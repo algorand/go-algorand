@@ -281,10 +281,6 @@ func (l *localLedger) BlockHdr(basics.Round) (bookkeeping.BlockHeader, error) {
 	return bookkeeping.BlockHeader{}, nil
 }
 
-func (l *localLedger) BlockHdrCached(basics.Round) (bookkeeping.BlockHeader, error) {
-	return bookkeeping.BlockHeader{}, nil
-}
-
 func (l *localLedger) GetStateProofVerificationContext(_ basics.Round) (*ledgercore.StateProofVerificationContext, error) {
 	return nil, fmt.Errorf("localLedger: GetStateProofVerificationContext, needed for state proof verification, is not implemented in debugger")
 }

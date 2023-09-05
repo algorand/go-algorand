@@ -319,7 +319,7 @@ func (a *compactResourcesDeltas) resourcesLoadOld(tx trackerdb.TransactionScope,
 		} else if acctRef, ok = knownAddresses[addr]; !ok {
 			acctRef, err = ar.LookupAccountRowID(addr)
 			if err != nil {
-				if err != sql.ErrNoRows || err != trackerdb.ErrNotFound {
+				if err != sql.ErrNoRows && err != trackerdb.ErrNotFound {
 					err = fmt.Errorf("base account cannot be read while processing resource for addr=%s, aidx=%d: %w", addr.String(), aidx, err)
 					return err
 

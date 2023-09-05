@@ -125,13 +125,17 @@ of a contract account.
 
 The bytecode plus the length of all Args must add up to no more than
 1000 bytes (consensus parameter LogicSigMaxSize). Each opcode has an
-associated cost and the program cost must total no more than 20,000
-(consensus parameter LogicSigMaxCost). Most opcodes have a cost of 1,
-but a few slow cryptographic operations have a much higher cost. Prior
-to v4, the program's cost was estimated as the static sum of all the
-opcode costs in the program (whether they were actually executed or
-not). Beginning with v4, the program's cost is tracked dynamically,
-while being evaluated. If the program exceeds its budget, it fails.
+associated cost, usually 1, but a few slow operations have higher
+costs. Prior to v4, the program's cost was estimated as the static sum
+of all the opcode costs in the program (whether they were actually
+executed or not). Beginning with v4, the program's cost is tracked
+dynamically, while being evaluated. If the program exceeds its budget,
+it fails.
+
+The total program cost of all Smart Signatures in a group must not
+exceed 20,000 (consensus parameter LogicSigMaxCost) times the number
+of transactions in the group.
+
 
 ## Execution Environment for Smart Contracts (Applications)
 

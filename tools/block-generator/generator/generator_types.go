@@ -26,6 +26,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	txn "github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -42,6 +43,7 @@ type Generator interface {
 
 type generator struct {
 	verbose bool
+	log     logging.Logger
 
 	config GenerationConfig
 
@@ -52,7 +54,7 @@ type generator struct {
 	numAccounts uint64
 
 	// Block stuff
-	round uint64
+	round         uint64
 	txnCounter    uint64
 	prevBlockHash string
 	timestamp     int64
@@ -147,7 +149,11 @@ type assetHolding struct {
 }
 
 // Report is the generation report.
-type Report map[TxTypeID]TxData
+type Report struct {
+	InitialRound uint64              `json:"initial_round"`
+	Counters     map[string]uint64   `json:"counters"`
+	Transactions map[TxTypeID]TxData `json:"transactions"`
+}
 
 // EffectsReport collates transaction counts caused by a root transaction.
 type EffectsReport map[string]uint64

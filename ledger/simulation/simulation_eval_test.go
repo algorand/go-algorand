@@ -24,12 +24,15 @@ import (
 	"strings"
 	"testing"
 
+	"golang.org/x/exp/slices"
+
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/logic/mocktracer"
 	"github.com/algorand/go-algorand/data/txntest"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/simulation"
 	simulationtesting "github.com/algorand/go-algorand/ledger/simulation/testing"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
@@ -62,6 +65,15 @@ func normalizeEvalDeltas(t *testing.T, actual, expected *transactions.EvalDelta)
 		}
 		if len(evalDelta.LocalDeltas) == 0 {
 			evalDelta.LocalDeltas = nil
+		}
+		if len(evalDelta.SharedAccts) == 0 {
+			evalDelta.SharedAccts = nil
+		}
+		if len(evalDelta.Logs) == 0 {
+			evalDelta.Logs = nil
+		}
+		if len(evalDelta.InnerTxns) == 0 {
+			evalDelta.InnerTxns = nil
 		}
 	}
 	// Use assert instead of require here so that we get a more useful error message later
@@ -120,6 +132,8 @@ func validateSimulationResult(t *testing.T, result simulation.Result) {
 	}
 }
 
+const ignoreAppBudgetConsumed = math.MaxUint64
+
 func simulationTest(t *testing.T, f func(env simulationtesting.Environment) simulationTestCase) {
 	t.Helper()
 	env := simulationtesting.PrepareSimulatorTest(t)
@@ -127,6 +141,10 @@ func simulationTest(t *testing.T, f func(env simulationtesting.Environment) simu
 
 	testcase := f(env)
 
+	runSimulationTestCase(t, env, testcase)
+}
+
+func runSimulationTestCase(t *testing.T, env simulationtesting.Environment, testcase simulationTestCase) {
 	actual, err := simulation.MakeSimulator(env.Ledger, testcase.developerAPI).Simulate(testcase.input)
 	require.NoError(t, err)
 
@@ -142,6 +160,22 @@ func simulationTest(t *testing.T, f func(env simulationtesting.Environment) simu
 				testcase.expected.TxnGroups[i].Txns[j].Txn.SignedTxn = testcase.input.TxnGroups[i][j]
 			}
 			normalizeEvalDeltas(t, &actual.TxnGroups[i].Txns[j].Txn.EvalDelta, &testcase.expected.TxnGroups[i].Txns[j].Txn.EvalDelta)
+
+			if testcase.expected.TxnGroups[i].Txns[j].AppBudgetConsumed == ignoreAppBudgetConsumed {
+				// This test does not care about the app budget consumed. Replace it with the actual value.
+				testcase.expected.TxnGroups[i].Txns[j].AppBudgetConsumed = actual.TxnGroups[i].Txns[j].AppBudgetConsumed
+			}
+		}
+
+		if testcase.expected.TxnGroups[i].AppBudgetConsumed == ignoreAppBudgetConsumed {
+			// This test does not care about the app budget consumed. Replace it with the actual value.
+			// But let's still ensure it's the sum of budgets consumed in this group.
+			var sum uint64
+			for _, txn := range actual.TxnGroups[i].Txns {
+				sum += txn.AppBudgetConsumed
+			}
+			assert.Equal(t, sum, actual.TxnGroups[i].AppBudgetConsumed)
+			testcase.expected.TxnGroups[i].AppBudgetConsumed = actual.TxnGroups[i].AppBudgetConsumed
 		}
 	}
 
@@ -995,6 +1029,9 @@ func TestAppCallWithExtraBudgetReturningPC(t *testing.T) {
 			ApprovalProgram:   expensiveAppSource,
 			ClearStateProgram: "#pragma version 6\nint 1",
 		})
+		op, err := logic.AssembleString(createTxn.ApprovalProgram.(string))
+		require.NoError(t, err)
+		approvalHash := crypto.Hash(op.Program)
 		// Expensive 700 repetition of int 1 and pop total cost 1404
 		expensiveTxn := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:          protocol.ApplicationCallTx,
@@ -1050,12 +1087,14 @@ func TestAppCallWithExtraBudgetReturningPC(t *testing.T) {
 								AppBudgetConsumed: 4,
 								Trace: &simulation.TransactionTrace{
 									ApprovalProgramTrace: firstTrace,
+									ApprovalProgramHash:  approvalHash,
 								},
 							},
 							{
 								AppBudgetConsumed: 1404,
 								Trace: &simulation.TransactionTrace{
 									ApprovalProgramTrace: secondTrace,
+									ApprovalProgramHash:  approvalHash,
 								},
 							},
 						},
@@ -1205,7 +1244,7 @@ func TestLogicSigOverBudget(t *testing.T) {
 ` + strings.Repeat(`byte "a"
 keccak256
 pop
-`, 200) + `int 1`)
+`, 310) + `int 1`)
 	require.NoError(t, err)
 	program := logic.Program(op.Program)
 	lsigAddr := basics.Address(crypto.HashObj(&program))
@@ -1261,7 +1300,7 @@ int 1`,
 									ApplyData: expectedAppCallAD,
 								},
 								AppBudgetConsumed:      0,
-								LogicSigBudgetConsumed: 19934,
+								LogicSigBudgetConsumed: 39998,
 							},
 						},
 						FailedAt:          expectedFailedAt,
@@ -1762,6 +1801,16 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 			ClearStateProgram: "#pragma version 8\nint 1",
 		})
 
+		op, err := logic.AssembleString(maxDepthTealApproval)
+		require.NoError(t, err)
+		approvalProgramBytes := op.Program
+		approvalDigest := crypto.Hash(approvalProgramBytes)
+
+		op, err = logic.AssembleString("#pragma version 8\nint 1")
+		require.NoError(t, err)
+		clearStateProgramBytes := op.Program
+		clearStateDigest := crypto.Hash(clearStateProgramBytes)
+
 		MaxDepth := 2
 		MinBalance := env.TxnInfo.CurrentProtocolParams().MinBalance
 		MinFee := env.TxnInfo.CurrentProtocolParams().MinTxnFee
@@ -1990,6 +2039,7 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 								AppBudgetConsumed: 7,
 								Trace: &simulation.TransactionTrace{
 									ApprovalProgramTrace: creationOpcodeTrace,
+									ApprovalProgramHash:  approvalDigest,
 								},
 							},
 							{
@@ -2037,32 +2087,41 @@ func TestMaxDepthAppWithPCTrace(t *testing.T) {
 								AppBudgetConsumed: 378,
 								Trace: &simulation.TransactionTrace{
 									ApprovalProgramTrace: recursiveLongOpcodeTrace,
+									ApprovalProgramHash:  approvalDigest,
 									InnerTraces: []simulation.TransactionTrace{
 										{
 											ApprovalProgramTrace: creationOpcodeTrace,
+											ApprovalProgramHash:  approvalDigest,
 										},
 										{},
 										{
 											ApprovalProgramTrace: optInTrace,
+											ApprovalProgramHash:  approvalDigest,
 										},
 										{
 											ClearStateProgramTrace: clearStateOpcodeTrace,
+											ClearStateProgramHash:  clearStateDigest,
 										},
 										{
 											ApprovalProgramTrace: recursiveLongOpcodeTrace,
+											ApprovalProgramHash:  approvalDigest,
 											InnerTraces: []simulation.TransactionTrace{
 												{
 													ApprovalProgramTrace: creationOpcodeTrace,
+													ApprovalProgramHash:  approvalDigest,
 												},
 												{},
 												{
 													ApprovalProgramTrace: optInTrace,
+													ApprovalProgramHash:  approvalDigest,
 												},
 												{
 													ClearStateProgramTrace: clearStateOpcodeTrace,
+													ClearStateProgramHash:  clearStateDigest,
 												},
 												{
 													ApprovalProgramTrace: finalDepthTrace,
+													ApprovalProgramHash:  approvalDigest,
 												},
 											},
 										},
@@ -2143,6 +2202,7 @@ func TestLogicSigPCandStackExposure(t *testing.T) {
 `, 2) + `int 1`)
 	require.NoError(t, err)
 	program := logic.Program(op.Program)
+	logicHash := crypto.Hash(program)
 	lsigAddr := basics.Address(crypto.HashObj(&program))
 
 	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
@@ -2161,6 +2221,10 @@ func TestLogicSigPCandStackExposure(t *testing.T) {
 byte "hello"; log; int 1`,
 			ClearStateProgram: "#pragma version 8\n int 1",
 		})
+
+		op, err = logic.AssembleString(appCallTxn.ApprovalProgram.(string))
+		require.NoError(t, err)
+		approvalHash := crypto.Hash(op.Program)
 
 		txntest.Group(&payTxn, &appCallTxn)
 
@@ -2218,6 +2282,7 @@ byte "hello"; log; int 1`,
 											StackAdded: goValuesToTealValues(1),
 										},
 									},
+									ApprovalProgramHash: approvalHash,
 									LogicSigTrace: []simulation.OpcodeTraceUnit{
 										{
 											PC: 1,
@@ -2253,6 +2318,7 @@ byte "hello"; log; int 1`,
 											StackAdded: goValuesToTealValues(1),
 										},
 									},
+									LogicSigHash: logicHash,
 								},
 							},
 						},
@@ -2273,8 +2339,9 @@ func TestFailingLogicSigPCandStack(t *testing.T) {
 ` + strings.Repeat(`byte "a"; keccak256; pop
 `, 2) + `int 0; int 1; -`)
 	require.NoError(t, err)
-	program := logic.Program(op.Program)
-	lsigAddr := basics.Address(crypto.HashObj(&program))
+	logicSigProg := logic.Program(op.Program)
+	logicSigHash := crypto.Hash(logicSigProg)
+	lsigAddr := basics.Address(crypto.HashObj(&logicSigProg))
 
 	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
 		sender := env.Accounts[0]
@@ -2297,7 +2364,7 @@ byte "hello"; log; int 1`,
 
 		signedPayTxn := payTxn.Txn().Sign(sender.Sk)
 		signedAppCallTxn := appCallTxn.SignedTxn()
-		signedAppCallTxn.Lsig = transactions.LogicSig{Logic: program}
+		signedAppCallTxn.Lsig = transactions.LogicSig{Logic: logicSigProg}
 
 		keccakBytes := ":\xc2%\x16\x8d\xf5B\x12\xa2\\\x1c\x01\xfd5\xbe\xbf\xea@\x8f\xda\xc2\xe3\x1d\xddo\x80\xa4\xbb\xf9\xa5\xf1\xcb"
 
@@ -2374,6 +2441,7 @@ byte "hello"; log; int 1`,
 											StackPopCount: 2,
 										},
 									},
+									LogicSigHash: logicSigHash,
 								},
 							},
 						},
@@ -2392,8 +2460,9 @@ func TestFailingApp(t *testing.T) {
 ` + strings.Repeat(`byte "a"; keccak256; pop
 `, 2) + `int 1`)
 	require.NoError(t, err)
-	program := logic.Program(op.Program)
-	lsigAddr := basics.Address(crypto.HashObj(&program))
+	logicSigProg := logic.Program(op.Program)
+	logicSigHash := crypto.Hash(logicSigProg)
+	lsigAddr := basics.Address(crypto.HashObj(&logicSigProg))
 
 	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
 		sender := env.Accounts[0]
@@ -2412,11 +2481,15 @@ byte "hello"; log; int 0`,
 			ClearStateProgram: "#pragma version 8\n int 1",
 		})
 
+		approvalOp, err := logic.AssembleString(appCallTxn.ApprovalProgram.(string))
+		require.NoError(t, err)
+		approvalHash := crypto.Hash(approvalOp.Program)
+
 		txntest.Group(&payTxn, &appCallTxn)
 
 		signedPayTxn := payTxn.Txn().Sign(sender.Sk)
 		signedAppCallTxn := appCallTxn.SignedTxn()
-		signedAppCallTxn.Lsig = transactions.LogicSig{Logic: program}
+		signedAppCallTxn.Lsig = transactions.LogicSig{Logic: logicSigProg}
 
 		return simulationTestCase{
 			input: simulation.Request{
@@ -2457,6 +2530,7 @@ byte "hello"; log; int 0`,
 										{PC: 8},
 										{PC: 9},
 									},
+									ApprovalProgramHash: approvalHash,
 									LogicSigTrace: []simulation.OpcodeTraceUnit{
 										{PC: 1},
 										{PC: 5},
@@ -2467,6 +2541,7 @@ byte "hello"; log; int 0`,
 										{PC: 10},
 										{PC: 11},
 									},
+									LogicSigHash: logicSigHash,
 								},
 							},
 						},
@@ -2529,6 +2604,10 @@ end:
 func TestFrameBuryDigStackTrace(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
+
+	op, err := logic.AssembleString(FrameBuryDigProgram)
+	require.NoError(t, err)
+	hash := crypto.Hash(op.Program)
 
 	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
 		sender := env.Accounts[0]
@@ -2616,6 +2695,7 @@ int 1`,
 											StackPopCount: 1,
 										},
 									},
+									ApprovalProgramHash: hash,
 								},
 							},
 							{
@@ -2852,11 +2932,1425 @@ int 1`,
 											StackPopCount: 1,
 										},
 									},
+									ApprovalProgramHash: hash,
 								},
 							},
 						},
 						AppBudgetAdded:    1400,
 						AppBudgetConsumed: 44,
+					},
+				},
+			},
+		}
+	})
+}
+
+func TestBoxChangeExecTrace(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+		sender := env.Accounts[0]
+
+		futureAppID := basics.AppIndex(1001)
+		boxContent := []byte("boxWriteContent")
+
+		boxStateChangeTraceTemplate := func(opName string, units ...simulation.OpcodeTraceUnit) []simulation.OpcodeTraceUnit {
+			begin := []simulation.OpcodeTraceUnit{
+				{
+					PC: 1,
+					StackAdded: []basics.TealValue{
+						{
+							Type: basics.TealUintType,
+							Uint: uint64(futureAppID),
+						},
+					},
+				},
+				{
+					PC:            3,
+					StackPopCount: 1,
+				},
+				{
+					PC: 6,
+					StackAdded: []basics.TealValue{
+						{
+							Type:  basics.TealBytesType,
+							Bytes: "create",
+						},
+					},
+				},
+				{
+					PC: 14,
+					StackAdded: []basics.TealValue{
+						{
+							Type:  basics.TealBytesType,
+							Bytes: "delete",
+						},
+					},
+				},
+				{
+					PC: 22,
+					StackAdded: []basics.TealValue{
+						{
+							Type:  basics.TealBytesType,
+							Bytes: "read",
+						},
+					},
+				},
+				{
+					PC: 28,
+					StackAdded: []basics.TealValue{
+						{
+							Type:  basics.TealBytesType,
+							Bytes: "write",
+						},
+					},
+				},
+				{
+					PC: 35,
+					StackAdded: []basics.TealValue{
+						{
+							Type:  basics.TealBytesType,
+							Bytes: opName,
+						},
+					},
+				},
+				{
+					PC:            38,
+					StackPopCount: 5,
+				},
+			}
+			end := []simulation.OpcodeTraceUnit{
+				{
+					PC: 87,
+					StackAdded: []basics.TealValue{
+						{
+							Type: basics.TealUintType,
+							Uint: 1,
+						},
+					},
+				},
+			}
+			result := append(begin, units...)
+			result = append(result, end...)
+			return result
+		}
+
+		createTxn := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:            protocol.ApplicationCallTx,
+			Sender:          sender.Addr,
+			ApplicationID:   0,
+			ApprovalProgram: fmt.Sprintf(boxTestProgram, 8),
+			ClearStateProgram: `#pragma version 8
+int 1`,
+		})
+
+		op, err := logic.AssembleString(createTxn.ApprovalProgram.(string))
+		require.NoError(t, err)
+		progHash := crypto.Hash(op.Program)
+
+		payment := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   sender.Addr,
+			Receiver: futureAppID.Address(),
+			Amount:   env.TxnInfo.CurrentProtocolParams().MinBalance * 2,
+		})
+		createBoxTxn := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:          protocol.ApplicationCallTx,
+			Sender:        sender.Addr,
+			ApplicationID: futureAppID,
+			ApplicationArgs: boxOperation{
+				op:         logic.BoxCreateOperation,
+				name:       "A",
+				createSize: uint64(len(boxContent)),
+			}.appArgs(),
+			Boxes: []transactions.BoxRef{
+				{Name: []byte("A")},
+			},
+		})
+		writeBoxTxn := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:          protocol.ApplicationCallTx,
+			Sender:        sender.Addr,
+			ApplicationID: futureAppID,
+			ApplicationArgs: boxOperation{
+				op:       logic.BoxWriteOperation,
+				name:     "A",
+				contents: boxContent,
+			}.appArgs(),
+			Boxes: []transactions.BoxRef{
+				{Name: []byte("A")},
+			},
+		})
+		delBoxTxn := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:          protocol.ApplicationCallTx,
+			Sender:        sender.Addr,
+			ApplicationID: futureAppID,
+			ApplicationArgs: boxOperation{
+				op:   logic.BoxDeleteOperation,
+				name: "A",
+			}.appArgs(),
+			Boxes: []transactions.BoxRef{
+				{Name: []byte("A")},
+			},
+		})
+		txntest.Group(&createTxn, &payment, &createBoxTxn, &writeBoxTxn, &delBoxTxn)
+
+		signedCreate := createTxn.Txn().Sign(sender.Sk)
+		signedPay := payment.Txn().Sign(sender.Sk)
+		signedCreateBox := createBoxTxn.Txn().Sign(sender.Sk)
+		signedWriteBox := writeBoxTxn.Txn().Sign(sender.Sk)
+		signedDelBox := delBoxTxn.Txn().Sign(sender.Sk)
+
+		return simulationTestCase{
+			input: simulation.Request{
+				TxnGroups: [][]transactions.SignedTxn{
+					{signedCreate, signedPay, signedCreateBox, signedWriteBox, signedDelBox},
+				},
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable:  true,
+					Stack:   true,
+					Scratch: true,
+					State:   true,
+				},
+			},
+			developerAPI: true,
+			expected: simulation.Result{
+				Version:   simulation.ResultLatestVersion,
+				LastRound: env.TxnInfo.LatestRound(),
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable:  true,
+					Stack:   true,
+					Scratch: true,
+					State:   true,
+				},
+				TxnGroups: []simulation.TxnGroupResult{
+					{
+						Txns: []simulation.TxnResult{
+							// App creation
+							{
+								Txn: transactions.SignedTxnWithAD{
+									ApplyData: transactions.ApplyData{
+										ApplicationID: futureAppID,
+									},
+								},
+								AppBudgetConsumed: 3,
+								Trace: &simulation.TransactionTrace{
+									ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
+										{
+											PC: 1,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+												},
+											},
+										},
+										{
+											PC:            3,
+											StackPopCount: 1,
+										},
+										{
+											PC: 87,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 1,
+												},
+											},
+										},
+									},
+									ApprovalProgramHash: progHash,
+								},
+							},
+							// Payment
+							{
+								Trace: &simulation.TransactionTrace{},
+							},
+							// BoxCreation
+							{
+								AppBudgetConsumed: 15,
+								Trace: &simulation.TransactionTrace{
+									ApprovalProgramTrace: boxStateChangeTraceTemplate("create",
+										simulation.OpcodeTraceUnit{
+											PC: 49,
+											StackAdded: []basics.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "A",
+												},
+											},
+										},
+										simulation.OpcodeTraceUnit{
+											PC: 52,
+											StackAdded: []basics.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: string(uint64ToBytes(uint64(len(boxContent)))),
+												},
+											},
+										},
+										simulation.OpcodeTraceUnit{
+											PC: 55,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: uint64(len(boxContent)),
+												},
+											},
+											StackPopCount: 1,
+										},
+										simulation.OpcodeTraceUnit{
+											PC:            56,
+											StackPopCount: 2,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 1,
+												},
+											},
+											StateChanges: []simulation.StateOperation{
+												{
+													AppStateOp: logic.AppStateWrite,
+													AppState:   logic.BoxState,
+													AppID:      futureAppID,
+													Key:        "A",
+													NewValue: basics.TealValue{
+														Type:  basics.TealBytesType,
+														Bytes: string(make([]byte, len(boxContent))),
+													},
+												},
+											},
+										},
+										simulation.OpcodeTraceUnit{
+											PC:            57,
+											StackPopCount: 1,
+										},
+										simulation.OpcodeTraceUnit{
+											PC: 58,
+										},
+									),
+									ApprovalProgramHash: progHash,
+								},
+							},
+							// BoxWrite
+							{
+								AppBudgetConsumed: 13,
+								Trace: &simulation.TransactionTrace{
+									ApprovalProgramTrace: boxStateChangeTraceTemplate("write",
+										simulation.OpcodeTraceUnit{
+											PC: 78,
+											StackAdded: []basics.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "A",
+												},
+											},
+										},
+										simulation.OpcodeTraceUnit{
+											PC: 81,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+												},
+											},
+										},
+										simulation.OpcodeTraceUnit{
+											PC: 83,
+											StackAdded: []basics.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: string(boxContent),
+												},
+											},
+										},
+										simulation.OpcodeTraceUnit{
+											PC:            86,
+											StackPopCount: 3,
+											StateChanges: []simulation.StateOperation{
+												{
+													AppStateOp: logic.AppStateWrite,
+													AppState:   logic.BoxState,
+													AppID:      futureAppID,
+													Key:        "A",
+													NewValue: basics.TealValue{
+														Type:  basics.TealBytesType,
+														Bytes: string(boxContent),
+													},
+												},
+											},
+										},
+									),
+									ApprovalProgramHash: progHash,
+								},
+							},
+							// BoxDelete
+							{
+								AppBudgetConsumed: 13,
+								Trace: &simulation.TransactionTrace{
+									ApprovalProgramTrace: boxStateChangeTraceTemplate("delete",
+										simulation.OpcodeTraceUnit{
+											PC: 61,
+											StackAdded: []basics.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "A",
+												},
+											},
+										},
+										simulation.OpcodeTraceUnit{
+											PC: 64,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 1,
+												},
+											},
+											StackPopCount: 1,
+											StateChanges: []simulation.StateOperation{
+												{
+													AppStateOp: logic.AppStateDelete,
+													AppState:   logic.BoxState,
+													AppID:      futureAppID,
+													Key:        "A",
+												},
+											},
+										},
+										simulation.OpcodeTraceUnit{
+											PC:            65,
+											StackPopCount: 1,
+										},
+										simulation.OpcodeTraceUnit{
+											PC: 66,
+										},
+									),
+									ApprovalProgramHash: progHash,
+								},
+							},
+						},
+						AppBudgetAdded:    2800,
+						AppBudgetConsumed: 44,
+					},
+				},
+			},
+		}
+	})
+}
+
+func TestAppLocalGlobalStateChange(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+		sender := env.Accounts[0]
+
+		futureAppID := basics.AppIndex(1001)
+
+		createTxn := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:              protocol.ApplicationCallTx,
+			Sender:            sender.Addr,
+			ApplicationID:     0,
+			GlobalStateSchema: basics.StateSchema{NumUint: 1, NumByteSlice: 1},
+			LocalStateSchema:  basics.StateSchema{NumUint: 1, NumByteSlice: 1},
+			ApprovalProgram: `#pragma version 8
+txn ApplicationID
+bz end // Do nothing during create
+
+txn OnCompletion
+int OptIn
+==
+bnz end // Always allow optin
+
+byte "local"
+byte "global"
+txn ApplicationArgs 0
+match local global
+err // Unknown command
+
+local:
+  txn Sender
+  byte "local-int-key"
+  int 0xcafeb0ba
+  app_local_put
+  int 0
+  byte "local-bytes-key"
+  byte "xqcL"
+  app_local_put
+  b end
+
+global:
+  byte "global-int-key"
+  int 0xdeadbeef
+  app_global_put
+  byte "global-bytes-key"
+  byte "welt am draht"
+  app_global_put
+  b end
+
+end:
+  int 1
+`,
+			ClearStateProgram: `#pragma version 8
+int 1`,
+		})
+
+		op, err := logic.AssembleString(createTxn.ApprovalProgram.(string))
+		require.NoError(t, err)
+		progHash := crypto.Hash(op.Program)
+
+		optIn := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:          protocol.ApplicationCallTx,
+			OnCompletion:  transactions.OptInOC,
+			Sender:        sender.Addr,
+			ApplicationID: futureAppID,
+		})
+
+		globalStateCall := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:            protocol.ApplicationCallTx,
+			Sender:          sender.Addr,
+			ApplicationID:   futureAppID,
+			ApplicationArgs: [][]byte{[]byte("global")},
+		})
+
+		localStateCall := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:            protocol.ApplicationCallTx,
+			Sender:          sender.Addr,
+			ApplicationID:   futureAppID,
+			ApplicationArgs: [][]byte{[]byte("local")},
+		})
+
+		txntest.Group(&createTxn, &optIn, &globalStateCall, &localStateCall)
+
+		signedCreate := createTxn.Txn().Sign(sender.Sk)
+		signedOptin := optIn.Txn().Sign(sender.Sk)
+		signedGlobalStateCall := globalStateCall.Txn().Sign(sender.Sk)
+		signedLocalStateCall := localStateCall.Txn().Sign(sender.Sk)
+
+		return simulationTestCase{
+			input: simulation.Request{
+				TxnGroups: [][]transactions.SignedTxn{
+					{signedCreate, signedOptin, signedGlobalStateCall, signedLocalStateCall},
+				},
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable:  true,
+					Stack:   true,
+					Scratch: true,
+					State:   true,
+				},
+			},
+			developerAPI: true,
+			expected: simulation.Result{
+				Version:   simulation.ResultLatestVersion,
+				LastRound: env.TxnInfo.LatestRound(),
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable:  true,
+					Stack:   true,
+					Scratch: true,
+					State:   true,
+				},
+				TxnGroups: []simulation.TxnGroupResult{
+					{
+						Txns: []simulation.TxnResult{
+							// App creation
+							{
+								Txn: transactions.SignedTxnWithAD{
+									ApplyData: transactions.ApplyData{
+										ApplicationID: futureAppID,
+									},
+								},
+								AppBudgetConsumed: 4,
+								Trace: &simulation.TransactionTrace{
+									ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
+										{
+											PC: 1,
+										},
+										{
+											PC: 4,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+												},
+											},
+										},
+										{
+											PC:            6,
+											StackPopCount: 1,
+										},
+										{
+											PC: 154,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 1,
+												},
+											},
+										},
+									},
+									ApprovalProgramHash: progHash,
+								},
+							},
+							// Optin
+							{
+								AppBudgetConsumed: 8,
+								Trace: &simulation.TransactionTrace{
+									ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
+										{
+											PC: 1,
+										},
+										{
+											PC: 4,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: uint64(futureAppID),
+												},
+											},
+										},
+										{
+											PC:            6,
+											StackPopCount: 1,
+										},
+										{
+											PC: 9,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 1,
+												},
+											},
+										},
+										{
+											PC: 11,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 1,
+												},
+											},
+										},
+										{
+											PC: 12,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 1,
+												},
+											},
+											StackPopCount: 2,
+										},
+										{
+											PC:            13,
+											StackPopCount: 1,
+										},
+										{
+											PC: 154,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 1,
+												},
+											},
+										},
+									},
+									ApprovalProgramHash: progHash,
+								},
+							},
+							// Global
+							{
+								Txn: transactions.SignedTxnWithAD{
+									ApplyData: transactions.ApplyData{
+										EvalDelta: transactions.EvalDelta{
+											GlobalDelta: basics.StateDelta{
+												"global-bytes-key": basics.ValueDelta{
+													Bytes:  "welt am draht",
+													Action: basics.SetBytesAction,
+												},
+												"global-int-key": basics.ValueDelta{
+													Uint:   0xdeadbeef,
+													Action: basics.SetUintAction,
+												},
+											},
+										},
+									},
+								},
+								AppBudgetConsumed: 19,
+								Trace: &simulation.TransactionTrace{
+									ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
+										{
+											PC: 1,
+										},
+										{
+											PC: 4,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: uint64(futureAppID),
+												},
+											},
+										},
+										{
+											PC:            6,
+											StackPopCount: 1,
+										},
+										{
+											PC: 9,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+												},
+											},
+										},
+										{
+											PC: 11,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 1,
+												},
+											},
+										},
+										{
+											PC: 12,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+												},
+											},
+											StackPopCount: 2,
+										},
+										{
+											PC:            13,
+											StackPopCount: 1,
+										},
+										{
+											PC: 16,
+											StackAdded: []basics.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "local",
+												},
+											},
+										},
+										{
+											PC: 23,
+											StackAdded: []basics.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "global",
+												},
+											},
+										},
+										{
+											PC: 31,
+											StackAdded: []basics.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "global",
+												},
+											},
+										},
+										{
+											PC:            34,
+											StackPopCount: 3,
+										},
+										{
+											PC: 94,
+											StackAdded: []basics.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "global-int-key",
+												},
+											},
+										},
+										{
+											PC: 110,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 0xdeadbeef,
+												},
+											},
+										},
+										{
+											PC: 116,
+											StateChanges: []simulation.StateOperation{
+												{
+													AppStateOp: logic.AppStateWrite,
+													AppState:   logic.GlobalState,
+													AppID:      futureAppID,
+													Key:        "global-int-key",
+													NewValue: basics.TealValue{
+														Type: basics.TealUintType,
+														Uint: 0xdeadbeef,
+													},
+												},
+											},
+											StackPopCount: 2,
+										},
+										{
+											PC: 117,
+											StackAdded: []basics.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "global-bytes-key",
+												},
+											},
+										},
+										{
+											PC: 135,
+											StackAdded: []basics.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "welt am draht",
+												},
+											},
+										},
+										{
+											PC:            150,
+											StackPopCount: 2,
+											StateChanges: []simulation.StateOperation{
+												{
+													AppStateOp: logic.AppStateWrite,
+													AppState:   logic.GlobalState,
+													AppID:      futureAppID,
+													Key:        "global-bytes-key",
+													NewValue: basics.TealValue{
+														Type:  basics.TealBytesType,
+														Bytes: "welt am draht",
+													},
+												},
+											},
+										},
+										{PC: 151},
+										{
+											PC: 154,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 1,
+												},
+											},
+										},
+									},
+									ApprovalProgramHash: progHash,
+								},
+							},
+							// Local
+							{
+								Txn: transactions.SignedTxnWithAD{
+									ApplyData: transactions.ApplyData{
+										EvalDelta: transactions.EvalDelta{
+											LocalDeltas: map[uint64]basics.StateDelta{
+												0: {
+													"local-bytes-key": basics.ValueDelta{
+														Bytes:  "xqcL",
+														Action: basics.SetBytesAction,
+													},
+													"local-int-key": basics.ValueDelta{
+														Uint:   0xcafeb0ba,
+														Action: basics.SetUintAction,
+													},
+												},
+											},
+										},
+									},
+								},
+								AppBudgetConsumed: 21,
+								Trace: &simulation.TransactionTrace{
+									ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
+										{
+											PC: 1,
+										},
+										{
+											PC: 4,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: uint64(futureAppID),
+												},
+											},
+										},
+										{
+											PC:            6,
+											StackPopCount: 1,
+										},
+										{
+											PC: 9,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+												},
+											},
+										},
+										{
+											PC: 11,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 1,
+												},
+											},
+										},
+										{
+											PC: 12,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+												},
+											},
+											StackPopCount: 2,
+										},
+										{
+											PC:            13,
+											StackPopCount: 1,
+										},
+										{
+											PC: 16,
+											StackAdded: []basics.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "local",
+												},
+											},
+										},
+										{
+											PC: 23,
+											StackAdded: []basics.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "global",
+												},
+											},
+										},
+										{
+											PC: 31,
+											StackAdded: []basics.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "local",
+												},
+											},
+										},
+										{
+											PC:            34,
+											StackPopCount: 3,
+										},
+										{
+											PC: 41,
+											StackAdded: []basics.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: string(sender.Addr[:]),
+												},
+											},
+										},
+										{
+											PC: 43,
+											StackAdded: []basics.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "local-int-key",
+												},
+											},
+										},
+										{
+											PC: 58,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 0xcafeb0ba,
+												},
+											},
+										},
+										{
+											PC: 64,
+											StateChanges: []simulation.StateOperation{
+												{
+													AppStateOp: logic.AppStateWrite,
+													AppState:   logic.LocalState,
+													AppID:      futureAppID,
+													Key:        "local-int-key",
+													NewValue: basics.TealValue{
+														Type: basics.TealUintType,
+														Uint: 0xcafeb0ba,
+													},
+													Account: sender.Addr,
+												},
+											},
+											StackPopCount: 3,
+										},
+										{
+											PC: 65,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+												},
+											},
+										},
+										{
+											PC: 67,
+											StackAdded: []basics.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "local-bytes-key",
+												},
+											},
+										},
+										{
+											PC: 84,
+											StackAdded: []basics.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "xqcL",
+												},
+											},
+										},
+										{
+											PC:            90,
+											StackPopCount: 3,
+											StateChanges: []simulation.StateOperation{
+												{
+													AppStateOp: logic.AppStateWrite,
+													AppState:   logic.LocalState,
+													AppID:      futureAppID,
+													Key:        "local-bytes-key",
+													NewValue: basics.TealValue{
+														Type:  basics.TealBytesType,
+														Bytes: "xqcL",
+													},
+													Account: sender.Addr,
+												},
+											},
+										},
+										{PC: 91},
+										{
+											PC: 154,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 1,
+												},
+											},
+										},
+									},
+									ApprovalProgramHash: progHash,
+								},
+							},
+						},
+						AppBudgetAdded:    2800,
+						AppBudgetConsumed: 52,
+					},
+				},
+			},
+		}
+	})
+}
+
+func TestGlobalStateTypeChange(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+		sender := env.Accounts[0]
+
+		futureAppID := basics.AppIndex(1001)
+
+		createTxn := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:              protocol.ApplicationCallTx,
+			Sender:            sender.Addr,
+			ApplicationID:     0,
+			GlobalStateSchema: basics.StateSchema{NumUint: 1, NumByteSlice: 1},
+			ApprovalProgram: `#pragma version 8
+txn ApplicationID
+bz end // Do nothing during create
+
+byte "global-key"
+int 0xdecaf
+app_global_put
+byte "global-key"
+byte "welt am draht"
+app_global_put
+
+end:
+  int 1
+`,
+			ClearStateProgram: `#pragma version 8
+int 1`,
+		})
+
+		op, err := logic.AssembleString(createTxn.ApprovalProgram.(string))
+		require.NoError(t, err)
+		progHash := crypto.Hash(op.Program)
+
+		globalStateCall := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:          protocol.ApplicationCallTx,
+			Sender:        sender.Addr,
+			ApplicationID: futureAppID,
+		})
+
+		txntest.Group(&createTxn, &globalStateCall)
+
+		signedCreate := createTxn.Txn().Sign(sender.Sk)
+		signedGlobalStateCall := globalStateCall.Txn().Sign(sender.Sk)
+
+		return simulationTestCase{
+			input: simulation.Request{
+				TxnGroups: [][]transactions.SignedTxn{
+					{signedCreate, signedGlobalStateCall},
+				},
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable:  true,
+					Stack:   true,
+					Scratch: true,
+					State:   true,
+				},
+			},
+			developerAPI: true,
+			expected: simulation.Result{
+				Version:   simulation.ResultLatestVersion,
+				LastRound: env.TxnInfo.LatestRound(),
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable:  true,
+					Stack:   true,
+					Scratch: true,
+					State:   true,
+				},
+				TxnGroups: []simulation.TxnGroupResult{
+					{
+						Txns: []simulation.TxnResult{
+							// App creation
+							{
+								Txn: transactions.SignedTxnWithAD{
+									ApplyData: transactions.ApplyData{
+										ApplicationID: futureAppID,
+									},
+								},
+								AppBudgetConsumed: 4,
+								Trace: &simulation.TransactionTrace{
+									ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
+										{
+											PC: 1,
+										},
+										{
+											PC: 14,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+												},
+											},
+										},
+										{
+											PC:            16,
+											StackPopCount: 1,
+										},
+										{
+											PC: 42,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 1,
+												},
+											},
+										},
+									},
+									ApprovalProgramHash: progHash,
+								},
+							},
+							// Global
+							{
+								Txn: transactions.SignedTxnWithAD{
+									ApplyData: transactions.ApplyData{
+										EvalDelta: transactions.EvalDelta{
+											GlobalDelta: basics.StateDelta{
+												"global-key": basics.ValueDelta{
+													Bytes:  "welt am draht",
+													Action: basics.SetBytesAction,
+												},
+											},
+										},
+									},
+								},
+								AppBudgetConsumed: 10,
+								Trace: &simulation.TransactionTrace{
+									ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
+										{
+											PC: 1,
+										},
+										{
+											PC: 14,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: uint64(futureAppID),
+												},
+											},
+										},
+										{
+											PC:            16,
+											StackPopCount: 1,
+										},
+										{
+											PC: 19,
+											StackAdded: []basics.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "global-key",
+												},
+											},
+										},
+										{
+											PC: 20,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 0xdecaf,
+												},
+											},
+										},
+										{
+											PC: 24,
+											StateChanges: []simulation.StateOperation{
+												{
+													AppStateOp: logic.AppStateWrite,
+													AppState:   logic.GlobalState,
+													AppID:      futureAppID,
+													Key:        "global-key",
+													NewValue: basics.TealValue{
+														Type: basics.TealUintType,
+														Uint: 0xdecaf,
+													},
+												},
+											},
+											StackPopCount: 2,
+										},
+										{
+											PC: 25,
+											StackAdded: []basics.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "global-key",
+												},
+											},
+										},
+										{
+											PC: 26,
+											StackAdded: []basics.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "welt am draht",
+												},
+											},
+										},
+										{
+											PC:            41,
+											StackPopCount: 2,
+											StateChanges: []simulation.StateOperation{
+												{
+													AppStateOp: logic.AppStateWrite,
+													AppState:   logic.GlobalState,
+													AppID:      futureAppID,
+													Key:        "global-key",
+													NewValue: basics.TealValue{
+														Type:  basics.TealBytesType,
+														Bytes: "welt am draht",
+													},
+												},
+											},
+										},
+										{
+											PC: 42,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 1,
+												},
+											},
+										},
+									},
+									ApprovalProgramHash: progHash,
+								},
+							},
+						},
+						AppBudgetAdded:    1400,
+						AppBudgetConsumed: 14,
+					},
+				},
+			},
+		}
+	})
+}
+
+func TestGlobalStateTypeChangeFailure(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+		sender := env.Accounts[0]
+
+		futureAppID := basics.AppIndex(1001)
+
+		createTxn := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:              protocol.ApplicationCallTx,
+			Sender:            sender.Addr,
+			ApplicationID:     0,
+			GlobalStateSchema: basics.StateSchema{NumUint: 1},
+			ApprovalProgram: `#pragma version 8
+txn ApplicationID
+bz end // Do nothing during create
+
+byte "global-key"
+byte "I pretend myself as an uint"
+app_global_put
+
+end:
+  int 1
+`,
+			ClearStateProgram: `#pragma version 8
+int 1`,
+		})
+
+		op, err := logic.AssembleString(createTxn.ApprovalProgram.(string))
+		require.NoError(t, err)
+		progHash := crypto.Hash(op.Program)
+
+		globalStateCall := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:          protocol.ApplicationCallTx,
+			Sender:        sender.Addr,
+			ApplicationID: futureAppID,
+		})
+
+		txntest.Group(&createTxn, &globalStateCall)
+
+		signedCreate := createTxn.Txn().Sign(sender.Sk)
+		signedGlobalStateCall := globalStateCall.Txn().Sign(sender.Sk)
+
+		return simulationTestCase{
+			input: simulation.Request{
+				TxnGroups: [][]transactions.SignedTxn{
+					{signedCreate, signedGlobalStateCall},
+				},
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable:  true,
+					Stack:   true,
+					Scratch: true,
+					State:   true,
+				},
+			},
+			developerAPI:  true,
+			expectedError: "store bytes count 1 exceeds schema bytes count 0.",
+			expected: simulation.Result{
+				Version:   simulation.ResultLatestVersion,
+				LastRound: env.TxnInfo.LatestRound(),
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable:  true,
+					Stack:   true,
+					Scratch: true,
+					State:   true,
+				},
+				TxnGroups: []simulation.TxnGroupResult{
+					{
+						FailedAt: simulation.TxnPath{1},
+						Txns: []simulation.TxnResult{
+							// App creation
+							{
+								Txn: transactions.SignedTxnWithAD{
+									ApplyData: transactions.ApplyData{
+										ApplicationID: futureAppID,
+									},
+								},
+								AppBudgetConsumed: 3,
+								Trace: &simulation.TransactionTrace{
+									ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
+										{
+											PC: 1,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+												},
+											},
+										},
+										{
+											PC:            3,
+											StackPopCount: 1,
+										},
+										{
+											PC: 48,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: 1,
+												},
+											},
+										},
+									},
+									ApprovalProgramHash: progHash,
+								},
+							},
+							// Global
+							{
+								Txn: transactions.SignedTxnWithAD{
+									ApplyData: transactions.ApplyData{
+										EvalDelta: transactions.EvalDelta{
+											GlobalDelta: basics.StateDelta{
+												"global-key": basics.ValueDelta{
+													Bytes:  "I pretend myself as an uint",
+													Action: basics.SetBytesAction,
+												},
+											},
+										},
+									},
+								},
+								AppBudgetConsumed: 5,
+								Trace: &simulation.TransactionTrace{
+									ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
+										{
+											PC: 1,
+											StackAdded: []basics.TealValue{
+												{
+													Type: basics.TealUintType,
+													Uint: uint64(futureAppID),
+												},
+											},
+										},
+										{
+											PC:            3,
+											StackPopCount: 1,
+										},
+										{
+											PC: 6,
+											StackAdded: []basics.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "global-key",
+												},
+											},
+										},
+										{
+											PC: 18,
+											StackAdded: []basics.TealValue{
+												{
+													Type:  basics.TealBytesType,
+													Bytes: "I pretend myself as an uint",
+												},
+											},
+										},
+										{
+											PC:            47,
+											StackPopCount: 2,
+											StateChanges: []simulation.StateOperation{
+												{
+													AppStateOp: logic.AppStateWrite,
+													AppState:   logic.GlobalState,
+													AppID:      futureAppID,
+													Key:        "global-key",
+												},
+											},
+										},
+									},
+									ApprovalProgramHash: progHash,
+								},
+							},
+						},
+						AppBudgetAdded:    1400,
+						AppBudgetConsumed: 8,
 					},
 				},
 			},
@@ -3576,6 +5070,1968 @@ func TestMockTracerScenarios(t *testing.T) {
 					expected:      expected,
 				}
 			})
+		})
+	}
+}
+
+// TestUnnamedResources tests that app calls can access resources that they otherwise should not be
+// able to if AllowUnnamedResources is enabled. Additional tests follow for special cases.
+func TestUnnamedResources(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	// Start with directRefEnabledVersion (4), since prior to that all restricted references had to
+	// be indexes into the foreign arrays, meaning we can't test the unnamed case.
+	for v := 4; v <= logic.LogicVersion; v++ {
+		v := v
+		t.Run(fmt.Sprintf("v%d", v), func(t *testing.T) {
+			t.Parallel()
+			simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+				sender := env.Accounts[0]
+
+				otherAccount := env.Accounts[1]
+				otherAccountAuthAddr := env.Accounts[2].Addr
+				env.Rekey(otherAccount.Addr, otherAccountAuthAddr)
+
+				assetCreator := env.Accounts[2].Addr
+				assetID := env.CreateAsset(assetCreator, basics.AssetParams{Total: 100})
+
+				assetHolder := env.Accounts[3].Addr
+				env.OptIntoAsset(assetHolder, assetID)
+				env.TransferAsset(assetCreator, assetHolder, assetID, 1)
+
+				otherAppCreator := env.Accounts[4].Addr
+				otherAppID := env.CreateApp(otherAppCreator, simulationtesting.AppParams{
+					// Using version 8 because this is the highest version where we check that
+					// cross-products of resources are available.
+					ApprovalProgram:   "#pragma version 8\nint 1",
+					ClearStateProgram: "#pragma version 8\nint 1",
+				})
+
+				otherAppUser := env.Accounts[5].Addr
+				env.OptIntoApp(otherAppUser, otherAppID)
+
+				proto := env.TxnInfo.CurrentProtocolParams()
+				expectedUnnamedResourceGroupAssignment := &simulation.ResourceTracker{
+					MaxAccounts:               proto.MaxTxGroupSize * (proto.MaxAppTxnAccounts + proto.MaxAppTxnForeignApps),
+					MaxAssets:                 proto.MaxTxGroupSize * proto.MaxAppTxnForeignAssets,
+					MaxApps:                   proto.MaxTxGroupSize * proto.MaxAppTxnForeignApps,
+					MaxBoxes:                  proto.MaxTxGroupSize * proto.MaxAppBoxReferences,
+					MaxTotalRefs:              proto.MaxTxGroupSize * proto.MaxAppTotalTxnReferences,
+					MaxCrossProductReferences: proto.MaxTxGroupSize * proto.MaxAppTxnForeignApps * (proto.MaxAppTxnForeignApps + 2),
+				}
+				var expectedUnnamedResourceTxnAssignment *simulation.ResourceTracker
+				var expectedResources *simulation.ResourceTracker
+				if v < 9 {
+					// no shared resources
+					expectedUnnamedResourceTxnAssignment = &simulation.ResourceTracker{
+						MaxAccounts:  proto.MaxAppTxnAccounts + proto.MaxAppTxnForeignApps,
+						MaxAssets:    proto.MaxAppTxnForeignAssets,
+						MaxApps:      proto.MaxAppTxnForeignApps,
+						MaxBoxes:     proto.MaxAppBoxReferences,
+						MaxTotalRefs: proto.MaxAppTotalTxnReferences,
+					}
+					expectedResources = expectedUnnamedResourceTxnAssignment
+				} else {
+					// shared resources
+					expectedResources = expectedUnnamedResourceGroupAssignment
+				}
+
+				var innerCount int
+
+				program := fmt.Sprintf("#pragma version %d\n", v)
+
+				// Do nothing during create
+				program += "txn ApplicationID; bz end;"
+
+				// Account access
+				program += fmt.Sprintf("addr %s; balance; int %d; <; assert;", otherAccount.Addr, otherAccount.AcctData.MicroAlgos.Raw)
+				if v >= 6 { // acct_params_get introduced
+					program += fmt.Sprintf("addr %s; acct_params_get AcctAuthAddr; assert; addr %s; ==; assert;", otherAccount.Addr, otherAccountAuthAddr)
+				}
+				if v >= 5 { // inner txns introduced
+					program += fmt.Sprintf("itxn_begin; int pay; itxn_field TypeEnum; addr %s; itxn_field Receiver; itxn_submit;", otherAccount.Addr)
+					innerCount++
+				}
+				expectedResources.Accounts = map[basics.Address]struct{}{
+					otherAccount.Addr: {},
+				}
+
+				// Asset params access
+				program += fmt.Sprintf("int %d; asset_params_get AssetTotal; assert; int 100; ==; assert;", assetID)
+				if v >= 5 { // AssetCreator field introduced
+					program += fmt.Sprintf("int %d; asset_params_get AssetCreator; assert; addr %s; ==; assert;", assetID, assetCreator)
+				}
+				expectedResources.Assets = map[basics.AssetIndex]struct{}{
+					assetID: {},
+				}
+
+				// Asset holding access
+				program += fmt.Sprintf("txn Sender; int %d; asset_holding_get AssetBalance; !; assert; !; assert;", assetID)
+				program += fmt.Sprintf("addr %s; int %d; asset_holding_get AssetBalance; assert; int 99; ==; assert;", assetCreator, assetID)
+				program += fmt.Sprintf("addr %s; int %d; asset_holding_get AssetBalance; assert; int 1; ==; assert;", assetHolder, assetID)
+				if v >= 5 { // inner txns introduced
+					program += fmt.Sprintf("itxn_begin; int axfer; itxn_field TypeEnum; int %d; itxn_field XferAsset; itxn_submit;", assetID)
+					innerCount++
+				}
+				expectedResources.Accounts[assetCreator] = struct{}{}
+				expectedResources.Accounts[assetHolder] = struct{}{}
+				if v >= 9 {
+					expectedUnnamedResourceGroupAssignment.AssetHoldings = map[ledgercore.AccountAsset]struct{}{
+						{Address: sender.Addr, Asset: assetID}:      {},
+						{Address: assetCreator, Asset: assetID}:     {},
+						{Address: assetHolder, Asset: assetID}:      {},
+						{Address: basics.Address{}, Asset: assetID}: {},
+					}
+				}
+
+				// App params access
+				program += fmt.Sprintf("int %d; byte 0x01; app_global_get_ex; !; assert; !; assert;", otherAppID)
+				if v >= 5 { // app_params_get introduced
+					program += fmt.Sprintf("int %d; app_params_get AppCreator; assert; addr %s; ==; assert;", otherAppID, otherAppCreator)
+				}
+				expectedResources.Apps = map[basics.AppIndex]struct{}{
+					otherAppID: {},
+				}
+
+				// App local access
+				program += fmt.Sprintf("txn Sender; int %d; app_opted_in; !; assert;", otherAppID)
+				program += fmt.Sprintf("addr %s; int %d; app_opted_in; assert;", otherAppUser, otherAppID)
+				program += fmt.Sprintf("addr %s; int %d; byte 0x01; app_local_get_ex; !; assert; !; assert;", otherAppUser, otherAppID)
+				if v >= 6 { // contract to contract itxn calls introduced
+					program += fmt.Sprintf("itxn_begin; int appl; itxn_field TypeEnum; int %d; itxn_field ApplicationID; itxn_submit;", otherAppID)
+					innerCount++
+				}
+				expectedResources.Accounts[otherAppUser] = struct{}{}
+				if v >= 9 {
+					expectedUnnamedResourceGroupAssignment.AppLocals = map[ledgercore.AccountApp]struct{}{
+						{Address: sender.Addr, App: otherAppID}:      {},
+						{Address: otherAppUser, App: otherAppID}:     {},
+						{Address: basics.Address{}, App: otherAppID}: {},
+					}
+				}
+
+				// Box access
+				if v >= 8 { // boxes introduced
+					program += `byte "A"; int 64; box_create; assert;`
+					program += `byte "B"; box_len; !; assert; !; assert;`
+					expectedUnnamedResourceGroupAssignment.Boxes = map[logic.BoxRef]uint64{
+						{App: 0, Name: "A"}: 0,
+						{App: 0, Name: "B"}: 0,
+					}
+				}
+
+				program += "end: int 1"
+
+				testAppID := env.CreateApp(sender.Addr, simulationtesting.AppParams{
+					ApprovalProgram:   program,
+					ClearStateProgram: fmt.Sprintf("#pragma version %d\n int 1", v),
+				})
+
+				// Fund the app to cover inner txn fees and min balance increases
+				env.TransferAlgos(sender.Addr, testAppID.Address(), 1_000_000)
+
+				var holdingsToFix []ledgercore.AccountAsset
+				for holding := range expectedUnnamedResourceGroupAssignment.AssetHoldings {
+					if holding.Address.IsZero() {
+						// replace with app address
+						holdingsToFix = append(holdingsToFix, holding)
+					}
+				}
+				for _, holding := range holdingsToFix {
+					delete(expectedUnnamedResourceGroupAssignment.AssetHoldings, holding)
+					holding.Address = testAppID.Address()
+					expectedUnnamedResourceGroupAssignment.AssetHoldings[holding] = struct{}{}
+				}
+				var localsToFix []ledgercore.AccountApp
+				for local := range expectedUnnamedResourceGroupAssignment.AppLocals {
+					if local.Address.IsZero() {
+						// replace with app address
+						localsToFix = append(localsToFix, local)
+					}
+				}
+				for _, local := range localsToFix {
+					delete(expectedUnnamedResourceGroupAssignment.AppLocals, local)
+					local.Address = testAppID.Address()
+					expectedUnnamedResourceGroupAssignment.AppLocals[local] = struct{}{}
+				}
+				var boxesToFix []logic.BoxRef
+				for box := range expectedUnnamedResourceGroupAssignment.Boxes {
+					if box.App == 0 {
+						// replace with app ID
+						boxesToFix = append(boxesToFix, box)
+					}
+				}
+				for _, box := range boxesToFix {
+					value := expectedUnnamedResourceGroupAssignment.Boxes[box]
+					delete(expectedUnnamedResourceGroupAssignment.Boxes, box)
+					box.App = testAppID
+					expectedUnnamedResourceGroupAssignment.Boxes[box] = value
+				}
+
+				txn := env.TxnInfo.NewTxn(txntest.Txn{
+					Type:          protocol.ApplicationCallTx,
+					Sender:        sender.Addr,
+					ApplicationID: testAppID,
+				})
+				stxn := txn.Txn().Sign(sender.Sk)
+
+				if expectedUnnamedResourceTxnAssignment != nil {
+					localAccounts := len(expectedUnnamedResourceTxnAssignment.Accounts)
+					localAssets := len(expectedUnnamedResourceTxnAssignment.Assets)
+					localApps := len(expectedUnnamedResourceTxnAssignment.Apps)
+					// Skip boxes, they are global only
+					expectedUnnamedResourceGroupAssignment.MaxAccounts -= localAccounts + localApps
+					expectedUnnamedResourceGroupAssignment.MaxAssets -= localAssets
+					expectedUnnamedResourceGroupAssignment.MaxApps -= localApps
+					expectedUnnamedResourceGroupAssignment.MaxTotalRefs -= localAccounts + localAssets + localApps
+
+					if !expectedUnnamedResourceTxnAssignment.HasResources() {
+						expectedUnnamedResourceTxnAssignment = nil
+					}
+				}
+
+				if !expectedUnnamedResourceGroupAssignment.HasResources() {
+					expectedUnnamedResourceGroupAssignment = nil
+				}
+
+				return simulationTestCase{
+					input: simulation.Request{
+						TxnGroups:             [][]transactions.SignedTxn{{stxn}},
+						AllowUnnamedResources: true,
+					},
+					expected: simulation.Result{
+						Version:   simulation.ResultLatestVersion,
+						LastRound: env.TxnInfo.LatestRound(),
+						TxnGroups: []simulation.TxnGroupResult{
+							{
+								Txns: []simulation.TxnResult{
+									{
+										Txn: transactions.SignedTxnWithAD{
+											ApplyData: transactions.ApplyData{
+												EvalDelta: transactions.EvalDelta{
+													InnerTxns: make([]transactions.SignedTxnWithAD, innerCount),
+												},
+											},
+										},
+										AppBudgetConsumed:        ignoreAppBudgetConsumed,
+										UnnamedResourcesAccessed: expectedUnnamedResourceTxnAssignment,
+									},
+								},
+								AppBudgetAdded:           700 + 700*uint64(innerCount),
+								AppBudgetConsumed:        ignoreAppBudgetConsumed,
+								UnnamedResourcesAccessed: expectedUnnamedResourceGroupAssignment,
+							},
+						},
+						EvalOverrides: simulation.ResultEvalOverrides{
+							AllowUnnamedResources: true,
+						},
+					},
+				}
+			})
+		})
+	}
+}
+
+// TestUnnamedResourcesAccountLocalWrite tests app call behavior when writing to an account's local
+// state they otherwise shouldn't have access to if AllowUnnamedResources is enabled.
+func TestUnnamedResourcesAccountLocalWrite(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	// Start with directRefEnabledVersion (4), since prior to that all restricted references had to
+	// be indexes into the foreign arrays, meaning we can't test the unnamed case.
+	for v := 4; v <= logic.LogicVersion; v++ {
+		v := v
+		t.Run(fmt.Sprintf("v%d", v), func(t *testing.T) {
+			t.Parallel()
+			simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+				sender := env.Accounts[0]
+				testAppUser := env.Accounts[1].Addr
+
+				program := fmt.Sprintf(`#pragma version %d
+txn ApplicationID
+!
+txn OnCompletion
+int OptIn
+==
+||
+bnz end // Do nothing during create or opt in
+
+// App local write to an account we shouldn't be able to
+addr %s
+byte "key"
+byte "value"
+app_local_put
+
+end:
+int 1
+`, v, testAppUser)
+
+				testAppID := env.CreateApp(sender.Addr, simulationtesting.AppParams{
+					ApprovalProgram:   program,
+					ClearStateProgram: fmt.Sprintf("#pragma version %d\n int 1", v),
+					LocalStateSchema: basics.StateSchema{
+						NumByteSlice: 1,
+					},
+				})
+
+				env.OptIntoApp(testAppUser, testAppID)
+
+				txn := env.TxnInfo.NewTxn(txntest.Txn{
+					Type:          protocol.ApplicationCallTx,
+					Sender:        sender.Addr,
+					ApplicationID: testAppID,
+				})
+				stxn := txn.Txn().Sign(sender.Sk)
+
+				proto := env.TxnInfo.CurrentProtocolParams()
+				expectedUnnamedResourceAssignment := &simulation.ResourceTracker{
+					MaxAccounts:               proto.MaxTxGroupSize * (proto.MaxAppTxnAccounts + proto.MaxAppTxnForeignApps),
+					MaxAssets:                 proto.MaxTxGroupSize * proto.MaxAppTxnForeignAssets,
+					MaxApps:                   proto.MaxTxGroupSize * proto.MaxAppTxnForeignApps,
+					MaxBoxes:                  proto.MaxTxGroupSize * proto.MaxAppBoxReferences,
+					MaxTotalRefs:              proto.MaxTxGroupSize * proto.MaxAppTotalTxnReferences,
+					MaxCrossProductReferences: proto.MaxTxGroupSize * proto.MaxAppTxnForeignApps * (proto.MaxAppTxnForeignApps + 2),
+				}
+				var expectedUnnamedResourceTxnAssignment *simulation.ResourceTracker
+
+				var expectedEvalDelta transactions.EvalDelta
+				var expectedError string
+				var expectedFailedAt simulation.TxnPath
+				// Can write to accounts outside of foreign array in sharedResourcesVersion (9), but not before then
+				if v >= 9 {
+					expectedEvalDelta = transactions.EvalDelta{
+						SharedAccts: []basics.Address{testAppUser},
+						LocalDeltas: map[uint64]basics.StateDelta{
+							1: {
+								"key": basics.ValueDelta{
+									Action: basics.SetBytesAction,
+									Bytes:  "value",
+								},
+							},
+						},
+					}
+					expectedUnnamedResourceAssignment.Accounts = map[basics.Address]struct{}{
+						testAppUser: {},
+					}
+					expectedUnnamedResourceAssignment.AppLocals = map[ledgercore.AccountApp]struct{}{
+						{Address: testAppUser, App: testAppID}: {},
+					}
+				} else {
+					expectedError = fmt.Sprintf("logic eval error: invalid Account reference for mutation %s", testAppUser)
+					expectedFailedAt = simulation.TxnPath{0}
+					expectedUnnamedResourceTxnAssignment = &simulation.ResourceTracker{
+						MaxAccounts:  proto.MaxAppTxnAccounts + proto.MaxAppTxnForeignApps,
+						MaxAssets:    proto.MaxAppTxnForeignAssets,
+						MaxApps:      proto.MaxAppTxnForeignApps,
+						MaxBoxes:     proto.MaxAppBoxReferences,
+						MaxTotalRefs: proto.MaxAppTotalTxnReferences,
+						Accounts: map[basics.Address]struct{}{
+							testAppUser: {},
+						},
+					}
+					expectedUnnamedResourceAssignment.MaxAccounts--
+					expectedUnnamedResourceAssignment.MaxTotalRefs--
+				}
+
+				if expectedUnnamedResourceTxnAssignment != nil && !expectedUnnamedResourceTxnAssignment.HasResources() {
+					expectedUnnamedResourceTxnAssignment = nil
+				}
+
+				if !expectedUnnamedResourceAssignment.HasResources() {
+					expectedUnnamedResourceAssignment = nil
+				}
+
+				return simulationTestCase{
+					input: simulation.Request{
+						TxnGroups:             [][]transactions.SignedTxn{{stxn}},
+						AllowUnnamedResources: true,
+					},
+					expectedError: expectedError,
+					expected: simulation.Result{
+						Version:   simulation.ResultLatestVersion,
+						LastRound: env.TxnInfo.LatestRound(),
+						TxnGroups: []simulation.TxnGroupResult{
+							{
+								Txns: []simulation.TxnResult{
+									{
+										Txn: transactions.SignedTxnWithAD{
+											ApplyData: transactions.ApplyData{
+												EvalDelta: expectedEvalDelta,
+											},
+										},
+										AppBudgetConsumed:        ignoreAppBudgetConsumed,
+										UnnamedResourcesAccessed: expectedUnnamedResourceTxnAssignment,
+									},
+								},
+								FailedAt:                 expectedFailedAt,
+								AppBudgetAdded:           700,
+								AppBudgetConsumed:        ignoreAppBudgetConsumed,
+								UnnamedResourcesAccessed: expectedUnnamedResourceAssignment,
+							},
+						},
+						EvalOverrides: simulation.ResultEvalOverrides{
+							AllowUnnamedResources: true,
+						},
+					},
+				}
+			})
+		})
+	}
+}
+
+// TestUnnamedResourcesCreatedAppsAndAssets tests cross-product availability for newly created apps
+// and assets.
+func TestUnnamedResourcesCreatedAppsAndAssets(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	// Start with v9, since that's when we first track cross-product references indepdently.
+	for v := 9; v <= logic.LogicVersion; v++ {
+		v := v
+		t.Run(fmt.Sprintf("v%d", v), func(t *testing.T) {
+			t.Parallel()
+			simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+				sender := env.Accounts[0]
+				otherResourceCreator := env.Accounts[1]
+				otherAccount := env.Accounts[2].Addr
+
+				otherAssetID := env.CreateAsset(otherResourceCreator.Addr, basics.AssetParams{Total: 100})
+				otherAppID := env.CreateApp(sender.Addr, simulationtesting.AppParams{
+					ApprovalProgram:   fmt.Sprintf("#pragma version %d\n int 1", v),
+					ClearStateProgram: fmt.Sprintf("#pragma version %d\n int 1", v),
+				})
+
+				program := fmt.Sprintf(`#pragma version %d
+txn ApplicationID
+bz end // Do nothing during create
+
+gtxn 0 CreatedAssetID
+store 0 // new asset
+
+gtxn 1 CreatedApplicationID
+dup
+store 1 // new app
+app_params_get AppAddress
+assert
+store 2 // new app account
+
+addr %s
+store 10 // other account
+
+int %d
+store 11 // other asset
+
+int %d
+store 12 // other app
+
+// Asset holding lookup for newly created asset
+load 10
+load 0
+asset_holding_get AssetBalance
+!
+assert
+!
+assert
+
+// App local lookup for newly created app
+load 10
+load 1
+app_opted_in
+!
+assert
+
+// Asset holding lookup for newly created app account
+load 2
+load 11
+asset_holding_get AssetBalance
+!
+assert
+!
+assert
+
+// App local lookup for newly created app account
+load 2
+load 12
+app_opted_in
+!
+assert
+
+end:
+int 1
+`, v, otherAccount, otherAssetID, otherAppID)
+
+				testAppID := env.CreateApp(sender.Addr, simulationtesting.AppParams{
+					ApprovalProgram:   program,
+					ClearStateProgram: fmt.Sprintf("#pragma version %d\n int 1", v),
+				})
+
+				assetCreateTxn := env.TxnInfo.NewTxn(txntest.Txn{
+					Type:   protocol.AssetConfigTx,
+					Sender: otherResourceCreator.Addr,
+					AssetParams: basics.AssetParams{
+						Total: 1,
+					},
+				})
+				appCreateTxn := env.TxnInfo.NewTxn(txntest.Txn{
+					Type:              protocol.ApplicationCallTx,
+					Sender:            otherResourceCreator.Addr,
+					ApprovalProgram:   fmt.Sprintf("#pragma version %d\n int 1", v),
+					ClearStateProgram: fmt.Sprintf("#pragma version %d\n int 1", v),
+				})
+				appCallTxn := env.TxnInfo.NewTxn(txntest.Txn{
+					Type:          protocol.ApplicationCallTx,
+					Sender:        sender.Addr,
+					ApplicationID: testAppID,
+				})
+				txntest.Group(&assetCreateTxn, &appCreateTxn, &appCallTxn)
+				assetCreateStxn := assetCreateTxn.Txn().Sign(otherResourceCreator.Sk)
+				appCreateStxn := appCreateTxn.Txn().Sign(otherResourceCreator.Sk)
+				appCallStxn := appCallTxn.Txn().Sign(sender.Sk)
+
+				proto := env.TxnInfo.CurrentProtocolParams()
+				expectedUnnamedResourceAssignment := simulation.ResourceTracker{
+					MaxAccounts:  (proto.MaxTxGroupSize - 1) * (proto.MaxAppTxnAccounts + proto.MaxAppTxnForeignApps),
+					MaxAssets:    (proto.MaxTxGroupSize - 1) * proto.MaxAppTxnForeignAssets,
+					MaxApps:      (proto.MaxTxGroupSize - 1) * proto.MaxAppTxnForeignApps,
+					MaxBoxes:     (proto.MaxTxGroupSize - 1) * proto.MaxAppBoxReferences,
+					MaxTotalRefs: (proto.MaxTxGroupSize - 1) * proto.MaxAppTotalTxnReferences,
+
+					Accounts: map[basics.Address]struct{}{
+						otherAccount: {},
+					},
+					Assets: map[basics.AssetIndex]struct{}{
+						otherAssetID: {},
+					},
+					Apps: map[basics.AppIndex]struct{}{
+						otherAppID: {},
+					},
+					MaxCrossProductReferences: (proto.MaxTxGroupSize - 1) * proto.MaxAppTxnForeignApps * (proto.MaxAppTxnForeignApps + 2),
+					// These should remain nil, since cross-product references for newly created
+					// resources should not be counted against the group's resource limits.
+					AssetHoldings: nil,
+					AppLocals:     nil,
+				}
+
+				return simulationTestCase{
+					input: simulation.Request{
+						TxnGroups: [][]transactions.SignedTxn{
+							{assetCreateStxn, appCreateStxn, appCallStxn},
+						},
+						AllowUnnamedResources: true,
+					},
+					expected: simulation.Result{
+						Version:   simulation.ResultLatestVersion,
+						LastRound: env.TxnInfo.LatestRound(),
+						TxnGroups: []simulation.TxnGroupResult{
+							{
+								Txns: []simulation.TxnResult{
+									{
+										Txn: transactions.SignedTxnWithAD{
+											ApplyData: transactions.ApplyData{
+												ConfigAsset: basics.AssetIndex(testAppID) + 1,
+											},
+										},
+									},
+									{
+										Txn: transactions.SignedTxnWithAD{
+											ApplyData: transactions.ApplyData{
+												ApplicationID: testAppID + 2,
+											},
+										},
+										AppBudgetConsumed: ignoreAppBudgetConsumed,
+									},
+									{
+										AppBudgetConsumed: ignoreAppBudgetConsumed,
+									},
+								},
+								AppBudgetAdded:           1400,
+								AppBudgetConsumed:        ignoreAppBudgetConsumed,
+								UnnamedResourcesAccessed: &expectedUnnamedResourceAssignment,
+							},
+						},
+						EvalOverrides: simulation.ResultEvalOverrides{
+							AllowUnnamedResources: true,
+						},
+					},
+				}
+			})
+		})
+	}
+}
+
+const boxTestProgram = `#pragma version %d
+txn ApplicationID
+bz end // Do nothing during create
+
+byte "create"
+byte "delete"
+byte "read"
+byte "write"
+txn ApplicationArgs 0
+match create delete read write
+err // Unknown command
+
+create:
+txn ApplicationArgs 1
+txn ApplicationArgs 2
+btoi
+box_create
+assert
+b end
+
+delete:
+txn ApplicationArgs 1
+box_del
+assert
+b end
+
+read:
+txn ApplicationArgs 1
+box_get
+pop
+pop
+b end
+
+write:
+txn ApplicationArgs 1
+int 0
+txn ApplicationArgs 2
+box_replace
+
+end:
+int 1
+`
+
+type boxOperation struct {
+	op            logic.BoxOperation
+	name          string
+	createSize    uint64
+	contents      []byte
+	otherRefCount int
+}
+
+func (o boxOperation) appArgs() [][]byte {
+	switch o.op {
+	case logic.BoxCreateOperation:
+		return [][]byte{
+			[]byte("create"),
+			[]byte(o.name),
+			uint64ToBytes(o.createSize),
+		}
+	case logic.BoxReadOperation:
+		return [][]byte{
+			[]byte("read"),
+			[]byte(o.name),
+		}
+	case logic.BoxWriteOperation:
+		return [][]byte{
+			[]byte("write"),
+			[]byte(o.name),
+			o.contents,
+		}
+	case logic.BoxDeleteOperation:
+		return [][]byte{
+			[]byte("delete"),
+			[]byte(o.name),
+		}
+	default:
+		panic(fmt.Sprintf("unknown box operation: %v", o.op))
+	}
+}
+
+type boxTestResult struct {
+	Boxes           map[logic.BoxRef]uint64
+	NumEmptyBoxRefs int
+
+	FailureMessage string
+	FailingIndex   int
+}
+
+func testUnnamedBoxOperations(t *testing.T, env simulationtesting.Environment, app basics.AppIndex, boxOps []boxOperation, expected boxTestResult) {
+	t.Helper()
+
+	maxGroupSize := env.TxnInfo.CurrentProtocolParams().MaxTxGroupSize
+	require.LessOrEqual(t, len(boxOps), maxGroupSize)
+
+	otherAssets := 0
+	txns := make([]*txntest.Txn, maxGroupSize)
+	for i, op := range boxOps {
+		txn := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:            protocol.ApplicationCallTx,
+			Sender:          env.Accounts[0].Addr,
+			ApplicationID:   app,
+			ApplicationArgs: op.appArgs(),
+			ForeignAssets:   make([]basics.AssetIndex, op.otherRefCount),
+			Note:            []byte{byte(i)}, // Make each txn unique
+		})
+		txns[i] = &txn
+		otherAssets += op.otherRefCount
+	}
+	for i := len(boxOps); i < maxGroupSize; i++ {
+		// Fill out the rest of the group with non-app transactions. This reduces the amount of
+		// unnamed global resources available.
+		txn := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   env.Accounts[0].Addr,
+			Receiver: env.Accounts[0].Addr,
+			Note:     []byte{byte(i)}, // Make each txn unique
+		})
+		txns[i] = &txn
+	}
+	txntest.Group(txns...)
+	stxns := make([]transactions.SignedTxn, len(txns))
+	for i, txn := range txns {
+		stxns[i] = txn.Txn().Sign(env.Accounts[0].Sk)
+	}
+
+	expectedTxnResults := make([]simulation.TxnResult, len(stxns))
+	for i := range expectedTxnResults {
+		expectedTxnResults[i].AppBudgetConsumed = ignoreAppBudgetConsumed
+	}
+
+	var failedAt simulation.TxnPath
+	if expected.FailureMessage != "" {
+		failedAt = simulation.TxnPath{uint64(expected.FailingIndex)}
+	}
+
+	proto := env.TxnInfo.CurrentProtocolParams()
+	expectedUnnamedResources := &simulation.ResourceTracker{
+		MaxAccounts:  len(boxOps) * (proto.MaxAppTxnAccounts + proto.MaxAppTxnForeignApps),
+		MaxAssets:    len(boxOps)*proto.MaxAppTxnForeignAssets - otherAssets,
+		MaxApps:      len(boxOps) * proto.MaxAppTxnForeignApps,
+		MaxBoxes:     len(boxOps) * proto.MaxAppBoxReferences,
+		MaxTotalRefs: len(boxOps)*proto.MaxAppTotalTxnReferences - otherAssets,
+
+		Boxes:           expected.Boxes,
+		NumEmptyBoxRefs: expected.NumEmptyBoxRefs,
+
+		MaxCrossProductReferences: len(boxOps) * proto.MaxAppTxnForeignApps * (proto.MaxAppTxnForeignApps + 2),
+	}
+
+	if !expectedUnnamedResources.HasResources() {
+		expectedUnnamedResources = nil
+	}
+
+	testCase := simulationTestCase{
+		input: simulation.Request{
+			TxnGroups:             [][]transactions.SignedTxn{stxns},
+			AllowUnnamedResources: true,
+		},
+		expectedError: expected.FailureMessage,
+		expected: simulation.Result{
+			Version:   simulation.ResultLatestVersion,
+			LastRound: env.TxnInfo.LatestRound(),
+			TxnGroups: []simulation.TxnGroupResult{
+				{
+					Txns:                     expectedTxnResults,
+					AppBudgetAdded:           uint64(700 * len(boxOps)),
+					AppBudgetConsumed:        ignoreAppBudgetConsumed,
+					UnnamedResourcesAccessed: expectedUnnamedResources,
+					FailedAt:                 failedAt,
+				},
+			},
+			EvalOverrides: simulation.ResultEvalOverrides{
+				AllowUnnamedResources: true,
+			},
+		},
+	}
+	runSimulationTestCase(t, env, testCase)
+}
+
+// TestUnnamedResourcesBoxIOBudget tests that the box IO budgets behave properly when
+// AllowUnnamedResources is enabled. It does us no good if you can reference unnamed boxes, but the
+// IO budget is still restricted based on the predeclared foreign box array.
+func TestUnnamedResourcesBoxIOBudget(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	// Boxes introduced in v8
+	for v := 8; v <= logic.LogicVersion; v++ {
+		v := v
+		t.Run(fmt.Sprintf("v%d", v), func(t *testing.T) {
+			t.Parallel()
+			env := simulationtesting.PrepareSimulatorTest(t)
+			defer env.Close()
+
+			sender := env.Accounts[0]
+
+			appID := env.CreateApp(sender.Addr, simulationtesting.AppParams{
+				ApprovalProgram:   fmt.Sprintf(boxTestProgram, v),
+				ClearStateProgram: fmt.Sprintf("#pragma version %d\n int 1", v),
+			})
+
+			proto := env.TxnInfo.CurrentProtocolParams()
+
+			// MBR is needed for boxes.
+			transferable := env.Accounts[1].AcctData.MicroAlgos.Raw - proto.MinBalance - proto.MinTxnFee
+			env.TransferAlgos(env.Accounts[1].Addr, appID.Address(), transferable)
+
+			// Set up boxes A, B, C for testing.
+			// A is a box with a size of exactly BytesPerBoxReference
+			env.Txn(env.TxnInfo.NewTxn(txntest.Txn{
+				Type:          protocol.ApplicationCallTx,
+				Sender:        sender.Addr,
+				ApplicationID: appID,
+				ApplicationArgs: [][]byte{
+					[]byte("create"),
+					[]byte("A"),
+					uint64ToBytes(proto.BytesPerBoxReference),
+				},
+				Boxes: []transactions.BoxRef{{Name: []byte("A")}},
+			}).SignedTxn())
+			// B is a box with a size of 1
+			env.Txn(env.TxnInfo.NewTxn(txntest.Txn{
+				Type:          protocol.ApplicationCallTx,
+				Sender:        sender.Addr,
+				ApplicationID: appID,
+				ApplicationArgs: [][]byte{
+					[]byte("create"),
+					[]byte("B"),
+					uint64ToBytes(1),
+				},
+				Boxes: []transactions.BoxRef{{Name: []byte("B")}},
+			}).SignedTxn())
+			// C is a box with a size of 2 * BytesPerBoxReference - 1
+			env.Txn(env.TxnInfo.NewTxn(txntest.Txn{
+				Type:          protocol.ApplicationCallTx,
+				Sender:        sender.Addr,
+				ApplicationID: appID,
+				ApplicationArgs: [][]byte{
+					[]byte("create"),
+					[]byte("C"),
+					uint64ToBytes(2*proto.BytesPerBoxReference - 1),
+				},
+				Boxes: []transactions.BoxRef{{Name: []byte("C")}, {}},
+			}).SignedTxn())
+
+			testBoxOps := func(boxOps []boxOperation, expected boxTestResult) {
+				t.Helper()
+				testUnnamedBoxOperations(t, env, appID, boxOps, expected)
+			}
+
+			// Each test below will run against the environment we just set up. They will each run
+			// in separate simulations, so we can reuse the same environment and not have to worry
+			// about the effects of one test interfering with another.
+
+			// Reading exisitng boxes
+			testBoxOps([]boxOperation{
+				{op: logic.BoxReadOperation, name: "A"},
+			}, boxTestResult{
+				Boxes: map[logic.BoxRef]uint64{
+					{App: appID, Name: "A"}: proto.BytesPerBoxReference,
+				},
+			})
+			testBoxOps([]boxOperation{
+				{op: logic.BoxReadOperation, name: "B"},
+			}, boxTestResult{
+				Boxes: map[logic.BoxRef]uint64{
+					{App: appID, Name: "B"}: 1,
+				},
+			})
+			testBoxOps([]boxOperation{
+				{op: logic.BoxReadOperation, name: "C"},
+			}, boxTestResult{
+				Boxes: map[logic.BoxRef]uint64{
+					{App: appID, Name: "C"}: 2*proto.BytesPerBoxReference - 1,
+				},
+				// We need an additional empty box ref because the size of C exceeds BytesPerBoxReference
+				NumEmptyBoxRefs: 1,
+			})
+			testBoxOps([]boxOperation{
+				{op: logic.BoxReadOperation, name: "A"},
+				{op: logic.BoxReadOperation, name: "B"},
+			}, boxTestResult{
+				Boxes: map[logic.BoxRef]uint64{
+					{App: appID, Name: "A"}: proto.BytesPerBoxReference,
+					{App: appID, Name: "B"}: 1,
+				},
+			})
+			testBoxOps([]boxOperation{
+				{op: logic.BoxReadOperation, name: "A"},
+				{op: logic.BoxReadOperation, name: "C"},
+			}, boxTestResult{
+				Boxes: map[logic.BoxRef]uint64{
+					{App: appID, Name: "A"}: proto.BytesPerBoxReference,
+					{App: appID, Name: "C"}: 2*proto.BytesPerBoxReference - 1,
+				},
+				NumEmptyBoxRefs: 1,
+			})
+			testBoxOps([]boxOperation{
+				{op: logic.BoxReadOperation, name: "A"},
+				{op: logic.BoxReadOperation, name: "B"},
+				{op: logic.BoxReadOperation, name: "C"},
+			}, boxTestResult{
+				Boxes: map[logic.BoxRef]uint64{
+					{App: appID, Name: "A"}: proto.BytesPerBoxReference,
+					{App: appID, Name: "B"}: 1,
+					{App: appID, Name: "C"}: 2*proto.BytesPerBoxReference - 1,
+				},
+				// No empty box refs needed because we have perfectly reached 3 * BytesPerBoxReference
+			})
+			testBoxOps([]boxOperation{
+				{op: logic.BoxReadOperation, name: "Q"},
+			}, boxTestResult{
+				Boxes: map[logic.BoxRef]uint64{
+					{App: appID, Name: "Q"}: 0,
+				},
+			})
+
+			// Creating new boxes
+			testBoxOps([]boxOperation{
+				{op: logic.BoxCreateOperation, name: "D", createSize: proto.BytesPerBoxReference},
+			}, boxTestResult{
+				Boxes: map[logic.BoxRef]uint64{
+					{App: appID, Name: "D"}: 0,
+				},
+			})
+			testBoxOps([]boxOperation{
+				{op: logic.BoxCreateOperation, name: "D", createSize: proto.BytesPerBoxReference + 1},
+			}, boxTestResult{
+				Boxes: map[logic.BoxRef]uint64{
+					{App: appID, Name: "D"}: 0,
+				},
+				NumEmptyBoxRefs: 1,
+			})
+			testBoxOps([]boxOperation{
+				{op: logic.BoxCreateOperation, name: "D", createSize: proto.BytesPerBoxReference * 3},
+			}, boxTestResult{
+				Boxes: map[logic.BoxRef]uint64{
+					{App: appID, Name: "D"}: 0,
+				},
+				NumEmptyBoxRefs: 2,
+			})
+			testBoxOps([]boxOperation{
+				{op: logic.BoxCreateOperation, name: "D", createSize: 1},
+				{op: logic.BoxCreateOperation, name: "E", createSize: 1},
+			}, boxTestResult{
+				Boxes: map[logic.BoxRef]uint64{
+					{App: appID, Name: "D"}: 0,
+					{App: appID, Name: "E"}: 0,
+				},
+			})
+
+			// Creating new boxes and reading existing ones
+			testBoxOps([]boxOperation{
+				{op: logic.BoxCreateOperation, name: "D", createSize: proto.BytesPerBoxReference + 2},
+				{op: logic.BoxReadOperation, name: "A"},
+			}, boxTestResult{
+				Boxes: map[logic.BoxRef]uint64{
+					{App: appID, Name: "D"}: 0,
+					{App: appID, Name: "A"}: proto.BytesPerBoxReference,
+				},
+				// Since we never write to A, its write budget can cover the extra bytes from writing D,
+				// so no extra refs needed.
+			})
+			testBoxOps([]boxOperation{
+				{op: logic.BoxReadOperation, name: "A"},
+				{op: logic.BoxCreateOperation, name: "D", createSize: proto.BytesPerBoxReference + 2},
+			}, boxTestResult{
+				Boxes: map[logic.BoxRef]uint64{
+					{App: appID, Name: "D"}: 0,
+					{App: appID, Name: "A"}: proto.BytesPerBoxReference,
+				},
+				// The same is true in reverse.
+			})
+
+			// Writing to new boxes and existing boxes
+			testBoxOps([]boxOperation{
+				{op: logic.BoxCreateOperation, name: "D", createSize: proto.BytesPerBoxReference + 2},
+				{op: logic.BoxWriteOperation, name: "A", contents: []byte{1}},
+			}, boxTestResult{
+				Boxes: map[logic.BoxRef]uint64{
+					{App: appID, Name: "D"}: 0,
+					{App: appID, Name: "A"}: proto.BytesPerBoxReference,
+				},
+				NumEmptyBoxRefs: 1,
+			})
+			testBoxOps([]boxOperation{
+				{op: logic.BoxCreateOperation, name: "D", createSize: proto.BytesPerBoxReference + 2},
+				{op: logic.BoxWriteOperation, name: "B", contents: []byte{1}},
+			}, boxTestResult{
+				Boxes: map[logic.BoxRef]uint64{
+					{App: appID, Name: "D"}: 0,
+					{App: appID, Name: "B"}: 1,
+				},
+				// Expect 0 empty box refs because the additional box ref from B can cover the extra bytes
+				// from writing D
+			})
+
+			// Writing then deleting
+			testBoxOps([]boxOperation{
+				{op: logic.BoxCreateOperation, name: "D", createSize: 4 * proto.BytesPerBoxReference},
+				{op: logic.BoxDeleteOperation, name: "D"},
+			}, boxTestResult{
+				Boxes: map[logic.BoxRef]uint64{
+					{App: appID, Name: "D"}: 0,
+				},
+				// Still need 3 empty box refs because we went over the write budget before deletion.
+				NumEmptyBoxRefs: 3,
+			})
+
+			// Writing, deleting, then reading
+			testBoxOps([]boxOperation{
+				{op: logic.BoxCreateOperation, name: "D", createSize: 4 * proto.BytesPerBoxReference},
+				{op: logic.BoxDeleteOperation, name: "D"},
+				{op: logic.BoxReadOperation, name: "C"},
+			}, boxTestResult{
+				Boxes: map[logic.BoxRef]uint64{
+					{App: appID, Name: "D"}: 0,
+					{App: appID, Name: "C"}: 2*proto.BytesPerBoxReference - 1,
+				},
+				// 1 extra ref from writing D can be used to cover the extra bytes from reading C,
+				// but the other refs must remain.
+				NumEmptyBoxRefs: 2,
+			})
+
+			// Testing limits
+
+			// Exactly at read budget
+			testBoxOps([]boxOperation{
+				{
+					op:            logic.BoxReadOperation,
+					name:          "A",
+					otherRefCount: proto.MaxAppBoxReferences - 1,
+				},
+			}, boxTestResult{
+				Boxes: map[logic.BoxRef]uint64{
+					{App: appID, Name: "A"}: proto.BytesPerBoxReference,
+				},
+			})
+
+			// Over read budget
+			testBoxOps([]boxOperation{
+				{
+					op:            logic.BoxReadOperation,
+					name:          "C",
+					otherRefCount: proto.MaxAppBoxReferences - 1,
+				},
+			}, boxTestResult{
+				FailureMessage: fmt.Sprintf("logic eval error: invalid Box reference %#x", "C"),
+				FailingIndex:   0,
+			})
+
+			// Very close to read budget, but writing another box should still be allowed
+			testBoxOps([]boxOperation{
+				{
+					op:            logic.BoxReadOperation,
+					name:          "C",
+					otherRefCount: proto.MaxAppBoxReferences - 2,
+				},
+				{
+					op:            logic.BoxCreateOperation,
+					name:          "X",
+					createSize:    2 * proto.BytesPerBoxReference,
+					otherRefCount: proto.MaxAppBoxReferences,
+				},
+			}, boxTestResult{
+				Boxes: map[logic.BoxRef]uint64{
+					{App: appID, Name: "C"}: 2*proto.BytesPerBoxReference - 1,
+					{App: appID, Name: "X"}: 0,
+				},
+			})
+
+			// Exactly at write budget
+			testBoxOps([]boxOperation{
+				{
+					op:            logic.BoxCreateOperation,
+					name:          "X",
+					createSize:    proto.BytesPerBoxReference,
+					otherRefCount: proto.MaxAppBoxReferences - 1,
+				},
+			}, boxTestResult{
+				Boxes: map[logic.BoxRef]uint64{
+					{App: appID, Name: "X"}: 0,
+				},
+			})
+
+			// Over write budget
+			testBoxOps([]boxOperation{
+				{
+					op:            logic.BoxCreateOperation,
+					name:          "X",
+					createSize:    proto.BytesPerBoxReference + 1,
+					otherRefCount: proto.MaxAppBoxReferences - 1,
+				},
+			}, boxTestResult{
+				Boxes: map[logic.BoxRef]uint64{
+					{App: appID, Name: "X"}: 0,
+				},
+				FailureMessage: fmt.Sprintf("logic eval error: write budget (%d) exceeded %d", proto.BytesPerBoxReference, proto.BytesPerBoxReference+1),
+				FailingIndex:   0,
+			})
+
+			// Exactly at write budget, but reading another box should still be allowed
+			testBoxOps([]boxOperation{
+				{
+					op:            logic.BoxCreateOperation,
+					name:          "X",
+					createSize:    2 * proto.BytesPerBoxReference,
+					otherRefCount: proto.MaxAppBoxReferences - 2,
+				},
+				{
+					op:            logic.BoxReadOperation,
+					name:          "A",
+					otherRefCount: proto.MaxAppBoxReferences,
+				},
+			}, boxTestResult{
+				Boxes: map[logic.BoxRef]uint64{
+					{App: appID, Name: "X"}: 0,
+					{App: appID, Name: "A"}: proto.BytesPerBoxReference,
+				},
+			})
+
+			// No more refs available
+			testBoxOps([]boxOperation{
+				{
+					op:            logic.BoxReadOperation,
+					name:          "A",
+					otherRefCount: proto.MaxAppBoxReferences - 1,
+				},
+				{
+					op:            logic.BoxReadOperation,
+					name:          "B",
+					otherRefCount: proto.MaxAppBoxReferences,
+				},
+			}, boxTestResult{
+				Boxes: map[logic.BoxRef]uint64{
+					{App: appID, Name: "A"}: proto.BytesPerBoxReference,
+				},
+				FailureMessage: fmt.Sprintf("logic eval error: invalid Box reference %#x", "B"),
+				FailingIndex:   1,
+			})
+		})
+	}
+}
+
+const resourceLimitsTestProgramBase = `#pragma version %d
+txn ApplicationID
+bz end // Do nothing during create
+
+// Scratch slots:
+// 0 - loop counter
+// 1 - resource type
+// 2 - cross-product app/asset ID
+// 3 - cross-product accounts
+
+loop:
+load 0
+txn NumAppArgs
+<
+bz loop_end
+load 0
+txnas ApplicationArgs
+dup
+
+extract 1 0
+swap
+
+int 0
+getbyte
+
+store 1
+load 1
+bz account
+load 1
+int 1
+==
+bnz asset
+load 1
+int 2
+==
+bnz app
+load 1
+int 3
+==
+bnz box
+load 1
+int 4
+==
+bnz asset_holding
+load 1
+int 5
+==
+bnz app_local
+err
+
+account:
+balance
+assert
+b loop_step
+
+asset:
+btoi
+asset_params_get AssetTotal
+assert
+assert
+b loop_step
+
+app:
+btoi
+byte 0x01
+app_global_get_ex
+!
+assert
+!
+assert
+b loop_step
+
+box:
+%s
+b loop_step
+
+asset_holding:
+dup
+int 0
+extract_uint64
+store 2
+extract 8 0
+store 3
+asset_holding_loop:
+load 3
+len
+bz asset_holding_loop_end
+txn Note
+load 3
+dup
+extract 1 0
+store 3
+int 0
+getbyte
+int 32
+*
+int 32
+extract
+load 2
+asset_holding_get AssetBalance
+!
+assert
+!
+assert
+b asset_holding_loop
+asset_holding_loop_end:
+b loop_step
+
+app_local:
+dup
+int 0
+extract_uint64
+store 2
+extract 8 0
+store 3
+app_local_loop:
+load 3
+len
+bz app_local_loop_end
+txn Note
+load 3
+dup
+extract 1 0
+store 3
+int 0
+getbyte
+int 32
+*
+int 32
+extract
+load 2
+app_opted_in
+!
+assert
+b app_local_loop
+app_local_loop_end:
+
+loop_step:
+load 0
+int 1
++
+store 0
+b loop
+loop_end:
+
+end:
+int 1
+`
+
+func resourceLimitsTestProgram(version int) string {
+	var boxCode string
+	if version >= 8 {
+		// Boxes available
+		boxCode = "box_len; !; assert; !; assert"
+	} else {
+		boxCode = "err"
+	}
+	return fmt.Sprintf(resourceLimitsTestProgramBase, version, boxCode)
+}
+
+type unnamedResourceArgument struct {
+	account              basics.Address
+	asset                basics.AssetIndex
+	app                  basics.AppIndex
+	box                  string
+	assetHoldingAccounts []basics.Address
+	appLocalAccounts     []basics.Address
+
+	limitExceeded bool
+}
+
+type unnamedResourceArguments []unnamedResourceArgument
+
+func (resources unnamedResourceArguments) markLimitExceeded() unnamedResourceArguments {
+	modified := slices.Clone(resources)
+	modified[len(modified)-1].limitExceeded = true
+	return modified
+}
+
+func (resources unnamedResourceArguments) addAccounts(accounts ...basics.Address) unnamedResourceArguments {
+	modified := slices.Clone(resources)
+	for _, account := range accounts {
+		modified = append(modified, unnamedResourceArgument{account: account})
+	}
+	return modified
+}
+
+func (resources unnamedResourceArguments) addAssets(assets ...basics.AssetIndex) unnamedResourceArguments {
+	modified := slices.Clone(resources)
+	for _, asset := range assets {
+		modified = append(modified, unnamedResourceArgument{asset: asset})
+	}
+	return modified
+}
+
+func (resources unnamedResourceArguments) addApps(apps ...basics.AppIndex) unnamedResourceArguments {
+	modified := slices.Clone(resources)
+	for _, app := range apps {
+		modified = append(modified, unnamedResourceArgument{app: app})
+	}
+	return modified
+}
+
+func (resources unnamedResourceArguments) addBoxes(boxes ...string) unnamedResourceArguments {
+	modified := slices.Clone(resources)
+	for _, box := range boxes {
+		modified = append(modified, unnamedResourceArgument{box: box})
+	}
+	return modified
+}
+
+func (resources unnamedResourceArguments) addAssetHoldings(asset basics.AssetIndex, accounts ...basics.Address) unnamedResourceArguments {
+	modified := slices.Clone(resources)
+	modified = append(modified, unnamedResourceArgument{asset: asset, assetHoldingAccounts: accounts})
+	return modified
+}
+
+func (resources unnamedResourceArguments) addAppLocals(app basics.AppIndex, accounts ...basics.Address) unnamedResourceArguments {
+	modified := slices.Clone(resources)
+	modified = append(modified, unnamedResourceArgument{app: app, appLocalAccounts: accounts})
+	return modified
+}
+
+func (resources unnamedResourceArguments) accounts() []basics.Address {
+	var accounts []basics.Address
+	for i := range resources {
+		if resources[i].limitExceeded {
+			break
+		}
+		if !resources[i].account.IsZero() {
+			accounts = append(accounts, resources[i].account)
+		}
+		// accounts = append(accounts, resources[i].assetHoldingAccounts...)
+		// accounts = append(accounts, resources[i].appLocalAccounts...)
+	}
+	return accounts
+}
+
+func (resources unnamedResourceArguments) assets() []basics.AssetIndex {
+	var assets []basics.AssetIndex
+	for i := range resources {
+		if resources[i].limitExceeded {
+			break
+		}
+		if resources[i].asset != 0 {
+			assets = append(assets, resources[i].asset)
+		}
+	}
+	return assets
+}
+
+func (resources unnamedResourceArguments) apps() []basics.AppIndex {
+	var apps []basics.AppIndex
+	for i := range resources {
+		if resources[i].limitExceeded {
+			break
+		}
+		if resources[i].app != 0 {
+			apps = append(apps, resources[i].app)
+		}
+	}
+	return apps
+}
+
+func (resources unnamedResourceArguments) boxes() []string {
+	var boxes []string
+	for i := range resources {
+		if resources[i].limitExceeded {
+			break
+		}
+		if resources[i].box != "" {
+			boxes = append(boxes, resources[i].box)
+		}
+	}
+	return boxes
+}
+
+func (resources unnamedResourceArguments) assetHoldings() []ledgercore.AccountAsset {
+	var assetHoldings []ledgercore.AccountAsset
+	for i := range resources {
+		if resources[i].limitExceeded {
+			break
+		}
+		for _, account := range resources[i].assetHoldingAccounts {
+			assetHoldings = append(assetHoldings, ledgercore.AccountAsset{
+				Address: account,
+				Asset:   resources[i].asset,
+			})
+		}
+	}
+	return assetHoldings
+}
+
+func (resources unnamedResourceArguments) appLocals() []ledgercore.AccountApp {
+	var appLocals []ledgercore.AccountApp
+	for i := range resources {
+		if resources[i].limitExceeded {
+			break
+		}
+		for _, account := range resources[i].appLocalAccounts {
+			appLocals = append(appLocals, ledgercore.AccountApp{
+				Address: account,
+				App:     resources[i].app,
+			})
+		}
+	}
+	return appLocals
+}
+
+func (resources unnamedResourceArguments) addToTxn(txn *txntest.Txn) {
+	encodedArgs := make([][]byte, len(resources))
+	crossProductAccounts := make(map[basics.Address]int)
+	var crossProductAccountsOrder []basics.Address
+	for i, resource := range resources {
+		switch {
+		case len(resource.assetHoldingAccounts) != 0:
+			encoding := make([]byte, 1+8+len(resource.assetHoldingAccounts))
+			encoding[0] = 4
+			copy(encoding[1:9], uint64ToBytes(uint64(resource.asset)))
+			for j, account := range resource.assetHoldingAccounts {
+				accountIndex, ok := crossProductAccounts[account]
+				if !ok {
+					accountIndex = len(crossProductAccounts)
+					crossProductAccounts[account] = accountIndex
+					crossProductAccountsOrder = append(crossProductAccountsOrder, account)
+				}
+				encoding[9+j] = byte(accountIndex)
+			}
+			encodedArgs[i] = encoding
+		case len(resource.appLocalAccounts) != 0:
+			encoding := make([]byte, 1+8+len(resource.appLocalAccounts))
+			encoding[0] = 5
+			copy(encoding[1:9], uint64ToBytes(uint64(resource.app)))
+			for j, account := range resource.appLocalAccounts {
+				accountIndex, ok := crossProductAccounts[account]
+				if !ok {
+					accountIndex = len(crossProductAccounts)
+					crossProductAccounts[account] = accountIndex
+					crossProductAccountsOrder = append(crossProductAccountsOrder, account)
+				}
+				encoding[9+j] = byte(accountIndex)
+			}
+			encodedArgs[i] = encoding
+		case !resource.account.IsZero():
+			encodedArgs[i] = append([]byte{0}, resource.account[:]...)
+		case resource.asset != 0:
+			encodedArgs[i] = append([]byte{1}, uint64ToBytes(uint64(resource.asset))...)
+		case resource.app != 0:
+			encodedArgs[i] = append([]byte{2}, uint64ToBytes(uint64(resource.app))...)
+		case resource.box != "":
+			encodedArgs[i] = append([]byte{3}, []byte(resource.box)...)
+		default:
+			panic(fmt.Sprintf("empty resource at index %d", i))
+		}
+	}
+	txn.ApplicationArgs = encodedArgs
+	txn.Note = make([]byte, 32*len(crossProductAccountsOrder))
+	for i, account := range crossProductAccountsOrder {
+		copy(txn.Note[32*i:], account[:])
+	}
+}
+
+func mapWithKeys[K comparable, V any](keys []K, defaultValue V) map[K]V {
+	if keys == nil {
+		return nil
+	}
+
+	m := make(map[K]V, len(keys))
+	for _, k := range keys {
+		m[k] = defaultValue
+	}
+	return m
+}
+
+func boxNamesToRefs(app basics.AppIndex, names []string) []logic.BoxRef {
+	if names == nil {
+		return nil
+	}
+
+	refs := make([]logic.BoxRef, len(names))
+	for i, name := range names {
+		refs[i] = logic.BoxRef{
+			App:  app,
+			Name: name,
+		}
+	}
+	return refs
+}
+
+func testUnnamedResourceLimits(t *testing.T, env simulationtesting.Environment, appVersion int, app basics.AppIndex, resources unnamedResourceArguments, otherTxns []txntest.Txn, extraBudget uint64, expectedError string) {
+	t.Helper()
+	maxGroupSize := env.TxnInfo.CurrentProtocolParams().MaxTxGroupSize
+	txns := make([]*txntest.Txn, maxGroupSize)
+	appCall := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:          protocol.ApplicationCallTx,
+		Sender:        env.Accounts[0].Addr,
+		ApplicationID: app,
+	})
+	resources.addToTxn(&appCall)
+	txns[0] = &appCall
+	for i := range otherTxns {
+		txn := env.TxnInfo.NewTxn(otherTxns[i])
+		txns[i+1] = &txn
+	}
+	for i := 1 + len(otherTxns); i < maxGroupSize; i++ {
+		// Fill out the rest of the group with non-app transactions. This reduces the amount of
+		// unnamed global resources available.
+		txn := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   env.Accounts[0].Addr,
+			Receiver: env.Accounts[0].Addr,
+			Note:     []byte{byte(i)}, // Make each txn unique
+		})
+		txns[i] = &txn
+	}
+	txntest.Group(txns...)
+	stxns := make([]transactions.SignedTxn, len(txns))
+	for i, txn := range txns {
+		stxns[i] = txn.Txn().Sign(env.Accounts[0].Sk)
+	}
+
+	expectedTxnResults := make([]simulation.TxnResult, len(stxns))
+	for i := range expectedTxnResults {
+		expectedTxnResults[i].AppBudgetConsumed = ignoreAppBudgetConsumed
+	}
+
+	var failedAt simulation.TxnPath
+	if expectedError != "" {
+		failedAt = simulation.TxnPath{0}
+	}
+
+	proto := env.TxnInfo.CurrentProtocolParams()
+
+	expectedGroupResources := &simulation.ResourceTracker{
+		MaxAccounts:  proto.MaxAppTxnAccounts + proto.MaxAppTxnForeignApps,
+		MaxAssets:    proto.MaxAppTxnForeignAssets,
+		MaxApps:      proto.MaxAppTxnForeignApps,
+		MaxBoxes:     proto.MaxAppBoxReferences,
+		MaxTotalRefs: proto.MaxAppTotalTxnReferences,
+
+		Boxes: mapWithKeys(boxNamesToRefs(app, resources.boxes()), uint64(0)),
+
+		MaxCrossProductReferences: proto.MaxAppTxnForeignApps * (proto.MaxAppTxnForeignApps + 2),
+	}
+	expectedAccounts := mapWithKeys(resources.accounts(), struct{}{})
+	// If present, delete the sender, since it's accessible normally.
+	delete(expectedAccounts, env.Accounts[0].Addr)
+	if len(expectedAccounts) == 0 {
+		expectedAccounts = nil
+	}
+	expectedAssets := mapWithKeys(resources.assets(), struct{}{})
+	for _, txn := range otherTxns {
+		delete(expectedAssets, txn.XferAsset)
+	}
+	if len(expectedAssets) == 0 {
+		expectedAssets = nil
+	}
+	expectedApps := mapWithKeys(resources.apps(), struct{}{})
+	delete(expectedApps, app)
+	if len(expectedApps) == 0 {
+		expectedApps = nil
+	}
+	if appVersion < 9 {
+		// No shared resources
+		localResources := simulation.ResourceTracker{
+			MaxAccounts:  proto.MaxAppTxnAccounts + proto.MaxAppTxnForeignApps,
+			MaxAssets:    proto.MaxAppTxnForeignAssets,
+			MaxApps:      proto.MaxAppTxnForeignApps,
+			MaxBoxes:     proto.MaxAppBoxReferences,
+			MaxTotalRefs: proto.MaxAppTotalTxnReferences,
+
+			Accounts: expectedAccounts,
+			Assets:   expectedAssets,
+			Apps:     expectedApps,
+		}
+		expectedGroupResources.MaxAccounts -= len(localResources.Accounts) + len(localResources.Apps)
+		expectedGroupResources.MaxAssets -= len(localResources.Assets)
+		expectedGroupResources.MaxApps -= len(localResources.Apps)
+		expectedGroupResources.MaxTotalRefs -= len(localResources.Accounts) + len(localResources.Assets) + len(localResources.Apps)
+		if localResources.HasResources() {
+			expectedTxnResults[0].UnnamedResourcesAccessed = &localResources
+		}
+	} else {
+		// Shared resources
+		expectedGroupResources.Accounts = expectedAccounts
+		expectedGroupResources.Assets = expectedAssets
+		expectedGroupResources.Apps = expectedApps
+		expectedGroupResources.AssetHoldings = mapWithKeys(resources.assetHoldings(), struct{}{})
+		expectedGroupResources.AppLocals = mapWithKeys(resources.appLocals(), struct{}{})
+	}
+
+	if !expectedGroupResources.HasResources() {
+		expectedGroupResources = nil
+	}
+
+	testCase := simulationTestCase{
+		input: simulation.Request{
+			TxnGroups:             [][]transactions.SignedTxn{stxns},
+			AllowUnnamedResources: true,
+			ExtraOpcodeBudget:     extraBudget,
+		},
+		expectedError: expectedError,
+		expected: simulation.Result{
+			Version:   simulation.ResultLatestVersion,
+			LastRound: env.TxnInfo.LatestRound(),
+			TxnGroups: []simulation.TxnGroupResult{
+				{
+					Txns:                     expectedTxnResults,
+					AppBudgetAdded:           uint64(700) + extraBudget,
+					AppBudgetConsumed:        ignoreAppBudgetConsumed,
+					UnnamedResourcesAccessed: expectedGroupResources,
+					FailedAt:                 failedAt,
+				},
+			},
+			EvalOverrides: simulation.ResultEvalOverrides{
+				AllowUnnamedResources: true,
+				ExtraOpcodeBudget:     extraBudget,
+			},
+		},
+	}
+	runSimulationTestCase(t, env, testCase)
+}
+
+func TestUnnamedResourcesLimits(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	// Start with v5, since that introduces the `txnas` opcode, needed for dynamic indexing into app
+	// args array.
+	for v := 5; v <= logic.LogicVersion; v++ {
+		v := v
+		t.Run(fmt.Sprintf("v%d", v), func(t *testing.T) {
+			t.Parallel()
+			env := simulationtesting.PrepareSimulatorTest(t)
+			defer env.Close()
+
+			proto := env.TxnInfo.CurrentProtocolParams()
+
+			sender := env.Accounts[0]
+			otherAccounts := make([]basics.Address, len(env.Accounts)-1)
+			for i := range otherAccounts {
+				otherAccounts[i] = env.Accounts[i+1].Addr
+			}
+
+			assetCreator := env.Accounts[1].Addr
+			assets := make([]basics.AssetIndex, proto.MaxAppTxnForeignAssets+1)
+			for i := range assets {
+				assets[i] = env.CreateAsset(assetCreator, basics.AssetParams{Total: 100})
+			}
+
+			otherAppCreator := env.Accounts[1].Addr
+			otherApps := make([]basics.AppIndex, proto.MaxAppTxnForeignApps+1)
+			for i := range otherApps {
+				otherApps[i] = env.CreateApp(otherAppCreator, simulationtesting.AppParams{
+					// The program version here doesn't matter
+					ApprovalProgram:   "#pragma version 8\nint 1",
+					ClearStateProgram: "#pragma version 8\nint 1",
+				})
+			}
+
+			boxes := make([]string, proto.MaxAppBoxReferences+1)
+			for i := range boxes {
+				boxes[i] = fmt.Sprintf("box%d", i)
+			}
+
+			appID := env.CreateApp(sender.Addr, simulationtesting.AppParams{
+				ApprovalProgram:   resourceLimitsTestProgram(v),
+				ClearStateProgram: fmt.Sprintf("#pragma version %d\n int 1", v),
+			})
+
+			testResourceAccess := func(resources unnamedResourceArguments, extra ...string) {
+				t.Helper()
+				var expectedError string
+				if len(extra) != 0 {
+					expectedError = extra[0]
+				}
+				testUnnamedResourceLimits(t, env, v, appID, resources, nil, 0, expectedError)
+			}
+
+			// Each test below will run against the environment we just set up. They will each run
+			// in separate simulations, so we can reuse the same environment and not have to worry
+			// about the effects of one test interfering with another.
+
+			// Exactly at account limit
+			testResourceAccess(
+				unnamedResourceArguments{}.addAccounts(otherAccounts[:proto.MaxAppTotalTxnReferences]...),
+			)
+			// Over account limit
+			testResourceAccess(
+				unnamedResourceArguments{}.
+					addAccounts(otherAccounts[:proto.MaxAppTotalTxnReferences+1]...).
+					markLimitExceeded(),
+				fmt.Sprintf("logic eval error: invalid Account reference %s", otherAccounts[proto.MaxAppTotalTxnReferences]),
+			)
+
+			// Exactly at asset limit
+			testResourceAccess(
+				unnamedResourceArguments{}.addAssets(assets[:proto.MaxAppTxnForeignAssets]...),
+			)
+			// Over asset limit
+			testResourceAccess(
+				unnamedResourceArguments{}.
+					addAssets(assets[:proto.MaxAppTxnForeignAssets+1]...).
+					markLimitExceeded(),
+				fmt.Sprintf("logic eval error: unavailable Asset %d", assets[proto.MaxAppTxnForeignAssets]),
+			)
+
+			// Exactly at app limit
+			testResourceAccess(
+				unnamedResourceArguments{}.addApps(otherApps[:proto.MaxAppTxnForeignApps]...),
+			)
+			// Over app limit
+			testResourceAccess(
+				unnamedResourceArguments{}.
+					addApps(otherApps[:proto.MaxAppTxnForeignApps+1]...).
+					markLimitExceeded(),
+				fmt.Sprintf("logic eval error: unavailable App %d", otherApps[proto.MaxAppTxnForeignApps]),
+			)
+
+			if v >= 8 {
+				// Exactly at box limit
+				testResourceAccess(
+					unnamedResourceArguments{}.addBoxes(boxes[:proto.MaxAppBoxReferences]...),
+				)
+				// Over box limit
+				testResourceAccess(
+					unnamedResourceArguments{}.
+						addBoxes(boxes[:proto.MaxAppBoxReferences+1]...).
+						markLimitExceeded(),
+					fmt.Sprintf("logic eval error: invalid Box reference %#x", boxes[proto.MaxAppBoxReferences]),
+				)
+			}
+
+			numResourceTypes := 3 // accounts, assets, apps
+			if v >= 8 {
+				numResourceTypes++ // boxes
+			}
+			var atLimit unnamedResourceArguments
+			for i := 0; i < proto.MaxAppTotalTxnReferences; i++ {
+				switch i % numResourceTypes {
+				case 0:
+					atLimit = atLimit.addAccounts(otherAccounts[i/numResourceTypes])
+				case 1:
+					atLimit = atLimit.addAssets(assets[i/numResourceTypes])
+				case 2:
+					atLimit = atLimit.addApps(otherApps[i/numResourceTypes])
+				case 3:
+					atLimit = atLimit.addBoxes(boxes[i/numResourceTypes])
+				default:
+					panic(fmt.Sprintf("i=%d, numResourceTypes=%d", i, numResourceTypes))
+				}
+			}
+			// Exactly at limit for total references
+			testResourceAccess(atLimit)
+
+			// Adding 1 more of any is over the limit
+			testResourceAccess(
+				atLimit.addAccounts(otherAccounts[len(otherAccounts)-1]).markLimitExceeded(),
+				fmt.Sprintf("logic eval error: invalid Account reference %s", otherAccounts[len(otherAccounts)-1]),
+			)
+			testResourceAccess(
+				atLimit.addAssets(assets[len(assets)-1]).markLimitExceeded(),
+				fmt.Sprintf("logic eval error: unavailable Asset %d", assets[len(assets)-1]),
+			)
+			testResourceAccess(
+				atLimit.addApps(otherApps[len(otherApps)-1]).markLimitExceeded(),
+				fmt.Sprintf("logic eval error: unavailable App %d", otherApps[len(otherApps)-1]),
+			)
+			if v >= 8 {
+				testResourceAccess(
+					atLimit.addBoxes(boxes[len(boxes)-1]).markLimitExceeded(),
+					fmt.Sprintf("logic eval error: invalid Box reference %#x", boxes[len(boxes)-1]),
+				)
+			}
+		})
+	}
+}
+
+// PROBLEM: for newly created assets/apps (and app accounts), cross-product refs with unnamed resources
+// SHOULD NOT count against the cross product limit. This is because just including the other resource
+// anywhere in the group is enough to grant access.
+
+func excludingIndex[S []V, V any](slice S, index int) S {
+	if index == 0 {
+		return slice[1:]
+	}
+	if index == len(slice)-1 {
+		return slice[:len(slice)-1]
+	}
+	return append(slices.Clone(slice[:index]), slice[index+1:]...)
+}
+
+func TestUnnamedResourcesCrossProductLimits(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	// Start with v9, since that's when we first track cross-product references indepdently.
+	for v := 9; v <= logic.LogicVersion; v++ {
+		v := v
+		t.Run(fmt.Sprintf("v%d", v), func(t *testing.T) {
+			t.Parallel()
+			env := simulationtesting.PrepareSimulatorTest(t)
+			defer env.Close()
+
+			proto := env.TxnInfo.CurrentProtocolParams()
+
+			sender := env.Accounts[0]
+			otherAccounts := make([]basics.Address, proto.MaxTxGroupSize)
+			for i := range otherAccounts {
+				otherAccounts[i][0] = byte(i + 1)
+			}
+
+			assets := make([]basics.AssetIndex, proto.MaxTxGroupSize-1)
+			for i := range assets {
+				assets[i] = env.CreateAsset(sender.Addr, basics.AssetParams{Total: 100})
+			}
+
+			otherApps := make([]basics.AppIndex, proto.MaxAppTxnForeignApps)
+			for i := range otherApps {
+				otherApps[i] = env.CreateApp(sender.Addr, simulationtesting.AppParams{
+					// The program version here doesn't matter
+					ApprovalProgram:   "#pragma version 8\nint 1",
+					ClearStateProgram: "#pragma version 8\nint 1",
+				})
+			}
+			otherAppAccounts := make([]basics.Address, len(otherApps))
+			for i := range otherAppAccounts {
+				otherAppAccounts[i] = otherApps[i].Address()
+			}
+
+			appID := env.CreateApp(sender.Addr, simulationtesting.AppParams{
+				ApprovalProgram:   resourceLimitsTestProgram(v),
+				ClearStateProgram: fmt.Sprintf("#pragma version %d\n int 1", v),
+			})
+
+			otherAccounts[len(otherAccounts)-1] = appID.Address()
+
+			assetFillingTxns := make([]txntest.Txn, proto.MaxTxGroupSize-1)
+			for i := range assetFillingTxns {
+				assetFillingTxns[i] = txntest.Txn{
+					Type:          protocol.AssetTransferTx,
+					XferAsset:     assets[i],
+					Sender:        sender.Addr,
+					AssetReceiver: otherAccounts[i],
+				}
+			}
+
+			testResourceAccess := func(resources unnamedResourceArguments, extra ...string) {
+				t.Helper()
+				var expectedError string
+				if len(extra) != 0 {
+					expectedError = extra[0]
+				}
+				testUnnamedResourceLimits(t, env, v, appID, resources, assetFillingTxns, 2000, expectedError)
+			}
+
+			// Each test below will run against the environment we just set up. They will each run
+			// in separate simulations, so we can reuse the same environment and not have to worry
+			// about the effects of one test interfering with another.
+
+			maxCrossProducts := proto.MaxAppTxnForeignApps * (proto.MaxAppTxnForeignApps + 2)
+
+			var atAssetHoldingLimit unnamedResourceArguments
+			var assetHoldingLimitIndex int
+			for i := range assets {
+				accounts := excludingIndex(otherAccounts, i)
+				end := false
+				if (i+1)*(proto.MaxTxGroupSize-1) >= maxCrossProducts {
+					remaining := maxCrossProducts - i*(proto.MaxTxGroupSize-1)
+					accounts = accounts[:remaining]
+					assetHoldingLimitIndex = i + 1
+					end = true
+				}
+				atAssetHoldingLimit = atAssetHoldingLimit.addAssetHoldings(assets[i], accounts...)
+				if end {
+					break
+				}
+			}
+
+			var atAppLocalLimit unnamedResourceArguments
+			for i := range otherApps {
+				accounts := []basics.Address{sender.Addr, appID.Address()}
+				accounts = append(accounts, excludingIndex(otherAppAccounts, i)...)
+				atAppLocalLimit = atAppLocalLimit.addAppLocals(otherApps[i], accounts...)
+			}
+			atAppLocalLimit = atAppLocalLimit.addAppLocals(appID, otherAppAccounts...)
+
+			// Hitting the limit with a combined number of asset holdings and app locals. We reuse
+			// most of atAppLocalLimit, but remove the last app locals and replace them with asset
+			// holdings.
+			atCombinedLimit := atAppLocalLimit[:len(atAppLocalLimit)-1]
+			atCombinedLimit = atCombinedLimit.addAssetHoldings(assets[0], otherAccounts[1:proto.MaxAppTxnForeignApps+1]...)
+
+			// Exactly at asset holding limit
+			testResourceAccess(atAssetHoldingLimit)
+
+			// Exactly at app local limit
+			testResourceAccess(atAppLocalLimit)
+
+			// Exactly at total cross-product limit with both resource types
+			testResourceAccess(atCombinedLimit)
+
+			// Over asset holding limit
+			testResourceAccess(
+				atAssetHoldingLimit.
+					addAssetHoldings(assets[assetHoldingLimitIndex], otherAccounts[0]).
+					markLimitExceeded(),
+				fmt.Sprintf("logic eval error: unavailable Holding %s x %d", otherAccounts[0], assets[assetHoldingLimitIndex]),
+			)
+
+			// Over app local limit
+			testResourceAccess(
+				atAppLocalLimit.
+					addAppLocals(appID, otherAccounts[0]).
+					markLimitExceeded(),
+				fmt.Sprintf("logic eval error: unavailable Local State %s x %d", otherAccounts[0], appID),
+			)
+
+			// Over total cross-product limit with asset holding
+			testResourceAccess(
+				atCombinedLimit.
+					addAssetHoldings(assets[1], otherAccounts[0]).
+					markLimitExceeded(),
+				fmt.Sprintf("logic eval error: unavailable Holding %s x %d", otherAccounts[0], assets[1]),
+			)
+
+			// Over total cross-product limit with app local
+			testResourceAccess(
+				atCombinedLimit.
+					addAppLocals(appID, otherAccounts[0]).
+					markLimitExceeded(),
+				fmt.Sprintf("logic eval error: unavailable Local State %s x %d", otherAccounts[0], appID),
+			)
 		})
 	}
 }

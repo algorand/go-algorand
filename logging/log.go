@@ -376,6 +376,12 @@ func NewWrappedLogger(l *logrus.Logger) Logger {
 	return out
 }
 
+// RegisterExitHandler registers a function to be called on exit by logrus
+// Exit handling happens when logrus.Exit is called, which is called by logrus.Fatal
+func RegisterExitHandler(handler func()) {
+	logrus.RegisterExitHandler(handler)
+}
+
 func (l logger) EnableTelemetry(cfg TelemetryConfig) (err error) {
 	if l.loggerState.telemetry != nil || (!cfg.Enable && !cfg.SendToLog) {
 		return nil

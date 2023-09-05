@@ -17,12 +17,52 @@
 package generator
 
 import (
+	_ "embed"
 	"fmt"
 	"math/rand"
 	"time"
 
 	txn "github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/tools/block-generator/util"
 )
+
+// ---- templates ----
+
+//go:embed teal/poap_boxes.teal
+var approvalBoxes string
+var approvalBoxesBytes interface{}
+
+//go:embed teal/poap_clear.teal
+var clearBoxes string
+var clearBoxesBytes interface{}
+
+//go:embed teal/swap_amm.teal
+var approvalSwap string
+var approvalSwapBytes interface{}
+
+//go:embed teal/swap_clear.teal
+var clearSwap string
+var clearSwapBytes interface{}
+
+// Precompile teal programs
+func init() {
+	prog, err := logic.AssembleString(approvalBoxes)
+	util.MaybeFail(err, "failed to assemble approval program")
+	approvalBoxesBytes = prog.Program
+
+	prog, err = logic.AssembleString(clearBoxes)
+	util.MaybeFail(err, "failed to assemble clear program")
+	clearBoxesBytes = prog.Program
+
+	prog, err = logic.AssembleString(approvalSwap)
+	util.MaybeFail(err, "failed to assemble approvalSwap program")
+	approvalSwapBytes = prog.Program
+
+	prog, err = logic.AssembleString(clearSwap)
+	util.MaybeFail(err, "failed to assemble clearSwap program")
+	clearSwapBytes = prog.Program
+}
 
 // ---- generator app state ----
 
@@ -71,7 +111,7 @@ func countEffects(actual TxTypeID) uint64 {
 
 func CumulativeEffects(report Report) EffectsReport {
 	effsReport := make(EffectsReport)
-	for txType, data := range report {
+	for txType, data := range report.Transactions {
 		rootCount := data.GenerationCount
 		effsReport[string(txType)] += rootCount
 		for _, effect := range effects[txType] {
