@@ -866,23 +866,20 @@ func (cfg *Local) AdjustConnectionLimits(requiredFDs, maxFDs uint64) bool {
 
 // StoresCatchpoints returns true if the node is configured to store catchpoints
 func (cfg *Local) StoresCatchpoints() bool {
+	if cfg.CatchpointInterval <= 0 {
+		return false
+	}
 	switch cfg.CatchpointTracking {
-	case -1:
+	case CatchpointTrackingModeUntracked:
 		// No catchpoints.
 	default:
 		fallthrough
-	case 0, 1:
-		if cfg.Archival && (cfg.CatchpointInterval > 0) {
+	case CatchpointTrackingModeAutomatic, CatchpointTrackingModeTracked:
+		if cfg.Archival {
 			return true
 		}
-	case 2:
-		if cfg.CatchpointInterval > 0 {
-			return true
-		}
-	case ForceCatchpointFileGenerationTrackingMode:
-		if cfg.CatchpointInterval > 0 {
-			return true
-		}
+	case CatchpointTrackingModeStored, ForceCatchpointFileGenerationTrackingMode:
+		return true
 	}
 	return false
 }
@@ -892,7 +889,7 @@ func (cfg *Local) TracksCatchpoints() bool {
 	if cfg.StoresCatchpoints() {
 		return true
 	}
-	if cfg.CatchpointTracking == 1 && cfg.CatchpointInterval > 0 {
+	if cfg.CatchpointTracking == CatchpointTrackingModeTracked && cfg.CatchpointInterval > 0 {
 		return true
 	}
 	return false

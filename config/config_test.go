@@ -816,69 +816,69 @@ func TestStoresCatchpoints(t *testing.T) {
 	}{
 		{
 			name:               "-1 w/ no catchpoint interval expects false",
-			catchpointTracking: -1,
+			catchpointTracking: CatchpointTrackingModeUntracked,
 			catchpointInterval: 0,
 			expected:           false,
 		},
 		{
 			name:               "-1 expects false",
-			catchpointTracking: -1,
+			catchpointTracking: CatchpointTrackingModeUntracked,
 			catchpointInterval: GetDefaultLocal().CatchpointInterval,
 			archival:           GetDefaultLocal().Archival,
 			expected:           false,
 		},
 		{
 			name:               "0 expects false",
-			catchpointTracking: 0,
+			catchpointTracking: CatchpointTrackingModeAutomatic,
 			catchpointInterval: GetDefaultLocal().CatchpointInterval,
 			archival:           GetDefaultLocal().Archival,
 			expected:           false,
 		},
 		{
 			name:               "0 w/ archival expects true",
-			catchpointTracking: 0,
+			catchpointTracking: CatchpointTrackingModeAutomatic,
 			catchpointInterval: GetDefaultLocal().CatchpointInterval,
 			archival:           true,
 			expected:           true,
 		},
 		{
 			name:               "0 w/ archival & catchpointInterval=0 expects false",
-			catchpointTracking: 0,
+			catchpointTracking: CatchpointTrackingModeAutomatic,
 			catchpointInterval: 0,
 			archival:           true,
 			expected:           false,
 		},
 		{
 			name:               "1 expects false",
-			catchpointTracking: 1,
+			catchpointTracking: CatchpointTrackingModeTracked,
 			catchpointInterval: GetDefaultLocal().CatchpointInterval,
 			archival:           GetDefaultLocal().Archival,
 			expected:           false,
 		},
 		{
 			name:               "1 w/ archival expects true",
-			catchpointTracking: 1,
+			catchpointTracking: CatchpointTrackingModeTracked,
 			catchpointInterval: GetDefaultLocal().CatchpointInterval,
 			archival:           true,
 			expected:           true,
 		},
 		{
 			name:               "1 w/ archival & catchpointInterval=0 expects false",
-			catchpointTracking: 1,
+			catchpointTracking: CatchpointTrackingModeTracked,
 			catchpointInterval: 0,
 			archival:           true,
 			expected:           false,
 		},
 		{
 			name:               "2 w/ catchpointInterval=0 expects false",
-			catchpointTracking: 2,
+			catchpointTracking: CatchpointTrackingModeStored,
 			catchpointInterval: 0,
 			archival:           GetDefaultLocal().Archival,
 			expected:           false,
 		},
 		{
 			name:               "2 expects true",
-			catchpointTracking: 2,
+			catchpointTracking: CatchpointTrackingModeStored,
 			catchpointInterval: GetDefaultLocal().CatchpointInterval,
 			archival:           GetDefaultLocal().Archival,
 			expected:           true,
@@ -923,7 +923,7 @@ func TestTracksCatchpointsWithoutStoring(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	cfg := GetDefaultLocal()
-	cfg.CatchpointTracking = 1
+	cfg.CatchpointTracking = CatchpointTrackingModeTracked
 	cfg.CatchpointInterval = 10000
 	cfg.Archival = false
 	require.Equal(t, true, cfg.TracksCatchpoints())
