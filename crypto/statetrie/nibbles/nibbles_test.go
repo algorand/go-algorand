@@ -43,7 +43,7 @@ func TestNibblesRandom(t *testing.T) {
 		localRand.Read(data)
 		half := localRand.Intn(2) == 0 // half of the time, we have an odd number of nibbles
 		if half && localRand.Intn(2) == 0 {
-			data[len(data)-1] |= 0x0f // sometimes clear the last nibble, sometimes do not
+			data[len(data)-1] &= 0xf0 // sometimes clear the last nibble, sometimes do not
 		}
 		nibbles := MakeNibbles(data, half)
 
