@@ -469,7 +469,6 @@ func verifyPermutationExpectedActions(t *testing.T, playerN int, eventN int, hel
 		switch eventN {
 		case proposeVoteVerifiedEventSamePeriod:
 			requireActionCount(t, trace, 1, playerN, eventN)
-			requireActionCount(t, trace, 1, playerN, eventN)
 			// This case should never happen -- player is on R+1 and the voteVerified event is for R.
 			// Player will not queue up a verifyVoteAction for this vote (without DynamicFilterTimeout enabled).
 			// We are asserting the relay behavior player currently implements, but it is not possible given current
