@@ -459,7 +459,6 @@ func (node *AlgorandFullNode) Stop() {
 	node.lowPriorityCryptoVerificationPool.Shutdown()
 	node.cryptoPool.Shutdown()
 	node.cancelCtx()
-	node.ledger.Close()
 	if node.capabilitiesDiscovery != nil {
 		node.capabilitiesDiscovery.Close()
 	}
