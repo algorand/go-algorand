@@ -632,6 +632,7 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 				// ignore it.
 				err := ef.(filteredEvent).Err
 				return append(actions, ignoreAction(e, err))
+			case MayImpactCredentialTracking:
 				// There is another case, where the message
 				// MayImpactCredentialTracking. This case does not return here,
 				// so we continue processing the message.
