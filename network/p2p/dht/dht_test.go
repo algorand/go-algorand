@@ -34,7 +34,12 @@ func TestDHTBasic(t *testing.T) {
 
 	h, err := libp2p.New()
 	require.NoError(t, err)
-	dht, err := MakeDHT(context.Background(), h, "devtestnet", config.GetDefaultLocal(), []*peer.AddrInfo{})
+	dht, err := MakeDHT(
+		context.Background(),
+		h,
+		"devtestnet",
+		config.GetDefaultLocal(),
+		[]*peer.AddrInfo{{}})
 	require.NoError(t, err)
 	_, err = MakeDiscovery(dht)
 	require.NoError(t, err)

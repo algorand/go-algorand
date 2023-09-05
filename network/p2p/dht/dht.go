@@ -71,9 +71,9 @@ func dhtProtocolPrefix(network string) protocol.ID {
 // MakeDHT creates the dht.IpfsDHT object
 func MakeDHT(ctx context.Context, h host.Host, network string, cfg config.Local, bootstrapPeers []*peer.AddrInfo) (*dht.IpfsDHT, error) {
 	var peers []peer.AddrInfo
-	for _, peer := range bootstrapPeers {
-		if peer != nil {
-			peers = append(peers, *peer)
+	for _, bPeer := range bootstrapPeers {
+		if bPeer != nil {
+			peers = append(peers, *bPeer)
 		}
 	}
 	dhtCfg := []dht.Option{
