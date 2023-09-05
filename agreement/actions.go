@@ -320,16 +320,11 @@ func (a rezeroAction) do(ctx context.Context, s *Service) {
 		s.historicalClocks[a.Round] = s.Clock
 	}
 
-	removeList := make([]round, 0)
-
+	// garbage collect clocks that are too old
 	for rnd := range s.historicalClocks {
 		if a.Round > rnd+credentialRoundLag {
-			removeList = append(removeList, rnd)
+			delete(s.historicalClocks, rnd)
 		}
-	}
-
-	for _, rnd := range removeList {
-		delete(s.historicalClocks, rnd)
 	}
 }
 
