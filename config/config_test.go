@@ -805,6 +805,8 @@ func TestResolveLogPaths(t *testing.T) {
 }
 
 func TestStoresCatchpoints(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	var tests = []struct {
 		name               string
 		catchpointTracking int64
@@ -918,6 +920,8 @@ func TestStoresCatchpoints(t *testing.T) {
 }
 
 func TestTracksCatchpointsWithoutStoring(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	cfg := GetDefaultLocal()
 	cfg.CatchpointTracking = 1
 	cfg.CatchpointInterval = 10000
