@@ -25,11 +25,54 @@ import (
 	"time"
 )
 
-func TestNibbles(t *testing.T) { // nolint:paralleltest // Serial tests for trie for the moment
+func TestNibblesRandom(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	rand.Seed(time.Now().UnixNano())
+	seed := time.Now().UnixNano()
+	localRand := rand.New(rand.NewSource(seed))
+	defer func() {
+		if t.Failed() {
+			t.Logf("The seed was %d", seed)
+		}
+	}()
+
+	for i := 0; i < 1_000; i++ {
+		length := localRand.Intn(8192) + 1
+		data := make([]byte, length)
+		localRand.Read(data)
+		half := localRand.Intn(2) == 0 // half of the time, we have an odd number of nibbles
+		if half && localRand.Intn(2) == 0 {
+			data[len(data)-1] |= 0x0f // sometimes clear the last nibble, sometimes do not
+		}
+		nibbles := MakeNibbles(data, half)
+
+		data2 := Serialize(nibbles)
+		nibbles2, err := Deserialize(data2)
+		require.NoError(t, err)
+		require.Equal(t, nibbles, nibbles2)
+
+		if half {
+			data[len(data)-1] &= 0xf0 // clear last nibble
+		}
+		packed, odd := Pack(nibbles)
+		require.Equal(t, odd, half)
+		require.Equal(t, packed, data)
+		unpacked := Unpack(packed, odd)
+		require.Equal(t, nibbles, unpacked)
+
+		packed, odd = Pack(nibbles2)
+		require.Equal(t, odd, half)
+		require.Equal(t, packed, data)
+		unpacked = Unpack(packed, odd)
+		require.Equal(t, nibbles2, unpacked)
+	}
+}
+
+func TestNibbles(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	sampleNibbles := []Nibbles{
 		{0x0, 0x1, 0x2, 0x3, 0x4},
 		{0x4, 0x1, 0x2, 0x3, 0x4},
@@ -115,7 +158,7 @@ func TestNibbles(t *testing.T) { // nolint:paralleltest // Serial tests for trie
 
 	for _, n := range sampleSerialization {
 		nbytes := Serialize(n)
-		n2, err := DeserializeNibbles(nbytes)
+		n2, err := Deserialize(nbytes)
 		require.NoError(t, err)
 		require.Equal(t, bytes.Equal(n, n2), true)
 	}
@@ -139,7 +182,7 @@ func TestNibbles(t *testing.T) { // nolint:paralleltest // Serial tests for trie
 	}
 	for _, n := range sampleEqualFalse {
 		ds := Serialize(n[0])
-		us, e := DeserializeNibbles(ds)
+		us, e := Deserialize(ds)
 		require.NoError(t, e)
 		require.Equal(t, Equal(n[0], us), true)
 		require.Equal(t, Equal(n[0], n[0]), true)
@@ -150,40 +193,8 @@ func TestNibbles(t *testing.T) { // nolint:paralleltest // Serial tests for trie
 		require.Equal(t, Equal(n[1], us), false)
 	}
 
-	_, e := DeserializeNibbles([]byte{})
+	_, e := Deserialize([]byte{})
 	require.Error(t, e)
-	_, e = DeserializeNibbles([]byte{0x02})
+	_, e = Deserialize([]byte{0x02})
 	require.Error(t, e)
-
-	for i := 0; i < 1_000; i++ {
-		length := rand.Intn(8191) + 1
-		data := make([]byte, length)
-		rand.Read(data)
-		half := rand.Intn(2) == 0 // half of the time, we have an odd number of nibbles
-		if half && rand.Intn(2) == 0 {
-			data[len(data)-1] |= 0x0f // sometimes clear the last nibble, sometimes do not
-		}
-		nibbles := MakeNibbles(data, half)
-
-		data2 := Serialize(nibbles)
-		nibbles2, err := DeserializeNibbles(data2)
-		require.NoError(t, err)
-		require.Equal(t, nibbles, nibbles2)
-
-		if half {
-			data[len(data)-1] &= 0xf0 // clear last nibble
-		}
-		packed, odd := Pack(nibbles)
-		require.Equal(t, odd, half)
-		require.Equal(t, packed, data)
-		unpacked := Unpack(packed, odd)
-		require.Equal(t, nibbles, unpacked)
-
-		packed, odd = Pack(nibbles2)
-		require.Equal(t, odd, half)
-		require.Equal(t, packed, data)
-		unpacked = Unpack(packed, odd)
-		require.Equal(t, nibbles2, unpacked)
-	}
-
 }

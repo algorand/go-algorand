@@ -24,8 +24,16 @@ import (
 // Nibbles are 4-bit values stored in an 8-bit byte arrays
 type Nibbles []byte
 
-// MakeNibbles returns a nibble array from the byte array.  If oddLength is true, the
-// last 4 bits of the last byte of the array are ignored.
+const (
+	// evenIndicator for serialization when the last nibble in a byte array
+	// is part of the nibble array.
+	evenIndicator = 0x01
+	// oddIndicator for when it is not.
+	oddIndicator = 0x03
+)
+
+// MakeNibbles returns a nibble array from the byte array.  If oddLength is true,
+// the last 4 bits of the last byte of the array are ignored.
 func MakeNibbles(data []byte, oddLength bool) Nibbles {
 	return Unpack(data, oddLength)
 }
@@ -135,25 +143,25 @@ func Serialize(nyb Nibbles) (data []byte) {
 	copy(output, p)
 	if h {
 		// 0x1 is the arbitrary odd length indicator
-		output[length] = 0x1
+		output[length] = evenIndicator
 	} else {
 		// 0x3 is the arbitrary even length indicator
-		output[length] = 0x3
+		output[length] = oddIndicator
 	}
 
 	return output
 }
 
-// DeserializeNibbles returns a nibble array from the byte array.
-func DeserializeNibbles(encoding []byte) (Nibbles, error) {
+// Deserialize returns a nibble array from the byte array.
+func Deserialize(encoding []byte) (Nibbles, error) {
 	var ns Nibbles
 	length := len(encoding)
 	if length == 0 {
 		return nil, errors.New("invalid encoding")
 	}
-	if encoding[length-1] == 1 {
+	if encoding[length-1] == evenIndicator {
 		ns = Unpack(encoding[:length-1], true)
-	} else if encoding[length-1] == 3 {
+	} else if encoding[length-1] == oddIndicator {
 		ns = Unpack(encoding[:length-1], false)
 	} else {
 		return nil, errors.New("invalid encoding")
