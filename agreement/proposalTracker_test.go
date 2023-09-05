@@ -69,7 +69,7 @@ func TestProposalTrackerProposalSeeker(t *testing.T) {
 	var effect CredentialTrackingEffect
 	s, effect, err = s.accept(votes[2])
 	assert.NoError(t, err)
-	assert.Equal(t, effect, NewBestCredential)
+	assert.Equal(t, effect, VerifiedBetterCredentialForTracking)
 	assert.False(t, s.Frozen)
 	assert.True(t, s.Filled)
 	assert.True(t, s.Lowest.equals(votes[2]))
@@ -85,7 +85,7 @@ func TestProposalTrackerProposalSeeker(t *testing.T) {
 
 	s, effect, err = s.accept(votes[1])
 	assert.NoError(t, err)
-	assert.Equal(t, effect, NewBestCredential)
+	assert.Equal(t, effect, VerifiedBetterCredentialForTracking)
 	assert.False(t, s.Frozen)
 	assert.True(t, s.Filled)
 	assert.True(t, s.Lowest.equals(votes[1]))
@@ -100,7 +100,7 @@ func TestProposalTrackerProposalSeeker(t *testing.T) {
 
 	s, effect, err = s.accept(votes[0])
 	assert.Error(t, err)
-	assert.Equal(t, effect, NewBestCredential)
+	assert.Equal(t, effect, VerifiedBetterCredentialForTracking)
 	assert.Equal(t, s.Lowest, lowestBeforeFreeze)
 	assert.True(t, s.Frozen)
 	assert.True(t, s.Filled)

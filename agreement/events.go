@@ -606,13 +606,15 @@ const (
 	// the credential tracking mechanism.
 	NoCredentialTrackingImpact CredentialTrackingEffect = iota
 
-	// MayImpactCredentialTracking indicates the filtered event could impact on
-	// the credential tracking mechanism and more processing may be required.
-	MayImpactCredentialTracking
+	// UnverifiedBetterCredentialForTracking indicates the filtered event could impact
+	// the credential tracking mechanism and more processing (validation) may be required.
+	// It may be set by proposalManager when handling votePresent events.
+	UnverifiedBetterCredentialForTracking
 
-	// NewBestCredential indicates that the filtered event provided a new best
+	// VerifiedBetterCredentialForTracking indicates that the filtered event provided a new best
 	// credential for its round.
-	NewBestCredential
+	// It may be set by proposalManager when handling voteVerified events.
+	VerifiedBetterCredentialForTracking
 )
 
 type filteredEvent struct {

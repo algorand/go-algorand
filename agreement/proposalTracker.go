@@ -50,7 +50,7 @@ func (s proposalSeeker) accept(v vote) (proposalSeeker, CredentialTrackingEffect
 		if !s.hasLowestAfterFreeze || v.Cred.Less(s.lowestAfterFreeze.Cred) {
 			s.lowestAfterFreeze = v
 			s.hasLowestAfterFreeze = true
-			effect = NewBestCredential
+			effect = VerifiedBetterCredentialForTracking
 		}
 		return s, effect, errProposalSeekerFrozen{}
 	}
@@ -63,7 +63,7 @@ func (s proposalSeeker) accept(v vote) (proposalSeeker, CredentialTrackingEffect
 	s.Filled = true
 	s.lowestAfterFreeze = v
 	s.hasLowestAfterFreeze = true
-	return s, NewBestCredential, nil
+	return s, VerifiedBetterCredentialForTracking, nil
 }
 
 // freeze freezes the state of the proposalSeeker so that future calls no longer
