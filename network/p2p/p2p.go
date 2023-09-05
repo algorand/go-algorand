@@ -70,7 +70,7 @@ const AlgorandWsProtocol = "/algorand-ws/1.0.0"
 
 const dialTimeout = 30 * time.Second
 
-func makeHost(cfg config.Local, datadir string, pstore peerstore.Peerstore, listenAddr string) (host.Host, error) {
+func makeHost(cfg config.Local, datadir string, pstore peerstore.Peerstore) (host.Host, error) {
 	// load stored peer ID, or make ephemeral peer ID
 	privKey, err := GetPrivKey(cfg, datadir)
 	if err != nil {
@@ -82,6 +82,15 @@ func makeHost(cfg config.Local, datadir string, pstore peerstore.Peerstore, list
 	// user-agent copied from wsNetwork.go
 	version := config.GetCurrentVersion()
 	ua := fmt.Sprintf("algod/%d.%d (%s; commit=%s; %d) %s(%s)", version.Major, version.Minor, version.Channel, version.CommitHash, version.BuildNumber, runtime.GOOS, runtime.GOARCH)
+
+	var listenAddr string
+	if cfg.NetAddress != "" {
+		if parsedListenAddr, perr := netAddressToListenAddress(cfg.NetAddress); perr == nil {
+			listenAddr = parsedListenAddr
+		}
+	} else {
+		listenAddr = "/ip4/0.0.0.0/tcp/0"
+	}
 
 	return libp2p.New(
 		libp2p.Identity(privKey),
@@ -95,15 +104,7 @@ func makeHost(cfg config.Local, datadir string, pstore peerstore.Peerstore, list
 
 // MakeService creates a P2P service instance
 func MakeService(ctx context.Context, log logging.Logger, cfg config.Local, datadir string, pstore peerstore.Peerstore, wsStreamHandler StreamHandler) (*serviceImpl, error) {
-	var listenAddr string
-	if cfg.NetAddress != "" {
-		if parsedListenAddr, perr := netAddressToListenAddress(cfg.NetAddress); perr == nil {
-			listenAddr = parsedListenAddr
-		}
-	} else {
-		listenAddr = "/ip4/0.0.0.0/tcp/0"
-	}
-	h, err := makeHost(cfg, datadir, pstore, listenAddr)
+	h, err := makeHost(cfg, datadir, pstore)
 	if err != nil {
 		return nil, err
 	}
