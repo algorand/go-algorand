@@ -20,12 +20,16 @@ import (
 	"bytes"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
+	"math/rand"
 	"testing"
+	"time"
 )
 
 func TestNibbles(t *testing.T) { // nolint:paralleltest // Serial tests for trie for the moment
 	partitiontest.PartitionTest(t)
-	// t.Parallel()
+	t.Parallel()
+
+	rand.Seed(time.Now().UnixNano())
 	sampleNibbles := []Nibbles{
 		{0x0, 0x1, 0x2, 0x3, 0x4},
 		{0x4, 0x1, 0x2, 0x3, 0x4},
@@ -150,5 +154,36 @@ func TestNibbles(t *testing.T) { // nolint:paralleltest // Serial tests for trie
 	require.Error(t, e)
 	_, e = DeserializeNibbles([]byte{0x02})
 	require.Error(t, e)
+
+	for i := 0; i < 1_000; i++ {
+		length := rand.Intn(8191) + 1
+		data := make([]byte, length)
+		rand.Read(data)
+		half := rand.Intn(1) == 0 // half of the time, we have an odd number of nibbles
+		if half && rand.Intn(1) == 0 {
+			data[len(data)-1] |= 0x0f // sometimes clear the last nibble, sometimes do not
+		}
+		nibbles := MakeNibbles(data, half)
+
+		data2 := Serialize(nibbles)
+		nibbles2, err := DeserializeNibbles(data2)
+		require.NoError(t, err)
+		require.Equal(t, nibbles, nibbles2)
+
+		if half {
+			data[len(data)-1] &= 0xf0 // clear last nibble
+		}
+		packed, odd := Pack(nibbles)
+		require.Equal(t, odd, half)
+		require.Equal(t, packed, data)
+		unpacked := Unpack(packed, odd)
+		require.Equal(t, nibbles, unpacked)
+
+		packed, odd = Pack(nibbles2)
+		require.Equal(t, odd, half)
+		require.Equal(t, packed, data)
+		unpacked = Unpack(packed, odd)
+		require.Equal(t, nibbles2, unpacked)
+	}
 
 }
