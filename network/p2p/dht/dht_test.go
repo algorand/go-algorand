@@ -79,9 +79,23 @@ func TestGetBootstrapPeersFailure(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	cfg := config.GetDefaultLocal()
+	cfg.DNSSecurityFlags = 0
 	cfg.DNSBootstrapID = "non-existent.algodev.network"
 
 	addrs := getBootstrapPeersFunc(cfg, "test")()
+
+	require.Equal(t, 0, len(addrs))
+}
+
+func TestGetBootstrapPeersInvalidAddr(t *testing.T) {
+	t.Parallel()
+	partitiontest.PartitionTest(t)
+
+	cfg := config.GetDefaultLocal()
+	cfg.DNSSecurityFlags = 0
+	cfg.DNSBootstrapID = "<network>.algodev.network"
+
+	addrs := getBootstrapPeersFunc(cfg, "testInvalidAddr")()
 
 	require.Equal(t, 0, len(addrs))
 }
