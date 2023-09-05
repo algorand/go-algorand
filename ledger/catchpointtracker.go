@@ -167,7 +167,13 @@ func (ct *catchpointTracker) initialize(cfg config.Local, paths DirsAndPrefix) {
 		ct.catchpointInterval = cfg.CatchpointInterval
 	}
 	ct.enableGeneratingCatchpointFiles = cfg.StoresCatchpoints()
-	ct.forceCatchpointFileWriting = cfg.CatchpointTracking == config.ForceCatchpointFileGenerationTrackingMode
+
+	// Overwrite previous options if forceCatchpointFileGenerationTrackingMode
+	if cfg.CatchpointTracking == forceCatchpointFileGenerationTrackingMode && cfg.CatchpointInterval > 0 {
+		ct.catchpointInterval = cfg.CatchpointInterval
+		ct.forceCatchpointFileWriting = true
+		ct.enableGeneratingCatchpointFiles = true
+	}
 
 	ct.catchpointFileHistoryLength = cfg.CatchpointFileHistoryLength
 	if cfg.CatchpointFileHistoryLength < -1 {

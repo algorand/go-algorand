@@ -89,10 +89,6 @@ const MaxGenesisIDLen = 128
 // MaxEvalDeltaTotalLogSize is the maximum size of the sum of all log sizes in a single eval delta.
 const MaxEvalDeltaTotalLogSize = 1024
 
-// ForceCatchpointFileGenerationTrackingMode defines the CatchpointTracking mode that would be used to
-// force a node to generate catchpoint files.
-const ForceCatchpointFileGenerationTrackingMode = 99
-
 // CatchpointTrackingModeUntracked defines the CatchpointTracking mode that does _not_ track catchpoints
 const CatchpointTrackingModeUntracked = -1
 

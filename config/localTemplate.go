@@ -388,8 +388,7 @@ type Local struct {
 	// A value of 1 means "track catchpoints as long as CatchpointInterval > 0".
 	// A value of 2 means "track catchpoints and always generate catchpoint files as long as CatchpointInterval > 0".
 	// A value of 0 means automatic, which is the default value. In this mode, a non archival node would not track the catchpoints, and an archival node would track the catchpoints as long as CatchpointInterval > 0.
-	// A value of 99 will force the node to generate catchpoint files
-	// Other values of CatchpointTracking would give a warning in the log file, and would behave as if the default value was provided.
+	// Other values of CatchpointTracking would behave as if the default value was provided.
 	CatchpointTracking int64 `version[11]:"0"`
 
 	// LedgerSynchronousMode defines the synchronous mode used by the ledger database. The supported options are:
@@ -881,7 +880,7 @@ func (cfg *Local) StoresCatchpoints() bool {
 		if cfg.Archival {
 			return true
 		}
-	case CatchpointTrackingModeStored, ForceCatchpointFileGenerationTrackingMode:
+	case CatchpointTrackingModeStored:
 		return true
 	}
 	return false

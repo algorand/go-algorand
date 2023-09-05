@@ -93,6 +93,10 @@ const initializingAccountCachesMessageTimeout = 3 * time.Second
 // where we end up batching up to 1000 rounds in a single update.
 const accountsUpdatePerRoundHighWatermark = 1 * time.Second
 
+// forceCatchpointFileGenerationTrackingMode defines the CatchpointTracking mode that would be used to
+// force a node to generate catchpoint files.
+const forceCatchpointFileGenerationTrackingMode = 99
+
 // A modifiedAccount represents an account that has been modified since
 // the persistent state stored in the account DB (i.e., in the range of
 // rounds covered by the accountUpdates tracker).
