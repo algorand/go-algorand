@@ -28,7 +28,12 @@ import (
 	"github.com/algorand/go-algorand/network/p2p"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
+
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/peer"
 	peerstore "github.com/libp2p/go-libp2p/core/peer"
+	ma "github.com/multiformats/go-multiaddr"
 	"github.com/stretchr/testify/require"
 )
 
@@ -63,7 +68,9 @@ func TestP2PSubmitTX(t *testing.T) {
 	require.Eventually(
 		t,
 		func() bool {
-			return len(netA.service.ListPeersForTopic(p2p.TXTopicName)) == 2 && len(netB.service.ListPeersForTopic(p2p.TXTopicName)) == 1 && len(netC.service.ListPeersForTopic(p2p.TXTopicName)) == 1
+			return len(netA.service.ListPeersForTopic(p2p.TXTopicName)) == 2 &&
+				len(netB.service.ListPeersForTopic(p2p.TXTopicName)) == 1 &&
+				len(netC.service.ListPeersForTopic(p2p.TXTopicName)) == 1
 		},
 		2*time.Second,
 		50*time.Millisecond,
@@ -174,4 +181,126 @@ func TestP2PSubmitWS(t *testing.T) {
 		1*time.Second,
 		50*time.Millisecond,
 	)
+}
+
+type mockService struct {
+	id    peer.ID
+	addrs []ma.Multiaddr
+	peers map[peer.ID]peer.AddrInfo
+}
+
+func (s *mockService) Close() error {
+	return nil
+}
+
+func (s *mockService) ID() peer.ID {
+	return s.id
+}
+
+func (s *mockService) AddrInfo() peer.AddrInfo {
+	return peer.AddrInfo{
+		ID:    s.id,
+		Addrs: s.addrs,
+	}
+}
+
+func (s *mockService) DialNode(ctx context.Context, peer *peer.AddrInfo) error {
+	s.peers[peer.ID] = *peer
+	return nil
+}
+
+func (s *mockService) DialPeersUntilTargetCount(targetConnCount int) {
+}
+
+func (s *mockService) ClosePeer(peer peer.ID) error {
+	if _, ok := s.peers[peer]; ok {
+		delete(s.peers, peer)
+	}
+	return nil
+}
+
+func (s *mockService) Conns() []network.Conn {
+	return nil
+}
+
+func (s *mockService) ListPeersForTopic(topic string) []peer.ID {
+	return nil
+}
+
+func (s *mockService) Subscribe(topic string, val pubsub.ValidatorEx) (*pubsub.Subscription, error) {
+	return nil, nil
+}
+func (s *mockService) Publish(ctx context.Context, topic string, data []byte) error {
+	return nil
+}
+
+func (s *mockService) setAddrs(addrs []ma.Multiaddr) {
+	s.addrs = addrs
+}
+
+func makeMockService(id peer.ID, addrs []ma.Multiaddr) *mockService {
+	return &mockService{
+		id:    id,
+		addrs: addrs,
+	}
+}
+
+func TestP2PNetworkAddress(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	cfg := config.GetDefaultLocal()
+	log := logging.TestingLog(t)
+	netA, err := NewP2PNetwork(log, cfg, "", nil, genesisID, config.Devtestnet)
+	defer netA.Stop()
+	require.NoError(t, err)
+	addrInfo := netA.service.AddrInfo()
+	// close the real service since we will substitute a mock one
+	netA.service.Close()
+
+	// define some multiaddrs we will use in the test
+	loopbackAddr, err := ma.NewMultiaddr("/ip4/127.0.0.1/tcp/1234")
+	require.NoError(t, err)
+	unspecifiedAddr, err := ma.NewMultiaddr("/ip4/0.0.0.0/tcp/0")
+	require.NoError(t, err)
+	publicAddr, err := ma.NewMultiaddr("/ip4/12.86.192.5/tcp/5678")
+	require.NoError(t, err)
+	publicAddr2, err := ma.NewMultiaddr("/ip4/23.97.191.6/tcp/1564")
+	require.NoError(t, err)
+
+	// first two are invalid so third one should be returned as the first public address
+	addrsA := []ma.Multiaddr{
+		loopbackAddr,
+		unspecifiedAddr,
+		publicAddr,
+		publicAddr2,
+	}
+	mockService := makeMockService(addrInfo.ID, addrsA)
+	netA.service = mockService
+
+	retAddr, ok := netA.Address()
+	require.True(t, ok)
+	// using Contains since the return of Address also includes the public peerID
+	require.Contains(t, retAddr, publicAddr.String())
+
+	// don't have a public address so return the first one
+	addrsB := []ma.Multiaddr{
+		loopbackAddr,
+		unspecifiedAddr,
+	}
+	mockService.addrs = addrsB
+	retAddr, ok = netA.Address()
+	require.True(t, ok)
+	require.Contains(t, retAddr, loopbackAddr.String())
+
+	// confirm that we don't return an address if none is supplied
+	mockService.addrs = nil
+	retAddr, ok = netA.Address()
+	require.False(t, ok)
+	require.Empty(t, retAddr)
+
+	mockService.addrs = addrsA         // these are still valid addresses
+	mockService.id = "invalid peer ID" // this won't parse and encode properly
+	retAddr, ok = netA.Address()
+	require.False(t, ok)
+	require.Empty(t, retAddr)
 }
