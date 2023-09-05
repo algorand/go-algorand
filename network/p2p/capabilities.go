@@ -93,7 +93,7 @@ func (c *CapabilitiesDiscovery) PeersForCapability(capability Capability, n int)
 		return nil, err
 	}
 	for p := range peersChan {
-		if p.ID.Size() > 0 {
+		if p.ID.Size() > 0 && p.ID != c.Host().ID() {
 			peers = append(peers, p)
 		}
 		if len(peers) >= n {

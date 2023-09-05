@@ -97,6 +97,22 @@ func setupDHTHosts(t *testing.T, numHosts int) []*dht.IpfsDHT {
 	return dhts
 }
 
+func waitForRouting(t *testing.T, disc *CapabilitiesDiscovery) {
+	refreshCtx, refCancel := context.WithTimeout(context.Background(), time.Second*5)
+	for {
+		select {
+		case <-refreshCtx.Done():
+			refCancel()
+			require.Fail(t, "failed to populate routing table before timeout")
+		default:
+			if disc.dht.RoutingTable().Size() > 0 {
+				refCancel()
+				return
+			}
+		}
+	}
+}
+
 func setupCapDiscovery(t *testing.T, numHosts int) []*CapabilitiesDiscovery {
 	var hosts []host.Host
 	var bootstrapPeers []*peer.AddrInfo
@@ -188,33 +204,16 @@ func TestVaryingCapabilities(t *testing.T) {
 	catchOnly := capsDisc[5:7]
 	archCatch := capsDisc[7:]
 
-	waitForRouting := func(disc *CapabilitiesDiscovery) {
-		refreshCtx, refCancel := context.WithTimeout(context.Background(), time.Second*5)
-	peersPopulated:
-		for {
-			select {
-			case <-refreshCtx.Done():
-				refCancel()
-				require.Fail(t, "failed to populate routing table before timeout")
-			default:
-				if disc.dht.RoutingTable().Size() > 0 {
-					refCancel()
-					break peersPopulated
-				}
-			}
-		}
-	}
-
 	for _, disc := range archOnly {
-		waitForRouting(disc)
+		waitForRouting(t, disc)
 		disc.AdvertiseCapabilities(Archival)
 	}
 	for _, disc := range catchOnly {
-		waitForRouting(disc)
+		waitForRouting(t, disc)
 		disc.AdvertiseCapabilities(Catchpoints)
 	}
 	for _, disc := range archCatch {
-		waitForRouting(disc)
+		waitForRouting(t, disc)
 		disc.AdvertiseCapabilities(Archival, Catchpoints)
 	}
 
@@ -253,4 +252,38 @@ func TestVaryingCapabilities(t *testing.T) {
 		// Make sure it actually closes
 		disc.wg.Wait()
 	}
+}
+
+func TestCapabilitiesExcludesSelf(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	disc := setupCapDiscovery(t, 2)
+
+	testPeersFound := func(disc *CapabilitiesDiscovery, n int, cap Capability) bool {
+		peers, err := disc.PeersForCapability(cap, n+1)
+		if err == nil && len(peers) == n {
+			return true
+		}
+		return false
+	}
+
+	waitForRouting(t, disc[0])
+	disc[0].AdvertiseCapabilities(Archival)
+	// disc[1] finds Archival
+	require.Eventuallyf(t,
+		func() bool { return testPeersFound(disc[1], 1, Archival) },
+		time.Minute,
+		time.Second,
+		"Could not find archival peer",
+	)
+
+	// disc[0] doesn't find itself
+	require.Neverf(t,
+		func() bool { return testPeersFound(disc[0], 1, Archival) },
+		time.Second*5,
+		time.Second,
+		"Found self when searching for capability",
+	)
+
+	disc[0].Close()
+	disc[0].wg.Wait()
 }
