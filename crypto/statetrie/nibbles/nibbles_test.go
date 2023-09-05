@@ -159,8 +159,8 @@ func TestNibbles(t *testing.T) { // nolint:paralleltest // Serial tests for trie
 		length := rand.Intn(8191) + 1
 		data := make([]byte, length)
 		rand.Read(data)
-		half := rand.Intn(1) == 0 // half of the time, we have an odd number of nibbles
-		if half && rand.Intn(1) == 0 {
+		half := rand.Intn(2) == 0 // half of the time, we have an odd number of nibbles
+		if half && rand.Intn(2) == 0 {
 			data[len(data)-1] |= 0x0f // sometimes clear the last nibble, sometimes do not
 		}
 		nibbles := MakeNibbles(data, half)
