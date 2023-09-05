@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/algorand/go-algorand/config"
@@ -69,7 +70,7 @@ const AlgorandWsProtocol = "/algorand-ws/1.0.0"
 
 const dialTimeout = 30 * time.Second
 
-func makeHost(cfg config.Local, datadir string, pstore peerstore.Peerstore) (host.Host, error) {
+func makeHost(cfg config.Local, datadir string, pstore peerstore.Peerstore, listenAddr string) (host.Host, error) {
 	// load stored peer ID, or make ephemeral peer ID
 	privKey, err := GetPrivKey(cfg, datadir)
 	if err != nil {
@@ -88,14 +89,21 @@ func makeHost(cfg config.Local, datadir string, pstore peerstore.Peerstore) (hos
 		libp2p.Transport(tcp.NewTCPTransport),
 		libp2p.Muxer("/yamux/1.0.0", &ymx),
 		libp2p.Peerstore(pstore),
-		libp2p.ListenAddrStrings("/ip4/0.0.0.0/tcp/0"),
+		libp2p.ListenAddrStrings(listenAddr),
 	)
 }
 
 // MakeService creates a P2P service instance
 func MakeService(ctx context.Context, log logging.Logger, cfg config.Local, datadir string, pstore peerstore.Peerstore, wsStreamHandler StreamHandler) (*serviceImpl, error) {
-
-	h, err := makeHost(cfg, datadir, pstore)
+	var listenAddr string
+	if cfg.NetAddress != "" {
+		if parsedListenAddr, perr := netAddressToListenAddress(cfg.NetAddress); perr == nil {
+			listenAddr = parsedListenAddr
+		}
+	} else {
+		listenAddr = "/ip4/0.0.0.0/tcp/0"
+	}
+	h, err := makeHost(cfg, datadir, pstore, listenAddr)
 	if err != nil {
 		return nil, err
 	}
@@ -177,4 +185,24 @@ func (s *serviceImpl) Conns() []network.Conn {
 // ClosePeer closes a connection to the provided peer
 func (s *serviceImpl) ClosePeer(peer peer.ID) error {
 	return s.host.Network().ClosePeer(peer)
+}
+
+// netAddressToListenAddress converts a netAddress in "ip:port" format to a listen address
+// that can be passed in to libp2p.ListenAddrStrings
+func netAddressToListenAddress(netAddress string) (string, error) {
+	// split the string on ":"
+	// if there are more than 2 parts, return an error
+	parts := strings.Split(netAddress, ":")
+	if len(parts) != 2 {
+		return "", fmt.Errorf("invalid netAddress %s; required format is \"ip:port\"", netAddress)
+	}
+	ip := "0.0.0.0"
+	if parts[0] != "" {
+		ip = parts[0]
+	}
+	if parts[1] == "" {
+		return "", fmt.Errorf("invalid netAddress %s, port is required", netAddress)
+	}
+
+	return fmt.Sprintf("/ip4/%s/tcp/%s", ip, parts[1]), nil
 }

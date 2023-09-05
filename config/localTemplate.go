@@ -388,6 +388,7 @@ type Local struct {
 	// A value of 1 means "track catchpoints as long as CatchpointInterval > 0".
 	// A value of 2 means "track catchpoints and always generate catchpoint files as long as CatchpointInterval > 0".
 	// A value of 0 means automatic, which is the default value. In this mode, a non archival node would not track the catchpoints, and an archival node would track the catchpoints as long as CatchpointInterval > 0.
+	// A value of 99 will force the node to generate catchpoint files
 	// Other values of CatchpointTracking would give a warning in the log file, and would behave as if the default value was provided.
 	CatchpointTracking int64 `version[11]:"0"`
 
@@ -440,7 +441,7 @@ type Local struct {
 	// an archiver or return StatusNotFound (404) when in does not have the requested round, and
 	// BlockServiceCustomFallbackEndpoints is empty.
 	// The archiver is randomly selected, if none is available, will return StatusNotFound (404).
-	EnableBlockServiceFallbackToArchiver bool `version[16]:"true"`
+	EnableBlockServiceFallbackToArchiver bool `version[16]:"true" version[31]:"false"`
 
 	// CatchupBlockValidateMode is a development and testing configuration used by the catchup service.
 	// It can be used to omit certain validations to speed up the catchup process, or to apply extra validations which are redundant in normal operation.
@@ -868,27 +869,31 @@ func (cfg *Local) AdjustConnectionLimits(requiredFDs, maxFDs uint64) bool {
 
 // StoresCatchpoints returns true if the node is configured to store catchpoints
 func (cfg *Local) StoresCatchpoints() bool {
+	if cfg.CatchpointInterval <= 0 {
+		return false
+	}
 	switch cfg.CatchpointTracking {
-	case -1:
+	case CatchpointTrackingModeUntracked:
 		// No catchpoints.
 	default:
 		fallthrough
-	case 0:
-		if cfg.Archival && (cfg.CatchpointInterval > 0) {
+	case CatchpointTrackingModeAutomatic, CatchpointTrackingModeTracked:
+		if cfg.Archival {
 			return true
 		}
-	case 1:
-		if cfg.CatchpointInterval > 0 && cfg.Archival {
-			return true
-		}
-	case 2:
-		if cfg.CatchpointInterval > 0 {
-			return true
-		}
-	case ForceCatchpointFileGenerationTrackingMode:
-		if cfg.CatchpointInterval > 0 {
-			return true
-		}
+	case CatchpointTrackingModeStored, ForceCatchpointFileGenerationTrackingMode:
+		return true
+	}
+	return false
+}
+
+// TracksCatchpoints returns true if the node is configured to track catchpoints
+func (cfg *Local) TracksCatchpoints() bool {
+	if cfg.StoresCatchpoints() {
+		return true
+	}
+	if cfg.CatchpointTracking == CatchpointTrackingModeTracked && cfg.CatchpointInterval > 0 {
+		return true
 	}
 	return false
 }

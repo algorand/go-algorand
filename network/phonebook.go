@@ -25,7 +25,7 @@ import (
 	"golang.org/x/exp/slices"
 )
 
-// when using GetAddresses with getAllAddresses, all the addresses will be retrieved, regardless
+// getAllAddresses when using GetAddresses with getAllAddresses, all the addresses will be retrieved, regardless
 // of how many addresses the phonebook actually has. ( with the retry-after logic applied )
 const getAllAddresses = math.MaxInt32
 

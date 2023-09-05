@@ -101,7 +101,7 @@ return
 	a.NoError(err)
 	appCreateTxID, err := testClient.SignAndBroadcastTransaction(wh, nil, appCreateTxn)
 	a.NoError(err)
-	_, err = helper.WaitForTransaction(t, testClient, someAddress, appCreateTxID, 30*time.Second)
+	_, err = helper.WaitForTransaction(t, testClient, appCreateTxID, 30*time.Second)
 	a.NoError(err)
 
 	// get app ID
@@ -115,7 +115,7 @@ return
 	appFundTxn, err := testClient.SendPaymentFromWallet(wh, nil, someAddress, createdAppID.Address().String(), 0, 1_000_000, nil, "", 0, 0)
 	a.NoError(err)
 	appFundTxID := appFundTxn.ID()
-	_, err = helper.WaitForTransaction(t, testClient, someAddress, appFundTxID.String(), 30*time.Second)
+	_, err = helper.WaitForTransaction(t, testClient, appFundTxID.String(), 30*time.Second)
 	a.NoError(err)
 
 	// call app, which will issue an ASA create inner txn
@@ -125,7 +125,7 @@ return
 	a.NoError(err)
 	appCallTxnTxID, err := testClient.SignAndBroadcastTransaction(wh, nil, appCallTxn)
 	a.NoError(err)
-	_, err = helper.WaitForTransaction(t, testClient, someAddress, appCallTxnTxID, 30*time.Second)
+	_, err = helper.WaitForTransaction(t, testClient, appCallTxnTxID, 30*time.Second)
 	a.NoError(err)
 
 	// verify pending txn info of outer txn
@@ -240,7 +240,7 @@ end:
 	a.NoError(err)
 	appCreateTxID, err := testClient.SignAndBroadcastTransaction(wh, nil, appCreateTxn)
 	a.NoError(err)
-	_, err = helper.WaitForTransaction(t, testClient, someAddress, appCreateTxID, 30*time.Second)
+	_, err = helper.WaitForTransaction(t, testClient, appCreateTxID, 30*time.Second)
 	a.NoError(err)
 
 	// get app ID
@@ -257,7 +257,7 @@ end:
 	)
 	a.NoError(err)
 	appFundTxID := appFundTxn.ID()
-	_, err = helper.WaitForTransaction(t, testClient, someAddress, appFundTxID.String(), 30*time.Second)
+	_, err = helper.WaitForTransaction(t, testClient, appFundTxID.String(), 30*time.Second)
 	a.NoError(err)
 
 	createdBoxName := map[string]bool{}
@@ -306,7 +306,7 @@ end:
 		err = testClient.BroadcastTransactionGroup(stxns)
 		if len(errPrefix) == 0 {
 			a.NoError(err)
-			_, err = helper.WaitForTransaction(t, testClient, someAddress, txns[0].ID().String(), 30*time.Second)
+			_, err = helper.WaitForTransaction(t, testClient, txns[0].ID().String(), 30*time.Second)
 			a.NoError(err)
 		} else {
 			a.ErrorContains(err, errPrefix[0])
@@ -545,7 +545,7 @@ end:
 	a.NoError(err)
 	appDeleteTxID, err := testClient.SignAndBroadcastTransaction(wh, nil, appDeleteTxn)
 	a.NoError(err)
-	_, err = helper.WaitForTransaction(t, testClient, someAddress, appDeleteTxID, 30*time.Second)
+	_, err = helper.WaitForTransaction(t, testClient, appDeleteTxID, 30*time.Second)
 	a.NoError(err)
 
 	_, err = testClient.ApplicationInformation(uint64(createdAppID))

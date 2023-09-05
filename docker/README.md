@@ -6,7 +6,7 @@ General purpose algod container image.
 
 ## Image Configuration
 
-Algorand maintains a Docker image with recent snapshot builds from our `master` branch on DockerHub to support users who prefer to run containerized processes. There are a couple of different images avaliable for running the latest stable or development versions of Algod.
+Algorand maintains a Docker image with recent snapshot builds from our `master` branch on DockerHub to support users who prefer to run containerized processes. There are a couple of different images available for running the latest stable or development versions of Algod.
 
 - `algorand/algod:latest` is the latest stable release version of Algod (default)
 - `algorand/algod:stable` is the latest stable version of Algod

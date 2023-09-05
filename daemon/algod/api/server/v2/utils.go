@@ -79,6 +79,16 @@ func convertSlice[X any, Y any](input []X, fn func(X) Y) []Y {
 	return output
 }
 
+func convertMap[X comparable, Y, Z any](input map[X]Y, fn func(X, Y) Z) []Z {
+	output := make([]Z, len(input))
+	counter := 0
+	for x, y := range input {
+		output[counter] = fn(x, y)
+		counter++
+	}
+	return output
+}
+
 func uint64Slice[T ~uint64](s []T) []uint64 {
 	return convertSlice(s, func(t T) uint64 { return uint64(t) })
 }
@@ -494,6 +504,51 @@ func convertUnnamedResourcesAccessed(resources *simulation.ResourceTracker) *mod
 	}
 }
 
+func convertAppKVStorePtr(address basics.Address, appKVPairs simulation.AppKVPairs) *model.ApplicationKVStorage {
+	if len(appKVPairs) == 0 && address.IsZero() {
+		return nil
+	}
+	return &model.ApplicationKVStorage{
+		Account: addrOrNil(address),
+		Kvs: convertMap(appKVPairs, func(key string, value basics.TealValue) model.AvmKeyValue {
+			return model.AvmKeyValue{
+				Key:   []byte(key),
+				Value: convertToAVMValue(value),
+			}
+		}),
+	}
+}
+
+func convertAppKVStoreInstance(address basics.Address, appKVPairs simulation.AppKVPairs) model.ApplicationKVStorage {
+	return model.ApplicationKVStorage{
+		Account: addrOrNil(address),
+		Kvs: convertMap(appKVPairs, func(key string, value basics.TealValue) model.AvmKeyValue {
+			return model.AvmKeyValue{
+				Key:   []byte(key),
+				Value: convertToAVMValue(value),
+			}
+		}),
+	}
+}
+
+func convertApplicationInitialStates(appID basics.AppIndex, states simulation.SingleAppInitialStates) model.ApplicationInitialStates {
+	return model.ApplicationInitialStates{
+		Id:         uint64(appID),
+		AppBoxes:   convertAppKVStorePtr(basics.Address{}, states.AppBoxes),
+		AppGlobals: convertAppKVStorePtr(basics.Address{}, states.AppGlobals),
+		AppLocals:  sliceOrNil(convertMap(states.AppLocals, convertAppKVStoreInstance)),
+	}
+}
+
+func convertSimulateInitialStates(initialStates *simulation.ResourcesInitialStates) *model.SimulateInitialStates {
+	if initialStates == nil {
+		return nil
+	}
+	return &model.SimulateInitialStates{
+		AppInitialStates: sliceOrNil(convertMap(initialStates.AllAppsInitialStates, convertApplicationInitialStates)),
+	}
+}
+
 func convertTxnGroupResult(txnGroupResult simulation.TxnGroupResult) PreEncodedSimulateTxnGroupResult {
 	txnResults := make([]PreEncodedSimulateTxnResult, len(txnGroupResult.Txns))
 	for i, txnResult := range txnGroupResult.Txns {
@@ -528,19 +583,14 @@ func convertSimulationResult(result simulation.Result) PreEncodedSimulateRespons
 		}
 	}
 
-	encodedSimulationResult := PreEncodedSimulateResponse{
+	return PreEncodedSimulateResponse{
 		Version:         result.Version,
 		LastRound:       uint64(result.LastRound),
-		TxnGroups:       make([]PreEncodedSimulateTxnGroupResult, len(result.TxnGroups)),
+		TxnGroups:       convertSlice(result.TxnGroups, convertTxnGroupResult),
 		EvalOverrides:   evalOverrides,
 		ExecTraceConfig: result.TraceConfig,
+		InitialStates:   convertSimulateInitialStates(result.InitialStates),
 	}
-
-	for i, txnGroup := range result.TxnGroups {
-		encodedSimulationResult.TxnGroups[i] = convertTxnGroupResult(txnGroup)
-	}
-
-	return encodedSimulationResult
 }
 
 func convertSimulationRequest(request PreEncodedSimulateRequest) simulation.Request {

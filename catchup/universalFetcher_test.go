@@ -94,7 +94,6 @@ func TestUGetBlockHTTP(t *testing.T) {
 
 	blockServiceConfig := config.GetDefaultLocal()
 	blockServiceConfig.EnableBlockService = true
-	blockServiceConfig.EnableBlockServiceFallbackToArchiver = false
 
 	net := &httpTestPeerSource{}
 	ls := rpcs.MakeBlockService(logging.Base(), blockServiceConfig, ledger, net, "test genesisID")
