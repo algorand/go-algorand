@@ -596,8 +596,8 @@ func (e payloadProcessedEvent) ComparableStr() string {
 	return fmt.Sprintf("%v: %.5v", e.t().String(), e.Proposal.BlockDigest.String())
 }
 
-// CredentialTrackingEffect inficates the impact of an event that got filtered
-// on the credential tracking mechanism for the purpose of tracking the time it
+// CredentialTrackingEffect indicates the impact of an event that got filtered
+// on the credential tracking mechanism, for the purpose of tracking the time it
 // took the best credential to arrive.
 type CredentialTrackingEffect uint8
 
@@ -620,7 +620,7 @@ type filteredEvent struct {
 	T eventType
 
 	// CredentialTrackingNote indicates the impact of the filtered event on the
-	// credential tracking machinary used for dynamically setting the filter
+	// credential tracking machinery used for dynamically setting the filter
 	// timeout.
 	CredentialTrackingNote CredentialTrackingEffect
 
