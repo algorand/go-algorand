@@ -43,10 +43,10 @@ import (
 	"github.com/algorand/go-algorand/tools/block-generator/util"
 )
 
-//go:embed template/conduit_pg.yml.tmpl
+//go:embed template/conduit_pg_exporter.tmpl
 var conduitPostgresConfigTmpl string
 
-//go:embed template/conduit_fe.yml.tmpl
+//go:embed template/conduit_file_exporter.tmpl
 var conduitFileExporterConfigTmpl string
 
 const pad = "  "
