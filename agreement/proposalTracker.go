@@ -66,6 +66,11 @@ func (s proposalSeeker) accept(v vote) (proposalSeeker, CredentialTrackingEffect
 	return s, VerifiedBetterCredentialForTracking, nil
 }
 
+func (s *proposalSeeker) copyCredentialTrackingState(s2 proposalSeeker) {
+	s.hasLowestAfterFreeze = s2.hasLowestAfterFreeze
+	s.lowestAfterFreeze = s2.lowestAfterFreeze
+}
+
 // freeze freezes the state of the proposalSeeker so that future calls no longer
 // change its state.
 func (s proposalSeeker) freeze() proposalSeeker {
@@ -158,18 +163,18 @@ func (t *proposalTracker) handle(r routerHandle, p player, e event) event {
 		}
 		t.Duplicate[v.R.Sender] = true
 
-		if t.Staging != bottom {
-			err := errProposalTrackerStaged{}
-			return filteredEvent{T: voteFiltered, Err: makeSerErr(err)}
-		}
-
-		var effect CredentialTrackingEffect
-		var err error
-		t.Freezer, effect, err = t.Freezer.accept(v)
+		newFreezer, effect, err := t.Freezer.accept(v)
+		t.Freezer.copyCredentialTrackingState(newFreezer)
 		if err != nil {
 			err := errProposalTrackerPS{Sub: err}
 			return filteredEvent{T: voteFiltered, CredentialTrackingNote: effect, Err: makeSerErr(err)}
 		}
+
+		if t.Staging != bottom {
+			err = errProposalTrackerStaged{}
+			return filteredEvent{T: voteFiltered, Err: makeSerErr(err)}
+		}
+		t.Freezer = newFreezer
 
 		return proposalAcceptedEvent{
 			Round:    v.R.Round,
