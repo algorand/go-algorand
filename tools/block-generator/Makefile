@@ -1,5 +1,7 @@
+# The following variables are primarily useful for tuning dev testing and
+# appear in the targets pg-up, pg-enter, pg-down, pg-query, 
+# run-runner, run-file-exporter, and benchmark-blocks-export:
 SCENARIO = scenarios/benchmarks/stress.50000.yml
-PG_UP = --start-postgres
 RESETDB = --reset-db
 TIMES = 1
 REPORTS = ../../tmp/RUN_RUNNER_OUTPUTS
@@ -20,9 +22,7 @@ clean-generator:
 	rm -f block-generator
 
 pg-up:
-	docker run --name $(PGCONT) -p 15432:5432 -e POSTGRES_USER=algorand -e POSTGRES_PASSWORD=algorand -d postgres
-	sleep 5
-	docker exec -it generator-test-container psql -Ualgorand -c "create database generator_db"
+	docker run --name $(PGCONT) -p 15432:5432 -e POSTGRES_USER=$(PGUSER) -e POSTGRES_PASSWORD=algorand -e POSTGRES_DB=$(PGDB) -d postgres
 
 pg-enter:
 	docker exec -it $(PGCONT) psql -U $(PGUSER) -d $(PGDB)
