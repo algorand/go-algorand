@@ -209,6 +209,65 @@ func TestProposalManagerRejectsUnknownEvent(t *testing.T) {
 	require.Errorf(t, panicErr, "proposalManager must reject bundleVerified event")
 }
 
+func TestLateVotes(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	const r = 100
+	const p = 3
+	const s = soft
+	currentPlayerState := freshnessData{
+		PlayerRound:          r,
+		PlayerPeriod:         p,
+		PlayerStep:           s,
+		PlayerLastConcluding: 0,
+	}
+	b := testCaseBuilder{}
+	_, pM, helper := setupManager(t, r)
+
+	// vote from credentialRoundLag rounds ago and period 0 should continue
+	// processing only for the purpose of tracking credentials.
+	pV := helper.MakeRandomProposalValue()
+	v1 := helper.MakeVerifiedVote(t, 0, r-credentialRoundLag, 0, 0, *pV)
+	inMsg1 := filterableMessageEvent{
+		FreshnessData: currentPlayerState,
+		messageEvent: messageEvent{
+			T: voteVerified,
+			Input: message{
+				UnauthenticatedVote: v1.u(),
+				Vote:                v1,
+			},
+		},
+	}
+
+	v2 := helper.MakeVerifiedVote(t, 0, r-credentialRoundLag, 0, 0, *pV)
+	inMsg2 := filterableMessageEvent{
+		FreshnessData: currentPlayerState,
+		messageEvent: messageEvent{
+			T: voteVerified,
+			Input: message{
+				UnauthenticatedVote: v2.u(),
+				Vote:                v2,
+			},
+		},
+	}
+
+	// Order the messages such that the first message's credential is lower
+	// (i.e., preffered). The first vote should be the best credential we get,
+	// so the second credential should be filtered without impacting the
+	// credential tracking mechanism.
+	if v1.Cred.Less(v2.Cred) {
+		b.AddInOutPair(inMsg1, filteredEvent{T: voteFiltered, CredentialTrackingNote: VerifiedBetterCredentialForTracking})
+		b.AddInOutPair(inMsg2, filteredEvent{T: voteFiltered, CredentialTrackingNote: NoCredentialTrackingImpact})
+	} else {
+		b.AddInOutPair(inMsg2, filteredEvent{T: voteFiltered, CredentialTrackingNote: VerifiedBetterCredentialForTracking})
+		b.AddInOutPair(inMsg1, filteredEvent{T: voteFiltered, CredentialTrackingNote: NoCredentialTrackingImpact})
+	}
+
+	res, err := b.Build().Validate(pM)
+	require.NoError(t, err)
+	require.NoErrorf(t, res, "VerifiedVote resulted in unexpected output")
+}
+
 func TestProposalFreshAdjacentPeriods(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
