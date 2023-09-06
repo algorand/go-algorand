@@ -26,6 +26,7 @@ import (
 	"github.com/algorand/websocket"
 
 	"github.com/libp2p/go-libp2p/core/network"
+	yamux "github.com/libp2p/go-yamux/v4"
 )
 
 type wsPeerConnP2PImpl struct {
@@ -65,14 +66,19 @@ func (c *wsPeerConnP2PImpl) WriteMessage(_ int, buf []byte) error {
 	return err
 }
 
+// Do nothing for now since this doesn't actually close the connection just sends the close message
 func (c *wsPeerConnP2PImpl) CloseWithMessage([]byte, time.Time) error {
-	return c.stream.Close()
+	return nil
 }
 
 func (c *wsPeerConnP2PImpl) SetReadLimit(int64) {}
 
 func (c *wsPeerConnP2PImpl) CloseWithoutFlush() error {
-	return c.stream.Close()
+	err := c.stream.Close()
+	if err != nil && err != yamux.ErrStreamClosed && err != yamux.ErrSessionShutdown && err != yamux.ErrStreamReset {
+		return err
+	}
+	return nil
 }
 
 func (c *wsPeerConnP2PImpl) UnderlyingConn() net.Conn { return nil }

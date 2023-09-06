@@ -70,7 +70,7 @@ func CreateNetworkFromTemplate(name, rootDir string, templateReader io.Reader, b
 	var err error
 	template := defaultNetworkTemplate
 
-	err = loadTemplateFromReader(templateReader, &template)
+	err = LoadTemplateFromReader(templateReader, &template)
 
 	if err == nil {
 		if overrideDevMode {
@@ -100,7 +100,7 @@ func CreateNetworkFromTemplate(name, rootDir string, templateReader io.Reader, b
 		return n, err
 	}
 	template.Consensus = consensus
-	err = template.generateGenesisAndWallets(rootDir, n.cfg.Name, binDir)
+	err = template.generateGenesisAndWallets(rootDir, n.cfg.Name)
 	if err != nil {
 		return n, err
 	}

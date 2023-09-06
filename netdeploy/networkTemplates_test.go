@@ -69,9 +69,8 @@ func TestGenerateGenesis(t *testing.T) {
 
 	targetFolder := t.TempDir()
 	networkName := "testGenGen"
-	binDir := os.ExpandEnv("${GOPATH}/bin")
 
-	err := template.generateGenesisAndWallets(targetFolder, networkName, binDir)
+	err := template.generateGenesisAndWallets(targetFolder, networkName)
 	a.NoError(err)
 	_, err = os.Stat(filepath.Join(targetFolder, config.GenesisJSONFile))
 	fileExists := err == nil

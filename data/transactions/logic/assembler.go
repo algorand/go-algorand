@@ -1778,14 +1778,14 @@ func mergeProtos(specs map[int]OpSpec) (Proto, uint64, bool) {
 			}
 		}
 		if debugExplainFuncPtr == nil {
-			debugExplainFuncPtr = spec.Explain
+			debugExplainFuncPtr = spec.StackExplain
 		}
 		i++
 	}
 	return Proto{
-		Arg:     typedList{args, ""},
-		Return:  typedList{returns, ""},
-		Explain: debugExplainFuncPtr,
+		Arg:          typedList{args, ""},
+		Return:       typedList{returns, ""},
+		StackExplain: debugExplainFuncPtr,
 	}, minVersion, true
 }
 
