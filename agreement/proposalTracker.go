@@ -165,14 +165,14 @@ func (t *proposalTracker) handle(r routerHandle, p player, e event) event {
 
 		newFreezer, effect, err := t.Freezer.accept(v)
 		t.Freezer.copyCredentialTrackingState(newFreezer)
-		if err != nil {
-			err := errProposalTrackerPS{Sub: err}
+		if t.Staging != bottom {
+			err = errProposalTrackerStaged{}
 			return filteredEvent{T: voteFiltered, CredentialTrackingNote: effect, Err: makeSerErr(err)}
 		}
 
-		if t.Staging != bottom {
-			err = errProposalTrackerStaged{}
-			return filteredEvent{T: voteFiltered, Err: makeSerErr(err)}
+		if err != nil {
+			err := errProposalTrackerPS{Sub: err}
+			return filteredEvent{T: voteFiltered, CredentialTrackingNote: effect, Err: makeSerErr(err)}
 		}
 		t.Freezer = newFreezer
 
