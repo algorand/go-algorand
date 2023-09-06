@@ -178,6 +178,7 @@ func (r *Args) run(reportDirectory string) error {
 			fmt.Printf("%sPostgreSQL next round: %d\n", pad, nextRound)
 		}
 	default:
+		// TODO: the default case should attempt to read the supplied template name as a file under ./template/
 		return fmt.Errorf("unknown template type: %s", r.Template)
 	}
 
