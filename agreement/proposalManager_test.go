@@ -19,6 +19,7 @@ package agreement
 import (
 	"testing"
 
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
@@ -252,13 +253,17 @@ func TestLateVotes(t *testing.T) {
 	}
 
 	// Order the messages such that the first message's credential is lower
-	// (i.e., preffered). The first vote should be the best credential we get,
+	// (i.e., preferred). The first vote should be the best credential we get,
 	// so the second credential should be filtered without impacting the
 	// credential tracking mechanism.
+	v1.Cred.VrfOut = crypto.Digest{1}
+	v2.Cred.VrfOut = crypto.Digest{2}
 	if v1.Cred.Less(v2.Cred) {
+		require.False(t, v2.Cred.Less(v1.Cred))
 		b.AddInOutPair(inMsg1, filteredEvent{T: voteFiltered, CredentialTrackingNote: VerifiedBetterCredentialForTracking})
 		b.AddInOutPair(inMsg2, filteredEvent{T: voteFiltered, CredentialTrackingNote: NoCredentialTrackingImpact})
 	} else {
+		require.True(t, v2.Cred.Less(v1.Cred))
 		b.AddInOutPair(inMsg2, filteredEvent{T: voteFiltered, CredentialTrackingNote: VerifiedBetterCredentialForTracking})
 		b.AddInOutPair(inMsg1, filteredEvent{T: voteFiltered, CredentialTrackingNote: NoCredentialTrackingImpact})
 	}

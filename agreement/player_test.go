@@ -3387,6 +3387,15 @@ func TestPlayerRetainsLateReceivedValidatedAtOneSample(t *testing.T) {
 // DynamicFilterCredentialArrivalHistory rounds.
 func TestPlayerRetainsReceivedValidatedAtForHistoryWindow(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	testPlayerRetainsReceivedValidatedAtForHistoryWindow(t, false)
+}
+
+func TestPlayerRetainsReceivedValidatedAtForHistoryWindowLateBetter(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	testPlayerRetainsReceivedValidatedAtForHistoryWindow(t, true)
+}
+
+func testPlayerRetainsReceivedValidatedAtForHistoryWindow(t *testing.T, addBetterLate bool) {
 	const r = round(20239)
 	const p = period(0)
 	pWhite, pM, helper := setupP(t, r-1, p, soft)
@@ -3397,6 +3406,21 @@ func TestPlayerRetainsReceivedValidatedAtForHistoryWindow(t *testing.T) {
 		// send voteVerified message
 		pP, pV := helper.MakeRandomProposalPayload(t, r+round(i)-1)
 		vVote := helper.MakeVerifiedVote(t, 0, r+round(i)-1, p, propose, *pV)
+		var betterLateVote vote
+		if addBetterLate {
+			// set up better late proposal-vote from someone else, so it won't be a errProposalTrackerSenderDup
+			vVote2 := helper.MakeVerifiedVote(t, 1, r+round(i)-1, p, propose, *pV)
+			vVote.Cred.VrfOut = crypto.Digest{1}
+			vVote2.Cred.VrfOut = crypto.Digest{2}
+			if vVote2.Cred.Less(vVote.Cred) {
+				betterLateVote = vVote2
+			} else {
+				betterLateVote = vVote
+				vVote = vVote2
+			}
+			require.True(t, betterLateVote.Cred.Less(vVote.Cred))
+			require.False(t, vVote.Cred.Less(betterLateVote.Cred))
+		}
 		inMsg := messageEvent{T: voteVerified, Input: message{Vote: vVote, UnauthenticatedVote: vVote.u()}}
 		timestamp := 500 + i
 		inMsg = inMsg.AttachValidatedAt(time.Duration(timestamp)*time.Millisecond, r+round(i)-1, nil)
@@ -3412,6 +3436,16 @@ func TestPlayerRetainsReceivedValidatedAtForHistoryWindow(t *testing.T) {
 		require.NoError(t, err)
 		require.NoError(t, panicErr)
 		moveToRound(t, pWhite, pM, helper, r+round(i), p, pP, pV, m, protocol.ConsensusFuture)
+
+		// send better late voteVerified message
+		if addBetterLate {
+			inMsg = messageEvent{T: voteVerified, Input: message{Vote: betterLateVote, UnauthenticatedVote: betterLateVote.u()}}
+			timestamp := 600 + i
+			inMsg = inMsg.AttachValidatedAt(time.Duration(timestamp)*time.Millisecond, r+round(i)-1, nil)
+			err, panicErr = pM.transition(inMsg)
+			require.NoError(t, err)
+			require.NoError(t, panicErr)
+		}
 	}
 
 	// assert lowest vote validateAt time was recorded into payloadArrivals
@@ -3419,6 +3453,9 @@ func TestPlayerRetainsReceivedValidatedAtForHistoryWindow(t *testing.T) {
 	for i := 0; i < dynamicFilterCredentialArrivalHistory; i++ {
 		// only the last historyLen samples are kept, so the first one is discarded
 		timestamp := 500 + i
+		if addBetterLate {
+			timestamp = 600 + i
+		}
 		require.Equal(t, time.Duration(timestamp)*time.Millisecond, pWhite.lowestCredentialArrivals.history[i])
 	}
 }
@@ -4074,6 +4111,13 @@ func moveToRound(t *testing.T, pWhite *player, pM ioAutomata, helper *voteMakerH
 	err, panicErr := pM.transition(inMsg)
 	require.NoError(t, err)
 	require.NoError(t, panicErr)
+
+	// // now, trigger soft vote timeout
+	// err, panicErr = pM.transition(makeTimeoutEvent())
+	// require.NoError(t, err)
+	// require.NoError(t, panicErr)
+	// softVoteEvent := ev(pseudonodeAction{T: attest, Round: r - 1, Period: p, Step: soft, Proposal: *pV})
+	// require.Truef(t, pM.getTrace().Contains(softVoteEvent), "Player should issue soft vote")
 
 	// gen cert to move into the next round
 	votes := make([]vote, int(cert.threshold(config.Consensus[ver])))
