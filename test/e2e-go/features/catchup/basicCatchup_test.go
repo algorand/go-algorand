@@ -17,6 +17,7 @@
 package catchup
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -98,20 +99,23 @@ func TestCatchupOverGossip(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
 
-	t.Parallel()
-
 	syncTest := fixtures.SynchronizedTest(t)
 	supportedVersions := network.SupportedProtocolVersions
 	require.LessOrEqual(syncTest, len(supportedVersions), 3)
+
+	subTest := func(tt *testing.T, ledgerVer, fetcherVer string) {
+		tt.Run(fmt.Sprintf("ledger=%s,fetcher=%s", ledgerVer, fetcherVer),
+			func(t *testing.T) { runCatchupOverGossip(t, ledgerVer, fetcherVer) })
+	}
 
 	// ledger node upgraded version, fetcher node upgraded version
 	// Run with the default values. Instead of "", pass the default value
 	// to exercise loading it from the config file.
 	runCatchupOverGossip(syncTest, supportedVersions[0], supportedVersions[0])
 	for i := 1; i < len(supportedVersions); i++ {
-		runCatchupOverGossip(t, supportedVersions[i], "")
-		runCatchupOverGossip(t, "", supportedVersions[i])
-		runCatchupOverGossip(t, supportedVersions[i], supportedVersions[i])
+		subTest(t, supportedVersions[i], "")
+		subTest(t, "", supportedVersions[i])
+		subTest(t, supportedVersions[i], supportedVersions[i])
 	}
 }
 
