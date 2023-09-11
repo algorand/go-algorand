@@ -128,6 +128,7 @@ type TxHandler struct {
 	streamVerifierChan    chan execpool.InputJob
 	streamVerifierDropped chan *verify.UnverifiedTxnSigJob
 	erl                   *util.ElasticRateLimiter
+	appLimiter            *appRateLimiter
 }
 
 // TxHandlerOpts is TxHandler configuration options
@@ -186,6 +187,10 @@ func MakeTxHandler(opts TxHandlerOpts) (*TxHandler, error) {
 			txBacklogDroppedCongestionManagement,
 		)
 		handler.erl = rateLimiter
+
+		// TODO: figure out init constants
+		const appCacheMaxSize = 1000
+		handler.appLimiter = MakeAppRateLimiter(appCacheMaxSize, 50, 10*time.Second)
 	}
 
 	// prepare the transaction stream verifier
@@ -638,6 +643,11 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 			transactionMessagesDupCanonical.Inc(nil)
 			return network.OutgoingMessage{Action: network.Ignore}
 		}
+	}
+
+	// rate limit per application in a group. Limiting any app in a group drops the entire message.
+	if handler.appLimiter != nil && handler.appLimiter.shouldDrop(unverifiedTxGroup) {
+		return network.OutgoingMessage{Action: network.Ignore}
 	}
 
 	select {
