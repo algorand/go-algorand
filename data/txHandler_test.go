@@ -62,6 +62,8 @@ type mockSender struct{}
 
 func (m mockSender) OnClose(func()) {}
 
+func (m mockSender) IPAddr() []byte { return nil }
+
 // txHandlerConfig is a subset of tx handler related options from config.Local
 type txHandlerConfig struct {
 	enableFilteringRawMsg    bool

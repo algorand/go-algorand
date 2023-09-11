@@ -190,7 +190,7 @@ func MakeTxHandler(opts TxHandlerOpts) (*TxHandler, error) {
 
 		// TODO: figure out init constants
 		const appCacheMaxSize = 1000
-		handler.appLimiter = MakeAppRateLimiter(appCacheMaxSize, 50, 10*time.Second)
+		handler.appLimiter = makeAppRateLimiter(appCacheMaxSize, 50, 10*time.Second)
 	}
 
 	// prepare the transaction stream verifier
@@ -646,7 +646,7 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 	}
 
 	// rate limit per application in a group. Limiting any app in a group drops the entire message.
-	if handler.appLimiter != nil && handler.appLimiter.shouldDrop(unverifiedTxGroup) {
+	if handler.appLimiter != nil && handler.appLimiter.shouldDrop(unverifiedTxGroup, rawmsg.Sender.(network.IPAddressable).IPAddr()) {
 		return network.OutgoingMessage{Action: network.Ignore}
 	}
 

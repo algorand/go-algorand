@@ -33,7 +33,7 @@ func TestAppRateLimiter_NoApps(t *testing.T) {
 
 	rate := uint64(10)
 	window := 1 * time.Second
-	rm := MakeAppRateLimiter(10, rate, window)
+	rm := makeAppRateLimiter(10, rate, window)
 
 	txns := []transactions.SignedTxn{
 		{
@@ -47,7 +47,7 @@ func TestAppRateLimiter_NoApps(t *testing.T) {
 			},
 		},
 	}
-	drop := rm.shouldDrop(txns)
+	drop := rm.shouldDrop(txns, nil)
 	require.False(t, drop)
 }
 
@@ -68,19 +68,19 @@ func TestAppRateLimiter_Basics(t *testing.T) {
 
 	rate := uint64(10)
 	window := 1 * time.Second
-	rm := MakeAppRateLimiter(10, rate, window)
+	rm := makeAppRateLimiter(10, rate, window)
 
 	txns := getAppTxnGroup(1)
 	now := time.Now()
-	drop := rm.shouldDropInner(txns, now)
+	drop := rm.shouldDropInner(txns, nil, now)
 	require.False(t, drop)
 
 	for i := len(txns); i < int(rate); i++ {
-		drop = rm.shouldDropInner(txns, now)
+		drop = rm.shouldDropInner(txns, nil, now)
 		require.False(t, drop)
 	}
 
-	drop = rm.shouldDropInner(txns, now)
+	drop = rm.shouldDropInner(txns, nil, now)
 	require.True(t, drop)
 
 	// check a single group with exceed rate is dropped
@@ -92,10 +92,10 @@ func TestAppRateLimiter_Basics(t *testing.T) {
 			Txn: apptxn2,
 		})
 	}
-	drop = rm.shouldDropInner(txns, now)
+	drop = rm.shouldDropInner(txns, nil, now)
 	require.True(t, drop)
 
-	drop = rm.shouldDropInner(txns, now.Add(2*window))
+	drop = rm.shouldDropInner(txns, nil, now.Add(2*window))
 	require.True(t, drop)
 }
 
@@ -105,7 +105,7 @@ func TestAppRateLimiter_Interval(t *testing.T) {
 
 	rate := uint64(10)
 	window := 10 * time.Second
-	rm := MakeAppRateLimiter(10, rate, window)
+	rm := makeAppRateLimiter(10, rate, window)
 
 	txns := getAppTxnGroup(1)
 	now := time.Date(2023, 9, 11, 10, 10, 11, 0, time.UTC) // 11 sec => 1 sec into the interval
@@ -116,17 +116,17 @@ func TestAppRateLimiter_Interval(t *testing.T) {
 	// 0.9 is calculated as 1 - 0.1 (fraction of the interval elapsed)
 	// since the next interval at second 21 would by 1 sec (== 10% == 0.1) after the interval beginning
 	for i := 0; i < int(0.8*float64(rate)); i++ {
-		drop := rm.shouldDropInner(txns, now)
+		drop := rm.shouldDropInner(txns, nil, now)
 		require.False(t, drop)
 	}
 
 	next := now.Add(window)
 	for i := 0; i < int(0.3*float64(rate)); i++ {
-		drop := rm.shouldDropInner(txns, next)
+		drop := rm.shouldDropInner(txns, nil, next)
 		require.False(t, drop)
 	}
 
-	drop := rm.shouldDropInner(txns, next)
+	drop := rm.shouldDropInner(txns, nil, next)
 	require.True(t, drop)
 }
 
@@ -136,7 +136,7 @@ func TestAppRateLimiter_IntervalSkip(t *testing.T) {
 
 	rate := uint64(10)
 	window := 10 * time.Second
-	rm := MakeAppRateLimiter(10, rate, window)
+	rm := makeAppRateLimiter(10, rate, window)
 
 	txns := getAppTxnGroup(1)
 	now := time.Date(2023, 9, 11, 10, 10, 11, 0, time.UTC) // 11 sec => 1 sec into the interval
@@ -146,17 +146,17 @@ func TestAppRateLimiter_IntervalSkip(t *testing.T) {
 	// ensure all capacity is available
 
 	for i := 0; i < int(0.8*float64(rate)); i++ {
-		drop := rm.shouldDropInner(txns, now)
+		drop := rm.shouldDropInner(txns, nil, now)
 		require.False(t, drop)
 	}
 
 	nextnext := now.Add(2 * window)
 	for i := 0; i < int(rate); i++ {
-		drop := rm.shouldDropInner(txns, nextnext)
+		drop := rm.shouldDropInner(txns, nil, nextnext)
 		require.False(t, drop)
 	}
 
-	drop := rm.shouldDropInner(txns, nextnext)
+	drop := rm.shouldDropInner(txns, nil, nextnext)
 	require.True(t, drop)
 }
 
@@ -169,10 +169,10 @@ func TestAppRateLimiter_MaxSize(t *testing.T) {
 	size := uint64(2)
 	rate := uint64(10)
 	window := 10 * time.Second
-	rm := MakeAppRateLimiter(size, rate, window)
+	rm := makeAppRateLimiter(size, rate, window)
 
 	for i := 1; i <= int(size)+1; i++ {
-		drop := rm.shouldDrop(getAppTxnGroup(basics.AppIndex(i)))
+		drop := rm.shouldDrop(getAppTxnGroup(basics.AppIndex(i)), nil)
 		require.False(t, drop)
 	}
 

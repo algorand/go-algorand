@@ -17,12 +17,14 @@
 package data
 
 import (
+	"encoding/binary"
 	"sync/atomic"
 	"time"
 
-	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
+	"golang.org/x/crypto/blake2b"
 
 	"github.com/algorand/go-deadlock"
 )
@@ -36,15 +38,15 @@ type appRateLimiter struct {
 	// TODO: consider some kind of concurrent map
 	// TODO: add expiration strategy
 	mu   deadlock.RWMutex
-	apps map[basics.AppIndex]*appRateLimiterEntry
+	apps map[crypto.Digest]*appRateLimiterEntry
 }
 
-func MakeAppRateLimiter(maxSize uint64, serviceRate uint64, serviceRateWindow time.Duration) *appRateLimiter {
+func makeAppRateLimiter(maxSize uint64, serviceRate uint64, serviceRateWindow time.Duration) *appRateLimiter {
 	return &appRateLimiter{
 		maxSize:           maxSize,
 		serviceRate:       serviceRate,
 		serviceRateWindow: serviceRateWindow,
-		apps:              map[basics.AppIndex]*appRateLimiterEntry{},
+		apps:              map[crypto.Digest]*appRateLimiterEntry{},
 	}
 }
 
@@ -54,14 +56,14 @@ type appRateLimiterEntry struct {
 	interval int64 // numeric representation of the current interval value
 }
 
-func (r *appRateLimiter) entry(appIdx basics.AppIndex) (*appRateLimiterEntry, bool) {
+func (r *appRateLimiter) entry(key crypto.Digest) (*appRateLimiterEntry, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	entry, ok := r.apps[appIdx]
+	entry, ok := r.apps[key]
 	if !ok {
 		entry = &appRateLimiterEntry{}
-		r.apps[appIdx] = entry
+		r.apps[key] = entry
 	}
 	return entry, ok
 }
@@ -79,29 +81,42 @@ func (r *appRateLimiter) fraction(now time.Time) float64 {
 // shouldDrop returns true if the given transaction group should be dropped based on the
 // on the rate for the applications in the group: the entire group is dropped if a single application
 // exceeds the rate.
-func (r *appRateLimiter) shouldDrop(txgroup []transactions.SignedTxn) bool {
-	return r.shouldDropInner(txgroup, time.Now())
+func (r *appRateLimiter) shouldDrop(txgroup []transactions.SignedTxn, origin []byte) bool {
+	return r.shouldDropInner(txgroup, origin, time.Now())
 }
 
-func (r *appRateLimiter) shouldDropInner(txgroup []transactions.SignedTxn, now time.Time) bool {
-	var apps []basics.AppIndex
+func (r *appRateLimiter) shouldDropInner(txgroup []transactions.SignedTxn, origin []byte, now time.Time) bool {
+	var keys []crypto.Digest
+	// TODO: check memory allocs
+	var buf [8 + 16]byte // uint64 + up to 16 bytes of address
 	for i := range txgroup {
 		if txgroup[i].Txn.Type == protocol.ApplicationCallTx {
-			apps = append(apps, txgroup[i].Txn.ApplicationID)
-			// TODO: enable? this could allow apps censoring
-			// if len(txgroup[i].Txn.ForeignApps) > 0 {
-			// 	apps = append(apps, txgroup[i].Txn.ForeignApps...)
-			// }
+			binary.LittleEndian.PutUint64(buf[:8], uint64(txgroup[i].Txn.ApplicationID))
+			copied := copy(buf[8:], origin)
+			d := crypto.Digest(blake2b.Sum256(buf[:8+copied]))
+			// TODO: since blake2 is a crypto hash function it seems OK to shrink 32 bytes digest to
+			// 16 or 12 bytes.
+			// Rationale: we expect thousands of apps sent from thousands of peers,
+			// so required millions of unique pairs => 12 or 16 bytes should be enough.
+			keys = append(keys, d)
+			if len(txgroup[i].Txn.ForeignApps) > 0 {
+				for j := range txgroup[i].Txn.ForeignApps {
+					binary.LittleEndian.PutUint64(buf[:8], uint64(txgroup[i].Txn.ForeignApps[j]))
+					copied = copy(buf[8:], origin)
+					d := crypto.Digest(blake2b.Sum256(buf[:8+copied]))
+					keys = append(keys, d)
+				}
+			}
 		}
 	}
-	if len(apps) == 0 {
+	if len(keys) == 0 {
 		return false
 	}
 
 	curInt := r.interval(now)
 
-	for _, appIdx := range apps {
-		entry, has := r.entry(appIdx)
+	for _, key := range keys {
+		entry, has := r.entry(key)
 		if !has {
 			// new entry, fill defaults and continue
 			entry.interval = curInt

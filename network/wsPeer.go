@@ -120,6 +120,7 @@ var defaultSendMessageTags = map[protocol.Tag]bool{
 
 // interface allows substituting debug implementation for *websocket.Conn
 type wsPeerWebsocketConn interface {
+	RemoteAddr() net.Addr
 	RemoteAddrString() string
 	NextReader() (int, io.Reader, error)
 	WriteMessage(int, []byte) error
@@ -324,6 +325,11 @@ type HTTPPeer interface {
 	GetHTTPClient() *http.Client
 }
 
+// IPAddressable is addressable with either IPv4 or IPv6 address
+type IPAddressable interface {
+	IPAddr() []byte
+}
+
 // UnicastPeer is another possible interface for the opaque Peer.
 // It is possible that we can only initiate a connection to a peer over websockets.
 type UnicastPeer interface {
@@ -370,6 +376,19 @@ func (wp *wsPeerCore) GetHTTPClient() *http.Client {
 // Version returns the matching version from network.SupportedProtocolVersions
 func (wp *wsPeer) Version() string {
 	return wp.version
+}
+
+func (wp *wsPeer) IPAddr() []byte {
+	remote := wp.conn.RemoteAddr()
+	if remote == nil {
+		return nil
+	}
+	ip := remote.(*net.TCPAddr).IP
+	result := ip.To4()
+	if result == nil {
+		result = ip.To16()
+	}
+	return result
 }
 
 // Unicast sends the given bytes to this specific peer. Does not wait for message to be sent.
