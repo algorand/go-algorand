@@ -18,6 +18,8 @@ package agreement
 
 import (
 	"fmt"
+
+	"github.com/algorand/go-algorand/data/basics"
 )
 
 // A proposalManager is a proposalMachine which applies relay rules to incoming
@@ -136,7 +138,8 @@ func (m *proposalManager) handleMessageEvent(r routerHandle, p player, e filtera
 		if err != nil {
 			// mark filtered votes that may still update the best credential arrival time
 			credTrackingNote := NoCredentialTrackingImpact
-			if proposalUsedForCredentialHistory(e.FreshnessData.PlayerRound, e.Input.UnauthenticatedVote) {
+			if _, ok := err.(errProposalManagerPVNotFresh); ok && proposalUsedForCredentialHistory(e.FreshnessData.PlayerRound, e.Input.UnauthenticatedVote) {
+				// the freshness check failed, but we still want to verify this proposal-vote for credential tracking
 				credTrackingNote = UnverifiedBetterCredentialForTracking
 			}
 			return filteredEvent{T: voteFiltered, Err: makeSerErr(err), CredentialTrackingNote: credTrackingNote}
@@ -244,17 +247,37 @@ func (m *proposalManager) handleMessageEvent(r routerHandle, p player, e filtera
 	}
 }
 
+// errProposalManagerPVFreshness indicates that filterProposalVote failed the proposalFresh check.
+type errProposalManagerPVNotFresh struct {
+	Reason error
+}
+
+func (a errProposalManagerPVNotFresh) Error() string {
+	return fmt.Sprintf("proposalManager: filtered proposal-vote due to age: %v", a.Reason)
+}
+
+// errProposalManagerPVDuplicate idnicates that filterProposalVote failed the duplicate check.
+type errProposalManagerPVDuplicate struct {
+	Sender basics.Address
+	Round  round
+	Period period
+}
+
+func (d errProposalManagerPVDuplicate) Error() string {
+	return fmt.Sprintf("proposalManager: filtered proposal-vote: sender %v had already sent a vote in round %d period %d", d.Sender, d.Round, d.Period)
+}
+
 // filterVote filters a vote, checking if it is both fresh and not a duplicate.
 func (m *proposalManager) filterProposalVote(p player, r routerHandle, uv unauthenticatedVote, freshData freshnessData) error {
 	err := proposalFresh(freshData, uv)
 	if err != nil {
-		return fmt.Errorf("proposalManager: filtered proposal-vote due to age: %v", err)
+		return errProposalManagerPVNotFresh{Reason: err}
 	}
 
 	qe := voteFilterRequestEvent{RawVote: uv.R}
 	sawVote := r.dispatch(p, qe, proposalMachinePeriod, uv.R.Round, uv.R.Period, 0)
 	if sawVote.t() == voteFiltered {
-		return fmt.Errorf("proposalManager: filtered proposal-vote: sender %v had already sent a vote in round %d period %d", uv.R.Sender, uv.R.Round, uv.R.Period)
+		return errProposalManagerPVDuplicate{Sender: uv.R.Sender, Round: uv.R.Round, Period: uv.R.Period}
 	}
 	return nil
 }
