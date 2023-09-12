@@ -37,19 +37,23 @@ type appRateLimiter struct {
 	serviceRate       uint64
 	serviceRateWindow time.Duration
 
-	// TODO: consider some kind of concurrent map
-	// TODO: add expiration strategy
-	mu   deadlock.RWMutex
-	apps map[crypto.Digest]*appRateLimiterEntry
+	seed uint64
+
+	buckets [128]map[crypto.Digest]*appRateLimiterEntry
+	mus     [128]deadlock.RWMutex
 }
 
 func makeAppRateLimiter(maxSize uint64, serviceRate uint64, serviceRateWindow time.Duration) *appRateLimiter {
-	return &appRateLimiter{
+	r := &appRateLimiter{
 		maxSize:           maxSize,
 		serviceRate:       serviceRate,
 		serviceRateWindow: serviceRateWindow,
-		apps:              map[crypto.Digest]*appRateLimiterEntry{},
+		seed:              crypto.RandUint64(),
 	}
+	for i := range r.buckets {
+		r.buckets[i] = make(map[crypto.Digest]*appRateLimiterEntry)
+	}
+	return r
 }
 
 type appRateLimiterEntry struct {
@@ -58,29 +62,29 @@ type appRateLimiterEntry struct {
 	interval int64 // numeric representation of the current interval value
 }
 
-func (r *appRateLimiter) entry(key crypto.Digest, curInt int64) (*appRateLimiterEntry, bool) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+func (r *appRateLimiter) entry(b int, key crypto.Digest, curInt int64) (*appRateLimiterEntry, bool) {
+	r.mus[b].Lock()
+	defer r.mus[b].Unlock()
 
-	if len(r.apps) >= int(r.maxSize) {
+	if len(r.buckets[b]) >= int(r.maxSize) {
 		// evict the oldest entry
 		// TODO: evict 10% oldest entries?
 		var oldestKey crypto.Digest
 		var oldestInterval int64 = math.MaxInt64
-		for k, v := range r.apps {
+		for k, v := range r.buckets[b] {
 			if v.interval < oldestInterval {
 				oldestKey = k
 				oldestInterval = v.interval
 			}
 		}
-		delete(r.apps, oldestKey)
+		delete(r.buckets[b], oldestKey)
 	}
 
-	entry, ok := r.apps[key]
+	entry, ok := r.buckets[b][key]
 	if !ok {
 		entry = &appRateLimiterEntry{interval: curInt}
 		entry.cur.Store(1)
-		r.apps[key] = entry
+		r.buckets[b][key] = entry
 	}
 	return entry, ok
 }
@@ -105,22 +109,22 @@ func (r *appRateLimiter) shouldDrop(txgroup []transactions.SignedTxn, origin []b
 // shouldDropInner is the same as shouldDrop but accepts the current time as a parameter
 // in order to make it testable
 func (r *appRateLimiter) shouldDropInner(txgroup []transactions.SignedTxn, origin []byte, now time.Time) bool {
-	keys := txgroupToKeys(txgroup, origin)
+	buckets, keys := txgroupToKeys(txgroup, origin, r.seed, len(r.buckets))
 	if len(keys) == 0 {
 		return false
 	}
-	return r.shouldDropKeys(keys, now)
+	return r.shouldDropKeys(buckets, keys, now)
 }
 
-func (r *appRateLimiter) shouldDropKeys(keys []crypto.Digest, now time.Time) bool {
+func (r *appRateLimiter) shouldDropKeys(buckets []int, keys []crypto.Digest, now time.Time) bool {
 	curInt := r.interval(now)
 
-	for _, key := range keys {
-		entry, has := r.entry(key, curInt)
+	for i := range keys {
+		key := keys[i]
+		bucket := buckets[i]
+		entry, has := r.entry(bucket, key, curInt)
 		if !has {
-			// new entry, fill defaults and continue
-			// entry.interval = curInt
-			// entry.cur.Store(1)
+			// new entry, defaults are provided by entry() function
 			continue
 		}
 
@@ -149,8 +153,12 @@ func (r *appRateLimiter) shouldDropKeys(keys []crypto.Digest, now time.Time) boo
 }
 
 // txgroupToKeys converts txgroup data to keys
-func txgroupToKeys(txgroup []transactions.SignedTxn, origin []byte) []crypto.Digest {
+func txgroupToKeys(txgroup []transactions.SignedTxn, origin []byte, seed uint64, numBuckets int) ([]int, []crypto.Digest) {
+	// there are max 16 * 8 = 128 apps (buckets, keys) per txgroup
+	// TODO: consider sync.Pool
+
 	var keys []crypto.Digest
+	var buckets []int
 	// TODO: since blake2 is a crypto hash function it seems OK to shrink 32 bytes digest to
 	// 16 or 12 bytes.
 	// Rationale: we expect thousands of apps sent from thousands of peers,
@@ -163,13 +171,42 @@ func txgroupToKeys(txgroup []transactions.SignedTxn, origin []byte) []crypto.Dig
 	}
 	for i := range txgroup {
 		if txgroup[i].Txn.Type == protocol.ApplicationCallTx {
-			keys = append(keys, txnToDigest(txgroup[i].Txn.ApplicationID))
+			appIdx := txgroup[i].Txn.ApplicationID
+			// hash appIdx into a bucket, do not use modulo since it could
+			// assign two vanilla (and presumable, popular) apps to the same bucket.
+			buckets = append(buckets, int(memhash64(uint64(appIdx), seed)%uint64(numBuckets)))
+			keys = append(keys, txnToDigest(appIdx))
 			if len(txgroup[i].Txn.ForeignApps) > 0 {
 				for _, appIdx := range txgroup[i].Txn.ForeignApps {
+					buckets = append(buckets, int(memhash64(uint64(appIdx), seed)%uint64(numBuckets)))
 					keys = append(keys, txnToDigest(appIdx))
 				}
 			}
 		}
 	}
-	return keys
+	return buckets, keys
+}
+
+const (
+	// Constants for multiplication: four random odd 64-bit numbers.
+	m1 = 16877499708836156737
+	m2 = 2820277070424839065
+	m3 = 9497967016996688599
+	m4 = 15839092249703872147
+)
+
+// memhash64 is uint64 hash function from go runtime
+// https://go-review.googlesource.com/c/go/+/59352/4/src/runtime/hash64.go#96
+func memhash64(val uint64, seed uint64) uint64 {
+	h := seed
+	h ^= val
+	h = rotl_31(h*m1) * m2
+	h ^= h >> 29
+	h *= m3
+	h ^= h >> 32
+	return h
+}
+
+func rotl_31(x uint64) uint64 {
+	return (x << 31) | (x >> (64 - 31))
 }

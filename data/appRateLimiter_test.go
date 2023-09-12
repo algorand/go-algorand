@@ -204,9 +204,14 @@ func TestAppRateLimiter_MaxSize(t *testing.T) {
 	rm := makeAppRateLimiter(size, rate, window)
 
 	for i := 1; i <= int(size)+1; i++ {
-		drop := rm.shouldDrop(getAppTxnGroup(basics.AppIndex(i)), nil)
+		drop := rm.shouldDrop(getAppTxnGroup(basics.AppIndex(1)), []byte{byte(i)})
 		require.False(t, drop)
 	}
-
-	require.Equal(t, int(size), len(rm.apps))
+	bucket := int(memhash64(uint64(1), rm.seed) % uint64(len(rm.buckets)))
+	require.Equal(t, int(size), len(rm.buckets[bucket]))
+	for i := 0; i < len(rm.buckets); i++ {
+		if i != bucket {
+			require.Equal(t, 0, len(rm.buckets[i]))
+		}
+	}
 }
