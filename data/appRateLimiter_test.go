@@ -97,6 +97,16 @@ func TestAppRateLimiter_Basics(t *testing.T) {
 
 	drop = rm.shouldDropInner(txns, nil, now.Add(2*window))
 	require.True(t, drop)
+
+	// check foreign apps
+	apptxn3 := txns[0].Txn
+	apptxn3.ApplicationID = 3
+	for i := 0; i < int(rate); i++ {
+		apptxn3.ForeignApps = append(apptxn3.ForeignApps, 3)
+	}
+	txns = []transactions.SignedTxn{{Txn: apptxn3}}
+	drop = rm.shouldDropInner(txns, nil, now)
+	require.True(t, drop)
 }
 
 func TestAppRateLimiter_Interval(t *testing.T) {
@@ -157,6 +167,30 @@ func TestAppRateLimiter_IntervalSkip(t *testing.T) {
 	}
 
 	drop := rm.shouldDropInner(txns, nil, nextnext)
+	require.True(t, drop)
+}
+
+func TestAppRateLimiter_IPAddr(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	rate := uint64(10)
+	window := 10 * time.Second
+	rm := makeAppRateLimiter(10, rate, window)
+
+	txns := getAppTxnGroup(1)
+	now := time.Now()
+
+	for i := 0; i < int(rate); i++ {
+		drop := rm.shouldDropInner(txns, []byte{1}, now)
+		require.False(t, drop)
+		drop = rm.shouldDropInner(txns, []byte{2}, now)
+		require.False(t, drop)
+	}
+
+	drop := rm.shouldDropInner(txns, []byte{1}, now)
+	require.True(t, drop)
+	drop = rm.shouldDropInner(txns, []byte{2}, now)
 	require.True(t, drop)
 }
 

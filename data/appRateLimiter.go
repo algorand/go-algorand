@@ -129,8 +129,6 @@ func (r *appRateLimiter) shouldDropInner(txgroup []transactions.SignedTxn, origi
 			if entry.interval == curInt-1 {
 				// there are continuous intervals, use the previous value
 				val = entry.cur.Load()
-			} else {
-				// no data for the previous interval, reset
 			}
 			entry.prev.Store(val)
 			entry.interval = curInt
