@@ -138,9 +138,16 @@ func (m *proposalManager) handleMessageEvent(r routerHandle, p player, e filtera
 		if err != nil {
 			// mark filtered votes that may still update the best credential arrival time
 			credTrackingNote := NoCredentialTrackingImpact
+			// the freshness check failed, but we still want to verify this proposal-vote for credential tracking
 			if _, ok := err.(errProposalManagerPVNotFresh); ok && proposalUsedForCredentialHistory(e.FreshnessData.PlayerRound, e.Input.UnauthenticatedVote) {
-				// the freshness check failed, but we still want to verify this proposal-vote for credential tracking
-				credTrackingNote = UnverifiedBetterCredentialForTracking
+				// check to make sure we haven't already seen this proposal-vote
+				uv := e.Input.UnauthenticatedVote
+				qe := voteFilterRequestEvent{RawVote: e.uv.R}
+				sawVote := r.dispatch(p, qe, proposalMachinePeriod, uv.R.Round, uv.R.Period, 0)
+				if sawVote.t() != voteFiltered {
+					// not seen before: allow player to queue it to be verified
+					credTrackingNote = UnverifiedBetterCredentialForTracking
+				}
 			}
 			return filteredEvent{T: voteFiltered, Err: makeSerErr(err), CredentialTrackingNote: credTrackingNote}
 		}
