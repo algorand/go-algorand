@@ -198,8 +198,6 @@ func TestAppRateLimiter_MaxSize(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	t.Skip("TODO: implement apps expiration")
-
 	size := uint64(2)
 	rate := uint64(10)
 	window := 10 * time.Second

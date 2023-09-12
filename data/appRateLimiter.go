@@ -18,10 +18,12 @@ package data
 
 import (
 	"encoding/binary"
+	"math"
 	"sync/atomic"
 	"time"
 
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 	"golang.org/x/crypto/blake2b"
@@ -56,13 +58,28 @@ type appRateLimiterEntry struct {
 	interval int64 // numeric representation of the current interval value
 }
 
-func (r *appRateLimiter) entry(key crypto.Digest) (*appRateLimiterEntry, bool) {
+func (r *appRateLimiter) entry(key crypto.Digest, curInt int64) (*appRateLimiterEntry, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
+	if len(r.apps) >= int(r.maxSize) {
+		// evict the oldest entry
+		// TODO: evict 10% oldest entries?
+		var oldestKey crypto.Digest
+		var oldestInterval int64 = math.MaxInt64
+		for k, v := range r.apps {
+			if v.interval < oldestInterval {
+				oldestKey = k
+				oldestInterval = v.interval
+			}
+		}
+		delete(r.apps, oldestKey)
+	}
+
 	entry, ok := r.apps[key]
 	if !ok {
-		entry = &appRateLimiterEntry{}
+		entry = &appRateLimiterEntry{interval: curInt}
+		entry.cur.Store(1)
 		r.apps[key] = entry
 	}
 	return entry, ok
@@ -85,42 +102,25 @@ func (r *appRateLimiter) shouldDrop(txgroup []transactions.SignedTxn, origin []b
 	return r.shouldDropInner(txgroup, origin, time.Now())
 }
 
+// shouldDropInner is the same as shouldDrop but accepts the current time as a parameter
+// in order to make it testable
 func (r *appRateLimiter) shouldDropInner(txgroup []transactions.SignedTxn, origin []byte, now time.Time) bool {
-	var keys []crypto.Digest
-	// TODO: check memory allocs
-	var buf [8 + 16]byte // uint64 + up to 16 bytes of address
-	for i := range txgroup {
-		if txgroup[i].Txn.Type == protocol.ApplicationCallTx {
-			binary.LittleEndian.PutUint64(buf[:8], uint64(txgroup[i].Txn.ApplicationID))
-			copied := copy(buf[8:], origin)
-			d := crypto.Digest(blake2b.Sum256(buf[:8+copied]))
-			// TODO: since blake2 is a crypto hash function it seems OK to shrink 32 bytes digest to
-			// 16 or 12 bytes.
-			// Rationale: we expect thousands of apps sent from thousands of peers,
-			// so required millions of unique pairs => 12 or 16 bytes should be enough.
-			keys = append(keys, d)
-			if len(txgroup[i].Txn.ForeignApps) > 0 {
-				for j := range txgroup[i].Txn.ForeignApps {
-					binary.LittleEndian.PutUint64(buf[:8], uint64(txgroup[i].Txn.ForeignApps[j]))
-					copied = copy(buf[8:], origin)
-					d := crypto.Digest(blake2b.Sum256(buf[:8+copied]))
-					keys = append(keys, d)
-				}
-			}
-		}
-	}
+	keys := txgroupToKeys(txgroup, origin)
 	if len(keys) == 0 {
 		return false
 	}
+	return r.shouldDropKeys(keys, now)
+}
 
+func (r *appRateLimiter) shouldDropKeys(keys []crypto.Digest, now time.Time) bool {
 	curInt := r.interval(now)
 
 	for _, key := range keys {
-		entry, has := r.entry(key)
+		entry, has := r.entry(key, curInt)
 		if !has {
 			// new entry, fill defaults and continue
-			entry.interval = curInt
-			entry.cur.Store(1)
+			// entry.interval = curInt
+			// entry.cur.Store(1)
 			continue
 		}
 
@@ -146,4 +146,30 @@ func (r *appRateLimiter) shouldDropInner(txgroup []transactions.SignedTxn, origi
 	}
 
 	return false
+}
+
+// txgroupToKeys converts txgroup data to keys
+func txgroupToKeys(txgroup []transactions.SignedTxn, origin []byte) []crypto.Digest {
+	var keys []crypto.Digest
+	// TODO: since blake2 is a crypto hash function it seems OK to shrink 32 bytes digest to
+	// 16 or 12 bytes.
+	// Rationale: we expect thousands of apps sent from thousands of peers,
+	// so required millions of unique pairs => 12 or 16 bytes should be enough.
+	txnToDigest := func(appIdx basics.AppIndex) crypto.Digest {
+		var buf [8 + 16]byte // uint64 + up to 16 bytes of address
+		binary.LittleEndian.PutUint64(buf[:8], uint64(appIdx))
+		copied := copy(buf[8:], origin)
+		return crypto.Digest(blake2b.Sum256(buf[:8+copied]))
+	}
+	for i := range txgroup {
+		if txgroup[i].Txn.Type == protocol.ApplicationCallTx {
+			keys = append(keys, txnToDigest(txgroup[i].Txn.ApplicationID))
+			if len(txgroup[i].Txn.ForeignApps) > 0 {
+				for _, appIdx := range txgroup[i].Txn.ForeignApps {
+					keys = append(keys, txnToDigest(appIdx))
+				}
+			}
+		}
+	}
+	return keys
 }
