@@ -59,7 +59,7 @@ func makeAppRateLimiter(maxSize uint64, serviceRate uint64, serviceRateWindow ti
 type appRateLimiterEntry struct {
 	prev     atomic.Uint64
 	cur      atomic.Uint64
-	interval int64 // numeric representation of the current interval value
+	interval atomic.Int64 // numeric representation of the current interval value
 }
 
 func (r *appRateLimiter) entry(b int, key crypto.Digest, curInt int64) (*appRateLimiterEntry, bool) {
@@ -72,9 +72,10 @@ func (r *appRateLimiter) entry(b int, key crypto.Digest, curInt int64) (*appRate
 		var oldestKey crypto.Digest
 		var oldestInterval int64 = math.MaxInt64
 		for k, v := range r.buckets[b] {
-			if v.interval < oldestInterval {
+			interval := v.interval.Load()
+			if interval < oldestInterval {
 				oldestKey = k
-				oldestInterval = v.interval
+				oldestInterval = interval
 			}
 		}
 		delete(r.buckets[b], oldestKey)
@@ -82,8 +83,9 @@ func (r *appRateLimiter) entry(b int, key crypto.Digest, curInt int64) (*appRate
 
 	entry, ok := r.buckets[b][key]
 	if !ok {
-		entry = &appRateLimiterEntry{interval: curInt}
+		entry = &appRateLimiterEntry{}
 		entry.cur.Store(1)
+		entry.interval.Store(curInt)
 		r.buckets[b][key] = entry
 	}
 	return entry, ok
@@ -128,15 +130,16 @@ func (r *appRateLimiter) shouldDropKeys(buckets []int, keys []crypto.Digest, now
 			continue
 		}
 
-		if entry.interval != curInt {
+		interval := entry.interval.Load()
+		if interval != curInt {
 			var val uint64 = 0
-			if entry.interval == curInt-1 {
+			if interval == curInt-1 {
 				// there are continuous intervals, use the previous value
 				val = entry.cur.Load()
 			}
 			entry.prev.Store(val)
-			entry.interval = curInt
 			entry.cur.Store(1)
+			entry.interval.Store(curInt)
 		} else {
 			entry.cur.Add(1)
 		}
@@ -200,13 +203,13 @@ const (
 func memhash64(val uint64, seed uint64) uint64 {
 	h := seed
 	h ^= val
-	h = rotl_31(h*m1) * m2
+	h = rotl31(h*m1) * m2
 	h ^= h >> 29
 	h *= m3
 	h ^= h >> 32
 	return h
 }
 
-func rotl_31(x uint64) uint64 {
+func rotl31(x uint64) uint64 {
 	return (x << 31) | (x >> (64 - 31))
 }
