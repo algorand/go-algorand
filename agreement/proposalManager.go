@@ -142,7 +142,7 @@ func (m *proposalManager) handleMessageEvent(r routerHandle, p player, e filtera
 			if _, ok := err.(errProposalManagerPVNotFresh); ok && proposalUsedForCredentialHistory(e.FreshnessData.PlayerRound, e.Input.UnauthenticatedVote) {
 				// check to make sure we haven't already seen this proposal-vote
 				uv := e.Input.UnauthenticatedVote
-				qe := voteFilterRequestEvent{RawVote: e.uv.R}
+				qe := voteFilterRequestEvent{RawVote: uv.R}
 				sawVote := r.dispatch(p, qe, proposalMachinePeriod, uv.R.Round, uv.R.Period, 0)
 				if sawVote.t() != voteFiltered {
 					// not seen before: allow player to queue it to be verified
