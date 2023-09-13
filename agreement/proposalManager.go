@@ -134,20 +134,13 @@ func (m *proposalManager) handleMessageEvent(r routerHandle, p player, e filtera
 
 	switch e.t() {
 	case votePresent:
-		err := m.filterProposalVote(p, r, e.Input.UnauthenticatedVote, e.FreshnessData)
+		err, verifyForCredHistory := m.filterProposalVote(p, r, e.Input.UnauthenticatedVote, e.FreshnessData)
 		if err != nil {
-			// mark filtered votes that may still update the best credential arrival time
 			credTrackingNote := NoCredentialTrackingImpact
-			// the freshness check failed, but we still want to verify this proposal-vote for credential tracking
-			if _, ok := err.(errProposalManagerPVNotFresh); ok && proposalUsedForCredentialHistory(e.FreshnessData.PlayerRound, e.Input.UnauthenticatedVote) {
-				// check to make sure we haven't already seen this proposal-vote
-				uv := e.Input.UnauthenticatedVote
-				qe := voteFilterRequestEvent{RawVote: uv.R}
-				sawVote := r.dispatch(p, qe, proposalMachinePeriod, uv.R.Round, uv.R.Period, 0)
-				if sawVote.t() != voteFiltered {
-					// not seen before: allow player to queue it to be verified
-					credTrackingNote = UnverifiedBetterCredentialForTracking
-				}
+			if verifyForCredHistory {
+				// mark filtered votes that may still update the best credential arrival time
+				// the freshness check failed, but we still want to verify this proposal-vote for credential tracking
+				credTrackingNote = UnverifiedBetterCredentialForTracking
 			}
 			return filteredEvent{T: voteFiltered, Err: makeSerErr(err), CredentialTrackingNote: credTrackingNote}
 		}
@@ -275,18 +268,32 @@ func (d errProposalManagerPVDuplicate) Error() string {
 }
 
 // filterVote filters a vote, checking if it is both fresh and not a duplicate.
-func (m *proposalManager) filterProposalVote(p player, r routerHandle, uv unauthenticatedVote, freshData freshnessData) error {
-	err := proposalFresh(freshData, uv)
-	if err != nil {
-		return errProposalManagerPVNotFresh{Reason: err}
+// It also returns a bool indicating whether this proposal-vote should still be verified for tracking credential history.
+func (m *proposalManager) filterProposalVote(p player, r routerHandle, uv unauthenticatedVote, freshData freshnessData) (error, bool) {
+	// check if the vote is within the credential history window
+	credHistory := proposalUsedForCredentialHistory(freshData.PlayerRound, uv)
+
+	// checkDup asks proposalTracker if the vote is a duplicate, returning true if so
+	checkDup := func() bool {
+		qe := voteFilterRequestEvent{RawVote: uv.R}
+		sawVote := r.dispatch(p, qe, proposalMachinePeriod, uv.R.Round, uv.R.Period, 0)
+		return sawVote.t() == voteFiltered
 	}
 
-	qe := voteFilterRequestEvent{RawVote: uv.R}
-	sawVote := r.dispatch(p, qe, proposalMachinePeriod, uv.R.Round, uv.R.Period, 0)
-	if sawVote.t() == voteFiltered {
-		return errProposalManagerPVDuplicate{Sender: uv.R.Sender, Round: uv.R.Round, Period: uv.R.Period}
+	// check the vote against the current player's freshness rules
+	err := proposalFresh(freshData, uv)
+	if err != nil {
+		// not fresh, but possibly useful for credential history: ensure not a duplicate
+		if credHistory && checkDup() {
+			credHistory = false
+		}
+		return errProposalManagerPVNotFresh{Reason: err}, credHistory
 	}
-	return nil
+
+	if checkDup() {
+		return errProposalManagerPVDuplicate{Sender: uv.R.Sender, Round: uv.R.Round, Period: uv.R.Period}, credHistory
+	}
+	return nil, credHistory
 }
 
 func proposalUsedForCredentialHistory(curRound round, vote unauthenticatedVote) bool {
