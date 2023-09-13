@@ -2192,8 +2192,8 @@ func testAcctUpdatesLookupRetry(t *testing.T, assertFn func(au *accountUpdates, 
 		postCommitUnlockedReleaseLock: make(chan struct{}),
 		postCommitEntryLock:           make(chan struct{}),
 		postCommitReleaseLock:         make(chan struct{}),
-		alwaysLock:                    true,
 	}
+	stallingTracker.alwaysLock.Store(true)
 	ml.trackers.trackers = append([]ledgerTracker{stallingTracker}, ml.trackers.trackers...)
 
 	// kick off another round
