@@ -340,7 +340,12 @@ int 1`
 
 	// There should be a failure when the round is too far back
 	simulateRequest.Round = basics.Round(followerSyncRound - 3)
-	result, err = simulateTransactions(simulateRequest)
+	require.Eventually(t, func() bool {
+		// use Eventually to workaround the ledger delays with committing accounts
+		result, err = simulateTransactions(simulateRequest)
+		return err != nil
+	}, 6*time.Second, 500*time.Millisecond)
+
 	a.Error(err)
 	var httpErr client.HTTPError
 	a.ErrorAs(err, &httpErr)
