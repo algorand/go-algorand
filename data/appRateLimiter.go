@@ -33,9 +33,9 @@ import (
 
 // appRateLimiter implements a sliding window counter rate limiter for applications
 type appRateLimiter struct {
-	maxSize           uint64
-	serviceRate       uint64
-	serviceRateWindow time.Duration
+	maxSize              uint64
+	serviceRatePerWindow uint64
+	serviceRateWindow    time.Duration
 
 	seed uint64
 
@@ -43,12 +43,18 @@ type appRateLimiter struct {
 	mus     [128]deadlock.RWMutex
 }
 
-func makeAppRateLimiter(maxSize uint64, serviceRate uint64, serviceRateWindow time.Duration) *appRateLimiter {
+// makeAppRateLimiter creates a new appRateLimiter from the parameters:
+// maxCacheSize is the maximum number of entries to keep in the cache to keep it memory bounded
+// maxAppPeerRate is the maximum number of admitted apps per peer per second
+// serviceRateWindow is the service window
+func makeAppRateLimiter(maxCacheSize uint64, maxAppPeerRate uint64, serviceRateWindow time.Duration) *appRateLimiter {
+	// convert target per app rate to per window service rate
+	serviceRatePerWindow := maxAppPeerRate * uint64(serviceRateWindow/time.Second)
 	r := &appRateLimiter{
-		maxSize:           maxSize,
-		serviceRate:       serviceRate,
-		serviceRateWindow: serviceRateWindow,
-		seed:              crypto.RandUint64(),
+		maxSize:              maxCacheSize,
+		serviceRatePerWindow: serviceRatePerWindow,
+		serviceRateWindow:    serviceRateWindow,
+		seed:                 crypto.RandUint64(),
 	}
 	for i := range r.buckets {
 		r.buckets[i] = make(map[crypto.Digest]*appRateLimiterEntry)
@@ -147,7 +153,7 @@ func (r *appRateLimiter) shouldDropKeys(buckets []int, keys []crypto.Digest, now
 		curFraction := r.fraction(now)
 		rate := uint64(float64(entry.prev.Load())*(1-curFraction)) + entry.cur.Load()
 
-		if rate > r.serviceRate {
+		if rate > r.serviceRatePerWindow {
 			return true
 		}
 	}

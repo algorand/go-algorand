@@ -115,7 +115,8 @@ func TestAppRateLimiter_Interval(t *testing.T) {
 
 	rate := uint64(10)
 	window := 10 * time.Second
-	rm := makeAppRateLimiter(10, rate, window)
+	perSecondRate := uint64(window) / rate / uint64(time.Second)
+	rm := makeAppRateLimiter(10, perSecondRate, window)
 
 	txns := getAppTxnGroup(1)
 	now := time.Date(2023, 9, 11, 10, 10, 11, 0, time.UTC) // 11 sec => 1 sec into the interval
@@ -146,7 +147,8 @@ func TestAppRateLimiter_IntervalSkip(t *testing.T) {
 
 	rate := uint64(10)
 	window := 10 * time.Second
-	rm := makeAppRateLimiter(10, rate, window)
+	perSecondRate := uint64(window) / rate / uint64(time.Second)
+	rm := makeAppRateLimiter(10, perSecondRate, window)
 
 	txns := getAppTxnGroup(1)
 	now := time.Date(2023, 9, 11, 10, 10, 11, 0, time.UTC) // 11 sec => 1 sec into the interval
@@ -176,7 +178,8 @@ func TestAppRateLimiter_IPAddr(t *testing.T) {
 
 	rate := uint64(10)
 	window := 10 * time.Second
-	rm := makeAppRateLimiter(10, rate, window)
+	perSecondRate := uint64(window) / rate / uint64(time.Second)
+	rm := makeAppRateLimiter(10, perSecondRate, window)
 
 	txns := getAppTxnGroup(1)
 	now := time.Now()

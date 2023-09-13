@@ -2505,3 +2505,67 @@ func TestTxHandlerRestartWithBacklogAndTxPool(t *testing.T) { //nolint:parallelt
 		require.False(t, inBad, "invalid transaction accepted")
 	}
 }
+
+func TestTxHandlerAppRateLimiter(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	const numUsers = 10
+	log := logging.TestingLog(t)
+	log.SetLevel(logging.Panic)
+
+	// prepare the accounts
+	addresses, secrets, genesis := makeTestGenesisAccounts(t, numUsers)
+	genBal := bookkeeping.MakeGenesisBalances(genesis, sinkAddr, poolAddr)
+	ledgerName := fmt.Sprintf("%s-mem", t.Name())
+	const inMem = true
+	cfg := config.GetDefaultLocal()
+	cfg.EnableTxBacklogRateLimiting = true
+	cfg.TxBacklogTxRateLimiterMaxSize = 100
+	cfg.TxBacklogServiceRateWindowSeconds = 1
+	cfg.TxBacklogTxRate = 3
+	ledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, nil, cfg)
+	require.NoError(t, err)
+	defer ledger.Close()
+
+	l := ledger
+	handler, err := makeTestTxHandler(l, cfg)
+	require.NoError(t, err)
+	defer handler.txVerificationPool.Shutdown()
+	defer close(handler.streamVerifierDropped)
+
+	tx := transactions.Transaction{
+		Type: protocol.ApplicationCallTx,
+		Header: transactions.Header{
+			Sender:     addresses[0],
+			Fee:        basics.MicroAlgos{Raw: proto.MinTxnFee * 2},
+			FirstValid: 0,
+			LastValid:  basics.Round(proto.MaxTxnLife),
+			Note:       make([]byte, 2),
+		},
+		ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+			ApplicationID: 1,
+		},
+	}
+	signedTx := tx.Sign(secrets[1])
+	blob := protocol.Encode(&signedTx)
+
+	action := handler.processIncomingTxn(network.IncomingMessage{Data: blob, Sender: mockSender{}})
+	require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, action)
+	require.Equal(t, 1, len(handler.backlogQueue))
+
+	// trigger the rate limiter and ensure the txn is ignored
+	tx2 := tx
+	for i := 0; i < cfg.TxBacklogTxRate*cfg.TxBacklogServiceRateWindowSeconds; i++ {
+		tx2.ForeignApps = append(tx2.ForeignApps, 1)
+	}
+	signedTx2 := tx.Sign(secrets[1])
+	blob2 := protocol.Encode(&signedTx2)
+
+	action = handler.processIncomingTxn(network.IncomingMessage{Data: blob2, Sender: mockSender{}})
+	require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, action)
+	require.Equal(t, 1, len(handler.backlogQueue))
+
+	msg := <-handler.backlogQueue
+	require.Equal(t, msg.rawmsg.Data, blob, blob)
+}

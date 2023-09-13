@@ -217,10 +217,17 @@ type Local struct {
 	// TxBacklogServiceRateWindowSeconds is the window size used to determine the service rate of the txBacklog
 	TxBacklogServiceRateWindowSeconds int `version[27]:"10"`
 
+	// TxBacklogTxRateLimiterMaxSize denotes a max size for the tx rate limiter
+	// calculated as "a thousand apps on a network of thousand of peers"
+	TxBacklogTxRateLimiterMaxSize int `version[31]:"1048576"`
+
 	// TxBacklogReservedCapacityPerPeer determines how much dedicated serving capacity the TxBacklog gives each peer
 	TxBacklogReservedCapacityPerPeer int `version[27]:"20"`
 
-	// EnableTxBacklogRateLimiting controls if a rate limiter and congestion manager shouild be attached to the tx backlog enqueue process
+	// TxBacklogTxRate determines a target app rate for the tx rate limiter
+	TxBacklogTxRate int `version[31]:"20"`
+
+	// EnableTxBacklogRateLimiting controls if a rate limiter and congestion manager should be attached to the tx backlog enqueue process
 	// if enabled, the over-all TXBacklog Size will be larger by MAX_PEERS*TxBacklogReservedCapacityPerPeer
 	EnableTxBacklogRateLimiting bool `version[27]:"false" version[30]:"true"`
 

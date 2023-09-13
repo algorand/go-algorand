@@ -188,9 +188,13 @@ func MakeTxHandler(opts TxHandlerOpts) (*TxHandler, error) {
 		)
 		handler.erl = rateLimiter
 
-		// TODO: figure out init constants
-		const appCacheMaxSize = 1000
-		handler.appLimiter = makeAppRateLimiter(appCacheMaxSize, 50, 10*time.Second)
+		if opts.Config.TxBacklogTxRateLimiterMaxSize > 0 {
+			handler.appLimiter = makeAppRateLimiter(
+				uint64(opts.Config.TxBacklogTxRateLimiterMaxSize),
+				uint64(opts.Config.TxBacklogTxRate),
+				time.Duration(opts.Config.TxBacklogServiceRateWindowSeconds)*time.Second,
+			)
+		}
 	}
 
 	// prepare the transaction stream verifier
