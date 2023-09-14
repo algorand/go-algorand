@@ -50,6 +50,11 @@ type appRateLimiter struct {
 
 	buckets [numBuckets]map[keyType]*appRateLimiterEntry
 	mus     [numBuckets]deadlock.RWMutex
+
+	// evictions
+	// TODO: delete
+	evictions    uint64
+	evictionTime uint64
 }
 
 // makeAppRateLimiter creates a new appRateLimiter from the parameters:
@@ -87,6 +92,8 @@ func (r *appRateLimiter) entry(b int, key keyType, curInt int64) (*appRateLimite
 	if len(r.buckets[b]) >= int(r.maxBucketSize) {
 		// evict the oldest entry
 		// TODO: evict 10% oldest entries?
+		// FIXME: linear search eviction is 17x slower than no eviction
+		start := time.Now()
 		var oldestKey keyType
 		var oldestInterval int64 = math.MaxInt64
 		for k, v := range r.buckets[b] {
@@ -97,6 +104,8 @@ func (r *appRateLimiter) entry(b int, key keyType, curInt int64) (*appRateLimite
 			}
 		}
 		delete(r.buckets[b], oldestKey)
+		atomic.AddUint64(&r.evictions, 1)
+		atomic.AddUint64(&r.evictionTime, uint64(time.Since(start)))
 	}
 
 	entry, ok := r.buckets[b][key]

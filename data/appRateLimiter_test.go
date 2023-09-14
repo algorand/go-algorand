@@ -17,14 +17,19 @@
 package data
 
 import (
+	"encoding/binary"
 	"testing"
 	"time"
 
+	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/crypto/blake2b"
+	"golang.org/x/exp/rand"
 )
 
 func TestAppRateLimiter_Make(t *testing.T) {
@@ -235,4 +240,93 @@ func TestAppRateLimiter_MaxSize(t *testing.T) {
 		}
 	}
 	require.LessOrEqual(t, totalSize, int(size))
+}
+
+func BenchmarkBlake2(b *testing.B) {
+	var salt [16]byte
+	crypto.RandBytes(salt[:])
+	origin := make([]byte, 4)
+
+	var buf [8 + 16 + 16]byte // uint64 + 16 bytes of salt + up to 16 bytes of address
+
+	b.Run("blake2b-sum256", func(b *testing.B) {
+		total := 0
+		for i := 0; i < b.N; i++ {
+			binary.LittleEndian.PutUint64(buf[:8], rand.Uint64())
+			copy(buf[8:], salt[:])
+			copied := copy(buf[8+16:], origin)
+			h := blake2b.Sum256(buf[:8+16+copied])
+			total += len(h[:])
+		}
+		b.Logf("total1: %d", total) // to prevent optimizing out the loop
+	})
+
+	b.Run("blake2b-sum8", func(b *testing.B) {
+		total := 0
+		for i := 0; i < b.N; i++ {
+			d, err := blake2b.New(8, nil)
+			require.NoError(b, err)
+
+			binary.LittleEndian.PutUint64(buf[:8], rand.Uint64())
+			copy(buf[8:], salt[:])
+			copied := copy(buf[8+16:], origin)
+
+			_, err = d.Write(buf[:8+16+copied])
+			require.NoError(b, err)
+			h := d.Sum([]byte{})
+			total += len(h[:])
+		}
+		b.Logf("total2: %d", total)
+	})
+}
+
+func BenchmarkAppRateLimiter(b *testing.B) {
+	cfg := config.GetDefaultLocal()
+
+	b.Run("multi bucket", func(b *testing.B) {
+		rm := makeAppRateLimiter(
+			uint64(cfg.TxBacklogTxRateLimiterMaxSize),
+			uint64(cfg.TxBacklogTxRate),
+			time.Duration(cfg.TxBacklogServiceRateWindowSeconds)*time.Second,
+		)
+		dropped := 0
+		for i := 0; i < b.N; i++ {
+			if rm.shouldDrop(getAppTxnGroup(basics.AppIndex(i%512)), []byte{byte(i), byte(i % 256)}) {
+				dropped++
+			}
+		}
+		b.ReportMetric(float64(dropped)/float64(b.N), "%_drop")
+	})
+
+	b.Run("single bucket no evict", func(b *testing.B) {
+		rm := makeAppRateLimiter(
+			uint64(cfg.TxBacklogTxRateLimiterMaxSize),
+			uint64(cfg.TxBacklogTxRate),
+			time.Duration(cfg.TxBacklogServiceRateWindowSeconds)*time.Second,
+		)
+		dropped := 0
+		for i := 0; i < b.N; i++ {
+			if rm.shouldDrop(getAppTxnGroup(basics.AppIndex(1)), []byte{byte(i), byte(i % 256)}) {
+				dropped++
+			}
+		}
+		b.ReportMetric(float64(dropped)/float64(b.N), "%_drop")
+		b.Logf("# evictions %d, time %d us", rm.evictions, rm.evictionTime/uint64(time.Microsecond))
+	})
+
+	b.Run("single bucket w evict", func(b *testing.B) {
+		rm := makeAppRateLimiter(
+			uint64(cfg.TxBacklogTxRateLimiterMaxSize),
+			uint64(cfg.TxBacklogTxRate),
+			time.Duration(cfg.TxBacklogServiceRateWindowSeconds)*time.Second,
+		)
+		dropped := 0
+		for i := 0; i < b.N; i++ {
+			if rm.shouldDrop(getAppTxnGroup(basics.AppIndex(1)), []byte{byte(i), byte(i / 256), byte(i % 256)}) {
+				dropped++
+			}
+		}
+		b.ReportMetric(float64(dropped)/float64(b.N), "%_drop")
+		b.Logf("# evictions %d, time %d us", rm.evictions, rm.evictionTime/uint64(time.Microsecond))
+	})
 }
