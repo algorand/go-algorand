@@ -1605,8 +1605,6 @@ func TestAcctOnlineTopBetweenCommitAndPostCommit(t *testing.T) {
 		postCommitUnlockedReleaseLock: make(chan struct{}),
 		postCommitEntryLock:           make(chan struct{}),
 		postCommitReleaseLock:         make(chan struct{}),
-		alwaysLock:                    false,
-		shouldLockPostCommit:          false,
 	}
 
 	conf := config.GetDefaultLocal()
@@ -1632,7 +1630,7 @@ func TestAcctOnlineTopBetweenCommitAndPostCommit(t *testing.T) {
 		newBlockWithUpdates(genesisAccts, updates, totals, t, ml, i, oa)
 	}
 
-	stallingTracker.shouldLockPostCommit = true
+	stallingTracker.shouldLockPostCommit.Store(true)
 
 	updateAccountsRoutine := func() {
 		var updates ledgercore.AccountDeltas
@@ -1698,8 +1696,6 @@ func TestAcctOnlineTopDBBehindMemRound(t *testing.T) {
 		postCommitUnlockedReleaseLock: make(chan struct{}),
 		postCommitEntryLock:           make(chan struct{}),
 		postCommitReleaseLock:         make(chan struct{}),
-		alwaysLock:                    false,
-		shouldLockPostCommit:          false,
 	}
 
 	conf := config.GetDefaultLocal()
@@ -1725,7 +1721,7 @@ func TestAcctOnlineTopDBBehindMemRound(t *testing.T) {
 		newBlockWithUpdates(genesisAccts, updates, totals, t, ml, i, oa)
 	}
 
-	stallingTracker.shouldLockPostCommit = true
+	stallingTracker.shouldLockPostCommit.Store(true)
 
 	updateAccountsRoutine := func() {
 		var updates ledgercore.AccountDeltas

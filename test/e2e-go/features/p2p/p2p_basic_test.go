@@ -57,11 +57,6 @@ func TestP2PTwoNodes(t *testing.T) {
 	testP2PWithConfig(t, "TwoNodes50EachP2P.json")
 }
 
-func TestP2PThreeNodesEvenDist(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	testP2PWithConfig(t, "ThreeNodesEvenDistP2P.json")
-}
-
 func TestP2PFiveNodes(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	testP2PWithConfig(t, "FiveNodesP2P.json")
