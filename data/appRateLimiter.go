@@ -33,15 +33,22 @@ import (
 
 const numBuckets = 128
 
-// appRateLimiter implements a sliding window counter rate limiter for applications
+type keyType [8]byte
+
+// appRateLimiter implements a sliding window counter rate limiter for applications.
+// It is a shared map with numBuckets of maps each protected by its own mutex.
+// Bucket is selected by hashing the application index with a seed (see memhash64).
 type appRateLimiter struct {
 	maxBucketSize        uint64
 	serviceRatePerWindow uint64
 	serviceRateWindow    time.Duration
 
+	// seed for hashing application index to bucket
 	seed uint64
+	// salt for hashing application index + origin address
+	salt [16]byte
 
-	buckets [numBuckets]map[crypto.Digest]*appRateLimiterEntry
+	buckets [numBuckets]map[keyType]*appRateLimiterEntry
 	mus     [numBuckets]deadlock.RWMutex
 }
 
@@ -59,8 +66,10 @@ func makeAppRateLimiter(maxCacheSize uint64, maxAppPeerRate uint64, serviceRateW
 		serviceRateWindow:    serviceRateWindow,
 		seed:                 crypto.RandUint64(),
 	}
+	crypto.RandBytes(r.salt[:])
+
 	for i := range r.buckets {
-		r.buckets[i] = make(map[crypto.Digest]*appRateLimiterEntry)
+		r.buckets[i] = make(map[keyType]*appRateLimiterEntry)
 	}
 	return r
 }
@@ -71,14 +80,14 @@ type appRateLimiterEntry struct {
 	interval atomic.Int64 // numeric representation of the current interval value
 }
 
-func (r *appRateLimiter) entry(b int, key crypto.Digest, curInt int64) (*appRateLimiterEntry, bool) {
+func (r *appRateLimiter) entry(b int, key keyType, curInt int64) (*appRateLimiterEntry, bool) {
 	r.mus[b].Lock()
 	defer r.mus[b].Unlock()
 
 	if len(r.buckets[b]) >= int(r.maxBucketSize) {
 		// evict the oldest entry
 		// TODO: evict 10% oldest entries?
-		var oldestKey crypto.Digest
+		var oldestKey keyType
 		var oldestInterval int64 = math.MaxInt64
 		for k, v := range r.buckets[b] {
 			interval := v.interval.Load()
@@ -120,14 +129,14 @@ func (r *appRateLimiter) shouldDrop(txgroup []transactions.SignedTxn, origin []b
 // shouldDropInner is the same as shouldDrop but accepts the current time as a parameter
 // in order to make it testable
 func (r *appRateLimiter) shouldDropInner(txgroup []transactions.SignedTxn, origin []byte, now time.Time) bool {
-	buckets, keys := txgroupToKeys(txgroup, origin, r.seed, numBuckets)
+	buckets, keys := txgroupToKeys(txgroup, origin, r.seed, r.salt, numBuckets)
 	if len(keys) == 0 {
 		return false
 	}
 	return r.shouldDropKeys(buckets, keys, now)
 }
 
-func (r *appRateLimiter) shouldDropKeys(buckets []int, keys []crypto.Digest, now time.Time) bool {
+func (r *appRateLimiter) shouldDropKeys(buckets []int, keys []keyType, now time.Time) bool {
 	curInt := r.interval(now)
 
 	for i := range keys {
@@ -165,21 +174,28 @@ func (r *appRateLimiter) shouldDropKeys(buckets []int, keys []crypto.Digest, now
 }
 
 // txgroupToKeys converts txgroup data to keys
-func txgroupToKeys(txgroup []transactions.SignedTxn, origin []byte, seed uint64, numBuckets int) ([]int, []crypto.Digest) {
+func txgroupToKeys(txgroup []transactions.SignedTxn, origin []byte, seed uint64, salt [16]byte, numBuckets int) ([]int, []keyType) {
 	// there are max 16 * 8 = 128 apps (buckets, keys) per txgroup
 	// TODO: consider sync.Pool
 
-	var keys []crypto.Digest
+	var keys []keyType
 	var buckets []int
-	// TODO: since blake2 is a crypto hash function it seems OK to shrink 32 bytes digest to
-	// 16 or 12 bytes.
+	// since blake2 is a crypto hash function it seems OK to shrink 32 bytes digest down to 8.
 	// Rationale: we expect thousands of apps sent from thousands of peers,
-	// so required millions of unique pairs => 12 or 16 bytes should be enough.
-	txnToDigest := func(appIdx basics.AppIndex) crypto.Digest {
-		var buf [8 + 16]byte // uint64 + up to 16 bytes of address
+	// so required millions of unique pairs => 8 bytes should be enough.
+	// The 16 bytes salt makes it harder to find collisions if an adversary attempts to censor
+	// some app by finding a collision with some app and flood a network with such transactions:
+	// h(app + relay_ip) = h(app2 + relay_ip).
+	var buf [8 + 16 + 16]byte // uint64 + 16 bytes of salt + up to 16 bytes of address
+	txnToDigest := func(appIdx basics.AppIndex) keyType {
 		binary.LittleEndian.PutUint64(buf[:8], uint64(appIdx))
-		copied := copy(buf[8:], origin)
-		return crypto.Digest(blake2b.Sum256(buf[:8+copied]))
+		copy(buf[8:], salt[:])
+		copied := copy(buf[8+16:], origin)
+
+		h := blake2b.Sum256(buf[:8+16+copied])
+		var key keyType
+		copy(key[:], h[:len(key)])
+		return key
 	}
 	for i := range txgroup {
 		if txgroup[i].Txn.Type == protocol.ApplicationCallTx {

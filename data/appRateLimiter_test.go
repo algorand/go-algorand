@@ -27,6 +27,19 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestAppRateLimiter_Make(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	rate := uint64(10)
+	window := 1 * time.Second
+	rm := makeAppRateLimiter(10, rate, window)
+
+	require.NotEmpty(t, rm.seed)
+	require.NotEmpty(t, rm.salt)
+	require.NotEmpty(t, rm.buckets)
+}
+
 func TestAppRateLimiter_NoApps(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
