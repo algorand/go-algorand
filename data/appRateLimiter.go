@@ -31,16 +31,18 @@ import (
 	"github.com/algorand/go-deadlock"
 )
 
+const numBuckets = 128
+
 // appRateLimiter implements a sliding window counter rate limiter for applications
 type appRateLimiter struct {
-	maxSize              uint64
+	maxBucketSize        uint64
 	serviceRatePerWindow uint64
 	serviceRateWindow    time.Duration
 
 	seed uint64
 
-	buckets [128]map[crypto.Digest]*appRateLimiterEntry
-	mus     [128]deadlock.RWMutex
+	buckets [numBuckets]map[crypto.Digest]*appRateLimiterEntry
+	mus     [numBuckets]deadlock.RWMutex
 }
 
 // makeAppRateLimiter creates a new appRateLimiter from the parameters:
@@ -50,8 +52,9 @@ type appRateLimiter struct {
 func makeAppRateLimiter(maxCacheSize uint64, maxAppPeerRate uint64, serviceRateWindow time.Duration) *appRateLimiter {
 	// convert target per app rate to per window service rate
 	serviceRatePerWindow := maxAppPeerRate * uint64(serviceRateWindow/time.Second)
+	maxBucketSize := maxCacheSize / numBuckets
 	r := &appRateLimiter{
-		maxSize:              maxCacheSize,
+		maxBucketSize:        maxBucketSize,
 		serviceRatePerWindow: serviceRatePerWindow,
 		serviceRateWindow:    serviceRateWindow,
 		seed:                 crypto.RandUint64(),
@@ -72,7 +75,7 @@ func (r *appRateLimiter) entry(b int, key crypto.Digest, curInt int64) (*appRate
 	r.mus[b].Lock()
 	defer r.mus[b].Unlock()
 
-	if len(r.buckets[b]) >= int(r.maxSize) {
+	if len(r.buckets[b]) >= int(r.maxBucketSize) {
 		// evict the oldest entry
 		// TODO: evict 10% oldest entries?
 		var oldestKey crypto.Digest
@@ -117,7 +120,7 @@ func (r *appRateLimiter) shouldDrop(txgroup []transactions.SignedTxn, origin []b
 // shouldDropInner is the same as shouldDrop but accepts the current time as a parameter
 // in order to make it testable
 func (r *appRateLimiter) shouldDropInner(txgroup []transactions.SignedTxn, origin []byte, now time.Time) bool {
-	buckets, keys := txgroupToKeys(txgroup, origin, r.seed, len(r.buckets))
+	buckets, keys := txgroupToKeys(txgroup, origin, r.seed, numBuckets)
 	if len(keys) == 0 {
 		return false
 	}

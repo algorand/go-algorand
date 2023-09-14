@@ -68,7 +68,7 @@ func TestAppRateLimiter_Basics(t *testing.T) {
 
 	rate := uint64(10)
 	window := 1 * time.Second
-	rm := makeAppRateLimiter(10, rate, window)
+	rm := makeAppRateLimiter(512, rate, window)
 
 	txns := getAppTxnGroup(1)
 	now := time.Now()
@@ -116,7 +116,7 @@ func TestAppRateLimiter_Interval(t *testing.T) {
 	rate := uint64(10)
 	window := 10 * time.Second
 	perSecondRate := uint64(window) / rate / uint64(time.Second)
-	rm := makeAppRateLimiter(10, perSecondRate, window)
+	rm := makeAppRateLimiter(512, perSecondRate, window)
 
 	txns := getAppTxnGroup(1)
 	now := time.Date(2023, 9, 11, 10, 10, 11, 0, time.UTC) // 11 sec => 1 sec into the interval
@@ -148,7 +148,7 @@ func TestAppRateLimiter_IntervalSkip(t *testing.T) {
 	rate := uint64(10)
 	window := 10 * time.Second
 	perSecondRate := uint64(window) / rate / uint64(time.Second)
-	rm := makeAppRateLimiter(10, perSecondRate, window)
+	rm := makeAppRateLimiter(512, perSecondRate, window)
 
 	txns := getAppTxnGroup(1)
 	now := time.Date(2023, 9, 11, 10, 10, 11, 0, time.UTC) // 11 sec => 1 sec into the interval
@@ -179,7 +179,7 @@ func TestAppRateLimiter_IPAddr(t *testing.T) {
 	rate := uint64(10)
 	window := 10 * time.Second
 	perSecondRate := uint64(window) / rate / uint64(time.Second)
-	rm := makeAppRateLimiter(10, perSecondRate, window)
+	rm := makeAppRateLimiter(512, perSecondRate, window)
 
 	txns := getAppTxnGroup(1)
 	now := time.Now()
@@ -197,12 +197,14 @@ func TestAppRateLimiter_IPAddr(t *testing.T) {
 	require.True(t, drop)
 }
 
+// TestAppRateLimiter_MaxSize puts size+1 elements into a single bucket and ensures the total size is capped
 func TestAppRateLimiter_MaxSize(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	size := uint64(2)
-	rate := uint64(10)
+	const size uint64 = 512
+	const rate uint64 = 10
+	const bucketSize = int(size / numBuckets)
 	window := 10 * time.Second
 	rm := makeAppRateLimiter(size, rate, window)
 
@@ -211,10 +213,13 @@ func TestAppRateLimiter_MaxSize(t *testing.T) {
 		require.False(t, drop)
 	}
 	bucket := int(memhash64(uint64(1), rm.seed) % uint64(len(rm.buckets)))
-	require.Equal(t, int(size), len(rm.buckets[bucket]))
+	require.Equal(t, bucketSize, len(rm.buckets[bucket]))
+	var totalSize int
 	for i := 0; i < len(rm.buckets); i++ {
+		totalSize += len(rm.buckets[i])
 		if i != bucket {
 			require.Equal(t, 0, len(rm.buckets[i]))
 		}
 	}
+	require.LessOrEqual(t, totalSize, int(size))
 }
