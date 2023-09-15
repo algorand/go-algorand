@@ -99,19 +99,39 @@ func TestList_RemoveFromList(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	l := NewList[testVal]()
+	l := NewList[*testVal]()
 	e1 := l.PushFront(&testVal{1})
 	e2 := l.PushFront(&testVal{2})
 	e3 := l.PushFront(&testVal{3})
-	checkListPointers(t, l, []*ListNode[testVal]{e3, e2, e1})
+	checkListPointers(t, l, []*ListNode[*testVal]{e3, e2, e1})
 
 	l.Remove(e2)
-	checkListPointers(t, l, []*ListNode[testVal]{e3, e1})
+	checkListPointers(t, l, []*ListNode[*testVal]{e3, e1})
 	l.Remove(e3)
-	checkListPointers(t, l, []*ListNode[testVal]{e1})
+	checkListPointers(t, l, []*ListNode[*testVal]{e1})
 }
 
-func TestList_AddingNewNodeWithAllocatedFreeList(t *testing.T) {
+func TestList_AddingNewNodeWithAllocatedFreeListPtr(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	l := NewList[*testVal]().AllocateFreeNodes(10)
+	checkListPointers(t, l, []*ListNode[*testVal]{})
+	if countListSize(l.freeList) != 10 {
+		t.Errorf("free list did not allocate nodes")
+		return
+	}
+	// test elements
+	e1 := l.PushFront(&testVal{1})
+	checkListPointers(t, l, []*ListNode[*testVal]{e1})
+
+	if countListSize(l.freeList) != 9 {
+		t.Errorf("free list did not provide a node on new list entry")
+		return
+	}
+}
+
+func TestList_AddingNewNodeWithAllocatedFreeListValue(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -122,7 +142,7 @@ func TestList_AddingNewNodeWithAllocatedFreeList(t *testing.T) {
 		return
 	}
 	// test elements
-	e1 := l.PushFront(&testVal{1})
+	e1 := l.PushFront(testVal{1})
 	checkListPointers(t, l, []*ListNode[testVal]{e1})
 
 	if countListSize(l.freeList) != 9 {
@@ -135,85 +155,85 @@ func TestList_MultiElementListPositioning(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	l := NewList[testVal]()
-	checkListPointers(t, l, []*ListNode[testVal]{})
+	l := NewList[*testVal]()
+	checkListPointers(t, l, []*ListNode[*testVal]{})
 	// test elements
 	e2 := l.PushFront(&testVal{2})
 	e1 := l.PushFront(&testVal{1})
 	e3 := l.PushFront(&testVal{3})
 	e4 := l.PushFront(&testVal{4})
 	e5 := l.PushFront(&testVal{5})
-	checkListPointers(t, l, []*ListNode[testVal]{e5, e4, e3, e1, e2})
+	checkListPointers(t, l, []*ListNode[*testVal]{e5, e4, e3, e1, e2})
 
 	l.move(e4, e1)
-	checkListPointers(t, l, []*ListNode[testVal]{e5, e3, e1, e4, e2})
+	checkListPointers(t, l, []*ListNode[*testVal]{e5, e3, e1, e4, e2})
 
 	l.Remove(e5)
-	checkListPointers(t, l, []*ListNode[testVal]{e3, e1, e4, e2})
+	checkListPointers(t, l, []*ListNode[*testVal]{e3, e1, e4, e2})
 
 	l.move(e1, e4) // swap in middle
-	checkListPointers(t, l, []*ListNode[testVal]{e3, e4, e1, e2})
+	checkListPointers(t, l, []*ListNode[*testVal]{e3, e4, e1, e2})
 
 	l.MoveToFront(e4)
-	checkListPointers(t, l, []*ListNode[testVal]{e4, e3, e1, e2})
+	checkListPointers(t, l, []*ListNode[*testVal]{e4, e3, e1, e2})
 
 	l.Remove(e2)
-	checkListPointers(t, l, []*ListNode[testVal]{e4, e3, e1})
+	checkListPointers(t, l, []*ListNode[*testVal]{e4, e3, e1})
 
 	l.MoveToFront(e3) // move from middle
-	checkListPointers(t, l, []*ListNode[testVal]{e3, e4, e1})
+	checkListPointers(t, l, []*ListNode[*testVal]{e3, e4, e1})
 
 	l.MoveToFront(e1) // move from end
-	checkListPointers(t, l, []*ListNode[testVal]{e1, e3, e4})
+	checkListPointers(t, l, []*ListNode[*testVal]{e1, e3, e4})
 
 	l.MoveToFront(e1) // no movement
-	checkListPointers(t, l, []*ListNode[testVal]{e1, e3, e4})
+	checkListPointers(t, l, []*ListNode[*testVal]{e1, e3, e4})
 
 	e2 = l.PushFront(&testVal{2})
-	checkListPointers(t, l, []*ListNode[testVal]{e2, e1, e3, e4})
+	checkListPointers(t, l, []*ListNode[*testVal]{e2, e1, e3, e4})
 
 	l.Remove(e3) // removing from middle
-	checkListPointers(t, l, []*ListNode[testVal]{e2, e1, e4})
+	checkListPointers(t, l, []*ListNode[*testVal]{e2, e1, e4})
 
 	l.Remove(e4) // removing from end
-	checkListPointers(t, l, []*ListNode[testVal]{e2, e1})
+	checkListPointers(t, l, []*ListNode[*testVal]{e2, e1})
 
 	l.move(e2, e1) // swapping between two elements
-	checkListPointers(t, l, []*ListNode[testVal]{e1, e2})
+	checkListPointers(t, l, []*ListNode[*testVal]{e1, e2})
 
 	l.Remove(e1) // removing front
-	checkListPointers(t, l, []*ListNode[testVal]{e2})
+	checkListPointers(t, l, []*ListNode[*testVal]{e2})
 
 	l.move(e2, l.Back()) // swapping element with itself.
-	checkListPointers(t, l, []*ListNode[testVal]{e2})
+	checkListPointers(t, l, []*ListNode[*testVal]{e2})
 
 	l.Remove(e2) // remove last one
-	checkListPointers(t, l, []*ListNode[testVal]{})
+	checkListPointers(t, l, []*ListNode[*testVal]{})
 }
 
 func TestList_SingleElementListPositioning(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	l := NewList[testVal]()
-	checkListPointers(t, l, []*ListNode[testVal]{})
+	l := NewList[*testVal]()
+	checkListPointers(t, l, []*ListNode[*testVal]{})
 	e := l.PushFront(&testVal{1})
-	checkListPointers(t, l, []*ListNode[testVal]{e})
+	checkListPointers(t, l, []*ListNode[*testVal]{e})
 	l.MoveToFront(e)
-	checkListPointers(t, l, []*ListNode[testVal]{e})
+	checkListPointers(t, l, []*ListNode[*testVal]{e})
 	l.Remove(e)
-	checkListPointers(t, l, []*ListNode[testVal]{})
+	checkListPointers(t, l, []*ListNode[*testVal]{})
 }
 
 func TestList_RemovedNodeShouldBeMovedToFreeList(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	l := NewList[testVal]()
+	l := NewList[*testVal]()
 	e1 := l.PushFront(&testVal{1})
 	e2 := l.PushFront(&testVal{2})
 
-	checkListPointers(t, l, []*ListNode[testVal]{e2, e1})
+	checkListPointers(t, l, []*ListNode[*testVal]{e2, e1})
 
 	e := l.Back()
 	l.Remove(e)

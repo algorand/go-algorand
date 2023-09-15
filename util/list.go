@@ -23,7 +23,7 @@ type List[T any] struct {
 	freeList *ListNode[T] // preallocated nodes location
 }
 
-// ListNode represent a list node holding next/prev pointers and a pointer to value of type T.
+// ListNode represent a list node holding next/prev pointers and a value of type T.
 type ListNode[T any] struct {
 	// Next and previous pointers in the doubly-linked list of elements.
 	// To simplify the implementation, internally a list l is implemented
@@ -32,7 +32,7 @@ type ListNode[T any] struct {
 	// element (l.Front()).
 	next, prev *ListNode[T]
 
-	Value *T
+	Value T
 }
 
 // NewList creates a new list for storing values of type T.
@@ -49,7 +49,8 @@ func NewList[T any]() *List[T] {
 func (l *List[T]) insertNodeToFreeList(otherNode *ListNode[T]) {
 	otherNode.next = l.freeList.next
 	otherNode.prev = nil
-	otherNode.Value = nil
+	var empty T
+	otherNode.Value = empty
 
 	l.freeList.next = otherNode
 }
@@ -101,7 +102,7 @@ func (l *List[T]) Remove(e *ListNode[T]) {
 }
 
 // PushFront inserts a new element e with value v at the front of list l and returns e.
-func (l *List[T]) PushFront(v *T) *ListNode[T] {
+func (l *List[T]) PushFront(v T) *ListNode[T] {
 	newNode := l.getNewNode()
 	newNode.Value = v
 	return l.insertValue(newNode, &l.root)

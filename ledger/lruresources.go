@@ -36,11 +36,11 @@ type cachedResourceData struct {
 type lruResources struct {
 	// resourcesList contain the list of persistedResourceData, where the front ones are the most "fresh"
 	// and the ones on the back are the oldest.
-	resourcesList *util.List[cachedResourceData]
+	resourcesList *util.List[*cachedResourceData]
 
 	// resources provides fast access to the various elements in the list by using the account address
 	// if lruResources is set with pendingWrites 0, then resources is nil
-	resources map[accountCreatable]*util.ListNode[cachedResourceData]
+	resources map[accountCreatable]*util.ListNode[*cachedResourceData]
 
 	// pendingResources are used as a way to avoid taking a write-lock. When the caller needs to "materialize" these,
 	// it would call flushPendingWrites and these would be merged into the resources/resourcesList
@@ -62,8 +62,8 @@ type lruResources struct {
 // thread locking semantics : write lock
 func (m *lruResources) init(log logging.Logger, pendingWrites int, pendingWritesWarnThreshold int) {
 	if pendingWrites > 0 {
-		m.resourcesList = util.NewList[cachedResourceData]().AllocateFreeNodes(pendingWrites)
-		m.resources = make(map[accountCreatable]*util.ListNode[cachedResourceData], pendingWrites)
+		m.resourcesList = util.NewList[*cachedResourceData]().AllocateFreeNodes(pendingWrites)
+		m.resources = make(map[accountCreatable]*util.ListNode[*cachedResourceData], pendingWrites)
 		m.pendingResources = make(chan cachedResourceData, pendingWrites)
 		m.notFound = make(map[accountCreatable]struct{}, pendingWrites)
 		m.pendingNotFound = make(chan accountCreatable, pendingWrites)

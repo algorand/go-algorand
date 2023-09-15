@@ -36,11 +36,11 @@ type cachedKVData struct {
 type lruKV struct {
 	// kvList contain the list of persistedKVData, where the front ones are the most "fresh"
 	// and the ones on the back are the oldest.
-	kvList *util.List[cachedKVData]
+	kvList *util.List[*cachedKVData]
 
 	// kvs provides fast access to the various elements in the list by using the key
 	// if lruKV is set with pendingWrites 0, then kvs is nil
-	kvs map[string]*util.ListNode[cachedKVData]
+	kvs map[string]*util.ListNode[*cachedKVData]
 
 	// pendingKVs are used as a way to avoid taking a write-lock. When the caller needs to "materialize" these,
 	// it would call flushPendingWrites and these would be merged into the kvs/kvList
@@ -58,8 +58,8 @@ type lruKV struct {
 // thread locking semantics : write lock
 func (m *lruKV) init(log logging.Logger, pendingWrites int, pendingWritesWarnThreshold int) {
 	if pendingWrites > 0 {
-		m.kvList = util.NewList[cachedKVData]().AllocateFreeNodes(pendingWrites)
-		m.kvs = make(map[string]*util.ListNode[cachedKVData], pendingWrites)
+		m.kvList = util.NewList[*cachedKVData]().AllocateFreeNodes(pendingWrites)
+		m.kvs = make(map[string]*util.ListNode[*cachedKVData], pendingWrites)
 		m.pendingKVs = make(chan cachedKVData, pendingWrites)
 	}
 	m.log = log

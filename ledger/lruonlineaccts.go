@@ -29,10 +29,10 @@ import (
 type lruOnlineAccounts struct {
 	// accountsList contain the list of persistedAccountData, where the front ones are the most "fresh"
 	// and the ones on the back are the oldest.
-	accountsList *util.List[trackerdb.PersistedOnlineAccountData]
+	accountsList *util.List[*trackerdb.PersistedOnlineAccountData]
 	// accounts provides fast access to the various elements in the list by using the account address
 	// if lruOnlineAccounts is set with pendingWrites 0, then accounts is nil
-	accounts map[basics.Address]*util.ListNode[trackerdb.PersistedOnlineAccountData]
+	accounts map[basics.Address]*util.ListNode[*trackerdb.PersistedOnlineAccountData]
 	// pendingAccounts are used as a way to avoid taking a write-lock. When the caller needs to "materialize" these,
 	// it would call flushPendingWrites and these would be merged into the accounts/accountsList
 	// if lruOnlineAccounts is set with pendingWrites 0, then pendingAccounts is nil
@@ -47,8 +47,8 @@ type lruOnlineAccounts struct {
 // thread locking semantics : write lock
 func (m *lruOnlineAccounts) init(log logging.Logger, pendingWrites int, pendingWritesWarnThreshold int) {
 	if pendingWrites > 0 {
-		m.accountsList = util.NewList[trackerdb.PersistedOnlineAccountData]().AllocateFreeNodes(pendingWrites)
-		m.accounts = make(map[basics.Address]*util.ListNode[trackerdb.PersistedOnlineAccountData], pendingWrites)
+		m.accountsList = util.NewList[*trackerdb.PersistedOnlineAccountData]().AllocateFreeNodes(pendingWrites)
+		m.accounts = make(map[basics.Address]*util.ListNode[*trackerdb.PersistedOnlineAccountData], pendingWrites)
 		m.pendingAccounts = make(chan trackerdb.PersistedOnlineAccountData, pendingWrites)
 	}
 	m.log = log
