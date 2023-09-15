@@ -58,6 +58,16 @@ type (
 		// Genesis hash to which this block belongs.
 		GenesisHash crypto.Digest `codec:"gh"`
 
+		// Proposer is the proposer of this block. Like the Seed, algod adds
+		// this after the block is built, so that the same block can be prepared
+		// for multiple Players in the same node. Therefore, it can not be used
+		// to influence block evaluation. Populated if proto.EnableMining
+		Proposer basics.Address `codec:"prp"`
+
+		// FeesCollected is the sum of all fees paid by transactions in this
+		// block. Populated if proto.EnableMining.
+		FeesCollected basics.MicroAlgos `codec:"fc"`
+
 		// Rewards.
 		//
 		// When a block is applied, some amount of rewards are accrued to
@@ -275,9 +285,13 @@ func (block Block) GenesisHash() crypto.Digest {
 }
 
 // WithSeed returns a copy of the Block with the seed set to s.
-func (block Block) WithSeed(s committee.Seed) Block {
+func (block Block) WithSeed(s committee.Seed, proposer basics.Address) Block {
 	c := block
 	c.BlockHeader.Seed = s
+	if !c.BlockHeader.Proposer.IsZero() {
+		panic("Attempt to re-set the proposer.")
+	}
+	c.BlockHeader.Proposer = proposer
 	return c
 }
 

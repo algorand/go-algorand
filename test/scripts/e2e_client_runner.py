@@ -114,7 +114,7 @@ def _script_thread_inner(runset, scriptname, timeout):
     params = algod.suggested_params()
     round = params.first
     max_init_wait_rounds = 5
-    txn = algosdk.transaction.PaymentTxn(sender=maxpubaddr, fee=params.min_fee, first=round, last=round+max_init_wait_rounds, gh=params.gh, receiver=addr, amt=1000000000000, flat_fee=True)
+    txn = algosdk.transaction.PaymentTxn(sender=maxpubaddr, fee=params.min_fee, first=round, last=round+max_init_wait_rounds, gh=params.gh, receiver=addr, amt=1_000_000_000_000, flat_fee=True)
     stxn = kmd.sign_transaction(pubw, '', txn)
     txid = algod.send_transaction(stxn)
     ptxinfo = None

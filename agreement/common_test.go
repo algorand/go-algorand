@@ -165,8 +165,9 @@ func (b testValidatedBlock) Block() bookkeeping.Block {
 	return b.Inside
 }
 
-func (b testValidatedBlock) WithSeed(s committee.Seed) ValidatedBlock {
+func (b testValidatedBlock) WithSeed(s committee.Seed, proposer basics.Address) ValidatedBlock {
 	b.Inside.BlockHeader.Seed = s
+	b.Inside.BlockHeader.Proposer = proposer
 	return b
 }
 

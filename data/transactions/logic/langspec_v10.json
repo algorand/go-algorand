@@ -4623,10 +4623,14 @@
       "Size": 2,
       "ArgEnum": [
         "BlkSeed",
-        "BlkTimestamp"
+        "BlkTimestamp",
+        "BlkProposer",
+        "BlkFeesCollected"
       ],
       "ArgEnumTypes": [
         "[]byte",
+        "uint64",
+        "address",
         "uint64"
       ],
       "DocCost": "1",

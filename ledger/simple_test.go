@@ -26,6 +26,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/ledger/eval"
@@ -136,11 +137,20 @@ func txgroup(t testing.TB, ledger *Ledger, eval *eval.BlockEvaluator, txns ...*t
 	return eval.TransactionGroup(transactions.WrapSignedTxnsWithAD(txgroup))
 }
 
-// endBlock completes the block being created, returns the ValidatedBlock for inspection
-func endBlock(t testing.TB, ledger *Ledger, eval *eval.BlockEvaluator) *ledgercore.ValidatedBlock {
-	validatedBlock, err := eval.GenerateBlock()
+// endBlock completes the block being created, returns the ValidatedBlock for
+// inspection. Proposer is optional - if unset, blocks will be finished with
+// ZeroAddress proposer.
+func endBlock(t testing.TB, ledger *Ledger, eval *eval.BlockEvaluator, proposer ...basics.Address) *ledgercore.ValidatedBlock {
+	vb, err := eval.GenerateBlock()
 	require.NoError(t, err)
-	err = ledger.AddValidatedBlock(*validatedBlock, agreement.Certificate{})
+
+	var prp basics.Address
+	if len(proposer) > 0 {
+		prp = proposer[0]
+	}
+	*vb = vb.WithSeed(committee.Seed{}, prp)
+
+	err = ledger.AddValidatedBlock(*vb, agreement.Certificate{})
 	require.NoError(t, err)
 	// `rndBQ` gives the latest known block round added to the ledger
 	// we should wait until `rndBQ` block to be committed to blockQueue,
@@ -152,7 +162,7 @@ func endBlock(t testing.TB, ledger *Ledger, eval *eval.BlockEvaluator) *ledgerco
 	// then we return the result and continue the execution.
 	rndBQ := ledger.Latest()
 	ledger.WaitForCommit(rndBQ)
-	return validatedBlock
+	return vb
 }
 
 // main wraps up some TEAL source in a header and footer so that it is

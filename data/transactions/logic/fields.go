@@ -961,6 +961,10 @@ const (
 	BlkSeed BlockField = iota
 	// BlkTimestamp is the Block's timestamp, seconds from epoch
 	BlkTimestamp
+	// BlkProposer is the Block's proposer, or ZeroAddress, pre EnableMining
+	BlkProposer
+	// BlkFeesCollected is the sum of fees for the block, or 0, pre EnableMining
+	BlkFeesCollected
 	invalidBlockField // compile-time constant for number of fields
 )
 
@@ -975,6 +979,8 @@ type blockFieldSpec struct {
 var blockFieldSpecs = [...]blockFieldSpec{
 	{BlkSeed, StackBytes, randomnessVersion},
 	{BlkTimestamp, StackUint64, randomnessVersion},
+	{BlkProposer, StackAddress, 10},
+	{BlkFeesCollected, StackUint64, 10},
 }
 
 func blockFieldSpecByField(r BlockField) (blockFieldSpec, bool) {

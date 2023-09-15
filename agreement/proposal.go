@@ -251,7 +251,7 @@ func proposalForBlock(address basics.Address, vrf *crypto.VRFSecrets, ve Validat
 		return proposal{}, proposalValue{}, fmt.Errorf("proposalForBlock: could not derive new seed: %v", err)
 	}
 
-	ve = ve.WithSeed(newSeed)
+	ve = ve.WithSeed(newSeed, address)
 	proposal := makeProposal(ve, seedProof, period, address)
 	value := proposalValue{
 		OriginalPeriod:   period,

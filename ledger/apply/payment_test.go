@@ -104,7 +104,7 @@ func TestPaymentApply(t *testing.T) {
 		},
 	}
 	var ad transactions.ApplyData
-	err := Payment(tx.PaymentTxnFields, tx.Header, mockBalV0, transactions.SpecialAddresses{FeeSink: feeSink}, &ad)
+	err := Payment(tx.PaymentTxnFields, tx.Header, mockBalV0, transactions.SpecialAddresses{}, &ad)
 	require.NoError(t, err)
 }
 

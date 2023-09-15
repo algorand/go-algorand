@@ -783,6 +783,13 @@ func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, evalOpts 
 		return nil, fmt.Errorf("overflowed subtracting rewards for block %v", hdr.Round)
 	}
 
+	miningIncentive, _ := basics.NewPercent(proto.MiningPercent).DivvyAlgos(prevHeader.FeesCollected)
+	err = eval.state.Move(prevHeader.FeeSink, prevHeader.Proposer, miningIncentive, nil, nil)
+	if err != nil {
+		// This should be impossible. The fees were just collected, and the FeeSink cannot be emptied.
+		return nil, fmt.Errorf("unable to Move mining incentive")
+	}
+
 	if eval.Tracer != nil {
 		eval.Tracer.BeforeBlock(&eval.block.BlockHeader)
 	}
@@ -1160,12 +1167,27 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 	return nil
 }
 
+func (cs *roundCowState) takeFee(tx *transactions.Transaction, senderRewards *basics.MicroAlgos, ep *logic.EvalParams) error {
+	err := cs.Move(tx.Sender, ep.Specials.FeeSink, tx.Fee, senderRewards, nil)
+	if err != nil {
+		return err
+	}
+	// transactions from FeeSink should be exceedingly rare. But we can't count
+	// them in feesCollected because there are no net algos added to the Sink
+	if tx.Sender == ep.Specials.FeeSink {
+		return nil
+	}
+	// overflow impossible, since these sum the fees actually paid. 10B algo limit
+	cs.feesCollected, _ = basics.OAddA(cs.feesCollected, tx.Fee)
+	return nil
+
+}
+
 // applyTransaction changes the balances according to this transaction.
 func (eval *BlockEvaluator) applyTransaction(tx transactions.Transaction, cow *roundCowState, evalParams *logic.EvalParams, gi int, ctr uint64) (ad transactions.ApplyData, err error) {
 	params := cow.ConsensusParams()
 
-	// move fee to pool
-	err = cow.Move(tx.Sender, eval.specials.FeeSink, tx.Fee, &ad.SenderRewards, nil)
+	err = cow.takeFee(&tx, &ad.SenderRewards, evalParams)
 	if err != nil {
 		return
 	}
@@ -1267,6 +1289,10 @@ func (eval *BlockEvaluator) endOfBlock() error {
 			eval.block.TxnCounter = 0
 		}
 
+		if eval.proto.EnableMining {
+			eval.block.FeesCollected = eval.state.feesCollected
+		}
+
 		eval.generateExpiredOnlineAccountsList()
 
 		if eval.proto.StateProofInterval > 0 {
@@ -1309,6 +1335,14 @@ func (eval *BlockEvaluator) endOfBlock() error {
 		}
 		if eval.block.TxnCounter != expectedTxnCount {
 			return fmt.Errorf("txn count wrong: %d != %d", eval.block.TxnCounter, expectedTxnCount)
+		}
+
+		var expectedFeesCollected basics.MicroAlgos
+		if eval.proto.EnableMining {
+			expectedFeesCollected = eval.state.feesCollected
+		}
+		if eval.block.FeesCollected != expectedFeesCollected {
+			return fmt.Errorf("fees collected wrong: %v != %v", eval.block.FeesCollected, expectedFeesCollected)
 		}
 
 		expectedVoters, expectedVotersWeight, err2 := eval.stateProofVotersAndTotal()

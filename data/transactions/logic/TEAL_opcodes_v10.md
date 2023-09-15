@@ -1635,10 +1635,12 @@ Standards
 
 Fields
 
-| Index | Name | Type | Notes |
-| - | ------ | -- | --------- |
-| 0 | BlkSeed | []byte |  |
-| 1 | BlkTimestamp | uint64 |  |
+| Index | Name | Type | In | Notes |
+| - | ------ | -- | - | --------- |
+| 0 | BlkSeed | []byte |      |  |
+| 1 | BlkTimestamp | uint64 |      |  |
+| 2 | BlkProposer | address | v10  |  |
+| 3 | BlkFeesCollected | uint64 | v10  |  |
 
 
 ## ec_add
