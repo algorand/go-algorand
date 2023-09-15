@@ -18,7 +18,6 @@ package data
 
 import (
 	"encoding/binary"
-	"math"
 	"sync/atomic"
 	"time"
 
@@ -26,6 +25,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util"
 	"golang.org/x/crypto/blake2b"
 
 	"github.com/algorand/go-deadlock"
@@ -50,11 +50,19 @@ type appRateLimiter struct {
 
 	buckets [numBuckets]map[keyType]*appRateLimiterEntry
 	mus     [numBuckets]deadlock.RWMutex
+	lrus    [numBuckets]*util.List[keyType]
 
 	// evictions
 	// TODO: delete
 	evictions    uint64
 	evictionTime uint64
+}
+
+type appRateLimiterEntry struct {
+	prev       atomic.Uint64
+	cur        atomic.Uint64
+	interval   atomic.Int64 // numeric representation of the current interval value
+	lruElement *util.ListNode[keyType]
 }
 
 // makeAppRateLimiter creates a new appRateLimiter from the parameters:
@@ -73,16 +81,11 @@ func makeAppRateLimiter(maxCacheSize uint64, maxAppPeerRate uint64, serviceRateW
 	}
 	crypto.RandBytes(r.salt[:])
 
-	for i := range r.buckets {
+	for i := 0; i < numBuckets; i++ {
 		r.buckets[i] = make(map[keyType]*appRateLimiterEntry)
+		r.lrus[i] = util.NewList[keyType]().AllocateFreeNodes(int(maxBucketSize))
 	}
 	return r
-}
-
-type appRateLimiterEntry struct {
-	prev     atomic.Uint64
-	cur      atomic.Uint64
-	interval atomic.Int64 // numeric representation of the current interval value
 }
 
 func (r *appRateLimiter) entry(b int, key keyType, curInt int64) (*appRateLimiterEntry, bool) {
@@ -91,26 +94,23 @@ func (r *appRateLimiter) entry(b int, key keyType, curInt int64) (*appRateLimite
 
 	if len(r.buckets[b]) >= int(r.maxBucketSize) {
 		// evict the oldest entry
-		// TODO: evict 10% oldest entries?
-		// FIXME: linear search eviction is 17x slower than no eviction
 		start := time.Now()
-		var oldestKey keyType
-		var oldestInterval int64 = math.MaxInt64
-		for k, v := range r.buckets[b] {
-			interval := v.interval.Load()
-			if interval < oldestInterval {
-				oldestKey = k
-				oldestInterval = interval
-			}
-		}
-		delete(r.buckets[b], oldestKey)
 		atomic.AddUint64(&r.evictions, 1)
+
+		el := r.lrus[b].Back()
+		delete(r.buckets[b], el.Value)
+		r.lrus[b].Remove(el)
+
 		atomic.AddUint64(&r.evictionTime, uint64(time.Since(start)))
 	}
 
 	entry, ok := r.buckets[b][key]
-	if !ok {
-		entry = &appRateLimiterEntry{}
+	if ok {
+		el := entry.lruElement
+		r.lrus[b].MoveToFront(el)
+	} else {
+		el := r.lrus[b].PushFront(key)
+		entry = &appRateLimiterEntry{lruElement: el}
 		entry.cur.Store(1)
 		entry.interval.Store(curInt)
 		r.buckets[b][key] = entry

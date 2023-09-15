@@ -220,9 +220,9 @@ func TestAppRateLimiter_MaxSize(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	const size uint64 = 512
+	const bucketSize = 4
+	const size uint64 = bucketSize * numBuckets
 	const rate uint64 = 10
-	const bucketSize = int(size / numBuckets)
 	window := 10 * time.Second
 	rm := makeAppRateLimiter(size, rate, window)
 
@@ -230,8 +230,56 @@ func TestAppRateLimiter_MaxSize(t *testing.T) {
 		drop := rm.shouldDrop(getAppTxnGroup(basics.AppIndex(1)), []byte{byte(i)})
 		require.False(t, drop)
 	}
-	bucket := int(memhash64(uint64(1), rm.seed) % uint64(len(rm.buckets)))
+	bucket := int(memhash64(uint64(1), rm.seed) % numBuckets)
 	require.Equal(t, bucketSize, len(rm.buckets[bucket]))
+	var totalSize int
+	for i := 0; i < len(rm.buckets); i++ {
+		totalSize += len(rm.buckets[i])
+		if i != bucket {
+			require.Equal(t, 0, len(rm.buckets[i]))
+		}
+	}
+	require.LessOrEqual(t, totalSize, int(size))
+}
+
+// TestAppRateLimiter_EvictOrder ensures that the least recent used is evicted
+func TestAppRateLimiter_EvictOrder(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	const bucketSize = 4
+	const size uint64 = bucketSize * numBuckets
+	const rate uint64 = 10
+	window := 10 * time.Second
+	rm := makeAppRateLimiter(size, rate, window)
+
+	keys := make([]keyType, 0, int(bucketSize)+1)
+	bucket := int(memhash64(uint64(1), rm.seed) % numBuckets)
+	for i := 0; i < bucketSize; i++ {
+		b, k := txgroupToKeys(getAppTxnGroup(basics.AppIndex(1)), []byte{byte(i)}, rm.seed, rm.salt, numBuckets)
+		require.Equal(t, 1, len(b))
+		require.Equal(t, 1, len(k))
+		require.Equal(t, bucket, b[0])
+		keys = append(keys, k[0])
+		drop := rm.shouldDrop(getAppTxnGroup(basics.AppIndex(1)), []byte{byte(i)})
+		require.False(t, drop)
+	}
+	require.Equal(t, bucketSize, len(rm.buckets[bucket]))
+
+	// add one more and expect the first evicted
+	b, k := txgroupToKeys(getAppTxnGroup(basics.AppIndex(1)), []byte{byte(bucketSize)}, rm.seed, rm.salt, numBuckets)
+	require.Equal(t, 1, len(b))
+	require.Equal(t, 1, len(k))
+	require.Equal(t, bucket, b[0])
+	drop := rm.shouldDrop(getAppTxnGroup(basics.AppIndex(1)), []byte{byte(bucketSize)})
+	require.False(t, drop)
+
+	require.Equal(t, bucketSize, len(rm.buckets[bucket]))
+	require.NotContains(t, rm.buckets[bucket], keys[0])
+	for i := 1; i < len(keys); i++ {
+		require.Contains(t, rm.buckets[bucket], keys[i])
+	}
+
 	var totalSize int
 	for i := 0; i < len(rm.buckets); i++ {
 		totalSize += len(rm.buckets[i])
@@ -283,7 +331,7 @@ func BenchmarkBlake2(b *testing.B) {
 func BenchmarkAppRateLimiter(b *testing.B) {
 	cfg := config.GetDefaultLocal()
 
-	b.Run("multi bucket", func(b *testing.B) {
+	b.Run("multi bucket no evict", func(b *testing.B) {
 		rm := makeAppRateLimiter(
 			uint64(cfg.TxBacklogTxRateLimiterMaxSize),
 			uint64(cfg.TxBacklogTxRate),
@@ -296,6 +344,9 @@ func BenchmarkAppRateLimiter(b *testing.B) {
 			}
 		}
 		b.ReportMetric(float64(dropped)/float64(b.N), "%_drop")
+		if rm.evictions > 0 {
+			b.Logf("# evictions %d, time %d us", rm.evictions, rm.evictionTime/uint64(time.Microsecond))
+		}
 	})
 
 	b.Run("single bucket no evict", func(b *testing.B) {
@@ -311,7 +362,9 @@ func BenchmarkAppRateLimiter(b *testing.B) {
 			}
 		}
 		b.ReportMetric(float64(dropped)/float64(b.N), "%_drop")
-		b.Logf("# evictions %d, time %d us", rm.evictions, rm.evictionTime/uint64(time.Microsecond))
+		if rm.evictions > 0 {
+			b.Logf("# evictions %d, time %d us", rm.evictions, rm.evictionTime/uint64(time.Microsecond))
+		}
 	})
 
 	b.Run("single bucket w evict", func(b *testing.B) {
@@ -327,6 +380,8 @@ func BenchmarkAppRateLimiter(b *testing.B) {
 			}
 		}
 		b.ReportMetric(float64(dropped)/float64(b.N), "%_drop")
-		b.Logf("# evictions %d, time %d us", rm.evictions, rm.evictionTime/uint64(time.Microsecond))
+		if rm.evictions > 0 {
+			b.Logf("# evictions %d, time %d us", rm.evictions, rm.evictionTime/uint64(time.Microsecond))
+		}
 	})
 }
