@@ -16,7 +16,7 @@
 
 package util
 
-// List represents a doubly linked.
+// List represents a doubly linked list.
 // must initiate with NewList.
 type List[T any] struct {
 	root     ListNode[T]  // sentinel list element, only &root, root.prev, and root.next are used

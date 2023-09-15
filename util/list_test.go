@@ -220,7 +220,7 @@ func TestList_RemovedNodeShouldBeMovedToFreeList(t *testing.T) {
 
 	for i := l.freeList.next; i != nil; i = i.next {
 		if i == e {
-			// stopping the tst with good results:
+			// stopping the test with good results:
 			return
 		}
 	}
