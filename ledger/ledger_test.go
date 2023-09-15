@@ -173,6 +173,9 @@ func (l *Ledger) appendUnvalidatedSignedTx(t *testing.T, initAccounts map[basics
 	if proto.TxnCounter {
 		blk.TxnCounter = blk.TxnCounter + 1
 	}
+	if proto.EnableMining {
+		blk.FeesCollected = stx.Txn.Fee
+	}
 	blk.Payset = append(blk.Payset, txib)
 	blk.TxnCommitments, err = blk.PaysetCommit()
 	require.NoError(t, err)

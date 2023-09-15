@@ -529,6 +529,13 @@ type ConsensusParams struct {
 	// arrival times or is set to a static value. Even if this flag disables the
 	// dynamic filter, it will be calculated and logged (but not used).
 	DynamicFilterTimeout bool
+
+	// EnableMining means that the proposer should be included in the BlockHeader.
+	EnableMining bool
+
+	// MiningPercent specifies the percent of fees paid in a block that go to
+	// the proposer instead of the FeeSink.
+	MiningPercent uint64
 }
 
 // PaysetCommitType enumerates possible ways for the block header to commit to
@@ -1411,6 +1418,9 @@ func initConsensusProtocols() {
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
 	vFuture.LogicSigVersion = 11 // When moving this to a release, put a new higher LogicSigVersion here
+
+	vFuture.EnableMining = true
+	vFuture.MiningPercent = 75
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 
