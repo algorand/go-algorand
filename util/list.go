@@ -90,7 +90,6 @@ func (l *List[T]) Back() *ListNode[T] {
 }
 
 // Remove removes e from l if e is an element of list l.
-// It returns the element value e.Value.
 // The element must not be nil.
 func (l *List[T]) Remove(e *ListNode[T]) {
 	e.prev.next = e.next

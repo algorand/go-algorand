@@ -19,6 +19,8 @@ package util
 import (
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -245,4 +247,30 @@ func TestList_RemovedNodeShouldBeMovedToFreeList(t *testing.T) {
 		}
 	}
 	t.Error("expected the removed node to appear at the freelist")
+}
+
+func TestList_PushMoveBackRemove(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	l := NewList[testVal]().AllocateFreeNodes(4)
+	e1 := l.PushFront(testVal{1})
+	e2 := l.PushFront(testVal{2})
+	checkListPointers(t, l, []*ListNode[testVal]{e2, e1})
+
+	l.MoveToFront(e1)
+	checkListPointers(t, l, []*ListNode[testVal]{e1, e2})
+
+	e := l.Back()
+	require.Equal(t, e, e2)
+	l.Remove(e)
+	checkListPointers(t, l, []*ListNode[testVal]{e1})
+
+	e = l.Back()
+	require.Equal(t, e, e1)
+	l.Remove(e)
+	checkListPointers(t, l, []*ListNode[testVal]{})
+
+	e = l.Back()
+	require.Nil(t, e)
 }
