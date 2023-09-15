@@ -1401,10 +1401,7 @@ func (v2 *Handlers) getPendingTransactions(ctx echo.Context, max *uint64, format
 	}
 
 	// MatchAddress uses this to check FeeSink, we don't care about that here.
-	spec := transactions.SpecialAddresses{
-		FeeSink:     basics.Address{},
-		RewardsPool: basics.Address{},
-	}
+	spec := transactions.SpecialAddresses{}
 
 	txnLimit := uint64(math.MaxUint64)
 	if max != nil && *max != 0 {

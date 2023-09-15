@@ -211,6 +211,67 @@ func TestBlockEvaluator(t *testing.T) {
 	require.Equal(t, bal2new.MicroAlgos.Raw, bal2.MicroAlgos.Raw-minFee.Raw)
 }
 
+// TestMiningFees ensures that the proper portion of tx fees go to the proposer,
+// starting in v39.
+func TestMiningFees(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	// Mining begins in v39. Start checking in v38 to test that is unchanged.
+	ledgertesting.TestConsensusRange(t, 38, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
+		defer dl.Close()
+
+		dl.fullBlock()
+
+		pay := txntest.Txn{
+			Type:     "pay",
+			Sender:   addrs[1],
+			Receiver: addrs[2],
+			Amount:   100000,
+		}
+
+		proposer := addrs[7]
+		presink := micros(dl.t, dl.generator, genBalances.FeeSink)
+		preprop := micros(dl.t, dl.generator, proposer)
+		dl.beginBlock()
+		dl.txns(&pay, pay.Args("again"))
+		vb := dl.endBlock(proposer)
+
+		if ver >= 39 {
+			require.True(t, dl.generator.GenesisProto().EnableMining) // version sanity check
+			// new fields are in the header
+			require.EqualValues(t, proposer, vb.Block().BlockHeader.Proposer)
+			require.EqualValues(t, 2000, vb.Block().BlockHeader.FeesCollected.Raw)
+		} else {
+			require.False(t, dl.generator.GenesisProto().EnableMining)
+			// new fields are not in the header
+			require.Zero(t, vb.Block().BlockHeader.Proposer)
+			require.Zero(t, vb.Block().BlockHeader.FeesCollected)
+		}
+
+		postsink := micros(dl.t, dl.generator, genBalances.FeeSink)
+		postprop := micros(dl.t, dl.generator, proposer)
+
+		// At the end of the block, all fees are still in the sink.
+		require.EqualValues(t, 2000, postsink-presink)
+		require.EqualValues(t, 0, postprop-preprop)
+
+		// Do the next block, which moves part of the fees to proposer
+		dl.fullBlock()
+		postsink = micros(dl.t, dl.generator, genBalances.FeeSink)
+		postprop = micros(dl.t, dl.generator, proposer)
+
+		if ver >= 39 {
+			require.EqualValues(t, 500, postsink-presink) // based on 75% in config/consensus.go
+			require.EqualValues(t, 1500, postprop-preprop)
+		} else {
+			require.EqualValues(t, 2000, postsink-presink) // no mining yet
+		}
+	})
+}
+
 // TestHoldingGet tests some of the corner cases for the asset_holding_get
 // opcode: the asset doesn't exist, the account doesn't exist, account not opted
 // in, vs it has none of the asset. This is tested here, even though it should
