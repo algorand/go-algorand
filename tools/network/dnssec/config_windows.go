@@ -98,6 +98,7 @@ func SystemConfig() (servers []ResolverAddress, timeout time.Duration, err error
 	buf, err := windows.LocalAlloc(windows.LMEM_FIXED | windows.LMEM_ZEROINIT, ulSize)
 	if err != nil {
 		err = fmt.Errorf("GetNetworkParams failed to allocate %d bytes of memory for fixedInfoWithOverlay", ulSize)
+		return
 	}
 
 	defer windows.LocalFree(windows.Handle(buf))
