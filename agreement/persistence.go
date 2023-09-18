@@ -55,6 +55,17 @@ func persistent(as []action) bool {
 // encode serializes the current state into a byte array.
 func encode(t timers.Clock[TimeoutType], rr rootRouter, p player, a []action, reflect bool) (raw []byte) {
 	var s diskState
+
+	// Don't persist state for old rounds
+	// rootRouter.update() may preserve roundRouters from credentialRoundLag rounds ago
+	children := make(map[round]*roundRouter)
+	for rnd, rndRouter := range rr.Children {
+		if rnd >= p.Round {
+			children[rnd] = rndRouter
+		}
+	}
+	rr.Children = children
+
 	if reflect {
 		s.Router = protocol.EncodeReflect(rr)
 		s.Player = protocol.EncodeReflect(p)
