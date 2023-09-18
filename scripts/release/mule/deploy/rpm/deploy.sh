@@ -78,6 +78,8 @@ then
     cp -r /root/rpmrepo .
 else
     aws s3 sync rpmrepo "s3://algorand-releases/rpm/$CHANNEL/"
+    # sync signatures to releases so that the .sig files load from there
+    aws s3 sync s3://$S3_SOURCE/releases/$CHANNEL/ s3://algorand-releases/rpm/sigs/$CHANNEL/ --exclude='*' --include='*.rpm.sig'
 fi
 
 echo
