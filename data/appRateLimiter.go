@@ -73,6 +73,10 @@ func makeAppRateLimiter(maxCacheSize uint64, maxAppPeerRate uint64, serviceRateW
 	// convert target per app rate to per window service rate
 	serviceRatePerWindow := maxAppPeerRate * uint64(serviceRateWindow/time.Second)
 	maxBucketSize := maxCacheSize / numBuckets
+	if maxBucketSize == 0 {
+		// got the max size less then buckets, use maps of 1
+		maxBucketSize = 1
+	}
 	r := &appRateLimiter{
 		maxBucketSize:        maxBucketSize,
 		serviceRatePerWindow: serviceRatePerWindow,

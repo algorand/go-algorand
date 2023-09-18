@@ -40,6 +40,7 @@ func TestAppRateLimiter_Make(t *testing.T) {
 	window := 1 * time.Second
 	rm := makeAppRateLimiter(10, rate, window)
 
+	require.Equal(t, uint64(1), rm.maxBucketSize)
 	require.NotEmpty(t, rm.seed)
 	require.NotEmpty(t, rm.salt)
 	require.NotEmpty(t, rm.buckets)
