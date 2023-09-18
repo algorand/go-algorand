@@ -95,7 +95,7 @@ type fixedInfoWithOverlay struct {
 func SystemConfig() (servers []ResolverAddress, timeout time.Duration, err error) {
 	ulSize := uint32(unsafe.Sizeof(fixedInfoWithOverlay{}))
 
-	buf, err := windows.LocalAlloc(windows.LMEM_FIXED, ulSize)
+	buf, err := windows.LocalAlloc(windows.LMEM_FIXED | windows.LMEM_ZEROINIT, ulSize)
 	if err != nil {
 		err = fmt.Errorf("GetNetworkParams failed to allocate %d bytes of memory for fixedInfoWithOverlay", ulSize)
 	}
