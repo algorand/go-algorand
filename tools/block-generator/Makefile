@@ -4,6 +4,7 @@ RESETDB = --reset-db
 REPORTS = ../../tmp/RUN_RUNNER_OUTPUTS
 DURATION = 30s
 VERBOSE = --verbose
+PG_MAXCONNS = 40
 
 block-generator: clean-generator
 	go build
@@ -35,7 +36,8 @@ run-runner: block-generator
 	--scenario $(SCENARIO) \
 	$(RESETDB) \
 	$(VERBOSE) \
-	--report-directory $(REPORTS)
+	--report-directory $(REPORTS) \
+	--postgres-max-conns $(PG_MAXCONNS)
 
 clean-reports:
 	rm -rf $(REPORTS)

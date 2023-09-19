@@ -55,6 +55,7 @@ type Args struct {
 	ConduitBinary            string
 	MetricsPort              uint64
 	PostgresConnectionString string
+	PostgresMaxConns         int32
 	CPUProfilePath           string
 	RunDuration              time.Duration
 	RunnerVerbose            bool
@@ -75,6 +76,7 @@ type config struct {
 	MetricsPort              string
 	AlgodNet                 string
 	PostgresConnectionString string
+	PostgresMaxConns         int32
 }
 
 // Run is a public helper to run the tests.
@@ -204,6 +206,7 @@ func (r *Args) run(reportDirectory string) error {
 		MetricsPort:              fmt.Sprintf(":%d", r.MetricsPort),
 		AlgodNet:                 algodNet,
 		PostgresConnectionString: r.PostgresConnectionString,
+		PostgresMaxConns:         r.PostgresMaxConns,
 	}
 	err = t.Execute(f, conduitConfig)
 	if err != nil {

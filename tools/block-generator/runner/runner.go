@@ -47,6 +47,7 @@ func init() {
 	RunnerCmd.Flags().StringVarP(&runnerArgs.ConduitBinary, "conduit-binary", "i", "", "Path to conduit binary.")
 	RunnerCmd.Flags().Uint64VarP(&runnerArgs.MetricsPort, "metrics-port", "p", 9999, "Port to start the metrics server at.")
 	RunnerCmd.Flags().StringVarP(&runnerArgs.PostgresConnectionString, "postgres-connection-string", "c", "", "Postgres connection string.")
+	RunnerCmd.Flags().Int32VarP(&runnerArgs.PostgresMaxConns, "postgres-max-conns", "", 20, "Maximum number of connections to use for Postgres.")
 	RunnerCmd.Flags().DurationVarP(&runnerArgs.RunDuration, "test-duration", "d", 5*time.Minute, "Duration to use for each scenario.")
 	RunnerCmd.Flags().StringVarP(&runnerArgs.BaseReportDirectory, "report-directory", "r", "", "Location to place test reports. If --times is used, this is the prefix for multiple report directories.")
 	RunnerCmd.Flags().BoolVarP(&runnerArgs.RunnerVerbose, "verbose", "v", false, "If set the runner will print debugging information from the generator and ledger.")

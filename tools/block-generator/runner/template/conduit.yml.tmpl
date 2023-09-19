@@ -56,6 +56,6 @@ exporter:
     # Maximum connection number for connection pool
     # This means the total number of active queries that can be running
     # concurrently can never be more than this
-    max-conn: 20
+    max-conns: {{ .PostgresMaxConns }}
 
 
