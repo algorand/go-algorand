@@ -56,6 +56,7 @@ var transactionMessageTxGroupExcessive = metrics.MakeCounter(metrics.Transaction
 var transactionMessageTxGroupFull = metrics.MakeCounter(metrics.TransactionMessageTxGroupFull)
 var transactionMessagesDupRawMsg = metrics.MakeCounter(metrics.TransactionMessagesDupRawMsg)
 var transactionMessagesDupCanonical = metrics.MakeCounter(metrics.TransactionMessagesDupCanonical)
+var transactionMessagesAppLimiterDrop = metrics.MakeCounter(metrics.TransactionMessagesAppLimiterDrop)
 var transactionMessagesBacklogSizeGauge = metrics.MakeGauge(metrics.TransactionMessagesBacklogSize)
 
 var transactionGroupTxSyncHandled = metrics.MakeCounter(metrics.TransactionGroupTxSyncHandled)
@@ -651,6 +652,7 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 
 	// rate limit per application in a group. Limiting any app in a group drops the entire message.
 	if handler.appLimiter != nil && handler.appLimiter.shouldDrop(unverifiedTxGroup, rawmsg.Sender.(network.IPAddressable).IPAddr()) {
+		transactionMessagesAppLimiterDrop.Inc(nil)
 		return network.OutgoingMessage{Action: network.Ignore}
 	}
 
