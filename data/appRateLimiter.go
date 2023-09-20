@@ -39,7 +39,7 @@ type keyType [8]byte
 // It is a shared map with numBuckets of maps each protected by its own mutex.
 // Bucket is selected by hashing the application index with a seed (see memhash64).
 type appRateLimiter struct {
-	maxBucketSize        uint64
+	maxBucketSize        int
 	serviceRatePerWindow uint64
 	serviceRateWindow    time.Duration
 
@@ -69,7 +69,7 @@ type appRateLimiterEntry struct {
 // maxCacheSize is the maximum number of entries to keep in the cache to keep it memory bounded
 // maxAppPeerRate is the maximum number of admitted apps per peer per second
 // serviceRateWindow is the service window
-func makeAppRateLimiter(maxCacheSize uint64, maxAppPeerRate uint64, serviceRateWindow time.Duration) *appRateLimiter {
+func makeAppRateLimiter(maxCacheSize int, maxAppPeerRate uint64, serviceRateWindow time.Duration) *appRateLimiter {
 	// convert target per app rate to per window service rate
 	serviceRatePerWindow := maxAppPeerRate * uint64(serviceRateWindow/time.Second)
 	maxBucketSize := maxCacheSize / numBuckets
@@ -87,7 +87,7 @@ func makeAppRateLimiter(maxCacheSize uint64, maxAppPeerRate uint64, serviceRateW
 
 	for i := 0; i < numBuckets; i++ {
 		r.buckets[i] = make(map[keyType]*appRateLimiterEntry)
-		r.lrus[i] = util.NewList[keyType]().AllocateFreeNodes(int(maxBucketSize))
+		r.lrus[i] = util.NewList[keyType]().AllocateFreeNodes(maxBucketSize)
 	}
 	return r
 }
@@ -96,7 +96,7 @@ func (r *appRateLimiter) entry(b int, key keyType, curInt int64) (*appRateLimite
 	r.mus[b].Lock()
 	defer r.mus[b].Unlock()
 
-	if len(r.buckets[b]) >= int(r.maxBucketSize) {
+	if len(r.buckets[b]) >= r.maxBucketSize {
 		// evict the oldest entry
 		start := time.Now()
 		atomic.AddUint64(&r.evictions, 1)
@@ -210,16 +210,19 @@ func txgroupToKeys(txgroup []transactions.SignedTxn, origin []byte, seed uint64,
 		copy(key[:], h[:len(key)])
 		return key
 	}
+	txnToBucket := func(appIdx basics.AppIndex) int {
+		return int(memhash64(uint64(appIdx), seed) % uint64(numBuckets))
+	}
 	for i := range txgroup {
 		if txgroup[i].Txn.Type == protocol.ApplicationCallTx {
 			appIdx := txgroup[i].Txn.ApplicationID
 			// hash appIdx into a bucket, do not use modulo since it could
 			// assign two vanilla (and presumable, popular) apps to the same bucket.
-			buckets = append(buckets, int(memhash64(uint64(appIdx), seed)%uint64(numBuckets)))
+			buckets = append(buckets, txnToBucket(appIdx))
 			keys = append(keys, txnToDigest(appIdx))
 			if len(txgroup[i].Txn.ForeignApps) > 0 {
 				for _, appIdx := range txgroup[i].Txn.ForeignApps {
-					buckets = append(buckets, int(memhash64(uint64(appIdx), seed)%uint64(numBuckets)))
+					buckets = append(buckets, txnToBucket(appIdx))
 					keys = append(keys, txnToDigest(appIdx))
 				}
 			}

@@ -40,7 +40,7 @@ func TestAppRateLimiter_Make(t *testing.T) {
 	window := 1 * time.Second
 	rm := makeAppRateLimiter(10, rate, window)
 
-	require.Equal(t, uint64(1), rm.maxBucketSize)
+	require.Equal(t, 1, rm.maxBucketSize)
 	require.NotEmpty(t, rm.seed)
 	require.NotEmpty(t, rm.salt)
 	require.NotEmpty(t, rm.buckets)
@@ -222,7 +222,7 @@ func TestAppRateLimiter_MaxSize(t *testing.T) {
 	t.Parallel()
 
 	const bucketSize = 4
-	const size uint64 = bucketSize * numBuckets
+	const size = bucketSize * numBuckets
 	const rate uint64 = 10
 	window := 10 * time.Second
 	rm := makeAppRateLimiter(size, rate, window)
@@ -249,7 +249,7 @@ func TestAppRateLimiter_EvictOrder(t *testing.T) {
 	t.Parallel()
 
 	const bucketSize = 4
-	const size uint64 = bucketSize * numBuckets
+	const size = bucketSize * numBuckets
 	const rate uint64 = 10
 	window := 10 * time.Second
 	rm := makeAppRateLimiter(size, rate, window)
@@ -334,7 +334,7 @@ func BenchmarkAppRateLimiter(b *testing.B) {
 
 	b.Run("multi bucket no evict", func(b *testing.B) {
 		rm := makeAppRateLimiter(
-			uint64(cfg.TxBacklogTxRateLimiterMaxSize),
+			cfg.TxBacklogTxRateLimiterMaxSize,
 			uint64(cfg.TxBacklogTxRate),
 			time.Duration(cfg.TxBacklogServiceRateWindowSeconds)*time.Second,
 		)
@@ -352,7 +352,7 @@ func BenchmarkAppRateLimiter(b *testing.B) {
 
 	b.Run("single bucket no evict", func(b *testing.B) {
 		rm := makeAppRateLimiter(
-			uint64(cfg.TxBacklogTxRateLimiterMaxSize),
+			cfg.TxBacklogTxRateLimiterMaxSize,
 			uint64(cfg.TxBacklogTxRate),
 			time.Duration(cfg.TxBacklogServiceRateWindowSeconds)*time.Second,
 		)
@@ -370,7 +370,7 @@ func BenchmarkAppRateLimiter(b *testing.B) {
 
 	b.Run("single bucket w evict", func(b *testing.B) {
 		rm := makeAppRateLimiter(
-			uint64(cfg.TxBacklogTxRateLimiterMaxSize),
+			cfg.TxBacklogTxRateLimiterMaxSize,
 			uint64(cfg.TxBacklogTxRate),
 			time.Duration(cfg.TxBacklogServiceRateWindowSeconds)*time.Second,
 		)
