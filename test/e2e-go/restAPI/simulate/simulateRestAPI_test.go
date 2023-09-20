@@ -340,7 +340,14 @@ int 1`
 
 	// If the round is too far back, we should get an error saying so.
 	simulateRequest.Round = basics.Round(followerSyncRound - 3)
-	result, err = simulateTransactions(simulateRequest)
+	endTime := time.Now().Add(6 * time.Second)
+	for {
+		result, err = simulateTransactions(simulateRequest)
+		if err != nil || endTime.After(time.Now()) {
+			break
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
 	if err == nil {
 		// NOTE: The ledger can have variability in when it commits rounds to the database. It's
 		// possible that older rounds are still available because of this. If so, let's bail on the
