@@ -219,7 +219,7 @@ def main():
         release_contents.extend(releases_response["Contents"])
 
         # If response was truncated, keep looping and appending
-        while (releases_response["IsTruncated"] == True):
+        while releases_response["IsTruncated"] == True:
             releases_response = s3.list_objects_v2(Bucket=releases_bucket, ContinuationToken=releases_response["NextContinuationToken"])
             release_contents.extend(releases_response["Contents"])
 
