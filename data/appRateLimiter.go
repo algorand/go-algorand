@@ -92,34 +92,24 @@ func makeAppRateLimiter(maxCacheSize int, maxAppPeerRate uint64, serviceRateWind
 	return r
 }
 
-func (r *appRateLimiter) entry(b int, key keyType, curInt int64) (*appRateLimiterEntry, bool) {
-	r.mus[b].Lock()
-	defer r.mus[b].Unlock()
-
+// newEntryLocked adds a new entry, must be called with appropriate bucket lock held
+func (r *appRateLimiter) newEntryLocked(b int, key keyType, curInt int64) {
 	if len(r.buckets[b]) >= r.maxBucketSize {
 		// evict the oldest entry
 		start := time.Now()
-		atomic.AddUint64(&r.evictions, 1)
-
 		el := r.lrus[b].Back()
 		delete(r.buckets[b], el.Value)
 		r.lrus[b].Remove(el)
 
+		// some stats for benchmarks/tests, remove?
+		atomic.AddUint64(&r.evictions, 1)
 		atomic.AddUint64(&r.evictionTime, uint64(time.Since(start)))
 	}
-
-	entry, ok := r.buckets[b][key]
-	if ok {
-		el := entry.lruElement
-		r.lrus[b].MoveToFront(el)
-	} else {
-		el := r.lrus[b].PushFront(key)
-		entry = &appRateLimiterEntry{lruElement: el}
-		entry.cur.Store(1)
-		entry.interval.Store(curInt)
-		r.buckets[b][key] = entry
-	}
-	return entry, ok
+	el := r.lrus[b].PushFront(key)
+	entry := &appRateLimiterEntry{lruElement: el}
+	entry.cur.Store(1)
+	entry.interval.Store(curInt)
+	r.buckets[b][key] = entry
 }
 
 // interval calculates the interval numeric representation based on the given time
@@ -154,32 +144,69 @@ func (r *appRateLimiter) shouldDropKeys(buckets []int, keys []keyType, now time.
 
 	for i := range keys {
 		key := keys[i]
-		bucket := buckets[i]
-		entry, has := r.entry(bucket, key, curInt)
+		b := buckets[i]
+		r.mus[b].Lock()
+		entry, has := r.buckets[b][key]
 		if !has {
-			// new entry, defaults are provided by entry() function
-			continue
-		}
-
-		interval := entry.interval.Load()
-		if interval != curInt {
-			var val uint64 = 0
-			if interval == curInt-1 {
-				// there are continuous intervals, use the previous value
-				val = entry.cur.Load()
-			}
-			entry.prev.Store(val)
-			entry.cur.Store(1)
-			entry.interval.Store(curInt)
+			// add a new entry and prune the oldest if needed
+			r.newEntryLocked(b, key, curInt)
+			r.mus[b].Unlock()
 		} else {
-			entry.cur.Add(1)
-		}
+			r.mus[b].Unlock()
+			// optimistic lock-free rate check
+			// expecting that buckets are large enough to avoid contention and frequent evictions
 
-		curFraction := r.fraction(now)
-		rate := uint64(float64(entry.prev.Load())*(1-curFraction)) + entry.cur.Load()
+			interval := entry.interval.Load()
+			// copy cur and prev values to check limits
+			// apply limits only after admission
+			cur := entry.cur.Load()
+			prev := entry.prev.Load()
+			thisInterval := true
+			var newPrev uint64 = 0
+			if interval != curInt {
+				thisInterval = false
+				if interval == curInt-1 {
+					// there are continuous intervals, use the previous value
+					newPrev = cur
+				}
+				prev = newPrev
+				cur = 1
+			} else {
+				cur++
+			}
 
-		if rate > r.serviceRatePerWindow {
-			return true
+			curFraction := r.fraction(now)
+			rate := uint64(float64(prev)*(1-curFraction)) + cur
+
+			if rate > r.serviceRatePerWindow {
+				return true
+			}
+
+			// admitted, update the entry
+			if thisInterval {
+				entry.cur.Add(1)
+			} else {
+				entry.prev.Store(newPrev)
+				entry.cur.Store(1)
+				entry.interval.Store(curInt)
+			}
+
+			r.mus[b].Lock()
+			el := entry.lruElement
+			// it is possible that the was removed from the list while executing
+			// the lock-free code above, so check again
+			if el.Value == (keyType{}) {
+				// moved to free list, add a new entry
+				el := r.lrus[b].PushFront(key)
+				entry.lruElement = el
+			} else if el.Value != key {
+				// this means the list element was reused for something else
+				// well, admitted, ignore
+			} else {
+				// normal case, move to front
+				r.lrus[b].MoveToFront(el)
+			}
+			r.mus[b].Unlock()
 		}
 	}
 
