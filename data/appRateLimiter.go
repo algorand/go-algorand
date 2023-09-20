@@ -36,8 +36,10 @@ const numBuckets = 128
 type keyType [8]byte
 
 // appRateLimiter implements a sliding window counter rate limiter for applications.
-// It is a shared map with numBuckets of maps each protected by its own mutex.
+// It is a sharded map with numBuckets of maps each protected by its own mutex.
 // Bucket is selected by hashing the application index with a seed (see memhash64).
+// LRU is used to evict entries from each bucket, and "last use" is updated on each attempt, not admission.
+// This is mostly done to simplify the implementation and does not look affecting the correctness.
 type appRateLimiter struct {
 	maxBucketSize        int
 	serviceRatePerWindow uint64
@@ -53,15 +55,15 @@ type appRateLimiter struct {
 	lrus    [numBuckets]*util.List[keyType]
 
 	// evictions
-	// TODO: delete
+	// TODO: delete?
 	evictions    uint64
 	evictionTime uint64
 }
 
 type appRateLimiterEntry struct {
-	prev       atomic.Uint64
-	cur        atomic.Uint64
-	interval   atomic.Int64 // numeric representation of the current interval value
+	prev       atomic.Int64
+	cur        atomic.Int64
+	interval   int64 // numeric representation of the current interval value
 	lruElement *util.ListNode[keyType]
 }
 
@@ -99,24 +101,44 @@ func (r *appRateLimiter) entry(b int, key keyType, curInt int64) (*appRateLimite
 	if len(r.buckets[b]) >= r.maxBucketSize {
 		// evict the oldest entry
 		start := time.Now()
-		atomic.AddUint64(&r.evictions, 1)
 
 		el := r.lrus[b].Back()
 		delete(r.buckets[b], el.Value)
 		r.lrus[b].Remove(el)
 
+		atomic.AddUint64(&r.evictions, 1)
 		atomic.AddUint64(&r.evictionTime, uint64(time.Since(start)))
 	}
 
 	entry, ok := r.buckets[b][key]
 	if ok {
 		el := entry.lruElement
+		// note, the entry is marked as recently used even before the rate limiting decision
+		// since it does not make sense to evict keys that are actively attempted
 		r.lrus[b].MoveToFront(el)
+
+		// the same logic is applicable to the intervals: if a new interval is started, update the entry
+		// by moving the current value to the previous and resetting the current.
+		// this is done under a lock so that the interval is not updated concurrently.
+		// The rationale is even this requests is going to be dropped the new interval already started
+		// and it is OK to start a new interval and have it prepared for upcoming requests
+		var newPrev int64 = 0
+		switch entry.interval {
+		case curInt:
+			// the interval is the same, do nothing
+		case curInt - 1:
+			// these are continuous intervals, use current value as a new previous
+			newPrev = entry.cur.Load()
+			fallthrough
+		default:
+			// non-contiguous intervals, reset the entry
+			entry.prev.Store(newPrev)
+			entry.cur.Store(0)
+			entry.interval = curInt
+		}
 	} else {
 		el := r.lrus[b].PushFront(key)
-		entry = &appRateLimiterEntry{lruElement: el}
-		entry.cur.Store(1)
-		entry.interval.Store(curInt)
+		entry = &appRateLimiterEntry{interval: curInt, lruElement: el}
 		r.buckets[b][key] = entry
 	}
 	return entry, ok
@@ -151,36 +173,25 @@ func (r *appRateLimiter) shouldDropInner(txgroup []transactions.SignedTxn, origi
 
 func (r *appRateLimiter) shouldDropKeys(buckets []int, keys []keyType, now time.Time) bool {
 	curInt := r.interval(now)
+	curFraction := r.fraction(now)
 
 	for i := range keys {
 		key := keys[i]
 		bucket := buckets[i]
+		// TODO: reuse last entry for matched keys and buckets?
 		entry, has := r.entry(bucket, key, curInt)
 		if !has {
 			// new entry, defaults are provided by entry() function
+			// admit and increment
+			entry.cur.Add(1)
 			continue
 		}
 
-		interval := entry.interval.Load()
-		if interval != curInt {
-			var val uint64 = 0
-			if interval == curInt-1 {
-				// there are continuous intervals, use the previous value
-				val = entry.cur.Load()
-			}
-			entry.prev.Store(val)
-			entry.cur.Store(1)
-			entry.interval.Store(curInt)
-		} else {
-			entry.cur.Add(1)
-		}
-
-		curFraction := r.fraction(now)
-		rate := uint64(float64(entry.prev.Load())*(1-curFraction)) + entry.cur.Load()
-
-		if rate > r.serviceRatePerWindow {
+		rate := int64(float64(entry.prev.Load())*(1-curFraction)) + entry.cur.Load() + 1
+		if rate > int64(r.serviceRatePerWindow) {
 			return true
 		}
+		entry.cur.Add(1)
 	}
 
 	return false

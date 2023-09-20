@@ -128,6 +128,7 @@ func TestAppRateLimiter_Basics(t *testing.T) {
 	require.True(t, drop)
 }
 
+// TestAppRateLimiter_Interval checks prev + cur rate approximation logic
 func TestAppRateLimiter_Interval(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -160,6 +161,37 @@ func TestAppRateLimiter_Interval(t *testing.T) {
 	require.True(t, drop)
 }
 
+// TestAppRateLimiter_IntervalFull checks the cur counter accounts only admitted requests
+func TestAppRateLimiter_IntervalAdmitted(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	rate := uint64(10)
+	window := 10 * time.Second
+	perSecondRate := uint64(window) / rate / uint64(time.Second)
+	rm := makeAppRateLimiter(512, perSecondRate, window)
+
+	txns := getAppTxnGroup(1)
+	buckets, keys := txgroupToKeys(getAppTxnGroup(basics.AppIndex(1)), nil, rm.seed, rm.salt, numBuckets)
+	require.Equal(t, 1, len(buckets))
+	require.Equal(t, 1, len(keys))
+	b := buckets[0]
+	k := keys[0]
+	now := time.Date(2023, 9, 11, 10, 10, 11, 0, time.UTC) // 11 sec => 1 sec into the interval
+
+	// fill a current interval with more than rate requests
+	// ensure the counter does not exceed the rate
+	for i := 0; i < int(rate); i++ {
+		drop := rm.shouldDropInner(txns, nil, now)
+		require.False(t, drop)
+	}
+	drop := rm.shouldDropInner(txns, nil, now)
+	require.True(t, drop)
+
+	require.Equal(t, int64(rate), rm.buckets[b][k].cur.Load())
+}
+
+// TestAppRateLimiter_IntervalSkip checks that the rate is reset when no requests within some interval
 func TestAppRateLimiter_IntervalSkip(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
