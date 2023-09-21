@@ -1487,7 +1487,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 
 - Bytecode: 0xb9
 - Stack: ..., A: boxName, B: uint64 &rarr; ..., bool
-- create a box named A, of length B. Fail if A is empty or B exceeds 32,768. Returns 0 if A already existed, else 1
+- create a box named A, of length B. Fail if the name A is empty or B exceeds 32,768. Returns 0 if A already existed, else 1
 - Availability: v8
 - Mode: Application
 
@@ -1655,7 +1655,7 @@ Boxes are of constant length. If C < len(D), then len(D)-C bytes will be removed
 
 - Bytecode: 0xd3
 - Stack: ..., A: boxName, B: uint64 &rarr; ...
-- change the size of box A to be of length B, adding zero bytes to end or removing bytes from the end, as needed. Fail if A is empty, is not an existing box, or B exceeds 32,768.
+- change the size of box named A to be of length B, adding zero bytes to end or removing bytes from the end, as needed. Fail if the name A is empty, A is not an existing box, or B exceeds 32,768.
 - Availability: v10
 - Mode: Application
 

@@ -763,7 +763,7 @@ are sure to be _available_.
 
 | Opcode | Description |
 | - | -- |
-| `box_create` | create a box named A, of length B. Fail if A is empty or B exceeds 32,768. Returns 0 if A already existed, else 1 |
+| `box_create` | create a box named A, of length B. Fail if the name A is empty or B exceeds 32,768. Returns 0 if A already existed, else 1 |
 | `box_extract` | read C bytes from box A, starting at offset B. Fail if A does not exist, or the byte range is outside A's size. |
 | `box_replace` | write byte-array C into box A, starting at offset B. Fail if A does not exist, or the byte range is outside A's size. |
 | `box_splice` | set box A to contain its previous bytes up to index B, followed by D, followed by the original bytes of A that began at index B+C. |
@@ -771,7 +771,7 @@ are sure to be _available_.
 | `box_len` | X is the length of box A if A exists, else 0. Y is 1 if A exists, else 0. |
 | `box_get` | X is the contents of box A if A exists, else ''. Y is 1 if A exists, else 0. |
 | `box_put` | replaces the contents of box A with byte-array B. Fails if A exists and len(B) != len(box A). Creates A if it does not exist |
-| `box_resize` | change the size of box A to be of length B, adding zero bytes to end or removing bytes from the end, as needed. Fail if A is empty, is not an existing box, or B exceeds 32,768. |
+| `box_resize` | change the size of box named A to be of length B, adding zero bytes to end or removing bytes from the end, as needed. Fail if the name A is empty, A is not an existing box, or B exceeds 32,768. |
 
 ### Inner Transactions
 

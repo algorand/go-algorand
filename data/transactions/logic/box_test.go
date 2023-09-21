@@ -146,6 +146,11 @@ func TestBoxReadWrite(t *testing.T) {
 		"no such box")
 	TestApp(t, `byte "junk"; int 1; byte 0x3031; box_replace`, ep,
 		"invalid Box reference")
+
+	TestApp(t, `byte "self"; int 1; int 2; byte 0x3031; box_splice`, ep,
+		"no such box")
+	TestApp(t, `byte "junk"; int 1; int 2; byte 0x3031; box_splice`, ep,
+		"invalid Box reference")
 }
 
 func TestBoxSplice(t *testing.T) {
@@ -203,6 +208,11 @@ func TestBoxSplice(t *testing.T) {
 	TestApp(t, `byte "self"; int 5; int 0; byte 0x; box_splice;
                 byte "self"; box_get; assert; byte 0x22333300; ==`, ep,
 		"replacement start 5 beyond length")
+
+	// overflow doesn't work
+	TestApp(t, `byte "self"; int 2; int 18446744073709551615; byte 0x; box_splice;
+                byte "self"; box_get; assert; byte 0x22333300; ==`, ep,
+		"splice end exceeds uint64")
 }
 
 func TestBoxAcrossTxns(t *testing.T) {
@@ -603,6 +613,8 @@ func TestEarlyPanics(t *testing.T) {
 		"box_len":     `byte "%s"; box_len`,
 		"box_put":     `byte "%s"; byte "hello"; box_put`,
 		"box_replace": `byte "%s"; int 0; byte "new"; box_replace`,
+		"box_splice":  `byte "%s"; int 0; int 2; byte "new"; box_splice`,
+		"box_resize":  `byte "%s"; int 2; box_resize`,
 	}
 
 	for name, program := range tests {
