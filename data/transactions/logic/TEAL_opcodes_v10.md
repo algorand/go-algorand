@@ -1641,6 +1641,24 @@ Fields
 | 1 | BlkTimestamp | uint64 |  |
 
 
+## box_splice
+
+- Bytecode: 0xd2
+- Stack: ..., A: boxName, B: uint64, C: uint64, D: []byte &rarr; ...
+- set box A to contain its previous bytes up to index B, followed by D, followed by the original bytes of A that began at index B+C.
+- Availability: v10
+- Mode: Application
+
+Boxes are of constant length. If C < len(D), then len(D)-C bytes will be removed from the end. If C > len(D), zero bytes will be appended to the end to reach the box length.
+
+## box_resize
+
+- Bytecode: 0xd3
+- Stack: ..., A: boxName, B: uint64 &rarr; ...
+- change the size of box A to be of length B, adding zero bytes to end or removing bytes from the end, as needed. Fail if A is empty, is not an existing box, or B exceeds 32,768.
+- Availability: v10
+- Mode: Application
+
 ## ec_add
 
 - Syntax: `ec_add G` ∋ G: [EC](#field-group-ec)

@@ -4645,6 +4645,39 @@
       ]
     },
     {
+      "Opcode": 210,
+      "Name": "box_splice",
+      "Args": [
+        "boxName",
+        "uint64",
+        "uint64",
+        "[]byte"
+      ],
+      "Size": 1,
+      "DocCost": "1",
+      "Doc": "set box A to contain its previous bytes up to index B, followed by D, followed by the original bytes of A that began at index B+C.",
+      "DocExtra": "Boxes are of constant length. If C \u003c len(D), then len(D)-C bytes will be removed from the end. If C \u003e len(D), zero bytes will be appended to the end to reach the box length.",
+      "IntroducedVersion": 10,
+      "Groups": [
+        "Box Access"
+      ]
+    },
+    {
+      "Opcode": 211,
+      "Name": "box_resize",
+      "Args": [
+        "boxName",
+        "uint64"
+      ],
+      "Size": 1,
+      "DocCost": "1",
+      "Doc": "change the size of box A to be of length B, adding zero bytes to end or removing bytes from the end, as needed. Fail if A is empty, is not an existing box, or B exceeds 32,768.",
+      "IntroducedVersion": 10,
+      "Groups": [
+        "Box Access"
+      ]
+    },
+    {
       "Opcode": 224,
       "Name": "ec_add",
       "Args": [

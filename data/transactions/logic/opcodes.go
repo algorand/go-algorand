@@ -75,6 +75,7 @@ const sharedResourcesVersion = 9 // apps can access resources from other transac
 // moved from vFuture to a new consensus version. If they remain unready, bump
 // their version, and fixup TestAssemble() in assembler_test.go.
 const pairingVersion = 10 // bn256 opcodes. will add bls12-381, and unify the available opcodes.
+const spliceVersion = 10  // box splicing/resizing
 
 // Unlimited Global Storage opcodes
 const boxVersion = 8 // box_*
@@ -721,6 +722,8 @@ var OpSpecs = []OpSpec{
 	// randomness support
 	{0xd0, "vrf_verify", opVrfVerify, proto("b83:bT"), randomnessVersion, field("s", &VrfStandards).costs(5700)},
 	{0xd1, "block", opBlock, proto("i:a"), randomnessVersion, field("f", &BlockFields)},
+	{0xd2, "box_splice", opBoxSplice, proto("Niib:").appStateExplain(opBoxSpliceStateChange), spliceVersion, only(ModeApp)},
+	{0xd3, "box_resize", opBoxResize, proto("Ni:").appStateExplain(opBoxResizeStateChange), spliceVersion, only(ModeApp)},
 
 	{0xe0, "ec_add", opEcAdd, proto("bb:b"), pairingVersion,
 		costByField("g", &EcGroups, []int{
