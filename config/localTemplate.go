@@ -522,7 +522,7 @@ type Local struct {
 
 	// BlockHistoryLookback sets the max lookback range for block information.
 	// i.e. the block DB can return transaction IDs for questions for the range Latest-MaxBlockHistoryLookback...Latest
-	MaxBlockHistoryLookback uint64 `version[32]:"0"`
+	MaxBlockHistoryLookback uint64 `version[31]:"0"`
 
 	// EnableUsageLog enables 10Hz log of CPU and RAM usage.
 	// Also adds 'algod_ram_usage` (number of bytes in use) to /metrics
