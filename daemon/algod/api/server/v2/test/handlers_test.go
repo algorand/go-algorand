@@ -1308,6 +1308,10 @@ func TestSimulateTransactionMultipleGroups(t *testing.T) {
 }
 
 func startCatchupTest(t *testing.T, catchpoint string, nodeError error, expectedCode int) {
+	startCatchupTestFull(t, catchpoint, nodeError, expectedCode, false, "")
+}
+
+func startCatchupTestFull(t *testing.T, catchpoint string, nodeError error, expectedCode int, initOnly bool, response string) {
 	numAccounts := 1
 	numTransactions := 1
 	offlineAccounts := true
@@ -1320,9 +1324,28 @@ func startCatchupTest(t *testing.T, catchpoint string, nodeError error, expected
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	err := handler.StartCatchup(c, catchpoint)
+	var err error
+	if initOnly {
+		err = handler.StartCatchup(c, catchpoint, model.StartCatchupParams{Initialize: &initOnly})
+	} else {
+		err = handler.StartCatchup(c, catchpoint, model.StartCatchupParams{})
+	}
 	require.NoError(t, err)
 	require.Equal(t, expectedCode, rec.Code)
+	if response != "" {
+		require.Contains(t, rec.Body.String(), response)
+	}
+}
+
+func TestStartCatchupInit(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	tooSmallCatchpoint := fmt.Sprintf("%d#DVFRZUYHEFKRLK5N6DNJRR4IABEVN2D6H76F3ZSEPIE6MKXMQWQA", v2.MinRoundsToInitialize-1)
+	startCatchupTestFull(t, tooSmallCatchpoint, nil, 200, true, "the node has already been initialized")
+
+	catchpointOK := fmt.Sprintf("%d#DVFRZUYHEFKRLK5N6DNJRR4IABEVN2D6H76F3ZSEPIE6MKXMQWQA", v2.MinRoundsToInitialize)
+	startCatchupTestFull(t, catchpointOK, nil, 201, true, catchpointOK)
 }
 
 func TestStartCatchup(t *testing.T) {
