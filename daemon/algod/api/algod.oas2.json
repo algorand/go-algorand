@@ -2508,6 +2508,12 @@
         "parameters": [
           {
             "$ref": "#/parameters/catchpoint"
+          },
+          {
+            "name": "initialize",
+            "description": "When set to `true`, catchup will only be used to initialize the node. This means it will only run a fast catchup that advances the round by at least 1 million rounds.",
+            "in": "query",
+            "type": "boolean"
           }
         ],
         "responses": {

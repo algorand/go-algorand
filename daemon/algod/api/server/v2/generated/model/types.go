@@ -1452,6 +1452,12 @@ type GetTransactionProofParamsHashtype string
 // GetTransactionProofParamsFormat defines parameters for GetTransactionProof.
 type GetTransactionProofParamsFormat string
 
+// StartCatchupParams defines parameters for StartCatchup.
+type StartCatchupParams struct {
+	// Initialize When set to `true`, catchup will only be used to initialize the node. This means it will only run a fast catchup that advances the round by at least 1 million rounds.
+	Initialize *bool `form:"initialize,omitempty" json:"initialize,omitempty"`
+}
+
 // GetLedgerStateDeltaForTransactionGroupParams defines parameters for GetLedgerStateDeltaForTransactionGroup.
 type GetLedgerStateDeltaForTransactionGroupParams struct {
 	// Format Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.

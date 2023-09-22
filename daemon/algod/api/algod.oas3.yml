@@ -4302,6 +4302,14 @@
               "x-algorand-format": "Catchpoint String"
             },
             "x-algorand-format": "Catchpoint String"
+          },
+          {
+            "description": "When set to `true`, catchup will only be used to initialize the node. This means it will only run a fast catchup that advances the round by at least 1 million rounds.",
+            "in": "query",
+            "name": "initialize",
+            "schema": {
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
