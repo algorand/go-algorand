@@ -189,10 +189,10 @@ func MakeTxHandler(opts TxHandlerOpts) (*TxHandler, error) {
 		)
 		handler.erl = rateLimiter
 
-		if opts.Config.TxBacklogTxRateLimiterMaxSize > 0 {
+		if opts.Config.TxBacklogAppTxRateLimiterMaxSize > 0 {
 			handler.appLimiter = makeAppRateLimiter(
-				opts.Config.TxBacklogTxRateLimiterMaxSize,
-				uint64(opts.Config.TxBacklogTxRate),
+				opts.Config.TxBacklogAppTxRateLimiterMaxSize,
+				uint64(opts.Config.TxBacklogAppTxPerSecondRate),
 				time.Duration(opts.Config.TxBacklogServiceRateWindowSeconds)*time.Second,
 			)
 		}

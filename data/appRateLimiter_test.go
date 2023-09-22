@@ -43,7 +43,10 @@ func TestAppRateLimiter_Make(t *testing.T) {
 	require.Equal(t, 1, rm.maxBucketSize)
 	require.NotEmpty(t, rm.seed)
 	require.NotEmpty(t, rm.salt)
-	require.NotEmpty(t, rm.buckets)
+	for i := 0; i < len(rm.buckets); i++ {
+		require.NotNil(t, rm.buckets[i].entries)
+		require.NotNil(t, rm.buckets[i].lru)
+	}
 }
 
 func TestAppRateLimiter_NoApps(t *testing.T) {
@@ -91,15 +94,15 @@ func TestAppRateLimiter_Basics(t *testing.T) {
 
 	txns := getAppTxnGroup(1)
 	now := time.Now()
-	drop := rm.shouldDropInner(txns, nil, now)
+	drop := rm.shouldDropAt(txns, nil, now)
 	require.False(t, drop)
 
 	for i := len(txns); i < int(rate); i++ {
-		drop = rm.shouldDropInner(txns, nil, now)
+		drop = rm.shouldDropAt(txns, nil, now)
 		require.False(t, drop)
 	}
 
-	drop = rm.shouldDropInner(txns, nil, now)
+	drop = rm.shouldDropAt(txns, nil, now)
 	require.True(t, drop)
 
 	// check a single group with exceed rate is dropped
@@ -111,10 +114,10 @@ func TestAppRateLimiter_Basics(t *testing.T) {
 			Txn: apptxn2,
 		})
 	}
-	drop = rm.shouldDropInner(txns, nil, now)
+	drop = rm.shouldDropAt(txns, nil, now)
 	require.True(t, drop)
 
-	drop = rm.shouldDropInner(txns, nil, now.Add(2*window))
+	drop = rm.shouldDropAt(txns, nil, now.Add(2*window))
 	require.True(t, drop)
 
 	// check foreign apps
@@ -124,7 +127,7 @@ func TestAppRateLimiter_Basics(t *testing.T) {
 		apptxn3.ForeignApps = append(apptxn3.ForeignApps, 3)
 	}
 	txns = []transactions.SignedTxn{{Txn: apptxn3}}
-	drop = rm.shouldDropInner(txns, nil, now)
+	drop = rm.shouldDropAt(txns, nil, now)
 	require.True(t, drop)
 }
 
@@ -147,17 +150,17 @@ func TestAppRateLimiter_Interval(t *testing.T) {
 	// 0.9 is calculated as 1 - 0.1 (fraction of the interval elapsed)
 	// since the next interval at second 21 would by 1 sec (== 10% == 0.1) after the interval beginning
 	for i := 0; i < int(0.8*float64(rate)); i++ {
-		drop := rm.shouldDropInner(txns, nil, now)
+		drop := rm.shouldDropAt(txns, nil, now)
 		require.False(t, drop)
 	}
 
 	next := now.Add(window)
 	for i := 0; i < int(0.3*float64(rate)); i++ {
-		drop := rm.shouldDropInner(txns, nil, next)
+		drop := rm.shouldDropAt(txns, nil, next)
 		require.False(t, drop)
 	}
 
-	drop := rm.shouldDropInner(txns, nil, next)
+	drop := rm.shouldDropAt(txns, nil, next)
 	require.True(t, drop)
 }
 
@@ -182,13 +185,15 @@ func TestAppRateLimiter_IntervalAdmitted(t *testing.T) {
 	// fill a current interval with more than rate requests
 	// ensure the counter does not exceed the rate
 	for i := 0; i < int(rate); i++ {
-		drop := rm.shouldDropInner(txns, nil, now)
+		drop := rm.shouldDropAt(txns, nil, now)
 		require.False(t, drop)
 	}
-	drop := rm.shouldDropInner(txns, nil, now)
+	drop := rm.shouldDropAt(txns, nil, now)
 	require.True(t, drop)
 
-	require.Equal(t, int64(rate), rm.buckets[b][k].cur.Load())
+	entry := rm.buckets[b].entries[k]
+	require.NotNil(t, entry)
+	require.Equal(t, int64(rate), entry.cur.Load())
 }
 
 // TestAppRateLimiter_IntervalSkip checks that the rate is reset when no requests within some interval
@@ -209,17 +214,17 @@ func TestAppRateLimiter_IntervalSkip(t *testing.T) {
 	// ensure all capacity is available
 
 	for i := 0; i < int(0.8*float64(rate)); i++ {
-		drop := rm.shouldDropInner(txns, nil, now)
+		drop := rm.shouldDropAt(txns, nil, now)
 		require.False(t, drop)
 	}
 
 	nextnext := now.Add(2 * window)
 	for i := 0; i < int(rate); i++ {
-		drop := rm.shouldDropInner(txns, nil, nextnext)
+		drop := rm.shouldDropAt(txns, nil, nextnext)
 		require.False(t, drop)
 	}
 
-	drop := rm.shouldDropInner(txns, nil, nextnext)
+	drop := rm.shouldDropAt(txns, nil, nextnext)
 	require.True(t, drop)
 }
 
@@ -236,15 +241,15 @@ func TestAppRateLimiter_IPAddr(t *testing.T) {
 	now := time.Now()
 
 	for i := 0; i < int(rate); i++ {
-		drop := rm.shouldDropInner(txns, []byte{1}, now)
+		drop := rm.shouldDropAt(txns, []byte{1}, now)
 		require.False(t, drop)
-		drop = rm.shouldDropInner(txns, []byte{2}, now)
+		drop = rm.shouldDropAt(txns, []byte{2}, now)
 		require.False(t, drop)
 	}
 
-	drop := rm.shouldDropInner(txns, []byte{1}, now)
+	drop := rm.shouldDropAt(txns, []byte{1}, now)
 	require.True(t, drop)
-	drop = rm.shouldDropInner(txns, []byte{2}, now)
+	drop = rm.shouldDropAt(txns, []byte{2}, now)
 	require.True(t, drop)
 }
 
@@ -264,12 +269,12 @@ func TestAppRateLimiter_MaxSize(t *testing.T) {
 		require.False(t, drop)
 	}
 	bucket := int(memhash64(uint64(1), rm.seed) % numBuckets)
-	require.Equal(t, bucketSize, len(rm.buckets[bucket]))
+	require.Equal(t, bucketSize, len(rm.buckets[bucket].entries))
 	var totalSize int
 	for i := 0; i < len(rm.buckets); i++ {
-		totalSize += len(rm.buckets[i])
+		totalSize += len(rm.buckets[i].entries)
 		if i != bucket {
-			require.Equal(t, 0, len(rm.buckets[i]))
+			require.Equal(t, 0, len(rm.buckets[i].entries))
 		}
 	}
 	require.LessOrEqual(t, totalSize, int(size))
@@ -297,7 +302,7 @@ func TestAppRateLimiter_EvictOrder(t *testing.T) {
 		drop := rm.shouldDrop(getAppTxnGroup(basics.AppIndex(1)), []byte{byte(i)})
 		require.False(t, drop)
 	}
-	require.Equal(t, bucketSize, len(rm.buckets[bucket]))
+	require.Equal(t, bucketSize, len(rm.buckets[bucket].entries))
 
 	// add one more and expect the first evicted
 	b, k := txgroupToKeys(getAppTxnGroup(basics.AppIndex(1)), []byte{byte(bucketSize)}, rm.seed, rm.salt, numBuckets)
@@ -307,17 +312,17 @@ func TestAppRateLimiter_EvictOrder(t *testing.T) {
 	drop := rm.shouldDrop(getAppTxnGroup(basics.AppIndex(1)), []byte{byte(bucketSize)})
 	require.False(t, drop)
 
-	require.Equal(t, bucketSize, len(rm.buckets[bucket]))
-	require.NotContains(t, rm.buckets[bucket], keys[0])
+	require.Equal(t, bucketSize, len(rm.buckets[bucket].entries))
+	require.NotContains(t, rm.buckets[bucket].entries, keys[0])
 	for i := 1; i < len(keys); i++ {
-		require.Contains(t, rm.buckets[bucket], keys[i])
+		require.Contains(t, rm.buckets[bucket].entries, keys[i])
 	}
 
 	var totalSize int
 	for i := 0; i < len(rm.buckets); i++ {
-		totalSize += len(rm.buckets[i])
+		totalSize += len(rm.buckets[i].entries)
 		if i != bucket {
-			require.Equal(t, 0, len(rm.buckets[i]))
+			require.Equal(t, 0, len(rm.buckets[i].entries))
 		}
 	}
 	require.LessOrEqual(t, totalSize, int(size))
@@ -366,8 +371,8 @@ func BenchmarkAppRateLimiter(b *testing.B) {
 
 	b.Run("multi bucket no evict", func(b *testing.B) {
 		rm := makeAppRateLimiter(
-			cfg.TxBacklogTxRateLimiterMaxSize,
-			uint64(cfg.TxBacklogTxRate),
+			cfg.TxBacklogAppTxRateLimiterMaxSize,
+			uint64(cfg.TxBacklogAppTxPerSecondRate),
 			time.Duration(cfg.TxBacklogServiceRateWindowSeconds)*time.Second,
 		)
 		dropped := 0
@@ -384,8 +389,8 @@ func BenchmarkAppRateLimiter(b *testing.B) {
 
 	b.Run("single bucket no evict", func(b *testing.B) {
 		rm := makeAppRateLimiter(
-			cfg.TxBacklogTxRateLimiterMaxSize,
-			uint64(cfg.TxBacklogTxRate),
+			cfg.TxBacklogAppTxRateLimiterMaxSize,
+			uint64(cfg.TxBacklogAppTxPerSecondRate),
 			time.Duration(cfg.TxBacklogServiceRateWindowSeconds)*time.Second,
 		)
 		dropped := 0
@@ -402,8 +407,8 @@ func BenchmarkAppRateLimiter(b *testing.B) {
 
 	b.Run("single bucket w evict", func(b *testing.B) {
 		rm := makeAppRateLimiter(
-			cfg.TxBacklogTxRateLimiterMaxSize,
-			uint64(cfg.TxBacklogTxRate),
+			cfg.TxBacklogAppTxRateLimiterMaxSize,
+			uint64(cfg.TxBacklogAppTxPerSecondRate),
 			time.Duration(cfg.TxBacklogServiceRateWindowSeconds)*time.Second,
 		)
 		dropped := 0

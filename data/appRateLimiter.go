@@ -50,14 +50,18 @@ type appRateLimiter struct {
 	// salt for hashing application index + origin address
 	salt [16]byte
 
-	buckets [numBuckets]map[keyType]*appRateLimiterEntry
-	mus     [numBuckets]deadlock.RWMutex
-	lrus    [numBuckets]*util.List[keyType]
+	buckets [numBuckets]appRateLimiterBucket
 
 	// evictions
 	// TODO: delete?
 	evictions    uint64
 	evictionTime uint64
+}
+
+type appRateLimiterBucket struct {
+	entries map[keyType]*appRateLimiterEntry
+	lru     *util.List[keyType]
+	mu      deadlock.RWMutex // mutex protects both map and the list access
 }
 
 type appRateLimiterEntry struct {
@@ -88,34 +92,33 @@ func makeAppRateLimiter(maxCacheSize int, maxAppPeerRate uint64, serviceRateWind
 	crypto.RandBytes(r.salt[:])
 
 	for i := 0; i < numBuckets; i++ {
-		r.buckets[i] = make(map[keyType]*appRateLimiterEntry)
-		r.lrus[i] = util.NewList[keyType]().AllocateFreeNodes(maxBucketSize)
+		r.buckets[i] = appRateLimiterBucket{entries: make(map[keyType]*appRateLimiterEntry), lru: util.NewList[keyType]()}
 	}
 	return r
 }
 
-func (r *appRateLimiter) entry(b int, key keyType, curInt int64) (*appRateLimiterEntry, bool) {
-	r.mus[b].Lock()
-	defer r.mus[b].Unlock()
+func (r *appRateLimiter) entry(b *appRateLimiterBucket, key keyType, curInt int64) (*appRateLimiterEntry, bool) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 
-	if len(r.buckets[b]) >= r.maxBucketSize {
+	if len(b.entries) >= r.maxBucketSize {
 		// evict the oldest entry
 		start := time.Now()
 
-		el := r.lrus[b].Back()
-		delete(r.buckets[b], el.Value)
-		r.lrus[b].Remove(el)
+		el := b.lru.Back()
+		delete(b.entries, el.Value)
+		b.lru.Remove(el)
 
 		atomic.AddUint64(&r.evictions, 1)
 		atomic.AddUint64(&r.evictionTime, uint64(time.Since(start)))
 	}
 
-	entry, ok := r.buckets[b][key]
+	entry, ok := b.entries[key]
 	if ok {
 		el := entry.lruElement
 		// note, the entry is marked as recently used even before the rate limiting decision
 		// since it does not make sense to evict keys that are actively attempted
-		r.lrus[b].MoveToFront(el)
+		b.lru.MoveToFront(el)
 
 		// the same logic is applicable to the intervals: if a new interval is started, update the entry
 		// by moving the current value to the previous and resetting the current.
@@ -137,9 +140,9 @@ func (r *appRateLimiter) entry(b int, key keyType, curInt int64) (*appRateLimite
 			entry.interval = curInt
 		}
 	} else {
-		el := r.lrus[b].PushFront(key)
+		el := b.lru.PushFront(key)
 		entry = &appRateLimiterEntry{interval: curInt, lruElement: el}
-		r.buckets[b][key] = entry
+		b.entries[key] = entry
 	}
 	return entry, ok
 }
@@ -158,12 +161,12 @@ func (r *appRateLimiter) fraction(now time.Time) float64 {
 // on the rate for the applications in the group: the entire group is dropped if a single application
 // exceeds the rate.
 func (r *appRateLimiter) shouldDrop(txgroup []transactions.SignedTxn, origin []byte) bool {
-	return r.shouldDropInner(txgroup, origin, time.Now())
+	return r.shouldDropAt(txgroup, origin, time.Now())
 }
 
-// shouldDropInner is the same as shouldDrop but accepts the current time as a parameter
+// shouldDropAt is the same as shouldDrop but accepts the current time as a parameter
 // in order to make it testable
-func (r *appRateLimiter) shouldDropInner(txgroup []transactions.SignedTxn, origin []byte, now time.Time) bool {
+func (r *appRateLimiter) shouldDropAt(txgroup []transactions.SignedTxn, origin []byte, now time.Time) bool {
 	buckets, keys := txgroupToKeys(txgroup, origin, r.seed, r.salt, numBuckets)
 	if len(keys) == 0 {
 		return false
@@ -175,11 +178,10 @@ func (r *appRateLimiter) shouldDropKeys(buckets []int, keys []keyType, now time.
 	curInt := r.interval(now)
 	curFraction := r.fraction(now)
 
-	for i := range keys {
-		key := keys[i]
-		bucket := buckets[i]
+	for i, key := range keys {
 		// TODO: reuse last entry for matched keys and buckets?
-		entry, has := r.entry(bucket, key, curInt)
+		b := buckets[i]
+		entry, has := r.entry(&r.buckets[b], key, curInt)
 		if !has {
 			// new entry, defaults are provided by entry() function
 			// admit and increment

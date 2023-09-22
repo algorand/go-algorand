@@ -2521,9 +2521,9 @@ func TestTxHandlerAppRateLimiter(t *testing.T) {
 	const inMem = true
 	cfg := config.GetDefaultLocal()
 	cfg.EnableTxBacklogRateLimiting = true
-	cfg.TxBacklogTxRateLimiterMaxSize = 100
+	cfg.TxBacklogAppTxRateLimiterMaxSize = 100
 	cfg.TxBacklogServiceRateWindowSeconds = 1
-	cfg.TxBacklogTxRate = 3
+	cfg.TxBacklogAppTxPerSecondRate = 3
 	ledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, nil, cfg)
 	require.NoError(t, err)
 	defer ledger.Close()
@@ -2556,7 +2556,7 @@ func TestTxHandlerAppRateLimiter(t *testing.T) {
 
 	// trigger the rate limiter and ensure the txn is ignored
 	tx2 := tx
-	for i := 0; i < cfg.TxBacklogTxRate*cfg.TxBacklogServiceRateWindowSeconds; i++ {
+	for i := 0; i < cfg.TxBacklogAppTxPerSecondRate*cfg.TxBacklogServiceRateWindowSeconds; i++ {
 		tx2.ForeignApps = append(tx2.ForeignApps, 1)
 	}
 	signedTx2 := tx.Sign(secrets[1])
