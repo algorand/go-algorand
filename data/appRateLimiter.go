@@ -199,6 +199,16 @@ func (r *appRateLimiter) shouldDropKeys(buckets []int, keys []keyType, now time.
 	return false
 }
 
+func (r *appRateLimiter) len() int {
+	var count int
+	for i := 0; i < numBuckets; i++ {
+		r.buckets[i].mu.RLock()
+		count += len(r.buckets[i].entries)
+		r.buckets[i].mu.RUnlock()
+	}
+	return count
+}
+
 // txgroupToKeys converts txgroup data to keys
 func txgroupToKeys(txgroup []transactions.SignedTxn, origin []byte, seed uint64, salt [16]byte, numBuckets int) ([]int, []keyType) {
 	// there are max 16 * 8 = 128 apps (buckets, keys) per txgroup

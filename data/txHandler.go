@@ -588,7 +588,9 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 
 	var err error
 	var capguard *util.ErlCapacityGuard
+	var congested bool
 	if handler.erl != nil {
+		congested = float64(cap(handler.backlogQueue))*0.5 < float64(len(handler.backlogQueue))
 		// consume a capacity unit
 		// if the elastic rate limiter cannot vend a capacity, the error it returns
 		// is sufficient to indicate that we should enable Congestion Control, because
@@ -601,7 +603,7 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 			return network.OutgoingMessage{Action: network.Ignore}
 		}
 		// if the backlog Queue has 50% of its buffer back, turn congestion control off
-		if float64(cap(handler.backlogQueue))*0.5 > float64(len(handler.backlogQueue)) {
+		if !congested {
 			handler.erl.DisableCongestionControl()
 		}
 	}
@@ -651,7 +653,7 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 	}
 
 	// rate limit per application in a group. Limiting any app in a group drops the entire message.
-	if handler.appLimiter != nil && handler.appLimiter.shouldDrop(unverifiedTxGroup, rawmsg.Sender.(network.IPAddressable).RoutingAddr()) {
+	if handler.appLimiter != nil && congested && handler.appLimiter.shouldDrop(unverifiedTxGroup, rawmsg.Sender.(network.IPAddressable).RoutingAddr()) {
 		transactionMessagesAppLimiterDrop.Inc(nil)
 		return network.OutgoingMessage{Action: network.Ignore}
 	}
