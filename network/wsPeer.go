@@ -328,6 +328,7 @@ type HTTPPeer interface {
 // IPAddressable is addressable with either IPv4 or IPv6 address
 type IPAddressable interface {
 	IPAddr() []byte
+	RoutingAddr() []byte
 }
 
 // UnicastPeer is another possible interface for the opaque Peer.
@@ -389,6 +390,32 @@ func (wp *wsPeer) IPAddr() []byte {
 		result = ip.To16()
 	}
 	return result
+}
+
+// RoutingAddr returns meaningful routing part of the address:
+// ipv4 for ipv4 addresses
+// top 8 bytes of ipv6 for ipv6 addresses
+// low 4 bytes for ipv4 embedded into ipv6
+// see http://www.tcpipguide.com/free/t_IPv6IPv4AddressEmbedding.htm for details.
+func (wp *wsPeer) RoutingAddr() []byte {
+	isZeros := func(ip []byte) bool {
+		for i := 0; i < len(ip); i++ {
+			if ip[i] != 0 {
+				return false
+			}
+		}
+		return true
+	}
+
+	ip := wp.IPAddr()
+	if len(ip) == 0 || len(ip) == net.IPv4len || len(ip) != net.IPv6len {
+		return ip
+	}
+	// ipv6, check if it's ipv4 embedded
+	if isZeros(ip[0:10]) {
+		return ip[12:16]
+	}
+	return ip[0:8]
 }
 
 // Unicast sends the given bytes to this specific peer. Does not wait for message to be sent.

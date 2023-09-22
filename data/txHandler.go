@@ -651,7 +651,7 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 	}
 
 	// rate limit per application in a group. Limiting any app in a group drops the entire message.
-	if handler.appLimiter != nil && handler.appLimiter.shouldDrop(unverifiedTxGroup, rawmsg.Sender.(network.IPAddressable).IPAddr()) {
+	if handler.appLimiter != nil && handler.appLimiter.shouldDrop(unverifiedTxGroup, rawmsg.Sender.(network.IPAddressable).RoutingAddr()) {
 		transactionMessagesAppLimiterDrop.Inc(nil)
 		return network.OutgoingMessage{Action: network.Ignore}
 	}
