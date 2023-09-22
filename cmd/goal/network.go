@@ -282,7 +282,8 @@ var networkDeleteCmd = &cobra.Command{
 
 var networkPregenCmd = &cobra.Command{
 	Use:   "pregen",
-	Short: "Pregenerates the genesis.json, root and participation keys for a wallet",
+	Short: "Pregenerate private network",
+	Long:  "Pregenerates the root and participation keys for a private network. The pregen directory can then be passed to the 'goal network create' to start the network more quickly.",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 		var err error
