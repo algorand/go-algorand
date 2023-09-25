@@ -2511,9 +2511,9 @@
           },
           {
             "name": "initialize",
-            "description": "When set to `true`, catchup will only be used to initialize the node. This means it will only run a fast catchup that advances the round by at least 1 million rounds.",
+            "description": "Specify a number of blocks which the ledger must be advanced by in order to start the catchup. This is useful for simplifying tools which support fast catchup, they can run the catchup unconditionally and the node will skip the catchup if it is not needed.",
             "in": "query",
-            "type": "boolean"
+            "type": "integer"
           }
         ],
         "responses": {

@@ -66,10 +66,6 @@ const MaxTealSourceBytes = 200_000
 // become quite large, so we allow up to 1MB
 const MaxTealDryrunBytes = 1_000_000
 
-// MinRoundsToInitialize is the minimum number of rounds that a catchup must
-// advance the node in order for it to be considered an initializing event.
-const MinRoundsToInitialize = 1_000_000
-
 // WaitForBlockTimeout is the timeout for the WaitForBlock endpoint.
 var WaitForBlockTimeout = 1 * time.Minute
 
@@ -1397,16 +1393,16 @@ func (v2 *Handlers) getPendingTransactions(ctx echo.Context, max *uint64, format
 }
 
 // startCatchup Given a catchpoint, it starts catching up to this catchpoint
-func (v2 *Handlers) startCatchup(ctx echo.Context, catchpoint string, initializeOnly bool) error {
+func (v2 *Handlers) startCatchup(ctx echo.Context, catchpoint string, initializeRounds uint64) error {
 	catchpointRound, _, err := ledgercore.ParseCatchpointLabel(catchpoint)
 	if err != nil {
 		return badRequest(ctx, err, errFailedToParseCatchpoint, v2.Log)
 	}
 
-	if initializeOnly {
+	if initializeRounds > 0 {
 		ledgerRound := v2.Node.LedgerForAPI().Latest()
-		if catchpointRound < (ledgerRound + MinRoundsToInitialize) {
-			v2.Log.Infof("Skipping catchup. Catchpoint round %d is not %d rounds ahead of the current round %d so it is not considered an initializing event.", catchpointRound, MinRoundsToInitialize, ledgerRound)
+		if catchpointRound < (ledgerRound + basics.Round(initializeRounds)) {
+			v2.Log.Infof("Skipping catchup. Catchpoint round %d is not %d rounds ahead of the current round %d so it is not considered an initializing event.", catchpointRound, initializeRounds, ledgerRound)
 			return ctx.JSON(http.StatusOK, model.CatchpointStartResponse{
 				CatchupMessage: errCatchpointWouldNotInitialize,
 			})

@@ -1308,10 +1308,10 @@ func TestSimulateTransactionMultipleGroups(t *testing.T) {
 }
 
 func startCatchupTest(t *testing.T, catchpoint string, nodeError error, expectedCode int) {
-	startCatchupTestFull(t, catchpoint, nodeError, expectedCode, false, "")
+	startCatchupTestFull(t, catchpoint, nodeError, expectedCode, 0, "")
 }
 
-func startCatchupTestFull(t *testing.T, catchpoint string, nodeError error, expectedCode int, initOnly bool, response string) {
+func startCatchupTestFull(t *testing.T, catchpoint string, nodeError error, expectedCode int, initRounds uint64, response string) {
 	numAccounts := 1
 	numTransactions := 1
 	offlineAccounts := true
@@ -1325,8 +1325,8 @@ func startCatchupTestFull(t *testing.T, catchpoint string, nodeError error, expe
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	var err error
-	if initOnly {
-		err = handler.StartCatchup(c, catchpoint, model.StartCatchupParams{Initialize: &initOnly})
+	if initRounds != 0 {
+		err = handler.StartCatchup(c, catchpoint, model.StartCatchupParams{Initialize: &initRounds})
 	} else {
 		err = handler.StartCatchup(c, catchpoint, model.StartCatchupParams{})
 	}
@@ -1341,11 +1341,13 @@ func TestStartCatchupInit(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	tooSmallCatchpoint := fmt.Sprintf("%d#DVFRZUYHEFKRLK5N6DNJRR4IABEVN2D6H76F3ZSEPIE6MKXMQWQA", v2.MinRoundsToInitialize-1)
-	startCatchupTestFull(t, tooSmallCatchpoint, nil, 200, true, "the node has already been initialized")
+	minRoundsToInitialize := uint64(1_000_000)
 
-	catchpointOK := fmt.Sprintf("%d#DVFRZUYHEFKRLK5N6DNJRR4IABEVN2D6H76F3ZSEPIE6MKXMQWQA", v2.MinRoundsToInitialize)
-	startCatchupTestFull(t, catchpointOK, nil, 201, true, catchpointOK)
+	tooSmallCatchpoint := fmt.Sprintf("%d#DVFRZUYHEFKRLK5N6DNJRR4IABEVN2D6H76F3ZSEPIE6MKXMQWQA", minRoundsToInitialize-1)
+	startCatchupTestFull(t, tooSmallCatchpoint, nil, 200, minRoundsToInitialize, "the node has already been initialized")
+
+	catchpointOK := fmt.Sprintf("%d#DVFRZUYHEFKRLK5N6DNJRR4IABEVN2D6H76F3ZSEPIE6MKXMQWQA", minRoundsToInitialize)
+	startCatchupTestFull(t, catchpointOK, nil, 201, minRoundsToInitialize, catchpointOK)
 }
 
 func TestStartCatchup(t *testing.T) {

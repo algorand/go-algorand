@@ -1454,8 +1454,8 @@ type GetTransactionProofParamsFormat string
 
 // StartCatchupParams defines parameters for StartCatchup.
 type StartCatchupParams struct {
-	// Initialize When set to `true`, catchup will only be used to initialize the node. This means it will only run a fast catchup that advances the round by at least 1 million rounds.
-	Initialize *bool `form:"initialize,omitempty" json:"initialize,omitempty"`
+	// Initialize Specify a number of blocks which the ledger must be advanced by in order to start the catchup. This is useful for simplifying tools which support fast catchup, they can run the catchup unconditionally and the node will skip the catchup if it is not needed.
+	Initialize *uint64 `form:"initialize,omitempty" json:"initialize,omitempty"`
 }
 
 // GetLedgerStateDeltaForTransactionGroupParams defines parameters for GetLedgerStateDeltaForTransactionGroup.
