@@ -93,7 +93,7 @@ func TestAppRateLimiter_Basics(t *testing.T) {
 	rm := makeAppRateLimiter(512, rate, window)
 
 	txns := getAppTxnGroup(1)
-	now := time.Now()
+	now := time.Now().UnixNano()
 	drop := rm.shouldDropAt(txns, nil, now)
 	require.False(t, drop)
 
@@ -117,7 +117,7 @@ func TestAppRateLimiter_Basics(t *testing.T) {
 	drop = rm.shouldDropAt(txns, nil, now)
 	require.True(t, drop)
 
-	drop = rm.shouldDropAt(txns, nil, now.Add(2*window))
+	drop = rm.shouldDropAt(txns, nil, now+int64(2*window))
 	require.True(t, drop)
 
 	// check foreign apps
@@ -142,7 +142,7 @@ func TestAppRateLimiter_Interval(t *testing.T) {
 	rm := makeAppRateLimiter(512, perSecondRate, window)
 
 	txns := getAppTxnGroup(1)
-	now := time.Date(2023, 9, 11, 10, 10, 11, 0, time.UTC) // 11 sec => 1 sec into the interval
+	now := time.Date(2023, 9, 11, 10, 10, 11, 0, time.UTC).UnixNano() // 11 sec => 1 sec into the interval
 
 	// fill 80% of the current interval
 	// switch to the next interval
@@ -154,7 +154,7 @@ func TestAppRateLimiter_Interval(t *testing.T) {
 		require.False(t, drop)
 	}
 
-	next := now.Add(window)
+	next := now + int64(window)
 	for i := 0; i < int(0.3*float64(rate)); i++ {
 		drop := rm.shouldDropAt(txns, nil, next)
 		require.False(t, drop)
@@ -180,7 +180,7 @@ func TestAppRateLimiter_IntervalAdmitted(t *testing.T) {
 	require.Equal(t, 1, len(keys))
 	b := buckets[0]
 	k := keys[0]
-	now := time.Date(2023, 9, 11, 10, 10, 11, 0, time.UTC) // 11 sec => 1 sec into the interval
+	now := time.Date(2023, 9, 11, 10, 10, 11, 0, time.UTC).UnixNano() // 11 sec => 1 sec into the interval
 
 	// fill a current interval with more than rate requests
 	// ensure the counter does not exceed the rate
@@ -207,7 +207,7 @@ func TestAppRateLimiter_IntervalSkip(t *testing.T) {
 	rm := makeAppRateLimiter(512, perSecondRate, window)
 
 	txns := getAppTxnGroup(1)
-	now := time.Date(2023, 9, 11, 10, 10, 11, 0, time.UTC) // 11 sec => 1 sec into the interval
+	now := time.Date(2023, 9, 11, 10, 10, 11, 0, time.UTC).UnixNano() // 11 sec => 1 sec into the interval
 
 	// fill 80% of the current interval
 	// switch to the next next interval
@@ -218,7 +218,7 @@ func TestAppRateLimiter_IntervalSkip(t *testing.T) {
 		require.False(t, drop)
 	}
 
-	nextnext := now.Add(2 * window)
+	nextnext := now + int64(2*window)
 	for i := 0; i < int(rate); i++ {
 		drop := rm.shouldDropAt(txns, nil, nextnext)
 		require.False(t, drop)
@@ -238,7 +238,7 @@ func TestAppRateLimiter_IPAddr(t *testing.T) {
 	rm := makeAppRateLimiter(512, perSecondRate, window)
 
 	txns := getAppTxnGroup(1)
-	now := time.Now()
+	now := time.Now().UnixNano()
 
 	for i := 0; i < int(rate); i++ {
 		drop := rm.shouldDropAt(txns, []byte{1}, now)

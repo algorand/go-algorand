@@ -148,35 +148,35 @@ func (r *appRateLimiter) entry(b *appRateLimiterBucket, key keyType, curInt int6
 }
 
 // interval calculates the interval numeric representation based on the given time
-func (r *appRateLimiter) interval(now time.Time) int64 {
-	return now.UnixNano() / int64(r.serviceRateWindow)
+func (r *appRateLimiter) interval(nowNano int64) int64 {
+	return nowNano / int64(r.serviceRateWindow)
 }
 
 // fraction calculates the fraction of the interval that is elapsed since the given time
-func (r *appRateLimiter) fraction(now time.Time) float64 {
-	return float64(now.UnixNano()%int64(r.serviceRateWindow)) / float64(r.serviceRateWindow)
+func (r *appRateLimiter) fraction(nowNano int64) float64 {
+	return float64(nowNano%int64(r.serviceRateWindow)) / float64(r.serviceRateWindow)
 }
 
 // shouldDrop returns true if the given transaction group should be dropped based on the
 // on the rate for the applications in the group: the entire group is dropped if a single application
 // exceeds the rate.
 func (r *appRateLimiter) shouldDrop(txgroup []transactions.SignedTxn, origin []byte) bool {
-	return r.shouldDropAt(txgroup, origin, time.Now())
+	return r.shouldDropAt(txgroup, origin, time.Now().UnixNano())
 }
 
 // shouldDropAt is the same as shouldDrop but accepts the current time as a parameter
 // in order to make it testable
-func (r *appRateLimiter) shouldDropAt(txgroup []transactions.SignedTxn, origin []byte, now time.Time) bool {
+func (r *appRateLimiter) shouldDropAt(txgroup []transactions.SignedTxn, origin []byte, nowNano int64) bool {
 	buckets, keys := txgroupToKeys(txgroup, origin, r.seed, r.salt, numBuckets)
 	if len(keys) == 0 {
 		return false
 	}
-	return r.shouldDropKeys(buckets, keys, now)
+	return r.shouldDropKeys(buckets, keys, nowNano)
 }
 
-func (r *appRateLimiter) shouldDropKeys(buckets []int, keys []keyType, now time.Time) bool {
-	curInt := r.interval(now)
-	curFraction := r.fraction(now)
+func (r *appRateLimiter) shouldDropKeys(buckets []int, keys []keyType, nowNano int64) bool {
+	curInt := r.interval(nowNano)
+	curFraction := r.fraction(nowNano)
 
 	for i, key := range keys {
 		// TODO: reuse last entry for matched keys and buckets?
