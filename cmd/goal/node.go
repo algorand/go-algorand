@@ -61,6 +61,7 @@ var newNodeFullConfig bool
 var watchMillisecond uint64
 var abortCatchup bool
 var fastCatchupForce bool
+var initializeCatchup uint64
 
 const catchpointURL = "https://algorand-catchpoints.s3.us-east-2.amazonaws.com/channel/%s/latest.catchpoint"
 
@@ -116,6 +117,7 @@ func init() {
 
 	catchupCmd.Flags().BoolVarP(&abortCatchup, "abort", "x", false, "Aborts the current catchup process")
 	catchupCmd.Flags().BoolVar(&fastCatchupForce, "force", false, "Forces fast catchup with implicit catchpoint to start without a consent prompt")
+	catchupCmd.Flags().Uint64VarP(&initializeCatchup, "initialize", "i", 0, "Catchup only if the catchpoint would advance the node by at least the specified number of rounds")
 
 }
 
@@ -161,9 +163,24 @@ var catchupCmd = &cobra.Command{
 	Example: "goal node catchup 6500000#1234567890ABCDEF01234567890ABCDEF0\tStart catching up to round 6500000 with the provided catchpoint\ngoal node catchup --abort\t\t\t\t\tAbort the current catchup",
 	Args:    catchpointCmdArgument,
 	Run: func(cmd *cobra.Command, args []string) {
+		var catchpoint string
+		// assume first positional parameter is the catchpoint
+		if len(args) != 0 {
+			catchpoint = args[0]
+		}
 		datadir.OnDataDirs(func(dataDir string) {
-			if !abortCatchup && len(args) == 0 {
-				client := ensureAlgodClient(dataDir)
+			client := ensureAlgodClient(dataDir)
+
+			if abortCatchup {
+				err := client.AbortCatchup()
+				if err != nil {
+					reportErrorf(errorNodeStatus, err)
+				}
+				return
+			}
+
+			// lookup missing catchpoint
+			if catchpoint == "" {
 				vers, err := client.AlgodVersions()
 				if err != nil {
 					reportErrorf(errorNodeStatus, err)
@@ -174,18 +191,24 @@ var catchupCmd = &cobra.Command{
 				if err != nil {
 					reportErrorf(errorCatchpointLabelMissing, errorUnableToLookupCatchpointLabel, err.Error())
 				}
-				args = append(args, label)
-				if !fastCatchupForce {
-					fmt.Printf(nodeConfirmImplicitCatchpoint, label)
-					reader := bufio.NewReader(os.Stdin)
-					text, _ := reader.ReadString('\n')
-					text = strings.Replace(text, "\n", "", -1)
-					if text != "yes" {
-						reportErrorf(errorAbortedPerUserRequest)
-					}
+				catchpoint = label
+			}
+
+			if !fastCatchupForce {
+				fmt.Printf(nodeConfirmImplicitCatchpoint, catchpoint)
+				reader := bufio.NewReader(os.Stdin)
+				text, _ := reader.ReadString('\n')
+				text = strings.Replace(text, "\n", "", -1)
+				if text != "yes" {
+					reportErrorf(errorAbortedPerUserRequest)
 				}
 			}
-			catchup(dataDir, args)
+
+			resp, err := client.Catchup(catchpoint, initializeCatchup)
+			if err != nil {
+				reportErrorf(errorNodeStatus, err)
+			}
+			reportInfof("node response: %s", resp.CatchupMessage)
 		})
 	},
 }
@@ -716,21 +739,6 @@ var createCmd = &cobra.Command{
 			reportErrorf(errorNodeCreation, err)
 		}
 	},
-}
-
-func catchup(dataDir string, args []string) {
-	client := ensureAlgodClient(datadir.EnsureSingleDataDir())
-	if abortCatchup {
-		err := client.AbortCatchup()
-		if err != nil {
-			reportErrorf(errorNodeStatus, err)
-		}
-		return
-	}
-	err := client.Catchup(args[0])
-	if err != nil {
-		reportErrorf(errorNodeStatus, err)
-	}
 }
 
 // verifyPeerDialArg verifies that the peers provided in peerDial are valid peers.
