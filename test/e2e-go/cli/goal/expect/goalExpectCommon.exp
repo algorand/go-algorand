@@ -936,6 +936,7 @@ proc ::AlgorandGoal::StartCatchup { NODE_DATA_DIR CATCHPOINT } {
         spawn goal node catchup $CATCHPOINT -d $NODE_DATA_DIR
         expect {
             timeout { ::AlgorandGoal::Abort "goal node catchup timed out" }
+            -re {Fast catchup response: ([0-9]*#[A-Z2-7]*)} {regexp -- {[0-9]*#[A-Z2-7]*} $expect_out(0,string) CATCHPOINT; exp_continue }
             eof { catch wait result; if { [lindex $result 3] != 0 } { ::AlgorandGoal::Abort "failed to start catching up : error code [lindex $result 3]"} }
         }
     } EXCEPTION ] } {
