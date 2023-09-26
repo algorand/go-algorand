@@ -4351,85 +4351,60 @@ func TestMergePrimarySecondaryRelayAddressListsMinOverlap(t *testing.T) {
 	})
 }
 
-type MergeTestDNSInputs struct {
-	dedupExpStr string
-
-	primaryDomainSuffix string
-
-	secondaryDomainSuffix string
-}
-
-func mergePrimarySecondaryRelayAddressListsPartialOverlapTestInputsGen() *rapid.Generator[*MergeTestDNSInputs] {
-
-	algorandNetBase := rapid.Custom(func(t *rapid.T) *MergeTestDNSInputs {
-		//unused/satisfying rapid expectation
-		rapid.String().Draw(t, "algorandNetBase")
-		//<network>.algorand.network?backup=<network>.algorand.net
-		//			dedup=<name>.algorand-<network>.(network|net)
-		return &MergeTestDNSInputs{
-			dedupExpStr:           "(algorand-<network>.(network|net))",
-			primaryDomainSuffix:   "algorand-<network>.network",
-			secondaryDomainSuffix: "algorand-<network>.net",
-		}
-	})
-
-	algorandNetInverse := rapid.Custom(func(t *rapid.T) *MergeTestDNSInputs {
-		//unused/satisfying rapid expectation
-		rapid.String().Draw(t, "algorandNetInverse")
-		//<network>.algorand.net?backup=<network>.algorand.network" +
-		//			"&dedup=<name>.algorand-<network>.(network|net)
-		return &MergeTestDNSInputs{
-			dedupExpStr:           "(algorand-<network>.(network|net))",
-			primaryDomainSuffix:   "algorand-<network>.net",
-			secondaryDomainSuffix: "algorand-<network>.network",
-		}
-	})
-
-	return rapid.OneOf(algorandNetBase, algorandNetInverse)
+func alphaNumStr(n int) string {
+	var chars = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0987654321")
+	str := make([]rune, n)
+	for i := range str {
+		str[i] = chars[rand.Intn(len(chars))]
+	}
+	return string(str)
 }
 
 func TestMergePrimarySecondaryRelayAddressListsPartialOverlap(t *testing.T) {
 	partitiontest.PartitionTest(t)
+
+	networks := []protocol.NetworkID{config.Testnet, config.Mainnet, config.Devnet, config.Betanet,
+		config.Alphanet, config.Devtestnet}
 	var netA *WebsocketNetwork
 
-	rapid.Check(t, func(t1 *rapid.T) {
-		netA = makeTestWebsocketNode(t)
-
-		network := supportedNetworkGen().Draw(t1, "network")
-		mergeTestInputs := mergePrimarySecondaryRelayAddressListsPartialOverlapTestInputsGen().Draw(t1, "mergeTestInputs")
-
+	for _, network := range networks {
 		dedupExp := regexp.MustCompile(strings.Replace(
-			mergeTestInputs.dedupExpStr, "<network>", network, -1))
-		primaryDomainSuffix := strings.Replace(
-			mergeTestInputs.primaryDomainSuffix, "<network>", network, -1)
+			"(algorand-<network>.(network|net))", "<network>", string(network), -1))
+		primaryRelayAddresses := make([]string, 0)
+		secondaryRelayAddresses := make([]string, 0)
+		extraSecondaryRelayAddresses := make([]string, 0)
+		for i := 0; i < 100; i++ {
+			relayId := alphaNumStr(2)
+			primaryRelayAddresses = append(primaryRelayAddresses, fmt.Sprintf("r-%s.algorand-%s.network",
+				relayId, network))
+			secondaryRelayAddresses = append(secondaryRelayAddresses, fmt.Sprintf("r-%s.algorand-%s.net",
+				relayId, network))
+		}
+		for i := 0; i < 20; i++ {
+			relayId := alphaNumStr(2) + "-" + alphaNumStr(1)
+			primaryRelayAddresses = append(primaryRelayAddresses, fmt.Sprintf("relay-%s.algorand-%s.network",
+				relayId, network))
+			secondaryRelayAddresses = append(secondaryRelayAddresses, fmt.Sprintf("relay-%s.algorand-%s.net",
+				relayId, network))
+		}
+		// Add additional secondary ones that intentionally do not duplicate primary ones
+		for i := 0; i < 10; i++ {
+			relayId := alphaNumStr(2) + "-" + alphaNumStr(1)
+			extraSecondaryRelayAddresses = append(extraSecondaryRelayAddresses, fmt.Sprintf("noduprelay-%s.algorand-%s.net",
+				relayId, network))
+		}
+		secondaryRelayAddresses = append(secondaryRelayAddresses, extraSecondaryRelayAddresses...)
 
-		// Generate hosts for a primary network domain
-		primaryNetworkDomainGen := rapidgen.DomainWithSuffixAndPort(primaryDomainSuffix, nil)
-		primaryDomainsGen := rapid.SliceOfN(primaryNetworkDomainGen, 0, 200)
-
-		primaryRelayAddresses := primaryDomainsGen.Draw(t1, "primaryRelayAddresses")
-
-		secondaryDomainSuffix := strings.Replace(
-			mergeTestInputs.secondaryDomainSuffix, "<network>", network, -1)
-		// Generate these addresses from primary ones, find/replace domain suffix appropriately
-		secondaryRelayAddresses := replaceAllIn(primaryRelayAddresses, primaryDomainSuffix, secondaryDomainSuffix)
-		// Add some generated addresses to secondary list - to simplify verification further down
-		// (substituting suffixes, etc), we dont want the generated addresses to duplicate any of
-		// the replaced secondary ones
-		secondaryNetworkDomainGen := rapidgen.DomainWithSuffixAndPort(secondaryDomainSuffix, secondaryRelayAddresses)
-		secondaryDomainsGen := rapid.SliceOfN(secondaryNetworkDomainGen, 0, 200)
-		generatedSecondaryRelayAddresses := secondaryDomainsGen.Draw(t1, "secondaryRelayAddresses")
-		secondaryRelayAddresses = append(secondaryRelayAddresses, generatedSecondaryRelayAddresses...)
-
-		mergedRelayAddresses := netA.mergePrimarySecondaryRelayAddressSlices(protocol.NetworkID(network),
+		mergedRelayAddresses := netA.mergePrimarySecondaryRelayAddressSlices(network,
 			primaryRelayAddresses, secondaryRelayAddresses, dedupExp)
 
-		// We expect the primary addresses to take precedence over a "matching" secondary address, randomly generated
+		// We expect the primary addresses to take precedence over a "matching" secondary address, extra non-duplicate
 		// secondary addresses should be present in the merged slice
-		expectedRelayAddresses := removeDuplicateStr(append(primaryRelayAddresses, generatedSecondaryRelayAddresses...), true)
+		expectedRelayAddresses := removeDuplicateStr(append(primaryRelayAddresses, extraSecondaryRelayAddresses...), true)
 
 		assert.ElementsMatch(t, expectedRelayAddresses, mergedRelayAddresses)
-	})
+	}
+
 }
 
 // Case where a "backup" network is specified, but no dedup expression is provided. Technically possible,
