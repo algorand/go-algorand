@@ -4374,24 +4374,24 @@ func TestMergePrimarySecondaryRelayAddressListsPartialOverlap(t *testing.T) {
 		secondaryRelayAddresses := make([]string, 0)
 		extraSecondaryRelayAddresses := make([]string, 0)
 		for i := 0; i < 100; i++ {
-			relayId := alphaNumStr(2)
+			relayID := alphaNumStr(2)
 			primaryRelayAddresses = append(primaryRelayAddresses, fmt.Sprintf("r-%s.algorand-%s.network",
-				relayId, network))
+				relayID, network))
 			secondaryRelayAddresses = append(secondaryRelayAddresses, fmt.Sprintf("r-%s.algorand-%s.net",
-				relayId, network))
+				relayID, network))
 		}
 		for i := 0; i < 20; i++ {
-			relayId := alphaNumStr(2) + "-" + alphaNumStr(1)
+			relayID := alphaNumStr(2) + "-" + alphaNumStr(1)
 			primaryRelayAddresses = append(primaryRelayAddresses, fmt.Sprintf("relay-%s.algorand-%s.network",
-				relayId, network))
+				relayID, network))
 			secondaryRelayAddresses = append(secondaryRelayAddresses, fmt.Sprintf("relay-%s.algorand-%s.net",
-				relayId, network))
+				relayID, network))
 		}
 		// Add additional secondary ones that intentionally do not duplicate primary ones
 		for i := 0; i < 10; i++ {
-			relayId := alphaNumStr(2) + "-" + alphaNumStr(1)
+			relayID := alphaNumStr(2) + "-" + alphaNumStr(1)
 			extraSecondaryRelayAddresses = append(extraSecondaryRelayAddresses, fmt.Sprintf("noduprelay-%s.algorand-%s.net",
-				relayId, network))
+				relayID, network))
 		}
 		secondaryRelayAddresses = append(secondaryRelayAddresses, extraSecondaryRelayAddresses...)
 
