@@ -187,21 +187,20 @@ var catchupCmd = &cobra.Command{
 				}
 				genesis := strings.Split(vers.GenesisID, "-")[0]
 				URL := fmt.Sprintf(catchpointURL, genesis)
-				label, err := getMissingCatchpointLabel(URL)
+				catchpoint, err := getMissingCatchpointLabel(URL)
 				if err != nil {
 					reportErrorf(errorCatchpointLabelMissing, errorUnableToLookupCatchpointLabel, err.Error())
 				}
-				catchpoint = label
-			}
 
-			// Prompt user to confirm implicit catchpoint.
-			if !fastCatchupForce && len(args) == 0 {
-				fmt.Printf(nodeConfirmImplicitCatchpoint, catchpoint)
-				reader := bufio.NewReader(os.Stdin)
-				text, _ := reader.ReadString('\n')
-				text = strings.Replace(text, "\n", "", -1)
-				if text != "yes" {
-					reportErrorf(errorAbortedPerUserRequest)
+				// Prompt user to confirm using an implicit catchpoint.
+				if !fastCatchupForce {
+					fmt.Printf(nodeConfirmImplicitCatchpoint, catchpoint)
+					reader := bufio.NewReader(os.Stdin)
+					text, _ := reader.ReadString('\n')
+					text = strings.Replace(text, "\n", "", -1)
+					if text != "yes" {
+						reportErrorf(errorAbortedPerUserRequest)
+					}
 				}
 			}
 
