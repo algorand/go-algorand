@@ -3476,7 +3476,7 @@ func TestPlayerRetainsReceivedValidatedAtPPOneSample(t *testing.T) {
 	pP, pV = helper.MakeRandomProposalPayload(t, r-credentialRoundLag)
 	vVote := sendCompoundMessage(t, helper, pM, r, r-credentialRoundLag, p, pP, pV, time.Second, nil, version)
 
-	verifyEvent := ev(cryptoAction{T: verifyVote, M: message{UnauthenticatedVote: vVote.u()}, Round: r - credentialRoundLag, Period: p, Step: propose, TaskIndex: 1})
+	verifyEvent := ev(verifyVoteAction(messageEvent{Input: message{UnauthenticatedVote: vVote.u()}}, r-credentialRoundLag, p, 1))
 	require.Truef(t, pM.getTrace().Contains(verifyEvent), "Player should verify vote")
 	sendVoteVerifiedForVote(t, vVote, pM, r, 502*time.Millisecond, historicalClocks, 1)
 
@@ -3530,7 +3530,7 @@ func TestPlayerRetainsEarlyReceivedValidatedAtPPOneSample(t *testing.T) {
 	vVote := sendCompoundMessage(t, helper, pM, r-credentialRoundLag-1, r-credentialRoundLag, p, pP, pV, time.Second, nil, version)
 
 	// make sure vote verify requests
-	verifyEvent := ev(cryptoAction{T: verifyVote, M: message{UnauthenticatedVote: vVote.u()}, Round: r - credentialRoundLag, Period: p, Step: propose, TaskIndex: 1})
+	verifyEvent := ev(verifyVoteAction(messageEvent{Input: message{UnauthenticatedVote: vVote.u()}}, r-credentialRoundLag, p, 1))
 	require.Truef(t, pM.getTrace().Contains(verifyEvent), "Player should verify vote")
 
 	sendVoteVerifiedForVote(t, vVote, pM, r-credentialRoundLag, 502*time.Millisecond, nil, 1)
@@ -3586,7 +3586,7 @@ func TestPlayerRetainsLateReceivedValidatedAtPPOneSample(t *testing.T) {
 	pP, pV = helper.MakeRandomProposalPayload(t, r-credentialRoundLag)
 	vVote := sendCompoundMessage(t, helper, pM, r, r-credentialRoundLag, p, pP, pV, time.Second, historicalClocks, version)
 
-	verifyEvent := ev(cryptoAction{T: verifyVote, M: message{UnauthenticatedVote: vVote.u()}, Round: r - credentialRoundLag, Period: p, Step: propose, TaskIndex: 1})
+	verifyEvent := ev(verifyVoteAction(messageEvent{Input: message{UnauthenticatedVote: vVote.u()}}, r-credentialRoundLag, p, 1))
 	require.Truef(t, pM.getTrace().Contains(verifyEvent), "Player should verify vote")
 
 	sendVoteVerifiedForVote(t, vVote, pM, r, 502*time.Millisecond, historicalClocks, 1)
@@ -3626,7 +3626,7 @@ func TestPlayerRetainsReceivedValidatedAtPPForHistoryWindow(t *testing.T) {
 
 		// make sure vote verify requests
 		taskIndex := uint64(i + 1)
-		verifyEvent := ev(cryptoAction{T: verifyVote, M: message{UnauthenticatedVote: vVote.u()}, Round: r + round(i) - 1, Period: p, Step: propose, TaskIndex: taskIndex})
+		verifyEvent := ev(verifyVoteAction(messageEvent{Input: message{UnauthenticatedVote: vVote.u()}}, r+round(i)-1, p, taskIndex))
 		require.Truef(t, pM.getTrace().Contains(verifyEvent), "Player should verify vote")
 
 		// send voteVerified
@@ -3679,7 +3679,7 @@ func TestPlayerRetainsReceivedValidatedAtAVPPOneSample(t *testing.T) {
 
 	// make sure vote verify requests
 	unverifiedVoteMsg := message{UnauthenticatedVote: vVote.u()}
-	verifyEvent := ev(cryptoAction{T: verifyVote, M: unverifiedVoteMsg, Round: r - credentialRoundLag, Period: p, Step: propose, TaskIndex: 1})
+	verifyEvent := ev(verifyVoteAction(messageEvent{Input: unverifiedVoteMsg}, r-credentialRoundLag, p, 1))
 	require.Truef(t, pM.getTrace().Contains(verifyEvent), "Player should verify vote")
 
 	// send voteVerified
@@ -3736,7 +3736,7 @@ func TestPlayerRetainsEarlyReceivedValidatedAtAVPPOneSample(t *testing.T) {
 	vVote := sendVotePresent(t, helper, pM, 0, r-credentialRoundLag, p, pV, version)
 
 	// make sure vote verify requests
-	verifyEvent := ev(cryptoAction{T: verifyVote, M: message{UnauthenticatedVote: vVote.u()}, Round: r - credentialRoundLag, Period: p, Step: propose, TaskIndex: 1})
+	verifyEvent := ev(verifyVoteAction(messageEvent{Input: message{UnauthenticatedVote: vVote.u()}}, r-credentialRoundLag, p, 1))
 	require.Truef(t, pM.getTrace().Contains(verifyEvent), "Player should verify vote")
 
 	// send voteVerified, pretend we're one round too early
@@ -3793,7 +3793,7 @@ func TestPlayerRetainsLateReceivedValidatedAtAVPPOneSample(t *testing.T) {
 	vVote := sendVotePresent(t, helper, pM, 0, r-credentialRoundLag, p, pV, version)
 
 	// make sure vote verify requests
-	verifyEvent := ev(cryptoAction{T: verifyVote, M: message{UnauthenticatedVote: vVote.u()}, Round: r - credentialRoundLag, Period: p, Step: propose, TaskIndex: 1})
+	verifyEvent := ev(verifyVoteAction(messageEvent{Input: message{UnauthenticatedVote: vVote.u()}}, r-credentialRoundLag, p, 1))
 	require.Truef(t, pM.getTrace().Contains(verifyEvent), "Player should verify vote")
 
 	historicalClocks := map[round]historicalClock{
@@ -3835,7 +3835,7 @@ func TestPlayerRetainsReceivedValidatedAtAVPPHistoryWindow(t *testing.T) {
 
 		// make sure vote verify requests
 		taskIndex := uint64(i + 1)
-		verifyEvent := ev(cryptoAction{T: verifyVote, M: message{UnauthenticatedVote: vVote.u()}, Round: r + round(i) - 1, Period: p, Step: propose, TaskIndex: taskIndex})
+		verifyEvent := ev(verifyVoteAction(messageEvent{Input: message{UnauthenticatedVote: vVote.u()}}, r+round(i)-1, p, taskIndex))
 		require.Truef(t, pM.getTrace().Contains(verifyEvent), "Player should verify vote")
 
 		// send voteVerified
@@ -3935,7 +3935,7 @@ func moveToRound(t *testing.T, pWhite *player, pM ioAutomata, helper *voteMakerH
 	r round, p period, pP *proposal, pV *proposalValue, validatedAt time.Duration, ver protocol.ConsensusVersion) {
 
 	// make sure payload verify request
-	verifyEvent := ev(cryptoAction{T: verifyPayload, M: message{UnauthenticatedProposal: pP.u()}, Round: r - 1, Period: p, Step: propose, TaskIndex: 0})
+	verifyEvent := ev(verifyPayloadAction(messageEvent{Input: message{UnauthenticatedProposal: pP.u()}}, r-1, p, false))
 	require.Truef(t, pM.getTrace().Contains(verifyEvent), "Player should verify payload")
 
 	// payloadVerified

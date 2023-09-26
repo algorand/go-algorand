@@ -202,8 +202,16 @@ func (a cryptoAction) String() string {
 	return a.t().String()
 }
 
-func (a cryptoAction) ComparableString() string {
-	return fmt.Sprintf("%s: %3v-%2v-%2v TaskIndex %d", a.t().String(), a.Round, a.Period, a.Step, a.TaskIndex)
+func (a cryptoAction) ComparableString() (s string) {
+	switch a.T {
+	case verifyVote:
+		s = fmt.Sprintf("%s: %3v-%2v TaskIndex %d", a.t().String(), a.Round, a.Period, a.TaskIndex)
+	case verifyPayload:
+		s = fmt.Sprintf("%s: %3v-%2v Pinned %v", a.t().String(), a.Round, a.Period, a.Pinned)
+	case verifyBundle:
+		s = fmt.Sprintf("%s: %3v-%2v-%2v", a.t().String(), a.Round, a.Period, a.Step)
+	}
+	return
 }
 
 func (a cryptoAction) do(ctx context.Context, s *Service) {
