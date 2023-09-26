@@ -61,7 +61,7 @@ var newNodeFullConfig bool
 var watchMillisecond uint64
 var abortCatchup bool
 var fastCatchupForce bool
-var initializeCatchup uint64
+var minRounds uint64
 
 const catchpointURL = "https://algorand-catchpoints.s3.us-east-2.amazonaws.com/channel/%s/latest.catchpoint"
 
@@ -117,7 +117,7 @@ func init() {
 
 	catchupCmd.Flags().BoolVarP(&abortCatchup, "abort", "x", false, "Aborts the current catchup process")
 	catchupCmd.Flags().BoolVar(&fastCatchupForce, "force", false, "Forces fast catchup with implicit catchpoint to start without a consent prompt")
-	catchupCmd.Flags().Uint64VarP(&initializeCatchup, "initialize", "i", 0, "Catchup only if the catchpoint would advance the node by at least the specified number of rounds")
+	catchupCmd.Flags().Uint64VarP(&minRounds, "min", "m", 0, "Catchup only if the catchpoint would advance the node by the specified minimum number of rounds")
 
 }
 
@@ -204,7 +204,7 @@ var catchupCmd = &cobra.Command{
 				}
 			}
 
-			resp, err := client.Catchup(catchpoint, initializeCatchup)
+			resp, err := client.Catchup(catchpoint, minRounds)
 			if err != nil {
 				reportErrorf(errorNodeStatus, err)
 			}
