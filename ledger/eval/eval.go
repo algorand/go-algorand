@@ -783,11 +783,23 @@ func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, evalOpts 
 		return nil, fmt.Errorf("overflowed subtracting rewards for block %v", hdr.Round)
 	}
 
+	// Pay the previous proposer
 	miningIncentive, _ := basics.NewPercent(proto.MiningPercent).DivvyAlgos(prevHeader.FeesCollected)
 	err = eval.state.Move(prevHeader.FeeSink, prevHeader.Proposer, miningIncentive, nil, nil)
 	if err != nil {
 		// This should be impossible. The fees were just collected, and the FeeSink cannot be emptied.
 		return nil, fmt.Errorf("unable to Move mining incentive")
+	}
+
+	// Note their proposal
+	prp, err := eval.state.Get(prevHeader.Proposer, false)
+	if err != nil {
+		return nil, err
+	}
+	prp.LastProposed = hdr.Round - 1
+	err = eval.state.Put(prevHeader.Proposer, prp)
+	if err != nil {
+		return nil, err
 	}
 
 	if eval.Tracer != nil {
@@ -1293,7 +1305,7 @@ func (eval *BlockEvaluator) endOfBlock() error {
 			eval.block.FeesCollected = eval.state.feesCollected
 		}
 
-		eval.generateExpiredOnlineAccountsList()
+		eval.generateKnockOfflineAccountsList()
 
 		if eval.proto.StateProofInterval > 0 {
 			var basicStateProof bookkeeping.StateProofTrackingData
@@ -1392,9 +1404,10 @@ func (eval *BlockEvaluator) endOfBlock() error {
 	return nil
 }
 
-// generateExpiredOnlineAccountsList creates the list of the expired participation accounts by traversing over the
-// modified accounts in the state deltas and testing if any of them needs to be reset.
-func (eval *BlockEvaluator) generateExpiredOnlineAccountsList() {
+// generateKnockOfflineAccountsList creates the lists of expired or absent
+// participation accounts by traversing over the modified accounts in the state
+// deltas and testing if any of them needs to be reset/suspended.
+func (eval *BlockEvaluator) generateKnockOfflineAccountsList() {
 	if !eval.generate {
 		return
 	}
@@ -1403,28 +1416,47 @@ func (eval *BlockEvaluator) generateExpiredOnlineAccountsList() {
 	// Then we are going to go through each modified account and
 	// see if it meets the criteria for adding it to the expired
 	// participation accounts list.
-	modifiedAccounts := eval.state.modifiedAccounts()
 	currentRound := eval.Round()
 
 	expectedMaxNumberOfExpiredAccounts := eval.proto.MaxProposedExpiredOnlineAccounts
+	expectedMaxNumberOfAbsentAccounts := eval.proto.MaxProposedAbsentOnlineAccounts
 
-	for i := 0; i < len(modifiedAccounts) && len(eval.block.ParticipationUpdates.ExpiredParticipationAccounts) < expectedMaxNumberOfExpiredAccounts; i++ {
-		accountAddr := modifiedAccounts[i]
+	updates := &eval.block.ParticipationUpdates
+
+	for _, accountAddr := range eval.state.modifiedAccounts() {
 		acctDelta, found := eval.state.mods.Accts.GetData(accountAddr)
 		if !found {
 			continue
 		}
 
-		// true if the account is online
-		isOnline := acctDelta.Status == basics.Online
-		// true if the accounts last valid round has passed
-		pastCurrentRound := acctDelta.VoteLastValid < currentRound
+		if acctDelta.Status == basics.Online || acctDelta.Status == basics.Suspended {
+			expiresBeforeCurrent := acctDelta.VoteLastValid < currentRound
+			if expiresBeforeCurrent &&
+				len(updates.ExpiredParticipationAccounts) < expectedMaxNumberOfExpiredAccounts {
+				updates.ExpiredParticipationAccounts = append(
+					updates.ExpiredParticipationAccounts,
+					accountAddr,
+				)
+				continue // if marking expired, do not also suspend
+			}
+		}
 
-		if isOnline && pastCurrentRound {
-			eval.block.ParticipationUpdates.ExpiredParticipationAccounts = append(
-				eval.block.ParticipationUpdates.ExpiredParticipationAccounts,
-				accountAddr,
-			)
+		if acctDelta.Status == basics.Online {
+			// TODO: 1000 rounds is obviously a placeholder. Probably needs to
+			// be something like 10x the "expected" interval.  Further
+			// complications: (1) At keyreg, LastProposed=0 (or is old). (2)
+			// Accounts should be allowed to "heartbeat" to stay online. (3)
+			// "Expected" interval varies with balance and onlinestake.
+			allowableLag := basics.Round(1000)
+			absent := acctDelta.LastProposed+allowableLag < currentRound &&
+				acctDelta.LastHeartbeat+allowableLag < currentRound
+			if absent &&
+				len(updates.AbsentParticipationAccounts) < expectedMaxNumberOfAbsentAccounts {
+				updates.AbsentParticipationAccounts = append(
+					updates.AbsentParticipationAccounts,
+					accountAddr,
+				)
+			}
 		}
 	}
 }
@@ -1449,7 +1481,7 @@ func (eval *BlockEvaluator) validateExpiredOnlineAccounts() error {
 	// are unique.  We make this map to keep track of previously seen address
 	addressSet := make(map[basics.Address]bool, lengthOfExpiredParticipationAccounts)
 
-	// Validate that all expired accounts meet the current criteria
+	// Validate that all proposed accounts have expired keys
 	currentRound := eval.Round()
 	for _, accountAddr := range eval.block.ParticipationUpdates.ExpiredParticipationAccounts {
 
@@ -1466,17 +1498,63 @@ func (eval *BlockEvaluator) validateExpiredOnlineAccounts() error {
 			return fmt.Errorf("endOfBlock was unable to retrieve account %v : %w", accountAddr, err)
 		}
 
-		// true if the account is online
-		isOnline := acctData.Status == basics.Online
-		// true if the accounts last valid round has passed
-		pastCurrentRound := acctData.VoteLastValid < currentRound
-
-		if !isOnline {
+		if acctData.Status != basics.Online && acctData.Status != basics.Suspended {
 			return fmt.Errorf("endOfBlock found %v was not online but %v", accountAddr, acctData.Status)
 		}
 
-		if !pastCurrentRound {
+		if acctData.VoteLastValid >= currentRound {
 			return fmt.Errorf("endOfBlock found %v round (%d) was not less than current round (%d)", accountAddr, acctData.VoteLastValid, currentRound)
+		}
+	}
+	return nil
+}
+
+// validateAbsentOnlineAccounts tests the accounts specified in
+// AbsentParticipationAccounts, and verifies that they need to be reset.
+func (eval *BlockEvaluator) validateAbsentOnlineAccounts() error {
+	if !eval.validate {
+		return nil
+	}
+	expectedMaxNumberOfAbsentAccounts := eval.proto.MaxProposedAbsentOnlineAccounts
+	lengthOfAbsentParticipationAccounts := len(eval.block.ParticipationUpdates.AbsentParticipationAccounts)
+
+	// If the length of the array is strictly greater than our max then we have an error.
+	// This works when the expected number of accounts is zero (i.e. it is disabled) as well
+	if lengthOfAbsentParticipationAccounts > expectedMaxNumberOfAbsentAccounts {
+		return fmt.Errorf("length of absent accounts (%d) was greater than expected (%d)",
+			lengthOfAbsentParticipationAccounts, expectedMaxNumberOfAbsentAccounts)
+	}
+
+	// For consistency with expired account handling, we preclude duplicates
+	addressSet := make(map[basics.Address]bool, lengthOfAbsentParticipationAccounts)
+
+	// Validate that all accounts have been absent
+	currentRound := eval.Round()
+	for _, accountAddr := range eval.block.ParticipationUpdates.AbsentParticipationAccounts {
+
+		if _, exists := addressSet[accountAddr]; exists {
+			return fmt.Errorf("duplicate address found: %v", accountAddr)
+		}
+		addressSet[accountAddr] = true
+
+		acctData, err := eval.state.lookup(accountAddr)
+		if err != nil {
+			return fmt.Errorf("unable to retrieve proposed absent account %v : %w", accountAddr, err)
+		}
+
+		if acctData.Status != basics.Online {
+			return fmt.Errorf("proposed absent acct %v was not online but %v", accountAddr, acctData.Status)
+		}
+
+		// TODO: 1000 rounds is obviously a placeholder. Probably needs to be
+		// something like 10x the "expected" interval.  Further complications:
+		// (1) At first keyreg, LastProposed=0. (2) Accounts should be allowed
+		// to "heartbeat" to stay online.
+		allowableLag := basics.Round(1000)
+		if acctData.LastProposed+allowableLag >= currentRound ||
+			acctData.LastHeartbeat+allowableLag >= currentRound {
+			return fmt.Errorf("proposed absent account %v is not absent in %d, %d",
+				accountAddr, acctData.LastProposed, acctData.LastHeartbeat)
 		}
 	}
 	return nil
@@ -1505,6 +1583,24 @@ func (eval *BlockEvaluator) resetExpiredOnlineAccountsParticipationKeys() error 
 
 		// Update the account information
 		err = eval.state.putAccount(accountAddr, acctData)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// suspendAbsentAccounts suspends the proposed list of absent accounts.
+func (eval *BlockEvaluator) suspendAbsentAccounts() error {
+	for _, addr := range eval.block.ParticipationUpdates.AbsentParticipationAccounts {
+		acct, err := eval.state.lookup(addr)
+		if err != nil {
+			return err
+		}
+
+		acct.Suspend()
+
+		err = eval.state.putAccount(addr, acct)
 		if err != nil {
 			return err
 		}

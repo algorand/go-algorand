@@ -64,16 +64,23 @@ func RandomAccountData(rewardsBase uint64) basics.AccountData {
 
 	// Avoid overflowing totals
 	data.MicroAlgos.Raw = crypto.RandUint64() % (1 << 32)
+	// 0 is an invalid round, but would be right if never proposed
+	data.LastProposed = basics.Round(crypto.RandUint64() % 100)
+	// 0 is an invalid round, but would be right if never needed a heartbeat
+	data.LastHeartbeat = basics.Round(crypto.RandUint64() % 100)
 
-	switch crypto.RandUint64() % 3 {
+	switch crypto.RandUint64() % 4 {
 	case 0:
 		data.Status = basics.Online
 		data.VoteLastValid = 10000
 	case 1:
 		data.Status = basics.Offline
 		data.VoteLastValid = 0
-	default:
+	case 2:
 		data.Status = basics.NotParticipating
+	case 3:
+		data.Status = basics.Suspended
+		data.VoteLastValid = basics.Round(crypto.RandUint64() % 10000)
 	}
 
 	data.VoteFirstValid = 0
@@ -268,14 +275,15 @@ func RandomAppLocalState() basics.AppLocalState {
 func RandomFullAccountData(rewardsLevel uint64, lastCreatableID *basics.CreatableIndex, assets map[basics.AssetIndex]struct{}, apps map[basics.AppIndex]struct{}) basics.AccountData {
 	data := RandomAccountData(rewardsLevel)
 
-	if data.Status == basics.Online {
+	switch data.Status {
+	case basics.Online, basics.Suspended:
 		crypto.RandBytes(data.VoteID[:])
 		crypto.RandBytes(data.SelectionID[:])
 		crypto.RandBytes(data.StateProofID[:])
 		data.VoteFirstValid = basics.Round(crypto.RandUint64())
 		data.VoteLastValid = basics.Round(crypto.RandUint64() % uint64(math.MaxInt64)) // int64 is the max sqlite can store
 		data.VoteKeyDilution = crypto.RandUint64()
-	} else {
+	case basics.Offline, basics.NotParticipating:
 		data.VoteID = crypto.OneTimeSignatureVerifier{}
 		data.SelectionID = crypto.VRFVerifier{}
 		data.StateProofID = merklesignature.Commitment{}

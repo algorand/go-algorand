@@ -77,6 +77,9 @@ func Keyreg(keyreg transactions.KeyregTxnFields, header transactions.Header, bal
 			}
 		}
 		record.Status = basics.Online
+		if params.EnableAbsenteeTracking() {
+			record.LastHeartbeat = header.FirstValid
+		}
 		record.VoteFirstValid = keyreg.VoteFirst
 		record.VoteLastValid = keyreg.VoteLast
 		record.VoteKeyDilution = keyreg.VoteKeyDilution

@@ -42,6 +42,11 @@ const (
 	// Two special accounts that are defined as NotParticipating are the incentive pool (also know as rewards pool) and the fee sink.
 	// These two accounts also have additional Algo transfer restrictions.
 	NotParticipating
+	// Suspended indicates that an account has registered keys, intending to
+	// particpate, but appears to have gone dark. Their balance should no longer
+	// be considered online, but their voting keys should be retained so they
+	// can easily get back online by sending a "heartbeat".
+	Suspended
 
 	// encodedMaxAssetsPerAccount is the decoder limit of number of assets stored per account.
 	// it's being verified by the unit test TestEncodedAccountAllocationBounds to align
@@ -75,6 +80,8 @@ func (s Status) String() string {
 		return "Online"
 	case NotParticipating:
 		return "Not Participating"
+	case Suspended:
+		return "Suspended"
 	}
 	return ""
 }
@@ -88,6 +95,8 @@ func UnmarshalStatus(value string) (s Status, err error) {
 		s = Online
 	case "Not Participating":
 		s = NotParticipating
+	case "Suspended":
+		s = Suspended
 	default:
 		err = fmt.Errorf("unknown account status: %v", value)
 	}
@@ -115,8 +124,13 @@ type OnlineAccountData struct {
 
 // AccountData contains the data associated with a given address.
 //
-// This includes the account balance, cryptographic public keys,
-// consensus delegation status, asset data, and application data.
+// This includes the account balance, cryptographic public keys, consensus
+// status, asset params (for assets made by this account), asset holdings (for
+// assets the account is opted into), and application data (globals if account
+// created, locals if opted-in).  This can be thought of as the fully "hydrated"
+// structure and could take an arbitrary number of db queries to fill. As such,
+// it is mostly used only for shuttling complete accounts into the ledger
+// (genesis, catchpoints, REST API). And a lot of legacy tests.
 type AccountData struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
@@ -171,6 +185,13 @@ type AccountData struct {
 	VoteFirstValid  Round  `codec:"voteFst"`
 	VoteLastValid   Round  `codec:"voteLst"`
 	VoteKeyDilution uint64 `codec:"voteKD"`
+
+	// LastProposed is the last round that the account is known to have
+	// proposed. It is updated at the start of the _next_ round.
+	LastProposed Round `codec:"lpr"`
+	// LastHeartbeat is the last round an account has indicated it is ready to
+	// vote by sending a heartbeat transaction, signed by its partkey.
+	LastHeartbeat Round `codec:"lhb"`
 
 	// If this account created an asset, AssetParams stores
 	// the parameters defining that asset.  The params are indexed

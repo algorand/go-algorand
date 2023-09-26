@@ -396,7 +396,7 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, ao *onlineAccounts, base
 				case basics.Online:
 					totalOnline += d.MicroAlgos.Raw
 					totalOnline += (d.MicroAlgos.Raw / proto.RewardUnit) * rewardsDelta
-				case basics.Offline:
+				case basics.Offline, basics.Suspended:
 					totalOffline += d.MicroAlgos.Raw
 					totalOffline += (d.MicroAlgos.Raw / proto.RewardUnit) * rewardsDelta
 				case basics.NotParticipating:

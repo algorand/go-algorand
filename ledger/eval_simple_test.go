@@ -272,6 +272,73 @@ func TestMiningFees(t *testing.T) {
 	})
 }
 
+// TestAbsentTracking checks that LastProposed and LastHeartbeat are updated
+// properly.
+func TestAbsentTracking(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	// Absentee checking begins in v39. Start checking in v38 to test that is unchanged.
+	ledgertesting.TestConsensusRange(t, 38, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
+		defer dl.Close()
+
+		dl.fullBlock()
+
+		pay := txntest.Txn{
+			Type:     "pay",
+			Sender:   addrs[1],
+			Receiver: addrs[2],
+			Amount:   100000,
+		}
+
+		proposer := addrs[7]
+		dl.beginBlock()
+		dl.txns(&pay)
+		dl.endBlock(proposer)
+
+		dl.fullBlock()
+
+		prp := lookup(t, dl.validator, proposer)
+
+		if ver >= 39 {
+			// version sanity check
+			require.True(t, dl.generator.GenesisProto().EnableAbsenteeTracking())
+			require.NotZero(t, prp.LastProposed)
+			require.Zero(t, prp.LastHeartbeat) // genesis participants have never hb
+		} else {
+			require.False(t, dl.generator.GenesisProto().EnableAbsenteeTracking())
+			require.Zero(t, prp.LastProposed)
+			require.Zero(t, prp.LastHeartbeat)
+		}
+
+		dl.txns(&txntest.Txn{Type: "keyreg", Sender: addrs[1]}) // OFFLINE keyreg
+		regger := lookup(t, dl.validator, addrs[1])
+
+		// offline transaction records nothing
+		require.Zero(t, regger.LastProposed)
+		require.Zero(t, regger.LastHeartbeat)
+
+		// ONLINE keyreg
+		dl.txns(&txntest.Txn{
+			Type:        "keyreg",
+			Sender:      addrs[1],
+			VotePK:      [32]byte{1},
+			SelectionPK: [32]byte{1},
+		})
+		regger = lookup(t, dl.validator, addrs[1])
+
+		if ver >= 39 {
+			require.Zero(t, regger.LastProposed)
+			require.NotZero(t, regger.LastHeartbeat) // online keyreg caused update
+		} else {
+			require.Zero(t, regger.LastProposed)
+			require.Zero(t, regger.LastHeartbeat)
+		}
+	})
+}
+
 // TestHoldingGet tests some of the corner cases for the asset_holding_get
 // opcode: the asset doesn't exist, the account doesn't exist, account not opted
 // in, vs it has none of the asset. This is tested here, even though it should
