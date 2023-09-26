@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/algorand/go-algorand/logging"
 )
@@ -111,7 +112,7 @@ func (t *ioTrace) String() string {
 	var buf bytes.Buffer
 	buf.WriteString("{\n")
 	for i := 0; i < len(t.events); i++ {
-		buf.WriteString(fmt.Sprintf("\t%v |", t.events[i]))
+		buf.WriteString(fmt.Sprintf("\t%v |", t.events[i].ComparableStr()))
 		if i%2 == 0 {
 			buf.WriteString("\n")
 		}
@@ -137,6 +138,12 @@ func (t *ioTrace) String() string {
 func (t ioTrace) Contains(e event) bool {
 	return t.ContainsFn(func(b event) bool {
 		return e.ComparableStr() == b.ComparableStr()
+	})
+}
+
+func (t ioTrace) ContainsString(s string) bool {
+	return t.ContainsFn(func(b event) bool {
+		return strings.Contains(b.ComparableStr(), s)
 	})
 }
 
@@ -550,7 +557,7 @@ func (e wrappedActionEvent) String() string {
 }
 
 func (e wrappedActionEvent) ComparableStr() string {
-	return e.action.String()
+	return e.action.ComparableString()
 }
 
 // ioAutomataConcretePlayer is a concrete wrapper around root router, implementing ioAutomata.
