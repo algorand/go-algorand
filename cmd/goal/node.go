@@ -208,7 +208,9 @@ var catchupCmd = &cobra.Command{
 			if err != nil {
 				reportErrorf(errorNodeStatus, err)
 			}
-			reportInfof("node response: %s", resp.CatchupMessage)
+			if resp.CatchupMessage != catchpoint {
+				reportInfof("node response: %s", resp.CatchupMessage)
+			}
 		})
 	},
 }
