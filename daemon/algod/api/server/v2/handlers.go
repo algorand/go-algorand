@@ -1393,10 +1393,20 @@ func (v2 *Handlers) getPendingTransactions(ctx echo.Context, max *uint64, format
 }
 
 // startCatchup Given a catchpoint, it starts catching up to this catchpoint
-func (v2 *Handlers) startCatchup(ctx echo.Context, catchpoint string) error {
-	_, _, err := ledgercore.ParseCatchpointLabel(catchpoint)
+func (v2 *Handlers) startCatchup(ctx echo.Context, catchpoint string, initializeRounds uint64) error {
+	catchpointRound, _, err := ledgercore.ParseCatchpointLabel(catchpoint)
 	if err != nil {
 		return badRequest(ctx, err, errFailedToParseCatchpoint, v2.Log)
+	}
+
+	if initializeRounds > 0 {
+		ledgerRound := v2.Node.LedgerForAPI().Latest()
+		if catchpointRound < (ledgerRound + basics.Round(initializeRounds)) {
+			v2.Log.Infof("Skipping catchup. Catchpoint round %d is not %d rounds ahead of the current round %d so it is not considered an initializing event.", catchpointRound, initializeRounds, ledgerRound)
+			return ctx.JSON(http.StatusOK, model.CatchpointStartResponse{
+				CatchupMessage: errCatchpointWouldNotInitialize,
+			})
+		}
 	}
 
 	// Select 200/201, or return an error
@@ -1600,8 +1610,9 @@ func (v2 *Handlers) GetPendingTransactionsByAddress(ctx echo.Context, addr strin
 
 // StartCatchup Given a catchpoint, it starts catching up to this catchpoint
 // (POST /v2/catchup/{catchpoint})
-func (v2 *Handlers) StartCatchup(ctx echo.Context, catchpoint string) error {
-	return v2.startCatchup(ctx, catchpoint)
+func (v2 *Handlers) StartCatchup(ctx echo.Context, catchpoint string, params model.StartCatchupParams) error {
+	init := nilToZero(params.Initialize)
+	return v2.startCatchup(ctx, catchpoint, init)
 }
 
 // AbortCatchup Given a catchpoint, it aborts catching up to this catchpoint
