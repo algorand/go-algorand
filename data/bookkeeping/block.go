@@ -155,6 +155,10 @@ type (
 		// that needs to be converted to offline since their
 		// participation key expired.
 		ExpiredParticipationAccounts []basics.Address `codec:"partupdrmv,allocbound=config.MaxProposedExpiredOnlineAccounts"`
+
+		// AbsentParticipationAccounts contains a list of online accounts that
+		// needs to be converted to offline since they are not proposing.
+		AbsentParticipationAccounts []basics.Address `codec:"partupdabs,allocbound=config.MaxProposedAbsentOnlineAccounts"`
 	}
 
 	// RewardsState represents the global parameters controlling the rate

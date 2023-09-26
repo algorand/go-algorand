@@ -365,8 +365,8 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 			}
 
 			// The trio of [VotePK, SelectionPK, VoteKeyDilution] needs to be all zeros or all non-zero for the transaction to be valid.
-			if !((tx.KeyregTxnFields.VotePK == crypto.OneTimeSignatureVerifier{} && tx.KeyregTxnFields.SelectionPK == crypto.VRFVerifier{} && tx.KeyregTxnFields.VoteKeyDilution == 0) ||
-				(tx.KeyregTxnFields.VotePK != crypto.OneTimeSignatureVerifier{} && tx.KeyregTxnFields.SelectionPK != crypto.VRFVerifier{} && tx.KeyregTxnFields.VoteKeyDilution != 0)) {
+			if !((tx.KeyregTxnFields.VotePK.IsEmpty() && tx.KeyregTxnFields.SelectionPK.IsEmpty() && tx.KeyregTxnFields.VoteKeyDilution == 0) ||
+				(!tx.KeyregTxnFields.VotePK.IsEmpty() && !tx.KeyregTxnFields.SelectionPK.IsEmpty() && tx.KeyregTxnFields.VoteKeyDilution != 0)) {
 				return errKeyregTxnNonCoherentVotingKeys
 			}
 
@@ -395,7 +395,7 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 				// that type of transaction, it is invalid.
 				return errKeyregTxnUnsupportedSwitchToNonParticipating
 			}
-			suppliesNullKeys := tx.KeyregTxnFields.VotePK == crypto.OneTimeSignatureVerifier{} || tx.KeyregTxnFields.SelectionPK == crypto.VRFVerifier{}
+			suppliesNullKeys := tx.KeyregTxnFields.VotePK.IsEmpty() || tx.KeyregTxnFields.SelectionPK.IsEmpty()
 			if !suppliesNullKeys {
 				return errKeyregTxnGoingOnlineWithNonParticipating
 			}
@@ -673,7 +673,7 @@ func (tx Transaction) stateProofPKWellFormed(proto config.ConsensusParams) error
 		return nil
 	}
 
-	if tx.VotePK == (crypto.OneTimeSignatureVerifier{}) || tx.SelectionPK == (crypto.VRFVerifier{}) {
+	if tx.VotePK.IsEmpty() || tx.SelectionPK.IsEmpty() {
 		if !isEmpty {
 			return errKeyregTxnOfflineShouldBeEmptyStateProofPK
 		}

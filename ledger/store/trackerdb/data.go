@@ -48,6 +48,8 @@ type BaseAccountData struct {
 	TotalBoxes                 uint64            `codec:"m"`
 	TotalBoxBytes              uint64            `codec:"n"`
 	IncentiveEligible          bool              `codec:"o"`
+	LastProposed               basics.Round      `codec:"p"`
+	LastHeartbeat              basics.Round      `codec:"q"`
 
 	BaseVotingData
 
@@ -289,6 +291,9 @@ func (ba *BaseAccountData) SetCoreAccountData(ad *ledgercore.AccountData) {
 	ba.TotalBoxBytes = ad.TotalBoxBytes
 	ba.IncentiveEligible = ad.IncentiveEligible
 
+	ba.LastProposed = ad.LastProposed
+	ba.LastHeartbeat = ad.LastHeartbeat
+
 	ba.BaseVotingData.SetCoreAccountData(ad)
 }
 
@@ -309,6 +314,9 @@ func (ba *BaseAccountData) SetAccountData(ad *basics.AccountData) {
 	ba.TotalBoxes = ad.TotalBoxes
 	ba.TotalBoxBytes = ad.TotalBoxBytes
 	ba.IncentiveEligible = ad.IncentiveEligible
+
+	ba.LastProposed = ad.LastProposed
+	ba.LastHeartbeat = ad.LastHeartbeat
 
 	ba.BaseVotingData.VoteID = ad.VoteID
 	ba.BaseVotingData.SelectionID = ad.SelectionID
@@ -346,6 +354,9 @@ func (ba *BaseAccountData) GetLedgerCoreAccountBaseData() ledgercore.AccountBase
 		TotalBoxes:          ba.TotalBoxes,
 		TotalBoxBytes:       ba.TotalBoxBytes,
 		IncentiveEligible:   ba.IncentiveEligible,
+
+		LastProposed:  ba.LastProposed,
+		LastHeartbeat: ba.LastHeartbeat,
 	}
 }
 
@@ -384,6 +395,9 @@ func (ba *BaseAccountData) GetAccountData() basics.AccountData {
 		VoteFirstValid:  ba.VoteFirstValid,
 		VoteLastValid:   ba.VoteLastValid,
 		VoteKeyDilution: ba.VoteKeyDilution,
+
+		LastProposed:  ba.LastProposed,
+		LastHeartbeat: ba.LastHeartbeat,
 	}
 }
 
@@ -404,6 +418,8 @@ func (ba *BaseAccountData) IsEmpty() bool {
 		ba.TotalAppLocalStates == 0 &&
 		ba.TotalBoxes == 0 &&
 		ba.TotalBoxBytes == 0 &&
+		ba.LastProposed == 0 &&
+		ba.LastHeartbeat == 0 &&
 		ba.BaseVotingData.IsEmpty()
 }
 
@@ -427,7 +443,7 @@ func (bo *BaseOnlineAccountData) IsVotingEmpty() bool {
 	return bo.BaseVotingData.IsEmpty()
 }
 
-// IsEmpty return true if any of the fields are non-zero.
+// IsEmpty return true if all of the fields are zero.
 func (bo *BaseOnlineAccountData) IsEmpty() bool {
 	return bo.IsVotingEmpty() &&
 		bo.MicroAlgos.Raw == 0 &&

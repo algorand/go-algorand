@@ -447,9 +447,13 @@ type ConsensusParams struct {
 
 	EnableExtraPagesOnAppUpdate bool
 
-	// MaxProposedExpiredOnlineAccounts is the maximum number of online accounts, which need
-	// to be taken offline, that would be proposed to be taken offline.
+	// MaxProposedExpiredOnlineAccounts is the maximum number of online accounts
+	// that a proposer can take offline for having expired voting keys.
 	MaxProposedExpiredOnlineAccounts int
+
+	// MaxProposedAbsentOnlineAccounts is the maximum number of online accounts,
+	// that a proposer can suspend for not proposing "lately" (TBD)
+	MaxProposedAbsentOnlineAccounts int
 
 	// EnableAccountDataResourceSeparation enables the support for extended application and asset storage
 	// in a separate table.
@@ -538,6 +542,12 @@ type ConsensusParams struct {
 	MiningPercent uint64
 }
 
+// EnableAbsenteeTracking returns true if the suspension mechanism of absentee
+// accounts is enabled.
+func (cp ConsensusParams) EnableAbsenteeTracking() bool {
+	return cp.MaxProposedAbsentOnlineAccounts > 0
+}
+
 // PaysetCommitType enumerates possible ways for the block header to commit to
 // the set of transactions in the block.
 type PaysetCommitType int
@@ -610,9 +620,13 @@ var MaxExtraAppProgramLen int
 // supported supported by any of the consensus protocols. used for decoding purposes.
 var MaxAvailableAppProgramLen int
 
-// MaxProposedExpiredOnlineAccounts is the maximum number of online accounts, which need
-// to be taken offline, that would be proposed to be taken offline.
+// MaxProposedExpiredOnlineAccounts is the maximum number of online accounts
+// that a proposer can take offline for having expired voting keys.
 var MaxProposedExpiredOnlineAccounts int
+
+// MaxProposedAbsentOnlineAccounts is the maximum number of online accounts,
+// that a proposer can suspend for not proposing "lately" (TBD)
+var MaxProposedAbsentOnlineAccounts int
 
 // MaxAppTotalArgLen is the maximum number of bytes across all arguments of an application
 // max sum([len(arg) for arg in txn.ApplicationArgs])
@@ -687,6 +701,7 @@ func checkSetAllocBounds(p ConsensusParams) {
 	checkSetMax(p.MaxAppProgramLen, &MaxLogCalls)
 	checkSetMax(p.MaxInnerTransactions*p.MaxTxGroupSize, &MaxInnerTransactionsPerDelta)
 	checkSetMax(p.MaxProposedExpiredOnlineAccounts, &MaxProposedExpiredOnlineAccounts)
+	checkSetMax(p.MaxProposedAbsentOnlineAccounts, &MaxProposedAbsentOnlineAccounts)
 
 	// These bounds are exported to make them available to the msgp generator for calculating
 	// maximum valid message size for each message going across the wire.
@@ -1421,6 +1436,8 @@ func initConsensusProtocols() {
 
 	vFuture.EnableMining = true
 	vFuture.MiningPercent = 75
+
+	vFuture.MaxProposedAbsentOnlineAccounts = 32
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 

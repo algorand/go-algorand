@@ -68,7 +68,7 @@ func AccountDataToAccount(
 	})
 
 	var apiParticipation *model.AccountParticipation
-	if record.VoteID != (crypto.OneTimeSignatureVerifier{}) {
+	if !record.VoteID.IsEmpty() {
 		apiParticipation = &model.AccountParticipation{
 			VoteParticipationKey:      record.VoteID[:],
 			SelectionParticipationKey: record.SelectionID[:],
@@ -139,6 +139,8 @@ func AccountDataToAccount(
 		TotalBoxes:                  omitEmpty(record.TotalBoxes),
 		TotalBoxBytes:               omitEmpty(record.TotalBoxBytes),
 		MinBalance:                  minBalance.Raw,
+		LastProposed:                omitEmpty(uint64(record.LastProposed)),
+		LastHeartbeat:               omitEmpty(uint64(record.LastHeartbeat)),
 	}, nil
 }
 
@@ -346,6 +348,16 @@ func AccountToAccountData(a *model.Account) (basics.AccountData, error) {
 		totalBoxBytes = *a.TotalBoxBytes
 	}
 
+	var lastProposed uint64
+	if a.LastProposed != nil {
+		lastProposed = *a.LastProposed
+	}
+
+	var lastHeartbeat uint64
+	if a.LastHeartbeat != nil {
+		lastHeartbeat = *a.LastHeartbeat
+	}
+
 	status, err := basics.UnmarshalStatus(a.Status)
 	if err != nil {
 		return basics.AccountData{}, err
@@ -370,6 +382,8 @@ func AccountToAccountData(a *model.Account) (basics.AccountData, error) {
 		TotalExtraAppPages: totalExtraPages,
 		TotalBoxes:         totalBoxes,
 		TotalBoxBytes:      totalBoxBytes,
+		LastProposed:       basics.Round(lastProposed),
+		LastHeartbeat:      basics.Round(lastHeartbeat),
 	}
 
 	if a.AuthAddr != nil {

@@ -385,18 +385,23 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, ao *onlineAccounts, base
 				// TODO: make lookupOnlineAccountData returning extended version of ledgercore.VotingData ?
 				od, err := ao.lookupOnlineAccountData(rnd, addr)
 				require.NoError(t, err)
-				require.Equal(t, od.VoteID, data.VoteID)
-				require.Equal(t, od.SelectionID, data.SelectionID)
-				require.Equal(t, od.VoteFirstValid, data.VoteFirstValid)
-				require.Equal(t, od.VoteLastValid, data.VoteLastValid)
-				require.Equal(t, od.VoteKeyDilution, data.VoteKeyDilution)
+				// Unless suspended an account's voting data should agree with
+				// the online account tracker. (Vaccuously true, when account is
+				// offline or non-part).
+				if data.Status != basics.Suspended {
+					require.Equal(t, od.VoteID, data.VoteID)
+					require.Equal(t, od.SelectionID, data.SelectionID)
+					require.Equal(t, od.VoteFirstValid, data.VoteFirstValid)
+					require.Equal(t, od.VoteLastValid, data.VoteLastValid)
+					require.Equal(t, od.VoteKeyDilution, data.VoteKeyDilution)
+				}
 
 				rewardsDelta := rewards[rnd] - d.RewardsBase
 				switch d.Status {
 				case basics.Online:
 					totalOnline += d.MicroAlgos.Raw
 					totalOnline += (d.MicroAlgos.Raw / proto.RewardUnit) * rewardsDelta
-				case basics.Offline:
+				case basics.Offline, basics.Suspended:
 					totalOffline += d.MicroAlgos.Raw
 					totalOffline += (d.MicroAlgos.Raw / proto.RewardUnit) * rewardsDelta
 				case basics.NotParticipating:
@@ -504,6 +509,10 @@ func checkOnlineAcctUpdatesConsistency(t *testing.T, ao *onlineAccounts, rnd bas
 	for i := 0; i < latest.Len(); i++ {
 		addr, acct := latest.GetByIdx(i)
 		od, err := ao.lookupOnlineAccountData(rnd, addr)
+		if acct.Status == basics.Suspended {
+			// suspended accounts will not match, since they have vote info but not in online accounts
+			continue
+		}
 		require.NoError(t, err)
 		require.Equal(t, acct.VoteID, od.VoteID)
 		require.Equal(t, acct.SelectionID, od.SelectionID)

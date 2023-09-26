@@ -20,7 +20,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 )
@@ -54,7 +53,7 @@ func Keyreg(keyreg transactions.KeyregTxnFields, header transactions.Header, bal
 	if params.EnableStateProofKeyregCheck {
 		record.StateProofID = keyreg.StateProofPK
 	}
-	if (keyreg.VotePK == crypto.OneTimeSignatureVerifier{} || keyreg.SelectionPK == crypto.VRFVerifier{}) {
+	if keyreg.VotePK.IsEmpty() || keyreg.SelectionPK.IsEmpty() {
 		if keyreg.Nonparticipation {
 			if params.SupportBecomeNonParticipatingTransactions {
 				record.Status = basics.NotParticipating
@@ -78,6 +77,9 @@ func Keyreg(keyreg transactions.KeyregTxnFields, header transactions.Header, bal
 			}
 		}
 		record.Status = basics.Online
+		if params.EnableAbsenteeTracking() {
+			record.LastHeartbeat = header.FirstValid
+		}
 		record.VoteFirstValid = keyreg.VoteFirst
 		record.VoteLastValid = keyreg.VoteLast
 		record.VoteKeyDilution = keyreg.VoteKeyDilution

@@ -100,8 +100,8 @@ import (
 func (z *BaseAccountData) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0001Len := uint32(22)
-	var zb0001Mask uint32 /* 24 bits */
+	zb0001Len := uint32(24)
+	var zb0001Mask uint32 /* 26 bits */
 	if (*z).BaseVotingData.VoteID.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x1
@@ -186,9 +186,17 @@ func (z *BaseAccountData) MarshalMsg(b []byte) (o []byte) {
 		zb0001Len--
 		zb0001Mask |= 0x400000
 	}
-	if (*z).UpdateRound == 0 {
+	if (*z).LastProposed.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x800000
+	}
+	if (*z).LastHeartbeat.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x1000000
+	}
+	if (*z).UpdateRound == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x2000000
 	}
 	// variable map header, size zb0001Len
 	o = msgp.AppendMapHeader(o, zb0001Len)
@@ -299,6 +307,16 @@ func (z *BaseAccountData) MarshalMsg(b []byte) (o []byte) {
 			o = msgp.AppendBool(o, (*z).IncentiveEligible)
 		}
 		if (zb0001Mask & 0x800000) == 0 { // if not empty
+			// string "p"
+			o = append(o, 0xa1, 0x70)
+			o = (*z).LastProposed.MarshalMsg(o)
+		}
+		if (zb0001Mask & 0x1000000) == 0 { // if not empty
+			// string "q"
+			o = append(o, 0xa1, 0x71)
+			o = (*z).LastHeartbeat.MarshalMsg(o)
+		}
+		if (zb0001Mask & 0x2000000) == 0 { // if not empty
 			// string "z"
 			o = append(o, 0xa1, 0x7a)
 			o = msgp.AppendUint64(o, (*z).UpdateRound)
@@ -447,6 +465,22 @@ func (z *BaseAccountData) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalSta
 			(*z).IncentiveEligible, bts, err = msgp.ReadBoolBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "IncentiveEligible")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).LastProposed.UnmarshalMsgWithState(bts, st)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "LastProposed")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).LastHeartbeat.UnmarshalMsgWithState(bts, st)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "LastHeartbeat")
 				return
 			}
 		}
@@ -619,6 +653,18 @@ func (z *BaseAccountData) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalSta
 					err = msgp.WrapError(err, "IncentiveEligible")
 					return
 				}
+			case "p":
+				bts, err = (*z).LastProposed.UnmarshalMsgWithState(bts, st)
+				if err != nil {
+					err = msgp.WrapError(err, "LastProposed")
+					return
+				}
+			case "q":
+				bts, err = (*z).LastHeartbeat.UnmarshalMsgWithState(bts, st)
+				if err != nil {
+					err = msgp.WrapError(err, "LastHeartbeat")
+					return
+				}
 			case "A":
 				bts, err = (*z).BaseVotingData.VoteID.UnmarshalMsgWithState(bts, st)
 				if err != nil {
@@ -684,18 +730,18 @@ func (_ *BaseAccountData) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *BaseAccountData) Msgsize() (s int) {
-	s = 3 + 2 + (*z).Status.Msgsize() + 2 + (*z).MicroAlgos.Msgsize() + 2 + msgp.Uint64Size + 2 + (*z).RewardedMicroAlgos.Msgsize() + 2 + (*z).AuthAddr.Msgsize() + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Uint32Size + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.BoolSize + 2 + (*z).BaseVotingData.VoteID.Msgsize() + 2 + (*z).BaseVotingData.SelectionID.Msgsize() + 2 + (*z).BaseVotingData.VoteFirstValid.Msgsize() + 2 + (*z).BaseVotingData.VoteLastValid.Msgsize() + 2 + msgp.Uint64Size + 2 + (*z).BaseVotingData.StateProofID.Msgsize() + 2 + msgp.Uint64Size
+	s = 3 + 2 + (*z).Status.Msgsize() + 2 + (*z).MicroAlgos.Msgsize() + 2 + msgp.Uint64Size + 2 + (*z).RewardedMicroAlgos.Msgsize() + 2 + (*z).AuthAddr.Msgsize() + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Uint32Size + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.BoolSize + 2 + (*z).LastProposed.Msgsize() + 2 + (*z).LastHeartbeat.Msgsize() + 2 + (*z).BaseVotingData.VoteID.Msgsize() + 2 + (*z).BaseVotingData.SelectionID.Msgsize() + 2 + (*z).BaseVotingData.VoteFirstValid.Msgsize() + 2 + (*z).BaseVotingData.VoteLastValid.Msgsize() + 2 + msgp.Uint64Size + 2 + (*z).BaseVotingData.StateProofID.Msgsize() + 2 + msgp.Uint64Size
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *BaseAccountData) MsgIsZero() bool {
-	return ((*z).Status.MsgIsZero()) && ((*z).MicroAlgos.MsgIsZero()) && ((*z).RewardsBase == 0) && ((*z).RewardedMicroAlgos.MsgIsZero()) && ((*z).AuthAddr.MsgIsZero()) && ((*z).TotalAppSchemaNumUint == 0) && ((*z).TotalAppSchemaNumByteSlice == 0) && ((*z).TotalExtraAppPages == 0) && ((*z).TotalAssetParams == 0) && ((*z).TotalAssets == 0) && ((*z).TotalAppParams == 0) && ((*z).TotalAppLocalStates == 0) && ((*z).TotalBoxes == 0) && ((*z).TotalBoxBytes == 0) && ((*z).IncentiveEligible == false) && ((*z).BaseVotingData.VoteID.MsgIsZero()) && ((*z).BaseVotingData.SelectionID.MsgIsZero()) && ((*z).BaseVotingData.VoteFirstValid.MsgIsZero()) && ((*z).BaseVotingData.VoteLastValid.MsgIsZero()) && ((*z).BaseVotingData.VoteKeyDilution == 0) && ((*z).BaseVotingData.StateProofID.MsgIsZero()) && ((*z).UpdateRound == 0)
+	return ((*z).Status.MsgIsZero()) && ((*z).MicroAlgos.MsgIsZero()) && ((*z).RewardsBase == 0) && ((*z).RewardedMicroAlgos.MsgIsZero()) && ((*z).AuthAddr.MsgIsZero()) && ((*z).TotalAppSchemaNumUint == 0) && ((*z).TotalAppSchemaNumByteSlice == 0) && ((*z).TotalExtraAppPages == 0) && ((*z).TotalAssetParams == 0) && ((*z).TotalAssets == 0) && ((*z).TotalAppParams == 0) && ((*z).TotalAppLocalStates == 0) && ((*z).TotalBoxes == 0) && ((*z).TotalBoxBytes == 0) && ((*z).IncentiveEligible == false) && ((*z).LastProposed.MsgIsZero()) && ((*z).LastHeartbeat.MsgIsZero()) && ((*z).BaseVotingData.VoteID.MsgIsZero()) && ((*z).BaseVotingData.SelectionID.MsgIsZero()) && ((*z).BaseVotingData.VoteFirstValid.MsgIsZero()) && ((*z).BaseVotingData.VoteLastValid.MsgIsZero()) && ((*z).BaseVotingData.VoteKeyDilution == 0) && ((*z).BaseVotingData.StateProofID.MsgIsZero()) && ((*z).UpdateRound == 0)
 }
 
 // MaxSize returns a maximum valid message size for this message type
 func BaseAccountDataMaxSize() (s int) {
-	s = 3 + 2 + basics.StatusMaxSize() + 2 + basics.MicroAlgosMaxSize() + 2 + msgp.Uint64Size + 2 + basics.MicroAlgosMaxSize() + 2 + basics.AddressMaxSize() + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Uint32Size + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.BoolSize + 2 + crypto.OneTimeSignatureVerifierMaxSize() + 2 + crypto.VRFVerifierMaxSize() + 2 + basics.RoundMaxSize() + 2 + basics.RoundMaxSize() + 2 + msgp.Uint64Size + 2 + merklesignature.CommitmentMaxSize() + 2 + msgp.Uint64Size
+	s = 3 + 2 + basics.StatusMaxSize() + 2 + basics.MicroAlgosMaxSize() + 2 + msgp.Uint64Size + 2 + basics.MicroAlgosMaxSize() + 2 + basics.AddressMaxSize() + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Uint32Size + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.BoolSize + 2 + basics.RoundMaxSize() + 2 + basics.RoundMaxSize() + 2 + crypto.OneTimeSignatureVerifierMaxSize() + 2 + crypto.VRFVerifierMaxSize() + 2 + basics.RoundMaxSize() + 2 + basics.RoundMaxSize() + 2 + msgp.Uint64Size + 2 + merklesignature.CommitmentMaxSize() + 2 + msgp.Uint64Size
 	return
 }
 

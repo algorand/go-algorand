@@ -49,6 +49,9 @@ type AccountBaseData struct {
 	TotalAssets         uint64             // Total of asset creations and optins (i.e. number of holdings)
 	TotalBoxes          uint64             // Total number of boxes associated to this account
 	TotalBoxBytes       uint64             // Total bytes for this account's boxes. keys _and_ values count
+
+	LastProposed  basics.Round // The last round that this account proposed the winning block.
+	LastHeartbeat basics.Round // The last round that this account sent a heartbeat to show it was online.
 }
 
 // VotingData holds participation information
@@ -87,6 +90,9 @@ func ToAccountData(acct basics.AccountData) AccountData {
 			TotalAppLocalStates: uint64(len(acct.AppLocalStates)),
 			TotalBoxes:          acct.TotalBoxes,
 			TotalBoxBytes:       acct.TotalBoxBytes,
+
+			LastProposed:  acct.LastProposed,
+			LastHeartbeat: acct.LastHeartbeat,
 		},
 		VotingData: VotingData{
 			VoteID:          acct.VoteID,
@@ -120,6 +126,9 @@ func AssignAccountData(a *basics.AccountData, acct AccountData) {
 	a.TotalExtraAppPages = acct.TotalExtraAppPages
 	a.TotalBoxes = acct.TotalBoxes
 	a.TotalBoxBytes = acct.TotalBoxBytes
+
+	a.LastProposed = acct.LastProposed
+	a.LastHeartbeat = acct.LastHeartbeat
 }
 
 // WithUpdatedRewards calls basics account data WithUpdatedRewards
@@ -134,6 +143,12 @@ func (u AccountData) WithUpdatedRewards(proto config.ConsensusParams, rewardsLev
 func (u *AccountData) ClearOnlineState() {
 	u.Status = basics.Offline
 	u.VotingData = VotingData{}
+}
+
+// Suspend sets the status to Suspended, but does _not_ clear voting keys, so
+// that a heartbeat can bring the account back Online
+func (u *AccountData) Suspend() {
+	u.Status = basics.Suspended
 }
 
 // MinBalance computes the minimum balance requirements for an account based on

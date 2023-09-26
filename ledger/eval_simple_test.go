@@ -372,6 +372,133 @@ func TestIncentiveEligible(t *testing.T) {
 	})
 }
 
+// TestAbsentTracking checks that LastProposed and LastHeartbeat are updated
+// properly.
+func TestAbsentTracking(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis(func(cfg *ledgertesting.GenesisCfg) {
+		cfg.OnlineCount = 2 // So we know proposer should propose every 2 rounds, on average
+	})
+	// Absentee checking begins in v39. Start checking in v38 to test that is unchanged.
+	ledgertesting.TestConsensusRange(t, 38, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
+		defer dl.Close()
+
+		totals, err := dl.generator.Totals(0)
+		require.NoError(t, err)
+		require.NotZero(t, totals.Online.Money.Raw)
+		for i, addr := range addrs {
+			fmt.Printf("addrs[%d] == %v\n", i, addr)
+		}
+		require.True(t, lookup(t, dl.generator, addrs[0]).Status == basics.Online)
+		require.True(t, lookup(t, dl.generator, addrs[1]).Status == basics.Online)
+		require.False(t, lookup(t, dl.generator, addrs[2]).Status == basics.Online)
+
+		dl.fullBlock()
+
+		proposer := addrs[7]
+		dl.beginBlock()
+		dl.txns(&txntest.Txn{
+			Type:     "pay",
+			Sender:   addrs[1],
+			Receiver: addrs[2],
+			Amount:   100_000,
+		})
+		dl.endBlock(proposer)
+
+		newtotals, err := dl.generator.Totals(dl.generator.Latest())
+		require.NoError(t, err)
+		// payment and fee left the online account
+		require.Equal(t, totals.Online.Money.Raw-100_000-1000, newtotals.Online.Money.Raw)
+		totals = newtotals
+
+		dl.fullBlock()
+
+		prp := lookup(t, dl.validator, proposer)
+
+		if ver >= 39 {
+			// version sanity check
+			require.True(t, dl.generator.GenesisProto().EnableAbsenteeTracking())
+			require.NotZero(t, prp.LastProposed)
+			require.Zero(t, prp.LastHeartbeat) // genesis participants have never hb
+		} else {
+			require.False(t, dl.generator.GenesisProto().EnableAbsenteeTracking())
+			require.Zero(t, prp.LastProposed)
+			require.Zero(t, prp.LastHeartbeat)
+		}
+
+		// addrs[2] was already offline
+		dl.txns(&txntest.Txn{Type: "keyreg", Sender: addrs[2]}) // OFFLINE keyreg
+		regger := lookup(t, dl.validator, addrs[2])
+
+		newtotals, err = dl.generator.Totals(dl.generator.Latest())
+		require.NoError(t, err)
+		require.Equal(t, totals.Online.Money.Raw, newtotals.Online.Money.Raw)
+
+		// offline transaction records nothing
+		require.Zero(t, regger.LastProposed)
+		require.Zero(t, regger.LastHeartbeat)
+
+		// ONLINE keyreg
+		dl.txns(&txntest.Txn{
+			Type:        "keyreg",
+			Sender:      addrs[2],
+			VotePK:      [32]byte{1},
+			SelectionPK: [32]byte{1},
+		})
+		newtotals, err = dl.generator.Totals(dl.generator.Latest())
+		require.NoError(t, err)
+		require.Greater(t, newtotals.Online.Money.Raw, totals.Online.Money.Raw)
+
+		regger = lookup(t, dl.validator, addrs[2])
+		require.Zero(t, regger.LastProposed)
+		require.True(t, regger.Status == basics.Online)
+
+		if ver >= 39 {
+			require.NotZero(t, regger.LastHeartbeat) // online keyreg caused update
+		} else {
+			require.Zero(t, regger.LastHeartbeat)
+		}
+
+		for i := 0; i < 5; i++ {
+			dl.fullBlock()
+			require.True(t, lookup(t, dl.generator, addrs[0]).Status == basics.Online)
+			require.True(t, lookup(t, dl.generator, addrs[1]).Status == basics.Online)
+			require.True(t, lookup(t, dl.generator, addrs[2]).Status == basics.Online)
+		}
+
+		// all are still online after a few blocks
+		require.True(t, lookup(t, dl.generator, addrs[0]).Status == basics.Online)
+		require.True(t, lookup(t, dl.generator, addrs[1]).Status == basics.Online)
+		require.True(t, lookup(t, dl.generator, addrs[2]).Status == basics.Online)
+
+		for i := 0; i < 30; i++ {
+			dl.fullBlock()
+		}
+
+		// addrs 0-2 all have about 1/3 of stake, so become eligible for
+		// suspension after 30 rounds. We're at about 35. But, since blocks are
+		// empty, nobody's susspendible account is noticed.
+		require.True(t, lookup(t, dl.generator, addrs[0]).Status == basics.Online)
+		require.True(t, lookup(t, dl.generator, addrs[1]).Status == basics.Online)
+		require.True(t, lookup(t, dl.generator, addrs[2]).Status == basics.Online)
+
+		// when 2 pays 0, they both get noticed and get suspended
+		dl.txns(&txntest.Txn{
+			Type:     "pay",
+			Sender:   addrs[2],
+			Receiver: addrs[0],
+			Amount:   0,
+		})
+		require.Equal(t, ver < 39, lookup(t, dl.generator, addrs[0]).Status == basics.Online)
+		require.True(t, lookup(t, dl.generator, addrs[1]).Status == basics.Online)
+		require.Equal(t, ver < 39, lookup(t, dl.generator, addrs[2]).Status == basics.Online)
+
+	})
+}
+
 // TestHoldingGet tests some of the corner cases for the asset_holding_get
 // opcode: the asset doesn't exist, the account doesn't exist, account not opted
 // in, vs it has none of the asset. This is tested here, even though it should

@@ -188,6 +188,12 @@ type Account struct {
 	// IncentiveEligible Whether or not the account can receive block incentives if its balance is in range at proposal time.
 	IncentiveEligible *bool `json:"incentive-eligible,omitempty"`
 
+	// LastHeartbeat The round in which this account last went online, or explicitly renewed their online status.
+	LastHeartbeat *uint64 `json:"last-heartbeat,omitempty"`
+
+	// LastProposed The round in which this account last proposed the block.
+	LastProposed *uint64 `json:"last-proposed,omitempty"`
+
 	// MinBalance MicroAlgo balance required by the account.
 	//
 	// The requirement grows based on asset and application usage.
