@@ -18,17 +18,18 @@ package data
 
 import (
 	"encoding/binary"
+	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util"
-	"golang.org/x/crypto/blake2b"
-
 	"github.com/algorand/go-deadlock"
+	"golang.org/x/crypto/blake2b"
 )
 
 const numBuckets = 128
@@ -167,11 +168,12 @@ func (r *appRateLimiter) shouldDrop(txgroup []transactions.SignedTxn, origin []b
 // shouldDropAt is the same as shouldDrop but accepts the current time as a parameter
 // in order to make it testable
 func (r *appRateLimiter) shouldDropAt(txgroup []transactions.SignedTxn, origin []byte, nowNano int64) bool {
-	buckets, keys := txgroupToKeys(txgroup, origin, r.seed, r.salt, numBuckets)
-	if len(keys) == 0 {
+	keysBuckets := txgroupToKeys(txgroup, origin, r.seed, r.salt, numBuckets)
+	defer putAppKeyBuf(keysBuckets)
+	if len(keysBuckets.keys) == 0 {
 		return false
 	}
-	return r.shouldDropKeys(buckets, keys, nowNano)
+	return r.shouldDropKeys(keysBuckets.buckets, keysBuckets.keys, nowNano)
 }
 
 func (r *appRateLimiter) shouldDropKeys(buckets []int, keys []keyType, nowNano int64) bool {
@@ -209,13 +211,37 @@ func (r *appRateLimiter) len() int {
 	return count
 }
 
-// txgroupToKeys converts txgroup data to keys
-func txgroupToKeys(txgroup []transactions.SignedTxn, origin []byte, seed uint64, salt [16]byte, numBuckets int) ([]int, []keyType) {
-	// there are max 16 * 8 = 128 apps (buckets, keys) per txgroup
-	// TODO: consider sync.Pool
+var appKeyPool = sync.Pool{
+	New: func() interface{} {
+		return &appKeyBuf{
+			// max config.MaxTxGroupSize apps per txgroup, each app has up to MaxAppTxnForeignApps extra foreign apps
+			// at moment of writing config.MaxTxGroupSize = 16, config.MaxAppTxnForeignApps = 8
+			keys:    make([]keyType, 0, config.MaxTxGroupSize*(1+config.MaxAppTxnForeignApps)),
+			buckets: make([]int, 0, config.MaxTxGroupSize*(1+config.MaxAppTxnForeignApps)),
+		}
+	},
+}
 
-	var keys []keyType
-	var buckets []int
+// appKeyBuf is a reusable storage for key and bucket slices
+type appKeyBuf struct {
+	keys    []keyType
+	buckets []int
+}
+
+func getAppKeyBuf() *appKeyBuf {
+	buf := appKeyPool.Get().(*appKeyBuf)
+	buf.buckets = buf.buckets[:0]
+	buf.keys = buf.keys[:0]
+	return buf
+}
+
+func putAppKeyBuf(buf *appKeyBuf) {
+	appKeyPool.Put(buf)
+}
+
+// txgroupToKeys converts txgroup data to keys
+func txgroupToKeys(txgroup []transactions.SignedTxn, origin []byte, seed uint64, salt [16]byte, numBuckets int) *appKeyBuf {
+	keysBuckets := getAppKeyBuf()
 	// since blake2 is a crypto hash function it seems OK to shrink 32 bytes digest down to 8.
 	// Rationale: we expect thousands of apps sent from thousands of peers,
 	// so required millions of unique pairs => 8 bytes should be enough.
@@ -241,17 +267,17 @@ func txgroupToKeys(txgroup []transactions.SignedTxn, origin []byte, seed uint64,
 			appIdx := txgroup[i].Txn.ApplicationID
 			// hash appIdx into a bucket, do not use modulo since it could
 			// assign two vanilla (and presumable, popular) apps to the same bucket.
-			buckets = append(buckets, txnToBucket(appIdx))
-			keys = append(keys, txnToDigest(appIdx))
+			keysBuckets.buckets = append(keysBuckets.buckets, txnToBucket(appIdx))
+			keysBuckets.keys = append(keysBuckets.keys, txnToDigest(appIdx))
 			if len(txgroup[i].Txn.ForeignApps) > 0 {
 				for _, appIdx := range txgroup[i].Txn.ForeignApps {
-					buckets = append(buckets, txnToBucket(appIdx))
-					keys = append(keys, txnToDigest(appIdx))
+					keysBuckets.buckets = append(keysBuckets.buckets, txnToBucket(appIdx))
+					keysBuckets.keys = append(keysBuckets.keys, txnToDigest(appIdx))
 				}
 			}
 		}
 	}
-	return buckets, keys
+	return keysBuckets
 }
 
 const (

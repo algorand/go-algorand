@@ -175,11 +175,11 @@ func TestAppRateLimiter_IntervalAdmitted(t *testing.T) {
 	rm := makeAppRateLimiter(512, perSecondRate, window)
 
 	txns := getAppTxnGroup(1)
-	buckets, keys := txgroupToKeys(getAppTxnGroup(basics.AppIndex(1)), nil, rm.seed, rm.salt, numBuckets)
-	require.Equal(t, 1, len(buckets))
-	require.Equal(t, 1, len(keys))
-	b := buckets[0]
-	k := keys[0]
+	bk := txgroupToKeys(getAppTxnGroup(basics.AppIndex(1)), nil, rm.seed, rm.salt, numBuckets)
+	require.Equal(t, 1, len(bk.buckets))
+	require.Equal(t, 1, len(bk.keys))
+	b := bk.buckets[0]
+	k := bk.keys[0]
 	now := time.Date(2023, 9, 11, 10, 10, 11, 0, time.UTC).UnixNano() // 11 sec => 1 sec into the interval
 
 	// fill a current interval with more than rate requests
@@ -294,21 +294,21 @@ func TestAppRateLimiter_EvictOrder(t *testing.T) {
 	keys := make([]keyType, 0, int(bucketSize)+1)
 	bucket := int(memhash64(uint64(1), rm.seed) % numBuckets)
 	for i := 0; i < bucketSize; i++ {
-		b, k := txgroupToKeys(getAppTxnGroup(basics.AppIndex(1)), []byte{byte(i)}, rm.seed, rm.salt, numBuckets)
-		require.Equal(t, 1, len(b))
-		require.Equal(t, 1, len(k))
-		require.Equal(t, bucket, b[0])
-		keys = append(keys, k[0])
+		bk := txgroupToKeys(getAppTxnGroup(basics.AppIndex(1)), []byte{byte(i)}, rm.seed, rm.salt, numBuckets)
+		require.Equal(t, 1, len(bk.buckets))
+		require.Equal(t, 1, len(bk.keys))
+		require.Equal(t, bucket, bk.buckets[0])
+		keys = append(keys, bk.keys[0])
 		drop := rm.shouldDrop(getAppTxnGroup(basics.AppIndex(1)), []byte{byte(i)})
 		require.False(t, drop)
 	}
 	require.Equal(t, bucketSize, len(rm.buckets[bucket].entries))
 
 	// add one more and expect the first evicted
-	b, k := txgroupToKeys(getAppTxnGroup(basics.AppIndex(1)), []byte{byte(bucketSize)}, rm.seed, rm.salt, numBuckets)
-	require.Equal(t, 1, len(b))
-	require.Equal(t, 1, len(k))
-	require.Equal(t, bucket, b[0])
+	bk := txgroupToKeys(getAppTxnGroup(basics.AppIndex(1)), []byte{byte(bucketSize)}, rm.seed, rm.salt, numBuckets)
+	require.Equal(t, 1, len(bk.buckets))
+	require.Equal(t, 1, len(bk.keys))
+	require.Equal(t, bucket, bk.buckets[0])
 	drop := rm.shouldDrop(getAppTxnGroup(basics.AppIndex(1)), []byte{byte(bucketSize)})
 	require.False(t, drop)
 
