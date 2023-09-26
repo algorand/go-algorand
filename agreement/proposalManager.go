@@ -134,7 +134,7 @@ func (m *proposalManager) handleMessageEvent(r routerHandle, p player, e filtera
 
 	switch e.t() {
 	case votePresent:
-		err, verifyForCredHistory := m.filterProposalVote(p, r, e.Input.UnauthenticatedVote, e.FreshnessData)
+		verifyForCredHistory, err := m.filterProposalVote(p, r, e.Input.UnauthenticatedVote, e.FreshnessData)
 		if err != nil {
 			credTrackingNote := NoCredentialTrackingImpact
 			if verifyForCredHistory {
@@ -267,9 +267,10 @@ func (d errProposalManagerPVDuplicate) Error() string {
 	return fmt.Sprintf("proposalManager: filtered proposal-vote: sender %v had already sent a vote in round %d period %d", d.Sender, d.Round, d.Period)
 }
 
-// filterVote filters a vote, checking if it is both fresh and not a duplicate.
+// filterVote filters a vote, checking if it is both fresh and not a duplicate, returning
+// an errProposalManagerPVNotFresh or errProposalManagerPVDuplicate if so, else nil.
 // It also returns a bool indicating whether this proposal-vote should still be verified for tracking credential history.
-func (m *proposalManager) filterProposalVote(p player, r routerHandle, uv unauthenticatedVote, freshData freshnessData) (error, bool) {
+func (m *proposalManager) filterProposalVote(p player, r routerHandle, uv unauthenticatedVote, freshData freshnessData) (bool, error) {
 	// check if the vote is within the credential history window
 	credHistory := proposalUsedForCredentialHistory(freshData.PlayerRound, uv)
 
@@ -287,13 +288,13 @@ func (m *proposalManager) filterProposalVote(p player, r routerHandle, uv unauth
 		if credHistory && checkDup() {
 			credHistory = false
 		}
-		return errProposalManagerPVNotFresh{Reason: err}, credHistory
+		return credHistory, errProposalManagerPVNotFresh{Reason: err}
 	}
 
 	if checkDup() {
-		return errProposalManagerPVDuplicate{Sender: uv.R.Sender, Round: uv.R.Round, Period: uv.R.Period}, credHistory
+		return credHistory, errProposalManagerPVDuplicate{Sender: uv.R.Sender, Round: uv.R.Round, Period: uv.R.Period}
 	}
-	return nil, credHistory
+	return credHistory, nil
 }
 
 func proposalUsedForCredentialHistory(curRound round, vote unauthenticatedVote) bool {
