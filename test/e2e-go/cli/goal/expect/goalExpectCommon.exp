@@ -933,7 +933,7 @@ proc ::AlgorandGoal::StartCatchup { NODE_DATA_DIR CATCHPOINT } {
     if { [catch {
         # start catchup
         puts "[clock format [clock seconds] -format %H:%M:%S]: spawn node catchup $CATCHPOINT"
-        spawn goal node catchup --force $CATCHPOINT -d $NODE_DATA_DIR
+        spawn goal node catchup $CATCHPOINT -d $NODE_DATA_DIR
         expect {
             timeout { ::AlgorandGoal::Abort "goal node catchup timed out" }
             eof { catch wait result; if { [lindex $result 3] != 0 } { ::AlgorandGoal::Abort "failed to start catching up : error code [lindex $result 3]"} }

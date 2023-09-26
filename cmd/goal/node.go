@@ -194,7 +194,8 @@ var catchupCmd = &cobra.Command{
 				catchpoint = label
 			}
 
-			if !fastCatchupForce {
+			// Prompt user to confirm implicit catchpoint.
+			if !fastCatchupForce && len(args) == 0 {
 				fmt.Printf(nodeConfirmImplicitCatchpoint, catchpoint)
 				reader := bufio.NewReader(os.Stdin)
 				text, _ := reader.ReadString('\n')
