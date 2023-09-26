@@ -187,7 +187,7 @@ var catchupCmd = &cobra.Command{
 				}
 				genesis := strings.Split(vers.GenesisID, "-")[0]
 				URL := fmt.Sprintf(catchpointURL, genesis)
-				catchpoint, err := getMissingCatchpointLabel(URL)
+				catchpoint, err = getMissingCatchpointLabel(URL)
 				if err != nil {
 					reportErrorf(errorCatchpointLabelMissing, errorUnableToLookupCatchpointLabel, err.Error())
 				}
