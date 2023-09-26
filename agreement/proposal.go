@@ -197,6 +197,12 @@ func verifyNewSeed(p unauthenticatedProposal, ledger LedgerReader) error {
 		return fmt.Errorf("failed to obtain consensus parameters in round %d: %v", ParamsRound(rnd), err)
 	}
 
+	if cparams.EnableMining {
+		if p.BlockHeader.Proposer != value.OriginalProposer {
+			return fmt.Errorf("payload has wrong proposer (%v != %v)", p.Proposer, value.OriginalProposer)
+		}
+	}
+
 	balanceRound := balanceRound(rnd, cparams)
 	proposerRecord, err := ledger.LookupAgreement(balanceRound, value.OriginalProposer)
 	if err != nil {
@@ -241,6 +247,7 @@ func verifyNewSeed(p unauthenticatedProposal, ledger LedgerReader) error {
 	if p.Seed() != committee.Seed(crypto.HashObj(input)) {
 		return fmt.Errorf("payload seed malformed (%v != %v)", committee.Seed(crypto.HashObj(input)), p.Seed())
 	}
+
 	return nil
 }
 
