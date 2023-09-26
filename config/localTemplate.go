@@ -225,7 +225,7 @@ type Local struct {
 	TxBacklogAppTxRateLimiterMaxSize int `version[31]:"1048576"`
 
 	// TxBacklogAppTxPerSecondRate determines a target app per second rate for the app tx rate limiter
-	TxBacklogAppTxPerSecondRate int `version[31]:"20"`
+	TxBacklogAppTxPerSecondRate int `version[31]:"100"`
 
 	// EnableTxBacklogRateLimiting controls if a rate limiter and congestion manager should be attached to the tx backlog enqueue process
 	// if enabled, the over-all TXBacklog Size will be larger by MAX_PEERS*TxBacklogReservedCapacityPerPeer
