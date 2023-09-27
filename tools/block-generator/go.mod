@@ -8,7 +8,7 @@ require (
 	github.com/algorand/avm-abi v0.2.0
 	github.com/algorand/go-algorand v0.0.0
 	github.com/algorand/go-codec/codec v1.1.10
-	github.com/algorand/go-deadlock v0.2.2
+	github.com/algorand/go-deadlock v0.2.3
 	github.com/lib/pq v1.10.9
 	github.com/spf13/cobra v1.7.0
 	github.com/stretchr/testify v1.8.4
