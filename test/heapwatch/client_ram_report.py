@@ -181,8 +181,9 @@ def hostports_to_nicks(args, hostports, metrics=None):
         if not hit:
             hit = hp
         out.append(hit)
+    out.sort()
     if metrics:
-        return ['{}#{}'.format(hp, m) for hp in hostports for m in metrics]
+        return ['{}#{}'.format(hp, m) for hp in out for m in metrics]
     return out
 
 
