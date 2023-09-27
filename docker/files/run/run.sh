@@ -87,6 +87,7 @@ function configure_data_dir() {
   fi
 
   algocfg -d . set -p EndpointAddress -v "0.0.0.0:${ALGOD_PORT}"
+  algocfg -d . set -p NodeExporterPath -v "$(which node_exporter)"
 
   # set token overrides
   for dir in ${ALGORAND_DATA}/../*/; do
