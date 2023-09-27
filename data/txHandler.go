@@ -112,24 +112,25 @@ type txBacklogMsg struct {
 
 // TxHandler handles transaction messages
 type TxHandler struct {
-	txPool                *pools.TransactionPool
-	ledger                *Ledger
-	genesisID             string
-	genesisHash           crypto.Digest
-	txVerificationPool    execpool.BacklogPool
-	backlogQueue          chan *txBacklogMsg
-	postVerificationQueue chan *verify.VerificationResult
-	backlogWg             sync.WaitGroup
-	net                   network.GossipNode
-	msgCache              *txSaltedCache
-	txCanonicalCache      *digestCache
-	ctx                   context.Context
-	ctxCancel             context.CancelFunc
-	streamVerifier        *execpool.StreamToBatch
-	streamVerifierChan    chan execpool.InputJob
-	streamVerifierDropped chan *verify.UnverifiedTxnSigJob
-	erl                   *util.ElasticRateLimiter
-	appLimiter            *appRateLimiter
+	txPool                     *pools.TransactionPool
+	ledger                     *Ledger
+	genesisID                  string
+	genesisHash                crypto.Digest
+	txVerificationPool         execpool.BacklogPool
+	backlogQueue               chan *txBacklogMsg
+	backlogCongestionThreshold float64
+	postVerificationQueue      chan *verify.VerificationResult
+	backlogWg                  sync.WaitGroup
+	net                        network.GossipNode
+	msgCache                   *txSaltedCache
+	txCanonicalCache           *digestCache
+	ctx                        context.Context
+	ctxCancel                  context.CancelFunc
+	streamVerifier             *execpool.StreamToBatch
+	streamVerifierChan         chan execpool.InputJob
+	streamVerifierDropped      chan *verify.UnverifiedTxnSigJob
+	erl                        *util.ElasticRateLimiter
+	appLimiter                 *appRateLimiter
 }
 
 // TxHandlerOpts is TxHandler configuration options
@@ -181,6 +182,11 @@ func MakeTxHandler(opts TxHandlerOpts) (*TxHandler, error) {
 	}
 
 	if opts.Config.EnableTxBacklogRateLimiting {
+		if opts.Config.TxBacklogRateLimitingCongestionPct > 100 || opts.Config.TxBacklogRateLimitingCongestionPct < 0 {
+			return nil, fmt.Errorf("invalid value for TxBacklogRateLimitingCongestionPct: %d", opts.Config.TxBacklogRateLimitingCongestionPct)
+		}
+		handler.backlogCongestionThreshold = float64(opts.Config.TxBacklogRateLimitingCongestionPct) / 100
+
 		rateLimiter := util.NewElasticRateLimiter(
 			txBacklogSize,
 			opts.Config.TxBacklogReservedCapacityPerPeer,
@@ -590,7 +596,7 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 	var capguard *util.ErlCapacityGuard
 	var congested bool
 	if handler.erl != nil {
-		congested = float64(cap(handler.backlogQueue))*0.5 < float64(len(handler.backlogQueue))
+		congested = float64(cap(handler.backlogQueue))*handler.backlogCongestionThreshold < float64(len(handler.backlogQueue))
 		// consume a capacity unit
 		// if the elastic rate limiter cannot vend a capacity, the error it returns
 		// is sufficient to indicate that we should enable Congestion Control, because

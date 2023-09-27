@@ -265,7 +265,7 @@ func txgroupToKeys(txgroup []transactions.SignedTxn, origin []byte, seed uint64,
 	for i := range txgroup {
 		if txgroup[i].Txn.Type == protocol.ApplicationCallTx {
 			appIdx := txgroup[i].Txn.ApplicationID
-			// hash appIdx into a bucket, do not use modulo since it could
+			// hash appIdx into a bucket, do not use modulo without hashing first since it could
 			// assign two vanilla (and presumable, popular) apps to the same bucket.
 			keysBuckets.buckets = append(keysBuckets.buckets, txnToBucket(appIdx))
 			keysBuckets.keys = append(keysBuckets.keys, txnToDigest(appIdx))

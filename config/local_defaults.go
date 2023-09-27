@@ -142,6 +142,7 @@ var defaultLocal = Local{
 	TransactionSyncSignificantMessageThreshold: 0,
 	TxBacklogAppTxPerSecondRate:                100,
 	TxBacklogAppTxRateLimiterMaxSize:           1048576,
+	TxBacklogRateLimitingCongestionPct:         50,
 	TxBacklogReservedCapacityPerPeer:           20,
 	TxBacklogServiceRateWindowSeconds:          10,
 	TxBacklogSize:                              26000,

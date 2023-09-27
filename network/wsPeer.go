@@ -408,7 +408,7 @@ func (wp *wsPeer) RoutingAddr() []byte {
 	}
 
 	ip := wp.IPAddr()
-	if len(ip) == 0 || len(ip) == net.IPv4len || len(ip) != net.IPv6len {
+	if len(ip) != net.IPv6len {
 		return ip
 	}
 	// ipv6, check if it's ipv4 embedded
