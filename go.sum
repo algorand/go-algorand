@@ -61,8 +61,8 @@ github.com/algorand/falcon v0.1.0 h1:xl832kfZ7hHG6B4p90DQynjfKFGbIUgUOnsRiMZXfAo
 github.com/algorand/falcon v0.1.0/go.mod h1:OkQyHlGvS0kLNcIWbC21/uQcnbfwSOQm+wiqWwBG9pQ=
 github.com/algorand/go-codec/codec v1.1.10 h1:zmWYU1cp64jQVTOG8Tw8wa+k0VfwgXIPbnDfiVa+5QA=
 github.com/algorand/go-codec/codec v1.1.10/go.mod h1:YkEx5nmr/zuCeaDYOIhlDg92Lxju8tj2d2NrYqP7g7k=
-github.com/algorand/go-deadlock v0.2.2 h1:L7AKATSUCzoeVuOgpTipfCEjdUu5ECmlje8R7lP9DOY=
-github.com/algorand/go-deadlock v0.2.2/go.mod h1:Hat1OXKqKNUcN/iv74FjGhF4hsOE2l7gOgQ9ZVIq6Fk=
+github.com/algorand/go-deadlock v0.2.3 h1:ek9rjUyUF1HhUm0I2DyaCN8+3S850ONJNl5jQr9kZOA=
+github.com/algorand/go-deadlock v0.2.3/go.mod h1:Gli2d0Cb7kgXzSpJLC4Vn0DCLgjNVi6fNldY/mOtO/U=
 github.com/algorand/go-sumhash v0.1.0 h1:b/QRhyLuF//vOcicBIxBXYW8bERNoeLxieht/dUYpVg=
 github.com/algorand/go-sumhash v0.1.0/go.mod h1:OOe7jdDWUhLkuP1XytkK5gnLu9entAviN5DfDZh6XAc=
 github.com/algorand/graphtrace v0.1.0 h1:QemP1iT0W56SExD0NfiU6rsG34/v0Je6bg5UZnptEUM=
