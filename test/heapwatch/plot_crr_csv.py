@@ -118,7 +118,7 @@ def main():
                 xy = metrics[metric]
 
                 ax.plot([p[0] for p in xy], [p[1] for p in xy], label=f'{k}/{metric}', color=lc, linestyle=plt_line_styles[i%len(plt_line_styles)])
-        ax.legend(loc='upper left', ncol=2)
+        fig.legend(loc='outside upper left', ncol=4)
         plt.savefig(fname + '.svg', format='svg')
         plt.savefig(fname + '.png', format='png')
         #plt.show()
