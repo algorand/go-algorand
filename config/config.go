@@ -145,10 +145,7 @@ func mergeConfigFromFile(configpath string, source Local) (Local, error) {
 
 	err = loadConfig(f, &source)
 
-	// For now, all relays (listening for incoming connections) are also Archival
-	// We can change this logic in the future, but it's currently the sanest default.
-	if source.NetAddress != "" {
-		source.Archival = true
+	if source.Archival {
 		source.EnableLedgerService = true
 		source.EnableBlockService = true
 

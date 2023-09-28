@@ -112,7 +112,7 @@ func TestLocal_MergeConfig(t *testing.T) {
 	c2, err := mergeConfigFromDir(tempDir, defaultConfig)
 
 	require.NoError(t, err)
-	require.Equal(t, defaultConfig.Archival || c1.NetAddress != "", c2.Archival)
+	require.Equal(t, defaultConfig.Archival, c2.Archival)
 	require.Equal(t, defaultConfig.IncomingConnectionsLimit, c2.IncomingConnectionsLimit)
 	require.Equal(t, defaultConfig.BaseLoggerDebugLevel, c2.BaseLoggerDebugLevel)
 
@@ -165,29 +165,15 @@ func TestLoadPhonebookMissing(t *testing.T) {
 	require.True(t, os.IsNotExist(err))
 }
 
-func TestArchivalIfRelay(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-
-	testArchivalIfRelay(t, true)
-}
-
 func TestArchivalIfNotRelay(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	testArchivalIfRelay(t, false)
-}
-
-func testArchivalIfRelay(t *testing.T, relay bool) {
 	tempDir := t.TempDir()
 
 	c1 := struct {
 		NetAddress string
 	}{}
-	if relay {
-		c1.NetAddress = ":1234"
-	}
 
 	// write our reduced version of the Local struct
 	fileToMerge := filepath.Join(tempDir, ConfigFilename)
@@ -202,11 +188,7 @@ func testArchivalIfRelay(t *testing.T, relay bool) {
 
 	c2, err := mergeConfigFromDir(tempDir, defaultConfig)
 	require.NoError(t, err)
-	if relay {
-		require.True(t, c2.Archival, "Relay should be archival")
-	} else {
-		require.False(t, c2.Archival, "Non-relay should still be non-archival")
-	}
+	require.False(t, c2.Archival, "Non-relay should still be non-archival")
 }
 
 func TestLocal_ConfigExampleIsCorrect(t *testing.T) {

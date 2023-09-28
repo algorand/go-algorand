@@ -8,5 +8,19 @@
     "TelemetryURI": "{{TelemetryURI}}",
     "EnableMetrics": true,
     "MetricsURI": "{{MetricsURI}}",
-    "ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"EnableRuntimeMetrics\": true, \"CadaverSizeTarget\": 0, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true }"
+    "ConfigJSONOverride": "{ \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"EnableRuntimeMetrics\": true, \"CadaverSizeTarget\": 0, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true }",
+    "AltConfigs": [
+        {
+            "NetAddress": "{{NetworkPort}}",
+            "APIEndpoint": "{{APIEndpoint}}",
+            "APIToken": "{{APIToken}}",
+            "EnableBlockStats": true,
+            "EnableTelemetry": true,
+            "TelemetryURI": "{{TelemetryURI}}",
+            "EnableMetrics": true,
+            "MetricsURI": "{{MetricsURI}}",
+            "ConfigJSONOverride": "{ \"Archival\": true, \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"EnableRuntimeMetrics\": true, \"CadaverSizeTarget\": 0, \"PeerPingPeriodSeconds\": 30, \"EnableAgreementReporting\": true, \"EnableAgreementTimeMetrics\": true, \"EnableAssembleStats\": true, \"EnableProcessBlockStats\": true, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true }",
+            "FractionApply": 0.20
+        }
+    ]
 }
