@@ -3279,6 +3279,7 @@ func TestLedgerMaxBlockHistoryLookback(t *testing.T) {
 		eval := nextBlock(t, l)
 		endBlock(t, l, eval)
 	}
+	require.Equal(t, basics.Round(1500), l.Latest())
 
 	// make sure we can get the last 1400 blocks
 	blk, err := l.Block(100)
