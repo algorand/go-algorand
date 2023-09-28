@@ -3261,3 +3261,33 @@ func TestLedgerSPTrackerAfterReplay(t *testing.T) {
 	a.Equal(1, len(l.spVerification.pendingDeleteContexts))
 	verifyStateProofVerificationTracking(t, &l.spVerification, firstStateProofRound, 1, proto.StateProofInterval, true, spverDBLoc)
 }
+
+func TestLedgerMaxBlockHistoryLookback(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genBalances, _, _ := ledgertesting.NewTestGenesis()
+	var genHash crypto.Digest
+	crypto.RandBytes(genHash[:])
+	cfg := config.GetDefaultLocal()
+	// set the max lookback to 1400
+	cfg.MaxBlockHistoryLookback = 1400
+	l := newSimpleLedgerFull(t, genBalances, protocol.ConsensusCurrentVersion, genHash, cfg, simpleLedgerNotArchival())
+	defer l.Close()
+
+	// make 1500 blocks
+	for i := 0; i < 1500; i++ {
+		eval := nextBlock(t, l)
+		endBlock(t, l, eval)
+	}
+	require.Equal(t, basics.Round(1500), l.Latest())
+
+	// make sure we can get the last 1400 blocks
+	blk, err := l.Block(100)
+	require.NoError(t, err)
+	require.NotEmpty(t, blk)
+
+	// make sure we can't get a block before the max lookback
+	blk, err = l.Block(90)
+	require.Error(t, err)
+	require.Empty(t, blk)
+}
