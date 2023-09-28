@@ -74,7 +74,8 @@ const sharedResourcesVersion = 9 // apps can access resources from other transac
 // EXPERIMENTAL. These should be revisited whenever a new LogicSigVersion is
 // moved from vFuture to a new consensus version. If they remain unready, bump
 // their version, and fixup TestAssemble() in assembler_test.go.
-const pairingVersion = 10 // bn256 opcodes. will add bls12-381, and unify the available opcodes.
+const pairingVersion = 10   // bn256 opcodes. will add bls12-381, and unify the available opcodes.
+const incentiveVersion = 10 // block fields, heartbeat
 
 // Unlimited Global Storage opcodes
 const boxVersion = 8 // box_*

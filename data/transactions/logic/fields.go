@@ -979,8 +979,8 @@ type blockFieldSpec struct {
 var blockFieldSpecs = [...]blockFieldSpec{
 	{BlkSeed, StackBytes, randomnessVersion},
 	{BlkTimestamp, StackUint64, randomnessVersion},
-	{BlkProposer, StackAddress, 10},
-	{BlkFeesCollected, StackUint64, 10},
+	{BlkProposer, StackAddress, incentiveVersion},
+	{BlkFeesCollected, StackUint64, incentiveVersion},
 }
 
 func blockFieldSpecByField(r BlockField) (blockFieldSpec, bool) {

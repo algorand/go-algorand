@@ -81,12 +81,18 @@ assert base64.b64decode(txinfo['logs'][1]) == block['fc'].to_bytes(8, "big")
 # balances may be changing all the time, because e2e_client_runner is
 # taking out 1M algos at a time to run parallel subtests. We'll work
 # with the balance mod 1M, so we can see the small fees being added to
-# it, even if the blance has dropped by 1M.
+# it, even if the balance has dropped by 1M. But then we _also_ need
+# to worry about wraparound.
 after_mining_credit = goal.balance(create_proposer)
 assertion = str(after_mining_credit)+" > "+str(immediately_after)
 print("credit", assertion)
 M = 1_000_000
-assert after_mining_credit % M > immediately_after % M, assertion
+before = immediately_after % M
+after = after_mining_credit % M
 
+# Detect that the mining credit wrapped around with respect to 1M.
+if after < M/4 and before > 3*M/4:
+    after += M
+assert after > before, assertion
 stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 print(f"{os.path.basename(sys.argv[0])} OK {stamp}")

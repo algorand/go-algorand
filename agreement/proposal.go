@@ -247,7 +247,6 @@ func verifyNewSeed(p unauthenticatedProposal, ledger LedgerReader) error {
 	if p.Seed() != committee.Seed(crypto.HashObj(input)) {
 		return fmt.Errorf("payload seed malformed (%v != %v)", committee.Seed(crypto.HashObj(input)), p.Seed())
 	}
-
 	return nil
 }
 
