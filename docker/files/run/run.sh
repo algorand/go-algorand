@@ -27,15 +27,8 @@ fi
 ####################
 
 function catchup() {
-  local FAST_CATCHUP_URL="https://algorand-catchpoints.s3.us-east-2.amazonaws.com/channel/CHANNEL/latest.catchpoint"
-  local CATCHPOINT=$(curl -s ${FAST_CATCHUP_URL/CHANNEL/$NETWORK})
-  if [[ "$(echo $CATCHPOINT | wc -l | tr -d ' ')" != "1" ]]; then
-    echo "Problem starting fast catchup."
-    exit 1
-  fi
-
   sleep 5
-  goal node catchup "$CATCHPOINT"
+  goal node catchup --force --min 1000000
 }
 
 function start_public_network() {
