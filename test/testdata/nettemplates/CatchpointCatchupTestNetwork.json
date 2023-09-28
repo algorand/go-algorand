@@ -23,7 +23,8 @@
       "Wallets": [
         { "Name": "Wallet1",
           "ParticipationOnly": false }
-      ]
+      ],
+      "ConfigJSONOverride": "{\"Archival\": true}"
     },
     {
       "Name": "Node",
