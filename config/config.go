@@ -145,7 +145,7 @@ func mergeConfigFromFile(configpath string, source Local) (Local, error) {
 
 	err = loadConfig(f, &source)
 
-	if source.Archival {
+	if source.Archival || source.NetAddress != "" {
 		source.EnableLedgerService = true
 		source.EnableBlockService = true
 
