@@ -296,7 +296,7 @@ func (e messageEvent) String() string {
 }
 
 func (e messageEvent) ComparableStr() string {
-	return e.T.String()
+	return fmt.Sprintf("{T:%s %d Err:%v}", e.t().String(), e.ConsensusRound(), e.Err)
 }
 
 func (e messageEvent) ConsensusRound() round {

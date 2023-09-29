@@ -66,6 +66,7 @@ type action interface {
 	do(context.Context, *Service)
 
 	String() string
+	ComparableString() string
 }
 
 type nonpersistent struct{}
@@ -87,6 +88,8 @@ func (a noopAction) do(context.Context, *Service) {}
 func (a noopAction) String() string {
 	return a.t().String()
 }
+
+func (a noopAction) ComparableString() string { return a.String() }
 
 type networkAction struct {
 	nonpersistent
@@ -118,6 +121,13 @@ func (a networkAction) String() string {
 		return fmt.Sprintf("%s: %2v: %5v", a.t().String(), a.Tag, a.CompoundMessage.Proposal.value())
 	}
 	return fmt.Sprintf("%s: %2v", a.t().String(), a.Tag)
+}
+
+func (a networkAction) ComparableString() string {
+	if a.Tag == protocol.AgreementVoteTag {
+		return fmt.Sprintf("%s: %2v: %3v-%2v-%2v", a.t().String(), a.Tag, a.UnauthenticatedVote.R.Round, a.UnauthenticatedVote.R.Period, a.UnauthenticatedVote.R.Step)
+	}
+	return a.String()
 }
 
 func (a networkAction) do(ctx context.Context, s *Service) {
@@ -192,6 +202,18 @@ func (a cryptoAction) String() string {
 	return a.t().String()
 }
 
+func (a cryptoAction) ComparableString() (s string) {
+	switch a.T {
+	case verifyVote:
+		s = fmt.Sprintf("%s: %3v-%2v TaskIndex %d", a.t().String(), a.Round, a.Period, a.TaskIndex)
+	case verifyPayload:
+		s = fmt.Sprintf("%s: %3v-%2v Pinned %v", a.t().String(), a.Round, a.Period, a.Pinned)
+	case verifyBundle:
+		s = fmt.Sprintf("%s: %3v-%2v-%2v", a.t().String(), a.Round, a.Period, a.Step)
+	}
+	return
+}
+
 func (a cryptoAction) do(ctx context.Context, s *Service) {
 	switch a.T {
 	case verifyVote:
@@ -224,6 +246,8 @@ func (a ensureAction) t() actionType {
 func (a ensureAction) String() string {
 	return fmt.Sprintf("%s: %.5s: %v, %v, %.5s", a.t().String(), a.Payload.Digest().String(), a.Certificate.Round, a.Certificate.Period, a.Certificate.Proposal.BlockDigest.String())
 }
+
+func (a ensureAction) ComparableString() string { return a.String() }
 
 func (a ensureAction) do(ctx context.Context, s *Service) {
 	logEvent := logspec.AgreementEvent{
@@ -288,6 +312,8 @@ func (a stageDigestAction) String() string {
 	return fmt.Sprintf("%s: %.5s. %v. %v", a.t().String(), a.Certificate.Proposal.BlockDigest.String(), a.Certificate.Round, a.Certificate.Period)
 }
 
+func (a stageDigestAction) ComparableString() string { return a.String() }
+
 func (a stageDigestAction) do(ctx context.Context, service *Service) {
 	logEvent := logspec.AgreementEvent{
 		Hash:   a.Certificate.Proposal.BlockDigest.String(),
@@ -312,6 +338,10 @@ func (a rezeroAction) t() actionType {
 
 func (a rezeroAction) String() string {
 	return a.t().String()
+}
+
+func (a rezeroAction) ComparableString() string {
+	return fmt.Sprintf("%s: %d", a.t().String(), a.Round)
 }
 
 func (a rezeroAction) do(ctx context.Context, s *Service) {
@@ -345,6 +375,8 @@ func (a pseudonodeAction) t() actionType {
 func (a pseudonodeAction) String() string {
 	return fmt.Sprintf("%v %3v-%2v-%2v: %.5v", a.t().String(), a.Round, a.Period, a.Step, a.Proposal.BlockDigest.String())
 }
+
+func (a pseudonodeAction) ComparableString() string { return a.String() }
 
 func (a pseudonodeAction) persistent() bool {
 	return a.T == attest
@@ -538,3 +570,5 @@ func (c checkpointAction) do(ctx context.Context, s *Service) {
 func (c checkpointAction) String() string {
 	return c.t().String()
 }
+
+func (c checkpointAction) ComparableString() string { return c.String() }
