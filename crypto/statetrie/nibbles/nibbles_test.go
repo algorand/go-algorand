@@ -17,12 +17,14 @@
 package nibbles
 
 import (
-	"bytes"
-	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/stretchr/testify/require"
-	"math/rand"
-	"testing"
 	"time"
+	"bytes"
+	"testing"
+	"math/rand"
+
+	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestNibblesRandom(t *testing.T) {
