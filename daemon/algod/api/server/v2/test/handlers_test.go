@@ -1311,7 +1311,7 @@ func startCatchupTest(t *testing.T, catchpoint string, nodeError error, expected
 	startCatchupTestFull(t, catchpoint, nodeError, expectedCode, 0, "")
 }
 
-func startCatchupTestFull(t *testing.T, catchpoint string, nodeError error, expectedCode int, initRounds uint64, response string) {
+func startCatchupTestFull(t *testing.T, catchpoint string, nodeError error, expectedCode int, minRounds uint64, response string) {
 	numAccounts := 1
 	numTransactions := 1
 	offlineAccounts := true
@@ -1325,8 +1325,8 @@ func startCatchupTestFull(t *testing.T, catchpoint string, nodeError error, expe
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	var err error
-	if initRounds != 0 {
-		err = handler.StartCatchup(c, catchpoint, model.StartCatchupParams{Initialize: &initRounds})
+	if minRounds != 0 {
+		err = handler.StartCatchup(c, catchpoint, model.StartCatchupParams{Min: &minRounds})
 	} else {
 		err = handler.StartCatchup(c, catchpoint, model.StartCatchupParams{})
 	}

@@ -1454,8 +1454,8 @@ type GetTransactionProofParamsFormat string
 
 // StartCatchupParams defines parameters for StartCatchup.
 type StartCatchupParams struct {
-	// Initialize Specify a number of blocks which the ledger must be advanced by in order to start the catchup. This is useful for simplifying tools which support fast catchup, they can run the catchup unconditionally and the node will skip the catchup if it is not needed.
-	Initialize *uint64 `form:"initialize,omitempty" json:"initialize,omitempty"`
+	// Min Specify the minimum number of blocks which the ledger must be advanced by in order to start the catchup. This is useful for simplifying tools which support fast catchup, they can run the catchup unconditionally and the node will skip the catchup if it is not needed.
+	Min *uint64 `form:"min,omitempty" json:"min,omitempty"`
 }
 
 // GetLedgerStateDeltaForTransactionGroupParams defines parameters for GetLedgerStateDeltaForTransactionGroup.

@@ -454,6 +454,11 @@ func (l *Ledger) notifyCommit(r basics.Round) basics.Round {
 	}()
 	minToSave := l.trackers.committedUpTo(r)
 
+	// Check if additional block history is configured, and adjust minToSave if so.
+	if configuredMinToSave := r.SubSaturate(basics.Round(l.cfg.MaxBlockHistoryLookback)); configuredMinToSave < minToSave {
+		minToSave = configuredMinToSave
+	}
+
 	if l.archival {
 		// Do not forget any blocks.
 		minToSave = 0
