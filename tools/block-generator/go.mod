@@ -1,6 +1,7 @@
 module github.com/algorand/go-algorand/tools/block-generator
 
 replace github.com/algorand/go-algorand => ../..
+replace github.com/algorand/msgp => ../../msgp
 
 go 1.20
 
