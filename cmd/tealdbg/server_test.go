@@ -18,7 +18,6 @@ package main
 
 import (
 	"context"
-	"math/rand"
 	"strings"
 	"testing"
 	"time"
@@ -105,17 +104,9 @@ func tryStartingServerDebug(t *testing.T, ds *DebugServer) (ok bool) {
 }
 
 func serverTestImpl(t *testing.T, run func(t *testing.T, ds *DebugServer) bool, dp *DebugParams) {
-	maxPortNum := 65000
-	minPortNum := 40000
-	attempt := 0
-	started := false
-	var ds DebugServer
-	for attempt < 5 && !started {
-		port = rand.Intn(maxPortNum-minPortNum) + minPortNum
-		ds = makeDebugServer("127.0.0.1", port, &mockFactory{}, dp)
-		started = run(t, &ds)
-		attempt++
-	}
+	// Using 0 as port should select a random available port.
+	ds := makeDebugServer("127.0.0.1", 0, &mockFactory{}, dp)
+	started := run(t, &ds)
 
 	require.True(t, started)
 	require.NotEmpty(t, ds)
