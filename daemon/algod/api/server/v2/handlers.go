@@ -494,7 +494,7 @@ func (v2 *Handlers) basicAccountInformation(ctx echo.Context, addr basics.Addres
 	}
 
 	var apiParticipation *model.AccountParticipation
-	if record.VoteID != (crypto.OneTimeSignatureVerifier{}) {
+	if !record.VoteID.IsEmpty() {
 		apiParticipation = &model.AccountParticipation{
 			VoteParticipationKey:      record.VoteID[:],
 			SelectionParticipationKey: record.SelectionID[:],

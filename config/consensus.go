@@ -535,6 +535,8 @@ type ConsensusParams struct {
 	MiningPercent uint64
 }
 
+// EnableAbsenteeTracking returns true if the suspension mechanism of absentee
+// accounts is enabled.
 func (cp ConsensusParams) EnableAbsenteeTracking() bool {
 	return cp.MaxProposedAbsentOnlineAccounts > 0
 }
