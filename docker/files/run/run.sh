@@ -96,7 +96,7 @@ function configure_data_dir() {
   if [ "$TELEMETRY_NAME" != "" ]; then
     diagcfg telemetry name -n "$TELEMETRY_NAME" -d "$ALGORAND_DATA"
     diagcfg telemetry enable -d "$ALGORAND_DATA"
-  else
+  elif ! [ -f "/etc/algorand/logging.config" ]; then
     diagcfg telemetry disable
   fi
 
