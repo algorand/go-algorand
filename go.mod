@@ -2,6 +2,8 @@ module github.com/algorand/go-algorand
 
 go 1.20
 
+replace github.com/algorand/msgp => ./msgp
+
 require (
 	github.com/DataDog/zstd v1.5.2
 	github.com/algorand/avm-abi v0.2.0
