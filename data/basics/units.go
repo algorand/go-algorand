@@ -99,7 +99,7 @@ func (a *MicroAlgos) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // UnmarshalMsgWithState implements msgp.Unmarshaler
 func (a *MicroAlgos) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
-	if st.Depth == 0 {
+	if st.AllowableDepth == 0 {
 		return nil, msgp.ErrMaxDepthExceeded{}
 	}
 	a.Raw, o, err = msgp.ReadUint64Bytes(bts)
