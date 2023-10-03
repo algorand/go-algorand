@@ -10,7 +10,7 @@ require (
 	github.com/algorand/go-deadlock v0.2.3
 	github.com/algorand/go-sumhash v0.1.0
 	github.com/algorand/graphtrace v0.1.0
-	github.com/algorand/msgp v1.1.55
+	github.com/algorand/msgp v1.1.60
 	github.com/algorand/oapi-codegen v1.12.0-algorand.0
 	github.com/algorand/sortition v1.0.0
 	github.com/algorand/websocket v1.4.6
