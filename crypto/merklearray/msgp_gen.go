@@ -13,6 +13,7 @@ import (
 //   |-----> MarshalMsg
 //   |-----> CanMarshalMsg
 //   |-----> (*) UnmarshalMsg
+//   |-----> (*) UnmarshalMsgWithState
 //   |-----> (*) CanUnmarshalMsg
 //   |-----> Msgsize
 //   |-----> MsgIsZero
@@ -22,6 +23,7 @@ import (
 //   |-----> (*) MarshalMsg
 //   |-----> (*) CanMarshalMsg
 //   |-----> (*) UnmarshalMsg
+//   |-----> (*) UnmarshalMsgWithState
 //   |-----> (*) CanUnmarshalMsg
 //   |-----> (*) Msgsize
 //   |-----> (*) MsgIsZero
@@ -31,6 +33,7 @@ import (
 //        |-----> (*) MarshalMsg
 //        |-----> (*) CanMarshalMsg
 //        |-----> (*) UnmarshalMsg
+//        |-----> (*) UnmarshalMsgWithState
 //        |-----> (*) CanUnmarshalMsg
 //        |-----> (*) Msgsize
 //        |-----> (*) MsgIsZero
@@ -39,6 +42,7 @@ import (
 //   |-----> (*) MarshalMsg
 //   |-----> (*) CanMarshalMsg
 //   |-----> (*) UnmarshalMsg
+//   |-----> (*) UnmarshalMsgWithState
 //   |-----> (*) CanUnmarshalMsg
 //   |-----> (*) Msgsize
 //   |-----> (*) MsgIsZero
@@ -68,7 +72,12 @@ func (_ Layer) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *Layer) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *Layer) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var zb0002 int
 	var zb0003 bool
 	zb0002, zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
@@ -89,7 +98,7 @@ func (z *Layer) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		(*z) = make(Layer, zb0002)
 	}
 	for zb0001 := range *z {
-		bts, err = (*z)[zb0001].UnmarshalMsg(bts)
+		bts, err = (*z)[zb0001].UnmarshalMsgWithState(bts, st)
 		if err != nil {
 			err = msgp.WrapError(err, zb0001)
 			return
@@ -99,6 +108,9 @@ func (z *Layer) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *Layer) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *Layer) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*Layer)
 	return ok
@@ -178,7 +190,12 @@ func (_ *Proof) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *Proof) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *Proof) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0002 int
@@ -212,7 +229,7 @@ func (z *Proof) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				(*z).Path = make([]crypto.GenericDigest, zb0004)
 			}
 			for zb0001 := range (*z).Path {
-				bts, err = (*z).Path[zb0001].UnmarshalMsg(bts)
+				bts, err = (*z).Path[zb0001].UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "Path", zb0001)
 					return
@@ -221,7 +238,7 @@ func (z *Proof) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0002 > 0 {
 			zb0002--
-			bts, err = (*z).HashFactory.UnmarshalMsg(bts)
+			bts, err = (*z).HashFactory.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "HashFactory")
 				return
@@ -279,14 +296,14 @@ func (z *Proof) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					(*z).Path = make([]crypto.GenericDigest, zb0006)
 				}
 				for zb0001 := range (*z).Path {
-					bts, err = (*z).Path[zb0001].UnmarshalMsg(bts)
+					bts, err = (*z).Path[zb0001].UnmarshalMsgWithState(bts, st)
 					if err != nil {
 						err = msgp.WrapError(err, "Path", zb0001)
 						return
 					}
 				}
 			case "hsh":
-				bts, err = (*z).HashFactory.UnmarshalMsg(bts)
+				bts, err = (*z).HashFactory.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "HashFactory")
 					return
@@ -310,6 +327,9 @@ func (z *Proof) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *Proof) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *Proof) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*Proof)
 	return ok
@@ -392,7 +412,12 @@ func (_ *SingleLeafProof) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *SingleLeafProof) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *SingleLeafProof) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0002 int
@@ -426,7 +451,7 @@ func (z *SingleLeafProof) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				(*z).Proof.Path = make([]crypto.GenericDigest, zb0004)
 			}
 			for zb0001 := range (*z).Proof.Path {
-				bts, err = (*z).Proof.Path[zb0001].UnmarshalMsg(bts)
+				bts, err = (*z).Proof.Path[zb0001].UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "Path", zb0001)
 					return
@@ -435,7 +460,7 @@ func (z *SingleLeafProof) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0002 > 0 {
 			zb0002--
-			bts, err = (*z).Proof.HashFactory.UnmarshalMsg(bts)
+			bts, err = (*z).Proof.HashFactory.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "HashFactory")
 				return
@@ -493,14 +518,14 @@ func (z *SingleLeafProof) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					(*z).Proof.Path = make([]crypto.GenericDigest, zb0006)
 				}
 				for zb0001 := range (*z).Proof.Path {
-					bts, err = (*z).Proof.Path[zb0001].UnmarshalMsg(bts)
+					bts, err = (*z).Proof.Path[zb0001].UnmarshalMsgWithState(bts, st)
 					if err != nil {
 						err = msgp.WrapError(err, "Path", zb0001)
 						return
 					}
 				}
 			case "hsh":
-				bts, err = (*z).Proof.HashFactory.UnmarshalMsg(bts)
+				bts, err = (*z).Proof.HashFactory.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "HashFactory")
 					return
@@ -524,6 +549,9 @@ func (z *SingleLeafProof) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *SingleLeafProof) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *SingleLeafProof) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*SingleLeafProof)
 	return ok
@@ -613,7 +641,12 @@ func (_ *Tree) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *Tree) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *Tree) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0003 int
@@ -667,7 +700,7 @@ func (z *Tree) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					(*z).Levels[zb0001] = make(Layer, zb0007)
 				}
 				for zb0002 := range (*z).Levels[zb0001] {
-					bts, err = (*z).Levels[zb0001][zb0002].UnmarshalMsg(bts)
+					bts, err = (*z).Levels[zb0001][zb0002].UnmarshalMsgWithState(bts, st)
 					if err != nil {
 						err = msgp.WrapError(err, "struct-from-array", "Levels", zb0001, zb0002)
 						return
@@ -685,7 +718,7 @@ func (z *Tree) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0003 > 0 {
 			zb0003--
-			bts, err = (*z).Hash.UnmarshalMsg(bts)
+			bts, err = (*z).Hash.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Hash")
 				return
@@ -763,7 +796,7 @@ func (z *Tree) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						(*z).Levels[zb0001] = make(Layer, zb0011)
 					}
 					for zb0002 := range (*z).Levels[zb0001] {
-						bts, err = (*z).Levels[zb0001][zb0002].UnmarshalMsg(bts)
+						bts, err = (*z).Levels[zb0001][zb0002].UnmarshalMsgWithState(bts, st)
 						if err != nil {
 							err = msgp.WrapError(err, "Levels", zb0001, zb0002)
 							return
@@ -777,7 +810,7 @@ func (z *Tree) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "hsh":
-				bts, err = (*z).Hash.UnmarshalMsg(bts)
+				bts, err = (*z).Hash.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "Hash")
 					return
@@ -801,6 +834,9 @@ func (z *Tree) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *Tree) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *Tree) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*Tree)
 	return ok

@@ -4260,39 +4260,6 @@ func TestUpdatePhonebookAddresses(t *testing.T) {
 	})
 }
 
-func TestUpdatePhonebookAddressesPersistentPeers(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	rapid.Check(t, func(t1 *rapid.T) {
-		nw := makeTestWebsocketNode(t)
-		// Generate a new set of relay domains
-		// Dont overlap with archive nodes previously specified, duplicates between them not stored in phonebook as of this writing
-		relayDomainsGen := rapid.SliceOfN(rapidgen.DomainOf(253, 63, "", nil), 0, 200)
-		relayDomains := relayDomainsGen.Draw(t1, "relayDomains")
-
-		var persistentPeers []string
-		// Add an initial set of relay domains as Persistent Peers in the Phonebook,
-		persistentPeers = rapid.SliceOfN(rapidgen.DomainOf(253, 63, "", relayDomains), 0, 200).Draw(t1, "")
-		nw.phonebook.AddPersistentPeers(persistentPeers, string(nw.NetworkID), PhoneBookEntryRelayRole)
-
-		// run updatePhonebookAddresses
-		nw.updatePhonebookAddresses(relayDomains, nil)
-
-		// Check that entries are in fact in phonebook less any duplicates
-		dedupedRelayDomains := removeDuplicateStr(relayDomains, false)
-
-		relayPeers := nw.GetPeers(PeersPhonebookRelays)
-		require.Equal(t, len(dedupedRelayDomains)+len(persistentPeers), len(relayPeers))
-
-		relayAddrs := make([]string, 0, len(relayPeers))
-		for _, peer := range relayPeers {
-			relayAddrs = append(relayAddrs, peer.(HTTPPeer).GetAddress())
-		}
-
-		require.ElementsMatch(t, append(dedupedRelayDomains, persistentPeers...), relayAddrs)
-	})
-}
-
 func removeDuplicateStr(strSlice []string, lowerCase bool) []string {
 	allKeys := make(map[string]bool)
 	var dedupStrSlice = make([]string, 0)

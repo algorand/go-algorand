@@ -13,6 +13,7 @@ import (
 //            |-----> (*) MarshalMsg
 //            |-----> (*) CanMarshalMsg
 //            |-----> (*) UnmarshalMsg
+//            |-----> (*) UnmarshalMsgWithState
 //            |-----> (*) CanUnmarshalMsg
 //            |-----> (*) Msgsize
 //            |-----> (*) MsgIsZero
@@ -22,6 +23,7 @@ import (
 //         |-----> (*) MarshalMsg
 //         |-----> (*) CanMarshalMsg
 //         |-----> (*) UnmarshalMsg
+//         |-----> (*) UnmarshalMsgWithState
 //         |-----> (*) CanUnmarshalMsg
 //         |-----> (*) Msgsize
 //         |-----> (*) MsgIsZero
@@ -73,7 +75,12 @@ func (_ *AccountApplicationModel) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *AccountApplicationModel) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *AccountApplicationModel) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0001 int
@@ -97,7 +104,7 @@ func (z *AccountApplicationModel) UnmarshalMsg(bts []byte) (o []byte, err error)
 				if (*z).AppLocalState == nil {
 					(*z).AppLocalState = new(basics.AppLocalState)
 				}
-				bts, err = (*z).AppLocalState.UnmarshalMsg(bts)
+				bts, err = (*z).AppLocalState.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "AppLocalState")
 					return
@@ -116,7 +123,7 @@ func (z *AccountApplicationModel) UnmarshalMsg(bts []byte) (o []byte, err error)
 				if (*z).AppParams == nil {
 					(*z).AppParams = new(basics.AppParams)
 				}
-				bts, err = (*z).AppParams.UnmarshalMsg(bts)
+				bts, err = (*z).AppParams.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "AppParams")
 					return
@@ -157,7 +164,7 @@ func (z *AccountApplicationModel) UnmarshalMsg(bts []byte) (o []byte, err error)
 					if (*z).AppLocalState == nil {
 						(*z).AppLocalState = new(basics.AppLocalState)
 					}
-					bts, err = (*z).AppLocalState.UnmarshalMsg(bts)
+					bts, err = (*z).AppLocalState.UnmarshalMsgWithState(bts, st)
 					if err != nil {
 						err = msgp.WrapError(err, "AppLocalState")
 						return
@@ -174,7 +181,7 @@ func (z *AccountApplicationModel) UnmarshalMsg(bts []byte) (o []byte, err error)
 					if (*z).AppParams == nil {
 						(*z).AppParams = new(basics.AppParams)
 					}
-					bts, err = (*z).AppParams.UnmarshalMsg(bts)
+					bts, err = (*z).AppParams.UnmarshalMsgWithState(bts, st)
 					if err != nil {
 						err = msgp.WrapError(err, "AppParams")
 						return
@@ -193,6 +200,9 @@ func (z *AccountApplicationModel) UnmarshalMsg(bts []byte) (o []byte, err error)
 	return
 }
 
+func (z *AccountApplicationModel) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *AccountApplicationModel) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*AccountApplicationModel)
 	return ok
@@ -274,7 +284,12 @@ func (_ *AccountAssetModel) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *AccountAssetModel) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *AccountAssetModel) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0001 int
@@ -298,7 +313,7 @@ func (z *AccountAssetModel) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				if (*z).AssetParams == nil {
 					(*z).AssetParams = new(basics.AssetParams)
 				}
-				bts, err = (*z).AssetParams.UnmarshalMsg(bts)
+				bts, err = (*z).AssetParams.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "AssetParams")
 					return
@@ -317,7 +332,7 @@ func (z *AccountAssetModel) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				if (*z).AssetHolding == nil {
 					(*z).AssetHolding = new(basics.AssetHolding)
 				}
-				bts, err = (*z).AssetHolding.UnmarshalMsg(bts)
+				bts, err = (*z).AssetHolding.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "AssetHolding")
 					return
@@ -358,7 +373,7 @@ func (z *AccountAssetModel) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					if (*z).AssetParams == nil {
 						(*z).AssetParams = new(basics.AssetParams)
 					}
-					bts, err = (*z).AssetParams.UnmarshalMsg(bts)
+					bts, err = (*z).AssetParams.UnmarshalMsgWithState(bts, st)
 					if err != nil {
 						err = msgp.WrapError(err, "AssetParams")
 						return
@@ -375,7 +390,7 @@ func (z *AccountAssetModel) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					if (*z).AssetHolding == nil {
 						(*z).AssetHolding = new(basics.AssetHolding)
 					}
-					bts, err = (*z).AssetHolding.UnmarshalMsg(bts)
+					bts, err = (*z).AssetHolding.UnmarshalMsgWithState(bts, st)
 					if err != nil {
 						err = msgp.WrapError(err, "AssetHolding")
 						return
@@ -394,6 +409,9 @@ func (z *AccountAssetModel) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *AccountAssetModel) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *AccountAssetModel) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*AccountAssetModel)
 	return ok
