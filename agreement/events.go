@@ -602,7 +602,7 @@ func (e payloadProcessedEvent) ComparableStr() string {
 type CredentialTrackingEffect uint8
 
 const (
-	// NoCredentialTrackingImpact indicates the filtered event had no impact on
+	// NoCredentialTrackingImpact indicates the filtered event would have no impact on
 	// the credential tracking mechanism.
 	NoCredentialTrackingImpact CredentialTrackingEffect = iota
 
