@@ -107,7 +107,7 @@ func (ref intReference) length(ops *OpStream, assembled []byte) (int, error) {
 	case opIntc:
 		return 2, nil
 	default:
-		return 0, errorLinef(ops.OffsetToLine[ref.position], "unexpected op at intReference: %d", assembled[ref.position])
+		return 0, sourceErrorf(ops.OffsetToSource[ref.position], "unexpected op at intReference: %d", assembled[ref.position])
 	}
 }
 
@@ -176,7 +176,7 @@ func (ref byteReference) length(ops *OpStream, assembled []byte) (int, error) {
 	case opBytec:
 		return 2, nil
 	default:
-		return 0, errorLinef(ops.OffsetToLine[ref.position], "unexpected op at byteReference: %d", assembled[ref.position])
+		return 0, sourceErrorf(ops.OffsetToSource[ref.position], "unexpected op at byteReference: %d", assembled[ref.position])
 	}
 }
 
@@ -214,6 +214,14 @@ func (ref byteReference) makeNewReference(ops *OpStream, singleton bool, newInde
 	}
 }
 
+// SourceLocation points to a specific location in a source file.
+type SourceLocation struct {
+	// Line is the line number, starting at 0.
+	Line int
+	// Column is the column number, starting at 0.
+	Column int
+}
+
 // OpStream accumulates state, including the final program, during assembly.
 type OpStream struct {
 	Version  uint64
@@ -249,8 +257,8 @@ type OpStream struct {
 	// track references in order to patch in jump offsets
 	labelReferences []labelReference
 
-	// map opcode offsets to source line
-	OffsetToLine map[int]int
+	// map opcode offsets to source location
+	OffsetToSource map[int]SourceLocation
 
 	HasStatefulOps bool
 
@@ -264,12 +272,12 @@ type OpStream struct {
 // OpStream must be used for each call to assemble().
 func newOpStream(version uint64) OpStream {
 	o := OpStream{
-		labels:       make(map[string]int),
-		OffsetToLine: make(map[int]int),
-		typeTracking: true,
-		Version:      version,
-		macros:       make(map[string][]token),
-		known:        ProgramKnowledge{fp: -1},
+		labels:         make(map[string]int),
+		OffsetToSource: make(map[int]SourceLocation),
+		typeTracking:   true,
+		Version:        version,
+		macros:         make(map[string][]token),
+		known:          ProgramKnowledge{fp: -1},
 	}
 
 	for i := range o.known.scratchSpace {
@@ -365,9 +373,9 @@ func (ops *OpStream) createLabel(withColon token) {
 	ops.known.label()
 }
 
-// recordSourceLine adds an entry to pc to line mapping
-func (ops *OpStream) recordSourceLine() {
-	ops.OffsetToLine[ops.pending.Len()] = ops.sourceLine - 1
+// recordSourceLocation adds an entry to pc to source location mapping
+func (ops *OpStream) recordSourceLocation(line, column int) {
+	ops.OffsetToSource[ops.pending.Len()] = SourceLocation{line - 1, column}
 }
 
 // referToLabel records an opcode label reference to resolve later
@@ -1826,8 +1834,8 @@ func (se sourceError) Unwrap() error {
 	return se.Err
 }
 
-func errorLinef(line int, format string, a ...interface{}) *sourceError {
-	return &sourceError{line, 0, fmt.Errorf(format, a...)}
+func sourceErrorf(location SourceLocation, format string, a ...interface{}) *sourceError {
+	return &sourceError{location.Line, location.Column, fmt.Errorf(format, a...)}
 }
 
 type token struct {
@@ -2087,8 +2095,9 @@ func (ops *OpStream) assemble(text string) error {
 			}
 			spec, expandedName, ok := getSpec(ops, current[0], len(current)-1)
 			if ok {
-				ops.trace("%3d: %s\t", ops.sourceLine, opstring)
-				ops.recordSourceLine()
+				line, column := current[0].line, current[0].col
+				ops.trace("%3d:%d %s\t", line, column, opstring)
+				ops.recordSourceLocation(line, column)
 				if spec.Modes == ModeApp {
 					ops.HasStatefulOps = true
 				}
@@ -2516,14 +2525,14 @@ func (ops *OpStream) optimizeConstants(refs []constReference, constBlock []inter
 			}
 		}
 		if !found {
-			err = errorLinef(ops.OffsetToLine[ref.getPosition()], "value not found in constant block: %v", ref.getValue())
+			err = sourceErrorf(ops.OffsetToSource[ref.getPosition()], "value not found in constant block: %v", ref.getValue())
 			return
 		}
 	}
 
 	for _, f := range freqs {
 		if f.freq == 0 {
-			err = errorLinef(ops.sourceLine, "member of constant block is not used: %v", f.value)
+			err = sourceErrorf(SourceLocation{ops.sourceLine, 0}, "member of constant block is not used: %v", f.value)
 			return
 		}
 	}
@@ -2554,7 +2563,7 @@ func (ops *OpStream) optimizeConstants(refs []constReference, constBlock []inter
 			}
 		}
 		if newIndex == -1 {
-			return nil, errorLinef(ops.OffsetToLine[ref.getPosition()], "value not found in constant block: %v", ref.getValue())
+			return nil, sourceErrorf(ops.OffsetToSource[ref.getPosition()], "value not found in constant block: %v", ref.getValue())
 		}
 
 		newBytes := ref.makeNewReference(ops, singleton, newIndex)
@@ -2601,15 +2610,15 @@ func (ops *OpStream) optimizeConstants(refs []constReference, constBlock []inter
 			}
 		}
 
-		fixedOffsetsToLine := make(map[int]int, len(ops.OffsetToLine))
-		for pos, sourceLine := range ops.OffsetToLine {
+		fixedOffsetsToSource := make(map[int]SourceLocation, len(ops.OffsetToSource))
+		for pos, sourceLocation := range ops.OffsetToSource {
 			if pos > position {
-				fixedOffsetsToLine[pos+positionDelta] = sourceLine
+				fixedOffsetsToSource[pos+positionDelta] = sourceLocation
 			} else {
-				fixedOffsetsToLine[pos] = sourceLine
+				fixedOffsetsToSource[pos] = sourceLocation
 			}
 		}
-		ops.OffsetToLine = fixedOffsetsToLine
+		ops.OffsetToSource = fixedOffsetsToSource
 	}
 
 	ops.pending = *bytes.NewBuffer(raw)
@@ -2666,11 +2675,11 @@ func (ops *OpStream) prependCBlocks() []byte {
 	}
 
 	// fixup offset to line mapping
-	newOffsetToLine := make(map[int]int, len(ops.OffsetToLine))
-	for o, l := range ops.OffsetToLine {
-		newOffsetToLine[o+pbl] = l
+	newOffsetToSource := make(map[int]SourceLocation, len(ops.OffsetToSource))
+	for o, l := range ops.OffsetToSource {
+		newOffsetToSource[o+pbl] = l
 	}
-	ops.OffsetToLine = newOffsetToLine
+	ops.OffsetToSource = newOffsetToSource
 
 	return out
 }
@@ -2684,7 +2693,7 @@ func (ops *OpStream) record(se *sourceError) {
 }
 
 func (ops *OpStream) warn(t token, format string, a ...interface{}) {
-	warning := &sourceError{Line: t.line, Column: t.col, Err: fmt.Errorf(format, a...)}
+	warning := &sourceError{t.line, t.col, fmt.Errorf(format, a...)}
 	ops.Warnings = append(ops.Warnings, warning)
 }
 

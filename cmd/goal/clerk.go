@@ -1012,7 +1012,7 @@ func assembleFile(fname string, printWarnings bool) (program []byte) {
 
 func assembleFileWithMap(fname string, printWarnings bool) ([]byte, logic.SourceMap) {
 	ops := assembleFileImpl(fname, printWarnings)
-	return ops.Program, logic.GetSourceMap([]string{fname}, ops.OffsetToLine)
+	return ops.Program, logic.GetSourceMap([]string{fname}, ops.OffsetToSource)
 }
 
 func disassembleFile(fname, outname string) {

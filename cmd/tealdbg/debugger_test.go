@@ -130,15 +130,17 @@ func createSessionFromSource(t *testing.T, program string) *session {
 
 	// create a sample disassembly line to pc mapping
 	// this simple source is similar to disassembly except intcblock at the beginning
-	pcOffset := make(map[int]int, len(ops.OffsetToLine))
-	for pc, line := range ops.OffsetToLine {
-		pcOffset[line+1] = pc
+	offsetToLine := make(map[int]int, len(ops.OffsetToSource))
+	pcOffset := make(map[int]int, len(ops.OffsetToSource))
+	for pc, location := range ops.OffsetToSource {
+		offsetToLine[pc] = location.Line
+		pcOffset[location.Line+1] = pc
 	}
 
 	s := makeSession(disassembly, 0)
 	s.source = source
 	s.programName = "test"
-	s.offsetToLine = ops.OffsetToLine
+	s.offsetToLine = offsetToLine
 	s.pcOffset = pcOffset
 
 	return s

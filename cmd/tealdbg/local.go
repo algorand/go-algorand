@@ -395,7 +395,11 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 				}
 				r.runs[i].program = ops.Program
 				if !dp.DisableSourceMap {
-					r.runs[i].offsetToLine = ops.OffsetToLine
+					offsetToLine := make(map[int]int, len(ops.OffsetToSource))
+					for pc, location := range ops.OffsetToSource {
+						offsetToLine[pc] = location.Line
+					}
+					r.runs[i].offsetToLine = offsetToLine
 					r.runs[i].source = source
 				}
 			}
