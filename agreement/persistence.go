@@ -58,13 +58,15 @@ func encode(t timers.Clock[TimeoutType], rr rootRouter, p player, a []action, re
 
 	// Don't persist state for old rounds
 	// rootRouter.update() may preserve roundRouters from credentialRoundLag rounds ago
-	if rr.Children != nil {
-		children := make(map[round]*roundRouter)
-		for rnd, rndRouter := range rr.Children {
-			if rnd >= p.Round {
-				children[rnd] = rndRouter
-			}
+	children := make(map[round]*roundRouter)
+	for rnd, rndRouter := range rr.Children {
+		if rnd >= p.Round {
+			children[rnd] = rndRouter
 		}
+	}
+	if len(children) == 0 {
+		rr.Children = nil
+	} else {
 		rr.Children = children
 	}
 
