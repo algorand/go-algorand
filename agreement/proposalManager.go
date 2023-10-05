@@ -183,7 +183,7 @@ func (m *proposalManager) handleMessageEvent(r routerHandle, p player, e filtera
 				credNote := e.(filteredEvent).CredentialTrackingNote
 				if credNote != VerifiedBetterCredentialForTracking && credNote != NoCredentialTrackingImpact {
 					// It should be impossible to hit this condition
-					r.t.log.Debugf("vote verified may only be tagged with NewBestCredential/NoCredentialTrackingImpact but saw %v", credNote)
+					r.t.log.Debugf("vote verified may only be tagged with VerifiedBetterCredential/NoCredentialTrackingImpact but saw %v", credNote)
 					credNote = NoCredentialTrackingImpact
 				}
 				// indicate whether it updated
