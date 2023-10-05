@@ -1010,12 +1010,12 @@ func (e checkpointEvent) AttachConsensusVersion(v ConsensusVersionView) external
 // is still waiting for quorum on R.
 const pipelinedMessageTimestamp = time.Nanosecond
 
-func getTimestampForEvent(eventRound round, d time.Duration, currentRound round, historicalClocks map[round]historicalClock) time.Duration {
+func getTimestampForEvent(eventRound round, currentRound round, currentClock historicalClock, historicalClocks map[round]historicalClock) time.Duration {
 	if eventRound > currentRound {
 		return pipelinedMessageTimestamp
 	}
 	if eventRound == currentRound {
-		return d
+		return currentClock.Since()
 	}
 	if clock, ok := historicalClocks[eventRound]; ok {
 		return clock.Since()
@@ -1026,12 +1026,12 @@ func getTimestampForEvent(eventRound round, d time.Duration, currentRound round,
 // AttachValidatedAt looks for a validated proposal or vote inside a
 // payloadVerified or voteVerified messageEvent, and attaches the given time to
 // the proposal's validatedAt field.
-func (e messageEvent) AttachValidatedAt(d time.Duration, currentRound round, historicalClocks map[round]historicalClock) messageEvent {
+func (e messageEvent) AttachValidatedAt(currentRound round, currentClock historicalClock, historicalClocks map[round]historicalClock) messageEvent {
 	switch e.T {
 	case payloadVerified:
-		e.Input.Proposal.validatedAt = getTimestampForEvent(e.Input.Proposal.Round(), d, currentRound, historicalClocks)
+		e.Input.Proposal.validatedAt = getTimestampForEvent(e.Input.Proposal.Round(), currentRound, currentClock, historicalClocks)
 	case voteVerified:
-		e.Input.Vote.validatedAt = getTimestampForEvent(e.Input.Vote.R.Round, d, currentRound, historicalClocks)
+		e.Input.Vote.validatedAt = getTimestampForEvent(e.Input.Vote.R.Round, currentRound, currentClock, historicalClocks)
 	}
 	return e
 }
@@ -1039,10 +1039,10 @@ func (e messageEvent) AttachValidatedAt(d time.Duration, currentRound round, his
 // AttachReceivedAt looks for an unauthenticatedProposal inside a
 // payloadPresent or votePresent messageEvent, and attaches the given
 // time to the proposal's receivedAt field.
-func (e messageEvent) AttachReceivedAt(d time.Duration, currentRound round, historicalClocks map[round]historicalClock) messageEvent {
+func (e messageEvent) AttachReceivedAt(currentRound round, currentClock historicalClock, historicalClocks map[round]historicalClock) messageEvent {
 	switch e.T {
 	case payloadPresent:
-		e.Input.UnauthenticatedProposal.receivedAt = getTimestampForEvent(e.Input.UnauthenticatedProposal.Round(), d, currentRound, historicalClocks)
+		e.Input.UnauthenticatedProposal.receivedAt = getTimestampForEvent(e.Input.UnauthenticatedProposal.Round(), currentRound, currentClock, historicalClocks)
 	case votePresent:
 		// Check for non-nil Tail, indicating this votePresent event
 		// contains a synthetic payloadPresent event that was attached
@@ -1051,7 +1051,7 @@ func (e messageEvent) AttachReceivedAt(d time.Duration, currentRound round, hist
 			// The tail event is payloadPresent, serialized together
 			// with the proposal vote as a single CompoundMessage
 			// using a protocol.ProposalPayloadTag network message.
-			e.Tail.Input.UnauthenticatedProposal.receivedAt = getTimestampForEvent(e.Tail.Input.UnauthenticatedProposal.Round(), d, currentRound, historicalClocks)
+			e.Tail.Input.UnauthenticatedProposal.receivedAt = getTimestampForEvent(e.Tail.Input.UnauthenticatedProposal.Round(), currentRound, currentClock, historicalClocks)
 		}
 	}
 	return e
