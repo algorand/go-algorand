@@ -297,12 +297,12 @@ func (p *player) updateCredentialArrivalHistory(r routerHandle, ver protocol.Con
 	credHistoryRound := p.Round - credentialRoundLag
 	re := readLowestEvent{T: readLowestVote, Round: credHistoryRound, Period: 0}
 	re = r.dispatch(*p, re, proposalMachineRound, credHistoryRound, 0, 0).(readLowestEvent)
-	if !re.HasLowestAfterFreeze {
+	if !re.HasLowestIncludingLate {
 		return 0
 	}
 
-	p.lowestCredentialArrivals.store(re.LowestAfterFreeze.validatedAt)
-	return re.LowestAfterFreeze.validatedAt
+	p.lowestCredentialArrivals.store(re.LowestIncludingLate.validatedAt)
+	return re.LowestIncludingLate.validatedAt
 }
 
 // calculateFilterTimeout chooses the appropriate filter timeout.

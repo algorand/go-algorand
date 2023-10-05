@@ -63,7 +63,7 @@ func TestProposalTrackerProposalSeeker(t *testing.T) {
 	var err error
 	assert.False(t, s.Frozen)
 	assert.False(t, s.Filled)
-	assert.False(t, s.hasLowestAfterFreeze)
+	assert.False(t, s.hasLowestIncludingLate)
 
 	// issue events in the following order: 2, 3, 1, (freeze), 0
 	var effect CredentialTrackingEffect
@@ -73,8 +73,8 @@ func TestProposalTrackerProposalSeeker(t *testing.T) {
 	assert.False(t, s.Frozen)
 	assert.True(t, s.Filled)
 	assert.True(t, s.Lowest.equals(votes[2]))
-	assert.True(t, s.hasLowestAfterFreeze)
-	assert.Equal(t, s.Lowest, s.lowestAfterFreeze)
+	assert.True(t, s.hasLowestIncludingLate)
+	assert.Equal(t, s.Lowest, s.lowestIncludingLate)
 
 	s, effect, err = s.accept(votes[3])
 	assert.Error(t, err)
@@ -82,8 +82,8 @@ func TestProposalTrackerProposalSeeker(t *testing.T) {
 	assert.False(t, s.Frozen)
 	assert.True(t, s.Filled)
 	assert.True(t, s.Lowest.equals(votes[2]))
-	assert.True(t, s.hasLowestAfterFreeze)
-	assert.Equal(t, s.Lowest, s.lowestAfterFreeze)
+	assert.True(t, s.hasLowestIncludingLate)
+	assert.Equal(t, s.Lowest, s.lowestIncludingLate)
 
 	s, effect, err = s.accept(votes[1])
 	assert.NoError(t, err)
@@ -91,16 +91,16 @@ func TestProposalTrackerProposalSeeker(t *testing.T) {
 	assert.False(t, s.Frozen)
 	assert.True(t, s.Filled)
 	assert.True(t, s.Lowest.equals(votes[1]))
-	assert.True(t, s.hasLowestAfterFreeze)
-	assert.Equal(t, s.Lowest, s.lowestAfterFreeze)
+	assert.True(t, s.hasLowestIncludingLate)
+	assert.Equal(t, s.Lowest, s.lowestIncludingLate)
 
 	lowestBeforeFreeze := s.Lowest
 	s = s.freeze()
 	assert.True(t, s.Frozen)
 	assert.True(t, s.Filled)
 	assert.True(t, s.Lowest.equals(votes[1]))
-	assert.True(t, s.hasLowestAfterFreeze)
-	assert.Equal(t, s.Lowest, s.lowestAfterFreeze)
+	assert.True(t, s.hasLowestIncludingLate)
+	assert.Equal(t, s.Lowest, s.lowestIncludingLate)
 
 	s, effect, err = s.accept(votes[0])
 	assert.Error(t, err)
@@ -109,11 +109,11 @@ func TestProposalTrackerProposalSeeker(t *testing.T) {
 	assert.True(t, s.Frozen)
 	assert.True(t, s.Filled)
 	assert.True(t, s.Lowest.equals(votes[1]))
-	assert.True(t, s.hasLowestAfterFreeze)
-	assert.True(t, s.lowestAfterFreeze.equals(votes[0]))
-	assert.NotEqual(t, s.Lowest, s.lowestAfterFreeze)
-	assert.True(t, !s.Lowest.Cred.Less(s.lowestAfterFreeze.Cred))
-	assert.True(t, s.lowestAfterFreeze.Cred.Less(s.Lowest.Cred))
+	assert.True(t, s.hasLowestIncludingLate)
+	assert.True(t, s.lowestIncludingLate.equals(votes[0]))
+	assert.NotEqual(t, s.Lowest, s.lowestIncludingLate)
+	assert.True(t, !s.Lowest.Cred.Less(s.lowestIncludingLate.Cred))
+	assert.True(t, s.lowestIncludingLate.Cred.Less(s.Lowest.Cred))
 }
 
 // mimics a proposalTracker, producing a trace of events

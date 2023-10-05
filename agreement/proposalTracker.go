@@ -34,10 +34,10 @@ type proposalSeeker struct {
 	// Filled will no longer be modified.
 	Frozen bool
 
-	// lowestAfterFreeze is used to track the lowest credential observed, even
+	// lowestIncludingLate is used to track the lowest credential observed, even
 	// after the Lowest value has been frozen.
-	lowestAfterFreeze    vote
-	hasLowestAfterFreeze bool
+	lowestIncludingLate    vote
+	hasLowestIncludingLate bool
 }
 
 // accept compares a given vote with the current lowest-credentialled vote and
@@ -51,9 +51,9 @@ func (s proposalSeeker) accept(v vote) (proposalSeeker, CredentialTrackingEffect
 	if s.Frozen {
 		effect := NoCredentialTrackingImpact
 		// continue tracking and forwarding the lowest proposal even when frozen
-		if !s.hasLowestAfterFreeze || v.Cred.Less(s.lowestAfterFreeze.Cred) {
-			s.lowestAfterFreeze = v
-			s.hasLowestAfterFreeze = true
+		if !s.hasLowestIncludingLate || v.Cred.Less(s.lowestIncludingLate.Cred) {
+			s.lowestIncludingLate = v
+			s.hasLowestIncludingLate = true
 			effect = VerifiedBetterCredentialForTracking
 		}
 		return s, effect, errProposalSeekerFrozen{}
@@ -65,14 +65,14 @@ func (s proposalSeeker) accept(v vote) (proposalSeeker, CredentialTrackingEffect
 
 	s.Lowest = v
 	s.Filled = true
-	s.lowestAfterFreeze = v
-	s.hasLowestAfterFreeze = true
+	s.lowestIncludingLate = v
+	s.hasLowestIncludingLate = true
 	return s, VerifiedBetterCredentialForTracking, nil
 }
 
 func (s *proposalSeeker) copyCredentialTrackingState(s2 proposalSeeker) {
-	s.hasLowestAfterFreeze = s2.hasLowestAfterFreeze
-	s.lowestAfterFreeze = s2.lowestAfterFreeze
+	s.hasLowestIncludingLate = s2.hasLowestIncludingLate
+	s.lowestIncludingLate = s2.lowestIncludingLate
 }
 
 // freeze freezes the state of the proposalSeeker so that future calls no longer
@@ -196,8 +196,8 @@ func (t *proposalTracker) handle(r routerHandle, p player, e event) event {
 		e := e.(readLowestEvent)
 		e.Vote = t.Freezer.Lowest
 		e.Filled = t.Freezer.Filled
-		e.LowestAfterFreeze = t.Freezer.lowestAfterFreeze
-		e.HasLowestAfterFreeze = t.Freezer.hasLowestAfterFreeze
+		e.LowestIncludingLate = t.Freezer.lowestIncludingLate
+		e.HasLowestIncludingLate = t.Freezer.hasLowestIncludingLate
 		return e
 
 	case softThreshold, certThreshold:
