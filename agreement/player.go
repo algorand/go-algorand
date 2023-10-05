@@ -633,9 +633,9 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 				err := ef.(filteredEvent).Err
 				return append(actions, ignoreAction(e, err))
 			case UnverifiedBetterCredentialForTracking:
-				// There is another case, where the message
-				// MayImpactCredentialTracking. This case does not return here,
-				// so we continue processing the message.
+				// In this case, the vote may impact credential tracking, but needs to
+				// be validated. So we do not return here, and continue processing, so that
+				// the votePresent chdck below will make a verifyVoteAction for this vote.
 			}
 		}
 

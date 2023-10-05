@@ -557,7 +557,7 @@ func (e wrappedActionEvent) String() string {
 }
 
 func (e wrappedActionEvent) ComparableStr() string {
-	return e.action.ComparableString()
+	return e.action.ComparableStr()
 }
 
 // ioAutomataConcretePlayer is a concrete wrapper around root router, implementing ioAutomata.

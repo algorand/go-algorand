@@ -161,7 +161,7 @@ func (m *proposalManager) handleMessageEvent(r routerHandle, p player, e filtera
 		keepForCredentialTracking := false
 		if err != nil {
 			// if we should keep processing this credential message only to record its timestamp, we continue
-			keepForCredentialTracking = proposalUsedForCredentialHistory(e.FreshnessData.PlayerRound, v.u())
+			keepForCredentialTracking = proposalUsefulForCredentialHistory(e.FreshnessData.PlayerRound, v.u())
 			if !keepForCredentialTracking {
 				err := makeSerErrf("proposalManager: ignoring proposal-vote due to age: %v", err)
 				return filteredEvent{T: voteFiltered, Err: err}
@@ -272,7 +272,7 @@ func (d errProposalManagerPVDuplicate) Error() string {
 // It also returns a bool indicating whether this proposal-vote should still be verified for tracking credential history.
 func (m *proposalManager) filterProposalVote(p player, r routerHandle, uv unauthenticatedVote, freshData freshnessData) (bool, error) {
 	// check if the vote is within the credential history window
-	credHistory := proposalUsedForCredentialHistory(freshData.PlayerRound, uv)
+	credHistory := proposalUsefulForCredentialHistory(freshData.PlayerRound, uv)
 
 	// checkDup asks proposalTracker if the vote is a duplicate, returning true if so
 	checkDup := func() bool {
@@ -297,7 +297,7 @@ func (m *proposalManager) filterProposalVote(p player, r routerHandle, uv unauth
 	return credHistory, nil
 }
 
-func proposalUsedForCredentialHistory(curRound round, vote unauthenticatedVote) bool {
+func proposalUsefulForCredentialHistory(curRound round, vote unauthenticatedVote) bool {
 	if vote.R.Round < curRound && curRound <= vote.R.Round+credentialRoundLag &&
 		vote.R.Period == 0 &&
 		vote.R.Step == propose {
