@@ -1040,9 +1040,10 @@ func (e messageEvent) AttachValidatedAt(d time.Duration, currentRound round, his
 // payloadPresent or votePresent messageEvent, and attaches the given
 // time to the proposal's receivedAt field.
 func (e messageEvent) AttachReceivedAt(d time.Duration, currentRound round, historicalClocks map[round]historicalClock) messageEvent {
-	if e.T == payloadPresent {
+	switch e.T {
+	case payloadPresent:
 		e.Input.UnauthenticatedProposal.receivedAt = getTimestampForEvent(e.Input.UnauthenticatedProposal.Round(), d, currentRound, historicalClocks)
-	} else if e.T == votePresent {
+	case votePresent:
 		// Check for non-nil Tail, indicating this votePresent event
 		// contains a synthetic payloadPresent event that was attached
 		// to it by setupCompoundMessage.
