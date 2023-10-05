@@ -611,7 +611,7 @@ const (
 	// It may be set by proposalManager when handling votePresent events.
 	UnverifiedBetterCredentialForTracking
 
-	// VerifiedBetterCredentialForTracking indicates that the filtered event provided a new best
+	// VerifiedBetterCredentialForTracking indicates that the filtered event provides a new best
 	// credential for its round.
 	// It may be set by proposalManager when handling voteVerified events.
 	VerifiedBetterCredentialForTracking
