@@ -260,12 +260,12 @@ func TestLateVotes(t *testing.T) {
 	v2.Cred.VrfOut = crypto.Digest{2}
 	if v1.Cred.Less(v2.Cred) {
 		require.False(t, v2.Cred.Less(v1.Cred))
-		b.AddInOutPair(inMsg1, filteredEvent{T: voteFiltered, CredentialTrackingNote: VerifiedBetterCredentialForTracking})
-		b.AddInOutPair(inMsg2, filteredEvent{T: voteFiltered, CredentialTrackingNote: NoCredentialTrackingImpact})
+		b.AddInOutPair(inMsg1, filteredEvent{T: voteFiltered, LateCredentialTrackingNote: VerifiedBetterLateCredentialForTracking})
+		b.AddInOutPair(inMsg2, filteredEvent{T: voteFiltered, LateCredentialTrackingNote: NoLateCredentialTrackingImpact})
 	} else {
 		require.True(t, v2.Cred.Less(v1.Cred))
-		b.AddInOutPair(inMsg2, filteredEvent{T: voteFiltered, CredentialTrackingNote: VerifiedBetterCredentialForTracking})
-		b.AddInOutPair(inMsg1, filteredEvent{T: voteFiltered, CredentialTrackingNote: NoCredentialTrackingImpact})
+		b.AddInOutPair(inMsg2, filteredEvent{T: voteFiltered, LateCredentialTrackingNote: VerifiedBetterLateCredentialForTracking})
+		b.AddInOutPair(inMsg1, filteredEvent{T: voteFiltered, LateCredentialTrackingNote: NoLateCredentialTrackingImpact})
 	}
 
 	res, err := b.Build().Validate(pM)
@@ -400,7 +400,7 @@ func TestProposalFreshAdjacentPeriods(t *testing.T) {
 			},
 		},
 	}
-	b.AddInOutPair(inMsg, filteredEvent{T: voteFiltered, CredentialTrackingNote: UnverifiedBetterCredentialForTracking})
+	b.AddInOutPair(inMsg, filteredEvent{T: voteFiltered, LateCredentialTrackingNote: UnverifiedLateCredentialForTracking})
 
 	// vote from credentialRoundLag ago and period > 0 should be filtered
 	pV = helper.MakeRandomProposalValue()

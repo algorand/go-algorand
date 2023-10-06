@@ -620,19 +620,19 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 				err := ef.(filteredEvent).Err
 				return append(actions, ignoreAction(e, err))
 			}
-			switch ef.(filteredEvent).CredentialTrackingNote {
-			case VerifiedBetterCredentialForTracking:
+			switch ef.(filteredEvent).LateCredentialTrackingNote {
+			case VerifiedBetterLateCredentialForTracking:
 				// Dynamic filter timeout feature enabled, and current message
 				// updated the best credential arrival time
 				v := e.Input.Vote
 				return append(actions, relayAction(e, protocol.AgreementVoteTag, v.u()))
-			case NoCredentialTrackingImpact:
+			case NoLateCredentialTrackingImpact:
 				// Dynamic filter timeout feature enabled, but current message
 				// may not update the best credential arrival time, so we should
 				// ignore it.
 				err := ef.(filteredEvent).Err
 				return append(actions, ignoreAction(e, err))
-			case UnverifiedBetterCredentialForTracking:
+			case UnverifiedLateCredentialForTracking:
 				// In this case, the vote may impact credential tracking, but needs to
 				// be validated. So we do not return here, and continue processing, so that
 				// the votePresent chdck below will make a verifyVoteAction for this vote.

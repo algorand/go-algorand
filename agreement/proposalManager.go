@@ -136,13 +136,13 @@ func (m *proposalManager) handleMessageEvent(r routerHandle, p player, e filtera
 	case votePresent:
 		verifyForCredHistory, err := m.filterProposalVote(p, r, e.Input.UnauthenticatedVote, e.FreshnessData)
 		if err != nil {
-			credTrackingNote := NoCredentialTrackingImpact
+			credTrackingNote := NoLateCredentialTrackingImpact
 			if verifyForCredHistory {
 				// mark filtered votes that may still update the best credential arrival time
 				// the freshness check failed, but we still want to verify this proposal-vote for credential tracking
-				credTrackingNote = UnverifiedBetterCredentialForTracking
+				credTrackingNote = UnverifiedLateCredentialForTracking
 			}
-			return filteredEvent{T: voteFiltered, Err: makeSerErr(err), CredentialTrackingNote: credTrackingNote}
+			return filteredEvent{T: voteFiltered, Err: makeSerErr(err), LateCredentialTrackingNote: credTrackingNote}
 		}
 		return emptyEvent{}
 
@@ -158,11 +158,11 @@ func (m *proposalManager) handleMessageEvent(r routerHandle, p player, e filtera
 		v := e.Input.Vote
 
 		err := proposalFresh(e.FreshnessData, v.u())
-		keepForCredentialTracking := false
+		keepForLateCredentialTracking := false
 		if err != nil {
 			// if we should keep processing this credential message only to record its timestamp, we continue
-			keepForCredentialTracking = proposalUsefulForCredentialHistory(e.FreshnessData.PlayerRound, v.u())
-			if !keepForCredentialTracking {
+			keepForLateCredentialTracking = proposalUsefulForCredentialHistory(e.FreshnessData.PlayerRound, v.u())
+			if !keepForLateCredentialTracking {
 				err := makeSerErrf("proposalManager: ignoring proposal-vote due to age: %v", err)
 				return filteredEvent{T: voteFiltered, Err: err}
 			}
@@ -176,22 +176,22 @@ func (m *proposalManager) handleMessageEvent(r routerHandle, p player, e filtera
 
 		e := r.dispatch(p, e.messageEvent, proposalMachineRound, v.R.Round, v.R.Period, 0)
 
-		if keepForCredentialTracking {
+		if keepForLateCredentialTracking {
 			// we only continued processing this vote to see whether it updates the credential arrival time
 			err := makeSerErrf("proposalManager: ignoring proposal-vote due to age: %v", err)
 			if e.t() == voteFiltered {
-				credNote := e.(filteredEvent).CredentialTrackingNote
-				if credNote != VerifiedBetterCredentialForTracking && credNote != NoCredentialTrackingImpact {
+				credNote := e.(filteredEvent).LateCredentialTrackingNote
+				if credNote != VerifiedBetterLateCredentialForTracking && credNote != NoLateCredentialTrackingImpact {
 					// It should be impossible to hit this condition
-					r.t.log.Debugf("vote verified may only be tagged with VerifiedBetterCredential/NoCredentialTrackingImpact but saw %v", credNote)
-					credNote = NoCredentialTrackingImpact
+					r.t.log.Debugf("vote verified may only be tagged with VerifiedBetterLateCredential/NoLateCredentialTrackingImpact but saw %v", credNote)
+					credNote = NoLateCredentialTrackingImpact
 				}
 				// indicate whether it updated
-				return filteredEvent{T: voteFiltered, Err: err, CredentialTrackingNote: credNote}
+				return filteredEvent{T: voteFiltered, Err: err, LateCredentialTrackingNote: credNote}
 			}
 			// the proposalMachineRound didn't filter the vote, so it must have had a better credential,
 			// indicate that it did cause updating its state
-			return filteredEvent{T: voteFiltered, Err: err, CredentialTrackingNote: VerifiedBetterCredentialForTracking}
+			return filteredEvent{T: voteFiltered, Err: err, LateCredentialTrackingNote: VerifiedBetterLateCredentialForTracking}
 		}
 		return e
 

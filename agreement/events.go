@@ -596,35 +596,35 @@ func (e payloadProcessedEvent) ComparableStr() string {
 	return fmt.Sprintf("%v: %.5v", e.t().String(), e.Proposal.BlockDigest.String())
 }
 
-// CredentialTrackingEffect indicates the impact of an event that got filtered
-// on the credential tracking mechanism, for the purpose of tracking the time it
-// took the best credential to arrive.
-type CredentialTrackingEffect uint8
+// LateCredentialTrackingEffect indicates the impact of a vote that was filtered (due to age)
+// on the credential tracking system (in credentialArrivalHistory), for the purpose of tracking
+// the time it took the best credential to arrive, even if it was late.
+type LateCredentialTrackingEffect uint8
 
 const (
-	// NoCredentialTrackingImpact indicates the filtered event would have no impact on
+	// NoLateCredentialTrackingImpact indicates the filtered event would have no impact on
 	// the credential tracking mechanism.
-	NoCredentialTrackingImpact CredentialTrackingEffect = iota
+	NoLateCredentialTrackingImpact LateCredentialTrackingEffect = iota
 
-	// UnverifiedBetterCredentialForTracking indicates the filtered event could impact
+	// UnverifiedLateCredentialForTracking indicates the filtered event could impact
 	// the credential tracking mechanism and more processing (validation) may be required.
 	// It may be set by proposalManager when handling votePresent events.
-	UnverifiedBetterCredentialForTracking
+	UnverifiedLateCredentialForTracking
 
-	// VerifiedBetterCredentialForTracking indicates that the filtered event provides a new best
+	// VerifiedBetterLateCredentialForTracking indicates that the filtered event provides a new best
 	// credential for its round.
 	// It may be set by proposalManager when handling voteVerified events.
-	VerifiedBetterCredentialForTracking
+	VerifiedBetterLateCredentialForTracking
 )
 
 type filteredEvent struct {
 	// {proposal,vote,bundle}{Filtered,Malformed}
 	T eventType
 
-	// CredentialTrackingNote indicates the impact of the filtered event on the
+	// LateCredentialTrackingNote indicates the impact of the filtered event on the
 	// credential tracking machinery used for dynamically setting the filter
 	// timeout.
-	CredentialTrackingNote CredentialTrackingEffect
+	LateCredentialTrackingNote LateCredentialTrackingEffect
 
 	// Err is the reason cryptographic verification failed and is set for
 	// events {proposal,vote,bundle}Malformed.

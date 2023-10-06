@@ -43,34 +43,34 @@ type proposalSeeker struct {
 // accept compares a given vote with the current lowest-credentialled vote and
 // sets it if freeze has not been called. Returns:
 //   - updated proposalSeeker state,
-//   - a CredentialTrackingEffect describing the usefulness of proposal-vote's
+//   - a LateCredentialTrackingEffect describing the usefulness of proposal-vote's
 //     credential for late credential tracking (for choosing dynamic filter timeout),
 //   - and an error if the proposal was not better than the lowest seen, or the
 //     seeker was already frozen.
-func (s proposalSeeker) accept(v vote) (proposalSeeker, CredentialTrackingEffect, error) {
+func (s proposalSeeker) accept(v vote) (proposalSeeker, LateCredentialTrackingEffect, error) {
 	if s.Frozen {
-		effect := NoCredentialTrackingImpact
+		effect := NoLateCredentialTrackingImpact
 		// continue tracking and forwarding the lowest proposal even when frozen
 		if !s.hasLowestIncludingLate || v.Cred.Less(s.lowestIncludingLate.Cred) {
 			s.lowestIncludingLate = v
 			s.hasLowestIncludingLate = true
-			effect = VerifiedBetterCredentialForTracking
+			effect = VerifiedBetterLateCredentialForTracking
 		}
 		return s, effect, errProposalSeekerFrozen{}
 	}
 
 	if s.Filled && !v.Cred.Less(s.Lowest.Cred) {
-		return s, NoCredentialTrackingImpact, errProposalSeekerNotLess{NewSender: v.R.Sender, LowestSender: s.Lowest.R.Sender}
+		return s, NoLateCredentialTrackingImpact, errProposalSeekerNotLess{NewSender: v.R.Sender, LowestSender: s.Lowest.R.Sender}
 	}
 
 	s.Lowest = v
 	s.Filled = true
 	s.lowestIncludingLate = v
 	s.hasLowestIncludingLate = true
-	return s, VerifiedBetterCredentialForTracking, nil
+	return s, VerifiedBetterLateCredentialForTracking, nil
 }
 
-func (s *proposalSeeker) copyCredentialTrackingState(s2 proposalSeeker) {
+func (s *proposalSeeker) copyLateCredentialTrackingState(s2 proposalSeeker) {
 	s.hasLowestIncludingLate = s2.hasLowestIncludingLate
 	s.lowestIncludingLate = s2.lowestIncludingLate
 }
@@ -168,15 +168,15 @@ func (t *proposalTracker) handle(r routerHandle, p player, e event) event {
 		t.Duplicate[v.R.Sender] = true
 
 		newFreezer, effect, err := t.Freezer.accept(v)
-		t.Freezer.copyCredentialTrackingState(newFreezer)
+		t.Freezer.copyLateCredentialTrackingState(newFreezer)
 		if t.Staging != bottom {
 			err = errProposalTrackerStaged{}
-			return filteredEvent{T: voteFiltered, CredentialTrackingNote: effect, Err: makeSerErr(err)}
+			return filteredEvent{T: voteFiltered, LateCredentialTrackingNote: effect, Err: makeSerErr(err)}
 		}
 
 		if err != nil {
 			err := errProposalTrackerPS{Sub: err}
-			return filteredEvent{T: voteFiltered, CredentialTrackingNote: effect, Err: makeSerErr(err)}
+			return filteredEvent{T: voteFiltered, LateCredentialTrackingNote: effect, Err: makeSerErr(err)}
 		}
 		t.Freezer = newFreezer
 
