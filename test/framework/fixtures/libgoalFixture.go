@@ -534,7 +534,7 @@ func (f *LibGoalFixture) TransactionProof(txid string, round uint64, hashType cr
 		return model.TransactionProofResponse{}, merklearray.SingleLeafProof{}, err
 	}
 
-	proof, err := merklearray.ProofDataToSingleLeafProof(string(proofResp.Hashtype), proofResp.Treedepth, proofResp.Proof)
+	proof, err := merklearray.ProofDataToSingleLeafProof(string(proofResp.Hashtype), proofResp.Proof)
 	if err != nil {
 		return model.TransactionProofResponse{}, merklearray.SingleLeafProof{}, err
 	}
@@ -550,7 +550,7 @@ func (f *LibGoalFixture) LightBlockHeaderProof(round uint64) (model.LightBlockHe
 		return model.LightBlockHeaderProofResponse{}, merklearray.SingleLeafProof{}, err
 	}
 
-	proof, err := merklearray.ProofDataToSingleLeafProof(crypto.Sha256.String(), proofResp.Treedepth, proofResp.Proof)
+	proof, err := merklearray.ProofDataToSingleLeafProof(crypto.Sha256.String(), proofResp.Proof)
 	if err != nil {
 		return model.LightBlockHeaderProofResponse{}, merklearray.SingleLeafProof{}, err
 	}

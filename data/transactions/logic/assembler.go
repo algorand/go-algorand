@@ -214,7 +214,7 @@ func (ref byteReference) makeNewReference(ops *OpStream, singleton bool, newInde
 	}
 }
 
-// OpStream is destination for program and scratch space
+// OpStream accumulates state, including the final program, during assembly.
 type OpStream struct {
 	Version  uint64
 	Trace    *strings.Builder
@@ -292,7 +292,7 @@ type ProgramKnowledge struct {
 	// fails. But when a label or callsub is encountered, `stack` is truncated
 	// and `bottom` becomes StackAny, because we don't track program state
 	// coming in from elsewhere. A `+` after a label succeeds, because the stack
-	// "vitually" contains an infinite list of StackAny.
+	// "virtually" contains an infinite list of StackAny.
 	bottom StackType
 
 	// deadcode indicates that the program is in deadcode, so no type checking
@@ -1104,7 +1104,7 @@ func (ops *OpStream) checkArgCount(name string, mnemonic token, args []token, ex
 	return nil
 }
 
-// Basic assembly. Any extra bytes of opcode are encoded as byte immediates.
+// Basic assembly, used for most opcodes. It assembles based on the information in OpSpec.
 func asmDefault(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *sourceError {
 	if err := ops.checkArgCount(spec.Name, mnemonic, args, len(spec.OpDetails.Immediates)); err != nil {
 		return err
@@ -1778,14 +1778,14 @@ func mergeProtos(specs map[int]OpSpec) (Proto, uint64, bool) {
 			}
 		}
 		if debugExplainFuncPtr == nil {
-			debugExplainFuncPtr = spec.Explain
+			debugExplainFuncPtr = spec.StackExplain
 		}
 		i++
 	}
 	return Proto{
-		Arg:     typedList{args, ""},
-		Return:  typedList{returns, ""},
-		Explain: debugExplainFuncPtr,
+		Arg:          typedList{args, ""},
+		Return:       typedList{returns, ""},
+		StackExplain: debugExplainFuncPtr,
 	}, minVersion, true
 }
 

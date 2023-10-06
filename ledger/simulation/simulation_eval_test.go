@@ -38,6 +38,7 @@ import (
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
+	"github.com/algorand/go-algorand/util"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -2306,6 +2307,7 @@ byte "hello"; log; int 1`,
 				TraceConfig: simulation.ExecTraceConfig{
 					Enable: true,
 					Stack:  true,
+					State:  true,
 				},
 			},
 			developerAPI: true,
@@ -2315,6 +2317,7 @@ byte "hello"; log; int 1`,
 				TraceConfig: simulation.ExecTraceConfig{
 					Enable: true,
 					Stack:  true,
+					State:  true,
 				},
 				TxnGroups: []simulation.TxnGroupResult{
 					{
@@ -2389,6 +2392,10 @@ byte "hello"; log; int 1`,
 						AppBudgetAdded:    700,
 						AppBudgetConsumed: 3,
 					},
+				},
+				InitialStates: &simulation.ResourcesInitialStates{
+					AllAppsInitialStates: simulation.AppsInitialStates{},
+					CreatedApp:           util.MakeSet(basics.AppIndex(1002)),
 				},
 			},
 		}
@@ -3394,6 +3401,10 @@ int 1`,
 						AppBudgetConsumed: 44,
 					},
 				},
+				InitialStates: &simulation.ResourcesInitialStates{
+					AllAppsInitialStates: make(simulation.AppsInitialStates),
+					CreatedApp:           util.MakeSet(futureAppID),
+				},
 			},
 		}
 	})
@@ -3404,17 +3415,7 @@ func TestAppLocalGlobalStateChange(t *testing.T) {
 	t.Parallel()
 
 	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
-		sender := env.Accounts[0]
-
-		futureAppID := basics.AppIndex(1001)
-
-		createTxn := env.TxnInfo.NewTxn(txntest.Txn{
-			Type:              protocol.ApplicationCallTx,
-			Sender:            sender.Addr,
-			ApplicationID:     0,
-			GlobalStateSchema: basics.StateSchema{NumUint: 1, NumByteSlice: 1},
-			LocalStateSchema:  basics.StateSchema{NumUint: 1, NumByteSlice: 1},
-			ApprovalProgram: `#pragma version 8
+		approvalProgramSrc := `#pragma version 8
 txn ApplicationID
 bz end // Do nothing during create
 
@@ -3451,12 +3452,19 @@ global:
 
 end:
   int 1
-`,
+`
+
+		sender := env.Accounts[0]
+
+		createdAppID := env.CreateApp(sender.Addr, simulationtesting.AppParams{
+			GlobalStateSchema: basics.StateSchema{NumUint: 1, NumByteSlice: 1},
+			LocalStateSchema:  basics.StateSchema{NumUint: 1, NumByteSlice: 1},
+			ApprovalProgram:   approvalProgramSrc,
 			ClearStateProgram: `#pragma version 8
 int 1`,
 		})
 
-		op, err := logic.AssembleString(createTxn.ApprovalProgram.(string))
+		op, err := logic.AssembleString(approvalProgramSrc)
 		require.NoError(t, err)
 		progHash := crypto.Hash(op.Program)
 
@@ -3464,26 +3472,25 @@ int 1`,
 			Type:          protocol.ApplicationCallTx,
 			OnCompletion:  transactions.OptInOC,
 			Sender:        sender.Addr,
-			ApplicationID: futureAppID,
+			ApplicationID: createdAppID,
 		})
 
 		globalStateCall := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:            protocol.ApplicationCallTx,
 			Sender:          sender.Addr,
-			ApplicationID:   futureAppID,
+			ApplicationID:   createdAppID,
 			ApplicationArgs: [][]byte{[]byte("global")},
 		})
 
 		localStateCall := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:            protocol.ApplicationCallTx,
 			Sender:          sender.Addr,
-			ApplicationID:   futureAppID,
+			ApplicationID:   createdAppID,
 			ApplicationArgs: [][]byte{[]byte("local")},
 		})
 
-		txntest.Group(&createTxn, &optIn, &globalStateCall, &localStateCall)
+		txntest.Group(&optIn, &globalStateCall, &localStateCall)
 
-		signedCreate := createTxn.Txn().Sign(sender.Sk)
 		signedOptin := optIn.Txn().Sign(sender.Sk)
 		signedGlobalStateCall := globalStateCall.Txn().Sign(sender.Sk)
 		signedLocalStateCall := localStateCall.Txn().Sign(sender.Sk)
@@ -3491,7 +3498,7 @@ int 1`,
 		return simulationTestCase{
 			input: simulation.Request{
 				TxnGroups: [][]transactions.SignedTxn{
-					{signedCreate, signedOptin, signedGlobalStateCall, signedLocalStateCall},
+					{signedOptin, signedGlobalStateCall, signedLocalStateCall},
 				},
 				TraceConfig: simulation.ExecTraceConfig{
 					Enable:  true,
@@ -3513,44 +3520,6 @@ int 1`,
 				TxnGroups: []simulation.TxnGroupResult{
 					{
 						Txns: []simulation.TxnResult{
-							// App creation
-							{
-								Txn: transactions.SignedTxnWithAD{
-									ApplyData: transactions.ApplyData{
-										ApplicationID: futureAppID,
-									},
-								},
-								AppBudgetConsumed: 4,
-								Trace: &simulation.TransactionTrace{
-									ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
-										{
-											PC: 1,
-										},
-										{
-											PC: 4,
-											StackAdded: []basics.TealValue{
-												{
-													Type: basics.TealUintType,
-												},
-											},
-										},
-										{
-											PC:            6,
-											StackPopCount: 1,
-										},
-										{
-											PC: 154,
-											StackAdded: []basics.TealValue{
-												{
-													Type: basics.TealUintType,
-													Uint: 1,
-												},
-											},
-										},
-									},
-									ApprovalProgramHash: progHash,
-								},
-							},
 							// Optin
 							{
 								AppBudgetConsumed: 8,
@@ -3564,7 +3533,7 @@ int 1`,
 											StackAdded: []basics.TealValue{
 												{
 													Type: basics.TealUintType,
-													Uint: uint64(futureAppID),
+													Uint: uint64(createdAppID),
 												},
 											},
 										},
@@ -3646,7 +3615,7 @@ int 1`,
 											StackAdded: []basics.TealValue{
 												{
 													Type: basics.TealUintType,
-													Uint: uint64(futureAppID),
+													Uint: uint64(createdAppID),
 												},
 											},
 										},
@@ -3739,7 +3708,7 @@ int 1`,
 												{
 													AppStateOp: logic.AppStateWrite,
 													AppState:   logic.GlobalState,
-													AppID:      futureAppID,
+													AppID:      createdAppID,
 													Key:        "global-int-key",
 													NewValue: basics.TealValue{
 														Type: basics.TealUintType,
@@ -3774,7 +3743,7 @@ int 1`,
 												{
 													AppStateOp: logic.AppStateWrite,
 													AppState:   logic.GlobalState,
-													AppID:      futureAppID,
+													AppID:      createdAppID,
 													Key:        "global-bytes-key",
 													NewValue: basics.TealValue{
 														Type:  basics.TealBytesType,
@@ -3828,7 +3797,7 @@ int 1`,
 											StackAdded: []basics.TealValue{
 												{
 													Type: basics.TealUintType,
-													Uint: uint64(futureAppID),
+													Uint: uint64(createdAppID),
 												},
 											},
 										},
@@ -3930,7 +3899,7 @@ int 1`,
 												{
 													AppStateOp: logic.AppStateWrite,
 													AppState:   logic.LocalState,
-													AppID:      futureAppID,
+													AppID:      createdAppID,
 													Key:        "local-int-key",
 													NewValue: basics.TealValue{
 														Type: basics.TealUintType,
@@ -3974,7 +3943,7 @@ int 1`,
 												{
 													AppStateOp: logic.AppStateWrite,
 													AppState:   logic.LocalState,
-													AppID:      futureAppID,
+													AppID:      createdAppID,
 													Key:        "local-bytes-key",
 													NewValue: basics.TealValue{
 														Type:  basics.TealBytesType,
@@ -3999,9 +3968,24 @@ int 1`,
 								},
 							},
 						},
-						AppBudgetAdded:    2800,
-						AppBudgetConsumed: 52,
+						AppBudgetAdded:    2100,
+						AppBudgetConsumed: 48,
 					},
+				},
+				InitialStates: &simulation.ResourcesInitialStates{
+					AllAppsInitialStates: simulation.AppsInitialStates{
+						createdAppID: simulation.SingleAppInitialStates{
+							AppLocals:      map[basics.Address]simulation.AppKVPairs{},
+							AppGlobals:     simulation.AppKVPairs{},
+							AppBoxes:       simulation.AppKVPairs{},
+							CreatedGlobals: util.MakeSet("global-bytes-key", "global-int-key"),
+							CreatedBoxes:   make(util.Set[string]),
+							CreatedLocals: map[basics.Address]util.Set[string]{
+								sender.Addr: util.MakeSet("local-bytes-key", "local-int-key"),
+							},
+						},
+					},
+					CreatedApp: util.Set[basics.AppIndex]{},
 				},
 			},
 		}
@@ -4237,6 +4221,10 @@ int 1`,
 						AppBudgetConsumed: 14,
 					},
 				},
+				InitialStates: &simulation.ResourcesInitialStates{
+					AllAppsInitialStates: make(simulation.AppsInitialStates),
+					CreatedApp:           util.MakeSet(futureAppID),
+				},
 			},
 		}
 	})
@@ -4416,6 +4404,1589 @@ int 1`,
 						AppBudgetAdded:    1400,
 						AppBudgetConsumed: 8,
 					},
+				},
+				InitialStates: &simulation.ResourcesInitialStates{
+					AllAppsInitialStates: make(simulation.AppsInitialStates),
+					CreatedApp:           util.MakeSet(futureAppID),
+				},
+			},
+		}
+	})
+}
+
+type BoxInitialStatesTestCase struct {
+	boxOpsForPrepare  []boxOperation
+	boxOpsForSimulate []boxOperation
+	initialBoxStates  simulation.AppKVPairs
+}
+
+func testBoxInitialStatesHelper(t *testing.T, testcase BoxInitialStatesTestCase) {
+	t.Helper()
+
+	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+		proto := env.TxnInfo.CurrentProtocolParams()
+		appCreator := env.Accounts[0]
+
+		boxApprovalProgram := fmt.Sprintf(boxTestProgram, 8)
+		boxAppID := env.CreateApp(appCreator.Addr, simulationtesting.AppParams{
+			ApprovalProgram: boxApprovalProgram,
+			ClearStateProgram: `#pragma version 8
+int 1`,
+		})
+
+		op, err := logic.AssembleString(boxApprovalProgram)
+		require.NoError(t, err)
+		progHash := crypto.Hash(op.Program)
+
+		transferable := env.Accounts[1].AcctData.MicroAlgos.Raw - proto.MinBalance - proto.MinTxnFee
+		env.TransferAlgos(env.Accounts[1].Addr, boxAppID.Address(), transferable)
+
+		for _, boxOp := range testcase.boxOpsForPrepare {
+			env.Txn(env.TxnInfo.NewTxn(txntest.Txn{
+				Type:            protocol.ApplicationCallTx,
+				Sender:          appCreator.Addr,
+				ApplicationID:   boxAppID,
+				ApplicationArgs: boxOp.appArgs(),
+				Boxes:           boxOp.boxRefs(),
+			}).SignedTxn())
+		}
+
+		boxOpToSimResult := func(boxOp boxOperation) simulation.TxnResult {
+			var res simulation.TxnResult
+			switch boxOp.op {
+			case logic.BoxReadOperation:
+				res = simulation.TxnResult{
+					AppBudgetConsumed: 14,
+					Trace: &simulation.TransactionTrace{
+						ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
+							{PC: 1},
+							{PC: 3},
+							{PC: 6},
+							{PC: 14},
+							{PC: 22},
+							{PC: 28},
+							{PC: 35},
+							{PC: 38},
+							{PC: 69},
+							{PC: 72},
+							{PC: 73},
+							{PC: 74},
+							{PC: 75},
+							{PC: 87},
+						},
+						ApprovalProgramHash: progHash,
+					},
+				}
+			case logic.BoxWriteOperation:
+				res = simulation.TxnResult{
+					AppBudgetConsumed: 13,
+					Trace: &simulation.TransactionTrace{
+						ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
+							{PC: 1},
+							{PC: 3},
+							{PC: 6},
+							{PC: 14},
+							{PC: 22},
+							{PC: 28},
+							{PC: 35},
+							{PC: 38},
+							{PC: 78},
+							{PC: 81},
+							{PC: 83},
+							{
+								PC: 86,
+								StateChanges: []simulation.StateOperation{
+									{
+										AppStateOp: logic.AppStateWrite,
+										AppState:   logic.BoxState,
+										AppID:      boxAppID,
+										Key:        boxOp.name,
+										NewValue: basics.TealValue{
+											Type:  basics.TealBytesType,
+											Bytes: string(boxOp.contents),
+										},
+									},
+								},
+							},
+							{PC: 87},
+						},
+						ApprovalProgramHash: progHash,
+					},
+				}
+			case logic.BoxCreateOperation:
+				res = simulation.TxnResult{
+					AppBudgetConsumed: 15,
+					Trace: &simulation.TransactionTrace{
+						ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
+							{PC: 1},
+							{PC: 3},
+							{PC: 6},
+							{PC: 14},
+							{PC: 22},
+							{PC: 28},
+							{PC: 35},
+							{PC: 38},
+							{PC: 49},
+							{PC: 52},
+							{PC: 55},
+							{
+								PC: 56,
+								StateChanges: []simulation.StateOperation{
+									{
+										AppStateOp: logic.AppStateWrite,
+										AppState:   logic.BoxState,
+										AppID:      boxAppID,
+										Key:        boxOp.name,
+										NewValue: basics.TealValue{
+											Type:  basics.TealBytesType,
+											Bytes: string(make([]byte, boxOp.createSize)),
+										},
+									},
+								},
+							},
+							{PC: 57},
+							{PC: 58},
+							{PC: 87},
+						},
+						ApprovalProgramHash: progHash,
+					},
+				}
+			case logic.BoxDeleteOperation:
+				res = simulation.TxnResult{
+					AppBudgetConsumed: 13,
+					Trace: &simulation.TransactionTrace{
+						ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
+							{PC: 1},
+							{PC: 3},
+							{PC: 6},
+							{PC: 14},
+							{PC: 22},
+							{PC: 28},
+							{PC: 35},
+							{PC: 38},
+							{PC: 61},
+							{
+								PC: 64,
+								StateChanges: []simulation.StateOperation{
+									{
+										AppStateOp: logic.AppStateDelete,
+										AppState:   logic.BoxState,
+										AppID:      boxAppID,
+										Key:        boxOp.name,
+									},
+								},
+							},
+							{PC: 65},
+							{PC: 66},
+							{PC: 87},
+						},
+						ApprovalProgramHash: progHash,
+					},
+				}
+			}
+			return res
+		}
+
+		txnPtrs := make([]*txntest.Txn, len(testcase.boxOpsForSimulate))
+		for i, boxOp := range testcase.boxOpsForSimulate {
+			tempTxn := env.TxnInfo.NewTxn(txntest.Txn{
+				Type:            protocol.ApplicationCallTx,
+				Sender:          appCreator.Addr,
+				ApplicationID:   boxAppID,
+				ApplicationArgs: boxOp.appArgs(),
+				Boxes:           boxOp.boxRefs(),
+			})
+			txnPtrs[i] = &tempTxn
+		}
+
+		txntest.Group(txnPtrs...)
+		signedTxns := make([]transactions.SignedTxn, len(testcase.boxOpsForSimulate))
+		for i, txn := range txnPtrs {
+			signedTxns[i] = txn.Txn().Sign(appCreator.Sk)
+		}
+
+		txnResults := make([]simulation.TxnResult, len(testcase.boxOpsForSimulate))
+		for i, boxOp := range testcase.boxOpsForSimulate {
+			txnResults[i] = boxOpToSimResult(boxOp)
+		}
+		totalConsumed := uint64(0)
+		for _, txnResult := range txnResults {
+			totalConsumed += txnResult.AppBudgetConsumed
+		}
+
+		prepareKeys := make(util.Set[string])
+		for _, instruction := range testcase.boxOpsForPrepare {
+			if instruction.op != logic.BoxWriteOperation {
+				continue
+			}
+			prepareKeys.Add(instruction.name)
+		}
+		newlyCreatedGlobalKeySet := make(util.Set[string])
+		for _, instruction := range testcase.boxOpsForSimulate {
+			if instruction.op != logic.BoxWriteOperation {
+				continue
+			}
+			if prepareKeys.Contains(instruction.name) {
+				continue
+			}
+			newlyCreatedGlobalKeySet.Add(instruction.name)
+		}
+
+		return simulationTestCase{
+			input: simulation.Request{
+				TxnGroups: [][]transactions.SignedTxn{
+					signedTxns,
+				},
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable: true,
+					State:  true,
+				},
+			},
+			developerAPI: true,
+			expected: simulation.Result{
+				Version:   simulation.ResultLatestVersion,
+				LastRound: env.TxnInfo.LatestRound(),
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable: true,
+					State:  true,
+				},
+				TxnGroups: []simulation.TxnGroupResult{
+					{
+						Txns:              txnResults,
+						AppBudgetAdded:    700 * uint64(len(txnResults)),
+						AppBudgetConsumed: totalConsumed,
+					},
+				},
+				InitialStates: &simulation.ResourcesInitialStates{
+					AllAppsInitialStates: simulation.AppsInitialStates{
+						boxAppID: simulation.SingleAppInitialStates{
+							AppGlobals:     make(simulation.AppKVPairs),
+							AppLocals:      map[basics.Address]simulation.AppKVPairs{},
+							AppBoxes:       testcase.initialBoxStates,
+							CreatedGlobals: make(util.Set[string]),
+							CreatedBoxes:   newlyCreatedGlobalKeySet,
+							CreatedLocals:  map[basics.Address]util.Set[string]{},
+						},
+					},
+					CreatedApp: util.Set[basics.AppIndex]{},
+				},
+			},
+		}
+	})
+}
+
+func TestAppInitialBoxStates(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	testBoxInitialStatesHelper(t, BoxInitialStatesTestCase{
+		boxOpsForPrepare: []boxOperation{
+			{
+				op:         logic.BoxCreateOperation,
+				name:       "A",
+				createSize: 21,
+			},
+			{
+				op:       logic.BoxWriteOperation,
+				name:     "A",
+				contents: []byte("initial box A content"),
+			},
+		},
+		boxOpsForSimulate: []boxOperation{
+			{
+				op:   logic.BoxReadOperation,
+				name: "A",
+			},
+			{
+				op:       logic.BoxWriteOperation,
+				name:     "A",
+				contents: []byte("box A get overwritten"),
+			},
+		},
+		initialBoxStates: simulation.AppKVPairs{
+			"A": {
+				Type:  basics.TealBytesType,
+				Bytes: "initial box A content",
+			},
+		},
+	})
+
+	testBoxInitialStatesHelper(t, BoxInitialStatesTestCase{
+		boxOpsForPrepare: []boxOperation{
+			{
+				op:         logic.BoxCreateOperation,
+				name:       "A",
+				createSize: 21,
+			},
+			{
+				op:       logic.BoxWriteOperation,
+				name:     "A",
+				contents: []byte("initial box A content"),
+			},
+			{
+				op:         logic.BoxCreateOperation,
+				name:       "B",
+				createSize: 21,
+			},
+			{
+				op:       logic.BoxWriteOperation,
+				name:     "B",
+				contents: []byte("initial box B content"),
+			},
+			{
+				op:         logic.BoxCreateOperation,
+				name:       "C",
+				createSize: 21,
+			},
+			{
+				op:       logic.BoxWriteOperation,
+				name:     "C",
+				contents: []byte("initial box C content"),
+			},
+		},
+		boxOpsForSimulate: []boxOperation{
+			{
+				op:   logic.BoxDeleteOperation,
+				name: "C",
+			},
+			{
+				op:   logic.BoxReadOperation,
+				name: "A",
+			},
+		},
+		initialBoxStates: simulation.AppKVPairs{
+			"A": {
+				Type:  basics.TealBytesType,
+				Bytes: "initial box A content",
+			},
+			"C": {
+				Type:  basics.TealBytesType,
+				Bytes: "initial box C content",
+			},
+		},
+	})
+
+	testBoxInitialStatesHelper(t, BoxInitialStatesTestCase{
+		boxOpsForPrepare: []boxOperation{
+			{
+				op:         logic.BoxCreateOperation,
+				name:       "A",
+				createSize: 21,
+			},
+			{
+				op:       logic.BoxWriteOperation,
+				name:     "A",
+				contents: []byte("initial box A content"),
+			},
+			{
+				op:         logic.BoxCreateOperation,
+				name:       "C",
+				createSize: 21,
+			},
+			{
+				op:       logic.BoxWriteOperation,
+				name:     "C",
+				contents: []byte("initial box C content"),
+			},
+		},
+		boxOpsForSimulate: []boxOperation{
+			{
+				op:         logic.BoxCreateOperation,
+				name:       "B",
+				createSize: 21,
+			},
+			{
+				op:       logic.BoxWriteOperation,
+				name:     "B",
+				contents: []byte("initial box B content"),
+			},
+		},
+		initialBoxStates: simulation.AppKVPairs{},
+	})
+}
+
+func testBoxPutInitialStatesHelper(t *testing.T, testcase BoxInitialStatesTestCase) {
+	t.Helper()
+
+	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+		proto := env.TxnInfo.CurrentProtocolParams()
+		appCreator := env.Accounts[0]
+
+		boxApprovalProgram := `#pragma version 8
+txn ApplicationID
+bz end // Do nothing during create
+
+byte "write"
+byte "delete"
+txn ApplicationArgs 0
+match put del
+err // Unknown command
+
+put:
+txn ApplicationArgs 1
+txn ApplicationArgs 2
+box_put
+b end
+
+del:
+txn ApplicationArgs 1
+box_del
+assert
+b end
+
+end:
+int 1
+`
+		boxAppID := env.CreateApp(appCreator.Addr, simulationtesting.AppParams{
+			ApprovalProgram: boxApprovalProgram,
+			ClearStateProgram: `#pragma version 8
+		int 1`,
+		})
+
+		op, err := logic.AssembleString(boxApprovalProgram)
+		require.NoError(t, err)
+		progHash := crypto.Hash(op.Program)
+
+		transferable := env.Accounts[1].AcctData.MicroAlgos.Raw - proto.MinBalance - proto.MinTxnFee
+		env.TransferAlgos(env.Accounts[1].Addr, boxAppID.Address(), transferable)
+
+		for _, boxOp := range testcase.boxOpsForPrepare {
+			env.Txn(env.TxnInfo.NewTxn(txntest.Txn{
+				Type:            protocol.ApplicationCallTx,
+				Sender:          appCreator.Addr,
+				ApplicationID:   boxAppID,
+				ApplicationArgs: boxOp.appArgs(),
+				Boxes:           boxOp.boxRefs(),
+			}).SignedTxn())
+		}
+
+		boxOpToSimResult := func(boxOp boxOperation) simulation.TxnResult {
+			var res simulation.TxnResult
+			switch boxOp.op {
+			case logic.BoxWriteOperation:
+				res = simulation.TxnResult{
+					AppBudgetConsumed: 11,
+					Trace: &simulation.TransactionTrace{
+						ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
+							{PC: 1},
+							{PC: 3},
+							{PC: 6},
+							{PC: 13},
+							{PC: 21},
+							{PC: 24},
+							{PC: 31},
+							{PC: 34},
+							{
+								PC: 37,
+								StateChanges: []simulation.StateOperation{
+									{
+										AppStateOp: logic.AppStateWrite,
+										AppState:   logic.BoxState,
+										AppID:      boxAppID,
+										Key:        boxOp.name,
+										NewValue: basics.TealValue{
+											Type:  basics.TealBytesType,
+											Bytes: string(boxOp.contents),
+										},
+									},
+								},
+							},
+							{PC: 38},
+							{PC: 49},
+						},
+						ApprovalProgramHash: progHash,
+					},
+				}
+			case logic.BoxDeleteOperation:
+				res = simulation.TxnResult{
+					AppBudgetConsumed: 11,
+					Trace: &simulation.TransactionTrace{
+						ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
+							{PC: 1},
+							{PC: 3},
+							{PC: 6},
+							{PC: 13},
+							{PC: 21},
+							{PC: 24},
+							{PC: 31},
+							{PC: 34},
+							{PC: 37},
+							{PC: 61},
+							{
+								PC: 64,
+								StateChanges: []simulation.StateOperation{
+									{
+										AppStateOp: logic.AppStateDelete,
+										AppState:   logic.BoxState,
+										AppID:      boxAppID,
+										Key:        boxOp.name,
+									},
+								},
+							},
+							{PC: 65},
+							{PC: 66},
+							{PC: 87},
+						},
+						ApprovalProgramHash: progHash,
+					},
+				}
+			}
+			return res
+		}
+
+		txnPtrs := make([]*txntest.Txn, len(testcase.boxOpsForSimulate))
+		for i, boxOp := range testcase.boxOpsForSimulate {
+			tempTxn := env.TxnInfo.NewTxn(txntest.Txn{
+				Type:            protocol.ApplicationCallTx,
+				Sender:          appCreator.Addr,
+				ApplicationID:   boxAppID,
+				ApplicationArgs: boxOp.appArgs(),
+				Boxes:           boxOp.boxRefs(),
+			})
+			txnPtrs[i] = &tempTxn
+		}
+
+		txntest.Group(txnPtrs...)
+		signedTxns := make([]transactions.SignedTxn, len(testcase.boxOpsForSimulate))
+		for i, txn := range txnPtrs {
+			signedTxns[i] = txn.Txn().Sign(appCreator.Sk)
+		}
+
+		txnResults := make([]simulation.TxnResult, len(testcase.boxOpsForSimulate))
+		for i, boxOp := range testcase.boxOpsForSimulate {
+			txnResults[i] = boxOpToSimResult(boxOp)
+		}
+		totalConsumed := uint64(0)
+		for _, txnResult := range txnResults {
+			totalConsumed += txnResult.AppBudgetConsumed
+		}
+
+		prepareKeys := make(util.Set[string])
+		for _, instruction := range testcase.boxOpsForPrepare {
+			if instruction.op != logic.BoxWriteOperation {
+				continue
+			}
+			prepareKeys.Add(instruction.name)
+		}
+		newlyCreatedGlobalKeySet := make(util.Set[string])
+		for _, instruction := range testcase.boxOpsForSimulate {
+			if instruction.op != logic.BoxWriteOperation {
+				continue
+			}
+			if prepareKeys.Contains(instruction.name) {
+				continue
+			}
+			newlyCreatedGlobalKeySet.Add(instruction.name)
+		}
+
+		return simulationTestCase{
+			input: simulation.Request{
+				TxnGroups: [][]transactions.SignedTxn{
+					signedTxns,
+				},
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable: true,
+					State:  true,
+				},
+			},
+			developerAPI: true,
+			expected: simulation.Result{
+				Version:   simulation.ResultLatestVersion,
+				LastRound: env.TxnInfo.LatestRound(),
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable: true,
+					State:  true,
+				},
+				TxnGroups: []simulation.TxnGroupResult{
+					{
+						Txns:              txnResults,
+						AppBudgetAdded:    700 * uint64(len(txnResults)),
+						AppBudgetConsumed: totalConsumed,
+					},
+				},
+				InitialStates: &simulation.ResourcesInitialStates{
+					AllAppsInitialStates: simulation.AppsInitialStates{
+						boxAppID: simulation.SingleAppInitialStates{
+							AppGlobals:     make(simulation.AppKVPairs),
+							AppLocals:      map[basics.Address]simulation.AppKVPairs{},
+							AppBoxes:       testcase.initialBoxStates,
+							CreatedGlobals: make(util.Set[string]),
+							CreatedBoxes:   newlyCreatedGlobalKeySet,
+							CreatedLocals:  map[basics.Address]util.Set[string]{},
+						},
+					},
+					CreatedApp: util.Set[basics.AppIndex]{},
+				},
+			},
+		}
+	})
+}
+
+func TestAppInitialBoxStatesAboutBoxPut(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	testBoxPutInitialStatesHelper(t, BoxInitialStatesTestCase{
+		boxOpsForPrepare: []boxOperation{
+			{
+				op:       logic.BoxWriteOperation,
+				name:     "A",
+				contents: []byte("initial box A content"),
+			},
+		},
+		boxOpsForSimulate: []boxOperation{
+			{
+				op:       logic.BoxWriteOperation,
+				name:     "A",
+				contents: []byte("box A get overwritten"),
+			},
+		},
+		initialBoxStates: simulation.AppKVPairs{
+			"A": {
+				Type:  basics.TealBytesType,
+				Bytes: "initial box A content",
+			},
+		},
+	})
+
+	testBoxPutInitialStatesHelper(t, BoxInitialStatesTestCase{
+		boxOpsForSimulate: []boxOperation{
+			{
+				op:       logic.BoxWriteOperation,
+				name:     "A",
+				contents: []byte("box A get overwritten"),
+			},
+		},
+		initialBoxStates: simulation.AppKVPairs{},
+	})
+}
+
+type GlobalInitialStatesTestCase struct {
+	prepareInstruction  [][][]byte
+	txnsArgs            [][][]byte
+	initialGlobalStates simulation.AppKVPairs
+}
+
+func (l GlobalInitialStatesTestCase) toSignedTxns(env simulationtesting.Environment, addr simulationtesting.Account, appID basics.AppIndex) []transactions.SignedTxn {
+	txns := make([]*txntest.Txn, len(l.txnsArgs))
+	for i, txnArgs := range l.txnsArgs {
+		tempTxn := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:            protocol.ApplicationCallTx,
+			Sender:          addr.Addr,
+			ApplicationID:   appID,
+			ApplicationArgs: txnArgs,
+		})
+		txns[i] = &tempTxn
+	}
+	txntest.Group(txns...)
+	signedTxns := make([]transactions.SignedTxn, len(l.txnsArgs))
+	for i, txn := range txns {
+		signedTxns[i] = txn.Txn().Sign(addr.Sk)
+	}
+	return signedTxns
+}
+
+func testGlobalInitialStatesHelper(t *testing.T, testcase GlobalInitialStatesTestCase) {
+	t.Helper()
+
+	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+		appCreator := env.Accounts[0]
+
+		approvalProgramSrc := `#pragma version 8
+txn ApplicationID
+bz end // Do nothing during create
+
+byte "put"
+byte "del"
+txn ApplicationArgs 0
+match put del
+err // Unknown command
+
+put:
+  txn ApplicationArgs 1
+  txn ApplicationArgs 2
+  app_global_put
+  b end
+
+del:
+  txn ApplicationArgs 1
+  app_global_del
+  b end
+
+end:
+  int 1
+`
+
+		appID := env.CreateApp(appCreator.Addr, simulationtesting.AppParams{
+			GlobalStateSchema: basics.StateSchema{NumByteSlice: 8},
+			ApprovalProgram:   approvalProgramSrc,
+			ClearStateProgram: `#pragma version 8
+int 1`,
+		})
+
+		op, err := logic.AssembleString(approvalProgramSrc)
+		require.NoError(t, err)
+		progHash := crypto.Hash(op.Program)
+
+		for _, instruction := range testcase.prepareInstruction {
+			txnArgs := [][]byte{[]byte("put")}
+			txnArgs = append(txnArgs, instruction...)
+			env.Txn(env.TxnInfo.NewTxn(txntest.Txn{
+				Sender:          appCreator.Addr,
+				Type:            protocol.ApplicationCallTx,
+				ApplicationID:   appID,
+				ApplicationArgs: txnArgs,
+			}).SignedTxn())
+		}
+
+		signedTxns := testcase.toSignedTxns(env, appCreator, appID)
+
+		txnArgsToResult := func(txnAppArgs [][]byte) simulation.TxnResult {
+			var res simulation.TxnResult
+			switch string(txnAppArgs[0]) {
+			case "put":
+				res = simulation.TxnResult{
+					Txn: transactions.SignedTxnWithAD{
+						ApplyData: transactions.ApplyData{
+							EvalDelta: transactions.EvalDelta{
+								GlobalDelta: basics.StateDelta{
+									string(txnAppArgs[1]): basics.ValueDelta{
+										Bytes:  string(txnAppArgs[2]),
+										Action: basics.SetBytesAction,
+									},
+								},
+							},
+						},
+					},
+					AppBudgetConsumed: 11,
+					Trace: &simulation.TransactionTrace{
+						ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
+							{PC: 1},
+							{PC: 3},
+							{PC: 6},
+							{PC: 11},
+							{PC: 16},
+							{PC: 19},
+							{PC: 26},
+							{PC: 29},
+							{
+								PC: 32,
+								StateChanges: []simulation.StateOperation{
+									{
+										AppStateOp: logic.AppStateWrite,
+										AppState:   logic.GlobalState,
+										AppID:      appID,
+										Key:        string(txnAppArgs[1]),
+										NewValue: basics.TealValue{
+											Type:  basics.TealBytesType,
+											Bytes: string(txnAppArgs[2]),
+										},
+									},
+								},
+							},
+							{PC: 33},
+							{PC: 43},
+						},
+						ApprovalProgramHash: progHash,
+					},
+				}
+			case "del":
+				res = simulation.TxnResult{
+					Txn: transactions.SignedTxnWithAD{
+						ApplyData: transactions.ApplyData{
+							EvalDelta: transactions.EvalDelta{
+								GlobalDelta: basics.StateDelta{
+									string(txnAppArgs[1]): basics.ValueDelta{
+										Action: basics.DeleteAction,
+									},
+								},
+							},
+						},
+					},
+					AppBudgetConsumed: 10,
+					Trace: &simulation.TransactionTrace{
+						ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
+							{PC: 1},
+							{PC: 3},
+							{PC: 6},
+							{PC: 11},
+							{PC: 16},
+							{PC: 19},
+							{PC: 36},
+							{
+								PC: 39,
+								StateChanges: []simulation.StateOperation{
+									{
+										AppStateOp: logic.AppStateDelete,
+										AppState:   logic.GlobalState,
+										AppID:      appID,
+										Key:        string(txnAppArgs[1]),
+									},
+								},
+							},
+							{PC: 40},
+							{PC: 43},
+						},
+						ApprovalProgramHash: progHash,
+					},
+				}
+			default:
+			}
+			return res
+		}
+		txnResults := make([]simulation.TxnResult, len(testcase.txnsArgs))
+		for i, txnArgs := range testcase.txnsArgs {
+			txnResults[i] = txnArgsToResult(txnArgs)
+		}
+
+		prepareKeys := make(util.Set[string])
+		for _, instruction := range testcase.prepareInstruction {
+			prepareKeys.Add(string(instruction[0]))
+		}
+		newlyCreatedGlobalKeySet := make(util.Set[string])
+		for _, txnArgs := range testcase.txnsArgs {
+			if string(txnArgs[0]) != "put" {
+				continue
+			}
+			if prepareKeys.Contains(string(txnArgs[1])) {
+				continue
+			}
+			newlyCreatedGlobalKeySet.Add(string(txnArgs[1]))
+		}
+
+		totalConsumed := uint64(0)
+		for _, txnResult := range txnResults {
+			totalConsumed += txnResult.AppBudgetConsumed
+		}
+
+		return simulationTestCase{
+			input: simulation.Request{
+				TxnGroups: [][]transactions.SignedTxn{
+					signedTxns,
+				},
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable: true,
+					State:  true,
+				},
+			},
+			developerAPI: true,
+			expected: simulation.Result{
+				Version:   simulation.ResultLatestVersion,
+				LastRound: env.TxnInfo.LatestRound(),
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable: true,
+					State:  true,
+				},
+				TxnGroups: []simulation.TxnGroupResult{
+					{
+						Txns:              txnResults,
+						AppBudgetAdded:    700 * uint64(len(txnResults)),
+						AppBudgetConsumed: totalConsumed,
+					},
+				},
+				InitialStates: &simulation.ResourcesInitialStates{
+					AllAppsInitialStates: simulation.AppsInitialStates{
+						appID: simulation.SingleAppInitialStates{
+							AppGlobals:     testcase.initialGlobalStates,
+							AppLocals:      map[basics.Address]simulation.AppKVPairs{},
+							AppBoxes:       make(simulation.AppKVPairs),
+							CreatedGlobals: newlyCreatedGlobalKeySet,
+							CreatedBoxes:   make(util.Set[string]),
+							CreatedLocals:  map[basics.Address]util.Set[string]{},
+						},
+					},
+					CreatedApp: make(util.Set[basics.AppIndex]),
+				},
+			},
+		}
+	})
+}
+
+func TestAppInitialGlobalStates(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	testGlobalInitialStatesHelper(t,
+		GlobalInitialStatesTestCase{
+			txnsArgs: [][][]byte{
+				{
+					[]byte("put"), []byte("A"), []byte("content A"),
+				},
+				{
+					[]byte("del"), []byte("A"),
+				},
+			},
+			initialGlobalStates: simulation.AppKVPairs{},
+		},
+	)
+
+	testGlobalInitialStatesHelper(t,
+		GlobalInitialStatesTestCase{
+			prepareInstruction: [][][]byte{
+				{
+					[]byte("A"), []byte("initial content A"),
+				},
+			},
+			txnsArgs: [][][]byte{
+				{
+					[]byte("put"), []byte("A"), []byte("content A"),
+				},
+				{
+					[]byte("del"), []byte("A"),
+				},
+			},
+			initialGlobalStates: simulation.AppKVPairs{
+				"A": basics.TealValue{
+					Type:  basics.TealBytesType,
+					Bytes: "initial content A",
+				},
+			},
+		},
+	)
+}
+
+type LocalStateOperation struct {
+	addressIndex uint64
+	appArgs      [][]byte
+}
+
+type LocalInitialStatesTestCase struct {
+	prepareInstructions  []LocalStateOperation
+	simulateInstructions []LocalStateOperation
+	initialLocalStates   map[uint64]simulation.AppKVPairs
+}
+
+func (testcase LocalInitialStatesTestCase) toSignedTxns(env simulationtesting.Environment, appID basics.AppIndex) []transactions.SignedTxn {
+	txns := make([]*txntest.Txn, len(testcase.simulateInstructions))
+	for i, instruction := range testcase.simulateInstructions {
+		tempTxn := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:            protocol.ApplicationCallTx,
+			Sender:          env.Accounts[instruction.addressIndex].Addr,
+			ApplicationID:   appID,
+			ApplicationArgs: instruction.appArgs,
+		})
+		txns[i] = &tempTxn
+	}
+	txntest.Group(txns...)
+	signedTxns := make([]transactions.SignedTxn, len(testcase.simulateInstructions))
+	for i, txn := range txns {
+		signedTxns[i] = txn.Txn().Sign(env.Accounts[testcase.simulateInstructions[i].addressIndex].Sk)
+	}
+	return signedTxns
+}
+
+func testLocalInitialStatesHelper(t *testing.T, testcase LocalInitialStatesTestCase) {
+	t.Helper()
+
+	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+		appCreator := env.Accounts[0]
+
+		approvalProgramSrc := `#pragma version 8
+txn ApplicationID
+bz end // Do nothing during create
+
+txn OnCompletion
+int OptIn
+==
+bnz end // Always allow optin
+
+byte "put"
+byte "get"
+byte "del"
+
+txn ApplicationArgs 0
+match put get del
+err // Unknown command
+
+put:
+  txn Sender            // account
+  txn ApplicationArgs 1 // key
+  txn ApplicationArgs 2 // local state content
+  app_local_put
+  b end
+
+get:
+  txn Sender            // account
+  txn ApplicationArgs 1 // key
+  app_local_get
+  pop
+  b end
+
+del:
+  txn Sender            // account
+  txn ApplicationArgs 1 // key
+  app_local_del
+  b end
+
+end:
+  int 1
+`
+
+		appID := env.CreateApp(appCreator.Addr, simulationtesting.AppParams{
+			LocalStateSchema: basics.StateSchema{NumByteSlice: 8},
+			ApprovalProgram:  approvalProgramSrc,
+			ClearStateProgram: `#pragma version 8
+int 1`,
+		})
+
+		op, err := logic.AssembleString(approvalProgramSrc)
+		require.NoError(t, err)
+		progHash := crypto.Hash(op.Program)
+
+		for _, acct := range env.Accounts[2:] {
+			env.Txn(env.TxnInfo.NewTxn(txntest.Txn{
+				Sender:        acct.Addr,
+				Type:          protocol.ApplicationCallTx,
+				ApplicationID: appID,
+				OnCompletion:  transactions.OptInOC,
+			}).SignedTxn())
+		}
+
+		for _, instruction := range testcase.prepareInstructions {
+			env.Txn(env.TxnInfo.NewTxn(txntest.Txn{
+				Sender:          env.Accounts[instruction.addressIndex].Addr,
+				Type:            protocol.ApplicationCallTx,
+				ApplicationID:   appID,
+				ApplicationArgs: instruction.appArgs,
+			}).SignedTxn())
+		}
+
+		signedTxns := testcase.toSignedTxns(env, appID)
+
+		txnArgsToResult := func(instruction LocalStateOperation) simulation.TxnResult {
+			var res simulation.TxnResult
+			switch string(instruction.appArgs[0]) {
+			case "put":
+				res = simulation.TxnResult{
+					Txn: transactions.SignedTxnWithAD{
+						ApplyData: transactions.ApplyData{
+							EvalDelta: transactions.EvalDelta{
+								LocalDeltas: map[uint64]basics.StateDelta{
+									0: {
+										string(instruction.appArgs[1]): basics.ValueDelta{
+											Bytes:  string(instruction.appArgs[2]),
+											Action: basics.SetBytesAction,
+										},
+									},
+								},
+							},
+						},
+					},
+					AppBudgetConsumed: 18,
+					Trace: &simulation.TransactionTrace{
+						ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
+							{PC: 1},
+							{PC: 4},
+							{PC: 6},
+							{PC: 9},
+							{PC: 11},
+							{PC: 12},
+							{PC: 13},
+							{PC: 16},
+							{PC: 21},
+							{PC: 26},
+							{PC: 31},
+							{PC: 34},
+							{PC: 43},
+							{PC: 45},
+							{PC: 48},
+							{
+								PC: 51,
+								StateChanges: []simulation.StateOperation{
+									{
+										AppStateOp: logic.AppStateWrite,
+										AppState:   logic.LocalState,
+										AppID:      appID,
+										Key:        string(instruction.appArgs[1]),
+										NewValue: basics.TealValue{
+											Type:  basics.TealBytesType,
+											Bytes: string(instruction.appArgs[2]),
+										},
+										Account: env.Accounts[instruction.addressIndex].Addr,
+									},
+								},
+							},
+							{PC: 52},
+							{PC: 74},
+						},
+						ApprovalProgramHash: progHash,
+					},
+				}
+			case "del":
+				res = simulation.TxnResult{
+					Txn: transactions.SignedTxnWithAD{
+						ApplyData: transactions.ApplyData{
+							EvalDelta: transactions.EvalDelta{
+								LocalDeltas: map[uint64]basics.StateDelta{
+									0: {
+										string(instruction.appArgs[1]): basics.ValueDelta{
+											Action: basics.DeleteAction,
+										},
+									},
+								},
+							},
+						},
+					},
+					AppBudgetConsumed: 17,
+					Trace: &simulation.TransactionTrace{
+						ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
+							{PC: 1},
+							{PC: 4},
+							{PC: 6},
+							{PC: 9},
+							{PC: 11},
+							{PC: 12},
+							{PC: 13},
+							{PC: 16},
+							{PC: 21},
+							{PC: 26},
+							{PC: 31},
+							{PC: 34},
+							{PC: 65},
+							{PC: 67},
+							{
+								PC: 70,
+								StateChanges: []simulation.StateOperation{
+									{
+										AppStateOp: logic.AppStateDelete,
+										AppState:   logic.LocalState,
+										AppID:      appID,
+										Key:        string(instruction.appArgs[1]),
+										Account:    env.Accounts[instruction.addressIndex].Addr,
+									},
+								},
+							},
+							{PC: 71},
+							{PC: 74},
+						},
+						ApprovalProgramHash: progHash,
+					},
+				}
+			case "get":
+				res = simulation.TxnResult{
+					AppBudgetConsumed: 18,
+					Trace: &simulation.TransactionTrace{
+						ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
+							{PC: 1},
+							{PC: 4},
+							{PC: 6},
+							{PC: 9},
+							{PC: 11},
+							{PC: 12},
+							{PC: 13},
+							{PC: 16},
+							{PC: 21},
+							{PC: 26},
+							{PC: 31},
+							{PC: 34},
+							{PC: 55},
+							{PC: 57},
+							{PC: 60},
+							{PC: 61},
+							{PC: 62},
+							{PC: 74},
+						},
+						ApprovalProgramHash: progHash,
+					},
+				}
+			default:
+			}
+			return res
+		}
+		txnResults := make([]simulation.TxnResult, len(testcase.simulateInstructions))
+		for i, txnArgs := range testcase.simulateInstructions {
+			txnResults[i] = txnArgsToResult(txnArgs)
+		}
+
+		prepareInitialStates := make(map[basics.Address]util.Set[string])
+		for _, instruction := range testcase.prepareInstructions {
+			if prepareInitialStates[env.Accounts[instruction.addressIndex].Addr] == nil {
+				prepareInitialStates[env.Accounts[instruction.addressIndex].Addr] = make(util.Set[string])
+			}
+			prepareInitialStates[env.Accounts[instruction.addressIndex].Addr].Add(string(instruction.appArgs[1]))
+		}
+
+		newlyCreatedLocalStates := make(map[basics.Address]util.Set[string])
+		for _, instruction := range testcase.simulateInstructions {
+			if string(instruction.appArgs[0]) != "put" {
+				continue
+			}
+			acctAddress := env.Accounts[instruction.addressIndex].Addr
+			if prepareInitialStates[acctAddress] != nil && prepareInitialStates[acctAddress].Contains(string(instruction.appArgs[1])) {
+				continue
+			}
+			if newlyCreatedLocalStates[acctAddress] == nil {
+				newlyCreatedLocalStates[acctAddress] = make(util.Set[string])
+			}
+			newlyCreatedLocalStates[acctAddress].Add(string(instruction.appArgs[1]))
+		}
+
+		totalConsumed := uint64(0)
+		for _, txnResult := range txnResults {
+			totalConsumed += txnResult.AppBudgetConsumed
+		}
+
+		expectedInitialLocalStates := make(map[basics.Address]simulation.AppKVPairs)
+		for addrID, kvPair := range testcase.initialLocalStates {
+			expectedInitialLocalStates[env.Accounts[addrID].Addr] = kvPair
+		}
+
+		return simulationTestCase{
+			input: simulation.Request{
+				TxnGroups: [][]transactions.SignedTxn{
+					signedTxns,
+				},
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable: true,
+					State:  true,
+				},
+			},
+			developerAPI: true,
+			expected: simulation.Result{
+				Version:   simulation.ResultLatestVersion,
+				LastRound: env.TxnInfo.LatestRound(),
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable: true,
+					State:  true,
+				},
+				TxnGroups: []simulation.TxnGroupResult{
+					{
+						Txns:              txnResults,
+						AppBudgetAdded:    700 * uint64(len(txnResults)),
+						AppBudgetConsumed: totalConsumed,
+					},
+				},
+				InitialStates: &simulation.ResourcesInitialStates{
+					AllAppsInitialStates: simulation.AppsInitialStates{
+						appID: simulation.SingleAppInitialStates{
+							AppGlobals:     make(simulation.AppKVPairs),
+							AppLocals:      expectedInitialLocalStates,
+							AppBoxes:       make(simulation.AppKVPairs),
+							CreatedGlobals: make(util.Set[string]),
+							CreatedLocals:  newlyCreatedLocalStates,
+							CreatedBoxes:   make(util.Set[string]),
+						},
+					},
+					CreatedApp: make(util.Set[basics.AppIndex]),
+				},
+			},
+		}
+	})
+}
+
+func TestLocalInitialStates(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	testLocalInitialStatesHelper(t, LocalInitialStatesTestCase{
+		prepareInstructions: []LocalStateOperation{},
+		simulateInstructions: []LocalStateOperation{
+			{
+				addressIndex: 2,
+				appArgs: [][]byte{
+					[]byte("put"), []byte("key"), []byte("value"),
+				},
+			},
+		},
+		initialLocalStates: map[uint64]simulation.AppKVPairs{},
+	})
+
+	testLocalInitialStatesHelper(t, LocalInitialStatesTestCase{
+		prepareInstructions: []LocalStateOperation{
+			{
+				addressIndex: 2,
+				appArgs: [][]byte{
+					[]byte("put"), []byte("key"), []byte("value"),
+				},
+			},
+		},
+		simulateInstructions: []LocalStateOperation{
+			{
+				addressIndex: 2,
+				appArgs: [][]byte{
+					[]byte("put"), []byte("key"), []byte("new-value"),
+				},
+			},
+			{
+				addressIndex: 2,
+				appArgs: [][]byte{
+					[]byte("get"), []byte("key"),
+				},
+			},
+			{
+				addressIndex: 2,
+				appArgs: [][]byte{
+					[]byte("del"), []byte("key"),
+				},
+			},
+		},
+		initialLocalStates: map[uint64]simulation.AppKVPairs{
+			2: {
+				"key": basics.TealValue{
+					Type:  basics.TealBytesType,
+					Bytes: "value",
+				},
+			},
+		},
+	})
+}
+
+func TestInitialStatesGetEx(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+		appCreator := env.Accounts[0]
+
+		approvalProgramSrc := `#pragma version 8
+txn ApplicationID
+bz end // Do nothing during create
+
+txn OnCompletion
+int OptIn
+==
+bnz end // Always allow optin
+
+byte "put"
+byte "local_put"
+byte "del"
+txn ApplicationArgs 0
+match put local_put del
+err // Unknown command
+
+put:
+  txn ApplicationArgs 1
+  txn ApplicationArgs 2
+  app_global_put
+  b end
+
+local_put:
+  txn Sender
+  txn ApplicationArgs 1
+  txn ApplicationArgs 2
+  app_local_put
+  b end
+
+del:
+  txn ApplicationArgs 1
+  app_global_del
+  b end
+
+end:
+  int 1
+`
+
+		appIDWithStates := env.CreateApp(appCreator.Addr, simulationtesting.AppParams{
+			GlobalStateSchema: basics.StateSchema{NumByteSlice: 8},
+			LocalStateSchema:  basics.StateSchema{NumByteSlice: 8},
+			ApprovalProgram:   approvalProgramSrc,
+			ClearStateProgram: `#pragma version 8
+int 1`,
+		})
+
+		env.Txn(env.TxnInfo.NewTxn(txntest.Txn{
+			Sender:        appCreator.Addr,
+			Type:          protocol.ApplicationCallTx,
+			ApplicationID: appIDWithStates,
+			OnCompletion:  transactions.OptInOC,
+		}).SignedTxn())
+
+		prepareSteps := [][][]byte{
+			{
+				[]byte("put"), []byte("A"), []byte("initial content A"),
+			},
+			{
+				[]byte("local_put"), []byte("B"), []byte("initial content B"),
+			},
+		}
+
+		for _, txnArgs := range prepareSteps {
+			env.Txn(env.TxnInfo.NewTxn(txntest.Txn{
+				Sender:          appCreator.Addr,
+				Type:            protocol.ApplicationCallTx,
+				ApplicationID:   appIDWithStates,
+				ApplicationArgs: txnArgs,
+			}).SignedTxn())
+		}
+
+		// The application to read another app
+		approvalProgramSrc = `#pragma version 8
+txn ApplicationID
+bz end // Do nothing during create
+
+byte "read_global"
+byte "read_local"
+txn ApplicationArgs 0
+match read_global read_local
+err // Unknown command
+
+read_global:
+  txn ApplicationArgs 1 // AppID
+  btoi
+  txn ApplicationArgs 2 // GlobalKey
+  app_global_get_ex
+  assert
+  pop
+  b end
+
+read_local:
+  txn Sender
+  txn ApplicationArgs 1 // AppID
+  btoi
+  txn ApplicationArgs 2 // LocalKey
+  app_local_get_ex
+  assert
+  pop
+  b end
+
+end:
+int 1
+`
+		appIDReadingStates := env.CreateApp(appCreator.Addr, simulationtesting.AppParams{
+			ApprovalProgram: approvalProgramSrc,
+			ClearStateProgram: `#pragma version 8
+int 1`,
+		})
+
+		op, err := logic.AssembleString(approvalProgramSrc)
+		require.NoError(t, err)
+		progHash := crypto.Hash(op.Program)
+
+		txns := make([]*txntest.Txn, 2)
+		tmpTxn0 := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:          protocol.ApplicationCallTx,
+			Sender:        appCreator.Addr,
+			ApplicationID: appIDReadingStates,
+			ApplicationArgs: [][]byte{
+				[]byte("read_global"),
+				uint64ToBytes(uint64(appIDWithStates)),
+				[]byte("A"),
+			},
+			ForeignApps: []basics.AppIndex{appIDWithStates},
+		})
+		txns[0] = &tmpTxn0
+		tmpTxn1 := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:          protocol.ApplicationCallTx,
+			Sender:        appCreator.Addr,
+			ApplicationID: appIDReadingStates,
+			ApplicationArgs: [][]byte{
+				[]byte("read_local"),
+				uint64ToBytes(uint64(appIDWithStates)),
+				[]byte("B"),
+			},
+			ForeignApps: []basics.AppIndex{appIDWithStates},
+			Note:        []byte("bla"),
+		})
+		txns[1] = &tmpTxn1
+		txntest.Group(txns...)
+		signedTxns := make([]transactions.SignedTxn, len(txns))
+		for i, txn := range txns {
+			signedTxns[i] = txn.Txn().Sign(appCreator.Sk)
+		}
+
+		// now construct app calls for global local get ex
+		txnResults := []simulation.TxnResult{
+			{
+				AppBudgetConsumed: 14,
+				Trace: &simulation.TransactionTrace{
+					ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
+						{PC: 1},
+						{PC: 3},
+						{PC: 6},
+						{PC: 19},
+						{PC: 31},
+						{PC: 34},
+						{PC: 41},
+						{PC: 44},
+						{PC: 45},
+						{PC: 48},
+						{PC: 49},
+						{PC: 50},
+						{PC: 51},
+						{PC: 69},
+					},
+					ApprovalProgramHash: progHash,
+				},
+			},
+			{
+				AppBudgetConsumed: 15,
+				Trace: &simulation.TransactionTrace{
+					ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
+						{PC: 1},
+						{PC: 3},
+						{PC: 6},
+						{PC: 19},
+						{PC: 31},
+						{PC: 34},
+						{PC: 54},
+						{PC: 56},
+						{PC: 59},
+						{PC: 60},
+						{PC: 63},
+						{PC: 64},
+						{PC: 65},
+						{PC: 66},
+						{PC: 69},
+					},
+					ApprovalProgramHash: progHash,
+				},
+			},
+		}
+
+		totalConsumed := uint64(0)
+		for _, txnResult := range txnResults {
+			totalConsumed += txnResult.AppBudgetConsumed
+		}
+
+		return simulationTestCase{
+			input: simulation.Request{
+				TxnGroups: [][]transactions.SignedTxn{
+					signedTxns,
+				},
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable: true,
+					State:  true,
+				},
+			},
+			developerAPI: true,
+			expected: simulation.Result{
+				Version:   simulation.ResultLatestVersion,
+				LastRound: env.TxnInfo.LatestRound(),
+				TraceConfig: simulation.ExecTraceConfig{
+					Enable: true,
+					State:  true,
+				},
+				TxnGroups: []simulation.TxnGroupResult{
+					{
+						Txns:              txnResults,
+						AppBudgetAdded:    700 * uint64(len(txnResults)),
+						AppBudgetConsumed: totalConsumed,
+					},
+				},
+				InitialStates: &simulation.ResourcesInitialStates{
+					AllAppsInitialStates: simulation.AppsInitialStates{
+						appIDWithStates: simulation.SingleAppInitialStates{
+							AppGlobals: simulation.AppKVPairs{
+								"A": basics.TealValue{
+									Type:  basics.TealBytesType,
+									Bytes: "initial content A",
+								},
+							},
+							AppLocals: map[basics.Address]simulation.AppKVPairs{
+								appCreator.Addr: {
+									"B": basics.TealValue{
+										Type:  basics.TealBytesType,
+										Bytes: "initial content B",
+									},
+								},
+							},
+							AppBoxes:       make(simulation.AppKVPairs),
+							CreatedGlobals: make(util.Set[string]),
+							CreatedBoxes:   make(util.Set[string]),
+							CreatedLocals:  map[basics.Address]util.Set[string]{},
+						},
+					},
+					CreatedApp: make(util.Set[basics.AppIndex]),
 				},
 			},
 		}
@@ -5800,6 +7371,10 @@ func (o boxOperation) appArgs() [][]byte {
 	default:
 		panic(fmt.Sprintf("unknown box operation: %v", o.op))
 	}
+}
+
+func (o boxOperation) boxRefs() []transactions.BoxRef {
+	return []transactions.BoxRef{{Name: []byte(o.name)}}
 }
 
 type boxTestResult struct {

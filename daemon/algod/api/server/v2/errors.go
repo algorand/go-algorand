@@ -44,6 +44,7 @@ var (
 	errFailedToParseCatchpoint                 = "failed to parse catchpoint"
 	errFailedToAbortCatchup                    = "failed to abort catchup : %v"
 	errFailedToStartCatchup                    = "failed to start catchup : %v"
+	errCatchpointWouldNotInitialize            = "the node has already been initialized"
 	errOperationNotAvailableDuringCatchup      = "operation not available during catchup"
 	errRESTPayloadZeroLength                   = "payload was of zero length"
 	errRoundGreaterThanTheLatest               = "given round is greater than the latest round"

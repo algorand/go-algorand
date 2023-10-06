@@ -163,34 +163,16 @@ func (ct *catchpointTracker) initialize(cfg config.Local, paths DirsAndPrefix) {
 	// the temp file uses the hot data directories
 	ct.tmpDir = paths.HotGenesisDir
 
-	switch cfg.CatchpointTracking {
-	case -1:
-		// No catchpoints.
-	default:
-		// Give a warning, then fall through to case 0.
-		logging.Base().Warnf("catchpointTracker: the CatchpointTracking field in the config.json file contains an invalid value (%d). The default value of 0 would be used instead.", cfg.CatchpointTracking)
-		fallthrough
-	case 0:
-		if cfg.Archival && (cfg.CatchpointInterval > 0) {
-			ct.catchpointInterval = cfg.CatchpointInterval
-			ct.enableGeneratingCatchpointFiles = true
-		}
-	case 1:
-		if cfg.CatchpointInterval > 0 {
-			ct.catchpointInterval = cfg.CatchpointInterval
-			ct.enableGeneratingCatchpointFiles = cfg.Archival
-		}
-	case 2:
-		if cfg.CatchpointInterval > 0 {
-			ct.catchpointInterval = cfg.CatchpointInterval
-			ct.enableGeneratingCatchpointFiles = true
-		}
-	case forceCatchpointFileGenerationTrackingMode:
-		if cfg.CatchpointInterval > 0 {
-			ct.catchpointInterval = cfg.CatchpointInterval
-			ct.enableGeneratingCatchpointFiles = true
-			ct.forceCatchpointFileWriting = true
-		}
+	if cfg.TracksCatchpoints() {
+		ct.catchpointInterval = cfg.CatchpointInterval
+	}
+	ct.enableGeneratingCatchpointFiles = cfg.StoresCatchpoints()
+
+	// Overwrite previous options if forceCatchpointFileGenerationTrackingMode
+	if cfg.CatchpointTracking == forceCatchpointFileGenerationTrackingMode && cfg.CatchpointInterval > 0 {
+		ct.catchpointInterval = cfg.CatchpointInterval
+		ct.forceCatchpointFileWriting = true
+		ct.enableGeneratingCatchpointFiles = true
 	}
 
 	ct.catchpointFileHistoryLength = cfg.CatchpointFileHistoryLength

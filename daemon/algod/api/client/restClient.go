@@ -389,6 +389,10 @@ type accountInformationParams struct {
 	Exclude string `url:"exclude"`
 }
 
+type catchupParams struct {
+	Min uint64 `url:"min"`
+}
+
 // PendingTransactionsByAddr returns all the pending transactions for an addr.
 func (client RestClient) PendingTransactionsByAddr(addr string, max uint64) (response model.PendingTransactionsResponse, err error) {
 	err = client.get(&response, fmt.Sprintf("/v2/accounts/%s/transactions/pending", addr), pendingTransactionsByAddrParams{max})
@@ -575,8 +579,8 @@ func (client RestClient) AbortCatchup(catchpointLabel string) (response model.Ca
 }
 
 // Catchup start catching up to the give catchpoint label
-func (client RestClient) Catchup(catchpointLabel string) (response model.CatchpointStartResponse, err error) {
-	err = client.submitForm(&response, fmt.Sprintf("/v2/catchup/%s", catchpointLabel), nil, nil, "POST", false, true, false)
+func (client RestClient) Catchup(catchpointLabel string, minRounds uint64) (response model.CatchpointStartResponse, err error) {
+	err = client.submitForm(&response, fmt.Sprintf("/v2/catchup/%s", catchpointLabel), catchupParams{Min: minRounds}, nil, "POST", false, true, false)
 	return
 }
 

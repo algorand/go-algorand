@@ -778,9 +778,9 @@ type blockingTracker struct {
 	postCommitEntryLock           chan struct{}
 	postCommitReleaseLock         chan struct{}
 	committedUpToRound            int64
-	alwaysLock                    bool
-	shouldLockPostCommit          bool
-	shouldLockPostCommitUnlocked  bool
+	alwaysLock                    atomic.Bool
+	shouldLockPostCommit          atomic.Bool
+	shouldLockPostCommitUnlocked  atomic.Bool
 }
 
 // loadFromDisk is not implemented in the blockingTracker.
@@ -815,7 +815,7 @@ func (bt *blockingTracker) commitRound(context.Context, trackerdb.TransactionSco
 
 // postCommit implements entry/exit blockers, designed for testing.
 func (bt *blockingTracker) postCommit(ctx context.Context, dcc *deferredCommitContext) {
-	if bt.alwaysLock || dcc.catchpointFirstStage || bt.shouldLockPostCommit {
+	if bt.alwaysLock.Load() || dcc.catchpointFirstStage || bt.shouldLockPostCommit.Load() {
 		bt.postCommitEntryLock <- struct{}{}
 		<-bt.postCommitReleaseLock
 	}
@@ -823,7 +823,7 @@ func (bt *blockingTracker) postCommit(ctx context.Context, dcc *deferredCommitCo
 
 // postCommitUnlocked implements entry/exit blockers, designed for testing.
 func (bt *blockingTracker) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
-	if bt.alwaysLock || dcc.catchpointFirstStage || bt.shouldLockPostCommitUnlocked {
+	if bt.alwaysLock.Load() || dcc.catchpointFirstStage || bt.shouldLockPostCommitUnlocked.Load() {
 		bt.postCommitUnlockedEntryLock <- struct{}{}
 		<-bt.postCommitUnlockedReleaseLock
 	}
@@ -1004,8 +1004,8 @@ func TestCatchpointTrackerWaitNotBlocking(t *testing.T) {
 	writeStallingTracker := &blockingTracker{
 		postCommitUnlockedEntryLock:   make(chan struct{}),
 		postCommitUnlockedReleaseLock: make(chan struct{}),
-		shouldLockPostCommitUnlocked:  true,
 	}
+	writeStallingTracker.shouldLockPostCommitUnlocked.Store(true)
 	ledger.trackerMu.Lock()
 	ledger.trackers.mu.Lock()
 	ledger.trackers.trackers = append(ledger.trackers.trackers, writeStallingTracker)
@@ -1032,7 +1032,7 @@ func TestCatchpointTrackerWaitNotBlocking(t *testing.T) {
 		// consume to unblock
 		<-writeStallingTracker.postCommitUnlockedEntryLock
 		// disable further blocking
-		writeStallingTracker.shouldLockPostCommitUnlocked = false
+		writeStallingTracker.shouldLockPostCommitUnlocked.Store(false)
 
 		// wait the writeStallingTracker.postCommitUnlockedReleaseLock passes
 		wg.Wait()

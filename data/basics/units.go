@@ -94,6 +94,14 @@ func (*MicroAlgos) CanUnmarshalMsg(z interface{}) bool {
 
 // UnmarshalMsg implements msgp.Unmarshaler
 func (a *MicroAlgos) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return a.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
+
+// UnmarshalMsgWithState implements msgp.Unmarshaler
+func (a *MicroAlgos) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		return nil, msgp.ErrMaxDepthExceeded{}
+	}
 	a.Raw, o, err = msgp.ReadUint64Bytes(bts)
 	return
 }

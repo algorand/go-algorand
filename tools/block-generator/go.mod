@@ -8,7 +8,7 @@ require (
 	github.com/algorand/avm-abi v0.2.0
 	github.com/algorand/go-algorand v0.0.0
 	github.com/algorand/go-codec/codec v1.1.10
-	github.com/algorand/go-deadlock v0.2.2
+	github.com/algorand/go-deadlock v0.2.3
 	github.com/lib/pq v1.10.9
 	github.com/spf13/cobra v1.7.0
 	github.com/stretchr/testify v1.8.4
@@ -19,7 +19,7 @@ require (
 	github.com/DataDog/zstd v1.5.2 // indirect
 	github.com/algorand/falcon v0.1.0 // indirect
 	github.com/algorand/go-sumhash v0.1.0 // indirect
-	github.com/algorand/msgp v1.1.55 // indirect
+	github.com/algorand/msgp v1.1.60 // indirect
 	github.com/algorand/oapi-codegen v1.12.0-algorand.0 // indirect
 	github.com/algorand/sortition v1.0.0 // indirect
 	github.com/algorand/websocket v1.4.6 // indirect
