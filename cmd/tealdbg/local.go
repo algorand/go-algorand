@@ -225,16 +225,16 @@ const (
 
 // evaluation is a description of a single debugger run
 type evaluation struct {
-	program      []byte
-	source       string
-	offsetToLine map[int]int
-	name         string
-	groupIndex   uint64
-	mode         modeType
-	aidx         basics.AppIndex
-	ba           apply.Balances
-	result       evalResult
-	states       AppState
+	program        []byte
+	source         string
+	offsetToSource map[int]logic.SourceLocation
+	name           string
+	groupIndex     uint64
+	mode           modeType
+	aidx           basics.AppIndex
+	ba             apply.Balances
+	result         evalResult
+	states         AppState
 }
 
 func (e *evaluation) eval(gi int, sep *logic.EvalParams, aep *logic.EvalParams) (pass bool, err error) {
@@ -395,11 +395,7 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 				}
 				r.runs[i].program = ops.Program
 				if !dp.DisableSourceMap {
-					offsetToLine := make(map[int]int, len(ops.OffsetToSource))
-					for pc, location := range ops.OffsetToSource {
-						offsetToLine[pc] = location.Line
-					}
-					r.runs[i].offsetToLine = offsetToLine
+					r.runs[i].offsetToSource = ops.OffsetToSource
 					r.runs[i].source = source
 				}
 			}
@@ -551,7 +547,7 @@ func (r *LocalRunner) RunAll() error {
 	for i := range r.runs {
 		run := &r.runs[i]
 		if r.debugger != nil {
-			r.debugger.SaveProgram(run.name, run.program, run.source, run.offsetToLine, run.states)
+			r.debugger.SaveProgram(run.name, run.program, run.source, run.offsetToSource, run.states)
 		}
 
 		run.result.pass, run.result.err = run.eval(int(run.groupIndex), sep, aep)
