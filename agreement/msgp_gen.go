@@ -40,6 +40,7 @@ import (
 //             |-----> MarshalMsg
 //             |-----> CanMarshalMsg
 //             |-----> (*) UnmarshalMsg
+//             |-----> (*) UnmarshalMsgWithState
 //             |-----> (*) CanUnmarshalMsg
 //             |-----> Msgsize
 //             |-----> MsgIsZero
@@ -1070,7 +1071,12 @@ func (_ CredentialTrackingEffect) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *CredentialTrackingEffect) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *CredentialTrackingEffect) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	{
 		var zb0001 uint8
 		zb0001, bts, err = msgp.ReadUint8Bytes(bts)
@@ -1084,6 +1090,9 @@ func (z *CredentialTrackingEffect) UnmarshalMsg(bts []byte) (o []byte, err error
 	return
 }
 
+func (z *CredentialTrackingEffect) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *CredentialTrackingEffect) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*CredentialTrackingEffect)
 	return ok
