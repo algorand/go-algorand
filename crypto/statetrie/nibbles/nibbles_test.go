@@ -60,15 +60,23 @@ func TestNibblesRandom(t *testing.T) {
 		packed, odd := Pack(nibbles)
 		require.Equal(t, odd, half)
 		require.Equal(t, packed, data)
-		unpacked := Unpack(packed, odd)
+		unpacked := MakeNibbles(packed, odd)
 		require.Equal(t, nibbles, unpacked)
 
 		packed, odd = Pack(nibbles2)
 		require.Equal(t, odd, half)
 		require.Equal(t, packed, data)
-		unpacked = Unpack(packed, odd)
+		unpacked = MakeNibbles(packed, odd)
 		require.Equal(t, nibbles2, unpacked)
 	}
+}
+
+func TestNibblesDeserialize(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+    enc := []byte{0x01}
+    _, err := Deserialize(enc)
+    require.Error(t, err, "should return invalid encoding error")
 }
 
 func TestNibbles(t *testing.T) {
@@ -121,7 +129,7 @@ func TestNibbles(t *testing.T) {
 		require.Equal(t, oddLength == (len(n)%2 == 1), true)
 		require.Equal(t, bytes.Equal(b, sampleNibblesPacked[i]), true)
 
-		unp := Unpack(b, oddLength)
+		unp := MakeNibbles(b, oddLength)
 		require.Equal(t, bytes.Equal(unp, n), true)
 
 	}
