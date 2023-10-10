@@ -70,15 +70,19 @@ func participationKeysPath(dataDir string, address basics.Address, firstValid, l
 // GenParticipationKeys creates a .partkey database for a given address, fills
 // it with keys, and installs it in the right place
 func (c *Client) GenParticipationKeys(address string, firstValid, lastValid, keyDilution uint64) (part account.Participation, filePath string, err error) {
-	return c.GenParticipationKeysTo(address, firstValid, lastValid, keyDilution, "")
+	installFunc := func(keyPath string) error {
+		_, err := c.AddParticipationKey(keyPath)
+		return err
+	}
+	return GenParticipationKeysTo(address, firstValid, lastValid, keyDilution, "", installFunc)
 }
 
 // GenParticipationKeysTo creates a .partkey database for a given address, fills
 // it with keys, and saves it in the specified output directory. If the output
 // directory is empty, the key will be installed.
-func (c *Client) GenParticipationKeysTo(address string, firstValid, lastValid, keyDilution uint64, outDir string) (part account.Participation, filePath string, err error) {
+func GenParticipationKeysTo(address string, firstValid, lastValid, keyDilution uint64, outDir string, installFunc func(keyPath string) error) (part account.Participation, filePath string, err error) {
 
-	install := outDir == ""
+	install := outDir == "" && installFunc != nil
 
 	// Parse the address
 	parsedAddr, err := basics.UnmarshalChecksumAddress(address)
@@ -133,7 +137,7 @@ func (c *Client) GenParticipationKeysTo(address string, firstValid, lastValid, k
 	}
 
 	if install {
-		_, err = c.AddParticipationKey(partKeyPath)
+		err = installFunc(partKeyPath)
 	}
 	return part, partKeyPath, err
 }

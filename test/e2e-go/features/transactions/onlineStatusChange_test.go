@@ -171,7 +171,11 @@ func TestCloseOnError(t *testing.T) {
 	_, curRound := fixture.GetBalanceAndRound(initiallyOnline)
 
 	var partkeyFile string
-	_, partkeyFile, err = client.GenParticipationKeysTo(initiallyOffline, 0, curRound+1000, 0, t.TempDir())
+	installFunc := func(keyPath string) error {
+		_, err := c.AddParticipationKey(keyPath)
+		return err
+	}
+	_, partkeyFile, err = client.GenParticipationKeysTo(initiallyOffline, 0, curRound+1000, 0, t.TempDir(), installFunc)
 	a.NoError(err)
 
 	// make a participation key for initiallyOffline

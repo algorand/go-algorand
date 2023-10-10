@@ -677,7 +677,11 @@ func installParticipationKey(t *testing.T, client libgoal.Client, addr string, f
 	defer os.RemoveAll(dir)
 
 	// Install overlapping participation keys...
-	part, filePath, err := client.GenParticipationKeysTo(addr, firstValid, lastValid, 100, dir)
+	installFunc := func(keyPath string) error {
+		_, err := c.AddParticipationKey(keyPath)
+		return err
+	}
+	part, filePath, err := client.GenParticipationKeysTo(addr, firstValid, lastValid, 100, dir, installFunc)
 	require.NoError(t, err)
 	require.NotNil(t, filePath)
 	require.Equal(t, addr, part.Parent.String())

@@ -912,7 +912,11 @@ var addParticipationKeyCmd = &cobra.Command{
 		var err error
 		var part algodAcct.Participation
 		participationGen := func() {
-			part, _, err = client.GenParticipationKeysTo(accountAddress, roundFirstValid, roundLastValid, keyDilution, partKeyOutDir)
+			installFunc := func(keyPath string) error {
+				_, err := c.AddParticipationKey(keyPath)
+				return err
+			}
+			part, _, err = client.GenParticipationKeysTo(accountAddress, roundFirstValid, roundLastValid, keyDilution, partKeyOutDir, installFunc)
 		}
 
 		util.RunFuncWithSpinningCursor(participationGen)

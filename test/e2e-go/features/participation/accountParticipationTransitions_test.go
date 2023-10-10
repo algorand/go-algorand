@@ -39,7 +39,11 @@ import (
 // installParticipationKey generates a new key for a given account and installs it with the client.
 func installParticipationKey(t *testing.T, client libgoal.Client, addr string, firstValid, lastValid uint64) (resp model.PostParticipationResponse, part account.Participation, err error) {
 	// Install overlapping participation keys...
-	part, filePath, err := client.GenParticipationKeysTo(addr, firstValid, lastValid, 100, t.TempDir())
+	installFunc := func(keyPath string) error {
+		_, err := c.AddParticipationKey(keyPath)
+		return err
+	}
+	part, filePath, err := client.GenParticipationKeysTo(addr, firstValid, lastValid, 100, t.TempDir(), installFunc)
 	require.NoError(t, err)
 	require.NotNil(t, filePath)
 	require.Equal(t, addr, part.Parent.String())

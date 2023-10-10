@@ -25,6 +25,7 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -48,6 +49,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/eval"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/simulation"
+	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/protocol"
@@ -238,6 +240,31 @@ func (v2 *Handlers) GetParticipationKeys(ctx echo.Context) error {
 	}
 
 	return ctx.JSON(http.StatusOK, response)
+}
+
+func (v2 *Handlers) GenerateParticipationKeys(ctx echo.Context, address string, params model.GenerateParticipationKeysParams) error {
+
+	installFunc := func(path string) error {
+		bytes, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		partKeyBinary := bytes
+
+		if len(partKeyBinary) == 0 {
+			lenErr := fmt.Errorf(errRESTPayloadZeroLength)
+			return badRequest(ctx, lenErr, lenErr.Error(), v2.Log)
+		}
+
+		partID, err := v2.Node.InstallParticipationKey(partKeyBinary)
+		v2.Log.Infof("Installed participation key %s", partID)
+		return err
+	}
+	_, _, err := libgoal.GenParticipationKeysTo(address, params.First, params.Last, nilToZero(params.Dilution), "output-directory", installFunc)
+	if err != nil {
+		v2.Log.Warnf("Error generating participation keys: %v", err)
+	}
+	return nil
 }
 
 // AddParticipationKey Add a participation key to the node
