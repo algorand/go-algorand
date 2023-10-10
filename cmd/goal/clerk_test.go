@@ -57,8 +57,20 @@ func TestDeterminePathToSourceFromSourceMap(t *testing.T) {
 		{
 			name:         "output one level down",
 			sourceFile:   filepath.FromSlash("data/program.teal"),
-			outFile:      filepath.FromSlash("program.teal.tok"),
+			outFile:      "program.teal.tok",
 			expectedPath: filepath.FromSlash("data/program.teal"),
+		},
+		{
+			name:         "input stdin",
+			sourceFile:   stdinFileNameValue,
+			outFile:      "program.teal.tok",
+			expectedPath: "stdin",
+		},
+		{
+			name:         "output stdout",
+			sourceFile:   filepath.FromSlash("data/program.teal"),
+			outFile:      stdoutFilenameValue,
+			expectedPath: abs(t, filepath.FromSlash("data/program.teal")),
 		},
 	}
 
@@ -66,8 +78,18 @@ func TestDeterminePathToSourceFromSourceMap(t *testing.T) {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			for sourceIndex, source := range []string{tc.sourceFile, abs(t, tc.sourceFile)} {
-				for outIndex, out := range []string{tc.outFile, abs(t, tc.outFile)} {
+
+			sources := []string{tc.sourceFile}
+			if tc.sourceFile != stdinFileNameValue {
+				sources = append(sources, abs(t, tc.sourceFile))
+			}
+			outs := []string{tc.outFile}
+			if tc.outFile != stdoutFilenameValue {
+				outs = append(outs, abs(t, tc.outFile))
+			}
+
+			for sourceIndex, source := range sources {
+				for outIndex, out := range outs {
 					actualPath, err := determinePathToSourceFromSourceMap(source, out)
 					require.NoError(t, err, "sourceIndex: %d, outIndex: %d", sourceIndex, outIndex)
 					require.Equal(t, tc.expectedPath, actualPath, "sourceIndex: %d, outIndex: %d", sourceIndex, outIndex)
