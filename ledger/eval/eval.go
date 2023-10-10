@@ -1321,13 +1321,17 @@ func (eval *BlockEvaluator) endOfBlock() error {
 		}
 	}
 
-	err := eval.validateExpiredOnlineAccounts()
-	if err != nil {
+	if err := eval.validateExpiredOnlineAccounts(); err != nil {
+		return err
+	}
+	if err := eval.resetExpiredOnlineAccountsParticipationKeys(); err != nil {
 		return err
 	}
 
-	err = eval.resetExpiredOnlineAccountsParticipationKeys()
-	if err != nil {
+	if err := eval.validateAbsentOnlineAccounts(); err != nil {
+		return err
+	}
+	if err := eval.suspendAbsentAccounts(); err != nil {
 		return err
 	}
 
@@ -1392,8 +1396,7 @@ func (eval *BlockEvaluator) endOfBlock() error {
 		}
 	}
 
-	err = eval.state.CalculateTotals()
-	if err != nil {
+	if err := eval.state.CalculateTotals(); err != nil {
 		return err
 	}
 
@@ -1442,15 +1445,8 @@ func (eval *BlockEvaluator) generateKnockOfflineAccountsList() {
 		}
 
 		if acctDelta.Status == basics.Online {
-			// TODO: 1000 rounds is obviously a placeholder. Probably needs to
-			// be something like 10x the "expected" interval.  Further
-			// complications: (1) At keyreg, LastProposed=0 (or is old). (2)
-			// Accounts should be allowed to "heartbeat" to stay online. (3)
-			// "Expected" interval varies with balance and onlinestake.
-			allowableLag := basics.Round(1000)
-			absent := acctDelta.LastProposed+allowableLag < currentRound &&
-				acctDelta.LastHeartbeat+allowableLag < currentRound
-			if absent &&
+			lastSeen := max(acctDelta.LastHeartbeat, acctDelta.LastHeartbeat)
+			if isAbsent(eval.state.prevTotals.Online.Money, acctDelta.MicroAlgos, lastSeen, currentRound) &&
 				len(updates.AbsentParticipationAccounts) < expectedMaxNumberOfAbsentAccounts {
 				updates.AbsentParticipationAccounts = append(
 					updates.AbsentParticipationAccounts,
@@ -1459,6 +1455,21 @@ func (eval *BlockEvaluator) generateKnockOfflineAccountsList() {
 			}
 		}
 	}
+}
+
+// delete me in Go 1.21
+func max(a, b basics.Round) basics.Round {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func isAbsent(totalOnlineStake basics.MicroAlgos, acctStake basics.MicroAlgos, lastSeen basics.Round, current basics.Round) bool {
+	// See if the account has exceeded 10x their expected observation interval.
+	allowableLag := basics.Round(10 * totalOnlineStake.Raw / acctStake.Raw)
+	fmt.Printf("%d / %d -> %d \n", acctStake, totalOnlineStake, allowableLag)
+	return lastSeen+allowableLag < current
 }
 
 // validateExpiredOnlineAccounts tests the expired online accounts specified in ExpiredParticipationAccounts, and verify
@@ -1546,13 +1557,8 @@ func (eval *BlockEvaluator) validateAbsentOnlineAccounts() error {
 			return fmt.Errorf("proposed absent acct %v was not online but %v", accountAddr, acctData.Status)
 		}
 
-		// TODO: 1000 rounds is obviously a placeholder. Probably needs to be
-		// something like 10x the "expected" interval.  Further complications:
-		// (1) At first keyreg, LastProposed=0. (2) Accounts should be allowed
-		// to "heartbeat" to stay online.
-		allowableLag := basics.Round(1000)
-		if acctData.LastProposed+allowableLag >= currentRound ||
-			acctData.LastHeartbeat+allowableLag >= currentRound {
+		lastSeen := max(acctData.LastHeartbeat, acctData.LastHeartbeat)
+		if !isAbsent(eval.state.prevTotals.Online.Money, acctData.MicroAlgos, lastSeen, currentRound) {
 			return fmt.Errorf("proposed absent account %v is not absent in %d, %d",
 				accountAddr, acctData.LastProposed, acctData.LastHeartbeat)
 		}
