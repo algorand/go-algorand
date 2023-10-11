@@ -41,6 +41,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/libgoal"
+	"github.com/algorand/go-algorand/libgoal/participation"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util"
 	"github.com/algorand/go-algorand/util/db"
@@ -913,10 +914,10 @@ var addParticipationKeyCmd = &cobra.Command{
 		var part algodAcct.Participation
 		participationGen := func() {
 			installFunc := func(keyPath string) error {
-				_, err := c.AddParticipationKey(keyPath)
+				_, err := client.AddParticipationKey(keyPath)
 				return err
 			}
-			part, _, err = client.GenParticipationKeysTo(accountAddress, roundFirstValid, roundLastValid, keyDilution, partKeyOutDir, installFunc)
+			part, _, err = participation.GenParticipationKeysTo(accountAddress, roundFirstValid, roundLastValid, keyDilution, partKeyOutDir, installFunc)
 		}
 
 		util.RunFuncWithSpinningCursor(participationGen)

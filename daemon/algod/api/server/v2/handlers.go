@@ -49,7 +49,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/eval"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/simulation"
-	"github.com/algorand/go-algorand/libgoal"
+	"github.com/algorand/go-algorand/libgoal/participation"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/protocol"
@@ -73,6 +73,7 @@ var WaitForBlockTimeout = 1 * time.Minute
 
 // Handlers is an implementation to the V2 route handler interface defined by the generated code.
 type Handlers struct {
+	keygen   chan struct{}
 	Node     NodeInterface
 	Log      logging.Logger
 	Shutdown <-chan struct{}
@@ -242,8 +243,7 @@ func (v2 *Handlers) GetParticipationKeys(ctx echo.Context) error {
 	return ctx.JSON(http.StatusOK, response)
 }
 
-func (v2 *Handlers) GenerateParticipationKeys(ctx echo.Context, address string, params model.GenerateParticipationKeysParams) error {
-
+func (v2 *Handlers) generateKeyHandler(address string, params model.GenerateParticipationKeysParams) error {
 	installFunc := func(path string) error {
 		bytes, err := os.ReadFile(path)
 		if err != nil {
@@ -252,19 +252,38 @@ func (v2 *Handlers) GenerateParticipationKeys(ctx echo.Context, address string, 
 		partKeyBinary := bytes
 
 		if len(partKeyBinary) == 0 {
-			lenErr := fmt.Errorf(errRESTPayloadZeroLength)
-			return badRequest(ctx, lenErr, lenErr.Error(), v2.Log)
+			return fmt.Errorf("cannot install partkey '%s' is empty", partKeyBinary)
 		}
 
 		partID, err := v2.Node.InstallParticipationKey(partKeyBinary)
 		v2.Log.Infof("Installed participation key %s", partID)
 		return err
 	}
-	_, _, err := libgoal.GenParticipationKeysTo(address, params.First, params.Last, nilToZero(params.Dilution), "output-directory", installFunc)
-	if err != nil {
-		v2.Log.Warnf("Error generating participation keys: %v", err)
+	_, _, err := participation.GenParticipationKeysTo(address, params.First, params.Last, nilToZero(params.Dilution), "output-directory", installFunc)
+	return err
+}
+
+func (v2 *Handlers) GenerateParticipationKeys(ctx echo.Context, address string, params model.GenerateParticipationKeysParams) error {
+	if v2.keygen == nil {
+		v2.keygen = make(chan struct{}, 1)
 	}
-	return nil
+
+	select {
+	case v2.keygen <- struct{}{}:
+		go func() {
+			defer func() {
+				<-v2.keygen
+			}()
+			err := v2.generateKeyHandler(address, params)
+			if err != nil {
+				v2.Log.Warnf("Error generating participation keys: %v", err)
+			}
+		}()
+	default:
+		err := fmt.Errorf("participation key generation already in progress")
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
+	return ctx.String(http.StatusOK, "{}")
 }
 
 // AddParticipationKey Add a participation key to the node
