@@ -58,7 +58,8 @@ type Service struct {
 	persistStatus  player
 	persistActions []action
 
-	historicalClocks map[round]historicalClock
+	// Retain the round period 0
+	historicalClocks map[round]roundZeroTimer
 }
 
 // Parameters holds the parameters necessary to run the agreement protocol.
@@ -87,8 +88,10 @@ type externalDemuxSignals struct {
 	CurrentRound         round
 }
 
-// an interface representing a clock from a previous round
-type historicalClock interface {
+// an interface allowing for measuring the duration since a clock from a previous round,
+// used for measuring the arrival time of a late proposal-vote, for the dynamic filter
+// timeout feature
+type roundZeroTimer interface {
 	Since() time.Duration
 }
 
@@ -118,7 +121,7 @@ func MakeService(p Parameters) (*Service, error) {
 
 	s.persistenceLoop = makeAsyncPersistenceLoop(s.log, s.Accessor, s.Ledger)
 
-	s.historicalClocks = make(map[round]historicalClock)
+	s.historicalClocks = make(map[round]roundZeroTimer)
 
 	return s, nil
 }

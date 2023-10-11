@@ -346,11 +346,14 @@ func (a rezeroAction) ComparableStr() string {
 
 func (a rezeroAction) do(ctx context.Context, s *Service) {
 	s.Clock = s.Clock.Zero()
+	// Preserve the zero time of the new round a.Round (for
+	// period 0) for future use if a late proposal-vote arrives,
+	// for late credential tracking.
 	if _, ok := s.historicalClocks[a.Round]; !ok {
 		s.historicalClocks[a.Round] = s.Clock
 	}
 
-	// garbage collect clocks that are too old
+	// Garbage collect clocks that are too old
 	for rnd := range s.historicalClocks {
 		if a.Round > rnd+credentialRoundLag {
 			delete(s.historicalClocks, rnd)
