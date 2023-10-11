@@ -1020,26 +1020,23 @@ func assembleFileWithMap(sourceFile string, outFile string, printWarnings bool) 
 }
 
 func determinePathToSourceFromSourceMap(sourceFile string, outFile string) (string, error) {
-	var pathToSourceFromSourceMap string
 	if sourceFile == stdinFileNameValue {
-		pathToSourceFromSourceMap = "stdin"
-	} else {
-		sourceFileAbsolute, err := filepath.Abs(sourceFile)
-		if err != nil {
-			return "", fmt.Errorf("could not determine absolute path to source file '%s': %w", sourceFile, err)
-		}
-		if outFile == stdoutFilenameValue {
-			pathToSourceFromSourceMap = sourceFileAbsolute
-		} else {
-			outFileAbsolute, err := filepath.Abs(outFile)
-			if err != nil {
-				return "", fmt.Errorf("could not determine absolute path to output file '%s': %w", outFile, err)
-			}
-			pathToSourceFromSourceMap, err = filepath.Rel(filepath.Dir(outFileAbsolute), sourceFileAbsolute)
-			if err != nil {
-				return "", fmt.Errorf("could not determine path from source map to source: %w", err)
-			}
-		}
+		return "<stdin>", nil
+	}
+	sourceFileAbsolute, err := filepath.Abs(sourceFile)
+	if err != nil {
+		return "", fmt.Errorf("could not determine absolute path to source file '%s': %w", sourceFile, err)
+	}
+	if outFile == stdoutFilenameValue {
+		return sourceFileAbsolute, nil
+	}
+	outFileAbsolute, err := filepath.Abs(outFile)
+	if err != nil {
+		return "", fmt.Errorf("could not determine absolute path to output file '%s': %w", outFile, err)
+	}
+	pathToSourceFromSourceMap, err := filepath.Rel(filepath.Dir(outFileAbsolute), sourceFileAbsolute)
+	if err != nil {
+		return "", fmt.Errorf("could not determine path from source map to source: %w", err)
 	}
 	return pathToSourceFromSourceMap, nil
 }

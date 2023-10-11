@@ -64,7 +64,7 @@ func TestDeterminePathToSourceFromSourceMap(t *testing.T) {
 			name:         "input stdin",
 			sourceFile:   stdinFileNameValue,
 			outFile:      "program.teal.tok",
-			expectedPath: "stdin",
+			expectedPath: "<stdin>",
 		},
 		{
 			name:         "output stdout",
