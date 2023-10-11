@@ -18,8 +18,6 @@ package agreement
 
 import (
 	"fmt"
-
-	"github.com/algorand/go-algorand/data/basics"
 )
 
 // A proposalManager is a proposalMachine which applies relay rules to incoming
@@ -247,26 +245,6 @@ func (m *proposalManager) handleMessageEvent(r routerHandle, p player, e filtera
 	}
 }
 
-// errProposalManagerPVFreshness indicates that filterProposalVote failed the proposalFresh check.
-type errProposalManagerPVNotFresh struct {
-	Reason error
-}
-
-func (a errProposalManagerPVNotFresh) Error() string {
-	return fmt.Sprintf("proposalManager: filtered proposal-vote due to age: %v", a.Reason)
-}
-
-// errProposalManagerPVDuplicate idnicates that filterProposalVote failed the duplicate check.
-type errProposalManagerPVDuplicate struct {
-	Sender basics.Address
-	Round  round
-	Period period
-}
-
-func (d errProposalManagerPVDuplicate) Error() string {
-	return fmt.Sprintf("proposalManager: filtered proposal-vote: sender %v had already sent a vote in round %d period %d", d.Sender, d.Round, d.Period)
-}
-
 // filterVote filters a vote, checking if it is both fresh and not a duplicate, returning
 // an errProposalManagerPVNotFresh or errProposalManagerPVDuplicate if so, else nil.
 // It also returns a bool indicating whether this proposal-vote should still be verified for tracking credential history.
@@ -288,11 +266,12 @@ func (m *proposalManager) filterProposalVote(p player, r routerHandle, uv unauth
 		if credHistory && checkDup() {
 			credHistory = false
 		}
-		return credHistory, errProposalManagerPVNotFresh{Reason: err}
+		return credHistory, fmt.Errorf("proposalManager: filtered proposal-vote due to age: %v", err)
 	}
 
 	if checkDup() {
-		return credHistory, errProposalManagerPVDuplicate{Sender: uv.R.Sender, Round: uv.R.Round, Period: uv.R.Period}
+		return credHistory, fmt.Errorf("proposalManager: filtered proposal-vote: sender %v had already sent a vote in round %d period %d", uv.R.Sender, uv.R.Round, uv.R.Period)
+
 	}
 	return credHistory, nil
 }
