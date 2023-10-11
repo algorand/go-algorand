@@ -635,7 +635,7 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 			case UnverifiedLateCredentialForTracking:
 				// In this case, the vote may impact credential tracking, but needs to
 				// be validated. So we do not return here, and continue processing, so that
-				// the votePresent chdck below will make a verifyVoteAction for this vote.
+				// the votePresent check below will make a verifyVoteAction for this vote.
 			}
 		}
 
