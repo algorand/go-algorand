@@ -14,7 +14,7 @@ require (
 	github.com/algorand/oapi-codegen v1.12.0-algorand.0
 	github.com/algorand/sortition v1.0.0
 	github.com/algorand/websocket v1.4.6
-	github.com/aws/aws-sdk-go v1.33.0
+	github.com/aws/aws-sdk-go v1.34.0
 	github.com/cockroachdb/pebble v0.0.0-20230807162746-af8c5f279001
 	github.com/consensys/gnark-crypto v0.12.0
 	github.com/davidlazar/go-crypto v0.0.0-20200604182044-b73af7476f6c
