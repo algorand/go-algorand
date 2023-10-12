@@ -216,7 +216,7 @@ func (part PersistedParticipation) PersistNewParent() error {
 	})
 }
 
-// DefaultKeyDilutiton computes the default diluation based on first and last rounds.
+// DefaultKeyDilution computes the default dilution based on first and last rounds.
 func DefaultKeyDilution(first, last basics.Round) uint64 {
 	return 1 + uint64(math.Sqrt(float64(last-first)))
 }
