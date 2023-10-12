@@ -2509,13 +2509,20 @@ func branchTarget(cx *EvalContext) (int, error) {
 }
 
 func switchTarget(cx *EvalContext, branchIdx uint64) (int, error) {
+	if cx.pc+1 >= len(cx.program) {
+		opcode := cx.program[cx.pc]
+		spec := &opsByOpcode[cx.version][opcode]
+		return 0, fmt.Errorf("bare %s opcode at end of program", spec.Name)
+	}
 	numOffsets := int(cx.program[cx.pc+1])
 
 	end := cx.pc + 2          // end of opcode + number of offsets, beginning of offset list
 	eoi := end + 2*numOffsets // end of instruction
 
 	if eoi > len(cx.program) { // eoi will equal len(p) if switch is last instruction
-		return 0, fmt.Errorf("switch claims to extend beyond program")
+		opcode := cx.program[cx.pc]
+		spec := &opsByOpcode[cx.version][opcode]
+		return 0, fmt.Errorf("%s opcode claims to extend beyond program", spec.Name)
 	}
 
 	offset := 0
@@ -2550,8 +2557,13 @@ func checkBranch(cx *EvalContext) error {
 	return nil
 }
 
-// checks switch is encoded properly (and calculates nextpc)
+// checks switch or match is encoded properly (and calculates nextpc)
 func checkSwitch(cx *EvalContext) error {
+	if cx.pc+1 >= len(cx.program) {
+		opcode := cx.program[cx.pc]
+		spec := &opsByOpcode[cx.version][opcode]
+		return fmt.Errorf("bare %s opcode at end of program", spec.Name)
+	}
 	numOffsets := int(cx.program[cx.pc+1])
 	eoi := cx.pc + 2 + 2*numOffsets
 
@@ -2628,6 +2640,9 @@ func opSwitch(cx *EvalContext) error {
 }
 
 func opMatch(cx *EvalContext) error {
+	if cx.pc+1 >= len(cx.program) {
+		return fmt.Errorf("bare match opcode at end of program")
+	}
 	n := int(cx.program[cx.pc+1])
 	// stack contains the n sized match list and the single match value
 	if n+1 > len(cx.Stack) {
