@@ -41,6 +41,7 @@ import (
 	"github.com/algorand/go-algorand/data/stateproofmsg"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/libgoal"
+	"github.com/algorand/go-algorand/libgoal/participation"
 	"github.com/algorand/go-algorand/nodecontrol"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
@@ -678,10 +679,10 @@ func installParticipationKey(t *testing.T, client libgoal.Client, addr string, f
 
 	// Install overlapping participation keys...
 	installFunc := func(keyPath string) error {
-		_, err := c.AddParticipationKey(keyPath)
+		_, err := client.AddParticipationKey(keyPath)
 		return err
 	}
-	part, filePath, err := client.GenParticipationKeysTo(addr, firstValid, lastValid, 100, dir, installFunc)
+	part, filePath, err := participation.GenParticipationKeysTo(addr, firstValid, lastValid, 100, dir, installFunc)
 	require.NoError(t, err)
 	require.NotNil(t, filePath)
 	require.Equal(t, addr, part.Parent.String())

@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/libgoal/participation"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -172,10 +173,10 @@ func TestCloseOnError(t *testing.T) {
 
 	var partkeyFile string
 	installFunc := func(keyPath string) error {
-		_, err := c.AddParticipationKey(keyPath)
+		_, err := client.AddParticipationKey(keyPath)
 		return err
 	}
-	_, partkeyFile, err = client.GenParticipationKeysTo(initiallyOffline, 0, curRound+1000, 0, t.TempDir(), installFunc)
+	_, partkeyFile, err = participation.GenParticipationKeysTo(initiallyOffline, 0, curRound+1000, 0, t.TempDir(), installFunc)
 	a.NoError(err)
 
 	// make a participation key for initiallyOffline

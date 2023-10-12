@@ -33,6 +33,8 @@ func TestGenParticipationKeysTo_Install(t *testing.T) {
 	for _, tc := range testcases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			var err error
 			var called bool
 			installFunc := func(keyPath string) error {
@@ -77,6 +79,8 @@ func TestGenParticipationKeysTo_DefaultKeyDilution(t *testing.T) {
 	for _, tc := range testcases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			part, _, err := GenParticipationKeysTo(addr.String(), first, last, tc.dilution, t.TempDir(), nil)
 			require.NoError(t, err)
 			require.Equal(t, tc.expected, part.KeyDilution)

@@ -32,6 +32,7 @@ import (
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/libgoal"
+	"github.com/algorand/go-algorand/libgoal/participation"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -40,10 +41,10 @@ import (
 func installParticipationKey(t *testing.T, client libgoal.Client, addr string, firstValid, lastValid uint64) (resp model.PostParticipationResponse, part account.Participation, err error) {
 	// Install overlapping participation keys...
 	installFunc := func(keyPath string) error {
-		_, err := c.AddParticipationKey(keyPath)
+		_, err := client.AddParticipationKey(keyPath)
 		return err
 	}
-	part, filePath, err := client.GenParticipationKeysTo(addr, firstValid, lastValid, 100, t.TempDir(), installFunc)
+	part, filePath, err := participation.GenParticipationKeysTo(addr, firstValid, lastValid, 100, t.TempDir(), installFunc)
 	require.NoError(t, err)
 	require.NotNil(t, filePath)
 	require.Equal(t, addr, part.Parent.String())
