@@ -5380,7 +5380,7 @@
       }
     },
     "/v2/participation/generate/{address}": {
-      "get": {
+      "post": {
         "operationId": "GenerateParticipationKeys",
         "parameters": [
           {
