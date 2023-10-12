@@ -264,6 +264,8 @@ func (v2 *Handlers) generateKeyHandler(address string, params model.GeneratePart
 	return err
 }
 
+// GenerateParticipationKeys generates and installs participation keys to the node.
+// (POST /v2/participation/generate/{address})
 func (v2 *Handlers) GenerateParticipationKeys(ctx echo.Context, address string, params model.GenerateParticipationKeysParams) error {
 	if v2.Keygen == nil {
 		v2.Keygen = make(chan struct{}, 1)

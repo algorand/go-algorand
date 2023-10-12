@@ -914,8 +914,8 @@ var addParticipationKeyCmd = &cobra.Command{
 		var part algodAcct.Participation
 		participationGen := func() {
 			installFunc := func(keyPath string) error {
-				_, err := client.AddParticipationKey(keyPath)
-				return err
+				_, installErr := client.AddParticipationKey(keyPath)
+				return installErr
 			}
 			part, _, err = participation.GenParticipationKeysTo(accountAddress, roundFirstValid, roundLastValid, keyDilution, partKeyOutDir, installFunc)
 		}

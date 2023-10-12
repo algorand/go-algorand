@@ -2380,6 +2380,9 @@ func TestRouterRequestBody(t *testing.T) {
 }
 
 func TestGeneratePartkeys(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	numAccounts := 1
 	numTransactions := 1
 	offlineAccounts := true
