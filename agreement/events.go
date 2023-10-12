@@ -1010,15 +1010,16 @@ func (e checkpointEvent) AttachConsensusVersion(v ConsensusVersionView) external
 // is still waiting for quorum on R.
 const pipelinedMessageTimestamp = time.Nanosecond
 
-type constantRoundZeroTimer time.Duration
+//msgp:ignore constantRoundStartTimer
+type constantRoundStartTimer time.Duration
 
-func (c constantRoundZeroTimer) Since() time.Duration { return time.Duration(c) }
+func (c constantRoundStartTimer) Since() time.Duration { return time.Duration(c) }
 
 // clockForRound retrieves the roundZeroTimer used for AttachValidatedAt and AttachReceivedAt.
-func clockForRound(currentRound round, currentClock roundZeroTimer, historicalClocks map[round]roundZeroTimer) func(round) roundZeroTimer {
-	return func(eventRound round) roundZeroTimer {
+func clockForRound(currentRound round, currentClock roundStartTimer, historicalClocks map[round]roundStartTimer) func(round) roundStartTimer {
+	return func(eventRound round) roundStartTimer {
 		if eventRound > currentRound {
-			return constantRoundZeroTimer(pipelinedMessageTimestamp)
+			return constantRoundStartTimer(pipelinedMessageTimestamp)
 		}
 		if eventRound == currentRound {
 			return currentClock
@@ -1026,14 +1027,14 @@ func clockForRound(currentRound round, currentClock roundZeroTimer, historicalCl
 		if clock, ok := historicalClocks[eventRound]; ok {
 			return clock
 		}
-		return constantRoundZeroTimer(0)
+		return constantRoundStartTimer(0)
 	}
 }
 
 // AttachValidatedAt looks for a validated proposal or vote inside a
 // payloadVerified or voteVerified messageEvent, and attaches the given time to
 // the proposal's validatedAt field.
-func (e messageEvent) AttachValidatedAt(getClock func(eventRound round) roundZeroTimer) messageEvent {
+func (e messageEvent) AttachValidatedAt(getClock func(eventRound round) roundStartTimer) messageEvent {
 	switch e.T {
 	case payloadVerified:
 		e.Input.Proposal.validatedAt = getClock(e.Input.Proposal.Round()).Since()
@@ -1046,7 +1047,7 @@ func (e messageEvent) AttachValidatedAt(getClock func(eventRound round) roundZer
 // AttachReceivedAt looks for an unauthenticatedProposal inside a
 // payloadPresent or votePresent messageEvent, and attaches the given
 // time to the proposal's receivedAt field.
-func (e messageEvent) AttachReceivedAt(getClock func(eventRound round) roundZeroTimer) messageEvent {
+func (e messageEvent) AttachReceivedAt(getClock func(eventRound round) roundStartTimer) messageEvent {
 	switch e.T {
 	case payloadPresent:
 		e.Input.UnauthenticatedProposal.receivedAt = getClock(e.Input.UnauthenticatedProposal.Round()).Since()

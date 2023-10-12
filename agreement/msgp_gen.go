@@ -106,16 +106,6 @@ import (
 //        |-----> (*) MsgIsZero
 //        |-----> CompoundMessageMaxSize()
 //
-// constantRoundZeroTimer
-//            |-----> MarshalMsg
-//            |-----> CanMarshalMsg
-//            |-----> (*) UnmarshalMsg
-//            |-----> (*) UnmarshalMsgWithState
-//            |-----> (*) CanUnmarshalMsg
-//            |-----> Msgsize
-//            |-----> MsgIsZero
-//            |-----> ConstantRoundZeroTimerMaxSize()
-//
 // diskState
 //     |-----> (*) MarshalMsg
 //     |-----> (*) CanMarshalMsg
@@ -1996,66 +1986,6 @@ func (z *compoundMessage) MsgIsZero() bool {
 // MaxSize returns a maximum valid message size for this message type
 func CompoundMessageMaxSize() (s int) {
 	s = 1 + 5 + UnauthenticatedVoteMaxSize() + 9 + UnauthenticatedProposalMaxSize()
-	return
-}
-
-// MarshalMsg implements msgp.Marshaler
-func (z constantRoundZeroTimer) MarshalMsg(b []byte) (o []byte) {
-	o = msgp.Require(b, z.Msgsize())
-	o = msgp.AppendDuration(o, duration(z))
-	return
-}
-
-func (_ constantRoundZeroTimer) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(constantRoundZeroTimer)
-	if !ok {
-		_, ok = (z).(*constantRoundZeroTimer)
-	}
-	return ok
-}
-
-// UnmarshalMsg implements msgp.Unmarshaler
-func (z *constantRoundZeroTimer) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
-	if st.AllowableDepth == 0 {
-		err = msgp.ErrMaxDepthExceeded{}
-		return
-	}
-	st.AllowableDepth--
-	{
-		var zb0001 duration
-		zb0001, bts, err = msgp.ReadDurationBytes(bts)
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		(*z) = constantRoundZeroTimer(zb0001)
-	}
-	o = bts
-	return
-}
-
-func (z *constantRoundZeroTimer) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
-}
-func (_ *constantRoundZeroTimer) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*constantRoundZeroTimer)
-	return ok
-}
-
-// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z constantRoundZeroTimer) Msgsize() (s int) {
-	s = msgp.DurationSize
-	return
-}
-
-// MsgIsZero returns whether this is a zero value
-func (z constantRoundZeroTimer) MsgIsZero() bool {
-	return z == 0
-}
-
-// MaxSize returns a maximum valid message size for this message type
-func ConstantRoundZeroTimerMaxSize() (s int) {
-	s = msgp.DurationSize
 	return
 }
 

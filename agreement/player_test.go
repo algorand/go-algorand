@@ -3325,10 +3325,10 @@ func TestPlayerRetainsEarlyReceivedValidatedAtOneSample(t *testing.T) {
 	assertSingleCredentialArrival(t, pWhite, pipelinedMessageTimestamp)
 }
 
-func testClockForRound(t *testing.T, pWhite *player, fixedDur time.Duration, currentRound round, historicalClocks map[round]roundZeroTimer) func(round) roundZeroTimer {
-	return func(eventRound round) roundZeroTimer {
+func testClockForRound(t *testing.T, pWhite *player, fixedDur time.Duration, currentRound round, historicalClocks map[round]roundStartTimer) func(round) roundStartTimer {
+	return func(eventRound round) roundStartTimer {
 		//require.Equal(t, pWhite.Round, currentRound) // TODO make tests more realistic
-		return clockForRound(currentRound, constantRoundZeroTimer(fixedDur), historicalClocks)(eventRound)
+		return clockForRound(currentRound, constantRoundStartTimer(fixedDur), historicalClocks)(eventRound)
 	}
 }
 
@@ -3344,8 +3344,8 @@ func TestPlayerRetainsLateReceivedValidatedAtOneSample(t *testing.T) {
 	const p = period(0)
 	pWhite, pM, helper := setupP(t, r-1, p, soft)
 
-	historicalClocks := map[round]roundZeroTimer{
-		r - credentialRoundLag - 1: constantRoundZeroTimer(900 * time.Millisecond),
+	historicalClocks := map[round]roundStartTimer{
+		r - credentialRoundLag - 1: constantRoundStartTimer(900 * time.Millisecond),
 	}
 
 	// send voteVerified message
@@ -3470,8 +3470,8 @@ func TestPlayerRetainsReceivedValidatedAtPPOneSample(t *testing.T) {
 
 	// XXX this behavior only happens if dynamic timeout enabled; test the other way
 
-	historicalClocks := map[round]roundZeroTimer{
-		r - credentialRoundLag: constantRoundZeroTimer(900 * time.Millisecond),
+	historicalClocks := map[round]roundStartTimer{
+		r - credentialRoundLag: constantRoundStartTimer(900 * time.Millisecond),
 	}
 	// create a PP message for the round we're going to take the sample from when round r-1 ends
 	pP, pV = helper.MakeRandomProposalPayload(t, r-credentialRoundLag)
@@ -3579,8 +3579,8 @@ func TestPlayerRetainsLateReceivedValidatedAtPPOneSample(t *testing.T) {
 	require.False(t, pWhite.lowestCredentialArrivals.isFull())
 	require.Equal(t, pWhite.lowestCredentialArrivals.writePtr, 0)
 
-	historicalClocks := map[round]roundZeroTimer{
-		r - credentialRoundLag: constantRoundZeroTimer(900 * time.Millisecond),
+	historicalClocks := map[round]roundStartTimer{
+		r - credentialRoundLag: constantRoundStartTimer(900 * time.Millisecond),
 	}
 	// create a PP message for the round we're going to take the sample from when round r-1 ends
 	// Now we're going to pretend we got the message credentialRoundLag too late.
@@ -3797,8 +3797,8 @@ func TestPlayerRetainsLateReceivedValidatedAtAVPPOneSample(t *testing.T) {
 	verifyEvent := ev(verifyVoteAction(messageEvent{Input: message{UnauthenticatedVote: vVote.u()}}, r-credentialRoundLag, p, 1))
 	require.Truef(t, pM.getTrace().Contains(verifyEvent), "Player should verify vote")
 
-	historicalClocks := map[round]roundZeroTimer{
-		r - credentialRoundLag: constantRoundZeroTimer(900 * time.Millisecond),
+	historicalClocks := map[round]roundStartTimer{
+		r - credentialRoundLag: constantRoundStartTimer(900 * time.Millisecond),
 	}
 	// send voteVerified, pretend we're credentialRoundLag after the message was sent
 	sendVoteVerifiedForVote(t, vVote, pWhite, pM, r, 502*time.Millisecond, historicalClocks, 1)
@@ -3861,13 +3861,13 @@ func TestPlayerRetainsReceivedValidatedAtAVPPHistoryWindow(t *testing.T) {
 // Helper function to send voteVerified message
 func sendVoteVerified(t *testing.T, helper *voteMakerHelper, pWhite *player, pM ioAutomata, addrIndex int,
 	curRound round, voteRound round, votePeriod period, pV *proposalValue, validatedAt time.Duration,
-	historicalClocks map[round]roundZeroTimer) {
+	historicalClocks map[round]roundStartTimer) {
 	vVote := helper.MakeVerifiedVote(t, addrIndex, voteRound, votePeriod, propose, *pV)
 	sendVoteVerifiedForVote(t, vVote, pWhite, pM, curRound, validatedAt, historicalClocks, 0)
 }
 
 func sendVoteVerifiedForVote(t *testing.T, vVote vote, pWhite *player, pM ioAutomata,
-	curRound round, validatedAt time.Duration, historicalClocks map[round]roundZeroTimer, taskIndex uint64) {
+	curRound round, validatedAt time.Duration, historicalClocks map[round]roundStartTimer, taskIndex uint64) {
 	inMsg := messageEvent{T: voteVerified, Input: message{Vote: vVote, UnauthenticatedVote: vVote.u()}, TaskIndex: taskIndex}
 	inMsg = inMsg.AttachValidatedAt(testClockForRound(t, pWhite, validatedAt, curRound, historicalClocks))
 	err, panicErr := pM.transition(inMsg)
@@ -3886,7 +3886,7 @@ func sendVotePresent(t *testing.T, helper *voteMakerHelper, pWhite *player, pM i
 }
 
 // Helper function to send payloadPresent message
-func sendPayloadPresent(t *testing.T, pWhite *player, pM ioAutomata, curRound round, pP *proposal, receivedAt time.Duration, historicalClocks map[round]roundZeroTimer) {
+func sendPayloadPresent(t *testing.T, pWhite *player, pM ioAutomata, curRound round, pP *proposal, receivedAt time.Duration, historicalClocks map[round]roundStartTimer) {
 	m := message{UnauthenticatedProposal: pP.u()}
 	inMsg := messageEvent{T: payloadPresent, Input: m}
 	inMsg = inMsg.AttachReceivedAt(testClockForRound(t, pWhite, receivedAt, curRound, historicalClocks))
@@ -3896,13 +3896,13 @@ func sendPayloadPresent(t *testing.T, pWhite *player, pM ioAutomata, curRound ro
 }
 
 // Helper function to send a compound PP message (votePresent + payloadPresent)
-func sendCompoundMessage(t *testing.T, helper *voteMakerHelper, pWhite *player, pM ioAutomata, curRound round, voteRound round, votePeriod period, pP *proposal, pV *proposalValue, receivedAt time.Duration, historicalClocks map[round]roundZeroTimer, version protocol.ConsensusVersion) vote {
+func sendCompoundMessage(t *testing.T, helper *voteMakerHelper, pWhite *player, pM ioAutomata, curRound round, voteRound round, votePeriod period, pP *proposal, pV *proposalValue, receivedAt time.Duration, historicalClocks map[round]roundStartTimer, version protocol.ConsensusVersion) vote {
 	vVote := helper.MakeVerifiedVote(t, 0, voteRound, votePeriod, propose, *pV)
 	sendCompoundMessageForVote(t, vVote, pWhite, pM, curRound, pP, receivedAt, historicalClocks, version)
 	return vVote
 }
 
-func sendCompoundMessageForVote(t *testing.T, vVote vote, pWhite *player, pM ioAutomata, curRound round, pP *proposal, receivedAt time.Duration, historicalClocks map[round]roundZeroTimer, version protocol.ConsensusVersion) {
+func sendCompoundMessageForVote(t *testing.T, vVote vote, pWhite *player, pM ioAutomata, curRound round, pP *proposal, receivedAt time.Duration, historicalClocks map[round]roundStartTimer, version protocol.ConsensusVersion) {
 	unverifiedVoteMsg := message{UnauthenticatedVote: vVote.u()}
 	proposalMsg := message{UnauthenticatedProposal: pP.u()}
 	compoundMsg := messageEvent{
