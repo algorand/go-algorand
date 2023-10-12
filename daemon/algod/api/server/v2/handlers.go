@@ -73,10 +73,11 @@ var WaitForBlockTimeout = 1 * time.Minute
 
 // Handlers is an implementation to the V2 route handler interface defined by the generated code.
 type Handlers struct {
-	keygen   chan struct{}
 	Node     NodeInterface
 	Log      logging.Logger
 	Shutdown <-chan struct{}
+	// Keygen is used to limit the number of concurrent key generation requests.
+	Keygen chan struct{}
 }
 
 // LedgerForAPI describes the Ledger methods used by the v2 API.
@@ -259,20 +260,20 @@ func (v2 *Handlers) generateKeyHandler(address string, params model.GeneratePart
 		v2.Log.Infof("Installed participation key %s", partID)
 		return err
 	}
-	_, _, err := participation.GenParticipationKeysTo(address, params.First, params.Last, nilToZero(params.Dilution), "output-directory", installFunc)
+	_, _, err := participation.GenParticipationKeysTo(address, params.First, params.Last, nilToZero(params.Dilution), "", installFunc)
 	return err
 }
 
 func (v2 *Handlers) GenerateParticipationKeys(ctx echo.Context, address string, params model.GenerateParticipationKeysParams) error {
-	if v2.keygen == nil {
-		v2.keygen = make(chan struct{}, 1)
+	if v2.Keygen == nil {
+		v2.Keygen = make(chan struct{}, 1)
 	}
 
 	select {
-	case v2.keygen <- struct{}{}:
+	case v2.Keygen <- struct{}{}:
 		go func() {
 			defer func() {
-				<-v2.keygen
+				<-v2.Keygen
 			}()
 			err := v2.generateKeyHandler(address, params)
 			if err != nil {
