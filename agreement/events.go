@@ -1015,7 +1015,7 @@ type constantRoundStartTimer time.Duration
 
 func (c constantRoundStartTimer) Since() time.Duration { return time.Duration(c) }
 
-// clockForRound retrieves the roundZeroTimer used for AttachValidatedAt and AttachReceivedAt.
+// clockForRound retrieves the roundStartTimer used for AttachValidatedAt and AttachReceivedAt.
 func clockForRound(currentRound round, currentClock roundStartTimer, historicalClocks map[round]roundStartTimer) func(round) roundStartTimer {
 	return func(eventRound round) roundStartTimer {
 		if eventRound > currentRound {
