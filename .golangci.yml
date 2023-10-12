@@ -29,8 +29,6 @@ linters-settings:
     require-specific: true
     # require comments like "//nolint:errcheck // Explanation of why we are ignoring linter here..."
     require-explanation: true
-    # allow nolint directives that have no effect (apparently needed for a linter regression in errcheck; try disabling later)
-    allow-unused: true
   errcheck:
     exclude-functions:
     # We do this 121 times and never check the error.
