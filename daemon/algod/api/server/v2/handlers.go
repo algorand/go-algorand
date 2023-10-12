@@ -1660,7 +1660,7 @@ func (v2 *Handlers) TealCompile(ctx echo.Context, params model.TealCompileParams
 	// If source map flag is enabled, then return the map.
 	var sourcemap *logic.SourceMap
 	if *params.Sourcemap {
-		rawmap := logic.GetSourceMap([]string{}, ops.OffsetToLine)
+		rawmap := logic.GetSourceMap([]string{"<body>"}, ops.OffsetToSource)
 		sourcemap = &rawmap
 	}
 
