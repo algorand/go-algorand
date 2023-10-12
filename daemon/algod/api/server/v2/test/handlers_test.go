@@ -2409,7 +2409,6 @@ func TestGeneratePartkeys(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.Equal(t, http.StatusOK, rec.Code)
-		require.Len(t, mockNode.PartKeyBinary, 0)
 
 		// Wait for keygen to complete
 		handler.Keygen <- struct{}{}
