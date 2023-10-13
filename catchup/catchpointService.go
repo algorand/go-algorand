@@ -290,7 +290,7 @@ func (cs *CatchpointCatchupService) processStageLedgerDownload() (err error) {
 	}
 
 	// download balances file.
-	peerSelector := cs.makeLedgerFetcherPeerSelector()
+	peerSelector := cs.makeCatchpointPeerSelector()
 	ledgerFetcher := makeLedgerFetcher(cs.net, cs.ledgerAccessor, cs.log, cs, cs.config)
 	attemptsCount := 0
 
@@ -796,32 +796,24 @@ func (cs *CatchpointCatchupService) updateBlockRetrievalStatistics(acquiredBlock
 }
 
 func (cs *CatchpointCatchupService) initDownloadPeerSelector() {
+	cs.blocksDownloadPeerSelector = cs.makeCatchpointPeerSelector()
+}
+
+func (cs *CatchpointCatchupService) makeCatchpointPeerSelector() *peerSelector {
 	if cs.config.EnableCatchupFromArchiveServers {
-		cs.blocksDownloadPeerSelector = makePeerSelector(
+		return makePeerSelector(
 			cs.net,
 			[]peerClass{
 				{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivers},
 				{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookRelays},
 			})
 	} else {
-		cs.blocksDownloadPeerSelector = makePeerSelector(
+		return makePeerSelector(
 			cs.net,
 			[]peerClass{
 				{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookRelays},
 			})
 	}
-}
-
-func (cs *CatchpointCatchupService) makeLedgerFetcherPeerSelector() *peerSelector {
-	if cs.config.EnableCatchupFromArchiveServers {
-		return makePeerSelector(cs.net, []peerClass{
-			{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivers},
-			{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookRelays},
-		})
-	}
-	return makePeerSelector(cs.net, []peerClass{
-		{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookRelays},
-	})
 }
 
 // checkLedgerDownload sends a HEAD request to the ledger endpoint of peers to validate the catchpoint's availability
@@ -832,7 +824,7 @@ func (cs *CatchpointCatchupService) checkLedgerDownload() error {
 	if err != nil {
 		return fmt.Errorf("failed to parse catchpoint label : %v", err)
 	}
-	peerSelector := cs.makeLedgerFetcherPeerSelector()
+	peerSelector := cs.makeCatchpointPeerSelector()
 	ledgerFetcher := makeLedgerFetcher(cs.net, cs.ledgerAccessor, cs.log, cs, cs.config)
 	for i := 0; i < cs.config.CatchupLedgerDownloadRetryAttempts; i++ {
 		psp, peerError := peerSelector.getNextPeer()
