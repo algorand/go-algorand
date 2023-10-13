@@ -18,6 +18,7 @@ package node
 
 import (
 	"context"
+	"path/filepath"
 	"testing"
 
 	"github.com/sirupsen/logrus"
@@ -31,6 +32,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/ledger/simulation"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -65,7 +67,8 @@ func setupFollowNode(t *testing.T) *AlgorandFollowerNode {
 	cfg := config.GetDefaultLocal()
 	cfg.EnableFollowMode = true
 	genesis := followNodeDefaultGenesis()
-	node, err := MakeFollower(logging.Base(), t.TempDir(), cfg, []string{}, genesis)
+	root := t.TempDir()
+	node, err := MakeFollower(logging.Base(), root, cfg, []string{}, genesis)
 	require.NoError(t, err)
 	return node
 }
@@ -136,7 +139,8 @@ func TestDevModeWarning(t *testing.T) {
 
 	logger, hook := test.NewNullLogger()
 	tlogger := logging.NewWrappedLogger(logger)
-	_, err := MakeFollower(tlogger, t.TempDir(), cfg, []string{}, genesis)
+	root := t.TempDir()
+	_, err := MakeFollower(tlogger, root, cfg, []string{}, genesis)
 	require.NoError(t, err)
 
 	// check for the warning
@@ -168,4 +172,170 @@ func TestFastCatchupResume(t *testing.T) {
 
 	// Verify the sync was reset.
 	assert.Equal(t, uint64(0), node.GetSyncRound())
+}
+
+// TestDefaultResourcePaths confirms that when no extra configuration is provided, all resources are created in the dataDir
+func TestDefaultResourcePaths_Follower(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	testDirectory := t.TempDir()
+
+	genesis := bookkeeping.Genesis{
+		SchemaID:    "go-test-node-genesis",
+		Proto:       protocol.ConsensusCurrentVersion,
+		Network:     config.Devtestnet,
+		FeeSink:     sinkAddr.String(),
+		RewardsPool: poolAddr.String(),
+	}
+
+	cfg := config.GetDefaultLocal()
+
+	// the logger is set up by the server, so we don't test this here
+	log := logging.Base()
+
+	n, err := MakeFollower(log, testDirectory, cfg, []string{}, genesis)
+	require.NoError(t, err)
+
+	n.Start()
+	defer n.Stop()
+
+	// confirm genesis dir exists in the data dir, and that resources exist in the expected locations
+	require.DirExists(t, filepath.Join(testDirectory, genesis.ID()))
+
+	require.FileExists(t, filepath.Join(testDirectory, genesis.ID(), "ledger.tracker.sqlite"))
+	require.FileExists(t, filepath.Join(testDirectory, genesis.ID(), "ledger.block.sqlite"))
+}
+
+// TestConfiguredDataDirs tests to see that when HotDataDir and ColdDataDir are set, underlying resources are created in the correct locations
+// Not all resources are tested here, because not all resources use the paths provided to them immediately. For example, catchpoint only creates
+// a directory when writing a catchpoint file, which is not being done here with this simple node
+func TestConfiguredDataDirs_Follower(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	testDirectory := t.TempDir()
+	testDirHot := t.TempDir()
+	testDirCold := t.TempDir()
+
+	genesis := bookkeeping.Genesis{
+		SchemaID:    "go-test-node-genesis",
+		Proto:       protocol.ConsensusCurrentVersion,
+		Network:     config.Devtestnet,
+		FeeSink:     sinkAddr.String(),
+		RewardsPool: poolAddr.String(),
+	}
+
+	cfg := config.GetDefaultLocal()
+
+	cfg.HotDataDir = testDirHot
+	cfg.ColdDataDir = testDirCold
+	cfg.CatchpointTracking = 2
+	cfg.CatchpointInterval = 1
+
+	// the logger is set up by the server, so we don't test this here
+	log := logging.Base()
+
+	n, err := MakeFollower(log, testDirectory, cfg, []string{}, genesis)
+	require.NoError(t, err)
+
+	n.Start()
+	defer n.Stop()
+
+	// confirm hot data dir exists and contains a genesis dir
+	require.DirExists(t, filepath.Join(testDirHot, genesis.ID()))
+
+	// confirm the tracker is in the genesis dir of hot data dir
+	require.FileExists(t, filepath.Join(testDirHot, genesis.ID(), "ledger.tracker.sqlite"))
+
+	// confirm cold data dir exists and contains a genesis dir
+	require.DirExists(t, filepath.Join(testDirCold, genesis.ID()))
+
+	// confirm the blockdb is in the genesis dir of cold data dir
+	require.FileExists(t, filepath.Join(testDirCold, genesis.ID(), "ledger.block.sqlite"))
+
+}
+
+// TestConfiguredResourcePaths tests to see that when individual paths are set, underlying resources are created in the correct locations
+func TestConfiguredResourcePaths_Follower(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	testDirectory := t.TempDir()
+	testDirHot := t.TempDir()
+	testDirCold := t.TempDir()
+
+	// add a path for each resource now
+	trackerPath := filepath.Join(testDirectory, "custom_tracker")
+	blockPath := filepath.Join(testDirectory, "custom_block")
+
+	genesis := bookkeeping.Genesis{
+		SchemaID:    "go-test-node-genesis",
+		Proto:       protocol.ConsensusCurrentVersion,
+		Network:     config.Devtestnet,
+		FeeSink:     sinkAddr.String(),
+		RewardsPool: poolAddr.String(),
+	}
+
+	cfg := config.GetDefaultLocal()
+
+	// Configure everything even though a follower node will only use Tracker and Block DBs
+	cfg.HotDataDir = testDirHot
+	cfg.ColdDataDir = testDirCold
+	cfg.TrackerDBDir = trackerPath
+	cfg.BlockDBDir = blockPath
+	cfg.CatchpointTracking = 2
+	cfg.CatchpointInterval = 1
+
+	// the logger is set up by the server, so we don't test this here
+	log := logging.Base()
+
+	n, err := MakeFollower(log, testDirectory, cfg, []string{}, genesis)
+	require.NoError(t, err)
+
+	n.Start()
+	defer n.Stop()
+
+	// confirm hot data dir exists and contains a genesis dir
+	require.DirExists(t, filepath.Join(testDirHot, genesis.ID()))
+
+	// the tracker shouldn't be in the hot data dir, but rather the custom path's genesis dir
+	require.NoFileExists(t, filepath.Join(testDirHot, genesis.ID(), "ledger.tracker.sqlite"))
+	require.FileExists(t, filepath.Join(cfg.TrackerDBDir, genesis.ID(), "ledger.tracker.sqlite"))
+
+	// confirm cold data dir exists and contains a genesis dir
+	require.DirExists(t, filepath.Join(testDirCold, genesis.ID()))
+
+	// block db shouldn't be in the cold data dir, but rather the custom path's genesis dir
+	require.NoFileExists(t, filepath.Join(testDirCold, genesis.ID(), "ledger.block.sqlite"))
+	require.FileExists(t, filepath.Join(cfg.BlockDBDir, genesis.ID(), "ledger.block.sqlite"))
+}
+
+func TestSimulate(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	node := setupFollowNode(t)
+
+	round := node.ledger.LastRound()
+
+	stxn := txntest.Txn{
+		Type:        protocol.PaymentTx,
+		Sender:      sinkAddr,
+		Receiver:    poolAddr,
+		Amount:      1,
+		Fee:         1000,
+		FirstValid:  round,
+		LastValid:   round + 1000,
+		GenesisHash: node.ledger.GenesisHash(),
+	}.SignedTxn()
+
+	request := simulation.Request{
+		TxnGroups:            [][]transactions.SignedTxn{{stxn}},
+		AllowEmptySignatures: true,
+	}
+
+	result, err := node.Simulate(request)
+	require.NoError(t, err)
+
+	require.Len(t, result.TxnGroups, 1)
+	require.Len(t, result.TxnGroups[0].Txns, 1)
+	require.Equal(t, stxn, result.TxnGroups[0].Txns[0].Txn.SignedTxn)
+	require.Empty(t, result.TxnGroups[0].FailureMessage)
 }

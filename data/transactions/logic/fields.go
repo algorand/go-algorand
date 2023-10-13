@@ -23,7 +23,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-//go:generate stringer -type=TxnField,GlobalField,AssetParamsField,AppParamsField,AcctParamsField,AssetHoldingField,OnCompletionConstType,EcdsaCurve,Base64Encoding,JSONRefType,VrfStandard,BlockField -output=fields_string.go
+//go:generate stringer -type=TxnField,GlobalField,AssetParamsField,AppParamsField,AcctParamsField,AssetHoldingField,OnCompletionConstType,EcdsaCurve,EcGroup,Base64Encoding,JSONRefType,VrfStandard,BlockField -output=fields_string.go
 
 // FieldSpec unifies the various specs for assembly, disassembly, and doc generation.
 type FieldSpec interface {
@@ -687,6 +687,74 @@ var EcdsaCurves = FieldGroup{
 	ecdsaCurveSpecByName,
 }
 
+// EcGroup is an enum for `ec_` opcodes
+type EcGroup int
+
+const (
+	// BN254g1 is the G1 group of BN254
+	BN254g1 EcGroup = iota
+	// BN254g2 is the G2 group of BN254
+	BN254g2
+	// BLS12_381g1 specifies the G1 group of BLS 12-381
+	BLS12_381g1
+	// BLS12_381g2 specifies the G2 group of BLS 12-381
+	BLS12_381g2
+	invalidEcGroup // compile-time constant for number of fields
+)
+
+var ecGroupNames [invalidEcGroup]string
+
+type ecGroupSpec struct {
+	field EcGroup
+	doc   string
+}
+
+func (fs ecGroupSpec) Field() byte {
+	return byte(fs.field)
+}
+func (fs ecGroupSpec) Type() StackType {
+	return StackNone // Will not show, since all are untyped
+}
+func (fs ecGroupSpec) OpVersion() uint64 {
+	return pairingVersion
+}
+func (fs ecGroupSpec) Version() uint64 {
+	return pairingVersion
+}
+func (fs ecGroupSpec) Note() string {
+	return fs.doc
+}
+
+var ecGroupSpecs = [...]ecGroupSpec{
+	{BN254g1, "G1 of the BN254 curve. Points encoded as 32 byte X following by 32 byte Y"},
+	{BN254g2, "G2 of the BN254 curve. Points encoded as 64 byte X following by 64 byte Y"},
+	{BLS12_381g1, "G1 of the BLS 12-381 curve. Points encoded as 48 byte X following by 48 byte Y"},
+	{BLS12_381g2, "G2 of the BLS 12-381 curve. Points encoded as 96 byte X following by 96 byte Y"},
+}
+
+func ecGroupSpecByField(c EcGroup) (ecGroupSpec, bool) {
+	if int(c) >= len(ecGroupSpecs) {
+		return ecGroupSpec{}, false
+	}
+	return ecGroupSpecs[c], true
+}
+
+var ecGroupSpecByName = make(ecGroupNameSpecMap, len(ecGroupNames))
+
+type ecGroupNameSpecMap map[string]ecGroupSpec
+
+func (s ecGroupNameSpecMap) get(name string) (FieldSpec, bool) {
+	fs, ok := s[name]
+	return fs, ok
+}
+
+// EcGroups collects details about the constants used to describe EcGroups
+var EcGroups = FieldGroup{
+	"EC", "Groups",
+	ecGroupNames[:],
+	ecGroupSpecByName,
+}
+
 // Base64Encoding is an enum for the `base64decode` opcode
 type Base64Encoding int
 
@@ -1332,6 +1400,13 @@ func init() {
 		equal(int(s.field), i)
 		ecdsaCurveNames[s.field] = s.field.String()
 		ecdsaCurveSpecByName[s.field.String()] = s
+	}
+
+	equal(len(ecGroupSpecs), len(ecGroupNames))
+	for i, s := range ecGroupSpecs {
+		equal(int(s.field), i)
+		ecGroupNames[s.field] = s.field.String()
+		ecGroupSpecByName[s.field.String()] = s
 	}
 
 	equal(len(base64EncodingSpecs), len(base64EncodingNames))

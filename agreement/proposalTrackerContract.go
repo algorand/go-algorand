@@ -32,7 +32,7 @@ type proposalTrackerContract struct {
 // TODO check concrete types of events
 func (c *proposalTrackerContract) pre(p player, in event) (pre []error) {
 	switch in.t() {
-	case voteVerified, proposalFrozen, softThreshold, certThreshold, voteFilterRequest, readStaging:
+	case voteVerified, proposalFrozen, softThreshold, certThreshold, voteFilterRequest, readStaging, readLowestVote:
 	default:
 		pre = append(pre, fmt.Errorf("incoming event has invalid type: %v", in.t()))
 	}

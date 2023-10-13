@@ -70,7 +70,8 @@ func MakeAccountsWriter(kvw KvWrite, kvr KvRead) *accountsWriter {
 func (w *accountsWriter) InsertAccount(addr basics.Address, normBalance uint64, data trackerdb.BaseAccountData) (ref trackerdb.AccountRef, err error) {
 	// write account entry
 	raw := protocol.Encode(&data)
-	err = w.kvw.Set(accountKey(addr), raw)
+	key := accountKey(addr)
+	err = w.kvw.Set(key[:], raw)
 	if err != nil {
 		return nil, err
 	}
@@ -82,7 +83,8 @@ func (w *accountsWriter) DeleteAccount(ref trackerdb.AccountRef) (rowsAffected i
 	xref := ref.(accountRef)
 
 	// delete account entry
-	err = w.kvw.Delete(accountKey(xref.addr))
+	key := accountKey(xref.addr)
+	err = w.kvw.Delete(key[:])
 	if err != nil {
 		return 0, err
 	}
@@ -95,7 +97,8 @@ func (w *accountsWriter) UpdateAccount(ref trackerdb.AccountRef, normBalance uin
 
 	// overwrite account entry
 	raw := protocol.Encode(&data)
-	err = w.kvw.Set(accountKey(xref.addr), raw)
+	key := accountKey(xref.addr)
+	err = w.kvw.Set(key[:], raw)
 	if err != nil {
 		return 0, err
 	}
@@ -108,7 +111,8 @@ func (w *accountsWriter) InsertResource(acctRef trackerdb.AccountRef, aidx basic
 
 	// write resource entry
 	raw := protocol.Encode(&data)
-	err = w.kvw.Set(resourceKey(xref.addr, aidx), raw)
+	key := resourceKey(xref.addr, aidx)
+	err = w.kvw.Set(key[:], raw)
 	if err != nil {
 		return nil, err
 	}
@@ -120,7 +124,8 @@ func (w *accountsWriter) DeleteResource(acctRef trackerdb.AccountRef, aidx basic
 	xref := acctRef.(accountRef)
 
 	// delete resource entry
-	err = w.kvw.Delete(resourceKey(xref.addr, aidx))
+	key := resourceKey(xref.addr, aidx)
+	err = w.kvw.Delete(key[:])
 	if err != nil {
 		return 0, err
 	}
@@ -133,7 +138,8 @@ func (w *accountsWriter) UpdateResource(acctRef trackerdb.AccountRef, aidx basic
 
 	// update resource entry
 	raw := protocol.Encode(&data)
-	err = w.kvw.Set(resourceKey(xref.addr, aidx), raw)
+	key := resourceKey(xref.addr, aidx)
+	err = w.kvw.Set(key[:], raw)
 	if err != nil {
 		return 0, err
 	}
@@ -170,7 +176,8 @@ type creatableEntry struct {
 func (w *accountsWriter) InsertCreatable(cidx basics.CreatableIndex, ctype basics.CreatableType, creator []byte) (ref trackerdb.CreatableRef, err error) {
 	// insert creatable entry
 	raw := protocol.Encode(&creatableEntry{Ctype: ctype, CreatorAddr: creator})
-	err = w.kvw.Set(creatableKey(cidx), raw)
+	key := creatableKey(cidx)
+	err = w.kvw.Set(key[:], raw)
 	if err != nil {
 		return
 	}
@@ -180,7 +187,8 @@ func (w *accountsWriter) InsertCreatable(cidx basics.CreatableIndex, ctype basic
 
 func (w *accountsWriter) DeleteCreatable(cidx basics.CreatableIndex, ctype basics.CreatableType) (rowsAffected int64, err error) {
 	// delete creatable entry
-	err = w.kvw.Delete(creatableKey(cidx))
+	key := creatableKey(cidx)
+	err = w.kvw.Delete(key[:])
 	if err != nil {
 		return 0, err
 	}

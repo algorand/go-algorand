@@ -34,6 +34,9 @@ SRCPATH=${SCRIPTPATH}/..
 export CHANNEL=$2
 export FULLVERSION=$($SRCPATH/scripts/compute_build_number.sh -f)
 
+# prevent ._* files from being included in the tarball
+export COPYFILE_DISABLE=true
+
 TEMPDIR=$(mktemp -d -t "upload_config.tmp.XXXXXX")
 TARFILE=${TEMPDIR}/config_${CHANNEL}_${FULLVERSION}.tar.gz
 

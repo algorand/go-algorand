@@ -21,6 +21,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"sync"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -177,31 +178,81 @@ func (tx Transaction) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.Transaction, protocol.Encode(&tx)
 }
 
+// txAllocSize returns the max possible size of a transaction without state proof fields.
+// It is used to preallocate a buffer for encoding a transaction.
+func txAllocSize() int {
+	return TransactionMaxSize() - StateProofTxnFieldsMaxSize()
+}
+
+// txEncodingPool holds temporary byte slice buffers used for encoding transaction messages.
+// Note, it prepends protocol.Transaction tag to the buffer economizing on subsequent append ops.
+var txEncodingPool = sync.Pool{
+	New: func() interface{} {
+		size := txAllocSize() + len(protocol.Transaction)
+		buf := make([]byte, len(protocol.Transaction), size)
+		copy(buf, []byte(protocol.Transaction))
+		return &txEncodingBuf{b: buf}
+	},
+}
+
+// getTxEncodingBuf returns a wrapped byte slice that can be used for encoding a
+// temporary message.  The byte slice length of encoded Transaction{} object.
+// The caller gets full ownership of the byte slice,
+// but is encouraged to return it using putEncodingBuf().
+func getTxEncodingBuf() *txEncodingBuf {
+	buf := txEncodingPool.Get().(*txEncodingBuf)
+	return buf
+}
+
+// putTxEncodingBuf places a byte slice into the pool of temporary buffers
+// for encoding.  The caller gives up ownership of the byte slice when
+// passing it to putTxEncodingBuf().
+func putTxEncodingBuf(buf *txEncodingBuf) {
+	buf.b = buf.b[:len(protocol.Transaction)]
+	txEncodingPool.Put(buf)
+}
+
+type txEncodingBuf struct {
+	b []byte
+}
+
 // ID returns the Txid (i.e., hash) of the transaction.
 func (tx Transaction) ID() Txid {
-	enc := tx.MarshalMsg(append(protocol.GetEncodingBuf(), []byte(protocol.Transaction)...))
-	defer protocol.PutEncodingBuf(enc)
+	buf := getTxEncodingBuf()
+	enc := tx.MarshalMsg(buf.b)
+	if cap(enc) > cap(buf.b) {
+		// use a bigger buffer as New's estimate was too small
+		buf.b = enc
+	}
+	defer putTxEncodingBuf(buf)
 	return Txid(crypto.Hash(enc))
 }
 
 // IDSha256 returns the digest (i.e., hash) of the transaction.
 // This is different from the canonical ID computed with Sum512_256 hashing function.
 func (tx Transaction) IDSha256() crypto.Digest {
-	enc := tx.MarshalMsg(append(protocol.GetEncodingBuf(), []byte(protocol.Transaction)...))
-	defer protocol.PutEncodingBuf(enc)
+	buf := getTxEncodingBuf()
+	enc := tx.MarshalMsg(buf.b)
+	if cap(enc) > cap(buf.b) {
+		buf.b = enc
+	}
+	defer putTxEncodingBuf(buf)
 	return sha256.Sum256(enc)
 }
 
 // InnerID returns something akin to Txid, but folds in the parent Txid and the
 // index of the inner call.
 func (tx Transaction) InnerID(parent Txid, index int) Txid {
-	input := append(protocol.GetEncodingBuf(), []byte(protocol.Transaction)...)
-	input = append(input, parent[:]...)
-	buf := make([]byte, 8)
-	binary.BigEndian.PutUint64(buf, uint64(index))
-	input = append(input, buf...)
+	buf := getTxEncodingBuf()
+	input := append(buf.b, parent[:]...)
+	var indexBuf [8]byte
+	binary.BigEndian.PutUint64(indexBuf[:], uint64(index))
+	input = append(input, indexBuf[:]...)
 	enc := tx.MarshalMsg(input)
-	defer protocol.PutEncodingBuf(enc)
+	if cap(enc) > cap(buf.b) {
+		buf.b = enc
+	}
+	defer putTxEncodingBuf(buf)
 	return Txid(crypto.Hash(enc))
 }
 

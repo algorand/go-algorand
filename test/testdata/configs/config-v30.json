@@ -87,7 +87,7 @@
     "OutgoingMessageFilterBucketCount": 3,
     "OutgoingMessageFilterBucketSize": 128,
     "P2PEnable": false,
-    "P2PPersistPeerID": true,
+    "P2PPersistPeerID": false,
     "P2PPrivateKeyLocation": "",
     "ParticipationKeysRefreshInterval": 60000000000,
     "PeerConnectionsUpdateInterval": 3600,

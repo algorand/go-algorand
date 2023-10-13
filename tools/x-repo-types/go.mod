@@ -3,7 +3,6 @@ module github.com/algorand/go-algorand/tools/x-repo-types
 go 1.20
 
 replace github.com/algorand/go-algorand => ../..
-replace github.com/algorand/msgp => ../../msgp
 
 require (
 	github.com/algorand/go-algorand v0.0.0
