@@ -290,7 +290,7 @@ func (cs *CatchpointCatchupService) processStageLedgerDownload() (err error) {
 	}
 
 	// download balances file.
-	peerSelector := makePeerSelector(cs.net, []peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookRelays}})
+	peerSelector := cs.makeLedgerFetcherPeerSelector()
 	ledgerFetcher := makeLedgerFetcher(cs.net, cs.ledgerAccessor, cs.log, cs, cs.config)
 	attemptsCount := 0
 
@@ -812,6 +812,18 @@ func (cs *CatchpointCatchupService) initDownloadPeerSelector() {
 	}
 }
 
+func (cs *CatchpointCatchupService) makeLedgerFetcherPeerSelector() *peerSelector {
+	if cs.config.EnableCatchupFromArchiveServers {
+		return makePeerSelector(cs.net, []peerClass{
+			{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivers},
+			{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookRelays},
+		})
+	}
+	return makePeerSelector(cs.net, []peerClass{
+		{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookRelays},
+	})
+}
+
 // checkLedgerDownload sends a HEAD request to the ledger endpoint of peers to validate the catchpoint's availability
 // before actually starting the catchup process.
 // The error returned is either from an unsuccessful request or a successful request that did not return a 200.
@@ -820,7 +832,7 @@ func (cs *CatchpointCatchupService) checkLedgerDownload() error {
 	if err != nil {
 		return fmt.Errorf("failed to parse catchpoint label : %v", err)
 	}
-	peerSelector := makePeerSelector(cs.net, []peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookRelays}})
+	peerSelector := cs.makeLedgerFetcherPeerSelector()
 	ledgerFetcher := makeLedgerFetcher(cs.net, cs.ledgerAccessor, cs.log, cs, cs.config)
 	for i := 0; i < cs.config.CatchupLedgerDownloadRetryAttempts; i++ {
 		psp, peerError := peerSelector.getNextPeer()
