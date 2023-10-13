@@ -3156,8 +3156,7 @@ done:
 int 1
 `, v)
 			// cut two last bytes - intc_1 and last byte of bnz
-			ops.Program = ops.Program[:len(ops.Program)-2]
-			testLogicBytes(t, ops.Program, nil,
+			testLogicBytes(t, ops.Program[:len(ops.Program)-2], nil,
 				"bnz program ends short", "bnz program ends short")
 		})
 	}
@@ -5835,6 +5834,40 @@ switch done1 done2; done1: ; done2: ;
 `, 8)
 }
 
+// TestShortSwitch ensures a clean error, in Check and Eval, when a switch ends early
+func TestShortSwitch(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	source := `
+	int 1
+	int 1
+	switch label1 label2
+	label1:
+	label2:
+	`
+	ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
+	require.NoError(t, err)
+
+	// fine as is
+	testLogicBytes(t, ops.Program, nil)
+
+	beyond := "switch opcode claims to extend beyond program"
+
+	// bad if a label is gone
+	testLogicBytes(t, ops.Program[:len(ops.Program)-2], nil, beyond, beyond)
+
+	// chop off all the labels, but keep the label count
+	testLogicBytes(t, ops.Program[:len(ops.Program)-4], nil, beyond, beyond)
+
+	// chop off before the label count
+	testLogicBytes(t, ops.Program[:len(ops.Program)-5], nil,
+		"bare switch opcode at end of program", "bare switch opcode at end of program")
+
+	// chop off half of a label
+	testLogicBytes(t, ops.Program[:len(ops.Program)-1], nil, beyond, beyond)
+}
+
 func TestMatch(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -5985,6 +6018,41 @@ int 1; return
 zero: int 0;
 one:  int 0;
 `, 8)
+}
+
+// TestShortMatch ensures a clean error when a match ends early
+func TestShortMatch(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	source := `int 1
+    int 40
+    int 45
+    int 40
+	match label1 label2
+	label1:
+    label2:
+	`
+	ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
+	require.NoError(t, err)
+
+	// fine as is
+	testLogicBytes(t, ops.Program, nil)
+
+	beyond := "match opcode claims to extend beyond program"
+
+	// bad if a label is gone
+	testLogicBytes(t, ops.Program[:len(ops.Program)-2], nil, beyond, beyond)
+
+	// chop off all the labels, but keep the label count
+	testLogicBytes(t, ops.Program[:len(ops.Program)-4], nil, beyond, beyond)
+
+	// chop off before the label count
+	testLogicBytes(t, ops.Program[:len(ops.Program)-5], nil,
+		"bare match opcode at end of program", "bare match opcode at end of program")
+
+	// chop off half of a label
+	testLogicBytes(t, ops.Program[:len(ops.Program)-1], nil, beyond, beyond)
 }
 
 func TestPushConsts(t *testing.T) {

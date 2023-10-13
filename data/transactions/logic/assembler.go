@@ -998,6 +998,7 @@ func asmBranch(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *sourc
 	return nil
 }
 
+// asmSwitch assembles switch and match opcodes
 func asmSwitch(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *sourceError {
 	numOffsets := len(args)
 	if numOffsets > math.MaxUint8 {
