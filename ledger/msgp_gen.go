@@ -80,11 +80,11 @@ func (_ CatchpointCatchupState) CanMarshalMsg(z interface{}) bool {
 
 // UnmarshalMsg implements msgp.Unmarshaler
 func (z *CatchpointCatchupState) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
-	if st.Depth == 0 {
+	if st.AllowableDepth == 0 {
 		err = msgp.ErrMaxDepthExceeded{}
 		return
 	}
-	st.Depth--
+	st.AllowableDepth--
 	{
 		var zb0001 int32
 		zb0001, bts, err = msgp.ReadInt32Bytes(bts)
@@ -224,11 +224,11 @@ func (_ *CatchpointFileHeader) CanMarshalMsg(z interface{}) bool {
 
 // UnmarshalMsg implements msgp.Unmarshaler
 func (z *CatchpointFileHeader) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
-	if st.Depth == 0 {
+	if st.AllowableDepth == 0 {
 		err = msgp.ErrMaxDepthExceeded{}
 		return
 	}
-	st.Depth--
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0001 int
@@ -465,11 +465,11 @@ func (_ *catchpointFileBalancesChunkV5) CanMarshalMsg(z interface{}) bool {
 
 // UnmarshalMsg implements msgp.Unmarshaler
 func (z *catchpointFileBalancesChunkV5) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
-	if st.Depth == 0 {
+	if st.AllowableDepth == 0 {
 		err = msgp.ErrMaxDepthExceeded{}
 		return
 	}
-	st.Depth--
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0002 int
@@ -655,11 +655,11 @@ func (_ *catchpointFileChunkV6) CanMarshalMsg(z interface{}) bool {
 
 // UnmarshalMsg implements msgp.Unmarshaler
 func (z *catchpointFileChunkV6) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
-	if st.Depth == 0 {
+	if st.AllowableDepth == 0 {
 		err = msgp.ErrMaxDepthExceeded{}
 		return
 	}
-	st.Depth--
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0003 int
@@ -892,11 +892,11 @@ func (_ *catchpointStateProofVerificationContext) CanMarshalMsg(z interface{}) b
 
 // UnmarshalMsg implements msgp.Unmarshaler
 func (z *catchpointStateProofVerificationContext) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
-	if st.Depth == 0 {
+	if st.AllowableDepth == 0 {
 		err = msgp.ErrMaxDepthExceeded{}
 		return
 	}
-	st.Depth--
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0002 int

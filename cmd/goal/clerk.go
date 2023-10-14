@@ -69,6 +69,7 @@ var (
 	requestFilename    string
 	requestOutFilename string
 
+	simulateStartRound            uint64
 	simulateAllowEmptySignatures  bool
 	simulateAllowMoreLogging      bool
 	simulateAllowMoreOpcodeBudget bool
@@ -164,6 +165,7 @@ func init() {
 	simulateCmd.Flags().StringVar(&requestFilename, "request", "", "Simulate request object to run. Mutually exclusive with --txfile")
 	simulateCmd.Flags().StringVar(&requestOutFilename, "request-only-out", "", "Filename for writing simulate request object. If provided, the command will only write the request object and exit. No simulation will happen")
 	simulateCmd.Flags().StringVarP(&outFilename, "result-out", "o", "", "Filename for writing simulation result")
+	simulateCmd.Flags().Uint64Var(&simulateStartRound, "round", 0, "Specify the round after which the simulation will take place. If not specified, the simulation will take place after the latest round.")
 	simulateCmd.Flags().BoolVar(&simulateAllowEmptySignatures, "allow-empty-signatures", false, "Allow transactions without signatures to be simulated as if they had correct signatures")
 	simulateCmd.Flags().BoolVar(&simulateAllowMoreLogging, "allow-more-logging", false, "Lift the limits on log opcode during simulation")
 	simulateCmd.Flags().BoolVar(&simulateAllowMoreOpcodeBudget, "allow-more-opcode-budget", false, "Apply max extra opcode budget for apps per transaction group (default 320000) during simulation")
@@ -1008,9 +1010,35 @@ func assembleFile(fname string, printWarnings bool) (program []byte) {
 	return ops.Program
 }
 
-func assembleFileWithMap(fname string, printWarnings bool) ([]byte, logic.SourceMap) {
-	ops := assembleFileImpl(fname, printWarnings)
-	return ops.Program, logic.GetSourceMap([]string{fname}, ops.OffsetToLine)
+func assembleFileWithMap(sourceFile string, outFile string, printWarnings bool) ([]byte, logic.SourceMap, error) {
+	ops := assembleFileImpl(sourceFile, printWarnings)
+	pathToSourceFromSourceMap, err := determinePathToSourceFromSourceMap(sourceFile, outFile)
+	if err != nil {
+		return nil, logic.SourceMap{}, err
+	}
+	return ops.Program, logic.GetSourceMap([]string{pathToSourceFromSourceMap}, ops.OffsetToSource), nil
+}
+
+func determinePathToSourceFromSourceMap(sourceFile string, outFile string) (string, error) {
+	if sourceFile == stdinFileNameValue {
+		return "<stdin>", nil
+	}
+	sourceFileAbsolute, err := filepath.Abs(sourceFile)
+	if err != nil {
+		return "", fmt.Errorf("could not determine absolute path to source file '%s': %w", sourceFile, err)
+	}
+	if outFile == stdoutFilenameValue {
+		return sourceFileAbsolute, nil
+	}
+	outFileAbsolute, err := filepath.Abs(outFile)
+	if err != nil {
+		return "", fmt.Errorf("could not determine absolute path to output file '%s': %w", outFile, err)
+	}
+	pathToSourceFromSourceMap, err := filepath.Rel(filepath.Dir(outFileAbsolute), sourceFileAbsolute)
+	if err != nil {
+		return "", fmt.Errorf("could not determine path from source map to source: %w", err)
+	}
+	return pathToSourceFromSourceMap, nil
 }
 
 func disassembleFile(fname, outname string) {
@@ -1068,7 +1096,10 @@ var compileCmd = &cobra.Command{
 				}
 			}
 			shouldPrintAdditionalInfo := outname != stdoutFilenameValue
-			program, sourceMap := assembleFileWithMap(fname, true)
+			program, sourceMap, err := assembleFileWithMap(fname, outname, true)
+			if err != nil {
+				reportErrorf("Could not assemble: %s", err)
+			}
 			outblob := program
 			if signProgram {
 				dataDir := datadir.EnsureSingleDataDir()
@@ -1285,6 +1316,7 @@ var simulateCmd = &cobra.Command{
 						Txns: txgroup,
 					},
 				},
+				Round:                 basics.Round(simulateStartRound),
 				AllowEmptySignatures:  simulateAllowEmptySignatures,
 				AllowMoreLogging:      simulateAllowMoreLogging,
 				AllowUnnamedResources: simulateAllowUnnamedResources,
@@ -1310,6 +1342,7 @@ var simulateCmd = &cobra.Command{
 						Txns: txgroup,
 					},
 				},
+				Round:                 basics.Round(simulateStartRound),
 				AllowEmptySignatures:  simulateAllowEmptySignatures,
 				AllowMoreLogging:      simulateAllowMoreLogging,
 				AllowUnnamedResources: simulateAllowUnnamedResources,

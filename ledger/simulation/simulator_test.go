@@ -48,13 +48,13 @@ func TestNonOverridenDataLedgerMethodsUseRoundParameter(t *testing.T) {
 	overridenMethods := []string{
 		"Latest",
 		"LookupLatest",
+		"LatestTotals",
 	}
 
 	// methods that don't use a round number
 	excludedMethods := []string{
 		"GenesisHash",
 		"GenesisProto",
-		"LatestTotals",
 		"FlushCaches",
 	}
 
@@ -141,6 +141,7 @@ int 1`,
 	txgroup := []transactions.SignedTxn{signedPayTxn, signedAppCallTxn}
 
 	mockTracer := &mocktracer.Tracer{}
+	s.ledger.start = s.ledger.Ledger.Latest() // Set starting round for simulation
 	block, err := s.simulateWithTracer(txgroup, mockTracer, ResultEvalOverrides{})
 	require.NoError(t, err)
 

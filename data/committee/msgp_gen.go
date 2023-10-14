@@ -116,11 +116,11 @@ func (_ *Credential) CanMarshalMsg(z interface{}) bool {
 
 // UnmarshalMsg implements msgp.Unmarshaler
 func (z *Credential) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
-	if st.Depth == 0 {
+	if st.AllowableDepth == 0 {
 		err = msgp.ErrMaxDepthExceeded{}
 		return
 	}
-	st.Depth--
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0001 int
@@ -277,11 +277,11 @@ func (_ *Seed) CanMarshalMsg(z interface{}) bool {
 
 // UnmarshalMsg implements msgp.Unmarshaler
 func (z *Seed) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
-	if st.Depth == 0 {
+	if st.AllowableDepth == 0 {
 		err = msgp.ErrMaxDepthExceeded{}
 		return
 	}
-	st.Depth--
+	st.AllowableDepth--
 	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -346,11 +346,11 @@ func (_ *UnauthenticatedCredential) CanMarshalMsg(z interface{}) bool {
 
 // UnmarshalMsg implements msgp.Unmarshaler
 func (z *UnauthenticatedCredential) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
-	if st.Depth == 0 {
+	if st.AllowableDepth == 0 {
 		err = msgp.ErrMaxDepthExceeded{}
 		return
 	}
-	st.Depth--
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0001 int
@@ -484,11 +484,11 @@ func (_ *hashableCredential) CanMarshalMsg(z interface{}) bool {
 
 // UnmarshalMsg implements msgp.Unmarshaler
 func (z *hashableCredential) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
-	if st.Depth == 0 {
+	if st.AllowableDepth == 0 {
 		err = msgp.ErrMaxDepthExceeded{}
 		return
 	}
-	st.Depth--
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0001 int

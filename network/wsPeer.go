@@ -949,11 +949,11 @@ func (wp *wsPeer) Close(deadline time.Time) {
 		close(wp.closing)
 		err := wp.conn.CloseWithMessage(websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""), deadline)
 		if err != nil {
-			wp.log.Infof("failed to write CloseMessage to connection for %s", wp.conn.RemoteAddrString())
+			wp.log.Infof("failed to write CloseMessage to connection for %s, err: %s", wp.conn.RemoteAddrString(), err)
 		}
 		err = wp.conn.CloseWithoutFlush()
 		if err != nil {
-			wp.log.Infof("failed to CloseWithoutFlush to connection for %s", wp.conn.RemoteAddrString())
+			wp.log.Infof("failed to CloseWithoutFlush to connection for %s, err: %s", wp.conn.RemoteAddrString(), err)
 		}
 	}
 

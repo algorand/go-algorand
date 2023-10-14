@@ -143,6 +143,9 @@ func TestRedirectFallbackArchiver(t *testing.T) {
 	net2 := &httpTestPeerSource{}
 
 	config := config.GetDefaultLocal()
+	// Need to enable block service fallbacks
+	config.EnableBlockServiceFallbackToArchiver = true
+
 	bs1 := MakeBlockService(log, config, ledger1, net1, "test-genesis-ID")
 	bs2 := MakeBlockService(log, config, ledger2, net2, "test-genesis-ID")
 
@@ -311,6 +314,8 @@ func TestRedirectOnFullCapacity(t *testing.T) {
 	net2 := &httpTestPeerSource{}
 
 	config := config.GetDefaultLocal()
+	// Need to enable block service fallbacks
+	config.EnableBlockServiceFallbackToArchiver = true
 	bs1 := MakeBlockService(log1, config, ledger1, net1, "test-genesis-ID")
 	bs2 := MakeBlockService(log2, config, ledger2, net2, "test-genesis-ID")
 	// set the memory cap so that it can serve only 1 block at a time
@@ -487,6 +492,9 @@ func TestRedirectExceptions(t *testing.T) {
 	net1 := &httpTestPeerSource{}
 
 	config := config.GetDefaultLocal()
+	// Need to enable block service fallbacks
+	config.EnableBlockServiceFallbackToArchiver = true
+
 	bs1 := MakeBlockService(log, config, ledger1, net1, "{genesisID}")
 
 	nodeA := &basicRPCNode{}
@@ -543,8 +551,9 @@ func makeLedger(t *testing.T, namePostfix string) *data.Ledger {
 	cfg := config.GetDefaultLocal()
 	const inMem = true
 
+	prefix := t.Name() + namePostfix
 	ledger, err := data.LoadLedger(
-		log, t.Name()+namePostfix, inMem, protocol.ConsensusCurrentVersion, genBal, "", genHash,
+		log, prefix, inMem, protocol.ConsensusCurrentVersion, genBal, "", genHash,
 		nil, cfg,
 	)
 	require.NoError(t, err)

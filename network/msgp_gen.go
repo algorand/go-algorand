@@ -107,11 +107,11 @@ func (_ disconnectReason) CanMarshalMsg(z interface{}) bool {
 
 // UnmarshalMsg implements msgp.Unmarshaler
 func (z *disconnectReason) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
-	if st.Depth == 0 {
+	if st.AllowableDepth == 0 {
 		err = msgp.ErrMaxDepthExceeded{}
 		return
 	}
-	st.Depth--
+	st.AllowableDepth--
 	{
 		var zb0001 string
 		zb0001, bts, err = msgp.ReadStringBytes(bts)
@@ -197,11 +197,11 @@ func (_ *identityChallenge) CanMarshalMsg(z interface{}) bool {
 
 // UnmarshalMsg implements msgp.Unmarshaler
 func (z *identityChallenge) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
-	if st.Depth == 0 {
+	if st.AllowableDepth == 0 {
 		err = msgp.ErrMaxDepthExceeded{}
 		return
 	}
-	st.Depth--
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0002 int
@@ -386,11 +386,11 @@ func (_ *identityChallengeResponse) CanMarshalMsg(z interface{}) bool {
 
 // UnmarshalMsg implements msgp.Unmarshaler
 func (z *identityChallengeResponse) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
-	if st.Depth == 0 {
+	if st.AllowableDepth == 0 {
 		err = msgp.ErrMaxDepthExceeded{}
 		return
 	}
-	st.Depth--
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0003 int
@@ -548,11 +548,11 @@ func (_ *identityChallengeResponseSigned) CanMarshalMsg(z interface{}) bool {
 
 // UnmarshalMsg implements msgp.Unmarshaler
 func (z *identityChallengeResponseSigned) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
-	if st.Depth == 0 {
+	if st.AllowableDepth == 0 {
 		err = msgp.ErrMaxDepthExceeded{}
 		return
 	}
-	st.Depth--
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0001 int
@@ -691,11 +691,11 @@ func (_ *identityChallengeSigned) CanMarshalMsg(z interface{}) bool {
 
 // UnmarshalMsg implements msgp.Unmarshaler
 func (z *identityChallengeSigned) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
-	if st.Depth == 0 {
+	if st.AllowableDepth == 0 {
 		err = msgp.ErrMaxDepthExceeded{}
 		return
 	}
-	st.Depth--
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0001 int
@@ -810,11 +810,11 @@ func (_ *identityChallengeValue) CanMarshalMsg(z interface{}) bool {
 
 // UnmarshalMsg implements msgp.Unmarshaler
 func (z *identityChallengeValue) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
-	if st.Depth == 0 {
+	if st.AllowableDepth == 0 {
 		err = msgp.ErrMaxDepthExceeded{}
 		return
 	}
-	st.Depth--
+	st.AllowableDepth--
 	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -879,11 +879,11 @@ func (_ *identityVerificationMessage) CanMarshalMsg(z interface{}) bool {
 
 // UnmarshalMsg implements msgp.Unmarshaler
 func (z *identityVerificationMessage) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
-	if st.Depth == 0 {
+	if st.AllowableDepth == 0 {
 		err = msgp.ErrMaxDepthExceeded{}
 		return
 	}
-	st.Depth--
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0002 int
@@ -1023,11 +1023,11 @@ func (_ *identityVerificationMessageSigned) CanMarshalMsg(z interface{}) bool {
 
 // UnmarshalMsg implements msgp.Unmarshaler
 func (z *identityVerificationMessageSigned) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
-	if st.Depth == 0 {
+	if st.AllowableDepth == 0 {
 		err = msgp.ErrMaxDepthExceeded{}
 		return
 	}
-	st.Depth--
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0002 int

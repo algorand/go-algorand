@@ -654,3 +654,278 @@ func TestLocal_RecalculateConnectionLimits(t *testing.T) {
 		})
 	}
 }
+
+// Tests that ensureAbsGenesisDir resolves a path to an absolute path, appends the genesis directory, and creates any needed directories
+func TestEnsureAbsDir(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	testDirectory := t.TempDir()
+
+	t1 := filepath.Join(testDirectory, "test1")
+	t1Abs, err := ensureAbsGenesisDir(t1, "myGenesisID")
+	require.NoError(t, err)
+	require.DirExists(t, t1Abs)
+	require.Equal(t, testDirectory+"/test1/myGenesisID", t1Abs)
+
+	// confirm that relative paths become absolute
+	t2 := filepath.Join(testDirectory, "test2", "..")
+	t2Abs, err := ensureAbsGenesisDir(t2, "myGenesisID")
+	require.NoError(t, err)
+	require.DirExists(t, t2Abs)
+	require.Equal(t, testDirectory+"/myGenesisID", t2Abs)
+}
+
+// TestEnsureAndResolveGenesisDirs confirms that paths provided in the config are resolved to absolute paths and are created if relevant
+func TestEnsureAndResolveGenesisDirs(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	cfg := GetDefaultLocal()
+
+	testDirectory := t.TempDir()
+	// insert some "Bad" path elements to see them removed when converted to absolute
+	cfg.TrackerDBDir = filepath.Join(testDirectory, "BAD/../custom_tracker")
+	cfg.BlockDBDir = filepath.Join(testDirectory, "/BAD/BAD/../../custom_block")
+	cfg.CrashDBDir = filepath.Join(testDirectory, "custom_crash")
+	cfg.StateproofDir = filepath.Join(testDirectory, "/RELATIVEPATHS/../RELATIVE/../custom_stateproof")
+	cfg.CatchpointDir = filepath.Join(testDirectory, "custom_catchpoint")
+
+	paths, err := cfg.EnsureAndResolveGenesisDirs(testDirectory, "myGenesisID")
+	require.NoError(t, err)
+
+	// confirm that the paths are absolute, and contain the genesisID
+	require.Equal(t, testDirectory+"/custom_tracker/myGenesisID", paths.TrackerGenesisDir)
+	require.DirExists(t, paths.TrackerGenesisDir)
+	require.Equal(t, testDirectory+"/custom_block/myGenesisID", paths.BlockGenesisDir)
+	require.DirExists(t, paths.BlockGenesisDir)
+	require.Equal(t, testDirectory+"/custom_crash/myGenesisID", paths.CrashGenesisDir)
+	require.DirExists(t, paths.CrashGenesisDir)
+	require.Equal(t, testDirectory+"/custom_stateproof/myGenesisID", paths.StateproofGenesisDir)
+	require.DirExists(t, paths.StateproofGenesisDir)
+	require.Equal(t, testDirectory+"/custom_catchpoint/myGenesisID", paths.CatchpointGenesisDir)
+	require.DirExists(t, paths.CatchpointGenesisDir)
+}
+
+// TestEnsureAndResolveGenesisDirs_hierarchy confirms that when only some directories are specified, other directories defer to them
+func TestEnsureAndResolveGenesisDirs_hierarchy(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	cfg := GetDefaultLocal()
+	testDirectory := t.TempDir()
+	paths, err := cfg.EnsureAndResolveGenesisDirs(testDirectory, "myGenesisID")
+	require.NoError(t, err)
+	// confirm that if only the root is specified, it is used for all directories
+	require.Equal(t, testDirectory+"/myGenesisID", paths.TrackerGenesisDir)
+	require.DirExists(t, paths.TrackerGenesisDir)
+	require.Equal(t, testDirectory+"/myGenesisID", paths.BlockGenesisDir)
+	require.DirExists(t, paths.BlockGenesisDir)
+	require.Equal(t, testDirectory+"/myGenesisID", paths.CrashGenesisDir)
+	require.DirExists(t, paths.CrashGenesisDir)
+	require.Equal(t, testDirectory+"/myGenesisID", paths.StateproofGenesisDir)
+	require.DirExists(t, paths.StateproofGenesisDir)
+	require.Equal(t, testDirectory+"/myGenesisID", paths.CatchpointGenesisDir)
+	require.DirExists(t, paths.CatchpointGenesisDir)
+
+	cfg = GetDefaultLocal()
+	testDirectory = t.TempDir()
+	hot := filepath.Join(testDirectory, "hot")
+	cold := filepath.Join(testDirectory, "cold")
+	cfg.HotDataDir = hot
+	cfg.ColdDataDir = cold
+	paths, err = cfg.EnsureAndResolveGenesisDirs(testDirectory, "myGenesisID")
+	require.NoError(t, err)
+	// confirm that if hot/cold are specified, hot/cold are used for appropriate directories
+	require.Equal(t, hot+"/myGenesisID", paths.TrackerGenesisDir)
+	require.DirExists(t, paths.TrackerGenesisDir)
+	require.Equal(t, cold+"/myGenesisID", paths.BlockGenesisDir)
+	require.DirExists(t, paths.BlockGenesisDir)
+	require.Equal(t, cold+"/myGenesisID", paths.CrashGenesisDir)
+	require.DirExists(t, paths.CrashGenesisDir)
+	require.Equal(t, cold+"/myGenesisID", paths.StateproofGenesisDir)
+	require.DirExists(t, paths.StateproofGenesisDir)
+	require.Equal(t, cold+"/myGenesisID", paths.CatchpointGenesisDir)
+	require.DirExists(t, paths.CatchpointGenesisDir)
+}
+
+// TestEnsureAndResolveGenesisDirsError confirms that if a path can't be created, an error is returned
+func TestEnsureAndResolveGenesisDirsError(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	cfg := GetDefaultLocal()
+
+	testDirectory := t.TempDir()
+	// insert some "Bad" path elements to see them removed when converted to absolute
+	cfg.TrackerDBDir = filepath.Join(testDirectory, "BAD/../custom_tracker")
+	cfg.BlockDBDir = filepath.Join(testDirectory, "/BAD/BAD/../../custom_block")
+	cfg.CrashDBDir = filepath.Join(testDirectory, "custom_crash")
+	cfg.StateproofDir = filepath.Join(testDirectory, "/RELATIVEPATHS/../RELATIVE/../custom_stateproof")
+	cfg.CatchpointDir = filepath.Join(testDirectory, "custom_catchpoint")
+
+	// first try an error with an empty root dir
+	paths, err := cfg.EnsureAndResolveGenesisDirs("", "myGenesisID")
+	require.Empty(t, paths)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "rootDir is required")
+
+	require.NoError(t, os.Chmod(testDirectory, 0200))
+
+	// now try an error with a root dir that can't be written to
+	paths, err = cfg.EnsureAndResolveGenesisDirs(testDirectory, "myGenesisID")
+	require.Empty(t, paths)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "permission denied")
+}
+
+// TestResolveLogPaths confirms that log paths are resolved to the most appropriate data directory of the supplied config
+func TestResolveLogPaths(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	// on default settings, the log paths should be in the root directory
+	cfg := GetDefaultLocal()
+	log, archive := cfg.ResolveLogPaths("root")
+	require.Equal(t, "root/node.log", log)
+	require.Equal(t, "root/node.archive.log", archive)
+
+	// with supplied hot/cold data directories, they resolve to hot/cold
+	cfg = GetDefaultLocal()
+	cfg.HotDataDir = "hot"
+	cfg.ColdDataDir = "cold"
+	log, archive = cfg.ResolveLogPaths("root")
+	require.Equal(t, "hot/node.log", log)
+	require.Equal(t, "cold/node.archive.log", archive)
+
+	// with supplied hot/cold data AND specific paths directories, they resolve to the specific paths
+	cfg = GetDefaultLocal()
+	cfg.HotDataDir = "hot"
+	cfg.ColdDataDir = "cold"
+	cfg.LogFileDir = "mycoolLogDir"
+	cfg.LogArchiveDir = "myCoolLogArchive"
+	log, archive = cfg.ResolveLogPaths("root")
+	require.Equal(t, "mycoolLogDir/node.log", log)
+	require.Equal(t, "myCoolLogArchive/node.archive.log", archive)
+}
+
+func TestStoresCatchpoints(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	var tests = []struct {
+		name               string
+		catchpointTracking int64
+		catchpointInterval uint64
+		archival           bool
+		expected           bool
+	}{
+		{
+			name:               "-1 w/ no catchpoint interval expects false",
+			catchpointTracking: CatchpointTrackingModeUntracked,
+			catchpointInterval: 0,
+			expected:           false,
+		},
+		{
+			name:               "-1 expects false",
+			catchpointTracking: CatchpointTrackingModeUntracked,
+			catchpointInterval: GetDefaultLocal().CatchpointInterval,
+			archival:           GetDefaultLocal().Archival,
+			expected:           false,
+		},
+		{
+			name:               "0 expects false",
+			catchpointTracking: CatchpointTrackingModeAutomatic,
+			catchpointInterval: GetDefaultLocal().CatchpointInterval,
+			archival:           GetDefaultLocal().Archival,
+			expected:           false,
+		},
+		{
+			name:               "0 w/ archival expects true",
+			catchpointTracking: CatchpointTrackingModeAutomatic,
+			catchpointInterval: GetDefaultLocal().CatchpointInterval,
+			archival:           true,
+			expected:           true,
+		},
+		{
+			name:               "0 w/ archival & catchpointInterval=0 expects false",
+			catchpointTracking: CatchpointTrackingModeAutomatic,
+			catchpointInterval: 0,
+			archival:           true,
+			expected:           false,
+		},
+		{
+			name:               "1 expects false",
+			catchpointTracking: CatchpointTrackingModeTracked,
+			catchpointInterval: GetDefaultLocal().CatchpointInterval,
+			archival:           GetDefaultLocal().Archival,
+			expected:           false,
+		},
+		{
+			name:               "1 w/ archival expects true",
+			catchpointTracking: CatchpointTrackingModeTracked,
+			catchpointInterval: GetDefaultLocal().CatchpointInterval,
+			archival:           true,
+			expected:           true,
+		},
+		{
+			name:               "1 w/ archival & catchpointInterval=0 expects false",
+			catchpointTracking: CatchpointTrackingModeTracked,
+			catchpointInterval: 0,
+			archival:           true,
+			expected:           false,
+		},
+		{
+			name:               "2 w/ catchpointInterval=0 expects false",
+			catchpointTracking: CatchpointTrackingModeStored,
+			catchpointInterval: 0,
+			archival:           GetDefaultLocal().Archival,
+			expected:           false,
+		},
+		{
+			name:               "2 expects true",
+			catchpointTracking: CatchpointTrackingModeStored,
+			catchpointInterval: GetDefaultLocal().CatchpointInterval,
+			archival:           GetDefaultLocal().Archival,
+			expected:           true,
+		},
+		{
+			name:               "99 expects false",
+			catchpointTracking: 99,
+			catchpointInterval: GetDefaultLocal().CatchpointInterval,
+			archival:           GetDefaultLocal().Archival,
+			expected:           false,
+		},
+		{
+			name:               "99 w/ catchpointInterval=0 expects false",
+			catchpointTracking: 99,
+			catchpointInterval: 0,
+			archival:           GetDefaultLocal().Archival,
+			expected:           false,
+		},
+		{
+			name:               "27 expects false",
+			catchpointTracking: 27,
+			catchpointInterval: GetDefaultLocal().CatchpointInterval,
+			archival:           GetDefaultLocal().Archival,
+			expected:           false,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			cfg := GetDefaultLocal()
+			cfg.CatchpointTracking = test.catchpointTracking
+			cfg.CatchpointInterval = test.catchpointInterval
+			cfg.Archival = test.archival
+			require.Equal(t, test.expected, cfg.StoresCatchpoints())
+			if cfg.StoresCatchpoints() {
+				require.Equal(t, true, cfg.TracksCatchpoints())
+			}
+		})
+	}
+}
+
+func TestTracksCatchpointsWithoutStoring(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	cfg := GetDefaultLocal()
+	cfg.CatchpointTracking = CatchpointTrackingModeTracked
+	cfg.CatchpointInterval = 10000
+	cfg.Archival = false
+	require.Equal(t, true, cfg.TracksCatchpoints())
+	require.Equal(t, false, cfg.StoresCatchpoints())
+}

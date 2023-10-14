@@ -58,11 +58,11 @@ func (_ *creatableEntry) CanMarshalMsg(z interface{}) bool {
 
 // UnmarshalMsg implements msgp.Unmarshaler
 func (z *creatableEntry) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
-	if st.Depth == 0 {
+	if st.AllowableDepth == 0 {
 		err = msgp.ErrMaxDepthExceeded{}
 		return
 	}
-	st.Depth--
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0001 int
