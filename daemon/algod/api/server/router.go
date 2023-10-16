@@ -19,6 +19,7 @@ package server
 
 import (
 	"fmt"
+	"golang.org/x/sync/semaphore"
 	"net"
 	"net/http"
 
@@ -122,6 +123,7 @@ func NewRouter(logger logging.Logger, node APINodeInterface, shutdown <-chan str
 		Node:     node,
 		Log:      logger,
 		Shutdown: shutdown,
+		Limiter:  semaphore.NewWeighted(1),
 	}
 	nppublic.RegisterHandlers(e, &v2Handler, publicMiddleware...)
 	npprivate.RegisterHandlers(e, &v2Handler, adminMiddleware...)

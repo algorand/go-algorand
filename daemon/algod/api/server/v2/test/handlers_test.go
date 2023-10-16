@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"golang.org/x/sync/semaphore"
 	"io"
 	"math"
 	"net"
@@ -2390,7 +2391,12 @@ func TestGeneratePartkeys(t *testing.T) {
 	defer releasefunc()
 	dummyShutdownChan := make(chan struct{})
 	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden, false)
-	handler := v2.Handlers{Node: mockNode, Log: logging.Base(), Shutdown: dummyShutdownChan}
+	handler := v2.Handlers{
+		Node:     mockNode,
+		Log:      logging.Base(),
+		Shutdown: dummyShutdownChan,
+		Limiter:  semaphore.NewWeighted(1),
+	}
 	e := echo.New()
 
 	var addr basics.Address
@@ -2411,9 +2417,10 @@ func TestGeneratePartkeys(t *testing.T) {
 		assert.Equal(t, http.StatusOK, rec.Code)
 
 		// Wait for keygen to complete
-		handler.Keygen <- struct{}{}
+		err = handler.Limiter.Acquire(context.Background(), 1)
+		require.NoError(t, err)
 		require.Greater(t, len(mockNode.PartKeyBinary), 0)
-		<-handler.Keygen
+		handler.Limiter.Release(1)
 	}
 
 	{
@@ -2421,8 +2428,9 @@ func TestGeneratePartkeys(t *testing.T) {
 		rec := httptest.NewRecorder()
 		c := e.NewContext(req, rec)
 		// Simulate a blocked keygen process (and block until the previous keygen is complete)
-		handler.Keygen <- struct{}{}
-		err := handler.GenerateParticipationKeys(c, addr.String(), model.GenerateParticipationKeysParams{
+		err := handler.Limiter.Acquire(context.Background(), 1)
+		require.NoError(t, err)
+		err = handler.GenerateParticipationKeys(c, addr.String(), model.GenerateParticipationKeysParams{
 			First: 1000,
 			Last:  2000,
 		})

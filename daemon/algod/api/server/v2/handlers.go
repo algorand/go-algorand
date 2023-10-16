@@ -22,6 +22,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"golang.org/x/sync/semaphore"
 	"io"
 	"math"
 	"net/http"
@@ -76,8 +77,7 @@ type Handlers struct {
 	Node     NodeInterface
 	Log      logging.Logger
 	Shutdown <-chan struct{}
-	// Keygen is used to limit the number of concurrent key generation requests.
-	Keygen chan struct{}
+	Limiter  *semaphore.Weighted
 }
 
 // LedgerForAPI describes the Ledger methods used by the v2 API.
@@ -267,22 +267,13 @@ func (v2 *Handlers) generateKeyHandler(address string, params model.GeneratePart
 // GenerateParticipationKeys generates and installs participation keys to the node.
 // (POST /v2/participation/generate/{address})
 func (v2 *Handlers) GenerateParticipationKeys(ctx echo.Context, address string, params model.GenerateParticipationKeysParams) error {
-	if v2.Keygen == nil {
-		v2.Keygen = make(chan struct{}, 1)
-	}
-
-	select {
-	case v2.Keygen <- struct{}{}:
-		go func() {
-			defer func() {
-				<-v2.Keygen
-			}()
-			err := v2.generateKeyHandler(address, params)
-			if err != nil {
-				v2.Log.Warnf("Error generating participation keys: %v", err)
-			}
-		}()
-	default:
+	if v2.Limiter == nil || v2.Limiter.TryAcquire(1) {
+		defer v2.Limiter.Release(1)
+		err := v2.generateKeyHandler(address, params)
+		if err != nil {
+			v2.Log.Warnf("Error generating participation keys: %v", err)
+		}
+	} else {
 		err := fmt.Errorf("participation key generation already in progress")
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
