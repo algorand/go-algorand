@@ -46,6 +46,16 @@ import (
 //     |-----> (*) MsgIsZero
 //     |-----> DeadlineMaxSize()
 //
+// LateCredentialTrackingEffect
+//               |-----> MarshalMsg
+//               |-----> CanMarshalMsg
+//               |-----> (*) UnmarshalMsg
+//               |-----> (*) UnmarshalMsgWithState
+//               |-----> (*) CanUnmarshalMsg
+//               |-----> Msgsize
+//               |-----> MsgIsZero
+//               |-----> LateCredentialTrackingEffectMaxSize()
+//
 // TimeoutType
 //      |-----> MarshalMsg
 //      |-----> CanMarshalMsg
@@ -1175,6 +1185,66 @@ func (z *Deadline) MsgIsZero() bool {
 // MaxSize returns a maximum valid message size for this message type
 func DeadlineMaxSize() (s int) {
 	s = 1 + 9 + msgp.DurationSize + 5 + msgp.Int8Size
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z LateCredentialTrackingEffect) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	o = msgp.AppendUint8(o, uint8(z))
+	return
+}
+
+func (_ LateCredentialTrackingEffect) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(LateCredentialTrackingEffect)
+	if !ok {
+		_, ok = (z).(*LateCredentialTrackingEffect)
+	}
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *LateCredentialTrackingEffect) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
+	{
+		var zb0001 uint8
+		zb0001, bts, err = msgp.ReadUint8Bytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		(*z) = LateCredentialTrackingEffect(zb0001)
+	}
+	o = bts
+	return
+}
+
+func (z *LateCredentialTrackingEffect) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
+func (_ *LateCredentialTrackingEffect) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*LateCredentialTrackingEffect)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z LateCredentialTrackingEffect) Msgsize() (s int) {
+	s = msgp.Uint8Size
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z LateCredentialTrackingEffect) MsgIsZero() bool {
+	return z == 0
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func LateCredentialTrackingEffectMaxSize() (s int) {
+	s = msgp.Uint8Size
 	return
 }
 

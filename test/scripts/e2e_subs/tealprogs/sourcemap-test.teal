@@ -1,0 +1,12 @@
+#pragma version 9
+#define assertEquals ==; assert
+
+txn ApplicationID; int 0; ==; bz create
+
+int 3; int 4; +;
+int 6; int 1; +;
+assertEquals
+
+create:
+    int 1
+    return
