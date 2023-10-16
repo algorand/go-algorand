@@ -2392,10 +2392,10 @@ func TestGeneratePartkeys(t *testing.T) {
 	dummyShutdownChan := make(chan struct{})
 	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden, false)
 	handler := v2.Handlers{
-		Node:     mockNode,
-		Log:      logging.Base(),
-		Shutdown: dummyShutdownChan,
-		Limiter:  semaphore.NewWeighted(1),
+		Node:          mockNode,
+		Log:           logging.Base(),
+		Shutdown:      dummyShutdownChan,
+		KeygenLimiter: semaphore.NewWeighted(1),
 	}
 	e := echo.New()
 
@@ -2417,10 +2417,10 @@ func TestGeneratePartkeys(t *testing.T) {
 		assert.Equal(t, http.StatusOK, rec.Code)
 
 		// Wait for keygen to complete
-		err = handler.Limiter.Acquire(context.Background(), 1)
+		err = handler.KeygenLimiter.Acquire(context.Background(), 1)
 		require.NoError(t, err)
 		require.Greater(t, len(mockNode.PartKeyBinary), 0)
-		handler.Limiter.Release(1)
+		handler.KeygenLimiter.Release(1)
 	}
 
 	{
@@ -2428,7 +2428,7 @@ func TestGeneratePartkeys(t *testing.T) {
 		rec := httptest.NewRecorder()
 		c := e.NewContext(req, rec)
 		// Simulate a blocked keygen process (and block until the previous keygen is complete)
-		err := handler.Limiter.Acquire(context.Background(), 1)
+		err := handler.KeygenLimiter.Acquire(context.Background(), 1)
 		require.NoError(t, err)
 		err = handler.GenerateParticipationKeys(c, addr.String(), model.GenerateParticipationKeysParams{
 			First: 1000,
