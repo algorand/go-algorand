@@ -5428,7 +5428,7 @@
                 }
               }
             },
-            "description": "The current swagger spec"
+            "description": "An empty JSON object is returned if the generation process was started. Currently no status is available."
           },
           "400": {
             "content": {
@@ -5449,16 +5449,6 @@
               }
             },
             "description": "Invalid API Token"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Participation Key Not Found"
           },
           "500": {
             "content": {
