@@ -40,7 +40,10 @@ func participationKeysPath(dataDir string, address basics.Address, firstValid, l
 // directory is empty, the key will be installed.
 func GenParticipationKeysTo(address string, firstValid, lastValid, keyDilution uint64, outDir string, installFunc func(keyPath string) error) (part account.Participation, filePath string, err error) {
 
-	install := outDir == "" && installFunc != nil
+	install := outDir == ""
+	if install && installFunc == nil {
+		return account.Participation{}, "", fmt.Errorf("must provide an install function when installing keys")
+	}
 
 	// Parse the address
 	parsedAddr, err := basics.UnmarshalChecksumAddress(address)

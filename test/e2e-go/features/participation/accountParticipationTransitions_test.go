@@ -21,6 +21,7 @@ package participation
 // deterministic.
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 	"testing"
@@ -41,8 +42,7 @@ import (
 func installParticipationKey(t *testing.T, client libgoal.Client, addr string, firstValid, lastValid uint64) (resp model.PostParticipationResponse, part account.Participation, err error) {
 	// Install overlapping participation keys...
 	installFunc := func(keyPath string) error {
-		_, err := client.AddParticipationKey(keyPath)
-		return err
+		return errors.New("the install directory is provided, so keys should not be installed")
 	}
 	part, filePath, err := participation.GenParticipationKeysTo(addr, firstValid, lastValid, 100, t.TempDir(), installFunc)
 	require.NoError(t, err)

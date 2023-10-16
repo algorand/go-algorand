@@ -17,6 +17,7 @@
 package transactions
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 	"testing"
@@ -173,8 +174,7 @@ func TestCloseOnError(t *testing.T) {
 
 	var partkeyFile string
 	installFunc := func(keyPath string) error {
-		_, err := client.AddParticipationKey(keyPath)
-		return err
+		return errors.New("the install directory is provided, so keys should not be installed")
 	}
 	_, partkeyFile, err = participation.GenParticipationKeysTo(initiallyOffline, 0, curRound+1000, 0, t.TempDir(), installFunc)
 	a.NoError(err)

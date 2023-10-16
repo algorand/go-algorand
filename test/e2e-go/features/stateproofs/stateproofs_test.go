@@ -18,6 +18,7 @@ package stateproofs
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -679,8 +680,7 @@ func installParticipationKey(t *testing.T, client libgoal.Client, addr string, f
 
 	// Install overlapping participation keys...
 	installFunc := func(keyPath string) error {
-		_, err := client.AddParticipationKey(keyPath)
-		return err
+		return errors.New("the install directory is provided, so keys should not be installed")
 	}
 	part, filePath, err := participation.GenParticipationKeysTo(addr, firstValid, lastValid, 100, dir, installFunc)
 	require.NoError(t, err)
