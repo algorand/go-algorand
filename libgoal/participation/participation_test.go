@@ -105,6 +105,9 @@ func TestGenParticipationKeysTo_DefaultKeyDilution(t *testing.T) {
 }
 
 func TestBadInput(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	_, _, err := GenParticipationKeysTo("", 0, 0, 0, "", nil)
 	require.ErrorContains(t, err, "must provide an install function when installing keys")
 }
