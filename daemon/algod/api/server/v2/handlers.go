@@ -74,9 +74,11 @@ var WaitForBlockTimeout = 1 * time.Minute
 
 // Handlers is an implementation to the V2 route handler interface defined by the generated code.
 type Handlers struct {
-	Node          NodeInterface
-	Log           logging.Logger
-	Shutdown      <-chan struct{}
+	Node     NodeInterface
+	Log      logging.Logger
+	Shutdown <-chan struct{}
+
+	// KeygenLimiter is used to limit the number of concurrent key generation requests.
 	KeygenLimiter *semaphore.Weighted
 }
 
@@ -267,18 +269,21 @@ func (v2 *Handlers) generateKeyHandler(address string, params model.GeneratePart
 // GenerateParticipationKeys generates and installs participation keys to the node.
 // (POST /v2/participation/generate/{address})
 func (v2 *Handlers) GenerateParticipationKeys(ctx echo.Context, address string, params model.GenerateParticipationKeysParams) error {
-	if v2.KeygenLimiter != nil && v2.KeygenLimiter.TryAcquire(1) {
-		go func() {
-			defer v2.KeygenLimiter.Release(1)
-			err := v2.generateKeyHandler(address, params)
-			if err != nil {
-				v2.Log.Warnf("Error generating participation keys: %v", err)
-			}
-		}()
-	} else {
+	if !v2.KeygenLimiter.TryAcquire(1) {
 		err := fmt.Errorf("participation key generation already in progress")
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
+
+	// Semaphore was acquired, generate the key.
+	go func() {
+		defer v2.KeygenLimiter.Release(1)
+		err := v2.generateKeyHandler(address, params)
+		if err != nil {
+			v2.Log.Warnf("Error generating participation keys: %v", err)
+		}
+	}()
+
+	// Empty object. In the future we may want to add a field for the participation ID.
 	return ctx.String(http.StatusOK, "{}")
 }
 
