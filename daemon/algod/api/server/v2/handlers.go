@@ -22,9 +22,11 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"golang.org/x/sync/semaphore"
 	"io"
 	"math"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -48,6 +50,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/eval"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/simulation"
+	"github.com/algorand/go-algorand/libgoal/participation"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/protocol"
@@ -71,9 +74,10 @@ var WaitForBlockTimeout = 1 * time.Minute
 
 // Handlers is an implementation to the V2 route handler interface defined by the generated code.
 type Handlers struct {
-	Node     NodeInterface
-	Log      logging.Logger
-	Shutdown <-chan struct{}
+	Node          NodeInterface
+	Log           logging.Logger
+	Shutdown      <-chan struct{}
+	KeygenLimiter *semaphore.Weighted
 }
 
 // LedgerForAPI describes the Ledger methods used by the v2 API.
@@ -238,6 +242,44 @@ func (v2 *Handlers) GetParticipationKeys(ctx echo.Context) error {
 	}
 
 	return ctx.JSON(http.StatusOK, response)
+}
+
+func (v2 *Handlers) generateKeyHandler(address string, params model.GenerateParticipationKeysParams) error {
+	installFunc := func(path string) error {
+		bytes, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		partKeyBinary := bytes
+
+		if len(partKeyBinary) == 0 {
+			return fmt.Errorf("cannot install partkey '%s' is empty", partKeyBinary)
+		}
+
+		partID, err := v2.Node.InstallParticipationKey(partKeyBinary)
+		v2.Log.Infof("Installed participation key %s", partID)
+		return err
+	}
+	_, _, err := participation.GenParticipationKeysTo(address, params.First, params.Last, nilToZero(params.Dilution), "", installFunc)
+	return err
+}
+
+// GenerateParticipationKeys generates and installs participation keys to the node.
+// (POST /v2/participation/generate/{address})
+func (v2 *Handlers) GenerateParticipationKeys(ctx echo.Context, address string, params model.GenerateParticipationKeysParams) error {
+	if v2.KeygenLimiter != nil && v2.KeygenLimiter.TryAcquire(1) {
+		go func() {
+			defer v2.KeygenLimiter.Release(1)
+			err := v2.generateKeyHandler(address, params)
+			if err != nil {
+				v2.Log.Warnf("Error generating participation keys: %v", err)
+			}
+		}()
+	} else {
+		err := fmt.Errorf("participation key generation already in progress")
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
+	return ctx.String(http.StatusOK, "{}")
 }
 
 // AddParticipationKey Add a participation key to the node
