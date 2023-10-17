@@ -395,6 +395,8 @@ func TestWrongProtoVersion(t *testing.T) {
 	}
 }
 
+// TestBlankStackSufficient will fail if an opcode is added with more than the
+// current max number of opcodes. Update `blankStack` to be longer.
 func TestBlankStackSufficient(t *testing.T) {
 	partitiontest.PartitionTest(t)
 

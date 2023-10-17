@@ -117,9 +117,9 @@ func TestVrfVerify(t *testing.T) {
 	testApp(t, notrack("byte 0x1122; byte 0x2233; int 3; vrf_verify VrfAlgorand"), ep, "arg 2 wanted")
 
 	ep = defaultSigParams()
-	testLogic(t, "byte 0x1122; byte 0x2233; byte 0x3344; vrf_verify VrfAlgorand", LogicVersion, ep, "vrf proof wrong size")
+	testLogic(t, notrack("byte 0x1122; byte 0x2233; byte 0x3344; vrf_verify VrfAlgorand"), LogicVersion, ep, "vrf proof wrong size")
 	// 80 byte proof
-	testLogic(t, "byte 0x1122; int 80; bzero; byte 0x3344; vrf_verify VrfAlgorand", LogicVersion, ep, "vrf pubkey wrong size")
+	testLogic(t, notrack("byte 0x1122; int 80; bzero; byte 0x3344; vrf_verify VrfAlgorand"), LogicVersion, ep, "vrf pubkey wrong size")
 	// 32 byte pubkey
 	testLogic(t, "byte 0x3344; int 80; bzero; int 32; bzero; vrf_verify VrfAlgorand", LogicVersion, ep, "stack len is 2")
 

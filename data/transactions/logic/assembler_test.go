@@ -518,7 +518,7 @@ func TestAssemble(t *testing.T) {
 			// this month that we did last month.
 			bytecode, ok := compiled[v]
 			require.True(t, ok, "Need v%d bytecode", v)
-			expectedBytes, _ := hex.DecodeString(bytecode)
+			expectedBytes, _ := hex.DecodeString(strings.ReplaceAll(bytecode, " ", ""))
 			require.NotEmpty(t, expectedBytes)
 			// the hex is for convenience if the program has been changed. the
 			// hex string can be copy pasted back in as a new expected result.
