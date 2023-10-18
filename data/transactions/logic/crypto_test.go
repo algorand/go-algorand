@@ -117,9 +117,9 @@ func TestVrfVerify(t *testing.T) {
 	testApp(t, notrack("byte 0x1122; byte 0x2233; int 3; vrf_verify VrfAlgorand"), ep, "arg 2 wanted")
 
 	ep = defaultSigParams()
-	testLogic(t, "byte 0x1122; byte 0x2233; byte 0x3344; vrf_verify VrfAlgorand", LogicVersion, ep, "vrf proof wrong size")
+	testLogic(t, notrack("byte 0x1122; byte 0x2233; byte 0x3344; vrf_verify VrfAlgorand"), LogicVersion, ep, "vrf proof wrong size")
 	// 80 byte proof
-	testLogic(t, "byte 0x1122; int 80; bzero; byte 0x3344; vrf_verify VrfAlgorand", LogicVersion, ep, "vrf pubkey wrong size")
+	testLogic(t, notrack("byte 0x1122; int 80; bzero; byte 0x3344; vrf_verify VrfAlgorand"), LogicVersion, ep, "vrf pubkey wrong size")
 	// 32 byte pubkey
 	testLogic(t, "byte 0x3344; int 80; bzero; int 32; bzero; vrf_verify VrfAlgorand", LogicVersion, ep, "stack len is 2")
 
@@ -194,33 +194,32 @@ func TestEd25519verify(t *testing.T) {
 	msg := "62fdfc072182654f163f5f0f9a621d729566c74d0aa413bf009c9800418c19cd"
 	data, err := hex.DecodeString(msg)
 	require.NoError(t, err)
-	pk := basics.Address(c.SignatureVerifier)
-	pkStr := pk.String()
 
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops := testProg(t, fmt.Sprintf(`arg 0
-arg 1
-addr %s
-ed25519verify`, pkStr), v)
+			ops := testProg(t, fmt.Sprintf("arg 0; arg 1; arg 2; ed25519verify"), v)
 			sig := c.Sign(Msg{
 				ProgramHash: crypto.HashObj(Program(ops.Program)),
 				Data:        data[:],
 			})
 			var txn transactions.SignedTxn
 			txn.Lsig.Logic = ops.Program
-			txn.Lsig.Args = [][]byte{data[:], sig[:]}
+			txn.Lsig.Args = [][]byte{data[:], sig[:], c.SignatureVerifier[:]}
 			testLogicBytes(t, ops.Program, defaultSigParams(txn))
 
 			// short sig will fail
-			txn.Lsig.Args[1] = sig[1:]
+			txn.Lsig.Args = [][]byte{data[:], sig[1:], c.SignatureVerifier[:]}
 			testLogicBytes(t, ops.Program, defaultSigParams(txn), "invalid signature")
 
+			// short pk will fail
+			txn.Lsig.Args = [][]byte{data[:], sig[:], c.SignatureVerifier[1:]}
+			testLogicBytes(t, ops.Program, defaultSigParams(txn), "invalid public key")
+
 			// flip a bit and it should not pass
-			msg1 := "52fdfc072182654f163f5f0f9a621d729566c74d0aa413bf009c9800418c19cd"
+			msg1 := "5" + msg[1:]
 			data1, err := hex.DecodeString(msg1)
 			require.NoError(t, err)
-			txn.Lsig.Args = [][]byte{data1, sig[:]}
+			txn.Lsig.Args = [][]byte{data1, sig[:], c.SignatureVerifier[:]}
 			testLogicBytes(t, ops.Program, defaultSigParams(txn), "REJECT")
 		})
 	}
@@ -236,31 +235,30 @@ func TestEd25519VerifyBare(t *testing.T) {
 	msg := "62fdfc072182654f163f5f0f9a621d729566c74d0aa413bf009c9800418c19cd"
 	data, err := hex.DecodeString(msg)
 	require.NoError(t, err)
-	pk := basics.Address(c.SignatureVerifier)
-	pkStr := pk.String()
 
 	for v := uint64(7); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops := testProg(t, fmt.Sprintf(`arg 0
-arg 1
-addr %s
-ed25519verify_bare`, pkStr), v)
+			ops := testProg(t, "arg 0; arg 1; arg 2; ed25519verify_bare", v)
 			require.NoError(t, err)
 			sig := c.SignBytes(data)
 			var txn transactions.SignedTxn
 			txn.Lsig.Logic = ops.Program
-			txn.Lsig.Args = [][]byte{data[:], sig[:]}
+			txn.Lsig.Args = [][]byte{data[:], sig[:], c.SignatureVerifier[:]}
 			testLogicBytes(t, ops.Program, defaultSigParams(txn))
 
 			// short sig will fail
-			txn.Lsig.Args[1] = sig[1:]
+			txn.Lsig.Args = [][]byte{data[:], sig[1:], c.SignatureVerifier[:]}
 			testLogicBytes(t, ops.Program, defaultSigParams(txn), "invalid signature")
 
+			// short pk will fail
+			txn.Lsig.Args = [][]byte{data[:], sig[:], c.SignatureVerifier[1:]}
+			testLogicBytes(t, ops.Program, defaultSigParams(txn), "invalid public key")
+
 			// flip a bit and it should not pass
-			msg1 := "52fdfc072182654f163f5f0f9a621d729566c74d0aa413bf009c9800418c19cd"
+			msg1 := "5" + msg[1:]
 			data1, err := hex.DecodeString(msg1)
 			require.NoError(t, err)
-			txn.Lsig.Args = [][]byte{data1, sig[:]}
+			txn.Lsig.Args = [][]byte{data1, sig[:], c.SignatureVerifier[:]}
 			testLogicBytes(t, ops.Program, defaultSigParams(txn), "REJECT")
 		})
 	}
@@ -360,15 +358,7 @@ byte 0x%s
 	}
 
 	// ecdsa verify tests
-	source = `
-byte "%s"
-sha512_256
-byte 0x%s
-byte 0x%s
-byte 0x%s
-byte 0x%s
-ecdsa_verify Secp256k1
-`
+	source = `byte "%s"; sha512_256; byte 0x%s; byte 0x%s; byte 0x%s; byte 0x%s; ecdsa_verify Secp256k1`
 	data := []byte("testdata")
 	msg := sha512.Sum512_256(data)
 
@@ -403,6 +393,9 @@ ecdsa_verify Secp256k1
 		})
 	}
 
+	// coverage for pk length check
+	testPanics(t, `int 31; bzero; byte 0x; byte 0x; byte 0x; byte 0x; ecdsa_verify Secp256k1`, 5, "must be 32")
+
 	// ecdsa recover tests
 	source = `
 byte 0x%s
@@ -434,7 +427,10 @@ load 1
 		{v, testAccepts},
 		{v ^ 1, testRejects},
 		{3, func(t *testing.T, program string, introduced uint64) {
-			testPanics(t, program, introduced)
+			testPanics(t, program, introduced, "recover failed")
+		}},
+		{4, func(t *testing.T, program string, introduced uint64) {
+			testPanics(t, program, introduced, "invalid recovery id")
 		}},
 	}
 	pkExpanded := secp256k1.S256().Marshal(key.PublicKey.X, key.PublicKey.Y)

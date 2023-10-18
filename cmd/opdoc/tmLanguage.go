@@ -205,7 +205,7 @@ func buildSyntaxHighlight(version uint64) *tmLanguage {
 		// and only add to keyword.Patterns later, when all
 		// have been collected.
 		case "Arithmetic", "Byte Array Manipulation", "Byte Array Arithmetic",
-			"Byte Array Logic", "Inner Transactions":
+			"Byte Array Logic", "Cryptography", "Inner Transactions":
 			escape := map[rune]bool{
 				'*': true,
 				'+': true,

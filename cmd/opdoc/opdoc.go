@@ -466,7 +466,7 @@ func main() {
 			AVMType:      t.AVMType.String(),
 		})
 	}
-	sort.Slice(named, func(i, j int) bool { return named[i].Name > named[j].Name })
+	sort.Slice(named, func(i, j int) bool { return named[i].Name < named[j].Name })
 
 	constants := create("named_integer_constants.md")
 	integerConstantsTableMarkdown(constants)
