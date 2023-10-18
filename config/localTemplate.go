@@ -128,8 +128,8 @@ type Local struct {
 	// If not specified, the node will use the ColdDataDir.
 	LogArchiveDir string `version[31]:""`
 
-	// IncomingConnectionsLimit specifies the max number of long-lived incoming
-	// connections. 0 means no connections allowed. Must be non-negative.
+	// IncomingConnectionsLimit specifies the max number of incoming connections
+	// for the port configured in NetAddress. 0 means no connections allowed. Must be non-negative.
 	// Estimating 1.5MB per incoming connection, 1.5MB*2400 = 3.6GB
 	IncomingConnectionsLimit int `version[0]:"-1" version[1]:"10000" version[17]:"800" version[27]:"2400"`
 
