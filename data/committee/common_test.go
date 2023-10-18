@@ -89,7 +89,7 @@ func testingenvMoreKeys(t testing.TB, numAccounts, numTxs int, keyBatchesForward
 	}
 
 	var seed Seed
-	rand.Read(seed[:])
+	gen.Read(seed[:])
 
 	tx := make([]transactions.SignedTxn, TXs)
 	for i := 0; i < TXs; i++ {
@@ -115,7 +115,7 @@ func testingenvMoreKeys(t testing.TB, numAccounts, numTxs int, keyBatchesForward
 				Amount:   amt,
 			},
 		}
-		rand.Read(t.Note)
+		gen.Read(t.Note)
 		tx[i] = t.Sign(secrets[send])
 	}
 
