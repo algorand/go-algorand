@@ -3176,7 +3176,6 @@ func TestReturnTypes(t *testing.T) {
 					}
 				}
 				sb.WriteString(cmd + "\n")
-				fmt.Printf("%s\n", cmd)
 				ops := testProg(t, sb.String(), AssemblerMaxVersion)
 
 				tx0 := makeSampleTxn()

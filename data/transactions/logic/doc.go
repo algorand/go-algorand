@@ -343,8 +343,8 @@ func OpDocExtra(opName string) string {
 // here is the order args opcodes are presented, so place related
 // opcodes consecutively, even if their opcode values are not.
 var OpGroups = map[string][]string{
-	"Arithmetic":              {"+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "shl", "shr", "sqrt", "bitlen", "exp", "==", "!=", "!", "len", "itob", "btoi", "%", "|", "&", "^", "~", "mulw", "addw", "divw", "divmodw", "expw", "getbit", "setbit", "getbyte", "setbyte", "concat"},
-	"Byte Array Manipulation": {"substring", "substring3", "extract", "extract3", "extract_uint16", "extract_uint32", "extract_uint64", "replace2", "replace3", "base64_decode", "json_ref"},
+	"Arithmetic":              {"+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "shl", "shr", "sqrt", "bitlen", "exp", "==", "!=", "!", "itob", "btoi", "%", "|", "&", "^", "~", "mulw", "addw", "divw", "divmodw", "expw"},
+	"Byte Array Manipulation": {"getbit", "setbit", "getbyte", "setbyte", "concat", "len", "substring", "substring3", "extract", "extract3", "extract_uint16", "extract_uint32", "extract_uint64", "replace2", "replace3", "base64_decode", "json_ref"},
 	"Byte Array Arithmetic":   {"b+", "b-", "b/", "b*", "b<", "b>", "b<=", "b>=", "b==", "b!=", "b%", "bsqrt"},
 	"Byte Array Logic":        {"b|", "b&", "b^", "b~"},
 	"Cryptography":            {"sha256", "keccak256", "sha512_256", "sha3_256", "ed25519verify", "ed25519verify_bare", "ecdsa_verify", "ecdsa_pk_recover", "ecdsa_pk_decompress", "vrf_verify", "ec_add", "ec_scalar_mul", "ec_pairing_check", "ec_multi_scalar_mul", "ec_subgroup_check", "ec_map_to"},

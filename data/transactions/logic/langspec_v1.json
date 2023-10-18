@@ -453,7 +453,7 @@
       "Doc": "yields length of byte value A",
       "IntroducedVersion": 1,
       "Groups": [
-        "Arithmetic"
+        "Byte Array Manipulation"
       ]
     },
     {

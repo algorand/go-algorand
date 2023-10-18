@@ -453,7 +453,7 @@
       "Doc": "yields length of byte value A",
       "IntroducedVersion": 1,
       "Groups": [
-        "Arithmetic"
+        "Byte Array Manipulation"
       ]
     },
     {
@@ -1440,7 +1440,7 @@
       "DocExtra": "`concat` fails if the result would be greater than 4096 bytes.",
       "IntroducedVersion": 2,
       "Groups": [
-        "Arithmetic"
+        "Byte Array Manipulation"
       ]
     },
     {
