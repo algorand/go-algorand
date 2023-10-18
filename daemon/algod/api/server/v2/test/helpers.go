@@ -99,9 +99,11 @@ type mockNode struct {
 	status          node.StatusReport
 	devmode         bool
 	timestampOffset *int64
+	PartKeyBinary   []byte
 }
 
 func (m *mockNode) InstallParticipationKey(partKeyBinary []byte) (account.ParticipationID, error) {
+	m.PartKeyBinary = partKeyBinary
 	return account.ParticipationID{}, nil
 }
 
