@@ -1325,8 +1325,6 @@ func (eval *BlockEvaluator) endOfBlock() error {
 		} else {
 			if eval.block.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight != expectedVotersWeight {
 				actualVotersWeight := eval.block.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight
-
-				logging.Base().With("WEIGHTMISMATCH", "true").Warnf("StateProofOnlineTotalWeight wrong: %v != %v for round %v", actualVotersWeight, expectedVotersWeight, eval.block.Round())
 				var highWeight, lowWeight basics.MicroAlgos
 				if expectedVotersWeight.LessThan(actualVotersWeight) {
 					highWeight = actualVotersWeight
