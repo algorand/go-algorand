@@ -51,20 +51,14 @@ echo "wat" | gpg -u rpm@algorand.com --clearsign
 
 cat << EOF > .rpmmacros
 %_gpg_name Algorand RPM <rpm@algorand.com>
-%__gpg /root/gnupg2/bin/gpg
+%__gpg /usr/bin/gpg2
 %__gpg_check_password_cmd true
-EOF
-
-cat << EOF > rpmsign.py
-import rpm
-import sys
-rpm.addSign(sys.argv[1], '')
 EOF
 
 mkdir rpmrepo
 for rpm in $(ls *"$VERSION"*.rpm)
 do
-    python3 rpmsign.py "$rpm"
+    rpmsign --addsign "$rpm"
     cp -p "$rpm" rpmrepo
 done
 
