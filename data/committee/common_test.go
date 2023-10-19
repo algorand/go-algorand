@@ -47,6 +47,11 @@ func signTx(s *crypto.SignatureSecrets, t transactions.Transaction) transactions
 	return t.Sign(s)
 }
 
+// testingenv creates a random set of participating accounts and random transactions between them, and
+// the associated selection parameters for use testing committee membership and credential validation.
+// seedGen is provided as an external source of randomness for the selection seed and transaction notes;
+// if the caller persists seedGen between calls to testingenv, each iteration that calls testingenv will
+// exercise a new selection seed.
 func testingenv(t testing.TB, numAccounts, numTxs int, seedGen io.Reader) (selectionParameterFn, selectionParameterListFn, basics.Round, []basics.Address, []*crypto.SignatureSecrets, []*crypto.VrfPrivkey, []*crypto.OneTimeSignatureSecrets, []transactions.SignedTxn) {
 	return testingenvMoreKeys(t, numAccounts, numTxs, uint(5), seedGen)
 }
