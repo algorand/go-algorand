@@ -240,6 +240,17 @@ func (bt *producePrepareBlockingTracker) reset() {
 	bt.cancelTasks = false
 }
 
+type commitRoundStallingTracker struct {
+	emptyTracker
+	commitRoundLock chan struct{}
+}
+
+// commitRound is not used by the blockingTracker
+func (st *commitRoundStallingTracker) commitRound(context.Context, trackerdb.TransactionScope, *deferredCommitContext) error {
+	<-st.commitRoundLock
+	return nil
+}
+
 // TestTrackers_DbRoundDataRace checks for dbRound data race
 // when commit scheduling relies on dbRound from the tracker registry but tracker's deltas
 // are used in calculations
@@ -383,7 +394,62 @@ func TestTrackers_CommitRoundIOError(t *testing.T) {
 	a.True(flag.Load())
 }
 
-func TestAccountUpdatesLedgerEvaluatorNoBlockHdr(t *testing.T) {
+// TestTrackers_BusyCommitting ensures trackerRegistry.busy() is set when commitRound is in progress
+func TestTrackers_BusyCommitting(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	genesisInitState, _ := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 1)
+	const inMem = true
+	log := logging.TestingLog(t)
+	log.SetLevel(logging.Warn)
+	cfg := config.GetDefaultLocal()
+	ledger, err := OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)
+	a.NoError(err)
+	defer ledger.Close()
+
+	// quit the commitSyncer goroutine
+	ledger.trackers.ctxCancel()
+	ledger.trackers.ctxCancel = nil
+	<-ledger.trackers.commitSyncerClosed
+	ledger.trackers.commitSyncerClosed = nil
+
+	tracker := &commitRoundStallingTracker{
+		commitRoundLock: make(chan struct{}),
+	}
+	ledger.trackerMu.Lock()
+	ledger.trackers.mu.Lock()
+	ledger.trackers.trackers = append([]ledgerTracker{tracker}, ledger.trackers.trackers...)
+	ledger.trackers.lastFlushTime = time.Time{}
+	ledger.trackers.mu.Unlock()
+	ledger.trackerMu.Unlock()
+
+	// add some blocks
+	blk := genesisInitState.Block
+	for i := basics.Round(0); i < basics.Round(cfg.MaxAcctLookback)+1; i++ {
+		blk.BlockHeader.Round++
+		blk.BlockHeader.TimeStamp += 1
+		ledger.trackers.newBlock(blk, ledgercore.StateDelta{})
+	}
+
+	// manually trigger a commit
+	ledger.trackers.committedUpTo(blk.BlockHeader.Round)
+	dcc := <-ledger.trackers.deferredCommits
+	go func() {
+		err = ledger.trackers.commitRound(dcc)
+		a.NoError(err)
+	}()
+
+	// commitRoundStallingTracker blocks commitRound in the goroutine above, wait few secs to ensure the trackerRegistry has set busy()
+	a.Eventually(func() bool {
+		return ledger.trackers.busy()
+	}, 3*time.Second, 50*time.Millisecond)
+	close(tracker.commitRoundLock)
+	ledger.trackers.waitAccountsWriting()
+	a.False(ledger.trackers.busy())
+}
+
+func TestTrackers_AccountUpdatesLedgerEvaluatorNoBlockHdr(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	aul := &accountUpdatesLedgerEvaluator{
