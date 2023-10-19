@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"reflect"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/algorand/go-algorand/config"
@@ -175,6 +176,8 @@ type trackerRegistry struct {
 
 	// accountsWriting provides synchronization around the background writing of account balances.
 	accountsWriting sync.WaitGroup
+	// accountsCommitting is set when trackers registry writing accounts into DB.
+	accountsCommitting atomic.Bool
 
 	// dbRound is always exactly accountsRound(),
 	// cached to avoid SQL queries.
@@ -456,6 +459,11 @@ func (tr *trackerRegistry) waitAccountsWriting() {
 	tr.accountsWriting.Wait()
 }
 
+// busy returns true if the trackerRegistry is actively writing accounts into DB.
+func (tr *trackerRegistry) busy() bool {
+	return tr.accountsCommitting.Load()
+}
+
 func (tr *trackerRegistry) close() {
 	if tr.ctxCancel != nil {
 		tr.ctxCancel()
@@ -562,6 +570,11 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) error {
 	start := time.Now()
 	ledgerCommitroundCount.Inc(nil)
 	err = tr.dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
+		tr.accountsCommitting.Store(true)
+		defer func() {
+			tr.accountsCommitting.Store(false)
+		}()
+
 		aw, err := tx.MakeAccountsWriter()
 		if err != nil {
 			return err

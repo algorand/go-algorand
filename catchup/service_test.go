@@ -830,6 +830,10 @@ func (m *mockedLedger) IsWritingCatchpointDataFile() bool {
 	return false
 }
 
+func (m *mockedLedger) Available() bool {
+	return true
+}
+
 func testingenvWithUpgrade(
 	t testing.TB,
 	numBlocks,
