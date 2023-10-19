@@ -320,7 +320,7 @@ an opcode manipulates the stack in such a way that a value changes
 position but is otherwise unchanged, the name of the output on the
 return stack matches the name of the input value.
 
-### Arithmetic, Logic, and Cryptographic Operations
+### Arithmetic and Logic Operations
 
 @@ Arithmetic.md @@
 
@@ -349,6 +349,10 @@ length as the longer input.  Therefore, unlike array arithmetic,
 these results may contain leading zero bytes.
 
 @@ Byte_Array_Logic.md @@
+
+### Cryptographic Operations
+
+@@ Cryptography.md @@
 
 ### Loading Values
 
