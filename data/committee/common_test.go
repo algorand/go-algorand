@@ -47,11 +47,11 @@ func signTx(s *crypto.SignatureSecrets, t transactions.Transaction) transactions
 	return t.Sign(s)
 }
 
-func testingenv(t testing.TB, numAccounts, numTxs int) (selectionParameterFn, selectionParameterListFn, basics.Round, []basics.Address, []*crypto.SignatureSecrets, []*crypto.VrfPrivkey, []*crypto.OneTimeSignatureSecrets, []transactions.SignedTxn) {
-	return testingenvMoreKeys(t, numAccounts, numTxs, uint(5))
+func testingenv(t testing.TB, numAccounts, numTxs int, seedGen io.Reader) (selectionParameterFn, selectionParameterListFn, basics.Round, []basics.Address, []*crypto.SignatureSecrets, []*crypto.VrfPrivkey, []*crypto.OneTimeSignatureSecrets, []transactions.SignedTxn) {
+	return testingenvMoreKeys(t, numAccounts, numTxs, uint(5), seedGen)
 }
 
-func testingenvMoreKeys(t testing.TB, numAccounts, numTxs int, keyBatchesForward uint) (selectionParameterFn, selectionParameterListFn, basics.Round, []basics.Address, []*crypto.SignatureSecrets, []*crypto.VrfPrivkey, []*crypto.OneTimeSignatureSecrets, []transactions.SignedTxn) {
+func testingenvMoreKeys(t testing.TB, numAccounts, numTxs int, keyBatchesForward uint, seedGen io.Reader) (selectionParameterFn, selectionParameterListFn, basics.Round, []basics.Address, []*crypto.SignatureSecrets, []*crypto.VrfPrivkey, []*crypto.OneTimeSignatureSecrets, []transactions.SignedTxn) {
 	P := numAccounts          // n accounts
 	TXs := numTxs             // n txns
 	maxMoneyAtStart := 100000 // max money start
@@ -89,7 +89,7 @@ func testingenvMoreKeys(t testing.TB, numAccounts, numTxs int, keyBatchesForward
 	}
 
 	var seed Seed
-	gen.Read(seed[:])
+	seedGen.Read(seed[:])
 
 	tx := make([]transactions.SignedTxn, TXs)
 	for i := 0; i < TXs; i++ {
@@ -115,7 +115,7 @@ func testingenvMoreKeys(t testing.TB, numAccounts, numTxs int, keyBatchesForward
 				Amount:   amt,
 			},
 		}
-		gen.Read(t.Note)
+		seedGen.Read(t.Note) // to match output from previous versions, which shared global RNG for seed & note
 		tx[i] = t.Sign(secrets[send])
 	}
 
