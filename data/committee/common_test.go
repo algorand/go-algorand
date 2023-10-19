@@ -57,6 +57,9 @@ func testingenv(t testing.TB, numAccounts, numTxs int, seedGen io.Reader) (selec
 }
 
 func testingenvMoreKeys(t testing.TB, numAccounts, numTxs int, keyBatchesForward uint, seedGen io.Reader) (selectionParameterFn, selectionParameterListFn, basics.Round, []basics.Address, []*crypto.SignatureSecrets, []*crypto.VrfPrivkey, []*crypto.OneTimeSignatureSecrets, []transactions.SignedTxn) {
+	if seedGen == nil {
+		seedGen = rand.New(rand.NewSource(1)) // same source as setting GODEBUG=randautoseed=0, same as pre-Go 1.20 default seed
+	}
 	P := numAccounts          // n accounts
 	TXs := numTxs             // n txns
 	maxMoneyAtStart := 100000 // max money start
