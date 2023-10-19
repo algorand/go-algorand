@@ -150,30 +150,58 @@ func TestTrackerScheduleCommit(t *testing.T) {
 	a.Equal(expectedOffset, dc.offset)
 }
 
-type ioErrorTracker struct {
+type emptyTracker struct {
 }
 
 // loadFromDisk is not implemented in the blockingTracker.
-func (io *ioErrorTracker) loadFromDisk(ledgerForTracker, basics.Round) error {
+func (t *emptyTracker) loadFromDisk(ledgerForTracker, basics.Round) error {
 	return nil
 }
 
 // newBlock is not implemented in the blockingTracker.
-func (io *ioErrorTracker) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
+func (t *emptyTracker) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 }
 
 // committedUpTo in the blockingTracker just stores the committed round.
-func (io *ioErrorTracker) committedUpTo(committedRnd basics.Round) (minRound, lookback basics.Round) {
+func (io *emptyTracker) committedUpTo(committedRnd basics.Round) (minRound, lookback basics.Round) {
 	return 0, basics.Round(0)
 }
 
-func (io *ioErrorTracker) produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcr *deferredCommitRange) *deferredCommitRange {
+func (t *emptyTracker) produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcr *deferredCommitRange) *deferredCommitRange {
 	return dcr
 }
 
 // prepareCommit, is not used by the blockingTracker
-func (io *ioErrorTracker) prepareCommit(*deferredCommitContext) error {
+func (t *emptyTracker) prepareCommit(*deferredCommitContext) error {
 	return nil
+}
+
+// commitRound is not used by the blockingTracker
+func (t *emptyTracker) commitRound(context.Context, trackerdb.TransactionScope, *deferredCommitContext) error {
+	return nil
+}
+
+func (t *emptyTracker) postCommit(ctx context.Context, dcc *deferredCommitContext) {
+}
+
+// postCommitUnlocked implements entry/exit blockers, designed for testing.
+func (t *emptyTracker) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
+}
+
+// control functions are not used by the blockingTracker
+func (t *emptyTracker) handleUnorderedCommit(dcc *deferredCommitContext) {
+}
+func (t *emptyTracker) handlePrepareCommitError(dcc *deferredCommitContext) {
+}
+func (t *emptyTracker) handleCommitError(dcc *deferredCommitContext) {
+}
+
+// close is not used by the blockingTracker
+func (t *emptyTracker) close() {
+}
+
+type ioErrorTracker struct {
+	emptyTracker
 }
 
 // commitRound is not used by the blockingTracker
@@ -181,47 +209,12 @@ func (io *ioErrorTracker) commitRound(context.Context, trackerdb.TransactionScop
 	return sqlite3.Error{Code: sqlite3.ErrIoErr}
 }
 
-func (io *ioErrorTracker) postCommit(ctx context.Context, dcc *deferredCommitContext) {
-}
-
-// postCommitUnlocked implements entry/exit blockers, designed for testing.
-func (io *ioErrorTracker) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
-}
-
-// control functions are not used by the blockingTracker
-func (io *ioErrorTracker) handleUnorderedCommit(dcc *deferredCommitContext) {
-}
-func (io *ioErrorTracker) handlePrepareCommitError(dcc *deferredCommitContext) {
-}
-func (io *ioErrorTracker) handleCommitError(dcc *deferredCommitContext) {
-}
-
-// close is not used by the blockingTracker
-func (io *ioErrorTracker) close() {
-}
-
-func (io *ioErrorTracker) reset() {
-}
-
 type producePrepareBlockingTracker struct {
+	emptyTracker
 	produceReleaseLock       chan struct{}
 	prepareCommitEntryLock   chan struct{}
 	prepareCommitReleaseLock chan struct{}
 	cancelTasks              bool
-}
-
-// loadFromDisk is not implemented in the blockingTracker.
-func (bt *producePrepareBlockingTracker) loadFromDisk(ledgerForTracker, basics.Round) error {
-	return nil
-}
-
-// newBlock is not implemented in the blockingTracker.
-func (bt *producePrepareBlockingTracker) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
-}
-
-// committedUpTo in the blockingTracker just stores the committed round.
-func (bt *producePrepareBlockingTracker) committedUpTo(committedRnd basics.Round) (minRound, lookback basics.Round) {
-	return 0, basics.Round(0)
 }
 
 func (bt *producePrepareBlockingTracker) produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcr *deferredCommitRange) *deferredCommitRange {
@@ -240,30 +233,6 @@ func (bt *producePrepareBlockingTracker) prepareCommit(*deferredCommitContext) e
 	return nil
 }
 
-// commitRound is not used by the blockingTracker
-func (bt *producePrepareBlockingTracker) commitRound(context.Context, trackerdb.TransactionScope, *deferredCommitContext) error {
-	return nil
-}
-
-func (bt *producePrepareBlockingTracker) postCommit(ctx context.Context, dcc *deferredCommitContext) {
-}
-
-// postCommitUnlocked implements entry/exit blockers, designed for testing.
-func (bt *producePrepareBlockingTracker) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
-}
-
-// control functions are not used by the blockingTracker
-func (bt *producePrepareBlockingTracker) handleUnorderedCommit(dcc *deferredCommitContext) {
-}
-func (bt *producePrepareBlockingTracker) handlePrepareCommitError(dcc *deferredCommitContext) {
-}
-func (bt *producePrepareBlockingTracker) handleCommitError(dcc *deferredCommitContext) {
-}
-
-// close is not used by the blockingTracker
-func (bt *producePrepareBlockingTracker) close() {
-}
-
 func (bt *producePrepareBlockingTracker) reset() {
 	bt.prepareCommitEntryLock = make(chan struct{})
 	bt.prepareCommitReleaseLock = make(chan struct{})
@@ -271,7 +240,7 @@ func (bt *producePrepareBlockingTracker) reset() {
 	bt.cancelTasks = false
 }
 
-// TestTrackerDbRoundDataRace checks for dbRound data race
+// TestTrackers_DbRoundDataRace checks for dbRound data race
 // when commit scheduling relies on dbRound from the tracker registry but tracker's deltas
 // are used in calculations
 // 1. Add say 128 + MaxAcctLookback (MaxLookback) blocks and commit
@@ -280,7 +249,7 @@ func (bt *producePrepareBlockingTracker) reset() {
 // 4. Set a block in produceCommittingTask, add a new block and resume the commit
 // 5. Resume produceCommittingTask
 // 6. The data race and panic happens in block queue syncher thread
-func TestTrackerDbRoundDataRace(t *testing.T) {
+func TestTrackers_DbRoundDataRace(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	t.Skip("For manual run when touching ledger locking")
@@ -367,7 +336,7 @@ func TestTrackerDbRoundDataRace(t *testing.T) {
 	close(stallingTracker.produceReleaseLock)
 }
 
-func TestCommitRoundIOError(t *testing.T) {
+func TestTrackers_CommitRoundIOError(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	a := require.New(t)
