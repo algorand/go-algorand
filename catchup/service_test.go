@@ -834,6 +834,14 @@ func (m *mockedLedger) Available() bool {
 	return true
 }
 
+type mockedUnavalLedger struct {
+	mockedLedger
+}
+
+func (m *mockedUnavalLedger) Available() bool {
+	return false
+}
+
 func testingenvWithUpgrade(
 	t testing.TB,
 	numBlocks,
@@ -1130,4 +1138,48 @@ func TestDownloadBlocksToSupportStateProofs(t *testing.T) {
 	topBlk.BlockHeader.CurrentProtocol = protocol.ConsensusV32
 	lookback = lookbackForStateproofsSupport(&topBlk)
 	assert.Equal(t, uint64(0), lookback)
+}
+
+// TestServiceLedgerUnavailable checks a local ledger that is unavailable cannot catchup up to remote round
+func TestServiceLedgerUnavailable(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	// Make Ledger
+	local := new(mockedUnavalLedger)
+	local.blocks = append(local.blocks, bookkeeping.Block{})
+
+	remote, _, blk, err := buildTestLedger(t, bookkeeping.Block{})
+	if err != nil {
+		t.Fatal(err)
+		return
+	}
+	numBlocks := 10
+	addBlocks(t, remote, blk, numBlocks)
+
+	// Create a network and block service
+	blockServiceConfig := config.GetDefaultLocal()
+	net := &httpTestPeerSource{}
+	ls := rpcs.MakeBlockService(logging.Base(), blockServiceConfig, remote, net, "test genesisID")
+
+	nodeA := basicRPCNode{}
+	nodeA.RegisterHTTPHandler(rpcs.BlockServiceBlockPath, ls)
+	nodeA.start()
+	defer nodeA.stop()
+	rootURL := nodeA.rootURL()
+	net.addPeer(rootURL)
+
+	require.Equal(t, basics.Round(0), local.LastRound())
+	require.Equal(t, basics.Round(numBlocks+1), remote.LastRound())
+
+	// Make Service
+	auth := &mockedAuthenticator{fail: false}
+	s := MakeService(logging.Base(), defaultConfig, net, local, auth, nil, nil)
+	s.log = &periodicSyncLogger{Logger: logging.Base()}
+	s.deadlineTimeout = 2 * time.Second
+
+	s.testStart()
+	defer s.Stop()
+	s.sync()
+	require.Greater(t, local.LastRound(), basics.Round(0))
+	require.Less(t, local.LastRound(), remote.LastRound())
 }
