@@ -118,7 +118,7 @@ func (ppa *pingPongAccount) String() string {
 	ppa.Lock()
 	defer ppa.Unlock()
 	var ow strings.Builder
-	fmt.Fprintf(&ow, "%s %d", ppa.pk.String(), ppa.balance)
+	fmt.Fprintf(&ow, "%s %d", ppa.pk.String(), ppa.balance.Load())
 	if len(ppa.holdings) > 0 {
 		fmt.Fprintf(&ow, "[")
 		first := true

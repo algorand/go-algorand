@@ -18,7 +18,6 @@ linters:
     - revive
     - staticcheck
     - typecheck
-    - paralleltest
 
 severity:
   default-severity: error
