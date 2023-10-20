@@ -898,20 +898,10 @@ func (l *Ledger) LatestTrackerCommitted() basics.Round {
 	return l.trackers.getDbRound()
 }
 
-// maxNonFlushedAccountRounds is a maximum number of not flushed yet account rounds (in-memory deltas)
-// that we allow to have before we stop the catchup process.
-// To many in-memory deltas can cause the node to run out of memory.
-const maxAccountDeltas = 256
-
 // Available returns indicates if the ledger is can safely accept more blocks.
 // It is intended use with catchup to slowdown when deltas overgrow some limit.
 func (l *Ledger) Available() bool {
-	deltas := l.Latest().SubSaturate(l.trackers.getDbRound())
-	if deltas < maxAccountDeltas {
-		return true
-	}
-
-	return !l.trackers.busy()
+	return l.trackers.available()
 }
 
 // DebuggerLedger defines the minimal set of method required for creating a debug balances.

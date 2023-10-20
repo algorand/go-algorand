@@ -442,11 +442,66 @@ func TestTrackers_BusyCommitting(t *testing.T) {
 
 	// commitRoundStallingTracker blocks commitRound in the goroutine above, wait few secs to ensure the trackerRegistry has set busy()
 	a.Eventually(func() bool {
-		return ledger.trackers.busy()
+		return ledger.trackers.accountsCommitting.Load()
 	}, 3*time.Second, 50*time.Millisecond)
 	close(tracker.commitRoundLock)
 	ledger.trackers.waitAccountsWriting()
-	a.False(ledger.trackers.busy())
+	a.False(ledger.trackers.accountsCommitting.Load())
+}
+
+func TestTrackers_InitializeMaxAccountDeltas(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	accts := setupAccts(20)
+	ml := makeMockLedgerForTracker(t, true, 1, protocol.ConsensusCurrentVersion, accts)
+	defer ml.Close()
+	tr := trackerRegistry{}
+
+	cfg := config.GetDefaultLocal()
+	err := tr.initialize(ml, []ledgerTracker{}, cfg)
+	a.NoError(err)
+	// quit the commitSyncer goroutine
+	tr.ctxCancel()
+	tr.ctxCancel = nil
+	<-tr.commitSyncerClosed
+	tr.commitSyncerClosed = nil
+	a.Equal(uint64(defaultMaxAccountDeltas), tr.maxAccountDeltas)
+
+	cfg.MaxAcctLookback = defaultMaxAccountDeltas + 100
+	err = tr.initialize(ml, []ledgerTracker{}, cfg)
+	a.NoError(err)
+	// quit the commitSyncer goroutine
+	tr.ctxCancel()
+	tr.ctxCancel = nil
+	<-tr.commitSyncerClosed
+	tr.commitSyncerClosed = nil
+	a.Equal(cfg.MaxAcctLookback+1, tr.maxAccountDeltas)
+}
+
+func TestTrackers_Available(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	tr := trackerRegistry{
+		accts:            &accountUpdates{},
+		maxAccountDeltas: defaultMaxAccountDeltas,
+	}
+
+	a.True(tr.available())
+
+	// no deltas but busy committing => available
+	tr.accountsCommitting.Store(true)
+	a.True(tr.available())
+	tr.accountsCommitting.Store(false)
+
+	// lots of deltas but not committing => available
+	tr.accts.deltas = make([]ledgercore.StateDelta, defaultMaxAccountDeltas+10)
+	a.True(tr.available())
+
+	// lots of deltas and committing => not available
+	tr.accountsCommitting.Store(true)
+	a.False(tr.available())
 }
 
 func TestTrackers_AccountUpdatesLedgerEvaluatorNoBlockHdr(t *testing.T) {
