@@ -17,24 +17,24 @@ VERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
 NO_DEPLOY=${NO_DEPLOY:-false}
 OS_TYPE=$(./scripts/release/mule/common/ostype.sh)
 PACKAGES_DIR=${PACKAGES_DIR:-"./tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE"}
+STAGING=${STAGING:-"algorand-staging/releases"}
 
 if [ -n "$S3_SOURCE" ]
 then
     PREFIX="$S3_SOURCE/$CHANNEL/$VERSION"
-
-    aws s3 cp "s3://$PREFIX/algorand-$VERSION-1.x86_64.rpm" /root
-    aws s3 cp "s3://$PREFIX/algorand-devtools-$VERSION-1.x86_64.rpm" /root
+    if [ "$CHANNEL" == "beta" ]
+    then
+        aws s3 cp "s3://$PREFIX/algorand-beta-$VERSION-1.x86_64.rpm" /root
+        aws s3 cp "s3://$PREFIX/algorand-devtools-beta-$VERSION-1.x86_64.rpm" /root
+    else
+        aws s3 cp "s3://$PREFIX/algorand-$VERSION-1.x86_64.rpm" /root
+        aws s3 cp "s3://$PREFIX/algorand-devtools-$VERSION-1.x86_64.rpm" /root
+    fi
 else
     cp "$PACKAGES_DIR"/*"$VERSION"*.rpm /root
 fi
 
 pushd /root
-
-aws s3 cp s3://algorand-devops-misc/tools/gnupg2.2.9_centos7_amd64.tar.bz2 .
-tar jxf gnupg*.tar.bz2
-
-export PATH="/root/gnupg2/bin:$PATH"
-export LD_LIBRARY_PATH=/root/gnupg2/lib
 
 mkdir -p .gnupg
 chmod 400 .gnupg
@@ -51,20 +51,14 @@ echo "wat" | gpg -u rpm@algorand.com --clearsign
 
 cat << EOF > .rpmmacros
 %_gpg_name Algorand RPM <rpm@algorand.com>
-%__gpg /root/gnupg2/bin/gpg
+%__gpg /usr/bin/gpg2
 %__gpg_check_password_cmd true
-EOF
-
-cat << EOF > rpmsign.py
-import rpm
-import sys
-rpm.addSign(sys.argv[1], '')
 EOF
 
 mkdir rpmrepo
 for rpm in $(ls *"$VERSION"*.rpm)
 do
-    python2 rpmsign.py "$rpm"
+    rpmsign --addsign "$rpm"
     cp -p "$rpm" rpmrepo
 done
 
@@ -79,7 +73,7 @@ then
 else
     aws s3 sync rpmrepo "s3://algorand-releases/rpm/$CHANNEL/"
     # sync signatures to releases so that the .sig files load from there
-    aws s3 sync s3://$S3_SOURCE/releases/$CHANNEL/ s3://algorand-releases/rpm/sigs/$CHANNEL/ --exclude='*' --include='*.rpm.sig'
+    aws s3 sync s3://$STAGING/releases/$CHANNEL/ s3://algorand-releases/rpm/sigs/$CHANNEL/ --exclude='*' --include='*.rpm.sig'
 fi
 
 echo
