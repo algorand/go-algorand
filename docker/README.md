@@ -6,7 +6,7 @@ General purpose algod container image.
 
 ## Image Configuration
 
-Algorand maintains a Docker image with recent snapshot builds from our `master` branch on DockerHub to support users who prefer to run containerized processes. There are a couple of different images avaliable for running the latest stable or development versions of Algod.
+Algorand maintains a Docker image with recent snapshot builds from our `master` branch on DockerHub to support users who prefer to run containerized processes. There are a couple of different images available for running the latest stable or development versions of Algod.
 
 - `algorand/algod:latest` is the latest stable release version of Algod (default)
 - `algorand/algod:stable` is the latest stable version of Algod
@@ -60,7 +60,8 @@ Configuration can be modified by specifying certain files. These can be changed 
 | /etc/algorand/algod.token | Override default randomized REST API token. |
 | /etc/algorand/algod.admin.token | Override default randomized REST API admin token. |
 | /etc/algorand/logging.config | Use a custom [logging.config](https://developer.algorand.org/docs/run-a-node/reference/telemetry-config/#configuration) file for configuring telemetry. |
- | /etc/algorand/template.json | Override default private network topology. One of the nodes in the template must be named "data".|
+| /etc/algorand/template.json | Override default private network topology. One of the nodes in the template must be named "data". |
+| /etc/algorand/keys/ | Override this directory to provide pregenerated private network data. |
 
 ## Example Configuration
 
@@ -117,3 +118,28 @@ On the host system, ensure the directory being mounted uses UID=999 and GID=999.
 Private networks work a little bit differently. They are configured with, potentially, several data directories. The default topology supplied with this container is installed to `/algod/`, and has a single node named `data`. This means the private network has a data directory at `/algod/data`, matching the production configuration.
 
 Because the root directory contains some metadata, if persistence of the private network is required, you should mount the volume `/algod/` instead of `/algod/data`. This will ensure the extra metadata is included when changing images.
+
+## Faster Private Network Startup
+
+Generating participation keys may take several minutes. By creating them ahead of time a new private network can be started more quickly. These keys can be reused for multiple networks.
+
+Note that you must provide a template.json file for this operation. [You can find a template here](https://github.com/algorand/go-algorand/blob/master/docker/files/run/devmode_template.json), be sure to replace `NUM_ROUNDS` with your desired number of rounds, such as 3000000.
+
+Use the `goal network pregen` command to generate the files in a mounted directory:
+```bash
+docker run --rm -it \
+    --name pregen \
+    -v /path/to/your/template.json:/etc/algorand/template.json \
+    -v $(pwd)/pregen:/algod/pregen \
+    --entrypoint "/node/bin/goal" \
+    algorand/algod:stable network pregen -t /etc/algorand/template.json -p /algod/pregen
+```
+
+You will now have a local directory named `pregen` which can be mounted the next time you want to start a network with this template:
+```bash
+docker run --rm -it --name algod-pregen-run \
+    -p 4190:8080 \
+    -v /tmp/big_keys.json:/etc/algorand/template.json \
+    -v $(pwd)/pregen:/etc/algorand/keys \
+    algorand/algod:stable
+```

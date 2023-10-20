@@ -141,6 +141,7 @@ type Result struct {
 	EvalOverrides ResultEvalOverrides
 	Block         *ledgercore.ValidatedBlock
 	TraceConfig   ExecTraceConfig
+	InitialStates *ResourcesInitialStates
 }
 
 // ReturnTrace reads from Result object and decides if simulation returns PC.
@@ -217,6 +218,7 @@ func makeSimulationResult(lastRound basics.Round, request Request, developerAPI 
 		TxnGroups:     groups,
 		EvalOverrides: resultEvalConstants,
 		TraceConfig:   request.TraceConfig,
+		InitialStates: newResourcesInitialStates(request),
 	}, nil
 }
 

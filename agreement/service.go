@@ -19,6 +19,7 @@ package agreement
 //go:generate dbgen -i agree.sql -p agreement -n agree -o agreeInstall.go -h ../scripts/LICENSE_HEADER
 import (
 	"context"
+	"time"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/logging"
@@ -56,6 +57,9 @@ type Service struct {
 	persistRouter  rootRouter
 	persistStatus  player
 	persistActions []action
+
+	// Retain old rounds' period 0 start times.
+	historicalClocks map[round]roundStartTimer
 }
 
 // Parameters holds the parameters necessary to run the agreement protocol.
@@ -84,6 +88,13 @@ type externalDemuxSignals struct {
 	CurrentRound         round
 }
 
+// an interface allowing for measuring the duration since a clock from a previous round,
+// used for measuring the arrival time of a late proposal-vote, for the dynamic filter
+// timeout feature
+type roundStartTimer interface {
+	Since() time.Duration
+}
+
 // MakeService creates a new Agreement Service instance given a set of Parameters.
 //
 // Call Start to start execution and Shutdown to finish execution.
@@ -94,16 +105,23 @@ func MakeService(p Parameters) (*Service, error) {
 
 	s.log = makeServiceLogger(p.Logger)
 
+	// If cadaver directory is not set, use cold data directory (which may also not be set)
+	cadaverDir := p.CadaverDirectory
+	if cadaverDir == "" {
+		cadaverDir = p.ColdDataDir
+	}
 	// GOAL2-541: tracer is not concurrency safe. It should only ever be
 	// accessed by main state machine loop.
 	var err error
-	s.tracer, err = makeTracer(s.log, defaultCadaverName, p.CadaverSizeTarget, p.CadaverDirectory,
+	s.tracer, err = makeTracer(s.log, defaultCadaverName, p.CadaverSizeTarget, cadaverDir,
 		s.Local.EnableAgreementReporting, s.Local.EnableAgreementTimeMetrics)
 	if err != nil {
 		return nil, err
 	}
 
 	s.persistenceLoop = makeAsyncPersistenceLoop(s.log, s.Accessor, s.Ledger)
+
+	s.historicalClocks = make(map[round]roundStartTimer)
 
 	return s, nil
 }
@@ -211,7 +229,7 @@ func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, r
 			s.log.Errorf("unable to retrieve consensus version for round %d, defaulting to binary consensus version", nextRound)
 			nextVersion = protocol.ConsensusCurrentVersion
 		}
-		status = player{Round: nextRound, Step: soft, Deadline: Deadline{Duration: FilterTimeout(0, nextVersion), Type: TimeoutFilter}}
+		status = player{Round: nextRound, Step: soft, Deadline: Deadline{Duration: FilterTimeout(0, nextVersion), Type: TimeoutFilter}, lowestCredentialArrivals: makeCredentialArrivalHistory(dynamicFilterCredentialArrivalHistory)}
 		router = makeRootRouter(status)
 
 		a1 := pseudonodeAction{T: assemble, Round: s.Ledger.NextRound()}

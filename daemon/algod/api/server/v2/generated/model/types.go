@@ -280,6 +280,30 @@ type Application struct {
 	Params ApplicationParams `json:"params"`
 }
 
+// ApplicationInitialStates An application's initial global/local/box states that were accessed during simulation.
+type ApplicationInitialStates struct {
+	// AppBoxes An application's global/local/box state.
+	AppBoxes *ApplicationKVStorage `json:"app-boxes,omitempty"`
+
+	// AppGlobals An application's global/local/box state.
+	AppGlobals *ApplicationKVStorage `json:"app-globals,omitempty"`
+
+	// AppLocals An application's initial local states tied to different accounts.
+	AppLocals *[]ApplicationKVStorage `json:"app-locals,omitempty"`
+
+	// Id Application index.
+	Id uint64 `json:"id"`
+}
+
+// ApplicationKVStorage An application's global/local/box state.
+type ApplicationKVStorage struct {
+	// Account The address of the account associated with the local state.
+	Account *string `json:"account,omitempty"`
+
+	// Kvs Key-Value pairs representing application states.
+	Kvs []AvmKeyValue `json:"kvs"`
+}
+
 // ApplicationLocalReference References an account's local state for an application.
 type ApplicationLocalReference struct {
 	// Account Address of the account with the local state.
@@ -441,6 +465,14 @@ type AssetParams struct {
 
 	// UrlB64 Base64 encoded URL where more information about the asset can be retrieved.
 	UrlB64 *[]byte `json:"url-b64,omitempty"`
+}
+
+// AvmKeyValue Represents an AVM key-value pair in an application store.
+type AvmKeyValue struct {
+	Key []byte `json:"key"`
+
+	// Value Represents an AVM value.
+	Value AvmValue `json:"value"`
 }
 
 // AvmValue Represents an AVM value.
@@ -696,6 +728,12 @@ type ScratchChange struct {
 	Slot uint64 `json:"slot"`
 }
 
+// SimulateInitialStates Initial states of resources that were accessed during simulation.
+type SimulateInitialStates struct {
+	// AppInitialStates The initial states of accessed application before simulation. The order of this array is arbitrary.
+	AppInitialStates *[]ApplicationInitialStates `json:"app-initial-states,omitempty"`
+}
+
 // SimulateRequest Request type for simulation endpoint.
 type SimulateRequest struct {
 	// AllowEmptySignatures Allows transactions without signatures to be simulated as if they had correct signatures.
@@ -712,6 +750,9 @@ type SimulateRequest struct {
 
 	// ExtraOpcodeBudget Applies extra opcode budget during simulation for each transaction group.
 	ExtraOpcodeBudget *uint64 `json:"extra-opcode-budget,omitempty"`
+
+	// Round If provided, specifies the round preceding the simulation. State changes through this round will be used to run this simulation. Usually only the 4 most recent rounds will be available (controlled by the node config value MaxAcctLookback). If not specified, defaults to the latest available round.
+	Round *uint64 `json:"round,omitempty"`
 
 	// TxnGroups The transaction groups to simulate.
 	TxnGroups []SimulateRequestTransactionGroup `json:"txn-groups"`
@@ -1240,6 +1281,9 @@ type SimulateResponse struct {
 	// ExecTraceConfig An object that configures simulation execution trace.
 	ExecTraceConfig *SimulateTraceConfig `json:"exec-trace-config,omitempty"`
 
+	// InitialStates Initial states of resources that were accessed during simulation.
+	InitialStates *SimulateInitialStates `json:"initial-states,omitempty"`
+
 	// LastRound The round immediately preceding this simulation. State changes through this round were used to run this simulation.
 	LastRound uint64 `json:"last-round"`
 
@@ -1407,6 +1451,12 @@ type GetTransactionProofParamsHashtype string
 
 // GetTransactionProofParamsFormat defines parameters for GetTransactionProof.
 type GetTransactionProofParamsFormat string
+
+// StartCatchupParams defines parameters for StartCatchup.
+type StartCatchupParams struct {
+	// Min Specify the minimum number of blocks which the ledger must be advanced by in order to start the catchup. This is useful for simplifying tools which support fast catchup, they can run the catchup unconditionally and the node will skip the catchup if it is not needed.
+	Min *uint64 `form:"min,omitempty" json:"min,omitempty"`
+}
 
 // GetLedgerStateDeltaForTransactionGroupParams defines parameters for GetLedgerStateDeltaForTransactionGroup.
 type GetLedgerStateDeltaForTransactionGroupParams struct {

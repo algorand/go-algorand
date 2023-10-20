@@ -89,6 +89,21 @@ const MaxGenesisIDLen = 128
 // MaxEvalDeltaTotalLogSize is the maximum size of the sum of all log sizes in a single eval delta.
 const MaxEvalDeltaTotalLogSize = 1024
 
+// CatchpointTrackingModeUntracked defines the CatchpointTracking mode that does _not_ track catchpoints
+const CatchpointTrackingModeUntracked = -1
+
+// CatchpointTrackingModeAutomatic defines the CatchpointTracking mode that automatically determines catchpoint tracking
+// and storage based on the Archival property and CatchpointInterval.
+const CatchpointTrackingModeAutomatic = 0
+
+// CatchpointTrackingModeTracked defines the CatchpointTracking mode that tracks catchpoint
+// as long as CatchpointInterval > 0
+const CatchpointTrackingModeTracked = 1
+
+// CatchpointTrackingModeStored defines the CatchpointTracking mode that tracks and stores catchpoints
+// as long as CatchpointInterval > 0
+const CatchpointTrackingModeStored = 2
+
 // LoadConfigFromDisk returns a Local config structure based on merging the defaults
 // with settings loaded from the config file from the custom dir.  If the custom file
 // cannot be loaded, the default config is returned (with the error from loading the

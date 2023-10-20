@@ -270,7 +270,7 @@ func (tracer *evalTracer) makeOpcodeTraceUnit(cx *logic.EvalContext) OpcodeTrace
 }
 
 func (o *OpcodeTraceUnit) computeStackValueDeletions(cx *logic.EvalContext, tracer *evalTracer) {
-	tracer.popCount, tracer.addCount = cx.GetOpSpec().Explain(cx)
+	tracer.popCount, tracer.addCount = cx.GetOpSpec().StackExplain(cx)
 	o.StackPopCount = uint64(tracer.popCount)
 
 	stackHeight := len(cx.Stack)
@@ -309,6 +309,7 @@ func (tracer *evalTracer) BeforeOpcode(cx *logic.EvalContext) {
 		}
 		if tracer.result.ReturnStateChange() {
 			latestOpcodeTraceUnit.appendStateOperations(cx)
+			tracer.result.InitialStates.increment(cx)
 		}
 	}
 }
@@ -325,10 +326,14 @@ func (o *OpcodeTraceUnit) appendAddedStackValue(cx *logic.EvalContext, tracer *e
 }
 
 func (o *OpcodeTraceUnit) appendStateOperations(cx *logic.EvalContext) {
-	if cx.GetOpSpec().StateExplain == nil {
+	if cx.GetOpSpec().AppStateExplain == nil {
 		return
 	}
-	appState, stateOp, appID, acctAddr, stateKey := cx.GetOpSpec().StateExplain(cx)
+	appState, stateOp, appID, acctAddr, stateKey := cx.GetOpSpec().AppStateExplain(cx)
+	// If the operation is not write or delete, return without
+	if stateOp == logic.AppStateRead {
+		return
+	}
 	o.StateChanges = append(o.StateChanges, StateOperation{
 		AppStateOp: stateOp,
 		AppState:   appState,
@@ -376,7 +381,7 @@ func (tracer *evalTracer) recordUpdatedScratchVars(cx *logic.EvalContext) []Scra
 
 func (o *OpcodeTraceUnit) updateNewStateValues(cx *logic.EvalContext) {
 	for i, sc := range o.StateChanges {
-		o.StateChanges[i].NewValue = logic.AppNewStateQuerying(
+		o.StateChanges[i].NewValue = logic.AppStateQuerying(
 			cx, sc.AppState, sc.AppStateOp, sc.AppID, sc.Account, sc.Key)
 	}
 }
@@ -445,6 +450,13 @@ func (tracer *evalTracer) BeforeProgram(cx *logic.EvalContext) {
 				txnTraceStackElem.ClearStateProgramHash = programHash
 			default:
 				txnTraceStackElem.ApprovalProgramHash = programHash
+			}
+		}
+		if tracer.result.ReturnStateChange() {
+			// If we are recording state changes, including initial states,
+			// then we should exclude initial states of created app during simulation.
+			if cx.TxnGroup[groupIndex].SignedTxn.Txn.ApplicationID == 0 {
+				tracer.result.InitialStates.CreatedApp.Add(cx.AppID())
 			}
 		}
 
