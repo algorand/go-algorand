@@ -1318,6 +1318,7 @@ func (eval *BlockEvaluator) endOfBlock() error {
 		if !eval.block.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment.IsEqual(expectedVoters) {
 			return fmt.Errorf("StateProofVotersCommitment wrong: %v != %v", eval.block.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment, expectedVoters)
 		}
+
 		if eval.block.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight != expectedVotersWeight {
 			mainnetGenesisHash, _ := crypto.DigestFromString("YBQ4JWH4DW655UWXMBF6IVUOH5WQIGMHVQ333ZFWEC22WOJERLPQ")
 			if eval.genesisHash == mainnetGenesisHash {
@@ -1331,6 +1332,8 @@ func (eval *BlockEvaluator) endOfBlock() error {
 				default:
 					return fmt.Errorf("StateProofOnlineTotalWeight wrong: %v != %v", eval.block.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight, expectedVotersWeight)
 				}
+			} else {
+				return fmt.Errorf("StateProofOnlineTotalWeight wrong: %v != %v", eval.block.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight, expectedVotersWeight)
 			}
 		}
 		if eval.block.StateProofTracking[protocol.StateProofBasic].StateProofNextRound != eval.state.GetStateProofNextRound() {
@@ -1705,11 +1708,11 @@ transactionGroupLoop:
 		select {
 		case <-ctx.Done():
 			return ledgercore.StateDelta{}, ctx.Err()
-		case err, open := <-txvalidator.done:
+		case err1, open := <-txvalidator.done:
 			if !open {
 				break
 			}
-			if err != nil {
+			if err1 != nil {
 				return ledgercore.StateDelta{}, err
 			}
 		}
