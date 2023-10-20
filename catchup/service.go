@@ -105,6 +105,9 @@ type Service struct {
 	// unsupportedRoundMonitor goroutine, after detecting
 	// an unsupported block.
 	onceUnsupportedRound sync.Once
+
+	lastBlock time.Time
+	rate      uint64
 }
 
 // A BlockAuthenticator authenticates blocks given a certificate.
@@ -267,7 +270,7 @@ func (s *Service) fetchAndWrite(ctx context.Context, r basics.Round, prevFetchCo
 		if i > catchupRetryLimit {
 			loggedMessage := fmt.Sprintf("fetchAndWrite(%d): block retrieval exceeded retry limit", r)
 			if _, initialSync := s.IsSynchronizing(); initialSync {
-				// on the initial sync, it's completly expected that we won't be able to get all the "next" blocks.
+				// on the initial sync, it's completely expected that we won't be able to get all the "next" blocks.
 				// Therefore, info should suffice.
 				s.log.Info(loggedMessage)
 			} else {
@@ -362,6 +365,10 @@ func (s *Service) fetchAndWrite(ctx context.Context, r basics.Round, prevFetchCo
 			s.log.Debugf("fetchAndWrite(%v): Aborted while waiting to write to ledger", r)
 			return false
 		case <-prevFetchCompleteChan:
+			if !s.lastBlock.IsZero() {
+				s.rate = uint64(time.Second.Milliseconds() / (time.Now().UnixMilli() - s.lastBlock.UnixMilli()))
+			}
+
 			// make sure the ledger wrote enough of the account data to disk, since we don't want the ledger to hold a large amount of data in memory.
 			proto, err := s.ledger.ConsensusParams(r.SubSaturate(1))
 			if err != nil {
@@ -427,6 +434,7 @@ func (s *Service) fetchAndWrite(ctx context.Context, r basics.Round, prevFetchCo
 }
 
 // TODO the following code does not handle the following case: seedLookback upgrades during fetch
+// Note: seedLookback is a consensus parameter. Currently 2.
 func (s *Service) pipelinedFetch(seedLookback uint64) {
 	parallelRequests := s.parallelBlocks
 	if parallelRequests < seedLookback {
@@ -501,6 +509,8 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 				s.suspendForCatchpointWriting = true
 				return
 			}
+
+			// TODO: update parallelRequests based on the rate of the network
 
 		case <-s.ctx.Done():
 			return
