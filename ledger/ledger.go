@@ -898,10 +898,10 @@ func (l *Ledger) LatestTrackerCommitted() basics.Round {
 	return l.trackers.getDbRound()
 }
 
-// Available returns indicates if the ledger is can safely accept more blocks.
-// It is intended use with catchup to slowdown when deltas overgrow some limit.
-func (l *Ledger) Available() bool {
-	return l.trackers.available()
+// IsBehindCommittingDeltas indicates if the ledger is behind expected number of in-memory deltas.
+// It intended to slow down the catchup service when deltas overgrow some limit.
+func (l *Ledger) IsBehindCommittingDeltas() bool {
+	return l.trackers.isBehindCommittingDeltas()
 }
 
 // DebuggerLedger defines the minimal set of method required for creating a debug balances.

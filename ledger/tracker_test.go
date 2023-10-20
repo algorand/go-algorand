@@ -163,7 +163,7 @@ func (t *emptyTracker) newBlock(blk bookkeeping.Block, delta ledgercore.StateDel
 }
 
 // committedUpTo in the blockingTracker just stores the committed round.
-func (io *emptyTracker) committedUpTo(committedRnd basics.Round) (minRound, lookback basics.Round) {
+func (t *emptyTracker) committedUpTo(committedRnd basics.Round) (minRound, lookback basics.Round) {
 	return 0, basics.Round(0)
 }
 
@@ -428,7 +428,7 @@ func TestTrackers_BusyCommitting(t *testing.T) {
 	blk := genesisInitState.Block
 	for i := basics.Round(0); i < basics.Round(cfg.MaxAcctLookback)+1; i++ {
 		blk.BlockHeader.Round++
-		blk.BlockHeader.TimeStamp += 1
+		blk.BlockHeader.TimeStamp++
 		ledger.trackers.newBlock(blk, ledgercore.StateDelta{})
 	}
 
@@ -479,7 +479,7 @@ func TestTrackers_InitializeMaxAccountDeltas(t *testing.T) {
 	a.Equal(cfg.MaxAcctLookback+1, tr.maxAccountDeltas)
 }
 
-func TestTrackers_Available(t *testing.T) {
+func TestTrackers_IsBehindCommittingDeltas(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
@@ -488,20 +488,20 @@ func TestTrackers_Available(t *testing.T) {
 		maxAccountDeltas: defaultMaxAccountDeltas,
 	}
 
-	a.True(tr.available())
+	a.False(tr.isBehindCommittingDeltas())
 
-	// no deltas but busy committing => available
+	// no deltas but busy committing => not behind
 	tr.accountsCommitting.Store(true)
-	a.True(tr.available())
+	a.False(tr.isBehindCommittingDeltas())
 	tr.accountsCommitting.Store(false)
 
-	// lots of deltas but not committing => available
+	// lots of deltas but not committing => not behind
 	tr.accts.deltas = make([]ledgercore.StateDelta, defaultMaxAccountDeltas+10)
-	a.True(tr.available())
+	a.False(tr.isBehindCommittingDeltas())
 
-	// lots of deltas and committing => not available
+	// lots of deltas and committing => behind
 	tr.accountsCommitting.Store(true)
-	a.False(tr.available())
+	a.True(tr.isBehindCommittingDeltas())
 }
 
 func TestTrackers_AccountUpdatesLedgerEvaluatorNoBlockHdr(t *testing.T) {

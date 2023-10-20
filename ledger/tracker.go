@@ -307,7 +307,7 @@ func (tr *trackerRegistry) initialize(l ledgerForTracker, trackers []ledgerTrack
 	tr.maxAccountDeltas = defaultMaxAccountDeltas
 	if cfg.MaxAcctLookback > tr.maxAccountDeltas {
 		tr.maxAccountDeltas = cfg.MaxAcctLookback + 1
-		tr.log.Info("Reset maxAccountDeltas to %d because of config.MaxAcctLookback=%d. Be advised it could cause OOM.", tr.maxAccountDeltas, cfg.MaxAcctLookback)
+		tr.log.Infof("Reset maxAccountDeltas to %d because of config.MaxAcctLookback=%d. Be advised it could cause OOM.", tr.maxAccountDeltas, cfg.MaxAcctLookback)
 	}
 
 	tr.ctx, tr.ctxCancel = context.WithCancel(context.Background())
@@ -338,13 +338,13 @@ func (tr *trackerRegistry) initialize(l ledgerForTracker, trackers []ledgerTrack
 func (tr *trackerRegistry) loadFromDisk(l ledgerForTracker) error {
 	var dbRound basics.Round
 	err := tr.dbs.Snapshot(func(ctx context.Context, tx trackerdb.SnapshotScope) (err error) {
-		ar, err := tx.MakeAccountsReader()
-		if err != nil {
-			return err
+		ar, err0 := tx.MakeAccountsReader()
+		if err0 != nil {
+			return err0
 		}
 
-		dbRound, err = ar.AccountsRound()
-		return err
+		dbRound, err0 = ar.AccountsRound()
+		return err0
 	})
 	if err != nil {
 		return err
@@ -355,19 +355,19 @@ func (tr *trackerRegistry) loadFromDisk(l ledgerForTracker) error {
 	tr.mu.RUnlock()
 
 	for _, lt := range tr.trackers {
-		err := lt.loadFromDisk(l, dbRound)
-		if err != nil {
+		err0 := lt.loadFromDisk(l, dbRound)
+		if err0 != nil {
 			// find the tracker name.
 			trackerName := reflect.TypeOf(lt).String()
-			return fmt.Errorf("tracker %s failed to loadFromDisk : %w", trackerName, err)
+			return fmt.Errorf("tracker %s failed to loadFromDisk : %w", trackerName, err0)
 		}
 	}
 
-	err = tr.replay(l)
-	if err != nil {
-		err = fmt.Errorf("trackers replay failed : %w", err)
+	if err0 := tr.replay(l); err0 != nil {
+		return fmt.Errorf("trackers replay failed : %w", err0)
 	}
-	return err
+
+	return nil
 }
 
 func (tr *trackerRegistry) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
@@ -473,13 +473,13 @@ func (tr *trackerRegistry) waitAccountsWriting() {
 	tr.accountsWriting.Wait()
 }
 
-func (tr *trackerRegistry) available() bool {
+func (tr *trackerRegistry) isBehindCommittingDeltas() bool {
 	if tr.accts.numDeltas() < tr.maxAccountDeltas {
-		return true
+		return false
 	}
 
 	// there is a large number of deltas check if commitSyncer is not writing accounts
-	return !tr.accountsCommitting.Load()
+	return tr.accountsCommitting.Load()
 }
 
 func (tr *trackerRegistry) close() {

@@ -830,16 +830,16 @@ func (m *mockedLedger) IsWritingCatchpointDataFile() bool {
 	return false
 }
 
-func (m *mockedLedger) Available() bool {
-	return true
+func (m *mockedLedger) IsBehindCommittingDeltas() bool {
+	return false
 }
 
-type mockedUnavalLedger struct {
+type mockedBehindDeltasLedger struct {
 	mockedLedger
 }
 
-func (m *mockedUnavalLedger) Available() bool {
-	return false
+func (m *mockedBehindDeltasLedger) IsBehindCommittingDeltas() bool {
+	return true
 }
 
 func testingenvWithUpgrade(
@@ -1145,7 +1145,7 @@ func TestServiceLedgerUnavailable(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	// Make Ledger
-	local := new(mockedUnavalLedger)
+	local := new(mockedBehindDeltasLedger)
 	local.blocks = append(local.blocks, bookkeeping.Block{})
 
 	remote, _, blk, err := buildTestLedger(t, bookkeeping.Block{})

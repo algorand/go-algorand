@@ -63,7 +63,7 @@ type Ledger interface {
 	Block(basics.Round) (bookkeeping.Block, error)
 	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
 	IsWritingCatchpointDataFile() bool
-	Available() bool
+	IsBehindCommittingDeltas() bool
 	Validate(ctx context.Context, blk bookkeeping.Block, executionPool execpool.BacklogPool) (*ledgercore.ValidatedBlock, error)
 	AddValidatedBlock(vb ledgercore.ValidatedBlock, cert agreement.Certificate) error
 	WaitMem(r basics.Round) chan struct{}
@@ -504,7 +504,7 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 			}
 
 			// if the ledger has too many non-flushed account changes, stop catching up to reduce the memory pressure.
-			if !s.ledger.Available() {
+			if s.ledger.IsBehindCommittingDeltas() {
 				s.log.Info("Catchup is stopping due to too many non-flushed account changes")
 				s.suspendForLedgerOps = true
 				return
@@ -563,7 +563,7 @@ func (s *Service) periodicSync() {
 			sleepDuration = time.Duration(crypto.RandUint63()) % s.deadlineTimeout
 			continue
 		case <-s.syncNow:
-			if s.parallelBlocks == 0 || s.ledger.IsWritingCatchpointDataFile() || !s.ledger.Available() {
+			if s.parallelBlocks == 0 || s.ledger.IsWritingCatchpointDataFile() || s.ledger.IsBehindCommittingDeltas() {
 				continue
 			}
 			s.suspendForLedgerOps = false
@@ -584,7 +584,7 @@ func (s *Service) periodicSync() {
 				continue
 			}
 			// if the ledger has too many non-flushed account changes, skip
-			if !s.ledger.Available() {
+			if s.ledger.IsBehindCommittingDeltas() {
 				continue
 			}
 
