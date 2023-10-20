@@ -1085,7 +1085,7 @@ func TestSynchronizingTime(t *testing.T) {
 	s := MakeService(logging.Base(), cfg, &httpTestPeerSource{}, ledger, &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil)
 
 	require.Equal(t, time.Duration(0), s.SynchronizingTime())
-	atomic.StoreInt64(&s.syncStartNS, 1000000)
+	s.syncStartNS.Store(1000000)
 	require.NotEqual(t, time.Duration(0), s.SynchronizingTime())
 }
 

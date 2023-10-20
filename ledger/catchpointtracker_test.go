@@ -53,11 +53,11 @@ func TestCatchpointIsWritingCatchpointFile(t *testing.T) {
 
 	ct := &catchpointTracker{}
 
-	ct.catchpointDataWriting = -1
+	ct.catchpointDataWriting.Store(-1)
 	ans := ct.isWritingCatchpointDataFile()
 	require.True(t, ans)
 
-	ct.catchpointDataWriting = 0
+	ct.catchpointDataWriting.Store(0)
 	ans = ct.isWritingCatchpointDataFile()
 	require.False(t, ans)
 }
@@ -762,7 +762,7 @@ func TestCatchpointReproducibleLabels(t *testing.T) {
 	require.NotZero(t, len(ct.roundDigest))
 	require.NoError(t, ct.loadFromDisk(ml, ml.Latest()))
 	require.Zero(t, len(ct.roundDigest))
-	require.Zero(t, ct.catchpointDataWriting)
+	require.Zero(t, ct.catchpointDataWriting.Load())
 	select {
 	case _, closed := <-ct.catchpointDataSlowWriting:
 		require.False(t, closed)
@@ -777,7 +777,7 @@ type blockingTracker struct {
 	postCommitUnlockedReleaseLock chan struct{}
 	postCommitEntryLock           chan struct{}
 	postCommitReleaseLock         chan struct{}
-	committedUpToRound            int64
+	committedUpToRound            atomic.Int64
 	alwaysLock                    atomic.Bool
 	shouldLockPostCommit          atomic.Bool
 	shouldLockPostCommitUnlocked  atomic.Bool
@@ -794,7 +794,7 @@ func (bt *blockingTracker) newBlock(blk bookkeeping.Block, delta ledgercore.Stat
 
 // committedUpTo in the blockingTracker just stores the committed round.
 func (bt *blockingTracker) committedUpTo(committedRnd basics.Round) (minRound, lookback basics.Round) {
-	atomic.StoreInt64(&bt.committedUpToRound, int64(committedRnd))
+	bt.committedUpToRound.Store(int64(committedRnd))
 	return committedRnd, basics.Round(0)
 }
 
@@ -906,7 +906,7 @@ func TestCatchpointTrackerNonblockingCatchpointWriting(t *testing.T) {
 	require.NoError(t, err)
 	// wait for the committedUpToRound to be called with the correct round number.
 	for {
-		committedUpToRound := atomic.LoadInt64(&writeStallingTracker.committedUpToRound)
+		committedUpToRound := writeStallingTracker.committedUpToRound.Load()
 		if basics.Round(committedUpToRound) == ledger.Latest() {
 			break
 		}
@@ -948,7 +948,7 @@ func TestCatchpointTrackerNonblockingCatchpointWriting(t *testing.T) {
 	require.NoError(t, err)
 	// wait for the committedUpToRound to be called with the correct round number.
 	for {
-		committedUpToRound := atomic.LoadInt64(&writeStallingTracker.committedUpToRound)
+		committedUpToRound := writeStallingTracker.committedUpToRound.Load()
 		if basics.Round(committedUpToRound) == ledger.Latest() {
 			break
 		}

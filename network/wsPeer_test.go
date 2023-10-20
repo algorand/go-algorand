@@ -25,6 +25,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 	"unsafe"
@@ -41,17 +42,17 @@ func TestCheckSlowWritingPeer(t *testing.T) {
 
 	now := time.Now()
 	peer := wsPeer{
-		intermittentOutgoingMessageEnqueueTime: 0,
+		intermittentOutgoingMessageEnqueueTime: atomic.Int64{},
 		wsPeerCore: wsPeerCore{net: &WebsocketNetwork{
 			log: logging.TestingLog(t),
 		}},
 	}
 	require.Equal(t, peer.CheckSlowWritingPeer(now), false)
 
-	peer.intermittentOutgoingMessageEnqueueTime = now.UnixNano()
+	peer.intermittentOutgoingMessageEnqueueTime.Store(now.UnixNano())
 	require.Equal(t, peer.CheckSlowWritingPeer(now), false)
 
-	peer.intermittentOutgoingMessageEnqueueTime = now.Add(-maxMessageQueueDuration * 2).UnixNano()
+	peer.intermittentOutgoingMessageEnqueueTime.Store(now.Add(-maxMessageQueueDuration * 2).UnixNano())
 	require.Equal(t, peer.CheckSlowWritingPeer(now), true)
 
 }

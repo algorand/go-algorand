@@ -31,17 +31,17 @@ import (
 // notifier is a struct that encapsulates a single-shot channel; it will only be signaled once.
 type notifier struct {
 	signal   chan struct{}
-	notified uint32
+	notified *atomic.Uint32
 }
 
 // makeNotifier constructs a notifier that has not been signaled.
 func makeNotifier() notifier {
-	return notifier{signal: make(chan struct{}), notified: 0}
+	return notifier{signal: make(chan struct{}), notified: &atomic.Uint32{}}
 }
 
 // notify signals the channel if it hasn't already done so
 func (notifier *notifier) notify() {
-	if atomic.CompareAndSwapUint32(&notifier.notified, 0, 1) {
+	if notifier.notified.CompareAndSwap(0, 1) {
 		close(notifier.signal)
 	}
 }
