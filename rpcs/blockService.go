@@ -322,7 +322,7 @@ func (bs *BlockService) handleCatchupReq(ctx context.Context, reqMsg network.Inc
 			outMsg.OnRelease = func() {
 				bs.wsMemoryUsed.Add(^uint64(n - 1))
 			}
-			bs.wsMemoryUsed.Add((n))
+			bs.wsMemoryUsed.Add(n)
 		}
 		err := target.Respond(ctx, reqMsg, outMsg)
 		if err != nil {
