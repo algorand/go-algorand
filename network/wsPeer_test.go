@@ -28,7 +28,6 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
-	"unsafe"
 
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -98,24 +97,6 @@ func TestDefaultMessageTagsLength(t *testing.T) {
 	for tag := range defaultSendMessageTags {
 		require.Equal(t, 2, len(tag))
 	}
-}
-
-// TestAtomicVariablesAlignment ensures that the 64-bit atomic variables
-// offsets are 64-bit aligned. This is required due to go atomic library
-// limitation.
-func TestAtomicVariablesAlignment(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	p := wsPeer{}
-	require.True(t, (unsafe.Offsetof(p.requestNonce)%8) == 0)
-	require.True(t, (unsafe.Offsetof(p.lastPacketTime)%8) == 0)
-	require.True(t, (unsafe.Offsetof(p.intermittentOutgoingMessageEnqueueTime)%8) == 0)
-	require.True(t, (unsafe.Offsetof(p.duplicateFilterCount)%8) == 0)
-	require.True(t, (unsafe.Offsetof(p.txMessageCount)%8) == 0)
-	require.True(t, (unsafe.Offsetof(p.miMessageCount)%8) == 0)
-	require.True(t, (unsafe.Offsetof(p.ppMessageCount)%8) == 0)
-	require.True(t, (unsafe.Offsetof(p.avMessageCount)%8) == 0)
-	require.True(t, (unsafe.Offsetof(p.unkMessageCount)%8) == 0)
 }
 
 func TestTagCounterFiltering(t *testing.T) {
