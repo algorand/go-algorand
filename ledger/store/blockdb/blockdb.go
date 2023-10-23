@@ -262,7 +262,7 @@ func BlockStartCatchupStaging(tx *sql.Tx, blk bookkeeping.Block, cert agreement.
 	}
 
 	// insert the top entry to the blocks table.
-	_, err := tx.Exec("INSERT INTO catchpointblocks (rnd, proto, hdrdata, blkdata, certdata) VALUES (?, ?, ?, ?)",
+	_, err := tx.Exec("INSERT INTO catchpointblocks (rnd, proto, hdrdata, blkdata, certdata) VALUES (?, ?, ?, ?, ?)",
 		blk.Round(),
 		blk.CurrentProtocol,
 		protocol.Encode(&blk.BlockHeader),
@@ -308,7 +308,7 @@ func BlockAbortCatchup(tx *sql.Tx) error {
 // BlockPutStaging store a block into catchpoint staging table
 func BlockPutStaging(tx *sql.Tx, blk bookkeeping.Block, cert agreement.Certificate) (err error) {
 	// insert the new entry
-	_, err = tx.Exec("INSERT INTO catchpointblocks (rnd, proto, hdrdata, blkdata, certdata) VALUES (?, ?, ?, ?)",
+	_, err = tx.Exec("INSERT INTO catchpointblocks (rnd, proto, hdrdata, blkdata, certdata) VALUES (?, ?, ?, ?, ?)",
 		blk.Round(),
 		blk.CurrentProtocol,
 		protocol.Encode(&blk.BlockHeader),
