@@ -129,7 +129,7 @@ type catchpointTracker struct {
 	// catchpointDataWriting helps to synchronize the (first stage) catchpoint data file
 	// writing. When this atomic variable is 0, no writing is going on.
 	// Any non-zero value indicates a catchpoint being written, or scheduled to be written.
-	catchpointDataWriting int32
+	catchpointDataWriting atomic.Int32
 
 	// The Trie tracking the current account balances. Always matches the balances that were
 	// written to the database.
@@ -233,7 +233,7 @@ func (ct *catchpointTracker) finishFirstStage(ctx context.Context, dbRound basic
 		catchpointGenerationStats.BalancesWriteTime = uint64(updatingBalancesDuration.Nanoseconds())
 		totalKVs, totalAccounts, totalChunks, biggestChunkLen, err = ct.generateCatchpointData(
 			ctx, dbRound, &catchpointGenerationStats, spVerificationEncodedData)
-		atomic.StoreInt32(&ct.catchpointDataWriting, 0)
+		ct.catchpointDataWriting.Store(0)
 		if err != nil {
 			return err
 		}
@@ -347,7 +347,7 @@ func (ct *catchpointTracker) loadFromDisk(l ledgerForTracker, dbRound basics.Rou
 	}
 
 	ct.roundDigest = nil
-	ct.catchpointDataWriting = 0
+	ct.catchpointDataWriting.Store(0)
 	// keep these channel closed if we're not generating catchpoint
 	ct.catchpointDataSlowWriting = make(chan struct{}, 1)
 	close(ct.catchpointDataSlowWriting)
@@ -500,7 +500,7 @@ func (ct *catchpointTracker) prepareCommit(dcc *deferredCommitContext) error {
 
 	if ct.enableGeneratingCatchpointFiles && dcc.catchpointFirstStage {
 		// store non-zero ( all ones ) into the catchpointWriting atomic variable to indicate that a catchpoint is being written
-		atomic.StoreInt32(&ct.catchpointDataWriting, int32(-1))
+		ct.catchpointDataWriting.Store(int32(-1))
 	}
 
 	dcc.committedRoundDigests = make([]crypto.Digest, dcc.offset)
@@ -516,7 +516,7 @@ func (ct *catchpointTracker) commitRound(ctx context.Context, tx trackerdb.Trans
 
 	defer func() {
 		if err != nil && dcc.catchpointFirstStage && ct.enableGeneratingCatchpointFiles {
-			atomic.StoreInt32(&ct.catchpointDataWriting, 0)
+			ct.catchpointDataWriting.Store(0)
 		}
 	}()
 
@@ -963,7 +963,7 @@ func (ct *catchpointTracker) cancelWrite(dcc *deferredCommitContext) {
 		// determine if this was a catchpoint round
 		if dcc.catchpointFirstStage {
 			// it was a catchpoint round, so update the catchpointWriting to indicate that we're done.
-			atomic.StoreInt32(&ct.catchpointDataWriting, 0)
+			ct.catchpointDataWriting.Store(0)
 		}
 	}
 }
@@ -1117,7 +1117,7 @@ func (ct *catchpointTracker) accountsUpdateBalances(accountsDeltas compactAccoun
 // isWritingCatchpointDataFile returns true iff a (first stage) catchpoint data file
 // is being generated.
 func (ct *catchpointTracker) isWritingCatchpointDataFile() bool {
-	return atomic.LoadInt32(&ct.catchpointDataWriting) != 0
+	return ct.catchpointDataWriting.Load() != 0
 }
 
 // Generates a (first stage) catchpoint data file.
