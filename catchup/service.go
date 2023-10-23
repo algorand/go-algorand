@@ -41,6 +41,11 @@ import (
 const catchupPeersForSync = 10
 const blockQueryPeerLimit = 10
 
+// uncapParallelDownloadRate is a simple threshold to detect whether or not the node is caught up.
+// If a block is downloaded in less than this duration, it's assumed that the node is not caught up
+// and allow the block downloader to start N=parallelBlocks concurrent fetches.
+const uncapParallelDownloadRate = time.Second
+
 // this should be at least the number of relays
 const catchupRetryLimit = 500
 
@@ -84,6 +89,7 @@ type Service struct {
 	auth                BlockAuthenticator
 	parallelBlocks      uint64
 	deadlineTimeout     time.Duration
+	prevBlockFetchTime  time.Time
 	blockValidationPool execpool.BacklogPool
 
 	// suspendForCatchpointWriting defines whether we've run into a state where the ledger is currently busy writing the
@@ -105,8 +111,6 @@ type Service struct {
 	// unsupportedRoundMonitor goroutine, after detecting
 	// an unsupported block.
 	onceUnsupportedRound sync.Once
-
-	lastBlockDownloadDuration time.Duration
 }
 
 // A BlockAuthenticator authenticates blocks given a certificate.
@@ -269,7 +273,7 @@ func (s *Service) fetchAndWrite(ctx context.Context, r basics.Round, prevFetchCo
 		if i > catchupRetryLimit {
 			loggedMessage := fmt.Sprintf("fetchAndWrite(%d): block retrieval exceeded retry limit", r)
 			if _, initialSync := s.IsSynchronizing(); initialSync {
-				// on the initial sync, it's completely expected that we won't be able to get all the "next" blocks.
+				// on the initial sync, it's completly expected that we won't be able to get all the "next" blocks.
 				// Therefore, info should suffice.
 				s.log.Info(loggedMessage)
 			} else {
@@ -429,20 +433,18 @@ func (s *Service) fetchAndWrite(ctx context.Context, r basics.Round, prevFetchCo
 }
 
 // TODO the following code does not handle the following case: seedLookback upgrades during fetch
-// Note: seedLookback is a consensus parameter. Currently 2.
 func (s *Service) pipelinedFetch(seedLookback uint64) {
 	maxParallelRequests := s.parallelBlocks
 	if maxParallelRequests < seedLookback {
 		maxParallelRequests = seedLookback
 	}
+	minParallelRequests := seedLookback
 
-	minParallelRequests := uint64(1)
-	if minParallelRequests < seedLookback {
-		minParallelRequests = seedLookback
+	// Start the limited requests at max(1, 'seedLookback')
+	limitedParallelRequests := uint64(1)
+	if limitedParallelRequests < seedLookback {
+		limitedParallelRequests = seedLookback
 	}
-
-	// Start from the minimum parallel requests.
-	parallelRequests := minParallelRequests
 
 	completed := make(map[basics.Round]chan bool)
 	var wg sync.WaitGroup
@@ -471,7 +473,8 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 	nextRound := firstRound
 
 	for {
-		for nextRound < firstRound+basics.Round(parallelRequests) {
+		// launch N=parallelRequests block download go routines.
+		for nextRound < firstRound+basics.Round(limitedParallelRequests) {
 			if s.roundIsNotSupported(nextRound) {
 				// Break out of the loop to avoid fetching
 				// blocks that we don't support.  If there
@@ -495,6 +498,7 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 			nextRound++
 		}
 
+		// wait for the first round to complete before starting the next download.
 		select {
 		case completedOK := <-completed[firstRound]:
 			delete(completed, firstRound)
@@ -505,7 +509,14 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 				return
 			}
 
-			// TODO: update parallelRequests based on the rate of the network
+			fetchTime := time.Now()
+			fetchDur := fetchTime.Sub(s.prevBlockFetchTime)
+			s.prevBlockFetchTime = fetchTime
+			if fetchDur < uncapParallelDownloadRate {
+				limitedParallelRequests = maxParallelRequests
+			} else {
+				limitedParallelRequests = minParallelRequests
+			}
 
 			// if we're writing a catchpoint file, stop catching up to reduce the memory pressure. Once we finish writing the file we
 			// could resume with the catchup.
