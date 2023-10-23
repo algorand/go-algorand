@@ -1713,7 +1713,7 @@ transactionGroupLoop:
 				break
 			}
 			if err1 != nil {
-				return ledgercore.StateDelta{}, err
+				return ledgercore.StateDelta{}, err1
 			}
 		}
 	}
