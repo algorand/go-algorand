@@ -1570,8 +1570,7 @@ func TestEval_EndOfBlockStake(t *testing.T) {
 			if len(test.err) == 0 {
 				require.NoError(t, err)
 			} else {
-				require.Error(t, err)
-				require.Contains(t, err.Error(), test.err)
+				require.ErrorContains(t, err, test.err)
 			}
 		})
 	}
