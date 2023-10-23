@@ -348,3 +348,12 @@ func (cs *roundCowState) Perform(gi int, ep *logic.EvalParams) error {
 
 	return nil
 }
+
+func (cs *roundCowState) Heartbeat(addr basics.Address) error {
+	acct, err := cs.lookup(addr)
+	if err != nil {
+		return err
+	}
+	acct.LastHeartbeat = cs.Round()
+	return cs.Put(addr, acct)
+}

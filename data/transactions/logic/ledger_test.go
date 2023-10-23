@@ -36,6 +36,7 @@ import (
 	"math"
 	"math/rand"
 
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/committee"
@@ -45,9 +46,12 @@ import (
 )
 
 type balanceRecord struct {
-	addr     basics.Address
-	auth     basics.Address
-	balance  uint64
+	addr      basics.Address
+	auth      basics.Address
+	balance   uint64
+	voting    ledgercore.VotingData
+	heartbeat basics.Round // The last round that this account sent a heartbeat to show it was online.
+
 	locals   map[basics.AppIndex]basics.TealKeyValue
 	holdings map[basics.AssetIndex]basics.AssetHolding
 	mods     map[basics.AppIndex]map[string]basics.ValueDelta
@@ -116,6 +120,18 @@ func (l *Ledger) Reset() {
 // NewAccount adds a new account with a given balance to the Ledger.
 func (l *Ledger) NewAccount(addr basics.Address, balance uint64) {
 	l.balances[addr] = newBalanceRecord(addr, balance)
+}
+
+// NewVoting sets VoteID on the account. Could expand to set other voting data
+// if that became useful in tests.
+func (l *Ledger) NewVoting(addr basics.Address, voteID crypto.OneTimeSignatureVerifier) {
+	br, ok := l.balances[addr]
+	if !ok {
+		br = newBalanceRecord(addr, 0)
+	}
+	br.voting.VoteID = voteID
+	br.voting.VoteKeyDilution = 10_000
+	l.balances[addr] = br
 }
 
 // NewApp add a new AVM app to the Ledger.  In most uses, it only sets up the id
@@ -305,7 +321,10 @@ func (l *Ledger) AccountData(addr basics.Address) (ledgercore.AccountData, error
 
 			TotalBoxes:    uint64(boxesTotal),
 			TotalBoxBytes: uint64(boxBytesTotal),
+
+			LastHeartbeat: br.heartbeat,
 		},
+		VotingData: br.voting,
 	}, nil
 }
 
@@ -900,6 +919,18 @@ func (l *Ledger) Perform(gi int, ep *EvalParams) error {
 	}
 }
 
+// Heartbeat increments the given addr's LastHeartbeat
+func (l *Ledger) Heartbeat(addr basics.Address) error {
+	br, ok := l.balances[addr]
+	if !ok {
+		return fmt.Errorf("no account %s", addr)
+	}
+	br.heartbeat = l.Round()
+	fmt.Printf("%+v\n", br)
+	l.balances[addr] = br
+	return nil
+}
+
 // Get returns the AccountData of an address. This test ledger does
 // not handle rewards, so the pening rewards flag is ignored.
 func (l *Ledger) Get(addr basics.Address, withPendingRewards bool) (basics.AccountData, error) {
@@ -913,6 +944,7 @@ func (l *Ledger) Get(addr basics.Address, withPendingRewards bool) (basics.Accou
 		Assets:         map[basics.AssetIndex]basics.AssetHolding{},
 		AppLocalStates: map[basics.AppIndex]basics.AppLocalState{},
 		AppParams:      map[basics.AppIndex]basics.AppParams{},
+		LastHeartbeat:  br.heartbeat,
 	}, nil
 }
 

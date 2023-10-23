@@ -1081,6 +1081,8 @@ Fields
 | 9 | AcctTotalAssets | uint64 | v8  | The numbers of ASAs held by this account (including ASAs this account created). |
 | 10 | AcctTotalBoxes | uint64 | v8  | The number of existing boxes created by this account's app. |
 | 11 | AcctTotalBoxBytes | uint64 | v8  | The total number of bytes used by this account's app's box keys and values. |
+| 12 | AcctLastProposed | uint64 | v10  | The round in which this account last proposed. |
+| 13 | AcctLastHeartbeat | uint64 | v10  | The round in which the account went online or executed `heartbeat`. |
 
 
 ## min_balance
@@ -1140,6 +1142,15 @@ pushints args are not added to the intcblock during assembly processes
 - for (data A, signature B, pubkey C) verify the signature of the data against the pubkey => {0 or 1}
 - **Cost**: 1900
 - Availability: v7
+
+## heartbeat
+
+- Bytecode: 0x87
+- Stack: ..., A: [64]byte, B: [32]byte, C: [64]byte, D: [32]byte, E: [64]byte, F &rarr; ...
+- for (signature components A, B, C, D, E, and account F) verify the signature of the block seed from round txn.FirstValid-1 using F's partkey for txn.LastValid
+- **Cost**: 5700
+- Availability: v10
+- Mode: Application
 
 ## callsub
 

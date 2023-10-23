@@ -3083,7 +3083,7 @@ func TestWrongStackTypeRuntime(t *testing.T) {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			ops := testProg(t, `int 1`, v)
 			ops.Program = append(ops.Program, 0x01, 0x15) // sha256, len
-			testLogicBytes(t, ops.Program, nil, "sha256 arg 0 wanted")
+			testLogicBytes(t, ops.Program, nil, "sha256 arg A wanted")
 		})
 	}
 }
@@ -3123,7 +3123,7 @@ func TestWrongStackTypeRuntime2(t *testing.T) {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			ops := testProg(t, `byte 0x1234; int 1`, v)
 			ops.Program = append(ops.Program, 0x08) // +
-			testLogicBytes(t, ops.Program, nil, "+ arg 0 wanted")
+			testLogicBytes(t, ops.Program, nil, "+ arg A wanted")
 		})
 	}
 }

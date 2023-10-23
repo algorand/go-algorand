@@ -118,11 +118,10 @@ func (lc *linearCost) docCost(argLen int) string {
 		return strconv.Itoa(lc.baseCost)
 	}
 	idxFromStart := argLen - lc.depth - 1
-	stackArg := rune(int('A') + idxFromStart)
 	if lc.chunkSize == 1 {
-		return fmt.Sprintf("%d + %d per byte of %c", lc.baseCost, lc.chunkCost, stackArg)
+		return fmt.Sprintf("%d + %d per byte of %c", lc.baseCost, lc.chunkCost, argName(idxFromStart))
 	}
-	return fmt.Sprintf("%d + %d per %d bytes of %c", lc.baseCost, lc.chunkCost, lc.chunkSize, stackArg)
+	return fmt.Sprintf("%d + %d per %d bytes of %c", lc.baseCost, lc.chunkCost, lc.chunkSize, argName(idxFromStart))
 }
 
 // OpDetails records details such as non-standard costs, immediate arguments, or
@@ -647,6 +646,9 @@ var OpSpecs = []OpSpec{
 	{0x83, "pushints", opPushInts, proto(":", "", "[N items]").stackExplain(opPushIntsStackChange), 8, constants(asmPushInts, checkIntImmArgs, "uint ...", immInts).typed(typePushInts).trust()},
 
 	{0x84, "ed25519verify_bare", opEd25519VerifyBare, proto("b63:T"), 7, costly(1900)},
+	{0x84, "ed25519verify_bare", opEd25519VerifyBare, proto("b63:T"), 7, costly(1900)},
+	// leaving room for falcon_verify and sumhash512
+	{0x87, "heartbeat", opHeartbeat, proto("63636a:"), incentiveVersion, only(ModeApp).costs(3 * 1900)},
 
 	// "Function oriented"
 	{0x88, "callsub", opCallSub, proto(":"), 4, detBranch()},

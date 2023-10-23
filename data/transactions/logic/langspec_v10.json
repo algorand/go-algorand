@@ -2891,12 +2891,16 @@
         "AcctTotalAssetsCreated",
         "AcctTotalAssets",
         "AcctTotalBoxes",
-        "AcctTotalBoxBytes"
+        "AcctTotalBoxBytes",
+        "AcctLastProposed",
+        "AcctLastHeartbeat"
       ],
       "ArgEnumTypes": [
         "uint64",
         "uint64",
         "address",
+        "uint64",
+        "uint64",
         "uint64",
         "uint64",
         "uint64",
@@ -3037,6 +3041,25 @@
       "DocCost": "1900",
       "Doc": "for (data A, signature B, pubkey C) verify the signature of the data against the pubkey =\u003e {0 or 1}",
       "IntroducedVersion": 7,
+      "Groups": [
+        "Cryptography"
+      ]
+    },
+    {
+      "Opcode": 135,
+      "Name": "heartbeat",
+      "Args": [
+        "[64]byte",
+        "[32]byte",
+        "[64]byte",
+        "[32]byte",
+        "[64]byte",
+        "any"
+      ],
+      "Size": 1,
+      "DocCost": "5700",
+      "Doc": "for (signature components A, B, C, D, E, and account F) verify the signature of the block seed from round txn.FirstValid-1 using F's partkey for txn.LastValid",
+      "IntroducedVersion": 10,
       "Groups": [
         "Cryptography"
       ]

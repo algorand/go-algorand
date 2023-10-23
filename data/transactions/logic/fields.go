@@ -1313,6 +1313,12 @@ const (
 
 	// AcctTotalAppSchema - consider how to expose
 
+	// AcctLastProposed is the last round that this account was the propser
+	AcctLastProposed
+	// AcctLastHeartbeat is the last round in which this account went online,
+	// or the `heartbeat` opcode executed in a valid transaction for it.
+	AcctLastHeartbeat
+
 	invalidAcctParamsField // compile-time constant for number of fields
 )
 
@@ -1355,6 +1361,9 @@ var acctParamsFieldSpecs = [...]acctParamsFieldSpec{
 	{AcctTotalAssets, StackUint64, 8, "The numbers of ASAs held by this account (including ASAs this account created)."},
 	{AcctTotalBoxes, StackUint64, boxVersion, "The number of existing boxes created by this account's app."},
 	{AcctTotalBoxBytes, StackUint64, boxVersion, "The total number of bytes used by this account's app's box keys and values."},
+
+	{AcctLastProposed, StackUint64, incentiveVersion, "The round in which this account last proposed."},
+	{AcctLastHeartbeat, StackUint64, incentiveVersion, "The round in which the account went online or executed `heartbeat`."},
 }
 
 func acctParamsFieldSpecByField(f AcctParamsField) (acctParamsFieldSpec, bool) {

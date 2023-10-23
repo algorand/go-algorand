@@ -239,6 +239,8 @@ type LedgerForLogic interface {
 
 	Perform(gi int, ep *EvalParams) error
 	Counter() uint64
+
+	Heartbeat(addr basics.Address) error
 }
 
 // BoxRef is the "hydrated" form of a transactions.BoxRef - it has the actual app id, not an index
@@ -900,6 +902,32 @@ func (st StackType) overlaps(expected StackType) bool {
 	return smin <= emax && smax >= emin
 }
 
+func (st StackType) checkBounds(value stackValue) error {
+	switch st.AVMType {
+	case avmAny:
+		return nil
+	case avmUint64:
+		if value.Uint < st.Bound[0] {
+			return fmt.Errorf("value is too small (%d < %d)", value.Uint, st.Bound[0])
+		}
+		if value.Uint > st.Bound[1] {
+			return fmt.Errorf("value is too large (%d > %d)", value.Uint, st.Bound[1])
+		}
+		return nil
+	case avmBytes:
+		l := uint64(len(value.Bytes))
+		if l < st.Bound[0] {
+			return fmt.Errorf("length is too small (%d < %d)", l, st.Bound[0])
+		}
+		if l > st.Bound[1] {
+			return fmt.Errorf("length is too large (%d > %d)", l, st.Bound[1])
+		}
+		return nil
+	default:
+		panic(st)
+	}
+}
+
 func (st StackType) String() string {
 	return st.Name
 }
@@ -1383,6 +1411,29 @@ func (cx *EvalContext) remainingInners() int {
 	return cx.Proto.MaxInnerTransactions - len(cx.txn.EvalDelta.InnerTxns)
 }
 
+// checkStackArgBounds confirms that all arguments obey StackType bounds.  It
+// plows along without check the AVMType because that will already have been
+// checked. It is only invoked explicitly by specific opcodes, rather than in
+// step() to avoid pointless overhead, as most opcodes have no specific bounds.
+
+func argName(i int) rune {
+	return rune(int('A') + i)
+}
+
+func (cx *EvalContext) checkStackArgBounds() error {
+	opcode := cx.program[cx.pc]
+	spec := &opsByOpcode[cx.version][opcode]
+
+	first := len(cx.Stack) - len(spec.Arg.Types)
+	for i, argType := range spec.Arg.Types {
+		value := cx.Stack[first+i]
+		if err := argType.checkBounds(value); err != nil {
+			return fmt.Errorf("%s arg %c's %w", spec.Name, argName(i), err)
+		}
+	}
+	return nil
+}
+
 func (cx *EvalContext) step() error {
 	opcode := cx.program[cx.pc]
 	spec := &opsByOpcode[cx.version][opcode]
@@ -1402,7 +1453,7 @@ func (cx *EvalContext) step() error {
 	first := len(cx.Stack) - len(spec.Arg.Types)
 	for i, argType := range spec.Arg.Types {
 		if !opCompat(argType.AVMType, cx.Stack[first+i].avmType()) {
-			return fmt.Errorf("%s arg %d wanted %s but got %s", spec.Name, i, argType, cx.Stack[first+i].typeName())
+			return fmt.Errorf("%s arg %c wanted %s but got %s", spec.Name, argName(i), argType, cx.Stack[first+i].typeName())
 		}
 	}
 
@@ -1443,17 +1494,17 @@ func (cx *EvalContext) step() error {
 	if err == nil && !spec.trusted {
 		postheight := len(cx.Stack)
 		if postheight-preheight != len(spec.Return.Types)-len(spec.Arg.Types) && !spec.AlwaysExits() {
-			return fmt.Errorf("%s changed stack height improperly %d != %d",
-				spec.Name, postheight-preheight, len(spec.Return.Types)-len(spec.Arg.Types))
+			return fmt.Errorf("%s changed stack height improperly.  Expected %d, Actual %d",
+				spec.Name, len(spec.Return.Types)-len(spec.Arg.Types), postheight-preheight)
 		}
 		first = postheight - len(spec.Return.Types)
-		for i, argType := range spec.Return.Types {
+		for i, retType := range spec.Return.Types {
 			stackType := cx.Stack[first+i].avmType()
-			if !opCompat(argType.AVMType, stackType) {
-				if spec.AlwaysExits() { // We test in the loop because it's the uncommon case.
+			if !opCompat(retType.AVMType, stackType) {
+				if spec.AlwaysExits() { // We check "late", because it's the uncommon case.
 					break
 				}
-				return fmt.Errorf("%s produced %s but intended %s", spec.Name, cx.Stack[first+i].typeName(), argType)
+				return fmt.Errorf("%s produced %s but intended %s", spec.Name, cx.Stack[first+i].typeName(), retType)
 			}
 			if stackType == avmBytes && len(cx.Stack[first+i].Bytes) > maxStringSize {
 				return fmt.Errorf("%s produced a too big (%d) byte-array", spec.Name, len(cx.Stack[first+i].Bytes))
@@ -1530,7 +1581,7 @@ func (cx *EvalContext) step() error {
 // because the static cost would be wrong. But then again, a static cost model
 // wouldn't work before backBranchEnabledVersion, so such an opcode is already
 // unacceptable. TestLinearOpcodes ensures.
-var blankStack = make([]stackValue, 5)
+var blankStack = make([]stackValue, 6)
 
 func (cx *EvalContext) checkStep() (int, error) {
 	cx.instructionStarts[cx.pc] = true
@@ -4897,6 +4948,14 @@ func opAcctParamsGet(cx *EvalContext) error {
 		value.Uint = account.TotalBoxes
 	case AcctTotalBoxBytes:
 		value.Uint = account.TotalBoxBytes
+
+	case AcctLastProposed:
+		value.Uint = uint64(account.LastProposed)
+	case AcctLastHeartbeat:
+		value.Uint = uint64(account.LastHeartbeat)
+
+	default:
+		return fmt.Errorf("invalid acct_params_get field %s", paramField)
 	}
 	cx.Stack[last] = value
 	cx.Stack = append(cx.Stack, boolToSV(account.MicroAlgos.Raw > 0))
