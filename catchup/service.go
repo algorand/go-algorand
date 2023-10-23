@@ -106,8 +106,7 @@ type Service struct {
 	// an unsupported block.
 	onceUnsupportedRound sync.Once
 
-	lastBlock time.Time
-	rate      uint64
+	lastBlockDownloadDuration time.Duration
 }
 
 // A BlockAuthenticator authenticates blocks given a certificate.
@@ -365,10 +364,6 @@ func (s *Service) fetchAndWrite(ctx context.Context, r basics.Round, prevFetchCo
 			s.log.Debugf("fetchAndWrite(%v): Aborted while waiting to write to ledger", r)
 			return false
 		case <-prevFetchCompleteChan:
-			if !s.lastBlock.IsZero() {
-				s.rate = uint64(time.Second.Milliseconds() / (time.Now().UnixMilli() - s.lastBlock.UnixMilli()))
-			}
-
 			// make sure the ledger wrote enough of the account data to disk, since we don't want the ledger to hold a large amount of data in memory.
 			proto, err := s.ledger.ConsensusParams(r.SubSaturate(1))
 			if err != nil {
@@ -436,10 +431,18 @@ func (s *Service) fetchAndWrite(ctx context.Context, r basics.Round, prevFetchCo
 // TODO the following code does not handle the following case: seedLookback upgrades during fetch
 // Note: seedLookback is a consensus parameter. Currently 2.
 func (s *Service) pipelinedFetch(seedLookback uint64) {
-	parallelRequests := s.parallelBlocks
-	if parallelRequests < seedLookback {
-		parallelRequests = seedLookback
+	maxParallelRequests := s.parallelBlocks
+	if maxParallelRequests < seedLookback {
+		maxParallelRequests = seedLookback
 	}
+
+	minParallelRequests := uint64(1)
+	if minParallelRequests < seedLookback {
+		minParallelRequests = seedLookback
+	}
+
+	// Start from the minimum parallel requests.
+	parallelRequests := minParallelRequests
 
 	completed := make(map[basics.Round]chan bool)
 	var wg sync.WaitGroup
@@ -502,6 +505,8 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 				return
 			}
 
+			// TODO: update parallelRequests based on the rate of the network
+
 			// if we're writing a catchpoint file, stop catching up to reduce the memory pressure. Once we finish writing the file we
 			// could resume with the catchup.
 			if s.ledger.IsWritingCatchpointDataFile() {
@@ -509,8 +514,6 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 				s.suspendForCatchpointWriting = true
 				return
 			}
-
-			// TODO: update parallelRequests based on the rate of the network
 
 		case <-s.ctx.Done():
 			return
