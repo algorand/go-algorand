@@ -1328,7 +1328,7 @@ func (eval *BlockEvaluator) endOfBlock() error {
 				switch eval.block.Round() {
 				case 24018688, 26982912, 27009024, 27713280, 27822080, 27822848, 27929344, 28032768,
 					28977920, 29822208, 30005248, 30033920:
-					// In Go, break is implicit at the end of each case
+					// Don't return an error for these blocks
 				default:
 					return fmt.Errorf("StateProofOnlineTotalWeight wrong: %v != %v", eval.block.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight, expectedVotersWeight)
 				}
