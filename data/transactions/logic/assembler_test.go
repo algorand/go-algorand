@@ -3619,8 +3619,8 @@ func TestReportMultipleErrors(t *testing.T) {
 	ops.ReportMultipleErrors("test.txt", &b)
 	expected := `test.txt: 1: error 1
 test.txt: 0: error 2
-test.txt: 3: error 4
-test.txt: 4:1: error 3
+test.txt: 3: error 3
+test.txt: 4:1: error 4
 test.txt: 5: warning 1
 test.txt: 0: warning 2
 test.txt: 7: warning 3
