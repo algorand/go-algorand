@@ -173,7 +173,7 @@ func (b *basicRPCNode) GetPeers(options ...network.PeerOption) []network.Peer {
 	return b.peers
 }
 
-func (b *basicRPCNode) GenesisID() string {
+func (b *basicRPCNode) GetGenesisID() string {
 	return "test genesisID"
 }
 
