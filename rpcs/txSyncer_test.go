@@ -103,12 +103,12 @@ func (mock mockPendingTxAggregate) PendingTxGroups() [][]transactions.SignedTxn 
 }
 
 type mockHandler struct {
-	messageCounter int32
+	messageCounter atomic.Int32
 	err            error
 }
 
 func (handler *mockHandler) Handle(txgroup []transactions.SignedTxn) error {
-	atomic.AddInt32(&handler.messageCounter, 1)
+	handler.messageCounter.Add(1)
 	return handler.err
 }
 
@@ -201,7 +201,7 @@ func TestSyncFromClient(t *testing.T) {
 	syncer.log = logging.TestingLog(t)
 
 	require.NoError(t, syncer.syncFromClient(&client))
-	require.Equal(t, int32(1), atomic.LoadInt32(&handler.messageCounter))
+	require.Equal(t, int32(1), handler.messageCounter.Load())
 }
 
 func TestSyncFromUnsupportedClient(t *testing.T) {
@@ -218,7 +218,7 @@ func TestSyncFromUnsupportedClient(t *testing.T) {
 	syncer.log = logging.TestingLog(t)
 
 	require.Error(t, syncer.syncFromClient(&client))
-	require.Zero(t, atomic.LoadInt32(&handler.messageCounter))
+	require.Zero(t, handler.messageCounter.Load())
 }
 
 func TestSyncFromClientAndQuit(t *testing.T) {
@@ -235,7 +235,7 @@ func TestSyncFromClientAndQuit(t *testing.T) {
 	syncer.log = logging.TestingLog(t)
 	syncer.cancel()
 	require.Error(t, syncer.syncFromClient(&client))
-	require.Zero(t, atomic.LoadInt32(&handler.messageCounter))
+	require.Zero(t, handler.messageCounter.Load())
 }
 
 func TestSyncFromClientAndError(t *testing.T) {
@@ -251,7 +251,7 @@ func TestSyncFromClientAndError(t *testing.T) {
 	syncer.ctx, syncer.cancel = context.WithCancel(context.Background())
 	syncer.log = logging.TestingLog(t)
 	require.Error(t, syncer.syncFromClient(&client))
-	require.Zero(t, atomic.LoadInt32(&handler.messageCounter))
+	require.Zero(t, handler.messageCounter.Load())
 }
 
 func TestSyncFromClientAndTimeout(t *testing.T) {
@@ -268,7 +268,7 @@ func TestSyncFromClientAndTimeout(t *testing.T) {
 	syncer.ctx, syncer.cancel = context.WithCancel(context.Background())
 	syncer.log = logging.TestingLog(t)
 	require.Error(t, syncer.syncFromClient(&client))
-	require.Zero(t, atomic.LoadInt32(&handler.messageCounter))
+	require.Zero(t, handler.messageCounter.Load())
 }
 
 func TestSync(t *testing.T) {
@@ -292,7 +292,7 @@ func TestSync(t *testing.T) {
 	syncer.log = logging.TestingLog(t)
 
 	require.NoError(t, syncer.sync())
-	require.Equal(t, int32(1), atomic.LoadInt32(&handler.messageCounter))
+	require.Equal(t, int32(1), handler.messageCounter.Load())
 }
 
 func TestNoClientsSync(t *testing.T) {
@@ -307,7 +307,7 @@ func TestNoClientsSync(t *testing.T) {
 	syncer.log = logging.TestingLog(t)
 
 	require.NoError(t, syncer.sync())
-	require.Zero(t, atomic.LoadInt32(&handler.messageCounter))
+	require.Zero(t, handler.messageCounter.Load())
 }
 
 func TestStartAndStop(t *testing.T) {
@@ -335,22 +335,22 @@ func TestStartAndStop(t *testing.T) {
 	canStart := make(chan struct{})
 	syncer.Start(canStart)
 	time.Sleep(2 * time.Second)
-	require.Zero(t, atomic.LoadInt32(&handler.messageCounter))
+	require.Zero(t, handler.messageCounter.Load())
 
 	// signal that syncing can start
 	close(canStart)
 	for x := 0; x < 20; x++ {
 		time.Sleep(100 * time.Millisecond)
-		if atomic.LoadInt32(&handler.messageCounter) != 0 {
+		if handler.messageCounter.Load() != 0 {
 			break
 		}
 	}
-	require.Equal(t, int32(1), atomic.LoadInt32(&handler.messageCounter))
+	require.Equal(t, int32(1), handler.messageCounter.Load())
 
 	// stop syncing and ensure it doesn't happen
 	syncer.Stop()
 	time.Sleep(2 * time.Second)
-	require.Equal(t, int32(1), atomic.LoadInt32(&handler.messageCounter))
+	require.Equal(t, int32(1), handler.messageCounter.Load())
 }
 
 func TestStartAndQuit(t *testing.T) {
@@ -370,12 +370,12 @@ func TestStartAndQuit(t *testing.T) {
 	canStart := make(chan struct{})
 	syncer.Start(canStart)
 	time.Sleep(2 * time.Second)
-	require.Zero(t, atomic.LoadInt32(&handler.messageCounter))
+	require.Zero(t, handler.messageCounter.Load())
 
 	syncer.cancel()
 	time.Sleep(50 * time.Millisecond)
 	// signal that syncing can start, but ensure that it doesn't start (since we quit)
 	close(canStart)
 	time.Sleep(2 * time.Second)
-	require.Zero(t, atomic.LoadInt32(&handler.messageCounter))
+	require.Zero(t, handler.messageCounter.Load())
 }

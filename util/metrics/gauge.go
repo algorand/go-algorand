@@ -24,7 +24,7 @@ import (
 
 // Gauge represent a single gauge variable.
 type Gauge struct {
-	value       uint64
+	value       atomic.Uint64
 	name        string
 	description string
 }
@@ -59,12 +59,12 @@ func (gauge *Gauge) Deregister(reg *Registry) {
 
 // Add increases gauge by x
 func (gauge *Gauge) Add(x uint64) {
-	atomic.AddUint64(&gauge.value, x)
+	gauge.value.Add(x)
 }
 
 // Set sets gauge to x
 func (gauge *Gauge) Set(x uint64) {
-	atomic.StoreUint64(&gauge.value, x)
+	gauge.value.Store(x)
 }
 
 // WriteMetric writes the metric into the output stream
@@ -82,14 +82,14 @@ func (gauge *Gauge) WriteMetric(buf *strings.Builder, parentLabels string) {
 		buf.WriteString(parentLabels)
 	}
 	buf.WriteString("} ")
-	value := atomic.LoadUint64(&gauge.value)
+	value := gauge.value.Load()
 	buf.WriteString(strconv.FormatUint(value, 10))
 	buf.WriteString("\n")
 }
 
 // AddMetric adds the metric into the map
 func (gauge *Gauge) AddMetric(values map[string]float64) {
-	value := atomic.LoadUint64(&gauge.value)
+	value := gauge.value.Load()
 
 	values[sanitizeTelemetryName(gauge.name)] = float64(value)
 }
