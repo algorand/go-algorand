@@ -488,20 +488,22 @@ func TestTrackers_IsBehindCommittingDeltas(t *testing.T) {
 		maxAccountDeltas: defaultMaxAccountDeltas,
 	}
 
-	a.False(tr.isBehindCommittingDeltas())
+	latest := basics.Round(0)
+	a.False(tr.isBehindCommittingDeltas(latest))
 
 	// no deltas but busy committing => not behind
 	tr.accountsCommitting.Store(true)
-	a.False(tr.isBehindCommittingDeltas())
+	a.False(tr.isBehindCommittingDeltas(latest))
 	tr.accountsCommitting.Store(false)
 
 	// lots of deltas but not committing => not behind
-	tr.accts.deltas = make([]ledgercore.StateDelta, defaultMaxAccountDeltas+10)
-	a.False(tr.isBehindCommittingDeltas())
+	latest = basics.Round(defaultMaxAccountDeltas + 10)
+	tr.dbRound = 0
+	a.False(tr.isBehindCommittingDeltas(latest))
 
 	// lots of deltas and committing => behind
 	tr.accountsCommitting.Store(true)
-	a.True(tr.isBehindCommittingDeltas())
+	a.True(tr.isBehindCommittingDeltas(latest))
 }
 
 func TestTrackers_AccountUpdatesLedgerEvaluatorNoBlockHdr(t *testing.T) {

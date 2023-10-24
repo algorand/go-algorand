@@ -738,13 +738,6 @@ func (au *accountUpdates) totalsImpl(rnd basics.Round) (ledgercore.AccountTotals
 	return au.roundTotals[offset], nil
 }
 
-func (au *accountUpdates) numDeltas() uint64 {
-	au.accountsMu.RLock()
-	numDeltas := uint64(len(au.deltas))
-	au.accountsMu.RUnlock()
-	return numDeltas
-}
-
 // initializeFromDisk performs the atomic operation of loading the accounts data information from disk
 // and preparing the accountUpdates for operation.
 func (au *accountUpdates) initializeFromDisk(l ledgerForTracker, lastBalancesRound basics.Round) error {

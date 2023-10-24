@@ -901,7 +901,7 @@ func (l *Ledger) LatestTrackerCommitted() basics.Round {
 // IsBehindCommittingDeltas indicates if the ledger is behind expected number of in-memory deltas.
 // It intended to slow down the catchup service when deltas overgrow some limit.
 func (l *Ledger) IsBehindCommittingDeltas() bool {
-	return l.trackers.isBehindCommittingDeltas()
+	return l.trackers.isBehindCommittingDeltas(l.Latest())
 }
 
 // DebuggerLedger defines the minimal set of method required for creating a debug balances.

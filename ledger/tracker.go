@@ -473,8 +473,13 @@ func (tr *trackerRegistry) waitAccountsWriting() {
 	tr.accountsWriting.Wait()
 }
 
-func (tr *trackerRegistry) isBehindCommittingDeltas() bool {
-	if tr.accts.numDeltas() < tr.maxAccountDeltas {
+func (tr *trackerRegistry) isBehindCommittingDeltas(latest basics.Round) bool {
+	tr.mu.RLock()
+	dbRound := tr.dbRound
+	tr.mu.RUnlock()
+
+	numDeltas := uint64(latest.SubSaturate(dbRound))
+	if numDeltas < tr.maxAccountDeltas {
 		return false
 	}
 
