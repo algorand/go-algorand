@@ -88,7 +88,7 @@ type Service struct {
 	blockValidationPool execpool.BacklogPool
 
 	// suspendForLedgerOps defines whether we've run into a state where the ledger is currently busy writing the
-	// catchpoint file. If so, we want to suspend the catchup process until the catchpoint file writing is complete,
+	// catchpoint file or flushing accounts. If so, we want to suspend the catchup process until the catchpoint file writing is complete,
 	// and resume from there without stopping the catchup timer.
 	suspendForLedgerOps bool
 
