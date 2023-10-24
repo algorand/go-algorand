@@ -60,7 +60,8 @@ var txBacklogSize = config.GetDefaultLocal().TxBacklogSize
 // mock sender is used to implement OnClose, since TXHandlers expect to use Senders and ERL Clients
 type mockSender struct{}
 
-func (m mockSender) OnClose(func()) {}
+func (m mockSender) OnClose(func())                 {}
+func (m mockSender) GossipNode() network.GossipNode { panic("not implemented") }
 
 // txHandlerConfig is a subset of tx handler related options from config.Local
 type txHandlerConfig struct {

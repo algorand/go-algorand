@@ -59,6 +59,7 @@ type P2PNetwork struct {
 	handler                        msgHandler
 	broadcaster                    msgBroadcaster
 	wsPeers                        map[peer.ID]*wsPeer
+	wsPeersToIDs                   map[*wsPeer]peer.ID
 	wsPeersLock                    deadlock.RWMutex
 	wsPeersChangeCounter           atomic.Int32
 	wsPeersConnectivityCheckTicker *time.Ticker
@@ -67,6 +68,13 @@ type P2PNetwork struct {
 type p2pPeerStats struct {
 	txReceived atomic.Uint64
 }
+
+type gossipSubPeer struct {
+	peerID peer.ID
+	net    GossipNode
+}
+
+func (p gossipSubPeer) GossipNode() GossipNode { return p.net }
 
 // NewP2PNetwork returns an instance of GossipNode that uses the p2p.Service
 func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebookAddresses []string, genesisID string, networkID protocol.NetworkID) (*P2PNetwork, error) {
@@ -83,13 +91,14 @@ func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebo
 	}
 
 	net := &P2PNetwork{
-		log:       log,
-		config:    cfg,
-		genesisID: genesisID,
-		networkID: networkID,
-		topicTags: map[protocol.Tag]string{"TX": p2p.TXTopicName},
-		wsPeers:   make(map[peer.ID]*wsPeer),
-		peerStats: make(map[peer.ID]*p2pPeerStats),
+		log:          log,
+		config:       cfg,
+		genesisID:    genesisID,
+		networkID:    networkID,
+		topicTags:    map[protocol.Tag]string{"TX": p2p.TXTopicName},
+		wsPeers:      make(map[peer.ID]*wsPeer),
+		wsPeersToIDs: make(map[*wsPeer]peer.ID),
+		peerStats:    make(map[peer.ID]*p2pPeerStats),
 	}
 	net.ctx, net.ctxCancel = context.WithCancel(context.Background())
 	net.handler = msgHandler{
@@ -176,6 +185,7 @@ func (n *P2PNetwork) innerStop() {
 			n.log.Warnf("Error closing peer %s: %v", peerID, err)
 		}
 		delete(n.wsPeers, peerID)
+		delete(n.wsPeersToIDs, peer)
 	}
 	n.wsPeersLock.Unlock()
 	closeGroup.Wait()
@@ -244,27 +254,35 @@ func (n *P2PNetwork) Relay(ctx context.Context, tag protocol.Tag, data []byte, w
 }
 
 // Disconnect from a peer, probably due to protocol errors.
-func (n *P2PNetwork) Disconnect(badnode Peer) {
-	node, ok := badnode.(peer.ID)
-	if !ok {
-		n.log.Warnf("Unknown peer type %T", badnode)
-		return
-	}
+func (n *P2PNetwork) Disconnect(badpeer DisconnectablePeer) {
+	var peerID peer.ID
+	var wsp *wsPeer
+
 	n.wsPeersLock.Lock()
 	defer n.wsPeersLock.Unlock()
-	if wsPeer, ok := n.wsPeers[node]; ok {
-		wsPeer.CloseAndWait(time.Now().Add(peerDisconnectionAckDuration))
-		delete(n.wsPeers, node)
-	} else {
-		n.log.Warnf("Could not find wsPeer reference for peer %s", node)
+	switch p := badpeer.(type) {
+	case gossipSubPeer: // Disconnect came from a message received via GossipSub
+		peerID, wsp = p.peerID, n.wsPeers[p.peerID]
+	case *wsPeer: // Disconnect came from a message received via wsPeer
+		peerID, wsp = n.wsPeersToIDs[p], p
+	default:
+		n.log.Warnf("Unknown peer type %T", badpeer)
+		return
 	}
-	err := n.service.ClosePeer(node)
+	if wsp != nil {
+		wsp.CloseAndWait(time.Now().Add(peerDisconnectionAckDuration))
+		delete(n.wsPeers, peerID)
+		delete(n.wsPeersToIDs, wsp)
+	} else {
+		n.log.Warnf("Could not find wsPeer reference for peer %s", peerID)
+	}
+	err := n.service.ClosePeer(peerID)
 	if err != nil {
-		n.log.Warnf("Error disconnecting from peer %s: %v", node, err)
+		n.log.Warnf("Error disconnecting from peer %s: %v", peerID, err)
 	}
 }
 
-func (n *P2PNetwork) disconnectThread(badnode Peer, reason disconnectReason) {
+func (n *P2PNetwork) disconnectThread(badnode DisconnectablePeer, reason disconnectReason) {
 	defer n.wg.Done()
 	n.Disconnect(badnode) // ignores reason
 }
@@ -309,7 +327,7 @@ func (n *P2PNetwork) ClearHandlers() {
 }
 
 // GetRoundTripper returns a Transport that would limit the number of outgoing connections.
-func (n *P2PNetwork) GetRoundTripper() http.RoundTripper {
+func (n *P2PNetwork) GetRoundTripper(peer Peer) http.RoundTripper {
 	return http.DefaultTransport
 }
 
@@ -322,11 +340,6 @@ func (n *P2PNetwork) OnNetworkAdvance() {}
 // GetHTTPRequestConnection returns the underlying connection for the given request. Note that the request must be the same
 // request that was provided to the http handler ( or provide a fallback Context() to that )
 func (n *P2PNetwork) GetHTTPRequestConnection(request *http.Request) (conn net.Conn) { return nil }
-
-// SubstituteGenesisID substitutes the "{genesisID}" with their network-specific genesisID.
-func (n *P2PNetwork) SubstituteGenesisID(rawURL string) string {
-	return strings.Replace(rawURL, "{genesisID}", n.genesisID, -1)
-}
 
 // wsStreamHandler is a callback that the p2p package calls when a new peer connects and establishes a
 // stream for the websocket protocol.
@@ -358,13 +371,14 @@ func (n *P2PNetwork) wsStreamHandler(ctx context.Context, peer peer.ID, stream n
 	}
 	// create a wsPeer for this stream and added it to the peers map.
 	wsp := &wsPeer{
-		wsPeerCore: makePeerCore(ctx, n, n.log, n.handler.readBuffer, addr, n.GetRoundTripper(), addr),
+		wsPeerCore: makePeerCore(ctx, n, n.log, n.handler.readBuffer, addr, n.GetRoundTripper(nil), addr),
 		conn:       &wsPeerConnP2PImpl{stream: stream},
 		outgoing:   !incoming,
 	}
 	wsp.init(n.config, outgoingMessagesBufferSize)
 	n.wsPeersLock.Lock()
 	n.wsPeers[peer] = wsp
+	n.wsPeersToIDs[wsp] = peer
 	n.wsPeersLock.Unlock()
 	n.wsPeersChangeCounter.Add(1)
 }
@@ -374,6 +388,7 @@ func (n *P2PNetwork) peerRemoteClose(peer *wsPeer, reason disconnectReason) {
 	remotePeerID := peer.conn.(*wsPeerConnP2PImpl).stream.Conn().RemotePeer()
 	n.wsPeersLock.Lock()
 	delete(n.wsPeers, remotePeerID)
+	delete(n.wsPeersToIDs, peer)
 	n.wsPeersLock.Unlock()
 	n.wsPeersChangeCounter.Add(1)
 }
@@ -438,7 +453,7 @@ func (n *P2PNetwork) txTopicHandleLoop() {
 // txTopicValidator calls txHandler to validate and process incoming transactions.
 func (n *P2PNetwork) txTopicValidator(ctx context.Context, peerID peer.ID, msg *pubsub.Message) pubsub.ValidationResult {
 	inmsg := IncomingMessage{
-		Sender:   msg.ReceivedFrom,
+		Sender:   gossipSubPeer{peerID: msg.ReceivedFrom, net: n},
 		Tag:      protocol.TxnTag,
 		Data:     msg.Data,
 		Net:      n,
@@ -446,7 +461,7 @@ func (n *P2PNetwork) txTopicValidator(ctx context.Context, peerID peer.ID, msg *
 	}
 
 	// if we sent the message, don't validate it
-	if inmsg.Sender == n.service.ID() {
+	if msg.ReceivedFrom == n.service.ID() {
 		return pubsub.ValidationAccept
 	}
 

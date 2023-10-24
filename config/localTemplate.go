@@ -585,6 +585,12 @@ type Local struct {
 	// EnableP2P turns on the peer to peer network
 	EnableP2P bool `version[31]:"false"`
 
+	// EnableP2PHybridMode turns on both websockets and P2P networking.
+	EnableP2PHybridMode bool `version[31]:"false"`
+
+	// P2PListenAddress sets the listen address used for P2P networking, if hybrid mode is set.
+	P2PListenAddress string `version[31]:""`
+
 	// P2PPersistPeerID will write the private key used for the node's PeerID to the P2PPrivateKeyLocation.
 	// This is only used when P2PEnable is true. If P2PPrivateKey is not specified, it uses the default location.
 	P2PPersistPeerID bool `version[29]:"false"`

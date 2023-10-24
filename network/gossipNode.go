@@ -20,6 +20,7 @@ import (
 	"context"
 	"net"
 	"net/http"
+	"strings"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/protocol"
@@ -27,6 +28,11 @@ import (
 
 // Peer opaque interface for referring to a neighbor in the network
 type Peer interface{}
+
+// DisconnectablePeer is a Peer with a long-living connection to a network that can be disconnected
+type DisconnectablePeer interface {
+	GossipNode() GossipNode
+}
 
 // PeerOption allows users to specify a subset of peers to query
 //
@@ -51,7 +57,7 @@ type GossipNode interface {
 	Address() (string, bool)
 	Broadcast(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except Peer) error
 	Relay(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except Peer) error
-	Disconnect(badnode Peer)
+	Disconnect(badnode DisconnectablePeer)
 	DisconnectPeers() // only used by testing
 
 	// RegisterHTTPHandler path accepts gorilla/mux path annotations
@@ -78,7 +84,7 @@ type GossipNode interface {
 	ClearHandlers()
 
 	// GetRoundTripper returns a Transport that would limit the number of outgoing connections.
-	GetRoundTripper() http.RoundTripper
+	GetRoundTripper(peer Peer) http.RoundTripper
 
 	// OnNetworkAdvance notifies the network library that the agreement protocol was able to make a notable progress.
 	// this is the only indication that we have that we haven't formed a clique, where all incoming messages
@@ -90,8 +96,8 @@ type GossipNode interface {
 	// request that was provided to the http handler ( or provide a fallback Context() to that )
 	GetHTTPRequestConnection(request *http.Request) (conn net.Conn)
 
-	// SubstituteGenesisID substitutes the "{genesisID}" with their network-specific genesisID.
-	SubstituteGenesisID(rawURL string) string
+	// GetGenesisID returns the network-specific genesisID.
+	GetGenesisID() string
 
 	// called from wsPeer to report that it has closed
 	peerRemoteClose(peer *wsPeer, reason disconnectReason)
@@ -109,7 +115,7 @@ var outgoingMessagesBufferSize = int(
 
 // IncomingMessage represents a message arriving from some peer in our p2p network
 type IncomingMessage struct {
-	Sender Peer
+	Sender DisconnectablePeer
 	Tag    Tag
 	Data   []byte
 	Err    error
@@ -206,4 +212,9 @@ func max(numbers ...uint64) (maxNum uint64) {
 		}
 	}
 	return
+}
+
+// SubstituteGenesisID substitutes the "{genesisID}" with their network-specific genesisID.
+func SubstituteGenesisID(net GossipNode, rawURL string) string {
+	return strings.Replace(rawURL, "{genesisID}", net.GetGenesisID(), -1)
 }

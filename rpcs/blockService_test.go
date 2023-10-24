@@ -70,6 +70,10 @@ func (mup *mockUnicastPeer) Respond(ctx context.Context, reqMsg network.Incoming
 	return nil
 }
 
+func (mup *mockUnicastPeer) GossipNode() network.GossipNode {
+	panic("not implemented")
+}
+
 // TestHandleCatchupReqNegative covers the error reporting in handleCatchupReq
 func TestHandleCatchupReqNegative(t *testing.T) {
 	partitiontest.PartitionTest(t)

@@ -1,0 +1,206 @@
+package network
+
+import (
+	"context"
+	"fmt"
+	"net"
+	"net/http"
+	"sync"
+
+	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/protocol"
+)
+
+// HybridP2PNetwork runs both P2PNetwork and WebsocketNetwork to implement the GossipNode interface
+type HybridP2PNetwork struct {
+	p2pNetwork *P2PNetwork
+	wsNetwork  *WebsocketNetwork
+	genesisID  string
+
+	useP2PAddress bool
+}
+
+// NewHybridP2PNetwork constructs a GossipNode that combines P2PNetwork and WebsocketNetwork
+func NewHybridP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebookAddresses []string, genesisID string, networkID protocol.NetworkID, nodeInfo NodeInfo) (*HybridP2PNetwork, error) {
+	if !cfg.EnableP2PHybridMode {
+		return nil, fmt.Errorf("hybrid mode is not enabled")
+	}
+	wsnet, err := NewWebsocketNetwork(log, cfg, phonebookAddresses, genesisID, networkID, nodeInfo)
+	if err != nil {
+		return nil, err
+	}
+	// supply alternate NetAddress for P2P network
+	p2pcfg := cfg
+	p2pcfg.NetAddress = cfg.P2PListenAddress
+	p2pnet, err := NewP2PNetwork(log, p2pcfg, datadir, phonebookAddresses, genesisID, networkID)
+	if err != nil {
+		return nil, err
+	}
+	return &HybridP2PNetwork{
+		p2pNetwork: p2pnet,
+		wsNetwork:  wsnet,
+		genesisID:  genesisID,
+	}, nil
+}
+
+// Address implements GossipNode
+func (n *HybridP2PNetwork) Address() (string, bool) {
+	// TODO map from configuration? used for REST API, goal status, algod.net, etc
+	if n.useP2PAddress {
+		return n.p2pNetwork.Address()
+	}
+	return n.wsNetwork.Address()
+}
+
+type multiError struct{ p2pErr, wsErr error }
+
+func (e *multiError) Error() string   { return fmt.Sprintf("p2pErr: %s, wsErr: %s", e.p2pErr, e.wsErr) }
+func (e *multiError) Unwrap() []error { return []error{e.p2pErr, e.wsErr} }
+
+func (n *HybridP2PNetwork) runParallel(fn func(net GossipNode) error) error {
+	var wg sync.WaitGroup
+	var p2pErr, wsErr error
+
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		p2pErr = fn(n.p2pNetwork)
+	}()
+	go func() {
+		defer wg.Done()
+		wsErr = fn(n.wsNetwork)
+	}()
+	wg.Wait()
+
+	if p2pErr != nil && wsErr != nil {
+		return &multiError{p2pErr, wsErr}
+	}
+	if p2pErr != nil {
+		return p2pErr
+	}
+	if wsErr != nil {
+		return wsErr
+	}
+	return nil
+}
+
+// Broadcast implements GossipNode
+func (n *HybridP2PNetwork) Broadcast(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except Peer) error {
+	return n.runParallel(func(net GossipNode) error {
+		return net.Broadcast(ctx, tag, data, wait, except)
+	})
+}
+
+// Relay implements GossipNode
+func (n *HybridP2PNetwork) Relay(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except Peer) error {
+	return n.runParallel(func(net GossipNode) error {
+		return net.Relay(ctx, tag, data, wait, except)
+	})
+}
+
+// Disconnect implements GossipNode
+func (n *HybridP2PNetwork) Disconnect(badnode DisconnectablePeer) {
+	net := badnode.GossipNode()
+	if net == n.p2pNetwork {
+		n.p2pNetwork.Disconnect(badnode)
+	} else if net == n.wsNetwork {
+		n.wsNetwork.Disconnect(badnode)
+	} else {
+		panic("badnode.GossipNode() returned a network that is not part of this HybridP2PNetwork")
+	}
+}
+
+// DisconnectPeers implements GossipNode
+func (n *HybridP2PNetwork) DisconnectPeers() {
+	_ = n.runParallel(func(net GossipNode) error {
+		net.DisconnectPeers()
+		return nil
+	})
+}
+
+// RegisterHTTPHandler implements GossipNode
+func (n *HybridP2PNetwork) RegisterHTTPHandler(path string, handler http.Handler) {
+	n.p2pNetwork.RegisterHTTPHandler(path, handler)
+	n.wsNetwork.RegisterHTTPHandler(path, handler)
+}
+
+// RequestConnectOutgoing implements GossipNode
+func (n *HybridP2PNetwork) RequestConnectOutgoing(replace bool, quit <-chan struct{}) {}
+
+// GetPeers implements GossipNode
+func (n *HybridP2PNetwork) GetPeers(options ...PeerOption) []Peer {
+	// TODO better way of combining data from peerstore and returning in GetPeers
+	var peers []Peer
+	peers = append(peers, n.p2pNetwork.GetPeers(options...)...)
+	peers = append(peers, n.wsNetwork.GetPeers(options...)...)
+	return peers
+}
+
+// Start implements GossipNode
+func (n *HybridP2PNetwork) Start() {
+	_ = n.runParallel(func(net GossipNode) error {
+		net.Start()
+		return nil
+	})
+}
+
+// Stop implements GossipNode
+func (n *HybridP2PNetwork) Stop() {
+	_ = n.runParallel(func(net GossipNode) error {
+		net.Start()
+		return nil
+	})
+}
+
+// RegisterHandlers adds to the set of given message handlers.
+func (n *HybridP2PNetwork) RegisterHandlers(dispatch []TaggedMessageHandler) {
+	n.p2pNetwork.RegisterHandlers(dispatch)
+	n.wsNetwork.RegisterHandlers(dispatch)
+}
+
+// ClearHandlers deregisters all the existing message handlers.
+func (n *HybridP2PNetwork) ClearHandlers() {
+	n.p2pNetwork.ClearHandlers()
+	n.wsNetwork.ClearHandlers()
+}
+
+// GetRoundTripper returns a Transport that would limit the number of outgoing connections.
+func (n *HybridP2PNetwork) GetRoundTripper(peer Peer) http.RoundTripper {
+	// TODO today this is used by HTTPTxSync.Sync after calling GetPeers(network.PeersPhonebookRelays)
+	switch p := peer.(type) {
+	case *wsPeer:
+		return p.net.GetRoundTripper(peer)
+	case gossipSubPeer:
+		return p.net.GetRoundTripper(peer)
+	default:
+		panic("unrecognized peer type")
+	}
+}
+
+// OnNetworkAdvance notifies the network library that the agreement protocol was able to make a notable progress.
+// this is the only indication that we have that we haven't formed a clique, where all incoming messages
+// arrive very quickly, but might be missing some votes. The usage of this call is expected to have similar
+// characteristics as with a watchdog timer.
+func (n *HybridP2PNetwork) OnNetworkAdvance() {
+	_ = n.runParallel(func(net GossipNode) error {
+		net.OnNetworkAdvance()
+		return nil
+	})
+}
+
+// GetHTTPRequestConnection returns the underlying connection for the given request. Note that the request must be the same
+// request that was provided to the http handler ( or provide a fallback Context() to that )
+func (n *HybridP2PNetwork) GetHTTPRequestConnection(request *http.Request) (conn net.Conn) {
+	return nil
+}
+
+// GetGenesisID returns the network-specific genesisID.
+func (n *HybridP2PNetwork) GetGenesisID() string {
+	return n.genesisID
+}
+
+// called from wsPeer to report that it has closed
+func (n *HybridP2PNetwork) peerRemoteClose(peer *wsPeer, reason disconnectReason) {
+	panic("wsPeer should only call WebsocketNetwork.peerRemoteClose or P2PNetwork.peerRemoteClose")
+}

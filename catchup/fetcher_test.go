@@ -21,7 +21,6 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"strings"
 	"testing"
 
 	"github.com/gorilla/mux"
@@ -174,8 +173,8 @@ func (b *basicRPCNode) GetPeers(options ...network.PeerOption) []network.Peer {
 	return b.peers
 }
 
-func (b *basicRPCNode) SubstituteGenesisID(rawURL string) string {
-	return strings.Replace(rawURL, "{genesisID}", "test genesisID", -1)
+func (b *basicRPCNode) GenesisID() string {
+	return "test genesisID"
 }
 
 type httpTestPeerSource struct {
@@ -192,8 +191,8 @@ func (s *httpTestPeerSource) RegisterHandlers(dispatch []network.TaggedMessageHa
 	s.dispatchHandlers = append(s.dispatchHandlers, dispatch...)
 }
 
-func (s *httpTestPeerSource) SubstituteGenesisID(rawURL string) string {
-	return strings.Replace(rawURL, "{genesisID}", "test genesisID", -1)
+func (s *httpTestPeerSource) GetGenesisID() string {
+	return "test genesisID"
 }
 
 // implement network.HTTPPeer
@@ -238,6 +237,8 @@ type testUnicastPeer struct {
 func (p *testUnicastPeer) GetAddress() string {
 	return "test"
 }
+
+func (p *testUnicastPeer) GossipNode() network.GossipNode { return p.gn }
 
 func (p *testUnicastPeer) Request(ctx context.Context, tag protocol.Tag, topics network.Topics) (resp *network.Response, e error) {
 

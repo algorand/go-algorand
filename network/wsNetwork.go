@@ -340,7 +340,7 @@ type networkPeerManager interface {
 
 	// used by msgHandler
 	Broadcast(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except Peer) error
-	disconnectThread(badnode Peer, reason disconnectReason)
+	disconnectThread(badnode DisconnectablePeer, reason disconnectReason)
 	checkPeersConnectivity()
 }
 
@@ -455,13 +455,13 @@ func (wn *WebsocketNetwork) RelayArray(ctx context.Context, tags []protocol.Tag,
 	return nil
 }
 
-func (wn *WebsocketNetwork) disconnectThread(badnode Peer, reason disconnectReason) {
+func (wn *WebsocketNetwork) disconnectThread(badnode DisconnectablePeer, reason disconnectReason) {
 	defer wn.wg.Done()
 	wn.disconnect(badnode, reason)
 }
 
 // Disconnect from a peer, probably due to protocol errors.
-func (wn *WebsocketNetwork) Disconnect(node Peer) {
+func (wn *WebsocketNetwork) Disconnect(node DisconnectablePeer) {
 	wn.disconnect(node, disconnectBadData)
 }
 
@@ -543,14 +543,14 @@ func (wn *WebsocketNetwork) GetPeers(options ...PeerOption) []Peer {
 			var addrs []string
 			addrs = wn.phonebook.GetAddresses(1000, PhoneBookEntryRelayRole)
 			for _, addr := range addrs {
-				peerCore := makePeerCore(wn.ctx, wn, wn.log, wn.handler.readBuffer, addr, wn.GetRoundTripper(), "" /*origin address*/)
+				peerCore := makePeerCore(wn.ctx, wn, wn.log, wn.handler.readBuffer, addr, wn.GetRoundTripper(nil), "" /*origin address*/)
 				outPeers = append(outPeers, &peerCore)
 			}
 		case PeersPhonebookArchivalNodes:
 			var addrs []string
 			addrs = wn.phonebook.GetAddresses(1000, PhoneBookEntryRelayRole)
 			for _, addr := range addrs {
-				peerCore := makePeerCore(wn.ctx, wn, wn.log, wn.handler.readBuffer, addr, wn.GetRoundTripper(), "" /*origin address*/)
+				peerCore := makePeerCore(wn.ctx, wn, wn.log, wn.handler.readBuffer, addr, wn.GetRoundTripper(nil), "" /*origin address*/)
 				outPeers = append(outPeers, &peerCore)
 			}
 		case PeersPhonebookArchivers:
@@ -558,7 +558,7 @@ func (wn *WebsocketNetwork) GetPeers(options ...PeerOption) []Peer {
 			var addrs []string
 			addrs = wn.phonebook.GetAddresses(1000, PhoneBookEntryArchiverRole)
 			for _, addr := range addrs {
-				peerCore := makePeerCore(wn.ctx, wn, wn.log, wn.handler.readBuffer, addr, wn.GetRoundTripper(), "" /*origin address*/)
+				peerCore := makePeerCore(wn.ctx, wn, wn.log, wn.handler.readBuffer, addr, wn.GetRoundTripper(nil), "" /*origin address*/)
 				outPeers = append(outPeers, &peerCore)
 			}
 		case PeersConnectedIn:
@@ -1074,7 +1074,7 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 	}
 
 	peer := &wsPeer{
-		wsPeerCore:        makePeerCore(wn.ctx, wn, wn.log, wn.handler.readBuffer, trackedRequest.otherPublicAddr, wn.GetRoundTripper(), trackedRequest.remoteHost),
+		wsPeerCore:        makePeerCore(wn.ctx, wn, wn.log, wn.handler.readBuffer, trackedRequest.otherPublicAddr, wn.GetRoundTripper(nil), trackedRequest.remoteHost),
 		conn:              wsPeerWebsocketConnImpl{conn},
 		outgoing:          false,
 		InstanceName:      trackedRequest.otherInstanceName,
@@ -2009,7 +2009,7 @@ func (wn *WebsocketNetwork) numOutgoingPending() int {
 
 // GetRoundTripper returns an http.Transport that limits the number of connection
 // to comply with connectionsRateLimitingCount.
-func (wn *WebsocketNetwork) GetRoundTripper() http.RoundTripper {
+func (wn *WebsocketNetwork) GetRoundTripper(peer Peer) http.RoundTripper {
 	return &wn.transport
 }
 
@@ -2148,7 +2148,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 	}
 
 	peer := &wsPeer{
-		wsPeerCore:                  makePeerCore(wn.ctx, wn, wn.log, wn.handler.readBuffer, addr, wn.GetRoundTripper(), "" /* origin */),
+		wsPeerCore:                  makePeerCore(wn.ctx, wn, wn.log, wn.handler.readBuffer, addr, wn.GetRoundTripper(nil), "" /* origin */),
 		conn:                        wsPeerWebsocketConnImpl{conn},
 		outgoing:                    true,
 		incomingMsgFilter:           wn.incomingMsgFilter,
@@ -2478,7 +2478,5 @@ func (wn *WebsocketNetwork) postMessagesOfInterestThread() {
 	}
 }
 
-// SubstituteGenesisID substitutes the "{genesisID}" with their network-specific genesisID.
-func (wn *WebsocketNetwork) SubstituteGenesisID(rawURL string) string {
-	return strings.Replace(rawURL, "{genesisID}", wn.GenesisID, -1)
-}
+// GetGenesisID returns the network-specific genesisID.
+func (wn *WebsocketNetwork) GetGenesisID() string { return wn.GenesisID }

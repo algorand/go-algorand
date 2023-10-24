@@ -58,7 +58,7 @@ func (network *MockNetwork) RequestConnectOutgoing(replace bool, quit <-chan str
 }
 
 // Disconnect - unused function
-func (network *MockNetwork) Disconnect(badpeer network.Peer) {
+func (network *MockNetwork) Disconnect(badpeer network.DisconnectablePeer) {
 }
 
 // DisconnectPeers - unused function
@@ -75,7 +75,7 @@ func (network *MockNetwork) GetPeers(options ...network.PeerOption) []network.Pe
 }
 
 // GetRoundTripper -- returns the network round tripper
-func (network *MockNetwork) GetRoundTripper() http.RoundTripper {
+func (network *MockNetwork) GetRoundTripper(peer network.Peer) http.RoundTripper {
 	return http.DefaultTransport
 }
 
@@ -106,7 +106,7 @@ func (network *MockNetwork) GetHTTPRequestConnection(request *http.Request) (con
 	return nil
 }
 
-// SubstituteGenesisID - empty implementation
-func (network *MockNetwork) SubstituteGenesisID(rawURL string) string {
-	return rawURL
+// GenesisID - empty implementation
+func (network *MockNetwork) GenesisID() string {
+	return "mocknet"
 }
