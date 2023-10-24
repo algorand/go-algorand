@@ -363,6 +363,10 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 
 	err = fixture.ClientWaitForRoundWithTimeout(usingNodeRestClient, uint64(targetCatchpointRound+1))
 	a.NoError(err)
+
+	// ensure the raw block can be downloaded (including cert)
+	_, err = usingNodeRestClient.RawBlock(uint64(targetCatchpointRound))
+	a.NoError(err)
 }
 
 func TestCatchpointLabelGeneration(t *testing.T) {
