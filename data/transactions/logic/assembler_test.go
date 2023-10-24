@@ -3604,10 +3604,13 @@ func TestReportMultipleErrors(t *testing.T) {
 			{Line: 1, Err: errors.New("error 1")},
 			{Err: errors.New("error 2")},
 			{Line: 3, Err: errors.New("error 3")},
+			{Line: 4, Column: 1, Err: errors.New("error 4")},
 		},
-		Warnings: []error{
-			errors.New("warning 1"),
-			errors.New("warning 2"),
+		Warnings: []sourceError{
+			{Line: 5, Err: errors.New("warning 1")},
+			{Err: errors.New("warning 2")},
+			{Line: 7, Err: errors.New("warning 3")},
+			{Line: 8, Column: 1, Err: errors.New("warning 4")},
 		},
 	}
 
@@ -3617,8 +3620,11 @@ func TestReportMultipleErrors(t *testing.T) {
 	expected := `test.txt: 1: error 1
 test.txt: 0: error 2
 test.txt: 3: error 3
-test.txt: warning 1
-test.txt: warning 2
+test.txt: 4:1: error 4
+test.txt: 5: warning 1
+test.txt: 0: warning 2
+test.txt: 7: warning 3
+test.txt: 8:1: warning 4
 `
 	require.Equal(t, expected, b.String())
 
@@ -3628,8 +3634,11 @@ test.txt: warning 2
 	expected = `1: error 1
 0: error 2
 3: error 3
-warning 1
-warning 2
+4:1: error 4
+5: warning 1
+0: warning 2
+7: warning 3
+8:1: warning 4
 `
 	require.Equal(t, expected, b.String())
 
