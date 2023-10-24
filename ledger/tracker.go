@@ -307,7 +307,7 @@ func (tr *trackerRegistry) initialize(l ledgerForTracker, trackers []ledgerTrack
 	tr.maxAccountDeltas = defaultMaxAccountDeltas
 	if cfg.MaxAcctLookback > tr.maxAccountDeltas {
 		tr.maxAccountDeltas = cfg.MaxAcctLookback + 1
-		tr.log.Infof("maxAccountDeltas as overridden to %d because of MaxAcctLookback=%d: this combination might use lots of RAM. To preserve some blocks in blockdb consider using MaxBlockHistoryLookback config option instead of MaxAcctLookback", tr.maxAccountDeltas, cfg.MaxAcctLookback)
+		tr.log.Infof("maxAccountDeltas was overridden to %d because of MaxAcctLookback=%d: this combination might use lots of RAM. To preserve some blocks in blockdb consider using MaxBlockHistoryLookback config option instead of MaxAcctLookback", tr.maxAccountDeltas, cfg.MaxAcctLookback)
 	}
 
 	tr.ctx, tr.ctxCancel = context.WithCancel(context.Background())
