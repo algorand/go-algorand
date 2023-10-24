@@ -36,6 +36,7 @@ import (
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/execpool"
+	"github.com/algorand/go-algorand/util/metrics"
 )
 
 const catchupPeersForSync = 10
@@ -294,6 +295,7 @@ func (s *Service) fetchAndWrite(ctx context.Context, r basics.Round, prevFetchCo
 
 		// Try to fetch, timing out after retryInterval
 		block, cert, blockDownloadDuration, err := s.innerFetch(ctx, r, peer)
+		totalBlocksFetched.Inc(nil)
 
 		if err != nil {
 			if err == errLedgerAlreadyHasBlock {
@@ -495,6 +497,14 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 				return
 			}
 
+			// if ledger is busy, pause for some time to let the fetchAndWrite goroutines to finish fetching in-flight blocks.
+			start := time.Now()
+			for (s.ledger.IsWritingCatchpointDataFile() || s.ledger.IsBehindCommittingDeltas()) && time.Since(start) < s.deadlineTimeout {
+				time.Sleep(100 * time.Millisecond)
+			}
+
+			// if ledger is still busy after s.deadlineTimeout timeout then about the current pipelinedFetch invocation.
+
 			// if we're writing a catchpoint file, stop catching up to reduce the memory pressure. Once we finish writing the file we
 			// could resume with the catchup.
 			if s.ledger.IsWritingCatchpointDataFile() {
@@ -654,7 +664,7 @@ func (s *Service) sync() {
 		}
 	}
 
-	elapsedTime := time.Now().Sub(start)
+	elapsedTime := time.Since(start)
 	s.log.EventWithDetails(telemetryspec.ApplicationState, telemetryspec.CatchupStopEvent, telemetryspec.CatchupStopEventDetails{
 		StartRound: uint64(pr),
 		EndRound:   uint64(s.ledger.LastRound()),
@@ -847,3 +857,5 @@ func createPeerSelector(net network.GossipNode, cfg config.Local, pipelineFetch 
 	}
 	return makePeerSelector(net, peerClasses)
 }
+
+var totalBlocksFetched = metrics.MakeCounter(metrics.MetricName{Name: "algod_catchup_blocks_fetched", Description: "Total number of blocks fetched with catchup"})
