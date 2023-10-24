@@ -153,16 +153,16 @@ func TestTrackerScheduleCommit(t *testing.T) {
 type emptyTracker struct {
 }
 
-// loadFromDisk is not implemented in the blockingTracker.
+// loadFromDisk is not implemented in the emptyTracker.
 func (t *emptyTracker) loadFromDisk(ledgerForTracker, basics.Round) error {
 	return nil
 }
 
-// newBlock is not implemented in the blockingTracker.
+// newBlock is not implemented in the emptyTracker.
 func (t *emptyTracker) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 }
 
-// committedUpTo in the blockingTracker just stores the committed round.
+// committedUpTo in the emptyTracker just stores the committed round.
 func (t *emptyTracker) committedUpTo(committedRnd basics.Round) (minRound, lookback basics.Round) {
 	return 0, basics.Round(0)
 }
@@ -171,12 +171,12 @@ func (t *emptyTracker) produceCommittingTask(committedRound basics.Round, dbRoun
 	return dcr
 }
 
-// prepareCommit, is not used by the blockingTracker
+// prepareCommit, is not used by the emptyTracker
 func (t *emptyTracker) prepareCommit(*deferredCommitContext) error {
 	return nil
 }
 
-// commitRound is not used by the blockingTracker
+// commitRound is not used by the emptyTracker
 func (t *emptyTracker) commitRound(context.Context, trackerdb.TransactionScope, *deferredCommitContext) error {
 	return nil
 }
@@ -188,7 +188,7 @@ func (t *emptyTracker) postCommit(ctx context.Context, dcc *deferredCommitContex
 func (t *emptyTracker) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
 }
 
-// control functions are not used by the blockingTracker
+// control functions are not used by the emptyTracker
 func (t *emptyTracker) handleUnorderedCommit(dcc *deferredCommitContext) {
 }
 func (t *emptyTracker) handlePrepareCommitError(dcc *deferredCommitContext) {
@@ -196,7 +196,7 @@ func (t *emptyTracker) handlePrepareCommitError(dcc *deferredCommitContext) {
 func (t *emptyTracker) handleCommitError(dcc *deferredCommitContext) {
 }
 
-// close is not used by the blockingTracker
+// close is not used by the emptyTracker
 func (t *emptyTracker) close() {
 }
 
@@ -204,7 +204,7 @@ type ioErrorTracker struct {
 	emptyTracker
 }
 
-// commitRound is not used by the blockingTracker
+// commitRound is not used by the ioErrorTracker
 func (io *ioErrorTracker) commitRound(context.Context, trackerdb.TransactionScope, *deferredCommitContext) error {
 	return sqlite3.Error{Code: sqlite3.ErrIoErr}
 }
