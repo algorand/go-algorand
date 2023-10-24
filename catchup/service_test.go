@@ -1173,7 +1173,9 @@ func TestServiceLedgerUnavailable(t *testing.T) {
 
 	// Make Service
 	auth := &mockedAuthenticator{fail: false}
-	s := MakeService(logging.Base(), defaultConfig, net, local, auth, nil, nil)
+	cfg := config.GetDefaultLocal()
+	cfg.CatchupParallelBlocks = 2
+	s := MakeService(logging.Base(), cfg, net, local, auth, nil, nil)
 	s.log = &periodicSyncLogger{Logger: logging.Base()}
 	s.deadlineTimeout = 2 * time.Second
 
