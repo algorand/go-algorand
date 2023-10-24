@@ -518,6 +518,9 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 				limitedParallelRequests = minParallelRequests
 			}
 
+			// TODO: Remove this.  It's just for debugging.
+			s.log.Infof("ROUND COMPLETE (%d): parallel requests (%d): active downloads (%d)", firstRound-1, limitedParallelRequests, len(completed))
+
 			// if we're writing a catchpoint file, stop catching up to reduce the memory pressure. Once we finish writing the file we
 			// could resume with the catchup.
 			if s.ledger.IsWritingCatchpointDataFile() {
