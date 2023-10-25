@@ -226,7 +226,7 @@ type SourceLocation struct {
 type OpStream struct {
 	Version  uint64
 	Trace    *strings.Builder
-	Warnings []error       // informational warnings, shouldn't stop assembly
+	Warnings []sourceError // informational warnings, shouldn't stop assembly
 	Errors   []sourceError // errors that should prevent final assembly
 	Program  []byte        // Final program bytes. Will stay nil if any errors
 
@@ -2694,7 +2694,7 @@ func (ops *OpStream) record(se *sourceError) {
 }
 
 func (ops *OpStream) warn(t token, format string, a ...interface{}) {
-	warning := &sourceError{t.line, t.col, fmt.Errorf(format, a...)}
+	warning := sourceError{t.line, t.col, fmt.Errorf(format, a...)}
 	ops.Warnings = append(ops.Warnings, warning)
 }
 
