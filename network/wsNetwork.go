@@ -722,8 +722,8 @@ func (wn *WebsocketNetwork) Start() {
 			}
 		}
 	}
-	// if the network has a public address, use that as the name for connection deduplication
-	if wn.config.PublicAddress != "" {
+	// if the network has a public address or a libp2p peer ID, use that as the name for connection deduplication
+	if wn.config.PublicAddress != "" || (wn.peerID != "" && wn.peerIDSigner != nil) {
 		wn.RegisterHandlers(identityHandlers)
 	}
 	if wn.identityScheme == nil {

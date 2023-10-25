@@ -22,7 +22,6 @@ import (
 	"math/rand"
 	"net/http"
 	"net/rpc"
-	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -170,9 +169,6 @@ type mockClientAggregator struct {
 func (mca *mockClientAggregator) GetPeers(options ...network.PeerOption) []network.Peer {
 	return mca.peers
 }
-func (mca *mockClientAggregator) SubstituteGenesisID(rawURL string) string {
-	return strings.Replace(rawURL, "{genesisID}", "test genesisID", -1)
-}
 
 const numberOfPeers = 10
 
@@ -283,7 +279,7 @@ func TestSync(t *testing.T) {
 
 	runner := mockRunner{failWithNil: false, failWithError: false, txgroups: pool.PendingTxGroups()[len(pool.PendingTxGroups())-1:], done: make(chan *rpc.Call)}
 	client := mockRPCClient{client: &runner, rootURL: nodeAURL, log: logging.TestingLog(t)}
-	clientAgg := mockClientAggregator{peers: []network.Peer{&client}}
+	clientAgg := mockClientAggregator{peers: []network.Peer{&client}, MockNetwork: mocks.MockNetwork{GenesisID: "test genesisID"}}
 	handler := mockHandler{}
 	syncerPool := makeMockPendingTxAggregate(3)
 	syncer := MakeTxSyncer(syncerPool, &clientAgg, &handler, testSyncInterval, testSyncTimeout, config.GetDefaultLocal().TxSyncServeResponseSize)
@@ -322,7 +318,7 @@ func TestStartAndStop(t *testing.T) {
 
 	runner := mockRunner{failWithNil: false, failWithError: false, txgroups: pool.PendingTxGroups()[len(pool.PendingTxGroups())-1:], done: make(chan *rpc.Call)}
 	client := mockRPCClient{client: &runner, rootURL: nodeAURL, log: logging.TestingLog(t)}
-	clientAgg := mockClientAggregator{peers: []network.Peer{&client}}
+	clientAgg := mockClientAggregator{peers: []network.Peer{&client}, MockNetwork: mocks.MockNetwork{GenesisID: "test genesisID"}}
 	handler := mockHandler{}
 
 	syncerPool := makeMockPendingTxAggregate(0)

@@ -28,6 +28,7 @@ import (
 // MockNetwork is a dummy network that doesn't do anything
 type MockNetwork struct {
 	network.GossipNode
+	GenesisID string
 }
 
 // Broadcast - unused function
@@ -108,5 +109,8 @@ func (network *MockNetwork) GetHTTPRequestConnection(request *http.Request) (con
 
 // GetGenesisID - empty implementation
 func (network *MockNetwork) GetGenesisID() string {
-	return "mocknet"
+	if network.GenesisID == "" {
+		return "mocknet"
+	}
+	return network.GenesisID
 }

@@ -145,6 +145,8 @@ func TestRedirectFallbackArchiver(t *testing.T) {
 
 	net1 := &httpTestPeerSource{}
 	net2 := &httpTestPeerSource{}
+	net1.GenesisID = "test-genesis-ID"
+	net2.GenesisID = "test-genesis-ID"
 
 	config := config.GetDefaultLocal()
 	// Need to enable block service fallbacks
@@ -253,6 +255,8 @@ func TestRedirectFallbackEndpoints(t *testing.T) {
 
 	net1 := &httpTestPeerSource{}
 	net2 := &httpTestPeerSource{}
+	net1.GenesisID = "test-genesis-ID"
+	net2.GenesisID = "test-genesis-ID"
 
 	nodeA := &basicRPCNode{}
 	nodeB := &basicRPCNode{}
@@ -265,8 +269,8 @@ func TestRedirectFallbackEndpoints(t *testing.T) {
 	// Set the first to a bad address, the second to self, and the third to the one that has the block.
 	// If RR is right, should succeed.
 	config.BlockServiceCustomFallbackEndpoints = fmt.Sprintf("://badaddress,%s,%s", nodeA.rootURL(), nodeB.rootURL())
-	bs1 := MakeBlockService(log, config, ledger1, net1, "{genesisID}")
-	bs2 := MakeBlockService(log, config, ledger2, net2, "{genesisID}")
+	bs1 := MakeBlockService(log, config, ledger1, net1, "test-genesis-ID")
+	bs2 := MakeBlockService(log, config, ledger2, net2, "test-genesis-ID")
 
 	nodeA.RegisterHTTPHandler(BlockServiceBlockPath, bs1)
 	nodeB.RegisterHTTPHandler(BlockServiceBlockPath, bs2)
@@ -316,6 +320,8 @@ func TestRedirectOnFullCapacity(t *testing.T) {
 
 	net1 := &httpTestPeerSource{}
 	net2 := &httpTestPeerSource{}
+	net1.GenesisID = "test-genesis-ID"
+	net2.GenesisID = "test-genesis-ID"
 
 	config := config.GetDefaultLocal()
 	// Need to enable block service fallbacks
@@ -494,12 +500,13 @@ func TestRedirectExceptions(t *testing.T) {
 	addBlock(t, ledger1)
 
 	net1 := &httpTestPeerSource{}
+	net1.GenesisID = "test-genesis-ID"
 
 	config := config.GetDefaultLocal()
 	// Need to enable block service fallbacks
 	config.EnableBlockServiceFallbackToArchiver = true
 
-	bs1 := MakeBlockService(log, config, ledger1, net1, "{genesisID}")
+	bs1 := MakeBlockService(log, config, ledger1, net1, "test-genesis-ID")
 
 	nodeA := &basicRPCNode{}
 
