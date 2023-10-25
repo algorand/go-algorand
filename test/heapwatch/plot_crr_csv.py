@@ -63,6 +63,8 @@ def main():
         fvals = {}
         minv = None
         maxv = None
+        minr = None
+        maxr = None
         with open(fname) as fin:
             reader = csv.DictReader(fin)
             for rec in reader:
@@ -84,13 +86,16 @@ def main():
 
                     minv = smin(minv, v)
                     maxv = smax(maxv, v)
+                minr = smin(minr, xround)
+                maxr = smax(maxr, xround)
         if not fvals:
             print(f"{fname} empty")
             continue
         nodes = sorted(fvals.keys())
-        print("{} found series {}".format(fname, nodes))
+        print("{} found series {} ({} - {})".format(fname, nodes, minr, maxr))
         fig, ax = plt.subplots()
         ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+        ax.set_xlim([minr, maxr])
         ax.yaxis.set_major_formatter(FuncFormatter(format_mem))
         ax.set_ylabel('bytes')
         ax.set_xlabel('round')

@@ -54,7 +54,7 @@ def gather_metrics_files_by_nick(metrics_files: Iterable[str]) -> Dict[str, Dict
 TYPE_GAUGE = 0
 TYPE_COUNTER = 1
 
-def parse_metrics(fin: Iterable[str], nick: str, metrics_names: set=None) -> Tuple[Dict[str, float], Dict[str, int]]:
+def parse_metrics(fin: Iterable[str], nick: str, metrics_names: set=None, diff: bool=None) -> Tuple[Dict[str, float], Dict[str, int]]:
     """Parse metrics file and return dicts of values and types"""
     out = {}
     types = {}
@@ -93,17 +93,28 @@ def parse_metrics(fin: Iterable[str], nick: str, metrics_names: set=None) -> Tup
     except:
         print(f'An exception occurred in parse_metrics: {sys.exc_info()}')
         pass
+    if diff and metrics_names and len(metrics_names) == 2 and len(out) == 2:
+        m = list(out.keys())
+        name = f'{m[0]}_-_{m[1]}'
+        new_out = {name: out[m[0]] - out[m[1]]}
+        new_types = {name: TYPE_GAUGE}
+        out = new_out
+        types = new_types
+
     return out, types
 
 
 def main():
     os.environ['TZ'] = 'UTC'
     time.tzset()
+    default_output_file = 'metrics_viz.png'
 
     ap = argparse.ArgumentParser()
     ap.add_argument('metrics_names', nargs='+', default=None, help='metric name(s) to track')
     ap.add_argument('-d', '--dir', type=str, default=None, help='dir path to find /*.metrics in')
     ap.add_argument('-l', '--list-nodes', default=False, action='store_true', help='list available node names with metrics')
+    ap.add_argument('-s', '--save', action='store_true', default=None, help=f'save plot to \'{default_output_file}\' file instead of showing it')
+    ap.add_argument('--diff', action='store_true', default=None, help='diff two gauge metrics instead of plotting their values. Requires two metrics names to be set')
     ap.add_argument('--verbose', default=False, action='store_true')
 
     args = ap.parse_args()
@@ -141,15 +152,16 @@ def main():
         ])
     )
     metrics_names = set(args.metrics_names)
+    nrows = 1 if args.diff and len(args.metrics_names) == 2 else len(metrics_names)
 
     fig = make_subplots(
-        rows=len(metrics_names), cols=1,
+        rows=nrows, cols=1,
         vertical_spacing=0.03, shared_xaxes=True)
 
     fig['layout']['margin'] = {
         'l': 30, 'r': 10, 'b': 10, 't': 10
     }
-    fig['layout']['height'] = 1500
+    fig['layout']['height'] = 500 * nrows
     # fig.update_layout(template="plotly_dark")
 
     data = {
@@ -161,7 +173,7 @@ def main():
         for dt, metrics_file in items.items():
             data['time'].append(dt)
             with open(metrics_file, 'rt') as f:
-                metrics, types = parse_metrics(f, nick, metrics_names)
+                metrics, types = parse_metrics(f, nick, metrics_names, args.diff)
                 for metric_name, metric_value in metrics.items():
                     raw_value = metric_value
                     if metric_name not in data:
@@ -186,7 +198,10 @@ def main():
                 line=dict(width=1),
             ), i+1, 1)
 
-    fig.show()
+    if args.save:
+        fig.write_image(os.path.join(args.dir, default_output_file))
+    else:
+        fig.show()
 
     # app.run_server(debug=True)
     return 0
