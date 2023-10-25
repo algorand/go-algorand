@@ -106,7 +106,7 @@ func (network *MockNetwork) GetHTTPRequestConnection(request *http.Request) (con
 	return nil
 }
 
-// GenesisID - empty implementation
+// GetGenesisID - empty implementation
 func (network *MockNetwork) GetGenesisID() string {
 	return "mocknet"
 }
