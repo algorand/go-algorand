@@ -74,7 +74,7 @@ type gossipSubPeer struct {
 	net    GossipNode
 }
 
-func (p gossipSubPeer) GossipNode() GossipNode { return p.net }
+func (p gossipSubPeer) GetNetwork() GossipNode { return p.net }
 
 // NewP2PNetwork returns an instance of GossipNode that uses the p2p.Service
 func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebookAddresses []string, genesisID string, networkID protocol.NetworkID) (*P2PNetwork, error) {
@@ -133,6 +133,15 @@ func (n *P2PNetwork) setup() error {
 		n.broadcaster.slowWritingPeerMonitorInterval = slowWritingPeerMonitorInterval
 	}
 	return nil
+}
+
+// PeerID returns this node's peer ID.
+func (n *P2PNetwork) PeerID() p2p.PeerID {
+	return p2p.PeerID(n.service.ID())
+}
+
+func (n *P2PNetwork) PeerIDSigner() identityChallengeSigner {
+	return n.service.IDSigner()
 }
 
 // Start threads, listen on sockets.

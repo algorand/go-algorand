@@ -180,7 +180,7 @@ func TestIdentityChallengeSchemeBadSignature(t *testing.T) {
 	// Copy the logic of attaching the header and signing so we can sign it wrong
 	c := identityChallengeSigned{
 		Msg: identityChallenge{
-			Key:           i.identityKeys.SignatureVerifier,
+			Key:           i.identityKeys.PublicKey(),
 			Challenge:     newIdentityChallengeValue(),
 			PublicAddress: []byte("i1"),
 		}}
@@ -232,7 +232,7 @@ func TestIdentityChallengeSchemeBadResponseSignature(t *testing.T) {
 	r := http.Header{}
 	resp := identityChallengeResponseSigned{
 		Msg: identityChallengeResponse{
-			Key:               i.identityKeys.SignatureVerifier,
+			Key:               i.identityKeys.PublicKey(),
 			Challenge:         origChal,
 			ResponseChallenge: newIdentityChallengeValue(),
 		}}

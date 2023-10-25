@@ -238,7 +238,7 @@ func (p *testUnicastPeer) GetAddress() string {
 	return "test"
 }
 
-func (p *testUnicastPeer) GossipNode() network.GossipNode { return p.gn }
+func (p *testUnicastPeer) GetNetwork() network.GossipNode { return p.gn }
 
 func (p *testUnicastPeer) Request(ctx context.Context, tag protocol.Tag, topics network.Topics) (resp *network.Response, e error) {
 

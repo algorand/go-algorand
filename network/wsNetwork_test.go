@@ -1715,7 +1715,7 @@ func TestPeeringWithBadIdentityChallenge(t *testing.T) {
 			attachChallenge: func(attach http.Header, addr string) identityChallengeValue {
 				s := NewIdentityChallengeScheme("does not matter") // make a scheme to use its keys
 				c := identityChallenge{
-					Key:           s.identityKeys.SignatureVerifier,
+					Key:           s.identityKeys.PublicKey(),
 					Challenge:     newIdentityChallengeValue(),
 					PublicAddress: []byte("incorrect address!"),
 				}
@@ -1733,7 +1733,7 @@ func TestPeeringWithBadIdentityChallenge(t *testing.T) {
 			attachChallenge: func(attach http.Header, addr string) identityChallengeValue {
 				s := NewIdentityChallengeScheme("does not matter") // make a scheme to use its keys
 				c := identityChallenge{
-					Key:           s.identityKeys.SignatureVerifier,
+					Key:           s.identityKeys.PublicKey(),
 					Challenge:     newIdentityChallengeValue(),
 					PublicAddress: []byte("incorrect address!"),
 				}.Sign(s.identityKeys)
@@ -1853,7 +1853,7 @@ func TestPeeringWithBadIdentityChallengeResponse(t *testing.T) {
 				protocol.Decode(msg, &idChal)
 				// make the response object, with an incorrect challenge encode it and attach it to the header
 				r := identityChallengeResponse{
-					Key:               s.identityKeys.SignatureVerifier,
+					Key:               s.identityKeys.PublicKey(),
 					Challenge:         newIdentityChallengeValue(),
 					ResponseChallenge: newIdentityChallengeValue(),
 				}
@@ -1876,7 +1876,7 @@ func TestPeeringWithBadIdentityChallengeResponse(t *testing.T) {
 				protocol.Decode(msg, &idChal)
 				// make the response object, then change the signature and encode and attach
 				r := identityChallengeResponse{
-					Key:               s.identityKeys.SignatureVerifier,
+					Key:               s.identityKeys.PublicKey(),
 					Challenge:         newIdentityChallengeValue(),
 					ResponseChallenge: newIdentityChallengeValue(),
 				}.Sign(s.identityKeys)

@@ -29,6 +29,7 @@ import (
 
 	"github.com/libp2p/go-libp2p"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -41,7 +42,8 @@ import (
 // Service defines the interface used by the network integrating with underlying p2p implementation
 type Service interface {
 	Close() error
-	ID() peer.ID             // return peer.ID for self
+	ID() peer.ID // return peer.ID for self
+	IDSigner() *PeerIDChallengeSigner
 	AddrInfo() peer.AddrInfo // return addrInfo for self
 
 	DialNode(context.Context, *peer.AddrInfo) error
@@ -61,6 +63,7 @@ type serviceImpl struct {
 	streams   *streamManager
 	pubsub    *pubsub.PubSub
 	pubsubCtx context.Context
+	privKey   crypto.PrivKey
 
 	topics   map[string]*pubsub.Topic
 	topicsMu deadlock.RWMutex
@@ -123,6 +126,7 @@ func MakeService(ctx context.Context, log logging.Logger, cfg config.Local, data
 		streams:   sm,
 		pubsub:    ps,
 		pubsubCtx: ctx,
+		privKey:   privKey,
 		topics:    make(map[string]*pubsub.Topic),
 	}, nil
 }
@@ -135,6 +139,10 @@ func (s *serviceImpl) Close() error {
 // ID returns the peer.ID for self
 func (s *serviceImpl) ID() peer.ID {
 	return s.host.ID()
+}
+
+func (s *serviceImpl) IDSigner() *PeerIDChallengeSigner {
+	return &PeerIDChallengeSigner{key: s.privKey}
 }
 
 // DialPeersUntilTargetCount attempts to establish connections to the provided phonebook addresses

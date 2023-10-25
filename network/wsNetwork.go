@@ -44,6 +44,7 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/network/limitlistener"
+	"github.com/algorand/go-algorand/network/p2p"
 	"github.com/algorand/go-algorand/protocol"
 	tools_network "github.com/algorand/go-algorand/tools/network"
 	"github.com/algorand/go-algorand/tools/network/dnssec"
@@ -194,6 +195,9 @@ type WebsocketNetwork struct {
 	GenesisID string
 	NetworkID protocol.NetworkID
 	RandomID  string
+
+	peerID       p2p.PeerID
+	peerIDSigner identityChallengeSigner
 
 	ready     atomic.Int32
 	readyChan chan struct{}
@@ -722,8 +726,13 @@ func (wn *WebsocketNetwork) Start() {
 	if wn.config.PublicAddress != "" {
 		wn.RegisterHandlers(identityHandlers)
 	}
-	if wn.identityScheme == nil && wn.config.PublicAddress != "" {
-		wn.identityScheme = NewIdentityChallengeScheme(wn.config.PublicAddress)
+	if wn.identityScheme == nil {
+		if wn.peerID != "" && wn.peerIDSigner != nil {
+			wn.identityScheme = NewIdentityChallengeSchemeWithSigner(string(wn.peerID), wn.peerIDSigner)
+		}
+		if wn.config.PublicAddress != "" {
+			wn.identityScheme = NewIdentityChallengeScheme(wn.config.PublicAddress)
+		}
 	}
 
 	wn.meshUpdateRequests <- meshRequest{false, nil}
@@ -2237,7 +2246,7 @@ func (wn *WebsocketNetwork) SetPeerData(peer Peer, key string, value interface{}
 }
 
 // NewWebsocketNetwork constructor for websockets based gossip network
-func NewWebsocketNetwork(log logging.Logger, config config.Local, phonebookAddresses []string, genesisID string, networkID protocol.NetworkID, nodeInfo NodeInfo) (wn *WebsocketNetwork, err error) {
+func NewWebsocketNetwork(log logging.Logger, config config.Local, phonebookAddresses []string, genesisID string, networkID protocol.NetworkID, nodeInfo NodeInfo, peerID p2p.PeerID, idSigner identityChallengeSigner) (wn *WebsocketNetwork, err error) {
 	phonebook := MakePhonebook(config.ConnectionsRateLimitingCount,
 		time.Duration(config.ConnectionsRateLimitingWindowSeconds)*time.Second)
 	phonebook.AddPersistentPeers(phonebookAddresses, string(networkID), PhoneBookEntryRelayRole)
@@ -2248,6 +2257,8 @@ func NewWebsocketNetwork(log logging.Logger, config config.Local, phonebookAddre
 		GenesisID:         genesisID,
 		NetworkID:         networkID,
 		nodeInfo:          nodeInfo,
+		peerID:            peerID,
+		peerIDSigner:      idSigner,
 		resolveSRVRecords: tools_network.ReadFromSRV,
 	}
 
@@ -2257,7 +2268,7 @@ func NewWebsocketNetwork(log logging.Logger, config config.Local, phonebookAddre
 
 // NewWebsocketGossipNode constructs a websocket network node and returns it as a GossipNode interface implementation
 func NewWebsocketGossipNode(log logging.Logger, config config.Local, phonebookAddresses []string, genesisID string, networkID protocol.NetworkID) (gn GossipNode, err error) {
-	return NewWebsocketNetwork(log, config, phonebookAddresses, genesisID, networkID, nil)
+	return NewWebsocketNetwork(log, config, phonebookAddresses, genesisID, networkID, nil, "", nil)
 }
 
 // SetPrioScheme specifies the network priority scheme for a network node

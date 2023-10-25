@@ -197,6 +197,10 @@ func (s *mockService) ID() peer.ID {
 	return s.id
 }
 
+func (s *mockService) IDSigner() *p2p.PeerIDChallengeSigner {
+	panic("not implemented")
+}
+
 func (s *mockService) AddrInfo() peer.AddrInfo {
 	return peer.AddrInfo{
 		ID:    s.id,

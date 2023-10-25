@@ -211,7 +211,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		}
 	} else {
 		var wsNode *network.WebsocketNetwork
-		wsNode, err = network.NewWebsocketNetwork(node.log, node.config, phonebookAddresses, genesis.ID(), genesis.Network, node)
+		wsNode, err = network.NewWebsocketNetwork(node.log, node.config, phonebookAddresses, genesis.ID(), genesis.Network, node, "", nil)
 		if err != nil {
 			log.Errorf("could not create websocket node: %v", err)
 			return nil, err

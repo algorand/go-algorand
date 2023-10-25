@@ -364,7 +364,7 @@ func (wp *wsPeerCore) GetHTTPClient() *http.Client {
 	return &wp.client
 }
 
-func (wp *wsPeerCore) GossipNode() GossipNode {
+func (wp *wsPeerCore) GetNetwork() GossipNode {
 	return wp.net
 }
 

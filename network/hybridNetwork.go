@@ -42,14 +42,14 @@ func NewHybridP2PNetwork(log logging.Logger, cfg config.Local, datadir string, p
 	if !cfg.EnableP2PHybridMode {
 		return nil, fmt.Errorf("hybrid mode is not enabled")
 	}
-	wsnet, err := NewWebsocketNetwork(log, cfg, phonebookAddresses, genesisID, networkID, nodeInfo)
-	if err != nil {
-		return nil, err
-	}
 	// supply alternate NetAddress for P2P network
 	p2pcfg := cfg
 	p2pcfg.NetAddress = cfg.P2PListenAddress
 	p2pnet, err := NewP2PNetwork(log, p2pcfg, datadir, phonebookAddresses, genesisID, networkID)
+	if err != nil {
+		return nil, err
+	}
+	wsnet, err := NewWebsocketNetwork(log, cfg, phonebookAddresses, genesisID, networkID, nodeInfo, p2pnet.PeerID(), p2pnet.PeerIDSigner())
 	if err != nil {
 		return nil, err
 	}
@@ -69,10 +69,12 @@ func (n *HybridP2PNetwork) Address() (string, bool) {
 	return n.wsNetwork.Address()
 }
 
-type multiError struct{ p2pErr, wsErr error }
+type hybridNetworkError struct{ p2pErr, wsErr error }
 
-func (e *multiError) Error() string   { return fmt.Sprintf("p2pErr: %s, wsErr: %s", e.p2pErr, e.wsErr) }
-func (e *multiError) Unwrap() []error { return []error{e.p2pErr, e.wsErr} }
+func (e *hybridNetworkError) Error() string {
+	return fmt.Sprintf("p2pErr: %s, wsErr: %s", e.p2pErr, e.wsErr)
+}
+func (e *hybridNetworkError) Unwrap() []error { return []error{e.p2pErr, e.wsErr} }
 
 func (n *HybridP2PNetwork) runParallel(fn func(net GossipNode) error) error {
 	var wg sync.WaitGroup
@@ -90,7 +92,7 @@ func (n *HybridP2PNetwork) runParallel(fn func(net GossipNode) error) error {
 	wg.Wait()
 
 	if p2pErr != nil && wsErr != nil {
-		return &multiError{p2pErr, wsErr}
+		return &hybridNetworkError{p2pErr, wsErr}
 	}
 	if p2pErr != nil {
 		return p2pErr
@@ -117,13 +119,13 @@ func (n *HybridP2PNetwork) Relay(ctx context.Context, tag protocol.Tag, data []b
 
 // Disconnect implements GossipNode
 func (n *HybridP2PNetwork) Disconnect(badnode DisconnectablePeer) {
-	net := badnode.GossipNode()
+	net := badnode.GetNetwork()
 	if net == n.p2pNetwork {
 		n.p2pNetwork.Disconnect(badnode)
 	} else if net == n.wsNetwork {
 		n.wsNetwork.Disconnect(badnode)
 	} else {
-		panic("badnode.GossipNode() returned a network that is not part of this HybridP2PNetwork")
+		panic("badnode.GetNetwork() returned a network that is not part of this HybridP2PNetwork")
 	}
 }
 

@@ -70,7 +70,7 @@ func (mup *mockUnicastPeer) Respond(ctx context.Context, reqMsg network.Incoming
 	return nil
 }
 
-func (mup *mockUnicastPeer) GossipNode() network.GossipNode {
+func (mup *mockUnicastPeer) GetNetwork() network.GossipNode {
 	panic("not implemented")
 }
 

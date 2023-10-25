@@ -78,7 +78,7 @@ type facadePeer struct {
 	net network.GossipNode
 }
 
-func (p *facadePeer) GossipNode() network.GossipNode { return p.net }
+func (p *facadePeer) GetNetwork() network.GossipNode { return p.net }
 
 // MakeNetworkFacade creates a facade with a given nodeID.
 func MakeNetworkFacade(fuzzer *Fuzzer, nodeID int) *NetworkFacade {

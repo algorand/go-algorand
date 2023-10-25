@@ -61,7 +61,7 @@ var txBacklogSize = config.GetDefaultLocal().TxBacklogSize
 type mockSender struct{}
 
 func (m mockSender) OnClose(func())                 {}
-func (m mockSender) GossipNode() network.GossipNode { panic("not implemented") }
+func (m mockSender) GetNetwork() network.GossipNode { panic("not implemented") }
 
 // txHandlerConfig is a subset of tx handler related options from config.Local
 type txHandlerConfig struct {

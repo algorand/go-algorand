@@ -31,7 +31,7 @@ type Peer interface{}
 
 // DisconnectablePeer is a Peer with a long-living connection to a network that can be disconnected
 type DisconnectablePeer interface {
-	GossipNode() GossipNode
+	GetNetwork() GossipNode
 }
 
 // PeerOption allows users to specify a subset of peers to query
