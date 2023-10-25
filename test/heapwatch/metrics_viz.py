@@ -114,7 +114,7 @@ def main():
     ap.add_argument('-d', '--dir', type=str, default=None, help='dir path to find /*.metrics in')
     ap.add_argument('-l', '--list-nodes', default=False, action='store_true', help='list available node names with metrics')
     ap.add_argument('-s', '--save', action='store_true', default=None, help=f'save plot to \'{default_output_file}\' file instead of showing it')
-    ap.add_argument('--diff', action='store_true', default=None, help='diff two metrics instead of plotting their values')
+    ap.add_argument('--diff', action='store_true', default=None, help='diff two gauge metrics instead of plotting their values. Requires two metrics names to be set')
     ap.add_argument('--verbose', default=False, action='store_true')
 
     args = ap.parse_args()
@@ -152,7 +152,7 @@ def main():
         ])
     )
     metrics_names = set(args.metrics_names)
-    nrows = 1 if arg.diff and len(args.metrics_names) == 2 else len(metrics_names)
+    nrows = 1 if args.diff and len(args.metrics_names) == 2 else len(metrics_names)
 
     fig = make_subplots(
         rows=nrows, cols=1,
