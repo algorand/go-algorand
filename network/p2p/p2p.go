@@ -141,6 +141,7 @@ func (s *serviceImpl) ID() peer.ID {
 	return s.host.ID()
 }
 
+// IDSigner returns a PeerIDChallengeSigner that implements the network identityChallengeSigner interface
 func (s *serviceImpl) IDSigner() *PeerIDChallengeSigner {
 	return &PeerIDChallengeSigner{key: s.privKey}
 }
