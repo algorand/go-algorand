@@ -773,6 +773,7 @@ func TestCatchpointReproducibleLabels(t *testing.T) {
 
 // blockingTracker is a testing tracker used to test "what if" a tracker would get blocked.
 type blockingTracker struct {
+	emptyTracker
 	postCommitUnlockedEntryLock   chan struct{}
 	postCommitUnlockedReleaseLock chan struct{}
 	postCommitEntryLock           chan struct{}
@@ -783,34 +784,10 @@ type blockingTracker struct {
 	shouldLockPostCommitUnlocked  atomic.Bool
 }
 
-// loadFromDisk is not implemented in the blockingTracker.
-func (bt *blockingTracker) loadFromDisk(ledgerForTracker, basics.Round) error {
-	return nil
-}
-
-// newBlock is not implemented in the blockingTracker.
-func (bt *blockingTracker) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
-}
-
 // committedUpTo in the blockingTracker just stores the committed round.
 func (bt *blockingTracker) committedUpTo(committedRnd basics.Round) (minRound, lookback basics.Round) {
 	bt.committedUpToRound.Store(int64(committedRnd))
 	return committedRnd, basics.Round(0)
-}
-
-// produceCommittingTask is not used by the blockingTracker
-func (bt *blockingTracker) produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcr *deferredCommitRange) *deferredCommitRange {
-	return dcr
-}
-
-// prepareCommit, is not used by the blockingTracker
-func (bt *blockingTracker) prepareCommit(*deferredCommitContext) error {
-	return nil
-}
-
-// commitRound is not used by the blockingTracker
-func (bt *blockingTracker) commitRound(context.Context, trackerdb.TransactionScope, *deferredCommitContext) error {
-	return nil
 }
 
 // postCommit implements entry/exit blockers, designed for testing.
@@ -827,18 +804,6 @@ func (bt *blockingTracker) postCommitUnlocked(ctx context.Context, dcc *deferred
 		bt.postCommitUnlockedEntryLock <- struct{}{}
 		<-bt.postCommitUnlockedReleaseLock
 	}
-}
-
-// control functions are not used by the blockingTracker
-func (bt *blockingTracker) handleUnorderedCommit(dcc *deferredCommitContext) {
-}
-func (bt *blockingTracker) handlePrepareCommitError(dcc *deferredCommitContext) {
-}
-func (bt *blockingTracker) handleCommitError(dcc *deferredCommitContext) {
-}
-
-// close is not used by the blockingTracker
-func (bt *blockingTracker) close() {
 }
 
 func TestCatchpointTrackerNonblockingCatchpointWriting(t *testing.T) {
