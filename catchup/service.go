@@ -501,7 +501,7 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 				time.Sleep(100 * time.Millisecond)
 			}
 
-			// if ledger is still busy after s.deadlineTimeout timeout then about the current pipelinedFetch invocation.
+			// if ledger is still busy after s.deadlineTimeout timeout then abort the current pipelinedFetch invocation.
 
 			// if we're writing a catchpoint file, stop catching up to reduce the memory pressure. Once we finish writing the file we
 			// could resume with the catchup.
