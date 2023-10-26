@@ -240,12 +240,13 @@ func (bs *BlockService) ServeHTTP(response http.ResponseWriter, request *http.Re
 	}
 	encodedBlockCert, err := bs.rawBlockBytes(basics.Round(round))
 	if err != nil {
-		switch err.(type) {
+		switch lerr := err.(type) {
 		case ledgercore.ErrNoEntry:
 			// entry cound not be found.
 			ok := bs.redirectRequest(round, response, request)
 			if !ok {
 				response.Header().Set("Cache-Control", blockResponseMissingBlockCacheControl)
+				response.Header().Set("X-Latest-Round", fmt.Sprintf("%d", lerr.Latest))
 				response.WriteHeader(http.StatusNotFound)
 			}
 			return

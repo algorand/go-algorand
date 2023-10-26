@@ -19,9 +19,9 @@ package catchup
 import (
 	"context"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/algorand/go-deadlock"
@@ -173,11 +173,10 @@ func (w *wsFetcherClient) requestBlock(ctx context.Context, round basics.Round) 
 	}
 
 	if errMsg, found := resp.Topics.GetValue(network.ErrorKey); found {
-		err := makeErrWsFetcherRequestFailed(round, w.target.GetAddress(), string(errMsg))
 		if latest, lfound := resp.Topics.GetValue(rpcs.LatestRoundKey); lfound {
-			err.latest = basics.Round(binary.BigEndian.Uint64(latest))
+			return nil, noBlockForRoundError{round: round, latest: basics.Round(binary.BigEndian.Uint64(latest))}
 		}
-		return nil, err
+		return nil, makeErrWsFetcherRequestFailed(round, w.target.GetAddress(), string(errMsg))
 	}
 
 	blk, found := resp.Topics.GetValue(rpcs.BlockDataKey)
@@ -199,7 +198,11 @@ func (w *wsFetcherClient) requestBlock(ctx context.Context, round basics.Round) 
 // set max fetcher size to 10MB, this is enough to fit the block and certificate
 const fetcherMaxBlockBytes = 10 << 20
 
-var errNoBlockForRound = errors.New("No block available for given round")
+type noBlockForRoundError struct {
+	latest, round basics.Round
+}
+
+func (noBlockForRoundError) Error() string { return "No block available for given round" }
 
 // HTTPFetcher implements FetcherClient doing an HTTP GET of the block
 type HTTPFetcher struct {
@@ -243,7 +246,13 @@ func (hf *HTTPFetcher) getBlockBytes(ctx context.Context, r basics.Round) (data 
 	case http.StatusOK:
 	case http.StatusNotFound: // server could not find a block with that round numbers.
 		response.Body.Close()
-		return nil, errNoBlockForRound
+		noBlockErr := noBlockForRoundError{round: r}
+		if latestBytes := response.Header.Get("X-Latest-Round"); latestBytes != "" {
+			if latest, err := strconv.ParseUint(latestBytes, 10, 64); err == nil {
+				noBlockErr.latest = basics.Round(latest)
+			}
+		}
+		return nil, noBlockErr
 	default:
 		bodyBytes, err := rpcs.ResponseBytes(response, hf.log, fetcherMaxBlockBytes)
 		hf.log.Warnf("HTTPFetcher.getBlockBytes: response status code %d from '%s'. Response body '%s' ", response.StatusCode, blockURL, string(bodyBytes))
@@ -342,10 +351,9 @@ func (cdbe errCannotDecodeBlock) Unwrap() error {
 }
 
 type errWsFetcherRequestFailed struct {
-	round  basics.Round
-	latest basics.Round
-	peer   string
-	cause  string
+	round basics.Round
+	peer  string
+	cause string
 }
 
 func makeErrWsFetcherRequestFailed(round basics.Round, peer, cause string) errWsFetcherRequestFailed {
