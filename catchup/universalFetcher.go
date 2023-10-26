@@ -173,7 +173,11 @@ func (w *wsFetcherClient) requestBlock(ctx context.Context, round basics.Round) 
 	}
 
 	if errMsg, found := resp.Topics.GetValue(network.ErrorKey); found {
-		return nil, makeErrWsFetcherRequestFailed(round, w.target.GetAddress(), string(errMsg))
+		err := makeErrWsFetcherRequestFailed(round, w.target.GetAddress(), string(errMsg))
+		if latest, lfound := resp.Topics.GetValue(rpcs.LatestRoundKey); lfound {
+			err.latest = basics.Round(binary.BigEndian.Uint64(latest))
+		}
+		return nil, err
 	}
 
 	blk, found := resp.Topics.GetValue(rpcs.BlockDataKey)
@@ -338,9 +342,10 @@ func (cdbe errCannotDecodeBlock) Unwrap() error {
 }
 
 type errWsFetcherRequestFailed struct {
-	round basics.Round
-	peer  string
-	cause string
+	round  basics.Round
+	latest basics.Round
+	peer   string
+	cause  string
 }
 
 func makeErrWsFetcherRequestFailed(round basics.Round, peer, cause string) errWsFetcherRequestFailed {

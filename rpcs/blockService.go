@@ -65,6 +65,7 @@ const (
 	BlockDataKey       = "blockData"       // Block-data topic-key in the response
 	CertDataKey        = "certData"        // Cert-data topic-key in the response
 	BlockAndCertValue  = "blockAndCert"    // block+cert request data (as the value of requestDataTypeKey)
+	LatestRoundKey     = "latest"
 )
 
 var errBlockServiceClosed = errors.New("block service is shutting down")
@@ -456,13 +457,16 @@ func (bs *BlockService) rawBlockBytes(round basics.Round) ([]byte, error) {
 func topicBlockBytes(log logging.Logger, dataLedger LedgerForBlockService, round basics.Round, requestType string) (network.Topics, uint64) {
 	blk, cert, err := dataLedger.EncodedBlockCert(round)
 	if err != nil {
-		switch err.(type) {
+		switch lerr := err.(type) {
 		case ledgercore.ErrNoEntry:
+			return network.Topics{
+				network.MakeTopic(network.ErrorKey, []byte(blockNotAvailableErrMsg)),
+				network.MakeTopic(LatestRoundKey, binary.BigEndian.AppendUint64([]byte{}, uint64(lerr.Latest))),
+			}, 0
 		default:
 			log.Infof("BlockService topicBlockBytes: %s", err)
 		}
-		return network.Topics{
-			network.MakeTopic(network.ErrorKey, []byte(blockNotAvailableErrMsg))}, 0
+		return network.Topics{network.MakeTopic(network.ErrorKey, []byte(blockNotAvailableErrMsg))}, 0
 	}
 	switch requestType {
 	case BlockAndCertValue:
