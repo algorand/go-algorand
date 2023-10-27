@@ -167,6 +167,7 @@ func TestServiceFetchBlocksSameRange(t *testing.T) {
 type periodicSyncLogger struct {
 	logging.Logger
 	WarnfCallback func(string, ...interface{})
+	debugMsgs     []string
 }
 
 func (cl *periodicSyncLogger) Warnf(s string, args ...interface{}) {
@@ -178,6 +179,12 @@ func (cl *periodicSyncLogger) Warnf(s string, args ...interface{}) {
 		return
 	}
 	cl.Logger.Warnf(s, args...)
+}
+
+func (cl *periodicSyncLogger) Debugf(s string, args ...interface{}) {
+	// save debug messages for later inspection.
+	cl.debugMsgs = append(cl.debugMsgs, s)
+	cl.Logger.Debugf(s, args...)
 }
 
 func TestSyncRound(t *testing.T) {
@@ -471,6 +478,8 @@ func TestServiceFetchBlocksMultiBlocks(t *testing.T) {
 		return
 	}
 	addBlocks(t, remote, blk, int(numberOfBlocks)-1)
+
+	logging.Base().SetLevel(logging.Debug)
 
 	// Create a network and block service
 	blockServiceConfig := config.GetDefaultLocal()
@@ -1100,35 +1109,6 @@ func TestSynchronizingTime(t *testing.T) {
 	require.NotEqual(t, time.Duration(0), s.SynchronizingTime())
 }
 
-func TestPeerSelectionTracker(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-
-	ps := peerSelectionTracker{}
-
-	var mockDur time.Duration
-	mockWaiter := func(d time.Duration) {
-		mockDur = d
-	}
-
-	ps.maybeWait(1, time.Second, mockWaiter)
-	require.Equal(t, time.Duration(0), mockDur)
-	// no errors => no delay
-	ps.maybeWait(1, time.Second, mockWaiter)
-	require.Equal(t, time.Duration(0), mockDur)
-
-	ps.failedPrio(1, peerRankDownloadFailed)
-	expected := defaultPeerWaitTime
-	for i := 0; i < 4; i++ {
-		ps.maybeWait(1, time.Second, mockWaiter)
-		require.Equal(t, expected, mockDur)
-		expected *= 2
-	}
-	// one more time to exceed the max
-	ps.maybeWait(1, time.Second, mockWaiter)
-	require.Equal(t, time.Second, mockDur)
-}
-
 func TestDownloadBlocksToSupportStateProofs(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -1212,4 +1192,53 @@ func TestServiceLedgerUnavailable(t *testing.T) {
 	s.sync()
 	require.Greater(t, local.LastRound(), basics.Round(0))
 	require.Less(t, local.LastRound(), remote.LastRound())
+}
+
+// TestServiceNoBlockForRound checks if fetchAndWrite does not repeats 500 times if a block not avaialble
+func TestServiceNoBlockForRound(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	// Make Ledger
+	local := new(mockedLedger)
+	local.blocks = append(local.blocks, bookkeeping.Block{})
+
+	remote, _, blk, err := buildTestLedger(t, bookkeeping.Block{})
+	if err != nil {
+		t.Fatal(err)
+		return
+	}
+	numBlocks := 10
+	addBlocks(t, remote, blk, numBlocks)
+
+	// Create a network and block service
+	blockServiceConfig := config.GetDefaultLocal()
+	net := &httpTestPeerSource{}
+	ls := rpcs.MakeBlockService(logging.Base(), blockServiceConfig, remote, net, "test genesisID")
+
+	nodeA := basicRPCNode{}
+	nodeA.RegisterHTTPHandler(rpcs.BlockServiceBlockPath, ls)
+	nodeA.start()
+	defer nodeA.stop()
+	rootURL := nodeA.rootURL()
+	net.addPeer(rootURL)
+
+	require.Equal(t, basics.Round(0), local.LastRound())
+	require.Equal(t, basics.Round(numBlocks+1), remote.LastRound())
+
+	// Make Service
+	auth := &mockedAuthenticator{fail: false}
+	cfg := config.GetDefaultLocal()
+	cfg.CatchupParallelBlocks = 8
+	s := MakeService(logging.Base(), cfg, net, local, auth, nil, nil)
+	pl := &periodicSyncLogger{Logger: logging.Base()}
+	s.log = pl
+	s.deadlineTimeout = 1 * time.Second
+
+	s.testStart()
+	defer s.Stop()
+	s.sync()
+
+	// without the fix there are about 2k messages (4x catchupRetryLimit)
+	// with the fix expect less than catchupRetryLimit
+	require.Less(t, len(pl.debugMsgs), catchupRetryLimit)
 }
