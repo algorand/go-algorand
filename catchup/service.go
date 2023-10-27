@@ -63,6 +63,7 @@ type Ledger interface {
 	Block(basics.Round) (bookkeeping.Block, error)
 	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
 	IsWritingCatchpointDataFile() bool
+	IsBehindCommittingDeltas() bool
 	Validate(ctx context.Context, blk bookkeeping.Block, executionPool execpool.BacklogPool) (*ledgercore.ValidatedBlock, error)
 	AddValidatedBlock(vb ledgercore.ValidatedBlock, cert agreement.Certificate) error
 	WaitMem(r basics.Round) chan struct{}
@@ -86,10 +87,10 @@ type Service struct {
 	deadlineTimeout     time.Duration
 	blockValidationPool execpool.BacklogPool
 
-	// suspendForCatchpointWriting defines whether we've run into a state where the ledger is currently busy writing the
-	// catchpoint file. If so, we want to suspend the catchup process until the catchpoint file writing is complete,
+	// suspendForLedgerOps defines whether we've run into a state where the ledger is currently busy writing the
+	// catchpoint file or flushing accounts. If so, we want to suspend the catchup process until the catchpoint file writing is complete,
 	// and resume from there without stopping the catchup timer.
-	suspendForCatchpointWriting bool
+	suspendForLedgerOps bool
 
 	// The channel gets closed when the initial sync is complete. This allows for other services to avoid
 	// the overhead of starting prematurely (before this node is caught-up and can validate messages for example).
@@ -494,11 +495,26 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 				return
 			}
 
+			// if ledger is busy, pause for some time to let the fetchAndWrite goroutines to finish fetching in-flight blocks.
+			start := time.Now()
+			for (s.ledger.IsWritingCatchpointDataFile() || s.ledger.IsBehindCommittingDeltas()) && time.Since(start) < s.deadlineTimeout {
+				time.Sleep(100 * time.Millisecond)
+			}
+
+			// if ledger is still busy after s.deadlineTimeout timeout then abort the current pipelinedFetch invocation.
+
 			// if we're writing a catchpoint file, stop catching up to reduce the memory pressure. Once we finish writing the file we
 			// could resume with the catchup.
 			if s.ledger.IsWritingCatchpointDataFile() {
 				s.log.Info("Catchup is stopping due to catchpoint file being written")
-				s.suspendForCatchpointWriting = true
+				s.suspendForLedgerOps = true
+				return
+			}
+
+			// if the ledger has too many non-flushed account changes, stop catching up to reduce the memory pressure.
+			if s.ledger.IsBehindCommittingDeltas() {
+				s.log.Info("Catchup is stopping due to too many non-flushed account changes")
+				s.suspendForLedgerOps = true
 				return
 			}
 
@@ -555,10 +571,10 @@ func (s *Service) periodicSync() {
 			sleepDuration = time.Duration(crypto.RandUint63()) % s.deadlineTimeout
 			continue
 		case <-s.syncNow:
-			if s.parallelBlocks == 0 || s.ledger.IsWritingCatchpointDataFile() {
+			if s.parallelBlocks == 0 || s.ledger.IsWritingCatchpointDataFile() || s.ledger.IsBehindCommittingDeltas() {
 				continue
 			}
-			s.suspendForCatchpointWriting = false
+			s.suspendForLedgerOps = false
 			s.log.Info("Immediate resync triggered; resyncing")
 			s.sync()
 		case <-time.After(sleepDuration):
@@ -575,7 +591,12 @@ func (s *Service) periodicSync() {
 				// keep the existing sleep duration and try again later.
 				continue
 			}
-			s.suspendForCatchpointWriting = false
+			// if the ledger has too many non-flushed account changes, skip
+			if s.ledger.IsBehindCommittingDeltas() {
+				continue
+			}
+
+			s.suspendForLedgerOps = false
 			s.log.Info("It's been too long since our ledger advanced; resyncing")
 			s.sync()
 		case cert := <-s.unmatchedPendingCertificates:
@@ -630,7 +651,7 @@ func (s *Service) sync() {
 	initSync := false
 
 	// if the catchupWriting flag is set, it means that we aborted the sync due to the ledger writing the catchup file.
-	if !s.suspendForCatchpointWriting {
+	if !s.suspendForLedgerOps {
 		// in that case, don't change the timer so that the "timer" would keep running.
 		s.syncStartNS.Store(0)
 
@@ -641,7 +662,7 @@ func (s *Service) sync() {
 		}
 	}
 
-	elapsedTime := time.Now().Sub(start)
+	elapsedTime := time.Since(start)
 	s.log.EventWithDetails(telemetryspec.ApplicationState, telemetryspec.CatchupStopEvent, telemetryspec.CatchupStopEventDetails{
 		StartRound: uint64(pr),
 		EndRound:   uint64(s.ledger.LastRound()),
