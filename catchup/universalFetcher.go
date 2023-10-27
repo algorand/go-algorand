@@ -113,6 +113,29 @@ func processBlockBytes(fetchedBuf []byte, r basics.Round, peerAddr string) (blk 
 	return &decodedEntry.Block, &decodedEntry.Certificate, nil
 }
 
+// type universalBlockFetcherPeer struct {
+// 	universalBlockFetcher
+// 	peer network.Peer
+// }
+
+// // makeUniversalBlockFetcherPeer returns a fetcher for http and ws peers.
+// func makeUniversalBlockFetcherPeer(log logging.Logger, net network.GossipNode, config config.Local, peer network.Peer) *universalBlockFetcherPeer {
+// 	return &universalBlockFetcherPeer{
+// 		universalBlockFetcher: universalBlockFetcher{
+// 			config: config,
+// 			net:    net,
+// 			log:    log,
+// 		},
+// 		peer: peer,
+// 	}
+// }
+
+// // fetchBlock returns a block from the peer. The peer can be either an http or ws peer.
+// func (uf *universalBlockFetcherPeer) fetchBlock(ctx context.Context, round basics.Round) (blk *bookkeeping.Block,
+// 	cert *agreement.Certificate, downloadDuration time.Duration, err error) {
+// 	return uf.universalBlockFetcher.fetchBlock(ctx, round, uf.peer)
+// }
+
 // a stub fetcherClient to satisfy the NetworkFetcher interface
 type wsFetcherClient struct {
 	target network.UnicastPeer // the peer where we're going to send the request.

@@ -243,6 +243,58 @@ func (s *Service) innerFetch(ctx context.Context, r basics.Round, peer network.P
 	return
 }
 
+const defaultPeerWaitTime time.Duration = 100 * time.Millisecond
+
+// peerSelectionTracker helps to detect and handle a situation when catchup is trying to download a block that not happened yet.
+// in this case fetchAndWrite/fetchRound could keep trying downloading the same block up to catchupRetryLimit times,
+// punishing peers. Say if there are only two peers connected and one stalled for some reason, the node might end up fetching a block
+// from there forewer.
+// To resolve this peerSelectionTracker tracks peers incrementing the retry delay if there was invocation it erred.
+// peerSelectionTracker is supposed to be instanciated in fetchAndWrite/fetchRound so covering a single round repeated downloads.
+type peerSelectionTracker map[network.Peer]struct {
+	count int
+	delay time.Duration
+	errs  int
+}
+
+func (pt peerSelectionTracker) maybeWait(peer network.Peer, maxDelay time.Duration, waiter func(d time.Duration)) {
+	if e, ok := pt[peer]; !ok {
+		e.count = 1
+		e.delay = defaultPeerWaitTime
+		e.errs = 0
+		pt[peer] = e
+	} else {
+		if e.errs > 0 {
+			waiter(e.delay)
+			e.delay *= 2
+			if e.delay > maxDelay {
+				e.delay = maxDelay
+			}
+		}
+		e.count++
+		pt[peer] = e
+	}
+}
+
+func (pt peerSelectionTracker) failedPrio(peer network.Peer, defaultPunishment int) int {
+	if e, ok := pt[peer]; ok {
+		e.errs++
+		pt[peer] = e
+		step := defaultPunishment / 1000
+		return int(basics.SubSaturate(uint32(defaultPunishment), uint32(step*e.errs)))
+	} else {
+		return defaultPunishment
+	}
+}
+
+func (pt peerSelectionTracker) invalidPrio(peer network.Peer, defaultPunishment int) int {
+	if e, ok := pt[peer]; ok {
+		e.errs++
+		pt[peer] = e
+	}
+	return defaultPunishment
+}
+
 // fetchAndWrite fetches a block, checks the cert, and writes it to the ledger. Cert checking and ledger writing both wait for the ledger to advance if necessary.
 // Returns false if we should stop trying to catch up.  This may occur for several reasons:
 //   - If the context is canceled (e.g. if the node is shutting down)
@@ -254,6 +306,9 @@ func (s *Service) fetchAndWrite(ctx context.Context, r basics.Round, prevFetchCo
 	if dontSyncRound := s.GetDisableSyncRound(); dontSyncRound != 0 && r >= basics.Round(dontSyncRound) {
 		return false
 	}
+
+	pst := peerSelectionTracker{}
+
 	i := 0
 	for {
 		i++
@@ -291,6 +346,7 @@ func (s *Service) fetchAndWrite(ctx context.Context, r basics.Round, prevFetchCo
 			return false
 		}
 		peer := psp.Peer
+		pst.maybeWait(peer, s.deadlineTimeout, time.Sleep)
 
 		// Try to fetch, timing out after retryInterval
 		block, cert, blockDownloadDuration, err := s.innerFetch(ctx, r, peer)
@@ -303,7 +359,7 @@ func (s *Service) fetchAndWrite(ctx context.Context, r basics.Round, prevFetchCo
 				return false
 			}
 			s.log.Debugf("fetchAndWrite(%v): Could not fetch: %v (attempt %d)", r, err, i)
-			peerSelector.rankPeer(psp, peerRankDownloadFailed)
+			peerSelector.rankPeer(psp, pst.failedPrio(peer, peerRankDownloadFailed))
 
 			// we've just failed to retrieve a block; wait until the previous block is fetched before trying again
 			// to avoid the usecase where the first block doesn't exist, and we're making many requests down the chain
@@ -348,7 +404,7 @@ func (s *Service) fetchAndWrite(ctx context.Context, r basics.Round, prevFetchCo
 			err = s.auth.Authenticate(block, cert)
 			if err != nil {
 				s.log.Warnf("fetchAndWrite(%v): cert did not authenticate block (attempt %d): %v", r, i, err)
-				peerSelector.rankPeer(psp, peerRankInvalidDownload)
+				peerSelector.rankPeer(psp, pst.invalidPrio(peer, peerRankInvalidDownload))
 				continue // retry the fetch
 			}
 		}
@@ -689,6 +745,8 @@ func (s *Service) fetchRound(cert agreement.Certificate, verifier *agreement.Asy
 		return
 	}
 
+	pst := peerSelectionTracker{}
+
 	blockHash := bookkeeping.BlockHash(cert.Proposal.BlockDigest) // semantic digest (i.e., hash of the block header), not byte-for-byte digest
 	peerSelector := createPeerSelector(s.net, s.cfg, false)
 	for s.ledger.LastRound() < cert.Round {
@@ -699,6 +757,7 @@ func (s *Service) fetchRound(cert agreement.Certificate, verifier *agreement.Asy
 			continue
 		}
 		peer := psp.Peer
+		pst.maybeWait(peer, s.deadlineTimeout, time.Sleep)
 
 		// Ask the fetcher to get the block somehow
 		block, fetchedCert, _, err := s.innerFetch(s.ctx, cert.Round, peer)
@@ -711,7 +770,7 @@ func (s *Service) fetchRound(cert agreement.Certificate, verifier *agreement.Asy
 			default:
 			}
 			logging.Base().Warnf("fetchRound could not acquire block, fetcher errored out: %v", err)
-			peerSelector.rankPeer(psp, peerRankDownloadFailed)
+			peerSelector.rankPeer(psp, pst.failedPrio(peer, peerRankDownloadFailed))
 			continue
 		}
 
@@ -721,7 +780,7 @@ func (s *Service) fetchRound(cert agreement.Certificate, verifier *agreement.Asy
 		}
 		// Otherwise, fetcher gave us the wrong block
 		logging.Base().Warnf("fetcher gave us bad/wrong block (for round %d): fetched hash %v; want hash %v", cert.Round, block.Hash(), blockHash)
-		peerSelector.rankPeer(psp, peerRankInvalidDownload)
+		peerSelector.rankPeer(psp, pst.invalidPrio(peer, peerRankInvalidDownload))
 
 		// As a failsafe, if the cert we fetched is valid but for the wrong block, panic as loudly as possible
 		if cert.Round == fetchedCert.Round &&

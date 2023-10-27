@@ -1100,6 +1100,35 @@ func TestSynchronizingTime(t *testing.T) {
 	require.NotEqual(t, time.Duration(0), s.SynchronizingTime())
 }
 
+func TestPeerSelectionTracker(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	ps := peerSelectionTracker{}
+
+	var mockDur time.Duration
+	mockWaiter := func(d time.Duration) {
+		mockDur = d
+	}
+
+	ps.maybeWait(1, time.Second, mockWaiter)
+	require.Equal(t, time.Duration(0), mockDur)
+	// no errors => no delay
+	ps.maybeWait(1, time.Second, mockWaiter)
+	require.Equal(t, time.Duration(0), mockDur)
+
+	ps.failedPrio(1, peerRankDownloadFailed)
+	expected := defaultPeerWaitTime
+	for i := 0; i < 4; i++ {
+		ps.maybeWait(1, time.Second, mockWaiter)
+		require.Equal(t, expected, mockDur)
+		expected *= 2
+	}
+	// one more time to exceed the max
+	ps.maybeWait(1, time.Second, mockWaiter)
+	require.Equal(t, time.Second, mockDur)
+}
+
 func TestDownloadBlocksToSupportStateProofs(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
