@@ -485,17 +485,17 @@ func (spec *OpSpec) deadens() bool {
 // assembly-time, with ops.returns()
 var OpSpecs = []OpSpec{
 	{0x00, "err", opErr, proto(":x"), 1, detDefault()},
-	{0x01, "sha256", opSHA256, proto("b:H"), 1, costly(7)},
-	{0x02, "keccak256", opKeccak256, proto("b:H"), 1, costly(26)},
-	{0x03, "sha512_256", opSHA512_256, proto("b:H"), 1, costly(9)},
+	{0x01, "sha256", opSHA256, proto("b:3"), 1, costly(7)},
+	{0x02, "keccak256", opKeccak256, proto("b:3"), 1, costly(26)},
+	{0x03, "sha512_256", opSHA512_256, proto("b:3"), 1, costly(9)},
 
 	// Cost of these opcodes increases in AVM version 2 based on measured
 	// performance. Should be able to run max hashes during stateful TEAL
 	// and achieve reasonable TPS. Same opcode for different versions
 	// is OK.
-	{0x01, "sha256", opSHA256, proto("b:H"), 2, costly(35)},
-	{0x02, "keccak256", opKeccak256, proto("b:H"), 2, costly(130)},
-	{0x03, "sha512_256", opSHA512_256, proto("b:H"), 2, costly(45)},
+	{0x01, "sha256", opSHA256, proto("b:3"), 2, costly(35)},
+	{0x02, "keccak256", opKeccak256, proto("b:3"), 2, costly(130)},
+	{0x03, "sha512_256", opSHA512_256, proto("b:3"), 2, costly(45)},
 
 	/*
 		Tabling these changes until we offer unlimited global storage as there
@@ -507,12 +507,12 @@ var OpSpecs = []OpSpec{
 		{0x03, "sha512_256", opSHA512_256, proto("b:b"), 7, unlimitedStorage, costByLength(17, 5, 8)},
 	*/
 
-	{0x04, "ed25519verify", opEd25519Verify, proto("bbb:T"), 1, costly(1900).only(ModeSig)},
-	{0x04, "ed25519verify", opEd25519Verify, proto("bbb:T"), 5, costly(1900)},
+	{0x04, "ed25519verify", opEd25519Verify, proto("b63:T"), 1, costly(1900).only(ModeSig)},
+	{0x04, "ed25519verify", opEd25519Verify, proto("b63:T"), 5, costly(1900)},
 
-	{0x05, "ecdsa_verify", opEcdsaVerify, proto("bbbbb:T"), 5, costByField("v", &EcdsaCurves, ecdsaVerifyCosts)},
+	{0x05, "ecdsa_verify", opEcdsaVerify, proto("3bbbb:T"), 5, costByField("v", &EcdsaCurves, ecdsaVerifyCosts)},
 	{0x06, "ecdsa_pk_decompress", opEcdsaPkDecompress, proto("b:bb"), 5, costByField("v", &EcdsaCurves, ecdsaDecompressCosts)},
-	{0x07, "ecdsa_pk_recover", opEcdsaPkRecover, proto("bibb:bb"), 5, field("v", &EcdsaCurves).costs(2000)},
+	{0x07, "ecdsa_pk_recover", opEcdsaPkRecover, proto("3i33:bb"), 5, field("v", &EcdsaCurves).costs(2000)},
 
 	{0x08, "+", opPlus, proto("ii:i"), 1, detDefault()},
 	{0x09, "-", opMinus, proto("ii:i"), 1, detDefault()},
@@ -645,7 +645,7 @@ var OpSpecs = []OpSpec{
 	{0x82, "pushbytess", opPushBytess, proto(":", "", "[N items]").stackExplain(opPushBytessStackChange), 8, constants(asmPushBytess, checkByteImmArgs, "bytes ...", immBytess).typed(typePushBytess).trust()},
 	{0x83, "pushints", opPushInts, proto(":", "", "[N items]").stackExplain(opPushIntsStackChange), 8, constants(asmPushInts, checkIntImmArgs, "uint ...", immInts).typed(typePushInts).trust()},
 
-	{0x84, "ed25519verify_bare", opEd25519VerifyBare, proto("bbb:T"), 7, costly(1900)},
+	{0x84, "ed25519verify_bare", opEd25519VerifyBare, proto("b63:T"), 7, costly(1900)},
 
 	// "Function oriented"
 	{0x88, "callsub", opCallSub, proto(":"), 4, detBranch()},
@@ -719,7 +719,7 @@ var OpSpecs = []OpSpec{
 	{0xc6, "gitxnas", opGitxnas, proto("i:a"), 6, immediates("t", "f").field("f", &TxnArrayFields).only(ModeApp)},
 
 	// randomness support
-	{0xd0, "vrf_verify", opVrfVerify, proto("bbb:bT"), randomnessVersion, field("s", &VrfStandards).costs(5700)},
+	{0xd0, "vrf_verify", opVrfVerify, proto("b83:bT"), randomnessVersion, field("s", &VrfStandards).costs(5700)},
 	{0xd1, "block", opBlock, proto("i:a"), randomnessVersion, field("f", &BlockFields)},
 
 	{0xe0, "ec_add", opEcAdd, proto("bb:b"), pairingVersion,

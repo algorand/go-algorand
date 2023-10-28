@@ -35,8 +35,8 @@ import (
 // of a secret-key compromise.
 type OneTimeSignature struct {
 	// Unfortunately we forgot to mark this struct as omitempty at
-	// one point, and now it's hard to recover from that if we want
-	// to preserve encodings..
+	// one point, and now it's hard to change if we want to preserve
+	// encodings.
 	_struct struct{} `codec:""`
 
 	// Sig is a signature of msg under the key PK.

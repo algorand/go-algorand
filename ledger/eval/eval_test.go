@@ -21,6 +21,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/algorand/go-algorand/crypto/merklearray"
+	"math"
 	"math/rand"
 	"testing"
 
@@ -671,56 +673,6 @@ func testnetFixupExecution(t *testing.T, headerRound basics.Round, poolBonus uin
 	require.NoError(t, err)
 }
 
-// newTestGenesis creates a bunch of accounts, splits up 10B algos
-// between them and the rewardspool and feesink, and gives out the
-// addresses and secrets it creates to enable tests.  For special
-// scenarios, manipulate these return values before using newTestLedger.
-func newTestGenesis() (bookkeeping.GenesisBalances, []basics.Address, []*crypto.SignatureSecrets) {
-	// irrelevant, but deterministic
-	sink, err := basics.UnmarshalChecksumAddress("YTPRLJ2KK2JRFSZZNAF57F3K5Y2KCG36FZ5OSYLW776JJGAUW5JXJBBD7Q")
-	if err != nil {
-		panic(err)
-	}
-	rewards, err := basics.UnmarshalChecksumAddress("242H5OXHUEBYCGGWB3CQ6AZAMQB5TMCWJGHCGQOZPEIVQJKOO7NZXUXDQA")
-	if err != nil {
-		panic(err)
-	}
-
-	const count = 10
-	addrs := make([]basics.Address, count)
-	secrets := make([]*crypto.SignatureSecrets, count)
-	accts := make(map[basics.Address]basics.AccountData)
-
-	// 10 billion microalgos, across N accounts and pool and sink
-	amount := 10 * 1000000000 * 1000000 / uint64(count+2)
-
-	for i := 0; i < count; i++ {
-		// Create deterministic addresses, so that output stays the same, run to run.
-		var seed crypto.Seed
-		seed[0] = byte(i)
-		secrets[i] = crypto.GenerateSignatureSecrets(seed)
-		addrs[i] = basics.Address(secrets[i].SignatureVerifier)
-
-		adata := basics.AccountData{
-			MicroAlgos: basics.MicroAlgos{Raw: amount},
-		}
-		accts[addrs[i]] = adata
-	}
-
-	accts[sink] = basics.AccountData{
-		MicroAlgos: basics.MicroAlgos{Raw: amount},
-		Status:     basics.NotParticipating,
-	}
-
-	accts[rewards] = basics.AccountData{
-		MicroAlgos: basics.MicroAlgos{Raw: amount},
-	}
-
-	genBalances := bookkeeping.MakeGenesisBalances(accts, sink, rewards)
-
-	return genBalances, addrs, secrets
-}
-
 type evalTestLedger struct {
 	blocks              map[basics.Round]bookkeeping.Block
 	roundBalances       map[basics.Round]map[basics.Address]basics.AccountData
@@ -732,6 +684,7 @@ type evalTestLedger struct {
 	latestTotals        ledgercore.AccountTotals
 	tracer              logic.EvalTracer
 	boxes               map[string][]byte
+	voters              map[basics.Round]*ledgercore.VotersForRound
 }
 
 // newTestLedger creates a in memory Ledger that is as realistic as
@@ -941,6 +894,9 @@ func (ledger *evalTestLedger) BlockHdr(rnd basics.Round) (bookkeeping.BlockHeade
 }
 
 func (ledger *evalTestLedger) VotersForStateProof(rnd basics.Round) (*ledgercore.VotersForRound, error) {
+	if v, ok := ledger.voters[rnd]; ok {
+		return v, nil
+	}
 	return nil, errors.New("untested code path")
 }
 
@@ -1444,4 +1400,179 @@ func TestExpiredAccountGeneration(t *testing.T) {
 	require.Equal(t, crypto.OneTimeSignatureVerifier{}, recvAcct.VoteID)
 	require.Equal(t, crypto.VRFVerifier{}, recvAcct.SelectionID)
 	require.Equal(t, merklesignature.Verifier{}.Commitment, recvAcct.StateProofID)
+}
+
+func TestEval_EndOfBlockStake(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	proto := protocol.ConsensusFuture
+	mainnetDigest, digestError := crypto.DigestFromString("YBQ4JWH4DW655UWXMBF6IVUOH5WQIGMHVQ333ZFWEC22WOJERLPQ")
+	require.NoError(t, digestError)
+
+	var tests = []struct {
+		actual      basics.MicroAlgos
+		expected    basics.MicroAlgos
+		round       basics.Round
+		genesisHash crypto.Digest
+		err         string
+	}{
+		// Normal round mainnet, matched stake => no error
+		{
+			actual:      basics.MicroAlgos{Raw: 100},
+			expected:    basics.MicroAlgos{Raw: 100},
+			round:       basics.Round(config.Consensus[proto].StateProofInterval),
+			genesisHash: mainnetDigest,
+			err:         "",
+		},
+		// Normal round mainnet, mismatched stake (actual<expected) => error
+		{
+			actual:      basics.MicroAlgos{Raw: 99},
+			expected:    basics.MicroAlgos{Raw: 100},
+			round:       basics.Round(config.Consensus[proto].StateProofInterval),
+			genesisHash: mainnetDigest,
+			err:         "StateProofOnlineTotalWeight wrong: {99} != {100}",
+		},
+		// Normal round mainnet, mismatched stake (actual>expected) => error
+		{
+			actual:      basics.MicroAlgos{Raw: 100},
+			expected:    basics.MicroAlgos{Raw: 99},
+			round:       basics.Round(config.Consensus[proto].StateProofInterval),
+			genesisHash: mainnetDigest,
+			err:         "StateProofOnlineTotalWeight wrong: {100} != {99}",
+		},
+		// Normal round mainnet, mismatched stake with max possible value for muldiv => error
+		{
+			actual:      basics.MicroAlgos{Raw: 100},
+			expected:    basics.MicroAlgos{Raw: math.MaxUint64},
+			round:       basics.Round(config.Consensus[proto].StateProofInterval),
+			genesisHash: mainnetDigest,
+			err:         "StateProofOnlineTotalWeight wrong: {100} != {18446744073709551615}",
+		},
+		// Normal round mainnet, matched stake with max possible value for muldiv => no error
+		{
+			actual:      basics.MicroAlgos{Raw: math.MaxUint64},
+			expected:    basics.MicroAlgos{Raw: math.MaxUint64},
+			round:       basics.Round(config.Consensus[proto].StateProofInterval),
+			genesisHash: mainnetDigest,
+			err:         "",
+		},
+		// Exception round mainnet, mismatched state (actual>expected) => no error
+		{
+			actual:      basics.MicroAlgos{Raw: 100},
+			expected:    basics.MicroAlgos{Raw: 99},
+			round:       basics.Round(27713280),
+			genesisHash: mainnetDigest,
+			err:         "",
+		},
+		// Exception round mainnet, mismatched state (actual<expected) => no error
+		{
+			actual:      basics.MicroAlgos{Raw: 99},
+			expected:    basics.MicroAlgos{Raw: 100},
+			round:       basics.Round(27713280),
+			genesisHash: mainnetDigest,
+			err:         "",
+		},
+		// Exception round mainnet, mismatched stake with max possible value for muldiv => no error
+		{
+			actual:      basics.MicroAlgos{Raw: math.MaxUint64 - 100},
+			expected:    basics.MicroAlgos{Raw: math.MaxUint64},
+			round:       basics.Round(27713280),
+			genesisHash: mainnetDigest,
+			err:         "",
+		},
+		// Normal round non-mainnet, matched stake => no error
+		{
+			actual:   basics.MicroAlgos{Raw: 100},
+			expected: basics.MicroAlgos{Raw: 100},
+			round:    basics.Round(config.Consensus[proto].StateProofInterval),
+			err:      "",
+		},
+		// Normal round non-mainnet, mismatched stake (actual<expected) => error
+		{
+			actual:   basics.MicroAlgos{Raw: 99},
+			expected: basics.MicroAlgos{Raw: 100},
+			round:    basics.Round(config.Consensus[proto].StateProofInterval),
+			err:      "StateProofOnlineTotalWeight wrong: {99} != {100}",
+		},
+		// Exception round non-mainnet, mismatched state (actual>expected) => no error
+		{
+			actual:   basics.MicroAlgos{Raw: 100},
+			expected: basics.MicroAlgos{Raw: 99},
+			round:    basics.Round(27713280),
+			err:      "StateProofOnlineTotalWeight wrong: {100} != {99}",
+		},
+		// Exception round non-mainnet, mismatched state (actual<expected) => no error
+		{
+			actual:   basics.MicroAlgos{Raw: 99},
+			expected: basics.MicroAlgos{Raw: 100},
+			round:    basics.Round(27713280),
+			err:      "StateProofOnlineTotalWeight wrong: {99} != {100}",
+		},
+		// Exception round non-mainnet, mismatched stake with max possible value for muldiv => no error
+		{
+			actual:   basics.MicroAlgos{Raw: math.MaxUint64 - 100},
+			expected: basics.MicroAlgos{Raw: math.MaxUint64},
+			round:    basics.Round(27713280),
+			err:      "StateProofOnlineTotalWeight wrong: {18446744073709551515} != {18446744073709551615}",
+		},
+	}
+
+	for i, test := range tests {
+		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
+			params := config.Consensus[proto]
+
+			genesisInitState, _, _ := ledgertesting.GenesisWithProto(2, proto)
+
+			l := newTestLedger(t, bookkeeping.GenesisBalances{
+				Balances:    genesisInitState.Accounts,
+				FeeSink:     testSinkAddr,
+				RewardsPool: testPoolAddr,
+				Timestamp:   0,
+			})
+			// If genesis hash is non-nil in test case, override the test hash here
+			if !test.genesisHash.IsZero() {
+				l.genesisHash = test.genesisHash
+			}
+			l.voters = map[basics.Round]*ledgercore.VotersForRound{
+				basics.Round(uint64(test.round) - params.StateProofVotersLookback): {
+					Tree:        &merklearray.Tree{},
+					TotalWeight: test.expected,
+				},
+			}
+
+			genesisBlockHeader, err := l.BlockHdr(0)
+			require.NoError(t, err)
+			newBlock := bookkeeping.MakeBlock(genesisBlockHeader)
+			newBlock.StateProofTracking = map[protocol.StateProofType]bookkeeping.StateProofTrackingData{
+				protocol.StateProofBasic: {
+					StateProofOnlineTotalWeight: test.actual,
+				},
+			}
+			newBlock.BlockHeader.Round = test.round
+
+			pcow := mockLedger{balanceMap: map[basics.Address]basics.AccountData{}}
+			mods := ledgercore.StateDelta{Hdr: &newBlock.BlockHeader}
+			cow := &roundCowState{
+				lookupParent: &pcow,
+				mods:         mods,
+			}
+			eval := BlockEvaluator{
+				state:       cow,
+				validate:    true,
+				prevHeader:  genesisBlockHeader,
+				proto:       params,
+				genesisHash: l.genesisHash,
+				block:       newBlock,
+				l:           l,
+			}
+
+			err = eval.endOfBlock()
+			if len(test.err) == 0 {
+				require.NoError(t, err)
+			} else {
+				require.ErrorContains(t, err, test.err)
+			}
+		})
+	}
+
 }

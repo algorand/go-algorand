@@ -63,7 +63,7 @@ type LedgerForService interface {
 // LedgerService represents the Ledger RPC API
 type LedgerService struct {
 	// running is non-zero once the service is running, and zero when it's not running. it needs to be at a 32-bit aligned address for RasPI support.
-	running       int32
+	running       atomic.Int32
 	ledger        LedgerForService
 	genesisID     string
 	net           network.GossipNode
@@ -89,14 +89,14 @@ func MakeLedgerService(config config.Local, ledger LedgerForService, net network
 // Start listening to catchup requests
 func (ls *LedgerService) Start() {
 	if ls.enableService {
-		atomic.StoreInt32(&ls.running, 1)
+		ls.running.Store(1)
 	}
 }
 
 // Stop servicing catchup requests
 func (ls *LedgerService) Stop() {
 	if ls.enableService {
-		atomic.StoreInt32(&ls.running, 0)
+		ls.running.Store(0)
 		ls.stopping.Wait()
 	}
 }
@@ -107,7 +107,7 @@ func (ls *LedgerService) Stop() {
 func (ls *LedgerService) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 	ls.stopping.Add(1)
 	defer ls.stopping.Done()
-	if atomic.AddInt32(&ls.running, 0) == 0 {
+	if ls.running.Add(0) == 0 {
 		response.WriteHeader(http.StatusNotFound)
 		return
 	}

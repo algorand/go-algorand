@@ -53,11 +53,11 @@ func TestCatchpointIsWritingCatchpointFile(t *testing.T) {
 
 	ct := &catchpointTracker{}
 
-	ct.catchpointDataWriting = -1
+	ct.catchpointDataWriting.Store(-1)
 	ans := ct.isWritingCatchpointDataFile()
 	require.True(t, ans)
 
-	ct.catchpointDataWriting = 0
+	ct.catchpointDataWriting.Store(0)
 	ans = ct.isWritingCatchpointDataFile()
 	require.False(t, ans)
 }
@@ -762,7 +762,7 @@ func TestCatchpointReproducibleLabels(t *testing.T) {
 	require.NotZero(t, len(ct.roundDigest))
 	require.NoError(t, ct.loadFromDisk(ml, ml.Latest()))
 	require.Zero(t, len(ct.roundDigest))
-	require.Zero(t, ct.catchpointDataWriting)
+	require.Zero(t, ct.catchpointDataWriting.Load())
 	select {
 	case _, closed := <-ct.catchpointDataSlowWriting:
 		require.False(t, closed)
@@ -773,44 +773,21 @@ func TestCatchpointReproducibleLabels(t *testing.T) {
 
 // blockingTracker is a testing tracker used to test "what if" a tracker would get blocked.
 type blockingTracker struct {
+	emptyTracker
 	postCommitUnlockedEntryLock   chan struct{}
 	postCommitUnlockedReleaseLock chan struct{}
 	postCommitEntryLock           chan struct{}
 	postCommitReleaseLock         chan struct{}
-	committedUpToRound            int64
+	committedUpToRound            atomic.Int64
 	alwaysLock                    atomic.Bool
 	shouldLockPostCommit          atomic.Bool
 	shouldLockPostCommitUnlocked  atomic.Bool
 }
 
-// loadFromDisk is not implemented in the blockingTracker.
-func (bt *blockingTracker) loadFromDisk(ledgerForTracker, basics.Round) error {
-	return nil
-}
-
-// newBlock is not implemented in the blockingTracker.
-func (bt *blockingTracker) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
-}
-
 // committedUpTo in the blockingTracker just stores the committed round.
 func (bt *blockingTracker) committedUpTo(committedRnd basics.Round) (minRound, lookback basics.Round) {
-	atomic.StoreInt64(&bt.committedUpToRound, int64(committedRnd))
+	bt.committedUpToRound.Store(int64(committedRnd))
 	return committedRnd, basics.Round(0)
-}
-
-// produceCommittingTask is not used by the blockingTracker
-func (bt *blockingTracker) produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcr *deferredCommitRange) *deferredCommitRange {
-	return dcr
-}
-
-// prepareCommit, is not used by the blockingTracker
-func (bt *blockingTracker) prepareCommit(*deferredCommitContext) error {
-	return nil
-}
-
-// commitRound is not used by the blockingTracker
-func (bt *blockingTracker) commitRound(context.Context, trackerdb.TransactionScope, *deferredCommitContext) error {
-	return nil
 }
 
 // postCommit implements entry/exit blockers, designed for testing.
@@ -827,18 +804,6 @@ func (bt *blockingTracker) postCommitUnlocked(ctx context.Context, dcc *deferred
 		bt.postCommitUnlockedEntryLock <- struct{}{}
 		<-bt.postCommitUnlockedReleaseLock
 	}
-}
-
-// control functions are not used by the blockingTracker
-func (bt *blockingTracker) handleUnorderedCommit(dcc *deferredCommitContext) {
-}
-func (bt *blockingTracker) handlePrepareCommitError(dcc *deferredCommitContext) {
-}
-func (bt *blockingTracker) handleCommitError(dcc *deferredCommitContext) {
-}
-
-// close is not used by the blockingTracker
-func (bt *blockingTracker) close() {
 }
 
 func TestCatchpointTrackerNonblockingCatchpointWriting(t *testing.T) {
@@ -906,7 +871,7 @@ func TestCatchpointTrackerNonblockingCatchpointWriting(t *testing.T) {
 	require.NoError(t, err)
 	// wait for the committedUpToRound to be called with the correct round number.
 	for {
-		committedUpToRound := atomic.LoadInt64(&writeStallingTracker.committedUpToRound)
+		committedUpToRound := writeStallingTracker.committedUpToRound.Load()
 		if basics.Round(committedUpToRound) == ledger.Latest() {
 			break
 		}
@@ -948,7 +913,7 @@ func TestCatchpointTrackerNonblockingCatchpointWriting(t *testing.T) {
 	require.NoError(t, err)
 	// wait for the committedUpToRound to be called with the correct round number.
 	for {
-		committedUpToRound := atomic.LoadInt64(&writeStallingTracker.committedUpToRound)
+		committedUpToRound := writeStallingTracker.committedUpToRound.Load()
 		if basics.Round(committedUpToRound) == ledger.Latest() {
 			break
 		}

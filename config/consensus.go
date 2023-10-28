@@ -788,6 +788,9 @@ func PreloadConfigurableConsensusProtocols(dataDirectory string) (ConsensusProto
 	return Consensus.Merge(configurableConsensus), nil
 }
 
+// initConsensusProtocols defines the consensus protocol values and how values change across different versions of the protocol.
+//
+// These are the only valid and tested consensus values and transitions. Other settings are not tested and may lead to unexpected behavior.
 func initConsensusProtocols() {
 	// WARNING: copying a ConsensusParams by value into a new variable
 	// does not copy the ApprovedUpgrades map.  Make sure that each new
