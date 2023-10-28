@@ -20,7 +20,9 @@ import (
 	"context"
 	"errors"
 	"math/rand"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -167,7 +169,6 @@ func TestServiceFetchBlocksSameRange(t *testing.T) {
 type periodicSyncLogger struct {
 	logging.Logger
 	WarnfCallback func(string, ...interface{})
-	debugMsgs     []string
 }
 
 func (cl *periodicSyncLogger) Warnf(s string, args ...interface{}) {
@@ -181,9 +182,24 @@ func (cl *periodicSyncLogger) Warnf(s string, args ...interface{}) {
 	cl.Logger.Warnf(s, args...)
 }
 
-func (cl *periodicSyncLogger) Debugf(s string, args ...interface{}) {
+type periodicSyncDebugLogger struct {
+	periodicSyncLogger
+	debugMsgFilter []string
+	debugMsgs      atomic.Uint32
+}
+
+func (cl *periodicSyncDebugLogger) Debugf(s string, args ...interface{}) {
 	// save debug messages for later inspection.
-	cl.debugMsgs = append(cl.debugMsgs, s)
+	if len(cl.debugMsgFilter) > 0 {
+		for _, filter := range cl.debugMsgFilter {
+			if strings.Contains(s, filter) {
+				cl.debugMsgs.Add(1)
+				break
+			}
+		}
+	} else {
+		cl.debugMsgs.Add(1)
+	}
 	cl.Logger.Debugf(s, args...)
 }
 
@@ -215,7 +231,7 @@ func TestSyncRound(t *testing.T) {
 
 	auth := &mockedAuthenticator{fail: true}
 	initialLocalRound := local.LastRound()
-	require.True(t, 0 == initialLocalRound)
+	require.Zero(t, initialLocalRound)
 
 	// Make Service
 	localCfg := config.GetDefaultLocal()
@@ -260,7 +276,7 @@ func TestSyncRound(t *testing.T) {
 	s.UnsetDisableSyncRound()
 	// wait until the catchup is done
 	waitStart = time.Now()
-	for time.Now().Sub(waitStart) < 8*s.deadlineTimeout {
+	for time.Since(waitStart) < 8*s.deadlineTimeout {
 		if remote.LastRound() == local.LastRound() {
 			break
 		}
@@ -305,7 +321,7 @@ func TestPeriodicSync(t *testing.T) {
 
 	auth := &mockedAuthenticator{fail: true}
 	initialLocalRound := local.LastRound()
-	require.True(t, 0 == initialLocalRound)
+	require.Zero(t, initialLocalRound)
 
 	// Make Service
 	s := MakeService(logging.Base(), defaultConfig, net, local, auth, nil, nil)
@@ -322,7 +338,7 @@ func TestPeriodicSync(t *testing.T) {
 	// wait until the catchup is done. Since we've might have missed the sleep window, we need to wait
 	// until the synchronization is complete.
 	waitStart := time.Now()
-	for time.Now().Sub(waitStart) < 10*s.deadlineTimeout {
+	for time.Since(waitStart) < 10*s.deadlineTimeout {
 		if remote.LastRound() == local.LastRound() {
 			break
 		}
@@ -1230,7 +1246,7 @@ func TestServiceNoBlockForRound(t *testing.T) {
 	cfg := config.GetDefaultLocal()
 	cfg.CatchupParallelBlocks = 8
 	s := MakeService(logging.Base(), cfg, net, local, auth, nil, nil)
-	pl := &periodicSyncLogger{Logger: logging.Base()}
+	pl := &periodicSyncDebugLogger{periodicSyncLogger: periodicSyncLogger{Logger: logging.Base()}}
 	s.log = pl
 	s.deadlineTimeout = 1 * time.Second
 
@@ -1240,5 +1256,5 @@ func TestServiceNoBlockForRound(t *testing.T) {
 
 	// without the fix there are about 2k messages (4x catchupRetryLimit)
 	// with the fix expect less than catchupRetryLimit
-	require.Less(t, len(pl.debugMsgs), catchupRetryLimit)
+	require.Less(t, int(pl.debugMsgs.Load()), catchupRetryLimit)
 }
