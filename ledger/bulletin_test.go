@@ -20,7 +20,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/test/partitiontest"
+	"github.com/stretchr/testify/require"
 )
 
 const epsilon = 5 * time.Millisecond
@@ -98,5 +100,69 @@ func TestBulletin(t *testing.T) {
 		// Correct
 	case <-time.After(time.Second):
 		t.Errorf("<-Wait(10) finished late")
+	}
+}
+
+func TestCancelWait(t *testing.T) {
+	bul := makeBulletin()
+
+	// Calling Wait before CancelWait
+	waitCh := bul.Wait(5)
+	bul.CancelWait(5)
+	bul.committedUpTo(5)
+	select {
+	case <-waitCh:
+		t.Errorf("<-Wait(5) should have been cancelled")
+	case <-time.After(epsilon):
+		// Correct
+	}
+	require.NotContains(t, bul.pendingNotificationRequests, basics.Round(5))
+
+	// CancelWait is called before Wait
+	bul.CancelWait(6)
+	select {
+	case <-bul.Wait(6):
+		t.Errorf("<-Wait(6) should have been cancelled")
+	case <-time.After(epsilon):
+		// Correct
+	}
+	require.Contains(t, bul.pendingNotificationRequests, basics.Round(6))
+	require.Equal(t, bul.pendingNotificationRequests[basics.Round(6)].count, 1)
+	bul.CancelWait(6)
+	require.NotContains(t, bul.pendingNotificationRequests, basics.Round(6))
+
+	// Two Waits, one cancelled
+	waitCh1 := bul.Wait(7)
+	waitCh2 := bul.Wait(7)
+	require.EqualValues(t, waitCh1, waitCh2)
+	bul.CancelWait(7)
+	select {
+	case <-waitCh1:
+		t.Errorf("<-Wait(7) should not be notified yet")
+	case <-time.After(epsilon):
+		// Correct
+	}
+	// Still one waiter
+	require.Contains(t, bul.pendingNotificationRequests, basics.Round(7))
+	require.Equal(t, bul.pendingNotificationRequests[basics.Round(7)].count, 1)
+
+	bul.committedUpTo(7)
+	select {
+	case <-waitCh1:
+		// Correct
+	case <-time.After(epsilon):
+		t.Errorf("<-Wait(7) should have been notified")
+	}
+	require.NotContains(t, bul.pendingNotificationRequests, basics.Round(7))
+
+	// Wait followed by Cancel for a round that already completed
+	waitCh = bul.Wait(5)
+	bul.CancelWait(5)
+	require.NotContains(t, bul.pendingNotificationRequests, basics.Round(5))
+	select {
+	case <-waitCh:
+		// Correct
+	case <-time.After(epsilon):
+		t.Errorf("<-Wait(5) should have been notified right away")
 	}
 }
