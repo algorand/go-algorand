@@ -118,7 +118,7 @@ func TestCancelWait(t *testing.T) {
 	}
 	require.NotContains(t, bul.pendingNotificationRequests, basics.Round(5))
 
-	// CancelWait is called before Wait
+	// Calling CancelWait before Wait
 	bul.CancelWait(6)
 	select {
 	case <-bul.Wait(6):
@@ -165,4 +165,34 @@ func TestCancelWait(t *testing.T) {
 	case <-time.After(epsilon):
 		t.Errorf("<-Wait(5) should have been notified right away")
 	}
+
+	// Cancel Wait after Wait triggered
+	waitCh = bul.Wait(8)
+	require.Contains(t, bul.pendingNotificationRequests, basics.Round(8))
+	require.Equal(t, bul.pendingNotificationRequests[basics.Round(8)].count, 1)
+	bul.committedUpTo(8)
+	require.NotContains(t, bul.pendingNotificationRequests, basics.Round(8))
+	select {
+	case <-waitCh:
+		// Correct
+	case <-time.After(epsilon):
+		t.Errorf("<-Wait(8) should have been notified")
+	}
+	require.NotContains(t, bul.pendingNotificationRequests, basics.Round(8))
+	bul.CancelWait(8) // should do nothing
+
+	// Cancel Wait after Wait triggered, but before Wait returned
+	waitCh = bul.Wait(9)
+	require.Contains(t, bul.pendingNotificationRequests, basics.Round(9))
+	require.Equal(t, bul.pendingNotificationRequests[basics.Round(9)].count, 1)
+	bul.committedUpTo(9)
+	require.NotContains(t, bul.pendingNotificationRequests, basics.Round(9))
+	bul.CancelWait(9) // should do nothing
+	select {
+	case <-waitCh:
+		// Correct
+	case <-time.After(epsilon):
+		t.Errorf("<-Wait(9) should have been notified")
+	}
+	require.NotContains(t, bul.pendingNotificationRequests, basics.Round(9))
 }
