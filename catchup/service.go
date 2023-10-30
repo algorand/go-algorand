@@ -257,8 +257,8 @@ func (s *Service) fetchAndWrite(ctx context.Context, r basics.Round, prevFetchCo
 		return false
 	}
 
-	// peerErrors tracks errNoBlockForRound in order to quite earlier without making
-	// tons of requests for a block that most likely not happened yet
+	// peerErrors tracks occurrences of errNoBlockForRound in order to quit earlier without making
+	// repeated requests for a block that most likely does not exist yet
 	peerErrors := map[network.Peer]int{}
 
 	i := 0
@@ -730,7 +730,7 @@ func (s *Service) fetchRound(cert agreement.Certificate, verifier *agreement.Asy
 			}
 			if err == errNoBlockForRound {
 				// remote peer doesn't have the block, try another peer
-				// quit if the the same peer peer encountered errNoBlockForRound more than errNoBlockForRoundThreshold times
+				// quit if the the same peer encountered errNoBlockForRound more than errNoBlockForRoundThreshold times
 				if count := peerErrors[peer]; count > errNoBlockForRoundThreshold {
 					s.log.Debugf("fetchAndWrite(%d): remote peers do not have the block. Quitting", cert.Round)
 					return
