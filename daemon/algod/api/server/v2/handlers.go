@@ -22,7 +22,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"golang.org/x/sync/semaphore"
 	"io"
 	"math"
 	"net/http"
@@ -31,6 +30,7 @@ import (
 	"time"
 
 	"github.com/labstack/echo/v4"
+	"golang.org/x/sync/semaphore"
 
 	"github.com/algorand/avm-abi/apps"
 	"github.com/algorand/go-codec/codec"
@@ -96,6 +96,7 @@ type LedgerForAPI interface {
 	LatestTotals() (basics.Round, ledgercore.AccountTotals, error)
 	BlockHdr(rnd basics.Round) (blk bookkeeping.BlockHeader, err error)
 	Wait(r basics.Round) chan struct{}
+	WaitWithCancel(r basics.Round) (chan struct{}, func())
 	GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error)
 	EncodedBlockCert(rnd basics.Round) (blk []byte, cert []byte, err error)
 	Block(rnd basics.Round) (blk bookkeeping.Block, err error)
@@ -940,11 +941,15 @@ func (v2 *Handlers) WaitForBlock(ctx echo.Context, round uint64) error {
 	}
 
 	// Wait
+	ledgerWaitCh, cancelLedgerWait := ledger.WaitWithCancel(basics.Round(round + 1))
+	defer cancelLedgerWait()
 	select {
 	case <-v2.Shutdown:
 		return internalError(ctx, err, errServiceShuttingDown, v2.Log)
+	case <-ctx.Request().Context().Done():
+		return ctx.NoContent(http.StatusRequestTimeout)
 	case <-time.After(WaitForBlockTimeout):
-	case <-ledger.Wait(basics.Round(round + 1)):
+	case <-ledgerWaitCh:
 	}
 
 	// Return status after the wait

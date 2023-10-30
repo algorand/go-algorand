@@ -31,12 +31,13 @@ import (
 // notifier is a struct that encapsulates a single-shot channel; it will only be signaled once.
 type notifier struct {
 	signal   chan struct{}
-	notified *atomic.Uint32
+	notified atomic.Uint32
+	count    int
 }
 
 // makeNotifier constructs a notifier that has not been signaled.
-func makeNotifier() notifier {
-	return notifier{signal: make(chan struct{}), notified: &atomic.Uint32{}}
+func makeNotifier() *notifier {
+	return &notifier{signal: make(chan struct{})}
 }
 
 // notify signals the channel if it hasn't already done so
@@ -50,7 +51,7 @@ func (notifier *notifier) notify() {
 // To use it, call <-Wait(round).
 type bulletin struct {
 	mu                          deadlock.Mutex
-	pendingNotificationRequests map[basics.Round]notifier
+	pendingNotificationRequests map[basics.Round]*notifier
 	latestRound                 basics.Round
 }
 
@@ -62,7 +63,7 @@ type bulletinMem struct {
 
 func makeBulletin() *bulletin {
 	b := new(bulletin)
-	b.pendingNotificationRequests = make(map[basics.Round]notifier)
+	b.pendingNotificationRequests = make(map[basics.Round]*notifier)
 	return b
 }
 
@@ -83,11 +84,29 @@ func (b *bulletin) Wait(round basics.Round) chan struct{} {
 		signal = makeNotifier()
 		b.pendingNotificationRequests[round] = signal
 	}
+	// Increment count of waiters, to support canceling.
+	signal.count++
+
 	return signal.signal
 }
 
+// CancelWait removes a wait for a particular round. If no one else is waiting, the
+// notifier channel for that round is removed.
+func (b *bulletin) CancelWait(round basics.Round) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	signal, exists := b.pendingNotificationRequests[round]
+	if exists {
+		signal.count--
+		if signal.count <= 0 {
+			delete(b.pendingNotificationRequests, round)
+		}
+	}
+}
+
 func (b *bulletin) loadFromDisk(l ledgerForTracker, _ basics.Round) error {
-	b.pendingNotificationRequests = make(map[basics.Round]notifier)
+	b.pendingNotificationRequests = make(map[basics.Round]*notifier)
 	b.latestRound = l.Latest()
 	return nil
 }
