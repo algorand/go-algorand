@@ -729,14 +729,21 @@ func (s *Service) fetchRound(cert agreement.Certificate, verifier *agreement.Asy
 			default:
 			}
 			if err == errNoBlockForRound {
-				// remote peer doesn't have the block, try another peer
-				// quit if the the same peer encountered errNoBlockForRound more than errNoBlockForRoundThreshold times
-				if count := peerErrors[peer]; count > errNoBlockForRoundThreshold {
-					s.log.Debugf("fetchAndWrite(%d): remote peers do not have the block. Quitting", cert.Round)
-					return
+				// If a peer does not have the block after few attempts it probably has not persisted the block yet.
+				// Give it some time to persist the block and try again.
+				// Quit if the the same peer errs more than errNoBlockForRoundThreshold times.
+				if count, ok := peerErrors[peer]; ok {
+					if count == errNoBlockForRoundThreshold {
+						time.Sleep(1 * time.Second)
+					}
+					if count > errNoBlockForRoundThreshold {
+						s.log.Debugf("fetchAndWrite(%d): remote peers do not have the block. Quitting", cert.Round)
+						return
+					}
 				}
 				peerErrors[peer]++
 			}
+			// remote peer doesn't have the block, try another peer
 			logging.Base().Warnf("fetchRound could not acquire block, fetcher errored out: %v", err)
 			peerSelector.rankPeer(psp, peerRankDownloadFailed)
 			continue
