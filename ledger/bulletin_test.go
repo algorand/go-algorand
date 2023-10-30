@@ -104,6 +104,8 @@ func TestBulletin(t *testing.T) {
 }
 
 func TestCancelWait(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	bul := makeBulletin()
 
 	// Calling Wait before CancelWait
