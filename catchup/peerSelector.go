@@ -110,11 +110,13 @@ type peerPool struct {
 // client to provide feedback regarding the peer's performance, and to have the subsequent
 // query(s) take advantage of that intel.
 type peerSelector struct {
-	mu          deadlock.Mutex
-	net         peersRetriever
+	mu  deadlock.Mutex
+	net peersRetriever
+	// peerClasses is the list of peer classes we want to have in the peerSelector.
 	peerClasses []peerClass
-	pools       []peerPool
-	counter     uint64
+	// pools is the list of peer pools, each pool contains a list of peers with the same rank.
+	pools   []peerPool
+	counter uint64
 }
 
 // historicStats stores the past windowSize ranks for the peer passed
