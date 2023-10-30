@@ -29,6 +29,8 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/sync/semaphore"
+
 	"github.com/labstack/echo/v4"
 	"golang.org/x/sync/semaphore"
 
@@ -728,6 +730,54 @@ func (v2 *Handlers) GetBlockTxids(ctx echo.Context, round uint64) error {
 	}
 
 	response := model.BlockTxidsResponse{BlockTxids: txids}
+
+	return ctx.JSON(http.StatusOK, response)
+}
+
+func getLogsFromTxns(txns []transactions.SignedTxnWithAD, blockLogs *[]model.BlockLog, outerTxnID string) {
+
+	for _, txn := range txns {
+		byteLogs := make([][]byte, 0, len(txns))
+		for _, log := range txn.EvalDelta.Logs {
+			byteLogs = append(byteLogs, []byte(log))
+		}
+
+		*blockLogs = append(*blockLogs, model.BlockLog{
+			Txid:             outerTxnID,
+			Logs:             byteLogs,
+			ApplicationIndex: uint64(txn.ApplicationID),
+		})
+
+		getLogsFromTxns(txn.EvalDelta.InnerTxns, blockLogs, outerTxnID)
+	}
+}
+
+// GetBlockLogs gets all of the logs (inner and outer app calls) for a given block
+// (GET /v2/blocks/{round}/logs)
+func (v2 *Handlers) GetBlockLogs(ctx echo.Context, round uint64) error {
+	ledger := v2.Node.LedgerForAPI()
+	block, err := ledger.Block(basics.Round(round))
+	if err != nil {
+		switch err.(type) {
+		case ledgercore.ErrNoEntry:
+			return notFound(ctx, err, errFailedLookingUpLedger, v2.Log)
+		default:
+			return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+		}
+	}
+
+	txns, err := block.DecodePaysetFlat()
+	if err != nil {
+		return internalError(ctx, err, "decoding transactions", v2.Log)
+	}
+
+	var blockLogs []model.BlockLog
+
+	for _, txn := range txns {
+		getLogsFromTxns(txn.EvalDelta.InnerTxns, &blockLogs, txn.ID().String())
+	}
+
+	response := model.BlockLogsResponse{Logs: blockLogs}
 
 	return ctx.JSON(http.StatusOK, response)
 }

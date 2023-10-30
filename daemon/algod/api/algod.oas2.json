@@ -4449,6 +4449,33 @@
           }
         }
       }
+    },
+    "BlockLog": {
+      "description": "An array of logs for a given application ID and outer transaction ID",
+      "type": "object",
+      "required": [
+        "logs",
+        "application-index",
+        "txid"
+      ],
+      "properties": {
+        "logs": {
+          "description": "An array of logs",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "byte"
+          }
+        },
+        "application-index": {
+          "description": "The application from which the logs were generated",
+          "type": "integer"
+        },
+        "txid": {
+          "description": "The transaction ID of the outer app call that lead to these logs",
+          "type": "string"
+        }
+      }
     }
   },
   "parameters": {
@@ -5102,6 +5129,23 @@
           },
           "initial-states": {
             "$ref": "#/definitions/SimulateInitialStates"
+          }
+        }
+      }
+    },
+    "BlockLogsResponse": {
+      "description": "All of the logs from outer and inner app calls in the given block",
+      "schema": {
+        "type": "object",
+        "required": [
+          "logs"
+        ],
+        "properties": {
+          "logs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/BlockLog"
+            }
           }
         }
       }
