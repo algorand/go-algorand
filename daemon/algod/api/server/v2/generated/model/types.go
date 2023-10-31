@@ -1452,6 +1452,12 @@ type GetTransactionProofParamsHashtype string
 // GetTransactionProofParamsFormat defines parameters for GetTransactionProof.
 type GetTransactionProofParamsFormat string
 
+// StartCatchupParams defines parameters for StartCatchup.
+type StartCatchupParams struct {
+	// Min Specify the minimum number of blocks which the ledger must be advanced by in order to start the catchup. This is useful for simplifying tools which support fast catchup, they can run the catchup unconditionally and the node will skip the catchup if it is not needed.
+	Min *uint64 `form:"min,omitempty" json:"min,omitempty"`
+}
+
 // GetLedgerStateDeltaForTransactionGroupParams defines parameters for GetLedgerStateDeltaForTransactionGroup.
 type GetLedgerStateDeltaForTransactionGroupParams struct {
 	// Format Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.
@@ -1478,6 +1484,18 @@ type GetTransactionGroupLedgerStateDeltasForRoundParams struct {
 
 // GetTransactionGroupLedgerStateDeltasForRoundParamsFormat defines parameters for GetTransactionGroupLedgerStateDeltasForRound.
 type GetTransactionGroupLedgerStateDeltasForRoundParamsFormat string
+
+// GenerateParticipationKeysParams defines parameters for GenerateParticipationKeys.
+type GenerateParticipationKeysParams struct {
+	// Dilution Key dilution for two-level participation keys (defaults to sqrt of validity window).
+	Dilution *uint64 `form:"dilution,omitempty" json:"dilution,omitempty"`
+
+	// First First round for participation key.
+	First uint64 `form:"first" json:"first"`
+
+	// Last Last round for participation key.
+	Last uint64 `form:"last" json:"last"`
+}
 
 // ShutdownNodeParams defines parameters for ShutdownNode.
 type ShutdownNodeParams struct {

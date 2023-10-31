@@ -518,7 +518,7 @@ func TestAssemble(t *testing.T) {
 			// this month that we did last month.
 			bytecode, ok := compiled[v]
 			require.True(t, ok, "Need v%d bytecode", v)
-			expectedBytes, _ := hex.DecodeString(bytecode)
+			expectedBytes, _ := hex.DecodeString(strings.ReplaceAll(bytecode, " ", ""))
 			require.NotEmpty(t, expectedBytes)
 			// the hex is for convenience if the program has been changed. the
 			// hex string can be copy pasted back in as a new expected result.
@@ -2151,73 +2151,77 @@ func TestAssembleOffsets(t *testing.T) {
 	source := "err"
 	ops := testProg(t, source, AssemblerMaxVersion)
 	require.Equal(t, 2, len(ops.Program))
-	require.Equal(t, 1, len(ops.OffsetToLine))
+	require.Equal(t, 1, len(ops.OffsetToSource))
 	// vlen
-	line, ok := ops.OffsetToLine[0]
+	location, ok := ops.OffsetToSource[0]
 	require.False(t, ok)
-	require.Equal(t, 0, line)
+	require.Equal(t, SourceLocation{}, location)
 	// err
-	line, ok = ops.OffsetToLine[1]
+	location, ok = ops.OffsetToSource[1]
 	require.True(t, ok)
-	require.Equal(t, 0, line)
+	require.Equal(t, SourceLocation{}, location)
 
 	source = `err
 // comment
-err
+err; err
 `
 	ops = testProg(t, source, AssemblerMaxVersion)
-	require.Equal(t, 3, len(ops.Program))
-	require.Equal(t, 2, len(ops.OffsetToLine))
+	require.Equal(t, 4, len(ops.Program))
+	require.Equal(t, 3, len(ops.OffsetToSource))
 	// vlen
-	line, ok = ops.OffsetToLine[0]
+	location, ok = ops.OffsetToSource[0]
 	require.False(t, ok)
-	require.Equal(t, 0, line)
+	require.Equal(t, SourceLocation{}, location)
 	// err 1
-	line, ok = ops.OffsetToLine[1]
+	location, ok = ops.OffsetToSource[1]
 	require.True(t, ok)
-	require.Equal(t, 0, line)
+	require.Equal(t, SourceLocation{}, location)
 	// err 2
-	line, ok = ops.OffsetToLine[2]
+	location, ok = ops.OffsetToSource[2]
 	require.True(t, ok)
-	require.Equal(t, 2, line)
+	require.Equal(t, SourceLocation{Line: 2}, location)
+	// err 3
+	location, ok = ops.OffsetToSource[3]
+	require.True(t, ok)
+	require.Equal(t, SourceLocation{Line: 2, Column: 5}, location)
 
 	source = `err
 b label1
 err
 label1:
-err
+  err
 `
 	ops = testProg(t, source, AssemblerMaxVersion)
 	require.Equal(t, 7, len(ops.Program))
-	require.Equal(t, 4, len(ops.OffsetToLine))
+	require.Equal(t, 4, len(ops.OffsetToSource))
 	// vlen
-	line, ok = ops.OffsetToLine[0]
+	location, ok = ops.OffsetToSource[0]
 	require.False(t, ok)
-	require.Equal(t, 0, line)
+	require.Equal(t, SourceLocation{}, location)
 	// err 1
-	line, ok = ops.OffsetToLine[1]
+	location, ok = ops.OffsetToSource[1]
 	require.True(t, ok)
-	require.Equal(t, 0, line)
+	require.Equal(t, SourceLocation{}, location)
 	// b
-	line, ok = ops.OffsetToLine[2]
+	location, ok = ops.OffsetToSource[2]
 	require.True(t, ok)
-	require.Equal(t, 1, line)
+	require.Equal(t, SourceLocation{Line: 1}, location)
 	// b byte 1
-	line, ok = ops.OffsetToLine[3]
+	location, ok = ops.OffsetToSource[3]
 	require.False(t, ok)
-	require.Equal(t, 0, line)
+	require.Equal(t, SourceLocation{}, location)
 	// b byte 2
-	line, ok = ops.OffsetToLine[4]
+	location, ok = ops.OffsetToSource[4]
 	require.False(t, ok)
-	require.Equal(t, 0, line)
+	require.Equal(t, SourceLocation{}, location)
 	// err 2
-	line, ok = ops.OffsetToLine[5]
+	location, ok = ops.OffsetToSource[5]
 	require.True(t, ok)
-	require.Equal(t, 2, line)
+	require.Equal(t, SourceLocation{Line: 2}, location)
 	// err 3
-	line, ok = ops.OffsetToLine[6]
+	location, ok = ops.OffsetToSource[6]
 	require.True(t, ok)
-	require.Equal(t, 4, line)
+	require.Equal(t, SourceLocation{Line: 4, Column: 2}, location)
 
 	source = `pushint 0
 // comment
@@ -2225,23 +2229,23 @@ err
 `
 	ops = testProg(t, source, AssemblerMaxVersion)
 	require.Equal(t, 4, len(ops.Program))
-	require.Equal(t, 2, len(ops.OffsetToLine))
+	require.Equal(t, 2, len(ops.OffsetToSource))
 	// vlen
-	line, ok = ops.OffsetToLine[0]
+	location, ok = ops.OffsetToSource[0]
 	require.False(t, ok)
-	require.Equal(t, 0, line)
+	require.Equal(t, SourceLocation{}, location)
 	// pushint
-	line, ok = ops.OffsetToLine[1]
+	location, ok = ops.OffsetToSource[1]
 	require.True(t, ok)
-	require.Equal(t, 0, line)
+	require.Equal(t, SourceLocation{}, location)
 	// pushint byte 1
-	line, ok = ops.OffsetToLine[2]
+	location, ok = ops.OffsetToSource[2]
 	require.False(t, ok)
-	require.Equal(t, 0, line)
+	require.Equal(t, SourceLocation{}, location)
 	// !
-	line, ok = ops.OffsetToLine[3]
+	location, ok = ops.OffsetToSource[3]
 	require.True(t, ok)
-	require.Equal(t, 2, line)
+	require.Equal(t, SourceLocation{Line: 2}, location)
 }
 
 func TestHasStatefulOps(t *testing.T) {
@@ -3600,10 +3604,13 @@ func TestReportMultipleErrors(t *testing.T) {
 			{Line: 1, Err: errors.New("error 1")},
 			{Err: errors.New("error 2")},
 			{Line: 3, Err: errors.New("error 3")},
+			{Line: 4, Column: 1, Err: errors.New("error 4")},
 		},
-		Warnings: []error{
-			errors.New("warning 1"),
-			errors.New("warning 2"),
+		Warnings: []sourceError{
+			{Line: 5, Err: errors.New("warning 1")},
+			{Err: errors.New("warning 2")},
+			{Line: 7, Err: errors.New("warning 3")},
+			{Line: 8, Column: 1, Err: errors.New("warning 4")},
 		},
 	}
 
@@ -3613,8 +3620,11 @@ func TestReportMultipleErrors(t *testing.T) {
 	expected := `test.txt: 1: error 1
 test.txt: 0: error 2
 test.txt: 3: error 3
-test.txt: warning 1
-test.txt: warning 2
+test.txt: 4:1: error 4
+test.txt: 5: warning 1
+test.txt: 0: warning 2
+test.txt: 7: warning 3
+test.txt: 8:1: warning 4
 `
 	require.Equal(t, expected, b.String())
 
@@ -3624,8 +3634,11 @@ test.txt: warning 2
 	expected = `1: error 1
 0: error 2
 3: error 3
-warning 1
-warning 2
+4:1: error 4
+5: warning 1
+0: warning 2
+7: warning 3
+8:1: warning 4
 `
 	require.Equal(t, expected, b.String())
 

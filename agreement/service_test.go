@@ -935,6 +935,25 @@ func simulateAgreementWithLedgerFactory(t *testing.T, numNodes int, numRounds in
 		services[i].Shutdown()
 	}
 
+	firstHistoricalClocksRound := startRound
+	if basics.Round(numRounds) > credentialRoundLag {
+		firstHistoricalClocksRound = startRound + basics.Round(numRounds) - credentialRoundLag
+	}
+
+	// check that historical clocks map didn't get too large
+	for i := 0; i < numNodes; i++ {
+		require.LessOrEqual(t, len(services[i].historicalClocks), int(credentialRoundLag)+1, "too many historical clocks kept")
+		for round := firstHistoricalClocksRound + 1; round <= startRound+basics.Round(numRounds); round++ {
+			_, has := services[i].historicalClocks[round]
+			require.True(t, has)
+		}
+	}
+	if numRounds >= int(credentialRoundLag) {
+		for i := 0; i < numNodes; i++ {
+			require.Equal(t, len(services[i].historicalClocks), int(credentialRoundLag)+1, "not enough historical clocks kept")
+		}
+	}
+
 	sanityCheck(startRound, round(numRounds), ledgers)
 
 	if len(clocks) == 0 {
@@ -1021,6 +1040,16 @@ func TestAgreementSynchronous5_50(t *testing.T) {
 	simulateAgreement(t, 5, 50, disabled)
 }
 
+func TestAgreementHistoricalClocksCleanup(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	if testing.Short() {
+		t.Skip("Skipping agreement integration test")
+	}
+
+	simulateAgreement(t, 5, int(credentialRoundLag)+10, disabled)
+}
+
 func createDynamicFilterConfig() (version protocol.ConsensusVersion, consensusVersion func(r basics.Round) (protocol.ConsensusVersion, error), configCleanup func()) {
 	version = protocol.ConsensusVersion("test-protocol-filtertimeout")
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
@@ -1052,18 +1081,19 @@ func TestAgreementSynchronousFuture5_DynamicFilterRounds(t *testing.T) {
 		return
 	}
 
-	rounds := dynamicFilterCredentialArrivalHistory + 20
+	baseHistoryRounds := dynamicFilterCredentialArrivalHistory + int(credentialRoundLag)
+	rounds := baseHistoryRounds + 20
 
 	filterTimeouts := simulateAgreementWithConsensusVersion(t, 5, rounds, disabled, consensusVersion)
 	require.Len(t, filterTimeouts, rounds-1)
-	for i := 1; i < dynamicFilterCredentialArrivalHistory-1; i++ {
+	for i := 1; i < baseHistoryRounds-1; i++ {
 		require.Equal(t, filterTimeouts[i-1], filterTimeouts[i])
 	}
 
 	// dynamic filter timeout kicks in when history window is full
-	require.Less(t, filterTimeouts[dynamicFilterCredentialArrivalHistory-1], filterTimeouts[dynamicFilterCredentialArrivalHistory-2])
+	require.Less(t, filterTimeouts[baseHistoryRounds-1], filterTimeouts[baseHistoryRounds-2])
 
-	for i := dynamicFilterCredentialArrivalHistory; i < len(filterTimeouts); i++ {
+	for i := baseHistoryRounds; i < len(filterTimeouts); i++ {
 		require.Equal(t, filterTimeouts[i-1], filterTimeouts[i])
 	}
 }
@@ -1101,9 +1131,11 @@ func TestDynamicFilterTimeoutResets(t *testing.T) {
 
 	filterTimeouts := make([][]time.Duration, numNodes, numNodes)
 
+	baseHistoryRounds := dynamicFilterCredentialArrivalHistory + int(credentialRoundLag)
+
 	// run round with round-specific consensus version first (since fix in #1896)
 	zeroes = runRoundTriggerFilter(clocks, activityMonitor, zeroes)
-	for j := 1; j < dynamicFilterCredentialArrivalHistory+1; j++ {
+	for j := 1; j < baseHistoryRounds+2; j++ {
 		for srvIdx, clock := range clocks {
 			delta, err := clock.(*testingClock).when(TimeoutFilter)
 			require.NoError(t, err)
@@ -1113,11 +1145,11 @@ func TestDynamicFilterTimeoutResets(t *testing.T) {
 	}
 
 	for i := range clocks {
-		require.Len(t, filterTimeouts[i], dynamicFilterCredentialArrivalHistory)
-		for j := 1; j < dynamicFilterCredentialArrivalHistory-1; j++ {
+		require.Len(t, filterTimeouts[i], baseHistoryRounds+1)
+		for j := 1; j < baseHistoryRounds-2; j++ {
 			require.Equal(t, filterTimeouts[i][j-1], filterTimeouts[i][j])
 		}
-		require.Less(t, filterTimeouts[i][dynamicFilterCredentialArrivalHistory-1], filterTimeouts[i][dynamicFilterCredentialArrivalHistory-2])
+		require.Less(t, filterTimeouts[i][baseHistoryRounds-1], filterTimeouts[i][baseHistoryRounds-2])
 	}
 
 	// force fast partition recovery into bottom
@@ -1149,7 +1181,7 @@ func TestDynamicFilterTimeoutResets(t *testing.T) {
 
 	// run round with round-specific consensus version first (since fix in #1896)
 	zeroes = runRoundTriggerFilter(clocks, activityMonitor, zeroes)
-	for j := 1; j < dynamicFilterCredentialArrivalHistory+1; j++ {
+	for j := 1; j < baseHistoryRounds+1; j++ {
 		for srvIdx, clock := range clocks {
 			delta, err := clock.(*testingClock).when(TimeoutFilter)
 			require.NoError(t, err)
@@ -1159,19 +1191,19 @@ func TestDynamicFilterTimeoutResets(t *testing.T) {
 	}
 
 	for i := range clocks {
-		require.Len(t, filterTimeoutsPostRecovery[i], dynamicFilterCredentialArrivalHistory)
+		require.Len(t, filterTimeoutsPostRecovery[i], baseHistoryRounds)
 		// check that history was discarded, so filter time increased back to its original default
-		require.Less(t, filterTimeouts[i][dynamicFilterCredentialArrivalHistory-1], filterTimeoutsPostRecovery[i][0])
-		require.Equal(t, filterTimeouts[i][dynamicFilterCredentialArrivalHistory-2], filterTimeoutsPostRecovery[i][0])
+		require.Less(t, filterTimeouts[i][baseHistoryRounds], filterTimeoutsPostRecovery[i][0])
+		require.Equal(t, filterTimeouts[i][baseHistoryRounds-2], filterTimeoutsPostRecovery[i][0])
 
 		// check that filter timeout was updated to at the end of the history window
-		for j := 1; j < dynamicFilterCredentialArrivalHistory-1; j++ {
+		for j := 1; j < dynamicFilterCredentialArrivalHistory-2; j++ {
 			require.Equal(t, filterTimeoutsPostRecovery[i][j-1], filterTimeoutsPostRecovery[i][j])
 		}
 		require.Less(t, filterTimeoutsPostRecovery[i][dynamicFilterCredentialArrivalHistory-1], filterTimeoutsPostRecovery[i][dynamicFilterCredentialArrivalHistory-2])
 	}
 
-	sanityCheck(startRound, 2*round(dynamicFilterCredentialArrivalHistory+1)+1, ledgers)
+	sanityCheck(startRound, 2*round(baseHistoryRounds+2), ledgers)
 }
 
 func TestAgreementSynchronousFuture1(t *testing.T) {

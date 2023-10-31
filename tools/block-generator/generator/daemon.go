@@ -48,7 +48,7 @@ func init() {
 
 	DaemonCmd.Flags().StringVarP(&configFile, "config", "c", "", "Specify the block configuration yaml file.")
 	DaemonCmd.Flags().Uint64VarP(&port, "port", "p", 4010, "Port to start the server at.")
-	DaemonCmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "If set the runner will print debugging information from the generator and ledger.")
+	DaemonCmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "If set the daemon will print debugging information from the generator and ledger.")
 
 	DaemonCmd.MarkFlagRequired("config")
 }

@@ -1131,16 +1131,12 @@ func (c *Client) AbortCatchup() error {
 }
 
 // Catchup start catching up to the give catchpoint label.
-func (c *Client) Catchup(catchpointLabel string) error {
+func (c *Client) Catchup(catchpointLabel string, min uint64) (model.CatchpointStartResponse, error) {
 	algod, err := c.ensureAlgodClient()
 	if err != nil {
-		return err
+		return model.CatchpointStartResponse{}, err
 	}
-	_, err = algod.Catchup(catchpointLabel)
-	if err != nil {
-		return err
-	}
-	return nil
+	return algod.Catchup(catchpointLabel, min)
 }
 
 const defaultAppIdx = 1380011588

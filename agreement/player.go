@@ -278,22 +278,31 @@ func (p *player) handleCheckpointEvent(r routerHandle, e checkpointEvent) []acti
 // updateCredentialArrivalHistory is called at the end of a successful
 // uninterrupted round (just after ensureAction is generated) to collect
 // credential arrival times to dynamically set the filter timeout.
-// It returns the time of the lowest credential's arrival, if one was
-// collected and added to lowestCredentialArrivals, or zero otherwise.
+// It returns the time of the lowest credential's arrival from
+// credentialRoundLag rounds ago, if one was collected and added to
+// lowestCredentialArrivals, or zero otherwise.
 func (p *player) updateCredentialArrivalHistory(r routerHandle, ver protocol.ConsensusVersion) time.Duration {
-	// only append to lowestCredentialArrivals if this was a successful round completing in period 0.
 	if p.Period != 0 {
-		return 0
-	}
-	// look up the validatedAt time of the winning proposal-vote
-	re := readLowestEvent{T: readLowestVote, Round: p.Round, Period: p.Period}
-	re = r.dispatch(*p, re, proposalMachineRound, p.Round, p.Period, 0).(readLowestEvent)
-	if !re.Filled {
+		// only append to lowestCredentialArrivals if this was a successful round completing in period 0.
 		return 0
 	}
 
-	p.lowestCredentialArrivals.store(re.Vote.validatedAt)
-	return re.Vote.validatedAt
+	if p.Round <= credentialRoundLag {
+		// not sufficiently many rounds had passed to collect any measurement
+		return 0
+	}
+
+	// look up the validatedAt time of the winning proposal-vote from credentialRoundLag ago,
+	// by now we should have seen the lowest credential for that round.
+	credHistoryRound := p.Round - credentialRoundLag
+	re := readLowestEvent{T: readLowestVote, Round: credHistoryRound, Period: 0}
+	re = r.dispatch(*p, re, proposalMachineRound, credHistoryRound, 0, 0).(readLowestEvent)
+	if !re.HasLowestIncludingLate {
+		return 0
+	}
+
+	p.lowestCredentialArrivals.store(re.LowestIncludingLate.validatedAt)
+	return re.LowestIncludingLate.validatedAt
 }
 
 // calculateFilterTimeout chooses the appropriate filter timeout.
@@ -603,8 +612,31 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 			err := ef.(filteredEvent).Err
 			return append(actions, disconnectAction(e, err))
 		case voteFiltered:
-			err := ef.(filteredEvent).Err
-			return append(actions, ignoreAction(e, err))
+			ver := e.Proto.Version
+			proto := config.Consensus[ver]
+			if !proto.DynamicFilterTimeout {
+				// Dynamic filter timeout feature disabled, so we filter the
+				// message as usual (keeping earlier behavior)
+				err := ef.(filteredEvent).Err
+				return append(actions, ignoreAction(e, err))
+			}
+			switch ef.(filteredEvent).LateCredentialTrackingNote {
+			case VerifiedBetterLateCredentialForTracking:
+				// Dynamic filter timeout feature enabled, and current message
+				// updated the best credential arrival time
+				v := e.Input.Vote
+				return append(actions, relayAction(e, protocol.AgreementVoteTag, v.u()))
+			case NoLateCredentialTrackingImpact:
+				// Dynamic filter timeout feature enabled, but current message
+				// may not update the best credential arrival time, so we should
+				// ignore it.
+				err := ef.(filteredEvent).Err
+				return append(actions, ignoreAction(e, err))
+			case UnverifiedLateCredentialForTracking:
+				// In this case, the vote may impact credential tracking, but needs to
+				// be validated. So we do not return here, and continue processing, so that
+				// the votePresent check below will make a verifyVoteAction for this vote.
+			}
 		}
 
 		if e.t() == votePresent {

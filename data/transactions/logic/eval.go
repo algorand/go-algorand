@@ -18,10 +18,6 @@ package logic
 
 import (
 	"bytes"
-	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/sha256"
-	"crypto/sha512"
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
@@ -34,12 +30,10 @@ import (
 	"runtime"
 	"strings"
 
-	"golang.org/x/crypto/sha3"
 	"golang.org/x/exp/slices"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/crypto/secp256k1"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -757,6 +751,10 @@ var (
 	StackAddress = NewStackType(avmBytes, static(32), "address")
 	// StackBytes32 represents a bytestring that should have exactly 32 bytes
 	StackBytes32 = NewStackType(avmBytes, static(32), "[32]byte")
+	// StackBytes64 represents a bytestring that should have exactly 64 bytes
+	StackBytes64 = NewStackType(avmBytes, static(64), "[64]byte")
+	// StackBytes80 represents a bytestring that should have exactly 80 bytes
+	StackBytes80 = NewStackType(avmBytes, static(80), "[80]byte")
 	// StackBigInt represents a bytestring that should be treated like an int
 	StackBigInt = NewStackType(avmBytes, bound(0, maxByteMathSize), "bigint")
 	// StackMethodSelector represents a bytestring that should be treated like a method selector
@@ -782,7 +780,9 @@ var (
 		'A': StackAddress,
 		'I': StackBigInt,
 		'T': StackBoolean,
-		'H': StackBytes32,
+		'3': StackBytes32,
+		'6': StackBytes64,
+		'8': StackBytes80,
 		'M': StackMethodSelector,
 		'K': StackStateKey,
 		'N': StackBoxName,
@@ -1628,45 +1628,6 @@ func opSelect(cx *EvalContext) error {
 	return nil
 }
 
-func opSHA256(cx *EvalContext) error {
-	last := len(cx.Stack) - 1
-	hash := sha256.Sum256(cx.Stack[last].Bytes)
-	cx.Stack[last].Bytes = hash[:]
-	return nil
-}
-
-// The NIST SHA3-256 is implemented for compatibility with ICON
-func opSHA3_256(cx *EvalContext) error {
-	last := len(cx.Stack) - 1
-	hash := sha3.Sum256(cx.Stack[last].Bytes)
-	cx.Stack[last].Bytes = hash[:]
-	return nil
-}
-
-// The Keccak256 variant of SHA-3 is implemented for compatibility with Ethereum
-func opKeccak256(cx *EvalContext) error {
-	last := len(cx.Stack) - 1
-	hasher := sha3.NewLegacyKeccak256()
-	hasher.Write(cx.Stack[last].Bytes)
-	hv := make([]byte, 0, hasher.Size())
-	hv = hasher.Sum(hv)
-	cx.Stack[last].Bytes = hv
-	return nil
-}
-
-// This is the hash commonly used in Algorand in crypto/util.go Hash()
-//
-// It is explicitly implemented here in terms of the specific hash for
-// stability and portability in case the rest of Algorand ever moves
-// to a different default hash. For stability of this language, at
-// that time a new opcode should be made with the new hash.
-func opSHA512_256(cx *EvalContext) error {
-	last := len(cx.Stack) - 1
-	hash := sha512.Sum512_256(cx.Stack[last].Bytes)
-	cx.Stack[last].Bytes = hash[:]
-	return nil
-}
-
 func opPlus(cx *EvalContext) error {
 	last := len(cx.Stack) - 1
 	prev := last - 1
@@ -2509,13 +2470,20 @@ func branchTarget(cx *EvalContext) (int, error) {
 }
 
 func switchTarget(cx *EvalContext, branchIdx uint64) (int, error) {
+	if cx.pc+1 >= len(cx.program) {
+		opcode := cx.program[cx.pc]
+		spec := &opsByOpcode[cx.version][opcode]
+		return 0, fmt.Errorf("bare %s opcode at end of program", spec.Name)
+	}
 	numOffsets := int(cx.program[cx.pc+1])
 
 	end := cx.pc + 2          // end of opcode + number of offsets, beginning of offset list
 	eoi := end + 2*numOffsets // end of instruction
 
 	if eoi > len(cx.program) { // eoi will equal len(p) if switch is last instruction
-		return 0, fmt.Errorf("switch claims to extend beyond program")
+		opcode := cx.program[cx.pc]
+		spec := &opsByOpcode[cx.version][opcode]
+		return 0, fmt.Errorf("%s opcode claims to extend beyond program", spec.Name)
 	}
 
 	offset := 0
@@ -2550,8 +2518,13 @@ func checkBranch(cx *EvalContext) error {
 	return nil
 }
 
-// checks switch is encoded properly (and calculates nextpc)
+// checks switch or match is encoded properly (and calculates nextpc)
 func checkSwitch(cx *EvalContext) error {
+	if cx.pc+1 >= len(cx.program) {
+		opcode := cx.program[cx.pc]
+		spec := &opsByOpcode[cx.version][opcode]
+		return fmt.Errorf("bare %s opcode at end of program", spec.Name)
+	}
 	numOffsets := int(cx.program[cx.pc+1])
 	eoi := cx.pc + 2 + 2*numOffsets
 
@@ -2628,6 +2601,9 @@ func opSwitch(cx *EvalContext) error {
 }
 
 func opMatch(cx *EvalContext) error {
+	if cx.pc+1 >= len(cx.program) {
+		return fmt.Errorf("bare match opcode at end of program")
+	}
 	n := int(cx.program[cx.pc+1])
 	// stack contains the n sized match list and the single match value
 	if n+1 > len(cx.Stack) {
@@ -3661,247 +3637,6 @@ func opGlobal(cx *EvalContext) error {
 	}
 
 	cx.Stack = append(cx.Stack, sv)
-	return nil
-}
-
-// Msg is data meant to be signed and then verified with the
-// ed25519verify opcode.
-type Msg struct {
-	_struct     struct{}      `codec:",omitempty,omitemptyarray"`
-	ProgramHash crypto.Digest `codec:"p"`
-	Data        []byte        `codec:"d"`
-}
-
-// ToBeHashed implements crypto.Hashable
-func (msg Msg) ToBeHashed() (protocol.HashID, []byte) {
-	return protocol.ProgramData, append(msg.ProgramHash[:], msg.Data...)
-}
-
-// programHash lets us lazily compute H(cx.program)
-func (cx *EvalContext) programHash() crypto.Digest {
-	if cx.programHashCached == (crypto.Digest{}) {
-		cx.programHashCached = crypto.HashObj(Program(cx.program))
-	}
-	return cx.programHashCached
-}
-
-func opEd25519Verify(cx *EvalContext) error {
-	last := len(cx.Stack) - 1 // index of PK
-	prev := last - 1          // index of signature
-	pprev := prev - 1         // index of data
-
-	var sv crypto.SignatureVerifier
-	if len(cx.Stack[last].Bytes) != len(sv) {
-		return errors.New("invalid public key")
-	}
-	copy(sv[:], cx.Stack[last].Bytes)
-
-	var sig crypto.Signature
-	if len(cx.Stack[prev].Bytes) != len(sig) {
-		return errors.New("invalid signature")
-	}
-	copy(sig[:], cx.Stack[prev].Bytes)
-
-	msg := Msg{ProgramHash: cx.programHash(), Data: cx.Stack[pprev].Bytes}
-	cx.Stack[pprev] = boolToSV(sv.Verify(msg, sig))
-	cx.Stack = cx.Stack[:prev]
-	return nil
-}
-
-func opEd25519VerifyBare(cx *EvalContext) error {
-	last := len(cx.Stack) - 1 // index of PK
-	prev := last - 1          // index of signature
-	pprev := prev - 1         // index of data
-
-	var sv crypto.SignatureVerifier
-	if len(cx.Stack[last].Bytes) != len(sv) {
-		return errors.New("invalid public key")
-	}
-	copy(sv[:], cx.Stack[last].Bytes)
-
-	var sig crypto.Signature
-	if len(cx.Stack[prev].Bytes) != len(sig) {
-		return errors.New("invalid signature")
-	}
-	copy(sig[:], cx.Stack[prev].Bytes)
-
-	cx.Stack[pprev] = boolToSV(sv.VerifyBytes(cx.Stack[pprev].Bytes, sig))
-	cx.Stack = cx.Stack[:prev]
-	return nil
-}
-
-func leadingZeros(size int, b *big.Int) ([]byte, error) {
-	byteLength := (b.BitLen() + 7) / 8
-	if size < byteLength {
-		return nil, fmt.Errorf("insufficient buffer size: %d < %d", size, byteLength)
-	}
-	buf := make([]byte, size)
-	b.FillBytes(buf)
-	return buf, nil
-}
-
-var ecdsaVerifyCosts = []int{
-	Secp256k1: 1700,
-	Secp256r1: 2500,
-}
-
-var secp256r1 = elliptic.P256()
-
-func opEcdsaVerify(cx *EvalContext) error {
-	ecdsaCurve := EcdsaCurve(cx.program[cx.pc+1])
-	fs, ok := ecdsaCurveSpecByField(ecdsaCurve)
-	if !ok || fs.version > cx.version {
-		return fmt.Errorf("invalid curve %d", ecdsaCurve)
-	}
-
-	if fs.field != Secp256k1 && fs.field != Secp256r1 {
-		return fmt.Errorf("unsupported curve %d", fs.field)
-	}
-
-	last := len(cx.Stack) - 1 // index of PK y
-	prev := last - 1          // index of PK x
-	pprev := prev - 1         // index of signature s
-	fourth := pprev - 1       // index of signature r
-	fifth := fourth - 1       // index of data
-
-	pkY := cx.Stack[last].Bytes
-	pkX := cx.Stack[prev].Bytes
-	sigS := cx.Stack[pprev].Bytes
-	sigR := cx.Stack[fourth].Bytes
-	msg := cx.Stack[fifth].Bytes
-
-	if len(msg) != 32 {
-		return fmt.Errorf("the signed data must be 32 bytes long, not %d", len(msg))
-	}
-
-	x := new(big.Int).SetBytes(pkX)
-	y := new(big.Int).SetBytes(pkY)
-
-	var result bool
-	if fs.field == Secp256k1 {
-		signature := make([]byte, 0, len(sigR)+len(sigS))
-		signature = append(signature, sigR...)
-		signature = append(signature, sigS...)
-
-		pubkey := secp256k1.S256().Marshal(x, y)
-		result = secp256k1.VerifySignature(pubkey, msg, signature)
-	} else if fs.field == Secp256r1 {
-		if !cx.Proto.EnablePrecheckECDSACurve || secp256r1.IsOnCurve(x, y) {
-			pubkey := ecdsa.PublicKey{
-				Curve: secp256r1,
-				X:     x,
-				Y:     y,
-			}
-			r := new(big.Int).SetBytes(sigR)
-			s := new(big.Int).SetBytes(sigS)
-			result = ecdsa.Verify(&pubkey, msg, r, s)
-		}
-	}
-
-	cx.Stack[fifth] = boolToSV(result)
-	cx.Stack = cx.Stack[:fourth]
-	return nil
-}
-
-var ecdsaDecompressCosts = []int{
-	Secp256k1: 650,
-	Secp256r1: 2400,
-}
-
-func opEcdsaPkDecompress(cx *EvalContext) error {
-	ecdsaCurve := EcdsaCurve(cx.program[cx.pc+1])
-	fs, ok := ecdsaCurveSpecByField(ecdsaCurve)
-	if !ok || fs.version > cx.version {
-		return fmt.Errorf("invalid curve %d", ecdsaCurve)
-	}
-
-	if fs.field != Secp256k1 && fs.field != Secp256r1 {
-		return fmt.Errorf("unsupported curve %d", fs.field)
-	}
-
-	last := len(cx.Stack) - 1 // compressed PK
-
-	pubkey := cx.Stack[last].Bytes
-	var x, y *big.Int
-	if fs.field == Secp256k1 {
-		x, y = secp256k1.DecompressPubkey(pubkey)
-		if x == nil {
-			return fmt.Errorf("invalid pubkey")
-		}
-	} else if fs.field == Secp256r1 {
-		x, y = elliptic.UnmarshalCompressed(elliptic.P256(), pubkey)
-		if x == nil {
-			return fmt.Errorf("invalid compressed pubkey")
-		}
-	}
-
-	var err error
-	cx.Stack[last].Uint = 0
-	cx.Stack[last].Bytes, err = leadingZeros(32, x)
-	if err != nil {
-		return fmt.Errorf("x component zeroing failed: %w", err)
-	}
-
-	var sv stackValue
-	sv.Bytes, err = leadingZeros(32, y)
-	if err != nil {
-		return fmt.Errorf("y component zeroing failed: %w", err)
-	}
-
-	cx.Stack = append(cx.Stack, sv)
-	return nil
-}
-
-func opEcdsaPkRecover(cx *EvalContext) error {
-	ecdsaCurve := EcdsaCurve(cx.program[cx.pc+1])
-	fs, ok := ecdsaCurveSpecByField(ecdsaCurve)
-	if !ok || fs.version > cx.version {
-		return fmt.Errorf("invalid curve %d", ecdsaCurve)
-	}
-
-	if fs.field != Secp256k1 {
-		return fmt.Errorf("unsupported curve %d", fs.field)
-	}
-
-	last := len(cx.Stack) - 1 // index of signature s
-	prev := last - 1          // index of signature r
-	pprev := prev - 1         // index of recovery id
-	fourth := pprev - 1       // index of data
-
-	sigS := cx.Stack[last].Bytes
-	sigR := cx.Stack[prev].Bytes
-	recid := cx.Stack[pprev].Uint
-	msg := cx.Stack[fourth].Bytes
-
-	if recid > 3 {
-		return fmt.Errorf("invalid recovery id: %d", recid)
-	}
-
-	signature := make([]byte, 0, len(sigR)+len(sigS)+1)
-	signature = append(signature, sigR...)
-	signature = append(signature, sigS...)
-	signature = append(signature, uint8(recid))
-
-	pk, err := secp256k1.RecoverPubkey(msg, signature)
-	if err != nil {
-		return fmt.Errorf("pubkey recover failed: %s", err.Error())
-	}
-	x, y := secp256k1.S256().Unmarshal(pk)
-	if x == nil {
-		return fmt.Errorf("pubkey unmarshal failed")
-	}
-
-	cx.Stack[fourth].Uint = 0
-	cx.Stack[fourth].Bytes, err = leadingZeros(32, x)
-	if err != nil {
-		return fmt.Errorf("x component zeroing failed: %s", err.Error())
-	}
-	cx.Stack[pprev].Uint = 0
-	cx.Stack[pprev].Bytes, err = leadingZeros(32, y)
-	if err != nil {
-		return fmt.Errorf("y component zeroing failed: %s", err.Error())
-	}
-	cx.Stack = cx.Stack[:prev]
 	return nil
 }
 
@@ -5801,54 +5536,6 @@ func opItxnSubmit(cx *EvalContext) (err error) {
 	// must clear the inner txid cache, otherwise prior inner txids will be returned for this group
 	cx.innerTxidCache = nil
 
-	return nil
-}
-
-type rawMessage []byte
-
-func (rm rawMessage) ToBeHashed() (protocol.HashID, []byte) {
-	return "", []byte(rm)
-}
-
-func opVrfVerify(cx *EvalContext) error {
-	last := len(cx.Stack) - 1 // PK
-	prev := last - 1          // proof
-	pprev := prev - 1         // data
-
-	data := rawMessage(cx.Stack[pprev].Bytes)
-	proofbytes := cx.Stack[prev].Bytes
-	var proof crypto.VrfProof
-	if len(proofbytes) != len(proof) {
-		return fmt.Errorf("vrf proof wrong size %d != %d", len(proofbytes), len(proof))
-	}
-	copy(proof[:], proofbytes[:])
-
-	pubkeybytes := cx.Stack[last].Bytes
-	var pubkey crypto.VrfPubkey
-	if len(pubkeybytes) != len(pubkey) {
-		return fmt.Errorf("vrf pubkey wrong size %d != %d", len(pubkeybytes), len(pubkey))
-	}
-	copy(pubkey[:], pubkeybytes[:])
-
-	var verified bool
-	var output []byte
-	std := VrfStandard(cx.program[cx.pc+1])
-	ss, ok := vrfStandardSpecByField(std)
-	if !ok || ss.version > cx.version {
-		return fmt.Errorf("invalid VRF standard %s", std)
-	}
-	switch std {
-	case VrfAlgorand:
-		var out crypto.VrfOutput
-		verified, out = pubkey.Verify(proof, data)
-		output = out[:]
-	default:
-		return fmt.Errorf("unsupported vrf_verify standard %s", std)
-	}
-
-	cx.Stack[pprev].Bytes = output[:]
-	cx.Stack[prev] = boolToSV(verified)
-	cx.Stack = cx.Stack[:last] // pop 1 because we take 3 args and return 2
 	return nil
 }
 

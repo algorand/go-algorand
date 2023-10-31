@@ -209,10 +209,10 @@ func (pps *WorkerState) ensureAccounts(ac *libgoal.Client) (err error) {
 			}
 
 			ppa := &pingPongAccount{
-				balance: amt,
-				sk:      secret,
-				pk:      accountAddress,
+				sk: secret,
+				pk: accountAddress,
 			}
+			ppa.balance.Store(amt)
 
 			pps.integrateAccountInfo(addr, ppa, ai)
 
@@ -246,7 +246,7 @@ func (pps *WorkerState) ensureAccounts(ac *libgoal.Client) (err error) {
 }
 
 func (pps *WorkerState) integrateAccountInfo(addr string, ppa *pingPongAccount, ai model.Account) {
-	ppa.balance = ai.Amount
+	ppa.balance.Store(ai.Amount)
 	// assets this account has created
 	if ai.CreatedAssets != nil {
 		for _, ap := range *ai.CreatedAssets {

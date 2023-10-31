@@ -934,6 +934,86 @@
         }
       }
     },
+    "/v2/participation/generate/{address}": {
+      "post": {
+        "tags": [
+          "private",
+          "participating"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Generate and install participation keys to the node.",
+        "operationId": "GenerateParticipationKeys",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "An account public key",
+            "name": "address",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "integer",
+            "description": "Key dilution for two-level participation keys (defaults to sqrt of validity window).",
+            "name": "dilution",
+            "in": "query"
+          },
+          {
+            "type": "integer",
+            "description": "First round for participation key.",
+            "name": "first",
+            "in": "query",
+            "required": true
+          },
+          {
+            "type": "integer",
+            "description": "Last round for participation key.",
+            "name": "last",
+            "in": "query",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "An empty JSON object is returned if the generation process was started. Currently no status is available.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "503": {
+            "description": "Service Temporarily Unavailable",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
     "/v2/participation/{participation-id}": {
       "delete": {
         "tags": [
@@ -2508,6 +2588,12 @@
         "parameters": [
           {
             "$ref": "#/parameters/catchpoint"
+          },
+          {
+            "name": "min",
+            "description": "Specify the minimum number of blocks which the ledger must be advanced by in order to start the catchup. This is useful for simplifying tools which support fast catchup, they can run the catchup unconditionally and the node will skip the catchup if it is not needed.",
+            "in": "query",
+            "type": "integer"
           }
         ],
         "responses": {

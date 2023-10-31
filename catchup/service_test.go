@@ -21,7 +21,6 @@ import (
 	"errors"
 	"math/rand"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -830,6 +829,18 @@ func (m *mockedLedger) IsWritingCatchpointDataFile() bool {
 	return false
 }
 
+func (m *mockedLedger) IsBehindCommittingDeltas() bool {
+	return false
+}
+
+type mockedBehindDeltasLedger struct {
+	mockedLedger
+}
+
+func (m *mockedBehindDeltasLedger) IsBehindCommittingDeltas() bool {
+	return true
+}
+
 func testingenvWithUpgrade(
 	t testing.TB,
 	numBlocks,
@@ -1085,7 +1096,7 @@ func TestSynchronizingTime(t *testing.T) {
 	s := MakeService(logging.Base(), cfg, &httpTestPeerSource{}, ledger, &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil)
 
 	require.Equal(t, time.Duration(0), s.SynchronizingTime())
-	atomic.StoreInt64(&s.syncStartNS, 1000000)
+	s.syncStartNS.Store(1000000)
 	require.NotEqual(t, time.Duration(0), s.SynchronizingTime())
 }
 
@@ -1126,4 +1137,50 @@ func TestDownloadBlocksToSupportStateProofs(t *testing.T) {
 	topBlk.BlockHeader.CurrentProtocol = protocol.ConsensusV32
 	lookback = lookbackForStateproofsSupport(&topBlk)
 	assert.Equal(t, uint64(0), lookback)
+}
+
+// TestServiceLedgerUnavailable checks a local ledger that is unavailable cannot catchup up to remote round
+func TestServiceLedgerUnavailable(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	// Make Ledger
+	local := new(mockedBehindDeltasLedger)
+	local.blocks = append(local.blocks, bookkeeping.Block{})
+
+	remote, _, blk, err := buildTestLedger(t, bookkeeping.Block{})
+	if err != nil {
+		t.Fatal(err)
+		return
+	}
+	numBlocks := 10
+	addBlocks(t, remote, blk, numBlocks)
+
+	// Create a network and block service
+	blockServiceConfig := config.GetDefaultLocal()
+	net := &httpTestPeerSource{}
+	ls := rpcs.MakeBlockService(logging.Base(), blockServiceConfig, remote, net, "test genesisID")
+
+	nodeA := basicRPCNode{}
+	nodeA.RegisterHTTPHandler(rpcs.BlockServiceBlockPath, ls)
+	nodeA.start()
+	defer nodeA.stop()
+	rootURL := nodeA.rootURL()
+	net.addPeer(rootURL)
+
+	require.Equal(t, basics.Round(0), local.LastRound())
+	require.Equal(t, basics.Round(numBlocks+1), remote.LastRound())
+
+	// Make Service
+	auth := &mockedAuthenticator{fail: false}
+	cfg := config.GetDefaultLocal()
+	cfg.CatchupParallelBlocks = 2
+	s := MakeService(logging.Base(), cfg, net, local, auth, nil, nil)
+	s.log = &periodicSyncLogger{Logger: logging.Base()}
+	s.deadlineTimeout = 2 * time.Second
+
+	s.testStart()
+	defer s.Stop()
+	s.sync()
+	require.Greater(t, local.LastRound(), basics.Round(0))
+	require.Less(t, local.LastRound(), remote.LastRound())
 }

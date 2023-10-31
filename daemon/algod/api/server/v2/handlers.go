@@ -22,9 +22,11 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"golang.org/x/sync/semaphore"
 	"io"
 	"math"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -48,6 +50,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/eval"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/simulation"
+	"github.com/algorand/go-algorand/libgoal/participation"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/protocol"
@@ -74,6 +77,9 @@ type Handlers struct {
 	Node     NodeInterface
 	Log      logging.Logger
 	Shutdown <-chan struct{}
+
+	// KeygenLimiter is used to limit the number of concurrent key generation requests.
+	KeygenLimiter *semaphore.Weighted
 }
 
 // LedgerForAPI describes the Ledger methods used by the v2 API.
@@ -238,6 +244,47 @@ func (v2 *Handlers) GetParticipationKeys(ctx echo.Context) error {
 	}
 
 	return ctx.JSON(http.StatusOK, response)
+}
+
+func (v2 *Handlers) generateKeyHandler(address string, params model.GenerateParticipationKeysParams) error {
+	installFunc := func(path string) error {
+		bytes, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		partKeyBinary := bytes
+
+		if len(partKeyBinary) == 0 {
+			return fmt.Errorf("cannot install partkey '%s' is empty", partKeyBinary)
+		}
+
+		partID, err := v2.Node.InstallParticipationKey(partKeyBinary)
+		v2.Log.Infof("Installed participation key %s", partID)
+		return err
+	}
+	_, _, err := participation.GenParticipationKeysTo(address, params.First, params.Last, nilToZero(params.Dilution), "", installFunc)
+	return err
+}
+
+// GenerateParticipationKeys generates and installs participation keys to the node.
+// (POST /v2/participation/generate/{address})
+func (v2 *Handlers) GenerateParticipationKeys(ctx echo.Context, address string, params model.GenerateParticipationKeysParams) error {
+	if !v2.KeygenLimiter.TryAcquire(1) {
+		err := fmt.Errorf("participation key generation already in progress")
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
+
+	// Semaphore was acquired, generate the key.
+	go func() {
+		defer v2.KeygenLimiter.Release(1)
+		err := v2.generateKeyHandler(address, params)
+		if err != nil {
+			v2.Log.Warnf("Error generating participation keys: %v", err)
+		}
+	}()
+
+	// Empty object. In the future we may want to add a field for the participation ID.
+	return ctx.String(http.StatusOK, "{}")
 }
 
 // AddParticipationKey Add a participation key to the node
@@ -1393,10 +1440,20 @@ func (v2 *Handlers) getPendingTransactions(ctx echo.Context, max *uint64, format
 }
 
 // startCatchup Given a catchpoint, it starts catching up to this catchpoint
-func (v2 *Handlers) startCatchup(ctx echo.Context, catchpoint string) error {
-	_, _, err := ledgercore.ParseCatchpointLabel(catchpoint)
+func (v2 *Handlers) startCatchup(ctx echo.Context, catchpoint string, minRounds uint64) error {
+	catchpointRound, _, err := ledgercore.ParseCatchpointLabel(catchpoint)
 	if err != nil {
 		return badRequest(ctx, err, errFailedToParseCatchpoint, v2.Log)
+	}
+
+	if minRounds > 0 {
+		ledgerRound := v2.Node.LedgerForAPI().Latest()
+		if catchpointRound < (ledgerRound + basics.Round(minRounds)) {
+			v2.Log.Infof("Skipping catchup. Catchpoint round %d is not %d rounds ahead of the current round %d.", catchpointRound, minRounds, ledgerRound)
+			return ctx.JSON(http.StatusOK, model.CatchpointStartResponse{
+				CatchupMessage: errCatchpointWouldNotInitialize,
+			})
+		}
 	}
 
 	// Select 200/201, or return an error
@@ -1600,8 +1657,9 @@ func (v2 *Handlers) GetPendingTransactionsByAddress(ctx echo.Context, addr strin
 
 // StartCatchup Given a catchpoint, it starts catching up to this catchpoint
 // (POST /v2/catchup/{catchpoint})
-func (v2 *Handlers) StartCatchup(ctx echo.Context, catchpoint string) error {
-	return v2.startCatchup(ctx, catchpoint)
+func (v2 *Handlers) StartCatchup(ctx echo.Context, catchpoint string, params model.StartCatchupParams) error {
+	min := nilToZero(params.Min)
+	return v2.startCatchup(ctx, catchpoint, min)
 }
 
 // AbortCatchup Given a catchpoint, it aborts catching up to this catchpoint
@@ -1649,7 +1707,7 @@ func (v2 *Handlers) TealCompile(ctx echo.Context, params model.TealCompileParams
 	// If source map flag is enabled, then return the map.
 	var sourcemap *logic.SourceMap
 	if *params.Sourcemap {
-		rawmap := logic.GetSourceMap([]string{}, ops.OffsetToLine)
+		rawmap := logic.GetSourceMap([]string{"<body>"}, ops.OffsetToSource)
 		sourcemap = &rawmap
 	}
 

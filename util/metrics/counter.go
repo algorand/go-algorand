@@ -20,7 +20,6 @@ import (
 	"math"
 	"strconv"
 	"strings"
-	"sync/atomic"
 	"time"
 )
 
@@ -111,7 +110,7 @@ func (counter *Counter) AddMicrosecondsSince(t time.Time, labels map[string]stri
 
 // GetUint64Value returns the value of the counter.
 func (counter *Counter) GetUint64Value() (x uint64) {
-	return atomic.LoadUint64(&counter.intValue)
+	return counter.intValue.Load()
 }
 
 // GetUint64ValueForLabels returns the value of the counter for the given labels or 0 if it's not found.
@@ -128,7 +127,7 @@ func (counter *Counter) GetUint64ValueForLabels(labels map[string]string) uint64
 }
 
 func (counter *Counter) fastAddUint64(x uint64) {
-	if atomic.AddUint64(&counter.intValue, x) == x {
+	if counter.intValue.Add(x) == x {
 		// What we just added is the whole value, this
 		// is the first Add. Create a dummy
 		// counterValue for the no-labels value.
@@ -202,7 +201,7 @@ func (counter *Counter) WriteMetric(buf *strings.Builder, parentLabels string) {
 		buf.WriteString("} ")
 		value := l.counter
 		if len(l.labels) == 0 {
-			value += atomic.LoadUint64(&counter.intValue)
+			value += counter.intValue.Load()
 		}
 		buf.WriteString(strconv.FormatUint(value, 10))
 		buf.WriteString("\n")
@@ -221,7 +220,7 @@ func (counter *Counter) AddMetric(values map[string]float64) {
 	for _, l := range counter.values {
 		sum := l.counter
 		if len(l.labels) == 0 {
-			sum += atomic.LoadUint64(&counter.intValue)
+			sum += counter.intValue.Load()
 		}
 		var suffix string
 		if len(l.formattedLabels) > 0 {

@@ -104,6 +104,7 @@ var defaultLocal = Local{
 	MaxAPIBoxPerApplication:                    100000,
 	MaxAPIResourcesPerAccount:                  100000,
 	MaxAcctLookback:                            4,
+	MaxBlockHistoryLookback:                    0,
 	MaxCatchpointDownloadDuration:              43200000000000,
 	MaxConnectionsPerIP:                        15,
 	MinCatchpointFileDownloadBytesPerSecond:    20480,
