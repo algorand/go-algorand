@@ -141,7 +141,7 @@ func makeHistoricStatus(windowSize int, class peerClass) *historicStats {
 	// that will determine the rank of the peer.
 	hs := historicStats{
 		windowSize:  windowSize,
-		rankSamples: make([]int, windowSize, windowSize),
+		rankSamples: make([]int, windowSize),
 		requestGaps: make([]uint64, 0, windowSize),
 		rankSum:     uint64(class.initialRank) * uint64(windowSize),
 		gapSum:      0.0}
@@ -237,7 +237,10 @@ func (hs *historicStats) push(value int, counter uint64, class peerClass) (avera
 		//   download, the value added to rankSum will
 		//   increase at an increasing rate to evict the peer
 		//   from the class sooner.
-		value = upperBound(class) * int(math.Exp2(float64(hs.downloadFailures)))
+		value = upperBound(class) * int(math.Exp2(float64(hs.downloadFailures)*0.45))
+		if value > peerRankDownloadFailed {
+			value = peerRankDownloadFailed
+		}
 	} else {
 		if hs.downloadFailures > 0 {
 			hs.downloadFailures--
@@ -468,7 +471,7 @@ func (ps *peerSelector) refreshAvailablePeers() {
 		for peerIdx := len(pool.peers) - 1; peerIdx >= 0; peerIdx-- {
 			peer := pool.peers[peerIdx].peer
 			if peerAddress := peerAddress(peer); peerAddress != "" {
-				if toRemove, _ := existingPeers[pool.peers[peerIdx].class.peerClass][peerAddress]; toRemove {
+				if toRemove := existingPeers[pool.peers[peerIdx].class.peerClass][peerAddress]; toRemove {
 					// need to be removed.
 					pool.peers = append(pool.peers[:peerIdx], pool.peers[peerIdx+1:]...)
 				}
