@@ -136,7 +136,7 @@ func TestCancelWait(t *testing.T) {
 	// Two Waits, one cancelled
 	waitCh1 := bul.Wait(7)
 	waitCh2 := bul.Wait(7)
-	require.EqualValues(t, waitCh1, waitCh2)
+	require.Equal(t, waitCh1, waitCh2)
 	bul.CancelWait(7)
 	select {
 	case <-waitCh1:
@@ -197,4 +197,14 @@ func TestCancelWait(t *testing.T) {
 		t.Errorf("<-Wait(9) should have been notified")
 	}
 	require.NotContains(t, bul.pendingNotificationRequests, basics.Round(9))
+
+	// Two waits, both cancelled
+	waitCh1 = bul.Wait(10)
+	waitCh2 = bul.Wait(10)
+	require.Equal(t, waitCh1, waitCh2)
+	bul.CancelWait(10)
+	require.Contains(t, bul.pendingNotificationRequests, basics.Round(10))
+	require.Equal(t, bul.pendingNotificationRequests[basics.Round(10)].count, 1)
+	bul.CancelWait(10)
+	require.NotContains(t, bul.pendingNotificationRequests, basics.Round(10))
 }
