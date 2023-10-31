@@ -18,7 +18,6 @@ package ledger
 
 import (
 	"context"
-	"sync/atomic"
 
 	"github.com/algorand/go-deadlock"
 
@@ -28,23 +27,10 @@ import (
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 )
 
-// notifier is a struct that encapsulates a single-shot channel; it will only be signaled once.
+// notifier is a struct that encapsulates a single-shot channel; it should only be signaled once.
 type notifier struct {
-	signal   chan struct{}
-	notified atomic.Uint32
-	count    int
-}
-
-// makeNotifier constructs a notifier that has not been signaled.
-func makeNotifier() *notifier {
-	return &notifier{signal: make(chan struct{})}
-}
-
-// notify signals the channel if it hasn't already done so
-func (notifier *notifier) notify() {
-	if notifier.notified.CompareAndSwap(0, 1) {
-		close(notifier.signal)
-	}
+	signal chan struct{}
+	count  int
 }
 
 // bulletin provides an easy way to wait on a round to be written to the ledger.
@@ -81,7 +67,7 @@ func (b *bulletin) Wait(round basics.Round) chan struct{} {
 
 	signal, exists := b.pendingNotificationRequests[round]
 	if !exists {
-		signal = makeNotifier()
+		signal = &notifier{signal: make(chan struct{})}
 		b.pendingNotificationRequests[round] = signal
 	}
 	// Increment count of waiters, to support canceling.
@@ -124,7 +110,8 @@ func (b *bulletin) notifyRound(rnd basics.Round) {
 		}
 
 		delete(b.pendingNotificationRequests, pending)
-		signal.notify()
+		// signal the channel by closing it; this is under lock and will only happen once
+		close(signal.signal)
 	}
 
 	b.latestRound = rnd
