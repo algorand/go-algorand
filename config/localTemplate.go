@@ -113,11 +113,11 @@ type Local struct {
 	CatchpointDir string `version[31]:""`
 	// StateproofDir is an optional directory to store stateproof data.
 	// For isolation, the node will create a subdirectory in this location, named by the genesis-id of the network.
-	// If not specified, the node will use the ColdDataDir.
+	// If not specified, the node will use the HotDataDir.
 	StateproofDir string `version[31]:""`
 	// CrashDBDir is an optional directory to store the crash database.
 	// For isolation, the node will create a subdirectory in this location, named by the genesis-id of the network.
-	// If not specified, the node will use the ColdDataDir.
+	// If not specified, the node will use the HotDataDir
 	CrashDBDir string `version[31]:""`
 
 	// LogFileDir is an optional directory to store the log, node.log
@@ -829,23 +829,23 @@ func (cfg *Local) EnsureAndResolveGenesisDirs(rootDir, genesisID string) (Resolv
 	} else {
 		resolved.CatchpointGenesisDir = resolved.ColdGenesisDir
 	}
-	// if StateproofDir is not set, use ColdDataDir
+	// if StateproofDir is not set, use HotDataDir
 	if cfg.StateproofDir != "" {
 		resolved.StateproofGenesisDir, err = ensureAbsGenesisDir(cfg.StateproofDir, genesisID)
 		if err != nil {
 			return ResolvedGenesisDirs{}, err
 		}
 	} else {
-		resolved.StateproofGenesisDir = resolved.ColdGenesisDir
+		resolved.StateproofGenesisDir = resolved.HotGenesisDir
 	}
-	// if CrashDBDir is not set, use ColdDataDir
+	// if CrashDBDir is not set, use HotDataDir
 	if cfg.CrashDBDir != "" {
 		resolved.CrashGenesisDir, err = ensureAbsGenesisDir(cfg.CrashDBDir, genesisID)
 		if err != nil {
 			return ResolvedGenesisDirs{}, err
 		}
 	} else {
-		resolved.CrashGenesisDir = resolved.ColdGenesisDir
+		resolved.CrashGenesisDir = resolved.HotGenesisDir
 	}
 	return resolved, nil
 }
