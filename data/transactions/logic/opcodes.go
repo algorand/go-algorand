@@ -392,24 +392,24 @@ type Proto struct {
 	Arg    typedList // what gets popped from the stack
 	Return typedList // what gets pushed to the stack
 
-	// Explain is the pointer to the function used in debugging process during simulation:
-	// - on default construction, Explain relies on Arg and Return count.
+	// StackExplain is the pointer to the function used in debugging process during simulation:
+	// - on default construction, StackExplain relies on Arg and Return count.
 	// - otherwise, we need to explicitly infer from EvalContext, by registering through explain function
-	Explain debugStackExplain
+	StackExplain debugStackExplain
 
-	// StateExplain is the pointer to the function used for debugging in simulation:
+	// AppStateExplain is the pointer to the function used for debugging in simulation:
 	// - for an opcode not touching app's local/global/box state, this pointer is nil.
 	// - otherwise, we call this method and check the operation of an opcode on app's state.
-	StateExplain stateChangeExplain
+	AppStateExplain stateChangeExplain
 }
 
 func (p Proto) stackExplain(e debugStackExplain) Proto {
-	p.Explain = e
+	p.StackExplain = e
 	return p
 }
 
-func (p Proto) stateExplain(s stateChangeExplain) Proto {
-	p.StateExplain = s
+func (p Proto) appStateExplain(s stateChangeExplain) Proto {
+	p.AppStateExplain = s
 	return p
 }
 
@@ -442,9 +442,9 @@ func proto(signature string, effects ...string) Proto {
 	retTypes := parseStackTypes(parts[1])
 	debugExplainFunc := defaultDebugExplain(len(filterNoneTypes(argTypes)), len(filterNoneTypes(retTypes)))
 	return Proto{
-		Arg:     typedList{argTypes, argEffect},
-		Return:  typedList{retTypes, retEffect},
-		Explain: debugExplainFunc,
+		Arg:          typedList{argTypes, argEffect},
+		Return:       typedList{retTypes, retEffect},
+		StackExplain: debugExplainFunc,
 	}
 }
 
@@ -618,18 +618,18 @@ var OpSpecs = []OpSpec{
 	{0x60, "balance", opBalance, proto("a:i"), directRefEnabledVersion, only(ModeApp)},
 	{0x61, "app_opted_in", opAppOptedIn, proto("ii:T"), 2, only(ModeApp)},
 	{0x61, "app_opted_in", opAppOptedIn, proto("ai:T"), directRefEnabledVersion, only(ModeApp)},
-	{0x62, "app_local_get", opAppLocalGet, proto("ib:a"), 2, only(ModeApp)},
-	{0x62, "app_local_get", opAppLocalGet, proto("ab:a"), directRefEnabledVersion, only(ModeApp)},
-	{0x63, "app_local_get_ex", opAppLocalGetEx, proto("iib:aT"), 2, only(ModeApp)},
-	{0x63, "app_local_get_ex", opAppLocalGetEx, proto("aib:aT"), directRefEnabledVersion, only(ModeApp)},
-	{0x64, "app_global_get", opAppGlobalGet, proto("b:a"), 2, only(ModeApp)},
-	{0x65, "app_global_get_ex", opAppGlobalGetEx, proto("ib:aT"), 2, only(ModeApp)},
-	{0x66, "app_local_put", opAppLocalPut, proto("iba:").stateExplain(opAppLocalPutStateChange), 2, only(ModeApp)},
-	{0x66, "app_local_put", opAppLocalPut, proto("aba:").stateExplain(opAppLocalPutStateChange), directRefEnabledVersion, only(ModeApp)},
-	{0x67, "app_global_put", opAppGlobalPut, proto("ba:").stateExplain(opAppGlobalPutStateChange), 2, only(ModeApp)},
-	{0x68, "app_local_del", opAppLocalDel, proto("ib:").stateExplain(opAppLocalDelStateChange), 2, only(ModeApp)},
-	{0x68, "app_local_del", opAppLocalDel, proto("ab:").stateExplain(opAppLocalDelStateChange), directRefEnabledVersion, only(ModeApp)},
-	{0x69, "app_global_del", opAppGlobalDel, proto("b:").stateExplain(opAppGlobalDelStateChange), 2, only(ModeApp)},
+	{0x62, "app_local_get", opAppLocalGet, proto("ib:a").appStateExplain(opAppLocalGetStateChange), 2, only(ModeApp)},
+	{0x62, "app_local_get", opAppLocalGet, proto("ab:a").appStateExplain(opAppLocalGetStateChange), directRefEnabledVersion, only(ModeApp)},
+	{0x63, "app_local_get_ex", opAppLocalGetEx, proto("iib:aT").appStateExplain(opAppLocalGetExStateChange), 2, only(ModeApp)},
+	{0x63, "app_local_get_ex", opAppLocalGetEx, proto("aib:aT").appStateExplain(opAppLocalGetExStateChange), directRefEnabledVersion, only(ModeApp)},
+	{0x64, "app_global_get", opAppGlobalGet, proto("b:a").appStateExplain(opAppGlobalGetStateChange), 2, only(ModeApp)},
+	{0x65, "app_global_get_ex", opAppGlobalGetEx, proto("ib:aT").appStateExplain(opAppGlobalGetExStateChange), 2, only(ModeApp)},
+	{0x66, "app_local_put", opAppLocalPut, proto("iba:").appStateExplain(opAppLocalPutStateChange), 2, only(ModeApp)},
+	{0x66, "app_local_put", opAppLocalPut, proto("aba:").appStateExplain(opAppLocalPutStateChange), directRefEnabledVersion, only(ModeApp)},
+	{0x67, "app_global_put", opAppGlobalPut, proto("ba:").appStateExplain(opAppGlobalPutStateChange), 2, only(ModeApp)},
+	{0x68, "app_local_del", opAppLocalDel, proto("ib:").appStateExplain(opAppLocalDelStateChange), 2, only(ModeApp)},
+	{0x68, "app_local_del", opAppLocalDel, proto("ab:").appStateExplain(opAppLocalDelStateChange), directRefEnabledVersion, only(ModeApp)},
+	{0x69, "app_global_del", opAppGlobalDel, proto("b:").appStateExplain(opAppGlobalDelStateChange), 2, only(ModeApp)},
 	{0x70, "asset_holding_get", opAssetHoldingGet, proto("ii:aT"), 2, field("f", &AssetHoldingFields).only(ModeApp)},
 	{0x70, "asset_holding_get", opAssetHoldingGet, proto("ai:aT"), directRefEnabledVersion, field("f", &AssetHoldingFields).only(ModeApp)},
 	{0x71, "asset_params_get", opAssetParamsGet, proto("i:aT"), 2, field("f", &AssetParamsFields).only(ModeApp)},
@@ -701,13 +701,13 @@ var OpSpecs = []OpSpec{
 	{0xb8, "gitxna", opGitxna, proto(":a"), 6, immediates("t", "f", "i").field("f", &TxnArrayFields).only(ModeApp)},
 
 	// Unlimited Global Storage - Boxes
-	{0xb9, "box_create", opBoxCreate, proto("Ni:T").stateExplain(opBoxCreateStateChange), boxVersion, only(ModeApp)},
-	{0xba, "box_extract", opBoxExtract, proto("Nii:b"), boxVersion, only(ModeApp)},
-	{0xbb, "box_replace", opBoxReplace, proto("Nib:").stateExplain(opBoxReplaceStateChange), boxVersion, only(ModeApp)},
-	{0xbc, "box_del", opBoxDel, proto("N:T").stateExplain(opBoxDelStateChange), boxVersion, only(ModeApp)},
-	{0xbd, "box_len", opBoxLen, proto("N:iT"), boxVersion, only(ModeApp)},
-	{0xbe, "box_get", opBoxGet, proto("N:bT"), boxVersion, only(ModeApp)},
-	{0xbf, "box_put", opBoxPut, proto("Nb:").stateExplain(opBoxPutStateChange), boxVersion, only(ModeApp)},
+	{0xb9, "box_create", opBoxCreate, proto("Ni:T").appStateExplain(opBoxCreateStateChange), boxVersion, only(ModeApp)},
+	{0xba, "box_extract", opBoxExtract, proto("Nii:b").appStateExplain(opBoxExtractStateChange), boxVersion, only(ModeApp)},
+	{0xbb, "box_replace", opBoxReplace, proto("Nib:").appStateExplain(opBoxReplaceStateChange), boxVersion, only(ModeApp)},
+	{0xbc, "box_del", opBoxDel, proto("N:T").appStateExplain(opBoxDelStateChange), boxVersion, only(ModeApp)},
+	{0xbd, "box_len", opBoxLen, proto("N:iT").appStateExplain(opBoxGetStateChange), boxVersion, only(ModeApp)},
+	{0xbe, "box_get", opBoxGet, proto("N:bT").appStateExplain(opBoxGetStateChange), boxVersion, only(ModeApp)},
+	{0xbf, "box_put", opBoxPut, proto("Nb:").appStateExplain(opBoxPutStateChange), boxVersion, only(ModeApp)},
 
 	// Dynamic indexing
 	{0xc0, "txnas", opTxnas, proto("i:a"), 5, field("f", &TxnArrayFields)},

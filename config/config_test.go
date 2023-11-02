@@ -803,3 +803,129 @@ func TestResolveLogPaths(t *testing.T) {
 	require.Equal(t, "mycoolLogDir/node.log", log)
 	require.Equal(t, "myCoolLogArchive/node.archive.log", archive)
 }
+
+func TestStoresCatchpoints(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	var tests = []struct {
+		name               string
+		catchpointTracking int64
+		catchpointInterval uint64
+		archival           bool
+		expected           bool
+	}{
+		{
+			name:               "-1 w/ no catchpoint interval expects false",
+			catchpointTracking: CatchpointTrackingModeUntracked,
+			catchpointInterval: 0,
+			expected:           false,
+		},
+		{
+			name:               "-1 expects false",
+			catchpointTracking: CatchpointTrackingModeUntracked,
+			catchpointInterval: GetDefaultLocal().CatchpointInterval,
+			archival:           GetDefaultLocal().Archival,
+			expected:           false,
+		},
+		{
+			name:               "0 expects false",
+			catchpointTracking: CatchpointTrackingModeAutomatic,
+			catchpointInterval: GetDefaultLocal().CatchpointInterval,
+			archival:           GetDefaultLocal().Archival,
+			expected:           false,
+		},
+		{
+			name:               "0 w/ archival expects true",
+			catchpointTracking: CatchpointTrackingModeAutomatic,
+			catchpointInterval: GetDefaultLocal().CatchpointInterval,
+			archival:           true,
+			expected:           true,
+		},
+		{
+			name:               "0 w/ archival & catchpointInterval=0 expects false",
+			catchpointTracking: CatchpointTrackingModeAutomatic,
+			catchpointInterval: 0,
+			archival:           true,
+			expected:           false,
+		},
+		{
+			name:               "1 expects false",
+			catchpointTracking: CatchpointTrackingModeTracked,
+			catchpointInterval: GetDefaultLocal().CatchpointInterval,
+			archival:           GetDefaultLocal().Archival,
+			expected:           false,
+		},
+		{
+			name:               "1 w/ archival expects true",
+			catchpointTracking: CatchpointTrackingModeTracked,
+			catchpointInterval: GetDefaultLocal().CatchpointInterval,
+			archival:           true,
+			expected:           true,
+		},
+		{
+			name:               "1 w/ archival & catchpointInterval=0 expects false",
+			catchpointTracking: CatchpointTrackingModeTracked,
+			catchpointInterval: 0,
+			archival:           true,
+			expected:           false,
+		},
+		{
+			name:               "2 w/ catchpointInterval=0 expects false",
+			catchpointTracking: CatchpointTrackingModeStored,
+			catchpointInterval: 0,
+			archival:           GetDefaultLocal().Archival,
+			expected:           false,
+		},
+		{
+			name:               "2 expects true",
+			catchpointTracking: CatchpointTrackingModeStored,
+			catchpointInterval: GetDefaultLocal().CatchpointInterval,
+			archival:           GetDefaultLocal().Archival,
+			expected:           true,
+		},
+		{
+			name:               "99 expects false",
+			catchpointTracking: 99,
+			catchpointInterval: GetDefaultLocal().CatchpointInterval,
+			archival:           GetDefaultLocal().Archival,
+			expected:           false,
+		},
+		{
+			name:               "99 w/ catchpointInterval=0 expects false",
+			catchpointTracking: 99,
+			catchpointInterval: 0,
+			archival:           GetDefaultLocal().Archival,
+			expected:           false,
+		},
+		{
+			name:               "27 expects false",
+			catchpointTracking: 27,
+			catchpointInterval: GetDefaultLocal().CatchpointInterval,
+			archival:           GetDefaultLocal().Archival,
+			expected:           false,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			cfg := GetDefaultLocal()
+			cfg.CatchpointTracking = test.catchpointTracking
+			cfg.CatchpointInterval = test.catchpointInterval
+			cfg.Archival = test.archival
+			require.Equal(t, test.expected, cfg.StoresCatchpoints())
+			if cfg.StoresCatchpoints() {
+				require.Equal(t, true, cfg.TracksCatchpoints())
+			}
+		})
+	}
+}
+
+func TestTracksCatchpointsWithoutStoring(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	cfg := GetDefaultLocal()
+	cfg.CatchpointTracking = CatchpointTrackingModeTracked
+	cfg.CatchpointInterval = 10000
+	cfg.Archival = false
+	require.Equal(t, true, cfg.TracksCatchpoints())
+	require.Equal(t, false, cfg.StoresCatchpoints())
+}

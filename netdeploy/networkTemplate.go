@@ -48,7 +48,7 @@ var defaultNetworkTemplate = NetworkTemplate{
 	Genesis: gen.DefaultGenesis,
 }
 
-func (t NetworkTemplate) generateGenesisAndWallets(targetFolder, networkName, binDir string) error {
+func (t NetworkTemplate) generateGenesisAndWallets(targetFolder, networkName string) error {
 	genesisData := t.Genesis
 	genesisData.NetworkName = networkName
 	mergedConsensus := config.Consensus.Merge(t.Consensus)
@@ -180,11 +180,12 @@ func loadTemplate(templateFile string) (NetworkTemplate, error) {
 	}
 	defer f.Close()
 
-	err = loadTemplateFromReader(f, &template)
+	err = LoadTemplateFromReader(f, &template)
 	return template, err
 }
 
-func loadTemplateFromReader(reader io.Reader, template *NetworkTemplate) error {
+// LoadTemplateFromReader loads and decodes a network template
+func LoadTemplateFromReader(reader io.Reader, template *NetworkTemplate) error {
 
 	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
 		// for arm machines, use smaller key dilution
