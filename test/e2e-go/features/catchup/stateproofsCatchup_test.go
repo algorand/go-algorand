@@ -93,7 +93,7 @@ func TestStateProofInReplayCatchpoint(t *testing.T) {
 
 	catchpointLabel := waitForCatchpointGeneration(t, fixture, primaryNodeRestClient, targetCatchpointRound)
 
-	_, err = usingNodeRestClient.Catchup(catchpointLabel)
+	_, err = usingNodeRestClient.Catchup(catchpointLabel, 0)
 	a.NoError(err)
 
 	// waiting for fastcatchup to start
@@ -169,7 +169,7 @@ func TestStateProofAfterCatchpoint(t *testing.T) {
 
 	catchpointLabel := waitForCatchpointGeneration(t, fixture, primaryNodeRestClient, targetCatchpointRound)
 
-	_, err = usingNodeRestClient.Catchup(catchpointLabel)
+	_, err = usingNodeRestClient.Catchup(catchpointLabel, 0)
 	a.NoError(err)
 
 	roundAfterSPGeneration := targetCatchpointRound.RoundUpToMultipleOf(basics.Round(consensusParams.StateProofInterval)) +
@@ -258,7 +258,7 @@ func TestSendSigsAfterCatchpointCatchup(t *testing.T) {
 	targetCatchpointRound := getFirstCatchpointRound(&consensusParams)
 
 	catchpointLabel := waitForCatchpointGeneration(t, &fixture, primaryNodeRestClient, targetCatchpointRound)
-	_, err = usingNodeRestClient.Catchup(catchpointLabel)
+	_, err = usingNodeRestClient.Catchup(catchpointLabel, 0)
 	a.NoError(err)
 
 	err = fixture.ClientWaitForRoundWithTimeout(usingNodeRestClient, uint64(targetCatchpointRound)+1)

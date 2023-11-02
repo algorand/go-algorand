@@ -19,6 +19,7 @@ package agreement
 //go:generate dbgen -i agree.sql -p agreement -n agree -o agreeInstall.go -h ../scripts/LICENSE_HEADER
 import (
 	"context"
+	"time"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/logging"
@@ -56,6 +57,9 @@ type Service struct {
 	persistRouter  rootRouter
 	persistStatus  player
 	persistActions []action
+
+	// Retain old rounds' period 0 start times.
+	historicalClocks map[round]roundStartTimer
 }
 
 // Parameters holds the parameters necessary to run the agreement protocol.
@@ -84,6 +88,13 @@ type externalDemuxSignals struct {
 	CurrentRound         round
 }
 
+// an interface allowing for measuring the duration since a clock from a previous round,
+// used for measuring the arrival time of a late proposal-vote, for the dynamic filter
+// timeout feature
+type roundStartTimer interface {
+	Since() time.Duration
+}
+
 // MakeService creates a new Agreement Service instance given a set of Parameters.
 //
 // Call Start to start execution and Shutdown to finish execution.
@@ -109,6 +120,8 @@ func MakeService(p Parameters) (*Service, error) {
 	}
 
 	s.persistenceLoop = makeAsyncPersistenceLoop(s.log, s.Accessor, s.Ledger)
+
+	s.historicalClocks = make(map[round]roundStartTimer)
 
 	return s, nil
 }

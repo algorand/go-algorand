@@ -104,7 +104,7 @@ func TestP2PSubmitTX(t *testing.T) {
 			if !ok {
 				return false
 			}
-			return atomic.LoadUint64(&netCpeerStatsA.txReceived) == 10
+			return netCpeerStatsA.txReceived.Load() == 10
 		},
 		1*time.Second,
 		50*time.Millisecond,
@@ -153,12 +153,12 @@ func TestP2PSubmitWS(t *testing.T) {
 	// now we should be connected in a line: B <-> A <-> C where both B and C are connected to A but not each other
 
 	testTag := protocol.AgreementVoteTag
-	var handlerCount uint32
+	var handlerCount atomic.Uint32
 
 	// Since we aren't using the transaction handler in this test, we need to register a pass-through handler
 	passThroughHandler := []TaggedMessageHandler{
 		{Tag: testTag, MessageHandler: HandlerFunc(func(msg IncomingMessage) OutgoingMessage {
-			atomic.AddUint32(&handlerCount, 1)
+			handlerCount.Add(1)
 			return OutgoingMessage{Action: Broadcast}
 		})},
 	}
@@ -176,7 +176,7 @@ func TestP2PSubmitWS(t *testing.T) {
 	require.Eventually(
 		t,
 		func() bool {
-			return atomic.LoadUint32(&handlerCount) == 20
+			return handlerCount.Load() == 20
 		},
 		1*time.Second,
 		50*time.Millisecond,

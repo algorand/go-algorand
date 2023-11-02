@@ -16,6 +16,10 @@
 
 package agreement
 
+import (
+	"github.com/algorand/go-algorand/config"
+)
+
 // A stateMachineTag uniquely identifies the type of a state machine.
 //
 // Rounds, periods, and steps may be used to further identify different state machine instances of the same type.
@@ -46,6 +50,19 @@ type routerHandle struct {
 	t   *tracer
 	r   router
 	src stateMachineTag
+}
+
+// credentialRoundLag the maximal number of rounds that could pass before a credential from
+// an honest party for an old round may arrive. It uses the
+// dynamicFilterTimeoutLowerBound parameter as the minimal round time.
+var credentialRoundLag round
+
+func init() {
+	// credential arrival time should be at most 2*config.Protocol.SmallLambda after it was sent
+	credentialRoundLag = round(2 * config.Protocol.SmallLambda / dynamicFilterTimeoutLowerBound)
+	if credentialRoundLag*round(dynamicFilterTimeoutLowerBound) < round(2*config.Protocol.SmallLambda) {
+		credentialRoundLag++
+	}
 }
 
 // dispatch sends an event to the given state machine listener with the given stateMachineTag.
@@ -136,7 +153,11 @@ func (router *rootRouter) update(state player, r round, gc bool) {
 	if gc {
 		children := make(map[round]*roundRouter)
 		for r, c := range router.Children {
-			if r >= state.Round {
+			// We may still receive credential messages from old rounds. Keep
+			// old round routers around, for as long as those credentials may
+			// arrive to keep track of them.
+			rr := r + credentialRoundLag
+			if rr >= state.Round {
 				children[r] = c
 			}
 		}
@@ -201,7 +222,6 @@ func (router *roundRouter) update(state player, p period, gc bool) {
 				// TODO may want regression test for correct pipelining behavior
 				children[p] = c
 			}
-
 		}
 		router.Children = children
 	}

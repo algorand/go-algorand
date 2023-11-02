@@ -16,6 +16,7 @@ import (
 //            |-----> MarshalMsg
 //            |-----> CanMarshalMsg
 //            |-----> (*) UnmarshalMsg
+//            |-----> (*) UnmarshalMsgWithState
 //            |-----> (*) CanUnmarshalMsg
 //            |-----> Msgsize
 //            |-----> MsgIsZero
@@ -25,6 +26,7 @@ import (
 //           |-----> (*) MarshalMsg
 //           |-----> (*) CanMarshalMsg
 //           |-----> (*) UnmarshalMsg
+//           |-----> (*) UnmarshalMsgWithState
 //           |-----> (*) CanUnmarshalMsg
 //           |-----> (*) Msgsize
 //           |-----> (*) MsgIsZero
@@ -34,6 +36,7 @@ import (
 //               |-----> (*) MarshalMsg
 //               |-----> (*) CanMarshalMsg
 //               |-----> (*) UnmarshalMsg
+//               |-----> (*) UnmarshalMsgWithState
 //               |-----> (*) CanUnmarshalMsg
 //               |-----> (*) Msgsize
 //               |-----> (*) MsgIsZero
@@ -43,6 +46,7 @@ import (
 //           |-----> (*) MarshalMsg
 //           |-----> (*) CanMarshalMsg
 //           |-----> (*) UnmarshalMsg
+//           |-----> (*) UnmarshalMsgWithState
 //           |-----> (*) CanUnmarshalMsg
 //           |-----> (*) Msgsize
 //           |-----> (*) MsgIsZero
@@ -52,6 +56,7 @@ import (
 //                    |-----> (*) MarshalMsg
 //                    |-----> (*) CanMarshalMsg
 //                    |-----> (*) UnmarshalMsg
+//                    |-----> (*) UnmarshalMsgWithState
 //                    |-----> (*) CanUnmarshalMsg
 //                    |-----> (*) Msgsize
 //                    |-----> (*) MsgIsZero
@@ -74,7 +79,12 @@ func (_ CatchpointCatchupState) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *CatchpointCatchupState) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *CatchpointCatchupState) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	{
 		var zb0001 int32
 		zb0001, bts, err = msgp.ReadInt32Bytes(bts)
@@ -88,6 +98,9 @@ func (z *CatchpointCatchupState) UnmarshalMsg(bts []byte) (o []byte, err error) 
 	return
 }
 
+func (z *CatchpointCatchupState) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *CatchpointCatchupState) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*CatchpointCatchupState)
 	return ok
@@ -210,7 +223,12 @@ func (_ *CatchpointFileHeader) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *CatchpointFileHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *CatchpointFileHeader) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0001 int
@@ -232,7 +250,7 @@ func (z *CatchpointFileHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).BalancesRound.UnmarshalMsg(bts)
+			bts, err = (*z).BalancesRound.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "BalancesRound")
 				return
@@ -240,7 +258,7 @@ func (z *CatchpointFileHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).BlocksRound.UnmarshalMsg(bts)
+			bts, err = (*z).BlocksRound.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "BlocksRound")
 				return
@@ -248,7 +266,7 @@ func (z *CatchpointFileHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).Totals.UnmarshalMsg(bts)
+			bts, err = (*z).Totals.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Totals")
 				return
@@ -288,7 +306,7 @@ func (z *CatchpointFileHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).BlockHeaderDigest.UnmarshalMsg(bts)
+			bts, err = (*z).BlockHeaderDigest.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "BlockHeaderDigest")
 				return
@@ -324,19 +342,19 @@ func (z *CatchpointFileHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "balancesRound":
-				bts, err = (*z).BalancesRound.UnmarshalMsg(bts)
+				bts, err = (*z).BalancesRound.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "BalancesRound")
 					return
 				}
 			case "blocksRound":
-				bts, err = (*z).BlocksRound.UnmarshalMsg(bts)
+				bts, err = (*z).BlocksRound.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "BlocksRound")
 					return
 				}
 			case "accountTotals":
-				bts, err = (*z).Totals.UnmarshalMsg(bts)
+				bts, err = (*z).Totals.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "Totals")
 					return
@@ -366,7 +384,7 @@ func (z *CatchpointFileHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "blockHeaderDigest":
-				bts, err = (*z).BlockHeaderDigest.UnmarshalMsg(bts)
+				bts, err = (*z).BlockHeaderDigest.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "BlockHeaderDigest")
 					return
@@ -384,6 +402,9 @@ func (z *CatchpointFileHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *CatchpointFileHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *CatchpointFileHeader) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*CatchpointFileHeader)
 	return ok
@@ -443,7 +464,12 @@ func (_ *catchpointFileBalancesChunkV5) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *catchpointFileBalancesChunkV5) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *catchpointFileBalancesChunkV5) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0002 int
@@ -477,7 +503,7 @@ func (z *catchpointFileBalancesChunkV5) UnmarshalMsg(bts []byte) (o []byte, err 
 				(*z).Balances = make([]encoded.BalanceRecordV5, zb0004)
 			}
 			for zb0001 := range (*z).Balances {
-				bts, err = (*z).Balances[zb0001].UnmarshalMsg(bts)
+				bts, err = (*z).Balances[zb0001].UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "Balances", zb0001)
 					return
@@ -528,7 +554,7 @@ func (z *catchpointFileBalancesChunkV5) UnmarshalMsg(bts []byte) (o []byte, err 
 					(*z).Balances = make([]encoded.BalanceRecordV5, zb0006)
 				}
 				for zb0001 := range (*z).Balances {
-					bts, err = (*z).Balances[zb0001].UnmarshalMsg(bts)
+					bts, err = (*z).Balances[zb0001].UnmarshalMsgWithState(bts, st)
 					if err != nil {
 						err = msgp.WrapError(err, "Balances", zb0001)
 						return
@@ -547,6 +573,9 @@ func (z *catchpointFileBalancesChunkV5) UnmarshalMsg(bts []byte) (o []byte, err 
 	return
 }
 
+func (z *catchpointFileBalancesChunkV5) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *catchpointFileBalancesChunkV5) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*catchpointFileBalancesChunkV5)
 	return ok
@@ -625,7 +654,12 @@ func (_ *catchpointFileChunkV6) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *catchpointFileChunkV6) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *catchpointFileChunkV6) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0003 int
@@ -659,7 +693,7 @@ func (z *catchpointFileChunkV6) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				(*z).Balances = make([]encoded.BalanceRecordV6, zb0005)
 			}
 			for zb0001 := range (*z).Balances {
-				bts, err = (*z).Balances[zb0001].UnmarshalMsg(bts)
+				bts, err = (*z).Balances[zb0001].UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "Balances", zb0001)
 					return
@@ -688,7 +722,7 @@ func (z *catchpointFileChunkV6) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				(*z).KVs = make([]encoded.KVRecordV6, zb0007)
 			}
 			for zb0002 := range (*z).KVs {
-				bts, err = (*z).KVs[zb0002].UnmarshalMsg(bts)
+				bts, err = (*z).KVs[zb0002].UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "KVs", zb0002)
 					return
@@ -739,7 +773,7 @@ func (z *catchpointFileChunkV6) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					(*z).Balances = make([]encoded.BalanceRecordV6, zb0009)
 				}
 				for zb0001 := range (*z).Balances {
-					bts, err = (*z).Balances[zb0001].UnmarshalMsg(bts)
+					bts, err = (*z).Balances[zb0001].UnmarshalMsgWithState(bts, st)
 					if err != nil {
 						err = msgp.WrapError(err, "Balances", zb0001)
 						return
@@ -766,7 +800,7 @@ func (z *catchpointFileChunkV6) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					(*z).KVs = make([]encoded.KVRecordV6, zb0011)
 				}
 				for zb0002 := range (*z).KVs {
-					bts, err = (*z).KVs[zb0002].UnmarshalMsg(bts)
+					bts, err = (*z).KVs[zb0002].UnmarshalMsgWithState(bts, st)
 					if err != nil {
 						err = msgp.WrapError(err, "KVs", zb0002)
 						return
@@ -785,6 +819,9 @@ func (z *catchpointFileChunkV6) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *catchpointFileChunkV6) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *catchpointFileChunkV6) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*catchpointFileChunkV6)
 	return ok
@@ -854,7 +891,12 @@ func (_ *catchpointStateProofVerificationContext) CanMarshalMsg(z interface{}) b
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *catchpointStateProofVerificationContext) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *catchpointStateProofVerificationContext) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0002 int
@@ -888,7 +930,7 @@ func (z *catchpointStateProofVerificationContext) UnmarshalMsg(bts []byte) (o []
 				(*z).Data = make([]ledgercore.StateProofVerificationContext, zb0004)
 			}
 			for zb0001 := range (*z).Data {
-				bts, err = (*z).Data[zb0001].UnmarshalMsg(bts)
+				bts, err = (*z).Data[zb0001].UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "Data", zb0001)
 					return
@@ -939,7 +981,7 @@ func (z *catchpointStateProofVerificationContext) UnmarshalMsg(bts []byte) (o []
 					(*z).Data = make([]ledgercore.StateProofVerificationContext, zb0006)
 				}
 				for zb0001 := range (*z).Data {
-					bts, err = (*z).Data[zb0001].UnmarshalMsg(bts)
+					bts, err = (*z).Data[zb0001].UnmarshalMsgWithState(bts, st)
 					if err != nil {
 						err = msgp.WrapError(err, "Data", zb0001)
 						return
@@ -958,6 +1000,9 @@ func (z *catchpointStateProofVerificationContext) UnmarshalMsg(bts []byte) (o []
 	return
 }
 
+func (z *catchpointStateProofVerificationContext) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *catchpointStateProofVerificationContext) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*catchpointStateProofVerificationContext)
 	return ok

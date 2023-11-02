@@ -104,7 +104,7 @@ type BlockService struct {
 	closeWaitGroup          sync.WaitGroup
 	mu                      deadlock.Mutex
 	memoryUsed              uint64
-	wsMemoryUsed            uint64
+	wsMemoryUsed            atomic.Uint64
 	memoryCap               uint64
 }
 
@@ -320,9 +320,9 @@ func (bs *BlockService) handleCatchupReq(ctx context.Context, reqMsg network.Inc
 		outMsg := network.OutgoingMessage{Topics: respTopics}
 		if n > 0 {
 			outMsg.OnRelease = func() {
-				atomic.AddUint64(&bs.wsMemoryUsed, ^uint64(n-1))
+				bs.wsMemoryUsed.Add(^uint64(n - 1))
 			}
-			atomic.AddUint64(&bs.wsMemoryUsed, (n))
+			bs.wsMemoryUsed.Add(n)
 		}
 		err := target.Respond(ctx, reqMsg, outMsg)
 		if err != nil {
@@ -332,7 +332,7 @@ func (bs *BlockService) handleCatchupReq(ctx context.Context, reqMsg network.Inc
 
 	// If we are over-capacity, we will not process the request
 	// respond to sender with error message
-	memUsed := atomic.LoadUint64(&bs.wsMemoryUsed)
+	memUsed := bs.wsMemoryUsed.Load()
 	if memUsed > bs.memoryCap {
 		err := errMemoryAtCapacity{capacity: bs.memoryCap, used: memUsed}
 		bs.log.Infof("BlockService handleCatchupReq: %s", err.Error())

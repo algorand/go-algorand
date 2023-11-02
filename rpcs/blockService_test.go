@@ -452,7 +452,7 @@ func TestWsBlockLimiting(t *testing.T) {
 			roundBin),
 	}
 	reqMsg.Data = topics.MarshallTopics()
-	require.Zero(t, bs1.wsMemoryUsed)
+	require.Zero(t, bs1.wsMemoryUsed.Load())
 	bs1.handleCatchupReq(context.Background(), reqMsg)
 	// We should have received the message into the mock peer and the block service should have memoryUsed > 0
 	data, found := peer.responseTopics.GetValue(BlockDataKey)
@@ -460,7 +460,7 @@ func TestWsBlockLimiting(t *testing.T) {
 	blk, _, err := ledger.EncodedBlockCert(basics.Round(2))
 	require.NoError(t, err)
 	require.Equal(t, data, blk)
-	require.Positive(t, bs1.wsMemoryUsed)
+	require.Positive(t, bs1.wsMemoryUsed.Load())
 
 	// Before making a new request save the callback since the new failed message will overwrite it in the mock peer
 	callback := peer.outMsg.OnRelease
@@ -474,7 +474,7 @@ func TestWsBlockLimiting(t *testing.T) {
 	// Now call the callback to free up memUsed
 	require.Nil(t, peer.outMsg.OnRelease)
 	callback()
-	require.Zero(t, bs1.wsMemoryUsed)
+	require.Zero(t, bs1.wsMemoryUsed.Load())
 }
 
 // TestRedirectExceptions tests exception cases:

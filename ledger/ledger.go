@@ -454,6 +454,11 @@ func (l *Ledger) notifyCommit(r basics.Round) basics.Round {
 	}()
 	minToSave := l.trackers.committedUpTo(r)
 
+	// Check if additional block history is configured, and adjust minToSave if so.
+	if configuredMinToSave := r.SubSaturate(basics.Round(l.cfg.MaxBlockHistoryLookback)); configuredMinToSave < minToSave {
+		minToSave = configuredMinToSave
+	}
+
 	if l.archival {
 		// Do not forget any blocks.
 		minToSave = 0
@@ -891,6 +896,12 @@ func (l *Ledger) Validate(ctx context.Context, blk bookkeeping.Block, executionP
 // LatestTrackerCommitted returns the trackers' dbRound which "is always exactly accountsRound()"
 func (l *Ledger) LatestTrackerCommitted() basics.Round {
 	return l.trackers.getDbRound()
+}
+
+// IsBehindCommittingDeltas indicates if the ledger is behind expected number of in-memory deltas.
+// It intended to slow down the catchup service when deltas overgrow some limit.
+func (l *Ledger) IsBehindCommittingDeltas() bool {
+	return l.trackers.isBehindCommittingDeltas(l.Latest())
 }
 
 // DebuggerLedger defines the minimal set of method required for creating a debug balances.

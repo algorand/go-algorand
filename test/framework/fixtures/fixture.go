@@ -161,11 +161,13 @@ func (st *synchTest) Helper() {
 	st.t.Helper()
 }
 func (st *synchTest) Log(args ...interface{}) {
+	st.t.Helper()
 	st.Lock()
 	defer st.Unlock()
 	st.t.Log(args...)
 }
 func (st *synchTest) Logf(format string, args ...interface{}) {
+	st.t.Helper()
 	st.Lock()
 	defer st.Unlock()
 	st.t.Logf(format, args...)

@@ -63,6 +63,7 @@ type Ledger interface {
 	Block(basics.Round) (bookkeeping.Block, error)
 	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
 	IsWritingCatchpointDataFile() bool
+	IsBehindCommittingDeltas() bool
 	Validate(ctx context.Context, blk bookkeeping.Block, executionPool execpool.BacklogPool) (*ledgercore.ValidatedBlock, error)
 	AddValidatedBlock(vb ledgercore.ValidatedBlock, cert agreement.Certificate) error
 	WaitMem(r basics.Round) chan struct{}
@@ -70,10 +71,10 @@ type Ledger interface {
 
 // Service represents the catchup service. Once started and until it is stopped, it ensures that the ledger is up to date with network.
 type Service struct {
-	syncStartNS int64 // at top of struct to keep 64 bit aligned for atomic.* ops
 	// disableSyncRound, provided externally, is the first round we will _not_ fetch from the network
 	// any round >= disableSyncRound will not be fetched. If set to 0, it will be disregarded.
-	disableSyncRound    uint64
+	disableSyncRound    atomic.Uint64
+	syncStartNS         atomic.Int64
 	cfg                 config.Local
 	ledger              Ledger
 	ctx                 context.Context
@@ -86,15 +87,15 @@ type Service struct {
 	deadlineTimeout     time.Duration
 	blockValidationPool execpool.BacklogPool
 
-	// suspendForCatchpointWriting defines whether we've run into a state where the ledger is currently busy writing the
-	// catchpoint file. If so, we want to suspend the catchup process until the catchpoint file writing is complete,
+	// suspendForLedgerOps defines whether we've run into a state where the ledger is currently busy writing the
+	// catchpoint file or flushing accounts. If so, we want to suspend the catchup process until the catchpoint file writing is complete,
 	// and resume from there without stopping the catchup timer.
-	suspendForCatchpointWriting bool
+	suspendForLedgerOps bool
 
 	// The channel gets closed when the initial sync is complete. This allows for other services to avoid
 	// the overhead of starting prematurely (before this node is caught-up and can validate messages for example).
 	InitialSyncDone              chan struct{}
-	initialSyncNotified          uint32
+	initialSyncNotified          atomic.Uint32
 	protocolErrorLogged          bool
 	unmatchedPendingCertificates <-chan PendingUnmatchedCertificate
 	// This channel signals periodSync to attempt catchup immediately. This allows us to start fetching rounds from
@@ -140,7 +141,7 @@ func MakeService(log logging.Logger, config config.Local, net network.GossipNode
 // Start the catchup service
 func (s *Service) Start() {
 	s.ctx, s.cancel = context.WithCancel(context.Background())
-	atomic.StoreUint32(&s.initialSyncNotified, 0)
+	s.initialSyncNotified.Store(0)
 	s.InitialSyncDone = make(chan struct{})
 	s.workers.Add(1)
 	go s.periodicSync()
@@ -150,7 +151,7 @@ func (s *Service) Start() {
 func (s *Service) Stop() {
 	s.cancel()
 	s.workers.Wait()
-	if atomic.CompareAndSwapUint32(&s.initialSyncNotified, 0, 1) {
+	if s.initialSyncNotified.CompareAndSwap(0, 1) {
 		close(s.InitialSyncDone)
 	}
 }
@@ -159,8 +160,8 @@ func (s *Service) Stop() {
 // or attempting to catchup after too-long waiting for next block.
 // Also returns a 2nd bool indicating if this is our initial sync
 func (s *Service) IsSynchronizing() (synchronizing bool, initialSync bool) {
-	synchronizing = atomic.LoadInt64(&s.syncStartNS) != 0
-	initialSync = atomic.LoadUint32(&s.initialSyncNotified) == 0
+	synchronizing = s.syncStartNS.Load() != 0
+	initialSync = s.initialSyncNotified.Load() == 0
 	return
 }
 
@@ -180,25 +181,25 @@ func (s *Service) SetDisableSyncRound(rnd uint64) error {
 	if basics.Round(rnd) < s.ledger.LastRound() {
 		return ErrSyncRoundInvalid
 	}
-	atomic.StoreUint64(&s.disableSyncRound, rnd)
+	s.disableSyncRound.Store(rnd)
 	s.triggerSync()
 	return nil
 }
 
 // UnsetDisableSyncRound removes any previously set disabled sync round
 func (s *Service) UnsetDisableSyncRound() {
-	atomic.StoreUint64(&s.disableSyncRound, 0)
+	s.disableSyncRound.Store(0)
 	s.triggerSync()
 }
 
 // GetDisableSyncRound returns the disabled sync round
 func (s *Service) GetDisableSyncRound() uint64 {
-	return atomic.LoadUint64(&s.disableSyncRound)
+	return s.disableSyncRound.Load()
 }
 
 // SynchronizingTime returns the time we've been performing a catchup operation (0 if not currently catching up)
 func (s *Service) SynchronizingTime() time.Duration {
-	startNS := atomic.LoadInt64(&s.syncStartNS)
+	startNS := s.syncStartNS.Load()
 	if startNS == 0 {
 		return time.Duration(0)
 	}
@@ -494,11 +495,26 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 				return
 			}
 
+			// if ledger is busy, pause for some time to let the fetchAndWrite goroutines to finish fetching in-flight blocks.
+			start := time.Now()
+			for (s.ledger.IsWritingCatchpointDataFile() || s.ledger.IsBehindCommittingDeltas()) && time.Since(start) < s.deadlineTimeout {
+				time.Sleep(100 * time.Millisecond)
+			}
+
+			// if ledger is still busy after s.deadlineTimeout timeout then abort the current pipelinedFetch invocation.
+
 			// if we're writing a catchpoint file, stop catching up to reduce the memory pressure. Once we finish writing the file we
 			// could resume with the catchup.
 			if s.ledger.IsWritingCatchpointDataFile() {
 				s.log.Info("Catchup is stopping due to catchpoint file being written")
-				s.suspendForCatchpointWriting = true
+				s.suspendForLedgerOps = true
+				return
+			}
+
+			// if the ledger has too many non-flushed account changes, stop catching up to reduce the memory pressure.
+			if s.ledger.IsBehindCommittingDeltas() {
+				s.log.Info("Catchup is stopping due to too many non-flushed account changes")
+				s.suspendForLedgerOps = true
 				return
 			}
 
@@ -555,10 +571,10 @@ func (s *Service) periodicSync() {
 			sleepDuration = time.Duration(crypto.RandUint63()) % s.deadlineTimeout
 			continue
 		case <-s.syncNow:
-			if s.parallelBlocks == 0 || s.ledger.IsWritingCatchpointDataFile() {
+			if s.parallelBlocks == 0 || s.ledger.IsWritingCatchpointDataFile() || s.ledger.IsBehindCommittingDeltas() {
 				continue
 			}
-			s.suspendForCatchpointWriting = false
+			s.suspendForLedgerOps = false
 			s.log.Info("Immediate resync triggered; resyncing")
 			s.sync()
 		case <-time.After(sleepDuration):
@@ -575,7 +591,12 @@ func (s *Service) periodicSync() {
 				// keep the existing sleep duration and try again later.
 				continue
 			}
-			s.suspendForCatchpointWriting = false
+			// if the ledger has too many non-flushed account changes, skip
+			if s.ledger.IsBehindCommittingDeltas() {
+				continue
+			}
+
+			s.suspendForLedgerOps = false
 			s.log.Info("It's been too long since our ledger advanced; resyncing")
 			s.sync()
 		case cert := <-s.unmatchedPendingCertificates:
@@ -608,8 +629,8 @@ func (s *Service) sync() {
 	start := time.Now()
 
 	timeInNS := start.UnixNano()
-	if !atomic.CompareAndSwapInt64(&s.syncStartNS, 0, timeInNS) {
-		s.log.Infof("resuming previous sync from %d (now=%d)", atomic.LoadInt64(&s.syncStartNS), timeInNS)
+	if !s.syncStartNS.CompareAndSwap(0, timeInNS) {
+		s.log.Infof("resuming previous sync from %d (now=%d)", s.syncStartNS.Load(), timeInNS)
 	}
 
 	pr := s.ledger.LastRound()
@@ -630,18 +651,18 @@ func (s *Service) sync() {
 	initSync := false
 
 	// if the catchupWriting flag is set, it means that we aborted the sync due to the ledger writing the catchup file.
-	if !s.suspendForCatchpointWriting {
+	if !s.suspendForLedgerOps {
 		// in that case, don't change the timer so that the "timer" would keep running.
-		atomic.StoreInt64(&s.syncStartNS, 0)
+		s.syncStartNS.Store(0)
 
 		// close the initial sync channel if not already close
-		if atomic.CompareAndSwapUint32(&s.initialSyncNotified, 0, 1) {
+		if s.initialSyncNotified.CompareAndSwap(0, 1) {
 			close(s.InitialSyncDone)
 			initSync = true
 		}
 	}
 
-	elapsedTime := time.Now().Sub(start)
+	elapsedTime := time.Since(start)
 	s.log.EventWithDetails(telemetryspec.ApplicationState, telemetryspec.CatchupStopEvent, telemetryspec.CatchupStopEventDetails{
 		StartRound: uint64(pr),
 		EndRound:   uint64(s.ledger.LastRound()),
