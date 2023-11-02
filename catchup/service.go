@@ -705,10 +705,7 @@ func (s *Service) fetchRound(cert agreement.Certificate, verifier *agreement.Asy
 		return
 	}
 
-	peerErrors := map[network.Peer]struct {
-		count             int
-		totalWaitDuration time.Duration
-	}{}
+	peerErrors := map[network.Peer]int{}
 
 	blockHash := bookkeeping.BlockHash(cert.Proposal.BlockDigest) // semantic digest (i.e., hash of the block header), not byte-for-byte digest
 	peerSelector := createPeerSelector(s.net, s.cfg, false)
@@ -734,23 +731,13 @@ func (s *Service) fetchRound(cert agreement.Certificate, verifier *agreement.Asy
 			if err == errNoBlockForRound {
 				// If a peer does not have the block after few attempts it probably has not persisted the block yet.
 				// Give it some time to persist the block and try again.
-				// Quit if the the same peer still errs after sleeping 2*config.Protocol.SmallLambda seconds in total.
-				if info, ok := peerErrors[peer]; ok {
-					if info.count > errNoBlockForRoundThreshold && info.totalWaitDuration >= 2*config.Protocol.SmallLambda {
-						s.log.Debugf("fetchAndWrite(%d): remote peers do not have the block. Quitting", cert.Round)
-						return
+				// None, there is no exit condition on too many retries as per the function contract.
+				if count, ok := peerErrors[peer]; ok {
+					if count > errNoBlockForRoundThreshold {
+						time.Sleep(100 * time.Millisecond)
 					}
-					if info.count > errNoBlockForRoundThreshold {
-						const waitDuration = 200 * time.Millisecond
-						info.totalWaitDuration += waitDuration
-						time.Sleep(waitDuration)
-					}
-					info.count++
-					peerErrors[peer] = info
-				} else {
-					info.count++
-					peerErrors[peer] = info
 				}
+				peerErrors[peer]++
 			}
 			// remote peer doesn't have the block, try another peer
 			logging.Base().Warnf("fetchRound could not acquire block, fetcher errored out: %v", err)
