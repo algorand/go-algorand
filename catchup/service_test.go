@@ -495,8 +495,6 @@ func TestServiceFetchBlocksMultiBlocks(t *testing.T) {
 	}
 	addBlocks(t, remote, blk, int(numberOfBlocks)-1)
 
-	logging.Base().SetLevel(logging.Debug)
-
 	// Create a network and block service
 	blockServiceConfig := config.GetDefaultLocal()
 	net := &httpTestPeerSource{}
@@ -531,7 +529,6 @@ func TestServiceFetchBlocksMultiBlocks(t *testing.T) {
 		localBlock, err := local.Block(i)
 		require.NoError(t, err)
 		require.Equal(t, *blk, localBlock)
-		return
 	}
 }
 

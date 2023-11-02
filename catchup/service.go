@@ -738,7 +738,15 @@ func (s *Service) fetchRound(cert agreement.Certificate, verifier *agreement.Asy
 				// None, there is no exit condition on too many retries as per the function contract.
 				if count, ok := peerErrors[peer]; ok {
 					if count > errNoBlockForRoundThreshold {
-						time.Sleep(100 * time.Millisecond)
+						time.Sleep(50 * time.Millisecond)
+					}
+					if count > errNoBlockForRoundThreshold*10 {
+						// for the low number of connected peers (like 2) the following scenatio is possible:
+						// - both peers do not have the block
+						// - peer selector punishes one of the peers more than the other
+						// - the punoshed peer gets the block, and the less punished peer stucks.
+						// It this case reset the peer selector to let it re-learn priorities.
+						peerSelector = createPeerSelector(s.net, s.cfg, false)
 					}
 				}
 				peerErrors[peer]++
