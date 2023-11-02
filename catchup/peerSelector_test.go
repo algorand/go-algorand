@@ -646,9 +646,9 @@ func TestEvictionAndUpgrade(t *testing.T) {
 
 	_, err := peerSelector.getNextPeer()
 	require.NoError(t, err)
-	for i := 0; i < 12; i++ {
+	for i := 0; i < 10; i++ {
 		if peerSelector.pools[len(peerSelector.pools)-1].rank == peerRankDownloadFailed {
-			require.Equal(t, 11, i)
+			require.Equal(t, 6, i)
 			break
 		}
 		psp, err := peerSelector.getNextPeer()
@@ -656,5 +656,6 @@ func TestEvictionAndUpgrade(t *testing.T) {
 		peerSelector.rankPeer(psp, peerRankDownloadFailed)
 	}
 	psp, err := peerSelector.getNextPeer()
+	require.NoError(t, err)
 	require.Equal(t, psp.peerClass, network.PeersPhonebookRelays)
 }

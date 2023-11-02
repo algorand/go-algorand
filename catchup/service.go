@@ -309,7 +309,9 @@ func (s *Service) fetchAndWrite(ctx context.Context, r basics.Round, prevFetchCo
 				s.log.Infof("fetchAndWrite(%d): the block is already in the ledger. The catchup is complete", r)
 				return false
 			}
+			failureRank := peerRankDownloadFailed
 			if err == errNoBlockForRound {
+				failureRank = peerRankNoBlockForRound
 				// remote peer doesn't have the block, try another peer
 				// quit if the the same peer peer encountered errNoBlockForRound more than errNoBlockForRoundThreshold times
 				if count := peerErrors[peer]; count > errNoBlockForRoundThreshold {
@@ -319,7 +321,7 @@ func (s *Service) fetchAndWrite(ctx context.Context, r basics.Round, prevFetchCo
 				peerErrors[peer]++
 			}
 			s.log.Debugf("fetchAndWrite(%v): Could not fetch: %v (attempt %d)", r, err, i)
-			peerSelector.rankPeer(psp, peerRankDownloadFailed)
+			peerSelector.rankPeer(psp, failureRank)
 
 			// we've just failed to retrieve a block; wait until the previous block is fetched before trying again
 			// to avoid the usecase where the first block doesn't exist, and we're making many requests down the chain
@@ -728,7 +730,9 @@ func (s *Service) fetchRound(cert agreement.Certificate, verifier *agreement.Asy
 				return
 			default:
 			}
+			failureRank := peerRankDownloadFailed
 			if err == errNoBlockForRound {
+				failureRank = peerRankNoBlockForRound
 				// If a peer does not have the block after few attempts it probably has not persisted the block yet.
 				// Give it some time to persist the block and try again.
 				// None, there is no exit condition on too many retries as per the function contract.
@@ -741,7 +745,7 @@ func (s *Service) fetchRound(cert agreement.Certificate, verifier *agreement.Asy
 			}
 			// remote peer doesn't have the block, try another peer
 			logging.Base().Warnf("fetchRound could not acquire block, fetcher errored out: %v", err)
-			peerSelector.rankPeer(psp, peerRankDownloadFailed)
+			peerSelector.rankPeer(psp, failureRank)
 			continue
 		}
 
