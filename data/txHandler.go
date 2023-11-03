@@ -222,7 +222,8 @@ func (handler *TxHandler) Start() {
 	handler.net.RegisterHandlers([]network.TaggedMessageHandler{
 		{Tag: protocol.TxnTag, MessageHandler: network.HandlerFunc(handler.processIncomingTxn)},
 	})
-	handler.backlogWg.Add(2)
+	handler.backlogWg.Add(3)
+	go handler.backlogWorker()
 	go handler.backlogWorker()
 	go handler.backlogGaugeThread()
 	handler.streamVerifier.Start(handler.ctx)
