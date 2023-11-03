@@ -843,9 +843,16 @@ type TestEvalContext interface {
 	CheckDup(firstValid, lastValid basics.Round, txid transactions.Txid, txl ledgercore.Txlease) error
 }
 
-func (eval *BlockEvaluator) Proto() config.ConsensusParams           { return eval.proto }
+// Proto implements the TestEvalContext interface.
+func (eval *BlockEvaluator) Proto() config.ConsensusParams { return eval.proto }
+
+// Specials implements the TestEvalContext interface.
 func (eval *BlockEvaluator) Specials() transactions.SpecialAddresses { return eval.specials }
-func (eval *BlockEvaluator) TxnContext() transactions.TxnContext     { return eval.block }
+
+// TxnContext implements the TestEvalContext interface.
+func (eval *BlockEvaluator) TxnContext() transactions.TxnContext { return eval.block }
+
+// CheckDup implements the TestEvalContext interface.
 func (eval *BlockEvaluator) CheckDup(firstValid, lastValid basics.Round, txid transactions.Txid, txl ledgercore.Txlease) error {
 	return eval.state.checkDup(firstValid, lastValid, txid, txl)
 }
@@ -857,6 +864,8 @@ func (eval *BlockEvaluator) TestTransactionGroup(txgroup []transactions.SignedTx
 	return TestTransactionGroup(eval, txgroup)
 }
 
+// TestTransactionGroup performs basic duplicate detection and well-formedness checks
+// on a transaction group.
 func TestTransactionGroup(eval TestEvalContext, txgroup []transactions.SignedTxn) error {
 	// Nothing to do if there are no transactions.
 	if len(txgroup) == 0 {
@@ -920,6 +929,8 @@ func (eval *BlockEvaluator) TestTransaction(txn transactions.SignedTxn) error {
 	return TestTransaction(eval, txn)
 }
 
+// TestTransaction performs basic duplicate detection and well-formedness checks
+// on a single transaction.
 func TestTransaction(eval TestEvalContext, txn transactions.SignedTxn) error {
 	// Transaction valid (not expired)?
 	err := txn.Txn.Alive(eval.TxnContext())
