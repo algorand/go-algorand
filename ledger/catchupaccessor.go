@@ -26,6 +26,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merkletrie"
@@ -78,10 +79,10 @@ type CatchpointCatchupAccessor interface {
 	StoreBalancesRound(ctx context.Context, blk *bookkeeping.Block) (err error)
 
 	// StoreFirstBlock stores a single block to the blocks database.
-	StoreFirstBlock(ctx context.Context, blk *bookkeeping.Block) (err error)
+	StoreFirstBlock(ctx context.Context, blk *bookkeeping.Block, cert *agreement.Certificate) (err error)
 
 	// StoreBlock stores a single block to the blocks database.
-	StoreBlock(ctx context.Context, blk *bookkeeping.Block) (err error)
+	StoreBlock(ctx context.Context, blk *bookkeeping.Block, cert *agreement.Certificate) (err error)
 
 	// FinishBlocks concludes the catchup of the blocks database.
 	FinishBlocks(ctx context.Context, applyChanges bool) (err error)
@@ -1055,12 +1056,12 @@ func (c *catchpointCatchupAccessorImpl) StoreBalancesRound(ctx context.Context, 
 }
 
 // StoreFirstBlock stores a single block to the blocks database.
-func (c *catchpointCatchupAccessorImpl) StoreFirstBlock(ctx context.Context, blk *bookkeeping.Block) (err error) {
+func (c *catchpointCatchupAccessorImpl) StoreFirstBlock(ctx context.Context, blk *bookkeeping.Block, cert *agreement.Certificate) (err error) {
 	blockDbs := c.ledger.blockDB()
 	start := time.Now()
 	ledgerStorefirstblockCount.Inc(nil)
 	err = blockDbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		return blockdb.BlockStartCatchupStaging(tx, *blk)
+		return blockdb.BlockStartCatchupStaging(tx, *blk, *cert)
 	})
 	ledgerStorefirstblockMicros.AddMicrosecondsSince(start, nil)
 	if err != nil {
@@ -1070,12 +1071,12 @@ func (c *catchpointCatchupAccessorImpl) StoreFirstBlock(ctx context.Context, blk
 }
 
 // StoreBlock stores a single block to the blocks database.
-func (c *catchpointCatchupAccessorImpl) StoreBlock(ctx context.Context, blk *bookkeeping.Block) (err error) {
+func (c *catchpointCatchupAccessorImpl) StoreBlock(ctx context.Context, blk *bookkeeping.Block, cert *agreement.Certificate) (err error) {
 	blockDbs := c.ledger.blockDB()
 	start := time.Now()
 	ledgerCatchpointStoreblockCount.Inc(nil)
 	err = blockDbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		return blockdb.BlockPutStaging(tx, *blk)
+		return blockdb.BlockPutStaging(tx, *blk, *cert)
 	})
 	ledgerCatchpointStoreblockMicros.AddMicrosecondsSince(start, nil)
 	if err != nil {

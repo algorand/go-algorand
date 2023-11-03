@@ -242,7 +242,7 @@ func BlockForgetBefore(tx *sql.Tx, rnd basics.Round) error {
 }
 
 // BlockStartCatchupStaging initializes catchup for catchpoint
-func BlockStartCatchupStaging(tx *sql.Tx, blk bookkeeping.Block) error {
+func BlockStartCatchupStaging(tx *sql.Tx, blk bookkeeping.Block, cert agreement.Certificate) error {
 	// delete the old catchpointblocks table, if there is such.
 	for _, stmt := range blockResetExprs {
 		stmt = strings.Replace(stmt, "blocks", "catchpointblocks", 1)
@@ -262,11 +262,12 @@ func BlockStartCatchupStaging(tx *sql.Tx, blk bookkeeping.Block) error {
 	}
 
 	// insert the top entry to the blocks table.
-	_, err := tx.Exec("INSERT INTO catchpointblocks (rnd, proto, hdrdata, blkdata) VALUES (?, ?, ?, ?)",
+	_, err := tx.Exec("INSERT INTO catchpointblocks (rnd, proto, hdrdata, blkdata, certdata) VALUES (?, ?, ?, ?, ?)",
 		blk.Round(),
 		blk.CurrentProtocol,
 		protocol.Encode(&blk.BlockHeader),
 		protocol.Encode(&blk),
+		protocol.Encode(&cert),
 	)
 	if err != nil {
 		return err
@@ -305,13 +306,14 @@ func BlockAbortCatchup(tx *sql.Tx) error {
 }
 
 // BlockPutStaging store a block into catchpoint staging table
-func BlockPutStaging(tx *sql.Tx, blk bookkeeping.Block) (err error) {
+func BlockPutStaging(tx *sql.Tx, blk bookkeeping.Block, cert agreement.Certificate) (err error) {
 	// insert the new entry
-	_, err = tx.Exec("INSERT INTO catchpointblocks (rnd, proto, hdrdata, blkdata) VALUES (?, ?, ?, ?)",
+	_, err = tx.Exec("INSERT INTO catchpointblocks (rnd, proto, hdrdata, blkdata, certdata) VALUES (?, ?, ?, ?, ?)",
 		blk.Round(),
 		blk.CurrentProtocol,
 		protocol.Encode(&blk.BlockHeader),
 		protocol.Encode(&blk),
+		protocol.Encode(&cert),
 	)
 	if err != nil {
 		return err
