@@ -62,6 +62,7 @@ var defaultLocal = Local{
 	EnableAccountUpdatesStats:                  false,
 	EnableAgreementReporting:                   false,
 	EnableAgreementTimeMetrics:                 false,
+	EnableAppTxBacklogRateLimiting:             true,
 	EnableAssembleStats:                        false,
 	EnableBlockService:                         false,
 	EnableBlockServiceFallbackToArchiver:       false,

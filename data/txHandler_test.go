@@ -2507,9 +2507,9 @@ func TestTxHandlerRestartWithBacklogAndTxPool(t *testing.T) { //nolint:parallelt
 	}
 }
 
-// check ERL and AppRateLimiter are either both enabled
+// check ERL and AppRateLimiter enablement with separate config values,
 // and the app limiter kicks in after congestion.
-func TestTxHandlerAppRateLimiterERLBothEnabled(t *testing.T) {
+func TestTxHandlerAppRateLimiterERLEnabled(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -2519,7 +2519,6 @@ func TestTxHandlerAppRateLimiterERLBothEnabled(t *testing.T) {
 	log.SetLevel(logging.Panic)
 
 	cfg := config.GetDefaultLocal()
-	cfg.EnableTxBacklogRateLimiting = true
 	cfg.TxBacklogAppTxRateLimiterMaxSize = 100
 	cfg.TxBacklogServiceRateWindowSeconds = 1
 	cfg.TxBacklogAppTxPerSecondRate = 3
@@ -2531,11 +2530,37 @@ func TestTxHandlerAppRateLimiterERLBothEnabled(t *testing.T) {
 	defer ledger.Close()
 
 	l := ledger
+
+	func() {
+		cfg.EnableTxBacklogRateLimiting = false
+		cfg.EnableAppTxBacklogRateLimiting = false
+		handler, err := makeTestTxHandler(l, cfg)
+		require.NoError(t, err)
+		defer handler.txVerificationPool.Shutdown()
+		defer close(handler.streamVerifierDropped)
+
+		require.Nil(t, handler.erl)
+		require.Nil(t, handler.appLimiter)
+	}()
+
+	func() {
+		cfg.EnableTxBacklogRateLimiting = true
+		cfg.EnableAppTxBacklogRateLimiting = false
+		handler, err := makeTestTxHandler(l, cfg)
+		require.NoError(t, err)
+		defer handler.txVerificationPool.Shutdown()
+		defer close(handler.streamVerifierDropped)
+
+		require.NotNil(t, handler.erl)
+		require.Nil(t, handler.appLimiter)
+	}()
+
+	cfg.EnableTxBacklogRateLimiting = true
+	cfg.EnableAppTxBacklogRateLimiting = true
 	handler, err := makeTestTxHandler(l, cfg)
 	require.NoError(t, err)
 	defer handler.txVerificationPool.Shutdown()
 	defer close(handler.streamVerifierDropped)
-
 	require.NotNil(t, handler.erl)
 	require.NotNil(t, handler.appLimiter)
 
