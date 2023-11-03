@@ -833,25 +833,46 @@ func (eval *BlockEvaluator) ResetTxnBytes() {
 	eval.blockTxBytes = 0
 }
 
+// TestEvalContext defines the evaluation context required to check for
+// well-formedness and duplicate detection used by TestTransactionGroup
+// and TestTransaction.
+type TestEvalContext interface {
+	Proto() config.ConsensusParams
+	Specials() transactions.SpecialAddresses
+	TxnContext() transactions.TxnContext
+	CheckDup(firstValid, lastValid basics.Round, txid transactions.Txid, txl ledgercore.Txlease) error
+}
+
+func (eval *BlockEvaluator) Proto() config.ConsensusParams           { return eval.proto }
+func (eval *BlockEvaluator) Specials() transactions.SpecialAddresses { return eval.specials }
+func (eval *BlockEvaluator) TxnContext() transactions.TxnContext     { return eval.block }
+func (eval *BlockEvaluator) CheckDup(firstValid, lastValid basics.Round, txid transactions.Txid, txl ledgercore.Txlease) error {
+	return eval.state.checkDup(firstValid, lastValid, txid, txl)
+}
+
 // TestTransactionGroup performs basic duplicate detection and well-formedness checks
 // on a transaction group, but does not actually add the transactions to the block
 // evaluator, or modify the block evaluator state in any other visible way.
 func (eval *BlockEvaluator) TestTransactionGroup(txgroup []transactions.SignedTxn) error {
+	return TestTransactionGroup(eval, txgroup)
+}
+
+func TestTransactionGroup(eval TestEvalContext, txgroup []transactions.SignedTxn) error {
 	// Nothing to do if there are no transactions.
 	if len(txgroup) == 0 {
 		return nil
 	}
 
-	if len(txgroup) > eval.proto.MaxTxGroupSize {
+	if len(txgroup) > eval.Proto().MaxTxGroupSize {
 		return &ledgercore.TxGroupMalformedError{
-			Msg:    fmt.Sprintf("group size %d exceeds maximum %d", len(txgroup), eval.proto.MaxTxGroupSize),
+			Msg:    fmt.Sprintf("group size %d exceeds maximum %d", len(txgroup), eval.Proto().MaxTxGroupSize),
 			Reason: ledgercore.TxGroupMalformedErrorReasonExceedMaxSize,
 		}
 	}
 
 	var group transactions.TxGroup
 	for gi, txn := range txgroup {
-		err := eval.TestTransaction(txn)
+		err := TestTransaction(eval, txn)
 		if err != nil {
 			return err
 		}
@@ -896,13 +917,17 @@ func (eval *BlockEvaluator) TestTransactionGroup(txgroup []transactions.SignedTx
 // on a single transaction, but does not actually add the transaction to the block
 // evaluator, or modify the block evaluator state in any other visible way.
 func (eval *BlockEvaluator) TestTransaction(txn transactions.SignedTxn) error {
+	return TestTransaction(eval, txn)
+}
+
+func TestTransaction(eval TestEvalContext, txn transactions.SignedTxn) error {
 	// Transaction valid (not expired)?
-	err := txn.Txn.Alive(eval.block)
+	err := txn.Txn.Alive(eval.TxnContext())
 	if err != nil {
 		return err
 	}
 
-	err = txn.Txn.WellFormed(eval.specials, eval.proto)
+	err = txn.Txn.WellFormed(eval.Specials(), eval.Proto())
 	if err != nil {
 		txnErr := ledgercore.TxnNotWellFormedError(fmt.Sprintf("transaction %v: malformed: %v", txn.ID(), err))
 		return &txnErr
@@ -910,7 +935,7 @@ func (eval *BlockEvaluator) TestTransaction(txn transactions.SignedTxn) error {
 
 	// Transaction already in the ledger?
 	txid := txn.ID()
-	err = eval.state.checkDup(txn.Txn.First(), txn.Txn.Last(), txid, ledgercore.Txlease{Sender: txn.Txn.Sender, Lease: txn.Txn.Lease})
+	err = eval.CheckDup(txn.Txn.First(), txn.Txn.Last(), txid, ledgercore.Txlease{Sender: txn.Txn.Sender, Lease: txn.Txn.Lease})
 	if err != nil {
 		return err
 	}
