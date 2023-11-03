@@ -776,6 +776,56 @@ func TestCatchpointReproducibleLabels(t *testing.T) {
 	}
 }
 
+// TestCatchpointBackwardCompatibleLabels checks labels before and after EnableCatchpointsWithSPContexts was introduced.
+func TestCatchpointBackwardCompatibleLabels(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	temporaryDirectory := t.TempDir()
+
+	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(20, true)}
+	ml := makeMockLedgerForTracker(t, true, 10, protocol.ConsensusCurrentVersion, accts)
+	defer ml.Close()
+
+	ct := &catchpointTracker{enableGeneratingCatchpointFiles: false}
+	conf := config.GetDefaultLocal()
+
+	conf.Archival = true
+	paths := DirsAndPrefix{
+		ResolvedGenesisDirs: config.ResolvedGenesisDirs{
+			CatchpointGenesisDir: ".",
+			HotGenesisDir:        ".",
+		},
+	}
+	ct.initialize(conf, paths)
+
+	defer ct.close()
+	ct.dbDirectory = temporaryDirectory
+	ct.tmpDir = temporaryDirectory
+
+	_, err := trackerDBInitialize(ml, true, ct.dbDirectory)
+	require.NoError(t, err)
+
+	err = ct.loadFromDisk(ml, ml.Latest())
+	require.NoError(t, err)
+
+	// create catpoint with the latest version of the code
+	round := basics.Round(2000)
+
+	protos := []protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusV37, protocol.ConsensusV36}
+	labels := make([]string, len(protos))
+	for i, proto := range protos {
+		err = ct.createCatchpoint(
+			context.Background(), round-1, round,
+			trackerdb.CatchpointFirstStageInfo{},
+			crypto.Digest{}, proto)
+		require.NoError(t, err)
+		require.NotEmpty(t, ct.lastCatchpointLabel)
+		labels[i] = ct.lastCatchpointLabel
+	}
+	require.NotEqual(t, labels[0], labels[1])
+	require.Equal(t, labels[1], labels[2])
+}
+
 // blockingTracker is a testing tracker used to test "what if" a tracker would get blocked.
 type blockingTracker struct {
 	emptyTracker

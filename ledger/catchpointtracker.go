@@ -354,6 +354,7 @@ func (ct *catchpointTracker) loadFromDisk(l ledgerForTracker, dbRound basics.Rou
 		return err
 	}
 
+	ct.catchpointsMu.Lock()
 	ct.cachedDBRound = dbRound
 	ct.roundDigest = nil
 	ct.consensusVersion = nil
@@ -361,6 +362,7 @@ func (ct *catchpointTracker) loadFromDisk(l ledgerForTracker, dbRound basics.Rou
 	// keep these channel closed if we're not generating catchpoint
 	ct.catchpointDataSlowWriting = make(chan struct{}, 1)
 	close(ct.catchpointDataSlowWriting)
+	ct.catchpointsMu.Unlock()
 
 	err = ct.dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) error {
 		return ct.initializeHashes(ctx, tx, dbRound)
