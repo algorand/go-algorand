@@ -58,6 +58,10 @@ func TestPayAction(t *testing.T) {
          itxn_submit
         `))
 
+		// We're going to test some mining effects here too, so that we have an inner transaction example.
+		// Do a block with no txns, so the fee sink balance as we start the next block is stable
+		dl.fullBlock()
+
 		payout1 := txntest.Txn{
 			Type:          "appl",
 			Sender:        addrs[1],
@@ -65,7 +69,40 @@ func TestPayAction(t *testing.T) {
 			Accounts:      []basics.Address{addrs[1]}, // pay self
 		}
 
-		dl.fullBlock(&payout1)
+		proposer := addrs[7]
+		presink := micros(dl.t, dl.generator, genBalances.FeeSink)
+		preprop := micros(dl.t, dl.generator, proposer)
+		dl.beginBlock()
+		dl.txns(&payout1)
+		vb := dl.endBlock(proposer)
+		// First MiningPct > 0
+		if ver >= 39 {
+			require.True(t, dl.generator.GenesisProto().EnableMining)
+			require.EqualValues(t, proposer, vb.Block().BlockHeader.Proposer)
+			require.EqualValues(t, 2000, vb.Block().BlockHeader.FeesCollected.Raw)
+		} else {
+			require.False(t, dl.generator.GenesisProto().EnableMining)
+			require.Zero(t, vb.Block().BlockHeader.Proposer)
+			require.Zero(t, vb.Block().BlockHeader.FeesCollected)
+		}
+
+		postsink := micros(dl.t, dl.generator, genBalances.FeeSink)
+		postprop := micros(dl.t, dl.generator, proposer)
+
+		// Mining checks
+		require.EqualValues(t, 0, postprop-preprop) // mining not moved yet
+		require.EqualValues(t, 2000, postsink-presink)
+
+		dl.fullBlock()
+		postsink = micros(dl.t, dl.generator, genBalances.FeeSink)
+		postprop = micros(dl.t, dl.generator, proposer)
+		// First MiningPct > 0
+		if ver >= 39 {
+			require.EqualValues(t, 500, postsink-presink) // based on 75% in config/consensus.go
+			require.EqualValues(t, 1500, postprop-preprop)
+		} else {
+			require.EqualValues(t, 2000, postsink-presink) // no mining yet
+		}
 
 		ad0 := micros(dl.t, dl.generator, addrs[0])
 		ad1 := micros(dl.t, dl.generator, addrs[1])
@@ -90,7 +127,7 @@ func TestPayAction(t *testing.T) {
 			ApplicationID: ai,
 			Accounts:      []basics.Address{addrs[2]}, // pay other
 		}
-		vb := dl.fullBlock(&payout2)
+		vb = dl.fullBlock(&payout2)
 		// confirm that modifiedAccounts can see account in inner txn
 
 		deltas := vb.Delta()

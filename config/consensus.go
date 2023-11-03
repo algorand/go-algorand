@@ -440,9 +440,13 @@ type ConsensusParams struct {
 
 	EnableExtraPagesOnAppUpdate bool
 
-	// MaxProposedExpiredOnlineAccounts is the maximum number of online accounts, which need
-	// to be taken offline, that would be proposed to be taken offline.
+	// MaxProposedExpiredOnlineAccounts is the maximum number of online accounts
+	// that a proposer can take offline for having expired voting keys.
 	MaxProposedExpiredOnlineAccounts int
+
+	// MaxProposedAbsentOnlineAccounts is the maximum number of online accounts,
+	// that a proposer can suspend for not proposing "lately" (TBD)
+	MaxProposedAbsentOnlineAccounts int
 
 	// EnableAccountDataResourceSeparation enables the support for extended application and asset storage
 	// in a separate table.
@@ -522,6 +526,19 @@ type ConsensusParams struct {
 	// arrival times or is set to a static value. Even if this flag disables the
 	// dynamic filter, it will be calculated and logged (but not used).
 	DynamicFilterTimeout bool
+
+	// EnableMining means that the proposer should be included in the BlockHeader.
+	EnableMining bool
+
+	// MiningPercent specifies the percent of fees paid in a block that go to
+	// the proposer instead of the FeeSink.
+	MiningPercent uint64
+}
+
+// EnableAbsenteeTracking returns true if the suspension mechanism of absentee
+// accounts is enabled.
+func (cp ConsensusParams) EnableAbsenteeTracking() bool {
+	return cp.MaxProposedAbsentOnlineAccounts > 0
 }
 
 // PaysetCommitType enumerates possible ways for the block header to commit to
@@ -596,9 +613,13 @@ var MaxExtraAppProgramLen int
 // supported supported by any of the consensus protocols. used for decoding purposes.
 var MaxAvailableAppProgramLen int
 
-// MaxProposedExpiredOnlineAccounts is the maximum number of online accounts, which need
-// to be taken offline, that would be proposed to be taken offline.
+// MaxProposedExpiredOnlineAccounts is the maximum number of online accounts
+// that a proposer can take offline for having expired voting keys.
 var MaxProposedExpiredOnlineAccounts int
+
+// MaxProposedAbsentOnlineAccounts is the maximum number of online accounts,
+// that a proposer can suspend for not proposing "lately" (TBD)
+var MaxProposedAbsentOnlineAccounts int
 
 // MaxAppTotalArgLen is the maximum number of bytes across all arguments of an application
 // max sum([len(arg) for arg in txn.ApplicationArgs])
@@ -670,6 +691,7 @@ func checkSetAllocBounds(p ConsensusParams) {
 	checkSetMax(p.MaxAppProgramLen, &MaxLogCalls)
 	checkSetMax(p.MaxInnerTransactions*p.MaxTxGroupSize, &MaxInnerTransactionsPerDelta)
 	checkSetMax(p.MaxProposedExpiredOnlineAccounts, &MaxProposedExpiredOnlineAccounts)
+	checkSetMax(p.MaxProposedAbsentOnlineAccounts, &MaxProposedAbsentOnlineAccounts)
 
 	// These bounds are exported to make them available to the msgp generator for calculating
 	// maximum valid message size for each message going across the wire.
@@ -1372,9 +1394,14 @@ func initConsensusProtocols() {
 	vFuture.LogicSigVersion = 10 // When moving this to a release, put a new higher LogicSigVersion here
 	vFuture.EnableLogicSigCostPooling = true
 
+	vFuture.MaxProposedAbsentOnlineAccounts = 32
+
 	// Setting DynamicFilterTimeout in vFuture will impact e2e test performance
 	// by reducing round time. Hence, it is commented out for now.
 	// vFuture.DynamicFilterTimeout = true
+
+	vFuture.EnableMining = true
+	vFuture.MiningPercent = 75
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 

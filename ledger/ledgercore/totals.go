@@ -66,7 +66,7 @@ func (at *AccountTotals) statusField(status basics.Status) *AlgoCount {
 	switch status {
 	case basics.Online:
 		return &at.Online
-	case basics.Offline:
+	case basics.Offline, basics.Suspended:
 		return &at.Offline
 	case basics.NotParticipating:
 		return &at.NotParticipating

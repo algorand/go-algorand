@@ -1992,8 +1992,8 @@ func (ops *OpStream) trackStack(args StackTypes, returns StackTypes, instruction
 				ops.trace(", %s", argType)
 			}
 			if !stype.overlaps(argType) {
-				ops.typeErrorf(tokens[0], "%s arg %d wanted type %s got %s",
-					reJoin(instruction, tokens[1:]), i, argType, stype)
+				ops.typeErrorf(tokens[0], "%s arg %c wanted type %s got %s",
+					reJoin(instruction, tokens[1:]), argName(i), argType, stype)
 			}
 		}
 		if !firstPop {

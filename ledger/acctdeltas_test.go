@@ -74,7 +74,7 @@ func checkAccounts(t *testing.T, tx trackerdb.TransactionScope, rnd basics.Round
 		switch d.Status {
 		case basics.Online:
 			totalOnline += d.MicroAlgos.Raw
-		case basics.Offline:
+		case basics.Offline, basics.Suspended:
 			totalOffline += d.MicroAlgos.Raw
 		case basics.NotParticipating:
 			totalNotPart += d.MicroAlgos.Raw

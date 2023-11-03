@@ -17,6 +17,7 @@
 package ledgercore
 
 import (
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/committee"
 )
@@ -39,10 +40,14 @@ func (vb ValidatedBlock) Delta() StateDelta {
 	return vb.delta
 }
 
-// WithSeed returns a copy of the ValidatedBlock with a modified seed.
-func (vb ValidatedBlock) WithSeed(s committee.Seed) ValidatedBlock {
+// WithSeed returns a copy of the ValidatedBlock with a modified seed and associated proposer
+func (vb ValidatedBlock) WithSeed(s committee.Seed, proposer basics.Address) ValidatedBlock {
 	newblock := vb.blk
 	newblock.BlockHeader.Seed = s
+
+	if vb.blk.ConsensusProtocol().EnableMining {
+		newblock.BlockHeader.Proposer = proposer
+	}
 
 	return ValidatedBlock{
 		blk:   newblock,

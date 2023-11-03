@@ -734,8 +734,9 @@ func performOnlineAccountsTableMigration(ctx context.Context, e db.Executable, p
 			}
 		}
 
-		// remove stateproofID field for offline accounts
-		if ba.Status != basics.Online && !ba.StateProofID.IsEmpty() {
+		// We had a bug that didn't remove StateProofIDs when going offline.
+		// Tidy up such accounts.
+		if ba.VoteID.IsEmpty() && !ba.StateProofID.IsEmpty() {
 			// store old data for account hash update
 			state := acctState{old: ba, oldEnc: encodedAcctData}
 			ba.StateProofID = merklesignature.Commitment{}

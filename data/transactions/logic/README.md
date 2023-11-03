@@ -469,6 +469,7 @@ these results may contain leading zero bytes.
 | `ed25519verify` | for (data A, signature B, pubkey C) verify the signature of ("ProgData" \|\| program_hash \|\| data) against the pubkey => {0 or 1} |
 | `ed25519verify_bare` | for (data A, signature B, pubkey C) verify the signature of the data against the pubkey => {0 or 1} |
 | `ecdsa_verify v` | for (data A, signature B, C and pubkey D, E) verify the signature of the data against the pubkey => {0 or 1} |
+| `heartbeat` | for (signature components A, B, C, D, E, and account F) verify the signature of the block seed from round txn.FirstValid-1 using F's partkey for txn.LastValid |
 | `ecdsa_pk_recover v` | for (data A, recovery id B, signature C, D) recover a public key |
 | `ecdsa_pk_decompress v` | decompress pubkey A into components X, Y |
 | `vrf_verify s` | Verify the proof B of message A against pubkey C. Returns vrf output and verification flag. |
@@ -696,6 +697,8 @@ Account fields used in the `acct_params_get` opcode.
 | 9 | AcctTotalAssets | uint64 | v8  | The numbers of ASAs held by this account (including ASAs this account created). |
 | 10 | AcctTotalBoxes | uint64 | v8  | The number of existing boxes created by this account's app. |
 | 11 | AcctTotalBoxBytes | uint64 | v8  | The total number of bytes used by this account's app's box keys and values. |
+| 12 | AcctLastProposed | uint64 | v10  | The round in which this account last proposed. |
+| 13 | AcctLastHeartbeat | uint64 | v10  | The round in which the account went online or executed `heartbeat`. |
 
 
 ### Flow Control

@@ -406,7 +406,7 @@ func TestBalance(t *testing.T) {
 		// won't assemble in old version teal
 		if v < directRefEnabledVersion {
 			testProg(t, source, ep.Proto.LogicSigVersion,
-				exp(1, "balance arg 0 wanted type uint64..."))
+				exp(1, "balance arg A wanted type uint64..."))
 			return
 		}
 
@@ -655,7 +655,7 @@ func TestAppCheckOptedIn(t *testing.T) {
 	testApp(t, "int 1; int 2; app_opted_in; int 0; ==", pre) // in pre, int 2 is an actual app id
 	testApp(t, "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui01\"; int 2; app_opted_in; int 1; ==", now)
 	testProg(t, "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui01\"; int 2; app_opted_in; int 1; ==", directRefEnabledVersion-1,
-		exp(1, "app_opted_in arg 0 wanted type uint64..."))
+		exp(1, "app_opted_in arg A wanted type uint64..."))
 
 	// Receiver opts into 888, the current app in testApp
 	ledger.NewLocals(txn.Txn.Receiver, 888)
@@ -730,7 +730,7 @@ byte "ALGO"
 	testApp(t, text, now)
 	testApp(t, strings.Replace(text, "int 1  // account idx", "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui01\"", -1), now)
 	testProg(t, strings.Replace(text, "int 1  // account idx", "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui01\"", -1), directRefEnabledVersion-1,
-		exp(4, "app_local_get_ex arg 0 wanted type uint64..."))
+		exp(4, "app_local_get_ex arg A wanted type uint64..."))
 	testApp(t, strings.Replace(text, "int 100 // app id", "int 2", -1), now)
 	// Next we're testing if the use of the current app's id works
 	// as a direct reference. The error is because the receiver
@@ -803,7 +803,7 @@ byte "ALGO"
 	testApp(t, text, now)
 	testApp(t, strings.Replace(text, "int 0  // account idx", "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00\"", -1), now)
 	testProg(t, strings.Replace(text, "int 0  // account idx", "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00\"", -1), directRefEnabledVersion-1,
-		exp(3, "app_local_get arg 0 wanted type uint64..."))
+		exp(3, "app_local_get arg A wanted type uint64..."))
 	testApp(t, strings.Replace(text, "int 0  // account idx", "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui01\"", -1), now)
 	testApp(t, strings.Replace(text, "int 0  // account idx", "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui02\"", -1), now,
 		"invalid Account reference")
@@ -1065,7 +1065,7 @@ func testAssetsByVersion(t *testing.T, assetsTestProgram string, version uint64)
 
 	// it wasn't legal to use a direct ref for account
 	testProg(t, `byte "aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"; int 54; asset_holding_get AssetBalance`,
-		directRefEnabledVersion-1, exp(1, "asset_holding_get AssetBalance arg 0 wanted type uint64..."))
+		directRefEnabledVersion-1, exp(1, "asset_holding_get AssetBalance arg A wanted type uint64..."))
 	// but it is now (empty asset yields 0,0 on stack)
 	testApp(t, `byte "aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"; int 55; asset_holding_get AssetBalance; ==`, now)
 	// This is receiver, who is in Assets array
@@ -1108,7 +1108,7 @@ func testAssetsByVersion(t *testing.T, assetsTestProgram string, version uint64)
 	testApp(t, strings.Replace(assetsTestProgram, "int 55", "int 0", -1), now)
 
 	// but old code cannot
-	testProg(t, strings.Replace(assetsTestProgram, "int 0//account", "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00\"", -1), directRefEnabledVersion-1, exp(3, "asset_holding_get AssetBalance arg 0 wanted type uint64..."))
+	testProg(t, strings.Replace(assetsTestProgram, "int 0//account", "byte \"aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00\"", -1), directRefEnabledVersion-1, exp(3, "asset_holding_get AssetBalance arg A wanted type uint64..."))
 
 	if version < 5 {
 		// Can't run these with AppCreator anyway
@@ -2445,7 +2445,7 @@ int 1
 			delta := testApp(t, withBytes, ep)
 			// But won't even compile in old teal
 			testProg(t, withBytes, directRefEnabledVersion-1,
-				exp(4, "app_local_put arg 0 wanted..."), exp(11, "app_local_del arg 0 wanted..."))
+				exp(4, "app_local_put arg A wanted..."), exp(11, "app_local_del arg A wanted..."))
 			require.Equal(t, 0, len(delta.GlobalDelta))
 			require.Equal(t, 2, len(delta.LocalDeltas))
 			ledger.Reset()
@@ -3098,7 +3098,8 @@ func TestReturnTypes(t *testing.T) {
 		"err":    true,
 		"return": true,
 
-		"ecdsa_pk_decompress": true,
+		"ecdsa_pk_decompress": true, // requires a [33]byte arg
+		"heartbeat":           true, // panics unless it verifies
 
 		"frame_dig":  true, // would need a "proto" subroutine
 		"frame_bury": true, // would need a "proto" subroutine
@@ -3366,7 +3367,7 @@ func TestLog(t *testing.T) {
 		},
 		{
 			source:         `load 0; log`,
-			errContains:    "log arg 0 wanted []byte but got uint64",
+			errContains:    "log arg A wanted []byte but got uint64",
 			assembledBytes: []byte{byte(ep.Proto.LogicSigVersion), 0x34, 0x00, 0xb0},
 		},
 	}

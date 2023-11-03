@@ -494,7 +494,7 @@ func (v2 *Handlers) basicAccountInformation(ctx echo.Context, addr basics.Addres
 	}
 
 	var apiParticipation *model.AccountParticipation
-	if record.VoteID != (crypto.OneTimeSignatureVerifier{}) {
+	if !record.VoteID.IsEmpty() {
 		apiParticipation = &model.AccountParticipation{
 			VoteParticipationKey:      record.VoteID[:],
 			SelectionParticipationKey: record.SelectionID[:],
@@ -537,6 +537,8 @@ func (v2 *Handlers) basicAccountInformation(ctx echo.Context, addr basics.Addres
 		TotalBoxes:          omitEmpty(record.TotalBoxes),
 		TotalBoxBytes:       omitEmpty(record.TotalBoxBytes),
 		MinBalance:          record.MinBalance(&consensus).Raw,
+		LastProposed:        omitEmpty(uint64(record.LastProposed)),
+		LastHeartbeat:       omitEmpty(uint64(record.LastHeartbeat)),
 	}
 	response := model.AccountResponse(account)
 	return ctx.JSON(http.StatusOK, response)
@@ -1396,10 +1398,7 @@ func (v2 *Handlers) getPendingTransactions(ctx echo.Context, max *uint64, format
 	}
 
 	// MatchAddress uses this to check FeeSink, we don't care about that here.
-	spec := transactions.SpecialAddresses{
-		FeeSink:     basics.Address{},
-		RewardsPool: basics.Address{},
-	}
+	spec := transactions.SpecialAddresses{}
 
 	txnLimit := uint64(math.MaxUint64)
 	if max != nil && *max != 0 {

@@ -176,7 +176,7 @@ func TestRemoveOfflineStateProofID(t *testing.T) {
 		accts[addr] = acct
 
 		expectedAcct := acct
-		if acct.Status != basics.Online {
+		if acct.Status != basics.Online && acct.Status != basics.Suspended {
 			expectedAcct.StateProofID = merklesignature.Commitment{}
 		}
 		expectedAccts[addr] = expectedAcct
@@ -211,7 +211,7 @@ func TestRemoveOfflineStateProofID(t *testing.T) {
 	defer dbs.Close()
 	defer tx.Rollback()
 
-	// make second copy of DB to prepare exepected/fixed merkle trie
+	// make second copy of DB to prepare expected/fixed merkle trie
 	expectedDBs, expectedTx := buildDB(expectedAccts)
 	defer expectedDBs.Close()
 	defer expectedTx.Rollback()
@@ -237,7 +237,7 @@ func TestRemoveOfflineStateProofID(t *testing.T) {
 			var ba trackerdb.BaseAccountData
 			err = protocol.Decode(encodedAcctData, &ba)
 			require.NoError(t, err)
-			if expected && ba.Status != basics.Online {
+			if expected && (ba.Status != basics.Online && ba.Status != basics.Suspended) {
 				require.Equal(t, merklesignature.Commitment{}, ba.StateProofID)
 			}
 			addHash := trackerdb.AccountHashBuilderV6(addr, &ba, encodedAcctData)
@@ -287,7 +287,7 @@ func TestRemoveOfflineStateProofID(t *testing.T) {
 		var ba trackerdb.BaseAccountData
 		err = protocol.Decode(encodedAcctData, &ba)
 		require.NoError(t, err)
-		if ba.Status != basics.Online {
+		if ba.Status != basics.Online && ba.Status != basics.Suspended {
 			require.True(t, ba.StateProofID.IsEmpty())
 		}
 	}

@@ -1013,15 +1013,15 @@ func onlineAccountsNewRoundImpl(
 						}
 						updatedAccounts = append(updatedAccounts, updated)
 						prevAcct = updated
-					} else if !newAcct.IsVotingEmpty() {
+					} else if !newAcct.IsVotingEmpty() && newStatus != basics.Suspended {
 						err = fmt.Errorf("non-empty voting data for non-online account %s: %v", data.address.String(), newAcct)
 						return nil, err
 					}
 				}
 			} else {
 				// non-zero rowid means we had a previous value.
-				if newAcct.IsVotingEmpty() {
-					// new value is zero then go offline
+				if newAcct.IsVotingEmpty() || newStatus == basics.Suspended {
+					// new value is zero, or the account is suspended then go offline
 					if newStatus == basics.Online {
 						err = fmt.Errorf("empty voting data but online account %s: %v", data.address.String(), newAcct)
 						return nil, err

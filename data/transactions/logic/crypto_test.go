@@ -112,9 +112,9 @@ func TestVrfVerify(t *testing.T) {
 	t.Parallel()
 
 	ep := defaultAppParams()
-	testApp(t, notrack("int 1; int 2; int 3; vrf_verify VrfAlgorand"), ep, "arg 0 wanted")
-	testApp(t, notrack("byte 0x1122; int 2; int 3; vrf_verify VrfAlgorand"), ep, "arg 1 wanted")
-	testApp(t, notrack("byte 0x1122; byte 0x2233; int 3; vrf_verify VrfAlgorand"), ep, "arg 2 wanted")
+	testApp(t, notrack("int 1; int 2; int 3; vrf_verify VrfAlgorand"), ep, "arg A wanted")
+	testApp(t, notrack("byte 0x1122; int 2; int 3; vrf_verify VrfAlgorand"), ep, "arg B wanted")
+	testApp(t, notrack("byte 0x1122; byte 0x2233; int 3; vrf_verify VrfAlgorand"), ep, "arg C wanted")
 
 	ep = defaultSigParams()
 	testLogic(t, notrack("byte 0x1122; byte 0x2233; byte 0x3344; vrf_verify VrfAlgorand"), LogicVersion, ep, "vrf proof wrong size")
@@ -184,13 +184,17 @@ pop								// output`, "int 1"},
 	}
 }
 
+func randSeed() crypto.Seed {
+	var s crypto.Seed
+	crypto.RandBytes(s[:])
+	return s
+}
+
 func TestEd25519verify(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	var s crypto.Seed
-	crypto.RandBytes(s[:])
-	c := crypto.GenerateSignatureSecrets(s)
+	c := crypto.GenerateSignatureSecrets(randSeed())
 	msg := "62fdfc072182654f163f5f0f9a621d729566c74d0aa413bf009c9800418c19cd"
 	data, err := hex.DecodeString(msg)
 	require.NoError(t, err)
@@ -229,9 +233,7 @@ func TestEd25519VerifyBare(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	var s crypto.Seed
-	crypto.RandBytes(s[:])
-	c := crypto.GenerateSignatureSecrets(s)
+	c := crypto.GenerateSignatureSecrets(randSeed())
 	msg := "62fdfc072182654f163f5f0f9a621d729566c74d0aa413bf009c9800418c19cd"
 	data, err := hex.DecodeString(msg)
 	require.NoError(t, err)
@@ -260,6 +262,64 @@ func TestEd25519VerifyBare(t *testing.T) {
 			require.NoError(t, err)
 			txn.Lsig.Args = [][]byte{data1, sig[:], c.SignatureVerifier[:]}
 			testLogicBytes(t, ops.Program, defaultSigParams(txn), "REJECT")
+		})
+	}
+}
+
+func TestPartkeyVerify(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	for v := uint64(10); v <= AssemblerMaxVersion; v++ {
+		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
+			ops := testProg(t, `
+ // OneTimeSignature in 5 parts
+ txn ApplicationArgs 0;
+ txn ApplicationArgs 1;
+ txn ApplicationArgs 2;
+ txn ApplicationArgs 3;
+ txn ApplicationArgs 4;
+
+ txn Sender;
+ heartbeat;
+
+ txn Sender
+ acct_params_get AcctLastHeartbeat
+ assert
+ global Round
+ ==
+`, v)
+			ep, tx, ledger := makeSampleEnv()
+			ep.Proto.MaxAppProgramCost = 6000 // ugly. real heartbeats would need a lot of opup
+
+			id := basics.OneTimeIDForRound(tx.LastValid, 10_000)
+			otss := crypto.GenerateOneTimeSignatureSecrets(id.Batch, 1)
+
+			hdr, err := ledger.BlockHdr(tx.FirstValid - 1)
+			require.NoError(t, err)
+			ots := otss.Sign(id, hdr.Seed)
+
+			tx.ApplicationArgs = [][]byte{
+				ots.Sig[:],
+				ots.PK[:],
+				ots.PK1Sig[:],
+				ots.PK2[:],
+				ots.PK2Sig[:],
+			}
+			testLogicBytes(t, ops.Program, defaultSigParams(transactions.SignedTxn{Txn: *tx}),
+				"not allowed in current mode", "not allowed in current mode")
+			ledger.NewAccount(tx.Sender, 1_000_000)
+			ledger.NewVoting(tx.Sender, otss.OneTimeSignatureVerifier)
+			testAppBytes(t, ops.Program, ep)
+
+			// change a byte in any arg, fail
+			for i := range tx.ApplicationArgs {
+				tx.ApplicationArgs[i][0]++
+				testAppBytes(t, ops.Program, ep, "REJECT")
+				tx.ApplicationArgs[i][0]--
+			}
+			// confirm back to passing
+			testAppBytes(t, ops.Program, ep)
 		})
 	}
 }
@@ -680,9 +740,7 @@ func BenchmarkEd25519Verifyx1(b *testing.B) {
 		crypto.RandBytes(buffer[:])
 		data = append(data, buffer)
 
-		var s crypto.Seed //generate programs and signatures
-		crypto.RandBytes(s[:])
-		secret := crypto.GenerateSignatureSecrets(s)
+		secret := crypto.GenerateSignatureSecrets(randSeed()) //generate programs and signatures
 		pk := basics.Address(secret.SignatureVerifier)
 		pkStr := pk.String()
 		ops, err := AssembleStringWithVersion(fmt.Sprintf(`arg 0
@@ -864,3 +922,13 @@ int 1`
 		benchmarkEcdsa(b, source, Secp256k1)
 	})
 }
+
+const incentiveNonsense = `
+pushbytes "X"
+pushbytes "sig"
+int 1
+heartbeat
+`
+
+// ------------------------pb  1  X  pb  3  S  I  G  1  pv
+const incentiveCompiled = "80 01 58  80 03 73 69 67 22  87"

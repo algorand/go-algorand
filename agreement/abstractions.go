@@ -59,7 +59,7 @@ type ValidatedBlock interface {
 	//
 	// Calls to Seed() or to Digest() on the copy's Block must
 	// reflect the value of the new seed.
-	WithSeed(committee.Seed) ValidatedBlock
+	WithSeed(committee.Seed, basics.Address) ValidatedBlock
 
 	// Block returns the underlying block that has been validated.
 	Block() bookkeeping.Block

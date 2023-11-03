@@ -961,6 +961,10 @@ const (
 	BlkSeed BlockField = iota
 	// BlkTimestamp is the Block's timestamp, seconds from epoch
 	BlkTimestamp
+	// BlkProposer is the Block's proposer, or ZeroAddress, pre EnableMining
+	BlkProposer
+	// BlkFeesCollected is the sum of fees for the block, or 0, pre EnableMining
+	BlkFeesCollected
 	invalidBlockField // compile-time constant for number of fields
 )
 
@@ -975,6 +979,8 @@ type blockFieldSpec struct {
 var blockFieldSpecs = [...]blockFieldSpec{
 	{BlkSeed, StackBytes, randomnessVersion},
 	{BlkTimestamp, StackUint64, randomnessVersion},
+	{BlkProposer, StackAddress, incentiveVersion},
+	{BlkFeesCollected, StackUint64, incentiveVersion},
 }
 
 func blockFieldSpecByField(r BlockField) (blockFieldSpec, bool) {
@@ -1307,6 +1313,12 @@ const (
 
 	// AcctTotalAppSchema - consider how to expose
 
+	// AcctLastProposed is the last round that this account was the propser
+	AcctLastProposed
+	// AcctLastHeartbeat is the last round in which this account went online,
+	// or the `heartbeat` opcode executed in a valid transaction for it.
+	AcctLastHeartbeat
+
 	invalidAcctParamsField // compile-time constant for number of fields
 )
 
@@ -1349,6 +1361,9 @@ var acctParamsFieldSpecs = [...]acctParamsFieldSpec{
 	{AcctTotalAssets, StackUint64, 8, "The numbers of ASAs held by this account (including ASAs this account created)."},
 	{AcctTotalBoxes, StackUint64, boxVersion, "The number of existing boxes created by this account's app."},
 	{AcctTotalBoxBytes, StackUint64, boxVersion, "The total number of bytes used by this account's app's box keys and values."},
+
+	{AcctLastProposed, StackUint64, incentiveVersion, "The round in which this account last proposed."},
+	{AcctLastHeartbeat, StackUint64, incentiveVersion, "The round in which the account went online or executed `heartbeat`."},
 }
 
 func acctParamsFieldSpecByField(f AcctParamsField) (acctParamsFieldSpec, bool) {

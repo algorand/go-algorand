@@ -27,6 +27,7 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/secp256k1"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
 	"golang.org/x/crypto/sha3"
 )
@@ -133,6 +134,62 @@ func opEd25519VerifyBare(cx *EvalContext) error {
 
 	cx.Stack[pprev] = boolToSV(sv.VerifyBytes(cx.Stack[pprev].Bytes, sig))
 	cx.Stack = cx.Stack[:prev]
+	return nil
+}
+
+func opHeartbeat(cx *EvalContext) error {
+	last := len(cx.Stack) - 1
+	pk2sig := last - 1
+	pk2 := last - 2
+	pk1sig := last - 3
+	pk := last - 4
+	sig := last - 5
+
+	addr, _, err := cx.accountReference(cx.Stack[last])
+	if err != nil {
+		return err
+	}
+
+	account, err := cx.Ledger.AccountData(addr)
+	if err != nil {
+		return err
+	}
+
+	sv := account.VoteID
+	if sv.IsEmpty() {
+		return fmt.Errorf("Account %s has has no voting keys\n", addr)
+	}
+	id := basics.OneTimeIDForRound(cx.txn.Txn.LastValid, account.VoteKeyDilution)
+
+	err = cx.checkStackArgBounds()
+	if err != nil {
+		return err
+	}
+
+	ots := crypto.OneTimeSignature{
+		Sig:    [64]byte(cx.Stack[sig].Bytes),    // the sig for the message, by PK
+		PK:     [32]byte(cx.Stack[pk].Bytes),     // the actual key that signed the message
+		PK1Sig: [64]byte(cx.Stack[pk1sig].Bytes), // the sig that proves PK is valid
+		PK2:    [32]byte(cx.Stack[pk2].Bytes),    // the key that signed to create PK1Sig
+		PK2Sig: [64]byte(cx.Stack[pk2sig].Bytes), // the sig that proves PK2 is valid, signed by VoteID
+	}
+
+	rnd, err := cx.availableRound(uint64(cx.txn.Txn.FirstValid) - 1)
+	if err != nil {
+		return err
+	}
+	hdr, err := cx.SigLedger.BlockHdr(rnd)
+	if err != nil {
+		return err
+	}
+
+	if !sv.Verify(id, hdr.Seed, ots) {
+		return errors.New("Improper heartbeat")
+	}
+
+	cx.Ledger.Heartbeat(addr)
+
+	cx.Stack = cx.Stack[:sig]
 	return nil
 }
 

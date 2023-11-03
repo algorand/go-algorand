@@ -290,8 +290,7 @@ func (cs *roundCowState) DelBox(appIdx basics.AppIndex, key string, appAddr basi
 func (cs *roundCowState) Perform(gi int, ep *logic.EvalParams) error {
 	txn := &ep.TxnGroup[gi]
 
-	// move fee to pool
-	err := cs.Move(txn.Txn.Sender, ep.Specials.FeeSink, txn.Txn.Fee, &txn.ApplyData.SenderRewards, nil)
+	err := cs.takeFee(&txn.Txn, &txn.ApplyData.SenderRewards, ep)
 	if err != nil {
 		return err
 	}
@@ -348,4 +347,13 @@ func (cs *roundCowState) Perform(gi int, ep *logic.EvalParams) error {
 	// modifiedAccounts().
 
 	return nil
+}
+
+func (cs *roundCowState) Heartbeat(addr basics.Address) error {
+	acct, err := cs.lookup(addr)
+	if err != nil {
+		return err
+	}
+	acct.LastHeartbeat = cs.Round()
+	return cs.Put(addr, acct)
 }

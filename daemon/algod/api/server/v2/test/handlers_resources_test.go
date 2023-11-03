@@ -19,10 +19,11 @@ package test
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/algorand/go-algorand/data/transactions/logic"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/algorand/go-algorand/data/transactions/logic"
 
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"

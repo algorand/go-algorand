@@ -430,7 +430,8 @@ pushbytess "1" "2" "1"
 const v8Nonsense = v7Nonsense + switchNonsense + frameNonsense + matchNonsense + boxNonsense
 
 const v9Nonsense = v8Nonsense
-const v10Nonsense = v9Nonsense + pairingNonsense
+
+const v10Nonsense = v9Nonsense + pairingNonsense + incentiveNonsense
 
 const v6Compiled = "2004010002b7a60c26050242420c68656c6c6f20776f726c6421070123456789abcd208dae2087fbba51304eb02b91f656948397a7946390e8cb70fc9ea4d95f92251d047465737400320032013202320380021234292929292b0431003101310231043105310731083109310a310b310c310d310e310f3111311231133114311533000033000133000233000433000533000733000833000933000a33000b33000c33000d33000e33000f3300113300123300133300143300152d2e01022581f8acd19181cf959a1281f8acd19181cf951a81f8acd19181cf1581f8acd191810f082209240a220b230c240d250e230f2310231123122313231418191a1b1c28171615400003290349483403350222231d4a484848482b50512a632223524100034200004322602261222704634848222862482864286548482228246628226723286828692322700048482371004848361c0037001a0031183119311b311d311e311f312023221e312131223123312431253126312731283129312a312b312c312d312e312f447825225314225427042455220824564c4d4b0222382124391c0081e80780046a6f686e2281d00f23241f880003420001892224902291922494249593a0a1a2a3a4a5a6a7a8a9aaabacadae24af3a00003b003c003d816472064e014f012a57000823810858235b235a2359b03139330039b1b200b322c01a23c1001a2323c21a23c3233e233f8120af06002a494905002a49490700b400b53a03b6b7043cb8033a0c2349c42a9631007300810881088120978101c53a8101c6003a"
 
@@ -447,7 +448,7 @@ const matchCompiled = "83030102018e02fff500008203013101320131"
 const v8Compiled = v7Compiled + switchCompiled + frameCompiled + matchCompiled + boxCompiled
 
 const v9Compiled = v8Compiled
-const v10Compiled = v9Compiled + pairingCompiled
+const v10Compiled = v9Compiled + pairingCompiled + incentiveCompiled
 
 var nonsense = map[uint64]string{
 	1:  v1Nonsense,
@@ -797,9 +798,9 @@ func TestAssembleGlobal(t *testing.T) {
 	testProg(t, "global MinTxnFee; int 2; +", AssemblerMaxVersion)
 	testProg(t, "global ZeroAddress; byte 0x12; concat; len", AssemblerMaxVersion)
 	testProg(t, "global MinTxnFee; byte 0x12; concat", AssemblerMaxVersion,
-		exp(1, "concat arg 0 wanted type []byte...", 29))
+		exp(1, "concat arg A wanted type []byte...", 29))
 	testProg(t, "int 2; global ZeroAddress; +", AssemblerMaxVersion,
-		exp(1, "+ arg 1 wanted type uint64...", 27))
+		exp(1, "+ arg B wanted type uint64...", 27))
 }
 
 func TestAssembleDefault(t *testing.T) {
@@ -811,7 +812,7 @@ int 1
  +
 // comment
 `
-	testProg(t, source, AssemblerMaxVersion, exp(3, "+ arg 0 wanted type uint64 got [5]byte", 1))
+	testProg(t, source, AssemblerMaxVersion, exp(3, "+ arg A wanted type uint64 got [5]byte", 1))
 }
 
 // mutateProgVersion replaces version (first two symbols) in hex-encoded program
@@ -1945,7 +1946,7 @@ balance
 int 1
 ==`
 	for v := uint64(2); v < directRefEnabledVersion; v++ {
-		testProg(t, source, v, exp(2, "balance arg 0 wanted type uint64 got [1]byte"))
+		testProg(t, source, v, exp(2, "balance arg A wanted type uint64 got [1]byte"))
 	}
 	for v := uint64(directRefEnabledVersion); v <= AssemblerMaxVersion; v++ {
 		testProg(t, source, v)
@@ -1961,7 +1962,7 @@ min_balance
 int 1
 ==`
 	for v := uint64(3); v < directRefEnabledVersion; v++ {
-		testProg(t, source, v, exp(2, "min_balance arg 0 wanted type uint64 got [1]byte"))
+		testProg(t, source, v, exp(2, "min_balance arg A wanted type uint64 got [1]byte"))
 	}
 	for v := uint64(directRefEnabledVersion); v <= AssemblerMaxVersion; v++ {
 		testProg(t, source, v)
@@ -1985,15 +1986,15 @@ func TestAssembleAsset(t *testing.T) {
 				exp(1, "asset_holding_get unknown field: \"ABC\""))
 
 			testProg(t, "byte 0x1234; asset_params_get ABC 1", v,
-				exp(1, "asset_params_get ABC 1 arg 0 wanted type uint64..."))
+				exp(1, "asset_params_get ABC 1 arg A wanted type uint64..."))
 
 			// Test that AssetUnitName is known to return bytes
 			testProg(t, "int 1; asset_params_get AssetUnitName; pop; int 1; +", v,
-				exp(1, "+ arg 0 wanted type uint64..."))
+				exp(1, "+ arg A wanted type uint64..."))
 
 			// Test that AssetTotal is known to return uint64
 			testProg(t, "int 1; asset_params_get AssetTotal; pop; byte 0x12; concat", v,
-				exp(1, "concat arg 0 wanted type []byte..."))
+				exp(1, "concat arg A wanted type []byte..."))
 
 			testLine(t, "asset_params_get ABC 1", v, "asset_params_get expects 1 immediate argument")
 			testLine(t, "asset_params_get ABC", v, "asset_params_get unknown field: \"ABC\"")
@@ -2620,10 +2621,10 @@ func TestSwapTypeCheck(t *testing.T) {
 	t.Parallel()
 
 	/* reconfirm that we detect this type error */
-	testProg(t, "int 1; byte 0x1234; +", AssemblerMaxVersion, exp(1, "+ arg 1..."))
+	testProg(t, "int 1; byte 0x1234; +", AssemblerMaxVersion, exp(1, "+ arg B..."))
 	/* despite swap, we track types */
-	testProg(t, "int 1; byte 0x1234; swap; +", AssemblerMaxVersion, exp(1, "+ arg 0..."))
-	testProg(t, "byte 0x1234; int 1; swap; +", AssemblerMaxVersion, exp(1, "+ arg 1..."))
+	testProg(t, "int 1; byte 0x1234; swap; +", AssemblerMaxVersion, exp(1, "+ arg A..."))
+	testProg(t, "byte 0x1234; int 1; swap; +", AssemblerMaxVersion, exp(1, "+ arg B..."))
 }
 
 func TestDigAsm(t *testing.T) {
@@ -2634,7 +2635,7 @@ func TestDigAsm(t *testing.T) {
 
 	testProg(t, "int 1; byte 0x1234; int 2; dig 2; +", AssemblerMaxVersion)
 	testProg(t, "byte 0x32; byte 0x1234; int 2; dig 2; +", AssemblerMaxVersion,
-		exp(1, "+ arg 1..."))
+		exp(1, "+ arg B..."))
 	testProg(t, "byte 0x32; byte 0x1234; int 2; dig 3; +", AssemblerMaxVersion,
 		exp(1, "dig 3 expects 4..."))
 	testProg(t, "int 1; byte 0x1234; int 2; dig 12; +", AssemblerMaxVersion,
@@ -2642,7 +2643,7 @@ func TestDigAsm(t *testing.T) {
 
 	// Confirm that digging something out does not ruin our knowledge about the types in the middle
 	testProg(t, "int 1; byte 0x1234; byte 0x1234; dig 2; dig 3; +; pop; +", AssemblerMaxVersion,
-		exp(1, "+ arg 1..."))
+		exp(1, "+ arg B..."))
 	testProg(t, "int 3; pushbytes \"123456\"; int 1; dig 2; substring3", AssemblerMaxVersion)
 
 }
@@ -2655,7 +2656,7 @@ func TestBuryAsm(t *testing.T) {
 
 	testProg(t, "int 1; byte 0x1234; int 2; bury 1; +", AssemblerMaxVersion) // the 2 replaces the byte string
 	testProg(t, "int 2; int 2; byte 0x1234; bury 1; +", AssemblerMaxVersion,
-		exp(1, "+ arg 1..."))
+		exp(1, "+ arg B..."))
 	testProg(t, "byte 0x32; byte 0x1234; int 2; bury 3; +", AssemblerMaxVersion,
 		exp(1, "bury 3 expects 4..."))
 	testProg(t, "int 1; byte 0x1234; int 2; bury 12; +", AssemblerMaxVersion,
@@ -2663,11 +2664,11 @@ func TestBuryAsm(t *testing.T) {
 
 	// We do not lose track of the ints between ToS and bury index
 	testProg(t, "int 0; int 1; int 2; int 4; bury 3; concat", AssemblerMaxVersion,
-		exp(1, "concat arg 1 wanted type []byte..."))
+		exp(1, "concat arg B wanted type []byte..."))
 
 	// Even when we are burying into unknown (seems repetitive, but is an easy bug)
 	testProg(t, "int 0; int 0; b LABEL; LABEL: int 1; int 2; int 4; bury 4; concat", AssemblerMaxVersion,
-		exp(1, "concat arg 1 wanted type []byte..."))
+		exp(1, "concat arg B wanted type []byte..."))
 
 	testProg(t, "intcblock 55; bury 1; int 1", AssemblerMaxVersion, exp(1, "bury 1 expects 2 stack arguments...", 14))
 	testProg(t, "intcblock 55; int 2; bury 1; int 1", AssemblerMaxVersion, exp(1, "bury 1 expects 2 stack arguments...", 21))
@@ -2677,39 +2678,39 @@ func TestBuryAsm(t *testing.T) {
 func TestEqualsTypeCheck(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
-	testProg(t, "int 1; byte 0x1234; ==", AssemblerMaxVersion, exp(1, "== arg 0..."))
-	testProg(t, "int 1; byte 0x1234; !=", AssemblerMaxVersion, exp(1, "!= arg 0..."))
-	testProg(t, "byte 0x1234; int 1; ==", AssemblerMaxVersion, exp(1, "== arg 0..."))
-	testProg(t, "byte 0x1234; int 1; !=", AssemblerMaxVersion, exp(1, "!= arg 0..."))
+	testProg(t, "int 1; byte 0x1234; ==", AssemblerMaxVersion, exp(1, "== arg A..."))
+	testProg(t, "int 1; byte 0x1234; !=", AssemblerMaxVersion, exp(1, "!= arg A..."))
+	testProg(t, "byte 0x1234; int 1; ==", AssemblerMaxVersion, exp(1, "== arg A..."))
+	testProg(t, "byte 0x1234; int 1; !=", AssemblerMaxVersion, exp(1, "!= arg A..."))
 }
 
 func TestDupTypeCheck(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
-	testProg(t, "byte 0x1234; dup; int 1; +", AssemblerMaxVersion, exp(1, "+ arg 0..."))
+	testProg(t, "byte 0x1234; dup; int 1; +", AssemblerMaxVersion, exp(1, "+ arg A..."))
 	testProg(t, "byte 0x1234; int 1; dup; +", AssemblerMaxVersion)
-	testProg(t, "byte 0x1234; int 1; dup2; +", AssemblerMaxVersion, exp(1, "+ arg 0..."))
-	testProg(t, "int 1; byte 0x1234; dup2; +", AssemblerMaxVersion, exp(1, "+ arg 1..."))
+	testProg(t, "byte 0x1234; int 1; dup2; +", AssemblerMaxVersion, exp(1, "+ arg A..."))
+	testProg(t, "int 1; byte 0x1234; dup2; +", AssemblerMaxVersion, exp(1, "+ arg B..."))
 
-	testProg(t, "byte 0x1234; int 1; dup; dig 1; len", AssemblerMaxVersion, exp(1, "len arg 0..."))
-	testProg(t, "int 1; byte 0x1234; dup; dig 1; !", AssemblerMaxVersion, exp(1, "! arg 0..."))
+	testProg(t, "byte 0x1234; int 1; dup; dig 1; len", AssemblerMaxVersion, exp(1, "len arg A..."))
+	testProg(t, "int 1; byte 0x1234; dup; dig 1; !", AssemblerMaxVersion, exp(1, "! arg A..."))
 
-	testProg(t, "byte 0x1234; int 1; dup2; dig 2; len", AssemblerMaxVersion, exp(1, "len arg 0..."))
-	testProg(t, "int 1; byte 0x1234; dup2; dig 2; !", AssemblerMaxVersion, exp(1, "! arg 0..."))
+	testProg(t, "byte 0x1234; int 1; dup2; dig 2; len", AssemblerMaxVersion, exp(1, "len arg A..."))
+	testProg(t, "int 1; byte 0x1234; dup2; dig 2; !", AssemblerMaxVersion, exp(1, "! arg A..."))
 }
 
 func TestSelectTypeCheck(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
-	testProg(t, "int 1; int 2; int 3; select; len", AssemblerMaxVersion, exp(1, "len arg 0..."))
-	testProg(t, "byte 0x1234; byte 0x5678; int 3; select; !", AssemblerMaxVersion, exp(1, "! arg 0..."))
+	testProg(t, "int 1; int 2; int 3; select; len", AssemblerMaxVersion, exp(1, "len arg A..."))
+	testProg(t, "byte 0x1234; byte 0x5678; int 3; select; !", AssemblerMaxVersion, exp(1, "! arg A..."))
 }
 
 func TestSetBitTypeCheck(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
-	testProg(t, "int 1; int 2; int 3; setbit; len", AssemblerMaxVersion, exp(1, "len arg 0..."))
-	testProg(t, "byte 0x1234; int 2; int 3; setbit; !", AssemblerMaxVersion, exp(1, "! arg 0..."))
+	testProg(t, "int 1; int 2; int 3; setbit; len", AssemblerMaxVersion, exp(1, "len arg A..."))
+	testProg(t, "byte 0x1234; int 2; int 3; setbit; !", AssemblerMaxVersion, exp(1, "! arg A..."))
 }
 
 func TestScratchTypeCheck(t *testing.T) {
@@ -2718,15 +2719,15 @@ func TestScratchTypeCheck(t *testing.T) {
 	// All scratch slots should start as uint64
 	testProg(t, "load 0; int 1; +", AssemblerMaxVersion)
 	// Check load and store accurately using the scratch space
-	testProg(t, "byte 0x01; store 0; load 0; int 1; +", AssemblerMaxVersion, exp(1, "+ arg 0..."))
+	testProg(t, "byte 0x01; store 0; load 0; int 1; +", AssemblerMaxVersion, exp(1, "+ arg A..."))
 	// Loads should know the type it's loading if all the slots are the same type
-	testProg(t, "int 0; loads; btoi", AssemblerMaxVersion, exp(1, "btoi arg 0..."))
+	testProg(t, "int 0; loads; btoi", AssemblerMaxVersion, exp(1, "btoi arg A..."))
 	// Loads only knows the type when slot is a const
-	testProg(t, "byte 0x01; store 0; int 1; loads; btoi", AssemblerMaxVersion, exp(1, "btoi arg 0..."))
+	testProg(t, "byte 0x01; store 0; int 1; loads; btoi", AssemblerMaxVersion, exp(1, "btoi arg A..."))
 	// Loads doesnt know the type if its the result of some other expression where we lose information
 	testProg(t, "byte 0x01; store 0; load 0; btoi; loads; btoi", AssemblerMaxVersion)
 	// Stores should only set slots to StackAny if they are not the same type as what is being stored
-	testProg(t, "byte 0x01; store 0; int 3; byte 0x01; stores; load 0; int 1; +", AssemblerMaxVersion, exp(1, "+ arg 0..."))
+	testProg(t, "byte 0x01; store 0; int 3; byte 0x01; stores; load 0; int 1; +", AssemblerMaxVersion, exp(1, "+ arg A..."))
 	// ScratchSpace should reset after hitting label in deadcode
 	testProg(t, "byte 0x01; store 0; b label1; label1:; load 0; int 1; +", AssemblerMaxVersion)
 	// But it should reset to StackAny not uint64
@@ -2734,7 +2735,7 @@ func TestScratchTypeCheck(t *testing.T) {
 	// Callsubs should also reset the scratch space
 	testProg(t, "callsub A; load 0; btoi; return; A: byte 0x01; store 0; retsub", AssemblerMaxVersion)
 	// But the scratchspace should still be tracked after the callsub
-	testProg(t, "callsub A; int 1; store 0; load 0; btoi; return; A: retsub", AssemblerMaxVersion, exp(1, "btoi arg 0..."))
+	testProg(t, "callsub A; int 1; store 0; load 0; btoi; return; A: retsub", AssemblerMaxVersion, exp(1, "btoi arg A..."))
 
 }
 
@@ -2773,7 +2774,7 @@ func TestScratchBounds(t *testing.T) {
 	require.Equal(t, osv.AVMType, avmAny)
 	require.ElementsMatch(t, osv.Bound, static(0))
 
-	testProg(t, "byte 0xff; store 1; load 1; return", AssemblerMaxVersion, exp(1, "return arg 0 wanted type uint64 ..."))
+	testProg(t, "byte 0xff; store 1; load 1; return", AssemblerMaxVersion, exp(1, "return arg A wanted type uint64 ..."))
 }
 
 // TestProtoAsm confirms that the assembler will yell at you if you are
@@ -2806,7 +2807,7 @@ func TestCoverAsm(t *testing.T) {
 	t.Parallel()
 	testProg(t, `int 4; byte "john"; int 5; cover 2; pop; +`, AssemblerMaxVersion)
 	testProg(t, `int 4; byte "ayush"; int 5; cover 1; pop; +`, AssemblerMaxVersion)
-	testProg(t, `int 4; byte "john"; int 5; cover 2; +`, AssemblerMaxVersion, exp(1, "+ arg 1..."))
+	testProg(t, `int 4; byte "john"; int 5; cover 2; +`, AssemblerMaxVersion, exp(1, "+ arg B..."))
 
 	testProg(t, `int 4; cover junk`, AssemblerMaxVersion, exp(1, "cover unable to parse n ..."))
 	testProg(t, notrack(`int 4; int 5; cover 0`), AssemblerMaxVersion)
@@ -2818,7 +2819,7 @@ func TestUncoverAsm(t *testing.T) {
 	testProg(t, `int 4; byte "john"; int 5; uncover 2; +`, AssemblerMaxVersion)
 	testProg(t, `int 4; byte "ayush"; int 5; uncover 1; pop; +`, AssemblerMaxVersion)
 	testProg(t, `int 1; byte "jj"; byte "ayush"; byte "john"; int 5; uncover 4; +`, AssemblerMaxVersion)
-	testProg(t, `int 4; byte "ayush"; int 5; uncover 1; +`, AssemblerMaxVersion, exp(1, "+ arg 1..."))
+	testProg(t, `int 4; byte "ayush"; int 5; uncover 1; +`, AssemblerMaxVersion, exp(1, "+ arg B..."))
 }
 
 func TestTxTypes(t *testing.T) {
@@ -2866,7 +2867,7 @@ func TestTypeTracking(t *testing.T) {
 
 	// but we do want to ensure we're not just treating the code after callsub as dead
 	testProg(t, "callsub A; int 1; concat; return; A: int 1; int 2; retsub", LogicVersion,
-		exp(1, "concat arg 1 wanted..."))
+		exp(1, "concat arg B wanted..."))
 
 	// retsub deadens code, like any unconditional branch
 	testProg(t, "callsub A; +; return; A: int 1; int 2; retsub; concat", LogicVersion)
@@ -2882,7 +2883,7 @@ label:
  +
 confusion:
  b label
-`, LogicVersion, exp(7, "+ arg 0 wanted type uint64..."))
+`, LogicVersion, exp(7, "+ arg A wanted type uint64..."))
 
 	// Unless that same error is in dead code.
 	testProg(t, `
@@ -2936,7 +2937,7 @@ done:
  concat
 #pragma typetrack true
  concat
-`, LogicVersion, exp(5, "concat arg 1 wanted type []byte..."))
+`, LogicVersion, exp(5, "concat arg B wanted type []byte..."))
 }
 
 func TestMergeProtos(t *testing.T) {
@@ -2994,7 +2995,7 @@ func TestReplacePseudo(t *testing.T) {
 		testProg(t, "byte 0x0000; byte 0x1234; replace 0", v)
 		testProg(t, "byte 0x0000; int 0; byte 0x1234; replace", v)
 		testProg(t, "byte 0x0000; byte 0x1234; replace", v, exp(1, "replace without immediates expects 3 stack arguments but stack height is 2"))
-		testProg(t, "byte 0x0000; int 0; byte 0x1234; replace 0", v, exp(1, "replace 0 arg 0 wanted type []byte got 0"))
+		testProg(t, "byte 0x0000; int 0; byte 0x1234; replace 0", v, exp(1, "replace 0 arg A wanted type []byte got 0"))
 	}
 }
 
@@ -3055,7 +3056,7 @@ func TestAssembleSwitch(t *testing.T) {
 	byte "fail"
     switch label1
     labe11:
-	`, AssemblerMaxVersion, exp(3, "switch label1 arg 0 wanted type uint64..."))
+	`, AssemblerMaxVersion, exp(3, "switch label1 arg A wanted type uint64..."))
 
 	// No labels is pretty degenerate, but ok, I suppose. It's just a no-op
 	testProg(t, `
@@ -3569,9 +3570,9 @@ func TestAssemblePushConsts(t *testing.T) {
 	source = `pushbytess 1 2 3`
 	testProg(t, source, AssemblerMaxVersion, exp(1, "pushbytess arg did not parse: 1"))
 	source = `pushints 6 4; concat`
-	testProg(t, source, AssemblerMaxVersion, exp(1, "concat arg 1 wanted type []byte got uint64"))
+	testProg(t, source, AssemblerMaxVersion, exp(1, "concat arg B wanted type []byte got uint64"))
 	source = `pushbytess "x" "y"; +`
-	testProg(t, source, AssemblerMaxVersion, exp(1, "+ arg 1 wanted type uint64 got []byte"))
+	testProg(t, source, AssemblerMaxVersion, exp(1, "+ arg B wanted type uint64 got []byte"))
 }
 
 func TestAssembleEmpty(t *testing.T) {

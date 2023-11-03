@@ -194,12 +194,14 @@ func _() {
 	_ = x[AcctTotalAssets-9]
 	_ = x[AcctTotalBoxes-10]
 	_ = x[AcctTotalBoxBytes-11]
-	_ = x[invalidAcctParamsField-12]
+	_ = x[AcctLastProposed-12]
+	_ = x[AcctLastHeartbeat-13]
+	_ = x[invalidAcctParamsField-14]
 }
 
-const _AcctParamsField_name = "AcctBalanceAcctMinBalanceAcctAuthAddrAcctTotalNumUintAcctTotalNumByteSliceAcctTotalExtraAppPagesAcctTotalAppsCreatedAcctTotalAppsOptedInAcctTotalAssetsCreatedAcctTotalAssetsAcctTotalBoxesAcctTotalBoxBytesinvalidAcctParamsField"
+const _AcctParamsField_name = "AcctBalanceAcctMinBalanceAcctAuthAddrAcctTotalNumUintAcctTotalNumByteSliceAcctTotalExtraAppPagesAcctTotalAppsCreatedAcctTotalAppsOptedInAcctTotalAssetsCreatedAcctTotalAssetsAcctTotalBoxesAcctTotalBoxBytesAcctLastProposedAcctLastHeartbeatinvalidAcctParamsField"
 
-var _AcctParamsField_index = [...]uint8{0, 11, 25, 37, 53, 74, 96, 116, 136, 158, 173, 187, 204, 226}
+var _AcctParamsField_index = [...]uint16{0, 11, 25, 37, 53, 74, 96, 116, 136, 158, 173, 187, 204, 220, 237, 259}
 
 func (i AcctParamsField) String() string {
 	if i < 0 || i >= AcctParamsField(len(_AcctParamsField_index)-1) {
@@ -351,12 +353,14 @@ func _() {
 	var x [1]struct{}
 	_ = x[BlkSeed-0]
 	_ = x[BlkTimestamp-1]
-	_ = x[invalidBlockField-2]
+	_ = x[BlkProposer-2]
+	_ = x[BlkFeesCollected-3]
+	_ = x[invalidBlockField-4]
 }
 
-const _BlockField_name = "BlkSeedBlkTimestampinvalidBlockField"
+const _BlockField_name = "BlkSeedBlkTimestampBlkProposerBlkFeesCollectedinvalidBlockField"
 
-var _BlockField_index = [...]uint8{0, 7, 19, 36}
+var _BlockField_index = [...]uint8{0, 7, 19, 30, 46, 63}
 
 func (i BlockField) String() string {
 	if i < 0 || i >= BlockField(len(_BlockField_index)-1) {
