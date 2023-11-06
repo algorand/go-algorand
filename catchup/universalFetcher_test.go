@@ -74,7 +74,9 @@ func TestUGetBlockWs(t *testing.T) {
 	block, cert, duration, err = fetcher.fetchBlock(context.Background(), next+1, up)
 
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "requested block is not available")
+	require.Error(t, noBlockForRoundError{}, err)
+	require.Equal(t, next+1, err.(noBlockForRoundError).round)
+	require.Equal(t, next, err.(noBlockForRoundError).latest)
 	require.Nil(t, block)
 	require.Nil(t, cert)
 	require.Equal(t, int64(duration), int64(0))
@@ -118,7 +120,9 @@ func TestUGetBlockHTTP(t *testing.T) {
 
 	block, cert, duration, err = fetcher.fetchBlock(context.Background(), next+1, net.GetPeers()[0])
 
-	require.Error(t, errNoBlockForRound, err)
+	require.Error(t, noBlockForRoundError{}, err)
+	require.Equal(t, next+1, err.(noBlockForRoundError).round)
+	require.Equal(t, next, err.(noBlockForRoundError).latest)
 	require.Contains(t, err.Error(), "No block available for given round")
 	require.Nil(t, block)
 	require.Nil(t, cert)
