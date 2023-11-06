@@ -132,7 +132,7 @@ func (w *wsFetcherClient) getBlockBytes(ctx context.Context, r basics.Round) ([]
 	defer func() {
 		cancelFunc()
 		// note that we don't need to have additional Unlock here since
-		// we already have a defered Unlock above ( which executes in reversed order )
+		// we already have a deferred Unlock above ( which executes in reversed order )
 		w.mu.Lock()
 	}()
 
