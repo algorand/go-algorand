@@ -467,7 +467,8 @@ func topicBlockBytes(log logging.Logger, dataLedger LedgerForBlockService, round
 		default:
 			log.Infof("BlockService topicBlockBytes: %s", err)
 		}
-		return network.Topics{network.MakeTopic(network.ErrorKey, []byte(blockNotAvailableErrMsg))}, 0
+		return network.Topics{
+			network.MakeTopic(network.ErrorKey, []byte(blockNotAvailableErrMsg))}, 0
 	}
 	switch requestType {
 	case BlockAndCertValue:

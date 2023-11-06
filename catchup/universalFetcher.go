@@ -248,7 +248,7 @@ func (hf *HTTPFetcher) getBlockBytes(ctx context.Context, r basics.Round) (data 
 		response.Body.Close()
 		noBlockErr := noBlockForRoundError{round: r}
 		if latestBytes := response.Header.Get("X-Latest-Round"); latestBytes != "" {
-			if latest, err := strconv.ParseUint(latestBytes, 10, 64); err == nil {
+			if latest, pErr := strconv.ParseUint(latestBytes, 10, 64); pErr == nil {
 				noBlockErr.latest = basics.Round(latest)
 			}
 		}
