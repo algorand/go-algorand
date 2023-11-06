@@ -54,6 +54,9 @@ const blockResponseRetryAfter = "3"                                             
 const blockServerMaxBodyLength = 512                                               // we don't really pass meaningful content here, so 512 bytes should be a safe limit
 const blockServerCatchupRequestBufferSize = 10
 
+// BlockResponseLatestRoundHeader is returned in the response header when the requested block is not available
+const BlockResponseLatestRoundHeader = "X-Latest-Round"
+
 // BlockServiceBlockPath is the path to register BlockService as a handler for when using gorilla/mux
 // e.g. .Handle(BlockServiceBlockPath, &ls)
 const BlockServiceBlockPath = "/v{version:[0-9.]+}/{genesisID}/block/{round:[0-9a-z]+}"
@@ -246,7 +249,7 @@ func (bs *BlockService) ServeHTTP(response http.ResponseWriter, request *http.Re
 			ok := bs.redirectRequest(round, response, request)
 			if !ok {
 				response.Header().Set("Cache-Control", blockResponseMissingBlockCacheControl)
-				response.Header().Set("X-Latest-Round", fmt.Sprintf("%d", lerr.Latest))
+				response.Header().Set(BlockResponseLatestRoundHeader, fmt.Sprintf("%d", lerr.Latest))
 				response.WriteHeader(http.StatusNotFound)
 			}
 			return
