@@ -269,6 +269,9 @@ type deferredCommitContext struct {
 	// Block hashes for the committed rounds range.
 	committedRoundDigests []crypto.Digest
 
+	// Consensus versions for the committed rounds range.
+	committedProtocolVersion []protocol.ConsensusVersion
+
 	// on catchpoint rounds, the transaction tail would fill up this field with the hash of the recent 1001 rounds
 	// of the txtail data. The catchpointTracker would be able to use that for calculating the catchpoint label.
 	txTailHash crypto.Digest
