@@ -123,7 +123,7 @@ func TestUGetBlockHTTP(t *testing.T) {
 	require.Error(t, noBlockForRoundError{}, err)
 	require.Equal(t, next+1, err.(noBlockForRoundError).round)
 	require.Equal(t, next, err.(noBlockForRoundError).latest)
-	require.Contains(t, err.Error(), "No block available for given round")
+	require.Contains(t, err.Error(), "no block available for given round")
 	require.Nil(t, block)
 	require.Nil(t, cert)
 	require.Equal(t, int64(duration), int64(0))

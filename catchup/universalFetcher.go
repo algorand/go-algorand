@@ -202,7 +202,7 @@ type noBlockForRoundError struct {
 	latest, round basics.Round
 }
 
-func (noBlockForRoundError) Error() string { return "No block available for given round" }
+func (noBlockForRoundError) Error() string { return "no block available for given round" }
 
 // HTTPFetcher implements FetcherClient doing an HTTP GET of the block
 type HTTPFetcher struct {
