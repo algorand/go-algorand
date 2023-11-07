@@ -213,6 +213,9 @@ const (
 	// NumClearStateProgramPages = len(ClearStateProgramPages) // 4096
 	NumClearStateProgramPages
 
+	// NumBoxes len(Boxes)
+	NumBoxes
+
 	invalidTxnField // compile-time constant for number of fields
 )
 
@@ -352,6 +355,8 @@ var txnFieldSpecs = [...]txnFieldSpec{
 	{NumApprovalProgramPages, StackUint64, false, 7, 0, false, "Number of Approval Program pages"},
 	{ClearStateProgramPages, StackBytes, true, 7, 7, false, "ClearState Program as an array of pages"},
 	{NumClearStateProgramPages, StackUint64, false, 7, 0, false, "Number of ClearState Program pages"},
+
+	{NumBoxes, StackUint64, false, 10, 10, false, "Number of Boxes"},
 }
 
 // TxnFields contains info on the arguments to the txn* family of opcodes

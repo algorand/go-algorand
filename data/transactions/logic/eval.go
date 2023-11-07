@@ -3065,6 +3065,9 @@ func (cx *EvalContext) txnFieldToStack(stxn *transactions.SignedTxnWithAD, fs *t
 	case NumApplications:
 		sv.Uint = uint64(len(txn.ForeignApps))
 
+	case NumBoxes:
+		sv.Uint = uint64(len(txn.Boxes))
+
 	case GlobalNumUint:
 		sv.Uint = uint64(txn.GlobalStateSchema.NumUint)
 	case GlobalNumByteSlice:

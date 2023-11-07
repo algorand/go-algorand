@@ -595,6 +595,7 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | 63 | StateProofPK | []byte | v6  | 64 byte state proof public key |
 | 65 | NumApprovalProgramPages | uint64 | v7  | Number of Approval Program pages |
 | 67 | NumClearStateProgramPages | uint64 | v7  | Number of ClearState Program pages |
+| 68 | NumBoxes | uint64 | v10  | Number of Boxes |
 
 ##### Array Fields
 | Index | Name | Type | In | Notes |

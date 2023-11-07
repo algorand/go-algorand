@@ -1085,7 +1085,8 @@
         "ApprovalProgramPages",
         "NumApprovalProgramPages",
         "ClearStateProgramPages",
-        "NumClearStateProgramPages"
+        "NumClearStateProgramPages",
+        "NumBoxes"
       ],
       "ArgEnumTypes": [
         "address",
@@ -1155,6 +1156,7 @@
         "[]byte",
         "uint64",
         "[]byte",
+        "uint64",
         "uint64"
       ],
       "DocCost": "1",
@@ -1307,7 +1309,8 @@
         "ApprovalProgramPages",
         "NumApprovalProgramPages",
         "ClearStateProgramPages",
-        "NumClearStateProgramPages"
+        "NumClearStateProgramPages",
+        "NumBoxes"
       ],
       "ArgEnumTypes": [
         "address",
@@ -1377,6 +1380,7 @@
         "[]byte",
         "uint64",
         "[]byte",
+        "uint64",
         "uint64"
       ],
       "DocCost": "1",
@@ -1615,7 +1619,8 @@
         "ApprovalProgramPages",
         "NumApprovalProgramPages",
         "ClearStateProgramPages",
-        "NumClearStateProgramPages"
+        "NumClearStateProgramPages",
+        "NumBoxes"
       ],
       "ArgEnumTypes": [
         "address",
@@ -1685,6 +1690,7 @@
         "[]byte",
         "uint64",
         "[]byte",
+        "uint64",
         "uint64"
       ],
       "DocCost": "1",
@@ -3711,7 +3717,8 @@
         "Nonparticipation",
         "StateProofPK",
         "ApprovalProgramPages",
-        "ClearStateProgramPages"
+        "ClearStateProgramPages",
+        "NumBoxes"
       ],
       "ArgEnumTypes": [
         "address",
@@ -3764,7 +3771,8 @@
         "bool",
         "[]byte",
         "[]byte",
-        "[]byte"
+        "[]byte",
+        "uint64"
       ],
       "DocCost": "1",
       "Doc": "set field F of the current inner transaction to A",
@@ -3869,7 +3877,8 @@
         "ApprovalProgramPages",
         "NumApprovalProgramPages",
         "ClearStateProgramPages",
-        "NumClearStateProgramPages"
+        "NumClearStateProgramPages",
+        "NumBoxes"
       ],
       "ArgEnumTypes": [
         "address",
@@ -3939,6 +3948,7 @@
         "[]byte",
         "uint64",
         "[]byte",
+        "uint64",
         "uint64"
       ],
       "DocCost": "1",
@@ -4088,7 +4098,8 @@
         "ApprovalProgramPages",
         "NumApprovalProgramPages",
         "ClearStateProgramPages",
-        "NumClearStateProgramPages"
+        "NumClearStateProgramPages",
+        "NumBoxes"
       ],
       "ArgEnumTypes": [
         "address",
@@ -4158,6 +4169,7 @@
         "[]byte",
         "uint64",
         "[]byte",
+        "uint64",
         "uint64"
       ],
       "DocCost": "1",
