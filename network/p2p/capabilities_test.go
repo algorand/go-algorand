@@ -176,6 +176,7 @@ func TestDHTTwoPeers(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 		var advertisers []peer.AddrInfo
 		peersChan, err := disc.FindPeers(ctx, topic, discovery.Limit(numAdvertisers))
+		require.NoError(t, err)
 	pollingForPeers:
 		for {
 			select {

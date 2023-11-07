@@ -70,21 +70,23 @@ func dhtProtocolPrefix(network string) protocol.ID {
 
 // MakeDHT creates the dht.IpfsDHT object
 func MakeDHT(ctx context.Context, h host.Host, network string, cfg config.Local, bootstrapPeers []*peer.AddrInfo) (*dht.IpfsDHT, error) {
-	var peers []peer.AddrInfo
-	for _, bPeer := range bootstrapPeers {
-		if bPeer != nil {
-			peers = append(peers, *bPeer)
-		}
-	}
 	dhtCfg := []dht.Option{
 		// Automatically determine server or client mode
 		dht.Mode(dht.ModeAutoServer),
 		// We don't need the value store right now
 		dht.DisableValues(),
 		dht.ProtocolPrefix(dhtProtocolPrefix(network)),
-		dht.BootstrapPeers(peers...),
 	}
-	if len(bootstrapPeers) == 0 {
+	if len(bootstrapPeers) > 0 {
+		var peers []peer.AddrInfo
+		for _, bPeer := range bootstrapPeers {
+			if bPeer != nil {
+				peers = append(peers, *bPeer)
+			}
+		}
+		dhtCfg = append(dhtCfg, dht.BootstrapPeers(peers...))
+
+	} else {
 		dhtCfg = append(dhtCfg, dht.BootstrapPeersFunc(getBootstrapPeersFunc(cfg, network)))
 	}
 	return dht.New(ctx, h, dhtCfg...)

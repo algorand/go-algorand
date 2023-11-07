@@ -88,7 +88,8 @@ func (c *CapabilitiesDiscovery) PeersForCapability(capability Capability, n int)
 	ctx, cancel := context.WithTimeout(context.Background(), operationTimeout)
 	defer cancel()
 	var peers []peer.AddrInfo
-	peersChan, err := c.FindPeers(ctx, string(capability), discovery.Limit(n))
+	peersChan, err := c.disc.FindPeers(ctx, string(capability), discovery.Limit(n))
+	// peersChan, err := c.FindPeers(ctx, string(capability), discovery.Limit(n))
 	if err != nil {
 		return nil, err
 	}
@@ -123,7 +124,8 @@ func (c *CapabilitiesDiscovery) AdvertiseCapabilities(capabilities ...Capability
 				var err error
 				advertisementInterval := maxAdvertisementInterval
 				for _, capa := range capabilities {
-					ttl, err0 := c.Advertise(c.dht.Context(), string(capa))
+					ttl, err0 := c.disc.Advertise(c.dht.Context(), string(capa))
+					// ttl, err0 := c.Advertise(c.dht.Context(), string(capa))
 					if err0 != nil {
 						err = err0
 						c.log.Errorf("failed to advertise for capability %s: %v", capa, err0)
