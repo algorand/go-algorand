@@ -486,3 +486,41 @@ func TestAppRateLimiter_TxgroupToKeys(t *testing.T) {
 	require.Equal(t, len(kb.buckets), len(kb.buckets))
 	putAppKeyBuf(kb)
 }
+
+func BenchmarkAppRateLimiter_TxgroupToKeys(b *testing.B) {
+	rnd := rand.New(rand.NewSource(123))
+
+	txgroups := make([][]transactions.SignedTxn, 0, b.N)
+	for i := 0; i < b.N; i++ {
+		txgroup := make([]transactions.SignedTxn, 0, config.MaxTxGroupSize)
+		for j := 0; j < config.MaxTxGroupSize; j++ {
+			apptxn := transactions.Transaction{
+				Type: protocol.ApplicationCallTx,
+				ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+					ApplicationID: basics.AppIndex(rnd.Uint64()),
+					ForeignApps:   []basics.AppIndex{basics.AppIndex(rnd.Uint64()), basics.AppIndex(rnd.Uint64()), basics.AppIndex(rnd.Uint64()), basics.AppIndex(rnd.Uint64())},
+				},
+			}
+			txgroup = append(txgroup, transactions.SignedTxn{Txn: apptxn})
+		}
+		txgroups = append(txgroups, txgroup)
+	}
+
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	origin := make([]byte, 4)
+	_, err := rnd.Read(origin)
+	require.NoError(b, err)
+	require.NotEmpty(b, origin)
+
+	salt := [16]byte{}
+	_, err = rnd.Read(salt[:])
+	require.NoError(b, err)
+	require.NotEmpty(b, salt)
+
+	for i := 0; i < b.N; i++ {
+		kb := txgroupToKeys(txgroups[i], origin, 123, salt, numBuckets)
+		putAppKeyBuf(kb)
+	}
+}

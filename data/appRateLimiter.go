@@ -248,16 +248,19 @@ func txgroupToKeys(txgroup []transactions.SignedTxn, origin []byte, seed uint64,
 	// The 16 bytes salt makes it harder to find collisions if an adversary attempts to censor
 	// some app by finding a collision with some app and flood a network with such transactions:
 	// h(app + relay_ip) = h(app2 + relay_ip).
-	var buf [8 + 16 + 16]byte // uint64 + 16 bytes of salt + up to 16 bytes of address
-	txnToDigest := func(appIdx basics.AppIndex) keyType {
-		binary.LittleEndian.PutUint64(buf[:8], uint64(appIdx))
-		copy(buf[8:], salt[:])
-		copied := copy(buf[8+16:], origin)
 
-		h := blake2b.Sum256(buf[:8+16+copied])
-		var key keyType
-		copy(key[:], h[:len(key)])
-		return key
+	// uint64 + 16 bytes of salt + up to 16 bytes of address
+	// salt and origin are fixed so pre-copy them into the buf
+	var buf [8 + 16 + 16]byte
+	copy(buf[8:], salt[:])
+	copied := copy(buf[8+16:], origin)
+	bufLen := 8 + 16 + copied
+
+	txnToDigest := func(appIdx basics.AppIndex) (key keyType) {
+		binary.LittleEndian.PutUint64(buf[:8], uint64(appIdx))
+		h := blake2b.Sum256(buf[:bufLen])
+		copy(key[:], h[:len(keyType{})])
+		return
 	}
 	txnToBucket := func(appIdx basics.AppIndex) int {
 		return int(memhash64(uint64(appIdx), seed) % uint64(numBuckets))
@@ -283,9 +286,9 @@ func txgroupToKeys(txgroup []transactions.SignedTxn, origin []byte, seed uint64,
 			if len(txgroup[i].Txn.ForeignApps) > 0 {
 				for _, appIdx := range txgroup[i].Txn.ForeignApps {
 					if valid(appIdx) {
-						seen[appIdx] = struct{}{}
 						keysBuckets.buckets = append(keysBuckets.buckets, txnToBucket(appIdx))
 						keysBuckets.keys = append(keysBuckets.keys, txnToDigest(appIdx))
+						seen[appIdx] = struct{}{}
 					}
 				}
 			}
