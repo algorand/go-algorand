@@ -310,7 +310,8 @@ func (s *Service) fetchAndWrite(ctx context.Context, r basics.Round, prevFetchCo
 				return false
 			}
 			failureRank := peerRankDownloadFailed
-			if err == errNoBlockForRound {
+			var nbfe noBlockForRoundError
+			if errors.As(err, &nbfe) {
 				failureRank = peerRankNoBlockForRound
 				// remote peer doesn't have the block, try another peer
 				// quit if the the same peer peer encountered errNoBlockForRound more than errNoBlockForRoundThreshold times
@@ -731,7 +732,8 @@ func (s *Service) fetchRound(cert agreement.Certificate, verifier *agreement.Asy
 			default:
 			}
 			failureRank := peerRankDownloadFailed
-			if err == errNoBlockForRound {
+			var nbfe noBlockForRoundError
+			if errors.As(err, &nbfe) {
 				failureRank = peerRankNoBlockForRound
 				// If a peer does not have the block after few attempts it probably has not persisted the block yet.
 				// Give it some time to persist the block and try again.
