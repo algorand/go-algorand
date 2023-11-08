@@ -243,6 +243,8 @@ func (s *Service) innerFetch(ctx context.Context, r basics.Round, peer network.P
 	return
 }
 
+const errNoBlockForRoundThreshold = 5
+
 // fetchAndWrite fetches a block, checks the cert, and writes it to the ledger. Cert checking and ledger writing both wait for the ledger to advance if necessary.
 // Returns false if we should stop trying to catch up.  This may occur for several reasons:
 //   - If the context is canceled (e.g. if the node is shutting down)
@@ -254,6 +256,11 @@ func (s *Service) fetchAndWrite(ctx context.Context, r basics.Round, prevFetchCo
 	if dontSyncRound := s.GetDisableSyncRound(); dontSyncRound != 0 && r >= basics.Round(dontSyncRound) {
 		return false
 	}
+
+	// peerErrors tracks occurrences of errNoBlockForRound in order to quit earlier without making
+	// repeated requests for a block that most likely does not exist yet
+	peerErrors := map[network.Peer]int{}
+
 	i := 0
 	for {
 		i++
@@ -302,8 +309,19 @@ func (s *Service) fetchAndWrite(ctx context.Context, r basics.Round, prevFetchCo
 				s.log.Infof("fetchAndWrite(%d): the block is already in the ledger. The catchup is complete", r)
 				return false
 			}
+			failureRank := peerRankDownloadFailed
+			if err == errNoBlockForRound {
+				failureRank = peerRankNoBlockForRound
+				// remote peer doesn't have the block, try another peer
+				// quit if the the same peer peer encountered errNoBlockForRound more than errNoBlockForRoundThreshold times
+				if count := peerErrors[peer]; count > errNoBlockForRoundThreshold {
+					s.log.Infof("fetchAndWrite(%d): remote peers do not have the block. Quitting", r)
+					return false
+				}
+				peerErrors[peer]++
+			}
 			s.log.Debugf("fetchAndWrite(%v): Could not fetch: %v (attempt %d)", r, err, i)
-			peerSelector.rankPeer(psp, peerRankDownloadFailed)
+			peerSelector.rankPeer(psp, failureRank)
 
 			// we've just failed to retrieve a block; wait until the previous block is fetched before trying again
 			// to avoid the usecase where the first block doesn't exist, and we're making many requests down the chain
@@ -689,6 +707,8 @@ func (s *Service) fetchRound(cert agreement.Certificate, verifier *agreement.Asy
 		return
 	}
 
+	peerErrors := map[network.Peer]int{}
+
 	blockHash := bookkeeping.BlockHash(cert.Proposal.BlockDigest) // semantic digest (i.e., hash of the block header), not byte-for-byte digest
 	peerSelector := createPeerSelector(s.net, s.cfg, false)
 	for s.ledger.LastRound() < cert.Round {
@@ -710,8 +730,30 @@ func (s *Service) fetchRound(cert agreement.Certificate, verifier *agreement.Asy
 				return
 			default:
 			}
+			failureRank := peerRankDownloadFailed
+			if err == errNoBlockForRound {
+				failureRank = peerRankNoBlockForRound
+				// If a peer does not have the block after few attempts it probably has not persisted the block yet.
+				// Give it some time to persist the block and try again.
+				// None, there is no exit condition on too many retries as per the function contract.
+				if count, ok := peerErrors[peer]; ok {
+					if count > errNoBlockForRoundThreshold {
+						time.Sleep(50 * time.Millisecond)
+					}
+					if count > errNoBlockForRoundThreshold*10 {
+						// for the low number of connected peers (like 2) the following scenatio is possible:
+						// - both peers do not have the block
+						// - peer selector punishes one of the peers more than the other
+						// - the punoshed peer gets the block, and the less punished peer stucks.
+						// It this case reset the peer selector to let it re-learn priorities.
+						peerSelector = createPeerSelector(s.net, s.cfg, false)
+					}
+				}
+				peerErrors[peer]++
+			}
+			// remote peer doesn't have the block, try another peer
 			logging.Base().Warnf("fetchRound could not acquire block, fetcher errored out: %v", err)
-			peerSelector.rankPeer(psp, peerRankDownloadFailed)
+			peerSelector.rankPeer(psp, failureRank)
 			continue
 		}
 
