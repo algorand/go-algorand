@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -137,6 +139,124 @@ func testOneTimeSignVerifyNewStyle(t *testing.T, c *OneTimeSignatureSecrets, c2 
 	bigJumpID.Batch++
 	if !c.Verify(bigJumpID, s, c.Sign(bigJumpID, s)) {
 		t.Errorf("bigJumpID.Batch++ does not verify")
+	}
+}
+
+// copied from basics to avoid circular dependency
+func oneTimeIDForRound(round uint64, keyDilution uint64) OneTimeSignatureIdentifier {
+	return OneTimeSignatureIdentifier{
+		Batch:  round / keyDilution,
+		Offset: round % keyDilution,
+	}
+}
+
+// Tests that we have the expected batch and offsets.
+func TestOneTimeSignatureSecrets_DeleteBeforeFineGrained(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	dilution := uint64(1000)
+
+	testcases := []struct {
+		name                string
+		startBatch          uint64
+		dilution            uint64
+		round               int
+		expectedBatches     int
+		expectedOffsets     int
+		expectedFirstBatch  uint64
+		expectedFirstOffset uint64
+	}{
+		{
+			name:                "no delete",
+			dilution:            dilution,
+			round:               -1, // no delete
+			expectedBatches:     int(dilution),
+			expectedOffsets:     0,
+			expectedFirstBatch:  0,
+			expectedFirstOffset: 0,
+		}, {
+			name:                "expand first batch",
+			dilution:            dilution,
+			round:               0,
+			expectedBatches:     int(dilution) - 1,
+			expectedOffsets:     int(dilution),
+			expectedFirstBatch:  1,
+			expectedFirstOffset: 0,
+		}, {
+			name:                "delete half of first batch",
+			dilution:            dilution,
+			round:               int(dilution / 2),
+			expectedBatches:     int(dilution) - 1,
+			expectedOffsets:     int(dilution) / 2,
+			expectedFirstBatch:  1,
+			expectedFirstOffset: dilution / 2,
+		}, {
+			name:                "expand second batch",
+			dilution:            dilution,
+			round:               int(dilution),
+			expectedBatches:     int(dilution) - 2,
+			expectedOffsets:     int(dilution),
+			expectedFirstBatch:  2,
+			expectedFirstOffset: 0,
+		}, {
+			name:                "halfway into 10th batch",
+			dilution:            dilution,
+			round:               int(9*dilution + dilution/2),
+			expectedBatches:     int(dilution) - 10,
+			expectedOffsets:     int(dilution) / 2,
+			expectedFirstBatch:  10,
+			expectedFirstOffset: dilution / 2,
+		}, {
+			name:                "delete all but last offset",
+			dilution:            dilution,
+			round:               int(dilution - 1),
+			expectedBatches:     int(dilution) - 1,
+			expectedOffsets:     1,
+			expectedFirstBatch:  1,
+			expectedFirstOffset: dilution - 1,
+		}, {
+			name:                "delete all but one",
+			dilution:            dilution,
+			round:               int(dilution*dilution) - 1,
+			expectedBatches:     0,
+			expectedOffsets:     1,
+			expectedFirstBatch:  dilution,
+			expectedFirstOffset: dilution - 1,
+		}, {
+			name:                "delete everything",
+			dilution:            dilution,
+			round:               int(dilution * dilution),
+			expectedBatches:     0,
+			expectedOffsets:     0,
+			expectedFirstBatch:  dilution,
+			expectedFirstOffset: 0,
+		}, {
+			name:                "non-zero start batch - expanded",
+			startBatch:          32_000,
+			dilution:            dilution,
+			round:               int(32_000 * dilution),
+			expectedBatches:     999,
+			expectedOffsets:     int(dilution),
+			expectedFirstBatch:  32_000 + 1,
+			expectedFirstOffset: 0,
+		},
+	}
+
+	for _, tc := range testcases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			c := GenerateOneTimeSignatureSecrets(tc.startBatch, tc.dilution)
+
+			if tc.round != -1 {
+				c.DeleteBeforeFineGrained(oneTimeIDForRound(uint64(tc.round), tc.dilution), tc.dilution)
+			}
+
+			require.Len(t, c.Batches, tc.expectedBatches)
+			require.Len(t, c.Offsets, tc.expectedOffsets)
+			require.Equal(t, c.FirstBatch, tc.expectedFirstBatch)
+			require.Equal(t, c.FirstOffset, tc.expectedFirstOffset)
+		})
 	}
 }
 
