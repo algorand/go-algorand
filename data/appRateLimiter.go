@@ -262,52 +262,18 @@ func txgroupToKeys(txgroup []transactions.SignedTxn, origin []byte, seed uint64,
 	txnToBucket := func(appIdx basics.AppIndex) int {
 		return int(memhash64(uint64(appIdx), seed) % uint64(numBuckets))
 	}
-	for i := range txgroup {
-		if txgroup[i].Txn.Type == protocol.ApplicationCallTx {
-			appIdx := txgroup[i].Txn.ApplicationID
-			// hash appIdx into a bucket, do not use modulo without hashing first since it could
-			// assign two vanilla (and presumable, popular) apps to the same bucket.
-			keysBuckets.buckets = append(keysBuckets.buckets, txnToBucket(appIdx))
-			keysBuckets.keys = append(keysBuckets.keys, txnToDigest(appIdx))
-			if len(txgroup[i].Txn.ForeignApps) > 0 {
-				for _, appIdx := range txgroup[i].Txn.ForeignApps {
-					keysBuckets.buckets = append(keysBuckets.buckets, txnToBucket(appIdx))
-					keysBuckets.keys = append(keysBuckets.keys, txnToDigest(appIdx))
-				}
-			}
+	seen := make(map[basics.AppIndex]struct{}, len(txgroup)*(1+config.MaxAppTxnForeignApps))
+	valid := func(appIdx basics.AppIndex) bool {
+		if appIdx != 0 {
+			_, ok := seen[appIdx]
+			return !ok
 		}
+		return false
 	}
-	return keysBuckets
-}
-
-// txgroupToKeys converts txgroup data to keys
-func txgroupToKeysDups(txgroup []transactions.SignedTxn, origin []byte, seed uint64, salt [16]byte, numBuckets int) *appKeyBuf {
-	keysBuckets := getAppKeyBuf()
-	// since blake2 is a crypto hash function it seems OK to shrink 32 bytes digest down to 8.
-	// Rationale: we expect thousands of apps sent from thousands of peers,
-	// so required millions of unique pairs => 8 bytes should be enough.
-	// The 16 bytes salt makes it harder to find collisions if an adversary attempts to censor
-	// some app by finding a collision with some app and flood a network with such transactions:
-	// h(app + relay_ip) = h(app2 + relay_ip).
-	var buf [8 + 16 + 16]byte // uint64 + 16 bytes of salt + up to 16 bytes of address
-	txnToDigest := func(appIdx basics.AppIndex) keyType {
-		binary.LittleEndian.PutUint64(buf[:8], uint64(appIdx))
-		copy(buf[8:], salt[:])
-		copied := copy(buf[8+16:], origin)
-
-		h := blake2b.Sum256(buf[:8+16+copied])
-		var key keyType
-		copy(key[:], h[:len(key)])
-		return key
-	}
-	txnToBucket := func(appIdx basics.AppIndex) int {
-		return int(memhash64(uint64(appIdx), seed) % uint64(numBuckets))
-	}
-	seen := make(map[basics.AppIndex]struct{}, len(txgroup)*config.MaxTxGroupSize*(1+config.MaxAppTxnForeignApps))
 	for i := range txgroup {
 		if txgroup[i].Txn.Type == protocol.ApplicationCallTx {
 			appIdx := txgroup[i].Txn.ApplicationID
-			if _, ok := seen[appIdx]; !ok {
+			if valid(appIdx) {
 				keysBuckets.buckets = append(keysBuckets.buckets, txnToBucket(appIdx))
 				keysBuckets.keys = append(keysBuckets.keys, txnToDigest(appIdx))
 				seen[appIdx] = struct{}{}
@@ -316,12 +282,11 @@ func txgroupToKeysDups(txgroup []transactions.SignedTxn, origin []byte, seed uin
 			// assign two vanilla (and presumable, popular) apps to the same bucket.
 			if len(txgroup[i].Txn.ForeignApps) > 0 {
 				for _, appIdx := range txgroup[i].Txn.ForeignApps {
-					if _, ok := seen[appIdx]; ok {
-						continue
+					if valid(appIdx) {
+						seen[appIdx] = struct{}{}
+						keysBuckets.buckets = append(keysBuckets.buckets, txnToBucket(appIdx))
+						keysBuckets.keys = append(keysBuckets.keys, txnToDigest(appIdx))
 					}
-					seen[appIdx] = struct{}{}
-					keysBuckets.buckets = append(keysBuckets.buckets, txnToBucket(appIdx))
-					keysBuckets.keys = append(keysBuckets.keys, txnToDigest(appIdx))
 				}
 			}
 		}

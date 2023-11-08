@@ -105,7 +105,9 @@ func TestAppRateLimiter_Basics(t *testing.T) {
 	drop = rm.shouldDropAt(txns, nil, now)
 	require.True(t, drop)
 
-	// check a single group with exceed rate is dropped
+	require.Equal(t, 1, rm.len())
+
+	// check a single group cannot exceed the rate
 	apptxn2 := txns[0].Txn
 	apptxn2.ApplicationID = 2
 	txns = make([]transactions.SignedTxn, 0, rate+1)
@@ -115,12 +117,19 @@ func TestAppRateLimiter_Basics(t *testing.T) {
 		})
 	}
 	drop = rm.shouldDropAt(txns, nil, now)
+	require.False(t, drop)
+
+	// check multple groups can exceed the rate (-1 comes from the previous check)
+	for i := 0; i < int(rate)-1; i++ {
+		drop = rm.shouldDropAt(txns, nil, now)
+		require.False(t, drop)
+	}
+	drop = rm.shouldDropAt(txns, nil, now)
 	require.True(t, drop)
 
-	drop = rm.shouldDropAt(txns, nil, now+int64(2*window))
-	require.True(t, drop)
+	require.Equal(t, 2, rm.len())
 
-	// check foreign apps
+	// check foreign apps in the same group do not trigger the rate limit
 	apptxn3 := txns[0].Txn
 	apptxn3.ApplicationID = 3
 	for i := 0; i < int(rate); i++ {
@@ -128,7 +137,17 @@ func TestAppRateLimiter_Basics(t *testing.T) {
 	}
 	txns = []transactions.SignedTxn{{Txn: apptxn3}}
 	drop = rm.shouldDropAt(txns, nil, now)
+	require.False(t, drop)
+
+	// check multple groups with foreign apps can exceed the rate (-1 comes from the previous check)
+	for i := 0; i < int(rate)-1; i++ {
+		drop = rm.shouldDropAt(txns, nil, now)
+		require.False(t, drop)
+	}
+	drop = rm.shouldDropAt(txns, nil, now)
 	require.True(t, drop)
+
+	require.Equal(t, 3, rm.len())
 }
 
 // TestAppRateLimiter_Interval checks prev + cur rate approximation logic
@@ -422,4 +441,48 @@ func BenchmarkAppRateLimiter(b *testing.B) {
 			b.Logf("# evictions %d, time %d us", rm.evictions, rm.evictionTime/uint64(time.Microsecond))
 		}
 	})
+}
+
+func TestAppRateLimiter_TxgroupToKeys(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	apptxn := transactions.Transaction{
+		Type: protocol.ApplicationCallTx,
+		ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+			ApplicationID: 0,
+			ForeignApps:   []basics.AppIndex{0},
+		},
+	}
+	txgroup := []transactions.SignedTxn{{Txn: apptxn}}
+
+	kb := txgroupToKeys(txgroup, nil, 123, [16]byte{}, 1)
+	require.Equal(t, 0, len(kb.keys))
+	require.Equal(t, len(kb.buckets), len(kb.buckets))
+	putAppKeyBuf(kb)
+
+	txgroup[0].Txn.ApplicationID = 1
+	kb = txgroupToKeys(txgroup, nil, 123, [16]byte{}, 1)
+	require.Equal(t, 1, len(kb.keys))
+	require.Equal(t, len(kb.buckets), len(kb.buckets))
+	putAppKeyBuf(kb)
+
+	txgroup[0].Txn.ForeignApps = append(txgroup[0].Txn.ForeignApps, 1)
+	kb = txgroupToKeys(txgroup, nil, 123, [16]byte{}, 1)
+	require.Equal(t, 1, len(kb.keys))
+	require.Equal(t, len(kb.buckets), len(kb.buckets))
+	putAppKeyBuf(kb)
+
+	txgroup[0].Txn.ForeignApps = append(txgroup[0].Txn.ForeignApps, 2)
+	kb = txgroupToKeys(txgroup, nil, 123, [16]byte{}, 1)
+	require.Equal(t, 2, len(kb.keys))
+	require.Equal(t, len(kb.buckets), len(kb.buckets))
+	putAppKeyBuf(kb)
+
+	apptxn.ApplicationID = 2
+	txgroup = append(txgroup, transactions.SignedTxn{Txn: apptxn})
+	kb = txgroupToKeys(txgroup, nil, 123, [16]byte{}, 1)
+	require.Equal(t, 2, len(kb.keys))
+	require.Equal(t, len(kb.buckets), len(kb.buckets))
+	putAppKeyBuf(kb)
 }
