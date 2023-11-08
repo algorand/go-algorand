@@ -181,11 +181,11 @@ func MakeTxHandler(opts TxHandlerOpts) (*TxHandler, error) {
 		handler.txCanonicalCache = makeDigestCache(int(opts.Config.TxIncomingFilterMaxSize))
 	}
 
-	if opts.Config.EnableTxBacklogRateLimiting || opts.Config.EnableAppTxBacklogRateLimiting {
+	if opts.Config.EnableTxBacklogRateLimiting || opts.Config.EnableTxBacklogAppRateLimiting {
 		if opts.Config.TxBacklogRateLimitingCongestionPct > 100 || opts.Config.TxBacklogRateLimitingCongestionPct < 0 {
 			return nil, fmt.Errorf("invalid value for TxBacklogRateLimitingCongestionPct: %d", opts.Config.TxBacklogRateLimitingCongestionPct)
 		}
-		if opts.Config.EnableAppTxBacklogRateLimiting && opts.Config.TxBacklogAppTxRateLimiterMaxSize == 0 {
+		if opts.Config.EnableTxBacklogAppRateLimiting && opts.Config.TxBacklogAppTxRateLimiterMaxSize == 0 {
 			return nil, fmt.Errorf("invalid value for TxBacklogAppTxRateLimiterMaxSize: %d. App rate limiter enabled with zero size", opts.Config.TxBacklogAppTxRateLimiterMaxSize)
 		}
 		handler.backlogCongestionThreshold = float64(opts.Config.TxBacklogRateLimitingCongestionPct) / 100
@@ -197,7 +197,7 @@ func MakeTxHandler(opts TxHandlerOpts) (*TxHandler, error) {
 				txBacklogDroppedCongestionManagement,
 			)
 		}
-		if opts.Config.EnableAppTxBacklogRateLimiting {
+		if opts.Config.EnableTxBacklogAppRateLimiting {
 			handler.appLimiter = makeAppRateLimiter(
 				opts.Config.TxBacklogAppTxRateLimiterMaxSize,
 				uint64(opts.Config.TxBacklogAppTxPerSecondRate),

@@ -2533,7 +2533,7 @@ func TestTxHandlerAppRateLimiterERLEnabled(t *testing.T) {
 
 	func() {
 		cfg.EnableTxBacklogRateLimiting = false
-		cfg.EnableAppTxBacklogRateLimiting = false
+		cfg.EnableTxBacklogAppRateLimiting = false
 		handler, err := makeTestTxHandler(l, cfg)
 		require.NoError(t, err)
 		defer handler.txVerificationPool.Shutdown()
@@ -2545,7 +2545,7 @@ func TestTxHandlerAppRateLimiterERLEnabled(t *testing.T) {
 
 	func() {
 		cfg.EnableTxBacklogRateLimiting = true
-		cfg.EnableAppTxBacklogRateLimiting = false
+		cfg.EnableTxBacklogAppRateLimiting = false
 		handler, err := makeTestTxHandler(l, cfg)
 		require.NoError(t, err)
 		defer handler.txVerificationPool.Shutdown()
@@ -2556,7 +2556,7 @@ func TestTxHandlerAppRateLimiterERLEnabled(t *testing.T) {
 	}()
 
 	cfg.EnableTxBacklogRateLimiting = true
-	cfg.EnableAppTxBacklogRateLimiting = true
+	cfg.EnableTxBacklogAppRateLimiting = true
 	handler, err := makeTestTxHandler(l, cfg)
 	require.NoError(t, err)
 	defer handler.txVerificationPool.Shutdown()

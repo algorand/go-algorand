@@ -238,11 +238,12 @@ type Local struct {
 	// TxBacklogAppTxPerSecondRate determines a target app per second rate for the app tx rate limiter
 	TxBacklogAppTxPerSecondRate int `version[32]:"100"`
 
-	// TxBacklogRateLimitingCongestionRatio determines the backlog filling threashold in percents at which app limiter kicks in
+	// TxBacklogRateLimitingCongestionRatio determines the backlog filling threshold percentage at which the app limiter kicks in
+	// or the tx backlog rate limiter kicks off.
 	TxBacklogRateLimitingCongestionPct int `version[32]:"50"`
 
-	// EnableAppTxBacklogRateLimiting controls if an app rate limiter should be attached to the tx backlog enqueue process
-	EnableAppTxBacklogRateLimiting bool `version[32]:"true"`
+	// EnableTxBacklogAppRateLimiting controls if an app rate limiter should be attached to the tx backlog enqueue process
+	EnableTxBacklogAppRateLimiting bool `version[32]:"true"`
 
 	// EnableTxBacklogRateLimiting controls if a rate limiter and congestion manager should be attached to the tx backlog enqueue process
 	// if enabled, the over-all TXBacklog Size will be larger by MAX_PEERS*TxBacklogReservedCapacityPerPeer
