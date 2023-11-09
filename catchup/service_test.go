@@ -20,7 +20,9 @@ import (
 	"context"
 	"errors"
 	"math/rand"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -180,6 +182,27 @@ func (cl *periodicSyncLogger) Warnf(s string, args ...interface{}) {
 	cl.Logger.Warnf(s, args...)
 }
 
+type periodicSyncDebugLogger struct {
+	periodicSyncLogger
+	debugMsgFilter []string
+	debugMsgs      atomic.Uint32
+}
+
+func (cl *periodicSyncDebugLogger) Debugf(s string, args ...interface{}) {
+	// save debug messages for later inspection.
+	if len(cl.debugMsgFilter) > 0 {
+		for _, filter := range cl.debugMsgFilter {
+			if strings.Contains(s, filter) {
+				cl.debugMsgs.Add(1)
+				break
+			}
+		}
+	} else {
+		cl.debugMsgs.Add(1)
+	}
+	cl.Logger.Debugf(s, args...)
+}
+
 func TestSyncRound(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -208,7 +231,7 @@ func TestSyncRound(t *testing.T) {
 
 	auth := &mockedAuthenticator{fail: true}
 	initialLocalRound := local.LastRound()
-	require.True(t, 0 == initialLocalRound)
+	require.Zero(t, initialLocalRound)
 
 	// Make Service
 	localCfg := config.GetDefaultLocal()
@@ -253,7 +276,7 @@ func TestSyncRound(t *testing.T) {
 	s.UnsetDisableSyncRound()
 	// wait until the catchup is done
 	waitStart = time.Now()
-	for time.Now().Sub(waitStart) < 8*s.deadlineTimeout {
+	for time.Since(waitStart) < 8*s.deadlineTimeout {
 		if remote.LastRound() == local.LastRound() {
 			break
 		}
@@ -298,7 +321,7 @@ func TestPeriodicSync(t *testing.T) {
 
 	auth := &mockedAuthenticator{fail: true}
 	initialLocalRound := local.LastRound()
-	require.True(t, 0 == initialLocalRound)
+	require.Zero(t, initialLocalRound)
 
 	// Make Service
 	s := MakeService(logging.Base(), defaultConfig, net, local, auth, nil, nil)
@@ -315,7 +338,7 @@ func TestPeriodicSync(t *testing.T) {
 	// wait until the catchup is done. Since we've might have missed the sleep window, we need to wait
 	// until the synchronization is complete.
 	waitStart := time.Now()
-	for time.Now().Sub(waitStart) < 10*s.deadlineTimeout {
+	for time.Since(waitStart) < 10*s.deadlineTimeout {
 		if remote.LastRound() == local.LastRound() {
 			break
 		}
@@ -506,7 +529,6 @@ func TestServiceFetchBlocksMultiBlocks(t *testing.T) {
 		localBlock, err := local.Block(i)
 		require.NoError(t, err)
 		require.Equal(t, *blk, localBlock)
-		return
 	}
 }
 
@@ -1183,4 +1205,53 @@ func TestServiceLedgerUnavailable(t *testing.T) {
 	s.sync()
 	require.Greater(t, local.LastRound(), basics.Round(0))
 	require.Less(t, local.LastRound(), remote.LastRound())
+}
+
+// TestServiceNoBlockForRound checks if fetchAndWrite does not repeats 500 times if a block not avaialble
+func TestServiceNoBlockForRound(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	// Make Ledger
+	local := new(mockedLedger)
+	local.blocks = append(local.blocks, bookkeeping.Block{})
+
+	remote, _, blk, err := buildTestLedger(t, bookkeeping.Block{})
+	if err != nil {
+		t.Fatal(err)
+		return
+	}
+	numBlocks := 10
+	addBlocks(t, remote, blk, numBlocks)
+
+	// Create a network and block service
+	blockServiceConfig := config.GetDefaultLocal()
+	net := &httpTestPeerSource{}
+	ls := rpcs.MakeBlockService(logging.Base(), blockServiceConfig, remote, net, "test genesisID")
+
+	nodeA := basicRPCNode{}
+	nodeA.RegisterHTTPHandler(rpcs.BlockServiceBlockPath, ls)
+	nodeA.start()
+	defer nodeA.stop()
+	rootURL := nodeA.rootURL()
+	net.addPeer(rootURL)
+
+	require.Equal(t, basics.Round(0), local.LastRound())
+	require.Equal(t, basics.Round(numBlocks+1), remote.LastRound())
+
+	// Make Service
+	auth := &mockedAuthenticator{fail: false}
+	cfg := config.GetDefaultLocal()
+	cfg.CatchupParallelBlocks = 8
+	s := MakeService(logging.Base(), cfg, net, local, auth, nil, nil)
+	pl := &periodicSyncDebugLogger{periodicSyncLogger: periodicSyncLogger{Logger: logging.Base()}}
+	s.log = pl
+	s.deadlineTimeout = 1 * time.Second
+
+	s.testStart()
+	defer s.Stop()
+	s.sync()
+
+	// without the fix there are about 2k messages (4x catchupRetryLimit)
+	// with the fix expect less than catchupRetryLimit
+	require.Less(t, int(pl.debugMsgs.Load()), catchupRetryLimit)
 }
