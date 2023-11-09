@@ -162,11 +162,13 @@ func SaveNonDefaultValuesToFile(filename string, object, defaultObject interface
 	defer outFile.Close()
 	writer := bufio.NewWriter(outFile)
 
-	WriteNonDefaultValues(writer, object, defaultObject, ignore)
-	if err == nil {
-		writer.Flush()
+	err = WriteNonDefaultValues(writer, object, defaultObject, ignore)
+	if err != nil {
+		return err
 	}
-	return err
+
+	writer.Flush()
+	return nil
 }
 
 func extractValueName(line string) (name string) {
