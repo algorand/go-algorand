@@ -849,7 +849,10 @@ func (db *participationDB) GetForRound(id ParticipationID, round basics.Round) (
 	snap := result.ParticipationRecord.Voting.Snapshot()
 	otsID := basics.OneTimeIDForRound(round, result.KeyDilution)
 	snap.DeleteBeforeFineGrained(otsID, result.KeyDilution)
-	snap.DeleteAllButFineGrained(otsID)
+	err := snap.DeleteAllButFineGrained(otsID)
+	if err != nil {
+		return ParticipationRecordForRound{}, fmt.Errorf("error occurred while truncating voting keys: %w", err)
+	}
 	result.ParticipationRecord.Voting = &snap
 
 	return result, nil

@@ -149,10 +149,10 @@ type OneTimeSignatureSecrets struct {
 type OneTimeSignatureSecretsPersistent struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	// Truncated is used to indicate that the results have been truncated beyond the normal
+	// truncated is used to indicate that the results have been truncated beyond the normal
 	// used key removal process. This flag is used to generate an error if an attempt is made
 	// to serialize a truncated object.
-	Truncated bool `codec:"-"`
+	truncated bool `codec:"-"`
 
 	OneTimeSignatureVerifier
 
@@ -334,6 +334,7 @@ func (v OneTimeSignatureVerifier) Verify(id OneTimeSignatureIdentifier, message 
 	return allValid
 }
 
+// ErrIdentifierNotInCurrentBatch is returned by DeleteAllButFineGrained when requesting an identifier that isn't in the current batch.
 var ErrIdentifierNotInCurrentBatch = fmt.Errorf("the requesuted identifier is not in the current batch")
 
 // DeleteAllButFineGrained DeleteBeforeFineGrained deletes ephemeral keys before and after (but not including) the given id.
@@ -363,7 +364,7 @@ func (s *OneTimeSignatureSecrets) DeleteAllButFineGrained(current OneTimeSignatu
 	// Remove future ephemeral subkeys.
 	s.Offsets = s.Offsets[:1]
 	s.Batches = nil
-	s.Truncated = true
+	s.truncated = true
 
 	return nil
 }
@@ -454,7 +455,7 @@ func (s *OneTimeSignatureSecrets) Snapshot() OneTimeSignatureSecrets {
 	defer s.mu.RUnlock()
 
 	// Should never serialize a truncated object.
-	if s.Truncated {
+	if s.truncated {
 		panic("Attempting to snapshot a truncated OneTimeSignatureSecrets object.")
 	}
 
