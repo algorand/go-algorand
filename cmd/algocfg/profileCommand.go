@@ -92,6 +92,7 @@ func init() {
 	rootCmd.AddCommand(profileCmd)
 	profileCmd.AddCommand(setProfileCmd)
 	setProfileCmd.Flags().BoolVarP(&forceUpdate, "yes", "y", false, "Force updates to be written")
+	profileCmd.AddCommand(printProfileCmd)
 	profileCmd.AddCommand(listProfileCmd)
 }
 
@@ -129,6 +130,23 @@ var listProfileCmd = &cobra.Command{
 
 		for key, value := range profileNames {
 			reportInfof("%-*s  %s", longest, key, value.description)
+		}
+	},
+}
+
+var printProfileCmd = &cobra.Command{
+	Use:   "print",
+	Short: "Print config.json to stdout.",
+	Args:  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		cfg, err := getConfigForArg(args[0])
+		if err != nil {
+			reportErrorf("%v", err)
+		}
+		stdoutName := os.Stdout.Name()
+		err = codecs.SaveNonDefaultValuesToFile(stdoutName, cfg, config.GetDefaultLocal(), nil, true)
+		if err != nil {
+			reportErrorf("Error saving updated config file '%s' - %s", stdoutName, err)
 		}
 	},
 }
