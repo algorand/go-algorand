@@ -33,7 +33,7 @@ const (
 )
 
 // MakeNibbles returns a nibble array from the byte array.  If oddLength is true,
-// the last 4 bits of the last byte of the array are ignored.  
+// the last 4 bits of the last byte of the array are ignored.
 //
 // [0x12, 0x30], true -> [0x1, 0x2, 0x3]
 // [0x12, 0x34], false -> [0x1, 0x2, 0x3, 0x4]
@@ -154,9 +154,9 @@ func Deserialize(encoding []byte) (Nibbles, error) {
 		return nil, errors.New("invalid encoding")
 	}
 	if encoding[length-1] == oddIndicator {
-        if length == 1 {
-    		return nil, errors.New("invalid encoding")
-        }
+		if length == 1 {
+			return nil, errors.New("invalid encoding")
+		}
 		ns = MakeNibbles(encoding[:length-1], true)
 	} else if encoding[length-1] == evenIndicator {
 		ns = MakeNibbles(encoding[:length-1], false)

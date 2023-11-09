@@ -17,10 +17,10 @@
 package nibbles
 
 import (
-	"time"
 	"bytes"
-	"testing"
 	"math/rand"
+	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -74,9 +74,9 @@ func TestNibblesRandom(t *testing.T) {
 func TestNibblesDeserialize(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
-    enc := []byte{0x01}
-    _, err := Deserialize(enc)
-    require.Error(t, err, "should return invalid encoding error")
+	enc := []byte{0x01}
+	_, err := Deserialize(enc)
+	require.Error(t, err, "should return invalid encoding error")
 }
 
 func TestNibbles(t *testing.T) {
