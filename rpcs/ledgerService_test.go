@@ -82,7 +82,7 @@ func TestLedgerService(t *testing.T) {
 	ledgerService := MakeLedgerService(cfg, &l, &fnet, genesisID)
 	fnet.AssertNotCalled(t, "RegisterHTTPHandler", LedgerServiceLedgerPath, ledgerService)
 	ledgerService.Start()
-	require.Equal(t, int32(0), ledgerService.running)
+	require.Equal(t, int32(0), ledgerService.running.Load())
 
 	// Test GET 404
 	rr := httptest.NewRecorder()
@@ -97,7 +97,7 @@ func TestLedgerService(t *testing.T) {
 	ledgerService = MakeLedgerService(cfg, &l, &fnet, genesisID)
 	fnet.AssertCalled(t, "RegisterHTTPHandler", LedgerServiceLedgerPath, ledgerService)
 	ledgerService.Start()
-	require.Equal(t, int32(1), ledgerService.running)
+	require.Equal(t, int32(1), ledgerService.running.Load())
 
 	// Test GET 400 Bad Version String
 	rr = httptest.NewRecorder()
@@ -170,5 +170,5 @@ func TestLedgerService(t *testing.T) {
 
 	// Test LedgerService Stopped
 	ledgerService.Stop()
-	require.Equal(t, int32(0), ledgerService.running)
+	require.Equal(t, int32(0), ledgerService.running.Load())
 }

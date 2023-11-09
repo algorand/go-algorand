@@ -20,7 +20,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/http"
-	"sync/atomic"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/protocol"
@@ -329,7 +328,7 @@ func identityVerificationHandler(message IncomingMessage) OutgoingMessage {
 
 	peer := message.Sender.(*wsPeer)
 	// avoid doing work (crypto and potentially taking a lock) if the peer is already verified
-	if atomic.LoadUint32(&peer.identityVerified) == 1 {
+	if peer.identityVerified.Load() == 1 {
 		return OutgoingMessage{}
 	}
 	localAddr, _ := peer.net.Address()
@@ -350,7 +349,7 @@ func identityVerificationHandler(message IncomingMessage) OutgoingMessage {
 		peer.log.With("remote", peer.OriginAddress()).With("local", localAddr).Warn("peer identity verification is incorrectly signed, disconnecting")
 		return OutgoingMessage{Action: Disconnect, reason: disconnectBadIdentityData}
 	}
-	atomic.StoreUint32(&peer.identityVerified, 1)
+	peer.identityVerified.Store(1)
 	// if the identity could not be claimed by this peer, it means the identity is in use
 	wn.peersLock.Lock()
 	ok := wn.identityTracker.setIdentity(peer)

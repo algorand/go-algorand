@@ -24,7 +24,6 @@ import (
 	"os"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -153,7 +152,7 @@ func TestTxSync(t *testing.T) {
 	// Since syncer is not Started, set the context here
 	syncer.ctx, syncer.cancel = context.WithCancel(context.Background())
 	require.NoError(t, syncer.sync())
-	require.Equal(t, int32(3), atomic.LoadInt32(&handler.messageCounter))
+	require.Equal(t, int32(3), handler.messageCounter.Load())
 }
 
 func BenchmarkTxSync(b *testing.B) {

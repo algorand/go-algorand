@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"golang.org/x/sync/semaphore"
 	"io"
 	"math"
 	"net"
@@ -2377,4 +2378,64 @@ func TestRouterRequestBody(t *testing.T) {
 	rec = httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 	assert.Equal(t, http.StatusRequestEntityTooLarge, rec.Code)
+}
+
+func TestGeneratePartkeys(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	numAccounts := 1
+	numTransactions := 1
+	offlineAccounts := true
+	mockLedger, _, _, _, releasefunc := testingenv(t, numAccounts, numTransactions, offlineAccounts)
+	defer releasefunc()
+	dummyShutdownChan := make(chan struct{})
+	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden, false)
+	handler := v2.Handlers{
+		Node:          mockNode,
+		Log:           logging.Base(),
+		Shutdown:      dummyShutdownChan,
+		KeygenLimiter: semaphore.NewWeighted(1),
+	}
+	e := echo.New()
+
+	var addr basics.Address
+	addr[0] = 1
+
+	{
+		require.Len(t, mockNode.PartKeyBinary, 0)
+		req := httptest.NewRequest(http.MethodPost, "/", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+
+		err := handler.GenerateParticipationKeys(c, addr.String(), model.GenerateParticipationKeysParams{
+			First: 1000,
+			Last:  2000,
+		})
+
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusOK, rec.Code)
+
+		// Wait for keygen to complete
+		err = handler.KeygenLimiter.Acquire(context.Background(), 1)
+		require.NoError(t, err)
+		require.Greater(t, len(mockNode.PartKeyBinary), 0)
+		handler.KeygenLimiter.Release(1)
+	}
+
+	{
+		req := httptest.NewRequest(http.MethodPost, "/", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		// Simulate a blocked keygen process (and block until the previous keygen is complete)
+		err := handler.KeygenLimiter.Acquire(context.Background(), 1)
+		require.NoError(t, err)
+		err = handler.GenerateParticipationKeys(c, addr.String(), model.GenerateParticipationKeysParams{
+			First: 1000,
+			Last:  2000,
+		})
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+	}
+
 }

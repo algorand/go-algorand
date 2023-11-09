@@ -53,11 +53,11 @@ func TestCatchpointIsWritingCatchpointFile(t *testing.T) {
 
 	ct := &catchpointTracker{}
 
-	ct.catchpointDataWriting = -1
+	ct.catchpointDataWriting.Store(-1)
 	ans := ct.isWritingCatchpointDataFile()
 	require.True(t, ans)
 
-	ct.catchpointDataWriting = 0
+	ct.catchpointDataWriting.Store(0)
 	ans = ct.isWritingCatchpointDataFile()
 	require.False(t, ans)
 }
@@ -360,7 +360,10 @@ func createCatchpoint(t *testing.T, ct *catchpointTracker, accountsRound basics.
 
 	require.Equal(t, calculateStateProofVerificationHash(t, ml), stateProofVerificationHash)
 
-	err = ct.createCatchpoint(context.Background(), accountsRound, round, trackerdb.CatchpointFirstStageInfo{BiggestChunkLen: biggestChunkLen}, crypto.Digest{})
+	err = ct.createCatchpoint(
+		context.Background(), accountsRound, round,
+		trackerdb.CatchpointFirstStageInfo{BiggestChunkLen: biggestChunkLen},
+		crypto.Digest{}, protocol.ConsensusCurrentVersion)
 	require.NoError(t, err)
 }
 
@@ -760,9 +763,11 @@ func TestCatchpointReproducibleLabels(t *testing.T) {
 
 	// test to see that after loadFromDisk, all the tracker content is lost ( as expected )
 	require.NotZero(t, len(ct.roundDigest))
+	require.NotZero(t, len(ct.consensusVersion))
 	require.NoError(t, ct.loadFromDisk(ml, ml.Latest()))
 	require.Zero(t, len(ct.roundDigest))
-	require.Zero(t, ct.catchpointDataWriting)
+	require.Zero(t, len(ct.consensusVersion))
+	require.Zero(t, ct.catchpointDataWriting.Load())
 	select {
 	case _, closed := <-ct.catchpointDataSlowWriting:
 		require.False(t, closed)
@@ -771,46 +776,73 @@ func TestCatchpointReproducibleLabels(t *testing.T) {
 	}
 }
 
+// TestCatchpointBackwardCompatibleLabels checks labels before and after EnableCatchpointsWithSPContexts was introduced.
+func TestCatchpointBackwardCompatibleLabels(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	temporaryDirectory := t.TempDir()
+
+	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(20, true)}
+	ml := makeMockLedgerForTracker(t, true, 10, protocol.ConsensusCurrentVersion, accts)
+	defer ml.Close()
+
+	ct := &catchpointTracker{enableGeneratingCatchpointFiles: false}
+	conf := config.GetDefaultLocal()
+
+	conf.Archival = true
+	paths := DirsAndPrefix{
+		ResolvedGenesisDirs: config.ResolvedGenesisDirs{
+			CatchpointGenesisDir: ".",
+			HotGenesisDir:        ".",
+		},
+	}
+	ct.initialize(conf, paths)
+
+	defer ct.close()
+	ct.dbDirectory = temporaryDirectory
+	ct.tmpDir = temporaryDirectory
+
+	_, err := trackerDBInitialize(ml, true, ct.dbDirectory)
+	require.NoError(t, err)
+
+	err = ct.loadFromDisk(ml, ml.Latest())
+	require.NoError(t, err)
+
+	// create catpoint with the latest version of the code
+	round := basics.Round(2000)
+
+	protos := []protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusV37, protocol.ConsensusV36}
+	labels := make([]string, len(protos))
+	for i, proto := range protos {
+		err = ct.createCatchpoint(
+			context.Background(), round-1, round,
+			trackerdb.CatchpointFirstStageInfo{},
+			crypto.Digest{}, proto)
+		require.NoError(t, err)
+		require.NotEmpty(t, ct.lastCatchpointLabel)
+		labels[i] = ct.lastCatchpointLabel
+	}
+	require.NotEqual(t, labels[0], labels[1])
+	require.Equal(t, labels[1], labels[2])
+}
+
 // blockingTracker is a testing tracker used to test "what if" a tracker would get blocked.
 type blockingTracker struct {
+	emptyTracker
 	postCommitUnlockedEntryLock   chan struct{}
 	postCommitUnlockedReleaseLock chan struct{}
 	postCommitEntryLock           chan struct{}
 	postCommitReleaseLock         chan struct{}
-	committedUpToRound            int64
+	committedUpToRound            atomic.Int64
 	alwaysLock                    atomic.Bool
 	shouldLockPostCommit          atomic.Bool
 	shouldLockPostCommitUnlocked  atomic.Bool
 }
 
-// loadFromDisk is not implemented in the blockingTracker.
-func (bt *blockingTracker) loadFromDisk(ledgerForTracker, basics.Round) error {
-	return nil
-}
-
-// newBlock is not implemented in the blockingTracker.
-func (bt *blockingTracker) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
-}
-
 // committedUpTo in the blockingTracker just stores the committed round.
 func (bt *blockingTracker) committedUpTo(committedRnd basics.Round) (minRound, lookback basics.Round) {
-	atomic.StoreInt64(&bt.committedUpToRound, int64(committedRnd))
+	bt.committedUpToRound.Store(int64(committedRnd))
 	return committedRnd, basics.Round(0)
-}
-
-// produceCommittingTask is not used by the blockingTracker
-func (bt *blockingTracker) produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcr *deferredCommitRange) *deferredCommitRange {
-	return dcr
-}
-
-// prepareCommit, is not used by the blockingTracker
-func (bt *blockingTracker) prepareCommit(*deferredCommitContext) error {
-	return nil
-}
-
-// commitRound is not used by the blockingTracker
-func (bt *blockingTracker) commitRound(context.Context, trackerdb.TransactionScope, *deferredCommitContext) error {
-	return nil
 }
 
 // postCommit implements entry/exit blockers, designed for testing.
@@ -827,18 +859,6 @@ func (bt *blockingTracker) postCommitUnlocked(ctx context.Context, dcc *deferred
 		bt.postCommitUnlockedEntryLock <- struct{}{}
 		<-bt.postCommitUnlockedReleaseLock
 	}
-}
-
-// control functions are not used by the blockingTracker
-func (bt *blockingTracker) handleUnorderedCommit(dcc *deferredCommitContext) {
-}
-func (bt *blockingTracker) handlePrepareCommitError(dcc *deferredCommitContext) {
-}
-func (bt *blockingTracker) handleCommitError(dcc *deferredCommitContext) {
-}
-
-// close is not used by the blockingTracker
-func (bt *blockingTracker) close() {
 }
 
 func TestCatchpointTrackerNonblockingCatchpointWriting(t *testing.T) {
@@ -906,7 +926,7 @@ func TestCatchpointTrackerNonblockingCatchpointWriting(t *testing.T) {
 	require.NoError(t, err)
 	// wait for the committedUpToRound to be called with the correct round number.
 	for {
-		committedUpToRound := atomic.LoadInt64(&writeStallingTracker.committedUpToRound)
+		committedUpToRound := writeStallingTracker.committedUpToRound.Load()
 		if basics.Round(committedUpToRound) == ledger.Latest() {
 			break
 		}
@@ -948,7 +968,7 @@ func TestCatchpointTrackerNonblockingCatchpointWriting(t *testing.T) {
 	require.NoError(t, err)
 	// wait for the committedUpToRound to be called with the correct round number.
 	for {
-		committedUpToRound := atomic.LoadInt64(&writeStallingTracker.committedUpToRound)
+		committedUpToRound := writeStallingTracker.committedUpToRound.Load()
 		if basics.Round(committedUpToRound) == ledger.Latest() {
 			break
 		}

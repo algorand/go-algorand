@@ -23,7 +23,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"math"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -99,7 +98,7 @@ func makeTestParticipationWithLifetime(a *require.Assertions, addrID int, first,
 
 	// Generate part keys like in partGenerateCmd and FillDBWithParticipationKeys
 	if dilution == 0 {
-		dilution = 1 + uint64(math.Sqrt(float64(last-first)))
+		dilution = DefaultKeyDilution(first, last)
 	}
 
 	// Compute how many distinct participation keys we should generate

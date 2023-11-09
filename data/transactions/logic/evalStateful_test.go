@@ -299,7 +299,7 @@ log
 
 	// check that ed25519verify and arg is not allowed in stateful mode between v2-v4
 	disallowedV4 := []string{
-		"byte 0x01\nbyte 0x01\nbyte 0x01\ned25519verify",
+		"byte 0x01; int 32; bzero; int 64; bzero; ed25519verify",
 		"arg 0",
 		"arg_0",
 		"arg_1",
@@ -3001,11 +3001,23 @@ func TestReturnTypes(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	// Ensure all opcodes return values they are supposed to according to the OpSpecs table
-	typeToArg := map[avmType]string{
-		avmUint64: "int 1\n",
-		avmAny:    "int 1\n",
-		avmBytes:  "byte 0x33343536\n", // Which is the string "3456"
+	// Generate a plausible (and consistent) value for a given StackType
+	typeToArg := func(t StackType) string {
+		switch t.AVMType {
+		case avmUint64:
+			if t.Bound[0] > 0 {
+				return fmt.Sprintf("int %d\n", t.Bound[0])
+			}
+			return "int 1\n"
+		case avmAny:
+			return "int 1\n"
+		case avmBytes:
+			if t.Bound[0] > 0 {
+				return fmt.Sprintf("byte 0x%s\n", strings.Repeat("33", int(t.Bound[0])))
+			}
+			return "byte 0x33343536\n" // Which is the string "3456"
+		}
+		panic(t)
 	}
 
 	// We try to form a snippet that will test every opcode, by sandwiching it
@@ -3016,11 +3028,6 @@ func TestReturnTypes(t *testing.T) {
 	// opcodes that need to set up their own stack inputs, a ": at the front of
 	// the string means "start with an empty stack".
 	specialCmd := map[string]string{
-		"txn":            "txn Sender",
-		"txna":           "txna ApplicationArgs 0",
-		"gtxn":           "gtxn 0 Sender",
-		"gtxna":          "gtxna 0 ApplicationArgs 0",
-		"global":         "global MinTxnFee",
 		"gaids":          ": int 0; gaids",
 		"gloads":         ": int 0; gloads 0",       // Needs txn index = 0 to work
 		"gloadss":        ": int 0; int 1; gloadss", // Needs txn index = 0 to work
@@ -3039,11 +3046,8 @@ func TestReturnTypes(t *testing.T) {
 		"extract_uint64": ": byte 0x010203040506070809; int 1; extract_uint64",
 		"replace2":       ": byte 0x0102030405; byte 0x0809; replace2 2",
 		"replace3":       ": byte 0x0102030405; int 2; byte 0x0809; replace3",
-		"gtxns":          "gtxns Sender",
 		"gtxnsa":         ": int 0; gtxnsa ApplicationArgs 0",
 		"extract":        "extract 0 2",
-		"txnas":          "txnas ApplicationArgs",
-		"gtxnas":         "gtxnas 0 ApplicationArgs",
 		"gtxnsas":        ": int 0; int 0; gtxnsas ApplicationArgs",
 		"divw":           ": int 1; int 2; int 3; divw",
 
@@ -3073,10 +3077,7 @@ func TestReturnTypes(t *testing.T) {
 		"gitxna":      "itxn_begin; int pay; itxn_field TypeEnum; itxn_submit; gitxna 0 Accounts 0",
 		"gitxnas":     ": itxn_begin; int pay; itxn_field TypeEnum; itxn_submit; int 0; gitxnas 0 Accounts",
 
-		"base64_decode": `: byte "YWJjMTIzIT8kKiYoKSctPUB+"; base64_decode StdEncoding`,
-		"json_ref":      `: byte "{\"k\": 7}"; byte "k"; json_ref JSONUint64`,
-
-		"block": "block BlkSeed",
+		"json_ref": `: byte "{\"k\": 7}"; byte "k"; json_ref JSONUint64`,
 
 		"proto": "callsub p; p: proto 0 3",
 		"bury":  ": int 1; int 2; int 3; bury 2; pop; pop;",
@@ -3097,13 +3098,7 @@ func TestReturnTypes(t *testing.T) {
 		"err":    true,
 		"return": true,
 
-		"ed25519verify":       true,
-		"ed25519verify_bare":  true,
-		"ecdsa_verify":        true,
-		"ecdsa_pk_recover":    true,
 		"ecdsa_pk_decompress": true,
-
-		"vrf_verify": true,
 
 		"frame_dig":  true, // would need a "proto" subroutine
 		"frame_bury": true, // would need a "proto" subroutine
@@ -3142,32 +3137,42 @@ func TestReturnTypes(t *testing.T) {
 					}
 				} else {
 					for _, imm := range spec.OpDetails.Immediates {
-						switch imm.kind {
-						case immByte:
-							cmd += " 0"
-						case immInt8:
-							cmd += " -2"
-						case immInt:
-							cmd += " 10"
-						case immInts:
-							cmd += " 11 12 13"
-						case immBytes:
-							cmd += " 0x123456"
-						case immBytess:
-							cmd += " 0x12 0x34 0x56"
-						case immLabel:
-							cmd += " done; done: ;"
-						case immLabels:
-							cmd += " done1 done2; done1: ; done2: ;"
-						default:
-							require.Fail(t, "bad immediate", "%s", imm)
+						if imm.Group != nil {
+							for _, name := range imm.Group.Names {
+								// missing names exist because of array vs normal opcodes
+								if name != "" {
+									cmd += " " + name
+									break
+								}
+							}
+						} else {
+							switch imm.kind {
+							case immByte:
+								cmd += " 0"
+							case immInt8:
+								cmd += " -2"
+							case immInt:
+								cmd += " 10"
+							case immInts:
+								cmd += " 11 12 13"
+							case immBytes:
+								cmd += " 0x123456"
+							case immBytess:
+								cmd += " 0x12 0x34 0x56"
+							case immLabel:
+								cmd += " done; done: ;"
+							case immLabels:
+								cmd += " done1 done2; done1: ; done2: ;"
+							default:
+								require.Fail(t, "bad immediate", "%s", imm)
+							}
 						}
 					}
 				}
 				var sb strings.Builder
 				if provideStackInput {
 					for _, t := range spec.Arg.Types {
-						sb.WriteString(typeToArg[t.AVMType])
+						sb.WriteString(typeToArg(t))
 					}
 				}
 				sb.WriteString(cmd + "\n")
@@ -3178,7 +3183,7 @@ func TestReturnTypes(t *testing.T) {
 				tx0.Txn.ApplicationID = 300
 				tx0.Txn.ForeignApps = []basics.AppIndex{300}
 				tx0.Txn.ForeignAssets = []basics.AssetIndex{400}
-				tx0.Txn.Boxes = []transactions.BoxRef{{Name: []byte("3456")}}
+				tx0.Txn.Boxes = []transactions.BoxRef{{Name: []byte("3")}} // The arg given for boxName type
 				tx0.Lsig.Args = [][]byte{
 					[]byte("aoeu"),
 					[]byte("aoeu"),
@@ -3218,12 +3223,13 @@ func TestReturnTypes(t *testing.T) {
 				ledger.NewAccount(appAddr(300), 1000000)
 
 				// these allows the box_* opcodes that to work
-				ledger.CreateBox(300, "3456", 10)
+				ledger.CreateBox(300, "3", 10)
 
 				// We are running gi=1, but we never ran gi=0.  Set things up as
 				// if we did, so they can be accessed with gtxn, gload, gaid
 				aep.pastScratch[0] = &scratchSpace{}
 				aep.TxnGroup[0].ConfigAsset = 100
+				*aep.PooledApplicationBudget = 10_000 // so we can run verifies
 
 				var cx *EvalContext
 				if m == ModeApp {
