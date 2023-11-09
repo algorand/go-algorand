@@ -38,7 +38,7 @@ import (
 
 const minBackoff = time.Second * 5
 const maxBackoff = time.Second * 20
-const baseBackoff = float64(1)
+const baseBackoff = float64(1.1)
 
 // getBootstrapPeersFunc looks up a list of Multiaddrs strings from the dnsaddr records at the primary
 // SRV record domain.
@@ -93,7 +93,7 @@ func MakeDHT(ctx context.Context, h host.Host, network string, cfg config.Local,
 }
 
 func backoffFactory() backoff.BackoffFactory {
-	return backoff.NewExponentialDecorrelatedJitter(minBackoff, maxBackoff, baseBackoff, rand.New(rand.NewSource(rand.Int63())))
+	return backoff.NewExponentialDecorrelatedJitter(minBackoff, maxBackoff, baseBackoff, rand.NewSource(rand.Int63()))
 }
 
 // MakeDiscovery creates a discovery.Discovery object using backoff and cacching

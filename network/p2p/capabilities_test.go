@@ -37,7 +37,7 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-func TestCapabilitiesDiscovery(t *testing.T) {
+func TestCapabilities_Discovery(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	golog.SetDebugLogging()
@@ -148,7 +148,7 @@ func setupCapDiscovery(t *testing.T, numHosts int) []*CapabilitiesDiscovery {
 	return capsDisc
 }
 
-func TestDHTTwoPeers(t *testing.T) {
+func TestCapabilities_DHTTwoPeers(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	numAdvertisers := 2
@@ -196,7 +196,7 @@ func TestDHTTwoPeers(t *testing.T) {
 	}
 }
 
-func TestVaryingCapabilities(t *testing.T) {
+func TestCapabilities_Varying(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	numAdvertisers := 10
@@ -278,7 +278,7 @@ func TestVaryingCapabilities(t *testing.T) {
 	}
 }
 
-func TestCapabilitiesExcludesSelf(t *testing.T) {
+func TestCapabilities_ExcludesSelf(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	disc := setupCapDiscovery(t, 2)
 
