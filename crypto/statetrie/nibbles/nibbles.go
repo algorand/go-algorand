@@ -134,10 +134,9 @@ func Serialize(nyb Nibbles) (data []byte) {
 	if p, h := Pack(nyb); h {
 		// 0x01 is the odd length indicator
 		return append(p, oddIndicator)
-	} else {
-		// 0x03 is the even length indicator
-		return append(p, evenIndicator)
 	}
+	// 0x03 is the even length indicator
+	return append(p, evenIndicator)
 }
 
 // Deserialize returns a nibble array from the byte array.
