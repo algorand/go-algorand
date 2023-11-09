@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2018-2023 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -72,7 +72,7 @@ func MakeNibbles(data []byte, oddLength bool) Nibbles {
 // [] -> [], false
 func Pack(nyb Nibbles) ([]byte, bool) {
 	length := len(nyb)
-	data := make([]byte, length/2+length%2)
+	data := make([]byte, length/2+length%2, length/2+length%2+1)
 	for i := 0; i < length; i++ {
 		if i%2 == 0 {
 			data[i/2] = nyb[i] << 4
@@ -131,19 +131,13 @@ func SharedPrefix(nyb1 Nibbles, nyb2 Nibbles) Nibbles {
 // [0x1, 0x2, 0x3, 0x4] -> [0x12, 0x34, 0x03]
 // [] -> [0x03]
 func Serialize(nyb Nibbles) (data []byte) {
-	p, h := Pack(nyb)
-	length := len(p)
-	output := make([]byte, length+1)
-	copy(output, p)
-	if h {
+	if p, h := Pack(nyb); h {
 		// 0x01 is the odd length indicator
-		output[length] = oddIndicator
+		return append(p, oddIndicator)
 	} else {
 		// 0x03 is the even length indicator
-		output[length] = evenIndicator
+		return append(p, evenIndicator)
 	}
-
-	return output
 }
 
 // Deserialize returns a nibble array from the byte array.
