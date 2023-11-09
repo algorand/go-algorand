@@ -48,7 +48,7 @@ func TestNibblesRandom(t *testing.T) {
 		if half && localRand.Intn(2) == 0 {
 			data[len(data)-1] &= 0xf0 // sometimes clear the last nibble, sometimes do not
 		}
-		nibbles := MakeNibbles(data, half)
+		nibbles := makeNibbles(data, half)
 
 		data2 := Serialize(nibbles)
 		nibbles2, err := Deserialize(data2)
@@ -61,13 +61,13 @@ func TestNibblesRandom(t *testing.T) {
 		packed, odd := Pack(nibbles)
 		require.Equal(t, odd, half)
 		require.Equal(t, packed, data)
-		unpacked := MakeNibbles(packed, odd)
+		unpacked := makeNibbles(packed, odd)
 		require.Equal(t, nibbles, unpacked)
 
 		packed, odd = Pack(nibbles2)
 		require.Equal(t, odd, half)
 		require.Equal(t, packed, data)
-		unpacked = MakeNibbles(packed, odd)
+		unpacked = makeNibbles(packed, odd)
 		require.Equal(t, nibbles2, unpacked)
 	}
 }
@@ -130,7 +130,7 @@ func TestNibbles(t *testing.T) {
 		require.Equal(t, oddLength == (len(n)%2 == 1), true)
 		require.Equal(t, bytes.Equal(b, sampleNibblesPacked[i]), true)
 
-		unp := MakeNibbles(b, oddLength)
+		unp := makeNibbles(b, oddLength)
 		require.Equal(t, bytes.Equal(unp, n), true)
 
 	}
@@ -183,10 +183,10 @@ func TestNibbles(t *testing.T) {
 
 	makeNibblesTestExpected := Nibbles{0x0, 0x1, 0x2, 0x9, 0x2}
 	makeNibblesTestData := []byte{0x01, 0x29, 0x20}
-	mntr := MakeNibbles(makeNibblesTestData, true)
+	mntr := makeNibbles(makeNibblesTestData, true)
 	require.Equal(t, bytes.Equal(mntr, makeNibblesTestExpected), true)
 	makeNibblesTestExpectedFW := Nibbles{0x0, 0x1, 0x2, 0x9, 0x2, 0x0}
-	mntr2 := MakeNibbles(makeNibblesTestData, false)
+	mntr2 := makeNibbles(makeNibblesTestData, false)
 	require.Equal(t, bytes.Equal(mntr2, makeNibblesTestExpectedFW), true)
 
 	sampleEqualFalse := [][]Nibbles{

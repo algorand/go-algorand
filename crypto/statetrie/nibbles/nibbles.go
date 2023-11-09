@@ -32,34 +32,6 @@ const (
 	evenIndicator = 0x03
 )
 
-// MakeNibbles returns a nibble array from the byte array.  If oddLength is true,
-// the last 4 bits of the last byte of the array are ignored.
-//
-// [0x12, 0x30], true -> [0x1, 0x2, 0x3]
-// [0x12, 0x34], false -> [0x1, 0x2, 0x3, 0x4]
-// [0x12, 0x34], true -> [0x1, 0x2, 0x3]  <-- last byte last 4 bits ignored
-// [], false -> []
-// never to be called with [], true
-// Allocates a new byte slice.
-func MakeNibbles(data []byte, oddLength bool) Nibbles {
-	length := len(data) * 2
-	if oddLength {
-		length = length - 1
-	}
-	ns := make([]byte, length)
-
-	j := 0
-	for i := 0; i < length; i++ {
-		if i%2 == 0 {
-			ns[i] = data[j] >> 4
-		} else {
-			ns[i] = data[j] & 0x0f
-			j++
-		}
-	}
-	return ns
-}
-
 // Pack the nibble array into a byte array.
 // Return the byte array and a bool indicating if the last byte is a full byte or
 // only the high 4 bits are part of the encoding
@@ -151,11 +123,39 @@ func Deserialize(encoding []byte) (Nibbles, error) {
 		if length == 1 {
 			return nil, errors.New("invalid encoding")
 		}
-		ns = MakeNibbles(encoding[:length-1], true)
+		ns = makeNibbles(encoding[:length-1], true)
 	} else if encoding[length-1] == evenIndicator {
-		ns = MakeNibbles(encoding[:length-1], false)
+		ns = makeNibbles(encoding[:length-1], false)
 	} else {
 		return nil, errors.New("invalid encoding")
 	}
 	return ns, nil
+}
+
+// makeNibbles returns a nibble array from the byte array.  If oddLength is true,
+// the last 4 bits of the last byte of the array are ignored.
+//
+// [0x12, 0x30], true -> [0x1, 0x2, 0x3]
+// [0x12, 0x34], false -> [0x1, 0x2, 0x3, 0x4]
+// [0x12, 0x34], true -> [0x1, 0x2, 0x3]  <-- last byte last 4 bits ignored
+// [], false -> []
+// never to be called with [], true
+// Allocates a new byte slice.
+func makeNibbles(data []byte, oddLength bool) Nibbles {
+	length := len(data) * 2
+	if oddLength {
+		length = length - 1
+	}
+	ns := make([]byte, length)
+
+	j := 0
+	for i := 0; i < length; i++ {
+		if i%2 == 0 {
+			ns[i] = data[j] >> 4
+		} else {
+			ns[i] = data[j] & 0x0f
+			j++
+		}
+	}
+	return ns
 }
