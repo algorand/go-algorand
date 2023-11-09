@@ -633,6 +633,9 @@ var StateProofTopVoters int
 // in a block must not exceed MaxTxnBytesPerBlock.
 var MaxTxnBytesPerBlock int
 
+// MaxAppTxnForeignApps is the max number of foreign apps per txn across all consensus versions
+var MaxAppTxnForeignApps int
+
 func checkSetMax(value int, curMax *int) {
 	if value > *curMax {
 		*curMax = value
@@ -681,6 +684,8 @@ func checkSetAllocBounds(p ConsensusParams) {
 	checkSetMax(p.MaxAppKeyLen, &MaxAppBytesKeyLen)
 	checkSetMax(int(p.StateProofTopVoters), &StateProofTopVoters)
 	checkSetMax(p.MaxTxnBytesPerBlock, &MaxTxnBytesPerBlock)
+
+	checkSetMax(p.MaxAppTxnForeignApps, &MaxAppTxnForeignApps)
 }
 
 // SaveConfigurableConsensus saves the configurable protocols file to the provided data directory.
