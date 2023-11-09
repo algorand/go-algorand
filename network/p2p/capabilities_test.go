@@ -18,6 +18,7 @@ package p2p
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 
@@ -205,48 +206,70 @@ func TestVaryingCapabilities(t *testing.T) {
 	catchOnly := capsDisc[5:7]
 	archCatch := capsDisc[7:]
 
+	var wg sync.WaitGroup
+	wg.Add(len(archOnly) + len(catchOnly) + len(archCatch))
 	for _, disc := range archOnly {
-		waitForRouting(t, disc)
-		disc.AdvertiseCapabilities(Archival)
+		go func(disc *CapabilitiesDiscovery) {
+			defer wg.Done()
+			waitForRouting(t, disc)
+			disc.AdvertiseCapabilities(Archival)
+		}(disc)
 	}
 	for _, disc := range catchOnly {
-		waitForRouting(t, disc)
-		disc.AdvertiseCapabilities(Catchpoints)
+		go func(disc *CapabilitiesDiscovery) {
+			defer wg.Done()
+			waitForRouting(t, disc)
+			disc.AdvertiseCapabilities(Catchpoints)
+		}(disc)
 	}
 	for _, disc := range archCatch {
-		waitForRouting(t, disc)
-		disc.AdvertiseCapabilities(Archival, Catchpoints)
+		go func(disc *CapabilitiesDiscovery) {
+			defer wg.Done()
+			waitForRouting(t, disc)
+			disc.AdvertiseCapabilities(Archival, Catchpoints)
+		}(disc)
 	}
 
+	wg.Wait()
+
+	wg.Add(len(noCap) * 2)
 	for _, disc := range noCap {
-		require.Eventuallyf(t,
-			func() bool {
-				numArchPeers := len(archOnly) + len(archCatch)
-				peers, err := disc.PeersForCapability(Archival, numArchPeers)
-				if err == nil && len(peers) == numArchPeers {
-					return true
-				}
-				return false
-			},
-			time.Minute,
-			time.Second,
-			"Not all expected archival peers were found",
-		)
+		go func(disc *CapabilitiesDiscovery) {
+			defer wg.Done()
+			require.Eventuallyf(t,
+				func() bool {
+					numArchPeers := len(archOnly) + len(archCatch)
+					peers, err := disc.PeersForCapability(Archival, numArchPeers)
+					if err == nil && len(peers) == numArchPeers {
+						return true
+					}
+					return false
+				},
+				time.Minute,
+				time.Second,
+				"Not all expected archival peers were found",
+			)
+		}(disc)
 
-		require.Eventuallyf(t,
-			func() bool {
-				numCatchPeers := len(catchOnly) + len(archCatch)
-				peers, err := disc.PeersForCapability(Catchpoints, numCatchPeers)
-				if err == nil && len(peers) == numCatchPeers {
-					return true
-				}
-				return false
-			},
-			time.Minute,
-			time.Second,
-			"Not all expected catchpoint peers were found",
-		)
+		go func(disc *CapabilitiesDiscovery) {
+			defer wg.Done()
+			require.Eventuallyf(t,
+				func() bool {
+					numCatchPeers := len(catchOnly) + len(archCatch)
+					peers, err := disc.PeersForCapability(Catchpoints, numCatchPeers)
+					if err == nil && len(peers) == numCatchPeers {
+						return true
+					}
+					return false
+				},
+				time.Minute,
+				time.Second,
+				"Not all expected catchpoint peers were found",
+			)
+		}(disc)
 	}
+
+	wg.Wait()
 
 	for _, disc := range capsDisc[3:] {
 		disc.Close()
