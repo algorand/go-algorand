@@ -149,16 +149,23 @@ type OneTimeSignatureSecrets struct {
 type OneTimeSignatureSecretsPersistent struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
+	// Truncated is used to indicate that the results have been truncated beyond the normal
+	// used key removal process. This flag is used to generate an error if an attempt is made
+	// to serialize a truncated object.
+	Truncated bool `codec:"-"`
+
 	OneTimeSignatureVerifier
 
 	// FirstBatch denotes the first batch whose subkey appears in Batches.
 	// The odd `codec:` name is for backwards compatibility with previous
 	// stored keys where we failed to give any explicit `codec:` name.
+	// Batches are the top-level keys used to generate the subkeys in Offsets.
 	FirstBatch uint64            `codec:"First"`
 	Batches    []ephemeralSubkey `codec:"Sub,allocbound=-"`
 
 	// FirstOffset denotes the first offset whose subkey appears in Offsets.
 	// These subkeys correspond to batch FirstBatch-1.
+	// These are the signing keys, they are generated as needed by the keys in Batches.
 	FirstOffset uint64            `codec:"firstoff"`
 	Offsets     []ephemeralSubkey `codec:"offkeys,allocbound=-"` // the bound is keyDilution
 
@@ -327,6 +334,40 @@ func (v OneTimeSignatureVerifier) Verify(id OneTimeSignatureIdentifier, message 
 	return allValid
 }
 
+var ErrIdentifierNotInCurrentBatch = fmt.Errorf("the requesuted identifier is not in the current batch")
+
+// DeleteAllButFineGrained DeleteBeforeFineGrained deletes ephemeral keys before and after (but not including) the given id.
+// It does not expand new batches. ErrIdentifierNotInCurrentBatch is returned, the caller should call DeleteAllButFineGrained first.
+func (s *OneTimeSignatureSecrets) DeleteAllButFineGrained(current OneTimeSignatureIdentifier) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// TODO: Securely wipe the keys from memory.
+
+	// This function only works when processing the current batch.
+	if current.Batch+1 != s.FirstBatch {
+		return ErrIdentifierNotInCurrentBatch
+	}
+
+	// Remove old ephemeral subkeys.
+	if current.Offset > s.FirstOffset {
+		jump := current.Offset - s.FirstOffset
+		if jump > uint64(len(s.Offsets)) {
+			jump = uint64(len(s.Offsets))
+		}
+
+		s.FirstOffset += jump
+		s.Offsets = s.Offsets[jump:]
+	}
+
+	// Remove future ephemeral subkeys.
+	s.Offsets = s.Offsets[:1]
+	s.Batches = nil
+	s.Truncated = true
+
+	return nil
+}
+
 // DeleteBeforeFineGrained deletes ephemeral keys before (but not including) the given id.
 func (s *OneTimeSignatureSecrets) DeleteBeforeFineGrained(current OneTimeSignatureIdentifier, numKeysPerBatch uint64) {
 	s.mu.Lock()
@@ -357,7 +398,7 @@ func (s *OneTimeSignatureSecrets) DeleteBeforeFineGrained(current OneTimeSignatu
 
 	// We are trying to move forward into a new batch.  The plan is fourfold:
 	// 1. Delete existing offsets.
-	s.Offsets = nil
+	s.Offsets = make([]ephemeralSubkey, 0, numKeysPerBatch)
 
 	// 2. Delete any whole batches that we are jumping over.
 	jump := current.Batch - s.FirstBatch
@@ -411,6 +452,11 @@ func (s *OneTimeSignatureSecrets) DeleteBeforeFineGrained(current OneTimeSignatu
 func (s *OneTimeSignatureSecrets) Snapshot() OneTimeSignatureSecrets {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+
+	// Should never serialize a truncated object.
+	if s.Truncated {
+		panic("Attempting to snapshot a truncated OneTimeSignatureSecrets object.")
+	}
 
 	return OneTimeSignatureSecrets{
 		OneTimeSignatureSecretsPersistent: s.OneTimeSignatureSecretsPersistent,
