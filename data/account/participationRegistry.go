@@ -845,10 +845,17 @@ func (db *participationDB) GetForRound(id ParticipationID, round basics.Round) (
 		return ParticipationRecordForRound{}, ErrRequestedRoundOutOfRange
 	}
 
+	// Delete all secrets except for the requested round
+	snap := result.ParticipationRecord.Voting.Snapshot()
+	otsID := basics.OneTimeIDForRound(round, result.KeyDilution)
+	snap.DeleteBeforeFineGrained(otsID, result.KeyDilution)
+	snap.DeleteAllButFineGrained(otsID)
+	result.ParticipationRecord.Voting = &snap
+
 	return result, nil
 }
 
-// updateRollingFields sets all of the rolling fields according to the record object.
+// updateRollingFields sets all the rolling fields according to the record object.
 func updateRollingFields(ctx context.Context, tx *sql.Tx, record ParticipationRecord) error {
 	voting := record.Voting.Snapshot()
 	encodedVotingSecrets := protocol.Encode(&voting)
