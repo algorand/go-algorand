@@ -143,7 +143,7 @@ var printProfileCmd = &cobra.Command{
 		if err != nil {
 			reportErrorf("%v", err)
 		}
-		err = codecs.WriteNonDefaultValues(os.Stdout, cfg, config.GetDefaultLocal(), nil, true)
+		err = codecs.WriteNonDefaultValues(os.Stdout, cfg, config.GetDefaultLocal(), nil)
 		if err != nil {
 			reportErrorf("Error writing config file to stdout: %s", err)
 		}
@@ -175,7 +175,7 @@ var setProfileCmd = &cobra.Command{
 					return
 				}
 			}
-			err = codecs.SaveNonDefaultValuesToFile(file, cfg, config.GetDefaultLocal(), nil, true)
+			err = codecs.SaveNonDefaultValuesToFile(file, cfg, config.GetDefaultLocal(), nil)
 			if err != nil {
 				reportErrorf("Error saving updated config file '%s' - %s", file, err)
 			}

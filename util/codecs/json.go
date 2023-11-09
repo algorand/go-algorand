@@ -69,7 +69,10 @@ func SaveObjectToFile(filename string, object interface{}, prettyFormat bool) er
 	return writeBytes(f, object, prettyFormat)
 }
 
-func WriteNonDefaultValues(writer io.Writer, object, defaultObject interface{}, ignore []string, prettyFormat bool) error {
+// WriteNonDefaultValues writes object to a writer as json, but only fields that are not
+// currently set to be the default value.
+// Optionally, you can specify an array of field names to always include.
+func WriteNonDefaultValues(writer io.Writer, object, defaultObject interface{}, ignore []string) error {
 	// Iterate one line at a time, parse Name
 	// If ignore contains Name, don't delete
 	// Use reflection to compare object[Name].value == defaultObject[Name].value
@@ -151,7 +154,7 @@ func WriteNonDefaultValues(writer io.Writer, object, defaultObject interface{}, 
 // SaveNonDefaultValuesToFile saves an object to a file as json, but only fields that are not
 // currently set to be the default value.
 // Optionally, you can specify an array of field names to always include.
-func SaveNonDefaultValuesToFile(filename string, object, defaultObject interface{}, ignore []string, prettyFormat bool) error {
+func SaveNonDefaultValuesToFile(filename string, object, defaultObject interface{}, ignore []string) error {
 	outFile, err := os.Create(filename)
 	if err != nil {
 		return err
@@ -159,7 +162,7 @@ func SaveNonDefaultValuesToFile(filename string, object, defaultObject interface
 	defer outFile.Close()
 	writer := bufio.NewWriter(outFile)
 
-	WriteNonDefaultValues(writer, object, defaultObject, ignore, prettyFormat)
+	WriteNonDefaultValues(writer, object, defaultObject, ignore)
 	if err == nil {
 		writer.Flush()
 	}
