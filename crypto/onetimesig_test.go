@@ -260,6 +260,97 @@ func TestOneTimeSignatureSecrets_DeleteBeforeFineGrained(t *testing.T) {
 	}
 }
 
+func TestOneTimeSignatureSecrets_DeleteAllButFineGrained(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	dilution := uint64(1000)
+
+	testcases := []struct {
+		name                string
+		startBatch          uint64
+		dilution            uint64
+		round               uint64
+		expectedFirstBatch  uint64
+		expectedFirstOffset uint64
+		err                 error
+	}{
+		{
+			name:                "expand first batch",
+			dilution:            dilution,
+			round:               0,
+			expectedFirstBatch:  1,
+			expectedFirstOffset: 0,
+		}, {
+			name:                "delete half of first batch",
+			dilution:            dilution,
+			round:               dilution / 2,
+			expectedFirstBatch:  1,
+			expectedFirstOffset: dilution / 2,
+		}, {
+			name:                "expand second batch",
+			dilution:            dilution,
+			round:               dilution,
+			expectedFirstBatch:  2,
+			expectedFirstOffset: 0,
+		}, {
+			name:                "halfway into 10th batch",
+			dilution:            dilution,
+			round:               9*dilution + dilution/2,
+			expectedFirstBatch:  10,
+			expectedFirstOffset: dilution / 2,
+		}, {
+			name:                "delete all but last offset",
+			dilution:            dilution,
+			round:               dilution - 1,
+			expectedFirstBatch:  1,
+			expectedFirstOffset: dilution - 1,
+		}, {
+			name:                "delete all but one",
+			dilution:            dilution,
+			round:               dilution*dilution - 1,
+			expectedFirstBatch:  dilution,
+			expectedFirstOffset: dilution - 1,
+		}, {
+			name:                "delete everything",
+			dilution:            dilution,
+			round:               dilution * dilution,
+			expectedFirstBatch:  dilution,
+			expectedFirstOffset: 0,
+			err:                 ErrIdentifierNotInCurrentBatch,
+		}, {
+			name:                "non-zero start batch - expanded",
+			startBatch:          32_000,
+			dilution:            dilution,
+			round:               32_000 * dilution,
+			expectedFirstBatch:  32_000 + 1,
+			expectedFirstOffset: 0,
+		},
+	}
+
+	for _, tc := range testcases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			c := GenerateOneTimeSignatureSecrets(tc.startBatch, tc.dilution)
+
+			id := oneTimeIDForRound(tc.round, tc.dilution)
+			c.DeleteBeforeFineGrained(id, tc.dilution)
+			err := c.DeleteAllButFineGrained(id)
+			if tc.err == nil {
+				require.NoError(t, err)
+			} else {
+				require.ErrorIs(t, err, tc.err)
+				return
+			}
+
+			require.Len(t, c.Batches, 0, "All batches are deleted.")
+			require.Len(t, c.Offsets, 1, "All but one offset is deleted.")
+			require.Equal(t, c.FirstBatch, tc.expectedFirstBatch)
+			require.Equal(t, c.FirstOffset, tc.expectedFirstOffset)
+		})
+	}
+}
+
 func BenchmarkOneTimeSigBatchVerification(b *testing.B) {
 	for _, enabled := range []bool{false, true} {
 		b.Run(fmt.Sprintf("batch=%v", enabled), func(b *testing.B) {
