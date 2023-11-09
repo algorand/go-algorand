@@ -148,6 +148,7 @@ var printProfileCmd = &cobra.Command{
 		if err != nil {
 			reportErrorf("Error saving updated config file '%s' - %s", stdoutName, err)
 		}
+		fmt.Fprintf(os.Stdout, "\n")
 	},
 }
 
