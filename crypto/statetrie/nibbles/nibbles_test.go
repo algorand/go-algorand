@@ -18,6 +18,7 @@ package nibbles
 
 import (
 	"bytes"
+	"fmt"
 	"math/rand"
 	"testing"
 	"time"
@@ -170,7 +171,14 @@ func TestNibbles(t *testing.T) {
 		nbytes := Serialize(n)
 		n2, err := Deserialize(nbytes)
 		require.NoError(t, err)
-		require.Equal(t, bytes.Equal(n, n2), true)
+		require.True(t, bytes.Equal(n, n2))
+		require.Equal(t, len(nbytes), len(n)/2+len(n)%2+1, fmt.Sprintf("nbytes: %v, n: %v", nbytes, n))
+		if len(n)%2 == 0 {
+			require.Equal(t, nbytes[len(nbytes)-1], uint8(evenIndicator))
+		} else {
+			require.Equal(t, nbytes[len(nbytes)-1], uint8(oddIndicator))
+			require.Equal(t, nbytes[len(nbytes)-2]&0x0F, uint8(0))
+		}
 	}
 
 	makeNibblesTestExpected := Nibbles{0x0, 0x1, 0x2, 0x9, 0x2}
