@@ -131,7 +131,8 @@ func SharedPrefix(nyb1 Nibbles, nyb2 Nibbles) Nibbles {
 // [0x1, 0x2, 0x3, 0x4] -> [0x12, 0x34, 0x03]
 // [] -> [0x03]
 func Serialize(nyb Nibbles) (data []byte) {
-	if p, h := Pack(nyb); h {
+	p, h := Pack(nyb)
+	if h {
 		// 0x01 is the odd length indicator
 		return append(p, oddIndicator)
 	}
