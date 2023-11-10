@@ -41,6 +41,11 @@ import (
 const catchupPeersForSync = 10
 const blockQueryPeerLimit = 10
 
+// uncapParallelDownloadRate is a simple threshold to detect whether or not the node is caught up.
+// If a block is downloaded in less than this duration, it's assumed that the node is not caught up
+// and allow the block downloader to start N=parallelBlocks concurrent fetches.
+const uncapParallelDownloadRate = time.Second
+
 // this should be at least the number of relays
 const catchupRetryLimit = 500
 
@@ -85,6 +90,7 @@ type Service struct {
 	auth                BlockAuthenticator
 	parallelBlocks      uint64
 	deadlineTimeout     time.Duration
+	prevBlockFetchTime  time.Time
 	blockValidationPool execpool.BacklogPool
 
 	// suspendForLedgerOps defines whether we've run into a state where the ledger is currently busy writing the
@@ -448,9 +454,16 @@ func (s *Service) fetchAndWrite(ctx context.Context, r basics.Round, prevFetchCo
 
 // TODO the following code does not handle the following case: seedLookback upgrades during fetch
 func (s *Service) pipelinedFetch(seedLookback uint64) {
-	parallelRequests := s.parallelBlocks
-	if parallelRequests < seedLookback {
-		parallelRequests = seedLookback
+	maxParallelRequests := s.parallelBlocks
+	if maxParallelRequests < seedLookback {
+		maxParallelRequests = seedLookback
+	}
+	minParallelRequests := seedLookback
+
+	// Start the limited requests at max(1, 'seedLookback')
+	limitedParallelRequests := uint64(1)
+	if limitedParallelRequests < seedLookback {
+		limitedParallelRequests = seedLookback
 	}
 
 	completed := make(map[basics.Round]chan bool)
@@ -480,7 +493,8 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 	nextRound := firstRound
 
 	for {
-		for nextRound < firstRound+basics.Round(parallelRequests) {
+		// launch N=parallelRequests block download go routines.
+		for nextRound < firstRound+basics.Round(limitedParallelRequests) {
 			if s.roundIsNotSupported(nextRound) {
 				// Break out of the loop to avoid fetching
 				// blocks that we don't support.  If there
@@ -504,6 +518,7 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 			nextRound++
 		}
 
+		// wait for the first round to complete before starting the next download.
 		select {
 		case completedOK := <-completed[firstRound]:
 			delete(completed, firstRound)
@@ -512,6 +527,15 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 			if !completedOK {
 				// there was an error; defer will cancel the pipeline
 				return
+			}
+
+			fetchTime := time.Now()
+			fetchDur := fetchTime.Sub(s.prevBlockFetchTime)
+			s.prevBlockFetchTime = fetchTime
+			if fetchDur < uncapParallelDownloadRate {
+				limitedParallelRequests = maxParallelRequests
+			} else {
+				limitedParallelRequests = minParallelRequests
 			}
 
 			// if ledger is busy, pause for some time to let the fetchAndWrite goroutines to finish fetching in-flight blocks.

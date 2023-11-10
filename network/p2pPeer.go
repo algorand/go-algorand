@@ -23,10 +23,12 @@ import (
 	"net"
 	"time"
 
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/websocket"
 
 	"github.com/libp2p/go-libp2p/core/network"
 	yamux "github.com/libp2p/go-yamux/v4"
+	mnet "github.com/multiformats/go-multiaddr/net"
 )
 
 type wsPeerConnP2PImpl struct {
@@ -82,3 +84,11 @@ func (c *wsPeerConnP2PImpl) CloseWithoutFlush() error {
 }
 
 func (c *wsPeerConnP2PImpl) UnderlyingConn() net.Conn { return nil }
+
+func (c *wsPeerConnP2PImpl) RemoteAddr() net.Addr {
+	netaddr, err := mnet.ToNetAddr(c.stream.Conn().RemoteMultiaddr())
+	if err != nil {
+		logging.Base().Errorf("Error converting multiaddr to netaddr: %v", err)
+	}
+	return netaddr
+}

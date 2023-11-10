@@ -62,6 +62,9 @@ type mockSender struct{}
 
 func (m mockSender) OnClose(func()) {}
 
+func (m mockSender) IPAddr() []byte      { return nil }
+func (m mockSender) RoutingAddr() []byte { return nil }
+
 // txHandlerConfig is a subset of tx handler related options from config.Local
 type txHandlerConfig struct {
 	enableFilteringRawMsg    bool
@@ -2502,4 +2505,179 @@ func TestTxHandlerRestartWithBacklogAndTxPool(t *testing.T) { //nolint:parallelt
 		_, inBad := badTxnGroups[u]
 		require.False(t, inBad, "invalid transaction accepted")
 	}
+}
+
+// check ERL and AppRateLimiter enablement with separate config values,
+// and the app limiter kicks in after congestion.
+func TestTxHandlerAppRateLimiterERLEnabled(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	ledgerName := fmt.Sprintf("%s-mem", t.Name())
+	const inMem = true
+	log := logging.TestingLog(t)
+	log.SetLevel(logging.Panic)
+
+	cfg := config.GetDefaultLocal()
+	cfg.TxBacklogAppTxRateLimiterMaxSize = 100
+	cfg.TxBacklogServiceRateWindowSeconds = 1
+	cfg.TxBacklogAppTxPerSecondRate = 3
+	cfg.TxBacklogReservedCapacityPerPeer = 2
+	cfg.TxBacklogSize = 1
+	cfg.IncomingConnectionsLimit = 1
+	ledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, bookkeeping.GenesisBalances{}, genesisID, genesisHash, nil, cfg)
+	require.NoError(t, err)
+	defer ledger.Close()
+
+	l := ledger
+
+	func() {
+		cfg.EnableTxBacklogRateLimiting = false
+		cfg.EnableTxBacklogAppRateLimiting = false
+		handler, err := makeTestTxHandler(l, cfg)
+		require.NoError(t, err)
+		defer handler.txVerificationPool.Shutdown()
+		defer close(handler.streamVerifierDropped)
+
+		require.Nil(t, handler.erl)
+		require.Nil(t, handler.appLimiter)
+	}()
+
+	func() {
+		cfg.EnableTxBacklogRateLimiting = true
+		cfg.EnableTxBacklogAppRateLimiting = false
+		handler, err := makeTestTxHandler(l, cfg)
+		require.NoError(t, err)
+		defer handler.txVerificationPool.Shutdown()
+		defer close(handler.streamVerifierDropped)
+
+		require.NotNil(t, handler.erl)
+		require.Nil(t, handler.appLimiter)
+	}()
+
+	cfg.EnableTxBacklogRateLimiting = true
+	cfg.EnableTxBacklogAppRateLimiting = true
+	handler, err := makeTestTxHandler(l, cfg)
+	require.NoError(t, err)
+	defer handler.txVerificationPool.Shutdown()
+	defer close(handler.streamVerifierDropped)
+	require.NotNil(t, handler.erl)
+	require.NotNil(t, handler.appLimiter)
+
+	var addr basics.Address
+	crypto.RandBytes(addr[:])
+
+	tx := transactions.Transaction{
+		Type: protocol.ApplicationCallTx,
+		Header: transactions.Header{
+			Sender:     addr,
+			Fee:        basics.MicroAlgos{Raw: proto.MinTxnFee * 2},
+			FirstValid: 0,
+			LastValid:  basics.Round(proto.MaxTxnLife),
+			Note:       make([]byte, 2),
+		},
+		ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+			ApplicationID: 1,
+		},
+	}
+	signedTx := tx.Sign(keypair()) // some random key
+	blob := protocol.Encode(&signedTx)
+	sender := mockSender{}
+
+	// submit and ensure it is accepted
+	congested := float64(cap(handler.backlogQueue))*0.5 < float64(len(handler.backlogQueue))
+	require.False(t, congested)
+
+	action := handler.processIncomingTxn(network.IncomingMessage{Data: blob, Sender: sender})
+	require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, action)
+	require.Equal(t, 1, len(handler.backlogQueue))
+
+	// repeat the same txn, we are still not congested
+	congested = float64(cap(handler.backlogQueue))*0.5 < float64(len(handler.backlogQueue))
+	require.False(t, congested)
+
+	signedTx = tx.Sign(keypair())
+	blob = protocol.Encode(&signedTx)
+	action = handler.processIncomingTxn(network.IncomingMessage{Data: blob, Sender: sender})
+	require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, action)
+	require.Equal(t, 2, len(handler.backlogQueue))
+	require.Equal(t, 0, handler.appLimiter.len()) // no rate limiting yet
+
+	congested = float64(cap(handler.backlogQueue))*0.5 < float64(len(handler.backlogQueue))
+	require.True(t, congested)
+
+	// submit it again and the app rate limiter should kick in
+	signedTx = tx.Sign(keypair())
+	blob = protocol.Encode(&signedTx)
+	action = handler.processIncomingTxn(network.IncomingMessage{Data: blob, Sender: sender})
+	require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, action)
+	require.Equal(t, 3, len(handler.backlogQueue))
+
+	require.Equal(t, 1, handler.appLimiter.len())
+}
+
+func TestTxHandlerAppRateLimiter(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	const numUsers = 10
+	log := logging.TestingLog(t)
+	log.SetLevel(logging.Panic)
+
+	// prepare the accounts
+	addresses, secrets, genesis := makeTestGenesisAccounts(t, numUsers)
+	genBal := bookkeeping.MakeGenesisBalances(genesis, sinkAddr, poolAddr)
+	ledgerName := fmt.Sprintf("%s-mem", t.Name())
+	const inMem = true
+
+	cfg := config.GetDefaultLocal()
+	cfg.EnableTxBacklogRateLimiting = true
+	cfg.TxBacklogAppTxRateLimiterMaxSize = 100
+	cfg.TxBacklogServiceRateWindowSeconds = 1
+	cfg.TxBacklogAppTxPerSecondRate = 3
+	ledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, nil, cfg)
+	require.NoError(t, err)
+	defer ledger.Close()
+
+	l := ledger
+	handler, err := makeTestTxHandler(l, cfg)
+	require.NoError(t, err)
+	defer handler.txVerificationPool.Shutdown()
+	defer close(handler.streamVerifierDropped)
+
+	tx := transactions.Transaction{
+		Type: protocol.ApplicationCallTx,
+		Header: transactions.Header{
+			Sender:     addresses[0],
+			Fee:        basics.MicroAlgos{Raw: proto.MinTxnFee * 2},
+			FirstValid: 0,
+			LastValid:  basics.Round(proto.MaxTxnLife),
+			Note:       make([]byte, 2),
+		},
+		ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+			ApplicationID: 1,
+		},
+	}
+	signedTx := tx.Sign(secrets[1])
+	blob := protocol.Encode(&signedTx)
+
+	action := handler.processIncomingTxn(network.IncomingMessage{Data: blob, Sender: mockSender{}})
+	require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, action)
+	require.Equal(t, 1, len(handler.backlogQueue))
+
+	// trigger the rate limiter and ensure the txn is ignored
+	tx2 := tx
+	for i := 0; i < cfg.TxBacklogAppTxPerSecondRate*cfg.TxBacklogServiceRateWindowSeconds; i++ {
+		tx2.ForeignApps = append(tx2.ForeignApps, 1)
+	}
+	signedTx2 := tx.Sign(secrets[1])
+	blob2 := protocol.Encode(&signedTx2)
+
+	action = handler.processIncomingTxn(network.IncomingMessage{Data: blob2, Sender: mockSender{}})
+	require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, action)
+	require.Equal(t, 1, len(handler.backlogQueue))
+
+	// backlogQueue has the first txn, but the second one is dropped
+	msg := <-handler.backlogQueue
+	require.Equal(t, msg.rawmsg.Data, blob, blob)
 }
