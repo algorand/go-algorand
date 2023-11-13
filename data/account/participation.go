@@ -84,6 +84,11 @@ func (id ParticipationKeyIdentity) ID() ParticipationID {
 	return ParticipationID(crypto.HashObj(&id))
 }
 
+// ID creates a ParticipationID hash from the identity file.
+func (id *ParticipationKeyIdentity) IDFast() ParticipationID {
+	return ParticipationID(crypto.HashObjFast(id))
+}
+
 // ID computes a ParticipationID.
 func (part Participation) ID() ParticipationID {
 	idData := ParticipationKeyIdentity{

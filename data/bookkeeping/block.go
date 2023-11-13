@@ -244,6 +244,10 @@ func (bh BlockHeader) Hash() BlockHash {
 	return BlockHash(crypto.HashObj(bh))
 }
 
+func (bh BlockHeader) HashFast() BlockHash {
+	return BlockHash(crypto.HashObjFast(bh))
+}
+
 // ToBeHashed implements the crypto.Hashable interface
 func (bh BlockHeader) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.BlockHeader, protocol.Encode(&bh)
@@ -252,6 +256,11 @@ func (bh BlockHeader) ToBeHashed() (protocol.HashID, []byte) {
 // Digest returns a cryptographic digest summarizing the Block.
 func (block Block) Digest() crypto.Digest {
 	return crypto.Digest(block.BlockHeader.Hash())
+}
+
+// Digest returns a cryptographic digest summarizing the Block.
+func (block Block) DigestFast() crypto.Digest {
+	return crypto.Digest(block.BlockHeader.HashFast())
 }
 
 // Round returns the Round for which the Block is relevant

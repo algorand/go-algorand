@@ -107,6 +107,11 @@ func (genesis Genesis) Hash() crypto.Digest {
 	return crypto.HashObj(genesis)
 }
 
+// HashFast is the genesis hash.
+func (genesis Genesis) HashFast() crypto.Digest {
+	return crypto.HashObjFast(genesis)
+}
+
 // Balances returns the genesis account balances.
 func (genesis Genesis) Balances() (GenesisBalances, error) {
 	genalloc := make(map[basics.Address]basics.AccountData)

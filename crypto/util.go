@@ -40,6 +40,12 @@ func HashRep(h Hashable) []byte {
 	return append([]byte(hashid), data...)
 }
 
+// HashRepFast appends the correct hashid before the message to be hashed.
+func HashRepFast[H Hashable](h H) []byte {
+	hashid, data := h.ToBeHashed()
+	return append([]byte(hashid), data...)
+}
+
 // DigestSize is the number of bytes in the preferred hash Digest used here.
 const DigestSize = sha512.Size256
 
@@ -88,6 +94,11 @@ func Hash(data []byte) Digest {
 // HashObj computes a hash of a Hashable object and its type
 func HashObj(h Hashable) Digest {
 	return Hash(HashRep(h))
+}
+
+// HashObjFast computes a hash of a Hashable object and its type
+func HashObjFast[H Hashable](h H) Digest {
+	return Hash(HashRepFast(h))
 }
 
 // NewHash returns a sha512-256 object to do the same operation as Hash()

@@ -35,3 +35,10 @@ func HashProgram(program []byte) crypto.Digest {
 	pb := Program(program)
 	return crypto.HashObj(&pb)
 }
+
+// HashProgram takes program bytes and returns the Digest
+// This Digest can be used as an Address for a logic controlled account.
+func HashProgramFast(program []byte) crypto.Digest {
+	pb := Program(program)
+	return crypto.HashObjFast(pb)
+}

@@ -175,6 +175,23 @@ func TestAppIndexHashing(t *testing.T) {
 	require.Equal(t, "PCYUFPA2ZTOYWTP43MX2MOX2OWAIAXUDNC2WFCXAGMRUZ3DYD6BWFDL5YM", i.Address().String())
 }
 
+func BenchmarkAddress(b *testing.B) {
+	b.ReportAllocs()
+	ai := AppIndex(12)
+	b.Run("existing", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			ai.Address()
+		}
+	})
+	b.Run("new", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			ai.AddressFast()
+		}
+	})
+}
+
 func TestOnlineAccountData(t *testing.T) {
 	partitiontest.PartitionTest(t)
 

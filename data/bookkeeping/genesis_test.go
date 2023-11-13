@@ -155,3 +155,20 @@ func TestGenesis_Balances(t *testing.T) {
 		})
 	}
 }
+
+func BenchmarkGenesisHash(b *testing.B) {
+	b.ReportAllocs()
+	g := Genesis{}
+	b.Run("existing", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			g.Hash()
+		}
+	})
+	b.Run("new", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			g.HashFast()
+		}
+	})
+}
