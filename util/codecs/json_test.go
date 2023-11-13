@@ -18,6 +18,8 @@ package codecs
 
 import (
 	"bytes"
+	"os"
+	"path"
 	"testing"
 	"time"
 
@@ -56,6 +58,44 @@ func TestIsDefaultValue(t *testing.T) {
 	a.True(isDefaultValue("String", objectValues, defaultValues))
 	a.False(isDefaultValue("Int", objectValues, defaultValues))
 	a.True(isDefaultValue("Missing", objectValues, defaultValues))
+}
+
+func TestSaveObjectToFile(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	type TestType struct {
+		A uint64
+		B string
+	}
+
+	obj := TestType{1024, "test"}
+
+	// prettyFormat = false
+	{
+		filename := path.Join(t.TempDir(), "test.json")
+		SaveObjectToFile(filename, obj, false)
+		data, err := os.ReadFile(filename)
+		require.NoError(t, err)
+		expected := `{"A":1024,"B":"test"}
+`
+		require.Equal(t, expected, string(data))
+	}
+
+	// prettyFormat = true
+	{
+		filename := path.Join(t.TempDir(), "test.json")
+		SaveObjectToFile(filename, obj, true)
+		data, err := os.ReadFile(filename)
+		require.NoError(t, err)
+		expected := `{
+	"A": 1024,
+	"B": "test"
+}
+`
+		require.Equal(t, expected, string(data))
+	}
+
 }
 
 func TestWriteNonDefaultValue(t *testing.T) {
