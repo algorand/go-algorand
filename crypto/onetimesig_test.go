@@ -351,6 +351,24 @@ func TestOneTimeSignatureSecrets_DeleteAllButFineGrained(t *testing.T) {
 	}
 }
 
+func TestTruncatedSecretPanic(t *testing.T) {
+
+	dilution := uint64(1000)
+	c := GenerateOneTimeSignatureSecrets(0, dilution)
+
+	id := oneTimeIDForRound(2500, dilution)
+	c.DeleteBeforeFineGrained(id, dilution)
+
+	require.False(t, c.truncated, "The object is not truncated yet.")
+	require.NotPanics(t, func() { c.Snapshot() }, "Snapshot should not panic if the object is not truncated")
+
+	err := c.DeleteAllButFineGrained(id)
+	require.NoError(t, err)
+
+	require.True(t, c.truncated, "DeleteAllbutFineGrained should mark the object as truncated")
+	require.Panics(t, func() { c.Snapshot() }, "Snapshot should panic on truncated object")
+}
+
 func BenchmarkOneTimeSigBatchVerification(b *testing.B) {
 	for _, enabled := range []bool{false, true} {
 		b.Run(fmt.Sprintf("batch=%v", enabled), func(b *testing.B) {
