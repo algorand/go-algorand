@@ -16,27 +16,7 @@
 
 package crypto
 
-// #cgo CFLAGS: -Wall -std=c99
-// #cgo darwin,amd64 CFLAGS: -I${SRCDIR}/libs/darwin/amd64/include
-// #cgo darwin,amd64 LDFLAGS: ${SRCDIR}/libs/darwin/amd64/lib/libsodium.a
-// #cgo darwin,arm64 CFLAGS: -I${SRCDIR}/libs/darwin/arm64/include
-// #cgo darwin,arm64 LDFLAGS: ${SRCDIR}/libs/darwin/arm64/lib/libsodium.a
-// #cgo linux,amd64 CFLAGS: -I${SRCDIR}/libs/linux/amd64/include
-// #cgo linux,amd64 LDFLAGS: ${SRCDIR}/libs/linux/amd64/lib/libsodium.a
-// #cgo linux,arm64 CFLAGS: -I${SRCDIR}/libs/linux/arm64/include
-// #cgo linux,arm64 LDFLAGS: ${SRCDIR}/libs/linux/arm64/lib/libsodium.a
-// #cgo linux,arm CFLAGS: -I${SRCDIR}/libs/linux/arm/include
-// #cgo linux,arm LDFLAGS: ${SRCDIR}/libs/linux/arm/lib/libsodium.a
-// #cgo windows,amd64 CFLAGS: -I${SRCDIR}/libs/windows/amd64/include
-// #cgo windows,amd64 LDFLAGS: ${SRCDIR}/libs/windows/amd64/lib/libsodium.a
-// #include <stdint.h>
-// #include "sodium.h"
-import "C"
-
 import (
-	"fmt"
-
-	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/util/metrics"
 )
 
@@ -53,27 +33,14 @@ var cryptoSigSecretsVerifyBytesTotal = metrics.MakeCounter(metrics.CryptoSigSecr
 
 const masterDerivationKeyLenBytes = 32
 
-func init() {
-	if C.sodium_init() < 0 {
-		logging.Init()
-		logging.Base().Fatal("failed to initialize libsodium!")
-	}
-
-	// Check sizes of structs
-	_ = [C.crypto_sign_ed25519_BYTES]byte(ed25519Signature{})
-	_ = [C.crypto_sign_ed25519_PUBLICKEYBYTES]byte(ed25519PublicKey{})
-	_ = [C.crypto_sign_ed25519_SECRETKEYBYTES]byte(ed25519PrivateKey{})
-	_ = [C.crypto_sign_ed25519_SEEDBYTES]byte(ed25519Seed{})
-}
-
 // A Seed holds the entropy needed to generate cryptographic keys.
 type Seed ed25519Seed
 
-/* Classical signatures */
-type ed25519Signature [64]byte
-type ed25519PublicKey [32]byte
-type ed25519PrivateKey [64]byte
-type ed25519Seed [32]byte
+// /* Classical signatures */
+// type ed25519Signature [64]byte
+// type ed25519PublicKey [32]byte
+// type ed25519PrivateKey [64]byte
+// type ed25519Seed [32]byte
 
 // MasterDerivationKey is used to derive ed25519 keys for use in wallets
 type MasterDerivationKey [masterDerivationKeyLenBytes]byte
@@ -94,33 +61,6 @@ func ed25519GenerateKeyRNG(rng RNG) (public ed25519PublicKey, secret ed25519Priv
 	var seed ed25519Seed
 	rng.RandBytes(seed[:])
 	return ed25519GenerateKeySeed(seed)
-}
-
-func ed25519GenerateKeySeed(seed ed25519Seed) (public ed25519PublicKey, secret ed25519PrivateKey) {
-	C.crypto_sign_ed25519_seed_keypair((*C.uchar)(&public[0]), (*C.uchar)(&secret[0]), (*C.uchar)(&seed[0]))
-	return
-}
-
-func ed25519Sign(secret ed25519PrivateKey, data []byte) (sig ed25519Signature) {
-	// &data[0] will make Go panic if msg is zero length
-	d := (*C.uchar)(C.NULL)
-	if len(data) != 0 {
-		d = (*C.uchar)(&data[0])
-	}
-	// https://download.libsodium.org/doc/public-key_cryptography/public-key_signatures#detached-mode
-	C.crypto_sign_ed25519_detached((*C.uchar)(&sig[0]), (*C.ulonglong)(C.NULL), d, C.ulonglong(len(data)), (*C.uchar)(&secret[0]))
-	return
-}
-
-func ed25519Verify(public ed25519PublicKey, data []byte, sig ed25519Signature) bool {
-	// &data[0] will make Go panic if msg is zero length
-	d := (*C.uchar)(C.NULL)
-	if len(data) != 0 {
-		d = (*C.uchar)(&data[0])
-	}
-	// https://download.libsodium.org/doc/public-key_cryptography/public-key_signatures#detached-mode
-	result := C.crypto_sign_ed25519_bv_compatible_verify_detached((*C.uchar)(&sig[0]), d, C.ulonglong(len(data)), (*C.uchar)(&public[0]))
-	return result == 0
 }
 
 // A Signature is a cryptographic signature. It proves that a message was
@@ -160,28 +100,6 @@ func SecretKeyToSignatureSecrets(sk PrivateKey) (secrets *SignatureSecrets, err 
 		SK:                ed25519PrivateKey(sk),
 	}
 	return
-}
-
-// SecretKeyToPublicKey derives a public key from a secret key. This is very
-// efficient since ed25519 private keys literally contain their public key
-func SecretKeyToPublicKey(secret PrivateKey) (PublicKey, error) {
-	var pk PublicKey
-	result := C.crypto_sign_ed25519_sk_to_pk((*C.uchar)(&pk[0]), (*C.uchar)(&secret[0]))
-	if result != 0 {
-		return pk, fmt.Errorf("failed to extract public key: %d", result)
-	}
-	return pk, nil
-}
-
-// SecretKeyToSeed derives the seed from a secret key. This is very efficient
-// since ed25519 private keys literally contain their seed
-func SecretKeyToSeed(secret PrivateKey) (Seed, error) {
-	var seed Seed
-	result := C.crypto_sign_ed25519_sk_to_seed((*C.uchar)(&seed[0]), (*C.uchar)(&secret[0]))
-	if result != 0 {
-		return seed, fmt.Errorf("failed to extract seed: %d", result)
-	}
-	return seed, nil
 }
 
 // GenerateSignatureSecrets creates SignatureSecrets from a source of entropy.
