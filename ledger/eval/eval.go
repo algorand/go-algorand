@@ -1318,22 +1318,29 @@ func (eval *BlockEvaluator) endOfBlock() error {
 		if !eval.block.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment.IsEqual(expectedVoters) {
 			return fmt.Errorf("StateProofVotersCommitment wrong: %v != %v", eval.block.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment, expectedVoters)
 		}
-
-		if eval.block.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight != expectedVotersWeight {
-			mainnetGenesisHash, _ := crypto.DigestFromString("YBQ4JWH4DW655UWXMBF6IVUOH5WQIGMHVQ333ZFWEC22WOJERLPQ")
-			if eval.genesisHash == mainnetGenesisHash {
-				// Handful of historic rounds where the state proof online total weight is known to be slightly different
-				// than expected voters weight. A consensus release (V38) addressed this/prevented the corner case from
-				// occurring going forward.
-				switch eval.block.Round() {
-				case 24018688, 26982912, 27009024, 27713280, 27822080, 27822848, 27929344, 28032768,
-					28977920, 29822208, 30005248, 30033920:
-					// Don't return an error for these blocks
-				default:
-					return fmt.Errorf("StateProofOnlineTotalWeight wrong: %v != %v", eval.block.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight, expectedVotersWeight)
-				}
-			} else {
+		if eval.proto.ExcludeExpiredCirculation {
+			if eval.block.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight != expectedVotersWeight {
 				return fmt.Errorf("StateProofOnlineTotalWeight wrong: %v != %v", eval.block.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight, expectedVotersWeight)
+			}
+		} else {
+			if eval.block.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight != expectedVotersWeight {
+				actualVotersWeight := eval.block.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight
+				var highWeight, lowWeight basics.MicroAlgos
+				if expectedVotersWeight.LessThan(actualVotersWeight) {
+					highWeight = actualVotersWeight
+					lowWeight = expectedVotersWeight
+				} else {
+					highWeight = expectedVotersWeight
+					lowWeight = actualVotersWeight
+				}
+				const stakeDiffusionFactor = 5
+				allowedDelta, overflowed := basics.Muldiv(expectedVotersWeight.Raw, stakeDiffusionFactor, 100)
+				if overflowed {
+					return fmt.Errorf("StateProofOnlineTotalWeight overflow: %v != %v", actualVotersWeight, expectedVotersWeight)
+				}
+				if (highWeight.Raw - lowWeight.Raw) > allowedDelta {
+					return fmt.Errorf("StateProofOnlineTotalWeight wrong: %v != %v greater than %d", actualVotersWeight, expectedVotersWeight, allowedDelta)
+				}
 			}
 		}
 		if eval.block.StateProofTracking[protocol.StateProofBasic].StateProofNextRound != eval.state.GetStateProofNextRound() {
@@ -1708,12 +1715,12 @@ transactionGroupLoop:
 		select {
 		case <-ctx.Done():
 			return ledgercore.StateDelta{}, ctx.Err()
-		case err1, open := <-txvalidator.done:
+		case err, open := <-txvalidator.done:
 			if !open {
 				break
 			}
-			if err1 != nil {
-				return ledgercore.StateDelta{}, err1
+			if err != nil {
+				return ledgercore.StateDelta{}, err
 			}
 		}
 	}
