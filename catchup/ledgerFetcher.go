@@ -79,7 +79,7 @@ func (lf *ledgerFetcher) requestLedger(ctx context.Context, peer network.HTTPPee
 		return nil, err
 	}
 
-	parsedURL.Path = lf.net.SubstituteGenesisID(path.Join(parsedURL.Path, "/v1/{genesisID}/ledger/"+strconv.FormatUint(uint64(round), 36)))
+	parsedURL.Path = network.SubstituteGenesisID(lf.net, path.Join(parsedURL.Path, "/v1/{genesisID}/ledger/"+strconv.FormatUint(uint64(round), 36)))
 	ledgerURL := parsedURL.String()
 	lf.log.Debugf("ledger %s %#v peer %#v %T", method, ledgerURL, peer, peer)
 	request, err := http.NewRequestWithContext(ctx, method, ledgerURL, nil)

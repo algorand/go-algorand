@@ -364,6 +364,10 @@ func (wp *wsPeerCore) GetHTTPClient() *http.Client {
 	return &wp.client
 }
 
+func (wp *wsPeerCore) GetNetwork() GossipNode {
+	return wp.net
+}
+
 // Version returns the matching version from network.SupportedProtocolVersions
 func (wp *wsPeer) Version() string {
 	return wp.version

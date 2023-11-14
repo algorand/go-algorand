@@ -22,7 +22,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -116,9 +115,7 @@ func (b *basicRPCNode) GetPeers(options ...network.PeerOption) []network.Peer {
 	return b.peers
 }
 
-func (b *basicRPCNode) SubstituteGenesisID(rawURL string) string {
-	return strings.Replace(rawURL, "{genesisID}", "test genesisID", -1)
-}
+func (b *basicRPCNode) GetGenesisID() string { return "test genesisID" }
 
 func nodePair() (*basicRPCNode, *basicRPCNode) {
 	nodeA := &basicRPCNode{}
