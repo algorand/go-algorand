@@ -666,7 +666,7 @@ func (cfg Local) SaveAllToDisk(root string) error {
 func (cfg Local) SaveToFile(filename string) error {
 	var alwaysInclude []string
 	alwaysInclude = append(alwaysInclude, "Version")
-	return codecs.SaveNonDefaultValuesToFile(filename, cfg, defaultLocal, alwaysInclude, true)
+	return codecs.SaveNonDefaultValuesToFile(filename, cfg, defaultLocal, alwaysInclude)
 }
 
 // DNSSecuritySRVEnforced returns true if SRV response verification enforced

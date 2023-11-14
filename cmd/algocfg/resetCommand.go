@@ -63,7 +63,7 @@ var resetCmd = &cobra.Command{
 			}
 
 			file := filepath.Join(dataDir, config.ConfigFilename)
-			err = codecs.SaveNonDefaultValuesToFile(file, cfg, defaults, nil, true)
+			err = codecs.SaveNonDefaultValuesToFile(file, cfg, defaults, nil)
 			if err != nil {
 				reportWarnf("Error saving updated config file '%s' - %s", file, err)
 				anyError = true
