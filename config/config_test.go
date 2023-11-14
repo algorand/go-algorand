@@ -753,6 +753,8 @@ func TestEnsureAndResolveGenesisDirs_hierarchy(t *testing.T) {
 }
 
 func TestEnsureAndResolveGenesisDirs_migrate(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	cfg := GetDefaultLocal()
 	testDirectory := t.TempDir()
 	hot := filepath.Join(testDirectory, "hot")
@@ -794,6 +796,8 @@ func TestEnsureAndResolveGenesisDirs_migrate(t *testing.T) {
 }
 
 func TestEnsureAndResolveGenesisDirs_migrateFail(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	cfg := GetDefaultLocal()
 	testDirectory := t.TempDir()
 	hot := filepath.Join(testDirectory, "hot")
