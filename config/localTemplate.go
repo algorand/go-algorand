@@ -842,12 +842,11 @@ func (cfg *Local) EnsureAndResolveGenesisDirs(rootDir, genesisID string, logger 
 	} else {
 		resolved.StateproofGenesisDir = resolved.HotGenesisDir
 		// if separate HotDataDir and ColdDataDir was configured, but StateproofDir was not configured
-		if cfg.HotDataDir != "" && resolved.ColdGenesisDir != resolved.HotGenesisDir {
+		if resolved.ColdGenesisDir != resolved.HotGenesisDir {
 			// move existing stateproof DB files from ColdDataDir to HotDataDir
 			moveErr := moveDirIfExists(logger, resolved.ColdGenesisDir, resolved.HotGenesisDir, "stateproof.sqlite", "stateproof.sqlite-shm", "stateproof.sqlite-wal")
 			if moveErr != nil {
-				logger.Infof("Failed to move stateproof DB files from ColdDataDir %s to HotDataDir %s: %v", resolved.ColdGenesisDir, resolved.HotGenesisDir, moveErr)
-				return ResolvedGenesisDirs{}, moveErr
+				return ResolvedGenesisDirs{}, fmt.Errorf("Error moving stateproof DB files from ColdDataDir %s to HotDataDir %s: %v", resolved.ColdGenesisDir, resolved.HotGenesisDir, moveErr)
 			}
 		}
 	}
@@ -860,12 +859,11 @@ func (cfg *Local) EnsureAndResolveGenesisDirs(rootDir, genesisID string, logger 
 	} else {
 		resolved.CrashGenesisDir = resolved.HotGenesisDir
 		// if separate HotDataDir and ColdDataDir was configured, but CrashDBDir was not configured
-		if cfg.HotDataDir != "" && resolved.ColdGenesisDir != resolved.HotGenesisDir {
+		if resolved.ColdGenesisDir != resolved.HotGenesisDir {
 			// move existing crash DB files from ColdDataDir to HotDataDir
 			moveErr := moveDirIfExists(logger, resolved.ColdGenesisDir, resolved.HotGenesisDir, "crash.sqlite", "crash.sqlite-shm", "crash.sqlite-wal")
 			if moveErr != nil {
-				logger.Infof("Failed to move crash DB files from ColdDataDir %s to HotDataDir %s: %v", resolved.ColdGenesisDir, resolved.HotGenesisDir, moveErr)
-				return ResolvedGenesisDirs{}, moveErr
+				return ResolvedGenesisDirs{}, fmt.Errorf("Error moving crash DB files from ColdDataDir %s to HotDataDir %s: %v", resolved.ColdGenesisDir, resolved.HotGenesisDir, moveErr)
 			}
 		}
 	}
