@@ -57,6 +57,9 @@ type Service struct {
 	persistRouter  rootRouter
 	persistStatus  player
 	persistActions []action
+
+	// Retain old rounds' period 0 start times.
+	historicalClocks map[round]roundStartTimer
 }
 
 // Parameters holds the parameters necessary to run the agreement protocol.
@@ -68,7 +71,7 @@ type Parameters struct {
 	BlockFactory
 	RandomSource
 	EventsProcessingMonitor
-	timers.Clock
+	timers.Clock[TimeoutType]
 	db.Accessor
 	logging.Logger
 	config.Local
@@ -80,9 +83,16 @@ type parameters Parameters
 
 // externalDemuxSignals used to syncronize the external signals that goes to the demux with the main loop.
 type externalDemuxSignals struct {
-	Deadline             time.Duration
-	FastRecoveryDeadline time.Duration
+	Deadline             Deadline
+	FastRecoveryDeadline Deadline
 	CurrentRound         round
+}
+
+// an interface allowing for measuring the duration since a clock from a previous round,
+// used for measuring the arrival time of a late proposal-vote, for the dynamic filter
+// timeout feature
+type roundStartTimer interface {
+	Since() time.Duration
 }
 
 // MakeService creates a new Agreement Service instance given a set of Parameters.
@@ -95,16 +105,23 @@ func MakeService(p Parameters) (*Service, error) {
 
 	s.log = makeServiceLogger(p.Logger)
 
+	// If cadaver directory is not set, use cold data directory (which may also not be set)
+	cadaverDir := p.CadaverDirectory
+	if cadaverDir == "" {
+		cadaverDir = p.ColdDataDir
+	}
 	// GOAL2-541: tracer is not concurrency safe. It should only ever be
 	// accessed by main state machine loop.
 	var err error
-	s.tracer, err = makeTracer(s.log, defaultCadaverName, p.CadaverSizeTarget, p.CadaverDirectory,
+	s.tracer, err = makeTracer(s.log, defaultCadaverName, p.CadaverSizeTarget, cadaverDir,
 		s.Local.EnableAgreementReporting, s.Local.EnableAgreementTimeMetrics)
 	if err != nil {
 		return nil, err
 	}
 
 	s.persistenceLoop = makeAsyncPersistenceLoop(s.log, s.Accessor, s.Ledger)
+
+	s.historicalClocks = make(map[round]roundStartTimer)
 
 	return s, nil
 }
@@ -188,7 +205,7 @@ func (s *Service) demuxLoop(ctx context.Context, input chan<- externalEvent, out
 // 4. If necessary, persist state to disk.
 func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, ready chan<- externalDemuxSignals) {
 	// setup
-	var clock timers.Clock
+	var clock timers.Clock[TimeoutType]
 	var router rootRouter
 	var status player
 	var a []action
@@ -212,7 +229,7 @@ func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, r
 			s.log.Errorf("unable to retrieve consensus version for round %d, defaulting to binary consensus version", nextRound)
 			nextVersion = protocol.ConsensusCurrentVersion
 		}
-		status = player{Round: nextRound, Step: soft, Deadline: FilterTimeout(0, nextVersion)}
+		status = player{Round: nextRound, Step: soft, Deadline: Deadline{Duration: FilterTimeout(0, nextVersion), Type: TimeoutFilter}, lowestCredentialArrivals: makeCredentialArrivalHistory(dynamicFilterCredentialArrivalHistory)}
 		router = makeRootRouter(status)
 
 		a1 := pseudonodeAction{T: assemble, Round: s.Ledger.NextRound()}
@@ -226,7 +243,8 @@ func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, r
 
 	for {
 		output <- a
-		ready <- externalDemuxSignals{Deadline: status.Deadline, FastRecoveryDeadline: status.FastRecoveryDeadline, CurrentRound: status.Round}
+		fastRecoveryDeadline := Deadline{Duration: status.FastRecoveryDeadline, Type: TimeoutFastRecovery}
+		ready <- externalDemuxSignals{Deadline: status.Deadline, FastRecoveryDeadline: fastRecoveryDeadline, CurrentRound: status.Round}
 		e, ok := <-input
 		if !ok {
 			break

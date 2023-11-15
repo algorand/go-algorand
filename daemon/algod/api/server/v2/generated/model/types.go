@@ -280,6 +280,30 @@ type Application struct {
 	Params ApplicationParams `json:"params"`
 }
 
+// ApplicationInitialStates An application's initial global/local/box states that were accessed during simulation.
+type ApplicationInitialStates struct {
+	// AppBoxes An application's global/local/box state.
+	AppBoxes *ApplicationKVStorage `json:"app-boxes,omitempty"`
+
+	// AppGlobals An application's global/local/box state.
+	AppGlobals *ApplicationKVStorage `json:"app-globals,omitempty"`
+
+	// AppLocals An application's initial local states tied to different accounts.
+	AppLocals *[]ApplicationKVStorage `json:"app-locals,omitempty"`
+
+	// Id Application index.
+	Id uint64 `json:"id"`
+}
+
+// ApplicationKVStorage An application's global/local/box state.
+type ApplicationKVStorage struct {
+	// Account The address of the account associated with the local state.
+	Account *string `json:"account,omitempty"`
+
+	// Kvs Key-Value pairs representing application states.
+	Kvs []AvmKeyValue `json:"kvs"`
+}
+
 // ApplicationLocalReference References an account's local state for an application.
 type ApplicationLocalReference struct {
 	// Account Address of the account with the local state.
@@ -323,6 +347,24 @@ type ApplicationParams struct {
 
 	// LocalStateSchema Specifies maximums on the number of each type that may be stored.
 	LocalStateSchema *ApplicationStateSchema `json:"local-state-schema,omitempty"`
+}
+
+// ApplicationStateOperation An operation against an application's global/local/box state.
+type ApplicationStateOperation struct {
+	// Account For local state changes, the address of the account associated with the local state.
+	Account *string `json:"account,omitempty"`
+
+	// AppStateType Type of application state. Value `g` is **global state**, `l` is **local state**, `b` is **boxes**.
+	AppStateType string `json:"app-state-type"`
+
+	// Key The key (name) of the global/local/box state.
+	Key []byte `json:"key"`
+
+	// NewValue Represents an AVM value.
+	NewValue *AvmValue `json:"new-value,omitempty"`
+
+	// Operation Operation type. Value `w` is **write**, `d` is **delete**.
+	Operation string `json:"operation"`
 }
 
 // ApplicationStateSchema Specifies maximums on the number of each type that may be stored.
@@ -423,6 +465,14 @@ type AssetParams struct {
 
 	// UrlB64 Base64 encoded URL where more information about the asset can be retrieved.
 	UrlB64 *[]byte `json:"url-b64,omitempty"`
+}
+
+// AvmKeyValue Represents an AVM key-value pair in an application store.
+type AvmKeyValue struct {
+	Key []byte `json:"key"`
+
+	// Value Represents an AVM value.
+	Value AvmValue `json:"value"`
 }
 
 // AvmValue Represents an AVM value.
@@ -678,6 +728,12 @@ type ScratchChange struct {
 	Slot uint64 `json:"slot"`
 }
 
+// SimulateInitialStates Initial states of resources that were accessed during simulation.
+type SimulateInitialStates struct {
+	// AppInitialStates The initial states of accessed application before simulation. The order of this array is arbitrary.
+	AppInitialStates *[]ApplicationInitialStates `json:"app-initial-states,omitempty"`
+}
+
 // SimulateRequest Request type for simulation endpoint.
 type SimulateRequest struct {
 	// AllowEmptySignatures Allows transactions without signatures to be simulated as if they had correct signatures.
@@ -694,6 +750,9 @@ type SimulateRequest struct {
 
 	// ExtraOpcodeBudget Applies extra opcode budget during simulation for each transaction group.
 	ExtraOpcodeBudget *uint64 `json:"extra-opcode-budget,omitempty"`
+
+	// Round If provided, specifies the round preceding the simulation. State changes through this round will be used to run this simulation. Usually only the 4 most recent rounds will be available (controlled by the node config value MaxAcctLookback). If not specified, defaults to the latest available round.
+	Round *uint64 `json:"round,omitempty"`
 
 	// TxnGroups The transaction groups to simulate.
 	TxnGroups []SimulateRequestTransactionGroup `json:"txn-groups"`
@@ -715,6 +774,9 @@ type SimulateTraceConfig struct {
 
 	// StackChange A boolean option enabling returning stack changes together with execution trace during simulation.
 	StackChange *bool `json:"stack-change,omitempty"`
+
+	// StateChange A boolean option enabling returning application state changes (global, local, and box changes) with the execution trace during simulation.
+	StateChange *bool `json:"state-change,omitempty"`
 }
 
 // SimulateTransactionGroupResult Simulation result for an atomic transaction group
@@ -814,18 +876,30 @@ type SimulationOpcodeTraceUnit struct {
 
 	// StackPopCount The number of deleted stack values by this opcode.
 	StackPopCount *uint64 `json:"stack-pop-count,omitempty"`
+
+	// StateChanges The operations against the current application's states.
+	StateChanges *[]ApplicationStateOperation `json:"state-changes,omitempty"`
 }
 
 // SimulationTransactionExecTrace The execution trace of calling an app or a logic sig, containing the inner app call trace in a recursive way.
 type SimulationTransactionExecTrace struct {
+	// ApprovalProgramHash SHA512_256 hash digest of the approval program executed in transaction.
+	ApprovalProgramHash *[]byte `json:"approval-program-hash,omitempty"`
+
 	// ApprovalProgramTrace Program trace that contains a trace of opcode effects in an approval program.
 	ApprovalProgramTrace *[]SimulationOpcodeTraceUnit `json:"approval-program-trace,omitempty"`
+
+	// ClearStateProgramHash SHA512_256 hash digest of the clear state program executed in transaction.
+	ClearStateProgramHash *[]byte `json:"clear-state-program-hash,omitempty"`
 
 	// ClearStateProgramTrace Program trace that contains a trace of opcode effects in a clear state program.
 	ClearStateProgramTrace *[]SimulationOpcodeTraceUnit `json:"clear-state-program-trace,omitempty"`
 
 	// InnerTrace An array of SimulationTransactionExecTrace representing the execution trace of any inner transactions executed.
 	InnerTrace *[]SimulationTransactionExecTrace `json:"inner-trace,omitempty"`
+
+	// LogicSigHash SHA512_256 hash digest of the logic sig executed in transaction.
+	LogicSigHash *[]byte `json:"logic-sig-hash,omitempty"`
 
 	// LogicSigTrace Program trace that contains a trace of opcode effects in a logic sig.
 	LogicSigTrace *[]SimulationOpcodeTraceUnit `json:"logic-sig-trace,omitempty"`
@@ -1207,6 +1281,9 @@ type SimulateResponse struct {
 	// ExecTraceConfig An object that configures simulation execution trace.
 	ExecTraceConfig *SimulateTraceConfig `json:"exec-trace-config,omitempty"`
 
+	// InitialStates Initial states of resources that were accessed during simulation.
+	InitialStates *SimulateInitialStates `json:"initial-states,omitempty"`
+
 	// LastRound The round immediately preceding this simulation. State changes through this round were used to run this simulation.
 	LastRound uint64 `json:"last-round"`
 
@@ -1375,6 +1452,12 @@ type GetTransactionProofParamsHashtype string
 // GetTransactionProofParamsFormat defines parameters for GetTransactionProof.
 type GetTransactionProofParamsFormat string
 
+// StartCatchupParams defines parameters for StartCatchup.
+type StartCatchupParams struct {
+	// Min Specify the minimum number of blocks which the ledger must be advanced by in order to start the catchup. This is useful for simplifying tools which support fast catchup, they can run the catchup unconditionally and the node will skip the catchup if it is not needed.
+	Min *uint64 `form:"min,omitempty" json:"min,omitempty"`
+}
+
 // GetLedgerStateDeltaForTransactionGroupParams defines parameters for GetLedgerStateDeltaForTransactionGroup.
 type GetLedgerStateDeltaForTransactionGroupParams struct {
 	// Format Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.
@@ -1401,6 +1484,18 @@ type GetTransactionGroupLedgerStateDeltasForRoundParams struct {
 
 // GetTransactionGroupLedgerStateDeltasForRoundParamsFormat defines parameters for GetTransactionGroupLedgerStateDeltasForRound.
 type GetTransactionGroupLedgerStateDeltasForRoundParamsFormat string
+
+// GenerateParticipationKeysParams defines parameters for GenerateParticipationKeys.
+type GenerateParticipationKeysParams struct {
+	// Dilution Key dilution for two-level participation keys (defaults to sqrt of validity window).
+	Dilution *uint64 `form:"dilution,omitempty" json:"dilution,omitempty"`
+
+	// First First round for participation key.
+	First uint64 `form:"first" json:"first"`
+
+	// Last Last round for participation key.
+	Last uint64 `form:"last" json:"last"`
+}
 
 // ShutdownNodeParams defines parameters for ShutdownNode.
 type ShutdownNodeParams struct {

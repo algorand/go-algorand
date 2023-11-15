@@ -47,7 +47,7 @@ type Fuzzer struct {
 	wallClock        int32
 	agreements       []*agreement.Service
 	facades          []*NetworkFacade
-	clocks           []timers.Clock
+	clocks           []timers.Clock[agreement.TimeoutType]
 	disconnected     [][]bool
 	crashAccessors   []db.Accessor
 	router           *Router
@@ -80,7 +80,7 @@ func MakeFuzzer(config FuzzerConfig) *Fuzzer {
 		networkName:      config.FuzzerName,
 		agreements:       make([]*agreement.Service, config.NodesCount),
 		facades:          make([]*NetworkFacade, config.NodesCount),
-		clocks:           make([]timers.Clock, config.NodesCount),
+		clocks:           make([]timers.Clock[agreement.TimeoutType], config.NodesCount),
 		disconnected:     make([][]bool, config.NodesCount),
 		crashAccessors:   make([]db.Accessor, config.NodesCount),
 		accounts:         make([]account.Participation, config.NodesCount),

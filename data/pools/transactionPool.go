@@ -49,9 +49,6 @@ import (
 // TransactionPool.AssembleBlock constructs a valid block for
 // proposal given a deadline.
 type TransactionPool struct {
-	// feePerByte is stored at the beginning of this struct to ensure it has a 64 bit aligned address. This is needed as it's being used
-	// with atomic operations which require 64 bit alignment on arm.
-	feePerByte uint64
 
 	// const
 	logProcessBlockStats bool
@@ -65,6 +62,7 @@ type TransactionPool struct {
 	expiredTxCount         map[basics.Round]int
 	pendingBlockEvaluator  BlockEvaluator
 	numPendingWholeBlocks  basics.Round
+	feePerByte             atomic.Uint64
 	feeThresholdMultiplier uint64
 	statusCache            *statusCache
 
@@ -295,7 +293,7 @@ func (pool *TransactionPool) checkPendingQueueSize(txnGroup []transactions.Signe
 // FeePerByte returns the current minimum microalgos per byte a transaction
 // needs to pay in order to get into the pool.
 func (pool *TransactionPool) FeePerByte() uint64 {
-	return atomic.LoadUint64(&pool.feePerByte)
+	return pool.feePerByte.Load()
 }
 
 // computeFeePerByte computes and returns the current minimum microalgos per byte a transaction
@@ -332,7 +330,7 @@ func (pool *TransactionPool) computeFeePerByte() uint64 {
 	}
 
 	// Update the counter for fast reads
-	atomic.StoreUint64(&pool.feePerByte, feePerByte)
+	pool.feePerByte.Store(feePerByte)
 
 	return feePerByte
 }

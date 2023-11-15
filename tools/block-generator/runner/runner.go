@@ -35,17 +35,21 @@ func init() {
 		Use:   "runner",
 		Short: "Run test suite and collect results.",
 		Long:  "Run an automated test suite using the block-generator daemon and a provided conduit binary. Results are captured to a specified output directory.",
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error{
 			fmt.Printf("starting block-generator runner with args: %+v\n", runnerArgs)
-			if err := Run(runnerArgs); err != nil {
-				fmt.Println(err)
+
+			if runnerArgs.Template == "postgres-exporter" && runnerArgs.PostgresConnectionString == "" {
+				return fmt.Errorf("exporting to postgres requires that postgres-connection-string to be set")
 			}
+
+			return Run(runnerArgs)
 		},
 	}
 
 	RunnerCmd.Flags().StringVarP(&runnerArgs.Path, "scenario", "s", "", "Directory containing scenarios, or specific scenario file.")
 	RunnerCmd.Flags().StringVarP(&runnerArgs.ConduitBinary, "conduit-binary", "i", "", "Path to conduit binary.")
 	RunnerCmd.Flags().Uint64VarP(&runnerArgs.MetricsPort, "metrics-port", "p", 9999, "Port to start the metrics server at.")
+	RunnerCmd.Flags().StringVarP(&runnerArgs.Template, "template", "", "postgres-exporter", "Specify the conduit template to use. Choices are: file-exporter or postgres-exporter.")
 	RunnerCmd.Flags().StringVarP(&runnerArgs.PostgresConnectionString, "postgres-connection-string", "c", "", "Postgres connection string.")
 	RunnerCmd.Flags().DurationVarP(&runnerArgs.RunDuration, "test-duration", "d", 5*time.Minute, "Duration to use for each scenario.")
 	RunnerCmd.Flags().StringVarP(&runnerArgs.BaseReportDirectory, "report-directory", "r", "", "Location to place test reports. If --times is used, this is the prefix for multiple report directories.")
@@ -58,9 +62,9 @@ func init() {
 	RunnerCmd.Flags().StringVarP(&runnerArgs.GenesisFile, "genesis-file", "f", "", "file path to the genesis associated with the db snapshot")
 	RunnerCmd.Flags().BoolVarP(&runnerArgs.ResetDB, "reset-db", "", false, "If set database will be deleted before running tests.")
 	RunnerCmd.Flags().Uint64VarP(&runnerArgs.Times, "times", "t", 1, "Number of times to run the scenario(s).")
+	RunnerCmd.Flags().DurationVarP(&runnerArgs.StartDelay, "start-delay", "", 0, "Duration to wait before starting a test scenario. This may be useful for snapshot tests where DB maintenance occurs after loading data.")
 
 	RunnerCmd.MarkFlagRequired("scenario")
 	RunnerCmd.MarkFlagRequired("conduit-binary")
-	RunnerCmd.MarkFlagRequired("postgres-connection-string")
 	RunnerCmd.MarkFlagRequired("report-directory")
 }

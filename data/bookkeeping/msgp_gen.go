@@ -20,6 +20,7 @@ import (
 //   |-----> (*) MarshalMsg
 //   |-----> (*) CanMarshalMsg
 //   |-----> (*) UnmarshalMsg
+//   |-----> (*) UnmarshalMsgWithState
 //   |-----> (*) CanUnmarshalMsg
 //   |-----> (*) Msgsize
 //   |-----> (*) MsgIsZero
@@ -29,6 +30,7 @@ import (
 //     |-----> (*) MarshalMsg
 //     |-----> (*) CanMarshalMsg
 //     |-----> (*) UnmarshalMsg
+//     |-----> (*) UnmarshalMsgWithState
 //     |-----> (*) CanUnmarshalMsg
 //     |-----> (*) Msgsize
 //     |-----> (*) MsgIsZero
@@ -37,6 +39,7 @@ import (
 //      |-----> (*) MarshalMsg
 //      |-----> (*) CanMarshalMsg
 //      |-----> (*) UnmarshalMsg
+//      |-----> (*) UnmarshalMsgWithState
 //      |-----> (*) CanUnmarshalMsg
 //      |-----> (*) Msgsize
 //      |-----> (*) MsgIsZero
@@ -46,6 +49,7 @@ import (
 //    |-----> (*) MarshalMsg
 //    |-----> (*) CanMarshalMsg
 //    |-----> (*) UnmarshalMsg
+//    |-----> (*) UnmarshalMsgWithState
 //    |-----> (*) CanUnmarshalMsg
 //    |-----> (*) Msgsize
 //    |-----> (*) MsgIsZero
@@ -55,6 +59,7 @@ import (
 //          |-----> (*) MarshalMsg
 //          |-----> (*) CanMarshalMsg
 //          |-----> (*) UnmarshalMsg
+//          |-----> (*) UnmarshalMsgWithState
 //          |-----> (*) CanUnmarshalMsg
 //          |-----> (*) Msgsize
 //          |-----> (*) MsgIsZero
@@ -64,6 +69,7 @@ import (
 //         |-----> (*) MarshalMsg
 //         |-----> (*) CanMarshalMsg
 //         |-----> (*) UnmarshalMsg
+//         |-----> (*) UnmarshalMsgWithState
 //         |-----> (*) CanUnmarshalMsg
 //         |-----> (*) Msgsize
 //         |-----> (*) MsgIsZero
@@ -73,6 +79,7 @@ import (
 //         |-----> (*) MarshalMsg
 //         |-----> (*) CanMarshalMsg
 //         |-----> (*) UnmarshalMsg
+//         |-----> (*) UnmarshalMsgWithState
 //         |-----> (*) CanUnmarshalMsg
 //         |-----> (*) Msgsize
 //         |-----> (*) MsgIsZero
@@ -82,6 +89,7 @@ import (
 //           |-----> (*) MarshalMsg
 //           |-----> (*) CanMarshalMsg
 //           |-----> (*) UnmarshalMsg
+//           |-----> (*) UnmarshalMsgWithState
 //           |-----> (*) CanUnmarshalMsg
 //           |-----> (*) Msgsize
 //           |-----> (*) MsgIsZero
@@ -91,6 +99,7 @@ import (
 //       |-----> (*) MarshalMsg
 //       |-----> (*) CanMarshalMsg
 //       |-----> (*) UnmarshalMsg
+//       |-----> (*) UnmarshalMsgWithState
 //       |-----> (*) CanUnmarshalMsg
 //       |-----> (*) Msgsize
 //       |-----> (*) MsgIsZero
@@ -100,6 +109,7 @@ import (
 //            |-----> (*) MarshalMsg
 //            |-----> (*) CanMarshalMsg
 //            |-----> (*) UnmarshalMsg
+//            |-----> (*) UnmarshalMsgWithState
 //            |-----> (*) CanUnmarshalMsg
 //            |-----> (*) Msgsize
 //            |-----> (*) MsgIsZero
@@ -109,6 +119,7 @@ import (
 //        |-----> (*) MarshalMsg
 //        |-----> (*) CanMarshalMsg
 //        |-----> (*) UnmarshalMsg
+//        |-----> (*) UnmarshalMsgWithState
 //        |-----> (*) CanUnmarshalMsg
 //        |-----> (*) Msgsize
 //        |-----> (*) MsgIsZero
@@ -118,6 +129,7 @@ import (
 //      |-----> (*) MarshalMsg
 //      |-----> (*) CanMarshalMsg
 //      |-----> (*) UnmarshalMsg
+//      |-----> (*) UnmarshalMsgWithState
 //      |-----> (*) CanUnmarshalMsg
 //      |-----> (*) Msgsize
 //      |-----> (*) MsgIsZero
@@ -402,7 +414,12 @@ func (_ *Block) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *Block) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *Block) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0004 int
@@ -416,7 +433,7 @@ func (z *Block) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0004 > 0 {
 			zb0004--
-			bts, err = (*z).BlockHeader.Round.UnmarshalMsg(bts)
+			bts, err = (*z).BlockHeader.Round.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Round")
 				return
@@ -424,7 +441,7 @@ func (z *Block) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0004 > 0 {
 			zb0004--
-			bts, err = (*z).BlockHeader.Branch.UnmarshalMsg(bts)
+			bts, err = (*z).BlockHeader.Branch.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Branch")
 				return
@@ -432,7 +449,7 @@ func (z *Block) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0004 > 0 {
 			zb0004--
-			bts, err = (*z).BlockHeader.Seed.UnmarshalMsg(bts)
+			bts, err = (*z).BlockHeader.Seed.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Seed")
 				return
@@ -440,7 +457,7 @@ func (z *Block) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0004 > 0 {
 			zb0004--
-			bts, err = (*z).BlockHeader.TxnCommitments.NativeSha512_256Commitment.UnmarshalMsg(bts)
+			bts, err = (*z).BlockHeader.TxnCommitments.NativeSha512_256Commitment.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "NativeSha512_256Commitment")
 				return
@@ -448,7 +465,7 @@ func (z *Block) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0004 > 0 {
 			zb0004--
-			bts, err = (*z).BlockHeader.TxnCommitments.Sha256Commitment.UnmarshalMsg(bts)
+			bts, err = (*z).BlockHeader.TxnCommitments.Sha256Commitment.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Sha256Commitment")
 				return
@@ -482,7 +499,7 @@ func (z *Block) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0004 > 0 {
 			zb0004--
-			bts, err = (*z).BlockHeader.GenesisHash.UnmarshalMsg(bts)
+			bts, err = (*z).BlockHeader.GenesisHash.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "GenesisHash")
 				return
@@ -490,7 +507,7 @@ func (z *Block) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0004 > 0 {
 			zb0004--
-			bts, err = (*z).BlockHeader.RewardsState.FeeSink.UnmarshalMsg(bts)
+			bts, err = (*z).BlockHeader.RewardsState.FeeSink.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "FeeSink")
 				return
@@ -498,7 +515,7 @@ func (z *Block) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0004 > 0 {
 			zb0004--
-			bts, err = (*z).BlockHeader.RewardsState.RewardsPool.UnmarshalMsg(bts)
+			bts, err = (*z).BlockHeader.RewardsState.RewardsPool.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "RewardsPool")
 				return
@@ -530,7 +547,7 @@ func (z *Block) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0004 > 0 {
 			zb0004--
-			bts, err = (*z).BlockHeader.RewardsState.RewardsRecalculationRound.UnmarshalMsg(bts)
+			bts, err = (*z).BlockHeader.RewardsState.RewardsRecalculationRound.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "RewardsRecalculationRound")
 				return
@@ -538,7 +555,7 @@ func (z *Block) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0004 > 0 {
 			zb0004--
-			bts, err = (*z).BlockHeader.UpgradeState.CurrentProtocol.UnmarshalMsg(bts)
+			bts, err = (*z).BlockHeader.UpgradeState.CurrentProtocol.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "CurrentProtocol")
 				return
@@ -546,7 +563,7 @@ func (z *Block) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0004 > 0 {
 			zb0004--
-			bts, err = (*z).BlockHeader.UpgradeState.NextProtocol.UnmarshalMsg(bts)
+			bts, err = (*z).BlockHeader.UpgradeState.NextProtocol.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "NextProtocol")
 				return
@@ -562,7 +579,7 @@ func (z *Block) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0004 > 0 {
 			zb0004--
-			bts, err = (*z).BlockHeader.UpgradeState.NextProtocolVoteBefore.UnmarshalMsg(bts)
+			bts, err = (*z).BlockHeader.UpgradeState.NextProtocolVoteBefore.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "NextProtocolVoteBefore")
 				return
@@ -570,7 +587,7 @@ func (z *Block) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0004 > 0 {
 			zb0004--
-			bts, err = (*z).BlockHeader.UpgradeState.NextProtocolSwitchOn.UnmarshalMsg(bts)
+			bts, err = (*z).BlockHeader.UpgradeState.NextProtocolSwitchOn.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "NextProtocolSwitchOn")
 				return
@@ -578,7 +595,7 @@ func (z *Block) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0004 > 0 {
 			zb0004--
-			bts, err = (*z).BlockHeader.UpgradeVote.UpgradePropose.UnmarshalMsg(bts)
+			bts, err = (*z).BlockHeader.UpgradeVote.UpgradePropose.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "UpgradePropose")
 				return
@@ -586,7 +603,7 @@ func (z *Block) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0004 > 0 {
 			zb0004--
-			bts, err = (*z).BlockHeader.UpgradeVote.UpgradeDelay.UnmarshalMsg(bts)
+			bts, err = (*z).BlockHeader.UpgradeVote.UpgradeDelay.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "UpgradeDelay")
 				return
@@ -631,12 +648,12 @@ func (z *Block) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				var zb0001 protocol.StateProofType
 				var zb0002 StateProofTrackingData
 				zb0007--
-				bts, err = zb0001.UnmarshalMsg(bts)
+				bts, err = zb0001.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "StateProofTracking")
 					return
 				}
-				bts, err = zb0002.UnmarshalMsg(bts)
+				bts, err = zb0002.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "StateProofTracking", zb0001)
 					return
@@ -666,7 +683,7 @@ func (z *Block) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				(*z).BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts = make([]basics.Address, zb0009)
 			}
 			for zb0003 := range (*z).BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts {
-				bts, err = (*z).BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts[zb0003].UnmarshalMsg(bts)
+				bts, err = (*z).BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts[zb0003].UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "ExpiredParticipationAccounts", zb0003)
 					return
@@ -675,7 +692,7 @@ func (z *Block) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0004 > 0 {
 			zb0004--
-			bts, err = (*z).Payset.UnmarshalMsg(bts)
+			bts, err = (*z).Payset.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Payset")
 				return
@@ -705,31 +722,31 @@ func (z *Block) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 			switch string(field) {
 			case "rnd":
-				bts, err = (*z).BlockHeader.Round.UnmarshalMsg(bts)
+				bts, err = (*z).BlockHeader.Round.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "Round")
 					return
 				}
 			case "prev":
-				bts, err = (*z).BlockHeader.Branch.UnmarshalMsg(bts)
+				bts, err = (*z).BlockHeader.Branch.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "Branch")
 					return
 				}
 			case "seed":
-				bts, err = (*z).BlockHeader.Seed.UnmarshalMsg(bts)
+				bts, err = (*z).BlockHeader.Seed.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "Seed")
 					return
 				}
 			case "txn":
-				bts, err = (*z).BlockHeader.TxnCommitments.NativeSha512_256Commitment.UnmarshalMsg(bts)
+				bts, err = (*z).BlockHeader.TxnCommitments.NativeSha512_256Commitment.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "NativeSha512_256Commitment")
 					return
 				}
 			case "txn256":
-				bts, err = (*z).BlockHeader.TxnCommitments.Sha256Commitment.UnmarshalMsg(bts)
+				bts, err = (*z).BlockHeader.TxnCommitments.Sha256Commitment.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "Sha256Commitment")
 					return
@@ -757,19 +774,19 @@ func (z *Block) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "gh":
-				bts, err = (*z).BlockHeader.GenesisHash.UnmarshalMsg(bts)
+				bts, err = (*z).BlockHeader.GenesisHash.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "GenesisHash")
 					return
 				}
 			case "fees":
-				bts, err = (*z).BlockHeader.RewardsState.FeeSink.UnmarshalMsg(bts)
+				bts, err = (*z).BlockHeader.RewardsState.FeeSink.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "FeeSink")
 					return
 				}
 			case "rwd":
-				bts, err = (*z).BlockHeader.RewardsState.RewardsPool.UnmarshalMsg(bts)
+				bts, err = (*z).BlockHeader.RewardsState.RewardsPool.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "RewardsPool")
 					return
@@ -793,19 +810,19 @@ func (z *Block) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "rwcalr":
-				bts, err = (*z).BlockHeader.RewardsState.RewardsRecalculationRound.UnmarshalMsg(bts)
+				bts, err = (*z).BlockHeader.RewardsState.RewardsRecalculationRound.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "RewardsRecalculationRound")
 					return
 				}
 			case "proto":
-				bts, err = (*z).BlockHeader.UpgradeState.CurrentProtocol.UnmarshalMsg(bts)
+				bts, err = (*z).BlockHeader.UpgradeState.CurrentProtocol.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "CurrentProtocol")
 					return
 				}
 			case "nextproto":
-				bts, err = (*z).BlockHeader.UpgradeState.NextProtocol.UnmarshalMsg(bts)
+				bts, err = (*z).BlockHeader.UpgradeState.NextProtocol.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "NextProtocol")
 					return
@@ -817,25 +834,25 @@ func (z *Block) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "nextbefore":
-				bts, err = (*z).BlockHeader.UpgradeState.NextProtocolVoteBefore.UnmarshalMsg(bts)
+				bts, err = (*z).BlockHeader.UpgradeState.NextProtocolVoteBefore.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "NextProtocolVoteBefore")
 					return
 				}
 			case "nextswitch":
-				bts, err = (*z).BlockHeader.UpgradeState.NextProtocolSwitchOn.UnmarshalMsg(bts)
+				bts, err = (*z).BlockHeader.UpgradeState.NextProtocolSwitchOn.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "NextProtocolSwitchOn")
 					return
 				}
 			case "upgradeprop":
-				bts, err = (*z).BlockHeader.UpgradeVote.UpgradePropose.UnmarshalMsg(bts)
+				bts, err = (*z).BlockHeader.UpgradeVote.UpgradePropose.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "UpgradePropose")
 					return
 				}
 			case "upgradedelay":
-				bts, err = (*z).BlockHeader.UpgradeVote.UpgradeDelay.UnmarshalMsg(bts)
+				bts, err = (*z).BlockHeader.UpgradeVote.UpgradeDelay.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "UpgradeDelay")
 					return
@@ -874,12 +891,12 @@ func (z *Block) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					var zb0001 protocol.StateProofType
 					var zb0002 StateProofTrackingData
 					zb0012--
-					bts, err = zb0001.UnmarshalMsg(bts)
+					bts, err = zb0001.UnmarshalMsgWithState(bts, st)
 					if err != nil {
 						err = msgp.WrapError(err, "StateProofTracking")
 						return
 					}
-					bts, err = zb0002.UnmarshalMsg(bts)
+					bts, err = zb0002.UnmarshalMsgWithState(bts, st)
 					if err != nil {
 						err = msgp.WrapError(err, "StateProofTracking", zb0001)
 						return
@@ -907,14 +924,14 @@ func (z *Block) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					(*z).BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts = make([]basics.Address, zb0014)
 				}
 				for zb0003 := range (*z).BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts {
-					bts, err = (*z).BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts[zb0003].UnmarshalMsg(bts)
+					bts, err = (*z).BlockHeader.ParticipationUpdates.ExpiredParticipationAccounts[zb0003].UnmarshalMsgWithState(bts, st)
 					if err != nil {
 						err = msgp.WrapError(err, "ExpiredParticipationAccounts", zb0003)
 						return
 					}
 				}
 			case "txns":
-				bts, err = (*z).Payset.UnmarshalMsg(bts)
+				bts, err = (*z).Payset.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "Payset")
 					return
@@ -932,6 +949,9 @@ func (z *Block) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *Block) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *Block) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*Block)
 	return ok
@@ -989,6 +1009,9 @@ func (_ *BlockHash) CanMarshalMsg(z interface{}) bool {
 // UnmarshalMsg implements msgp.Unmarshaler
 func (z *BlockHash) UnmarshalMsg(bts []byte) ([]byte, error) {
 	return ((*(crypto.Digest))(z)).UnmarshalMsg(bts)
+}
+func (z *BlockHash) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) ([]byte, error) {
+	return ((*(crypto.Digest))(z)).UnmarshalMsgWithState(bts, st)
 }
 func (_ *BlockHash) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*BlockHash)
@@ -1276,7 +1299,12 @@ func (_ *BlockHeader) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *BlockHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *BlockHeader) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0004 int
@@ -1290,7 +1318,7 @@ func (z *BlockHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0004 > 0 {
 			zb0004--
-			bts, err = (*z).Round.UnmarshalMsg(bts)
+			bts, err = (*z).Round.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Round")
 				return
@@ -1298,7 +1326,7 @@ func (z *BlockHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0004 > 0 {
 			zb0004--
-			bts, err = (*z).Branch.UnmarshalMsg(bts)
+			bts, err = (*z).Branch.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Branch")
 				return
@@ -1306,7 +1334,7 @@ func (z *BlockHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0004 > 0 {
 			zb0004--
-			bts, err = (*z).Seed.UnmarshalMsg(bts)
+			bts, err = (*z).Seed.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Seed")
 				return
@@ -1314,7 +1342,7 @@ func (z *BlockHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0004 > 0 {
 			zb0004--
-			bts, err = (*z).TxnCommitments.NativeSha512_256Commitment.UnmarshalMsg(bts)
+			bts, err = (*z).TxnCommitments.NativeSha512_256Commitment.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "NativeSha512_256Commitment")
 				return
@@ -1322,7 +1350,7 @@ func (z *BlockHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0004 > 0 {
 			zb0004--
-			bts, err = (*z).TxnCommitments.Sha256Commitment.UnmarshalMsg(bts)
+			bts, err = (*z).TxnCommitments.Sha256Commitment.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Sha256Commitment")
 				return
@@ -1356,7 +1384,7 @@ func (z *BlockHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0004 > 0 {
 			zb0004--
-			bts, err = (*z).GenesisHash.UnmarshalMsg(bts)
+			bts, err = (*z).GenesisHash.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "GenesisHash")
 				return
@@ -1364,7 +1392,7 @@ func (z *BlockHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0004 > 0 {
 			zb0004--
-			bts, err = (*z).RewardsState.FeeSink.UnmarshalMsg(bts)
+			bts, err = (*z).RewardsState.FeeSink.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "FeeSink")
 				return
@@ -1372,7 +1400,7 @@ func (z *BlockHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0004 > 0 {
 			zb0004--
-			bts, err = (*z).RewardsState.RewardsPool.UnmarshalMsg(bts)
+			bts, err = (*z).RewardsState.RewardsPool.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "RewardsPool")
 				return
@@ -1404,7 +1432,7 @@ func (z *BlockHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0004 > 0 {
 			zb0004--
-			bts, err = (*z).RewardsState.RewardsRecalculationRound.UnmarshalMsg(bts)
+			bts, err = (*z).RewardsState.RewardsRecalculationRound.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "RewardsRecalculationRound")
 				return
@@ -1412,7 +1440,7 @@ func (z *BlockHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0004 > 0 {
 			zb0004--
-			bts, err = (*z).UpgradeState.CurrentProtocol.UnmarshalMsg(bts)
+			bts, err = (*z).UpgradeState.CurrentProtocol.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "CurrentProtocol")
 				return
@@ -1420,7 +1448,7 @@ func (z *BlockHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0004 > 0 {
 			zb0004--
-			bts, err = (*z).UpgradeState.NextProtocol.UnmarshalMsg(bts)
+			bts, err = (*z).UpgradeState.NextProtocol.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "NextProtocol")
 				return
@@ -1436,7 +1464,7 @@ func (z *BlockHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0004 > 0 {
 			zb0004--
-			bts, err = (*z).UpgradeState.NextProtocolVoteBefore.UnmarshalMsg(bts)
+			bts, err = (*z).UpgradeState.NextProtocolVoteBefore.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "NextProtocolVoteBefore")
 				return
@@ -1444,7 +1472,7 @@ func (z *BlockHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0004 > 0 {
 			zb0004--
-			bts, err = (*z).UpgradeState.NextProtocolSwitchOn.UnmarshalMsg(bts)
+			bts, err = (*z).UpgradeState.NextProtocolSwitchOn.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "NextProtocolSwitchOn")
 				return
@@ -1452,7 +1480,7 @@ func (z *BlockHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0004 > 0 {
 			zb0004--
-			bts, err = (*z).UpgradeVote.UpgradePropose.UnmarshalMsg(bts)
+			bts, err = (*z).UpgradeVote.UpgradePropose.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "UpgradePropose")
 				return
@@ -1460,7 +1488,7 @@ func (z *BlockHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0004 > 0 {
 			zb0004--
-			bts, err = (*z).UpgradeVote.UpgradeDelay.UnmarshalMsg(bts)
+			bts, err = (*z).UpgradeVote.UpgradeDelay.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "UpgradeDelay")
 				return
@@ -1505,12 +1533,12 @@ func (z *BlockHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				var zb0001 protocol.StateProofType
 				var zb0002 StateProofTrackingData
 				zb0007--
-				bts, err = zb0001.UnmarshalMsg(bts)
+				bts, err = zb0001.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "StateProofTracking")
 					return
 				}
-				bts, err = zb0002.UnmarshalMsg(bts)
+				bts, err = zb0002.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "StateProofTracking", zb0001)
 					return
@@ -1540,7 +1568,7 @@ func (z *BlockHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				(*z).ParticipationUpdates.ExpiredParticipationAccounts = make([]basics.Address, zb0009)
 			}
 			for zb0003 := range (*z).ParticipationUpdates.ExpiredParticipationAccounts {
-				bts, err = (*z).ParticipationUpdates.ExpiredParticipationAccounts[zb0003].UnmarshalMsg(bts)
+				bts, err = (*z).ParticipationUpdates.ExpiredParticipationAccounts[zb0003].UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "ExpiredParticipationAccounts", zb0003)
 					return
@@ -1571,31 +1599,31 @@ func (z *BlockHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 			switch string(field) {
 			case "rnd":
-				bts, err = (*z).Round.UnmarshalMsg(bts)
+				bts, err = (*z).Round.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "Round")
 					return
 				}
 			case "prev":
-				bts, err = (*z).Branch.UnmarshalMsg(bts)
+				bts, err = (*z).Branch.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "Branch")
 					return
 				}
 			case "seed":
-				bts, err = (*z).Seed.UnmarshalMsg(bts)
+				bts, err = (*z).Seed.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "Seed")
 					return
 				}
 			case "txn":
-				bts, err = (*z).TxnCommitments.NativeSha512_256Commitment.UnmarshalMsg(bts)
+				bts, err = (*z).TxnCommitments.NativeSha512_256Commitment.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "NativeSha512_256Commitment")
 					return
 				}
 			case "txn256":
-				bts, err = (*z).TxnCommitments.Sha256Commitment.UnmarshalMsg(bts)
+				bts, err = (*z).TxnCommitments.Sha256Commitment.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "Sha256Commitment")
 					return
@@ -1623,19 +1651,19 @@ func (z *BlockHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "gh":
-				bts, err = (*z).GenesisHash.UnmarshalMsg(bts)
+				bts, err = (*z).GenesisHash.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "GenesisHash")
 					return
 				}
 			case "fees":
-				bts, err = (*z).RewardsState.FeeSink.UnmarshalMsg(bts)
+				bts, err = (*z).RewardsState.FeeSink.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "FeeSink")
 					return
 				}
 			case "rwd":
-				bts, err = (*z).RewardsState.RewardsPool.UnmarshalMsg(bts)
+				bts, err = (*z).RewardsState.RewardsPool.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "RewardsPool")
 					return
@@ -1659,19 +1687,19 @@ func (z *BlockHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "rwcalr":
-				bts, err = (*z).RewardsState.RewardsRecalculationRound.UnmarshalMsg(bts)
+				bts, err = (*z).RewardsState.RewardsRecalculationRound.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "RewardsRecalculationRound")
 					return
 				}
 			case "proto":
-				bts, err = (*z).UpgradeState.CurrentProtocol.UnmarshalMsg(bts)
+				bts, err = (*z).UpgradeState.CurrentProtocol.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "CurrentProtocol")
 					return
 				}
 			case "nextproto":
-				bts, err = (*z).UpgradeState.NextProtocol.UnmarshalMsg(bts)
+				bts, err = (*z).UpgradeState.NextProtocol.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "NextProtocol")
 					return
@@ -1683,25 +1711,25 @@ func (z *BlockHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "nextbefore":
-				bts, err = (*z).UpgradeState.NextProtocolVoteBefore.UnmarshalMsg(bts)
+				bts, err = (*z).UpgradeState.NextProtocolVoteBefore.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "NextProtocolVoteBefore")
 					return
 				}
 			case "nextswitch":
-				bts, err = (*z).UpgradeState.NextProtocolSwitchOn.UnmarshalMsg(bts)
+				bts, err = (*z).UpgradeState.NextProtocolSwitchOn.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "NextProtocolSwitchOn")
 					return
 				}
 			case "upgradeprop":
-				bts, err = (*z).UpgradeVote.UpgradePropose.UnmarshalMsg(bts)
+				bts, err = (*z).UpgradeVote.UpgradePropose.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "UpgradePropose")
 					return
 				}
 			case "upgradedelay":
-				bts, err = (*z).UpgradeVote.UpgradeDelay.UnmarshalMsg(bts)
+				bts, err = (*z).UpgradeVote.UpgradeDelay.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "UpgradeDelay")
 					return
@@ -1740,12 +1768,12 @@ func (z *BlockHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					var zb0001 protocol.StateProofType
 					var zb0002 StateProofTrackingData
 					zb0012--
-					bts, err = zb0001.UnmarshalMsg(bts)
+					bts, err = zb0001.UnmarshalMsgWithState(bts, st)
 					if err != nil {
 						err = msgp.WrapError(err, "StateProofTracking")
 						return
 					}
-					bts, err = zb0002.UnmarshalMsg(bts)
+					bts, err = zb0002.UnmarshalMsgWithState(bts, st)
 					if err != nil {
 						err = msgp.WrapError(err, "StateProofTracking", zb0001)
 						return
@@ -1773,7 +1801,7 @@ func (z *BlockHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					(*z).ParticipationUpdates.ExpiredParticipationAccounts = make([]basics.Address, zb0014)
 				}
 				for zb0003 := range (*z).ParticipationUpdates.ExpiredParticipationAccounts {
-					bts, err = (*z).ParticipationUpdates.ExpiredParticipationAccounts[zb0003].UnmarshalMsg(bts)
+					bts, err = (*z).ParticipationUpdates.ExpiredParticipationAccounts[zb0003].UnmarshalMsgWithState(bts, st)
 					if err != nil {
 						err = msgp.WrapError(err, "ExpiredParticipationAccounts", zb0003)
 						return
@@ -1792,6 +1820,9 @@ func (z *BlockHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *BlockHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *BlockHeader) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*BlockHeader)
 	return ok
@@ -1940,7 +1971,12 @@ func (_ *Genesis) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *Genesis) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *Genesis) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0002 int
@@ -1962,7 +1998,7 @@ func (z *Genesis) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0002 > 0 {
 			zb0002--
-			bts, err = (*z).Network.UnmarshalMsg(bts)
+			bts, err = (*z).Network.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Network")
 				return
@@ -1970,7 +2006,7 @@ func (z *Genesis) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0002 > 0 {
 			zb0002--
-			bts, err = (*z).Proto.UnmarshalMsg(bts)
+			bts, err = (*z).Proto.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Proto")
 				return
@@ -1998,7 +2034,7 @@ func (z *Genesis) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				(*z).Allocation = make([]GenesisAllocation, zb0004)
 			}
 			for zb0001 := range (*z).Allocation {
-				bts, err = (*z).Allocation[zb0001].UnmarshalMsg(bts)
+				bts, err = (*z).Allocation[zb0001].UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "Allocation", zb0001)
 					return
@@ -2075,13 +2111,13 @@ func (z *Genesis) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "network":
-				bts, err = (*z).Network.UnmarshalMsg(bts)
+				bts, err = (*z).Network.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "Network")
 					return
 				}
 			case "proto":
-				bts, err = (*z).Proto.UnmarshalMsg(bts)
+				bts, err = (*z).Proto.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "Proto")
 					return
@@ -2107,7 +2143,7 @@ func (z *Genesis) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					(*z).Allocation = make([]GenesisAllocation, zb0006)
 				}
 				for zb0001 := range (*z).Allocation {
-					bts, err = (*z).Allocation[zb0001].UnmarshalMsg(bts)
+					bts, err = (*z).Allocation[zb0001].UnmarshalMsgWithState(bts, st)
 					if err != nil {
 						err = msgp.WrapError(err, "Allocation", zb0001)
 						return
@@ -2156,6 +2192,9 @@ func (z *Genesis) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *Genesis) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *Genesis) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*Genesis)
 	return ok
@@ -2284,7 +2323,12 @@ func (_ *GenesisAccountData) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *GenesisAccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *GenesisAccountData) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0001 int
@@ -2298,7 +2342,7 @@ func (z *GenesisAccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).Status.UnmarshalMsg(bts)
+			bts, err = (*z).Status.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Status")
 				return
@@ -2306,7 +2350,7 @@ func (z *GenesisAccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).MicroAlgos.UnmarshalMsg(bts)
+			bts, err = (*z).MicroAlgos.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "MicroAlgos")
 				return
@@ -2314,7 +2358,7 @@ func (z *GenesisAccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).VoteID.UnmarshalMsg(bts)
+			bts, err = (*z).VoteID.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "VoteID")
 				return
@@ -2322,7 +2366,7 @@ func (z *GenesisAccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).StateProofID.UnmarshalMsg(bts)
+			bts, err = (*z).StateProofID.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "StateProofID")
 				return
@@ -2330,7 +2374,7 @@ func (z *GenesisAccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).SelectionID.UnmarshalMsg(bts)
+			bts, err = (*z).SelectionID.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "SelectionID")
 				return
@@ -2338,7 +2382,7 @@ func (z *GenesisAccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).VoteFirstValid.UnmarshalMsg(bts)
+			bts, err = (*z).VoteFirstValid.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "VoteFirstValid")
 				return
@@ -2346,7 +2390,7 @@ func (z *GenesisAccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).VoteLastValid.UnmarshalMsg(bts)
+			bts, err = (*z).VoteLastValid.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "VoteLastValid")
 				return
@@ -2384,43 +2428,43 @@ func (z *GenesisAccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 			switch string(field) {
 			case "onl":
-				bts, err = (*z).Status.UnmarshalMsg(bts)
+				bts, err = (*z).Status.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "Status")
 					return
 				}
 			case "algo":
-				bts, err = (*z).MicroAlgos.UnmarshalMsg(bts)
+				bts, err = (*z).MicroAlgos.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "MicroAlgos")
 					return
 				}
 			case "vote":
-				bts, err = (*z).VoteID.UnmarshalMsg(bts)
+				bts, err = (*z).VoteID.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "VoteID")
 					return
 				}
 			case "stprf":
-				bts, err = (*z).StateProofID.UnmarshalMsg(bts)
+				bts, err = (*z).StateProofID.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "StateProofID")
 					return
 				}
 			case "sel":
-				bts, err = (*z).SelectionID.UnmarshalMsg(bts)
+				bts, err = (*z).SelectionID.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "SelectionID")
 					return
 				}
 			case "voteFst":
-				bts, err = (*z).VoteFirstValid.UnmarshalMsg(bts)
+				bts, err = (*z).VoteFirstValid.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "VoteFirstValid")
 					return
 				}
 			case "voteLst":
-				bts, err = (*z).VoteLastValid.UnmarshalMsg(bts)
+				bts, err = (*z).VoteLastValid.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "VoteLastValid")
 					return
@@ -2444,6 +2488,9 @@ func (z *GenesisAccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *GenesisAccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *GenesisAccountData) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*GenesisAccountData)
 	return ok
@@ -2488,7 +2535,12 @@ func (_ *GenesisAllocation) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *GenesisAllocation) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *GenesisAllocation) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0001 int
@@ -2518,7 +2570,7 @@ func (z *GenesisAllocation) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).State.UnmarshalMsg(bts)
+			bts, err = (*z).State.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "State")
 				return
@@ -2560,7 +2612,7 @@ func (z *GenesisAllocation) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "state":
-				bts, err = (*z).State.UnmarshalMsg(bts)
+				bts, err = (*z).State.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "State")
 					return
@@ -2578,6 +2630,9 @@ func (z *GenesisAllocation) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *GenesisAllocation) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *GenesisAllocation) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*GenesisAllocation)
 	return ok
@@ -2668,7 +2723,12 @@ func (_ *LightBlockHeader) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *LightBlockHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *LightBlockHeader) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0001 int
@@ -2682,7 +2742,7 @@ func (z *LightBlockHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).Seed.UnmarshalMsg(bts)
+			bts, err = (*z).Seed.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Seed")
 				return
@@ -2690,7 +2750,7 @@ func (z *LightBlockHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).BlockHash.UnmarshalMsg(bts)
+			bts, err = (*z).BlockHash.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "BlockHash")
 				return
@@ -2698,7 +2758,7 @@ func (z *LightBlockHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).Round.UnmarshalMsg(bts)
+			bts, err = (*z).Round.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Round")
 				return
@@ -2706,7 +2766,7 @@ func (z *LightBlockHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).GenesisHash.UnmarshalMsg(bts)
+			bts, err = (*z).GenesisHash.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "GenesisHash")
 				return
@@ -2714,7 +2774,7 @@ func (z *LightBlockHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).Sha256TxnCommitment.UnmarshalMsg(bts)
+			bts, err = (*z).Sha256TxnCommitment.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Sha256TxnCommitment")
 				return
@@ -2744,31 +2804,31 @@ func (z *LightBlockHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 			switch string(field) {
 			case "0":
-				bts, err = (*z).Seed.UnmarshalMsg(bts)
+				bts, err = (*z).Seed.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "Seed")
 					return
 				}
 			case "1":
-				bts, err = (*z).BlockHash.UnmarshalMsg(bts)
+				bts, err = (*z).BlockHash.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "BlockHash")
 					return
 				}
 			case "r":
-				bts, err = (*z).Round.UnmarshalMsg(bts)
+				bts, err = (*z).Round.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "Round")
 					return
 				}
 			case "gh":
-				bts, err = (*z).GenesisHash.UnmarshalMsg(bts)
+				bts, err = (*z).GenesisHash.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "GenesisHash")
 					return
 				}
 			case "tc":
-				bts, err = (*z).Sha256TxnCommitment.UnmarshalMsg(bts)
+				bts, err = (*z).Sha256TxnCommitment.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "Sha256TxnCommitment")
 					return
@@ -2786,6 +2846,9 @@ func (z *LightBlockHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *LightBlockHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *LightBlockHeader) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*LightBlockHeader)
 	return ok
@@ -2843,7 +2906,12 @@ func (_ *ParticipationUpdates) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *ParticipationUpdates) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *ParticipationUpdates) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0002 int
@@ -2877,7 +2945,7 @@ func (z *ParticipationUpdates) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				(*z).ExpiredParticipationAccounts = make([]basics.Address, zb0004)
 			}
 			for zb0001 := range (*z).ExpiredParticipationAccounts {
-				bts, err = (*z).ExpiredParticipationAccounts[zb0001].UnmarshalMsg(bts)
+				bts, err = (*z).ExpiredParticipationAccounts[zb0001].UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "ExpiredParticipationAccounts", zb0001)
 					return
@@ -2928,7 +2996,7 @@ func (z *ParticipationUpdates) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					(*z).ExpiredParticipationAccounts = make([]basics.Address, zb0006)
 				}
 				for zb0001 := range (*z).ExpiredParticipationAccounts {
-					bts, err = (*z).ExpiredParticipationAccounts[zb0001].UnmarshalMsg(bts)
+					bts, err = (*z).ExpiredParticipationAccounts[zb0001].UnmarshalMsgWithState(bts, st)
 					if err != nil {
 						err = msgp.WrapError(err, "ExpiredParticipationAccounts", zb0001)
 						return
@@ -2947,6 +3015,9 @@ func (z *ParticipationUpdates) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *ParticipationUpdates) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *ParticipationUpdates) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*ParticipationUpdates)
 	return ok
@@ -3047,7 +3118,12 @@ func (_ *RewardsState) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *RewardsState) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *RewardsState) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0001 int
@@ -3061,7 +3137,7 @@ func (z *RewardsState) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).FeeSink.UnmarshalMsg(bts)
+			bts, err = (*z).FeeSink.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "FeeSink")
 				return
@@ -3069,7 +3145,7 @@ func (z *RewardsState) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).RewardsPool.UnmarshalMsg(bts)
+			bts, err = (*z).RewardsPool.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "RewardsPool")
 				return
@@ -3101,7 +3177,7 @@ func (z *RewardsState) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).RewardsRecalculationRound.UnmarshalMsg(bts)
+			bts, err = (*z).RewardsRecalculationRound.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "RewardsRecalculationRound")
 				return
@@ -3131,13 +3207,13 @@ func (z *RewardsState) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 			switch string(field) {
 			case "fees":
-				bts, err = (*z).FeeSink.UnmarshalMsg(bts)
+				bts, err = (*z).FeeSink.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "FeeSink")
 					return
 				}
 			case "rwd":
-				bts, err = (*z).RewardsPool.UnmarshalMsg(bts)
+				bts, err = (*z).RewardsPool.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "RewardsPool")
 					return
@@ -3161,7 +3237,7 @@ func (z *RewardsState) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "rwcalr":
-				bts, err = (*z).RewardsRecalculationRound.UnmarshalMsg(bts)
+				bts, err = (*z).RewardsRecalculationRound.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "RewardsRecalculationRound")
 					return
@@ -3179,6 +3255,9 @@ func (z *RewardsState) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *RewardsState) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *RewardsState) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*RewardsState)
 	return ok
@@ -3247,7 +3326,12 @@ func (_ *StateProofTrackingData) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *StateProofTrackingData) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *StateProofTrackingData) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0001 int
@@ -3261,7 +3345,7 @@ func (z *StateProofTrackingData) UnmarshalMsg(bts []byte) (o []byte, err error) 
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).StateProofVotersCommitment.UnmarshalMsg(bts)
+			bts, err = (*z).StateProofVotersCommitment.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "StateProofVotersCommitment")
 				return
@@ -3269,7 +3353,7 @@ func (z *StateProofTrackingData) UnmarshalMsg(bts []byte) (o []byte, err error) 
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).StateProofOnlineTotalWeight.UnmarshalMsg(bts)
+			bts, err = (*z).StateProofOnlineTotalWeight.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "StateProofOnlineTotalWeight")
 				return
@@ -3277,7 +3361,7 @@ func (z *StateProofTrackingData) UnmarshalMsg(bts []byte) (o []byte, err error) 
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).StateProofNextRound.UnmarshalMsg(bts)
+			bts, err = (*z).StateProofNextRound.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "StateProofNextRound")
 				return
@@ -3307,19 +3391,19 @@ func (z *StateProofTrackingData) UnmarshalMsg(bts []byte) (o []byte, err error) 
 			}
 			switch string(field) {
 			case "v":
-				bts, err = (*z).StateProofVotersCommitment.UnmarshalMsg(bts)
+				bts, err = (*z).StateProofVotersCommitment.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "StateProofVotersCommitment")
 					return
 				}
 			case "t":
-				bts, err = (*z).StateProofOnlineTotalWeight.UnmarshalMsg(bts)
+				bts, err = (*z).StateProofOnlineTotalWeight.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "StateProofOnlineTotalWeight")
 					return
 				}
 			case "n":
-				bts, err = (*z).StateProofNextRound.UnmarshalMsg(bts)
+				bts, err = (*z).StateProofNextRound.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "StateProofNextRound")
 					return
@@ -3337,6 +3421,9 @@ func (z *StateProofTrackingData) UnmarshalMsg(bts []byte) (o []byte, err error) 
 	return
 }
 
+func (z *StateProofTrackingData) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *StateProofTrackingData) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*StateProofTrackingData)
 	return ok
@@ -3396,7 +3483,12 @@ func (_ *TxnCommitments) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *TxnCommitments) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *TxnCommitments) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0001 int
@@ -3410,7 +3502,7 @@ func (z *TxnCommitments) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).NativeSha512_256Commitment.UnmarshalMsg(bts)
+			bts, err = (*z).NativeSha512_256Commitment.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "NativeSha512_256Commitment")
 				return
@@ -3418,7 +3510,7 @@ func (z *TxnCommitments) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).Sha256Commitment.UnmarshalMsg(bts)
+			bts, err = (*z).Sha256Commitment.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Sha256Commitment")
 				return
@@ -3448,13 +3540,13 @@ func (z *TxnCommitments) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 			switch string(field) {
 			case "txn":
-				bts, err = (*z).NativeSha512_256Commitment.UnmarshalMsg(bts)
+				bts, err = (*z).NativeSha512_256Commitment.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "NativeSha512_256Commitment")
 					return
 				}
 			case "txn256":
-				bts, err = (*z).Sha256Commitment.UnmarshalMsg(bts)
+				bts, err = (*z).Sha256Commitment.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "Sha256Commitment")
 					return
@@ -3472,6 +3564,9 @@ func (z *TxnCommitments) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *TxnCommitments) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *TxnCommitments) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*TxnCommitments)
 	return ok
@@ -3540,7 +3635,12 @@ func (_ *UpgradeVote) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *UpgradeVote) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *UpgradeVote) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0001 int
@@ -3554,7 +3654,7 @@ func (z *UpgradeVote) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).UpgradePropose.UnmarshalMsg(bts)
+			bts, err = (*z).UpgradePropose.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "UpgradePropose")
 				return
@@ -3562,7 +3662,7 @@ func (z *UpgradeVote) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).UpgradeDelay.UnmarshalMsg(bts)
+			bts, err = (*z).UpgradeDelay.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "UpgradeDelay")
 				return
@@ -3600,13 +3700,13 @@ func (z *UpgradeVote) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 			switch string(field) {
 			case "upgradeprop":
-				bts, err = (*z).UpgradePropose.UnmarshalMsg(bts)
+				bts, err = (*z).UpgradePropose.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "UpgradePropose")
 					return
 				}
 			case "upgradedelay":
-				bts, err = (*z).UpgradeDelay.UnmarshalMsg(bts)
+				bts, err = (*z).UpgradeDelay.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "UpgradeDelay")
 					return
@@ -3630,6 +3730,9 @@ func (z *UpgradeVote) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *UpgradeVote) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *UpgradeVote) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*UpgradeVote)
 	return ok

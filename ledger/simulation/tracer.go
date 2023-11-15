@@ -19,6 +19,7 @@ package simulation
 import (
 	"fmt"
 
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
@@ -269,7 +270,7 @@ func (tracer *evalTracer) makeOpcodeTraceUnit(cx *logic.EvalContext) OpcodeTrace
 }
 
 func (o *OpcodeTraceUnit) computeStackValueDeletions(cx *logic.EvalContext, tracer *evalTracer) {
-	tracer.popCount, tracer.addCount = cx.GetOpSpec().Explain(cx)
+	tracer.popCount, tracer.addCount = cx.GetOpSpec().StackExplain(cx)
 	o.StackPopCount = uint64(tracer.popCount)
 
 	stackHeight := len(cx.Stack)
@@ -306,6 +307,10 @@ func (tracer *evalTracer) BeforeOpcode(cx *logic.EvalContext) {
 		if tracer.result.ReturnScratchChange() {
 			tracer.recordChangedScratchSlots(cx)
 		}
+		if tracer.result.ReturnStateChange() {
+			latestOpcodeTraceUnit.appendStateOperations(cx)
+			tracer.result.InitialStates.increment(cx)
+		}
 	}
 }
 
@@ -318,6 +323,24 @@ func (o *OpcodeTraceUnit) appendAddedStackValue(cx *logic.EvalContext, tracer *e
 			Bytes: tealValue.Bytes,
 		})
 	}
+}
+
+func (o *OpcodeTraceUnit) appendStateOperations(cx *logic.EvalContext) {
+	if cx.GetOpSpec().AppStateExplain == nil {
+		return
+	}
+	appState, stateOp, appID, acctAddr, stateKey := cx.GetOpSpec().AppStateExplain(cx)
+	// If the operation is not write or delete, return without
+	if stateOp == logic.AppStateRead {
+		return
+	}
+	o.StateChanges = append(o.StateChanges, StateOperation{
+		AppStateOp: stateOp,
+		AppState:   appState,
+		AppID:      appID,
+		Key:        stateKey,
+		Account:    acctAddr,
+	})
 }
 
 func (tracer *evalTracer) recordChangedScratchSlots(cx *logic.EvalContext) {
@@ -356,11 +379,18 @@ func (tracer *evalTracer) recordUpdatedScratchVars(cx *logic.EvalContext) []Scra
 	return changes
 }
 
+func (o *OpcodeTraceUnit) updateNewStateValues(cx *logic.EvalContext) {
+	for i, sc := range o.StateChanges {
+		o.StateChanges[i].NewValue = logic.AppStateQuerying(
+			cx, sc.AppState, sc.AppStateOp, sc.AppID, sc.Account, sc.Key)
+	}
+}
+
 func (tracer *evalTracer) AfterOpcode(cx *logic.EvalContext, evalError error) {
 	groupIndex := cx.GroupIndex()
 
 	// NOTE: only when we have no evalError on current opcode,
-	// we can proceed for recording stack chaange
+	// we can proceed for recording stack change
 	if evalError == nil && tracer.result.ReturnTrace() {
 		var txnTrace *TransactionTrace
 		if cx.RunMode() == logic.ModeSig {
@@ -375,6 +405,9 @@ func (tracer *evalTracer) AfterOpcode(cx *logic.EvalContext, evalError error) {
 		}
 		if tracer.result.ReturnScratchChange() {
 			latestOpcodeTraceUnit.ScratchSlotChanges = tracer.recordUpdatedScratchVars(cx)
+		}
+		if tracer.result.ReturnStateChange() {
+			latestOpcodeTraceUnit.updateNewStateValues(cx)
 		}
 	}
 
@@ -396,33 +429,55 @@ func (tracer *evalTracer) AfterOpcode(cx *logic.EvalContext, evalError error) {
 func (tracer *evalTracer) BeforeProgram(cx *logic.EvalContext) {
 	groupIndex := cx.GroupIndex()
 
-	// Before Program, activated for logic sig, happens before txn group execution
-	// we should create trace object for this txn result
-	if cx.RunMode() == logic.ModeSig {
+	switch cx.RunMode() {
+	case logic.ModeSig:
+		// Before Program, activated for logic sig, happens before txn group execution
+		// we should create trace object for this txn result
 		if tracer.result.ReturnTrace() {
 			tracer.result.TxnGroups[0].Txns[groupIndex].Trace = &TransactionTrace{}
 			traceRef := tracer.result.TxnGroups[0].Txns[groupIndex].Trace
 			traceRef.programTraceRef = &traceRef.LogicSigTrace
+			traceRef.LogicSigHash = crypto.Hash(cx.GetProgram())
 		}
-	}
+	case logic.ModeApp:
+		if tracer.result.ReturnTrace() {
+			txnTraceStackElem := tracer.execTraceStack[len(tracer.execTraceStack)-1]
+			currentTxn := cx.EvalParams.TxnGroup[groupIndex]
+			programHash := crypto.Hash(cx.GetProgram())
 
-	if cx.RunMode() == logic.ModeApp && tracer.unnamedResourcePolicy != nil {
-		globalSharing := false
-		for iter := cx; iter != nil; iter = iter.GetCaller() {
-			if iter.ProgramVersion() >= 9 {
-				// If some caller in the app callstack allows global sharing, global resources can
-				// be accessed here. Otherwise the top-level txn must declare all resources locally.
-				globalSharing = true
-				break
+			switch currentTxn.Txn.ApplicationCallTxnFields.OnCompletion {
+			case transactions.ClearStateOC:
+				txnTraceStackElem.ClearStateProgramHash = programHash
+			default:
+				txnTraceStackElem.ApprovalProgramHash = programHash
 			}
 		}
-		tracer.unnamedResourcePolicy.globalSharing = globalSharing
-		tracer.unnamedResourcePolicy.programVersion = cx.ProgramVersion()
-		if tracer.unnamedResourcePolicy.initialBoxSurplusReadBudget == nil {
-			s := cx.SurplusReadBudget
-			tracer.unnamedResourcePolicy.initialBoxSurplusReadBudget = &s
+		if tracer.result.ReturnStateChange() {
+			// If we are recording state changes, including initial states,
+			// then we should exclude initial states of created app during simulation.
+			if cx.TxnGroup[groupIndex].SignedTxn.Txn.ApplicationID == 0 {
+				tracer.result.InitialStates.CreatedApp.Add(cx.AppID())
+			}
 		}
-		cx.SetIOBudget(tracer.unnamedResourcePolicy.tracker.maxPossibleBoxIOBudget(cx.Proto.BytesPerBoxReference))
+
+		if tracer.unnamedResourcePolicy != nil {
+			globalSharing := false
+			for iter := cx; iter != nil; iter = iter.GetCaller() {
+				if iter.ProgramVersion() >= 9 {
+					// If some caller in the app callstack allows global sharing, global resources can
+					// be accessed here. Otherwise the top-level txn must declare all resources locally.
+					globalSharing = true
+					break
+				}
+			}
+			tracer.unnamedResourcePolicy.globalSharing = globalSharing
+			tracer.unnamedResourcePolicy.programVersion = cx.ProgramVersion()
+			if tracer.unnamedResourcePolicy.initialBoxSurplusReadBudget == nil {
+				s := cx.SurplusReadBudget
+				tracer.unnamedResourcePolicy.initialBoxSurplusReadBudget = &s
+			}
+			cx.SetIOBudget(tracer.unnamedResourcePolicy.tracker.maxPossibleBoxIOBudget(cx.Proto.BytesPerBoxReference))
+		}
 	}
 }
 

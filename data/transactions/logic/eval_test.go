@@ -52,6 +52,8 @@ func protoVer(version uint64) protoOpt {
 	}
 }
 
+var testLogicBudget = 25_000 // In a var so that we can temporarily change it
+
 func makeTestProtoV(version uint64) *config.ConsensusParams {
 	return makeTestProto(protoVer(version))
 }
@@ -59,8 +61,8 @@ func makeTestProtoV(version uint64) *config.ConsensusParams {
 func makeTestProto(opts ...protoOpt) *config.ConsensusParams {
 	p := config.ConsensusParams{
 		LogicSigVersion:   LogicVersion,
-		LogicSigMaxCost:   20000,
 		Application:       true,
+		LogicSigMaxCost:   uint64(testLogicBudget),
 		MaxAppProgramCost: 700,
 
 		MaxAppKeyLen:          64,
@@ -393,6 +395,8 @@ func TestWrongProtoVersion(t *testing.T) {
 	}
 }
 
+// TestBlankStackSufficient will fail if an opcode is added with more than the
+// current max number of stack arguments. Update `blankStack` to be longer.
 func TestBlankStackSufficient(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -1226,7 +1230,8 @@ const globalV9TestProgram = globalV8TestProgram + `
 `
 
 const globalV10TestProgram = globalV9TestProgram + `
-// No new globals in v10
+global AssetCreateMinBalance; int 1001; ==; &&
+global AssetOptInMinBalance; int 1001; ==; &&
 `
 
 func TestGlobal(t *testing.T) {
@@ -1249,7 +1254,7 @@ func TestGlobal(t *testing.T) {
 		7:  {CallerApplicationAddress, globalV7TestProgram},
 		8:  {CallerApplicationAddress, globalV8TestProgram},
 		9:  {CallerApplicationAddress, globalV9TestProgram},
-		10: {CallerApplicationAddress, globalV10TestProgram},
+		10: {AssetOptInMinBalance, globalV10TestProgram},
 	}
 	// tests keys are versions so they must be in a range 1..AssemblerMaxVersion plus zero version
 	require.LessOrEqual(t, len(tests), AssemblerMaxVersion+1)
@@ -1752,7 +1757,6 @@ const testTxnProgramTextV9 = testTxnProgramTextV8 + `
 assert
 int 1
 `
-
 const testTxnProgramTextV10 = testTxnProgramTextV9 + `
 assert
 int 1
@@ -1861,15 +1865,16 @@ func TestTxn(t *testing.T) {
 
 	t.Parallel()
 	tests := map[uint64]string{
-		1:  testTxnProgramTextV1,
-		2:  testTxnProgramTextV2,
-		3:  testTxnProgramTextV3,
-		4:  testTxnProgramTextV4,
-		5:  testTxnProgramTextV5,
-		6:  testTxnProgramTextV6,
-		7:  testTxnProgramTextV7,
-		8:  testTxnProgramTextV8,
-		9:  testTxnProgramTextV9,
+		1: testTxnProgramTextV1,
+		2: testTxnProgramTextV2,
+		3: testTxnProgramTextV3,
+		4: testTxnProgramTextV4,
+		5: testTxnProgramTextV5,
+		6: testTxnProgramTextV6,
+		7: testTxnProgramTextV7,
+		8: testTxnProgramTextV8,
+		9: testTxnProgramTextV9,
+
 		10: testTxnProgramTextV10,
 	}
 
@@ -2995,9 +3000,9 @@ func TestSlowLogic(t *testing.T) {
 	testAccepts(t, source, 1)
 
 	// in v1, each repeat costs 30
-	v1overspend := fragment + strings.Repeat(fragment+"&&; ", 20000/30)
+	v1overspend := fragment + strings.Repeat(fragment+"&&; ", testLogicBudget/30)
 	// in v2,v3 each repeat costs 134
-	v2overspend := fragment + strings.Repeat(fragment+"&&; ", 20000/134)
+	v2overspend := fragment + strings.Repeat(fragment+"&&; ", testLogicBudget/134)
 
 	// v1overspend fails (on v1)
 	ops := testProg(t, v1overspend, 1)
@@ -3037,13 +3042,14 @@ int %d
 ==
 `, budget-1, budget-5)
 	}
-	testLogic(t, source(20000), LogicVersion, nil)
+	b := testLogicBudget
+	testLogic(t, source(b), LogicVersion, nil)
 
-	testLogics(t, []string{source(40000), source(39993)}, nil, nil)
+	testLogics(t, []string{source(2 * b), source(2*b - 7)}, nil, nil)
 
-	testLogics(t, []string{source(60000), source(59993), ""}, nil, nil)
+	testLogics(t, []string{source(3 * b), source(3*b - 7), ""}, nil, nil)
 
-	testLogics(t, []string{source(20000), source(20000)}, nil,
+	testLogics(t, []string{source(b), source(b)}, nil,
 		func(p *config.ConsensusParams) { p.EnableLogicSigCostPooling = false })
 }
 
@@ -3152,8 +3158,7 @@ done:
 int 1
 `, v)
 			// cut two last bytes - intc_1 and last byte of bnz
-			ops.Program = ops.Program[:len(ops.Program)-2]
-			testLogicBytes(t, ops.Program, nil,
+			testLogicBytes(t, ops.Program[:len(ops.Program)-2], nil,
 				"bnz program ends short", "bnz program ends short")
 		})
 	}
@@ -3213,11 +3218,36 @@ func TestShortBytecblock2(t *testing.T) {
 
 const panicString = "out of memory, buffer overrun, stack overflow, divide by zero, halt and catch fire"
 
-func opPanic(cx *EvalContext) error {
-	panic(panicString)
-}
-func checkPanic(cx *EvalContext) error {
-	panic(panicString)
+// withOpcode temporarily modifies the opsByOpcode array to include an
+// additional opcode, specieid by op.
+//
+// WARNING: do not call this in a parallel test, since it's not safe for concurrent use.
+func withOpcode(t *testing.T, version uint64, op OpSpec, f func(opcode byte)) {
+	t.Helper()
+
+	var foundEmptySpace bool
+	var hackedOpcode byte
+	var oldSpec OpSpec
+	// Find an unused opcode to temporarily convert to op
+	for opcode, spec := range opsByOpcode[version] {
+		if spec.op == nil {
+			foundEmptySpace = true
+			require.LessOrEqual(t, opcode, math.MaxUint8)
+			hackedOpcode = byte(opcode)
+			oldSpec = spec
+			copy := op
+			copy.Opcode = hackedOpcode
+			opsByOpcode[version][opcode] = copy
+			OpsByName[version][op.Name] = copy
+			break
+		}
+	}
+	require.True(t, foundEmptySpace, "could not find an empty space for the opcode")
+	defer func() {
+		opsByOpcode[version][hackedOpcode] = oldSpec
+		delete(OpsByName[version], op.Name)
+	}()
+	f(hackedOpcode)
 }
 
 // withPanicOpcode temporarily modifies the opsByOpcode array to include an additional panic opcode.
@@ -3226,42 +3256,22 @@ func checkPanic(cx *EvalContext) error {
 // WARNING: do not call this in a parallel test, since it's not safe for concurrent use.
 func withPanicOpcode(t *testing.T, version uint64, panicDuringCheck bool, f func(opcode byte)) {
 	t.Helper()
-	const name = "panic"
 
-	var foundEmptySpace bool
-	var hackedOpcode byte
-	var oldSpec OpSpec
-	// Find an unused opcode to temporarily convert to a panicing opcode,
-	// and append it to program.
-	for opcode, spec := range opsByOpcode[version] {
-		if spec.op == nil {
-			foundEmptySpace = true
-			require.LessOrEqual(t, opcode, math.MaxUint8)
-			hackedOpcode = byte(opcode)
-			oldSpec = spec
-
-			details := detDefault()
-			if panicDuringCheck {
-				details.check = checkPanic
-			}
-			panicSpec := OpSpec{
-				Opcode:    hackedOpcode,
-				Name:      name,
-				op:        opPanic,
-				OpDetails: details,
-			}
-
-			opsByOpcode[version][opcode] = panicSpec
-			OpsByName[version][name] = panicSpec
-			break
-		}
+	opPanic := func(cx *EvalContext) error {
+		panic(panicString)
 	}
-	require.True(t, foundEmptySpace, "could not find an empty space for the panic opcode")
-	defer func() {
-		opsByOpcode[version][hackedOpcode] = oldSpec
-		delete(OpsByName[version], name)
-	}()
-	f(hackedOpcode)
+	details := detDefault()
+	if panicDuringCheck {
+		details.check = opPanic
+	}
+
+	panicSpec := OpSpec{
+		Name:      "panic",
+		op:        opPanic,
+		OpDetails: details,
+	}
+
+	withOpcode(t, version, panicSpec, f)
 }
 
 func TestPanic(t *testing.T) { //nolint:paralleltest // Uses withPanicOpcode
@@ -3728,12 +3738,17 @@ int 142791994204213819
 +
 `
 
-func evalLoop(b *testing.B, runs int, program []byte) {
+func evalLoop(b *testing.B, runs int, programs ...[]byte) {
+	program := programs[0]
+	final := programs[len(programs)-1]
 	b.Helper()
 	b.ResetTimer()
 	for i := 0; i < runs; i++ {
 		var txn transactions.SignedTxn
 		txn.Lsig.Logic = program
+		if i == runs-1 {
+			txn.Lsig.Logic = final
+		}
 		pass, err := EvalSignature(0, benchmarkSigParams(txn))
 		if !pass {
 			// rerun to trace it.  tracing messes up timing too much
@@ -3765,11 +3780,18 @@ func benchmarkBasicProgram(b *testing.B, source string) {
 // the idea is that you can subtract that out from the reported speed
 func benchmarkOperation(b *testing.B, prefix string, operation string, suffix string) {
 	b.Helper()
-	runs := 1 + b.N/2000
+	runs := b.N / 2000
 	inst := strings.Count(operation, ";") + strings.Count(operation, "\n")
 	source := prefix + ";" + strings.Repeat(operation+"\n", 2000) + ";" + suffix
 	ops := testProg(b, source, AssemblerMaxVersion)
-	evalLoop(b, runs, ops.Program)
+	finalOps := ops
+
+	if b.N%2000 != 0 {
+		runs++
+		finalSource := prefix + ";" + strings.Repeat(operation+"\n", b.N%2000) + ";" + suffix
+		finalOps = testProg(b, finalSource, AssemblerMaxVersion)
+	}
+	evalLoop(b, runs, ops.Program, finalOps.Program)
 	b.ReportMetric(float64(inst), "extra/op")
 }
 
@@ -5258,7 +5280,7 @@ byte ""
 base64_decode URLEncoding
 pop
 global OpcodeBudget
-int ` + fmt.Sprintf("%d", 20_000-3-1) + ` // base64_decode cost = 1
+int ` + fmt.Sprintf("%d", testLogicBudget-3-1) + ` // base64_decode cost = 1
 ==
 `
 	testAccepts(t, source, fidoVersion)
@@ -5268,7 +5290,7 @@ byte "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
 base64_decode URLEncoding
 pop
 global OpcodeBudget
-int ` + fmt.Sprintf("%d", 20_000-3-5) + ` // base64_decode cost = 5 (64 bytes -> 1 + 64/16)
+int ` + fmt.Sprintf("%d", testLogicBudget-3-5) + ` // base64_decode cost = 5 (64 bytes -> 1 + 64/16)
 ==
 `
 	testAccepts(t, source, fidoVersion)
@@ -5278,7 +5300,7 @@ byte "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz01234567"
 base64_decode URLEncoding
 pop
 global OpcodeBudget
-int ` + fmt.Sprintf("%d", 20_000-3-5) + ` // base64_decode cost = 5 (60 bytes -> 1 + ceil(60/16))
+int ` + fmt.Sprintf("%d", testLogicBudget-3-5) + ` // base64_decode cost = 5 (60 bytes -> 1 + ceil(60/16))
 ==
 `
 	testAccepts(t, source, fidoVersion)
@@ -5288,7 +5310,7 @@ byte "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_AA=="
 base64_decode URLEncoding
 pop
 global OpcodeBudget
-int ` + fmt.Sprintf("%d", 20_000-3-6) + ` // base64_decode cost = 6 (68 bytes -> 1 + ceil(68/16))
+int ` + fmt.Sprintf("%d", testLogicBudget-3-6) + ` // base64_decode cost = 6 (68 bytes -> 1 + ceil(68/16))
 ==
 `
 	testAccepts(t, source, fidoVersion)
@@ -5814,6 +5836,40 @@ switch done1 done2; done1: ; done2: ;
 `, 8)
 }
 
+// TestShortSwitch ensures a clean error, in Check and Eval, when a switch ends early
+func TestShortSwitch(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	source := `
+	int 1
+	int 1
+	switch label1 label2
+	label1:
+	label2:
+	`
+	ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
+	require.NoError(t, err)
+
+	// fine as is
+	testLogicBytes(t, ops.Program, nil)
+
+	beyond := "switch opcode claims to extend beyond program"
+
+	// bad if a label is gone
+	testLogicBytes(t, ops.Program[:len(ops.Program)-2], nil, beyond, beyond)
+
+	// chop off all the labels, but keep the label count
+	testLogicBytes(t, ops.Program[:len(ops.Program)-4], nil, beyond, beyond)
+
+	// chop off before the label count
+	testLogicBytes(t, ops.Program[:len(ops.Program)-5], nil,
+		"bare switch opcode at end of program", "bare switch opcode at end of program")
+
+	// chop off half of a label
+	testLogicBytes(t, ops.Program[:len(ops.Program)-1], nil, beyond, beyond)
+}
+
 func TestMatch(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -5964,6 +6020,41 @@ int 1; return
 zero: int 0;
 one:  int 0;
 `, 8)
+}
+
+// TestShortMatch ensures a clean error when a match ends early
+func TestShortMatch(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	source := `int 1
+    int 40
+    int 45
+    int 40
+	match label1 label2
+	label1:
+    label2:
+	`
+	ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
+	require.NoError(t, err)
+
+	// fine as is
+	testLogicBytes(t, ops.Program, nil)
+
+	beyond := "match opcode claims to extend beyond program"
+
+	// bad if a label is gone
+	testLogicBytes(t, ops.Program[:len(ops.Program)-2], nil, beyond, beyond)
+
+	// chop off all the labels, but keep the label count
+	testLogicBytes(t, ops.Program[:len(ops.Program)-4], nil, beyond, beyond)
+
+	// chop off before the label count
+	testLogicBytes(t, ops.Program[:len(ops.Program)-5], nil,
+		"bare match opcode at end of program", "bare match opcode at end of program")
+
+	// chop off half of a label
+	testLogicBytes(t, ops.Program[:len(ops.Program)-1], nil, beyond, beyond)
 }
 
 func TestPushConsts(t *testing.T) {

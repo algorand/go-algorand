@@ -316,7 +316,7 @@ func TestCatchpointCatchupFailure(t *testing.T) {
 	err = primaryNode.StopAlgod()
 	a.NoError(err)
 
-	_, err = usingNodeRestClient.Catchup(catchpointLabel)
+	_, err = usingNodeRestClient.Catchup(catchpointLabel, 0)
 	a.ErrorContains(err, node.MakeStartCatchpointError(catchpointLabel, fmt.Errorf("")).Error())
 }
 
@@ -358,10 +358,14 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 
 	catchpointLabel := waitForCatchpointGeneration(t, fixture, primaryNodeRestClient, targetCatchpointRound)
 
-	_, err = usingNodeRestClient.Catchup(catchpointLabel)
+	_, err = usingNodeRestClient.Catchup(catchpointLabel, 0)
 	a.NoError(err)
 
 	err = fixture.ClientWaitForRoundWithTimeout(usingNodeRestClient, uint64(targetCatchpointRound+1))
+	a.NoError(err)
+
+	// ensure the raw block can be downloaded (including cert)
+	_, err = usingNodeRestClient.RawBlock(uint64(targetCatchpointRound))
 	a.NoError(err)
 }
 
@@ -534,7 +538,7 @@ func TestNodeTxHandlerRestart(t *testing.T) {
 	lastCatchpoint := waitForCatchpointGeneration(t, &fixture, relayClient, basics.Round(targetCatchpointRound))
 
 	// let the primary node catchup
-	err = client1.Catchup(lastCatchpoint)
+	_, err = client1.Catchup(lastCatchpoint, 0)
 	a.NoError(err)
 
 	status1, err := client1.Status()
@@ -647,7 +651,7 @@ func TestReadyEndpoint(t *testing.T) {
 	// Then when the primary node is at target round, it should satisfy ready 200 condition
 
 	// let the primary node catchup
-	err = client1.Catchup(lastCatchpoint)
+	_, err = client1.Catchup(lastCatchpoint, 0)
 	a.NoError(err)
 
 	// The primary node is catching up with its previous catchpoint
@@ -789,7 +793,7 @@ func TestNodeTxSyncRestart(t *testing.T) {
 	_, err = fixture.StartNode(primaryNode.GetDataDir())
 	a.NoError(err)
 	// let the primary node catchup
-	err = client1.Catchup(lastCatchpoint)
+	_, err = client1.Catchup(lastCatchpoint, 0)
 	a.NoError(err)
 
 	// the transaction should not be confirmed yet

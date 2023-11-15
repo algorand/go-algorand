@@ -41,21 +41,21 @@ type SourceMap struct {
 
 // GetSourceMap returns a struct containing details about
 // the assembled file and encoded mappings to the source file.
-func GetSourceMap(sourceNames []string, offsetToLine map[int]int) SourceMap {
+func GetSourceMap(sourceNames []string, offsetToLocation map[int]SourceLocation) SourceMap {
 	maxPC := 0
-	for pc := range offsetToLine {
+	for pc := range offsetToLocation {
 		if pc > maxPC {
 			maxPC = pc
 		}
 	}
 
 	// Array where index is the PC and value is the line for `mappings` field.
-	prevSourceLine := 0
+	prevSourceLocation := SourceLocation{}
 	pcToLine := make([]string, maxPC+1)
 	for pc := range pcToLine {
-		if line, ok := offsetToLine[pc]; ok {
-			pcToLine[pc] = MakeSourceMapLine(0, 0, line-prevSourceLine, 0)
-			prevSourceLine = line
+		if location, ok := offsetToLocation[pc]; ok {
+			pcToLine[pc] = MakeSourceMapLine(0, 0, location.Line-prevSourceLocation.Line, location.Column-prevSourceLocation.Column)
+			prevSourceLocation = location
 		} else {
 			pcToLine[pc] = ""
 		}

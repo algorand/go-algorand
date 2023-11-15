@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"golang.org/x/sync/semaphore"
 	"io"
 	"math"
 	"net"
@@ -1308,6 +1309,10 @@ func TestSimulateTransactionMultipleGroups(t *testing.T) {
 }
 
 func startCatchupTest(t *testing.T, catchpoint string, nodeError error, expectedCode int) {
+	startCatchupTestFull(t, catchpoint, nodeError, expectedCode, 0, "")
+}
+
+func startCatchupTestFull(t *testing.T, catchpoint string, nodeError error, expectedCode int, minRounds uint64, response string) {
 	numAccounts := 1
 	numTransactions := 1
 	offlineAccounts := true
@@ -1320,9 +1325,30 @@ func startCatchupTest(t *testing.T, catchpoint string, nodeError error, expected
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	err := handler.StartCatchup(c, catchpoint)
+	var err error
+	if minRounds != 0 {
+		err = handler.StartCatchup(c, catchpoint, model.StartCatchupParams{Min: &minRounds})
+	} else {
+		err = handler.StartCatchup(c, catchpoint, model.StartCatchupParams{})
+	}
 	require.NoError(t, err)
 	require.Equal(t, expectedCode, rec.Code)
+	if response != "" {
+		require.Contains(t, rec.Body.String(), response)
+	}
+}
+
+func TestStartCatchupInit(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	minRoundsToInitialize := uint64(1_000_000)
+
+	tooSmallCatchpoint := fmt.Sprintf("%d#DVFRZUYHEFKRLK5N6DNJRR4IABEVN2D6H76F3ZSEPIE6MKXMQWQA", minRoundsToInitialize-1)
+	startCatchupTestFull(t, tooSmallCatchpoint, nil, 200, minRoundsToInitialize, "the node has already been initialized")
+
+	catchpointOK := fmt.Sprintf("%d#DVFRZUYHEFKRLK5N6DNJRR4IABEVN2D6H76F3ZSEPIE6MKXMQWQA", minRoundsToInitialize)
+	startCatchupTestFull(t, catchpointOK, nil, 201, minRoundsToInitialize, catchpointOK)
 }
 
 func TestStartCatchup(t *testing.T) {
@@ -1427,7 +1453,7 @@ int 1
 assert
 int 1`, logic.AssemblerMaxVersion)
 	ops, _ := logic.AssembleString(goodProgram)
-	expectedSourcemap := logic.GetSourceMap([]string{}, ops.OffsetToLine)
+	expectedSourcemap := logic.GetSourceMap([]string{"<body>"}, ops.OffsetToSource)
 	goodProgramBytes := []byte(goodProgram)
 
 	// Test good program with params
@@ -1810,8 +1836,10 @@ func TestGetProofDefault(t *testing.T) {
 	blkHdr, err := l.BlockHdr(1)
 	a.NoError(err)
 
-	singleLeafProof, err := merklearray.ProofDataToSingleLeafProof(string(resp.Hashtype), resp.Treedepth, resp.Proof)
+	singleLeafProof, err := merklearray.ProofDataToSingleLeafProof(string(resp.Hashtype), resp.Proof)
 	a.NoError(err)
+
+	a.Equal(uint64(singleLeafProof.TreeDepth), resp.Treedepth)
 
 	element := TxnMerkleElemRaw{Txn: crypto.Digest(txid)}
 	copy(element.Stib[:], resp.Stibhash[:])
@@ -2350,4 +2378,64 @@ func TestRouterRequestBody(t *testing.T) {
 	rec = httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 	assert.Equal(t, http.StatusRequestEntityTooLarge, rec.Code)
+}
+
+func TestGeneratePartkeys(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	numAccounts := 1
+	numTransactions := 1
+	offlineAccounts := true
+	mockLedger, _, _, _, releasefunc := testingenv(t, numAccounts, numTransactions, offlineAccounts)
+	defer releasefunc()
+	dummyShutdownChan := make(chan struct{})
+	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden, false)
+	handler := v2.Handlers{
+		Node:          mockNode,
+		Log:           logging.Base(),
+		Shutdown:      dummyShutdownChan,
+		KeygenLimiter: semaphore.NewWeighted(1),
+	}
+	e := echo.New()
+
+	var addr basics.Address
+	addr[0] = 1
+
+	{
+		require.Len(t, mockNode.PartKeyBinary, 0)
+		req := httptest.NewRequest(http.MethodPost, "/", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+
+		err := handler.GenerateParticipationKeys(c, addr.String(), model.GenerateParticipationKeysParams{
+			First: 1000,
+			Last:  2000,
+		})
+
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusOK, rec.Code)
+
+		// Wait for keygen to complete
+		err = handler.KeygenLimiter.Acquire(context.Background(), 1)
+		require.NoError(t, err)
+		require.Greater(t, len(mockNode.PartKeyBinary), 0)
+		handler.KeygenLimiter.Release(1)
+	}
+
+	{
+		req := httptest.NewRequest(http.MethodPost, "/", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		// Simulate a blocked keygen process (and block until the previous keygen is complete)
+		err := handler.KeygenLimiter.Acquire(context.Background(), 1)
+		require.NoError(t, err)
+		err = handler.GenerateParticipationKeys(c, addr.String(), model.GenerateParticipationKeysParams{
+			First: 1000,
+			Last:  2000,
+		})
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+	}
+
 }

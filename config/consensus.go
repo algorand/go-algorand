@@ -521,6 +521,12 @@ type ConsensusParams struct {
 	// used by agreement for Circulation, and updates the calculation of StateProofOnlineTotalWeight used
 	// by state proofs to use the same method (rather than excluding stake from the top N stakeholders as before).
 	ExcludeExpiredCirculation bool
+
+	// DynamicFilterTimeout indicates whether the filter timeout is set
+	// dynamically, at run time, according to the recent history of credential
+	// arrival times or is set to a static value. Even if this flag disables the
+	// dynamic filter, it will be calculated and logged (but not used).
+	DynamicFilterTimeout bool
 }
 
 // PaysetCommitType enumerates possible ways for the block header to commit to
@@ -632,6 +638,9 @@ var StateProofTopVoters int
 // in a block must not exceed MaxTxnBytesPerBlock.
 var MaxTxnBytesPerBlock int
 
+// MaxAppTxnForeignApps is the max number of foreign apps per txn across all consensus versions
+var MaxAppTxnForeignApps int
+
 func checkSetMax(value int, curMax *int) {
 	if value > *curMax {
 		*curMax = value
@@ -680,6 +689,8 @@ func checkSetAllocBounds(p ConsensusParams) {
 	checkSetMax(p.MaxAppKeyLen, &MaxAppBytesKeyLen)
 	checkSetMax(int(p.StateProofTopVoters), &StateProofTopVoters)
 	checkSetMax(p.MaxTxnBytesPerBlock, &MaxTxnBytesPerBlock)
+
+	checkSetMax(p.MaxAppTxnForeignApps, &MaxAppTxnForeignApps)
 }
 
 // SaveConfigurableConsensus saves the configurable protocols file to the provided data directory.
@@ -792,6 +803,9 @@ func PreloadConfigurableConsensusProtocols(dataDirectory string) (ConsensusProto
 	return Consensus.Merge(configurableConsensus), nil
 }
 
+// initConsensusProtocols defines the consensus protocol values and how values change across different versions of the protocol.
+//
+// These are the only valid and tested consensus values and transitions. Other settings are not tested and may lead to unexpected behavior.
 func initConsensusProtocols() {
 	// WARNING: copying a ConsensusParams by value into a new variable
 	// does not copy the ApprovedUpgrades map.  Make sure that each new
@@ -1367,12 +1381,17 @@ func initConsensusProtocols() {
 	// ConsensusFuture is used to test features that are implemented
 	// but not yet released in a production protocol version.
 	vFuture := v38
+
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
 	vFuture.LogicSigVersion = 10 // When moving this to a release, put a new higher LogicSigVersion here
 	vFuture.EnableLogicSigCostPooling = true
 
 	vFuture.StateProofBlockHashInLightHeader = true
+
+	// Setting DynamicFilterTimeout in vFuture will impact e2e test performance
+	// by reducing round time. Hence, it is commented out for now.
+	// vFuture.DynamicFilterTimeout = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 

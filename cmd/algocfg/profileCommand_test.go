@@ -45,4 +45,10 @@ func Test_getConfigForArg(t *testing.T) {
 		require.True(t, cfg.EnableFollowMode)
 	})
 
+	t.Run("valid config test development", func(t *testing.T) {
+		t.Parallel()
+		cfg, err := getConfigForArg("development")
+		require.NoError(t, err)
+		require.True(t, cfg.DisableAPIAuth)
+	})
 }

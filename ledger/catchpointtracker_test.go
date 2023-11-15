@@ -53,11 +53,11 @@ func TestCatchpointIsWritingCatchpointFile(t *testing.T) {
 
 	ct := &catchpointTracker{}
 
-	ct.catchpointDataWriting = -1
+	ct.catchpointDataWriting.Store(-1)
 	ans := ct.isWritingCatchpointDataFile()
 	require.True(t, ans)
 
-	ct.catchpointDataWriting = 0
+	ct.catchpointDataWriting.Store(0)
 	ans = ct.isWritingCatchpointDataFile()
 	require.False(t, ans)
 }
@@ -67,7 +67,13 @@ func newCatchpointTracker(tb testing.TB, l *mockLedgerForTracker, conf config.Lo
 	ct := &catchpointTracker{}
 	ao := &onlineAccounts{}
 	au.initialize(conf)
-	ct.initialize(conf, dbPathPrefix)
+	paths := DirsAndPrefix{
+		ResolvedGenesisDirs: config.ResolvedGenesisDirs{
+			CatchpointGenesisDir: dbPathPrefix,
+			HotGenesisDir:        dbPathPrefix,
+		},
+	}
+	ct.initialize(conf, paths)
 	ao.initialize(conf)
 	_, err := trackerDBInitialize(l, ct.catchpointEnabled(), dbPathPrefix)
 	require.NoError(tb, err)
@@ -100,6 +106,7 @@ func TestCatchpointGetCatchpointStream(t *testing.T) {
 	require.NoError(t, err)
 
 	ct.dbDirectory = temporaryDirectory
+	ct.tmpDir = temporaryDirectory
 
 	// Create the catchpoint files with dummy data
 	for i := 0; i < filesToCreate; i++ {
@@ -169,6 +176,7 @@ func TestCatchpointsDeleteStored(t *testing.T) {
 	ct := newCatchpointTracker(t, ml, conf, ".")
 	defer ct.close()
 	ct.dbDirectory = temporaryDirectory
+	ct.tmpDir = temporaryDirectory
 
 	dummyCatchpointFilesToCreate := 42
 
@@ -245,9 +253,16 @@ func TestCatchpointsDeleteStoredOnSchemaUpdate(t *testing.T) {
 	ct := &catchpointTracker{}
 	conf := config.GetDefaultLocal()
 	conf.CatchpointInterval = 1
-	ct.initialize(conf, ".")
+	paths := DirsAndPrefix{
+		ResolvedGenesisDirs: config.ResolvedGenesisDirs{
+			CatchpointGenesisDir: ".",
+			HotGenesisDir:        ".",
+		},
+	}
+	ct.initialize(conf, paths)
 	defer ct.close()
 	ct.dbDirectory = temporaryDirectroy
+	ct.tmpDir = temporaryDirectroy
 
 	_, err = trackerDBInitialize(ml, true, ct.dbDirectory)
 	require.NoError(t, err)
@@ -301,9 +316,16 @@ func TestRecordCatchpointFile(t *testing.T) {
 
 	conf.CatchpointFileHistoryLength = 3
 	conf.Archival = true
-	ct.initialize(conf, ".")
+	paths := DirsAndPrefix{
+		ResolvedGenesisDirs: config.ResolvedGenesisDirs{
+			CatchpointGenesisDir: ".",
+			HotGenesisDir:        ".",
+		},
+	}
+	ct.initialize(conf, paths)
 	defer ct.close()
 	ct.dbDirectory = temporaryDirectory
+	ct.tmpDir = temporaryDirectory
 
 	_, err := trackerDBInitialize(ml, true, ct.dbDirectory)
 	require.NoError(t, err)
@@ -338,7 +360,10 @@ func createCatchpoint(t *testing.T, ct *catchpointTracker, accountsRound basics.
 
 	require.Equal(t, calculateStateProofVerificationHash(t, ml), stateProofVerificationHash)
 
-	err = ct.createCatchpoint(context.Background(), accountsRound, round, trackerdb.CatchpointFirstStageInfo{BiggestChunkLen: biggestChunkLen}, crypto.Digest{})
+	err = ct.createCatchpoint(
+		context.Background(), accountsRound, round,
+		trackerdb.CatchpointFirstStageInfo{BiggestChunkLen: biggestChunkLen},
+		crypto.Digest{}, protocol.ConsensusCurrentVersion)
 	require.NoError(t, err)
 }
 
@@ -358,9 +383,17 @@ func TestCatchpointCommitErrorHandling(t *testing.T) {
 	conf := config.GetDefaultLocal()
 
 	conf.Archival = true
-	ct.initialize(conf, ".")
+	paths := DirsAndPrefix{
+		ResolvedGenesisDirs: config.ResolvedGenesisDirs{
+			CatchpointGenesisDir: ".",
+			HotGenesisDir:        ".",
+		},
+	}
+	ct.initialize(conf, paths)
+
 	defer ct.close()
 	ct.dbDirectory = temporaryDirectory
+	ct.tmpDir = temporaryDirectory
 
 	_, err := trackerDBInitialize(ml, true, ct.dbDirectory)
 	require.NoError(t, err)
@@ -439,9 +472,17 @@ func TestCatchpointFileWithLargeSpVerification(t *testing.T) {
 	conf := config.GetDefaultLocal()
 
 	conf.Archival = true
-	ct.initialize(conf, ".")
+	paths := DirsAndPrefix{
+		ResolvedGenesisDirs: config.ResolvedGenesisDirs{
+			CatchpointGenesisDir: ".",
+			HotGenesisDir:        ".",
+		},
+	}
+	ct.initialize(conf, paths)
+
 	defer ct.close()
 	ct.dbDirectory = temporaryDirectory
+	ct.tmpDir = temporaryDirectory
 
 	_, err := trackerDBInitialize(ml, true, ct.dbDirectory)
 	require.NoError(t, err)
@@ -503,7 +544,13 @@ func BenchmarkLargeCatchpointDataWriting(b *testing.B) {
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
 	ct := catchpointTracker{}
-	ct.initialize(cfg, ".")
+	paths := DirsAndPrefix{
+		ResolvedGenesisDirs: config.ResolvedGenesisDirs{
+			CatchpointGenesisDir: ".",
+			HotGenesisDir:        ".",
+		},
+	}
+	ct.initialize(cfg, paths)
 
 	temporaryDirectroy := b.TempDir()
 	catchpointsDirectory := filepath.Join(temporaryDirectroy, trackerdb.CatchpointDirName)
@@ -511,6 +558,7 @@ func BenchmarkLargeCatchpointDataWriting(b *testing.B) {
 	require.NoError(b, err)
 
 	ct.dbDirectory = temporaryDirectroy
+	ct.tmpDir = temporaryDirectroy
 
 	err = ct.loadFromDisk(ml, 0)
 	require.NoError(b, err)
@@ -715,9 +763,11 @@ func TestCatchpointReproducibleLabels(t *testing.T) {
 
 	// test to see that after loadFromDisk, all the tracker content is lost ( as expected )
 	require.NotZero(t, len(ct.roundDigest))
+	require.NotZero(t, len(ct.consensusVersion))
 	require.NoError(t, ct.loadFromDisk(ml, ml.Latest()))
 	require.Zero(t, len(ct.roundDigest))
-	require.Zero(t, ct.catchpointDataWriting)
+	require.Zero(t, len(ct.consensusVersion))
+	require.Zero(t, ct.catchpointDataWriting.Load())
 	select {
 	case _, closed := <-ct.catchpointDataSlowWriting:
 		require.False(t, closed)
@@ -726,51 +776,78 @@ func TestCatchpointReproducibleLabels(t *testing.T) {
 	}
 }
 
+// TestCatchpointBackwardCompatibleLabels checks labels before and after EnableCatchpointsWithSPContexts was introduced.
+func TestCatchpointBackwardCompatibleLabels(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	temporaryDirectory := t.TempDir()
+
+	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(20, true)}
+	ml := makeMockLedgerForTracker(t, true, 10, protocol.ConsensusCurrentVersion, accts)
+	defer ml.Close()
+
+	ct := &catchpointTracker{enableGeneratingCatchpointFiles: false}
+	conf := config.GetDefaultLocal()
+
+	conf.Archival = true
+	paths := DirsAndPrefix{
+		ResolvedGenesisDirs: config.ResolvedGenesisDirs{
+			CatchpointGenesisDir: ".",
+			HotGenesisDir:        ".",
+		},
+	}
+	ct.initialize(conf, paths)
+
+	defer ct.close()
+	ct.dbDirectory = temporaryDirectory
+	ct.tmpDir = temporaryDirectory
+
+	_, err := trackerDBInitialize(ml, true, ct.dbDirectory)
+	require.NoError(t, err)
+
+	err = ct.loadFromDisk(ml, ml.Latest())
+	require.NoError(t, err)
+
+	// create catpoint with the latest version of the code
+	round := basics.Round(2000)
+
+	protos := []protocol.ConsensusVersion{protocol.ConsensusCurrentVersion, protocol.ConsensusV37, protocol.ConsensusV36}
+	labels := make([]string, len(protos))
+	for i, proto := range protos {
+		err = ct.createCatchpoint(
+			context.Background(), round-1, round,
+			trackerdb.CatchpointFirstStageInfo{},
+			crypto.Digest{}, proto)
+		require.NoError(t, err)
+		require.NotEmpty(t, ct.lastCatchpointLabel)
+		labels[i] = ct.lastCatchpointLabel
+	}
+	require.NotEqual(t, labels[0], labels[1])
+	require.Equal(t, labels[1], labels[2])
+}
+
 // blockingTracker is a testing tracker used to test "what if" a tracker would get blocked.
 type blockingTracker struct {
+	emptyTracker
 	postCommitUnlockedEntryLock   chan struct{}
 	postCommitUnlockedReleaseLock chan struct{}
 	postCommitEntryLock           chan struct{}
 	postCommitReleaseLock         chan struct{}
-	committedUpToRound            int64
-	alwaysLock                    bool
-	shouldLockPostCommit          bool
-	shouldLockPostCommitUnlocked  bool
-}
-
-// loadFromDisk is not implemented in the blockingTracker.
-func (bt *blockingTracker) loadFromDisk(ledgerForTracker, basics.Round) error {
-	return nil
-}
-
-// newBlock is not implemented in the blockingTracker.
-func (bt *blockingTracker) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
+	committedUpToRound            atomic.Int64
+	alwaysLock                    atomic.Bool
+	shouldLockPostCommit          atomic.Bool
+	shouldLockPostCommitUnlocked  atomic.Bool
 }
 
 // committedUpTo in the blockingTracker just stores the committed round.
 func (bt *blockingTracker) committedUpTo(committedRnd basics.Round) (minRound, lookback basics.Round) {
-	atomic.StoreInt64(&bt.committedUpToRound, int64(committedRnd))
+	bt.committedUpToRound.Store(int64(committedRnd))
 	return committedRnd, basics.Round(0)
-}
-
-// produceCommittingTask is not used by the blockingTracker
-func (bt *blockingTracker) produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcr *deferredCommitRange) *deferredCommitRange {
-	return dcr
-}
-
-// prepareCommit, is not used by the blockingTracker
-func (bt *blockingTracker) prepareCommit(*deferredCommitContext) error {
-	return nil
-}
-
-// commitRound is not used by the blockingTracker
-func (bt *blockingTracker) commitRound(context.Context, trackerdb.TransactionScope, *deferredCommitContext) error {
-	return nil
 }
 
 // postCommit implements entry/exit blockers, designed for testing.
 func (bt *blockingTracker) postCommit(ctx context.Context, dcc *deferredCommitContext) {
-	if bt.alwaysLock || dcc.catchpointFirstStage || bt.shouldLockPostCommit {
+	if bt.alwaysLock.Load() || dcc.catchpointFirstStage || bt.shouldLockPostCommit.Load() {
 		bt.postCommitEntryLock <- struct{}{}
 		<-bt.postCommitReleaseLock
 	}
@@ -778,22 +855,10 @@ func (bt *blockingTracker) postCommit(ctx context.Context, dcc *deferredCommitCo
 
 // postCommitUnlocked implements entry/exit blockers, designed for testing.
 func (bt *blockingTracker) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
-	if bt.alwaysLock || dcc.catchpointFirstStage || bt.shouldLockPostCommitUnlocked {
+	if bt.alwaysLock.Load() || dcc.catchpointFirstStage || bt.shouldLockPostCommitUnlocked.Load() {
 		bt.postCommitUnlockedEntryLock <- struct{}{}
 		<-bt.postCommitUnlockedReleaseLock
 	}
-}
-
-// control functions are not used by the blockingTracker
-func (bt *blockingTracker) handleUnorderedCommit(dcc *deferredCommitContext) {
-}
-func (bt *blockingTracker) handlePrepareCommitError(dcc *deferredCommitContext) {
-}
-func (bt *blockingTracker) handleCommitError(dcc *deferredCommitContext) {
-}
-
-// close is not used by the blockingTracker
-func (bt *blockingTracker) close() {
 }
 
 func TestCatchpointTrackerNonblockingCatchpointWriting(t *testing.T) {
@@ -861,7 +926,7 @@ func TestCatchpointTrackerNonblockingCatchpointWriting(t *testing.T) {
 	require.NoError(t, err)
 	// wait for the committedUpToRound to be called with the correct round number.
 	for {
-		committedUpToRound := atomic.LoadInt64(&writeStallingTracker.committedUpToRound)
+		committedUpToRound := writeStallingTracker.committedUpToRound.Load()
 		if basics.Round(committedUpToRound) == ledger.Latest() {
 			break
 		}
@@ -903,7 +968,7 @@ func TestCatchpointTrackerNonblockingCatchpointWriting(t *testing.T) {
 	require.NoError(t, err)
 	// wait for the committedUpToRound to be called with the correct round number.
 	for {
-		committedUpToRound := atomic.LoadInt64(&writeStallingTracker.committedUpToRound)
+		committedUpToRound := writeStallingTracker.committedUpToRound.Load()
 		if basics.Round(committedUpToRound) == ledger.Latest() {
 			break
 		}
@@ -959,8 +1024,8 @@ func TestCatchpointTrackerWaitNotBlocking(t *testing.T) {
 	writeStallingTracker := &blockingTracker{
 		postCommitUnlockedEntryLock:   make(chan struct{}),
 		postCommitUnlockedReleaseLock: make(chan struct{}),
-		shouldLockPostCommitUnlocked:  true,
 	}
+	writeStallingTracker.shouldLockPostCommitUnlocked.Store(true)
 	ledger.trackerMu.Lock()
 	ledger.trackers.mu.Lock()
 	ledger.trackers.trackers = append(ledger.trackers.trackers, writeStallingTracker)
@@ -987,7 +1052,7 @@ func TestCatchpointTrackerWaitNotBlocking(t *testing.T) {
 		// consume to unblock
 		<-writeStallingTracker.postCommitUnlockedEntryLock
 		// disable further blocking
-		writeStallingTracker.shouldLockPostCommitUnlocked = false
+		writeStallingTracker.shouldLockPostCommitUnlocked.Store(false)
 
 		// wait the writeStallingTracker.postCommitUnlockedReleaseLock passes
 		wg.Wait()
@@ -1148,6 +1213,7 @@ func TestCatchpointFirstStageInfoPruning(t *testing.T) {
 	require.NoError(t, err)
 
 	ct.dbDirectory = temporaryDirectory
+	ct.tmpDir = temporaryDirectory
 
 	expectedNumEntries := protoParams.CatchpointLookback / cfg.CatchpointInterval
 
@@ -1247,8 +1313,7 @@ func TestCatchpointFirstStagePersistence(t *testing.T) {
 	cfg.CatchpointInterval = 4
 	cfg.CatchpointTracking = 2
 	cfg.MaxAcctLookback = 0
-	ct := newCatchpointTracker(
-		t, ml, cfg, filepath.Join(tempDirectory, config.LedgerFilenamePrefix))
+	ct := newCatchpointTracker(t, ml, cfg, tempDirectory)
 	defer ct.close()
 
 	// Add blocks until the first catchpoint first stage round.
@@ -1299,8 +1364,7 @@ func TestCatchpointFirstStagePersistence(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create a catchpoint tracker and let it restart catchpoint's first stage.
-	ct2 := newCatchpointTracker(
-		t, ml2, cfg, filepath.Join(tempDirectory, config.LedgerFilenamePrefix))
+	ct2 := newCatchpointTracker(t, ml2, cfg, tempDirectory)
 	defer ct2.close()
 
 	// Check that the catchpoint data file was rewritten.
@@ -1348,8 +1412,7 @@ func TestCatchpointSecondStagePersistence(t *testing.T) {
 	cfg.CatchpointInterval = 4
 	cfg.CatchpointTracking = 2
 	cfg.MaxAcctLookback = 0
-	ct := newCatchpointTracker(
-		t, ml, cfg, filepath.Join(tempDirectory, config.LedgerFilenamePrefix))
+	ct := newCatchpointTracker(t, ml, cfg, tempDirectory)
 	defer ct.close()
 
 	isCatchpointRound := func(rnd basics.Round) bool {
@@ -1443,8 +1506,7 @@ func TestCatchpointSecondStagePersistence(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create a catchpoint tracker and let it restart catchpoint's second stage.
-	ct2 := newCatchpointTracker(
-		t, ml2, cfg, filepath.Join(tempDirectory, config.LedgerFilenamePrefix))
+	ct2 := newCatchpointTracker(t, ml2, cfg, tempDirectory)
 	defer ct2.close()
 
 	// Check that the catchpoint data file was rewritten.
@@ -1493,8 +1555,7 @@ func TestCatchpointSecondStageDeletesUnfinishedCatchpointRecord(t *testing.T) {
 	cfg.CatchpointInterval = 4
 	cfg.CatchpointTracking = 0
 	cfg.MaxAcctLookback = 0
-	ct := newCatchpointTracker(
-		t, ml, cfg, filepath.Join(tempDirectory, config.LedgerFilenamePrefix))
+	ct := newCatchpointTracker(t, ml, cfg, tempDirectory)
 	defer ct.close()
 
 	secondStageRound := basics.Round(36)
@@ -1526,8 +1587,7 @@ func TestCatchpointSecondStageDeletesUnfinishedCatchpointRecord(t *testing.T) {
 
 	// Configure a new catchpoint tracker with catchpoints enabled.
 	cfg.CatchpointTracking = 2
-	ct2 := newCatchpointTracker(
-		t, ml2, cfg, filepath.Join(tempDirectory, config.LedgerFilenamePrefix))
+	ct2 := newCatchpointTracker(t, ml2, cfg, tempDirectory)
 	defer ct2.close()
 
 	// Add the last block.
@@ -1966,4 +2026,37 @@ func TestCatchpointLargeAccountCountCatchpointGeneration(t *testing.T) {
 
 	// Garbage collection helps prevent trashing for next tests
 	runtime.GC()
+}
+
+func TestMakeCatchpointFilePath(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	type testCase struct {
+		round                      int
+		expectedDataFilePath       string
+		expectedCatchpointFilePath string
+	}
+
+	tcs := []testCase{
+		{10, "10.data", "10.catchpoint"},
+		{100, "100.data", "100.catchpoint"},
+		// MakeCatchpointFilePath divides the round by 256 to create subdirecories
+		{257, "257.data", "01/257.catchpoint"},
+		{511, "511.data", "01/511.catchpoint"},
+		{512, "512.data", "02/512.catchpoint"},
+		// 256 * 256 = 65536
+		{65536, "65536.data", "00/01/65536.catchpoint"},
+		{65537, "65537.data", "00/01/65537.catchpoint"},
+		// 645536 * 3 = 193609728
+		{193609727, "193609727.data", "3f/8a/0b/193609727.catchpoint"},
+		{193609728, "193609728.data", "40/8a/0b/193609728.catchpoint"},
+		// 256 * 256 * 256 = 16777216
+		{16777216, "16777216.data", "00/00/01/16777216.catchpoint"},
+	}
+
+	for _, tc := range tcs {
+		require.Equal(t, tc.expectedCatchpointFilePath, trackerdb.MakeCatchpointFilePath(basics.Round(tc.round)))
+		require.Equal(t, tc.expectedDataFilePath, makeCatchpointDataFilePath(basics.Round(tc.round)))
+	}
+
 }

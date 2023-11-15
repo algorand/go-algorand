@@ -81,8 +81,8 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 
 	lib.GenesisJSONText = genesisText
 
-	liveLog := filepath.Join(s.RootPath, "node.log")
-	archive := filepath.Join(s.RootPath, cfg.LogArchiveName)
+	liveLog, archive := cfg.ResolveLogPaths(s.RootPath)
+
 	var maxLogAge time.Duration
 	var err error
 	if cfg.LogArchiveMaxAge != "" {
@@ -290,10 +290,15 @@ func (s *Server) Start() {
 		s.metricServiceStarted = true
 	}
 
-	apiToken, err := tokens.GetAndValidateAPIToken(s.RootPath, tokens.AlgodTokenFilename)
-	if err != nil {
-		fmt.Printf("APIToken error: %v\n", err)
-		os.Exit(1)
+	var apiToken string
+	var err error
+	fmt.Printf("API authentication disabled: %v\n", cfg.DisableAPIAuth)
+	if !cfg.DisableAPIAuth {
+		apiToken, err = tokens.GetAndValidateAPIToken(s.RootPath, tokens.AlgodTokenFilename)
+		if err != nil {
+			fmt.Printf("APIToken error: %v\n", err)
+			os.Exit(1)
+		}
 	}
 
 	adminAPIToken, err := tokens.GetAndValidateAPIToken(s.RootPath, tokens.AlgodAdminTokenFilename)

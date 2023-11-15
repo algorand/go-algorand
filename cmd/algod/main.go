@@ -19,16 +19,12 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/algorand/go-algorand/util"
 	"math/rand"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/algorand/go-deadlock"
-	"github.com/gofrs/flock"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -39,8 +35,12 @@ import (
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
 	toolsnet "github.com/algorand/go-algorand/tools/network"
+	"github.com/algorand/go-algorand/util"
 	"github.com/algorand/go-algorand/util/metrics"
 	"github.com/algorand/go-algorand/util/tokens"
+	"github.com/gofrs/flock"
+
+	"github.com/algorand/go-deadlock"
 )
 
 var dataDirectory = flag.String("d", "", "Root Algorand daemon data path")
@@ -92,11 +92,13 @@ func run() int {
 	baseHeartbeatEvent.Info.Branch = version.Branch
 	baseHeartbeatEvent.Info.CommitHash = version.GetCommitHash()
 
+	// -b will print only the git branch and then exit
 	if *branchCheck {
 		fmt.Println(config.Branch)
 		return 0
 	}
 
+	// -c will print only the release channel and then exit
 	if *channelCheck {
 		fmt.Println(config.Channel)
 		return 0
@@ -114,24 +116,13 @@ func run() int {
 	}
 
 	genesisPath := *genesisFile
-	if genesisPath == "" {
-		genesisPath = filepath.Join(dataDir, config.GenesisJSONFile)
-	}
-
-	// Load genesis
-	genesisText, err := os.ReadFile(genesisPath)
+	genesis, genesisText, err := loadGenesis(dataDir, genesisPath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Cannot read genesis file %s: %v\n", genesisPath, err)
+		fmt.Fprintf(os.Stderr, "Error loading genesis file (%s): %v", genesisPath, err)
 		return 1
 	}
 
-	var genesis bookkeeping.Genesis
-	err = protocol.DecodeJSON(genesisText, &genesis)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Cannot parse genesis file %s: %v\n", genesisPath, err)
-		return 1
-	}
-
+	// -G will print only the genesis ID and then exit
 	if *genesisPrint {
 		fmt.Println(genesis.ID())
 		return 0
@@ -234,15 +225,19 @@ func run() int {
 		Genesis:  genesis,
 	}
 
-	// Generate a REST API token if one was not provided
-	apiToken, wroteNewToken, err := tokens.ValidateOrGenerateAPIToken(s.RootPath, tokens.AlgodTokenFilename)
+	if !cfg.DisableAPIAuth {
+		// Generate a REST API token if one was not provided
+		apiToken, wroteNewToken, err2 := tokens.ValidateOrGenerateAPIToken(s.RootPath, tokens.AlgodTokenFilename)
 
-	if err != nil {
-		log.Fatalf("API token error: %v", err)
-	}
+		if err2 != nil {
+			log.Fatalf("API token error: %v", err2)
+		}
 
-	if wroteNewToken {
-		fmt.Printf("No REST API Token found. Generated token: %s\n", apiToken)
+		if wroteNewToken {
+			fmt.Printf("No REST API Token found. Generated token: %s\n", apiToken)
+		}
+	} else {
+		fmt.Printf("Public (non-admin) API authentication disabled. %s not generated\n", tokens.AlgodTokenFilename)
 	}
 
 	// Generate a admin REST API token if one was not provided
@@ -281,12 +276,12 @@ func run() int {
 
 		// make sure that the format of each entry is valid:
 		for idx, peer := range peerOverrideArray {
-			url, err := network.ParseHostOrURL(peer)
-			if err != nil {
+			addr, addrErr := network.ParseHostOrURLOrMultiaddr(peer)
+			if addrErr != nil {
 				fmt.Fprintf(os.Stderr, "Provided command line parameter '%s' is not a valid host:port pair\n", peer)
 				return 1
 			}
-			peerOverrideArray[idx] = url.Host
+			peerOverrideArray[idx] = addr
 		}
 	}
 
@@ -447,4 +442,20 @@ func resolveDataDir() string {
 		dir = *dataDirectory
 	}
 	return dir
+}
+
+func loadGenesis(dataDir string, genesisPath string) (bookkeeping.Genesis, string, error) {
+	if genesisPath == "" {
+		genesisPath = filepath.Join(dataDir, config.GenesisJSONFile)
+	}
+	genesisText, err := os.ReadFile(genesisPath)
+	if err != nil {
+		return bookkeeping.Genesis{}, "", err
+	}
+	var genesis bookkeeping.Genesis
+	err = protocol.DecodeJSON(genesisText, &genesis)
+	if err != nil {
+		return bookkeeping.Genesis{}, "", err
+	}
+	return genesis, string(genesisText), nil
 }

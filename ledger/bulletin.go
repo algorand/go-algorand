@@ -18,7 +18,6 @@ package ledger
 
 import (
 	"context"
-	"sync/atomic"
 
 	"github.com/algorand/go-deadlock"
 
@@ -28,35 +27,29 @@ import (
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 )
 
-// notifier is a struct that encapsulates a single-shot channel; it will only be signaled once.
+// notifier is a struct that encapsulates a single-shot channel; it should only be signaled once.
 type notifier struct {
-	signal   chan struct{}
-	notified uint32
-}
-
-// makeNotifier constructs a notifier that has not been signaled.
-func makeNotifier() notifier {
-	return notifier{signal: make(chan struct{}), notified: 0}
-}
-
-// notify signals the channel if it hasn't already done so
-func (notifier *notifier) notify() {
-	if atomic.CompareAndSwapUint32(&notifier.notified, 0, 1) {
-		close(notifier.signal)
-	}
+	signal chan struct{}
+	count  int
 }
 
 // bulletin provides an easy way to wait on a round to be written to the ledger.
-// To use it, call <-Wait(round)
+// To use it, call <-Wait(round).
 type bulletin struct {
 	mu                          deadlock.Mutex
-	pendingNotificationRequests map[basics.Round]notifier
+	pendingNotificationRequests map[basics.Round]*notifier
 	latestRound                 basics.Round
+}
+
+// bulletinMem is a variant of bulletin that notifies when blocks
+// are available in-memory (but might not be stored durably on disk).
+type bulletinMem struct {
+	bulletin
 }
 
 func makeBulletin() *bulletin {
 	b := new(bulletin)
-	b.pendingNotificationRequests = make(map[basics.Round]notifier)
+	b.pendingNotificationRequests = make(map[basics.Round]*notifier)
 	return b
 }
 
@@ -74,14 +67,32 @@ func (b *bulletin) Wait(round basics.Round) chan struct{} {
 
 	signal, exists := b.pendingNotificationRequests[round]
 	if !exists {
-		signal = makeNotifier()
+		signal = &notifier{signal: make(chan struct{})}
 		b.pendingNotificationRequests[round] = signal
 	}
+	// Increment count of waiters, to support canceling.
+	signal.count++
+
 	return signal.signal
 }
 
+// CancelWait removes a wait for a particular round. If no one else is waiting, the
+// notifier channel for that round is removed.
+func (b *bulletin) CancelWait(round basics.Round) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	signal, exists := b.pendingNotificationRequests[round]
+	if exists {
+		signal.count--
+		if signal.count <= 0 {
+			delete(b.pendingNotificationRequests, round)
+		}
+	}
+}
+
 func (b *bulletin) loadFromDisk(l ledgerForTracker, _ basics.Round) error {
-	b.pendingNotificationRequests = make(map[basics.Round]notifier)
+	b.pendingNotificationRequests = make(map[basics.Round]*notifier)
 	b.latestRound = l.Latest()
 	return nil
 }
@@ -89,10 +100,7 @@ func (b *bulletin) loadFromDisk(l ledgerForTracker, _ basics.Round) error {
 func (b *bulletin) close() {
 }
 
-func (b *bulletin) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
-}
-
-func (b *bulletin) committedUpTo(rnd basics.Round) (retRound, lookback basics.Round) {
+func (b *bulletin) notifyRound(rnd basics.Round) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -102,10 +110,24 @@ func (b *bulletin) committedUpTo(rnd basics.Round) (retRound, lookback basics.Ro
 		}
 
 		delete(b.pendingNotificationRequests, pending)
-		signal.notify()
+		// signal the channel by closing it; this is under lock and will only happen once
+		close(signal.signal)
 	}
 
 	b.latestRound = rnd
+}
+
+func (b *bulletin) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
+}
+
+func (b *bulletinMem) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
+	b.notifyRound(blk.Round())
+}
+
+func (b *bulletin) committedUpTo(rnd basics.Round) (retRound, lookback basics.Round) {
+	// We notify for rnd for both bulletinMem and bulletinDisk, for simplicity.
+	// It's always safe to notify when block hits disk.
+	b.notifyRound(rnd)
 	return rnd, basics.Round(0)
 }
 

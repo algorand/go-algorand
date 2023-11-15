@@ -80,6 +80,7 @@ func TestGetPrivKeyUserGeneratedPersisted(t *testing.T) {
 	t.Parallel()
 	tempdir := t.TempDir()
 	cfg := config.GetDefaultLocal()
+	cfg.P2PPersistPeerID = true
 	// get a generated private key
 	privKey, err := GetPrivKey(cfg, tempdir)
 	require.NoError(t, err)

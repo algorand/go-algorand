@@ -371,6 +371,21 @@ label_colors = {
     'npn': (.7,.7,0),
 }
 
+def terraform_inventory_ip_not_names(tf_inventory_path):
+    """return ip to nickname mapping"""
+    tf_inventory = configparser.ConfigParser(allow_no_value=True)
+    tf_inventory.read(tf_inventory_path)
+    ip_to_name = {}
+    for k, sub in tf_inventory.items():
+        if k.startswith('name_'):
+            for ip in sub:
+                if ip in ip_to_name:
+                    logger.warning('ip %r already named %r, also got %r', ip, ip_to_name[ip], k)
+                ip_to_name[ip] = k
+    #logger.debug('names: %r', sorted(ip_to_name.values()))
+    #logger.debug('ip to name %r', ip_to_name)
+    return ip_to_name
+
 def main():
     os.environ['TZ'] = 'UTC'
     time.tzset()
@@ -409,17 +424,7 @@ def main():
                 break
     nick_to_tfname = {}
     if tf_inventory_path:
-        tf_inventory = configparser.ConfigParser(allow_no_value=True)
-        tf_inventory.read(tf_inventory_path)
-        ip_to_name = {}
-        for k, sub in tf_inventory.items():
-            if k.startswith('name_'):
-                for ip in sub:
-                    if ip in ip_to_name:
-                        logger.warning('ip %r already named %r, also got %r', ip, ip_to_name[ip], k)
-                    ip_to_name[ip] = k
-        #logger.debug('names: %r', sorted(ip_to_name.values()))
-        #logger.debug('ip to name %r', ip_to_name)
+        ip_to_name = terraform_inventory_ip_not_names(tf_inventory_path)
         unfound = []
         for ip, name in ip_to_name.items():
             found = []

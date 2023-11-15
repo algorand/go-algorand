@@ -934,6 +934,86 @@
         }
       }
     },
+    "/v2/participation/generate/{address}": {
+      "post": {
+        "tags": [
+          "private",
+          "participating"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Generate and install participation keys to the node.",
+        "operationId": "GenerateParticipationKeys",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "An account public key",
+            "name": "address",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "integer",
+            "description": "Key dilution for two-level participation keys (defaults to sqrt of validity window).",
+            "name": "dilution",
+            "in": "query"
+          },
+          {
+            "type": "integer",
+            "description": "First round for participation key.",
+            "name": "first",
+            "in": "query",
+            "required": true
+          },
+          {
+            "type": "integer",
+            "description": "Last round for participation key.",
+            "name": "last",
+            "in": "query",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "An empty JSON object is returned if the generation process was started. Currently no status is available.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "503": {
+            "description": "Service Temporarily Unavailable",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
     "/v2/participation/{participation-id}": {
       "delete": {
         "tags": [
@@ -2508,6 +2588,12 @@
         "parameters": [
           {
             "$ref": "#/parameters/catchpoint"
+          },
+          {
+            "name": "min",
+            "description": "Specify the minimum number of blocks which the ledger must be advanced by in order to start the catchup. This is useful for simplifying tools which support fast catchup, they can run the catchup unconditionally and the node will skip the catchup if it is not needed.",
+            "in": "query",
+            "type": "integer"
           }
         ],
         "responses": {
@@ -3289,6 +3375,23 @@
         }
       }
     },
+    "AvmKeyValue": {
+      "description": "Represents an AVM key-value pair in an application store.",
+      "type": "object",
+      "required": [
+        "key",
+        "value"
+      ],
+      "properties": {
+        "key": {
+          "type": "string",
+          "format": "byte"
+        },
+        "value": {
+          "$ref": "#/definitions/AvmValue"
+        }
+      }
+    },
     "StateDelta": {
       "description": "Application state delta.",
       "type": "array",
@@ -3629,6 +3732,10 @@
             "$ref": "#/definitions/SimulateRequestTransactionGroup"
           }
         },
+        "round": {
+          "description": "If provided, specifies the round preceding the simulation. State changes through this round will be used to run this simulation. Usually only the 4 most recent rounds will be available (controlled by the node config value MaxAcctLookback). If not specified, defaults to the latest available round.",
+          "type": "integer"
+        },
         "allow-empty-signatures": {
           "description": "Allows transactions without signatures to be simulated as if they had correct signatures.",
           "type": "boolean"
@@ -3683,6 +3790,10 @@
         },
         "scratch-change": {
           "description": "A boolean option enabling returning scratch slot changes together with execution trace during simulation.",
+          "type": "boolean"
+        },
+        "state-change": {
+          "description": "A boolean option enabling returning application state changes (global, local, and box changes) with the execution trace during simulation.",
           "type": "boolean"
         }
       }
@@ -4092,6 +4203,83 @@
         }
       }
     },
+    "ApplicationStateOperation": {
+      "description": "An operation against an application's global/local/box state.",
+      "required": [
+        "operation",
+        "app-state-type",
+        "key"
+      ],
+      "properties": {
+        "operation": {
+          "description": "Operation type. Value `w` is **write**, `d` is **delete**.",
+          "type": "string"
+        },
+        "app-state-type": {
+          "description": "Type of application state. Value `g` is **global state**, `l` is **local state**, `b` is **boxes**.",
+          "type": "string"
+        },
+        "key": {
+          "description": "The key (name) of the global/local/box state.",
+          "type": "string",
+          "format": "byte"
+        },
+        "new-value": {
+          "$ref": "#/definitions/AvmValue"
+        },
+        "account": {
+          "description": "For local state changes, the address of the account associated with the local state.",
+          "type": "string",
+          "x-algorand-format": "Address"
+        }
+      }
+    },
+    "ApplicationKVStorage": {
+      "description": "An application's global/local/box state.",
+      "required": [
+        "kvs"
+      ],
+      "properties": {
+        "kvs": {
+          "description": "Key-Value pairs representing application states.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/AvmKeyValue"
+          }
+        },
+        "account": {
+          "description": "The address of the account associated with the local state.",
+          "type": "string",
+          "x-algorand-format": "Address"
+        }
+      }
+    },
+    "ApplicationInitialStates": {
+      "description": "An application's initial global/local/box states that were accessed during simulation.",
+      "required": [
+        "id"
+      ],
+      "properties": {
+        "id": {
+          "description": "Application index.",
+          "type": "integer",
+          "x-algorand-format": "uint64"
+        },
+        "app-locals": {
+          "description": "An application's initial local states tied to different accounts.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ApplicationKVStorage"
+          }
+        },
+        "app-globals": {
+          "$ref": "#/definitions/ApplicationKVStorage"
+        },
+        "app-boxes": {
+          "$ref": "#/definitions/ApplicationKVStorage"
+        }
+      }
+    },
     "SimulationOpcodeTraceUnit": {
       "description": "The set of trace information and effect from evaluating a single opcode.",
       "type": "object",
@@ -4108,6 +4296,13 @@
           "type": "array",
           "items": {
             "$ref": "#/definitions/ScratchChange"
+          }
+        },
+        "state-changes": {
+          "description": "The operations against the current application's states.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ApplicationStateOperation"
           }
         },
         "spawned-inners": {
@@ -4141,6 +4336,11 @@
             "$ref": "#/definitions/SimulationOpcodeTraceUnit"
           }
         },
+        "approval-program-hash": {
+          "description": "SHA512_256 hash digest of the approval program executed in transaction.",
+          "type": "string",
+          "format": "byte"
+        },
         "clear-state-program-trace": {
           "description": "Program trace that contains a trace of opcode effects in a clear state program.",
           "type": "array",
@@ -4148,12 +4348,22 @@
             "$ref": "#/definitions/SimulationOpcodeTraceUnit"
           }
         },
+        "clear-state-program-hash": {
+          "description": "SHA512_256 hash digest of the clear state program executed in transaction.",
+          "type": "string",
+          "format": "byte"
+        },
         "logic-sig-trace": {
           "description": "Program trace that contains a trace of opcode effects in a logic sig.",
           "type": "array",
           "items": {
             "$ref": "#/definitions/SimulationOpcodeTraceUnit"
           }
+        },
+        "logic-sig-hash": {
+          "description": "SHA512_256 hash digest of the logic sig executed in transaction.",
+          "type": "string",
+          "format": "byte"
         },
         "inner-trace": {
           "description": "An array of SimulationTransactionExecTrace representing the execution trace of any inner transactions executed.",
@@ -4215,6 +4425,19 @@
           "type": "array",
           "items": {
             "$ref": "#/definitions/ApplicationLocalReference"
+          }
+        }
+      }
+    },
+    "SimulateInitialStates": {
+      "description": "Initial states of resources that were accessed during simulation.",
+      "type": "object",
+      "properties": {
+        "app-initial-states": {
+          "description": "The initial states of accessed application before simulation. The order of this array is arbitrary.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ApplicationInitialStates"
           }
         }
       }
@@ -4868,6 +5091,9 @@
           },
           "exec-trace-config": {
             "$ref": "#/definitions/SimulateTraceConfig"
+          },
+          "initial-states": {
+            "$ref": "#/definitions/SimulateInitialStates"
           }
         }
       }
