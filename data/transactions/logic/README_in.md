@@ -44,7 +44,7 @@ above the current stack.
 
 While every element of the stack is restricted to the types `uint64` and `bytes`, 
 the values of these types may be known to be bounded.  The more common bounded types are 
-named to provide more semantic information in the documentation. 're also used during
+named to provide more semantic information in the documentation. They're also used during
 assembly time to do type checking and to provide more informative error messages.
 
 
