@@ -757,13 +757,10 @@ func TestEnsureAndResolveGenesisDirs_migrate(t *testing.T) {
 
 	cfg := GetDefaultLocal()
 	testDirectory := t.TempDir()
-	hot := filepath.Join(testDirectory, "hot")
-	cold := filepath.Join(testDirectory, "cold")
-	cfg.HotDataDir = hot
-	cfg.ColdDataDir = cold
-	// create ColdDataDir
-	coldDir := filepath.Join(cold, "myGenesisID")
-	hotDir := filepath.Join(hot, "myGenesisID")
+	cfg.HotDataDir = filepath.Join(testDirectory, "hot")
+	cfg.ColdDataDir = filepath.Join(testDirectory, "cold")
+	coldDir := filepath.Join(cfg.ColdDataDir, "myGenesisID")
+	hotDir := filepath.Join(cfg.HotDataDir, "myGenesisID")
 	err := os.MkdirAll(coldDir, 0755)
 	require.NoError(t, err)
 	// put a crash.sqlite file in the ColdDataDir
@@ -781,33 +778,32 @@ func TestEnsureAndResolveGenesisDirs_migrate(t *testing.T) {
 	require.NoError(t, err)
 	// Confirm that crash.sqlite was moved to HotDataDir
 	require.DirExists(t, paths.CrashGenesisDir)
-	require.Equal(t, hot+"/myGenesisID", paths.CrashGenesisDir)
+	require.Equal(t, hotDir, paths.CrashGenesisDir)
 	require.NoFileExists(t, filepath.Join(coldDir, "crash.sqlite"))
 	require.NoFileExists(t, filepath.Join(coldDir, "crash.sqlite-shm"))
 	require.FileExists(t, filepath.Join(hotDir, "crash.sqlite"))
 	require.FileExists(t, filepath.Join(hotDir, "crash.sqlite-shm"))
 	// Confirm that stateproof.sqlite was moved to HotDataDir
 	require.DirExists(t, paths.StateproofGenesisDir)
-	require.Equal(t, hot+"/myGenesisID", paths.StateproofGenesisDir)
-	require.NoFileExists(t, filepath.Join(cold, "stateproof.sqlite"))
-	require.NoFileExists(t, filepath.Join(cold, "stateproof.sqlite-wal"))
+	require.Equal(t, hotDir, paths.StateproofGenesisDir)
+	require.NoFileExists(t, filepath.Join(coldDir, "stateproof.sqlite"))
+	require.NoFileExists(t, filepath.Join(coldDir, "stateproof.sqlite-wal"))
 	require.FileExists(t, filepath.Join(hotDir, "stateproof.sqlite"))
 	require.FileExists(t, filepath.Join(hotDir, "stateproof.sqlite-wal"))
 }
 
-func TestEnsureAndResolveGenesisDirs_migrateFail(t *testing.T) {
+func TestEnsureAndResolveGenesisDirs_migrateCrashFail(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	cfg := GetDefaultLocal()
 	testDirectory := t.TempDir()
-	hot := filepath.Join(testDirectory, "hot")
-	cold := filepath.Join(testDirectory, "cold")
-	cfg.HotDataDir = hot
-	cfg.ColdDataDir = cold
-	// create ColdDataDir
-	coldDir := filepath.Join(cold, "myGenesisID")
-	hotDir := filepath.Join(hot, "myGenesisID")
+	cfg.HotDataDir = filepath.Join(testDirectory, "hot")
+	cfg.ColdDataDir = filepath.Join(testDirectory, "cold")
+	coldDir := filepath.Join(cfg.ColdDataDir, "myGenesisID")
+	hotDir := filepath.Join(cfg.HotDataDir, "myGenesisID")
 	err := os.MkdirAll(coldDir, 0755)
+	require.NoError(t, err)
+	err = os.MkdirAll(hotDir, 0755)
 	require.NoError(t, err)
 	// put a crash.sqlite file in the ColdDataDir
 	err = os.WriteFile(filepath.Join(coldDir, "crash.sqlite"), []byte("test"), 0644)
@@ -815,9 +811,31 @@ func TestEnsureAndResolveGenesisDirs_migrateFail(t *testing.T) {
 	err = os.WriteFile(filepath.Join(coldDir, "crash.sqlite-shm"), []byte("test"), 0644)
 	require.NoError(t, err)
 	// also put a crash.sqlite file in the HotDataDir
-	err = os.MkdirAll(hotDir, 0755)
-	require.NoError(t, err)
 	err = os.WriteFile(filepath.Join(hotDir, "crash.sqlite"), []byte("test"), 0644)
+	require.NoError(t, err)
+	// Resolve
+	paths, err := cfg.EnsureAndResolveGenesisDirs(testDirectory, "myGenesisID", tLogger{t: t})
+	require.Error(t, err)
+	require.Empty(t, paths)
+	// Confirm that crash.sqlite was not moved to HotDataDir
+	require.FileExists(t, filepath.Join(coldDir, "crash.sqlite"))
+	require.FileExists(t, filepath.Join(coldDir, "crash.sqlite-shm"))
+	require.FileExists(t, filepath.Join(hotDir, "crash.sqlite"))
+	require.NoFileExists(t, filepath.Join(hotDir, "crash.sqlite-shm"))
+}
+
+func TestEnsureAndResolveGenesisDirs_migrateSPFail(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	cfg := GetDefaultLocal()
+	testDirectory := t.TempDir()
+	cfg.HotDataDir = filepath.Join(testDirectory, "hot")
+	cfg.ColdDataDir = filepath.Join(testDirectory, "cold")
+	coldDir := filepath.Join(cfg.ColdDataDir, "myGenesisID")
+	hotDir := filepath.Join(cfg.HotDataDir, "myGenesisID")
+	err := os.MkdirAll(coldDir, 0755)
+	require.NoError(t, err)
+	err = os.MkdirAll(hotDir, 0755)
 	require.NoError(t, err)
 	// put a stateproof.sqlite file in the ColdDataDir
 	err = os.WriteFile(filepath.Join(coldDir, "stateproof.sqlite"), []byte("test"), 0644)
@@ -831,11 +849,6 @@ func TestEnsureAndResolveGenesisDirs_migrateFail(t *testing.T) {
 	paths, err := cfg.EnsureAndResolveGenesisDirs(testDirectory, "myGenesisID", tLogger{t: t})
 	require.Error(t, err)
 	require.Empty(t, paths)
-	// Confirm that crash.sqlite was not moved to HotDataDir
-	require.FileExists(t, filepath.Join(coldDir, "crash.sqlite"))
-	require.FileExists(t, filepath.Join(coldDir, "crash.sqlite-shm"))
-	require.FileExists(t, filepath.Join(hotDir, "crash.sqlite"))
-	require.NoFileExists(t, filepath.Join(hotDir, "crash.sqlite-shm"))
 	// Confirm that stateproof.sqlite was not moved to HotDataDir
 	require.FileExists(t, filepath.Join(coldDir, "stateproof.sqlite"))
 	require.FileExists(t, filepath.Join(coldDir, "stateproof.sqlite-wal"))
