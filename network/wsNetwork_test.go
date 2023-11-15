@@ -628,6 +628,10 @@ func TestWebsocketNetworkNoAddress(t *testing.T) {
 
 	noAddressConfig := defaultConfig
 	noAddressConfig.NetAddress = ""
+	// enable services even though NetAddress is not set (to assert they don't override NetAddress)
+	noAddressConfig.EnableGossipService = true
+	noAddressConfig.EnableBlockService = true
+	noAddressConfig.EnableLedgerService = true
 	netB := makeTestWebsocketNodeWithConfig(t, noAddressConfig)
 	netB.config.GossipFanout = 1
 	addrA, postListen := netA.Address()
@@ -636,6 +640,12 @@ func TestWebsocketNetworkNoAddress(t *testing.T) {
 	netB.phonebook.ReplacePeerList([]string{addrA}, "default", PhoneBookEntryRelayRole)
 	netB.Start()
 	defer netStop(t, netB, "B")
+
+	// assert addrB is not listening
+	addrB, postListenB := netB.Address()
+	require.False(t, postListenB)
+	require.Empty(t, addrB)
+
 	counter := newMessageCounter(t, 2)
 	counterDone := counter.done
 	netB.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.TxnTag, MessageHandler: counter}})
