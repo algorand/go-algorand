@@ -130,7 +130,7 @@ func MakeService(ctx context.Context, log logging.Logger, cfg config.Local, data
 		streams:   sm,
 		pubsub:    ps,
 		pubsubCtx: ctx,
-		privKey:   privKey,
+		privKey:   pstore.PrivKey(h.ID()),
 		topics:    make(map[string]*pubsub.Topic),
 	}, nil
 }
