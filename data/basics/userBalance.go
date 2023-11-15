@@ -414,11 +414,6 @@ func (app AppIndex) Address() Address {
 	return Address(crypto.HashObj(app))
 }
 
-// AddressFast yields the "app address" of the app
-func (app AppIndex) AddressFast() Address {
-	return Address(crypto.HashObjFast(app))
-}
-
 // Money returns the amount of MicroAlgos associated with the user's account
 func (u AccountData) Money(proto config.ConsensusParams, rewardsLevel uint64) (money MicroAlgos, rewards MicroAlgos) {
 	e := u.WithUpdatedRewards(proto, rewardsLevel)

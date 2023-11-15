@@ -610,15 +610,9 @@ func BenchmarkParticipationSign(b *testing.B) {
 func BenchmarkID(b *testing.B) {
 	pki := ParticipationKeyIdentity{}
 	b.Run("existing", func(b *testing.B) {
-		b.ReportAllocs()
+		b.ReportAllocs() // demonstrate this is a single alloc
 		for i := 0; i < b.N; i++ {
 			pki.ID()
-		}
-	})
-	b.Run("new", func(b *testing.B) {
-		b.ReportAllocs()
-		for i := 0; i < b.N; i++ {
-			pki.IDFast()
 		}
 	})
 }

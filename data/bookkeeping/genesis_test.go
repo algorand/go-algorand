@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -156,19 +157,23 @@ func TestGenesis_Balances(t *testing.T) {
 	}
 }
 
+func (genesis Genesis) hashOld() crypto.Digest {
+	return crypto.HashObjSlow(genesis)
+}
+
 func BenchmarkGenesisHash(b *testing.B) {
 	b.ReportAllocs()
 	g := Genesis{}
-	b.Run("existing", func(b *testing.B) {
+	b.Run("new", func(b *testing.B) {
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
 			g.Hash()
 		}
 	})
-	b.Run("new", func(b *testing.B) {
+	b.Run("old", func(b *testing.B) {
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
-			g.HashFast()
+			g.hashOld()
 		}
 	})
 }

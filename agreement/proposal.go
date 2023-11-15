@@ -189,54 +189,6 @@ func deriveNewSeed(address basics.Address, vrf *crypto.VRFSecrets, rnd round, pe
 	return
 }
 
-func deriveNewSeedFast(address basics.Address, vrf *crypto.VRFSecrets, rnd round, period period, ledger LedgerReader) (newSeed committee.Seed, seedProof crypto.VRFProof, reterr error) {
-	var ok bool
-	var vrfOut crypto.VrfOutput
-
-	cparams, err := ledger.ConsensusParams(ParamsRound(rnd))
-	if err != nil {
-		reterr = fmt.Errorf("failed to obtain consensus parameters in round %d: %v", ParamsRound(rnd), err)
-		return
-	}
-	var alpha crypto.Digest
-	prevSeed, err := ledger.Seed(seedRound(rnd, cparams))
-	if err != nil {
-		reterr = fmt.Errorf("failed read seed of round %d: %v", seedRound(rnd, cparams), err)
-		return
-	}
-
-	if period == 0 {
-		seedProof, ok = vrf.SK.Prove(prevSeed)
-		if !ok {
-			reterr = fmt.Errorf("could not make seed proof")
-			return
-		}
-		vrfOut, ok = seedProof.Hash()
-		if !ok {
-			// If proof2hash fails on a proof we produced with VRF Prove, this indicates our VRF code has a dangerous bug.
-			// Panicking is the only safe thing to do.
-			logging.Base().Panicf("VrfProof.Hash() failed on a proof we ourselves generated; this indicates a bug in the VRF code: %v", seedProof)
-		}
-		alpha = crypto.HashObjFast(proposerSeed{Addr: address, VRF: vrfOut})
-	} else {
-		alpha = crypto.HashObjFast(prevSeed)
-	}
-
-	input := seedInput{Alpha: alpha}
-	rerand := rnd % basics.Round(cparams.SeedLookback*cparams.SeedRefreshInterval)
-	if rerand < basics.Round(cparams.SeedLookback) {
-		digrnd := rnd.SubSaturate(basics.Round(cparams.SeedLookback * cparams.SeedRefreshInterval))
-		oldDigest, err := ledger.LookupDigest(digrnd)
-		if err != nil {
-			reterr = fmt.Errorf("could not lookup old entry digest (for seed) from round %d: %v", digrnd, err)
-			return
-		}
-		input.History = oldDigest
-	}
-	newSeed = committee.Seed(crypto.HashObjFast(input))
-	return
-}
-
 func verifyNewSeed(p unauthenticatedProposal, ledger LedgerReader) error {
 	value := p.value()
 	rnd := p.Round()
@@ -306,24 +258,6 @@ func proposalForBlock(address basics.Address, vrf *crypto.VRFSecrets, ve Validat
 		OriginalProposer: address,
 		BlockDigest:      proposal.Block.Digest(),
 		EncodingDigest:   crypto.HashObj(proposal),
-	}
-	return proposal, value, nil
-}
-
-func proposalForBlockFast(address basics.Address, vrf *crypto.VRFSecrets, ve ValidatedBlock, period period, ledger LedgerReader) (proposal, proposalValue, error) {
-	rnd := ve.Block().Round()
-	newSeed, seedProof, err := deriveNewSeedFast(address, vrf, rnd, period, ledger)
-	if err != nil {
-		return proposal{}, proposalValue{}, fmt.Errorf("proposalForBlock: could not derive new seed: %v", err)
-	}
-
-	ve = ve.WithSeed(newSeed)
-	proposal := makeProposal(ve, seedProof, period, address)
-	value := proposalValue{
-		OriginalPeriod:   period,
-		OriginalProposer: address,
-		BlockDigest:      proposal.Block.DigestFast(),
-		EncodingDigest:   crypto.HashObjFast(proposal),
 	}
 	return proposal, value, nil
 }

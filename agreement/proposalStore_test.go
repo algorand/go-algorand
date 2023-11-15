@@ -928,39 +928,3 @@ func TestProposalStoreRegressionWrongPipelinePeriodBug_39387501(t *testing.T) {
 		require.Equal(t, res.(payloadProcessedEvent).Period, period(1))
 	}
 }
-
-func BenchmarkProposalForBlock(b *testing.B) {
-	type fields struct {
-		Pipeline       unauthenticatedProposal
-		Filled         bool
-		Payload        proposal
-		Assembled      bool
-		Authenticators []vote
-	}
-	type args struct {
-		p unauthenticatedProposal
-	}
-
-	player, _, accounts, factory, ledger := testSetup(0)
-
-	round := player.Round
-	period := player.Period
-	testBlockFactory, err := factory.AssembleBlock(player.Round)
-	require.NoError(b, err, "Could not generate a proposal for round %d: %v", round, err)
-
-	accountIndex := 0
-	accountIndex++
-
-	b.Run("existing", func(b *testing.B) {
-		b.ReportAllocs()
-		for i := 0; i < b.N; i++ {
-			proposalForBlock(accounts.addresses[accountIndex], accounts.vrfs[accountIndex], testBlockFactory, period, ledger)
-		}
-	})
-	b.Run("new", func(b *testing.B) {
-		b.ReportAllocs()
-		for i := 0; i < b.N; i++ {
-			proposalForBlockFast(accounts.addresses[accountIndex], accounts.vrfs[accountIndex], testBlockFactory, period, ledger)
-		}
-	})
-}

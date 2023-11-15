@@ -35,13 +35,7 @@ type Hashable interface {
 }
 
 // HashRep appends the correct hashid before the message to be hashed.
-func HashRep(h Hashable) []byte {
-	hashid, data := h.ToBeHashed()
-	return append([]byte(hashid), data...)
-}
-
-// HashRepFast appends the correct hashid before the message to be hashed.
-func HashRepFast[H Hashable](h H) []byte {
+func HashRep[H Hashable](h H) []byte {
 	hashid, data := h.ToBeHashed()
 	return append([]byte(hashid), data...)
 }
@@ -91,14 +85,15 @@ func Hash(data []byte) Digest {
 	return sha512.Sum512_256(data)
 }
 
-// HashObj computes a hash of a Hashable object and its type
-func HashObj(h Hashable) Digest {
+// HashObjSlow computes a hash of a Hashable object and its type, doing so the
+// "old way" to show it requires an extra allocation in benchmarks.  Don't use.
+func HashObjSlow(h Hashable) Digest {
 	return Hash(HashRep(h))
 }
 
-// HashObjFast computes a hash of a Hashable object and its type
-func HashObjFast[H Hashable](h H) Digest {
-	return Hash(HashRepFast(h))
+// HashObj computes a hash of a Hashable object and its type
+func HashObj[H Hashable](h H) Digest {
+	return Hash(HashRep(h))
 }
 
 // NewHash returns a sha512-256 object to do the same operation as Hash()
