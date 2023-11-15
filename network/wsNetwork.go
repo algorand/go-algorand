@@ -1012,7 +1012,7 @@ func (wn *WebsocketNetwork) GetHTTPRequestConnection(request *http.Request) (con
 // ServerHTTP handles the gossip network functions over websockets
 func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 	if !wn.config.EnableGossipService {
-		response.WriteHeader(http.StatusServiceUnavailable)
+		response.WriteHeader(http.StatusNotFound)
 		return
 	}
 
