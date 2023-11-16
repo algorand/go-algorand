@@ -844,9 +844,9 @@ func (cfg *Local) EnsureAndResolveGenesisDirs(rootDir, genesisID string, logger 
 		// if separate HotDataDir and ColdDataDir was configured, but StateproofDir was not configured
 		if resolved.ColdGenesisDir != resolved.HotGenesisDir {
 			// move existing stateproof DB files from ColdDataDir to HotDataDir
-			moveErr := moveDirIfExists(logger, resolved.ColdGenesisDir, resolved.HotGenesisDir, StateProofFileName, StateProofFileName + "-shm", StateProofFileName + "-wal")
+			moveErr := moveDirIfExists(logger, resolved.ColdGenesisDir, resolved.HotGenesisDir, StateProofFileName, StateProofFileName+"-shm", StateProofFileName+"-wal")
 			if moveErr != nil {
-				return ResolvedGenesisDirs{}, fmt.Errorf("Error moving stateproof DB files from ColdDataDir %s to HotDataDir %s: %v", resolved.ColdGenesisDir, resolved.HotGenesisDir, moveErr)
+				return ResolvedGenesisDirs{}, fmt.Errorf("error moving stateproof DB files from ColdDataDir %s to HotDataDir %s: %v", resolved.ColdGenesisDir, resolved.HotGenesisDir, moveErr)
 			}
 		}
 	}
@@ -861,9 +861,9 @@ func (cfg *Local) EnsureAndResolveGenesisDirs(rootDir, genesisID string, logger 
 		// if separate HotDataDir and ColdDataDir was configured, but CrashDBDir was not configured
 		if resolved.ColdGenesisDir != resolved.HotGenesisDir {
 			// move existing crash DB files from ColdDataDir to HotDataDir
-			moveErr := moveDirIfExists(logger, resolved.ColdGenesisDir, resolved.HotGenesisDir, CrashFilename, CrashFilename + "-shm", CrashFilename + "-wal")
+			moveErr := moveDirIfExists(logger, resolved.ColdGenesisDir, resolved.HotGenesisDir, CrashFilename, CrashFilename+"-shm", CrashFilename+"-wal")
 			if moveErr != nil {
-				return ResolvedGenesisDirs{}, fmt.Errorf("Error moving crash DB files from ColdDataDir %s to HotDataDir %s: %v", resolved.ColdGenesisDir, resolved.HotGenesisDir, moveErr)
+				return ResolvedGenesisDirs{}, fmt.Errorf("error moving crash DB files from ColdDataDir %s to HotDataDir %s: %v", resolved.ColdGenesisDir, resolved.HotGenesisDir, moveErr)
 			}
 		}
 	}
