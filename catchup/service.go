@@ -49,7 +49,7 @@ const uncapParallelDownloadRate = time.Second
 // this should be at least the number of relays
 const catchupRetryLimit = 500
 
-const followLatestBackoff = 50 * time.Millisecond
+const followLatestBackoff = 100 * time.Millisecond
 
 // ErrSyncRoundInvalid is returned when the sync round requested is behind the current ledger round
 var ErrSyncRoundInvalid = errors.New("requested sync round cannot be less than the latest round")
@@ -332,7 +332,7 @@ func (s *Service) fetchAndWrite(ctx context.Context, r basics.Round, prevFetchCo
 				// quit if the the same peer peer encountered errNoBlockForRound more than errNoBlockForRoundThreshold times
 				if s.followLatest {
 					// back off between retries to allow time for the next block to appear;
-					// this will provide 25s (catchupRetryLimit * followLatestBackoff) of
+					// this will provide 50s (catchupRetryLimit * followLatestBackoff) of
 					// polling when continuously running catchup instead of agreement.
 					time.Sleep(followLatestBackoff)
 				} else {
