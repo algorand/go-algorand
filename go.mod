@@ -16,7 +16,7 @@ require (
 	github.com/algorand/websocket v1.4.6
 	github.com/aws/aws-sdk-go v1.34.0
 	github.com/cockroachdb/pebble v0.0.0-20230807162746-af8c5f279001
-	github.com/consensys/gnark-crypto v0.12.0
+	github.com/consensys/gnark-crypto v0.12.1
 	github.com/davidlazar/go-crypto v0.0.0-20200604182044-b73af7476f6c
 	github.com/dchest/siphash v1.2.1
 	github.com/fatih/color v1.13.0

@@ -20,7 +20,7 @@
 package config
 
 var defaultLocal = Local{
-	Version:                                    31,
+	Version:                                    32,
 	AccountUpdatesStatsInterval:                5000000000,
 	AccountsRebuildSynchronousMode:             1,
 	AgreementIncomingBundlesQueueLength:        15,
@@ -81,6 +81,7 @@ var defaultLocal = Local{
 	EnableRequestLogger:                        false,
 	EnableRuntimeMetrics:                       false,
 	EnableTopAccountsReporting:                 false,
+	EnableTxBacklogAppRateLimiting:             true,
 	EnableTxBacklogRateLimiting:                true,
 	EnableTxnEvalTracer:                        false,
 	EnableUsageLog:                             false,
@@ -141,6 +142,9 @@ var defaultLocal = Local{
 	TrackerDBDir:                               "",
 	TransactionSyncDataExchangeRate:            0,
 	TransactionSyncSignificantMessageThreshold: 0,
+	TxBacklogAppTxPerSecondRate:                100,
+	TxBacklogAppTxRateLimiterMaxSize:           1048576,
+	TxBacklogRateLimitingCongestionPct:         50,
 	TxBacklogReservedCapacityPerPeer:           20,
 	TxBacklogServiceRateWindowSeconds:          10,
 	TxBacklogSize:                              26000,

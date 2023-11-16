@@ -42,7 +42,7 @@ type Local struct {
 	// Version tracks the current version of the defaults so we can migrate old -> new
 	// This is specifically important whenever we decide to change the default value
 	// for an existing parameter. This field tag must be updated any time we add a new version.
-	Version uint32 `version[0]:"0" version[1]:"1" version[2]:"2" version[3]:"3" version[4]:"4" version[5]:"5" version[6]:"6" version[7]:"7" version[8]:"8" version[9]:"9" version[10]:"10" version[11]:"11" version[12]:"12" version[13]:"13" version[14]:"14" version[15]:"15" version[16]:"16" version[17]:"17" version[18]:"18" version[19]:"19" version[20]:"20" version[21]:"21" version[22]:"22" version[23]:"23" version[24]:"24" version[25]:"25" version[26]:"26" version[27]:"27" version[28]:"28" version[29]:"29" version[30]:"30" version[31]:"31"`
+	Version uint32 `version[0]:"0" version[1]:"1" version[2]:"2" version[3]:"3" version[4]:"4" version[5]:"5" version[6]:"6" version[7]:"7" version[8]:"8" version[9]:"9" version[10]:"10" version[11]:"11" version[12]:"12" version[13]:"13" version[14]:"14" version[15]:"15" version[16]:"16" version[17]:"17" version[18]:"18" version[19]:"19" version[20]:"20" version[21]:"21" version[22]:"22" version[23]:"23" version[24]:"24" version[25]:"25" version[26]:"26" version[27]:"27" version[28]:"28" version[29]:"29" version[30]:"30" version[31]:"31" version[32]:"32"`
 
 	// Archival nodes retain a full copy of the block history. Non-Archival nodes will delete old blocks and only retain what's need to properly validate blockchain messages (the precise number of recent blocks depends on the consensus parameters. Currently the last 1321 blocks are required). This means that non-Archival nodes require significantly less storage than Archival nodes. Relays (nodes with a valid NetAddress) are always Archival, regardless of this setting. This may change in the future. If setting this to true for the first time, the existing ledger may need to be deleted to get the historical values stored as the setting only effects current blocks forward. To do this, shutdown the node and delete all .sqlite files within the data/testnet-version directory, except the crash.sqlite file. Restart the node and wait for the node to sync.
 	Archival bool `version[0]:"false"`
@@ -111,13 +111,13 @@ type Local struct {
 	// For isolation, the node will create a subdirectory in this location, named by the genesis-id of the network.
 	// If not specified, the node will use the ColdDataDir.
 	CatchpointDir string `version[31]:""`
-	// StateproofDir is an optional directory to store stateproof data.
+	// StateproofDir is an optional directory to persist state about observed and issued state proof messages.
 	// For isolation, the node will create a subdirectory in this location, named by the genesis-id of the network.
-	// If not specified, the node will use the ColdDataDir.
+	// If not specified, the node will use the HotDataDir.
 	StateproofDir string `version[31]:""`
-	// CrashDBDir is an optional directory to store the crash database.
+	// CrashDBDir is an optional directory to persist agreement's consensus participation state.
 	// For isolation, the node will create a subdirectory in this location, named by the genesis-id of the network.
-	// If not specified, the node will use the ColdDataDir.
+	// If not specified, the node will use the HotDataDir
 	CrashDBDir string `version[31]:""`
 
 	// LogFileDir is an optional directory to store the log, node.log
@@ -231,7 +231,21 @@ type Local struct {
 	// TxBacklogReservedCapacityPerPeer determines how much dedicated serving capacity the TxBacklog gives each peer
 	TxBacklogReservedCapacityPerPeer int `version[27]:"20"`
 
-	// EnableTxBacklogRateLimiting controls if a rate limiter and congestion manager shouild be attached to the tx backlog enqueue process
+	// TxBacklogAppTxRateLimiterMaxSize denotes a max size for the tx rate limiter
+	// calculated as "a thousand apps on a network of thousand of peers"
+	TxBacklogAppTxRateLimiterMaxSize int `version[32]:"1048576"`
+
+	// TxBacklogAppTxPerSecondRate determines a target app per second rate for the app tx rate limiter
+	TxBacklogAppTxPerSecondRate int `version[32]:"100"`
+
+	// TxBacklogRateLimitingCongestionRatio determines the backlog filling threshold percentage at which the app limiter kicks in
+	// or the tx backlog rate limiter kicks off.
+	TxBacklogRateLimitingCongestionPct int `version[32]:"50"`
+
+	// EnableTxBacklogAppRateLimiting controls if an app rate limiter should be attached to the tx backlog enqueue process
+	EnableTxBacklogAppRateLimiting bool `version[32]:"true"`
+
+	// EnableTxBacklogRateLimiting controls if a rate limiter and congestion manager should be attached to the tx backlog enqueue process
 	// if enabled, the over-all TXBacklog Size will be larger by MAX_PEERS*TxBacklogReservedCapacityPerPeer
 	EnableTxBacklogRateLimiting bool `version[27]:"false" version[30]:"true"`
 
@@ -652,7 +666,7 @@ func (cfg Local) SaveAllToDisk(root string) error {
 func (cfg Local) SaveToFile(filename string) error {
 	var alwaysInclude []string
 	alwaysInclude = append(alwaysInclude, "Version")
-	return codecs.SaveNonDefaultValuesToFile(filename, cfg, defaultLocal, alwaysInclude, true)
+	return codecs.SaveNonDefaultValuesToFile(filename, cfg, defaultLocal, alwaysInclude)
 }
 
 // DNSSecuritySRVEnforced returns true if SRV response verification enforced
@@ -771,9 +785,13 @@ func (cfg *Local) ResolveLogPaths(rootDir string) (liveLog, archive string) {
 	return liveLog, archive
 }
 
+type logger interface {
+	Infof(format string, args ...interface{})
+}
+
 // EnsureAndResolveGenesisDirs will resolve the supplied config paths to absolute paths, and will create the genesis directories of each
 // returns a ResolvedGenesisDirs struct with the resolved paths for use during runtime
-func (cfg *Local) EnsureAndResolveGenesisDirs(rootDir, genesisID string) (ResolvedGenesisDirs, error) {
+func (cfg *Local) EnsureAndResolveGenesisDirs(rootDir, genesisID string, logger logger) (ResolvedGenesisDirs, error) {
 	var resolved ResolvedGenesisDirs
 	var err error
 	if rootDir != "" {
@@ -829,25 +847,60 @@ func (cfg *Local) EnsureAndResolveGenesisDirs(rootDir, genesisID string) (Resolv
 	} else {
 		resolved.CatchpointGenesisDir = resolved.ColdGenesisDir
 	}
-	// if StateproofDir is not set, use ColdDataDir
+	// if StateproofDir is not set, use HotDataDir
 	if cfg.StateproofDir != "" {
 		resolved.StateproofGenesisDir, err = ensureAbsGenesisDir(cfg.StateproofDir, genesisID)
 		if err != nil {
 			return ResolvedGenesisDirs{}, err
 		}
 	} else {
-		resolved.StateproofGenesisDir = resolved.ColdGenesisDir
+		resolved.StateproofGenesisDir = resolved.HotGenesisDir
+		// if separate HotDataDir and ColdDataDir was configured, but StateproofDir was not configured
+		if resolved.ColdGenesisDir != resolved.HotGenesisDir {
+			// move existing stateproof DB files from ColdDataDir to HotDataDir
+			moveErr := moveDirIfExists(logger, resolved.ColdGenesisDir, resolved.HotGenesisDir, StateProofFileName, StateProofFileName+"-shm", StateProofFileName+"-wal")
+			if moveErr != nil {
+				return ResolvedGenesisDirs{}, fmt.Errorf("error moving stateproof DB files from ColdDataDir %s to HotDataDir %s: %v", resolved.ColdGenesisDir, resolved.HotGenesisDir, moveErr)
+			}
+		}
 	}
-	// if CrashDBDir is not set, use ColdDataDir
+	// if CrashDBDir is not set, use HotDataDir
 	if cfg.CrashDBDir != "" {
 		resolved.CrashGenesisDir, err = ensureAbsGenesisDir(cfg.CrashDBDir, genesisID)
 		if err != nil {
 			return ResolvedGenesisDirs{}, err
 		}
 	} else {
-		resolved.CrashGenesisDir = resolved.ColdGenesisDir
+		resolved.CrashGenesisDir = resolved.HotGenesisDir
+		// if separate HotDataDir and ColdDataDir was configured, but CrashDBDir was not configured
+		if resolved.ColdGenesisDir != resolved.HotGenesisDir {
+			// move existing crash DB files from ColdDataDir to HotDataDir
+			moveErr := moveDirIfExists(logger, resolved.ColdGenesisDir, resolved.HotGenesisDir, CrashFilename, CrashFilename+"-shm", CrashFilename+"-wal")
+			if moveErr != nil {
+				return ResolvedGenesisDirs{}, fmt.Errorf("error moving crash DB files from ColdDataDir %s to HotDataDir %s: %v", resolved.ColdGenesisDir, resolved.HotGenesisDir, moveErr)
+			}
+		}
 	}
 	return resolved, nil
+}
+
+func moveDirIfExists(logger logger, srcdir, dstdir string, files ...string) error {
+	// first, check if any files already exist in dstdir, and quit if so
+	for _, file := range files {
+		if _, err := os.Stat(filepath.Join(dstdir, file)); err == nil {
+			return fmt.Errorf("destination file %s already exists, not overwriting", filepath.Join(dstdir, file))
+		}
+	}
+	// then, check if any files exist in srcdir, and move them to dstdir
+	for _, file := range files {
+		if _, err := os.Stat(filepath.Join(srcdir, file)); err == nil {
+			if err := os.Rename(filepath.Join(srcdir, file), filepath.Join(dstdir, file)); err != nil {
+				return fmt.Errorf("failed to move file %s from %s to %s: %v", file, srcdir, dstdir, err)
+			}
+			logger.Infof("Moved DB file %s from ColdDataDir %s to HotDataDir %s", file, srcdir, dstdir)
+		}
+	}
+	return nil
 }
 
 // AdjustConnectionLimits updates RestConnectionsSoftLimit, RestConnectionsHardLimit, IncomingConnectionsLimit
