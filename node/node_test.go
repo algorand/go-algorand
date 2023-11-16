@@ -598,7 +598,7 @@ func TestConfiguredDataDirs(t *testing.T) {
 	require.FileExists(t, filepath.Join(testDirHot, genesis.ID(), "ledger.tracker.sqlite"))
 
 	// confirm the stateproof db in the genesis dir of hot data dir
-	require.FileExists(t, filepath.Join(testDirCold, genesis.ID(), "stateproof.sqlite"))
+	require.FileExists(t, filepath.Join(testDirHot, genesis.ID(), "stateproof.sqlite"))
 
 	// confirm cold data dir exists and contains a genesis dir
 	require.DirExists(t, filepath.Join(testDirCold, genesis.ID()))
@@ -609,8 +609,8 @@ func TestConfiguredDataDirs(t *testing.T) {
 	// confirm the partregistry is in the genesis dir of cold data dir
 	require.FileExists(t, filepath.Join(testDirCold, genesis.ID(), "partregistry.sqlite"))
 
-	// confirm the partregistry is in the genesis dir of cold data dir
-	require.FileExists(t, filepath.Join(testDirCold, genesis.ID(), "crash.sqlite"))
+	// confirm the agreement crash DB is in the genesis dir of hot data dir
+	require.FileExists(t, filepath.Join(testDirHot, genesis.ID(), "crash.sqlite"))
 }
 
 // TestConfiguredResourcePaths tests to see that when TrackerDbFilePath, BlockDbFilePath, StateproofDir, and CrashFilePath are set, underlying resources are created in the correct locations

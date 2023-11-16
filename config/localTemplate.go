@@ -111,13 +111,13 @@ type Local struct {
 	// For isolation, the node will create a subdirectory in this location, named by the genesis-id of the network.
 	// If not specified, the node will use the ColdDataDir.
 	CatchpointDir string `version[31]:""`
-	// StateproofDir is an optional directory to store stateproof data.
+	// StateproofDir is an optional directory to persist state about observed and issued state proof messages.
 	// For isolation, the node will create a subdirectory in this location, named by the genesis-id of the network.
-	// If not specified, the node will use the ColdDataDir.
+	// If not specified, the node will use the HotDataDir.
 	StateproofDir string `version[31]:""`
-	// CrashDBDir is an optional directory to store the crash database.
+	// CrashDBDir is an optional directory to persist agreement's consensus participation state.
 	// For isolation, the node will create a subdirectory in this location, named by the genesis-id of the network.
-	// If not specified, the node will use the ColdDataDir.
+	// If not specified, the node will use the HotDataDir
 	CrashDBDir string `version[31]:""`
 
 	// LogFileDir is an optional directory to store the log, node.log
@@ -785,9 +785,13 @@ func (cfg *Local) ResolveLogPaths(rootDir string) (liveLog, archive string) {
 	return liveLog, archive
 }
 
+type logger interface {
+	Infof(format string, args ...interface{})
+}
+
 // EnsureAndResolveGenesisDirs will resolve the supplied config paths to absolute paths, and will create the genesis directories of each
 // returns a ResolvedGenesisDirs struct with the resolved paths for use during runtime
-func (cfg *Local) EnsureAndResolveGenesisDirs(rootDir, genesisID string) (ResolvedGenesisDirs, error) {
+func (cfg *Local) EnsureAndResolveGenesisDirs(rootDir, genesisID string, logger logger) (ResolvedGenesisDirs, error) {
 	var resolved ResolvedGenesisDirs
 	var err error
 	if rootDir != "" {
@@ -843,25 +847,60 @@ func (cfg *Local) EnsureAndResolveGenesisDirs(rootDir, genesisID string) (Resolv
 	} else {
 		resolved.CatchpointGenesisDir = resolved.ColdGenesisDir
 	}
-	// if StateproofDir is not set, use ColdDataDir
+	// if StateproofDir is not set, use HotDataDir
 	if cfg.StateproofDir != "" {
 		resolved.StateproofGenesisDir, err = ensureAbsGenesisDir(cfg.StateproofDir, genesisID)
 		if err != nil {
 			return ResolvedGenesisDirs{}, err
 		}
 	} else {
-		resolved.StateproofGenesisDir = resolved.ColdGenesisDir
+		resolved.StateproofGenesisDir = resolved.HotGenesisDir
+		// if separate HotDataDir and ColdDataDir was configured, but StateproofDir was not configured
+		if resolved.ColdGenesisDir != resolved.HotGenesisDir {
+			// move existing stateproof DB files from ColdDataDir to HotDataDir
+			moveErr := moveDirIfExists(logger, resolved.ColdGenesisDir, resolved.HotGenesisDir, StateProofFileName, StateProofFileName+"-shm", StateProofFileName+"-wal")
+			if moveErr != nil {
+				return ResolvedGenesisDirs{}, fmt.Errorf("error moving stateproof DB files from ColdDataDir %s to HotDataDir %s: %v", resolved.ColdGenesisDir, resolved.HotGenesisDir, moveErr)
+			}
+		}
 	}
-	// if CrashDBDir is not set, use ColdDataDir
+	// if CrashDBDir is not set, use HotDataDir
 	if cfg.CrashDBDir != "" {
 		resolved.CrashGenesisDir, err = ensureAbsGenesisDir(cfg.CrashDBDir, genesisID)
 		if err != nil {
 			return ResolvedGenesisDirs{}, err
 		}
 	} else {
-		resolved.CrashGenesisDir = resolved.ColdGenesisDir
+		resolved.CrashGenesisDir = resolved.HotGenesisDir
+		// if separate HotDataDir and ColdDataDir was configured, but CrashDBDir was not configured
+		if resolved.ColdGenesisDir != resolved.HotGenesisDir {
+			// move existing crash DB files from ColdDataDir to HotDataDir
+			moveErr := moveDirIfExists(logger, resolved.ColdGenesisDir, resolved.HotGenesisDir, CrashFilename, CrashFilename+"-shm", CrashFilename+"-wal")
+			if moveErr != nil {
+				return ResolvedGenesisDirs{}, fmt.Errorf("error moving crash DB files from ColdDataDir %s to HotDataDir %s: %v", resolved.ColdGenesisDir, resolved.HotGenesisDir, moveErr)
+			}
+		}
 	}
 	return resolved, nil
+}
+
+func moveDirIfExists(logger logger, srcdir, dstdir string, files ...string) error {
+	// first, check if any files already exist in dstdir, and quit if so
+	for _, file := range files {
+		if _, err := os.Stat(filepath.Join(dstdir, file)); err == nil {
+			return fmt.Errorf("destination file %s already exists, not overwriting", filepath.Join(dstdir, file))
+		}
+	}
+	// then, check if any files exist in srcdir, and move them to dstdir
+	for _, file := range files {
+		if _, err := os.Stat(filepath.Join(srcdir, file)); err == nil {
+			if err := os.Rename(filepath.Join(srcdir, file), filepath.Join(dstdir, file)); err != nil {
+				return fmt.Errorf("failed to move file %s from %s to %s: %v", file, srcdir, dstdir, err)
+			}
+			logger.Infof("Moved DB file %s from ColdDataDir %s to HotDataDir %s", file, srcdir, dstdir)
+		}
+	}
+	return nil
 }
 
 // AdjustConnectionLimits updates RestConnectionsSoftLimit, RestConnectionsHardLimit, IncomingConnectionsLimit
