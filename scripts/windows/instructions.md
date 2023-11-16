@@ -8,7 +8,7 @@
 	pacman -Syu --disable-download-timeout
 	```
 
-	NOTE: It is very likely MSYS2 will ask to close the window and repeat the command for furter updates. Check `MSYS2` web page for additional support.
+	NOTE: It is very likely MSYS2 will ask to close the window and repeat the command for further updates. Check `MSYS2` web page for additional support.
 
 4. Install GIT on MSYS2 by executing the following command:
 
