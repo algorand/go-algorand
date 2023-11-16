@@ -158,7 +158,13 @@ func TestGenesis_Balances(t *testing.T) {
 }
 
 func (genesis Genesis) hashOld() crypto.Digest {
-	return crypto.HashObjSlow(genesis)
+	return hashObjOld(genesis)
+}
+
+// hashObjOld computes a hash of a Hashable object and its type, doing so the
+// "old way" to show it requires an extra allocation in benchmarks.
+func hashObjOld(h crypto.Hashable) crypto.Digest {
+	return crypto.Hash(crypto.HashRep(h))
 }
 
 func BenchmarkGenesisHash(b *testing.B) {

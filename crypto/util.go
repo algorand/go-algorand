@@ -85,12 +85,6 @@ func Hash(data []byte) Digest {
 	return sha512.Sum512_256(data)
 }
 
-// HashObjSlow computes a hash of a Hashable object and its type, doing so the
-// "old way" to show it requires an extra allocation in benchmarks.  Don't use.
-func HashObjSlow(h Hashable) Digest {
-	return Hash(HashRep(h))
-}
-
 // HashObj computes a hash of a Hashable object and its type
 func HashObj[H Hashable](h H) Digest {
 	return Hash(HashRep(h))
