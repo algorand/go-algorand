@@ -49,6 +49,8 @@ const uncapParallelDownloadRate = time.Second
 // this should be at least the number of relays
 const catchupRetryLimit = 500
 
+const followLatestBackoff = 100 * time.Millisecond
+
 // ErrSyncRoundInvalid is returned when the sync round requested is behind the current ledger round
 var ErrSyncRoundInvalid = errors.New("requested sync round cannot be less than the latest round")
 
@@ -93,6 +95,12 @@ type Service struct {
 	prevBlockFetchTime  time.Time
 	blockValidationPool execpool.BacklogPool
 
+	// followLatest is set to true if this is a follower node: meaning there is no
+	// agreement service to follow the latest round, so catchup continuously runs,
+	// polling for new blocks as they appear. This enables a different behavior
+	// to avoid aborting the catchup service once you get to the tip of the chain.
+	followLatest bool
+
 	// suspendForLedgerOps defines whether we've run into a state where the ledger is currently busy writing the
 	// catchpoint file or flushing accounts. If so, we want to suspend the catchup process until the catchpoint file writing is complete,
 	// and resume from there without stopping the catchup timer.
@@ -131,6 +139,7 @@ func MakeService(log logging.Logger, config config.Local, net network.GossipNode
 	s = &Service{}
 
 	s.cfg = config
+	s.followLatest = s.cfg.EnableFollowMode
 	s.ledger = ledger
 	s.net = net
 	s.auth = auth
@@ -321,11 +330,18 @@ func (s *Service) fetchAndWrite(ctx context.Context, r basics.Round, prevFetchCo
 				failureRank = peerRankNoBlockForRound
 				// remote peer doesn't have the block, try another peer
 				// quit if the the same peer peer encountered errNoBlockForRound more than errNoBlockForRoundThreshold times
-				if count := peerErrors[peer]; count > errNoBlockForRoundThreshold {
-					s.log.Infof("fetchAndWrite(%d): remote peers do not have the block. Quitting", r)
-					return false
+				if s.followLatest {
+					// back off between retries to allow time for the next block to appear;
+					// this will provide 50s (catchupRetryLimit * followLatestBackoff) of
+					// polling when continuously running catchup instead of agreement.
+					time.Sleep(followLatestBackoff)
+				} else {
+					if count := peerErrors[peer]; count > errNoBlockForRoundThreshold {
+						s.log.Infof("fetchAndWrite(%d): remote peers do not have the block. Quitting", r)
+						return false
+					}
+					peerErrors[peer]++
 				}
-				peerErrors[peer]++
 			}
 			s.log.Debugf("fetchAndWrite(%v): Could not fetch: %v (attempt %d)", r, err, i)
 			peerSelector.rankPeer(psp, failureRank)
