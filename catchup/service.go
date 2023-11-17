@@ -41,8 +41,15 @@ import (
 const catchupPeersForSync = 10
 const blockQueryPeerLimit = 10
 
+// uncapParallelDownloadRate is a simple threshold to detect whether or not the node is caught up.
+// If a block is downloaded in less than this duration, it's assumed that the node is not caught up
+// and allow the block downloader to start N=parallelBlocks concurrent fetches.
+const uncapParallelDownloadRate = time.Second
+
 // this should be at least the number of relays
 const catchupRetryLimit = 500
+
+const followLatestBackoff = 100 * time.Millisecond
 
 // ErrSyncRoundInvalid is returned when the sync round requested is behind the current ledger round
 var ErrSyncRoundInvalid = errors.New("requested sync round cannot be less than the latest round")
@@ -85,7 +92,14 @@ type Service struct {
 	auth                BlockAuthenticator
 	parallelBlocks      uint64
 	deadlineTimeout     time.Duration
+	prevBlockFetchTime  time.Time
 	blockValidationPool execpool.BacklogPool
+
+	// followLatest is set to true if this is a follower node: meaning there is no
+	// agreement service to follow the latest round, so catchup continuously runs,
+	// polling for new blocks as they appear. This enables a different behavior
+	// to avoid aborting the catchup service once you get to the tip of the chain.
+	followLatest bool
 
 	// suspendForLedgerOps defines whether we've run into a state where the ledger is currently busy writing the
 	// catchpoint file or flushing accounts. If so, we want to suspend the catchup process until the catchpoint file writing is complete,
@@ -125,6 +139,7 @@ func MakeService(log logging.Logger, config config.Local, net network.GossipNode
 	s = &Service{}
 
 	s.cfg = config
+	s.followLatest = s.cfg.EnableFollowMode
 	s.ledger = ledger
 	s.net = net
 	s.auth = auth
@@ -243,6 +258,8 @@ func (s *Service) innerFetch(ctx context.Context, r basics.Round, peer network.P
 	return
 }
 
+const errNoBlockForRoundThreshold = 5
+
 // fetchAndWrite fetches a block, checks the cert, and writes it to the ledger. Cert checking and ledger writing both wait for the ledger to advance if necessary.
 // Returns false if we should stop trying to catch up.  This may occur for several reasons:
 //   - If the context is canceled (e.g. if the node is shutting down)
@@ -254,6 +271,11 @@ func (s *Service) fetchAndWrite(ctx context.Context, r basics.Round, prevFetchCo
 	if dontSyncRound := s.GetDisableSyncRound(); dontSyncRound != 0 && r >= basics.Round(dontSyncRound) {
 		return false
 	}
+
+	// peerErrors tracks occurrences of errNoBlockForRound in order to quit earlier without making
+	// repeated requests for a block that most likely does not exist yet
+	peerErrors := map[network.Peer]int{}
+
 	i := 0
 	for {
 		i++
@@ -302,8 +324,27 @@ func (s *Service) fetchAndWrite(ctx context.Context, r basics.Round, prevFetchCo
 				s.log.Infof("fetchAndWrite(%d): the block is already in the ledger. The catchup is complete", r)
 				return false
 			}
+			failureRank := peerRankDownloadFailed
+			var nbfe noBlockForRoundError
+			if errors.As(err, &nbfe) {
+				failureRank = peerRankNoBlockForRound
+				// remote peer doesn't have the block, try another peer
+				// quit if the the same peer peer encountered errNoBlockForRound more than errNoBlockForRoundThreshold times
+				if s.followLatest {
+					// back off between retries to allow time for the next block to appear;
+					// this will provide 50s (catchupRetryLimit * followLatestBackoff) of
+					// polling when continuously running catchup instead of agreement.
+					time.Sleep(followLatestBackoff)
+				} else {
+					if count := peerErrors[peer]; count > errNoBlockForRoundThreshold {
+						s.log.Infof("fetchAndWrite(%d): remote peers do not have the block. Quitting", r)
+						return false
+					}
+					peerErrors[peer]++
+				}
+			}
 			s.log.Debugf("fetchAndWrite(%v): Could not fetch: %v (attempt %d)", r, err, i)
-			peerSelector.rankPeer(psp, peerRankDownloadFailed)
+			peerSelector.rankPeer(psp, failureRank)
 
 			// we've just failed to retrieve a block; wait until the previous block is fetched before trying again
 			// to avoid the usecase where the first block doesn't exist, and we're making many requests down the chain
@@ -429,9 +470,16 @@ func (s *Service) fetchAndWrite(ctx context.Context, r basics.Round, prevFetchCo
 
 // TODO the following code does not handle the following case: seedLookback upgrades during fetch
 func (s *Service) pipelinedFetch(seedLookback uint64) {
-	parallelRequests := s.parallelBlocks
-	if parallelRequests < seedLookback {
-		parallelRequests = seedLookback
+	maxParallelRequests := s.parallelBlocks
+	if maxParallelRequests < seedLookback {
+		maxParallelRequests = seedLookback
+	}
+	minParallelRequests := seedLookback
+
+	// Start the limited requests at max(1, 'seedLookback')
+	limitedParallelRequests := uint64(1)
+	if limitedParallelRequests < seedLookback {
+		limitedParallelRequests = seedLookback
 	}
 
 	completed := make(map[basics.Round]chan bool)
@@ -461,7 +509,8 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 	nextRound := firstRound
 
 	for {
-		for nextRound < firstRound+basics.Round(parallelRequests) {
+		// launch N=parallelRequests block download go routines.
+		for nextRound < firstRound+basics.Round(limitedParallelRequests) {
 			if s.roundIsNotSupported(nextRound) {
 				// Break out of the loop to avoid fetching
 				// blocks that we don't support.  If there
@@ -485,6 +534,7 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 			nextRound++
 		}
 
+		// wait for the first round to complete before starting the next download.
 		select {
 		case completedOK := <-completed[firstRound]:
 			delete(completed, firstRound)
@@ -493,6 +543,15 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 			if !completedOK {
 				// there was an error; defer will cancel the pipeline
 				return
+			}
+
+			fetchTime := time.Now()
+			fetchDur := fetchTime.Sub(s.prevBlockFetchTime)
+			s.prevBlockFetchTime = fetchTime
+			if fetchDur < uncapParallelDownloadRate {
+				limitedParallelRequests = maxParallelRequests
+			} else {
+				limitedParallelRequests = minParallelRequests
 			}
 
 			// if ledger is busy, pause for some time to let the fetchAndWrite goroutines to finish fetching in-flight blocks.
@@ -689,6 +748,8 @@ func (s *Service) fetchRound(cert agreement.Certificate, verifier *agreement.Asy
 		return
 	}
 
+	peerErrors := map[network.Peer]int{}
+
 	blockHash := bookkeeping.BlockHash(cert.Proposal.BlockDigest) // semantic digest (i.e., hash of the block header), not byte-for-byte digest
 	peerSelector := createPeerSelector(s.net, s.cfg, false)
 	for s.ledger.LastRound() < cert.Round {
@@ -710,8 +771,31 @@ func (s *Service) fetchRound(cert agreement.Certificate, verifier *agreement.Asy
 				return
 			default:
 			}
+			failureRank := peerRankDownloadFailed
+			var nbfe noBlockForRoundError
+			if errors.As(err, &nbfe) {
+				failureRank = peerRankNoBlockForRound
+				// If a peer does not have the block after few attempts it probably has not persisted the block yet.
+				// Give it some time to persist the block and try again.
+				// None, there is no exit condition on too many retries as per the function contract.
+				if count, ok := peerErrors[peer]; ok {
+					if count > errNoBlockForRoundThreshold {
+						time.Sleep(50 * time.Millisecond)
+					}
+					if count > errNoBlockForRoundThreshold*10 {
+						// for the low number of connected peers (like 2) the following scenatio is possible:
+						// - both peers do not have the block
+						// - peer selector punishes one of the peers more than the other
+						// - the punoshed peer gets the block, and the less punished peer stucks.
+						// It this case reset the peer selector to let it re-learn priorities.
+						peerSelector = createPeerSelector(s.net, s.cfg, false)
+					}
+				}
+				peerErrors[peer]++
+			}
+			// remote peer doesn't have the block, try another peer
 			logging.Base().Warnf("fetchRound could not acquire block, fetcher errored out: %v", err)
-			peerSelector.rankPeer(psp, peerRankDownloadFailed)
+			peerSelector.rankPeer(psp, failureRank)
 			continue
 		}
 

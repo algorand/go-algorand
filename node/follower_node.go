@@ -83,7 +83,7 @@ func MakeFollower(log logging.Logger, rootDir string, cfg config.Local, phoneboo
 	node.genesisHash = genesis.Hash()
 	node.devMode = genesis.DevMode
 	var err error
-	node.genesisDirs, err = cfg.EnsureAndResolveGenesisDirs(rootDir, genesis.ID())
+	node.genesisDirs, err = cfg.EnsureAndResolveGenesisDirs(rootDir, genesis.ID(), log)
 	if err != nil {
 		return nil, err
 	}

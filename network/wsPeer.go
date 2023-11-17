@@ -120,6 +120,7 @@ var defaultSendMessageTags = map[protocol.Tag]bool{
 
 // interface allows substituting debug implementation for *websocket.Conn
 type wsPeerWebsocketConn interface {
+	RemoteAddr() net.Addr
 	RemoteAddrString() string
 	NextReader() (int, io.Reader, error)
 	WriteMessage(int, []byte) error
@@ -321,6 +322,12 @@ type HTTPPeer interface {
 	GetHTTPClient() *http.Client
 }
 
+// IPAddressable is addressable with either IPv4 or IPv6 address
+type IPAddressable interface {
+	IPAddr() []byte
+	RoutingAddr() []byte
+}
+
 // UnicastPeer is another possible interface for the opaque Peer.
 // It is possible that we can only initiate a connection to a peer over websockets.
 type UnicastPeer interface {
@@ -371,6 +378,45 @@ func (wp *wsPeerCore) GetNetwork() GossipNode {
 // Version returns the matching version from network.SupportedProtocolVersions
 func (wp *wsPeer) Version() string {
 	return wp.version
+}
+
+func (wp *wsPeer) IPAddr() []byte {
+	remote := wp.conn.RemoteAddr()
+	if remote == nil {
+		return nil
+	}
+	ip := remote.(*net.TCPAddr).IP
+	result := ip.To4()
+	if result == nil {
+		result = ip.To16()
+	}
+	return result
+}
+
+// RoutingAddr returns meaningful routing part of the address:
+// ipv4 for ipv4 addresses
+// top 8 bytes of ipv6 for ipv6 addresses
+// low 4 bytes for ipv4 embedded into ipv6
+// see http://www.tcpipguide.com/free/t_IPv6IPv4AddressEmbedding.htm for details.
+func (wp *wsPeer) RoutingAddr() []byte {
+	isZeros := func(ip []byte) bool {
+		for i := 0; i < len(ip); i++ {
+			if ip[i] != 0 {
+				return false
+			}
+		}
+		return true
+	}
+
+	ip := wp.IPAddr()
+	if len(ip) != net.IPv6len {
+		return ip
+	}
+	// ipv6, check if it's ipv4 embedded
+	if isZeros(ip[0:10]) {
+		return ip[12:16]
+	}
+	return ip[0:8]
 }
 
 // Unicast sends the given bytes to this specific peer. Does not wait for message to be sent.

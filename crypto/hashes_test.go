@@ -53,7 +53,6 @@ func TestHashSum(t *testing.T) {
 
 	dgst := HashObj(TestingHashable{})
 	a.Equal(GenericHashObj(h, TestingHashable{}), dgst[:])
-
 }
 
 func TestEmptyHash(t *testing.T) {

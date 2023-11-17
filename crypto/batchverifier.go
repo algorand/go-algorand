@@ -30,15 +30,22 @@ package crypto
 // #cgo windows,amd64 CFLAGS: -I${SRCDIR}/libs/windows/amd64/include
 // #cgo windows,amd64 LDFLAGS: ${SRCDIR}/libs/windows/amd64/lib/libsodium.a
 // #include <stdint.h>
-// #include "sodium.h"
 // enum {
 //	sizeofPtr = sizeof(void*),
 //	sizeofULongLong = sizeof(unsigned long long),
 // };
+// int ed25519_batch_wrapper(const unsigned char **messages2D,
+//                           const unsigned char **publicKeys2D,
+//                           const unsigned char **signatures2D,
+//                           const unsigned char *messages1D,
+//                           const unsigned long long *mlen,
+//                           const unsigned char *publicKeys1D,
+//                           const unsigned char *signatures1D,
+//                           size_t num,
+//                           int *valid_p);
 import "C"
 import (
 	"errors"
-	"runtime"
 	"unsafe"
 )
 
@@ -120,14 +127,21 @@ func (b *BatchVerifier) Verify() error {
 // if some signatures are invalid, true will be set in failed at the corresponding indexes, and
 // ErrBatchVerificationFailed for err
 func (b *BatchVerifier) VerifyWithFeedback() (failed []bool, err error) {
-	if b.GetNumberOfEnqueuedSignatures() == 0 {
+	if len(b.messages) == 0 {
 		return nil, nil
 	}
-	var messages = make([][]byte, b.GetNumberOfEnqueuedSignatures())
+
+	const estimatedMessageSize = 64
+	msgLengths := make([]uint64, 0, len(b.messages))
+	var messages = make([]byte, 0, len(b.messages)*estimatedMessageSize)
+
+	lenWas := 0
 	for i := range b.messages {
-		messages[i] = HashRep(b.messages[i])
+		messages = HashRepToBuff(b.messages[i], messages)
+		msgLengths = append(msgLengths, uint64(len(messages)-lenWas))
+		lenWas = len(messages)
 	}
-	allValid, failed := batchVerificationImpl(messages, b.publicKeys, b.signatures)
+	allValid, failed := batchVerificationImpl(messages, msgLengths, b.publicKeys, b.signatures)
 	if allValid {
 		return failed, nil
 	}
@@ -137,50 +151,27 @@ func (b *BatchVerifier) VerifyWithFeedback() (failed []bool, err error) {
 // batchVerificationImpl invokes the ed25519 batch verification algorithm.
 // it returns true if all the signatures were authentically signed by the owners
 // otherwise, returns false, and sets the indexes of the failed sigs in failed
-func batchVerificationImpl(messages [][]byte, publicKeys []SignatureVerifier, signatures []Signature) (allSigsValid bool, failed []bool) {
+func batchVerificationImpl(messages []byte, msgLengths []uint64, publicKeys []SignatureVerifier, signatures []Signature) (allSigsValid bool, failed []bool) {
 
-	numberOfSignatures := len(messages)
-
-	messagesAllocation := C.malloc(C.size_t(C.sizeofPtr * numberOfSignatures))
-	messagesLenAllocation := C.malloc(C.size_t(C.sizeofULongLong * numberOfSignatures))
-	publicKeysAllocation := C.malloc(C.size_t(C.sizeofPtr * numberOfSignatures))
-	signaturesAllocation := C.malloc(C.size_t(C.sizeofPtr * numberOfSignatures))
-	valid := C.malloc(C.size_t(C.sizeof_int * numberOfSignatures))
-
-	defer func() {
-		// release staging memory
-		C.free(messagesAllocation)
-		C.free(messagesLenAllocation)
-		C.free(publicKeysAllocation)
-		C.free(signaturesAllocation)
-		C.free(valid)
-	}()
-
-	// load all the data pointers into the array pointers.
-	for i := 0; i < numberOfSignatures; i++ {
-		*(*uintptr)(unsafe.Pointer(uintptr(messagesAllocation) + uintptr(i*C.sizeofPtr))) = uintptr(unsafe.Pointer(&messages[i][0]))
-		*(*C.ulonglong)(unsafe.Pointer(uintptr(messagesLenAllocation) + uintptr(i*C.sizeofULongLong))) = C.ulonglong(len(messages[i]))
-		*(*uintptr)(unsafe.Pointer(uintptr(publicKeysAllocation) + uintptr(i*C.sizeofPtr))) = uintptr(unsafe.Pointer(&publicKeys[i][0]))
-		*(*uintptr)(unsafe.Pointer(uintptr(signaturesAllocation) + uintptr(i*C.sizeofPtr))) = uintptr(unsafe.Pointer(&signatures[i][0]))
-	}
+	numberOfSignatures := len(msgLengths)
+	valid := make([]C.int, numberOfSignatures)
+	messages2D := make([]*C.uchar, numberOfSignatures)
+	publicKeys2D := make([]*C.uchar, numberOfSignatures)
+	signatures2D := make([]*C.uchar, numberOfSignatures)
 
 	// call the batch verifier
-	allValid := C.crypto_sign_ed25519_open_batch(
-		(**C.uchar)(unsafe.Pointer(messagesAllocation)),
-		(*C.ulonglong)(unsafe.Pointer(messagesLenAllocation)),
-		(**C.uchar)(unsafe.Pointer(publicKeysAllocation)),
-		(**C.uchar)(unsafe.Pointer(signaturesAllocation)),
-		C.size_t(len(messages)),
-		(*C.int)(unsafe.Pointer(valid)))
-
-	runtime.KeepAlive(messages)
-	runtime.KeepAlive(publicKeys)
-	runtime.KeepAlive(signatures)
+	allValid := C.ed25519_batch_wrapper(
+		&messages2D[0], &publicKeys2D[0], &signatures2D[0],
+		(*C.uchar)(&messages[0]),
+		(*C.ulonglong)(&msgLengths[0]),
+		(*C.uchar)(&publicKeys[0][0]),
+		(*C.uchar)(&signatures[0][0]),
+		C.size_t(numberOfSignatures),
+		(*C.int)(&valid[0]))
 
 	failed = make([]bool, numberOfSignatures)
 	for i := 0; i < numberOfSignatures; i++ {
-		cint := *(*C.int)(unsafe.Pointer(uintptr(valid) + uintptr(i*C.sizeof_int)))
-		failed[i] = (cint == 0)
+		failed[i] = (valid[i] == 0)
 	}
 	return allValid == 0, failed
 }

@@ -54,6 +54,9 @@ const blockResponseRetryAfter = "3"                                             
 const blockServerMaxBodyLength = 512                                               // we don't really pass meaningful content here, so 512 bytes should be a safe limit
 const blockServerCatchupRequestBufferSize = 10
 
+// BlockResponseLatestRoundHeader is returned in the response header when the requested block is not available
+const BlockResponseLatestRoundHeader = "X-Latest-Round"
+
 // BlockServiceBlockPath is the path to register BlockService as a handler for when using gorilla/mux
 // e.g. .Handle(BlockServiceBlockPath, &ls)
 const BlockServiceBlockPath = "/v{version:[0-9.]+}/{genesisID}/block/{round:[0-9a-z]+}"
@@ -65,6 +68,7 @@ const (
 	BlockDataKey       = "blockData"       // Block-data topic-key in the response
 	CertDataKey        = "certData"        // Cert-data topic-key in the response
 	BlockAndCertValue  = "blockAndCert"    // block+cert request data (as the value of requestDataTypeKey)
+	LatestRoundKey     = "latest"
 )
 
 var errBlockServiceClosed = errors.New("block service is shutting down")
@@ -239,12 +243,13 @@ func (bs *BlockService) ServeHTTP(response http.ResponseWriter, request *http.Re
 	}
 	encodedBlockCert, err := bs.rawBlockBytes(basics.Round(round))
 	if err != nil {
-		switch err.(type) {
+		switch lerr := err.(type) {
 		case ledgercore.ErrNoEntry:
 			// entry cound not be found.
 			ok := bs.redirectRequest(round, response, request)
 			if !ok {
 				response.Header().Set("Cache-Control", blockResponseMissingBlockCacheControl)
+				response.Header().Set(BlockResponseLatestRoundHeader, fmt.Sprintf("%d", lerr.Latest))
 				response.WriteHeader(http.StatusNotFound)
 			}
 			return
@@ -456,8 +461,12 @@ func (bs *BlockService) rawBlockBytes(round basics.Round) ([]byte, error) {
 func topicBlockBytes(log logging.Logger, dataLedger LedgerForBlockService, round basics.Round, requestType string) (network.Topics, uint64) {
 	blk, cert, err := dataLedger.EncodedBlockCert(round)
 	if err != nil {
-		switch err.(type) {
+		switch lerr := err.(type) {
 		case ledgercore.ErrNoEntry:
+			return network.Topics{
+				network.MakeTopic(network.ErrorKey, []byte(blockNotAvailableErrMsg)),
+				network.MakeTopic(LatestRoundKey, binary.BigEndian.AppendUint64([]byte{}, uint64(lerr.Latest))),
+			}, 0
 		default:
 			log.Infof("BlockService topicBlockBytes: %s", err)
 		}

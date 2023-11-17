@@ -22,7 +22,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"golang.org/x/sync/semaphore"
 	"io"
 	"math"
 	"net"
@@ -32,6 +31,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"golang.org/x/sync/semaphore"
 
 	"github.com/algorand/go-algorand/daemon/algod/api/server"
 	"github.com/algorand/go-algorand/ledger/eval"
@@ -272,8 +273,7 @@ func addBlockHelper(t *testing.T) (v2.Handlers, echo.Context, *httptest.Response
 
 	// make an app call txn with eval delta
 	lsig := transactions.LogicSig{Logic: retOneProgram} // int 1
-	program := logic.Program(lsig.Logic)
-	lhash := crypto.HashObj(&program)
+	lhash := logic.HashProgram(lsig.Logic)
 	var sender basics.Address
 	copy(sender[:], lhash[:])
 	stx := transactions.SignedTxn{

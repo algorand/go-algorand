@@ -50,7 +50,7 @@ Duplicate keys at the top level result in an error; however, duplicate keys nest
 #### Special Values
 
 - `null`, `true`, `false` are the only accepted special values.
-- other spcial values such as `NaN`,`+Inf`,`-Inf` are not accepted
+- other special values such as `NaN`,`+Inf`,`-Inf` are not accepted
 
 #### Exponential Notation
 

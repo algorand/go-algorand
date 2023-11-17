@@ -139,7 +139,7 @@ The base64 encoding of the signature will always be printed to stdout. Optionall
 				reportErrorf(tealsignEmptyLogic)
 			}
 
-			progHash = crypto.HashObj(logic.Program(stxn.Lsig.Logic))
+			progHash = logic.HashProgram(stxn.Lsig.Logic)
 		} else {
 			// Otherwise, the contract address is the logic hash
 			parsedAddr, err := basics.UnmarshalChecksumAddress(contractAddr)
