@@ -628,6 +628,10 @@ func TestWebsocketNetworkNoAddress(t *testing.T) {
 
 	noAddressConfig := defaultConfig
 	noAddressConfig.NetAddress = ""
+	// enable services even though NetAddress is not set (to assert they don't override NetAddress)
+	noAddressConfig.EnableGossipService = true
+	noAddressConfig.EnableBlockService = true
+	noAddressConfig.EnableLedgerService = true
 	netB := makeTestWebsocketNodeWithConfig(t, noAddressConfig)
 	netB.config.GossipFanout = 1
 	addrA, postListen := netA.Address()
@@ -636,6 +640,12 @@ func TestWebsocketNetworkNoAddress(t *testing.T) {
 	netB.phonebook.ReplacePeerList([]string{addrA}, "default", PhoneBookEntryRelayRole)
 	netB.Start()
 	defer netStop(t, netB, "B")
+
+	// assert addrB is not listening
+	addrB, postListenB := netB.Address()
+	require.False(t, postListenB)
+	require.Empty(t, addrB)
+
 	counter := newMessageCounter(t, 2)
 	counterDone := counter.done
 	netB.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.TxnTag, MessageHandler: counter}})
@@ -654,6 +664,29 @@ func TestWebsocketNetworkNoAddress(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Errorf("timeout, count=%d, wanted 2", counter.count)
 	}
+}
+
+func TestWebsocketNetworkNoGossipService(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	config := defaultConfig
+	config.EnableGossipService = false
+	netA := makeTestWebsocketNodeWithConfig(t, config)
+	netA.Start()
+	defer netStop(t, netA, "A")
+
+	// assert that the network was started and is listening
+	addrA, postListen := netA.Address()
+	require.True(t, postListen)
+
+	// make HTTP request to gossip service and assert 404
+	var resp *http.Response
+	require.Eventually(t, func() bool {
+		var err error
+		resp, err = http.Get(fmt.Sprintf("%s/v1/%s/gossip", addrA, genesisID))
+		return err == nil
+	}, 2*time.Second, 100*time.Millisecond)
+	require.Equal(t, http.StatusNotFound, resp.StatusCode)
 }
 
 func lineNetwork(t *testing.T, numNodes int) (nodes []*WebsocketNetwork, counters []messageCounterHandler) {
