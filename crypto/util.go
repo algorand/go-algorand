@@ -35,7 +35,7 @@ type Hashable interface {
 }
 
 // HashRep appends the correct hashid before the message to be hashed.
-func HashRep(h Hashable) []byte {
+func HashRep[H Hashable](h H) []byte {
 	hashid, data := h.ToBeHashed()
 	return append([]byte(hashid), data...)
 }
@@ -86,7 +86,7 @@ func Hash(data []byte) Digest {
 }
 
 // HashObj computes a hash of a Hashable object and its type
-func HashObj(h Hashable) Digest {
+func HashObj[H Hashable](h H) Digest {
 	return Hash(HashRep(h))
 }
 
