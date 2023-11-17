@@ -604,10 +604,10 @@ type Local struct {
 	EnableP2P bool `version[31]:"false"`
 
 	// EnableP2PHybridMode turns on both websockets and P2P networking.
-	EnableP2PHybridMode bool `version[31]:"false"`
+	EnableP2PHybridMode bool `version[33]:"false"`
 
 	// P2PListenAddress sets the listen address used for P2P networking, if hybrid mode is set.
-	P2PListenAddress string `version[31]:""`
+	P2PListenAddress string `version[33]:""`
 
 	// P2PPersistPeerID will write the private key used for the node's PeerID to the P2PPrivateKeyLocation.
 	// This is only used when P2PEnable is true. If P2PPrivateKey is not specified, it uses the default location.
@@ -622,7 +622,7 @@ type Local struct {
 	DisableAPIAuth bool `version[30]:"false"`
 
 	// EnableDHT will turn on the hash table for use with capabilities advertisement
-	EnableDHTProviders bool `version[30]:"false"`
+	EnableDHTProviders bool `version[33]:"false"`
 }
 
 // DNSBootstrapArray returns an array of one or more DNS Bootstrap identifiers
