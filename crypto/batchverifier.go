@@ -34,7 +34,10 @@ package crypto
 //	sizeofPtr = sizeof(void*),
 //	sizeofULongLong = sizeof(unsigned long long),
 // };
-// int ed25519_batch_wrapper(const unsigned char *messages1D,
+// int ed25519_batch_wrapper(const unsigned char **messages2D,
+//                           const unsigned char **publicKeys2D,
+//                           const unsigned char **signatures2D,
+//                           const unsigned char *messages1D,
 //                           const unsigned long long *mlen,
 //                           const unsigned char *publicKeys1D,
 //                           const unsigned char *signatures1D,
@@ -124,13 +127,13 @@ func (b *BatchVerifier) Verify() error {
 // if some signatures are invalid, true will be set in failed at the corresponding indexes, and
 // ErrBatchVerificationFailed for err
 func (b *BatchVerifier) VerifyWithFeedback() (failed []bool, err error) {
-	if b.GetNumberOfEnqueuedSignatures() == 0 {
+	if len(b.messages) == 0 {
 		return nil, nil
 	}
 
 	const estimatedMessageSize = 64
 	msgLengths := make([]uint64, 0, len(b.messages))
-	var messages = make([]byte, 0, b.GetNumberOfEnqueuedSignatures()*estimatedMessageSize)
+	var messages = make([]byte, 0, len(b.messages)*estimatedMessageSize)
 
 	lenWas := 0
 	for i := range b.messages {
@@ -152,13 +155,17 @@ func batchVerificationImpl(messages []byte, msgLengths []uint64, publicKeys []Si
 
 	numberOfSignatures := len(msgLengths)
 	valid := make([]C.int, numberOfSignatures)
+	messages2D := make([]*C.uchar, numberOfSignatures)
+	publicKeys2D := make([]*C.uchar, numberOfSignatures)
+	signatures2D := make([]*C.uchar, numberOfSignatures)
 
 	// call the batch verifier
 	allValid := C.ed25519_batch_wrapper(
+		&messages2D[0], &publicKeys2D[0], &signatures2D[0],
 		(*C.uchar)(&messages[0]),
 		(*C.ulonglong)(&msgLengths[0]),
-		(*C.uchar)(&(publicKeys[0][0])),
-		(*C.uchar)(&(signatures[0][0])),
+		(*C.uchar)(&publicKeys[0][0]),
+		(*C.uchar)(&signatures[0][0]),
 		C.size_t(numberOfSignatures),
 		(*C.int)(&valid[0]))
 
