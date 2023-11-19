@@ -770,12 +770,14 @@ func LoadConfigurableConsensusProtocols(dataDirectory string) error {
 }
 
 // SetConfigurableConsensusProtocols sets the configurable protocols.
-func SetConfigurableConsensusProtocols(newConsensus ConsensusProtocols) {
+func SetConfigurableConsensusProtocols(newConsensus ConsensusProtocols) ConsensusProtocols {
+	oldConsensus := Consensus
 	Consensus = newConsensus
 	// Set allocation limits
 	for _, p := range Consensus {
 		checkSetAllocBounds(p)
 	}
+	return oldConsensus
 }
 
 // PreloadConfigurableConsensusProtocols loads the configurable protocols from the data directory
