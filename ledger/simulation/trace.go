@@ -292,7 +292,7 @@ type TransactionTrace struct {
 	// it produced should be reverted once the program exits.
 	ClearStateRollback bool
 	// ClearStateRollbackError contains the error message explaining why the clear state program failed. This
-	// field will only be populated if ClearStateRollback is true and the failure was due to an opcode error.
+	// field will only be populated if ClearStateRollback is true and the failure was due to an execution error.
 	ClearStateRollbackError string
 
 	// LogicSigTrace contains the trace for a logicsig evaluation, if the transaction is approved by a logicsig.
