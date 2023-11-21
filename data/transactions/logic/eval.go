@@ -1169,7 +1169,7 @@ func eval(program []byte, cx *EvalContext) (pass bool, err error) {
 			}
 
 			// Ensure we update the tracer before exiting
-			cx.Tracer.AfterProgram(cx, tracerErr)
+			cx.Tracer.AfterProgram(cx, pass, tracerErr)
 
 			if x != nil {
 				// Panic again to trigger higher-level recovery and error reporting

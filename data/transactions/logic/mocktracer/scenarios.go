@@ -379,7 +379,7 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 				},
 				OpcodeEvents(3, false),
 				{
-					AfterProgram(logic.ModeApp, false),
+					AfterProgram(logic.ModeApp, true, false),
 					AfterTxn(protocol.ApplicationCallTx, expectedAD.EvalDelta.InnerTxns[0].ApplyData, false),
 					AfterTxnGroup(1, nil, false), // end first itxn group
 					AfterOpcode(false),
@@ -397,7 +397,7 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 				},
 				OpcodeEvents(3, false),
 				{
-					AfterProgram(logic.ModeApp, false),
+					AfterProgram(logic.ModeApp, true, false),
 					AfterTxn(protocol.ApplicationCallTx, expectedAD, false),
 				},
 			}),
@@ -458,7 +458,7 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 					},
 					OpcodeEvents(4, shouldError),
 					{
-						AfterProgram(logic.ModeApp, shouldError),
+						AfterProgram(logic.ModeApp, false, shouldError),
 						AfterTxn(protocol.ApplicationCallTx, expectedADNoED, true),
 					},
 				}),
@@ -510,11 +510,11 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 					},
 					OpcodeEvents(3, shouldError),
 					{
-						AfterProgram(logic.ModeApp, shouldError),
+						AfterProgram(logic.ModeApp, false, shouldError),
 						AfterTxn(protocol.ApplicationCallTx, expectedInnerAppCallADNoEvalDelta, true),
 						AfterTxnGroup(1, nil, true), // end first itxn group
 						AfterOpcode(true),
-						AfterProgram(logic.ModeApp, true),
+						AfterProgram(logic.ModeApp, false, true),
 						AfterTxn(protocol.ApplicationCallTx, expectedADNoED, true),
 					},
 				}),
@@ -565,14 +565,14 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 					},
 					OpcodeEvents(3, false),
 					{
-						AfterProgram(logic.ModeApp, false),
+						AfterProgram(logic.ModeApp, true, false),
 						AfterTxn(protocol.ApplicationCallTx, expectedInnerAppCallAD, false),
 						AfterTxnGroup(1, nil, false), // end first itxn group
 						AfterOpcode(false),
 					},
 					OpcodeEvents(4, shouldError),
 					{
-						AfterProgram(logic.ModeApp, shouldError),
+						AfterProgram(logic.ModeApp, false, shouldError),
 						AfterTxn(protocol.ApplicationCallTx, expectedADNoED, true),
 					},
 				}),
@@ -625,7 +625,7 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 						},
 						OpcodeEvents(3, false),
 						{
-							AfterProgram(logic.ModeApp, false),
+							AfterProgram(logic.ModeApp, true, false),
 							AfterTxn(protocol.ApplicationCallTx, expectedInnerAppCallAD, false),
 							AfterTxnGroup(1, nil, false), // end first itxn group
 							AfterOpcode(false),
@@ -638,7 +638,7 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 							AfterTxn(protocol.PaymentTx, expectedInnerPay1AD, true),
 							AfterTxnGroup(2, nil, true), // end second itxn group
 							AfterOpcode(true),
-							AfterProgram(logic.ModeApp, true),
+							AfterProgram(logic.ModeApp, false, true),
 							AfterTxn(protocol.ApplicationCallTx, expectedADNoED, true),
 						},
 					}),
@@ -691,7 +691,7 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 						},
 						OpcodeEvents(3, false),
 						{
-							AfterProgram(logic.ModeApp, false),
+							AfterProgram(logic.ModeApp, true, false),
 							AfterTxn(protocol.ApplicationCallTx, expectedInnerAppCallAD, false),
 							AfterTxnGroup(1, nil, false), // end first itxn group
 							AfterOpcode(false),
@@ -706,7 +706,7 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 							AfterTxn(protocol.PaymentTx, expectedInnerPay2AD, true),
 							AfterTxnGroup(2, nil, true), // end second itxn group
 							AfterOpcode(true),
-							AfterProgram(logic.ModeApp, true),
+							AfterProgram(logic.ModeApp, false, true),
 							AfterTxn(protocol.ApplicationCallTx, expectedADNoED, true),
 						},
 					}),
@@ -754,7 +754,7 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 					},
 					OpcodeEvents(3, false),
 					{
-						AfterProgram(logic.ModeApp, false),
+						AfterProgram(logic.ModeApp, true, false),
 						AfterTxn(protocol.ApplicationCallTx, expectedInnerAppCallAD, false),
 						AfterTxnGroup(1, nil, false), // end first itxn group
 						AfterOpcode(false),
@@ -772,7 +772,7 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 					},
 					OpcodeEvents(3, shouldError),
 					{
-						AfterProgram(logic.ModeApp, shouldError),
+						AfterProgram(logic.ModeApp, false, shouldError),
 						AfterTxn(protocol.ApplicationCallTx, expectedADNoED, true),
 					},
 				}),

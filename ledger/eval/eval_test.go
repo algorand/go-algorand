@@ -543,7 +543,7 @@ int 1`,
 					},
 					mocktracer.OpcodeEvents(3, false),
 					{
-						mocktracer.AfterProgram(logic.ModeApp, false),
+						mocktracer.AfterProgram(logic.ModeApp, true, false),
 						mocktracer.AfterTxn(protocol.ApplicationCallTx, expectedBasicAppCallAD, false), // end basicAppCallTxn
 						mocktracer.BeforeTxn(protocol.PaymentTx),                                       // start payTxn
 						mocktracer.AfterTxn(protocol.PaymentTx, expectedPayTxnAD, false),               // end payTxn
@@ -569,7 +569,7 @@ int 1`,
 					},
 					mocktracer.OpcodeEvents(3, hasError),
 					{
-						mocktracer.AfterProgram(logic.ModeApp, hasError),
+						mocktracer.AfterProgram(logic.ModeApp, false, hasError),
 						mocktracer.AfterTxn(protocol.ApplicationCallTx, expectedBasicAppCallAD, true), // end basicAppCallTxn
 						mocktracer.AfterTxnGroup(3, &expectedBasicAppCallDelta, true),
 					},

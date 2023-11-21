@@ -74,6 +74,9 @@ type Event struct {
 	// only for BeforeTxnGroup and AfterTxnGroup
 	GroupSize int
 
+	// only for AfterProgram
+	Pass bool
+
 	// only for AfterOpcode, AfterProgram, AfterTxn, and AfterTxnGroup
 	HasError bool
 
@@ -112,8 +115,8 @@ func AfterTxn(txnType protocol.TxType, ad transactions.ApplyData, hasError bool)
 }
 
 // AfterProgram creates a new Event with the type AfterProgramEvent
-func AfterProgram(mode logic.RunMode, hasError bool) Event {
-	return Event{Type: AfterProgramEvent, LogicEvalMode: mode, HasError: hasError}
+func AfterProgram(mode logic.RunMode, pass bool, hasError bool) Event {
+	return Event{Type: AfterProgramEvent, LogicEvalMode: mode, Pass: pass, HasError: hasError}
 }
 
 // BeforeOpcode creates a new Event with the type BeforeOpcodeEvent
@@ -189,8 +192,8 @@ func (d *Tracer) BeforeProgram(cx *logic.EvalContext) {
 }
 
 // AfterProgram mocks the logic.EvalTracer.AfterProgram method
-func (d *Tracer) AfterProgram(cx *logic.EvalContext, evalError error) {
-	d.Events = append(d.Events, AfterProgram(cx.RunMode(), evalError != nil))
+func (d *Tracer) AfterProgram(cx *logic.EvalContext, pass bool, evalError error) {
+	d.Events = append(d.Events, AfterProgram(cx.RunMode(), pass, evalError != nil))
 }
 
 // BeforeOpcode mocks the logic.EvalTracer.BeforeOpcode method
