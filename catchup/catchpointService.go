@@ -373,8 +373,9 @@ func (cs *CatchpointCatchupService) processStageLatestBlockDownload() (err error
 	var blk *bookkeeping.Block
 	var cert *agreement.Certificate
 	// check to see if the current ledger might have this block. If so, we should try this first instead of downloading anything.
-	if ledgerBlock, err := cs.ledger.Block(blockRound); err == nil {
+	if ledgerBlock, ledgerCert, err := cs.ledger.BlockCert(blockRound); err == nil {
 		blk = &ledgerBlock
+		cert = &ledgerCert
 	}
 	var protoParams config.ConsensusParams
 	var ok bool
@@ -552,8 +553,9 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 
 		blk = nil
 		// check to see if the current ledger might have this block. If so, we should try this first instead of downloading anything.
-		if ledgerBlock, err := cs.ledger.Block(topBlock.Round() - basics.Round(blocksFetched)); err == nil {
+		if ledgerBlock, ledgerCert, err := cs.ledger.BlockCert(topBlock.Round() - basics.Round(blocksFetched)); err == nil {
 			blk = &ledgerBlock
+			cert = &ledgerCert
 		} else {
 			switch err.(type) {
 			case ledgercore.ErrNoEntry:

@@ -22,6 +22,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/components/mocks"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
@@ -35,7 +36,7 @@ import (
 type catchpointCatchupLedger struct {
 }
 
-func (l *catchpointCatchupLedger) Block(rnd basics.Round) (blk bookkeeping.Block, err error) {
+func (l *catchpointCatchupLedger) BlockCert(rnd basics.Round) (blk bookkeeping.Block, cert agreement.Certificate, err error) {
 	blk = bookkeeping.Block{
 		BlockHeader: bookkeeping.BlockHeader{
 			UpgradeState: bookkeeping.UpgradeState{
@@ -43,13 +44,14 @@ func (l *catchpointCatchupLedger) Block(rnd basics.Round) (blk bookkeeping.Block
 			},
 		},
 	}
+	cert = agreement.Certificate{}
 	commitments, err := blk.PaysetCommit()
 	if err != nil {
-		return blk, err
+		return blk, cert, err
 	}
 	blk.TxnCommitments = commitments
 
-	return blk, nil
+	return blk, cert, nil
 }
 
 func (l *catchpointCatchupLedger) GenesisHash() (d crypto.Digest) {
