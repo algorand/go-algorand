@@ -33,10 +33,9 @@ type testGenesisCfg struct {
 // TestGenesisOption provides functional options for testGenesisCfg.
 type TestGenesisOption func(*testGenesisCfg)
 
-// TestGenesisRewardsPoolSize configures the rewards pool size in the genesis block.
-func TestGenesisRewardsPoolSize(amount basics.MicroAlgos) TestGenesisOption {
-	return func(cfg *testGenesisCfg) { cfg.rewardsPoolAmount = amount }
-}
+// TurnOffRewards turns off the rewards pool for tests that are sensistive to
+// "surprise" balance changes.
+var TurnOffRewards = func(cfg *testGenesisCfg) { cfg.rewardsPoolAmount = basics.MicroAlgos{Raw: 100_000} }
 
 // NewTestGenesis creates a bunch of accounts, splits up 10B algos
 // between them and the rewardspool and feesink, and gives out the

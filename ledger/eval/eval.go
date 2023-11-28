@@ -788,11 +788,13 @@ func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, evalOpts 
 		return nil, fmt.Errorf("overflowed subtracting rewards for block %v", hdr.Round)
 	}
 
-	miningIncentive, _ := basics.NewPercent(proto.MiningPercent).DivvyAlgos(prevHeader.FeesCollected)
-	err = eval.state.Move(prevHeader.FeeSink, prevHeader.Proposer, miningIncentive, nil, nil)
-	if err != nil {
-		// This should be impossible. The fees were just collected, and the FeeSink cannot be emptied.
-		return nil, fmt.Errorf("unable to Move mining incentive")
+	if eval.eligibleForIncentives(prevHeader.Proposer) {
+		miningIncentive, _ := basics.NewPercent(proto.MiningPercent).DivvyAlgos(prevHeader.FeesCollected)
+		err = eval.state.Move(prevHeader.FeeSink, prevHeader.Proposer, miningIncentive, nil, nil)
+		if err != nil {
+			// This should be impossible. The fees were just collected, and the FeeSink cannot be emptied.
+			return nil, fmt.Errorf("unable to Move mining incentive")
+		}
 	}
 
 	if eval.Tracer != nil {
@@ -800,6 +802,46 @@ func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, evalOpts 
 	}
 
 	return eval, nil
+}
+
+const (
+	// these would become ConsensusParameters if we ever wanted to change them
+
+	// incentiveMinBalance is the minimum balance an account must have to be
+	// eligible for incentives. It serves a couple purposes. First, it sets a
+	// manageable upper bound on the total number of incentivized participating
+	// accounts.  This means it is possible to track these accounts in memory,
+	// which is required to ensure absenteeism checking time is bounded. Second,
+	// it ensures that smaller accounts continue to operate for the same
+	// motivations they had before block incentives were introduced. Without
+	// that assurance, it is difficult to model their behaviour - might many
+	// participants join for the hope of easy financial rewards, but without
+	// caring enough to run a high-quality node?
+	incentiveMinBalance = 100_000 * 1_000_000 // 100K algos
+
+	// incentiveMaxBalance is the maximum balance an account might have to be
+	// eligible for incentives. It encourages large accounts to split their
+	// stake to add resilience to consensus in the case of outages.  Of course,
+	// nothing in protocol can prevent such accounts from running nodes that
+	// share fate (same machine, same data center, etc), but this serves as a
+	// gentle reminder.
+	incentiveMaxBalance = 100_000_000 * 1_000_000 // 100M algos
+)
+
+func (eval *BlockEvaluator) eligibleForIncentives(proposer basics.Address) bool {
+	proposerState, err := eval.state.Get(proposer, true)
+	if err != nil {
+		return false
+	}
+	if proposerState.MicroAlgos.Raw < incentiveMinBalance {
+		return false
+	}
+	if proposerState.MicroAlgos.Raw > incentiveMaxBalance {
+		return false
+	}
+	// We'll also need a flag on the account, set to true if the account
+	// properly key-regged for incentives by including the "entry fee".
+	return true
 }
 
 // hotfix for testnet stall 08/26/2019; move some algos from testnet bank to rewards pool to give it enough time until protocol upgrade occur.
