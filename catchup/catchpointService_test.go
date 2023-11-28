@@ -35,7 +35,6 @@ import (
 )
 
 type catchpointCatchupLedger struct {
-	blk bookkeeping.Block
 }
 
 func (l *catchpointCatchupLedger) BlockCert(rnd basics.Round) (blk bookkeeping.Block, cert agreement.Certificate, err error) {
