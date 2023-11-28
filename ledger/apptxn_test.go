@@ -35,7 +35,7 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-// TestPayAction ensures a pay in teal affects balances
+// TestPayAction ensures a inner pay transaction affects balances
 func TestPayAction(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -59,8 +59,13 @@ func TestPayAction(t *testing.T) {
         `))
 
 		// We're going to test some mining effects here too, so that we have an inner transaction example.
-		// Do a block with no txns, so the fee sink balance as we start the next block is stable
-		dl.fullBlock()
+		proposer := basics.Address{0x01, 0x02, 0x03}
+		dl.txn(&txntest.Txn{
+			Type:     "pay",
+			Sender:   addrs[7],
+			Receiver: proposer,
+			Amount:   1_000_000 * 1_000_000, // 1 million algos is surely an eligible amount
+		})
 
 		payout1 := txntest.Txn{
 			Type:          "appl",
@@ -69,7 +74,6 @@ func TestPayAction(t *testing.T) {
 			Accounts:      []basics.Address{addrs[1]}, // pay self
 		}
 
-		proposer := addrs[7]
 		presink := micros(dl.t, dl.generator, genBalances.FeeSink)
 		preprop := micros(dl.t, dl.generator, proposer)
 		dl.beginBlock()

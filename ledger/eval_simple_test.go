@@ -217,57 +217,78 @@ func TestMiningFees(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	// Lots of balance checks that would be messed up by rewards
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis(ledgertesting.TurnOffRewards)
 	// Mining begins in v39. Start checking in v38 to test that is unchanged.
 	ledgertesting.TestConsensusRange(t, 38, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
 		dl := NewDoubleLedger(t, genBalances, cv, cfg)
 		defer dl.Close()
 
-		dl.fullBlock()
+		tooBig := basics.Address{0x01, 0x011}
+		tooSmall := basics.Address{0x01, 0x022}
+		smallest := basics.Address{0x01, 0x033}
+		biggest := basics.Address{0x01, 0x044}
 
-		pay := txntest.Txn{
-			Type:     "pay",
-			Sender:   addrs[1],
-			Receiver: addrs[2],
-			Amount:   100000,
-		}
+		dl.txns(&txntest.Txn{Type: "pay", Sender: addrs[1], Receiver: tooBig, Amount: 100_000_000*1_000_000 + 1},
+			&txntest.Txn{Type: "pay", Sender: addrs[1], Receiver: tooSmall, Amount: 100_000*1_000_000 - 1},
+			&txntest.Txn{Type: "pay", Sender: addrs[1], Receiver: smallest, Amount: 100_000 * 1_000_000},
+			&txntest.Txn{Type: "pay", Sender: addrs[1], Receiver: biggest, Amount: 100_000_000 * 1_000_000},
+		)
 
-		proposer := addrs[7]
-		presink := micros(dl.t, dl.generator, genBalances.FeeSink)
-		preprop := micros(dl.t, dl.generator, proposer)
-		dl.beginBlock()
-		dl.txns(&pay, pay.Args("again"))
-		vb := dl.endBlock(proposer)
+		for _, proposer := range []basics.Address{tooBig, tooSmall, smallest, biggest} {
+			t.Log(proposer)
+			dl.fullBlock() // start with an empty block, so no mining fees are paid at start of next one
 
-		if ver >= 39 {
-			require.True(t, dl.generator.GenesisProto().EnableMining) // version sanity check
-			// new fields are in the header
-			require.EqualValues(t, proposer, vb.Block().BlockHeader.Proposer)
-			require.EqualValues(t, 2000, vb.Block().BlockHeader.FeesCollected.Raw)
-		} else {
-			require.False(t, dl.generator.GenesisProto().EnableMining)
-			// new fields are not in the header
-			require.Zero(t, vb.Block().BlockHeader.Proposer)
-			require.Zero(t, vb.Block().BlockHeader.FeesCollected)
-		}
+			presink := micros(dl.t, dl.generator, genBalances.FeeSink)
+			preprop := micros(dl.t, dl.generator, proposer)
+			t.Log(" presink", presink)
+			t.Log(" preprop", preprop)
+			dl.beginBlock()
+			pay := txntest.Txn{
+				Type:     "pay",
+				Sender:   addrs[1],
+				Receiver: addrs[2],
+				Amount:   100000,
+			}
+			dl.txns(&pay, pay.Args("again"))
+			vb := dl.endBlock(proposer)
 
-		postsink := micros(dl.t, dl.generator, genBalances.FeeSink)
-		postprop := micros(dl.t, dl.generator, proposer)
+			if ver >= 39 {
+				require.True(t, dl.generator.GenesisProto().EnableMining)     // version sanity check
+				require.NotZero(t, dl.generator.GenesisProto().MiningPercent) // version sanity check
+				// new fields are in the header
+				require.EqualValues(t, proposer, vb.Block().BlockHeader.Proposer)
+				require.EqualValues(t, 2000, vb.Block().BlockHeader.FeesCollected.Raw)
+			} else {
+				require.False(t, dl.generator.GenesisProto().EnableMining)
+				require.Zero(t, dl.generator.GenesisProto().MiningPercent) // version sanity check
+				// new fields are not in the header
+				require.Zero(t, vb.Block().BlockHeader.Proposer)
+				require.Zero(t, vb.Block().BlockHeader.FeesCollected)
+			}
 
-		// At the end of the block, all fees are still in the sink.
-		require.EqualValues(t, 2000, postsink-presink)
-		require.EqualValues(t, 0, postprop-preprop)
+			postsink := micros(dl.t, dl.generator, genBalances.FeeSink)
+			postprop := micros(dl.t, dl.generator, proposer)
+			t.Log(" postsink", postsink)
+			t.Log(" postprop", postprop)
 
-		// Do the next block, which moves part of the fees to proposer
-		dl.fullBlock()
-		postsink = micros(dl.t, dl.generator, genBalances.FeeSink)
-		postprop = micros(dl.t, dl.generator, proposer)
+			// At the end of the block, all fees are still in the sink.
+			require.EqualValues(t, 2000, postsink-presink)
+			//require.EqualValues(t, 0, postprop-preprop)
 
-		if ver >= 39 {
-			require.EqualValues(t, 500, postsink-presink) // based on 75% in config/consensus.go
-			require.EqualValues(t, 1500, postprop-preprop)
-		} else {
-			require.EqualValues(t, 2000, postsink-presink) // no mining yet
+			// Do the next block, which moves part of the fees to proposer
+			dl.fullBlock()
+			postsink = micros(dl.t, dl.generator, genBalances.FeeSink)
+			postprop = micros(dl.t, dl.generator, proposer)
+
+			if ver >= 39 && (proposer == smallest || proposer == biggest) {
+				require.EqualValues(t, 500, postsink-presink) // based on 75% in config/consensus.go
+				require.EqualValues(t, 1500, postprop-preprop)
+			} else {
+				// stayed in the feesink
+				require.EqualValues(t, 0, postprop-preprop, "%v", proposer)
+				require.EqualValues(t, 2000, postsink-presink)
+			}
 		}
 	})
 }

@@ -244,9 +244,8 @@ type doubleLedgerAcctModel struct {
 }
 
 func newDoubleLedgerAcctModel(t testing.TB, proto protocol.ConsensusVersion, inMem bool) *doubleLedgerAcctModel {
-	// set 1 Algo for rewards pool size -- rewards math not supported by newMapOnlineAcctModel
-	genesisOpt := ledgertesting.TestGenesisRewardsPoolSize(basics.MicroAlgos{Raw: 1_000_000})
-	genBalances, genAddrs, genSecrets := ledgertesting.NewTestGenesis(genesisOpt)
+	// rewards math not supported by newMapOnlineAcctModel
+	genBalances, genAddrs, genSecrets := ledgertesting.NewTestGenesis(ledgertesting.TurnOffRewards)
 	cfg := config.GetDefaultLocal()
 	opts := []simpleLedgerOption{simpleLedgerNotArchival()}
 	if !inMem {
