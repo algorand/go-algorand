@@ -12,10 +12,10 @@ Each set of participation keys includes voting keys for each and every round
 for their validity range, in addition to state proof secrets for each and every
 state proof round (a state proof is not created every round). Because there
 are separate keys for each action we sometimes refer to the voting keys as
-**OneTimeKeys**. After each key is used, the secret is permenantly deleted from
+**OneTimeKeys**. After each key is used, the secret is permanently deleted from
 the node. This is a security property that eliminates the possibility of votes
 being changed in the event a node becomes compromised at a later date. This
-helps ensure finality even if a serious security breech were to occur.
+helps ensure finality even if a serious security breach were to occur.
 
 Aside from the **Registration** event, keys are completely decoupled from the
 account secrets. This is another security property. A securely managed account
@@ -24,13 +24,13 @@ reason tools like **algokey** are available for fully offline transaction
 signing.
 
 Given a set of participation keys, and a signed key registration transaction,
-an algod node can be configured to participation in the consensus protocol.
+an algod node can be configured to participate in the consensus protocol.
 For each round a single-use key is used to verify the authenticity of messages.
 
 ## Key Creation
 
 Keys can be created with **goal** or **algokey**. There are a number of
-shortcuts and helpers, especially in **goal**, which wont be covered here.
+shortcuts and helpers, especially in **goal**, which won't be covered here.
 
 Required parameters are as follows:
 * **First**: the first round the keys will be valid for.
@@ -121,7 +121,7 @@ registered with the network. This is done using a special key registration
 transaction.
 
 Like account creation, there are utilities in both **goal** and **algokey**.
-For this document we'll use **algokey**. Because it is designed to use offline
+For this document we'll use **algokey**. Because it is designed to be used offline
 you need to provide the current round.
 
 It has the following arguments:
