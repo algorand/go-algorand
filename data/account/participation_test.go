@@ -606,3 +606,13 @@ func BenchmarkParticipationSign(b *testing.B) {
 		_ = part.Voting.Sign(ephID, msg)
 	}
 }
+
+func BenchmarkID(b *testing.B) {
+	pki := ParticipationKeyIdentity{}
+	b.Run("existing", func(b *testing.B) {
+		b.ReportAllocs() // demonstrate this is a single alloc
+		for i := 0; i < b.N; i++ {
+			pki.ID()
+		}
+	})
+}

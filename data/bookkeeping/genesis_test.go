@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -154,4 +155,31 @@ func TestGenesis_Balances(t *testing.T) {
 			assert.Equalf(t, tt.want, got, "Balances()")
 		})
 	}
+}
+
+func (genesis Genesis) hashOld() crypto.Digest {
+	return hashObjOld(genesis)
+}
+
+// hashObjOld computes a hash of a Hashable object and its type, doing so the
+// "old way" to show it requires an extra allocation in benchmarks.
+func hashObjOld(h crypto.Hashable) crypto.Digest {
+	return crypto.Hash(crypto.HashRep(h))
+}
+
+func BenchmarkGenesisHash(b *testing.B) {
+	b.ReportAllocs()
+	g := Genesis{}
+	b.Run("new", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			g.Hash()
+		}
+	})
+	b.Run("old", func(b *testing.B) {
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			g.hashOld()
+		}
+	})
 }

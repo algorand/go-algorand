@@ -373,8 +373,9 @@ func (cs *CatchpointCatchupService) processStageLatestBlockDownload() (err error
 	var blk *bookkeeping.Block
 	var cert *agreement.Certificate
 	// check to see if the current ledger might have this block. If so, we should try this first instead of downloading anything.
-	if ledgerBlock, err := cs.ledger.Block(blockRound); err == nil {
+	if ledgerBlock, ledgerCert, err0 := cs.ledger.BlockCert(blockRound); err0 == nil {
 		blk = &ledgerBlock
+		cert = &ledgerCert
 	}
 	var protoParams config.ConsensusParams
 	var ok bool
@@ -551,15 +552,17 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 		}
 
 		blk = nil
+		cert = nil
 		// check to see if the current ledger might have this block. If so, we should try this first instead of downloading anything.
-		if ledgerBlock, err := cs.ledger.Block(topBlock.Round() - basics.Round(blocksFetched)); err == nil {
+		if ledgerBlock, ledgerCert, err0 := cs.ledger.BlockCert(topBlock.Round() - basics.Round(blocksFetched)); err0 == nil {
 			blk = &ledgerBlock
+			cert = &ledgerCert
 		} else {
-			switch err.(type) {
+			switch err0.(type) {
 			case ledgercore.ErrNoEntry:
 				// this is expected, ignore this one.
 			default:
-				cs.log.Warnf("processStageBlocksDownload encountered the following error when attempting to retrieve the block for round %d : %v", topBlock.Round()-basics.Round(blocksFetched), err)
+				cs.log.Warnf("processStageBlocksDownload encountered the following error when attempting to retrieve the block for round %d : %v", topBlock.Round()-basics.Round(blocksFetched), err0)
 			}
 		}
 

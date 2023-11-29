@@ -80,8 +80,8 @@ func (id *ParticipationKeyIdentity) ToBeHashed() (protocol.HashID, []byte) {
 }
 
 // ID creates a ParticipationID hash from the identity file.
-func (id ParticipationKeyIdentity) ID() ParticipationID {
-	return ParticipationID(crypto.HashObj(&id))
+func (id *ParticipationKeyIdentity) ID() ParticipationID {
+	return ParticipationID(crypto.HashObj(id))
 }
 
 // ID computes a ParticipationID.

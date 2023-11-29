@@ -2663,23 +2663,27 @@ func GenesisAllocationMaxSize() (s int) {
 func (z *LightBlockHeader) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0001Len := uint32(4)
-	var zb0001Mask uint8 /* 5 bits */
+	zb0001Len := uint32(5)
+	var zb0001Mask uint8 /* 6 bits */
 	if (*z).Seed.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x1
 	}
-	if (*z).GenesisHash.MsgIsZero() {
+	if (*z).BlockHash.MsgIsZero() {
 		zb0001Len--
-		zb0001Mask |= 0x4
+		zb0001Mask |= 0x2
 	}
-	if (*z).Round.MsgIsZero() {
+	if (*z).GenesisHash.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x8
 	}
-	if (*z).Sha256TxnCommitment.MsgIsZero() {
+	if (*z).Round.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x10
+	}
+	if (*z).Sha256TxnCommitment.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x20
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
@@ -2689,17 +2693,22 @@ func (z *LightBlockHeader) MarshalMsg(b []byte) (o []byte) {
 			o = append(o, 0xa1, 0x30)
 			o = (*z).Seed.MarshalMsg(o)
 		}
-		if (zb0001Mask & 0x4) == 0 { // if not empty
+		if (zb0001Mask & 0x2) == 0 { // if not empty
+			// string "1"
+			o = append(o, 0xa1, 0x31)
+			o = (*z).BlockHash.MarshalMsg(o)
+		}
+		if (zb0001Mask & 0x8) == 0 { // if not empty
 			// string "gh"
 			o = append(o, 0xa2, 0x67, 0x68)
 			o = (*z).GenesisHash.MarshalMsg(o)
 		}
-		if (zb0001Mask & 0x8) == 0 { // if not empty
+		if (zb0001Mask & 0x10) == 0 { // if not empty
 			// string "r"
 			o = append(o, 0xa1, 0x72)
 			o = (*z).Round.MarshalMsg(o)
 		}
-		if (zb0001Mask & 0x10) == 0 { // if not empty
+		if (zb0001Mask & 0x20) == 0 { // if not empty
 			// string "tc"
 			o = append(o, 0xa2, 0x74, 0x63)
 			o = (*z).Sha256TxnCommitment.MarshalMsg(o)
@@ -2736,6 +2745,14 @@ func (z *LightBlockHeader) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalSt
 			bts, err = (*z).Seed.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Seed")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).BlockHash.UnmarshalMsgWithState(bts, st)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "BlockHash")
 				return
 			}
 		}
@@ -2792,6 +2809,12 @@ func (z *LightBlockHeader) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalSt
 					err = msgp.WrapError(err, "Seed")
 					return
 				}
+			case "1":
+				bts, err = (*z).BlockHash.UnmarshalMsgWithState(bts, st)
+				if err != nil {
+					err = msgp.WrapError(err, "BlockHash")
+					return
+				}
 			case "r":
 				bts, err = (*z).Round.UnmarshalMsgWithState(bts, st)
 				if err != nil {
@@ -2833,18 +2856,18 @@ func (_ *LightBlockHeader) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *LightBlockHeader) Msgsize() (s int) {
-	s = 1 + 2 + (*z).Seed.Msgsize() + 2 + (*z).Round.Msgsize() + 3 + (*z).GenesisHash.Msgsize() + 3 + (*z).Sha256TxnCommitment.Msgsize()
+	s = 1 + 2 + (*z).Seed.Msgsize() + 2 + (*z).BlockHash.Msgsize() + 2 + (*z).Round.Msgsize() + 3 + (*z).GenesisHash.Msgsize() + 3 + (*z).Sha256TxnCommitment.Msgsize()
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *LightBlockHeader) MsgIsZero() bool {
-	return ((*z).Seed.MsgIsZero()) && ((*z).Round.MsgIsZero()) && ((*z).GenesisHash.MsgIsZero()) && ((*z).Sha256TxnCommitment.MsgIsZero())
+	return ((*z).Seed.MsgIsZero()) && ((*z).BlockHash.MsgIsZero()) && ((*z).Round.MsgIsZero()) && ((*z).GenesisHash.MsgIsZero()) && ((*z).Sha256TxnCommitment.MsgIsZero())
 }
 
 // MaxSize returns a maximum valid message size for this message type
 func LightBlockHeaderMaxSize() (s int) {
-	s = 1 + 2 + committee.SeedMaxSize() + 2 + basics.RoundMaxSize() + 3 + crypto.DigestMaxSize() + 3 + crypto.GenericDigestMaxSize()
+	s = 1 + 2 + committee.SeedMaxSize() + 2 + BlockHashMaxSize() + 2 + basics.RoundMaxSize() + 3 + crypto.DigestMaxSize() + 3 + crypto.GenericDigestMaxSize()
 	return
 }
 
