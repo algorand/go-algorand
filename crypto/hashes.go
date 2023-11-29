@@ -118,7 +118,7 @@ func (z *HashFactory) Validate() error {
 }
 
 // GenericHashObj Makes it easier to sum using hash interface and Hashable interface
-func GenericHashObj(hsh hash.Hash, h Hashable) []byte {
+func GenericHashObj[H Hashable](hsh hash.Hash, h H) []byte {
 	rep := HashRep(h)
 	return hashBytes(hsh, rep)
 }

@@ -591,7 +591,9 @@ func (wn *WebsocketNetwork) setup() {
 	wn.upgrader.EnableCompression = false
 	wn.lastPeerConnectionsSent = time.Now()
 	wn.router = mux.NewRouter()
-	wn.router.Handle(GossipNetworkPath, wn)
+	if wn.config.EnableGossipService {
+		wn.router.Handle(GossipNetworkPath, wn)
+	}
 	wn.requestsTracker = makeRequestsTracker(wn.router, wn.log, wn.config)
 	if wn.config.EnableRequestLogger {
 		wn.requestsLogger = makeRequestLogger(wn.requestsTracker, wn.log)
@@ -1009,6 +1011,11 @@ func (wn *WebsocketNetwork) GetHTTPRequestConnection(request *http.Request) (con
 
 // ServerHTTP handles the gossip network functions over websockets
 func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *http.Request) {
+	if !wn.config.EnableGossipService {
+		response.WriteHeader(http.StatusNotFound)
+		return
+	}
+
 	trackedRequest := wn.requestsTracker.GetTrackedRequest(request)
 
 	if wn.checkIncomingConnectionLimits(response, request, trackedRequest.remoteHost, trackedRequest.otherTelemetryGUID, trackedRequest.otherInstanceName) != http.StatusOK {

@@ -419,6 +419,11 @@ type ConsensusParams struct {
 	// their account balances.
 	StateProofExcludeTotalWeightWithRewards bool
 
+	// StateProofBlockHashInLightHeader specifies that the LightBlockHeader
+	// committed to by state proofs should contain the BlockHash of each
+	// block, instead of the seed.
+	StateProofBlockHashInLightHeader bool
+
 	// EnableAssetCloseAmount adds an extra field to the ApplyData. The field contains the amount of the remaining
 	// asset that were sent to the close-to address.
 	EnableAssetCloseAmount bool
@@ -759,13 +764,20 @@ func LoadConfigurableConsensusProtocols(dataDirectory string) error {
 		return err
 	}
 	if newConsensus != nil {
-		Consensus = newConsensus
-		// Set allocation limits
-		for _, p := range Consensus {
-			checkSetAllocBounds(p)
-		}
+		SetConfigurableConsensusProtocols(newConsensus)
 	}
 	return nil
+}
+
+// SetConfigurableConsensusProtocols sets the configurable protocols.
+func SetConfigurableConsensusProtocols(newConsensus ConsensusProtocols) ConsensusProtocols {
+	oldConsensus := Consensus
+	Consensus = newConsensus
+	// Set allocation limits
+	for _, p := range Consensus {
+		checkSetAllocBounds(p)
+	}
+	return oldConsensus
 }
 
 // PreloadConfigurableConsensusProtocols loads the configurable protocols from the data directory
@@ -1376,6 +1388,8 @@ func initConsensusProtocols() {
 
 	vFuture.LogicSigVersion = 10 // When moving this to a release, put a new higher LogicSigVersion here
 	vFuture.EnableLogicSigCostPooling = true
+
+	vFuture.StateProofBlockHashInLightHeader = true
 
 	// Setting DynamicFilterTimeout in vFuture will impact e2e test performance
 	// by reducing round time. Hence, it is commented out for now.

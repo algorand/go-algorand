@@ -323,6 +323,8 @@ func TestStateProofMessageCommitmentVerification(t *testing.T) {
 	consensusVersion := protocol.ConsensusVersion("test-fast-stateproofs")
 	consensusParams := getDefaultStateProofConsensusParams()
 	configurableConsensus[consensusVersion] = consensusParams
+	oldConsensus := config.SetConfigurableConsensusProtocols(configurableConsensus)
+	defer config.SetConfigurableConsensusProtocols(oldConsensus)
 
 	var fixture fixtures.RestClientFixture
 	fixture.SetConsensus(configurableConsensus)
