@@ -58,7 +58,7 @@ flowchart TD
     p0 --> vN["Batch 1 Key N"]
 ```
 
-The top-level array of keys that are used to generate the actual voting keys.
+The top-level array of keys are used to generate the actual voting keys.
 This allows them to be significantly smaller, because voting keys are not
 generated until they are required. The **Dilution** parameter defines how many
 voting keys are generated for each top-level key. This is done for space
