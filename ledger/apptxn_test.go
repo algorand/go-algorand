@@ -26,6 +26,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
@@ -60,11 +61,19 @@ func TestPayAction(t *testing.T) {
 
 		// We're going to test some mining effects here too, so that we have an inner transaction example.
 		proposer := basics.Address{0x01, 0x02, 0x03}
-		dl.txn(&txntest.Txn{
+		dl.txns(&txntest.Txn{
 			Type:     "pay",
 			Sender:   addrs[7],
 			Receiver: proposer,
 			Amount:   1_000_000 * 1_000_000, // 1 million algos is surely an eligible amount
+		}, &txntest.Txn{
+			Type:         "keyreg",
+			Sender:       proposer,
+			Fee:          3_000_000,
+			VotePK:       crypto.OneTimeSignatureVerifier{0x01},
+			SelectionPK:  crypto.VRFVerifier{0x02},
+			StateProofPK: merklesignature.Commitment{0x03},
+			VoteFirst:    1, VoteLast: 1000,
 		})
 
 		payout1 := txntest.Txn{

@@ -68,17 +68,17 @@ func RandomAccountData(rewardsBase uint64) basics.AccountData {
 	switch crypto.RandUint64() % 3 {
 	case 0:
 		data.Status = basics.Online
+		data.VoteID = crypto.OneTimeSignatureVerifier{0x01}
+		data.IncentiveEligible = crypto.RandUint64()%5 == 0
+		data.VoteFirstValid = 1
 		data.VoteLastValid = 10000
 	case 1:
 		data.Status = basics.Offline
-		data.VoteLastValid = 0
 	default:
 		data.Status = basics.NotParticipating
 	}
 
-	data.VoteFirstValid = 0
 	data.RewardsBase = rewardsBase
-	data.IncentiveEligible = crypto.RandUint64()%5 == 0
 	return data
 }
 

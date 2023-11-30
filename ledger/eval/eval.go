@@ -804,7 +804,7 @@ func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, evalOpts 
 	return eval, nil
 }
 
-const (
+var (
 	// these would become ConsensusParameters if we ever wanted to change them
 
 	// incentiveMinBalance is the minimum balance an account must have to be
@@ -817,7 +817,7 @@ const (
 	// that assurance, it is difficult to model their behaviour - might many
 	// participants join for the hope of easy financial rewards, but without
 	// caring enough to run a high-quality node?
-	incentiveMinBalance = 100_000 * 1_000_000 // 100K algos
+	incentiveMinBalance = basics.Algos(100_000)
 
 	// incentiveMaxBalance is the maximum balance an account might have to be
 	// eligible for incentives. It encourages large accounts to split their
@@ -825,7 +825,7 @@ const (
 	// nothing in protocol can prevent such accounts from running nodes that
 	// share fate (same machine, same data center, etc), but this serves as a
 	// gentle reminder.
-	incentiveMaxBalance = 100_000_000 * 1_000_000 // 100M algos
+	incentiveMaxBalance = basics.Algos(100_000_000)
 )
 
 func (eval *BlockEvaluator) eligibleForIncentives(proposer basics.Address) bool {
@@ -833,15 +833,13 @@ func (eval *BlockEvaluator) eligibleForIncentives(proposer basics.Address) bool 
 	if err != nil {
 		return false
 	}
-	if proposerState.MicroAlgos.Raw < incentiveMinBalance {
+	if proposerState.MicroAlgos.LessThan(incentiveMinBalance) {
 		return false
 	}
-	if proposerState.MicroAlgos.Raw > incentiveMaxBalance {
+	if proposerState.MicroAlgos.GreaterThan(incentiveMaxBalance) {
 		return false
 	}
-	// We'll also need a flag on the account, set to true if the account
-	// properly key-regged for incentives by including the "entry fee".
-	return true
+	return proposerState.IncentiveEligible
 }
 
 // hotfix for testnet stall 08/26/2019; move some algos from testnet bank to rewards pool to give it enough time until protocol upgrade occur.
