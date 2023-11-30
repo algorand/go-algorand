@@ -44,8 +44,23 @@ be set before the keys can be installed or registered.
 There is one optional parameter:
 * **Dilution**: Configure the multi-level key storage.
 
-Internally, keys are stored as a top-level array of keys that are used to
-generate the actual voting keys. The **Dilution** parameter defines how many
+Internally, keys are stored as a two-level hierarchy of ed25519 keys.
+
+```mermaid
+flowchart TD
+    root["onetime signature container"] --> p0["Batch Signer 1"]
+    root --> p1["Batch Signer 2"]
+    root --> pDot["..."]
+    root --> pN["Batch Signer N"]
+    p0 --> v0["Batch 1 Key 1"]
+    p0 --> v1["Batch 1 Key 2"]
+    p0 --> vDot["..."]
+    p0 --> vN["Batch 1 Key N"]
+```
+
+The top-level array of keys that are used to generate the actual voting keys.
+This allows them to be significantly smaller, because voting keys are not
+generated until they are required. The **Dilution** parameter defines how many
 voting keys are generated for each top-level key. This is done for space
 efficiency. It is optional because **sqrt(Last - First)** gives us the most
 space efficient value.
@@ -104,8 +119,9 @@ votes are cast for the same account causing both to be ignored.
 
 Once installed keys are stored in the **Participation Registry**. This is a
 service that wraps a SQLite file for storage. Once installed, keys are assigned
-an ID. There are additional Admin API endpoints available to manage the
-registry:
+an ID, which is referred to as **<participation-ID>** below. The ID is a hash
+built from parts of the participation key metadata. There are additional Admin
+API endpoints available to manage the registry:
 
 ```
 DELETE /v2/participation/<participation-id>
@@ -140,7 +156,11 @@ The unsigned transaction can also be signed with **algokey**:
 algokey sign -t keyreg.txn -o keyreg.stxn -m “[enter your account’s 25 word private key delimited by spaces]”
 ```
 
-Submit the transaction as usual with **goal**.
+Now copy the signed **keyreg.stxn** file to an node and submit it as usual.
+It does not need to be the same node which was used to install the keys.
+```
+goal clerk rawsend -f keyreg.stxn -d /path/to/data-dir
+```
 
 The node monitors blocks for key registrations and updates the **Participation Registry**.
 
