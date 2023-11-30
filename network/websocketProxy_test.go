@@ -299,6 +299,7 @@ func TestWebsocketProxyWsNet(t *testing.T) {
 	wsProxyGossip, ok := netB.tryConnectReserveAddr(wsProxyAddr)
 	require.True(t, ok)
 
+	netB.wg.Add(1)
 	netB.tryConnect(wsProxyAddr, wsProxyGossip)
 
 	require.Eventually(t, func() bool {
@@ -318,8 +319,4 @@ func TestWebsocketProxyWsNet(t *testing.T) {
 	require.NotEqual(t, peerB.RoutingAddr(), peerB.IPAddr())
 	fakeXForwardedForParsed := net.ParseIP(fakeXForwardedFor)
 	require.NotEqual(t, fakeXForwardedForParsed, peerB.RoutingAddr())
-
-	// TODO: figure out why closing netB before netA causes a panic
-	netA.Stop()
-	netB.Stop()
 }
