@@ -174,6 +174,7 @@ func TestRateLimiting(t *testing.T) {
 
 func TestIsLocalHost(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	require.True(t, isLocalhost("localhost"))
 	require.True(t, isLocalhost("127.0.0.1"))
@@ -188,6 +189,7 @@ func TestIsLocalHost(t *testing.T) {
 
 func TestGetForwardedConnectionAddress(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	var bufNewLogger bytes.Buffer
 	log := logging.NewLogger()
@@ -259,6 +261,23 @@ func TestGetForwardedConnectionAddress(t *testing.T) {
 	bufNewLogger.Reset()
 	rt.config.UseXForwardedForAddressField = "X-Forwarded-For"
 	header.Set("X-Forwarded-For", "123.123.123.123, 234.234.234.234")
+	ip = rt.getForwardedConnectionAddress(header)
+	require.NotNil(t, ip)
+	require.Equal(t, "234.234.234.234", ip.String())
+	msgs = bufNewLogger.String()
+	require.Empty(t, msgs)
+
+	// check multile X-Forwarded-For headers - the last one should be used
+	header.Set("X-Forwarded-For", "127.0.0.1")
+	header.Add("X-Forwarded-For", "234.234.234.234")
+	ip = rt.getForwardedConnectionAddress(header)
+	require.NotNil(t, ip)
+	require.Equal(t, "234.234.234.234", ip.String())
+	msgs = bufNewLogger.String()
+	require.Empty(t, msgs)
+
+	header.Set("X-Forwarded-For", "127.0.0.1")
+	header.Add("X-Forwarded-For", "123.123.123.123, 234.234.234.234")
 	ip = rt.getForwardedConnectionAddress(header)
 	require.NotNil(t, ip)
 	require.Equal(t, "234.234.234.234", ip.String())

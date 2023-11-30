@@ -311,8 +311,8 @@ type Local struct {
 	// determining the source of a connection.  If used, it should be set to the string "X-Forwarded-For", unless the
 	// proxy vendor provides another header field.  In the case of CloudFlare proxy, the "CF-Connecting-IP" header
 	// field can be used.
-	// This setting does not support multiple values in X-Forwarded-For HTTP header and always use the last value
-	// that corresponds to a single reverse proxy (even if it received the request from another reverse proxy or adversary node).
+	// This setting does not support multiple X-Forwarded-For HTTP headers or multiple values in in the header and always use the last value
+	// from the last X-Forwarded-For HTTP headers that corresponds to a single reverse proxy (even if it received the request from another reverse proxy or adversary node).
 	UseXForwardedForAddressField string `version[0]:""`
 
 	// ForceRelayMessages indicates whether the network library should relay messages even in the case that no NetAddress was specified.
