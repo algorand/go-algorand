@@ -405,6 +405,9 @@ func (wp *wsPeer) RoutingAddr() []byte {
 	}
 
 	var ip []byte
+	// originAddress is set for incoming connections
+	// and optionally includes reverse proxy support.
+	// see RequestTracker.getForwardedConnectionAddress for details.
 	if wp.wsPeerCore.originAddress != "" {
 		ip = net.ParseIP(wp.wsPeerCore.originAddress)
 	} else {
