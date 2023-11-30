@@ -185,6 +185,9 @@ type Account struct {
 	// Note: the raw account uses `map[int] -> Asset` for this type.
 	CreatedAssets *[]Asset `json:"created-assets,omitempty"`
 
+	// IncentiveEligible Whether or not the account can receive block incentives if its balance is in range at proposal time.
+	IncentiveEligible *bool `json:"incentive-eligible,omitempty"`
+
 	// MinBalance MicroAlgo balance required by the account.
 	//
 	// The requirement grows based on asset and application usage.

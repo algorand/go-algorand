@@ -78,6 +78,7 @@ func RandomAccountData(rewardsBase uint64) basics.AccountData {
 
 	data.VoteFirstValid = 0
 	data.RewardsBase = rewardsBase
+	data.IncentiveEligible = crypto.RandUint64()%5 == 0
 	return data
 }
 
@@ -98,6 +99,10 @@ func RandomAssetParams() basics.AssetParams {
 		Total:         crypto.RandUint64(),
 		Decimals:      uint32(crypto.RandUint64() % 20),
 		DefaultFrozen: crypto.RandUint64()%2 == 0,
+	}
+	// Since 0 and 1 Total assets seem extra interesting, make them more often.
+	if crypto.RandUint64()%5 != 0 {
+		ap.Total = crypto.RandUint64() % 2
 	}
 	if crypto.RandUint64()%5 != 0 {
 		ap.UnitName = fmt.Sprintf("un%x", uint32(crypto.RandUint64()%0x7fffff))
