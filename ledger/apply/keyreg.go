@@ -31,7 +31,7 @@ var errKeyregGoingOnlineFirstVotingInFuture = errors.New("transaction tries to m
 // Keyreg applies a KeyRegistration transaction using the Balances interface.
 func Keyreg(keyreg transactions.KeyregTxnFields, header transactions.Header, balances Balances, spec transactions.SpecialAddresses, ad *transactions.ApplyData, round basics.Round) error {
 	if header.Sender == spec.FeeSink {
-		return fmt.Errorf("cannot register participation key for fee sink's address %v ", header.Sender)
+		return fmt.Errorf("cannot register participation key for fee sink's address %v", header.Sender)
 	}
 
 	// Get the user's balance entry
@@ -67,6 +67,7 @@ func Keyreg(keyreg transactions.KeyregTxnFields, header transactions.Header, bal
 		record.VoteFirstValid = 0
 		record.VoteLastValid = 0
 		record.VoteKeyDilution = 0
+		record.IncentiveEligible = false
 	} else {
 		if params.EnableKeyregCoherencyCheck {
 			if keyreg.VoteLast <= round {
@@ -80,6 +81,9 @@ func Keyreg(keyreg transactions.KeyregTxnFields, header transactions.Header, bal
 		record.VoteFirstValid = keyreg.VoteFirst
 		record.VoteLastValid = keyreg.VoteLast
 		record.VoteKeyDilution = keyreg.VoteKeyDilution
+		if header.Fee.GTE(incentiveFeeForEligibility) && params.EnableMining {
+			record.IncentiveEligible = true
+		}
 	}
 
 	// Write the updated entry
@@ -90,3 +94,9 @@ func Keyreg(keyreg transactions.KeyregTxnFields, header transactions.Header, bal
 
 	return nil
 }
+
+// incentiveFeeForEligibility imparts a small cost on moving from offline to
+// online. This will impose a cost to running unreliable nodes that get
+// suspended and then come back online. Becomes a consensus param if ever
+// changed.
+var incentiveFeeForEligibility = basics.Algos(2)

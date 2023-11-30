@@ -29,6 +29,7 @@ import (
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -229,14 +230,31 @@ func TestMiningFees(t *testing.T) {
 		smallest := basics.Address{0x01, 0x033}
 		biggest := basics.Address{0x01, 0x044}
 
-		dl.txns(&txntest.Txn{Type: "pay", Sender: addrs[1], Receiver: tooBig, Amount: 100_000_000*1_000_000 + 1},
-			&txntest.Txn{Type: "pay", Sender: addrs[1], Receiver: tooSmall, Amount: 100_000*1_000_000 - 1},
-			&txntest.Txn{Type: "pay", Sender: addrs[1], Receiver: smallest, Amount: 100_000 * 1_000_000},
-			&txntest.Txn{Type: "pay", Sender: addrs[1], Receiver: biggest, Amount: 100_000_000 * 1_000_000},
+		const eFee = 3_000_000
+		dl.txns(
+			&txntest.Txn{Type: "pay", Sender: addrs[1],
+				Receiver: tooBig, Amount: eFee + 100_000_000*1_000_000 + 1},
+			&txntest.Txn{Type: "pay", Sender: addrs[1],
+				Receiver: tooSmall, Amount: eFee + 100_000*1_000_000 - 1},
+			&txntest.Txn{Type: "pay", Sender: addrs[1],
+				Receiver: smallest, Amount: eFee + 100_000*1_000_000},
+			&txntest.Txn{Type: "pay", Sender: addrs[1],
+				Receiver: biggest, Amount: eFee + 100_000_000*1_000_000},
 		)
 
 		for _, proposer := range []basics.Address{tooBig, tooSmall, smallest, biggest} {
 			t.Log(proposer)
+
+			dl.txn(&txntest.Txn{
+				Type:         "keyreg",
+				Sender:       proposer,
+				Fee:          eFee,
+				VotePK:       crypto.OneTimeSignatureVerifier{0x01},
+				SelectionPK:  crypto.VRFVerifier{0x02},
+				StateProofPK: merklesignature.Commitment{0x03},
+				VoteFirst:    1, VoteLast: 1000,
+			})
+
 			dl.fullBlock() // start with an empty block, so no mining fees are paid at start of next one
 
 			presink := micros(dl.t, dl.generator, genBalances.FeeSink)
@@ -290,6 +308,68 @@ func TestMiningFees(t *testing.T) {
 				require.EqualValues(t, 2000, postsink-presink)
 			}
 		}
+	})
+}
+
+// TestIncentiveEligible checks that keyreg with extra fee turns on the incentive eligible flag
+func TestIncentiveEligible(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	// Incentive-eligible appears in v39. Start checking in v38 to test that is unchanged.
+	ledgertesting.TestConsensusRange(t, 38, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
+		defer dl.Close()
+
+		tooSmall := basics.Address{0x01, 0x011}
+		smallest := basics.Address{0x01, 0x022}
+
+		// They begin ineligible
+		for _, addr := range []basics.Address{tooSmall, smallest} {
+			acct, _, _, err := dl.generator.LookupLatest(addr)
+			require.NoError(t, err)
+			require.False(t, acct.IncentiveEligible)
+		}
+
+		// Fund everyone
+		dl.txns(&txntest.Txn{Type: "pay", Sender: addrs[1], Receiver: tooSmall, Amount: 10_000_000},
+			&txntest.Txn{Type: "pay", Sender: addrs[1], Receiver: smallest, Amount: 10_000_000},
+		)
+
+		// Keyreg (but offline) with various fees. No effect on incentive eligible
+		dl.txns(&txntest.Txn{Type: "keyreg", Sender: tooSmall, Fee: 2_000_000 - 1},
+			&txntest.Txn{Type: "keyreg", Sender: smallest, Fee: 2_000_000},
+		)
+
+		for _, addr := range []basics.Address{tooSmall, smallest} {
+			acct, _, _, err := dl.generator.LookupLatest(addr)
+			require.NoError(t, err)
+			require.False(t, acct.IncentiveEligible)
+		}
+
+		// Keyreg to get online with various fees. Sufficient fee gets `smallest` eligible
+		keyreg := txntest.Txn{
+			Type:         "keyreg",
+			VotePK:       crypto.OneTimeSignatureVerifier{0x01},
+			SelectionPK:  crypto.VRFVerifier{0x02},
+			StateProofPK: merklesignature.Commitment{0x03},
+			VoteFirst:    1, VoteLast: 1000,
+		}
+		tooSmallKR := keyreg
+		tooSmallKR.Sender = tooSmall
+		tooSmallKR.Fee = 2_000_000 - 1
+
+		smallKR := keyreg
+		smallKR.Sender = smallest
+		smallKR.Fee = 2_000_000
+		dl.txns(&tooSmallKR, &smallKR)
+		a, _, _, err := dl.generator.LookupLatest(tooSmall)
+		require.NoError(t, err)
+		require.False(t, a.IncentiveEligible)
+		a, _, _, err = dl.generator.LookupLatest(smallest)
+		require.NoError(t, err)
+		require.Equal(t, a.IncentiveEligible, ver > 38)
 	})
 }
 

@@ -23,6 +23,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/stateproofmsg"
@@ -55,6 +56,7 @@ type Txn struct {
 	VoteLast         basics.Round
 	VoteKeyDilution  uint64
 	Nonparticipation bool
+	StateProofPK     merklesignature.Commitment
 
 	Receiver         basics.Address
 	Amount           uint64
@@ -228,6 +230,7 @@ func (tx Txn) Txn() transactions.Transaction {
 			VoteLast:         tx.VoteLast,
 			VoteKeyDilution:  tx.VoteKeyDilution,
 			Nonparticipation: tx.Nonparticipation,
+			StateProofPK:     tx.StateProofPK,
 		},
 		PaymentTxnFields: transactions.PaymentTxnFields{
 			Receiver:         tx.Receiver,

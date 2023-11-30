@@ -209,6 +209,9 @@ type AccountData struct {
 	// This allows key rotation, changing the members in a multisig, etc.
 	AuthAddr Address `codec:"spend"`
 
+	// IncentiveEligible indicates whether the account came online with the
+	// extra fee required to be eligible for block incentives. At proposal time,
+	// balance limits must also be met to receive incentives.
 	IncentiveEligible bool `codec:"ie"`
 
 	// AppLocalStates stores the local states associated with any applications

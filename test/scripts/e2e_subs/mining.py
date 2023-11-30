@@ -39,7 +39,7 @@ get_proposer = """
 
 
 # During construction, the app examines an arbitrary round, a little before the latest.
-examined = max(goal.params(1).first-5, 1)
+examined = max(goal.params().first-5, 1)
 txinfo, err = goal.app_create(joe, goal.assemble(get_proposer), app_args=[examined], lifetime=50)
 assert not err, err
 getter = txinfo['application-index']
@@ -82,4 +82,3 @@ assert base64.b64decode(txinfo['logs'][1]) == block['fc'].to_bytes(8, "big")
 
 stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 print(f"{os.path.basename(sys.argv[0])} OK {stamp}")
-

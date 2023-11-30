@@ -24,6 +24,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
 	"golang.org/x/exp/slices"
@@ -200,12 +201,16 @@ func AccountToAccountData(a *model.Account) (basics.AccountData, error) {
 	var voteFirstValid basics.Round
 	var voteLastValid basics.Round
 	var voteKeyDilution uint64
+	var stateProofID merklesignature.Commitment
 	if a.Participation != nil {
 		copy(voteID[:], a.Participation.VoteParticipationKey)
 		copy(selID[:], a.Participation.SelectionParticipationKey)
 		voteFirstValid = basics.Round(a.Participation.VoteFirstValid)
 		voteLastValid = basics.Round(a.Participation.VoteLastValid)
 		voteKeyDilution = a.Participation.VoteKeyDilution
+		if a.Participation.StateProofKey != nil {
+			copy(stateProofID[:], *a.Participation.StateProofKey)
+		}
 	}
 
 	var rewardsBase uint64
@@ -351,11 +356,13 @@ func AccountToAccountData(a *model.Account) (basics.AccountData, error) {
 		MicroAlgos:         basics.MicroAlgos{Raw: a.Amount},
 		RewardsBase:        rewardsBase,
 		RewardedMicroAlgos: basics.MicroAlgos{Raw: a.Rewards},
+		IncentiveEligible:  nilToZero(a.IncentiveEligible),
 		VoteID:             voteID,
 		SelectionID:        selID,
 		VoteFirstValid:     voteFirstValid,
 		VoteLastValid:      voteLastValid,
 		VoteKeyDilution:    voteKeyDilution,
+		StateProofID:       stateProofID,
 		Assets:             assets,
 		AppLocalStates:     appLocalStates,
 		AppParams:          appParams,
