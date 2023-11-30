@@ -180,3 +180,31 @@ Writes are optimized by putting disk IO in a separate thread. Operations like
 deleting old keys (and installing, updating, etc) are performed asynchronously.
 The cache is manually updated when async operations are initiated to ensure it
 always represents the current state.
+
+# Appendix 1: Key Registration Delay and Overlapping keys
+
+When a key is registered, there is a delay of 320 rounds before it can be used.
+The number 320 is defined by the **balanceRound** function, which derives it
+from the **SeedRefreshInterval** and **SeedLookback** consensus settings.
+This delay is intended to circumvent some specific attacks related to
+registering new voting keys at a high frequency. See the research papers for
+those details, here we'll focus on some implications of this property.
+
+* When an account is brought online for the first time, it doesn't vote until
+  320 rounds after it was registered.
+* When an account renews its voting keys by installing a new set of keys and
+  registering them, there is a 320 round window where the old keys are still
+  used. During this window you must not remove first set of keys from the node
+  or else your account will not vote properly.
+
+# Appendix 2: On-chain Storage
+
+When a key registration transaction is evaluated, public keys required to
+verify votes from that account are written to the account record. This is the
+only on-chain component for voting keys.
+
+Each participating node will accumulate votes and write them to a
+**Certificate** which serves to validate the block. The certificate would be
+validated using the public keys stored in each account. Because there are many
+nodes accumulating votes at the same time, it is possible to have multiple
+correct but different certificates validating the same block.
