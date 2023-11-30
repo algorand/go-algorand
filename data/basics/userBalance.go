@@ -209,6 +209,8 @@ type AccountData struct {
 	// This allows key rotation, changing the members in a multisig, etc.
 	AuthAddr Address `codec:"spend"`
 
+	IncentiveEligible bool `codec:"ie"`
+
 	// AppLocalStates stores the local states associated with any applications
 	// that this account has opted in to.
 	AppLocalStates map[AppIndex]AppLocalState `codec:"appl,allocbound=EncodedMaxAppLocalStates"`

@@ -2983,6 +2983,10 @@
         "participation": {
           "$ref": "#/definitions/AccountParticipation"
         },
+        "incentive-eligible": {
+          "description": "Whether or not the account can receive block incentives if its balance is in range at proposal time.",
+          "type": "boolean"
+        },
         "pending-rewards": {
           "description": "amount of MicroAlgos of pending rewards in this account.",
           "type": "integer"

@@ -47,6 +47,7 @@ type BaseAccountData struct {
 	TotalAppLocalStates        uint64            `codec:"l"`
 	TotalBoxes                 uint64            `codec:"m"`
 	TotalBoxBytes              uint64            `codec:"n"`
+	IncentiveEligible          bool              `codec:"o"`
 
 	BaseVotingData
 
@@ -286,6 +287,7 @@ func (ba *BaseAccountData) SetCoreAccountData(ad *ledgercore.AccountData) {
 	ba.TotalAppLocalStates = ad.TotalAppLocalStates
 	ba.TotalBoxes = ad.TotalBoxes
 	ba.TotalBoxBytes = ad.TotalBoxBytes
+	ba.IncentiveEligible = ad.IncentiveEligible
 
 	ba.BaseVotingData.SetCoreAccountData(ad)
 }
@@ -306,6 +308,7 @@ func (ba *BaseAccountData) SetAccountData(ad *basics.AccountData) {
 	ba.TotalAppLocalStates = uint64(len(ad.AppLocalStates))
 	ba.TotalBoxes = ad.TotalBoxes
 	ba.TotalBoxBytes = ad.TotalBoxBytes
+	ba.IncentiveEligible = ad.IncentiveEligible
 
 	ba.BaseVotingData.VoteID = ad.VoteID
 	ba.BaseVotingData.SelectionID = ad.SelectionID
@@ -342,6 +345,7 @@ func (ba *BaseAccountData) GetLedgerCoreAccountBaseData() ledgercore.AccountBase
 		TotalAssets:         ba.TotalAssets,
 		TotalBoxes:          ba.TotalBoxes,
 		TotalBoxBytes:       ba.TotalBoxBytes,
+		IncentiveEligible:   ba.IncentiveEligible,
 	}
 }
 
@@ -365,6 +369,7 @@ func (ba *BaseAccountData) GetAccountData() basics.AccountData {
 		RewardsBase:        ba.RewardsBase,
 		RewardedMicroAlgos: ba.RewardedMicroAlgos,
 		AuthAddr:           ba.AuthAddr,
+		IncentiveEligible:  ba.IncentiveEligible,
 		TotalAppSchema: basics.StateSchema{
 			NumUint:      ba.TotalAppSchemaNumUint,
 			NumByteSlice: ba.TotalAppSchemaNumByteSlice,
@@ -389,6 +394,7 @@ func (ba *BaseAccountData) IsEmpty() bool {
 		ba.RewardsBase == 0 &&
 		ba.RewardedMicroAlgos.Raw == 0 &&
 		ba.AuthAddr.IsZero() &&
+		!ba.IncentiveEligible &&
 		ba.TotalAppSchemaNumUint == 0 &&
 		ba.TotalAppSchemaNumByteSlice == 0 &&
 		ba.TotalExtraAppPages == 0 &&

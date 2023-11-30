@@ -39,6 +39,7 @@ type AccountBaseData struct {
 	RewardsBase        uint64
 	RewardedMicroAlgos basics.MicroAlgos
 	AuthAddr           basics.Address
+	IncentiveEligible  bool
 
 	TotalAppSchema      basics.StateSchema // Totals across created globals, and opted in locals.
 	TotalExtraAppPages  uint32             // Total number of extra pages across all created apps
@@ -75,8 +76,8 @@ func ToAccountData(acct basics.AccountData) AccountData {
 			MicroAlgos:         acct.MicroAlgos,
 			RewardsBase:        acct.RewardsBase,
 			RewardedMicroAlgos: acct.RewardedMicroAlgos,
-
-			AuthAddr: acct.AuthAddr,
+			AuthAddr:           acct.AuthAddr,
+			IncentiveEligible:  acct.IncentiveEligible,
 
 			TotalAppSchema:      acct.TotalAppSchema,
 			TotalExtraAppPages:  acct.TotalExtraAppPages,
@@ -105,6 +106,8 @@ func AssignAccountData(a *basics.AccountData, acct AccountData) {
 	a.MicroAlgos = acct.MicroAlgos
 	a.RewardsBase = acct.RewardsBase
 	a.RewardedMicroAlgos = acct.RewardedMicroAlgos
+	a.AuthAddr = acct.AuthAddr
+	a.IncentiveEligible = acct.IncentiveEligible
 
 	a.VoteID = acct.VoteID
 	a.SelectionID = acct.SelectionID
@@ -113,7 +116,6 @@ func AssignAccountData(a *basics.AccountData, acct AccountData) {
 	a.VoteLastValid = acct.VoteLastValid
 	a.VoteKeyDilution = acct.VoteKeyDilution
 
-	a.AuthAddr = acct.AuthAddr
 	a.TotalAppSchema = acct.TotalAppSchema
 	a.TotalExtraAppPages = acct.TotalExtraAppPages
 	a.TotalBoxes = acct.TotalBoxes

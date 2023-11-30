@@ -87,7 +87,6 @@ func TestAccounts(t *testing.T) {
 	zeroValueExceptions := []reflectionhelpers.TypePath{
 		reflectionhelpers.TypePath{}.AddField("MicroAlgos").AddField("Raw"),
 		reflectionhelpers.TypePath{}.AddField("AssetParams").AddMapKey(),
-		reflectionhelpers.TypePath{}.AddField("AssetParams").AddValue().AddField("Total"),
 		reflectionhelpers.TypePath{}.AddField("Assets").AddMapKey(),
 		reflectionhelpers.TypePath{}.AddField("AppLocalStates").AddMapKey(),
 		reflectionhelpers.TypePath{}.AddField("AppLocalStates").AddValue().AddField("KeyValue").AddValue().AddField("Type"),

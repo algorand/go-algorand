@@ -123,6 +123,7 @@ func AccountDataToAccount(
 		Status:                      record.Status.String(),
 		RewardBase:                  &record.RewardsBase,
 		Participation:               apiParticipation,
+		IncentiveEligible:           omitEmpty(record.IncentiveEligible),
 		CreatedAssets:               &createdAssets,
 		TotalCreatedAssets:          uint64(len(createdAssets)),
 		CreatedApps:                 &createdApps,

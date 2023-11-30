@@ -525,6 +525,7 @@ func (v2 *Handlers) basicAccountInformation(ctx echo.Context, addr basics.Addres
 		Status:                      record.Status.String(),
 		RewardBase:                  &record.RewardsBase,
 		Participation:               apiParticipation,
+		IncentiveEligible:           omitEmpty(record.IncentiveEligible),
 		TotalCreatedAssets:          record.TotalAssetParams,
 		TotalCreatedApps:            record.TotalAppParams,
 		TotalAssetsOptedIn:          record.TotalAssets,

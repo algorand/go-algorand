@@ -1067,6 +1067,10 @@
             },
             "type": "array"
           },
+          "incentive-eligible": {
+            "description": "Whether or not the account can receive block incentives if its balance is in range at proposal time.",
+            "type": "boolean"
+          },
           "min-balance": {
             "description": "MicroAlgo balance required by the account.\n\nThe requirement grows based on asset and application usage.",
             "type": "integer"
