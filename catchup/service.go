@@ -91,7 +91,7 @@ type Service struct {
 	net                 network.GossipNode
 	auth                BlockAuthenticator
 	parallelBlocks      uint64
-	deadlineTimeout     time.Duration
+	roundTimeEstimate   time.Duration
 	prevBlockFetchTime  time.Time
 	blockValidationPool execpool.BacklogPool
 
@@ -146,7 +146,7 @@ func MakeService(log logging.Logger, config config.Local, net network.GossipNode
 	s.unmatchedPendingCertificates = unmatchedPendingCertificates
 	s.log = log.With("Context", "sync")
 	s.parallelBlocks = config.CatchupParallelBlocks
-	s.deadlineTimeout = agreement.DeadlineTimeout()
+	s.roundTimeEstimate = agreement.DefaultDeadlineTimeout()
 	s.blockValidationPool = blockValidationPool
 	s.syncNow = make(chan struct{}, 1)
 
@@ -556,11 +556,11 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 
 			// if ledger is busy, pause for some time to let the fetchAndWrite goroutines to finish fetching in-flight blocks.
 			start := time.Now()
-			for (s.ledger.IsWritingCatchpointDataFile() || s.ledger.IsBehindCommittingDeltas()) && time.Since(start) < s.deadlineTimeout {
+			for (s.ledger.IsWritingCatchpointDataFile() || s.ledger.IsBehindCommittingDeltas()) && time.Since(start) < s.roundTimeEstimate {
 				time.Sleep(100 * time.Millisecond)
 			}
 
-			// if ledger is still busy after s.deadlineTimeout timeout then abort the current pipelinedFetch invocation.
+			// if ledger is still busy after s.roundTimeEstimate timeout then abort the current pipelinedFetch invocation.
 
 			// if we're writing a catchpoint file, stop catching up to reduce the memory pressure. Once we finish writing the file we
 			// could resume with the catchup.
@@ -616,7 +616,7 @@ func (s *Service) periodicSync() {
 		s.sync()
 	}
 	stuckInARow := 0
-	sleepDuration := s.deadlineTimeout
+	sleepDuration := s.roundTimeEstimate
 	for {
 		currBlock := s.ledger.LastRound()
 		select {
@@ -627,7 +627,7 @@ func (s *Service) periodicSync() {
 			stuckInARow = 0
 			// go to sleep for a short while, for a random duration.
 			// we want to sleep for a random duration since it would "de-syncronize" us from the ledger advance sync
-			sleepDuration = time.Duration(crypto.RandUint63()) % s.deadlineTimeout
+			sleepDuration = time.Duration(crypto.RandUint63()) % s.roundTimeEstimate
 			continue
 		case <-s.syncNow:
 			if s.parallelBlocks == 0 || s.ledger.IsWritingCatchpointDataFile() || s.ledger.IsBehindCommittingDeltas() {
@@ -637,8 +637,8 @@ func (s *Service) periodicSync() {
 			s.log.Info("Immediate resync triggered; resyncing")
 			s.sync()
 		case <-time.After(sleepDuration):
-			if sleepDuration < s.deadlineTimeout || s.cfg.DisableNetworking {
-				sleepDuration = s.deadlineTimeout
+			if sleepDuration < s.roundTimeEstimate || s.cfg.DisableNetworking {
+				sleepDuration = s.roundTimeEstimate
 				continue
 			}
 			// if the catchup is disabled in the config file, just skip it.
