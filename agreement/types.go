@@ -50,7 +50,7 @@ type Deadline struct {
 	Type TimeoutType
 }
 
-var deadlineTimeout = config.Protocol.BigLambda + config.Protocol.SmallLambda
+var defaultDeadlineTimeout = config.Protocol.BigLambda + config.Protocol.SmallLambda
 var partitionStep = next + 3
 var recoveryExtraTimeout = config.Protocol.SmallLambda
 
@@ -64,8 +64,11 @@ func FilterTimeout(p period, v protocol.ConsensusVersion) time.Duration {
 }
 
 // DeadlineTimeout is the duration of the second agreement step.
-func DeadlineTimeout() time.Duration {
-	return deadlineTimeout
+func DeadlineTimeout(p period, v protocol.ConsensusVersion) time.Duration {
+	if p == 0 {
+		return config.Consensus[v].AgreementDeadlineTimeoutPeriod0
+	}
+	return defaultDeadlineTimeout
 }
 
 type (
@@ -93,9 +96,9 @@ const (
 )
 
 func (s step) nextVoteRanges() (lower, upper time.Duration) {
-	extra := recoveryExtraTimeout // eg  2000 ms
-	lower = deadlineTimeout       // eg 17000 ms (15000 + 2000)
-	upper = lower + extra         // eg 19000 ms
+	extra := recoveryExtraTimeout  // eg  2000 ms
+	lower = defaultDeadlineTimeout // eg 17000 ms (15000 + 2000)
+	upper = lower + extra          // eg 19000 ms
 
 	for i := next; i < s; i++ {
 		extra *= 2

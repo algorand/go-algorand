@@ -162,6 +162,8 @@ type ConsensusParams struct {
 	// time for nodes to wait for block proposal headers for period = 0, value should be configured to suit best case
 	// critical path
 	AgreementFilterTimeoutPeriod0 time.Duration
+	// Duration of the second agreement step for period=0, value should be configured to suit best case critical path
+	AgreementDeadlineTimeoutPeriod0 time.Duration
 
 	FastRecoveryLambda time.Duration // time between fast recovery attempts
 
@@ -848,8 +850,9 @@ func initConsensusProtocols() {
 		DownCommitteeSize:      10000,
 		DownCommitteeThreshold: 7750,
 
-		AgreementFilterTimeout:        4 * time.Second,
-		AgreementFilterTimeoutPeriod0: 4 * time.Second,
+		AgreementFilterTimeout:          4 * time.Second,
+		AgreementFilterTimeoutPeriod0:   4 * time.Second,
+		AgreementDeadlineTimeoutPeriod0: Protocol.BigLambda + Protocol.SmallLambda,
 
 		FastRecoveryLambda: 5 * time.Minute,
 
@@ -1388,6 +1391,8 @@ func initConsensusProtocols() {
 
 	vFuture.LogicSigVersion = 10 // When moving this to a release, put a new higher LogicSigVersion here
 	vFuture.EnableLogicSigCostPooling = true
+
+	vFuture.AgreementDeadlineTimeoutPeriod0 = 4000 * time.Millisecond
 
 	vFuture.StateProofBlockHashInLightHeader = true
 
