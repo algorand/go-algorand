@@ -37,15 +37,27 @@ const (
 )
 
 // TrackerRequest hold the tracking data associated with a single request.
+// It supposed by an upstream http.Handler called before the wsNetwork's ServeHTTP
+// and wsNetwork's Listener (see Accept() method)
 type TrackerRequest struct {
-	created            time.Time
-	remoteHost         string
-	remotePort         string
-	remoteAddr         string
-	request            *http.Request
+	created time.Time
+	// remoteHost is IP address of the remote host and it is equal to either
+	// a host part of the remoteAddr or to the value of X-Forwarded-For header.
+	remoteHost string
+	// remotePort is the port of the remote peer as reported by the connection or
+	// by the standard http.Request.RemoteAddr field.
+	remotePort string
+	// remoteAddr is IP:Port of the remote host retrieved from the connection
+	// or from the standard http.Request.RemoteAddr field.
+	// This field the real address of the remote incomming connection.
+	remoteAddr string
+	// otherPublicAddr is the public address of the other node, as reported by the other node
+	// via the X-Algorand-Location header.
+	// It is used for logging and as a rootURL for when creating a new wsPeer from a request.
+	otherPublicAddr string
+
 	otherTelemetryGUID string
 	otherInstanceName  string
-	otherPublicAddr    string
 	connection         net.Conn
 	noPrune            bool
 }
@@ -63,6 +75,33 @@ func makeTrackerRequest(remoteAddr, remoteHost, remotePort string, createTime ti
 		remotePort: remotePort,
 		connection: conn,
 	}
+}
+
+// remoteAddress a best guessed remote address for the request.
+// Rational is the following:
+// remoteAddress() is used either for logging or as rootURL for creating a new wsPeer.
+// rootURL is an address to connect to. It is well defined only for peers from a phonebooks,
+// and for incoming peers the best guess is either otherPublicAddr, remoteHost, or remoteAddr.
+//   - otherPublicAddr is provided by a remote peer by X-Algorand-Location header and cannot be trusted,
+//     but can be used if remoteHost matches to otherPublicAddr value. In this case otherPublicAddr is a better guess
+//     for a rootURL because it might include a port.
+//   - remoteHost is either a real address of the remote peer or a value of X-Forwarded-For header.
+//     Use it if remoteHost was taken from X-Forwarded-For header.
+//     Note, the remoteHost does not include a port since a listening port is not known.
+//   - remoteAddr is used otherwise.
+func (tr *TrackerRequest) remoteAddress() string {
+	if len(tr.otherPublicAddr) != 0 {
+		url, err := ParseHostOrURL(tr.otherPublicAddr)
+		if err == nil && len(tr.remoteHost) > 0 && url.Hostname() == tr.remoteHost {
+			return tr.otherPublicAddr
+		}
+	}
+	url, err := ParseHostOrURL(tr.remoteAddr)
+	if err != nil || url.Hostname() == tr.remoteHost {
+		// TrackerRequest could be created with only remoteAddr provided so use it as a default.
+		return tr.remoteAddr
+	}
+	return tr.remoteHost
 }
 
 // hostIncomingRequests holds all the requests that are originating from a single host.
@@ -139,7 +178,6 @@ func (ard *hostIncomingRequests) add(trackerRequest *TrackerRequest) {
 	}
 	// it's going to be added somewhere in the middle.
 	ard.requests = append(ard.requests[:itemIdx], append([]*TrackerRequest{trackerRequest}, ard.requests[itemIdx:]...)...)
-	return
 }
 
 // countConnections counts the number of connection that we have that occurred after the provided specified time
@@ -369,7 +407,7 @@ func (rt *RequestTracker) sendBlockedConnectionResponse(conn net.Conn, requestTi
 func (rt *RequestTracker) pruneAcceptedConnections(pruneStartDate time.Time) {
 	localAddrToRemove := []net.Addr{}
 	for localAddr, request := range rt.acceptedConnections {
-		if request.noPrune == false && request.created.Before(pruneStartDate) {
+		if !request.noPrune && request.created.Before(pruneStartDate) {
 			localAddrToRemove = append(localAddrToRemove, localAddr)
 		}
 	}
@@ -394,7 +432,7 @@ func (rt *RequestTracker) getWaitUntilNoConnectionsChannel(checkInterval time.Du
 			return len(rt.httpConnections) == 0
 		}
 
-		for true {
+		for {
 			if checkEmpty(rt) {
 				close(done)
 				return
@@ -446,7 +484,7 @@ func (rt *RequestTracker) ServeHTTP(response http.ResponseWriter, request *http.
 	trackedRequest := rt.acceptedConnections[localAddr]
 	if trackedRequest != nil {
 		// update the original tracker request so that it won't get pruned.
-		if trackedRequest.noPrune == false {
+		if !trackedRequest.noPrune {
 			trackedRequest.noPrune = true
 			rt.hostRequests.convertToAdditionalRequest(trackedRequest)
 		}
@@ -461,10 +499,9 @@ func (rt *RequestTracker) ServeHTTP(response http.ResponseWriter, request *http.
 	}
 
 	// update the origin address.
-	rt.updateRequestRemoteAddr(trackedRequest, request)
+	rt.remoteHostProxyFix(request.Header, trackedRequest)
 
 	rt.httpConnectionsMu.Lock()
-	trackedRequest.request = request
 	trackedRequest.otherTelemetryGUID, trackedRequest.otherInstanceName, trackedRequest.otherPublicAddr = getCommonHeaders(request.Header)
 	rt.httpHostRequests.addRequest(trackedRequest)
 	rt.httpHostRequests.pruneRequests(rateLimitingWindowStartTime)
@@ -503,13 +540,12 @@ func (rt *RequestTracker) ServeHTTP(response http.ResponseWriter, request *http.
 
 }
 
-// updateRequestRemoteAddr updates the origin IP address in both the trackedRequest as well as in the request.RemoteAddr string
-func (rt *RequestTracker) updateRequestRemoteAddr(trackedRequest *TrackerRequest, request *http.Request) {
-	originIP := rt.getForwardedConnectionAddress(request.Header)
+// remoteHostProxyFix updates the origin IP address in the trackedRequest
+func (rt *RequestTracker) remoteHostProxyFix(header http.Header, trackedRequest *TrackerRequest) {
+	originIP := rt.getForwardedConnectionAddress(header)
 	if originIP == nil {
 		return
 	}
-	request.RemoteAddr = originIP.String() + ":" + trackedRequest.remotePort
 	trackedRequest.remoteHost = originIP.String()
 }
 

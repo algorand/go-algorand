@@ -360,6 +360,7 @@ func makePeerCore(ctx context.Context, net GossipNode, log logging.Logger, readB
 }
 
 // GetAddress returns the root url to use to connect to this peer.
+// This implements HTTPPeer interface and used by external services to determine where to connect to.
 // TODO: should GetAddress be added to Peer interface?
 func (wp *wsPeerCore) GetAddress() string {
 	return wp.rootURL
