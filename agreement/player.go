@@ -161,8 +161,8 @@ func (p *player) handleFastTimeout(r routerHandle, e timeoutEvent) []action {
 func (p *player) issueSoftVote(r routerHandle, te timeoutEvent) (actions []action) {
 	defer func() {
 		var deadlineTimeout time.Duration
-		if te.Proto.Err != nil {
-			r.t.log.Errorf("failed to read protocol version for timeout event (proto %v): %v. "+
+		if te.Proto.Version == "" || te.Proto.Err != nil {
+			r.t.log.Errorf("failed to read valid protocol version for timeout event (proto %v): %v. "+
 				"Falling Back to default deadline timeout.", te.Proto.Version, te.Proto.Err)
 			deadlineTimeout = defaultDeadlineTimeout
 		} else {
