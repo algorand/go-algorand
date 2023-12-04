@@ -1392,7 +1392,7 @@ func initConsensusProtocols() {
 	vFuture.LogicSigVersion = 10 // When moving this to a release, put a new higher LogicSigVersion here
 	vFuture.EnableLogicSigCostPooling = true
 
-	vFuture.AgreementDeadlineTimeoutPeriod0 = 4000 * time.Millisecond
+	vFuture.AgreementDeadlineTimeoutPeriod0 = 4 * time.Second
 
 	vFuture.StateProofBlockHashInLightHeader = true
 
