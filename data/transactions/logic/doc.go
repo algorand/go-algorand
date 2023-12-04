@@ -286,13 +286,15 @@ var opDescByName = map[string]OpDesc{
 	"frame_bury": {"replace the Nth (signed) value from the frame pointer in the stack with A", "", []string{"frame slot"}},
 	"popn":       {"remove N values from the top of the stack", "", []string{"stack depth"}},
 
-	"box_create":  {"create a box named A, of length B. Fail if A is empty or B exceeds 32,768. Returns 0 if A already existed, else 1", "Newly created boxes are filled with 0 bytes. `box_create` will fail if the referenced box already exists with a different size. Otherwise, existing boxes are unchanged by `box_create`.", nil},
+	"box_create":  {"create a box named A, of length B. Fail if the name A is empty or B exceeds 32,768. Returns 0 if A already existed, else 1", "Newly created boxes are filled with 0 bytes. `box_create` will fail if the referenced box already exists with a different size. Otherwise, existing boxes are unchanged by `box_create`.", nil},
 	"box_extract": {"read C bytes from box A, starting at offset B. Fail if A does not exist, or the byte range is outside A's size.", "", nil},
 	"box_replace": {"write byte-array C into box A, starting at offset B. Fail if A does not exist, or the byte range is outside A's size.", "", nil},
+	"box_splice":  {"set box A to contain its previous bytes up to index B, followed by D, followed by the original bytes of A that began at index B+C.", "Boxes are of constant length. If C < len(D), then len(D)-C bytes will be removed from the end. If C > len(D), zero bytes will be appended to the end to reach the box length.", nil},
 	"box_del":     {"delete box named A if it exists. Return 1 if A existed, 0 otherwise", "", nil},
 	"box_len":     {"X is the length of box A if A exists, else 0. Y is 1 if A exists, else 0.", "", nil},
 	"box_get":     {"X is the contents of box A if A exists, else ''. Y is 1 if A exists, else 0.", "For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `box_replace`", nil},
 	"box_put":     {"replaces the contents of box A with byte-array B. Fails if A exists and len(B) != len(box A). Creates A if it does not exist", "For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `box_replace`", nil},
+	"box_resize":  {"change the size of box named A to be of length B, adding zero bytes to end or removing bytes from the end, as needed. Fail if the name A is empty, A is not an existing box, or B exceeds 32,768.", "", nil},
 }
 
 // OpDoc returns a description of the op
@@ -351,7 +353,7 @@ var OpGroups = map[string][]string{
 	"Loading Values":          {"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "pushint", "pushints", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "pushbytes", "pushbytess", "bzero", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "args", "txn", "gtxn", "txna", "txnas", "gtxna", "gtxnas", "gtxns", "gtxnsa", "gtxnsas", "global", "load", "loads", "store", "stores", "gload", "gloads", "gloadss", "gaid", "gaids"},
 	"Flow Control":            {"err", "bnz", "bz", "b", "return", "pop", "popn", "dup", "dup2", "dupn", "dig", "bury", "cover", "uncover", "frame_dig", "frame_bury", "swap", "select", "assert", "callsub", "proto", "retsub", "switch", "match"},
 	"State Access":            {"balance", "min_balance", "app_opted_in", "app_local_get", "app_local_get_ex", "app_global_get", "app_global_get_ex", "app_local_put", "app_global_put", "app_local_del", "app_global_del", "asset_holding_get", "asset_params_get", "app_params_get", "acct_params_get", "log", "block"},
-	"Box Access":              {"box_create", "box_extract", "box_replace", "box_del", "box_len", "box_get", "box_put"},
+	"Box Access":              {"box_create", "box_extract", "box_replace", "box_splice", "box_del", "box_len", "box_get", "box_put", "box_resize"},
 	"Inner Transactions":      {"itxn_begin", "itxn_next", "itxn_field", "itxn_submit", "itxn", "itxna", "itxnas", "gitxn", "gitxna", "gitxnas"},
 }
 
