@@ -31,7 +31,7 @@ const dynamicFilterCredentialArrivalHistory int = 40
 
 // DynamicFilterTimeoutLowerBound specifies a minimal duration that the
 // filter timeout must meet.
-const dynamicFilterTimeoutLowerBound time.Duration = 500 * time.Millisecond
+const dynamicFilterTimeoutLowerBound time.Duration = 2500 * time.Millisecond
 
 // DynamicFilterTimeoutCredentialArrivalHistoryIdx specified which sample to use
 // out of a sorted DynamicFilterCredentialArrivalHistory-sized array of time
