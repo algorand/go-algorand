@@ -2682,6 +2682,26 @@
         ]
       }
     },
+    "/mempprof": {
+      "get": {
+        "operationId": "Mempprof",
+        "responses": {
+          "200": {
+            "content": {},
+            "description": "text with \\#-comments and key:value lines"
+          },
+          "404": {
+            "content": {},
+            "description": "metrics were compiled out"
+          }
+        },
+        "summary": "Return metrics about algod functioning.",
+        "tags": [
+          "public",
+          "common"
+        ]
+      }
+    },
     "/metrics": {
       "get": {
         "operationId": "Metrics",

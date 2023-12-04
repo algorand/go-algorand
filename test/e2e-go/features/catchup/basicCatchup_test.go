@@ -17,7 +17,10 @@
 package catchup
 
 import (
+	"context"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"testing"
@@ -27,6 +30,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/network"
+	"github.com/algorand/go-algorand/nodecontrol"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -165,6 +169,34 @@ func runCatchupOverGossip(t fixtures.TestingTB,
 	fixture.Start()
 	lg, err := fixture.StartNode(ncPrim.GetDataDir())
 	a.NoError(err)
+
+	ctx, cf := context.WithCancel(context.Background())
+	defer cf()
+	memdumper := func(nc *nodecontrol.NodeController) {
+		ticker := time.NewTicker(10 * time.Second)
+		defer ticker.Stop()
+		addr, err := nc.GetHostAddress()
+		url := fmt.Sprintf("http://%s/mempprof", addr)
+		a.NoError(err)
+		for {
+			select {
+			case <-ticker.C:
+				// Let the primary make some progress
+				resp, err := http.Get(url)
+				if err != nil {
+					t.Logf("Error getting mempprof: %v", err)
+					return
+				}
+				data, err := io.ReadAll(resp.Body)
+				a.NoError(err)
+				t.Logf("mempprof[%s]: %s", nc.GetDataDir(), string(data))
+			case <-ctx.Done():
+				return
+			}
+		}
+	}
+	go memdumper(&ncPrim)
+	go memdumper(&nc)
 
 	// Now, catch up
 	err = fixture.LibGoalFixture.ClientWaitForRoundWithTimeout(lg, waitForRound)

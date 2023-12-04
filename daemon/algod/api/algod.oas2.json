@@ -101,6 +101,30 @@
         }
       }
     },
+    "/mempprof": {
+      "get": {
+        "tags": [
+          "public",
+          "common"
+        ],
+        "produces": [
+          "text/plain"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Return metrics about algod functioning.",
+        "operationId": "Mempprof",
+        "responses": {
+          "200": {
+            "description": "text with \\#-comments and key:value lines"
+          },
+          "404": {
+            "description": "metrics were compiled out"
+          }
+        }
+      }
+    },
     "/genesis": {
       "get": {
         "description": "Returns the entire genesis file in json.",

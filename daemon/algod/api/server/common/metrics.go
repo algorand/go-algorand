@@ -18,6 +18,7 @@ package common
 
 import (
 	"net/http"
+	"runtime/pprof"
 	"strings"
 
 	"github.com/labstack/echo/v4"
@@ -49,6 +50,18 @@ func Metrics(ctx lib.ReqContext, context echo.Context) {
 	w.Write([]byte(buf.String()))
 }
 
+// Mempprof dumps memory pprof data
+func Mempprof(ctx lib.ReqContext, context echo.Context) {
+	w := context.Response().Writer
+	w.Header().Set("Content-Type", "text/plain")
+	w.WriteHeader(http.StatusOK)
+	p := pprof.Lookup("heap")
+	err := p.WriteTo(w, 1)
+	if err != nil {
+		context.Logger().Errorf("mempprof: %v", err)
+	}
+}
+
 func init() {
 	Routes = append(Routes,
 		lib.Route{
@@ -56,6 +69,14 @@ func init() {
 			Method:      "GET",
 			Path:        "/metrics",
 			HandlerFunc: Metrics,
+		},
+	)
+	Routes = append(Routes,
+		lib.Route{
+			Name:        "mempprof",
+			Method:      "GET",
+			Path:        "/mempprof",
+			HandlerFunc: Mempprof,
 		},
 	)
 }
