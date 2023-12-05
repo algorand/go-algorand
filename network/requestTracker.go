@@ -42,9 +42,9 @@ const (
 // TrackerRequest hold the tracking data associated with a single request.
 type TrackerRequest struct {
 	created            time.Time
-	remoteHost         string // changed by updateRequestRemoteAddr if UseXForwardedForAddressField is set
+	remoteHost         string
 	remotePort         string
-	remoteAddr         string // not changed by updateRequestRemoteAddr. TODO FIXME
+	remoteAddr         string
 	request            *http.Request
 	otherTelemetryGUID string
 	otherInstanceName  string
