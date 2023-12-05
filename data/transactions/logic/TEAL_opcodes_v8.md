@@ -1485,7 +1485,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 
 - Bytecode: 0xb9
 - Stack: ..., A: boxName, B: uint64 &rarr; ..., bool
-- create a box named A, of length B. Fail if A is empty or B exceeds 32,768. Returns 0 if A already existed, else 1
+- create a box named A, of length B. Fail if the name A is empty or B exceeds 32,768. Returns 0 if A already existed, else 1
 - Availability: v8
 - Mode: Application
 
