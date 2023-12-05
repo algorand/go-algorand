@@ -1686,18 +1686,21 @@ txn NumApprovalProgramPages
 txna ApprovalProgramPages 0
 txn NumClearStateProgramPages
 txna ClearStateProgramPages 0
+pushint 1
+block BlkTimestamp
+pushint 1
+block BlkSeed
 global AssetCreateMinBalance
 global AssetOptInMinBalance
 txn GenesisHash
+pushint 1
+block BlkGenesisHash
 `, AssemblerMaxVersion)
-	for _, globalField := range GlobalFieldNames {
-		if !strings.Contains(text, globalField) {
-			t.Errorf("TestAssembleDisassemble missing field global %v", globalField)
-		}
-	}
-	for _, txnField := range TxnFieldNames {
-		if !strings.Contains(text, txnField) {
-			t.Errorf("TestAssembleDisassemble missing field txn %v", txnField)
+	for _, names := range [][]string{GlobalFieldNames[:], TxnFieldNames[:], blockFieldNames[:]} {
+		for _, f := range names {
+			if !strings.Contains(text, f) {
+				t.Errorf("TestAssembleDisassemble missing field %v", f)
+			}
 		}
 	}
 	ops := testProg(t, text, AssemblerMaxVersion)

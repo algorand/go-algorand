@@ -3435,7 +3435,7 @@ func TestLatestTimestamp(t *testing.T) {
 	testApp(t, source, ep)
 }
 
-func TestBlockSeed(t *testing.T) {
+func TestBlock(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -3465,7 +3465,7 @@ func TestBlockSeed(t *testing.T) {
 	testApp(t, "int 4294967310; int 1502; -; block BlkSeed; len; int 32; ==", ep,
 		"not available") // 1501 back from lv is not
 
-	// A little silly, as it only tests the test ledger: ensure samenes and differentness
+	// A little silly, as it only tests the test ledger: ensure sameness and differentness
 	testApp(t, "int 0xfffffff0; block BlkSeed; int 0xfffffff0; block BlkSeed; ==", ep)
 	testApp(t, "int 0xfffffff0; block BlkSeed; int 0xfffffff1; block BlkSeed; !=", ep)
 
@@ -3474,6 +3474,7 @@ func TestBlockSeed(t *testing.T) {
 	ep.runMode = ModeSig
 	ep.Ledger = nil
 	testLogic(t, "int 0xfffffff0; block BlkTimestamp", randomnessVersion, ep)
+	testLogic(t, "int 0xfffffff0; block BlkGenesisHash; byte 0x010203; int 29; bzero; concat; ==", 10, ep)
 }
 
 func TestCurrentApplicationID(t *testing.T) {

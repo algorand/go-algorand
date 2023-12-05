@@ -308,3 +308,36 @@ func TestAcctParamsFieldsVersions(t *testing.T) {
 
 	}
 }
+
+func TestBlockFieldsVersions(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	for _, field := range blockFieldSpecs {
+		text := fmt.Sprintf("txn FirstValid; int 1; - ; block %s;", field.field)
+		if field.ftype.AVMType == avmBytes {
+			text += "global ZeroAddress; concat; len" // use concat to prove we have bytes
+		} else {
+			text += "global ZeroAddress; len; +" // use + to prove we have an int
+		}
+
+		testLogicRange(t, 4, 0, func(t *testing.T, ep *EvalParams, txn *transactions.Transaction, ledger *Ledger) {
+			v := ep.Proto.LogicSigVersion
+			if field.version > v {
+				// check assembler fails if version before introduction
+				testProg(t, text, v, exp(1, "...was introduced in..."))
+				ops := testProg(t, text, field.version) // assemble in the future
+				ops.Program[0] = byte(v)                // but set version back to before intro
+				if v < randomnessVersion {
+					testAppBytes(t, ops.Program, ep, "illegal opcode", "illegal opcode")
+				} else {
+					testAppBytes(t, ops.Program, ep, "invalid block field")
+				}
+			} else {
+				testProg(t, text, v)
+				testApp(t, text, ep)
+			}
+		})
+
+	}
+}

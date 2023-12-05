@@ -966,6 +966,8 @@ const (
 	BlkSeed BlockField = iota
 	// BlkTimestamp is the Block's timestamp, seconds from epoch
 	BlkTimestamp
+	// BlkGenesisHash is the Block's genesis hash, which is always the same in a given network
+	BlkGenesisHash
 	invalidBlockField // compile-time constant for number of fields
 )
 
@@ -980,6 +982,7 @@ type blockFieldSpec struct {
 var blockFieldSpecs = [...]blockFieldSpec{
 	{BlkSeed, StackBytes, randomnessVersion},
 	{BlkTimestamp, StackUint64, randomnessVersion},
+	{BlkGenesisHash, StackBytes32, 10},
 }
 
 func blockFieldSpecByField(r BlockField) (blockFieldSpec, bool) {

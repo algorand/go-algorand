@@ -352,12 +352,13 @@ func _() {
 	var x [1]struct{}
 	_ = x[BlkSeed-0]
 	_ = x[BlkTimestamp-1]
-	_ = x[invalidBlockField-2]
+	_ = x[BlkGenesisHash-2]
+	_ = x[invalidBlockField-3]
 }
 
-const _BlockField_name = "BlkSeedBlkTimestampinvalidBlockField"
+const _BlockField_name = "BlkSeedBlkTimestampBlkGenesisHashinvalidBlockField"
 
-var _BlockField_index = [...]uint8{0, 7, 19, 36}
+var _BlockField_index = [...]uint8{0, 7, 19, 33, 50}
 
 func (i BlockField) String() string {
 	if i < 0 || i >= BlockField(len(_BlockField_index)-1) {

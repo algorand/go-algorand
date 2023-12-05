@@ -1636,10 +1636,11 @@ Standards
 
 Fields
 
-| Index | Name | Type | Notes |
-| - | ------ | -- | --------- |
-| 0 | BlkSeed | []byte |  |
-| 1 | BlkTimestamp | uint64 |  |
+| Index | Name | Type | In | Notes |
+| - | ------ | -- | - | --------- |
+| 0 | BlkSeed | []byte |      |  |
+| 1 | BlkTimestamp | uint64 |      |  |
+| 2 | BlkGenesisHash | [32]byte | v10  |  |
 
 
 ## box_splice

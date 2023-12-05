@@ -4633,11 +4633,13 @@
       "Size": 2,
       "ArgEnum": [
         "BlkSeed",
-        "BlkTimestamp"
+        "BlkTimestamp",
+        "BlkGenesisHash"
       ],
       "ArgEnumTypes": [
         "[]byte",
-        "uint64"
+        "uint64",
+        "[32]byte"
       ],
       "DocCost": "1",
       "Doc": "field F of block A. Fail unless A falls between txn.LastValid-1002 and txn.FirstValid (exclusive)",

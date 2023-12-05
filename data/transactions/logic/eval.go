@@ -5588,8 +5588,11 @@ func opBlock(cx *EvalContext) error {
 		}
 		cx.Stack[last].Uint = uint64(hdr.TimeStamp)
 		return nil
+	case BlkGenesisHash:
+		cx.Stack[last].Bytes = hdr.GenesisHash[:]
+		return nil
 	default:
-		return fmt.Errorf("invalid block field %d", fs.field)
+		return fmt.Errorf("invalid block field %s", fs.field)
 	}
 }
 

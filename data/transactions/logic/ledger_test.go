@@ -36,6 +36,7 @@ import (
 	"math"
 	"math/rand"
 
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/committee"
@@ -230,6 +231,7 @@ func (l *Ledger) BlockHdr(round basics.Round) (bookkeeping.BlockHeader, error) {
 	seed[7] = byte(round >> 56)
 	hdr.Seed = seed
 	hdr.TimeStamp = 100 + (9 * int64(round) / 2)
+	hdr.GenesisHash = crypto.Digest{0x01, 0x02, 0x03}
 	return hdr, nil
 	// perhaps should add an error when requesting old round for better testing
 }
