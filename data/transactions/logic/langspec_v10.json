@@ -1085,7 +1085,8 @@
         "ApprovalProgramPages",
         "NumApprovalProgramPages",
         "ClearStateProgramPages",
-        "NumClearStateProgramPages"
+        "NumClearStateProgramPages",
+        "GenesisHash"
       ],
       "ArgEnumTypes": [
         "address",
@@ -1155,7 +1156,8 @@
         "[]byte",
         "uint64",
         "[]byte",
-        "uint64"
+        "uint64",
+        "[32]byte"
       ],
       "DocCost": "1",
       "Doc": "field F of current transaction",
@@ -1307,7 +1309,8 @@
         "ApprovalProgramPages",
         "NumApprovalProgramPages",
         "ClearStateProgramPages",
-        "NumClearStateProgramPages"
+        "NumClearStateProgramPages",
+        "GenesisHash"
       ],
       "ArgEnumTypes": [
         "address",
@@ -1377,7 +1380,8 @@
         "[]byte",
         "uint64",
         "[]byte",
-        "uint64"
+        "uint64",
+        "[32]byte"
       ],
       "DocCost": "1",
       "Doc": "field F of the Tth transaction in the current group",
@@ -1615,7 +1619,8 @@
         "ApprovalProgramPages",
         "NumApprovalProgramPages",
         "ClearStateProgramPages",
-        "NumClearStateProgramPages"
+        "NumClearStateProgramPages",
+        "GenesisHash"
       ],
       "ArgEnumTypes": [
         "address",
@@ -1685,7 +1690,8 @@
         "[]byte",
         "uint64",
         "[]byte",
-        "uint64"
+        "uint64",
+        "[32]byte"
       ],
       "DocCost": "1",
       "Doc": "field F of the Ath transaction in the current group",
@@ -3869,7 +3875,8 @@
         "ApprovalProgramPages",
         "NumApprovalProgramPages",
         "ClearStateProgramPages",
-        "NumClearStateProgramPages"
+        "NumClearStateProgramPages",
+        "GenesisHash"
       ],
       "ArgEnumTypes": [
         "address",
@@ -3939,7 +3946,8 @@
         "[]byte",
         "uint64",
         "[]byte",
-        "uint64"
+        "uint64",
+        "[32]byte"
       ],
       "DocCost": "1",
       "Doc": "field F of the last inner transaction",
@@ -4088,7 +4096,8 @@
         "ApprovalProgramPages",
         "NumApprovalProgramPages",
         "ClearStateProgramPages",
-        "NumClearStateProgramPages"
+        "NumClearStateProgramPages",
+        "GenesisHash"
       ],
       "ArgEnumTypes": [
         "address",
@@ -4158,7 +4167,8 @@
         "[]byte",
         "uint64",
         "[]byte",
-        "uint64"
+        "uint64",
+        "[32]byte"
       ],
       "DocCost": "1",
       "Doc": "field F of the Tth transaction in the last inner group submitted",

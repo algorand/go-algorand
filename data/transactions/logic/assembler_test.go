@@ -1688,6 +1688,7 @@ txn NumClearStateProgramPages
 txna ClearStateProgramPages 0
 global AssetCreateMinBalance
 global AssetOptInMinBalance
+txn GenesisHash
 `, AssemblerMaxVersion)
 	for _, globalField := range GlobalFieldNames {
 		if !strings.Contains(text, globalField) {

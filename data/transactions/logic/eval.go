@@ -2977,6 +2977,8 @@ func (cx *EvalContext) txnFieldToStack(stxn *transactions.SignedTxnWithAD, fs *t
 		sv.Uint = uint64(txn.LastValid)
 	case Note:
 		sv.Bytes = nilToEmpty(txn.Note)
+	case GenesisHash:
+		sv.Bytes = txn.GenesisHash[:]
 	case Receiver:
 		sv.Bytes = txn.Receiver[:]
 	case Amount:

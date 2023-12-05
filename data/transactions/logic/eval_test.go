@@ -1759,6 +1759,10 @@ int 1
 `
 const testTxnProgramTextV10 = testTxnProgramTextV9 + `
 assert
+txn GenesisHash
+byte 0x0200000000000000000000000000000000000000000000000000000000000000
+==
+assert
 int 1
 `
 
@@ -1909,6 +1913,7 @@ func TestTxn(t *testing.T) {
 			txn.Txn.ApprovalProgram = ops.Program
 			txn.Txn.ClearStateProgram = clearOps.Program
 			txn.Txn.ExtraProgramPages = 2
+			txn.Txn.GenesisHash = crypto.Digest{0x02}
 			// RekeyTo not allowed in v1
 			if v < rekeyingEnabledVersion {
 				txn.Txn.RekeyTo = basics.Address{}

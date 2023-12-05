@@ -429,6 +429,7 @@ Fields (see [transaction reference](https://developer.algorand.org/docs/referenc
 | 63 | StateProofPK | []byte | v6  | 64 byte state proof public key |
 | 65 | NumApprovalProgramPages | uint64 | v7  | Number of Approval Program pages |
 | 67 | NumClearStateProgramPages | uint64 | v7  | Number of ClearState Program pages |
+| 68 | GenesisHash | [32]byte | v10  | Genesis Hash |
 
 
 ## global
