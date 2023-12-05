@@ -33,7 +33,7 @@ Ops have a 'cost' of 1 unless otherwise specified.
 ## ed25519verify
 
 - Bytecode: 0x04
-- Stack: ..., A: []byte, B: []byte, C: []byte &rarr; ..., bool
+- Stack: ..., A: []byte, B: [64]byte, C: [32]byte &rarr; ..., bool
 - for (data A, signature B, pubkey C) verify the signature of ("ProgData" || program_hash || data) against the pubkey => {0 or 1}
 - **Cost**: 1900
 
@@ -43,7 +43,7 @@ The 32 byte public key is the last element on the stack, preceded by the 64 byte
 
 - Syntax: `ecdsa_verify V` ∋ V: [ECDSA](#field-group-ecdsa)
 - Bytecode: 0x05 {uint8}
-- Stack: ..., A: []byte, B: []byte, C: []byte, D: []byte, E: []byte &rarr; ..., bool
+- Stack: ..., A: [32]byte, B: []byte, C: []byte, D: []byte, E: []byte &rarr; ..., bool
 - for (data A, signature B, C and pubkey D, E) verify the signature of the data against the pubkey => {0 or 1}
 - **Cost**: Secp256k1=1700
 - Availability: v5
@@ -74,7 +74,7 @@ The 33 byte public key in a compressed form to be decompressed into X and Y (top
 
 - Syntax: `ecdsa_pk_recover V` ∋ V: [ECDSA](#field-group-ecdsa)
 - Bytecode: 0x07 {uint8}
-- Stack: ..., A: []byte, B: uint64, C: []byte, D: []byte &rarr; ..., X: []byte, Y: []byte
+- Stack: ..., A: [32]byte, B: uint64, C: [32]byte, D: [32]byte &rarr; ..., X: []byte, Y: []byte
 - for (data A, recovery id B, signature C, D) recover a public key
 - **Cost**: 2000
 - Availability: v5

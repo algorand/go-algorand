@@ -60,12 +60,12 @@ type P2PNetwork struct {
 	broadcaster                    msgBroadcaster
 	wsPeers                        map[peer.ID]*wsPeer
 	wsPeersLock                    deadlock.RWMutex
-	wsPeersChangeCounter           int32
+	wsPeersChangeCounter           atomic.Int32
 	wsPeersConnectivityCheckTicker *time.Ticker
 }
 
 type p2pPeerStats struct {
-	txReceived uint64
+	txReceived atomic.Uint64
 }
 
 // NewP2PNetwork returns an instance of GossipNode that uses the p2p.Service
@@ -366,7 +366,7 @@ func (n *P2PNetwork) wsStreamHandler(ctx context.Context, peer peer.ID, stream n
 	n.wsPeersLock.Lock()
 	n.wsPeers[peer] = wsp
 	n.wsPeersLock.Unlock()
-	atomic.AddInt32(&n.wsPeersChangeCounter, 1)
+	n.wsPeersChangeCounter.Add(1)
 }
 
 // peerRemoteClose called from wsPeer to report that it has closed
@@ -375,7 +375,7 @@ func (n *P2PNetwork) peerRemoteClose(peer *wsPeer, reason disconnectReason) {
 	n.wsPeersLock.Lock()
 	delete(n.wsPeers, remotePeerID)
 	n.wsPeersLock.Unlock()
-	atomic.AddInt32(&n.wsPeersChangeCounter, 1)
+	n.wsPeersChangeCounter.Add(1)
 }
 
 func (n *P2PNetwork) peerSnapshot(dest []*wsPeer) ([]*wsPeer, int32) {
@@ -403,7 +403,7 @@ func (n *P2PNetwork) peerSnapshot(dest []*wsPeer) ([]*wsPeer, int32) {
 }
 
 func (n *P2PNetwork) getPeersChangeCounter() int32 {
-	return atomic.LoadInt32(&n.wsPeersChangeCounter)
+	return n.wsPeersChangeCounter.Load()
 }
 
 func (n *P2PNetwork) checkSlowWritingPeers()  {}
@@ -453,10 +453,10 @@ func (n *P2PNetwork) txTopicValidator(ctx context.Context, peerID peer.ID, msg *
 	n.peerStatsMu.Lock()
 	peerStats, ok := n.peerStats[peerID]
 	if !ok {
-		n.peerStats[peerID] = &p2pPeerStats{txReceived: 1}
-	} else {
-		peerStats.txReceived++
+		peerStats = &p2pPeerStats{}
+		n.peerStats[peerID] = peerStats
 	}
+	peerStats.txReceived.Add(1)
 	n.peerStatsMu.Unlock()
 
 	outmsg := n.handler.Handle(inmsg)

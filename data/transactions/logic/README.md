@@ -52,17 +52,19 @@ assembly time to do type checking and to provide more informative error messages
 
 | Name | Bound | AVM Type |
 | ---- | ---- | -------- |
-| uint64 | x <= 18446744073709551615 | uint64 |
-| stateKey | len(x) <= 64 | []byte |
-| none |  | none |
-| method | len(x) == 4 | []byte |
-| boxName | 1 <= len(x) <= 64 | []byte |
-| bool | x <= 1 | uint64 |
-| bigint | len(x) <= 64 | []byte |
-| any |  | any |
-| address | len(x) == 32 | []byte |
-| []byte | len(x) <= 4096 | []byte |
 | [32]byte | len(x) == 32 | []byte |
+| [64]byte | len(x) == 64 | []byte |
+| [80]byte | len(x) == 80 | []byte |
+| []byte | len(x) <= 4096 | []byte |
+| address | len(x) == 32 | []byte |
+| any |  | any |
+| bigint | len(x) <= 64 | []byte |
+| bool | x <= 1 | uint64 |
+| boxName | 1 <= len(x) <= 64 | []byte |
+| method | len(x) == 4 | []byte |
+| none |  | none |
+| stateKey | len(x) <= 64 | []byte |
+| uint64 | x <= 18446744073709551615 | uint64 |
 
 
 
@@ -339,7 +341,7 @@ An application transaction must indicate the action to be taken following the ex
 
 Most operations work with only one type of argument, uint64 or bytes, and fail if the wrong type value is on the stack.
 
-Many instructions accept values to designate Accounts, Assets, or Applications. Beginning with v4, these values may be given as an _offset_ in the corresponding Txn fields (Txn.Accounts, Txn.ForeignAssets, Txn.ForeignApps) _or_ as the value itself (a byte-array address for Accounts, or a uint64 ID). The values, however, must still be present in the Txn fields. Before v4, most opcodes required the use of an offset, except for reading account local values of assets or applications, which accepted the IDs directly and did not require the ID to be present in they corresponding _Foreign_ array. (Note that beginning with v4, those IDs _are_ required to be present in their corresponding _Foreign_ array.) See individual opcodes for details. In the case of account offsets or application offsets, 0 is specially defined to Txn.Sender or the ID of the current application, respectively.
+Many instructions accept values to designate Accounts, Assets, or Applications. Beginning with v4, these values may be given as an _offset_ in the corresponding Txn fields (Txn.Accounts, Txn.ForeignAssets, Txn.ForeignApps) _or_ as the value itself (a byte-array address for Accounts, or a uint64 ID). The values, however, must still be present in the Txn fields. Before v4, most opcodes required the use of an offset, except for reading account local values of assets or applications, which accepted the IDs directly and did not require the ID to be present in the corresponding _Foreign_ array. (Note that beginning with v4, those IDs _are_ required to be present in their corresponding _Foreign_ array.) See individual opcodes for details. In the case of account offsets or application offsets, 0 is specially defined to Txn.Sender or the ID of the current application, respectively.
 
 This summary is supplemented by more detail in the [opcodes document](TEAL_opcodes.md).
 
@@ -359,26 +361,10 @@ an opcode manipulates the stack in such a way that a value changes
 position but is otherwise unchanged, the name of the output on the
 return stack matches the name of the input value.
 
-### Arithmetic, Logic, and Cryptographic Operations
+### Arithmetic and Logic Operations
 
 | Opcode | Description |
 | - | -- |
-| `sha256` | SHA256 hash of value A, yields [32]byte |
-| `keccak256` | Keccak256 hash of value A, yields [32]byte |
-| `sha512_256` | SHA512_256 hash of value A, yields [32]byte |
-| `sha3_256` | SHA3_256 hash of value A, yields [32]byte |
-| `ed25519verify` | for (data A, signature B, pubkey C) verify the signature of ("ProgData" \|\| program_hash \|\| data) against the pubkey => {0 or 1} |
-| `ed25519verify_bare` | for (data A, signature B, pubkey C) verify the signature of the data against the pubkey => {0 or 1} |
-| `ecdsa_verify v` | for (data A, signature B, C and pubkey D, E) verify the signature of the data against the pubkey => {0 or 1} |
-| `ecdsa_pk_recover v` | for (data A, recovery id B, signature C, D) recover a public key |
-| `ecdsa_pk_decompress v` | decompress pubkey A into components X, Y |
-| `vrf_verify s` | Verify the proof B of message A against pubkey C. Returns vrf output and verification flag. |
-| `ec_add g` | for curve points A and B, return the curve point A + B |
-| `ec_scalar_mul g` | for curve point A and scalar B, return the curve point BA, the point A multiplied by the scalar B. |
-| `ec_pairing_check g` | 1 if the product of the pairing of each point in A with its respective point in B is equal to the identity element of the target group Gt, else 0 |
-| `ec_multi_scalar_mul g` | for curve points A and scalars B, return curve point B0A0 + B1A1 + B2A2 + ... + BnAn |
-| `ec_subgroup_check g` | 1 if A is in the main prime-order subgroup of G (including the point at infinity) else 0. Program fails if A is not in G at all. |
-| `ec_map_to g` | maps field element A to group G |
 | `+` | A plus B. Fail on overflow. |
 | `-` | A minus B. Fail if B > A. |
 | `/` | A divided by B (truncated division). Fail if B == 0. |
@@ -397,7 +383,6 @@ return stack matches the name of the input value.
 | `==` | A is equal to B => {0 or 1} |
 | `!=` | A is not equal to B => {0 or 1} |
 | `!` | A == 0 yields 1; else 0 |
-| `len` | yields length of byte value A |
 | `itob` | converts uint64 A to big-endian byte array, always of length 8 |
 | `btoi` | converts big-endian byte array A to uint64. Fails if len(A) > 8. Padded by leading 0s if len(A) < 8. |
 | `%` | A modulo B. Fail if B == 0. |
@@ -410,16 +395,17 @@ return stack matches the name of the input value.
 | `divw` | A,B / C. Fail if C == 0 or if result overflows. |
 | `divmodw` | W,X = (A,B / C,D); Y,Z = (A,B modulo C,D) |
 | `expw` | A raised to the Bth power as a 128-bit result in two uint64s. X is the high 64 bits, Y is the low. Fail if A == B == 0 or if the results exceeds 2^128-1 |
-| `getbit` | Bth bit of (byte-array or integer) A. If B is greater than or equal to the bit length of the value (8*byte length), the program fails |
-| `setbit` | Copy of (byte-array or integer) A, with the Bth bit set to (0 or 1) C. If B is greater than or equal to the bit length of the value (8*byte length), the program fails |
-| `getbyte` | Bth byte of A, as an integer. If B is greater than or equal to the array length, the program fails |
-| `setbyte` | Copy of A with the Bth byte set to small integer (between 0..255) C. If B is greater than or equal to the array length, the program fails |
-| `concat` | join A and B |
 
 ### Byte Array Manipulation
 
 | Opcode | Description |
 | - | -- |
+| `getbit` | Bth bit of (byte-array or integer) A. If B is greater than or equal to the bit length of the value (8*byte length), the program fails |
+| `setbit` | Copy of (byte-array or integer) A, with the Bth bit set to (0 or 1) C. If B is greater than or equal to the bit length of the value (8*byte length), the program fails |
+| `getbyte` | Bth byte of A, as an integer. If B is greater than or equal to the array length, the program fails |
+| `setbyte` | Copy of A with the Bth byte set to small integer (between 0..255) C. If B is greater than or equal to the array length, the program fails |
+| `concat` | join A and B |
+| `len` | yields length of byte value A |
 | `substring s e` | A range of bytes from A starting at S up to but not including E. If E < S, or either is larger than the array length, the program fails |
 | `substring3` | A range of bytes from A starting at B up to but not including C. If C < B, or either is larger than the array length, the program fails |
 | `extract s l` | A range of bytes from A starting at S up to but not including S+L. If L is 0, then extract to the end of the string. If S or S+L is larger than the array length, the program fails |
@@ -471,6 +457,27 @@ these results may contain leading zero bytes.
 | `b&` | A bitwise-and B. A and B are zero-left extended to the greater of their lengths |
 | `b^` | A bitwise-xor B. A and B are zero-left extended to the greater of their lengths |
 | `b~` | A with all bits inverted |
+
+### Cryptographic Operations
+
+| Opcode | Description |
+| - | -- |
+| `sha256` | SHA256 hash of value A, yields [32]byte |
+| `keccak256` | Keccak256 hash of value A, yields [32]byte |
+| `sha512_256` | SHA512_256 hash of value A, yields [32]byte |
+| `sha3_256` | SHA3_256 hash of value A, yields [32]byte |
+| `ed25519verify` | for (data A, signature B, pubkey C) verify the signature of ("ProgData" \|\| program_hash \|\| data) against the pubkey => {0 or 1} |
+| `ed25519verify_bare` | for (data A, signature B, pubkey C) verify the signature of the data against the pubkey => {0 or 1} |
+| `ecdsa_verify v` | for (data A, signature B, C and pubkey D, E) verify the signature of the data against the pubkey => {0 or 1} |
+| `ecdsa_pk_recover v` | for (data A, recovery id B, signature C, D) recover a public key |
+| `ecdsa_pk_decompress v` | decompress pubkey A into components X, Y |
+| `vrf_verify s` | Verify the proof B of message A against pubkey C. Returns vrf output and verification flag. |
+| `ec_add g` | for curve points A and B, return the curve point A + B |
+| `ec_scalar_mul g` | for curve point A and scalar B, return the curve point BA, the point A multiplied by the scalar B. |
+| `ec_pairing_check g` | 1 if the product of the pairing of each point in A with its respective point in B is equal to the identity element of the target group Gt, else 0 |
+| `ec_multi_scalar_mul g` | for curve points A and scalars B, return curve point B0A0 + B1A1 + B2A2 + ... + BnAn |
+| `ec_subgroup_check g` | 1 if A is in the main prime-order subgroup of G (including the point at infinity) else 0. Program fails if A is not in G at all. |
+| `ec_map_to g` | maps field element A to group G |
 
 ### Loading Values
 
@@ -768,7 +775,7 @@ are sure to be _available_.
 
 The following opcodes allow for "inner transactions". Inner
 transactions allow stateful applications to have many of the effects
-of a true top-level transaction, programatically.  However, they are
+of a true top-level transaction, programmatically.  However, they are
 different in significant ways.  The most important differences are
 that they are not signed, duplicates are not rejected, and they do not
 appear in the block in the usual away. Instead, their effects are
@@ -779,7 +786,7 @@ account that has been rekeyed to that hash.
 
 In v5, inner transactions may perform `pay`, `axfer`, `acfg`, and
 `afrz` effects.  After executing an inner transaction with
-`itxn_submit`, the effects of the transaction are visible begining
+`itxn_submit`, the effects of the transaction are visible beginning
 with the next instruction with, for example, `balance` and
 `min_balance` checks. In v6, inner transactions may also perform
 `keyreg` and `appl` effects. Inner `appl` calls fail if they attempt
@@ -799,7 +806,7 @@ setting is used when `itxn_submit` executes. For this purpose `Type`
 and `TypeEnum` are considered to be the same field. When using
 `itxn_field` to set an array field (`ApplicationArgs` `Accounts`,
 `Assets`, or `Applications`) each use adds an element to the end of
-the the array, rather than setting the entire array at once.
+the array, rather than setting the entire array at once.
 
 `itxn_field` fails immediately for unsupported fields, unsupported
 transaction types, or improperly typed values for a particular

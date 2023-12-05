@@ -35,8 +35,8 @@ import (
 // of a secret-key compromise.
 type OneTimeSignature struct {
 	// Unfortunately we forgot to mark this struct as omitempty at
-	// one point, and now it's hard to recover from that if we want
-	// to preserve encodings..
+	// one point, and now it's hard to change if we want to preserve
+	// encodings.
 	_struct struct{} `codec:""`
 
 	// Sig is a signature of msg under the key PK.
@@ -319,8 +319,21 @@ func (v OneTimeSignatureVerifier) Verify(id OneTimeSignatureIdentifier, message 
 		Batch:    id.Batch,
 	}
 
+	// serialize encoded batchID, offsetID, message into a continuous memory buffer with the layout
+	// hashRep(batchID)... hashRep(offsetID)... hashRep(message)...
+	const estimatedSize = 256
+	messageBuffer := make([]byte, 0, estimatedSize)
+
+	messageBuffer = HashRepToBuff(batchID, messageBuffer)
+	batchIDLen := uint64(len(messageBuffer))
+	messageBuffer = HashRepToBuff(offsetID, messageBuffer)
+	offsetIDLen := uint64(len(messageBuffer)) - batchIDLen
+	messageBuffer = HashRepToBuff(message, messageBuffer)
+	messageLen := uint64(len(messageBuffer)) - offsetIDLen - batchIDLen
+	msgLengths := []uint64{batchIDLen, offsetIDLen, messageLen}
 	allValid, _ := batchVerificationImpl(
-		[][]byte{HashRep(batchID), HashRep(offsetID), HashRep(message)},
+		messageBuffer,
+		msgLengths,
 		[]PublicKey{PublicKey(v), PublicKey(batchID.SubKeyPK), PublicKey(offsetID.SubKeyPK)},
 		[]Signature{Signature(sig.PK2Sig), Signature(sig.PK1Sig), Signature(sig.Sig)},
 	)

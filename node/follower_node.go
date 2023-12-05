@@ -83,7 +83,7 @@ func MakeFollower(log logging.Logger, rootDir string, cfg config.Local, phoneboo
 	node.genesisHash = genesis.Hash()
 	node.devMode = genesis.DevMode
 	var err error
-	node.genesisDirs, err = cfg.EnsureAndResolveGenesisDirs(rootDir, genesis.ID())
+	node.genesisDirs, err = cfg.EnsureAndResolveGenesisDirs(rootDir, genesis.ID(), log)
 	if err != nil {
 		return nil, err
 	}
@@ -226,17 +226,17 @@ func (node *AlgorandFollowerNode) Ledger() *data.Ledger {
 
 // BroadcastSignedTxGroup errors in follower mode
 func (node *AlgorandFollowerNode) BroadcastSignedTxGroup(_ []transactions.SignedTxn) (err error) {
-	return fmt.Errorf("cannot broadcast txns in sync mode")
+	return fmt.Errorf("cannot broadcast txns in follower mode")
 }
 
 // AsyncBroadcastSignedTxGroup errors in follower mode
 func (node *AlgorandFollowerNode) AsyncBroadcastSignedTxGroup(_ []transactions.SignedTxn) (err error) {
-	return fmt.Errorf("cannot broadcast txns in sync mode")
+	return fmt.Errorf("cannot broadcast txns in follower mode")
 }
 
 // BroadcastInternalSignedTxGroup errors in follower mode
 func (node *AlgorandFollowerNode) BroadcastInternalSignedTxGroup(_ []transactions.SignedTxn) (err error) {
-	return fmt.Errorf("cannot broadcast internal signed txn group in sync mode")
+	return fmt.Errorf("cannot broadcast internal signed txn group in follower mode")
 }
 
 // Simulate speculatively runs a transaction group against the current

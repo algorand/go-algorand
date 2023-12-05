@@ -28,6 +28,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
@@ -162,7 +163,7 @@ func initializeTestCatchupAccessor(t *testing.T, l *Ledger, accountsCount uint64
 	require.NoError(t, err)
 
 	// We do this to initialize the catchpointblocks table. Needed to be able to use CompleteCatchup.
-	err = catchpointAccessor.StoreFirstBlock(ctx, &bookkeeping.Block{})
+	err = catchpointAccessor.StoreFirstBlock(ctx, &bookkeeping.Block{}, &agreement.Certificate{})
 	require.NoError(t, err)
 
 	// We do this to initialize the accounttotals table. Needed to be able to use CompleteCatchup.
@@ -441,6 +442,7 @@ func TestVerifyCatchpoint(t *testing.T) {
 
 	// actual testing...
 	var blk bookkeeping.Block
+	var cert agreement.Certificate
 	err = catchpointAccessor.VerifyCatchpoint(ctx, &blk)
 	require.Error(t, err)
 
@@ -455,14 +457,14 @@ func TestVerifyCatchpoint(t *testing.T) {
 	err = catchpointAccessor.StoreBalancesRound(ctx, &blk)
 	require.NoError(t, err)
 	// StoreFirstBlock is a dumb wrapper on some db logic
-	err = catchpointAccessor.StoreFirstBlock(ctx, &blk)
+	err = catchpointAccessor.StoreFirstBlock(ctx, &blk, &cert)
 	require.NoError(t, err)
 
 	_, err = catchpointAccessor.EnsureFirstBlock(ctx)
 	require.NoError(t, err)
 
 	blk.BlockHeader.Round++
-	err = catchpointAccessor.StoreBlock(ctx, &blk)
+	err = catchpointAccessor.StoreBlock(ctx, &blk, &cert)
 	require.NoError(t, err)
 
 	// TODO: write a case with working no-err

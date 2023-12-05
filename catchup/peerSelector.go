@@ -51,6 +51,10 @@ const (
 	peerRank4LowBlockTime        = 801
 	peerRank4HighBlockTime       = 999
 
+	// peerRankNoBlockForRound is used for responses failed because of no block for round
+	// This indicates a peer is either behind or a block has not happened yet, or does not have a block that is old enough.
+	peerRankNoBlockForRound = 2000
+
 	// peerRankDownloadFailed is used for responses which could be temporary, such as missing files, or such that we don't
 	// have clear resolution
 	peerRankDownloadFailed = 10000
@@ -110,11 +114,13 @@ type peerPool struct {
 // client to provide feedback regarding the peer's performance, and to have the subsequent
 // query(s) take advantage of that intel.
 type peerSelector struct {
-	mu          deadlock.Mutex
-	net         peersRetriever
+	mu  deadlock.Mutex
+	net peersRetriever
+	// peerClasses is the list of peer classes we want to have in the peerSelector.
 	peerClasses []peerClass
-	pools       []peerPool
-	counter     uint64
+	// pools is the list of peer pools, each pool contains a list of peers with the same rank.
+	pools   []peerPool
+	counter uint64
 }
 
 // historicStats stores the past windowSize ranks for the peer passed
@@ -141,7 +147,7 @@ func makeHistoricStatus(windowSize int, class peerClass) *historicStats {
 	// that will determine the rank of the peer.
 	hs := historicStats{
 		windowSize:  windowSize,
-		rankSamples: make([]int, windowSize, windowSize),
+		rankSamples: make([]int, windowSize),
 		requestGaps: make([]uint64, 0, windowSize),
 		rankSum:     uint64(class.initialRank) * uint64(windowSize),
 		gapSum:      0.0}
@@ -227,18 +233,24 @@ func (hs *historicStats) push(value int, counter uint64, class peerClass) (avera
 
 	// Download may fail for various reasons. Give it additional tries
 	// and see if it recovers/improves.
-	if value == peerRankDownloadFailed {
+	factor := float64(1.0)
+	switch value {
+	// - Set the rank to the class upper bound multiplied
+	//   by the number of downloadFailures.
+	// - Each downloadFailure increments the counter, and
+	//   each non-failure decrements it, until it gets to 0.
+	// - When the peer is consistently failing to
+	//   download, the value added to rankSum will
+	//   increase at an increasing rate to evict the peer
+	//   from the class sooner.
+	case peerRankNoBlockForRound:
+		// for the no block errors apply very smooth rank increase
+		factor = 0.1
+		fallthrough
+	case peerRankDownloadFailed:
 		hs.downloadFailures++
-		// - Set the rank to the class upper bound multiplied
-		//   by the number of downloadFailures.
-		// - Each downloadFailure increments the counter, and
-		//   each non-failure decrements it, until it gets to 0.
-		// - When the peer is consistently failing to
-		//   download, the value added to rankSum will
-		//   increase at an increasing rate to evict the peer
-		//   from the class sooner.
-		value = upperBound(class) * int(math.Exp2(float64(hs.downloadFailures)))
-	} else {
+		value = upperBound(class) * int(math.Exp2(float64(hs.downloadFailures)*factor))
+	default:
 		if hs.downloadFailures > 0 {
 			hs.downloadFailures--
 		}
@@ -250,12 +262,12 @@ func (hs *historicStats) push(value int, counter uint64, class peerClass) (avera
 	// The average performance of the peer
 	average := float64(hs.rankSum) / float64(len(hs.rankSamples))
 
-	if int(average) > upperBound(class) && initialRank == peerRankDownloadFailed {
+	if int(average) > upperBound(class) && (initialRank == peerRankDownloadFailed || initialRank == peerRankNoBlockForRound) {
 		// peerRankDownloadFailed will be delayed, to give the peer
 		// additional time to improve. If does not improve over time,
 		// the average will exceed the class limit. At this point,
 		// it will be pushed down to download failed class.
-		return peerRankDownloadFailed
+		return initialRank
 	}
 
 	// A penalty is added relative to how freequently the peer is used
@@ -468,7 +480,7 @@ func (ps *peerSelector) refreshAvailablePeers() {
 		for peerIdx := len(pool.peers) - 1; peerIdx >= 0; peerIdx-- {
 			peer := pool.peers[peerIdx].peer
 			if peerAddress := peerAddress(peer); peerAddress != "" {
-				if toRemove, _ := existingPeers[pool.peers[peerIdx].class.peerClass][peerAddress]; toRemove {
+				if toRemove := existingPeers[pool.peers[peerIdx].class.peerClass][peerAddress]; toRemove {
 					// need to be removed.
 					pool.peers = append(pool.peers[:peerIdx], pool.peers[peerIdx+1:]...)
 				}

@@ -17,14 +17,15 @@
 package metrics
 
 import (
+	"sync/atomic"
+
 	"github.com/algorand/go-deadlock"
 )
 
 // Counter represent a single counter variable.
 type Counter struct {
 	// Collects value for special fast-path with no labels through Inc(nil) AddUint64(x, nil)
-	// We want to make it on a 64-bit aligned address for ARM compiliers as it's being used by AddUint64
-	intValue uint64
+	intValue atomic.Uint64
 
 	deadlock.Mutex
 	name          string

@@ -33,7 +33,7 @@ Ops have a 'cost' of 1 unless otherwise specified.
 ## ed25519verify
 
 - Bytecode: 0x04
-- Stack: ..., A: []byte, B: []byte, C: []byte &rarr; ..., bool
+- Stack: ..., A: []byte, B: [64]byte, C: [32]byte &rarr; ..., bool
 - for (data A, signature B, pubkey C) verify the signature of ("ProgData" || program_hash || data) against the pubkey => {0 or 1}
 - **Cost**: 1900
 - Mode: Signature

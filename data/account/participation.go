@@ -20,6 +20,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"math"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -79,8 +80,8 @@ func (id *ParticipationKeyIdentity) ToBeHashed() (protocol.HashID, []byte) {
 }
 
 // ID creates a ParticipationID hash from the identity file.
-func (id ParticipationKeyIdentity) ID() ParticipationID {
-	return ParticipationID(crypto.HashObj(&id))
+func (id *ParticipationKeyIdentity) ID() ParticipationID {
+	return ParticipationID(crypto.HashObj(id))
 }
 
 // ID computes a ParticipationID.
@@ -213,6 +214,11 @@ func (part PersistedParticipation) PersistNewParent() error {
 		_, err := tx.Exec("UPDATE ParticipationAccount SET parent=?", part.Parent[:])
 		return err
 	})
+}
+
+// DefaultKeyDilution computes the default dilution based on first and last rounds as the sqrt of validity window.
+func DefaultKeyDilution(first, last basics.Round) uint64 {
+	return 1 + uint64(math.Sqrt(float64(last-first)))
 }
 
 // FillDBWithParticipationKeys initializes the passed database with participation keys

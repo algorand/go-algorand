@@ -56,6 +56,7 @@ var transactionMessageTxGroupExcessive = metrics.MakeCounter(metrics.Transaction
 var transactionMessageTxGroupFull = metrics.MakeCounter(metrics.TransactionMessageTxGroupFull)
 var transactionMessagesDupRawMsg = metrics.MakeCounter(metrics.TransactionMessagesDupRawMsg)
 var transactionMessagesDupCanonical = metrics.MakeCounter(metrics.TransactionMessagesDupCanonical)
+var transactionMessagesAppLimiterDrop = metrics.MakeCounter(metrics.TransactionMessagesAppLimiterDrop)
 var transactionMessagesBacklogSizeGauge = metrics.MakeGauge(metrics.TransactionMessagesBacklogSize)
 
 var transactionGroupTxSyncHandled = metrics.MakeCounter(metrics.TransactionGroupTxSyncHandled)
@@ -111,23 +112,25 @@ type txBacklogMsg struct {
 
 // TxHandler handles transaction messages
 type TxHandler struct {
-	txPool                *pools.TransactionPool
-	ledger                *Ledger
-	genesisID             string
-	genesisHash           crypto.Digest
-	txVerificationPool    execpool.BacklogPool
-	backlogQueue          chan *txBacklogMsg
-	postVerificationQueue chan *verify.VerificationResult
-	backlogWg             sync.WaitGroup
-	net                   network.GossipNode
-	msgCache              *txSaltedCache
-	txCanonicalCache      *digestCache
-	ctx                   context.Context
-	ctxCancel             context.CancelFunc
-	streamVerifier        *execpool.StreamToBatch
-	streamVerifierChan    chan execpool.InputJob
-	streamVerifierDropped chan *verify.UnverifiedTxnSigJob
-	erl                   *util.ElasticRateLimiter
+	txPool                     *pools.TransactionPool
+	ledger                     *Ledger
+	genesisID                  string
+	genesisHash                crypto.Digest
+	txVerificationPool         execpool.BacklogPool
+	backlogQueue               chan *txBacklogMsg
+	backlogCongestionThreshold float64
+	postVerificationQueue      chan *verify.VerificationResult
+	backlogWg                  sync.WaitGroup
+	net                        network.GossipNode
+	msgCache                   *txSaltedCache
+	txCanonicalCache           *digestCache
+	ctx                        context.Context
+	ctxCancel                  context.CancelFunc
+	streamVerifier             *execpool.StreamToBatch
+	streamVerifierChan         chan execpool.InputJob
+	streamVerifierDropped      chan *verify.UnverifiedTxnSigJob
+	erl                        *util.ElasticRateLimiter
+	appLimiter                 *appRateLimiter
 }
 
 // TxHandlerOpts is TxHandler configuration options
@@ -178,14 +181,29 @@ func MakeTxHandler(opts TxHandlerOpts) (*TxHandler, error) {
 		handler.txCanonicalCache = makeDigestCache(int(opts.Config.TxIncomingFilterMaxSize))
 	}
 
-	if opts.Config.EnableTxBacklogRateLimiting {
-		rateLimiter := util.NewElasticRateLimiter(
-			txBacklogSize,
-			opts.Config.TxBacklogReservedCapacityPerPeer,
-			time.Duration(opts.Config.TxBacklogServiceRateWindowSeconds)*time.Second,
-			txBacklogDroppedCongestionManagement,
-		)
-		handler.erl = rateLimiter
+	if opts.Config.EnableTxBacklogRateLimiting || opts.Config.EnableTxBacklogAppRateLimiting {
+		if opts.Config.TxBacklogRateLimitingCongestionPct > 100 || opts.Config.TxBacklogRateLimitingCongestionPct < 0 {
+			return nil, fmt.Errorf("invalid value for TxBacklogRateLimitingCongestionPct: %d", opts.Config.TxBacklogRateLimitingCongestionPct)
+		}
+		if opts.Config.EnableTxBacklogAppRateLimiting && opts.Config.TxBacklogAppTxRateLimiterMaxSize == 0 {
+			return nil, fmt.Errorf("invalid value for TxBacklogAppTxRateLimiterMaxSize: %d. App rate limiter enabled with zero size", opts.Config.TxBacklogAppTxRateLimiterMaxSize)
+		}
+		handler.backlogCongestionThreshold = float64(opts.Config.TxBacklogRateLimitingCongestionPct) / 100
+		if opts.Config.EnableTxBacklogRateLimiting {
+			handler.erl = util.NewElasticRateLimiter(
+				txBacklogSize,
+				opts.Config.TxBacklogReservedCapacityPerPeer,
+				time.Duration(opts.Config.TxBacklogServiceRateWindowSeconds)*time.Second,
+				txBacklogDroppedCongestionManagement,
+			)
+		}
+		if opts.Config.EnableTxBacklogAppRateLimiting {
+			handler.appLimiter = makeAppRateLimiter(
+				opts.Config.TxBacklogAppTxRateLimiterMaxSize,
+				uint64(opts.Config.TxBacklogAppTxPerSecondRate),
+				time.Duration(opts.Config.TxBacklogServiceRateWindowSeconds)*time.Second,
+			)
+		}
 	}
 
 	// prepare the transaction stream verifier
@@ -578,7 +596,9 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 
 	var err error
 	var capguard *util.ErlCapacityGuard
+	var congested bool
 	if handler.erl != nil {
+		congested = float64(cap(handler.backlogQueue))*handler.backlogCongestionThreshold < float64(len(handler.backlogQueue))
 		// consume a capacity unit
 		// if the elastic rate limiter cannot vend a capacity, the error it returns
 		// is sufficient to indicate that we should enable Congestion Control, because
@@ -591,7 +611,7 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 			return network.OutgoingMessage{Action: network.Ignore}
 		}
 		// if the backlog Queue has 50% of its buffer back, turn congestion control off
-		if float64(cap(handler.backlogQueue))*0.5 > float64(len(handler.backlogQueue)) {
+		if !congested {
 			handler.erl.DisableCongestionControl()
 		}
 	}
@@ -638,6 +658,12 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 			transactionMessagesDupCanonical.Inc(nil)
 			return network.OutgoingMessage{Action: network.Ignore}
 		}
+	}
+
+	// rate limit per application in a group. Limiting any app in a group drops the entire message.
+	if handler.appLimiter != nil && congested && handler.appLimiter.shouldDrop(unverifiedTxGroup, rawmsg.Sender.(network.IPAddressable).RoutingAddr()) {
+		transactionMessagesAppLimiterDrop.Inc(nil)
+		return network.OutgoingMessage{Action: network.Ignore}
 	}
 
 	select {

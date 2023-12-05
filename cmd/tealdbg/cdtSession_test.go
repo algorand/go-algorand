@@ -521,9 +521,7 @@ func TestCdtSessionGetObjects(t *testing.T) {
 			{Type: basics.TealUintType, Uint: 1},
 			{Type: basics.TealBytesType, Bytes: "\x01\x02"},
 		},
-		pc:   atomicInt{1},
-		line: atomicInt{1},
-		err:  e,
+		err: e,
 		AppState: AppState{
 			appIdx: basics.AppIndex(1),
 			schemas: basics.StateSchemas{
@@ -582,6 +580,8 @@ func TestCdtSessionGetObjects(t *testing.T) {
 			},
 		},
 	}
+	state.pc.Store(1)
+	state.line.Store(1)
 
 	req.Method = "Runtime.getProperties"
 	req.Params = map[string]interface{}{}

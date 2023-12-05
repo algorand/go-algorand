@@ -769,6 +769,16 @@ func (l *Ledger) Wait(r basics.Round) chan struct{} {
 	return l.bulletinDisk.Wait(r)
 }
 
+// WaitWithCancel returns a channel that closes once a given round is
+// stored durably in the ledger. The returned function can be used to
+// cancel the wait, which cleans up resources if no other Wait call is
+// active for the same round.
+func (l *Ledger) WaitWithCancel(r basics.Round) (chan struct{}, func()) {
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
+	return l.bulletinDisk.Wait(r), func() { l.bulletinDisk.CancelWait(r) }
+}
+
 // WaitMem returns a channel that closes once a given round is
 // available in memory in the ledger, but might not be stored
 // durably on disk yet.
@@ -896,6 +906,12 @@ func (l *Ledger) Validate(ctx context.Context, blk bookkeeping.Block, executionP
 // LatestTrackerCommitted returns the trackers' dbRound which "is always exactly accountsRound()"
 func (l *Ledger) LatestTrackerCommitted() basics.Round {
 	return l.trackers.getDbRound()
+}
+
+// IsBehindCommittingDeltas indicates if the ledger is behind expected number of in-memory deltas.
+// It intended to slow down the catchup service when deltas overgrow some limit.
+func (l *Ledger) IsBehindCommittingDeltas() bool {
+	return l.trackers.isBehindCommittingDeltas(l.Latest())
 }
 
 // DebuggerLedger defines the minimal set of method required for creating a debug balances.

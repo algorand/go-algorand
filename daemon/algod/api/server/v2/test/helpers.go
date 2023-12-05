@@ -99,9 +99,11 @@ type mockNode struct {
 	status          node.StatusReport
 	devmode         bool
 	timestampOffset *int64
+	PartKeyBinary   []byte
 }
 
 func (m *mockNode) InstallParticipationKey(partKeyBinary []byte) (account.ParticipationID, error) {
+	m.PartKeyBinary = partKeyBinary
 	return account.ParticipationID{}, nil
 }
 
@@ -340,8 +342,7 @@ func testingenvWithBalances(t testing.TB, minMoneyAtStart, maxMoneyAtStart, numA
 
 	genesis[poolAddr] = basics_testing.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 100000 * uint64(proto.RewardsRateRefreshInterval)})
 
-	program := logic.Program(retOneProgram)
-	lhash := crypto.HashObj(&program)
+	lhash := logic.HashProgram(retOneProgram)
 	var addr basics.Address
 	copy(addr[:], lhash[:])
 	ad := basics_testing.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 100000 * uint64(proto.RewardsRateRefreshInterval)})

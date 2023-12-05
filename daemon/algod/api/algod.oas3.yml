@@ -5379,6 +5379,109 @@
         "x-codegen-request-body-name": "participationkey"
       }
     },
+    "/v2/participation/generate/{address}": {
+      "post": {
+        "operationId": "GenerateParticipationKeys",
+        "parameters": [
+          {
+            "description": "An account public key",
+            "in": "path",
+            "name": "address",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Key dilution for two-level participation keys (defaults to sqrt of validity window).",
+            "in": "query",
+            "name": "dilution",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "First round for participation key.",
+            "in": "query",
+            "name": "first",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Last round for participation key.",
+            "in": "query",
+            "name": "last",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "An empty JSON object is returned if the generation process was started. Currently no status is available."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid API Token"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Temporarily Unavailable"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Generate and install participation keys to the node.",
+        "tags": [
+          "private",
+          "participating"
+        ]
+      }
+    },
     "/v2/participation/{participation-id}": {
       "delete": {
         "description": "Delete a given participation key by ID",
@@ -7089,5 +7192,6 @@
     {
       "name": "private"
     }
-  ]
+  ],
+  "x-original-swagger-version": "2.0"
 }

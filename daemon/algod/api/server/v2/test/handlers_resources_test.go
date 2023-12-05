@@ -19,10 +19,11 @@ package test
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/algorand/go-algorand/data/transactions/logic"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/algorand/go-algorand/data/transactions/logic"
 
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
@@ -133,6 +134,9 @@ func (l *mockLedger) BlockHdr(rnd basics.Round) (bookkeeping.BlockHeader, error)
 	return blk.BlockHeader, nil
 }
 func (l *mockLedger) Wait(r basics.Round) chan struct{} {
+	panic("not implemented")
+}
+func (l *mockLedger) WaitWithCancel(r basics.Round) (chan struct{}, func()) {
 	panic("not implemented")
 }
 func (l *mockLedger) GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (c basics.Address, ok bool, err error) {
