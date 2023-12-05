@@ -2978,7 +2978,15 @@ func (cx *EvalContext) txnFieldToStack(stxn *transactions.SignedTxnWithAD, fs *t
 	case Note:
 		sv.Bytes = nilToEmpty(txn.Note)
 	case GenesisHash:
-		sv.Bytes = txn.GenesisHash[:]
+		// We don't copy the GenesisHash into inner transactions, but apps
+		// should still be allowed to access it. This "virtually copies" it.
+		// All GHs in the whole group are identical, so it's OK that we use the
+		// GH from ancestor of this cx, even if this cx is not evaluting txn.
+		top := cx
+		for ; top.caller != nil; top = top.caller {
+			// just walking up, no code.
+		}
+		sv.Bytes = top.txn.Txn.GenesisHash[:]
 	case Receiver:
 		sv.Bytes = txn.Receiver[:]
 	case Amount:
