@@ -28,8 +28,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/libp2p/go-libp2p/core/peer"
-
 	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/agreement"
@@ -201,7 +199,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	}
 
 	if cfg.EnableDHTProviders {
-		caps, err0 := p2p.MakeCapabilitiesDiscovery(node.ctx, node.config, node.genesisDirs.RootGenesisDir, string(genesis.Network), node.log, []*peer.AddrInfo{})
+		caps, err0 := p2p.MakeCapabilitiesDiscovery(node.ctx, node.config, node.genesisDirs.RootGenesisDir, string(genesis.Network), node.log, phonebookAddresses)
 		if err0 != nil {
 			log.Errorf("Failed to create dht node capabilities discovery: %v", err)
 			return nil, err

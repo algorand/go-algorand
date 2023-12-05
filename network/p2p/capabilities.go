@@ -147,7 +147,15 @@ func (c *CapabilitiesDiscovery) AdvertiseCapabilities(capabilities ...Capability
 }
 
 // MakeCapabilitiesDiscovery creates a new CapabilitiesDiscovery object which exposes peer discovery and capabilities advertisement
-func MakeCapabilitiesDiscovery(ctx context.Context, cfg config.Local, datadir string, network string, log logging.Logger, bootstrapPeers []*peer.AddrInfo) (*CapabilitiesDiscovery, error) {
+func MakeCapabilitiesDiscovery(ctx context.Context, cfg config.Local, datadir string, network string, log logging.Logger, phonebookAddresses []string) (*CapabilitiesDiscovery, error) {
+	var bootstrapPeers []*peer.AddrInfo
+	if len(phonebookAddresses) > 0 {
+		var malformedAddrs map[string]string
+		bootstrapPeers, malformedAddrs = peerstore.PeerInfoFromAddrs(phonebookAddresses)
+		for malAddr, malErr := range malformedAddrs {
+			log.Infof("Ignoring malformed phonebook address %s: %s", malAddr, malErr)
+		}
+	}
 	pstore, err := peerstore.NewPeerStore(bootstrapPeers)
 	if err != nil {
 		return nil, err
