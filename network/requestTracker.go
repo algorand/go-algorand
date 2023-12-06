@@ -42,14 +42,14 @@ const (
 type TrackerRequest struct {
 	created time.Time
 	// remoteHost is IP address of the remote host and it is equal to either
-	// a host part of the remoteAddr or to the value of X-Forwarded-For header.
+	// a host part of the remoteAddr or to the value of X-Forwarded-For header (UseXForwardedForAddressField config value).
 	remoteHost string
 	// remotePort is the port of the remote peer as reported by the connection or
 	// by the standard http.Request.RemoteAddr field.
 	remotePort string
 	// remoteAddr is IP:Port of the remote host retrieved from the connection
 	// or from the standard http.Request.RemoteAddr field.
-	// This field the real address of the remote incomming connection.
+	// This field the real address of the remote incoming connection.
 	remoteAddr string
 	// otherPublicAddr is the public address of the other node, as reported by the other node
 	// via the X-Algorand-Location header.

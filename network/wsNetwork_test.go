@@ -1430,7 +1430,6 @@ func TestPeeringWithIdentityChallenge(t *testing.T) {
 	netA.wg.Add(1)
 	netA.tryConnect(addrB, gossipC)
 	// let the tryConnect go forward
-	time.Sleep(250 * time.Millisecond)
 	assert.Eventually(t, func() bool {
 		return len(netA.GetPeers(PeersConnectedOut)) == 2
 	}, time.Second, 50*time.Millisecond)
