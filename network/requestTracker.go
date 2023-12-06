@@ -100,11 +100,21 @@ func (tr *TrackerRequest) remoteAddress() string {
 		}
 	}
 	url, err := ParseHostOrURL(tr.remoteAddr)
-	if err != nil || url.Hostname() == tr.remoteHost {
-		// TrackerRequest could be created with only remoteAddr provided so use it as a default.
+	if err != nil {
+		// tr.remoteAddr can't be parsed so try to use tr.remoteHost
+		// there is a chance it came from a proxy and has a meaningful value
+		if len(tr.remoteHost) != 0 {
+			return tr.remoteHost
+		}
+		// otherwise fallback to tr.remoteAddr
 		return tr.remoteAddr
 	}
-	return tr.remoteHost
+	if url.Hostname() != tr.remoteHost {
+		// if remoteAddr's host not equal to remoteHost then the remoteHost
+		// is definitely came from a proxy, use it
+		return tr.remoteHost
+	}
+	return tr.remoteAddr
 }
 
 // hostIncomingRequests holds all the requests that are originating from a single host.
