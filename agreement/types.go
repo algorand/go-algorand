@@ -100,10 +100,10 @@ const (
 	down
 )
 
-func (s step) nextVoteRanges() (lower, upper time.Duration) {
-	extra := recoveryExtraTimeout  // eg  2000 ms
-	lower = defaultDeadlineTimeout // eg 17000 ms (15000 + 2000)
-	upper = lower + extra          // eg 19000 ms
+func (s step) nextVoteRanges(deadlineTimeout time.Duration) (lower, upper time.Duration) {
+	extra := recoveryExtraTimeout // eg  2000 ms
+	lower = deadlineTimeout       // based on types.DeadlineTimeout()
+	upper = lower + extra
 
 	for i := next; i < s; i++ {
 		extra *= 2

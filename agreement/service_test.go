@@ -2043,11 +2043,11 @@ func TestAgreementRecoverBothVAndBotQuorums(t *testing.T) {
 		activityMonitor.waitForQuiet()
 
 		// actually create the value quorum
-		_, upper := (next).nextVoteRanges()
+		_, upper := (next).nextVoteRanges(DeadlineTimeout(0, version))
 		triggerGlobalTimeout(upper, TimeoutDeadline, clocks[1:], activityMonitor) // activates next timers
 		zeroes = expectNoNewPeriod(clocks[1:], zeroes)
 
-		lower, upper := (next + 1).nextVoteRanges()
+		lower, upper := (next + 1).nextVoteRanges(DeadlineTimeout(0, version))
 		delta := time.Duration(testingRand{}.Uint64() % uint64(upper-lower))
 		triggerGlobalTimeout(lower+delta, TimeoutDeadline, clocks[1:], activityMonitor)
 		zeroes = expectNewPeriod(clocks, zeroes)
