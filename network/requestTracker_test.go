@@ -17,7 +17,9 @@
 package network
 
 import (
+	"bytes"
 	"math/rand"
+	"net/http"
 	"testing"
 	"time"
 
@@ -198,6 +200,7 @@ func TestRemoteAddress(t *testing.T) {
 
 func TestIsLocalHost(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	require.True(t, isLocalhost("localhost"))
 	require.True(t, isLocalhost("127.0.0.1"))
@@ -208,4 +211,102 @@ func TestIsLocalHost(t *testing.T) {
 	require.False(t, isLocalhost(""))
 	require.False(t, isLocalhost("0.0.0.0"))
 	require.False(t, isLocalhost("127.0.0.0"))
+}
+
+func TestGetForwardedConnectionAddress(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	var bufNewLogger bytes.Buffer
+	log := logging.NewLogger()
+	log.SetOutput(&bufNewLogger)
+
+	rt := RequestTracker{log: log}
+	header := http.Header{}
+
+	ip := rt.getForwardedConnectionAddress(header)
+	require.Nil(t, ip)
+	msgs := bufNewLogger.String()
+	require.Empty(t, msgs)
+
+	rt.config.UseXForwardedForAddressField = "X-Custom-Addr"
+	ip = rt.getForwardedConnectionAddress(header)
+	require.Nil(t, ip)
+	msgs = bufNewLogger.String()
+	require.NotEmpty(t, msgs)
+	require.Contains(t, msgs, "UseForwardedForAddressField is configured as 'X-Custom-Addr'")
+
+	// try again and ensure the message is not logged second time.
+	bufNewLogger.Reset()
+	ip = rt.getForwardedConnectionAddress(header)
+	require.Nil(t, ip)
+	msgs = bufNewLogger.String()
+	require.Empty(t, msgs)
+
+	// check a custom address can be parsed successfully.
+	header.Set("X-Custom-Addr", "123.123.123.123")
+	ip = rt.getForwardedConnectionAddress(header)
+	require.NotNil(t, ip)
+	require.Equal(t, "123.123.123.123", ip.String())
+	msgs = bufNewLogger.String()
+	require.Empty(t, msgs)
+
+	// check a custom address in a form of a list can not be parsed,
+	// this is the original behavior since the Release.
+	header.Set("X-Custom-Addr", "123.123.123.123, 234.234.234.234")
+	ip = rt.getForwardedConnectionAddress(header)
+	require.Nil(t, ip)
+	msgs = bufNewLogger.String()
+	require.NotEmpty(t, msgs)
+	require.Contains(t, msgs, "unable to parse origin address")
+
+	// "X-Forwarded-For
+	bufNewLogger.Reset()
+	rt.misconfiguredUseForwardedForAddress.Store(false)
+	rt.config.UseXForwardedForAddressField = "X-Forwarded-For"
+	header = http.Header{}
+
+	// check "X-Forwarded-For" empty value.
+	ip = rt.getForwardedConnectionAddress(header)
+	require.Nil(t, ip)
+	msgs = bufNewLogger.String()
+	require.NotEmpty(t, msgs)
+	require.Contains(t, msgs, "UseForwardedForAddressField is configured as 'X-Forwarded-For'")
+	bufNewLogger.Reset()
+
+	// check "X-Forwarded-For" single value.
+	header.Set("X-Forwarded-For", "123.123.123.123")
+	ip = rt.getForwardedConnectionAddress(header)
+	require.NotNil(t, ip)
+	require.Equal(t, "123.123.123.123", ip.String())
+	msgs = bufNewLogger.String()
+	require.Empty(t, msgs)
+
+	// check "X-Forwarded-For" list values - the last one is used,
+	// this is a new behavior.
+	bufNewLogger.Reset()
+	rt.config.UseXForwardedForAddressField = "X-Forwarded-For"
+	header.Set("X-Forwarded-For", "123.123.123.123, 234.234.234.234")
+	ip = rt.getForwardedConnectionAddress(header)
+	require.NotNil(t, ip)
+	require.Equal(t, "234.234.234.234", ip.String())
+	msgs = bufNewLogger.String()
+	require.Empty(t, msgs)
+
+	// check multile X-Forwarded-For headers - the last one should be used
+	header.Set("X-Forwarded-For", "127.0.0.1")
+	header.Add("X-Forwarded-For", "234.234.234.234")
+	ip = rt.getForwardedConnectionAddress(header)
+	require.NotNil(t, ip)
+	require.Equal(t, "234.234.234.234", ip.String())
+	msgs = bufNewLogger.String()
+	require.Empty(t, msgs)
+
+	header.Set("X-Forwarded-For", "127.0.0.1")
+	header.Add("X-Forwarded-For", "123.123.123.123, 234.234.234.234")
+	ip = rt.getForwardedConnectionAddress(header)
+	require.NotNil(t, ip)
+	require.Equal(t, "234.234.234.234", ip.String())
+	msgs = bufNewLogger.String()
+	require.Empty(t, msgs)
 }
