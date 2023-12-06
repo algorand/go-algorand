@@ -44,13 +44,13 @@ func TestP2PSubmitTX(t *testing.T) {
 	log := logging.TestingLog(t)
 	netA, err := NewP2PNetwork(log, cfg, "", nil, genesisID, config.Devtestnet)
 	require.NoError(t, err)
-	peerInfoA := netA.service.AddrInfo()
+	netA.Start()
+	defer netA.Stop()
 
+	peerInfoA := netA.service.AddrInfo()
 	addrsA, err := peerstore.AddrInfoToP2pAddrs(&peerInfoA)
 	require.NoError(t, err)
 	require.NotZero(t, addrsA[0])
-	netA.Start()
-	defer netA.Stop()
 
 	multiAddrStr := addrsA[0].String()
 	phoneBookAddresses := []string{multiAddrStr}
@@ -119,24 +119,27 @@ func TestP2PSubmitWS(t *testing.T) {
 	netA, err := NewP2PNetwork(log, cfg, "", nil, genesisID, config.Devtestnet)
 	require.NoError(t, err)
 
+	err = netA.Start()
+	require.NoError(t, err)
+	defer netA.Stop()
+
 	peerInfoA := netA.service.AddrInfo()
 	addrsA, err := peerstore.AddrInfoToP2pAddrs(&peerInfoA)
 	require.NoError(t, err)
 	require.NotZero(t, addrsA[0])
-	netA.Start()
-	defer netA.Stop()
 
 	multiAddrStr := addrsA[0].String()
 	phoneBookAddresses := []string{multiAddrStr}
 	netB, err := NewP2PNetwork(log, cfg, "", phoneBookAddresses, genesisID, config.Devtestnet)
 	require.NoError(t, err)
-	netB.Start()
+	err = netB.Start()
+	require.NoError(t, err)
 	defer netB.Stop()
 
 	netC, err := NewP2PNetwork(log, cfg, "", phoneBookAddresses, genesisID, config.Devtestnet)
-
 	require.NoError(t, err)
-	netC.Start()
+	err = netC.Start()
+	require.NoError(t, err)
 	defer netC.Stop()
 
 	require.Eventually(
@@ -187,6 +190,10 @@ type mockService struct {
 	id    peer.ID
 	addrs []ma.Multiaddr
 	peers map[peer.ID]peer.AddrInfo
+}
+
+func (s *mockService) Start() error {
+	return nil
 }
 
 func (s *mockService) Close() error {
@@ -307,4 +314,46 @@ func TestP2PNetworkAddress(t *testing.T) {
 	retAddr, ok = netA.Address()
 	require.False(t, ok)
 	require.Empty(t, retAddr)
+}
+
+func TestGetBootstrapPeers(t *testing.T) {
+	t.Parallel()
+	partitiontest.PartitionTest(t)
+
+	cfg := config.GetDefaultLocal()
+	cfg.DNSBootstrapID = "<network>.algodev.network"
+	cfg.DNSSecurityFlags = 0
+
+	addrs := getBootstrapPeers(cfg, "test")
+
+	require.GreaterOrEqual(t, len(addrs), 1)
+	addr := addrs[0]
+	require.Equal(t, len(addr.Addrs), 1)
+	require.GreaterOrEqual(t, len(addr.Addrs), 1)
+}
+
+func TestGetBootstrapPeersFailure(t *testing.T) {
+	t.Parallel()
+	partitiontest.PartitionTest(t)
+
+	cfg := config.GetDefaultLocal()
+	cfg.DNSSecurityFlags = 0
+	cfg.DNSBootstrapID = "non-existent.algodev.network"
+
+	addrs := getBootstrapPeers(cfg, "test")
+
+	require.Equal(t, 0, len(addrs))
+}
+
+func TestGetBootstrapPeersInvalidAddr(t *testing.T) {
+	t.Parallel()
+	partitiontest.PartitionTest(t)
+
+	cfg := config.GetDefaultLocal()
+	cfg.DNSSecurityFlags = 0
+	cfg.DNSBootstrapID = "<network>.algodev.network"
+
+	addrs := getBootstrapPeers(cfg, "testInvalidAddr")
+
+	require.Equal(t, 0, len(addrs))
 }

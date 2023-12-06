@@ -154,8 +154,6 @@ type AlgorandFullNode struct {
 	tracer messagetracer.MessageTracer
 
 	stateProofWorker *stateproof.Worker
-
-	capabilitiesDiscovery *p2p.CapabilitiesDiscovery
 }
 
 // TxnWithStatus represents information about a single transaction,
@@ -198,14 +196,14 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		return nil, err
 	}
 
-	if cfg.EnableDHTProviders {
-		caps, err0 := p2p.MakeCapabilitiesDiscovery(node.ctx, node.config, node.genesisDirs.RootGenesisDir, string(genesis.Network), node.log, phonebookAddresses)
-		if err0 != nil {
-			log.Errorf("Failed to create dht node capabilities discovery: %v", err)
-			return nil, err
-		}
-		node.capabilitiesDiscovery = caps
-	}
+	// if cfg.EnableDHTProviders {
+	// 	caps, err0 := p2p.MakeCapabilitiesDiscovery(node.ctx, node.config, node.genesisDirs.RootGenesisDir, string(genesis.Network), node.log, phonebookAddresses)
+	// 	if err0 != nil {
+	// 		log.Errorf("Failed to create dht node capabilities discovery: %v", err)
+	// 		return nil, err
+	// 	}
+	// 	node.capabilitiesDiscovery = caps
+	// }
 
 	// tie network, block fetcher, and agreement services together
 	var p2pNode network.GossipNode
@@ -398,10 +396,10 @@ func (node *AlgorandFullNode) Start() error {
 
 		node.startMonitoringRoutines()
 	}
-	if node.capabilitiesDiscovery != nil {
-		node.capabilitiesDiscovery.AdvertiseCapabilities(node.capabilities()...)
-	}
-
+	// if node.capabilitiesDiscovery != nil {
+	// 	node.capabilitiesDiscovery.AdvertiseCapabilities(node.capabilities()...)
+	// }
+	return nil
 }
 
 func (node *AlgorandFullNode) capabilities() []p2p.Capability {
@@ -470,9 +468,9 @@ func (node *AlgorandFullNode) Stop() {
 	node.lowPriorityCryptoVerificationPool.Shutdown()
 	node.cryptoPool.Shutdown()
 	node.cancelCtx()
-	if node.capabilitiesDiscovery != nil {
-		node.capabilitiesDiscovery.Close()
-	}
+	// if node.capabilitiesDiscovery != nil {
+	// 	node.capabilitiesDiscovery.Close()
+	// }
 }
 
 // note: unlike the other two functions, this accepts a whole filename

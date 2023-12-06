@@ -28,6 +28,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network/p2p"
+	"github.com/algorand/go-algorand/network/p2p/dnsaddr"
 	"github.com/algorand/go-algorand/network/p2p/peerstore"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-deadlock"
@@ -63,6 +64,67 @@ type P2PNetwork struct {
 	wsPeersLock                    deadlock.RWMutex
 	wsPeersChangeCounter           atomic.Int32
 	wsPeersConnectivityCheckTicker *time.Ticker
+
+	capabilitiesDiscovery *p2p.CapabilitiesDiscovery
+
+	bootstrapper bootstrapper
+}
+
+type bootstrapper struct {
+	cfg            config.Local
+	networkID      protocol.NetworkID
+	phonebookPeers []*peer.AddrInfo
+	started        bool
+}
+
+func (b *bootstrapper) start() {
+	b.started = true
+}
+
+func (b *bootstrapper) stop() {
+	b.started = false
+}
+
+func (b *bootstrapper) BootstrapFunc() []peer.AddrInfo {
+	// not started yet, do not give it any peers
+	if !b.started {
+		return nil
+	}
+
+	// have a list of peers, use them
+	if len(b.phonebookPeers) > 0 {
+		var addrs []peer.AddrInfo
+		for _, bPeer := range b.phonebookPeers {
+			if bPeer != nil {
+				addrs = append(addrs, *bPeer)
+			}
+		}
+		return addrs
+	}
+
+	return getBootstrapPeers(b.cfg, b.networkID)
+}
+
+// getBootstrapPeers looks up a list of Multiaddrs strings from the dnsaddr records at the primary
+// SRV record domain.
+func getBootstrapPeers(cfg config.Local, network protocol.NetworkID) []peer.AddrInfo {
+	var addrs []peer.AddrInfo
+	bootstraps := cfg.DNSBootstrapArray(network)
+	for _, dnsBootstrap := range bootstraps {
+		controller := dnsaddr.NewMultiaddrDNSResolveController(cfg.DNSSecuritySRVEnforced(), "")
+		resolvedAddrs, err := dnsaddr.MultiaddrsFromResolver(dnsBootstrap.PrimarySRVBootstrap, controller)
+		if err != nil {
+			continue
+		}
+		for _, resolvedAddr := range resolvedAddrs {
+			info, err0 := peer.AddrInfoFromP2pAddr(resolvedAddr)
+			if err0 != nil {
+				continue
+			}
+			addrs = append(addrs, *info)
+		}
+	}
+	return addrs
 }
 
 type p2pPeerStats struct {
@@ -115,9 +177,30 @@ func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebo
 		broadcastQueueBulk:     make(chan broadcastRequest, 100),
 	}
 
-	net.service, err = p2p.MakeService(net.ctx, log, cfg, datadir, pstore, net.wsStreamHandler)
+	h, la, err := p2p.MakeHost(cfg, datadir, pstore)
 	if err != nil {
 		return nil, err
+	}
+	log.Infof("P2P host created: peer ID %s addrs %s", h.ID(), h.Addrs())
+
+	net.service, err = p2p.MakeService(net.ctx, log, cfg, h, la, net.wsStreamHandler, addrInfo)
+	if err != nil {
+		return nil, err
+	}
+
+	bootstrapper := &bootstrapper{
+		cfg:            cfg,
+		networkID:      networkID,
+		phonebookPeers: addrInfo,
+	}
+
+	if cfg.EnableDHTProviders {
+		caps, err0 := p2p.MakeCapabilitiesDiscovery(net.ctx, cfg, h, networkID, net.log, bootstrapper.BootstrapFunc)
+		if err0 != nil {
+			log.Errorf("Failed to create dht node capabilities discovery: %v", err)
+			return nil, err
+		}
+		net.capabilitiesDiscovery = caps
 	}
 
 	err = net.setup()
@@ -148,6 +231,11 @@ func (n *P2PNetwork) PeerIDSigner() identityChallengeSigner {
 // Start threads, listen on sockets.
 func (n *P2PNetwork) Start() error {
 	n.wg.Add(1)
+	n.bootstrapper.start()
+	err := n.service.Start()
+	if err != nil {
+		return err
+	}
 	go n.txTopicHandleLoop()
 
 	if n.wsPeersConnectivityCheckTicker != nil {
@@ -180,6 +268,7 @@ func (n *P2PNetwork) Stop() {
 	n.innerStop()
 	n.ctxCancel()
 	n.service.Close()
+	n.bootstrapper.stop()
 	n.wg.Wait()
 }
 

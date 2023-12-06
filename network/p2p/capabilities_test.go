@@ -47,7 +47,11 @@ func TestCapabilities_Discovery(t *testing.T) {
 	testSize := 3
 	for i := 0; i < testSize; i++ {
 		tempdir := t.TempDir()
-		capD, err := MakeCapabilitiesDiscovery(context.Background(), config.GetDefaultLocal(), tempdir, "devtestnet", logging.Base(), []*peer.AddrInfo{})
+		ps, err := peerstore.NewPeerStore(nil)
+		require.NoError(t, err)
+		h, _, err := MakeHost(config.GetDefaultLocal(), tempdir, ps)
+		require.NoError(t, err)
+		capD, err := MakeCapabilitiesDiscovery(context.Background(), config.GetDefaultLocal(), h, "devtestnet", logging.Base(), func() []peer.AddrInfo { return nil })
 		require.NoError(t, err)
 		caps = append(caps, capD)
 		addrs = append(addrs, peer.AddrInfo{
@@ -72,7 +76,7 @@ func TestCapabilities_Discovery(t *testing.T) {
 
 func setupDHTHosts(t *testing.T, numHosts int) []*dht.IpfsDHT {
 	var hosts []host.Host
-	var bootstrapPeers []*peer.AddrInfo
+	var bootstrapPeers []peer.AddrInfo
 	var dhts []*dht.IpfsDHT
 	cfg := config.GetDefaultLocal()
 	for i := 0; i < numHosts; i++ {
@@ -87,10 +91,10 @@ func setupDHTHosts(t *testing.T, numHosts int) []*dht.IpfsDHT {
 			libp2p.Peerstore(ps))
 		require.NoError(t, err)
 		hosts = append(hosts, h)
-		bootstrapPeers = append(bootstrapPeers, &peer.AddrInfo{ID: h.ID(), Addrs: h.Addrs()})
+		bootstrapPeers = append(bootstrapPeers, peer.AddrInfo{ID: h.ID(), Addrs: h.Addrs()})
 	}
 	for _, h := range hosts {
-		ht, err := algodht.MakeDHT(context.Background(), h, "devtestnet", cfg, bootstrapPeers)
+		ht, err := algodht.MakeDHT(context.Background(), h, "devtestnet", cfg, func() []peer.AddrInfo { return bootstrapPeers })
 		require.NoError(t, err)
 		err = ht.Bootstrap(context.Background())
 		require.NoError(t, err)
@@ -117,7 +121,7 @@ func waitForRouting(t *testing.T, disc *CapabilitiesDiscovery) {
 
 func setupCapDiscovery(t *testing.T, numHosts int, numBootstrapPeers int) []*CapabilitiesDiscovery {
 	var hosts []host.Host
-	var bootstrapPeers []*peer.AddrInfo
+	var bootstrapPeers []peer.AddrInfo
 	var capsDisc []*CapabilitiesDiscovery
 	cfg := config.GetDefaultLocal()
 	for i := 0; i < numHosts; i++ {
@@ -132,7 +136,7 @@ func setupCapDiscovery(t *testing.T, numHosts int, numBootstrapPeers int) []*Cap
 			libp2p.Peerstore(ps))
 		require.NoError(t, err)
 		hosts = append(hosts, h)
-		bootstrapPeers = append(bootstrapPeers, &peer.AddrInfo{ID: h.ID(), Addrs: h.Addrs()})
+		bootstrapPeers = append(bootstrapPeers, peer.AddrInfo{ID: h.ID(), Addrs: h.Addrs()})
 	}
 	for _, h := range hosts {
 		bp := bootstrapPeers
@@ -142,7 +146,7 @@ func setupCapDiscovery(t *testing.T, numHosts int, numBootstrapPeers int) []*Cap
 			})
 			bp = bp[:numBootstrapPeers]
 		}
-		ht, err := algodht.MakeDHT(context.Background(), h, "devtestnet", cfg, bp)
+		ht, err := algodht.MakeDHT(context.Background(), h, "devtestnet", cfg, func() []peer.AddrInfo { return bp })
 		require.NoError(t, err)
 		disc, err := algodht.MakeDiscovery(ht)
 		require.NoError(t, err)

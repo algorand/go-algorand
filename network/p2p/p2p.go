@@ -26,6 +26,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-deadlock"
+	"github.com/multiformats/go-multiaddr"
 
 	"github.com/libp2p/go-libp2p"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -41,6 +42,7 @@ import (
 
 // Service defines the interface used by the network integrating with underlying p2p implementation
 type Service interface {
+	Start() error
 	Close() error
 	ID() peer.ID // return peer.ID for self
 	IDSigner() *PeerIDChallengeSigner
@@ -58,12 +60,13 @@ type Service interface {
 
 // serviceImpl manages integration with libp2p and implements the Service interface
 type serviceImpl struct {
-	log       logging.Logger
-	host      host.Host
-	streams   *streamManager
-	pubsub    *pubsub.PubSub
-	pubsubCtx context.Context
-	privKey   crypto.PrivKey
+	log        logging.Logger
+	listenAddr string
+	host       host.Host
+	streams    *streamManager
+	pubsub     *pubsub.PubSub
+	pubsubCtx  context.Context
+	privKey    crypto.PrivKey
 
 	topics   map[string]*pubsub.Topic
 	topicsMu deadlock.RWMutex
@@ -74,11 +77,13 @@ const AlgorandWsProtocol = "/algorand-ws/1.0.0"
 
 const dialTimeout = 30 * time.Second
 
-func makeHost(cfg config.Local, datadir string, pstore peerstore.Peerstore) (host.Host, error) {
+// MakeHost creates a libp2p host but does not start listening.
+// Use host.Network().Listen() on the returned address to start listening.
+func MakeHost(cfg config.Local, datadir string, pstore peerstore.Peerstore) (host.Host, string, error) {
 	// load stored peer ID, or make ephemeral peer ID
 	privKey, err := GetPrivKey(cfg, datadir)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	// muxer supports tweaking fields from yamux.Config
@@ -96,24 +101,26 @@ func makeHost(cfg config.Local, datadir string, pstore peerstore.Peerstore) (hos
 		listenAddr = "/ip4/0.0.0.0/tcp/0"
 	}
 
-	return libp2p.New(
+	// the libp2p.NoListenAddrs builtin disables relays but this one does not
+	var noListenAddrs = func(cfg *libp2p.Config) error {
+		cfg.ListenAddrs = []multiaddr.Multiaddr{}
+		return nil
+	}
+
+	host, err := libp2p.New(
 		libp2p.Identity(privKey),
 		libp2p.UserAgent(ua),
 		libp2p.Transport(tcp.NewTCPTransport),
 		libp2p.Muxer("/yamux/1.0.0", &ymx),
 		libp2p.Peerstore(pstore),
-		libp2p.ListenAddrStrings(listenAddr),
+		noListenAddrs,
 		libp2p.Security(noise.ID, noise.New),
 	)
+	return host, listenAddr, err
 }
 
 // MakeService creates a P2P service instance
-func MakeService(ctx context.Context, log logging.Logger, cfg config.Local, datadir string, pstore peerstore.Peerstore, wsStreamHandler StreamHandler) (*serviceImpl, error) {
-	h, err := makeHost(cfg, datadir, pstore)
-	if err != nil {
-		return nil, err
-	}
-	log.Infof("P2P service started: peer ID %s addrs %s", h.ID(), h.Addrs())
+func MakeService(ctx context.Context, log logging.Logger, cfg config.Local, h host.Host, listenAddr string, wsStreamHandler StreamHandler, bootstrapPeers []*peer.AddrInfo) (*serviceImpl, error) {
 
 	sm := makeStreamManager(ctx, log, h, wsStreamHandler)
 	h.Network().Notify(sm)
@@ -125,14 +132,26 @@ func MakeService(ctx context.Context, log logging.Logger, cfg config.Local, data
 	}
 
 	return &serviceImpl{
-		log:       log,
-		host:      h,
-		streams:   sm,
-		pubsub:    ps,
-		pubsubCtx: ctx,
-		privKey:   pstore.PrivKey(h.ID()),
-		topics:    make(map[string]*pubsub.Topic),
+		log:        log,
+		listenAddr: listenAddr,
+		host:       h,
+		streams:    sm,
+		pubsub:     ps,
+		pubsubCtx:  ctx,
+		privKey:    h.Peerstore().PrivKey(h.ID()),
+		topics:     make(map[string]*pubsub.Topic),
 	}, nil
+}
+
+// Close shuts down the P2P service
+func (s *serviceImpl) Start() error {
+	listenAddr, err := multiaddr.NewMultiaddr(s.listenAddr)
+	if err != nil {
+		s.log.Errorf("failed to create multiaddress: %s", err)
+		return err
+	}
+
+	return s.host.Network().Listen(listenAddr)
 }
 
 // Close shuts down the P2P service

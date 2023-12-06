@@ -30,7 +30,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/logging"
 	algoDht "github.com/algorand/go-algorand/network/p2p/dht"
-	"github.com/algorand/go-algorand/network/p2p/peerstore"
+	"github.com/algorand/go-algorand/protocol"
 )
 
 // Capability represents functions that some nodes may provide and other nodes would want to know about
@@ -147,24 +147,8 @@ func (c *CapabilitiesDiscovery) AdvertiseCapabilities(capabilities ...Capability
 }
 
 // MakeCapabilitiesDiscovery creates a new CapabilitiesDiscovery object which exposes peer discovery and capabilities advertisement
-func MakeCapabilitiesDiscovery(ctx context.Context, cfg config.Local, datadir string, network string, log logging.Logger, phonebookAddresses []string) (*CapabilitiesDiscovery, error) {
-	var bootstrapPeers []*peer.AddrInfo
-	if len(phonebookAddresses) > 0 {
-		var malformedAddrs map[string]string
-		bootstrapPeers, malformedAddrs = peerstore.PeerInfoFromAddrs(phonebookAddresses)
-		for malAddr, malErr := range malformedAddrs {
-			log.Infof("Ignoring malformed phonebook address %s: %s", malAddr, malErr)
-		}
-	}
-	pstore, err := peerstore.NewPeerStore(bootstrapPeers)
-	if err != nil {
-		return nil, err
-	}
-	h, err := makeHost(cfg, datadir, pstore)
-	if err != nil {
-		return nil, err
-	}
-	discDht, err := algoDht.MakeDHT(ctx, h, network, cfg, bootstrapPeers)
+func MakeCapabilitiesDiscovery(ctx context.Context, cfg config.Local, h host.Host, networkID protocol.NetworkID, log logging.Logger, bootstrapFunc func() []peer.AddrInfo) (*CapabilitiesDiscovery, error) {
+	discDht, err := algoDht.MakeDHT(ctx, h, networkID, cfg, bootstrapFunc)
 	if err != nil {
 		return nil, err
 	}
