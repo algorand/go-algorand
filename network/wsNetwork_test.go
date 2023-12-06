@@ -1347,7 +1347,9 @@ func TestPeeringWithIdentityChallenge(t *testing.T) {
 		netA.wg.Add(1)
 		netA.tryConnect(addrB, gossipB)
 		// let the tryConnect go forward
-		time.Sleep(250 * time.Millisecond)
+		assert.Eventually(t, func() bool {
+			return len(netA.GetPeers(PeersConnectedOut)) == 1
+		}, time.Second, 50*time.Millisecond)
 	}
 	// just one A->B connection
 	assert.Equal(t, 0, len(netA.GetPeers(PeersConnectedIn)))
@@ -1360,7 +1362,10 @@ func TestPeeringWithIdentityChallenge(t *testing.T) {
 	assert.Equal(t, 1, netA.identityTracker.(*mockIdentityTracker).getInsertCount())
 
 	// netB has to wait for a final verification message over WS Handler, so pause a moment
-	time.Sleep(250 * time.Millisecond)
+	assert.Eventually(t, func() bool {
+		return netB.identityTracker.(*mockIdentityTracker).getSetCount() == 1
+	}, time.Second, 50*time.Millisecond)
+
 	assert.Equal(t, 1, netB.identityTracker.(*mockIdentityTracker).getSetCount())
 	assert.Equal(t, 1, netB.identityTracker.(*mockIdentityTracker).getInsertCount())
 
@@ -1388,9 +1393,13 @@ func TestPeeringWithIdentityChallenge(t *testing.T) {
 	_, ok = netA.tryConnectReserveAddr(addrB)
 	assert.False(t, ok)
 	netA.wg.Add(1)
+	old := networkPeerIdentityDisconnect.GetUint64Value()
 	netA.tryConnect(addrB, gossipB)
 	// let the tryConnect go forward
-	time.Sleep(250 * time.Millisecond)
+	assert.Eventually(t, func() bool {
+		new := networkPeerIdentityDisconnect.GetUint64Value()
+		return new > old
+	}, time.Second, 50*time.Millisecond)
 
 	// netB never tries to add a new identity, since the connection gets abandoned before it is verified
 	assert.Equal(t, 1, netB.identityTracker.(*mockIdentityTracker).getSetCount())
@@ -1447,7 +1456,10 @@ func TestPeeringWithIdentityChallenge(t *testing.T) {
 	assert.Equal(t, 2, netA.identityTracker.(*mockIdentityTracker).getInsertCount())
 
 	// netC has to wait for a final verification message over WS Handler, so pause a moment
-	time.Sleep(250 * time.Millisecond)
+	assert.Eventually(t, func() bool {
+		return netC.identityTracker.(*mockIdentityTracker).getSetCount() == 1
+	}, time.Second, 50*time.Millisecond)
+
 	assert.Equal(t, 1, netC.identityTracker.(*mockIdentityTracker).getSetCount())
 	assert.Equal(t, 1, netC.identityTracker.(*mockIdentityTracker).getInsertCount())
 
