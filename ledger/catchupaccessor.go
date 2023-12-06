@@ -238,7 +238,7 @@ const (
 
 // CatchupAccessorClientLedger represents ledger interface needed for catchpoint accessor clients
 type CatchupAccessorClientLedger interface {
-	Block(rnd basics.Round) (blk bookkeeping.Block, err error)
+	BlockCert(rnd basics.Round) (blk bookkeeping.Block, cert agreement.Certificate, err error)
 	GenesisHash() crypto.Digest
 	BlockHdr(rnd basics.Round) (blk bookkeeping.BlockHeader, err error)
 	Latest() (rnd basics.Round)

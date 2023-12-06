@@ -3962,7 +3962,7 @@ func replaceCarefully(original []byte, replacement []byte, start uint64) ([]byte
 		return nil, fmt.Errorf("replacement start %d beyond length: %d", start, len(original))
 	}
 	end := start + uint64(len(replacement))
-	if end < start { // impossible because it is sum of two avm value lengths
+	if end < start { // impossible because it is sum of two avm value (or box) lengths
 		return nil, fmt.Errorf("replacement end exceeds uint64")
 	}
 
