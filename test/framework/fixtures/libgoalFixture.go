@@ -119,6 +119,10 @@ func (f *LibGoalFixture) nodeExitWithError(nc *nodecontrol.NodeController, err e
 	if f.t == nil {
 		return
 	}
+
+	f.t.Logf("Node at %s has terminated with an error: %v. Dumping logs...", nc.GetDataDir(), err)
+	f.dumpLogs(filepath.Join(nc.GetDataDir(), "node.log"))
+
 	exitError, ok := err.(*exec.ExitError)
 	if !ok {
 		require.NoError(f.t, err, "Node at %s has terminated with an error", nc.GetDataDir())
