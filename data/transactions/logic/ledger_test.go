@@ -608,9 +608,11 @@ func (l *Ledger) AppParams(appID basics.AppIndex) (basics.AppParams, basics.Addr
 	return basics.AppParams{}, basics.Address{}, fmt.Errorf("no app %d", appID)
 }
 
+var testGenHash = crypto.Digest{0x03, 0x02, 0x03}
+
 // GenesisHash returns a phony genesis hash that can be tested against
 func (l *Ledger) GenesisHash() crypto.Digest {
-	return crypto.Digest{0x03, 0x02, 0x03}
+	return testGenHash
 }
 
 func (l *Ledger) move(from basics.Address, to basics.Address, amount uint64) error {

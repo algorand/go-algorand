@@ -3439,7 +3439,7 @@ func TestGenHash(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 	ep, _, _ := makeSampleEnv()
-	source := "global GenesisHash; byte 0x030203; int 29; bzero; concat; =="
+	source := fmt.Sprintf("global GenesisHash; byte 0x%s; ==", hex.EncodeToString(testGenHash[:]))
 	testApp(t, source, ep)
 }
 
