@@ -20,7 +20,10 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/textproto"
 	"sort"
+	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/algorand/go-deadlock"
@@ -222,7 +225,7 @@ type RequestTracker struct {
 	log               logging.Logger
 	config            config.Local
 	// once we detect that we have a misconfigured UseForwardedForAddress, we set this and write an warning message.
-	misconfiguredUseForwardedForAddress bool
+	misconfiguredUseForwardedForAddress atomic.Bool
 
 	listener net.Listener // this is the downsteam listener
 
@@ -518,13 +521,29 @@ func (rt *RequestTracker) getForwardedConnectionAddress(header http.Header) (ip 
 	if rt.config.UseXForwardedForAddressField == "" {
 		return
 	}
-	forwardedForString := header.Get(rt.config.UseXForwardedForAddressField)
+	var forwardedForString string
+	// if we're using the standard X-Forwarded-For header(s), we need to parse it.
+	// as UseXForwardedForAddressField defines, use the last value from the last X-Forwarded-For header's list of values.
+	if textproto.CanonicalMIMEHeaderKey(rt.config.UseXForwardedForAddressField) == "X-Forwarded-For" {
+		forwardedForStrings := header.Values(rt.config.UseXForwardedForAddressField)
+		if len(forwardedForStrings) != 0 {
+			forwardedForString = forwardedForStrings[len(forwardedForStrings)-1]
+			ips := strings.Split(forwardedForString, ",")
+			if len(ips) != 0 {
+				forwardedForString = strings.TrimSpace(ips[len(ips)-1])
+			} else {
+				// looks like not possble case now but it's better to handle
+				rt.log.Warnf("header X-Forwarded-For has an invalid value: '%s'", forwardedForString)
+				forwardedForString = ""
+			}
+		}
+	} else {
+		forwardedForString = header.Get(rt.config.UseXForwardedForAddressField)
+	}
+
 	if forwardedForString == "" {
-		rt.httpConnectionsMu.Lock()
-		defer rt.httpConnectionsMu.Unlock()
-		if !rt.misconfiguredUseForwardedForAddress {
+		if rt.misconfiguredUseForwardedForAddress.CompareAndSwap(false, true) {
 			rt.log.Warnf("UseForwardedForAddressField is configured as '%s', but no value was retrieved from header", rt.config.UseXForwardedForAddressField)
-			rt.misconfiguredUseForwardedForAddress = true
 		}
 		return
 	}
