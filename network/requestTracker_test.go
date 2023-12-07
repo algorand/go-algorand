@@ -183,7 +183,7 @@ func TestRemoteAddress(t *testing.T) {
 
 	require.Equal(t, "127.0.0.1:444", tr.remoteAddress())
 
-	// remoteHost set to seomething else via X-Forwared-For HTTP headers
+	// remoteHost set to something else via X-Forwared-For HTTP headers
 	tr.remoteHost = "10.0.0.1"
 	require.Equal(t, "10.0.0.1", tr.remoteAddress())
 

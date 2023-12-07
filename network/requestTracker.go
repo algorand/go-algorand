@@ -52,7 +52,7 @@ type TrackerRequest struct {
 	remotePort string
 	// remoteAddr is IP:Port of the remote host retrieved from the connection
 	// or from the standard http.Request.RemoteAddr field.
-	// This field the real address of the remote incoming connection.
+	// This field is the real address of the remote incoming connection.
 	remoteAddr string
 	// otherPublicAddr is the public address of the other node, as reported by the other node
 	// via the X-Algorand-Location header.
