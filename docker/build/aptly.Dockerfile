@@ -12,8 +12,9 @@ ENV GOROOT=/usr/local/go \
 
 WORKDIR /root
 COPY .aptly.conf .
-RUN curl https://releases.algorand.com/key.pub | gpg --no-default-keyring --keyring trustedkeys.gpg --import - && \
-    aptly mirror create stable https://releases.algorand.com/deb/ stable main && \
+RUN curl https://releases.algorand.com/key.pub | gpg --no-default-keyring --keyring /root/.gnupg/trustedkeys.gpg --import -
+RUN gpg --no-default-keyring --keyring /root/.gnupg/trustedkeys.gpg --export --output /root/.gnupg/newkeyring.gpg && mv -f /root/.gnupg/newkeyring.gpg /root/.gnupg/trustedkeys.gpg
+RUN aptly mirror create stable https://releases.algorand.com/deb/ stable main && \
     aptly mirror create beta https://releases.algorand.com/deb/ beta main && \
     aptly repo create -distribution=stable -architectures=amd64 -component=main -comment=mainnet stable && \
     aptly repo create -distribution=beta -architectures=amd64 -component=main -comment=betanet beta && \
@@ -23,4 +24,3 @@ RUN curl https://releases.algorand.com/key.pub | gpg --no-default-keyring --keyr
     aptly repo import beta beta algorand-beta algorand-devtools-beta
 
 CMD ["/bin/bash"]
-
