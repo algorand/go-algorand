@@ -599,6 +599,8 @@ int 222;     itxn_field ApplicationID
 itxn_submit
 itxn Logs 0; btoi; txn FirstValid; ==; assert
 itxn Logs 1; btoi; txn LastValid; ==; assert
+itxn FirstValid; txn FirstValid; ==; assert
+itxn LastValid; txn LastValid; ==; assert
 int 1
 `, ep)
 
