@@ -358,7 +358,7 @@ func (node *AlgorandFullNode) Config() config.Local {
 }
 
 // Start the node: connect to peers and run the agreement service while obtaining a lock. Doesn't wait for initial sync.
-func (node *AlgorandFullNode) Start() {
+func (node *AlgorandFullNode) Start() error {
 	node.mu.Lock()
 	defer node.mu.Unlock()
 
@@ -368,12 +368,16 @@ func (node *AlgorandFullNode) Start() {
 	// The start network is being called only after the various services start up.
 	// We want to do so in order to let the services register their callbacks with the
 	// network package before any connections are being made.
-	startNetwork := func() {
+	startNetwork := func() error {
 		if !node.config.DisableNetworking {
 			// start accepting connections
-			node.net.Start()
+			err := node.net.Start()
+			if err != nil {
+				return err
+			}
 			node.config.NetAddress, _ = node.net.Address()
 		}
+		return nil
 	}
 
 	if node.catchpointCatchupService != nil {
@@ -387,7 +391,10 @@ func (node *AlgorandFullNode) Start() {
 		node.ledgerService.Start()
 		node.txHandler.Start()
 		node.stateProofWorker.Start()
-		startNetwork()
+		err := startNetwork()
+		if err != nil {
+			return err
+		}
 
 		node.startMonitoringRoutines()
 	}

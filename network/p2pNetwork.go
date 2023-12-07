@@ -146,7 +146,7 @@ func (n *P2PNetwork) PeerIDSigner() identityChallengeSigner {
 }
 
 // Start threads, listen on sockets.
-func (n *P2PNetwork) Start() {
+func (n *P2PNetwork) Start() error {
 	n.wg.Add(1)
 	go n.txTopicHandleLoop()
 
@@ -166,6 +166,8 @@ func (n *P2PNetwork) Start() {
 
 	n.wg.Add(1)
 	go n.meshThread()
+
+	return nil
 }
 
 // Stop closes sockets and stop threads.

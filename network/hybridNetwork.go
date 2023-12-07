@@ -153,11 +153,12 @@ func (n *HybridP2PNetwork) GetPeers(options ...PeerOption) []Peer {
 }
 
 // Start implements GossipNode
-func (n *HybridP2PNetwork) Start() {
-	_ = n.runParallel(func(net GossipNode) error {
-		net.Start()
-		return nil
+func (n *HybridP2PNetwork) Start() error {
+	err := n.runParallel(func(net GossipNode) error {
+		err0 := net.Start()
+		return err0
 	})
+	return err
 }
 
 // Stop implements GossipNode

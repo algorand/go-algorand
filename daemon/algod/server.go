@@ -56,7 +56,7 @@ const maxHeaderBytes = 4096
 type ServerNode interface {
 	apiServer.APINodeInterface
 	ListeningAddress() (string, bool)
-	Start()
+	Start() error
 	Stop()
 }
 
@@ -272,7 +272,13 @@ func makeListener(addr string) (net.Listener, error) {
 func (s *Server) Start() {
 	s.log.Info("Trying to start an Algorand node")
 	fmt.Print("Initializing the Algorand node... ")
-	s.node.Start()
+	err := s.node.Start()
+	if err != nil {
+		msg := fmt.Sprintf(("Failed to start alg Algorand node: %v"), err)
+		s.log.Error(msg)
+		fmt.Println(msg)
+		os.Exit(1)
+	}
 	s.log.Info("Successfully started an Algorand node.")
 	fmt.Println("Success!")
 
@@ -291,7 +297,6 @@ func (s *Server) Start() {
 	}
 
 	var apiToken string
-	var err error
 	fmt.Printf("API authentication disabled: %v\n", cfg.DisableAPIAuth)
 	if !cfg.DisableAPIAuth {
 		apiToken, err = tokens.GetAndValidateAPIToken(s.RootPath, tokens.AlgodTokenFilename)
