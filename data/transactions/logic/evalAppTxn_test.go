@@ -575,6 +575,37 @@ func TestBadField(t *testing.T) {
 	TestAppBytes(t, ops.Program, ep, "invalid itxn_field FirstValid")
 }
 
+// TestInnerValidity logs fv and lv fields that are handled oddly (valid
+// rounds are copied) so we can check if they are correct.
+func TestInnerValidity(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	ep, tx, ledger := MakeSampleEnv()
+	tx.GenesisHash = crypto.Digest{0x01, 0x02, 0x03}
+	logger := TestProg(t, `
+txn FirstValid; itob; log;
+txn LastValid; itob; log;
+int 1`, AssemblerMaxVersion)
+	ledger.NewApp(tx.Receiver, 222, basics.AppParams{
+		ApprovalProgram: logger.Program,
+	})
+
+	ledger.NewAccount(appAddr(888), 50_000)
+	tx.ForeignApps = []basics.AppIndex{basics.AppIndex(222)}
+	TestApp(t, `
+itxn_begin
+int appl;    itxn_field TypeEnum
+int 222;     itxn_field ApplicationID
+itxn_submit
+itxn Logs 0; btoi; txn FirstValid; ==; assert
+itxn Logs 1; btoi; txn LastValid; ==; assert
+itxn FirstValid; txn FirstValid; ==; assert
+itxn LastValid; txn LastValid; ==; assert
+int 1
+`, ep)
+
+}
+
 func TestNumInnerShallow(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()

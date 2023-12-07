@@ -40,6 +40,7 @@ import (
 // LedgerForCowBase represents subset of Ledger functionality needed for cow business
 type LedgerForCowBase interface {
 	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
+	GenesisHash() crypto.Digest
 	CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, ledgercore.Txlease) error
 	LookupWithoutRewards(basics.Round, basics.Address) (ledgercore.AccountData, basics.Round, error)
 	LookupAsset(basics.Round, basics.Address, basics.AssetIndex) (ledgercore.AssetResource, error)
@@ -335,6 +336,10 @@ func (x *roundCowBase) GetStateProofNextRound() basics.Round {
 
 func (x *roundCowBase) BlockHdr(r basics.Round) (bookkeeping.BlockHeader, error) {
 	return x.l.BlockHdr(r)
+}
+
+func (x *roundCowBase) GenesisHash() crypto.Digest {
+	return x.l.GenesisHash()
 }
 
 func (x *roundCowBase) GetStateProofVerificationContext(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error) {

@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -99,8 +100,8 @@ func (ml *emptyLedger) BlockHdr(rnd basics.Round) (bookkeeping.BlockHeader, erro
 	return bookkeeping.BlockHeader{}, nil
 }
 
-func (ml *emptyLedger) blockHdrCached(rnd basics.Round) (bookkeeping.BlockHeader, error) {
-	return bookkeeping.BlockHeader{}, nil
+func (ml *emptyLedger) GenesisHash() crypto.Digest {
+	return crypto.Digest{}
 }
 
 func (ml *emptyLedger) GetStateProofNextRound() basics.Round {

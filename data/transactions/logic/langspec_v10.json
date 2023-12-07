@@ -1196,7 +1196,8 @@
         "CallerApplicationID",
         "CallerApplicationAddress",
         "AssetCreateMinBalance",
-        "AssetOptInMinBalance"
+        "AssetOptInMinBalance",
+        "GenesisHash"
       ],
       "ArgEnumTypes": [
         "uint64",
@@ -1215,7 +1216,8 @@
         "uint64",
         "address",
         "uint64",
-        "uint64"
+        "uint64",
+        "[32]byte"
       ],
       "DocCost": "1",
       "Doc": "global field F",
