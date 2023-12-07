@@ -237,7 +237,7 @@ func TestSyncRound(t *testing.T) {
 	localCfg := config.GetDefaultLocal()
 	s := MakeService(logging.Base(), localCfg, net, local, auth, nil, nil)
 	s.log = &periodicSyncLogger{Logger: logging.Base()}
-	s.deadlineTimeout = 2 * time.Second
+	s.roundTimeEstimate = 2 * time.Second
 
 	// Set disable round success
 	err = s.SetDisableSyncRound(3)
@@ -246,14 +246,14 @@ func TestSyncRound(t *testing.T) {
 	s.Start()
 	defer s.Stop()
 	// wait past the initial sync - which is known to fail due to the above "auth"
-	time.Sleep(s.deadlineTimeout*2 - 200*time.Millisecond)
+	time.Sleep(s.roundTimeEstimate*2 - 200*time.Millisecond)
 	require.Equal(t, initialLocalRound, local.LastRound())
 	auth.alter(-1, false)
 
 	// wait until the catchup is done. Since we've might have missed the sleep window, we need to wait
 	// until the synchronization is complete.
 	waitStart := time.Now()
-	for time.Since(waitStart) < 2*s.deadlineTimeout {
+	for time.Since(waitStart) < 2*s.roundTimeEstimate {
 		if remote.LastRound() == local.LastRound() {
 			break
 		}
@@ -276,7 +276,7 @@ func TestSyncRound(t *testing.T) {
 	s.UnsetDisableSyncRound()
 	// wait until the catchup is done
 	waitStart = time.Now()
-	for time.Since(waitStart) < 8*s.deadlineTimeout {
+	for time.Since(waitStart) < 8*s.roundTimeEstimate {
 		if remote.LastRound() == local.LastRound() {
 			break
 		}
@@ -326,19 +326,19 @@ func TestPeriodicSync(t *testing.T) {
 	// Make Service
 	s := MakeService(logging.Base(), defaultConfig, net, local, auth, nil, nil)
 	s.log = &periodicSyncLogger{Logger: logging.Base()}
-	s.deadlineTimeout = 2 * time.Second
+	s.roundTimeEstimate = 2 * time.Second
 
 	s.Start()
 	defer s.Stop()
 	// wait past the initial sync - which is known to fail due to the above "auth"
-	time.Sleep(s.deadlineTimeout*2 - 200*time.Millisecond)
+	time.Sleep(s.roundTimeEstimate*2 - 200*time.Millisecond)
 	require.Equal(t, initialLocalRound, local.LastRound())
 	auth.alter(-1, false)
 
 	// wait until the catchup is done. Since we've might have missed the sleep window, we need to wait
 	// until the synchronization is complete.
 	waitStart := time.Now()
-	for time.Since(waitStart) < 10*s.deadlineTimeout {
+	for time.Since(waitStart) < 10*s.roundTimeEstimate {
 		if remote.LastRound() == local.LastRound() {
 			break
 		}
@@ -717,7 +717,7 @@ func helperTestOnSwitchToUnSupportedProtocol(
 
 	// Make Service
 	s := MakeService(logging.Base(), config, net, local, &mockedAuthenticator{errorRound: -1}, nil, nil)
-	s.deadlineTimeout = 2 * time.Second
+	s.roundTimeEstimate = 2 * time.Second
 	s.Start()
 	defer s.Stop()
 
@@ -1198,7 +1198,7 @@ func TestServiceLedgerUnavailable(t *testing.T) {
 	cfg.CatchupParallelBlocks = 2
 	s := MakeService(logging.Base(), cfg, net, local, auth, nil, nil)
 	s.log = &periodicSyncLogger{Logger: logging.Base()}
-	s.deadlineTimeout = 2 * time.Second
+	s.roundTimeEstimate = 2 * time.Second
 
 	s.testStart()
 	defer s.Stop()
@@ -1245,7 +1245,7 @@ func TestServiceNoBlockForRound(t *testing.T) {
 	s := MakeService(logging.Base(), cfg, net, local, auth, nil, nil)
 	pl := &periodicSyncDebugLogger{periodicSyncLogger: periodicSyncLogger{Logger: logging.Base()}}
 	s.log = pl
-	s.deadlineTimeout = 1 * time.Second
+	s.roundTimeEstimate = 1 * time.Second
 
 	s.testStart()
 	defer s.Stop()
