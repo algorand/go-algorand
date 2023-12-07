@@ -187,10 +187,10 @@ func (tracer *evalTracer) AfterTxnGroup(ep *logic.EvalParams, deltas *ledgercore
 
 func (tracer *evalTracer) saveApplyData(applyData transactions.ApplyData, omitEvalDelta bool) {
 	applyDataOfCurrentTxn := tracer.mustGetApplyDataAtPath(tracer.absolutePath())
-	// Copy everything except the EvalDelta, since that has been kept up-to-date after every op
 	evalDelta := applyDataOfCurrentTxn.EvalDelta
 	*applyDataOfCurrentTxn = applyData
 	if omitEvalDelta {
+		// If omitEvalDelta is true, restore the EvalDelta from applyDataOfCurrentTxn
 		applyDataOfCurrentTxn.EvalDelta = evalDelta
 	}
 }
