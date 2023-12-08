@@ -461,6 +461,7 @@ Fields
 | 14 | CallerApplicationAddress | address | v6  | The application address of the application that called this application. ZeroAddress if this application is at the top-level. Application mode only. |
 | 15 | AssetCreateMinBalance | uint64 | v10  | The additional minimum balance required to create (and opt-in to) an asset. |
 | 16 | AssetOptInMinBalance | uint64 | v10  | The additional minimum balance required to opt-in to an asset. |
+| 17 | GenesisHash | [32]byte | v10  | The Genesis Hash for the network. |
 
 
 ## gtxn

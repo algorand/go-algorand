@@ -172,6 +172,32 @@ func TestRateLimiting(t *testing.T) {
 	}
 }
 
+func TestRemoteAddress(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	tr := makeTrackerRequest("127.0.0.1:444", "", "", time.Now(), nil)
+	require.Equal(t, "127.0.0.1:444", tr.remoteAddr)
+	require.Equal(t, "127.0.0.1", tr.remoteHost)
+	require.Equal(t, "444", tr.remotePort)
+
+	require.Equal(t, "127.0.0.1:444", tr.remoteAddress())
+
+	// remoteHost set to something else via X-Forwared-For HTTP headers
+	tr.remoteHost = "10.0.0.1"
+	require.Equal(t, "10.0.0.1", tr.remoteAddress())
+
+	// otherPublicAddr is set via X-Algorand-Location HTTP header
+	// and matches to the remoteHost
+	tr.otherPublicAddr = "10.0.0.1:555"
+	require.Equal(t, "10.0.0.1:555", tr.remoteAddress())
+
+	// otherPublicAddr does not match remoteHost
+	tr.remoteHost = "127.0.0.1"
+	tr.otherPublicAddr = "127.0.0.99:555"
+	require.Equal(t, "127.0.0.1:444", tr.remoteAddress())
+}
+
 func TestIsLocalHost(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()

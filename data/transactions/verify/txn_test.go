@@ -78,6 +78,9 @@ func (d *DummyLedgerForSignature) BlockHdr(rnd basics.Round) (blk bookkeeping.Bl
 	}
 	return createDummyBlockHeader(), nil
 }
+func (d *DummyLedgerForSignature) GenesisHash() crypto.Digest {
+	return crypto.Digest{}
+}
 func (d *DummyLedgerForSignature) Latest() basics.Round {
 	return 0
 }

@@ -1334,7 +1334,7 @@ func TestAgreementFastRecoveryDownMiss(t *testing.T) {
 		triggerGlobalTimeout(FilterTimeout(0, version), TimeoutFilter, clocks, activityMonitor)
 		zeroes = expectNoNewPeriod(clocks, zeroes)
 
-		triggerGlobalTimeout(deadlineTimeout, TimeoutDeadline, clocks, activityMonitor)
+		triggerGlobalTimeout(DeadlineTimeout(0, version), TimeoutDeadline, clocks, activityMonitor)
 		zeroes = expectNoNewPeriod(clocks, zeroes)
 
 		triggerGlobalTimeout(0, TimeoutFastRecovery, clocks, activityMonitor) // activates fast partition recovery timer
@@ -1435,7 +1435,7 @@ func TestAgreementFastRecoveryLate(t *testing.T) {
 			}
 		}
 
-		triggerGlobalTimeout(deadlineTimeout, TimeoutDeadline, clocks, activityMonitor)
+		triggerGlobalTimeout(DeadlineTimeout(0, version), TimeoutDeadline, clocks, activityMonitor)
 		zeroes = expectNoNewPeriod(clocks, zeroes)
 
 		triggerGlobalTimeout(0, TimeoutFastRecovery, clocks, activityMonitor) // activates fast partition recovery timer
@@ -1548,7 +1548,7 @@ func TestAgreementFastRecoveryRedo(t *testing.T) {
 			}
 		}
 
-		triggerGlobalTimeout(deadlineTimeout, TimeoutDeadline, clocks, activityMonitor)
+		triggerGlobalTimeout(DeadlineTimeout(0, version), TimeoutDeadline, clocks, activityMonitor)
 		zeroes = expectNoNewPeriod(clocks, zeroes)
 
 		triggerGlobalTimeout(0, TimeoutFastRecovery, clocks, activityMonitor) // activates fast partition recovery timer
@@ -1589,7 +1589,7 @@ func TestAgreementFastRecoveryRedo(t *testing.T) {
 		triggerGlobalTimeout(FilterTimeout(1, version), TimeoutFilter, clocks, activityMonitor)
 		zeroes = expectNoNewPeriod(clocks, zeroes)
 
-		triggerGlobalTimeout(deadlineTimeout, TimeoutDeadline, clocks, activityMonitor)
+		triggerGlobalTimeout(DeadlineTimeout(1, version), TimeoutDeadline, clocks, activityMonitor)
 		zeroes = expectNoNewPeriod(clocks, zeroes)
 
 		triggerGlobalTimeout(0, TimeoutFastRecovery, clocks, activityMonitor) // activates fast partition recovery timer
@@ -1681,7 +1681,7 @@ func TestAgreementBlockReplayBug_b29ea57(t *testing.T) {
 		triggerGlobalTimeout(FilterTimeout(0, version), TimeoutFilter, clocks, activityMonitor)
 		zeroes = expectNoNewPeriod(clocks, zeroes)
 
-		triggerGlobalTimeout(deadlineTimeout, TimeoutDeadline, clocks, activityMonitor)
+		triggerGlobalTimeout(DeadlineTimeout(0, version), TimeoutDeadline, clocks, activityMonitor)
 		zeroes = expectNewPeriod(clocks, zeroes)
 	}
 
@@ -1690,7 +1690,7 @@ func TestAgreementBlockReplayBug_b29ea57(t *testing.T) {
 		triggerGlobalTimeout(FilterTimeout(1, version), TimeoutFilter, clocks, activityMonitor)
 		zeroes = expectNoNewPeriod(clocks, zeroes)
 
-		triggerGlobalTimeout(deadlineTimeout, TimeoutDeadline, clocks, activityMonitor)
+		triggerGlobalTimeout(DeadlineTimeout(1, version), TimeoutDeadline, clocks, activityMonitor)
 		zeroes = expectNewPeriod(clocks, zeroes)
 	}
 
@@ -1743,7 +1743,7 @@ func TestAgreementLateCertBug(t *testing.T) {
 		closeFn()
 		baseNetwork.repairAll()
 
-		triggerGlobalTimeout(deadlineTimeout, TimeoutDeadline, clocks, activityMonitor)
+		triggerGlobalTimeout(DeadlineTimeout(0, version), TimeoutDeadline, clocks, activityMonitor)
 		zeroes = expectNewPeriod(clocks, zeroes)
 	}
 
@@ -1819,7 +1819,7 @@ func TestAgreementRecoverGlobalStartingValue(t *testing.T) {
 			}
 		}
 
-		triggerGlobalTimeout(deadlineTimeout, TimeoutDeadline, clocks, activityMonitor)
+		triggerGlobalTimeout(DeadlineTimeout(0, version), TimeoutDeadline, clocks, activityMonitor)
 		zeroes = expectNewPeriod(clocks, zeroes)
 		require.Equal(t, 4, int(zeroes))
 	}
@@ -1846,7 +1846,7 @@ func TestAgreementRecoverGlobalStartingValue(t *testing.T) {
 			}
 		}
 
-		triggerGlobalTimeout(deadlineTimeout, TimeoutDeadline, clocks, activityMonitor)
+		triggerGlobalTimeout(DeadlineTimeout(1, version), TimeoutDeadline, clocks, activityMonitor)
 		zeroes = expectNewPeriod(clocks, zeroes)
 		require.Equal(t, 5, int(zeroes))
 	}
@@ -1924,7 +1924,7 @@ func TestAgreementRecoverGlobalStartingValueBadProposal(t *testing.T) {
 			}
 			return params
 		})
-		triggerGlobalTimeout(deadlineTimeout, TimeoutDeadline, clocks, activityMonitor)
+		triggerGlobalTimeout(DeadlineTimeout(0, version), TimeoutDeadline, clocks, activityMonitor)
 		zeroes = expectNewPeriod(clocks, zeroes)
 		require.Equal(t, 4, int(zeroes))
 	}
@@ -1950,7 +1950,7 @@ func TestAgreementRecoverGlobalStartingValueBadProposal(t *testing.T) {
 				panic(errstr)
 			}
 		}
-		triggerGlobalTimeout(deadlineTimeout, TimeoutDeadline, clocks, activityMonitor)
+		triggerGlobalTimeout(DeadlineTimeout(1, version), TimeoutDeadline, clocks, activityMonitor)
 		zeroes = expectNewPeriod(clocks, zeroes)
 
 	}
@@ -2025,7 +2025,7 @@ func TestAgreementRecoverBothVAndBotQuorums(t *testing.T) {
 		}
 		// generate a bottom quorum; let only one node see it.
 		baseNetwork.crown(0)
-		triggerGlobalTimeout(deadlineTimeout, TimeoutDeadline, clocks, activityMonitor)
+		triggerGlobalTimeout(DeadlineTimeout(0, version), TimeoutDeadline, clocks, activityMonitor)
 		if clocks[0].(*testingClock).zeroes != zeroes+1 {
 			errstr := fmt.Sprintf("node 0 did not enter new period from bot quorum")
 			panic(errstr)
@@ -2043,11 +2043,11 @@ func TestAgreementRecoverBothVAndBotQuorums(t *testing.T) {
 		activityMonitor.waitForQuiet()
 
 		// actually create the value quorum
-		_, upper := (next).nextVoteRanges()
+		_, upper := (next).nextVoteRanges(DeadlineTimeout(0, version))
 		triggerGlobalTimeout(upper, TimeoutDeadline, clocks[1:], activityMonitor) // activates next timers
 		zeroes = expectNoNewPeriod(clocks[1:], zeroes)
 
-		lower, upper := (next + 1).nextVoteRanges()
+		lower, upper := (next + 1).nextVoteRanges(DeadlineTimeout(0, version))
 		delta := time.Duration(testingRand{}.Uint64() % uint64(upper-lower))
 		triggerGlobalTimeout(lower+delta, TimeoutDeadline, clocks[1:], activityMonitor)
 		zeroes = expectNewPeriod(clocks, zeroes)
@@ -2076,7 +2076,7 @@ func TestAgreementRecoverBothVAndBotQuorums(t *testing.T) {
 			}
 		}
 
-		triggerGlobalTimeout(deadlineTimeout, TimeoutDeadline, clocks, activityMonitor)
+		triggerGlobalTimeout(DeadlineTimeout(1, version), TimeoutDeadline, clocks, activityMonitor)
 		zeroes = expectNewPeriod(clocks, zeroes)
 	}
 
@@ -2190,7 +2190,7 @@ func TestAgreementSlowPayloadsPostDeadline(t *testing.T) {
 	{
 		triggerGlobalTimeout(FilterTimeout(0, version), TimeoutFilter, clocks, activityMonitor)
 		zeroes = expectNoNewPeriod(clocks, zeroes)
-		triggerGlobalTimeout(deadlineTimeout, TimeoutDeadline, clocks, activityMonitor)
+		triggerGlobalTimeout(DeadlineTimeout(0, version), TimeoutDeadline, clocks, activityMonitor)
 		zeroes = expectNewPeriod(clocks, zeroes)
 	}
 
@@ -2251,7 +2251,7 @@ func TestAgreementLargePeriods(t *testing.T) {
 			zeroes = expectNoNewPeriod(clocks, zeroes)
 
 			baseNetwork.repairAll()
-			triggerGlobalTimeout(deadlineTimeout, TimeoutDeadline, clocks, activityMonitor)
+			triggerGlobalTimeout(DeadlineTimeout(period(p), version), TimeoutDeadline, clocks, activityMonitor)
 			zeroes = expectNewPeriod(clocks, zeroes)
 			require.Equal(t, 4+p, int(zeroes))
 		}
@@ -2363,7 +2363,7 @@ func TestAgreementRegression_WrongPeriodPayloadVerificationCancellation_8ba23942
 	// release proposed blocks in a controlled manner to prevent oversubscription of verification
 	pocket1 := make(chan multicastParams, 100)
 	closeFn = baseNetwork.pocketAllCompound(pocket1)
-	triggerGlobalTimeout(deadlineTimeout, TimeoutDeadline, clocks, activityMonitor)
+	triggerGlobalTimeout(DeadlineTimeout(0, version), TimeoutDeadline, clocks, activityMonitor)
 	baseNetwork.repairAll()
 	close(pocket1)
 	{

@@ -535,6 +535,9 @@ const (
 	// AssetOptInMinBalance is the additional minimum balance required to opt in to an asset
 	AssetOptInMinBalance
 
+	// GenesisHash is the genesis hash for the network
+	GenesisHash
+
 	invalidGlobalField // compile-time constant for number of fields
 )
 
@@ -599,6 +602,7 @@ var globalFieldSpecs = [...]globalFieldSpec{
 		"The additional minimum balance required to create (and opt-in to) an asset."},
 	{AssetOptInMinBalance, StackUint64, modeAny, 10,
 		"The additional minimum balance required to opt-in to an asset."},
+	{GenesisHash, StackBytes32, modeAny, 10, "The Genesis Hash for the network."},
 }
 
 func globalFieldSpecByField(f GlobalField) (globalFieldSpec, bool) {
@@ -961,6 +965,7 @@ const (
 	BlkSeed BlockField = iota
 	// BlkTimestamp is the Block's timestamp, seconds from epoch
 	BlkTimestamp
+
 	invalidBlockField // compile-time constant for number of fields
 )
 
