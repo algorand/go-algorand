@@ -2,7 +2,7 @@ FROM ubuntu:20.04
 
 ARG ARCH=amd64
 
-RUN apt-get update && DEBIAN_FRONTEND noninteractive apt-get install aptly awscli binutils build-essential curl gnupg2 -y
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install aptly awscli binutils build-essential curl gnupg2 -y
 
 WORKDIR /root
 COPY .aptly.conf .
