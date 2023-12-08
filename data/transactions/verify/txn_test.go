@@ -386,13 +386,13 @@ pushint 1`,
 				{
 					mocktracer.BeforeProgram(logic.ModeSig),                  // first txn start
 					mocktracer.BeforeOpcode(), mocktracer.AfterOpcode(false), // first txn LogicSig: 1 op
-					mocktracer.AfterProgram(logic.ModeSig, false), // first txn end
+					mocktracer.AfterProgram(logic.ModeSig, mocktracer.ProgramResultPass), // first txn end
 					// nothing for second txn (not signed with a LogicSig)
 					mocktracer.BeforeProgram(logic.ModeSig), // third txn start
 				},
 				mocktracer.OpcodeEvents(3, false), // third txn LogicSig: 3 ops
 				{
-					mocktracer.AfterProgram(logic.ModeSig, false), // third txn end
+					mocktracer.AfterProgram(logic.ModeSig, mocktracer.ProgramResultPass), // third txn end
 				},
 			}),
 		},
@@ -409,13 +409,13 @@ pushint 0`,
 				{
 					mocktracer.BeforeProgram(logic.ModeSig),                  // first txn start
 					mocktracer.BeforeOpcode(), mocktracer.AfterOpcode(false), // first txn LogicSig: 1 op
-					mocktracer.AfterProgram(logic.ModeSig, false), // first txn end
+					mocktracer.AfterProgram(logic.ModeSig, mocktracer.ProgramResultPass), // first txn end
 					// nothing for second txn (not signed with a LogicSig)
 					mocktracer.BeforeProgram(logic.ModeSig), // third txn start
 				},
 				mocktracer.OpcodeEvents(3, false), // third txn LogicSig: 3 ops
 				{
-					mocktracer.AfterProgram(logic.ModeSig, false), // third txn end
+					mocktracer.AfterProgram(logic.ModeSig, mocktracer.ProgramResultReject), // third txn end
 				},
 			}),
 		},
@@ -434,13 +434,13 @@ pop`,
 				{
 					mocktracer.BeforeProgram(logic.ModeSig),                  // first txn start
 					mocktracer.BeforeOpcode(), mocktracer.AfterOpcode(false), // first txn LogicSig: 1 op
-					mocktracer.AfterProgram(logic.ModeSig, false), // first txn end
+					mocktracer.AfterProgram(logic.ModeSig, mocktracer.ProgramResultPass), // first txn end
 					// nothing for second txn (not signed with a LogicSig)
 					mocktracer.BeforeProgram(logic.ModeSig), // third txn start
 				},
 				mocktracer.OpcodeEvents(3, true), // third txn LogicSig: 3 ops
 				{
-					mocktracer.AfterProgram(logic.ModeSig, true), // third txn end
+					mocktracer.AfterProgram(logic.ModeSig, mocktracer.ProgramResultError), // third txn end
 				},
 			}),
 		},
@@ -456,7 +456,7 @@ pushint 1`,
 			expectedEvents: []mocktracer.Event{
 				mocktracer.BeforeProgram(logic.ModeSig),                  // first txn start
 				mocktracer.BeforeOpcode(), mocktracer.AfterOpcode(false), // first txn LogicSig: 1 op
-				mocktracer.AfterProgram(logic.ModeSig, false), // first txn end
+				mocktracer.AfterProgram(logic.ModeSig, mocktracer.ProgramResultReject), // first txn end
 				// execution stops at rejection
 			},
 		},
@@ -472,7 +472,7 @@ pushint 1`,
 			expectedEvents: []mocktracer.Event{
 				mocktracer.BeforeProgram(logic.ModeSig),                 // first txn start
 				mocktracer.BeforeOpcode(), mocktracer.AfterOpcode(true), // first txn LogicSig: 1 op
-				mocktracer.AfterProgram(logic.ModeSig, true), // first txn end
+				mocktracer.AfterProgram(logic.ModeSig, mocktracer.ProgramResultError), // first txn end
 				// execution stops at error
 			},
 		},
