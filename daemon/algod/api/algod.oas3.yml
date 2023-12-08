@@ -2447,6 +2447,14 @@
             },
             "type": "array"
           },
+          "clear-state-rollback": {
+            "description": "If true, indicates that the clear state program failed and any persistent state changes it produced should be reverted once the program exits.",
+            "type": "boolean"
+          },
+          "clear-state-rollback-error": {
+            "description": "The error message explaining why the clear state program failed. This field will only be populated if clear-state-rollback is true and the failure was due to an execution error.",
+            "type": "string"
+          },
           "inner-trace": {
             "description": "An array of SimulationTransactionExecTrace representing the execution trace of any inner transactions executed.",
             "items": {

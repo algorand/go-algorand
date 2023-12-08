@@ -865,6 +865,254 @@ int 0
 	})
 }
 
+const returnFirstAppArgProgram = `#pragma version 6
+byte "counter"
+dup
+app_global_get
+int 1
++
+app_global_put
+
+txn ApplicationID
+bz end
+
+txn OnCompletion
+int OptIn
+==
+bnz end
+
+txn ApplicationArgs 0
+btoi
+return
+
+end:
+int 1
+return`
+
+func TestClearStateRejection(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+		sender := env.Accounts[0]
+		user := env.Accounts[1]
+
+		appID := env.CreateApp(sender.Addr, simulationtesting.AppParams{
+			ApprovalProgram:   returnFirstAppArgProgram,
+			ClearStateProgram: returnFirstAppArgProgram,
+			GlobalStateSchema: basics.StateSchema{
+				NumUint: 1,
+			},
+		})
+		env.OptIntoApp(user.Addr, appID)
+
+		clearStateTxn := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:            protocol.ApplicationCallTx,
+			Sender:          user.Addr,
+			ApplicationID:   appID,
+			OnCompletion:    transactions.ClearStateOC,
+			ApplicationArgs: [][]byte{{0}},
+		})
+		otherAppCall := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:            protocol.ApplicationCallTx,
+			Sender:          user.Addr,
+			ApplicationID:   appID,
+			ApplicationArgs: [][]byte{{1}},
+		})
+
+		txntest.Group(&clearStateTxn, &otherAppCall)
+
+		signedClearStateTxn := clearStateTxn.Txn().Sign(user.Sk)
+		signedOtherAppCall := otherAppCall.Txn().Sign(user.Sk)
+
+		return simulationTestCase{
+			input: simulation.Request{
+				TxnGroups: [][]transactions.SignedTxn{{signedClearStateTxn, signedOtherAppCall}},
+			},
+			expected: simulation.Result{
+				Version:   simulation.ResultLatestVersion,
+				LastRound: env.TxnInfo.LatestRound(),
+				TxnGroups: []simulation.TxnGroupResult{
+					{
+						Txns: []simulation.TxnResult{
+							{
+								// No EvalDelta changes because the clear state failed
+								AppBudgetConsumed: 16,
+							},
+							{
+								Txn: transactions.SignedTxnWithAD{
+									ApplyData: transactions.ApplyData{
+										EvalDelta: transactions.EvalDelta{
+											GlobalDelta: basics.StateDelta{
+												"counter": {
+													Action: basics.SetUintAction,
+													Uint:   3,
+												},
+											},
+										},
+									},
+								},
+								AppBudgetConsumed: 16,
+							},
+						},
+						AppBudgetAdded:    1400,
+						AppBudgetConsumed: 32,
+					},
+				},
+			},
+		}
+	})
+}
+
+func TestClearStateError(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+		sender := env.Accounts[0]
+		user := env.Accounts[1]
+
+		appID := env.CreateApp(sender.Addr, simulationtesting.AppParams{
+			ApprovalProgram:   returnFirstAppArgProgram,
+			ClearStateProgram: returnFirstAppArgProgram,
+			GlobalStateSchema: basics.StateSchema{
+				NumUint: 1,
+			},
+		})
+		env.OptIntoApp(user.Addr, appID)
+
+		clearStateTxn := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:            protocol.ApplicationCallTx,
+			Sender:          user.Addr,
+			ApplicationID:   appID,
+			OnCompletion:    transactions.ClearStateOC,
+			ApplicationArgs: [][]byte{}, // No app args, will cause error
+		})
+		otherAppCall := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:            protocol.ApplicationCallTx,
+			Sender:          user.Addr,
+			ApplicationID:   appID,
+			ApplicationArgs: [][]byte{{1}},
+		})
+
+		txntest.Group(&clearStateTxn, &otherAppCall)
+
+		signedClearStateTxn := clearStateTxn.Txn().Sign(user.Sk)
+		signedOtherAppCall := otherAppCall.Txn().Sign(user.Sk)
+
+		return simulationTestCase{
+			input: simulation.Request{
+				TxnGroups: [][]transactions.SignedTxn{{signedClearStateTxn, signedOtherAppCall}},
+			},
+			expected: simulation.Result{
+				Version:   simulation.ResultLatestVersion,
+				LastRound: env.TxnInfo.LatestRound(),
+				TxnGroups: []simulation.TxnGroupResult{
+					{
+						Txns: []simulation.TxnResult{
+							{
+								// No EvalDelta changes because the clear state failed
+								AppBudgetConsumed: 14,
+							},
+							{
+								Txn: transactions.SignedTxnWithAD{
+									ApplyData: transactions.ApplyData{
+										EvalDelta: transactions.EvalDelta{
+											GlobalDelta: basics.StateDelta{
+												"counter": {
+													Action: basics.SetUintAction,
+													Uint:   3,
+												},
+											},
+										},
+									},
+								},
+								AppBudgetConsumed: 16,
+							},
+						},
+						AppBudgetAdded:    1400,
+						AppBudgetConsumed: 30,
+					},
+				},
+			},
+		}
+	})
+}
+
+func TestErrorAfterClearStateError(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+		sender := env.Accounts[0]
+		user := env.Accounts[1]
+
+		appID := env.CreateApp(sender.Addr, simulationtesting.AppParams{
+			ApprovalProgram:   returnFirstAppArgProgram,
+			ClearStateProgram: returnFirstAppArgProgram,
+			GlobalStateSchema: basics.StateSchema{
+				NumUint: 1,
+			},
+		})
+		env.OptIntoApp(user.Addr, appID)
+
+		clearStateTxn := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:            protocol.ApplicationCallTx,
+			Sender:          user.Addr,
+			ApplicationID:   appID,
+			OnCompletion:    transactions.ClearStateOC,
+			ApplicationArgs: [][]byte{}, // No app args, will cause error
+		})
+		otherAppCall := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:            protocol.ApplicationCallTx,
+			Sender:          user.Addr,
+			ApplicationID:   appID,
+			ApplicationArgs: [][]byte{{0}},
+		})
+
+		txntest.Group(&clearStateTxn, &otherAppCall)
+
+		signedClearStateTxn := clearStateTxn.Txn().Sign(user.Sk)
+		signedOtherAppCall := otherAppCall.Txn().Sign(user.Sk)
+
+		return simulationTestCase{
+			input: simulation.Request{
+				TxnGroups: [][]transactions.SignedTxn{{signedClearStateTxn, signedOtherAppCall}},
+			},
+			expectedError: "transaction rejected by ApprovalProgram",
+			expected: simulation.Result{
+				Version:   simulation.ResultLatestVersion,
+				LastRound: env.TxnInfo.LatestRound(),
+				TxnGroups: []simulation.TxnGroupResult{
+					{
+						Txns: []simulation.TxnResult{
+							{
+								// No EvalDelta changes because the clear state failed
+								AppBudgetConsumed: 14,
+							},
+							{
+								Txn: transactions.SignedTxnWithAD{
+									ApplyData: transactions.ApplyData{
+										EvalDelta: transactions.EvalDelta{
+											GlobalDelta: basics.StateDelta{
+												"counter": {
+													Action: basics.SetUintAction,
+													Uint:   3,
+												},
+											},
+										},
+									},
+								},
+								AppBudgetConsumed: 16,
+							},
+						},
+						AppBudgetAdded:    1400,
+						AppBudgetConsumed: 30,
+						FailedAt:          simulation.TxnPath{1},
+					},
+				},
+			},
+		}
+	})
+}
+
 func TestAppCallOverBudget(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -3992,242 +4240,216 @@ int 1`,
 	})
 }
 
-func TestGlobalStateTypeChange(t *testing.T) {
+func TestAppLocalGlobalStateChangeClearStateRollback(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
+	for _, shouldError := range []bool{false, true} {
+		shouldError := shouldError
+		t.Run(fmt.Sprintf("shouldError=%v", shouldError), func(t *testing.T) {
+			t.Parallel()
+			simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+				sender := env.Accounts[0]
 
-	simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
-		sender := env.Accounts[0]
-
-		futureAppID := basics.AppIndex(1001)
-
-		createTxn := env.TxnInfo.NewTxn(txntest.Txn{
-			Type:              protocol.ApplicationCallTx,
-			Sender:            sender.Addr,
-			ApplicationID:     0,
-			GlobalStateSchema: basics.StateSchema{NumUint: 1, NumByteSlice: 1},
-			ApprovalProgram: `#pragma version 8
-txn ApplicationID
-bz end // Do nothing during create
-
-byte "global-key"
-int 0xdecaf
-app_global_put
-byte "global-key"
-byte "welt am draht"
+				approvalProgram := `#pragma version 8
+int 1`
+				clearStateProgram := `#pragma version 8
+byte "global key"
+byte "global value"
 app_global_put
 
-end:
-  int 1
-`,
-			ClearStateProgram: `#pragma version 8
-int 1`,
-		})
+txn Sender
+byte "local key"
+byte "local value"
+app_local_put
+`
 
-		op, err := logic.AssembleString(createTxn.ApprovalProgram.(string))
-		require.NoError(t, err)
-		progHash := crypto.Hash(op.Program)
+				if shouldError {
+					clearStateProgram += "err"
+				} else {
+					clearStateProgram += "int 0"
+				}
 
-		globalStateCall := env.TxnInfo.NewTxn(txntest.Txn{
-			Type:          protocol.ApplicationCallTx,
-			Sender:        sender.Addr,
-			ApplicationID: futureAppID,
-		})
+				createdAppID := env.CreateApp(sender.Addr, simulationtesting.AppParams{
+					GlobalStateSchema: basics.StateSchema{NumByteSlice: 1},
+					LocalStateSchema:  basics.StateSchema{NumByteSlice: 1},
+					ApprovalProgram:   approvalProgram,
+					ClearStateProgram: clearStateProgram,
+				})
 
-		txntest.Group(&createTxn, &globalStateCall)
+				op, err := logic.AssembleString(clearStateProgram)
+				require.NoError(t, err)
+				progHash := crypto.Hash(op.Program)
 
-		signedCreate := createTxn.Txn().Sign(sender.Sk)
-		signedGlobalStateCall := globalStateCall.Txn().Sign(sender.Sk)
+				env.OptIntoApp(sender.Addr, createdAppID)
 
-		return simulationTestCase{
-			input: simulation.Request{
-				TxnGroups: [][]transactions.SignedTxn{
-					{signedCreate, signedGlobalStateCall},
-				},
-				TraceConfig: simulation.ExecTraceConfig{
-					Enable:  true,
-					Stack:   true,
-					Scratch: true,
-					State:   true,
-				},
-			},
-			developerAPI: true,
-			expected: simulation.Result{
-				Version:   simulation.ResultLatestVersion,
-				LastRound: env.TxnInfo.LatestRound(),
-				TraceConfig: simulation.ExecTraceConfig{
-					Enable:  true,
-					Stack:   true,
-					Scratch: true,
-					State:   true,
-				},
-				TxnGroups: []simulation.TxnGroupResult{
+				clearStateTxn := env.TxnInfo.NewTxn(txntest.Txn{
+					Type:          protocol.ApplicationCallTx,
+					Sender:        sender.Addr,
+					ApplicationID: createdAppID,
+					OnCompletion:  transactions.ClearStateOC,
+				})
+
+				signedClearStateTxn := clearStateTxn.Txn().Sign(sender.Sk)
+
+				clearStateRollbackError := ""
+				clearStateProgramTrace := []simulation.OpcodeTraceUnit{
 					{
-						Txns: []simulation.TxnResult{
-							// App creation
+						PC: 1,
+						StackAdded: []basics.TealValue{
 							{
-								Txn: transactions.SignedTxnWithAD{
-									ApplyData: transactions.ApplyData{
-										ApplicationID: futureAppID,
-									},
-								},
-								AppBudgetConsumed: 4,
-								Trace: &simulation.TransactionTrace{
-									ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
-										{
-											PC: 1,
-										},
-										{
-											PC: 14,
-											StackAdded: []basics.TealValue{
-												{
-													Type: basics.TealUintType,
-												},
-											},
-										},
-										{
-											PC:            16,
-											StackPopCount: 1,
-										},
-										{
-											PC: 42,
-											StackAdded: []basics.TealValue{
-												{
-													Type: basics.TealUintType,
-													Uint: 1,
-												},
-											},
-										},
-									},
-									ApprovalProgramHash: progHash,
-								},
+								Type:  basics.TealBytesType,
+								Bytes: "global key",
 							},
-							// Global
+						},
+					},
+					{
+						PC: 13,
+						StackAdded: []basics.TealValue{
 							{
-								Txn: transactions.SignedTxnWithAD{
-									ApplyData: transactions.ApplyData{
-										EvalDelta: transactions.EvalDelta{
-											GlobalDelta: basics.StateDelta{
-												"global-key": basics.ValueDelta{
-													Bytes:  "welt am draht",
-													Action: basics.SetBytesAction,
-												},
-											},
-										},
-									},
-								},
-								AppBudgetConsumed: 10,
-								Trace: &simulation.TransactionTrace{
-									ApprovalProgramTrace: []simulation.OpcodeTraceUnit{
-										{
-											PC: 1,
-										},
-										{
-											PC: 14,
-											StackAdded: []basics.TealValue{
-												{
-													Type: basics.TealUintType,
-													Uint: uint64(futureAppID),
-												},
-											},
-										},
-										{
-											PC:            16,
-											StackPopCount: 1,
-										},
-										{
-											PC: 19,
-											StackAdded: []basics.TealValue{
-												{
-													Type:  basics.TealBytesType,
-													Bytes: "global-key",
-												},
-											},
-										},
-										{
-											PC: 20,
-											StackAdded: []basics.TealValue{
-												{
-													Type: basics.TealUintType,
-													Uint: 0xdecaf,
-												},
-											},
-										},
-										{
-											PC: 24,
-											StateChanges: []simulation.StateOperation{
-												{
-													AppStateOp: logic.AppStateWrite,
-													AppState:   logic.GlobalState,
-													AppID:      futureAppID,
-													Key:        "global-key",
-													NewValue: basics.TealValue{
-														Type: basics.TealUintType,
-														Uint: 0xdecaf,
-													},
-												},
-											},
-											StackPopCount: 2,
-										},
-										{
-											PC: 25,
-											StackAdded: []basics.TealValue{
-												{
-													Type:  basics.TealBytesType,
-													Bytes: "global-key",
-												},
-											},
-										},
-										{
-											PC: 26,
-											StackAdded: []basics.TealValue{
-												{
-													Type:  basics.TealBytesType,
-													Bytes: "welt am draht",
-												},
-											},
-										},
-										{
-											PC:            41,
-											StackPopCount: 2,
-											StateChanges: []simulation.StateOperation{
-												{
-													AppStateOp: logic.AppStateWrite,
-													AppState:   logic.GlobalState,
-													AppID:      futureAppID,
-													Key:        "global-key",
-													NewValue: basics.TealValue{
-														Type:  basics.TealBytesType,
-														Bytes: "welt am draht",
-													},
-												},
-											},
-										},
-										{
-											PC: 42,
-											StackAdded: []basics.TealValue{
-												{
-													Type: basics.TealUintType,
-													Uint: 1,
-												},
-											},
-										},
-									},
-									ApprovalProgramHash: progHash,
+								Type:  basics.TealBytesType,
+								Bytes: "global value",
+							},
+						},
+					},
+					{
+						PC:            27,
+						StackPopCount: 2,
+						StateChanges: []simulation.StateOperation{
+							{
+								AppStateOp: logic.AppStateWrite,
+								AppState:   logic.GlobalState,
+								AppID:      createdAppID,
+								Key:        "global key",
+								NewValue: basics.TealValue{
+									Type:  basics.TealBytesType,
+									Bytes: "global value",
 								},
 							},
 						},
-						AppBudgetAdded:    1400,
-						AppBudgetConsumed: 14,
 					},
-				},
-				InitialStates: &simulation.ResourcesInitialStates{
-					AllAppsInitialStates: make(simulation.AppsInitialStates),
-					CreatedApp:           util.MakeSet(futureAppID),
-				},
-			},
-		}
-	})
+					{
+						PC: 28,
+						StackAdded: []basics.TealValue{
+							{
+								Type:  basics.TealBytesType,
+								Bytes: string(sender.Addr[:]),
+							},
+						},
+					},
+					{
+						PC: 30,
+						StackAdded: []basics.TealValue{
+							{
+								Type:  basics.TealBytesType,
+								Bytes: "local key",
+							},
+						},
+					},
+					{
+						PC: 41,
+						StackAdded: []basics.TealValue{
+							{
+								Type:  basics.TealBytesType,
+								Bytes: "local value",
+							},
+						},
+					},
+					{
+						PC:            54,
+						StackPopCount: 3,
+						StateChanges: []simulation.StateOperation{
+							{
+								AppStateOp: logic.AppStateWrite,
+								AppState:   logic.LocalState,
+								AppID:      createdAppID,
+								Account:    sender.Addr,
+								Key:        "local key",
+								NewValue: basics.TealValue{
+									Type:  basics.TealBytesType,
+									Bytes: "local value",
+								},
+							},
+						},
+					},
+					{
+						PC: 55,
+						StackAdded: []basics.TealValue{
+							{
+								Type: basics.TealUintType,
+								Uint: 0,
+							},
+						},
+					},
+				}
+
+				if shouldError {
+					clearStateRollbackError = "err opcode executed"
+					clearStateProgramTrace[len(clearStateProgramTrace)-1].StackAdded = nil
+				}
+
+				return simulationTestCase{
+					input: simulation.Request{
+						TxnGroups: [][]transactions.SignedTxn{{signedClearStateTxn}},
+						TraceConfig: simulation.ExecTraceConfig{
+							Enable:  true,
+							Stack:   true,
+							Scratch: true,
+							State:   true,
+						},
+					},
+					developerAPI: true,
+					expected: simulation.Result{
+						Version:   simulation.ResultLatestVersion,
+						LastRound: env.TxnInfo.LatestRound(),
+						TraceConfig: simulation.ExecTraceConfig{
+							Enable:  true,
+							Stack:   true,
+							Scratch: true,
+							State:   true,
+						},
+						TxnGroups: []simulation.TxnGroupResult{
+							{
+								Txns: []simulation.TxnResult{
+									{
+										AppBudgetConsumed: 8,
+										Trace: &simulation.TransactionTrace{
+											ClearStateProgramTrace:  clearStateProgramTrace,
+											ClearStateProgramHash:   progHash,
+											ClearStateRollback:      true,
+											ClearStateRollbackError: clearStateRollbackError,
+										},
+									},
+								},
+								AppBudgetAdded:    700,
+								AppBudgetConsumed: 8,
+							},
+						},
+						InitialStates: &simulation.ResourcesInitialStates{
+							AllAppsInitialStates: simulation.AppsInitialStates{
+								createdAppID: {
+									AppLocals:  map[basics.Address]simulation.AppKVPairs{},
+									AppGlobals: simulation.AppKVPairs{},
+									AppBoxes:   simulation.AppKVPairs{},
+									// It's fine to leave the keys in "CreatedX" for two reasons:
+									// 1. These fields really just mean state was accessed that
+									//    didn't exist before, so we shouldn't try to report an
+									//    initial value.
+									// 2. These values are not included in the REST API, so they are
+									//    not going to confuse users.
+									CreatedGlobals: util.MakeSet("global key"),
+									CreatedBoxes:   make(util.Set[string]),
+									CreatedLocals: map[basics.Address]util.Set[string]{
+										sender.Addr: util.MakeSet("local key"),
+									},
+								},
+							},
+							CreatedApp: util.Set[basics.AppIndex]{},
+						},
+					},
+				}
+			})
+		})
+	}
 }
 
 func TestGlobalStateTypeChangeFailure(t *testing.T) {
