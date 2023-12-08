@@ -61,7 +61,7 @@ aptly repo import beta beta algorand-beta algorand-devtools-beta
 #     fi
 # done
 
-cp tmp/{algorand,algorand-devtools}_beta_linux-{amd64,arm64}_3.20.1.deb $PACKAGES_DIR
+cp -f tmp/{algorand,algorand-devtools}_${CHANNEL}_linux-{amd64,arm64}_3.20.1.deb $PACKAGES_DIR
 
 if ls -A $PACKAGES_DIR
 then
