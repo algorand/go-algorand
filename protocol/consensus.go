@@ -220,7 +220,7 @@ const ConsensusV38 = ConsensusVersion(
 // ConsensusV39test enables dynamic filter timeouts with a floor of 2.5s, a deadline timeout of 4 seconds,
 // TEAL v10 logicSig opcode budget pooling along with elliptic curve ops on some pairing friendly curves.
 const ConsensusV39test = ConsensusVersion(
-	"NOTAREALSPEC",
+	"https://github.com/algorandfoundation/specs/tree/NOTAREALSPEC",
 )
 
 // ConsensusFuture is a protocol that should not appear in any production

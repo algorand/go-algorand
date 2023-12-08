@@ -811,16 +811,16 @@ func TestPlayerPermutation(t *testing.T) {
 }
 
 func playerPermutationCheck(t *testing.T, enableDynamicFilterTimeout bool) {
-	// create a protocol version where dynamic filter is enabled
-	version, _, configCleanup := createDynamicFilterConfig()
+	// create a protocol disabledFilterTimeoutVersion where dynamic filter is disabled
+	disabledFilterTimeoutVersion, _, configCleanup := overrideConfigWithDynamicFilterParam(false)
 	defer configCleanup()
 
 	for i := 0; i < 7; i++ {
 		for j := 0; j < 14; j++ {
 			_, pMachine, helper := getPlayerPermutation(t, i)
 			inMsg := getMessageEventPermutation(t, j, helper)
-			if enableDynamicFilterTimeout {
-				inMsg.Proto = ConsensusVersionView{Version: version}
+			if !enableDynamicFilterTimeout {
+				inMsg.Proto = ConsensusVersionView{Version: disabledFilterTimeoutVersion}
 			}
 			err, panicErr := pMachine.transition(inMsg)
 			fmt.Println(pMachine.getTrace().events)
