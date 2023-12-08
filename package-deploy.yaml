@@ -40,7 +40,7 @@ agents:
     volumes:
       - $XDG_RUNTIME_DIR/gnupg/S.gpg-agent:/root/.gnupg/S.gpg-agent
       - $HOME/.gnupg/pubring.kbx:/root/.gnupg/pubring.kbx
-      - $HOME/aptly:/root/aptly
+      - $HOME/.aptly:/root/.aptly
     workDir: $HOME/projects/go-algorand
 
   - name: rpm
