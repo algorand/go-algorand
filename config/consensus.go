@@ -1383,22 +1383,34 @@ func initConsensusProtocols() {
 	// for the sake of future manual calculations, we'll round that down a bit :
 	v37.ApprovedUpgrades[protocol.ConsensusV38] = 10000
 
+	v39Test := v38
+	v39Test.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+
+	v39Test.LogicSigVersion = 10
+	v39Test.EnableLogicSigCostPooling = true
+
+	v39Test.AgreementDeadlineTimeoutPeriod0 = 4 * time.Second
+
+	v39Test.StateProofBlockHashInLightHeader = true
+
+	v39Test.DynamicFilterTimeout = true
+
+	// For future upgrades, round times will likely be shorter so giving ourselves some buffer room
+	v39Test.MaxUpgradeWaitRounds = 250000
+
+	Consensus[protocol.ConsensusV39test] = v39Test
+
+	// v38 can be upgraded to v39Test, with an update delay of 7d:
+	// 157000 = (7 * 24 * 60 * 60 / 3.3 round times currently)
+	// but our current max is 150000 so using that :
+	v38.ApprovedUpgrades[protocol.ConsensusV39test] = 150000
+
 	// ConsensusFuture is used to test features that are implemented
 	// but not yet released in a production protocol version.
-	vFuture := v38
-
+	vFuture := v39Test
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
-	vFuture.LogicSigVersion = 10 // When moving this to a release, put a new higher LogicSigVersion here
-	vFuture.EnableLogicSigCostPooling = true
-
-	vFuture.AgreementDeadlineTimeoutPeriod0 = 4 * time.Second
-
-	vFuture.StateProofBlockHashInLightHeader = true
-
-	// Setting DynamicFilterTimeout in vFuture will impact e2e test performance
-	// by reducing round time. Hence, it is commented out for now.
-	vFuture.DynamicFilterTimeout = true
+	vFuture.LogicSigVersion = 11 // When moving this to a release, put a new higher LogicSigVersion here
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 

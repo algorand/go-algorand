@@ -37,7 +37,7 @@ func init() {
 }
 
 func makeTimeoutEvent() timeoutEvent {
-	return timeoutEvent{T: timeout, RandomEntropy: crypto.RandUint64()}
+	return timeoutEvent{T: timeout, RandomEntropy: crypto.RandUint64(), Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion}}
 }
 
 func generateProposalEvents(t *testing.T, player player, accs testAccountData, f testBlockFactory, ledger Ledger) (voteBatch []event, payloadBatch []event, lowestProposal proposalValue) {
@@ -3240,7 +3240,7 @@ func TestPlayerAlwaysResynchsPinnedValue(t *testing.T) {
 func TestPlayerRetainsReceivedValidatedAtOneSample(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	version := protocol.ConsensusFuture
+	version := protocol.ConsensusCurrentVersion
 	const r = round(20239)
 	const p = period(131)
 	pWhite, pM, helper := setupP(t, r-1, p, soft)
@@ -3262,7 +3262,7 @@ func TestPlayerRetainsReceivedValidatedAtOneSample(t *testing.T) {
 func TestPlayerRetainsReceivedValidatedAtCredentialHistory(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	version := protocol.ConsensusFuture
+	version := protocol.ConsensusCurrentVersion
 	const r = round(20239)
 	const p = period(0)
 	pWhite, pM, helper := setupP(t, r-credentialRoundLag-1, p, soft)
@@ -3301,7 +3301,7 @@ func TestPlayerRetainsReceivedValidatedAtCredentialHistory(t *testing.T) {
 func TestPlayerRetainsEarlyReceivedValidatedAtOneSample(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	version := protocol.ConsensusFuture
+	version := protocol.ConsensusCurrentVersion
 	const r = round(20239)
 	const p = period(0)
 	pWhite, pM, helper := setupP(t, r-1, p, soft)
@@ -3339,7 +3339,7 @@ func testClockForRound(t *testing.T, pWhite *player, fixedDur time.Duration, cur
 func TestPlayerRetainsLateReceivedValidatedAtOneSample(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	version := protocol.ConsensusFuture
+	version := protocol.ConsensusCurrentVersion
 	const r = round(20239)
 	const p = period(0)
 	pWhite, pM, helper := setupP(t, r-1, p, soft)
@@ -3382,7 +3382,7 @@ func TestPlayerRetainsReceivedValidatedAtForHistoryWindowLateBetter(t *testing.T
 }
 
 func testPlayerRetainsReceivedValidatedAtForHistoryWindow(t *testing.T, addBetterLate bool) {
-	version := protocol.ConsensusFuture
+	version := protocol.ConsensusCurrentVersion
 	const r = round(20239)
 	const p = period(0)
 	pWhite, pM, helper := setupP(t, r-1, p, soft)
@@ -3613,7 +3613,7 @@ func TestPlayerRetainsLateReceivedValidatedAtPPOneSample(t *testing.T) {
 func TestPlayerRetainsReceivedValidatedAtPPForHistoryWindow(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	version := protocol.ConsensusFuture
+	version := protocol.ConsensusCurrentVersion
 	const r = round(20239)
 	const p = period(0)
 	pWhite, pM, helper := setupP(t, r-1, p, soft)
@@ -3710,7 +3710,7 @@ func TestPlayerRetainsReceivedValidatedAtAVPPOneSample(t *testing.T) {
 func TestPlayerRetainsEarlyReceivedValidatedAtAVPPOneSample(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	version := protocol.ConsensusFuture
+	version := protocol.ConsensusCurrentVersion
 	const r = round(20239)
 	const p = period(0)
 	pWhite, pM, helper := setupP(t, r-1, p, soft)
@@ -3767,7 +3767,7 @@ func TestPlayerRetainsEarlyReceivedValidatedAtAVPPOneSample(t *testing.T) {
 func TestPlayerRetainsLateReceivedValidatedAtAVPPOneSample(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	version := protocol.ConsensusFuture
+	version := protocol.ConsensusCurrentVersion
 	const r = round(20239)
 	const p = period(0)
 	pWhite, pM, helper := setupP(t, r-1, p, soft)
@@ -3821,7 +3821,7 @@ func TestPlayerRetainsLateReceivedValidatedAtAVPPOneSample(t *testing.T) {
 func TestPlayerRetainsReceivedValidatedAtAVPPHistoryWindow(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	version := protocol.ConsensusFuture
+	version := protocol.ConsensusCurrentVersion
 	const r = round(20239)
 	const p = period(0)
 	pWhite, pM, helper := setupP(t, r-1, p, soft)

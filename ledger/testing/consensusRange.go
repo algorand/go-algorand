@@ -59,7 +59,8 @@ var consensusByNumber = []protocol.ConsensusVersion{
 	protocol.ConsensusV35, // minor, double upgrade withe v34
 	protocol.ConsensusV36, // AVM v8, box storage
 	protocol.ConsensusV37,
-	protocol.ConsensusV38, // AVM v9, ECDSA pre-check, stateproofs recoverability
+	protocol.ConsensusV38,     // AVM v9, ECDSA pre-check, stateproofs recoverability
+	protocol.ConsensusV39test, // AVM v10, loogicsig opcode budget pooling, elliptic curve ops, dynamic round times
 	protocol.ConsensusFuture,
 }
 
