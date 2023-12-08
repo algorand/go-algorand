@@ -1398,7 +1398,7 @@ func initConsensusProtocols() {
 
 	// Setting DynamicFilterTimeout in vFuture will impact e2e test performance
 	// by reducing round time. Hence, it is commented out for now.
-	// vFuture.DynamicFilterTimeout = true
+	vFuture.DynamicFilterTimeout = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 
