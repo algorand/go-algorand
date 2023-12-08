@@ -32,10 +32,10 @@ aptly mirror update beta
 aptly repo import stable stable algorand algorand-devtools
 aptly repo import beta beta algorand-beta algorand-devtools-beta
 
-KEY_PREFIX="$CHANNEL/$VERSION"
-FILENAME_SUFFIX="${CHANNEL}_linux-amd64_${VERSION}.deb"
-ALGORAND_KEY="$KEY_PREFIX/algorand_${FILENAME_SUFFIX}"
-DEVTOOLS_KEY="$KEY_PREFIX/algorand-devtools_${FILENAME_SUFFIX}"
+# KEY_PREFIX="$CHANNEL/$VERSION"
+# FILENAME_SUFFIX="${CHANNEL}_linux-amd64_${VERSION}.deb"
+# ALGORAND_KEY="$KEY_PREFIX/algorand_${FILENAME_SUFFIX}"
+# DEVTOOLS_KEY="$KEY_PREFIX/algorand-devtools_${FILENAME_SUFFIX}"
 
 # # `STAGING` could contain a "path" (i.e. "my_bucket/foo/bar"), but the
 # # `s3api` api expects it to be only the bucket name (i.e., "my_bucket").
@@ -61,8 +61,12 @@ DEVTOOLS_KEY="$KEY_PREFIX/algorand-devtools_${FILENAME_SUFFIX}"
 #     fi
 # done
 
-# if ls -A $PACKAGES_DIR
-# then
+cp tmp/{algorand,algorand-devtools}_beta_linux-{amd64,arm64}_3.20.1.deb $PACKAGES_DIR
+
+if ls -A $PACKAGES_DIR
+then
+    echo "Would have added the following:"
+    ls -l $PACKAGES_DIR
 #     aptly repo add "$CHANNEL" "$PACKAGES_DIR"/*.deb
 #     aptly repo show -with-packages "$CHANNEL"
 #     aptly snapshot create "$SNAPSHOT" from repo "$CHANNEL"
@@ -72,8 +76,7 @@ DEVTOOLS_KEY="$KEY_PREFIX/algorand-devtools_${FILENAME_SUFFIX}"
 #     else
 #         aptly publish switch "$CHANNEL" s3:algorand-releases: "$SNAPSHOT"
 #     fi
-# else
-#     echo "[$0] The packages directory is empty, so there is nothing to add the \`$CHANNEL\` repo."
-#     exit 1
-# fi
-
+else
+    echo "[$0] The packages directory is empty, so there is nothing to add the \`$CHANNEL\` repo."
+    exit 1
+fi
