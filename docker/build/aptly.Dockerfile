@@ -10,7 +10,7 @@ RUN curl https://releases.algorand.com/key.pub | gpg --no-default-keyring --keyr
 RUN gpg --no-default-keyring --keyring /root/.gnupg/trustedkeys.gpg --export --output /root/.gnupg/newkeyring.gpg && mv -f /root/.gnupg/newkeyring.gpg /root/.gnupg/trustedkeys.gpg
 RUN aptly mirror create stable https://releases.algorand.com/deb/ stable main && \
     aptly mirror create beta https://releases.algorand.com/deb/ beta main && \
-    aptly repo create -distribution=stable -architectures=amd64 -component=main -comment=mainnet stable && \
-    aptly repo create -distribution=beta -architectures=amd64 -component=main -comment=betanet beta
+    aptly repo create -distribution=stable -architectures=amd64,arm64 -component=main -comment=mainnet stable && \
+    aptly repo create -distribution=beta -architectures=amd64,arm64 -component=main -comment=betanet beta
 
 CMD ["/bin/bash"]
