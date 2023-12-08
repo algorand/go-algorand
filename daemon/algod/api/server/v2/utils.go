@@ -18,6 +18,7 @@ package v2
 
 import (
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -39,12 +40,18 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/serr"
 )
 
 // returnError logs an internal message while returning the encoded response.
 func returnError(ctx echo.Context, code int, internal error, external string, logger logging.Logger) error {
 	logger.Info(internal)
-	return ctx.JSON(code, model.ErrorResponse{Message: external})
+	var data *map[string]any
+	var se *serr.Error
+	if errors.As(internal, &se) {
+		data = &se.Attrs
+	}
+	return ctx.JSON(code, model.ErrorResponse{Message: external, Data: data})
 }
 
 func badRequest(ctx echo.Context, internal error, external string, log logging.Logger) error {

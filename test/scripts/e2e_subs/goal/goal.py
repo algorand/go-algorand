@@ -156,7 +156,7 @@ class Goal:
                 return txid, ""
             return self.confirm(txid), ""
         except algosdk.error.AlgodHTTPError as e:
-            return (None, e)
+            return (e.obj, e)
 
     def send_group(self, txns, confirm=True):
         # Need unsigned transactions to calculate the group This pulls

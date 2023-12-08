@@ -40,6 +40,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/serr"
 )
 
 // The constants below control opcode evaluation and MAY NOT be changed without
@@ -968,10 +969,9 @@ var errTooManyArgs = errors.New("LogicSig has too many arguments")
 
 // EvalError indicates AVM evaluation failure
 type EvalError struct {
-	Err        error
-	details    string
-	groupIndex int
-	logicsig   bool
+	Err      error
+	details  string
+	logicsig bool
 }
 
 // Error satisfies builtin interface `error`
@@ -990,6 +990,12 @@ func (err EvalError) Error() string {
 
 func (err EvalError) Unwrap() error {
 	return err.Err
+}
+
+func (cx *EvalContext) evalError(err error) error {
+	pc, det := cx.pcDetails()
+	details := fmt.Sprintf("pc=%d, opcodes=%s", pc, det)
+	return EvalError{serr.Extend(err, "pc", pc), details, cx.runMode == ModeSig}
 }
 
 // EvalContract executes stateful program as the gi'th transaction in params
@@ -1070,7 +1076,13 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 			if used > cx.ioBudget {
 				err = fmt.Errorf("box read budget (%d) exceeded", cx.ioBudget)
 				if !cx.Proto.EnableBareBudgetError {
-					err = EvalError{err, "", gi, false}
+					// We return an EvalError here because we used to do
+					// that. It is wrong, and means that there could be a
+					// ClearState call in an old block that failed on read
+					// quota, but we allowed to execute anyway.  If testnet and
+					// mainnet have no such transactions, we can remove
+					// EnableBareBudgetError and this code.
+					err = EvalError{err, "", false}
 				}
 				return false, nil, err
 			}
@@ -1084,9 +1096,7 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 	}
 	pass, err := eval(program, &cx)
 	if err != nil {
-		pc, det := cx.pcDetails()
-		details := fmt.Sprintf("pc=%d, opcodes=%s", pc, det)
-		err = EvalError{err, details, gi, false}
+		err = cx.evalError(err)
 	}
 
 	if cx.Trace != nil && cx.caller != nil {
@@ -1126,9 +1136,7 @@ func EvalSignatureFull(gi int, params *EvalParams) (bool, *EvalContext, error) {
 	pass, err := eval(cx.txn.Lsig.Logic, &cx)
 
 	if err != nil {
-		pc, det := cx.pcDetails()
-		details := fmt.Sprintf("pc=%d, opcodes=%s", pc, det)
-		err = EvalError{err, details, gi, true}
+		err = cx.evalError(err)
 	}
 
 	return pass, &cx, err
