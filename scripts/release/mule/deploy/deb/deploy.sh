@@ -32,7 +32,7 @@ aptly mirror update beta
 aptly repo import stable stable algorand algorand-devtools
 aptly repo import beta beta algorand-beta algorand-devtools-beta
 
-cp -f tmp/{algorand,algorand-devtools}_${CHANNEL}_linux-{amd64,arm64}_3.20.1.deb $PACKAGES_DIR
+cp -f tmp/{algorand,algorand-devtools}_${CHANNEL}_linux-{amd64,arm64}_${VERSION}.deb $PACKAGES_DIR
 
 if ls -A $PACKAGES_DIR
 then
