@@ -41,7 +41,7 @@ then
     aptly snapshot create "$SNAPSHOT" from repo "$CHANNEL"
     if ! aptly publish show "$CHANNEL" s3:algorand-releases: &> /dev/null
     then
-        aptly publish snapshot -gpg-key=dev@algorand.com -origin=Algorand -label=Algorand "$SNAPSHOT" s3:algorand-releases:
+        aptly publish --keyring=secring.gpg snapshot -gpg-key=dev@algorand.com -origin=Algorand -label=Algorand "$SNAPSHOT" s3:algorand-releases:
     else
         aptly publish switch "$CHANNEL" s3:algorand-releases: "$SNAPSHOT"
     fi
