@@ -41,7 +41,6 @@ agents:
       - $XDG_RUNTIME_DIR/gnupg/S.gpg-agent:/root/.gnupg/S.gpg-agent
       - $HOME/.gnupg/pubring.kbx:/root/.gnupg/pubring.kbx
       - $HOME/.gnupg/secring.gpg:/root/.gnupg/secring.gpg
-      - $HOME/.gnupg/.gpg-v21-migrated:/root/.gnupg/.gpg-v21-migrated
       - $HOME/.aptly:/root/.aptly
     workDir: $HOME/projects/go-algorand
 
