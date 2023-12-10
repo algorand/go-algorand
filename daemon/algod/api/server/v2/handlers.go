@@ -29,8 +29,6 @@ import (
 	"strings"
 	"time"
 
-	"golang.org/x/sync/semaphore"
-
 	"github.com/labstack/echo/v4"
 	"golang.org/x/sync/semaphore"
 
