@@ -342,7 +342,7 @@
             }
           }
         },
-        "description": "All of the logs from outer and inner app calls in the given block"
+        "description": "All of the logs from outer and inner app calls in the given round"
       },
       "BlockResponse": {
         "content": {
@@ -4019,6 +4019,92 @@
           }
         },
         "summary": "Gets a proof for a given light block header inside a state proof commitment",
+        "tags": [
+          "public",
+          "nonparticipating"
+        ]
+      }
+    },
+    "/v2/blocks/{round}/logs": {
+      "get": {
+        "description": "Get all of the logs from outer and inner app calls in the given round",
+        "operationId": "GetBlockLogs",
+        "parameters": [
+          {
+            "description": "The round from which to fetch block log information.",
+            "in": "path",
+            "name": "round",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "logs": {
+                      "items": {
+                        "$ref": "#/components/schemas/BlockLog"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "logs"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "All of the logs from outer and inner app calls in the given round"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request - Non integer number"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid API Token"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "None existing block "
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Error"
+          }
+        },
+        "summary": "Get all of the logs from outer and inner app calls in the given round",
         "tags": [
           "public",
           "nonparticipating"

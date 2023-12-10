@@ -735,7 +735,7 @@ func (v2 *Handlers) GetBlockTxids(ctx echo.Context, round uint64) error {
 func getLogsFromTxns(txns []transactions.SignedTxnWithAD, blockLogs *[]model.BlockLog, outerTxnID string) {
 
 	for _, txn := range txns {
-		byteLogs := make([][]byte, 0, len(txns))
+		byteLogs := [][]byte{}
 		for _, log := range txn.EvalDelta.Logs {
 			byteLogs = append(byteLogs, []byte(log))
 		}
@@ -769,7 +769,7 @@ func (v2 *Handlers) GetBlockLogs(ctx echo.Context, round uint64) error {
 		return internalError(ctx, err, "decoding transactions", v2.Log)
 	}
 
-	var blockLogs []model.BlockLog
+	blockLogs := []model.BlockLog{}
 
 	for _, txn := range txns {
 		getLogsFromTxns(txn.EvalDelta.InnerTxns, &blockLogs, txn.ID().String())

@@ -787,6 +787,62 @@
         }
       ]
     },
+    "/v2/blocks/{round}/logs": {
+      "get": {
+        "tags": [
+          "public",
+          "nonparticipating"
+        ],
+        "description": "Get all of the logs from outer and inner app calls in the given round",
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Get all of the logs from outer and inner app calls in the given round",
+        "operationId": "GetBlockLogs",
+        "parameters": [
+          {
+            "minimum": 0,
+            "type": "integer",
+            "description": "The round from which to fetch block log information.",
+            "name": "round",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/BlockLogsResponse"
+          },
+          "400": {
+            "description": "Bad Request - Non integer number",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "None existing block ",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        }
+      }
+    },
     "/v2/ledger/supply": {
       "get": {
         "tags": [
@@ -5134,7 +5190,7 @@
       }
     },
     "BlockLogsResponse": {
-      "description": "All of the logs from outer and inner app calls in the given block",
+      "description": "All of the logs from outer and inner app calls in the given round",
       "schema": {
         "type": "object",
         "required": [
