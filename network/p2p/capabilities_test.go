@@ -141,6 +141,8 @@ func setupCapDiscovery(t *testing.T, numHosts int, numBootstrapPeers int) []*Cap
 	for _, h := range hosts {
 		bp := bootstrapPeers
 		if numBootstrapPeers != 0 && numBootstrapPeers != numHosts {
+			bp = make([]peer.AddrInfo, len(bootstrapPeers))
+			copy(bp, bootstrapPeers)
 			rand.Shuffle(len(bootstrapPeers), func(i, j int) {
 				bp[i], bp[j] = bp[j], bp[i]
 			})

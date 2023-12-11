@@ -160,7 +160,7 @@ func (w *whiteholeNetwork) GetHTTPRequestConnection(request *http.Request) (conn
 	return nil
 }
 
-func (w *whiteholeNetwork) Start() {
+func (w *whiteholeNetwork) Start() error {
 	w.quit = make(chan struct{})
 	go func(w *whiteholeNetwork) {
 		w.domain.messagesMu.Lock()
@@ -216,7 +216,7 @@ func (w *whiteholeNetwork) Start() {
 			atomic.AddUint32(&w.lastMsgRead, 1)
 		}
 	}(w)
-	return
+	return nil
 }
 func (w *whiteholeNetwork) getMux() *network.Multiplexer {
 	return w.mux

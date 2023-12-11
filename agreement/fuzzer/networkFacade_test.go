@@ -247,7 +247,7 @@ func (n *NetworkFacade) PushDownstreamMessage(newMsg context.CancelFunc) bool {
 func (n *NetworkFacade) Address() (string, bool) { return "mock network", true }
 
 // Start - unused function
-func (n *NetworkFacade) Start() {}
+func (n *NetworkFacade) Start() error { return nil }
 
 // Stop - unused function
 func (n *NetworkFacade) Stop() {}

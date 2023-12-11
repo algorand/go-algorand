@@ -390,6 +390,7 @@ func (node *AlgorandFullNode) Start() error {
 	return nil
 }
 
+// Capabilities returns the node's capabilities for advertising to other nodes.
 func (node *AlgorandFullNode) Capabilities() []p2p.Capability {
 	var caps []p2p.Capability
 	if node.IsArchival() {

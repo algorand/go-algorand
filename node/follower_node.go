@@ -186,7 +186,7 @@ func (node *AlgorandFollowerNode) Start() error {
 
 	var err error
 	if node.catchpointCatchupService != nil {
-		err := startNetwork()
+		err = startNetwork()
 		if err == nil {
 			err = node.catchpointCatchupService.Start(node.ctx)
 		}
