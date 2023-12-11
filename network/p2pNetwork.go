@@ -68,6 +68,7 @@ type P2PNetwork struct {
 	capabilitiesDiscovery *p2p.CapabilitiesDiscovery
 
 	bootstrapper bootstrapper
+	nodeInfo     NodeInfo
 }
 
 type bootstrapper struct {
@@ -139,7 +140,7 @@ type gossipSubPeer struct {
 func (p gossipSubPeer) GetNetwork() GossipNode { return p.net }
 
 // NewP2PNetwork returns an instance of GossipNode that uses the p2p.Service
-func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebookAddresses []string, genesisID string, networkID protocol.NetworkID) (*P2PNetwork, error) {
+func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebookAddresses []string, genesisID string, networkID protocol.NetworkID, node NodeInfo) (*P2PNetwork, error) {
 	const readBufferLen = 2048
 
 	// create Peerstore and add phonebook addresses
@@ -161,6 +162,7 @@ func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebo
 		wsPeers:      make(map[peer.ID]*wsPeer),
 		wsPeersToIDs: make(map[*wsPeer]peer.ID),
 		peerStats:    make(map[peer.ID]*p2pPeerStats),
+		nodeInfo:     node,
 	}
 	net.ctx, net.ctxCancel = context.WithCancel(context.Background())
 	net.handler = msgHandler{
@@ -255,11 +257,19 @@ func (n *P2PNetwork) Start() error {
 	n.wg.Add(1)
 	go n.meshThread()
 
+	if n.capabilitiesDiscovery != nil {
+		n.capabilitiesDiscovery.AdvertiseCapabilities(n.nodeInfo.Capabilities()...)
+	}
+
 	return nil
 }
 
 // Stop closes sockets and stop threads.
 func (n *P2PNetwork) Stop() {
+	if n.capabilitiesDiscovery != nil {
+		n.capabilitiesDiscovery.Close()
+	}
+
 	n.handler.ClearHandlers([]Tag{})
 	if n.wsPeersConnectivityCheckTicker != nil {
 		n.wsPeersConnectivityCheckTicker.Stop()

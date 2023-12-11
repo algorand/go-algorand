@@ -196,15 +196,6 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		return nil, err
 	}
 
-	// if cfg.EnableDHTProviders {
-	// 	caps, err0 := p2p.MakeCapabilitiesDiscovery(node.ctx, node.config, node.genesisDirs.RootGenesisDir, string(genesis.Network), node.log, phonebookAddresses)
-	// 	if err0 != nil {
-	// 		log.Errorf("Failed to create dht node capabilities discovery: %v", err)
-	// 		return nil, err
-	// 	}
-	// 	node.capabilitiesDiscovery = caps
-	// }
-
 	// tie network, block fetcher, and agreement services together
 	var p2pNode network.GossipNode
 	if cfg.EnableP2PHybridMode {
@@ -215,7 +206,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		}
 	} else if cfg.EnableP2P {
 		// TODO: pass more appropriate genesisDir (hot/cold). Presently this is just used to store a peerID key.
-		p2pNode, err = network.NewP2PNetwork(node.log, node.config, node.genesisDirs.RootGenesisDir, phonebookAddresses, genesis.ID(), genesis.Network)
+		p2pNode, err = network.NewP2PNetwork(node.log, node.config, node.genesisDirs.RootGenesisDir, phonebookAddresses, genesis.ID(), genesis.Network, node)
 		if err != nil {
 			log.Errorf("could not create p2p node: %v", err)
 			return nil, err
@@ -396,13 +387,10 @@ func (node *AlgorandFullNode) Start() error {
 
 		node.startMonitoringRoutines()
 	}
-	// if node.capabilitiesDiscovery != nil {
-	// 	node.capabilitiesDiscovery.AdvertiseCapabilities(node.capabilities()...)
-	// }
 	return nil
 }
 
-func (node *AlgorandFullNode) capabilities() []p2p.Capability {
+func (node *AlgorandFullNode) Capabilities() []p2p.Capability {
 	var caps []p2p.Capability
 	if node.IsArchival() {
 		caps = append(caps, p2p.Archival)
@@ -468,9 +456,6 @@ func (node *AlgorandFullNode) Stop() {
 	node.lowPriorityCryptoVerificationPool.Shutdown()
 	node.cryptoPool.Shutdown()
 	node.cancelCtx()
-	// if node.capabilitiesDiscovery != nil {
-	// 	node.capabilitiesDiscovery.Close()
-	// }
 }
 
 // note: unlike the other two functions, this accepts a whole filename

@@ -156,6 +156,8 @@ const GossipNetworkPath = "/v1/{genesisID}/gossip"
 type NodeInfo interface {
 	// IsParticipating returns true if this node has stake and may vote on blocks or propose blocks.
 	IsParticipating() bool
+	// Capabilities returns a list of capabilities this node has.
+	Capabilities() []p2p.Capability
 }
 
 type nopeNodeInfo struct {
@@ -163,6 +165,10 @@ type nopeNodeInfo struct {
 
 func (nnni *nopeNodeInfo) IsParticipating() bool {
 	return false
+}
+
+func (nnni *nopeNodeInfo) Capabilities() []p2p.Capability {
+	return nil
 }
 
 // WebsocketNetwork implements GossipNode
