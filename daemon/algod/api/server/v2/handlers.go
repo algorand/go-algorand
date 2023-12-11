@@ -732,19 +732,26 @@ func (v2 *Handlers) GetBlockTxids(ctx echo.Context, round uint64) error {
 	return ctx.JSON(http.StatusOK, response)
 }
 
+func NewBlockLog(txid string, logs []string, appIndex uint64) *model.BlockLog {
+	byteLogs := make([][]byte, len(logs))
+	for i, log := range logs {
+		byteLogs[i] = []byte(log)
+	}
+
+	return &model.BlockLog{
+		Txid:             txid,
+		Logs:             byteLogs,
+		ApplicationIndex: appIndex,
+	}
+}
+
 func getLogsFromTxns(txns []transactions.SignedTxnWithAD, blockLogs *[]model.BlockLog, outerTxnID string) {
 
 	for _, txn := range txns {
-		byteLogs := make([][]byte, len(txn.EvalDelta.Logs))
-		for i, log := range txn.EvalDelta.Logs {
-			byteLogs[i] = []byte(log)
-		}
-
-		*blockLogs = append(*blockLogs, model.BlockLog{
-			Txid:             outerTxnID,
-			Logs:             byteLogs,
-			ApplicationIndex: uint64(txn.ApplicationID),
-		})
+		*blockLogs = append(
+			*blockLogs,
+			*NewBlockLog(outerTxnID, txn.EvalDelta.Logs, uint64(txn.ApplicationID)),
+		)
 
 		getLogsFromTxns(txn.EvalDelta.InnerTxns, blockLogs, outerTxnID)
 	}
@@ -772,6 +779,11 @@ func (v2 *Handlers) GetBlockLogs(ctx echo.Context, round uint64) error {
 	blockLogs := []model.BlockLog{}
 
 	for _, txn := range txns {
+		blockLogs = append(
+			blockLogs,
+			*NewBlockLog(txn.ID().String(), txn.EvalDelta.Logs, uint64(txn.ApplicationID)),
+		)
+
 		getLogsFromTxns(txn.EvalDelta.InnerTxns, &blockLogs, txn.ID().String())
 	}
 
