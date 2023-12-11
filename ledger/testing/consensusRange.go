@@ -60,7 +60,7 @@ var consensusByNumber = []protocol.ConsensusVersion{
 	protocol.ConsensusV36, // AVM v8, box storage
 	protocol.ConsensusV37,
 	protocol.ConsensusV38,     // AVM v9, ECDSA pre-check, stateproofs recoverability
-	protocol.ConsensusV39test, // AVM v10, loogicsig opcode budget pooling, elliptic curve ops, dynamic round times
+	protocol.ConsensusV39test, // AVM v10, logicsig opcode budget pooling, elliptic curve ops, dynamic round times
 	protocol.ConsensusFuture,
 }
 

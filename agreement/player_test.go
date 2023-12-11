@@ -3449,7 +3449,7 @@ func testPlayerRetainsReceivedValidatedAtForHistoryWindow(t *testing.T, addBette
 func TestPlayerRetainsReceivedValidatedAtPPOneSample(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	version, _, configCleanup := createEnabledDynamicFilterConfig()
+	version, _, configCleanup := overrideConfigWithDynamicFilterParam(true)
 	defer configCleanup()
 	const r = round(20239)
 	const p = period(0)
@@ -3505,7 +3505,7 @@ func TestPlayerRetainsReceivedValidatedAtPPOneSample(t *testing.T) {
 func TestPlayerRetainsEarlyReceivedValidatedAtPPOneSample(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	version, _, configCleanup := createEnabledDynamicFilterConfig()
+	version, _, configCleanup := overrideConfigWithDynamicFilterParam(true)
 	defer configCleanup()
 
 	const r = round(20239)
@@ -3559,7 +3559,7 @@ func TestPlayerRetainsEarlyReceivedValidatedAtPPOneSample(t *testing.T) {
 func TestPlayerRetainsLateReceivedValidatedAtPPOneSample(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	version, _, configCleanup := createEnabledDynamicFilterConfig()
+	version, _, configCleanup := overrideConfigWithDynamicFilterParam(true)
 	defer configCleanup()
 	const r = round(20239)
 	const p = period(0)
@@ -3655,7 +3655,7 @@ func TestPlayerRetainsReceivedValidatedAtAVPPOneSample(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	// create a protocol version where dynamic lambda is enabled
-	version, _, configCleanup := createEnabledDynamicFilterConfig()
+	version, _, configCleanup := overrideConfigWithDynamicFilterParam(true)
 	defer configCleanup()
 	const r = round(20239)
 	const p = period(0)
@@ -3729,7 +3729,7 @@ func TestPlayerRetainsEarlyReceivedValidatedAtAVPPOneSample(t *testing.T) {
 	require.Equal(t, pWhite.lowestCredentialArrivals.writePtr, 0)
 
 	// create a protocol version where dynamic filter is enabled
-	version, _, configCleanup := createEnabledDynamicFilterConfig()
+	version, _, configCleanup := overrideConfigWithDynamicFilterParam(true)
 	defer configCleanup()
 
 	// send votePresent message (mimicking the first AV message validating)
@@ -3786,7 +3786,7 @@ func TestPlayerRetainsLateReceivedValidatedAtAVPPOneSample(t *testing.T) {
 	require.Equal(t, pWhite.lowestCredentialArrivals.writePtr, 0)
 
 	// create a protocol version where dynamic filter is enabled
-	version, _, configCleanup := createEnabledDynamicFilterConfig()
+	version, _, configCleanup := overrideConfigWithDynamicFilterParam(true)
 	defer configCleanup()
 
 	// send votePresent message (mimicking the first AV message validating)
