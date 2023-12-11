@@ -735,9 +735,9 @@ func (v2 *Handlers) GetBlockTxids(ctx echo.Context, round uint64) error {
 func getLogsFromTxns(txns []transactions.SignedTxnWithAD, blockLogs *[]model.BlockLog, outerTxnID string) {
 
 	for _, txn := range txns {
-		byteLogs := [][]byte{}
-		for _, log := range txn.EvalDelta.Logs {
-			byteLogs = append(byteLogs, []byte(log))
+		byteLogs := make([][]byte, len(txn.EvalDelta.Logs))
+		for i, log := range txn.EvalDelta.Logs {
+			byteLogs[i] = []byte(log)
 		}
 
 		*blockLogs = append(*blockLogs, model.BlockLog{
