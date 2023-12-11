@@ -748,10 +748,12 @@ func NewBlockLog(txid string, logs []string, appIndex uint64) *model.BlockLog {
 func getLogsFromTxns(txns []transactions.SignedTxnWithAD, blockLogs []model.BlockLog, outerTxnID string) []model.BlockLog {
 
 	for _, txn := range txns {
-		blockLogs = append(
-			blockLogs,
-			*NewBlockLog(outerTxnID, txn.EvalDelta.Logs, uint64(txn.ApplicationID)),
-		)
+		if len(txn.EvalDelta.Logs) > 0 {
+			blockLogs = append(
+				blockLogs,
+				*NewBlockLog(outerTxnID, txn.EvalDelta.Logs, uint64(txn.ApplicationID)),
+			)
+		}
 
 		getLogsFromTxns(txn.EvalDelta.InnerTxns, blockLogs, outerTxnID)
 	}
@@ -781,10 +783,12 @@ func (v2 *Handlers) GetBlockLogs(ctx echo.Context, round uint64) error {
 	blockLogs := []model.BlockLog{}
 
 	for _, txn := range txns {
-		blockLogs = append(
-			blockLogs,
-			*NewBlockLog(txn.ID().String(), txn.EvalDelta.Logs, uint64(txn.ApplicationID)),
-		)
+		if len(txn.EvalDelta.Logs) > 0 {
+			blockLogs = append(
+				blockLogs,
+				*NewBlockLog(txn.ID().String(), txn.EvalDelta.Logs, uint64(txn.ApplicationID)),
+			)
+		}
 
 		blockLogs = getLogsFromTxns(txn.EvalDelta.InnerTxns, blockLogs, txn.ID().String())
 	}
