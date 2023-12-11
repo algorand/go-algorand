@@ -67,6 +67,11 @@ var maxAppCallDepth = 8
 // maxStackDepth should not change unless controlled by an AVM version change
 const maxStackDepth = 1000
 
+// maxTxGroupSize is the same as config.MaxTxGroupSize, but is a constant so
+// that we can declare an array of this size. A unit test confirms that they
+// match.
+const maxTxGroupSize = 16
+
 // stackValue is the type for the operand stack.
 // Each stackValue is either a valid []byte value or a uint64 value.
 // If (.Bytes != nil) the stackValue is a []byte value, otherwise uint64 value.
@@ -101,6 +106,17 @@ func (sv stackValue) String() string {
 		return hex.EncodeToString(sv.Bytes)
 	}
 	return fmt.Sprintf("%d 0x%x", sv.Uint, sv.Uint)
+}
+
+func (sv stackValue) asAny() any {
+	if sv.Bytes != nil {
+		return sv.Bytes
+	}
+	return sv.Uint
+}
+
+func (sv stackValue) isEmpty() bool {
+	return sv.Bytes == nil && sv.Uint == 0
 }
 
 func (sv stackValue) address() (addr basics.Address, err error) {
@@ -302,7 +318,7 @@ type EvalParams struct {
 
 	TxnGroup []transactions.SignedTxnWithAD
 
-	pastScratch []*scratchSpace
+	pastScratch [maxTxGroupSize]*scratchSpace
 
 	logger logging.Logger
 
@@ -458,7 +474,6 @@ func NewAppEvalParams(txgroup []transactions.SignedTxnWithAD, proto *config.Cons
 		TxnGroup:                copyWithClearAD(txgroup),
 		Proto:                   proto,
 		Specials:                specials,
-		pastScratch:             make([]*scratchSpace, len(txgroup)),
 		minAvmVersion:           computeMinAvmVersion(txgroup),
 		FeeCredit:               credit,
 		PooledApplicationBudget: pooledApplicationBudget,
@@ -526,7 +541,6 @@ func NewInnerEvalParams(txg []transactions.SignedTxnWithAD, caller *EvalContext)
 		Proto:                   caller.Proto,
 		Trace:                   caller.Trace,
 		TxnGroup:                txg,
-		pastScratch:             make([]*scratchSpace, len(txg)),
 		logger:                  caller.logger,
 		SigLedger:               caller.SigLedger,
 		Ledger:                  caller.Ledger,
@@ -995,7 +1009,69 @@ func (err EvalError) Unwrap() error {
 func (cx *EvalContext) evalError(err error) error {
 	pc, det := cx.pcDetails()
 	details := fmt.Sprintf("pc=%d, opcodes=%s", pc, det)
-	return EvalError{serr.Extend(err, "pc", pc), details, cx.runMode == ModeSig}
+
+	return EvalError{
+		serr.Annotate(err, "pc", pc, "group-index", cx.groupIndex,
+			"eval-states", cx.evalStates()),
+		details,
+		cx.runMode == ModeSig,
+	}
+}
+
+type evalState struct {
+	Scratch []any    `json:"scratch,omitempty"`
+	Stack   []any    `json:"stack,omitempty"`
+	Logs    [][]byte `json:"logs,omitempty"`
+}
+
+func (cx *EvalContext) evalStates() []evalState {
+	states := make([]evalState, cx.groupIndex+1)
+	for i := 0; i <= cx.groupIndex; i++ {
+		var scratch []stackValue
+		if cx.pastScratch[i] != nil {
+			scratch = (*cx.pastScratch[i])[:]
+		}
+		lastNonZero := -1
+		scratchAsAny := make([]any, len(scratch))
+		for s, sv := range scratch {
+			if !sv.isEmpty() {
+				lastNonZero = s
+			}
+			scratchAsAny[s] = sv.asAny()
+		}
+		if lastNonZero == -1 {
+			scratchAsAny = nil
+		} else {
+			scratchAsAny = scratchAsAny[:lastNonZero+1]
+		}
+
+		// Only the current program's stack is still available. So perhaps it
+		// should be located outside of the evalState, with the PC.
+		var stack []any
+		if cx.groupIndex == i {
+			stack = convertSlice(cx.Stack, func(sv stackValue) any {
+				return sv.asAny()
+			})
+		}
+
+		states[i] = evalState{
+			Scratch: scratchAsAny,
+			Stack:   stack,
+			Logs:    convertSlice(cx.TxnGroup[i].EvalDelta.Logs, func(s string) []byte { return []byte(s) }),
+		}
+	}
+	return states
+}
+
+func convertSlice[X any, Y any](input []X, fn func(X) Y) []Y {
+	if input == nil {
+		return nil
+	}
+	output := make([]Y, len(input))
+	for i := range input {
+		output[i] = fn(input[i])
+	}
+	return output
 }
 
 // EvalContract executes stateful program as the gi'th transaction in params
@@ -1019,6 +1095,10 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 		txn:        &params.TxnGroup[gi],
 		appID:      aid,
 	}
+	// Save scratch for `gload`. We used to copy, but cx.scratch is quite large,
+	// about 8k, and caused measurable CPU and memory demands.  Of course, these
+	// should never be changed by later transactions.
+	cx.pastScratch[cx.groupIndex] = &cx.Scratch
 
 	if cx.Proto.IsolateClearState && cx.txn.Txn.OnCompletion == transactions.ClearStateOC {
 		if cx.PooledApplicationBudget != nil && *cx.PooledApplicationBudget < cx.Proto.MaxAppProgramCost {
@@ -1103,11 +1183,6 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 		fmt.Fprintf(cx.Trace, "--- exit  %d accept=%t\n", aid, pass)
 	}
 
-	// Save scratch for `gload`. We used to copy, but cx.scratch is quite large,
-	// about 8k, and caused measurable CPU and memory demands.  Of course, these
-	// should never be changed by later transactions.
-	cx.pastScratch[cx.groupIndex] = &cx.Scratch
-
 	return pass, &cx, err
 }
 
@@ -1133,6 +1208,11 @@ func EvalSignatureFull(gi int, params *EvalParams) (bool, *EvalContext, error) {
 		groupIndex: gi,
 		txn:        &params.TxnGroup[gi],
 	}
+	// Save scratch. `gload*` opcodes are not currently allowed in ModeSig
+	// (though it seems we could allow them, with access to LogicSig scratch
+	// values). But error returns and potentially debug code might like to
+	// return them.
+	cx.pastScratch[cx.groupIndex] = &cx.Scratch
 	pass, err := eval(cx.txn.Lsig.Logic, &cx)
 
 	if err != nil {
@@ -5547,7 +5627,7 @@ func opItxnSubmit(cx *EvalContext) (err error) {
 		}
 
 		if err != nil {
-			return err
+			return serr.Wrap(err, fmt.Sprintf("inner tx %d failed: %s", i, err.Error()), "inner")
 		}
 
 		// This is mostly a no-op, because Perform does its work "in-place", but
