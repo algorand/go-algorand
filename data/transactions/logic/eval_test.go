@@ -1232,6 +1232,7 @@ const globalV9TestProgram = globalV8TestProgram + `
 const globalV10TestProgram = globalV9TestProgram + `
 global AssetCreateMinBalance; int 1001; ==; &&
 global AssetOptInMinBalance; int 1001; ==; &&
+global GenesisHash; len; int 32; ==; &&
 `
 
 func TestGlobal(t *testing.T) {
@@ -1254,11 +1255,15 @@ func TestGlobal(t *testing.T) {
 		7:  {CallerApplicationAddress, globalV7TestProgram},
 		8:  {CallerApplicationAddress, globalV8TestProgram},
 		9:  {CallerApplicationAddress, globalV9TestProgram},
-		10: {AssetOptInMinBalance, globalV10TestProgram},
+		10: {GenesisHash, globalV10TestProgram},
 	}
 	// tests keys are versions so they must be in a range 1..AssemblerMaxVersion plus zero version
 	require.LessOrEqual(t, len(tests), AssemblerMaxVersion+1)
 	require.Len(t, globalFieldSpecs, int(invalidGlobalField))
+
+	// ensure we are testing everything
+	require.Equal(t, tests[AssemblerMaxVersion].lastField, invalidGlobalField-1,
+		"did you add a new global field?")
 
 	ledger := NewLedger(nil)
 	addr, err := basics.UnmarshalChecksumAddress(testAddr)

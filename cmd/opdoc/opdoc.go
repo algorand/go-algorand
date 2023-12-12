@@ -47,7 +47,7 @@ func opImmediateNoteSyntaxMarkdown(name string, oids []logic.OpImmediateDetails)
 		argDocs[idx] = fmt.Sprintf("%s: %s", oid.Name, argNote)
 	}
 
-	return fmt.Sprintf("`%s %s` ∋ %s", name, strings.Join(argNames, " "), strings.Join(argDocs, ", "))
+	return fmt.Sprintf("`%s %s` where %s", name, strings.Join(argNames, " "), strings.Join(argDocs, ", "))
 }
 
 func opImmediateNoteEncoding(opcode byte, oids []logic.OpImmediateDetails) string {

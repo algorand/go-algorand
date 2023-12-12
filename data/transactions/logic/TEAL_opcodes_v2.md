@@ -189,7 +189,7 @@ Overflow is an error condition which halts execution and fails the transaction. 
 
 ## intcblock
 
-- Syntax: `intcblock UINT ...` ∋ UINT ...: a block of int constant values
+- Syntax: `intcblock UINT ...` where UINT ...: a block of int constant values
 - Bytecode: 0x20 {varuint count, [varuint ...]}
 - Stack: ... &rarr; ...
 - prepare block of uint64 constants for use by intc
@@ -198,7 +198,7 @@ Overflow is an error condition which halts execution and fails the transaction. 
 
 ## intc
 
-- Syntax: `intc I` ∋ I: an index in the intcblock
+- Syntax: `intc I` where I: an index in the intcblock
 - Bytecode: 0x21 {uint8}
 - Stack: ... &rarr; ..., uint64
 - Ith constant from intcblock
@@ -229,7 +229,7 @@ Overflow is an error condition which halts execution and fails the transaction. 
 
 ## bytecblock
 
-- Syntax: `bytecblock BYTES ...` ∋ BYTES ...: a block of byte constant values
+- Syntax: `bytecblock BYTES ...` where BYTES ...: a block of byte constant values
 - Bytecode: 0x26 {varuint count, [varuint length, bytes ...]}
 - Stack: ... &rarr; ...
 - prepare block of byte-array constants for use by bytec
@@ -238,7 +238,7 @@ Overflow is an error condition which halts execution and fails the transaction. 
 
 ## bytec
 
-- Syntax: `bytec I` ∋ I: an index in the bytecblock
+- Syntax: `bytec I` where I: an index in the bytecblock
 - Bytecode: 0x27 {uint8}
 - Stack: ... &rarr; ..., []byte
 - Ith constant from bytecblock
@@ -269,7 +269,7 @@ Overflow is an error condition which halts execution and fails the transaction. 
 
 ## arg
 
-- Syntax: `arg N` ∋ N: an arg index
+- Syntax: `arg N` where N: an arg index
 - Bytecode: 0x2c {uint8}
 - Stack: ... &rarr; ..., []byte
 - Nth LogicSig argument
@@ -305,7 +305,7 @@ Overflow is an error condition which halts execution and fails the transaction. 
 
 ## txn
 
-- Syntax: `txn F` ∋ F: [txn](#field-group-txn)
+- Syntax: `txn F` where F: [txn](#field-group-txn)
 - Bytecode: 0x31 {uint8}
 - Stack: ... &rarr; ..., any
 - field F of current transaction
@@ -365,7 +365,7 @@ Fields (see [transaction reference](https://developer.algorand.org/docs/referenc
 
 ## global
 
-- Syntax: `global F` ∋ F: [global](#field-group-global)
+- Syntax: `global F` where F: [global](#field-group-global)
 - Bytecode: 0x32 {uint8}
 - Stack: ... &rarr; ..., any
 - global field F
@@ -389,7 +389,7 @@ Fields
 
 ## gtxn
 
-- Syntax: `gtxn T F` ∋ T: transaction group index, F: [txn](#field-group-txn)
+- Syntax: `gtxn T F` where T: transaction group index, F: [txn](#field-group-txn)
 - Bytecode: 0x33 {uint8}, {uint8}
 - Stack: ... &rarr; ..., any
 - field F of the Tth transaction in the current group
@@ -398,21 +398,21 @@ for notes on transaction fields available, see `txn`. If this transaction is _i_
 
 ## load
 
-- Syntax: `load I` ∋ I: position in scratch space to load from
+- Syntax: `load I` where I: position in scratch space to load from
 - Bytecode: 0x34 {uint8}
 - Stack: ... &rarr; ..., any
 - Ith scratch space value. All scratch spaces are 0 at program start.
 
 ## store
 
-- Syntax: `store I` ∋ I: position in scratch space to store to
+- Syntax: `store I` where I: position in scratch space to store to
 - Bytecode: 0x35 {uint8}
 - Stack: ..., A &rarr; ...
 - store A to the Ith scratch space
 
 ## txna
 
-- Syntax: `txna F I` ∋ F: [txna](#field-group-txna), I: transaction field array index
+- Syntax: `txna F I` where F: [txna](#field-group-txna), I: transaction field array index
 - Bytecode: 0x36 {uint8}, {uint8}
 - Stack: ... &rarr; ..., any
 - Ith value of the array field F of the current transaction<br />`txna` can be called using `txn` with 2 immediates.
@@ -430,7 +430,7 @@ Fields (see [transaction reference](https://developer.algorand.org/docs/referenc
 
 ## gtxna
 
-- Syntax: `gtxna T F I` ∋ T: transaction group index, F: [txna](#field-group-txna), I: transaction field array index
+- Syntax: `gtxna T F I` where T: transaction group index, F: [txna](#field-group-txna), I: transaction field array index
 - Bytecode: 0x37 {uint8}, {uint8}, {uint8}
 - Stack: ... &rarr; ..., any
 - Ith value of the array field F from the Tth transaction in the current group<br />`gtxna` can be called using `gtxn` with 3 immediates.
@@ -438,7 +438,7 @@ Fields (see [transaction reference](https://developer.algorand.org/docs/referenc
 
 ## bnz
 
-- Syntax: `bnz TARGET` ∋ TARGET: branch offset
+- Syntax: `bnz TARGET` where TARGET: branch offset
 - Bytecode: 0x40 {int16 (big-endian)}
 - Stack: ..., A: uint64 &rarr; ...
 - branch to TARGET if value A is not zero
@@ -449,7 +449,7 @@ At v2 it became allowed to branch to the end of the program exactly after the la
 
 ## bz
 
-- Syntax: `bz TARGET` ∋ TARGET: branch offset
+- Syntax: `bz TARGET` where TARGET: branch offset
 - Bytecode: 0x41 {int16 (big-endian)}
 - Stack: ..., A: uint64 &rarr; ...
 - branch to TARGET if value A is zero
@@ -459,7 +459,7 @@ See `bnz` for details on how branches work. `bz` inverts the behavior of `bnz`.
 
 ## b
 
-- Syntax: `b TARGET` ∋ TARGET: branch offset
+- Syntax: `b TARGET` where TARGET: branch offset
 - Bytecode: 0x42 {int16 (big-endian)}
 - Stack: ... &rarr; ...
 - branch unconditionally to TARGET
@@ -504,7 +504,7 @@ See `bnz` for details on how branches work. `b` always jumps to the offset.
 
 ## substring
 
-- Syntax: `substring S E` ∋ S: start position, E: end position
+- Syntax: `substring S E` where S: start position, E: end position
 - Bytecode: 0x51 {uint8}, {uint8}
 - Stack: ..., A: []byte &rarr; ..., []byte
 - A range of bytes from A starting at S up to but not including E. If E < S, or either is larger than the array length, the program fails
@@ -621,7 +621,7 @@ Deleting a key which is already absent has no effect on the application global s
 
 ## asset_holding_get
 
-- Syntax: `asset_holding_get F` ∋ F: [asset_holding](#field-group-asset_holding)
+- Syntax: `asset_holding_get F` where F: [asset_holding](#field-group-asset_holding)
 - Bytecode: 0x70 {uint8}
 - Stack: ..., A: uint64, B: uint64 &rarr; ..., X: any, Y: bool
 - X is field F from account A's holding of asset B. Y is 1 if A is opted into B, else 0
@@ -642,7 +642,7 @@ params: Txn.Accounts offset (or, since v4, an _available_ address), asset id (or
 
 ## asset_params_get
 
-- Syntax: `asset_params_get F` ∋ F: [asset_params](#field-group-asset_params)
+- Syntax: `asset_params_get F` where F: [asset_params](#field-group-asset_params)
 - Bytecode: 0x71 {uint8}
 - Stack: ..., A: uint64 &rarr; ..., X: any, Y: bool
 - X is field F from asset A. Y is 1 if A exists, else 0
