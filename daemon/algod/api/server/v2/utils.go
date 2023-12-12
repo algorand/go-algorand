@@ -450,12 +450,14 @@ func convertTxnTrace(txnTrace *simulation.TransactionTrace) *model.SimulationTra
 		return nil
 	}
 	return &model.SimulationTransactionExecTrace{
-		ApprovalProgramTrace:   sliceOrNil(convertSlice(txnTrace.ApprovalProgramTrace, convertOpcodeTraceUnit)),
-		ApprovalProgramHash:    digestOrNil(txnTrace.ApprovalProgramHash),
-		ClearStateProgramTrace: sliceOrNil(convertSlice(txnTrace.ClearStateProgramTrace, convertOpcodeTraceUnit)),
-		ClearStateProgramHash:  digestOrNil(txnTrace.ClearStateProgramHash),
-		LogicSigTrace:          sliceOrNil(convertSlice(txnTrace.LogicSigTrace, convertOpcodeTraceUnit)),
-		LogicSigHash:           digestOrNil(txnTrace.LogicSigHash),
+		ApprovalProgramTrace:    sliceOrNil(convertSlice(txnTrace.ApprovalProgramTrace, convertOpcodeTraceUnit)),
+		ApprovalProgramHash:     digestOrNil(txnTrace.ApprovalProgramHash),
+		ClearStateProgramTrace:  sliceOrNil(convertSlice(txnTrace.ClearStateProgramTrace, convertOpcodeTraceUnit)),
+		ClearStateProgramHash:   digestOrNil(txnTrace.ClearStateProgramHash),
+		ClearStateRollback:      omitEmpty(txnTrace.ClearStateRollback),
+		ClearStateRollbackError: omitEmpty(txnTrace.ClearStateRollbackError),
+		LogicSigTrace:           sliceOrNil(convertSlice(txnTrace.LogicSigTrace, convertOpcodeTraceUnit)),
+		LogicSigHash:            digestOrNil(txnTrace.LogicSigHash),
 		InnerTrace: sliceOrNil(convertSlice(txnTrace.InnerTraces,
 			func(trace simulation.TransactionTrace) model.SimulationTransactionExecTrace {
 				return *convertTxnTrace(&trace)

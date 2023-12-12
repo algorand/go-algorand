@@ -323,7 +323,8 @@ func TestStateProofMessageCommitmentVerification(t *testing.T) {
 	consensusVersion := protocol.ConsensusVersion("test-fast-stateproofs")
 	consensusParams := getDefaultStateProofConsensusParams()
 	configurableConsensus[consensusVersion] = consensusParams
-	config.SetConfigurableConsensusProtocols(configurableConsensus)
+	oldConsensus := config.SetConfigurableConsensusProtocols(configurableConsensus)
+	defer config.SetConfigurableConsensusProtocols(oldConsensus)
 
 	var fixture fixtures.RestClientFixture
 	fixture.SetConsensus(configurableConsensus)
@@ -842,7 +843,11 @@ func TestTotalWeightChanges(t *testing.T) {
 			richNode.goOffline(a, &fixture, rnd)
 		}
 
-		a.NoError(fixture.WaitForRound(rnd, 30*time.Second))
+		if testing.Short() {
+			a.NoError(fixture.WaitForRound(rnd, 30*time.Second))
+		} else {
+			a.NoError(fixture.WaitForRound(rnd, 60*time.Second))
+		}
 		blk, err := libgoal.BookkeepingBlock(rnd)
 		a.NoErrorf(err, "failed to retrieve block from algod on round %d", rnd)
 

@@ -6,7 +6,7 @@ import os
 import subprocess
 
 import algosdk
-import algosdk.future.transaction as txn
+import algosdk.transaction as txn
 import algosdk.encoding as enc
 
 

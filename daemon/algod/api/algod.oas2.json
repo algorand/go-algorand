@@ -4353,6 +4353,14 @@
           "type": "string",
           "format": "byte"
         },
+        "clear-state-rollback": {
+          "description": "If true, indicates that the clear state program failed and any persistent state changes it produced should be reverted once the program exits.",
+          "type": "boolean"
+        },
+        "clear-state-rollback-error": {
+          "description": "The error message explaining why the clear state program failed. This field will only be populated if clear-state-rollback is true and the failure was due to an execution error.",
+          "type": "string"
+        },
         "logic-sig-trace": {
           "description": "Program trace that contains a trace of opcode effects in a logic sig.",
           "type": "array",

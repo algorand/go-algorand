@@ -406,6 +406,12 @@ Account fields used in the `acct_params_get` opcode.
 
 ### Box Access
 
+Box opcodes that create, delete, or resize boxes affect the minimum
+balance requirement of the calling application's account.  The change
+is immediate, and can be observed after exection by using
+`min_balance`.  If the account does not possess the new minimum
+balance, the opcode fails.
+
 All box related opcodes fail immediately if used in a
 ClearStateProgram. This behavior is meant to discourage Smart Contract
 authors from depending upon the availability of boxes in a ClearState

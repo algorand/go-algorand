@@ -1196,7 +1196,8 @@
         "CallerApplicationID",
         "CallerApplicationAddress",
         "AssetCreateMinBalance",
-        "AssetOptInMinBalance"
+        "AssetOptInMinBalance",
+        "GenesisHash"
       ],
       "ArgEnumTypes": [
         "uint64",
@@ -1215,7 +1216,8 @@
         "uint64",
         "address",
         "uint64",
-        "uint64"
+        "uint64",
+        "[32]byte"
       ],
       "DocCost": "1",
       "Doc": "global field F",
@@ -4242,7 +4244,7 @@
       ],
       "Size": 1,
       "DocCost": "1",
-      "Doc": "create a box named A, of length B. Fail if A is empty or B exceeds 32,768. Returns 0 if A already existed, else 1",
+      "Doc": "create a box named A, of length B. Fail if the name A is empty or B exceeds 32,768. Returns 0 if A already existed, else 1",
       "DocExtra": "Newly created boxes are filled with 0 bytes. `box_create` will fail if the referenced box already exists with a different size. Otherwise, existing boxes are unchanged by `box_create`.",
       "IntroducedVersion": 8,
       "Groups": [
@@ -4642,6 +4644,39 @@
       "IntroducedVersion": 7,
       "Groups": [
         "State Access"
+      ]
+    },
+    {
+      "Opcode": 210,
+      "Name": "box_splice",
+      "Args": [
+        "boxName",
+        "uint64",
+        "uint64",
+        "[]byte"
+      ],
+      "Size": 1,
+      "DocCost": "1",
+      "Doc": "set box A to contain its previous bytes up to index B, followed by D, followed by the original bytes of A that began at index B+C.",
+      "DocExtra": "Boxes are of constant length. If C \u003c len(D), then len(D)-C bytes will be removed from the end. If C \u003e len(D), zero bytes will be appended to the end to reach the box length.",
+      "IntroducedVersion": 10,
+      "Groups": [
+        "Box Access"
+      ]
+    },
+    {
+      "Opcode": 211,
+      "Name": "box_resize",
+      "Args": [
+        "boxName",
+        "uint64"
+      ],
+      "Size": 1,
+      "DocCost": "1",
+      "Doc": "change the size of box named A to be of length B, adding zero bytes to end or removing bytes from the end, as needed. Fail if the name A is empty, A is not an existing box, or B exceeds 32,768.",
+      "IntroducedVersion": 10,
+      "Groups": [
+        "Box Access"
       ]
     },
     {

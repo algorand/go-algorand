@@ -121,14 +121,14 @@ func Ready(ctx lib.ReqContext, context echo.Context) {
 	// must satisfy following sub conditions:
 	// 1. the node is not in a fast-catchup stage
 	// 2. the node's time since last round should be [0, deadline),
-	//    while deadline = bigLambda + smallLambda = 17s
+	//    while deadline = agreement.DefaultDeadlineTimeout = 17s
 	// 3. the node's catchup time is 0
 	isReadyFromStat := func(status node.StatusReport) bool {
 		timeSinceLastRound := status.TimeSinceLastRound().Milliseconds()
 
 		return len(status.Catchpoint) == 0 &&
 			timeSinceLastRound >= 0 &&
-			timeSinceLastRound < agreement.DeadlineTimeout().Milliseconds() &&
+			timeSinceLastRound < agreement.DefaultDeadlineTimeout().Milliseconds() &&
 			status.CatchupTime.Milliseconds() == 0
 	}
 

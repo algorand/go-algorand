@@ -895,6 +895,12 @@ type SimulationTransactionExecTrace struct {
 	// ClearStateProgramTrace Program trace that contains a trace of opcode effects in a clear state program.
 	ClearStateProgramTrace *[]SimulationOpcodeTraceUnit `json:"clear-state-program-trace,omitempty"`
 
+	// ClearStateRollback If true, indicates that the clear state program failed and any persistent state changes it produced should be reverted once the program exits.
+	ClearStateRollback *bool `json:"clear-state-rollback,omitempty"`
+
+	// ClearStateRollbackError The error message explaining why the clear state program failed. This field will only be populated if clear-state-rollback is true and the failure was due to an execution error.
+	ClearStateRollbackError *string `json:"clear-state-rollback-error,omitempty"`
+
 	// InnerTrace An array of SimulationTransactionExecTrace representing the execution trace of any inner transactions executed.
 	InnerTrace *[]SimulationTransactionExecTrace `json:"inner-trace,omitempty"`
 
