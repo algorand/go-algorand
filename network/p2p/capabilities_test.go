@@ -310,7 +310,7 @@ func TestCapabilities_ExcludesSelf(t *testing.T) {
 	disc := setupCapDiscovery(t, 2, 2)
 
 	testPeersFound := func(disc *CapabilitiesDiscovery, n int, cap Capability) bool {
-		peers, err := disc.PeersForCapability(cap, n+1)
+		peers, err := disc.PeersForCapability(cap, n)
 		if err == nil && len(peers) == n {
 			return true
 		}
