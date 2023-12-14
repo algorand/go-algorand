@@ -1391,9 +1391,9 @@ func initConsensusProtocols() {
 
 	v39.AgreementDeadlineTimeoutPeriod0 = 4 * time.Second
 
-	v39.StateProofBlockHashInLightHeader = true
-
 	v39.DynamicFilterTimeout = true
+
+	v39.StateProofBlockHashInLightHeader = true
 
 	// For future upgrades, round times will likely be shorter so giving ourselves some buffer room
 	v39.MaxUpgradeWaitRounds = 250000
