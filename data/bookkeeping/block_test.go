@@ -832,9 +832,9 @@ func TestBlock_ContentsMatchHeader(t *testing.T) {
 	copy(block.BlockHeader.TxnCommitments.Sha256Commitment[:], rootSliceSHA256)
 	a.False(block.ContentsMatchHeader())
 
-	/* Test Consensus Future */
+	/* Test Consensus Current */
 	// Create a block with SHA256 TxnCommitments
-	block.CurrentProtocol = protocol.ConsensusFuture
+	block.CurrentProtocol = protocol.ConsensusCurrentVersion
 
 	block.BlockHeader.TxnCommitments.NativeSha512_256Commitment = crypto.Digest{}
 	block.BlockHeader.TxnCommitments.Sha256Commitment = crypto.Digest{}
