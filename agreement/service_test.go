@@ -1050,10 +1050,10 @@ func TestAgreementHistoricalClocksCleanup(t *testing.T) {
 	simulateAgreement(t, 5, int(credentialRoundLag)+10, disabled)
 }
 
-func createDynamicFilterConfig() (version protocol.ConsensusVersion, consensusVersion func(r basics.Round) (protocol.ConsensusVersion, error), configCleanup func()) {
+func overrideConfigWithDynamicFilterParam(dynamicFilterTimeoutEnabled bool) (version protocol.ConsensusVersion, consensusVersion func(r basics.Round) (protocol.ConsensusVersion, error), configCleanup func()) {
 	version = protocol.ConsensusVersion("test-protocol-filtertimeout")
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
-	protoParams.DynamicFilterTimeout = true
+	protoParams.DynamicFilterTimeout = dynamicFilterTimeoutEnabled
 	config.Consensus[version] = protoParams
 
 	consensusVersion = func(r basics.Round) (protocol.ConsensusVersion, error) {
@@ -1074,7 +1074,7 @@ func TestAgreementSynchronousFuture5_DynamicFilterRounds(t *testing.T) {
 		t.Skip("Skipping agreement integration test")
 	}
 
-	_, consensusVersion, configCleanup := createDynamicFilterConfig()
+	_, consensusVersion, configCleanup := overrideConfigWithDynamicFilterParam(true)
 	defer configCleanup()
 
 	if dynamicFilterCredentialArrivalHistory <= 0 {
@@ -1105,7 +1105,7 @@ func TestDynamicFilterTimeoutResets(t *testing.T) {
 		t.Skip("Skipping agreement integration test")
 	}
 
-	version, consensusVersion, configCleanup := createDynamicFilterConfig()
+	version, consensusVersion, configCleanup := overrideConfigWithDynamicFilterParam(true)
 	defer configCleanup()
 
 	if dynamicFilterCredentialArrivalHistory <= 0 {
