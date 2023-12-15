@@ -27,7 +27,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-        "runtime/debug"
+	"runtime/debug"
 	"strings"
 	"syscall"
 	"time"
@@ -179,7 +179,7 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 			}
 		}
 
-                debug.SetMemoryLimit(7 * 1024 * 1024 * 1024) // 7GB
+		debug.SetMemoryLimit(7 * 1024 * 1024 * 1024) // 7GB
 	}
 
 	// configure the deadlock detector library
