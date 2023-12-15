@@ -70,6 +70,7 @@ def build_net(template_path, netgoal_params):
 def build_genesis(template_path, netgoal_params, template_dict):
     args = [
         '-t', 'genesis',
+        '--last-part-key-round', str(100_000),
         '-o', f"{template_path}/generated/genesis.json"
     ]
     args.extend(netgoal_params)
