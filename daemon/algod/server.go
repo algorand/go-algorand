@@ -27,6 +27,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+        "runtime/debug"
 	"strings"
 	"syscall"
 	"time"
@@ -177,6 +178,8 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 				s.log.Errorf("Failed to set a new RLIMIT_NOFILE value to %d (max %d): %s", fdRequired, hard, fdErr.Error())
 			}
 		}
+
+                debug.SetMemoryLimit(7 * 1024 * 1024 * 1024) // 7GB
 	}
 
 	// configure the deadlock detector library
