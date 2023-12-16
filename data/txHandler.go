@@ -597,8 +597,10 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 	var err error
 	var capguard *util.ErlCapacityGuard
 	var congested bool
-	if handler.erl != nil {
+	if handler.erl != nil || handler.appLimiter != nil {
 		congested = float64(cap(handler.backlogQueue))*handler.backlogCongestionThreshold < float64(len(handler.backlogQueue))
+	}
+	if handler.erl != nil {
 		// consume a capacity unit
 		// if the elastic rate limiter cannot vend a capacity, the error it returns
 		// is sufficient to indicate that we should enable Congestion Control, because
