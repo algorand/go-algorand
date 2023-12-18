@@ -1443,30 +1443,43 @@ func benchLedgerCache(b *testing.B, startRound basics.Round) {
 	}
 }
 
-func triggerTrackerFlush(t *testing.T, l *Ledger, genesisInitState ledgercore.InitState) {
+// triggerTrackerFlush is based in the commit flow but executed it in a single (this) goroutine.
+func triggerTrackerFlush(t *testing.T, l *Ledger) {
 	l.trackers.mu.Lock()
-	initialDbRound := l.trackers.dbRound
-	currentDbRound := initialDbRound
-	l.trackers.lastFlushTime = time.Time{}
+	dbRound := l.trackers.dbRound
 	l.trackers.mu.Unlock()
 
-	const timeout = 3 * time.Second
-	started := time.Now()
-
-	// We can't truly wait for scheduleCommit to take place, which means without waiting using sleeps
-	// we might beat scheduleCommit's addition to accountsWriting, making our wait on it continue immediately.
-	// The solution is to continue to add blocks and  wait for the advancement of l.trackers.dbRound,
-	// which is a side effect of postCommit's success.
-	for currentDbRound == initialDbRound {
-		time.Sleep(50 * time.Microsecond)
-		require.True(t, time.Since(started) < timeout)
-		addEmptyValidatedBlock(t, l, genesisInitState.Accounts)
-		l.WaitForCommit(l.Latest())
-		l.trackers.mu.RLock()
-		currentDbRound = l.trackers.dbRound
-		l.trackers.mu.RUnlock()
+	rnd := l.Latest()
+	minBlock := rnd
+	maxLookback := basics.Round(0)
+	for _, lt := range l.trackers.trackers {
+		retainRound, lookback := lt.committedUpTo(rnd)
+		if retainRound < minBlock {
+			minBlock = retainRound
+		}
+		if lookback > maxLookback {
+			maxLookback = lookback
+		}
 	}
-	l.trackers.waitAccountsWriting()
+
+	dcc := &deferredCommitContext{
+		deferredCommitRange: deferredCommitRange{
+			lookback: maxLookback,
+		},
+	}
+
+	l.trackers.mu.RLock()
+	cdr := l.trackers.produceCommittingTask(rnd, dbRound, &dcc.deferredCommitRange)
+	if cdr != nil {
+		dcc.deferredCommitRange = *cdr
+	} else {
+		dcc = nil
+	}
+	l.trackers.mu.RUnlock()
+	if dcc != nil {
+		l.trackers.accountsWriting.Add(1)
+		l.trackers.commitRound(dcc)
+	}
 }
 
 func testLedgerReload(t *testing.T, cfg config.Local) {
@@ -1646,7 +1659,7 @@ func TestLedgerVerifiesOldStateProofs(t *testing.T) {
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	defer backlogPool.Shutdown()
 
-	triggerTrackerFlush(t, l, genesisInitState)
+	triggerTrackerFlush(t, l)
 	l.WaitForCommit(l.Latest())
 	blk := createBlkWithStateproof(t, maxBlocks, proto, genesisInitState, l, accounts)
 	_, err = l.Validate(context.Background(), blk, backlogPool)
@@ -1656,7 +1669,7 @@ func TestLedgerVerifiesOldStateProofs(t *testing.T) {
 		addDummyBlock(t, addresses, proto, l, initKeys, genesisInitState)
 	}
 
-	triggerTrackerFlush(t, l, genesisInitState)
+	triggerTrackerFlush(t, l)
 	addDummyBlock(t, addresses, proto, l, initKeys, genesisInitState)
 	l.WaitForCommit(l.Latest())
 	// At this point the block queue go-routine will start removing block . However, it might not complete the task
@@ -2767,11 +2780,11 @@ func verifyVotersContent(t *testing.T, expected map[basics.Round]*ledgercore.Vot
 
 func triggerDeleteVoters(t *testing.T, l *Ledger, genesisInitState ledgercore.InitState) {
 	// We make the ledger flush tracker data to allow votersTracker to advance lowestRound
-	triggerTrackerFlush(t, l, genesisInitState)
+	triggerTrackerFlush(t, l)
 
 	// We add another block to make the block queue query the voter's tracker lowest round again, which allows it to forget
 	// rounds based on the new lowest round.
-	triggerTrackerFlush(t, l, genesisInitState)
+	triggerTrackerFlush(t, l)
 }
 
 func testVotersReloadFromDisk(t *testing.T, cfg config.Local) {
@@ -2796,7 +2809,7 @@ func testVotersReloadFromDisk(t *testing.T, cfg config.Local) {
 
 	// at this point the database should contain the voter for round 256 but the voters for round 512 should be in deltas
 	l.WaitForCommit(l.Latest())
-	triggerTrackerFlush(t, l, genesisInitState)
+	triggerTrackerFlush(t, l)
 	vtSnapshot := l.acctsOnline.voters.votersForRoundCache
 
 	// ensuring no tree was evicted.
@@ -3028,7 +3041,7 @@ func TestLedgerSPVerificationTracker(t *testing.T) {
 	}
 
 	l.WaitForCommit(l.Latest())
-	triggerTrackerFlush(t, l, genesisInitState)
+	triggerTrackerFlush(t, l)
 
 	verifyStateProofVerificationTracking(t, &l.spVerification, basics.Round(firstStateProofContextTargetRound),
 		numOfStateProofs-1, proto.StateProofInterval, true, trackerDB)
@@ -3037,7 +3050,7 @@ func TestLedgerSPVerificationTracker(t *testing.T) {
 		1, proto.StateProofInterval, true, trackerMemory)
 
 	l.WaitForCommit(l.Latest())
-	triggerTrackerFlush(t, l, genesisInitState)
+	triggerTrackerFlush(t, l)
 
 	verifyStateProofVerificationTracking(t, &l.spVerification, basics.Round(firstStateProofContextTargetRound),
 		numOfStateProofs, proto.StateProofInterval, true, spverDBLoc)
@@ -3063,7 +3076,7 @@ func TestLedgerSPVerificationTracker(t *testing.T) {
 	}
 
 	l.WaitForCommit(blk.BlockHeader.Round)
-	triggerTrackerFlush(t, l, genesisInitState)
+	triggerTrackerFlush(t, l)
 
 	verifyStateProofVerificationTracking(t, &l.spVerification, basics.Round(firstStateProofContextTargetRound),
 		1, proto.StateProofInterval, false, spverDBLoc)
@@ -3167,7 +3180,7 @@ func TestLedgerCatchpointSPVerificationTracker(t *testing.T) {
 	// Feeding blocks until we can know for sure we have at least one catchpoint written.
 	blk = feedBlocksUntilRound(t, l, blk, basics.Round(cfg.CatchpointInterval*2))
 	l.WaitForCommit(basics.Round(cfg.CatchpointInterval * 2))
-	triggerTrackerFlush(t, l, genesisInitState)
+	triggerTrackerFlush(t, l)
 
 	numTrackedDataFirstCatchpoint := (cfg.CatchpointInterval - proto.MaxBalLookback) / proto.StateProofInterval
 
