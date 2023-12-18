@@ -2567,8 +2567,8 @@ func TestSlowPeerDisconnection(t *testing.T) {
 		GenesisID: genesisID,
 		NetworkID: config.Devtestnet,
 	}
-	wn.broadcaster.slowWritingPeerMonitorInterval = time.Millisecond * 50
 	wn.setup()
+	wn.broadcaster.slowWritingPeerMonitorInterval = time.Millisecond * 50
 	wn.eventualReadyDelay = time.Second
 	wn.messagesOfInterest = nil // clear this before starting the network so that we won't be sending a MOI upon connection.
 
