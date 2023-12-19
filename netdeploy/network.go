@@ -169,6 +169,16 @@ func (n Network) PrimaryDataDir() string {
 	panic(fmt.Errorf("neither relay directories nor node directories are defined for the network"))
 }
 
+// RelayDataDirs returns an array of relay data directories (not the nodes)
+func (n Network) RelayDataDirs() []string {
+	var directories []string
+	for _, dir := range n.cfg.RelayDirs {
+		directories = append(directories, n.getNodeFullPath(dir))
+	}
+	sort.Strings(directories)
+	return directories
+}
+
 // NodeDataDirs returns an array of node data directories (not the relays)
 func (n Network) NodeDataDirs() []string {
 	var directories []string
