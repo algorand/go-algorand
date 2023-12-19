@@ -1335,8 +1335,7 @@ func TestCatchpointFirstStagePersistence(t *testing.T) {
 	ml.trackers.waitAccountsWriting()
 
 	// Check that the data file exists.
-	catchpointDataFilePath :=
-		filepath.Join(catchpointsDirectory, makeCatchpointDataFilePath(firstStageRound))
+	catchpointDataFilePath := filepath.Join(catchpointsDirectory, makeCatchpointDataFilePath(firstStageRound))
 	info, err := os.Stat(catchpointDataFilePath)
 	require.NoError(t, err)
 
@@ -1468,8 +1467,7 @@ func TestCatchpointSecondStagePersistence(t *testing.T) {
 	}
 
 	// Check that the data file exists.
-	catchpointFilePath :=
-		filepath.Join(catchpointsDirectory, trackerdb.MakeCatchpointFilePath(secondStageRound))
+	catchpointFilePath := filepath.Join(catchpointsDirectory, trackerdb.MakeCatchpointFilePath(secondStageRound))
 	info, err := os.Stat(catchpointFilePath)
 	require.NoError(t, err)
 

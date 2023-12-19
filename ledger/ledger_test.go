@@ -27,7 +27,6 @@ import (
 	"runtime"
 	"sort"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 	"golang.org/x/exp/slices"
@@ -1462,22 +1461,12 @@ func triggerTrackerFlush(t *testing.T, l *Ledger) {
 		}
 	}
 
-	dcc := &deferredCommitContext{
-		deferredCommitRange: deferredCommitRange{
-			lookback: maxLookback,
-		},
-	}
-
 	l.trackers.mu.RLock()
-	cdr := l.trackers.produceCommittingTask(rnd, dbRound, &dcc.deferredCommitRange)
-	if cdr != nil {
-		dcc.deferredCommitRange = *cdr
-	} else {
-		dcc = nil
-	}
+	dcc := l.trackers.produceCommittingTask(rnd, dbRound, maxLookback)
 	l.trackers.mu.RUnlock()
+
 	if dcc != nil {
-		l.trackers.accountsWriting.Add(1)
+		l.trackers.accountsWritingAcquire()
 		l.trackers.commitRound(dcc)
 	}
 }
@@ -1659,8 +1648,8 @@ func TestLedgerVerifiesOldStateProofs(t *testing.T) {
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	defer backlogPool.Shutdown()
 
-	triggerTrackerFlush(t, l)
 	l.WaitForCommit(l.Latest())
+	triggerTrackerFlush(t, l)
 	blk := createBlkWithStateproof(t, maxBlocks, proto, genesisInitState, l, accounts)
 	_, err = l.Validate(context.Background(), blk, backlogPool)
 	require.ErrorContains(t, err, "state proof crypto error")
@@ -1669,9 +1658,9 @@ func TestLedgerVerifiesOldStateProofs(t *testing.T) {
 		addDummyBlock(t, addresses, proto, l, initKeys, genesisInitState)
 	}
 
+	l.WaitForCommit(l.Latest())
 	triggerTrackerFlush(t, l)
 	addDummyBlock(t, addresses, proto, l, initKeys, genesisInitState)
-	l.WaitForCommit(l.Latest())
 	// At this point the block queue go-routine will start removing block . However, it might not complete the task
 	// for that reason, we wait for the next block to be committed.
 	addDummyBlock(t, addresses, proto, l, initKeys, genesisInitState)
@@ -3114,16 +3103,7 @@ func TestLedgerReloadStateProofVerificationTracker(t *testing.T) {
 	// trigger trackers flush
 	// first ensure the block is committed into blockdb
 	l.WaitForCommit(l.Latest())
-	// wait for any pending tracker flushes
-	l.trackers.waitAccountsWriting()
-	// force flush as needed
-	if l.LatestTrackerCommitted() < l.Latest()+basics.Round(cfg.MaxAcctLookback) {
-		l.trackers.mu.Lock()
-		l.trackers.lastFlushTime = time.Time{}
-		l.trackers.mu.Unlock()
-		l.notifyCommit(l.Latest())
-		l.trackers.waitAccountsWriting()
-	}
+	triggerTrackerFlush(t, l)
 
 	verifyStateProofVerificationTracking(t, &l.spVerification, basics.Round(firstStateProofContextTargetRound),
 		numOfStateProofs-1, proto.StateProofInterval, true, trackerDB)
@@ -3257,16 +3237,7 @@ func TestLedgerSPTrackerAfterReplay(t *testing.T) {
 
 	// first ensure the block is committed into blockdb
 	l.WaitForCommit(l.Latest())
-	// wait for any pending tracker flushes
-	l.trackers.waitAccountsWriting()
-	// force flush as needed
-	if l.LatestTrackerCommitted() < l.Latest()+basics.Round(cfg.MaxAcctLookback) {
-		l.trackers.mu.Lock()
-		l.trackers.lastFlushTime = time.Time{}
-		l.trackers.mu.Unlock()
-		l.notifyCommit(spblk.BlockHeader.Round)
-		l.trackers.waitAccountsWriting()
-	}
+	triggerTrackerFlush(t, l)
 
 	err = l.reloadLedger()
 	a.NoError(err)

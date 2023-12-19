@@ -1999,8 +1999,8 @@ func TestAcctUpdatesResources(t *testing.T) {
 		if cdr != nil {
 			func() {
 				dcc.deferredCommitRange = *cdr
-				ml.trackers.accountsWriting.Add(1)
-				defer ml.trackers.accountsWriting.Done()
+				ml.trackers.accountsWritingAcquire()
+				defer ml.trackers.accountsWritingRelease()
 
 				// do not take any locks since all operations are synchronous
 				newBase := dcc.newBase()
@@ -2285,8 +2285,8 @@ func auCommitSync(t *testing.T, rnd basics.Round, au *accountUpdates, ml *mockLe
 	if cdr != nil {
 		func() {
 			dcc.deferredCommitRange = *cdr
-			ml.trackers.accountsWriting.Add(1)
-			defer ml.trackers.accountsWriting.Done()
+			ml.trackers.accountsWritingAcquire()
+			defer ml.trackers.accountsWritingRelease()
 
 			// do not take any locks since all operations are synchronous
 			newBase := dcc.newBase()

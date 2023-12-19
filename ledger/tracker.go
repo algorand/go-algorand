@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -175,7 +174,7 @@ type trackerRegistry struct {
 	commitSyncerClosed chan struct{}
 
 	// accountsWriting provides synchronization around the background writing of account balances.
-	accountsWriting sync.WaitGroup
+	accountsWriting atomic.Int64
 	// accountsCommitting is set when trackers registry writing accounts into DB.
 	accountsCommitting atomic.Bool
 
@@ -397,14 +396,25 @@ func (tr *trackerRegistry) committedUpTo(rnd basics.Round) basics.Round {
 	return minBlock
 }
 
-func (tr *trackerRegistry) produceCommittingTask(blockqRound basics.Round, dbRound basics.Round, cdr *deferredCommitRange) *deferredCommitRange {
+func (tr *trackerRegistry) produceCommittingTask(blockqRound basics.Round, dbRound basics.Round, maxLookback basics.Round) *deferredCommitContext {
+	if len(tr.trackers) == 0 {
+		return nil
+	}
+
+	dcc := &deferredCommitContext{
+		deferredCommitRange: deferredCommitRange{
+			lookback: maxLookback,
+		},
+	}
 	for _, lt := range tr.trackers {
+		cdr := &dcc.deferredCommitRange
 		base := cdr.oldBase
 		offset := cdr.offset
 		cdr = lt.produceCommittingTask(blockqRound, dbRound, cdr)
 		if cdr == nil {
-			break
+			return nil
 		}
+		dcc.deferredCommitRange = *cdr
 		if offset > 0 && cdr.offset > offset {
 			tr.log.Warnf("tracker %T produced offset %d but expected not greater than %d, dbRound %d, latestRound %d", lt, cdr.offset, offset, dbRound, blockqRound)
 		}
@@ -412,24 +422,15 @@ func (tr *trackerRegistry) produceCommittingTask(blockqRound basics.Round, dbRou
 			tr.log.Warnf("tracker %T modified oldBase %d that expected to be %d, dbRound %d, latestRound %d", lt, cdr.oldBase, base, dbRound, blockqRound)
 		}
 	}
-	return cdr
+	return dcc
 }
 
 func (tr *trackerRegistry) scheduleCommit(blockqRound, maxLookback basics.Round) {
-	dcc := &deferredCommitContext{
-		deferredCommitRange: deferredCommitRange{
-			lookback: maxLookback,
-		},
-	}
 
 	tr.mu.RLock()
 	dbRound := tr.dbRound
-	cdr := tr.produceCommittingTask(blockqRound, dbRound, &dcc.deferredCommitRange)
-	if cdr != nil {
-		dcc.deferredCommitRange = *cdr
-	} else {
-		dcc = nil
-	}
+	dcc := tr.produceCommittingTask(blockqRound, dbRound, maxLookback)
+
 	// If we recently flushed, wait to aggregate some more blocks.
 	// ( unless we're creating a catchpoint, in which case we want to flush it right away
 	//   so that all the instances of the catchpoint would contain exactly the same data )
@@ -453,7 +454,7 @@ func (tr *trackerRegistry) scheduleCommit(blockqRound, maxLookback basics.Round)
 	if dcc != nil {
 		// Increment the waitgroup first, otherwise this goroutine can be interrupted
 		// and commitSyncer attempts calling Done() on empty wait group.
-		tr.accountsWriting.Add(1)
+		tr.accountsWritingAcquire()
 		select {
 		case tr.deferredCommits <- dcc:
 		default:
@@ -466,14 +467,25 @@ func (tr *trackerRegistry) scheduleCommit(blockqRound, maxLookback basics.Round)
 			// This means a blocking write to deferredCommits will block Ledger reads (TODO use more fine-grained locks).
 			// Dropping this dcc allows the blockqueue syncer to continue persisting other blocks
 			// and ledger reads to proceed without being blocked by trackerMu lock.
-			tr.accountsWriting.Done()
+			tr.accountsWritingRelease()
 		}
 	}
 }
 
 // waitAccountsWriting waits for all the pending ( or current ) account writing to be completed.
 func (tr *trackerRegistry) waitAccountsWriting() {
-	tr.accountsWriting.Wait()
+	// spin until commitRound exits and deferredCommits drained
+	for tr.accountsWriting.Load() != 0 || len(tr.deferredCommits) != 0 {
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func (tr *trackerRegistry) accountsWritingAcquire() {
+	tr.accountsWriting.Add(1)
+}
+
+func (tr *trackerRegistry) accountsWritingRelease() {
+	tr.accountsWriting.Add(-1)
 }
 
 func (tr *trackerRegistry) isBehindCommittingDeltas(latest basics.Round) bool {
@@ -529,7 +541,7 @@ func (tr *trackerRegistry) commitSyncer(deferredCommits chan *deferredCommitCont
 			for !drained {
 				select {
 				case <-deferredCommits:
-					tr.accountsWriting.Done()
+					tr.accountsWritingRelease()
 				default:
 					drained = true
 				}
@@ -541,7 +553,7 @@ func (tr *trackerRegistry) commitSyncer(deferredCommits chan *deferredCommitCont
 
 // commitRound commits the given deferredCommitContext via the trackers.
 func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) error {
-	defer tr.accountsWriting.Done()
+	defer tr.accountsWritingRelease()
 	tr.mu.RLock()
 
 	offset := dcc.offset

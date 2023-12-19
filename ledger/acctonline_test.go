@@ -38,17 +38,10 @@ import (
 
 func commitSync(t *testing.T, oa *onlineAccounts, ml *mockLedgerForTracker, rnd basics.Round) {
 	_, maxLookback := oa.committedUpTo(rnd)
-	dcc := &deferredCommitContext{
-		deferredCommitRange: deferredCommitRange{
-			lookback: maxLookback,
-		},
-	}
-	cdr := ml.trackers.produceCommittingTask(rnd, ml.trackers.dbRound, &dcc.deferredCommitRange)
-	if cdr != nil {
+	dcc := ml.trackers.produceCommittingTask(rnd, ml.trackers.dbRound, maxLookback)
+	if dcc != nil {
 		func() {
-			dcc.deferredCommitRange = *cdr
-			ml.trackers.accountsWriting.Add(1)
-
+			ml.trackers.accountsWritingAcquire()
 			// do not take any locks since all operations are synchronous
 			err := ml.trackers.commitRound(dcc)
 			require.NoError(t, err)
@@ -59,17 +52,10 @@ func commitSync(t *testing.T, oa *onlineAccounts, ml *mockLedgerForTracker, rnd 
 // commitSyncPartial does not call postCommit
 func commitSyncPartial(t *testing.T, oa *onlineAccounts, ml *mockLedgerForTracker, rnd basics.Round) *deferredCommitContext {
 	_, maxLookback := oa.committedUpTo(rnd)
-	dcc := &deferredCommitContext{
-		deferredCommitRange: deferredCommitRange{
-			lookback: maxLookback,
-		},
-	}
-	cdr := ml.trackers.produceCommittingTask(rnd, ml.trackers.dbRound, &dcc.deferredCommitRange)
-	if cdr != nil {
+	dcc := ml.trackers.produceCommittingTask(rnd, ml.trackers.dbRound, maxLookback)
+	if dcc != nil {
 		func() {
-			dcc.deferredCommitRange = *cdr
-			ml.trackers.accountsWriting.Add(1)
-
+			ml.trackers.accountsWritingAcquire()
 			// do not take any locks since all operations are synchronous
 			newBase := dcc.newBase()
 			dcc.flushTime = time.Now()
@@ -101,8 +87,7 @@ func commitSyncPartial(t *testing.T, oa *onlineAccounts, ml *mockLedgerForTracke
 }
 
 func commitSyncPartialComplete(t *testing.T, oa *onlineAccounts, ml *mockLedgerForTracker, dcc *deferredCommitContext) {
-	defer ml.trackers.accountsWriting.Done()
-
+	defer ml.trackers.accountsWritingRelease()
 	ml.trackers.dbRound = dcc.newBase()
 	for _, lt := range ml.trackers.trackers {
 		lt.postCommit(ml.trackers.ctx, dcc)

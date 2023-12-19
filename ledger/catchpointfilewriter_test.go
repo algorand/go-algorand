@@ -423,12 +423,10 @@ func TestCatchpointReadDatabaseOverflowSingleAccount(t *testing.T) {
 	conf.CatchpointInterval = 1
 	conf.Archival = true
 	au, _ := newAcctUpdates(t, ml, conf)
-	err := au.loadFromDisk(ml, 0)
-	require.NoError(t, err)
 	au.close() // it is OK to close it here - no data race since commitSyncer is not active
 	catchpointDataFilePath := filepath.Join(temporaryDirectory, "15.data")
 
-	err = ml.trackerDB().Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
+	err := ml.trackerDB().Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
 		expectedTotalAccounts := uint64(1)
 		totalAccountsWritten := uint64(0)
 		totalResources := 0
@@ -516,12 +514,10 @@ func TestCatchpointReadDatabaseOverflowAccounts(t *testing.T) {
 	conf.CatchpointInterval = 1
 	conf.Archival = true
 	au, _ := newAcctUpdates(t, ml, conf)
-	err := au.loadFromDisk(ml, 0)
-	require.NoError(t, err)
 	au.close()
 	catchpointDataFilePath := filepath.Join(temporaryDirectory, "15.data")
 
-	err = ml.trackerDB().Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
+	err := ml.trackerDB().Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
 		ar, err := tx.MakeAccountsReader()
 		if err != nil {
 			return err
