@@ -461,6 +461,7 @@ Fields
 | 14 | CallerApplicationAddress | address | v6  | The application address of the application that called this application. ZeroAddress if this application is at the top-level. Application mode only. |
 | 15 | AssetCreateMinBalance | uint64 | v10  | The additional minimum balance required to create (and opt-in to) an asset. |
 | 16 | AssetOptInMinBalance | uint64 | v10  | The additional minimum balance required to opt-in to an asset. |
+| 17 | GenesisHash | [32]byte | v10  | The Genesis Hash for the network. |
 
 
 ## gtxn
@@ -1487,7 +1488,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 
 - Bytecode: 0xb9
 - Stack: ..., A: boxName, B: uint64 &rarr; ..., bool
-- create a box named A, of length B. Fail if A is empty or B exceeds 32,768. Returns 0 if A already existed, else 1
+- create a box named A, of length B. Fail if the name A is empty or B exceeds 32,768. Returns 0 if A already existed, else 1
 - Availability: v8
 - Mode: Application
 
@@ -1640,6 +1641,24 @@ Fields
 | 0 | BlkSeed | []byte |  |
 | 1 | BlkTimestamp | uint64 |  |
 
+
+## box_splice
+
+- Bytecode: 0xd2
+- Stack: ..., A: boxName, B: uint64, C: uint64, D: []byte &rarr; ...
+- set box A to contain its previous bytes up to index B, followed by D, followed by the original bytes of A that began at index B+C.
+- Availability: v10
+- Mode: Application
+
+Boxes are of constant length. If C < len(D), then len(D)-C bytes will be removed from the end. If C > len(D), zero bytes will be appended to the end to reach the box length.
+
+## box_resize
+
+- Bytecode: 0xd3
+- Stack: ..., A: boxName, B: uint64 &rarr; ...
+- change the size of box named A to be of length B, adding zero bytes to end or removing bytes from the end, as needed. Fail if the name A is empty, A is not an existing box, or B exceeds 32,768.
+- Availability: v10
+- Mode: Application
 
 ## ec_add
 

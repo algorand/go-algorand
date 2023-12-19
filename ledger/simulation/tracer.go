@@ -185,12 +185,14 @@ func (tracer *evalTracer) AfterTxnGroup(ep *logic.EvalParams, deltas *ledgercore
 	}
 }
 
-func (tracer *evalTracer) saveApplyData(applyData transactions.ApplyData) {
+func (tracer *evalTracer) saveApplyData(applyData transactions.ApplyData, omitEvalDelta bool) {
 	applyDataOfCurrentTxn := tracer.mustGetApplyDataAtPath(tracer.absolutePath())
-	// Copy everything except the EvalDelta, since that has been kept up-to-date after every op
 	evalDelta := applyDataOfCurrentTxn.EvalDelta
 	*applyDataOfCurrentTxn = applyData
-	applyDataOfCurrentTxn.EvalDelta = evalDelta
+	if omitEvalDelta {
+		// If omitEvalDelta is true, restore the EvalDelta from applyDataOfCurrentTxn
+		applyDataOfCurrentTxn.EvalDelta = evalDelta
+	}
 }
 
 func (tracer *evalTracer) BeforeTxn(ep *logic.EvalParams, groupIndex int) {
@@ -245,7 +247,7 @@ func (tracer *evalTracer) BeforeTxn(ep *logic.EvalParams, groupIndex int) {
 
 func (tracer *evalTracer) AfterTxn(ep *logic.EvalParams, groupIndex int, ad transactions.ApplyData, evalError error) {
 	tracer.handleError(evalError)
-	tracer.saveApplyData(ad)
+	tracer.saveApplyData(ad, evalError != nil)
 	// if the current transaction + simulation condition would lead to exec trace making
 	// we should clean them up from tracer.execTraceStack.
 	if tracer.result.ReturnTrace() {
@@ -412,7 +414,9 @@ func (tracer *evalTracer) AfterOpcode(cx *logic.EvalContext, evalError error) {
 	}
 
 	if cx.RunMode() == logic.ModeApp {
-		tracer.handleError(evalError)
+		if cx.TxnGroup[groupIndex].Txn.ApplicationCallTxnFields.OnCompletion != transactions.ClearStateOC {
+			tracer.handleError(evalError)
+		}
 		if evalError == nil && tracer.unnamedResourcePolicy != nil {
 			if err := tracer.unnamedResourcePolicy.tracker.reconcileBoxWriteBudget(cx.BoxDirtyBytes(), cx.Proto.BytesPerBoxReference); err != nil {
 				// This should never happen, since we limit the IO budget to tracer.unnamedResourcePolicy.assignment.maxPossibleBoxIOBudget
@@ -481,7 +485,7 @@ func (tracer *evalTracer) BeforeProgram(cx *logic.EvalContext) {
 	}
 }
 
-func (tracer *evalTracer) AfterProgram(cx *logic.EvalContext, evalError error) {
+func (tracer *evalTracer) AfterProgram(cx *logic.EvalContext, pass bool, evalError error) {
 	groupIndex := cx.GroupIndex()
 
 	if cx.RunMode() == logic.ModeSig {
@@ -497,5 +501,15 @@ func (tracer *evalTracer) AfterProgram(cx *logic.EvalContext, evalError error) {
 	// If it is an inner app call, roll up its cost to the top level transaction.
 	tracer.result.TxnGroups[0].Txns[tracer.relativeCursor[0]].AppBudgetConsumed += uint64(cx.Cost())
 
-	tracer.handleError(evalError)
+	if cx.TxnGroup[groupIndex].Txn.ApplicationCallTxnFields.OnCompletion == transactions.ClearStateOC {
+		if tracer.result.ReturnTrace() && (!pass || evalError != nil) {
+			txnTrace := tracer.execTraceStack[len(tracer.execTraceStack)-1]
+			txnTrace.ClearStateRollback = true
+			if evalError != nil {
+				txnTrace.ClearStateRollbackError = evalError.Error()
+			}
+		}
+	} else {
+		tracer.handleError(evalError)
+	}
 }

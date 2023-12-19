@@ -200,16 +200,28 @@ func computeMinAvmVersion(group []transactions.SignedTxnWithAD) uint64 {
 // "stateless" for signature purposes.
 type LedgerForSignature interface {
 	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
+	GenesisHash() crypto.Digest
 }
 
-// NoHeaderLedger is intended for debugging situations in which it is reasonable
-// to preclude the use of `block` and `txn LastValidTime`
+// NoHeaderLedger is intended for debugging TEAL in isolation(no real ledger) in
+// which it is reasonable to preclude the use of `block`, `txn
+// LastValidTime`. Also `global GenesisHash` is just a static value.
 type NoHeaderLedger struct {
 }
 
 // BlockHdr always errors
 func (NoHeaderLedger) BlockHdr(basics.Round) (bookkeeping.BlockHeader, error) {
 	return bookkeeping.BlockHeader{}, fmt.Errorf("no block header access")
+}
+
+// GenesisHash returns a fixed value
+func (NoHeaderLedger) GenesisHash() crypto.Digest {
+	return crypto.Digest{
+		0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03,
+		0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03,
+		0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03,
+		0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03,
+	}
 }
 
 // LedgerForLogic represents ledger API for Stateful TEAL program
@@ -1169,7 +1181,7 @@ func eval(program []byte, cx *EvalContext) (pass bool, err error) {
 			}
 
 			// Ensure we update the tracer before exiting
-			cx.Tracer.AfterProgram(cx, tracerErr)
+			cx.Tracer.AfterProgram(cx, pass, tracerErr)
 
 			if x != nil {
 				// Panic again to trigger higher-level recovery and error reporting
@@ -3610,8 +3622,11 @@ func (cx *EvalContext) globalFieldToValue(fs globalFieldSpec) (sv stackValue, er
 		sv.Uint = cx.Proto.MinBalance
 	case AssetOptInMinBalance:
 		sv.Uint = cx.Proto.MinBalance
+	case GenesisHash:
+		gh := cx.SigLedger.GenesisHash()
+		sv.Bytes = gh[:]
 	default:
-		err = fmt.Errorf("invalid global field %d", fs.field)
+		return sv, fmt.Errorf("invalid global field %s", fs.field)
 	}
 
 	if fs.ftype.AVMType != sv.avmType() {
@@ -3962,7 +3977,7 @@ func replaceCarefully(original []byte, replacement []byte, start uint64) ([]byte
 		return nil, fmt.Errorf("replacement start %d beyond length: %d", start, len(original))
 	}
 	end := start + uint64(len(replacement))
-	if end < start { // impossible because it is sum of two avm value lengths
+	if end < start { // impossible because it is sum of two avm value (or box) lengths
 		return nil, fmt.Errorf("replacement end exceeds uint64")
 	}
 
@@ -5587,7 +5602,7 @@ func opBlock(cx *EvalContext) error {
 		cx.Stack[last].Uint = uint64(hdr.TimeStamp)
 		return nil
 	default:
-		return fmt.Errorf("invalid block field %d", fs.field)
+		return fmt.Errorf("invalid block field %s", fs.field)
 	}
 }
 

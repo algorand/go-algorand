@@ -22,6 +22,7 @@ import (
 	"sync"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -65,6 +66,7 @@ type roundCowParent interface {
 	getKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, accountIdx uint64) (basics.TealValue, bool, error)
 	kvGet(key string) ([]byte, bool, error)
 	GetStateProofVerificationContext(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error)
+	GenesisHash() crypto.Digest
 }
 
 // When adding new fields make sure to clear them in the roundCowState.recycle() as well to avoid dirty state
@@ -243,6 +245,10 @@ func (cb *roundCowState) GetStateProofNextRound() basics.Round {
 
 func (cb *roundCowState) BlockHdr(r basics.Round) (bookkeeping.BlockHeader, error) {
 	return cb.lookupParent.BlockHdr(r)
+}
+
+func (cb *roundCowState) GenesisHash() crypto.Digest {
+	return cb.lookupParent.GenesisHash()
 }
 
 func (cb *roundCowState) GetStateProofVerificationContext(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error) {

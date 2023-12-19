@@ -3435,6 +3435,14 @@ func TestLatestTimestamp(t *testing.T) {
 	testApp(t, source, ep)
 }
 
+func TestGenHash(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	ep, _, _ := makeSampleEnv()
+	source := fmt.Sprintf("global GenesisHash; byte 0x%s; ==", hex.EncodeToString(testGenHash[:]))
+	testApp(t, source, ep)
+}
+
 func TestBlockSeed(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -3465,7 +3473,7 @@ func TestBlockSeed(t *testing.T) {
 	testApp(t, "int 4294967310; int 1502; -; block BlkSeed; len; int 32; ==", ep,
 		"not available") // 1501 back from lv is not
 
-	// A little silly, as it only tests the test ledger: ensure samenes and differentness
+	// A little silly, as it only tests the test ledger: ensure sameness and differentness
 	testApp(t, "int 0xfffffff0; block BlkSeed; int 0xfffffff0; block BlkSeed; ==", ep)
 	testApp(t, "int 0xfffffff0; block BlkSeed; int 0xfffffff1; block BlkSeed; !=", ep)
 

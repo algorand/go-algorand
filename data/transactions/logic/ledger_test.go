@@ -36,6 +36,7 @@ import (
 	"math"
 	"math/rand"
 
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/committee"
@@ -605,6 +606,13 @@ func (l *Ledger) AppParams(appID basics.AppIndex) (basics.AppParams, basics.Addr
 		return app.AppParams, app.Creator, nil
 	}
 	return basics.AppParams{}, basics.Address{}, fmt.Errorf("no app %d", appID)
+}
+
+var testGenHash = crypto.Digest{0x03, 0x02, 0x03}
+
+// GenesisHash returns a phony genesis hash that can be tested against
+func (l *Ledger) GenesisHash() crypto.Digest {
+	return testGenHash
 }
 
 func (l *Ledger) move(from basics.Address, to basics.Address, amount uint64) error {

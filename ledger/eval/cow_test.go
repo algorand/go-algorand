@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/stateproofmsg"
@@ -103,8 +104,8 @@ func (ml *mockLedger) BlockHdr(rnd basics.Round) (bookkeeping.BlockHeader, error
 	return bookkeeping.BlockHeader{}, errors.New("requested blockheader not found")
 }
 
-func (ml *mockLedger) blockHdrCached(rnd basics.Round) (bookkeeping.BlockHeader, error) {
-	return ml.BlockHdr(rnd)
+func (ml *mockLedger) GenesisHash() crypto.Digest {
+	panic("GenesisHash unused by tests")
 }
 
 func (ml *mockLedger) GetStateProofVerificationContext(rnd basics.Round) (*ledgercore.StateProofVerificationContext, error) {

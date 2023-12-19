@@ -44,7 +44,7 @@ func getSimpleTracerTestCases(mode RunMode) []tracerTestCase {
 				},
 				mocktracer.OpcodeEvents(35, false),
 				{
-					mocktracer.AfterProgram(mode, false),
+					mocktracer.AfterProgram(mode, mocktracer.ProgramResultPass),
 				},
 			}),
 		},
@@ -58,7 +58,7 @@ func getSimpleTracerTestCases(mode RunMode) []tracerTestCase {
 				},
 				mocktracer.OpcodeEvents(36, false),
 				{
-					mocktracer.AfterProgram(mode, false),
+					mocktracer.AfterProgram(mode, mocktracer.ProgramResultReject),
 				},
 			}),
 		},
@@ -72,7 +72,7 @@ func getSimpleTracerTestCases(mode RunMode) []tracerTestCase {
 				},
 				mocktracer.OpcodeEvents(36, true),
 				{
-					mocktracer.AfterProgram(mode, true),
+					mocktracer.AfterProgram(mode, mocktracer.ProgramResultError),
 				},
 			}),
 		},
@@ -90,7 +90,7 @@ func getPanicTracerTestCase(mode RunMode) tracerTestCase {
 			},
 			mocktracer.OpcodeEvents(36, true),
 			{
-				mocktracer.AfterProgram(mode, true),
+				mocktracer.AfterProgram(mode, mocktracer.ProgramResultError),
 			},
 		}),
 	}
