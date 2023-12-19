@@ -40,12 +40,10 @@ func commitSync(t *testing.T, oa *onlineAccounts, ml *mockLedgerForTracker, rnd 
 	_, maxLookback := oa.committedUpTo(rnd)
 	dcc := ml.trackers.produceCommittingTask(rnd, ml.trackers.dbRound, maxLookback)
 	if dcc != nil {
-		func() {
-			ml.trackers.accountsWritingAcquire()
-			// do not take any locks since all operations are synchronous
-			err := ml.trackers.commitRound(dcc)
-			require.NoError(t, err)
-		}()
+		ml.trackers.accountsWritingAcquire()
+		// do not take any locks since all operations are synchronous
+		err := ml.trackers.commitRound(dcc)
+		require.NoError(t, err)
 	}
 }
 
@@ -54,33 +52,31 @@ func commitSyncPartial(t *testing.T, oa *onlineAccounts, ml *mockLedgerForTracke
 	_, maxLookback := oa.committedUpTo(rnd)
 	dcc := ml.trackers.produceCommittingTask(rnd, ml.trackers.dbRound, maxLookback)
 	if dcc != nil {
-		func() {
-			ml.trackers.accountsWritingAcquire()
-			// do not take any locks since all operations are synchronous
-			newBase := dcc.newBase()
-			dcc.flushTime = time.Now()
+		ml.trackers.accountsWritingAcquire()
+		// do not take any locks since all operations are synchronous
+		newBase := dcc.newBase()
+		dcc.flushTime = time.Now()
+
+		for _, lt := range ml.trackers.trackers {
+			err := lt.prepareCommit(dcc)
+			require.NoError(t, err)
+		}
+		err := ml.trackers.dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
+			aw, err := tx.MakeAccountsWriter()
+			if err != nil {
+				return err
+			}
 
 			for _, lt := range ml.trackers.trackers {
-				err := lt.prepareCommit(dcc)
-				require.NoError(t, err)
+				err0 := lt.commitRound(ctx, tx, dcc)
+				if err0 != nil {
+					return err0
+				}
 			}
-			err := ml.trackers.dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
-				aw, err := tx.MakeAccountsWriter()
-				if err != nil {
-					return err
-				}
 
-				for _, lt := range ml.trackers.trackers {
-					err0 := lt.commitRound(ctx, tx, dcc)
-					if err0 != nil {
-						return err0
-					}
-				}
-
-				return aw.UpdateAccountsRound(newBase)
-			})
-			require.NoError(t, err)
-		}()
+			return aw.UpdateAccountsRound(newBase)
+		})
+		require.NoError(t, err)
 	}
 
 	return dcc
