@@ -47,6 +47,12 @@ func (v *Validator) Go(netConfig *FuzzerConfig) {
 	network := MakeFuzzer(*netConfig)
 	require.NotNil(v.tb, network)
 
+	defer func() {
+		if r := recover(); r != nil {
+			network.DumpQueues()
+		}
+	}()
+
 	network.Start()
 	//_, runRes := network.Run(v.config.NetworkRunDuration /*time.Millisecond*5000*/, time.Millisecond*3000, time.Second)
 	_, v.runResult = network.Run(v.config.NetworkRunTicks, v.config.NetworkRecoverTicks, 100)
