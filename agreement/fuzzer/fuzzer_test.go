@@ -261,6 +261,13 @@ func (n *Fuzzer) Start() {
 	}
 }
 
+// DumpQueues dumps the queues of all the nodes.
+func (n *Fuzzer) DumpQueues() {
+	for _, f := range n.agreements {
+		f.DumpDemuxQueues(os.Stderr)
+	}
+}
+
 func (n *Fuzzer) InvokeFiltersShutdown(preshutdown bool) {
 	for _, facade := range n.facades {
 		dsFilter := facade.GetDownstreamFilter()
