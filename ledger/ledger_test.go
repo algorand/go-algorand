@@ -27,7 +27,6 @@ import (
 	"runtime"
 	"sort"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 	"golang.org/x/exp/slices"
@@ -3114,16 +3113,7 @@ func TestLedgerReloadStateProofVerificationTracker(t *testing.T) {
 	// trigger trackers flush
 	// first ensure the block is committed into blockdb
 	l.WaitForCommit(l.Latest())
-	// wait for any pending tracker flushes
-	l.trackers.waitAccountsWriting()
-	// force flush as needed
-	if l.LatestTrackerCommitted() < l.Latest()+basics.Round(cfg.MaxAcctLookback) {
-		l.trackers.mu.Lock()
-		l.trackers.lastFlushTime = time.Time{}
-		l.trackers.mu.Unlock()
-		l.notifyCommit(l.Latest())
-		l.trackers.waitAccountsWriting()
-	}
+	triggerTrackerFlush(t, l)
 
 	verifyStateProofVerificationTracking(t, &l.spVerification, basics.Round(firstStateProofContextTargetRound),
 		numOfStateProofs-1, proto.StateProofInterval, true, trackerDB)
@@ -3257,16 +3247,7 @@ func TestLedgerSPTrackerAfterReplay(t *testing.T) {
 
 	// first ensure the block is committed into blockdb
 	l.WaitForCommit(l.Latest())
-	// wait for any pending tracker flushes
-	l.trackers.waitAccountsWriting()
-	// force flush as needed
-	if l.LatestTrackerCommitted() < l.Latest()+basics.Round(cfg.MaxAcctLookback) {
-		l.trackers.mu.Lock()
-		l.trackers.lastFlushTime = time.Time{}
-		l.trackers.mu.Unlock()
-		l.notifyCommit(spblk.BlockHeader.Round)
-		l.trackers.waitAccountsWriting()
-	}
+	triggerTrackerFlush(t, l)
 
 	err = l.reloadLedger()
 	a.NoError(err)
