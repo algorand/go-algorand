@@ -122,7 +122,7 @@ func (n *NetworkFacade) DumpQueues() {
 	}
 	n.eventsQueuesMu.Unlock()
 	queues += "----------------------\n"
-	fmt.Printf(queues)
+	fmt.Print(queues)
 }
 
 func (n *NetworkFacade) WaitForEventsQueue(cleared bool) {
@@ -151,7 +151,7 @@ func (n *NetworkFacade) WaitForEventsQueue(cleared bool) {
 				n.DumpQueues()
 				//panic("Waiting for event processing for 0 took too long")
 				pprof.Lookup("goroutine").WriteTo(os.Stdout, 1)
-				os.Exit(1)
+				panic(fmt.Sprintf("maxWait %d sec exceeded", maxEventQueueWait/time.Second))
 			}
 
 		}

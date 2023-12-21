@@ -19,6 +19,7 @@ package agreement
 //go:generate dbgen -i agree.sql -p agreement -n agree -o agreeInstall.go -h ../scripts/LICENSE_HEADER
 import (
 	"context"
+	"io"
 	"time"
 
 	"github.com/algorand/go-algorand/config"
@@ -176,6 +177,11 @@ func (s *Service) Shutdown() {
 	s.quitFn()
 	<-s.done
 	s.persistenceLoop.Quit()
+}
+
+// DumpDemuxQueues dumps the demux queues to the given writer.
+func (s *Service) DumpDemuxQueues(w io.Writer) {
+	s.demux.dumpQueues(w)
 }
 
 // demuxLoop repeatedly executes pending actions and then requests the next event from the Service.demux.
