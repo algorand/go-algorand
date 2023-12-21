@@ -163,7 +163,8 @@ func (n *HybridP2PNetwork) Start() error {
 // Stop implements GossipNode
 func (n *HybridP2PNetwork) Stop() {
 	_ = n.runParallel(func(net GossipNode) error {
-		return net.Start()
+		net.Stop()
+		return nil
 	})
 }
 
