@@ -2950,6 +2950,22 @@ done:
 `, LogicVersion, exp(5, "concat arg 1 wanted type []byte..."))
 }
 
+func TestTypeTrackingRegression(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	testProg(t, `
+callsub end	// wipes out initial program knowledge, makes scratch "any"
+label1:
+ load 1
+ byte 0x01
+ stores		// we had a bug in which the "any" seemed constant
+ load 0
+ load 0
+ +
+end:
+`, LogicVersion)
+}
+
 func TestMergeProtos(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
