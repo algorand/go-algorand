@@ -42,7 +42,7 @@ func NewHybridP2PNetwork(log logging.Logger, cfg config.Local, datadir string, p
 	// supply alternate NetAddress for P2P network
 	p2pcfg := cfg
 	p2pcfg.NetAddress = cfg.P2PListenAddress
-	p2pnet, err := NewP2PNetwork(log, p2pcfg, datadir, phonebookAddresses, genesisID, networkID)
+	p2pnet, err := NewP2PNetwork(log, p2pcfg, datadir, phonebookAddresses, genesisID, networkID, nodeInfo)
 	if err != nil {
 		return nil, err
 	}
@@ -153,17 +153,17 @@ func (n *HybridP2PNetwork) GetPeers(options ...PeerOption) []Peer {
 }
 
 // Start implements GossipNode
-func (n *HybridP2PNetwork) Start() {
-	_ = n.runParallel(func(net GossipNode) error {
-		net.Start()
-		return nil
+func (n *HybridP2PNetwork) Start() error {
+	err := n.runParallel(func(net GossipNode) error {
+		return net.Start()
 	})
+	return err
 }
 
 // Stop implements GossipNode
 func (n *HybridP2PNetwork) Stop() {
 	_ = n.runParallel(func(net GossipNode) error {
-		net.Start()
+		net.Stop()
 		return nil
 	})
 }

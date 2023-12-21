@@ -30,7 +30,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/logging"
 	algoDht "github.com/algorand/go-algorand/network/p2p/dht"
-	"github.com/algorand/go-algorand/network/p2p/peerstore"
+	"github.com/algorand/go-algorand/protocol"
 )
 
 // Capability represents functions that some nodes may provide and other nodes would want to know about
@@ -88,7 +88,9 @@ func (c *CapabilitiesDiscovery) PeersForCapability(capability Capability, n int)
 	ctx, cancel := context.WithTimeout(context.Background(), operationTimeout)
 	defer cancel()
 	var peers []peer.AddrInfo
-	peersChan, err := c.FindPeers(ctx, string(capability), discovery.Limit(n))
+	// +1 because it can include self but we exclude self from the returned list
+	// that might confuse the caller (and tests assertions)
+	peersChan, err := c.FindPeers(ctx, string(capability), discovery.Limit(n+1))
 	if err != nil {
 		return nil, err
 	}
@@ -146,17 +148,19 @@ func (c *CapabilitiesDiscovery) AdvertiseCapabilities(capabilities ...Capability
 	}()
 }
 
+// Sizer exposes the Size method
+type Sizer interface {
+	Size() int
+}
+
+// RoutingTable exposes some knowledge about the DHT routing table
+func (c *CapabilitiesDiscovery) RoutingTable() Sizer {
+	return c.dht.RoutingTable()
+}
+
 // MakeCapabilitiesDiscovery creates a new CapabilitiesDiscovery object which exposes peer discovery and capabilities advertisement
-func MakeCapabilitiesDiscovery(ctx context.Context, cfg config.Local, datadir string, network string, log logging.Logger, bootstrapPeers []*peer.AddrInfo) (*CapabilitiesDiscovery, error) {
-	pstore, err := peerstore.NewPeerStore(bootstrapPeers)
-	if err != nil {
-		return nil, err
-	}
-	h, err := makeHost(cfg, datadir, pstore)
-	if err != nil {
-		return nil, err
-	}
-	discDht, err := algoDht.MakeDHT(ctx, h, network, cfg, bootstrapPeers)
+func MakeCapabilitiesDiscovery(ctx context.Context, cfg config.Local, h host.Host, networkID protocol.NetworkID, log logging.Logger, bootstrapFunc func() []peer.AddrInfo) (*CapabilitiesDiscovery, error) {
+	discDht, err := algoDht.MakeDHT(ctx, h, networkID, cfg, bootstrapFunc)
 	if err != nil {
 		return nil, err
 	}

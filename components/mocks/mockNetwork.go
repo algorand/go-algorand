@@ -47,7 +47,8 @@ func (network *MockNetwork) Address() (string, bool) {
 }
 
 // Start - unused function
-func (network *MockNetwork) Start() {
+func (network *MockNetwork) Start() error {
+	return nil
 }
 
 // Stop - unused function

@@ -28,8 +28,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/libp2p/go-libp2p/core/peer"
-
 	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/agreement"
@@ -156,8 +154,6 @@ type AlgorandFullNode struct {
 	tracer messagetracer.MessageTracer
 
 	stateProofWorker *stateproof.Worker
-
-	capabilitiesDiscovery *p2p.CapabilitiesDiscovery
 }
 
 // TxnWithStatus represents information about a single transaction,
@@ -200,15 +196,6 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		return nil, err
 	}
 
-	if cfg.EnableDHTProviders {
-		caps, err0 := p2p.MakeCapabilitiesDiscovery(node.ctx, node.config, node.genesisDirs.RootGenesisDir, string(genesis.Network), node.log, []*peer.AddrInfo{})
-		if err0 != nil {
-			log.Errorf("Failed to create dht node capabilities discovery: %v", err)
-			return nil, err
-		}
-		node.capabilitiesDiscovery = caps
-	}
-
 	// tie network, block fetcher, and agreement services together
 	var p2pNode network.GossipNode
 	if cfg.EnableP2PHybridMode {
@@ -219,7 +206,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		}
 	} else if cfg.EnableP2P {
 		// TODO: pass more appropriate genesisDir (hot/cold). Presently this is just used to store a peerID key.
-		p2pNode, err = network.NewP2PNetwork(node.log, node.config, node.genesisDirs.RootGenesisDir, phonebookAddresses, genesis.ID(), genesis.Network)
+		p2pNode, err = network.NewP2PNetwork(node.log, node.config, node.genesisDirs.RootGenesisDir, phonebookAddresses, genesis.ID(), genesis.Network, node)
 		if err != nil {
 			log.Errorf("could not create p2p node: %v", err)
 			return nil, err
@@ -360,7 +347,7 @@ func (node *AlgorandFullNode) Config() config.Local {
 }
 
 // Start the node: connect to peers and run the agreement service while obtaining a lock. Doesn't wait for initial sync.
-func (node *AlgorandFullNode) Start() {
+func (node *AlgorandFullNode) Start() error {
 	node.mu.Lock()
 	defer node.mu.Unlock()
 
@@ -370,12 +357,16 @@ func (node *AlgorandFullNode) Start() {
 	// The start network is being called only after the various services start up.
 	// We want to do so in order to let the services register their callbacks with the
 	// network package before any connections are being made.
-	startNetwork := func() {
+	startNetwork := func() error {
 		if !node.config.DisableNetworking {
 			// start accepting connections
-			node.net.Start()
+			err := node.net.Start()
+			if err != nil {
+				return err
+			}
 			node.config.NetAddress, _ = node.net.Address()
 		}
+		return nil
 	}
 
 	if node.catchpointCatchupService != nil {
@@ -389,17 +380,18 @@ func (node *AlgorandFullNode) Start() {
 		node.ledgerService.Start()
 		node.txHandler.Start()
 		node.stateProofWorker.Start()
-		startNetwork()
+		err := startNetwork()
+		if err != nil {
+			return err
+		}
 
 		node.startMonitoringRoutines()
 	}
-	if node.capabilitiesDiscovery != nil {
-		node.capabilitiesDiscovery.AdvertiseCapabilities(node.capabilities()...)
-	}
-
+	return nil
 }
 
-func (node *AlgorandFullNode) capabilities() []p2p.Capability {
+// Capabilities returns the node's capabilities for advertising to other nodes.
+func (node *AlgorandFullNode) Capabilities() []p2p.Capability {
 	var caps []p2p.Capability
 	if node.IsArchival() {
 		caps = append(caps, p2p.Archival)
@@ -465,9 +457,6 @@ func (node *AlgorandFullNode) Stop() {
 	node.lowPriorityCryptoVerificationPool.Shutdown()
 	node.cryptoPool.Shutdown()
 	node.cancelCtx()
-	if node.capabilitiesDiscovery != nil {
-		node.capabilitiesDiscovery.Close()
-	}
 }
 
 // note: unlike the other two functions, this accepts a whole filename

@@ -72,7 +72,7 @@ type GossipNode interface {
 	GetPeers(options ...PeerOption) []Peer
 
 	// Start threads, listen on sockets.
-	Start()
+	Start() error
 
 	// Close sockets. Stop threads.
 	Stop()

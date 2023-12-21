@@ -156,6 +156,8 @@ const GossipNetworkPath = "/v1/{genesisID}/gossip"
 type NodeInfo interface {
 	// IsParticipating returns true if this node has stake and may vote on blocks or propose blocks.
 	IsParticipating() bool
+	// Capabilities returns a list of capabilities this node has.
+	Capabilities() []p2p.Capability
 }
 
 type nopeNodeInfo struct {
@@ -163,6 +165,10 @@ type nopeNodeInfo struct {
 
 func (nnni *nopeNodeInfo) IsParticipating() bool {
 	return false
+}
+
+func (nnni *nopeNodeInfo) Capabilities() []p2p.Capability {
+	return nil
 }
 
 // WebsocketNetwork implements GossipNode
@@ -680,7 +686,7 @@ func (wn *WebsocketNetwork) setup() {
 }
 
 // Start makes network connections and threads
-func (wn *WebsocketNetwork) Start() {
+func (wn *WebsocketNetwork) Start() error {
 	wn.messagesOfInterestMu.Lock()
 	defer wn.messagesOfInterestMu.Unlock()
 	wn.messagesOfInterestEncoded = true
@@ -692,7 +698,7 @@ func (wn *WebsocketNetwork) Start() {
 		listener, err := net.Listen("tcp", wn.config.NetAddress)
 		if err != nil {
 			wn.log.Errorf("network could not listen %v: %s", wn.config.NetAddress, err)
-			return
+			return err
 		}
 		// wrap the original listener with a limited connection listener
 		listener = limitlistener.RejectingLimitListener(
@@ -768,6 +774,8 @@ func (wn *WebsocketNetwork) Start() {
 	go wn.postMessagesOfInterestThread()
 
 	wn.log.Infof("serving genesisID=%s on %#v with RandomID=%s", wn.GenesisID, wn.PublicAddress(), wn.RandomID)
+
+	return nil
 }
 
 func (wn *WebsocketNetwork) httpdThread() {

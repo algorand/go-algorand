@@ -40,6 +40,7 @@ import (
 	"time"
 
 	"github.com/algorand/go-algorand/internal/rapidgen"
+	"github.com/algorand/go-algorand/network/p2p"
 	"pgregory.net/rapid"
 
 	"github.com/stretchr/testify/assert"
@@ -3288,6 +3289,9 @@ type participatingNodeInfo struct {
 
 func (nnni *participatingNodeInfo) IsParticipating() bool {
 	return true
+}
+func (nnni *participatingNodeInfo) Capabilities() []p2p.Capability {
+	return nil
 }
 
 func TestWebsocketNetworkTXMessageOfInterestPN(t *testing.T) {
