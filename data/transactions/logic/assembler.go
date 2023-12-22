@@ -1481,7 +1481,7 @@ func typeStores(pgm *ProgramKnowledge, args []token) (StackTypes, StackTypes, er
 	// If the index of the scratch slot is a const
 	// we can modify only that scratch slots type
 	if top >= 1 {
-		if idx, isConst := pgm.stack[top-1].constant(); isConst {
+		if idx, isConst := pgm.stack[top-1].constInt(); isConst {
 			pgm.scratchSpace[idx] = pgm.stack[top]
 			return nil, nil, nil
 		}
@@ -1524,7 +1524,7 @@ func typeLoads(pgm *ProgramKnowledge, args []token) (StackTypes, StackTypes, err
 		return nil, nil, nil
 	}
 
-	if val, isConst := pgm.stack[top].constant(); isConst {
+	if val, isConst := pgm.stack[top].constInt(); isConst {
 		return nil, StackTypes{pgm.scratchSpace[val]}, nil
 	}
 
