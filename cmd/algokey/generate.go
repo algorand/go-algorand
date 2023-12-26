@@ -18,6 +18,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/spf13/cobra"
 
@@ -27,10 +28,12 @@ import (
 
 var generateKeyfile string
 var generatePubkeyfile string
+var generateIndiscreet bool
 
 func init() {
 	generateCmd.Flags().StringVarP(&generateKeyfile, "keyfile", "f", "", "Private key filename")
 	generateCmd.Flags().StringVarP(&generatePubkeyfile, "pubkeyfile", "p", "", "Public key filename")
+	generateCmd.Flags().BoolVarP(&generateIndiscreet, "indiscreet", "", false, "Print mnemonic directly on current terminal")
 }
 
 var generateCmd = &cobra.Command{
@@ -46,7 +49,11 @@ var generateCmd = &cobra.Command{
 		key := crypto.GenerateSignatureSecrets(seed)
 		publicKeyChecksummed := basics.Address(key.SignatureVerifier).String()
 
-		fmt.Printf("Private key mnemonic: %s\n", mnemonic)
+		if generateIndiscreet {
+			fmt.Printf("Private key mnemonic: %s\n", mnemonic)
+		} else {
+			printDiscreetly(os.Stderr, "**Important** write this private key mnemonic phrase in a safe place. Do not share it to anyone", fmt.Sprintf("Private key mnemonic: %s", mnemonic))
+		}
 		fmt.Printf("Public key: %s\n", publicKeyChecksummed)
 
 		if generateKeyfile != "" {
