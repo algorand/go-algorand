@@ -52,7 +52,10 @@ var generateCmd = &cobra.Command{
 		if generateIndiscreet {
 			fmt.Printf("Private key mnemonic: %s\n", mnemonic)
 		} else {
-			printDiscreetly(os.Stderr, "**Important** write this private key mnemonic phrase in a safe place. Do not share it to anyone", fmt.Sprintf("Private key mnemonic: %s", mnemonic))
+			if err := printDiscreetly(os.Stderr, "**Important** write this private key mnemonic phrase in a safe place. Do not share it to anyone", fmt.Sprintf("Private key mnemonic: %s", mnemonic)); err != nil {
+				fmt.Fprintf(os.Stderr, "Fail to print mnemonic: %v", err)
+				os.Exit(1)
+			}
 		}
 		fmt.Printf("Public key: %s\n", publicKeyChecksummed)
 

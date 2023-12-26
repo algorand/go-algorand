@@ -24,6 +24,7 @@ import (
 )
 
 func Test_printDiscreetly(t *testing.T) {
+	t.Parallel()
 	buf := new(bytes.Buffer)
 	var (
 		promptMsg = "Prompt Message"
