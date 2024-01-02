@@ -1232,6 +1232,11 @@ const globalV9TestProgram = globalV8TestProgram + `
 const globalV10TestProgram = globalV9TestProgram + `
 global AssetCreateMinBalance; int 1001; ==; &&
 global AssetOptInMinBalance; int 1001; ==; &&
+global GenesisHash; len; int 32; ==; &&
+`
+
+const globalV11TestProgram = globalV10TestProgram + `
+// No new globals in v11
 `
 
 func TestGlobal(t *testing.T) {
@@ -1254,11 +1259,16 @@ func TestGlobal(t *testing.T) {
 		7:  {CallerApplicationAddress, globalV7TestProgram},
 		8:  {CallerApplicationAddress, globalV8TestProgram},
 		9:  {CallerApplicationAddress, globalV9TestProgram},
-		10: {AssetOptInMinBalance, globalV10TestProgram},
+		10: {GenesisHash, globalV10TestProgram},
+		11: {GenesisHash, globalV11TestProgram},
 	}
 	// tests keys are versions so they must be in a range 1..AssemblerMaxVersion plus zero version
 	require.LessOrEqual(t, len(tests), AssemblerMaxVersion+1)
 	require.Len(t, globalFieldSpecs, int(invalidGlobalField))
+
+	// ensure we are testing everything
+	require.Equal(t, tests[AssemblerMaxVersion].lastField, invalidGlobalField-1,
+		"did you add a new global field?")
 
 	ledger := NewLedger(nil)
 	addr, err := basics.UnmarshalChecksumAddress(testAddr)
@@ -1762,6 +1772,11 @@ assert
 int 1
 `
 
+const testTxnProgramTextV11 = testTxnProgramTextV10 + `
+assert
+int 1
+`
+
 func makeSampleTxn() transactions.SignedTxn {
 	var txn transactions.SignedTxn
 	copy(txn.Txn.Sender[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"))
@@ -1865,17 +1880,17 @@ func TestTxn(t *testing.T) {
 
 	t.Parallel()
 	tests := map[uint64]string{
-		1: testTxnProgramTextV1,
-		2: testTxnProgramTextV2,
-		3: testTxnProgramTextV3,
-		4: testTxnProgramTextV4,
-		5: testTxnProgramTextV5,
-		6: testTxnProgramTextV6,
-		7: testTxnProgramTextV7,
-		8: testTxnProgramTextV8,
-		9: testTxnProgramTextV9,
-
+		1:  testTxnProgramTextV1,
+		2:  testTxnProgramTextV2,
+		3:  testTxnProgramTextV3,
+		4:  testTxnProgramTextV4,
+		5:  testTxnProgramTextV5,
+		6:  testTxnProgramTextV6,
+		7:  testTxnProgramTextV7,
+		8:  testTxnProgramTextV8,
+		9:  testTxnProgramTextV9,
 		10: testTxnProgramTextV10,
+		11: testTxnProgramTextV11,
 	}
 
 	for i, txnField := range TxnFieldNames {

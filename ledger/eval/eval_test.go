@@ -543,7 +543,7 @@ int 1`,
 					},
 					mocktracer.OpcodeEvents(3, false),
 					{
-						mocktracer.AfterProgram(logic.ModeApp, false),
+						mocktracer.AfterProgram(logic.ModeApp, mocktracer.ProgramResultPass),
 						mocktracer.AfterTxn(protocol.ApplicationCallTx, expectedBasicAppCallAD, false), // end basicAppCallTxn
 						mocktracer.BeforeTxn(protocol.PaymentTx),                                       // start payTxn
 						mocktracer.AfterTxn(protocol.PaymentTx, expectedPayTxnAD, false),               // end payTxn
@@ -559,6 +559,11 @@ int 1`,
 				delete(expectedBasicAppCallDelta.Txids, txgroup[0].Txn.ID())
 
 				hasError := testCase.firstTxnBehavior == "error"
+				expectedProgramResult := mocktracer.ProgramResultReject
+				if hasError {
+					expectedProgramResult = mocktracer.ProgramResultError
+				}
+
 				// EvalDeltas are removed from failed app call transactions
 				expectedBasicAppCallAD.EvalDelta = transactions.EvalDelta{}
 				expectedEvents = append(expectedEvents, mocktracer.FlattenEvents([][]mocktracer.Event{
@@ -569,7 +574,7 @@ int 1`,
 					},
 					mocktracer.OpcodeEvents(3, hasError),
 					{
-						mocktracer.AfterProgram(logic.ModeApp, hasError),
+						mocktracer.AfterProgram(logic.ModeApp, expectedProgramResult),
 						mocktracer.AfterTxn(protocol.ApplicationCallTx, expectedBasicAppCallAD, true), // end basicAppCallTxn
 						mocktracer.AfterTxnGroup(3, &expectedBasicAppCallDelta, true),
 					},
@@ -1035,6 +1040,10 @@ type testCowBaseLedger struct {
 
 func (l *testCowBaseLedger) BlockHdr(basics.Round) (bookkeeping.BlockHeader, error) {
 	return bookkeeping.BlockHeader{}, errors.New("not implemented")
+}
+
+func (l *testCowBaseLedger) GenesisHash() crypto.Digest {
+	panic("not implemented")
 }
 
 func (l *testCowBaseLedger) CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, ledgercore.Txlease) error {

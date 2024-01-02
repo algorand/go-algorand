@@ -310,4 +310,10 @@ func TestWsPeerIPAddr(t *testing.T) {
 	require.Equal(t, 16, len(conn.addr.IP))
 	require.Equal(t, []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 127, 0, 0, 4}, peer.IPAddr())
 	require.Equal(t, []byte{127, 0, 0, 4}, peer.RoutingAddr())
+
+	// check incoming peer with originAddress set
+	conn.addr.IP = []byte{127, 0, 0, 1}
+	peer.wsPeerCore.originAddress = "127.0.0.2"
+	require.Equal(t, []byte{127, 0, 0, 1}, peer.IPAddr())
+	require.Equal(t, []byte{127, 0, 0, 2}, peer.RoutingAddr())
 }

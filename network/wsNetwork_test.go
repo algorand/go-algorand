@@ -1332,8 +1332,6 @@ func TestPeeringWithIdentityChallenge(t *testing.T) {
 
 	addrA, ok := netA.Address()
 	require.True(t, ok)
-	gossipA, err := netA.addrToGossipAddr(addrA)
-	require.NoError(t, err)
 
 	addrB, ok := netB.Address()
 	require.True(t, ok)
@@ -1349,7 +1347,9 @@ func TestPeeringWithIdentityChallenge(t *testing.T) {
 		netA.wg.Add(1)
 		netA.tryConnect(addrB, gossipB)
 		// let the tryConnect go forward
-		time.Sleep(250 * time.Millisecond)
+		assert.Eventually(t, func() bool {
+			return len(netA.GetPeers(PeersConnectedOut)) == 1
+		}, time.Second, 50*time.Millisecond)
 	}
 	// just one A->B connection
 	assert.Equal(t, 0, len(netA.GetPeers(PeersConnectedIn)))
@@ -1362,17 +1362,16 @@ func TestPeeringWithIdentityChallenge(t *testing.T) {
 	assert.Equal(t, 1, netA.identityTracker.(*mockIdentityTracker).getInsertCount())
 
 	// netB has to wait for a final verification message over WS Handler, so pause a moment
-	time.Sleep(250 * time.Millisecond)
+	assert.Eventually(t, func() bool {
+		return netB.identityTracker.(*mockIdentityTracker).getSetCount() == 1
+	}, time.Second, 50*time.Millisecond)
+
 	assert.Equal(t, 1, netB.identityTracker.(*mockIdentityTracker).getSetCount())
 	assert.Equal(t, 1, netB.identityTracker.(*mockIdentityTracker).getInsertCount())
 
 	// bi-directional connection from B should not proceed
-	if _, ok := netB.tryConnectReserveAddr(addrA); ok {
-		netB.wg.Add(1)
-		netB.tryConnect(addrA, gossipA)
-		// let the tryConnect go forward
-		time.Sleep(250 * time.Millisecond)
-	}
+	_, ok = netB.tryConnectReserveAddr(addrA)
+	assert.False(t, ok)
 
 	// still just one A->B connection
 	assert.Equal(t, 0, len(netA.GetPeers(PeersConnectedIn)))
@@ -1381,9 +1380,9 @@ func TestPeeringWithIdentityChallenge(t *testing.T) {
 	assert.Equal(t, 0, len(netB.GetPeers(PeersConnectedOut)))
 	// netA never attempts to set identity as it never sees a verified identity
 	assert.Equal(t, 1, netA.identityTracker.(*mockIdentityTracker).getSetCount())
-	// netB would attempt to add the identity to the tracker
-	// but it would not end up being added
-	assert.Equal(t, 2, netB.identityTracker.(*mockIdentityTracker).getSetCount())
+	// no connecton => netB does attepmt to add the identity to the tracker
+	// and it would not end up being added
+	assert.Equal(t, 1, netB.identityTracker.(*mockIdentityTracker).getSetCount())
 	assert.Equal(t, 1, netB.identityTracker.(*mockIdentityTracker).getInsertCount())
 
 	// Check deduplication again, this time from A
@@ -1391,15 +1390,19 @@ func TestPeeringWithIdentityChallenge(t *testing.T) {
 	// will prevent this connection from attempting in the first place
 	// in the real world, that isConnectedTo doesn't always trigger, if the hosts are behind
 	// a load balancer or other NAT
-	if _, ok := netA.tryConnectReserveAddr(addrB); ok || true {
-		netA.wg.Add(1)
-		netA.tryConnect(addrB, gossipB)
-		// let the tryConnect go forward
-		time.Sleep(250 * time.Millisecond)
-	}
+	_, ok = netA.tryConnectReserveAddr(addrB)
+	assert.False(t, ok)
+	netA.wg.Add(1)
+	old := networkPeerIdentityDisconnect.GetUint64Value()
+	netA.tryConnect(addrB, gossipB)
+	// let the tryConnect go forward
+	assert.Eventually(t, func() bool {
+		new := networkPeerIdentityDisconnect.GetUint64Value()
+		return new > old
+	}, time.Second, 50*time.Millisecond)
 
 	// netB never tries to add a new identity, since the connection gets abandoned before it is verified
-	assert.Equal(t, 2, netB.identityTracker.(*mockIdentityTracker).getSetCount())
+	assert.Equal(t, 1, netB.identityTracker.(*mockIdentityTracker).getSetCount())
 	assert.Equal(t, 1, netB.identityTracker.(*mockIdentityTracker).getInsertCount())
 	// still just one A->B connection
 	assert.Equal(t, 0, len(netA.GetPeers(PeersConnectedIn)))
@@ -1411,11 +1414,9 @@ func TestPeeringWithIdentityChallenge(t *testing.T) {
 	// the underlying connection is being closed. In this case, the read loop
 	// on the peer will detect and close the peer. Since this is asynchronous,
 	// we wait and check regularly to allow the connection to settle
-	assert.Eventually(
-		t,
-		func() bool { return len(netB.GetPeers(PeersConnectedIn)) == 1 },
-		5*time.Second,
-		100*time.Millisecond)
+	assert.Eventually(t, func() bool {
+		return len(netB.GetPeers(PeersConnectedIn)) == 1
+	}, time.Second, 50*time.Millisecond)
 
 	// Now have A connect to node C, which has the same PublicAddress as B (e.g., because it shares the
 	// same public load balancer endpoint). C will have a different identity keypair and so will not be
@@ -1432,13 +1433,15 @@ func TestPeeringWithIdentityChallenge(t *testing.T) {
 	require.True(t, ok)
 	gossipC, err := netC.addrToGossipAddr(addrC)
 	require.NoError(t, err)
-	addrC = hostAndPort(addrC)
 
+	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedOut)))
 	// A connects to C (but uses addrB here to simulate case where B & C have the same PublicAddress)
 	netA.wg.Add(1)
 	netA.tryConnect(addrB, gossipC)
 	// let the tryConnect go forward
-	time.Sleep(250 * time.Millisecond)
+	assert.Eventually(t, func() bool {
+		return len(netA.GetPeers(PeersConnectedOut)) == 2
+	}, time.Second, 50*time.Millisecond)
 
 	// A->B and A->C both open
 	assert.Equal(t, 0, len(netA.GetPeers(PeersConnectedIn)))
@@ -1453,7 +1456,10 @@ func TestPeeringWithIdentityChallenge(t *testing.T) {
 	assert.Equal(t, 2, netA.identityTracker.(*mockIdentityTracker).getInsertCount())
 
 	// netC has to wait for a final verification message over WS Handler, so pause a moment
-	time.Sleep(250 * time.Millisecond)
+	assert.Eventually(t, func() bool {
+		return netC.identityTracker.(*mockIdentityTracker).getSetCount() == 1
+	}, time.Second, 50*time.Millisecond)
+
 	assert.Equal(t, 1, netC.identityTracker.(*mockIdentityTracker).getSetCount())
 	assert.Equal(t, 1, netC.identityTracker.(*mockIdentityTracker).getInsertCount())
 
@@ -1481,8 +1487,6 @@ func TestPeeringSenderIdentityChallengeOnly(t *testing.T) {
 
 	addrA, ok := netA.Address()
 	require.True(t, ok)
-	gossipA, err := netA.addrToGossipAddr(addrA)
-	require.NoError(t, err)
 
 	addrB, ok := netB.Address()
 	require.True(t, ok)
@@ -1493,12 +1497,16 @@ func TestPeeringSenderIdentityChallengeOnly(t *testing.T) {
 	addrA = hostAndPort(addrA)
 	addrB = hostAndPort(addrB)
 
+	assert.Equal(t, 0, len(netA.GetPeers(PeersConnectedOut)))
+	assert.Equal(t, 0, len(netB.GetPeers(PeersConnectedIn)))
+
 	// first connection should work just fine
 	if _, ok := netA.tryConnectReserveAddr(addrB); ok {
 		netA.wg.Add(1)
 		netA.tryConnect(addrB, gossipB)
-		// let the tryConnect go forward
-		time.Sleep(250 * time.Millisecond)
+		assert.Eventually(t, func() bool {
+			return len(netA.GetPeers(PeersConnectedOut)) == 1
+		}, time.Second, 50*time.Millisecond)
 	}
 	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedOut)))
 	assert.Equal(t, 1, len(netB.GetPeers(PeersConnectedIn)))
@@ -1507,18 +1515,15 @@ func TestPeeringSenderIdentityChallengeOnly(t *testing.T) {
 	assert.Equal(t, 0, netA.identityTracker.(*mockIdentityTracker).getSetCount())
 	assert.Equal(t, 0, netB.identityTracker.(*mockIdentityTracker).getSetCount())
 
-	// bi-directional connection should also work
-	if _, ok := netB.tryConnectReserveAddr(addrA); ok {
-		netB.wg.Add(1)
-		netB.tryConnect(addrA, gossipA)
-		// let the tryConnect go forward
-		time.Sleep(250 * time.Millisecond)
-	}
-	// the nodes are connected redundantly
-	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedIn)))
+	// bi-directional connection does not work because netA advertises its public address
+	_, ok = netB.tryConnectReserveAddr(addrA)
+	assert.False(t, ok)
+
+	// no redundant connections
+	assert.Equal(t, 0, len(netA.GetPeers(PeersConnectedIn)))
 	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedOut)))
 	assert.Equal(t, 1, len(netB.GetPeers(PeersConnectedIn)))
-	assert.Equal(t, 1, len(netB.GetPeers(PeersConnectedOut)))
+	assert.Equal(t, 0, len(netB.GetPeers(PeersConnectedOut)))
 	// confirm identity map was not added to for either host
 	assert.Equal(t, 0, netA.identityTracker.(*mockIdentityTracker).getSetCount())
 	assert.Equal(t, 0, netB.identityTracker.(*mockIdentityTracker).getSetCount())
@@ -1558,12 +1563,15 @@ func TestPeeringReceiverIdentityChallengeOnly(t *testing.T) {
 	addrA = hostAndPort(addrA)
 	addrB = hostAndPort(addrB)
 
+	assert.Equal(t, 0, len(netA.GetPeers(PeersConnectedOut)))
 	// first connection should work just fine
 	if _, ok := netA.tryConnectReserveAddr(addrB); ok {
 		netA.wg.Add(1)
 		netA.tryConnect(addrB, gossipB)
 		// let the tryConnect go forward
-		time.Sleep(250 * time.Millisecond)
+		assert.Eventually(t, func() bool {
+			return len(netA.GetPeers(PeersConnectedOut)) == 1
+		}, time.Second, 50*time.Millisecond)
 	}
 	// single A->B connection
 	assert.Equal(t, 0, len(netA.GetPeers(PeersConnectedIn)))
@@ -1580,7 +1588,9 @@ func TestPeeringReceiverIdentityChallengeOnly(t *testing.T) {
 		netB.wg.Add(1)
 		netB.tryConnect(addrA, gossipA)
 		// let the tryConnect go forward
-		time.Sleep(250 * time.Millisecond)
+		assert.Eventually(t, func() bool {
+			return len(netB.GetPeers(PeersConnectedOut)) == 1
+		}, time.Second, 50*time.Millisecond)
 	}
 	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedIn)))
 	assert.Equal(t, 1, len(netA.GetPeers(PeersConnectedOut)))
@@ -1591,7 +1601,7 @@ func TestPeeringReceiverIdentityChallengeOnly(t *testing.T) {
 	assert.Equal(t, 0, netB.identityTracker.(*mockIdentityTracker).getSetCount())
 }
 
-// TestPeeringIncorrectDeduplicationName  confirm that if the reciever can't match
+// TestPeeringIncorrectDeduplicationName confirm that if the reciever can't match
 // the Address in the challenge to its PublicAddress, identities aren't exchanged, but peering continues
 func TestPeeringIncorrectDeduplicationName(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -1625,12 +1635,15 @@ func TestPeeringIncorrectDeduplicationName(t *testing.T) {
 	addrA = hostAndPort(addrA)
 	addrB = hostAndPort(addrB)
 
+	assert.Equal(t, 0, len(netA.GetPeers(PeersConnectedOut)))
 	// first connection should work just fine
 	if _, ok := netA.tryConnectReserveAddr(addrB); ok {
 		netA.wg.Add(1)
 		netA.tryConnect(addrB, gossipB)
 		// let the tryConnect go forward
-		time.Sleep(250 * time.Millisecond)
+		assert.Eventually(t, func() bool {
+			return len(netA.GetPeers(PeersConnectedOut)) == 1
+		}, time.Second, 50*time.Millisecond)
 	}
 	// single A->B connection
 	assert.Equal(t, 0, len(netA.GetPeers(PeersConnectedIn)))
@@ -1643,14 +1656,18 @@ func TestPeeringIncorrectDeduplicationName(t *testing.T) {
 	assert.Equal(t, 0, netA.identityTracker.(*mockIdentityTracker).getSetCount())
 	assert.Equal(t, 0, netB.identityTracker.(*mockIdentityTracker).getSetCount())
 
-	// bi-directional connection should also work
+	// bi-directional connection would now work since netB detects to be connected to netA in tryConnectReserveAddr,
+	// so force it.
 	// this second connection should set identities, because the reciever address matches now
-	if _, ok := netB.tryConnectReserveAddr(addrA); ok {
-		netB.wg.Add(1)
-		netB.tryConnect(addrA, gossipA)
-		// let the tryConnect go forward
-		time.Sleep(250 * time.Millisecond)
-	}
+	_, ok = netB.tryConnectReserveAddr(addrA)
+	assert.False(t, ok)
+	netB.wg.Add(1)
+	netB.tryConnect(addrA, gossipA)
+	// let the tryConnect go forward
+	assert.Eventually(t, func() bool {
+		return len(netB.GetPeers(PeersConnectedOut)) == 1
+	}, time.Second, 50*time.Millisecond)
+
 	// confirm that at this point the identityTracker was called once per network
 	//	and inserted once per network
 	assert.Equal(t, 1, netA.identityTracker.(*mockIdentityTracker).getSetCount())
@@ -1982,14 +1999,13 @@ func TestPeeringWithBadIdentityVerification(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	type testCase struct {
-		name            string
-		verifyResponse  func(t *testing.T, h http.Header, c identityChallengeValue) (crypto.PublicKey, []byte, error)
-		totalInA        int
-		totalOutA       int
-		totalInB        int
-		totalOutB       int
-		additionalSleep time.Duration
-		occupied        bool
+		name           string
+		verifyResponse func(t *testing.T, h http.Header, c identityChallengeValue) (crypto.PublicKey, []byte, error)
+		totalInA       int
+		totalOutA      int
+		totalInB       int
+		totalOutB      int
+		occupied       bool
 	}
 
 	testCases := []testCase{
@@ -2602,7 +2618,7 @@ func TestSlowPeerDisconnection(t *testing.T) {
 		peers, _ = netA.peerSnapshot(peers)
 		if len(peers) == 0 || peers[0] != peer {
 			// make sure it took more than 1 second, and less than 5 seconds.
-			waitTime := time.Now().Sub(beforeLoopTime)
+			waitTime := time.Since(beforeLoopTime)
 			require.LessOrEqual(t, int64(time.Second), int64(waitTime))
 			require.GreaterOrEqual(t, int64(5*time.Second), int64(waitTime))
 			break
@@ -2895,7 +2911,7 @@ func TestWebsocketNetworkMessageOfInterest(t *testing.T) {
 	netB.config.EnablePingHandler = false
 	addrA, postListen := netA.Address()
 	require.True(t, postListen)
-	t.Log(addrA)
+	t.Logf("netA %s", addrA)
 	netB.phonebook.ReplacePeerList([]string{addrA}, "default", PhoneBookEntryRelayRole)
 
 	// have netB asking netA to send it ft2, deregister ping handler to make sure that we aren't exceeding the maximum MOI messagesize
@@ -2905,6 +2921,8 @@ func TestWebsocketNetworkMessageOfInterest(t *testing.T) {
 
 	netB.Start()
 	defer netStop(t, netB, "B")
+	addrB, _ := netB.Address()
+	t.Logf("netB %s", addrB)
 
 	incomingMsgSync := deadlock.Mutex{}
 	msgCounters := make(map[protocol.Tag]int)
@@ -3652,7 +3670,7 @@ func BenchmarkVariableTransactionMessageBlockSizes(t *testing.B) {
 				netB.Broadcast(context.Background(), protocol.TxnTag, dataBuffer, true, nil)
 				<-msgProcessed
 			}
-			deltaTime := time.Now().Sub(startTime)
+			deltaTime := time.Since(startTime)
 			rate = float64(t.N) * float64(time.Second) / float64(deltaTime)
 			t.ReportMetric(rate, "txn/sec")
 		})
@@ -3794,7 +3812,6 @@ func TestWebsocketNetworkTelemetryTCP(t *testing.T) {
 type mockServer struct {
 	*httptest.Server
 	URL string
-	t   *testing.T
 
 	waitForClientClose bool
 }
@@ -3845,7 +3862,7 @@ func (t mockHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	wr.Close()
 
-	for true {
+	for {
 		// echo a message back to the client
 		_, _, err := ws.NextReader()
 		if err != nil {
@@ -4002,7 +4019,7 @@ func TestDiscardUnrequestedBlockResponse(t *testing.T) {
 	require.Eventually(t, func() bool { return netA.NumPeers() == 1 }, 500*time.Millisecond, 25*time.Millisecond)
 
 	// send an unrequested block response
-	msg := make([]sendMessage, 1, 1)
+	msg := make([]sendMessage, 1)
 	msg[0] = sendMessage{
 		data:         append([]byte(protocol.TopicMsgRespTag), []byte("foo")...),
 		enqueued:     time.Now(),

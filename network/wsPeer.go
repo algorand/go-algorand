@@ -360,6 +360,7 @@ func makePeerCore(ctx context.Context, net GossipNode, log logging.Logger, readB
 }
 
 // GetAddress returns the root url to use to connect to this peer.
+// This implements HTTPPeer interface and used by external services to determine where to connect to.
 // TODO: should GetAddress be added to Peer interface?
 func (wp *wsPeerCore) GetAddress() string {
 	return wp.rootURL
@@ -404,7 +405,16 @@ func (wp *wsPeer) RoutingAddr() []byte {
 		return true
 	}
 
-	ip := wp.IPAddr()
+	var ip []byte
+	// originAddress is set for incoming connections
+	// and optionally includes reverse proxy support.
+	// see RequestTracker.getForwardedConnectionAddress for details.
+	if wp.wsPeerCore.originAddress != "" {
+		ip = net.ParseIP(wp.wsPeerCore.originAddress)
+	} else {
+		ip = wp.IPAddr()
+	}
+
 	if len(ip) != net.IPv6len {
 		return ip
 	}

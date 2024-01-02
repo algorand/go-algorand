@@ -283,16 +283,26 @@ type TransactionTrace struct {
 	ApprovalProgramTrace []OpcodeTraceUnit
 	// ApprovalProgramHash stands for the hash digest of approval program bytecode executed during simulation
 	ApprovalProgramHash crypto.Digest
+
 	// ClearStateProgramTrace stands for a slice of OpcodeTraceUnit over application call on clear-state program
 	ClearStateProgramTrace []OpcodeTraceUnit
 	// ClearStateProgramHash stands for the hash digest of clear state program bytecode executed during simulation
 	ClearStateProgramHash crypto.Digest
+	// ClearStateRollback, if true, indicates that the clear state program failed and any persistent state changes
+	// it produced should be reverted once the program exits.
+	ClearStateRollback bool
+	// ClearStateRollbackError contains the error message explaining why the clear state program failed. This
+	// field will only be populated if ClearStateRollback is true and the failure was due to an execution error.
+	ClearStateRollbackError string
+
 	// LogicSigTrace contains the trace for a logicsig evaluation, if the transaction is approved by a logicsig.
 	LogicSigTrace []OpcodeTraceUnit
 	// LogicSigHash stands for the hash digest of logic sig bytecode executed during simulation
 	LogicSigHash crypto.Digest
+
 	// programTraceRef points to one of ApprovalProgramTrace, ClearStateProgramTrace, and LogicSigTrace during simulation.
 	programTraceRef *[]OpcodeTraceUnit
+
 	// InnerTraces contains the traces for inner transactions, if this transaction spawned any. This
 	// object only contains traces for inners that are immediate children of this transaction.
 	// Grandchild traces will be present inside the TransactionTrace of their parent.

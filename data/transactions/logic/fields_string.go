@@ -110,12 +110,13 @@ func _() {
 	_ = x[CallerApplicationAddress-14]
 	_ = x[AssetCreateMinBalance-15]
 	_ = x[AssetOptInMinBalance-16]
-	_ = x[invalidGlobalField-17]
+	_ = x[GenesisHash-17]
+	_ = x[invalidGlobalField-18]
 }
 
-const _GlobalField_name = "MinTxnFeeMinBalanceMaxTxnLifeZeroAddressGroupSizeLogicSigVersionRoundLatestTimestampCurrentApplicationIDCreatorAddressCurrentApplicationAddressGroupIDOpcodeBudgetCallerApplicationIDCallerApplicationAddressAssetCreateMinBalanceAssetOptInMinBalanceinvalidGlobalField"
+const _GlobalField_name = "MinTxnFeeMinBalanceMaxTxnLifeZeroAddressGroupSizeLogicSigVersionRoundLatestTimestampCurrentApplicationIDCreatorAddressCurrentApplicationAddressGroupIDOpcodeBudgetCallerApplicationIDCallerApplicationAddressAssetCreateMinBalanceAssetOptInMinBalanceGenesisHashinvalidGlobalField"
 
-var _GlobalField_index = [...]uint16{0, 9, 19, 29, 40, 49, 64, 69, 84, 104, 118, 143, 150, 162, 181, 205, 226, 246, 264}
+var _GlobalField_index = [...]uint16{0, 9, 19, 29, 40, 49, 64, 69, 84, 104, 118, 143, 150, 162, 181, 205, 226, 246, 257, 275}
 
 func (i GlobalField) String() string {
 	if i >= GlobalField(len(_GlobalField_index)-1) {

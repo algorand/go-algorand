@@ -98,7 +98,7 @@ func (a *debuggerEvalTracerAdaptor) BeforeOpcode(cx *EvalContext) {
 }
 
 // AfterProgram invokes the debugger's Complete hook
-func (a *debuggerEvalTracerAdaptor) AfterProgram(cx *EvalContext, evalError error) {
+func (a *debuggerEvalTracerAdaptor) AfterProgram(cx *EvalContext, pass bool, evalError error) {
 	if a.txnDepth > 0 {
 		// only report updates for top-level transactions, for backwards compatibility
 		return
