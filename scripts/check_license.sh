@@ -30,7 +30,7 @@ EXCLUDE=(
 )
 FILTER=$(IFS="|" ; echo "${EXCLUDE[*]}")
 INPLACE=false
-UPGRADE=false
+UPDATE=false
 VERBOSE=false
 MOD_COUNT=0
 RETURN_VALUE=0
@@ -42,7 +42,7 @@ usage() {
     echo
     echo "Args:"
     echo "-i    Edit in-place."
-    echo "-u    Upgrade license to current year."
+    echo "-u    Update license to current year."
     echo "-v    Verbose, same as doing \`head -n ${NUMLINES:-15}\` on each file."
     echo
 }
@@ -56,7 +56,7 @@ while [ "$1" != "" ]; do
             INPLACE=true
             ;;
         -u)
-            UPGRADE=true
+            UPDATE=true
             ;;
         -v) VERBOSE=true
             ;;
@@ -81,7 +81,7 @@ for FILE in $VERSIONED_GO_FILES; do
             RETURN_VALUE=1
 
             if ! $VERBOSE; then
-                if $UPGRADE; then
+                if $UPDATE; then
                     sed -i.orig s/Copyright\ \(C\)\ 2019-....\ Algorand,\ Inc\./Copyright\ \(C\)\ 2019-$CURRENT_YEAR\ Algorand,\ Inc./ "$PROJECT_ROOT/$FILE" && \
                         rm "$PROJECT_ROOT/$FILE".orig
                     ((MOD_COUNT++))
@@ -105,11 +105,12 @@ for FILE in "${EXTRA_FILES[@]}"; do
     if ! grep -qs "Copyright (C) 2019-$CURRENT_YEAR Algorand, Inc." "$PROJECT_ROOT/$FILE"; then
         RETURN_VALUE=1
         if ! $VERBOSE; then
-            if $UPGRADE; then
+            if $UPDATE; then
                 sed -i.orig s/Copyright\ \(C\)\ 2019-....\ Algorand,\ Inc\./Copyright\ \(C\)\ 2019-$CURRENT_YEAR\ Algorand,\ Inc./ "$PROJECT_ROOT/$FILE" && \
                     rm "$PROJECT_ROOT/$FILE".orig
                 ((MOD_COUNT++))
             fi
+            # It's dangerous to do inplace updates of non-go files, because their format might be different
             echo "$FILE"
         else
             echo -e "\n${RED_FG}$FILE${END_FG_COLOR}"
@@ -124,7 +125,7 @@ READMECOPYRIGHT="Copyright (C) 2019-$CURRENT_YEAR, Algorand Inc."
 if [ "$(<README.md grep -c "${READMECOPYRIGHT}" | tr -d ' ')" = "0" ]; then
     RETURN_VALUE=1
     if ! $VERBOSE; then
-        if $UPGRADE; then
+        if $UPDATE; then
             sed -i.orig s/Copyright\ \(C\)\ 2019-....,\ Algorand\ Inc\./Copyright\ \(C\)\ 2019-$CURRENT_YEAR,\ Algorand\ Inc./ README.md &&
                 rm README.md.orig
             ((MOD_COUNT++))
@@ -139,8 +140,8 @@ fi
 
 if [ $RETURN_VALUE -ne 0 ]; then
     echo -e "\n${RED_FG}FAILED LICENSE CHECK.${END_FG_COLOR}"
-    if [ $INPLACE == "false" ] && [ $UPGRADE == "false" ]; then
-        echo -e "Use 'check_license.sh -u' to fix."
+    if [ $INPLACE == "false" ] && [ $UPDATE == "false" ]; then
+        echo -e "Use 'check_license -i' to install to new files, 'check_license.sh -u' to update year."
     else
         echo "Modified $MOD_COUNT file(s)."
     fi
