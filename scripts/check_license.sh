@@ -104,12 +104,18 @@ done
 for FILE in "${EXTRA_FILES[@]}"; do
     if ! grep -qs "Copyright (C) 2019-$CURRENT_YEAR Algorand, Inc." "$PROJECT_ROOT/$FILE"; then
         RETURN_VALUE=1
-        if $UPGRADE; then
-            sed -i.orig s/Copyright\ \(C\)\ 2019-....\ Algorand,\ Inc\./Copyright\ \(C\)\ 2019-$CURRENT_YEAR\ Algorand,\ Inc./ "$PROJECT_ROOT/$FILE" && \
-                rm "$PROJECT_ROOT/$FILE".orig
-            ((MOD_COUNT++))
+        if ! $VERBOSE; then
+            if $UPGRADE; then
+                sed -i.orig s/Copyright\ \(C\)\ 2019-....\ Algorand,\ Inc\./Copyright\ \(C\)\ 2019-$CURRENT_YEAR\ Algorand,\ Inc./ "$PROJECT_ROOT/$FILE" && \
+                    rm "$PROJECT_ROOT/$FILE".orig
+                ((MOD_COUNT++))
+            fi
+            echo "$FILE"
+        else
+            echo -e "\n${RED_FG}$FILE${END_FG_COLOR}"
+            <"$PROJECT_ROOT/$FILE" head -n "$NUMLINES"
+            echo
         fi
-        echo "$FILE"
     fi
 done
 
@@ -118,16 +124,23 @@ READMECOPYRIGHT="Copyright (C) 2019-$CURRENT_YEAR, Algorand Inc."
 if [ "$(<README.md grep -c "${READMECOPYRIGHT}" | tr -d ' ')" = "0" ]; then
     RETURN_VALUE=1
     echo "README.md file need to have its license date range updated."
-    if $UPGRADE; then
-        sed -i.orig s/Copyright\ \(C\)\ 2019-....,\ Algorand\ Inc\./Copyright\ \(C\)\ 2019-$CURRENT_YEAR,\ Algorand\ Inc./ README.md &&
-            rm README.md.orig
-        ((MOD_COUNT++))
+    if ! $VERBOSE; then
+        if $UPGRADE; then
+            sed -i.orig s/Copyright\ \(C\)\ 2019-....,\ Algorand\ Inc\./Copyright\ \(C\)\ 2019-$CURRENT_YEAR,\ Algorand\ Inc./ README.md &&
+                rm README.md.orig
+            ((MOD_COUNT++))
+        fi
+        echo "README.md"
+    else
+        echo -e "\n${RED_FG}README.md${END_FG_COLOR}"
+        grep 'Copyright (C) 2019' README.md
+        echo
     fi
 fi
 
 if [ $RETURN_VALUE -ne 0 ]; then
     echo -e "\n${RED_FG}FAILED LICENSE CHECK.${END_FG_COLOR}"
-    if [ $INPLACE == "false" ]; then
+    if [ $INPLACE == "false" ] && [ $UPGRADE == "false" ]; then
         echo -e "Use 'check_license.sh -u' to fix."
     else
         echo "Modified $MOD_COUNT file(s)."
