@@ -89,7 +89,12 @@ func (dr *DryrunRequest) ExpandSources() error {
 	for i, s := range dr.Sources {
 		ops, err := logic.AssembleString(s.Source)
 		if err != nil {
-			return fmt.Errorf("dryrun Source[%d]: %v", i, err)
+			if len(ops.Errors) <= 1 {
+				return fmt.Errorf("dryrun Source[%d]: %w", i, err)
+			}
+			var sb strings.Builder
+			ops.ReportMultipleErrors("", &sb)
+			return fmt.Errorf("dryrun Source[%d]: %d errors\n%s", i, len(ops.Errors), sb.String())
 		}
 		switch s.FieldName {
 		case "lsig":
