@@ -92,7 +92,7 @@ if [ "$(<README.md grep -c "${READMECOPYRIGHT}" | tr -d ' ')" = "0" ]; then
     RETURN_VALUE=1
     echo "README.md file need to have its license date range updated."
     if $UPGRADE; then
-        sed -i.orig s/Copyright\ \(C\)\ 2019-....\ Algorand,\ Inc\./Copyright\ \(C\)\ 2019-$CURRENT_YEAR\ Algorand,\ Inc./ README.md &&
+        sed -i.orig s/Copyright\ \(C\)\ 2019-....,\ Algorand\ Inc\./Copyright\ \(C\)\ 2019-$CURRENT_YEAR,\ Algorand\ Inc./ README.md &&
             rm README.md.orig
     fi
 fi
