@@ -17,6 +17,7 @@ EXCLUDE=(
 )
 FILTER=$(IFS="|" ; echo "${EXCLUDE[*]}")
 INPLACE=false
+UPGRADE=false
 VERBOSE=false
 MOD_COUNT=0
 RETURN_VALUE=0
