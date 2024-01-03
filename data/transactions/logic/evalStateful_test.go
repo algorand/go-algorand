@@ -31,7 +31,6 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/serr"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -834,7 +833,7 @@ byte 0x01020300; store 15		// store a bytes
 int 100; byte 0x0201; == // types mismatch so this will fail
 `)
 	_, err := testApp(t, badsource, nil, "cannot compare")
-	attrs := serr.Attributes(err)
+	attrs := basics.Attributes(err)
 	zeros := [256]int{}
 	scratch := convertSlice(zeros[:], func(i int) any { return uint64(i) })
 	scratch[10] = uint64(5)
@@ -842,6 +841,7 @@ int 100; byte 0x0201; == // types mismatch so this will fail
 	require.Equal(t, map[string]any{
 		"pc":          26,
 		"group-index": 0,
+		"app-index":   basics.AppIndex(888),
 		"eval-states": []evalState{
 			{
 				Logs:    [][]byte{{0x04, 0x04, 0x00, 0x04}},
@@ -864,10 +864,11 @@ int 1
 	gscratch[3] = []byte("jj")
 
 	_, err = testApps(t, []string{goodsource, badsource}, nil, nil, nil, exp(1, "cannot compare"))
-	attrs = serr.Attributes(err)
+	attrs = basics.Attributes(err)
 	require.Equal(t, map[string]any{
 		"pc":          26,
 		"group-index": 1,
+		"app-index":   basics.AppIndex(888),
 		"eval-states": []evalState{
 			{
 				Logs: [][]byte{
@@ -900,10 +901,11 @@ itxn_field ClearStateProgram
 itxn_submit
 `
 	_, err = testApps(t, []string{goodsource, innerFailSource}, nil, nil, ledger, exp(1, "inner tx 0 failed"))
-	attrs = serr.Attributes(err)
+	attrs = basics.Attributes(err)
 	require.Equal(t, map[string]any{
 		"pc":          45,
 		"group-index": 1,
+		"app-index":   basics.AppIndex(888),
 		"eval-states": []evalState{
 			{
 				Logs: [][]byte{
@@ -916,10 +918,11 @@ itxn_submit
 				Stack: []any{uint64(777)},
 			},
 		},
-		"inner-msg": "logic eval error: cannot compare (uint64 to []byte). Details: pc=26, opcodes=pushint 100; pushbytes 0x0201 // 0x0201; ==",
+		"inner-msg": "logic eval error: cannot compare (uint64 to []byte). Details: app=5000 pc=26, opcodes=pushint 100; pushbytes 0x0201 // 0x0201; ==",
 		"inner-attrs": map[string]any{
 			"pc":          26,
 			"group-index": 0,
+			"app-index":   basics.AppIndex(firstTestID),
 			"eval-states": []evalState{
 				{
 					Logs:    [][]byte{{0x04, 0x04, 0x00, 0x04}},

@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package serr
+package basics
 
 import (
 	"errors"
@@ -66,7 +66,7 @@ func TestAnnotate(t *testing.T) {
 }
 
 func attribute(err error, name string) any {
-	var serr *Error
+	var serr *SError
 	if ok := errors.As(err, &serr); ok {
 		return serr.Attrs[name]
 	}

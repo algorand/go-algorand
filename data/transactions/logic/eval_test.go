@@ -38,7 +38,6 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/serr"
 	"github.com/algorand/go-algorand/test/partitiontest"
 
 	"pgregory.net/rapid"
@@ -2779,7 +2778,7 @@ byte 0x01020300; store 15		// store a bytes
 int 100; byte 0x0201; == // types mismatch so this will fail
 `)
 	err := testPanics(t, badsource, 1, "cannot compare")
-	attrs := serr.Attributes(err)
+	attrs := basics.Attributes(err)
 	zeros := [256]int{}
 	scratch := convertSlice(zeros[:], func(i int) any { return uint64(i) })
 	scratch[10] = uint64(5)
@@ -2805,7 +2804,7 @@ int 1
 	gscratch[3] = []byte("jj")
 
 	err = testLogics(t, []string{goodsource, badsource}, nil, nil, exp(1, "cannot compare"))
-	attrs = serr.Attributes(err)
+	attrs = basics.Attributes(err)
 	require.Equal(t, map[string]any{
 		"pc":          19,
 		"group-index": 1,
@@ -4617,7 +4616,7 @@ func testEvaluation(t *testing.T, program string, introduced uint64, tester eval
 					isNotPanic(t, err) // Never want a Go level panic.
 					if err != nil {
 						// Use `outer` wisely. It could return any of the concurrent runs' errors.
-						var se *serr.Error
+						var se *basics.SError
 						require.ErrorAs(t, err, &se)
 						var ee EvalError
 						require.ErrorAs(t, err, &ee)

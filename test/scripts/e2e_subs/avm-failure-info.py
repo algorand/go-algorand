@@ -44,6 +44,7 @@ j = json.loads(response)
 print(j)
 assert j['data']['pc'] == 45
 assert j['data']['group-index'] == 0
+assert j['data']['app-index'] > 1000
 assert j['data']['eval-states'][0]['scratch'][10] == 7
 assert j['data']['eval-states'][0]['scratch'][12] == 'SgABSv4='
 assert j['data']['eval-states'][0]['stack'] == [42, 'SgEASvo=', 1, 2]

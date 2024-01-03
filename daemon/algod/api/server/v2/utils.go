@@ -40,14 +40,13 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/serr"
 )
 
 // returnError logs an internal message while returning the encoded response.
 func returnError(ctx echo.Context, code int, internal error, external string, logger logging.Logger) error {
 	logger.Info(internal)
 	var data *map[string]any
-	var se *serr.Error
+	var se *basics.SError
 	if errors.As(internal, &se) {
 		data = &se.Attrs
 	}

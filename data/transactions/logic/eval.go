@@ -40,7 +40,6 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/serr"
 )
 
 // The constants below control opcode evaluation and MAY NOT be changed without
@@ -1010,12 +1009,16 @@ func (cx *EvalContext) evalError(err error) error {
 	pc, det := cx.pcDetails()
 	details := fmt.Sprintf("pc=%d, opcodes=%s", pc, det)
 
-	return EvalError{
-		serr.Annotate(err, "pc", pc, "group-index", cx.groupIndex,
-			"eval-states", cx.evalStates()),
-		details,
-		cx.runMode == ModeSig,
+	serr := basics.Annotate(err,
+		"pc", pc,
+		"group-index", cx.groupIndex,
+		"eval-states", cx.evalStates())
+	if cx.runMode == ModeApp {
+		details = fmt.Sprintf("app=%d %s", cx.appID, details)
+		basics.Annotate(serr, "app-index", cx.appID)
 	}
+
+	return EvalError{serr, details, cx.runMode == ModeSig}
 }
 
 type evalState struct {
@@ -5627,7 +5630,7 @@ func opItxnSubmit(cx *EvalContext) (err error) {
 		}
 
 		if err != nil {
-			return serr.Wrap(err, fmt.Sprintf("inner tx %d failed: %s", i, err.Error()), "inner")
+			return basics.Wrap(err, fmt.Sprintf("inner tx %d failed: %s", i, err.Error()), "inner")
 		}
 
 		// This is mostly a no-op, because Perform does its work "in-place", but

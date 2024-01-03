@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package serr
+package basics
 
 import (
 	"errors"
@@ -23,10 +23,10 @@ import (
 	"golang.org/x/exp/slog"
 )
 
-// Error is a structured error object. It contains a message and an arbitrary
+// SError is a structured error object. It contains a message and an arbitrary
 // set of attributes. If the message contains "%A", it will be replaced by the
-// attributes (in no guaranteed order), when Error() is called.
-type Error struct {
+// attributes (in no guaranteed order), when SError() is called.
+type SError struct {
 	Msg     string
 	Attrs   map[string]any
 	Wrapped error
@@ -35,17 +35,17 @@ type Error struct {
 // New creates a new structured error object using the supplied message and
 // attributes. If the message contains "%A", it will be replaced by the
 // attributes when Error() is called.
-func New(msg string, pairs ...any) *Error {
+func New(msg string, pairs ...any) *SError {
 	attrs := make(map[string]any, len(pairs)/2)
 	for i := 0; i < len(pairs); i += 2 {
 		attrs[pairs[i].(string)] = pairs[i+1]
 	}
-	return &Error{Msg: msg, Attrs: attrs}
+	return &SError{Msg: msg, Attrs: attrs}
 }
 
 // Error returns either the exact supplied message, or the serialized attributes if
 // the supplied message was blank, or substituted for %A.
-func (e *Error) Error() string {
+func (e *SError) Error() string {
 	if e.Msg == "" {
 		return e.AttributesAsString()
 	}
@@ -58,7 +58,7 @@ func (e *Error) Error() string {
 
 // AttributesAsString returns the attributes the same way that slog serializes
 // attributes to text in a log message, in no guaranteed order.
-func (e *Error) AttributesAsString() string {
+func (e *SError) AttributesAsString() string {
 	var buf strings.Builder
 	args := make([]any, 0, 2*len(e.Attrs))
 	for key, val := range e.Attrs {
@@ -80,7 +80,7 @@ func Annotate(err error, pairs ...any) error {
 	if err == nil {
 		return nil
 	}
-	var serr *Error
+	var serr *SError
 	if ok := errors.As(err, &serr); ok {
 		for i := 0; i < len(pairs); i += 2 {
 			serr.Attrs[pairs[i].(string)] = pairs[i+1]
@@ -103,7 +103,7 @@ func Wrap(err error, msg string, field string, pairs ...any) error {
 	}
 	serr.Wrapped = err
 
-	var inner *Error
+	var inner *SError
 	if ok := errors.As(err, &inner); ok {
 		attributes := make(map[string]any, len(inner.Attrs))
 		for key, val := range inner.Attrs {
@@ -116,13 +116,13 @@ func Wrap(err error, msg string, field string, pairs ...any) error {
 }
 
 // Unwrap returns the inner error, if it exists.
-func (e *Error) Unwrap() error {
+func (e *SError) Unwrap() error {
 	return e.Wrapped
 }
 
 // Attributes returns the attributes of a structured error, or nil/empty.
 func Attributes(err error) map[string]any {
-	var se *Error
+	var se *SError
 	if errors.As(err, &se) {
 		return se.Attrs
 	}
