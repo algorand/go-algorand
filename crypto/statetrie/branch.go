@@ -30,7 +30,7 @@ type branchNode struct {
 	hash      crypto.Digest
 }
 
-// makeBranchNode creates a branch node with the provided children nodes, valueHash, 
+// makeBranchNode creates a branch node with the provided children nodes, valueHash,
 // and full key.
 func makeBranchNode(children [16]node, valueHash crypto.Digest, key nibbles.Nibbles) *branchNode {
 	stats.makebranches++
@@ -166,7 +166,7 @@ func (bn *branchNode) getKey() nibbles.Nibbles {
 	return bn.key
 }
 
-// getHash gets the hash for this node.  If the hash has not been set by a 
+// getHash gets the hash for this node.  If the hash has not been set by a
 // hashing operation like branchNode.hashing, getHash will not calculate it
 // (instead it will return the empty hash, crypto.Digest{})
 func (bn *branchNode) getHash() *crypto.Digest {

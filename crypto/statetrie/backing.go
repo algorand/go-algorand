@@ -17,13 +17,13 @@
 package statetrie
 
 import (
-	"sync"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/statetrie/nibbles"
+	"sync"
 )
 
 // Backing nodes are placeholders for nodes that have been stored in the
-// backing store.  All we need is the full key of the node and its hash. 
+// backing store.  All we need is the full key of the node and its hash.
 type backingNode struct {
 	key  nibbles.Nibbles
 	hash crypto.Digest
@@ -48,7 +48,7 @@ func (ba *backingNode) setHash(hash crypto.Digest) {
 	ba.hash = hash
 }
 func (ba *backingNode) add(mt *Trie, pathKey nibbles.Nibbles, remainingKey nibbles.Nibbles, valueHash crypto.Digest) (node, error) {
-    // will be provided in the subsequent backing store PR
+	// will be provided in the subsequent backing store PR
 	return nil, nil
 }
 func (ba *backingNode) hashing() error {

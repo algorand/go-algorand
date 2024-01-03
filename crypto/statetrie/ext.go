@@ -30,8 +30,8 @@ type extensionNode struct {
 	hash      crypto.Digest
 }
 
-// makeExtensionNode creates a extension node with the provided shared prefix, 
-// next node, and full key in the trie. 
+// makeExtensionNode creates a extension node with the provided shared prefix,
+// next node, and full key in the trie.
 func makeExtensionNode(sharedKey nibbles.Nibbles, next node, key nibbles.Nibbles) *extensionNode {
 	stats.makeextensions++
 	en := &extensionNode{sharedKey: make(nibbles.Nibbles, len(sharedKey)), next: next, key: make(nibbles.Nibbles, len(key))}
@@ -49,14 +49,14 @@ func (en *extensionNode) add(mt *Trie, pathKey nibbles.Nibbles, remainingKey nib
 	//- EN.ADD.6: Modify the existing extension node shared key and point the child at the new branch node.
 	//- EN.ADD.7: Replace the extension node with the branch node created earlier.
 	//
-    //Codepaths:
+	//Codepaths:
 	//
-    //  * Codepath 1: EN.ADD.1
+	//  * Codepath 1: EN.ADD.1
 	//
 	//  This redirects the extension node to a new/existing node resulting from
 	//  performing the Add operation on the extension child.
 	//
-    //  * Codepaths 2 - 5: EN.ADD.2|EN.ADD.3 then EN.ADD.4|EN.ADD.5 then EN.ADD.6
+	//  * Codepaths 2 - 5: EN.ADD.2|EN.ADD.3 then EN.ADD.4|EN.ADD.5 then EN.ADD.6
 	//
 	//  This stores the current extension node child in either a new branch node
 	//  child slot or by creating a new extension node at a new key pointing at the
@@ -65,7 +65,7 @@ func (en *extensionNode) add(mt *Trie, pathKey nibbles.Nibbles, remainingKey nib
 	//  assigned, and another extension node is created to replace it pointed at the
 	//  branch node as its target.
 	//
-    //  * Codepaths 6 - 9: EN.ADD.2|EN.ADD.3 then EN.ADD.4|EN.ADD.5 then EN.ADD.7
+	//  * Codepaths 6 - 9: EN.ADD.2|EN.ADD.3 then EN.ADD.4|EN.ADD.5 then EN.ADD.7
 	//
 	//  Same as above, only the new branch node replaceds the existing extension node
 	//  outright, without the additional extension node.
@@ -201,7 +201,7 @@ func deserializeExtensionNode(data []byte, key nibbles.Nibbles) *extensionNode {
 		panic("data too short to be an extension node")
 	}
 
-	sharedKey := nibbles.Unpack(data[(1+crypto.DigestSize):], data[0] == 1)
+	sharedKey := nibbles.MakeNibbles(data[(1+crypto.DigestSize):], data[0] == 1)
 	if len(sharedKey) == 0 {
 		panic("sharedKey can't be empty in an extension node")
 	}
@@ -224,7 +224,7 @@ func (en *extensionNode) getKey() nibbles.Nibbles {
 	return en.key
 }
 
-// getHash gets the hash for this node.  If the hash has not been set by a 
+// getHash gets the hash for this node.  If the hash has not been set by a
 // hashing operation like extNode.hashing, getHash will not calculate it
 // (instead it will return the empty hash, crypto.Digest{})
 func (en *extensionNode) getHash() *crypto.Digest {

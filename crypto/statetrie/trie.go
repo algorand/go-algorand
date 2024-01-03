@@ -32,7 +32,7 @@ type Trie struct {
 	root node
 }
 
-// MakeTrie constructs a Trie 
+// MakeTrie constructs a Trie
 func MakeTrie() *Trie {
 	mt := &Trie{}
 	return mt
@@ -66,18 +66,18 @@ func (mt *Trie) Add(key nibbles.Nibbles, value []byte) (err error) {
 	}
 
 	if mt.root == nil {
-        // If there are no nodes in the trie, make a leaf node for this
-        // key/value pair and return.
+		// If there are no nodes in the trie, make a leaf node for this
+		// key/value pair and return.
 		stats.cryptohashes++
 		stats.newrootnode++
 		mt.root = makeLeafNode(key, crypto.Hash(value), nibbles.Nibbles{})
 		return nil
 	}
 
-    // Add the key/value pair to the trie, and replace the root node with the
-    // new modified node that results from the operation.  If the root node has 
-    // no hash, then the key/value pair resulted in a new root hash (i.e. it was
-    // not a duplicate key/value pair)
+	// Add the key/value pair to the trie, and replace the root node with the
+	// new modified node that results from the operation.  If the root node has
+	// no hash, then the key/value pair resulted in a new root hash (i.e. it was
+	// not a duplicate key/value pair)
 	stats.cryptohashes++
 	replacement, err := mt.root.add(mt, nibbles.Nibbles{}, key, crypto.Hash(value))
 	if err != nil {
@@ -87,7 +87,7 @@ func (mt *Trie) Add(key nibbles.Nibbles, value []byte) (err error) {
 		stats.newrootnode++
 	}
 
-    // Replace the root with the replacement node.
+	// Replace the root with the replacement node.
 	mt.root = replacement
 	return nil
 }

@@ -26,15 +26,15 @@ import (
 // Trie nodes
 
 type node interface {
-    // add to the trie the key (represented by pathKey + remainingKey) and the value (represented
-    // by valueHash) into the trie provided.
+	// add to the trie the key (represented by pathKey + remainingKey) and the value (represented
+	// by valueHash) into the trie provided.
 	add(mt *Trie, pathKey nibbles.Nibbles, remainingKey nibbles.Nibbles, valueHash crypto.Digest) (node, error)
 
-	hashing() error // calculate the hash of the node
+	hashing() error             // calculate the hash of the node
 	serialize() ([]byte, error) // serialize the node
-	getHash() *crypto.Digest // the hash of the node, if it has been hashed
+	getHash() *crypto.Digest    // the hash of the node, if it has been hashed
 	setHash(hash crypto.Digest) // set the hash of the node
-	getKey() nibbles.Nibbles // the key of the node in the trie
+	getKey() nibbles.Nibbles    // the key of the node in the trie
 }
 
 // First byte of a committed node indicates the type of node.
@@ -61,4 +61,3 @@ func deserializeNode(nbytes []byte, key nibbles.Nibbles) node {
 		panic(fmt.Sprintf("deserializeNode: invalid node type %d", nbytes[0]))
 	}
 }
-
