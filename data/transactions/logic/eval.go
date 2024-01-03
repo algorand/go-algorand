@@ -1009,16 +1009,16 @@ func (cx *EvalContext) evalError(err error) error {
 	pc, det := cx.pcDetails()
 	details := fmt.Sprintf("pc=%d, opcodes=%s", pc, det)
 
-	serr := basics.Annotate(err,
+	err = basics.Annotate(err,
 		"pc", pc,
 		"group-index", cx.groupIndex,
 		"eval-states", cx.evalStates())
 	if cx.runMode == ModeApp {
 		details = fmt.Sprintf("app=%d %s", cx.appID, details)
-		basics.Annotate(serr, "app-index", cx.appID)
+		err = basics.Annotate(err, "app-index", cx.appID)
 	}
 
-	return EvalError{serr, details, cx.runMode == ModeSig}
+	return EvalError{err, details, cx.runMode == ModeSig}
 }
 
 type evalState struct {
