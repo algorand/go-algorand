@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -131,6 +131,48 @@ func logResponse(t *testing.T, response *model.DryrunResponse) {
 
 var dryrunProtoVersion protocol.ConsensusVersion = protocol.ConsensusFuture
 var dryrunMakeLedgerProto protocol.ConsensusVersion = "dryrunMakeLedgerProto"
+
+func TestDryrunSources(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	goodSource := model.DryrunSource{
+		AppIndex:  1007,
+		FieldName: "approv",
+		Source: `#pragma version 10
+int 1`,
+	}
+	badSource := model.DryrunSource{
+		AppIndex:  1007,
+		FieldName: "approv",
+		Source: `#pragma version 10
+int 1
+pop
+fake_opcode
+int not_an_int`,
+	}
+
+	dr := DryrunRequest{
+		Sources: []model.DryrunSource{
+			goodSource,
+		},
+		Apps: []model.Application{
+			{
+				Id: 1007,
+			},
+		},
+	}
+	var response model.DryrunResponse
+
+	doDryrunRequest(&dr, &response)
+	require.Empty(t, response.Error)
+
+	dr.Sources[0] = badSource
+	doDryrunRequest(&dr, &response)
+	require.Contains(t, response.Error, "dryrun Source[0]: 2 errors")
+	require.Contains(t, response.Error, "4: unknown opcode: fake_opcode")
+	require.Contains(t, response.Error, "5:4: unable to parse \"not_an_int\" as integer")
+}
 
 func TestDryrunLogicSig(t *testing.T) {
 	partitiontest.PartitionTest(t)
