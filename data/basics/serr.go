@@ -26,6 +26,8 @@ import (
 // SError is a structured error object. It contains a message and an arbitrary
 // set of attributes. If the message contains "%A", it will be replaced by the
 // attributes (in no guaranteed order), when SError() is called.
+//
+//msgp:ignore SError
 type SError struct {
 	Msg     string
 	Attrs   map[string]any
