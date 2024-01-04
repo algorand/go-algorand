@@ -80,7 +80,9 @@ type txTail struct {
 	// lastValid, recent, lowWaterMark, roundTailHashes, roundTailSerializedDeltas and blockHeaderData.
 	tailMu deadlock.RWMutex
 
-	lastValid map[basics.Round]map[transactions.Txid]basics.Round // map tx.LastValid -> tx confirmed set
+	// lastValid allows looking up all of the transactions that expire in a given round.
+	// The map for an expiration round gives the round the transaction was originally confirmed, so it can be found for the /pending endpoint.
+	lastValid map[basics.Round]map[transactions.Txid]int16 // map tx.LastValid -> tx confirmed map: txid -> (last valid - confirmed) delta
 
 	// duplicate detection queries with LastValid before
 	// lowWaterMark are not guaranteed to succeed
@@ -115,7 +117,7 @@ func (t *txTail) loadFromDisk(l ledgerForTracker, dbRound basics.Round) error {
 	}
 
 	t.lowWaterMark = l.Latest()
-	t.lastValid = make(map[basics.Round]map[transactions.Txid]basics.Round)
+	t.lastValid = make(map[basics.Round]map[transactions.Txid]int16)
 	t.recent = make(map[basics.Round]roundLeases)
 
 	// the lastValid is a temporary map used during the execution of
@@ -177,9 +179,12 @@ func (t *txTail) loadFromDisk(l ledgerForTracker, dbRound basics.Round) error {
 
 	// add all the entries in roundsLastValids to their corresponding map entry in t.lastValid
 	for lastValid, list := range lastValid {
-		lastValueMap := make(map[transactions.Txid]basics.Round, len(list))
+		lastValueMap := make(map[transactions.Txid]int16, len(list))
 		for _, entry := range list {
-			lastValueMap[entry.txid] = entry.rnd
+			if lastValid < entry.rnd {
+				return fmt.Errorf("txTail: invalid lastValid %d / rnd %d for txid %s", lastValid, entry.rnd, entry.txid)
+			}
+			lastValueMap[entry.txid] = int16(lastValid - entry.rnd)
 		}
 		t.lastValid[lastValid] = lastValueMap
 	}
@@ -214,9 +219,10 @@ func (t *txTail) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 
 	for txid, txnInc := range delta.Txids {
 		if _, ok := t.lastValid[txnInc.LastValid]; !ok {
-			t.lastValid[txnInc.LastValid] = make(map[transactions.Txid]basics.Round)
+			t.lastValid[txnInc.LastValid] = make(map[transactions.Txid]int16)
 		}
-		t.lastValid[txnInc.LastValid][txid] = blk.BlockHeader.Round
+		deltaR := int16(txnInc.LastValid - blk.BlockHeader.Round)
+		t.lastValid[txnInc.LastValid][txid] = deltaR
 
 		tail.TxnIDs[txnInc.Intra] = txid
 		tail.LastValid[txnInc.Intra] = txnInc.LastValid
@@ -390,9 +396,9 @@ func (t *txTail) checkConfirmed(txid transactions.Txid) (basics.Round, bool) {
 	t.tailMu.RLock()
 	defer t.tailMu.RUnlock()
 
-	for _, lastValid := range t.lastValid {
-		if rnd, confirmed := lastValid[txid]; confirmed {
-			return rnd, true
+	for lastValidRound, lastValid := range t.lastValid {
+		if deltaR, confirmed := lastValid[txid]; confirmed {
+			return lastValidRound + basics.Round(deltaR), true
 		}
 	}
 	return 0, false
