@@ -80,7 +80,7 @@ type txTail struct {
 	// lastValid, recent, lowWaterMark, roundTailHashes, roundTailSerializedDeltas and blockHeaderData.
 	tailMu deadlock.RWMutex
 
-	lastValid map[basics.Round]map[transactions.Txid]struct{} // map tx.LastValid -> tx confirmed set
+	lastValid map[basics.Round]map[transactions.Txid]basics.Round // map tx.LastValid -> tx confirmed set
 
 	// duplicate detection queries with LastValid before
 	// lowWaterMark are not guaranteed to succeed
@@ -115,14 +115,18 @@ func (t *txTail) loadFromDisk(l ledgerForTracker, dbRound basics.Round) error {
 	}
 
 	t.lowWaterMark = l.Latest()
-	t.lastValid = make(map[basics.Round]map[transactions.Txid]struct{})
+	t.lastValid = make(map[basics.Round]map[transactions.Txid]basics.Round)
 	t.recent = make(map[basics.Round]roundLeases)
 
 	// the lastValid is a temporary map used during the execution of
 	// loadFromDisk, allowing us to construct the lastValid maps in their
 	// optimal size. This would ensure that upon startup, we don't preallocate
 	// more memory than we truly need.
-	lastValid := make(map[basics.Round][]transactions.Txid)
+	type lastValidEntry struct {
+		rnd  basics.Round
+		txid transactions.Txid
+	}
+	lastValid := make(map[basics.Round][]lastValidEntry)
 
 	// the roundTailHashes and blockHeaderData need a single element to start with
 	// in order to allow lookups on zero offsets when they are empty (new database)
@@ -153,16 +157,16 @@ func (t *txTail) loadFromDisk(l ledgerForTracker, dbRound basics.Round) error {
 				list := lastValid[txTailRound.LastValid[i]]
 				// if the list reached capacity, resize.
 				if len(list) == cap(list) {
-					var newList []transactions.Txid
+					var newList []lastValidEntry
 					if cap(list) == 0 {
-						newList = make([]transactions.Txid, 0, initialLastValidArrayLen)
+						newList = make([]lastValidEntry, 0, initialLastValidArrayLen)
 					} else {
-						newList = make([]transactions.Txid, len(list), len(list)*2)
+						newList = make([]lastValidEntry, len(list), len(list)*2)
 					}
 					copy(newList[:], list[:])
 					list = newList
 				}
-				list = append(list, txTailRound.TxnIDs[i])
+				list = append(list, lastValidEntry{txTailRound.Hdr.Round, txTailRound.TxnIDs[i]})
 				lastValid[txTailRound.LastValid[i]] = list
 			}
 		}
@@ -173,9 +177,9 @@ func (t *txTail) loadFromDisk(l ledgerForTracker, dbRound basics.Round) error {
 
 	// add all the entries in roundsLastValids to their corresponding map entry in t.lastValid
 	for lastValid, list := range lastValid {
-		lastValueMap := make(map[transactions.Txid]struct{}, len(list))
-		for _, id := range list {
-			lastValueMap[id] = struct{}{}
+		lastValueMap := make(map[transactions.Txid]basics.Round, len(list))
+		for _, entry := range list {
+			lastValueMap[entry.txid] = entry.rnd
 		}
 		t.lastValid[lastValid] = lastValueMap
 	}
@@ -210,9 +214,9 @@ func (t *txTail) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 
 	for txid, txnInc := range delta.Txids {
 		if _, ok := t.lastValid[txnInc.LastValid]; !ok {
-			t.lastValid[txnInc.LastValid] = make(map[transactions.Txid]struct{})
+			t.lastValid[txnInc.LastValid] = make(map[transactions.Txid]basics.Round)
 		}
-		t.lastValid[txnInc.LastValid][txid] = struct{}{}
+		t.lastValid[txnInc.LastValid][txid] = blk.BlockHeader.Round
 
 		tail.TxnIDs[txnInc.Intra] = txid
 		tail.LastValid[txnInc.Intra] = txnInc.LastValid
@@ -379,6 +383,19 @@ func (t *txTail) checkDup(proto config.ConsensusParams, current basics.Round, fi
 		return &ledgercore.TransactionInLedgerError{Txid: txid, InBlockEvaluator: false}
 	}
 	return nil
+}
+
+// checkConfirmed test to see if the given transaction id already exists.
+func (t *txTail) checkConfirmed(txid transactions.Txid) (basics.Round, bool) {
+	t.tailMu.RLock()
+	defer t.tailMu.RUnlock()
+
+	for _, lastValid := range t.lastValid {
+		if rnd, confirmed := lastValid[txid]; confirmed {
+			return rnd, true
+		}
+	}
+	return 0, false
 }
 
 func (t *txTail) recentTailHash(offset uint64, retainSize uint64) (crypto.Digest, error) {

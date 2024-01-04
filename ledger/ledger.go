@@ -657,6 +657,11 @@ func (l *Ledger) CheckDup(currentProto config.ConsensusParams, current basics.Ro
 	return l.txTail.checkDup(currentProto, current, firstValid, lastValid, txid, txl)
 }
 
+// CheckConfirmed return whether a transaction was confirmed in last up to MaxTxnLife rounds.
+func (l *Ledger) CheckConfirmed(txid transactions.Txid) (basics.Round, bool) {
+	return l.txTail.checkConfirmed(txid)
+}
+
 // Latest returns the latest known block round added to the ledger.
 func (l *Ledger) Latest() basics.Round {
 	return l.blockQ.latest()

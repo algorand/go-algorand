@@ -653,40 +653,10 @@ func (node *AlgorandFullNode) GetPendingTransaction(txID transactions.Txid) (res
 		// Keep looking in the ledger.
 	}
 
-	var maxLife basics.Round
-	latest := node.ledger.Latest()
-	proto, err := node.ledger.ConsensusParams(latest)
-	if err == nil {
-		maxLife = basics.Round(proto.MaxTxnLife)
-	} else {
-		node.log.Errorf("node.GetPendingTransaction: cannot get consensus params for latest round %v", latest)
-	}
-
-	// Search from newest to oldest round up to the max life of a transaction.
-	maxRound := latest
-	minRound := maxRound.SubSaturate(maxLife)
-
-	// Since we're using uint64, if the minRound is 0, we need to check for an underflow.
-	if minRound == 0 {
-		minRound++
-	}
-
-	// If we did find the transaction, we know there is no point
-	// checking rounds earlier or later than validity rounds
-	if found {
-		if tx.Txn.FirstValid > minRound {
-			minRound = tx.Txn.FirstValid
-		}
-
-		if tx.Txn.LastValid < maxRound {
-			maxRound = tx.Txn.LastValid
-		}
-	}
-
-	for r := maxRound; r >= minRound; r-- {
-		tx, found, err := node.ledger.LookupTxid(txID, r)
-		if err != nil || !found {
-			continue
+	if r, confirmed := node.ledger.CheckConfirmed(txID); confirmed {
+		tx, foundBlk, err := node.ledger.LookupTxid(txID, r)
+		if err != nil || !foundBlk {
+			return res, found
 		}
 		return TxnWithStatus{
 			Txn:            tx.SignedTxn,
@@ -696,7 +666,7 @@ func (node *AlgorandFullNode) GetPendingTransaction(txID transactions.Txid) (res
 	}
 
 	// Return whatever we found in the pool (if anything).
-	return
+	return res, found
 }
 
 // Status returns a StatusReport structure reporting our status as Active and with our ledger's LastRound
