@@ -1755,17 +1755,16 @@ func (v2 *Handlers) GetApplicationByID(ctx echo.Context, applicationID uint64) e
 
 func applicationBoxesMaxKeys(requestedMax uint64, algodMax uint64) uint64 {
 	if requestedMax == 0 {
-		if algodMax == 0 {
-			return math.MaxUint64 // unlimited results when both requested and algod max are 0
-		}
-		return algodMax + 1 // API limit dominates.  Increments by 1 to test if more than max supported results exist.
+		requestedMax = math.MaxUint64
 	}
-
-	if requestedMax <= algodMax || algodMax == 0 {
-		return requestedMax // requested limit dominates
+	if algodMax == 0 {
+		algodMax = math.MaxUint64
 	}
-
-	return algodMax + 1 // API limit dominates.  Increments by 1 to test if more than max supported results exist.
+	// return min(requestedMax, algodMax)
+	if requestedMax < algodMax {
+		return requestedMax
+	}
+	return algodMax
 }
 
 // GetApplicationBoxes returns the box names of an application
@@ -1774,12 +1773,28 @@ func (v2 *Handlers) GetApplicationBoxes(ctx echo.Context, applicationID uint64, 
 	appIdx := basics.AppIndex(applicationID)
 	ledger := v2.Node.LedgerForAPI()
 	lastRound := ledger.Latest()
-	keyPrefix := apps.MakeBoxKey(uint64(appIdx), "")
 
 	requestedMax, algodMax := nilToZero(params.Max), v2.Node.Config().MaxAPIBoxPerApplication
 	max := applicationBoxesMaxKeys(requestedMax, algodMax)
 
-	if max != math.MaxUint64 {
+	namePrefix := ""
+	if params.Prefix != nil {
+		namePrefix = *params.Prefix
+		if len(namePrefix) > 0 {
+			cb, err := apps.NewAppCallBytes(namePrefix)
+			if err != nil {
+				return badRequest(ctx, err, err.Error(), v2.Log)
+			}
+			rawPrefix, err := cb.Raw()
+			if err != nil {
+				return badRequest(ctx, err, err.Error(), v2.Log)
+			}
+			namePrefix = string(rawPrefix)
+		}
+	}
+
+	// Fail fast if we know we will retrieve too many box names.
+	if max != math.MaxUint64 && namePrefix == "" {
 		record, _, _, err := ledger.LookupAccount(ledger.Latest(), appIdx.Address())
 		if err != nil {
 			return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
@@ -1796,9 +1811,23 @@ func (v2 *Handlers) GetApplicationBoxes(ctx echo.Context, applicationID uint64, 
 		}
 	}
 
-	boxKeys, err := ledger.LookupKeysByPrefix(lastRound, keyPrefix, math.MaxUint64)
+	keyPrefix := apps.MakeBoxKey(uint64(appIdx), namePrefix)
+	// ask for 1 more, since we need to report an error if more than max available
+	if max == math.MaxUint64 {
+		max = math.MaxUint64 - 1 // avoid wraparound when adding 1, it's plenty big!
+	}
+	boxKeys, err := ledger.LookupKeysByPrefix(lastRound, keyPrefix, max+1)
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+	}
+	if uint64(len(boxKeys)) > max {
+		return ctx.JSON(http.StatusBadRequest, model.ErrorResponse{
+			Message: "Result limit exceeded",
+			Data: &map[string]interface{}{
+				"max-api-box-per-application": algodMax,
+				"max":                         requestedMax,
+			},
+		})
 	}
 
 	prefixLen := len(keyPrefix)

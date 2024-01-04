@@ -314,7 +314,7 @@ end:
 	}
 
 	// `assertErrorResponse` confirms the _Result limit exceeded_ error response provides expected fields and values.
-	assertErrorResponse := func(err error, expectedCount, requestedMax uint64) {
+	assertErrorResponse := func(err error, expectedCount, requestedMax uint64, expectTotal bool) {
 		a.Error(err)
 		e := err.(client.HTTPError)
 		a.Equal(400, e.StatusCode)
@@ -322,29 +322,35 @@ end:
 		a.Equal("Result limit exceeded", e.ErrorString)
 		a.EqualValues(100000, e.Data["max-api-box-per-application"])
 		a.EqualValues(requestedMax, e.Data["max"])
-		a.EqualValues(expectedCount, e.Data["total-boxes"])
+		if expectTotal {
+			a.EqualValues(expectedCount, e.Data["total-boxes"])
+			a.Len(e.Data, 3, fmt.Sprintf("error response (%v) contains unverified fields.  Extend test for new fields.", e.Data))
+			return
+		}
 
-		a.Len(e.Data, 3, fmt.Sprintf("error response (%v) contains unverified fields.  Extend test for new fields.", e.Data))
+		a.Len(e.Data, 2, fmt.Sprintf("error response (%v) contains unverified fields.  Extend test for new fields.", e.Data))
 	}
 
 	// `assertBoxCount` sanity checks that the REST API respects `expectedCount` through different queries against app ID = `createdAppID`.
-	assertBoxCount := func(expectedCount uint64) {
+	assertBoxCount := func(expectedCount uint64, prefix string) {
 		// Query without client-side limit.
-		resp, err := testClient.ApplicationBoxes(uint64(createdAppID), 0)
+		resp, err := testClient.ApplicationBoxes(uint64(createdAppID), 0, prefix)
 		a.NoError(err)
 		a.Len(resp.Boxes, int(expectedCount))
 
 		// Query with requested max < expected expectedCount.
-		_, err = testClient.ApplicationBoxes(uint64(createdAppID), expectedCount-1)
-		assertErrorResponse(err, expectedCount, expectedCount-1)
+		if expectedCount > 1 {
+			_, err = testClient.ApplicationBoxes(uint64(createdAppID), expectedCount-1, prefix)
+			assertErrorResponse(err, expectedCount, expectedCount-1, prefix == "")
+		}
 
 		// Query with requested max == expected expectedCount.
-		resp, err = testClient.ApplicationBoxes(uint64(createdAppID), expectedCount)
+		resp, err = testClient.ApplicationBoxes(uint64(createdAppID), expectedCount, prefix)
 		a.NoError(err)
 		a.Len(resp.Boxes, int(expectedCount))
 
 		// Query with requested max > expected expectedCount.
-		resp, err = testClient.ApplicationBoxes(uint64(createdAppID), expectedCount+1)
+		resp, err = testClient.ApplicationBoxes(uint64(createdAppID), expectedCount+1, prefix)
 		a.NoError(err)
 		a.Len(resp.Boxes, int(expectedCount))
 	}
@@ -385,7 +391,7 @@ end:
 		}
 
 		var resp model.BoxesResponse
-		resp, err = testClient.ApplicationBoxes(uint64(createdAppID), 0)
+		resp, err = testClient.ApplicationBoxes(uint64(createdAppID), 0, "")
 		a.NoError(err)
 
 		expectedCreatedBoxes := make([]string, 0, createdBoxCount)
@@ -406,6 +412,9 @@ end:
 	}
 
 	testingBoxNames := []string{
+		`simple1`,
+		`simple2`,
+		`simple3`,
 		` `,
 		`     	`,
 		` ? = % ;`,
@@ -444,7 +453,10 @@ end:
 	}
 
 	// Happy Vanilla paths:
-	resp, err := testClient.ApplicationBoxes(uint64(createdAppID), 0)
+	resp, err := testClient.ApplicationBoxes(uint64(createdAppID), 0, "")
+	a.NoError(err)
+	a.Empty(resp.Boxes)
+	resp, err = testClient.ApplicationBoxes(uint64(createdAppID), 0, "str:xxx")
 	a.NoError(err)
 	a.Empty(resp.Boxes)
 
@@ -457,7 +469,7 @@ end:
 	nonexistantAppIndex := uint64(1337)
 	_, err = testClient.ApplicationInformation(nonexistantAppIndex)
 	a.ErrorContains(err, "application does not exist")
-	resp, err = testClient.ApplicationBoxes(nonexistantAppIndex, 0)
+	resp, err = testClient.ApplicationBoxes(nonexistantAppIndex, 0, "")
 	a.NoError(err)
 	a.Len(resp.Boxes, 0)
 
@@ -474,7 +486,18 @@ end:
 		operateAndMatchRes("create", strSliceTest)
 	}
 
-	assertBoxCount(uint64(len(testingBoxNames)))
+	assertBoxCount(uint64(len(testingBoxNames)), "")
+	assertBoxCount(3, "str:simpl")
+	assertBoxCount(1, "str:simple1")
+	assertBoxCount(0, "str:simple10")
+
+	// check that returned names strip the prefix
+	resp, err = testClient.ApplicationBoxes(uint64(createdAppID), 0, "str:simple")
+	a.NoError(err)
+	a.ElementsMatch(resp.Boxes, []model.BoxDescriptor{
+		{Name: []byte("1")},
+		{Name: []byte("2")},
+		{Name: []byte("3")}})
 
 	for i := 0; i < len(testingBoxNames); i += 16 {
 		var strSliceTest []string
@@ -487,7 +510,7 @@ end:
 		operateAndMatchRes("delete", strSliceTest)
 	}
 
-	resp, err = testClient.ApplicationBoxes(uint64(createdAppID), 0)
+	resp, err = testClient.ApplicationBoxes(uint64(createdAppID), 0, "")
 	a.NoError(err)
 	a.Empty(resp.Boxes)
 
@@ -527,7 +550,7 @@ end:
 	}
 
 	const numberOfBoxesRemaining = uint64(3)
-	assertBoxCount(numberOfBoxesRemaining)
+	assertBoxCount(numberOfBoxesRemaining, "")
 
 	// Non-vanilla. Wasteful but correct. Can delete an app without first cleaning up its boxes.
 	appAccountData, err := testClient.AccountData(createdAppID.Address().String())
@@ -548,7 +571,8 @@ end:
 	_, err = testClient.ApplicationInformation(uint64(createdAppID))
 	a.ErrorContains(err, "application does not exist")
 
-	assertBoxCount(numberOfBoxesRemaining)
+	assertBoxCount(numberOfBoxesRemaining, "")
+	assertBoxCount(1, "str:f")
 }
 
 func TestBlockLogs(t *testing.T) {

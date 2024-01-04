@@ -475,12 +475,14 @@ func (client RestClient) ApplicationInformation(index uint64) (response model.Ap
 }
 
 type applicationBoxesParams struct {
-	Max uint64 `url:"max,omitempty"`
+	Max    uint64 `url:"max,omitempty"`
+	Prefix string `url:"prefix,omitempty"`
 }
 
 // ApplicationBoxes gets the BoxesResponse associated with the passed application ID
-func (client RestClient) ApplicationBoxes(appID uint64, maxBoxNum uint64) (response model.BoxesResponse, err error) {
-	err = client.get(&response, fmt.Sprintf("/v2/applications/%d/boxes", appID), applicationBoxesParams{maxBoxNum})
+func (client RestClient) ApplicationBoxes(appID uint64, maxBoxNum uint64, prefix string) (response model.BoxesResponse, err error) {
+	err = client.get(&response, fmt.Sprintf("/v2/applications/%d/boxes", appID),
+		applicationBoxesParams{maxBoxNum, prefix})
 	return
 }
 

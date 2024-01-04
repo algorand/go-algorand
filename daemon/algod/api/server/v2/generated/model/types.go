@@ -1514,6 +1514,9 @@ type GetApplicationBoxByNameParams struct {
 type GetApplicationBoxesParams struct {
 	// Max Max number of box names to return. If max is not set, or max == 0, returns all box-names.
 	Max *uint64 `form:"max,omitempty" json:"max,omitempty"`
+
+	// Prefix A box name prefix, in the goal app call arg form 'encoding:value'. For ints, use the form 'int:1234'. For raw bytes, use the form 'b64:A=='. For printable strings, use the form 'str:hello'. For addresses, use the form 'addr:XYZ...'.
+	Prefix *string `form:"prefix,omitempty" json:"prefix,omitempty"`
 }
 
 // GetBlockParams defines parameters for GetBlock.

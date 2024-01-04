@@ -98,7 +98,7 @@ var appBoxListCmd = &cobra.Command{
 		_, client := getDataDirAndClient()
 
 		// Get app boxes
-		boxesRes, err := client.ApplicationBoxes(appIdx, maxBoxes)
+		boxesRes, err := client.ApplicationBoxes(appIdx, maxBoxes, "")
 		if err != nil {
 			reportErrorf(errorRequestFail, err)
 		}
