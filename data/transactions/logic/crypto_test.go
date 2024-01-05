@@ -309,28 +309,36 @@ func TestFalconVerify(t *testing.T) {
 	data, err := hex.DecodeString(msg)
 	require.NoError(t, err)
 
+	yes := testProg(t, fmt.Sprintf(`arg 0; arg 1; byte 0x%s; falcon_verify`,
+		hex.EncodeToString(fs.PublicKey[:])), 11)
+	require.NoError(t, err)
+	no := testProg(t, fmt.Sprintf(`arg 0; arg 1; byte 0x%s; falcon_verify; !`,
+		hex.EncodeToString(fs.PublicKey[:])), 11)
+	require.NoError(t, err)
+
 	for v := uint64(11); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			ops := testProg(t, fmt.Sprintf(`arg 0; arg 1; byte 0x%s; falcon_verify`, hex.EncodeToString(fs.PublicKey[:])), v)
-			require.NoError(t, err)
+			yes.Program[0] = byte(v)
 			sig, err := fs.SignBytes(data)
 			require.NoError(t, err)
 
 			var txn transactions.SignedTxn
-			txn.Lsig.Logic = ops.Program
 			txn.Lsig.Args = [][]byte{data[:], sig[:]}
-			testLogicBytes(t, ops.Program, defaultSigParams(txn))
+			testLogicBytes(t, yes.Program, defaultSigParams(txn))
+			testLogicBytes(t, no.Program, defaultSigParams(txn), "REJECT")
 
 			// short sig will fail
 			txn.Lsig.Args[1] = sig[1:]
-			testLogicBytes(t, ops.Program, defaultSigParams(txn), "verify failed")
+			testLogicBytes(t, yes.Program, defaultSigParams(txn), "REJECT")
+			testLogicBytes(t, no.Program, defaultSigParams(txn))
 
 			// flip a bit and it should not pass
 			msg1 := "52fdfc072182654f163f5f0f9a621d729566c74d0aa413bf009c9800418c19cd"
 			data1, err := hex.DecodeString(msg1)
 			require.NoError(t, err)
 			txn.Lsig.Args = [][]byte{data1, sig[:]}
-			testLogicBytes(t, ops.Program, defaultSigParams(txn), "REJECT")
+			testLogicBytes(t, yes.Program, defaultSigParams(txn), "REJECT")
+			testLogicBytes(t, no.Program, defaultSigParams(txn))
 		})
 	}
 }

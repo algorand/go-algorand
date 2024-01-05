@@ -3098,7 +3098,7 @@ func TestReturnTypes(t *testing.T) {
 		"err":    true,
 		"return": true,
 
-		// these have unusual input sizew requirements not encoded in proto
+		// these have unusual input size requirements not encoded in proto
 		"falcon_verify":       true,
 		"ecdsa_pk_decompress": true,
 

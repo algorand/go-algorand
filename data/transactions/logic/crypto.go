@@ -96,7 +96,7 @@ func opFalconVerify(cx *EvalContext) error {
 	err := fv.VerifyBytes(cx.Stack[pprev].Bytes, sig)
 	cx.Stack[pprev] = boolToSV(err == nil)
 	cx.Stack = cx.Stack[:prev]
-	return err
+	return nil
 }
 
 // Msg is data meant to be signed and then verified with the
