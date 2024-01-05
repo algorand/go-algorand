@@ -350,16 +350,17 @@ func TestTxTailCheckConfirmed(t *testing.T) {
 	require.NoError(t, ledger.initialize(t, protoVersion))
 	require.NoError(t, txtail.loadFromDisk(&ledger, ledger.Latest()))
 
-	// check all txids in blocks are in txTail as well
+	// ensure block retrieval from txTailTestLedger works
 	startRound := ledger.Latest() - basics.Round(proto.MaxTxnLife) + 1
-	// ensure block caching works
 	b1, err := ledger.Block(startRound)
 	require.NoError(t, err)
 	b2, err := ledger.Block(startRound)
 	require.NoError(t, err)
 	require.Equal(t, b1, b2)
 
-	for i := startRound; i <= ledger.Latest(); i++ {
+	// check all txids in blocks are in txTail as well
+	// note, txtail does not store txids for transactions with lastValid < ledger.Latest()
+	for i := ledger.Latest() - testTxTailValidityRange + 1; i < ledger.Latest(); i++ {
 		blk, err := ledger.Block(i)
 		require.NoError(t, err)
 		for _, txn := range blk.Payset {
