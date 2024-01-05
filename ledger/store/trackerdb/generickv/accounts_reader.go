@@ -223,7 +223,7 @@ func keyPrefixIntervalPreprocessing(prefix []byte) ([]byte, []byte) {
 	return prefix, nil
 }
 
-func (r *accountsReader) LookupKeysByPrefix(prefix string, maxKeyNum uint64, results map[string]bool, resultCount uint64) (round basics.Round, err error) {
+func (r *accountsReader) LookupKeysByPrefix(prefix string, limit uint64, dupsCount bool, results map[string]bool) (round basics.Round, err error) {
 	// SQL at time of writing:
 	//
 	// SELECT acctrounds.rnd, kvstore.key
@@ -241,28 +241,24 @@ func (r *accountsReader) LookupKeysByPrefix(prefix string, maxKeyNum uint64, res
 	iter := r.kvr.NewIter(start, end, false)
 	defer iter.Close()
 
-	var value []byte
-
 	for iter.Next() {
 		// end iteration if we reached max results
-		if resultCount == maxKeyNum {
+		if limit == 0 {
 			return
 		}
 
 		// read the key
 		key := string(iter.Key())
 
-		// get value for current item in the iterator
-		value, err = iter.Value()
-		if err != nil {
-			return
+		if extant, ok := results[key]; ok {
+			// We don't want to count this as a new result if it's known
+			// to have been deleted, or if we are running with !dupsCount.
+			if !extant || !dupsCount {
+				continue // skip, we have a more recent result
+			}
 		}
-
-		// mark if the key has data on the result map
-		results[key] = len(value) > 0
-
-		// inc results in range
-		resultCount++
+		results[key] = true
+		limit--
 	}
 
 	return

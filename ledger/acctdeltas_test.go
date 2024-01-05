@@ -946,7 +946,7 @@ func TestLookupKeysByPrefix(t *testing.T) {
 	for index, testCase := range testCases {
 		t.Run("lookupKVByPrefix-testcase-"+strconv.Itoa(index), func(t *testing.T) {
 			actual := make(map[string]bool)
-			_, err := qs.LookupKeysByPrefix(string(testCase.prefix), uint64(len(kvPairDBPrepareSet)), actual, 0)
+			_, err := qs.LookupKeysByPrefix(string(testCase.prefix), uint64(len(kvPairDBPrepareSet)), false, actual)
 			if err != nil {
 				require.NotEmpty(t, testCase.err, testCase.prefix)
 				require.Contains(t, err.Error(), testCase.err)
@@ -1024,7 +1024,7 @@ func BenchmarkLookupKeyByPrefix(b *testing.B) {
 		b.Run("lookupKVByPrefix-DBsize"+strconv.Itoa(currentDBSize), func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				results := make(map[string]bool)
-				_, err := qs.LookupKeysByPrefix(prefix, uint64(currentDBSize), results, 0)
+				_, err := qs.LookupKeysByPrefix(prefix, uint64(currentDBSize), false, results)
 				require.NoError(b, err)
 				require.True(b, len(results) >= 1)
 			}

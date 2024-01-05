@@ -270,12 +270,13 @@ func (qs *accountsDbQueries) LookupKeyValue(key string) (pv trackerdb.PersistedK
 	return
 }
 
-// LookupKeysByPrefix returns a set of application boxed values matching the prefix.
-func (qs *accountsDbQueries) LookupKeysByPrefix(prefix string, maxKeyNum uint64, results map[string]bool, resultCount uint64) (round basics.Round, err error) {
+// LookupKeysByPrefix returns a set of application box names matching the prefix.
+func (qs *accountsDbQueries) LookupKeysByPrefix(prefix string, limit uint64, dupsCount bool, results map[string]bool) (round basics.Round, err error) {
 	start, end := keyPrefixIntervalPreprocessing([]byte(prefix))
 	if end == nil {
 		// Not an expected use case, it's asking for all keys, or all keys
-		// prefixed by some number of 0xFF bytes.
+		// prefixed by some number of 0xFF bytes. That's not possible because
+		// there's always (at least) a "bx:<appid>" prefix.
 		return 0, fmt.Errorf("lookup by strange prefix %#v", prefix)
 	}
 	err = db.Retry(func() error {
@@ -289,7 +290,7 @@ func (qs *accountsDbQueries) LookupKeysByPrefix(prefix string, maxKeyNum uint64,
 		var v sql.NullString
 
 		for rows.Next() {
-			if resultCount == maxKeyNum {
+			if limit == 0 {
 				return nil
 			}
 			err = rows.Scan(&round, &v)
@@ -297,11 +298,15 @@ func (qs *accountsDbQueries) LookupKeysByPrefix(prefix string, maxKeyNum uint64,
 				return err
 			}
 			if v.Valid {
-				if _, ok := results[v.String]; ok {
-					continue
+				if extant, ok := results[v.String]; ok {
+					// We don't want to count this as a new result if it's known
+					// to have been deleted, or if we running with !dupsCount.
+					if !extant || !dupsCount {
+						continue // skip, we have a more recent result
+					}
 				}
 				results[v.String] = true
-				resultCount++
+				limit--
 			}
 		}
 		return nil

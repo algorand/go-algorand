@@ -1517,6 +1517,9 @@ type GetApplicationBoxesParams struct {
 
 	// Prefix A box name prefix, in the goal app call arg form 'encoding:value'. For ints, use the form 'int:1234'. For raw bytes, use the form 'b64:A=='. For printable strings, use the form 'str:hello'. For addresses, use the form 'addr:XYZ...'.
 	Prefix *string `form:"prefix,omitempty" json:"prefix,omitempty"`
+
+	// After A box name, in the goal app call arg form 'encoding:value'. When provided, even if blank, the returned box names will be the names lexigraphically following the provided name in sorted order. Further, the call will not fail if there are more box names following the maximum return limit. Callers may implement pagination by reinvoking the endpoint with the last box name returned. Call will fail if the provided max exceeds the algod configured max, to prevent ambiguity of short returns.
+	After *string `form:"after,omitempty" json:"after,omitempty"`
 }
 
 // GetBlockParams defines parameters for GetBlock.

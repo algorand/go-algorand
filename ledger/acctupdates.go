@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/algorand/go-deadlock"
+	"golang.org/x/exp/slices"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
@@ -458,10 +459,10 @@ func (au *accountUpdates) lookupKv(rnd basics.Round, key string, synchronized bo
 }
 
 func (au *accountUpdates) LookupKeysByPrefix(round basics.Round, keyPrefix string, maxKeyNum uint64) ([]string, error) {
-	return au.lookupKeysByPrefix(round, keyPrefix, maxKeyNum, true /* take lock */)
+	return au.lookupKeysByPrefix(round, keyPrefix, maxKeyNum, nil, true /* take lock */)
 }
 
-func (au *accountUpdates) lookupKeysByPrefix(round basics.Round, keyPrefix string, maxKeyNum uint64, synchronized bool) (resultKeys []string, err error) {
+func (au *accountUpdates) lookupKeysByPrefix(round basics.Round, keyPrefix string, maxKeyNum uint64, after *string, synchronized bool) (resultKeys []string, err error) {
 	var results map[string]bool
 	// keep track of the number of result key with value
 	var resultCount uint64
@@ -483,6 +484,15 @@ func (au *accountUpdates) lookupKeysByPrefix(round basics.Round, keyPrefix strin
 				if present {
 					resultKeys = append(resultKeys, resKey)
 				}
+			}
+			if after != nil {
+				// When `after` is used, we may have more than `maxKeyNum`
+				// results. We'll return the earliest.
+				if resultCount > maxKeyNum {
+					resultCount = maxKeyNum
+				}
+				slices.Sort(resultKeys)
+				resultKeys = resultKeys[:resultCount]
 			}
 		}
 	}()
@@ -531,8 +541,8 @@ func (au *accountUpdates) lookupKeysByPrefix(round basics.Round, keyPrefix strin
 					results[keyInRound] = true
 					resultCount++
 					// check if the size of `results` reaches `maxKeyNum`
-					// if so just return the list of keys
-					if resultCount == maxKeyNum {
+					// if so just return the list of keys, unless `after` is used.
+					if after == nil && resultCount == maxKeyNum {
 						return
 					}
 				}
@@ -552,9 +562,15 @@ func (au *accountUpdates) lookupKeysByPrefix(round basics.Round, keyPrefix strin
 		// queries. It may be preferable to increase the SQLite cache size if these reads become
 		// too slow.
 
-		// Finishing searching updates of this account in kvDeltas, keep going: use on-disk DB
-		// to find the rest matching keys in DB.
-		dbRound, dbErr := au.accountsq.LookupKeysByPrefix(keyPrefix, maxKeyNum, results, resultCount)
+		// We hit the DB now if we still need more keys. Either we haven't found
+		// enough, or we need to check DB for lexicographically earlier answers.
+		limit := maxKeyNum
+		allowDups := true
+		if after == nil {
+			limit -= resultCount // we already have some usable results
+			allowDups = false    // but don't double count against our limit
+		}
+		dbRound, dbErr := au.accountsq.LookupKeysByPrefix(keyPrefix, limit, allowDups, results)
 		if dbErr != nil {
 			return nil, dbErr
 		}
