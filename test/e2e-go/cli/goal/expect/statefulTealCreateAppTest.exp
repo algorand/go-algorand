@@ -75,7 +75,7 @@ proc statefulTealTest { TEST_ALGO_DIR TEST_DATA_DIR TEAL_PROGRAM} {
     spawn goal app call --app-id $APP_ID --from $PRIMARY_ACCOUNT_ADDRESS -w $PRIMARY_WALLET_NAME -d $TEST_PRIMARY_NODE_DIR
     expect {
         timeout { puts timeout; ::AlgorandGoal::Abort  "\n Failed to see expected output" }
-        "Couldn't broadcast tx with algod: HTTP 400 Bad Request: *TransactionPool.Remember: transaction*" {puts "received expected error"; close}
+        "Couldn't broadcast tx with algod: HTTP 400 Bad Request: TransactionPool.Remember: transaction*" {puts "received expected error"; close}
         eof { close; ::AlgorandGoal::Abort "did not receive expected error" }
     }
 
@@ -88,7 +88,7 @@ proc statefulTealTest { TEST_ALGO_DIR TEST_DATA_DIR TEAL_PROGRAM} {
             "Please enter the password for wallet '$WALLET_1_NAME':" {send "$WALLET_1_PASSWORD\r" ; exp_continue }
             "*not opted in to app*" {puts "received expected error"; close}
             "*exceeds schema bytes count*" {puts "received expected error"; close}
-            "Couldn't broadcast tx with algod: HTTP 400 Bad Request: *TransactionPool.Remember: transaction*" {puts "received expected error"; close}
+            "Couldn't broadcast tx with algod: HTTP 400 Bad Request: TransactionPool.Remember: transaction*" {puts "received expected error"; close}
             eof { close; ::AlgorandGoal::Abort "did not receive expected error" }
         }
     }

@@ -148,7 +148,7 @@ proc goalAppAccountAddress { TEST_ALGO_DIR TEST_DATA_DIR} {
 	--app-account $ACCOUNT_4_ADDRESS
     expect {
         timeout { puts timeout; ::AlgorandGoal::Abort  "\n Failed to see expected output" }
-        "*Couldn't broadcast tx with algod: HTTP 400 Bad Request: *TransactionPool.Remember: transaction*invalid Accounts index 4*" {
+        "*Couldn't broadcast tx with algod: HTTP 400 Bad Request: TransactionPool.Remember: transaction*invalid Accounts index 4*" {
             puts "\nError received successfully "
             # wait until the eof signal is received
             expect {

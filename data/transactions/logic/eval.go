@@ -1014,7 +1014,7 @@ func (cx *EvalContext) evalError(err error) error {
 		"group-index", cx.groupIndex,
 		"eval-states", cx.evalStates())
 	if cx.runMode == ModeApp {
-		details = fmt.Sprintf("app=%d %s", cx.appID, details)
+		details = fmt.Sprintf("app=%d, %s", cx.appID, details)
 		err = basics.Annotate(err, "app-index", cx.appID)
 	}
 
