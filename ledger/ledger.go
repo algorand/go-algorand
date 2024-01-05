@@ -657,7 +657,7 @@ func (l *Ledger) CheckDup(currentProto config.ConsensusParams, current basics.Ro
 	return l.txTail.checkDup(currentProto, current, firstValid, lastValid, txid, txl)
 }
 
-// CheckConfirmedTail checks if a transaction txid happens to have LastValid greater than the current round on time of calling and was committed to the ledger.
+// CheckConfirmedTail checks if a transaction txid happens to have LastValid greater than the current round at the time of calling and has been already committed to the ledger.
 // If both conditions are met it returns true.
 // This function could be used as filter to check if a transaction is committed to the ledger, and no extra checks needed if it says true.
 //
