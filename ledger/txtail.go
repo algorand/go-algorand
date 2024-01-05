@@ -184,7 +184,8 @@ func (t *txTail) loadFromDisk(l ledgerForTracker, dbRound basics.Round) error {
 			if lastValid < entry.rnd {
 				return fmt.Errorf("txTail: invalid lastValid %d / rnd %d for txid %s", lastValid, entry.rnd, entry.txid)
 			}
-			lastValueMap[entry.txid] = int16(lastValid - entry.rnd)
+			deltaR := int16(lastValid - entry.rnd)
+			lastValueMap[entry.txid] = deltaR
 		}
 		t.lastValid[lastValid] = lastValueMap
 	}
@@ -398,7 +399,7 @@ func (t *txTail) checkConfirmed(txid transactions.Txid) (basics.Round, bool) {
 
 	for lastValidRound, lastValid := range t.lastValid {
 		if deltaR, confirmed := lastValid[txid]; confirmed {
-			return lastValidRound + basics.Round(deltaR), true
+			return lastValidRound - basics.Round(deltaR), true
 		}
 	}
 	return 0, false
