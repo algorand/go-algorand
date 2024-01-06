@@ -118,6 +118,9 @@ type onlineAccounts struct {
 
 	// disableCache (de)activates the LRU cache use in onlineAccounts
 	disableCache bool
+
+	// expiringStakeCache tracks the amount of stake expiring per round
+	expiringStakeCache onlineAccountAttributeCache[basics.Round, basics.MicroAlgos]
 }
 
 // initialize initializes the accountUpdates structure
@@ -174,6 +177,9 @@ func (ao *onlineAccounts) initializeFromDisk(l ledgerForTracker, lastBalancesRou
 			return err0
 		}
 		ao.onlineAccountsCache.init(onlineAccounts, onlineAccountsCacheMaxSize)
+
+		ao.expiringStakeCache = newExpiringStakeCache()
+		ao.expiringStakeCache.init(onlineAccounts)
 
 		return nil
 	})
@@ -495,6 +501,14 @@ func (ao *onlineAccounts) postCommit(ctx context.Context, dcc *deferredCommitCon
 				updRound:              persistedAcct.UpdRound,
 			})
 	}
+
+	for _, acctUpdate := range dcc.compactOnlineAccountDeltas.deltas {
+		ao.expiringStakeCache.update(acctUpdate)
+	}
+	// drop entries behind our current round, as we don't need to know who has expired in the past
+	// TODO: I think this is trimming on the committed-to-disk round, not sure if that's the right one to trim on.
+	// since this is just for memory bounding, it should be ok to trim on the committed-to-disk round.
+	ao.expiringStakeCache.trim(newBase)
 
 	// clear the backing array to let GC collect data
 	// see the comment in acctupdates.go
@@ -1009,7 +1023,15 @@ func (ao *onlineAccounts) TopOnlineAccounts(rnd basics.Round, voteRnd basics.Rou
 	}
 }
 
-func (ao *onlineAccounts) onlineAcctsExpiredByRound(rnd, voteRnd basics.Round) (map[basics.Address]*ledgercore.OnlineAccountData, error) {
+// onlineAcctsExpiredByRound returns the online accounts that expired by the given round, and their account data (with a focus on stake with rewards)
+// it takes the following arguments
+// rnd: the last round for updates to the online accounts (our "perspective" of the online accounts is based on round `rnd`)
+// voteRnd: the round by which an account would need to expire by to be included in the returned map
+// noCache: if true, the expiring stake cache will not be used, even if the requested round is the latest round in the database
+// performance tip: if `rnd` is equal to the latest round in the database, this method will not hit the database and will instead use the expiring stake cache.
+// the expiring stake cache is a cache of the expiring stake per round and account, but only holds a view of the data from the lastest db round
+// returns a map of address to online account data, with rewards applied
+func (ao *onlineAccounts) onlineAcctsExpiredByRound(rnd, voteRnd basics.Round, noCache bool) (map[basics.Address]*ledgercore.OnlineAccountData, error) {
 	needUnlock := false
 	defer func() {
 		if needUnlock {
@@ -1048,11 +1070,17 @@ func (ao *onlineAccounts) onlineAcctsExpiredByRound(rnd, voteRnd basics.Round) (
 			if err != nil {
 				return err
 			}
-			expiredAccounts, err = ar.ExpiredOnlineAccountsForRound(rnd, voteRnd, rewardsParams, rewardsLevel)
+			// first get dbRound to check if the requested round is at the tip of history
+			dbRound, err = ar.AccountsRound()
 			if err != nil {
 				return err
 			}
-			dbRound, err = ar.AccountsRound()
+			// if the requested round is what the db is updated to, use the cache instead of hitting the db
+			if rnd == dbRound && !noCache {
+				expiredAccounts = ao.expiringStakeCache.getRange(0, voteRnd, rewardsParams, rewardsLevel)
+			} else {
+				expiredAccounts, err = ar.ExpiredOnlineAccountsForRound(rnd, voteRnd, rewardsParams, rewardsLevel)
+			}
 			return err
 		})
 		if err != nil {
@@ -1102,7 +1130,25 @@ func (ao *onlineAccounts) onlineAcctsExpiredByRound(rnd, voteRnd basics.Round) (
 // ExpiredOnlineCirculation returns the total online stake for accounts with participation keys registered
 // at round `rnd` that are expired by round `voteRnd`.
 func (ao *onlineAccounts) ExpiredOnlineCirculation(rnd, voteRnd basics.Round) (basics.MicroAlgos, error) {
-	expiredAccounts, err := ao.onlineAcctsExpiredByRound(rnd, voteRnd)
+	expiredAccounts, err := ao.onlineAcctsExpiredByRound(rnd, voteRnd, false)
+	if err != nil {
+		return basics.MicroAlgos{}, err
+	}
+	ot := basics.OverflowTracker{}
+	expiredStake := basics.MicroAlgos{}
+	for _, d := range expiredAccounts {
+		expiredStake = ot.AddA(expiredStake, d.MicroAlgosWithRewards)
+		if ot.Overflowed {
+			return basics.MicroAlgos{}, fmt.Errorf("ExpiredOnlineCirculation: overflow totaling expired stake")
+		}
+	}
+	return expiredStake, nil
+}
+
+// expiredOnlineCirculation_skipCache returns the total online stake for accounts expiring by round `voteRnd`
+// this is a test-only method that skips the expiring stake cache, to confirm `onlineAccountsExpiredByRound` returns correctly regardles of cache
+func (ao *onlineAccounts) expiredOnlineCirculation_skipCache(rnd, voteRnd basics.Round) (basics.MicroAlgos, error) {
+	expiredAccounts, err := ao.onlineAcctsExpiredByRound(rnd, voteRnd, true)
 	if err != nil {
 		return basics.MicroAlgos{}, err
 	}

@@ -203,6 +203,7 @@ type PersistedResourcesData struct {
 }
 
 // PersistedOnlineAccountData is exported view of persistedOnlineAccountData
+// TODO: persistedOnlineAccountData is not a symbol in this repo, we should correct this comment.
 type PersistedOnlineAccountData struct {
 	Addr        basics.Address
 	AccountData BaseOnlineAccountData

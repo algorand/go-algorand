@@ -2008,6 +2008,7 @@ func TestAcctOnline_ExpiredOnlineCirculation(t *testing.T) {
 	const dbRoundsToCommit = 2
 	for dbCombo := uint64(0); dbCombo < powInt(uint64(len(dbStates)), dbRoundsToCommit); dbCombo++ {
 		for deltaCombo := uint64(0); deltaCombo < powInt(uint64(len(deltaStates)), conf.MaxAcctLookback); deltaCombo++ {
+
 			var stateA acctState
 			var stateB acctState
 
@@ -2017,7 +2018,7 @@ func TestAcctOnline_ExpiredOnlineCirculation(t *testing.T) {
 			ternDelta := strconv.FormatUint(deltaCombo, 3)
 			ternDelta = fmt.Sprintf("%0*s", conf.MaxAcctLookback, ternDelta)
 			// uncomment for debugging
-			// t.Logf("db=%d|delta=%d <==> older->%s<-db top | first->%s<-last", dbCombo, deltaCombo, ternDb, ternDelta)
+			// fmt.Printf("db=%d|delta=%d <==> older->%s<-db top | first->%s<-last\n", dbCombo, deltaCombo, ternDb, ternDelta)
 
 			targetVoteRnd := rnd +
 				basics.Round(conf.MaxAcctLookback) /* all deltas */ +
@@ -2152,6 +2153,11 @@ func TestAcctOnline_ExpiredOnlineCirculation(t *testing.T) {
 			expiredStake, err := oa.ExpiredOnlineCirculation(rnd-1, targetVoteRnd)
 			a.NoError(err)
 			a.Equal(expectedExpiredStake, expiredStake)
+			// because this test only checks the expired stake at the tip of history (i.e. the last round),
+			// we can also test that the expired stake cache also has the same value by using the test-only function which skips the cache
+			expiredStake_noCache, err := oa.expiredOnlineCirculation_skipCache(rnd-1, targetVoteRnd)
+			a.NoError(err)
+			a.Equal(expectedExpiredStake, expiredStake_noCache)
 
 			// restore the original state of accounts A and B
 			updates := ledgercore.AccountDeltas{}
@@ -2175,6 +2181,7 @@ func TestAcctOnline_ExpiredOnlineCirculation(t *testing.T) {
 			a.Equal(int(conf.MaxAcctLookback), len(oa.deltas))
 		}
 	}
+
 }
 
 // TestAcctOnline_OnlineAcctsExpiredByRound ensures that onlineAcctsExpiredByRound
@@ -2275,9 +2282,14 @@ func TestAcctOnline_OnlineAcctsExpiredByRound(t *testing.T) {
 	require.NotEmpty(t, roundParamsData)
 
 	// but still available for lookup via onlineAcctsExpiredByRound
-	expAccts, err := oa.onlineAcctsExpiredByRound(targetRound, targetRound+10)
+	// f mt.Println(targetRound, targetRound+10)
+	// allow the cache to be optinally used, but this test won't use it
+	expAccts, err := oa.onlineAcctsExpiredByRound(targetRound, targetRound+10, false)
 	require.NoError(t, err)
 	require.Len(t, expAccts, numExpiredAccts)
+	expAccts_noCache, err := oa.onlineAcctsExpiredByRound(targetRound, targetRound+10, true)
+	require.NoError(t, err)
+	require.Len(t, expAccts_noCache, numExpiredAccts)
 
 	var expiredStake basics.MicroAlgos
 	for _, expAcct := range expAccts {
