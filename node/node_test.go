@@ -45,7 +45,6 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util"
 	"github.com/algorand/go-algorand/util/db"
-	"github.com/algorand/go-algorand/util/execpool"
 )
 
 var expectedAgreementTime = 2*config.Protocol.BigLambda + config.Protocol.SmallLambda + config.Consensus[protocol.ConsensusCurrentVersion].AgreementFilterTimeout + 2*time.Second
@@ -61,19 +60,23 @@ var defaultConfig = config.Local{
 	IncomingConnectionsLimit: -1,
 }
 
-func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationPool execpool.BacklogPool, customConsensus config.ConsensusProtocols) ([]*AlgorandFullNode, []string) {
-	util.SetFdSoftLimit(1000)
+func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion,
+	customConsensus config.ConsensusProtocols) ([]*AlgorandFullNode, []string, *os.File) {
+	util.SetFdSoftLimit(400)
 	f, _ := os.Create(t.Name() + ".log")
 	logging.Base().SetJSONFormatter()
 	logging.Base().SetOutput(f)
 	logging.Base().SetLevel(logging.Debug)
 
 	numAccounts := 10
+	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
+		numAccounts = 2
+	}
 	minMoneyAtStart := 10000
 	maxMoneyAtStart := 100000
 
 	firstRound := basics.Round(0)
-	lastRound := basics.Round(200)
+	lastRound := basics.Round(20)
 
 	genesis := make(map[basics.Address]basics.AccountData)
 	gen := rand.New(rand.NewSource(2))
@@ -168,8 +171,9 @@ func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationP
 		cfg, err := config.LoadConfigFromDisk(rootDirectory)
 		require.NoError(t, err)
 		cfg.Archival = true
-		_, err = data.LoadLedger(logging.Base().With("name", nodeID), ledgerFilenamePrefix, inMem, g.Proto, bootstrap, g.ID(), g.Hash(), nil, cfg)
+		ledg, err := data.LoadLedger(logging.Base().With("name", nodeID), ledgerFilenamePrefix, inMem, g.Proto, bootstrap, g.ID(), g.Hash(), nil, cfg)
 		require.NoError(t, err)
+		ledg.Close()
 	}
 
 	for i := range nodes {
@@ -184,7 +188,7 @@ func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationP
 		require.NoError(t, err)
 	}
 
-	return nodes, wallets
+	return nodes, wallets, f
 }
 
 func TestSyncingFullNode(t *testing.T) {
@@ -192,12 +196,12 @@ func TestSyncingFullNode(t *testing.T) {
 
 	t.Skip("Flaky in nightly test environment")
 
-	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
-	defer backlogPool.Shutdown()
-
-	nodes, wallets := setupFullNodes(t, protocol.ConsensusCurrentVersion, backlogPool, nil)
+	nodes, wallets, f := setupFullNodes(t, protocol.ConsensusCurrentVersion, nil)
+	defer f.Close()
 	for i := 0; i < len(nodes); i++ {
+		defer nodes[i].Shutdown()
 		defer os.Remove(wallets[i])
+		defer nodes[i].ledger.Close()
 		defer nodes[i].Stop()
 	}
 
@@ -257,12 +261,12 @@ func TestInitialSync(t *testing.T) {
 		t.Skip("Test is too heavy for amd64 builder running in parallel with other packages")
 	}
 
-	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
-	defer backlogPool.Shutdown()
-
-	nodes, wallets := setupFullNodes(t, protocol.ConsensusCurrentVersion, backlogPool, nil)
+	nodes, wallets, f := setupFullNodes(t, protocol.ConsensusCurrentVersion, nil)
+	defer f.Close()
 	for i := 0; i < len(nodes); i++ {
+		defer nodes[i].Shutdown()
 		defer os.Remove(wallets[i])
+		defer nodes[i].ledger.Close()
 		defer nodes[i].Stop()
 	}
 	initialRound := nodes[0].ledger.NextRound()
@@ -290,9 +294,6 @@ func TestSimpleUpgrade(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	t.Skip("Flaky in nightly test environment.")
-
-	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
-	defer backlogPool.Shutdown()
 
 	// ConsensusTest0 is a version of ConsensusV0 used for testing
 	// (it has different approved upgrade paths).
@@ -330,9 +331,12 @@ func TestSimpleUpgrade(t *testing.T) {
 	testParams1.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 	configurableConsensus[consensusTest1] = testParams1
 
-	nodes, wallets := setupFullNodes(t, consensusTest0, backlogPool, configurableConsensus)
+	nodes, wallets, f := setupFullNodes(t, consensusTest0, configurableConsensus)
+	defer f.Close()
 	for i := 0; i < len(nodes); i++ {
+		defer nodes[i].Shutdown()
 		defer os.Remove(wallets[i])
+		defer nodes[i].ledger.Close()
 		defer nodes[i].Stop()
 	}
 
@@ -394,9 +398,9 @@ func startAndConnectNodes(nodes []*AlgorandFullNode, delayStartFirstNode bool) {
 			continue
 		}
 		wg.Add(1)
-		go func(i int) {
+		go func(x int) {
 			defer wg.Done()
-			nodes[i].Start()
+			nodes[x].Start()
 		}(i)
 	}
 	wg.Wait()

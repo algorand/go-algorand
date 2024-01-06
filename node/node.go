@@ -152,6 +152,7 @@ type AlgorandFullNode struct {
 	tracer messagetracer.MessageTracer
 
 	stateProofWorker *stateproof.Worker
+	partHandles      []db.Accessor
 }
 
 // TxnWithStatus represents information about a single transaction,
@@ -430,6 +431,14 @@ func (node *AlgorandFullNode) Stop() {
 	node.lowPriorityCryptoVerificationPool.Shutdown()
 	node.cryptoPool.Shutdown()
 	node.cancelCtx()
+}
+
+func (node *AlgorandFullNode) Shutdown() {
+	node.accountManager.Registry().Close()
+	node.agreementService.Accessor.Close()
+	for h := range node.partHandles {
+		node.partHandles[h].Close()
+	}
 }
 
 // note: unlike the other two functions, this accepts a whole filename
@@ -960,6 +969,7 @@ func (node *AlgorandFullNode) loadParticipationKeys() error {
 	if err != nil {
 		return fmt.Errorf("AlgorandFullNode.loadPartitipationKeys: could not read directory %v: %v", genesisDir, err)
 	}
+	node.partHandles = make([]db.Accessor, 0)
 
 	// For each of these files
 	for _, info := range files {
@@ -1008,12 +1018,12 @@ func (node *AlgorandFullNode) loadParticipationKeys() error {
 			// These files are not ephemeral and must be deleted eventually since
 			// this function is called to load files located in the node on startup
 			added := node.accountManager.AddParticipation(part, false)
-			if added {
-				node.log.Infof("Loaded participation keys from storage: %s %s", part.Address(), info.Name())
-			} else {
+			if !added {
 				part.Close()
 				continue
 			}
+			node.log.Infof("Loaded participation keys from storage: %s %s", part.Address(), info.Name())
+			node.partHandles = append(node.partHandles, handle)
 			err = insertStateProofToRegistry(part, node)
 			if err != nil {
 				return err
