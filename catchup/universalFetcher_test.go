@@ -101,7 +101,7 @@ func TestUGetBlockHTTP(t *testing.T) {
 	ls := rpcs.MakeBlockService(logging.Base(), blockServiceConfig, ledger, net, "test genesisID")
 
 	nodeA := basicRPCNode{}
-	nodeA.RegisterHTTPHandler(rpcs.BlockServiceBlockPath, ls)
+	ls.RegisterHandlers(&nodeA)
 	nodeA.start()
 	defer nodeA.stop()
 	rootURL := nodeA.rootURL()

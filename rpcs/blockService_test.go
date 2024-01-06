@@ -152,11 +152,11 @@ func TestRedirectFallbackArchiver(t *testing.T) {
 	nodeA := &basicRPCNode{}
 	nodeB := &basicRPCNode{}
 
-	nodeA.RegisterHTTPHandler(BlockServiceBlockPath, bs1)
+	bs1.RegisterHandlers(nodeA)
 	nodeA.start()
 	defer nodeA.stop()
 
-	nodeB.RegisterHTTPHandler(BlockServiceBlockPath, bs2)
+	bs2.RegisterHandlers(nodeB)
 	nodeB.start()
 	defer nodeB.stop()
 
@@ -203,7 +203,7 @@ func TestBlockServiceShutdown(t *testing.T) {
 
 	nodeA := &basicRPCNode{}
 
-	nodeA.RegisterHTTPHandler(BlockServiceBlockPath, bs1)
+	bs1.RegisterHandlers(nodeA)
 	nodeA.start()
 	defer nodeA.stop()
 
@@ -264,8 +264,8 @@ func TestRedirectFallbackEndpoints(t *testing.T) {
 	bs1 := MakeBlockService(log, config, ledger1, net1, "{genesisID}")
 	bs2 := MakeBlockService(log, config, ledger2, net2, "{genesisID}")
 
-	nodeA.RegisterHTTPHandler(BlockServiceBlockPath, bs1)
-	nodeB.RegisterHTTPHandler(BlockServiceBlockPath, bs2)
+	bs1.RegisterHandlers(nodeA)
+	bs2.RegisterHandlers(nodeB)
 
 	parsedURL, err := network.ParseHostOrURL(nodeA.rootURL())
 	require.NoError(t, err)
@@ -325,11 +325,11 @@ func TestRedirectOnFullCapacity(t *testing.T) {
 	nodeA := &basicRPCNode{}
 	nodeB := &basicRPCNode{}
 
-	nodeA.RegisterHTTPHandler(BlockServiceBlockPath, bs1)
+	bs1.RegisterHandlers(nodeA)
 	nodeA.start()
 	defer nodeA.stop()
 
-	nodeB.RegisterHTTPHandler(BlockServiceBlockPath, bs2)
+	bs2.RegisterHandlers(nodeB)
 	nodeB.start()
 	defer nodeB.stop()
 
@@ -499,7 +499,7 @@ func TestRedirectExceptions(t *testing.T) {
 
 	nodeA := &basicRPCNode{}
 
-	nodeA.RegisterHTTPHandler(BlockServiceBlockPath, bs1)
+	bs1.RegisterHandlers(nodeA)
 	nodeA.start()
 	defer nodeA.stop()
 

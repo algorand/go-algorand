@@ -54,8 +54,9 @@ type GossipNode interface {
 	Disconnect(badnode Peer)
 	DisconnectPeers() // only used by testing
 
-	// RegisterHTTPHandler path accepts gorilla/mux path annotations
+	// RegisterHTTPHandler and RegisterHTTPHandlerFunc: path accepts gorilla/mux path annotations
 	RegisterHTTPHandler(path string, handler http.Handler)
+	RegisterHTTPHandlerFunc(path string, handler func(http.ResponseWriter, *http.Request))
 
 	// RequestConnectOutgoing asks the system to actually connect to peers.
 	// `replace` optionally drops existing connections before making new ones.

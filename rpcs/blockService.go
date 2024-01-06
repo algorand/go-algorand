@@ -58,7 +58,7 @@ const blockServerCatchupRequestBufferSize = 10
 const BlockResponseLatestRoundHeader = "X-Latest-Round"
 
 // BlockServiceBlockPath is the path to register BlockService as a handler for when using gorilla/mux
-// e.g. .Handle(BlockServiceBlockPath, &ls)
+// e.g. .HandleFunc(BlockServiceBlockPath, ls.ServeBlockPath)
 const BlockServiceBlockPath = "/v{version:[0-9.]+}/{genesisID}/block/{round:[0-9a-z]+}"
 
 // Constant strings used as keys for topics
@@ -149,9 +149,20 @@ func MakeBlockService(log logging.Logger, config config.Local, ledger LedgerForB
 		memoryCap:               config.BlockServiceMemCap,
 	}
 	if service.enableService {
-		net.RegisterHTTPHandler(BlockServiceBlockPath, service)
+		service.RegisterHandlers(net)
 	}
 	return service
+}
+
+// HTTPRegistrar represents an HTTP request router that can be used by BlockService
+// to register its request handlers.
+type HTTPRegistrar interface {
+	RegisterHTTPHandlerFunc(path string, handler func(response http.ResponseWriter, request *http.Request))
+}
+
+// RegisterHandlers registers the request handlers for BlockService's paths with the registrar.
+func (bs *BlockService) RegisterHandlers(registrar HTTPRegistrar) {
+	registrar.RegisterHTTPHandlerFunc(BlockServiceBlockPath, bs.ServeBlockPath)
 }
 
 // Start listening to catchup requests over ws
@@ -178,10 +189,10 @@ func (bs *BlockService) Stop() {
 	bs.closeWaitGroup.Wait()
 }
 
-// ServerHTTP returns blocks
+// ServeBlockPath returns blocks
 // Either /v{version}/{genesisID}/block/{round} or ?b={round}&v={version}
 // Uses gorilla/mux for path argument parsing.
-func (bs *BlockService) ServeHTTP(response http.ResponseWriter, request *http.Request) {
+func (bs *BlockService) ServeBlockPath(response http.ResponseWriter, request *http.Request) {
 	pathVars := mux.Vars(request)
 	versionStr, hasVersionStr := pathVars["version"]
 	roundStr, hasRoundStr := pathVars["round"]
@@ -259,13 +270,13 @@ func (bs *BlockService) ServeHTTP(response http.ResponseWriter, request *http.Re
 			if !ok {
 				response.Header().Set("Retry-After", blockResponseRetryAfter)
 				response.WriteHeader(http.StatusServiceUnavailable)
-				bs.log.Debugf("ServeHTTP: returned retry-after: %v", err)
+				bs.log.Debugf("ServeBlockPath: returned retry-after: %v", err)
 			}
 			httpBlockMessagesDroppedCounter.Inc(nil)
 			return
 		default:
 			// unexpected error.
-			bs.log.Warnf("ServeHTTP : failed to retrieve block %d %v", round, err)
+			bs.log.Warnf("ServeBlockPath: failed to retrieve block %d %v", round, err)
 			response.WriteHeader(http.StatusInternalServerError)
 			return
 		}
