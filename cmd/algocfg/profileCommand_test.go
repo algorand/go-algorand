@@ -51,4 +51,15 @@ func Test_getConfigForArg(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, cfg.DisableAPIAuth)
 	})
+
+	t.Run("valid config test archival node", func(t *testing.T) {
+		t.Parallel()
+		cfg, err := getConfigForArg("archival")
+		require.NoError(t, err)
+		require.True(t, cfg.Archival)
+		require.True(t, cfg.EnableLedgerService)
+		require.True(t, cfg.EnableBlockService)
+		require.Equal(t, ":4160", cfg.NetAddress)
+		require.False(t, cfg.EnableGossipService)
+	})
 }

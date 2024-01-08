@@ -77,11 +77,24 @@ var (
 		},
 	}
 
+	archival = configUpdater{
+		description: "Store the full chain history and support catchup.",
+		updateFunc: func(cfg config.Local) config.Local {
+			cfg.Archival = true
+			cfg.EnableLedgerService = true
+			cfg.EnableBlockService = true
+			cfg.NetAddress = ":4160"
+			cfg.EnableGossipService = false
+			return cfg
+		},
+	}
+
 	// profileNames are the supported pre-configurations of config values
 	profileNames = map[string]configUpdater{
 		"participation": participation,
 		"conduit":       conduit,
 		"relay":         relay,
+		"archival":      archival,
 		"development":   development,
 	}
 
