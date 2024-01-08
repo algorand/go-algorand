@@ -868,7 +868,7 @@ byte "ALGO"
 	// check that actual app id ok instead of indirect reference
 	text = `int 100; txn ApplicationArgs 0; app_global_get_ex; int 1; ==; assert; byte "ALGO"; ==`
 	testApp(t, text, now)
-	testApp(t, text, pre, "App index 100 beyond") // but not in old teal
+	testApp(t, text, pre, "app index 100 beyond") // but not in old teal
 
 	// check app_global_get default value
 	text = "byte 0x414c474f55; app_global_get; int 0; =="
@@ -1074,7 +1074,7 @@ func testAssetsByVersion(t *testing.T, assetsTestProgram string, version uint64)
 	testApp(t, `byte "aoeuiaoeuiaoeuiaoeuiaoeuiaoeui02"; int 55; asset_holding_get AssetBalance; ==`, now, "invalid")
 
 	// for params get, presence in ForeignAssets has always be required
-	testApp(t, "int 5; asset_params_get AssetTotal", pre, "Asset index 5 beyond")
+	testApp(t, "int 5; asset_params_get AssetTotal", pre, "asset index 5 beyond")
 	testApp(t, "int 5; asset_params_get AssetTotal", now, "unavailable Asset 5")
 
 	params := basics.AssetParams{
@@ -1112,7 +1112,7 @@ func testAssetsByVersion(t *testing.T, assetsTestProgram string, version uint64)
 
 	if version < 5 {
 		// Can't run these with AppCreator anyway
-		testApp(t, strings.Replace(assetsTestProgram, "int 0//params", "int 55", -1), pre, "Asset index 55 beyond")
+		testApp(t, strings.Replace(assetsTestProgram, "int 0//params", "int 55", -1), pre, "asset index 55 beyond")
 		testApp(t, strings.Replace(assetsTestProgram, "int 55", "int 0", -1), pre, "err opcode")
 	}
 
@@ -3235,7 +3235,15 @@ func TestReturnTypes(t *testing.T) {
 
 				var cx *EvalContext
 				if m == ModeApp {
-					_, cx, err = EvalContract(ops.Program, 1, 300, aep)
+					cx = &EvalContext{
+						EvalParams: aep,
+						runMode:    ModeApp,
+						groupIndex: 1,
+						txn:        &aep.TxnGroup[1],
+						appID:      300,
+						Scratch:    &scratchSpace{},
+					}
+					_, cx, err = EvalContract(ops.Program, 1, 300, cx)
 				} else {
 					_, cx, err = EvalSignatureFull(1, sep)
 				}

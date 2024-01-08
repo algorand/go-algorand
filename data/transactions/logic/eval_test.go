@@ -5152,7 +5152,16 @@ func TestPcDetails(t *testing.T) {
 			ep, _, _ := makeSampleEnv()
 			ep.Trace = &strings.Builder{}
 
-			pass, cx, err := EvalContract(ops.Program, 0, 888, ep)
+			cx := &EvalContext{
+				EvalParams: ep,
+				runMode:    ModeApp,
+				groupIndex: 0,
+				txn:        &ep.TxnGroup[0],
+				appID:      888,
+				Scratch:    &scratchSpace{},
+			}
+
+			pass, cx, err := EvalContract(ops.Program, 0, 888, cx)
 			require.Error(t, err)
 			require.False(t, pass)
 			require.NotNil(t, cx) // cx comes back nil if we couldn't even run

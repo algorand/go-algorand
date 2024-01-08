@@ -61,7 +61,7 @@ func newSimpleLedgerFull(t testing.TB, balances bookkeeping.GenesisBalances, cv 
 	for _, opt := range opts {
 		opt(&slCfg)
 	}
-	genBlock, err := bookkeeping.MakeGenesisBlock(cv, balances, "test", genHash)
+	genBlock, err := bookkeeping.MakeGenesisBlock(cv, balances, t.Name(), genHash)
 	require.NoError(t, err)
 	require.False(t, genBlock.FeeSink.IsZero())
 	require.False(t, genBlock.RewardsPool.IsZero())

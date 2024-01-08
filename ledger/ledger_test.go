@@ -100,8 +100,8 @@ func initNextBlockHeader(correctHeader *bookkeeping.BlockHeader, lastBlock bookk
 	}
 }
 
-func makeNewEmptyBlock(t *testing.T, l *Ledger, GenesisID string, initAccounts map[basics.Address]basics.AccountData) (blk bookkeeping.Block) {
-	a := require.New(t)
+func makeNewEmptyBlock(tb testing.TB, l *Ledger, GenesisID string, initAccounts map[basics.Address]basics.AccountData) (blk bookkeeping.Block) {
+	a := require.New(tb)
 
 	lastBlock, err := l.Block(l.Latest())
 	a.NoError(err, "could not get last block")
@@ -110,7 +110,7 @@ func makeNewEmptyBlock(t *testing.T, l *Ledger, GenesisID string, initAccounts m
 	poolAddr := testPoolAddr
 	var totalRewardUnits uint64
 	if l.Latest() == 0 {
-		require.NotNil(t, initAccounts)
+		require.NotNil(tb, initAccounts)
 		for _, acctdata := range initAccounts {
 			if acctdata.Status != basics.NotParticipating {
 				totalRewardUnits += acctdata.MicroAlgos.RewardUnits(proto)
@@ -118,8 +118,8 @@ func makeNewEmptyBlock(t *testing.T, l *Ledger, GenesisID string, initAccounts m
 		}
 	} else {
 		latestRound, totals, err := l.LatestTotals()
-		require.NoError(t, err)
-		require.Equal(t, l.Latest(), latestRound)
+		require.NoError(tb, err)
+		require.Equal(tb, l.Latest(), latestRound)
 		totalRewardUnits = totals.RewardUnits()
 	}
 	poolBal, _, _, err := l.LookupLatest(poolAddr)
@@ -137,7 +137,7 @@ func makeNewEmptyBlock(t *testing.T, l *Ledger, GenesisID string, initAccounts m
 	}
 
 	blk.TxnCommitments, err = blk.PaysetCommit()
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	if proto.SupportGenesisHash {
 		blk.BlockHeader.GenesisHash = crypto.Hash([]byte(GenesisID))
@@ -151,7 +151,7 @@ func makeNewEmptyBlock(t *testing.T, l *Ledger, GenesisID string, initAccounts m
 
 	if proto.StateProofInterval != 0 && uint64(blk.Round())%proto.StateProofInterval == 0 && uint64(blk.Round()) != 0 {
 		voters, err := l.VotersForStateProof(blk.Round() - basics.Round(proto.StateProofVotersLookback))
-		require.NoError(t, err)
+		require.NoError(tb, err)
 		stateProofTracking := bookkeeping.StateProofTrackingData{
 			StateProofVotersCommitment:  voters.Tree.Root(),
 			StateProofOnlineTotalWeight: voters.TotalWeight,
@@ -179,8 +179,8 @@ func (l *Ledger) appendUnvalidatedSignedTx(t *testing.T, initAccounts map[basics
 	return l.appendUnvalidated(blk)
 }
 
-func (l *Ledger) addBlockTxns(t *testing.T, accounts map[basics.Address]basics.AccountData, stxns []transactions.SignedTxn, ad transactions.ApplyData) error {
-	blk := makeNewEmptyBlock(t, l, t.Name(), accounts)
+func (l *Ledger) addBlockTxns(tb testing.TB, accounts map[basics.Address]basics.AccountData, stxns []transactions.SignedTxn, ad transactions.ApplyData) error {
+	blk := makeNewEmptyBlock(tb, l, tb.Name(), accounts)
 	proto := config.Consensus[blk.CurrentProtocol]
 	for _, stx := range stxns {
 		txib, err := blk.EncodeSignedTxn(stx, ad)
@@ -194,7 +194,7 @@ func (l *Ledger) addBlockTxns(t *testing.T, accounts map[basics.Address]basics.A
 	}
 	var err error
 	blk.TxnCommitments, err = blk.PaysetCommit()
-	require.NoError(t, err)
+	require.NoError(tb, err)
 	return l.AddBlock(blk, agreement.Certificate{})
 }
 

@@ -19,6 +19,7 @@ package ledger
 import (
 	"encoding/hex"
 	"fmt"
+	"os"
 	"strconv"
 	"testing"
 
@@ -31,8 +32,10 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/txntest"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
+	"github.com/algorand/go-deadlock"
 )
 
 // TestPayAction ensures a pay in teal affects balances
@@ -1407,7 +1410,7 @@ func TestGtxnEffects(t *testing.T) {
 		}
 
 		if ver == 30 {
-			dl.txgroup("Unable to obtain effects from top-level transactions", &createasa, &see)
+			dl.txgroup("unable to obtain effects from top-level transactions", &createasa, &see)
 			return
 		}
 		payset := dl.txgroup("", &createasa, &see)
@@ -3777,4 +3780,106 @@ func TestAppCallAppDuringInit(t *testing.T) {
 		}
 		dl.txn(&callInInit, problem)
 	})
+}
+
+func BenchmarkAppEvalMem(b *testing.B) {
+
+	genesisInitState, initSecrets := ledgertesting.GenerateInitState(b, protocol.ConsensusCurrentVersion, 10000000000)
+	cfg := config.GetDefaultLocal()
+	poolAddr := testPoolAddr
+	sinkAddr := testSinkAddr
+
+	initAccounts := genesisInitState.Accounts
+	var addrList []basics.Address
+	for addr := range initAccounts {
+		if addr != poolAddr && addr != sinkAddr {
+			addrList = append(addrList, addr)
+		}
+	}
+
+	dbName := fmt.Sprintf("%s.%d", b.Name(), crypto.RandUint64())
+	const inMem = false
+	log := logging.TestingLog(b)
+	log.SetLevel(logging.Info)   // prevent spamming with ledger.AddValidatedBlock debug message
+	deadlock.Opts.Disable = true // catchpoint writing might take long
+	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
+	require.NoError(b, err)
+	defer l.Close()
+	defer func() {
+		l.Close()
+		os.Remove(dbName + ".block.sqlite")
+		os.Remove(dbName + ".tracker.sqlite")
+	}()
+
+	var curStxns []transactions.SignedTxn
+	var curADs []transactions.ApplyData
+
+	const txnsPerBlock = 1000
+	for i := 0; i < b.N; i++ {
+		sender := addrList[i%len(addrList)]
+		appcall1 := txntest.Txn{
+			Type:              protocol.ApplicationCallTx,
+			GenesisHash:       l.GenesisHash(),
+			FirstValid:        1,
+			LastValid:         1000,
+			Fee:               1000,
+			Sender:            sender,
+			Note:              []byte{uint8(i), uint8(i >> 8), uint8(i >> 16), uint8(i >> 24)},
+			GlobalStateSchema: basics.StateSchema{NumByteSlice: 2},
+			ApprovalProgram: `#pragma version 2
+	txn ApplicationID
+	bz create
+	byte "caller"
+	txn Sender
+	app_global_put
+	b ok
+create:
+	byte "creator"
+	txn Sender
+	app_global_put
+ok:
+	int 1`,
+			ClearStateProgram: "#pragma version 2\nint 1",
+		}
+		appID := basics.AppIndex(1000+i) + 1
+		// fmt.Printf("%d %d\n", i, appID)
+
+		ad := transactions.ApplyData{
+			ApplicationID: appID,
+			EvalDelta: transactions.EvalDelta{
+				GlobalDelta: basics.StateDelta{
+					"creator": basics.ValueDelta{
+						Action: basics.SetBytesAction, Bytes: string(sender[:]),
+					},
+				},
+			},
+		}
+		stx1 := sign(initSecrets, appcall1.Txn())
+
+		if len(curStxns) < txnsPerBlock {
+			curStxns = append(curStxns, stx1)
+			curADs = append(curADs, ad)
+			if i != b.N-1 {
+				continue
+			}
+		}
+
+		blk := makeNewEmptyBlock(b, l, b.Name(), genesisInitState.Accounts)
+		b.Logf("starting new block: i=%d %d txns, cnt=%d", i, len(curStxns), blk.TxnCounter)
+		for i, stx := range curStxns {
+			txib, err := blk.EncodeSignedTxn(stx, curADs[i])
+			require.NoError(b, err)
+			blk.Payset = append(blk.Payset, txib)
+		}
+		blk.TxnCounter = blk.TxnCounter + uint64(len(curStxns))
+		blk.TxnCommitments, err = blk.PaysetCommit()
+		require.NoError(b, err)
+		err = l.appendUnvalidated(blk)
+
+		require.NoError(b, err)
+		curStxns = curStxns[:0]
+		curADs = curADs[:0]
+		curStxns = append(curStxns, stx1)
+		curADs = append(curADs, ad)
+	}
 }

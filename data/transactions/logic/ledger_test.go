@@ -832,7 +832,15 @@ func (l *Ledger) appl(from basics.Address, appl transactions.ApplicationCallTxnF
 	if !ok {
 		return errors.New("No application")
 	}
-	pass, cx, err := EvalContract(params.ApprovalProgram, gi, aid, ep)
+	cx := &EvalContext{
+		EvalParams: ep,
+		runMode:    ModeApp,
+		groupIndex: gi,
+		txn:        &ep.TxnGroup[gi],
+		appID:      aid,
+		Scratch:    &scratchSpace{},
+	}
+	pass, cx, err := EvalContract(params.ApprovalProgram, gi, aid, cx)
 	if err != nil {
 		ad.EvalDelta = transactions.EvalDelta{}
 		return err

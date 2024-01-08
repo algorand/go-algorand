@@ -29,6 +29,7 @@ import (
 	"math/bits"
 	"runtime"
 	"strings"
+	"sync"
 
 	"golang.org/x/exp/slices"
 
@@ -664,7 +665,7 @@ type EvalContext struct {
 	intc    []uint64
 	bytec   [][]byte
 	version uint64
-	Scratch scratchSpace
+	Scratch *scratchSpace
 
 	subtxns []transactions.SignedTxnWithAD // place to build for itxn_submit
 	cost    int                            // cost incurred so far
@@ -993,30 +994,24 @@ func (err EvalError) Unwrap() error {
 }
 
 // EvalContract executes stateful program as the gi'th transaction in params
-func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParams) (bool, *EvalContext, error) {
-	if params.Ledger == nil {
+func EvalContract(program []byte, gi int, aid basics.AppIndex, cx *EvalContext) (bool, *EvalContext, error) {
+	if cx.EvalParams.Ledger == nil {
 		return false, nil, errors.New("no ledger in contract eval")
 	}
-	if params.SigLedger == nil {
+	if cx.EvalParams.SigLedger == nil {
 		return false, nil, errors.New("no sig ledger in contract eval")
 	}
 	if aid == 0 {
 		return false, nil, errors.New("0 appId in contract eval")
 	}
-	if params.runMode != ModeApp {
-		return false, nil, fmt.Errorf("attempt to evaluate a contract with %s mode EvalParams", params.runMode)
-	}
-	cx := EvalContext{
-		EvalParams: params,
-		runMode:    ModeApp,
-		groupIndex: gi,
-		txn:        &params.TxnGroup[gi],
-		appID:      aid,
+
+	if cx.EvalParams.runMode != ModeApp {
+		return false, nil, fmt.Errorf("attempt to evaluate a contract with %s mode EvalParams", cx.EvalParams.runMode)
 	}
 
 	if cx.Proto.IsolateClearState && cx.txn.Txn.OnCompletion == transactions.ClearStateOC {
 		if cx.PooledApplicationBudget != nil && *cx.PooledApplicationBudget < cx.Proto.MaxAppProgramCost {
-			return false, nil, fmt.Errorf("Attempted ClearState execution with low OpcodeBudget %d", *cx.PooledApplicationBudget)
+			return false, nil, fmt.Errorf("attempted ClearState execution with low OpcodeBudget %d", *cx.PooledApplicationBudget)
 		}
 	}
 
@@ -1082,7 +1077,7 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 	if cx.Trace != nil && cx.caller != nil {
 		fmt.Fprintf(cx.Trace, "--- enter %d %s %v\n", aid, cx.txn.Txn.OnCompletion, cx.txn.Txn.ApplicationArgs)
 	}
-	pass, err := eval(program, &cx)
+	pass, err := eval(program, cx)
 	if err != nil {
 		pc, det := cx.pcDetails()
 		details := fmt.Sprintf("pc=%d, opcodes=%s", pc, det)
@@ -1096,14 +1091,56 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 	// Save scratch for `gload`. We used to copy, but cx.scratch is quite large,
 	// about 8k, and caused measurable CPU and memory demands.  Of course, these
 	// should never be changed by later transactions.
-	cx.pastScratch[cx.groupIndex] = &cx.Scratch
+	cx.pastScratch[cx.groupIndex] = cx.Scratch
 
-	return pass, &cx, err
+	return pass, cx, err
+}
+
+var cxPool = sync.Pool{
+	New: func() interface{} {
+		return &EvalContext{}
+	},
+}
+
+func getEvalContext(gi int, aid basics.AppIndex, params *EvalParams) *EvalContext {
+	cx := cxPool.Get().(*EvalContext)
+	cx.EvalParams = params
+	cx.runMode = params.runMode
+
+	cx.groupIndex = gi
+	cx.txn = &cx.EvalParams.TxnGroup[gi]
+	cx.appID = aid
+
+	cx.Stack = cx.Stack[:0]
+	cx.callstack = cx.callstack[:0]
+	cx.fromCallsub = false
+	cx.program = cx.program[:0]
+	cx.pc = 0
+	cx.nextpc = 0
+	cx.intc = cx.intc[:0]
+	cx.bytec = cx.bytec[:0]
+	cx.version = 0
+	cx.Scratch = &scratchSpace{}
+
+	cx.subtxns = cx.subtxns[:0]
+	cx.cost = 0
+	cx.logSize = 0
+	cx.branchTargets = cx.branchTargets[:0]
+	cx.instructionStarts = cx.instructionStarts[:0]
+	cx.programHashCached = crypto.Digest{}
+	return cx
+}
+
+func putEvalContext(cx *EvalContext) {
+	cxPool.Put(cx)
 }
 
 // EvalApp is a lighter weight interface that doesn't return the EvalContext
 func EvalApp(program []byte, gi int, aid basics.AppIndex, params *EvalParams) (bool, error) {
-	pass, _, err := EvalContract(program, gi, aid, params)
+	cx := getEvalContext(gi, aid, params)
+	defer putEvalContext(cx)
+
+	pass, _, err := EvalContract(program, gi, aid, cx)
 	return pass, err
 }
 
@@ -1122,6 +1159,7 @@ func EvalSignatureFull(gi int, params *EvalParams) (bool, *EvalContext, error) {
 		runMode:    ModeSig,
 		groupIndex: gi,
 		txn:        &params.TxnGroup[gi],
+		Scratch:    &scratchSpace{},
 	}
 	pass, err := eval(cx.txn.Lsig.Logic, &cx)
 
@@ -2953,7 +2991,7 @@ func (cx *EvalContext) txnFieldToStack(stxn *transactions.SignedTxnWithAD, fs *t
 			return sv, fmt.Errorf("txn[%s] not allowed in current mode", fs.field)
 		}
 		if cx.version < txnEffectsVersion && !inner {
-			return sv, errors.New("Unable to obtain effects from top-level transactions")
+			return sv, errors.New("unable to obtain effects from top-level transactions")
 		}
 	}
 	if inner {
@@ -3569,7 +3607,7 @@ func (ep *EvalParams) GetApplicationAddress(app basics.AppIndex) basics.Address 
 func (cx *EvalContext) getCreatorAddress() ([]byte, error) {
 	_, creator, err := cx.Ledger.AppParams(cx.appID)
 	if err != nil {
-		return nil, fmt.Errorf("No params for current app")
+		return nil, fmt.Errorf("no params for current app")
 	}
 	return creator[:], nil
 }
@@ -4579,7 +4617,7 @@ func (cx *EvalContext) appReference(ref uint64, foreign bool) (aid basics.AppInd
 		if ref <= uint64(len(cx.txn.Txn.ForeignApps)) {
 			return basics.AppIndex(cx.txn.Txn.ForeignApps[ref-1]), nil
 		}
-		return 0, fmt.Errorf("App index %d beyond txn.ForeignApps", ref)
+		return 0, fmt.Errorf("app index %d beyond txn.ForeignApps", ref)
 	}
 	// Otherwise it's direct
 	return basics.AppIndex(ref), nil
@@ -4686,7 +4724,7 @@ func (cx *EvalContext) assetReference(ref uint64, foreign bool) (aid basics.Asse
 		if ref < uint64(len(cx.txn.Txn.ForeignAssets)) {
 			return basics.AssetIndex(cx.txn.Txn.ForeignAssets[ref]), nil
 		}
-		return 0, fmt.Errorf("Asset index %d beyond txn.ForeignAssets", ref)
+		return 0, fmt.Errorf("asset index %d beyond txn.ForeignAssets", ref)
 	}
 	// Otherwise it's direct
 	return basics.AssetIndex(ref), nil
