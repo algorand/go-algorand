@@ -212,16 +212,15 @@ func TestBlockEvaluator(t *testing.T) {
 	require.Equal(t, bal2new.MicroAlgos.Raw, bal2.MicroAlgos.Raw-minFee.Raw)
 }
 
-// TestMiningFees ensures that the proper portion of tx fees go to the proposer,
-// starting in v39.
+// TestMiningFees ensures that the proper portion of tx fees go to the proposer
 func TestMiningFees(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	// Lots of balance checks that would be messed up by rewards
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis(ledgertesting.TurnOffRewards)
-	// Mining begins in v39. Start checking in v38 to test that is unchanged.
-	ledgertesting.TestConsensusRange(t, 38, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+	miningBegins := 40
+	ledgertesting.TestConsensusRange(t, miningBegins-1, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
 		dl := NewDoubleLedger(t, genBalances, cv, cfg)
 		defer dl.Close()
 
@@ -271,7 +270,7 @@ func TestMiningFees(t *testing.T) {
 			dl.txns(&pay, pay.Args("again"))
 			vb := dl.endBlock(proposer)
 
-			if ver >= 39 {
+			if ver >= miningBegins {
 				require.True(t, dl.generator.GenesisProto().EnableMining)     // version sanity check
 				require.NotZero(t, dl.generator.GenesisProto().MiningPercent) // version sanity check
 				// new fields are in the header
@@ -299,7 +298,7 @@ func TestMiningFees(t *testing.T) {
 			postsink = micros(dl.t, dl.generator, genBalances.FeeSink)
 			postprop = micros(dl.t, dl.generator, proposer)
 
-			if ver >= 39 && (proposer == smallest || proposer == biggest) {
+			if ver >= miningBegins && (proposer == smallest || proposer == biggest) {
 				require.EqualValues(t, 500, postsink-presink) // based on 75% in config/consensus.go
 				require.EqualValues(t, 1500, postprop-preprop)
 			} else {
@@ -317,8 +316,8 @@ func TestIncentiveEligible(t *testing.T) {
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	// Incentive-eligible appears in v39. Start checking in v38 to test that is unchanged.
-	ledgertesting.TestConsensusRange(t, 38, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+	miningBegins := 40
+	ledgertesting.TestConsensusRange(t, miningBegins-1, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
 		dl := NewDoubleLedger(t, genBalances, cv, cfg)
 		defer dl.Close()
 
@@ -369,7 +368,7 @@ func TestIncentiveEligible(t *testing.T) {
 		require.False(t, a.IncentiveEligible)
 		a, _, _, err = dl.generator.LookupLatest(smallest)
 		require.NoError(t, err)
-		require.Equal(t, a.IncentiveEligible, ver > 38)
+		require.Equal(t, a.IncentiveEligible, ver >= miningBegins)
 	})
 }
 

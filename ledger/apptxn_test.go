@@ -89,7 +89,7 @@ func TestPayAction(t *testing.T) {
 		dl.txns(&payout1)
 		vb := dl.endBlock(proposer)
 		// First MiningPct > 0
-		if ver >= 39 {
+		if ver >= 40 {
 			require.True(t, dl.generator.GenesisProto().EnableMining)
 			require.EqualValues(t, proposer, vb.Block().BlockHeader.Proposer)
 			require.EqualValues(t, 2000, vb.Block().BlockHeader.FeesCollected.Raw)
@@ -110,7 +110,7 @@ func TestPayAction(t *testing.T) {
 		postsink = micros(dl.t, dl.generator, genBalances.FeeSink)
 		postprop = micros(dl.t, dl.generator, proposer)
 		// First MiningPct > 0
-		if ver >= 39 {
+		if ver >= 40 {
 			require.EqualValues(t, 500, postsink-presink) // based on 75% in config/consensus.go
 			require.EqualValues(t, 1500, postprop-preprop)
 		} else {
