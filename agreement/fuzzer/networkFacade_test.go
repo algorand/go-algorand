@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -129,7 +129,7 @@ func (n *NetworkFacade) DumpQueues() {
 	}
 	n.eventsQueuesMu.Unlock()
 	queues += "----------------------\n"
-	fmt.Printf(queues)
+	fmt.Print(queues)
 }
 
 func (n *NetworkFacade) WaitForEventsQueue(cleared bool) {
@@ -158,7 +158,7 @@ func (n *NetworkFacade) WaitForEventsQueue(cleared bool) {
 				n.DumpQueues()
 				//panic("Waiting for event processing for 0 took too long")
 				pprof.Lookup("goroutine").WriteTo(os.Stdout, 1)
-				os.Exit(1)
+				panic(fmt.Sprintf("maxWait %d sec exceeded", maxEventQueueWait/time.Second))
 			}
 
 		}

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -879,11 +879,11 @@ func (st StackType) widened() StackType {
 	}
 }
 
-func (st StackType) constant() (uint64, bool) {
-	if st.Bound[0] == st.Bound[1] {
-		return st.Bound[0], true
+func (st StackType) constInt() (uint64, bool) {
+	if st.AVMType != avmUint64 || st.Bound[0] != st.Bound[1] {
+		return 0, false
 	}
-	return 0, false
+	return st.Bound[0], true
 }
 
 // overlaps checks if there is enough overlap

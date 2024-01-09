@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -2568,8 +2568,8 @@ func TestSlowPeerDisconnection(t *testing.T) {
 		GenesisID: genesisID,
 		NetworkID: config.Devtestnet,
 	}
-	wn.broadcaster.slowWritingPeerMonitorInterval = time.Millisecond * 50
 	wn.setup()
+	wn.broadcaster.slowWritingPeerMonitorInterval = time.Millisecond * 50
 	wn.eventualReadyDelay = time.Second
 	wn.messagesOfInterest = nil // clear this before starting the network so that we won't be sending a MOI upon connection.
 

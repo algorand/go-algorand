@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -1383,22 +1383,34 @@ func initConsensusProtocols() {
 	// for the sake of future manual calculations, we'll round that down a bit :
 	v37.ApprovedUpgrades[protocol.ConsensusV38] = 10000
 
+	v39 := v38
+	v39.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+
+	v39.LogicSigVersion = 10
+	v39.EnableLogicSigCostPooling = true
+
+	v39.AgreementDeadlineTimeoutPeriod0 = 4 * time.Second
+
+	v39.DynamicFilterTimeout = true
+
+	v39.StateProofBlockHashInLightHeader = true
+
+	// For future upgrades, round times will likely be shorter so giving ourselves some buffer room
+	v39.MaxUpgradeWaitRounds = 250000
+
+	Consensus[protocol.ConsensusV39] = v39
+
+	// v38 can be upgraded to v39, with an update delay of 7d:
+	// 157000 = (7 * 24 * 60 * 60 / 3.3 round times currently)
+	// but our current max is 150000 so using that :
+	v38.ApprovedUpgrades[protocol.ConsensusV39] = 150000
+
 	// ConsensusFuture is used to test features that are implemented
 	// but not yet released in a production protocol version.
-	vFuture := v38
-
+	vFuture := v39
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
-	vFuture.LogicSigVersion = 10 // When moving this to a release, put a new higher LogicSigVersion here
-	vFuture.EnableLogicSigCostPooling = true
-
-	vFuture.AgreementDeadlineTimeoutPeriod0 = 4 * time.Second
-
-	vFuture.StateProofBlockHashInLightHeader = true
-
-	// Setting DynamicFilterTimeout in vFuture will impact e2e test performance
-	// by reducing round time. Hence, it is commented out for now.
-	vFuture.DynamicFilterTimeout = true
+	vFuture.LogicSigVersion = 11 // When moving this to a release, put a new higher LogicSigVersion here
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -811,17 +811,16 @@ func TestPlayerPermutation(t *testing.T) {
 }
 
 func playerPermutationCheck(t *testing.T, enableDynamicFilterTimeout bool) {
-	// create a protocol version where dynamic filter is enabled
-	version, _, configCleanup := createDynamicFilterConfig()
+	// create a protocol where dynamic filter is set based on the enableDynamicFilterTimeout flag
+	dynamicFilterOverriddenProtocol, _, configCleanup := overrideConfigWithDynamicFilterParam(enableDynamicFilterTimeout)
 	defer configCleanup()
 
 	for i := 0; i < 7; i++ {
 		for j := 0; j < 14; j++ {
 			_, pMachine, helper := getPlayerPermutation(t, i)
 			inMsg := getMessageEventPermutation(t, j, helper)
-			if enableDynamicFilterTimeout {
-				inMsg.Proto = ConsensusVersionView{Version: version}
-			}
+			inMsg.Proto = ConsensusVersionView{Version: dynamicFilterOverriddenProtocol}
+
 			err, panicErr := pMachine.transition(inMsg)
 			fmt.Println(pMachine.getTrace().events)
 			fmt.Println("")

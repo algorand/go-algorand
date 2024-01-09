@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -3098,6 +3098,8 @@ func TestReturnTypes(t *testing.T) {
 		"err":    true,
 		"return": true,
 
+		// these have unusual input size requirements not encoded in proto
+		"falcon_verify":       true,
 		"ecdsa_pk_decompress": true,
 
 		"frame_dig":  true, // would need a "proto" subroutine

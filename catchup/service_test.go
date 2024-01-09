@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -1135,7 +1135,7 @@ func TestDownloadBlocksToSupportStateProofs(t *testing.T) {
 
 	lookback := lookbackForStateproofsSupport(&topBlk)
 	oldestRound := topBlk.BlockHeader.Round.SubSaturate(basics.Round(lookback))
-	assert.Equal(t, uint64(oldestRound), 512-config.Consensus[protocol.ConsensusFuture].StateProofInterval-config.Consensus[protocol.ConsensusFuture].StateProofVotersLookback)
+	assert.Equal(t, uint64(oldestRound), 512-config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval-config.Consensus[protocol.ConsensusCurrentVersion].StateProofVotersLookback)
 
 	// the network has made progress and now it is on round 8000. in this case we would not download blocks to cover 512.
 	// instead, we will download blocks to confirm only the recovery period lookback.
@@ -1150,7 +1150,7 @@ func TestDownloadBlocksToSupportStateProofs(t *testing.T) {
 	oldestRound = topBlk.BlockHeader.Round.SubSaturate(basics.Round(lookback))
 
 	lowestRoundToRetain := 8000 - (8000 % config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval) -
-		config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval*(config.Consensus[protocol.ConsensusCurrentVersion].StateProofMaxRecoveryIntervals+1) - config.Consensus[protocol.ConsensusFuture].StateProofVotersLookback
+		config.Consensus[protocol.ConsensusCurrentVersion].StateProofInterval*(config.Consensus[protocol.ConsensusCurrentVersion].StateProofMaxRecoveryIntervals+1) - config.Consensus[protocol.ConsensusCurrentVersion].StateProofVotersLookback
 
 	assert.Equal(t, uint64(oldestRound), lowestRoundToRetain)
 

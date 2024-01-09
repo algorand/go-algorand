@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -217,6 +217,12 @@ const ConsensusV38 = ConsensusVersion(
 	"https://github.com/algorandfoundation/specs/tree/abd3d4823c6f77349fc04c3af7b1e99fe4df699f",
 )
 
+// ConsensusV39 enables dynamic filter timeouts, a deadline timeout of 4 seconds,
+// TEAL v10 logicSig opcode budget pooling along with elliptic curve ops on some pairing friendly curves.
+const ConsensusV39 = ConsensusVersion(
+	"https://github.com/algorandfoundation/specs/tree/925a46433742afb0b51bb939354bd907fa88bf95",
+)
+
 // ConsensusFuture is a protocol that should not appear in any production
 // network, but is used to test features before they are released.
 const ConsensusFuture = ConsensusVersion(
@@ -246,7 +252,7 @@ const ConsensusVAlpha5 = ConsensusVersion("alpha5")
 
 // ConsensusCurrentVersion is the latest version and should be used
 // when a specific version is not provided.
-const ConsensusCurrentVersion = ConsensusV38
+const ConsensusCurrentVersion = ConsensusV39
 
 // Error is used to indicate that an unsupported protocol has been detected.
 type Error ConsensusVersion
