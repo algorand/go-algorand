@@ -33,7 +33,6 @@ import (
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -83,7 +82,6 @@ func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationP
 	}
 
 	wallets := make([]string, numAccounts)
-	nodes := make([]*AlgorandFullNode, numAccounts)
 	rootDirs := make([]string, 0)
 
 	// The genesis configuration is missing allocations, but that's OK
@@ -152,34 +150,40 @@ func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationP
 		MicroAlgos: basics.MicroAlgos{Raw: uint64(100000)},
 	}
 
-	bootstrap := bookkeeping.MakeGenesisBalances(genesis, sinkAddr, poolAddr)
-
-	for i, rootDirectory := range rootDirs {
-		genesisDir := filepath.Join(rootDirectory, g.ID())
-		ledgerFilenamePrefix := filepath.Join(genesisDir, config.LedgerFilenamePrefix)
-		if customConsensus != nil {
-			err := config.SaveConfigurableConsensus(genesisDir, customConsensus)
-			require.Nil(t, err)
-		}
-		err1 := config.LoadConfigurableConsensusProtocols(genesisDir)
-		require.Nil(t, err1)
-		nodeID := fmt.Sprintf("Node%d", i)
-		const inMem = false
-		cfg, err := config.LoadConfigFromDisk(rootDirectory)
-		require.NoError(t, err)
-		cfg.Archival = true
-		_, err = data.LoadLedger(logging.Base().With("name", nodeID), ledgerFilenamePrefix, inMem, g.Proto, bootstrap, g.ID(), g.Hash(), nil, cfg)
-		require.NoError(t, err)
+	for addr, data := range genesis {
+		g.Allocation = append(g.Allocation, bookkeeping.GenesisAllocation{
+			Address: addr.String(),
+			State: bookkeeping.GenesisAccountData{
+				Status:          data.Status,
+				MicroAlgos:      data.MicroAlgos,
+				VoteID:          data.VoteID,
+				StateProofID:    data.StateProofID,
+				SelectionID:     data.SelectionID,
+				VoteFirstValid:  data.VoteFirstValid,
+				VoteLastValid:   data.VoteLastValid,
+				VoteKeyDilution: data.VoteKeyDilution,
+			},
+		})
 	}
 
+	nodes := make([]*AlgorandFullNode, numAccounts)
 	for i := range nodes {
+		rootDirectory := rootDirs[i]
+		genesisDir := filepath.Join(rootDirectory, g.ID())
+		if customConsensus != nil {
+			err0 := config.SaveConfigurableConsensus(genesisDir, customConsensus)
+			require.Nil(t, err0)
+			err0 = config.LoadConfigurableConsensusProtocols(genesisDir)
+			require.Nil(t, err0)
+		}
+
 		var nodeNeighbors []string
 		nodeNeighbors = append(nodeNeighbors, neighbors[:i]...)
 		nodeNeighbors = append(nodeNeighbors, neighbors[i+1:]...)
-		rootDirectory := rootDirs[i]
 		cfg, err := config.LoadConfigFromDisk(rootDirectory)
 		require.NoError(t, err)
-		node, err := MakeFull(logging.Base().With("source", t.Name()+strconv.Itoa(i)), rootDirectory, cfg, nodeNeighbors, g)
+		nodeID := fmt.Sprintf("Node%d", i)
+		node, err := MakeFull(logging.Base().With("name", nodeID), rootDirectory, cfg, nodeNeighbors, g)
 		nodes[i] = node
 		require.NoError(t, err)
 	}
@@ -190,7 +194,14 @@ func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationP
 func TestSyncingFullNode(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	t.Skip("Flaky in nightly test environment")
+	if testing.Short() {
+		t.Skip("Test takes ~50 seconds.")
+	}
+
+	if (runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" && runtime.GOOS != "darwin") &&
+		strings.ToUpper(os.Getenv("CIRCLECI")) == "TRUE" {
+		t.Skip("Test is too heavy for amd64 builder running in parallel with other packages")
+	}
 
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	defer backlogPool.Shutdown()
@@ -252,7 +263,7 @@ func TestInitialSync(t *testing.T) {
 		t.Skip("Test takes ~25 seconds.")
 	}
 
-	if (runtime.GOARCH == "arm" || runtime.GOARCH == "arm64") &&
+	if (runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" && runtime.GOOS != "darwin") &&
 		strings.ToUpper(os.Getenv("CIRCLECI")) == "TRUE" {
 		t.Skip("Test is too heavy for amd64 builder running in parallel with other packages")
 	}
@@ -289,7 +300,14 @@ func TestInitialSync(t *testing.T) {
 func TestSimpleUpgrade(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	t.Skip("Flaky in nightly test environment.")
+	if testing.Short() {
+		t.Skip("Test takes ~50 seconds.")
+	}
+
+	if (runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" && runtime.GOOS != "darwin") &&
+		strings.ToUpper(os.Getenv("CIRCLECI")) == "TRUE" {
+		t.Skip("Test is too heavy for amd64 builder running in parallel with other packages")
+	}
 
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	defer backlogPool.Shutdown()
@@ -344,7 +362,7 @@ func TestSimpleUpgrade(t *testing.T) {
 	roundsCheckedForUpgrade := 0
 
 	for tests := basics.Round(0); tests < maxRounds; tests++ {
-		blocks := make([]bookkeeping.Block, len(wallets), len(wallets))
+		blocks := make([]bookkeeping.Block, len(wallets))
 		for i := range wallets {
 			select {
 			case <-nodes[i].ledger.Wait(initialRound + tests):
