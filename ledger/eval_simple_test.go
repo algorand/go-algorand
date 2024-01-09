@@ -381,8 +381,8 @@ func TestAbsentTracking(t *testing.T) {
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis(func(cfg *ledgertesting.GenesisCfg) {
 		cfg.OnlineCount = 2 // So we know proposer should propose every 2 rounds, on average
 	})
-	// Absentee checking begins in v39. Start checking in v38 to test that is unchanged.
-	ledgertesting.TestConsensusRange(t, 38, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+	checkingBegins := 40
+	ledgertesting.TestConsensusRange(t, checkingBegins-1, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
 		dl := NewDoubleLedger(t, genBalances, cv, cfg)
 		defer dl.Close()
 
@@ -418,7 +418,7 @@ func TestAbsentTracking(t *testing.T) {
 
 		prp := lookup(t, dl.validator, proposer)
 
-		if ver >= 39 {
+		if ver >= checkingBegins {
 			// version sanity check
 			require.True(t, dl.generator.GenesisProto().EnableAbsenteeTracking())
 			require.NotZero(t, prp.LastProposed)
@@ -456,7 +456,7 @@ func TestAbsentTracking(t *testing.T) {
 		require.Zero(t, regger.LastProposed)
 		require.True(t, regger.Status == basics.Online)
 
-		if ver >= 39 {
+		if ver >= checkingBegins {
 			require.NotZero(t, regger.LastHeartbeat) // online keyreg caused update
 		} else {
 			require.Zero(t, regger.LastHeartbeat)
@@ -492,9 +492,9 @@ func TestAbsentTracking(t *testing.T) {
 			Receiver: addrs[0],
 			Amount:   0,
 		})
-		require.Equal(t, ver < 39, lookup(t, dl.generator, addrs[0]).Status == basics.Online)
+		require.Equal(t, ver < checkingBegins, lookup(t, dl.generator, addrs[0]).Status == basics.Online)
 		require.True(t, lookup(t, dl.generator, addrs[1]).Status == basics.Online)
-		require.Equal(t, ver < 39, lookup(t, dl.generator, addrs[2]).Status == basics.Online)
+		require.Equal(t, ver < checkingBegins, lookup(t, dl.generator, addrs[2]).Status == basics.Online)
 
 	})
 }

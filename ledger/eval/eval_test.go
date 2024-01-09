@@ -1142,6 +1142,7 @@ func TestEvalFunctionForExpiredAccounts(t *testing.T) {
 		tmp.Status = basics.Online
 		crypto.RandBytes(tmp.StateProofID[:])
 		crypto.RandBytes(tmp.SelectionID[:])
+		crypto.RandBytes(tmp.VoteID[:])
 		genesisInitState.Accounts[addr] = tmp
 	}
 
@@ -1165,10 +1166,16 @@ func TestEvalFunctionForExpiredAccounts(t *testing.T) {
 	blkEval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0, nil)
 	require.NoError(t, err)
 
-	// Advance the evaluator a couple rounds...
+	// Advance the evaluator a couple rounds, watching for lack of expiration
 	for i := uint64(0); i < uint64(targetRound); i++ {
-		l.endBlock(t, blkEval)
+		vb := l.endBlock(t, blkEval)
 		blkEval = l.nextBlock(t)
+		for _, acct := range vb.Block().ExpiredParticipationAccounts {
+			if acct == recvAddr {
+				// won't happen, because recvAddr didn't appear in block
+				require.Fail(t, "premature expiration")
+			}
+		}
 	}
 
 	require.Greater(t, uint64(blkEval.Round()), uint64(recvAddrLastValidRound))
@@ -1199,14 +1206,22 @@ func TestEvalFunctionForExpiredAccounts(t *testing.T) {
 	validatedBlock, err := blkEval.GenerateBlock()
 	require.NoError(t, err)
 
+	expired := false
+	for _, acct := range validatedBlock.Block().ExpiredParticipationAccounts {
+		if acct == recvAddr {
+			expired = true
+		}
+	}
+	require.True(t, expired)
+
 	_, err = Eval(context.Background(), l, validatedBlock.Block(), false, nil, nil, l.tracer)
 	require.NoError(t, err)
 
 	acctData, _ := blkEval.state.lookup(recvAddr)
 
-	require.Equal(t, merklesignature.Verifier{}.Commitment, acctData.StateProofID)
-	require.Equal(t, crypto.VRFVerifier{}, acctData.SelectionID)
-
+	require.Zero(t, acctData.StateProofID)
+	require.Zero(t, acctData.SelectionID)
+	require.Zero(t, acctData.VoteID)
 	badBlock := *validatedBlock
 
 	// First validate that bad block is fine if we dont touch it...

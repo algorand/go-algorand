@@ -235,8 +235,6 @@ func parseRecord(cols []string) (rec record) {
 		rec.Status = basics.Offline
 	case "NotParticipating":
 		rec.Status = basics.NotParticipating
-	case "Suspended":
-		rec.Status = basics.Suspended
 	default:
 		log.Fatalf("unknown status: %s", cols[3])
 	}

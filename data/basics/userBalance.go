@@ -42,11 +42,6 @@ const (
 	// Two special accounts that are defined as NotParticipating are the incentive pool (also know as rewards pool) and the fee sink.
 	// These two accounts also have additional Algo transfer restrictions.
 	NotParticipating
-	// Suspended indicates that an account has registered keys, intending to
-	// particpate, but appears to have gone dark. Their balance should no longer
-	// be considered online, but their voting keys should be retained so they
-	// can easily get back online by sending a "heartbeat".
-	Suspended
 
 	// encodedMaxAssetsPerAccount is the decoder limit of number of assets stored per account.
 	// it's being verified by the unit test TestEncodedAccountAllocationBounds to align
@@ -80,8 +75,6 @@ func (s Status) String() string {
 		return "Online"
 	case NotParticipating:
 		return "Not Participating"
-	case Suspended:
-		return "Suspended"
 	}
 	return ""
 }
@@ -95,8 +88,6 @@ func UnmarshalStatus(value string) (s Status, err error) {
 		s = Online
 	case "Not Participating":
 		s = NotParticipating
-	case "Suspended":
-		s = Suspended
 	default:
 		err = fmt.Errorf("unknown account status: %v", value)
 	}

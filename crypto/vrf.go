@@ -134,7 +134,7 @@ func (pk VrfPubkey) verifyBytes(proof VrfProof, msg []byte) (bool, VrfOutput) {
 	return ret == 0, out
 }
 
-// IsEmpty returns true is the key is empty/zero'd.
+// IsEmpty returns true if the key is empty/zero'd.
 func (pk VrfPubkey) IsEmpty() bool {
 	return pk == VrfPubkey{}
 }

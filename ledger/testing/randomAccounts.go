@@ -22,7 +22,6 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
 
@@ -69,36 +68,24 @@ func RandomAccountData(rewardsBase uint64) basics.AccountData {
 	// 0 is an invalid round, but would be right if never needed a heartbeat
 	data.LastHeartbeat = basics.Round(crypto.RandUint64() % 10)
 
-	switch crypto.RandUint64() % 4 {
+	switch crypto.RandUint64() % 3 {
 	case 0:
 		data.Status = basics.Online
-		data.VoteID = crypto.OneTimeSignatureVerifier{0x01}
 		data.IncentiveEligible = crypto.RandUint64()%5 == 0
-		data.VoteFirstValid = 1
-		data.VoteLastValid = 10000
 	case 1:
 		data.Status = basics.Offline
 	case 2:
 		data.Status = basics.NotParticipating
-	case 3:
-		data.Status = basics.Suspended
 	}
 
-	switch data.Status {
-	case basics.Online, basics.Suspended:
+	// Give online accounts voting data, and some of the offline too. They are "suspended".
+	if data.Status == basics.Online || (data.Status == basics.Offline && crypto.RandUint64()%5 == 1) {
 		crypto.RandBytes(data.VoteID[:])
 		crypto.RandBytes(data.SelectionID[:])
 		crypto.RandBytes(data.StateProofID[:])
 		data.VoteFirstValid = basics.Round(crypto.RandUint64())
 		data.VoteLastValid = basics.Round(crypto.RandUint64() % uint64(math.MaxInt64)) // int64 is the max sqlite can store
 		data.VoteKeyDilution = crypto.RandUint64()
-	case basics.Offline, basics.NotParticipating:
-		data.VoteID = crypto.OneTimeSignatureVerifier{}
-		data.SelectionID = crypto.VRFVerifier{}
-		data.StateProofID = merklesignature.Commitment{}
-		data.VoteFirstValid = 0
-		data.VoteLastValid = 0
-		data.VoteKeyDilution = 0
 	}
 
 	data.RewardsBase = rewardsBase

@@ -216,8 +216,6 @@ func (accountList *AccountsList) outputAccount(addr string, acctInfo model.Accou
 			status = "offline"
 		case basics.NotParticipating.String():
 			status = "excluded"
-		case basics.Suspended.String():
-			status = "suspended"
 		default:
 			panic(fmt.Sprintf("unexpected account status: %v", acctInfo.Status))
 		}

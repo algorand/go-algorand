@@ -1460,7 +1460,9 @@ func (eval *BlockEvaluator) endOfBlock() error {
 
 // generateKnockOfflineAccountsList creates the lists of expired or absent
 // participation accounts by traversing over the modified accounts in the state
-// deltas and testing if any of them needs to be reset/suspended.
+// deltas and testing if any of them needs to be reset/suspended. Expiration
+// takes precedence - if an account is expired, it should be knocked offline and
+// key material deleted. If it is only suspended, the key material will remain.
 func (eval *BlockEvaluator) generateKnockOfflineAccountsList() {
 	if !eval.generate {
 		return
@@ -1483,7 +1485,10 @@ func (eval *BlockEvaluator) generateKnockOfflineAccountsList() {
 			continue
 		}
 
-		if acctDelta.Status == basics.Online || acctDelta.Status == basics.Suspended {
+		// Regardless of being online or suspended, if voting data exists, the
+		// account can be expired to remove it.  This means an offline account
+		// can be expired (because it was already suspended).
+		if !acctDelta.VoteID.IsEmpty() {
 			expiresBeforeCurrent := acctDelta.VoteLastValid < currentRound
 			if expiresBeforeCurrent &&
 				len(updates.ExpiredParticipationAccounts) < expectedMaxNumberOfExpiredAccounts {
@@ -1496,7 +1501,7 @@ func (eval *BlockEvaluator) generateKnockOfflineAccountsList() {
 		}
 
 		if acctDelta.Status == basics.Online {
-			lastSeen := max(acctDelta.LastHeartbeat, acctDelta.LastHeartbeat)
+			lastSeen := max(acctDelta.LastProposed, acctDelta.LastHeartbeat)
 			if isAbsent(eval.state.prevTotals.Online.Money, acctDelta.MicroAlgos, lastSeen, currentRound) &&
 				len(updates.AbsentParticipationAccounts) < expectedMaxNumberOfAbsentAccounts {
 				updates.AbsentParticipationAccounts = append(
@@ -1519,7 +1524,6 @@ func max(a, b basics.Round) basics.Round {
 func isAbsent(totalOnlineStake basics.MicroAlgos, acctStake basics.MicroAlgos, lastSeen basics.Round, current basics.Round) bool {
 	// See if the account has exceeded 10x their expected observation interval.
 	allowableLag := basics.Round(10 * totalOnlineStake.Raw / acctStake.Raw)
-	fmt.Printf("%d / %d -> %d \n", acctStake, totalOnlineStake, allowableLag)
 	return lastSeen+allowableLag < current
 }
 
@@ -1560,8 +1564,8 @@ func (eval *BlockEvaluator) validateExpiredOnlineAccounts() error {
 			return fmt.Errorf("endOfBlock was unable to retrieve account %v : %w", accountAddr, err)
 		}
 
-		if acctData.Status != basics.Online && acctData.Status != basics.Suspended {
-			return fmt.Errorf("endOfBlock found %v was not online but %v", accountAddr, acctData.Status)
+		if acctData.VoteID.IsEmpty() {
+			return fmt.Errorf("endOfBlock found expiration candidate %v had no vote key", accountAddr)
 		}
 
 		if acctData.VoteLastValid >= currentRound {
@@ -1608,7 +1612,7 @@ func (eval *BlockEvaluator) validateAbsentOnlineAccounts() error {
 			return fmt.Errorf("proposed absent acct %v was not online but %v", accountAddr, acctData.Status)
 		}
 
-		lastSeen := max(acctData.LastHeartbeat, acctData.LastHeartbeat)
+		lastSeen := max(acctData.LastProposed, acctData.LastHeartbeat)
 		if !isAbsent(eval.state.prevTotals.Online.Money, acctData.MicroAlgos, lastSeen, currentRound) {
 			return fmt.Errorf("proposed absent account %v is not absent in %d, %d",
 				accountAddr, acctData.LastProposed, acctData.LastHeartbeat)

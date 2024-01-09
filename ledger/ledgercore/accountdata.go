@@ -145,10 +145,10 @@ func (u *AccountData) ClearOnlineState() {
 	u.VotingData = VotingData{}
 }
 
-// Suspend sets the status to Suspended, but does _not_ clear voting keys, so
+// Suspend sets the status to Offline, but does _not_ clear voting keys, so
 // that a heartbeat can bring the account back Online
 func (u *AccountData) Suspend() {
-	u.Status = basics.Suspended
+	u.Status = basics.Offline
 }
 
 // MinBalance computes the minimum balance requirements for an account based on
