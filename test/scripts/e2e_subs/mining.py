@@ -23,7 +23,7 @@ _, err = goal.keyreg(joe, nonpart=True)
 assert not err, err
 
 get_proposer = """
-#pragma version 10
+#pragma version 11
  txn ApplicationArgs 0; btoi
  block BlkProposer; global ZeroAddress; !=; assert
 
