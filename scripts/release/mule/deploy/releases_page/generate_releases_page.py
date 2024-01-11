@@ -24,7 +24,7 @@ html_tpl = "html.tpl"
 # Nit: should be styles_file
 styles_url = "releases_page.css"
 # May want to call these channels instead
-tokens = ["stable", "beta", "indexer"]
+tokens = ["stable", "beta"]
 
 
 def get_stage_release_set(response):
@@ -201,7 +201,7 @@ def main():
     channels = {}
 
     # Should use tokens array instead
-    for channel in ["stable", "beta", "indexer"]:
+    for channel in ["stable", "beta"]:
         # Fetch contents of e.g. s3://algorand-dev-deb-repo/releases/beta/
         # Note: MaxKeys will limit to last 100 releases, which is more than
         # enough. Consider dropping this to 2.
