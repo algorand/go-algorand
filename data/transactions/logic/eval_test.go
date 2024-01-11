@@ -5042,8 +5042,8 @@ func TestBytesMath(t *testing.T) {
 	testAccepts(t, "byte 0xffffff; bsqrt; len; int 2; ==; return", 6)
 	// 64 byte long inputs are accepted, even if they produce longer outputs
 	testAccepts(t, fmt.Sprintf("byte 0x%s; bsqrt; len; int 32; ==", effs), 6)
-	// 65 byte inputs are not ok.
-	testPanics(t, fmt.Sprintf("byte 0x%s00; bsqrt; pop; int 1", effs), 6)
+	// 65 byte inputs are not ok (no track allows assembly)
+	testPanics(t, notrack(fmt.Sprintf("byte 0x%s00; bsqrt; pop; int 1", effs)), 6)
 }
 
 func TestBytesCompare(t *testing.T) {

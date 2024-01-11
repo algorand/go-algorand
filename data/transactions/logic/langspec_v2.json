@@ -463,7 +463,7 @@
         "uint64"
       ],
       "Returns": [
-        "[]byte"
+        "[8]byte"
       ],
       "Size": 1,
       "DocCost": "1",
@@ -1533,7 +1533,7 @@
       "Name": "app_local_get",
       "Args": [
         "uint64",
-        "[]byte"
+        "stateKey"
       ],
       "Returns": [
         "any"
@@ -1553,7 +1553,7 @@
       "Args": [
         "uint64",
         "uint64",
-        "[]byte"
+        "stateKey"
       ],
       "Returns": [
         "any",
@@ -1572,7 +1572,7 @@
       "Opcode": 100,
       "Name": "app_global_get",
       "Args": [
-        "[]byte"
+        "stateKey"
       ],
       "Returns": [
         "any"
@@ -1591,7 +1591,7 @@
       "Name": "app_global_get_ex",
       "Args": [
         "uint64",
-        "[]byte"
+        "stateKey"
       ],
       "Returns": [
         "any",
@@ -1611,7 +1611,7 @@
       "Name": "app_local_put",
       "Args": [
         "uint64",
-        "[]byte",
+        "stateKey",
         "any"
       ],
       "Size": 1,
@@ -1627,7 +1627,7 @@
       "Opcode": 103,
       "Name": "app_global_put",
       "Args": [
-        "[]byte",
+        "stateKey",
         "any"
       ],
       "Size": 1,
@@ -1643,7 +1643,7 @@
       "Name": "app_local_del",
       "Args": [
         "uint64",
-        "[]byte"
+        "stateKey"
       ],
       "Size": 1,
       "DocCost": "1",
@@ -1658,7 +1658,7 @@
       "Opcode": 105,
       "Name": "app_global_del",
       "Args": [
-        "[]byte"
+        "stateKey"
       ],
       "Size": 1,
       "DocCost": "1",

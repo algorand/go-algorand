@@ -1875,12 +1875,12 @@ func TestAppLocalGlobalErrorCases(t *testing.T) {
 		if ep.Proto.LogicSigVersion < directRefEnabledVersion {
 			sender = "int 0;"
 		}
-		testApp(t, fmt.Sprintf(`byte "%v"; int 1;`+g+`int 1`, strings.Repeat("v", ep.Proto.MaxAppKeyLen+1)), ep, "key too long")
+		testApp(t, notrack(fmt.Sprintf(`byte "%v"; int 1;`+g+`int 1`, strings.Repeat("v", ep.Proto.MaxAppKeyLen+1))), ep, "key too long")
 
 		testApp(t, fmt.Sprintf(`byte "%v"; int 1;`+g+`int 1`, strings.Repeat("v", ep.Proto.MaxAppKeyLen)), ep)
 
 		ledger.NewLocals(tx.Sender, 888)
-		testApp(t, fmt.Sprintf(sender+`byte "%v"; int 1;`+l+`int 1`, strings.Repeat("v", ep.Proto.MaxAppKeyLen+1)), ep, "key too long")
+		testApp(t, notrack(fmt.Sprintf(sender+`byte "%v"; int 1;`+l+`int 1`, strings.Repeat("v", ep.Proto.MaxAppKeyLen+1))), ep, "key too long")
 
 		testApp(t, fmt.Sprintf(sender+`byte "%v"; int 1;`+l+`int 1`, strings.Repeat("v", ep.Proto.MaxAppKeyLen)), ep)
 
@@ -3098,8 +3098,7 @@ func TestReturnTypes(t *testing.T) {
 		"err":    true,
 		"return": true,
 
-		// these have unusual input size requirements not encoded in proto
-		"falcon_verify":       true,
+		// panics unless the pk is proper
 		"ecdsa_pk_decompress": true,
 
 		"frame_dig":  true, // would need a "proto" subroutine
