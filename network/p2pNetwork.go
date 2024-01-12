@@ -492,6 +492,18 @@ func (n *P2PNetwork) wsStreamHandler(ctx context.Context, peer peer.ID, stream n
 	n.wsPeersToIDs[wsp] = peer
 	n.wsPeersLock.Unlock()
 	n.wsPeersChangeCounter.Add(1)
+
+	localAddr, _ := n.Address()
+	n.log.With("event", "ConnectedIn").With("remote", addr).With("local", localAddr).Infof("Accepted incoming connection from peer %s", peer.String())
+
+	// TODO: add telemetry
+	// n.log.EventWithDetails(telemetryspec.Network, telemetryspec.ConnectPeerEvent,
+	// 	telemetryspec.PeerEventDetails{
+	// 		Address:       addr,
+	// 		TelemetryGUID: trackedRequest.otherTelemetryGUID,
+	// 		Incoming:      true,
+	// 		InstanceName:  trackedRequest.otherInstanceName,
+	// 	})
 }
 
 // peerRemoteClose called from wsPeer to report that it has closed

@@ -39,6 +39,10 @@ const DefaultPrivKeyPath = "peerIDPrivKey.pem"
 // PeerID is a string representation of a peer's public key, primarily used to avoid importing libp2p into packages that shouldn't need it
 type PeerID string
 
+func (id PeerID) String() string {
+	return peer.ID(id).String()
+}
+
 // GetPrivKey manages loading and creation of private keys for network PeerIDs
 // It prioritizes, in this order:
 //  1. user supplied path to privKey

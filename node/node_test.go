@@ -39,6 +39,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
+	"github.com/algorand/go-algorand/network/p2p"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/stateproof"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -60,29 +61,77 @@ var defaultConfig = config.Local{
 	IncomingConnectionsLimit: -1,
 }
 
+type nodeInfo struct {
+	idx     int
+	host    string
+	wsPort  int
+	p2pPort int
+	p2pId   p2p.PeerID
+	rootDir string
+	genesis bookkeeping.Genesis
+}
+
+func (ni nodeInfo) wsNetAddr() string {
+	return fmt.Sprintf("%s:%d", ni.host, ni.wsPort)
+}
+
+func (ni nodeInfo) p2pNetAddr() string {
+	return fmt.Sprintf("%s:%d", ni.host, ni.p2pPort)
+}
+
+func (ni nodeInfo) p2pMultiAddr() string {
+	return fmt.Sprintf("/ip4/%s/tcp/%d/p2p/%s", ni.host, ni.p2pPort, ni.p2pId.String())
+}
+
+type configHook func(ni nodeInfo, cfg config.Local) (nodeInfo, config.Local)
+type phonebookHook func([]nodeInfo, int) []string
+
 func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationPool execpool.BacklogPool, customConsensus config.ConsensusProtocols) ([]*AlgorandFullNode, []string) {
+	minMoneyAtStart := 10000
+	maxMoneyAtStart := 100000
+	gen := rand.New(rand.NewSource(2))
+
+	const numAccounts = 10
+	acctStake := make([]basics.MicroAlgos, numAccounts)
+	for i := range acctStake {
+		acctStake[i] = basics.MicroAlgos{Raw: uint64(minMoneyAtStart + (gen.Int() % (maxMoneyAtStart - minMoneyAtStart)))}
+	}
+
+	configHook := func(ni nodeInfo, cfg config.Local) (nodeInfo, config.Local) {
+		cfg.NetAddress = ni.wsNetAddr()
+		return ni, cfg
+	}
+
+	phonebookHook := func(nodes []nodeInfo, nodeIdx int) []string {
+		phonebook := make([]string, 0, len(nodes)-1)
+		for i := range nodes {
+			if i != nodeIdx {
+				phonebook = append(phonebook, nodes[i].wsNetAddr())
+			}
+		}
+		return phonebook
+	}
+	nodes, wallets := setupFullNodesEx(t, proto, verificationPool, customConsensus, acctStake, configHook, phonebookHook)
+	require.Len(t, nodes, numAccounts)
+	require.Len(t, wallets, numAccounts)
+	return nodes, wallets
+}
+
+func setupFullNodesEx(
+	t *testing.T, proto protocol.ConsensusVersion, verificationPool execpool.BacklogPool, customConsensus config.ConsensusProtocols,
+	acctStake []basics.MicroAlgos, configHook configHook, phonebookHook phonebookHook,
+) ([]*AlgorandFullNode, []string) {
+
 	util.SetFdSoftLimit(1000)
+
 	f, _ := os.Create(t.Name() + ".log")
 	logging.Base().SetJSONFormatter()
 	logging.Base().SetOutput(f)
 	logging.Base().SetLevel(logging.Debug)
-
-	numAccounts := 10
-	minMoneyAtStart := 10000
-	maxMoneyAtStart := 100000
+	t.Logf("Logging to %s\n", t.Name()+".log")
 
 	firstRound := basics.Round(0)
 	lastRound := basics.Round(200)
-
-	genesis := make(map[basics.Address]basics.AccountData)
-	gen := rand.New(rand.NewSource(2))
-	neighbors := make([]string, numAccounts)
-	for i := range neighbors {
-		neighbors[i] = "127.0.0.1:" + strconv.Itoa(10000+i)
-	}
-
-	wallets := make([]string, numAccounts)
-	rootDirs := make([]string, 0)
 
 	// The genesis configuration is missing allocations, but that's OK
 	// because we explicitly generated the sqlite database above (in
@@ -95,16 +144,31 @@ func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationP
 		RewardsPool: poolAddr.String(),
 	}
 
+	genesis := make(map[basics.Address]basics.AccountData)
+	numAccounts := len(acctStake)
+	wallets := make([]string, numAccounts)
+	nodeInfos := make([]nodeInfo, numAccounts)
+
 	for i := range wallets {
 		rootDirectory := t.TempDir()
-		rootDirs = append(rootDirs, rootDirectory)
+		nodeInfos[i] = nodeInfo{
+			idx:     i,
+			host:    "127.0.0.1",
+			wsPort:  10000 + 100*i,
+			p2pPort: 10000 + 100*i + 1,
+			rootDir: rootDirectory,
+			genesis: g,
+		}
 
-		defaultConfig.NetAddress = neighbors[i]
-		defaultConfig.SaveToDisk(rootDirectory)
+		ni, cfg := configHook(nodeInfos[i], defaultConfig)
+		nodeInfos[i] = ni
+		cfg.SaveToDisk(rootDirectory)
 
-		// Save empty phonebook - we'll add peers after they've been assigned listening ports
-		err := config.SavePhonebookToDisk(make([]string, 0), rootDirectory)
-		require.NoError(t, err)
+		t.Logf("Root directory of node %d (%s): %s\n", i, ni.wsNetAddr(), rootDirectory)
+
+		// // Save empty phonebook - we'll add peers after they've been assigned listening ports
+		// err := config.SavePhonebookToDisk(make([]string, 0), rootDirectory)
+		// require.NoError(t, err)
 
 		genesisDir := filepath.Join(rootDirectory, g.ID())
 		os.Mkdir(genesisDir, 0700)
@@ -138,7 +202,7 @@ func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationP
 
 		data := basics.AccountData{
 			Status:      basics.Online,
-			MicroAlgos:  basics.MicroAlgos{Raw: uint64(minMoneyAtStart + (gen.Int() % (maxMoneyAtStart - minMoneyAtStart)))},
+			MicroAlgos:  acctStake[i],
 			SelectionID: part.VRFSecrets().PK,
 			VoteID:      part.VotingSecrets().OneTimeSignatureVerifier,
 		}
@@ -168,7 +232,7 @@ func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationP
 
 	nodes := make([]*AlgorandFullNode, numAccounts)
 	for i := range nodes {
-		rootDirectory := rootDirs[i]
+		rootDirectory := nodeInfos[i].rootDir
 		genesisDir := filepath.Join(rootDirectory, g.ID())
 		if customConsensus != nil {
 			err0 := config.SaveConfigurableConsensus(genesisDir, customConsensus)
@@ -177,13 +241,10 @@ func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationP
 			require.Nil(t, err0)
 		}
 
-		var nodeNeighbors []string
-		nodeNeighbors = append(nodeNeighbors, neighbors[:i]...)
-		nodeNeighbors = append(nodeNeighbors, neighbors[i+1:]...)
 		cfg, err := config.LoadConfigFromDisk(rootDirectory)
+		phonebook := phonebookHook(nodeInfos, i)
 		require.NoError(t, err)
-		nodeID := fmt.Sprintf("Node%d", i)
-		node, err := MakeFull(logging.Base().With("name", nodeID), rootDirectory, cfg, nodeNeighbors, g)
+		node, err := MakeFull(logging.Base(), rootDirectory, cfg, phonebook, g)
 		nodes[i] = node
 		require.NoError(t, err)
 	}
@@ -771,4 +832,108 @@ func TestMaxSizesCorrect(t *testing.T) {
 	require.Equal(t, vbSize, protocol.VoteBundleTag.MaxMessageSize())
 	tsSize := uint64(network.MaxMessageLength)
 	require.Equal(t, tsSize, protocol.TopicMsgRespTag.MaxMessageSize())
+}
+
+// TestNodeHybridTopology set ups 3 nodes network with the following topology:
+// N -- R -- A and ensures N can discover A and download blocks from it.
+//
+// N is a non-part node that joins the network later
+// R is a non-arhival relay node with block serice disabled. It also serves as P2P boootstrap node
+// A is a archival node that can only provide blocks.
+// Nodes N and A have only R in their initial phonebook, and all nodes are in hybrid mode.
+func TestNodeHybridTopology(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	// t.Skip()
+
+	// ConsensusTest0 is a version of ConsensusV0 used for testing
+	// (it has different approved upgrade paths).
+	const consensusTest0 = protocol.ConsensusVersion("test0")
+
+	configurableConsensus := make(config.ConsensusProtocols)
+
+	testParams0 := config.Consensus[protocol.ConsensusCurrentVersion]
+	testParams0.AgreementFilterTimeoutPeriod0 = 500 * time.Millisecond
+	configurableConsensus[consensusTest0] = testParams0
+
+	minMoneyAtStart := 1_000_000
+	maxMoneyAtStart := 100_000_000_000
+	gen := rand.New(rand.NewSource(2))
+
+	const numAccounts = 3
+	acctStake := make([]basics.MicroAlgos, numAccounts)
+	for i := range acctStake {
+		acctStake[i] = basics.MicroAlgos{Raw: uint64(minMoneyAtStart + (gen.Int() % (maxMoneyAtStart - minMoneyAtStart)))}
+	}
+	acctStake[0] = basics.MicroAlgos{} // no stake at node 0
+
+	configHook := func(ni nodeInfo, cfg config.Local) (nodeInfo, config.Local) {
+		cfg = config.GetDefaultLocal()
+		if ni.idx != 2 {
+			cfg.EnableBlockService = false
+			cfg.EnableGossipBlockService = false
+			cfg.EnableLedgerService = false
+			cfg.CatchpointInterval = 0
+			cfg.Archival = false
+		} else {
+			// node 2 is archival
+			cfg.EnableBlockService = true
+			cfg.EnableGossipBlockService = true
+			cfg.EnableLedgerService = true
+			cfg.CatchpointInterval = 200
+			cfg.Archival = true
+		}
+
+		cfg.NetAddress = ni.wsNetAddr()
+		cfg.EnableP2PHybridMode = true
+		cfg.EnableDHTProviders = true
+		cfg.P2PPersistPeerID = true
+		genesisDirs, err := cfg.EnsureAndResolveGenesisDirs(ni.rootDir, ni.genesis.ID(), nil)
+		require.NoError(t, err)
+		privKey, err := p2p.GetPrivKey(cfg, genesisDirs.RootGenesisDir)
+		require.NoError(t, err)
+		ni.p2pId, err = p2p.PeerIDFromPublicKey(privKey.GetPublic())
+		require.NoError(t, err)
+
+		cfg.P2PListenAddress = ni.p2pNetAddr()
+		return ni, cfg
+	}
+
+	phonebookHook := func(ni []nodeInfo, i int) []string {
+		// all connected to node 1
+		if i == 1 {
+			t.Logf("Node%d phonebook: %s, %s", i, ni[2].wsNetAddr(), ni[2].p2pMultiAddr())
+			return []string{ni[2].wsNetAddr(), ni[2].p2pMultiAddr()}
+		} else {
+			t.Logf("Node%d phonebook: %s, %s", i, ni[1].wsNetAddr(), ni[1].p2pMultiAddr())
+			return []string{ni[1].wsNetAddr(), ni[1].p2pMultiAddr()}
+		}
+	}
+
+	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
+	defer backlogPool.Shutdown()
+
+	nodes, wallets := setupFullNodesEx(t, consensusTest0, backlogPool, configurableConsensus, acctStake, configHook, phonebookHook)
+	require.Len(t, nodes, 3)
+	require.Len(t, wallets, 3)
+	for i := 0; i < len(nodes); i++ {
+		defer os.Remove(wallets[i])
+		defer nodes[i].Stop()
+	}
+
+	startAndConnectNodes(nodes, true)
+
+	initialRound := nodes[0].ledger.NextRound()
+
+	select {
+	case <-nodes[0].ledger.Wait(initialRound):
+		e0, err := nodes[0].ledger.Block(initialRound)
+		require.NoError(t, err)
+		e1, err := nodes[1].ledger.Block(initialRound)
+		require.NoError(t, err)
+		require.Equal(t, e1.Hash(), e0.Hash())
+	case <-time.After(60 * time.Second):
+		require.Fail(t, fmt.Sprintf("no block notification for wallet: %v.", wallets[0]))
+		return
+	}
 }

@@ -49,7 +49,9 @@ func TestP2PSubmitTX(t *testing.T) {
 	defer netA.Stop()
 
 	peerInfoA := netA.service.AddrInfo()
+	fmt.Print("peerInfoA is ", peerInfoA)
 	addrsA, err := peerstore.AddrInfoToP2pAddrs(&peerInfoA)
+	fmt.Printf("addrsA is %v\n", addrsA)
 	require.NoError(t, err)
 	require.NotZero(t, addrsA[0])
 
