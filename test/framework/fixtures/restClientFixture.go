@@ -196,16 +196,12 @@ func (f *RestClientFixture) GetBalanceAndRound(account string) (balance uint64, 
 // GetWalletsSortedByBalance returns the Primary node's accounts sorted DESC by balance
 // the richest account will be at accounts[0]
 func (f *RestClientFixture) GetWalletsSortedByBalance() (accounts []model.Account, err error) {
-	return f.getNodeWalletsSortedByBalance(f.LibGoalClient)
+	return f.GetNodeWalletsSortedByBalance(f.LibGoalClient)
 }
 
 // GetNodeWalletsSortedByBalance returns the specified node's accounts sorted DESC by balance
 // the richest account will be at accounts[0]
-func (f *RestClientFixture) GetNodeWalletsSortedByBalance(nodeDataDir string) (accounts []model.Account, err error) {
-	return f.getNodeWalletsSortedByBalance(f.GetLibGoalClientFromDataDir(nodeDataDir))
-}
-
-func (f *RestClientFixture) getNodeWalletsSortedByBalance(client libgoal.Client) (accounts []model.Account, err error) {
+func (f *RestClientFixture) GetNodeWalletsSortedByBalance(client libgoal.Client) (accounts []model.Account, err error) {
 	wh, err := client.GetUnencryptedWalletHandle()
 	if err != nil {
 		return nil, fmt.Errorf("unable to retrieve wallet handle : %v", err)

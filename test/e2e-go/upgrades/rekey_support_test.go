@@ -46,7 +46,7 @@ func TestRekeyUpgrade(t *testing.T) {
 	defer fixture.Shutdown()
 
 	client := fixture.GetLibGoalClientForNamedNode("Node")
-	accountList, err := fixture.GetNodeWalletsSortedByBalance(client.DataDir())
+	accountList, err := fixture.GetNodeWalletsSortedByBalance(client)
 	a.NoError(err)
 
 	accountA := accountList[0].Address

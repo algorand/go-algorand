@@ -85,7 +85,7 @@ func TestApplicationsUpgradeOverREST(t *testing.T) {
 	a := require.New(fixtures.SynchronizedTest(t))
 
 	client := fixture.GetLibGoalClientForNamedNode("Node")
-	accountList, err := fixture.GetNodeWalletsSortedByBalance(client.DataDir())
+	accountList, err := fixture.GetNodeWalletsSortedByBalance(client)
 	a.NoError(err)
 
 	creator := accountList[0].Address
@@ -328,7 +328,7 @@ func TestApplicationsUpgradeOverGossip(t *testing.T) {
 
 	defer fixture.Shutdown()
 
-	accountList, err := fixture.GetNodeWalletsSortedByBalance(client.DataDir())
+	accountList, err := fixture.GetNodeWalletsSortedByBalance(client)
 	a.NoError(err)
 
 	creator := accountList[0].Address
