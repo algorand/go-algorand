@@ -34,6 +34,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	peerstore "github.com/libp2p/go-libp2p/core/peer"
+	"github.com/multiformats/go-multiaddr"
 	ma "github.com/multiformats/go-multiaddr"
 	"github.com/stretchr/testify/require"
 )
@@ -505,4 +506,27 @@ func TestP2PNetworkDHTCapabilities(t *testing.T) {
 			wg.Wait()
 		})
 	}
+}
+
+// TestMultiaddrConversionToFrom ensures Multiaddr can be serialized back to an address without losing information
+func TestMultiaddrConversionToFrom(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	a := "/ip4/192.168.1.1/tcp/8180/p2p/Qmewz5ZHN1AAGTarRbMupNPbZRfg3p5jUGoJ3JYEatJVVk"
+	ma, err := multiaddr.NewMultiaddr(a)
+	require.NoError(t, err)
+	require.Equal(t, a, ma.String())
+
+	// this conversion drops the p2p proto part
+	pi, err := peer.AddrInfoFromP2pAddr(ma)
+	require.NoError(t, err)
+	require.NotEqual(t, a, pi.Addrs[0].String())
+	require.Len(t, pi.Addrs, 1)
+
+	mas, err := peer.AddrInfoToP2pAddrs(pi)
+	require.NoError(t, err)
+	require.Len(t, mas, 1)
+	require.Equal(t, a, mas[0].String())
+
 }

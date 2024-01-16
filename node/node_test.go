@@ -844,10 +844,6 @@ func TestMaxSizesCorrect(t *testing.T) {
 func TestNodeHybridTopology(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	// t.Skip()
-
-	// ConsensusTest0 is a version of ConsensusV0 used for testing
-	// (it has different approved upgrade paths).
 	const consensusTest0 = protocol.ConsensusVersion("test0")
 
 	configurableConsensus := make(config.ConsensusProtocols)

@@ -69,6 +69,7 @@ type P2PNetwork struct {
 
 	bootstrapper bootstrapper
 	nodeInfo     NodeInfo
+	pstore       *peerstore.PeerStore
 }
 
 type bootstrapper struct {
@@ -163,6 +164,7 @@ func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebo
 		wsPeersToIDs: make(map[*wsPeer]peer.ID),
 		peerStats:    make(map[peer.ID]*p2pPeerStats),
 		nodeInfo:     node,
+		pstore:       pstore,
 	}
 	net.ctx, net.ctxCancel = context.WithCancel(context.Background())
 	net.handler = msgHandler{
@@ -417,13 +419,94 @@ func (n *P2PNetwork) RequestConnectOutgoing(replace bool, quit <-chan struct{}) 
 
 // GetPeers returns a list of Peers we could potentially send a direct message to.
 func (n *P2PNetwork) GetPeers(options ...PeerOption) []Peer {
-	// currently returns same list of peers for all PeerOption filters.
 	peers := make([]Peer, 0)
-	n.wsPeersLock.RLock()
-	for _, peer := range n.wsPeers {
-		peers = append(peers, Peer(peer))
+	for _, option := range options {
+		switch option {
+		case PeersConnectedOut:
+			n.wsPeersLock.RLock()
+			for _, peer := range n.wsPeers {
+				if peer.outgoing {
+					peers = append(peers, Peer(peer))
+				}
+			}
+			n.wsPeersLock.RUnlock()
+		case PeersPhonebookRelays:
+			// TODO: query peerstore for PhoneBookEntryRelayRole
+			// TODO: currently peerstore is not populated in a way to store roles
+			// return all nodes at the moment
+
+			// // return copy of phonebook, which probably also contains peers we're connected to, but if it doesn't maybe we shouldn't be making new connections to those peers (because they disappeared from the directory)
+			// addrs := n.pstore.GetAddresses(1000, PhoneBookEntryRelayRole)
+			// for _, addr := range addrs {
+			// 	peerCore := makePeerCore(n.ctx, n, n.log, n.handler.readBuffer, addr, n.GetRoundTripper(nil), "" /*origin address*/)
+			// 	peers = append(peers, &peerCore)
+			// }
+
+			// temporary return all nodes
+			n.wsPeersLock.RLock()
+			for _, peer := range n.wsPeers {
+				peers = append(peers, Peer(peer))
+			}
+			n.wsPeersLock.RUnlock()
+
+		case PeersPhonebookArchivalNodes:
+			// query known archvial nodes from DHT if enabled
+			if n.config.EnableDHTProviders {
+				const nodesToFind = 5
+				info, err := n.capabilitiesDiscovery.PeersForCapability(p2p.Archival, nodesToFind)
+				if err != nil {
+					n.log.Warnf("Error getting archival nodes from capabilities discovery: %v", err)
+					return peers
+				}
+				for _, addrInfo := range info {
+					mas, err := peer.AddrInfoToP2pAddrs(&addrInfo)
+					if err != nil {
+						n.log.Warnf("Error converting archival AddrInfo to p2p addr: %v", err)
+						continue
+					}
+
+					for _, ma := range mas {
+						addr := ma.String()
+						peerCore := makePeerCore(n.ctx, n, n.log, n.handler.readBuffer, addr, n.GetRoundTripper(nil), "" /*origin address*/)
+						peers = append(peers, &peerCore)
+					}
+				}
+			} else {
+				// default to all peers
+				n.wsPeersLock.RLock()
+				for _, peer := range n.wsPeers {
+					peers = append(peers, Peer(peer))
+				}
+				n.wsPeersLock.RUnlock()
+			}
+		case PeersPhonebookArchivers:
+			// TODO: query peerstore for PhoneBookEntryArchiverRole
+			// TODO: currently peerstore is not populated in a way to store roles
+
+			// // return copy of phonebook, which probably also contains peers we're connected to, but if it doesn't maybe we shouldn't be making new connections to those peers (because they disappeared from the directory)
+			// addrs := n.pstore.GetAddresses(1000, PhoneBookEntryArchiverRole)
+			// for _, addr := range addrs {
+			// 	peerCore := makePeerCore(n.ctx, n, n.log, n.handler.readBuffer, addr, n.GetRoundTripper(nil), "" /*origin address*/)
+			// 	peers = append(peers, &peerCore)
+			// }
+
+			// temporary return all nodes
+			n.wsPeersLock.RLock()
+			for _, peer := range n.wsPeers {
+				peers = append(peers, Peer(peer))
+			}
+			n.wsPeersLock.RUnlock()
+
+		case PeersConnectedIn:
+			n.wsPeersLock.RLock()
+			for _, peer := range n.wsPeers {
+				if !peer.outgoing {
+					peers = append(peers, Peer(peer))
+				}
+			}
+			n.wsPeersLock.RUnlock()
+		}
 	}
-	n.wsPeersLock.RUnlock()
 	return peers
 }
 
