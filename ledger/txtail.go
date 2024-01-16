@@ -82,7 +82,7 @@ type txTail struct {
 
 	// lastValid allows looking up all of the transactions that expire in a given round.
 	// The map for an expiration round gives the round the transaction was originally confirmed, so it can be found for the /pending endpoint.
-	lastValid map[basics.Round]map[transactions.Txid]int16 // map tx.LastValid -> tx confirmed map: txid -> (last valid - confirmed) delta
+	lastValid map[basics.Round]map[transactions.Txid]uint16 // map tx.LastValid -> tx confirmed map: txid -> (last valid - confirmed) delta
 
 	// duplicate detection queries with LastValid before
 	// lowWaterMark are not guaranteed to succeed
@@ -117,7 +117,7 @@ func (t *txTail) loadFromDisk(l ledgerForTracker, dbRound basics.Round) error {
 	}
 
 	t.lowWaterMark = l.Latest()
-	t.lastValid = make(map[basics.Round]map[transactions.Txid]int16)
+	t.lastValid = make(map[basics.Round]map[transactions.Txid]uint16)
 	t.recent = make(map[basics.Round]roundLeases)
 
 	// the lastValid is a temporary map used during the execution of
@@ -179,15 +179,15 @@ func (t *txTail) loadFromDisk(l ledgerForTracker, dbRound basics.Round) error {
 
 	// add all the entries in roundsLastValids to their corresponding map entry in t.lastValid
 	for lastValid, list := range lastValid {
-		lastValueMap := make(map[transactions.Txid]int16, len(list))
+		lastValidMap := make(map[transactions.Txid]uint16, len(list))
 		for _, entry := range list {
 			if lastValid < entry.rnd {
 				return fmt.Errorf("txTail: invalid lastValid %d / rnd %d for txid %s", lastValid, entry.rnd, entry.txid)
 			}
-			deltaR := int16(lastValid - entry.rnd)
-			lastValueMap[entry.txid] = deltaR
+			deltaR := uint16(lastValid - entry.rnd)
+			lastValidMap[entry.txid] = deltaR
 		}
-		t.lastValid[lastValid] = lastValueMap
+		t.lastValid[lastValid] = lastValidMap
 	}
 
 	if enableTxTailHashes {
@@ -220,9 +220,9 @@ func (t *txTail) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 
 	for txid, txnInc := range delta.Txids {
 		if _, ok := t.lastValid[txnInc.LastValid]; !ok {
-			t.lastValid[txnInc.LastValid] = make(map[transactions.Txid]int16)
+			t.lastValid[txnInc.LastValid] = make(map[transactions.Txid]uint16)
 		}
-		deltaR := int16(txnInc.LastValid - blk.BlockHeader.Round)
+		deltaR := uint16(txnInc.LastValid - blk.BlockHeader.Round)
 		t.lastValid[txnInc.LastValid][txid] = deltaR
 
 		tail.TxnIDs[txnInc.Intra] = txid
