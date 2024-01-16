@@ -785,7 +785,7 @@ var (
 	// AllStackTypes is a map of all the stack types we recognize
 	// so that we can iterate over them in doc prep
 	// and use them for opcode proto shorthand
-	AllStackTypes = map[rune]StackType{
+	AllStackTypes = map[byte]StackType{
 		'a': StackAny,
 		'b': StackBytes,
 		'i': StackUint64,
@@ -932,7 +932,7 @@ func parseStackTypes(spec string) StackTypes {
 	}
 	types := make(StackTypes, 0, len(spec))
 	for i := 0; i < len(spec); i++ {
-		letter := rune(spec[i])
+		letter := spec[i]
 		if letter == '{' {
 			if types[len(types)-1] != StackBytes {
 				panic("{ after non-bytes " + spec)
