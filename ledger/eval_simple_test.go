@@ -389,15 +389,15 @@ func TestAbsentTracking(t *testing.T) {
 		totals, err := dl.generator.Totals(0)
 		require.NoError(t, err)
 		require.NotZero(t, totals.Online.Money.Raw)
-		for i, addr := range addrs {
-			fmt.Printf("addrs[%d] == %v\n", i, addr)
-		}
+
+		// as configured above, the first two accounts should be online
 		require.True(t, lookup(t, dl.generator, addrs[0]).Status == basics.Online)
 		require.True(t, lookup(t, dl.generator, addrs[1]).Status == basics.Online)
 		require.False(t, lookup(t, dl.generator, addrs[2]).Status == basics.Online)
 
 		dl.fullBlock()
 
+		// although it's not even online, we'll use addrs[7] as the proposer
 		proposer := addrs[7]
 		dl.beginBlock()
 		dl.txns(&txntest.Txn{
@@ -406,8 +406,9 @@ func TestAbsentTracking(t *testing.T) {
 			Receiver: addrs[2],
 			Amount:   100_000,
 		})
-		dl.endBlock(proposer)
+		vb := dl.endBlock(proposer)
 
+		// addr[1] is spent to an offline account, so Online totals decrease
 		newtotals, err := dl.generator.Totals(dl.generator.Latest())
 		require.NoError(t, err)
 		// payment and fee left the online account
@@ -421,10 +422,12 @@ func TestAbsentTracking(t *testing.T) {
 		if ver >= checkingBegins {
 			// version sanity check
 			require.True(t, dl.generator.GenesisProto().EnableAbsenteeTracking())
+			require.Equal(t, proposer, vb.Block().BlockHeader.Proposer)
 			require.NotZero(t, prp.LastProposed)
 			require.Zero(t, prp.LastHeartbeat) // genesis participants have never hb
 		} else {
 			require.False(t, dl.generator.GenesisProto().EnableAbsenteeTracking())
+			require.Zero(t, vb.Block().BlockHeader.Proposer)
 			require.Zero(t, prp.LastProposed)
 			require.Zero(t, prp.LastHeartbeat)
 		}
@@ -433,11 +436,12 @@ func TestAbsentTracking(t *testing.T) {
 		dl.txns(&txntest.Txn{Type: "keyreg", Sender: addrs[2]}) // OFFLINE keyreg
 		regger := lookup(t, dl.validator, addrs[2])
 
+		// total were unchanged by an offline keyreg from an offline account
 		newtotals, err = dl.generator.Totals(dl.generator.Latest())
 		require.NoError(t, err)
 		require.Equal(t, totals.Online.Money.Raw, newtotals.Online.Money.Raw)
 
-		// offline transaction records nothing
+		// an an offline keyreg transaction records no activity
 		require.Zero(t, regger.LastProposed)
 		require.Zero(t, regger.LastHeartbeat)
 
@@ -448,6 +452,7 @@ func TestAbsentTracking(t *testing.T) {
 			VotePK:      [32]byte{1},
 			SelectionPK: [32]byte{1},
 		})
+		// online totals have grown
 		newtotals, err = dl.generator.Totals(dl.generator.Latest())
 		require.NoError(t, err)
 		require.Greater(t, newtotals.Online.Money.Raw, totals.Online.Money.Raw)
@@ -480,10 +485,10 @@ func TestAbsentTracking(t *testing.T) {
 
 		// addrs 0-2 all have about 1/3 of stake, so become eligible for
 		// suspension after 30 rounds. We're at about 35. But, since blocks are
-		// empty, nobody's susspendible account is noticed.
-		require.True(t, lookup(t, dl.generator, addrs[0]).Status == basics.Online)
-		require.True(t, lookup(t, dl.generator, addrs[1]).Status == basics.Online)
-		require.True(t, lookup(t, dl.generator, addrs[2]).Status == basics.Online)
+		// empty, nobody's suspendible account is noticed.
+		require.Equal(t, basics.Online, lookup(t, dl.generator, addrs[0]).Status)
+		require.Equal(t, basics.Online, lookup(t, dl.generator, addrs[1]).Status)
+		require.Equal(t, basics.Online, lookup(t, dl.generator, addrs[2]).Status)
 
 		// when 2 pays 0, they both get noticed and get suspended
 		dl.txns(&txntest.Txn{
@@ -492,10 +497,17 @@ func TestAbsentTracking(t *testing.T) {
 			Receiver: addrs[0],
 			Amount:   0,
 		})
-		require.Equal(t, ver < checkingBegins, lookup(t, dl.generator, addrs[0]).Status == basics.Online)
-		require.True(t, lookup(t, dl.generator, addrs[1]).Status == basics.Online)
-		require.Equal(t, ver < checkingBegins, lookup(t, dl.generator, addrs[2]).Status == basics.Online)
+		require.Equal(t, ver >= checkingBegins, lookup(t, dl.generator, addrs[0]).Status == basics.Offline)
+		require.Equal(t, basics.Online, lookup(t, dl.generator, addrs[1]).Status)
+		require.Equal(t, ver >= checkingBegins, lookup(t, dl.generator, addrs[2]).Status == basics.Offline)
 
+		// now, addrs[2] proposes, so it gets back online, but not immediately,
+		// because processing happens after the proposing block
+		dl.proposer = addrs[2]
+		dl.fullBlock()
+		require.Equal(t, ver >= checkingBegins, lookup(t, dl.generator, addrs[2]).Status == basics.Offline)
+		dl.fullBlock()
+		require.Equal(t, basics.Online, lookup(t, dl.generator, addrs[2]).Status)
 	})
 }
 

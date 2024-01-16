@@ -797,15 +797,21 @@ func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, evalOpts 
 		}
 	}
 
-	// Note their proposal
-	prp, err := eval.state.Get(prevHeader.Proposer, false)
-	if err != nil {
-		return nil, err
-	}
-	prp.LastProposed = hdr.Round - 1
-	err = eval.state.Put(prevHeader.Proposer, prp)
-	if err != nil {
-		return nil, err
+	// Note their proposal if MiningEnabled.
+	if proto.EnableMining {
+		prp, err := eval.state.Get(prevHeader.Proposer, false)
+		if err != nil {
+			return nil, err
+		}
+		prp.LastProposed = hdr.Round - 1
+		// An account could propose, even while suspended, because of the 320 round lookback.
+		if prp.Suspended() {
+			prp.Status = basics.Online
+		}
+		err = eval.state.Put(prevHeader.Proposer, prp)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	if eval.Tracer != nil {

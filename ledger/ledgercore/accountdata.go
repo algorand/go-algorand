@@ -151,6 +151,11 @@ func (u *AccountData) Suspend() {
 	u.Status = basics.Offline
 }
 
+// Suspended returns true if the account is suspended (offline with keys)
+func (u *AccountData) Suspended() bool {
+	return u.Status == basics.Offline && !u.VoteID.IsEmpty()
+}
+
 // MinBalance computes the minimum balance requirements for an account based on
 // some consensus parameters. MinBalance should correspond roughly to how much
 // storage the account is allowed to store on disk.

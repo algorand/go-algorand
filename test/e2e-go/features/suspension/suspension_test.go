@@ -78,6 +78,7 @@ func TestBasicSuspension(t *testing.T) {
 	account, err := fixture.LibGoalClient.AccountData(address)
 	a.NoError(err)
 	a.Equal(basics.Online, account.Status)
+	voteID := account.VoteID
 
 	// Proceed to round 70
 	err = fixture.WaitForRound(70, 10*roundTime)
@@ -110,9 +111,10 @@ func TestBasicSuspension(t *testing.T) {
 	// Proceed to round 90
 	err = fixture.WaitForRound(90, 20*roundTime)
 	a.NoError(err)
-	// n15's account is back online, but has voting key material (suspended)
+	// n15's account is back online, with same voting material
 	account, err = fixture.LibGoalClient.AccountData(address)
 	a.NoError(err)
 	a.Equal(basics.Online, account.Status)
 	a.NotZero(account.VoteID)
+	a.Equal(voteID, account.VoteID)
 }
