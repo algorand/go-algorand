@@ -488,34 +488,34 @@ func (spec *OpSpec) deadens() bool {
 // assembly-time, with ops.returns()
 var OpSpecs = []OpSpec{
 	{0x00, "err", opErr, proto(":x"), 1, detDefault()},
-	{0x01, "sha256", opSHA256, proto("b:3"), 1, costly(7)},
-	{0x02, "keccak256", opKeccak256, proto("b:3"), 1, costly(26)},
-	{0x03, "sha512_256", opSHA512_256, proto("b:3"), 1, costly(9)},
+	{0x01, "sha256", opSHA256, proto("b:b{32}"), 1, costly(7)},
+	{0x02, "keccak256", opKeccak256, proto("b:b{32}"), 1, costly(26)},
+	{0x03, "sha512_256", opSHA512_256, proto("b:b{32}"), 1, costly(9)},
 
 	// Cost of these opcodes increases in AVM version 2 based on measured
 	// performance. Should be able to run max hashes during stateful TEAL
 	// and achieve reasonable TPS. Same opcode for different versions
 	// is OK.
-	{0x01, "sha256", opSHA256, proto("b:3"), 2, costly(35)},
-	{0x02, "keccak256", opKeccak256, proto("b:3"), 2, costly(130)},
-	{0x03, "sha512_256", opSHA512_256, proto("b:3"), 2, costly(45)},
+	{0x01, "sha256", opSHA256, proto("b:b{32}"), 2, costly(35)},
+	{0x02, "keccak256", opKeccak256, proto("b:b{32}"), 2, costly(130)},
+	{0x03, "sha512_256", opSHA512_256, proto("b:b{32}"), 2, costly(45)},
 
 	/*
 		Tabling these changes until we offer unlimited global storage as there
 		is currently a useful pattern that requires hashes on long slices to
 		creating logicsigs in apps.
 
-		{0x01, "sha256", opSHA256, proto("b:b"), ?, costByLength(...)},
-		{0x02, "keccak256", opKeccak256, proto("b:b"), ?, costByLength(...)},
-		{0x03, "sha512_256", opSHA512_256, proto("b:b"), ?, costByLength(...)},
+		{0x01, "sha256", opSHA256, proto("b:b{32}"), ?, costByLength(...)},
+		{0x02, "keccak256", opKeccak256, proto("b:b{32}"), ?, costByLength(...)},
+		{0x03, "sha512_256", opSHA512_256, proto("b:b{32}"), ?, costByLength(...)},
 	*/
 
-	{0x04, "ed25519verify", opEd25519Verify, proto("b63:T"), 1, costly(1900).only(ModeSig)},
-	{0x04, "ed25519verify", opEd25519Verify, proto("b63:T"), 5, costly(1900)},
+	{0x04, "ed25519verify", opEd25519Verify, proto("bb{64}b{32}:T"), 1, costly(1900).only(ModeSig)},
+	{0x04, "ed25519verify", opEd25519Verify, proto("bb{64}b{32}:T"), 5, costly(1900)},
 
-	{0x05, "ecdsa_verify", opEcdsaVerify, proto("33333:T"), 5, costByField("v", &EcdsaCurves, ecdsaVerifyCosts)},
-	{0x06, "ecdsa_pk_decompress", opEcdsaPkDecompress, proto("b{33}:33"), 5, costByField("v", &EcdsaCurves, ecdsaDecompressCosts)},
-	{0x07, "ecdsa_pk_recover", opEcdsaPkRecover, proto("3i33:33"), 5, field("v", &EcdsaCurves).costs(2000)},
+	{0x05, "ecdsa_verify", opEcdsaVerify, proto("b{32}b{32}b{32}b{32}b{32}:T"), 5, costByField("v", &EcdsaCurves, ecdsaVerifyCosts)},
+	{0x06, "ecdsa_pk_decompress", opEcdsaPkDecompress, proto("b{33}:b{32}b{32}"), 5, costByField("v", &EcdsaCurves, ecdsaDecompressCosts)},
+	{0x07, "ecdsa_pk_recover", opEcdsaPkRecover, proto("b{32}ib{32}b{32}:b{32}b{32}"), 5, field("v", &EcdsaCurves).costs(2000)},
 
 	{0x08, "+", opPlus, proto("ii:i"), 1, detDefault()},
 	{0x09, "-", opMinus, proto("ii:i"), 1, detDefault()},
@@ -648,9 +648,9 @@ var OpSpecs = []OpSpec{
 	{0x82, "pushbytess", opPushBytess, proto(":", "", "[N items]").stackExplain(opPushBytessStackChange), 8, constants(asmPushBytess, checkByteImmArgs, "bytes ...", immBytess).typed(typePushBytess).trust()},
 	{0x83, "pushints", opPushInts, proto(":", "", "[N items]").stackExplain(opPushIntsStackChange), 8, constants(asmPushInts, checkIntImmArgs, "uint ...", immInts).typed(typePushInts).trust()},
 
-	{0x84, "ed25519verify_bare", opEd25519VerifyBare, proto("b63:T"), 7, costly(1900)},
+	{0x84, "ed25519verify_bare", opEd25519VerifyBare, proto("bb{64}b{32}:T"), 7, costly(1900)},
 	{0x85, "falcon_verify", opFalconVerify, proto("bb{1232}b{1793}:T"), spOpcodesVersion, costly(1700)}, // dynamic for internal hash?
-	{0x86, "sumhash512", opSumhash512, proto("b:6"), spOpcodesVersion, costByLength(150, 7, 4, 0)},
+	{0x86, "sumhash512", opSumhash512, proto("b:b{64}"), spOpcodesVersion, costByLength(150, 7, 4, 0)},
 
 	// "Function oriented"
 	{0x88, "callsub", opCallSub, proto(":"), 4, detBranch()},
@@ -671,9 +671,9 @@ var OpSpecs = []OpSpec{
 	{0x95, "expw", opExpw, proto("ii:ii"), 4, costly(10)},
 	{0x96, "bsqrt", opBytesSqrt, proto("I:I"), 6, costly(40)},
 	{0x97, "divw", opDivw, proto("iii:i"), 6, detDefault()},
-	{0x98, "sha3_256", opSHA3_256, proto("b:3"), 7, costly(130)},
+	{0x98, "sha3_256", opSHA3_256, proto("b:b{32}"), 7, costly(130)},
 	/* Will end up following keccak256 -
-	{0x98, "sha3_256", opSHA3_256, proto("b:b"), ?, costByLength(...)},},
+	{0x98, "sha3_256", opSHA3_256, proto("b:b{32}"), ?, costByLength(...)},},
 	*/
 
 	// Byteslice math.
@@ -724,7 +724,7 @@ var OpSpecs = []OpSpec{
 	{0xc6, "gitxnas", opGitxnas, proto("i:a"), 6, immediates("t", "f").field("f", &TxnArrayFields).only(ModeApp)},
 
 	// randomness support
-	{0xd0, "vrf_verify", opVrfVerify, proto("b83:6T"), randomnessVersion, field("s", &VrfStandards).costs(5700)},
+	{0xd0, "vrf_verify", opVrfVerify, proto("bb{80}b{32}:b{64}T"), randomnessVersion, field("s", &VrfStandards).costs(5700)},
 	{0xd1, "block", opBlock, proto("i:a"), randomnessVersion, field("f", &BlockFields)},
 	{0xd2, "box_splice", opBoxSplice, proto("Niib:").appStateExplain(opBoxSpliceStateChange), spliceVersion, only(ModeApp)},
 	{0xd3, "box_resize", opBoxResize, proto("Ni:").appStateExplain(opBoxResizeStateChange), spliceVersion, only(ModeApp)},
