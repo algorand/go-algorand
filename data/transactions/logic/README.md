@@ -52,9 +52,6 @@ assembly time to do type checking and to provide more informative error messages
 
 | Name | Bound | AVM Type |
 | ---- | ---- | -------- |
-| [32]byte | len(x) == 32 | []byte |
-| [64]byte | len(x) == 64 | []byte |
-| [80]byte | len(x) == 80 | []byte |
 | []byte | len(x) <= 4096 | []byte |
 | address | len(x) == 32 | []byte |
 | any |  | any |
