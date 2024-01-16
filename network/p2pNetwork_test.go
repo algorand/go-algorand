@@ -459,6 +459,7 @@ func TestP2PNetworkDHTCapabilities(t *testing.T) {
 			)
 			t.Logf("peers connected")
 
+			nets := []*P2PNetwork{netA, netB, netC}
 			discs := []*p2p.CapabilitiesDiscovery{netA.capabilitiesDiscovery, netB.capabilitiesDiscovery, netC.capabilitiesDiscovery}
 
 			var wg sync.WaitGroup
@@ -483,10 +484,12 @@ func TestP2PNetworkDHTCapabilities(t *testing.T) {
 			}
 
 			wg.Add(len(discs))
-			for _, disc := range discs {
-				go func(disc *p2p.CapabilitiesDiscovery) {
+			for i := range discs {
+				go func(idx int) {
+					disc := discs[idx]
 					defer wg.Done()
-					if disc == netA.capabilitiesDiscovery {
+					// skip netA since it is special for the test cap=netA
+					if test.name == "cap=netA" && disc == netA.capabilitiesDiscovery {
 						return
 					}
 					require.Eventuallyf(t,
@@ -501,7 +504,20 @@ func TestP2PNetworkDHTCapabilities(t *testing.T) {
 						time.Second,
 						fmt.Sprintf("Not all expected %s cap peers were found", cap),
 					)
-				}(disc)
+					// ensure GetPeers gets PeersPhonebookArchivalNodes peers
+					// it appears there are artifical peers because of listening on localhost and on a real network interface
+					// so filter out and save only unique peers by their IDs
+					net := nets[idx]
+					peers := net.GetPeers(PeersPhonebookArchivalNodes)
+					uniquePeerIDs := make(map[peer.ID]struct{})
+					for _, peer := range peers {
+						wsPeer := peer.(*wsPeerCore)
+						pi, err := peerstore.AddrInfoFromString(wsPeer.rootURL)
+						require.NoError(t, err)
+						uniquePeerIDs[pi.ID] = struct{}{}
+					}
+					require.Equal(t, test.numCapPeers, len(uniquePeerIDs))
+				}(i)
 			}
 			wg.Wait()
 		})
