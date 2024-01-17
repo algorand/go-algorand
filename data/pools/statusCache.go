@@ -63,5 +63,5 @@ func (sc *statusCache) put(tx transactions.SignedTxn, txErr string) {
 
 func (sc *statusCache) reset() {
 	sc.cur = make(map[transactions.Txid]statusCacheEntry, sc.sz)
-	sc.prev = make(map[transactions.Txid]statusCacheEntry, sc.sz)
+	sc.prev = nil
 }
