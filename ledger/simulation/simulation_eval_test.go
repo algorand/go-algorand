@@ -6813,7 +6813,7 @@ int 1`,
 			input: simulation.Request{
 				TxnGroups: [][]transactions.SignedTxn{txgroup},
 			},
-			expectedError: "logic eval error: this transaction should be issued by the manager",
+			expectedError: "this transaction should be issued by the manager",
 			expected: simulation.Result{
 				Version:   simulation.ResultLatestVersion,
 				LastRound: env.TxnInfo.LatestRound(),
