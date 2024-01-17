@@ -293,11 +293,13 @@ Opcodes have a cost of 1 unless otherwise specified.
 type OpRecord struct {
 	Opcode  byte
 	Name    string
+	Cost    string
 	Args    []string `json:",omitempty"`
 	Returns []string `json:",omitempty"`
 	Size    int
 
 	ArgEnum      []string `json:",omitempty"`
+	ArgEnumDoc   []string `json:",omitempty"`
 	ArgEnumTypes []string `json:",omitempty"`
 
 	DocCost string
@@ -374,20 +376,22 @@ func typeStrings(types logic.StackTypes) []string {
 	return out
 }
 
-func fieldsAndTypes(group logic.FieldGroup, version uint64) ([]string, []string) {
+func fieldsAndTypes(group logic.FieldGroup, version uint64) ([]string, []string, []string) {
 	// reminder: group.Names can be "sparse" See: logic.TxnaFields
 	fields := make([]string, 0, len(group.Names))
+	docs := make([]string, 0, len(group.Names))
 	types := make([]logic.StackType, 0, len(group.Names))
 	for _, name := range group.Names {
 		if spec, ok := group.SpecByName(name); ok && spec.Version() <= version {
 			fields = append(fields, name)
 			types = append(types, spec.Type())
+			docs = append(docs, spec.Note())
 		}
 	}
-	return fields, typeStrings(types)
+	return fields, typeStrings(types), docs
 }
 
-func argEnums(name string, version uint64) ([]string, []string) {
+func argEnums(name string, version uint64) ([]string, []string, []string) {
 	// reminder: this needs to be manually updated every time
 	// a new opcode is added with an associated FieldGroup
 	// it'd be nice to have this auto-update
@@ -421,7 +425,7 @@ func argEnums(name string, version uint64) ([]string, []string) {
 	case "ecdsa_pk_recover", "ecdsa_verify", "ecdsa_pk_decompress":
 		return fieldsAndTypes(logic.EcdsaCurves, version)
 	default:
-		return nil, nil
+		return nil, nil, nil
 	}
 }
 
@@ -431,12 +435,16 @@ func buildLanguageSpec(opGroups map[string][]string, namedTypes []namedType, ver
 	for i, spec := range opSpecs {
 		records[i].Opcode = spec.Opcode
 		records[i].Name = spec.Name
+		argLen := len(spec.Arg.Types)
+		records[i].Cost = spec.OpDetails.DocCost(argLen, version)
 		records[i].Args = typeStrings(spec.Arg.Types)
 		records[i].Returns = typeStrings(spec.Return.Types)
 		records[i].Size = spec.OpDetails.Size
 		records[i].DocCost = spec.DocCost(version)
-		records[i].ArgEnum, records[i].ArgEnumTypes = argEnums(spec.Name, version)
+		records[i].ArgEnum, records[i].ArgEnumTypes, records[i].ArgEnumDoc = argEnums(spec.Name, version)
 		desc := logic.OpDescOf(spec.Name)
+		//FIXME
+		//records[i].Doc = strings.ReplaceAll(desc.Short, "<br />", "\n")
 		records[i].Doc = desc.Short
 		records[i].DocExtra = desc.Extra
 		records[i].ImmediateNote = logic.OpImmediateDetailsFromSpec(spec)
