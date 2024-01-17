@@ -419,6 +419,7 @@ func (n *P2PNetwork) RequestConnectOutgoing(replace bool, quit <-chan struct{}) 
 
 // GetPeers returns a list of Peers we could potentially send a direct message to.
 func (n *P2PNetwork) GetPeers(options ...PeerOption) []Peer {
+	n.log.Debugf("GetPeers called with options %v", options)
 	peers := make([]Peer, 0)
 	for _, option := range options {
 		switch option {
@@ -458,6 +459,7 @@ func (n *P2PNetwork) GetPeers(options ...PeerOption) []Peer {
 					n.log.Warnf("Error getting archival nodes from capabilities discovery: %v", err)
 					return peers
 				}
+				n.log.Debugf("Got %d archival node(s) from DHT", len(info))
 				for _, addrInfo := range info {
 					mas, err := peer.AddrInfoToP2pAddrs(&addrInfo)
 					if err != nil {
@@ -470,6 +472,13 @@ func (n *P2PNetwork) GetPeers(options ...PeerOption) []Peer {
 						peerCore := makePeerCore(n.ctx, n, n.log, n.handler.readBuffer, addr, n.GetRoundTripper(nil), "" /*origin address*/)
 						peers = append(peers, &peerCore)
 					}
+				}
+				if n.log.GetLevel() >= logging.Debug && len(peers) > 0 {
+					addrs := make([]string, 0, len(peers))
+					for _, peer := range peers {
+						addrs = append(addrs, peer.(*wsPeerCore).rootURL)
+					}
+					n.log.Debugf("Archival node(s) from DHT: %v", addrs)
 				}
 			} else {
 				// default to all peers
@@ -559,7 +568,8 @@ func (n *P2PNetwork) wsStreamHandler(ctx context.Context, peer peer.ID, stream n
 	}
 
 	// get address for peer ID
-	addr := stream.Conn().RemoteMultiaddr().String()
+	ma := stream.Conn().RemoteMultiaddr()
+	addr := ma.String()
 	if addr == "" {
 		n.log.Warnf("Could not get address for peer %s", peer)
 	}
@@ -576,8 +586,14 @@ func (n *P2PNetwork) wsStreamHandler(ctx context.Context, peer peer.ID, stream n
 	n.wsPeersLock.Unlock()
 	n.wsPeersChangeCounter.Add(1)
 
+	event := "ConnectedOut"
+	msg := "Made outgoing connection to peer %s"
+	if incoming {
+		event = "ConnectedIn"
+		msg = "Accepted incoming connection from peer %s"
+	}
 	localAddr, _ := n.Address()
-	n.log.With("event", "ConnectedIn").With("remote", addr).With("local", localAddr).Infof("Accepted incoming connection from peer %s", peer.String())
+	n.log.With("event", event).With("remote", addr).With("local", localAddr).Infof(msg, peer.String())
 
 	// TODO: add telemetry
 	// n.log.EventWithDetails(telemetryspec.Network, telemetryspec.ConnectPeerEvent,
