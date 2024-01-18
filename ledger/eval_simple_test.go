@@ -392,7 +392,15 @@ func TestAbsentTracking(t *testing.T) {
 		dl := NewDoubleLedger(t, genBalances, cv, cfg)
 		defer dl.Close()
 
-		totals, err := dl.generator.Totals(0)
+		// have addrs[1] go online, which makes it eligible for suspension
+		dl.txn(&txntest.Txn{
+			Type:        "keyreg",
+			Sender:      addrs[1],
+			VotePK:      [32]byte{1},
+			SelectionPK: [32]byte{1},
+		})
+
+		totals, err := dl.generator.Totals(1)
 		require.NoError(t, err)
 		require.NotZero(t, totals.Online.Money.Raw)
 
@@ -511,9 +519,10 @@ func TestAbsentTracking(t *testing.T) {
 			dl.fullBlock()
 		}
 
-		// addrs 0-2 all have about 1/3 of stake, so become eligible for
-		// suspension after 30 rounds. We're at about 35. But, since blocks are
-		// empty, nobody's suspendible account is noticed.
+		// addrs 0-2 all have about 1/3 of stake, so seemingly (see next block
+		// of checks) become eligible for suspension after 30 rounds. We're at
+		// about 35. But, since blocks are empty, nobody's suspendible account
+		// is noticed.
 		require.Equal(t, basics.Online, lookup(t, dl.generator, addrs[0]).Status)
 		require.Equal(t, basics.Online, lookup(t, dl.generator, addrs[1]).Status)
 		require.Equal(t, basics.Online, lookup(t, dl.generator, addrs[2]).Status)
@@ -526,8 +535,23 @@ func TestAbsentTracking(t *testing.T) {
 			Receiver: addrs[0],
 			Amount:   0,
 		})
-		require.Equal(t, ver >= checkingBegins, lookup(t, dl.generator, addrs[0]).Status == basics.Offline)
+		// addr[0] has never proposed or heartbeat so it is not considered absent
+		require.Equal(t, basics.Online, lookup(t, dl.generator, addrs[0]).Status)
+		// addr[1] still hasn't been "noticed"
 		require.Equal(t, basics.Online, lookup(t, dl.generator, addrs[1]).Status)
+		require.Equal(t, ver >= checkingBegins, lookup(t, dl.generator, addrs[2]).Status == basics.Offline)
+		require.False(t, lookup(t, dl.generator, addrs[2]).IncentiveEligible)
+
+		// now, when 2 pays 1, 1 gets suspended (unlike 0, we had 1 keyreg early on, so LastHeartbeat>0)
+		dl.txns(&txntest.Txn{
+			Type:     "pay",
+			Sender:   addrs[2],
+			Receiver: addrs[1],
+			Amount:   0,
+		})
+		require.Equal(t, basics.Online, lookup(t, dl.generator, addrs[0]).Status)
+		require.Equal(t, ver >= checkingBegins, lookup(t, dl.generator, addrs[1]).Status == basics.Offline)
+		require.False(t, lookup(t, dl.generator, addrs[1]).IncentiveEligible)
 		require.Equal(t, ver >= checkingBegins, lookup(t, dl.generator, addrs[2]).Status == basics.Offline)
 		require.False(t, lookup(t, dl.generator, addrs[2]).IncentiveEligible)
 

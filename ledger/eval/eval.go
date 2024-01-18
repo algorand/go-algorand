@@ -1528,6 +1528,12 @@ func max(a, b basics.Round) basics.Round {
 }
 
 func isAbsent(totalOnlineStake basics.MicroAlgos, acctStake basics.MicroAlgos, lastSeen basics.Round, current basics.Round) bool {
+	// Don't consider accounts that were online when mining went into effect as
+	// absent.  They get noticed the next time they propose or keyreg, which
+	// ought to be soon, if they want to earn incentives.
+	if lastSeen == 0 {
+		return false
+	}
 	// See if the account has exceeded 10x their expected observation interval.
 	allowableLag := basics.Round(10 * totalOnlineStake.Raw / acctStake.Raw)
 	return lastSeen+allowableLag < current
