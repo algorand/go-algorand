@@ -36,6 +36,7 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
+	libp2phttp "github.com/libp2p/go-libp2p/p2p/http"
 	manet "github.com/multiformats/go-multiaddr/net"
 )
 
@@ -70,6 +71,7 @@ type P2PNetwork struct {
 	bootstrapper bootstrapper
 	nodeInfo     NodeInfo
 	pstore       *peerstore.PeerStore
+	httpServer   libp2phttp.Host
 }
 
 type bootstrapper struct {
@@ -207,6 +209,10 @@ func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebo
 		net.capabilitiesDiscovery = disc
 	}
 
+	net.httpServer = libp2phttp.Host{
+		StreamHost: h,
+	}
+
 	err = net.setup()
 	if err != nil {
 		return nil, err
@@ -253,6 +259,9 @@ func (n *P2PNetwork) Start() error {
 	}
 
 	n.wg.Add(1)
+	go n.httpdThread()
+
+	n.wg.Add(1)
 	go n.broadcaster.broadcastThread(&n.wg, n)
 	n.service.DialPeersUntilTargetCount(n.config.GossipFanout)
 
@@ -281,6 +290,7 @@ func (n *P2PNetwork) Stop() {
 	n.ctxCancel()
 	n.service.Close()
 	n.bootstrapper.stop()
+	n.httpServer.Close()
 	n.wg.Wait()
 }
 
@@ -315,6 +325,14 @@ func (n *P2PNetwork) meshThread() {
 		case <-n.ctx.Done():
 			return
 		}
+	}
+}
+
+func (n *P2PNetwork) httpdThread() {
+	defer n.wg.Done()
+	err := n.httpServer.Serve()
+	if err != nil {
+		n.log.Errorf("Error serving P2PHTTP: %v", err)
 	}
 }
 
@@ -409,6 +427,7 @@ func (n *P2PNetwork) DisconnectPeers() {
 
 // RegisterHTTPHandler path accepts gorilla/mux path annotations
 func (n *P2PNetwork) RegisterHTTPHandler(path string, handler http.Handler) {
+	n.httpServer.SetHTTPHandlerAtPath(p2p.AlgorandP2pHttpProtocol, path, handler)
 }
 
 // RequestConnectOutgoing asks the system to actually connect to peers.
@@ -463,15 +482,26 @@ func (n *P2PNetwork) GetPeers(options ...PeerOption) []Peer {
 				for _, addrInfo := range info {
 					mas, err := peer.AddrInfoToP2pAddrs(&addrInfo)
 					if err != nil {
-						n.log.Warnf("Error converting archival AddrInfo to p2p addr: %v", err)
+						n.log.Warnf("Archival AddrInfo conversion error: %v", err)
+						continue
+					}
+					if len(mas) == 0 {
+						n.log.Warnf("Archival AddrInfo: empty multiaddr for : %v", addrInfo)
+						continue
+					}
+					addr := mas[0].String()
+					client, err := p2p.MakeHTTPClient(p2p.AlgorandP2pHttpProtocol, addrInfo)
+					if err != nil {
+						n.log.Warnf("MakeHTTPClient failed: %v", err)
 						continue
 					}
 
-					for _, ma := range mas {
-						addr := ma.String()
-						peerCore := makePeerCore(n.ctx, n, n.log, n.handler.readBuffer, addr, n.GetRoundTripper(nil), "" /*origin address*/)
-						peers = append(peers, &peerCore)
-					}
+					peerCore := makePeerCoreWithClient(
+						n.ctx, n, n.log, n.handler.readBuffer,
+						addr, n.GetRoundTripper(nil), "", /*origin address*/
+						client,
+					)
+					peers = append(peers, &peerCore)
 				}
 				if n.log.GetLevel() >= logging.Debug && len(peers) > 0 {
 					addrs := make([]string, 0, len(peers))
