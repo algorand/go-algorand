@@ -834,8 +834,13 @@ func OpcodesByVersion(version uint64) []OpSpec {
 		}
 	}
 	result := maps.Values(subv)
-	slices.SortFunc(result, func(a, b OpSpec) bool {
-		return a.Opcode < b.Opcode
+	slices.SortFunc(result, func(a, b OpSpec) int {
+		if a.Opcode == b.Opcode {
+			return 0
+		} else if a.Opcode > b.Opcode {
+			return 1
+		}
+		return -1
 	})
 	return result
 }
