@@ -304,6 +304,14 @@ func (s *OneTimeSignatureSecrets) Sign(id OneTimeSignatureIdentifier, message Ha
 	return OneTimeSignature{}
 }
 
+// SigVerificationTask is a single self-containing struct for the signiture verification
+type SigVerificationTask struct {
+	V       OneTimeSignatureVerifier
+	ID      OneTimeSignatureIdentifier
+	Message Hashable
+	Sig     *OneTimeSignature
+}
+
 // Verify verifies that some Hashable signature was signed under some
 // OneTimeSignatureVerifier and some OneTimeSignatureIdentifier.
 //
@@ -338,6 +346,46 @@ func (v OneTimeSignatureVerifier) Verify(id OneTimeSignatureIdentifier, message 
 		[]Signature{Signature(sig.PK2Sig), Signature(sig.PK1Sig), Signature(sig.Sig)},
 	)
 	return allValid
+}
+
+// BatchVerifyOneTimeSignatures has the same function as Verify, but it operates on a batch of signatures.
+func BatchVerifyOneTimeSignatures(vTasks []*SigVerificationTask) (failed []bool) {
+	numTasks := len(vTasks)
+	messageBytes := make([][]byte, numTasks*3)
+	publicKeys := make([]PublicKey, numTasks*3)
+	signatures := make([]Signature, numTasks*3)
+
+	for i := range vTasks {
+		offsetID := OneTimeSignatureSubkeyOffsetID{
+			SubKeyPK: vTasks[i].Sig.PK,
+			Batch:    vTasks[i].ID.Batch,
+			Offset:   vTasks[i].ID.Offset,
+		}
+		batchID := OneTimeSignatureSubkeyBatchID{
+			SubKeyPK: vTasks[i].Sig.PK2,
+			Batch:    vTasks[i].ID.Batch,
+		}
+		messageBytes[i*3] = HashRep(batchID)
+		messageBytes[i*3+1] = HashRep(offsetID)
+		messageBytes[i*3+2] = HashRep(vTasks[i].Message)
+
+		publicKeys[i*3] = PublicKey(vTasks[i].V)
+		publicKeys[i*3+1] = PublicKey(batchID.SubKeyPK)
+		publicKeys[i*3+2] = PublicKey(offsetID.SubKeyPK)
+
+		signatures[i*3] = Signature(vTasks[i].Sig.PK2Sig)
+		signatures[i*3+1] = Signature(vTasks[i].Sig.PK1Sig)
+		signatures[i*3+2] = Signature(vTasks[i].Sig.Sig)
+	}
+	allPass, results := batchVerificationImpl(messageBytes, publicKeys, signatures)
+	sigResults := make([]bool, numTasks)
+	if allPass {
+		return sigResults
+	}
+	for i := range sigResults {
+		sigResults[i] = results[i*3] || results[i*3+1] || results[i*3+2]
+	}
+	return sigResults
 }
 
 // DeleteBeforeFineGrained deletes ephemeral keys before (but not including) the given id.

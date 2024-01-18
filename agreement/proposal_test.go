@@ -65,7 +65,7 @@ func createProposalsTesting(accs testAccountData, round basics.Round, period per
 			logging.Base().Errorf("AccountManager.makeVotes: Could not create vote: %v", err)
 			return
 		}
-		vote, err := uv.verify(ledger)
+		vote, err := verifySigVote(uv, ledger)
 		if err != nil {
 			continue
 		}

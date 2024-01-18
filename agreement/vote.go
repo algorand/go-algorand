@@ -93,57 +93,70 @@ type (
 	UnauthenticatedVote = unauthenticatedVote
 )
 
-// verify verifies that a vote that was received from the network is valid.
-func (uv unauthenticatedVote) verify(l LedgerReader) (vote, error) {
+// getVerificationTask performs checks on the vote that was received from the netwok,
+// and returns the vote verification task to be verified
+func (uv *unauthenticatedVote) getVerificationTask(l LedgerReader, m *committee.Membership) (*crypto.SigVerificationTask, error) {
 	rv := uv.R
-	m, err := membership(l, rv.Sender, rv.Round, rv.Period, rv.Step)
-	if err != nil {
-		return vote{}, fmt.Errorf("unauthenticatedVote.verify: could not get membership parameters: %w", err)
-	}
 
 	switch rv.Step {
 	case propose:
 		if rv.Period == rv.Proposal.OriginalPeriod && rv.Sender != rv.Proposal.OriginalProposer {
-			return vote{}, fmt.Errorf("unauthenticatedVote.verify: proposal-vote sender mismatches with proposal-value: %v != %v", rv.Sender, rv.Proposal.OriginalProposer)
+			return nil, fmt.Errorf("unauthenticatedVote.getVerificationTask: proposal-vote sender mismatches with proposal-value: %v != %v", rv.Sender, rv.Proposal.OriginalProposer)
 		}
 		// The following check could apply to all steps, but it's sufficient to only check in the propose step.
 		if rv.Proposal.OriginalPeriod > rv.Period {
-			return vote{}, fmt.Errorf("unauthenticatedVote.verify: proposal-vote in period %d claims to repropose block from future period %d", rv.Period, rv.Proposal.OriginalPeriod)
+			return nil, fmt.Errorf("unauthenticatedVote.getVerificationTask: proposal-vote in period %d claims to repropose block from future period %d", rv.Period, rv.Proposal.OriginalPeriod)
 		}
 		fallthrough
 	case soft:
 		fallthrough
 	case cert:
 		if rv.Proposal == bottom {
-			return vote{}, fmt.Errorf("unauthenticatedVote.verify: votes from step %d cannot validate bottom", rv.Step)
+			return nil, fmt.Errorf("unauthenticatedVote.getVerificationTask: votes from step %d cannot validate bottom", rv.Step)
 		}
 	}
 
 	proto, err := l.ConsensusParams(ParamsRound(rv.Round))
 	if err != nil {
-		return vote{}, fmt.Errorf("unauthenticatedVote.verify: could not get consensus params for round %d: %v", ParamsRound(rv.Round), err)
+		return nil, fmt.Errorf("unauthenticatedVote.getVerificationTask: could not get consensus params for round %d: %w", ParamsRound(rv.Round), err)
 	}
 
 	if rv.Round < m.Record.VoteFirstValid {
-		return vote{}, fmt.Errorf("unauthenticatedVote.verify: vote by %v in round %d before VoteFirstValid %d: %+v", rv.Sender, rv.Round, m.Record.VoteFirstValid, uv)
+		return nil, fmt.Errorf("unauthenticatedVote.getVerificationTask: vote by %v in round %d before VoteFirstValid %d: %+v", rv.Sender, rv.Round, m.Record.VoteFirstValid, uv)
 	}
 
 	if m.Record.VoteLastValid != 0 && rv.Round > m.Record.VoteLastValid {
-		return vote{}, fmt.Errorf("unauthenticatedVote.verify: vote by %v in round %d after VoteLastValid %d: %+v", rv.Sender, rv.Round, m.Record.VoteLastValid, uv)
+		return nil, fmt.Errorf("unauthenticatedVote.getVerificationTask: vote by %v in round %d after VoteLastValid %d: %+v", rv.Sender, rv.Round, m.Record.VoteLastValid, uv)
 	}
-
 	ephID := basics.OneTimeIDForRound(rv.Round, m.Record.KeyDilution(proto))
 	voteID := m.Record.VoteID
-	if !voteID.Verify(ephID, rv, uv.Sig) {
-		return vote{}, fmt.Errorf("unauthenticatedVote.verify: could not verify FS signature on vote by %v given %v: %+v", rv.Sender, voteID, uv)
-	}
+	return &crypto.SigVerificationTask{V: voteID, ID: ephID, Message: rv, Sig: &uv.Sig}, nil
+}
 
-	cred, err := uv.Cred.Verify(proto, m)
+func (uv *unauthenticatedVote) authenticateCredAndGetVote(l LedgerReader, m *committee.Membership) (*vote, error) {
+	cred, err := authenticateCred(&uv.Cred, uv.R.Round, l, m)
 	if err != nil {
-		return vote{}, fmt.Errorf("unauthenticatedVote.verify: got a vote, but sender was not selected: %v", err)
+		return nil, fmt.Errorf("unauthenticatedVote.authenticateCredAndGetVote: got a vote, but sender was not selected: %w", err)
 	}
+	v := vote{R: uv.R, Cred: *cred, Sig: uv.Sig}
+	return &v, nil
+}
 
-	return vote{R: rv, Cred: cred, Sig: uv.Sig}, nil
+func (pair *unauthenticatedEquivocationVote) authenticateCredAndGetEqVote(l LedgerReader, m *committee.Membership) (*equivocationVote, error) {
+	cred, err := authenticateCred(&pair.Cred, pair.Round, l, m)
+	if err != nil {
+		return nil, fmt.Errorf("unauthenticatedVote.authenticateCredAndGetEqVote: got a vote, but sender was not selected: %w", err)
+	}
+	ev := equivocationVote{
+		Sender:    pair.Sender,
+		Round:     pair.Round,
+		Period:    pair.Period,
+		Step:      pair.Step,
+		Cred:      *cred,
+		Proposals: pair.Proposals,
+		Sigs:      pair.Sigs,
+	}
+	return &ev, nil
 }
 
 // makeVote creates a new unauthenticated vote from its constituent components.
@@ -190,9 +203,9 @@ func (v vote) u() unauthenticatedVote {
 	return unauthenticatedVote{R: v.R, Cred: v.Cred.UnauthenticatedCredential, Sig: v.Sig}
 }
 
-func (pair unauthenticatedEquivocationVote) verify(l LedgerReader) (equivocationVote, error) {
+func (pair *unauthenticatedEquivocationVote) getEquivocVerificationTasks(l LedgerReader) ([]*crypto.SigVerificationTask, *committee.Membership, error) {
 	if pair.Proposals[0] == pair.Proposals[1] {
-		return equivocationVote{}, fmt.Errorf("isEquivocationPair: not an equivocation pair: identical vote (block hash %v == %v)", pair.Proposals[0], pair.Proposals[1])
+		return nil, nil, fmt.Errorf("getEquivocVerificationTasks: not an equivocation pair: identical vote (block hash %v == %v)", pair.Proposals[0], pair.Proposals[1])
 	}
 
 	rv0 := rawVote{Sender: pair.Sender, Round: pair.Round, Period: pair.Period, Step: pair.Step, Proposal: pair.Proposals[0]}
@@ -201,25 +214,21 @@ func (pair unauthenticatedEquivocationVote) verify(l LedgerReader) (equivocation
 	uv0 := unauthenticatedVote{R: rv0, Cred: pair.Cred, Sig: pair.Sigs[0]}
 	uv1 := unauthenticatedVote{R: rv1, Cred: pair.Cred, Sig: pair.Sigs[1]}
 
-	v0, err := uv0.verify(l)
+	m, err := membership(l, uv0.R.Sender, uv0.R.Round, uv0.R.Period, uv0.R.Step)
 	if err != nil {
-		return equivocationVote{}, fmt.Errorf("unauthenticatedEquivocationVote.verify: failed to verify pair 0: %w", err)
+		return nil, nil, fmt.Errorf("getEquivocVerificationTasks: could not get membership parameters: %w", err)
+	}
+	vt0, err := uv0.getVerificationTask(l, &m)
+	if err != nil {
+		return nil, nil, fmt.Errorf("getEquivocVerificationTasks: failed to get verification task for pair 0: %w", err)
 	}
 
-	_, err = uv1.verify(l)
+	vt1, err := uv1.getVerificationTask(l, &m)
 	if err != nil {
-		return equivocationVote{}, fmt.Errorf("unauthenticatedEquivocationVote.verify: failed to verify pair 1: %w", err)
+		return nil, nil, fmt.Errorf("getEquivocVerificationTasks: failed to get verification task for pair 1: %w", err)
 	}
 
-	return equivocationVote{
-		Sender:    pair.Sender,
-		Round:     pair.Round,
-		Period:    pair.Period,
-		Step:      pair.Step,
-		Cred:      v0.Cred,
-		Proposals: pair.Proposals,
-		Sigs:      pair.Sigs,
-	}, nil
+	return []*crypto.SigVerificationTask{vt0, vt1}, &m, nil
 }
 
 // the first member of the equivocation pair
@@ -232,4 +241,16 @@ func (pair equivocationVote) v0() vote {
 func (pair equivocationVote) v1() vote {
 	rv := rawVote{Sender: pair.Sender, Round: pair.Round, Period: pair.Period, Step: pair.Step, Proposal: pair.Proposals[1]}
 	return vote{R: rv, Cred: pair.Cred, Sig: pair.Sigs[1]}
+}
+
+// authenticateCred is called to authenticate the credential after the signatures are verified
+// this is to avoid this expensive task in the event the signature fails
+func authenticateCred(cred *committee.UnauthenticatedCredential, round round, l LedgerReader,
+	m *committee.Membership) (c *committee.Credential, err error) {
+	proto, err := l.ConsensusParams(ParamsRound(round))
+	if err != nil {
+		return nil, fmt.Errorf("authenticateCred: could not get consensus params for round %d: %w", ParamsRound(round), err)
+	}
+	cr, err := cred.Verify(proto, *m)
+	return &cr, err
 }

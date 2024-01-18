@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/algorand/go-algorand/test/partitiontest"
+	"github.com/stretchr/testify/require"
 )
 
 func randID() OneTimeSignatureIdentifier {
@@ -140,6 +141,128 @@ func testOneTimeSignVerifyNewStyle(t *testing.T, c *OneTimeSignatureSecrets, c2 
 	}
 }
 
+func TestOneTimeSignBatchVerifyNewStyle(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	vTasks := make([]*SigVerificationTask, 0, 16)
+
+	c := GenerateOneTimeSignatureSecrets(0, 1000)
+	c2 := GenerateOneTimeSignatureSecrets(0, 1000)
+
+	id := randID()
+	s := randString()
+	s2 := randString()
+
+	v := c.OneTimeSignatureVerifier
+
+	sig := c.Sign(id, s)
+	vTasks = append(vTasks, &SigVerificationTask{V: v, ID: id, Message: s, Sig: &sig})
+
+	vTasks = append(vTasks, &SigVerificationTask{V: v, ID: id, Message: s2, Sig: &sig})
+
+	sig2 := c2.Sign(id, s)
+	vTasks = append(vTasks, &SigVerificationTask{V: v, ID: id, Message: s, Sig: &sig2})
+
+	otherID := randID()
+	vTasks = append(vTasks, &SigVerificationTask{V: v, ID: otherID, Message: s, Sig: &sig})
+
+	nextOffsetID := id
+	nextOffsetID.Offset++
+	vTasks = append(vTasks, &SigVerificationTask{V: v, ID: nextOffsetID, Message: s, Sig: &sig})
+
+	c.DeleteBeforeFineGrained(nextOffsetID, 256)
+	sigAfterDelete := c.Sign(id, s)
+	vTasks = append(vTasks, &SigVerificationTask{V: v, ID: id, Message: s, Sig: &sigAfterDelete})
+
+	sigNextAfterDelete := c.Sign(nextOffsetID, s)
+	vTasks = append(vTasks, &SigVerificationTask{V: v, ID: nextOffsetID, Message: s, Sig: &sigNextAfterDelete})
+
+	nextOffsetID.Offset++
+	sigNext2AfterDelete := c.Sign(nextOffsetID, s)
+	vTasks = append(vTasks, &SigVerificationTask{V: v, ID: nextOffsetID, Message: s, Sig: &sigNext2AfterDelete})
+
+	nextBatchID := id
+	nextBatchID.Batch++
+
+	nextBatchOffsetID := nextBatchID
+	nextBatchOffsetID.Offset++
+	c.DeleteBeforeFineGrained(nextBatchOffsetID, 256)
+	sigAfterDelete2 := c.Sign(nextBatchID, s)
+	vTasks = append(vTasks, &SigVerificationTask{V: v, ID: nextBatchID, Message: s, Sig: &sigAfterDelete2})
+
+	sigNextAfterDelete2 := c.Sign(nextBatchOffsetID, s)
+	vTasks = append(vTasks, &SigVerificationTask{V: v, ID: nextBatchOffsetID, Message: s, Sig: &sigNextAfterDelete2})
+
+	nextBatchOffsetID.Offset++
+	sigNext2AfterDelete2 := c.Sign(nextBatchOffsetID, s)
+	vTasks = append(vTasks, &SigVerificationTask{V: v, ID: nextBatchOffsetID, Message: s, Sig: &sigNext2AfterDelete2})
+
+	// Jump by two batches
+	bigJumpID := nextBatchOffsetID
+	bigJumpID.Batch += 10
+	c.DeleteBeforeFineGrained(bigJumpID, 256)
+
+	preBigJumpID := bigJumpID
+	preBigJumpID.Batch--
+	sig3 := c.Sign(preBigJumpID, s)
+	vTasks = append(vTasks, &SigVerificationTask{V: v, ID: preBigJumpID, Message: s, Sig: &sig3})
+
+	preBigJumpID.Batch++
+	preBigJumpID.Offset--
+	sig4 := c.Sign(preBigJumpID, s)
+	vTasks = append(vTasks, &SigVerificationTask{V: v, ID: preBigJumpID, Message: s, Sig: &sig4})
+
+	sig5 := c.Sign(bigJumpID, s)
+	vTasks = append(vTasks, &SigVerificationTask{V: v, ID: bigJumpID, Message: s, Sig: &sig5})
+
+	bigJumpID.Offset++
+	sig6 := c.Sign(bigJumpID, s)
+	vTasks = append(vTasks, &SigVerificationTask{V: v, ID: bigJumpID, Message: s, Sig: &sig6})
+
+	bigJumpID.Batch++
+	sig7 := c.Sign(bigJumpID, s)
+	vTasks = append(vTasks, &SigVerificationTask{V: v, ID: bigJumpID, Message: s, Sig: &sig7})
+
+	results := BatchVerifyOneTimeSignatures(vTasks)
+
+	require.False(t, results[0], "correct signature failed to verify (ephemeral)")
+	require.True(t, results[1], "signature verifies on wrong message")
+	require.True(t, results[2], "wrong master key incorrectly verified (ephemeral)")
+	require.True(t, results[3], "signature verifies for wrong ID")
+	require.True(t, results[4], "signature verifies after changing offset")
+	require.True(t, results[5], "signature verifies after delete offset")
+	require.False(t, results[6], "signature fails to verify after deleting up to this offset")
+	require.False(t, results[7], "signature fails to verify after deleting up to previous offset")
+	require.True(t, results[8], "signature verifies after delete")
+	require.False(t, results[9], "signature fails to verify after delete up to this offset")
+	require.False(t, results[10], "signature fails to verify after delete up to previous offset")
+	require.True(t, results[11], "preBigJumpID verifies")
+	require.True(t, results[12], "preBigJumpID verifies")
+	require.False(t, results[13], "bigJumpID does not verify")
+	require.False(t, results[14], "bigJumpID.Offset++ does not verify")
+	require.False(t, results[15], "bigJumpID.Batch++ does not verify")
+
+}
+
+func TestBatchVerifyOneTimeSignaturesAllPass(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	vTasks := make([]*SigVerificationTask, 0, 16)
+
+	for x := 0; x < 16; x++ {
+		c := GenerateOneTimeSignatureSecrets(0, 1000)
+		id := randID()
+		s := randString()
+		v := c.OneTimeSignatureVerifier
+		sig := c.Sign(id, s)
+		vTasks = append(vTasks, &SigVerificationTask{V: v, ID: id, Message: s, Sig: &sig})
+	}
+	results := BatchVerifyOneTimeSignatures(vTasks)
+	for x := 0; x < 16; x++ {
+		require.False(t, results[x], "correct signature failed to verify (ephemeral)")
+	}
+}
+
 func BenchmarkOneTimeSigBatchVerification(b *testing.B) {
 	for _, enabled := range []bool{false, true} {
 		b.Run(fmt.Sprintf("batch=%v", enabled), func(b *testing.B) {
@@ -160,6 +283,32 @@ func BenchmarkOneTimeSigBatchVerification(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				v.Verify(ids[i], msg, sigs[i])
 			}
+		})
+	}
+}
+
+func BenchmarkBatchedOneTimeSigBatchVerification(b *testing.B) {
+	for _, enabled := range []bool{false, true} {
+		b.Run(fmt.Sprintf("batch=%v", enabled), func(b *testing.B) {
+			// generate a bunch of signatures
+			c := GenerateOneTimeSignatureSecrets(0, 1000)
+			msg := randString()
+			vTasks := make([]*SigVerificationTask, b.N)
+			for i := 0; i < b.N; i++ {
+				vs := c.OneTimeSignatureVerifier
+				id := randID()
+				msg := msg
+				sig := c.Sign(id, msg)
+				vTasks[i] = &SigVerificationTask{
+					V:       vs,
+					ID:      id,
+					Message: msg,
+					Sig:     &sig,
+				}
+			}
+			// verify them
+			b.ResetTimer()
+			BatchVerifyOneTimeSignatures(vTasks)
 		})
 	}
 }

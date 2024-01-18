@@ -18,10 +18,10 @@ package agreement
 
 import (
 	"context"
-	"errors"
 	"sync"
 
 	"github.com/algorand/go-algorand/util/execpool"
+	"github.com/algorand/go-deadlock"
 )
 
 type asyncVerifyVoteRequest struct {
@@ -57,10 +57,13 @@ type AsyncVoteVerifier struct {
 	execpoolOut     chan interface{}
 	ctx             context.Context
 	ctxCancel       context.CancelFunc
+	batchVerifier   *execpool.StreamToBatch
+	batchInputChan  chan execpool.InputJob
+	mu              deadlock.RWMutex
 }
 
-// MakeAsyncVoteVerifier creates an AsyncVoteVerifier with workers as the number of CPUs
-func MakeAsyncVoteVerifier(verificationPool execpool.BacklogPool) *AsyncVoteVerifier {
+// MakeStartAsyncVoteVerifier creates an AsyncVoteVerifier with workers as the number of CPUs
+func MakeStartAsyncVoteVerifier(verificationPool execpool.BacklogPool) *AsyncVoteVerifier {
 	verifier := &AsyncVoteVerifier{
 		done: make(chan struct{}),
 	}
@@ -79,7 +82,16 @@ func MakeAsyncVoteVerifier(verificationPool execpool.BacklogPool) *AsyncVoteVeri
 	verifier.ctx, verifier.ctxCancel = context.WithCancel(context.Background())
 
 	verifier.workerWaitCh = make(chan struct{})
+
+	// batchInputChan should match the execpool buffer size so that the sender's blocking behavior does not change
+	verifier.batchInputChan = make(chan execpool.InputJob, 2*verificationPool.GetParallelism())
+
+	verifier.batchVerifier = execpool.MakeStreamToBatch(
+		verifier.batchInputChan,
+		verificationPool,
+		&voteBatchProcessor{outChan: verifier.execpoolOut})
 	go verifier.worker()
+	verifier.batchVerifier.Start(verifier.ctx)
 	return verifier
 }
 
@@ -94,44 +106,10 @@ func (avv *AsyncVoteVerifier) worker() {
 	}
 }
 
-func (avv *AsyncVoteVerifier) executeVoteVerification(task interface{}) interface{} {
-	req := task.(asyncVerifyVoteRequest)
-
-	select {
-	case <-req.ctx.Done():
-		// request cancelled, return an error response on the channel
-		return &asyncVerifyVoteResponse{err: req.ctx.Err(), cancelled: true, req: &req, index: req.index}
-	default:
-		// request was not cancelled, so we verify it here and return the result on the channel
-		v, err := req.uv.verify(req.l)
-		req.message.Vote = v
-
-		var e *LedgerDroppedRoundError
-		cancelled := errors.As(err, &e)
-
-		return &asyncVerifyVoteResponse{v: v, index: req.index, message: req.message, err: err, cancelled: cancelled, req: &req}
-	}
-}
-
-func (avv *AsyncVoteVerifier) executeEqVoteVerification(task interface{}) interface{} {
-	req := task.(asyncVerifyVoteRequest)
-
-	select {
-	case <-req.ctx.Done():
-		// request cancelled, return an error response on the channel
-		return &asyncVerifyVoteResponse{err: req.ctx.Err(), cancelled: true, req: &req, index: req.index}
-	default:
-		// request was not cancelled, so we verify it here and return the result on the channel
-		ev, err := req.uev.verify(req.l)
-
-		var e *LedgerDroppedRoundError
-		cancelled := errors.As(err, &e)
-
-		return &asyncVerifyVoteResponse{ev: ev, index: req.index, message: req.message, err: err, cancelled: cancelled, req: &req}
-	}
-}
-
-func (avv *AsyncVoteVerifier) verifyVote(verctx context.Context, l LedgerReader, uv unauthenticatedVote, index uint64, message message, out chan<- asyncVerifyVoteResponse) error {
+func (avv *AsyncVoteVerifier) verifyVote(verctx context.Context, l LedgerReader, uv unauthenticatedVote,
+	index uint64, message message, out chan<- asyncVerifyVoteResponse) {
+	avv.mu.RLock()
+	defer avv.mu.RUnlock()
 	select {
 	case <-avv.ctx.Done(): // if we're quitting, don't enqueue the request
 	// case <-verctx.Done(): DO NOT DO THIS! otherwise we will lose the vote (and forget to clean up)!
@@ -140,18 +118,14 @@ func (avv *AsyncVoteVerifier) verifyVote(verctx context.Context, l LedgerReader,
 		// if we're done while waiting for room in the requests channel, don't queue the request
 		req := asyncVerifyVoteRequest{ctx: verctx, l: l, uv: &uv, index: index, message: message, out: out}
 		avv.wg.Add(1)
-		if err := avv.backlogExecPool.EnqueueBacklog(avv.ctx, avv.executeVoteVerification, req, avv.execpoolOut); err != nil {
-			// we want to call "wg.Done()" here to "fix" the accounting of the number of pending tasks.
-			// if we got a non-nil, it means that our context has expired, which means that we won't see this task
-			// getting to the verification function.
-			avv.wg.Done()
-			return err
-		}
+		avv.batchInputChan <- &req
 	}
-	return nil
 }
 
-func (avv *AsyncVoteVerifier) verifyEqVote(verctx context.Context, l LedgerReader, uev unauthenticatedEquivocationVote, index uint64, message message, out chan<- asyncVerifyVoteResponse) error {
+func (avv *AsyncVoteVerifier) verifyEqVote(verctx context.Context, l LedgerReader, uev unauthenticatedEquivocationVote,
+	index uint64, message message, out chan<- asyncVerifyVoteResponse) {
+	avv.mu.RLock()
+	defer avv.mu.RUnlock()
 	select {
 	case <-avv.ctx.Done(): // if we're quitting, don't enqueue the request
 	// case <-verctx.Done(): DO NOT DO THIS! otherwise we will lose the vote (and forget to clean up)!
@@ -160,21 +134,19 @@ func (avv *AsyncVoteVerifier) verifyEqVote(verctx context.Context, l LedgerReade
 		// if we're done while waiting for room in the requests channel, don't queue the request
 		req := asyncVerifyVoteRequest{ctx: verctx, l: l, uev: &uev, index: index, message: message, out: out}
 		avv.wg.Add(1)
-		if err := avv.backlogExecPool.EnqueueBacklog(avv.ctx, avv.executeEqVoteVerification, req, avv.execpoolOut); err != nil {
-			// we want to call "wg.Done()" here to "fix" the accounting of the number of pending tasks.
-			// if we got a non-nil, it means that our context has expired, which means that we won't see this task
-			// getting to the verification function.
-			avv.wg.Done()
-			return err
-		}
+		avv.batchInputChan <- &req
 	}
-	return nil
 }
 
 // Quit tells the AsyncVoteVerifier to shutdown and waits until all workers terminate.
 func (avv *AsyncVoteVerifier) Quit() {
 	// indicate we're done and wait for all workers to finish
+	avv.mu.Lock()
 	avv.ctxCancel()
+	avv.mu.Unlock()
+
+	// wait until the batchVerifier stops and reports cancled error on remaining unverified sigs (excepts the ones in exec pool)
+	avv.batchVerifier.WaitForStop()
 
 	// wait until all the tasks we've given the pool are done.
 	avv.wg.Wait()
@@ -191,4 +163,11 @@ func (avv *AsyncVoteVerifier) Quit() {
 // Parallelism gives the maximum parallelism of the vote verifier.
 func (avv *AsyncVoteVerifier) Parallelism() int {
 	return avv.backlogExecPool.GetParallelism()
+}
+
+func (uv *asyncVerifyVoteRequest) GetNumberOfBatchableItems() (count uint64, err error) {
+	if uv.uev != nil {
+		return uint64(6), nil
+	}
+	return uint64(3), nil
 }

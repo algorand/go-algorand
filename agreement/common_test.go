@@ -317,7 +317,7 @@ func (l *testLedger) LookupAgreement(r basics.Round, a basics.Address) (basics.O
 
 	if r >= l.nextRound {
 		err := fmt.Errorf("Lookup called on future round: %v >= %v! (this is probably a bug)", r, l.nextRound)
-		panic(err)
+		return basics.OnlineAccountData{}, err
 	}
 
 	if l.maxNumBlocks != 0 && r+round(l.maxNumBlocks) < l.nextRound {
@@ -436,7 +436,7 @@ func makeProposalsTesting(accs testAccountData, round basics.Round, period perio
 			logging.Base().Errorf("AccountManager.makeVotes: Could not create vote: %v", err)
 			return
 		}
-		vote, err := uv.verify(ledger)
+		vote, err := verifySigVote(uv, ledger)
 		if err != nil {
 			continue
 		}
@@ -461,7 +461,7 @@ func makeVotesTesting(accs testAccountData, round basics.Round, period period, s
 			return
 		}
 
-		vote, err := uv.verify(ledger)
+		vote, err := verifySigVote(uv, ledger)
 		if err == nil {
 			votes = append(votes, vote)
 		}
