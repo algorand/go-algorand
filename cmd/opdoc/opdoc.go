@@ -424,6 +424,8 @@ func argEnums(name string, version uint64) ([]string, []string, []string) {
 		return fieldsAndTypes(logic.VrfStandards, version)
 	case "ecdsa_pk_recover", "ecdsa_verify", "ecdsa_pk_decompress":
 		return fieldsAndTypes(logic.EcdsaCurves, version)
+	case "ec_add", "ec_scalar_mul", "ec_pairing_check", "ec_multi_scalar_mul", "ec_subgroup_check", "ec_map_to":
+		return fieldsAndTypes(logic.EcGroups, version)
 	default:
 		return nil, nil, nil
 	}

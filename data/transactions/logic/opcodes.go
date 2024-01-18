@@ -176,8 +176,8 @@ func (d *OpDetails) docCost(argLen int, version uint64) string {
 	return cost
 }
 
-func (d *OpDetails) DocCost(argLen int) string {
-	return d.docCost(argLen)
+func (d *OpDetails) DocCost(argLen int, version uint64) string {
+	return d.docCost(argLen, version)
 }
 
 // Cost computes the cost of the opcode, given details about how it is used,
