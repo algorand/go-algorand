@@ -625,7 +625,7 @@ func (l *Ledger) move(from basics.Address, to basics.Address, amount uint64) err
 		tbr = newBalanceRecord(to, 0)
 	}
 	if fbr.balance < amount {
-		return fmt.Errorf("insufficient balance")
+		return fmt.Errorf("insufficient balance in %v. %d < %d", from, fbr.balance, amount)
 	}
 	fbr.balance -= amount
 	tbr.balance += amount

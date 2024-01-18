@@ -2006,7 +2006,7 @@ int 1
 			ledger.NewApp(parentTx.Receiver, parentAppID, basics.AppParams{})
 			ledger.NewAccount(parentAppID.Address(), 50_000)
 
-			parentEd := TestApp(t, parentSource, ep)
+			parentEd, _ := TestApp(t, parentSource, ep)
 
 			require.Len(t, parentEd.Logs, 2)
 			require.Len(t, parentEd.InnerTxns, 2)
@@ -2334,7 +2334,7 @@ int 1
 			ledger.NewApp(parentTx.Receiver, parentAppID, basics.AppParams{})
 			ledger.NewAccount(parentAppID.Address(), 50_000)
 
-			parentEd := TestApp(t, parentSource, ep)
+			parentEd, _ := TestApp(t, parentSource, ep)
 
 			require.Len(t, parentEd.Logs, 2)
 			require.Len(t, parentEd.InnerTxns, 2)

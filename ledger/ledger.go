@@ -657,6 +657,15 @@ func (l *Ledger) CheckDup(currentProto config.ConsensusParams, current basics.Ro
 	return l.txTail.checkDup(currentProto, current, firstValid, lastValid, txid, txl)
 }
 
+// CheckConfirmedTail checks if a transaction txid happens to have LastValid greater than the current round at the time of calling and has been already committed to the ledger.
+// If both conditions are met it returns true.
+// This function could be used as filter to check if a transaction is committed to the ledger, and no extra checks needed if it says true.
+//
+// Note, this cannot be used to check if transaction happened or not in past MaxTxnLife rounds.
+func (l *Ledger) CheckConfirmedTail(txid transactions.Txid) (basics.Round, bool) {
+	return l.txTail.checkConfirmed(txid)
+}
+
 // Latest returns the latest known block round added to the ledger.
 func (l *Ledger) Latest() basics.Round {
 	return l.blockQ.latest()

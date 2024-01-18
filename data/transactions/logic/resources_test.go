@@ -141,7 +141,7 @@ func TestAppSharing(t *testing.T) {
 	TestApps(t, sources, txntest.Group(&appl0, &appl1), 9, ledger,
 		Exp(1, "account "+appl0.Sender.String()+" is not opted into 901"))
 	ledger.NewLocals(appl0.Sender, 901) // opt in
-	ep := TestApps(t, sources, txntest.Group(&appl0, &appl1), 9, ledger)
+	ep, _ := TestApps(t, sources, txntest.Group(&appl0, &appl1), 9, ledger)
 	require.Len(t, ep.TxnGroup, 2)
 	ed := ep.TxnGroup[1].ApplyData.EvalDelta
 	require.Equal(t, map[uint64]basics.StateDelta{
