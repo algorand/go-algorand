@@ -73,7 +73,11 @@ func (n *streamManager) streamHandler(stream network.Stream) {
 				n.log.Infof("Failed to check old stream with %s: %v", remotePeer, err)
 			}
 			n.streams[stream.Conn().RemotePeer()] = stream
-			n.handler(n.ctx, remotePeer, stream, true)
+			if stream.Conn().Stat().Direction == network.DirUnknown {
+				n.log.Warnf("Unknown direction for connection %s", remotePeer)
+			}
+			incoming := stream.Conn().Stat().Direction == network.DirInbound
+			n.handler(n.ctx, remotePeer, stream, incoming)
 			return
 		}
 		// otherwise, the old stream is still open, so we can close the new one
@@ -82,7 +86,11 @@ func (n *streamManager) streamHandler(stream network.Stream) {
 	}
 	// no old stream
 	n.streams[stream.Conn().RemotePeer()] = stream
-	n.handler(n.ctx, remotePeer, stream, true)
+	if stream.Conn().Stat().Direction == network.DirUnknown {
+		n.log.Warnf("Unknown direction for connection %s", remotePeer)
+	}
+	incoming := stream.Conn().Stat().Direction == network.DirInbound
+	n.handler(n.ctx, remotePeer, stream, incoming)
 }
 
 // Connected is called when a connection is opened
@@ -95,21 +103,29 @@ func (n *streamManager) Connected(net network.Network, conn network.Conn) {
 		return
 	}
 
-	n.streamsLock.Lock()
-	defer n.streamsLock.Unlock()
-	_, ok := n.streams[remotePeer]
-	if ok {
-		return // there's already an active stream with this peer for our protocol
-	}
+	var stream network.Stream
+	var err error
+	func() {
+		n.streamsLock.Lock()
+		defer n.streamsLock.Unlock()
+		_, ok := n.streams[remotePeer]
+		if ok {
+			return // there's already an active stream with this peer for our protocol
+		}
 
-	stream, err := n.host.NewStream(n.ctx, remotePeer, AlgorandWsProtocol)
-	if err != nil {
-		n.log.Infof("Failed to open stream to %s: %v", remotePeer, err)
-		return
-	}
+		stream, err = n.host.NewStream(n.ctx, remotePeer, AlgorandWsProtocol)
+		if err != nil {
+			n.log.Infof("Failed to open stream to %s: %v", remotePeer, err)
+			return
+		}
 
-	n.streams[remotePeer] = stream
-	n.handler(n.ctx, remotePeer, stream, false)
+		n.streams[remotePeer] = stream
+		if conn.Stat().Direction == network.DirUnknown {
+			n.log.Warnf("Unknown direction for connection %s", remotePeer)
+		}
+	}()
+	incoming := conn.Stat().Direction == network.DirInbound
+	n.handler(n.ctx, remotePeer, stream, incoming)
 }
 
 // Disconnected is called when a connection is closed
