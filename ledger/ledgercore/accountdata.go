@@ -149,6 +149,8 @@ func (u *AccountData) ClearOnlineState() {
 // that a heartbeat can bring the account back Online
 func (u *AccountData) Suspend() {
 	u.Status = basics.Offline
+	// To regain eligibility, the account will have to `keyreg` with the extra fee.
+	u.IncentiveEligible = false
 }
 
 // Suspended returns true if the account is suspended (offline with keys)

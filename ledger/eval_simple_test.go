@@ -244,6 +244,9 @@ func TestMiningFees(t *testing.T) {
 		for _, proposer := range []basics.Address{tooBig, tooSmall, smallest, biggest} {
 			t.Log(proposer)
 
+			prp := lookup(dl.t, dl.generator, proposer)
+			require.False(t, prp.IncentiveEligible)
+
 			dl.txn(&txntest.Txn{
 				Type:         "keyreg",
 				Sender:       proposer,
@@ -253,6 +256,9 @@ func TestMiningFees(t *testing.T) {
 				StateProofPK: merklesignature.Commitment{0x03},
 				VoteFirst:    1, VoteLast: 1000,
 			})
+
+			prp = lookup(dl.t, dl.generator, proposer)
+			require.Equal(t, ver >= miningBegins, prp.IncentiveEligible)
 
 			dl.fullBlock() // start with an empty block, so no mining fees are paid at start of next one
 
@@ -390,10 +396,14 @@ func TestAbsentTracking(t *testing.T) {
 		require.NoError(t, err)
 		require.NotZero(t, totals.Online.Money.Raw)
 
-		// as configured above, the first two accounts should be online
+		// as configured above, only the first two accounts should be online
 		require.True(t, lookup(t, dl.generator, addrs[0]).Status == basics.Online)
 		require.True(t, lookup(t, dl.generator, addrs[1]).Status == basics.Online)
 		require.False(t, lookup(t, dl.generator, addrs[2]).Status == basics.Online)
+		// genesis accounts don't begin IncentiveEligible, even if online
+		require.False(t, lookup(t, dl.generator, addrs[0]).IncentiveEligible)
+		require.False(t, lookup(t, dl.generator, addrs[1]).IncentiveEligible)
+		require.False(t, lookup(t, dl.generator, addrs[2]).IncentiveEligible)
 
 		dl.fullBlock()
 
@@ -408,6 +418,12 @@ func TestAbsentTracking(t *testing.T) {
 		})
 		vb := dl.endBlock(proposer)
 
+		// no changes until the next block
+		prp := lookup(t, dl.validator, proposer)
+		require.Zero(t, prp.LastProposed)
+		require.Zero(t, prp.LastHeartbeat)
+		require.False(t, prp.IncentiveEligible)
+
 		// addr[1] is spent to an offline account, so Online totals decrease
 		newtotals, err := dl.generator.Totals(dl.generator.Latest())
 		require.NoError(t, err)
@@ -417,16 +433,15 @@ func TestAbsentTracking(t *testing.T) {
 
 		dl.fullBlock()
 
-		prp := lookup(t, dl.validator, proposer)
+		prp = lookup(t, dl.validator, proposer)
+		require.False(t, prp.IncentiveEligible)
 
 		if ver >= checkingBegins {
 			// version sanity check
-			require.True(t, dl.generator.GenesisProto().EnableAbsenteeTracking())
 			require.Equal(t, proposer, vb.Block().BlockHeader.Proposer)
 			require.NotZero(t, prp.LastProposed)
 			require.Zero(t, prp.LastHeartbeat) // genesis participants have never hb
 		} else {
-			require.False(t, dl.generator.GenesisProto().EnableAbsenteeTracking())
 			require.Zero(t, vb.Block().BlockHeader.Proposer)
 			require.Zero(t, prp.LastProposed)
 			require.Zero(t, prp.LastHeartbeat)
@@ -445,7 +460,7 @@ func TestAbsentTracking(t *testing.T) {
 		require.Zero(t, regger.LastProposed)
 		require.Zero(t, regger.LastHeartbeat)
 
-		// ONLINE keyreg
+		// ONLINE keyreg without extra fee
 		dl.txns(&txntest.Txn{
 			Type:        "keyreg",
 			Sender:      addrs[2],
@@ -466,6 +481,19 @@ func TestAbsentTracking(t *testing.T) {
 		} else {
 			require.Zero(t, regger.LastHeartbeat)
 		}
+		require.False(t, regger.IncentiveEligible)
+
+		// ONLINE keyreg with extra fee
+		dl.txns(&txntest.Txn{
+			Type:        "keyreg",
+			Fee:         2_000_000,
+			Sender:      addrs[2],
+			VotePK:      [32]byte{1},
+			SelectionPK: [32]byte{1},
+		})
+
+		regger = lookup(t, dl.validator, addrs[2])
+		require.Equal(t, ver >= checkingBegins, regger.IncentiveEligible)
 
 		for i := 0; i < 5; i++ {
 			dl.fullBlock()
@@ -489,6 +517,7 @@ func TestAbsentTracking(t *testing.T) {
 		require.Equal(t, basics.Online, lookup(t, dl.generator, addrs[0]).Status)
 		require.Equal(t, basics.Online, lookup(t, dl.generator, addrs[1]).Status)
 		require.Equal(t, basics.Online, lookup(t, dl.generator, addrs[2]).Status)
+		require.Equal(t, ver >= checkingBegins, lookup(t, dl.generator, addrs[2]).IncentiveEligible)
 
 		// when 2 pays 0, they both get noticed and get suspended
 		dl.txns(&txntest.Txn{
@@ -500,6 +529,7 @@ func TestAbsentTracking(t *testing.T) {
 		require.Equal(t, ver >= checkingBegins, lookup(t, dl.generator, addrs[0]).Status == basics.Offline)
 		require.Equal(t, basics.Online, lookup(t, dl.generator, addrs[1]).Status)
 		require.Equal(t, ver >= checkingBegins, lookup(t, dl.generator, addrs[2]).Status == basics.Offline)
+		require.False(t, lookup(t, dl.generator, addrs[2]).IncentiveEligible)
 
 		// now, addrs[2] proposes, so it gets back online, but not immediately,
 		// because processing happens after the proposing block

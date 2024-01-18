@@ -96,6 +96,7 @@ func TestBasicSuspension(t *testing.T) {
 	a.NoError(err)
 	a.Equal(basics.Offline, account.Status)
 	a.NotZero(account.VoteID)
+	a.False(account.IncentiveEligible)
 
 	// Use the fixture to start the node again. Since we're only a bit past the
 	// suspension round, it will still be voting.  It should get a chance to
@@ -117,4 +118,7 @@ func TestBasicSuspension(t *testing.T) {
 	a.Equal(basics.Online, account.Status)
 	a.NotZero(account.VoteID)
 	a.Equal(voteID, account.VoteID)
+	// coming back online by proposal does not make you incentive eligible (you
+	// didn't "pay the fine")
+	a.False(account.IncentiveEligible)
 }
