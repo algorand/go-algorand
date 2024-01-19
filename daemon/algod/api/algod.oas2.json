@@ -829,7 +829,7 @@
             }
           },
           "404": {
-            "description": "None existing block ",
+            "description": "Nonexistent block ",
             "schema": {
               "$ref": "#/definitions/ErrorResponse"
             }
