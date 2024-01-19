@@ -732,8 +732,8 @@ func (v2 *Handlers) GetBlockTxids(ctx echo.Context, round uint64) error {
 	return ctx.JSON(http.StatusOK, response)
 }
 
-func NewBlockLog(txid string, logs []string, appIndex uint64) *model.BlockLog {
-	return &model.BlockLog{
+func NewBlockLog(txid string, logs []string, appIndex uint64) model.BlockLog {
+	return model.BlockLog{
 		Txid:             txid,
 		Logs:             convertSlice(logs, func(s string) []byte { return []byte(s) }),
 		ApplicationIndex: appIndex,
@@ -755,7 +755,7 @@ func getLogsFromTxns(txns []transactions.SignedTxnWithAD, blockLogs []model.Bloc
 		if len(txn.EvalDelta.Logs) > 0 {
 			blockLogs = append(
 				blockLogs,
-				*NewBlockLog(outerTxnID, txn.EvalDelta.Logs, getAppIndexFromTxn(txn)),
+				NewBlockLog(outerTxnID, txn.EvalDelta.Logs, getAppIndexFromTxn(txn)),
 			)
 		}
 
@@ -790,7 +790,7 @@ func (v2 *Handlers) GetBlockLogs(ctx echo.Context, round uint64) error {
 		if len(txn.EvalDelta.Logs) > 0 {
 			blockLogs = append(
 				blockLogs,
-				*NewBlockLog(txn.ID().String(), txn.EvalDelta.Logs, getAppIndexFromTxn(txn)),
+				NewBlockLog(txn.ID().String(), txn.EvalDelta.Logs, getAppIndexFromTxn(txn)),
 			)
 		}
 
