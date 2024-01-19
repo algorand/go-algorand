@@ -111,6 +111,8 @@ func (bq *blockQueue) stop() {
 	}
 }
 
+const maxDeletionBatchSize = 10_000
+
 func (bq *blockQueue) syncer() {
 	bq.mu.Lock()
 	for {
@@ -165,7 +167,6 @@ func (bq *blockQueue) syncer() {
 
 			minToSave := bq.l.notifyCommit(committed)
 			var earliest basics.Round
-			const maxDeletionBatchSize = 10_000
 			err = bq.l.blockDBs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 				var err0 error
 				earliest, err0 = blockdb.BlockEarliest(tx)
