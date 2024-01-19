@@ -164,6 +164,22 @@ func (bq *blockQueue) syncer() {
 			bq.mu.Unlock()
 
 			minToSave := bq.l.notifyCommit(committed)
+			var earliest basics.Round
+			const maxDeletionBatchSize = 10_000
+			err = bq.l.blockDBs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+				var err0 error
+				earliest, err0 = blockdb.BlockEarliest(tx)
+				if err0 != nil {
+					bq.l.log.Warnf("blockQueue.syncer: BlockEarliest(): %v", err0)
+				}
+				return err0
+			})
+			if err == nil {
+				if basics.SubSaturate(minToSave, earliest) > maxDeletionBatchSize {
+					minToSave = basics.AddSaturate(earliest, maxDeletionBatchSize)
+				}
+			}
+
 			bfstart := time.Now()
 			ledgerSyncBlockforgetCount.Inc(nil)
 			err = bq.l.blockDBs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
