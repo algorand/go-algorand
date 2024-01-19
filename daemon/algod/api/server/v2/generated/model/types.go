@@ -271,6 +271,18 @@ type AccountStateDelta struct {
 	Delta StateDelta `json:"delta"`
 }
 
+// AppCallLogs An array of logs for a given application ID and outer transaction ID
+type AppCallLogs struct {
+	// ApplicationIndex The application from which the logs were generated
+	ApplicationIndex uint64 `json:"application-index"`
+
+	// Logs An array of logs
+	Logs [][]byte `json:"logs"`
+
+	// Txid The transaction ID of the outer app call that lead to these logs
+	Txid string `json:"txid"`
+}
+
 // Application Application index and its parameters
 type Application struct {
 	// Id \[appidx\] application index.
@@ -485,18 +497,6 @@ type AvmValue struct {
 
 	// Uint uint value.
 	Uint *uint64 `json:"uint,omitempty"`
-}
-
-// BlockLog An array of logs for a given application ID and outer transaction ID
-type BlockLog struct {
-	// ApplicationIndex The application from which the logs were generated
-	ApplicationIndex uint64 `json:"application-index"`
-
-	// Logs An array of logs
-	Logs [][]byte `json:"logs"`
-
-	// Txid The transaction ID of the outer app call that lead to these logs
-	Txid string `json:"txid"`
 }
 
 // Box Box name and its content.
@@ -1102,7 +1102,7 @@ type BlockHashResponse struct {
 
 // BlockLogsResponse defines model for BlockLogsResponse.
 type BlockLogsResponse struct {
-	Logs []BlockLog `json:"logs"`
+	Logs []AppCallLogs `json:"logs"`
 }
 
 // BlockResponse defines model for BlockResponse.

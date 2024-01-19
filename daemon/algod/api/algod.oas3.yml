@@ -330,7 +330,7 @@
               "properties": {
                 "logs": {
                   "items": {
-                    "$ref": "#/components/schemas/BlockLog"
+                    "$ref": "#/components/schemas/AppCallLogs"
                   },
                   "type": "array"
                 }
@@ -1224,6 +1224,34 @@
         ],
         "type": "object"
       },
+      "AppCallLogs": {
+        "description": "An array of logs for a given application ID and outer transaction ID",
+        "properties": {
+          "application-index": {
+            "description": "The application from which the logs were generated",
+            "type": "integer"
+          },
+          "logs": {
+            "description": "An array of logs",
+            "items": {
+              "format": "byte",
+              "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "txid": {
+            "description": "The transaction ID of the outer app call that lead to these logs",
+            "type": "string"
+          }
+        },
+        "required": [
+          "application-index",
+          "logs",
+          "txid"
+        ],
+        "type": "object"
+      },
       "Application": {
         "description": "Application index and its parameters",
         "properties": {
@@ -1606,34 +1634,6 @@
         },
         "required": [
           "type"
-        ],
-        "type": "object"
-      },
-      "BlockLog": {
-        "description": "An array of logs for a given application ID and outer transaction ID",
-        "properties": {
-          "application-index": {
-            "description": "The application from which the logs were generated",
-            "type": "integer"
-          },
-          "logs": {
-            "description": "An array of logs",
-            "items": {
-              "format": "byte",
-              "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "txid": {
-            "description": "The transaction ID of the outer app call that lead to these logs",
-            "type": "string"
-          }
-        },
-        "required": [
-          "application-index",
-          "logs",
-          "txid"
         ],
         "type": "object"
       },
@@ -4049,7 +4049,7 @@
                   "properties": {
                     "logs": {
                       "items": {
-                        "$ref": "#/components/schemas/BlockLog"
+                        "$ref": "#/components/schemas/AppCallLogs"
                       },
                       "type": "array"
                     }
@@ -4091,7 +4091,7 @@
                 }
               }
             },
-            "description": "None existing block "
+            "description": "Nonexistent block "
           },
           "500": {
             "content": {

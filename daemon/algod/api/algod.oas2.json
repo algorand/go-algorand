@@ -4506,7 +4506,7 @@
         }
       }
     },
-    "BlockLog": {
+    "AppCallLogs": {
       "description": "An array of logs for a given application ID and outer transaction ID",
       "type": "object",
       "required": [
@@ -5200,7 +5200,7 @@
           "logs": {
             "type": "array",
             "items": {
-              "$ref": "#/definitions/BlockLog"
+              "$ref": "#/definitions/AppCallLogs"
             }
           }
         }
