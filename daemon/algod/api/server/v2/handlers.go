@@ -735,7 +735,7 @@ func (v2 *Handlers) GetBlockTxids(ctx echo.Context, round uint64) error {
 func NewBlockLog(txid string, logs []string, appIndex uint64) *model.BlockLog {
 	return &model.BlockLog{
 		Txid:             txid,
-		Logs:             convertSlice(logs, fn (s string) { return []byte(s) })
+		Logs:             convertSlice(logs, func(s string) []byte { return []byte(s) }),
 		ApplicationIndex: appIndex,
 	}
 }
