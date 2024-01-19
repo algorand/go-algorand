@@ -1339,3 +1339,12 @@ func (c *Client) GetLedgerStateDelta(round uint64) (rep model.LedgerStateDeltaRe
 	}
 	return
 }
+
+// BlockLogs returns all the logs in a block for a given round
+func (c *Client) BlockLogs(round uint64) (resp model.BlockLogsResponse, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		return algod.BlockLogs(round)
+	}
+	return
+}

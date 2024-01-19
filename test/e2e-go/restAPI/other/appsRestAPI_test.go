@@ -549,3 +549,85 @@ end:
 
 	assertBoxCount(numberOfBoxesRemaining)
 }
+
+func TestBlockLogs(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	a := require.New(fixtures.SynchronizedTest(t))
+	var localFixture fixtures.RestClientFixture
+	localFixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50EachFuture.json"))
+	defer localFixture.Shutdown()
+
+	testClient := localFixture.LibGoalClient
+
+	testClient.WaitForRound(1)
+
+	wh, err := testClient.GetUnencryptedWalletHandle()
+	a.NoError(err)
+	addresses, err := testClient.ListAddresses(wh)
+	a.NoError(err)
+	_, someAddress := helper.GetMaxBalAddr(t, testClient, addresses)
+	if someAddress == "" {
+		t.Error("no addr with funds")
+	}
+	a.NoError(err)
+
+	prog := "#pragma version 10\nbyte 0xdeadbeef\nlog\nint 1"
+
+	ops, err := logic.AssembleString(prog)
+	a.NoError(err)
+	approval := ops.Program
+	ops, err = logic.AssembleString("#pragma version 10\nint 1")
+	a.NoError(err)
+	clearState := ops.Program
+
+	gl := basics.StateSchema{}
+	lc := basics.StateSchema{}
+
+	// create app
+	appCreateTxn, err := testClient.MakeUnsignedApplicationCallTx(
+		0, nil, nil, nil,
+		nil, nil, transactions.NoOpOC,
+		approval, clearState, gl, lc, 0,
+	)
+	a.NoError(err)
+	appCreateTxn, err = testClient.FillUnsignedTxTemplate(someAddress, 0, 0, 0, appCreateTxn)
+	a.NoError(err)
+	appCreateTxID, err := testClient.SignAndBroadcastTransaction(wh, nil, appCreateTxn)
+	a.NoError(err)
+	confirmation, err := helper.WaitForTransaction(t, testClient, appCreateTxID, 30*time.Second)
+	a.NoError(err)
+	round := confirmation.ConfirmedRound
+	txid := confirmation.Txn.ID()
+
+	// get app ID
+	submittedAppCreateTxn, err := testClient.PendingTransactionInformation(appCreateTxID)
+	a.NoError(err)
+	a.NotNil(submittedAppCreateTxn.ApplicationIndex)
+	createdAppID := basics.AppIndex(*submittedAppCreateTxn.ApplicationIndex)
+	a.NotZero(createdAppID)
+
+	// get block logs
+	resp, err := testClient.BlockLogs(*round)
+	a.NoError(err)
+	logs := resp.Logs[0]
+	a.Equal(logs.ApplicationIndex, uint64(createdAppID))
+	a.Equal(logs.Txid, txid.String())
+	deadBeef, err := hex.DecodeString("deadbeef")
+	a.NoError(err)
+	a.Equal(logs.Logs[0], deadBeef)
+
+	// delete the app
+	appDeleteTxn, err := testClient.MakeUnsignedAppDeleteTx(uint64(createdAppID), nil, nil, nil, nil, nil)
+	a.NoError(err)
+	appDeleteTxn, err = testClient.FillUnsignedTxTemplate(someAddress, 0, 0, 0, appDeleteTxn)
+	a.NoError(err)
+	appDeleteTxID, err := testClient.SignAndBroadcastTransaction(wh, nil, appDeleteTxn)
+	a.NoError(err)
+	_, err = helper.WaitForTransaction(t, testClient, appDeleteTxID, 30*time.Second)
+	a.NoError(err)
+
+	_, err = testClient.ApplicationInformation(uint64(createdAppID))
+	a.ErrorContains(err, "application does not exist")
+}
