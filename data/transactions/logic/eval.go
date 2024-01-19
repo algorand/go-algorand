@@ -28,6 +28,7 @@ import (
 	"math/big"
 	"math/bits"
 	"runtime"
+	"strconv"
 	"strings"
 
 	"golang.org/x/exp/slices"
@@ -798,7 +799,7 @@ var (
 	// AllStackTypes is a map of all the stack types we recognize
 	// so that we can iterate over them in doc prep
 	// and use them for opcode proto shorthand
-	AllStackTypes = map[rune]StackType{
+	AllStackTypes = map[byte]StackType{
 		'a': StackAny,
 		'b': StackBytes,
 		'i': StackUint64,
@@ -806,9 +807,6 @@ var (
 		'A': StackAddress,
 		'I': StackBigInt,
 		'T': StackBoolean,
-		'3': StackBytes32,
-		'6': StackBytes64,
-		'8': StackBytes80,
 		'M': StackMethodSelector,
 		'K': StackStateKey,
 		'N': StackBoxName,
@@ -946,13 +944,31 @@ func parseStackTypes(spec string) StackTypes {
 	if spec == "" {
 		return nil
 	}
-	types := make(StackTypes, len(spec))
-	for i, letter := range spec {
+	types := make(StackTypes, 0, len(spec))
+	for i := 0; i < len(spec); i++ {
+		letter := spec[i]
+		if letter == '{' {
+			if types[len(types)-1] != StackBytes {
+				panic("{ after non-bytes " + spec)
+			}
+			end := strings.IndexByte(spec[i:], '}')
+			if end == -1 {
+				panic("No } after b{ " + spec)
+			}
+			size, err := strconv.Atoi(spec[i+1 : i+end])
+			if err != nil {
+				panic("b{} does not contain a number " + spec)
+			}
+			// replace the generic type with the constrained type
+			types[len(types)-1] = NewStackType(avmBytes, static(uint64(size)), fmt.Sprintf("[%d]byte", size))
+			i += end
+			continue
+		}
 		st, ok := AllStackTypes[letter]
 		if !ok {
 			panic(spec)
 		}
-		types[i] = st
+		types = append(types, st)
 	}
 	return types
 }
