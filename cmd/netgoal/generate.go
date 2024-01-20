@@ -475,6 +475,9 @@ func saveTemplateToDisk(template remote.DeployedNetworkConfig, filename string) 
 }
 
 func saveGoalTemplateToDisk(template netdeploy.NetworkTemplate, filename string) error {
+	if lastPartKeyRound != 0 {
+		template.Genesis.LastPartKeyRound = lastPartKeyRound
+	}
 	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 	if err == nil {
 		defer f.Close()
