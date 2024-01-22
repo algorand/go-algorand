@@ -23,8 +23,6 @@ GOLANG_VERSION=$(./scripts/get_golang_version.sh)
 
 eval "$(~/gimme "${GOLANG_VERSION}")"
 
-"${SCRIPTPATH}"/../buildtools/install_buildtools.sh
-
 make gen SHORT_PART_PERIOD=1
 
 echo "Running check_license..."

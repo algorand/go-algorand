@@ -26,7 +26,7 @@ import (
 // TODO Maybe this should be called ComponentEventType (and change Event to ComponentEvent),
 // since these are not actually types of components
 //
-//go:generate stringer -type=Component
+//go:generate go run golang.org/x/tools/cmd/stringer@v0.17.0 -type=Component
 type Component int
 
 const (

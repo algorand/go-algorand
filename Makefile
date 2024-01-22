@@ -35,12 +35,7 @@ GOTAGSLIST          := sqlite_unlock_notify sqlite_omit_load_extension
 # e.g. make GOTAGSCUSTOM=msgtrace
 GOTAGSLIST += ${GOTAGSCUSTOM}
 
-# If available, use gotestsum instead of 'go test'.
-ifeq (, $(shell which gotestsum))
-export GOTESTCOMMAND=go test
-else
-export GOTESTCOMMAND=gotestsum --format pkgname --jsonfile testresults.json --
-endif
+export GOTESTCOMMAND=go run gotest.tools/gotestsum@v1.10.0
 
 # M1 Mac--homebrew install location in /opt/homebrew
 ifeq ($(OS_TYPE), darwin)
@@ -99,8 +94,8 @@ fmt:
 fix: build
 	$(GOPATH1)/bin/algofix */
 
-lint: deps
-	$(GOPATH1)/bin/golangci-lint run -c .golangci.yml
+lint:
+	go run github.com/golangci/golangci-lint/cmd/golangci-lint@v1.53.2 run -c .golangci.yml
 
 check_go_version:
 	@if [ $(CURRENT_GO_VERSION_MAJOR) != $(GOLANG_VERSION_BUILD_MAJOR) ]; then \
@@ -127,17 +122,18 @@ cover:
 prof:
 	cd node && go test $(GOTAGS) -cpuprofile=cpu.out -memprofile=mem.out -mutexprofile=mutex.out
 
-generate: deps
+generate:
 	PATH=$(GOPATH1)/bin:$$PATH go generate ./...
 
 msgp: $(patsubst %,%/msgp_gen.go,$(MSGP_GENERATE))
 
-%/msgp_gen.go: deps ALWAYS
+MSGP := go run github.com/algorand/msgp@v1.1.60
+%/msgp_gen.go: ALWAYS
 		@set +e; \
 		printf "msgp: $(@D)..."; \
-		$(GOPATH1)/bin/msgp -file ./$(@D) -o $@ -warnmask github.com/algorand/go-algorand > ./$@.out 2>&1; \
+		$(MSGP) -file ./$(@D) -o $@ -warnmask github.com/algorand/go-algorand > ./$@.out 2>&1; \
 		if [ "$$?" != "0" ]; then \
-			printf "failed:\n$(GOPATH1)/bin/msgp -file ./$(@D) -o $@ -warnmask github.com/algorand/go-algorand\n"; \
+			printf "failed:\n$(MSGP) -file ./$(@D) -o $@ -warnmask github.com/algorand/go-algorand\n"; \
 			cat ./$@.out; \
 			rm ./$@.out; \
 			exit 1; \
@@ -156,9 +152,6 @@ crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a:
 		./configure --disable-shared --prefix="$(SRCPATH)/crypto/libs/$(OS_TYPE)/$(ARCH)" && \
 		$(MAKE) && \
 		$(MAKE) install
-
-deps:
-	./scripts/check_deps.sh
 
 # artifacts
 
