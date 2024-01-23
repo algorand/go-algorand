@@ -142,7 +142,7 @@ var proxySigner = crypto.PrivateKey{
 // check verifies that the transaction is well-formed and has valid or missing signatures.
 // An invalid transaction group error is returned if the transaction is not well-formed or there are invalid signatures.
 // To make things easier, we support submitting unsigned transactions and will respond whether signatures are missing.
-func (s Simulator) check(hdr bookkeeping.BlockHeader, txgroup []transactions.SignedTxn, tracer logic.EvalTracer, overrides ResultEvalOverrides) error {
+func (s Simulator) check(hdr bookkeeping.BlockHeader, txgroup []transactions.SignedTxnWithAD, tracer logic.EvalTracer, overrides ResultEvalOverrides) error {
 	proxySignerSecrets, err := crypto.SecretKeyToSignatureSecrets(proxySigner)
 	if err != nil {
 		return err
@@ -158,7 +158,8 @@ func (s Simulator) check(hdr bookkeeping.BlockHeader, txgroup []transactions.Sig
 	// denoting that a LogicSig's delegation signature is omitted, e.g. by setting all the bits of
 	// the signature.
 	txnsToVerify := make([]transactions.SignedTxn, len(txgroup))
-	for i, stxn := range txgroup {
+	for i, stxnad := range txgroup {
+		stxn := stxnad.SignedTxn
 		if stxn.Txn.Type == protocol.StateProofTx {
 			return errors.New("cannot simulate StateProof transactions")
 		}
@@ -181,15 +182,13 @@ func (s Simulator) check(hdr bookkeeping.BlockHeader, txgroup []transactions.Sig
 	return err
 }
 
-func (s Simulator) evaluate(hdr bookkeeping.BlockHeader, stxns []transactions.SignedTxn, tracer logic.EvalTracer) (*ledgercore.ValidatedBlock, error) {
+func (s Simulator) evaluate(hdr bookkeeping.BlockHeader, group []transactions.SignedTxnWithAD, tracer logic.EvalTracer) (*ledgercore.ValidatedBlock, error) {
 	// s.ledger has 'StartEvaluator' because *data.Ledger is embedded in the simulatorLedger
 	// and data.Ledger embeds *ledger.Ledger
-	eval, err := s.ledger.StartEvaluator(hdr, len(stxns), 0, tracer)
+	eval, err := s.ledger.StartEvaluator(hdr, len(group), 0, tracer)
 	if err != nil {
 		return nil, err
 	}
-
-	group := transactions.WrapSignedTxnsWithAD(stxns)
 
 	err = eval.TransactionGroup(group)
 	if err != nil {
@@ -205,7 +204,7 @@ func (s Simulator) evaluate(hdr bookkeeping.BlockHeader, stxns []transactions.Si
 	return vb, nil
 }
 
-func (s Simulator) simulateWithTracer(txgroup []transactions.SignedTxn, tracer logic.EvalTracer, overrides ResultEvalOverrides) (*ledgercore.ValidatedBlock, error) {
+func (s Simulator) simulateWithTracer(txgroup []transactions.SignedTxnWithAD, tracer logic.EvalTracer, overrides ResultEvalOverrides) (*ledgercore.ValidatedBlock, error) {
 	prevBlockHdr, err := s.ledger.BlockHdr(s.ledger.start)
 	if err != nil {
 		return nil, err
@@ -243,11 +242,6 @@ func (s Simulator) Simulate(simulateRequest Request) (Result, error) {
 		s.ledger.start = s.ledger.Ledger.Latest()
 	}
 
-	simulatorTracer, err := makeEvalTracer(s.ledger.start, simulateRequest, s.developerAPI)
-	if err != nil {
-		return Result{}, err
-	}
-
 	if len(simulateRequest.TxnGroups) != 1 {
 		return Result{}, InvalidRequestError{
 			SimulatorError{
@@ -256,7 +250,14 @@ func (s Simulator) Simulate(simulateRequest Request) (Result, error) {
 		}
 	}
 
-	block, err := s.simulateWithTracer(simulateRequest.TxnGroups[0], simulatorTracer, simulatorTracer.result.EvalOverrides)
+	group := transactions.WrapSignedTxnsWithAD(simulateRequest.TxnGroups[0])
+
+	simulatorTracer, err := makeEvalTracer(s.ledger.start, group, simulateRequest, s.developerAPI)
+	if err != nil {
+		return Result{}, err
+	}
+
+	block, err := s.simulateWithTracer(group, simulatorTracer, simulatorTracer.result.EvalOverrides)
 	if err != nil {
 		var verifyError *verify.TxGroupError
 		switch {

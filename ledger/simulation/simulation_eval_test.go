@@ -8896,3 +8896,68 @@ func TestUnnamedResourcesCrossProductLimits(t *testing.T) {
 		})
 	}
 }
+
+func TestFixAuthAddr(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	env := simulationtesting.PrepareSimulatorTest(t)
+	defer env.Close()
+
+	sender := env.Accounts[0]
+	other := env.Accounts[1]
+
+	appID := env.CreateApp(sender.Addr, simulationtesting.AppParams{
+		ApprovalProgram: `#pragma version 9
+txn ApplicationID
+bz end
+
+itxn_begin
+int pay
+itxn_field TypeEnum
+txn ApplicationArgs 0
+itxn_field Sender
+txn ApplicationArgs 0
+sha512_256 // essentially a random account
+itxn_field RekeyTo
+itxn_submit
+
+end:
+int 1
+`,
+		ClearStateProgram: "#pragma version 9\nint 1",
+	})
+	env.TransferAlgos(sender.Addr, appID.Address(), 1_000_000)
+
+	pay1 := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:     protocol.PaymentTx,
+		Sender:   sender.Addr,
+		Receiver: sender.Addr,
+		RekeyTo:  appID.Address(),
+	})
+	appCall := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:            protocol.ApplicationCallTx,
+		Sender:          other.Addr,
+		ApplicationID:   appID,
+		ApplicationArgs: [][]byte{sender.Addr[:]},
+	})
+	pay2 := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:     protocol.PaymentTx,
+		Sender:   sender.Addr,
+		Receiver: sender.Addr,
+	})
+
+	txgroup := txntest.Group(&pay1, &appCall, &pay2)
+
+	request := simulation.Request{
+		TxnGroups:            [][]transactions.SignedTxn{txgroup},
+		AllowEmptySignatures: true,
+	}
+
+	result, err := simulation.MakeSimulator(env.Ledger, false).Simulate(request)
+	require.NoError(t, err)
+
+	require.Empty(t, result.TxnGroups[0].FailureMessage)
+
+	// TODO: make sure output txn has the correct auth addr?
+}

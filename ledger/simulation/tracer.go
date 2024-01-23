@@ -98,14 +98,16 @@ type evalTracer struct {
 	// scratchSlots are the scratch slots changed on current opcode (currently either `store` or `stores`).
 	// NOTE: this field scratchSlots is used only for scratch change exposure.
 	scratchSlots []uint64
+
+	groups [][]transactions.SignedTxnWithAD
 }
 
-func makeEvalTracer(lastRound basics.Round, request Request, developerAPI bool) (*evalTracer, error) {
+func makeEvalTracer(lastRound basics.Round, group []transactions.SignedTxnWithAD, request Request, developerAPI bool) (*evalTracer, error) {
 	result, err := makeSimulationResult(lastRound, request, developerAPI)
 	if err != nil {
 		return nil, err
 	}
-	return &evalTracer{result: &result}, nil
+	return &evalTracer{result: &result, groups: [][]transactions.SignedTxnWithAD{group}}, nil
 }
 
 // handleError is responsible for setting the failedAt field properly.
@@ -511,5 +513,17 @@ func (tracer *evalTracer) AfterProgram(cx *logic.EvalContext, pass bool, evalErr
 		}
 	} else {
 		tracer.handleError(evalError)
+	}
+
+	fixAuthAddrs := true
+	if fixAuthAddrs && groupIndex+1 < len(cx.TxnGroup) {
+		// Fix up the auth-addr of the next transaction in the group, if needed
+		nextTxn := &tracer.groups[0][groupIndex+1]
+		data, err := cx.Ledger.AccountData(nextTxn.Txn.Sender)
+		if err != nil {
+			panic(err)
+		}
+		fmt.Printf("Setting auth addr of txn %d from %s to %s", groupIndex+1, nextTxn.Txn.Sender, data.AuthAddr)
+		nextTxn.AuthAddr = data.AuthAddr
 	}
 }
