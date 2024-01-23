@@ -321,8 +321,9 @@ func createConfigFile(node remote.NodeConfigGoal, configFile string, numNodes in
 	if node.IsRelay {
 		// Have relays listen on any localhost port
 		cfg.NetAddress = "127.0.0.1:0"
-		// For test purposes, having relays keep all blocks (archival mode)
-		cfg.Archival = true
+
+		cfg.Archival = false                // make it explicit non-archival
+		cfg.MaxBlockHistoryLookback = 20000 // to save blocks beyond MaxTxnLife=13
 	} else {
 		// Non-relays should not open incoming connections
 		cfg.IncomingConnectionsLimit = 0

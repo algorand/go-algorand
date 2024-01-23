@@ -498,10 +498,7 @@ func TestNodeTxHandlerRestart(t *testing.T) {
 	cfg, err := config.LoadConfigFromDisk(primaryNode.GetDataDir())
 	a.NoError(err)
 	cfg.MaxAcctLookback = 2
-	cfg.Archival = false                 // make it explicit non-archival
-	cfg.MaxBlockHistoryLookback = 20000  // to save blocks beyond MaxTxnLife=13
-	cfg.CatchpointTracking = 2           // to enable catchpoints on non-archival nodes
-	cfg.CatchpointFileHistoryLength = 30 // to store more than 2 default catchpoints
+	cfg.Archival = false
 
 	cfg.TxSyncIntervalSeconds = 200000 // disable txSync
 
