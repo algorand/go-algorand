@@ -69,7 +69,9 @@ var (
 	relay = configUpdater{
 		description: "Relay consensus messages across the network and support catchup.",
 		updateFunc: func(cfg config.Local) config.Local {
-			cfg.Archival = true
+			cfg.MaxBlockHistoryLookback = 22000 // Enough to support 2 catchpoints with some wiggle room for nodes to catch up from the older one
+			cfg.CatchpointFileHistoryLength = 3
+			cfg.CatchpointTracking = 2
 			cfg.EnableLedgerService = true
 			cfg.EnableBlockService = true
 			cfg.NetAddress = ":4160"

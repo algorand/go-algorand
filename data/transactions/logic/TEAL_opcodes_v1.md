@@ -133,7 +133,7 @@ Overflow is an error condition which halts execution and fails the transaction. 
 ## itob
 
 - Bytecode: 0x16
-- Stack: ..., A: uint64 &rarr; ..., []byte
+- Stack: ..., A: uint64 &rarr; ..., [8]byte
 - converts uint64 A to big-endian byte array, always of length 8
 
 ## btoi
