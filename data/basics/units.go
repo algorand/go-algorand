@@ -130,9 +130,9 @@ func MicroAlgosMaxSize() (s int) {
 }
 
 // Algos is a convenience function so that whole Algos can be written easily. It
-// panics on overflow because it should only be used constants - things that are
-// best human-readable in source code - not used on arbitrary values from, say,
-// transactions.
+// panics on overflow because it should only be used for constants - things that
+// are best human-readable in source code - not used on arbitrary values from,
+// say, transactions.
 func Algos(algos uint64) MicroAlgos {
 	if algos > math.MaxUint64/1_000_000 {
 		panic(algos)

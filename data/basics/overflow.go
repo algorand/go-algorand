@@ -142,6 +142,14 @@ func (t *OverflowTracker) ScalarMulA(a MicroAlgos, b uint64) MicroAlgos {
 	return MicroAlgos{Raw: t.Mul(a.Raw, b)}
 }
 
+// MinA returns the smaller of 2 MicroAlgos values
+func MinA(a, b MicroAlgos) MicroAlgos {
+	if a.Raw < b.Raw {
+		return a
+	}
+	return b
+}
+
 // Muldiv computes a*b/c.  The overflow flag indicates that
 // the result was 2^64 or greater.
 func Muldiv(a uint64, b uint64, c uint64) (res uint64, overflow bool) {

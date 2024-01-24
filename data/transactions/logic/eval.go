@@ -5710,6 +5710,8 @@ func opBlock(cx *EvalContext) error {
 		cx.Stack[last].Bytes = hdr.Proposer[:]
 	case BlkFeesCollected:
 		cx.Stack[last].Uint = hdr.FeesCollected.Raw
+	case BlkBonus:
+		cx.Stack[last].Uint = hdr.Bonus.Raw
 	default:
 		return fmt.Errorf("invalid block field %s", fs.field)
 	}

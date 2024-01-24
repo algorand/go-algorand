@@ -172,6 +172,15 @@ func (u AccountData) MinBalance(proto *config.ConsensusParams) (res basics.Micro
 	)
 }
 
+// AvailableBalance returns the amount of MicroAlgos that are available for
+// spending without fully closing the account.
+func (u AccountData) AvailableBalance(proto *config.ConsensusParams) (res basics.MicroAlgos) {
+	if left, o := basics.OSubA(u.MicroAlgos, u.MinBalance(proto)); !o {
+		return left
+	}
+	return basics.MicroAlgos{}
+}
+
 // IsZero checks if an AccountData value is the same as its zero value.
 func (u AccountData) IsZero() bool {
 	return u == AccountData{}

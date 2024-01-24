@@ -534,6 +534,9 @@ type ConsensusParams struct {
 	// dynamic filter, it will be calculated and logged (but not used).
 	DynamicFilterTimeout bool
 
+	// BonusPlan is the "version" of the block bonus plan. 0 indicates no block bonuses.
+	BonusPlan uint8
+
 	// EnableMining means that the proposer should be included in the BlockHeader.
 	EnableMining bool
 

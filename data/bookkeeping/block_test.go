@@ -50,10 +50,12 @@ func init() {
 	}
 	params1.MinUpgradeWaitRounds = 0
 	params1.MaxUpgradeWaitRounds = 0
+	params1.BonusPlan = 0
 	config.Consensus[proto1] = params1
 
 	params2 := config.Consensus[protocol.ConsensusCurrentVersion]
 	params2.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+	params2.BonusPlan = 1
 	config.Consensus[proto2] = params2
 
 	paramsDelay := config.Consensus[protocol.ConsensusCurrentVersion]
@@ -218,7 +220,7 @@ func TestBlockUnsupported(t *testing.T) { //nolint:paralleltest // Not parallel 
 	delete(config.Consensus, protoUnsupported)
 
 	err := b1.PreCheck(b.BlockHeader)
-	require.Error(t, err)
+	require.ErrorContains(t, err, "protocol TestUnsupported not supported")
 }
 
 func TestTime(t *testing.T) {
@@ -243,11 +245,43 @@ func TestTime(t *testing.T) {
 	require.NoError(t, b.PreCheck(prev.BlockHeader))
 
 	b.TimeStamp = prev.TimeStamp - 1
-	require.Error(t, b.PreCheck(prev.BlockHeader))
+	require.ErrorContains(t, b.PreCheck(prev.BlockHeader), "bad timestamp")
 	b.TimeStamp = prev.TimeStamp + proto.MaxTimestampIncrement
 	require.NoError(t, b.PreCheck(prev.BlockHeader))
 	b.TimeStamp = prev.TimeStamp + proto.MaxTimestampIncrement + 1
-	require.Error(t, b.PreCheck(prev.BlockHeader))
+	require.ErrorContains(t, b.PreCheck(prev.BlockHeader), "bad timestamp")
+}
+
+func TestBonus(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	var prev Block
+	prev.CurrentProtocol = proto1
+	prev.BlockHeader.GenesisID = t.Name()
+	crypto.RandBytes(prev.BlockHeader.GenesisHash[:])
+
+	b := MakeBlock(prev.BlockHeader)
+	require.NoError(t, b.PreCheck(prev.BlockHeader))
+
+	// proto1 has no bonuses
+	b.Bonus.Raw++
+	require.ErrorContains(t, b.PreCheck(prev.BlockHeader), "bad bonus: {1} != {0}")
+
+	prev.CurrentProtocol = proto2
+	prev.Bonus = basics.Algos(5)
+	b = MakeBlock(prev.BlockHeader)
+	require.NoError(t, b.PreCheck(prev.BlockHeader))
+
+	b.Bonus.Raw++
+	require.ErrorContains(t, b.PreCheck(prev.BlockHeader), "bad bonus: {5000001} != {5000000}")
+
+	prev.BlockHeader.Round = 10_000_000 - 1
+	b = MakeBlock(prev.BlockHeader)
+	require.NoError(t, b.PreCheck(prev.BlockHeader))
+
+	// since current block is 0 mod decayInterval, bonus goes down to 4,950,000
+	b.Bonus.Raw++
+	require.ErrorContains(t, b.PreCheck(prev.BlockHeader), "bad bonus: {4950001} != {4950000}")
 }
 
 func TestRewardsLevel(t *testing.T) {

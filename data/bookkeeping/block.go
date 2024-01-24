@@ -68,6 +68,10 @@ type (
 		// block. Populated if proto.EnableMining.
 		FeesCollected basics.MicroAlgos `codec:"fc"`
 
+		// Bonus is the bonus incentive to be paid for proposing this block.  It
+		// begins as a consensus parameter value, and decays periodically.
+		Bonus basics.MicroAlgos `codec:"bi"`
+
 		// Rewards.
 		//
 		// When a block is applied, some amount of rewards are accrued to
@@ -485,6 +489,61 @@ func ProcessUpgradeParams(prev BlockHeader) (uv UpgradeVote, us UpgradeState, er
 	return upgradeVote, upgradeState, err
 }
 
+type bonusPlan struct {
+	baseRound     basics.Round
+	baseAmount    basics.MicroAlgos
+	decayInterval basics.Round
+}
+
+var bonusPlans = []bonusPlan{
+	0: {},
+	1: {
+		baseRound:  0, // goes into effect with upgrade
+		baseAmount: basics.Algos(2),
+		// 2.9 sec rounds gives about 10.8M rounds per year.
+		decayInterval: 500_000, // .9^(10.8/.5) = 10% decay per year
+	},
+	// If we need to change the decay rate (only), we would create a new plan like:
+	// { decayInterval: XXX} by using an old baseRound, the amount is not adjusted
+	// For a bigger change, we'd use a plan like:
+	// { baseRound:  <FUTURE round>, baseAmount: <new amount>,	decayInterval: <new> }
+	// the new decay rate would go into effect at upgrade time, and the new
+	// amount would be set explicitly at baseRound. So care must be taken to
+	// make it _higher_ than the round of the upgrade.
+}
+
+func nextBonus(prev BlockHeader, params *config.ConsensusParams) basics.MicroAlgos {
+	// We always set if we are in the baseRound so that a new bonus plan can
+	// reset the amount.
+	current := prev.Round + 1
+	plan := bonusPlans[params.BonusPlan]
+	if current == plan.baseRound {
+		return plan.baseAmount
+	}
+
+	bonus := prev.Bonus
+	switch {
+	case bonus.IsZero() && current > plan.baseRound:
+		prevParams, _ := config.Consensus[prev.CurrentProtocol] // presence ensured by ProcessUpgradeParams
+		if prevParams.BonusPlan == 0 {
+			// We must have have just upgraded, with a passed baseRound, so install the bonus
+			bonus = plan.baseAmount
+		}
+		// else bonus is zero because it has decayed to zero.  that's fine.
+	case bonus.IsZero() && current < plan.baseRound:
+		/* do nothing, wait for baseRound */
+	default:
+		if plan.decayInterval != 0 && current%plan.decayInterval == 0 {
+			var o bool
+			bonus.Raw, o = basics.Muldiv(bonus.Raw, 99, 100)
+			if o {
+				logging.Base().Panicf("MakeBlock: error decaying bonus: %d", prev.Bonus)
+			}
+		}
+	}
+	return bonus
+}
+
 // MakeBlock constructs a new valid block with an empty payset and an unset Seed.
 func MakeBlock(prev BlockHeader) Block {
 	upgradeVote, upgradeState, err := ProcessUpgradeParams(prev)
@@ -506,6 +565,8 @@ func MakeBlock(prev BlockHeader) Block {
 		}
 	}
 
+	bonus := nextBonus(prev, &params)
+
 	// the merkle root of TXs will update when fillpayset is called
 	blk := Block{
 		BlockHeader: BlockHeader{
@@ -516,6 +577,7 @@ func MakeBlock(prev BlockHeader) Block {
 			TimeStamp:    timestamp,
 			GenesisID:    prev.GenesisID,
 			GenesisHash:  prev.GenesisHash,
+			Bonus:        bonus,
 		},
 	}
 	blk.TxnCommitments, err = blk.PaysetCommit()
@@ -629,6 +691,12 @@ func (bh BlockHeader) PreCheck(prev BlockHeader) error {
 		} else if bh.TimeStamp > prev.TimeStamp+params.MaxTimestampIncrement {
 			return fmt.Errorf("bad timestamp: current %v > previous %v, max increment = %v ", bh.TimeStamp, prev.TimeStamp, params.MaxTimestampIncrement)
 		}
+	}
+
+	// check bonus
+	expectedBonus := nextBonus(prev, &params)
+	if bh.Bonus != expectedBonus {
+		return fmt.Errorf("bad bonus: %d != %d ", bh.Bonus, expectedBonus)
 	}
 
 	// Check genesis ID value against previous block, if set

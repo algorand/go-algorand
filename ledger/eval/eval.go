@@ -716,19 +716,19 @@ func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, evalOpts 
 
 	poolAddr := eval.prevHeader.RewardsPool
 	// get the reward pool account data without any rewards
-	incentivePoolData, _, err := l.LookupWithoutRewards(eval.prevHeader.Round, poolAddr)
+	rewardsPoolData, _, err := l.LookupWithoutRewards(eval.prevHeader.Round, poolAddr)
 	if err != nil {
 		return nil, err
 	}
 
 	// this is expected to be a no-op, but update the rewards on the rewards pool if it was configured to receive rewards ( unlike mainnet ).
-	incentivePoolData = incentivePoolData.WithUpdatedRewards(prevProto, eval.prevHeader.RewardsLevel)
+	rewardsPoolData = rewardsPoolData.WithUpdatedRewards(prevProto, eval.prevHeader.RewardsLevel)
 
 	if evalOpts.Generate {
 		if eval.proto.SupportGenesisHash {
 			eval.block.BlockHeader.GenesisHash = eval.genesisHash
 		}
-		eval.block.BlockHeader.RewardsState = eval.prevHeader.NextRewardsState(hdr.Round, proto, incentivePoolData.MicroAlgos, prevTotals.RewardUnits(), logging.Base())
+		eval.block.BlockHeader.RewardsState = eval.prevHeader.NextRewardsState(hdr.Round, proto, rewardsPoolData.MicroAlgos, prevTotals.RewardUnits(), logging.Base())
 	}
 	// set the eval state with the current header
 	eval.state = makeRoundCowState(base, eval.block.BlockHeader, proto, eval.prevHeader.TimeStamp, prevTotals, evalOpts.PaysetHint)
@@ -740,7 +740,7 @@ func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, evalOpts 
 		}
 
 		// Check that the rewards rate, level and residue match expected values
-		expectedRewardsState := eval.prevHeader.NextRewardsState(hdr.Round, proto, incentivePoolData.MicroAlgos, prevTotals.RewardUnits(), logging.Base())
+		expectedRewardsState := eval.prevHeader.NextRewardsState(hdr.Round, proto, rewardsPoolData.MicroAlgos, prevTotals.RewardUnits(), logging.Base())
 		if eval.block.RewardsState != expectedRewardsState {
 			return nil, fmt.Errorf("bad rewards state: %+v != %+v", eval.block.RewardsState, expectedRewardsState)
 		}
@@ -751,7 +751,7 @@ func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, evalOpts 
 		}
 	}
 
-	// Withdraw rewards from the incentive pool
+	// Withdraw rewards from the pool
 	var ot basics.OverflowTracker
 	rewardsPerUnit := ot.Sub(eval.block.BlockHeader.RewardsLevel, eval.prevHeader.RewardsLevel)
 	if ot.Overflowed {
@@ -789,11 +789,23 @@ func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, evalOpts 
 	}
 
 	if eval.eligibleForIncentives(prevHeader.Proposer) {
-		miningIncentive, _ := basics.NewPercent(proto.MiningPercent).DivvyAlgos(prevHeader.FeesCollected)
-		err = eval.state.Move(prevHeader.FeeSink, prevHeader.Proposer, miningIncentive, nil, nil)
+		incentive, _ := basics.NewPercent(proto.MiningPercent).DivvyAlgos(prevHeader.FeesCollected)
+		total, o := basics.OAddA(incentive, prevHeader.Bonus)
+		if o {
+			return nil, fmt.Errorf("overflowed adding bonus incentive %d %d", incentive, prevHeader.Bonus)
+		}
+
+		sink, err := eval.state.lookup(prevHeader.FeeSink)
 		if err != nil {
-			// This should be impossible. The fees were just collected, and the FeeSink cannot be emptied.
-			return nil, fmt.Errorf("unable to Move mining incentive")
+			return nil, err
+		}
+		available := sink.AvailableBalance(&proto)
+		total = basics.MinA(total, available)
+
+		err = eval.state.Move(prevHeader.FeeSink, prevHeader.Proposer, total, nil, nil)
+		if err != nil {
+			// Should be impossible, we used AvailableBalance
+			return nil, fmt.Errorf("unable to pay block incentive: %v", err)
 		}
 	}
 
