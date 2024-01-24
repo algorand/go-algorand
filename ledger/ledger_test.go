@@ -2880,11 +2880,13 @@ func testVotersReloadFromDiskAfterOneStateProofCommitted(t *testing.T, cfg confi
 	}
 
 	triggerDeleteVoters(t, l, genesisInitState)
+	l.acctsOnline.voters.votersMu.Lock()
 	vtSnapshot := l.acctsOnline.voters.votersForRoundCache
 
 	// verifying that the tree for round 512 is still in the cache, but the tree for round 256 is evicted.
 	require.Contains(t, vtSnapshot, basics.Round(496))
 	require.NotContains(t, vtSnapshot, basics.Round(240))
+	l.acctsOnline.voters.votersMu.Unlock()
 
 	err = l.reloadLedger()
 	require.NoError(t, err)

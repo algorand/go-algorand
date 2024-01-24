@@ -43,7 +43,7 @@ The 32 byte public key is the last element on the stack, preceded by the 64 byte
 
 - Syntax: `ecdsa_verify V` where V: [ECDSA](#field-group-ecdsa)
 - Bytecode: 0x05 {uint8}
-- Stack: ..., A: [32]byte, B: []byte, C: []byte, D: []byte, E: []byte &rarr; ..., bool
+- Stack: ..., A: [32]byte, B: [32]byte, C: [32]byte, D: [32]byte, E: [32]byte &rarr; ..., bool
 - for (data A, signature B, C and pubkey D, E) verify the signature of the data against the pubkey => {0 or 1}
 - **Cost**: Secp256k1=1700
 - Availability: v5
@@ -63,7 +63,7 @@ The 32 byte Y-component of a public key is the last element on the stack, preced
 
 - Syntax: `ecdsa_pk_decompress V` where V: [ECDSA](#field-group-ecdsa)
 - Bytecode: 0x06 {uint8}
-- Stack: ..., A: []byte &rarr; ..., X: []byte, Y: []byte
+- Stack: ..., A: [33]byte &rarr; ..., X: [32]byte, Y: [32]byte
 - decompress pubkey A into components X, Y
 - **Cost**: Secp256k1=650
 - Availability: v5
@@ -74,7 +74,7 @@ The 33 byte public key in a compressed form to be decompressed into X and Y (top
 
 - Syntax: `ecdsa_pk_recover V` where V: [ECDSA](#field-group-ecdsa)
 - Bytecode: 0x07 {uint8}
-- Stack: ..., A: [32]byte, B: uint64, C: [32]byte, D: [32]byte &rarr; ..., X: []byte, Y: []byte
+- Stack: ..., A: [32]byte, B: uint64, C: [32]byte, D: [32]byte &rarr; ..., X: [32]byte, Y: [32]byte
 - for (data A, recovery id B, signature C, D) recover a public key
 - **Cost**: 2000
 - Availability: v5
@@ -174,7 +174,7 @@ Overflow is an error condition which halts execution and fails the transaction. 
 ## itob
 
 - Bytecode: 0x16
-- Stack: ..., A: uint64 &rarr; ..., []byte
+- Stack: ..., A: uint64 &rarr; ..., [8]byte
 - converts uint64 A to big-endian byte array, always of length 8
 
 ## btoi
@@ -801,7 +801,7 @@ params: Txn.Accounts offset (or, since v4, an _available_ account address), _ava
 ## app_local_get
 
 - Bytecode: 0x62
-- Stack: ..., A, B: []byte &rarr; ..., any
+- Stack: ..., A, B: stateKey &rarr; ..., any
 - local state of the key B in the current application in account A
 - Availability: v2
 - Mode: Application
@@ -811,7 +811,7 @@ params: Txn.Accounts offset (or, since v4, an _available_ account address), stat
 ## app_local_get_ex
 
 - Bytecode: 0x63
-- Stack: ..., A, B: uint64, C: []byte &rarr; ..., X: any, Y: bool
+- Stack: ..., A, B: uint64, C: stateKey &rarr; ..., X: any, Y: bool
 - X is the local state of application B, key C in account A. Y is 1 if key existed, else 0
 - Availability: v2
 - Mode: Application
@@ -821,7 +821,7 @@ params: Txn.Accounts offset (or, since v4, an _available_ account address), _ava
 ## app_global_get
 
 - Bytecode: 0x64
-- Stack: ..., A: []byte &rarr; ..., any
+- Stack: ..., A: stateKey &rarr; ..., any
 - global state of the key A in the current application
 - Availability: v2
 - Mode: Application
@@ -831,7 +831,7 @@ params: state key. Return: value. The value is zero (of type uint64) if the key 
 ## app_global_get_ex
 
 - Bytecode: 0x65
-- Stack: ..., A: uint64, B: []byte &rarr; ..., X: any, Y: bool
+- Stack: ..., A: uint64, B: stateKey &rarr; ..., X: any, Y: bool
 - X is the global state of application A, key B. Y is 1 if key existed, else 0
 - Availability: v2
 - Mode: Application
@@ -841,7 +841,7 @@ params: Txn.ForeignApps offset (or, since v4, an _available_ application id), st
 ## app_local_put
 
 - Bytecode: 0x66
-- Stack: ..., A, B: []byte, C &rarr; ...
+- Stack: ..., A, B: stateKey, C &rarr; ...
 - write C to key B in account A's local state of the current application
 - Availability: v2
 - Mode: Application
@@ -851,7 +851,7 @@ params: Txn.Accounts offset (or, since v4, an _available_ account address), stat
 ## app_global_put
 
 - Bytecode: 0x67
-- Stack: ..., A: []byte, B &rarr; ...
+- Stack: ..., A: stateKey, B &rarr; ...
 - write B to key A in the global state of the current application
 - Availability: v2
 - Mode: Application
@@ -859,7 +859,7 @@ params: Txn.Accounts offset (or, since v4, an _available_ account address), stat
 ## app_local_del
 
 - Bytecode: 0x68
-- Stack: ..., A, B: []byte &rarr; ...
+- Stack: ..., A, B: stateKey &rarr; ...
 - delete key B from account A's local state of the current application
 - Availability: v2
 - Mode: Application
@@ -871,7 +871,7 @@ Deleting a key which is already absent has no effect on the application local st
 ## app_global_del
 
 - Bytecode: 0x69
-- Stack: ..., A: []byte &rarr; ...
+- Stack: ..., A: stateKey &rarr; ...
 - delete key A from the global state of the current application
 - Availability: v2
 - Mode: Application
@@ -1078,7 +1078,7 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 ## bsqrt
 
 - Bytecode: 0x96
-- Stack: ..., A: []byte &rarr; ..., []byte
+- Stack: ..., A: bigint &rarr; ..., bigint
 - The largest integer I such that I^2 <= A. A and I are interpreted as big-endian unsigned integers
 - **Cost**: 40
 - Availability: v6
@@ -1169,7 +1169,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 ## b%
 
 - Bytecode: 0xaa
-- Stack: ..., A: []byte, B: []byte &rarr; ..., []byte
+- Stack: ..., A: bigint, B: bigint &rarr; ..., bigint
 - A modulo B. A and B are interpreted as big-endian unsigned integers. Fail if B is zero.
 - **Cost**: 20
 - Availability: v4

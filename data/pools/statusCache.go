@@ -52,7 +52,7 @@ func (sc *statusCache) check(txid transactions.Txid) (tx transactions.SignedTxn,
 func (sc *statusCache) put(tx transactions.SignedTxn, txErr string) {
 	if len(sc.cur) >= sc.sz {
 		sc.prev = sc.cur
-		sc.cur = map[transactions.Txid]statusCacheEntry{}
+		sc.cur = make(map[transactions.Txid]statusCacheEntry, sc.sz)
 	}
 
 	sc.cur[tx.ID()] = statusCacheEntry{
@@ -62,6 +62,6 @@ func (sc *statusCache) put(tx transactions.SignedTxn, txErr string) {
 }
 
 func (sc *statusCache) reset() {
-	sc.cur = map[transactions.Txid]statusCacheEntry{}
-	sc.prev = map[transactions.Txid]statusCacheEntry{}
+	sc.cur = make(map[transactions.Txid]statusCacheEntry, sc.sz)
+	sc.prev = nil
 }

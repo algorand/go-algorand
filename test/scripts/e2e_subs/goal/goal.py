@@ -158,6 +158,19 @@ class Goal:
         except algosdk.error.AlgodHTTPError as e:
             return (None, e)
 
+    def send_details(self, tx):
+        stx = self.sign(tx)
+        headers = {"Content-Type": "application/x-binary",
+                   "X-Algo-API-Token": self.algod.algod_token,
+        }
+        url = self.algod.algod_address + "/v2/transactions"
+        return (url, headers, enc.msgpack_encode(stx))
+
+    def curl_command(self, tx):
+        (url, headers, b64data) = self.send_details(tx)
+        H = " ".join(['-H "' + k + ':' + v + '"' for k,v in headers.items()])
+        return f"echo {b64data} | base64 -d | curl -s {url} {H} --data-binary @-"
+
     def send_group(self, txns, confirm=True):
         # Need unsigned transactions to calculate the group This pulls
         # out the unsigned tx if tx is sigged, logicsigged or
