@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -69,10 +69,24 @@ var (
 	relay = configUpdater{
 		description: "Relay consensus messages across the network and support catchup.",
 		updateFunc: func(cfg config.Local) config.Local {
+			cfg.MaxBlockHistoryLookback = 22000 // Enough to support 2 catchpoints with some wiggle room for nodes to catch up from the older one
+			cfg.CatchpointFileHistoryLength = 3
+			cfg.CatchpointTracking = 2
+			cfg.EnableLedgerService = true
+			cfg.EnableBlockService = true
+			cfg.NetAddress = ":4160"
+			return cfg
+		},
+	}
+
+	archival = configUpdater{
+		description: "Store the full chain history and support catchup.",
+		updateFunc: func(cfg config.Local) config.Local {
 			cfg.Archival = true
 			cfg.EnableLedgerService = true
 			cfg.EnableBlockService = true
 			cfg.NetAddress = ":4160"
+			cfg.EnableGossipService = false
 			return cfg
 		},
 	}
@@ -82,6 +96,7 @@ var (
 		"participation": participation,
 		"conduit":       conduit,
 		"relay":         relay,
+		"archival":      archival,
 		"development":   development,
 	}
 

@@ -125,9 +125,10 @@ if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "SCRIPTS" ]; then
     . "${TEMPDIR}/ve/bin/activate"
     "${TEMPDIR}/ve/bin/pip3" install --upgrade pip
 
-    # Pin a version of our python SDK's so that breaking changes don't spuriously break our tests.
-    # Please update as necessary.
-    "${TEMPDIR}/ve/bin/pip3" install py-algorand-sdk==1.17.0
+    # Pin major version of our python SDK's so that breaking changes
+    # don't spuriously break our tests.  If a minor version breaks our
+    # tests, we ought to find out.
+    "${TEMPDIR}/ve/bin/pip3" install 'py-algorand-sdk==2.*'
 
     # Enable remote debugging:
     "${TEMPDIR}/ve/bin/pip3" install --upgrade debugpy

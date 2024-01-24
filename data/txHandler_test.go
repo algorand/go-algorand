@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -2522,9 +2522,7 @@ func TestTxHandlerAppRateLimiterERLEnabled(t *testing.T) {
 	cfg.TxBacklogAppTxRateLimiterMaxSize = 100
 	cfg.TxBacklogServiceRateWindowSeconds = 1
 	cfg.TxBacklogAppTxPerSecondRate = 3
-	cfg.TxBacklogReservedCapacityPerPeer = 2
-	cfg.TxBacklogSize = 1
-	cfg.IncomingConnectionsLimit = 1
+	cfg.TxBacklogSize = 3
 	ledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, bookkeeping.GenesisBalances{}, genesisID, genesisHash, nil, cfg)
 	require.NoError(t, err)
 	defer ledger.Close()
@@ -2585,7 +2583,9 @@ func TestTxHandlerAppRateLimiterERLEnabled(t *testing.T) {
 	sender := mockSender{}
 
 	// submit and ensure it is accepted
-	congested := float64(cap(handler.backlogQueue))*0.5 < float64(len(handler.backlogQueue))
+	pct := float64(cfg.TxBacklogRateLimitingCongestionPct) / 100
+	limit := int(float64(cfg.TxBacklogSize) * pct)
+	congested := len(handler.backlogQueue) > limit
 	require.False(t, congested)
 
 	action := handler.processIncomingTxn(network.IncomingMessage{Data: blob, Sender: sender})
@@ -2593,7 +2593,7 @@ func TestTxHandlerAppRateLimiterERLEnabled(t *testing.T) {
 	require.Equal(t, 1, len(handler.backlogQueue))
 
 	// repeat the same txn, we are still not congested
-	congested = float64(cap(handler.backlogQueue))*0.5 < float64(len(handler.backlogQueue))
+	congested = len(handler.backlogQueue) > limit
 	require.False(t, congested)
 
 	signedTx = tx.Sign(keypair())
@@ -2603,7 +2603,7 @@ func TestTxHandlerAppRateLimiterERLEnabled(t *testing.T) {
 	require.Equal(t, 2, len(handler.backlogQueue))
 	require.Equal(t, 0, handler.appLimiter.len()) // no rate limiting yet
 
-	congested = float64(cap(handler.backlogQueue))*0.5 < float64(len(handler.backlogQueue))
+	congested = len(handler.backlogQueue) > limit
 	require.True(t, congested)
 
 	// submit it again and the app rate limiter should kick in

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -80,7 +80,9 @@ type txTail struct {
 	// lastValid, recent, lowWaterMark, roundTailHashes, roundTailSerializedDeltas and blockHeaderData.
 	tailMu deadlock.RWMutex
 
-	lastValid map[basics.Round]map[transactions.Txid]struct{} // map tx.LastValid -> tx confirmed set
+	// lastValid allows looking up all of the transactions that expire in a given round.
+	// The map for an expiration round gives the round the transaction was originally confirmed, so it can be found for the /pending endpoint.
+	lastValid map[basics.Round]map[transactions.Txid]uint16 // map tx.LastValid -> tx confirmed map: txid -> (last valid - confirmed) delta
 
 	// duplicate detection queries with LastValid before
 	// lowWaterMark are not guaranteed to succeed
@@ -115,14 +117,18 @@ func (t *txTail) loadFromDisk(l ledgerForTracker, dbRound basics.Round) error {
 	}
 
 	t.lowWaterMark = l.Latest()
-	t.lastValid = make(map[basics.Round]map[transactions.Txid]struct{})
+	t.lastValid = make(map[basics.Round]map[transactions.Txid]uint16)
 	t.recent = make(map[basics.Round]roundLeases)
 
 	// the lastValid is a temporary map used during the execution of
 	// loadFromDisk, allowing us to construct the lastValid maps in their
 	// optimal size. This would ensure that upon startup, we don't preallocate
 	// more memory than we truly need.
-	lastValid := make(map[basics.Round][]transactions.Txid)
+	type lastValidEntry struct {
+		rnd  basics.Round
+		txid transactions.Txid
+	}
+	lastValid := make(map[basics.Round][]lastValidEntry)
 
 	// the roundTailHashes and blockHeaderData need a single element to start with
 	// in order to allow lookups on zero offsets when they are empty (new database)
@@ -153,16 +159,16 @@ func (t *txTail) loadFromDisk(l ledgerForTracker, dbRound basics.Round) error {
 				list := lastValid[txTailRound.LastValid[i]]
 				// if the list reached capacity, resize.
 				if len(list) == cap(list) {
-					var newList []transactions.Txid
+					var newList []lastValidEntry
 					if cap(list) == 0 {
-						newList = make([]transactions.Txid, 0, initialLastValidArrayLen)
+						newList = make([]lastValidEntry, 0, initialLastValidArrayLen)
 					} else {
-						newList = make([]transactions.Txid, len(list), len(list)*2)
+						newList = make([]lastValidEntry, len(list), len(list)*2)
 					}
 					copy(newList[:], list[:])
 					list = newList
 				}
-				list = append(list, txTailRound.TxnIDs[i])
+				list = append(list, lastValidEntry{txTailRound.Hdr.Round, txTailRound.TxnIDs[i]})
 				lastValid[txTailRound.LastValid[i]] = list
 			}
 		}
@@ -173,11 +179,15 @@ func (t *txTail) loadFromDisk(l ledgerForTracker, dbRound basics.Round) error {
 
 	// add all the entries in roundsLastValids to their corresponding map entry in t.lastValid
 	for lastValid, list := range lastValid {
-		lastValueMap := make(map[transactions.Txid]struct{}, len(list))
-		for _, id := range list {
-			lastValueMap[id] = struct{}{}
+		lastValidMap := make(map[transactions.Txid]uint16, len(list))
+		for _, entry := range list {
+			if lastValid < entry.rnd {
+				return fmt.Errorf("txTail: invalid lastValid %d / rnd %d for txid %s", lastValid, entry.rnd, entry.txid)
+			}
+			deltaR := uint16(lastValid - entry.rnd)
+			lastValidMap[entry.txid] = deltaR
 		}
-		t.lastValid[lastValid] = lastValueMap
+		t.lastValid[lastValid] = lastValidMap
 	}
 
 	if enableTxTailHashes {
@@ -210,9 +220,10 @@ func (t *txTail) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 
 	for txid, txnInc := range delta.Txids {
 		if _, ok := t.lastValid[txnInc.LastValid]; !ok {
-			t.lastValid[txnInc.LastValid] = make(map[transactions.Txid]struct{})
+			t.lastValid[txnInc.LastValid] = make(map[transactions.Txid]uint16)
 		}
-		t.lastValid[txnInc.LastValid][txid] = struct{}{}
+		deltaR := uint16(txnInc.LastValid - blk.BlockHeader.Round)
+		t.lastValid[txnInc.LastValid][txid] = deltaR
 
 		tail.TxnIDs[txnInc.Intra] = txid
 		tail.LastValid[txnInc.Intra] = txnInc.LastValid
@@ -379,6 +390,19 @@ func (t *txTail) checkDup(proto config.ConsensusParams, current basics.Round, fi
 		return &ledgercore.TransactionInLedgerError{Txid: txid, InBlockEvaluator: false}
 	}
 	return nil
+}
+
+// checkConfirmed test to see if the given transaction id already exists.
+func (t *txTail) checkConfirmed(txid transactions.Txid) (basics.Round, bool) {
+	t.tailMu.RLock()
+	defer t.tailMu.RUnlock()
+
+	for lastValidRound, lastValid := range t.lastValid {
+		if deltaR, confirmed := lastValid[txid]; confirmed {
+			return lastValidRound - basics.Round(deltaR), true
+		}
+	}
+	return 0, false
 }
 
 func (t *txTail) recentTailHash(offset uint64, retainSize uint64) (crypto.Digest, error) {
