@@ -405,6 +405,9 @@ func (bs *BlockService) getNextCustomFallbackEndpoint() (endpointAddress string)
 	if len(bs.fallbackEndpoints.endpoints) == 0 {
 		return
 	}
+
+	bs.mu.Lock()
+	defer bs.mu.Unlock()
 	endpointAddress = bs.fallbackEndpoints.endpoints[bs.fallbackEndpoints.lastUsed]
 	bs.fallbackEndpoints.lastUsed = (bs.fallbackEndpoints.lastUsed + 1) % len(bs.fallbackEndpoints.endpoints)
 	return
