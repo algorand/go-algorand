@@ -961,14 +961,11 @@ func TestCreatePeerSelector(t *testing.T) {
 	// Make Service
 	cfg := defaultConfig
 
+	// cfg.NetAddress != ""; cfg.EnableGossipService = true; pipelineFetch = true
 	cfg.NetAddress = "someAddress"
+	cfg.EnableGossipService = true
 	s := MakeService(logging.Base(), cfg, &httpTestPeerSource{}, new(mockedLedger), &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil)
 	ps := createPeerSelector(s.net, s.cfg, true)
-
-	// cfg.NetAddress != ""; pipelineFetch = true
-	cfg.NetAddress = "someAddress"
-	s = MakeService(logging.Base(), cfg, &httpTestPeerSource{}, new(mockedLedger), &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil)
-	ps = createPeerSelector(s.net, s.cfg, true)
 
 	require.Equal(t, 4, len(ps.peerClasses))
 	require.Equal(t, peerRankInitialFirstPriority, ps.peerClasses[0].initialRank)
@@ -981,8 +978,9 @@ func TestCreatePeerSelector(t *testing.T) {
 	require.Equal(t, network.PeersPhonebookRelays, ps.peerClasses[2].peerClass)
 	require.Equal(t, network.PeersConnectedIn, ps.peerClasses[3].peerClass)
 
-	// cfg.NetAddress == ""; pipelineFetch = true
+	// cfg.NetAddress == ""; cfg.EnableGossipService = true; pipelineFetch = true
 	cfg.NetAddress = ""
+	cfg.EnableGossipService = true
 	s = MakeService(logging.Base(), cfg, &httpTestPeerSource{}, new(mockedLedger), &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil)
 	ps = createPeerSelector(s.net, s.cfg, true)
 
@@ -995,8 +993,24 @@ func TestCreatePeerSelector(t *testing.T) {
 	require.Equal(t, network.PeersConnectedOut, ps.peerClasses[1].peerClass)
 	require.Equal(t, network.PeersPhonebookRelays, ps.peerClasses[2].peerClass)
 
-	// cfg.NetAddress != ""; pipelineFetch = false
+	// cfg.NetAddress != ""; cfg.EnableGossipService = false; pipelineFetch = true
 	cfg.NetAddress = "someAddress"
+	cfg.EnableGossipService = false
+	s = MakeService(logging.Base(), cfg, &httpTestPeerSource{}, new(mockedLedger), &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil)
+	ps = createPeerSelector(s.net, s.cfg, true)
+
+	require.Equal(t, 3, len(ps.peerClasses))
+	require.Equal(t, peerRankInitialFirstPriority, ps.peerClasses[0].initialRank)
+	require.Equal(t, peerRankInitialSecondPriority, ps.peerClasses[1].initialRank)
+	require.Equal(t, peerRankInitialThirdPriority, ps.peerClasses[2].initialRank)
+
+	require.Equal(t, network.PeersPhonebookArchivalNodes, ps.peerClasses[0].peerClass)
+	require.Equal(t, network.PeersConnectedOut, ps.peerClasses[1].peerClass)
+	require.Equal(t, network.PeersPhonebookRelays, ps.peerClasses[2].peerClass)
+
+	// cfg.NetAddress != ""; cfg.EnableGossipService = true; pipelineFetch = false
+	cfg.NetAddress = "someAddress"
+	cfg.EnableGossipService = true
 	s = MakeService(logging.Base(), cfg, &httpTestPeerSource{}, new(mockedLedger), &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil)
 	ps = createPeerSelector(s.net, s.cfg, false)
 
@@ -1011,8 +1025,24 @@ func TestCreatePeerSelector(t *testing.T) {
 	require.Equal(t, network.PeersPhonebookArchivalNodes, ps.peerClasses[2].peerClass)
 	require.Equal(t, network.PeersPhonebookRelays, ps.peerClasses[3].peerClass)
 
-	// cfg.NetAddress == ""; pipelineFetch = false
+	// cfg.NetAddress == ""; cfg.EnableGossipService = true; pipelineFetch = false
 	cfg.NetAddress = ""
+	cfg.EnableGossipService = true
+	s = MakeService(logging.Base(), cfg, &httpTestPeerSource{}, new(mockedLedger), &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil)
+	ps = createPeerSelector(s.net, s.cfg, false)
+
+	require.Equal(t, 3, len(ps.peerClasses))
+	require.Equal(t, peerRankInitialFirstPriority, ps.peerClasses[0].initialRank)
+	require.Equal(t, peerRankInitialSecondPriority, ps.peerClasses[1].initialRank)
+	require.Equal(t, peerRankInitialThirdPriority, ps.peerClasses[2].initialRank)
+
+	require.Equal(t, network.PeersConnectedOut, ps.peerClasses[0].peerClass)
+	require.Equal(t, network.PeersPhonebookArchivalNodes, ps.peerClasses[1].peerClass)
+	require.Equal(t, network.PeersPhonebookRelays, ps.peerClasses[2].peerClass)
+
+	// cfg.NetAddress != ""; cfg.EnableGossipService = false; pipelineFetch = false
+	cfg.NetAddress = "someAddress"
+	cfg.EnableGossipService = false
 	s = MakeService(logging.Base(), cfg, &httpTestPeerSource{}, new(mockedLedger), &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil)
 	ps = createPeerSelector(s.net, s.cfg, false)
 
