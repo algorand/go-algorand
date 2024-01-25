@@ -1895,15 +1895,14 @@ func (wn *WebsocketNetwork) getDNSAddrs(dnsBootstrap string) (relaysAddresses []
 		}
 		relaysAddresses = nil
 	}
-	if wn.config.EnableBlockServiceFallbackToArchiver {
-		archiverAddresses, err = wn.resolveSRVRecords("archive", "tcp", dnsBootstrap, wn.config.FallbackDNSResolverAddress, wn.config.DNSSecuritySRVEnforced())
-		if err != nil {
-			// only log this warning on testnet or devnet
-			if wn.NetworkID == config.Devnet || wn.NetworkID == config.Testnet {
-				wn.log.Warnf("Cannot lookup archive SRV record for %s: %v", dnsBootstrap, err)
-			}
-			archiverAddresses = nil
+
+	archiverAddresses, err = wn.resolveSRVRecords("archive", "tcp", dnsBootstrap, wn.config.FallbackDNSResolverAddress, wn.config.DNSSecuritySRVEnforced())
+	if err != nil {
+		// only log this warning on testnet or devnet
+		if wn.NetworkID == config.Devnet || wn.NetworkID == config.Testnet {
+			wn.log.Warnf("Cannot lookup archive SRV record for %s: %v", dnsBootstrap, err)
 		}
+		archiverAddresses = nil
 	}
 	return
 }

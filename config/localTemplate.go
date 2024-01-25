@@ -460,15 +460,9 @@ type Local struct {
 	DisableLocalhostConnectionRateLimit bool `version[16]:"true"`
 
 	// BlockServiceCustomFallbackEndpoints is a comma delimited list of endpoints which the block service uses to
-	// redirect the http requests to in case it does not have the round. If it is not specified, will check
-	// EnableBlockServiceFallbackToArchiver.
+	// redirect the http requests to in case it does not have the round. If empty, the block service will return
+	// StatusNotFound (404)
 	BlockServiceCustomFallbackEndpoints string `version[16]:""`
-
-	// EnableBlockServiceFallbackToArchiver controls whether the block service redirects the http requests to
-	// an archiver or return StatusNotFound (404) when in does not have the requested round, and
-	// BlockServiceCustomFallbackEndpoints is empty.
-	// The archiver is randomly selected, if none is available, will return StatusNotFound (404).
-	EnableBlockServiceFallbackToArchiver bool `version[16]:"true" version[31]:"false"`
 
 	// CatchupBlockValidateMode is a development and testing configuration used by the catchup service.
 	// It can be used to omit certain validations to speed up the catchup process, or to apply extra validations which are redundant in normal operation.

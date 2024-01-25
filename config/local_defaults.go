@@ -64,7 +64,6 @@ var defaultLocal = Local{
 	EnableAgreementTimeMetrics:                 false,
 	EnableAssembleStats:                        false,
 	EnableBlockService:                         false,
-	EnableBlockServiceFallbackToArchiver:       false,
 	EnableDeveloperAPI:                         false,
 	EnableExperimentalAPI:                      false,
 	EnableFollowMode:                           false,
