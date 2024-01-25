@@ -30,6 +30,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-deadlock"
+
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -275,7 +277,7 @@ func TestSyncingFullNode(t *testing.T) {
 
 	initialRound := nodes[0].ledger.NextRound()
 
-	startAndConnectNodes(nodes, true)
+	startAndConnectNodes(nodes, defaultFirstNodeStartDelay)
 
 	counter := 0
 	for tests := uint64(0); tests < 16; tests++ {
@@ -339,7 +341,7 @@ func TestInitialSync(t *testing.T) {
 	}
 	initialRound := nodes[0].ledger.NextRound()
 
-	startAndConnectNodes(nodes, true)
+	startAndConnectNodes(nodes, defaultFirstNodeStartDelay)
 
 	select {
 	case <-nodes[0].ledger.Wait(initialRound):
@@ -417,7 +419,7 @@ func TestSimpleUpgrade(t *testing.T) {
 
 	initialRound := nodes[0].ledger.NextRound()
 
-	startAndConnectNodes(nodes, false)
+	startAndConnectNodes(nodes, nodelayFirstNodeStartDelay)
 
 	maxRounds := basics.Round(16)
 	roundsCheckedForUpgrade := 0
@@ -466,10 +468,13 @@ func TestSimpleUpgrade(t *testing.T) {
 	require.Equal(t, 2, roundsCheckedForUpgrade)
 }
 
-func startAndConnectNodes(nodes []*AlgorandFullNode, delayStartFirstNode bool) {
+const defaultFirstNodeStartDelay = 20 * time.Second
+const nodelayFirstNodeStartDelay = 0
+
+func startAndConnectNodes(nodes []*AlgorandFullNode, delayStartFirstNode time.Duration) {
 	var wg sync.WaitGroup
 	for i := range nodes {
-		if delayStartFirstNode && i == 0 {
+		if delayStartFirstNode > 0 && i == 0 {
 			continue
 		}
 		wg.Add(1)
@@ -480,9 +485,9 @@ func startAndConnectNodes(nodes []*AlgorandFullNode, delayStartFirstNode bool) {
 	}
 	wg.Wait()
 
-	if delayStartFirstNode {
+	if delayStartFirstNode > 0 {
 		connectPeers(nodes[1:])
-		delayStartNode(nodes[0], nodes[1:], 20*time.Second)
+		delayStartNode(nodes[0], nodes[1:], delayStartFirstNode)
 	} else {
 		connectPeers(nodes)
 	}
@@ -838,16 +843,18 @@ func TestMaxSizesCorrect(t *testing.T) {
 // N -- R -- A and ensures N can discover A and download blocks from it.
 //
 // N is a non-part node that joins the network later
-// R is a non-arhival relay node with block serice disabled. It also serves as P2P boootstrap node
+// R is a non-arhival relay node with block service disabled. It MUST NOT service blocks to force N to discover A.
 // A is a archival node that can only provide blocks.
 // Nodes N and A have only R in their initial phonebook, and all nodes are in hybrid mode.
 func TestNodeHybridTopology(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
+	deadlock.Opts.Disable = true
+
 	// peer selector prefers ConnectedOut peers but A can connect to N
 	// in this case it could takes longer to switch to the next peer class
 	// and use a discovered node with cap=Archival
-	t.Skip("Flaky because of connectivity and peer selector ranking")
+	// t.Skip("Flaky because of connectivity and peer selector ranking")
 
 	const consensusTest0 = protocol.ConsensusVersion("test0")
 
@@ -884,6 +891,10 @@ func TestNodeHybridTopology(t *testing.T) {
 			cfg.CatchpointInterval = 200
 			cfg.Archival = true
 		}
+		if ni.idx == 0 {
+			// do not allow node 0 (N) to make any outgoing connections
+			cfg.GossipFanout = 0
+		}
 
 		cfg.NetAddress = ni.wsNetAddr()
 		cfg.EnableP2PHybridMode = true
@@ -901,14 +912,26 @@ func TestNodeHybridTopology(t *testing.T) {
 	}
 
 	phonebookHook := func(ni []nodeInfo, i int) []string {
-		// all connected to node 1
-		if i == 1 {
-			t.Logf("Node%d phonebook: %s, %s", i, ni[2].wsNetAddr(), ni[2].p2pMultiAddr())
-			return []string{ni[2].wsNetAddr(), ni[2].p2pMultiAddr()}
-		} else {
+		switch i {
+		case 0:
+			// node 0 (N) only accept connections to work around the peer selector
+			// ConnectedOut priority. TODO: merge switching to archival peers from master
+			// when ready.
+			t.Logf("Node%d phonebook: empty", i)
+			return []string{}
+		case 1:
+			// node 1 (R) connectes to all
+			t.Logf("Node%d phonebook: %s, %s, %s, %s", i, ni[0].wsNetAddr(), ni[2].wsNetAddr(), ni[0].p2pMultiAddr(), ni[2].p2pMultiAddr())
+			return []string{ni[0].wsNetAddr(), ni[2].wsNetAddr(), ni[0].p2pMultiAddr(), ni[2].p2pMultiAddr()}
+		case 2:
+			// node 2 (A) connects to R
 			t.Logf("Node%d phonebook: %s, %s", i, ni[1].wsNetAddr(), ni[1].p2pMultiAddr())
 			return []string{ni[1].wsNetAddr(), ni[1].p2pMultiAddr()}
+		default:
+			t.Errorf("not expected number of nodes: %d", i)
+			t.FailNow()
 		}
+		return nil
 	}
 
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
@@ -922,19 +945,19 @@ func TestNodeHybridTopology(t *testing.T) {
 		defer nodes[i].Stop()
 	}
 
-	startAndConnectNodes(nodes, true)
+	startAndConnectNodes(nodes, 10*time.Second)
 
 	initialRound := nodes[0].ledger.NextRound()
+	targetRound := initialRound + 10
 
 	select {
-	case <-nodes[0].ledger.Wait(initialRound):
-		e0, err := nodes[0].ledger.Block(initialRound)
+	case <-nodes[0].ledger.Wait(targetRound):
+		e0, err := nodes[0].ledger.Block(targetRound)
 		require.NoError(t, err)
-		e1, err := nodes[1].ledger.Block(initialRound)
+		e1, err := nodes[1].ledger.Block(targetRound)
 		require.NoError(t, err)
 		require.Equal(t, e1.Hash(), e0.Hash())
-	case <-time.After(60 * time.Second):
+	case <-time.After(120 * time.Second):
 		require.Fail(t, fmt.Sprintf("no block notification for wallet: %v.", wallets[0]))
-		return
 	}
 }

@@ -32,6 +32,7 @@ import (
 	"github.com/algorand/go-algorand/network/p2p/peerstore"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-deadlock"
+	"github.com/gorilla/mux"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/network"
@@ -72,6 +73,9 @@ type P2PNetwork struct {
 	nodeInfo     NodeInfo
 	pstore       *peerstore.PeerStore
 	httpServer   libp2phttp.Host
+
+	p2phttpMux             *mux.Router
+	p2phttpMuxRegistarOnce sync.Once
 }
 
 type bootstrapper struct {
@@ -167,6 +171,7 @@ func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebo
 		peerStats:    make(map[peer.ID]*p2pPeerStats),
 		nodeInfo:     node,
 		pstore:       pstore,
+		p2phttpMux:   mux.NewRouter(),
 	}
 	net.ctx, net.ctxCancel = context.WithCancel(context.Background())
 	net.handler = msgHandler{
@@ -332,7 +337,8 @@ func (n *P2PNetwork) httpdThread() {
 	defer n.wg.Done()
 	err := n.httpServer.Serve()
 	if err != nil {
-		n.log.Errorf("Error serving P2PHTTP: %v", err)
+		n.log.Errorf("Error serving libp2phttp: %v", err)
+		return
 	}
 }
 
@@ -427,7 +433,14 @@ func (n *P2PNetwork) DisconnectPeers() {
 
 // RegisterHTTPHandler path accepts gorilla/mux path annotations
 func (n *P2PNetwork) RegisterHTTPHandler(path string, handler http.Handler) {
-	n.httpServer.SetHTTPHandlerAtPath(p2p.AlgorandP2pHttpProtocol, path, handler)
+}
+
+// // RegisterHTTPHandlerWithPrefix path accepts http.ServeMux prefix and gorilla/mux path annotations
+func (n *P2PNetwork) RegisterHTTPHandlerWithPrefix(prefix string, path string, handler http.Handler) {
+	n.p2phttpMux.Handle(path, handler)
+	n.p2phttpMuxRegistarOnce.Do(func() {
+		n.httpServer.SetHTTPHandlerAtPath(p2p.AlgorandP2pHttpProtocol, prefix, n.p2phttpMux)
+	})
 }
 
 // RequestConnectOutgoing asks the system to actually connect to peers.
@@ -438,7 +451,6 @@ func (n *P2PNetwork) RequestConnectOutgoing(replace bool, quit <-chan struct{}) 
 
 // GetPeers returns a list of Peers we could potentially send a direct message to.
 func (n *P2PNetwork) GetPeers(options ...PeerOption) []Peer {
-	n.log.Debugf("GetPeers called with options %v", options)
 	peers := make([]Peer, 0)
 	for _, option := range options {
 		switch option {
@@ -498,8 +510,7 @@ func (n *P2PNetwork) GetPeers(options ...PeerOption) []Peer {
 
 					peerCore := makePeerCoreWithClient(
 						n.ctx, n, n.log, n.handler.readBuffer,
-						addr, n.GetRoundTripper(nil), "", /*origin address*/
-						client,
+						addr /*rootURL*/, client, "", /*origin address*/
 					)
 					peers = append(peers, &peerCore)
 				}
@@ -590,6 +601,23 @@ func (n *P2PNetwork) wsStreamHandler(ctx context.Context, peer peer.ID, stream n
 			return
 		}
 	} else {
+		n.wsPeersLock.Lock()
+		numOutgoingPeers := 0
+		for _, peer := range n.wsPeers {
+			if peer.outgoing {
+				n.log.Debugf("outgoing peer orig=%s addr=%s", peer.OriginAddress(), peer.GetAddress())
+				numOutgoingPeers++
+			}
+		}
+		n.wsPeersLock.Unlock()
+		if numOutgoingPeers >= n.config.GossipFanout {
+			// this appears to be some auxiliary connection made by libp2p itself like DHT connection.
+			// skip this connection since there are already enough peers
+			n.log.Debugf("skipping outgoing connection to peer %s: num outgoing %d > fanout %d ", peer, numOutgoingPeers, n.config.GossipFanout)
+			stream.Close()
+			return
+		}
+
 		_, err := stream.Write([]byte("1"))
 		if err != nil {
 			n.log.Warnf("wsStreamHandler: error sending initial message: %s", err)
@@ -625,6 +653,12 @@ func (n *P2PNetwork) wsStreamHandler(ctx context.Context, peer peer.ID, stream n
 	localAddr, _ := n.Address()
 	n.log.With("event", event).With("remote", addr).With("local", localAddr).Infof(msg, peer.String())
 
+	if n.log.GetLevel() >= logging.Debug {
+		n.log.Debugf("streams for %s conn %s ", stream.Conn().Stat().Direction.String(), stream.Conn().ID())
+		for _, s := range stream.Conn().GetStreams() {
+			n.log.Debugf("%s stream %s protocol %s", s.Stat().Direction.String(), s.ID(), s.Protocol())
+		}
+	}
 	// TODO: add telemetry
 	// n.log.EventWithDetails(telemetryspec.Network, telemetryspec.ConnectPeerEvent,
 	// 	telemetryspec.PeerEventDetails{

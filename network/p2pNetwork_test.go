@@ -19,6 +19,8 @@ package network
 import (
 	"context"
 	"fmt"
+	"io"
+	"net/http"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -228,9 +230,7 @@ func (s *mockService) DialPeersUntilTargetCount(targetConnCount int) {
 }
 
 func (s *mockService) ClosePeer(peer peer.ID) error {
-	if _, ok := s.peers[peer]; ok {
-		delete(s.peers, peer)
-	}
+	delete(s.peers, peer)
 	return nil
 }
 
@@ -247,10 +247,6 @@ func (s *mockService) Subscribe(topic string, val pubsub.ValidatorEx) (*pubsub.S
 }
 func (s *mockService) Publish(ctx context.Context, topic string, data []byte) error {
 	return nil
-}
-
-func (s *mockService) setAddrs(addrs []ma.Multiaddr) {
-	s.addrs = addrs
 }
 
 func makeMockService(id peer.ID, addrs []ma.Multiaddr) *mockService {
@@ -544,5 +540,64 @@ func TestMultiaddrConversionToFrom(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, mas, 1)
 	require.Equal(t, a, mas[0].String())
+}
 
+type p2phttpHandler struct {
+}
+
+func (h *p2phttpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	w.Write([]byte("hello"))
+}
+
+func TestP2PHTTPHandler(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	cfg := config.GetDefaultLocal()
+	cfg.EnableDHTProviders = true
+	cfg.GossipFanout = 1
+	log := logging.TestingLog(t)
+
+	netA, err := NewP2PNetwork(log, cfg, "", nil, genesisID, config.Devtestnet, &nopeNodeInfo{})
+	require.NoError(t, err)
+
+	h := &p2phttpHandler{}
+	netA.RegisterHTTPHandler("/test", h)
+
+	netA.Start()
+	defer netA.Stop()
+
+	// have a second net client to connect to A
+	// to ensure p2phttp and other p2p trafic works in parallel
+	peerInfoA := netA.service.AddrInfo()
+	addrsA, err := peerstore.AddrInfoToP2pAddrs(&peerInfoA)
+	require.NoError(t, err)
+	require.NotZero(t, addrsA[0])
+
+	multiAddrStr := addrsA[0].String()
+	phoneBookAddresses := []string{multiAddrStr}
+	netB, err := NewP2PNetwork(log, cfg, "", phoneBookAddresses, genesisID, config.Devtestnet, &nopeNodeInfo{})
+	require.NoError(t, err)
+	err = netB.Start()
+	require.NoError(t, err)
+	defer netB.Stop()
+
+	// now run a few parallel requests to see it works as expected with multiple connections
+	var wg sync.WaitGroup
+	wg.Add(10)
+	for i := 0; i < 10; i++ {
+		go func() {
+			defer wg.Done()
+			httpClient, err := p2p.MakeHTTPClient(p2p.AlgorandP2pHttpProtocol, netA.service.AddrInfo())
+			require.NoError(t, err)
+			resp, err := httpClient.Get("/test")
+			require.NoError(t, err)
+			defer resp.Body.Close()
+
+			body, err := io.ReadAll(resp.Body)
+			require.NoError(t, err)
+			require.Equal(t, "hello", string(body))
+		}()
+	}
+	wg.Wait()
 }

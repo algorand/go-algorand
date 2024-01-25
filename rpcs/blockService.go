@@ -150,6 +150,7 @@ func MakeBlockService(log logging.Logger, config config.Local, ledger LedgerForB
 	}
 	if service.enableService {
 		net.RegisterHTTPHandler(BlockServiceBlockPath, service)
+		net.RegisterHTTPHandlerWithPrefix(network.GossipNodeHttpPathPrefix, BlockServiceBlockPath, service)
 	}
 	return service
 }

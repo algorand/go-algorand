@@ -219,13 +219,25 @@ type HTTPFetcher struct {
 // getBlockBytes gets a block.
 // Core piece of FetcherClient interface
 func (hf *HTTPFetcher) getBlockBytes(ctx context.Context, r basics.Round) (data []byte, err error) {
-	parsedURL, err := network.ParseHostOrURL(hf.rootURL)
-	if err != nil {
-		return nil, err
+	var blockURL string
+
+	if hf.rootURL[0] == '/' && hf.rootURL[1] != '/' {
+		_, err0 := network.ParseHostOrURLOrMultiaddr(hf.rootURL)
+		if err0 != nil {
+			return nil, err0
+		}
+		blockURL = rpcs.FormatBlockQuery(uint64(r), network.GossipNodeHttpPathPrefix, hf.net)
+
+	} else {
+
+		if parsedURL, err0 := network.ParseHostOrURL(hf.rootURL); err0 == nil {
+			parsedURL.Path = rpcs.FormatBlockQuery(uint64(r), parsedURL.Path, hf.net)
+			blockURL = parsedURL.String()
+		} else {
+			return nil, err0
+		}
 	}
 
-	parsedURL.Path = rpcs.FormatBlockQuery(uint64(r), parsedURL.Path, hf.net)
-	blockURL := parsedURL.String()
 	hf.log.Debugf("block GET %#v peer %#v %T", blockURL, hf.peer, hf.peer)
 	request, err := http.NewRequest("GET", blockURL, nil)
 	if err != nil {

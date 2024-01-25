@@ -27,6 +27,7 @@ import (
 	"net/http"
 	"net/textproto"
 	"net/url"
+	"path"
 	"regexp"
 	"runtime"
 	"strconv"
@@ -512,6 +513,10 @@ func (wn *WebsocketNetwork) Ready() chan struct{} {
 // RegisterHTTPHandler path accepts gorilla/mux path annotations
 func (wn *WebsocketNetwork) RegisterHTTPHandler(path string, handler http.Handler) {
 	wn.router.Handle(path, handler)
+}
+
+func (wn *WebsocketNetwork) RegisterHTTPHandlerWithPrefix(prefix string, p string, handler http.Handler) {
+	wn.router.Handle(path.Join(prefix, p), handler)
 }
 
 // RequestConnectOutgoing tries to actually do the connect to new peers.
