@@ -806,20 +806,11 @@ func (cs *CatchpointCatchupService) initDownloadPeerSelector() {
 }
 
 func (cs *CatchpointCatchupService) makeCatchpointPeerSelector() *peerSelector {
-	if cs.config.EnableCatchupFromArchiveServers {
-		return makePeerSelector(
-			cs.net,
-			[]peerClass{
-				{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivers},
-				{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookRelays},
-			})
-	} else {
-		return makePeerSelector(
-			cs.net,
-			[]peerClass{
-				{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookRelays},
-			})
-	}
+	return makePeerSelector(
+		cs.net,
+		[]peerClass{
+			{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookRelays},
+		})
 }
 
 // checkLedgerDownload sends a HEAD request to the ledger endpoint of peers to validate the catchpoint's availability
