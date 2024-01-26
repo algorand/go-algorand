@@ -73,12 +73,15 @@ func (n *streamManager) streamHandler(stream network.Stream) {
 				n.log.Infof("Failed to check old stream with %s: %v", remotePeer, err)
 			}
 			n.streams[stream.Conn().RemotePeer()] = stream
-			if stream.Stat().Direction == network.DirUnknown {
-				n.log.Warnf("Unknown direction for connection %s", remotePeer)
-			}
+
+			// streamHandler is supposed to be called for accepted streams, so we expect incoming here
 			incoming := stream.Stat().Direction == network.DirInbound
-			if stream.Conn().Stat().Direction != stream.Stat().Direction {
-				n.log.Warnf("Mismatched direction in streamHandler for connection %s (%s): %s vs %s stream", stream.Conn().ID(), remotePeer, stream.Conn().Stat().Direction, stream.Stat().Direction.String())
+			if !incoming {
+				if stream.Stat().Direction == network.DirUnknown {
+					n.log.Warnf("Unknown direction for a steam %s to/from %s", stream.ID(), remotePeer)
+				} else {
+					n.log.Warnf("Unexpected outgoing sream in streamHandler for connection %s (%s): %s vs %s stream", stream.Conn().ID(), remotePeer, stream.Conn().Stat().Direction, stream.Stat().Direction.String())
+				}
 			}
 			n.handler(n.ctx, remotePeer, stream, incoming)
 			return
@@ -89,13 +92,15 @@ func (n *streamManager) streamHandler(stream network.Stream) {
 	}
 	// no old stream
 	n.streams[stream.Conn().RemotePeer()] = stream
-	if stream.Stat().Direction == network.DirUnknown {
-		n.log.Warnf("Unknown direction for connection %s", remotePeer)
-	}
-	if stream.Conn().Stat().Direction != stream.Stat().Direction {
-		n.log.Warnf("Mismatched direction in streamHandler for connection %s (%s): %s vs %s stream", stream.Conn().ID(), remotePeer, stream.Conn().Stat().Direction, stream.Stat().Direction.String())
-	}
+	// streamHandler is supposed to be called for accepted streams, so we expect incoming here
 	incoming := stream.Stat().Direction == network.DirInbound
+	if !incoming {
+		if stream.Stat().Direction == network.DirUnknown {
+			n.log.Warnf("streamHandler: unknown direction for a steam %s to/from %s", stream.ID(), remotePeer)
+		} else {
+			n.log.Warnf("Unexpected outgoing sream in streamHandler for connection %s (%s): %s vs %s stream", stream.Conn().ID(), remotePeer, stream.Conn().Stat().Direction, stream.Stat().Direction.String())
+		}
+	}
 	n.handler(n.ctx, remotePeer, stream, incoming)
 }
 
@@ -126,23 +131,22 @@ func (n *streamManager) Connected(net network.Network, conn network.Conn) {
 		n.log.Infof("Failed to open stream to %s: %v", remotePeer, err)
 		return
 	}
-	n.log.Debugf("create a stream %s at net %v", stream.ID(), net.ListenAddresses())
-
 	n.streams[remotePeer] = stream
-	if conn.Stat().Direction == network.DirUnknown {
-		n.log.Warnf("Unknown direction for connection %s", remotePeer)
-	}
 
 	// release the lock to let handler do its thing
 	// otherwise reading/writing to the stream will deadlock
 	needUnlock = false
 	n.streamsLock.Unlock()
 
-	if stream.Conn().Stat().Direction != stream.Stat().Direction {
-		n.log.Warnf("Mismatched direction in Connected for connection %s (%s): %s vs %s stream", stream.Conn().ID(), remotePeer, stream.Conn().Stat().Direction, stream.Stat().Direction.String())
-	}
-
+	// a new stream created above, expected direction is outbound
 	incoming := stream.Stat().Direction == network.DirInbound
+	if incoming {
+		n.log.Warnf("Unexpected incoming sream in streamHandler for connection %s (%s): %s vs %s stream", stream.Conn().ID(), remotePeer, stream.Conn().Stat().Direction, stream.Stat().Direction.String())
+	} else {
+		if stream.Stat().Direction == network.DirUnknown {
+			n.log.Warnf("Connected: unknown direction for a steam %s to/from %s", stream.ID(), remotePeer)
+		}
+	}
 	n.handler(n.ctx, remotePeer, stream, incoming)
 }
 
