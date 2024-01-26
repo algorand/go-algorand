@@ -26,10 +26,12 @@ import (
 	"github.com/algorand/go-algorand/tools/network"
 )
 
+// Resolver is an interface for resolving dnsaddrs
 type Resolver interface {
 	Resolve(ctx context.Context, maddr multiaddr.Multiaddr) ([]multiaddr.Multiaddr, error)
 }
 
+// ResolveController is an interface for cycling through resolvers
 type ResolveController interface {
 	Resolver() Resolver
 	NextResolver() Resolver
