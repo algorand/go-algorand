@@ -33,7 +33,7 @@ var generateIndiscreet bool
 func init() {
 	generateCmd.Flags().StringVarP(&generateKeyfile, "keyfile", "f", "", "Private key filename")
 	generateCmd.Flags().StringVarP(&generatePubkeyfile, "pubkeyfile", "p", "", "Public key filename")
-	generateCmd.Flags().BoolVarP(&generateIndiscreet, "indiscreet", "", false, "Print mnemonic directly on current terminal")
+	generateCmd.Flags().BoolVarP(&generateIndiscreet, "indiscreet", "", true, "Print mnemonic directly on current terminal")
 }
 
 var generateCmd = &cobra.Command{
