@@ -221,15 +221,9 @@ type HTTPFetcher struct {
 func (hf *HTTPFetcher) getBlockBytes(ctx context.Context, r basics.Round) (data []byte, err error) {
 	var blockURL string
 
-	if hf.rootURL[0] == '/' && hf.rootURL[1] != '/' {
-		_, err0 := network.ParseHostOrURLOrMultiaddr(hf.rootURL)
-		if err0 != nil {
-			return nil, err0
-		}
+	if network.IsMultiaddr(hf.rootURL) {
 		blockURL = rpcs.FormatBlockQuery(uint64(r), "", hf.net)
-
 	} else {
-
 		if parsedURL, err0 := network.ParseHostOrURL(hf.rootURL); err0 == nil {
 			parsedURL.Path = rpcs.FormatBlockQuery(uint64(r), parsedURL.Path, hf.net)
 			blockURL = parsedURL.String()

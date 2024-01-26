@@ -124,6 +124,7 @@ func TestParseHostURLOrMultiaddr(t *testing.T) {
 			v, err := ParseHostOrURLOrMultiaddr(addr)
 			require.NoError(t, err)
 			require.Equal(t, addr, v)
+			require.True(t, IsMultiaddr(addr))
 		})
 	}
 
@@ -131,6 +132,7 @@ func TestParseHostURLOrMultiaddr(t *testing.T) {
 		t.Run(addr, func(t *testing.T) {
 			_, err := ParseHostOrURLOrMultiaddr(addr)
 			require.Error(t, err)
+			require.False(t, IsMultiaddr(addr))
 		})
 	}
 

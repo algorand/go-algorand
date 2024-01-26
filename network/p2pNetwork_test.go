@@ -572,10 +572,11 @@ func TestMultiaddrConversionToFrom(t *testing.T) {
 }
 
 type p2phttpHandler struct {
+	retData string
 }
 
 func (h *p2phttpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte("hello"))
+	w.Write([]byte(h.retData))
 }
 
 func TestP2PHTTPHandler(t *testing.T) {
@@ -590,8 +591,11 @@ func TestP2PHTTPHandler(t *testing.T) {
 	netA, err := NewP2PNetwork(log, cfg, "", nil, genesisID, config.Devtestnet, &nopeNodeInfo{})
 	require.NoError(t, err)
 
-	h := &p2phttpHandler{}
+	h := &p2phttpHandler{"hello"}
 	netA.RegisterHTTPHandler("/test", h)
+
+	h2 := &p2phttpHandler{"world"}
+	netA.RegisterHTTPHandler("/bar", h2)
 
 	netA.Start()
 	defer netA.Stop()
@@ -610,4 +614,15 @@ func TestP2PHTTPHandler(t *testing.T) {
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	require.Equal(t, "hello", string(body))
+
+	httpClient, err = p2p.MakeHTTPClient(p2p.AlgorandP2pHTTPProtocol, netA.service.AddrInfo())
+	require.NoError(t, err)
+	resp, err = httpClient.Get("/bar")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	body, err = io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.Equal(t, "world", string(body))
+
 }

@@ -30,8 +30,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/algorand/go-deadlock"
-
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -474,7 +472,7 @@ const nodelayFirstNodeStartDelay = 0
 func startAndConnectNodes(nodes []*AlgorandFullNode, delayStartFirstNode time.Duration) {
 	var wg sync.WaitGroup
 	for i := range nodes {
-		if delayStartFirstNode > 0 && i == 0 {
+		if delayStartFirstNode != nodelayFirstNodeStartDelay && i == 0 {
 			continue
 		}
 		wg.Add(1)
@@ -485,7 +483,7 @@ func startAndConnectNodes(nodes []*AlgorandFullNode, delayStartFirstNode time.Du
 	}
 	wg.Wait()
 
-	if delayStartFirstNode > 0 {
+	if delayStartFirstNode != nodelayFirstNodeStartDelay {
 		connectPeers(nodes[1:])
 		delayStartNode(nodes[0], nodes[1:], delayStartFirstNode)
 	} else {
@@ -848,13 +846,6 @@ func TestMaxSizesCorrect(t *testing.T) {
 // Nodes N and A have only R in their initial phonebook, and all nodes are in hybrid mode.
 func TestNodeHybridTopology(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
-	deadlock.Opts.Disable = true
-
-	// peer selector prefers ConnectedOut peers but A can connect to N
-	// in this case it could takes longer to switch to the next peer class
-	// and use a discovered node with cap=Archival
-	// t.Skip("Flaky because of connectivity and peer selector ranking")
 
 	const consensusTest0 = protocol.ConsensusVersion("test0")
 

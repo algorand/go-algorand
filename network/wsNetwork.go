@@ -557,7 +557,6 @@ func (wn *WebsocketNetwork) GetPeers(options ...PeerOption) []Peer {
 				outPeers = append(outPeers, &peerCore)
 			}
 		case PeersPhonebookArchivalNodes:
-			// TODO: return known archival nodes only (from DNS)
 			var addrs []string
 			addrs = wn.phonebook.GetAddresses(1000, PhoneBookEntryRelayRole)
 			for _, addr := range addrs {

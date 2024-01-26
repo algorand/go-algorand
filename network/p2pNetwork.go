@@ -519,25 +519,9 @@ func (n *P2PNetwork) GetPeers(options ...PeerOption) []Peer {
 					}
 					n.log.Debugf("Archival node(s) from DHT: %v", addrs)
 				}
-			} else {
-				// default to all peers
-				n.wsPeersLock.RLock()
-				for _, peer := range n.wsPeers {
-					peers = append(peers, Peer(peer))
-				}
-				n.wsPeersLock.RUnlock()
 			}
 		case PeersPhonebookArchivers:
-			// TODO: query peerstore for PhoneBookEntryArchiverRole
-			// TODO: currently peerstore is not populated in a way to store roles
-
-			// // return copy of phonebook, which probably also contains peers we're connected to, but if it doesn't maybe we shouldn't be making new connections to those peers (because they disappeared from the directory)
-			// addrs := n.pstore.GetAddresses(1000, PhoneBookEntryArchiverRole)
-			// for _, addr := range addrs {
-			// 	peerCore := makePeerCore(n.ctx, n, n.log, n.handler.readBuffer, addr, n.GetRoundTripper(nil), "" /*origin address*/)
-			// 	peers = append(peers, &peerCore)
-			// }
-
+			// TODO: remove after merging with master
 			// temporary return all nodes
 			n.wsPeersLock.RLock()
 			for _, peer := range n.wsPeers {
