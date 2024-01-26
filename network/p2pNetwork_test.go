@@ -588,7 +588,7 @@ func TestP2PHTTPHandler(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		go func() {
 			defer wg.Done()
-			httpClient, err := p2p.MakeHTTPClient(p2p.AlgorandP2pHttpProtocol, netA.service.AddrInfo())
+			httpClient, err := p2p.MakeHTTPClient(p2p.AlgorandP2pHTTPProtocol, netA.service.AddrInfo())
 			require.NoError(t, err)
 			resp, err := httpClient.Get("/test")
 			require.NoError(t, err)

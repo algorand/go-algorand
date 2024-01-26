@@ -68,7 +68,7 @@ type nodeInfo struct {
 	host    string
 	wsPort  int
 	p2pPort int
-	p2pId   p2p.PeerID
+	p2pID   p2p.PeerID
 	rootDir string
 	genesis bookkeeping.Genesis
 }
@@ -82,7 +82,7 @@ func (ni nodeInfo) p2pNetAddr() string {
 }
 
 func (ni nodeInfo) p2pMultiAddr() string {
-	return fmt.Sprintf("/ip4/%s/tcp/%d/p2p/%s", ni.host, ni.p2pPort, ni.p2pId.String())
+	return fmt.Sprintf("/ip4/%s/tcp/%d/p2p/%s", ni.host, ni.p2pPort, ni.p2pID.String())
 }
 
 type configHook func(ni nodeInfo, cfg config.Local) (nodeInfo, config.Local)
@@ -904,7 +904,7 @@ func TestNodeHybridTopology(t *testing.T) {
 		require.NoError(t, err)
 		privKey, err := p2p.GetPrivKey(cfg, genesisDirs.RootGenesisDir)
 		require.NoError(t, err)
-		ni.p2pId, err = p2p.PeerIDFromPublicKey(privKey.GetPublic())
+		ni.p2pID, err = p2p.PeerIDFromPublicKey(privKey.GetPublic())
 		require.NoError(t, err)
 
 		cfg.P2PListenAddress = ni.p2pNetAddr()

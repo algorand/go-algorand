@@ -24,6 +24,7 @@ import (
 	libp2phttp "github.com/libp2p/go-libp2p/p2p/http"
 )
 
+// MakeHTTPClient creates a http.Client that uses libp2p transport for a goven protocol and peer address.
 func MakeHTTPClient(protocolID string, addrInfo peer.AddrInfo) (http.Client, error) {
 	clientStreamHost, err := libp2p.New(libp2p.NoListenAddrs)
 	if err != nil {

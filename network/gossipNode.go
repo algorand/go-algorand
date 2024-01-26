@@ -26,10 +26,10 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-// GossipNodeHttpPathPrefix is the prefix for all gossip node HTTP paths
+// GossipNodeHTTPPathPrefix is the prefix for all gossip node HTTP paths
 // It is added to allow to use the standard libp2p http support with prefixes
 // handled by the standard library http mux.
-const GossipNodeHttpPathPrefix = "/algorand"
+const GossipNodeHTTPPathPrefix = "/algorand"
 
 // Peer opaque interface for referring to a neighbor in the network
 type Peer interface{}

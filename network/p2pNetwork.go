@@ -435,11 +435,11 @@ func (n *P2PNetwork) DisconnectPeers() {
 func (n *P2PNetwork) RegisterHTTPHandler(path string, handler http.Handler) {
 }
 
-// // RegisterHTTPHandlerWithPrefix path accepts http.ServeMux prefix and gorilla/mux path annotations
+// RegisterHTTPHandlerWithPrefix path accepts http.ServeMux prefix and gorilla/mux path annotations
 func (n *P2PNetwork) RegisterHTTPHandlerWithPrefix(prefix string, path string, handler http.Handler) {
 	n.p2phttpMux.Handle(path, handler)
 	n.p2phttpMuxRegistarOnce.Do(func() {
-		n.httpServer.SetHTTPHandlerAtPath(p2p.AlgorandP2pHttpProtocol, prefix, n.p2phttpMux)
+		n.httpServer.SetHTTPHandlerAtPath(p2p.AlgorandP2pHTTPProtocol, prefix, n.p2phttpMux)
 	})
 }
 
@@ -492,7 +492,8 @@ func (n *P2PNetwork) GetPeers(options ...PeerOption) []Peer {
 				}
 				n.log.Debugf("Got %d archival node(s) from DHT", len(info))
 				for _, addrInfo := range info {
-					mas, err := peer.AddrInfoToP2pAddrs(&addrInfo)
+					info := addrInfo
+					mas, err := peer.AddrInfoToP2pAddrs(&info)
 					if err != nil {
 						n.log.Warnf("Archival AddrInfo conversion error: %v", err)
 						continue
@@ -502,7 +503,7 @@ func (n *P2PNetwork) GetPeers(options ...PeerOption) []Peer {
 						continue
 					}
 					addr := mas[0].String()
-					client, err := p2p.MakeHTTPClient(p2p.AlgorandP2pHttpProtocol, addrInfo)
+					client, err := p2p.MakeHTTPClient(p2p.AlgorandP2pHTTPProtocol, addrInfo)
 					if err != nil {
 						n.log.Warnf("MakeHTTPClient failed: %v", err)
 						continue

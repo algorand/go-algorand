@@ -515,6 +515,7 @@ func (wn *WebsocketNetwork) RegisterHTTPHandler(path string, handler http.Handle
 	wn.router.Handle(path, handler)
 }
 
+// RegisterHTTPHandlerWithPrefix registers prefix + / + path with the given handler
 func (wn *WebsocketNetwork) RegisterHTTPHandlerWithPrefix(prefix string, p string, handler http.Handler) {
 	wn.router.Handle(path.Join(prefix, p), handler)
 }
