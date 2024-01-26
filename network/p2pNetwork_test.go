@@ -605,7 +605,7 @@ func TestP2PHTTPHandler(t *testing.T) {
 	require.NoError(t, err)
 	require.NotZero(t, addrsA[0])
 
-	httpClient, err := p2p.MakeHTTPClient(p2p.AlgorandP2pHTTPProtocol, netA.service.AddrInfo())
+	httpClient, err := p2p.MakeHTTPClient(p2p.AlgorandP2pHTTPProtocol, &peerInfoA)
 	require.NoError(t, err)
 	resp, err := httpClient.Get("/test")
 	require.NoError(t, err)
@@ -615,7 +615,7 @@ func TestP2PHTTPHandler(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "hello", string(body))
 
-	httpClient, err = p2p.MakeHTTPClient(p2p.AlgorandP2pHTTPProtocol, netA.service.AddrInfo())
+	httpClient, err = p2p.MakeHTTPClient(p2p.AlgorandP2pHTTPProtocol, &peerInfoA)
 	require.NoError(t, err)
 	resp, err = httpClient.Get("/bar")
 	require.NoError(t, err)

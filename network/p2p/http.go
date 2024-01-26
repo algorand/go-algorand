@@ -25,10 +25,10 @@ import (
 )
 
 // MakeHTTPClient creates a http.Client that uses libp2p transport for a goven protocol and peer address.
-func MakeHTTPClient(protocolID string, addrInfo peer.AddrInfo) (http.Client, error) {
+func MakeHTTPClient(protocolID string, addrInfo *peer.AddrInfo) (*http.Client, error) {
 	clientStreamHost, err := libp2p.New(libp2p.NoListenAddrs)
 	if err != nil {
-		return http.Client{}, err
+		return nil, err
 	}
 
 	client := libp2phttp.Host{StreamHost: clientStreamHost}
@@ -37,10 +37,10 @@ func MakeHTTPClient(protocolID string, addrInfo peer.AddrInfo) (http.Client, err
 	// to make a NamespaceRoundTripper that limits to specific URL paths.
 	// First, we do not want make requests when listing peers (the main MakeHTTPClient invoker).
 	// Secondly, this makes unit testing easier - no need to register fake handlers.
-	rt, err := client.NewConstrainedRoundTripper(addrInfo)
+	rt, err := client.NewConstrainedRoundTripper(*addrInfo)
 	if err != nil {
-		return http.Client{}, err
+		return nil, err
 	}
 
-	return http.Client{Transport: rt}, nil
+	return &http.Client{Transport: rt}, nil
 }

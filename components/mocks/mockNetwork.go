@@ -18,6 +18,7 @@ package mocks
 
 import (
 	"context"
+	"errors"
 	"net"
 	"net/http"
 
@@ -76,11 +77,6 @@ func (network *MockNetwork) GetPeers(options ...network.PeerOption) []network.Pe
 	return nil
 }
 
-// GetRoundTripper -- returns the network round tripper
-func (network *MockNetwork) GetRoundTripper(peer network.Peer) http.RoundTripper {
-	return http.DefaultTransport
-}
-
 // Ready - always ready
 func (network *MockNetwork) Ready() chan struct{} {
 	c := make(chan struct{})
@@ -114,4 +110,9 @@ func (network *MockNetwork) GetGenesisID() string {
 		return "mocknet"
 	}
 	return network.GenesisID
+}
+
+// GetHTTPClient returns a http.Client with a suitable for the network
+func (network *MockNetwork) GetHTTPClient(p network.HTTPPeer) (*http.Client, error) {
+	return nil, errors.New("not implemented")
 }

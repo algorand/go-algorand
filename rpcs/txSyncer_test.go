@@ -170,6 +170,10 @@ func (mca *mockClientAggregator) GetPeers(options ...network.PeerOption) []netwo
 	return mca.peers
 }
 
+func (mca *mockClientAggregator) GetHTTPClient(peer network.HTTPPeer) (*http.Client, error) {
+	return &http.Client{Transport: http.DefaultTransport}, nil
+}
+
 const numberOfPeers = 10
 
 func makeMockClientAggregator(t *testing.T, failWithNil bool, failWithError bool) *mockClientAggregator {

@@ -83,8 +83,9 @@ type GossipNode interface {
 	// ClearHandlers deregisters all the existing message handlers.
 	ClearHandlers()
 
-	// GetRoundTripper returns a Transport that would limit the number of outgoing connections.
-	GetRoundTripper(peer Peer) http.RoundTripper
+	// GetHTTPClient returns a http.Client with a suitable for the network Transport
+	// that would also limit the number of outgoing connections.
+	GetHTTPClient(peer HTTPPeer) (*http.Client, error)
 
 	// OnNetworkAdvance notifies the network library that the agreement protocol was able to make a notable progress.
 	// this is the only indication that we have that we haven't formed a clique, where all incoming messages

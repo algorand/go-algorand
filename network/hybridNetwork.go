@@ -180,14 +180,14 @@ func (n *HybridP2PNetwork) ClearHandlers() {
 	n.wsNetwork.ClearHandlers()
 }
 
-// GetRoundTripper returns a Transport that would limit the number of outgoing connections.
-func (n *HybridP2PNetwork) GetRoundTripper(peer Peer) http.RoundTripper {
-	// TODO today this is used by HTTPTxSync.Sync after calling GetPeers(network.PeersPhonebookRelays)
-	switch p := peer.(type) {
+// GetHTTPClient returns a http.Client with a suitable for the network Transport
+// that would also limit the number of outgoing connections.
+func (n *HybridP2PNetwork) GetHTTPClient(peer HTTPPeer) (*http.Client, error) {
+	switch peer.(type) {
 	case *wsPeer:
-		return p.net.GetRoundTripper(peer)
-	case gossipSubPeer:
-		return p.net.GetRoundTripper(peer)
+		return n.wsNetwork.GetHTTPClient(peer)
+	case *wsPeerCore:
+		return n.p2pNetwork.GetHTTPClient(peer)
 	default:
 		panic("unrecognized peer type")
 	}

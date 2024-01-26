@@ -106,20 +106,19 @@ func (hts *HTTPTxSync) Sync(ctx context.Context, bloom *bloom.Filter) (txgroups 
 	var syncURL string
 	hts.rootURL = hpeer.GetAddress()
 	client := hpeer.GetHTTPClient()
-	if network.IsMultiaddr(hts.rootURL) {
-		if client == nil {
-			client = hts.peers.GetHTTPClient(peer)
+	if client == nil {
+		client, err = hts.peers.GetHTTPClient(hpeer)
+		if err != nil {
+			return nil, fmt.Errorf("HTTPTxSync cannot create a HTTP client for a peer %T %#v: %s", peer, peer, err.Error())
 		}
+	}
+	if network.IsMultiaddr(hts.rootURL) {
 		syncURL = network.SubstituteGenesisID(hts.peers, path.Join("", TxServiceHTTPPath))
 	} else {
-		if client == nil {
-			client = &http.Client{}
-			client.Transport = hts.peers.GetRoundTripper(peer)
-		}
-		parsedURL, err := network.ParseHostOrURL(hts.rootURL)
-		if err != nil {
-			hts.log.Warnf("txSync bad url %v: %s", hts.rootURL, err)
-			return nil, err
+		parsedURL, err0 := network.ParseHostOrURL(hts.rootURL)
+		if err0 != nil {
+			hts.log.Warnf("txSync bad url %v: %s", hts.rootURL, err0)
+			return nil, err0
 		}
 		parsedURL.Path = network.SubstituteGenesisID(hts.peers, path.Join(parsedURL.Path, TxServiceHTTPPath))
 		syncURL = parsedURL.String()
