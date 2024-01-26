@@ -226,7 +226,7 @@ func (hf *HTTPFetcher) getBlockBytes(ctx context.Context, r basics.Round) (data 
 		if err0 != nil {
 			return nil, err0
 		}
-		blockURL = rpcs.FormatBlockQuery(uint64(r), network.GossipNodeHTTPPathPrefix, hf.net)
+		blockURL = rpcs.FormatBlockQuery(uint64(r), "", hf.net)
 
 	} else {
 

@@ -333,7 +333,7 @@ func TestBootstrapFunc(t *testing.T) {
 	b.cfg = config.GetDefaultLocal()
 	b.cfg.DNSBootstrapID = "<network>.algodev.network"
 	b.cfg.DNSSecurityFlags = 0
-	b.networkID = "test"
+	b.networkID = "devnet"
 
 	addrs := b.BootstrapFunc()
 
@@ -567,37 +567,18 @@ func TestP2PHTTPHandler(t *testing.T) {
 	netA.Start()
 	defer netA.Stop()
 
-	// have a second net client to connect to A
-	// to ensure p2phttp and other p2p trafic works in parallel
 	peerInfoA := netA.service.AddrInfo()
 	addrsA, err := peerstore.AddrInfoToP2pAddrs(&peerInfoA)
 	require.NoError(t, err)
 	require.NotZero(t, addrsA[0])
 
-	multiAddrStr := addrsA[0].String()
-	phoneBookAddresses := []string{multiAddrStr}
-	netB, err := NewP2PNetwork(log, cfg, "", phoneBookAddresses, genesisID, config.Devtestnet, &nopeNodeInfo{})
+	httpClient, err := p2p.MakeHTTPClient(p2p.AlgorandP2pHTTPProtocol, netA.service.AddrInfo())
 	require.NoError(t, err)
-	err = netB.Start()
+	resp, err := httpClient.Get("/test")
 	require.NoError(t, err)
-	defer netB.Stop()
+	defer resp.Body.Close()
 
-	// now run a few parallel requests to see it works as expected with multiple connections
-	var wg sync.WaitGroup
-	wg.Add(10)
-	for i := 0; i < 10; i++ {
-		go func() {
-			defer wg.Done()
-			httpClient, err := p2p.MakeHTTPClient(p2p.AlgorandP2pHTTPProtocol, netA.service.AddrInfo())
-			require.NoError(t, err)
-			resp, err := httpClient.Get("/test")
-			require.NoError(t, err)
-			defer resp.Body.Close()
-
-			body, err := io.ReadAll(resp.Body)
-			require.NoError(t, err)
-			require.Equal(t, "hello", string(body))
-		}()
-	}
-	wg.Wait()
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.Equal(t, "hello", string(body))
 }

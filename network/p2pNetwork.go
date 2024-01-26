@@ -433,13 +433,9 @@ func (n *P2PNetwork) DisconnectPeers() {
 
 // RegisterHTTPHandler path accepts gorilla/mux path annotations
 func (n *P2PNetwork) RegisterHTTPHandler(path string, handler http.Handler) {
-}
-
-// RegisterHTTPHandlerWithPrefix path accepts http.ServeMux prefix and gorilla/mux path annotations
-func (n *P2PNetwork) RegisterHTTPHandlerWithPrefix(prefix string, path string, handler http.Handler) {
 	n.p2phttpMux.Handle(path, handler)
 	n.p2phttpMuxRegistarOnce.Do(func() {
-		n.httpServer.SetHTTPHandlerAtPath(p2p.AlgorandP2pHTTPProtocol, prefix, n.p2phttpMux)
+		n.httpServer.SetHTTPHandlerAtPath(p2p.AlgorandP2pHTTPProtocol, "/", n.p2phttpMux)
 	})
 }
 
