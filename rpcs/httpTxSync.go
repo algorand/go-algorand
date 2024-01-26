@@ -103,19 +103,27 @@ func (hts *HTTPTxSync) Sync(ctx context.Context, bloom *bloom.Filter) (txgroups 
 	if !ok {
 		return nil, fmt.Errorf("cannot HTTPTxSync non http peer %T %#v", peer, peer)
 	}
+	var syncURL string
 	hts.rootURL = hpeer.GetAddress()
 	client := hpeer.GetHTTPClient()
-	if client == nil {
-		client = &http.Client{}
-		client.Transport = hts.peers.GetRoundTripper(peer)
+	if network.IsMultiaddr(hts.rootURL) {
+		if client == nil {
+			client = hts.peers.GetHTTPClient(peer)
+		}
+		syncURL = network.SubstituteGenesisID(hts.peers, path.Join("", TxServiceHTTPPath))
+	} else {
+		if client == nil {
+			client = &http.Client{}
+			client.Transport = hts.peers.GetRoundTripper(peer)
+		}
+		parsedURL, err := network.ParseHostOrURL(hts.rootURL)
+		if err != nil {
+			hts.log.Warnf("txSync bad url %v: %s", hts.rootURL, err)
+			return nil, err
+		}
+		parsedURL.Path = network.SubstituteGenesisID(hts.peers, path.Join(parsedURL.Path, TxServiceHTTPPath))
+		syncURL = parsedURL.String()
 	}
-	parsedURL, err := network.ParseHostOrURL(hts.rootURL)
-	if err != nil {
-		hts.log.Warnf("txSync bad url %v: %s", hts.rootURL, err)
-		return nil, err
-	}
-	parsedURL.Path = network.SubstituteGenesisID(hts.peers, path.Join(parsedURL.Path, TxServiceHTTPPath))
-	syncURL := parsedURL.String()
 	hts.log.Infof("http sync from %s", syncURL)
 	params := url.Values{}
 	params.Set("bf", bloomParam)
