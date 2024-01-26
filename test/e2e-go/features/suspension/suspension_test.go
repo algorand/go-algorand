@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -44,8 +45,9 @@ func TestBasicSuspension(t *testing.T) {
 
 	// Overview of this test:
 	// Start a three-node network (84,15,1)
-	// Stop the 15% node
-	// Let it run for less than 10*100/15
+	// Wait for 15% node to propose (we never suspend accounts with lastProposed=lastHeartbeat=0)
+	// Stop it
+	// Let it run for less than 10*100/15 = 66.6
 	// check not suspended, send a tx, still not suspended
 	// Let it run two more, during which the node can't propose, so it is ready for suspension
 	// check not suspended, send a tx, NOW suspended
@@ -65,23 +67,37 @@ func TestBasicSuspension(t *testing.T) {
 	a.Equal(accounts[0].Status, basics.Online.String())
 	address := accounts[0].Address
 
+	// wait for n15 to have LastProposed != 0
+	account, err := fixture.LibGoalClient.AccountData(address)
+	for account.LastProposed == 0 {
+		a.NoError(err)
+		a.Equal(basics.Online, account.Status)
+		account, err = fixture.LibGoalClient.AccountData(address)
+		time.Sleep(roundTime)
+	}
+	a.NoError(err)
+
 	// turn off Node15
 	n15, err := fixture.GetNodeController("Node15")
 	a.NoError(err)
 	a.NoError(n15.FullStop())
 
-	// Proceed 60 rounds
-	err = fixture.WaitForRound(60, 60*roundTime)
+	afterStop, err := fixture.AlgodClient.Status()
+	a.NoError(err)
+
+	// Advance 60 rounds
+	err = fixture.WaitForRound(afterStop.LastRound+60, 60*roundTime)
 	a.NoError(err)
 
 	// n15account is still online (the node is off, but the account is marked online)
-	account, err := fixture.LibGoalClient.AccountData(address)
+	account, err = fixture.LibGoalClient.AccountData(address)
 	a.NoError(err)
 	a.Equal(basics.Online, account.Status)
 	voteID := account.VoteID
+	a.NotZero(voteID)
 
-	// Proceed to round 70
-	err = fixture.WaitForRound(70, 10*roundTime)
+	// Advance 10 more, n15 has been "absent" for 70 rounds now
+	err = fixture.WaitForRound(afterStop.LastRound+70, 15*roundTime)
 	a.NoError(err)
 
 	// n15's account is still online, but only because it has gone "unnoticed"
@@ -90,6 +106,8 @@ func TestBasicSuspension(t *testing.T) {
 	a.Equal(basics.Online, account.Status)
 
 	fixture.SendMoneyAndWait(70, 1000, 1000, richAccount.Address, address, "")
+	// pay n15, so it gets noticed
+	fixture.SendMoneyAndWait(afterStop.LastRound+70, 5, 1000, richAccount.Address, address, "")
 
 	// n15's account is now offline, but has voting key material (suspended)
 	account, err = fixture.LibGoalClient.AccountData(address)
@@ -116,9 +134,40 @@ func TestBasicSuspension(t *testing.T) {
 	account, err = fixture.LibGoalClient.AccountData(address)
 	a.NoError(err)
 	a.Equal(basics.Online, account.Status)
-	a.NotZero(account.VoteID)
 	a.Equal(voteID, account.VoteID)
 	// coming back online by proposal does not make you incentive eligible (you
 	// didn't "pay the fine")
 	a.False(account.IncentiveEligible)
+
+	// but n15 wants incentives, so it keyregs again, paying the extra fee.
+	// We're going to re-reg the exact same key material, so that the running
+	// node can keep voting.
+
+	// we make an _offline_ tx here, because we want to populate the key
+	// material ourself, but copying the accounts existing state. That makes it
+	// an _online_ keyreg.
+	reReg, err := n15c.MakeUnsignedGoOfflineTx(address, 0, 0, 5_000_000, [32]byte{})
+	require.NoError(t, err, "should be able to make tx")
+
+	reReg.KeyregTxnFields = transactions.KeyregTxnFields{
+		VotePK:          account.VoteID,
+		SelectionPK:     account.SelectionID,
+		StateProofPK:    account.StateProofID,
+		VoteFirst:       account.VoteFirstValid,
+		VoteLast:        account.VoteLastValid,
+		VoteKeyDilution: account.VoteKeyDilution,
+	}
+
+	wh, err := n15c.GetUnencryptedWalletHandle()
+	require.NoError(t, err, "should be able to get unencrypted wallet handle")
+	onlineTxID, err := n15c.SignAndBroadcastTransaction(wh, nil, reReg)
+	require.NoError(t, err, "should be no errors when going online")
+
+	fixture.WaitForConfirmedTxn(uint64(reReg.LastValid), address, onlineTxID)
+	account, err = fixture.LibGoalClient.AccountData(address)
+
+	a.NoError(err)
+	a.Equal(basics.Online, account.Status)
+	a.True(account.IncentiveEligible) // eligible!
+
 }
