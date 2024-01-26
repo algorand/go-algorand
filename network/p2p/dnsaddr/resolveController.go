@@ -17,15 +17,27 @@
 package dnsaddr
 
 import (
+	"context"
+
+	"github.com/multiformats/go-multiaddr"
 	madns "github.com/multiformats/go-multiaddr-dns"
 
 	log "github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/tools/network"
 )
 
+type Resolver interface {
+	Resolve(ctx context.Context, maddr multiaddr.Multiaddr) ([]multiaddr.Multiaddr, error)
+}
+
+type ResolveController interface {
+	Resolver() Resolver
+	NextResolver() Resolver
+}
+
 // MultiaddrDNSResolveController returns a madns.Resolver, cycling through underlying net.Resolvers
 type MultiaddrDNSResolveController struct {
-	resolver      *madns.Resolver
+	resolver      Resolver
 	nextResolvers []func() *madns.Resolver
 	controller    network.ResolveController
 }
@@ -45,7 +57,7 @@ func NewMultiaddrDNSResolveController(secure bool, fallbackDNSResolverAddress st
 }
 
 // NextResolver applies the nextResolvers functions in order and returns the most recent result
-func (c *MultiaddrDNSResolveController) NextResolver() *madns.Resolver {
+func (c *MultiaddrDNSResolveController) NextResolver() Resolver {
 	if len(c.nextResolvers) == 0 {
 		c.resolver = nil
 	} else {
@@ -56,7 +68,7 @@ func (c *MultiaddrDNSResolveController) NextResolver() *madns.Resolver {
 }
 
 // Resolver returns the current resolver, invokes NextResolver if the resolver is nil
-func (c *MultiaddrDNSResolveController) Resolver() *madns.Resolver {
+func (c *MultiaddrDNSResolveController) Resolver() Resolver {
 	if c.resolver == nil {
 		c.resolver = c.NextResolver()
 	}

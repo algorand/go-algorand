@@ -29,6 +29,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network/p2p"
+	"github.com/algorand/go-algorand/network/p2p/dnsaddr"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 
@@ -316,6 +317,31 @@ func TestP2PNetworkAddress(t *testing.T) {
 	require.Empty(t, retAddr)
 }
 
+type nilResolveController struct{}
+
+func (c *nilResolveController) Resolver() dnsaddr.Resolver {
+	return nil
+}
+
+func (c *nilResolveController) NextResolver() dnsaddr.Resolver {
+	return nil
+}
+
+type mockResolveController struct {
+	nilResolveController
+}
+
+func (c *mockResolveController) Resolver() dnsaddr.Resolver {
+	return &mockResolver{}
+}
+
+type mockResolver struct{}
+
+func (r *mockResolver) Resolve(ctx context.Context, maddr multiaddr.Multiaddr) ([]multiaddr.Multiaddr, error) {
+	ma, err := multiaddr.NewMultiaddr("/ip4/127.0.0.1/p2p/QmcgpsyWgH8Y8ajJz1Cu72KnS5uo2Aa2LpzU7kinSupNKC")
+	return []multiaddr.Multiaddr{ma}, err
+}
+
 func TestBootstrapFunc(t *testing.T) {
 	t.Parallel()
 	partitiontest.PartitionTest(t)
@@ -334,6 +360,7 @@ func TestBootstrapFunc(t *testing.T) {
 	b.cfg.DNSBootstrapID = "<network>.algodev.network"
 	b.cfg.DNSSecurityFlags = 0
 	b.networkID = "devnet"
+	b.resolveControler = &mockResolveController{}
 
 	addrs := b.BootstrapFunc()
 
@@ -351,7 +378,8 @@ func TestGetBootstrapPeersFailure(t *testing.T) {
 	cfg.DNSSecurityFlags = 0
 	cfg.DNSBootstrapID = "non-existent.algodev.network"
 
-	addrs := getBootstrapPeers(cfg, "test")
+	controller := nilResolveController{}
+	addrs := getBootstrapPeers(cfg, "test", &controller)
 
 	require.Equal(t, 0, len(addrs))
 }
@@ -364,7 +392,8 @@ func TestGetBootstrapPeersInvalidAddr(t *testing.T) {
 	cfg.DNSSecurityFlags = 0
 	cfg.DNSBootstrapID = "<network>.algodev.network"
 
-	addrs := getBootstrapPeers(cfg, "testInvalidAddr")
+	controller := nilResolveController{}
+	addrs := getBootstrapPeers(cfg, "testInvalidAddr", &controller)
 
 	require.Equal(t, 0, len(addrs))
 }

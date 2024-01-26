@@ -30,7 +30,7 @@ func isDnsaddr(maddr multiaddr.Multiaddr) bool {
 }
 
 // Iterate runs through the resolvable dnsaddrs in the tree using the resolveController and invokes f for each dnsaddr node lookup
-func Iterate(initial multiaddr.Multiaddr, controller *MultiaddrDNSResolveController, f func(dnsaddr multiaddr.Multiaddr, entries []multiaddr.Multiaddr) error) error {
+func Iterate(initial multiaddr.Multiaddr, controller ResolveController, f func(dnsaddr multiaddr.Multiaddr, entries []multiaddr.Multiaddr) error) error {
 	resolver := controller.Resolver()
 	if resolver == nil {
 		return errors.New("passed controller has no resolvers Iterate")
@@ -64,7 +64,7 @@ func Iterate(initial multiaddr.Multiaddr, controller *MultiaddrDNSResolveControl
 // Any further dnsaddrs will be looked up until all TXT records have been fetched,
 // and the full list of resulting Multiaddrs is returned.
 // It uses the MultiaddrDNSResolveController to cycle through DNS resolvers on failure.
-func MultiaddrsFromResolver(domain string, controller *MultiaddrDNSResolveController) ([]multiaddr.Multiaddr, error) {
+func MultiaddrsFromResolver(domain string, controller ResolveController) ([]multiaddr.Multiaddr, error) {
 	dnsaddr, err := multiaddr.NewMultiaddr(fmt.Sprintf("/dnsaddr/%s", domain))
 	if err != nil {
 		return nil, fmt.Errorf("unable to construct multiaddr for %s : %v", domain, err)

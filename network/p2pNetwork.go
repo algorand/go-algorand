@@ -79,10 +79,11 @@ type P2PNetwork struct {
 }
 
 type bootstrapper struct {
-	cfg            config.Local
-	networkID      protocol.NetworkID
-	phonebookPeers []*peer.AddrInfo
-	started        bool
+	cfg              config.Local
+	networkID        protocol.NetworkID
+	phonebookPeers   []*peer.AddrInfo
+	resolveControler dnsaddr.ResolveController
+	started          bool
 }
 
 func (b *bootstrapper) start() {
@@ -110,16 +111,15 @@ func (b *bootstrapper) BootstrapFunc() []peer.AddrInfo {
 		return addrs
 	}
 
-	return getBootstrapPeers(b.cfg, b.networkID)
+	return getBootstrapPeers(b.cfg, b.networkID, b.resolveControler)
 }
 
 // getBootstrapPeers looks up a list of Multiaddrs strings from the dnsaddr records at the primary
 // SRV record domain.
-func getBootstrapPeers(cfg config.Local, network protocol.NetworkID) []peer.AddrInfo {
+func getBootstrapPeers(cfg config.Local, network protocol.NetworkID, controller dnsaddr.ResolveController) []peer.AddrInfo {
 	var addrs []peer.AddrInfo
 	bootstraps := cfg.DNSBootstrapArray(network)
 	for _, dnsBootstrap := range bootstraps {
-		controller := dnsaddr.NewMultiaddrDNSResolveController(cfg.DNSSecuritySRVEnforced(), "")
 		resolvedAddrs, err := dnsaddr.MultiaddrsFromResolver(dnsBootstrap.PrimarySRVBootstrap, controller)
 		if err != nil {
 			continue
@@ -200,9 +200,10 @@ func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebo
 	}
 
 	bootstrapper := &bootstrapper{
-		cfg:            cfg,
-		networkID:      networkID,
-		phonebookPeers: addrInfo,
+		cfg:              cfg,
+		networkID:        networkID,
+		phonebookPeers:   addrInfo,
+		resolveControler: dnsaddr.NewMultiaddrDNSResolveController(cfg.DNSSecuritySRVEnforced(), ""),
 	}
 
 	if cfg.EnableDHTProviders {
