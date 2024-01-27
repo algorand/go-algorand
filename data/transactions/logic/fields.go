@@ -969,7 +969,7 @@ const (
 	BlkProposer
 	// BlkFeesCollected is the sum of fees for the block, or 0, pre EnableMining
 	BlkFeesCollected
-	// BlkBonus is the extra amount to be paid for the given block (from FreeSink)
+	// BlkBonus is the extra amount to be paid for the given block (from FeeSink)
 	BlkBonus
 
 	invalidBlockField // compile-time constant for number of fields

@@ -524,7 +524,7 @@ func nextBonus(prev BlockHeader, params *config.ConsensusParams) basics.MicroAlg
 	bonus := prev.Bonus
 	switch {
 	case bonus.IsZero() && current > plan.baseRound:
-		prevParams, _ := config.Consensus[prev.CurrentProtocol] // presence ensured by ProcessUpgradeParams
+		prevParams := config.Consensus[prev.CurrentProtocol] // presence ensured by ProcessUpgradeParams
 		if prevParams.BonusPlan == 0 {
 			// We must have have just upgraded, with a passed baseRound, so install the bonus
 			bonus = plan.baseAmount
