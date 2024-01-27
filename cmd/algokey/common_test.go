@@ -21,9 +21,12 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func Test_printDiscreetly(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
 	buf := new(bytes.Buffer)
 	var (
