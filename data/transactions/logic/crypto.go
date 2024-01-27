@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -28,6 +28,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/secp256k1"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-sumhash"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -67,6 +68,34 @@ func opSHA512_256(cx *EvalContext) error {
 	last := len(cx.Stack) - 1
 	hash := sha512.Sum512_256(cx.Stack[last].Bytes)
 	cx.Stack[last].Bytes = hash[:]
+	return nil
+}
+
+// Sumhash512 corresponds to the hash used in State Proofs
+func opSumhash512(cx *EvalContext) error {
+	last := len(cx.Stack) - 1
+	h := sumhash.New512(nil)
+	h.Write(cx.Stack[last].Bytes)
+	cx.Stack[last].Bytes = h.Sum(nil)
+	return nil
+}
+
+func opFalconVerify(cx *EvalContext) error {
+	last := len(cx.Stack) - 1 // index of PK
+	prev := last - 1          // index of signature
+	pprev := prev - 1         // index of data
+
+	var fv crypto.FalconVerifier
+	if len(cx.Stack[last].Bytes) != len(fv.PublicKey) {
+		return fmt.Errorf("invalid public key size %d != %d", len(cx.Stack[last].Bytes), len(fv.PublicKey))
+	}
+	copy(fv.PublicKey[:], cx.Stack[last].Bytes)
+
+	sig := crypto.FalconSignature(cx.Stack[prev].Bytes)
+
+	err := fv.VerifyBytes(cx.Stack[pprev].Bytes, sig)
+	cx.Stack[pprev] = boolToSV(err == nil)
+	cx.Stack = cx.Stack[:prev]
 	return nil
 }
 

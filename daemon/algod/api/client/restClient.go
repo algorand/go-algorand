@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -72,6 +72,7 @@ type HTTPError struct {
 	StatusCode  int
 	Status      string
 	ErrorString string
+	Data        map[string]any
 }
 
 // Error formats an error string.
@@ -120,24 +121,11 @@ func extractError(resp *http.Response) error {
 	decodeErr := json.Unmarshal(errorBuf, &errorJSON)
 
 	var errorString string
+	var data map[string]any
 	if decodeErr == nil {
-		if errorJSON.Data == nil {
-			// There's no additional data, so let's just use the message
-			errorString = errorJSON.Message
-		} else {
-			// There's additional data, so let's re-encode the JSON response to show everything.
-			// We do this because the original response is likely encoded with escapeHTML=true, but
-			// since this isn't a webpage that extra encoding is not preferred.
-			var buffer strings.Builder
-			enc := json.NewEncoder(&buffer)
-			enc.SetEscapeHTML(false)
-			encErr := enc.Encode(errorJSON)
-			if encErr != nil {
-				// This really shouldn't happen, but if it does let's default to errorBuff
-				errorString = string(errorBuf)
-			} else {
-				errorString = buffer.String()
-			}
+		errorString = errorJSON.Message
+		if errorJSON.Data != nil {
+			data = *errorJSON.Data
 		}
 	} else {
 		errorString = string(errorBuf)
@@ -149,7 +137,7 @@ func extractError(resp *http.Response) error {
 		return unauthorizedRequestError{errorString, apiToken, resp.Request.URL.String()}
 	}
 
-	return HTTPError{StatusCode: resp.StatusCode, Status: resp.Status, ErrorString: errorString}
+	return HTTPError{StatusCode: resp.StatusCode, Status: resp.Status, ErrorString: errorString, Data: data}
 }
 
 // stripTransaction gets a transaction of the form "tx-XXXXXXXX" and truncates the "tx-" part, if it starts with "tx-"

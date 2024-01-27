@@ -133,7 +133,7 @@ Overflow is an error condition which halts execution and fails the transaction. 
 ## itob
 
 - Bytecode: 0x16
-- Stack: ..., A: uint64 &rarr; ..., []byte
+- Stack: ..., A: uint64 &rarr; ..., [8]byte
 - converts uint64 A to big-endian byte array, always of length 8
 
 ## btoi
@@ -682,7 +682,7 @@ params: Txn.Accounts offset (or, since v4, an _available_ account address), _ava
 ## app_local_get
 
 - Bytecode: 0x62
-- Stack: ..., A, B: []byte &rarr; ..., any
+- Stack: ..., A, B: stateKey &rarr; ..., any
 - local state of the key B in the current application in account A
 - Availability: v2
 - Mode: Application
@@ -692,7 +692,7 @@ params: Txn.Accounts offset (or, since v4, an _available_ account address), stat
 ## app_local_get_ex
 
 - Bytecode: 0x63
-- Stack: ..., A, B: uint64, C: []byte &rarr; ..., X: any, Y: bool
+- Stack: ..., A, B: uint64, C: stateKey &rarr; ..., X: any, Y: bool
 - X is the local state of application B, key C in account A. Y is 1 if key existed, else 0
 - Availability: v2
 - Mode: Application
@@ -702,7 +702,7 @@ params: Txn.Accounts offset (or, since v4, an _available_ account address), _ava
 ## app_global_get
 
 - Bytecode: 0x64
-- Stack: ..., A: []byte &rarr; ..., any
+- Stack: ..., A: stateKey &rarr; ..., any
 - global state of the key A in the current application
 - Availability: v2
 - Mode: Application
@@ -712,7 +712,7 @@ params: state key. Return: value. The value is zero (of type uint64) if the key 
 ## app_global_get_ex
 
 - Bytecode: 0x65
-- Stack: ..., A: uint64, B: []byte &rarr; ..., X: any, Y: bool
+- Stack: ..., A: uint64, B: stateKey &rarr; ..., X: any, Y: bool
 - X is the global state of application A, key B. Y is 1 if key existed, else 0
 - Availability: v2
 - Mode: Application
@@ -722,7 +722,7 @@ params: Txn.ForeignApps offset (or, since v4, an _available_ application id), st
 ## app_local_put
 
 - Bytecode: 0x66
-- Stack: ..., A, B: []byte, C &rarr; ...
+- Stack: ..., A, B: stateKey, C &rarr; ...
 - write C to key B in account A's local state of the current application
 - Availability: v2
 - Mode: Application
@@ -732,7 +732,7 @@ params: Txn.Accounts offset (or, since v4, an _available_ account address), stat
 ## app_global_put
 
 - Bytecode: 0x67
-- Stack: ..., A: []byte, B &rarr; ...
+- Stack: ..., A: stateKey, B &rarr; ...
 - write B to key A in the global state of the current application
 - Availability: v2
 - Mode: Application
@@ -740,7 +740,7 @@ params: Txn.Accounts offset (or, since v4, an _available_ account address), stat
 ## app_local_del
 
 - Bytecode: 0x68
-- Stack: ..., A, B: []byte &rarr; ...
+- Stack: ..., A, B: stateKey &rarr; ...
 - delete key B from account A's local state of the current application
 - Availability: v2
 - Mode: Application
@@ -752,7 +752,7 @@ Deleting a key which is already absent has no effect on the application local st
 ## app_global_del
 
 - Bytecode: 0x69
-- Stack: ..., A: []byte &rarr; ...
+- Stack: ..., A: stateKey &rarr; ...
 - delete key A from the global state of the current application
 - Availability: v2
 - Mode: Application
@@ -984,7 +984,7 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 ## b%
 
 - Bytecode: 0xaa
-- Stack: ..., A: []byte, B: []byte &rarr; ..., []byte
+- Stack: ..., A: bigint, B: bigint &rarr; ..., bigint
 - A modulo B. A and B are interpreted as big-endian unsigned integers. Fail if B is zero.
 - **Cost**: 20
 - Availability: v4

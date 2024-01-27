@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -112,13 +112,15 @@ func TestTxTailCheckdup(t *testing.T) {
 type txTailTestLedger struct {
 	Ledger
 	protoVersion protocol.ConsensusVersion
+	blocks       map[basics.Round]bookkeeping.Block
 }
 
 const testTxTailValidityRange = 200
 const testTxTailTxnPerRound = 150
+const testTxTailExtraRounds = 10
 
 func (t *txTailTestLedger) Latest() basics.Round {
-	return basics.Round(config.Consensus[t.protoVersion].MaxTxnLife + 10)
+	return basics.Round(config.Consensus[t.protoVersion].MaxTxnLife + testTxTailExtraRounds)
 }
 
 func (t *txTailTestLedger) BlockHdr(r basics.Round) (bookkeeping.BlockHeader, error) {
@@ -130,6 +132,10 @@ func (t *txTailTestLedger) BlockHdr(r basics.Round) (bookkeeping.BlockHeader, er
 }
 
 func (t *txTailTestLedger) Block(r basics.Round) (bookkeeping.Block, error) {
+	if bkl, found := t.blocks[r]; found {
+		return bkl, nil
+	}
+
 	blk := bookkeeping.Block{
 		BlockHeader: bookkeeping.BlockHeader{
 			UpgradeState: bookkeeping.UpgradeState{
@@ -142,6 +148,10 @@ func (t *txTailTestLedger) Block(r basics.Round) (bookkeeping.Block, error) {
 	for i := range blk.Payset {
 		blk.Payset[i] = makeTxTailTestTransaction(r, i)
 	}
+	if t.blocks == nil {
+		t.blocks = make(map[basics.Round]bookkeeping.Block)
+	}
+	t.blocks[r] = blk
 
 	return blk, nil
 }
@@ -328,6 +338,74 @@ func TestTxTailDeltaTracking(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestTxTailCheckConfirmed(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	var ledger txTailTestLedger
+	txtail := txTail{}
+	protoVersion := protocol.ConsensusCurrentVersion
+	proto := config.Consensus[protoVersion]
+	require.NoError(t, ledger.initialize(t, protoVersion))
+	require.NoError(t, txtail.loadFromDisk(&ledger, ledger.Latest()))
+
+	// ensure block retrieval from txTailTestLedger works
+	startRound := ledger.Latest() - basics.Round(proto.MaxTxnLife) + 1
+	b1, err := ledger.Block(startRound)
+	require.NoError(t, err)
+	b2, err := ledger.Block(startRound)
+	require.NoError(t, err)
+	require.Equal(t, b1, b2)
+
+	// check all txids in blocks are in txTail as well
+	// note, txtail does not store txids for transactions with lastValid < ledger.Latest()
+	for i := ledger.Latest() - testTxTailValidityRange + 1; i < ledger.Latest(); i++ {
+		blk, err := ledger.Block(i)
+		require.NoError(t, err)
+		for _, txn := range blk.Payset {
+			confirmedAt, found := txtail.checkConfirmed(txn.Txn.ID())
+			require.True(t, found, "failed to find txn at round %d (startRound=%d, latest=%d)", i, startRound, ledger.Latest())
+			require.Equal(t, basics.Round(i), confirmedAt)
+		}
+	}
+
+	rnd := ledger.Latest() + 1
+	lv := basics.Round(rnd + 50)
+	blk := bookkeeping.Block{
+		BlockHeader: bookkeeping.BlockHeader{
+			Round:     rnd,
+			TimeStamp: int64(rnd << 10),
+			UpgradeState: bookkeeping.UpgradeState{
+				CurrentProtocol: protoVersion,
+			},
+		},
+		Payset: make(transactions.Payset, 1),
+	}
+	sender := &basics.Address{}
+	sender[0] = byte(rnd)
+	sender[1] = byte(rnd >> 8)
+	sender[2] = byte(rnd >> 16)
+	blk.Payset[0].Txn.Sender = *sender
+	blk.Payset[0].Txn.FirstValid = rnd
+	blk.Payset[0].Txn.LastValid = lv
+	deltas := ledgercore.MakeStateDelta(&blk.BlockHeader, 0, 0, 0)
+	deltas.Txids[blk.Payset[0].Txn.ID()] = ledgercore.IncludedTransactions{
+		LastValid: lv,
+		Intra:     0,
+	}
+	deltas.AddTxLease(ledgercore.Txlease{Sender: blk.Payset[0].Txn.Sender, Lease: blk.Payset[0].Txn.Lease}, basics.Round(rnd+50))
+
+	txtail.newBlock(blk, deltas)
+	txtail.committedUpTo(basics.Round(rnd))
+
+	confirmedAt, found := txtail.checkConfirmed(blk.Payset[0].Txn.ID())
+	require.True(t, found)
+	require.Equal(t, basics.Round(rnd), confirmedAt)
+
+	confirmedAt, found = txtail.checkConfirmed(transactions.Txid{})
+	require.False(t, found)
+	require.Equal(t, basics.Round(0), confirmedAt)
 }
 
 // BenchmarkTxTailBlockHeaderCache adds 2M random blocks by calling

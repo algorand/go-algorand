@@ -199,6 +199,6 @@ Provides utilities for the various components:
 
 Please see the [COPYING_FAQ](COPYING_FAQ) for details about how to apply our license.
 
-Copyright (C) 2019-2023, Algorand Inc.
+Copyright (C) 2019-2024, Algorand Inc.
 
 [developer site url]: https://developer.algorand.org/

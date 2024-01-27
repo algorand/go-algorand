@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -31,7 +31,6 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
-	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
@@ -319,15 +318,12 @@ end:
 		e := err.(client.HTTPError)
 		a.Equal(400, e.StatusCode)
 
-		var er *model.ErrorResponse
-		err = protocol.DecodeJSON([]byte(e.ErrorString), &er)
-		a.NoError(err)
-		a.Equal("Result limit exceeded", er.Message)
-		a.Equal(uint64(100000), ((*er.Data)["max-api-box-per-application"]).(uint64))
-		a.Equal(requestedMax, ((*er.Data)["max"]).(uint64))
-		a.Equal(expectedCount, ((*er.Data)["total-boxes"]).(uint64))
+		a.Equal("Result limit exceeded", e.ErrorString)
+		a.EqualValues(100000, e.Data["max-api-box-per-application"])
+		a.EqualValues(requestedMax, e.Data["max"])
+		a.EqualValues(expectedCount, e.Data["total-boxes"])
 
-		a.Len(*er.Data, 3, fmt.Sprintf("error response (%v) contains unverified fields.  Extend test for new fields.", *er.Data))
+		a.Len(e.Data, 3, fmt.Sprintf("error response (%v) contains unverified fields.  Extend test for new fields.", e.Data))
 	}
 
 	// `assertBoxCount` sanity checks that the REST API respects `expectedCount` through different queries against app ID = `createdAppID`.

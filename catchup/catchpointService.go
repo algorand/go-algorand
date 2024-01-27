@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -806,20 +806,11 @@ func (cs *CatchpointCatchupService) initDownloadPeerSelector() {
 }
 
 func (cs *CatchpointCatchupService) makeCatchpointPeerSelector() *peerSelector {
-	if cs.config.EnableCatchupFromArchiveServers {
-		return makePeerSelector(
-			cs.net,
-			[]peerClass{
-				{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivers},
-				{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookRelays},
-			})
-	} else {
-		return makePeerSelector(
-			cs.net,
-			[]peerClass{
-				{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookRelays},
-			})
-	}
+	return makePeerSelector(
+		cs.net,
+		[]peerClass{
+			{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookRelays},
+		})
 }
 
 // checkLedgerDownload sends a HEAD request to the ledger endpoint of peers to validate the catchpoint's availability
