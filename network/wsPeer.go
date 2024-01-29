@@ -348,6 +348,11 @@ type TCPInfoUnicastPeer interface {
 
 // Create a wsPeerCore object
 func makePeerCore(ctx context.Context, net GossipNode, log logging.Logger, readBuffer chan<- IncomingMessage, rootURL string, roundTripper http.RoundTripper, originAddress string) wsPeerCore {
+	return makePeerCoreWithClient(ctx, net, log, readBuffer, rootURL, http.Client{Transport: roundTripper}, originAddress)
+}
+
+// Create a wsPeerCore object
+func makePeerCoreWithClient(ctx context.Context, net GossipNode, log logging.Logger, readBuffer chan<- IncomingMessage, rootURL string, client http.Client, originAddress string) wsPeerCore {
 	return wsPeerCore{
 		net:           net,
 		netCtx:        ctx,
@@ -355,7 +360,7 @@ func makePeerCore(ctx context.Context, net GossipNode, log logging.Logger, readB
 		readBuffer:    readBuffer,
 		rootURL:       rootURL,
 		originAddress: originAddress,
-		client:        http.Client{Transport: roundTripper},
+		client:        client,
 	}
 }
 

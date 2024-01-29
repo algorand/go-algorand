@@ -96,6 +96,12 @@ func setupDHTHosts(t *testing.T, numHosts int) []*dht.IpfsDHT {
 	for _, h := range hosts {
 		ht, err := algodht.MakeDHT(context.Background(), h, "devtestnet", cfg, func() []peer.AddrInfo { return bootstrapPeers })
 		require.NoError(t, err)
+		// this is a workaround for the following issue
+		// "failed to negotiate security protocol: error reading handshake message: noise: message is too short"
+		// it appears simultenous connectino attempts (dht.New() attempts to connect) causes this handshake error.
+		// https://github.com/libp2p/go-libp2p-noise/issues/70
+		time.Sleep(200 * time.Millisecond)
+
 		err = ht.Bootstrap(context.Background())
 		require.NoError(t, err)
 		dhts = append(dhts, ht)
@@ -150,6 +156,12 @@ func setupCapDiscovery(t *testing.T, numHosts int, numBootstrapPeers int) []*Cap
 		}
 		ht, err := algodht.MakeDHT(context.Background(), h, "devtestnet", cfg, func() []peer.AddrInfo { return bp })
 		require.NoError(t, err)
+		// this is a workaround for the following issue
+		// "failed to negotiate security protocol: error reading handshake message: noise: message is too short"
+		// it appears simultenous connectino attempts (dht.New() attempts to connect) causes this handshake error.
+		// https://github.com/libp2p/go-libp2p-noise/issues/70
+		time.Sleep(200 * time.Millisecond)
+
 		disc, err := algodht.MakeDiscovery(ht)
 		require.NoError(t, err)
 		cd := &CapabilitiesDiscovery{

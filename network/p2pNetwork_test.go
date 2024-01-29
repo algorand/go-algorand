@@ -19,6 +19,8 @@ package network
 import (
 	"context"
 	"fmt"
+	"io"
+	"net/http"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -27,6 +29,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network/p2p"
+	"github.com/algorand/go-algorand/network/p2p/dnsaddr"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 
@@ -34,6 +37,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	peerstore "github.com/libp2p/go-libp2p/core/peer"
+	"github.com/multiformats/go-multiaddr"
 	ma "github.com/multiformats/go-multiaddr"
 	"github.com/stretchr/testify/require"
 )
@@ -49,7 +53,9 @@ func TestP2PSubmitTX(t *testing.T) {
 	defer netA.Stop()
 
 	peerInfoA := netA.service.AddrInfo()
+	fmt.Print("peerInfoA is ", peerInfoA)
 	addrsA, err := peerstore.AddrInfoToP2pAddrs(&peerInfoA)
+	fmt.Printf("addrsA is %v\n", addrsA)
 	require.NoError(t, err)
 	require.NotZero(t, addrsA[0])
 
@@ -225,9 +231,7 @@ func (s *mockService) DialPeersUntilTargetCount(targetConnCount int) {
 }
 
 func (s *mockService) ClosePeer(peer peer.ID) error {
-	if _, ok := s.peers[peer]; ok {
-		delete(s.peers, peer)
-	}
+	delete(s.peers, peer)
 	return nil
 }
 
@@ -244,10 +248,6 @@ func (s *mockService) Subscribe(topic string, val pubsub.ValidatorEx) (*pubsub.S
 }
 func (s *mockService) Publish(ctx context.Context, topic string, data []byte) error {
 	return nil
-}
-
-func (s *mockService) setAddrs(addrs []ma.Multiaddr) {
-	s.addrs = addrs
 }
 
 func makeMockService(id peer.ID, addrs []ma.Multiaddr) *mockService {
@@ -317,6 +317,31 @@ func TestP2PNetworkAddress(t *testing.T) {
 	require.Empty(t, retAddr)
 }
 
+type nilResolveController struct{}
+
+func (c *nilResolveController) Resolver() dnsaddr.Resolver {
+	return nil
+}
+
+func (c *nilResolveController) NextResolver() dnsaddr.Resolver {
+	return nil
+}
+
+type mockResolveController struct {
+	nilResolveController
+}
+
+func (c *mockResolveController) Resolver() dnsaddr.Resolver {
+	return &mockResolver{}
+}
+
+type mockResolver struct{}
+
+func (r *mockResolver) Resolve(ctx context.Context, maddr multiaddr.Multiaddr) ([]multiaddr.Multiaddr, error) {
+	ma, err := multiaddr.NewMultiaddr("/ip4/127.0.0.1/p2p/QmcgpsyWgH8Y8ajJz1Cu72KnS5uo2Aa2LpzU7kinSupNKC")
+	return []multiaddr.Multiaddr{ma}, err
+}
+
 func TestBootstrapFunc(t *testing.T) {
 	t.Parallel()
 	partitiontest.PartitionTest(t)
@@ -334,7 +359,8 @@ func TestBootstrapFunc(t *testing.T) {
 	b.cfg = config.GetDefaultLocal()
 	b.cfg.DNSBootstrapID = "<network>.algodev.network"
 	b.cfg.DNSSecurityFlags = 0
-	b.networkID = "test"
+	b.networkID = "devnet"
+	b.resolveControler = &mockResolveController{}
 
 	addrs := b.BootstrapFunc()
 
@@ -352,7 +378,8 @@ func TestGetBootstrapPeersFailure(t *testing.T) {
 	cfg.DNSSecurityFlags = 0
 	cfg.DNSBootstrapID = "non-existent.algodev.network"
 
-	addrs := getBootstrapPeers(cfg, "test")
+	controller := nilResolveController{}
+	addrs := getBootstrapPeers(cfg, "test", &controller)
 
 	require.Equal(t, 0, len(addrs))
 }
@@ -365,7 +392,8 @@ func TestGetBootstrapPeersInvalidAddr(t *testing.T) {
 	cfg.DNSSecurityFlags = 0
 	cfg.DNSBootstrapID = "<network>.algodev.network"
 
-	addrs := getBootstrapPeers(cfg, "testInvalidAddr")
+	controller := nilResolveController{}
+	addrs := getBootstrapPeers(cfg, "testInvalidAddr", &controller)
 
 	require.Equal(t, 0, len(addrs))
 }
@@ -456,6 +484,7 @@ func TestP2PNetworkDHTCapabilities(t *testing.T) {
 			)
 			t.Logf("peers connected")
 
+			nets := []*P2PNetwork{netA, netB, netC}
 			discs := []*p2p.CapabilitiesDiscovery{netA.capabilitiesDiscovery, netB.capabilitiesDiscovery, netC.capabilitiesDiscovery}
 
 			var wg sync.WaitGroup
@@ -480,10 +509,12 @@ func TestP2PNetworkDHTCapabilities(t *testing.T) {
 			}
 
 			wg.Add(len(discs))
-			for _, disc := range discs {
-				go func(disc *p2p.CapabilitiesDiscovery) {
+			for i := range discs {
+				go func(idx int) {
+					disc := discs[idx]
 					defer wg.Done()
-					if disc == netA.capabilitiesDiscovery {
+					// skip netA since it is special for the test cap=netA
+					if test.name == "cap=netA" && disc == netA.capabilitiesDiscovery {
 						return
 					}
 					require.Eventuallyf(t,
@@ -498,9 +529,100 @@ func TestP2PNetworkDHTCapabilities(t *testing.T) {
 						time.Second,
 						fmt.Sprintf("Not all expected %s cap peers were found", cap),
 					)
-				}(disc)
+					// ensure GetPeers gets PeersPhonebookArchivalNodes peers
+					// it appears there are artifical peers because of listening on localhost and on a real network interface
+					// so filter out and save only unique peers by their IDs
+					net := nets[idx]
+					peers := net.GetPeers(PeersPhonebookArchivalNodes)
+					uniquePeerIDs := make(map[peer.ID]struct{})
+					for _, peer := range peers {
+						wsPeer := peer.(*wsPeerCore)
+						pi, err := peerstore.AddrInfoFromString(wsPeer.rootURL)
+						require.NoError(t, err)
+						uniquePeerIDs[pi.ID] = struct{}{}
+					}
+					require.Equal(t, test.numCapPeers, len(uniquePeerIDs))
+				}(i)
 			}
 			wg.Wait()
 		})
 	}
+}
+
+// TestMultiaddrConversionToFrom ensures Multiaddr can be serialized back to an address without losing information
+func TestMultiaddrConversionToFrom(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	a := "/ip4/192.168.1.1/tcp/8180/p2p/Qmewz5ZHN1AAGTarRbMupNPbZRfg3p5jUGoJ3JYEatJVVk"
+	ma, err := multiaddr.NewMultiaddr(a)
+	require.NoError(t, err)
+	require.Equal(t, a, ma.String())
+
+	// this conversion drops the p2p proto part
+	pi, err := peer.AddrInfoFromP2pAddr(ma)
+	require.NoError(t, err)
+	require.NotEqual(t, a, pi.Addrs[0].String())
+	require.Len(t, pi.Addrs, 1)
+
+	mas, err := peer.AddrInfoToP2pAddrs(pi)
+	require.NoError(t, err)
+	require.Len(t, mas, 1)
+	require.Equal(t, a, mas[0].String())
+}
+
+type p2phttpHandler struct {
+	retData string
+}
+
+func (h *p2phttpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	w.Write([]byte(h.retData))
+}
+
+func TestP2PHTTPHandler(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	cfg := config.GetDefaultLocal()
+	cfg.EnableDHTProviders = true
+	cfg.GossipFanout = 1
+	log := logging.TestingLog(t)
+
+	netA, err := NewP2PNetwork(log, cfg, "", nil, genesisID, config.Devtestnet, &nopeNodeInfo{})
+	require.NoError(t, err)
+
+	h := &p2phttpHandler{"hello"}
+	netA.RegisterHTTPHandler("/test", h)
+
+	h2 := &p2phttpHandler{"world"}
+	netA.RegisterHTTPHandler("/bar", h2)
+
+	netA.Start()
+	defer netA.Stop()
+
+	peerInfoA := netA.service.AddrInfo()
+	addrsA, err := peerstore.AddrInfoToP2pAddrs(&peerInfoA)
+	require.NoError(t, err)
+	require.NotZero(t, addrsA[0])
+
+	httpClient, err := p2p.MakeHTTPClient(p2p.AlgorandP2pHTTPProtocol, netA.service.AddrInfo())
+	require.NoError(t, err)
+	resp, err := httpClient.Get("/test")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.Equal(t, "hello", string(body))
+
+	httpClient, err = p2p.MakeHTTPClient(p2p.AlgorandP2pHTTPProtocol, netA.service.AddrInfo())
+	require.NoError(t, err)
+	resp, err = httpClient.Get("/bar")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	body, err = io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.Equal(t, "world", string(body))
+
 }

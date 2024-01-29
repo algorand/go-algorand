@@ -32,10 +32,12 @@ import (
 	"github.com/algorand/go-algorand/network/p2p/peerstore"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-deadlock"
+	"github.com/gorilla/mux"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
+	libp2phttp "github.com/libp2p/go-libp2p/p2p/http"
 	manet "github.com/multiformats/go-multiaddr/net"
 )
 
@@ -69,13 +71,19 @@ type P2PNetwork struct {
 
 	bootstrapper bootstrapper
 	nodeInfo     NodeInfo
+	pstore       *peerstore.PeerStore
+	httpServer   libp2phttp.Host
+
+	p2phttpMux             *mux.Router
+	p2phttpMuxRegistarOnce sync.Once
 }
 
 type bootstrapper struct {
-	cfg            config.Local
-	networkID      protocol.NetworkID
-	phonebookPeers []*peer.AddrInfo
-	started        bool
+	cfg              config.Local
+	networkID        protocol.NetworkID
+	phonebookPeers   []*peer.AddrInfo
+	resolveControler dnsaddr.ResolveController
+	started          bool
 }
 
 func (b *bootstrapper) start() {
@@ -103,16 +111,15 @@ func (b *bootstrapper) BootstrapFunc() []peer.AddrInfo {
 		return addrs
 	}
 
-	return getBootstrapPeers(b.cfg, b.networkID)
+	return getBootstrapPeers(b.cfg, b.networkID, b.resolveControler)
 }
 
 // getBootstrapPeers looks up a list of Multiaddrs strings from the dnsaddr records at the primary
 // SRV record domain.
-func getBootstrapPeers(cfg config.Local, network protocol.NetworkID) []peer.AddrInfo {
+func getBootstrapPeers(cfg config.Local, network protocol.NetworkID, controller dnsaddr.ResolveController) []peer.AddrInfo {
 	var addrs []peer.AddrInfo
 	bootstraps := cfg.DNSBootstrapArray(network)
 	for _, dnsBootstrap := range bootstraps {
-		controller := dnsaddr.NewMultiaddrDNSResolveController(cfg.DNSSecuritySRVEnforced(), "")
 		resolvedAddrs, err := dnsaddr.MultiaddrsFromResolver(dnsBootstrap.PrimarySRVBootstrap, controller)
 		if err != nil {
 			continue
@@ -163,6 +170,8 @@ func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebo
 		wsPeersToIDs: make(map[*wsPeer]peer.ID),
 		peerStats:    make(map[peer.ID]*p2pPeerStats),
 		nodeInfo:     node,
+		pstore:       pstore,
+		p2phttpMux:   mux.NewRouter(),
 	}
 	net.ctx, net.ctxCancel = context.WithCancel(context.Background())
 	net.handler = msgHandler{
@@ -191,9 +200,10 @@ func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebo
 	}
 
 	bootstrapper := &bootstrapper{
-		cfg:            cfg,
-		networkID:      networkID,
-		phonebookPeers: addrInfo,
+		cfg:              cfg,
+		networkID:        networkID,
+		phonebookPeers:   addrInfo,
+		resolveControler: dnsaddr.NewMultiaddrDNSResolveController(cfg.DNSSecuritySRVEnforced(), ""),
 	}
 
 	if cfg.EnableDHTProviders {
@@ -203,6 +213,10 @@ func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebo
 			return nil, err
 		}
 		net.capabilitiesDiscovery = disc
+	}
+
+	net.httpServer = libp2phttp.Host{
+		StreamHost: h,
 	}
 
 	err = net.setup()
@@ -251,6 +265,9 @@ func (n *P2PNetwork) Start() error {
 	}
 
 	n.wg.Add(1)
+	go n.httpdThread()
+
+	n.wg.Add(1)
 	go n.broadcaster.broadcastThread(&n.wg, n)
 	n.service.DialPeersUntilTargetCount(n.config.GossipFanout)
 
@@ -279,6 +296,7 @@ func (n *P2PNetwork) Stop() {
 	n.ctxCancel()
 	n.service.Close()
 	n.bootstrapper.stop()
+	n.httpServer.Close()
 	n.wg.Wait()
 }
 
@@ -313,6 +331,15 @@ func (n *P2PNetwork) meshThread() {
 		case <-n.ctx.Done():
 			return
 		}
+	}
+}
+
+func (n *P2PNetwork) httpdThread() {
+	defer n.wg.Done()
+	err := n.httpServer.Serve()
+	if err != nil {
+		n.log.Errorf("Error serving libp2phttp: %v", err)
+		return
 	}
 }
 
@@ -407,6 +434,10 @@ func (n *P2PNetwork) DisconnectPeers() {
 
 // RegisterHTTPHandler path accepts gorilla/mux path annotations
 func (n *P2PNetwork) RegisterHTTPHandler(path string, handler http.Handler) {
+	n.p2phttpMux.Handle(path, handler)
+	n.p2phttpMuxRegistarOnce.Do(func() {
+		n.httpServer.SetHTTPHandlerAtPath(p2p.AlgorandP2pHTTPProtocol, "/", n.p2phttpMux)
+	})
 }
 
 // RequestConnectOutgoing asks the system to actually connect to peers.
@@ -417,13 +448,97 @@ func (n *P2PNetwork) RequestConnectOutgoing(replace bool, quit <-chan struct{}) 
 
 // GetPeers returns a list of Peers we could potentially send a direct message to.
 func (n *P2PNetwork) GetPeers(options ...PeerOption) []Peer {
-	// currently returns same list of peers for all PeerOption filters.
 	peers := make([]Peer, 0)
-	n.wsPeersLock.RLock()
-	for _, peer := range n.wsPeers {
-		peers = append(peers, Peer(peer))
+	for _, option := range options {
+		switch option {
+		case PeersConnectedOut:
+			n.wsPeersLock.RLock()
+			for _, peer := range n.wsPeers {
+				if peer.outgoing {
+					peers = append(peers, Peer(peer))
+				}
+			}
+			n.wsPeersLock.RUnlock()
+		case PeersPhonebookRelays:
+			// TODO: query peerstore for PhoneBookEntryRelayRole
+			// TODO: currently peerstore is not populated in a way to store roles
+			// return all nodes at the moment
+
+			// // return copy of phonebook, which probably also contains peers we're connected to, but if it doesn't maybe we shouldn't be making new connections to those peers (because they disappeared from the directory)
+			// addrs := n.pstore.GetAddresses(1000, PhoneBookEntryRelayRole)
+			// for _, addr := range addrs {
+			// 	peerCore := makePeerCore(n.ctx, n, n.log, n.handler.readBuffer, addr, n.GetRoundTripper(nil), "" /*origin address*/)
+			// 	peers = append(peers, &peerCore)
+			// }
+
+			// temporary return all nodes
+			n.wsPeersLock.RLock()
+			for _, peer := range n.wsPeers {
+				peers = append(peers, Peer(peer))
+			}
+			n.wsPeersLock.RUnlock()
+
+		case PeersPhonebookArchivalNodes:
+			// query known archvial nodes from DHT if enabled
+			if n.config.EnableDHTProviders {
+				const nodesToFind = 5
+				info, err := n.capabilitiesDiscovery.PeersForCapability(p2p.Archival, nodesToFind)
+				if err != nil {
+					n.log.Warnf("Error getting archival nodes from capabilities discovery: %v", err)
+					return peers
+				}
+				n.log.Debugf("Got %d archival node(s) from DHT", len(info))
+				for _, addrInfo := range info {
+					info := addrInfo
+					mas, err := peer.AddrInfoToP2pAddrs(&info)
+					if err != nil {
+						n.log.Warnf("Archival AddrInfo conversion error: %v", err)
+						continue
+					}
+					if len(mas) == 0 {
+						n.log.Warnf("Archival AddrInfo: empty multiaddr for : %v", addrInfo)
+						continue
+					}
+					addr := mas[0].String()
+					client, err := p2p.MakeHTTPClient(p2p.AlgorandP2pHTTPProtocol, addrInfo)
+					if err != nil {
+						n.log.Warnf("MakeHTTPClient failed: %v", err)
+						continue
+					}
+
+					peerCore := makePeerCoreWithClient(
+						n.ctx, n, n.log, n.handler.readBuffer,
+						addr /*rootURL*/, client, "", /*origin address*/
+					)
+					peers = append(peers, &peerCore)
+				}
+				if n.log.GetLevel() >= logging.Debug && len(peers) > 0 {
+					addrs := make([]string, 0, len(peers))
+					for _, peer := range peers {
+						addrs = append(addrs, peer.(*wsPeerCore).rootURL)
+					}
+					n.log.Debugf("Archival node(s) from DHT: %v", addrs)
+				}
+			}
+		case PeersPhonebookArchivers:
+			// TODO: remove after merging with master
+			// temporary return all nodes
+			n.wsPeersLock.RLock()
+			for _, peer := range n.wsPeers {
+				peers = append(peers, Peer(peer))
+			}
+			n.wsPeersLock.RUnlock()
+
+		case PeersConnectedIn:
+			n.wsPeersLock.RLock()
+			for _, peer := range n.wsPeers {
+				if !peer.outgoing {
+					peers = append(peers, Peer(peer))
+				}
+			}
+			n.wsPeersLock.RUnlock()
+		}
 	}
-	n.wsPeersLock.RUnlock()
 	return peers
 }
 
@@ -468,6 +583,23 @@ func (n *P2PNetwork) wsStreamHandler(ctx context.Context, peer peer.ID, stream n
 			return
 		}
 	} else {
+		n.wsPeersLock.Lock()
+		numOutgoingPeers := 0
+		for _, peer := range n.wsPeers {
+			if peer.outgoing {
+				n.log.Debugf("outgoing peer orig=%s addr=%s", peer.OriginAddress(), peer.GetAddress())
+				numOutgoingPeers++
+			}
+		}
+		n.wsPeersLock.Unlock()
+		if numOutgoingPeers >= n.config.GossipFanout {
+			// this appears to be some auxiliary connection made by libp2p itself like DHT connection.
+			// skip this connection since there are already enough peers
+			n.log.Debugf("skipping outgoing connection to peer %s: num outgoing %d > fanout %d ", peer, numOutgoingPeers, n.config.GossipFanout)
+			stream.Close()
+			return
+		}
+
 		_, err := stream.Write([]byte("1"))
 		if err != nil {
 			n.log.Warnf("wsStreamHandler: error sending initial message: %s", err)
@@ -476,7 +608,8 @@ func (n *P2PNetwork) wsStreamHandler(ctx context.Context, peer peer.ID, stream n
 	}
 
 	// get address for peer ID
-	addr := stream.Conn().RemoteMultiaddr().String()
+	ma := stream.Conn().RemoteMultiaddr()
+	addr := ma.String()
 	if addr == "" {
 		n.log.Warnf("Could not get address for peer %s", peer)
 	}
@@ -492,6 +625,30 @@ func (n *P2PNetwork) wsStreamHandler(ctx context.Context, peer peer.ID, stream n
 	n.wsPeersToIDs[wsp] = peer
 	n.wsPeersLock.Unlock()
 	n.wsPeersChangeCounter.Add(1)
+
+	event := "ConnectedOut"
+	msg := "Made outgoing connection to peer %s"
+	if incoming {
+		event = "ConnectedIn"
+		msg = "Accepted incoming connection from peer %s"
+	}
+	localAddr, _ := n.Address()
+	n.log.With("event", event).With("remote", addr).With("local", localAddr).Infof(msg, peer.String())
+
+	if n.log.GetLevel() >= logging.Debug {
+		n.log.Debugf("streams for %s conn %s ", stream.Conn().Stat().Direction.String(), stream.Conn().ID())
+		for _, s := range stream.Conn().GetStreams() {
+			n.log.Debugf("%s stream %s protocol %s", s.Stat().Direction.String(), s.ID(), s.Protocol())
+		}
+	}
+	// TODO: add telemetry
+	// n.log.EventWithDetails(telemetryspec.Network, telemetryspec.ConnectPeerEvent,
+	// 	telemetryspec.PeerEventDetails{
+	// 		Address:       addr,
+	// 		TelemetryGUID: trackedRequest.otherTelemetryGUID,
+	// 		Incoming:      true,
+	// 		InstanceName:  trackedRequest.otherInstanceName,
+	// 	})
 }
 
 // peerRemoteClose called from wsPeer to report that it has closed

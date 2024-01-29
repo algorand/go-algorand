@@ -75,6 +75,9 @@ type serviceImpl struct {
 // AlgorandWsProtocol defines a libp2p protocol name for algorand's websockets messages
 const AlgorandWsProtocol = "/algorand-ws/1.0.0"
 
+// AlgorandP2pHTTPProtocol defines a libp2p protocol name for algorand's http over p2p messages
+const AlgorandP2pHTTPProtocol = "/algorand-http/1.0.0"
+
 const dialTimeout = 30 * time.Second
 
 // MakeHost creates a libp2p host but does not start listening.
