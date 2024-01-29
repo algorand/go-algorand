@@ -18,14 +18,41 @@ package p2p
 
 import (
 	"net/http"
+	"sync"
 
+	"github.com/gorilla/mux"
 	"github.com/libp2p/go-libp2p"
+	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	libp2phttp "github.com/libp2p/go-libp2p/p2p/http"
 )
 
+// algorandP2pHTTPProtocol defines a libp2p protocol name for algorand's http over p2p messages
+const algorandP2pHTTPProtocol = "/algorand-http/1.0.0"
+
+type HTTPServer struct {
+	libp2phttp.Host
+	p2phttpMux             *mux.Router
+	p2phttpMuxRegistarOnce sync.Once
+}
+
+func MakeHTTPServer(streamHost host.Host) *HTTPServer {
+	httpServer := HTTPServer{
+		Host:       libp2phttp.Host{StreamHost: streamHost},
+		p2phttpMux: mux.NewRouter(),
+	}
+	return &httpServer
+}
+
+func (s *HTTPServer) RegisterHTTPHandler(path string, handler http.Handler) {
+	s.p2phttpMux.Handle(path, handler)
+	s.p2phttpMuxRegistarOnce.Do(func() {
+		s.Host.SetHTTPHandlerAtPath(algorandP2pHTTPProtocol, "/", s.p2phttpMux)
+	})
+}
+
 // MakeHTTPClient creates a http.Client that uses libp2p transport for a goven protocol and peer address.
-func MakeHTTPClient(protocolID string, addrInfo *peer.AddrInfo) (*http.Client, error) {
+func MakeHTTPClient(addrInfo *peer.AddrInfo) (*http.Client, error) {
 	clientStreamHost, err := libp2p.New(libp2p.NoListenAddrs)
 	if err != nil {
 		return nil, err

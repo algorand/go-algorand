@@ -32,12 +32,10 @@ import (
 	"github.com/algorand/go-algorand/network/p2p/peerstore"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-deadlock"
-	"github.com/gorilla/mux"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
-	libp2phttp "github.com/libp2p/go-libp2p/p2p/http"
 	"github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr/net"
 )
@@ -73,10 +71,7 @@ type P2PNetwork struct {
 	bootstrapper bootstrapper
 	nodeInfo     NodeInfo
 	pstore       *peerstore.PeerStore
-	httpServer   libp2phttp.Host
-
-	p2phttpMux             *mux.Router
-	p2phttpMuxRegistarOnce sync.Once
+	httpServer   *p2p.HTTPServer
 }
 
 type bootstrapper struct {
@@ -172,7 +167,6 @@ func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebo
 		peerStats:    make(map[peer.ID]*p2pPeerStats),
 		nodeInfo:     node,
 		pstore:       pstore,
-		p2phttpMux:   mux.NewRouter(),
 	}
 	net.ctx, net.ctxCancel = context.WithCancel(context.Background())
 	net.handler = msgHandler{
@@ -216,9 +210,7 @@ func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebo
 		net.capabilitiesDiscovery = disc
 	}
 
-	net.httpServer = libp2phttp.Host{
-		StreamHost: h,
-	}
+	net.httpServer = p2p.MakeHTTPServer(h)
 
 	err = net.setup()
 	if err != nil {
@@ -435,10 +427,7 @@ func (n *P2PNetwork) DisconnectPeers() {
 
 // RegisterHTTPHandler path accepts gorilla/mux path annotations
 func (n *P2PNetwork) RegisterHTTPHandler(path string, handler http.Handler) {
-	n.p2phttpMux.Handle(path, handler)
-	n.p2phttpMuxRegistarOnce.Do(func() {
-		n.httpServer.SetHTTPHandlerAtPath(p2p.AlgorandP2pHTTPProtocol, "/", n.p2phttpMux)
-	})
+	n.httpServer.RegisterHTTPHandler(path, handler)
 }
 
 // RequestConnectOutgoing asks the system to actually connect to peers.
@@ -501,7 +490,7 @@ func (n *P2PNetwork) GetPeers(options ...PeerOption) []Peer {
 						continue
 					}
 					addr := mas[0].String()
-					client, err := p2p.MakeHTTPClient(p2p.AlgorandP2pHTTPProtocol, &info)
+					client, err := p2p.MakeHTTPClient(&info)
 					if err != nil {
 						n.log.Warnf("MakeHTTPClient failed: %v", err)
 						continue
@@ -560,7 +549,7 @@ func (n *P2PNetwork) GetHTTPClient(p HTTPPeer) (*http.Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	return p2p.MakeHTTPClient(p2p.AlgorandP2pHTTPProtocol, addrInfo)
+	return p2p.MakeHTTPClient(addrInfo)
 }
 
 // OnNetworkAdvance notifies the network library that the agreement protocol was able to make a notable progress.
@@ -620,7 +609,7 @@ func (n *P2PNetwork) wsStreamHandler(ctx context.Context, p2ppeer peer.ID, strea
 		n.log.Warnf("Could not get address for peer %s", p2ppeer)
 	}
 	// create a wsPeer for this stream and added it to the peers map.
-	client, err := p2p.MakeHTTPClient(p2p.AlgorandP2pHTTPProtocol, &peer.AddrInfo{ID: p2ppeer, Addrs: []multiaddr.Multiaddr{ma}})
+	client, err := p2p.MakeHTTPClient(&peer.AddrInfo{ID: p2ppeer, Addrs: []multiaddr.Multiaddr{ma}})
 	if err != nil {
 		client = nil
 	}
