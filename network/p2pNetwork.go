@@ -469,7 +469,7 @@ func (n *P2PNetwork) GetPeers(options ...PeerOption) []Peer {
 			n.wsPeersLock.RUnlock()
 
 		case PeersPhonebookArchivalNodes:
-			// query known archvial nodes from DHT if enabled
+			// query known archival nodes from DHT if enabled
 			if n.config.EnableDHTProviders {
 				const nodesToFind = 5
 				info, err := n.capabilitiesDiscovery.PeersForCapability(p2p.Archival, nodesToFind)

@@ -80,7 +80,7 @@ func (n *streamManager) streamHandler(stream network.Stream) {
 				if stream.Stat().Direction == network.DirUnknown {
 					n.log.Warnf("Unknown direction for a steam %s to/from %s", stream.ID(), remotePeer)
 				} else {
-					n.log.Warnf("Unexpected outgoing sream in streamHandler for connection %s (%s): %s vs %s stream", stream.Conn().ID(), remotePeer, stream.Conn().Stat().Direction, stream.Stat().Direction.String())
+					n.log.Warnf("Unexpected outgoing stream in streamHandler for connection %s (%s): %s vs %s stream", stream.Conn().ID(), remotePeer, stream.Conn().Stat().Direction, stream.Stat().Direction.String())
 				}
 			}
 			n.handler(n.ctx, remotePeer, stream, incoming)
@@ -98,7 +98,7 @@ func (n *streamManager) streamHandler(stream network.Stream) {
 		if stream.Stat().Direction == network.DirUnknown {
 			n.log.Warnf("streamHandler: unknown direction for a steam %s to/from %s", stream.ID(), remotePeer)
 		} else {
-			n.log.Warnf("Unexpected outgoing sream in streamHandler for connection %s (%s): %s vs %s stream", stream.Conn().ID(), remotePeer, stream.Conn().Stat().Direction, stream.Stat().Direction.String())
+			n.log.Warnf("Unexpected outgoing stream in streamHandler for connection %s (%s): %s vs %s stream", stream.Conn().ID(), remotePeer, stream.Conn().Stat().Direction, stream.Stat().Direction.String())
 		}
 	}
 	n.handler(n.ctx, remotePeer, stream, incoming)
@@ -141,7 +141,7 @@ func (n *streamManager) Connected(net network.Network, conn network.Conn) {
 	// a new stream created above, expected direction is outbound
 	incoming := stream.Stat().Direction == network.DirInbound
 	if incoming {
-		n.log.Warnf("Unexpected incoming sream in streamHandler for connection %s (%s): %s vs %s stream", stream.Conn().ID(), remotePeer, stream.Conn().Stat().Direction, stream.Stat().Direction.String())
+		n.log.Warnf("Unexpected incoming stream in streamHandler for connection %s (%s): %s vs %s stream", stream.Conn().ID(), remotePeer, stream.Conn().Stat().Direction, stream.Stat().Direction.String())
 	} else {
 		if stream.Stat().Direction == network.DirUnknown {
 			n.log.Warnf("Connected: unknown direction for a steam %s to/from %s", stream.ID(), remotePeer)

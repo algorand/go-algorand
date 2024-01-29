@@ -32,8 +32,8 @@ const algorandP2pHTTPProtocol = "/algorand-http/1.0.0"
 
 type HTTPServer struct {
 	libp2phttp.Host
-	p2phttpMux             *mux.Router
-	p2phttpMuxRegistarOnce sync.Once
+	p2phttpMux              *mux.Router
+	p2phttpMuxRegistrarOnce sync.Once
 }
 
 func MakeHTTPServer(streamHost host.Host) *HTTPServer {
@@ -46,12 +46,12 @@ func MakeHTTPServer(streamHost host.Host) *HTTPServer {
 
 func (s *HTTPServer) RegisterHTTPHandler(path string, handler http.Handler) {
 	s.p2phttpMux.Handle(path, handler)
-	s.p2phttpMuxRegistarOnce.Do(func() {
+	s.p2phttpMuxRegistrarOnce.Do(func() {
 		s.Host.SetHTTPHandlerAtPath(algorandP2pHTTPProtocol, "/", s.p2phttpMux)
 	})
 }
 
-// MakeHTTPClient creates a http.Client that uses libp2p transport for a goven protocol and peer address.
+// MakeHTTPClient creates a http.Client that uses libp2p transport for a given protocol and peer address.
 func MakeHTTPClient(addrInfo *peer.AddrInfo) (*http.Client, error) {
 	clientStreamHost, err := libp2p.New(libp2p.NoListenAddrs)
 	if err != nil {

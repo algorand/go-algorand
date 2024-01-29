@@ -36,8 +36,6 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
-	peerstore "github.com/libp2p/go-libp2p/core/peer"
-	"github.com/multiformats/go-multiaddr"
 	ma "github.com/multiformats/go-multiaddr"
 	"github.com/stretchr/testify/require"
 )
@@ -53,9 +51,7 @@ func TestP2PSubmitTX(t *testing.T) {
 	defer netA.Stop()
 
 	peerInfoA := netA.service.AddrInfo()
-	fmt.Print("peerInfoA is ", peerInfoA)
-	addrsA, err := peerstore.AddrInfoToP2pAddrs(&peerInfoA)
-	fmt.Printf("addrsA is %v\n", addrsA)
+	addrsA, err := peer.AddrInfoToP2pAddrs(&peerInfoA)
 	require.NoError(t, err)
 	require.NotZero(t, addrsA[0])
 
@@ -131,7 +127,7 @@ func TestP2PSubmitWS(t *testing.T) {
 	defer netA.Stop()
 
 	peerInfoA := netA.service.AddrInfo()
-	addrsA, err := peerstore.AddrInfoToP2pAddrs(&peerInfoA)
+	addrsA, err := peer.AddrInfoToP2pAddrs(&peerInfoA)
 	require.NoError(t, err)
 	require.NotZero(t, addrsA[0])
 
@@ -337,9 +333,9 @@ func (c *mockResolveController) Resolver() dnsaddr.Resolver {
 
 type mockResolver struct{}
 
-func (r *mockResolver) Resolve(ctx context.Context, maddr multiaddr.Multiaddr) ([]multiaddr.Multiaddr, error) {
-	ma, err := multiaddr.NewMultiaddr("/ip4/127.0.0.1/p2p/QmcgpsyWgH8Y8ajJz1Cu72KnS5uo2Aa2LpzU7kinSupNKC")
-	return []multiaddr.Multiaddr{ma}, err
+func (r *mockResolver) Resolve(ctx context.Context, _ ma.Multiaddr) ([]ma.Multiaddr, error) {
+	maddr, err := ma.NewMultiaddr("/ip4/127.0.0.1/p2p/QmcgpsyWgH8Y8ajJz1Cu72KnS5uo2Aa2LpzU7kinSupNKC")
+	return []ma.Multiaddr{maddr}, err
 }
 
 func TestBootstrapFunc(t *testing.T) {
@@ -454,7 +450,7 @@ func TestP2PNetworkDHTCapabilities(t *testing.T) {
 			defer netA.Stop()
 
 			peerInfoA := netA.service.AddrInfo()
-			addrsA, err := peerstore.AddrInfoToP2pAddrs(&peerInfoA)
+			addrsA, err := peer.AddrInfoToP2pAddrs(&peerInfoA)
 			require.NoError(t, err)
 			require.NotZero(t, addrsA[0])
 
@@ -535,9 +531,9 @@ func TestP2PNetworkDHTCapabilities(t *testing.T) {
 					net := nets[idx]
 					peers := net.GetPeers(PeersPhonebookArchivalNodes)
 					uniquePeerIDs := make(map[peer.ID]struct{})
-					for _, peer := range peers {
-						wsPeer := peer.(*wsPeerCore)
-						pi, err := peerstore.AddrInfoFromString(wsPeer.rootURL)
+					for _, p := range peers {
+						wsPeer := p.(*wsPeerCore)
+						pi, err := peer.AddrInfoFromString(wsPeer.rootURL)
 						require.NoError(t, err)
 						uniquePeerIDs[pi.ID] = struct{}{}
 					}
@@ -555,7 +551,7 @@ func TestMultiaddrConversionToFrom(t *testing.T) {
 	t.Parallel()
 
 	a := "/ip4/192.168.1.1/tcp/8180/p2p/Qmewz5ZHN1AAGTarRbMupNPbZRfg3p5jUGoJ3JYEatJVVk"
-	ma, err := multiaddr.NewMultiaddr(a)
+	ma, err := ma.NewMultiaddr(a)
 	require.NoError(t, err)
 	require.Equal(t, a, ma.String())
 
@@ -601,7 +597,7 @@ func TestP2PHTTPHandler(t *testing.T) {
 	defer netA.Stop()
 
 	peerInfoA := netA.service.AddrInfo()
-	addrsA, err := peerstore.AddrInfoToP2pAddrs(&peerInfoA)
+	addrsA, err := peer.AddrInfoToP2pAddrs(&peerInfoA)
 	require.NoError(t, err)
 	require.NotZero(t, addrsA[0])
 

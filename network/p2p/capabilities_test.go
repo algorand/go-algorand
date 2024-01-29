@@ -98,7 +98,7 @@ func setupDHTHosts(t *testing.T, numHosts int) []*dht.IpfsDHT {
 		require.NoError(t, err)
 		// this is a workaround for the following issue
 		// "failed to negotiate security protocol: error reading handshake message: noise: message is too short"
-		// it appears simultenous connectino attempts (dht.New() attempts to connect) causes this handshake error.
+		// it appears simultaneous connection attempts (dht.New() attempts to connect) causes this handshake error.
 		// https://github.com/libp2p/go-libp2p-noise/issues/70
 		time.Sleep(200 * time.Millisecond)
 
@@ -158,7 +158,7 @@ func setupCapDiscovery(t *testing.T, numHosts int, numBootstrapPeers int) []*Cap
 		require.NoError(t, err)
 		// this is a workaround for the following issue
 		// "failed to negotiate security protocol: error reading handshake message: noise: message is too short"
-		// it appears simultenous connectino attempts (dht.New() attempts to connect) causes this handshake error.
+		// it appears simultaneous connection attempts (dht.New() attempts to connect) causes this handshake error.
 		// https://github.com/libp2p/go-libp2p-noise/issues/70
 		time.Sleep(200 * time.Millisecond)
 
