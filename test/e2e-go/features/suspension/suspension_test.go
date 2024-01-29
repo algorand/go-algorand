@@ -105,7 +105,6 @@ func TestBasicSuspension(t *testing.T) {
 	a.NoError(err)
 	a.Equal(basics.Online, account.Status)
 
-	fixture.SendMoneyAndWait(70, 1000, 1000, richAccount.Address, address, "")
 	// pay n15, so it gets noticed
 	fixture.SendMoneyAndWait(afterStop.LastRound+70, 5, 1000, richAccount.Address, address, "")
 
@@ -124,12 +123,22 @@ func TestBasicSuspension(t *testing.T) {
 
 	// Wait for newly restarted node to start. Presumably it'll catchup in
 	// seconds, and propose by round 90
-	_, err = lg.Status()
+	stat, err := lg.Status()
 	a.NoError(err)
 
-	// Proceed to round 90
-	err = fixture.WaitForRound(90, 20*roundTime)
-	a.NoError(err)
+	// Proceed until a round is proposed by n15. (Stop at 50 rounds, that's more likely a bug than luck)
+	for r := stat.LastRound; r < stat.LastRound+50; r++ {
+		err = fixture.WaitForRound(r, roundTime)
+		a.NoError(err)
+
+		// Once n15 proposes, break out early
+		if fixture.VerifyBlockProposed(address, 1) {
+			// wait one extra round, because changes are processed in block n+1.
+			err = fixture.WaitForRound(r+1, roundTime)
+			a.NoError(err)
+			break
+		}
+	}
 	// n15's account is back online, with same voting material
 	account, err = fixture.LibGoalClient.AccountData(address)
 	a.NoError(err)
