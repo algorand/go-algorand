@@ -30,12 +30,14 @@ import (
 // algorandP2pHTTPProtocol defines a libp2p protocol name for algorand's http over p2p messages
 const algorandP2pHTTPProtocol = "/algorand-http/1.0.0"
 
+// HTTPServer is a wrapper around libp2phttp.Host that allows registering http handlers with path parameters.
 type HTTPServer struct {
 	libp2phttp.Host
 	p2phttpMux              *mux.Router
 	p2phttpMuxRegistrarOnce sync.Once
 }
 
+// MakeHTTPServer creates a new HTTPServer
 func MakeHTTPServer(streamHost host.Host) *HTTPServer {
 	httpServer := HTTPServer{
 		Host:       libp2phttp.Host{StreamHost: streamHost},
@@ -44,6 +46,7 @@ func MakeHTTPServer(streamHost host.Host) *HTTPServer {
 	return &httpServer
 }
 
+// RegisterHTTPHandler registers a http handler with a given path.
 func (s *HTTPServer) RegisterHTTPHandler(path string, handler http.Handler) {
 	s.p2phttpMux.Handle(path, handler)
 	s.p2phttpMuxRegistrarOnce.Do(func() {

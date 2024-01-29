@@ -130,12 +130,12 @@ func nodePair() (*basicRPCNode, *basicRPCNode) {
 	return nodeA, nodeB
 }
 
-func nodePairP2p(tb testing.TB) (*p2ptesting.P2PHTTPNode, *p2ptesting.P2PHTTPNode) {
-	nodeA := p2ptesting.MakeP2PHTTPNode(tb)
+func nodePairP2p(tb testing.TB) (*p2ptesting.HTTPNode, *p2ptesting.HTTPNode) {
+	nodeA := p2ptesting.MakeHTTPNode(tb)
 	addrsA := nodeA.Addrs()
 	require.Greater(tb, len(addrsA), 0)
 
-	nodeB := p2ptesting.MakeP2PHTTPNode(tb)
+	nodeB := p2ptesting.MakeHTTPNode(tb)
 	addrsB := nodeA.Addrs()
 	require.Greater(tb, len(addrsB), 0)
 

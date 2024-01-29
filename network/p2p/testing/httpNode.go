@@ -32,7 +32,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type P2PHTTPNode struct {
+// HTTPNode is a mock network node that uses libp2p and http.
+type HTTPNode struct {
 	mocks.MockNetwork
 	host.Host
 	httpServer *p2p.HTTPServer
@@ -41,42 +42,53 @@ type P2PHTTPNode struct {
 	genesisID  string
 }
 
-// MakeP2PHost returns a new libp2p host.
-func MakeP2PHTTPNode(tb testing.TB) *P2PHTTPNode {
+// MakeHTTPNode returns a new P2PHTTPNode node.
+func MakeHTTPNode(tb testing.TB) *HTTPNode {
 	p2pHost, err := libp2p.New(libp2p.ListenAddrStrings("/ip4/127.0.0.1/tcp/0"))
 	require.NoError(tb, err)
 
-	return &P2PHTTPNode{
+	return &HTTPNode{
 		Host:       p2pHost,
 		httpServer: p2p.MakeHTTPServer(p2pHost),
 		tb:         tb,
 	}
 }
 
-func (p *P2PHTTPNode) RegisterHTTPHandler(path string, handler http.Handler) {
+// RegisterHTTPHandler registers a http handler with a given path.
+func (p *HTTPNode) RegisterHTTPHandler(path string, handler http.Handler) {
 	p.httpServer.RegisterHTTPHandler(path, handler)
 }
 
-func (p *P2PHTTPNode) RegisterHandlers(dispatch []network.TaggedMessageHandler) {}
+// RegisterHandlers not implemented.
+func (p *HTTPNode) RegisterHandlers(dispatch []network.TaggedMessageHandler) {}
 
-func (p *P2PHTTPNode) Start() error {
-	go p.httpServer.Serve()
+// Start starts http service
+func (p *HTTPNode) Start() error {
+	go func() {
+		err := p.httpServer.Serve()
+		require.NoError(p.tb, err)
+	}()
 	return nil
 }
 
-func (p *P2PHTTPNode) Stop() {
+// Stop stops http service
+func (p *HTTPNode) Stop() {
 	p.httpServer.Close()
 	p.Host.Close()
 }
 
-func (p *P2PHTTPNode) GetGenesisID() string          { return p.genesisID }
-func (p *P2PHTTPNode) SetGenesisID(genesisID string) { p.genesisID = genesisID }
+// GetGenesisID returns genesisID
+func (p *HTTPNode) GetGenesisID() string { return p.genesisID }
+
+// SetGenesisID sets genesisID
+func (p *HTTPNode) SetGenesisID(genesisID string) { p.genesisID = genesisID }
 
 type httpPeer struct {
 	addrInfo peer.AddrInfo
 	tb       testing.TB
 }
 
+// GetAddress implements HTTPPeer interface returns the address of the peer
 func (p httpPeer) GetAddress() string {
 	mas, err := peer.AddrInfoToP2pAddrs(&p.addrInfo)
 	require.NoError(p.tb, err)
@@ -84,18 +96,21 @@ func (p httpPeer) GetAddress() string {
 	return mas[0].String()
 }
 
+// GetAddress implements HTTPPeer interface and returns the http client for a peer
 func (p httpPeer) GetHTTPClient() *http.Client {
 	c, err := p2p.MakeHTTPClient(&p.addrInfo)
 	require.NoError(p.tb, err)
 	return c
 }
 
-func (p *P2PHTTPNode) SetPeers(other *P2PHTTPNode) {
+// SetPeers sets peers
+func (p *HTTPNode) SetPeers(other *HTTPNode) {
 	addrInfo := peer.AddrInfo{ID: other.ID(), Addrs: other.Addrs()}
-	httpPeer := httpPeer{addrInfo, p.tb}
-	p.peers = append(p.peers, httpPeer)
+	hpeer := httpPeer{addrInfo, p.tb}
+	p.peers = append(p.peers, hpeer)
 }
 
-func (p *P2PHTTPNode) GetPeers(options ...network.PeerOption) []network.Peer {
+// GetPeers returns peers
+func (p *HTTPNode) GetPeers(options ...network.PeerOption) []network.Peer {
 	return p.peers
 }
