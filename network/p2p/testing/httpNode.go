@@ -77,6 +77,12 @@ func (p *HTTPNode) Stop() {
 	p.Host.Close()
 }
 
+// GetHTTPPeer returns the http peer for connecting to this node
+func (p *HTTPNode) GetHTTPPeer() network.Peer {
+	addrInfo := peer.AddrInfo{ID: p.ID(), Addrs: p.Addrs()}
+	return httpPeer{addrInfo, p.tb}
+}
+
 // GetGenesisID returns genesisID
 func (p *HTTPNode) GetGenesisID() string { return p.genesisID }
 
