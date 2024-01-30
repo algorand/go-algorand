@@ -173,7 +173,7 @@ func OpenLedger[T string | DirsAndPrefix](
 	start := time.Now()
 	ledgerInitblocksdbCount.Inc(nil)
 	err = l.blockDBs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		return initBlocksDB(tx, l, []bookkeeping.Block{genesisInitState.Block}, cfg.Archival)
+		return initBlocksDB(tx, l.log, []bookkeeping.Block{genesisInitState.Block}, cfg.Archival)
 	})
 	ledgerInitblocksdbMicros.AddMicrosecondsSince(start, nil)
 	if err != nil {
@@ -364,7 +364,7 @@ func (l *Ledger) setSynchronousMode(ctx context.Context, synchronousMode db.Sync
 // initBlocksDB performs DB initialization:
 // - creates and populates it with genesis blocks
 // - ensures DB is in good shape for archival mode and resets it if not
-func initBlocksDB(tx *sql.Tx, l *Ledger, initBlocks []bookkeeping.Block, isArchival bool) (err error) {
+func initBlocksDB(tx *sql.Tx, log logging.Logger, initBlocks []bookkeeping.Block, isArchival bool) (err error) {
 	err = blockdb.BlockInit(tx, initBlocks)
 	if err != nil {
 		err = fmt.Errorf("initBlocksDB.blockInit %v", err)
@@ -382,7 +382,7 @@ func initBlocksDB(tx *sql.Tx, l *Ledger, initBlocks []bookkeeping.Block, isArchi
 		// Detect possible problem - archival node needs all block but have only subsequence of them
 		// So reset the DB and init it again
 		if earliest != basics.Round(0) {
-			l.log.Warnf("resetting blocks DB (earliest block is %v)", earliest)
+			log.Warnf("resetting blocks DB (earliest block is %v)", earliest)
 			err := blockdb.BlockResetDB(tx)
 			if err != nil {
 				err = fmt.Errorf("initBlocksDB.blockResetDB %v", err)
