@@ -292,17 +292,6 @@ func (block Block) GenesisHash() crypto.Digest {
 	return block.BlockHeader.GenesisHash
 }
 
-// WithSeed returns a copy of the Block with the seed set to s.
-func (block Block) WithSeed(s committee.Seed, proposer basics.Address) Block {
-	c := block
-	c.BlockHeader.Seed = s
-	if !c.BlockHeader.Proposer.IsZero() {
-		panic("Attempt to re-set the proposer.")
-	}
-	c.BlockHeader.Proposer = proposer
-	return c
-}
-
 // Seed returns the Block's random seed.
 func (block *Block) Seed() committee.Seed {
 	return block.BlockHeader.Seed

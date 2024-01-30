@@ -66,7 +66,9 @@ func (i entryFactoryImpl) AssembleBlock(round basics.Round) (agreement.Validated
 
 // WithSeed implements the agreement.ValidatedBlock interface.
 func (ve validatedBlock) WithSeed(s committee.Seed, proposer basics.Address) agreement.ValidatedBlock {
-	newblock := ve.blk.WithSeed(s, proposer)
+	newblock := *ve.blk
+	newblock.BlockHeader.Seed = s
+	newblock.BlockHeader.Proposer = proposer
 	return validatedBlock{blk: &newblock}
 }
 
