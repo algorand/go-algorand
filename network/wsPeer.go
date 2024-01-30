@@ -167,7 +167,7 @@ type wsPeerCore struct {
 	readBuffer    chan<- IncomingMessage
 	rootURL       string
 	originAddress string // incoming connection remote host
-	client        http.Client
+	client        *http.Client
 }
 
 type disconnectReason string
@@ -348,11 +348,11 @@ type TCPInfoUnicastPeer interface {
 
 // Create a wsPeerCore object
 func makePeerCore(ctx context.Context, net GossipNode, log logging.Logger, readBuffer chan<- IncomingMessage, rootURL string, roundTripper http.RoundTripper, originAddress string) wsPeerCore {
-	return makePeerCoreWithClient(ctx, net, log, readBuffer, rootURL, http.Client{Transport: roundTripper}, originAddress)
+	return makePeerCoreWithClient(ctx, net, log, readBuffer, rootURL, &http.Client{Transport: roundTripper}, originAddress)
 }
 
 // Create a wsPeerCore object
-func makePeerCoreWithClient(ctx context.Context, net GossipNode, log logging.Logger, readBuffer chan<- IncomingMessage, rootURL string, client http.Client, originAddress string) wsPeerCore {
+func makePeerCoreWithClient(ctx context.Context, net GossipNode, log logging.Logger, readBuffer chan<- IncomingMessage, rootURL string, client *http.Client, originAddress string) wsPeerCore {
 	return wsPeerCore{
 		net:           net,
 		netCtx:        ctx,
@@ -374,7 +374,7 @@ func (wp *wsPeerCore) GetAddress() string {
 // GetHTTPClient returns a client for this peer.
 // http.Client will maintain a cache of connections with some keepalive.
 func (wp *wsPeerCore) GetHTTPClient() *http.Client {
-	return &wp.client
+	return wp.client
 }
 
 func (wp *wsPeerCore) GetNetwork() GossipNode {

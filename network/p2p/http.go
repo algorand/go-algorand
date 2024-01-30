@@ -18,17 +18,47 @@ package p2p
 
 import (
 	"net/http"
+	"sync"
 
+	"github.com/gorilla/mux"
 	"github.com/libp2p/go-libp2p"
+	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	libp2phttp "github.com/libp2p/go-libp2p/p2p/http"
 )
 
-// MakeHTTPClient creates a http.Client that uses libp2p transport for a goven protocol and peer address.
-func MakeHTTPClient(protocolID string, addrInfo peer.AddrInfo) (http.Client, error) {
+// algorandP2pHTTPProtocol defines a libp2p protocol name for algorand's http over p2p messages
+const algorandP2pHTTPProtocol = "/algorand-http/1.0.0"
+
+// HTTPServer is a wrapper around libp2phttp.Host that allows registering http handlers with path parameters.
+type HTTPServer struct {
+	libp2phttp.Host
+	p2phttpMux              *mux.Router
+	p2phttpMuxRegistrarOnce sync.Once
+}
+
+// MakeHTTPServer creates a new HTTPServer
+func MakeHTTPServer(streamHost host.Host) *HTTPServer {
+	httpServer := HTTPServer{
+		Host:       libp2phttp.Host{StreamHost: streamHost},
+		p2phttpMux: mux.NewRouter(),
+	}
+	return &httpServer
+}
+
+// RegisterHTTPHandler registers a http handler with a given path.
+func (s *HTTPServer) RegisterHTTPHandler(path string, handler http.Handler) {
+	s.p2phttpMux.Handle(path, handler)
+	s.p2phttpMuxRegistrarOnce.Do(func() {
+		s.Host.SetHTTPHandlerAtPath(algorandP2pHTTPProtocol, "/", s.p2phttpMux)
+	})
+}
+
+// MakeHTTPClient creates a http.Client that uses libp2p transport for a given protocol and peer address.
+func MakeHTTPClient(addrInfo *peer.AddrInfo) (*http.Client, error) {
 	clientStreamHost, err := libp2p.New(libp2p.NoListenAddrs)
 	if err != nil {
-		return http.Client{}, err
+		return nil, err
 	}
 
 	client := libp2phttp.Host{StreamHost: clientStreamHost}
@@ -37,10 +67,10 @@ func MakeHTTPClient(protocolID string, addrInfo peer.AddrInfo) (http.Client, err
 	// to make a NamespaceRoundTripper that limits to specific URL paths.
 	// First, we do not want make requests when listing peers (the main MakeHTTPClient invoker).
 	// Secondly, this makes unit testing easier - no need to register fake handlers.
-	rt, err := client.NewConstrainedRoundTripper(addrInfo)
+	rt, err := client.NewConstrainedRoundTripper(*addrInfo)
 	if err != nil {
-		return http.Client{}, err
+		return nil, err
 	}
 
-	return http.Client{Transport: rt}, nil
+	return &http.Client{Transport: rt}, nil
 }

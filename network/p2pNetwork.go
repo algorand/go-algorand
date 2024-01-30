@@ -32,12 +32,11 @@ import (
 	"github.com/algorand/go-algorand/network/p2p/peerstore"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-deadlock"
-	"github.com/gorilla/mux"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
-	libp2phttp "github.com/libp2p/go-libp2p/p2p/http"
+	"github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr/net"
 )
 
@@ -72,10 +71,7 @@ type P2PNetwork struct {
 	bootstrapper bootstrapper
 	nodeInfo     NodeInfo
 	pstore       *peerstore.PeerStore
-	httpServer   libp2phttp.Host
-
-	p2phttpMux             *mux.Router
-	p2phttpMuxRegistarOnce sync.Once
+	httpServer   *p2p.HTTPServer
 }
 
 type bootstrapper struct {
@@ -171,7 +167,6 @@ func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebo
 		peerStats:    make(map[peer.ID]*p2pPeerStats),
 		nodeInfo:     node,
 		pstore:       pstore,
-		p2phttpMux:   mux.NewRouter(),
 	}
 	net.ctx, net.ctxCancel = context.WithCancel(context.Background())
 	net.handler = msgHandler{
@@ -215,9 +210,7 @@ func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebo
 		net.capabilitiesDiscovery = disc
 	}
 
-	net.httpServer = libp2phttp.Host{
-		StreamHost: h,
-	}
+	net.httpServer = p2p.MakeHTTPServer(h)
 
 	err = net.setup()
 	if err != nil {
@@ -434,10 +427,7 @@ func (n *P2PNetwork) DisconnectPeers() {
 
 // RegisterHTTPHandler path accepts gorilla/mux path annotations
 func (n *P2PNetwork) RegisterHTTPHandler(path string, handler http.Handler) {
-	n.p2phttpMux.Handle(path, handler)
-	n.p2phttpMuxRegistarOnce.Do(func() {
-		n.httpServer.SetHTTPHandlerAtPath(p2p.AlgorandP2pHTTPProtocol, "/", n.p2phttpMux)
-	})
+	n.httpServer.RegisterHTTPHandler(path, handler)
 }
 
 // RequestConnectOutgoing asks the system to actually connect to peers.
@@ -479,7 +469,7 @@ func (n *P2PNetwork) GetPeers(options ...PeerOption) []Peer {
 			n.wsPeersLock.RUnlock()
 
 		case PeersPhonebookArchivalNodes:
-			// query known archvial nodes from DHT if enabled
+			// query known archival nodes from DHT if enabled
 			if n.config.EnableDHTProviders {
 				const nodesToFind = 5
 				info, err := n.capabilitiesDiscovery.PeersForCapability(p2p.Archival, nodesToFind)
@@ -500,7 +490,7 @@ func (n *P2PNetwork) GetPeers(options ...PeerOption) []Peer {
 						continue
 					}
 					addr := mas[0].String()
-					client, err := p2p.MakeHTTPClient(p2p.AlgorandP2pHTTPProtocol, addrInfo)
+					client, err := p2p.MakeHTTPClient(&info)
 					if err != nil {
 						n.log.Warnf("MakeHTTPClient failed: %v", err)
 						continue
@@ -552,9 +542,14 @@ func (n *P2PNetwork) ClearHandlers() {
 	n.handler.ClearHandlers([]Tag{})
 }
 
-// GetRoundTripper returns a Transport that would limit the number of outgoing connections.
-func (n *P2PNetwork) GetRoundTripper(peer Peer) http.RoundTripper {
-	return http.DefaultTransport
+// GetHTTPClient returns a http.Client with a suitable for the network Transport
+// that would also limit the number of outgoing connections.
+func (n *P2PNetwork) GetHTTPClient(p HTTPPeer) (*http.Client, error) {
+	addrInfo, err := peer.AddrInfoFromString(p.GetAddress())
+	if err != nil {
+		return nil, err
+	}
+	return p2p.MakeHTTPClient(addrInfo)
 }
 
 // OnNetworkAdvance notifies the network library that the agreement protocol was able to make a notable progress.
@@ -569,7 +564,7 @@ func (n *P2PNetwork) GetHTTPRequestConnection(request *http.Request) (conn net.C
 
 // wsStreamHandler is a callback that the p2p package calls when a new peer connects and establishes a
 // stream for the websocket protocol.
-func (n *P2PNetwork) wsStreamHandler(ctx context.Context, peer peer.ID, stream network.Stream, incoming bool) {
+func (n *P2PNetwork) wsStreamHandler(ctx context.Context, p2ppeer peer.ID, stream network.Stream, incoming bool) {
 	if stream.Protocol() != p2p.AlgorandWsProtocol {
 		n.log.Warnf("unknown protocol %s", stream.Protocol())
 		return
@@ -595,7 +590,7 @@ func (n *P2PNetwork) wsStreamHandler(ctx context.Context, peer peer.ID, stream n
 		if numOutgoingPeers >= n.config.GossipFanout {
 			// this appears to be some auxiliary connection made by libp2p itself like DHT connection.
 			// skip this connection since there are already enough peers
-			n.log.Debugf("skipping outgoing connection to peer %s: num outgoing %d > fanout %d ", peer, numOutgoingPeers, n.config.GossipFanout)
+			n.log.Debugf("skipping outgoing connection to peer %s: num outgoing %d > fanout %d ", p2ppeer, numOutgoingPeers, n.config.GossipFanout)
 			stream.Close()
 			return
 		}
@@ -611,18 +606,23 @@ func (n *P2PNetwork) wsStreamHandler(ctx context.Context, peer peer.ID, stream n
 	ma := stream.Conn().RemoteMultiaddr()
 	addr := ma.String()
 	if addr == "" {
-		n.log.Warnf("Could not get address for peer %s", peer)
+		n.log.Warnf("Could not get address for peer %s", p2ppeer)
 	}
 	// create a wsPeer for this stream and added it to the peers map.
+	client, err := p2p.MakeHTTPClient(&peer.AddrInfo{ID: p2ppeer, Addrs: []multiaddr.Multiaddr{ma}})
+	if err != nil {
+		client = nil
+	}
+	peerCore := makePeerCoreWithClient(ctx, n, n.log, n.handler.readBuffer, addr, client, addr)
 	wsp := &wsPeer{
-		wsPeerCore: makePeerCore(ctx, n, n.log, n.handler.readBuffer, addr, n.GetRoundTripper(nil), addr),
+		wsPeerCore: peerCore,
 		conn:       &wsPeerConnP2PImpl{stream: stream},
 		outgoing:   !incoming,
 	}
 	wsp.init(n.config, outgoingMessagesBufferSize)
 	n.wsPeersLock.Lock()
-	n.wsPeers[peer] = wsp
-	n.wsPeersToIDs[wsp] = peer
+	n.wsPeers[p2ppeer] = wsp
+	n.wsPeersToIDs[wsp] = p2ppeer
 	n.wsPeersLock.Unlock()
 	n.wsPeersChangeCounter.Add(1)
 
@@ -633,7 +633,7 @@ func (n *P2PNetwork) wsStreamHandler(ctx context.Context, peer peer.ID, stream n
 		msg = "Accepted incoming connection from peer %s"
 	}
 	localAddr, _ := n.Address()
-	n.log.With("event", event).With("remote", addr).With("local", localAddr).Infof(msg, peer.String())
+	n.log.With("event", event).With("remote", addr).With("local", localAddr).Infof(msg, p2ppeer.String())
 
 	if n.log.GetLevel() >= logging.Debug {
 		n.log.Debugf("streams for %s conn %s ", stream.Conn().Stat().Direction.String(), stream.Conn().ID())

@@ -170,16 +170,8 @@ func (mca *mockClientAggregator) GetPeers(options ...network.PeerOption) []netwo
 	return mca.peers
 }
 
-const numberOfPeers = 10
-
-func makeMockClientAggregator(t *testing.T, failWithNil bool, failWithError bool) *mockClientAggregator {
-	clients := make([]network.Peer, 0)
-	for i := 0; i < numberOfPeers; i++ {
-		runner := mockRunner{failWithNil: failWithNil, failWithError: failWithError, done: make(chan *rpc.Call)}
-		clients = append(clients, &mockRPCClient{client: &runner, log: logging.TestingLog(t)})
-	}
-	t.Logf("len(mca.clients) = %d", len(clients))
-	return &mockClientAggregator{peers: clients}
+func (mca *mockClientAggregator) GetHTTPClient(peer network.HTTPPeer) (*http.Client, error) {
+	return &http.Client{Transport: http.DefaultTransport}, nil
 }
 
 func TestSyncFromClient(t *testing.T) {
