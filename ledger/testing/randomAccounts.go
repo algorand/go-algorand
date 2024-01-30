@@ -18,7 +18,6 @@ package testing
 
 import (
 	"fmt"
-	"math"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -84,7 +83,7 @@ func RandomAccountData(rewardsBase uint64) basics.AccountData {
 		crypto.RandBytes(data.SelectionID[:])
 		crypto.RandBytes(data.StateProofID[:])
 		data.VoteFirstValid = basics.Round(crypto.RandUint64())
-		data.VoteLastValid = basics.Round(crypto.RandUint64() % uint64(math.MaxInt64)) // int64 is the max sqlite can store
+		data.VoteLastValid = basics.Round(crypto.RandUint63()) // int64 is the max sqlite can store
 		data.VoteKeyDilution = crypto.RandUint64()
 	}
 

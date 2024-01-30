@@ -501,7 +501,7 @@ var bonusPlans = []bonusPlan{
 		baseRound:  0, // goes into effect with upgrade
 		baseAmount: basics.Algos(2),
 		// 2.9 sec rounds gives about 10.8M rounds per year.
-		decayInterval: 500_000, // .9^(10.8/.5) = 10% decay per year
+		decayInterval: 1_000_000, // .99^(10.8/1) ~ .897 ~ 10% decay per year
 	},
 	// If we need to change the decay rate (only), we would create a new plan like:
 	// { decayInterval: XXX} by using an old baseRound, the amount is not adjusted
