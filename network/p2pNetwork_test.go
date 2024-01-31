@@ -581,7 +581,7 @@ func (h *p2phttpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(h.retData))
 	if r.URL.Path == "/check-conn" {
 		c := h.net.GetHTTPRequestConnection(r)
-		require.NotEmpty(h.tb, c)
+		require.NotNil(h.tb, c)
 	}
 }
 
