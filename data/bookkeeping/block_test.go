@@ -19,6 +19,7 @@ package bookkeeping
 import (
 	"bytes"
 	"encoding/hex"
+	"fmt"
 	"math"
 	"testing"
 	"time"
@@ -907,4 +908,31 @@ func TestBlockHeader_Serialization(t *testing.T) {
 
 	a.Equal(crypto.Digest{}, blkHdr.TxnCommitments.Sha256Commitment)
 	a.NotEqual(crypto.Digest{}, blkHdr.TxnCommitments.NativeSha512_256Commitment)
+}
+
+// TestFirstYearBonus shows what about a year's worth of block bonuses would pay out.
+func TestFirstYearBonus(t *testing.T) {
+	yearSeconds := 365 * 24 * 60 * 60
+	yearRounds := int(float64(yearSeconds) / 2.9)
+
+	sum := uint64(0)
+	bonus := bonusPlans[1].baseAmount.Raw
+	interval := int(bonusPlans[1].decayInterval)
+	for i := 0; i < yearRounds; i++ {
+		sum += bonus
+		if i%interval == 0 {
+			bonus, _ = basics.Muldiv(bonus, 99, 100)
+		}
+	}
+	sum /= 1_000_000 // micro to Algos
+
+	fmt.Printf("paid %d algos\n", sum)
+	fmt.Printf("bonus start: %d end: %d\n", bonusPlans[1].baseAmount.Raw, bonus)
+
+	// pays about 51M algos
+	require.InDelta(t, 51_000_000, sum, 500_000)
+
+	// decline about 10%
+	require.InDelta(t, 0.90, float64(bonus)/float64(bonusPlans[1].baseAmount.Raw), 0.01)
+
 }

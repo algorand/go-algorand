@@ -479,8 +479,18 @@ func ProcessUpgradeParams(prev BlockHeader) (uv UpgradeVote, us UpgradeState, er
 }
 
 type bonusPlan struct {
-	baseRound     basics.Round
-	baseAmount    basics.MicroAlgos
+	// baseRound is the earliest round this plan can apply. Of course, the
+	// consensus update must also have happened. So using a low value makes it
+	// go into effect immediately upon upgrade.
+	baseRound basics.Round
+	// baseAmount is the bonus to be paid when this plan first applies (see
+	// baseRound). If it is zero, then no explicit change is made to the bonus
+	// (useful for only changing the decay rate).
+	baseAmount basics.MicroAlgos
+	// decayInterval is the time in rounds between 1% decays. For simplicity,
+	// decay occurs based on round % decayInterval, so a decay can happen right
+	// after going into effect. The decayInterval goes into effect at upgrade
+	// time, regardless of `baseRound`.
 	decayInterval basics.Round
 }
 
@@ -488,7 +498,7 @@ var bonusPlans = []bonusPlan{
 	0: {},
 	1: {
 		baseRound:  0, // goes into effect with upgrade
-		baseAmount: basics.Algos(2),
+		baseAmount: basics.MicroAlgos{Raw: 5_000_000},
 		// 2.9 sec rounds gives about 10.8M rounds per year.
 		decayInterval: 1_000_000, // .99^(10.8/1) ~ .897 ~ 10% decay per year
 	},
@@ -502,35 +512,24 @@ var bonusPlans = []bonusPlan{
 }
 
 func nextBonus(prev BlockHeader, params *config.ConsensusParams) basics.MicroAlgos {
-	// We always set if we are in the baseRound so that a new bonus plan can
-	// reset the amount.
+	prevParams := config.Consensus[prev.CurrentProtocol] // presence ensured by ProcessUpgradeParams
+	upgrading := prevParams.BonusPlan != params.BonusPlan
+
 	current := prev.Round + 1
 	plan := bonusPlans[params.BonusPlan]
-	if current == plan.baseRound {
+	// Reset the amount if it's non-zero and we are upgrading, or the time has come.
+	if (upgrading || current == plan.baseRound) && !plan.baseAmount.IsZero() {
 		return plan.baseAmount
 	}
 
-	bonus := prev.Bonus
-	switch {
-	case bonus.IsZero() && current > plan.baseRound:
-		prevParams := config.Consensus[prev.CurrentProtocol] // presence ensured by ProcessUpgradeParams
-		if prevParams.BonusPlan == 0 {
-			// We must have have just upgraded, with a passed baseRound, so install the bonus
-			bonus = plan.baseAmount
+	// decay
+	if plan.decayInterval != 0 && current%plan.decayInterval == 0 {
+		if newBonus, o := basics.Muldiv(prev.Bonus.Raw, 99, 100); !o {
+			return basics.MicroAlgos{Raw: newBonus}
 		}
-		// else bonus is zero because it has decayed to zero.  that's fine.
-	case bonus.IsZero() && current < plan.baseRound:
-		/* do nothing, wait for baseRound */
-	default:
-		if plan.decayInterval != 0 && current%plan.decayInterval == 0 {
-			var o bool
-			bonus.Raw, o = basics.Muldiv(bonus.Raw, 99, 100)
-			if o {
-				logging.Base().Panicf("MakeBlock: error decaying bonus: %d", prev.Bonus)
-			}
-		}
+		logging.Base().Panicf("MakeBlock: error decaying bonus: %d", prev.Bonus)
 	}
-	return bonus
+	return prev.Bonus
 }
 
 // MakeBlock constructs a new valid block with an empty payset and an unset Seed.
