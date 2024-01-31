@@ -26,6 +26,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/verify"
@@ -1476,6 +1477,21 @@ func (eval *BlockEvaluator) endOfBlock() error {
 	return nil
 }
 
+const (
+	// Challenges occur once every challengeInterval rounds
+	challengeInterval = basics.Round(1000)
+	// Suspensions can between 1 and 2 grace periods after a challenge
+	challengeGracePeriod = basics.Round(200)
+	// An account is challenged if the first challengeBits match the start of the account address.
+	challengeBits = 5
+)
+
+type challenge struct {
+	round basics.Round
+	seed  committee.Seed
+	bits  int
+}
+
 // generateKnockOfflineAccountsList creates the lists of expired or absent
 // participation accounts by traversing over the modified accounts in the state
 // deltas and testing if any of them needs to be reset/suspended. Expiration
@@ -1485,17 +1501,14 @@ func (eval *BlockEvaluator) generateKnockOfflineAccountsList() {
 	if !eval.generate {
 		return
 	}
-	// We are going to find the list of modified accounts and the
-	// current round that is being evaluated.
-	// Then we are going to go through each modified account and
-	// see if it meets the criteria for adding it to the expired
-	// participation accounts list.
-	currentRound := eval.Round()
+	current := eval.Round()
 
-	expectedMaxNumberOfExpiredAccounts := eval.proto.MaxProposedExpiredOnlineAccounts
-	expectedMaxNumberOfAbsentAccounts := eval.proto.MaxProposedAbsentOnlineAccounts
+	maxExpirations := eval.proto.MaxProposedExpiredOnlineAccounts
+	maxSuspensions := eval.proto.MaxProposedAbsentOnlineAccounts
 
 	updates := &eval.block.ParticipationUpdates
+
+	ch := eval.activeChallenge()
 
 	for _, accountAddr := range eval.state.modifiedAccounts() {
 		acctDelta, found := eval.state.mods.Accts.GetData(accountAddr)
@@ -1507,9 +1520,9 @@ func (eval *BlockEvaluator) generateKnockOfflineAccountsList() {
 		// account can be expired to remove it.  This means an offline account
 		// can be expired (because it was already suspended).
 		if !acctDelta.VoteID.IsEmpty() {
-			expiresBeforeCurrent := acctDelta.VoteLastValid < currentRound
+			expiresBeforeCurrent := acctDelta.VoteLastValid < current
 			if expiresBeforeCurrent &&
-				len(updates.ExpiredParticipationAccounts) < expectedMaxNumberOfExpiredAccounts {
+				len(updates.ExpiredParticipationAccounts) < maxExpirations {
 				updates.ExpiredParticipationAccounts = append(
 					updates.ExpiredParticipationAccounts,
 					accountAddr,
@@ -1518,10 +1531,14 @@ func (eval *BlockEvaluator) generateKnockOfflineAccountsList() {
 			}
 		}
 
+		if len(updates.AbsentParticipationAccounts) >= maxSuspensions {
+			continue // no more room (don't break the loop, since we may have more expiries)
+		}
+
 		if acctDelta.Status == basics.Online {
 			lastSeen := max(acctDelta.LastProposed, acctDelta.LastHeartbeat)
-			if isAbsent(eval.state.prevTotals.Online.Money, acctDelta.MicroAlgos, lastSeen, currentRound) &&
-				len(updates.AbsentParticipationAccounts) < expectedMaxNumberOfAbsentAccounts {
+			if isAbsent(eval.state.prevTotals.Online.Money, acctDelta.MicroAlgos, lastSeen, current) ||
+				failsChallenge(ch, accountAddr, lastSeen) {
 				updates.AbsentParticipationAccounts = append(
 					updates.AbsentParticipationAccounts,
 					accountAddr,
@@ -1539,6 +1556,34 @@ func max(a, b basics.Round) basics.Round {
 	return b
 }
 
+// bitsMatch checks if the first n bits of two byte slices match. Written to
+// work on arbitrary slices, but expected that n is small. No attempt to
+// optimize for byte by byte comparisons. (Only user today calls with n=5)
+func bitsMatch(a, b []byte, n int) bool {
+	// Ensure n is a valid number of bits to compare
+	if n < 0 || n > len(a)*8 || n > len(b)*8 {
+		return false
+	}
+
+	// Compare each bit up to the specified n bits
+	for i := 0; i < n; i++ {
+		// Calculate the byte and bit positions
+		bytePos := i / 8
+		bitPos := i % 8
+
+		// Extract the bits from each slice
+		bit1 := (a[bytePos] >> (7 - bitPos)) & 1
+		bit2 := (b[bytePos] >> (7 - bitPos)) & 1
+
+		// Compare the bits
+		if bit1 != bit2 {
+			return false
+		}
+	}
+
+	return true
+}
+
 func isAbsent(totalOnlineStake basics.MicroAlgos, acctStake basics.MicroAlgos, lastSeen basics.Round, current basics.Round) bool {
 	// Don't consider accounts that were online when mining went into effect as
 	// absent.  They get noticed the next time they propose or keyreg, which
@@ -1549,6 +1594,28 @@ func isAbsent(totalOnlineStake basics.MicroAlgos, acctStake basics.MicroAlgos, l
 	// See if the account has exceeded 10x their expected observation interval.
 	allowableLag := basics.Round(10 * totalOnlineStake.Raw / acctStake.Raw)
 	return lastSeen+allowableLag < current
+}
+
+func (eval *BlockEvaluator) activeChallenge() challenge {
+	current := eval.Round()
+	var round basics.Round
+	if current > challengeInterval {
+		lastChallenge := current - (current % challengeInterval)
+		// challengeRound is in effect if we're after one grace period, but before the 2nd ends.
+		if current > lastChallenge+challengeGracePeriod && current < lastChallenge+2*challengeGracePeriod {
+			round = lastChallenge
+			challengeHdr, err := eval.state.BlockHdr(round)
+			if err != nil {
+				panic(err)
+			}
+			return challenge{round, challengeHdr.Seed, challengeBits}
+		}
+	}
+	return challenge{}
+}
+
+func failsChallenge(ch challenge, address basics.Address, lastSeen basics.Round) bool {
+	return ch.round != 0 && bitsMatch(ch.seed[:], address[:], ch.bits) && lastSeen < ch.round
 }
 
 // validateExpiredOnlineAccounts tests the expired online accounts specified in ExpiredParticipationAccounts, and verify
@@ -1600,28 +1667,27 @@ func (eval *BlockEvaluator) validateExpiredOnlineAccounts() error {
 }
 
 // validateAbsentOnlineAccounts tests the accounts specified in
-// AbsentParticipationAccounts, and verifies that they need to be reset.
+// AbsentParticipationAccounts, and verifies that they need to be suspended
 func (eval *BlockEvaluator) validateAbsentOnlineAccounts() error {
 	if !eval.validate {
 		return nil
 	}
-	expectedMaxNumberOfAbsentAccounts := eval.proto.MaxProposedAbsentOnlineAccounts
-	lengthOfAbsentParticipationAccounts := len(eval.block.ParticipationUpdates.AbsentParticipationAccounts)
+	maxSuspensions := eval.proto.MaxProposedAbsentOnlineAccounts
+	suspensionCount := len(eval.block.ParticipationUpdates.AbsentParticipationAccounts)
 
 	// If the length of the array is strictly greater than our max then we have an error.
 	// This works when the expected number of accounts is zero (i.e. it is disabled) as well
-	if lengthOfAbsentParticipationAccounts > expectedMaxNumberOfAbsentAccounts {
+	if suspensionCount > maxSuspensions {
 		return fmt.Errorf("length of absent accounts (%d) was greater than expected (%d)",
-			lengthOfAbsentParticipationAccounts, expectedMaxNumberOfAbsentAccounts)
+			suspensionCount, maxSuspensions)
 	}
 
 	// For consistency with expired account handling, we preclude duplicates
-	addressSet := make(map[basics.Address]bool, lengthOfAbsentParticipationAccounts)
+	addressSet := make(map[basics.Address]bool, suspensionCount)
 
-	// Validate that all accounts have been absent
-	currentRound := eval.Round()
+	ch := eval.activeChallenge()
+
 	for _, accountAddr := range eval.block.ParticipationUpdates.AbsentParticipationAccounts {
-
 		if _, exists := addressSet[accountAddr]; exists {
 			return fmt.Errorf("duplicate address found: %v", accountAddr)
 		}
@@ -1637,10 +1703,14 @@ func (eval *BlockEvaluator) validateAbsentOnlineAccounts() error {
 		}
 
 		lastSeen := max(acctData.LastProposed, acctData.LastHeartbeat)
-		if !isAbsent(eval.state.prevTotals.Online.Money, acctData.MicroAlgos, lastSeen, currentRound) {
-			return fmt.Errorf("proposed absent account %v is not absent in %d, %d",
-				accountAddr, acctData.LastProposed, acctData.LastHeartbeat)
+		if isAbsent(eval.state.prevTotals.Online.Money, acctData.MicroAlgos, lastSeen, eval.Round()) {
+			continue // ok. it's "normal absent"
 		}
+		if failsChallenge(ch, accountAddr, lastSeen) {
+			continue // ok. it's "challenge absent"
+		}
+		return fmt.Errorf("proposed absent account %v is not absent in %d, %d",
+			accountAddr, acctData.LastProposed, acctData.LastHeartbeat)
 	}
 	return nil
 }

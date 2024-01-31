@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -189,18 +190,27 @@ func deriveNewSeed(address basics.Address, vrf *crypto.VRFSecrets, rnd round, pe
 	return
 }
 
+// verifyNewSeed checks the things in the header that can only be confirmed by
+// looking into the unauthenticatedProposal, namely the BlockSeed and the
+// Proposer.
 func verifyNewSeed(p unauthenticatedProposal, ledger LedgerReader) error {
 	value := p.value()
 	rnd := p.Round()
-	cparams, err := ledger.ConsensusParams(ParamsRound(rnd))
-	if err != nil {
-		return fmt.Errorf("failed to obtain consensus parameters in round %d: %v", ParamsRound(rnd), err)
-	}
 
-	if cparams.EnableMining {
+	curParams := config.Consensus[p.BlockHeader.CurrentProtocol]
+	if curParams.EnableMining {
 		if p.BlockHeader.Proposer != value.OriginalProposer {
 			return fmt.Errorf("payload has wrong proposer (%v != %v)", p.Proposer, value.OriginalProposer)
 		}
+	} else {
+		if !p.BlockHeader.Proposer.IsZero() {
+			return fmt.Errorf("payload has a proposer %v when Mining disabled", p.Proposer)
+		}
+	}
+
+	cparams, err := ledger.ConsensusParams(ParamsRound(rnd))
+	if err != nil {
+		return fmt.Errorf("failed to obtain consensus parameters in round %d: %v", ParamsRound(rnd), err)
 	}
 
 	balanceRound := balanceRound(rnd, cparams)
@@ -257,7 +267,11 @@ func proposalForBlock(address basics.Address, vrf *crypto.VRFSecrets, ve Validat
 		return proposal{}, proposalValue{}, fmt.Errorf("proposalForBlock: could not derive new seed: %v", err)
 	}
 
-	ve = ve.WithSeed(newSeed, address)
+	var hdrProp basics.Address // The proposer as recorded in BlockHeader
+	if ve.Block().ConsensusProtocol().EnableMining {
+		hdrProp = address
+	}
+	ve = ve.WithSeed(newSeed, hdrProp)
 	proposal := makeProposal(ve, seedProof, period, address)
 	value := proposalValue{
 		OriginalPeriod:   period,

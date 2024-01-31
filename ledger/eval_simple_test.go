@@ -280,13 +280,11 @@ func TestMiningFees(t *testing.T) {
 				require.True(t, dl.generator.GenesisProto().EnableMining)     // version sanity check
 				require.NotZero(t, dl.generator.GenesisProto().MiningPercent) // version sanity check
 				// new fields are in the header
-				require.EqualValues(t, proposer, vb.Block().BlockHeader.Proposer)
 				require.EqualValues(t, 2000, vb.Block().BlockHeader.FeesCollected.Raw)
 			} else {
 				require.False(t, dl.generator.GenesisProto().EnableMining)
 				require.Zero(t, dl.generator.GenesisProto().MiningPercent) // version sanity check
 				// new fields are not in the header
-				require.Zero(t, vb.Block().BlockHeader.Proposer)
 				require.Zero(t, vb.Block().BlockHeader.FeesCollected)
 			}
 
@@ -424,7 +422,7 @@ func TestAbsentTracking(t *testing.T) {
 			Receiver: addrs[2],
 			Amount:   100_000,
 		})
-		vb := dl.endBlock(proposer)
+		dl.endBlock(proposer)
 
 		// no changes until the next block
 		prp := lookup(t, dl.validator, proposer)
@@ -446,11 +444,9 @@ func TestAbsentTracking(t *testing.T) {
 
 		if ver >= checkingBegins {
 			// version sanity check
-			require.Equal(t, proposer, vb.Block().BlockHeader.Proposer)
 			require.NotZero(t, prp.LastProposed)
 			require.Zero(t, prp.LastHeartbeat) // genesis participants have never hb
 		} else {
-			require.Zero(t, vb.Block().BlockHeader.Proposer)
 			require.Zero(t, prp.LastProposed)
 			require.Zero(t, prp.LastHeartbeat)
 		}
@@ -562,6 +558,123 @@ func TestAbsentTracking(t *testing.T) {
 		require.Equal(t, ver >= checkingBegins, lookup(t, dl.generator, addrs[2]).Status == basics.Offline)
 		dl.fullBlock()
 		require.Equal(t, basics.Online, lookup(t, dl.generator, addrs[2]).Status)
+	})
+}
+
+// TestAbsenteeChallenges ensures that online accounts that don't (do) respond
+// to challenges end up off (on) line.
+func TestAbsenteeChallenges(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis(func(cfg *ledgertesting.GenesisCfg) {
+		cfg.OnlineCount = 5 // Make online stake big, so these accounts won't be expected to propose
+	})
+	checkingBegins := 40
+
+	ledgertesting.TestConsensusRange(t, checkingBegins-1, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
+		defer dl.Close()
+
+		// We'll generate a challenge for accounts that start with 0xaa.
+		propguy := basics.Address{0xaa, 0xaa, 0xaa} // Will propose during the challenge window
+		regguy := basics.Address{0xaa, 0xbb, 0xbb}  // Will re-reg during the challenge window
+		badguy := basics.Address{0xaa, 0x11, 0x11}  // Will ignore the challenge
+
+		// Fund them all and have them go online. That makes them eligible to be challenged
+		for i, guy := range []basics.Address{propguy, regguy, badguy} {
+			dl.txns(&txntest.Txn{
+				Type:     "pay",
+				Sender:   addrs[0],
+				Receiver: guy,
+				Amount:   10_000_000,
+			}, &txntest.Txn{
+				Type:        "keyreg",
+				Fee:         5_000_000, // enough to be incentive eligible
+				Sender:      guy,
+				VotePK:      [32]byte{byte(i + 1)},
+				SelectionPK: [32]byte{byte(i + 1)},
+			})
+			acct := lookup(t, dl.generator, guy)
+			require.Equal(t, basics.Online, acct.Status)
+			require.Equal(t, ver >= checkingBegins, acct.IncentiveEligible, guy)
+		}
+
+		for vb := dl.fullBlock(); vb.Block().BlockHeader.Round < 999; vb = dl.fullBlock() {
+			// we just advancing to one before the challenge round
+		}
+		// All still online, same eligibility
+		for _, guy := range []basics.Address{propguy, regguy, badguy} {
+			acct := lookup(t, dl.generator, guy)
+			require.Equal(t, basics.Online, acct.Status)
+			require.Equal(t, ver >= checkingBegins, acct.IncentiveEligible, guy)
+		}
+		// make the BlockSeed start with 0xa in the challenge round
+		dl.beginBlock()
+		dl.endBlock(basics.Address{0xaa}) // This becomes the seed, which is used for the challenge
+
+		for vb := dl.fullBlock(); vb.Block().BlockHeader.Round < 1200; vb = dl.fullBlock() {
+			// advance through first grace period
+		}
+		dl.beginBlock()
+		dl.endBlock(propguy) // propose, which is a fine (though less likely) way to respond
+
+		// All still online, unchanged eligibility
+		for _, guy := range []basics.Address{propguy, regguy, badguy} {
+			acct := lookup(t, dl.generator, guy)
+			require.Equal(t, basics.Online, acct.Status)
+			require.Equal(t, ver >= checkingBegins, acct.IncentiveEligible, guy)
+		}
+
+		for vb := dl.fullBlock(); vb.Block().BlockHeader.Round < 1220; vb = dl.fullBlock() {
+			// advance into knockoff period. but no transactions means
+			// unresponsive accounts go unnoticed.
+		}
+		// All still online, same eligibility
+		for _, guy := range []basics.Address{propguy, regguy, badguy} {
+			acct := lookup(t, dl.generator, guy)
+			require.Equal(t, basics.Online, acct.Status)
+			require.Equal(t, ver >= checkingBegins, acct.IncentiveEligible, guy)
+		}
+
+		// badguy never responded, he gets knocked off when paid
+		dl.txns(&txntest.Txn{
+			Type:     "pay",
+			Sender:   addrs[0],
+			Receiver: badguy,
+		})
+		acct := lookup(t, dl.generator, badguy)
+		require.Equal(t, ver >= checkingBegins, basics.Offline == acct.Status) // if checking, badguy fails
+		require.False(t, acct.IncentiveEligible)
+
+		// propguy proposed during the grace period, he stays on even when paid
+		dl.txns(&txntest.Txn{
+			Type:     "pay",
+			Sender:   addrs[0],
+			Receiver: propguy,
+		})
+		acct = lookup(t, dl.generator, propguy)
+		require.Equal(t, basics.Online, acct.Status)
+		require.Equal(t, ver >= checkingBegins, acct.IncentiveEligible)
+
+		// regguy keyregs before he's caught, which is a heartbeat, he stays on as well
+		dl.txns(&txntest.Txn{
+			Type:        "keyreg", // Does not pay extra fee, since he's still eligible
+			Sender:      regguy,
+			VotePK:      [32]byte{1},
+			SelectionPK: [32]byte{1},
+		})
+		acct = lookup(t, dl.generator, regguy)
+		require.Equal(t, basics.Online, acct.Status)
+		require.Equal(t, ver >= checkingBegins, acct.IncentiveEligible)
+		dl.txns(&txntest.Txn{
+			Type:     "pay",
+			Sender:   addrs[0],
+			Receiver: regguy,
+		})
+		acct = lookup(t, dl.generator, regguy)
+		require.Equal(t, basics.Online, acct.Status)
+		require.Equal(t, ver >= checkingBegins, acct.IncentiveEligible)
 	})
 }
 

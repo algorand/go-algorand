@@ -1469,3 +1469,18 @@ func TestExpiredAccountGeneration(t *testing.T) {
 	require.Equal(t, crypto.VRFVerifier{}, recvAcct.SelectionID)
 	require.Equal(t, merklesignature.Verifier{}.Commitment, recvAcct.StateProofID)
 }
+
+func TestBitsMatch(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	for b := 0; b <= 6; b++ {
+		require.True(t, bitsMatch([]byte{0x1}, []byte{0x2}, b), "%d", b)
+	}
+	require.False(t, bitsMatch([]byte{0x1}, []byte{0x2}, 7))
+
+	for b := 0; b <= 12; b++ {
+		require.True(t, bitsMatch([]byte{0x1, 0xff, 0xaa}, []byte{0x1, 0xf0}, b), "%d", b)
+	}
+	require.False(t, bitsMatch([]byte{0x1, 0xff, 0xaa}, []byte{0x1, 0xf0}, 13))
+}

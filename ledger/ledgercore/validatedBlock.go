@@ -44,10 +44,7 @@ func (vb ValidatedBlock) Delta() StateDelta {
 func (vb ValidatedBlock) WithSeed(s committee.Seed, proposer basics.Address) ValidatedBlock {
 	newblock := vb.blk
 	newblock.BlockHeader.Seed = s
-
-	if vb.blk.ConsensusProtocol().EnableMining {
-		newblock.BlockHeader.Proposer = proposer
-	}
+	newblock.BlockHeader.Proposer = proposer
 
 	return ValidatedBlock{
 		blk:   newblock,
