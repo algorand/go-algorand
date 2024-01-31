@@ -161,7 +161,7 @@ func (u *AccountData) Suspended() bool {
 // MinBalance computes the minimum balance requirements for an account based on
 // some consensus parameters. MinBalance should correspond roughly to how much
 // storage the account is allowed to store on disk.
-func (u AccountData) MinBalance(proto *config.ConsensusParams) (res basics.MicroAlgos) {
+func (u AccountData) MinBalance(proto *config.ConsensusParams) basics.MicroAlgos {
 	return basics.MinBalance(
 		proto,
 		uint64(u.TotalAssets),
@@ -174,7 +174,7 @@ func (u AccountData) MinBalance(proto *config.ConsensusParams) (res basics.Micro
 
 // AvailableBalance returns the amount of MicroAlgos that are available for
 // spending without fully closing the account.
-func (u AccountData) AvailableBalance(proto *config.ConsensusParams) (res basics.MicroAlgos) {
+func (u AccountData) AvailableBalance(proto *config.ConsensusParams) basics.MicroAlgos {
 	if left, o := basics.OSubA(u.MicroAlgos, u.MinBalance(proto)); !o {
 		return left
 	}

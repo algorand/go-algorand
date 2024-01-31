@@ -34,7 +34,7 @@ type GenesisCfg struct {
 // TestGenesisOption provides functional options for testGenesisCfg.
 type TestGenesisOption func(*GenesisCfg)
 
-// TurnOffRewards turns off the rewards pool for tests that are sensistive to
+// TurnOffRewards turns off the rewards pool for tests that are sensitive to
 // "surprise" balance changes.
 var TurnOffRewards = func(cfg *GenesisCfg) { cfg.rewardsPoolAmount = basics.MicroAlgos{Raw: 100_000} }
 

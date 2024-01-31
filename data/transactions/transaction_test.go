@@ -102,12 +102,14 @@ func TestGoOnlineGoNonparticipatingContradiction(t *testing.T) {
 		VotePK:           v.OneTimeSignatureVerifier,
 		SelectionPK:      vrf.PK,
 		VoteKeyDilution:  1,
+		VoteFirst:        1,
+		VoteLast:         100,
 		Nonparticipation: true,
 	}
 	// this tx tries to both register keys to go online, and mark an account as non-participating.
 	// it is not well-formed.
 	err = tx.WellFormed(SpecialAddresses{}, config.Consensus[protocol.ConsensusCurrentVersion])
-	require.ErrorContains(t, err, "go online, but vote last is set to zero")
+	require.ErrorContains(t, err, "tries to register keys to go online, but nonparticipatory flag is set")
 }
 
 func TestGoNonparticipatingWellFormed(t *testing.T) {

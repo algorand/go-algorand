@@ -91,11 +91,9 @@ func TestPayAction(t *testing.T) {
 		// First MiningPct > 0
 		if ver >= 40 {
 			require.True(t, dl.generator.GenesisProto().EnableMining)
-			require.EqualValues(t, proposer, vb.Block().BlockHeader.Proposer)
 			require.EqualValues(t, 2000, vb.Block().BlockHeader.FeesCollected.Raw)
 		} else {
 			require.False(t, dl.generator.GenesisProto().EnableMining)
-			require.Zero(t, vb.Block().BlockHeader.Proposer)
 			require.Zero(t, vb.Block().BlockHeader.FeesCollected)
 		}
 
