@@ -452,7 +452,8 @@ type ConsensusParams struct {
 	MaxProposedExpiredOnlineAccounts int
 
 	// MaxProposedAbsentOnlineAccounts is the maximum number of online accounts,
-	// that a proposer can suspend for not proposing "lately" (TBD)
+	// that a proposer can suspend for not proposing "lately" (In 10x expected
+	// interval, or within a grace period from being challenged)
 	MaxProposedAbsentOnlineAccounts int
 
 	// EnableAccountDataResourceSeparation enables the support for extended application and asset storage
