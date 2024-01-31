@@ -17,6 +17,9 @@
 package rpcs
 
 import (
+	"archive/tar"
+	"bytes"
+	"compress/gzip"
 	"fmt"
 	"io"
 	"net/http"
@@ -171,4 +174,60 @@ func TestLedgerService(t *testing.T) {
 	// Test LedgerService Stopped
 	ledgerService.Stop()
 	require.Equal(t, int32(0), ledgerService.running.Load())
+}
+
+type mockSizedStream struct {
+	*bytes.Buffer
+}
+
+func (mss mockSizedStream) Size() (int64, error) {
+	return int64(mss.Len()), nil
+}
+
+func (mss mockSizedStream) Close() error {
+	return nil
+}
+
+type mockLedgerForService struct {
+}
+
+func (l *mockLedgerForService) GetCatchpointStream(round basics.Round) (ledger.ReadCloseSizer, error) {
+	buf := bytes.NewBuffer(nil)
+	gz := gzip.NewWriter(buf)
+	wtar := tar.NewWriter(gz)
+	wtar.Close()
+	gz.Close()
+
+	buf2 := bytes.NewBuffer(buf.Bytes())
+	return mockSizedStream{buf2}, nil
+}
+
+// TestLedgerServiceP2P creates a ledger service on a node, and a p2p client tries to download
+// an empty catchpoint file from the ledger service.
+func TestLedgerServiceP2P(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	nodeA, nodeB := nodePairP2p(t)
+	defer nodeA.Stop()
+	defer nodeB.Stop()
+
+	genesisID := "test GenesisID"
+	cfg := config.GetDefaultLocal()
+	cfg.EnableLedgerService = true
+	l := mockLedgerForService{}
+	ledgerService := MakeLedgerService(cfg, &l, nodeA, genesisID)
+	ledgerService.Start()
+	defer ledgerService.Stop()
+
+	nodeA.RegisterHTTPHandler(LedgerServiceLedgerPath, ledgerService)
+
+	httpPeer := nodeA.GetHTTPPeer().(network.HTTPPeer)
+
+	req, err := http.NewRequest("GET", fmt.Sprintf("/v1/%s/ledger/0", genesisID), nil)
+	require.NoError(t, err)
+	resp, err := httpPeer.GetHTTPClient().Do(req)
+	require.NoError(t, err)
+	defer func() { _ = resp.Body.Close() }()
+
+	require.Equal(t, http.StatusOK, resp.StatusCode)
 }
