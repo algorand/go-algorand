@@ -19,7 +19,6 @@ package mocks
 import (
 	"context"
 	"errors"
-	"net"
 	"net/http"
 
 	"github.com/algorand/go-algorand/network"
@@ -100,7 +99,7 @@ func (network *MockNetwork) RegisterHTTPHandler(path string, handler http.Handle
 func (network *MockNetwork) OnNetworkAdvance() {}
 
 // GetHTTPRequestConnection - empty implementation
-func (network *MockNetwork) GetHTTPRequestConnection(request *http.Request) (conn net.Conn) {
+func (network *MockNetwork) GetHTTPRequestConnection(request *http.Request) (conn network.DeadlineSettable) {
 	return nil
 }
 

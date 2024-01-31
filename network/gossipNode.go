@@ -18,9 +18,9 @@ package network
 
 import (
 	"context"
-	"net"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/protocol"
@@ -51,6 +51,13 @@ const (
 	// PeersPhonebookArchivers specifies all archivers in the phonebook
 	PeersPhonebookArchivers PeerOption = iota
 )
+
+// DeadlineSettable abstracts net.Conn and related types as deadline-settable
+type DeadlineSettable interface {
+	SetDeadline(time.Time) error
+	SetReadDeadline(time.Time) error
+	SetWriteDeadline(time.Time) error
+}
 
 // GossipNode represents a node in the gossip network
 type GossipNode interface {
@@ -95,7 +102,7 @@ type GossipNode interface {
 
 	// GetHTTPRequestConnection returns the underlying connection for the given request. Note that the request must be the same
 	// request that was provided to the http handler ( or provide a fallback Context() to that )
-	GetHTTPRequestConnection(request *http.Request) (conn net.Conn)
+	GetHTTPRequestConnection(request *http.Request) (conn DeadlineSettable)
 
 	// GetGenesisID returns the network-specific genesisID.
 	GetGenesisID() string
