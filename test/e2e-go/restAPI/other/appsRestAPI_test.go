@@ -634,7 +634,7 @@ func TestBlockLogs(t *testing.T) {
 	_, err = helper.WaitForTransaction(t, testClient, appFundTxID.String(), 30*time.Second)
 	a.NoError(err)
 
-	// call app
+	// call app twice
 	appCallTxn, err := testClient.MakeUnsignedAppNoOpTx(
 		uint64(createdAppID), nil, nil, nil,
 		nil, nil,
@@ -654,6 +654,7 @@ func TestBlockLogs(t *testing.T) {
 	stxn0, err := testClient.SignTransactionWithWallet(wh, nil, appCallTxn0)
 	a.NoError(err)
 	stxn1, err := testClient.SignTransactionWithWallet(wh, nil, appCallTxn1)
+	a.NoError(err)
 
 	err = testClient.BroadcastTransactionGroup([]transactions.SignedTxn{stxn0, stxn1})
 	a.NoError(err)
