@@ -134,10 +134,27 @@ func (pk VrfPubkey) verifyBytes(proof VrfProof, msg []byte) (bool, VrfOutput) {
 	return ret == 0, out
 }
 
+// verifyVarTimeBytes is the same as verify Vartime except that it is not constant time
+func (pk VrfPubkey) verifyVarTimeBytes(proof VrfProof, msg []byte) (bool, VrfOutput) {
+	var out VrfOutput
+	// &msg[0] will make Go panic if msg is zero length
+	m := (*C.uchar)(C.NULL)
+	if len(msg) != 0 {
+		m = (*C.uchar)(&msg[0])
+	}
+	ret := C.crypto_vrf_verify_vartime((*C.uchar)(&out[0]), (*C.uchar)(&pk[0]), (*C.uchar)(&proof[0]), (*C.uchar)(m), (C.ulonglong)(len(msg)))
+	return ret == 0, out
+}
+
 // Verify checks a VRF proof of a given Hashable. If the proof is valid the pseudorandom VrfOutput will be returned.
 // For a given public key and message, there are potentially multiple valid proofs.
 // However, given a public key and message, all valid proofs will yield the same output.
 // Moreover, the output is indistinguishable from random to anyone without the proof or the secret key.
 func (pk VrfPubkey) Verify(p VrfProof, message Hashable) (bool, VrfOutput) {
 	return pk.verifyBytes(p, HashRep(message))
+}
+
+// VerifyVarTime is the same as Verify except it is not constant time
+func (pk VrfPubkey) VerifyVarTime(p VrfProof, message Hashable) (bool, VrfOutput) {
+	return pk.verifyVarTimeBytes(p, HashRep(message))
 }

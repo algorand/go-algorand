@@ -1,5 +1,6 @@
 
 #define TEST_NAME "vrf"
+
 #include "cmptest.h"
 
 typedef struct TestData_ {
@@ -44,10 +45,11 @@ static const TestData test_data[] = {
 {{0xac,0x21,0xb0,0x30,0x3e,0xd8,0xb5,0x12,0x3a,0xe3,0xbf,0x13,0xf2,0xc6,0x27,0xdc,0x9b,0x9c,0x2e,0x04,0xcf,0x1c,0x73,0x23,0x64,0xcf,0xe4,0x72,0xa5,0xf1,0x45,0xc2},{0x5b,0x14,0xfd,0xe6,0xdb,0x37,0xa5,0x30,0x2f,0x01,0x50,0xa7,0x3f,0x6a,0xda,0x5a,0x05,0xa8,0x10,0xa2,0x4c,0x65,0x64,0x82,0xcb,0xde,0xb5,0x10,0x20,0xe9,0x2f,0xe7},{0x31,0xcd,0xab,0x62,0x0b,0xdf,0x82,0x31,0xab,0xce,0xe3,0x2d,0x61,0x5a,0xf3,0x46,0x49,0xe6,0x9b,0x13,0x22,0x86,0xcc,0x59,0xf9,0x50,0xf2,0x35,0x52,0x84,0xd9,0x53,0xa6,0xb7,0xea,0x97,0x5a,0x2f,0xd8,0x9a,0xf4,0x43,0xa1,0x5c,0x07,0x63,0x99,0xf3,0x90,0xc9,0x4a,0x6a,0xa3,0xf5,0xdb,0xf8,0xe1,0x57,0x67,0x80,0xa7,0xe1,0x6f,0xa4,0x8c,0x3a,0x09,0x59,0x72,0xac,0x3a,0xb1,0xe1,0xaa,0x07,0x6d,0x92,0x46,0xac,0x09},{0x15,0x2d,0xca,0x76,0x91,0x2d,0x4a,0x38,0x60,0x6f,0x46,0xd9,0x0d,0x4b,0x87,0x8b,0x3e,0x60,0xb9,0xce,0xf8,0x74,0x0e,0xf3,0x22,0x29,0x0f,0x18,0xa6,0x7a,0xd4,0x8e,0x71,0x6f,0x41,0x2e,0x70,0x13,0xd5,0xe1,0xee,0x4c,0x4a,0xaf,0x5e,0x7f,0x86,0xd1,0x58,0x24,0x9b,0xcd,0x06,0x7f,0x5e,0x62,0xb6,0x2c,0x25,0xb7,0x16,0x6b,0x94,0x29},"\x23\x0d\xd4\xc8\x55\xc1\x33\xc5\xb3\xc2\x4a\x72\xaf\x9b\xbb\xc4\x82\x05\x98\x4e\xa4\xf2\x04\x5f\xea\xac\x17\xfe\x1a\xf9"},
 };
 
-static inline void printhex(const char *label, const unsigned char *c, size_t len){
+static inline void printhex(const char *label, const unsigned char *c, size_t len)
+{
 	size_t i;
 	printf("%s", label);
-	for (i = 0; i < len; i++){
+    for (i = 0; i < len; i++) {
 		printf("%02x", c[i]);
 	}
 	printf("\n");
@@ -73,7 +75,7 @@ int main(void)
 		memset(proof, 0, sizeof proof);
 		memset(output, 0, sizeof output);
 		crypto_vrf_keypair_from_seed(pk, sk, test_data[i].seed);
-		if (memcmp(pk, test_data[i].pk, crypto_vrf_PUBLICKEYBYTES) != 0){
+        if (memcmp(pk, test_data[i].pk, crypto_vrf_PUBLICKEYBYTES) != 0) {
 			printf("keypair_from_seed produced wrong pk: [%u]\n", i);
 			printhex("\tWanted: ", test_data[i].pk, crypto_vrf_PUBLICKEYBYTES);
 			printhex("\tGot:    ", pk, crypto_vrf_PUBLICKEYBYTES);
@@ -83,21 +85,26 @@ int main(void)
 			printf("crypto_vrf_is_valid_key() error: [%u]\n", i);
 			continue;
 		}
-		if (crypto_vrf_prove(proof, sk, (const unsigned char*) test_data[i].msg, i) != 0){
+        if (crypto_vrf_prove(proof, sk, (const unsigned char *) test_data[i].msg, i) != 0) {
 			printf("crypto_vrf_prove() error: [%u]\n", i);
 			continue;
 		}
-		if (memcmp(test_data[i].proof, proof, crypto_vrf_PROOFBYTES) != 0){
+        if (memcmp(test_data[i].proof, proof, crypto_vrf_PROOFBYTES) != 0) {
 			printf("proof error: [%u]\n", i);
 			printhex("\tWanted: ", test_data[i].proof, crypto_vrf_PROOFBYTES);
 			printhex("\tGot:    ", proof, crypto_vrf_PROOFBYTES);
 			continue;
 		}
-		if (crypto_vrf_verify(output, test_data[i].pk, proof, (const unsigned char*) test_data[i].msg, i) != 0){
+        if (crypto_vrf_verify(output, test_data[i].pk, proof, (const unsigned char *) test_data[i].msg, i) != 0) {
 			printf("verify error: [%u]\n", i);
 			continue;
 		}
-		if (memcmp(output, test_data[i].output, crypto_vrf_OUTPUTBYTES) != 0){
+        if (crypto_vrf_verify_vartime(output, test_data[i].pk, proof, (const unsigned char *) test_data[i].msg, i) !=
+            0) {
+            printf("verify_vartime error: [%u]\n", i);
+            continue;
+        }
+        if (memcmp(output, test_data[i].output, crypto_vrf_OUTPUTBYTES) != 0) {
 			printf("output wrong: [%u]\n", i);
 			printhex("\tWanted: ", test_data[i].output, crypto_vrf_OUTPUTBYTES);
 			printhex("\tGot:    ", output, crypto_vrf_OUTPUTBYTES);
@@ -105,32 +112,59 @@ int main(void)
 		}
 
 		proof[0] ^= 0x01;
-		if (crypto_vrf_verify(output, test_data[i].pk, proof, (const unsigned char*) test_data[i].msg, i) == 0){
+        if (crypto_vrf_verify(output, test_data[i].pk, proof, (const unsigned char *) test_data[i].msg, i) == 0) {
 			printf("verify succeeded with bad gamma: [%u]\n", i);
 			continue;
 		}
+        if (crypto_vrf_verify_vartime(output, test_data[i].pk, proof, (const unsigned char *) test_data[i].msg, i) ==
+            0) {
+            printf("verify_vartime succeeded with bad gamma: [%u]\n", i);
+            continue;
+        }
 		proof[0] ^= 0x01;
 		proof[32] ^= 0x01;
-		if (crypto_vrf_verify(output, test_data[i].pk, proof, (const unsigned char*) test_data[i].msg, i) == 0){
+        if (crypto_vrf_verify(output, test_data[i].pk, proof, (const unsigned char *) test_data[i].msg, i) == 0) {
 			printf("verify succeeded with bad c value: [%u]\n", i);
 			continue;
 		}
+        if (crypto_vrf_verify_vartime(output, test_data[i].pk, proof, (const unsigned char *) test_data[i].msg, i) ==
+            0) {
+            printf("verify_vartime succeeded with bad c value: [%u]\n", i);
+            continue;
+        }
 		proof[32] ^= 0x01;
 		proof[48] ^= 0x01;
-		if (crypto_vrf_verify(output, test_data[i].pk, proof, (const unsigned char*) test_data[i].msg, i) == 0){
+        if (crypto_vrf_verify(output, test_data[i].pk, proof, (const unsigned char *) test_data[i].msg, i) == 0) {
 			printf("verify succeeded with bad s value: [%u]\n", i);
 			continue;
 		}
+        if (crypto_vrf_verify_vartime(output, test_data[i].pk, proof, (const unsigned char *) test_data[i].msg, i) ==
+            0) {
+            printf("verify_vartime succeeded with bad s value: [%u]\n", i);
+            continue;
+        }
 		proof[48] ^= 0x01;
 		proof[79] ^= 0x80;
-		if (crypto_vrf_verify(output, test_data[i].pk, proof, (const unsigned char*) test_data[i].msg, i) == 0){
+        if (crypto_vrf_verify(output, test_data[i].pk, proof, (const unsigned char *) test_data[i].msg, i) == 0) {
 			printf("verify succeeded with bad s value (high-order-bit flipped): [%u]\n", i);
 			continue;
 		}
+        if (crypto_vrf_verify_vartime(output, test_data[i].pk, proof, (const unsigned char *) test_data[i].msg, i) ==
+            0) {
+            printf("verify_vartime succeeded with bad s value (high-order-bit flipped): [%u]\n", i);
+            continue;
+        }
 		proof[79] ^= 0x80;
 
 		if (i > 0) {
-			if (crypto_vrf_verify(output, test_data[i].pk, proof, (const unsigned char*) test_data[i].msg, i-1) == 0){
+            if (crypto_vrf_verify(output, test_data[i].pk, proof, (const unsigned char *) test_data[i].msg, i - 1) ==
+                0) {
+                printf("verify succeeded with truncated message: [%u]\n", i);
+                continue;
+            }
+            if (crypto_vrf_verify_vartime(output, test_data[i].pk, proof, (const unsigned char *) test_data[i].msg,
+                                          i - 1) ==
+                0) {
 				printf("verify succeeded with truncated message: [%u]\n", i);
 				continue;
 			}

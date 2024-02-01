@@ -98,6 +98,17 @@ int crypto_vrf_ietfdraft03_verify(unsigned char *output,
 				  unsigned long long mlen)
             __attribute__ ((warn_unused_result));
 
+// Verify a VRF proof (for a given a public key and message) and validate the
+// public key like crypto_vrf_ietfdraft03_verify except the verification
+// is not ensured to take a constant time
+SODIUM_EXPORT
+int crypto_vrf_ietfdraft03_verify_vartime(unsigned char *output,
+                   const unsigned char *pk,
+                   const unsigned char *proof,
+                   const unsigned char *m,
+                   unsigned long long mlen)
+             __attribute__ ((warn_unused_result));
+
 // Convert a VRF proof to a VRF output.
 //
 // This function does not verify the proof.

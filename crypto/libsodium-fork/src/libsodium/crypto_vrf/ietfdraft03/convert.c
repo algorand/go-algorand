@@ -39,6 +39,14 @@ _vrf_ietfdraft03_point_to_string(unsigned char string[32], const ge25519_p3 *poi
     ge25519_p3_tobytes(string, point);
 }
 
+/* Same as _vrf_ietfdraft03_point_to_string but for p2 points instead
+ */
+void
+_vrf_ietfdraft03_point_p2_to_string(unsigned char string[32], const ge25519_p2 *point)
+{
+    ge25519_tobytes(string, point);
+}
+
 /* Decode elliptic curve point from 32-byte octet string per RFC8032 section
  * 5.1.3.
  *
@@ -101,6 +109,26 @@ _vrf_ietfdraft03_hash_points(unsigned char c[16], const ge25519_p3 *P1,
     _vrf_ietfdraft03_point_to_string(str+2+32*1, P2);
     _vrf_ietfdraft03_point_to_string(str+2+32*2, P3);
     _vrf_ietfdraft03_point_to_string(str+2+32*3, P4);
+    crypto_hash_sha512(c1, str, sizeof str);
+    memmove(c, c1, 16);
+    sodium_memzero(c1, 64);
+}
+
+/* Same as _vrf_ietfdraft03_hash_points but for ge25519_p2 points instead
+ * for the last two points */
+void
+_vrf_ietfdraft03_hash_points_p3p2(unsigned char c[16], const ge25519_p3 *P1,
+                                const ge25519_p3 *P2, const ge25519_p2 *P3,
+                                const ge25519_p2 *P4)
+{
+    unsigned char str[2+32*4], c1[64];
+
+    str[0] = SUITE;
+    str[1] = TWO;
+    _vrf_ietfdraft03_point_to_string(str+2+32*0, P1);
+    _vrf_ietfdraft03_point_to_string(str+2+32*1, P2);
+    _vrf_ietfdraft03_point_p2_to_string(str+2+32*2, P3);
+    _vrf_ietfdraft03_point_p2_to_string(str+2+32*3, P4);
     crypto_hash_sha512(c1, str, sizeof str);
     memmove(c, c1, 16);
     sodium_memzero(c1, 64);

@@ -107,6 +107,13 @@ void ge25519_double_scalarmult_vartime(ge25519_p2 *r, const unsigned char *a,
                                        const ge25519_p3 *A,
                                        const unsigned char *b);
 
+void ge25519_double_sub_scalarmult_vartime(ge25519_p2 *r, const unsigned char *a,
+                                           const ge25519_p3 *A, const unsigned char *b);
+
+void ge25519_double_sub_nonbase_scalarmult_vartime(ge25519_p2 *r, const unsigned char *a,
+                                                   const ge25519_p3 *A, const unsigned char *b,
+                                                   const ge25519_p3 *B);
+
 void ge25519_double_scalarmult_vartime_p3(ge25519_p3 *r, const unsigned char *a,
                                           const ge25519_p3 *A,
                                           const unsigned char *b);

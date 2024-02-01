@@ -45,7 +45,7 @@ crypto_vrf_keypair(unsigned char *pk, unsigned char *sk)
 
 int
 crypto_vrf_keypair_from_seed(unsigned char *pk, unsigned char *sk,
-			     const unsigned char *seed)
+                             const unsigned char *seed)
 {
     return crypto_vrf_ietfdraft03_keypair_from_seed(pk, sk, seed);
 }
@@ -58,17 +58,25 @@ crypto_vrf_is_valid_key(const unsigned char *pk)
 
 int
 crypto_vrf_prove(unsigned char *proof, const unsigned char *skpk,
-		 const unsigned char *m, const unsigned long long mlen)
+                 const unsigned char *m, const unsigned long long mlen)
 {
     return crypto_vrf_ietfdraft03_prove(proof, skpk, m, mlen);
 }
 
 int
 crypto_vrf_verify(unsigned char *output, const unsigned char *pk,
-		  const unsigned char *proof, const unsigned char *m,
-		  const unsigned long long mlen)
+                  const unsigned char *proof, const unsigned char *m,
+                  const unsigned long long mlen)
 {
     return crypto_vrf_ietfdraft03_verify(output, pk, proof, m, mlen);
+}
+
+int
+crypto_vrf_verify_vartime(unsigned char *output, const unsigned char *pk,
+                          const unsigned char *proof, const unsigned char *m,
+                          const unsigned long long mlen)
+{
+    return crypto_vrf_ietfdraft03_verify_vartime(output, pk, proof, m, mlen);
 }
 
 int
