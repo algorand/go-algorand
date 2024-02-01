@@ -31,5 +31,9 @@ assert "last-proposed" in prp_info, prp_info # they just did!
 assert prp_info["last-proposed"] > 0
 assert "last-heartbeat" not in prp_info, prp_info # was a genesis account
 
+# This test really only examines the fields needed for absenteeism
+# tracking. For actually seeing accounts being taken offline, see
+# `suspension_test.go`
+
 stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 print(f"{os.path.basename(sys.argv[0])} OK {stamp}")
