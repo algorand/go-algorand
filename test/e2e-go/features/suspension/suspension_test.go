@@ -153,8 +153,9 @@ func TestBasicSuspension(t *testing.T) {
 	// node can keep voting.
 
 	// we make an _offline_ tx here, because we want to populate the key
-	// material ourself, but copying the accounts existing state. That makes it
-	// an _online_ keyreg.
+	// material ourself, by copying the account's existing state. That makes it
+	// an _online_ keyreg. That allows the running node to chug along without
+	// new part keys.
 	reReg, err := n15c.MakeUnsignedGoOfflineTx(address, 0, 0, 5_000_000, [32]byte{})
 	require.NoError(t, err, "should be able to make tx")
 

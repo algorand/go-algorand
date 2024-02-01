@@ -1442,6 +1442,7 @@ func initConsensusProtocols() {
 	vFuture.MiningPercent = 75
 
 	vFuture.MaxProposedAbsentOnlineAccounts = 32
+	vFuture.BonusPlan = 1
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 
