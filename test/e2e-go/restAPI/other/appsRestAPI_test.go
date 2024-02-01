@@ -639,15 +639,29 @@ func TestBlockLogs(t *testing.T) {
 		uint64(createdAppID), nil, nil, nil,
 		nil, nil,
 	)
-	appCallTxn, err = testClient.FillUnsignedTxTemplate(someAddress, 0, 0, 0, appCallTxn)
+	appCallTxn0, err := testClient.FillUnsignedTxTemplate(someAddress, 0, 0, 0, appCallTxn)
+	appCallTxn0.Note = []byte("0")
+
+	appCallTxn1, err := testClient.FillUnsignedTxTemplate(someAddress, 0, 0, 0, appCallTxn)
+	appCallTxn1.Note = []byte("1")
 	a.NoError(err)
-	appCallTxID, err := testClient.SignAndBroadcastTransaction(wh, nil, appCallTxn)
+
+	gid, err := testClient.GroupID([]transactions.Transaction{appCallTxn0, appCallTxn1})
 	a.NoError(err)
-	callConf, err := helper.WaitForTransaction(t, testClient, appCallTxID, 30*time.Second)
+	appCallTxn0.Group = gid
+	appCallTxn1.Group = gid
+
+	stxn0, err := testClient.SignTransactionWithWallet(wh, nil, appCallTxn0)
+	a.NoError(err)
+	stxn1, err := testClient.SignTransactionWithWallet(wh, nil, appCallTxn1)
+
+	err = testClient.BroadcastTransactionGroup([]transactions.SignedTxn{stxn0, stxn1})
+	a.NoError(err)
+
+	callConf, err := helper.WaitForTransaction(t, testClient, stxn0.ID().String(), 30*time.Second)
 	a.NoError(err)
 
 	round := callConf.ConfirmedRound
-	txid := callConf.Txn.ID()
 
 	deadDood, err := hex.DecodeString("deadd00d")
 	deadBeef, err := hex.DecodeString("deadbeef")
@@ -657,12 +671,22 @@ func TestBlockLogs(t *testing.T) {
 	a.NoError(err)
 	l0 := resp.Logs[0]
 	l1 := resp.Logs[1]
+	l2 := resp.Logs[2]
+	l3 := resp.Logs[3]
 
 	a.Equal(uint64(createdAppID), l0.ApplicationIndex)
-	a.Equal(txid.String(), l0.Txid)
+	a.Equal(stxn0.ID().String(), l0.Txid)
 	a.Equal(deadDood, l0.Logs[0])
 
 	a.Equal(uint64(createdAppID)+3, l1.ApplicationIndex)
-	a.Equal(txid.String(), l1.Txid)
+	a.Equal(stxn0.ID().String(), l1.Txid)
 	a.Equal(deadBeef, l1.Logs[0])
+
+	a.Equal(uint64(createdAppID), l2.ApplicationIndex)
+	a.Equal(stxn1.ID().String(), l2.Txid)
+	a.Equal(deadDood, l2.Logs[0])
+
+	a.Equal(uint64(createdAppID)+5, l3.ApplicationIndex)
+	a.Equal(stxn1.ID().String(), l3.Txid)
+	a.Equal(deadBeef, l3.Logs[0])
 }
