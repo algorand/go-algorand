@@ -503,33 +503,41 @@ var bonusPlans = []bonusPlan{
 		decayInterval: 1_000_000, // .99^(10.8/1) ~ .897 ~ 10% decay per year
 	},
 	// If we need to change the decay rate (only), we would create a new plan like:
-	// { decayInterval: XXX} by using an old baseRound, the amount is not adjusted
+	// { decayInterval: XXX} by using a zero baseAmount, the amount not affected.
 	// For a bigger change, we'd use a plan like:
-	// { baseRound:  <FUTURE round>, baseAmount: <new amount>,	decayInterval: <new> }
+	// { baseRound:  <FUTURE round>, baseAmount: <new amount>, decayInterval: <new> }
+	// or just
+	// { baseAmount: <new amount>, decayInterval: <new> }
 	// the new decay rate would go into effect at upgrade time, and the new
-	// amount would be set explicitly at baseRound. So care must be taken to
-	// make it _higher_ than the round of the upgrade.
+	// amount would be set at baseRound or at upgrade time.
 }
 
+// nextBonus determines the bonus that should be paid out for proposing the next block.
 func nextBonus(prev BlockHeader, params *config.ConsensusParams) basics.MicroAlgos {
-	prevParams := config.Consensus[prev.CurrentProtocol] // presence ensured by ProcessUpgradeParams
-	upgrading := prevParams.BonusPlan != params.BonusPlan
-
 	current := prev.Round + 1
-	plan := bonusPlans[params.BonusPlan]
-	// Reset the amount if it's non-zero and we are upgrading, or the time has come.
-	if (upgrading || current == plan.baseRound) && !plan.baseAmount.IsZero() {
-		return plan.baseAmount
+	prevParams := config.Consensus[prev.CurrentProtocol] // presence ensured by ProcessUpgradeParams
+	return computeBonus(current, prev.Bonus, bonusPlans[params.BonusPlan], bonusPlans[prevParams.BonusPlan])
+}
+
+// computeBonus is the guts of nextBonus that can be unit tested more effectively.
+func computeBonus(current basics.Round, prevBonus basics.MicroAlgos, curPlan bonusPlan, prevPlan bonusPlan) basics.MicroAlgos {
+	// Set the amount if it's non-zero...
+	if !curPlan.baseAmount.IsZero() {
+		upgrading := curPlan != prevPlan
+		// and the time has come. When the baseRound arrives, or at upgrade time is already passed.
+		if current == curPlan.baseRound || (upgrading && current > curPlan.baseRound) {
+			return curPlan.baseAmount
+		}
 	}
 
-	// decay
-	if plan.decayInterval != 0 && current%plan.decayInterval == 0 {
-		if newBonus, o := basics.Muldiv(prev.Bonus.Raw, 99, 100); !o {
+	if curPlan.decayInterval != 0 && current%curPlan.decayInterval == 0 {
+		// decay
+		if newBonus, o := basics.Muldiv(prevBonus.Raw, 99, 100); !o {
 			return basics.MicroAlgos{Raw: newBonus}
 		}
-		logging.Base().Panicf("MakeBlock: error decaying bonus: %d", prev.Bonus)
+		logging.Base().Panicf("MakeBlock: error decaying bonus: %d", prevBonus)
 	}
-	return prev.Bonus
+	return prevBonus
 }
 
 // MakeBlock constructs a new valid block with an empty payset and an unset Seed.

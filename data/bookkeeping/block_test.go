@@ -214,7 +214,7 @@ func TestMakeBlockUpgrades(t *testing.T) {
 
 func TestBlockUnsupported(t *testing.T) { //nolint:paralleltest // Not parallel because it modifies config.Consensus
 	partitiontest.PartitionTest(t)
-	t.Parallel()
+	// t.Parallel() not parallel because it modifies config.Consensus
 
 	var b Block
 	b.CurrentProtocol = protoUnsupported
@@ -933,6 +933,58 @@ func TestBlockHeader_Serialization(t *testing.T) {
 
 	a.Equal(crypto.Digest{}, blkHdr.TxnCommitments.Sha256Commitment)
 	a.NotEqual(crypto.Digest{}, blkHdr.TxnCommitments.NativeSha512_256Commitment)
+}
+
+func TestBonusUpgrades(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	a := require.New(t)
+
+	ma0 := basics.MicroAlgos{Raw: 0}
+	ma99 := basics.MicroAlgos{Raw: 99}
+	ma100 := basics.MicroAlgos{Raw: 100}
+	ma198 := basics.MicroAlgos{Raw: 198}
+	ma200 := basics.MicroAlgos{Raw: 200}
+
+	old := bonusPlan{}
+	plan := bonusPlan{}
+
+	// Nothing happens with empty plans
+	a.Equal(ma0, computeBonus(1, ma0, plan, old))
+	a.Equal(ma100, computeBonus(1, ma100, plan, old))
+
+	// When plan doesn't change, just expect decay on the intervals
+	plan.decayInterval = 100
+	a.Equal(ma100, computeBonus(1, ma100, plan, plan))
+	a.Equal(ma100, computeBonus(99, ma100, plan, plan))
+	a.Equal(ma99, computeBonus(100, ma100, plan, plan))
+	a.Equal(ma100, computeBonus(101, ma100, plan, plan))
+	a.Equal(ma99, computeBonus(10000, ma100, plan, plan))
+
+	// When plan changes, the new decay is in effect
+	d90 := bonusPlan{decayInterval: 90}
+	a.Equal(ma100, computeBonus(100, ma100, d90, plan)) // no decay
+	a.Equal(ma99, computeBonus(180, ma100, d90, plan))  // decay
+
+	// When plan changes and amount is present, it is installed
+	d90.baseAmount = ma200
+	a.Equal(ma200, computeBonus(100, ma100, d90, plan)) // no decay (wrong round and upgrade anyway)
+	a.Equal(ma200, computeBonus(180, ma100, d90, plan)) // no decay (upgrade)
+	a.Equal(ma198, computeBonus(180, ma200, d90, d90))  // decay
+	a.Equal(ma99, computeBonus(180, ma100, d90, d90))   // decay (no install)
+
+	// If there's a baseRound, the amount is installed accordingly
+	d90.baseRound = 150
+	a.Equal(ma99, computeBonus(90, ma100, d90, plan))   // decay because baseRound delays install
+	a.Equal(ma100, computeBonus(149, ma100, d90, plan)) // no decay (interval) but also not installed yet
+	a.Equal(ma200, computeBonus(150, ma100, d90, plan)) // no decay (upgrade and immediate change)
+	a.Equal(ma200, computeBonus(151, ma100, d90, plan)) // no decay (upgrade and immediate change)
+
+	// same tests, but not the upgrade round. only the "immediate installs" changes
+	a.Equal(ma99, computeBonus(90, ma100, d90, d90))   // decay
+	a.Equal(ma100, computeBonus(149, ma100, d90, d90)) // no decay (interval) but also not installed yet
+	a.Equal(ma200, computeBonus(150, ma100, d90, d90)) // not upgrade, but baseRound means install time
+	a.Equal(ma100, computeBonus(151, ma100, d90, d90)) // no decay (interval)
 }
 
 // TestFirstYearBonus shows what about a year's worth of block bonuses would pay out.
