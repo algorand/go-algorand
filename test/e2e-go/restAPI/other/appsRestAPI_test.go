@@ -17,6 +17,7 @@
 package other
 
 import (
+	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
@@ -573,14 +574,39 @@ func TestBlockLogs(t *testing.T) {
 	}
 	a.NoError(err)
 
-	prog := "#pragma version 10\nbyte 0xdeadbeef\nlog\nint 1"
+	innerTEAL := "#pragma version 10\nbyte 0xdeadbeef\nlog\nint 1"
 
-	ops, err := logic.AssembleString(prog)
+	innerOps, err := logic.AssembleString(innerTEAL)
 	a.NoError(err)
-	approval := ops.Program
-	ops, err = logic.AssembleString("#pragma version 10\nint 1")
+	innerApproval := innerOps.Program
 	a.NoError(err)
-	clearState := ops.Program
+	clearState := innerOps.Program
+
+	b64InnerApproval := base64.StdEncoding.EncodeToString(innerApproval)
+
+	outerTEAL := fmt.Sprintf(`#pragma version 10
+	byte 0xDEADD00D
+	log
+	txn ApplicationID
+	bz ret
+
+	itxn_begin
+	int appl
+	itxn_field TypeEnum
+	byte b64 %s
+	itxn_field ApprovalProgram
+	byte b64 %s
+	itxn_field ClearStateProgram
+	itxn_submit
+
+	ret:
+	int 1
+	return 
+	`, b64InnerApproval, b64InnerApproval)
+
+	outerOps, err := logic.AssembleString(outerTEAL)
+	a.NoError(err)
+	outerApproval := outerOps.Program
 
 	gl := basics.StateSchema{}
 	lc := basics.StateSchema{}
@@ -589,45 +615,54 @@ func TestBlockLogs(t *testing.T) {
 	appCreateTxn, err := testClient.MakeUnsignedApplicationCallTx(
 		0, nil, nil, nil,
 		nil, nil, transactions.NoOpOC,
-		approval, clearState, gl, lc, 0,
+		outerApproval, clearState, gl, lc, 0,
 	)
 	a.NoError(err)
 	appCreateTxn, err = testClient.FillUnsignedTxTemplate(someAddress, 0, 0, 0, appCreateTxn)
 	a.NoError(err)
 	appCreateTxID, err := testClient.SignAndBroadcastTransaction(wh, nil, appCreateTxn)
 	a.NoError(err)
-	confirmation, err := helper.WaitForTransaction(t, testClient, appCreateTxID, 30*time.Second)
+	createConf, err := helper.WaitForTransaction(t, testClient, appCreateTxID, 30*time.Second)
 	a.NoError(err)
-	round := confirmation.ConfirmedRound
-	txid := confirmation.Txn.ID()
 
-	// get app ID
-	submittedAppCreateTxn, err := testClient.PendingTransactionInformation(appCreateTxID)
+	createdAppID := basics.AppIndex(*createConf.ApplicationIndex)
+
+	// fund app account
+	appFundTxn, err := testClient.SendPaymentFromWallet(wh, nil, someAddress, createdAppID.Address().String(), 0, 1_000_000, nil, "", 0, 0)
 	a.NoError(err)
-	a.NotNil(submittedAppCreateTxn.ApplicationIndex)
-	createdAppID := basics.AppIndex(*submittedAppCreateTxn.ApplicationIndex)
-	a.NotZero(createdAppID)
+	appFundTxID := appFundTxn.ID()
+	_, err = helper.WaitForTransaction(t, testClient, appFundTxID.String(), 30*time.Second)
+	a.NoError(err)
+
+	// call app
+	appCallTxn, err := testClient.MakeUnsignedAppNoOpTx(
+		uint64(createdAppID), nil, nil, nil,
+		nil, nil,
+	)
+	appCallTxn, err = testClient.FillUnsignedTxTemplate(someAddress, 0, 0, 0, appCallTxn)
+	a.NoError(err)
+	appCallTxID, err := testClient.SignAndBroadcastTransaction(wh, nil, appCallTxn)
+	a.NoError(err)
+	callConf, err := helper.WaitForTransaction(t, testClient, appCallTxID, 30*time.Second)
+	a.NoError(err)
+
+	round := callConf.ConfirmedRound
+	txid := callConf.Txn.ID()
+
+	deadDood, err := hex.DecodeString("deadd00d")
+	deadBeef, err := hex.DecodeString("deadbeef")
 
 	// get block logs
 	resp, err := testClient.BlockLogs(*round)
 	a.NoError(err)
-	logs := resp.Logs[0]
-	a.Equal(logs.ApplicationIndex, uint64(createdAppID))
-	a.Equal(logs.Txid, txid.String())
-	deadBeef, err := hex.DecodeString("deadbeef")
-	a.NoError(err)
-	a.Equal(logs.Logs[0], deadBeef)
+	l0 := resp.Logs[0]
+	l1 := resp.Logs[1]
 
-	// delete the app
-	appDeleteTxn, err := testClient.MakeUnsignedAppDeleteTx(uint64(createdAppID), nil, nil, nil, nil, nil)
-	a.NoError(err)
-	appDeleteTxn, err = testClient.FillUnsignedTxTemplate(someAddress, 0, 0, 0, appDeleteTxn)
-	a.NoError(err)
-	appDeleteTxID, err := testClient.SignAndBroadcastTransaction(wh, nil, appDeleteTxn)
-	a.NoError(err)
-	_, err = helper.WaitForTransaction(t, testClient, appDeleteTxID, 30*time.Second)
-	a.NoError(err)
+	a.Equal(uint64(createdAppID), l0.ApplicationIndex)
+	a.Equal(txid.String(), l0.Txid)
+	a.Equal(deadDood, l0.Logs[0])
 
-	_, err = testClient.ApplicationInformation(uint64(createdAppID))
-	a.ErrorContains(err, "application does not exist")
+	a.Equal(uint64(createdAppID)+3, l1.ApplicationIndex)
+	a.Equal(txid.String(), l1.Txid)
+	a.Equal(deadBeef, l1.Logs[0])
 }
