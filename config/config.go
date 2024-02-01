@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -145,10 +145,7 @@ func mergeConfigFromFile(configpath string, source Local) (Local, error) {
 
 	err = loadConfig(f, &source)
 
-	// For now, all relays (listening for incoming connections) are also Archival
-	// We can change this logic in the future, but it's currently the sanest default.
 	if source.NetAddress != "" {
-		source.Archival = true
 		source.EnableLedgerService = true
 		source.EnableBlockService = true
 

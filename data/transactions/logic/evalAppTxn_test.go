@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -2006,7 +2006,7 @@ int 1
 			ledger.NewApp(parentTx.Receiver, parentAppID, basics.AppParams{})
 			ledger.NewAccount(parentAppID.Address(), 50_000)
 
-			parentEd := TestApp(t, parentSource, ep)
+			parentEd, _ := TestApp(t, parentSource, ep)
 
 			require.Len(t, parentEd.Logs, 2)
 			require.Len(t, parentEd.InnerTxns, 2)
@@ -2334,7 +2334,7 @@ int 1
 			ledger.NewApp(parentTx.Receiver, parentAppID, basics.AppParams{})
 			ledger.NewAccount(parentAppID.Address(), 50_000)
 
-			parentEd := TestApp(t, parentSource, ep)
+			parentEd, _ := TestApp(t, parentSource, ep)
 
 			require.Len(t, parentEd.Logs, 2)
 			require.Len(t, parentEd.InnerTxns, 2)
