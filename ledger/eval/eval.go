@@ -1557,16 +1557,22 @@ func max(a, b basics.Round) basics.Round {
 }
 
 // bitsMatch checks if the first n bits of two byte slices match. Written to
-// work on arbitrary slices, but expected that n is small. No attempt to
-// optimize for byte by byte comparisons. (Only user today calls with n=5)
+// work on arbitrary slices, but we expect that n is small. Only user today
+// calls with n=5.
 func bitsMatch(a, b []byte, n int) bool {
 	// Ensure n is a valid number of bits to compare
 	if n < 0 || n > len(a)*8 || n > len(b)*8 {
 		return false
 	}
 
-	// Compare each bit up to the specified n bits
-	for i := 0; i < n; i++ {
+	// Compare entire bytes when n is bigger than 8
+	for i := 0; i < n/8; i++ {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	// Compare bits in the last byte
+	for i := n / 8 * 8; i < n; i++ {
 		// Calculate the byte and bit positions
 		bytePos := i / 8
 		bitPos := i % 8

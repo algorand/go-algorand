@@ -91,10 +91,10 @@ func TestPayAction(t *testing.T) {
 		// First MiningPct > 0
 		if ver >= 40 {
 			require.True(t, dl.generator.GenesisProto().EnableMining)
-			require.EqualValues(t, 2000, vb.Block().BlockHeader.FeesCollected.Raw)
+			require.EqualValues(t, 2000, vb.Block().FeesCollected.Raw)
 		} else {
 			require.False(t, dl.generator.GenesisProto().EnableMining)
-			require.Zero(t, vb.Block().BlockHeader.FeesCollected)
+			require.Zero(t, vb.Block().FeesCollected)
 		}
 
 		postsink := micros(dl.t, dl.generator, genBalances.FeeSink)

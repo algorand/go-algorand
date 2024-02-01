@@ -280,12 +280,12 @@ func TestMiningFees(t *testing.T) {
 				require.True(t, dl.generator.GenesisProto().EnableMining)     // version sanity check
 				require.NotZero(t, dl.generator.GenesisProto().MiningPercent) // version sanity check
 				// new fields are in the header
-				require.EqualValues(t, 2000, vb.Block().BlockHeader.FeesCollected.Raw)
+				require.EqualValues(t, 2000, vb.Block().FeesCollected.Raw)
 			} else {
 				require.False(t, dl.generator.GenesisProto().EnableMining)
 				require.Zero(t, dl.generator.GenesisProto().MiningPercent) // version sanity check
 				// new fields are not in the header
-				require.Zero(t, vb.Block().BlockHeader.FeesCollected)
+				require.Zero(t, vb.Block().FeesCollected)
 			}
 
 			postsink := micros(dl.t, dl.generator, genBalances.FeeSink)
@@ -524,13 +524,16 @@ func TestAbsentTracking(t *testing.T) {
 		require.Equal(t, basics.Online, lookup(t, dl.generator, addrs[2]).Status)
 		require.Equal(t, ver >= checkingBegins, lookup(t, dl.generator, addrs[2]).IncentiveEligible)
 
-		// when 2 pays 0, they both get noticed and get suspended
-		dl.txns(&txntest.Txn{
+		// when 2 pays 0, they both get noticed but addr[0] is not considered absent
+		vb := dl.fullBlock(&txntest.Txn{
 			Type:     "pay",
 			Sender:   addrs[2],
 			Receiver: addrs[0],
 			Amount:   0,
 		})
+		if ver >= checkingBegins {
+			require.Equal(t, vb.Block().AbsentParticipationAccounts, []basics.Address{addrs[2]})
+		}
 		// addr[0] has never proposed or heartbeat so it is not considered absent
 		require.Equal(t, basics.Online, lookup(t, dl.generator, addrs[0]).Status)
 		// addr[1] still hasn't been "noticed"
@@ -539,12 +542,15 @@ func TestAbsentTracking(t *testing.T) {
 		require.False(t, lookup(t, dl.generator, addrs[2]).IncentiveEligible)
 
 		// now, when 2 pays 1, 1 gets suspended (unlike 0, we had 1 keyreg early on, so LastHeartbeat>0)
-		dl.txns(&txntest.Txn{
+		vb = dl.fullBlock(&txntest.Txn{
 			Type:     "pay",
 			Sender:   addrs[2],
 			Receiver: addrs[1],
 			Amount:   0,
 		})
+		if ver >= checkingBegins {
+			require.Equal(t, vb.Block().AbsentParticipationAccounts, []basics.Address{addrs[1]})
+		}
 		require.Equal(t, basics.Online, lookup(t, dl.generator, addrs[0]).Status)
 		require.Equal(t, ver >= checkingBegins, lookup(t, dl.generator, addrs[1]).Status == basics.Offline)
 		require.False(t, lookup(t, dl.generator, addrs[1]).IncentiveEligible)
@@ -600,7 +606,7 @@ func TestAbsenteeChallenges(t *testing.T) {
 			require.Equal(t, ver >= checkingBegins, acct.IncentiveEligible, guy)
 		}
 
-		for vb := dl.fullBlock(); vb.Block().BlockHeader.Round < 999; vb = dl.fullBlock() {
+		for vb := dl.fullBlock(); vb.Block().Round() < 999; vb = dl.fullBlock() {
 			// we just advancing to one before the challenge round
 		}
 		// All still online, same eligibility
@@ -613,7 +619,7 @@ func TestAbsenteeChallenges(t *testing.T) {
 		dl.beginBlock()
 		dl.endBlock(basics.Address{0xaa}) // This becomes the seed, which is used for the challenge
 
-		for vb := dl.fullBlock(); vb.Block().BlockHeader.Round < 1200; vb = dl.fullBlock() {
+		for vb := dl.fullBlock(); vb.Block().Round() < 1200; vb = dl.fullBlock() {
 			// advance through first grace period
 		}
 		dl.beginBlock()
@@ -626,7 +632,7 @@ func TestAbsenteeChallenges(t *testing.T) {
 			require.Equal(t, ver >= checkingBegins, acct.IncentiveEligible, guy)
 		}
 
-		for vb := dl.fullBlock(); vb.Block().BlockHeader.Round < 1220; vb = dl.fullBlock() {
+		for vb := dl.fullBlock(); vb.Block().Round() < 1220; vb = dl.fullBlock() {
 			// advance into knockoff period. but no transactions means
 			// unresponsive accounts go unnoticed.
 		}
@@ -638,11 +644,14 @@ func TestAbsenteeChallenges(t *testing.T) {
 		}
 
 		// badguy never responded, he gets knocked off when paid
-		dl.txns(&txntest.Txn{
+		vb := dl.fullBlock(&txntest.Txn{
 			Type:     "pay",
 			Sender:   addrs[0],
 			Receiver: badguy,
 		})
+		if ver >= checkingBegins {
+			require.Equal(t, vb.Block().AbsentParticipationAccounts, []basics.Address{badguy})
+		}
 		acct := lookup(t, dl.generator, badguy)
 		require.Equal(t, ver >= checkingBegins, basics.Offline == acct.Status) // if checking, badguy fails
 		require.False(t, acct.IncentiveEligible)
