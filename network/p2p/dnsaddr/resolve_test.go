@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net"
 	"testing"
+	"time"
 
 	"github.com/multiformats/go-multiaddr"
 	madns "github.com/multiformats/go-multiaddr-dns"
@@ -108,4 +109,43 @@ func TestMultiaddrsFromResolverDnsFailure(t *testing.T) {
 	maddrs, err = MultiaddrsFromResolver("bootstrap.libp2p.io", dnsaddrCont)
 	assert.Empty(t, maddrs)
 	assert.ErrorContains(t, err, "always errors")
+}
+
+type mockController struct {
+}
+
+func (c mockController) Resolver() Resolver {
+	return selfResolver{}
+}
+
+func (c mockController) NextResolver() Resolver {
+	return nil
+}
+
+type selfResolver struct {
+}
+
+func (r selfResolver) Resolve(ctx context.Context, maddr multiaddr.Multiaddr) ([]multiaddr.Multiaddr, error) {
+	return []multiaddr.Multiaddr{maddr}, nil
+}
+
+// TestIterate ensures the Iterate() does not hang in infinite loop
+// when resolver returns the same dnsaddr
+func TestIterate(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	dnsAddr := "/dnsaddr/foobar.com"
+	require.True(t, isDnsaddr(multiaddr.StringCast(dnsAddr)))
+	ma, err := multiaddr.NewMultiaddr(dnsAddr)
+	require.NoError(t, err)
+
+	require.Eventually(t, func() bool {
+		Iterate(
+			ma,
+			mockController{},
+			func(dnsaddr multiaddr.Multiaddr, entries []multiaddr.Multiaddr) error { return nil },
+		)
+		return true
+	}, 100*time.Millisecond, 50*time.Millisecond)
 }
