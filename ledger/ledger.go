@@ -20,7 +20,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"math"
 	"path/filepath"
 	"time"
 
@@ -473,18 +472,24 @@ func (l *Ledger) notifyCommit(r basics.Round) basics.Round {
 	return minToSave
 }
 
-func (l *Ledger) calcMinCatchpointRoundsLookback() (minCatchpointRoundsLookback basics.Round) {
+func (l *Ledger) calcMinCatchpointRoundsLookback() basics.Round {
 	// cfg.StoresCatchpoints checks that CatchpointInterval is positive
-	if l.cfg.StoresCatchpoints() && l.cfg.CatchpointFileHistoryLength != 0 {
-		// Nodes catching up from the _most recent_
-		// catchpoint will need to look back at least MaxTxnLife+DeeperBlockHeaderHistory+CatchpointLookback+
-		// buffer rounds before the catchpoint round in order to build up the necessary state.
-		// The max comparison is to mitigate against small catchpoint interval configurations.
-		minCatchpointRoundsLookback = basics.Round(math.Max(float64(2*l.cfg.CatchpointInterval),
-			float64(l.cfg.CatchpointInterval+l.genesisProto.MaxTxnLife+l.genesisProto.DeeperBlockHeaderHistory+
-				l.genesisProto.CatchpointLookback+100)))
+	if !l.cfg.StoresCatchpoints() || l.cfg.CatchpointFileHistoryLength == 0 {
+		return 0
 	}
-	return
+
+	// Nodes catching up from the _most recent_
+	// catchpoint will need to look back at least MaxTxnLife+DeeperBlockHeaderHistory+CatchpointLookback+
+	// buffer rounds before the catchpoint round in order to build up the necessary state.
+	// The max comparison is to mitigate against small catchpoint interval configurations.
+	catchpointIntervalLookback := 2 * l.cfg.CatchpointInterval
+	existingEstimatedLookback := l.cfg.CatchpointInterval + l.genesisProto.MaxTxnLife + l.genesisProto.DeeperBlockHeaderHistory +
+		l.genesisProto.CatchpointLookback + 100 // 100 rounds buffer
+	if catchpointIntervalLookback > existingEstimatedLookback {
+		return basics.Round(catchpointIntervalLookback)
+	}
+
+	return 0 // should be treated as a no-op
 }
 
 // GetLastCatchpointLabel returns the latest catchpoint label that was written to the
