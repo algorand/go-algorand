@@ -478,18 +478,7 @@ func (l *Ledger) calcMinCatchpointRoundsLookback() basics.Round {
 		return 0
 	}
 
-	// Nodes catching up from the _most recent_
-	// catchpoint will need to look back at least MaxTxnLife+DeeperBlockHeaderHistory+CatchpointLookback+
-	// buffer rounds before the catchpoint round in order to build up the necessary state.
-	// The max comparison is to mitigate against small catchpoint interval configurations.
-	catchpointIntervalLookback := 2 * l.cfg.CatchpointInterval
-	existingEstimatedLookback := l.cfg.CatchpointInterval + l.genesisProto.MaxTxnLife + l.genesisProto.DeeperBlockHeaderHistory +
-		l.genesisProto.CatchpointLookback + 100 // 100 rounds buffer
-	if catchpointIntervalLookback > existingEstimatedLookback {
-		return basics.Round(catchpointIntervalLookback)
-	}
-
-	return 0 // should be treated as a no-op
+	return basics.Round(2 * l.cfg.CatchpointInterval)
 }
 
 // GetLastCatchpointLabel returns the latest catchpoint label that was written to the
