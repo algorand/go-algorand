@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"sync"
 	"testing"
@@ -500,6 +501,7 @@ func TestRedirectExceptions(t *testing.T) {
 	parsedURLNodeB.Path = FormatBlockQuery(uint64(4), parsedURLNodeB.Path, net2)
 	blockURLNodeB := parsedURLNodeB.String()
 	requestNodeB, err := http.NewRequest("GET", blockURLNodeB, nil)
+	require.NoError(t, err)
 	_, err = client.Do(requestNodeB)
 
 	require.Error(t, err)
@@ -558,8 +560,45 @@ func addBlock(t *testing.T, ledger *data.Ledger) (timestamp int64) {
 
 func TestErrMemoryAtCapacity(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	macError := errMemoryAtCapacity{capacity: uint64(100), used: uint64(110)}
 	errStr := macError.Error()
 	require.Equal(t, "block service memory over capacity: 110 / 100", errStr)
+}
+
+func TestBlockServiceRedirect(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	log := logging.TestingLog(t)
+
+	ep1 := "http://localhost:1234"
+	ep2 := "/ip4/127.0.0.1/tcp/2345/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN"
+	endpoints := strings.Join([]string{ep1, ep2}, ",")
+	fb := makeFallbackEndpoints(log, endpoints)
+	require.Len(t, fb.endpoints, 2)
+	require.Equal(t, ep1, fb.endpoints[0])
+	require.Equal(t, ep2, fb.endpoints[1])
+
+	bs := BlockService{
+		net:               &httpTestPeerSource{},
+		fallbackEndpoints: fb,
+		log:               log,
+	}
+
+	r := httptest.NewRequest("GET", "/", strings.NewReader(""))
+	w := httptest.NewRecorder()
+	ok := bs.redirectRequest(10, w, r)
+	require.True(t, ok)
+	expectedPath := ep1 + FormatBlockQuery(10, "/", bs.net)
+	require.Equal(t, expectedPath, w.Result().Header.Get("Location"))
+
+	r = httptest.NewRequest("GET", "/", strings.NewReader(""))
+	w = httptest.NewRecorder()
+	ok = bs.redirectRequest(11, w, r)
+	require.True(t, ok)
+	// for p2p nodes the url is actually a peer address in p2p network and not part of HTTP path
+	expectedPath = FormatBlockQuery(11, "", bs.net)
+	require.Equal(t, expectedPath, w.Result().Header.Get("Location"))
 }
