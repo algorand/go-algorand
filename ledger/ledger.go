@@ -20,6 +20,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"math"
 	"path/filepath"
 	"time"
 
@@ -462,9 +463,28 @@ func (l *Ledger) notifyCommit(r basics.Round) basics.Round {
 	if l.archival {
 		// Do not forget any blocks.
 		minToSave = 0
+	} else if minCatchpointsRoundsLookback := l.calcMinCatchpointRoundsLookback(); minCatchpointsRoundsLookback > 0 {
+		catchpointsMinToSave := r.SubSaturate(minCatchpointsRoundsLookback)
+		if catchpointsMinToSave < minToSave {
+			minToSave = catchpointsMinToSave
+		}
 	}
 
 	return minToSave
+}
+
+func (l *Ledger) calcMinCatchpointRoundsLookback() (minCatchpointRoundsLookback basics.Round) {
+	// cfg.StoresCatchpoints checks that CatchpointInterval is positive
+	if l.cfg.StoresCatchpoints() && l.cfg.CatchpointFileHistoryLength != 0 {
+		// Nodes catching up from the _most recent_
+		// catchpoint will need to look back at least MaxTxnLife+DeeperBlockHeaderHistory+CatchpointLookback+
+		// buffer rounds before the catchpoint round in order to build up the necessary state.
+		// The max comparison is to mitigate against small catchpoint interval configurations.
+		minCatchpointRoundsLookback = basics.Round(math.Max(float64(2*l.cfg.CatchpointInterval),
+			float64(l.cfg.CatchpointInterval+l.genesisProto.MaxTxnLife+l.genesisProto.DeeperBlockHeaderHistory+
+				l.genesisProto.CatchpointLookback+100)))
+	}
+	return
 }
 
 // GetLastCatchpointLabel returns the latest catchpoint label that was written to the
@@ -901,7 +921,7 @@ func (l *Ledger) FlushCaches() {
 // Validate uses the ledger to validate block blk as a candidate next block.
 // It returns an error if blk is not the expected next block, or if blk is
 // not a valid block (e.g., it has duplicate transactions, overspends some
-// account, etc).
+// account, etc.).
 func (l *Ledger) Validate(ctx context.Context, blk bookkeeping.Block, executionPool execpool.BacklogPool) (*ledgercore.ValidatedBlock, error) {
 	delta, err := eval.Eval(ctx, l, blk, true, l.verifiedTxnCache, executionPool, l.tracer)
 	if err != nil {
