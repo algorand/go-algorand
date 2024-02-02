@@ -224,15 +224,15 @@ func (f *RestClientFixture) GetNodeWalletsSortedByBalance(client libgoal.Client)
 // WaitForTxnConfirmation waits until either the passed txid is confirmed
 // or until the passed roundTimeout passes
 // or until waiting for a round to pass times out
-func (f *RestClientFixture) WaitForTxnConfirmation(roundTimeout uint64, accountAddress, txid string) bool {
-	_, err := f.WaitForConfirmedTxn(roundTimeout, accountAddress, txid)
+func (f *RestClientFixture) WaitForTxnConfirmation(roundTimeout uint64, txid string) bool {
+	_, err := f.WaitForConfirmedTxn(roundTimeout, txid)
 	return err == nil
 }
 
 // WaitForConfirmedTxn waits until either the passed txid is confirmed
 // or until the passed roundTimeout passes
 // or until waiting for a round to pass times out
-func (f *RestClientFixture) WaitForConfirmedTxn(roundTimeout uint64, accountAddress, txid string) (txn v2.PreEncodedTxInfo, err error) {
+func (f *RestClientFixture) WaitForConfirmedTxn(roundTimeout uint64, txid string) (txn v2.PreEncodedTxInfo, err error) {
 	client := f.AlgodClient
 	for {
 		// Get current round information
@@ -270,7 +270,7 @@ func (f *RestClientFixture) WaitForAllTxnsToConfirm(roundTimeout uint64, txidsAn
 		return true
 	}
 	for txid, addr := range txidsAndAddresses {
-		_, err := f.WaitForConfirmedTxn(roundTimeout, addr, txid)
+		_, err := f.WaitForConfirmedTxn(roundTimeout, txid)
 		if err != nil {
 			f.t.Logf("txn failed to confirm: addr=%s, txid=%s", addr, txid)
 			pendingTxns, err := f.LibGoalClient.GetParsedPendingTransactions(0)
@@ -359,7 +359,7 @@ func (f *RestClientFixture) SendMoneyAndWaitFromWallet(walletHandle, walletPassw
 	require.NoError(f.t, err, "client should be able to send money from rich to poor account")
 	require.NotEmpty(f.t, fundingTx.ID().String(), "transaction ID should not be empty")
 	waitingDeadline := curRound + uint64(5)
-	txn, err = f.WaitForConfirmedTxn(waitingDeadline, fromAccount, fundingTx.ID().String())
+	txn, err = f.WaitForConfirmedTxn(waitingDeadline, fundingTx.ID().String())
 	require.NoError(f.t, err)
 	return
 }

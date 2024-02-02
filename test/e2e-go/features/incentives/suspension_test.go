@@ -29,8 +29,6 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-const roundTime = 4 * time.Second
-
 // TestBasicSuspension confirms that accounts that don't propose get suspended
 // (when a tx naming them occurs)
 func TestBasicSuspension(t *testing.T) {
@@ -173,7 +171,7 @@ func TestBasicSuspension(t *testing.T) {
 	onlineTxID, err := n15c.SignAndBroadcastTransaction(wh, nil, reReg)
 	require.NoError(t, err, "should be no errors when going online")
 
-	fixture.WaitForConfirmedTxn(uint64(reReg.LastValid), address, onlineTxID)
+	fixture.WaitForConfirmedTxn(uint64(reReg.LastValid), onlineTxID)
 	account, err = fixture.LibGoalClient.AccountData(address)
 
 	a.NoError(err)

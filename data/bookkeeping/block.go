@@ -523,7 +523,7 @@ func nextBonus(prev BlockHeader, params *config.ConsensusParams) basics.MicroAlg
 func computeBonus(current basics.Round, prevBonus basics.MicroAlgos, curPlan bonusPlan, prevPlan bonusPlan) basics.MicroAlgos {
 	// Set the amount if it's non-zero...
 	if !curPlan.baseAmount.IsZero() {
-		upgrading := curPlan != prevPlan
+		upgrading := curPlan != prevPlan || current == 1
 		// and the time has come. When the baseRound arrives, or at upgrade time is already passed.
 		if current == curPlan.baseRound || (upgrading && current > curPlan.baseRound) {
 			return curPlan.baseAmount
