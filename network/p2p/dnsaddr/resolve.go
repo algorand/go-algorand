@@ -35,8 +35,14 @@ func Iterate(initial multiaddr.Multiaddr, controller ResolveController, f func(d
 	if resolver == nil {
 		return errors.New("passed controller has no resolvers Iterate")
 	}
+	const maxHops = 100
+	hops := 0
 	var toResolve = []multiaddr.Multiaddr{initial}
 	for resolver != nil && len(toResolve) > 0 {
+		hops++
+		if hops > maxHops {
+			return errors.New("max hops reached while resolving dnsaddr " + initial.String())
+		}
 		curr := toResolve[0]
 		maddrs, resolveErr := resolver.Resolve(context.Background(), curr)
 		if resolveErr != nil {
