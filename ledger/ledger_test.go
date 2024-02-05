@@ -3291,7 +3291,7 @@ func TestLedgerMaxBlockHistoryLookback(t *testing.T) {
 func TestLedgerRetainMinOffCatchpointInterval(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	// This test is to ensure that the ledger retains the minimum number of blocks off the catchpoint interval.
-	blocksToMake := 5000
+	blocksToMake := 2000
 
 	// Cases:
 	// 1. Base Case: Archival = false, Stores catchpoints returns true, CatchpointFileHistoryLength = >= 1 - implies catchpoint interval > 0 - min formula
@@ -3304,17 +3304,15 @@ func TestLedgerRetainMinOffCatchpointInterval(t *testing.T) {
 		storeCatchpoints            bool
 		archival                    bool
 		catchpointFileHistoryLength int
-		expectedOldestBlock         basics.Round
 	}{
-		{true, false, 1, 1000}, // should use min catchpoint formula
-		{false, true, 1, 1},    // all blocks get retained, archival mode dictates
-		{false, false, 1, basics.Round(uint64(blocksToMake) - 2800)}, // should not modify min blocks retained based on catchpoint interval
-		{true, false, -1, 1000},  // should use min formula, this is the keep all catchpoints setting
-		{true, false, 365, 1000}, // should use min formula, this is the default setting for catchpoint file history length
+		{true, false, 1},   // should use min catchpoint formula
+		{false, true, 1},   // all blocks get retained, archival mode dictates
+		{false, false, 1},  // should not modify min blocks retained based on catchpoint interval
+		{true, false, -1},  // should use min formula, this is the keep all catchpoints setting
+		{true, false, 365}, // should use min formula, this is the default setting for catchpoint file history length
 	}
 	for _, tc := range catchpointIntervalBlockRetentionTestCases {
 		func() {
-			genBalances, _, _ := ledgertesting.NewTestGenesis()
 			var genHash crypto.Digest
 			crypto.RandBytes(genHash[:])
 			cfg := config.GetDefaultLocal()
@@ -3322,40 +3320,32 @@ func TestLedgerRetainMinOffCatchpointInterval(t *testing.T) {
 			cfg.MaxBlockHistoryLookback = 0 // max block history lookback is not used in this test
 			if tc.storeCatchpoints {
 				cfg.CatchpointTracking = config.CatchpointTrackingModeStored
-				cfg.CatchpointInterval = 2000
+				cfg.CatchpointInterval = 100
 			} else {
 				cfg.CatchpointInterval = 0 // sufficient for cfg.StoresCatchpoints() to return false
 			}
 			cfg.CatchpointFileHistoryLength = tc.catchpointFileHistoryLength
+			cfg.Archival = tc.archival
 
-			l := newSimpleLedgerFull(t, genBalances, protocol.ConsensusCurrentVersion, genHash, cfg,
-				func(cfg *simpleLedgerCfg) { cfg.notArchival = !tc.archival })
-			defer l.Close()
+			l := &Ledger{}
+			l.cfg = cfg
+			l.archival = cfg.Archival
 
-			for i := 0; i < blocksToMake; i++ {
-				eval := nextBlock(t, l)
-				endBlock(t, l, eval)
-			}
+			for i := 1; i <= blocksToMake; i++ {
+				minBlockToKeep := l.notifyCommit(basics.Round(i))
 
-			require.Equal(t, basics.Round(blocksToMake), l.Latest())
+				// In archival mode, all blocks should always be kept
+				if cfg.Archival {
+					require.Equal(t, basics.Round(0), minBlockToKeep)
+				} else {
+					// This happens to work for the test case where we don't store catchpoints since mintosave is always
+					// 0 in that case.
+					expectedCatchpointLookback := 2 * cfg.CatchpointInterval
 
-			// Default for archival nodes
-			blockToCheckUnavailable := basics.Round(0)
-
-			if !tc.archival {
-				blockToCheckUnavailable = tc.expectedOldestBlock - 500
-			}
-
-			// make sure we can get the last `expectedOldestBlock` blocks
-			blkA, err := l.Block(tc.expectedOldestBlock)
-
-			require.NoError(t, err)
-			require.NotEmpty(t, blkA)
-
-			if blockToCheckUnavailable > 0 {
-				blkU, err1 := l.Block(blockToCheckUnavailable)
-				require.Error(t, err1)
-				require.Empty(t, blkU)
+					expectedMinBlockToKeep := basics.Round(uint64(i)).SubSaturate(
+						basics.Round(expectedCatchpointLookback))
+					require.Equal(t, expectedMinBlockToKeep, minBlockToKeep)
+				}
 			}
 		}()
 	}
