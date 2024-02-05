@@ -41,6 +41,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
+	"github.com/algorand/go-algorand/network/addr"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/metrics"
 )
@@ -389,10 +390,10 @@ func (bs *BlockService) redirectRequest(round uint64, response http.ResponseWrit
 	}
 
 	var redirectURL string
-	if network.IsMultiaddr(peerAddress) {
+	if addr.IsMultiaddr(peerAddress) {
 		redirectURL = strings.Replace(FormatBlockQuery(round, "", bs.net), "{genesisID}", bs.genesisID, 1)
 	} else {
-		parsedURL, err := network.ParseHostOrURL(peerAddress)
+		parsedURL, err := addr.ParseHostOrURL(peerAddress)
 		if err != nil {
 			bs.log.Debugf("redirectRequest: %s", err.Error())
 			return false
@@ -498,10 +499,10 @@ func makeFallbackEndpoints(log logging.Logger, customFallbackEndpoints string) (
 	}
 	endpoints := strings.Split(customFallbackEndpoints, ",")
 	for _, ep := range endpoints {
-		if network.IsMultiaddr(ep) {
+		if addr.IsMultiaddr(ep) {
 			fe.endpoints = append(fe.endpoints, ep)
 		} else {
-			parsed, err := network.ParseHostOrURL(ep)
+			parsed, err := addr.ParseHostOrURL(ep)
 			if err != nil {
 				log.Warnf("makeFallbackEndpoints: error parsing %s %s", ep, err.Error())
 				continue

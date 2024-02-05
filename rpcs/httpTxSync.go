@@ -31,6 +31,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
+	"github.com/algorand/go-algorand/network/addr"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/bloom"
 )
@@ -112,10 +113,10 @@ func (hts *HTTPTxSync) Sync(ctx context.Context, bloom *bloom.Filter) (txgroups 
 			return nil, fmt.Errorf("HTTPTxSync cannot create a HTTP client for a peer %T %#v: %s", peer, peer, err.Error())
 		}
 	}
-	if network.IsMultiaddr(hts.rootURL) {
+	if addr.IsMultiaddr(hts.rootURL) {
 		syncURL = network.SubstituteGenesisID(hts.peers, path.Join("", TxServiceHTTPPath))
 	} else {
-		parsedURL, err0 := network.ParseHostOrURL(hts.rootURL)
+		parsedURL, err0 := addr.ParseHostOrURL(hts.rootURL)
 		if err0 != nil {
 			hts.log.Warnf("txSync bad url %v: %s", hts.rootURL, err0)
 			return nil, err0

@@ -39,6 +39,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
+	"github.com/algorand/go-algorand/network/addr"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -168,7 +169,7 @@ func TestRedirectFallbackEndpoints(t *testing.T) {
 	nodeA.RegisterHTTPHandler(BlockServiceBlockPath, bs1)
 	nodeB.RegisterHTTPHandler(BlockServiceBlockPath, bs2)
 
-	parsedURL, err := network.ParseHostOrURL(nodeA.rootURL())
+	parsedURL, err := addr.ParseHostOrURL(nodeA.rootURL())
 	require.NoError(t, err)
 
 	client := http.Client{}
@@ -213,7 +214,7 @@ func TestBlockServiceShutdown(t *testing.T) {
 	nodeA.start()
 	defer nodeA.stop()
 
-	parsedURL, err := network.ParseHostOrURL(nodeA.rootURL())
+	parsedURL, err := addr.ParseHostOrURL(nodeA.rootURL())
 	require.NoError(t, err)
 
 	client := http.Client{}
@@ -295,7 +296,7 @@ func TestRedirectOnFullCapacity(t *testing.T) {
 
 	nodeB.RegisterHTTPHandler(BlockServiceBlockPath, bs2)
 
-	parsedURL, err := network.ParseHostOrURL(nodeA.rootURL())
+	parsedURL, err := addr.ParseHostOrURL(nodeA.rootURL())
 	require.NoError(t, err)
 
 	client := http.Client{}
@@ -476,7 +477,7 @@ func TestRedirectExceptions(t *testing.T) {
 	nodeA.RegisterHTTPHandler(BlockServiceBlockPath, bs1)
 	nodeB.RegisterHTTPHandler(BlockServiceBlockPath, bs2)
 
-	parsedURL, err := network.ParseHostOrURL(nodeA.rootURL())
+	parsedURL, err := addr.ParseHostOrURL(nodeA.rootURL())
 	require.NoError(t, err)
 
 	client := http.Client{}
@@ -495,7 +496,7 @@ func TestRedirectExceptions(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, response.StatusCode, http.StatusNotFound)
 
-	parsedURLNodeB, err := network.ParseHostOrURL(nodeB.rootURL())
+	parsedURLNodeB, err := addr.ParseHostOrURL(nodeB.rootURL())
 	require.NoError(t, err)
 
 	parsedURLNodeB.Path = FormatBlockQuery(uint64(4), parsedURLNodeB.Path, net2)

@@ -103,13 +103,13 @@ func MakePhonebook(connectionsRateLimitingCount uint,
 }
 
 // GetAddresses returns up to N addresses, but may return fewer
-func (ps *PeerStore) GetAddresses(n int, role PhoneBookEntryRoles) []string {
+func (ps *PeerStore) GetAddresses(n int, role phonebook.PhoneBookEntryRoles) []string {
 	return shuffleSelect(ps.filterRetryTime(time.Now(), role), n)
 }
 
 // UpdateRetryAfter updates the retryAfter time for the given address.
 func (ps *PeerStore) UpdateRetryAfter(addr string, retryAfter time.Time) {
-	info, err := PeerInfoFromDomainPort(addr)
+	info, err := peerInfoFromDomainPort(addr)
 	if err != nil {
 		return
 	}
@@ -132,7 +132,7 @@ func (ps *PeerStore) UpdateRetryAfter(addr string, retryAfter time.Time) {
 // The provisional time should be updated after the connection with UpdateConnectionTime
 func (ps *PeerStore) GetConnectionWaitTime(addr string) (bool, time.Duration, time.Time) {
 	curTime := time.Now()
-	info, err := PeerInfoFromDomainPort(addr)
+	info, err := peerInfoFromDomainPortOrMultiaddr(addr)
 	if err != nil {
 		return false, 0 /* not used */, curTime /* not used */
 	}
@@ -181,7 +181,7 @@ func (ps *PeerStore) GetConnectionWaitTime(addr string) (bool, time.Duration, ti
 
 // UpdateConnectionTime updates the connection time for the given address.
 func (ps *PeerStore) UpdateConnectionTime(addr string, provisionalTime time.Time) bool {
-	info, err := PeerInfoFromDomainPort(addr)
+	info, err := peerInfoFromDomainPortOrMultiaddr(addr)
 	if err != nil {
 		return false
 	}
@@ -232,7 +232,7 @@ func (ps *PeerStore) ReplacePeerList(addressesThey []string, networkName string,
 
 	}
 	for _, addr := range addressesThey {
-		info, err := PeerInfoFromDomainPort(addr)
+		info, err := peerInfoFromDomainPort(addr)
 		if err != nil {
 			return
 		}
@@ -264,7 +264,7 @@ func (ps *PeerStore) ReplacePeerList(addressesThey []string, networkName string,
 func (ps *PeerStore) AddPersistentPeers(dnsAddresses []string, networkName string, role PhoneBookEntryRoles) {
 
 	for _, addr := range dnsAddresses {
-		info, err := PeerInfoFromDomainPort(addr)
+		info, err := peerInfoFromDomainPort(addr)
 		if err != nil {
 			return
 		}
