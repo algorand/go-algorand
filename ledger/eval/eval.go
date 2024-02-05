@@ -789,7 +789,12 @@ func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, evalOpts 
 		return nil, fmt.Errorf("overflowed subtracting rewards for block %v", hdr.Round)
 	}
 
-	if eval.eligibleForIncentives(prevHeader.Proposer) {
+	eligible, err := eval.eligibleForIncentives(prevHeader.Proposer)
+	if err != nil {
+		return nil, err
+	}
+
+	if eligible {
 		incentive, _ := basics.NewPercent(proto.MiningPercent).DivvyAlgos(prevHeader.FeesCollected)
 		total, o := basics.OAddA(incentive, prevHeader.Bonus)
 		if o {
@@ -858,18 +863,18 @@ var (
 	incentiveMaxBalance = basics.Algos(100_000_000)
 )
 
-func (eval *BlockEvaluator) eligibleForIncentives(proposer basics.Address) bool {
+func (eval *BlockEvaluator) eligibleForIncentives(proposer basics.Address) (bool, error) {
 	proposerState, err := eval.state.Get(proposer, true)
 	if err != nil {
-		return false
+		return false, err
 	}
 	if proposerState.MicroAlgos.LessThan(incentiveMinBalance) {
-		return false
+		return false, nil
 	}
 	if proposerState.MicroAlgos.GreaterThan(incentiveMaxBalance) {
-		return false
+		return false, nil
 	}
-	return proposerState.IncentiveEligible
+	return proposerState.IncentiveEligible, nil
 }
 
 // hotfix for testnet stall 08/26/2019; move some algos from testnet bank to rewards pool to give it enough time until protocol upgrade occur.
