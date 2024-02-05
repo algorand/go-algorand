@@ -21,12 +21,13 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/algorand/go-algorand/network/phonebook"
 	"github.com/algorand/go-algorand/util"
 )
 
 // rateLimitingTransport is the transport for execute a single HTTP transaction, obtaining the Response for a given Request.
 type rateLimitingTransport struct {
-	phonebook       Phonebook
+	phonebook       phonebook.Phonebook
 	innerTransport  *http.Transport
 	queueingTimeout time.Duration
 }
@@ -37,7 +38,7 @@ var ErrConnectionQueueingTimeout = errors.New("rateLimitingTransport: queueing t
 
 // makeRateLimitingTransport creates a rate limiting http transport that would limit the requests rate
 // according to the entries in the phonebook.
-func makeRateLimitingTransport(phonebook Phonebook, queueingTimeout time.Duration, dialer *Dialer, maxIdleConnsPerHost int) rateLimitingTransport {
+func makeRateLimitingTransport(phonebook phonebook.Phonebook, queueingTimeout time.Duration, dialer *Dialer, maxIdleConnsPerHost int) rateLimitingTransport {
 	defaultTransport := http.DefaultTransport.(*http.Transport)
 	return rateLimitingTransport{
 		phonebook: phonebook,

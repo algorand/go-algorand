@@ -28,6 +28,7 @@ import (
 	libp2p "github.com/libp2p/go-libp2p/core/peerstore"
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/network/phonebook"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -154,7 +155,7 @@ func TestArrayPhonebookAll(t *testing.T) {
 	require.NoError(t, err)
 	for _, addr := range set {
 		entry := makePhonebookEntryData("", PhoneBookEntryRelayRole, false)
-		info, _ := PeerInfoFromDomainPort(addr)
+		info, _ := peerInfoFromDomainPort(addr)
 		ph.AddAddrs(info.ID, info.Addrs, libp2p.AddressTTL)
 		ph.Put(info.ID, addressDataKey, entry)
 	}
@@ -169,7 +170,7 @@ func TestArrayPhonebookUniform1(t *testing.T) {
 	require.NoError(t, err)
 	for _, addr := range set {
 		entry := makePhonebookEntryData("", PhoneBookEntryRelayRole, false)
-		info, _ := PeerInfoFromDomainPort(addr)
+		info, _ := peerInfoFromDomainPort(addr)
 		ph.AddAddrs(info.ID, info.Addrs, libp2p.AddressTTL)
 		ph.Put(info.ID, addressDataKey, entry)
 	}
@@ -184,7 +185,7 @@ func TestArrayPhonebookUniform3(t *testing.T) {
 	require.NoError(t, err)
 	for _, addr := range set {
 		entry := makePhonebookEntryData("", PhoneBookEntryRelayRole, false)
-		info, _ := PeerInfoFromDomainPort(addr)
+		info, _ := peerInfoFromDomainPort(addr)
 		ph.AddAddrs(info.ID, info.Addrs, libp2p.AddressTTL)
 		ph.Put(info.ID, addressDataKey, entry)
 	}
@@ -277,8 +278,8 @@ func TestWaitAndAddConnectionTimeLongtWindow(t *testing.T) {
 	require.NoError(t, err)
 	addr1 := "addrABC:4040"
 	addr2 := "addrXYZ:4041"
-	info1, _ := PeerInfoFromDomainPort(addr1)
-	info2, _ := PeerInfoFromDomainPort(addr2)
+	info1, _ := peerInfoFromDomainPort(addr1)
+	info2, _ := peerInfoFromDomainPort(addr2)
 
 	// Address not in. Should return false
 	addrInPhonebook, _, provisionalTime := entries.GetConnectionWaitTime(addr1)
@@ -409,7 +410,7 @@ func TestPhonebookRoles(t *testing.T) {
 	require.Equal(t, len(relaysSet)+len(archiverSet), len(ph.Peers()))
 	require.Equal(t, len(relaysSet)+len(archiverSet), ph.Length())
 
-	for _, role := range []PhoneBookEntryRoles{PhoneBookEntryRelayRole, PhoneBookEntryArchiverRole} {
+	for _, role := range []phonebook.PhoneBookEntryRoles{PhoneBookEntryRelayRole, PhoneBookEntryArchiverRole} {
 		for k := 0; k < 100; k++ {
 			for l := 0; l < 3; l++ {
 				entries := ph.GetAddresses(l, role)
