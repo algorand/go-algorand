@@ -462,8 +462,8 @@ func (l *Ledger) notifyCommit(r basics.Round) basics.Round {
 	if l.archival {
 		// Do not forget any blocks.
 		minToSave = 0
-	} else if minCatchpointsRoundsLookback := l.calcMinCatchpointRoundsLookback(); minCatchpointsRoundsLookback > 0 {
-		catchpointsMinToSave := r.SubSaturate(minCatchpointsRoundsLookback)
+	} else {
+		catchpointsMinToSave := r.SubSaturate(l.calcMinCatchpointRoundsLookback())
 		if catchpointsMinToSave < minToSave {
 			minToSave = catchpointsMinToSave
 		}
