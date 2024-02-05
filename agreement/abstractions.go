@@ -54,12 +54,14 @@ type BlockValidator interface {
 // and can now be recorded in the ledger.  This is an optimized version of
 // calling EnsureBlock() on the Ledger.
 type ValidatedBlock interface {
-	// WithSeed creates a copy of this ValidatedBlock with its
-	// cryptographically random seed set to the given value.
+	// WithProposal creates a copy of this ValidatedBlock with its
+	// cryptographically random seed and proposer set. Abstractly, it is how the
+	// agreement code "finishes" a block and makes it a proposal for a specific
+	// account.
 	//
 	// Calls to Seed() or to Digest() on the copy's Block must
 	// reflect the value of the new seed.
-	WithSeed(committee.Seed, basics.Address) ValidatedBlock
+	WithProposal(committee.Seed, basics.Address) ValidatedBlock
 
 	// Block returns the underlying block that has been validated.
 	Block() bookkeeping.Block

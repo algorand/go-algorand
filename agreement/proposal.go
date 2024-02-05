@@ -271,7 +271,7 @@ func proposalForBlock(address basics.Address, vrf *crypto.VRFSecrets, ve Validat
 	if ve.Block().ConsensusProtocol().EnableMining {
 		hdrProp = address
 	}
-	ve = ve.WithSeed(newSeed, hdrProp)
+	ve = ve.WithProposal(newSeed, hdrProp)
 	proposal := makeProposal(ve, seedProof, period, address)
 	value := proposalValue{
 		OriginalPeriod:   period,

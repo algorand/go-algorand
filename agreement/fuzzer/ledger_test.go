@@ -93,7 +93,7 @@ func (b testValidatedBlock) Block() bookkeeping.Block {
 	return b.Inside
 }
 
-func (b testValidatedBlock) WithSeed(s committee.Seed, proposer basics.Address) agreement.ValidatedBlock {
+func (b testValidatedBlock) WithProposal(s committee.Seed, proposer basics.Address) agreement.ValidatedBlock {
 	b.Inside.BlockHeader.Seed = s
 	b.Inside.BlockHeader.Proposer = proposer
 	return b

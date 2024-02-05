@@ -1291,8 +1291,8 @@ type validatedBlock struct {
 }
 
 // WithSeed satisfies the agreement.ValidatedBlock interface.
-func (vb validatedBlock) WithSeed(s committee.Seed, proposer basics.Address) agreement.ValidatedBlock {
-	lvb := vb.vb.WithSeed(s, proposer)
+func (vb validatedBlock) WithProposal(s committee.Seed, proposer basics.Address) agreement.ValidatedBlock {
+	lvb := vb.vb.WithProposal(s, proposer)
 	return validatedBlock{vb: &lvb}
 }
 
