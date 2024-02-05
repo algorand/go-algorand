@@ -60,19 +60,25 @@ type LedgerForService interface {
 	GetCatchpointStream(round basics.Round) (ledger.ReadCloseSizer, error)
 }
 
+// httpGossipNode is a reduced interface for the gossipNode that only includes the methods needed by the LedgerService
+type httpGossipNode interface {
+	RegisterHTTPHandler(path string, handler http.Handler)
+	GetHTTPRequestConnection(request *http.Request) (conn network.DeadlineSettable)
+}
+
 // LedgerService represents the Ledger RPC API
 type LedgerService struct {
 	// running is non-zero once the service is running, and zero when it's not running. it needs to be at a 32-bit aligned address for RasPI support.
 	running       atomic.Int32
 	ledger        LedgerForService
 	genesisID     string
-	net           network.GossipNode
+	net           httpGossipNode
 	enableService bool
 	stopping      sync.WaitGroup
 }
 
 // MakeLedgerService creates a LedgerService around the provider Ledger and registers it with the HTTP router
-func MakeLedgerService(config config.Local, ledger LedgerForService, net network.GossipNode, genesisID string) *LedgerService {
+func MakeLedgerService(config config.Local, ledger LedgerForService, net httpGossipNode, genesisID string) *LedgerService {
 	service := &LedgerService{
 		ledger:        ledger,
 		genesisID:     genesisID,

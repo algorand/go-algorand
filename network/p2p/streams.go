@@ -104,6 +104,20 @@ func (n *streamManager) streamHandler(stream network.Stream) {
 	n.handler(n.ctx, remotePeer, stream, incoming)
 }
 
+// streamHandlerHTTP tracks the ProtocolIDForMultistreamSelect = "/http/1.1" streams
+func (n *streamManager) streamHandlerHTTP(stream network.Stream) {
+	n.streamsLock.Lock()
+	defer n.streamsLock.Unlock()
+	n.streams[stream.Conn().LocalPeer()] = stream
+}
+
+func (n *streamManager) getStream(peerID peer.ID) (network.Stream, bool) {
+	n.streamsLock.Lock()
+	defer n.streamsLock.Unlock()
+	stream, ok := n.streams[peerID]
+	return stream, ok
+}
+
 // Connected is called when a connection is opened
 func (n *streamManager) Connected(net network.Network, conn network.Conn) {
 	remotePeer := conn.RemotePeer()
@@ -159,6 +173,12 @@ func (n *streamManager) Disconnected(net network.Network, conn network.Conn) {
 	if ok {
 		stream.Close()
 		delete(n.streams, conn.RemotePeer())
+	}
+
+	stream, ok = n.streams[conn.LocalPeer()]
+	if ok {
+		stream.Close()
+		delete(n.streams, conn.LocalPeer())
 	}
 }
 

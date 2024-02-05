@@ -19,7 +19,6 @@ package network
 import (
 	"context"
 	"fmt"
-	"net"
 	"net/http"
 	"sync"
 
@@ -206,8 +205,12 @@ func (n *HybridP2PNetwork) OnNetworkAdvance() {
 
 // GetHTTPRequestConnection returns the underlying connection for the given request. Note that the request must be the same
 // request that was provided to the http handler ( or provide a fallback Context() to that )
-func (n *HybridP2PNetwork) GetHTTPRequestConnection(request *http.Request) (conn net.Conn) {
-	return nil
+func (n *HybridP2PNetwork) GetHTTPRequestConnection(request *http.Request) (conn DeadlineSettable) {
+	conn = n.wsNetwork.GetHTTPRequestConnection(request)
+	if conn != nil {
+		return conn
+	}
+	return n.p2pNetwork.GetHTTPRequestConnection(request)
 }
 
 // GetGenesisID returns the network-specific genesisID.

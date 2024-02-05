@@ -246,6 +246,10 @@ func (s *mockService) Publish(ctx context.Context, topic string, data []byte) er
 	return nil
 }
 
+func (s *mockService) GetStream(peer.ID) (network.Stream, bool) {
+	return nil, false
+}
+
 func makeMockService(id peer.ID, addrs []ma.Multiaddr) *mockService {
 	return &mockService{
 		id:    id,
@@ -568,11 +572,17 @@ func TestMultiaddrConversionToFrom(t *testing.T) {
 }
 
 type p2phttpHandler struct {
+	tb      testing.TB
 	retData string
+	net     GossipNode
 }
 
 func (h *p2phttpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(h.retData))
+	if r.URL.Path == "/check-conn" {
+		c := h.net.GetHTTPRequestConnection(r)
+		require.NotNil(h.tb, c)
+	}
 }
 
 func TestP2PHTTPHandler(t *testing.T) {
@@ -587,11 +597,11 @@ func TestP2PHTTPHandler(t *testing.T) {
 	netA, err := NewP2PNetwork(log, cfg, "", nil, genesisID, config.Devtestnet, &nopeNodeInfo{})
 	require.NoError(t, err)
 
-	h := &p2phttpHandler{"hello"}
+	h := &p2phttpHandler{t, "hello", nil}
 	netA.RegisterHTTPHandler("/test", h)
 
-	h2 := &p2phttpHandler{"world"}
-	netA.RegisterHTTPHandler("/bar", h2)
+	h2 := &p2phttpHandler{t, "world", netA}
+	netA.RegisterHTTPHandler("/check-conn", h2)
 
 	netA.Start()
 	defer netA.Stop()
@@ -613,7 +623,7 @@ func TestP2PHTTPHandler(t *testing.T) {
 
 	httpClient, err = p2p.MakeHTTPClient(&peerInfoA)
 	require.NoError(t, err)
-	resp, err = httpClient.Get("/bar")
+	resp, err = httpClient.Get("/check-conn")
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
