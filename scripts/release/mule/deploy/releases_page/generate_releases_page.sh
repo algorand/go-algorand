@@ -14,7 +14,7 @@ then
     exit 1
 fi
 
-CHANNEL=$(./scripts/release/mule/common/get_channel.sh "$NETWORK")
+CHANNEL=${CHANNEL:-$(./scripts/release/mule/common/get_channel.sh "$NETWORK")}
 
 cd scripts/release/mule/deploy/releases_page
 
