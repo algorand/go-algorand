@@ -33,6 +33,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/encoded"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
+	"github.com/algorand/go-algorand/network/addr"
 	"github.com/algorand/go-algorand/rpcs"
 	"github.com/algorand/go-algorand/util"
 )
@@ -75,11 +76,11 @@ func makeLedgerFetcher(net network.GossipNode, accessor ledger.CatchpointCatchup
 
 func (lf *ledgerFetcher) requestLedger(ctx context.Context, peer network.HTTPPeer, round basics.Round, method string) (*http.Response, error) {
 	var ledgerURL string
-	if network.IsMultiaddr(peer.GetAddress()) {
+	if addr.IsMultiaddr(peer.GetAddress()) {
 		ledgerURL = network.SubstituteGenesisID(lf.net, "/v1/{genesisID}/ledger/"+strconv.FormatUint(uint64(round), 36))
 	} else {
 
-		parsedURL, err := network.ParseHostOrURL(peer.GetAddress())
+		parsedURL, err := addr.ParseHostOrURL(peer.GetAddress())
 		if err != nil {
 			return nil, err
 		}

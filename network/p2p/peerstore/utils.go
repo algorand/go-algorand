@@ -72,7 +72,8 @@ func peerInfoFromDomainPort(domainPort string) (*peer.AddrInfo, error) {
 // peerInfoFromDomainPortOrMultiaddr converts a string of the form domain:port or multiaddr to AddrInfo
 func peerInfoFromDomainPortOrMultiaddr(dpOrMa string) (info *peer.AddrInfo, err error) {
 	if addr.IsMultiaddr(dpOrMa) {
-		ma, err := multiaddr.NewMultiaddr(dpOrMa)
+		var ma multiaddr.Multiaddr
+		ma, err = multiaddr.NewMultiaddr(dpOrMa)
 		if err != nil {
 			return nil, err
 		}

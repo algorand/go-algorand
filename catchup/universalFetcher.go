@@ -32,6 +32,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
+	"github.com/algorand/go-algorand/network/addr"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/rpcs"
 )
@@ -221,10 +222,10 @@ type HTTPFetcher struct {
 func (hf *HTTPFetcher) getBlockBytes(ctx context.Context, r basics.Round) (data []byte, err error) {
 	var blockURL string
 
-	if network.IsMultiaddr(hf.rootURL) {
+	if addr.IsMultiaddr(hf.rootURL) {
 		blockURL = rpcs.FormatBlockQuery(uint64(r), "", hf.net)
 	} else {
-		if parsedURL, err0 := network.ParseHostOrURL(hf.rootURL); err0 == nil {
+		if parsedURL, err0 := addr.ParseHostOrURL(hf.rootURL); err0 == nil {
 			parsedURL.Path = rpcs.FormatBlockQuery(uint64(r), parsedURL.Path, hf.net)
 			blockURL = parsedURL.String()
 		} else {
