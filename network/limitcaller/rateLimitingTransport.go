@@ -26,8 +26,8 @@ import (
 
 // ConnectionTimeStore is a subset of the phonebook that is used to store the connection times.
 type ConnectionTimeStore interface {
-	GetConnectionWaitTime(addr string) (bool, time.Duration, time.Time)
-	UpdateConnectionTime(addr string, provisionalTime time.Time) bool
+	GetConnectionWaitTime(addrOrInfo interface{}) (bool, time.Duration, time.Time)
+	UpdateConnectionTime(addrOrInfo interface{}, provisionalTime time.Time) bool
 }
 
 // RateLimitingTransport is the transport for execute a single HTTP transaction, obtaining the Response for a given Request.
@@ -35,6 +35,7 @@ type RateLimitingTransport struct {
 	phonebook       ConnectionTimeStore
 	innerTransport  http.RoundTripper
 	queueingTimeout time.Duration
+	targetAddr      interface{} // target address for the p2p http request
 }
 
 // DefaultQueueingTimeout is the default timeout for queueing the request.
@@ -65,11 +66,12 @@ func MakeRateLimitingTransport(phonebook ConnectionTimeStore, queueingTimeout ti
 
 // MakeRateLimitingTransportWithTransport creates a rate limiting http transport that would limit the requests rate
 // according to the entries in the phonebook.
-func MakeRateLimitingTransportWithTransport(phonebook ConnectionTimeStore, queueingTimeout time.Duration, rt http.RoundTripper, maxIdleConnsPerHost int) RateLimitingTransport {
+func MakeRateLimitingTransportWithTransport(phonebook ConnectionTimeStore, queueingTimeout time.Duration, rt http.RoundTripper, target interface{}, maxIdleConnsPerHost int) RateLimitingTransport {
 	return RateLimitingTransport{
 		phonebook:       phonebook,
 		innerTransport:  rt,
 		queueingTimeout: queueingTimeout,
+		targetAddr:      target,
 	}
 }
 
@@ -79,8 +81,13 @@ func (r *RateLimitingTransport) RoundTrip(req *http.Request) (res *http.Response
 	var waitTime time.Duration
 	var provisionalTime time.Time
 	queueingDeadline := time.Now().Add(r.queueingTimeout)
+	var host interface{} = req.Host
+	if len(req.Host) == 0 && req.URL != nil && len(req.URL.Host) == 0 {
+		// p2p/http clients have per-connection transport and address info so use that
+		host = r.targetAddr
+	}
 	for {
-		_, waitTime, provisionalTime = r.phonebook.GetConnectionWaitTime(req.Host)
+		_, waitTime, provisionalTime = r.phonebook.GetConnectionWaitTime(host)
 		if waitTime == 0 {
 			break // break out of the loop and proceed to the connection
 		}
@@ -92,6 +99,6 @@ func (r *RateLimitingTransport) RoundTrip(req *http.Request) (res *http.Response
 		return nil, ErrConnectionQueueingTimeout
 	}
 	res, err = r.innerTransport.RoundTrip(req)
-	r.phonebook.UpdateConnectionTime(req.Host, provisionalTime)
+	r.phonebook.UpdateConnectionTime(host, provisionalTime)
 	return
 }

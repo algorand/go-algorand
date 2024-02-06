@@ -473,13 +473,13 @@ func (n *P2PNetwork) GetPeers(options ...PeerOption) []Peer {
 			// query known archival nodes from DHT if enabled
 			if n.config.EnableDHTProviders {
 				const nodesToFind = 5
-				info, err := n.capabilitiesDiscovery.PeersForCapability(p2p.Archival, nodesToFind)
+				infos, err := n.capabilitiesDiscovery.PeersForCapability(p2p.Archival, nodesToFind)
 				if err != nil {
 					n.log.Warnf("Error getting archival nodes from capabilities discovery: %v", err)
 					return peers
 				}
-				n.log.Debugf("Got %d archival node(s) from DHT", len(info))
-				for _, addrInfo := range info {
+				n.log.Debugf("Got %d archival node(s) from DHT", len(infos))
+				for _, addrInfo := range infos {
 					info := addrInfo
 					mas, err := peer.AddrInfoToP2pAddrs(&info)
 					if err != nil {

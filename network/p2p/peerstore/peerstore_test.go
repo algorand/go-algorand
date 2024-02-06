@@ -220,7 +220,9 @@ func TestMultiPhonebook(t *testing.T) {
 func TestMultiPhonebookPersistentPeers(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	persistentPeers := []string{"a:4041"}
+	info, err := peerInfoFromDomainPort("a:4041")
+	require.NoError(t, err)
+	persistentPeers := []interface{}{info}
 	set := []string{"b:4042", "c:4043", "d:4044", "e:4045", "f:4046", "g:4047", "h:4048", "i:4049", "j:4010"}
 	pha := make([]string, 0)
 	for _, e := range set[:5] {
@@ -237,10 +239,12 @@ func TestMultiPhonebookPersistentPeers(t *testing.T) {
 	ph.ReplacePeerList(pha, "pha", PhoneBookEntryRelayRole)
 	ph.ReplacePeerList(phb, "phb", PhoneBookEntryRelayRole)
 
-	testPhonebookAll(t, append(set, persistentPeers...), ph)
+	testPhonebookAll(t, append(set, "a:4041"), ph)
 	allAddresses := ph.GetAddresses(len(set)+len(persistentPeers), PhoneBookEntryRelayRole)
 	for _, pp := range persistentPeers {
-		require.Contains(t, allAddresses, pp)
+		pp := pp.(*peer.AddrInfo)
+		// TODO: modify as needed when completely switching from peerID = "host:port" to peer.AddrInfo
+		require.Contains(t, allAddresses, string(pp.ID))
 	}
 }
 
@@ -282,17 +286,17 @@ func TestWaitAndAddConnectionTimeLongtWindow(t *testing.T) {
 	info2, _ := peerInfoFromDomainPort(addr2)
 
 	// Address not in. Should return false
-	addrInPhonebook, _, provisionalTime := entries.GetConnectionWaitTime(addr1)
+	addrInPhonebook, _, provisionalTime := entries.GetConnectionWaitTime(info1)
 	require.Equal(t, false, addrInPhonebook)
-	require.Equal(t, false, entries.UpdateConnectionTime(addr1, provisionalTime))
+	require.Equal(t, false, entries.UpdateConnectionTime(info1, provisionalTime))
 
 	// Test the addresses are populated in the phonebook and a
 	// time can be added to one of them
 	entries.ReplacePeerList([]string{addr1, addr2}, "default", PhoneBookEntryRelayRole)
-	addrInPhonebook, waitTime, provisionalTime := entries.GetConnectionWaitTime(addr1)
+	addrInPhonebook, waitTime, provisionalTime := entries.GetConnectionWaitTime(info1)
 	require.Equal(t, true, addrInPhonebook)
 	require.Equal(t, time.Duration(0), waitTime)
-	require.Equal(t, true, entries.UpdateConnectionTime(addr1, provisionalTime))
+	require.Equal(t, true, entries.UpdateConnectionTime(info1, provisionalTime))
 	data, _ := entries.Get(info1.ID, addressDataKey)
 	require.NotNil(t, data)
 	ad := data.(addressData)
@@ -305,9 +309,9 @@ func TestWaitAndAddConnectionTimeLongtWindow(t *testing.T) {
 	}
 
 	// add another value to addr
-	addrInPhonebook, waitTime, provisionalTime = entries.GetConnectionWaitTime(addr1)
+	addrInPhonebook, waitTime, provisionalTime = entries.GetConnectionWaitTime(info1)
 	require.Equal(t, time.Duration(0), waitTime)
-	require.Equal(t, true, entries.UpdateConnectionTime(addr1, provisionalTime))
+	require.Equal(t, true, entries.UpdateConnectionTime(info1, provisionalTime))
 	data, _ = entries.Get(info1.ID, addressDataKey)
 	ad = data.(addressData)
 	phBookData = ad.recentConnectionTimes
@@ -320,9 +324,9 @@ func TestWaitAndAddConnectionTimeLongtWindow(t *testing.T) {
 
 	// the first time should be removed and a new one added
 	// there should not be any wait
-	addrInPhonebook, waitTime, provisionalTime = entries.GetConnectionWaitTime(addr1)
+	addrInPhonebook, waitTime, provisionalTime = entries.GetConnectionWaitTime(info1)
 	require.Equal(t, time.Duration(0), waitTime)
-	require.Equal(t, true, entries.UpdateConnectionTime(addr1, provisionalTime))
+	require.Equal(t, true, entries.UpdateConnectionTime(info1, provisionalTime))
 	data, _ = entries.Get(info1.ID, addressDataKey)
 	ad = data.(addressData)
 	phBookData2 := ad.recentConnectionTimes
@@ -337,9 +341,9 @@ func TestWaitAndAddConnectionTimeLongtWindow(t *testing.T) {
 
 	// add 3 values to another address. should not wait
 	// value 1
-	_, waitTime, provisionalTime = entries.GetConnectionWaitTime(addr2)
+	_, waitTime, provisionalTime = entries.GetConnectionWaitTime(info2)
 	require.Equal(t, time.Duration(0), waitTime)
-	require.Equal(t, true, entries.UpdateConnectionTime(addr2, provisionalTime))
+	require.Equal(t, true, entries.UpdateConnectionTime(info2, provisionalTime))
 
 	// introduce a gap between the two requests so that only the first will be removed later when waited
 	// simulate passing a unit of time
@@ -351,13 +355,13 @@ func TestWaitAndAddConnectionTimeLongtWindow(t *testing.T) {
 	}
 
 	// value 2
-	_, waitTime, provisionalTime = entries.GetConnectionWaitTime(addr2)
+	_, waitTime, provisionalTime = entries.GetConnectionWaitTime(info2)
 	require.Equal(t, time.Duration(0), waitTime)
-	require.Equal(t, true, entries.UpdateConnectionTime(addr2, provisionalTime))
+	require.Equal(t, true, entries.UpdateConnectionTime(info2, provisionalTime))
 	// value 3
-	_, waitTime, provisionalTime = entries.GetConnectionWaitTime(addr2)
+	_, waitTime, provisionalTime = entries.GetConnectionWaitTime(info2)
 	require.Equal(t, time.Duration(0), waitTime)
-	require.Equal(t, true, entries.UpdateConnectionTime(addr2, provisionalTime))
+	require.Equal(t, true, entries.UpdateConnectionTime(info2, provisionalTime))
 
 	data2, _ = entries.Get(info2.ID, addressDataKey)
 	ad2 = data2.(addressData)
@@ -366,7 +370,7 @@ func TestWaitAndAddConnectionTimeLongtWindow(t *testing.T) {
 	require.Equal(t, 3, len(phBookData))
 
 	// add another element to trigger wait
-	_, waitTime, provisionalTime = entries.GetConnectionWaitTime(addr2)
+	_, waitTime, provisionalTime = entries.GetConnectionWaitTime(info2)
 	require.Greater(t, int64(waitTime), int64(0))
 	// no element should be removed
 	data2, _ = entries.Get(info2.ID, addressDataKey)
@@ -381,9 +385,9 @@ func TestWaitAndAddConnectionTimeLongtWindow(t *testing.T) {
 	}
 
 	// The wait should be sufficient
-	_, waitTime, provisionalTime = entries.GetConnectionWaitTime(addr2)
+	_, waitTime, provisionalTime = entries.GetConnectionWaitTime(info2)
 	require.Equal(t, time.Duration(0), waitTime)
-	require.Equal(t, true, entries.UpdateConnectionTime(addr2, provisionalTime))
+	require.Equal(t, true, entries.UpdateConnectionTime(info2, provisionalTime))
 	// only one element should be removed, and one added
 	data2, _ = entries.Get(info2.ID, addressDataKey)
 	ad2 = data2.(addressData)

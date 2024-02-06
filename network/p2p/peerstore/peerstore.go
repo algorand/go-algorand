@@ -125,12 +125,9 @@ func (ps *PeerStore) UpdateRetryAfter(addr string, retryAfter time.Time) {
 // The connection should be established when the waitTime is 0.
 // It will register a provisional next connection time when the waitTime is 0.
 // The provisional time should be updated after the connection with UpdateConnectionTime
-func (ps *PeerStore) GetConnectionWaitTime(addr string) (bool, time.Duration, time.Time) {
+func (ps *PeerStore) GetConnectionWaitTime(addr interface{}) (bool, time.Duration, time.Time) {
 	curTime := time.Now()
-	info, err := peerInfoFromDomainPortOrMultiaddr(addr)
-	if err != nil {
-		return false, 0 /* not used */, curTime /* not used */
-	}
+	info := addr.(*peer.AddrInfo)
 	var timeSince time.Duration
 	var numElmtsToRemove int
 	metadata, err := ps.Get(info.ID, addressDataKey)
@@ -152,7 +149,7 @@ func (ps *PeerStore) GetConnectionWaitTime(addr string) (bool, time.Duration, ti
 	}
 
 	// Remove the expired elements from e.data[addr].recentConnectionTimes
-	ps.popNElements(numElmtsToRemove, peer.ID(addr))
+	ps.popNElements(numElmtsToRemove, info.ID)
 	// If there are max number of connections within the time window, wait
 	metadata, _ = ps.Get(info.ID, addressDataKey)
 	ad, ok = metadata.(addressData)
@@ -175,11 +172,8 @@ func (ps *PeerStore) GetConnectionWaitTime(addr string) (bool, time.Duration, ti
 }
 
 // UpdateConnectionTime updates the connection time for the given address.
-func (ps *PeerStore) UpdateConnectionTime(addr string, provisionalTime time.Time) bool {
-	info, err := peerInfoFromDomainPortOrMultiaddr(addr)
-	if err != nil {
-		return false
-	}
+func (ps *PeerStore) UpdateConnectionTime(addr interface{}, provisionalTime time.Time) bool {
+	info := addr.(*peer.AddrInfo)
 	metadata, err := ps.Get(info.ID, addressDataKey)
 	if err != nil {
 		return false
@@ -256,13 +250,9 @@ func (ps *PeerStore) ReplacePeerList(addressesThey []string, networkName string,
 
 // AddPersistentPeers stores addresses of peers which are persistent.
 // i.e. they won't be replaced by ReplacePeerList calls
-func (ps *PeerStore) AddPersistentPeers(dnsAddresses []string, networkName string, role phonebook.PhoneBookEntryRoles) {
-
+func (ps *PeerStore) AddPersistentPeers(dnsAddresses []interface{}, networkName string, role phonebook.PhoneBookEntryRoles) {
 	for _, addr := range dnsAddresses {
-		info, err := peerInfoFromDomainPort(addr)
-		if err != nil {
-			return
-		}
+		info := addr.(*peer.AddrInfo)
 		data, _ := ps.Get(info.ID, addressDataKey)
 		if data != nil {
 			// we already have this.
