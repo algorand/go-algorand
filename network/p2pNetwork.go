@@ -27,6 +27,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/network/limitcaller"
 	"github.com/algorand/go-algorand/network/p2p"
 	"github.com/algorand/go-algorand/network/p2p/dnsaddr"
 	"github.com/algorand/go-algorand/network/p2p/peerstore"
@@ -490,7 +491,9 @@ func (n *P2PNetwork) GetPeers(options ...PeerOption) []Peer {
 						continue
 					}
 					addr := mas[0].String()
-					client, err := p2p.MakeHTTPClient(&info)
+
+					maxIdleConnsPerHost := int(n.config.ConnectionsRateLimitingCount)
+					client, err := p2p.MakeHTTPClientWithRateLimit(&info, n.pstore, limitcaller.DefaultQueueingTimeout, maxIdleConnsPerHost)
 					if err != nil {
 						n.log.Warnf("MakeHTTPClient failed: %v", err)
 						continue
@@ -549,7 +552,8 @@ func (n *P2PNetwork) GetHTTPClient(p HTTPPeer) (*http.Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	return p2p.MakeHTTPClient(addrInfo)
+	maxIdleConnsPerHost := int(n.config.ConnectionsRateLimitingCount)
+	return p2p.MakeHTTPClientWithRateLimit(addrInfo, n.pstore, limitcaller.DefaultQueueingTimeout, maxIdleConnsPerHost)
 }
 
 // OnNetworkAdvance notifies the network library that the agreement protocol was able to make a notable progress.
@@ -622,7 +626,10 @@ func (n *P2PNetwork) wsStreamHandler(ctx context.Context, p2ppeer peer.ID, strea
 		n.log.Warnf("Could not get address for peer %s", p2ppeer)
 	}
 	// create a wsPeer for this stream and added it to the peers map.
-	client, err := p2p.MakeHTTPClient(&peer.AddrInfo{ID: p2ppeer, Addrs: []multiaddr.Multiaddr{ma}})
+
+	addrInfo := &peer.AddrInfo{ID: p2ppeer, Addrs: []multiaddr.Multiaddr{ma}}
+	maxIdleConnsPerHost := int(n.config.ConnectionsRateLimitingCount)
+	client, err := p2p.MakeHTTPClientWithRateLimit(addrInfo, n.pstore, limitcaller.DefaultQueueingTimeout, maxIdleConnsPerHost)
 	if err != nil {
 		client = nil
 	}

@@ -596,7 +596,7 @@ func (wn *WebsocketNetwork) setup() {
 	}
 	maxIdleConnsPerHost := int(wn.config.ConnectionsRateLimitingCount)
 	wn.dialer = limitcaller.MakeRateLimitingDialer(wn.phonebook, preferredResolver)
-	wn.transport = limitcaller.MakeRateLimitingTransport(wn.phonebook, 10*time.Second, &wn.dialer, maxIdleConnsPerHost)
+	wn.transport = limitcaller.MakeRateLimitingTransport(wn.phonebook, limitcaller.DefaultQueueingTimeout, &wn.dialer, maxIdleConnsPerHost)
 
 	wn.upgrader.ReadBufferSize = 4096
 	wn.upgrader.WriteBufferSize = 4096

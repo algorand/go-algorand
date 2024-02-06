@@ -21,16 +21,24 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/algorand/go-algorand/network/phonebook"
 	"github.com/algorand/go-algorand/util"
 )
 
+// ConnectionTimeStore is a subset of the phonebook that is used to store the connection times.
+type ConnectionTimeStore interface {
+	GetConnectionWaitTime(addr string) (bool, time.Duration, time.Time)
+	UpdateConnectionTime(addr string, provisionalTime time.Time) bool
+}
+
 // RateLimitingTransport is the transport for execute a single HTTP transaction, obtaining the Response for a given Request.
 type RateLimitingTransport struct {
-	phonebook       phonebook.Phonebook
-	innerTransport  *http.Transport
+	phonebook       ConnectionTimeStore
+	innerTransport  http.RoundTripper
 	queueingTimeout time.Duration
 }
+
+// DefaultQueueingTimeout is the default timeout for queueing the request.
+const DefaultQueueingTimeout = 10 * time.Second
 
 // ErrConnectionQueueingTimeout indicates that we've exceeded the time allocated for
 // queueing the current request before the request attempt could be made.
@@ -38,7 +46,7 @@ var ErrConnectionQueueingTimeout = errors.New("rateLimitingTransport: queueing t
 
 // MakeRateLimitingTransport creates a rate limiting http transport that would limit the requests rate
 // according to the entries in the phonebook.
-func MakeRateLimitingTransport(phonebook phonebook.Phonebook, queueingTimeout time.Duration, dialer *Dialer, maxIdleConnsPerHost int) RateLimitingTransport {
+func MakeRateLimitingTransport(phonebook ConnectionTimeStore, queueingTimeout time.Duration, dialer *Dialer, maxIdleConnsPerHost int) RateLimitingTransport {
 	defaultTransport := http.DefaultTransport.(*http.Transport)
 	return RateLimitingTransport{
 		phonebook: phonebook,
@@ -51,6 +59,16 @@ func MakeRateLimitingTransport(phonebook phonebook.Phonebook, queueingTimeout ti
 			ExpectContinueTimeout: defaultTransport.ExpectContinueTimeout,
 			MaxIdleConnsPerHost:   maxIdleConnsPerHost,
 		},
+		queueingTimeout: queueingTimeout,
+	}
+}
+
+// MakeRateLimitingTransportWithTransport creates a rate limiting http transport that would limit the requests rate
+// according to the entries in the phonebook.
+func MakeRateLimitingTransportWithTransport(phonebook ConnectionTimeStore, queueingTimeout time.Duration, rt http.RoundTripper, maxIdleConnsPerHost int) RateLimitingTransport {
+	return RateLimitingTransport{
+		phonebook:       phonebook,
+		innerTransport:  rt,
 		queueingTimeout: queueingTimeout,
 	}
 }

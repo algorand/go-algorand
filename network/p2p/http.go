@@ -19,7 +19,9 @@ package p2p
 import (
 	"net/http"
 	"sync"
+	"time"
 
+	"github.com/algorand/go-algorand/network/limitcaller"
 	"github.com/gorilla/mux"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p/core/host"
@@ -73,4 +75,16 @@ func MakeHTTPClient(addrInfo *peer.AddrInfo) (*http.Client, error) {
 	}
 
 	return &http.Client{Transport: rt}, nil
+}
+
+// MakeHTTPClientWithRateLimit creates a http.Client that uses libp2p transport for a given protocol and peer address.
+func MakeHTTPClientWithRateLimit(addrInfo *peer.AddrInfo, pstore limitcaller.ConnectionTimeStore, queueingTimeout time.Duration, maxIdleConnsPerHost int) (*http.Client, error) {
+	cl, err := MakeHTTPClient(addrInfo)
+	if err != nil {
+		return nil, err
+	}
+	rlrt := limitcaller.MakeRateLimitingTransportWithTransport(pstore, queueingTimeout, cl.Transport, maxIdleConnsPerHost)
+	cl.Transport = &rlrt
+	return cl, nil
+
 }
