@@ -2,20 +2,10 @@
 
 set -ex
 
-if [ -z "$NETWORK" ]
-then
-    echo "[$0] Network is a required parameter."
-    exit 1
-fi
-
-CHANNEL=$("./scripts/release/mule/common/get_channel.sh" "$NETWORK")
+CHANNEL=${CHANNEL:-$("./scripts/release/mule/common/get_channel.sh" "$NETWORK")}
 VERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
 PACKAGES_DIR=${PACKAGES_DIR:-~/packages}
-
-if [ -z "$SNAPSHOT" ]
-then
-    SNAPSHOT="$CHANNEL-$VERSION"
-fi
+SNAPSHOT=${SNAPSHOT:-"${CHANNEL}-${VERSION}"}
 
 mkdir -p $PACKAGES_DIR
 
