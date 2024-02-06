@@ -841,7 +841,7 @@ func TestMaxSizesCorrect(t *testing.T) {
 // N -- R -- A and ensures N can discover A and download blocks from it.
 //
 // N is a non-part node that joins the network later
-// R is a non-arhival relay node with block service disabled. It MUST NOT service blocks to force N to discover A.
+// R is a non-archival relay node with block service disabled. It MUST NOT service blocks to force N to discover A.
 // A is a archival node that can only provide blocks.
 // Nodes N and A have only R in their initial phonebook, and all nodes are in hybrid mode.
 func TestNodeHybridTopology(t *testing.T) {

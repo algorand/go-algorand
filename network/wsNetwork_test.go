@@ -4544,3 +4544,23 @@ func TestSendMessageCallbackDrain(t *testing.T) {
 		50*time.Millisecond,
 	)
 }
+
+// TestWsNetworkPhonebookMix ensures p2p addresses are not added into wsNetwork via phonebook
+func TestWsNetworkPhonebookMix(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	net, err := NewWebsocketNetwork(
+		logging.TestingLog(t),
+		config.GetDefaultLocal(),
+		[]string{"127.0.0.1:1234", "/ip4/127.0.0.1/tcp/1234", "/ip4/127.0.0.1/p2p/QmcgpsyWgH8Y8ajJz1Cu72KnS5uo2Aa2LpzU7kinSupNKC"},
+		"test",
+		"net",
+		nil,
+		"",
+		nil,
+	)
+	require.NoError(t, err)
+	addrs := net.phonebook.GetAddresses(10, phonebook.PhoneBookEntryRelayRole)
+	require.Len(t, addrs, 1)
+}
