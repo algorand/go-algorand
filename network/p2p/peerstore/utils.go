@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/algorand/go-algorand/network/addr"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
 )
@@ -67,25 +66,4 @@ func peerInfoFromDomainPort(domainPort string) (*peer.AddrInfo, error) {
 	// These will never have peer IDs
 	transport, _ := peer.SplitAddr(maddr)
 	return &peer.AddrInfo{ID: peer.ID(domainPort), Addrs: []multiaddr.Multiaddr{transport}}, nil
-}
-
-// peerInfoFromDomainPortOrMultiaddr converts a string of the form domain:port or multiaddr to AddrInfo
-func peerInfoFromDomainPortOrMultiaddr(dpOrMa string) (info *peer.AddrInfo, err error) {
-	if addr.IsMultiaddr(dpOrMa) {
-		var ma multiaddr.Multiaddr
-		ma, err = multiaddr.NewMultiaddr(dpOrMa)
-		if err != nil {
-			return nil, err
-		}
-		info, err = peer.AddrInfoFromP2pAddr(ma)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		info, err = peerInfoFromDomainPort(dpOrMa)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return info, nil
 }
