@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package network
+package limitcaller
 
 import (
 	"context"
@@ -34,12 +34,11 @@ type netDialer interface {
 type Dialer struct {
 	phonebook   phonebook.Phonebook
 	innerDialer netDialer
-	resolver    *net.Resolver
 }
 
-// makeRateLimitingDialer creates a rate limiting dialer that would limit the connections
+// MakeRateLimitingDialer creates a rate limiting dialer that would limit the connections
 // according to the entries in the phonebook.
-func makeRateLimitingDialer(phonebook phonebook.Phonebook, resolver dnssec.ResolverIf) Dialer {
+func MakeRateLimitingDialer(phonebook phonebook.Phonebook, resolver dnssec.ResolverIf) Dialer {
 	var innerDialer netDialer = &net.Dialer{
 		Timeout:   30 * time.Second,
 		KeepAlive: 30 * time.Second,

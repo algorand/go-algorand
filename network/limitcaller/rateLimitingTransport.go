@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package network
+package limitcaller
 
 import (
 	"errors"
@@ -25,8 +25,8 @@ import (
 	"github.com/algorand/go-algorand/util"
 )
 
-// rateLimitingTransport is the transport for execute a single HTTP transaction, obtaining the Response for a given Request.
-type rateLimitingTransport struct {
+// RateLimitingTransport is the transport for execute a single HTTP transaction, obtaining the Response for a given Request.
+type RateLimitingTransport struct {
 	phonebook       phonebook.Phonebook
 	innerTransport  *http.Transport
 	queueingTimeout time.Duration
@@ -36,11 +36,11 @@ type rateLimitingTransport struct {
 // queueing the current request before the request attempt could be made.
 var ErrConnectionQueueingTimeout = errors.New("rateLimitingTransport: queueing timeout")
 
-// makeRateLimitingTransport creates a rate limiting http transport that would limit the requests rate
+// MakeRateLimitingTransport creates a rate limiting http transport that would limit the requests rate
 // according to the entries in the phonebook.
-func makeRateLimitingTransport(phonebook phonebook.Phonebook, queueingTimeout time.Duration, dialer *Dialer, maxIdleConnsPerHost int) rateLimitingTransport {
+func MakeRateLimitingTransport(phonebook phonebook.Phonebook, queueingTimeout time.Duration, dialer *Dialer, maxIdleConnsPerHost int) RateLimitingTransport {
 	defaultTransport := http.DefaultTransport.(*http.Transport)
-	return rateLimitingTransport{
+	return RateLimitingTransport{
 		phonebook: phonebook,
 		innerTransport: &http.Transport{
 			Proxy:                 defaultTransport.Proxy,
@@ -57,7 +57,7 @@ func makeRateLimitingTransport(phonebook phonebook.Phonebook, queueingTimeout ti
 
 // RoundTrip connects to the address on the named network using the provided context.
 // It waits if needed not to exceed connectionsRateLimitingCount.
-func (r *rateLimitingTransport) RoundTrip(req *http.Request) (res *http.Response, err error) {
+func (r *RateLimitingTransport) RoundTrip(req *http.Request) (res *http.Response, err error) {
 	var waitTime time.Duration
 	var provisionalTime time.Time
 	queueingDeadline := time.Now().Add(r.queueingTimeout)

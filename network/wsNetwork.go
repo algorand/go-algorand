@@ -43,6 +43,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
+	"github.com/algorand/go-algorand/network/limitcaller"
 	"github.com/algorand/go-algorand/network/limitlistener"
 	"github.com/algorand/go-algorand/network/p2p"
 	"github.com/algorand/go-algorand/network/phonebook"
@@ -259,8 +260,8 @@ type WebsocketNetwork struct {
 
 	// transport and dialer are customized to limit the number of
 	// connection in compliance with connectionsRateLimitingCount.
-	transport rateLimitingTransport
-	dialer    Dialer
+	transport limitcaller.RateLimitingTransport
+	dialer    limitcaller.Dialer
 
 	// messagesOfInterest specifies the message types that this node
 	// wants to receive.  nil means default.  non-nil causes this
@@ -594,8 +595,8 @@ func (wn *WebsocketNetwork) setup() {
 		wn.nodeInfo = &nopeNodeInfo{}
 	}
 	maxIdleConnsPerHost := int(wn.config.ConnectionsRateLimitingCount)
-	wn.dialer = makeRateLimitingDialer(wn.phonebook, preferredResolver)
-	wn.transport = makeRateLimitingTransport(wn.phonebook, 10*time.Second, &wn.dialer, maxIdleConnsPerHost)
+	wn.dialer = limitcaller.MakeRateLimitingDialer(wn.phonebook, preferredResolver)
+	wn.transport = limitcaller.MakeRateLimitingTransport(wn.phonebook, 10*time.Second, &wn.dialer, maxIdleConnsPerHost)
 
 	wn.upgrader.ReadBufferSize = 4096
 	wn.upgrader.WriteBufferSize = 4096
