@@ -28,8 +28,11 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/network/limitcaller"
 	"github.com/algorand/go-algorand/network/p2p"
 	"github.com/algorand/go-algorand/network/p2p/dnsaddr"
+	"github.com/algorand/go-algorand/network/p2p/peerstore"
+	"github.com/algorand/go-algorand/network/phonebook"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 
@@ -621,6 +624,7 @@ func TestP2PHTTPHandler(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "hello", string(body))
 
+	// check another endpoint that also access the underlying connection/stream
 	httpClient, err = p2p.MakeHTTPClient(&peerInfoA)
 	require.NoError(t, err)
 	resp, err = httpClient.Get("/check-conn")
@@ -631,4 +635,13 @@ func TestP2PHTTPHandler(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "world", string(body))
 
+	// check rate limiting client:
+	// zero clients allowed, rate limiting window (10s) is greater than queue deadline (1s)
+	pstore, err := peerstore.MakePhonebook(0, 10*time.Second)
+	require.NoError(t, err)
+	pstore.AddPersistentPeers([]interface{}{&peerInfoA}, "net", phonebook.PhoneBookEntryRelayRole)
+	httpClient, err = p2p.MakeHTTPClientWithRateLimit(&peerInfoA, pstore, 1*time.Second, 1)
+	require.NoError(t, err)
+	_, err = httpClient.Get("/test")
+	require.ErrorIs(t, err, limitcaller.ErrConnectionQueueingTimeout)
 }
