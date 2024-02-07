@@ -198,7 +198,7 @@ func verifyNewSeed(p unauthenticatedProposal, ledger LedgerReader) error {
 	rnd := p.Round()
 
 	curParams := config.Consensus[p.BlockHeader.CurrentProtocol]
-	if curParams.EnableMining {
+	if curParams.Mining().Enabled {
 		if p.BlockHeader.Proposer != value.OriginalProposer {
 			return fmt.Errorf("payload has wrong proposer (%v != %v)", p.Proposer, value.OriginalProposer)
 		}
@@ -268,7 +268,7 @@ func proposalForBlock(address basics.Address, vrf *crypto.VRFSecrets, ve Validat
 	}
 
 	var hdrProp basics.Address // The proposer as recorded in BlockHeader
-	if ve.Block().ConsensusProtocol().EnableMining {
+	if ve.Block().ConsensusProtocol().Mining().Enabled {
 		hdrProp = address
 	}
 	ve = ve.WithProposal(newSeed, hdrProp)

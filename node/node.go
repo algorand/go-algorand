@@ -1290,7 +1290,7 @@ type validatedBlock struct {
 	vb *ledgercore.ValidatedBlock
 }
 
-// WithSeed satisfies the agreement.ValidatedBlock interface.
+// WithProposal satisfies the agreement.ValidatedBlock interface.
 func (vb validatedBlock) WithProposal(s committee.Seed, proposer basics.Address) agreement.ValidatedBlock {
 	lvb := vb.vb.WithProposal(s, proposer)
 	return validatedBlock{vb: &lvb}

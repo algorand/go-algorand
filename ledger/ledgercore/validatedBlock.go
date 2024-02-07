@@ -40,7 +40,7 @@ func (vb ValidatedBlock) Delta() StateDelta {
 	return vb.delta
 }
 
-// WithSeed returns a copy of the ValidatedBlock with a modified seed and associated proposer
+// WithProposal returns a copy of the ValidatedBlock with a modified seed and associated proposer
 func (vb ValidatedBlock) WithProposal(s committee.Seed, proposer basics.Address) ValidatedBlock {
 	newblock := vb.blk
 	newblock.BlockHeader.Seed = s

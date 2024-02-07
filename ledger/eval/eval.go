@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"sync"
 
 	"github.com/algorand/go-algorand/config"
@@ -795,7 +796,7 @@ func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, evalOpts 
 	}
 
 	if eligible {
-		incentive, _ := basics.NewPercent(proto.MiningPercent).DivvyAlgos(prevHeader.FeesCollected)
+		incentive, _ := basics.NewPercent(proto.Mining().Percent).DivvyAlgos(prevHeader.FeesCollected)
 		total, o := basics.OAddA(incentive, prevHeader.Bonus)
 		if o {
 			return nil, fmt.Errorf("overflowed adding bonus incentive %d %d", incentive, prevHeader.Bonus)
@@ -816,7 +817,7 @@ func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, evalOpts 
 	}
 
 	// Note their proposal if MiningEnabled.
-	if proto.EnableMining {
+	if proto.Mining().Enabled {
 		prp, err := eval.state.Get(prevHeader.Proposer, false)
 		if err != nil {
 			return nil, err
@@ -839,39 +840,16 @@ func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, evalOpts 
 	return eval, nil
 }
 
-var (
-	// these would become ConsensusParameters if we ever wanted to change them
-
-	// incentiveMinBalance is the minimum balance an account must have to be
-	// eligible for incentives. It serves a couple purposes. First, it sets a
-	// manageable upper bound on the total number of incentivized participating
-	// accounts.  This means it is possible to track these accounts in memory,
-	// which is required to ensure absenteeism checking time is bounded. Second,
-	// it ensures that smaller accounts continue to operate for the same
-	// motivations they had before block incentives were introduced. Without
-	// that assurance, it is difficult to model their behaviour - might many
-	// participants join for the hope of easy financial rewards, but without
-	// caring enough to run a high-quality node?
-	incentiveMinBalance = basics.Algos(100_000)
-
-	// incentiveMaxBalance is the maximum balance an account might have to be
-	// eligible for incentives. It encourages large accounts to split their
-	// stake to add resilience to consensus in the case of outages.  Of course,
-	// nothing in protocol can prevent such accounts from running nodes that
-	// share fate (same machine, same data center, etc), but this serves as a
-	// gentle reminder.
-	incentiveMaxBalance = basics.Algos(100_000_000)
-)
-
 func (eval *BlockEvaluator) eligibleForIncentives(proposer basics.Address) (bool, error) {
 	proposerState, err := eval.state.Get(proposer, true)
 	if err != nil {
 		return false, err
 	}
-	if proposerState.MicroAlgos.LessThan(incentiveMinBalance) {
+	params := eval.state.ConsensusParams()
+	if proposerState.MicroAlgos.Raw < params.Mining().MinBalance {
 		return false, nil
 	}
-	if proposerState.MicroAlgos.GreaterThan(incentiveMaxBalance) {
+	if proposerState.MicroAlgos.Raw > params.Mining().MaxBalance {
 		return false, nil
 	}
 	return proposerState.IncentiveEligible, nil
@@ -1369,7 +1347,7 @@ func (eval *BlockEvaluator) endOfBlock() error {
 			eval.block.TxnCounter = 0
 		}
 
-		if eval.proto.EnableMining {
+		if eval.proto.Mining().Enabled {
 			eval.block.FeesCollected = eval.state.feesCollected
 		}
 
@@ -1422,7 +1400,7 @@ func (eval *BlockEvaluator) endOfBlock() error {
 		}
 
 		var expectedFeesCollected basics.MicroAlgos
-		if eval.proto.EnableMining {
+		if eval.proto.Mining().Enabled {
 			expectedFeesCollected = eval.state.feesCollected
 		}
 		if eval.block.FeesCollected != expectedFeesCollected {
@@ -1509,7 +1487,7 @@ func (eval *BlockEvaluator) generateKnockOfflineAccountsList() {
 	current := eval.Round()
 
 	maxExpirations := eval.proto.MaxProposedExpiredOnlineAccounts
-	maxSuspensions := eval.proto.MaxProposedAbsentOnlineAccounts
+	maxSuspensions := eval.proto.Mining().MaxMarkAbsent
 
 	updates := &eval.block.ParticipationUpdates
 
@@ -1603,8 +1581,13 @@ func isAbsent(totalOnlineStake basics.MicroAlgos, acctStake basics.MicroAlgos, l
 		return false
 	}
 	// See if the account has exceeded 10x their expected observation interval.
-	allowableLag := basics.Round(10 * totalOnlineStake.Raw / acctStake.Raw)
-	return lastSeen+allowableLag < current
+	allowableLag, o := basics.Muldiv(10, totalOnlineStake.Raw, acctStake.Raw)
+	if o {
+		// This can't happen with 10B total possible stake, but if we imagine
+		// another algorand network with huge possible stake, this seems reasonable.
+		allowableLag = math.MaxInt64 / acctStake.Raw
+	}
+	return lastSeen+basics.Round(allowableLag) < current
 }
 
 func (eval *BlockEvaluator) activeChallenge() challenge {
@@ -1683,7 +1666,7 @@ func (eval *BlockEvaluator) validateAbsentOnlineAccounts() error {
 	if !eval.validate {
 		return nil
 	}
-	maxSuspensions := eval.proto.MaxProposedAbsentOnlineAccounts
+	maxSuspensions := eval.proto.Mining().MaxMarkAbsent
 	suspensionCount := len(eval.block.ParticipationUpdates.AbsentParticipationAccounts)
 
 	// If the length of the array is strictly greater than our max then we have an error.

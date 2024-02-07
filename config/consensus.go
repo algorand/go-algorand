@@ -451,11 +451,6 @@ type ConsensusParams struct {
 	// that a proposer can take offline for having expired voting keys.
 	MaxProposedExpiredOnlineAccounts int
 
-	// MaxProposedAbsentOnlineAccounts is the maximum number of online accounts,
-	// that a proposer can suspend for not proposing "lately" (In 10x expected
-	// interval, or within a grace period from being challenged)
-	MaxProposedAbsentOnlineAccounts int
-
 	// EnableAccountDataResourceSeparation enables the support for extended application and asset storage
 	// in a separate table.
 	EnableAccountDataResourceSeparation bool
@@ -535,21 +530,64 @@ type ConsensusParams struct {
 	// dynamic filter, it will be calculated and logged (but not used).
 	DynamicFilterTimeout bool
 
-	// BonusPlan is the "version" of the block bonus plan. 0 indicates no block bonuses.
-	BonusPlan uint8
+	// MiningRules is the version of mining related rules. It excludes anything
+	// related to block "bonuses" - extra payments made beyond what fees could
+	// provide. 0 disables mining and related tracking
+	MiningRulesVer uint8
 
-	// EnableMining means that the proposer should be included in the BlockHeader.
-	EnableMining bool
-
-	// MiningPercent specifies the percent of fees paid in a block that go to
-	// the proposer instead of the FeeSink.
-	MiningPercent uint64
+	// BonusPlanVer is the version of the block bonus plan. 0 indicates no block bonuses.
+	BonusPlanVer uint8
 }
 
-// EnableAbsenteeTracking returns true if the suspension mechanism of absentee
-// accounts is enabled.
-func (cp ConsensusParams) EnableAbsenteeTracking() bool {
-	return cp.MaxProposedAbsentOnlineAccounts > 0
+type MiningRules struct {
+	// Enabled turns on several things needed for paying block incentives,
+	// including tracking of the proposer and fees collected.
+	Enabled bool
+
+	// GoOnlineFee imparts a small cost on moving from offline to online. This
+	// will impose a cost to running unreliable nodes that get suspended and
+	// then come back online.
+	GoOnlineFee uint64
+
+	// Percent specifies the percent of fees paid in a block that go to the
+	// proposer instead of the FeeSink.
+	Percent uint64
+
+	// MinBalance is the minimum balance an account must have to be eligible for
+	// incentives. It ensures that smaller accounts continue to operate for the
+	// same motivations they had before block incentives were
+	// introduced. Without that assurance, it is difficult to model their
+	// behaviour - might many participants join for the hope of easy financial
+	// rewards, but without caring enough to run a high-quality node?
+	MinBalance uint64
+
+	// MaxBalance is the maximum balance an account can have to be eligible for
+	// incentives. It encourages large accounts to split their stake to add
+	// resilience to consensus in the case of outages.  Nothing in protocol can
+	// prevent such accounts from running nodes that share fate (same machine,
+	// same data center, etc), but this serves as a gentle reminder.
+	MaxBalance uint64
+
+	// MaxMarkAbsent is the maximum number of online accounts, that a proposer
+	// can suspend for not proposing "lately" (In 10x expected interval, or
+	// within a grace period from being challenged)
+	MaxMarkAbsent int
+}
+
+var miningRules = [...]MiningRules{
+	{Enabled: false},
+	{
+		Enabled:       true,
+		Percent:       75,
+		GoOnlineFee:   2_000_000,           // 2 algos
+		MinBalance:    100_000_000_000,     // 100,000 algos
+		MaxBalance:    100_000_000_000_000, // 100M algos
+		MaxMarkAbsent: 32,
+	},
+}
+
+func (cp ConsensusParams) Mining() MiningRules {
+	return miningRules[cp.MiningRulesVer]
 }
 
 // PaysetCommitType enumerates possible ways for the block header to commit to
@@ -628,9 +666,9 @@ var MaxAvailableAppProgramLen int
 // that a proposer can take offline for having expired voting keys.
 var MaxProposedExpiredOnlineAccounts int
 
-// MaxProposedAbsentOnlineAccounts is the maximum number of online accounts,
-// that a proposer can suspend for not proposing "lately" (TBD)
-var MaxProposedAbsentOnlineAccounts int
+// MaxMarkAbsent is the maximum number of online accounts that a proposer can
+// suspend for not proposing "lately"
+var MaxMarkAbsent int
 
 // MaxAppTotalArgLen is the maximum number of bytes across all arguments of an application
 // max sum([len(arg) for arg in txn.ApplicationArgs])
@@ -705,7 +743,7 @@ func checkSetAllocBounds(p ConsensusParams) {
 	checkSetMax(p.MaxAppProgramLen, &MaxLogCalls)
 	checkSetMax(p.MaxInnerTransactions*p.MaxTxGroupSize, &MaxInnerTransactionsPerDelta)
 	checkSetMax(p.MaxProposedExpiredOnlineAccounts, &MaxProposedExpiredOnlineAccounts)
-	checkSetMax(p.MaxProposedAbsentOnlineAccounts, &MaxProposedAbsentOnlineAccounts)
+	checkSetMax(p.Mining().MaxMarkAbsent, &MaxMarkAbsent)
 
 	// These bounds are exported to make them available to the msgp generator for calculating
 	// maximum valid message size for each message going across the wire.
@@ -1438,11 +1476,8 @@ func initConsensusProtocols() {
 
 	vFuture.LogicSigVersion = 11 // When moving this to a release, put a new higher LogicSigVersion here
 
-	vFuture.EnableMining = true
-	vFuture.MiningPercent = 75
-
-	vFuture.MaxProposedAbsentOnlineAccounts = 32
-	vFuture.BonusPlan = 1
+	vFuture.MiningRulesVer = 1
+	vFuture.BonusPlanVer = 1
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 

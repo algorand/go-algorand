@@ -5143,8 +5143,8 @@ func (z *proposal) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o 
 				err = msgp.WrapError(err, "struct-from-array", "AbsentParticipationAccounts")
 				return
 			}
-			if zb0012 > config.MaxProposedAbsentOnlineAccounts {
-				err = msgp.ErrOverflow(uint64(zb0012), uint64(config.MaxProposedAbsentOnlineAccounts))
+			if zb0012 > config.MaxMarkAbsent {
+				err = msgp.ErrOverflow(uint64(zb0012), uint64(config.MaxMarkAbsent))
 				err = msgp.WrapError(err, "struct-from-array", "AbsentParticipationAccounts")
 				return
 			}
@@ -5457,8 +5457,8 @@ func (z *proposal) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o 
 					err = msgp.WrapError(err, "AbsentParticipationAccounts")
 					return
 				}
-				if zb0020 > config.MaxProposedAbsentOnlineAccounts {
-					err = msgp.ErrOverflow(uint64(zb0020), uint64(config.MaxProposedAbsentOnlineAccounts))
+				if zb0020 > config.MaxMarkAbsent {
+					err = msgp.ErrOverflow(uint64(zb0020), uint64(config.MaxMarkAbsent))
 					err = msgp.WrapError(err, "AbsentParticipationAccounts")
 					return
 				}
@@ -5565,7 +5565,7 @@ func ProposalMaxSize() (s int) {
 	s += msgp.ArrayHeaderSize + ((config.MaxProposedExpiredOnlineAccounts) * (basics.AddressMaxSize()))
 	s += 11
 	// Calculating size of slice: z.unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.AbsentParticipationAccounts
-	s += msgp.ArrayHeaderSize + ((config.MaxProposedAbsentOnlineAccounts) * (basics.AddressMaxSize()))
+	s += msgp.ArrayHeaderSize + ((config.MaxMarkAbsent) * (basics.AddressMaxSize()))
 	s += 5
 	// Using maxtotalbytes for: z.unauthenticatedProposal.Block.Payset
 	s += config.MaxTxnBytesPerBlock
@@ -9663,8 +9663,8 @@ func (z *transmittedPayload) UnmarshalMsgWithState(bts []byte, st msgp.Unmarshal
 				err = msgp.WrapError(err, "struct-from-array", "AbsentParticipationAccounts")
 				return
 			}
-			if zb0012 > config.MaxProposedAbsentOnlineAccounts {
-				err = msgp.ErrOverflow(uint64(zb0012), uint64(config.MaxProposedAbsentOnlineAccounts))
+			if zb0012 > config.MaxMarkAbsent {
+				err = msgp.ErrOverflow(uint64(zb0012), uint64(config.MaxMarkAbsent))
 				err = msgp.WrapError(err, "struct-from-array", "AbsentParticipationAccounts")
 				return
 			}
@@ -9985,8 +9985,8 @@ func (z *transmittedPayload) UnmarshalMsgWithState(bts []byte, st msgp.Unmarshal
 					err = msgp.WrapError(err, "AbsentParticipationAccounts")
 					return
 				}
-				if zb0020 > config.MaxProposedAbsentOnlineAccounts {
-					err = msgp.ErrOverflow(uint64(zb0020), uint64(config.MaxProposedAbsentOnlineAccounts))
+				if zb0020 > config.MaxMarkAbsent {
+					err = msgp.ErrOverflow(uint64(zb0020), uint64(config.MaxMarkAbsent))
 					err = msgp.WrapError(err, "AbsentParticipationAccounts")
 					return
 				}
@@ -10099,7 +10099,7 @@ func TransmittedPayloadMaxSize() (s int) {
 	s += msgp.ArrayHeaderSize + ((config.MaxProposedExpiredOnlineAccounts) * (basics.AddressMaxSize()))
 	s += 11
 	// Calculating size of slice: z.unauthenticatedProposal.Block.BlockHeader.ParticipationUpdates.AbsentParticipationAccounts
-	s += msgp.ArrayHeaderSize + ((config.MaxProposedAbsentOnlineAccounts) * (basics.AddressMaxSize()))
+	s += msgp.ArrayHeaderSize + ((config.MaxMarkAbsent) * (basics.AddressMaxSize()))
 	s += 5
 	// Using maxtotalbytes for: z.unauthenticatedProposal.Block.Payset
 	s += config.MaxTxnBytesPerBlock
@@ -11462,8 +11462,8 @@ func (z *unauthenticatedProposal) UnmarshalMsgWithState(bts []byte, st msgp.Unma
 				err = msgp.WrapError(err, "struct-from-array", "AbsentParticipationAccounts")
 				return
 			}
-			if zb0012 > config.MaxProposedAbsentOnlineAccounts {
-				err = msgp.ErrOverflow(uint64(zb0012), uint64(config.MaxProposedAbsentOnlineAccounts))
+			if zb0012 > config.MaxMarkAbsent {
+				err = msgp.ErrOverflow(uint64(zb0012), uint64(config.MaxMarkAbsent))
 				err = msgp.WrapError(err, "struct-from-array", "AbsentParticipationAccounts")
 				return
 			}
@@ -11776,8 +11776,8 @@ func (z *unauthenticatedProposal) UnmarshalMsgWithState(bts []byte, st msgp.Unma
 					err = msgp.WrapError(err, "AbsentParticipationAccounts")
 					return
 				}
-				if zb0020 > config.MaxProposedAbsentOnlineAccounts {
-					err = msgp.ErrOverflow(uint64(zb0020), uint64(config.MaxProposedAbsentOnlineAccounts))
+				if zb0020 > config.MaxMarkAbsent {
+					err = msgp.ErrOverflow(uint64(zb0020), uint64(config.MaxMarkAbsent))
 					err = msgp.WrapError(err, "AbsentParticipationAccounts")
 					return
 				}
@@ -11884,7 +11884,7 @@ func UnauthenticatedProposalMaxSize() (s int) {
 	s += msgp.ArrayHeaderSize + ((config.MaxProposedExpiredOnlineAccounts) * (basics.AddressMaxSize()))
 	s += 11
 	// Calculating size of slice: z.Block.BlockHeader.ParticipationUpdates.AbsentParticipationAccounts
-	s += msgp.ArrayHeaderSize + ((config.MaxProposedAbsentOnlineAccounts) * (basics.AddressMaxSize()))
+	s += msgp.ArrayHeaderSize + ((config.MaxMarkAbsent) * (basics.AddressMaxSize()))
 	s += 5
 	// Using maxtotalbytes for: z.Block.Payset
 	s += config.MaxTxnBytesPerBlock

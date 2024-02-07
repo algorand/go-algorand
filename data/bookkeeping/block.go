@@ -162,7 +162,7 @@ type (
 
 		// AbsentParticipationAccounts contains a list of online accounts that
 		// needs to be converted to offline since they are not proposing.
-		AbsentParticipationAccounts []basics.Address `codec:"partupdabs,allocbound=config.MaxProposedAbsentOnlineAccounts"`
+		AbsentParticipationAccounts []basics.Address `codec:"partupdabs,allocbound=config.MaxMarkAbsent"`
 	}
 
 	// RewardsState represents the global parameters controlling the rate
@@ -512,14 +512,14 @@ var bonusPlans = []bonusPlan{
 	// amount would be set at baseRound or at upgrade time.
 }
 
-// nextBonus determines the bonus that should be paid out for proposing the next block.
-func nextBonus(prev BlockHeader, params *config.ConsensusParams) basics.MicroAlgos {
+// NextBonus determines the bonus that should be paid out for proposing the next block.
+func NextBonus(prev BlockHeader, params *config.ConsensusParams) basics.MicroAlgos {
 	current := prev.Round + 1
 	prevParams := config.Consensus[prev.CurrentProtocol] // presence ensured by ProcessUpgradeParams
-	return computeBonus(current, prev.Bonus, bonusPlans[params.BonusPlan], bonusPlans[prevParams.BonusPlan])
+	return computeBonus(current, prev.Bonus, bonusPlans[params.BonusPlanVer], bonusPlans[prevParams.BonusPlanVer])
 }
 
-// computeBonus is the guts of nextBonus that can be unit tested more effectively.
+// computeBonus is the guts of NextBonus that can be unit tested more effectively.
 func computeBonus(current basics.Round, prevBonus basics.MicroAlgos, curPlan bonusPlan, prevPlan bonusPlan) basics.MicroAlgos {
 	// Set the amount if it's non-zero...
 	if !curPlan.baseAmount.IsZero() {
@@ -532,10 +532,8 @@ func computeBonus(current basics.Round, prevBonus basics.MicroAlgos, curPlan bon
 
 	if curPlan.decayInterval != 0 && current%curPlan.decayInterval == 0 {
 		// decay
-		if newBonus, o := basics.Muldiv(prevBonus.Raw, 99, 100); !o {
-			return basics.MicroAlgos{Raw: newBonus}
-		}
-		logging.Base().Panicf("MakeBlock: error decaying bonus: %d", prevBonus)
+		keep, _ := basics.NewPercent(99).DivvyAlgos(prevBonus)
+		return keep
 	}
 	return prevBonus
 }
@@ -561,18 +559,18 @@ func MakeBlock(prev BlockHeader) Block {
 		}
 	}
 
-	bonus := nextBonus(prev, &params)
+	bonus := NextBonus(prev, &params)
 
 	// the merkle root of TXs will update when fillpayset is called
 	blk := Block{
 		BlockHeader: BlockHeader{
 			Round:        prev.Round + 1,
 			Branch:       prev.Hash(),
-			UpgradeVote:  upgradeVote,
-			UpgradeState: upgradeState,
 			TimeStamp:    timestamp,
 			GenesisID:    prev.GenesisID,
 			GenesisHash:  prev.GenesisHash,
+			UpgradeVote:  upgradeVote,
+			UpgradeState: upgradeState,
 			Bonus:        bonus,
 		},
 	}
@@ -690,7 +688,7 @@ func (bh BlockHeader) PreCheck(prev BlockHeader) error {
 	}
 
 	// check bonus
-	expectedBonus := nextBonus(prev, &params)
+	expectedBonus := NextBonus(prev, &params)
 	if bh.Bonus != expectedBonus {
 		return fmt.Errorf("bad bonus: %d != %d ", bh.Bonus, expectedBonus)
 	}

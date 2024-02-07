@@ -126,13 +126,14 @@ func makeNewEmptyBlock(t *testing.T, l *Ledger, GenesisID string, initAccounts m
 	a.NoError(err, "could not get incentive pool balance")
 
 	blk.BlockHeader = bookkeeping.BlockHeader{
-		GenesisID:    GenesisID,
-		Round:        l.Latest() + 1,
-		Branch:       lastBlock.Hash(),
+		Round:  l.Latest() + 1,
+		Branch: lastBlock.Hash(),
+		// Seed:       does not matter,
 		TimeStamp:    0,
+		GenesisID:    GenesisID,
+		Bonus:        bookkeeping.NextBonus(lastBlock.BlockHeader, &proto),
 		RewardsState: lastBlock.NextRewardsState(l.Latest()+1, proto, poolBal.MicroAlgos, totalRewardUnits, logging.Base()),
 		UpgradeState: lastBlock.UpgradeState,
-		// Seed:       does not matter,
 		// UpgradeVote: empty,
 	}
 
@@ -173,7 +174,7 @@ func (l *Ledger) appendUnvalidatedSignedTx(t *testing.T, initAccounts map[basics
 	if proto.TxnCounter {
 		blk.TxnCounter = blk.TxnCounter + 1
 	}
-	if proto.EnableMining {
+	if proto.Mining().Enabled {
 		blk.FeesCollected = stx.Txn.Fee
 	}
 	blk.Payset = append(blk.Payset, txib)
@@ -244,13 +245,13 @@ func TestLedgerBlockHeaders(t *testing.T) {
 	a.NoError(err, "could not get incentive pool balance")
 
 	correctHeader := bookkeeping.BlockHeader{
-		GenesisID:    t.Name(),
-		Round:        l.Latest() + 1,
-		Branch:       lastBlock.Hash(),
+		Round:  l.Latest() + 1,
+		Branch: lastBlock.Hash(),
+		// Seed:       does not matter,
 		TimeStamp:    0,
+		GenesisID:    t.Name(),
 		RewardsState: lastBlock.NextRewardsState(l.Latest()+1, proto, poolBal.MicroAlgos, totalRewardUnits, logging.Base()),
 		UpgradeState: lastBlock.UpgradeState,
-		// Seed:       does not matter,
 		// UpgradeVote: empty,
 	}
 
@@ -1251,13 +1252,14 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 			a.NoError(err, "could not get last block")
 
 			correctHeader := bookkeeping.BlockHeader{
-				GenesisID:    t.Name(),
-				Round:        l.Latest() + 1,
-				Branch:       lastBlock.Hash(),
+				Round:  l.Latest() + 1,
+				Branch: lastBlock.Hash(),
+				// Seed:       does not matter,
 				TimeStamp:    0,
+				GenesisID:    t.Name(),
+				Bonus:        bookkeeping.NextBonus(lastBlock.BlockHeader, &proto),
 				RewardsState: lastBlock.NextRewardsState(l.Latest()+1, proto, poolBal.MicroAlgos, totalRewardUnits, logging.Base()),
 				UpgradeState: lastBlock.UpgradeState,
-				// Seed:       does not matter,
 				// UpgradeVote: empty,
 			}
 			correctHeader.RewardsPool = testPoolAddr

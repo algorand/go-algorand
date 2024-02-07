@@ -83,7 +83,7 @@ func Keyreg(keyreg transactions.KeyregTxnFields, header transactions.Header, bal
 		record.VoteFirstValid = keyreg.VoteFirst
 		record.VoteLastValid = keyreg.VoteLast
 		record.VoteKeyDilution = keyreg.VoteKeyDilution
-		if header.Fee.GTE(incentiveFeeForEligibility) && params.EnableMining {
+		if header.Fee.Raw >= params.Mining().GoOnlineFee && params.Mining().Enabled {
 			record.IncentiveEligible = true
 		}
 	}
@@ -96,9 +96,3 @@ func Keyreg(keyreg transactions.KeyregTxnFields, header transactions.Header, bal
 
 	return nil
 }
-
-// incentiveFeeForEligibility imparts a small cost on moving from offline to
-// online. This will impose a cost to running unreliable nodes that get
-// suspended and then come back online. Becomes a consensus param if ever
-// changed.
-var incentiveFeeForEligibility = basics.Algos(2)

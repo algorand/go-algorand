@@ -29,7 +29,7 @@ type Fraction struct {
 }
 
 // NewFraction creates the obvious Fraction, and checks that is not improper,
-// nor dives by zero.
+// nor divides by zero.
 func NewFraction(numerator uint64, denominator uint64) Fraction {
 	if denominator == 0 {
 		panic("/0")

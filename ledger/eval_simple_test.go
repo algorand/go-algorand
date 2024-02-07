@@ -277,13 +277,13 @@ func TestMiningFees(t *testing.T) {
 			vb := dl.endBlock(proposer)
 
 			if ver >= miningBegins {
-				require.True(t, dl.generator.GenesisProto().EnableMining)     // version sanity check
-				require.NotZero(t, dl.generator.GenesisProto().MiningPercent) // version sanity check
+				require.True(t, dl.generator.GenesisProto().Mining().Enabled)    // version sanity check
+				require.NotZero(t, dl.generator.GenesisProto().Mining().Percent) // version sanity check
 				// new fields are in the header
 				require.EqualValues(t, 2000, vb.Block().FeesCollected.Raw)
 			} else {
-				require.False(t, dl.generator.GenesisProto().EnableMining)
-				require.Zero(t, dl.generator.GenesisProto().MiningPercent) // version sanity check
+				require.False(t, dl.generator.GenesisProto().Mining().Enabled)
+				require.Zero(t, dl.generator.GenesisProto().Mining().Percent) // version sanity check
 				// new fields are not in the header
 				require.Zero(t, vb.Block().FeesCollected)
 			}

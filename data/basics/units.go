@@ -45,11 +45,6 @@ func (a MicroAlgos) GreaterThan(b MicroAlgos) bool {
 	return a.Raw > b.Raw
 }
 
-// GTE implements arithmetic comparison for MicroAlgos
-func (a MicroAlgos) GTE(b MicroAlgos) bool {
-	return a.Raw >= b.Raw
-}
-
 // IsZero implements arithmetic comparison for MicroAlgos
 func (a MicroAlgos) IsZero() bool {
 	return a.Raw == 0

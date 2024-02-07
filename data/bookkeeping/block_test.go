@@ -51,12 +51,12 @@ func init() {
 	}
 	params1.MinUpgradeWaitRounds = 0
 	params1.MaxUpgradeWaitRounds = 0
-	params1.BonusPlan = 0
+	params1.BonusPlanVer = 0
 	config.Consensus[proto1] = params1
 
 	params2 := config.Consensus[protocol.ConsensusCurrentVersion]
 	params2.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
-	params2.BonusPlan = 1
+	params2.BonusPlanVer = 1
 	config.Consensus[proto2] = params2
 
 	paramsDelay := config.Consensus[protocol.ConsensusCurrentVersion]
