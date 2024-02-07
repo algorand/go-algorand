@@ -27,10 +27,12 @@ import (
 
 var exportKeyfile string
 var exportPubkeyfile string
+var exportDiscreet bool
 
 func init() {
 	exportCmd.Flags().StringVarP(&exportKeyfile, "keyfile", "f", "", "Private key filename")
 	exportCmd.Flags().StringVarP(&exportPubkeyfile, "pubkeyfile", "p", "", "Public key filename")
+	exportCmd.Flags().BoolVar(&exportDiscreet, "discreet", false, "Print mnemonic discreetly to an alternate screen")
 	exportCmd.MarkFlagRequired("keyfile")
 }
 
@@ -45,7 +47,14 @@ var exportCmd = &cobra.Command{
 		key := crypto.GenerateSignatureSecrets(seed)
 		publicKeyChecksummed := basics.Address(key.SignatureVerifier).String()
 
-		fmt.Printf("Private key mnemonic: %s\n", mnemonic)
+		if exportDiscreet {
+			if err := printDiscreetly(os.Stderr, "**Important** write this private key mnemonic phrase in a safe place. Do not share it to anyone", fmt.Sprintf("Private key mnemonic: %s", mnemonic)); err != nil {
+				fmt.Fprintf(os.Stderr, "Fail to print mnemonic: %v", err)
+				os.Exit(1)
+			}
+		} else {
+			fmt.Printf("Private key mnemonic: %s\n", mnemonic)
+		}
 		fmt.Printf("Public key: %s\n", publicKeyChecksummed)
 
 		if exportPubkeyfile != "" {
