@@ -301,7 +301,7 @@ func (cb *roundCowState) commitToParent() {
 		cb.commitParent.mods.Txids[txid] = ledgercore.IncludedTransactions{LastValid: incTxn.LastValid, Intra: commitParentBaseIdx + incTxn.Intra}
 	}
 	cb.commitParent.txnCount += cb.txnCount
-	// no overflow because of 10B algo cap
+	// no overflow because max supply is uint64, can't exceed that in fees paid
 	cb.commitParent.feesCollected, _ = basics.OAddA(cb.commitParent.feesCollected, cb.feesCollected)
 
 	for txl, expires := range cb.mods.Txleases {

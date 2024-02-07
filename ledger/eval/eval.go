@@ -1235,7 +1235,7 @@ func (cs *roundCowState) takeFee(tx *transactions.Transaction, senderRewards *ba
 	if tx.Sender == ep.Specials.FeeSink {
 		return nil
 	}
-	// overflow impossible, since these sum the fees actually paid. 10B algo limit
+	// overflow impossible, since these sum the fees actually paid and max supply is uint64
 	cs.feesCollected, _ = basics.OAddA(cs.feesCollected, tx.Fee)
 	return nil
 
