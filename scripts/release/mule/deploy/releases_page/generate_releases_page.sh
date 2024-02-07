@@ -13,11 +13,9 @@ VERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
 
 cd scripts/release/mule/deploy/releases_page
 
-echo $(./reverse_hex_timestamp)
-# aws s3 sync --acl public-read "s3://algorand-staging/releases/$CHANNEL/$VERSION" "s3://algorand-dev-deb-repo/releases/$CHANNEL/$(./reverse_hex_timestamp)_$VERSION"
+aws s3 sync --acl public-read "s3://algorand-staging/releases/$CHANNEL/$VERSION" "s3://algorand-dev-deb-repo/releases/$CHANNEL/$(./reverse_hex_timestamp)_$VERSION"
 ./generate_releases_page.py > index.html
-# aws s3 cp s3://algorand-releases/index.html s3://algorand-staging/releases-page/index.html-previous
-# aws s3 cp index.html s3://algorand-staging/releases-page/
-aws s3 cp index.html s3://algorand-staging/releases-page-test/ --acl public-read
-# aws s3 cp index.html s3://algorand-releases/
+aws s3 cp s3://algorand-releases/index.html s3://algorand-staging/releases-page/index.html-previous
+aws s3 cp index.html s3://algorand-staging/releases-page/
+aws s3 cp index.html s3://algorand-releases/
 
