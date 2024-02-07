@@ -27,10 +27,12 @@ import (
 
 var mnemonic string
 var importKeyfile string
+var importDiscreet bool
 
 func init() {
 	importCmd.Flags().StringVarP(&mnemonic, "mnemonic", "m", "", "Private key mnemonic")
 	importCmd.Flags().StringVarP(&importKeyfile, "keyfile", "f", "", "Private key filename")
+	importCmd.Flags().BoolVar(&importDiscreet, "discreet", false, "Print mnemonic discreetly to an alternate screen")
 	importCmd.MarkFlagRequired("mnemonic")
 }
 
@@ -44,7 +46,14 @@ var importCmd = &cobra.Command{
 		key := crypto.GenerateSignatureSecrets(seed)
 		publicKeyChecksummed := basics.Address(key.SignatureVerifier).String()
 
-		fmt.Printf("Private key mnemonic: %s\n", mnemonic)
+		if importDiscreet {
+			if err := printDiscreetly(os.Stderr, "**Important** write this private key mnemonic phrase in a safe place. Do not share it to anyone", fmt.Sprintf("Private key mnemonic: %s", mnemonic)); err != nil {
+				fmt.Fprintf(os.Stderr, "Fail to print mnemonic: %v", err)
+				os.Exit(1)
+			}
+		} else {
+			fmt.Printf("Private key mnemonic: %s\n", mnemonic)
+		}
 		fmt.Printf("Public key: %s\n", publicKeyChecksummed)
 
 		if importKeyfile != "" {
