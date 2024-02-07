@@ -530,7 +530,7 @@ type ConsensusParams struct {
 	// dynamic filter, it will be calculated and logged (but not used).
 	DynamicFilterTimeout bool
 
-	// MiningRules is the version of mining related rules. It excludes anything
+	// MiningRulesVer is the version of mining related rules. It excludes anything
 	// related to block "bonuses" - extra payments made beyond what fees could
 	// provide. 0 disables mining and related tracking
 	MiningRulesVer uint8
@@ -539,6 +539,8 @@ type ConsensusParams struct {
 	BonusPlanVer uint8
 }
 
+// MiningRules puts several related consensus parameters in one place. The same
+// care for backward compatibility with old blocks must be taken.
 type MiningRules struct {
 	// Enabled turns on several things needed for paying block incentives,
 	// including tracking of the proposer and fees collected.
@@ -574,6 +576,8 @@ type MiningRules struct {
 	MaxMarkAbsent int
 }
 
+// miningRules should be extended, never changed, since old blocks must retain
+// their behavior.
 var miningRules = [...]MiningRules{
 	{Enabled: false},
 	{
@@ -586,6 +590,9 @@ var miningRules = [...]MiningRules{
 	},
 }
 
+// Mining() returns the MiningRules of the ConsensusParams. These are the
+// consensus params related to tracking proposers and paying a portion of fees
+// to eligible recipients.
 func (cp ConsensusParams) Mining() MiningRules {
 	return miningRules[cp.MiningRulesVer]
 }

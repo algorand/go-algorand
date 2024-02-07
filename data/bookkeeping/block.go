@@ -494,6 +494,8 @@ type bonusPlan struct {
 	decayInterval basics.Round
 }
 
+// bonusPlans should be extended, never changed, since old blocks must retain
+// their behavior.
 var bonusPlans = []bonusPlan{
 	0: {},
 	1: {
