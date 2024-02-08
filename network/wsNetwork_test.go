@@ -4564,3 +4564,49 @@ func TestWsNetworkPhonebookMix(t *testing.T) {
 	addrs := net.phonebook.GetAddresses(10, phonebook.PhoneBookEntryRelayRole)
 	require.Len(t, addrs, 1)
 }
+
+type testRecordingTransport struct {
+	resultUrl string
+}
+
+func (rt *testRecordingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	rt.resultUrl = req.URL.String()
+	return &http.Response{StatusCode: 200}, nil
+}
+
+func TestHTTPPAddressBoundTransport(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	const path = "/test/path"
+	const expErr = "ERR"
+	tests := []struct {
+		addr     string
+		expected string
+	}{
+		{"", expErr},
+		{":", expErr},
+		{"host:1234/lbr", expErr},
+		{"host:1234", "http://host:1234" + path},
+		{"http://host:1234", "http://host:1234" + path},
+		{"http://host:1234/lbr", "http://host:1234/lbr" + path},
+	}
+
+	for _, test := range tests {
+		recorder := testRecordingTransport{}
+		tr := HTTPPAddressBoundTransport{
+			Addr:           test.addr,
+			InnerTransport: &recorder,
+		}
+		req, err := http.NewRequest("GET", path, nil)
+		require.NoError(t, err)
+		resp, err := tr.RoundTrip(req)
+		if test.expected == expErr {
+			require.Error(t, err)
+		} else {
+			require.NoError(t, err)
+			require.Equal(t, 200, resp.StatusCode)
+			require.Equal(t, test.expected, recorder.resultUrl)
+		}
+	}
+}
