@@ -9,8 +9,7 @@ echo
 
 CHANNEL=${CHANNEL:-$(./scripts/release/mule/common/get_channel.sh "$NETWORK")}
 VERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
-# NO_DEPLOY=${NO_DEPLOY:-false}
-NO_DEPLOY=true
+NO_DEPLOY=${NO_DEPLOY:-false}
 PACKAGES_DIR=${PACKAGES_DIR:-"tmp"}
 
 if [ -n "$S3_SOURCE" ]
