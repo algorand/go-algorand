@@ -142,13 +142,3 @@ func TestParseHostURLOrMultiaddr(t *testing.T) {
 	}
 
 }
-
-func TestEmptyURL(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-
-	var url = &url.URL{}
-	url.Path = "/test"
-
-	require.Equal(t, "/test", url.String())
-}

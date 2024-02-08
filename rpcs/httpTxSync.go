@@ -36,7 +36,7 @@ import (
 
 // HTTPTxSync implements the TxSyncClient interface over HTTP
 type HTTPTxSync struct {
-	addr string
+	rootURL string
 
 	peers network.GossipNode
 
@@ -103,11 +103,11 @@ func (hts *HTTPTxSync) Sync(ctx context.Context, bloom *bloom.Filter) (txgroups 
 		return nil, fmt.Errorf("cannot HTTPTxSync non http peer %T %#v", peer, peer)
 	}
 	var syncURL string
-	hts.addr = hpeer.GetAddress()
+	hts.rootURL = hpeer.GetAddress()
 
 	client := hpeer.GetHTTPClient()
 	if client == nil {
-		client, err = hts.peers.GetHTTPClient(hts.addr)
+		client, err = hts.peers.GetHTTPClient(hts.rootURL)
 		if err != nil {
 			return nil, fmt.Errorf("HTTPTxSync cannot create a HTTP client for a peer %T %#v: %s", peer, peer, err.Error())
 		}
@@ -179,7 +179,7 @@ func (hts *HTTPTxSync) Sync(ctx context.Context, bloom *bloom.Filter) (txgroups 
 // Address is part of TxSyncClient interface.
 // Returns the root URL of the connected peer.
 func (hts *HTTPTxSync) Address() string {
-	return hts.addr
+	return hts.rootURL
 }
 
 // Close is part of TxSyncClient interface

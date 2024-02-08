@@ -995,7 +995,7 @@ func TestSlowOutboundPeer(t *testing.T) {
 		destPeers[i].sendBufferHighPrio = make(chan sendMessages, sendBufferLength)
 		destPeers[i].sendBufferBulk = make(chan sendMessages, sendBufferLength)
 		destPeers[i].conn = &nopConnSingleton
-		destPeers[i].addr = fmt.Sprintf("fake %d", i)
+		destPeers[i].rootURL = fmt.Sprintf("fake %d", i)
 		node.addPeer(&destPeers[i])
 	}
 	node.Start()
@@ -4578,6 +4578,12 @@ func TestHTTPPAddressBoundTransport(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
+	// first ensure url.URL.String() on path-only URLs works as expected
+	var url = &url.URL{}
+	url.Path = "/test"
+	require.Equal(t, "/test", url.String())
+
+	// now test some combinations of address and path
 	const path = "/test/path"
 	const expErr = "ERR"
 	tests := []struct {

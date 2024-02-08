@@ -165,7 +165,7 @@ type wsPeerCore struct {
 	netCtx        context.Context
 	log           logging.Logger
 	readBuffer    chan<- IncomingMessage
-	addr          string // string representation of the peer's address
+	rootURL       string
 	originAddress string // incoming connection remote host
 	client        *http.Client
 }
@@ -353,7 +353,7 @@ func makePeerCore(ctx context.Context, net GossipNode, log logging.Logger, readB
 		netCtx:        ctx,
 		log:           log,
 		readBuffer:    readBuffer,
-		addr:          addr,
+		rootURL:       addr,
 		originAddress: originAddress,
 		client:        client,
 	}
@@ -362,7 +362,7 @@ func makePeerCore(ctx context.Context, net GossipNode, log logging.Logger, readB
 // GetAddress returns the root url to use to identify or connect to this peer.
 // This implements HTTPPeer interface and used to distinguish between peers.
 func (wp *wsPeerCore) GetAddress() string {
-	return wp.addr
+	return wp.rootURL
 }
 
 // GetHTTPClient returns a client for this peer.
