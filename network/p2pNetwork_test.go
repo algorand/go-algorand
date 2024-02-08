@@ -540,7 +540,7 @@ func TestP2PNetworkDHTCapabilities(t *testing.T) {
 					uniquePeerIDs := make(map[peer.ID]struct{})
 					for _, p := range peers {
 						wsPeer := p.(*wsPeerCore)
-						pi, err := peer.AddrInfoFromString(wsPeer.rootURL)
+						pi, err := peer.AddrInfoFromString(wsPeer.GetAddress())
 						require.NoError(t, err)
 						uniquePeerIDs[pi.ID] = struct{}{}
 					}

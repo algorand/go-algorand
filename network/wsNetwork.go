@@ -27,6 +27,7 @@ import (
 	"net/http"
 	"net/textproto"
 	"net/url"
+	"path"
 	"regexp"
 	"runtime"
 	"strconv"
@@ -556,14 +557,16 @@ func (wn *WebsocketNetwork) GetPeers(options ...PeerOption) []Peer {
 			var addrs []string
 			addrs = wn.phonebook.GetAddresses(1000, phonebook.PhoneBookEntryRelayRole)
 			for _, addr := range addrs {
-				peerCore := makePeerCore(wn.ctx, wn, wn.log, wn.handler.readBuffer, addr, wn.getRoundTripper(nil), "" /*origin address*/)
+				client, _ := wn.GetHTTPClient(addr)
+				peerCore := makePeerCore(wn.ctx, wn, wn.log, wn.handler.readBuffer, addr, client, "" /*origin address*/)
 				outPeers = append(outPeers, &peerCore)
 			}
 		case PeersPhonebookArchivalNodes:
 			var addrs []string
 			addrs = wn.phonebook.GetAddresses(1000, phonebook.PhoneBookEntryRelayRole)
 			for _, addr := range addrs {
-				peerCore := makePeerCore(wn.ctx, wn, wn.log, wn.handler.readBuffer, addr, wn.getRoundTripper(nil), "" /*origin address*/)
+				client, _ := wn.GetHTTPClient(addr)
+				peerCore := makePeerCore(wn.ctx, wn, wn.log, wn.handler.readBuffer, addr, client, "" /*origin address*/)
 				outPeers = append(outPeers, &peerCore)
 			}
 		case PeersPhonebookArchivers:
@@ -571,7 +574,8 @@ func (wn *WebsocketNetwork) GetPeers(options ...PeerOption) []Peer {
 			var addrs []string
 			addrs = wn.phonebook.GetAddresses(1000, phonebook.PhoneBookEntryArchiverRole)
 			for _, addr := range addrs {
-				peerCore := makePeerCore(wn.ctx, wn, wn.log, wn.handler.readBuffer, addr, wn.getRoundTripper(nil), "" /*origin address*/)
+				client, _ := wn.GetHTTPClient(addr)
+				peerCore := makePeerCore(wn.ctx, wn, wn.log, wn.handler.readBuffer, addr, client, "" /*origin address*/)
 				outPeers = append(outPeers, &peerCore)
 			}
 		case PeersConnectedIn:
@@ -1097,8 +1101,9 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 		wn.requestsLogger.SetStatusCode(response, http.StatusSwitchingProtocols)
 	}
 
+	client, _ := wn.GetHTTPClient(trackedRequest.remoteAddress())
 	peer := &wsPeer{
-		wsPeerCore:        makePeerCore(wn.ctx, wn, wn.log, wn.handler.readBuffer, trackedRequest.remoteAddress(), wn.getRoundTripper(nil), trackedRequest.remoteHost),
+		wsPeerCore:        makePeerCore(wn.ctx, wn, wn.log, wn.handler.readBuffer, trackedRequest.remoteAddress(), client, trackedRequest.remoteHost),
 		conn:              wsPeerWebsocketConnImpl{conn},
 		outgoing:          false,
 		InstanceName:      trackedRequest.otherInstanceName,
@@ -1541,7 +1546,7 @@ func (wn *WebsocketNetwork) isConnectedTo(addr string) bool {
 	wn.peersLock.RLock()
 	defer wn.peersLock.RUnlock()
 	for _, peer := range wn.peers {
-		if addr == peer.rootURL {
+		if addr == peer.GetAddress() {
 			return true
 		}
 	}
@@ -2030,18 +2035,31 @@ func (wn *WebsocketNetwork) numOutgoingPending() int {
 	return len(wn.tryConnectAddrs)
 }
 
-// getRoundTripper returns an http.Transport that limits the number of connection
-// to comply with connectionsRateLimitingCount.
-func (wn *WebsocketNetwork) getRoundTripper(peer Peer) http.RoundTripper {
-	return &wn.transport
-}
-
 // GetHTTPClient returns a http.Client with a suitable for the network Transport
 // that would also limit the number of outgoing connections.
-func (wn *WebsocketNetwork) GetHTTPClient(peer HTTPPeer) (*http.Client, error) {
+func (wn *WebsocketNetwork) GetHTTPClient(address string) (*http.Client, error) {
 	return &http.Client{
-		Transport: &wn.transport,
+		Transport: &HTTPPAddressBoundTransport{address, &wn.transport},
 	}, nil
+}
+
+// HTTPPAddressBoundTransport is a http.RoundTripper that sets the scheme and host of the request URL to the given address
+type HTTPPAddressBoundTransport struct {
+	Addr           string
+	InnerTransport http.RoundTripper
+}
+
+// RoundTrip implements http.RoundTripper by adding the schema, host, port, path prefix from the
+// parsed address to the request URL and then calling the inner transport.
+func (t *HTTPPAddressBoundTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	url, err := addr.ParseHostOrURL(t.Addr)
+	if err != nil {
+		return nil, err
+	}
+	req.URL.Scheme = url.Scheme
+	req.URL.Host = url.Host
+	req.URL.Path = path.Join(url.Path, req.URL.Path)
+	return t.InnerTransport.RoundTrip(req)
 }
 
 // filterASCII filter out the non-ascii printable characters out of the given input string and
@@ -2062,9 +2080,9 @@ func filterASCII(unfilteredString string) (filteredString string) {
 }
 
 // tryConnect opens websocket connection and checks initial connection parameters.
-// addr should be 'host:port' or a URL, gossipAddr is the websocket endpoint URL
-func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
-	defer wn.tryConnectReleaseAddr(addr, gossipAddr)
+// netAddr should be 'host:port' or a URL, gossipAddr is the websocket endpoint URL
+func (wn *WebsocketNetwork) tryConnect(netAddr, gossipAddr string) {
+	defer wn.tryConnectReleaseAddr(netAddr, gossipAddr)
 	defer func() {
 		if xpanic := recover(); xpanic != nil {
 			wn.log.Errorf("panic in tryConnect: %v", xpanic)
@@ -2080,7 +2098,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 
 	var idChallenge identityChallengeValue
 	if wn.identityScheme != nil {
-		idChallenge = wn.identityScheme.AttachChallenge(requestHeader, addr)
+		idChallenge = wn.identityScheme.AttachChallenge(requestHeader, netAddr)
 	}
 
 	// for backward compatibility, include the ProtocolVersion header as well.
@@ -2125,7 +2143,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 					// we've got a retry-after header.
 					// convert it to a timestamp so that we could use it.
 					retryAfterTime := time.Now().Add(time.Duration(retryAfter) * time.Second)
-					wn.phonebook.UpdateRetryAfter(addr, retryAfterTime)
+					wn.phonebook.UpdateRetryAfter(netAddr, retryAfterTime)
 				}
 			default:
 				wn.log.Warnf("ws connect(%s) fail - bad handshake, Status code = %d, Headers = %#v, Body = %s", gossipAddr, response.StatusCode, response.Header, errString)
@@ -2166,7 +2184,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 		peerID, idVerificationMessage, err = wn.identityScheme.VerifyResponse(response.Header, idChallenge)
 		if err != nil {
 			networkPeerIdentityError.Inc(nil)
-			wn.log.With("err", err).With("remote", addr).With("local", localAddr).Warn("peer supplied an invalid identity response, abandoning peering")
+			wn.log.With("err", err).With("remote", netAddr).With("local", localAddr).Warn("peer supplied an invalid identity response, abandoning peering")
 			closeEarly("Invalid identity response")
 			return
 		}
@@ -2179,8 +2197,9 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 		wn.throttledOutgoingConnections.Add(int32(1))
 	}
 
+	client, _ := wn.GetHTTPClient(netAddr)
 	peer := &wsPeer{
-		wsPeerCore:                  makePeerCore(wn.ctx, wn, wn.log, wn.handler.readBuffer, addr, wn.getRoundTripper(nil), "" /* origin */),
+		wsPeerCore:                  makePeerCore(wn.ctx, wn, wn.log, wn.handler.readBuffer, netAddr, client, "" /* origin */),
 		conn:                        wsPeerWebsocketConnImpl{conn},
 		outgoing:                    true,
 		incomingMsgFilter:           wn.incomingMsgFilter,
@@ -2202,7 +2221,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 		wn.peersLock.Unlock()
 		if !ok {
 			networkPeerIdentityDisconnect.Inc(nil)
-			wn.log.With("remote", addr).With("local", localAddr).Warn("peer deduplicated before adding because the identity is already known")
+			wn.log.With("remote", netAddr).With("local", localAddr).Warn("peer deduplicated before adding because the identity is already known")
 			closeEarly("Duplicate connection")
 			return
 		}
@@ -2210,7 +2229,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 	peer.init(wn.config, wn.outgoingMessagesBufferSize)
 	wn.addPeer(peer)
 
-	wn.log.With("event", "ConnectedOut").With("remote", addr).With("local", localAddr).Infof("Made outgoing connection to peer %v", addr)
+	wn.log.With("event", "ConnectedOut").With("remote", netAddr).With("local", localAddr).Infof("Made outgoing connection to peer %v", netAddr)
 	wn.log.EventWithDetails(telemetryspec.Network, telemetryspec.ConnectPeerEvent,
 		telemetryspec.PeerEventDetails{
 			Address:       justHost(conn.RemoteAddr().String()),
@@ -2226,7 +2245,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 	if len(idVerificationMessage) > 0 {
 		sent := peer.writeNonBlock(context.Background(), idVerificationMessage, true, crypto.Digest{}, time.Now())
 		if !sent {
-			wn.log.With("remote", addr).With("local", localAddr).Warn("could not send identity challenge verification")
+			wn.log.With("remote", netAddr).With("local", localAddr).Warn("could not send identity challenge verification")
 		}
 	}
 
@@ -2241,7 +2260,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 				mbytes := append([]byte(protocol.NetPrioResponseTag), resp...)
 				sent := peer.writeNonBlock(context.Background(), mbytes, true, crypto.Digest{}, time.Now())
 				if !sent {
-					wn.log.With("remote", addr).With("local", localAddr).Warnf("could not send priority response to %v", addr)
+					wn.log.With("remote", netAddr).With("local", localAddr).Warnf("could not send priority response to %v", netAddr)
 				}
 			}
 		}
@@ -2316,11 +2335,11 @@ func (wn *WebsocketNetwork) removePeer(peer *wsPeer, reason disconnectReason) {
 	// first logging, then take the lock and do the actual accounting.
 	// definitely don't change this to do the logging while holding the lock.
 	localAddr, _ := wn.Address()
-	logEntry := wn.log.With("event", "Disconnected").With("remote", peer.rootURL).With("local", localAddr)
+	logEntry := wn.log.With("event", "Disconnected").With("remote", peer.GetAddress()).With("local", localAddr)
 	if peer.outgoing && peer.peerMessageDelay > 0 {
 		logEntry = logEntry.With("messageDelay", peer.peerMessageDelay)
 	}
-	logEntry.Infof("Peer %s disconnected: %s", peer.rootURL, reason)
+	logEntry.Infof("Peer %s disconnected: %s", peer.GetAddress(), reason)
 	peerAddr := peer.OriginAddress()
 	// we might be able to get addr out of conn, or it might be closed
 	if peerAddr == "" && peer.conn != nil {
@@ -2331,12 +2350,12 @@ func (wn *WebsocketNetwork) removePeer(peer *wsPeer, reason disconnectReason) {
 	}
 	if peerAddr == "" {
 		// didn't get addr from peer, try from url
-		url, err := url.Parse(peer.rootURL)
+		url, err := url.Parse(peer.GetAddress())
 		if err == nil {
 			peerAddr = justHost(url.Host)
 		} else {
 			// use whatever it is
-			peerAddr = justHost(peer.rootURL)
+			peerAddr = justHost(peer.GetAddress())
 		}
 	}
 	eventDetails := telemetryspec.PeerEventDetails{

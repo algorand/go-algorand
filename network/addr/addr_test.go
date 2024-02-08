@@ -31,6 +31,8 @@ type urlCase struct {
 
 func TestParseHostOrURL(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	urlTestCases := []urlCase{
 		{"localhost:123", url.URL{Scheme: "http", Host: "localhost:123"}},
 		{"http://localhost:123", url.URL{Scheme: "http", Host: "localhost:123"}},
@@ -102,6 +104,7 @@ func TestParseHostOrURL(t *testing.T) {
 
 func TestParseHostURLOrMultiaddr(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	validMultiAddrs := []string{
 		"/ip4/127.0.0.1/tcp/8080",

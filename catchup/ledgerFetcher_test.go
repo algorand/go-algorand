@@ -163,7 +163,7 @@ func TestLedgerFetcher(t *testing.T) {
 	// headLedger parseURL failure
 	parseFailurePeer := testHTTPPeer("foobar")
 	err = lf.headLedger(context.Background(), &parseFailurePeer, basics.Round(0))
-	require.Equal(t, fmt.Errorf("could not parse a host from url"), err)
+	require.ErrorContains(t, err, "could not parse a host from url")
 
 	// headLedger 404 response
 	httpServerResponse = http.StatusNotFound

@@ -201,8 +201,13 @@ type testHTTPPeer string
 func (p *testHTTPPeer) GetAddress() string {
 	return string(*p)
 }
+
 func (p *testHTTPPeer) GetHTTPClient() *http.Client {
-	return &http.Client{}
+	return &http.Client{
+		Transport: &network.HTTPPAddressBoundTransport{
+			Addr:           p.GetAddress(),
+			InnerTransport: http.DefaultTransport},
+	}
 }
 func (p *testHTTPPeer) GetHTTPPeer() network.HTTPPeer {
 	return p

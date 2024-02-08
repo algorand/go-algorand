@@ -347,26 +347,20 @@ type TCPInfoUnicastPeer interface {
 }
 
 // Create a wsPeerCore object
-func makePeerCore(ctx context.Context, net GossipNode, log logging.Logger, readBuffer chan<- IncomingMessage, rootURL string, roundTripper http.RoundTripper, originAddress string) wsPeerCore {
-	return makePeerCoreWithClient(ctx, net, log, readBuffer, rootURL, &http.Client{Transport: roundTripper}, originAddress)
-}
-
-// Create a wsPeerCore object
-func makePeerCoreWithClient(ctx context.Context, net GossipNode, log logging.Logger, readBuffer chan<- IncomingMessage, rootURL string, client *http.Client, originAddress string) wsPeerCore {
+func makePeerCore(ctx context.Context, net GossipNode, log logging.Logger, readBuffer chan<- IncomingMessage, addr string, client *http.Client, originAddress string) wsPeerCore {
 	return wsPeerCore{
 		net:           net,
 		netCtx:        ctx,
 		log:           log,
 		readBuffer:    readBuffer,
-		rootURL:       rootURL,
+		rootURL:       addr,
 		originAddress: originAddress,
 		client:        client,
 	}
 }
 
-// GetAddress returns the root url to use to connect to this peer.
-// This implements HTTPPeer interface and used by external services to determine where to connect to.
-// TODO: should GetAddress be added to Peer interface?
+// GetAddress returns the root url to use to identify or connect to this peer.
+// This implements HTTPPeer interface and used to distinguish between peers.
 func (wp *wsPeerCore) GetAddress() string {
 	return wp.rootURL
 }
@@ -515,7 +509,7 @@ func (wp *wsPeer) Respond(ctx context.Context, reqMsg IncomingMessage, outMsg Ou
 
 // setup values not trivially assigned
 func (wp *wsPeer) init(config config.Local, sendBufferLength int) {
-	wp.log.Debugf("wsPeer init outgoing=%v %#v", wp.outgoing, wp.rootURL)
+	wp.log.Debugf("wsPeer init outgoing=%v %#v", wp.outgoing, wp.GetAddress())
 	wp.closing = make(chan struct{})
 	wp.sendBufferHighPrio = make(chan sendMessages, sendBufferLength)
 	wp.sendBufferBulk = make(chan sendMessages, sendBufferLength)

@@ -2366,8 +2366,8 @@ func TestWebsocketNetworkPrioLimit(t *testing.T) {
 	}
 
 	if failed {
-		t.Errorf("NetA had the following two peers priorities : [0]:%s=%d [1]:%s=%d", netA.peers[0].rootURL, netA.peers[0].prioWeight, netA.peers[1].rootURL, netA.peers[1].prioWeight)
-		t.Errorf("first peer before broadcasting was %s", firstPeer.rootURL)
+		t.Errorf("NetA had the following two peers priorities : [0]:%s=%d [1]:%s=%d", netA.peers[0].GetAddress(), netA.peers[0].prioWeight, netA.peers[1].GetAddress(), netA.peers[1].prioWeight)
+		t.Errorf("first peer before broadcasting was %s", firstPeer.GetAddress())
 	}
 }
 
@@ -4563,4 +4563,56 @@ func TestWsNetworkPhonebookMix(t *testing.T) {
 	require.NoError(t, err)
 	addrs := net.phonebook.GetAddresses(10, phonebook.PhoneBookEntryRelayRole)
 	require.Len(t, addrs, 1)
+}
+
+type testRecordingTransport struct {
+	resultURL string
+}
+
+func (rt *testRecordingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	rt.resultURL = req.URL.String()
+	return &http.Response{StatusCode: 200}, nil
+}
+
+func TestHTTPPAddressBoundTransport(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// first ensure url.URL.String() on path-only URLs works as expected
+	var url = &url.URL{}
+	url.Path = "/test"
+	require.Equal(t, "/test", url.String())
+
+	// now test some combinations of address and path
+	const path = "/test/path"
+	const expErr = "ERR"
+	tests := []struct {
+		addr     string
+		expected string
+	}{
+		{"", expErr},
+		{":", expErr},
+		{"host:1234/lbr", expErr},
+		{"host:1234", "http://host:1234" + path},
+		{"http://host:1234", "http://host:1234" + path},
+		{"http://host:1234/lbr", "http://host:1234/lbr" + path},
+	}
+
+	for _, test := range tests {
+		recorder := testRecordingTransport{}
+		tr := HTTPPAddressBoundTransport{
+			Addr:           test.addr,
+			InnerTransport: &recorder,
+		}
+		req, err := http.NewRequest("GET", path, nil)
+		require.NoError(t, err)
+		resp, err := tr.RoundTrip(req)
+		if test.expected == expErr {
+			require.Error(t, err)
+		} else {
+			require.NoError(t, err)
+			require.Equal(t, 200, resp.StatusCode)
+			require.Equal(t, test.expected, recorder.resultURL)
+		}
+	}
 }

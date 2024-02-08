@@ -157,6 +157,7 @@ func (client *mockRPCClient) Sync(ctx context.Context, bloom *bloom.Filter) (txg
 func (client *mockRPCClient) GetAddress() string {
 	return client.rootURL
 }
+
 func (client *mockRPCClient) GetHTTPClient() *http.Client {
 	return nil
 }
@@ -170,8 +171,12 @@ func (mca *mockClientAggregator) GetPeers(options ...network.PeerOption) []netwo
 	return mca.peers
 }
 
-func (mca *mockClientAggregator) GetHTTPClient(peer network.HTTPPeer) (*http.Client, error) {
-	return &http.Client{Transport: http.DefaultTransport}, nil
+func (mca *mockClientAggregator) GetHTTPClient(address string) (*http.Client, error) {
+	return &http.Client{
+		Transport: &network.HTTPPAddressBoundTransport{
+			Addr:           address,
+			InnerTransport: http.DefaultTransport},
+	}, nil
 }
 
 func TestSyncFromClient(t *testing.T) {
