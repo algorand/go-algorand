@@ -590,7 +590,7 @@ var miningRules = [...]MiningRules{
 	},
 }
 
-// Mining() returns the MiningRules of the ConsensusParams. These are the
+// Mining returns the MiningRules of the ConsensusParams. These are the
 // consensus params related to tracking proposers and paying a portion of fees
 // to eligible recipients.
 func (cp ConsensusParams) Mining() MiningRules {
