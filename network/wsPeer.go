@@ -166,7 +166,6 @@ type wsPeerCore struct {
 	log           logging.Logger
 	readBuffer    chan<- IncomingMessage
 	addr          string // string representation of the peer's address
-	rootURL       string // url to connect to this peer, could be empty for p2p peers (handled by client)
 	originAddress string // incoming connection remote host
 	client        *http.Client
 }
@@ -320,7 +319,6 @@ type wsPeer struct {
 // If you get an opaque Peer handle from a GossipNode, maybe try a .(HTTPPeer) type assertion on it.
 type HTTPPeer interface {
 	GetAddress() string
-	GetURL() string
 	GetHTTPClient() *http.Client
 }
 
@@ -349,14 +347,13 @@ type TCPInfoUnicastPeer interface {
 }
 
 // Create a wsPeerCore object
-func makePeerCore(ctx context.Context, net GossipNode, log logging.Logger, readBuffer chan<- IncomingMessage, addr string, rootURL string, client *http.Client, originAddress string) wsPeerCore {
+func makePeerCore(ctx context.Context, net GossipNode, log logging.Logger, readBuffer chan<- IncomingMessage, addr string, client *http.Client, originAddress string) wsPeerCore {
 	return wsPeerCore{
 		net:           net,
 		netCtx:        ctx,
 		log:           log,
 		readBuffer:    readBuffer,
 		addr:          addr,
-		rootURL:       rootURL,
 		originAddress: originAddress,
 		client:        client,
 	}
@@ -366,12 +363,6 @@ func makePeerCore(ctx context.Context, net GossipNode, log logging.Logger, readB
 // This implements HTTPPeer interface and used to distinguish between peers.
 func (wp *wsPeerCore) GetAddress() string {
 	return wp.addr
-}
-
-// GetURL returns the root url to use to connect to this peer.
-// This implements HTTPPeer interface and used by external services to determine where to connect to.
-func (wp *wsPeerCore) GetURL() string {
-	return wp.rootURL
 }
 
 // GetHTTPClient returns a client for this peer.

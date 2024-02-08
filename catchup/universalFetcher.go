@@ -72,13 +72,12 @@ func (uf *universalBlockFetcher) fetchBlock(ctx context.Context, round basics.Ro
 		address = fetcherClient.address()
 	} else if httpPeer, validHTTPPeer := peer.(network.HTTPPeer); validHTTPPeer {
 		fetcherClient := &HTTPFetcher{
-			peer:    httpPeer,
-			addr:    httpPeer.GetAddress(),
-			rootURL: httpPeer.GetURL(),
-			net:     uf.net,
-			client:  httpPeer.GetHTTPClient(),
-			log:     uf.log,
-			config:  &uf.config}
+			peer:   httpPeer,
+			addr:   httpPeer.GetAddress(),
+			net:    uf.net,
+			client: httpPeer.GetHTTPClient(),
+			log:    uf.log,
+			config: &uf.config}
 		fetchedBuf, err = fetcherClient.getBlockBytes(ctx, round)
 		if err != nil {
 			return nil, nil, time.Duration(0), err

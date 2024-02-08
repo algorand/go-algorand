@@ -24,6 +24,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/network/addr"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -181,15 +182,11 @@ func (n *HybridP2PNetwork) ClearHandlers() {
 
 // GetHTTPClient returns a http.Client with a suitable for the network Transport
 // that would also limit the number of outgoing connections.
-func (n *HybridP2PNetwork) GetHTTPClient(peer HTTPPeer) (*http.Client, error) {
-	switch peer.(type) {
-	case *wsPeer:
-		return n.wsNetwork.GetHTTPClient(peer)
-	case *wsPeerCore:
-		return n.p2pNetwork.GetHTTPClient(peer)
-	default:
-		panic("unrecognized peer type")
+func (n *HybridP2PNetwork) GetHTTPClient(address string) (*http.Client, error) {
+	if addr.IsMultiaddr(address) {
+		return n.p2pNetwork.GetHTTPClient(address)
 	}
+	return n.wsNetwork.GetHTTPClient(address)
 }
 
 // OnNetworkAdvance notifies the network library that the agreement protocol was able to make a notable progress.

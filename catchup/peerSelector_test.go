@@ -41,9 +41,6 @@ type mockHTTPPeer struct {
 func (d *mockHTTPPeer) GetAddress() string {
 	return d.address
 }
-func (d *mockHTTPPeer) GetURL() string {
-	return d.address
-}
 func (d *mockHTTPPeer) GetHTTPClient() *http.Client {
 	return nil
 }

@@ -24,22 +24,19 @@ import (
 	"math/rand"
 	"net/http"
 	"net/url"
-	"path"
 	"strings"
 
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
-	"github.com/algorand/go-algorand/network/addr"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/bloom"
 )
 
 // HTTPTxSync implements the TxSyncClient interface over HTTP
 type HTTPTxSync struct {
-	addr    string
-	rootURL string
+	addr string
 
 	peers network.GossipNode
 
@@ -106,25 +103,16 @@ func (hts *HTTPTxSync) Sync(ctx context.Context, bloom *bloom.Filter) (txgroups 
 		return nil, fmt.Errorf("cannot HTTPTxSync non http peer %T %#v", peer, peer)
 	}
 	var syncURL string
-	hts.rootURL = hpeer.GetURL()
 	hts.addr = hpeer.GetAddress()
 
 	client := hpeer.GetHTTPClient()
 	if client == nil {
-		client, err = hts.peers.GetHTTPClient(hpeer)
+		client, err = hts.peers.GetHTTPClient(hts.addr)
 		if err != nil {
 			return nil, fmt.Errorf("HTTPTxSync cannot create a HTTP client for a peer %T %#v: %s", peer, peer, err.Error())
 		}
 	}
-	var parsedURL = &url.URL{}
-	if hts.rootURL != "" {
-		parsedURL, err = addr.ParseHostOrURL(hts.rootURL)
-		if err != nil {
-			return nil, err
-		}
-	}
-	parsedURL.Path = network.SubstituteGenesisID(hts.peers, path.Join(parsedURL.Path, TxServiceHTTPPath))
-	syncURL = parsedURL.String()
+	syncURL = network.SubstituteGenesisID(hts.peers, TxServiceHTTPPath)
 
 	hts.log.Infof("http sync from %s", syncURL)
 	params := url.Values{}

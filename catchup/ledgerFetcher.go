@@ -23,8 +23,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
-	"path"
 	"strconv"
 	"time"
 
@@ -34,7 +32,6 @@ import (
 	"github.com/algorand/go-algorand/ledger/encoded"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
-	"github.com/algorand/go-algorand/network/addr"
 	"github.com/algorand/go-algorand/rpcs"
 	"github.com/algorand/go-algorand/util"
 )
@@ -77,17 +74,7 @@ func makeLedgerFetcher(net network.GossipNode, accessor ledger.CatchpointCatchup
 
 func (lf *ledgerFetcher) requestLedger(ctx context.Context, peer network.HTTPPeer, round basics.Round, method string) (*http.Response, error) {
 	var ledgerURL string
-
-	var err error
-	var parsedURL = &url.URL{}
-	if peer.GetURL() != "" {
-		parsedURL, err = addr.ParseHostOrURL(peer.GetURL())
-		if err != nil {
-			return nil, err
-		}
-	}
-	parsedURL.Path = network.SubstituteGenesisID(lf.net, path.Join(parsedURL.Path, "/v1/{genesisID}/ledger/"+strconv.FormatUint(uint64(round), 36)))
-	ledgerURL = parsedURL.String()
+	ledgerURL = network.SubstituteGenesisID(lf.net, "/v1/{genesisID}/ledger/"+strconv.FormatUint(uint64(round), 36))
 	lf.log.Debugf("ledger %s %#v peer %#v %T", method, ledgerURL, peer, peer)
 	request, err := http.NewRequestWithContext(ctx, method, ledgerURL, nil)
 	if err != nil {

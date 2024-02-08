@@ -22,6 +22,7 @@ import (
 	"math/rand"
 	"net/http"
 	"net/rpc"
+	"path"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -35,6 +36,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
+	"github.com/algorand/go-algorand/network/addr"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/bloom"
@@ -157,9 +159,6 @@ func (client *mockRPCClient) Sync(ctx context.Context, bloom *bloom.Filter) (txg
 func (client *mockRPCClient) GetAddress() string {
 	return client.rootURL
 }
-func (client *mockRPCClient) GetURL() string {
-	return client.rootURL
-}
 
 func (client *mockRPCClient) GetHTTPClient() *http.Client {
 	return nil
@@ -174,8 +173,27 @@ func (mca *mockClientAggregator) GetPeers(options ...network.PeerOption) []netwo
 	return mca.peers
 }
 
-func (mca *mockClientAggregator) GetHTTPClient(peer network.HTTPPeer) (*http.Client, error) {
-	return &http.Client{Transport: http.DefaultTransport}, nil
+type httpRoundTripper struct {
+	addr string
+}
+
+func (mrt *httpRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	url, err := addr.ParseHostOrURL(mrt.addr)
+	if err != nil {
+		return nil, err
+	}
+	req.URL.Scheme = url.Scheme
+	req.URL.Host = url.Host
+	req.URL.Path = path.Join(url.Path, req.URL.Path)
+	return http.DefaultTransport.RoundTrip(req)
+}
+
+func (mca *mockClientAggregator) GetHTTPClient(address string) (*http.Client, error) {
+	return &http.Client{
+		Transport: &httpRoundTripper{
+			addr: address,
+		},
+	}, nil
 }
 
 func TestSyncFromClient(t *testing.T) {

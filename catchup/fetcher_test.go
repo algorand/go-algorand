@@ -21,6 +21,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"path"
 	"testing"
 
 	"github.com/gorilla/mux"
@@ -36,6 +37,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
+	"github.com/algorand/go-algorand/network/addr"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -202,15 +204,30 @@ func (p *testHTTPPeer) GetAddress() string {
 	return string(*p)
 }
 
-func (p *testHTTPPeer) GetURL() string {
-	return string(*p)
-}
-
 func (p *testHTTPPeer) GetHTTPClient() *http.Client {
-	return &http.Client{}
+	return &http.Client{
+		Transport: &httpRoundTripper{
+			addr: p.GetAddress(),
+		},
+	}
 }
 func (p *testHTTPPeer) GetHTTPPeer() network.HTTPPeer {
 	return p
+}
+
+type httpRoundTripper struct {
+	addr string
+}
+
+func (mrt *httpRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	url, err := addr.ParseHostOrURL(mrt.addr)
+	if err != nil {
+		return nil, err
+	}
+	req.URL.Scheme = url.Scheme
+	req.URL.Host = url.Host
+	req.URL.Path = path.Join(url.Path, req.URL.Path)
+	return http.DefaultTransport.RoundTrip(req)
 }
 
 func (s *httpTestPeerSource) addPeer(rootURL string) {

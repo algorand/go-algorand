@@ -112,6 +112,6 @@ func (network *MockNetwork) GetGenesisID() string {
 }
 
 // GetHTTPClient returns a http.Client with a suitable for the network
-func (network *MockNetwork) GetHTTPClient(p network.HTTPPeer) (*http.Client, error) {
+func (network *MockNetwork) GetHTTPClient(address string) (*http.Client, error) {
 	return nil, errors.New("not implemented")
 }

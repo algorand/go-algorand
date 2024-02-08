@@ -27,6 +27,7 @@ import (
 	"net/http"
 	"net/textproto"
 	"net/url"
+	"path"
 	"regexp"
 	"runtime"
 	"strconv"
@@ -554,27 +555,27 @@ func (wn *WebsocketNetwork) GetPeers(options ...PeerOption) []Peer {
 		case PeersPhonebookRelays:
 			// return copy of phonebook, which probably also contains peers we're connected to, but if it doesn't maybe we shouldn't be making new connections to those peers (because they disappeared from the directory)
 			var addrs []string
-			client, _ := wn.GetHTTPClient(nil)
 			addrs = wn.phonebook.GetAddresses(1000, phonebook.PhoneBookEntryRelayRole)
 			for _, addr := range addrs {
-				peerCore := makePeerCore(wn.ctx, wn, wn.log, wn.handler.readBuffer, addr, addr, client, "" /*origin address*/)
+				client, _ := wn.GetHTTPClient(addr)
+				peerCore := makePeerCore(wn.ctx, wn, wn.log, wn.handler.readBuffer, addr, client, "" /*origin address*/)
 				outPeers = append(outPeers, &peerCore)
 			}
 		case PeersPhonebookArchivalNodes:
 			var addrs []string
-			client, _ := wn.GetHTTPClient(nil)
 			addrs = wn.phonebook.GetAddresses(1000, phonebook.PhoneBookEntryRelayRole)
 			for _, addr := range addrs {
-				peerCore := makePeerCore(wn.ctx, wn, wn.log, wn.handler.readBuffer, addr, addr, client, "" /*origin address*/)
+				client, _ := wn.GetHTTPClient(addr)
+				peerCore := makePeerCore(wn.ctx, wn, wn.log, wn.handler.readBuffer, addr, client, "" /*origin address*/)
 				outPeers = append(outPeers, &peerCore)
 			}
 		case PeersPhonebookArchivers:
 			// return copy of phonebook, which probably also contains peers we're connected to, but if it doesn't maybe we shouldn't be making new connections to those peers (because they disappeared from the directory)
 			var addrs []string
-			client, _ := wn.GetHTTPClient(nil)
 			addrs = wn.phonebook.GetAddresses(1000, phonebook.PhoneBookEntryArchiverRole)
 			for _, addr := range addrs {
-				peerCore := makePeerCore(wn.ctx, wn, wn.log, wn.handler.readBuffer, addr, addr, client, "" /*origin address*/)
+				client, _ := wn.GetHTTPClient(addr)
+				peerCore := makePeerCore(wn.ctx, wn, wn.log, wn.handler.readBuffer, addr, client, "" /*origin address*/)
 				outPeers = append(outPeers, &peerCore)
 			}
 		case PeersConnectedIn:
@@ -1100,11 +1101,9 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 		wn.requestsLogger.SetStatusCode(response, http.StatusSwitchingProtocols)
 	}
 
-	client, _ := wn.GetHTTPClient(nil)
+	client, _ := wn.GetHTTPClient(trackedRequest.remoteAddress())
 	peer := &wsPeer{
-		wsPeerCore: makePeerCore(
-			wn.ctx, wn, wn.log, wn.handler.readBuffer,
-			trackedRequest.remoteAddress(), trackedRequest.remoteAddress(), client, trackedRequest.remoteHost),
+		wsPeerCore:        makePeerCore(wn.ctx, wn, wn.log, wn.handler.readBuffer, trackedRequest.remoteAddress(), client, trackedRequest.remoteHost),
 		conn:              wsPeerWebsocketConnImpl{conn},
 		outgoing:          false,
 		InstanceName:      trackedRequest.otherInstanceName,
@@ -2036,18 +2035,31 @@ func (wn *WebsocketNetwork) numOutgoingPending() int {
 	return len(wn.tryConnectAddrs)
 }
 
-// getRoundTripper returns an http.Transport that limits the number of connection
-// to comply with connectionsRateLimitingCount.
-func (wn *WebsocketNetwork) getRoundTripper(peer Peer) http.RoundTripper {
-	return &wn.transport
-}
-
 // GetHTTPClient returns a http.Client with a suitable for the network Transport
 // that would also limit the number of outgoing connections.
-func (wn *WebsocketNetwork) GetHTTPClient(peer HTTPPeer) (*http.Client, error) {
+func (wn *WebsocketNetwork) GetHTTPClient(address string) (*http.Client, error) {
 	return &http.Client{
-		Transport: &wn.transport,
+		Transport: &wsHTTPTransport{
+			addr:           address,
+			innerTransport: &wn.transport,
+		},
 	}, nil
+}
+
+type wsHTTPTransport struct {
+	addr           string
+	innerTransport http.RoundTripper
+}
+
+func (t *wsHTTPTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	url, err := addr.ParseHostOrURL(t.addr)
+	if err != nil {
+		return nil, err
+	}
+	req.URL.Scheme = url.Scheme
+	req.URL.Host = url.Host
+	req.URL.Path = path.Join(url.Path, req.URL.Path)
+	return t.innerTransport.RoundTrip(req)
 }
 
 // filterASCII filter out the non-ascii printable characters out of the given input string and
@@ -2185,9 +2197,9 @@ func (wn *WebsocketNetwork) tryConnect(netAddr, gossipAddr string) {
 		wn.throttledOutgoingConnections.Add(int32(1))
 	}
 
-	client, _ := wn.GetHTTPClient(nil)
+	client, _ := wn.GetHTTPClient(netAddr)
 	peer := &wsPeer{
-		wsPeerCore:                  makePeerCore(wn.ctx, wn, wn.log, wn.handler.readBuffer, netAddr, netAddr, client, "" /* origin */),
+		wsPeerCore:                  makePeerCore(wn.ctx, wn, wn.log, wn.handler.readBuffer, netAddr, client, "" /* origin */),
 		conn:                        wsPeerWebsocketConnImpl{conn},
 		outgoing:                    true,
 		incomingMsgFilter:           wn.incomingMsgFilter,
