@@ -4566,11 +4566,11 @@ func TestWsNetworkPhonebookMix(t *testing.T) {
 }
 
 type testRecordingTransport struct {
-	resultUrl string
+	resultURL string
 }
 
 func (rt *testRecordingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	rt.resultUrl = req.URL.String()
+	rt.resultURL = req.URL.String()
 	return &http.Response{StatusCode: 200}, nil
 }
 
@@ -4612,7 +4612,7 @@ func TestHTTPPAddressBoundTransport(t *testing.T) {
 		} else {
 			require.NoError(t, err)
 			require.Equal(t, 200, resp.StatusCode)
-			require.Equal(t, test.expected, recorder.resultUrl)
+			require.Equal(t, test.expected, recorder.resultURL)
 		}
 	}
 }
