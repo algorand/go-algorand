@@ -2039,27 +2039,27 @@ func (wn *WebsocketNetwork) numOutgoingPending() int {
 // that would also limit the number of outgoing connections.
 func (wn *WebsocketNetwork) GetHTTPClient(address string) (*http.Client, error) {
 	return &http.Client{
-		Transport: &wsHTTPTransport{
-			addr:           address,
-			innerTransport: &wn.transport,
-		},
+		Transport: &HTTPPAddressBoundTransport{address, &wn.transport},
 	}, nil
 }
 
-type wsHTTPTransport struct {
-	addr           string
-	innerTransport http.RoundTripper
+// HTTPPAddressBoundTransport is a http.RoundTripper that sets the scheme and host of the request URL to the given address
+type HTTPPAddressBoundTransport struct {
+	Addr           string
+	InnerTransport http.RoundTripper
 }
 
-func (t *wsHTTPTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	url, err := addr.ParseHostOrURL(t.addr)
+// RoundTrip implements http.RoundTripper by adding the schema, host, port, path prefix from the
+// parsed address to the request URL and then calling the inner transport.
+func (t *HTTPPAddressBoundTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	url, err := addr.ParseHostOrURL(t.Addr)
 	if err != nil {
 		return nil, err
 	}
 	req.URL.Scheme = url.Scheme
 	req.URL.Host = url.Host
 	req.URL.Path = path.Join(url.Path, req.URL.Path)
-	return t.innerTransport.RoundTrip(req)
+	return t.InnerTransport.RoundTrip(req)
 }
 
 // filterASCII filter out the non-ascii printable characters out of the given input string and

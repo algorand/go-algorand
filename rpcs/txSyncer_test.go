@@ -22,7 +22,6 @@ import (
 	"math/rand"
 	"net/http"
 	"net/rpc"
-	"path"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -36,7 +35,6 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
-	"github.com/algorand/go-algorand/network/addr"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/bloom"
@@ -173,26 +171,11 @@ func (mca *mockClientAggregator) GetPeers(options ...network.PeerOption) []netwo
 	return mca.peers
 }
 
-type httpRoundTripper struct {
-	addr string
-}
-
-func (mrt *httpRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
-	url, err := addr.ParseHostOrURL(mrt.addr)
-	if err != nil {
-		return nil, err
-	}
-	req.URL.Scheme = url.Scheme
-	req.URL.Host = url.Host
-	req.URL.Path = path.Join(url.Path, req.URL.Path)
-	return http.DefaultTransport.RoundTrip(req)
-}
-
 func (mca *mockClientAggregator) GetHTTPClient(address string) (*http.Client, error) {
 	return &http.Client{
-		Transport: &httpRoundTripper{
-			addr: address,
-		},
+		Transport: &network.HTTPPAddressBoundTransport{
+			Addr:           address,
+			InnerTransport: http.DefaultTransport},
 	}, nil
 }
 

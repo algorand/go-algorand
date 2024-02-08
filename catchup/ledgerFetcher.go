@@ -73,8 +73,7 @@ func makeLedgerFetcher(net network.GossipNode, accessor ledger.CatchpointCatchup
 }
 
 func (lf *ledgerFetcher) requestLedger(ctx context.Context, peer network.HTTPPeer, round basics.Round, method string) (*http.Response, error) {
-	var ledgerURL string
-	ledgerURL = network.SubstituteGenesisID(lf.net, "/v1/{genesisID}/ledger/"+strconv.FormatUint(uint64(round), 36))
+	ledgerURL := network.SubstituteGenesisID(lf.net, "/v1/{genesisID}/ledger/"+strconv.FormatUint(uint64(round), 36))
 	lf.log.Debugf("ledger %s %#v peer %#v %T", method, ledgerURL, peer, peer)
 	request, err := http.NewRequestWithContext(ctx, method, ledgerURL, nil)
 	if err != nil {
