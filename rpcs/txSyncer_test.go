@@ -157,6 +157,10 @@ func (client *mockRPCClient) Sync(ctx context.Context, bloom *bloom.Filter) (txg
 func (client *mockRPCClient) GetAddress() string {
 	return client.rootURL
 }
+func (client *mockRPCClient) GetURL() string {
+	return client.rootURL
+}
+
 func (client *mockRPCClient) GetHTTPClient() *http.Client {
 	return nil
 }

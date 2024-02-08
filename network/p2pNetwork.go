@@ -499,16 +499,16 @@ func (n *P2PNetwork) GetPeers(options ...PeerOption) []Peer {
 						continue
 					}
 
-					peerCore := makePeerCoreWithClient(
+					peerCore := makePeerCore(
 						n.ctx, n, n.log, n.handler.readBuffer,
-						addr /*rootURL*/, client, "", /*origin address*/
+						addr, "", client, "", /*origin address*/
 					)
 					peers = append(peers, &peerCore)
 				}
 				if n.log.GetLevel() >= logging.Debug && len(peers) > 0 {
 					addrs := make([]string, 0, len(peers))
 					for _, peer := range peers {
-						addrs = append(addrs, peer.(*wsPeerCore).rootURL)
+						addrs = append(addrs, peer.(*wsPeerCore).GetAddress())
 					}
 					n.log.Debugf("Archival node(s) from DHT: %v", addrs)
 				}
@@ -633,7 +633,7 @@ func (n *P2PNetwork) wsStreamHandler(ctx context.Context, p2ppeer peer.ID, strea
 	if err != nil {
 		client = nil
 	}
-	peerCore := makePeerCoreWithClient(ctx, n, n.log, n.handler.readBuffer, addr, client, addr)
+	peerCore := makePeerCore(ctx, n, n.log, n.handler.readBuffer, addr, "", client, addr)
 	wsp := &wsPeer{
 		wsPeerCore: peerCore,
 		conn:       &wsPeerConnP2PImpl{stream: stream},

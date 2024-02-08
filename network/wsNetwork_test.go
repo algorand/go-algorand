@@ -995,7 +995,7 @@ func TestSlowOutboundPeer(t *testing.T) {
 		destPeers[i].sendBufferHighPrio = make(chan sendMessages, sendBufferLength)
 		destPeers[i].sendBufferBulk = make(chan sendMessages, sendBufferLength)
 		destPeers[i].conn = &nopConnSingleton
-		destPeers[i].rootURL = fmt.Sprintf("fake %d", i)
+		destPeers[i].addr = fmt.Sprintf("fake %d", i)
 		node.addPeer(&destPeers[i])
 	}
 	node.Start()
@@ -2366,8 +2366,8 @@ func TestWebsocketNetworkPrioLimit(t *testing.T) {
 	}
 
 	if failed {
-		t.Errorf("NetA had the following two peers priorities : [0]:%s=%d [1]:%s=%d", netA.peers[0].rootURL, netA.peers[0].prioWeight, netA.peers[1].rootURL, netA.peers[1].prioWeight)
-		t.Errorf("first peer before broadcasting was %s", firstPeer.rootURL)
+		t.Errorf("NetA had the following two peers priorities : [0]:%s=%d [1]:%s=%d", netA.peers[0].GetAddress(), netA.peers[0].prioWeight, netA.peers[1].GetAddress(), netA.peers[1].prioWeight)
+		t.Errorf("first peer before broadcasting was %s", firstPeer.GetAddress())
 	}
 }
 

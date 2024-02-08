@@ -102,6 +102,10 @@ func (p httpPeer) GetAddress() string {
 	return mas[0].String()
 }
 
+func (p httpPeer) GetURL() string {
+	return ""
+}
+
 // GetAddress implements HTTPPeer interface and returns the http client for a peer
 func (p httpPeer) GetHTTPClient() *http.Client {
 	c, err := p2p.MakeHTTPClient(&p.addrInfo)

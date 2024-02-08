@@ -38,6 +38,7 @@ import (
 
 // HTTPTxSync implements the TxSyncClient interface over HTTP
 type HTTPTxSync struct {
+	addr    string
 	rootURL string
 
 	peers network.GossipNode
@@ -105,7 +106,9 @@ func (hts *HTTPTxSync) Sync(ctx context.Context, bloom *bloom.Filter) (txgroups 
 		return nil, fmt.Errorf("cannot HTTPTxSync non http peer %T %#v", peer, peer)
 	}
 	var syncURL string
-	hts.rootURL = hpeer.GetAddress()
+	hts.rootURL = hpeer.GetURL()
+	hts.addr = hpeer.GetAddress()
+
 	client := hpeer.GetHTTPClient()
 	if client == nil {
 		client, err = hts.peers.GetHTTPClient(hpeer)
@@ -113,17 +116,16 @@ func (hts *HTTPTxSync) Sync(ctx context.Context, bloom *bloom.Filter) (txgroups 
 			return nil, fmt.Errorf("HTTPTxSync cannot create a HTTP client for a peer %T %#v: %s", peer, peer, err.Error())
 		}
 	}
-	if addr.IsMultiaddr(hts.rootURL) {
-		syncURL = network.SubstituteGenesisID(hts.peers, path.Join("", TxServiceHTTPPath))
-	} else {
-		parsedURL, err0 := addr.ParseHostOrURL(hts.rootURL)
-		if err0 != nil {
-			hts.log.Warnf("txSync bad url %v: %s", hts.rootURL, err0)
-			return nil, err0
+	var parsedURL = &url.URL{}
+	if hts.rootURL != "" {
+		parsedURL, err = addr.ParseHostOrURL(hts.rootURL)
+		if err != nil {
+			return nil, err
 		}
-		parsedURL.Path = network.SubstituteGenesisID(hts.peers, path.Join(parsedURL.Path, TxServiceHTTPPath))
-		syncURL = parsedURL.String()
 	}
+	parsedURL.Path = network.SubstituteGenesisID(hts.peers, path.Join(parsedURL.Path, TxServiceHTTPPath))
+	syncURL = parsedURL.String()
+
 	hts.log.Infof("http sync from %s", syncURL)
 	params := url.Values{}
 	params.Set("bf", bloomParam)
@@ -189,7 +191,7 @@ func (hts *HTTPTxSync) Sync(ctx context.Context, bloom *bloom.Filter) (txgroups 
 // Address is part of TxSyncClient interface.
 // Returns the root URL of the connected peer.
 func (hts *HTTPTxSync) Address() string {
-	return hts.rootURL
+	return hts.addr
 }
 
 // Close is part of TxSyncClient interface

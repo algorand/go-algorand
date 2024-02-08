@@ -201,6 +201,11 @@ type testHTTPPeer string
 func (p *testHTTPPeer) GetAddress() string {
 	return string(*p)
 }
+
+func (p *testHTTPPeer) GetURL() string {
+	return string(*p)
+}
+
 func (p *testHTTPPeer) GetHTTPClient() *http.Client {
 	return &http.Client{}
 }

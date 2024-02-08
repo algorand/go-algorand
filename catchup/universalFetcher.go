@@ -21,6 +21,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
 	"time"
 
@@ -72,7 +73,8 @@ func (uf *universalBlockFetcher) fetchBlock(ctx context.Context, round basics.Ro
 	} else if httpPeer, validHTTPPeer := peer.(network.HTTPPeer); validHTTPPeer {
 		fetcherClient := &HTTPFetcher{
 			peer:    httpPeer,
-			rootURL: httpPeer.GetAddress(),
+			addr:    httpPeer.GetAddress(),
+			rootURL: httpPeer.GetURL(),
 			net:     uf.net,
 			client:  httpPeer.GetHTTPClient(),
 			log:     uf.log,
@@ -208,6 +210,7 @@ func (noBlockForRoundError) Error() string { return "no block available for give
 // HTTPFetcher implements FetcherClient doing an HTTP GET of the block
 type HTTPFetcher struct {
 	peer    network.HTTPPeer
+	addr    string
 	rootURL string
 	net     network.GossipNode
 
@@ -222,16 +225,15 @@ type HTTPFetcher struct {
 func (hf *HTTPFetcher) getBlockBytes(ctx context.Context, r basics.Round) (data []byte, err error) {
 	var blockURL string
 
-	if addr.IsMultiaddr(hf.rootURL) {
-		blockURL = rpcs.FormatBlockQuery(uint64(r), "", hf.net)
-	} else {
-		if parsedURL, err0 := addr.ParseHostOrURL(hf.rootURL); err0 == nil {
-			parsedURL.Path = rpcs.FormatBlockQuery(uint64(r), parsedURL.Path, hf.net)
-			blockURL = parsedURL.String()
-		} else {
-			return nil, err0
+	var parsedURL = &url.URL{}
+	if hf.rootURL != "" {
+		parsedURL, err = addr.ParseHostOrURL(hf.rootURL)
+		if err != nil {
+			return nil, err
 		}
 	}
+	parsedURL.Path = rpcs.FormatBlockQuery(uint64(r), parsedURL.Path, hf.net)
+	blockURL = parsedURL.String()
 
 	hf.log.Debugf("block GET %#v peer %#v %T", blockURL, hf.peer, hf.peer)
 	request, err := http.NewRequest("GET", blockURL, nil)
@@ -296,7 +298,7 @@ func (hf *HTTPFetcher) getBlockBytes(ctx context.Context, r basics.Round) (data 
 // Address is part of FetcherClient interface.
 // Returns the root URL of the connected peer.
 func (hf *HTTPFetcher) address() string {
-	return hf.rootURL
+	return hf.addr
 }
 
 type errWrongCertFromPeer struct {
