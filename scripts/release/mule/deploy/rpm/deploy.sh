@@ -57,7 +57,7 @@ mkdir rpmrepo
 for rpm in $(ls *"$VERSION"*.rpm)
 do
     rpmsign --addsign "$rpm"
-    mv -p "$rpm" rpmrepo
+    mv -f "$rpm" rpmrepo
 done
 
 createrepo --database rpmrepo
