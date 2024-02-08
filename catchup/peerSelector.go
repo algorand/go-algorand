@@ -109,6 +109,12 @@ type peerPool struct {
 	peers []peerPoolEntry
 }
 
+type peerSelectorI interface {
+	rankPeer(psp *peerSelectorPeer, rank int) (int, int)
+	peerDownloadDurationToRank(psp *peerSelectorPeer, blockDownloadDuration time.Duration) (rank int)
+	getNextPeer() (psp *peerSelectorPeer, err error)
+}
+
 // peerSelector is a helper struct used to select the next peer to try and connect to
 // for various catchup purposes. Unlike the underlying network GetPeers(), it allows the
 // client to provide feedback regarding the peer's performance, and to have the subsequent
