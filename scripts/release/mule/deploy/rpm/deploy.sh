@@ -71,7 +71,18 @@ then
 else
     # aws s3 sync rpmrepo "s3://algorand-releases/rpm/$CHANNEL/"
     # sync signatures to releases so that the .sig files load from there
-    # aws s3 sync s3://algorand-staging/releases/$CHANNEL/ s3://algorand-releases/rpm/sigs/$CHANNEL/ --exclude='*' --include='*.rpm.sig'
+
+    if [ -n "$S3_SOURCE" ]; then
+        # if S3_SOURCE exists, we copied files from s3
+        echo "Copy signatures from s3 staging to s3 releases"
+        # aws s3 sync s3://algorand-staging/releases/$CHANNEL/ s3://algorand-releases/rpm/sigs/$CHANNEL/ --exclude='*' --include='*.rpm.sig'
+
+    else
+        # We are working with files locally
+        popd
+        echo "Copy local signatures to s3 releases"
+        # aws s3 cp tmp/*.sig "s3://algorand-releases/rpm/sigs/$CHANNEL/"
+    fi
 fi
 
 echo
