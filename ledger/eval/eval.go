@@ -1461,7 +1461,7 @@ func (eval *BlockEvaluator) endOfBlock() error {
 }
 
 type challenge struct {
-	// round is the round the challenge occured in. 0 indicates this is not a challenge.
+	// round is when the challenge occurred. 0 means this is not a challenge.
 	round basics.Round
 	// accounts that match the first `bits` of `seed` must propose or heartbeat to stay online
 	seed committee.Seed
