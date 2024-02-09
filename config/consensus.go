@@ -579,7 +579,7 @@ type MiningRules struct {
 	ChallengeInterval uint64
 	// Suspensions happen between 1 and 2 grace periods after a challenge. Must
 	// be less than half MaxTxnLife to ensure the Block header will be cached
-	// and less than half ChallengeInterval to overlapping challenges. A larger
+	// and less than half ChallengeInterval to avoid overlapping challenges. A larger
 	// grace period means larger stake nodes will probably propose before they
 	// need to consider an active heartbeat.
 	ChallengeGracePeriod uint64
