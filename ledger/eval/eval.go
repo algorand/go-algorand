@@ -1460,19 +1460,12 @@ func (eval *BlockEvaluator) endOfBlock() error {
 	return nil
 }
 
-const (
-	// Challenges occur once every challengeInterval rounds
-	challengeInterval = basics.Round(1000)
-	// Suspensions can between 1 and 2 grace periods after a challenge
-	challengeGracePeriod = basics.Round(200)
-	// An account is challenged if the first challengeBits match the start of the account address.
-	challengeBits = 5
-)
-
 type challenge struct {
+	// round is the round the challenge occured in. 0 indicates this is not a challenge.
 	round basics.Round
-	seed  committee.Seed
-	bits  int
+	// accounts that match the first `bits` of `seed` must propose or heartbeat to stay online
+	seed committee.Seed
+	bits int
 }
 
 // generateKnockOfflineAccountsList creates the lists of expired or absent
@@ -1491,7 +1484,7 @@ func (eval *BlockEvaluator) generateKnockOfflineAccountsList() {
 
 	updates := &eval.block.ParticipationUpdates
 
-	ch := eval.activeChallenge()
+	ch := activeChallenge(&eval.proto, uint64(eval.Round()), eval.state)
 
 	for _, accountAddr := range eval.state.modifiedAccounts() {
 		acctDelta, found := eval.state.mods.Accts.GetData(accountAddr)
@@ -1576,7 +1569,7 @@ func bitsMatch(a, b []byte, n int) bool {
 func isAbsent(totalOnlineStake basics.MicroAlgos, acctStake basics.MicroAlgos, lastSeen basics.Round, current basics.Round) bool {
 	// Don't consider accounts that were online when mining went into effect as
 	// absent.  They get noticed the next time they propose or keyreg, which
-	// ought to be soon, if they want to earn incentives.
+	// ought to be soon, if they are high stake or want to earn incentives.
 	if lastSeen == 0 {
 		return false
 	}
@@ -1590,22 +1583,33 @@ func isAbsent(totalOnlineStake basics.MicroAlgos, acctStake basics.MicroAlgos, l
 	return lastSeen+basics.Round(allowableLag) < current
 }
 
-func (eval *BlockEvaluator) activeChallenge() challenge {
-	current := eval.Round()
-	var round basics.Round
-	if current > challengeInterval {
-		lastChallenge := current - (current % challengeInterval)
-		// challengeRound is in effect if we're after one grace period, but before the 2nd ends.
-		if current > lastChallenge+challengeGracePeriod && current < lastChallenge+2*challengeGracePeriod {
-			round = lastChallenge
-			challengeHdr, err := eval.state.BlockHdr(round)
-			if err != nil {
-				panic(err)
-			}
-			return challenge{round, challengeHdr.Seed, challengeBits}
-		}
+type headerSource interface {
+	BlockHdr(round basics.Round) (bookkeeping.BlockHeader, error)
+}
+
+func activeChallenge(proto *config.ConsensusParams, current uint64, headers headerSource) challenge {
+	rules := proto.Mining()
+	// are challenges active?
+	if rules.ChallengeInterval == 0 || current < rules.ChallengeInterval {
+		return challenge{}
 	}
-	return challenge{}
+	lastChallenge := current - (current % rules.ChallengeInterval)
+	// challenge is in effect if we're after one grace period, but before the 2nd ends.
+	if current <= lastChallenge+rules.ChallengeGracePeriod ||
+		current > lastChallenge+2*rules.ChallengeGracePeriod {
+		return challenge{}
+	}
+	round := basics.Round(lastChallenge)
+	challengeHdr, err := headers.BlockHdr(round)
+	if err != nil {
+		panic(err)
+	}
+	challengeProto := config.Consensus[challengeHdr.CurrentProtocol]
+	// challenge is not considered if rules have changed since that round
+	if challengeProto.Mining() != rules {
+		return challenge{}
+	}
+	return challenge{round, challengeHdr.Seed, rules.ChallengeBits}
 }
 
 func failsChallenge(ch challenge, address basics.Address, lastSeen basics.Round) bool {
@@ -1679,7 +1683,7 @@ func (eval *BlockEvaluator) validateAbsentOnlineAccounts() error {
 	// For consistency with expired account handling, we preclude duplicates
 	addressSet := make(map[basics.Address]bool, suspensionCount)
 
-	ch := eval.activeChallenge()
+	ch := activeChallenge(&eval.proto, uint64(eval.Round()), eval.state)
 
 	for _, accountAddr := range eval.block.ParticipationUpdates.AbsentParticipationAccounts {
 		if _, exists := addressSet[accountAddr]; exists {

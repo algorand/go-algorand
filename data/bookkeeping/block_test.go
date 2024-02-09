@@ -1017,3 +1017,13 @@ func TestFirstYearBonus(t *testing.T) {
 	a.InDelta(0.90, float64(bonus)/float64(bonusPlans[1].baseAmount.Raw), 0.01)
 
 }
+
+func TestAllProtocolBonusPlans(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	a := assert.New(t)
+
+	for _, p := range config.Consensus {
+		a.Less(int(p.BonusPlanVer), len(bonusPlans))
+	}
+}

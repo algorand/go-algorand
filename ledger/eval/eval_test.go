@@ -1484,3 +1484,91 @@ func TestBitsMatch(t *testing.T) {
 	}
 	require.False(t, bitsMatch([]byte{0x1, 0xff, 0xaa}, []byte{0x1, 0xf0}, 13))
 }
+
+func TestIsAbsent(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	a := assert.New(t)
+
+	var absent = func(total uint64, acct uint64, last uint64, current uint64) bool {
+		return isAbsent(basics.Algos(total), basics.Algos(acct), basics.Round(last), basics.Round(current))
+	}
+	// 1% of stake, absent for 1000 rounds
+	a.False(absent(1000, 10, 5000, 6000))
+	a.True(absent(1000, 10, 5000, 6001))  // longer
+	a.True(absent(1000, 11, 5000, 6001))  // more acct stake
+	a.False(absent(1000, 9, 5000, 6001))  // less acct stake
+	a.False(absent(1001, 10, 5000, 6001)) // more online stake
+	// not absent if never seen
+	a.False(absent(1000, 10, 0, 6000))
+	a.False(absent(1000, 10, 0, 6001))
+}
+
+func TestFailsChallenge(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	a := assert.New(t)
+
+	// a valid challenge, with 4 matching bits, and an old last seen
+	a.True(failsChallenge(challenge{round: 11, seed: [32]byte{0xb0, 0xb4}, bits: 4}, basics.Address{0xbf, 0x34}, 10))
+
+	// challenge isn't "on"
+	a.False(failsChallenge(challenge{round: 0, seed: [32]byte{0xb0, 0xb4}, bits: 4}, basics.Address{0xbf, 0x34}, 10))
+	// node has appeared more recently
+	a.False(failsChallenge(challenge{round: 11, seed: [32]byte{0xb0, 0xb4}, bits: 4}, basics.Address{0xbf, 0x34}, 12))
+	// bits don't match
+	a.False(failsChallenge(challenge{round: 11, seed: [32]byte{0xb0, 0xb4}, bits: 4}, basics.Address{0xcf, 0x34}, 10))
+	// no enough bits match
+	a.False(failsChallenge(challenge{round: 11, seed: [32]byte{0xb0, 0xb4}, bits: 5}, basics.Address{0xbf, 0x34}, 10))
+}
+
+type singleSource bookkeeping.BlockHeader
+
+func (ss singleSource) BlockHdr(r basics.Round) (bookkeeping.BlockHeader, error) {
+	return bookkeeping.BlockHeader(ss), nil
+}
+
+func TestActiveChallenge(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	a := assert.New(t)
+
+	nowHeader := bookkeeping.BlockHeader{
+		UpgradeState: bookkeeping.UpgradeState{
+			// Here the rules are on, so they certainly differ from rules in oldHeader's params
+			CurrentProtocol: protocol.ConsensusFuture,
+		},
+	}
+	now := config.Consensus[nowHeader.CurrentProtocol]
+
+	// simplest test. when interval=X and grace=G, X+G+1 is a challenge
+	inChallenge := now.Mining().ChallengeInterval + now.Mining().ChallengeGracePeriod + 1
+	ch := activeChallenge(&now, inChallenge, singleSource(nowHeader))
+	a.NotZero(ch.round)
+
+	// all rounds before that have no challenge
+	for r := uint64(1); r < inChallenge; r++ {
+		ch := activeChallenge(&now, r, singleSource(nowHeader))
+		a.Zero(ch.round, r)
+	}
+
+	// ChallengeGracePeriod rounds allow challenges starting with inChallenge
+	for r := inChallenge; r < inChallenge+now.Mining().ChallengeGracePeriod; r++ {
+		ch := activeChallenge(&now, r, singleSource(nowHeader))
+		a.EqualValues(ch.round, now.Mining().ChallengeInterval)
+	}
+
+	// And the next round is again challenge-less
+	ch = activeChallenge(&now, inChallenge+now.Mining().ChallengeGracePeriod, singleSource(nowHeader))
+	a.Zero(ch.round)
+
+	// ignore challenge if upgrade happened
+	oldHeader := bookkeeping.BlockHeader{
+		UpgradeState: bookkeeping.UpgradeState{
+			// We need a version from before mining rules got turned on
+			CurrentProtocol: protocol.ConsensusV39,
+		},
+	}
+	ch = activeChallenge(&now, inChallenge, singleSource(oldHeader))
+	a.Zero(ch.round)
+}

@@ -574,6 +574,19 @@ type MiningRules struct {
 	// can suspend for not proposing "lately" (In 10x expected interval, or
 	// within a grace period from being challenged)
 	MaxMarkAbsent int
+
+	// Challenges occur once every challengeInterval rounds.
+	ChallengeInterval uint64
+	// Suspensions happen between 1 and 2 grace periods after a challenge. Must
+	// be less than half MaxTxnLife to ensure the Block header will be cached
+	// and less than half ChallengeInterval to overlapping challenges. A larger
+	// grace period means larger stake nodes will probably propose before they
+	// need to consider an active heartbeat.
+	ChallengeGracePeriod uint64
+	// An account is challenged if the first challengeBits match the start of
+	// the account address. An online account will be challenged about once
+	// every interval*2^bits rounds.
+	ChallengeBits int
 }
 
 // miningRules should be extended, never changed, since old blocks must retain
@@ -581,12 +594,16 @@ type MiningRules struct {
 var miningRules = [...]MiningRules{
 	{Enabled: false},
 	{
-		Enabled:       true,
-		Percent:       75,
-		GoOnlineFee:   2_000_000,           // 2 algos
-		MinBalance:    100_000_000_000,     // 100,000 algos
-		MaxBalance:    100_000_000_000_000, // 100M algos
-		MaxMarkAbsent: 32,
+		Enabled:              true,
+		Percent:              75,
+		GoOnlineFee:          2_000_000,          // 2 algos
+		MinBalance:           10_000_000_000,     // 10,000 algos
+		MaxBalance:           50_000_000_000_000, // 50M algos
+		MaxMarkAbsent:        32,
+		ChallengeInterval:    1000,
+		ChallengeGracePeriod: 200,
+		ChallengeBits:        5,
+		// With about 31k rounds per day, we expect about (31k/interval)/2^bits ~= 1 challenge / day / account)
 	},
 }
 

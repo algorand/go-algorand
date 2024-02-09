@@ -454,7 +454,7 @@ int 1
 	// Try polling 10 rounds to ensure txn is committed.
 	round, err = client.CurrentRound()
 	a.NoError(err)
-	isCommitted := fixture.WaitForTxnConfirmation(round+10, creator, txid)
+	isCommitted := fixture.WaitForTxnConfirmation(round+10, txid)
 	a.True(isCommitted)
 
 	// check creator's balance record for the app entry and the state changes
