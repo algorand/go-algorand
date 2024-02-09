@@ -196,7 +196,7 @@ func TestNewAccountCanGoOnlineAndParticipate(t *testing.T) {
 
 	fixture.AssertValidTxid(onlineTxID)
 	maxRoundsToWaitForTxnConfirm := uint64(5)
-	fixture.WaitForTxnConfirmation(seededRound+maxRoundsToWaitForTxnConfirm, newAccount, onlineTxID)
+	fixture.WaitForTxnConfirmation(seededRound+maxRoundsToWaitForTxnConfirm, onlineTxID)
 	nodeStatus, _ = client.Status()
 	onlineRound := nodeStatus.LastRound
 	newAccountStatus, err := client.AccountInformation(newAccount, false)
@@ -311,7 +311,7 @@ func TestAccountGoesOnlineForShortPeriod(t *testing.T) {
 	nodeStatus, err := client.Status()
 	a.NoError(err)
 	seededRound := nodeStatus.LastRound
-	fixture.WaitForTxnConfirmation(seededRound+maxRoundsToWaitForTxnConfirm, newAccount, onlineTxID)
+	fixture.WaitForTxnConfirmation(seededRound+maxRoundsToWaitForTxnConfirm, onlineTxID)
 	nodeStatus, _ = client.Status()
 
 	accountStatus, err := client.AccountInformation(newAccount, false)
