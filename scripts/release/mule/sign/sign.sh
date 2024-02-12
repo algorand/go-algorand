@@ -10,18 +10,13 @@ echo
 date "+build_release begin SIGN stage %Y%m%d_%H%M%S"
 echo
 
-if [ -z "$NETWORK" ]; then
-    echo "[$0] NETWORK is missing."
-    exit 1
-fi
-
-CHANNEL=$(./scripts/release/mule/common/get_channel.sh "$NETWORK")
+CHANNEL=${CHANNEL:-$(./scripts/release/mule/common/get_channel.sh "$NETWORK")}
 VERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
 PKG_DIR="./tmp/node_pkgs"
 SIGNING_KEY_ADDR=dev@algorand.com
 OS_TYPE=$(./scripts/release/mule/common/ostype.sh)
-ARCHS=(amd64 arm arm64)
-ARCH_BITS=(x86_64 armv7l aarch64)
+ARCHS=(amd64 arm64)
+ARCH_BITS=(x86_64 aarch64)
 # Note that we don't want to use $GNUPGHOME here because that is a documented env var for the gnupg
 # project and if it's set in the environment mule will automatically pick it up, which could have
 # unintended consequences and be hard to debug.
@@ -58,6 +53,12 @@ then
     done
 fi
 
+cat << EOF > .rpmmacros
+%_gpg_name Algorand RPM <rpm@algorand.com>
+%__gpg /usr/bin/gpg2
+%__gpg_check_password_cmd true
+EOF
+
 cd "$PKG_DIR"
 
 # TODO: "$PKG_TYPE" == "source"
@@ -87,6 +88,7 @@ for os in "${OS_TYPES[@]}"; do
 
                 for file in *.rpm
                 do
+                    rpmsign --addsign "$file"
                     gpg -u rpm@algorand.com --detach-sign "$file"
                 done
 
