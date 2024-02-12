@@ -94,8 +94,8 @@ for os in "${OS_TYPES[@]}"; do
 
                 HASHFILE="hashes_${CHANNEL}_${os}_${arch}_${VERSION}"
                 md5sum *.tar.gz *.deb *.rpm >> "$HASHFILE"
-                sha1sum -a 256 *.tar.gz *.deb *.rpm >> "$HASHFILE"
-                sha1sum -a 512 *.tar.gz *.deb *.rpm >> "$HASHFILE"
+                sha256sum *.tar.gz *.deb *.rpm >> "$HASHFILE"
+                sha512sum *.tar.gz *.deb *.rpm >> "$HASHFILE"
 
                 gpg -u "$SIGNING_KEY_ADDR" --detach-sign "$HASHFILE"
                 gpg -u "$SIGNING_KEY_ADDR" --clearsign "$HASHFILE"
