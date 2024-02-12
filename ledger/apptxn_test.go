@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
@@ -85,11 +86,12 @@ func TestPayAction(t *testing.T) {
 
 		presink := micros(dl.t, dl.generator, genBalances.FeeSink)
 		preprop := micros(dl.t, dl.generator, proposer)
+		dl.t.Log("presink", presink, "preprop", preprop)
 		dl.beginBlock()
 		dl.txns(&payout1)
 		vb := dl.endBlock(proposer)
-		// First MiningPct > 0
-		if ver >= 40 {
+		const miningVer = 40
+		if ver >= miningVer {
 			require.True(t, dl.generator.GenesisProto().Mining().Enabled)
 			require.EqualValues(t, 2000, vb.Block().FeesCollected.Raw)
 		} else {
@@ -107,10 +109,11 @@ func TestPayAction(t *testing.T) {
 		dl.fullBlock()
 		postsink = micros(dl.t, dl.generator, genBalances.FeeSink)
 		postprop = micros(dl.t, dl.generator, proposer)
-		// First MiningPct > 0
-		if ver >= 40 {
-			require.EqualValues(t, 500, postsink-presink) // based on 75% in config/consensus.go
-			require.EqualValues(t, 1500, postprop-preprop)
+		dl.t.Log("postsink", postsink, "postprop", postprop)
+		if ver >= miningVer {
+			bonus := 5_000_000                                 // block.go
+			assert.EqualValues(t, bonus-500, presink-postsink) // based on 75% in config/consensus.go
+			require.EqualValues(t, bonus+1500, postprop-preprop)
 		} else {
 			require.EqualValues(t, 2000, postsink-presink) // no mining yet
 		}
