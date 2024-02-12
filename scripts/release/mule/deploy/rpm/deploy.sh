@@ -53,11 +53,7 @@ cat << EOF > .rpmmacros
 EOF
 
 mkdir rpmrepo
-for rpm in $(ls *"$VERSION"*.rpm)
-do
-    rpmsign --addsign "$rpm"
-    mv -f "$rpm" rpmrepo
-done
+mv -f *"$VERSION"*.rpm rpmrepo
 
 createrepo --database rpmrepo
 rm -f rpmrepo/repodata/repomd.xml.asc
@@ -68,19 +64,19 @@ then
     popd
     cp -r /root/rpmrepo .
 else
-    # aws s3 sync rpmrepo "s3://algorand-releases/rpm/$CHANNEL/"
-    # sync signatures to releases so that the .sig files load from there
+    aws s3 sync rpmrepo "s3://algorand-releases/rpm/$CHANNEL/"
 
+    # sync signatures to releases so that the .sig files load from there
     if [ -n "$S3_SOURCE" ]; then
         # if S3_SOURCE exists, we copied files from s3
         echo "Copy signatures from s3 staging to s3 releases"
-        # aws s3 sync s3://algorand-staging/releases/$CHANNEL/ s3://algorand-releases/rpm/sigs/$CHANNEL/ --exclude='*' --include='*.rpm.sig'
+        aws s3 sync s3://algorand-staging/releases/$CHANNEL/ s3://algorand-releases/rpm/sigs/$CHANNEL/ --exclude='*' --include='*.rpm.sig'
 
     else
         # We are working with files locally
         popd
         echo "Copy local signatures to s3 releases"
-        # aws s3 cp tmp/*.sig "s3://algorand-releases/rpm/sigs/$CHANNEL/"
+        aws s3 sync "$PACKAGES_DIR" "s3://algorand-releases/rpm/sigs/$CHANNEL/" --exclude='*' --include='*.rpm.sig'
     fi
 fi
 
