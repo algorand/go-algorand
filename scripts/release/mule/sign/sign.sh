@@ -35,6 +35,14 @@ then
     find "$GPG_DIR" -type f -exec chmod 600 {} \;
 fi
 
+pushd /root
+cat << EOF > .rpmmacros
+%_gpg_name Algorand RPM <rpm@algorand.com>
+%__gpg /usr/bin/gpg2
+%__gpg_check_password_cmd true
+EOF
+popd
+
 # Note that when downloading from the cloud that we'll get all packages for all architectures.
 if [ -n "$S3_SOURCE" ]
 then
@@ -79,12 +87,6 @@ for os in "${OS_TYPES[@]}"; do
                 do
                     gpg -u "$SIGNING_KEY_ADDR" --detach-sign "$file"
                 done
-
-                cat << EOF > .rpmmacros
-%_gpg_name Algorand RPM <rpm@algorand.com>
-%__gpg /usr/bin/gpg2
-%__gpg_check_password_cmd true
-EOF
 
                 for file in *.rpm
                 do
