@@ -53,12 +53,6 @@ then
     done
 fi
 
-cat << EOF > .rpmmacros
-%_gpg_name Algorand RPM <rpm@algorand.com>
-%__gpg /usr/bin/gpg2
-%__gpg_check_password_cmd true
-EOF
-
 cd "$PKG_DIR"
 
 # TODO: "$PKG_TYPE" == "source"
@@ -85,6 +79,12 @@ for os in "${OS_TYPES[@]}"; do
                 do
                     gpg -u "$SIGNING_KEY_ADDR" --detach-sign "$file"
                 done
+
+                cat << EOF > .rpmmacros
+%_gpg_name Algorand RPM <rpm@algorand.com>
+%__gpg /usr/bin/gpg2
+%__gpg_check_password_cmd true
+EOF
 
                 for file in *.rpm
                 do
