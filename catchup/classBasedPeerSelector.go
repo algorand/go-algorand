@@ -17,10 +17,15 @@
 package catchup
 
 import (
+	"errors"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-deadlock"
+	"sort"
 	"time"
 )
+
+// The duration after which we reset the downloadFailures for a peerSelector
+const lastCheckedDuration = 10 * time.Minute
 
 // classBasedPeerSelector is a peerSelector that tracks and ranks classes of peers based on their response behavior.
 // It is used to select the most appropriate peers to download blocks from - this is most useful when catching up
@@ -56,10 +61,45 @@ func (c *classBasedPeerSelector) rankPeer(psp *peerSelectorPeer, rank int) (int,
 	}
 
 	if peerSelectorSortNeeded {
-		// TODO: Implement sorting of peerSelectors
+		c.sortPeerSelectors()
 	}
 
 	return poolIdx, peerIdx
+}
+
+// sortPeerSelectors sorts the peerSelectors by tolerance factor violation, and then by priority
+// It should only be called within a locked context
+func (c *classBasedPeerSelector) sortPeerSelectors() {
+	psUnderTolerance := make([]*wrappedPeerSelector, 0, len(c.peerSelectors))
+	psOverTolerance := make([]*wrappedPeerSelector, 0, len(c.peerSelectors))
+	for _, wp := range c.peerSelectors {
+		// If the peerSelector's download failures have not been reset in a while, we reset them
+		if time.Since(wp.lastCheckedTime) > lastCheckedDuration {
+			wp.downloadFailures = 0
+			// Reset again here, so we don't keep resetting the same peerSelector
+			wp.lastCheckedTime = time.Now()
+		}
+
+		if wp.downloadFailures <= wp.toleranceFactor {
+			psUnderTolerance = append(psUnderTolerance, wp)
+		} else {
+			psOverTolerance = append(psOverTolerance, wp)
+		}
+
+	}
+
+	// Sort the two groups by priority
+	sortByPriority := func(ps []*wrappedPeerSelector) {
+		sort.SliceStable(ps, func(i, j int) bool {
+			return ps[i].priority < ps[j].priority
+		})
+	}
+
+	sortByPriority(psUnderTolerance)
+	sortByPriority(psOverTolerance)
+
+	//Append the two groups back together
+	c.peerSelectors = append(psUnderTolerance, psOverTolerance...)
 }
 
 func (c *classBasedPeerSelector) peerDownloadDurationToRank(psp *peerSelectorPeer, blockDownloadDuration time.Duration) (rank int) {
@@ -73,7 +113,7 @@ func (c *classBasedPeerSelector) peerDownloadDurationToRank(psp *peerSelectorPee
 			continue
 		}
 		// Should be a legit ranking, we return it
-		return
+		return rank
 	}
 	// If we reached here, we have exhausted all classes without finding the peer
 	return peerRankInvalidDownload
@@ -84,24 +124,25 @@ func (c *classBasedPeerSelector) getNextPeer() (psp *peerSelectorPeer, err error
 	defer c.mu.Unlock()
 	for _, wp := range c.peerSelectors {
 		psp, err = wp.peerSelector.getNextPeer()
+		wp.lastCheckedTime = time.Now()
 		if err != nil {
-			// TODO: No peers available in this class, move to the end of our list???
+			if errors.Is(err, errPeerSelectorNoPeerPoolsAvailable) {
+				// We penalize this class the equivalent of one download failure (in case this is transient)
+				wp.downloadFailures++
+			}
 			continue
 		}
-		return
+		return psp, nil
 	}
 	// If we reached here, we have exhausted all classes and still have no peers
-	return
+	return nil, err
 }
 
 type wrappedPeerSelector struct {
-	peerSelector     peerSelector
-	peerClass        network.PeerOption
-	toleranceFactor  int // The number of times we can net fail for any reason before we move to the next class's peerSelector
-	downloadFailures int
-	// TODO: Add a lastUsed time.Duration to this struct
+	peerSelector     peerSelector       // The unserlying peerSelector for this class
+	peerClass        network.PeerOption // The class of peers the peerSelector is responsible for
+	toleranceFactor  int                // The number of times we can net fail for any reason before we move to the next class's peerSelector
+	downloadFailures int                // The number of times we have failed to download a block from this class's peerSelector since it was last reset
+	priority         int                // The original priority of the peerSelector, used for sorting
+	lastCheckedTime  time.Time          // The last time we tried to use the peerSelector
 }
-
-// Logic: We try a class's peerSelector Y times, and if it fails, we move to the next class.
-// If we get to the last peerSelector and are still not getting blocks, we return an error.
-// NOTE: if a peerselector has no pools, we do not use it??
