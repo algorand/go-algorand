@@ -41,6 +41,8 @@ const (
 	Archival Capability = "archival"
 	// Catchpoints storing nodes
 	Catchpoints = "catchpointStoring"
+	// Gossip nodes are non permissioned relays
+	Gossip = "gossip"
 )
 
 const operationTimeout = time.Second * 5

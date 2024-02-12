@@ -427,8 +427,8 @@ func waitForRouting(t *testing.T, disc *p2p.CapabilitiesDiscovery) {
 	}
 }
 
-// TestP2PNetworkDHTCapabilities runs nodes with capabilites and ensures that connected nodes
-// can discover themself. The other nodes receive the first node in bootstrap list before starting.
+// TestP2PNetworkDHTCapabilities runs nodes with capabilities and ensures that connected nodes
+// can discover itself. The other nodes receive the first node in bootstrap list before starting.
 // There is two variations of the test: only netA advertises capabilities, and all nodes advertise.
 func TestP2PNetworkDHTCapabilities(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -506,9 +506,13 @@ func TestP2PNetworkDHTCapabilities(t *testing.T) {
 
 			t.Logf("DHT is ready")
 
-			// ensure all peers are connected
+			// ensure all peers are connected - wait for connectivity as needed
 			for _, disc := range discs {
-				require.Equal(t, 2, len(disc.Host().Network().Peers()))
+				go func(disc *p2p.CapabilitiesDiscovery) {
+					require.Eventuallyf(t, func() bool {
+						return len(disc.Host().Network().Peers()) == 2
+					}, time.Minute, time.Second, "Not all peers were found")
+				}(disc)
 			}
 
 			wg.Add(len(discs))

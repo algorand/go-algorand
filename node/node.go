@@ -399,6 +399,10 @@ func (node *AlgorandFullNode) Capabilities() []p2p.Capability {
 	if node.config.StoresCatchpoints() {
 		caps = append(caps, p2p.Catchpoints)
 	}
+	// TODO: change to a separate
+	if node.config.EnableGossipService && node.config.IsGossipServer() {
+		caps = append(caps, p2p.Gossip)
+	}
 	return caps
 }
 

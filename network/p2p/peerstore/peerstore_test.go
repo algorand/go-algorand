@@ -51,7 +51,7 @@ func TestPeerstore(t *testing.T) {
 	}
 
 	addrInfo, _ := PeerInfoFromAddrs(peerAddrs)
-	ps, err := NewPeerStore(addrInfo)
+	ps, err := NewPeerStore(addrInfo, "net-id")
 	require.NoError(t, err)
 	defer ps.Close()
 
@@ -89,12 +89,13 @@ func TestPeerstore(t *testing.T) {
 
 }
 
-func testPhonebookAll(t *testing.T, set []string, ph *PeerStore) {
+func testPhonebookAll(t *testing.T, set []*peer.AddrInfo, ph *PeerStore) {
 	actual := ph.GetAddresses(len(set), PhoneBookEntryRelayRole)
 	for _, got := range actual {
+		info := got.(*peer.AddrInfo)
 		ok := false
 		for _, known := range set {
-			if got == known {
+			if info.ID == known.ID {
 				ok = true
 				break
 			}
@@ -106,7 +107,8 @@ func testPhonebookAll(t *testing.T, set []string, ph *PeerStore) {
 	for _, known := range set {
 		ok := false
 		for _, got := range actual {
-			if got == known {
+			info := got.(*peer.AddrInfo)
+			if info.ID == known.ID {
 				ok = true
 				break
 			}
@@ -117,18 +119,19 @@ func testPhonebookAll(t *testing.T, set []string, ph *PeerStore) {
 	}
 }
 
-func testPhonebookUniform(t *testing.T, set []string, ph *PeerStore, getsize int) {
+func testPhonebookUniform(t *testing.T, set []*peer.AddrInfo, ph *PeerStore, getsize int) {
 	uniformityTestLength := 250000 / len(set)
 	expected := (uniformityTestLength * getsize) / len(set)
 	counts := make(map[string]int)
 	for i := 0; i < len(set); i++ {
-		counts[set[i]] = 0
+		counts[set[i].ID.String()] = 0
 	}
 	for i := 0; i < uniformityTestLength; i++ {
 		actual := ph.GetAddresses(getsize, PhoneBookEntryRelayRole)
 		for _, xa := range actual {
-			if _, ok := counts[xa]; ok {
-				counts[xa]++
+			info := xa.(*peer.AddrInfo)
+			if _, ok := counts[info.ID.String()]; ok {
+				counts[info.ID.String()]++
 			}
 		}
 	}
@@ -151,6 +154,13 @@ func TestArrayPhonebookAll(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	set := []string{"a:4041", "b:4042", "c:4043", "d:4044", "e:4045", "f:4046", "g:4047", "h:4048", "i:4049", "j:4010"}
+	infoSet := make([]*peer.AddrInfo, 0)
+	for _, addr := range set {
+		info, err := peerInfoFromDomainPort(addr)
+		require.NoError(t, err)
+		infoSet = append(infoSet, info)
+	}
+
 	ph, err := MakePhonebook(1, 1*time.Millisecond)
 	require.NoError(t, err)
 	for _, addr := range set {
@@ -159,13 +169,20 @@ func TestArrayPhonebookAll(t *testing.T) {
 		ph.AddAddrs(info.ID, info.Addrs, libp2p.AddressTTL)
 		ph.Put(info.ID, addressDataKey, entry)
 	}
-	testPhonebookAll(t, set, ph)
+	testPhonebookAll(t, infoSet, ph)
 }
 
 func TestArrayPhonebookUniform1(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	set := []string{"a:4041", "b:4042", "c:4043", "d:4044", "e:4045", "f:4046", "g:4047", "h:4048", "i:4049", "j:4010"}
+	infoSet := make([]*peer.AddrInfo, 0)
+	for _, addr := range set {
+		info, err := peerInfoFromDomainPort(addr)
+		require.NoError(t, err)
+		infoSet = append(infoSet, info)
+	}
+
 	ph, err := MakePhonebook(1, 1*time.Millisecond)
 	require.NoError(t, err)
 	for _, addr := range set {
@@ -174,13 +191,20 @@ func TestArrayPhonebookUniform1(t *testing.T) {
 		ph.AddAddrs(info.ID, info.Addrs, libp2p.AddressTTL)
 		ph.Put(info.ID, addressDataKey, entry)
 	}
-	testPhonebookUniform(t, set, ph, 1)
+	testPhonebookUniform(t, infoSet, ph, 1)
 }
 
 func TestArrayPhonebookUniform3(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	set := []string{"a:4041", "b:4042", "c:4043", "d:4044", "e:4045", "f:4046", "g:4047", "h:4048", "i:4049", "j:4010"}
+	infoSet := make([]*peer.AddrInfo, 0)
+	for _, addr := range set {
+		info, err := peerInfoFromDomainPort(addr)
+		require.NoError(t, err)
+		infoSet = append(infoSet, info)
+	}
+
 	ph, err := MakePhonebook(1, 1*time.Millisecond)
 	require.NoError(t, err)
 	for _, addr := range set {
@@ -189,19 +213,25 @@ func TestArrayPhonebookUniform3(t *testing.T) {
 		ph.AddAddrs(info.ID, info.Addrs, libp2p.AddressTTL)
 		ph.Put(info.ID, addressDataKey, entry)
 	}
-	testPhonebookUniform(t, set, ph, 3)
+	testPhonebookUniform(t, infoSet, ph, 3)
 }
 
 func TestMultiPhonebook(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	set := []string{"a:4041", "b:4042", "c:4043", "d:4044", "e:4045", "f:4046", "g:4047", "h:4048", "i:4049", "j:4010"}
-	pha := make([]string, 0)
-	for _, e := range set[:5] {
+	infoSet := make([]*peer.AddrInfo, 0)
+	for _, addr := range set {
+		info, err := peerInfoFromDomainPort(addr)
+		require.NoError(t, err)
+		infoSet = append(infoSet, info)
+	}
+	pha := make([]interface{}, 0)
+	for _, e := range infoSet[:5] {
 		pha = append(pha, e)
 	}
-	phb := make([]string, 0)
-	for _, e := range set[5:] {
+	phb := make([]interface{}, 0)
+	for _, e := range infoSet[5:] {
 		phb = append(phb, e)
 	}
 
@@ -210,9 +240,9 @@ func TestMultiPhonebook(t *testing.T) {
 	ph.ReplacePeerList(pha, "pha", PhoneBookEntryRelayRole)
 	ph.ReplacePeerList(phb, "phb", PhoneBookEntryRelayRole)
 
-	testPhonebookAll(t, set, ph)
-	testPhonebookUniform(t, set, ph, 1)
-	testPhonebookUniform(t, set, ph, 3)
+	testPhonebookAll(t, infoSet, ph)
+	testPhonebookUniform(t, infoSet, ph, 1)
+	testPhonebookUniform(t, infoSet, ph, 3)
 }
 
 // TestMultiPhonebookPersistentPeers validates that the peers added via Phonebook.AddPersistentPeers
@@ -224,12 +254,19 @@ func TestMultiPhonebookPersistentPeers(t *testing.T) {
 	require.NoError(t, err)
 	persistentPeers := []interface{}{info}
 	set := []string{"b:4042", "c:4043", "d:4044", "e:4045", "f:4046", "g:4047", "h:4048", "i:4049", "j:4010"}
-	pha := make([]string, 0)
-	for _, e := range set[:5] {
+	infoSet := make([]*peer.AddrInfo, 0)
+	for _, addr := range set {
+		info, err := peerInfoFromDomainPort(addr)
+		require.NoError(t, err)
+		infoSet = append(infoSet, info)
+	}
+
+	pha := make([]interface{}, 0)
+	for _, e := range infoSet[:5] {
 		pha = append(pha, e)
 	}
-	phb := make([]string, 0)
-	for _, e := range set[5:] {
+	phb := make([]interface{}, 0)
+	for _, e := range infoSet[5:] {
 		phb = append(phb, e)
 	}
 	ph, err := MakePhonebook(1, 1*time.Millisecond)
@@ -239,12 +276,19 @@ func TestMultiPhonebookPersistentPeers(t *testing.T) {
 	ph.ReplacePeerList(pha, "pha", PhoneBookEntryRelayRole)
 	ph.ReplacePeerList(phb, "phb", PhoneBookEntryRelayRole)
 
-	testPhonebookAll(t, append(set, "a:4041"), ph)
+	testPhonebookAll(t, append(infoSet, info), ph)
 	allAddresses := ph.GetAddresses(len(set)+len(persistentPeers), PhoneBookEntryRelayRole)
 	for _, pp := range persistentPeers {
 		pp := pp.(*peer.AddrInfo)
-		// TODO: modify as needed when completely switching from peerID = "host:port" to peer.AddrInfo
-		require.Contains(t, allAddresses, string(pp.ID))
+		found := false
+		for _, addr := range allAddresses {
+			addr := addr.(*peer.AddrInfo)
+			if addr.ID == pp.ID {
+				found = true
+				break
+			}
+		}
+		require.True(t, found, fmt.Sprintf("%s not found in %v", string(pp.ID), allAddresses))
 	}
 }
 
@@ -252,12 +296,19 @@ func TestMultiPhonebookDuplicateFiltering(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	set := []string{"b:4042", "c:4043", "d:4044", "e:4045", "f:4046", "g:4047", "h:4048", "i:4049", "j:4010"}
-	pha := make([]string, 0)
-	for _, e := range set[:7] {
+	infoSet := make([]*peer.AddrInfo, 0)
+	for _, addr := range set {
+		info, err := peerInfoFromDomainPort(addr)
+		require.NoError(t, err)
+		infoSet = append(infoSet, info)
+	}
+
+	pha := make([]interface{}, 0)
+	for _, e := range infoSet[:7] {
 		pha = append(pha, e)
 	}
-	phb := make([]string, 0)
-	for _, e := range set[3:] {
+	phb := make([]interface{}, 0)
+	for _, e := range infoSet[3:] {
 		phb = append(phb, e)
 	}
 	ph, err := MakePhonebook(1, 1*time.Millisecond)
@@ -265,9 +316,9 @@ func TestMultiPhonebookDuplicateFiltering(t *testing.T) {
 	ph.ReplacePeerList(pha, "pha", PhoneBookEntryRelayRole)
 	ph.ReplacePeerList(phb, "phb", PhoneBookEntryRelayRole)
 
-	testPhonebookAll(t, set, ph)
-	testPhonebookUniform(t, set, ph, 1)
-	testPhonebookUniform(t, set, ph, 3)
+	testPhonebookAll(t, infoSet, ph)
+	testPhonebookUniform(t, infoSet, ph, 1)
+	testPhonebookUniform(t, infoSet, ph, 3)
 }
 
 func TestWaitAndAddConnectionTimeLongtWindow(t *testing.T) {
@@ -292,7 +343,7 @@ func TestWaitAndAddConnectionTimeLongtWindow(t *testing.T) {
 
 	// Test the addresses are populated in the phonebook and a
 	// time can be added to one of them
-	entries.ReplacePeerList([]string{addr1, addr2}, "default", PhoneBookEntryRelayRole)
+	entries.ReplacePeerList([]interface{}{info1, info2}, "default", PhoneBookEntryRelayRole)
 	addrInPhonebook, waitTime, provisionalTime := entries.GetConnectionWaitTime(info1)
 	require.Equal(t, true, addrInPhonebook)
 	require.Equal(t, time.Duration(0), waitTime)
@@ -407,10 +458,24 @@ func TestPhonebookRoles(t *testing.T) {
 	relaysSet := []string{"relay1:4040", "relay2:4041", "relay3:4042"}
 	archiverSet := []string{"archiver1:1111", "archiver2:1112", "archiver3:1113"}
 
+	infoRelaySet := make([]interface{}, 0)
+	for _, addr := range relaysSet {
+		info, err := peerInfoFromDomainPort(addr)
+		require.NoError(t, err)
+		infoRelaySet = append(infoRelaySet, info)
+	}
+
+	infoArchiverSet := make([]interface{}, 0)
+	for _, addr := range archiverSet {
+		info, err := peerInfoFromDomainPort(addr)
+		require.NoError(t, err)
+		infoArchiverSet = append(infoArchiverSet, info)
+	}
+
 	ph, err := MakePhonebook(1, 1)
 	require.NoError(t, err)
-	ph.ReplacePeerList(relaysSet, "default", PhoneBookEntryRelayRole)
-	ph.ReplacePeerList(archiverSet, "default", PhoneBookEntryArchiverRole)
+	ph.ReplacePeerList(infoRelaySet, "default", PhoneBookEntryRelayRole)
+	ph.ReplacePeerList(infoArchiverSet, "default", PhoneBookEntryArchiverRole)
 	require.Equal(t, len(relaysSet)+len(archiverSet), len(ph.Peers()))
 	require.Equal(t, len(relaysSet)+len(archiverSet), ph.Length())
 
@@ -420,11 +485,13 @@ func TestPhonebookRoles(t *testing.T) {
 				entries := ph.GetAddresses(l, role)
 				if role == PhoneBookEntryRelayRole {
 					for _, entry := range entries {
-						require.Contains(t, entry, "relay")
+						entry := entry.(*peer.AddrInfo)
+						require.Contains(t, string(entry.ID), "relay")
 					}
 				} else if role == PhoneBookEntryArchiverRole {
 					for _, entry := range entries {
-						require.Contains(t, entry, "archiver")
+						entry := entry.(*peer.AddrInfo)
+						require.Contains(t, string(entry.ID), "archiver")
 					}
 				}
 			}

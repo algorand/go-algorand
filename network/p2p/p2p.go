@@ -226,6 +226,8 @@ func (s *serviceImpl) DialPeersUntilTargetCount(targetConnCount int) {
 		if len(s.host.Network().ConnsToPeer(peerID)) > 0 {
 			continue
 		}
+		// TODO: prefer relays nodes?
+		// switch to phonebook instead of peerstore
 		peerInfo := s.host.Peerstore().PeerInfo(peerID)
 		err := s.DialNode(context.Background(), &peerInfo) // leaving the calls as blocking for now, to not over-connect beyond fanout
 		if err != nil {

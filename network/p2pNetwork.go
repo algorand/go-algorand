@@ -31,6 +31,7 @@ import (
 	"github.com/algorand/go-algorand/network/p2p"
 	"github.com/algorand/go-algorand/network/p2p/dnsaddr"
 	"github.com/algorand/go-algorand/network/p2p/peerstore"
+	"github.com/algorand/go-algorand/network/phonebook"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-deadlock"
 
@@ -152,7 +153,7 @@ func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebo
 	for malAddr, malErr := range malformedAddrs {
 		log.Infof("Ignoring malformed phonebook address %s: %s", malAddr, malErr)
 	}
-	pstore, err := peerstore.NewPeerStore(addrInfo)
+	pstore, err := peerstore.NewPeerStore(addrInfo, string(networkID))
 	if err != nil {
 		return nil, err
 	}
@@ -263,7 +264,7 @@ func (n *P2PNetwork) Start() error {
 
 	n.wg.Add(1)
 	go n.broadcaster.broadcastThread(&n.wg, n)
-	n.service.DialPeersUntilTargetCount(n.config.GossipFanout)
+	// n.service.DialPeersUntilTargetCount(n.config.GossipFanout)
 
 	n.wg.Add(1)
 	go n.meshThread()
@@ -319,6 +320,24 @@ func (n *P2PNetwork) meshThread() {
 	timer := time.NewTicker(meshThreadInterval)
 	defer timer.Stop()
 	for {
+		// get some relay nodes
+		var peers []peer.AddrInfo
+		if n.capabilitiesDiscovery != nil {
+			var err error
+			peers, err = n.capabilitiesDiscovery.PeersForCapability(p2p.Gossip, n.config.GossipFanout)
+			if err != nil {
+				n.log.Warnf("Error getting relay nodes from capabilities discovery: %v", err)
+			} else {
+				n.log.Debugf("Discovered %d gossip peers from DHT", len(peers))
+				replace := make([]interface{}, 0, len(peers))
+				for i := range peers {
+					replace = append(replace, &peers[i])
+				}
+				n.pstore.ReplacePeerList(replace, string(n.networkID), phonebook.PhoneBookEntryRelayRole)
+			}
+		}
+		// call immediately and then every interval
+		n.service.DialPeersUntilTargetCount(n.config.GossipFanout)
 		select {
 		case <-timer.C:
 			n.service.DialPeersUntilTargetCount(n.config.GossipFanout)
