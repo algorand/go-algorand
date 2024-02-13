@@ -25,8 +25,9 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/logging"
+	pstore "github.com/algorand/go-algorand/network/p2p/peerstore"
+	"github.com/algorand/go-algorand/network/phonebook"
 	"github.com/algorand/go-deadlock"
-	"github.com/multiformats/go-multiaddr"
 
 	"github.com/libp2p/go-libp2p"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -34,12 +35,12 @@ import (
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/libp2p/go-libp2p/core/peerstore"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	libp2phttp "github.com/libp2p/go-libp2p/p2p/http"
 	"github.com/libp2p/go-libp2p/p2p/muxer/yamux"
 	"github.com/libp2p/go-libp2p/p2p/security/noise"
 	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
+	"github.com/multiformats/go-multiaddr"
 )
 
 // Service defines the interface used by the network integrating with underlying p2p implementation
@@ -83,7 +84,7 @@ const dialTimeout = 30 * time.Second
 
 // MakeHost creates a libp2p host but does not start listening.
 // Use host.Network().Listen() on the returned address to start listening.
-func MakeHost(cfg config.Local, datadir string, pstore peerstore.Peerstore) (host.Host, string, error) {
+func MakeHost(cfg config.Local, datadir string, pstore *pstore.PeerStore) (host.Host, string, error) {
 	// load stored peer ID, or make ephemeral peer ID
 	privKey, err := GetPrivKey(cfg, datadir)
 	if err != nil {
@@ -216,22 +217,21 @@ func (s *serviceImpl) IDSigner() *PeerIDChallengeSigner {
 
 // DialPeersUntilTargetCount attempts to establish connections to the provided phonebook addresses
 func (s *serviceImpl) DialPeersUntilTargetCount(targetConnCount int) {
-	peerIDs := s.host.Peerstore().Peers()
-	for _, peerID := range peerIDs {
+	ps := s.host.Peerstore().(*pstore.PeerStore)
+	peerIDs := ps.GetAddresses(targetConnCount, phonebook.PhoneBookEntryRelayRole)
+	for _, peerInfo := range peerIDs {
+		peerInfo := peerInfo.(*peer.AddrInfo)
 		// if we are at our target count stop trying to connect
 		if len(s.host.Network().Conns()) == targetConnCount {
 			return
 		}
 		// if we are already connected to this peer, skip it
-		if len(s.host.Network().ConnsToPeer(peerID)) > 0 {
+		if len(s.host.Network().ConnsToPeer(peerInfo.ID)) > 0 {
 			continue
 		}
-		// TODO: prefer relays nodes?
-		// switch to phonebook instead of peerstore
-		peerInfo := s.host.Peerstore().PeerInfo(peerID)
-		err := s.DialNode(context.Background(), &peerInfo) // leaving the calls as blocking for now, to not over-connect beyond fanout
+		err := s.DialNode(context.Background(), peerInfo) // leaving the calls as blocking for now, to not over-connect beyond fanout
 		if err != nil {
-			s.log.Warnf("failed to connect to peer %s: %v", peerID, err)
+			s.log.Warnf("failed to connect to peer %s: %v", peerInfo.ID, err)
 		}
 	}
 }
