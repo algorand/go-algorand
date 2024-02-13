@@ -967,16 +967,29 @@ func TestCreatePeerSelector(t *testing.T) {
 	s := MakeService(logging.Base(), cfg, &httpTestPeerSource{}, new(mockedLedger), &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil)
 	ps := createPeerSelector(s.net, s.cfg, true)
 
-	require.Equal(t, 4, len(ps.peerClasses))
-	require.Equal(t, peerRankInitialFirstPriority, ps.peerClasses[0].initialRank)
-	require.Equal(t, peerRankInitialSecondPriority, ps.peerClasses[1].initialRank)
-	require.Equal(t, peerRankInitialThirdPriority, ps.peerClasses[2].initialRank)
-	require.Equal(t, peerRankInitialFourthPriority, ps.peerClasses[3].initialRank)
+	cps, ok := ps.(*classBasedPeerSelector)
+	require.True(t, ok)
 
-	require.Equal(t, network.PeersConnectedOut, ps.peerClasses[0].peerClass)
-	require.Equal(t, network.PeersPhonebookArchivalNodes, ps.peerClasses[1].peerClass)
-	require.Equal(t, network.PeersPhonebookRelays, ps.peerClasses[2].peerClass)
-	require.Equal(t, network.PeersConnectedIn, ps.peerClasses[3].peerClass)
+	require.Equal(t, 4, len(cps.peerSelectors))
+	require.Equal(t, peerRankInitialFirstPriority, cps.peerSelectors[0].priority)
+	require.Equal(t, peerRankInitialSecondPriority, cps.peerSelectors[1].priority)
+	require.Equal(t, peerRankInitialThirdPriority, cps.peerSelectors[2].priority)
+	require.Equal(t, peerRankInitialFourthPriority, cps.peerSelectors[3].priority)
+
+	require.Equal(t, network.PeersConnectedOut, cps.peerSelectors[0].peerClass)
+	require.Equal(t, network.PeersPhonebookRelays, cps.peerSelectors[1].peerClass)
+	require.Equal(t, network.PeersPhonebookArchivalNodes, cps.peerSelectors[2].peerClass)
+	require.Equal(t, network.PeersConnectedIn, cps.peerSelectors[3].peerClass)
+
+	require.Equal(t, 3, cps.peerSelectors[0].toleranceFactor)
+	require.Equal(t, 3, cps.peerSelectors[1].toleranceFactor)
+	require.Equal(t, 10, cps.peerSelectors[2].toleranceFactor)
+	require.Equal(t, 3, cps.peerSelectors[3].toleranceFactor)
+
+	require.False(t, cps.peerSelectors[0].lastCheckedTime.IsZero())
+	require.False(t, cps.peerSelectors[1].lastCheckedTime.IsZero())
+	require.False(t, cps.peerSelectors[2].lastCheckedTime.IsZero())
+	require.False(t, cps.peerSelectors[3].lastCheckedTime.IsZero())
 
 	// cfg.NetAddress == ""; cfg.EnableGossipService = true; pipelineFetch = true
 	cfg.NetAddress = ""
@@ -984,14 +997,25 @@ func TestCreatePeerSelector(t *testing.T) {
 	s = MakeService(logging.Base(), cfg, &httpTestPeerSource{}, new(mockedLedger), &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil)
 	ps = createPeerSelector(s.net, s.cfg, true)
 
-	require.Equal(t, 3, len(ps.peerClasses))
-	require.Equal(t, peerRankInitialFirstPriority, ps.peerClasses[0].initialRank)
-	require.Equal(t, peerRankInitialSecondPriority, ps.peerClasses[1].initialRank)
-	require.Equal(t, peerRankInitialThirdPriority, ps.peerClasses[2].initialRank)
+	cps, ok = ps.(*classBasedPeerSelector)
+	require.True(t, ok)
 
-	require.Equal(t, network.PeersPhonebookArchivalNodes, ps.peerClasses[0].peerClass)
-	require.Equal(t, network.PeersConnectedOut, ps.peerClasses[1].peerClass)
-	require.Equal(t, network.PeersPhonebookRelays, ps.peerClasses[2].peerClass)
+	require.Equal(t, 3, len(cps.peerSelectors))
+	require.Equal(t, peerRankInitialFirstPriority, cps.peerSelectors[0].priority)
+	require.Equal(t, peerRankInitialSecondPriority, cps.peerSelectors[1].priority)
+	require.Equal(t, peerRankInitialThirdPriority, cps.peerSelectors[2].priority)
+
+	require.Equal(t, network.PeersConnectedOut, cps.peerSelectors[0].peerClass)
+	require.Equal(t, network.PeersPhonebookRelays, cps.peerSelectors[1].peerClass)
+	require.Equal(t, network.PeersPhonebookArchivalNodes, cps.peerSelectors[2].peerClass)
+
+	require.Equal(t, 3, cps.peerSelectors[0].toleranceFactor)
+	require.Equal(t, 3, cps.peerSelectors[1].toleranceFactor)
+	require.Equal(t, 10, cps.peerSelectors[2].toleranceFactor)
+
+	require.False(t, cps.peerSelectors[0].lastCheckedTime.IsZero())
+	require.False(t, cps.peerSelectors[1].lastCheckedTime.IsZero())
+	require.False(t, cps.peerSelectors[2].lastCheckedTime.IsZero())
 
 	// cfg.NetAddress != ""; cfg.EnableGossipService = false; pipelineFetch = true
 	cfg.NetAddress = "someAddress"
@@ -999,14 +1023,25 @@ func TestCreatePeerSelector(t *testing.T) {
 	s = MakeService(logging.Base(), cfg, &httpTestPeerSource{}, new(mockedLedger), &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil)
 	ps = createPeerSelector(s.net, s.cfg, true)
 
-	require.Equal(t, 3, len(ps.peerClasses))
-	require.Equal(t, peerRankInitialFirstPriority, ps.peerClasses[0].initialRank)
-	require.Equal(t, peerRankInitialSecondPriority, ps.peerClasses[1].initialRank)
-	require.Equal(t, peerRankInitialThirdPriority, ps.peerClasses[2].initialRank)
+	cps, ok = ps.(*classBasedPeerSelector)
+	require.True(t, ok)
 
-	require.Equal(t, network.PeersPhonebookArchivalNodes, ps.peerClasses[0].peerClass)
-	require.Equal(t, network.PeersConnectedOut, ps.peerClasses[1].peerClass)
-	require.Equal(t, network.PeersPhonebookRelays, ps.peerClasses[2].peerClass)
+	require.Equal(t, 3, len(cps.peerSelectors))
+	require.Equal(t, peerRankInitialFirstPriority, cps.peerSelectors[0].priority)
+	require.Equal(t, peerRankInitialSecondPriority, cps.peerSelectors[1].priority)
+	require.Equal(t, peerRankInitialThirdPriority, cps.peerSelectors[2].priority)
+
+	require.Equal(t, network.PeersConnectedOut, cps.peerSelectors[0].peerClass)
+	require.Equal(t, network.PeersPhonebookRelays, cps.peerSelectors[1].peerClass)
+	require.Equal(t, network.PeersPhonebookArchivalNodes, cps.peerSelectors[2].peerClass)
+
+	require.Equal(t, 3, cps.peerSelectors[0].toleranceFactor)
+	require.Equal(t, 3, cps.peerSelectors[1].toleranceFactor)
+	require.Equal(t, 10, cps.peerSelectors[2].toleranceFactor)
+
+	require.False(t, cps.peerSelectors[0].lastCheckedTime.IsZero())
+	require.False(t, cps.peerSelectors[1].lastCheckedTime.IsZero())
+	require.False(t, cps.peerSelectors[2].lastCheckedTime.IsZero())
 
 	// cfg.NetAddress != ""; cfg.EnableGossipService = true; pipelineFetch = false
 	cfg.NetAddress = "someAddress"
@@ -1014,16 +1049,19 @@ func TestCreatePeerSelector(t *testing.T) {
 	s = MakeService(logging.Base(), cfg, &httpTestPeerSource{}, new(mockedLedger), &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil)
 	ps = createPeerSelector(s.net, s.cfg, false)
 
-	require.Equal(t, 4, len(ps.peerClasses))
-	require.Equal(t, peerRankInitialFirstPriority, ps.peerClasses[0].initialRank)
-	require.Equal(t, peerRankInitialSecondPriority, ps.peerClasses[1].initialRank)
-	require.Equal(t, peerRankInitialThirdPriority, ps.peerClasses[2].initialRank)
-	require.Equal(t, peerRankInitialFourthPriority, ps.peerClasses[3].initialRank)
+	cps, ok = ps.(*classBasedPeerSelector)
+	require.True(t, ok)
 
-	require.Equal(t, network.PeersConnectedOut, ps.peerClasses[0].peerClass)
-	require.Equal(t, network.PeersConnectedIn, ps.peerClasses[1].peerClass)
-	require.Equal(t, network.PeersPhonebookArchivalNodes, ps.peerClasses[2].peerClass)
-	require.Equal(t, network.PeersPhonebookRelays, ps.peerClasses[3].peerClass)
+	require.Equal(t, 4, len(cps.peerSelectors))
+	require.Equal(t, peerRankInitialFirstPriority, cps.peerSelectors[0].priority)
+	require.Equal(t, peerRankInitialSecondPriority, cps.peerSelectors[1].priority)
+	require.Equal(t, peerRankInitialThirdPriority, cps.peerSelectors[2].priority)
+	require.Equal(t, peerRankInitialFourthPriority, cps.peerSelectors[3].priority)
+
+	require.Equal(t, network.PeersConnectedOut, cps.peerSelectors[0].peerClass)
+	require.Equal(t, network.PeersConnectedIn, cps.peerSelectors[1].peerClass)
+	require.Equal(t, network.PeersPhonebookArchivalNodes, cps.peerSelectors[2].peerClass)
+	require.Equal(t, network.PeersPhonebookRelays, cps.peerSelectors[3].peerClass)
 
 	// cfg.NetAddress == ""; cfg.EnableGossipService = true; pipelineFetch = false
 	cfg.NetAddress = ""
@@ -1031,14 +1069,25 @@ func TestCreatePeerSelector(t *testing.T) {
 	s = MakeService(logging.Base(), cfg, &httpTestPeerSource{}, new(mockedLedger), &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil)
 	ps = createPeerSelector(s.net, s.cfg, false)
 
-	require.Equal(t, 3, len(ps.peerClasses))
-	require.Equal(t, peerRankInitialFirstPriority, ps.peerClasses[0].initialRank)
-	require.Equal(t, peerRankInitialSecondPriority, ps.peerClasses[1].initialRank)
-	require.Equal(t, peerRankInitialThirdPriority, ps.peerClasses[2].initialRank)
+	cps, ok = ps.(*classBasedPeerSelector)
+	require.True(t, ok)
 
-	require.Equal(t, network.PeersConnectedOut, ps.peerClasses[0].peerClass)
-	require.Equal(t, network.PeersPhonebookArchivalNodes, ps.peerClasses[1].peerClass)
-	require.Equal(t, network.PeersPhonebookRelays, ps.peerClasses[2].peerClass)
+	require.Equal(t, 3, len(cps.peerSelectors))
+	require.Equal(t, peerRankInitialFirstPriority, cps.peerSelectors[0].priority)
+	require.Equal(t, peerRankInitialSecondPriority, cps.peerSelectors[1].priority)
+	require.Equal(t, peerRankInitialThirdPriority, cps.peerSelectors[2].priority)
+
+	require.Equal(t, network.PeersConnectedOut, cps.peerSelectors[0].peerClass)
+	require.Equal(t, network.PeersPhonebookArchivalNodes, cps.peerSelectors[1].peerClass)
+	require.Equal(t, network.PeersPhonebookRelays, cps.peerSelectors[2].peerClass)
+
+	require.Equal(t, 3, cps.peerSelectors[0].toleranceFactor)
+	require.Equal(t, 10, cps.peerSelectors[1].toleranceFactor)
+	require.Equal(t, 3, cps.peerSelectors[2].toleranceFactor)
+
+	require.False(t, cps.peerSelectors[0].lastCheckedTime.IsZero())
+	require.False(t, cps.peerSelectors[1].lastCheckedTime.IsZero())
+	require.False(t, cps.peerSelectors[2].lastCheckedTime.IsZero())
 
 	// cfg.NetAddress != ""; cfg.EnableGossipService = false; pipelineFetch = false
 	cfg.NetAddress = "someAddress"
@@ -1046,14 +1095,25 @@ func TestCreatePeerSelector(t *testing.T) {
 	s = MakeService(logging.Base(), cfg, &httpTestPeerSource{}, new(mockedLedger), &mockedAuthenticator{errorRound: int(0 + 1)}, nil, nil)
 	ps = createPeerSelector(s.net, s.cfg, false)
 
-	require.Equal(t, 3, len(ps.peerClasses))
-	require.Equal(t, peerRankInitialFirstPriority, ps.peerClasses[0].initialRank)
-	require.Equal(t, peerRankInitialSecondPriority, ps.peerClasses[1].initialRank)
-	require.Equal(t, peerRankInitialThirdPriority, ps.peerClasses[2].initialRank)
+	cps, ok = ps.(*classBasedPeerSelector)
+	require.True(t, ok)
 
-	require.Equal(t, network.PeersConnectedOut, ps.peerClasses[0].peerClass)
-	require.Equal(t, network.PeersPhonebookArchivalNodes, ps.peerClasses[1].peerClass)
-	require.Equal(t, network.PeersPhonebookRelays, ps.peerClasses[2].peerClass)
+	require.Equal(t, 3, len(cps.peerSelectors))
+	require.Equal(t, peerRankInitialFirstPriority, cps.peerSelectors[0].priority)
+	require.Equal(t, peerRankInitialSecondPriority, cps.peerSelectors[1].priority)
+	require.Equal(t, peerRankInitialThirdPriority, cps.peerSelectors[2].priority)
+
+	require.Equal(t, network.PeersConnectedOut, cps.peerSelectors[0].peerClass)
+	require.Equal(t, network.PeersPhonebookArchivalNodes, cps.peerSelectors[1].peerClass)
+	require.Equal(t, network.PeersPhonebookRelays, cps.peerSelectors[2].peerClass)
+
+	require.Equal(t, 3, cps.peerSelectors[0].toleranceFactor)
+	require.Equal(t, 10, cps.peerSelectors[1].toleranceFactor)
+	require.Equal(t, 3, cps.peerSelectors[2].toleranceFactor)
+
+	require.False(t, cps.peerSelectors[0].lastCheckedTime.IsZero())
+	require.False(t, cps.peerSelectors[1].lastCheckedTime.IsZero())
+	require.False(t, cps.peerSelectors[2].lastCheckedTime.IsZero())
 }
 
 func TestServiceStartStop(t *testing.T) {

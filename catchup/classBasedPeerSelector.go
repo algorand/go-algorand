@@ -35,6 +35,16 @@ type classBasedPeerSelector struct {
 	peerSelectors []*wrappedPeerSelector
 }
 
+func makeClassBasedPeerSelector(peerSelectors []*wrappedPeerSelector) *classBasedPeerSelector {
+	// Sort the peerSelectors by priority
+	sort.SliceStable(peerSelectors, func(i, j int) bool {
+		return peerSelectors[i].priority < peerSelectors[j].priority
+	})
+	return &classBasedPeerSelector{
+		peerSelectors: peerSelectors,
+	}
+}
+
 func (c *classBasedPeerSelector) rankPeer(psp *peerSelectorPeer, rank int) (int, int) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -43,7 +53,7 @@ func (c *classBasedPeerSelector) rankPeer(psp *peerSelectorPeer, rank int) (int,
 	poolIdx, peerIdx := -1, -1
 	for _, wp := range c.peerSelectors {
 		// See if the peer is in the class, ranking it appropriately if so
-		poolIdx, peerIdx = wp.peerSelector.rankPeer(psp, rank)
+		poolIdx, peerIdx = wp.peerSelectorIRenameMeLater.rankPeer(psp, rank)
 		if poolIdx < 0 || peerIdx < 0 {
 			// Peer not found in this class
 			continue
@@ -107,7 +117,7 @@ func (c *classBasedPeerSelector) peerDownloadDurationToRank(psp *peerSelectorPee
 	defer c.mu.Unlock()
 
 	for _, wp := range c.peerSelectors {
-		rank = wp.peerSelector.peerDownloadDurationToRank(psp, blockDownloadDuration)
+		rank = wp.peerSelectorIRenameMeLater.peerDownloadDurationToRank(psp, blockDownloadDuration)
 		// If rank is peerRankInvalidDownload, we check the next class's peerSelector
 		if rank >= peerRankInvalidDownload {
 			continue
@@ -123,7 +133,7 @@ func (c *classBasedPeerSelector) getNextPeer() (psp *peerSelectorPeer, err error
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	for _, wp := range c.peerSelectors {
-		psp, err = wp.peerSelector.getNextPeer()
+		psp, err = wp.peerSelectorIRenameMeLater.getNextPeer()
 		wp.lastCheckedTime = time.Now()
 		if err != nil {
 			if errors.Is(err, errPeerSelectorNoPeerPoolsAvailable) {
@@ -139,10 +149,10 @@ func (c *classBasedPeerSelector) getNextPeer() (psp *peerSelectorPeer, err error
 }
 
 type wrappedPeerSelector struct {
-	peerSelector     peerSelector       // The unserlying peerSelector for this class
-	peerClass        network.PeerOption // The class of peers the peerSelector is responsible for
-	toleranceFactor  int                // The number of times we can net fail for any reason before we move to the next class's peerSelector
-	downloadFailures int                // The number of times we have failed to download a block from this class's peerSelector since it was last reset
-	priority         int                // The original priority of the peerSelector, used for sorting
-	lastCheckedTime  time.Time          // The last time we tried to use the peerSelector
+	peerSelectorIRenameMeLater peerSelectorI      // The underlying peerSelector for this class
+	peerClass                  network.PeerOption // The class of peers the peerSelector is responsible for
+	toleranceFactor            int                // The number of times we can net fail for any reason before we move to the next class's peerSelector
+	downloadFailures           int                // The number of times we have failed to download a block from this class's peerSelector since it was last reset
+	priority                   int                // The original priority of the peerSelector, used for sorting
+	lastCheckedTime            time.Time          // The last time we tried to use the peerSelector
 }

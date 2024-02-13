@@ -18,6 +18,7 @@ package catchup
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -69,7 +70,7 @@ type CatchpointCatchupStats struct {
 type CatchpointCatchupService struct {
 	// stats is the statistics object, updated async while downloading the ledger
 	stats CatchpointCatchupStats
-	// statsMu synchronizes access to stats, as we could attempt to update it while querying for it's current state
+	// statsMu synchronizes access to stats, as we could attempt to update it while querying for its current state
 	statsMu deadlock.Mutex
 	node    CatchpointCatchupNodeServices
 	// ctx is the node cancellation context, used when the node is being stopped.
@@ -98,7 +99,7 @@ type CatchpointCatchupService struct {
 	abortCtx     context.Context
 	abortCtxFunc context.CancelFunc
 	// blocksDownloadPeerSelector is the peer selector used for downloading blocks.
-	blocksDownloadPeerSelector *peerSelector
+	blocksDownloadPeerSelector peerSelectorI
 }
 
 // MakeResumedCatchpointCatchupService creates a catchpoint catchup service for a node that is already in catchpoint catchup mode
@@ -506,14 +507,14 @@ func lookbackForStateproofsSupport(topBlock *bookkeeping.Block) uint64 {
 	return uint64(topBlock.Round().SubSaturate(lowestStateProofRound))
 }
 
-// processStageBlocksDownload is the fourth catchpoint catchup stage. It downloads all the reminder of the blocks, verifying each one of them against it's predecessor.
+// processStageBlocksDownload is the fourth catchpoint catchup stage. It downloads all the reminder of the blocks, verifying each one of them against its predecessor.
 func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 	topBlock, err := cs.ledgerAccessor.EnsureFirstBlock(cs.ctx)
 	if err != nil {
 		return cs.abort(fmt.Errorf("processStageBlocksDownload failed, unable to ensure first block : %v", err))
 	}
 
-	// pick the lookback with the greater of
+	// pick the lookback with the greatest of
 	// either (MaxTxnLife+DeeperBlockHeaderHistory+CatchpointLookback) or MaxBalLookback
 	// Explanation:
 	// 1. catchpoint snapshots accounts at round X-CatchpointLookback
@@ -537,7 +538,7 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 	}
 
 	cs.statsMu.Lock()
-	cs.stats.TotalBlocks = uint64(lookback)
+	cs.stats.TotalBlocks = lookback
 	cs.stats.AcquiredBlocks = 0
 	cs.stats.VerifiedBlocks = 0
 	cs.statsMu.Unlock()
@@ -558,8 +559,9 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 			blk = &ledgerBlock
 			cert = &ledgerCert
 		} else {
-			switch err0.(type) {
-			case ledgercore.ErrNoEntry:
+			var errNoEntry ledgercore.ErrNoEntry
+			switch {
+			case errors.As(err0, &errNoEntry):
 				// this is expected, ignore this one.
 			default:
 				cs.log.Warnf("processStageBlocksDownload encountered the following error when attempting to retrieve the block for round %d : %v", topBlock.Round()-basics.Round(blocksFetched), err0)
@@ -658,7 +660,7 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 func (cs *CatchpointCatchupService) fetchBlock(round basics.Round, retryCount uint64) (blk *bookkeeping.Block, cert *agreement.Certificate, downloadDuration time.Duration, psp *peerSelectorPeer, stop bool, err error) {
 	psp, err = cs.blocksDownloadPeerSelector.getNextPeer()
 	if err != nil {
-		if err == errPeerSelectorNoPeerPoolsAvailable {
+		if errors.Is(err, errPeerSelectorNoPeerPoolsAvailable) {
 			cs.log.Infof("fetchBlock: unable to obtain a list of peers to retrieve the latest block from; will retry shortly.")
 			// this is a possible on startup, since the network package might have yet to retrieve the list of peers.
 			time.Sleep(noPeersAvailableSleepInterval)
@@ -718,7 +720,7 @@ func (cs *CatchpointCatchupService) processStageSwitch() (err error) {
 // stopOrAbort is called when any of the stage processing function sees that cs.ctx has been canceled. It can be
 // due to the end user attempting to abort the current catchpoint catchup operation or due to a node shutdown.
 func (cs *CatchpointCatchupService) stopOrAbort() error {
-	if cs.abortCtx.Err() == context.Canceled {
+	if errors.Is(cs.abortCtx.Err(), context.Canceled) {
 		return cs.abort(context.Canceled)
 	}
 	return nil
@@ -749,7 +751,7 @@ func (cs *CatchpointCatchupService) updateStage(newStage ledger.CatchpointCatchu
 	return nil
 }
 
-// updateNodeCatchupMode requests the node to change it's operational mode from
+// updateNodeCatchupMode requests the node to change its operational mode from
 // catchup mode to normal mode and vice versa.
 func (cs *CatchpointCatchupService) updateNodeCatchupMode(catchupModeEnabled bool) {
 	newCtxCh := cs.node.SetCatchpointCatchupMode(catchupModeEnabled)
@@ -805,12 +807,27 @@ func (cs *CatchpointCatchupService) initDownloadPeerSelector() {
 	cs.blocksDownloadPeerSelector = cs.makeCatchpointPeerSelector()
 }
 
-func (cs *CatchpointCatchupService) makeCatchpointPeerSelector() *peerSelector {
-	return makePeerSelector(
-		cs.net,
-		[]peerClass{
-			{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookRelays},
-		})
+func (cs *CatchpointCatchupService) makeCatchpointPeerSelector() peerSelectorI {
+	wrappedPeerSelectors := []*wrappedPeerSelector{
+		{
+			peerClass: network.PeersPhonebookRelays,
+			peerSelectorIRenameMeLater: makePeerSelector(cs.net,
+				[]peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookRelays}}),
+			priority:        peerRankInitialFirstPriority,
+			toleranceFactor: 3,
+			lastCheckedTime: time.Now(),
+		},
+		{
+			peerClass: network.PeersPhonebookArchivalNodes,
+			peerSelectorIRenameMeLater: makePeerSelector(cs.net,
+				[]peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivalNodes}}),
+			priority:        peerRankInitialSecondPriority,
+			toleranceFactor: 10,
+			lastCheckedTime: time.Now(),
+		},
+	}
+
+	return makeClassBasedPeerSelector(wrappedPeerSelectors)
 }
 
 // checkLedgerDownload sends a HEAD request to the ledger endpoint of peers to validate the catchpoint's availability
