@@ -4161,7 +4161,7 @@ func TestRefreshRelayArchivePhonebookAddresses(t *testing.T) {
 		}
 
 		// Mock the SRV record lookup
-		netA.resolveSRVRecords = func(service string, protocol string, name string, fallbackDNSResolverAddress string,
+		netA.resolveSRVRecords = func(ctx context.Context, service string, protocol string, name string, fallbackDNSResolverAddress string,
 			secure bool) (addrs []string, err error) {
 			if service == "algobootstrap" && protocol == "tcp" && name == primarySRVBootstrap {
 				return primaryRelayResolvedRecords, nil
