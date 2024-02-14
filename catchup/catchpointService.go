@@ -99,7 +99,7 @@ type CatchpointCatchupService struct {
 	abortCtx     context.Context
 	abortCtxFunc context.CancelFunc
 	// blocksDownloadPeerSelector is the peer selector used for downloading blocks.
-	blocksDownloadPeerSelector peerSelectorI
+	blocksDownloadPeerSelector peerSelector
 }
 
 // MakeResumedCatchpointCatchupService creates a catchpoint catchup service for a node that is already in catchpoint catchup mode
@@ -281,7 +281,7 @@ func (cs *CatchpointCatchupService) processStageInactive() (err error) {
 }
 
 // processStageLedgerDownload is the second catchpoint catchup stage. It downloads the ledger.
-func (cs *CatchpointCatchupService) processStageLedgerDownload() (err error) {
+func (cs *CatchpointCatchupService) processStageLedgerDownload() error {
 	cs.statsMu.Lock()
 	label := cs.stats.CatchpointLabel
 	cs.statsMu.Unlock()
@@ -292,40 +292,40 @@ func (cs *CatchpointCatchupService) processStageLedgerDownload() (err error) {
 	}
 
 	// download balances file.
-	peerSelector := cs.makeCatchpointPeerSelector()
-	ledgerFetcher := makeLedgerFetcher(cs.net, cs.ledgerAccessor, cs.log, cs, cs.config)
+	ps := cs.makeCatchpointPeerSelector()
+	lf := makeLedgerFetcher(cs.net, cs.ledgerAccessor, cs.log, cs, cs.config)
 	attemptsCount := 0
 
 	for {
 		attemptsCount++
 
-		err = cs.ledgerAccessor.ResetStagingBalances(cs.ctx, true)
-		if err != nil {
+		err1 := cs.ledgerAccessor.ResetStagingBalances(cs.ctx, true)
+		if err1 != nil {
 			if cs.ctx.Err() != nil {
 				return cs.stopOrAbort()
 			}
-			return cs.abort(fmt.Errorf("processStageLedgerDownload failed to reset staging balances : %v", err))
+			return cs.abort(fmt.Errorf("processStageLedgerDownload failed to reset staging balances : %v", err1))
 		}
-		psp, err := peerSelector.getNextPeer()
-		if err != nil {
-			err = fmt.Errorf("processStageLedgerDownload: catchpoint catchup was unable to obtain a list of peers to retrieve the catchpoint file from")
-			return cs.abort(err)
+		psp, err1 := ps.getNextPeer()
+		if err1 != nil {
+			err1 = fmt.Errorf("processStageLedgerDownload: catchpoint catchup was unable to obtain a list of peers to retrieve the catchpoint file from")
+			return cs.abort(err1)
 		}
 		peer := psp.Peer
 		start := time.Now()
-		err = ledgerFetcher.downloadLedger(cs.ctx, peer, round)
-		if err == nil {
+		err1 = lf.downloadLedger(cs.ctx, peer, round)
+		if err1 == nil {
 			cs.log.Infof("ledger downloaded in %d seconds", time.Since(start)/time.Second)
 			start = time.Now()
-			err = cs.ledgerAccessor.BuildMerkleTrie(cs.ctx, cs.updateVerifiedCounts)
-			if err == nil {
+			err1 = cs.ledgerAccessor.BuildMerkleTrie(cs.ctx, cs.updateVerifiedCounts)
+			if err1 == nil {
 				cs.log.Infof("built merkle trie in %d seconds", time.Since(start)/time.Second)
 				break
 			}
 			// failed to build the merkle trie for the above catchpoint file.
-			peerSelector.rankPeer(psp, peerRankInvalidDownload)
+			ps.rankPeer(psp, peerRankInvalidDownload)
 		} else {
-			peerSelector.rankPeer(psp, peerRankDownloadFailed)
+			ps.rankPeer(psp, peerRankDownloadFailed)
 		}
 
 		// instead of testing for err == cs.ctx.Err() , we'll check on the context itself.
@@ -336,15 +336,15 @@ func (cs *CatchpointCatchupService) processStageLedgerDownload() (err error) {
 		}
 
 		if attemptsCount >= cs.config.CatchupLedgerDownloadRetryAttempts {
-			err = fmt.Errorf("processStageLedgerDownload: catchpoint catchup exceeded number of attempts to retrieve ledger")
-			return cs.abort(err)
+			err1 = fmt.Errorf("processStageLedgerDownload: catchpoint catchup exceeded number of attempts to retrieve ledger")
+			return cs.abort(err1)
 		}
-		cs.log.Warnf("unable to download ledger : %v", err)
+		cs.log.Warnf("unable to download ledger : %v", err1)
 	}
 
-	err = cs.updateStage(ledger.CatchpointCatchupStateLatestBlockDownload)
-	if err != nil {
-		return cs.abort(fmt.Errorf("processStageLedgerDownload failed to update stage to CatchpointCatchupStateLatestBlockDownload : %v", err))
+	err0 = cs.updateStage(ledger.CatchpointCatchupStateLatestBlockDownload)
+	if err0 != nil {
+		return cs.abort(fmt.Errorf("processStageLedgerDownload failed to update stage to CatchpointCatchupStateLatestBlockDownload : %v", err0))
 	}
 	return nil
 }
@@ -532,7 +532,7 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 	}
 
 	// in case the effective lookback is going before our rounds count, trim it there.
-	// ( a catchpoint is generated starting round MaxBalLookback, and this is a possible in any round in the range of MaxBalLookback..MaxTxnLife)
+	// ( a catchpoint is generated starting round MaxBalLookback, and this is a possible in any round in the range of MaxBalLookback...MaxTxnLife)
 	if lookback >= uint64(topBlock.Round()) {
 		lookback = uint64(topBlock.Round() - 1)
 	}
@@ -807,11 +807,11 @@ func (cs *CatchpointCatchupService) initDownloadPeerSelector() {
 	cs.blocksDownloadPeerSelector = cs.makeCatchpointPeerSelector()
 }
 
-func (cs *CatchpointCatchupService) makeCatchpointPeerSelector() peerSelectorI {
+func (cs *CatchpointCatchupService) makeCatchpointPeerSelector() peerSelector {
 	wrappedPeerSelectors := []*wrappedPeerSelector{
 		{
 			peerClass: network.PeersPhonebookRelays,
-			peerSelectorIRenameMeLater: makePeerSelector(cs.net,
+			peerSelector: makeRankPooledPeerSelector(cs.net,
 				[]peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookRelays}}),
 			priority:        peerRankInitialFirstPriority,
 			toleranceFactor: 3,
@@ -819,7 +819,7 @@ func (cs *CatchpointCatchupService) makeCatchpointPeerSelector() peerSelectorI {
 		},
 		{
 			peerClass: network.PeersPhonebookArchivalNodes,
-			peerSelectorIRenameMeLater: makePeerSelector(cs.net,
+			peerSelector: makeRankPooledPeerSelector(cs.net,
 				[]peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivalNodes}}),
 			priority:        peerRankInitialSecondPriority,
 			toleranceFactor: 10,
@@ -838,10 +838,10 @@ func (cs *CatchpointCatchupService) checkLedgerDownload() error {
 	if err != nil {
 		return fmt.Errorf("failed to parse catchpoint label : %v", err)
 	}
-	peerSelector := cs.makeCatchpointPeerSelector()
+	ps := cs.makeCatchpointPeerSelector()
 	ledgerFetcher := makeLedgerFetcher(cs.net, cs.ledgerAccessor, cs.log, cs, cs.config)
 	for i := 0; i < cs.config.CatchupLedgerDownloadRetryAttempts; i++ {
-		psp, peerError := peerSelector.getNextPeer()
+		psp, peerError := ps.getNextPeer()
 		if peerError != nil {
 			return err
 		}

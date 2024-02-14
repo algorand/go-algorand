@@ -38,7 +38,7 @@ import (
 	"github.com/algorand/go-algorand/util/execpool"
 )
 
-// uncapParallelDownloadRate is a simple threshold to detect whether or not the node is caught up.
+// uncapParallelDownloadRate is a simple threshold to detect whether the node is caught up.
 // If a block is downloaded in less than this duration, it's assumed that the node is not caught up
 // and allow the block downloader to start N=parallelBlocks concurrent fetches.
 const uncapParallelDownloadRate = time.Second
@@ -263,7 +263,7 @@ const errNoBlockForRoundThreshold = 5
 //   - If we couldn't fetch the block (e.g. if there are no peers available, or we've reached the catchupRetryLimit)
 //   - If the block is already in the ledger (e.g. if agreement service has already written it)
 //   - If the retrieval of the previous block was unsuccessful
-func (s *Service) fetchAndWrite(ctx context.Context, r basics.Round, prevFetchCompleteChan chan struct{}, lookbackComplete chan struct{}, peerSelector peerSelectorI) bool {
+func (s *Service) fetchAndWrite(ctx context.Context, r basics.Round, prevFetchCompleteChan chan struct{}, lookbackComplete chan struct{}, peerSelector peerSelector) bool {
 	// If sync-ing this round is not intended, don't fetch it
 	if dontSyncRound := s.GetDisableSyncRound(); dontSyncRound != 0 && r >= basics.Round(dontSyncRound) {
 		return false
@@ -315,7 +315,7 @@ func (s *Service) fetchAndWrite(ctx context.Context, r basics.Round, prevFetchCo
 		block, cert, blockDownloadDuration, err := s.innerFetch(ctx, r, peer)
 
 		if err != nil {
-			if err == errLedgerAlreadyHasBlock {
+			if errors.Is(err, errLedgerAlreadyHasBlock) {
 				// ledger already has the block, no need to request this block.
 				// only the agreement could have added this block into the ledger, catchup is complete
 				s.log.Infof("fetchAndWrite(%d): the block is already in the ledger. The catchup is complete", r)
@@ -326,7 +326,7 @@ func (s *Service) fetchAndWrite(ctx context.Context, r basics.Round, prevFetchCo
 			if errors.As(err, &nbfe) {
 				failureRank = peerRankNoBlockForRound
 				// remote peer doesn't have the block, try another peer
-				// quit if the the same peer peer encountered errNoBlockForRound more than errNoBlockForRoundThreshold times
+				// quit if the same peer encountered errNoBlockForRound more than errNoBlockForRoundThreshold times
 				if s.followLatest {
 					// back off between retries to allow time for the next block to appear;
 					// this will provide 50s (catchupRetryLimit * followLatestBackoff) of
@@ -424,7 +424,8 @@ func (s *Service) fetchAndWrite(ctx context.Context, r basics.Round, prevFetchCo
 						// if the context expired, just exit.
 						return false
 					}
-					if errNSBE, ok := err.(ledgercore.ErrNonSequentialBlockEval); ok && errNSBE.EvaluatorRound <= errNSBE.LatestRound {
+					var errNSBE ledgercore.ErrNonSequentialBlockEval
+					if errors.As(err, &errNSBE) && errNSBE.EvaluatorRound <= errNSBE.LatestRound {
 						// the block was added to the ledger from elsewhere after fetching it here
 						// only the agreement could have added this block into the ledger, catchup is complete
 						s.log.Infof("fetchAndWrite(%d): after fetching the block, it is already in the ledger. The catchup is complete", r)
@@ -439,18 +440,21 @@ func (s *Service) fetchAndWrite(ctx context.Context, r basics.Round, prevFetchCo
 			}
 
 			if err != nil {
-				switch err.(type) {
-				case ledgercore.ErrNonSequentialBlockEval:
+				var errNonSequentialBlockEval ledgercore.ErrNonSequentialBlockEval
+				var blockInLedgerError ledgercore.BlockInLedgerError
+				var err1 protocol.Error
+				switch {
+				case errors.As(err, &errNonSequentialBlockEval):
 					s.log.Infof("fetchAndWrite(%d): no need to re-evaluate historical block", r)
 					return true
-				case ledgercore.BlockInLedgerError:
+				case errors.As(err, &blockInLedgerError):
 					// the block was added to the ledger from elsewhere after fetching it here
 					// only the agreement could have added this block into the ledger, catchup is complete
 					s.log.Infof("fetchAndWrite(%d): after fetching the block, it is already in the ledger. The catchup is complete", r)
 					return false
-				case protocol.Error:
+				case errors.As(err, &err1):
 					if !s.protocolErrorLogged {
-						logging.Base().Errorf("fetchAndWrite(%v): unrecoverable protocol error detected: %v", r, err)
+						logging.Base().Errorf("fetchAndWrite(%v): unrecoverable protocol err1 detected: %v", r, err)
 						s.protocolErrorLogged = true
 					}
 				default:
@@ -488,8 +492,8 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 		}
 	}()
 
-	peerSelector := createPeerSelector(s.net, s.cfg, true)
-	if _, err := peerSelector.getNextPeer(); err == errPeerSelectorNoPeerPoolsAvailable {
+	ps := createPeerSelector(s.net, s.cfg, true)
+	if _, err := ps.getNextPeer(); errors.Is(err, errPeerSelectorNoPeerPoolsAvailable) {
 		s.log.Debugf("pipelinedFetch: was unable to obtain a peer to retrieve the block from")
 		return
 	}
@@ -524,7 +528,7 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 			go func(r basics.Round) {
 				prev := s.ledger.WaitMem(r - 1)
 				seed := s.ledger.WaitMem(r.SubSaturate(basics.Round(seedLookback)))
-				done <- s.fetchAndWrite(ctx, r, prev, seed, peerSelector)
+				done <- s.fetchAndWrite(ctx, r, prev, seed, ps)
 				wg.Done()
 			}(nextRound)
 
@@ -863,7 +867,7 @@ func (s *Service) roundIsNotSupported(nextRound basics.Round) bool {
 	return true
 }
 
-func createPeerSelector(net network.GossipNode, cfg config.Local, pipelineFetch bool) peerSelectorI {
+func createPeerSelector(net network.GossipNode, cfg config.Local, pipelineFetch bool) peerSelector {
 	var wrappedPeerSelectors []*wrappedPeerSelector
 	//TODO: Revisit this ordering
 	if pipelineFetch {
@@ -871,7 +875,7 @@ func createPeerSelector(net network.GossipNode, cfg config.Local, pipelineFetch 
 			wrappedPeerSelectors = []*wrappedPeerSelector{
 				{
 					peerClass: network.PeersConnectedOut,
-					peerSelectorIRenameMeLater: makePeerSelector(net,
+					peerSelector: makeRankPooledPeerSelector(net,
 						[]peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersConnectedOut}}),
 					priority:        peerRankInitialFirstPriority,
 					toleranceFactor: 3,
@@ -879,7 +883,7 @@ func createPeerSelector(net network.GossipNode, cfg config.Local, pipelineFetch 
 				},
 				{
 					peerClass: network.PeersPhonebookRelays,
-					peerSelectorIRenameMeLater: makePeerSelector(net,
+					peerSelector: makeRankPooledPeerSelector(net,
 						[]peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookRelays}}),
 					priority:        peerRankInitialSecondPriority,
 					toleranceFactor: 3,
@@ -887,7 +891,7 @@ func createPeerSelector(net network.GossipNode, cfg config.Local, pipelineFetch 
 				},
 				{
 					peerClass: network.PeersPhonebookArchivalNodes,
-					peerSelectorIRenameMeLater: makePeerSelector(net,
+					peerSelector: makeRankPooledPeerSelector(net,
 						[]peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivalNodes}}),
 					priority:        peerRankInitialThirdPriority,
 					toleranceFactor: 10,
@@ -895,7 +899,7 @@ func createPeerSelector(net network.GossipNode, cfg config.Local, pipelineFetch 
 				},
 				{
 					peerClass: network.PeersConnectedIn,
-					peerSelectorIRenameMeLater: makePeerSelector(net,
+					peerSelector: makeRankPooledPeerSelector(net,
 						[]peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersConnectedIn}}),
 					priority:        peerRankInitialFourthPriority,
 					toleranceFactor: 3,
@@ -906,7 +910,7 @@ func createPeerSelector(net network.GossipNode, cfg config.Local, pipelineFetch 
 			wrappedPeerSelectors = []*wrappedPeerSelector{
 				{
 					peerClass: network.PeersConnectedOut,
-					peerSelectorIRenameMeLater: makePeerSelector(net,
+					peerSelector: makeRankPooledPeerSelector(net,
 						[]peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersConnectedOut}}),
 					priority:        peerRankInitialFirstPriority,
 					toleranceFactor: 3,
@@ -914,7 +918,7 @@ func createPeerSelector(net network.GossipNode, cfg config.Local, pipelineFetch 
 				},
 				{
 					peerClass: network.PeersPhonebookRelays,
-					peerSelectorIRenameMeLater: makePeerSelector(net,
+					peerSelector: makeRankPooledPeerSelector(net,
 						[]peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookRelays}}),
 					priority:        peerRankInitialSecondPriority,
 					toleranceFactor: 3,
@@ -922,7 +926,7 @@ func createPeerSelector(net network.GossipNode, cfg config.Local, pipelineFetch 
 				},
 				{
 					peerClass: network.PeersPhonebookArchivalNodes,
-					peerSelectorIRenameMeLater: makePeerSelector(net,
+					peerSelector: makeRankPooledPeerSelector(net,
 						[]peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivalNodes}}),
 					priority:        peerRankInitialThirdPriority,
 					toleranceFactor: 10,
@@ -935,7 +939,7 @@ func createPeerSelector(net network.GossipNode, cfg config.Local, pipelineFetch 
 			wrappedPeerSelectors = []*wrappedPeerSelector{
 				{
 					peerClass: network.PeersConnectedOut,
-					peerSelectorIRenameMeLater: makePeerSelector(net,
+					peerSelector: makeRankPooledPeerSelector(net,
 						[]peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersConnectedOut}}),
 					priority:        peerRankInitialFirstPriority,
 					toleranceFactor: 3,
@@ -943,7 +947,7 @@ func createPeerSelector(net network.GossipNode, cfg config.Local, pipelineFetch 
 				},
 				{
 					peerClass: network.PeersConnectedIn,
-					peerSelectorIRenameMeLater: makePeerSelector(net,
+					peerSelector: makeRankPooledPeerSelector(net,
 						[]peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersConnectedIn}}),
 					priority:        peerRankInitialSecondPriority,
 					toleranceFactor: 3,
@@ -951,7 +955,7 @@ func createPeerSelector(net network.GossipNode, cfg config.Local, pipelineFetch 
 				},
 				{
 					peerClass: network.PeersPhonebookArchivalNodes,
-					peerSelectorIRenameMeLater: makePeerSelector(net,
+					peerSelector: makeRankPooledPeerSelector(net,
 						[]peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivalNodes}}),
 					priority:        peerRankInitialThirdPriority,
 					toleranceFactor: 10,
@@ -959,7 +963,7 @@ func createPeerSelector(net network.GossipNode, cfg config.Local, pipelineFetch 
 				},
 				{
 					peerClass: network.PeersPhonebookRelays,
-					peerSelectorIRenameMeLater: makePeerSelector(net,
+					peerSelector: makeRankPooledPeerSelector(net,
 						[]peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookRelays}}),
 					priority:        peerRankInitialFourthPriority,
 					toleranceFactor: 3,
@@ -970,7 +974,7 @@ func createPeerSelector(net network.GossipNode, cfg config.Local, pipelineFetch 
 			wrappedPeerSelectors = []*wrappedPeerSelector{
 				{
 					peerClass: network.PeersConnectedOut,
-					peerSelectorIRenameMeLater: makePeerSelector(net,
+					peerSelector: makeRankPooledPeerSelector(net,
 						[]peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersConnectedOut}}),
 					priority:        peerRankInitialFirstPriority,
 					toleranceFactor: 3,
@@ -978,7 +982,7 @@ func createPeerSelector(net network.GossipNode, cfg config.Local, pipelineFetch 
 				},
 				{
 					peerClass: network.PeersPhonebookArchivalNodes,
-					peerSelectorIRenameMeLater: makePeerSelector(net,
+					peerSelector: makeRankPooledPeerSelector(net,
 						[]peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivalNodes}}),
 					priority:        peerRankInitialSecondPriority,
 					toleranceFactor: 10,
@@ -986,7 +990,7 @@ func createPeerSelector(net network.GossipNode, cfg config.Local, pipelineFetch 
 				},
 				{
 					peerClass: network.PeersPhonebookRelays,
-					peerSelectorIRenameMeLater: makePeerSelector(net,
+					peerSelector: makeRankPooledPeerSelector(net,
 						[]peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookRelays}}),
 					priority:        peerRankInitialThirdPriority,
 					toleranceFactor: 3,
