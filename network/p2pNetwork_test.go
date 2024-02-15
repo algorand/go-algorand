@@ -649,3 +649,115 @@ func TestP2PHTTPHandler(t *testing.T) {
 	_, err = httpClient.Get("/test")
 	require.ErrorIs(t, err, limitcaller.ErrConnectionQueueingTimeout)
 }
+
+func TestP2PRelay(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	cfg := config.GetDefaultLocal()
+	log := logging.TestingLog(t)
+	netA, err := NewP2PNetwork(log, cfg, "", nil, genesisID, config.Devtestnet, &nopeNodeInfo{})
+	require.NoError(t, err)
+
+	err = netA.Start()
+	require.NoError(t, err)
+	defer netA.Stop()
+
+	peerInfoA := netA.service.AddrInfo()
+	addrsA, err := peer.AddrInfoToP2pAddrs(&peerInfoA)
+	require.NoError(t, err)
+	require.NotZero(t, addrsA[0])
+
+	multiAddrStr := addrsA[0].String()
+	phoneBookAddresses := []string{multiAddrStr}
+
+	netB, err := NewP2PNetwork(log, cfg, "", phoneBookAddresses, genesisID, config.Devtestnet, &nopeNodeInfo{})
+	require.NoError(t, err)
+	err = netB.Start()
+	require.NoError(t, err)
+	defer netB.Stop()
+
+	require.Eventually(
+		t,
+		func() bool {
+			return len(netA.service.ListPeersForTopic(p2p.TXTopicName)) > 0 &&
+				len(netB.service.ListPeersForTopic(p2p.TXTopicName)) > 0
+		},
+		2*time.Second,
+		50*time.Millisecond,
+	)
+
+	require.Eventually(t, func() bool {
+		return len(netA.wsPeers) > 0 && len(netB.wsPeers) > 0
+	}, 2*time.Second, 50*time.Millisecond)
+
+	counter := newMessageCounter(t, 1)
+	counterDone := counter.done
+	netA.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.TxnTag, MessageHandler: counter}})
+
+	// send 5 messages from both netB to netA
+	// since there is no node with listening address set => no messages should be received
+	for i := 0; i < 5; i++ {
+		err := netB.Relay(context.Background(), protocol.TxnTag, []byte{1, 2, 3, byte(i)}, true, nil)
+		require.NoError(t, err)
+	}
+
+	select {
+	case <-counterDone:
+		require.Fail(t, "No messages should have been received")
+	case <-time.After(1 * time.Second):
+	}
+
+	// add netC with listening address set, and enable relaying on netB
+	// ensure all messages are received by netA
+	cfg.NetAddress = "127.0.0.1:0"
+	netC, err := NewP2PNetwork(log, cfg, "", phoneBookAddresses, genesisID, config.Devtestnet, &nopeNodeInfo{})
+	require.NoError(t, err)
+	err = netC.Start()
+	require.NoError(t, err)
+	defer netC.Stop()
+
+	netB.relayMessages = true
+
+	require.Eventually(
+		t,
+		func() bool {
+			return len(netA.service.ListPeersForTopic(p2p.TXTopicName)) > 0 &&
+				len(netB.service.ListPeersForTopic(p2p.TXTopicName)) > 0 &&
+				len(netC.service.ListPeersForTopic(p2p.TXTopicName)) > 0
+		},
+		2*time.Second,
+		50*time.Millisecond,
+	)
+
+	require.Eventually(t, func() bool {
+		return len(netA.wsPeers) > 0 && len(netB.wsPeers) > 0 && len(netC.wsPeers) > 0
+	}, 2*time.Second, 50*time.Millisecond)
+
+	const expectedMsgs = 10
+	counter = newMessageCounter(t, expectedMsgs)
+	counterDone = counter.done
+	netA.ClearHandlers()
+	netA.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.TxnTag, MessageHandler: counter}})
+
+	for i := 0; i < expectedMsgs/2; i++ {
+		err := netB.Relay(context.Background(), protocol.TxnTag, []byte{1, 2, 3, byte(i)}, true, nil)
+		require.NoError(t, err)
+		err = netC.Relay(context.Background(), protocol.TxnTag, []byte{11, 12, 10 + byte(i), 14}, true, nil)
+		require.NoError(t, err)
+	}
+	// send some duplicate messages, they should be dropped
+	for i := 0; i < expectedMsgs/2; i++ {
+		err := netB.Relay(context.Background(), protocol.TxnTag, []byte{1, 2, 3, byte(i)}, true, nil)
+		require.NoError(t, err)
+	}
+
+	select {
+	case <-counterDone:
+	case <-time.After(2 * time.Second):
+		if counter.count < expectedMsgs {
+			require.Failf(t, "One or more messages failed to reach destination network", "%d > %d", expectedMsgs, counter.count)
+		} else if counter.count > expectedMsgs {
+			require.Failf(t, "One or more messages that were expected to be dropped, reached destination network", "%d < %d", expectedMsgs, counter.count)
+		}
+	}
+}

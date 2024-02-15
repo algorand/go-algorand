@@ -68,6 +68,8 @@ type P2PNetwork struct {
 	wsPeersChangeCounter           atomic.Int32
 	wsPeersConnectivityCheckTicker *time.Ticker
 
+	relayMessages bool // True if we should relay messages from other nodes (nominally true for relays, false otherwise)
+
 	capabilitiesDiscovery *p2p.CapabilitiesDiscovery
 
 	bootstrapper bootstrapper
@@ -159,16 +161,17 @@ func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebo
 	}
 
 	net := &P2PNetwork{
-		log:          log,
-		config:       cfg,
-		genesisID:    genesisID,
-		networkID:    networkID,
-		topicTags:    map[protocol.Tag]string{"TX": p2p.TXTopicName},
-		wsPeers:      make(map[peer.ID]*wsPeer),
-		wsPeersToIDs: make(map[*wsPeer]peer.ID),
-		peerStats:    make(map[peer.ID]*p2pPeerStats),
-		nodeInfo:     node,
-		pstore:       pstore,
+		log:           log,
+		config:        cfg,
+		genesisID:     genesisID,
+		networkID:     networkID,
+		topicTags:     map[protocol.Tag]string{"TX": p2p.TXTopicName},
+		wsPeers:       make(map[peer.ID]*wsPeer),
+		wsPeersToIDs:  make(map[*wsPeer]peer.ID),
+		peerStats:     make(map[peer.ID]*p2pPeerStats),
+		nodeInfo:      node,
+		pstore:        pstore,
+		relayMessages: cfg.IsGossipServer() || cfg.ForceRelayMessages,
 	}
 	net.ctx, net.ctxCancel = context.WithCancel(context.Background())
 	net.handler = msgHandler{
@@ -401,7 +404,10 @@ func (n *P2PNetwork) Broadcast(ctx context.Context, tag protocol.Tag, data []byt
 
 // Relay message
 func (n *P2PNetwork) Relay(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except Peer) error {
-	return n.Broadcast(ctx, tag, data, wait, except)
+	if n.relayMessages {
+		return n.Broadcast(ctx, tag, data, wait, except)
+	}
+	return nil
 }
 
 // Disconnect from a peer, probably due to protocol errors.
