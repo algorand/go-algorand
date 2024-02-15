@@ -49,7 +49,6 @@ func (c *classBasedPeerSelector) rankPeer(psp *peerSelectorPeer, rank int) (int,
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	peerSelectorSortNeeded := false
 	oldRank, newRank := -1, -1
 	for _, wp := range c.peerSelectors {
 		// See if the peer is in the class, ranking it appropriately if so
@@ -63,53 +62,10 @@ func (c *classBasedPeerSelector) rankPeer(psp *peerSelectorPeer, rank int) (int,
 			wp.downloadFailures++
 		}
 
-		// If we have failed more than the tolerance factor, we re-sort the slice of peerSelectors
-		if wp.downloadFailures > wp.toleranceFactor {
-			peerSelectorSortNeeded = true
-		}
 		break
 	}
 
-	if peerSelectorSortNeeded {
-		c.sortPeerSelectors()
-	}
-
 	return oldRank, newRank
-}
-
-// sortPeerSelectors sorts the peerSelectors by tolerance factor violation, and then by priority
-// It should only be called within a locked context
-func (c *classBasedPeerSelector) sortPeerSelectors() {
-	psUnderTolerance := make([]*wrappedPeerSelector, 0, len(c.peerSelectors))
-	psOverTolerance := make([]*wrappedPeerSelector, 0, len(c.peerSelectors))
-	for _, wp := range c.peerSelectors {
-		// If the rankPooledPeerSelector's download failures have not been reset in a while, we reset them
-		if time.Since(wp.lastCheckedTime) > lastCheckedDuration {
-			wp.downloadFailures = 0
-			// Reset again here, so we don't keep resetting the same rankPooledPeerSelector
-			wp.lastCheckedTime = time.Now()
-		}
-
-		if wp.downloadFailures <= wp.toleranceFactor {
-			psUnderTolerance = append(psUnderTolerance, wp)
-		} else {
-			psOverTolerance = append(psOverTolerance, wp)
-		}
-
-	}
-
-	// Sort the two groups by priority
-	sortByPriority := func(ps []*wrappedPeerSelector) {
-		sort.SliceStable(ps, func(i, j int) bool {
-			return ps[i].priority < ps[j].priority
-		})
-	}
-
-	sortByPriority(psUnderTolerance)
-	sortByPriority(psOverTolerance)
-
-	//Append the two groups back together
-	c.peerSelectors = append(psUnderTolerance, psOverTolerance...)
 }
 
 func (c *classBasedPeerSelector) peerDownloadDurationToRank(psp *peerSelectorPeer, blockDownloadDuration time.Duration) (rank int) {
@@ -133,6 +89,14 @@ func (c *classBasedPeerSelector) getNextPeer() (psp *peerSelectorPeer, err error
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	for _, wp := range c.peerSelectors {
+		if time.Since(wp.lastCheckedTime) > lastCheckedDuration {
+			wp.downloadFailures = 0
+		}
+
+		if wp.downloadFailures > wp.toleranceFactor {
+			// peerSelector is disabled for now, we move to the next one
+			continue
+		}
 		psp, err = wp.peerSelector.getNextPeer()
 		wp.lastCheckedTime = time.Now()
 		if err != nil {
@@ -146,14 +110,14 @@ func (c *classBasedPeerSelector) getNextPeer() (psp *peerSelectorPeer, err error
 		return psp, nil
 	}
 	// If we reached here, we have exhausted all classes and still have no peers
-	return nil, err
+	return nil, errPeerSelectorNoPeerPoolsAvailable
 }
 
 type wrappedPeerSelector struct {
-	peerSelector     peerSelector       // The underlying rankPooledPeerSelector for this class
-	peerClass        network.PeerOption // The class of peers the rankPooledPeerSelector is responsible for
+	peerSelector     peerSelector       // The underlying peerSelector for this class
+	peerClass        network.PeerOption // The class of peers the peerSelector is responsible for
 	toleranceFactor  int                // The number of times we can net fail for any reason before we move to the next class's rankPooledPeerSelector
-	priority         int                // The original priority of the rankPooledPeerSelector, used for sorting
+	priority         int                // The original priority of the peerSelector, used for sorting
 	downloadFailures int                // The number of times we have failed to download a block from this class's rankPooledPeerSelector since it was last reset
-	lastCheckedTime  time.Time          // The last time we tried to use the rankPooledPeerSelector
+	lastCheckedTime  time.Time          // The last time we tried to use the peerSelector
 }
