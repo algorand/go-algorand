@@ -50,11 +50,11 @@ func (c *classBasedPeerSelector) rankPeer(psp *peerSelectorPeer, rank int) (int,
 	defer c.mu.Unlock()
 
 	peerSelectorSortNeeded := false
-	poolIdx, peerIdx := -1, -1
+	oldRank, newRank := -1, -1
 	for _, wp := range c.peerSelectors {
 		// See if the peer is in the class, ranking it appropriately if so
-		poolIdx, peerIdx = wp.peerSelector.rankPeer(psp, rank)
-		if poolIdx < 0 || peerIdx < 0 {
+		oldRank, newRank = wp.peerSelector.rankPeer(psp, rank)
+		if oldRank < 0 || newRank < 0 {
 			// Peer not found in this class
 			continue
 		}
@@ -74,7 +74,7 @@ func (c *classBasedPeerSelector) rankPeer(psp *peerSelectorPeer, rank int) (int,
 		c.sortPeerSelectors()
 	}
 
-	return poolIdx, peerIdx
+	return oldRank, newRank
 }
 
 // sortPeerSelectors sorts the peerSelectors by tolerance factor violation, and then by priority
@@ -136,6 +136,7 @@ func (c *classBasedPeerSelector) getNextPeer() (psp *peerSelectorPeer, err error
 		psp, err = wp.peerSelector.getNextPeer()
 		wp.lastCheckedTime = time.Now()
 		if err != nil {
+			// This is mostly just future-proofing, as we don't expect any other errors from getNextPeer
 			if errors.Is(err, errPeerSelectorNoPeerPoolsAvailable) {
 				// We penalize this class the equivalent of one download failure (in case this is transient)
 				wp.downloadFailures++
@@ -152,7 +153,7 @@ type wrappedPeerSelector struct {
 	peerSelector     peerSelector       // The underlying rankPooledPeerSelector for this class
 	peerClass        network.PeerOption // The class of peers the rankPooledPeerSelector is responsible for
 	toleranceFactor  int                // The number of times we can net fail for any reason before we move to the next class's rankPooledPeerSelector
-	downloadFailures int                // The number of times we have failed to download a block from this class's rankPooledPeerSelector since it was last reset
 	priority         int                // The original priority of the rankPooledPeerSelector, used for sorting
+	downloadFailures int                // The number of times we have failed to download a block from this class's rankPooledPeerSelector since it was last reset
 	lastCheckedTime  time.Time          // The last time we tried to use the rankPooledPeerSelector
 }
