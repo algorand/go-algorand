@@ -285,10 +285,10 @@ func (cs *CatchpointCatchupService) processStageLedgerDownload() error {
 	cs.statsMu.Lock()
 	label := cs.stats.CatchpointLabel
 	cs.statsMu.Unlock()
-	round, _, err0 := ledgercore.ParseCatchpointLabel(label)
+	round, _, err := ledgercore.ParseCatchpointLabel(label)
 
-	if err0 != nil {
-		return cs.abort(fmt.Errorf("processStageLedgerDownload failed to parse label : %v", err0))
+	if err != nil {
+		return cs.abort(fmt.Errorf("processStageLedgerDownload failed to parse label : %v", err))
 	}
 
 	// download balances file.
@@ -298,26 +298,26 @@ func (cs *CatchpointCatchupService) processStageLedgerDownload() error {
 	for {
 		attemptsCount++
 
-		err1 := cs.ledgerAccessor.ResetStagingBalances(cs.ctx, true)
-		if err1 != nil {
+		err0 := cs.ledgerAccessor.ResetStagingBalances(cs.ctx, true)
+		if err0 != nil {
 			if cs.ctx.Err() != nil {
 				return cs.stopOrAbort()
 			}
-			return cs.abort(fmt.Errorf("processStageLedgerDownload failed to reset staging balances : %v", err1))
+			return cs.abort(fmt.Errorf("processStageLedgerDownload failed to reset staging balances : %v", err0))
 		}
-		psp, err1 := cs.blocksDownloadPeerSelector.getNextPeer()
-		if err1 != nil {
-			err1 = fmt.Errorf("processStageLedgerDownload: catchpoint catchup was unable to obtain a list of peers to retrieve the catchpoint file from")
-			return cs.abort(err1)
+		psp, err0 := cs.blocksDownloadPeerSelector.getNextPeer()
+		if err0 != nil {
+			err0 = fmt.Errorf("processStageLedgerDownload: catchpoint catchup was unable to obtain a list of peers to retrieve the catchpoint file from")
+			return cs.abort(err0)
 		}
 		peer := psp.Peer
 		start := time.Now()
-		err1 = lf.downloadLedger(cs.ctx, peer, round)
-		if err1 == nil {
+		err0 = lf.downloadLedger(cs.ctx, peer, round)
+		if err0 == nil {
 			cs.log.Infof("ledger downloaded in %d seconds", time.Since(start)/time.Second)
 			start = time.Now()
-			err1 = cs.ledgerAccessor.BuildMerkleTrie(cs.ctx, cs.updateVerifiedCounts)
-			if err1 == nil {
+			err0 = cs.ledgerAccessor.BuildMerkleTrie(cs.ctx, cs.updateVerifiedCounts)
+			if err0 == nil {
 				cs.log.Infof("built merkle trie in %d seconds", time.Since(start)/time.Second)
 				break
 			}
@@ -335,15 +335,15 @@ func (cs *CatchpointCatchupService) processStageLedgerDownload() error {
 		}
 
 		if attemptsCount >= cs.config.CatchupLedgerDownloadRetryAttempts {
-			err1 = fmt.Errorf("processStageLedgerDownload: catchpoint catchup exceeded number of attempts to retrieve ledger")
-			return cs.abort(err1)
+			err0 = fmt.Errorf("processStageLedgerDownload: catchpoint catchup exceeded number of attempts to retrieve ledger")
+			return cs.abort(err0)
 		}
-		cs.log.Warnf("unable to download ledger : %v", err1)
+		cs.log.Warnf("unable to download ledger : %v", err0)
 	}
 
-	err0 = cs.updateStage(ledger.CatchpointCatchupStateLatestBlockDownload)
-	if err0 != nil {
-		return cs.abort(fmt.Errorf("processStageLedgerDownload failed to update stage to CatchpointCatchupStateLatestBlockDownload : %v", err0))
+	err = cs.updateStage(ledger.CatchpointCatchupStateLatestBlockDownload)
+	if err != nil {
+		return cs.abort(fmt.Errorf("processStageLedgerDownload failed to update stage to CatchpointCatchupStateLatestBlockDownload : %v", err))
 	}
 	return nil
 }
