@@ -43,6 +43,11 @@ import (
 	"github.com/multiformats/go-multiaddr"
 )
 
+type SubNextCancellable interface {
+	Next(ctx context.Context) (*pubsub.Message, error)
+	Cancel()
+}
+
 // Service defines the interface used by the network integrating with underlying p2p implementation
 type Service interface {
 	Start() error
@@ -57,7 +62,7 @@ type Service interface {
 
 	Conns() []network.Conn
 	ListPeersForTopic(topic string) []peer.ID
-	Subscribe(topic string, val pubsub.ValidatorEx) (*pubsub.Subscription, error)
+	Subscribe(topic string, val pubsub.ValidatorEx) (SubNextCancellable, error)
 	Publish(ctx context.Context, topic string, data []byte) error
 
 	GetStream(peer.ID) (network.Stream, bool)

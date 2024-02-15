@@ -133,7 +133,7 @@ func (s *serviceImpl) getOrCreateTopic(topicName string) (*pubsub.Topic, error) 
 }
 
 // Subscribe returns a subscription to the given topic
-func (s *serviceImpl) Subscribe(topic string, val pubsub.ValidatorEx) (*pubsub.Subscription, error) {
+func (s *serviceImpl) Subscribe(topic string, val pubsub.ValidatorEx) (SubNextCancellable, error) {
 	if err := s.pubsub.RegisterTopicValidator(topic, val); err != nil {
 		return nil, err
 	}
