@@ -292,7 +292,6 @@ func (cs *CatchpointCatchupService) processStageLedgerDownload() error {
 	}
 
 	// download balances file.
-	ps := cs.makeCatchpointPeerSelector()
 	lf := makeLedgerFetcher(cs.net, cs.ledgerAccessor, cs.log, cs, cs.config)
 	attemptsCount := 0
 
@@ -306,7 +305,7 @@ func (cs *CatchpointCatchupService) processStageLedgerDownload() error {
 			}
 			return cs.abort(fmt.Errorf("processStageLedgerDownload failed to reset staging balances : %v", err1))
 		}
-		psp, err1 := ps.getNextPeer()
+		psp, err1 := cs.blocksDownloadPeerSelector.getNextPeer()
 		if err1 != nil {
 			err1 = fmt.Errorf("processStageLedgerDownload: catchpoint catchup was unable to obtain a list of peers to retrieve the catchpoint file from")
 			return cs.abort(err1)
@@ -323,9 +322,9 @@ func (cs *CatchpointCatchupService) processStageLedgerDownload() error {
 				break
 			}
 			// failed to build the merkle trie for the above catchpoint file.
-			ps.rankPeer(psp, peerRankInvalidDownload)
+			cs.blocksDownloadPeerSelector.rankPeer(psp, peerRankInvalidDownload)
 		} else {
-			ps.rankPeer(psp, peerRankDownloadFailed)
+			cs.blocksDownloadPeerSelector.rankPeer(psp, peerRankDownloadFailed)
 		}
 
 		// instead of testing for err == cs.ctx.Err() , we'll check on the context itself.
@@ -838,10 +837,9 @@ func (cs *CatchpointCatchupService) checkLedgerDownload() error {
 	if err != nil {
 		return fmt.Errorf("failed to parse catchpoint label : %v", err)
 	}
-	ps := cs.makeCatchpointPeerSelector()
 	ledgerFetcher := makeLedgerFetcher(cs.net, cs.ledgerAccessor, cs.log, cs, cs.config)
 	for i := 0; i < cs.config.CatchupLedgerDownloadRetryAttempts; i++ {
-		psp, peerError := ps.getNextPeer()
+		psp, peerError := cs.blocksDownloadPeerSelector.getNextPeer()
 		if peerError != nil {
 			return err
 		}
