@@ -803,30 +803,7 @@ func (cs *CatchpointCatchupService) updateBlockRetrievalStatistics(acquiredBlock
 }
 
 func (cs *CatchpointCatchupService) initDownloadPeerSelector() {
-	cs.blocksDownloadPeerSelector = cs.makeCatchpointPeerSelector()
-}
-
-func (cs *CatchpointCatchupService) makeCatchpointPeerSelector() peerSelector {
-	wrappedPeerSelectors := []*wrappedPeerSelector{
-		{
-			peerClass: network.PeersPhonebookRelays,
-			peerSelector: makeRankPooledPeerSelector(cs.net,
-				[]peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookRelays}}),
-			priority:        peerRankInitialFirstPriority,
-			toleranceFactor: 3,
-			lastCheckedTime: time.Now(),
-		},
-		{
-			peerClass: network.PeersPhonebookArchivalNodes,
-			peerSelector: makeRankPooledPeerSelector(cs.net,
-				[]peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivalNodes}}),
-			priority:        peerRankInitialSecondPriority,
-			toleranceFactor: 10,
-			lastCheckedTime: time.Now(),
-		},
-	}
-
-	return makeClassBasedPeerSelector(wrappedPeerSelectors)
+	cs.blocksDownloadPeerSelector = makeCatchpointPeerSelector(cs.net)
 }
 
 // checkLedgerDownload sends a HEAD request to the ledger endpoint of peers to validate the catchpoint's availability

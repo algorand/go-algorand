@@ -126,3 +126,28 @@ type wrappedPeerSelector struct {
 	downloadFailures int                // The number of times we have failed to download a block from this class's rankPooledPeerSelector since it was last reset
 	lastCheckedTime  time.Time          // The last time we tried to use the peerSelector
 }
+
+// makeCatchpointPeerSelector returns a classBasedPeerSelector that selects peers based on their class and response behavior.
+// These are the preferred configurations for the catchpoint service.
+func makeCatchpointPeerSelector(net peersRetriever) peerSelector {
+	wrappedPeerSelectors := []*wrappedPeerSelector{
+		{
+			peerClass: network.PeersPhonebookRelays,
+			peerSelector: makeRankPooledPeerSelector(net,
+				[]peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookRelays}}),
+			priority:        peerRankInitialFirstPriority,
+			toleranceFactor: 3,
+			lastCheckedTime: time.Now(),
+		},
+		{
+			peerClass: network.PeersPhonebookArchivalNodes,
+			peerSelector: makeRankPooledPeerSelector(net,
+				[]peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivalNodes}}),
+			priority:        peerRankInitialSecondPriority,
+			toleranceFactor: 10,
+			lastCheckedTime: time.Now(),
+		},
+	}
+
+	return makeClassBasedPeerSelector(wrappedPeerSelectors)
+}
