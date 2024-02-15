@@ -85,7 +85,9 @@ func TestClassBasedPeerSelector_rankPeer(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	mockPeer := &peerSelectorPeer{}
+	mockPeer := &peerSelectorPeer{
+		peerClass: network.PeersPhonebookRelays,
+	}
 
 	// Create a class based peer selector initially with the first wrapped peer selector not having the peer,
 	// second one having it, and a third one not having it
@@ -156,9 +158,21 @@ func TestClassBasedPeerSelector_rankPeer(t *testing.T) {
 	require.Equal(t, peerRankNoBlockForRound, newRank)
 	require.Equal(t, 4, cps.peerSelectors[1].downloadFailures)
 
-	// Now, feed a peer that is not in any of the selectors - it should return -1, -1
-	mockPeer2 := &peerSelectorPeer{}
+	// Now, feed peers that are not in any of the selectors - it should return -1, -1
+	mockPeer2 := &peerSelectorPeer{
+		peerClass: network.PeersConnectedIn,
+	}
+
 	oldRank, newRank = cps.rankPeer(mockPeer2, 50)
+	require.Equal(t, -1, oldRank)
+	require.Equal(t, -1, newRank)
+
+	// While this will match class, the selectors will not have it
+	mockPeer3 := &peerSelectorPeer{
+		peerClass: network.PeersConnectedOut,
+	}
+
+	oldRank, newRank = cps.rankPeer(mockPeer3, 50)
 	require.Equal(t, -1, oldRank)
 	require.Equal(t, -1, newRank)
 
@@ -231,7 +245,9 @@ func TestClassBasedPeerSelector_getNextPeer(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	mockPeer := &peerSelectorPeer{}
+	mockPeer := &peerSelectorPeer{
+		peerClass: network.PeersPhonebookRelays,
+	}
 
 	// Create a class based peer selector initially with the first wrapped peer selector not having any peers,
 	// second one having a peer, and a third one not having any peers
@@ -275,7 +291,7 @@ func TestClassBasedPeerSelector_getNextPeer(t *testing.T) {
 
 	peerResult, err := cps.getNextPeer()
 	require.Nil(t, err)
-	require.Equal(t, peerResult, mockPeer)
+	require.Equal(t, mockPeer, peerResult)
 
 	// Update selector to not return any peers
 	wrappedPeerSelectors[1].peerSelector = mockPeerSelector{
@@ -290,8 +306,15 @@ func TestClassBasedPeerSelector_getNextPeer(t *testing.T) {
 
 	// Create a class based peer selector initially with all wrapped peer selectors having peers.
 	// The peers should always come from the first one repeatedly since rankings are not changed.
-	mockPeer2 := &peerSelectorPeer{}
-	mockPeer3 := &peerSelectorPeer{}
+	mockPeer = &peerSelectorPeer{
+		peerClass: network.PeersConnectedOut,
+	}
+	mockPeer2 := &peerSelectorPeer{
+		peerClass: network.PeersPhonebookRelays,
+	}
+	mockPeer3 := &peerSelectorPeer{
+		peerClass: network.PeersPhonebookArchivalNodes,
+	}
 
 	wrappedPeerSelectors = []*wrappedPeerSelector{
 		{
@@ -353,7 +376,7 @@ func TestClassBasedPeerSelector_getNextPeer(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		peerResult, err = cps.getNextPeer()
 		require.Nil(t, err)
-		require.Equal(t, peerResult, mockPeer)
+		require.Equal(t, mockPeer, peerResult)
 	}
 
 	// Okay, record enough download failures to disable the first selector
@@ -364,30 +387,30 @@ func TestClassBasedPeerSelector_getNextPeer(t *testing.T) {
 	// Now, we should get the peer from the second selector
 	peerResult, err = cps.getNextPeer()
 	require.Nil(t, err)
-	require.Equal(t, peerResult, mockPeer2)
+	require.Equal(t, mockPeer2, peerResult)
 
 	// Sanity check the download failures for each selector
 	require.Equal(t, 4, cps.peerSelectors[0].downloadFailures)
 	require.Equal(t, 0, cps.peerSelectors[1].downloadFailures)
 	require.Equal(t, 0, cps.peerSelectors[2].downloadFailures)
 
-	// Now, record download failures just under the tolerance factor for the second selector
-	for i := 0; i < 9; i++ {
+	// Now, record download failures just up to the tolerance factor for the second selector
+	for i := 0; i < 10; i++ {
 		cps.rankPeer(mockPeer2, peerRankNoBlockForRound)
 	}
 
 	peerResult, err = cps.getNextPeer()
 	require.Nil(t, err)
-	require.Equal(t, peerResult, mockPeer2)
+	require.Equal(t, mockPeer2, peerResult)
 
 	// One more should push us to the third selector
 	cps.rankPeer(mockPeer2, peerRankNoBlockForRound)
 	peerResult, err = cps.getNextPeer()
 	require.Nil(t, err)
-	require.Equal(t, peerResult, mockPeer3)
+	require.Equal(t, mockPeer3, peerResult)
 
 	// Final sanity check of the download failures for each selector
 	require.Equal(t, 4, cps.peerSelectors[0].downloadFailures)
-	require.Equal(t, 10, cps.peerSelectors[1].downloadFailures)
+	require.Equal(t, 11, cps.peerSelectors[1].downloadFailures)
 	require.Equal(t, 0, cps.peerSelectors[2].downloadFailures)
 }

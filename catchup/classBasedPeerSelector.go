@@ -52,11 +52,16 @@ func (c *classBasedPeerSelector) rankPeer(psp *peerSelectorPeer, rank int) (int,
 	oldRank, newRank := -1, -1
 	for _, wp := range c.peerSelectors {
 		// See if the peer is in the class, ranking it appropriately if so
-		oldRank, newRank = wp.peerSelector.rankPeer(psp, rank)
-		if oldRank < 0 || newRank < 0 {
-			// Peer not found in this class
+		if psp.peerClass != wp.peerClass {
 			continue
 		}
+
+		oldRank, newRank = wp.peerSelector.rankPeer(psp, rank)
+		if oldRank < 0 || newRank < 0 {
+			// Peer not found in this selector
+			continue
+		}
+
 		// Peer was in this class, if there was any kind of download issue, we increment the failure count
 		if rank >= peerRankNoBlockForRound {
 			wp.downloadFailures++
