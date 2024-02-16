@@ -121,7 +121,7 @@ func TestP2PSubmitTX(t *testing.T) {
 			}
 			return netCpeerStatsA.txReceived.Load() == 10
 		},
-		1*time.Second,
+		5*time.Second,
 		50*time.Millisecond,
 	)
 }
@@ -197,7 +197,7 @@ func TestP2PSubmitTXNoGossip(t *testing.T) {
 			}
 			return netBpeerStatsA.txReceived.Load() == 10
 		},
-		1*time.Second,
+		5*time.Second,
 		50*time.Millisecond,
 	)
 

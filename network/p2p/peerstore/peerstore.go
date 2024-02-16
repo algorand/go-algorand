@@ -78,7 +78,6 @@ func NewPeerStore(addrInfo []*peer.AddrInfo, network string) (*PeerStore, error)
 	peers := make([]interface{}, len(addrInfo))
 	for i := 0; i < len(addrInfo); i++ {
 		peers[i] = addrInfo[i]
-		// ps.AddAddrs(addrInfo[i].ID, addrInfo[i].Addrs, libp2p.AddressTTL)
 	}
 
 	pstore := &PeerStore{peerStoreCAB: ps}
