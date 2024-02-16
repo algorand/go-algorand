@@ -115,10 +115,14 @@ func TestP2PSubmitTX(t *testing.T) {
 		func() bool {
 			netC.peerStatsMu.Lock()
 			netCpeerStatsA, ok := netC.peerStats[netA.service.ID()]
+			for pid, stat := range netC.peerStats {
+				fmt.Printf("peer %s: %v\n", pid, stat)
+			}
 			netC.peerStatsMu.Unlock()
 			if !ok {
 				return false
 			}
+			// fmt.Printf("netCpeerStatsA.txReceived.Load() %d", netCpeerStatsA.txReceived.Load())
 			return netCpeerStatsA.txReceived.Load() == 10
 		},
 		5*time.Second,
@@ -867,9 +871,10 @@ func TestP2PWantTXGossip(t *testing.T) {
 	cancel()
 	mockService := &mockSubPService{}
 	net := &P2PNetwork{
+		service:  mockService,
+		log:      logging.TestingLog(t),
 		ctx:      ctx,
 		nodeInfo: &nopeNodeInfo{},
-		service:  mockService,
 	}
 	net.wantTXGossip.Store(false)
 

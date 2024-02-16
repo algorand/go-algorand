@@ -167,7 +167,7 @@ func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebo
 		config:        cfg,
 		genesisID:     genesisID,
 		networkID:     networkID,
-		topicTags:     map[protocol.Tag]string{"TX": p2p.TXTopicName},
+		topicTags:     map[protocol.Tag]string{protocol.TxnTag: p2p.TXTopicName},
 		wsPeers:       make(map[peer.ID]*wsPeer),
 		wsPeersToIDs:  make(map[*wsPeer]peer.ID),
 		peerStats:     make(map[peer.ID]*p2pPeerStats),
@@ -767,6 +767,7 @@ func (n *P2PNetwork) txTopicHandleLoop() {
 		n.log.Errorf("Failed to subscribe to topic %s: %v", p2p.TXTopicName, err)
 		return
 	}
+	n.log.Debugf("Subscribed to topic %s", p2p.TXTopicName)
 
 	for {
 		msg, err := sub.Next(n.ctx)
@@ -774,6 +775,7 @@ func (n *P2PNetwork) txTopicHandleLoop() {
 			if err != pubsub.ErrSubscriptionCancelled && err != context.Canceled {
 				n.log.Errorf("Error reading from subscription %v, peerId %s", err, n.service.ID())
 			}
+			n.log.Debugf("Canceling subscription to topic %s due Next error", p2p.TXTopicName)
 			sub.Cancel()
 			return
 		}
@@ -785,7 +787,7 @@ func (n *P2PNetwork) txTopicHandleLoop() {
 
 		// participation or configuration change, cancel subscription and quit
 		if !n.wantTXGossip.Load() {
-			n.log.Debugf("Canceling subscription to topic %s", p2p.TXTopicName)
+			n.log.Debugf("Canceling subscription to topic %s due participation change", p2p.TXTopicName)
 			sub.Cancel()
 			return
 		}
