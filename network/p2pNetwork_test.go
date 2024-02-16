@@ -43,6 +43,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func (n *P2PNetwork) hasPeers() bool {
+	n.wsPeersLock.RLock()
+	defer n.wsPeersLock.RUnlock()
+	return len(n.wsPeers) > 0
+}
+
 func TestP2PSubmitTX(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -82,7 +88,7 @@ func TestP2PSubmitTX(t *testing.T) {
 		50*time.Millisecond,
 	)
 	require.Eventually(t, func() bool {
-		return len(netA.wsPeers) > 0 && len(netB.wsPeers) > 0 && len(netC.wsPeers) > 0
+		return netA.hasPeers() && netB.hasPeers() && netC.hasPeers()
 	}, 2*time.Second, 50*time.Millisecond)
 
 	// now we should be connected in a line: B <-> A <-> C where both B and C are connected to A but not each other
@@ -162,7 +168,7 @@ func TestP2PSubmitTXNoGossip(t *testing.T) {
 	defer netC.Stop()
 
 	require.Eventually(t, func() bool {
-		return len(netA.wsPeers) > 0 && len(netB.wsPeers) > 0 && len(netC.wsPeers) > 0
+		return netA.hasPeers() && netB.hasPeers() && netC.hasPeers()
 	}, 2*time.Second, 50*time.Millisecond)
 
 	// ensure netC cannot receive messages
@@ -234,7 +240,7 @@ func TestP2PSubmitWS(t *testing.T) {
 	defer netC.Stop()
 
 	require.Eventually(t, func() bool {
-		return len(netA.wsPeers) > 0 && len(netB.wsPeers) > 0 && len(netC.wsPeers) > 0
+		return netA.hasPeers() && netB.hasPeers() && netC.hasPeers()
 	}, 2*time.Second, 50*time.Millisecond)
 
 	// now we should be connected in a line: B <-> A <-> C where both B and C are connected to A but not each other
@@ -554,7 +560,7 @@ func TestP2PNetworkDHTCapabilities(t *testing.T) {
 			defer netC.Stop()
 
 			require.Eventually(t, func() bool {
-				return len(netA.wsPeers) > 0 && len(netB.wsPeers) > 0 && len(netC.wsPeers) > 0
+				return netA.hasPeers() && netB.hasPeers() && netC.hasPeers()
 			}, 2*time.Second, 50*time.Millisecond)
 
 			t.Logf("peers connected")
@@ -760,7 +766,7 @@ func TestP2PRelay(t *testing.T) {
 	)
 
 	require.Eventually(t, func() bool {
-		return len(netA.wsPeers) > 0 && len(netB.wsPeers) > 0
+		return netA.hasPeers() && netB.hasPeers()
 	}, 2*time.Second, 50*time.Millisecond)
 
 	counter := newMessageCounter(t, 1)
@@ -803,7 +809,7 @@ func TestP2PRelay(t *testing.T) {
 	)
 
 	require.Eventually(t, func() bool {
-		return len(netA.wsPeers) > 0 && len(netB.wsPeers) > 0 && len(netC.wsPeers) > 0
+		return netA.hasPeers() && netB.hasPeers() && netC.hasPeers()
 	}, 2*time.Second, 50*time.Millisecond)
 
 	const expectedMsgs = 10
@@ -837,7 +843,7 @@ func TestP2PRelay(t *testing.T) {
 
 type mockSubPService struct {
 	mockService
-	count int
+	count atomic.Int64
 }
 
 type mockSubscription struct {
@@ -847,7 +853,7 @@ func (m *mockSubscription) Next(ctx context.Context) (*pubsub.Message, error) { 
 func (m *mockSubscription) Cancel()                                           {}
 
 func (m *mockSubPService) Subscribe(topic string, val pubsub.ValidatorEx) (p2p.SubNextCancellable, error) {
-	m.count++
+	m.count.Add(1)
 	return &mockSubscription{}, nil
 }
 
@@ -870,24 +876,24 @@ func TestP2PWantTXGossip(t *testing.T) {
 	// ensure wantTXGossip from false to false is noop
 	net.OnNetworkAdvance()
 	require.Eventually(t, func() bool { net.wg.Wait(); return true }, 1*time.Second, 50*time.Millisecond)
-	require.Equal(t, 0, mockService.count)
+	require.Equal(t, int64(0), mockService.count.Load())
 	require.False(t, net.wantTXGossip.Load())
 
 	// ensure wantTXGossip from true (wantTXGossip) to false (nopeNodeInfo) is noop
 	net.wantTXGossip.Store(true)
 	net.OnNetworkAdvance()
 	require.Eventually(t, func() bool { net.wg.Wait(); return true }, 1*time.Second, 50*time.Millisecond)
-	require.Equal(t, 0, mockService.count)
+	require.Equal(t, int64(0), mockService.count.Load())
 	require.False(t, net.wantTXGossip.Load())
 
 	// check false to true change triggers subscription
 	net.nodeInfo = &participatingNodeInfo{}
 	net.OnNetworkAdvance()
-	require.Eventually(t, func() bool { return mockService.count == 1 }, 1*time.Second, 50*time.Millisecond)
+	require.Eventually(t, func() bool { return mockService.count.Load() == 1 }, 1*time.Second, 50*time.Millisecond)
 	require.True(t, net.wantTXGossip.Load())
 
 	// check true to true change is noop
 	net.OnNetworkAdvance()
-	require.Eventually(t, func() bool { return mockService.count == 1 }, 1*time.Second, 50*time.Millisecond)
+	require.Eventually(t, func() bool { return mockService.count.Load() == 1 }, 1*time.Second, 50*time.Millisecond)
 	require.True(t, net.wantTXGossip.Load())
 }

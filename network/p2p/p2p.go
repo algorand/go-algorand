@@ -43,6 +43,7 @@ import (
 	"github.com/multiformats/go-multiaddr"
 )
 
+// SubNextCancellable is an abstraction for pubsub.Subscription
 type SubNextCancellable interface {
 	Next(ctx context.Context) (*pubsub.Message, error)
 	Cancel()

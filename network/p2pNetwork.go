@@ -175,7 +175,6 @@ func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebo
 		pstore:        pstore,
 		relayMessages: relayMessages,
 	}
-	net.wantTXGossip.Store(relayMessages || cfg.ForceFetchTransactions || node.IsParticipating())
 
 	net.ctx, net.ctxCancel = context.WithCancel(context.Background())
 	net.handler = msgHandler{
@@ -253,7 +252,10 @@ func (n *P2PNetwork) Start() error {
 	if err != nil {
 		return err
 	}
-	if n.wantTXGossip.Load() {
+
+	wantTXGossip := n.relayMessages || n.config.ForceFetchTransactions || n.nodeInfo.IsParticipating()
+	if wantTXGossip {
+		n.wantTXGossip.Store(true)
 		n.wg.Add(1)
 		go n.txTopicHandleLoop()
 	}
