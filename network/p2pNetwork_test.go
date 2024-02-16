@@ -91,6 +91,9 @@ func TestP2PSubmitTX(t *testing.T) {
 		return netA.hasPeers() && netB.hasPeers() && netC.hasPeers()
 	}, 2*time.Second, 50*time.Millisecond)
 
+	// for some reason the above check is not enough in race builds on CI
+	time.Sleep(time.Second) // give time for peers to connect.
+
 	// now we should be connected in a line: B <-> A <-> C where both B and C are connected to A but not each other
 
 	// Since we aren't using the transaction handler in this test, we need to register a pass-through handler
@@ -115,17 +118,13 @@ func TestP2PSubmitTX(t *testing.T) {
 		func() bool {
 			netC.peerStatsMu.Lock()
 			netCpeerStatsA, ok := netC.peerStats[netA.service.ID()]
-			for pid, stat := range netC.peerStats {
-				fmt.Printf("peer %s: %v\n", pid, stat)
-			}
 			netC.peerStatsMu.Unlock()
 			if !ok {
 				return false
 			}
-			// fmt.Printf("netCpeerStatsA.txReceived.Load() %d", netCpeerStatsA.txReceived.Load())
 			return netCpeerStatsA.txReceived.Load() == 10
 		},
-		5*time.Second,
+		1*time.Second,
 		50*time.Millisecond,
 	)
 }
@@ -175,6 +174,8 @@ func TestP2PSubmitTXNoGossip(t *testing.T) {
 		return netA.hasPeers() && netB.hasPeers() && netC.hasPeers()
 	}, 2*time.Second, 50*time.Millisecond)
 
+	time.Sleep(time.Second) // give time for peers to connect.
+
 	// ensure netC cannot receive messages
 	passThroughHandler := []TaggedMessageHandler{
 		{Tag: protocol.TxnTag, MessageHandler: HandlerFunc(func(msg IncomingMessage) OutgoingMessage {
@@ -201,7 +202,7 @@ func TestP2PSubmitTXNoGossip(t *testing.T) {
 			}
 			return netBpeerStatsA.txReceived.Load() == 10
 		},
-		5*time.Second,
+		1*time.Second,
 		50*time.Millisecond,
 	)
 
