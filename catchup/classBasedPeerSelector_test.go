@@ -414,3 +414,91 @@ func TestClassBasedPeerSelector_getNextPeer(t *testing.T) {
 	require.Equal(t, 11, cps.peerSelectors[1].downloadFailures)
 	require.Equal(t, 0, cps.peerSelectors[2].downloadFailures)
 }
+
+func TestClassBasedPeerSelector_integration(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	mockP1Peer := mockHTTPPeer{address: "p1"}
+	mockP2Peer := mockHTTPPeer{address: "p2"}
+
+	mockP1WrappedPeer := &peerSelectorPeer{&mockP1Peer, network.PeersPhonebookRelays}
+	mockP2WrappedPeer := &peerSelectorPeer{&mockP2Peer, network.PeersPhonebookArchivalNodes}
+
+	net := makePeersRetrieverStub(func(options ...network.PeerOption) []network.Peer {
+		if len(options) > 0 {
+			switch options[0] {
+			case network.PeersPhonebookRelays:
+				return []network.Peer{&mockP1Peer}
+			case network.PeersPhonebookArchivalNodes:
+				return []network.Peer{&mockP2Peer}
+			default:
+				return []network.Peer{&mockP1Peer, &mockP2Peer}
+			}
+		}
+		return nil
+	})
+	// Create a class based peer selector with a few wrapped peer selectors
+	cps := makeCatchpointPeerSelector(net).(*classBasedPeerSelector)
+
+	// We should get the peer from the first priority selector, PeersPhonebookRelays
+	peerResult, err := cps.getNextPeer()
+	require.Nil(t, err)
+	require.Equal(t, mockP1WrappedPeer, peerResult)
+
+	// Normal expected usage: rank the peer
+	durationRank := cps.peerDownloadDurationToRank(mockP1WrappedPeer, 500)
+	oldRank, newRank := cps.rankPeer(mockP1WrappedPeer, durationRank)
+
+	require.Equal(t, 0, oldRank)
+	require.Equal(t, durationRank, newRank)
+
+	// Let's simulate a few download failures (not enough to disable the selector)
+	for i := 0; i < 3; i++ {
+		expectedOldRank := newRank
+		peerResult, err = cps.getNextPeer()
+
+		require.Nil(t, err)
+		require.Equal(t, mockP1WrappedPeer, peerResult)
+
+		oldRank, newRank = cps.rankPeer(mockP1WrappedPeer, peerRankNoBlockForRound)
+
+		require.Equal(t, expectedOldRank, oldRank)
+		// Should be increasing with no block penalties
+		require.True(t, newRank >= oldRank)
+	}
+
+	// Sanity check, still should be the same peer (from phonebook selector)
+	peerResult, err = cps.getNextPeer()
+	require.Nil(t, err)
+	require.Equal(t, mockP1WrappedPeer, peerResult)
+
+	// Rank the peer to follow normal usage
+	durationRank = cps.peerDownloadDurationToRank(mockP1WrappedPeer, 500)
+	expectedOldRank := newRank
+	oldRank, newRank = cps.rankPeer(mockP1WrappedPeer, durationRank)
+
+	require.Equal(t, expectedOldRank, oldRank)
+	// Rank should not go up after successful download
+	require.True(t, newRank <= oldRank)
+
+	// Now, let's simulate enough download failures to disable the first selector
+	peerResult, err = cps.getNextPeer()
+	require.Nil(t, err)
+	require.Equal(t, mockP1WrappedPeer, peerResult)
+	cps.rankPeer(mockP1WrappedPeer, peerRankNoBlockForRound)
+
+	peerResult, err = cps.getNextPeer()
+	require.Nil(t, err)
+	require.Equal(t, mockP2WrappedPeer, peerResult)
+
+	// Normal expected usage: rank the peer
+	durationRank = cps.peerDownloadDurationToRank(mockP2WrappedPeer, 500)
+	oldRank, newRank = cps.rankPeer(mockP2WrappedPeer, durationRank)
+
+	require.Equal(t, 0, oldRank)
+	require.Equal(t, durationRank, newRank)
+
+	require.Equal(t, 4, cps.peerSelectors[0].downloadFailures)
+	require.Equal(t, 0, cps.peerSelectors[1].downloadFailures)
+}
