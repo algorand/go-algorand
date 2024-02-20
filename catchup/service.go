@@ -73,7 +73,7 @@ type Ledger interface {
 	WaitMem(r basics.Round) chan struct{}
 }
 
-// Service represents the catchup service. Once started and until it is stopped, it ensures that the ledger is up to date with network.
+// Service represents the catchup service. Once started and until it is stopped, it ensures that the ledger is up-to-date with network.
 type Service struct {
 	// disableSyncRound, provided externally, is the first round we will _not_ fetch from the network
 	// any round >= disableSyncRound will not be fetched. If set to 0, it will be disregarded.
@@ -492,7 +492,7 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 		}
 	}()
 
-	ps := createPeerSelector(s.net, s.cfg, true)
+	ps := createPeerSelector(s.net)
 	if _, err := ps.getNextPeer(); errors.Is(err, errPeerSelectorNoPeerPoolsAvailable) {
 		s.log.Debugf("pipelinedFetch: was unable to obtain a peer to retrieve the block from")
 		return
@@ -752,7 +752,7 @@ func (s *Service) fetchRound(cert agreement.Certificate, verifier *agreement.Asy
 	peerErrors := map[network.Peer]int{}
 
 	blockHash := bookkeeping.BlockHash(cert.Proposal.BlockDigest) // semantic digest (i.e., hash of the block header), not byte-for-byte digest
-	ps := createPeerSelector(s.net, s.cfg, false)
+	ps := createPeerSelector(s.net)
 	for s.ledger.LastRound() < cert.Round {
 		psp, getPeerErr := ps.getNextPeer()
 		if getPeerErr != nil {
@@ -784,12 +784,12 @@ func (s *Service) fetchRound(cert agreement.Certificate, verifier *agreement.Asy
 						time.Sleep(50 * time.Millisecond)
 					}
 					if count > errNoBlockForRoundThreshold*10 {
-						// for the low number of connected peers (like 2) the following scenatio is possible:
+						// for the low number of connected peers (like 2) the following scenario is possible:
 						// - both peers do not have the block
 						// - peer selector punishes one of the peers more than the other
-						// - the punoshed peer gets the block, and the less punished peer stucks.
+						// - the punished peer gets the block, and the less punished peer stucks.
 						// It this case reset the peer selector to let it re-learn priorities.
-						ps = createPeerSelector(s.net, s.cfg, false)
+						ps = createPeerSelector(s.net)
 					}
 				}
 				peerErrors[peer]++
@@ -867,137 +867,40 @@ func (s *Service) roundIsNotSupported(nextRound basics.Round) bool {
 	return true
 }
 
-func createPeerSelector(net network.GossipNode, cfg config.Local, pipelineFetch bool) peerSelector {
-	var wrappedPeerSelectors []*wrappedPeerSelector
-	//TODO: Revisit this ordering
-	if pipelineFetch {
-		if cfg.NetAddress != "" && cfg.EnableGossipService { // Relay node
-			wrappedPeerSelectors = []*wrappedPeerSelector{
-				{
-					peerClass: network.PeersConnectedOut,
-					peerSelector: makeRankPooledPeerSelector(net,
-						[]peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersConnectedOut}}),
-					priority:        peerRankInitialFirstPriority,
-					toleranceFactor: 3,
-					lastCheckedTime: time.Now(),
-				},
-				{
-					peerClass: network.PeersPhonebookRelays,
-					peerSelector: makeRankPooledPeerSelector(net,
-						[]peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookRelays}}),
-					priority:        peerRankInitialSecondPriority,
-					toleranceFactor: 3,
-					lastCheckedTime: time.Now(),
-				},
-				{
-					peerClass: network.PeersPhonebookArchivalNodes,
-					peerSelector: makeRankPooledPeerSelector(net,
-						[]peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivalNodes}}),
-					priority:        peerRankInitialThirdPriority,
-					toleranceFactor: 10,
-					lastCheckedTime: time.Now(),
-				},
-				{
-					peerClass: network.PeersConnectedIn,
-					peerSelector: makeRankPooledPeerSelector(net,
-						[]peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersConnectedIn}}),
-					priority:        peerRankInitialFourthPriority,
-					toleranceFactor: 3,
-					lastCheckedTime: time.Now(),
-				},
-			}
-		} else {
-			wrappedPeerSelectors = []*wrappedPeerSelector{
-				{
-					peerClass: network.PeersConnectedOut,
-					peerSelector: makeRankPooledPeerSelector(net,
-						[]peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersConnectedOut}}),
-					priority:        peerRankInitialFirstPriority,
-					toleranceFactor: 3,
-					lastCheckedTime: time.Now(),
-				},
-				{
-					peerClass: network.PeersPhonebookRelays,
-					peerSelector: makeRankPooledPeerSelector(net,
-						[]peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookRelays}}),
-					priority:        peerRankInitialSecondPriority,
-					toleranceFactor: 3,
-					lastCheckedTime: time.Now(),
-				},
-				{
-					peerClass: network.PeersPhonebookArchivalNodes,
-					peerSelector: makeRankPooledPeerSelector(net,
-						[]peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivalNodes}}),
-					priority:        peerRankInitialThirdPriority,
-					toleranceFactor: 10,
-					lastCheckedTime: time.Now(),
-				},
-			}
-		}
-	} else {
-		if cfg.NetAddress != "" && cfg.EnableGossipService { // Relay node
-			wrappedPeerSelectors = []*wrappedPeerSelector{
-				{
-					peerClass: network.PeersConnectedOut,
-					peerSelector: makeRankPooledPeerSelector(net,
-						[]peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersConnectedOut}}),
-					priority:        peerRankInitialFirstPriority,
-					toleranceFactor: 3,
-					lastCheckedTime: time.Now(),
-				},
-				{
-					peerClass: network.PeersConnectedIn,
-					peerSelector: makeRankPooledPeerSelector(net,
-						[]peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersConnectedIn}}),
-					priority:        peerRankInitialSecondPriority,
-					toleranceFactor: 3,
-					lastCheckedTime: time.Now(),
-				},
-				{
-					peerClass: network.PeersPhonebookArchivalNodes,
-					peerSelector: makeRankPooledPeerSelector(net,
-						[]peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivalNodes}}),
-					priority:        peerRankInitialThirdPriority,
-					toleranceFactor: 10,
-					lastCheckedTime: time.Now(),
-				},
-				{
-					peerClass: network.PeersPhonebookRelays,
-					peerSelector: makeRankPooledPeerSelector(net,
-						[]peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookRelays}}),
-					priority:        peerRankInitialFourthPriority,
-					toleranceFactor: 3,
-					lastCheckedTime: time.Now(),
-				},
-			}
-		} else {
-			wrappedPeerSelectors = []*wrappedPeerSelector{
-				{
-					peerClass: network.PeersConnectedOut,
-					peerSelector: makeRankPooledPeerSelector(net,
-						[]peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersConnectedOut}}),
-					priority:        peerRankInitialFirstPriority,
-					toleranceFactor: 3,
-					lastCheckedTime: time.Now(),
-				},
-				{
-					peerClass: network.PeersPhonebookArchivalNodes,
-					peerSelector: makeRankPooledPeerSelector(net,
-						[]peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivalNodes}}),
-					priority:        peerRankInitialSecondPriority,
-					toleranceFactor: 10,
-					lastCheckedTime: time.Now(),
-				},
-				{
-					peerClass: network.PeersPhonebookRelays,
-					peerSelector: makeRankPooledPeerSelector(net,
-						[]peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookRelays}}),
-					priority:        peerRankInitialThirdPriority,
-					toleranceFactor: 3,
-					lastCheckedTime: time.Now(),
-				},
-			}
-		}
+func createPeerSelector(net network.GossipNode) peerSelector {
+	wrappedPeerSelectors := []*wrappedPeerSelector{
+		{
+			peerClass: network.PeersConnectedOut,
+			peerSelector: makeRankPooledPeerSelector(net,
+				[]peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersConnectedOut}}),
+			priority:        peerRankInitialFirstPriority,
+			toleranceFactor: 3,
+			lastCheckedTime: time.Now(),
+		},
+		{
+			peerClass: network.PeersPhonebookRelays,
+			peerSelector: makeRankPooledPeerSelector(net,
+				[]peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookRelays}}),
+			priority:        peerRankInitialSecondPriority,
+			toleranceFactor: 3,
+			lastCheckedTime: time.Now(),
+		},
+		{
+			peerClass: network.PeersPhonebookArchivalNodes,
+			peerSelector: makeRankPooledPeerSelector(net,
+				[]peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivalNodes}}),
+			priority:        peerRankInitialThirdPriority,
+			toleranceFactor: 10,
+			lastCheckedTime: time.Now(),
+		},
+		{
+			peerClass: network.PeersConnectedIn,
+			peerSelector: makeRankPooledPeerSelector(net,
+				[]peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersConnectedIn}}),
+			priority:        peerRankInitialFourthPriority,
+			toleranceFactor: 3,
+			lastCheckedTime: time.Now(),
+		},
 	}
 
 	return makeClassBasedPeerSelector(wrappedPeerSelectors)
