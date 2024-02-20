@@ -454,7 +454,7 @@ func (s *Service) fetchAndWrite(ctx context.Context, r basics.Round, prevFetchCo
 					return false
 				case errors.As(err, &err1):
 					if !s.protocolErrorLogged {
-						logging.Base().Errorf("fetchAndWrite(%v): unrecoverable protocol err1 detected: %v", r, err)
+						logging.Base().Errorf("fetchAndWrite(%v): unrecoverable protocol error detected: %v", r, err)
 						s.protocolErrorLogged = true
 					}
 				default:
@@ -493,7 +493,7 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 	}()
 
 	ps := createPeerSelector(s.net)
-	if _, err := ps.getNextPeer(); errors.Is(err, errPeerSelectorNoPeerPoolsAvailable) {
+	if _, err := ps.getNextPeer(); err != nil {
 		s.log.Debugf("pipelinedFetch: was unable to obtain a peer to retrieve the block from")
 		return
 	}
