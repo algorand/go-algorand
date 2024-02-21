@@ -20,7 +20,6 @@ import (
 	"errors"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-deadlock"
-	"sort"
 	"time"
 )
 
@@ -30,16 +29,13 @@ const lastCheckedDuration = 10 * time.Minute
 // classBasedPeerSelector is a rankPooledPeerSelector that tracks and ranks classes of peers based on their response behavior.
 // It is used to select the most appropriate peers to download blocks from - this is most useful when catching up
 // and needing to figure out whether the blocks can be retrieved from relay nodes or require archive nodes.
+// The ordering of the peerSelectors directly determines the priority of the classes of peers.
 type classBasedPeerSelector struct {
 	mu            deadlock.Mutex
 	peerSelectors []*wrappedPeerSelector
 }
 
 func makeClassBasedPeerSelector(peerSelectors []*wrappedPeerSelector) *classBasedPeerSelector {
-	// Sort the peerSelectors by priority
-	sort.SliceStable(peerSelectors, func(i, j int) bool {
-		return peerSelectors[i].priority < peerSelectors[j].priority
-	})
 	return &classBasedPeerSelector{
 		peerSelectors: peerSelectors,
 	}
@@ -122,7 +118,6 @@ type wrappedPeerSelector struct {
 	peerSelector     peerSelector       // The underlying peerSelector for this class
 	peerClass        network.PeerOption // The class of peers the peerSelector is responsible for
 	toleranceFactor  int                // The number of times we can net fail for any reason before we move to the next class's rankPooledPeerSelector
-	priority         int                // The original priority of the peerSelector, used for sorting
 	downloadFailures int                // The number of times we have failed to download a block from this class's rankPooledPeerSelector since it was last reset
 	lastCheckedTime  time.Time          // The last time we tried to use the peerSelector
 }
@@ -135,7 +130,6 @@ func makeCatchpointPeerSelector(net peersRetriever) peerSelector {
 			peerClass: network.PeersPhonebookRelays,
 			peerSelector: makeRankPooledPeerSelector(net,
 				[]peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookRelays}}),
-			priority:        peerRankInitialFirstPriority,
 			toleranceFactor: 3,
 			lastCheckedTime: time.Now(),
 		},
@@ -143,7 +137,6 @@ func makeCatchpointPeerSelector(net peersRetriever) peerSelector {
 			peerClass: network.PeersPhonebookArchivalNodes,
 			peerSelector: makeRankPooledPeerSelector(net,
 				[]peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivalNodes}}),
-			priority:        peerRankInitialSecondPriority,
 			toleranceFactor: 10,
 			lastCheckedTime: time.Now(),
 		},

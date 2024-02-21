@@ -965,10 +965,6 @@ func TestCreatePeerSelector(t *testing.T) {
 	require.True(t, ok)
 
 	require.Equal(t, 4, len(cps.peerSelectors))
-	require.Equal(t, peerRankInitialFirstPriority, cps.peerSelectors[0].priority)
-	require.Equal(t, peerRankInitialSecondPriority, cps.peerSelectors[1].priority)
-	require.Equal(t, peerRankInitialThirdPriority, cps.peerSelectors[2].priority)
-	require.Equal(t, peerRankInitialFourthPriority, cps.peerSelectors[3].priority)
 
 	require.Equal(t, network.PeersConnectedOut, cps.peerSelectors[0].peerClass)
 	require.Equal(t, network.PeersPhonebookRelays, cps.peerSelectors[1].peerClass)

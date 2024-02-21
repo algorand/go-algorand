@@ -47,27 +47,23 @@ func TestClassBasedPeerSelector_makeClassBasedPeerSelector(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	// Intentionally put the selectors in non-priority order
 	wrappedPeerSelectors := []*wrappedPeerSelector{
+		{
+			peerClass:       network.PeersPhonebookRelays,
+			peerSelector:    mockPeerSelector{},
+			toleranceFactor: 3,
+			lastCheckedTime: time.Now(),
+		},
 		{
 			peerClass:       network.PeersConnectedOut,
 			peerSelector:    mockPeerSelector{},
-			priority:        peerRankInitialSecondPriority,
 			toleranceFactor: 3,
 			lastCheckedTime: time.Now(),
 		},
 		{
 			peerClass:       network.PeersPhonebookArchivalNodes,
 			peerSelector:    mockPeerSelector{},
-			priority:        peerRankInitialThirdPriority,
 			toleranceFactor: 10,
-			lastCheckedTime: time.Now(),
-		},
-		{
-			peerClass:       network.PeersPhonebookRelays,
-			peerSelector:    mockPeerSelector{},
-			priority:        peerRankInitialFirstPriority,
-			toleranceFactor: 3,
 			lastCheckedTime: time.Now(),
 		},
 	}
@@ -99,7 +95,6 @@ func TestClassBasedPeerSelector_rankPeer(t *testing.T) {
 					return -1, -1
 				},
 			},
-			priority:        peerRankInitialFirstPriority,
 			toleranceFactor: 3,
 			lastCheckedTime: time.Now(),
 		},
@@ -113,7 +108,6 @@ func TestClassBasedPeerSelector_rankPeer(t *testing.T) {
 					return -1, -1
 				},
 			},
-			priority:        peerRankInitialSecondPriority,
 			toleranceFactor: 3,
 			lastCheckedTime: time.Now(),
 		},
@@ -124,7 +118,6 @@ func TestClassBasedPeerSelector_rankPeer(t *testing.T) {
 					return -1, -1
 				},
 			},
-			priority:        peerRankInitialThirdPriority,
 			toleranceFactor: 3,
 			lastCheckedTime: time.Now(),
 		},
@@ -198,7 +191,6 @@ func TestClassBasedPeerSelector_peerDownloadDurationToRank(t *testing.T) {
 					return peerRankInvalidDownload
 				},
 			},
-			priority:        peerRankInitialFirstPriority,
 			toleranceFactor: 3,
 			lastCheckedTime: time.Now(),
 		},
@@ -212,7 +204,6 @@ func TestClassBasedPeerSelector_peerDownloadDurationToRank(t *testing.T) {
 					return peerRankInvalidDownload
 				},
 			},
-			priority:        peerRankInitialSecondPriority,
 			toleranceFactor: 3,
 			lastCheckedTime: time.Now(),
 		},
@@ -223,7 +214,6 @@ func TestClassBasedPeerSelector_peerDownloadDurationToRank(t *testing.T) {
 					return peerRankInvalidDownload
 				},
 			},
-			priority:        peerRankInitialThirdPriority,
 			toleranceFactor: 3,
 			lastCheckedTime: time.Now(),
 		},
@@ -259,7 +249,6 @@ func TestClassBasedPeerSelector_getNextPeer(t *testing.T) {
 					return nil, errPeerSelectorNoPeerPoolsAvailable
 				},
 			},
-			priority:        peerRankInitialFirstPriority,
 			toleranceFactor: 3,
 			lastCheckedTime: time.Now(),
 		},
@@ -270,7 +259,6 @@ func TestClassBasedPeerSelector_getNextPeer(t *testing.T) {
 					return mockPeer, nil
 				},
 			},
-			priority:        peerRankInitialSecondPriority,
 			toleranceFactor: 3,
 			lastCheckedTime: time.Now(),
 		},
@@ -281,7 +269,6 @@ func TestClassBasedPeerSelector_getNextPeer(t *testing.T) {
 					return nil, errPeerSelectorNoPeerPoolsAvailable
 				},
 			},
-			priority:        peerRankInitialThirdPriority,
 			toleranceFactor: 3,
 			lastCheckedTime: time.Now(),
 		},
@@ -330,7 +317,6 @@ func TestClassBasedPeerSelector_getNextPeer(t *testing.T) {
 					return -1, -1
 				},
 			},
-			priority:        peerRankInitialFirstPriority,
 			toleranceFactor: 3,
 			lastCheckedTime: time.Now(),
 		},
@@ -347,7 +333,6 @@ func TestClassBasedPeerSelector_getNextPeer(t *testing.T) {
 					return -1, -1
 				},
 			},
-			priority:        peerRankInitialSecondPriority,
 			toleranceFactor: 10,
 			lastCheckedTime: time.Now(),
 		},
@@ -364,7 +349,6 @@ func TestClassBasedPeerSelector_getNextPeer(t *testing.T) {
 					return -1, -1
 				},
 			},
-			priority:        peerRankInitialThirdPriority,
 			toleranceFactor: 3,
 			lastCheckedTime: time.Now(),
 		},

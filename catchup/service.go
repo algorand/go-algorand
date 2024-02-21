@@ -442,7 +442,7 @@ func (s *Service) fetchAndWrite(ctx context.Context, r basics.Round, prevFetchCo
 			if err != nil {
 				var errNonSequentialBlockEval ledgercore.ErrNonSequentialBlockEval
 				var blockInLedgerError ledgercore.BlockInLedgerError
-				var err1 protocol.Error
+				var protocolErr protocol.Error
 				switch {
 				case errors.As(err, &errNonSequentialBlockEval):
 					s.log.Infof("fetchAndWrite(%d): no need to re-evaluate historical block", r)
@@ -452,7 +452,7 @@ func (s *Service) fetchAndWrite(ctx context.Context, r basics.Round, prevFetchCo
 					// only the agreement could have added this block into the ledger, catchup is complete
 					s.log.Infof("fetchAndWrite(%d): after fetching the block, it is already in the ledger. The catchup is complete", r)
 					return false
-				case errors.As(err, &err1):
+				case errors.As(err, &protocolErr):
 					if !s.protocolErrorLogged {
 						logging.Base().Errorf("fetchAndWrite(%v): unrecoverable protocol error detected: %v", r, err)
 						s.protocolErrorLogged = true
@@ -873,7 +873,6 @@ func createPeerSelector(net network.GossipNode) peerSelector {
 			peerClass: network.PeersConnectedOut,
 			peerSelector: makeRankPooledPeerSelector(net,
 				[]peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersConnectedOut}}),
-			priority:        peerRankInitialFirstPriority,
 			toleranceFactor: 3,
 			lastCheckedTime: time.Now(),
 		},
@@ -881,7 +880,6 @@ func createPeerSelector(net network.GossipNode) peerSelector {
 			peerClass: network.PeersPhonebookRelays,
 			peerSelector: makeRankPooledPeerSelector(net,
 				[]peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookRelays}}),
-			priority:        peerRankInitialSecondPriority,
 			toleranceFactor: 3,
 			lastCheckedTime: time.Now(),
 		},
@@ -889,7 +887,6 @@ func createPeerSelector(net network.GossipNode) peerSelector {
 			peerClass: network.PeersPhonebookArchivalNodes,
 			peerSelector: makeRankPooledPeerSelector(net,
 				[]peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivalNodes}}),
-			priority:        peerRankInitialThirdPriority,
 			toleranceFactor: 10,
 			lastCheckedTime: time.Now(),
 		},
@@ -897,7 +894,6 @@ func createPeerSelector(net network.GossipNode) peerSelector {
 			peerClass: network.PeersConnectedIn,
 			peerSelector: makeRankPooledPeerSelector(net,
 				[]peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersConnectedIn}}),
-			priority:        peerRankInitialFourthPriority,
 			toleranceFactor: 3,
 			lastCheckedTime: time.Now(),
 		},
