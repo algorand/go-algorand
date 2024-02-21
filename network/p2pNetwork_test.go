@@ -248,6 +248,8 @@ func TestP2PSubmitWS(t *testing.T) {
 		return netA.hasPeers() && netB.hasPeers() && netC.hasPeers()
 	}, 2*time.Second, 50*time.Millisecond)
 
+	time.Sleep(time.Second) // give time for peers to connect.
+
 	// now we should be connected in a line: B <-> A <-> C where both B and C are connected to A but not each other
 
 	testTag := protocol.AgreementVoteTag
