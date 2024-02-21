@@ -131,7 +131,7 @@ func TestPeerSelector_RankPeer(t *testing.T) {
 
 	peers := []network.Peer{&mockHTTPPeer{address: "12345"}}
 
-	peerSelector := makePeerSelector(
+	peerSelector := makeRankPooledPeerSelector(
 		makePeersRetrieverStub(func(options ...network.PeerOption) []network.Peer {
 			return peers
 		}), []peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivalNodes}},
@@ -191,7 +191,7 @@ func TestPeerSelector_PeerDownloadRanking(t *testing.T) {
 	peers1 := []network.Peer{&mockHTTPPeer{address: "1234"}, &mockHTTPPeer{address: "5678"}}
 	peers2 := []network.Peer{&mockHTTPPeer{address: "abcd"}, &mockHTTPPeer{address: "efgh"}}
 
-	peerSelector := makePeerSelector(
+	peerSelector := makeRankPooledPeerSelector(
 		makePeersRetrieverStub(func(options ...network.PeerOption) (peers []network.Peer) {
 			for _, opt := range options {
 				if opt == network.PeersPhonebookArchivalNodes {
@@ -240,7 +240,7 @@ func TestPeerSelector_FindMissingPeer(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	peerSelector := makePeerSelector(
+	peerSelector := makeRankPooledPeerSelector(
 		makePeersRetrieverStub(func(options ...network.PeerOption) []network.Peer {
 			return []network.Peer{}
 		}), []peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivalNodes}},
@@ -258,7 +258,7 @@ func TestPeerSelector_HistoricData(t *testing.T) {
 	peers1 := []network.Peer{&mockHTTPPeer{address: "a1"}, &mockHTTPPeer{address: "a2"}, &mockHTTPPeer{address: "a3"}}
 	peers2 := []network.Peer{&mockHTTPPeer{address: "b1"}, &mockHTTPPeer{address: "b2"}}
 
-	peerSelector := makePeerSelector(
+	peerSelector := makeRankPooledPeerSelector(
 		makePeersRetrieverStub(func(options ...network.PeerOption) (peers []network.Peer) {
 			for _, opt := range options {
 				if opt == network.PeersPhonebookArchivalNodes {
@@ -332,7 +332,7 @@ func TestPeerSelector_PeersDownloadFailed(t *testing.T) {
 	peers1 := []network.Peer{&mockHTTPPeer{address: "a1"}, &mockHTTPPeer{address: "a2"}, &mockHTTPPeer{address: "a3"}}
 	peers2 := []network.Peer{&mockHTTPPeer{address: "b1"}, &mockHTTPPeer{address: "b2"}}
 
-	peerSelector := makePeerSelector(
+	peerSelector := makeRankPooledPeerSelector(
 		makePeersRetrieverStub(func(options ...network.PeerOption) (peers []network.Peer) {
 			for _, opt := range options {
 				if opt == network.PeersPhonebookArchivalNodes {
@@ -408,7 +408,7 @@ func TestPeerSelector_Penalty(t *testing.T) {
 	peers1 := []network.Peer{&mockHTTPPeer{address: "a1"}, &mockHTTPPeer{address: "a2"}, &mockHTTPPeer{address: "a3"}}
 	peers2 := []network.Peer{&mockHTTPPeer{address: "b1"}, &mockHTTPPeer{address: "b2"}}
 
-	peerSelector := makePeerSelector(
+	peerSelector := makeRankPooledPeerSelector(
 		makePeersRetrieverStub(func(options ...network.PeerOption) (peers []network.Peer) {
 			for _, opt := range options {
 				if opt == network.PeersPhonebookArchivalNodes {
@@ -469,7 +469,7 @@ func TestPeerSelector_PeerDownloadDurationToRank(t *testing.T) {
 	peers3 := []network.Peer{&mockHTTPPeer{address: "c1"}, &mockHTTPPeer{address: "c2"}}
 	peers4 := []network.Peer{&mockHTTPPeer{address: "d1"}, &mockHTTPPeer{address: "b2"}}
 
-	peerSelector := makePeerSelector(
+	peerSelector := makeRankPooledPeerSelector(
 		makePeersRetrieverStub(func(options ...network.PeerOption) (peers []network.Peer) {
 			for _, opt := range options {
 				if opt == network.PeersPhonebookRelays {
@@ -574,7 +574,7 @@ func TestPeerSelector_ClassUpperBound(t *testing.T) {
 
 	peers1 := []network.Peer{&mockHTTPPeer{address: "a1"}, &mockHTTPPeer{address: "a2"}}
 	pClass := peerClass{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookArchivalNodes}
-	peerSelector := makePeerSelector(
+	peerSelector := makeRankPooledPeerSelector(
 		makePeersRetrieverStub(func(options ...network.PeerOption) (peers []network.Peer) {
 			for _, opt := range options {
 				if opt == network.PeersPhonebookArchivalNodes {
@@ -609,7 +609,7 @@ func TestPeerSelector_ClassLowerBound(t *testing.T) {
 
 	peers1 := []network.Peer{&mockHTTPPeer{address: "a1"}, &mockHTTPPeer{address: "a2"}}
 	pClass := peerClass{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookArchivalNodes}
-	peerSelector := makePeerSelector(
+	peerSelector := makeRankPooledPeerSelector(
 		makePeersRetrieverStub(func(options ...network.PeerOption) (peers []network.Peer) {
 			for _, opt := range options {
 				if opt == network.PeersPhonebookArchivalNodes {
@@ -639,7 +639,7 @@ func TestPeerSelector_EvictionAndUpgrade(t *testing.T) {
 	peers1 := []network.Peer{&mockHTTPPeer{address: "a1"}}
 	peers2 := []network.Peer{&mockHTTPPeer{address: "a1"}}
 
-	peerSelector := makePeerSelector(
+	peerSelector := makeRankPooledPeerSelector(
 		makePeersRetrieverStub(func(options ...network.PeerOption) (peers []network.Peer) {
 			for _, opt := range options {
 				if opt == network.PeersPhonebookArchivalNodes {
@@ -677,7 +677,7 @@ func TestPeerSelector_RefreshAvailablePeers(t *testing.T) {
 	// check new peers added to the pool
 	p1 := mockHTTPPeer{address: "p1"}
 	p2 := mockHTTPPeer{address: "p2"}
-	ps := peerSelector{
+	ps := rankPooledPeerSelector{
 		peerClasses: []peerClass{
 			{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersConnectedOut},
 			{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookArchivalNodes},
