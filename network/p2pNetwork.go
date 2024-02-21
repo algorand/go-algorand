@@ -544,8 +544,9 @@ func (n *P2PNetwork) GetPeers(options ...PeerOption) []Peer {
 				}
 				n.log.Debugf("Got %d archival node(s) from DHT", len(infos))
 				for _, addrInfo := range infos {
-					info := &addrInfo
-					if peerCore, ok := addrInfoToWsPeerCore(n, info); ok {
+					// TODO: remove after go1.22
+					info := addrInfo
+					if peerCore, ok := addrInfoToWsPeerCore(n, &info); ok {
 						peers = append(peers, &peerCore)
 					}
 				}
