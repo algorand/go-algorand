@@ -42,7 +42,7 @@ type Local struct {
 	// Version tracks the current version of the defaults so we can migrate old -> new
 	// This is specifically important whenever we decide to change the default value
 	// for an existing parameter. This field tag must be updated any time we add a new version.
-	Version uint32 `version[0]:"0" version[1]:"1" version[2]:"2" version[3]:"3" version[4]:"4" version[5]:"5" version[6]:"6" version[7]:"7" version[8]:"8" version[9]:"9" version[10]:"10" version[11]:"11" version[12]:"12" version[13]:"13" version[14]:"14" version[15]:"15" version[16]:"16" version[17]:"17" version[18]:"18" version[19]:"19" version[20]:"20" version[21]:"21" version[22]:"22" version[23]:"23" version[24]:"24" version[25]:"25" version[26]:"26" version[27]:"27" version[28]:"28" version[29]:"29" version[30]:"30" version[31]:"31" version[32]:"32" version[33]:"33"`
+	Version uint32 `version[0]:"0" version[1]:"1" version[2]:"2" version[3]:"3" version[4]:"4" version[5]:"5" version[6]:"6" version[7]:"7" version[8]:"8" version[9]:"9" version[10]:"10" version[11]:"11" version[12]:"12" version[13]:"13" version[14]:"14" version[15]:"15" version[16]:"16" version[17]:"17" version[18]:"18" version[19]:"19" version[20]:"20" version[21]:"21" version[22]:"22" version[23]:"23" version[24]:"24" version[25]:"25" version[26]:"26" version[27]:"27" version[28]:"28" version[29]:"29" version[30]:"30" version[31]:"31" version[32]:"32" version[33]:"33" version[34]:"34"`
 
 	// Archival nodes retain a full copy of the block history. Non-Archival nodes will delete old blocks and only retain what's need to properly validate blockchain messages (the precise number of recent blocks depends on the consensus parameters. Currently the last 1321 blocks are required). This means that non-Archival nodes require significantly less storage than Archival nodes.  If setting this to true for the first time, the existing ledger may need to be deleted to get the historical values stored as the setting only affects current blocks forward. To do this, shutdown the node and delete all .sqlite files within the data/testnet-version directory, except the crash.sqlite file. Restart the node and wait for the node to sync.
 	Archival bool `version[0]:"false"`
@@ -598,10 +598,13 @@ type Local struct {
 	EnableP2P bool `version[31]:"false"`
 
 	// EnableP2PHybridMode turns on both websockets and P2P networking.
-	EnableP2PHybridMode bool `version[33]:"false"`
+	EnableP2PHybridMode bool `version[34]:"false"`
 
 	// P2PListenAddress sets the listen address used for P2P networking, if hybrid mode is set.
-	P2PListenAddress string `version[33]:""`
+	P2PListenAddress string `version[34]:""`
+
+	// EnableDHT will turn on the hash table for use with capabilities advertisement
+	EnableDHTProviders bool `version[34]:"false"`
 
 	// P2PPersistPeerID will write the private key used for the node's PeerID to the P2PPrivateKeyLocation.
 	// This is only used when P2PEnable is true. If P2PPrivateKey is not specified, it uses the default location.
@@ -614,9 +617,6 @@ type Local struct {
 
 	// DisableAPIAuth turns off authentication for public (non-admin) API endpoints.
 	DisableAPIAuth bool `version[30]:"false"`
-
-	// EnableDHT will turn on the hash table for use with capabilities advertisement
-	EnableDHTProviders bool `version[33]:"false"`
 }
 
 // DNSBootstrapArray returns an array of one or more DNS Bootstrap identifiers
