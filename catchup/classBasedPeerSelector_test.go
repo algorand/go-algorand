@@ -52,19 +52,16 @@ func TestClassBasedPeerSelector_makeClassBasedPeerSelector(t *testing.T) {
 			peerClass:       network.PeersPhonebookRelays,
 			peerSelector:    mockPeerSelector{},
 			toleranceFactor: 3,
-			lastCheckedTime: time.Now(),
 		},
 		{
 			peerClass:       network.PeersConnectedOut,
 			peerSelector:    mockPeerSelector{},
 			toleranceFactor: 3,
-			lastCheckedTime: time.Now(),
 		},
 		{
 			peerClass:       network.PeersPhonebookArchivalNodes,
 			peerSelector:    mockPeerSelector{},
 			toleranceFactor: 10,
-			lastCheckedTime: time.Now(),
 		},
 	}
 
@@ -96,7 +93,6 @@ func TestClassBasedPeerSelector_rankPeer(t *testing.T) {
 				},
 			},
 			toleranceFactor: 3,
-			lastCheckedTime: time.Now(),
 		},
 		{
 			peerClass: network.PeersPhonebookRelays,
@@ -109,7 +105,6 @@ func TestClassBasedPeerSelector_rankPeer(t *testing.T) {
 				},
 			},
 			toleranceFactor: 3,
-			lastCheckedTime: time.Now(),
 		},
 		{
 			peerClass: network.PeersPhonebookArchivalNodes,
@@ -119,7 +114,6 @@ func TestClassBasedPeerSelector_rankPeer(t *testing.T) {
 				},
 			},
 			toleranceFactor: 3,
-			lastCheckedTime: time.Now(),
 		},
 	}
 	cps := makeClassBasedPeerSelector(wrappedPeerSelectors)
@@ -192,7 +186,6 @@ func TestClassBasedPeerSelector_peerDownloadDurationToRank(t *testing.T) {
 				},
 			},
 			toleranceFactor: 3,
-			lastCheckedTime: time.Now(),
 		},
 		{
 			peerClass: network.PeersPhonebookRelays,
@@ -205,7 +198,6 @@ func TestClassBasedPeerSelector_peerDownloadDurationToRank(t *testing.T) {
 				},
 			},
 			toleranceFactor: 3,
-			lastCheckedTime: time.Now(),
 		},
 		{
 			peerClass: network.PeersPhonebookArchivalNodes,
@@ -215,7 +207,6 @@ func TestClassBasedPeerSelector_peerDownloadDurationToRank(t *testing.T) {
 				},
 			},
 			toleranceFactor: 3,
-			lastCheckedTime: time.Now(),
 		},
 	}
 	cps := makeClassBasedPeerSelector(wrappedPeerSelectors)
@@ -250,7 +241,6 @@ func TestClassBasedPeerSelector_getNextPeer(t *testing.T) {
 				},
 			},
 			toleranceFactor: 3,
-			lastCheckedTime: time.Now(),
 		},
 		{
 			peerClass: network.PeersPhonebookRelays,
@@ -260,7 +250,6 @@ func TestClassBasedPeerSelector_getNextPeer(t *testing.T) {
 				},
 			},
 			toleranceFactor: 3,
-			lastCheckedTime: time.Now(),
 		},
 		{
 			peerClass: network.PeersPhonebookArchivalNodes,
@@ -270,7 +259,6 @@ func TestClassBasedPeerSelector_getNextPeer(t *testing.T) {
 				},
 			},
 			toleranceFactor: 3,
-			lastCheckedTime: time.Now(),
 		},
 	}
 
@@ -318,7 +306,6 @@ func TestClassBasedPeerSelector_getNextPeer(t *testing.T) {
 				},
 			},
 			toleranceFactor: 3,
-			lastCheckedTime: time.Now(),
 		},
 		{
 			peerClass: network.PeersPhonebookRelays,
@@ -334,7 +321,6 @@ func TestClassBasedPeerSelector_getNextPeer(t *testing.T) {
 				},
 			},
 			toleranceFactor: 10,
-			lastCheckedTime: time.Now(),
 		},
 		{
 			peerClass: network.PeersPhonebookArchivalNodes,
@@ -350,7 +336,6 @@ func TestClassBasedPeerSelector_getNextPeer(t *testing.T) {
 				},
 			},
 			toleranceFactor: 3,
-			lastCheckedTime: time.Now(),
 		},
 	}
 
@@ -393,9 +378,34 @@ func TestClassBasedPeerSelector_getNextPeer(t *testing.T) {
 	require.Nil(t, err)
 	require.Equal(t, mockPeer3, peerResult)
 
-	// Final sanity check of the download failures for each selector
+	// Check of the download failures for each selector
 	require.Equal(t, 4, cps.peerSelectors[0].downloadFailures)
 	require.Equal(t, 11, cps.peerSelectors[1].downloadFailures)
+	require.Equal(t, 0, cps.peerSelectors[2].downloadFailures)
+
+	// Now, record download failures just up to the tolerance factor for the third selector
+	for i := 0; i < 3; i++ {
+		cps.rankPeer(mockPeer3, peerRankNoBlockForRound)
+	}
+
+	peerResult, err = cps.getNextPeer()
+	require.Nil(t, err)
+	require.Equal(t, mockPeer3, peerResult)
+
+	require.Equal(t, 4, cps.peerSelectors[0].downloadFailures)
+	require.Equal(t, 11, cps.peerSelectors[1].downloadFailures)
+	require.Equal(t, 3, cps.peerSelectors[2].downloadFailures)
+
+	// One more failure should reset ALL download failures (and grab a peer from the first selector)
+	cps.rankPeer(mockPeer3, peerRankNoBlockForRound)
+
+	peerResult, err = cps.getNextPeer()
+	require.Nil(t, err)
+	require.Equal(t, mockPeer, peerResult)
+
+	// Check of the download failures for each selector, should have been reset
+	require.Equal(t, 0, cps.peerSelectors[0].downloadFailures)
+	require.Equal(t, 0, cps.peerSelectors[1].downloadFailures)
 	require.Equal(t, 0, cps.peerSelectors[2].downloadFailures)
 }
 

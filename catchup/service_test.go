@@ -975,11 +975,6 @@ func TestCreatePeerSelector(t *testing.T) {
 	require.Equal(t, 3, cps.peerSelectors[1].toleranceFactor)
 	require.Equal(t, 10, cps.peerSelectors[2].toleranceFactor)
 	require.Equal(t, 3, cps.peerSelectors[3].toleranceFactor)
-
-	require.False(t, cps.peerSelectors[0].lastCheckedTime.IsZero())
-	require.False(t, cps.peerSelectors[1].lastCheckedTime.IsZero())
-	require.False(t, cps.peerSelectors[2].lastCheckedTime.IsZero())
-	require.False(t, cps.peerSelectors[3].lastCheckedTime.IsZero())
 }
 
 func TestServiceStartStop(t *testing.T) {

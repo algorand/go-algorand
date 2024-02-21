@@ -874,28 +874,24 @@ func createPeerSelector(net network.GossipNode) peerSelector {
 			peerSelector: makeRankPooledPeerSelector(net,
 				[]peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersConnectedOut}}),
 			toleranceFactor: 3,
-			lastCheckedTime: time.Now(),
 		},
 		{
 			peerClass: network.PeersPhonebookRelays,
 			peerSelector: makeRankPooledPeerSelector(net,
 				[]peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookRelays}}),
 			toleranceFactor: 3,
-			lastCheckedTime: time.Now(),
 		},
 		{
 			peerClass: network.PeersPhonebookArchivalNodes,
 			peerSelector: makeRankPooledPeerSelector(net,
 				[]peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivalNodes}}),
 			toleranceFactor: 10,
-			lastCheckedTime: time.Now(),
 		},
 		{
 			peerClass: network.PeersConnectedIn,
 			peerSelector: makeRankPooledPeerSelector(net,
 				[]peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersConnectedIn}}),
 			toleranceFactor: 3,
-			lastCheckedTime: time.Now(),
 		},
 	}
 

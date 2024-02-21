@@ -23,9 +23,6 @@ import (
 	"time"
 )
 
-// The duration after which we reset the downloadFailures for a rankPooledPeerSelector
-const lastCheckedDuration = 10 * time.Minute
-
 // classBasedPeerSelector is a rankPooledPeerSelector that tracks and ranks classes of peers based on their response behavior.
 // It is used to select the most appropriate peers to download blocks from - this is most useful when catching up
 // and needing to figure out whether the blocks can be retrieved from relay nodes or require archive nodes.
@@ -89,17 +86,24 @@ func (c *classBasedPeerSelector) peerDownloadDurationToRank(psp *peerSelectorPee
 func (c *classBasedPeerSelector) getNextPeer() (psp *peerSelectorPeer, err error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	for _, wp := range c.peerSelectors {
-		if time.Since(wp.lastCheckedTime) > lastCheckedDuration {
-			wp.downloadFailures = 0
-		}
+	return c.internalGetNextPeer(0)
+}
 
+// internalGetNextPeer is a helper function that should be called with the lock held
+func (c *classBasedPeerSelector) internalGetNextPeer(recurseCount int8) (psp *peerSelectorPeer, err error) {
+	// Safety check to prevent infinite recursion
+	if recurseCount > 1 {
+		return nil, errPeerSelectorNoPeerPoolsAvailable
+	}
+	selectorDisabledCount := 0
+	for _, wp := range c.peerSelectors {
 		if wp.downloadFailures > wp.toleranceFactor {
 			// peerSelector is disabled for now, we move to the next one
+			selectorDisabledCount++
 			continue
 		}
 		psp, err = wp.peerSelector.getNextPeer()
-		wp.lastCheckedTime = time.Now()
+
 		if err != nil {
 			// This is mostly just future-proofing, as we don't expect any other errors from getNextPeer
 			if errors.Is(err, errPeerSelectorNoPeerPoolsAvailable) {
@@ -111,6 +115,15 @@ func (c *classBasedPeerSelector) getNextPeer() (psp *peerSelectorPeer, err error
 		return psp, nil
 	}
 	// If we reached here, we have exhausted all classes and still have no peers
+	// IFF all classes are disabled, we reset the downloadFailures for all classes and start over
+	if len(c.peerSelectors) != 0 && selectorDisabledCount == len(c.peerSelectors) {
+		for _, wp := range c.peerSelectors {
+			wp.downloadFailures = 0
+		}
+		// Recurse to try again, we should have at least one class enabled now
+		return c.internalGetNextPeer(recurseCount + 1)
+	}
+	// If we reached here, we have exhausted all classes without finding a peer, not due to all classes being disabled
 	return nil, errPeerSelectorNoPeerPoolsAvailable
 }
 
@@ -119,7 +132,6 @@ type wrappedPeerSelector struct {
 	peerClass        network.PeerOption // The class of peers the peerSelector is responsible for
 	toleranceFactor  int                // The number of times we can net fail for any reason before we move to the next class's rankPooledPeerSelector
 	downloadFailures int                // The number of times we have failed to download a block from this class's rankPooledPeerSelector since it was last reset
-	lastCheckedTime  time.Time          // The last time we tried to use the peerSelector
 }
 
 // makeCatchpointPeerSelector returns a classBasedPeerSelector that selects peers based on their class and response behavior.
@@ -131,14 +143,12 @@ func makeCatchpointPeerSelector(net peersRetriever) peerSelector {
 			peerSelector: makeRankPooledPeerSelector(net,
 				[]peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookRelays}}),
 			toleranceFactor: 3,
-			lastCheckedTime: time.Now(),
 		},
 		{
 			peerClass: network.PeersPhonebookArchivalNodes,
 			peerSelector: makeRankPooledPeerSelector(net,
 				[]peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivalNodes}}),
 			toleranceFactor: 10,
-			lastCheckedTime: time.Now(),
 		},
 	}
 
