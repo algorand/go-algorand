@@ -73,8 +73,8 @@ type P2PNetwork struct {
 
 	capabilitiesDiscovery *p2p.CapabilitiesDiscovery
 
-	bootstrapper      bootstrapper
-	resolveController dnsaddr.ResolveController
+	bootstrapperStart func()
+	bootstrapperStop  func()
 	nodeInfo          NodeInfo
 	pstore            *peerstore.PeerStore
 	httpServer        *p2p.HTTPServer
@@ -85,21 +85,21 @@ type bootstrapper struct {
 	networkID         protocol.NetworkID
 	phonebookPeers    []*peer.AddrInfo
 	resolveController dnsaddr.ResolveController
-	started           bool
+	started           atomic.Bool
 	log               logging.Logger
 }
 
 func (b *bootstrapper) start() {
-	b.started = true
+	b.started.Store(true)
 }
 
 func (b *bootstrapper) stop() {
-	b.started = false
+	b.started.Store(false)
 }
 
 func (b *bootstrapper) BootstrapFunc() []peer.AddrInfo {
 	// not started yet, do not give it any peers
-	if !b.started {
+	if !b.started.Load() {
 		return nil
 	}
 
@@ -250,17 +250,18 @@ func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebo
 		return nil, err
 	}
 
-	net.resolveController = dnsaddr.NewMultiaddrDNSResolveController(cfg.DNSSecuritySRVEnforced(), "")
-	net.bootstrapper = bootstrapper{
+	bootstrapper := &bootstrapper{
 		cfg:               cfg,
 		networkID:         networkID,
 		phonebookPeers:    addrInfo,
-		resolveController: net.resolveController,
+		resolveController: dnsaddr.NewMultiaddrDNSResolveController(cfg.DNSSecuritySRVEnforced(), ""),
 		log:               net.log,
 	}
+	net.bootstrapperStart = bootstrapper.start
+	net.bootstrapperStop = bootstrapper.stop
 
 	if cfg.EnableDHTProviders {
-		disc, err0 := p2p.MakeCapabilitiesDiscovery(net.ctx, cfg, h, networkID, net.log, net.bootstrapper.BootstrapFunc)
+		disc, err0 := p2p.MakeCapabilitiesDiscovery(net.ctx, cfg, h, networkID, net.log, bootstrapper.BootstrapFunc)
 		if err0 != nil {
 			log.Errorf("Failed to create dht node capabilities discovery: %v", err)
 			return nil, err
@@ -297,7 +298,7 @@ func (n *P2PNetwork) PeerIDSigner() identityChallengeSigner {
 
 // Start threads, listen on sockets.
 func (n *P2PNetwork) Start() error {
-	n.bootstrapper.start()
+	n.bootstrapperStart()
 	err := n.service.Start()
 	if err != nil {
 		return err
@@ -350,7 +351,7 @@ func (n *P2PNetwork) Stop() {
 	n.innerStop()
 	n.ctxCancel()
 	n.service.Close()
-	n.bootstrapper.stop()
+	n.bootstrapperStop()
 	n.httpServer.Close()
 	n.wg.Wait()
 }
@@ -381,7 +382,7 @@ func (n *P2PNetwork) meshThreadInner() {
 
 	// fetch peers from DNS
 	var dnsPeers, dhtPeers []peer.AddrInfo
-	dnsPeers = dnsLookupBootstrapPeers(n.log, n.config, n.networkID, n.bootstrapper.resolveController)
+	dnsPeers = dnsLookupBootstrapPeers(n.log, n.config, n.networkID, dnsaddr.NewMultiaddrDNSResolveController(n.config.DNSSecuritySRVEnforced(), ""))
 
 	// discover peers from DHT
 	if n.capabilitiesDiscovery != nil {

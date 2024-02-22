@@ -453,7 +453,7 @@ func TestP2PBootstrapFunc(t *testing.T) {
 	b := bootstrapper{}
 	require.Nil(t, b.BootstrapFunc())
 
-	b.started = true
+	b.started.Store(true)
 	p := peer.AddrInfo{ID: "test"}
 	b.phonebookPeers = []*peer.AddrInfo{&p}
 	require.Equal(t, []peer.AddrInfo{p}, b.BootstrapFunc())
