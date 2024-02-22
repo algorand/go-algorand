@@ -73,18 +73,20 @@ type P2PNetwork struct {
 
 	capabilitiesDiscovery *p2p.CapabilitiesDiscovery
 
-	bootstrapper bootstrapper
-	nodeInfo     NodeInfo
-	pstore       *peerstore.PeerStore
-	httpServer   *p2p.HTTPServer
+	bootstrapper      bootstrapper
+	resolveController dnsaddr.ResolveController
+	nodeInfo          NodeInfo
+	pstore            *peerstore.PeerStore
+	httpServer        *p2p.HTTPServer
 }
 
 type bootstrapper struct {
-	cfg              config.Local
-	networkID        protocol.NetworkID
-	phonebookPeers   []*peer.AddrInfo
-	resolveControler dnsaddr.ResolveController
-	started          bool
+	cfg               config.Local
+	networkID         protocol.NetworkID
+	phonebookPeers    []*peer.AddrInfo
+	resolveController dnsaddr.ResolveController
+	started           bool
+	log               logging.Logger
 }
 
 func (b *bootstrapper) start() {
@@ -112,28 +114,74 @@ func (b *bootstrapper) BootstrapFunc() []peer.AddrInfo {
 		return addrs
 	}
 
-	return getBootstrapPeers(b.cfg, b.networkID, b.resolveControler)
+	return dnsLookupBootstrapPeers(b.log, b.cfg, b.networkID, b.resolveController)
 }
 
-// getBootstrapPeers looks up a list of Multiaddrs strings from the dnsaddr records at the primary
+// dnsLookupBootstrapPeers looks up a list of Multiaddrs strings from the dnsaddr records at the primary
 // SRV record domain.
-func getBootstrapPeers(cfg config.Local, network protocol.NetworkID, controller dnsaddr.ResolveController) []peer.AddrInfo {
+func dnsLookupBootstrapPeers(log logging.Logger, cfg config.Local, network protocol.NetworkID, controller dnsaddr.ResolveController) []peer.AddrInfo {
 	var addrs []peer.AddrInfo
 	bootstraps := cfg.DNSBootstrapArray(network)
 	for _, dnsBootstrap := range bootstraps {
-		resolvedAddrs, err := dnsaddr.MultiaddrsFromResolver(dnsBootstrap.PrimarySRVBootstrap, controller)
-		if err != nil {
-			continue
+		var resolvedAddrs, resolvedAddrsBackup []multiaddr.Multiaddr
+		var errPrim, errBackup error
+		resolvedAddrs, errPrim = dnsaddr.MultiaddrsFromResolver(dnsBootstrap.PrimarySRVBootstrap, controller)
+		if errPrim != nil {
+			log.Infof("Failed to resolve bootstrap peers from %s: %v", dnsBootstrap.PrimarySRVBootstrap, errPrim)
 		}
-		for _, resolvedAddr := range resolvedAddrs {
-			info, err0 := peer.AddrInfoFromP2pAddr(resolvedAddr)
-			if err0 != nil {
-				continue
+		if dnsBootstrap.BackupSRVBootstrap != "" {
+			resolvedAddrsBackup, errBackup = dnsaddr.MultiaddrsFromResolver(dnsBootstrap.BackupSRVBootstrap, controller)
+			if errBackup != nil {
+				log.Infof("Failed to resolve bootstrap peers from %s: %v", dnsBootstrap.BackupSRVBootstrap, errBackup)
 			}
-			addrs = append(addrs, *info)
+		}
+
+		if len(resolvedAddrs) > 0 || len(resolvedAddrsBackup) > 0 {
+			resolvedAddrInfos := mergeP2PMultiaddrResolvedAddresses(resolvedAddrs, resolvedAddrsBackup)
+			addrs = append(addrs, resolvedAddrInfos...)
 		}
 	}
 	return addrs
+}
+
+func mergeP2PMultiaddrResolvedAddresses(primary, backup []multiaddr.Multiaddr) []peer.AddrInfo {
+	// deduplicate addresses by PeerID
+	unique := make(map[peer.ID]*peer.AddrInfo)
+	for _, addr := range primary {
+		info, err0 := peer.AddrInfoFromP2pAddr(addr)
+		if err0 != nil {
+			continue
+		}
+		unique[info.ID] = info
+	}
+	for _, addr := range backup {
+		info, err0 := peer.AddrInfoFromP2pAddr(addr)
+		if err0 != nil {
+			continue
+		}
+		unique[info.ID] = info
+	}
+	var result []peer.AddrInfo
+	for _, addr := range unique {
+		result = append(result, *addr)
+	}
+	return result
+}
+
+func mergeP2PAddrInfoResolvedAddresses(primary, backup []peer.AddrInfo) []peer.AddrInfo {
+	// deduplicate addresses by PeerID
+	unique := make(map[peer.ID]peer.AddrInfo)
+	for _, addr := range primary {
+		unique[addr.ID] = addr
+	}
+	for _, addr := range backup {
+		unique[addr.ID] = addr
+	}
+	var result []peer.AddrInfo
+	for _, addr := range unique {
+		result = append(result, addr)
+	}
+	return result
 }
 
 type p2pPeerStats struct {
@@ -202,15 +250,17 @@ func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebo
 		return nil, err
 	}
 
-	bootstrapper := &bootstrapper{
-		cfg:              cfg,
-		networkID:        networkID,
-		phonebookPeers:   addrInfo,
-		resolveControler: dnsaddr.NewMultiaddrDNSResolveController(cfg.DNSSecuritySRVEnforced(), ""),
+	net.resolveController = dnsaddr.NewMultiaddrDNSResolveController(cfg.DNSSecuritySRVEnforced(), "")
+	net.bootstrapper = bootstrapper{
+		cfg:               cfg,
+		networkID:         networkID,
+		phonebookPeers:    addrInfo,
+		resolveController: net.resolveController,
+		log:               net.log,
 	}
 
 	if cfg.EnableDHTProviders {
-		disc, err0 := p2p.MakeCapabilitiesDiscovery(net.ctx, cfg, h, networkID, net.log, bootstrapper.BootstrapFunc)
+		disc, err0 := p2p.MakeCapabilitiesDiscovery(net.ctx, cfg, h, networkID, net.log, net.bootstrapper.BootstrapFunc)
 		if err0 != nil {
 			log.Errorf("Failed to create dht node capabilities discovery: %v", err)
 			return nil, err
@@ -327,23 +377,29 @@ func (n *P2PNetwork) innerStop() {
 
 // meshThreadInner fetches nodes from DHT and attempts to connect to them
 func (n *P2PNetwork) meshThreadInner() {
-	// get some relay nodes
-	var peers []peer.AddrInfo
+	defer n.service.DialPeersUntilTargetCount(n.config.GossipFanout)
+
+	// fetch peers from DNS
+	var dnsPeers, dhtPeers []peer.AddrInfo
+	dnsPeers = dnsLookupBootstrapPeers(n.log, n.config, n.networkID, n.bootstrapper.resolveController)
+
+	// discover peers from DHT
 	if n.capabilitiesDiscovery != nil {
 		var err error
-		peers, err = n.capabilitiesDiscovery.PeersForCapability(p2p.Gossip, n.config.GossipFanout)
+		dhtPeers, err = n.capabilitiesDiscovery.PeersForCapability(p2p.Gossip, n.config.GossipFanout)
 		if err != nil {
 			n.log.Warnf("Error getting relay nodes from capabilities discovery: %v", err)
-		} else {
-			n.log.Debugf("Discovered %d gossip peers from DHT", len(peers))
-			replace := make([]interface{}, 0, len(peers))
-			for i := range peers {
-				replace = append(replace, &peers[i])
-			}
-			n.pstore.ReplacePeerList(replace, string(n.networkID), phonebook.PhoneBookEntryRelayRole)
+			return
 		}
+		n.log.Debugf("Discovered %d gossip peers from DHT", len(dhtPeers))
 	}
-	n.service.DialPeersUntilTargetCount(n.config.GossipFanout)
+
+	peers := mergeP2PAddrInfoResolvedAddresses(dnsPeers, dhtPeers)
+	replace := make([]interface{}, 0, len(peers))
+	for i := range peers {
+		replace = append(replace, &peers[i])
+	}
+	n.pstore.ReplacePeerList(replace, string(n.networkID), phonebook.PhoneBookEntryRelayRole)
 }
 
 func (n *P2PNetwork) meshThread() {

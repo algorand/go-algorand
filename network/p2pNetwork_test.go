@@ -37,6 +37,7 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	ma "github.com/multiformats/go-multiaddr"
@@ -432,7 +433,16 @@ func (c *mockResolveController) Resolver() dnsaddr.Resolver {
 type mockResolver struct{}
 
 func (r *mockResolver) Resolve(ctx context.Context, _ ma.Multiaddr) ([]ma.Multiaddr, error) {
-	maddr, err := ma.NewMultiaddr("/ip4/127.0.0.1/p2p/QmcgpsyWgH8Y8ajJz1Cu72KnS5uo2Aa2LpzU7kinSupNKC")
+	// return random stuff each time
+	_, publicKey, err := crypto.GenerateKeyPair(crypto.RSA, 2048)
+	if err != nil {
+		panic(err)
+	}
+	peerID, err := peer.IDFromPublicKey(publicKey)
+	if err != nil {
+		panic(err)
+	}
+	maddr, err := ma.NewMultiaddr("/ip4/127.0.0.1/p2p/" + peerID.String())
 	return []ma.Multiaddr{maddr}, err
 }
 
@@ -454,7 +464,7 @@ func TestP2PBootstrapFunc(t *testing.T) {
 	b.cfg.DNSBootstrapID = "<network>.algodev.network"
 	b.cfg.DNSSecurityFlags = 0
 	b.networkID = "devnet"
-	b.resolveControler = &mockResolveController{}
+	b.resolveController = &mockResolveController{}
 
 	addrs := b.BootstrapFunc()
 
@@ -464,7 +474,7 @@ func TestP2PBootstrapFunc(t *testing.T) {
 	require.GreaterOrEqual(t, len(addr.Addrs), 1)
 }
 
-func TestP2PGetBootstrapPeersFailure(t *testing.T) {
+func TestP2PdnsLookupBootstrapPeersFailure(t *testing.T) {
 	t.Parallel()
 	partitiontest.PartitionTest(t)
 
@@ -473,12 +483,12 @@ func TestP2PGetBootstrapPeersFailure(t *testing.T) {
 	cfg.DNSBootstrapID = "non-existent.algodev.network"
 
 	controller := nilResolveController{}
-	addrs := getBootstrapPeers(cfg, "test", &controller)
+	addrs := dnsLookupBootstrapPeers(logging.TestingLog(t), cfg, "test", &controller)
 
 	require.Equal(t, 0, len(addrs))
 }
 
-func TestP2PGetBootstrapPeersInvalidAddr(t *testing.T) {
+func TestP2PdnsLookupBootstrapPeersInvalidAddr(t *testing.T) {
 	t.Parallel()
 	partitiontest.PartitionTest(t)
 
@@ -487,9 +497,27 @@ func TestP2PGetBootstrapPeersInvalidAddr(t *testing.T) {
 	cfg.DNSBootstrapID = "<network>.algodev.network"
 
 	controller := nilResolveController{}
-	addrs := getBootstrapPeers(cfg, "testInvalidAddr", &controller)
+	addrs := dnsLookupBootstrapPeers(logging.TestingLog(t), cfg, "testInvalidAddr", &controller)
 
 	require.Equal(t, 0, len(addrs))
+}
+
+func TestP2PdnsLookupBootstrapPeersWithBackup(t *testing.T) {
+	t.Parallel()
+	partitiontest.PartitionTest(t)
+
+	cfg := config.GetDefaultLocal()
+	cfg.DNSSecurityFlags = 0
+	cfg.DNSBootstrapID = "<network>.algodev.network"
+
+	controller := &mockResolveController{}
+	addrs := dnsLookupBootstrapPeers(logging.TestingLog(t), cfg, "test", controller)
+	require.GreaterOrEqual(t, len(addrs), 1)
+
+	cfg.DNSBootstrapID = "<network>.algodev.network?backup=<network>.backup.algodev.network"
+	addrs = dnsLookupBootstrapPeers(logging.TestingLog(t), cfg, "test", controller)
+	require.GreaterOrEqual(t, len(addrs), 2)
+
 }
 
 type capNodeInfo struct {
@@ -682,7 +710,6 @@ func TestP2PHTTPHandler(t *testing.T) {
 	t.Parallel()
 
 	cfg := config.GetDefaultLocal()
-	cfg.EnableDHTProviders = true
 	cfg.GossipFanout = 1
 	log := logging.TestingLog(t)
 
@@ -904,4 +931,62 @@ func TestP2PWantTXGossip(t *testing.T) {
 	net.OnNetworkAdvance()
 	require.Eventually(t, func() bool { return mockService.count.Load() == 1 }, 1*time.Second, 50*time.Millisecond)
 	require.True(t, net.wantTXGossip.Load())
+}
+
+func TestMergeP2PAddrInfoResolvedAddresses(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	m1, err := ma.NewMultiaddr("/ip4/127.0.0.1/tcp/4001/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN")
+	require.NoError(t, err)
+	m2, err := ma.NewMultiaddr("/ip4/127.0.0.1/tcp/4001/p2p/QmbLHAnMoJPWSCR5Zhtx6BHJX9KiKNN6tpvbUcqanj75Nb")
+	require.NoError(t, err)
+	m3, err := ma.NewMultiaddr("/ip4/127.0.0.1/tcp/4001/p2p/QmcgpsyWgH8Y8ajJz1Cu72KnS5uo2Aa2LpzU7kinSupNKC")
+	require.NoError(t, err)
+
+	var tests = []struct {
+		name     string
+		primary  []ma.Multiaddr
+		backup   []ma.Multiaddr
+		expected int
+	}{
+		{"no overlap", []ma.Multiaddr{m1}, []ma.Multiaddr{m2}, 2},
+		{"complete overlap", []ma.Multiaddr{m1}, []ma.Multiaddr{m1}, 1},
+		{"partial overlap", []ma.Multiaddr{m1, m2}, []ma.Multiaddr{m1, m3}, 3},
+		{"empty slices", []ma.Multiaddr{}, []ma.Multiaddr{}, 0},
+		{"nil slices", nil, nil, 0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r1 := mergeP2PMultiaddrResolvedAddresses(tt.primary, tt.backup)
+			if len(r1) != tt.expected {
+				t.Errorf("Expected  %d addresses, got %d", tt.expected, len(r1))
+			}
+
+			var info1 []peer.AddrInfo
+			var info2 []peer.AddrInfo
+			for _, addr := range tt.primary {
+				info, err0 := peer.AddrInfoFromP2pAddr(addr)
+				require.NoError(t, err0)
+				info1 = append(info1, *info)
+			}
+			for _, addr := range tt.backup {
+				info, err0 := peer.AddrInfoFromP2pAddr(addr)
+				require.NoError(t, err0)
+				info2 = append(info2, *info)
+			}
+			if info1 == nil && tt.primary != nil {
+				info1 = []peer.AddrInfo{}
+			}
+			if info2 == nil && tt.backup != nil {
+				info1 = []peer.AddrInfo{}
+			}
+
+			r2 := mergeP2PAddrInfoResolvedAddresses(info1, info2)
+			if len(r2) != tt.expected {
+				t.Errorf("Expected  %d addresses, got %d", tt.expected, len(r2))
+			}
+		})
+	}
 }

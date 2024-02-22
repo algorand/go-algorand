@@ -37,22 +37,22 @@ func TestIsDnsaddr(t *testing.T) {
 	t.Parallel()
 
 	testcases := []struct {
-		name     string
-		addr     string
-		expected bool
+		name      string
+		addr      string
+		isDnsaddr bool
 	}{
-		{name: "DnsAddr", addr: "/dnsaddr/foobar.com", expected: true},
-		{name: "DnsAddrWithPeerId", addr: "/dnsaddr/foobar.com/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN", expected: true},
-		{name: "DnsAddrWithIPPeerId", addr: "/dnsaddr/foobar.com/ip4/127.0.0.1/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN", expected: true},
-		{name: "Dns4Addr", addr: "/dns4/foobar.com/", expected: false},
-		{name: "Dns6Addr", addr: "/dns6/foobar.com/", expected: false},
-		{name: "Dns4AddrWithPeerId", addr: "/dns4/foobar.com/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN", expected: false},
+		{name: "DnsAddr", addr: "/dnsaddr/foobar.com", isDnsaddr: true},
+		{name: "DnsAddrWithPeerId", addr: "/dnsaddr/foobar.com/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN", isDnsaddr: true},
+		{name: "DnsAddrWithIPPeerId", addr: "/dnsaddr/foobar.com/ip4/127.0.0.1/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN", isDnsaddr: true},
+		{name: "Dns4Addr", addr: "/dns4/foobar.com/", isDnsaddr: false},
+		{name: "Dns6Addr", addr: "/dns6/foobar.com/", isDnsaddr: false},
+		{name: "Dns4AddrWithPeerId", addr: "/dns4/foobar.com/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN", isDnsaddr: false},
 	}
 	for _, testcase := range testcases {
 		t.Run(testcase.name, func(t *testing.T) {
 			maddr, err := multiaddr.NewMultiaddr(testcase.addr)
 			require.NoError(t, err)
-			require.Equal(t, testcase.expected, isDnsaddr(maddr))
+			require.Equal(t, testcase.isDnsaddr, isDnsaddr(maddr))
 		})
 	}
 }
