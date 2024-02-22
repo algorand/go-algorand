@@ -39,8 +39,8 @@ type PhoneBookEntryRoles int
 // or via a configuration file.
 const PhoneBookEntryRelayRole = 1
 
-// PhoneBookEntryArchiverRole used for all the archivers that are provided via the archive SRV record.
-const PhoneBookEntryArchiverRole = 2
+// PhoneBookEntryArchivalRole used for all the archival nodes that are provided via the archive SRV record.
+const PhoneBookEntryArchivalRole = 2
 
 // Phonebook stores or looks up addresses of nodes we might contact
 type Phonebook interface {

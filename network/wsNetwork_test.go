@@ -1183,6 +1183,9 @@ func TestGetPeers(t *testing.T) {
 
 	phbMulti.ReplacePeerList([]string{"a", "b", "c"}, "ph", PhoneBookEntryRelayRole)
 
+	// A few for archival node roles
+	phbMulti.ReplacePeerList([]string{"d", "e", "f"}, "ph", PhoneBookEntryArchivalRole)
+
 	//addrB, _ := netB.Address()
 
 	// A has only an inbound connection from B
@@ -1206,14 +1209,13 @@ func TestGetPeers(t *testing.T) {
 	sort.Strings(expectAddrs)
 	assert.Equal(t, expectAddrs, peerAddrs)
 
-	// For now, PeersPhonebookArchivalNodes and PeersPhonebookRelays will return the same set of nodes
 	bPeers2 := netB.GetPeers(PeersPhonebookArchivalNodes)
 	peerAddrs2 := make([]string, len(bPeers2))
 	for pi2, peer2 := range bPeers2 {
 		peerAddrs2[pi2] = peer2.(HTTPPeer).GetAddress()
 	}
 	sort.Strings(peerAddrs2)
-	assert.Equal(t, expectAddrs, peerAddrs2)
+	assert.Equal(t, []string{"d", "e", "f"}, peerAddrs2)
 
 }
 
@@ -4176,7 +4178,7 @@ func TestRefreshRelayArchivePhonebookAddresses(t *testing.T) {
 		relayPeers := netA.GetPeers(PeersPhonebookRelays)
 		assert.Equal(t, 0, len(relayPeers))
 
-		archivePeers := netA.GetPeers(PeersPhonebookArchivers)
+		archivePeers := netA.GetPeers(PeersPhonebookArchivalNodes)
 		assert.Equal(t, 0, len(archivePeers))
 
 		netA.refreshRelayArchivePhonebookAddresses()
@@ -4191,7 +4193,7 @@ func TestRefreshRelayArchivePhonebookAddresses(t *testing.T) {
 
 		assert.ElementsMatch(t, primaryRelayResolvedRecords, relayAddrs)
 
-		archivePeers = netA.GetPeers(PeersPhonebookArchivers)
+		archivePeers = netA.GetPeers(PeersPhonebookArchivalNodes)
 
 		// TODO: For the time being, we do not dedup resolved archive nodes
 		assert.Equal(t, len(primaryArchiveResolvedRecords)+len(secondaryArchiveResolvedRecords), len(archivePeers))
@@ -4219,7 +4221,7 @@ func TestUpdatePhonebookAddresses(t *testing.T) {
 		relayPeers := netA.GetPeers(PeersPhonebookRelays)
 		assert.Equal(t, 0, len(relayPeers))
 
-		archivePeers := netA.GetPeers(PeersPhonebookArchivers)
+		archivePeers := netA.GetPeers(PeersPhonebookArchivalNodes)
 		assert.Equal(t, 0, len(archivePeers))
 
 		domainGen := rapidgen.Domain()
@@ -4248,7 +4250,7 @@ func TestUpdatePhonebookAddresses(t *testing.T) {
 
 		assert.ElementsMatch(t, dedupedRelayDomains, relayAddrs)
 
-		archivePeers = netA.GetPeers(PeersPhonebookArchivers)
+		archivePeers = netA.GetPeers(PeersPhonebookArchivalNodes)
 		assert.Equal(t, len(dedupedArchiveDomains), len(archivePeers))
 
 		archiveAddrs := make([]string, 0, len(archivePeers))
@@ -4288,7 +4290,7 @@ func TestUpdatePhonebookAddresses(t *testing.T) {
 
 		assert.ElementsMatch(t, dedupedRelayDomains, relayAddrs)
 
-		archivePeers = netA.GetPeers(PeersPhonebookArchivers)
+		archivePeers = netA.GetPeers(PeersPhonebookArchivalNodes)
 		assert.Equal(t, len(dedupedArchiveDomains), len(archivePeers))
 
 		archiveAddrs = nil

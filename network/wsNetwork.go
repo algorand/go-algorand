@@ -548,15 +548,7 @@ func (wn *WebsocketNetwork) GetPeers(options ...PeerOption) []Peer {
 			}
 		case PeersPhonebookArchivalNodes:
 			var addrs []string
-			addrs = wn.phonebook.GetAddresses(1000, PhoneBookEntryRelayRole)
-			for _, addr := range addrs {
-				peerCore := makePeerCore(wn.ctx, wn, wn.log, wn.handler.readBuffer, addr, wn.GetRoundTripper(), "" /*origin address*/)
-				outPeers = append(outPeers, &peerCore)
-			}
-		case PeersPhonebookArchivers:
-			// return copy of phonebook, which probably also contains peers we're connected to, but if it doesn't maybe we shouldn't be making new connections to those peers (because they disappeared from the directory)
-			var addrs []string
-			addrs = wn.phonebook.GetAddresses(1000, PhoneBookEntryArchiverRole)
+			addrs = wn.phonebook.GetAddresses(1000, PhoneBookEntryArchivalRole)
 			for _, addr := range addrs {
 				peerCore := makePeerCore(wn.ctx, wn, wn.log, wn.handler.readBuffer, addr, wn.GetRoundTripper(), "" /*origin address*/)
 				outPeers = append(outPeers, &peerCore)
@@ -1607,15 +1599,15 @@ func (wn *WebsocketNetwork) refreshRelayArchivePhonebookAddresses() {
 	dnsBootstrapArray := wn.config.DNSBootstrapArray(wn.NetworkID)
 
 	for _, dnsBootstrap := range dnsBootstrapArray {
-		primaryRelayAddrs, primaryArchiveAddrs := wn.getDNSAddrs(dnsBootstrap.PrimarySRVBootstrap)
+		primaryRelayAddrs, primaryArchivalAddrs := wn.getDNSAddrs(dnsBootstrap.PrimarySRVBootstrap)
 
 		if dnsBootstrap.BackupSRVBootstrap != "" {
-			backupRelayAddrs, backupArchiveAddrs := wn.getDNSAddrs(dnsBootstrap.BackupSRVBootstrap)
+			backupRelayAddrs, backupArchivalAddrs := wn.getDNSAddrs(dnsBootstrap.BackupSRVBootstrap)
 			dedupedRelayAddresses := wn.mergePrimarySecondaryRelayAddressSlices(wn.NetworkID, primaryRelayAddrs,
 				backupRelayAddrs, dnsBootstrap.DedupExp)
-			wn.updatePhonebookAddresses(dedupedRelayAddresses, append(primaryArchiveAddrs, backupArchiveAddrs...))
+			wn.updatePhonebookAddresses(dedupedRelayAddresses, append(primaryArchivalAddrs, backupArchivalAddrs...))
 		} else {
-			wn.updatePhonebookAddresses(primaryRelayAddrs, primaryArchiveAddrs)
+			wn.updatePhonebookAddresses(primaryRelayAddrs, primaryArchivalAddrs)
 		}
 	}
 }
@@ -1628,7 +1620,7 @@ func (wn *WebsocketNetwork) updatePhonebookAddresses(relayAddrs []string, archiv
 		wn.log.Infof("got no relay DNS addrs for network %s", wn.NetworkID)
 	}
 	if len(archiveAddrs) > 0 {
-		wn.phonebook.ReplacePeerList(archiveAddrs, string(wn.NetworkID), PhoneBookEntryArchiverRole)
+		wn.phonebook.ReplacePeerList(archiveAddrs, string(wn.NetworkID), PhoneBookEntryArchivalRole)
 	}
 }
 
@@ -1885,7 +1877,7 @@ func (wn *WebsocketNetwork) mergePrimarySecondaryRelayAddressSlices(network prot
 	return
 }
 
-func (wn *WebsocketNetwork) getDNSAddrs(dnsBootstrap string) (relaysAddresses []string, archiverAddresses []string) {
+func (wn *WebsocketNetwork) getDNSAddrs(dnsBootstrap string) (relaysAddresses []string, archivalAddresses []string) {
 	var err error
 	relaysAddresses, err = wn.resolveSRVRecords(wn.ctx, "algobootstrap", "tcp", dnsBootstrap, wn.config.FallbackDNSResolverAddress, wn.config.DNSSecuritySRVEnforced())
 	if err != nil {
@@ -1896,13 +1888,13 @@ func (wn *WebsocketNetwork) getDNSAddrs(dnsBootstrap string) (relaysAddresses []
 		relaysAddresses = nil
 	}
 
-	archiverAddresses, err = wn.resolveSRVRecords(wn.ctx, "archive", "tcp", dnsBootstrap, wn.config.FallbackDNSResolverAddress, wn.config.DNSSecuritySRVEnforced())
+	archivalAddresses, err = wn.resolveSRVRecords(wn.ctx, "archive", "tcp", dnsBootstrap, wn.config.FallbackDNSResolverAddress, wn.config.DNSSecuritySRVEnforced())
 	if err != nil {
 		// only log this warning on testnet or devnet
 		if wn.NetworkID == config.Devnet || wn.NetworkID == config.Testnet {
 			wn.log.Warnf("Cannot lookup archive SRV record for %s: %v", dnsBootstrap, err)
 		}
-		archiverAddresses = nil
+		archivalAddresses = nil
 	}
 	return
 }
