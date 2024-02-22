@@ -4195,15 +4195,14 @@ func TestRefreshRelayArchivePhonebookAddresses(t *testing.T) {
 
 		archivePeers = netA.GetPeers(PeersPhonebookArchivalNodes)
 
-		// TODO: For the time being, we do not dedup resolved archive nodes
-		assert.Equal(t, len(primaryArchiveResolvedRecords)+len(secondaryArchiveResolvedRecords), len(archivePeers))
+		assert.Equal(t, 3, len(archivePeers))
 
 		archiveAddrs := make([]string, 0, len(archivePeers))
 		for _, peer := range archivePeers {
 			archiveAddrs = append(archiveAddrs, peer.(HTTPPeer).GetAddress())
 		}
 
-		assert.ElementsMatch(t, append(primaryArchiveResolvedRecords, secondaryArchiveResolvedRecords...), archiveAddrs)
+		assert.ElementsMatch(t, primaryArchiveResolvedRecords, archiveAddrs)
 
 	})
 }
@@ -4351,7 +4350,7 @@ func TestMergePrimarySecondaryRelayAddressListsMinOverlap(t *testing.T) {
 		primaryRelayAddresses := domainsGen.Draw(t1, "primaryRelayAddresses")
 		secondaryRelayAddresses := domainsGen.Draw(t1, "secondaryRelayAddresses")
 
-		mergedRelayAddresses := netA.mergePrimarySecondaryRelayAddressSlices(protocol.NetworkID(network),
+		mergedRelayAddresses := netA.mergePrimarySecondaryAddressSlices(
 			primaryRelayAddresses, secondaryRelayAddresses, dedupExp)
 
 		expectedRelayAddresses := removeDuplicateStr(append(primaryRelayAddresses, secondaryRelayAddresses...), true)
@@ -4404,7 +4403,7 @@ func TestMergePrimarySecondaryRelayAddressListsPartialOverlap(t *testing.T) {
 		}
 		secondaryRelayAddresses = append(secondaryRelayAddresses, extraSecondaryRelayAddresses...)
 
-		mergedRelayAddresses := netA.mergePrimarySecondaryRelayAddressSlices(network,
+		mergedRelayAddresses := netA.mergePrimarySecondaryAddressSlices(
 			primaryRelayAddresses, secondaryRelayAddresses, dedupExp)
 
 		// We expect the primary addresses to take precedence over a "matching" secondary address, extra non-duplicate
@@ -4447,7 +4446,7 @@ func TestMergePrimarySecondaryRelayAddressListsNoDedupExp(t *testing.T) {
 		generatedSecondaryRelayAddresses := secondaryDomainsGen.Draw(t1, "secondaryRelayAddresses")
 		secondaryRelayAddresses = append(secondaryRelayAddresses, generatedSecondaryRelayAddresses...)
 
-		mergedRelayAddresses := netA.mergePrimarySecondaryRelayAddressSlices(protocol.NetworkID(network),
+		mergedRelayAddresses := netA.mergePrimarySecondaryAddressSlices(
 			primaryRelayAddresses, secondaryRelayAddresses, nil)
 
 		// We expect non deduplication, so all addresses _should_ be present (note that no lower casing happens either)

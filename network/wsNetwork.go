@@ -1603,9 +1603,11 @@ func (wn *WebsocketNetwork) refreshRelayArchivePhonebookAddresses() {
 
 		if dnsBootstrap.BackupSRVBootstrap != "" {
 			backupRelayAddrs, backupArchivalAddrs := wn.getDNSAddrs(dnsBootstrap.BackupSRVBootstrap)
-			dedupedRelayAddresses := wn.mergePrimarySecondaryRelayAddressSlices(wn.NetworkID, primaryRelayAddrs,
+			dedupedRelayAddresses := wn.mergePrimarySecondaryAddressSlices(primaryRelayAddrs,
 				backupRelayAddrs, dnsBootstrap.DedupExp)
-			wn.updatePhonebookAddresses(dedupedRelayAddresses, append(primaryArchivalAddrs, backupArchivalAddrs...))
+			dedupedArchivalAddresses := wn.mergePrimarySecondaryAddressSlices(primaryArchivalAddrs,
+				backupArchivalAddrs, dnsBootstrap.DedupExp)
+			wn.updatePhonebookAddresses(dedupedRelayAddresses, dedupedArchivalAddresses)
 		} else {
 			wn.updatePhonebookAddresses(primaryRelayAddrs, primaryArchivalAddrs)
 		}
@@ -1621,6 +1623,8 @@ func (wn *WebsocketNetwork) updatePhonebookAddresses(relayAddrs []string, archiv
 	}
 	if len(archiveAddrs) > 0 {
 		wn.phonebook.ReplacePeerList(archiveAddrs, string(wn.NetworkID), PhoneBookEntryArchivalRole)
+	} else {
+		wn.log.Infof("got no archive DNS addrs for network %s", wn.NetworkID)
 	}
 }
 
@@ -1838,40 +1842,40 @@ func (wn *WebsocketNetwork) prioWeightRefresh() {
 	}
 }
 
-// This logic assumes that the relay address suffixes
+// This logic assumes that the address suffixes
 // correspond to the primary/backup network conventions. If this proves to be false, i.e. one network's
 // suffix is a substring of another network's suffix, then duplicates can end up in the merged slice.
-func (wn *WebsocketNetwork) mergePrimarySecondaryRelayAddressSlices(network protocol.NetworkID,
-	primaryRelayAddresses []string, secondaryRelayAddresses []string, dedupExp *regexp.Regexp) (dedupedRelayAddresses []string) {
+func (wn *WebsocketNetwork) mergePrimarySecondaryAddressSlices(
+	primaryAddresses []string, secondaryAddresses []string, dedupExp *regexp.Regexp) (dedupedAddresses []string) {
 
 	if dedupExp == nil {
 		// No expression provided, so just append the slices without deduping
-		return append(primaryRelayAddresses, secondaryRelayAddresses...)
+		return append(primaryAddresses, secondaryAddresses...)
 	}
 
-	var relayAddressPrefixToValue = make(map[string]string, 2*len(primaryRelayAddresses))
+	var addressPrefixToValue = make(map[string]string, 2*len(primaryAddresses))
 
-	for _, pra := range primaryRelayAddresses {
+	for _, pra := range primaryAddresses {
 		var normalizedPra = strings.ToLower(pra)
 
 		var pfxKey = dedupExp.ReplaceAllString(normalizedPra, "")
-		if _, exists := relayAddressPrefixToValue[pfxKey]; !exists {
-			relayAddressPrefixToValue[pfxKey] = normalizedPra
+		if _, exists := addressPrefixToValue[pfxKey]; !exists {
+			addressPrefixToValue[pfxKey] = normalizedPra
 		}
 	}
 
-	for _, sra := range secondaryRelayAddresses {
+	for _, sra := range secondaryAddresses {
 		var normalizedSra = strings.ToLower(sra)
 		var pfxKey = dedupExp.ReplaceAllString(normalizedSra, "")
 
-		if _, exists := relayAddressPrefixToValue[pfxKey]; !exists {
-			relayAddressPrefixToValue[pfxKey] = normalizedSra
+		if _, exists := addressPrefixToValue[pfxKey]; !exists {
+			addressPrefixToValue[pfxKey] = normalizedSra
 		}
 	}
 
-	dedupedRelayAddresses = make([]string, 0, len(relayAddressPrefixToValue))
-	for _, value := range relayAddressPrefixToValue {
-		dedupedRelayAddresses = append(dedupedRelayAddresses, value)
+	dedupedAddresses = make([]string, 0, len(addressPrefixToValue))
+	for _, value := range addressPrefixToValue {
+		dedupedAddresses = append(dedupedAddresses, value)
 	}
 
 	return

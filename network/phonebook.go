@@ -30,7 +30,7 @@ import (
 const getAllAddresses = math.MaxInt32
 
 // PhoneBookEntryRoles defines the roles that a single entry on the phonebook can take.
-// currently, we have two roles : relay role and archiver role, which are mutually exclusive.
+// currently, we have two roles : relay role and archival role, which are mutually exclusive.
 //
 //msgp:ignore PhoneBookEntryRoles
 type PhoneBookEntryRoles int
