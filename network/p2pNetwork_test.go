@@ -710,6 +710,7 @@ func TestP2PHTTPHandler(t *testing.T) {
 	t.Parallel()
 
 	cfg := config.GetDefaultLocal()
+	cfg.EnableDHTProviders = true
 	cfg.GossipFanout = 1
 	log := logging.TestingLog(t)
 
@@ -943,18 +944,22 @@ func TestMergeP2PAddrInfoResolvedAddresses(t *testing.T) {
 	require.NoError(t, err)
 	m3, err := ma.NewMultiaddr("/ip4/127.0.0.1/tcp/4001/p2p/QmcgpsyWgH8Y8ajJz1Cu72KnS5uo2Aa2LpzU7kinSupNKC")
 	require.NoError(t, err)
+	m4, err := ma.NewMultiaddr("/ip4/127.0.0.1/tcp/4001")
+	require.NoError(t, err)
 
 	var tests = []struct {
-		name     string
-		primary  []ma.Multiaddr
-		backup   []ma.Multiaddr
-		expected int
+		name       string
+		primary    []ma.Multiaddr
+		backup     []ma.Multiaddr
+		expected   int
+		hasInvalid bool
 	}{
-		{"no overlap", []ma.Multiaddr{m1}, []ma.Multiaddr{m2}, 2},
-		{"complete overlap", []ma.Multiaddr{m1}, []ma.Multiaddr{m1}, 1},
-		{"partial overlap", []ma.Multiaddr{m1, m2}, []ma.Multiaddr{m1, m3}, 3},
-		{"empty slices", []ma.Multiaddr{}, []ma.Multiaddr{}, 0},
-		{"nil slices", nil, nil, 0},
+		{"no overlap", []ma.Multiaddr{m1}, []ma.Multiaddr{m2}, 2, false},
+		{"complete overlap", []ma.Multiaddr{m1}, []ma.Multiaddr{m1}, 1, false},
+		{"partial overlap", []ma.Multiaddr{m1, m2}, []ma.Multiaddr{m1, m3}, 3, false},
+		{"empty slices", []ma.Multiaddr{}, []ma.Multiaddr{}, 0, false},
+		{"nil slices", nil, nil, 0, false},
+		{"invalid p2p", []ma.Multiaddr{m1, m4}, []ma.Multiaddr{m2, m4}, 2, true},
 	}
 
 	for _, tt := range tests {
@@ -968,13 +973,25 @@ func TestMergeP2PAddrInfoResolvedAddresses(t *testing.T) {
 			var info2 []peer.AddrInfo
 			for _, addr := range tt.primary {
 				info, err0 := peer.AddrInfoFromP2pAddr(addr)
-				require.NoError(t, err0)
-				info1 = append(info1, *info)
+				if tt.hasInvalid {
+					if err0 == nil {
+						info1 = append(info1, *info)
+					}
+				} else {
+					require.NoError(t, err0)
+					info1 = append(info1, *info)
+				}
 			}
 			for _, addr := range tt.backup {
 				info, err0 := peer.AddrInfoFromP2pAddr(addr)
-				require.NoError(t, err0)
-				info2 = append(info2, *info)
+				if tt.hasInvalid {
+					if err0 == nil {
+						info2 = append(info2, *info)
+					}
+				} else {
+					require.NoError(t, err0)
+					info2 = append(info2, *info)
+				}
 			}
 			if info1 == nil && tt.primary != nil {
 				info1 = []peer.AddrInfo{}
