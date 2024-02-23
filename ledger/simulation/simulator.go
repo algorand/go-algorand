@@ -212,6 +212,33 @@ func (s Simulator) simulateWithTracer(txgroup []transactions.SignedTxnWithAD, tr
 	nextBlock := bookkeeping.MakeBlock(prevBlockHdr)
 	hdr := nextBlock.BlockHeader
 
+	fixAuthAddr := true
+	if fixAuthAddr {
+		// Map of rekeys for senders in the group
+		staticRekeys := make(map[basics.Address]basics.Address)
+
+		for i := range txgroup {
+			sender := txgroup[i].SignedTxn.Txn.Sender
+
+			if authAddr, ok := staticRekeys[sender]; ok {
+				// If there is a static rekey for the sender set the auth addr to that address
+				txgroup[i].SignedTxn.AuthAddr = authAddr
+			} else {
+				// Otherwise lookup the sender's account and set the txn auth addr to the account's auth addr
+				data, _, _, err := s.ledger.LookupAccount(s.ledger.start, sender)
+				if err != nil {
+					return nil, err
+				}
+				txgroup[i].SignedTxn.AuthAddr = data.AuthAddr
+			}
+
+			if txgroup[i].SignedTxn.Txn.RekeyTo != (basics.Address{}) {
+				staticRekeys[sender] = txgroup[i].SignedTxn.Txn.RekeyTo
+			}
+		}
+
+	}
+
 	// check that the transaction is well-formed and mark whether signatures are missing
 	err = s.check(hdr, txgroup, tracer, overrides)
 	if err != nil {

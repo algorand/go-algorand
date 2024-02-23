@@ -516,14 +516,40 @@ func (tracer *evalTracer) AfterProgram(cx *logic.EvalContext, pass bool, evalErr
 	}
 
 	fixAuthAddrs := true
-	if fixAuthAddrs && groupIndex+1 < len(cx.TxnGroup) {
-		// Fix up the auth-addr of the next transaction in the group, if needed
-		nextTxn := &tracer.groups[0][groupIndex+1]
-		data, err := cx.Ledger.AccountData(nextTxn.Txn.Sender)
-		if err != nil {
-			panic(err)
+
+	// Since an app could rekey multiple accounts, we need to go over the
+	// rest of the txngroup and make sure all the auth addrs are correct
+	if fixAuthAddrs {
+		knownAuthAddrs := make(map[basics.Address]basics.Address)
+		// iterate over all txns in the group after this one
+		for i := groupIndex + 1; i < len(cx.TxnGroup); i++ {
+			stxn := &tracer.groups[0][i]
+			sender := stxn.Txn.Sender
+
+			// Check if we already know the auth addr
+			if authAddr, ok := knownAuthAddrs[sender]; ok {
+				stxn.AuthAddr = authAddr
+			} else {
+				// Get the auth addr from the ledger
+				data, err := cx.Ledger.AccountData(sender)
+				if err != nil {
+					panic(err)
+				}
+
+				// set the txn auth addr
+				stxn.AuthAddr = data.AuthAddr
+				knownAuthAddrs[sender] = data.AuthAddr
+			}
+
+			// If this is an appl, we can break since we know AfterProgram will be called afterwards
+			if stxn.Txn.Type == protocol.ApplicationCallTx {
+				break
+			}
+
+			// If this is a rekey, save the auth addr for the sender
+			if stxn.Txn.RekeyTo != (basics.Address{}) {
+				knownAuthAddrs[sender] = stxn.Txn.RekeyTo
+			}
 		}
-		fmt.Printf("Setting auth addr of txn %d from %s to %s", groupIndex+1, nextTxn.Txn.Sender, data.AuthAddr)
-		nextTxn.AuthAddr = data.AuthAddr
 	}
 }

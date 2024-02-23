@@ -8929,6 +8929,12 @@ int 1
 	})
 	env.TransferAlgos(sender.Addr, appID.Address(), 1_000_000)
 
+	pay0 := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:     protocol.PaymentTx,
+		Sender:   sender.Addr,
+		Receiver: sender.Addr,
+		RekeyTo:  other.Addr,
+	})
 	pay1 := env.TxnInfo.NewTxn(txntest.Txn{
 		Type:     protocol.PaymentTx,
 		Sender:   sender.Addr,
@@ -8947,7 +8953,7 @@ int 1
 		Receiver: sender.Addr,
 	})
 
-	txgroup := txntest.Group(&pay1, &appCall, &pay2)
+	txgroup := txntest.Group(&pay0, &pay1, &appCall, &pay2)
 
 	request := simulation.Request{
 		TxnGroups:            [][]transactions.SignedTxn{txgroup},
