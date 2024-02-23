@@ -68,18 +68,20 @@ type peerStoreCAB interface {
 }
 
 // NewPeerStore creates a new peerstore backed by a datastore.
-func NewPeerStore(addrInfo []*peer.AddrInfo) (*PeerStore, error) {
+func NewPeerStore(addrInfo []*peer.AddrInfo, network string) (*PeerStore, error) {
 	ps, err := mempstore.NewPeerstore()
 	if err != nil {
 		return nil, fmt.Errorf("cannot initialize a peerstore: %w", err)
 	}
 
 	// initialize peerstore with addresses
+	peers := make([]interface{}, len(addrInfo))
 	for i := 0; i < len(addrInfo); i++ {
-		info := addrInfo[i]
-		ps.AddAddrs(info.ID, info.Addrs, libp2p.AddressTTL)
+		peers[i] = addrInfo[i]
 	}
+
 	pstore := &PeerStore{peerStoreCAB: ps}
+	pstore.AddPersistentPeers(peers, network, phonebook.PhoneBookEntryRelayRole)
 	return pstore, nil
 }
 
@@ -98,7 +100,7 @@ func MakePhonebook(connectionsRateLimitingCount uint,
 }
 
 // GetAddresses returns up to N addresses, but may return fewer
-func (ps *PeerStore) GetAddresses(n int, role phonebook.PhoneBookEntryRoles) []string {
+func (ps *PeerStore) GetAddresses(n int, role phonebook.PhoneBookEntryRoles) []interface{} {
 	return shuffleSelect(ps.filterRetryTime(time.Now(), role), n)
 }
 
@@ -206,7 +208,7 @@ func (ps *PeerStore) UpdateConnectionTime(addr interface{}, provisionalTime time
 }
 
 // ReplacePeerList replaces the peer list for the given networkName and role.
-func (ps *PeerStore) ReplacePeerList(addressesThey []string, networkName string, role phonebook.PhoneBookEntryRoles) {
+func (ps *PeerStore) ReplacePeerList(addressesThey []interface{}, networkName string, role phonebook.PhoneBookEntryRoles) {
 	// prepare a map of items we'd like to remove.
 	removeItems := make(map[peer.ID]bool, 0)
 	peerIDs := ps.Peers()
@@ -221,10 +223,7 @@ func (ps *PeerStore) ReplacePeerList(addressesThey []string, networkName string,
 
 	}
 	for _, addr := range addressesThey {
-		info, err := peerInfoFromDomainPort(addr)
-		if err != nil {
-			return
-		}
+		info := addr.(*peer.AddrInfo)
 		data, _ := ps.Get(info.ID, addressDataKey)
 		if data != nil {
 			// we already have this.
@@ -294,7 +293,7 @@ func (ps *PeerStore) deletePhonebookEntry(peerID peer.ID, networkName string) {
 	}
 	ad := data.(addressData)
 	delete(ad.networkNames, networkName)
-	if 0 == len(ad.networkNames) {
+	if len(ad.networkNames) == 0 {
 		ps.ClearAddrs(peerID)
 		_ = ps.Put(peerID, addressDataKey, nil)
 	}
@@ -319,21 +318,23 @@ func (ps *PeerStore) popNElements(n int, peerID peer.ID) {
 	_ = ps.Put(peerID, addressDataKey, ad)
 }
 
-func (ps *PeerStore) filterRetryTime(t time.Time, role phonebook.PhoneBookEntryRoles) []string {
-	o := make([]string, 0, len(ps.Peers()))
+func (ps *PeerStore) filterRetryTime(t time.Time, role phonebook.PhoneBookEntryRoles) []interface{} {
+	o := make([]interface{}, 0, len(ps.Peers()))
 	for _, peerID := range ps.Peers() {
 		data, _ := ps.Get(peerID, addressDataKey)
 		if data != nil {
 			ad := data.(addressData)
 			if t.After(ad.retryAfter) && role == ad.role {
-				o = append(o, string(peerID))
+				mas := ps.Addrs(peerID)
+				info := peer.AddrInfo{ID: peerID, Addrs: mas}
+				o = append(o, &info)
 			}
 		}
 	}
 	return o
 }
 
-func shuffleSelect(set []string, n int) []string {
+func shuffleSelect(set []interface{}, n int) []interface{} {
 	if n >= len(set) || n == getAllAddresses {
 		// return shuffled copy of everything
 		out := slices.Clone(set)
@@ -350,13 +351,13 @@ func shuffleSelect(set []string, n int) []string {
 			}
 		}
 	}
-	out := make([]string, n)
+	out := make([]interface{}, n)
 	for i, index := range indexSample {
 		out[i] = set[index]
 	}
 	return out
 }
 
-func shuffleStrings(set []string) {
+func shuffleStrings(set []interface{}) {
 	rand.Shuffle(len(set), func(i, j int) { set[i], set[j] = set[j], set[i] })
 }

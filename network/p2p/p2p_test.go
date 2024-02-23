@@ -89,7 +89,7 @@ func TestP2PStreamingHost(t *testing.T) {
 
 	cfg := config.GetDefaultLocal()
 	dir := t.TempDir()
-	pstore, err := peerstore.NewPeerStore(nil)
+	pstore, err := peerstore.NewPeerStore(nil, "")
 	require.NoError(t, err)
 	h, la, err := MakeHost(cfg, dir, pstore)
 	require.NoError(t, err)
@@ -115,7 +115,7 @@ func TestP2PStreamingHost(t *testing.T) {
 		ID:    h.ID(),
 		Addrs: h.Addrs(),
 	}
-	cpstore, err := peerstore.NewPeerStore([]*peer.AddrInfo{&addrInfo})
+	cpstore, err := peerstore.NewPeerStore([]*peer.AddrInfo{&addrInfo}, "")
 	require.NoError(t, err)
 	c, _, err := MakeHost(cfg, dir, cpstore)
 	require.NoError(t, err)

@@ -911,7 +911,7 @@ func TestNodeHybridTopology(t *testing.T) {
 			t.Logf("Node%d phonebook: empty", i)
 			return []string{}
 		case 1:
-			// node 1 (R) connectes to all
+			// node 1 (R) connects to all
 			t.Logf("Node%d phonebook: %s, %s, %s, %s", i, ni[0].wsNetAddr(), ni[2].wsNetAddr(), ni[0].p2pMultiAddr(), ni[2].p2pMultiAddr())
 			return []string{ni[0].wsNetAddr(), ni[2].wsNetAddr(), ni[0].p2pMultiAddr(), ni[2].p2pMultiAddr()}
 		case 2:
@@ -951,4 +951,105 @@ func TestNodeHybridTopology(t *testing.T) {
 	case <-time.After(120 * time.Second):
 		require.Fail(t, fmt.Sprintf("no block notification for wallet: %v.", wallets[0]))
 	}
+}
+
+// TestNodeP2PRelays creates a network of 3 nodes with the following topology:
+// R1 (relay, DHT) -> R2 (relay, phonebook) <- N (part node)
+// Expect N to discover R1 via DHT and connect to it.
+func TestNodeP2PRelays(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	const consensusTest0 = protocol.ConsensusVersion("test0")
+
+	configurableConsensus := make(config.ConsensusProtocols)
+
+	testParams0 := config.Consensus[protocol.ConsensusCurrentVersion]
+	testParams0.AgreementFilterTimeoutPeriod0 = 500 * time.Millisecond
+	configurableConsensus[consensusTest0] = testParams0
+
+	minMoneyAtStart := 1_000_000
+	maxMoneyAtStart := 100_000_000_000
+	gen := rand.New(rand.NewSource(2))
+
+	const numAccounts = 3
+	acctStake := make([]basics.MicroAlgos, numAccounts)
+	// only node N has stake
+	acctStake[2] = basics.MicroAlgos{Raw: uint64(minMoneyAtStart + (gen.Int() % (maxMoneyAtStart - minMoneyAtStart)))}
+
+	configHook := func(ni nodeInfo, cfg config.Local) (nodeInfo, config.Local) {
+		cfg = config.GetDefaultLocal()
+		cfg.BaseLoggerDebugLevel = uint32(logging.Debug)
+		cfg.EnableP2P = true
+		cfg.NetAddress = ""
+		cfg.EnableDHTProviders = true
+
+		cfg.P2PPersistPeerID = true
+		genesisDirs, err := cfg.EnsureAndResolveGenesisDirs(ni.rootDir, ni.genesis.ID(), nil)
+		require.NoError(t, err)
+		privKey, err := p2p.GetPrivKey(cfg, genesisDirs.RootGenesisDir)
+		require.NoError(t, err)
+		ni.p2pID, err = p2p.PeerIDFromPublicKey(privKey.GetPublic())
+		require.NoError(t, err)
+
+		switch ni.idx {
+		case 2:
+			// N is not a relay
+		default:
+			cfg.NetAddress = ni.p2pNetAddr()
+		}
+		return ni, cfg
+	}
+
+	phonebookHook := func(ni []nodeInfo, i int) []string {
+		switch i {
+		case 0:
+			// node R1 connects to R2
+			t.Logf("Node%d phonebook: %s", i, ni[1].p2pMultiAddr())
+			return []string{ni[1].p2pMultiAddr()}
+		case 1:
+			// node R2 connects to none one
+			t.Logf("Node%d phonebook: empty", i)
+			return []string{}
+		case 2:
+			// node N only connects to R1
+			t.Logf("Node%d phonebook: %s", i, ni[1].p2pMultiAddr())
+			return []string{ni[1].p2pMultiAddr()}
+		default:
+			t.Errorf("not expected number of nodes: %d", i)
+			t.FailNow()
+		}
+		return nil
+	}
+
+	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
+	defer backlogPool.Shutdown()
+
+	nodes, wallets := setupFullNodesEx(t, consensusTest0, backlogPool, configurableConsensus, acctStake, configHook, phonebookHook)
+	require.Len(t, nodes, 3)
+	require.Len(t, wallets, 3)
+	for i := 0; i < len(nodes); i++ {
+		defer os.Remove(wallets[i])
+		defer nodes[i].Stop()
+	}
+
+	startAndConnectNodes(nodes, nodelayFirstNodeStartDelay)
+
+	require.Eventually(t, func() bool {
+		connectPeers(nodes)
+
+		// since p2p open streams based on peer ID, there is no way to judge
+		// connectivity based on exact In/Out so count both
+		return len(nodes[0].net.GetPeers(network.PeersConnectedIn, network.PeersConnectedOut)) >= 1 &&
+			len(nodes[1].net.GetPeers(network.PeersConnectedIn, network.PeersConnectedOut)) >= 2 &&
+			len(nodes[2].net.GetPeers(network.PeersConnectedIn, network.PeersConnectedOut)) >= 1
+	}, 60*time.Second, 1*time.Second)
+
+	t.Log("Nodes connected to R2")
+
+	// wait until N gets R1 in its phonebook
+	require.Eventually(t, func() bool {
+		// refresh N's peers in order to learn DHT data faster
+		nodes[2].net.RequestConnectOutgoing(false, nil)
+		return len(nodes[2].net.GetPeers(network.PeersPhonebookRelays)) == 2
+	}, 80*time.Second, 1*time.Second)
 }
