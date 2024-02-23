@@ -1553,13 +1553,21 @@ func (cx *EvalContext) step() error {
 			budgetPerMinFee = uint64(cx.Proto.MaxAppProgramCost)
 		}
 
-		shortfall := cx.Proto.MinTxnFee * ((requiredExtraBudget + budgetPerMinFee - 1) / budgetPerMinFee)
+		requiredMinFees := (requiredExtraBudget + budgetPerMinFee - 1) / budgetPerMinFee
+		shortfall := cx.Proto.MinTxnFee * requiredMinFees
 
 		if cx.FeeCredit == nil || *cx.FeeCredit < shortfall {
 			return fmt.Errorf("pc=%3d dynamic cost budget exceeded, executing %s: local program cost was %d",
 				cx.pc, spec.Name, cx.cost)
 		}
 		*cx.FeeCredit -= shortfall
+
+		switch {
+		case cx.PooledApplicationBudget != nil:
+			*cx.PooledApplicationBudget += int(budgetPerMinFee * requiredMinFees)
+		case cx.PooledLogicSigBudget != nil:
+			*cx.PooledLogicSigBudget += int(budgetPerMinFee * requiredMinFees)
+		}
 	}
 
 	cx.cost += opcost
