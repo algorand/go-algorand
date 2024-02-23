@@ -67,6 +67,7 @@ type P2PNetwork struct {
 	wsPeersLock                    deadlock.RWMutex
 	wsPeersChangeCounter           atomic.Int32
 	wsPeersConnectivityCheckTicker *time.Ticker
+	peerStater                     peerConnectionStater
 
 	relayMessages bool // True if we should relay messages from other nodes (nominally true for relays, false otherwise)
 	wantTXGossip  atomic.Bool
@@ -222,6 +223,11 @@ func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebo
 		nodeInfo:      node,
 		pstore:        pstore,
 		relayMessages: relayMessages,
+		peerStater: peerConnectionStater{
+			log:                           log,
+			peerConnectionsUpdateInterval: time.Duration(cfg.PeerConnectionsUpdateInterval) * time.Second,
+			lastPeerConnectionsSent:       time.Now(),
+		},
 	}
 
 	net.ctx, net.ctxCancel = context.WithCancel(context.Background())
@@ -419,6 +425,11 @@ func (n *P2PNetwork) meshThread() {
 		case <-n.ctx.Done():
 			return
 		}
+
+		// send the currently connected peers information to the
+		// telemetry server; that would allow the telemetry server
+		// to construct a cross-node map of all the nodes interconnections.
+		n.peerStater.sendPeerConnectionsTelemetryStatus(n)
 	}
 }
 
