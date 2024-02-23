@@ -639,7 +639,9 @@ func TestBlockLogs(t *testing.T) {
 		uint64(createdAppID), nil, nil, nil,
 		nil, nil,
 	)
+	a.NoError(err)
 	appCallTxn0, err := testClient.FillUnsignedTxTemplate(someAddress, 0, 0, 0, appCallTxn)
+	a.NoError(err)
 	appCallTxn0.Note = []byte("0")
 
 	appCallTxn1, err := testClient.FillUnsignedTxTemplate(someAddress, 0, 0, 0, appCallTxn)
@@ -665,10 +667,12 @@ func TestBlockLogs(t *testing.T) {
 	round := callConf.ConfirmedRound
 
 	deadDood, err := hex.DecodeString("deadd00d")
+	a.NoError(err)
 	deadBeef, err := hex.DecodeString("deadbeef")
+	a.NoError(err)
 
 	// get block logs
-    resp, err := testClient.BlockLogs(*round)
+	resp, err := testClient.BlockLogs(*round)
 	a.NoError(err)
 
 	expected := model.BlockLogsResponse{
@@ -696,3 +700,4 @@ func TestBlockLogs(t *testing.T) {
 		},
 	}
 	a.Equal(expected, resp)
+}
