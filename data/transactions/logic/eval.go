@@ -1541,9 +1541,29 @@ func (cx *EvalContext) step() error {
 		}
 	}
 
+	// TODO: Right now opcode budget is uncapped with this mechanism, which we probably don't want
+	// We need to do some sort of accouting in/with remainingInners() to ensure we stay below the max
 	if opcost > cx.remainingBudget() {
-		return fmt.Errorf("pc=%3d dynamic cost budget exceeded, executing %s: local program cost was %d",
-			cx.pc, spec.Name, cx.cost)
+		requiredExtraBudget := uint64(opcost - cx.remainingBudget())
+		var budgetPerMinFee uint64
+
+		if cx.runMode == ModeSig {
+			budgetPerMinFee = cx.Proto.LogicSigMaxCost
+		} else {
+			budgetPerMinFee = uint64(cx.Proto.MaxAppProgramCost)
+		}
+
+		shortfall := cx.Proto.MinTxnFee * (requiredExtraBudget / budgetPerMinFee)
+
+		if requiredExtraBudget%budgetPerMinFee != 0 {
+			shortfall += cx.Proto.MinTxnFee
+		}
+
+		if cx.FeeCredit == nil || *cx.FeeCredit < shortfall {
+			return fmt.Errorf("pc=%3d dynamic cost budget exceeded, executing %s: local program cost was %d",
+				cx.pc, spec.Name, cx.cost)
+		}
+		*cx.FeeCredit -= shortfall
 	}
 
 	cx.cost += opcost
