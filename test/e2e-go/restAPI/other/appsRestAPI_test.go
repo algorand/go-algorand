@@ -668,26 +668,31 @@ func TestBlockLogs(t *testing.T) {
 	deadBeef, err := hex.DecodeString("deadbeef")
 
 	// get block logs
-	resp, err := testClient.BlockLogs(*round)
+    resp, err := testClient.BlockLogs(*round)
 	a.NoError(err)
-	l0 := resp.Logs[0]
-	l1 := resp.Logs[1]
-	l2 := resp.Logs[2]
-	l3 := resp.Logs[3]
 
-	a.Equal(uint64(createdAppID), l0.ApplicationIndex)
-	a.Equal(stxn0.ID().String(), l0.Txid)
-	a.Equal(deadDood, l0.Logs[0])
-
-	a.Equal(uint64(createdAppID)+3, l1.ApplicationIndex)
-	a.Equal(stxn0.ID().String(), l1.Txid)
-	a.Equal(deadBeef, l1.Logs[0])
-
-	a.Equal(uint64(createdAppID), l2.ApplicationIndex)
-	a.Equal(stxn1.ID().String(), l2.Txid)
-	a.Equal(deadDood, l2.Logs[0])
-
-	a.Equal(uint64(createdAppID)+5, l3.ApplicationIndex)
-	a.Equal(stxn1.ID().String(), l3.Txid)
-	a.Equal(deadBeef, l3.Logs[0])
-}
+	expected := model.BlockLogsResponse{
+		Logs: []model.AppCallLogs{
+			{
+				ApplicationIndex: uint64(createdAppID),
+				Txid:             stxn0.ID().String(),
+				Logs:             [][]byte{deadDood},
+			},
+			{
+				ApplicationIndex: uint64(createdAppID + 3),
+				Txid:             stxn0.ID().String(),
+				Logs:             [][]byte{deadBeef},
+			},
+			{
+				ApplicationIndex: uint64(createdAppID),
+				Txid:             stxn1.ID().String(),
+				Logs:             [][]byte{deadDood},
+			},
+			{
+				ApplicationIndex: uint64(createdAppID + 5),
+				Txid:             stxn1.ID().String(),
+				Logs:             [][]byte{deadBeef},
+			},
+		},
+	}
+	a.Equal(expected, resp)
