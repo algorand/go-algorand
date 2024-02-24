@@ -1541,16 +1541,16 @@ func (cx *EvalContext) step() error {
 		}
 	}
 
-	// TODO: Right now opcode budget is uncapped with this mechanism, which we probably don't want
-	// We need to do some sort of accouting in/with remainingInners() to ensure we stay below the max
 	if opcost > cx.remainingBudget() {
 		requiredExtraBudget := uint64(opcost - cx.remainingBudget())
 		var budgetPerMinFee uint64
 
 		if cx.runMode == ModeSig {
 			budgetPerMinFee = cx.Proto.LogicSigMaxCost
-		} else {
+		} else if cx.runMode == ModeApp {
 			budgetPerMinFee = uint64(cx.Proto.MaxAppProgramCost)
+		} else {
+			return fmt.Errorf("unknown run mode %d", cx.runMode)
 		}
 
 		requiredMinFees := (requiredExtraBudget + budgetPerMinFee - 1) / budgetPerMinFee
@@ -1562,11 +1562,19 @@ func (cx *EvalContext) step() error {
 		}
 		*cx.FeeCredit -= shortfall
 
-		switch {
-		case cx.PooledApplicationBudget != nil:
+		if cx.runMode == ModeApp {
+			*cx.pooledAllowedInners -= int(requiredMinFees)
+			if *cx.pooledAllowedInners < 0 {
+				return fmt.Errorf("pc=%3d dynamic group cost budget exceeded, executing %s: local program cost was %d.",
+					cx.pc, spec.Name, cx.cost)
+			}
+
 			*cx.PooledApplicationBudget += int(budgetPerMinFee * requiredMinFees)
-		case cx.PooledLogicSigBudget != nil:
+		} else if cx.runMode == ModeSig {
+			// TODO: return error if we've used MaxTxGroupSize worth of lsig budget in the group
 			*cx.PooledLogicSigBudget += int(budgetPerMinFee * requiredMinFees)
+		} else {
+			return fmt.Errorf("unknown run mode %d", cx.runMode)
 		}
 	}
 
