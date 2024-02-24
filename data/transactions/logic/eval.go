@@ -1565,7 +1565,7 @@ func (cx *EvalContext) step() error {
 		if cx.runMode == ModeApp {
 			*cx.pooledAllowedInners -= int(requiredMinFees)
 			if *cx.pooledAllowedInners < 0 {
-				return fmt.Errorf("pc=%3d dynamic group cost budget exceeded, executing %s: local program cost was %d.",
+				return fmt.Errorf("pc=%3d dynamic group cost budget exceeded, executing %s: local program cost was %d",
 					cx.pc, spec.Name, cx.cost)
 			}
 
