@@ -1183,6 +1183,9 @@ func TestGetPeers(t *testing.T) {
 
 	phbMulti.ReplacePeerList([]string{"a", "b", "c"}, "ph", PhoneBookEntryRelayRole)
 
+	// A few for archival node roles
+	phbMulti.ReplacePeerList([]string{"d", "e", "f"}, "ph", PhoneBookEntryArchivalRole)
+
 	//addrB, _ := netB.Address()
 
 	// A has only an inbound connection from B
@@ -1206,14 +1209,13 @@ func TestGetPeers(t *testing.T) {
 	sort.Strings(expectAddrs)
 	assert.Equal(t, expectAddrs, peerAddrs)
 
-	// For now, PeersPhonebookArchivalNodes and PeersPhonebookRelays will return the same set of nodes
 	bPeers2 := netB.GetPeers(PeersPhonebookArchivalNodes)
 	peerAddrs2 := make([]string, len(bPeers2))
 	for pi2, peer2 := range bPeers2 {
 		peerAddrs2[pi2] = peer2.(HTTPPeer).GetAddress()
 	}
 	sort.Strings(peerAddrs2)
-	assert.Equal(t, expectAddrs, peerAddrs2)
+	assert.Equal(t, []string{"d", "e", "f"}, peerAddrs2)
 
 }
 
@@ -4176,7 +4178,7 @@ func TestRefreshRelayArchivePhonebookAddresses(t *testing.T) {
 		relayPeers := netA.GetPeers(PeersPhonebookRelays)
 		assert.Equal(t, 0, len(relayPeers))
 
-		archivePeers := netA.GetPeers(PeersPhonebookArchivers)
+		archivePeers := netA.GetPeers(PeersPhonebookArchivalNodes)
 		assert.Equal(t, 0, len(archivePeers))
 
 		netA.refreshRelayArchivePhonebookAddresses()
@@ -4191,17 +4193,16 @@ func TestRefreshRelayArchivePhonebookAddresses(t *testing.T) {
 
 		assert.ElementsMatch(t, primaryRelayResolvedRecords, relayAddrs)
 
-		archivePeers = netA.GetPeers(PeersPhonebookArchivers)
+		archivePeers = netA.GetPeers(PeersPhonebookArchivalNodes)
 
-		// TODO: For the time being, we do not dedup resolved archive nodes
-		assert.Equal(t, len(primaryArchiveResolvedRecords)+len(secondaryArchiveResolvedRecords), len(archivePeers))
+		assert.Equal(t, 3, len(archivePeers))
 
 		archiveAddrs := make([]string, 0, len(archivePeers))
 		for _, peer := range archivePeers {
 			archiveAddrs = append(archiveAddrs, peer.(HTTPPeer).GetAddress())
 		}
 
-		assert.ElementsMatch(t, append(primaryArchiveResolvedRecords, secondaryArchiveResolvedRecords...), archiveAddrs)
+		assert.ElementsMatch(t, primaryArchiveResolvedRecords, archiveAddrs)
 
 	})
 }
@@ -4219,7 +4220,7 @@ func TestUpdatePhonebookAddresses(t *testing.T) {
 		relayPeers := netA.GetPeers(PeersPhonebookRelays)
 		assert.Equal(t, 0, len(relayPeers))
 
-		archivePeers := netA.GetPeers(PeersPhonebookArchivers)
+		archivePeers := netA.GetPeers(PeersPhonebookArchivalNodes)
 		assert.Equal(t, 0, len(archivePeers))
 
 		domainGen := rapidgen.Domain()
@@ -4248,7 +4249,7 @@ func TestUpdatePhonebookAddresses(t *testing.T) {
 
 		assert.ElementsMatch(t, dedupedRelayDomains, relayAddrs)
 
-		archivePeers = netA.GetPeers(PeersPhonebookArchivers)
+		archivePeers = netA.GetPeers(PeersPhonebookArchivalNodes)
 		assert.Equal(t, len(dedupedArchiveDomains), len(archivePeers))
 
 		archiveAddrs := make([]string, 0, len(archivePeers))
@@ -4288,7 +4289,7 @@ func TestUpdatePhonebookAddresses(t *testing.T) {
 
 		assert.ElementsMatch(t, dedupedRelayDomains, relayAddrs)
 
-		archivePeers = netA.GetPeers(PeersPhonebookArchivers)
+		archivePeers = netA.GetPeers(PeersPhonebookArchivalNodes)
 		assert.Equal(t, len(dedupedArchiveDomains), len(archivePeers))
 
 		archiveAddrs = nil
@@ -4349,7 +4350,7 @@ func TestMergePrimarySecondaryRelayAddressListsMinOverlap(t *testing.T) {
 		primaryRelayAddresses := domainsGen.Draw(t1, "primaryRelayAddresses")
 		secondaryRelayAddresses := domainsGen.Draw(t1, "secondaryRelayAddresses")
 
-		mergedRelayAddresses := netA.mergePrimarySecondaryRelayAddressSlices(protocol.NetworkID(network),
+		mergedRelayAddresses := netA.mergePrimarySecondaryAddressSlices(
 			primaryRelayAddresses, secondaryRelayAddresses, dedupExp)
 
 		expectedRelayAddresses := removeDuplicateStr(append(primaryRelayAddresses, secondaryRelayAddresses...), true)
@@ -4402,7 +4403,7 @@ func TestMergePrimarySecondaryRelayAddressListsPartialOverlap(t *testing.T) {
 		}
 		secondaryRelayAddresses = append(secondaryRelayAddresses, extraSecondaryRelayAddresses...)
 
-		mergedRelayAddresses := netA.mergePrimarySecondaryRelayAddressSlices(network,
+		mergedRelayAddresses := netA.mergePrimarySecondaryAddressSlices(
 			primaryRelayAddresses, secondaryRelayAddresses, dedupExp)
 
 		// We expect the primary addresses to take precedence over a "matching" secondary address, extra non-duplicate
@@ -4445,7 +4446,7 @@ func TestMergePrimarySecondaryRelayAddressListsNoDedupExp(t *testing.T) {
 		generatedSecondaryRelayAddresses := secondaryDomainsGen.Draw(t1, "secondaryRelayAddresses")
 		secondaryRelayAddresses = append(secondaryRelayAddresses, generatedSecondaryRelayAddresses...)
 
-		mergedRelayAddresses := netA.mergePrimarySecondaryRelayAddressSlices(protocol.NetworkID(network),
+		mergedRelayAddresses := netA.mergePrimarySecondaryAddressSlices(
 			primaryRelayAddresses, secondaryRelayAddresses, nil)
 
 		// We expect non deduplication, so all addresses _should_ be present (note that no lower casing happens either)

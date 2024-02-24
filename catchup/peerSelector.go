@@ -29,12 +29,12 @@ import (
 )
 
 const (
-	// peerRankInitialFirstPriority is the high-priority peers group ( typically, archivers )
+	// peerRankInitialFirstPriority is the high-priority peers group
 	peerRankInitialFirstPriority = 0
 	peerRank0LowBlockTime        = 1
 	peerRank0HighBlockTime       = 199
 
-	// peerRankInitialSecondPriority is the second priority peers group ( typically, relays )
+	// peerRankInitialSecondPriority is the second priority peers group
 	peerRankInitialSecondPriority = 200
 	peerRank1LowBlockTime         = 201
 	peerRank1HighBlockTime        = 399

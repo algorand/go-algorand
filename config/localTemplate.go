@@ -171,6 +171,7 @@ type Local struct {
 	RestWriteTimeoutSeconds int `version[4]:"120"`
 
 	// DNSBootstrapID specifies the names of a set of DNS SRV records that identify the set of nodes available to connect to.
+	// This is applicable to both relay and archival nodes - they are assumed to use the same DNSBootstrapID today.
 	// When resolving the bootstrap ID <network> will be replaced by the genesis block's network name. This string uses a URL
 	// parsing library and supports optional backup and dedup parameters. 'backup' is used to provide a second DNS entry to use
 	// in case the primary is unavailable. dedup is intended to be used to deduplicate SRV records returned from the primary
