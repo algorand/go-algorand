@@ -44,8 +44,5 @@ func MakeHealthService(net network.GossipNode, enableService bool) HealthService
 
 func (h HealthService) ServeHTTP(writer http.ResponseWriter, _ *http.Request) {
 	writer.WriteHeader(http.StatusOK)
-	_, err := fmt.Fprintf(writer, "Port is Open!")
-	if err != nil {
-		http.Error(writer, err.Error(), http.StatusInternalServerError)
-	}
+	_, _ = fmt.Fprintf(writer, "Port is Open!")
 }
