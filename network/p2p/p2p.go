@@ -86,6 +86,10 @@ type serviceImpl struct {
 // AlgorandWsProtocol defines a libp2p protocol name for algorand's websockets messages
 const AlgorandWsProtocol = "/algorand-ws/1.0.0"
 
+// algorandGUIDProtocolPrefix defines a libp2p protocol name for algorand node telemetry GUID exchange
+const algorandGUIDProtocolPrefix = "/algorand-telemetry/1.0.0/"
+const algorandGUIDProtocolTemplate = algorandGUIDProtocolPrefix + "%s/%s"
+
 const dialTimeout = 30 * time.Second
 
 // MakeHost creates a libp2p host but does not start listening.
@@ -177,6 +181,12 @@ func MakeService(ctx context.Context, log logging.Logger, cfg config.Local, h ho
 	h.Network().Notify(sm)
 	h.SetStreamHandler(AlgorandWsProtocol, sm.streamHandler)
 	h.SetStreamHandler(libp2phttp.ProtocolIDForMultistreamSelect, sm.streamHandlerHTTP)
+
+	// set an empty handler for telemetryID/telemetryInstance protocol in order to allow other peers to know our telemetryID
+	telemetryID := log.GetTelemetryGUID()
+	telemetryInstance := log.GetInstanceName()
+	telemetryProtoInfo := fmt.Sprintf(algorandGUIDProtocolTemplate, telemetryID, telemetryInstance)
+	h.SetStreamHandler(protocol.ID(telemetryProtoInfo), func(s network.Stream) {})
 
 	ps, err := makePubSub(ctx, cfg, h)
 	if err != nil {
@@ -293,4 +303,18 @@ func netAddressToListenAddress(netAddress string) (string, error) {
 	}
 
 	return fmt.Sprintf("/ip4/%s/tcp/%s", ip, parts[1]), nil
+}
+
+// GetPeerTelemetryInfo returns the telemetry ID of a peer by looking at its protocols
+func GetPeerTelemetryInfo(peerProtocols []protocol.ID) (telemetryID string, telemetryInstance string) {
+	for _, protocol := range peerProtocols {
+		if strings.HasPrefix(string(protocol), algorandGUIDProtocolPrefix) {
+			telemetryInfo := string(protocol[len(algorandGUIDProtocolPrefix):])
+			telemetryInfoParts := strings.Split(telemetryInfo, "/")
+			if len(telemetryInfoParts) == 2 {
+				return telemetryInfoParts[0], telemetryInfoParts[1]
+			}
+		}
+	}
+	return "", ""
 }

@@ -23,8 +23,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/stretchr/testify/require"
 
@@ -143,4 +145,75 @@ func TestP2PStreamingHost(t *testing.T) {
 		return h1calls.Load() == 1
 	}, 5*time.Second, 100*time.Millisecond)
 
+}
+
+// TestP2PGetPeerTelemetryInfo tests the GetPeerTelemetryInfo function
+func TestP2PGetPeerTelemetryInfo(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	testCases := []struct {
+		name                      string
+		peerProtocols             []protocol.ID
+		expectedTelemetryID       string
+		expectedTelemetryInstance string
+	}{
+		{
+			name:                      "Valid Telemetry Info",
+			peerProtocols:             []protocol.ID{protocol.ID("/algorand-telemetry/1.0.0/telemetryID/telemetryInstance")},
+			expectedTelemetryID:       "telemetryID",
+			expectedTelemetryInstance: "telemetryInstance",
+		},
+		{
+			name:                      "No Telemetry Info",
+			peerProtocols:             []protocol.ID{protocol.ID("/some-other-protocol/1.0.0/otherID/otherInstance")},
+			expectedTelemetryID:       "",
+			expectedTelemetryInstance: "",
+		},
+		{
+			name:                      "Invalid Telemetry Info Format",
+			peerProtocols:             []protocol.ID{protocol.ID("/algorand-telemetry/1.0.0/invalidFormat")},
+			expectedTelemetryID:       "",
+			expectedTelemetryInstance: "",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			telemetryID, telemetryInstance := GetPeerTelemetryInfo(tc.peerProtocols)
+			if telemetryID != tc.expectedTelemetryID || telemetryInstance != tc.expectedTelemetryInstance {
+				t.Errorf("Expected telemetry ID: %s, telemetry instance: %s, but got telemetry ID: %s, telemetry instance: %s",
+					tc.expectedTelemetryID, tc.expectedTelemetryInstance, telemetryID, telemetryInstance)
+			}
+		})
+	}
+}
+
+func TestP2PProtocolAsMeta(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	h1, err := libp2p.New(libp2p.ListenAddrStrings("/ip4/127.0.0.1/tcp/0"))
+	require.NoError(t, err)
+	defer h1.Close()
+
+	h1TID := "telemetryID1"
+	h1Inst := "telemetryInstance2"
+	telemetryProtoInfo := fmt.Sprintf(algorandGUIDProtocolTemplate, h1TID, h1Inst)
+	h1.SetStreamHandler(protocol.ID(telemetryProtoInfo), func(s network.Stream) {})
+
+	h2, err := libp2p.New(libp2p.ListenAddrStrings("/ip4/127.0.0.1/tcp/0"))
+	require.NoError(t, err)
+	defer h2.Close()
+
+	err = h2.Connect(ctx, peer.AddrInfo{ID: h1.ID(), Addrs: h1.Addrs()})
+	require.NoError(t, err)
+
+	protos, err := h2.Peerstore().GetProtocols(h1.ID())
+	require.NoError(t, err)
+
+	tid, inst := GetPeerTelemetryInfo(protos)
+	require.Equal(t, h1TID, tid)
+	require.Equal(t, h1Inst, inst)
 }

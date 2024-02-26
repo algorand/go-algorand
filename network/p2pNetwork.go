@@ -27,6 +27,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/network/limitcaller"
 	"github.com/algorand/go-algorand/network/p2p"
 	"github.com/algorand/go-algorand/network/p2p/dnsaddr"
@@ -755,6 +756,12 @@ func (n *P2PNetwork) wsStreamHandler(ctx context.Context, p2ppeer peer.ID, strea
 		conn:       &wsPeerConnP2PImpl{stream: stream},
 		outgoing:   !incoming,
 	}
+	protos, err := n.pstore.GetProtocols(p2ppeer)
+	if err != nil {
+		n.log.Warnf("Error getting protocols for peer %s: %v", p2ppeer, err)
+	}
+	wsp.TelemetryGUID, wsp.InstanceName = p2p.GetPeerTelemetryInfo(protos)
+
 	wsp.init(n.config, outgoingMessagesBufferSize)
 	n.wsPeersLock.Lock()
 	n.wsPeers[p2ppeer] = wsp
@@ -777,14 +784,13 @@ func (n *P2PNetwork) wsStreamHandler(ctx context.Context, p2ppeer peer.ID, strea
 			n.log.Debugf("%s stream %s protocol %s", s.Stat().Direction.String(), s.ID(), s.Protocol())
 		}
 	}
-	// TODO: add telemetry
-	// n.log.EventWithDetails(telemetryspec.Network, telemetryspec.ConnectPeerEvent,
-	// 	telemetryspec.PeerEventDetails{
-	// 		Address:       addr,
-	// 		TelemetryGUID: trackedRequest.otherTelemetryGUID,
-	// 		Incoming:      true,
-	// 		InstanceName:  trackedRequest.otherInstanceName,
-	// 	})
+	n.log.EventWithDetails(telemetryspec.Network, telemetryspec.ConnectPeerEvent,
+		telemetryspec.PeerEventDetails{
+			Address:       addr,
+			TelemetryGUID: wsp.TelemetryGUID,
+			Incoming:      incoming,
+			InstanceName:  wsp.InstanceName,
+		})
 }
 
 // peerRemoteClose called from wsPeer to report that it has closed
@@ -795,6 +801,27 @@ func (n *P2PNetwork) peerRemoteClose(peer *wsPeer, reason disconnectReason) {
 	delete(n.wsPeersToIDs, peer)
 	n.wsPeersLock.Unlock()
 	n.wsPeersChangeCounter.Add(1)
+
+	eventDetails := telemetryspec.PeerEventDetails{
+		Address:       peer.GetAddress(), // p2p peers store p2p addresses
+		TelemetryGUID: peer.TelemetryGUID,
+		InstanceName:  peer.InstanceName,
+		Incoming:      !peer.outgoing,
+	}
+	if peer.outgoing {
+		eventDetails.Endpoint = peer.GetAddress()
+		eventDetails.MessageDelay = peer.peerMessageDelay
+	}
+
+	n.log.EventWithDetails(telemetryspec.Network, telemetryspec.DisconnectPeerEvent,
+		telemetryspec.DisconnectPeerEventDetails{
+			PeerEventDetails: eventDetails,
+			Reason:           string(reason),
+			TXCount:          peer.txMessageCount.Load(),
+			MICount:          peer.miMessageCount.Load(),
+			AVCount:          peer.avMessageCount.Load(),
+			PPCount:          peer.ppMessageCount.Load(),
+		})
 }
 
 func (n *P2PNetwork) peerSnapshot(dest []*wsPeer) ([]*wsPeer, int32) {
