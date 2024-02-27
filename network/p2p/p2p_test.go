@@ -159,8 +159,20 @@ func TestP2PGetPeerTelemetryInfo(t *testing.T) {
 	}{
 		{
 			name:                      "Valid Telemetry Info",
-			peerProtocols:             []protocol.ID{protocol.ID("/algorand-telemetry/1.0.0/telemetryID/telemetryInstance")},
+			peerProtocols:             []protocol.ID{protocol.ID(formatPeerTelemetryInfoProtocolName("telemetryID", "telemetryInstance"))},
 			expectedTelemetryID:       "telemetryID",
+			expectedTelemetryInstance: "telemetryInstance",
+		},
+		{
+			name:                      "Partial Telemetry Info 1",
+			peerProtocols:             []protocol.ID{protocol.ID(formatPeerTelemetryInfoProtocolName("telemetryID", ""))},
+			expectedTelemetryID:       "telemetryID",
+			expectedTelemetryInstance: "",
+		},
+		{
+			name:                      "Partial Telemetry Info 2",
+			peerProtocols:             []protocol.ID{protocol.ID(formatPeerTelemetryInfoProtocolName("", "telemetryInstance"))},
+			expectedTelemetryID:       "",
 			expectedTelemetryInstance: "telemetryInstance",
 		},
 		{
@@ -174,6 +186,12 @@ func TestP2PGetPeerTelemetryInfo(t *testing.T) {
 			peerProtocols:             []protocol.ID{protocol.ID("/algorand-telemetry/1.0.0/invalidFormat")},
 			expectedTelemetryID:       "",
 			expectedTelemetryInstance: "",
+		},
+		{
+			name:                      "Special Characters Telemetry Info Format",
+			peerProtocols:             []protocol.ID{protocol.ID(formatPeerTelemetryInfoProtocolName("telemetry/ID", "123-//11-33"))},
+			expectedTelemetryID:       "telemetry/ID",
+			expectedTelemetryInstance: "123-//11-33",
 		},
 	}
 
@@ -200,8 +218,8 @@ func TestP2PProtocolAsMeta(t *testing.T) {
 
 	h1TID := "telemetryID1"
 	h1Inst := "telemetryInstance2"
-	telemetryProtoInfo := fmt.Sprintf(algorandGUIDProtocolTemplate, h1TID, h1Inst)
-	h1.SetStreamHandler(protocol.ID(telemetryProtoInfo), func(s network.Stream) {})
+	telemetryProtoInfo := formatPeerTelemetryInfoProtocolName(h1TID, h1Inst)
+	h1.SetStreamHandler(protocol.ID(telemetryProtoInfo), func(s network.Stream) { s.Close() })
 
 	h2, err := libp2p.New(libp2p.ListenAddrStrings("/ip4/127.0.0.1/tcp/0"))
 	require.NoError(t, err)

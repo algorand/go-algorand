@@ -18,6 +18,7 @@ package p2p
 
 import (
 	"context"
+	"encoding/base32"
 	"fmt"
 	"runtime"
 	"strings"
@@ -185,15 +186,15 @@ func MakeService(ctx context.Context, log logging.Logger, cfg config.Local, h ho
 	// set an empty handler for telemetryID/telemetryInstance protocol in order to allow other peers to know our telemetryID
 	telemetryID := log.GetTelemetryGUID()
 	telemetryInstance := log.GetInstanceName()
-	telemetryProtoInfo := fmt.Sprintf(algorandGUIDProtocolTemplate, telemetryID, telemetryInstance)
-	h.SetStreamHandler(protocol.ID(telemetryProtoInfo), func(s network.Stream) {})
+	telemetryProtoInfo := formatPeerTelemetryInfoProtocolName(telemetryID, telemetryInstance)
+	h.SetStreamHandler(protocol.ID(telemetryProtoInfo), func(s network.Stream) { s.Close() })
 
 	ps, err := makePubSub(ctx, cfg, h)
 	if err != nil {
 		return nil, err
 	}
-
 	return &serviceImpl{
+
 		log:        log,
 		listenAddr: listenAddr,
 		host:       h,
@@ -312,9 +313,24 @@ func GetPeerTelemetryInfo(peerProtocols []protocol.ID) (telemetryID string, tele
 			telemetryInfo := string(protocol[len(algorandGUIDProtocolPrefix):])
 			telemetryInfoParts := strings.Split(telemetryInfo, "/")
 			if len(telemetryInfoParts) == 2 {
-				return telemetryInfoParts[0], telemetryInfoParts[1]
+				telemetryIDBytes, err := base32.StdEncoding.DecodeString(telemetryInfoParts[0])
+				if err == nil {
+					telemetryID = string(telemetryIDBytes)
+				}
+				telemetryInstanceBytes, err := base32.StdEncoding.DecodeString(telemetryInfoParts[1])
+				if err == nil {
+					telemetryInstance = string(telemetryInstanceBytes)
+				}
+				return telemetryID, telemetryInstance
 			}
 		}
 	}
 	return "", ""
+}
+
+func formatPeerTelemetryInfoProtocolName(telemetryID string, telemetryInstance string) string {
+	return fmt.Sprintf(algorandGUIDProtocolTemplate,
+		base32.StdEncoding.EncodeToString([]byte(telemetryID)),
+		base32.StdEncoding.EncodeToString([]byte(telemetryInstance)),
+	)
 }
