@@ -260,18 +260,49 @@ func verifyNewSeed(p unauthenticatedProposal, ledger LedgerReader) error {
 	return nil
 }
 
-func proposalForBlock(address basics.Address, vrf *crypto.VRFSecrets, ve ValidatedBlock, period period, ledger LedgerReader) (proposal, proposalValue, error) {
-	rnd := ve.Block().Round()
-	newSeed, seedProof, err := deriveNewSeed(address, vrf, rnd, period, ledger)
-	if err != nil {
-		return proposal{}, proposalValue{}, fmt.Errorf("proposalForBlock: could not derive new seed: %v", err)
+// payoutForBlock determines whether the proposer ought to be recorded, and
+// whether that proposer ought to be paid for proposing.
+func payoutForBlock(blk bookkeeping.Block, proposer basics.Address, ledger LedgerReader) (recorded basics.Address, eligible bool, err error) {
+	rnd := blk.Round()
+	proto, err := ledger.ConsensusParams(rnd)
+	if err != nil || !proto.Mining().Enabled {
+		return recorded, eligible, err // err may or may not be nil, either way, others are zero'd
 	}
 
-	var hdrProp basics.Address // The proposer as recorded in BlockHeader
-	if ve.Block().ConsensusProtocol().Mining().Enabled {
-		hdrProp = address
+	// We want to check eligibility and the online balance in the round that
+	// mattered to select this proposer.  We use the ParamsRound() to find the
+	// round in question, not current proto.
+	agreementParams, err := ledger.ConsensusParams(ParamsRound(rnd))
+	if err != nil {
+		return recorded, false, err
 	}
-	ve = ve.WithProposal(newSeed, hdrProp)
+
+	// Check the balance from the agreement round
+	balanceRound := balanceRound(rnd, agreementParams)
+	balanceRecord, err := ledger.LookupAgreement(balanceRound, proposer)
+	if err != nil {
+		return recorded, false, err
+	}
+
+	eligible = balanceRecord.IncentiveEligible &&
+		balanceRecord.MicroAlgosWithRewards.Raw >= proto.Mining().MinBalance &&
+		balanceRecord.MicroAlgosWithRewards.Raw <= proto.Mining().MaxBalance
+	return proposer, eligible, nil
+}
+
+func proposalForBlock(address basics.Address, vrf *crypto.VRFSecrets, ve ValidatedBlock, period period, ledger LedgerReader) (proposal, proposalValue, error) {
+	blk := ve.Block()
+	newSeed, seedProof, err := deriveNewSeed(address, vrf, blk.Round(), period, ledger)
+	if err != nil {
+		return proposal{}, proposalValue{}, fmt.Errorf("proposalForBlock: could not derive new seed: %w", err)
+	}
+
+	hdrProp, eligible, err := payoutForBlock(blk, address, ledger)
+	if err != nil {
+		return proposal{}, proposalValue{}, fmt.Errorf("proposalForBlock: could determine payout: %w", err)
+	}
+
+	ve = ve.WithProposal(newSeed, hdrProp, eligible)
 	proposal := makeProposal(ve, seedProof, period, address)
 	value := proposalValue{
 		OriginalPeriod:   period,

@@ -41,10 +41,13 @@ func (vb ValidatedBlock) Delta() StateDelta {
 }
 
 // WithProposal returns a copy of the ValidatedBlock with a modified seed and associated proposer
-func (vb ValidatedBlock) WithProposal(s committee.Seed, proposer basics.Address) ValidatedBlock {
+func (vb ValidatedBlock) WithProposal(s committee.Seed, proposer basics.Address, eligible bool) ValidatedBlock {
 	newblock := vb.blk
 	newblock.BlockHeader.Seed = s
 	newblock.BlockHeader.Proposer = proposer
+	if !eligible {
+		newblock.BlockHeader.ProposerPayout = basics.MicroAlgos{}
+	}
 
 	return ValidatedBlock{
 		blk:   newblock,

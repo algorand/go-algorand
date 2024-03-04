@@ -154,7 +154,7 @@ func endBlock(t testing.TB, ledger *Ledger, eval *eval.BlockEvaluator, proposer 
 
 	// We have this backdoor way to install a proposer or seed into the header
 	// for tests. Doesn't matter that it makes them both the same.
-	*vb = vb.WithProposal(committee.Seed(prp), prp)
+	*vb = vb.WithProposal(committee.Seed(prp), prp, true)
 
 	err = ledger.AddValidatedBlock(*vb, agreement.Certificate{})
 	require.NoError(t, err)

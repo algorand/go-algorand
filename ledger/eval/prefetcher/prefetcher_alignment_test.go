@@ -377,7 +377,7 @@ func TestEvaluatorPrefetcherAlignmentPayment(t *testing.T) {
 
 	requested, prefetched := run(t, l, txn)
 
-	prefetched.pretend(rewardsPool(), proposer())
+	prefetched.pretend(rewardsPool())
 	require.Equal(t, requested, prefetched)
 }
 
@@ -409,7 +409,7 @@ func TestEvaluatorPrefetcherAlignmentCreateAsset(t *testing.T) {
 
 	requested, prefetched := run(t, l, txn)
 
-	prefetched.pretend(rewardsPool(), proposer())
+	prefetched.pretend(rewardsPool())
 	// Only one (non-existing) asset is requested. Ignore it.
 	require.Len(t, requested.Assets, 1)
 	require.Len(t, requested.Assets[makeAddress(1)], 1)
@@ -465,7 +465,7 @@ func TestEvaluatorPrefetcherAlignmentReconfigAsset(t *testing.T) {
 
 	requested, prefetched := run(t, l, txn)
 
-	prefetched.pretend(rewardsPool(), proposer())
+	prefetched.pretend(rewardsPool())
 	require.Equal(t, requested, prefetched)
 }
 
@@ -520,7 +520,7 @@ func TestEvaluatorPrefetcherAlignmentAssetOptIn(t *testing.T) {
 
 	requested, prefetched := run(t, l, txn)
 
-	prefetched.pretend(rewardsPool(), proposer())
+	prefetched.pretend(rewardsPool())
 	require.Equal(t, requested, prefetched)
 }
 
@@ -586,7 +586,7 @@ func TestEvaluatorPrefetcherAlignmentAssetOptInCloseTo(t *testing.T) {
 
 	requested, prefetched := run(t, l, txn)
 
-	prefetched.pretend(rewardsPool(), proposer())
+	prefetched.pretend(rewardsPool())
 	require.Equal(t, requested, prefetched)
 }
 
@@ -657,7 +657,7 @@ func TestEvaluatorPrefetcherAlignmentAssetTransfer(t *testing.T) {
 
 	requested, prefetched := run(t, l, txn)
 
-	prefetched.pretend(rewardsPool(), proposer())
+	prefetched.pretend(rewardsPool())
 	require.Equal(t, requested, prefetched)
 
 	// zero transfer of any asset
@@ -676,7 +676,7 @@ func TestEvaluatorPrefetcherAlignmentAssetTransfer(t *testing.T) {
 
 	requested, prefetched = run(t, l, txn)
 
-	prefetched.pretend(rewardsPool(), proposer())
+	prefetched.pretend(rewardsPool())
 	require.Equal(t, requested, prefetched)
 }
 
@@ -757,7 +757,7 @@ func TestEvaluatorPrefetcherAlignmentAssetClawback(t *testing.T) {
 
 	requested, prefetched := run(t, l, txn)
 
-	prefetched.pretend(rewardsPool(), proposer())
+	prefetched.pretend(rewardsPool())
 	require.Equal(t, requested, prefetched)
 }
 
@@ -827,7 +827,7 @@ func TestEvaluatorPrefetcherAlignmentAssetFreeze(t *testing.T) {
 
 	requested, prefetched := run(t, l, txn)
 
-	prefetched.pretend(rewardsPool(), proposer())
+	prefetched.pretend(rewardsPool())
 	require.Equal(t, requested, prefetched)
 }
 
@@ -874,7 +874,7 @@ func TestEvaluatorPrefetcherAlignmentKeyreg(t *testing.T) {
 
 	requested, prefetched := run(t, l, txn)
 
-	prefetched.pretend(rewardsPool(), proposer())
+	prefetched.pretend(rewardsPool())
 	require.Equal(t, requested, prefetched)
 }
 
@@ -911,7 +911,7 @@ func TestEvaluatorPrefetcherAlignmentCreateApplication(t *testing.T) {
 
 	requested, prefetched := run(t, l, txn)
 
-	prefetched.pretend(rewardsPool(), proposer())
+	prefetched.pretend(rewardsPool())
 	// Only one (non-existing) asset is requested. Ignore it.
 	require.Len(t, requested.Apps, 1)
 	require.Len(t, requested.Apps[makeAddress(1)], 1)
@@ -969,7 +969,7 @@ func TestEvaluatorPrefetcherAlignmentDeleteApplication(t *testing.T) {
 
 	requested, prefetched := run(t, l, txn)
 
-	prefetched.pretend(rewardsPool(), proposer())
+	prefetched.pretend(rewardsPool())
 	require.Equal(t, requested, prefetched)
 }
 
@@ -1027,7 +1027,7 @@ func TestEvaluatorPrefetcherAlignmentApplicationOptIn(t *testing.T) {
 
 	requested, prefetched := run(t, l, txn)
 
-	prefetched.pretend(rewardsPool(), proposer())
+	prefetched.pretend(rewardsPool())
 	require.Equal(t, requested, prefetched)
 }
 
@@ -1091,7 +1091,7 @@ func TestEvaluatorPrefetcherAlignmentApplicationCloseOut(t *testing.T) {
 
 	requested, prefetched := run(t, l, txn)
 
-	prefetched.pretend(rewardsPool(), proposer())
+	prefetched.pretend(rewardsPool())
 	require.Equal(t, requested, prefetched)
 }
 
@@ -1155,7 +1155,7 @@ func TestEvaluatorPrefetcherAlignmentApplicationClearState(t *testing.T) {
 
 	requested, prefetched := run(t, l, txn)
 
-	prefetched.pretend(rewardsPool(), proposer())
+	prefetched.pretend(rewardsPool())
 	require.Equal(t, requested, prefetched)
 }
 
@@ -1219,7 +1219,7 @@ func TestEvaluatorPrefetcherAlignmentApplicationCallAccountsDeclaration(t *testi
 
 	requested, prefetched := run(t, l, txn)
 
-	prefetched.pretend(rewardsPool(), proposer())
+	prefetched.pretend(rewardsPool())
 	// Foreign accounts are not loaded, ensure they are not prefetched
 	require.NotContains(t, prefetched.Accounts, makeAddress(5))
 	require.NotContains(t, prefetched.Accounts, makeAddress(3))
@@ -1287,7 +1287,7 @@ func TestEvaluatorPrefetcherAlignmentApplicationCallForeignAppsDeclaration(t *te
 
 	requested, prefetched := run(t, l, txn)
 
-	prefetched.pretend(rewardsPool(), proposer())
+	prefetched.pretend(rewardsPool())
 	// Foreign apps are not loaded, ensure they are not prefetched
 	require.NotContains(t, prefetched.Creators, creatable{cindex: 6, ctype: basics.AppCreatable})
 	require.NotContains(t, prefetched.Creators, creatable{cindex: 8, ctype: basics.AppCreatable})
@@ -1354,7 +1354,7 @@ func TestEvaluatorPrefetcherAlignmentApplicationCallForeignAssetsDeclaration(t *
 
 	requested, prefetched := run(t, l, txn)
 
-	prefetched.pretend(rewardsPool(), proposer())
+	prefetched.pretend(rewardsPool())
 	// Foreign apps are not loaded, ensure they are not prefetched
 	require.NotContains(t, prefetched.Creators, creatable{cindex: 6, ctype: basics.AssetCreatable})
 	require.NotContains(t, prefetched.Creators, creatable{cindex: 8, ctype: basics.AssetCreatable})
@@ -1401,6 +1401,6 @@ func TestEvaluatorPrefetcherAlignmentStateProof(t *testing.T) {
 
 	requested, prefetched := run(t, l, txn)
 
-	prefetched.pretend(rewardsPool(), proposer())
+	prefetched.pretend(rewardsPool())
 	require.Equal(t, requested, prefetched)
 }

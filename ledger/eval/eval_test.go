@@ -1478,11 +1478,19 @@ func TestBitsMatch(t *testing.T) {
 		require.True(t, bitsMatch([]byte{0x1}, []byte{0x2}, b), "%d", b)
 	}
 	require.False(t, bitsMatch([]byte{0x1}, []byte{0x2}, 7))
+	require.False(t, bitsMatch([]byte{0x1}, []byte{0x2}, 8))
+	require.False(t, bitsMatch([]byte{0x1}, []byte{0x2}, 9))
 
 	for b := 0; b <= 12; b++ {
 		require.True(t, bitsMatch([]byte{0x1, 0xff, 0xaa}, []byte{0x1, 0xf0}, b), "%d", b)
 	}
 	require.False(t, bitsMatch([]byte{0x1, 0xff, 0xaa}, []byte{0x1, 0xf0}, 13))
+
+	// on a byte boundary
+	require.True(t, bitsMatch([]byte{0x1}, []byte{0x1}, 8))
+	require.False(t, bitsMatch([]byte{0x1}, []byte{0x1}, 9))
+	require.True(t, bitsMatch([]byte{0x1, 0xff}, []byte{0x1, 0x00}, 8))
+	require.False(t, bitsMatch([]byte{0x1, 0xff}, []byte{0x1, 00}, 9))
 }
 
 func TestIsAbsent(t *testing.T) {

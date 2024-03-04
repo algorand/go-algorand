@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"math/bits"
 	"sync"
 
 	"github.com/algorand/go-algorand/config"
@@ -783,6 +784,8 @@ func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, evalOpts 
 		return nil, err
 	}
 
+	// Move last block's proposer payout to the proposer
+
 	// ensure that we have at least MinBalance after withdrawing rewards
 	ot.SubA(poolNew.MicroAlgos, basics.MicroAlgos{Raw: proto.MinBalance})
 	if ot.Overflowed {
@@ -790,40 +793,29 @@ func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, evalOpts 
 		return nil, fmt.Errorf("overflowed subtracting rewards for block %v", hdr.Round)
 	}
 
-	eligible, err := eval.eligibleForIncentives(prevHeader.Proposer)
-	if err != nil {
-		return nil, err
-	}
-
-	if eligible {
-		incentive, _ := basics.NewPercent(proto.Mining().Percent).DivvyAlgos(prevHeader.FeesCollected)
-		total, o := basics.OAddA(incentive, prevHeader.Bonus)
-		if o {
-			return nil, fmt.Errorf("overflowed adding bonus incentive %d %d", incentive, prevHeader.Bonus)
+	if !prevHeader.Proposer.IsZero() {
+		// Payout the previous proposer.
+		if !prevHeader.ProposerPayout.IsZero() {
+			// Use the FeeSink from that header, since that's the checked
+			// balance. (Though we have no expectation it will ever change.)
+			err = eval.state.Move(prevHeader.FeeSink, prevHeader.Proposer, prevHeader.ProposerPayout, nil, nil)
+			if err != nil {
+				// Should be impossible, it was checked when put into the block
+				return nil, fmt.Errorf("unable to payout block incentive: %v", err)
+			}
 		}
 
-		sink, err := eval.state.lookup(prevHeader.FeeSink)
-		if err != nil {
-			return nil, err
-		}
-		available := sink.AvailableBalance(&proto)
-		total = basics.MinA(total, available)
-
-		err = eval.state.Move(prevHeader.FeeSink, prevHeader.Proposer, total, nil, nil)
-		if err != nil {
-			// Should be impossible, we used AvailableBalance
-			return nil, fmt.Errorf("unable to pay block incentive: %v", err)
-		}
-	}
-
-	// Note their proposal if MiningEnabled.
-	if proto.Mining().Enabled {
+		// Increment LastProposed on the proposer account
 		prp, err := eval.state.Get(prevHeader.Proposer, false)
 		if err != nil {
 			return nil, err
 		}
 		prp.LastProposed = hdr.Round - 1
-		// An account could propose, even while suspended, because of the 320 round lookback.
+
+		// An account could propose, even while suspended, because of the 320
+		// round lookback.  Doing so is evidence the account is
+		// back. Unsuspend. But the account will remain not IncentiveElgible
+		// until they repay the initial fee.
 		if prp.Suspended() {
 			prp.Status = basics.Online
 		}
@@ -838,21 +830,6 @@ func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, evalOpts 
 	}
 
 	return eval, nil
-}
-
-func (eval *BlockEvaluator) eligibleForIncentives(proposer basics.Address) (bool, error) {
-	proposerState, err := eval.state.Get(proposer, true)
-	if err != nil {
-		return false, err
-	}
-	params := eval.state.ConsensusParams()
-	if proposerState.MicroAlgos.Raw < params.Mining().MinBalance {
-		return false, nil
-	}
-	if proposerState.MicroAlgos.Raw > params.Mining().MaxBalance {
-		return false, nil
-	}
-	return proposerState.IncentiveEligible, nil
 }
 
 // hotfix for testnet stall 08/26/2019; move some algos from testnet bank to rewards pool to give it enough time until protocol upgrade occur.
@@ -1348,7 +1325,23 @@ func (eval *BlockEvaluator) endOfBlock() error {
 		}
 
 		if eval.proto.Mining().Enabled {
+			// Determine how much the proposer should be paid. Agreement code
+			// can cancel this payment by zero'ing the ProposerPayout if the
+			// proposer is found to be ineligible. See WithProposal().
 			eval.block.FeesCollected = eval.state.feesCollected
+
+			incentive, _ := basics.NewPercent(eval.proto.Mining().Percent).DivvyAlgos(eval.block.FeesCollected)
+			total, o := basics.OAddA(incentive, eval.block.Bonus)
+			if o {
+				return fmt.Errorf("overflowed adding bonus incentive %d %d", incentive, eval.block.Bonus)
+			}
+
+			sink, lerr := eval.state.lookup(eval.block.FeeSink)
+			if lerr != nil {
+				return lerr
+			}
+			available := sink.AvailableBalance(&eval.proto)
+			eval.block.ProposerPayout = basics.MinA(total, available)
 		}
 
 		eval.generateKnockOfflineAccountsList()
@@ -1547,23 +1540,11 @@ func bitsMatch(a, b []byte, n int) bool {
 			return false
 		}
 	}
-	// Compare bits in the last byte
-	for i := n / 8 * 8; i < n; i++ {
-		// Calculate the byte and bit positions
-		bytePos := i / 8
-		bitPos := i % 8
-
-		// Extract the bits from each slice
-		bit1 := (a[bytePos] >> (7 - bitPos)) & 1
-		bit2 := (b[bytePos] >> (7 - bitPos)) & 1
-
-		// Compare the bits
-		if bit1 != bit2 {
-			return false
-		}
+	remaining := n % 8
+	if remaining == 0 {
+		return true
 	}
-
-	return true
+	return bits.LeadingZeros8(a[n/8]^b[n/8]) >= remaining
 }
 
 func isAbsent(totalOnlineStake basics.MicroAlgos, acctStake basics.MicroAlgos, lastSeen basics.Round, current basics.Round) bool {
