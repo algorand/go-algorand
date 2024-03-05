@@ -2,28 +2,13 @@
 
 set -ex
 
-if [ -z "$NETWORK" ]
-then
-    echo "[$0] Network is a required parameter."
-    exit 1
-fi
-
-if [ -z "$STAGING" ]
-then
-    echo "[$0] Staging is a required parameter."
-    exit 1
-fi
-
-CHANNEL=$("./scripts/release/mule/common/get_channel.sh" "$NETWORK")
+CHANNEL=${CHANNEL:-$("./scripts/release/mule/common/get_channel.sh" "$NETWORK")}
 VERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
+PACKAGES_DIR=${PACKAGES_DIR:-~/packages}
+SNAPSHOT=${SNAPSHOT:-"${CHANNEL}-${VERSION}"}
 
-if [ -z "$SNAPSHOT" ]
-then
-    SNAPSHOT="$CHANNEL-$VERSION"
-fi
-
-PACKAGES_DIR=/root/packages
-mkdir -p /root/packages
+mkdir -p $PACKAGES_DIR
+rm -f $PACKAGES_DIR/*.deb
 
 aptly mirror update stable
 aptly mirror update beta
