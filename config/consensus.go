@@ -597,7 +597,7 @@ var miningRules = [...]MiningRules{
 		Enabled:              true,
 		Percent:              75,
 		GoOnlineFee:          2_000_000,          // 2 algos
-		MinBalance:           10_000_000_000,     // 10,000 algos
+		MinBalance:           30_000_000_000,     // 30,000 algos
 		MaxBalance:           50_000_000_000_000, // 50M algos
 		MaxMarkAbsent:        32,
 		ChallengeInterval:    1000,

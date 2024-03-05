@@ -224,92 +224,84 @@ func TestMiningFees(t *testing.T) {
 		dl := NewDoubleLedger(t, genBalances, cv, cfg)
 		defer dl.Close()
 
-		tooBig := basics.Address{0x01, 0x011}
-		tooSmall := basics.Address{0x01, 0x022}
-		smallest := basics.Address{0x01, 0x033}
-		biggest := basics.Address{0x01, 0x044}
-
+		proposer := basics.Address{0x01, 0x011}
 		const eFee = 3_000_000
-		dl.txns(
+		dl.txn(
 			&txntest.Txn{Type: "pay", Sender: addrs[1],
-				Receiver: tooBig, Amount: eFee + 100_000_000*1_000_000 + 1},
-			&txntest.Txn{Type: "pay", Sender: addrs[1],
-				Receiver: tooSmall, Amount: eFee + 100_000*1_000_000 - 1},
-			&txntest.Txn{Type: "pay", Sender: addrs[1],
-				Receiver: smallest, Amount: eFee + 100_000*1_000_000},
-			&txntest.Txn{Type: "pay", Sender: addrs[1],
-				Receiver: biggest, Amount: eFee + 100_000_000*1_000_000},
+				Receiver: proposer, Amount: eFee + 50_000_000*1_000_000 + 1},
 		)
 
-		for _, proposer := range []basics.Address{tooBig, tooSmall, smallest, biggest} {
-			t.Log(proposer)
+		prp := lookup(dl.t, dl.generator, proposer)
+		require.False(t, prp.IncentiveEligible)
 
-			prp := lookup(dl.t, dl.generator, proposer)
-			require.False(t, prp.IncentiveEligible)
+		dl.txn(&txntest.Txn{
+			Type:         "keyreg",
+			Sender:       proposer,
+			Fee:          eFee,
+			VotePK:       crypto.OneTimeSignatureVerifier{0x01},
+			SelectionPK:  crypto.VRFVerifier{0x02},
+			StateProofPK: merklesignature.Commitment{0x03},
+			VoteFirst:    1, VoteLast: 1000,
+		})
 
-			dl.txn(&txntest.Txn{
-				Type:         "keyreg",
-				Sender:       proposer,
-				Fee:          eFee,
-				VotePK:       crypto.OneTimeSignatureVerifier{0x01},
-				SelectionPK:  crypto.VRFVerifier{0x02},
-				StateProofPK: merklesignature.Commitment{0x03},
-				VoteFirst:    1, VoteLast: 1000,
-			})
+		prp = lookup(dl.t, dl.generator, proposer)
+		require.Equal(t, ver >= miningBegins, prp.IncentiveEligible)
 
-			prp = lookup(dl.t, dl.generator, proposer)
-			require.Equal(t, ver >= miningBegins, prp.IncentiveEligible)
+		dl.fullBlock() // start with an empty block, so no mining fees are paid at start of next one
 
-			dl.fullBlock() // start with an empty block, so no mining fees are paid at start of next one
+		presink := micros(dl.t, dl.generator, genBalances.FeeSink)
+		preprop := micros(dl.t, dl.generator, proposer)
+		t.Log(" presink", presink)
+		t.Log(" preprop", preprop)
+		dl.beginBlock()
+		pay := txntest.Txn{
+			Type:     "pay",
+			Sender:   addrs[1],
+			Receiver: addrs[2],
+			Amount:   100000,
+		}
+		dl.txns(&pay, pay.Args("again"))
+		vb := dl.endBlock(proposer)
 
-			presink := micros(dl.t, dl.generator, genBalances.FeeSink)
-			preprop := micros(dl.t, dl.generator, proposer)
-			t.Log(" presink", presink)
-			t.Log(" preprop", preprop)
-			dl.beginBlock()
-			pay := txntest.Txn{
-				Type:     "pay",
-				Sender:   addrs[1],
-				Receiver: addrs[2],
-				Amount:   100000,
-			}
-			dl.txns(&pay, pay.Args("again"))
-			vb := dl.endBlock(proposer)
+		const bonus1 = 5_000_000 // the first bonus value, set in
+		if ver >= miningBegins {
+			require.True(t, dl.generator.GenesisProto().Mining().Enabled)    // version sanity check
+			require.NotZero(t, dl.generator.GenesisProto().Mining().Percent) // version sanity check
+			// new fields are in the header
+			require.EqualValues(t, 2000, vb.Block().FeesCollected.Raw)
+			require.EqualValues(t, bonus1, vb.Block().Bonus.Raw)
+			require.EqualValues(t, bonus1+1_500, vb.Block().ProposerPayout.Raw)
+		} else {
+			require.False(t, dl.generator.GenesisProto().Mining().Enabled)
+			require.Zero(t, dl.generator.GenesisProto().Mining().Percent) // version sanity check
+			require.Zero(t, vb.Block().FeesCollected)
+			require.Zero(t, vb.Block().Bonus)
+			require.Zero(t, vb.Block().ProposerPayout)
+		}
 
-			if ver >= miningBegins {
-				require.True(t, dl.generator.GenesisProto().Mining().Enabled)    // version sanity check
-				require.NotZero(t, dl.generator.GenesisProto().Mining().Percent) // version sanity check
-				// new fields are in the header
-				require.EqualValues(t, 2000, vb.Block().FeesCollected.Raw)
-			} else {
-				require.False(t, dl.generator.GenesisProto().Mining().Enabled)
-				require.Zero(t, dl.generator.GenesisProto().Mining().Percent) // version sanity check
-				// new fields are not in the header
-				require.Zero(t, vb.Block().FeesCollected)
-			}
+		postsink := micros(dl.t, dl.generator, genBalances.FeeSink)
+		postprop := micros(dl.t, dl.generator, proposer)
+		t.Log(" postsink", postsink)
+		t.Log(" postprop", postprop)
 
-			postsink := micros(dl.t, dl.generator, genBalances.FeeSink)
-			postprop := micros(dl.t, dl.generator, proposer)
-			t.Log(" postsink", postsink)
-			t.Log(" postprop", postprop)
+		// At the end of the block, all fees are still in the sink.
+		require.EqualValues(t, 2000, postsink-presink)
+		require.EqualValues(t, 0, postprop-preprop)
 
-			// At the end of the block, all fees are still in the sink.
+		// Do the next block, which moves part of the fees + bonus to proposer
+		dl.fullBlock()
+		postsink = micros(dl.t, dl.generator, genBalances.FeeSink)
+		postprop = micros(dl.t, dl.generator, proposer)
+		t.Log(" postsink2", postsink)
+		t.Log(" postprop2", postprop)
+
+		if ver >= miningBegins {
+			require.EqualValues(t, bonus1+1500, postprop-preprop) // based on 75% in config/consensus.go
+			require.EqualValues(t, bonus1-500, presink-postsink)
+		} else {
+			// stayed in the feesink
+			require.EqualValues(t, 0, postprop-preprop, "%v", proposer)
 			require.EqualValues(t, 2000, postsink-presink)
-			//require.EqualValues(t, 0, postprop-preprop)
-
-			// Do the next block, which moves part of the fees to proposer
-			dl.fullBlock()
-			postsink = micros(dl.t, dl.generator, genBalances.FeeSink)
-			postprop = micros(dl.t, dl.generator, proposer)
-
-			if ver >= miningBegins && (proposer == smallest || proposer == biggest) {
-				require.EqualValues(t, 500, postsink-presink) // based on 75% in config/consensus.go
-				require.EqualValues(t, 1500, postprop-preprop)
-			} else {
-				// stayed in the feesink
-				require.EqualValues(t, 0, postprop-preprop, "%v", proposer)
-				require.EqualValues(t, 2000, postsink-presink)
-			}
 		}
 	})
 }

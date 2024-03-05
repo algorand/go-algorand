@@ -153,8 +153,16 @@ func endBlock(t testing.TB, ledger *Ledger, eval *eval.BlockEvaluator, proposer 
 	}
 
 	// We have this backdoor way to install a proposer or seed into the header
-	// for tests. Doesn't matter that it makes them both the same.
-	*vb = vb.WithProposal(committee.Seed(prp), prp, true)
+	// for tests. Doesn't matter that it makes them both the same.  Since this
+	// can't call the agreement code, the eligibility of the prp is not
+	// considered.
+	if ledger.GenesisProto().Mining().Enabled {
+		*vb = vb.WithProposal(committee.Seed(prp), prp, true)
+	} else {
+		// To more closely mimic the agreement code, we don't
+		// write the proposer when !Mining().Enabled.
+		*vb = vb.WithProposal(committee.Seed(prp), basics.Address{}, false)
+	}
 
 	err = ledger.AddValidatedBlock(*vb, agreement.Certificate{})
 	require.NoError(t, err)
