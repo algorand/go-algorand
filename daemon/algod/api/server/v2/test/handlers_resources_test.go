@@ -108,7 +108,7 @@ func (l *mockLedger) LookupAsset(rnd basics.Round, addr basics.Address, aidx bas
 	return ar, nil
 }
 
-func (l *mockLedger) LookupAssets(rnd basics.Round, addr basics.Address, assetIDGT basics.AssetIndex, limit uint64) ([]ledgercore.AssetResourceWithIDs, error) {
+func (l *mockLedger) LookupAssets(rnd basics.Round, addr basics.Address, assetIDGT basics.AssetIndex, limit uint64) ([]ledgercore.AssetResourceWithIDs, basics.Round, error) {
 	panic("implement me")
 }
 
