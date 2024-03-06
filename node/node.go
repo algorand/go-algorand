@@ -252,7 +252,9 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	}
 
 	// The health service registers itself with the network
-	rpcs.MakeHealthService(node.net, cfg.IsGossipServer())
+	if cfg.IsGossipServer() {
+		rpcs.MakeHealthService(node.net)
+	}
 
 	node.blockService = rpcs.MakeBlockService(node.log, cfg, node.ledger, p2pNode, node.genesisID)
 	node.ledgerService = rpcs.MakeLedgerService(cfg, node.ledger, p2pNode, node.genesisID)

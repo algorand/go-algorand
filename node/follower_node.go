@@ -128,8 +128,9 @@ func MakeFollower(log logging.Logger, rootDir string, cfg config.Local, phoneboo
 
 	node.ledger.RegisterBlockListeners(blockListeners)
 
-	// The health service registers itself with the network
-	rpcs.MakeHealthService(node.net, cfg.IsGossipServer())
+	if cfg.IsGossipServer() {
+		rpcs.MakeHealthService(node.net)
+	}
 
 	node.blockService = rpcs.MakeBlockService(node.log, cfg, node.ledger, p2pNode, node.genesisID)
 	node.catchupBlockAuth = blockAuthenticatorImpl{Ledger: node.ledger, AsyncVoteVerifier: agreement.MakeAsyncVoteVerifier(node.lowPriorityCryptoVerificationPool)}

@@ -17,7 +17,6 @@
 package rpcs
 
 import (
-	"fmt"
 	"github.com/algorand/go-algorand/network"
 	"net/http"
 )
@@ -26,23 +25,17 @@ import (
 const HealthServiceStatusPath = "/status"
 
 // HealthService is a service that provides health information endpoints for the node
-type HealthService struct {
-	net           network.GossipNode
-	enableService bool
-}
+type HealthService struct{}
 
 // MakeHealthService creates a new HealthService and registers it with the provided network if enabled
-func MakeHealthService(net network.GossipNode, enableService bool) HealthService {
-	service := HealthService{net: net, enableService: enableService}
+func MakeHealthService(net network.GossipNode) HealthService {
+	service := HealthService{}
 
-	if enableService {
-		net.RegisterHTTPHandler(HealthServiceStatusPath, service)
-	}
+	net.RegisterHTTPHandler(HealthServiceStatusPath, service)
 
 	return service
 }
 
 func (h HealthService) ServeHTTP(writer http.ResponseWriter, _ *http.Request) {
 	writer.WriteHeader(http.StatusOK)
-	_, _ = fmt.Fprintf(writer, "Port is Open!")
 }

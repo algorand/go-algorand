@@ -33,7 +33,7 @@ func TestHealthService_ServeHTTP(t *testing.T) {
 	nodeA.start()
 	defer nodeA.stop()
 
-	_ = MakeHealthService(nodeA, true)
+	_ = MakeHealthService(nodeA)
 
 	parsedURL, err := network.ParseHostOrURL(nodeA.rootURL())
 	require.NoError(t, err)
@@ -48,17 +48,5 @@ func TestHealthService_ServeHTTP(t *testing.T) {
 	require.Equal(t, http.StatusOK, response.StatusCode)
 	bodyData, err := io.ReadAll(response.Body)
 	require.NoError(t, err)
-	require.NotEqual(t, 0, len(bodyData))
-
-	// Test with status endpoint disabled
-	nodeA.stop()
-	nodeA = &basicRPCNode{}
-	nodeA.start()
-	defer nodeA.stop()
-
-	// Status endpoint should not register, connection will be refused
-	_ = MakeHealthService(nodeA, false)
-	response, err = client.Get(parsedURL.String())
-	require.Error(t, err)
-	require.Nil(t, response)
+	require.Empty(t, bodyData)
 }
