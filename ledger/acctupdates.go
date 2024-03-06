@@ -1244,7 +1244,7 @@ func (au *accountUpdates) lookupAssetResources(rnd basics.Round, addr basics.Add
 			return nil, basics.Round(0), err0
 		}
 
-		if resourceDbRound == currentDbRound {
+		if resourceDbRound == currentDbRound || len(persistedResources) == 0 { // db round will return 0 in this case
 			data = make([]ledgercore.AssetResourceWithIDs, 0, len(persistedResources))
 			for _, pd := range persistedResources {
 				ah := pd.Data.GetAssetHolding()
