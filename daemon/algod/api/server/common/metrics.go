@@ -46,6 +46,7 @@ func Metrics(ctx lib.ReqContext, context echo.Context) {
 
 	var buf strings.Builder
 	metrics.DefaultRegistry().WriteMetrics(&buf, "")
+	metrics.WriteOpenCensusMetrics(&buf, "")
 	w.Write([]byte(buf.String()))
 }
 
