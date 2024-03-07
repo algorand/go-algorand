@@ -141,9 +141,9 @@ func (s *statExporter) ExportMetrics(ctx context.Context, data []*metricdata.Met
 		return strings.Join(entries, "_")
 	}
 	dhtLabeler := func(lv []metricdata.LabelValue) string {
-		// default labeler ignore instance_id and concatenates peer_id + message_type
+		// dht labeler ignores instance_id and concatenates peer_id + message_type
 		var entries []string
-		for i := len(lv) - 1; i > 0; i++ {
+		for i := len(lv) - 1; i > 0; i-- {
 			if lv[i].Present {
 				entries = append(entries, lv[i].Value)
 			}
@@ -152,10 +152,11 @@ func (s *statExporter) ExportMetrics(ctx context.Context, data []*metricdata.Met
 	}
 
 	for _, m := range data {
-		if _, ok := s.names[m.Descriptor.Name]; !ok {
+		if _, ok := s.names[m.Descriptor.Name]; len(s.names) > 0 && !ok {
 			continue
 		}
 		labeler := defaultLabeler
+		// guess DHT-specific stats format
 		if len(m.Descriptor.LabelKeys) == 3 && m.Descriptor.LabelKeys[0].Key == "instance_id" &&
 			m.Descriptor.LabelKeys[1].Key == "message_type" && m.Descriptor.LabelKeys[2].Key == "peer_id" {
 			labeler = dhtLabeler
@@ -184,6 +185,7 @@ func (s *statExporter) ExportMetrics(ctx context.Context, data []*metricdata.Met
 				dist.labels = append(dist.labels, label)
 				dist.values = append(dist.values, d.Points[0].Value.(*metricdata.Distribution).Sum)
 			}
+			s.metrics = append(s.metrics, &dist)
 		}
 	}
 	return nil
