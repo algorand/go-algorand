@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"go.opencensus.io/stats"
 	"go.opencensus.io/stats/view"
@@ -85,11 +86,14 @@ func TestDHTOpenCensusMetrics(t *testing.T) {
 	// first check some metrics are collected when no names provided
 	// cannot assert on specific values because network tests might run in parallel with this package
 	// and produce some metric under specific configuration
-	metrics := collectOpenCensusMetrics(nil)
-	require.GreaterOrEqual(t, len(metrics), 2)
+	require.Eventually(t, func() bool {
+		// stats are written by a background goroutine, give it a chance to finish
+		metrics := collectOpenCensusMetrics(nil)
+		return len(metrics) >= 2
+	}, 10*time.Second, 20*time.Millisecond)
 
 	// now assert on specific names and values
-	metrics = collectOpenCensusMetrics([]string{"my_sent_messages", "my_received_bytes"})
+	metrics := collectOpenCensusMetrics([]string{"my_sent_messages", "my_received_bytes"})
 	require.Len(t, metrics, 2)
 	for _, m := range metrics {
 		values := make(map[string]float64)
