@@ -59,12 +59,26 @@ func TestBasicMining(t *testing.T) {
 
 	// wait for richAccount to have LastProposed != 0
 	account, err := client.AccountData(richAccount.Address)
+	a.NoError(err)
 	fmt.Printf(" rich balance %v %d\n", richAccount.Address, account.MicroAlgos)
+	waits := 0
 	for account.LastProposed == 0 {
 		a.NoError(err)
 		a.Equal(basics.Online, account.Status)
 		account, err = client.AccountData(richAccount.Address)
+		if account.LastProposed > 0 {
+			break
+		}
+		status, err := client.Status()
+		a.NoError(err)
+		block, err := client.BookkeepingBlock(status.LastRound)
+		a.NoError(err)
+		fmt.Printf(" block proposed by %v\n", block.Proposer)
 		time.Sleep(roundTime)
+		waits++
+		if waits > 15 {
+			panic(fmt.Sprintf(" timeout at rnd %d waiting for proposal by %v\n", status.LastRound, account))
+		}
 	}
 	a.NoError(err)
 

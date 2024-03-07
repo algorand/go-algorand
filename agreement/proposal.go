@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -197,7 +196,10 @@ func verifyNewSeed(p unauthenticatedProposal, ledger LedgerReader) error {
 	value := p.value()
 	rnd := p.Round()
 
-	curParams := config.Consensus[p.BlockHeader.CurrentProtocol]
+	curParams, err := ledger.ConsensusParams(rnd)
+	if err != nil {
+		return fmt.Errorf("failed to obtain consensus parameters in round %d: %v", ParamsRound(rnd), err)
+	}
 	if curParams.Mining().Enabled {
 		if p.BlockHeader.Proposer != value.OriginalProposer {
 			return fmt.Errorf("payload has wrong proposer (%v != %v)", p.Proposer, value.OriginalProposer)
