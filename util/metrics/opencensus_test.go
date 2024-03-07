@@ -96,6 +96,25 @@ func TestDHTOpenCensusMetrics(t *testing.T) {
 	metrics := collectOpenCensusMetrics([]string{"my_sent_messages", "my_received_bytes"})
 	require.Len(t, metrics, 2)
 	for _, m := range metrics {
+		var buf strings.Builder
+		m.WriteMetric(&buf, "")
+		promValue := buf.String()
+		if strings.Contains(promValue, "my_sent_messages") {
+			require.Contains(t, promValue, "my_sent_messages_abcd_ADD_PROVIDER")
+			require.Contains(t, promValue, "my_sent_messages_1234_UNKNOWN")
+			require.Contains(t, promValue, "my_sent_messages_abcd_ADD_PROVIDER counter\n")
+			require.Contains(t, promValue, "my_sent_messages_1234_UNKNOWN counter\n")
+			require.Contains(t, promValue, "my_sent_messages_abcd_ADD_PROVIDER 1\n")
+			require.Contains(t, promValue, "my_sent_messages_1234_UNKNOWN 1\n")
+		} else if strings.Contains(promValue, "my_received_bytes") {
+			require.Contains(t, promValue, "my_received_bytes_abcd_ADD_PROVIDER gauge\n")
+			require.Contains(t, promValue, "my_received_bytes_1234_UNKNOWN gauge\n")
+			require.Contains(t, promValue, "my_received_bytes_abcd_ADD_PROVIDER 123.000000\n")
+			require.Contains(t, promValue, "my_received_bytes_1234_UNKNOWN 100.000000\n")
+		} else {
+			require.Fail(t, "not expected metric", promValue)
+		}
+
 		values := make(map[string]float64)
 		m.AddMetric(values)
 		for k, v := range values {
@@ -110,7 +129,6 @@ func TestDHTOpenCensusMetrics(t *testing.T) {
 			} else {
 				require.Fail(t, "not expected metric key", k)
 			}
-
 		}
 	}
 

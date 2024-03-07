@@ -47,11 +47,19 @@ func collectOpenCensusMetrics(names []string) []Metric {
 	return exporter.metrics
 }
 
-// WriteOpenCensusMetrics return open census data converted to algorand format
+// WriteOpenCensusMetrics return opencensus data converted to algorand format
 func WriteOpenCensusMetrics(buf *strings.Builder, parentLabels string, names ...string) {
 	metrics := collectOpenCensusMetrics(names)
 	for _, metric := range metrics {
 		metric.WriteMetric(buf, parentLabels)
+	}
+}
+
+// AddOpenCensusMetrics return opencensus data converted to algorand format
+func AddOpenCensusMetrics(values map[string]float64, names ...string) {
+	metrics := collectOpenCensusMetrics(names)
+	for _, metric := range metrics {
+		metric.AddMetric(values)
 	}
 }
 
@@ -79,7 +87,7 @@ func (st *statCounter) WriteMetric(buf *strings.Builder, parentLabels string) {
 			buf.WriteString("{" + parentLabels + "}")
 		}
 		value := st.values[i]
-		buf.WriteString(strconv.FormatUint(uint64(value), 10))
+		buf.WriteString(" " + strconv.FormatUint(uint64(value), 10))
 		buf.WriteString("\n")
 	}
 }
@@ -110,13 +118,13 @@ func (st *statDistribution) WriteMetric(buf *strings.Builder, parentLabels strin
 		buf.WriteString(st.description)
 		buf.WriteString("\n# TYPE ")
 		buf.WriteString(name)
-		buf.WriteString(" counter\n")
+		buf.WriteString(" gauge\n")
 		buf.WriteString(name)
 		if len(parentLabels) > 0 {
 			buf.WriteString("{" + parentLabels + "}")
 		}
 		value := st.values[i]
-		buf.WriteString(strconv.FormatFloat(value, 'f', 6, 64))
+		buf.WriteString(" " + strconv.FormatFloat(value, 'f', 6, 64))
 		buf.WriteString("\n")
 	}
 }

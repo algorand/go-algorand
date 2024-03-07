@@ -384,6 +384,7 @@ func run() int {
 			sendHeartbeat := func() {
 				values := make(map[string]float64)
 				metrics.DefaultRegistry().AddMetrics(values)
+				metrics.AddOpenCensusMetrics(values)
 
 				heartbeatDetails := baseHeartbeatEvent
 				heartbeatDetails.Metrics = values
