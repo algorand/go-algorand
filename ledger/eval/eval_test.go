@@ -34,6 +34,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	basics_testing "github.com/algorand/go-algorand/data/basics/testing"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/logic/mocktracer"
@@ -182,8 +183,7 @@ func TestEvalAppStateCountsWithTxnGroup(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	_, _, err := testEvalAppGroup(t, basics.StateSchema{NumByteSlice: 1})
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "store bytes count 2 exceeds schema bytes count 1")
+	require.ErrorContains(t, err, "store bytes count 2 exceeds schema bytes count 1")
 }
 
 // TestEvalAppAllocStateWithTxnGroup ensures roundCowState.deltas and applyStorageDelta
@@ -213,7 +213,7 @@ func TestTestTransactionGroup(t *testing.T) {
 	eval.proto = config.Consensus[protocol.ConsensusCurrentVersion]
 	txgroup = make([]transactions.SignedTxn, eval.proto.MaxTxGroupSize+1)
 	err = eval.TestTransactionGroup(txgroup)
-	require.Error(t, err) // too many
+	require.ErrorContains(t, err, "group size")
 }
 
 // test BlockEvaluator.transactionGroup()
@@ -229,7 +229,7 @@ func TestPrivateTransactionGroup(t *testing.T) {
 	eval.proto = config.Consensus[protocol.ConsensusCurrentVersion]
 	txgroup = make([]transactions.SignedTxnWithAD, eval.proto.MaxTxGroupSize+1)
 	err = eval.TransactionGroup(txgroup)
-	require.Error(t, err) // too many
+	require.ErrorContains(t, err, "group size")
 }
 
 func TestTransactionGroupWithTracer(t *testing.T) {
@@ -647,7 +647,7 @@ func testnetFixupExecution(t *testing.T, headerRound basics.Round, poolBonus uin
 	// won't work before funding bank
 	if poolBonus > 0 {
 		_, err = eval.workaroundOverspentRewards(rewardPoolBalance, headerRound)
-		require.Error(t, err)
+		require.ErrorContains(t, err, "unable to move funds from testnet bank")
 	}
 
 	bankAddr, _ := basics.UnmarshalChecksumAddress("GD64YIY3TWGDMCNPP553DZPPR6LDUSFQOIJVFDPPXWEG3FVOJCCDBBHU5A")
@@ -1206,6 +1206,9 @@ func TestEvalFunctionForExpiredAccounts(t *testing.T) {
 	validatedBlock, err := blkEval.GenerateBlock()
 	require.NoError(t, err)
 
+	// fake agreement's setting of header fields so later validates work
+	*validatedBlock = validatedBlock.WithProposal(committee.Seed{}, testPoolAddr, true)
+
 	expired := false
 	for _, acct := range validatedBlock.Block().ExpiredParticipationAccounts {
 		if acct == recvAddr {
@@ -1222,51 +1225,40 @@ func TestEvalFunctionForExpiredAccounts(t *testing.T) {
 	require.Zero(t, acctData.StateProofID)
 	require.Zero(t, acctData.SelectionID)
 	require.Zero(t, acctData.VoteID)
-	badBlock := *validatedBlock
+	goodBlock := validatedBlock.Block()
 
-	// First validate that bad block is fine if we dont touch it...
-	_, err = Eval(context.Background(), l, badBlock.Block(), true, verify.GetMockedCache(true), nil, l.tracer)
+	// First validate that it's fine if we dont touch it.
+	_, err = Eval(context.Background(), l, goodBlock, true, verify.GetMockedCache(true), nil, l.tracer)
 	require.NoError(t, err)
-
-	badBlock = *validatedBlock
 
 	// Introduce an unknown address to introduce an error
-	badBlockObj := badBlock.Block()
-	badBlockObj.ExpiredParticipationAccounts = append(badBlockObj.ExpiredParticipationAccounts, basics.Address{1})
-	badBlock = ledgercore.MakeValidatedBlock(badBlockObj, badBlock.Delta())
+	badBlock := goodBlock
+	badBlock.ExpiredParticipationAccounts = append(badBlock.ExpiredParticipationAccounts, basics.Address{1})
 
-	_, err = Eval(context.Background(), l, badBlock.Block(), true, verify.GetMockedCache(true), nil, l.tracer)
-	require.Error(t, err)
-
-	badBlock = *validatedBlock
-
-	addressToCopy := badBlock.Block().ExpiredParticipationAccounts[0]
+	_, err = Eval(context.Background(), l, badBlock, true, verify.GetMockedCache(true), nil, l.tracer)
+	require.ErrorContains(t, err, "expiration candidate")
 
 	// Add more than the expected number of accounts
-	badBlockObj = badBlock.Block()
+	badBlock = goodBlock
+	addressToCopy := badBlock.ExpiredParticipationAccounts[0]
 	for i := 0; i < blkEval.proto.MaxProposedExpiredOnlineAccounts+1; i++ {
-		badBlockObj.ExpiredParticipationAccounts = append(badBlockObj.ExpiredParticipationAccounts, addressToCopy)
+		badBlock.ExpiredParticipationAccounts = append(badBlock.ExpiredParticipationAccounts, addressToCopy)
 	}
-	badBlock = ledgercore.MakeValidatedBlock(badBlockObj, badBlock.Delta())
 
-	_, err = Eval(context.Background(), l, badBlock.Block(), true, verify.GetMockedCache(true), nil, l.tracer)
-	require.Error(t, err)
-
-	badBlock = *validatedBlock
+	_, err = Eval(context.Background(), l, badBlock, true, verify.GetMockedCache(true), nil, l.tracer)
+	require.ErrorContains(t, err, "length of expired accounts")
 
 	// Duplicate an address
-	badBlockObj = badBlock.Block()
-	badBlockObj.ExpiredParticipationAccounts = append(badBlockObj.ExpiredParticipationAccounts, badBlockObj.ExpiredParticipationAccounts[0])
-	badBlock = ledgercore.MakeValidatedBlock(badBlockObj, badBlock.Delta())
+	badBlock = goodBlock
+	badBlock.ExpiredParticipationAccounts = append(badBlock.ExpiredParticipationAccounts, addressToCopy)
 
-	_, err = Eval(context.Background(), l, badBlock.Block(), true, verify.GetMockedCache(true), nil, l.tracer)
-	require.Error(t, err)
+	_, err = Eval(context.Background(), l, badBlock, true, verify.GetMockedCache(true), nil, l.tracer)
+	require.ErrorContains(t, err, "duplicate address found")
 
-	badBlock = *validatedBlock
+	badBlock = goodBlock
 	// sanity check that bad block is being actually copied and not just the pointer
-	_, err = Eval(context.Background(), l, badBlock.Block(), true, verify.GetMockedCache(true), nil, l.tracer)
+	_, err = Eval(context.Background(), l, badBlock, true, verify.GetMockedCache(true), nil, l.tracer)
 	require.NoError(t, err)
-
 }
 
 type failRoundCowParent struct {
@@ -1353,17 +1345,16 @@ func TestExpiredAccountGenerationWithDiskFailure(t *testing.T) {
 	eval.block.ExpiredParticipationAccounts = append(eval.block.ExpiredParticipationAccounts, recvAddr)
 
 	err = eval.endOfBlock()
-	require.Error(t, err)
+	require.ErrorContains(t, err, "found expiration candidate")
 
 	eval.block.ExpiredParticipationAccounts = []basics.Address{{}}
 	eval.state.mods.Accts = ledgercore.AccountDeltas{}
 	eval.state.lookupParent = &failRoundCowParent{}
 	err = eval.endOfBlock()
-	require.Error(t, err)
+	require.ErrorContains(t, err, "disk I/O fail (on purpose)")
 
 	err = eval.resetExpiredOnlineAccountsParticipationKeys()
-	require.Error(t, err)
-
+	require.ErrorContains(t, err, "disk I/O fail (on purpose)")
 }
 
 // TestExpiredAccountGeneration test that expired accounts are added to a block header and validated

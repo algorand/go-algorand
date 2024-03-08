@@ -784,8 +784,6 @@ func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, evalOpts 
 		return nil, err
 	}
 
-	// Move last block's proposer payout to the proposer
-
 	// ensure that we have at least MinBalance after withdrawing rewards
 	ot.SubA(poolNew.MicroAlgos, basics.MicroAlgos{Raw: proto.MinBalance})
 	if ot.Overflowed {
@@ -793,6 +791,7 @@ func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, evalOpts 
 		return nil, fmt.Errorf("overflowed subtracting rewards for block %v", hdr.Round)
 	}
 
+	// Move last block's proposer payout to the proposer
 	if !prevHeader.Proposer.IsZero() {
 		// Payout the previous proposer.
 		if !prevHeader.ProposerPayout.IsZero() {
@@ -1329,19 +1328,10 @@ func (eval *BlockEvaluator) endOfBlock() error {
 			// can cancel this payment by zero'ing the ProposerPayout if the
 			// proposer is found to be ineligible. See WithProposal().
 			eval.block.FeesCollected = eval.state.feesCollected
-
-			incentive, _ := basics.NewPercent(eval.proto.Mining().Percent).DivvyAlgos(eval.block.FeesCollected)
-			total, o := basics.OAddA(incentive, eval.block.Bonus)
-			if o {
-				return fmt.Errorf("overflowed adding bonus incentive %d %d", incentive, eval.block.Bonus)
+			eval.block.ProposerPayout, err = eval.proposerPayout()
+			if err != nil {
+				return err
 			}
-
-			sink, lerr := eval.state.lookup(eval.block.FeeSink)
-			if lerr != nil {
-				return lerr
-			}
-			available := sink.AvailableBalance(&eval.proto)
-			eval.block.ProposerPayout = basics.MinA(total, available)
 		}
 
 		eval.generateKnockOfflineAccountsList()
@@ -1400,6 +1390,35 @@ func (eval *BlockEvaluator) endOfBlock() error {
 			return fmt.Errorf("fees collected wrong: %v != %v", eval.block.FeesCollected, expectedFeesCollected)
 		}
 
+		// agreement will check that the proposer is correct (we can't because
+		// we don't see the bundle), but agreement allows the proposer to be set
+		// even if Mining is not enabled (and unset any time).  So make sure
+		// it's set iff it should be.
+		if eval.proto.Mining().Enabled {
+			if eval.block.Proposer.IsZero() && !eval.generate { // if generating, proposer is set later by agreement
+				return fmt.Errorf("proposer missing when mining enabled")
+			}
+		} else {
+			if !eval.block.Proposer.IsZero() {
+				return fmt.Errorf("proposer %v present when mining disabled", eval.block.Proposer)
+			}
+		}
+
+		// agreement will check that the payout is zero if the proposer is
+		// ineligible, but we must check that it is correct if non-zero. We allow it
+		// to be too low. A proposer can be algruistic.
+		maxPayout := uint64(0)
+		if eval.proto.Mining().Enabled {
+			payout, err := eval.proposerPayout()
+			if err != nil {
+				return err
+			}
+			maxPayout = payout.Raw
+		}
+		if eval.block.ProposerPayout.Raw > maxPayout {
+			return fmt.Errorf("proposal wants %d payout, %d is allowed", eval.block.ProposerPayout.Raw, maxPayout)
+		}
+
 		expectedVoters, expectedVotersWeight, err2 := eval.stateProofVotersAndTotal()
 		if err2 != nil {
 			return err2
@@ -1451,6 +1470,21 @@ func (eval *BlockEvaluator) endOfBlock() error {
 	}
 
 	return nil
+}
+
+func (eval *BlockEvaluator) proposerPayout() (basics.MicroAlgos, error) {
+	incentive, _ := basics.NewPercent(eval.proto.Mining().Percent).DivvyAlgos(eval.block.FeesCollected)
+	total, o := basics.OAddA(incentive, eval.block.Bonus)
+	if o {
+		return basics.MicroAlgos{}, fmt.Errorf("payout overflowed adding bonus incentive %d %d", incentive, eval.block.Bonus)
+	}
+
+	sink, err := eval.state.lookup(eval.block.FeeSink)
+	if err != nil {
+		return basics.MicroAlgos{}, err
+	}
+	available := sink.AvailableBalance(&eval.proto)
+	return basics.MinA(total, available), nil
 }
 
 type challenge struct {

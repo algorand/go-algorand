@@ -77,7 +77,7 @@ func TestBasicMining(t *testing.T) {
 		time.Sleep(roundTime)
 		waits++
 		if waits > 15 {
-			panic(fmt.Sprintf(" timeout at rnd %d waiting for proposal by %v\n", status.LastRound, account))
+			a.Failf("timeout", "rnd %d waiting for proposal by %v\n", status.LastRound, account)
 		}
 	}
 	a.NoError(err)

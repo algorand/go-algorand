@@ -592,7 +592,13 @@ type MiningRules struct {
 // miningRules should be extended, never changed, since old blocks must retain
 // their behavior.
 var miningRules = [...]MiningRules{
-	{Enabled: false},
+	{
+		Enabled: false,
+		// Because the eligibility check has a lookback, we need these set even
+		// here before mining begins.
+		MinBalance: 30_000_000_000,     // 30,000 algos
+		MaxBalance: 50_000_000_000_000, // 50M algos
+	},
 	{
 		Enabled:              true,
 		Percent:              75,

@@ -189,25 +189,28 @@ func deriveNewSeed(address basics.Address, vrf *crypto.VRFSecrets, rnd round, pe
 	return
 }
 
-// verifyNewSeed checks the things in the header that can only be confirmed by
-// looking into the unauthenticatedProposal, namely the BlockSeed and the
-// Proposer.
-func verifyNewSeed(p unauthenticatedProposal, ledger LedgerReader) error {
+// verifyHeader checks the things in the header that can only be confirmed by
+// looking into the unauthenticatedProposal or using LookupAgreement. The
+// Proposer, ProposerPayout, and Seed.
+func verifyHeader(p unauthenticatedProposal, ledger LedgerReader) error {
 	value := p.value()
 	rnd := p.Round()
 
-	curParams, err := ledger.ConsensusParams(rnd)
-	if err != nil {
-		return fmt.Errorf("failed to obtain consensus parameters in round %d: %v", ParamsRound(rnd), err)
+	// ledger.ConsensusParams(rnd) is not allowed because rnd isn't committed.
+	// The BlockHeader isn't trustworthy yet, since we haven't checked the
+	// upgrade state. So, for now, we confirm that the BlockSeed is *either*
+	// correct or missing. `eval` package will using Mining().Enabled to confirm
+	// which it should be.
+	if !p.BlockHeader.Proposer.IsZero() && p.BlockHeader.Proposer != value.OriginalProposer {
+		return fmt.Errorf("wrong proposer (%v != %v)", p.Proposer, value.OriginalProposer)
 	}
-	if curParams.Mining().Enabled {
-		if p.BlockHeader.Proposer != value.OriginalProposer {
-			return fmt.Errorf("payload has wrong proposer (%v != %v)", p.Proposer, value.OriginalProposer)
-		}
-	} else {
-		if !p.BlockHeader.Proposer.IsZero() {
-			return fmt.Errorf("payload has a proposer %v when Mining disabled", p.Proposer)
-		}
+
+	// Similarly, we only check here that the payout is zero if
+	// ineligibile. `eval` code must check that it is correct if > 0.
+	eligible, err := payoutEligible(rnd, p.Proposer, ledger)
+	if !eligible && p.BlockHeader.ProposerPayout.Raw > 0 {
+		return fmt.Errorf("proposer payout (%d) for ineligible Proposer %v",
+			p.BlockHeader.ProposerPayout.Raw, p.Proposer)
 	}
 
 	cparams, err := ledger.ConsensusParams(ParamsRound(rnd))
@@ -224,14 +227,14 @@ func verifyNewSeed(p unauthenticatedProposal, ledger LedgerReader) error {
 	var alpha crypto.Digest
 	prevSeed, err := ledger.Seed(seedRound(rnd, cparams))
 	if err != nil {
-		return fmt.Errorf("failed read seed of round %d: %v", seedRound(rnd, cparams), err)
+		return fmt.Errorf("failed to read seed of round %d: %v", seedRound(rnd, cparams), err)
 	}
 
 	if value.OriginalPeriod == 0 {
 		verifier := proposerRecord.SelectionID
 		ok, _ := verifier.Verify(p.SeedProof, prevSeed) // ignoring VrfOutput returned by Verify
 		if !ok {
-			return fmt.Errorf("payload seed proof malformed (%v, %v)", prevSeed, p.SeedProof)
+			return fmt.Errorf("seed proof malformed (%v, %v)", prevSeed, p.SeedProof)
 		}
 		// TODO remove the following Hash() call,
 		// redundant with the Verify() call above.
@@ -257,39 +260,39 @@ func verifyNewSeed(p unauthenticatedProposal, ledger LedgerReader) error {
 		input.History = oldDigest
 	}
 	if p.Seed() != committee.Seed(crypto.HashObj(input)) {
-		return fmt.Errorf("payload seed malformed (%v != %v)", committee.Seed(crypto.HashObj(input)), p.Seed())
+		return fmt.Errorf("seed malformed (%v != %v)", committee.Seed(crypto.HashObj(input)), p.Seed())
 	}
 	return nil
 }
 
-// payoutForBlock determines whether the proposer ought to be recorded, and
-// whether that proposer ought to be paid for proposing.
-func payoutForBlock(blk bookkeeping.Block, proposer basics.Address, ledger LedgerReader) (recorded basics.Address, eligible bool, err error) {
-	rnd := blk.Round()
-	proto, err := ledger.ConsensusParams(rnd)
-	if err != nil || !proto.Mining().Enabled {
-		return recorded, eligible, err // err may or may not be nil, either way, others are zero'd
-	}
-
-	// We want to check eligibility and the online balance in the round that
-	// mattered to select this proposer.  We use the ParamsRound() to find the
-	// round in question, not current proto.
+// payoutEligible determines whether the proposer is eligible for block incentive payout.
+func payoutEligible(rnd basics.Round, proposer basics.Address, ledger LedgerReader) (bool, error) {
+	// We want to check eligibility of the online balance in the round that
+	// mattered to select this proposer.
 	agreementParams, err := ledger.ConsensusParams(ParamsRound(rnd))
 	if err != nil {
-		return recorded, false, err
+		return false, err
 	}
 
 	// Check the balance from the agreement round
 	balanceRound := balanceRound(rnd, agreementParams)
 	balanceRecord, err := ledger.LookupAgreement(balanceRound, proposer)
 	if err != nil {
-		return recorded, false, err
+		return false, err
 	}
 
-	eligible = balanceRecord.IncentiveEligible &&
-		balanceRecord.MicroAlgosWithRewards.Raw >= proto.Mining().MinBalance &&
-		balanceRecord.MicroAlgosWithRewards.Raw <= proto.Mining().MaxBalance
-	return proposer, eligible, nil
+	balanceParams, err := ledger.ConsensusParams(balanceRound)
+	if err != nil {
+		return false, err
+	}
+
+	// It's only fair to compare balance's from 320 rounds ago to the mining
+	// rules that were in effect then.  To make this work in a reasonable way
+	// when mining begins, the miningRules[0] in consensus.go has Min and Max.
+	eligible := balanceRecord.IncentiveEligible &&
+		balanceRecord.MicroAlgosWithRewards.Raw >= balanceParams.Mining().MinBalance &&
+		balanceRecord.MicroAlgosWithRewards.Raw <= balanceParams.Mining().MaxBalance
+	return eligible, nil
 }
 
 func proposalForBlock(address basics.Address, vrf *crypto.VRFSecrets, ve ValidatedBlock, period period, ledger LedgerReader) (proposal, proposalValue, error) {
@@ -299,12 +302,12 @@ func proposalForBlock(address basics.Address, vrf *crypto.VRFSecrets, ve Validat
 		return proposal{}, proposalValue{}, fmt.Errorf("proposalForBlock: could not derive new seed: %w", err)
 	}
 
-	hdrProp, eligible, err := payoutForBlock(blk, address, ledger)
+	eligible, err := payoutEligible(blk.Round(), address, ledger)
 	if err != nil {
-		return proposal{}, proposalValue{}, fmt.Errorf("proposalForBlock: could determine payout: %w", err)
+		return proposal{}, proposalValue{}, fmt.Errorf("proposalForBlock: could determine eligibility: %w", err)
 	}
 
-	ve = ve.WithProposal(newSeed, hdrProp, eligible)
+	ve = ve.WithProposal(newSeed, address, eligible)
 	proposal := makeProposal(ve, seedProof, period, address)
 	value := proposalValue{
 		OriginalPeriod:   period,
@@ -325,14 +328,14 @@ func (p unauthenticatedProposal) validate(ctx context.Context, current round, le
 		return invalid, fmt.Errorf("proposed entry from wrong round: entry.Round() != current: %v != %v", entry.Round(), current)
 	}
 
-	err := verifyNewSeed(p, ledger)
+	err := verifyHeader(p, ledger)
 	if err != nil {
-		return invalid, fmt.Errorf("proposal has bad seed: %v", err)
+		return invalid, fmt.Errorf("unable to verify header: %w", err)
 	}
 
 	ve, err := validator.Validate(ctx, entry)
 	if err != nil {
-		return invalid, fmt.Errorf("EntryValidator rejected entry: %v", err)
+		return invalid, fmt.Errorf("EntryValidator rejected entry: %w", err)
 	}
 
 	return makeProposal(ve, p.SeedProof, p.OriginalPeriod, p.OriginalProposer), nil
