@@ -23,6 +23,7 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/passphrase"
+	"github.com/muesli/termenv"
 )
 
 const (
@@ -121,4 +122,19 @@ func readFile(filename string) ([]byte, error) {
 		return io.ReadAll(os.Stdin)
 	}
 	return os.ReadFile(filename)
+}
+
+// printDiscreetly Print a secret string to an alternate screen,
+// so the string isn't printed to the terminal.
+func printDiscreetly(w io.Writer, promptMsg, secretMsg string) error {
+	output := termenv.NewOutput(w)
+	output.AltScreen()
+	defer output.ExitAltScreen()
+	if _, err := fmt.Fprintf(output, "%s\n\n%s\n\nPress 'Enter' key to continue.", promptMsg, secretMsg); err != nil {
+		return err
+	}
+	if _, err := fmt.Scanln(); err != nil {
+		return err
+	}
+	return nil
 }

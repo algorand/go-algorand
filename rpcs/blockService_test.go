@@ -125,8 +125,9 @@ func TestHandleCatchupReqNegative(t *testing.T) {
 	require.Equal(t, roundNumberParseErrMsg, string(val))
 }
 
-// TestRedirectFallbackArchiver tests the case when the block service fallback to another in the absence of a given block.
-func TestRedirectFallbackArchiver(t *testing.T) {
+// TestRedirectFallbackEndpoints tests the case when the block service falls back to another from
+// BlockServiceCustomFallbackEndpoints in the absence of a given block.
+func TestRedirectFallbackEndpoints(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	log := logging.TestingLog(t)
@@ -142,25 +143,23 @@ func TestRedirectFallbackArchiver(t *testing.T) {
 	net1 := &httpTestPeerSource{}
 	net2 := &httpTestPeerSource{}
 
+	nodeA := &basicRPCNode{}
+	nodeB := &basicRPCNode{}
+	nodeA.start()
+	defer nodeA.stop()
+	nodeB.start()
+	defer nodeB.stop()
+
 	config := config.GetDefaultLocal()
-	// Need to enable block service fallbacks
-	config.EnableBlockServiceFallbackToArchiver = true
+	// Set the first to a bad address, the second to self, and the third to the one that has the block.
+	// If RR is right, should succeed.
+	config.BlockServiceCustomFallbackEndpoints = fmt.Sprintf("://badaddress,%s,%s", nodeA.rootURL(), nodeB.rootURL())
 
 	bs1 := MakeBlockService(log, config, ledger1, net1, "test-genesis-ID")
 	bs2 := MakeBlockService(log, config, ledger2, net2, "test-genesis-ID")
 
-	nodeA := &basicRPCNode{}
-	nodeB := &basicRPCNode{}
-
 	nodeA.RegisterHTTPHandler(BlockServiceBlockPath, bs1)
-	nodeA.start()
-	defer nodeA.stop()
-
 	nodeB.RegisterHTTPHandler(BlockServiceBlockPath, bs2)
-	nodeB.start()
-	defer nodeB.stop()
-
-	net1.addPeer(nodeB.rootURL())
 
 	parsedURL, err := network.ParseHostOrURL(nodeA.rootURL())
 	require.NoError(t, err)
@@ -235,60 +234,8 @@ func TestBlockServiceShutdown(t *testing.T) {
 	<-requestDone
 }
 
-// TestRedirectBasic tests the case when the block service redirects the request to elsewhere
-func TestRedirectFallbackEndpoints(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	log := logging.TestingLog(t)
-
-	ledger1 := makeLedger(t, "l1")
-	defer ledger1.Close()
-	ledger2 := makeLedger(t, "l2")
-	defer ledger2.Close()
-	addBlock(t, ledger2)
-
-	net1 := &httpTestPeerSource{}
-	net2 := &httpTestPeerSource{}
-
-	nodeA := &basicRPCNode{}
-	nodeB := &basicRPCNode{}
-	nodeA.start()
-	defer nodeA.stop()
-	nodeB.start()
-	defer nodeB.stop()
-
-	config := config.GetDefaultLocal()
-	// Set the first to a bad address, the second to self, and the third to the one that has the block.
-	// If RR is right, should succeed.
-	config.BlockServiceCustomFallbackEndpoints = fmt.Sprintf("://badaddress,%s,%s", nodeA.rootURL(), nodeB.rootURL())
-	bs1 := MakeBlockService(log, config, ledger1, net1, "{genesisID}")
-	bs2 := MakeBlockService(log, config, ledger2, net2, "{genesisID}")
-
-	nodeA.RegisterHTTPHandler(BlockServiceBlockPath, bs1)
-	nodeB.RegisterHTTPHandler(BlockServiceBlockPath, bs2)
-
-	parsedURL, err := network.ParseHostOrURL(nodeA.rootURL())
-	require.NoError(t, err)
-
-	client := http.Client{}
-
-	ctx := context.Background()
-	parsedURL.Path = FormatBlockQuery(uint64(1), parsedURL.Path, net1)
-	blockURL := parsedURL.String()
-	request, err := http.NewRequest("GET", blockURL, nil)
-	require.NoError(t, err)
-	requestCtx, requestCancel := context.WithTimeout(ctx, time.Duration(config.CatchupHTTPBlockFetchTimeoutSec)*time.Second)
-	defer requestCancel()
-	request = request.WithContext(requestCtx)
-	network.SetUserAgentHeader(request.Header)
-	response, err := client.Do(request)
-	require.NoError(t, err)
-
-	require.Equal(t, http.StatusOK, response.StatusCode)
-}
-
-// TestRedirectFallbackArchiver tests the case when the block service
-// fallback to another because its memory use it at capacity
+// TestRedirectOnFullCapacity tests the case when the block service
+// fallback to another because its memory use is at capacity
 func TestRedirectOnFullCapacity(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -313,27 +260,31 @@ func TestRedirectOnFullCapacity(t *testing.T) {
 	net1 := &httpTestPeerSource{}
 	net2 := &httpTestPeerSource{}
 
-	config := config.GetDefaultLocal()
-	// Need to enable block service fallbacks
-	config.EnableBlockServiceFallbackToArchiver = true
-	bs1 := MakeBlockService(log1, config, ledger1, net1, "test-genesis-ID")
-	bs2 := MakeBlockService(log2, config, ledger2, net2, "test-genesis-ID")
+	nodeA := &basicRPCNode{}
+	nodeB := &basicRPCNode{}
+	nodeA.start()
+	defer nodeA.stop()
+	nodeB.start()
+	defer nodeB.stop()
+
+	configWithRedirects := config.GetDefaultLocal()
+
+	configWithRedirects.BlockServiceCustomFallbackEndpoints = nodeB.rootURL()
+
+	bs1 := MakeBlockService(log1, configWithRedirects, ledger1, net1, "test-genesis-ID")
+
+	// config with no redirects
+	configNoRedirects := config.GetDefaultLocal()
+	configNoRedirects.BlockServiceCustomFallbackEndpoints = ""
+
+	bs2 := MakeBlockService(log2, configNoRedirects, ledger2, net2, "test-genesis-ID")
 	// set the memory cap so that it can serve only 1 block at a time
 	bs1.memoryCap = 250
 	bs2.memoryCap = 250
 
-	nodeA := &basicRPCNode{}
-	nodeB := &basicRPCNode{}
-
 	nodeA.RegisterHTTPHandler(BlockServiceBlockPath, bs1)
-	nodeA.start()
-	defer nodeA.stop()
 
 	nodeB.RegisterHTTPHandler(BlockServiceBlockPath, bs2)
-	nodeB.start()
-	defer nodeB.stop()
-
-	net1.addPeer(nodeB.rootURL())
 
 	parsedURL, err := network.ParseHostOrURL(nodeA.rootURL())
 	require.NoError(t, err)
@@ -483,27 +434,36 @@ func TestWsBlockLimiting(t *testing.T) {
 func TestRedirectExceptions(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	log := logging.TestingLog(t)
+	log1 := logging.TestingLog(t)
+	log2 := logging.TestingLog(t)
 
 	ledger1 := makeLedger(t, "l1")
+	ledger2 := makeLedger(t, "l2")
 	defer ledger1.Close()
+	defer ledger2.Close()
 	addBlock(t, ledger1)
 
 	net1 := &httpTestPeerSource{}
-
-	config := config.GetDefaultLocal()
-	// Need to enable block service fallbacks
-	config.EnableBlockServiceFallbackToArchiver = true
-
-	bs1 := MakeBlockService(log, config, ledger1, net1, "{genesisID}")
+	net2 := &httpTestPeerSource{}
 
 	nodeA := &basicRPCNode{}
-
-	nodeA.RegisterHTTPHandler(BlockServiceBlockPath, bs1)
+	nodeB := &basicRPCNode{}
 	nodeA.start()
 	defer nodeA.stop()
+	nodeB.start()
+	defer nodeB.stop()
 
-	net1.peers = append(net1.peers, "invalidPeer")
+	configInvalidRedirects := config.GetDefaultLocal()
+	configInvalidRedirects.BlockServiceCustomFallbackEndpoints = "badAddress"
+
+	configWithRedirectToSelf := config.GetDefaultLocal()
+	configWithRedirectToSelf.BlockServiceCustomFallbackEndpoints = nodeB.rootURL()
+
+	bs1 := MakeBlockService(log1, configInvalidRedirects, ledger1, net1, "{genesisID}")
+	bs2 := MakeBlockService(log2, configWithRedirectToSelf, ledger2, net2, "{genesisID}")
+
+	nodeA.RegisterHTTPHandler(BlockServiceBlockPath, bs1)
+	nodeB.RegisterHTTPHandler(BlockServiceBlockPath, bs2)
 
 	parsedURL, err := network.ParseHostOrURL(nodeA.rootURL())
 	require.NoError(t, err)
@@ -515,7 +475,7 @@ func TestRedirectExceptions(t *testing.T) {
 	blockURL := parsedURL.String()
 	request, err := http.NewRequest("GET", blockURL, nil)
 	require.NoError(t, err)
-	requestCtx, requestCancel := context.WithTimeout(ctx, time.Duration(config.CatchupHTTPBlockFetchTimeoutSec)*time.Second)
+	requestCtx, requestCancel := context.WithTimeout(ctx, time.Duration(configInvalidRedirects.CatchupHTTPBlockFetchTimeoutSec)*time.Second)
 	defer requestCancel()
 	request = request.WithContext(requestCtx)
 	network.SetUserAgentHeader(request.Header)
@@ -524,8 +484,14 @@ func TestRedirectExceptions(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, response.StatusCode, http.StatusNotFound)
 
-	net1.addPeer(nodeA.rootURL())
-	_, err = client.Do(request)
+	parsedURLNodeB, err := network.ParseHostOrURL(nodeB.rootURL())
+	require.NoError(t, err)
+
+	parsedURLNodeB.Path = FormatBlockQuery(uint64(4), parsedURLNodeB.Path, net2)
+	blockURLNodeB := parsedURLNodeB.String()
+	requestNodeB, err := http.NewRequest("GET", blockURLNodeB, nil)
+	_, err = client.Do(requestNodeB)
+
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "stopped after 10 redirects")
 }
