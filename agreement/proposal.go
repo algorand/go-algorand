@@ -208,6 +208,9 @@ func verifyHeader(p unauthenticatedProposal, ledger LedgerReader) error {
 	// Similarly, we only check here that the payout is zero if
 	// ineligibile. `eval` code must check that it is correct if > 0.
 	eligible, err := payoutEligible(rnd, p.Proposer, ledger)
+	if err != nil {
+		return fmt.Errorf("failed to determine incentive eligibility %w", err)
+	}
 	if !eligible && p.BlockHeader.ProposerPayout.Raw > 0 {
 		return fmt.Errorf("proposer payout (%d) for ineligible Proposer %v",
 			p.BlockHeader.ProposerPayout.Raw, p.Proposer)
