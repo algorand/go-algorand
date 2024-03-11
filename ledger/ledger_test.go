@@ -71,7 +71,7 @@ func (l *Ledger) appendUnvalidated(blk bookkeeping.Block) error {
 	l.verifiedTxnCache = verify.GetMockedCache(false)
 	vb, err := l.Validate(context.Background(), blk, backlogPool)
 	if err != nil {
-		return fmt.Errorf("appendUnvalidated error in Validate: %s", err.Error())
+		return fmt.Errorf("appendUnvalidated error in Validate: %w", err)
 	}
 
 	return l.AddValidatedBlock(*vb, agreement.Certificate{})
@@ -98,6 +98,22 @@ func initNextBlockHeader(correctHeader *bookkeeping.BlockHeader, lastBlock bookk
 			protocol.StateProofBasic: ccBasic,
 		}
 	}
+}
+
+// endOfBlock is simplified implementation of BlockEvaluator.endOfBlock so that
+// our test blocks can pass validation.
+func endOfBlock(blk *bookkeeping.Block) error {
+	if blk.ConsensusProtocol().Mining().Enabled {
+		// This won't work for inner fees, and it's not bothering with overflow
+		for _, txn := range blk.Payset {
+			blk.FeesCollected.Raw += txn.Txn.Fee.Raw
+		}
+		// blk.ProposerPayout is allowed to be zero, so don't reproduce the calc here.
+		blk.Proposer = basics.Address{0x01} // Must be set to _something_.
+	}
+	var err error
+	blk.TxnCommitments, err = blk.PaysetCommit()
+	return err
 }
 
 func makeNewEmptyBlock(t *testing.T, l *Ledger, GenesisID string, initAccounts map[basics.Address]basics.AccountData) (blk bookkeeping.Block) {
@@ -171,15 +187,11 @@ func (l *Ledger) appendUnvalidatedSignedTx(t *testing.T, initAccounts map[basics
 	if err != nil {
 		return fmt.Errorf("could not sign txn: %s", err.Error())
 	}
+	blk.Payset = append(blk.Payset, txib)
 	if proto.TxnCounter {
 		blk.TxnCounter = blk.TxnCounter + 1
 	}
-	if proto.Mining().Enabled {
-		blk.FeesCollected = stx.Txn.Fee
-	}
-	blk.Payset = append(blk.Payset, txib)
-	blk.TxnCommitments, err = blk.PaysetCommit()
-	require.NoError(t, err)
+	require.NoError(t, endOfBlock(&blk))
 	return l.appendUnvalidated(blk)
 }
 
@@ -274,55 +286,72 @@ func TestLedgerBlockHeaders(t *testing.T) {
 
 	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
 	badBlock.BlockHeader.Round++
-	a.Error(l.appendUnvalidated(badBlock), "added block header with round that was too high")
+	a.ErrorContains(l.appendUnvalidated(badBlock), "ledger does not have entry")
 
 	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
 	badBlock.BlockHeader.Round--
-	a.Error(l.appendUnvalidated(badBlock), "added block header with round that was too low")
+	a.ErrorIs(l.appendUnvalidated(badBlock), eval.ErrRoundZero)
 
 	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
 	badBlock.BlockHeader.Round = 0
-	a.Error(l.appendUnvalidated(badBlock), "added block header with round 0")
+	a.ErrorIs(l.appendUnvalidated(badBlock), eval.ErrRoundZero)
 
 	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
 	badBlock.BlockHeader.GenesisID = ""
-	a.Error(l.appendUnvalidated(badBlock), "added block header with empty genesis ID")
+	a.ErrorContains(l.appendUnvalidated(badBlock), "genesis ID missing")
 
 	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
 	badBlock.BlockHeader.GenesisID = "incorrect"
-	a.Error(l.appendUnvalidated(badBlock), "added block header with incorrect genesis ID")
+	a.ErrorContains(l.appendUnvalidated(badBlock), "genesis ID mismatch")
 
 	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
 	badBlock.BlockHeader.UpgradePropose = "invalid"
-	a.Error(l.appendUnvalidated(badBlock), "added block header with invalid upgrade proposal")
+	a.ErrorContains(l.appendUnvalidated(badBlock), "proposed upgrade wait rounds 0")
+
+	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
+	badBlock.BlockHeader.UpgradePropose = "invalid"
+	badBlock.BlockHeader.UpgradeDelay = 20000
+	a.ErrorContains(l.appendUnvalidated(badBlock), "UpgradeState mismatch")
 
 	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
 	badBlock.BlockHeader.UpgradeApprove = true
-	a.Error(l.appendUnvalidated(badBlock), "added block header with upgrade approve set but no open upgrade")
+	a.ErrorContains(l.appendUnvalidated(badBlock), "approval without an active proposal")
 
 	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
 	badBlock.BlockHeader.CurrentProtocol = "incorrect"
-	a.Error(l.appendUnvalidated(badBlock), "added block header with incorrect current protocol")
+	a.ErrorContains(l.appendUnvalidated(badBlock), "protocol not supported")
 
 	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
 	badBlock.BlockHeader.CurrentProtocol = ""
-	a.Error(l.appendUnvalidated(badBlock), "added block header with empty current protocol")
+	a.ErrorContains(l.appendUnvalidated(badBlock), "protocol not supported", "header with empty current protocol")
+
+	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
+	var wrongVersion protocol.ConsensusVersion
+	for ver := range config.Consensus {
+		if ver != correctHeader.CurrentProtocol {
+			wrongVersion = ver
+			break
+		}
+	}
+	a.NotEmpty(wrongVersion)
+	badBlock.BlockHeader.CurrentProtocol = wrongVersion
+	a.ErrorContains(l.appendUnvalidated(badBlock), "UpgradeState mismatch")
 
 	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
 	badBlock.BlockHeader.NextProtocol = "incorrect"
-	a.Error(l.appendUnvalidated(badBlock), "added block header with incorrect next protocol")
+	a.ErrorContains(l.appendUnvalidated(badBlock), "UpgradeState mismatch", "added block header with incorrect next protocol")
 
 	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
 	badBlock.BlockHeader.NextProtocolApprovals++
-	a.Error(l.appendUnvalidated(badBlock), "added block header with incorrect number of upgrade approvals")
+	a.ErrorContains(l.appendUnvalidated(badBlock), "UpgradeState mismatch", "added block header with incorrect number of upgrade approvals")
 
 	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
 	badBlock.BlockHeader.NextProtocolVoteBefore++
-	a.Error(l.appendUnvalidated(badBlock), "added block header with incorrect next protocol vote deadline")
+	a.ErrorContains(l.appendUnvalidated(badBlock), "UpgradeState mismatch", "added block header with incorrect next protocol vote deadline")
 
 	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
 	badBlock.BlockHeader.NextProtocolSwitchOn++
-	a.Error(l.appendUnvalidated(badBlock), "added block header with incorrect next protocol switch round")
+	a.ErrorContains(l.appendUnvalidated(badBlock), "UpgradeState mismatch", "added block header with incorrect next protocol switch round")
 
 	// TODO test upgrade cases with a valid upgrade in progress
 
@@ -330,33 +359,33 @@ func TestLedgerBlockHeaders(t *testing.T) {
 
 	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
 	badBlock.BlockHeader.Branch = bookkeeping.BlockHash{}
-	a.Error(l.appendUnvalidated(badBlock), "added block header with empty previous-block hash")
+	a.ErrorContains(l.appendUnvalidated(badBlock), "block branch incorrect")
 
 	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
 	badBlock.BlockHeader.Branch[0]++
-	a.Error(l.appendUnvalidated(badBlock), "added block header with incorrect previous-block hash")
+	a.ErrorContains(l.appendUnvalidated(badBlock), "block branch incorrect")
 
 	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
 	badBlock.BlockHeader.RewardsLevel++
-	a.Error(l.appendUnvalidated(badBlock), "added block header with incorrect rewards level")
+	a.ErrorContains(l.appendUnvalidated(badBlock), "bad rewards state")
 
 	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
 	badBlock.BlockHeader.RewardsRate++
-	a.Error(l.appendUnvalidated(badBlock), "added block header with incorrect rewards rate")
+	a.ErrorContains(l.appendUnvalidated(badBlock), "bad rewards state")
 
 	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
 	badBlock.BlockHeader.RewardsResidue++
-	a.Error(l.appendUnvalidated(badBlock), "added block header with incorrect rewards residue")
+	a.ErrorContains(l.appendUnvalidated(badBlock), "bad rewards state")
 
 	// TODO test rewards cases with changing poolAddr money, with changing round, and with changing total reward units
 
 	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
 	badBlock.BlockHeader.TxnCommitments.NativeSha512_256Commitment = crypto.Hash([]byte{0})
-	a.Error(l.appendUnvalidated(badBlock), "added block header with empty transaction root")
+	a.ErrorContains(l.appendUnvalidated(badBlock), "txn root wrong")
 
 	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
 	badBlock.BlockHeader.TxnCommitments.NativeSha512_256Commitment[0]++
-	a.Error(l.appendUnvalidated(badBlock), "added block header with invalid transaction root")
+	a.ErrorContains(l.appendUnvalidated(badBlock), "txn root wrong")
 
 	correctBlock := bookkeeping.Block{BlockHeader: correctHeader}
 	a.NoError(l.appendUnvalidated(correctBlock), "could not add block with correct header")
@@ -659,42 +688,36 @@ func TestLedgerSingleTxV24(t *testing.T) {
 	badTx = correctAssetConfig
 	badTx.ConfigAsset = 2
 	err = l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad)
-	a.Error(err)
-	a.Contains(err.Error(), "asset 2 does not exist or has been deleted")
+	a.ErrorContains(err, "asset 2 does not exist or has been deleted")
 
 	badTx = correctAssetConfig
 	badTx.ConfigAsset = assetIdx
 	badTx.AssetFrozen = true
 	err = l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad)
-	a.Error(err)
-	a.Contains(err.Error(), "type acfg has non-zero fields for type afrz")
+	a.ErrorContains(err, "type acfg has non-zero fields for type afrz")
 
 	badTx = correctAssetConfig
 	badTx.ConfigAsset = assetIdx
 	badTx.Sender = addrList[1]
 	badTx.AssetParams.Freeze = addrList[0]
 	err = l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad)
-	a.Error(err)
-	a.Contains(err.Error(), "this transaction should be issued by the manager")
+	a.ErrorContains(err, "this transaction should be issued by the manager")
 
 	badTx = correctAssetConfig
 	badTx.AssetParams.UnitName = "very long unit name that exceeds the limit"
 	err = l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad)
-	a.Error(err)
-	a.Contains(err.Error(), "transaction asset unit name too big: 42 > 8")
+	a.ErrorContains(err, "transaction asset unit name too big: 42 > 8")
 
 	badTx = correctAssetTransfer
 	badTx.XferAsset = assetIdx
 	badTx.AssetAmount = 101
 	err = l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad)
-	a.Error(err)
-	a.Contains(err.Error(), "underflow on subtracting 101 from sender amount 100")
+	a.ErrorContains(err, "underflow on subtracting 101 from sender amount 100")
 
 	badTx = correctAssetTransfer
 	badTx.XferAsset = assetIdx
 	err = l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad)
-	a.Error(err)
-	a.Contains(err.Error(), fmt.Sprintf("asset %d missing from", assetIdx))
+	a.ErrorContains(err, fmt.Sprintf("asset %d missing from", assetIdx))
 
 	a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctAppCreate, ad))
 	appIdx = 2 // the second successful txn
@@ -704,24 +727,20 @@ func TestLedgerSingleTxV24(t *testing.T) {
 	program[0] = '\x01'
 	badTx.ApprovalProgram = program
 	err = l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad)
-	a.Error(err)
-	a.Contains(err.Error(), "program version must be >= 2")
+	a.ErrorContains(err, "program version must be >= 2")
 
 	badTx = correctAppCreate
 	badTx.ApplicationID = appIdx
 	err = l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad)
-	a.Error(err)
-	a.Contains(err.Error(), "programs may only be specified during application creation or update")
+	a.ErrorContains(err, "programs may only be specified during application creation or update")
 
 	badTx = correctAppCall
 	badTx.ApplicationID = 0
 	err = l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad)
-	a.Error(err)
-	a.Contains(err.Error(), "ApprovalProgram: invalid program (empty)")
+	a.ErrorContains(err, "ApprovalProgram: invalid program (empty)")
 	badTx.ApprovalProgram = []byte{242}
 	err = l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad)
-	a.Error(err)
-	a.Contains(err.Error(), "ApprovalProgram: invalid version")
+	a.ErrorContains(err, "ApprovalProgram: invalid version")
 
 	correctAppCall.ApplicationID = appIdx
 	a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctAppCall, ad))
@@ -1272,8 +1291,7 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 			initNextBlockHeader(&correctHeader, lastBlock, proto)
 
 			correctBlock := bookkeeping.Block{BlockHeader: correctHeader}
-			correctBlock.TxnCommitments, err = correctBlock.PaysetCommit()
-			a.NoError(err)
+			a.NoError(endOfBlock(&correctBlock))
 
 			a.NoError(l.appendUnvalidated(correctBlock), "could not add block with correct header")
 		}
