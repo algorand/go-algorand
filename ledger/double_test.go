@@ -203,8 +203,8 @@ func checkBlock(t testing.TB, checkLedger *Ledger, vb *ledgercore.ValidatedBlock
 	}
 	check.SetGenerateForTesting(true)
 	// We use the same value for seed and proposer. But the proposer is
-	// sometimes zero'd to account for mining being disabled. So we provide we
-	// get the blocks to match by providing the Seed as the proposer.
+	// sometimes zero'd to account for mining being disabled. So we get the
+	// blocks to match by providing the Seed as the proposer.
 	cb := endBlock(t, checkLedger, check, basics.Address(vb.Block().BlockHeader.Seed))
 	check.SetGenerateForTesting(false)
 	require.Equal(t, vb.Block(), cb.Block())
