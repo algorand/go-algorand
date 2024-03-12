@@ -46,7 +46,7 @@ FROM debian:bookworm-20230703-slim as final
 ENV PATH="/node/bin:${PATH}" ALGOD_PORT="8080" KMD_PORT="7833" ALGORAND_DATA="/algod/data"
 
 # curl is needed to lookup the fast catchup url
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl gosu && \
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl && \
     update-ca-certificates && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* && \
