@@ -68,18 +68,10 @@ func (i entryFactoryImpl) AssembleBlock(round basics.Round) (agreement.Validated
 func (ve validatedBlock) WithProposal(s committee.Seed, proposer basics.Address, eligible bool) agreement.ValidatedBlock {
 	newblock := *ve.blk
 	newblock.BlockHeader.Seed = s
-
-	// agreement is telling us who the proposer is and if they're eligible, but
-	// agreement does not consider the current config params, so here we decide
-	// what really goes into the BlockHeader.
-	proto := config.Consensus[ve.blk.CurrentProtocol]
-	if proto.Mining().Enabled {
-		newblock.BlockHeader.Proposer = proposer
-	}
-	if !proto.Mining().Enabled || !eligible {
+	newblock.BlockHeader.Proposer = proposer
+	if !eligible {
 		newblock.BlockHeader.ProposerPayout = basics.MicroAlgos{}
 	}
-
 	return validatedBlock{blk: &newblock}
 }
 

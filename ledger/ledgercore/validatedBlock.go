@@ -17,6 +17,7 @@
 package ledgercore
 
 import (
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/committee"
@@ -44,8 +45,14 @@ func (vb ValidatedBlock) Delta() StateDelta {
 func (vb ValidatedBlock) WithProposal(s committee.Seed, proposer basics.Address, eligible bool) ValidatedBlock {
 	newblock := vb.blk
 	newblock.BlockHeader.Seed = s
-	newblock.BlockHeader.Proposer = proposer
-	if !eligible {
+	// agreement is telling us who the proposer is and if they're eligible, but
+	// agreement does not consider the current config params, so here we decide
+	// what really goes into the BlockHeader.
+	proto := config.Consensus[vb.blk.CurrentProtocol]
+	if proto.Mining().Enabled {
+		newblock.BlockHeader.Proposer = proposer
+	}
+	if !proto.Mining().Enabled || !eligible {
 		newblock.BlockHeader.ProposerPayout = basics.MicroAlgos{}
 	}
 
