@@ -247,11 +247,7 @@ func TestAccountGoesOnlineForShortPeriod(t *testing.T) {
 	t.Parallel()
 	a := require.New(fixtures.SynchronizedTest(t))
 
-	// Make the seed lookback shorter, otherwise will wait for 320 rounds
-	consensus := make(config.ConsensusProtocols)
-
 	var fixture fixtures.RestClientFixture
-	fixture.SetConsensus(consensus)
 	fixture.SetupNoStart(t, filepath.Join("nettemplates", "TwoNodes50EachFuture.json"))
 
 	// update the config file by setting the ParticipationKeysRefreshInterval to 5 second.

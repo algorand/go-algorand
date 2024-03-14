@@ -198,7 +198,7 @@ func verifyHeader(p unauthenticatedProposal, ledger LedgerReader) error {
 
 	// ledger.ConsensusParams(rnd) is not allowed because rnd isn't committed.
 	// The BlockHeader isn't trustworthy yet, since we haven't checked the
-	// upgrade state. So, for now, we confirm that the BlockSeed is *either*
+	// upgrade state. So, for now, we confirm that the Proposer is *either*
 	// correct or missing. `eval` package will using Mining().Enabled to confirm
 	// which it should be.
 	if !p.BlockHeader.Proposer.IsZero() && p.BlockHeader.Proposer != value.OriginalProposer {
@@ -284,14 +284,13 @@ func payoutEligible(rnd basics.Round, proposer basics.Address, ledger LedgerRead
 		return false, err
 	}
 
+	// It's only fair to compare balances from 320 rounds ago to the mining
+	// rules that were in effect then.  To make this work in a reasonable way
+	// when mining begins, the miningRules[0] in consensus.go has Min and Max.
 	balanceParams, err := ledger.ConsensusParams(balanceRound)
 	if err != nil {
 		return false, err
 	}
-
-	// It's only fair to compare balance's from 320 rounds ago to the mining
-	// rules that were in effect then.  To make this work in a reasonable way
-	// when mining begins, the miningRules[0] in consensus.go has Min and Max.
 	eligible := balanceRecord.IncentiveEligible &&
 		balanceRecord.MicroAlgosWithRewards.Raw >= balanceParams.Mining().MinBalance &&
 		balanceRecord.MicroAlgosWithRewards.Raw <= balanceParams.Mining().MaxBalance
