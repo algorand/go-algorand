@@ -78,7 +78,7 @@ var netCmd = &cobra.Command{
 		if relayAddress != "" {
 			addrs = []string{relayAddress}
 		} else {
-			addrs, err = tools.ReadFromSRV("algobootstrap", "tcp", networkName, "", false)
+			addrs, err = tools.ReadFromSRV(context.Background(), "algobootstrap", "tcp", networkName, "", false)
 			if err != nil || len(addrs) == 0 {
 				reportErrorf("Unable to bootstrap records for '%s' : %v", networkName, err)
 			}

@@ -44,13 +44,13 @@ type Local struct {
 	// for an existing parameter. This field tag must be updated any time we add a new version.
 	Version uint32 `version[0]:"0" version[1]:"1" version[2]:"2" version[3]:"3" version[4]:"4" version[5]:"5" version[6]:"6" version[7]:"7" version[8]:"8" version[9]:"9" version[10]:"10" version[11]:"11" version[12]:"12" version[13]:"13" version[14]:"14" version[15]:"15" version[16]:"16" version[17]:"17" version[18]:"18" version[19]:"19" version[20]:"20" version[21]:"21" version[22]:"22" version[23]:"23" version[24]:"24" version[25]:"25" version[26]:"26" version[27]:"27" version[28]:"28" version[29]:"29" version[30]:"30" version[31]:"31" version[32]:"32" version[33]:"33"`
 
-	// Archival nodes retain a full copy of the block history. Non-Archival nodes will delete old blocks and only retain what's need to properly validate blockchain messages (the precise number of recent blocks depends on the consensus parameters. Currently the last 1321 blocks are required). This means that non-Archival nodes require significantly less storage than Archival nodes. Relays (nodes with a valid NetAddress) are always Archival, regardless of this setting. This may change in the future. If setting this to true for the first time, the existing ledger may need to be deleted to get the historical values stored as the setting only effects current blocks forward. To do this, shutdown the node and delete all .sqlite files within the data/testnet-version directory, except the crash.sqlite file. Restart the node and wait for the node to sync.
+	// Archival nodes retain a full copy of the block history. Non-Archival nodes will delete old blocks and only retain what's need to properly validate blockchain messages (the precise number of recent blocks depends on the consensus parameters. Currently the last 1321 blocks are required). This means that non-Archival nodes require significantly less storage than Archival nodes.  If setting this to true for the first time, the existing ledger may need to be deleted to get the historical values stored as the setting only affects current blocks forward. To do this, shutdown the node and delete all .sqlite files within the data/testnet-version directory, except the crash.sqlite file. Restart the node and wait for the node to sync.
 	Archival bool `version[0]:"false"`
 
 	// GossipFanout sets the maximum number of peers the node will connect to with outgoing connections. If the list of peers is less than this setting, fewer connections will be made. The node will not connect to the same peer multiple times (with outgoing connections).
 	GossipFanout int `version[0]:"4"`
 
-	// NetAddress is the address and/or port on which the relay node listens for incoming connections, or blank to ignore incoming connections. Specify an IP and port or just a port. For example, 127.0.0.1:0 will listen on a random port on the localhost.
+	// NetAddress is the address and/or port on which a node listens for incoming connections, or blank to ignore incoming connections. Specify an IP and port or just a port. For example, 127.0.0.1:0 will listen on a random port on the localhost.
 	NetAddress string `version[0]:""`
 
 	// ReconnectTime is deprecated and unused.
@@ -171,6 +171,7 @@ type Local struct {
 	RestWriteTimeoutSeconds int `version[4]:"120"`
 
 	// DNSBootstrapID specifies the names of a set of DNS SRV records that identify the set of nodes available to connect to.
+	// This is applicable to both relay and archival nodes - they are assumed to use the same DNSBootstrapID today.
 	// When resolving the bootstrap ID <network> will be replaced by the genesis block's network name. This string uses a URL
 	// parsing library and supports optional backup and dedup parameters. 'backup' is used to provide a second DNS entry to use
 	// in case the primary is unavailable. dedup is intended to be used to deduplicate SRV records returned from the primary
@@ -454,27 +455,15 @@ type Local struct {
 	// VerifiedTranscationsCacheSize defines the number of transactions that the verified transactions cache would hold before cycling the cache storage in a round-robin fashion.
 	VerifiedTranscationsCacheSize int `version[14]:"30000" version[23]:"150000"`
 
-	// EnableCatchupFromArchiveServers controls which peers the catchup service would use in order to catchup.
-	// When enabled, the catchup service would use the archive servers before falling back to the relays.
-	// On networks that don't have archive servers, this becomes a no-op, as the catchup service would have no
-	// archive server to pick from, and therefore automatically selects one of the relay nodes.
-	EnableCatchupFromArchiveServers bool `version[15]:"false"`
-
 	// DisableLocalhostConnectionRateLimit controls whether the incoming connection rate limit would apply for
 	// connections that are originating from the local machine. Setting this to "true", allow to create large
 	// local-machine networks that won't trip the incoming connection limit observed by relays.
 	DisableLocalhostConnectionRateLimit bool `version[16]:"true"`
 
 	// BlockServiceCustomFallbackEndpoints is a comma delimited list of endpoints which the block service uses to
-	// redirect the http requests to in case it does not have the round. If it is not specified, will check
-	// EnableBlockServiceFallbackToArchiver.
+	// redirect the http requests to in case it does not have the round. If empty, the block service will return
+	// StatusNotFound (404)
 	BlockServiceCustomFallbackEndpoints string `version[16]:""`
-
-	// EnableBlockServiceFallbackToArchiver controls whether the block service redirects the http requests to
-	// an archiver or return StatusNotFound (404) when in does not have the requested round, and
-	// BlockServiceCustomFallbackEndpoints is empty.
-	// The archiver is randomly selected, if none is available, will return StatusNotFound (404).
-	EnableBlockServiceFallbackToArchiver bool `version[16]:"true" version[31]:"false"`
 
 	// CatchupBlockValidateMode is a development and testing configuration used by the catchup service.
 	// It can be used to omit certain validations to speed up the catchup process, or to apply extra validations which are redundant in normal operation.

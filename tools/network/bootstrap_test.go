@@ -17,6 +17,7 @@
 package network
 
 import (
+	"context"
 	"testing"
 
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -55,10 +56,10 @@ func TestReadFromSRV(t *testing.T) {
 	fallback := ""
 	secure := true
 
-	addrs, err := ReadFromSRV("", protocol, name, fallback, secure)
+	addrs, err := ReadFromSRV(context.Background(), "", protocol, name, fallback, secure)
 	require.Error(t, err)
 
-	addrs, err = ReadFromSRV(service, protocol, name, fallback, secure)
+	addrs, err = ReadFromSRV(context.Background(), service, protocol, name, fallback, secure)
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, len(addrs), 1)
 	addr := addrs[0]
