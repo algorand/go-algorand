@@ -131,5 +131,4 @@ func TestDHTOpenCensusMetrics(t *testing.T) {
 			}
 		}
 	}
-
 }

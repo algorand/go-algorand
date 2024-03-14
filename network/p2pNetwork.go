@@ -871,7 +871,7 @@ func (n *P2PNetwork) txTopicHandleLoop() {
 			if err != pubsub.ErrSubscriptionCancelled && err != context.Canceled {
 				n.log.Errorf("Error reading from subscription %v, peerId %s", err, n.service.ID())
 			}
-			n.log.Debugf("Canceling subscription to topic %s due Next error", p2p.TXTopicName)
+			n.log.Debugf("Cancelling subscription to topic %s due Subscription.Next error: %v", p2p.TXTopicName, err)
 			sub.Cancel()
 			return
 		}
@@ -883,7 +883,7 @@ func (n *P2PNetwork) txTopicHandleLoop() {
 
 		// participation or configuration change, cancel subscription and quit
 		if !n.wantTXGossip.Load() {
-			n.log.Debugf("Canceling subscription to topic %s due participation change", p2p.TXTopicName)
+			n.log.Debugf("Cancelling subscription to topic %s due participation change", p2p.TXTopicName)
 			sub.Cancel()
 			return
 		}

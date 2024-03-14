@@ -123,6 +123,11 @@ func MakeHost(cfg config.Local, datadir string, pstore *pstore.PeerStore) (host.
 		return nil
 	}
 
+	var disableMetrics = func(cfg *libp2p.Config) error { return nil }
+	if !cfg.EnableMetricReporting {
+		disableMetrics = libp2p.DisableMetrics()
+	}
+
 	host, err := libp2p.New(
 		libp2p.Identity(privKey),
 		libp2p.UserAgent(ua),
@@ -131,6 +136,7 @@ func MakeHost(cfg config.Local, datadir string, pstore *pstore.PeerStore) (host.
 		libp2p.Peerstore(pstore),
 		noListenAddrs,
 		libp2p.Security(noise.ID, noise.New),
+		disableMetrics,
 	)
 	return &StreamChainingHost{
 		Host:     host,

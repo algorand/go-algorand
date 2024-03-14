@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-// Functions for opencensus stats aggs stats to our internal data type
+// Functions for opencensus stats aggs conversion to our internal data type
 // suitable for further reporting
 
 package metrics
