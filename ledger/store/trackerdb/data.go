@@ -152,8 +152,9 @@ type BaseOnlineAccountData struct {
 
 	BaseVotingData
 
-	MicroAlgos  basics.MicroAlgos `codec:"Y"`
-	RewardsBase uint64            `codec:"Z"`
+	IncentiveEligible bool              `codec:"W"`
+	MicroAlgos        basics.MicroAlgos `codec:"Y"`
+	RewardsBase       uint64            `codec:"Z"`
 }
 
 // PersistedKVData represents the stored entry behind a application boxed key/value.
@@ -447,7 +448,7 @@ func (bo *BaseOnlineAccountData) IsVotingEmpty() bool {
 func (bo *BaseOnlineAccountData) IsEmpty() bool {
 	return bo.IsVotingEmpty() &&
 		bo.MicroAlgos.Raw == 0 &&
-		bo.RewardsBase == 0
+		bo.RewardsBase == 0 && !bo.IncentiveEligible
 }
 
 // GetOnlineAccount returns ledgercore.OnlineAccount for top online accounts / voters
@@ -481,6 +482,7 @@ func (bo *BaseOnlineAccountData) GetOnlineAccountData(proto config.ConsensusPara
 			VoteLastValid:   bo.VoteLastValid,
 			VoteKeyDilution: bo.VoteKeyDilution,
 		},
+		IncentiveEligible: bo.IncentiveEligible,
 	}
 }
 
@@ -493,9 +495,10 @@ func (bo *BaseOnlineAccountData) NormalizedOnlineBalance(proto config.ConsensusP
 func (bo *BaseOnlineAccountData) SetCoreAccountData(ad *ledgercore.AccountData) {
 	bo.BaseVotingData.SetCoreAccountData(ad)
 
-	// MicroAlgos/RewardsBase are updated by the evaluator when accounts are touched
+	// These are updated by the evaluator when accounts are touched
 	bo.MicroAlgos = ad.MicroAlgos
 	bo.RewardsBase = ad.RewardsBase
+	bo.IncentiveEligible = ad.IncentiveEligible
 }
 
 // MakeResourcesData returns a new empty instance of resourcesData.

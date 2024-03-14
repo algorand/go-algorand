@@ -19,18 +19,21 @@ package suspension
 import (
 	"fmt"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/libgoal"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
-
-const roundTime = 4 * time.Second
 
 // TestBasicMining shows proposers getting paid
 func TestBasicMining(t *testing.T) {
@@ -43,157 +46,187 @@ func TestBasicMining(t *testing.T) {
 	t.Parallel()
 	a := require.New(fixtures.SynchronizedTest(t))
 
+	// Make the seed lookback shorter, otherwise we need wait 320 rounds to become IncentiveEligible.
+	var fixture fixtures.RestClientFixture
+	consensus := make(config.ConsensusProtocols)
+	fast := config.Consensus[protocol.ConsensusFuture]
+	fast.SeedRefreshInterval = 8 // so balanceRound ends up 2 * 8 * 2 = 32
+	// and speed up the roudns while we're at it
+	if runtime.GOARCH == "amd64" || runtime.GOARCH == "arm64" {
+		fast.AgreementFilterTimeoutPeriod0 = time.Second / 2
+		fast.AgreementFilterTimeout = time.Second / 2
+	}
+	consensus[protocol.ConsensusFuture] = fast
+	fixture.SetConsensus(consensus)
+
 	// Overview of this test:
 	// Start a single network
 	// Show that a genesis account does not get incentives
 	// rereg to become eligible
 	// show incentives are paid (mining and bonuses)
 
-	var fixture fixtures.RestClientFixture
-	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50EachFuture.json"))
+	fixture.Setup(t, filepath.Join("nettemplates", "Suspension.json"))
 	defer fixture.Shutdown()
-	client := fixture.LibGoalClient
 
-	richAccount, err := fixture.GetRichestAccount()
-	a.NoError(err)
-
-	// wait for richAccount to have LastProposed != 0
-	account, err := client.AccountData(richAccount.Address)
-	a.NoError(err)
-	fmt.Printf(" rich balance %v %d\n", richAccount.Address, account.MicroAlgos)
-	waits := 0
-	for account.LastProposed == 0 {
+	clientAndAccount := func(name string) (libgoal.Client, model.Account) {
+		c := fixture.GetLibGoalClientForNamedNode(name)
+		accounts, err := fixture.GetNodeWalletsSortedByBalance(c)
 		a.NoError(err)
-		a.Equal(basics.Online, account.Status)
-		account, err = client.AccountData(richAccount.Address)
-		if account.LastProposed > 0 {
-			break
+		a.Len(accounts, 1)
+		return c, accounts[0]
+	}
+
+	c15, account15 := clientAndAccount("Node15")
+	c01, account01 := clientAndAccount("Node01")
+
+	rekeyreg := func(client libgoal.Client, address string) basics.AccountData {
+		// we start by making an _offline_ tx here, because we want to populate the
+		// key material ourself with a copy of the account's existing material. That
+		// makes it an _online_ keyreg. That allows the running node to chug along
+		// without new part keys. We overpay the fee, which makes us
+		// IncentiveEligible, and to get some funds into FeeSink because we will
+		// watch it drain toward bottom of test.
+		reReg, err := client.MakeUnsignedGoOfflineTx(address, 0, 0, 12_000_000, [32]byte{})
+		a.NoError(err)
+
+		data, err := client.AccountData(address)
+		a.True(data.LastHeartbeat == 0)
+		a.NoError(err)
+		reReg.KeyregTxnFields = transactions.KeyregTxnFields{
+			VotePK:          data.VoteID,
+			SelectionPK:     data.SelectionID,
+			StateProofPK:    data.StateProofID,
+			VoteFirst:       data.VoteFirstValid,
+			VoteLast:        data.VoteLastValid,
+			VoteKeyDilution: data.VoteKeyDilution,
 		}
+
+		wh, err := client.GetUnencryptedWalletHandle()
+		a.NoError(err)
+		onlineTxID, err := client.SignAndBroadcastTransaction(wh, nil, reReg)
+		a.NoError(err)
+		txn, err := fixture.WaitForConfirmedTxn(uint64(reReg.LastValid), onlineTxID)
+		a.NoError(err)
+		data, err = client.AccountData(address)
+		a.NoError(err)
+		a.Equal(basics.Online, data.Status)
+		a.True(data.IncentiveEligible)
+		a.True(data.LastHeartbeat > 0)
+		fmt.Printf(" %v has %v in round %d\n", address, data.MicroAlgos.Raw, *txn.ConfirmedRound)
+		return data
+	}
+
+	data01 := rekeyreg(c01, account01.Address)
+	data15 := rekeyreg(c15, account15.Address)
+
+	// have account01 burn some money to get below to eligibility cap
+	// Starts with 100M, so burn 60M and get under 50M cap.
+	txn, err := c01.SendPaymentFromUnencryptedWallet(account01.Address, basics.Address{}.String(),
+		1000, 60_000_000_000_000, nil)
+	a.NoError(err)
+	burn, err := fixture.WaitForConfirmedTxn(uint64(txn.LastValid), txn.ID().String())
+	a.NoError(err)
+	data01, err = c01.AccountData(account01.Address)
+	a.NoError(err)
+
+	// Go 31 rounds after the burn happened. rounds. During this time,
+	// incentive eligibility is not in effect yet, so regardless of who
+	// proposes, they won't earn anything.
+
+	client := fixture.LibGoalClient
+	status, err := client.Status()
+	a.NoError(err)
+	for status.LastRound < *burn.ConfirmedRound+31 {
+		block, err := client.BookkeepingBlock(status.LastRound)
+		a.NoError(err)
+
+		fmt.Printf(" 1 block %d proposed by %v\n", status.LastRound, block.Proposer)
+		a.Zero(block.ProposerPayout) // nobody is eligible yet (hasn't worked back to balance round)
+		a.EqualValues(5_000_000, block.Bonus.Raw)
+		fixture.WaitForRoundWithTimeout(status.LastRound + 1)
+
+		// incentives would pay out in the next round (they won't here, but makes the test realistic)
+		next, err := client.AccountData(block.Proposer.String())
+		a.EqualValues(next.LastProposed, status.LastRound)
+		// regardless of proposer, nobody gets paid
+		switch block.Proposer.String() {
+		case account01.Address:
+			a.Equal(data01.MicroAlgos, next.MicroAlgos)
+			data01 = next
+		case account15.Address:
+			a.Equal(data15.MicroAlgos, next.MicroAlgos)
+			data15 = next
+		default:
+			a.Fail("bad proposer", "%v proposed", block.Proposer)
+		}
+		status, err = client.Status()
+		a.NoError(err)
+	}
+
+	// Wait until each have proposed, so we can see that 01 gets paid and 15 does not (too much balance)
+	proposed01 := false
+	proposed15 := false
+	for i := 0; !proposed01 || !proposed15; i++ {
 		status, err := client.Status()
 		a.NoError(err)
 		block, err := client.BookkeepingBlock(status.LastRound)
 		a.NoError(err)
-		fmt.Printf(" block proposed by %v\n", block.Proposer)
-		time.Sleep(roundTime)
-		waits++
-		if waits > 15 {
-			a.Failf("timeout", "rnd %d waiting for proposal by %v\n", status.LastRound, account)
+
+		fmt.Printf(" 3 block %d proposed by %v\n", status.LastRound, block.Proposer)
+		a.EqualValues(5_000_000, block.Bonus.Raw)
+
+		// incentives would pay out in the next round so wait to see them
+		fixture.WaitForRoundWithTimeout(status.LastRound + 1)
+		next, err := client.AccountData(block.Proposer.String())
+		fmt.Printf(" proposer %v has %d at round %d\n", block.Proposer, next.MicroAlgos.Raw, status.LastRound)
+
+		// 01 would get paid (because under balance cap) 15 would not
+		switch block.Proposer.String() {
+		case account01.Address:
+			a.NotZero(block.ProposerPayout)
+			a.NotEqual(data01.MicroAlgos, next.MicroAlgos)
+			proposed01 = true
+			data01 = next
+		case account15.Address:
+			a.Zero(block.ProposerPayout)
+			a.Equal(data15.MicroAlgos, next.MicroAlgos)
+			data15 = next
+			proposed15 = true
+		default:
+			a.Fail("bad proposer", "%v proposed", block.Proposer)
 		}
 	}
-	a.NoError(err)
-
-	// we make an _offline_ tx here, because we want to populate the key
-	// material ourself, by copying the account's existing state. That makes it
-	// an _online_ keyreg. That allows the running node to chug along without
-	// new part keys. We overpay the fee, just to get some funds into FeeSink
-	// because we will watch it drain toward bottom of test.
-	reReg, err := client.MakeUnsignedGoOfflineTx(richAccount.Address, 0, 0, 12_000_000, [32]byte{})
-	require.NoError(t, err, "should be able to make tx")
-
-	reReg.KeyregTxnFields = transactions.KeyregTxnFields{
-		VotePK:          account.VoteID,
-		SelectionPK:     account.SelectionID,
-		StateProofPK:    account.StateProofID,
-		VoteFirst:       account.VoteFirstValid,
-		VoteLast:        account.VoteLastValid,
-		VoteKeyDilution: account.VoteKeyDilution,
-	}
-
-	wh, err := client.GetUnencryptedWalletHandle()
-	require.NoError(t, err, "should be able to get unencrypted wallet handle")
-	onlineTxID, err := client.SignAndBroadcastTransaction(wh, nil, reReg)
-	require.NoError(t, err, "should be no errors when going online")
-	fixture.WaitForConfirmedTxn(uint64(reReg.LastValid), onlineTxID)
-
-	account, err = client.AccountData(richAccount.Address)
-	a.NoError(err)
-	a.True(account.IncentiveEligible)
-	// wait for richAccount to propose again, earns nothing (too much balance)
-	proposed := account.LastProposed
-	priorBalance := account.MicroAlgos
-	for account.LastProposed == proposed {
-		a.NoError(err)
-		account, err = client.AccountData(richAccount.Address)
-		a.NoError(err)
-		time.Sleep(roundTime)
-	}
-
-	// incentives would pay out in the next round (they won't here, but makes the test realistic)
-	fixture.WaitForRound(uint64(account.LastProposed+1), roundTime)
-	account, err = client.AccountData(richAccount.Address)
-	a.NoError(err)
-	a.Equal(priorBalance, account.MicroAlgos)
-
-	// Unload some algos, so we become incentive eligible
-	burn := "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ"
-	target := basics.Algos(1_000_000) // Assumes 1M algos is eligible
-	diff, _ := basics.OSubA(account.MicroAlgos, target)
-	fmt.Printf(" rich pays out %d + fee\n", diff.Raw)
-	tx, err := client.SendPaymentFromUnencryptedWallet(richAccount.Address, burn, 0, diff.Raw, nil)
-	a.NoError(err)
-	status, err := client.Status()
-	a.NoError(err)
-	info, err := fixture.WaitForConfirmedTxn(status.LastRound+10, tx.ID().String())
-	a.NoError(err)
-
-	// Figure out whether rich account was proposer of its own payment
-	blockProposer := func(r uint64) string {
-		block, err := client.Block(r)
-		a.NoError(err)
-		return block.Block["prp"].(string)
-	}
-
-	// allow the incentive payment to happen
-	err = fixture.WaitForRound(*info.ConfirmedRound+1, roundTime)
-	a.NoError(err)
-	// check that rich account got paid (or didn't) based on whether it proposed
-	if blockProposer(*info.ConfirmedRound) == richAccount.Address {
-		// should earn the block bonus
-		target, _ = basics.OAddA(target, basics.Algos(5))
-		// and only spent 25% of fee, since we earned 75% back
-		target, _ = basics.OAddA(target, basics.MicroAlgos{Raw: 750})
-	}
-	// undershot 1M because of fee
-	target, _ = basics.OSubA(target, basics.MicroAlgos{Raw: 1000})
-	account, err = client.AccountData(richAccount.Address)
-	a.NoError(err)
-	a.Equal(target, account.MicroAlgos)
-
-	proposed = account.LastProposed
-	priorBalance = account.MicroAlgos
-	// wait for richAccount to propose following its payment to become eligible
-	r := *info.ConfirmedRound + 1
-	for blockProposer(r) != richAccount.Address {
-		r++
-		err = fixture.WaitForRound(r, roundTime)
-		a.NoError(err)
-		a.Less(r, *info.ConfirmedRound+20) // avoid infinite loop if bug
-	}
-	account, err = client.AccountData(richAccount.Address)
-	a.NoError(err)
-	fmt.Printf(" rich balance after eligible proposal %d\n", account.MicroAlgos)
-	// incentives pay out in the next round
-	err = fixture.WaitForRound(r+1, roundTime)
-	a.NoError(err)
-	account, err = client.AccountData(richAccount.Address)
-	a.NoError(err)
-	fmt.Printf(" rich balance after eligible payout %d\n", account.MicroAlgos)
-	// Should have earned 5A
-	target, _ = basics.OAddA(target, basics.Algos(5))
-	a.Equal(target, account.MicroAlgos)
+	a.True(proposed15)
+	a.True(proposed01) // There's some chance of this triggering flakily
 
 	// Now that we've proven incentives get paid, let's drain the FeeSink and
-	// ensure it happens gracefully.
-	block, err := client.Block(r + 1)
+	// ensure it happens gracefully.  Have account15 go offline so that (after
+	// 32 rounds) only account01 is proposing. It is eligible and will drain the
+	// fee sink.
+
+	offline, err := c15.MakeUnsignedGoOfflineTx(account15.Address, 0, 0, 1000, [32]byte{})
 	a.NoError(err)
-	feesink := block.Block["fees"].(string)
-	status, err = client.Status()
+	wh, err := c15.GetUnencryptedWalletHandle()
 	a.NoError(err)
-	for i := uint64(0); i < 10; i++ {
-		err = fixture.WaitForRound(status.LastRound+i, roundTime)
+	_, err = c15.SignAndBroadcastTransaction(wh, nil, offline)
+	a.NoError(err)
+
+	for i := 0; i < 100; i++ {
+		status, err := client.Status()
 		a.NoError(err)
-		account, err = client.AccountData(feesink)
+		block, err := client.BookkeepingBlock(status.LastRound)
 		a.NoError(err)
+
+		feesink := block.BlockHeader.FeeSink
+		err = fixture.WaitForRoundWithTimeout(status.LastRound + 1)
+		a.NoError(err)
+		data, err := client.AccountData(feesink.String())
+		a.NoError(err)
+		fmt.Printf(" feesink has %d at round %d\n", data.MicroAlgos.Raw, status.LastRound)
+		a.LessOrEqual(100000, int(data.MicroAlgos.Raw)) // won't go below minfee
+		if data.MicroAlgos.Raw == 100000 {
+			break
+		}
+		a.Less(i, 32+20)
 	}
-	a.EqualValues(100000, account.MicroAlgos.Raw) // won't go below minfee
 }

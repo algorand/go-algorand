@@ -29,6 +29,8 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
+const roundTime = 2 * time.Second // with speedup below, what's a good value?
+
 // TestBasicSuspension confirms that accounts that don't propose get suspended
 // (when a tx naming them occurs)
 func TestBasicSuspension(t *testing.T) {

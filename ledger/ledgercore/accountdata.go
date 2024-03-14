@@ -69,6 +69,7 @@ type VotingData struct {
 type OnlineAccountData struct {
 	MicroAlgosWithRewards basics.MicroAlgos
 	VotingData
+	IncentiveEligible bool
 }
 
 // ToAccountData returns ledgercore.AccountData from basics.AccountData
