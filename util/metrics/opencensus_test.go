@@ -100,17 +100,20 @@ func TestDHTOpenCensusMetrics(t *testing.T) {
 		m.WriteMetric(&buf, "")
 		promValue := buf.String()
 		if strings.Contains(promValue, "my_sent_messages") {
-			require.Contains(t, promValue, "my_sent_messages_abcd_ADD_PROVIDER")
-			require.Contains(t, promValue, "my_sent_messages_1234_UNKNOWN")
-			require.Contains(t, promValue, "my_sent_messages_abcd_ADD_PROVIDER counter\n")
-			require.Contains(t, promValue, "my_sent_messages_1234_UNKNOWN counter\n")
-			require.Contains(t, promValue, "my_sent_messages_abcd_ADD_PROVIDER 1\n")
-			require.Contains(t, promValue, "my_sent_messages_1234_UNKNOWN 1\n")
+			require.Contains(t, promValue, "my_sent_messages counter\n")
+			require.Contains(t, promValue, `peer_id="abcd"`)
+			require.Contains(t, promValue, `peer_id="1234"`)
+			require.Contains(t, promValue, `message_type="ADD_PROVIDER"`)
+			require.Contains(t, promValue, `message_type="UNKNOWN"`)
+			require.Contains(t, promValue, "} 1\n")
 		} else if strings.Contains(promValue, "my_received_bytes") {
-			require.Contains(t, promValue, "my_received_bytes_abcd_ADD_PROVIDER gauge\n")
-			require.Contains(t, promValue, "my_received_bytes_1234_UNKNOWN gauge\n")
-			require.Contains(t, promValue, "my_received_bytes_abcd_ADD_PROVIDER 123.000000\n")
-			require.Contains(t, promValue, "my_received_bytes_1234_UNKNOWN 100.000000\n")
+			require.Contains(t, promValue, "my_received_bytes gauge\n")
+			require.Contains(t, promValue, `peer_id="1234"`)
+			require.Contains(t, promValue, `peer_id="abcd"`)
+			require.Contains(t, promValue, `message_type="ADD_PROVIDER"`)
+			require.Contains(t, promValue, `message_type="UNKNOWN"`)
+			require.Contains(t, promValue, "} 123\n")
+			require.Contains(t, promValue, "} 100\n")
 		} else {
 			require.Fail(t, "not expected metric", promValue)
 		}
@@ -118,14 +121,12 @@ func TestDHTOpenCensusMetrics(t *testing.T) {
 		values := make(map[string]float64)
 		m.AddMetric(values)
 		for k, v := range values {
+			require.True(t, strings.Contains(k, "message_type__ADD_PROVIDER") || strings.Contains(k, "message_type__UNKNOWN"))
+			require.True(t, strings.Contains(k, "peer_id__1234") || strings.Contains(k, "peer_id__abcd"))
 			if strings.Contains(k, "my_sent_messages") {
-				require.Contains(t, values, "my_sent_messages_abcd_ADD_PROVIDER")
-				require.Contains(t, values, "my_sent_messages_1234_UNKNOWN")
 				require.Equal(t, v, float64(1))
 			} else if strings.Contains(k, "my_received_bytes") {
-				require.Contains(t, values, "my_received_bytes_abcd_ADD_PROVIDER")
-				require.Contains(t, values, "my_received_bytes_1234_UNKNOWN")
-				require.True(t, v == float64(100) || v == float64(123))
+				require.True(t, v == 100 || v == 123)
 			} else {
 				require.Fail(t, "not expected metric key", k)
 			}

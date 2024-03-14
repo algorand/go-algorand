@@ -21,11 +21,11 @@ package metrics
 
 import (
 	"context"
-	"strconv"
 	"strings"
 
 	"go.opencensus.io/metric/metricdata"
 	"go.opencensus.io/metric/metricexport"
+	"golang.org/x/exp/slices"
 )
 
 type statExporter struct {
@@ -67,129 +67,95 @@ func AddOpenCensusMetrics(values map[string]float64, names ...string) {
 type statCounter struct {
 	name        string
 	description string
-	labels      []string
+	labels      []map[string]string
 	values      []int64
 }
 
 // WriteMetric outputs Prometheus metrics for all labels/values in statCounter
 func (st *statCounter) WriteMetric(buf *strings.Builder, parentLabels string) {
+	counter := makeCounter(MetricName{st.name, st.description})
 	for i := 0; i < len(st.labels); i++ {
-		name := sanitizePrometheusName(st.name + "_" + st.labels[i])
-		buf.WriteString("# HELP ")
-		buf.WriteString(name)
-		buf.WriteString(" ")
-		buf.WriteString(st.description)
-		buf.WriteString("\n# TYPE ")
-		buf.WriteString(name)
-		buf.WriteString(" counter\n")
-		buf.WriteString(name)
-		if len(parentLabels) > 0 {
-			buf.WriteString("{" + parentLabels + "}")
-		}
-		value := st.values[i]
-		buf.WriteString(" " + strconv.FormatUint(uint64(value), 10))
-		buf.WriteString("\n")
+		counter.AddUint64(uint64(st.values[i]), st.labels[i])
 	}
+	counter.WriteMetric(buf, parentLabels)
 }
 
 // AddMetric outputs all statCounter's labels/values into a map
 func (st *statCounter) AddMetric(values map[string]float64) {
+	counter := makeCounter(MetricName{st.name, st.description})
 	for i := 0; i < len(st.labels); i++ {
-		name := sanitizePrometheusName(st.name + "_" + st.labels[i])
-		values[name] = float64(st.values[i])
+		counter.AddUint64(uint64(st.values[i]), st.labels[i])
 	}
+	counter.AddMetric(values)
 }
 
 // statCounter stores single float64 sun value per stat with labels
 type statDistribution struct {
 	name        string
 	description string
-	labels      []string
+	labels      []map[string]string
 	values      []float64
 }
 
 // WriteMetric outputs Prometheus metrics for all labels/values in statCounter
 func (st *statDistribution) WriteMetric(buf *strings.Builder, parentLabels string) {
+	gauge := makeGauge(MetricName{st.name, st.description})
 	for i := 0; i < len(st.labels); i++ {
-		name := sanitizePrometheusName(st.name + "_" + st.labels[i])
-		buf.WriteString("# HELP ")
-		buf.WriteString(name)
-		buf.WriteString(" ")
-		buf.WriteString(st.description)
-		buf.WriteString("\n# TYPE ")
-		buf.WriteString(name)
-		buf.WriteString(" gauge\n")
-		buf.WriteString(name)
-		if len(parentLabels) > 0 {
-			buf.WriteString("{" + parentLabels + "}")
-		}
-		value := st.values[i]
-		buf.WriteString(" " + strconv.FormatFloat(value, 'f', 6, 64))
-		buf.WriteString("\n")
+		gauge.SetLabels(uint64(st.values[i]), st.labels[i])
 	}
+	gauge.WriteMetric(buf, parentLabels)
 }
 
 // AddMetric outputs all statCounter's labels/values into a map
 func (st *statDistribution) AddMetric(values map[string]float64) {
+	gauge := makeGauge(MetricName{st.name, st.description})
 	for i := 0; i < len(st.labels); i++ {
-		name := sanitizePrometheusName(st.name + "_" + st.labels[i])
-		values[name] = float64(st.values[i])
+		gauge.SetLabels(uint64(st.values[i]), st.labels[i])
 	}
+	gauge.AddMetric(values)
 }
 
 func (s *statExporter) ExportMetrics(ctx context.Context, data []*metricdata.Metric) error {
-	defaultLabeler := func(lv []metricdata.LabelValue) string {
+	labeler := func(lk []metricdata.LabelKey, lv []metricdata.LabelValue, ignores ...string) map[string]string {
 		// default labeler concatenates labels
-		var entries []string
-		for i := range lv {
-			if lv[i].Present {
-				entries = append(entries, lv[i].Value)
+		labels := make(map[string]string, len(lk))
+		for i := range lk {
+			if lv[i].Present && (len(ignores) == 0 || len(ignores) > 0 && !slices.Contains(ignores, lk[i].Key)) {
+				labels[lk[i].Key] = lv[i].Value
 			}
 		}
-		return strings.Join(entries, "_")
-	}
-	dhtLabeler := func(lv []metricdata.LabelValue) string {
-		// dht labeler ignores instance_id and concatenates peer_id + message_type
-		var entries []string
-		for i := len(lv) - 1; i > 0; i-- {
-			if lv[i].Present {
-				entries = append(entries, lv[i].Value)
-			}
-		}
-		return strings.Join(entries, "_")
+		return labels
 	}
 
 	for _, m := range data {
 		if _, ok := s.names[m.Descriptor.Name]; len(s.names) > 0 && !ok {
 			continue
 		}
-		labeler := defaultLabeler
-		// guess DHT-specific stats format
-		if len(m.Descriptor.LabelKeys) == 3 && m.Descriptor.LabelKeys[0].Key == "instance_id" &&
-			m.Descriptor.LabelKeys[1].Key == "message_type" && m.Descriptor.LabelKeys[2].Key == "peer_id" {
-			labeler = dhtLabeler
-		}
 		if m.Descriptor.Type == metricdata.TypeCumulativeInt64 {
 			counter := statCounter{
 				name:        m.Descriptor.Name,
 				description: m.Descriptor.Description,
 			}
-			// check if we are processing a known DHT metric
 			for _, d := range m.TimeSeries {
-				label := labeler(d.LabelValues)
-				counter.labels = append(counter.labels, label)
+				// ignore a known useless instance_id label
+				labels := labeler(m.Descriptor.LabelKeys, d.LabelValues, "instance_id")
+				counter.labels = append(counter.labels, labels)
 				counter.values = append(counter.values, d.Points[0].Value.(int64))
 			}
 
 			s.metrics = append(s.metrics, &counter)
 		} else if m.Descriptor.Type == metricdata.TypeCumulativeDistribution {
+			// TODO: the metrics below cannot be integer gauge, and Sum statistic does not make any sense.
+			// libp2p.io/dht/kad/outbound_request_latency
+			// libp2p.io/dht/kad/inbound_request_latency
+			// Ignore?
 			dist := statDistribution{
 				name:        m.Descriptor.Name,
 				description: m.Descriptor.Description,
 			}
 			// check if we are processing a known DHT metric
 			for _, d := range m.TimeSeries {
-				label := labeler(d.LabelValues)
+				label := labeler(m.Descriptor.LabelKeys, d.LabelValues, "instance_id")
 				dist.labels = append(dist.labels, label)
 				dist.values = append(dist.values, d.Points[0].Value.(*metricdata.Distribution).Sum)
 			}
