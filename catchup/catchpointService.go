@@ -824,6 +824,8 @@ func (cs *CatchpointCatchupService) checkLedgerDownload() error {
 		if err == nil {
 			return nil
 		}
+		// a non-nil error means that the catchpoint is not available, so we should rank it accordingly
+		cs.blocksDownloadPeerSelector.rankPeer(psp, peerRankNoCatchpointForRound)
 	}
 	return fmt.Errorf("checkLedgerDownload(): catchpoint '%s' unavailable from peers: %s", cs.stats.CatchpointLabel, err)
 }
