@@ -19,13 +19,10 @@ package suspension
 import (
 	"fmt"
 	"path/filepath"
-	"runtime"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -40,33 +37,19 @@ func TestBasicMining(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
 
-	if testing.Short() {
-		t.Skip()
-	}
 	t.Parallel()
 	a := require.New(fixtures.SynchronizedTest(t))
 
-	// Make the seed lookback shorter, otherwise we need wait 320 rounds to become IncentiveEligible.
 	var fixture fixtures.RestClientFixture
-	consensus := make(config.ConsensusProtocols)
-	fast := config.Consensus[protocol.ConsensusFuture]
-	fast.SeedRefreshInterval = 8 // so balanceRound ends up 2 * 8 * 2 = 32
-	// and speed up the roudns while we're at it
-	if runtime.GOARCH == "amd64" || runtime.GOARCH == "arm64" {
-		fast.AgreementFilterTimeoutPeriod0 = time.Second / 2
-		fast.AgreementFilterTimeout = time.Second / 2
-	}
-	consensus[protocol.ConsensusFuture] = fast
-	fixture.SetConsensus(consensus)
+	// Make the seed lookback shorter, otherwise we need to wait 320 rounds to become IncentiveEligible.
+	fixture.FasterConsensus(protocol.ConsensusFuture)
+	fixture.Setup(t, filepath.Join("nettemplates", "Mining.json"))
+	defer fixture.Shutdown()
 
 	// Overview of this test:
-	// Start a single network
-	// Show that a genesis account does not get incentives
-	// rereg to become eligible
+	// rereg to become eligible (must pay extra fee)
 	// show incentives are paid (mining and bonuses)
-
-	fixture.Setup(t, filepath.Join("nettemplates", "Suspension.json"))
-	defer fixture.Shutdown()
+	// deplete feesink to ensure it's graceful
 
 	clientAndAccount := func(name string) (libgoal.Client, model.Account) {
 		c := fixture.GetLibGoalClientForNamedNode(name)
@@ -79,45 +62,8 @@ func TestBasicMining(t *testing.T) {
 	c15, account15 := clientAndAccount("Node15")
 	c01, account01 := clientAndAccount("Node01")
 
-	rekeyreg := func(client libgoal.Client, address string) basics.AccountData {
-		// we start by making an _offline_ tx here, because we want to populate the
-		// key material ourself with a copy of the account's existing material. That
-		// makes it an _online_ keyreg. That allows the running node to chug along
-		// without new part keys. We overpay the fee, which makes us
-		// IncentiveEligible, and to get some funds into FeeSink because we will
-		// watch it drain toward bottom of test.
-		reReg, err := client.MakeUnsignedGoOfflineTx(address, 0, 0, 12_000_000, [32]byte{})
-		a.NoError(err)
-
-		data, err := client.AccountData(address)
-		a.True(data.LastHeartbeat == 0)
-		a.NoError(err)
-		reReg.KeyregTxnFields = transactions.KeyregTxnFields{
-			VotePK:          data.VoteID,
-			SelectionPK:     data.SelectionID,
-			StateProofPK:    data.StateProofID,
-			VoteFirst:       data.VoteFirstValid,
-			VoteLast:        data.VoteLastValid,
-			VoteKeyDilution: data.VoteKeyDilution,
-		}
-
-		wh, err := client.GetUnencryptedWalletHandle()
-		a.NoError(err)
-		onlineTxID, err := client.SignAndBroadcastTransaction(wh, nil, reReg)
-		a.NoError(err)
-		txn, err := fixture.WaitForConfirmedTxn(uint64(reReg.LastValid), onlineTxID)
-		a.NoError(err)
-		data, err = client.AccountData(address)
-		a.NoError(err)
-		a.Equal(basics.Online, data.Status)
-		a.True(data.IncentiveEligible)
-		a.True(data.LastHeartbeat > 0)
-		fmt.Printf(" %v has %v in round %d\n", address, data.MicroAlgos.Raw, *txn.ConfirmedRound)
-		return data
-	}
-
-	data01 := rekeyreg(c01, account01.Address)
-	data15 := rekeyreg(c15, account15.Address)
+	data01 := rekeyreg(&fixture, a, c01, account01.Address)
+	data15 := rekeyreg(&fixture, a, c15, account15.Address)
 
 	// have account01 burn some money to get below to eligibility cap
 	// Starts with 100M, so burn 60M and get under 50M cap.
@@ -229,4 +175,41 @@ func TestBasicMining(t *testing.T) {
 		}
 		a.Less(i, 32+20)
 	}
+}
+
+func rekeyreg(f *fixtures.RestClientFixture, a *require.Assertions, client libgoal.Client, address string) basics.AccountData {
+	// we start by making an _offline_ tx here, because we want to populate the
+	// key material ourself with a copy of the account's existing material. That
+	// makes it an _online_ keyreg. That allows the running node to chug along
+	// without new part keys. We overpay the fee, which makes us
+	// IncentiveEligible, and to get some funds into FeeSink because we will
+	// watch it drain toward bottom of test.
+	reReg, err := client.MakeUnsignedGoOfflineTx(address, 0, 0, 12_000_000, [32]byte{})
+	a.NoError(err)
+
+	data, err := client.AccountData(address)
+	a.True(data.LastHeartbeat == 0)
+	a.NoError(err)
+	reReg.KeyregTxnFields = transactions.KeyregTxnFields{
+		VotePK:          data.VoteID,
+		SelectionPK:     data.SelectionID,
+		StateProofPK:    data.StateProofID,
+		VoteFirst:       data.VoteFirstValid,
+		VoteLast:        data.VoteLastValid,
+		VoteKeyDilution: data.VoteKeyDilution,
+	}
+
+	wh, err := client.GetUnencryptedWalletHandle()
+	a.NoError(err)
+	onlineTxID, err := client.SignAndBroadcastTransaction(wh, nil, reReg)
+	a.NoError(err)
+	txn, err := f.WaitForConfirmedTxn(uint64(reReg.LastValid), onlineTxID)
+	a.NoError(err)
+	data, err = client.AccountData(address)
+	a.NoError(err)
+	a.Equal(basics.Online, data.Status)
+	a.True(data.IncentiveEligible)
+	a.True(data.LastHeartbeat > 0)
+	fmt.Printf(" %v has %v in round %d\n", address, data.MicroAlgos.Raw, *txn.ConfirmedRound)
+	return data
 }

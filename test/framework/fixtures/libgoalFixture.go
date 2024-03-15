@@ -22,6 +22,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 	"testing"
@@ -63,6 +64,24 @@ type LibGoalFixture struct {
 // any of the nodes starts
 func (f *RestClientFixture) SetConsensus(consensus config.ConsensusProtocols) {
 	f.consensus = consensus
+}
+
+// FasterConsensus speeds up the given consensus version in two ways. The seed
+// refresh lookback is set tp 8 (instead of 80), so the 320 round balance
+// lookback becomes 32.  And, if the architecture implies it can be handled,
+// round times are shortened by lowering vote timeouts.
+func (f *RestClientFixture) FasterConsensus(ver protocol.ConsensusVersion) {
+	if f.consensus == nil {
+		f.consensus = make(config.ConsensusProtocols)
+	}
+	fast := config.Consensus[ver]
+	fast.SeedRefreshInterval = 8 // so balanceRound ends up 2 * 8 * 2 = 32
+	// and speed up the rounds while we're at it
+	if runtime.GOARCH == "amd64" || runtime.GOARCH == "arm64" {
+		fast.AgreementFilterTimeoutPeriod0 = time.Second / 2
+		fast.AgreementFilterTimeout = time.Second / 2
+	}
+	f.consensus[ver] = fast
 }
 
 // Setup is called to initialize the test fixture for the test(s)
