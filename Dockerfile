@@ -41,7 +41,7 @@ RUN /dist/files/build/install.sh \
     -b "${BRANCH}" \
     -s "${SHA}"
 
-FROM debian:bookworm-20230703-slim as final
+FROM debian:bookworm-20240311-slim as final
 
 ENV PATH="/node/bin:${PATH}" ALGOD_PORT="8080" KMD_PORT="7833" ALGORAND_DATA="/algod/data"
 
