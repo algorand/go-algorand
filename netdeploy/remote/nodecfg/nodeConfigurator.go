@@ -42,11 +42,17 @@ type nodeConfigurator struct {
 	bootstrappedTrackerDir  string
 	relayEndpoints          []srvEntry
 	metricsEndpoints        []srvEntry
+	p2pBootstrapEndpoints   []txtEntry
 }
 
 type srvEntry struct {
 	srvName string
 	port    string
+}
+
+type txtEntry struct {
+	netAddress string
+	peerID     string
 }
 
 // ApplyConfigurationToHost attempts to apply the provided configuration to the local host,
@@ -248,6 +254,30 @@ func (nc *nodeConfigurator) registerDNSRecords() (err error) {
 			return
 		}
 	}
+
+	dnsaddrsFrom := fmt.Sprintf("_dnsaddr.%s.algodev.network", nc.genesisData.Network)
+	for _, entry := range nc.p2pBootstrapEndpoints {
+		port, parseErr := strconv.ParseInt(strings.Split(entry.netAddress, ":")[1], 10, 64)
+		if parseErr != nil {
+			return parseErr
+		}
+		var addrType string
+		if isIP {
+			addrType = "ip4"
+		} else {
+			addrType = "dnsaddr"
+		}
+		addrInfoString := fmt.Sprintf("/%s/%s/tcp/%d/p2p/%s", addrType, nc.dnsName, port, entry.peerID)
+		to := fmt.Sprintf("dnsaddr=%s", addrInfoString)
+
+		const priority = 1
+		const proxied = false
+		dnsErr := cloudflareDNS.CreateDNSRecord(context.Background(), "TXT", dnsaddrsFrom, to, cloudflare.AutomaticTTL, priority, proxied)
+		if dnsErr != nil {
+			return dnsErr
+		}
+	}
+
 	return
 }
 
@@ -280,4 +310,8 @@ func (nc *nodeConfigurator) addRelaySrv(srvRecord string, port string) {
 
 func (nc *nodeConfigurator) registerMetricsSrv(srvRecord string, port string) {
 	nc.metricsEndpoints = append(nc.metricsEndpoints, srvEntry{srvRecord, port})
+}
+
+func (nc *nodeConfigurator) addP2PBootstrap(netAddress string, peerID string) {
+	nc.p2pBootstrapEndpoints = append(nc.p2pBootstrapEndpoints, txtEntry{netAddress, peerID})
 }
