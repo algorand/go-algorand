@@ -787,6 +787,62 @@
         }
       ]
     },
+    "/v2/blocks/{round}/logs": {
+      "get": {
+        "tags": [
+          "public",
+          "nonparticipating"
+        ],
+        "description": "Get all of the logs from outer and inner app calls in the given round",
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Get all of the logs from outer and inner app calls in the given round",
+        "operationId": "GetBlockLogs",
+        "parameters": [
+          {
+            "minimum": 0,
+            "type": "integer",
+            "description": "The round from which to fetch block log information.",
+            "name": "round",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/BlockLogsResponse"
+          },
+          "400": {
+            "description": "Bad Request - Non integer number",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Nonexistent block ",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        }
+      }
+    },
     "/v2/ledger/supply": {
       "get": {
         "tags": [
@@ -4449,6 +4505,33 @@
           }
         }
       }
+    },
+    "AppCallLogs": {
+      "description": "An array of logs for a given application ID and outer transaction ID",
+      "type": "object",
+      "required": [
+        "logs",
+        "application-index",
+        "txid"
+      ],
+      "properties": {
+        "logs": {
+          "description": "An array of logs",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "byte"
+          }
+        },
+        "application-index": {
+          "description": "The application from which the logs were generated",
+          "type": "integer"
+        },
+        "txid": {
+          "description": "The transaction ID of the outer app call that lead to these logs",
+          "type": "string"
+        }
+      }
     }
   },
   "parameters": {
@@ -5102,6 +5185,23 @@
           },
           "initial-states": {
             "$ref": "#/definitions/SimulateInitialStates"
+          }
+        }
+      }
+    },
+    "BlockLogsResponse": {
+      "description": "All of the logs from outer and inner app calls in the given round",
+      "schema": {
+        "type": "object",
+        "required": [
+          "logs"
+        ],
+        "properties": {
+          "logs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/AppCallLogs"
+            }
           }
         }
       }

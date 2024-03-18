@@ -732,6 +732,78 @@ func (v2 *Handlers) GetBlockTxids(ctx echo.Context, round uint64) error {
 	return ctx.JSON(http.StatusOK, response)
 }
 
+// NewAppCallLogs generates a new model.AppCallLogs struct from the given parameters.
+func NewAppCallLogs(txid string, logs []string, appIndex uint64) model.AppCallLogs {
+	return model.AppCallLogs{
+		Txid:             txid,
+		Logs:             convertSlice(logs, func(s string) []byte { return []byte(s) }),
+		ApplicationIndex: appIndex,
+	}
+}
+
+func getAppIndexFromTxn(txn transactions.SignedTxnWithAD) uint64 {
+	appIndex := uint64(txn.SignedTxn.Txn.ApplicationID)
+	if appIndex == 0 {
+		appIndex = uint64(txn.ApplyData.ApplicationID)
+	}
+
+	return appIndex
+}
+
+func getLogsFromTxns(txns []transactions.SignedTxnWithAD, blockLogs []model.AppCallLogs, outerTxnID string) []model.AppCallLogs {
+
+	for _, txn := range txns {
+		if len(txn.EvalDelta.Logs) > 0 {
+			blockLogs = append(
+				blockLogs,
+				NewAppCallLogs(outerTxnID, txn.EvalDelta.Logs, getAppIndexFromTxn(txn)),
+			)
+		}
+
+		blockLogs = getLogsFromTxns(txn.EvalDelta.InnerTxns, blockLogs, outerTxnID)
+	}
+
+	return blockLogs
+}
+
+// GetBlockLogs gets all of the logs (inner and outer app calls) for a given block
+// (GET /v2/blocks/{round}/logs)
+func (v2 *Handlers) GetBlockLogs(ctx echo.Context, round uint64) error {
+	ledger := v2.Node.LedgerForAPI()
+	block, err := ledger.Block(basics.Round(round))
+	if err != nil {
+		switch err.(type) {
+		case ledgercore.ErrNoEntry:
+			return notFound(ctx, err, errFailedLookingUpLedger, v2.Log)
+		default:
+			return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+		}
+	}
+
+	txns, err := block.DecodePaysetFlat()
+	if err != nil {
+		return internalError(ctx, err, "decoding transactions", v2.Log)
+	}
+
+	blockLogs := []model.AppCallLogs{}
+
+	for _, txn := range txns {
+		txid := txn.ID().String()
+		if len(txn.EvalDelta.Logs) > 0 {
+			blockLogs = append(
+				blockLogs,
+				NewAppCallLogs(txid, txn.EvalDelta.Logs, getAppIndexFromTxn(txn)),
+			)
+		}
+
+		blockLogs = getLogsFromTxns(txn.EvalDelta.InnerTxns, blockLogs, txid)
+	}
+
+	response := model.BlockLogsResponse{Logs: blockLogs}
+
+	return ctx.JSON(http.StatusOK, response)
+}
+
 // GetBlockHash gets the block hash for the given round.
 // (GET /v2/blocks/{round}/hash)
 func (v2 *Handlers) GetBlockHash(ctx echo.Context, round uint64) error {
