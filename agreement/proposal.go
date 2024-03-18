@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -141,15 +142,10 @@ func (i seedInput) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.ProposerSeed, protocol.Encode(&i)
 }
 
-func deriveNewSeed(address basics.Address, vrf *crypto.VRFSecrets, rnd round, period period, ledger LedgerReader) (newSeed committee.Seed, seedProof crypto.VRFProof, reterr error) {
+func deriveNewSeed(address basics.Address, vrf *crypto.VRFSecrets, rnd round, period period, ledger LedgerReader, cparams config.ConsensusParams) (newSeed committee.Seed, seedProof crypto.VRFProof, reterr error) {
 	var ok bool
 	var vrfOut crypto.VrfOutput
 
-	cparams, err := ledger.ConsensusParams(ParamsRound(rnd))
-	if err != nil {
-		reterr = fmt.Errorf("failed to obtain consensus parameters in round %d: %v", ParamsRound(rnd), err)
-		return
-	}
 	var alpha crypto.Digest
 	prevSeed, err := ledger.Seed(seedRound(rnd, cparams))
 	if err != nil {
@@ -198,33 +194,27 @@ func verifyHeader(p unauthenticatedProposal, ledger LedgerReader) error {
 
 	// ledger.ConsensusParams(rnd) is not allowed because rnd isn't committed.
 	// The BlockHeader isn't trustworthy yet, since we haven't checked the
-	// upgrade state. So, for now, we confirm that the Proposer is *either*
-	// correct or missing. `eval` package will using Mining().Enabled to confirm
-	// which it should be.
+	// upgrade state. So, lacking the current consensus params, we confirm that
+	// the Proposer is *either* correct or missing. `eval` package will using
+	// Mining().Enabled to confirm which it should be.
 	if !p.BlockHeader.Proposer.IsZero() && p.BlockHeader.Proposer != value.OriginalProposer {
 		return fmt.Errorf("wrong proposer (%v != %v)", p.Proposer, value.OriginalProposer)
 	}
 
+	cparams, err := ledger.ConsensusParams(ParamsRound(rnd))
+	if err != nil {
+		return fmt.Errorf("failed to obtain consensus parameters in round %d: %w", ParamsRound(rnd), err)
+	}
+
 	// Similarly, we only check here that the payout is zero if
-	// ineligibile. `eval` code must check that it is correct if > 0.
-	eligible, err := payoutEligible(rnd, p.Proposer, ledger)
+	// ineligible. `eval` code must check that it is correct if > 0.
+	eligible, proposerRecord, err := payoutEligible(rnd, p.Proposer, ledger, cparams)
 	if err != nil {
 		return fmt.Errorf("failed to determine incentive eligibility %w", err)
 	}
 	if !eligible && p.BlockHeader.ProposerPayout.Raw > 0 {
 		return fmt.Errorf("proposer payout (%d) for ineligible Proposer %v",
 			p.BlockHeader.ProposerPayout.Raw, p.Proposer)
-	}
-
-	cparams, err := ledger.ConsensusParams(ParamsRound(rnd))
-	if err != nil {
-		return fmt.Errorf("failed to obtain consensus parameters in round %d: %v", ParamsRound(rnd), err)
-	}
-
-	balanceRound := balanceRound(rnd, cparams)
-	proposerRecord, err := ledger.LookupAgreement(balanceRound, value.OriginalProposer)
-	if err != nil {
-		return fmt.Errorf("failed to obtain balance record for address %v in round %d: %v", value.OriginalProposer, balanceRound, err)
 	}
 
 	var alpha crypto.Digest
@@ -269,19 +259,12 @@ func verifyHeader(p unauthenticatedProposal, ledger LedgerReader) error {
 }
 
 // payoutEligible determines whether the proposer is eligible for block incentive payout.
-func payoutEligible(rnd basics.Round, proposer basics.Address, ledger LedgerReader) (bool, error) {
-	// We want to check eligibility of the online balance in the round that
-	// mattered to select this proposer.
-	agreementParams, err := ledger.ConsensusParams(ParamsRound(rnd))
-	if err != nil {
-		return false, err
-	}
-
+func payoutEligible(rnd basics.Round, proposer basics.Address, ledger LedgerReader, cparams config.ConsensusParams) (bool, basics.OnlineAccountData, error) {
 	// Check the balance from the agreement round
-	balanceRound := balanceRound(rnd, agreementParams)
+	balanceRound := balanceRound(rnd, cparams)
 	balanceRecord, err := ledger.LookupAgreement(balanceRound, proposer)
 	if err != nil {
-		return false, err
+		return false, basics.OnlineAccountData{}, err
 	}
 
 	// It's only fair to compare balances from 320 rounds ago to the mining
@@ -289,22 +272,28 @@ func payoutEligible(rnd basics.Round, proposer basics.Address, ledger LedgerRead
 	// when mining begins, the miningRules[0] in consensus.go has Min and Max.
 	balanceParams, err := ledger.ConsensusParams(balanceRound)
 	if err != nil {
-		return false, err
+		return false, basics.OnlineAccountData{}, err
 	}
 	eligible := balanceRecord.IncentiveEligible &&
 		balanceRecord.MicroAlgosWithRewards.Raw >= balanceParams.Mining().MinBalance &&
 		balanceRecord.MicroAlgosWithRewards.Raw <= balanceParams.Mining().MaxBalance
-	return eligible, nil
+	return eligible, balanceRecord, nil
 }
 
 func proposalForBlock(address basics.Address, vrf *crypto.VRFSecrets, ve ValidatedBlock, period period, ledger LedgerReader) (proposal, proposalValue, error) {
-	blk := ve.Block()
-	newSeed, seedProof, err := deriveNewSeed(address, vrf, blk.Round(), period, ledger)
+	rnd := ve.Block().Round()
+
+	cparams, err := ledger.ConsensusParams(ParamsRound(rnd))
+	if err != nil {
+		return proposal{}, proposalValue{}, fmt.Errorf("proposalForBlock: no consensus parameters for round %d: %w", ParamsRound(rnd), err)
+	}
+
+	newSeed, seedProof, err := deriveNewSeed(address, vrf, rnd, period, ledger, cparams)
 	if err != nil {
 		return proposal{}, proposalValue{}, fmt.Errorf("proposalForBlock: could not derive new seed: %w", err)
 	}
 
-	eligible, err := payoutEligible(blk.Round(), address, ledger)
+	eligible, _, err := payoutEligible(rnd, address, ledger, cparams)
 	if err != nil {
 		return proposal{}, proposalValue{}, fmt.Errorf("proposalForBlock: could determine eligibility: %w", err)
 	}
