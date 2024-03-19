@@ -1213,20 +1213,12 @@ func TestCatchpointFirstStageInfoPruning(t *testing.T) {
 				if errors.Is(err, os.ErrNotExist) {
 					err := os.MkdirAll(path, 0777)
 					require.NoError(t, err)
-					cwd, err := os.Getwd()
-					require.NoError(t, err)
-					t.Logf("created directory %s/%s", cwd, path)
-					// defer os.RemoveAll(path)
 				}
 			}
 
-			// temporaryDirectory := t.TempDir()
 			dataFileDirectory := filepath.Join(test.hotPath, trackerdb.CatchpointDirName)
 			err := os.Mkdir(dataFileDirectory, 0777)
 			require.NoError(t, err)
-
-			// ct.dbDirectory = temporaryDirectory
-			// ct.tmpDir = temporaryDirectory
 
 			// create new protocol version, which has lower lookback
 			testProtocolVersion :=
