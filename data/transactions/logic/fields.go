@@ -32,6 +32,7 @@ type FieldSpec interface {
 	Type() StackType
 	OpVersion() uint64
 	Note() string
+	Modes() RunMode
 	Version() uint64
 }
 
@@ -278,6 +279,13 @@ func (fs txnFieldSpec) Note() string {
 		note = addExtra(note, "Application mode only")
 	}
 	return note
+}
+
+func (fs txnFieldSpec) Modes() RunMode {
+	if fs.effects {
+		return ModeApp
+	}
+	return modeAny
 }
 
 var txnFieldSpecs = [...]txnFieldSpec{
@@ -617,6 +625,9 @@ func (fs globalFieldSpec) Note() string {
 	// There are no Signature mode only globals
 	return note
 }
+func (fs globalFieldSpec) Modes() RunMode {
+	return fs.mode
+}
 
 var globalFieldSpecs = [...]globalFieldSpec{
 	// version 0 is the same as v1 (initial release)
@@ -718,6 +729,9 @@ func (fs ecdsaCurveSpec) Version() uint64 {
 func (fs ecdsaCurveSpec) Note() string {
 	return fs.doc
 }
+func (fs ecdsaCurveSpec) Modes() RunMode {
+	return ModeDunno
+}
 
 var ecdsaCurveSpecs = [...]ecdsaCurveSpec{
 	{Secp256k1, 5, "secp256k1 curve, used in Bitcoin"},
@@ -783,6 +797,9 @@ func (fs ecGroupSpec) Version() uint64 {
 }
 func (fs ecGroupSpec) Note() string {
 	return fs.doc
+}
+func (fs ecGroupSpec) Modes() RunMode {
+	return ModeDunno
 }
 
 var ecGroupSpecs = [...]ecGroupSpec{
@@ -927,6 +944,9 @@ func (fs base64EncodingSpec) Note() string {
 	note := "" // no doc list?
 	return note
 }
+func (fs base64EncodingSpec) Modes() RunMode {
+	return ModeDunno
+}
 
 func (s base64EncodingSpecMap) get(name string) (FieldSpec, bool) {
 	fs, ok := s[name]
@@ -993,6 +1013,9 @@ func (fs jsonRefSpec) Version() uint64 {
 func (fs jsonRefSpec) Note() string {
 	note := "" // no doc list?
 	return note
+}
+func (fs jsonRefSpec) Modes() RunMode {
+	return ModeDunno
 }
 
 func (s jsonRefSpecMap) get(name string) (FieldSpec, bool) {
@@ -1062,6 +1085,9 @@ func (fs vrfStandardSpec) Version() uint64 {
 func (fs vrfStandardSpec) Note() string {
 	note := "" // no doc list?
 	return note
+}
+func (fs vrfStandardSpec) Modes() RunMode {
+	return ModeDunno
 }
 
 func (s vrfStandardSpecMap) SpecByName(name string) FieldSpec {
@@ -1175,6 +1201,9 @@ func (fs blockFieldSpec) Version() uint64 {
 func (fs blockFieldSpec) Note() string {
 	return ""
 }
+func (fs blockFieldSpec) Modes() RunMode {
+	return ModeDunno
+}
 
 func (s blockFieldSpecMap) SpecByName(name string) FieldSpec {
 	return s[name]
@@ -1221,6 +1250,9 @@ func (fs assetHoldingFieldSpec) Version() uint64 {
 }
 func (fs assetHoldingFieldSpec) Note() string {
 	return fs.doc
+}
+func (fs assetHoldingFieldSpec) Modes() RunMode {
+	return ModeDunno
 }
 
 var assetHoldingFieldSpecs = [...]assetHoldingFieldSpec{
@@ -1307,6 +1339,9 @@ func (fs assetParamsFieldSpec) Version() uint64 {
 }
 func (fs assetParamsFieldSpec) Note() string {
 	return fs.doc
+}
+func (fs assetParamsFieldSpec) Modes() RunMode {
+	return ModeDunno
 }
 
 var assetParamsFieldSpecs = [...]assetParamsFieldSpec{
@@ -1404,6 +1439,9 @@ func (fs appParamsFieldSpec) Version() uint64 {
 }
 func (fs appParamsFieldSpec) Note() string {
 	return fs.doc
+}
+func (fs appParamsFieldSpec) Modes() RunMode {
+	return ModeDunno
 }
 
 var appParamsFieldSpecs = [...]appParamsFieldSpec{
@@ -1512,6 +1550,9 @@ func (fs acctParamsFieldSpec) Version() uint64 {
 }
 func (fs acctParamsFieldSpec) Note() string {
 	return fs.doc
+}
+func (fs acctParamsFieldSpec) Modes() RunMode {
+	return ModeDunno
 }
 
 var acctParamsFieldSpecs = [...]acctParamsFieldSpec{

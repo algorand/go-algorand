@@ -575,6 +575,7 @@ const (
 	// ModeApp is application/contract execution
 	ModeApp
 
+	ModeDunno = 0
 	// local constant, run in any mode
 	modeAny = ModeSig | ModeApp
 )
