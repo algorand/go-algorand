@@ -818,7 +818,6 @@ func (ct *catchpointTracker) createCatchpoint(ctx context.Context, accountsRound
 	}
 
 	relCatchpointFilePath := filepath.Join(trackerdb.CatchpointDirName, trackerdb.MakeCatchpointFilePath(round))
-
 	absCatchpointFilePath := filepath.Join(ct.dbDirectory, relCatchpointFilePath)
 
 	err = os.MkdirAll(filepath.Dir(absCatchpointFilePath), 0700)
@@ -929,7 +928,7 @@ func (ct *catchpointTracker) pruneFirstStageRecordsData(ctx context.Context, max
 	for _, round := range rounds {
 		relCatchpointDataFilePath :=
 			filepath.Join(trackerdb.CatchpointDirName, makeCatchpointDataFilePath(round))
-		err = trackerdb.RemoveSingleCatchpointFileFromDisk(ct.dbDirectory, relCatchpointDataFilePath)
+		err = trackerdb.RemoveSingleCatchpointFileFromDisk(ct.tmpDir, relCatchpointDataFilePath)
 		if err != nil {
 			return err
 		}
