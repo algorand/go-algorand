@@ -213,6 +213,7 @@ func (u AccountData) OnlineAccountData(proto config.ConsensusParams, rewardsLeve
 			VoteLastValid:   u.VoteLastValid,
 			VoteKeyDilution: u.VoteKeyDilution,
 		},
+		IncentiveEligible: u.IncentiveEligible,
 	}
 }
 
