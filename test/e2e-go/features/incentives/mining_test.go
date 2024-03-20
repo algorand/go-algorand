@@ -75,9 +75,9 @@ func TestBasicMining(t *testing.T) {
 	data01, err = c01.AccountData(account01.Address)
 	a.NoError(err)
 
-	// Go 31 rounds after the burn happened. rounds. During this time,
-	// incentive eligibility is not in effect yet, so regardless of who
-	// proposes, they won't earn anything.
+	// Go 31 rounds after the burn happened. During this time, incentive
+	// eligibility is not in effect yet, so regardless of who proposes, they
+	// won't earn anything.
 
 	client := fixture.LibGoalClient
 	status, err := client.Status()
