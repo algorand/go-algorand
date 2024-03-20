@@ -140,6 +140,7 @@ func (dl *DoubleLedger) fullBlock(txs ...*txntest.Txn) *ledgercore.ValidatedBloc
 func (dl *DoubleLedger) endBlock(proposer ...basics.Address) *ledgercore.ValidatedBlock {
 	prp := dl.proposer
 	if len(proposer) > 0 {
+		require.Len(dl.t, proposer, 1, "endBlock() cannot specify multiple proposers")
 		prp = proposer[0]
 	}
 	vb := endBlock(dl.t, dl.generator, dl.eval, prp)
