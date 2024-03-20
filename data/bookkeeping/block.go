@@ -58,9 +58,9 @@ type (
 		// Genesis hash to which this block belongs.
 		GenesisHash crypto.Digest `codec:"gh"`
 
-		// Proposer is the proposer of this block. Like the Seed, algod adds
-		// this after the block is built, so that the same block can be prepared
-		// for multiple Players in the same node. Therefore, it can not be used
+		// Proposer is the proposer of this block. Like the Seed, agreement adds
+		// this after the block is assembled by the transaction pool, so that the same block can be prepared
+		// for multiple participating accounts in the same node. Therefore, it can not be used
 		// to influence block evaluation. Populated if proto.EnableMining
 		Proposer basics.Address `codec:"prp"`
 
