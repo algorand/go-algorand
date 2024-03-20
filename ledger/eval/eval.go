@@ -1326,7 +1326,7 @@ func (eval *BlockEvaluator) endOfBlock() error {
 		if eval.proto.Mining().Enabled {
 			// Determine how much the proposer should be paid. Agreement code
 			// can cancel this payment by zero'ing the ProposerPayout if the
-			// proposer is found to be ineligible. See WithProposal().
+			// proposer is found to be ineligible. See WithProposer().
 			eval.block.FeesCollected = eval.state.feesCollected
 			eval.block.BlockHeader.ProposerPayout, err = eval.proposerPayout()
 			if err != nil {

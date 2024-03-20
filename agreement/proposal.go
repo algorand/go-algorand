@@ -185,10 +185,10 @@ func deriveNewSeed(address basics.Address, vrf *crypto.VRFSecrets, rnd round, pe
 	return
 }
 
-// verifyHeader checks the things in the header that can only be confirmed by
+// verifyProposer checks the things in the header that can only be confirmed by
 // looking into the unauthenticatedProposal or using LookupAgreement. The
 // Proposer, ProposerPayout, and Seed.
-func verifyHeader(p unauthenticatedProposal, ledger LedgerReader) error {
+func verifyProposer(p unauthenticatedProposal, ledger LedgerReader) error {
 	value := p.value()
 	rnd := p.Round()
 
@@ -298,7 +298,7 @@ func proposalForBlock(address basics.Address, vrf *crypto.VRFSecrets, ve Validat
 		return proposal{}, proposalValue{}, fmt.Errorf("proposalForBlock: could determine eligibility: %w", err)
 	}
 
-	ve = ve.WithProposal(newSeed, address, eligible)
+	ve = ve.WithProposer(newSeed, address, eligible)
 	proposal := makeProposal(ve, seedProof, period, address)
 	value := proposalValue{
 		OriginalPeriod:   period,
@@ -319,7 +319,7 @@ func (p unauthenticatedProposal) validate(ctx context.Context, current round, le
 		return invalid, fmt.Errorf("proposed entry from wrong round: entry.Round() != current: %v != %v", entry.Round(), current)
 	}
 
-	err := verifyHeader(p, ledger)
+	err := verifyProposer(p, ledger)
 	if err != nil {
 		return invalid, fmt.Errorf("unable to verify header: %w", err)
 	}

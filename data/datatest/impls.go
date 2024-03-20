@@ -64,8 +64,8 @@ func (i entryFactoryImpl) AssembleBlock(round basics.Round) (agreement.Validated
 	return validatedBlock{blk: &b}, nil
 }
 
-// WithProposal implements the agreement.ValidatedBlock interface.
-func (ve validatedBlock) WithProposal(s committee.Seed, proposer basics.Address, eligible bool) agreement.ValidatedBlock {
+// WithProposer implements the agreement.ValidatedBlock interface.
+func (ve validatedBlock) WithProposer(s committee.Seed, proposer basics.Address, eligible bool) agreement.ValidatedBlock {
 	newblock := *ve.blk
 	newblock.BlockHeader.Seed = s
 	newblock.BlockHeader.Proposer = proposer

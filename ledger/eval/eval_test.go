@@ -990,7 +990,7 @@ func (ledger *evalTestLedger) endBlock(t testing.TB, eval *BlockEvaluator) *ledg
 	// fake agreement's setting of header fields so later validates work.
 	seed := committee.Seed{}
 	crypto.RandBytes(seed[:])
-	*validatedBlock = validatedBlock.WithProposal(seed, testPoolAddr, true)
+	*validatedBlock = validatedBlock.WithProposer(seed, testPoolAddr, true)
 	err = ledger.AddValidatedBlock(*validatedBlock, agreement.Certificate{})
 	require.NoError(t, err)
 	return validatedBlock
@@ -1212,7 +1212,7 @@ func TestEvalFunctionForExpiredAccounts(t *testing.T) {
 	require.NoError(t, err)
 
 	// fake agreement's setting of header fields so later validates work
-	*validatedBlock = validatedBlock.WithProposal(committee.Seed{}, testPoolAddr, true)
+	*validatedBlock = validatedBlock.WithProposer(committee.Seed{}, testPoolAddr, true)
 
 	expired := false
 	for _, acct := range validatedBlock.Block().ExpiredParticipationAccounts {
@@ -1455,7 +1455,7 @@ func TestAbsenteeChecks(t *testing.T) {
 	require.NoError(t, err)
 
 	// fake agreement's setting of header fields so later validates work
-	*validatedBlock = validatedBlock.WithProposal(committee.Seed{}, testPoolAddr, true)
+	*validatedBlock = validatedBlock.WithProposer(committee.Seed{}, testPoolAddr, true)
 
 	require.Zero(t, validatedBlock.Block().ExpiredParticipationAccounts)
 	require.Contains(t, validatedBlock.Block().AbsentParticipationAccounts, addrs[0], addrs[0].String())
