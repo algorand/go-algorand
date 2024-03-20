@@ -2233,7 +2233,7 @@ func TestAccountOnlineQueries(t *testing.T) {
 				MicroAlgos: basics.MicroAlgos{Raw: 100_000_000},
 				Status:     basics.Online,
 			},
-			VotingData: ledgercore.VotingData{
+			VotingData: basics.VotingData{
 				VoteID: voteIDA,
 			},
 		}
@@ -2243,7 +2243,7 @@ func TestAccountOnlineQueries(t *testing.T) {
 				MicroAlgos: basics.MicroAlgos{Raw: 200_000_000},
 				Status:     basics.Online,
 			},
-			VotingData: ledgercore.VotingData{
+			VotingData: basics.VotingData{
 				VoteID: voteIDB,
 			},
 		}
@@ -2253,7 +2253,7 @@ func TestAccountOnlineQueries(t *testing.T) {
 				MicroAlgos: basics.MicroAlgos{Raw: 300_000_000},
 				Status:     basics.Online,
 			},
-			VotingData: ledgercore.VotingData{
+			VotingData: basics.VotingData{
 				VoteID: voteIDC,
 			},
 		}

@@ -303,7 +303,7 @@ func (r *accountsV2Reader) OnlineAccountsAll(maxAccounts uint64) ([]trackerdb.Pe
 }
 
 // ExpiredOnlineAccountsForRound returns all online accounts known at `rnd` that will be expired by `voteRnd`.
-func (r *accountsV2Reader) ExpiredOnlineAccountsForRound(rnd, voteRnd basics.Round, proto config.ConsensusParams, rewardsLevel uint64) (map[basics.Address]*ledgercore.OnlineAccountData, error) {
+func (r *accountsV2Reader) ExpiredOnlineAccountsForRound(rnd, voteRnd basics.Round, proto config.ConsensusParams, rewardsLevel uint64) (map[basics.Address]*basics.OnlineAccountData, error) {
 	// This relies on SQLite's handling of max(updround) and bare columns not in the GROUP BY.
 	// The values of votelastvalid, votefirstvalid, and data will all be from the same row as max(updround)
 	rows, err := r.q.Query(`SELECT address, data, max(updround)
@@ -317,7 +317,7 @@ ORDER BY address`, rnd, voteRnd)
 	}
 	defer rows.Close()
 
-	ret := make(map[basics.Address]*ledgercore.OnlineAccountData)
+	ret := make(map[basics.Address]*basics.OnlineAccountData)
 	for rows.Next() {
 		var addrbuf []byte
 		var buf []byte

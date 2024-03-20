@@ -129,7 +129,7 @@ type AccountsReaderExt interface {
 	LookupOnlineAccountDataByAddress(addr basics.Address) (ref OnlineAccountRef, data []byte, err error)
 	AccountsOnlineTop(rnd basics.Round, offset uint64, n uint64, proto config.ConsensusParams) (map[basics.Address]*ledgercore.OnlineAccount, error)
 	AccountsOnlineRoundParams() (onlineRoundParamsData []ledgercore.OnlineRoundParamsData, endRound basics.Round, err error)
-	ExpiredOnlineAccountsForRound(rnd, voteRnd basics.Round, proto config.ConsensusParams, rewardsLevel uint64) (map[basics.Address]*ledgercore.OnlineAccountData, error)
+	ExpiredOnlineAccountsForRound(rnd, voteRnd basics.Round, proto config.ConsensusParams, rewardsLevel uint64) (map[basics.Address]*basics.OnlineAccountData, error)
 	OnlineAccountsAll(maxAccounts uint64) ([]PersistedOnlineAccountData, error)
 	LoadTxTail(ctx context.Context, dbRound basics.Round) (roundData []*TxTailRound, roundHash []crypto.Digest, baseRound basics.Round, err error)
 	LoadAllFullAccounts(ctx context.Context, balancesTable string, resourcesTable string, acctCb func(basics.Address, basics.AccountData)) (count int, err error)

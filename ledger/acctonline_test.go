@@ -207,7 +207,7 @@ func TestAcctOnline(t *testing.T) {
 		var updates ledgercore.AccountDeltas
 		acctIdx := int(i) - 1
 
-		updates.Upsert(allAccts[acctIdx].Addr, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{Status: basics.Offline}, VotingData: ledgercore.VotingData{}})
+		updates.Upsert(allAccts[acctIdx].Addr, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{Status: basics.Offline}, VotingData: basics.VotingData{}})
 
 		base := genesisAccts[i-1]
 		newAccts := applyPartialDeltas(base, updates)
@@ -489,13 +489,13 @@ func TestAcctOnlineCache(t *testing.T) {
 
 				// put all accts online, then all offline, one each round
 				if (int(i)-1)%(numAccts*2) >= numAccts {
-					updates.Upsert(allAccts[acctIdx].Addr, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{Status: basics.Offline}, VotingData: ledgercore.VotingData{}})
+					updates.Upsert(allAccts[acctIdx].Addr, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{Status: basics.Offline}, VotingData: basics.VotingData{}})
 				} else {
 					updates.Upsert(allAccts[acctIdx].Addr, ledgercore.ToAccountData(allAccts[acctIdx].AccountData))
 				}
 
 				// set acctA online for each round
-				updates.Upsert(addrA, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{Status: basics.Online}, VotingData: ledgercore.VotingData{VoteLastValid: basics.Round(100 * i)}})
+				updates.Upsert(addrA, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{Status: basics.Online}, VotingData: basics.VotingData{VoteLastValid: basics.Round(100 * i)}})
 
 				base := genesisAccts[i-1]
 				newAccts := applyPartialDeltas(base, updates)
@@ -887,7 +887,7 @@ func TestAcctOnlineCacheDBSync(t *testing.T) {
 		require.NoError(t, err)
 
 		var updates ledgercore.AccountDeltas
-		updates.Upsert(addrA, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{Status: basics.Offline}, VotingData: ledgercore.VotingData{}})
+		updates.Upsert(addrA, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{Status: basics.Offline}, VotingData: basics.VotingData{}})
 
 		// copy genesisAccts for the test
 		accounts := copyGenesisAccts()
@@ -967,7 +967,7 @@ func TestAcctOnlineCacheDBSync(t *testing.T) {
 		require.NoError(t, err)
 
 		var updates ledgercore.AccountDeltas
-		updates.Upsert(addrA, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{Status: basics.Offline}, VotingData: ledgercore.VotingData{}})
+		updates.Upsert(addrA, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{Status: basics.Offline}, VotingData: basics.VotingData{}})
 
 		// copy genesisAccts for the test
 		accounts := copyGenesisAccts()
@@ -1016,8 +1016,8 @@ func TestAcctOnlineCacheDBSync(t *testing.T) {
 
 		addrB := ledgertesting.RandomAddress()
 		var updates ledgercore.AccountDeltas
-		updates.Upsert(addrA, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{Status: basics.Offline}, VotingData: ledgercore.VotingData{}})
-		updates.Upsert(addrB, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{Status: basics.Online}, VotingData: ledgercore.VotingData{VoteLastValid: 10000}})
+		updates.Upsert(addrA, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{Status: basics.Offline}, VotingData: basics.VotingData{}})
+		updates.Upsert(addrB, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{Status: basics.Online}, VotingData: basics.VotingData{VoteLastValid: 10000}})
 
 		// copy genesisAccts for the test
 		accounts := copyGenesisAccts()
@@ -1174,9 +1174,9 @@ func TestAcctOnlineBaseAccountCache(t *testing.T) {
 	accounts := genesisAccts
 
 	acctDatas := [3]ledgercore.AccountData{
-		{AccountBaseData: ledgercore.AccountBaseData{Status: basics.Online}, VotingData: ledgercore.VotingData{VoteLastValid: basics.Round(1000 + maxBalLookback)}},
-		{AccountBaseData: ledgercore.AccountBaseData{Status: basics.Offline}, VotingData: ledgercore.VotingData{}},
-		{AccountBaseData: ledgercore.AccountBaseData{Status: basics.Online}, VotingData: ledgercore.VotingData{VoteLastValid: basics.Round(1000 + maxBalLookback)}},
+		{AccountBaseData: ledgercore.AccountBaseData{Status: basics.Online}, VotingData: basics.VotingData{VoteLastValid: basics.Round(1000 + maxBalLookback)}},
+		{AccountBaseData: ledgercore.AccountBaseData{Status: basics.Offline}, VotingData: basics.VotingData{}},
+		{AccountBaseData: ledgercore.AccountBaseData{Status: basics.Online}, VotingData: basics.VotingData{VoteLastValid: basics.Round(1000 + maxBalLookback)}},
 	}
 	// set online, offline, online
 	for i := 1; i <= 3; i++ {
@@ -1276,7 +1276,7 @@ func TestAcctOnlineVotersLongerHistory(t *testing.T) {
 	maxBlocks := maxBalLookback * 5
 	for i := 1; i <= maxBlocks; i++ {
 		var updates ledgercore.AccountDeltas
-		updates.Upsert(addrA, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{Status: basics.Online}, VotingData: ledgercore.VotingData{VoteLastValid: basics.Round(100 * i)}})
+		updates.Upsert(addrA, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{Status: basics.Online}, VotingData: basics.VotingData{VoteLastValid: basics.Round(100 * i)}})
 		base := genesisAccts[i-1]
 		newAccts := applyPartialDeltas(base, updates)
 		totals = newBlock(t, ml, testProtocolVersion, protoParams, basics.Round(i), base, updates, totals)
@@ -1438,7 +1438,7 @@ func TestAcctOnlineTop(t *testing.T) {
 	var updates ledgercore.AccountDeltas
 	ac := allAccts[numAccts-3]
 	updates.Upsert(ac.Addr, ledgercore.AccountData{
-		AccountBaseData: ledgercore.AccountBaseData{Status: basics.Offline, MicroAlgos: ac.MicroAlgos}, VotingData: ledgercore.VotingData{}})
+		AccountBaseData: ledgercore.AccountBaseData{Status: basics.Offline, MicroAlgos: ac.MicroAlgos}, VotingData: basics.VotingData{}})
 	totals = newBlockWithUpdates(genesisAccts, updates, totals, t, ml, 1, oa)
 	accountToBeUpdated := ac
 	accountToBeUpdated.Status = basics.Offline
@@ -1452,7 +1452,7 @@ func TestAcctOnlineTop(t *testing.T) {
 	updates = ledgercore.AccountDeltas{}
 	updates.Upsert(allAccts[numAccts-2].Addr, ledgercore.AccountData{
 		AccountBaseData: ledgercore.AccountBaseData{Status: basics.Online, MicroAlgos: allAccts[numAccts-2].MicroAlgos},
-		VotingData: ledgercore.VotingData{
+		VotingData: basics.VotingData{
 			VoteFirstValid: 0,
 			VoteLastValid:  1,
 		}})
@@ -1471,7 +1471,7 @@ func TestAcctOnlineTop(t *testing.T) {
 	// mark an account with high stake as online - it should be pushed to the top of the list
 	updates.Upsert(allAccts[numAccts-1].Addr, ledgercore.AccountData{
 		AccountBaseData: ledgercore.AccountBaseData{Status: basics.Online, MicroAlgos: allAccts[numAccts-1].MicroAlgos},
-		VotingData:      ledgercore.VotingData{VoteLastValid: basics.Round(1000)}})
+		VotingData:      basics.VotingData{VoteLastValid: basics.Round(1000)}})
 	totals = newBlockWithUpdates(genesisAccts, updates, totals, t, ml, 3, oa)
 	accountToBeUpdated = allAccts[numAccts-1]
 	accountToBeUpdated.Status = basics.Online
@@ -1549,7 +1549,7 @@ func TestAcctOnlineTopInBatches(t *testing.T) {
 				if i == 300 {
 					updates.Upsert(acct299.Addr, ledgercore.AccountData{
 						AccountBaseData: ledgercore.AccountBaseData{Status: basics.Offline, MicroAlgos: acct299.MicroAlgos},
-						VotingData:      ledgercore.VotingData{},
+						VotingData:      basics.VotingData{},
 					})
 				}
 				newBlockWithUpdates(genesisAccts, updates, totals, t, ml, i, oa)
@@ -1626,7 +1626,7 @@ func TestAcctOnlineTopBetweenCommitAndPostCommit(t *testing.T) {
 	for ; i < 10; i++ {
 		var updates ledgercore.AccountDeltas
 		updates.Upsert(allAccts[numAccts-1].Addr, ledgercore.AccountData{
-			AccountBaseData: ledgercore.AccountBaseData{Status: basics.Offline}, VotingData: ledgercore.VotingData{}})
+			AccountBaseData: ledgercore.AccountBaseData{Status: basics.Offline}, VotingData: basics.VotingData{}})
 		newBlockWithUpdates(genesisAccts, updates, totals, t, ml, i, oa)
 	}
 
@@ -1635,7 +1635,7 @@ func TestAcctOnlineTopBetweenCommitAndPostCommit(t *testing.T) {
 	updateAccountsRoutine := func() {
 		var updates ledgercore.AccountDeltas
 		updates.Upsert(allAccts[numAccts-1].Addr, ledgercore.AccountData{
-			AccountBaseData: ledgercore.AccountBaseData{Status: basics.Offline}, VotingData: ledgercore.VotingData{}})
+			AccountBaseData: ledgercore.AccountBaseData{Status: basics.Offline}, VotingData: basics.VotingData{}})
 		newBlockWithUpdates(genesisAccts, updates, totals, t, ml, i, oa)
 	}
 
@@ -1717,7 +1717,7 @@ func TestAcctOnlineTopDBBehindMemRound(t *testing.T) {
 	for ; i < 10; i++ {
 		var updates ledgercore.AccountDeltas
 		updates.Upsert(allAccts[numAccts-1].Addr, ledgercore.AccountData{
-			AccountBaseData: ledgercore.AccountBaseData{Status: basics.Offline}, VotingData: ledgercore.VotingData{}})
+			AccountBaseData: ledgercore.AccountBaseData{Status: basics.Offline}, VotingData: basics.VotingData{}})
 		newBlockWithUpdates(genesisAccts, updates, totals, t, ml, i, oa)
 	}
 
@@ -1726,7 +1726,7 @@ func TestAcctOnlineTopDBBehindMemRound(t *testing.T) {
 	updateAccountsRoutine := func() {
 		var updates ledgercore.AccountDeltas
 		updates.Upsert(allAccts[numAccts-1].Addr, ledgercore.AccountData{
-			AccountBaseData: ledgercore.AccountBaseData{Status: basics.Offline}, VotingData: ledgercore.VotingData{}})
+			AccountBaseData: ledgercore.AccountBaseData{Status: basics.Offline}, VotingData: basics.VotingData{}})
 		newBlockWithUpdates(genesisAccts, updates, totals, t, ml, i, oa)
 	}
 
@@ -1807,10 +1807,10 @@ func TestAcctOnlineTop_ChangeOnlineStake(t *testing.T) {
 		var updates ledgercore.AccountDeltas
 		if i == 15 { // round 15 should be in deltas (memory)
 			// turn account `i` offline
-			updates.Upsert(allAccts[i].Addr, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{Status: basics.Offline, MicroAlgos: allAccts[i].MicroAlgos}, VotingData: ledgercore.VotingData{}})
+			updates.Upsert(allAccts[i].Addr, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{Status: basics.Offline, MicroAlgos: allAccts[i].MicroAlgos}, VotingData: basics.VotingData{}})
 		}
 		if i == 18 {
-			updates.Upsert(allAccts[i].Addr, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{Status: basics.Online, MicroAlgos: allAccts[i].MicroAlgos}, VotingData: ledgercore.VotingData{VoteLastValid: basics.Round(18)}})
+			updates.Upsert(allAccts[i].Addr, ledgercore.AccountData{AccountBaseData: ledgercore.AccountBaseData{Status: basics.Online, MicroAlgos: allAccts[i].MicroAlgos}, VotingData: basics.VotingData{VoteLastValid: basics.Round(18)}})
 		} // else: insert empty block
 		totals = newBlockWithUpdates(genesisAccts, updates, totals, t, ml, i, oa)
 	}
@@ -1969,19 +1969,19 @@ func TestAcctOnline_ExpiredOnlineCirculation(t *testing.T) {
 	addrA := allAccts[0].Addr
 	stakeA := allAccts[0].MicroAlgos
 	statesA := map[acctState]ledgercore.AccountData{
-		acctStateOffline: {AccountBaseData: ledgercore.AccountBaseData{Status: basics.Offline, MicroAlgos: stakeA}, VotingData: ledgercore.VotingData{}},
-		acctStateOnline:  {AccountBaseData: ledgercore.AccountBaseData{Status: basics.Online, MicroAlgos: stakeA}, VotingData: ledgercore.VotingData(allAccts[0].OnlineAccountData().VotingData)},
+		acctStateOffline: {AccountBaseData: ledgercore.AccountBaseData{Status: basics.Offline, MicroAlgos: stakeA}, VotingData: basics.VotingData{}},
+		acctStateOnline:  {AccountBaseData: ledgercore.AccountBaseData{Status: basics.Online, MicroAlgos: stakeA}, VotingData: basics.VotingData(allAccts[0].OnlineAccountData().VotingData)},
 	}
 
 	addrB := allAccts[1].Addr
 	stakeB := allAccts[1].MicroAlgos
 	votingDataB := allAccts[1].OnlineAccountData().VotingData
 	statesB := map[acctState]ledgercore.AccountData{
-		acctStateOffline: {AccountBaseData: ledgercore.AccountBaseData{Status: basics.Offline, MicroAlgos: stakeB}, VotingData: ledgercore.VotingData{}},
-		acctStateOnline:  {AccountBaseData: ledgercore.AccountBaseData{Status: basics.Online, MicroAlgos: stakeB}, VotingData: ledgercore.VotingData(votingDataB)},
+		acctStateOffline: {AccountBaseData: ledgercore.AccountBaseData{Status: basics.Offline, MicroAlgos: stakeB}, VotingData: basics.VotingData{}},
+		acctStateOnline:  {AccountBaseData: ledgercore.AccountBaseData{Status: basics.Online, MicroAlgos: stakeB}, VotingData: basics.VotingData(votingDataB)},
 	}
 	expStatesB := func(state acctState, voteRnd basics.Round) ledgercore.AccountData {
-		vd := ledgercore.VotingData(votingDataB)
+		vd := basics.VotingData(votingDataB)
 		switch state {
 		case acctStateExpired:
 			vd.VoteLastValid = voteRnd - 1
@@ -2100,7 +2100,7 @@ func TestAcctOnline_ExpiredOnlineCirculation(t *testing.T) {
 			commitSync(t, oa, ml, basics.Round(rnd-1))
 			a.Equal(int(conf.MaxAcctLookback), len(oa.deltas)) // ensure the only expected deltas are not flushed
 
-			var expiredAccts map[basics.Address]*ledgercore.OnlineAccountData
+			var expiredAccts map[basics.Address]*basics.OnlineAccountData
 			err = ml.trackers.dbs.Snapshot(func(ctx context.Context, tx trackerdb.SnapshotScope) error {
 				reader, err := tx.MakeAccountsReader()
 				if err != nil {
@@ -2158,7 +2158,7 @@ func TestAcctOnline_ExpiredOnlineCirculation(t *testing.T) {
 			base := accounts[rnd-1]
 			updates.Upsert(addrA, statesA[acctStateOnline])
 			updates.Upsert(addrB, ledgercore.AccountData{
-				AccountBaseData: ledgercore.AccountBaseData{Status: basics.Online, MicroAlgos: stakeB}, VotingData: ledgercore.VotingData(votingDataB),
+				AccountBaseData: ledgercore.AccountBaseData{Status: basics.Online, MicroAlgos: stakeB}, VotingData: basics.VotingData(votingDataB),
 			})
 			accounts = append(accounts, applyPartialDeltas(base, updates))
 			totals = newBlock(t, ml, proto, params, rnd, base, updates, totals)
