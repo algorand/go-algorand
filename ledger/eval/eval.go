@@ -1514,7 +1514,8 @@ func (eval *BlockEvaluator) generateKnockOfflineAccountsList() {
 	ch := activeChallenge(&eval.proto, uint64(eval.Round()), eval.state)
 
 	for _, accountAddr := range eval.state.modifiedAccounts() {
-		acctDelta, found := eval.state.mods.Accts.GetData(accountAddr)
+		fmt.Printf("Check %v\n", accountAddr)
+		acctData, found := eval.state.mods.Accts.GetData(accountAddr)
 		if !found {
 			continue
 		}
@@ -1522,8 +1523,8 @@ func (eval *BlockEvaluator) generateKnockOfflineAccountsList() {
 		// Regardless of being online or suspended, if voting data exists, the
 		// account can be expired to remove it.  This means an offline account
 		// can be expired (because it was already suspended).
-		if !acctDelta.VoteID.IsEmpty() {
-			expiresBeforeCurrent := acctDelta.VoteLastValid < current
+		if !acctData.VoteID.IsEmpty() {
+			expiresBeforeCurrent := acctData.VoteLastValid < current
 			if expiresBeforeCurrent &&
 				len(updates.ExpiredParticipationAccounts) < maxExpirations {
 				updates.ExpiredParticipationAccounts = append(
@@ -1538,9 +1539,9 @@ func (eval *BlockEvaluator) generateKnockOfflineAccountsList() {
 			continue // no more room (don't break the loop, since we may have more expiries)
 		}
 
-		if acctDelta.Status == basics.Online {
-			lastSeen := max(acctDelta.LastProposed, acctDelta.LastHeartbeat)
-			if isAbsent(eval.state.prevTotals.Online.Money, acctDelta.MicroAlgos, lastSeen, current) ||
+		if acctData.Status == basics.Online {
+			lastSeen := max(acctData.LastProposed, acctData.LastHeartbeat)
+			if isAbsent(eval.state.prevTotals.Online.Money, acctData.MicroAlgos, lastSeen, current) ||
 				failsChallenge(ch, accountAddr, lastSeen) {
 				updates.AbsentParticipationAccounts = append(
 					updates.AbsentParticipationAccounts,
@@ -1712,7 +1713,7 @@ func (eval *BlockEvaluator) validateAbsentOnlineAccounts() error {
 		}
 
 		if acctData.Status != basics.Online {
-			return fmt.Errorf("proposed absent acct %v was not online but %v", accountAddr, acctData.Status)
+			return fmt.Errorf("proposed absent account %v was %v, not Online", accountAddr, acctData.Status)
 		}
 
 		lastSeen := max(acctData.LastProposed, acctData.LastHeartbeat)

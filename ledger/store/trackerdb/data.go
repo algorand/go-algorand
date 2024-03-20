@@ -152,7 +152,7 @@ type BaseOnlineAccountData struct {
 
 	BaseVotingData
 
-	IncentiveEligible bool              `codec:"W"`
+	IncentiveEligible bool              `codec:"X"`
 	MicroAlgos        basics.MicroAlgos `codec:"Y"`
 	RewardsBase       uint64            `codec:"Z"`
 }

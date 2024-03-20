@@ -58,10 +58,6 @@ func rewardsPool() basics.Address {
 	return makeAddress(101)
 }
 
-func proposer() basics.Address {
-	return basics.Address{}
-}
-
 func genesisBlock() (bookkeeping.Block, error) {
 	block, err := bookkeeping.MakeGenesisBlock(
 		proto,
