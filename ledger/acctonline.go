@@ -676,7 +676,7 @@ func (ao *onlineAccounts) roundParamsOffset(rnd basics.Round) (offset uint64, er
 }
 
 // lookupOnlineAccountData returns the online account data for a given address at a given round.
-func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.Address) (ledgercore.OnlineAccountData, error) {
+func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.Address) (basics.OnlineAccountData, error) {
 	needUnlock := false
 	defer func() {
 		if needUnlock {
@@ -704,14 +704,14 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 		if err != nil {
 			var roundOffsetError *RoundOffsetError
 			if !errors.As(err, &roundOffsetError) {
-				return ledgercore.OnlineAccountData{}, err
+				return basics.OnlineAccountData{}, err
 			}
 			// the round number cannot be found in deltas, it is in history
 			inHistory = true
 		}
 		paramsOffset, err = ao.roundParamsOffset(rnd)
 		if err != nil {
-			return ledgercore.OnlineAccountData{}, err
+			return basics.OnlineAccountData{}, err
 		}
 
 		rewardsProto = config.Consensus[ao.onlineRoundParamsData[paramsOffset].CurrentProtocol]
@@ -755,7 +755,7 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 		persistedData, err = ao.accountsq.LookupOnline(addr, rnd)
 		if err != nil || persistedData.Ref == nil {
 			// no such online account, return empty
-			return ledgercore.OnlineAccountData{}, err
+			return basics.OnlineAccountData{}, err
 		}
 		// Now we load the entire history of this account to fill the onlineAccountsCache, so that the
 		// next lookup for this online account will not hit the on-disk DB.
@@ -770,7 +770,7 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 		//   3. after postCommit => OK, postCommit does not add new entry with writeFrontIfExist, but here all the full history is loaded
 		persistedDataHistory, validThrough, err := ao.accountsq.LookupOnlineHistory(addr)
 		if err != nil || len(persistedDataHistory) == 0 {
-			return ledgercore.OnlineAccountData{}, err
+			return basics.OnlineAccountData{}, err
 		}
 		// 3. After we finished reading the history (lookupOnlineHistory), either
 		//   1. The DB round has not advanced (validThrough == currentDbRound) => OK
@@ -797,7 +797,7 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 					if !written {
 						ao.accountsMu.Unlock()
 						err = fmt.Errorf("failed to write history of acct %s for round %d into online accounts cache", data.Addr.String(), data.UpdRound)
-						return ledgercore.OnlineAccountData{}, err
+						return basics.OnlineAccountData{}, err
 					}
 				}
 				ao.log.Info("inserted new item to onlineAccountsCache")
@@ -810,7 +810,7 @@ func (ao *onlineAccounts) lookupOnlineAccountData(rnd basics.Round, addr basics.
 
 		if validThrough < currentDbRound {
 			ao.log.Errorf("onlineAccounts.lookupOnlineAccountData: database round %d is behind in-memory round %d", validThrough, currentDbRound)
-			return ledgercore.OnlineAccountData{}, &StaleDatabaseRoundError{databaseRound: validThrough, memoryRound: currentDbRound}
+			return basics.OnlineAccountData{}, &StaleDatabaseRoundError{databaseRound: validThrough, memoryRound: currentDbRound}
 		}
 	}
 }
@@ -1010,7 +1010,7 @@ func (ao *onlineAccounts) TopOnlineAccounts(rnd basics.Round, voteRnd basics.Rou
 	}
 }
 
-func (ao *onlineAccounts) onlineAcctsExpiredByRound(rnd, voteRnd basics.Round) (map[basics.Address]*ledgercore.OnlineAccountData, error) {
+func (ao *onlineAccounts) onlineAcctsExpiredByRound(rnd, voteRnd basics.Round) (map[basics.Address]*basics.OnlineAccountData, error) {
 	needUnlock := false
 	defer func() {
 		if needUnlock {
@@ -1018,7 +1018,7 @@ func (ao *onlineAccounts) onlineAcctsExpiredByRound(rnd, voteRnd basics.Round) (
 		}
 	}()
 
-	var expiredAccounts map[basics.Address]*ledgercore.OnlineAccountData
+	var expiredAccounts map[basics.Address]*basics.OnlineAccountData
 	ao.accountsMu.RLock()
 	needUnlock = true
 	for {
