@@ -1184,8 +1184,11 @@ func TestCalculateCatchpointRounds(t *testing.T) {
 	}
 }
 
-// Test that pruning first stage catchpoint database records and catchpoint data files
-// works.
+// TestCatchpointFirstStageInfoPruning checks pruning first stage catchpoint database records and catchpoint data files.
+// The test makes a catchpoint tracker and adds blocks into a mock ledger
+// until it reaches expected number of catchpoint. Then checks if database records match to data files existence.
+// Additional effect is that there are much more data files written during the process than catchpoints at the very end of the test
+// because of automatic pruning so check that most data files are removed confirms pruning works.
 func TestCatchpointFirstStageInfoPruning(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -1254,6 +1257,7 @@ func TestCatchpointFirstStageInfoPruning(t *testing.T) {
 			}
 
 			numCatchpointsCreated := uint64(0)
+			numDataFilesWritten := uint64(0)
 			i := basics.Round(0)
 			lastCatchpointLabel := ""
 
@@ -1279,6 +1283,7 @@ func TestCatchpointFirstStageInfoPruning(t *testing.T) {
 					for ct.isWritingCatchpointDataFile() {
 						time.Sleep(time.Millisecond)
 					}
+					numDataFilesWritten++
 				}
 
 				if isCatchpointRound(i) {
@@ -1309,6 +1314,7 @@ func TestCatchpointFirstStageInfoPruning(t *testing.T) {
 			}
 
 			require.Equal(t, expectedNumEntries, numEntries)
+			require.Greater(t, numDataFilesWritten, numEntries)
 		})
 	}
 }
