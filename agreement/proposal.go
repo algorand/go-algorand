@@ -197,7 +197,7 @@ func verifyHeader(p unauthenticatedProposal, ledger LedgerReader) error {
 	// upgrade state. So, lacking the current consensus params, we confirm that
 	// the Proposer is *either* correct or missing. `eval` package will using
 	// Mining().Enabled to confirm which it should be.
-	if !p.BlockHeader.Proposer.IsZero() && p.BlockHeader.Proposer != value.OriginalProposer {
+	if !p.Proposer().IsZero() && p.Proposer() != value.OriginalProposer {
 		return fmt.Errorf("wrong proposer (%v != %v)", p.Proposer, value.OriginalProposer)
 	}
 
@@ -208,13 +208,13 @@ func verifyHeader(p unauthenticatedProposal, ledger LedgerReader) error {
 
 	// Similarly, we only check here that the payout is zero if
 	// ineligible. `eval` code must check that it is correct if > 0.
-	eligible, proposerRecord, err := payoutEligible(rnd, p.Proposer, ledger, cparams)
+	eligible, proposerRecord, err := payoutEligible(rnd, p.Proposer(), ledger, cparams)
 	if err != nil {
 		return fmt.Errorf("failed to determine incentive eligibility %w", err)
 	}
-	if !eligible && p.BlockHeader.ProposerPayout.Raw > 0 {
+	if !eligible && p.ProposerPayout().Raw > 0 {
 		return fmt.Errorf("proposer payout (%d) for ineligible Proposer %v",
-			p.BlockHeader.ProposerPayout.Raw, p.Proposer)
+			p.ProposerPayout().Raw, p.Proposer)
 	}
 
 	var alpha crypto.Digest

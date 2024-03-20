@@ -299,8 +299,18 @@ func (block Block) GenesisHash() crypto.Digest {
 }
 
 // Seed returns the Block's random seed.
-func (block *Block) Seed() committee.Seed {
+func (block Block) Seed() committee.Seed {
 	return block.BlockHeader.Seed
+}
+
+// Proposer returns the Block's proposer.
+func (block Block) Proposer() basics.Address {
+	return block.BlockHeader.Proposer
+}
+
+// ProposerPayout returns the Block's proposer payout.
+func (block Block) ProposerPayout() basics.MicroAlgos {
+	return block.BlockHeader.ProposerPayout
 }
 
 // NextRewardsState computes the RewardsState of the subsequent round

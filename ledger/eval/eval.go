@@ -1328,7 +1328,7 @@ func (eval *BlockEvaluator) endOfBlock() error {
 			// can cancel this payment by zero'ing the ProposerPayout if the
 			// proposer is found to be ineligible. See WithProposal().
 			eval.block.FeesCollected = eval.state.feesCollected
-			eval.block.ProposerPayout, err = eval.proposerPayout()
+			eval.block.BlockHeader.ProposerPayout, err = eval.proposerPayout()
 			if err != nil {
 				return err
 			}
@@ -1395,12 +1395,12 @@ func (eval *BlockEvaluator) endOfBlock() error {
 		// even if Mining is not enabled (and unset any time).  So make sure
 		// it's set iff it should be.
 		if eval.proto.Mining().Enabled {
-			if eval.block.Proposer.IsZero() && !eval.generate { // if generating, proposer is set later by agreement
+			if eval.block.Proposer().IsZero() && !eval.generate { // if generating, proposer is set later by agreement
 				return fmt.Errorf("proposer missing when mining enabled")
 			}
 		} else {
-			if !eval.block.Proposer.IsZero() {
-				return fmt.Errorf("proposer %v present when mining disabled", eval.block.Proposer)
+			if !eval.block.Proposer().IsZero() {
+				return fmt.Errorf("proposer %v present when mining disabled", eval.block.Proposer())
 			}
 		}
 
@@ -1415,8 +1415,8 @@ func (eval *BlockEvaluator) endOfBlock() error {
 			}
 			maxPayout = payout.Raw
 		}
-		if eval.block.ProposerPayout.Raw > maxPayout {
-			return fmt.Errorf("proposal wants %d payout, %d is allowed", eval.block.ProposerPayout.Raw, maxPayout)
+		if eval.block.ProposerPayout().Raw > maxPayout {
+			return fmt.Errorf("proposal wants %d payout, %d is allowed", eval.block.ProposerPayout().Raw, maxPayout)
 		}
 
 		expectedVoters, expectedVotersWeight, err2 := eval.stateProofVotersAndTotal()
