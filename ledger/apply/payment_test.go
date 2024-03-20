@@ -135,18 +135,18 @@ func TestCheckSpender(t *testing.T) {
 	}
 
 	tx.Sender = basics.Address(feeSink)
-	require.Error(t, checkSpender(tx.PaymentTxnFields, tx.Header, spec, mockBalV0.ConsensusParams()))
+	require.Error(t, tx.PaymentTxnFields.CheckSpender(tx.Header, spec, mockBalV0.ConsensusParams()))
 
 	poolAddr := basics.Address(poolAddr)
 	tx.Receiver = poolAddr
-	require.NoError(t, checkSpender(tx.PaymentTxnFields, tx.Header, spec, mockBalV0.ConsensusParams()))
+	require.NoError(t, tx.PaymentTxnFields.CheckSpender(tx.Header, spec, mockBalV0.ConsensusParams()))
 
 	tx.CloseRemainderTo = poolAddr
-	require.Error(t, checkSpender(tx.PaymentTxnFields, tx.Header, spec, mockBalV0.ConsensusParams()))
-	require.Error(t, checkSpender(tx.PaymentTxnFields, tx.Header, spec, mockBalV7.ConsensusParams()))
+	require.Error(t, tx.PaymentTxnFields.CheckSpender(tx.Header, spec, mockBalV0.ConsensusParams()))
+	require.Error(t, tx.PaymentTxnFields.CheckSpender(tx.Header, spec, mockBalV7.ConsensusParams()))
 
 	tx.Sender = src
-	require.NoError(t, checkSpender(tx.PaymentTxnFields, tx.Header, spec, mockBalV7.ConsensusParams()))
+	require.NoError(t, tx.PaymentTxnFields.CheckSpender(tx.Header, spec, mockBalV7.ConsensusParams()))
 }
 
 func TestPaymentValidation(t *testing.T) {

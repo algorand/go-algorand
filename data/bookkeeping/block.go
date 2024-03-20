@@ -532,7 +532,8 @@ func computeBonus(current basics.Round, prevBonus basics.MicroAlgos, curPlan bon
 	// Set the amount if it's non-zero...
 	if !curPlan.baseAmount.IsZero() {
 		upgrading := curPlan != prevPlan || current == 1
-		// and the time has come. When the baseRound arrives, or at upgrade time is already passed.
+		// The time has come if the baseRound arrives, or at upgrade time if
+		// baseRound has already passed.
 		if current == curPlan.baseRound || (upgrading && current > curPlan.baseRound) {
 			return curPlan.baseAmount
 		}

@@ -66,7 +66,8 @@ func Keyreg(keyreg transactions.KeyregTxnFields, header transactions.Header, bal
 		record.VoteFirstValid = 0
 		record.VoteLastValid = 0
 		record.VoteKeyDilution = 0
-		record.IncentiveEligible = false
+		// IncentiveEligible is not reset, because the account has gracefully
+		// gone offline. They should be able to get back online without paying again.
 	} else {
 		if params.EnableKeyregCoherencyCheck {
 			if keyreg.VoteLast <= round {
