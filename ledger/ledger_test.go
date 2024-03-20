@@ -109,7 +109,7 @@ func endOfBlock(blk *bookkeeping.Block) error {
 			blk.FeesCollected.Raw += txn.Txn.Fee.Raw
 		}
 		// blk.ProposerPayout is allowed to be zero, so don't reproduce the calc here.
-		blk.Proposer = basics.Address{0x01} // Must be set to _something_.
+		blk.BlockHeader.Proposer = basics.Address{0x01} // Must be set to _something_.
 	}
 	var err error
 	blk.TxnCommitments, err = blk.PaysetCommit()

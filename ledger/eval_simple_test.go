@@ -270,7 +270,7 @@ func TestMiningFees(t *testing.T) {
 			// new fields are in the header
 			require.EqualValues(t, 2000, vb.Block().FeesCollected.Raw)
 			require.EqualValues(t, bonus1, vb.Block().Bonus.Raw)
-			require.EqualValues(t, bonus1+1_500, vb.Block().ProposerPayout.Raw)
+			require.EqualValues(t, bonus1+1_500, vb.Block().ProposerPayout().Raw)
 		} else {
 			require.False(t, dl.generator.GenesisProto().Mining().Enabled)
 			require.Zero(t, dl.generator.GenesisProto().Mining().Percent) // version sanity check
