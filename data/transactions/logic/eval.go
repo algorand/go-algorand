@@ -5701,17 +5701,16 @@ func opBlock(cx *EvalContext) error {
 	case BlkSeed:
 		cx.Stack[last].Bytes = hdr.Seed[:]
 	case BlkTimestamp:
-		cx.Stack[last].Bytes = nil
 		if hdr.TimeStamp < 0 {
 			return fmt.Errorf("block(%d) timestamp %d < 0", round, hdr.TimeStamp)
 		}
-		cx.Stack[last].Uint = uint64(hdr.TimeStamp)
+		cx.Stack[last] = stackValue{Uint: uint64(hdr.TimeStamp)}
 	case BlkProposer:
 		cx.Stack[last].Bytes = hdr.Proposer[:]
 	case BlkFeesCollected:
-		cx.Stack[last].Uint = hdr.FeesCollected.Raw
+		cx.Stack[last] = stackValue{Uint: hdr.FeesCollected.Raw}
 	case BlkBonus:
-		cx.Stack[last].Uint = hdr.Bonus.Raw
+		cx.Stack[last] = stackValue{Uint: hdr.Bonus.Raw}
 	default:
 		return fmt.Errorf("invalid block field %s", fs.field)
 	}
