@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -36,7 +36,6 @@ import (
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
@@ -103,7 +102,6 @@ type BlockService struct {
 	enableService           bool
 	enableServiceOverGossip bool
 	fallbackEndpoints       fallbackEndpoints
-	enableArchiverFallback  bool
 	log                     logging.Logger
 	closeWaitGroup          sync.WaitGroup
 	mu                      deadlock.Mutex
@@ -144,7 +142,6 @@ func MakeBlockService(log logging.Logger, config config.Local, ledger LedgerForB
 		enableService:           config.EnableBlockService,
 		enableServiceOverGossip: config.EnableGossipBlockService,
 		fallbackEndpoints:       makeFallbackEndpoints(log, config.BlockServiceCustomFallbackEndpoints),
-		enableArchiverFallback:  config.EnableBlockServiceFallbackToArchiver,
 		log:                     log,
 		memoryCap:               config.BlockServiceMemCap,
 	}
@@ -384,13 +381,10 @@ func (bs *BlockService) handleCatchupReq(ctx context.Context, reqMsg network.Inc
 	return
 }
 
-// redirectRequest redirects the request to the next round robin fallback endpoing if available, otherwise,
-// if EnableBlockServiceFallbackToArchiver is enabled, redirects to a random archiver.
+// redirectRequest redirects the request to the next round robin fallback endpoint if available
 func (bs *BlockService) redirectRequest(round uint64, response http.ResponseWriter, request *http.Request) (ok bool) {
 	peerAddress := bs.getNextCustomFallbackEndpoint()
-	if peerAddress == "" && bs.enableArchiverFallback {
-		peerAddress = bs.getRandomArchiver()
-	}
+
 	if peerAddress == "" {
 		return false
 	}
@@ -411,27 +405,11 @@ func (bs *BlockService) getNextCustomFallbackEndpoint() (endpointAddress string)
 	if len(bs.fallbackEndpoints.endpoints) == 0 {
 		return
 	}
+
+	bs.mu.Lock()
+	defer bs.mu.Unlock()
 	endpointAddress = bs.fallbackEndpoints.endpoints[bs.fallbackEndpoints.lastUsed]
 	bs.fallbackEndpoints.lastUsed = (bs.fallbackEndpoints.lastUsed + 1) % len(bs.fallbackEndpoints.endpoints)
-	return
-}
-
-// getRandomArchiver returns a random archiver address
-func (bs *BlockService) getRandomArchiver() (endpointAddress string) {
-	peers := bs.net.GetPeers(network.PeersPhonebookArchivers)
-	httpPeers := make([]network.HTTPPeer, 0, len(peers))
-
-	for _, peer := range peers {
-		httpPeer, validHTTPPeer := peer.(network.HTTPPeer)
-		if validHTTPPeer {
-			httpPeers = append(httpPeers, httpPeer)
-		}
-	}
-	if len(httpPeers) == 0 {
-		return
-	}
-	randIndex := crypto.RandUint64() % uint64(len(httpPeers))
-	endpointAddress = httpPeers[randIndex].GetAddress()
 	return
 }
 

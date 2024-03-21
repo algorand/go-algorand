@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -346,11 +346,11 @@ func TestPhonebookRoles(t *testing.T) {
 
 	ph := MakePhonebook(1, 1).(*phonebookImpl)
 	ph.ReplacePeerList(relaysSet, "default", PhoneBookEntryRelayRole)
-	ph.ReplacePeerList(archiverSet, "default", PhoneBookEntryArchiverRole)
+	ph.ReplacePeerList(archiverSet, "default", PhoneBookEntryArchivalRole)
 	require.Equal(t, len(relaysSet)+len(archiverSet), len(ph.data))
 	require.Equal(t, len(relaysSet)+len(archiverSet), ph.Length())
 
-	for _, role := range []PhoneBookEntryRoles{PhoneBookEntryRelayRole, PhoneBookEntryArchiverRole} {
+	for _, role := range []PhoneBookEntryRoles{PhoneBookEntryRelayRole, PhoneBookEntryArchivalRole} {
 		for k := 0; k < 100; k++ {
 			for l := 0; l < 3; l++ {
 				entries := ph.GetAddresses(l, role)
@@ -358,7 +358,7 @@ func TestPhonebookRoles(t *testing.T) {
 					for _, entry := range entries {
 						require.Contains(t, entry, "relay")
 					}
-				} else if role == PhoneBookEntryArchiverRole {
+				} else if role == PhoneBookEntryArchivalRole {
 					for _, entry := range entries {
 						require.Contains(t, entry, "archiver")
 					}

@@ -30,8 +30,6 @@ agents:
     dockerFilePath: docker/build/aptly.Dockerfile
     image: algorand/aptly
     version: scripts/configure_dev-deps.sh
-    buildArgs:
-      - GOLANG_VERSION=`./scripts/get_golang_version.sh`
     env:
       - AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
       - AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
@@ -42,6 +40,8 @@ agents:
     volumes:
       - $XDG_RUNTIME_DIR/gnupg/S.gpg-agent:/root/.gnupg/S.gpg-agent
       - $HOME/.gnupg/pubring.kbx:/root/.gnupg/pubring.kbx
+      - $HOME/.gnupg/secring.gpg:/root/.gnupg/secring.gpg
+      - $HOME/.aptly:/root/.aptly
     workDir: $HOME/projects/go-algorand
 
   - name: rpm
@@ -56,14 +56,12 @@ agents:
       - NETWORK=$NETWORK
       - NO_DEPLOY=$NO_DEPLOY
       - PACKAGES_DIR=$PACKAGES_DIR
-      - S3_SOURCE=$S3_SOURCE
       - STAGING=$STAGING
       - VERSION=$VERSION
     volumes:
       - $XDG_RUNTIME_DIR/gnupg/S.gpg-agent:/root/.gnupg/S.gpg-agent
       - $HOME/.gnupg/pubring.kbx:/root/.gnupg/pubring.kbx
     workDir: $HOME/projects/go-algorand
-
 
 tasks:
   - task: docker.Make

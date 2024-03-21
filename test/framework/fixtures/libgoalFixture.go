@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -120,8 +120,10 @@ func (f *LibGoalFixture) nodeExitWithError(nc *nodecontrol.NodeController, err e
 		return
 	}
 
-	f.t.Logf("Node at %s has terminated with an error: %v. Dumping logs...", nc.GetDataDir(), err)
-	f.dumpLogs(filepath.Join(nc.GetDataDir(), "node.log"))
+	defer func() {
+		f.t.Logf("Node at %s has terminated with an error: %v. Dumping logs...", nc.GetDataDir(), err)
+		f.dumpLogs(filepath.Join(nc.GetDataDir(), "node.log"))
+	}()
 
 	exitError, ok := err.(*exec.ExitError)
 	if !ok {
@@ -317,7 +319,9 @@ func (f *LibGoalFixture) ShutdownImpl(preserveData bool) {
 	f.NC.StopKMD()
 	if preserveData {
 		f.network.Stop(f.binDir)
-		f.dumpLogs(filepath.Join(f.PrimaryDataDir(), "node.log"))
+		for _, relayDir := range f.RelayDataDirs() {
+			f.dumpLogs(filepath.Join(relayDir, "node.log"))
+		}
 		for _, nodeDir := range f.NodeDataDirs() {
 			f.dumpLogs(filepath.Join(nodeDir, "node.log"))
 		}
@@ -363,6 +367,11 @@ func (f *LibGoalFixture) failOnError(err error, message string) {
 // PrimaryDataDir returns the data directory for the PrimaryNode for the network
 func (f *LibGoalFixture) PrimaryDataDir() string {
 	return f.network.PrimaryDataDir()
+}
+
+// RelayDataDirs returns the relays data directories for the network (including the primary relay)
+func (f *LibGoalFixture) RelayDataDirs() []string {
+	return f.network.RelayDataDirs()
 }
 
 // NodeDataDirs returns the (non-Primary) data directories for the network

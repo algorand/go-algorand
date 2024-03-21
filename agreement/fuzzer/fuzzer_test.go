@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -258,6 +258,13 @@ func (n *Fuzzer) Start() {
 	for _, f := range n.facades {
 		// wait until no activity.
 		f.WaitForEventsQueue(true)
+	}
+}
+
+// DumpQueues dumps the queues of all the nodes.
+func (n *Fuzzer) DumpQueues() {
+	for _, f := range n.agreements {
+		f.DumpDemuxQueues(os.Stderr)
 	}
 }
 

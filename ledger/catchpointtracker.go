@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -151,8 +151,8 @@ type catchpointTracker struct {
 	// catchpoint files even before the protocol upgrade took place.
 	forceCatchpointFileWriting bool
 
-	// catchpointsMu protects roundDigest, reenableCatchpointsRound, cachedDBRound and
-	// `lastCatchpointLabel`.
+	// catchpointsMu protects roundDigest, reenableCatchpointsRound, cachedDBRound,
+	// lastCatchpointLabel and balancesTrie.
 	catchpointsMu deadlock.RWMutex
 
 	// cachedDBRound is always exactly tracker DB round (and therefore, accountsRound()),
@@ -555,16 +555,19 @@ func (ct *catchpointTracker) commitRound(ctx context.Context, tx trackerdb.Trans
 		}
 
 		var trie *merkletrie.Trie
+		ct.catchpointsMu.Lock()
 		if ct.balancesTrie == nil {
 			trie, err = merkletrie.MakeTrie(mc, trackerdb.TrieMemoryConfig)
 			if err != nil {
 				ct.log.Warnf("unable to create merkle trie during committedUpTo: %v", err)
+				ct.catchpointsMu.Unlock()
 				return err
 			}
 			ct.balancesTrie = trie
 		} else {
 			ct.balancesTrie.SetCommitter(mc)
 		}
+		ct.catchpointsMu.Unlock()
 		treeTargetRound = dbRound + basics.Round(offset)
 	}
 
@@ -610,6 +613,7 @@ func (ct *catchpointTracker) commitRound(ctx context.Context, tx trackerdb.Trans
 }
 
 func (ct *catchpointTracker) postCommit(ctx context.Context, dcc *deferredCommitContext) {
+	ct.catchpointsMu.Lock()
 	if ct.balancesTrie != nil {
 		_, err := ct.balancesTrie.Evict(false)
 		if err != nil {
@@ -617,7 +621,6 @@ func (ct *catchpointTracker) postCommit(ctx context.Context, dcc *deferredCommit
 		}
 	}
 
-	ct.catchpointsMu.Lock()
 	ct.roundDigest = ct.roundDigest[dcc.offset:]
 	ct.consensusVersion = ct.consensusVersion[dcc.offset:]
 	ct.cachedDBRound = dcc.newBase()
@@ -815,7 +818,6 @@ func (ct *catchpointTracker) createCatchpoint(ctx context.Context, accountsRound
 	}
 
 	relCatchpointFilePath := filepath.Join(trackerdb.CatchpointDirName, trackerdb.MakeCatchpointFilePath(round))
-
 	absCatchpointFilePath := filepath.Join(ct.dbDirectory, relCatchpointFilePath)
 
 	err = os.MkdirAll(filepath.Dir(absCatchpointFilePath), 0700)
@@ -926,7 +928,7 @@ func (ct *catchpointTracker) pruneFirstStageRecordsData(ctx context.Context, max
 	for _, round := range rounds {
 		relCatchpointDataFilePath :=
 			filepath.Join(trackerdb.CatchpointDirName, makeCatchpointDataFilePath(round))
-		err = trackerdb.RemoveSingleCatchpointFileFromDisk(ct.dbDirectory, relCatchpointDataFilePath)
+		err = trackerdb.RemoveSingleCatchpointFileFromDisk(ct.tmpDir, relCatchpointDataFilePath)
 		if err != nil {
 			return err
 		}
@@ -986,7 +988,9 @@ func (ct *catchpointTracker) handleCommitError(dcc *deferredCommitContext) {
 	// Specifically, modifications to the trie happen through accountsUpdateBalances,
 	// which happens before commit to disk. Errors in this tracker, subsequent trackers, or the commit to disk may cause the trie cache to be incorrect,
 	// affecting the perceived root on subsequent rounds
+	ct.catchpointsMu.Lock()
 	ct.balancesTrie = nil
+	ct.catchpointsMu.Unlock()
 	ct.cancelWrite(dcc)
 }
 
@@ -1276,9 +1280,11 @@ func (ct *catchpointTracker) recordFirstStageInfo(ctx context.Context, tx tracke
 	if err != nil {
 		return err
 	}
+	ct.catchpointsMu.Lock()
 	if ct.balancesTrie == nil {
 		trie, trieErr := merkletrie.MakeTrie(mc, trackerdb.TrieMemoryConfig)
 		if trieErr != nil {
+			ct.catchpointsMu.Unlock()
 			return trieErr
 		}
 		ct.balancesTrie = trie
@@ -1288,8 +1294,10 @@ func (ct *catchpointTracker) recordFirstStageInfo(ctx context.Context, tx tracke
 
 	trieBalancesHash, err := ct.balancesTrie.RootHash()
 	if err != nil {
+		ct.catchpointsMu.Unlock()
 		return err
 	}
+	ct.catchpointsMu.Unlock()
 
 	cw, err := tx.MakeCatchpointWriter()
 	if err != nil {

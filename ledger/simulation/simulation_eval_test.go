@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -6813,7 +6813,7 @@ int 1`,
 			input: simulation.Request{
 				TxnGroups: [][]transactions.SignedTxn{txgroup},
 			},
-			expectedError: "logic eval error: this transaction should be issued by the manager",
+			expectedError: "this transaction should be issued by the manager",
 			expected: simulation.Result{
 				Version:   simulation.ResultLatestVersion,
 				LastRound: env.TxnInfo.LatestRound(),

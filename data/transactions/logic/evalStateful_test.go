@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -422,7 +422,7 @@ func TestBalance(t *testing.T) {
 }
 
 func testApps(t *testing.T, programs []string, txgroup []transactions.SignedTxn, opt protoOpt, ledger *Ledger,
-	expected ...expect) *EvalParams {
+	expected ...expect) (*EvalParams, error) {
 	t.Helper()
 	proto := makeTestProto(opt)
 	codes := make([][]byte, len(programs))
@@ -447,11 +447,10 @@ func testApps(t *testing.T, programs []string, txgroup []transactions.SignedTxn,
 	ledger.Reset()
 	ep.Ledger = ledger
 	ep.SigLedger = ledger
-	testAppsBytes(t, codes, ep, expected...)
-	return ep
+	return ep, testAppsBytes(t, codes, ep, expected...)
 }
 
-func testAppsBytes(t *testing.T, programs [][]byte, ep *EvalParams, expected ...expect) {
+func testAppsBytes(t *testing.T, programs [][]byte, ep *EvalParams, expected ...expect) error {
 	t.Helper()
 	require.LessOrEqual(t, len(programs), len(ep.TxnGroup))
 	for i := range ep.TxnGroup {
@@ -465,20 +464,21 @@ func testAppsBytes(t *testing.T, programs [][]byte, ep *EvalParams, expected ...
 				appID = basics.AppIndex(888)
 			}
 			if len(expected) > 0 && expected[0].l == i {
-				testAppFull(t, program, i, appID, ep, expected[0].s)
-				break // Stop after first failure
-			} else {
-				testAppFull(t, program, i, appID, ep)
+				// Stop after first failure
+				_, err := testAppFull(t, program, i, appID, ep, expected[0].s)
+				return err
 			}
+			testAppFull(t, program, i, appID, ep)
 		} else {
 			if len(expected) > 0 && expected[0].l == i {
 				require.Failf(t, "testAppsBytes used incorrectly.", "No error can happen in txn %d. Not an app.", i)
 			}
 		}
 	}
+	return nil
 }
 
-func testApp(t *testing.T, program string, ep *EvalParams, problems ...string) transactions.EvalDelta {
+func testApp(t *testing.T, program string, ep *EvalParams, problems ...string) (transactions.EvalDelta, error) {
 	t.Helper()
 	if ep == nil {
 		ep = defaultAppParamsWithVersion(LogicVersion)
@@ -487,7 +487,7 @@ func testApp(t *testing.T, program string, ep *EvalParams, problems ...string) t
 	return testAppBytes(t, ops.Program, ep, problems...)
 }
 
-func testAppBytes(t *testing.T, program []byte, ep *EvalParams, problems ...string) transactions.EvalDelta {
+func testAppBytes(t *testing.T, program []byte, ep *EvalParams, problems ...string) (transactions.EvalDelta, error) {
 	t.Helper()
 	if ep == nil {
 		ep = defaultAppParamsWithVersion(LogicVersion)
@@ -505,7 +505,7 @@ func testAppBytes(t *testing.T, program []byte, ep *EvalParams, problems ...stri
 // ep.reset() is in testAppBytes, not here. This means that ADs in the ep are
 // not cleared, so repeated use of a single ep is probably not a good idea
 // unless you are *intending* to see how ep is modified as you go.
-func testAppFull(t *testing.T, program []byte, gi int, aid basics.AppIndex, ep *EvalParams, problems ...string) transactions.EvalDelta {
+func testAppFull(t *testing.T, program []byte, gi int, aid basics.AppIndex, ep *EvalParams, problems ...string) (transactions.EvalDelta, error) {
 	t.Helper()
 
 	var checkProblem string
@@ -545,7 +545,7 @@ func testAppFull(t *testing.T, program []byte, gi int, aid basics.AppIndex, ep *
 	if evalProblem == "" {
 		require.NoError(t, err, "Eval\n%sExpected: PASS", ep.Trace)
 		require.True(t, pass, "Eval\n%sExpected: PASS", ep.Trace)
-		return delta
+		return delta, nil
 	}
 
 	// There is an evalProblem to check. REJECT is special and only means that
@@ -555,7 +555,7 @@ func testAppFull(t *testing.T, program []byte, gi int, aid basics.AppIndex, ep *
 	} else {
 		require.ErrorContains(t, err, evalProblem, "Wrong error in EvalContract %v", ep.Trace)
 	}
-	return delta
+	return delta, err
 }
 
 // testLogicRange allows for running tests against a range of avm
@@ -817,6 +817,122 @@ int 0
 
 	ledger.NewLocal(now.TxnGroup[0].Txn.Sender, 100, string(protocol.PaymentTx), basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"})
 	testApp(t, text, now)
+}
+
+// TestAppErrorDetails confirms that the error returned from app failures
+// has the right structured information.
+func TestAppErrorDetails(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	badsource := notrack(`
+byte 0x04040004; log			// log
+int 5; store 10					// store an int
+byte 0x01020300; store 15		// store a bytes
+
+int 100; byte 0x0201; == // types mismatch so this will fail
+`)
+	_, err := testApp(t, badsource, nil, "cannot compare")
+	attrs := basics.Attributes(err)
+	zeros := [256]int{}
+	scratch := convertSlice(zeros[:], func(i int) any { return uint64(i) })
+	scratch[10] = uint64(5)
+	scratch[15] = []byte{0x01, 0x02, 0x03, 0x00}
+	require.Equal(t, map[string]any{
+		"pc":          26,
+		"group-index": 0,
+		"app-index":   basics.AppIndex(888),
+		"eval-states": []evalState{
+			{
+				Logs:    [][]byte{{0x04, 0x04, 0x00, 0x04}},
+				Stack:   []any{uint64(100), []byte{02, 01}},
+				Scratch: scratch[:16],
+			},
+		},
+	}, attrs)
+
+	goodsource := `
+byte 0x04040104; log			// log
+byte 0x04040204; log			// log
+
+int 4; store 2			// store an int
+byte "jj"; store 3		// store a bytes
+int 1
+`
+	gscratch := convertSlice(zeros[:], func(i int) any { return uint64(i) })
+	gscratch[2] = uint64(4)
+	gscratch[3] = []byte("jj")
+
+	_, err = testApps(t, []string{goodsource, badsource}, nil, nil, nil, exp(1, "cannot compare"))
+	attrs = basics.Attributes(err)
+	require.Equal(t, map[string]any{
+		"pc":          26,
+		"group-index": 1,
+		"app-index":   basics.AppIndex(888),
+		"eval-states": []evalState{
+			{
+				Logs: [][]byte{
+					{0x04, 0x04, 0x01, 0x04},
+					{0x04, 0x04, 0x02, 0x04},
+				},
+				Scratch: gscratch[:4],
+			},
+			{
+				Logs:    [][]byte{{0x04, 0x04, 0x00, 0x04}},
+				Stack:   []any{uint64(100), []byte{02, 01}},
+				Scratch: scratch[:16],
+			},
+		},
+	}, attrs)
+
+	_, _, ledger := makeSampleEnv()
+	ledger.NewAccount(appAddr(888), 100_000)
+	bad := testProg(t, badsource, 5)
+	innerFailSource := `
+int 777
+itxn_begin
+int appl; itxn_field TypeEnum
+byte 0x` + hex.EncodeToString(bad.Program) + ` // run the bad program by trying to create it
+itxn_field ApprovalProgram
+
+byte 0x05
+itxn_field ClearStateProgram
+
+itxn_submit
+`
+	_, err = testApps(t, []string{goodsource, innerFailSource}, nil, nil, ledger, exp(1, "inner tx 0 failed"))
+	attrs = basics.Attributes(err)
+	require.Equal(t, map[string]any{
+		"pc":          45,
+		"group-index": 1,
+		"app-index":   basics.AppIndex(888),
+		"eval-states": []evalState{
+			{
+				Logs: [][]byte{
+					{0x04, 0x04, 0x01, 0x04},
+					{0x04, 0x04, 0x02, 0x04},
+				},
+				Scratch: gscratch[:4],
+			},
+			{
+				Stack: []any{uint64(777)},
+			},
+		},
+		"inner-msg": "logic eval error: cannot compare (uint64 to []byte). Details: app=5000, pc=26, opcodes=pushint 100; pushbytes 0x0201 // 0x0201; ==",
+		"inner-attrs": map[string]any{
+			"pc":          26,
+			"group-index": 0,
+			"app-index":   basics.AppIndex(firstTestID),
+			"eval-states": []evalState{
+				{
+					Logs:    [][]byte{{0x04, 0x04, 0x00, 0x04}},
+					Stack:   []any{uint64(100), []byte{02, 01}},
+					Scratch: scratch[:16],
+				},
+			},
+		},
+	}, attrs)
+
 }
 
 func TestAppReadGlobalState(t *testing.T) {
@@ -1493,7 +1609,7 @@ func TestGlobalNonDelete(t *testing.T) {
 	testLogicRange(t, 2, 0, func(t *testing.T, ep *EvalParams, txn *transactions.Transaction, ledger *Ledger) {
 		source := `byte "none"; app_global_del; int 1`
 		ledger.NewApp(txn.Sender, 888, makeApp(0, 0, 1, 0))
-		delta := testApp(t, source, ep)
+		delta, _ := testApp(t, source, ep)
 		require.Empty(t, delta.GlobalDelta)
 		require.Empty(t, delta.LocalDeltas)
 	})
@@ -1509,7 +1625,7 @@ func TestLocalNonDelete(t *testing.T) {
 		ledger.NewAccount(txn.Sender, 100000)
 		ledger.NewApp(txn.Sender, 888, makeApp(0, 0, 1, 0))
 		ledger.NewLocals(txn.Sender, 888)
-		delta := testApp(t, source, ep)
+		delta, _ := testApp(t, source, ep)
 		require.Empty(t, delta.GlobalDelta)
 		require.Empty(t, delta.LocalDeltas)
 	})
@@ -1660,7 +1776,7 @@ int 0x77
 		if ep.Proto.LogicSigVersion < directRefEnabledVersion {
 			source = strings.ReplaceAll(source, "txn Sender", "int 0")
 		}
-		delta := testApp(t, source, ep)
+		delta, _ := testApp(t, source, ep)
 		require.Empty(t, delta.GlobalDelta)
 		require.Len(t, delta.LocalDeltas, 1)
 
@@ -1698,7 +1814,7 @@ int 0x77
 		algoValue := basics.TealValue{Type: basics.TealUintType, Uint: 0x77}
 		ledger.NewLocal(txn.Sender, 100, "ALGO", algoValue)
 
-		delta = testApp(t, source, ep)
+		delta, _ = testApp(t, source, ep)
 		require.Empty(t, delta.GlobalDelta)
 		require.Empty(t, delta.LocalDeltas)
 
@@ -1730,7 +1846,7 @@ exist2:
 		if ep.Proto.LogicSigVersion < directRefEnabledVersion {
 			source = strings.ReplaceAll(source, "txn Sender", "int 0")
 		}
-		delta = testApp(t, source, ep)
+		delta, _ = testApp(t, source, ep)
 		require.Empty(t, delta.GlobalDelta)
 		require.Empty(t, delta.LocalDeltas)
 
@@ -1748,7 +1864,7 @@ int 1
 		if ep.Proto.LogicSigVersion < directRefEnabledVersion {
 			source = strings.ReplaceAll(source, "txn Sender", "int 0")
 		}
-		delta = testApp(t, source, ep)
+		delta, _ = testApp(t, source, ep)
 		require.Empty(t, delta.GlobalDelta)
 		require.Len(t, delta.LocalDeltas, 1)
 		require.Len(t, delta.LocalDeltas[0], 1)
@@ -1778,7 +1894,7 @@ int 0x78
 		if ep.Proto.LogicSigVersion < directRefEnabledVersion {
 			source = strings.ReplaceAll(source, "txn Sender", "int 0")
 		}
-		delta = testApp(t, source, ep)
+		delta, _ = testApp(t, source, ep)
 		require.Empty(t, delta.GlobalDelta)
 		require.Len(t, delta.LocalDeltas, 1)
 		require.Len(t, delta.LocalDeltas[0], 1)
@@ -1806,7 +1922,7 @@ app_local_put
 		if ep.Proto.LogicSigVersion < directRefEnabledVersion {
 			source = strings.ReplaceAll(source, "txn Sender", "int 0")
 		}
-		delta = testApp(t, source, ep)
+		delta, _ = testApp(t, source, ep)
 		require.Empty(t, delta.GlobalDelta)
 		require.Len(t, delta.LocalDeltas, 1)
 		require.Len(t, delta.LocalDeltas[0], 1)
@@ -1844,7 +1960,7 @@ int 1
 			source = strings.ReplaceAll(source, "txn Sender", "int 0")
 			source = strings.ReplaceAll(source, "txn Accounts 1", "int 1")
 		}
-		delta = testApp(t, source, ep)
+		delta, _ = testApp(t, source, ep)
 		require.Empty(t, delta.GlobalDelta)
 		require.Len(t, delta.LocalDeltas, 2)
 		require.Len(t, delta.LocalDeltas[0], 2)
@@ -1875,12 +1991,12 @@ func TestAppLocalGlobalErrorCases(t *testing.T) {
 		if ep.Proto.LogicSigVersion < directRefEnabledVersion {
 			sender = "int 0;"
 		}
-		testApp(t, fmt.Sprintf(`byte "%v"; int 1;`+g+`int 1`, strings.Repeat("v", ep.Proto.MaxAppKeyLen+1)), ep, "key too long")
+		testApp(t, notrack(fmt.Sprintf(`byte "%v"; int 1;`+g+`int 1`, strings.Repeat("v", ep.Proto.MaxAppKeyLen+1))), ep, "key too long")
 
 		testApp(t, fmt.Sprintf(`byte "%v"; int 1;`+g+`int 1`, strings.Repeat("v", ep.Proto.MaxAppKeyLen)), ep)
 
 		ledger.NewLocals(tx.Sender, 888)
-		testApp(t, fmt.Sprintf(sender+`byte "%v"; int 1;`+l+`int 1`, strings.Repeat("v", ep.Proto.MaxAppKeyLen+1)), ep, "key too long")
+		testApp(t, notrack(fmt.Sprintf(sender+`byte "%v"; int 1;`+l+`int 1`, strings.Repeat("v", ep.Proto.MaxAppKeyLen+1))), ep, "key too long")
 
 		testApp(t, fmt.Sprintf(sender+`byte "%v"; int 1;`+l+`int 1`, strings.Repeat("v", ep.Proto.MaxAppKeyLen)), ep)
 
@@ -1934,7 +2050,7 @@ int 0x77
 
 			ledger.Reset()
 
-			delta := testAppBytes(t, ops.Program, ep)
+			delta, _ := testAppBytes(t, ops.Program, ep)
 			require.Empty(t, delta.LocalDeltas)
 		}
 	})
@@ -2023,7 +2139,7 @@ int 0x77
 				}
 				source = strings.ReplaceAll(source, "THISAPP", "int 100")
 			}
-			delta := testApp(t, source, ep)
+			delta, _ := testApp(t, source, ep)
 
 			require.Len(t, delta.GlobalDelta, 2)
 			require.Empty(t, delta.LocalDeltas)
@@ -2052,7 +2168,7 @@ int 0x77
 			algoValue := basics.TealValue{Type: basics.TealUintType, Uint: 0x77}
 			ledger.NewGlobal(100, "ALGO", algoValue)
 
-			delta = testApp(t, source, ep)
+			delta, _ = testApp(t, source, ep)
 			require.Empty(t, delta.GlobalDelta)
 			require.Empty(t, delta.LocalDeltas)
 
@@ -2076,7 +2192,7 @@ int 0x77
 			ledger.NoGlobal(100, "ALGOA")
 			ledger.NewGlobal(100, "ALGO", algoValue)
 
-			delta = testApp(t, source, ep)
+			delta, _ = testApp(t, source, ep)
 			require.Empty(t, delta.GlobalDelta)
 			require.Empty(t, delta.LocalDeltas)
 
@@ -2116,7 +2232,7 @@ byte "ALGO"
 			ledger.NoGlobal(100, "ALGOA")
 			ledger.NewGlobal(100, "ALGO", algoValue)
 
-			delta = testApp(t, source, ep)
+			delta, _ = testApp(t, source, ep)
 
 			require.Len(t, delta.GlobalDelta, 2)
 			require.Empty(t, delta.LocalDeltas)
@@ -2172,7 +2288,7 @@ byte "myval"
 			ledger.NewAccount(txn.Sender, 1)
 			ledger.NewApp(txn.Sender, 100, basics.AppParams{})
 
-			delta := testApp(t, source, ep, "no app 101")
+			delta, _ := testApp(t, source, ep, "no app 101")
 			require.Empty(t, delta.GlobalDelta)
 			require.Empty(t, delta.LocalDeltas)
 
@@ -2181,7 +2297,7 @@ byte "myval"
 			algoValue := basics.TealValue{Type: basics.TealBytesType, Bytes: "myval"}
 			ledger.NewGlobal(101, "mykey", algoValue)
 
-			delta = testApp(t, source, ep)
+			delta, _ = testApp(t, source, ep)
 			require.Empty(t, delta.GlobalDelta)
 			require.Empty(t, delta.LocalDeltas)
 		})
@@ -2214,7 +2330,7 @@ int 7
 		ledger.NewAccount(txn.Sender, 1)
 		ledger.NewApp(txn.Sender, 100, basics.AppParams{})
 
-		delta := testApp(t, source, ep)
+		delta, _ := testApp(t, source, ep)
 		require.Empty(t, delta.LocalDeltas)
 	})
 }
@@ -2256,7 +2372,7 @@ int 1
 			txn.ApplicationID = 100
 			ledger.NewApp(txn.Sender, 100, basics.AppParams{})
 
-			delta := testApp(t, source, ep)
+			delta, _ := testApp(t, source, ep)
 			require.Len(t, delta.GlobalDelta, 2)
 			require.Empty(t, delta.LocalDeltas)
 
@@ -2287,7 +2403,7 @@ app_global_get_ex
 				source = strings.ReplaceAll(source, "THISAPP", "int 100")
 			}
 			txn.ForeignApps = []basics.AppIndex{txn.ApplicationID}
-			delta = testApp(t, source, ep)
+			delta, _ = testApp(t, source, ep)
 			require.Len(t, delta.GlobalDelta, 1)
 			vd := delta.GlobalDelta["ALGO"]
 			require.Equal(t, basics.DeleteAction, vd.Action)
@@ -2312,7 +2428,7 @@ byte "ALGOA"
 int 0x78
 app_global_put
 `
-			delta = testApp(t, source, ep)
+			delta, _ = testApp(t, source, ep)
 			require.Len(t, delta.GlobalDelta, 1)
 			vd = delta.GlobalDelta["ALGOA"]
 			require.Equal(t, basics.SetUintAction, vd.Action)
@@ -2334,7 +2450,7 @@ int 0x78
 app_global_put
 int 1
 `
-			delta = testApp(t, source, ep)
+			delta, _ = testApp(t, source, ep)
 			require.Len(t, delta.GlobalDelta, 1)
 			vd = delta.GlobalDelta["ALGO"]
 			require.Equal(t, basics.SetUintAction, vd.Action)
@@ -2357,7 +2473,7 @@ byte "ALGO"
 app_global_del
 int 1
 `
-			delta = testApp(t, source, ep)
+			delta, _ = testApp(t, source, ep)
 			require.Len(t, delta.GlobalDelta, 1)
 			vd = delta.GlobalDelta["ALGO"]
 			require.Equal(t, basics.DeleteAction, vd.Action)
@@ -2380,7 +2496,7 @@ byte "ALGOA"
 app_global_del
 int 1
 `
-			delta = testApp(t, source, ep)
+			delta, _ = testApp(t, source, ep)
 			require.Len(t, delta.GlobalDelta, 1)
 			require.Len(t, delta.LocalDeltas, 0)
 		})
@@ -2433,7 +2549,7 @@ int 1
 
 		ep.Trace = &strings.Builder{}
 
-		delta := testApp(t, source, ep)
+		delta, _ := testApp(t, source, ep)
 		require.Equal(t, 0, len(delta.GlobalDelta))
 		require.Equal(t, 2, len(delta.LocalDeltas))
 		ledger.Reset()
@@ -2442,7 +2558,7 @@ int 1
 			// test that app_local_put and _app_local_del can use byte addresses
 			withBytes := strings.ReplaceAll(source, "int 0 // sender", "txn Sender")
 			withBytes = strings.ReplaceAll(withBytes, "int 1 // other", "txn Accounts 1")
-			delta := testApp(t, withBytes, ep)
+			delta, _ := testApp(t, withBytes, ep)
 			// But won't even compile in old teal
 			testProg(t, withBytes, directRefEnabledVersion-1,
 				exp(4, "app_local_put arg 0 wanted..."), exp(11, "app_local_del arg 0 wanted..."))
@@ -2473,7 +2589,7 @@ app_local_get_ex
 		if ep.Proto.LogicSigVersion < directRefEnabledVersion {
 			source = strings.ReplaceAll(source, "txn Sender", "int 0")
 		}
-		delta = testApp(t, source, ep)
+		delta, _ = testApp(t, source, ep)
 		require.Equal(t, 0, len(delta.GlobalDelta))
 		require.Equal(t, 1, len(delta.LocalDeltas))
 		vd := delta.LocalDeltas[0]["ALGO"]
@@ -2504,7 +2620,7 @@ app_local_put
 		if ep.Proto.LogicSigVersion < directRefEnabledVersion {
 			source = strings.ReplaceAll(source, "txn Sender", "int 0")
 		}
-		delta = testApp(t, source, ep)
+		delta, _ = testApp(t, source, ep)
 		require.Equal(t, 0, len(delta.GlobalDelta))
 		require.Equal(t, 1, len(delta.LocalDeltas))
 		vd = delta.LocalDeltas[0]["ALGOA"]
@@ -2531,7 +2647,7 @@ int 1
 		if ep.Proto.LogicSigVersion < directRefEnabledVersion {
 			source = strings.ReplaceAll(source, "txn Sender", "int 0")
 		}
-		delta = testApp(t, source, ep)
+		delta, _ = testApp(t, source, ep)
 		require.Equal(t, 0, len(delta.GlobalDelta))
 		require.Equal(t, 1, len(delta.LocalDeltas))
 		vd = delta.LocalDeltas[0]["ALGO"]
@@ -2561,7 +2677,7 @@ int 1
 		if ep.Proto.LogicSigVersion < directRefEnabledVersion {
 			source = strings.ReplaceAll(source, "txn Sender", "int 0")
 		}
-		delta = testApp(t, source, ep)
+		delta, _ = testApp(t, source, ep)
 		require.Equal(t, 0, len(delta.GlobalDelta))
 		require.Equal(t, 1, len(delta.LocalDeltas))
 		vd = delta.LocalDeltas[0]["ALGO"]
@@ -2591,7 +2707,7 @@ int 1
 		if ep.Proto.LogicSigVersion < directRefEnabledVersion {
 			source = strings.ReplaceAll(source, "txn Sender", "int 0")
 		}
-		delta = testApp(t, source, ep)
+		delta, _ = testApp(t, source, ep)
 		require.Equal(t, 0, len(delta.GlobalDelta))
 		require.Equal(t, 1, len(delta.LocalDeltas))
 		require.Equal(t, 1, len(delta.LocalDeltas[0]))
@@ -3098,6 +3214,7 @@ func TestReturnTypes(t *testing.T) {
 		"err":    true,
 		"return": true,
 
+		// panics unless the pk is proper
 		"ecdsa_pk_decompress": true,
 
 		"frame_dig":  true, // would need a "proto" subroutine
@@ -3326,7 +3443,7 @@ func TestLog(t *testing.T) {
 
 	//track expected number of logs in cx.EvalDelta.Logs
 	for i, s := range testCases {
-		delta := testApp(t, s.source, ep)
+		delta, _ := testApp(t, s.source, ep)
 		require.Len(t, delta.Logs, s.loglen)
 		if i == len(testCases)-1 {
 			require.Equal(t, strings.Repeat("a", maxLogSize), delta.Logs[0])
@@ -3651,7 +3768,7 @@ int 43
 app_local_put
 int 1
 `
-		ed := testApp(t, source, ep)
+		delta, _ := testApp(t, source, ep)
 		require.Len(t, tx.Accounts, 1) // Sender + 1 tx.Accounts means LocalDelta index should be 2
 		require.Equal(t, map[uint64]basics.StateDelta{
 			1: {
@@ -3666,8 +3783,8 @@ int 1
 					Uint:   42,
 				},
 			},
-		}, ed.LocalDeltas)
-		require.Equal(t, []basics.Address{tx.ApplicationID.Address()}, ed.SharedAccts)
+		}, delta.LocalDeltas)
+		require.Equal(t, []basics.Address{tx.ApplicationID.Address()}, delta.SharedAccts)
 
 		/* Confirm it worked. */
 		source = `
@@ -3693,7 +3810,7 @@ int 7
 app_local_put
 int 1
 `
-		ed = testApp(t, source, ep)
+		delta, _ = testApp(t, source, ep)
 		require.Len(t, tx.Accounts, 1) // Sender + 1 tx.Accounts means LocalDelta index should be 2
 		require.Equal(t, map[uint64]basics.StateDelta{
 			1: {
@@ -3707,8 +3824,8 @@ int 1
 					Action: basics.DeleteAction,
 				},
 			},
-		}, ed.LocalDeltas)
-		require.Equal(t, []basics.Address{tx.ApplicationID.Address()}, ed.SharedAccts)
+		}, delta.LocalDeltas)
+		require.Equal(t, []basics.Address{tx.ApplicationID.Address()}, delta.SharedAccts)
 
 		// Now, repeat the "put" test with multiple keys, to ensure only one
 		// address is added to SharedAccts and we'll modify the Sender too, to
@@ -3732,7 +3849,7 @@ int 21
 app_local_put
 int 1
 `
-		ed = testApp(t, source, ep)
+		delta, _ = testApp(t, source, ep)
 		require.Len(t, tx.Accounts, 1) // Sender + 1 tx.Accounts means LocalDelta index should be 2
 		require.Equal(t, map[uint64]basics.StateDelta{
 			0: {
@@ -3751,9 +3868,9 @@ int 1
 					Uint:   21,
 				},
 			},
-		}, ed.LocalDeltas)
+		}, delta.LocalDeltas)
 
-		require.Equal(t, []basics.Address{tx.ApplicationID.Address()}, ed.SharedAccts)
+		require.Equal(t, []basics.Address{tx.ApplicationID.Address()}, delta.SharedAccts)
 	})
 }
 

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -38,10 +38,7 @@ import (
 	"github.com/algorand/go-algorand/util/execpool"
 )
 
-const catchupPeersForSync = 10
-const blockQueryPeerLimit = 10
-
-// uncapParallelDownloadRate is a simple threshold to detect whether or not the node is caught up.
+// uncapParallelDownloadRate is a simple threshold to detect whether the node is caught up.
 // If a block is downloaded in less than this duration, it's assumed that the node is not caught up
 // and allow the block downloader to start N=parallelBlocks concurrent fetches.
 const uncapParallelDownloadRate = time.Second
@@ -76,7 +73,7 @@ type Ledger interface {
 	WaitMem(r basics.Round) chan struct{}
 }
 
-// Service represents the catchup service. Once started and until it is stopped, it ensures that the ledger is up to date with network.
+// Service represents the catchup service. Once started and until it is stopped, it ensures that the ledger is up-to-date with network.
 type Service struct {
 	// disableSyncRound, provided externally, is the first round we will _not_ fetch from the network
 	// any round >= disableSyncRound will not be fetched. If set to 0, it will be disregarded.
@@ -266,7 +263,7 @@ const errNoBlockForRoundThreshold = 5
 //   - If we couldn't fetch the block (e.g. if there are no peers available, or we've reached the catchupRetryLimit)
 //   - If the block is already in the ledger (e.g. if agreement service has already written it)
 //   - If the retrieval of the previous block was unsuccessful
-func (s *Service) fetchAndWrite(ctx context.Context, r basics.Round, prevFetchCompleteChan chan struct{}, lookbackComplete chan struct{}, peerSelector *peerSelector) bool {
+func (s *Service) fetchAndWrite(ctx context.Context, r basics.Round, prevFetchCompleteChan chan struct{}, lookbackComplete chan struct{}, peerSelector peerSelector) bool {
 	// If sync-ing this round is not intended, don't fetch it
 	if dontSyncRound := s.GetDisableSyncRound(); dontSyncRound != 0 && r >= basics.Round(dontSyncRound) {
 		return false
@@ -318,7 +315,7 @@ func (s *Service) fetchAndWrite(ctx context.Context, r basics.Round, prevFetchCo
 		block, cert, blockDownloadDuration, err := s.innerFetch(ctx, r, peer)
 
 		if err != nil {
-			if err == errLedgerAlreadyHasBlock {
+			if errors.Is(err, errLedgerAlreadyHasBlock) {
 				// ledger already has the block, no need to request this block.
 				// only the agreement could have added this block into the ledger, catchup is complete
 				s.log.Infof("fetchAndWrite(%d): the block is already in the ledger. The catchup is complete", r)
@@ -329,7 +326,7 @@ func (s *Service) fetchAndWrite(ctx context.Context, r basics.Round, prevFetchCo
 			if errors.As(err, &nbfe) {
 				failureRank = peerRankNoBlockForRound
 				// remote peer doesn't have the block, try another peer
-				// quit if the the same peer peer encountered errNoBlockForRound more than errNoBlockForRoundThreshold times
+				// quit if the same peer encountered errNoBlockForRound more than errNoBlockForRoundThreshold times
 				if s.followLatest {
 					// back off between retries to allow time for the next block to appear;
 					// this will provide 50s (catchupRetryLimit * followLatestBackoff) of
@@ -427,7 +424,8 @@ func (s *Service) fetchAndWrite(ctx context.Context, r basics.Round, prevFetchCo
 						// if the context expired, just exit.
 						return false
 					}
-					if errNSBE, ok := err.(ledgercore.ErrNonSequentialBlockEval); ok && errNSBE.EvaluatorRound <= errNSBE.LatestRound {
+					var errNSBE ledgercore.ErrNonSequentialBlockEval
+					if errors.As(err, &errNSBE) && errNSBE.EvaluatorRound <= errNSBE.LatestRound {
 						// the block was added to the ledger from elsewhere after fetching it here
 						// only the agreement could have added this block into the ledger, catchup is complete
 						s.log.Infof("fetchAndWrite(%d): after fetching the block, it is already in the ledger. The catchup is complete", r)
@@ -442,16 +440,19 @@ func (s *Service) fetchAndWrite(ctx context.Context, r basics.Round, prevFetchCo
 			}
 
 			if err != nil {
-				switch err.(type) {
-				case ledgercore.ErrNonSequentialBlockEval:
+				var errNonSequentialBlockEval ledgercore.ErrNonSequentialBlockEval
+				var blockInLedgerError ledgercore.BlockInLedgerError
+				var protocolErr protocol.Error
+				switch {
+				case errors.As(err, &errNonSequentialBlockEval):
 					s.log.Infof("fetchAndWrite(%d): no need to re-evaluate historical block", r)
 					return true
-				case ledgercore.BlockInLedgerError:
+				case errors.As(err, &blockInLedgerError):
 					// the block was added to the ledger from elsewhere after fetching it here
 					// only the agreement could have added this block into the ledger, catchup is complete
 					s.log.Infof("fetchAndWrite(%d): after fetching the block, it is already in the ledger. The catchup is complete", r)
 					return false
-				case protocol.Error:
+				case errors.As(err, &protocolErr):
 					if !s.protocolErrorLogged {
 						logging.Base().Errorf("fetchAndWrite(%v): unrecoverable protocol error detected: %v", r, err)
 						s.protocolErrorLogged = true
@@ -491,8 +492,8 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 		}
 	}()
 
-	peerSelector := createPeerSelector(s.net, s.cfg, true)
-	if _, err := peerSelector.getNextPeer(); err == errPeerSelectorNoPeerPoolsAvailable {
+	ps := createPeerSelector(s.net)
+	if _, err := ps.getNextPeer(); err != nil {
 		s.log.Debugf("pipelinedFetch: was unable to obtain a peer to retrieve the block from")
 		return
 	}
@@ -527,7 +528,7 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 			go func(r basics.Round) {
 				prev := s.ledger.WaitMem(r - 1)
 				seed := s.ledger.WaitMem(r.SubSaturate(basics.Round(seedLookback)))
-				done <- s.fetchAndWrite(ctx, r, prev, seed, peerSelector)
+				done <- s.fetchAndWrite(ctx, r, prev, seed, ps)
 				wg.Done()
 			}(nextRound)
 
@@ -751,9 +752,9 @@ func (s *Service) fetchRound(cert agreement.Certificate, verifier *agreement.Asy
 	peerErrors := map[network.Peer]int{}
 
 	blockHash := bookkeeping.BlockHash(cert.Proposal.BlockDigest) // semantic digest (i.e., hash of the block header), not byte-for-byte digest
-	peerSelector := createPeerSelector(s.net, s.cfg, false)
+	ps := createPeerSelector(s.net)
 	for s.ledger.LastRound() < cert.Round {
-		psp, getPeerErr := peerSelector.getNextPeer()
+		psp, getPeerErr := ps.getNextPeer()
 		if getPeerErr != nil {
 			s.log.Debugf("fetchRound: was unable to obtain a peer to retrieve the block from")
 			s.net.RequestConnectOutgoing(true, s.ctx.Done())
@@ -783,19 +784,19 @@ func (s *Service) fetchRound(cert agreement.Certificate, verifier *agreement.Asy
 						time.Sleep(50 * time.Millisecond)
 					}
 					if count > errNoBlockForRoundThreshold*10 {
-						// for the low number of connected peers (like 2) the following scenatio is possible:
+						// for the low number of connected peers (like 2) the following scenario is possible:
 						// - both peers do not have the block
 						// - peer selector punishes one of the peers more than the other
-						// - the punoshed peer gets the block, and the less punished peer stucks.
+						// - the punished peer gets the block, and the less punished peer stucks.
 						// It this case reset the peer selector to let it re-learn priorities.
-						peerSelector = createPeerSelector(s.net, s.cfg, false)
+						ps = createPeerSelector(s.net)
 					}
 				}
 				peerErrors[peer]++
 			}
 			// remote peer doesn't have the block, try another peer
 			logging.Base().Warnf("fetchRound could not acquire block, fetcher errored out: %v", err)
-			peerSelector.rankPeer(psp, failureRank)
+			ps.rankPeer(psp, failureRank)
 			continue
 		}
 
@@ -805,7 +806,7 @@ func (s *Service) fetchRound(cert agreement.Certificate, verifier *agreement.Asy
 		}
 		// Otherwise, fetcher gave us the wrong block
 		logging.Base().Warnf("fetcher gave us bad/wrong block (for round %d): fetched hash %v; want hash %v", cert.Round, block.Hash(), blockHash)
-		peerSelector.rankPeer(psp, peerRankInvalidDownload)
+		ps.rankPeer(psp, peerRankInvalidDownload)
 
 		// As a failsafe, if the cert we fetched is valid but for the wrong block, panic as loudly as possible
 		if cert.Round == fetchedCert.Round &&
@@ -866,76 +867,33 @@ func (s *Service) roundIsNotSupported(nextRound basics.Round) bool {
 	return true
 }
 
-func createPeerSelector(net network.GossipNode, cfg config.Local, pipelineFetch bool) *peerSelector {
-	var peerClasses []peerClass
-	if cfg.EnableCatchupFromArchiveServers {
-		if pipelineFetch {
-			if cfg.NetAddress != "" { // Relay node
-				peerClasses = []peerClass{
-					{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersConnectedOut},
-					{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookArchivalNodes},
-					{initialRank: peerRankInitialThirdPriority, peerClass: network.PeersPhonebookArchivers},
-					{initialRank: peerRankInitialFourthPriority, peerClass: network.PeersPhonebookRelays},
-					{initialRank: peerRankInitialFifthPriority, peerClass: network.PeersConnectedIn},
-				}
-			} else {
-				peerClasses = []peerClass{
-					{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivalNodes},
-					{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookArchivers},
-					{initialRank: peerRankInitialThirdPriority, peerClass: network.PeersConnectedOut},
-					{initialRank: peerRankInitialFourthPriority, peerClass: network.PeersPhonebookRelays},
-				}
-			}
-		} else {
-			if cfg.NetAddress != "" { // Relay node
-				peerClasses = []peerClass{
-					{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersConnectedOut},
-					{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersConnectedIn},
-					{initialRank: peerRankInitialThirdPriority, peerClass: network.PeersPhonebookArchivalNodes},
-					{initialRank: peerRankInitialFourthPriority, peerClass: network.PeersPhonebookRelays},
-					{initialRank: peerRankInitialFifthPriority, peerClass: network.PeersPhonebookArchivers},
-				}
-			} else {
-				peerClasses = []peerClass{
-					{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersConnectedOut},
-					{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookArchivalNodes},
-					{initialRank: peerRankInitialThirdPriority, peerClass: network.PeersPhonebookRelays},
-					{initialRank: peerRankInitialFourthPriority, peerClass: network.PeersPhonebookArchivers},
-				}
-			}
-		}
-	} else {
-		if pipelineFetch {
-			if cfg.NetAddress != "" { // Relay node
-				peerClasses = []peerClass{
-					{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersConnectedOut},
-					{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookArchivalNodes},
-					{initialRank: peerRankInitialThirdPriority, peerClass: network.PeersPhonebookRelays},
-					{initialRank: peerRankInitialFourthPriority, peerClass: network.PeersConnectedIn},
-				}
-			} else {
-				peerClasses = []peerClass{
-					{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivalNodes},
-					{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersConnectedOut},
-					{initialRank: peerRankInitialThirdPriority, peerClass: network.PeersPhonebookRelays},
-				}
-			}
-		} else {
-			if cfg.NetAddress != "" { // Relay node
-				peerClasses = []peerClass{
-					{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersConnectedOut},
-					{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersConnectedIn},
-					{initialRank: peerRankInitialThirdPriority, peerClass: network.PeersPhonebookArchivalNodes},
-					{initialRank: peerRankInitialFourthPriority, peerClass: network.PeersPhonebookRelays},
-				}
-			} else {
-				peerClasses = []peerClass{
-					{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersConnectedOut},
-					{initialRank: peerRankInitialSecondPriority, peerClass: network.PeersPhonebookArchivalNodes},
-					{initialRank: peerRankInitialThirdPriority, peerClass: network.PeersPhonebookRelays},
-				}
-			}
-		}
+func createPeerSelector(net network.GossipNode) peerSelector {
+	wrappedPeerSelectors := []*wrappedPeerSelector{
+		{
+			peerClass: network.PeersConnectedOut,
+			peerSelector: makeRankPooledPeerSelector(net,
+				[]peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersConnectedOut}}),
+			toleranceFactor: 3,
+		},
+		{
+			peerClass: network.PeersPhonebookRelays,
+			peerSelector: makeRankPooledPeerSelector(net,
+				[]peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookRelays}}),
+			toleranceFactor: 3,
+		},
+		{
+			peerClass: network.PeersPhonebookArchivalNodes,
+			peerSelector: makeRankPooledPeerSelector(net,
+				[]peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersPhonebookArchivalNodes}}),
+			toleranceFactor: 10,
+		},
+		{
+			peerClass: network.PeersConnectedIn,
+			peerSelector: makeRankPooledPeerSelector(net,
+				[]peerClass{{initialRank: peerRankInitialFirstPriority, peerClass: network.PeersConnectedIn}}),
+			toleranceFactor: 3,
+		},
 	}
-	return makePeerSelector(net, peerClasses)
+
+	return makeClassBasedPeerSelector(wrappedPeerSelectors)
 }

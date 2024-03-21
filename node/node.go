@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -249,6 +249,11 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	if err != nil {
 		log.Errorf("Cannot initialize TxHandler: %v", err)
 		return nil, err
+	}
+
+	// The health service registers itself with the network
+	if cfg.IsGossipServer() {
+		rpcs.MakeHealthService(node.net)
 	}
 
 	node.blockService = rpcs.MakeBlockService(node.log, cfg, node.ledger, p2pNode, node.genesisID)
@@ -653,6 +658,25 @@ func (node *AlgorandFullNode) GetPendingTransaction(txID transactions.Txid) (res
 		// Keep looking in the ledger.
 	}
 
+	// quick check for confirmed transactions with LastValid in future
+	// this supposed to cover most of the cases where REST checks for the most recent txns
+	if r, confirmed := node.ledger.CheckConfirmedTail(txID); confirmed {
+		tx, foundBlk, err := node.ledger.LookupTxid(txID, r)
+		if err == nil && foundBlk {
+			return TxnWithStatus{
+				Txn:            tx.SignedTxn,
+				ConfirmedRound: r,
+				ApplyData:      tx.ApplyData,
+			}, true
+		}
+	}
+	// if found in the pool and not in the tail then return without looking into blocks
+	// because the check appears to be too early
+	if found {
+		return res, found
+	}
+
+	// fallback to blocks lookup
 	var maxLife basics.Round
 	latest := node.ledger.Latest()
 	proto, err := node.ledger.ConsensusParams(latest)
@@ -688,6 +712,7 @@ func (node *AlgorandFullNode) GetPendingTransaction(txID transactions.Txid) (res
 		if err != nil || !found {
 			continue
 		}
+
 		return TxnWithStatus{
 			Txn:            tx.SignedTxn,
 			ConfirmedRound: r,
@@ -696,7 +721,7 @@ func (node *AlgorandFullNode) GetPendingTransaction(txID transactions.Txid) (res
 	}
 
 	// Return whatever we found in the pool (if anything).
-	return
+	return res, found
 }
 
 // Status returns a StatusReport structure reporting our status as Active and with our ledger's LastRound

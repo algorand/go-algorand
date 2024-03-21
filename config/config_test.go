@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -112,7 +112,8 @@ func TestLocal_MergeConfig(t *testing.T) {
 	c2, err := mergeConfigFromDir(tempDir, defaultConfig)
 
 	require.NoError(t, err)
-	require.Equal(t, defaultConfig.Archival || c1.NetAddress != "", c2.Archival)
+	require.Equal(t, defaultConfig.EnableLedgerService || c1.NetAddress != "", c2.EnableLedgerService)
+	require.Equal(t, defaultConfig.EnableBlockService || c1.NetAddress != "", c2.EnableBlockService)
 	require.Equal(t, defaultConfig.IncomingConnectionsLimit, c2.IncomingConnectionsLimit)
 	require.Equal(t, defaultConfig.BaseLoggerDebugLevel, c2.BaseLoggerDebugLevel)
 
@@ -163,50 +164,6 @@ func TestLoadPhonebookMissing(t *testing.T) {
 	tempDir := t.TempDir()
 	_, err := LoadPhonebook(tempDir)
 	require.True(t, os.IsNotExist(err))
-}
-
-func TestArchivalIfRelay(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-
-	testArchivalIfRelay(t, true)
-}
-
-func TestArchivalIfNotRelay(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-
-	testArchivalIfRelay(t, false)
-}
-
-func testArchivalIfRelay(t *testing.T, relay bool) {
-	tempDir := t.TempDir()
-
-	c1 := struct {
-		NetAddress string
-	}{}
-	if relay {
-		c1.NetAddress = ":1234"
-	}
-
-	// write our reduced version of the Local struct
-	fileToMerge := filepath.Join(tempDir, ConfigFilename)
-	f, err := os.OpenFile(fileToMerge, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
-	if err == nil {
-		enc := json.NewEncoder(f)
-		err = enc.Encode(c1)
-		f.Close()
-	}
-	require.NoError(t, err)
-	require.False(t, defaultConfig.Archival, "Default should be non-archival")
-
-	c2, err := mergeConfigFromDir(tempDir, defaultConfig)
-	require.NoError(t, err)
-	if relay {
-		require.True(t, c2.Archival, "Relay should be archival")
-	} else {
-		require.False(t, c2.Archival, "Non-relay should still be non-archival")
-	}
 }
 
 func TestLocal_ConfigExampleIsCorrect(t *testing.T) {

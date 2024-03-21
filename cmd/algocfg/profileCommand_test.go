@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -50,5 +50,16 @@ func Test_getConfigForArg(t *testing.T) {
 		cfg, err := getConfigForArg("development")
 		require.NoError(t, err)
 		require.True(t, cfg.DisableAPIAuth)
+	})
+
+	t.Run("valid config test archival node", func(t *testing.T) {
+		t.Parallel()
+		cfg, err := getConfigForArg("archival")
+		require.NoError(t, err)
+		require.True(t, cfg.Archival)
+		require.True(t, cfg.EnableLedgerService)
+		require.True(t, cfg.EnableBlockService)
+		require.Equal(t, ":4160", cfg.NetAddress)
+		require.False(t, cfg.EnableGossipService)
 	})
 }

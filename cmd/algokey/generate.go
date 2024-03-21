@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,6 +18,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/spf13/cobra"
 
@@ -27,10 +28,12 @@ import (
 
 var generateKeyfile string
 var generatePubkeyfile string
+var generateDiscreet bool
 
 func init() {
 	generateCmd.Flags().StringVarP(&generateKeyfile, "keyfile", "f", "", "Private key filename")
 	generateCmd.Flags().StringVarP(&generatePubkeyfile, "pubkeyfile", "p", "", "Public key filename")
+	generateCmd.Flags().BoolVar(&generateDiscreet, "discreet", false, "Print mnemonic discreetly to an alternate screen")
 }
 
 var generateCmd = &cobra.Command{
@@ -46,7 +49,14 @@ var generateCmd = &cobra.Command{
 		key := crypto.GenerateSignatureSecrets(seed)
 		publicKeyChecksummed := basics.Address(key.SignatureVerifier).String()
 
-		fmt.Printf("Private key mnemonic: %s\n", mnemonic)
+		if generateDiscreet {
+			if err := printDiscreetly(os.Stderr, "**Important** write this private key mnemonic phrase in a safe place. Do not share it to anyone", fmt.Sprintf("Private key mnemonic: %s", mnemonic)); err != nil {
+				fmt.Fprintf(os.Stderr, "Fail to print mnemonic: %v", err)
+				os.Exit(1)
+			}
+		} else {
+			fmt.Printf("Private key mnemonic: %s\n", mnemonic)
+		}
 		fmt.Printf("Public key: %s\n", publicKeyChecksummed)
 
 		if generateKeyfile != "" {

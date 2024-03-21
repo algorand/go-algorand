@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -217,7 +217,7 @@ func (ep *EvalParams) reset() {
 			inners := ep.Proto.MaxTxGroupSize * ep.Proto.MaxInnerTransactions
 			ep.pooledAllowedInners = &inners
 		}
-		ep.pastScratch = make([]*scratchSpace, len(ep.TxnGroup))
+		ep.pastScratch = [maxTxGroupSize]*scratchSpace{}
 		for i := range ep.TxnGroup {
 			ep.TxnGroup[i].ApplyData = transactions.ApplyData{}
 		}
@@ -2182,7 +2182,7 @@ func testLogicBytes(t *testing.T, program []byte, ep *EvalParams, problems ...st
 }
 
 // testLogicFull is the lowest-level so it does not create an ep or reset it.
-func testLogicFull(t *testing.T, program []byte, gi int, ep *EvalParams, problems ...string) {
+func testLogicFull(t *testing.T, program []byte, gi int, ep *EvalParams, problems ...string) error {
 	t.Helper()
 
 	var checkProblem string
@@ -2217,7 +2217,7 @@ func testLogicFull(t *testing.T, program []byte, gi int, ep *EvalParams, problem
 	if evalProblem == "" {
 		require.NoError(t, err, "Eval\n%sExpected: PASS", ep.Trace)
 		assert.True(t, pass, "Eval\n%sExpected: PASS", ep.Trace)
-		return
+		return nil
 	}
 
 	// There is an evalProblem to check. REJECT is special and only means that
@@ -2227,9 +2227,10 @@ func testLogicFull(t *testing.T, program []byte, gi int, ep *EvalParams, problem
 	} else {
 		require.ErrorContains(t, err, evalProblem, "Wrong error in EvalSignature %v", ep.Trace)
 	}
+	return err
 }
 
-func testLogics(t *testing.T, programs []string, txgroup []transactions.SignedTxn, opt protoOpt, expected ...expect) *EvalParams {
+func testLogics(t *testing.T, programs []string, txgroup []transactions.SignedTxn, opt protoOpt, expected ...expect) error {
 	t.Helper()
 	proto := makeTestProto(opt)
 
@@ -2248,10 +2249,14 @@ func testLogics(t *testing.T, programs []string, txgroup []transactions.SignedTx
 	ep := NewSigEvalParams(txgroup, proto, &NoHeaderLedger{})
 	for i, program := range programs {
 		if program != "" {
+			if len(expected) > 0 && expected[0].l == i {
+				// Stop after first failure
+				return testLogicFull(t, txgroup[i].Lsig.Logic, i, ep, expected[0].s)
+			}
 			testLogicFull(t, txgroup[i].Lsig.Logic, i, ep)
 		}
 	}
-	return ep
+	return nil
 }
 
 func TestTxna(t *testing.T) {
@@ -2571,12 +2576,11 @@ substring3
 len`, 2)
 
 	// fails at runtime
-	err := testPanics(t, `byte 0xf000000000000000
+	testPanics(t, `byte 0xf000000000000000
 int 4
 int 0xFFFFFFFFFFFFFFFE
 substring3
-len`, 2)
-	require.Contains(t, err.Error(), "substring range beyond length of string")
+len`, 2, "substring range beyond length of string")
 }
 
 func TestSubstringRange(t *testing.T) {
@@ -2629,44 +2633,37 @@ func TestExtractFlop(t *testing.T) {
 	len`, 5, exp(4, "extract3 expects 0 immediate arguments"))
 
 	// fails at runtime
-	err := testPanics(t, `byte 0xf000000000000000
+	testPanics(t, `byte 0xf000000000000000
 	extract 1 8
-	len`, 5)
-	require.Contains(t, err.Error(), "extraction end 9")
+	len`, 5, "extraction end 9")
 
-	err = testPanics(t, `byte 0xf000000000000000
+	testPanics(t, `byte 0xf000000000000000
 	extract 9 0
-	len`, 5)
-	require.Contains(t, err.Error(), "extraction start 9")
+	len`, 5, "extraction start 9")
 
-	err = testPanics(t, `byte 0xf000000000000000
+	testPanics(t, `byte 0xf000000000000000
 	int 4
 	int 0xFFFFFFFFFFFFFFFE
 	extract3
-	len`, 5)
-	require.Contains(t, err.Error(), "extraction end exceeds uint64")
+	len`, 5, "extraction end exceeds uint64")
 
-	err = testPanics(t, `byte 0xf000000000000000
+	testPanics(t, `byte 0xf000000000000000
 	int 100
 	int 2
 	extract3
-	len`, 5)
-	require.Contains(t, err.Error(), "extraction start 100")
+	len`, 5, "extraction start 100")
 
-	err = testPanics(t, `byte 0xf000000000000000
+	testPanics(t, `byte 0xf000000000000000
 	int 55
-	extract_uint16`, 5)
-	require.Contains(t, err.Error(), "extraction start 55")
+	extract_uint16`, 5, "extraction start 55")
 
-	err = testPanics(t, `byte 0xf000000000000000
+	testPanics(t, `byte 0xf000000000000000
 	int 9
-	extract_uint32`, 5)
-	require.Contains(t, err.Error(), "extraction start 9")
+	extract_uint32`, 5, "extraction start 9")
 
-	err = testPanics(t, `byte 0xf000000000000000
+	testPanics(t, `byte 0xf000000000000000
 	int 1
-	extract_uint64`, 5)
-	require.Contains(t, err.Error(), "extraction end 9")
+	extract_uint64`, 5, "extraction end 9")
 }
 
 func TestReplace(t *testing.T) {
@@ -2752,8 +2749,8 @@ loads
 
 func TestLoadStore2(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
 	t.Parallel()
+
 	progText := `int 2
 int 3
 byte 0xaa
@@ -2766,6 +2763,61 @@ load 42
 int 5
 ==`
 	testAccepts(t, progText, 1)
+}
+
+// TestLogicErrorDetails confirms that the error returned from logicsig failures
+// has the right structured information.
+func TestLogicErrorDetails(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	badsource := notrack(`
+int 5; store 10					// store an int
+byte 0x01020300; store 15		// store a bytes
+
+int 100; byte 0x0201; == // types mismatch so this will fail
+`)
+	err := testPanics(t, badsource, 1, "cannot compare")
+	attrs := basics.Attributes(err)
+	zeros := [256]int{}
+	scratch := convertSlice(zeros[:], func(i int) any { return uint64(i) })
+	scratch[10] = uint64(5)
+	scratch[15] = []byte{0x01, 0x02, 0x03, 0x00}
+	require.Equal(t, map[string]any{
+		"pc":          19,
+		"group-index": 0,
+		"eval-states": []evalState{
+			{
+				Stack:   []any{uint64(100), []byte{02, 01}},
+				Scratch: scratch[:16],
+			},
+		},
+	}, attrs)
+
+	goodsource := `
+int 4; store 2			// store an int
+byte "jj"; store 3		// store a bytes
+int 1
+`
+	gscratch := convertSlice(zeros[:], func(i int) any { return uint64(i) })
+	gscratch[2] = uint64(4)
+	gscratch[3] = []byte("jj")
+
+	err = testLogics(t, []string{goodsource, badsource}, nil, nil, exp(1, "cannot compare"))
+	attrs = basics.Attributes(err)
+	require.Equal(t, map[string]any{
+		"pc":          19,
+		"group-index": 1,
+		"eval-states": []evalState{
+			{
+				Scratch: gscratch[:4],
+			},
+			{
+				Stack:   []any{uint64(100), []byte{02, 01}},
+				Scratch: scratch[:16],
+			},
+		},
+	}, attrs)
 }
 
 func TestGload(t *testing.T) {
@@ -4563,7 +4615,11 @@ func testEvaluation(t *testing.T, program string, introduced uint64, tester eval
 					require.True(t, ok)
 					isNotPanic(t, err) // Never want a Go level panic.
 					if err != nil {
-						// Use wisely. This could probably return any of the concurrent runs' errors.
+						// Use `outer` wisely. It could return any of the concurrent runs' errors.
+						var se *basics.SError
+						require.ErrorAs(t, err, &se)
+						var ee EvalError
+						require.ErrorAs(t, err, &ee)
 						outer = err
 					}
 				})
@@ -5042,8 +5098,8 @@ func TestBytesMath(t *testing.T) {
 	testAccepts(t, "byte 0xffffff; bsqrt; len; int 2; ==; return", 6)
 	// 64 byte long inputs are accepted, even if they produce longer outputs
 	testAccepts(t, fmt.Sprintf("byte 0x%s; bsqrt; len; int 32; ==", effs), 6)
-	// 65 byte inputs are not ok.
-	testPanics(t, fmt.Sprintf("byte 0x%s00; bsqrt; pop; int 1", effs), 6)
+	// 65 byte inputs are not ok (no track allows assembly)
+	testPanics(t, notrack(fmt.Sprintf("byte 0x%s00; bsqrt; pop; int 1", effs)), 6)
 }
 
 func TestBytesCompare(t *testing.T) {
@@ -5278,9 +5334,7 @@ By Herman Melville`, "",
 			if LogicVersion < fidoVersion {
 				testProg(t, source, AssemblerMaxVersion, exp(0, "unknown opcode..."))
 			} else {
-				err := testPanics(t, source, fidoVersion)
-				require.Error(t, err)
-				require.Contains(t, err.Error(), tc.error)
+				testPanics(t, source, fidoVersion, tc.error)
 			}
 		}
 	}
@@ -6122,9 +6176,17 @@ int 1
 
 func TestNoHeaderLedger(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	nhl := NoHeaderLedger{}
 	_, err := nhl.BlockHdr(1)
 	require.Error(t, err)
 	require.Equal(t, err, fmt.Errorf("no block header access"))
+}
+
+func TestMaxTxGroup(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	require.Equal(t, config.MaxTxGroupSize, maxTxGroupSize)
 }

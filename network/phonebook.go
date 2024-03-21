@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -30,7 +30,7 @@ import (
 const getAllAddresses = math.MaxInt32
 
 // PhoneBookEntryRoles defines the roles that a single entry on the phonebook can take.
-// currently, we have two roles : relay role and archiver role, which are mutually exclusive.
+// currently, we have two roles : relay role and archival role, which are mutually exclusive.
 //
 //msgp:ignore PhoneBookEntryRoles
 type PhoneBookEntryRoles int
@@ -39,8 +39,8 @@ type PhoneBookEntryRoles int
 // or via a configuration file.
 const PhoneBookEntryRelayRole = 1
 
-// PhoneBookEntryArchiverRole used for all the archivers that are provided via the archive SRV record.
-const PhoneBookEntryArchiverRole = 2
+// PhoneBookEntryArchivalRole used for all the archival nodes that are provided via the archive SRV record.
+const PhoneBookEntryArchivalRole = 2
 
 // Phonebook stores or looks up addresses of nodes we might contact
 type Phonebook interface {

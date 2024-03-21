@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,6 +18,7 @@ package v2
 
 import (
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -44,7 +45,12 @@ import (
 // returnError logs an internal message while returning the encoded response.
 func returnError(ctx echo.Context, code int, internal error, external string, logger logging.Logger) error {
 	logger.Info(internal)
-	return ctx.JSON(code, model.ErrorResponse{Message: external})
+	var data *map[string]any
+	var se *basics.SError
+	if errors.As(internal, &se) {
+		data = &se.Attrs
+	}
+	return ctx.JSON(code, model.ErrorResponse{Message: external, Data: data})
 }
 
 func badRequest(ctx echo.Context, internal error, external string, log logging.Logger) error {

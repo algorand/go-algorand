@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -64,8 +64,6 @@ var defaultLocal = Local{
 	EnableAgreementTimeMetrics:                 false,
 	EnableAssembleStats:                        false,
 	EnableBlockService:                         false,
-	EnableBlockServiceFallbackToArchiver:       false,
-	EnableCatchupFromArchiveServers:            false,
 	EnableDeveloperAPI:                         false,
 	EnableExperimentalAPI:                      false,
 	EnableFollowMode:                           false,

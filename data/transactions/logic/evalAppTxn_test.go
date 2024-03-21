@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -372,6 +372,34 @@ func TestRekeyBack(t *testing.T) {
 		TestApp(t, "txn Sender; txn Accounts 1; int 100"+payAndUnkey+"; int 1", ep)
 		// now rekeyed back to original
 		TestApp(t, "txn Sender; txn Accounts 1; int 100"+payAndUnkey, ep, "unauthorized")
+	})
+}
+
+// TestRekeyInnerGroup ensures that in an inner group, if an account is
+// rekeyed, it can not be used (by the previously owning app) later in the
+// group.
+func TestRekeyInnerGroup(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	rekeyAndUse := `
+  itxn_begin
+   // pay 0 to the zero address, and rekey a junk addr
+   int pay;  itxn_field TypeEnum
+   global ZeroAddress; byte 0x01; b|; itxn_field RekeyTo
+  itxn_next
+   // try to perform the same 0 pay, but fail because tx0 gave away control
+   int pay;  itxn_field TypeEnum
+  itxn_submit
+  int 1
+`
+
+	// v6 added inner rekey
+	TestLogicRange(t, 6, 0, func(t *testing.T, ep *EvalParams, tx *transactions.Transaction, ledger *Ledger) {
+		ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
+		// fund the app account
+		ledger.NewAccount(basics.AppIndex(888).Address(), 1_000_000)
+		TestApp(t, rekeyAndUse, ep, "unauthorized AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAVIOOBQA")
 	})
 }
 
@@ -2006,7 +2034,7 @@ int 1
 			ledger.NewApp(parentTx.Receiver, parentAppID, basics.AppParams{})
 			ledger.NewAccount(parentAppID.Address(), 50_000)
 
-			parentEd := TestApp(t, parentSource, ep)
+			parentEd, _ := TestApp(t, parentSource, ep)
 
 			require.Len(t, parentEd.Logs, 2)
 			require.Len(t, parentEd.InnerTxns, 2)
@@ -2334,7 +2362,7 @@ int 1
 			ledger.NewApp(parentTx.Receiver, parentAppID, basics.AppParams{})
 			ledger.NewAccount(parentAppID.Address(), 50_000)
 
-			parentEd := TestApp(t, parentSource, ep)
+			parentEd, _ := TestApp(t, parentSource, ep)
 
 			require.Len(t, parentEd.Logs, 2)
 			require.Len(t, parentEd.InnerTxns, 2)

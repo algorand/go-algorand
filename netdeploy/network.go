@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -167,6 +167,16 @@ func (n Network) PrimaryDataDir() string {
 		return n.getNodeFullPath(nodeName)
 	}
 	panic(fmt.Errorf("neither relay directories nor node directories are defined for the network"))
+}
+
+// RelayDataDirs returns an array of relay data directories (not the nodes)
+func (n Network) RelayDataDirs() []string {
+	var directories []string
+	for _, dir := range n.cfg.RelayDirs {
+		directories = append(directories, n.getNodeFullPath(dir))
+	}
+	sort.Strings(directories)
+	return directories
 }
 
 // NodeDataDirs returns an array of node data directories (not the relays)
