@@ -821,8 +821,8 @@ func (z *BaseOnlineAccountData) MarshalMsg(b []byte) (o []byte) {
 			o = (*z).BaseVotingData.StateProofID.MarshalMsg(o)
 		}
 		if (zb0001Mask & 0x40) == 0 { // if not empty
-			// string "W"
-			o = append(o, 0xa1, 0x57)
+			// string "X"
+			o = append(o, 0xa1, 0x58)
 			o = msgp.AppendBool(o, (*z).IncentiveEligible)
 		}
 		if (zb0001Mask & 0x80) == 0 { // if not empty
@@ -993,7 +993,7 @@ func (z *BaseOnlineAccountData) UnmarshalMsgWithState(bts []byte, st msgp.Unmars
 					err = msgp.WrapError(err, "StateProofID")
 					return
 				}
-			case "W":
+			case "X":
 				(*z).IncentiveEligible, bts, err = msgp.ReadBoolBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "IncentiveEligible")
