@@ -28,6 +28,7 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	pstore "github.com/algorand/go-algorand/network/p2p/peerstore"
 	"github.com/algorand/go-algorand/network/phonebook"
+	"github.com/algorand/go-algorand/util/metrics"
 	"github.com/algorand/go-deadlock"
 
 	"github.com/libp2p/go-libp2p"
@@ -126,6 +127,8 @@ func MakeHost(cfg config.Local, datadir string, pstore *pstore.PeerStore) (host.
 	var disableMetrics = func(cfg *libp2p.Config) error { return nil }
 	if !cfg.EnableMetricReporting {
 		disableMetrics = libp2p.DisableMetrics()
+	} else {
+		metrics.DefaultRegistry().Register(&metrics.PrometheusDefaultMetrics)
 	}
 
 	host, err := libp2p.New(

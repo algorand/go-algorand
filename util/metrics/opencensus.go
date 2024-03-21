@@ -28,6 +28,26 @@ import (
 	"golang.org/x/exp/slices"
 )
 
+type defaultOpencensusGatherer struct {
+	names []string
+}
+
+// WriteMetric return opencensus data converted to algorand format
+func (og *defaultOpencensusGatherer) WriteMetric(buf *strings.Builder, parentLabels string) {
+	metrics := collectOpenCensusMetrics(og.names)
+	for _, metric := range metrics {
+		metric.WriteMetric(buf, parentLabels)
+	}
+}
+
+// AddMetric return opencensus data converted to algorand format
+func (og *defaultOpencensusGatherer) AddMetric(values map[string]float64) {
+	metrics := collectOpenCensusMetrics(og.names)
+	for _, metric := range metrics {
+		metric.AddMetric(values)
+	}
+}
+
 type statExporter struct {
 	names   map[string]struct{}
 	metrics []Metric
@@ -45,22 +65,6 @@ func collectOpenCensusMetrics(names []string) []Metric {
 	reader.ReadAndExport(exporter)
 
 	return exporter.metrics
-}
-
-// WriteOpenCensusMetrics return opencensus data converted to algorand format
-func WriteOpenCensusMetrics(buf *strings.Builder, parentLabels string, names ...string) {
-	metrics := collectOpenCensusMetrics(names)
-	for _, metric := range metrics {
-		metric.WriteMetric(buf, parentLabels)
-	}
-}
-
-// AddOpenCensusMetrics return opencensus data converted to algorand format
-func AddOpenCensusMetrics(values map[string]float64, names ...string) {
-	metrics := collectOpenCensusMetrics(names)
-	for _, metric := range metrics {
-		metric.AddMetric(values)
-	}
 }
 
 // statCounter stores single int64 value per stat with labels

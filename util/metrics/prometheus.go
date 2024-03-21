@@ -26,19 +26,23 @@ import (
 	iopc "github.com/prometheus/client_model/go"
 )
 
-// WritePrometheusMetrics return prometheus converted to algorand format.
+type defaultPrometheusGatherer struct {
+	names []string
+}
+
+// WriteMetric return prometheus converted to algorand format.
 // Supports only counter and gauge types and ignores go_ metrics.
-func WritePrometheusMetrics(buf *strings.Builder, parentLabels string, names ...string) {
-	metrics := collectOpenCensusMetrics(names)
+func (pg *defaultPrometheusGatherer) WriteMetric(buf *strings.Builder, parentLabels string) {
+	metrics := collectOpenCensusMetrics(pg.names)
 	for _, metric := range metrics {
 		metric.WriteMetric(buf, parentLabels)
 	}
 }
 
-// AddPrometheusMetrics return prometheus data converted to algorand format.
+// AddMetric return prometheus data converted to algorand format.
 // Supports only counter and gauge types and ignores go_ metrics.
-func AddPrometheusMetrics(values map[string]float64, names ...string) {
-	metrics := collectPrometheusMetrics(names)
+func (pg *defaultPrometheusGatherer) AddMetric(values map[string]float64) {
+	metrics := collectPrometheusMetrics(pg.names)
 	for _, metric := range metrics {
 		metric.AddMetric(values)
 	}

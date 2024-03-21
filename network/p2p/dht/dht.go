@@ -35,6 +35,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	algoproto "github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util/metrics"
 )
 
 const minBackoff = time.Second * 5
@@ -60,6 +61,7 @@ func MakeDHT(ctx context.Context, h host.Host, networkID algoproto.NetworkID, cf
 		if err := view.Register(dhtmetrics.DefaultViews...); err != nil {
 			return nil, err
 		}
+		metrics.DefaultRegistry().Register(&metrics.OpencensusDefaultMetrics)
 	}
 
 	return dht.New(ctx, h, dhtCfg...)

@@ -37,6 +37,12 @@ func DefaultRegistry() *Registry {
 	return defaultRegistry
 }
 
+// PrometheusDefaultMetrics is the default prometheus gatherer implementing the Metric interface
+var PrometheusDefaultMetrics = defaultPrometheusGatherer{}
+
+// OpencensusDefaultMetrics is the default prometheus gatherer implementing the Metric interface
+var OpencensusDefaultMetrics = defaultOpencensusGatherer{}
+
 func init() {
 	defaultRegistry = MakeRegistry()
 }
