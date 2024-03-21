@@ -32,8 +32,8 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-// TestBasicMining shows proposers getting paid
-func TestBasicMining(t *testing.T) {
+// TestBasicPayouts shows proposers getting paid
+func TestBasicPayouts(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
 
@@ -48,7 +48,7 @@ func TestBasicMining(t *testing.T) {
 
 	// Overview of this test:
 	// rereg to become eligible (must pay extra fee)
-	// show incentives are paid (mining and bonuses)
+	// show payouts are paid (from fees and bonuses)
 	// deplete feesink to ensure it's graceful
 
 	clientAndAccount := func(name string) (libgoal.Client, model.Account) {

@@ -60,7 +60,7 @@ func TestPayAction(t *testing.T) {
          itxn_submit
         `))
 
-		// We're going to test some mining effects here too, so that we have an inner transaction example.
+		// We're going to test some payout effects here too, so that we have an inner transaction example.
 		proposer := basics.Address{0x01, 0x02, 0x03}
 		dl.txns(&txntest.Txn{
 			Type:     "pay",
@@ -90,8 +90,8 @@ func TestPayAction(t *testing.T) {
 		dl.beginBlock()
 		dl.txns(&payout1)
 		vb := dl.endBlock(proposer)
-		const miningVer = 40
-		if ver >= miningVer {
+		const payoutsVer = 40
+		if ver >= payoutsVer {
 			require.True(t, dl.generator.GenesisProto().Payouts.Enabled)
 			require.EqualValues(t, 2000, vb.Block().FeesCollected.Raw)
 		} else {
@@ -102,20 +102,20 @@ func TestPayAction(t *testing.T) {
 		postsink := micros(dl.t, dl.generator, genBalances.FeeSink)
 		postprop := micros(dl.t, dl.generator, proposer)
 
-		// Mining checks
-		require.EqualValues(t, 0, postprop-preprop) // mining not moved yet
+		// Payout checks
+		require.EqualValues(t, 0, postprop-preprop) // payout not moved yet
 		require.EqualValues(t, 2000, postsink-presink)
 
 		dl.fullBlock()
 		postsink = micros(dl.t, dl.generator, genBalances.FeeSink)
 		postprop = micros(dl.t, dl.generator, proposer)
 		dl.t.Log("postsink", postsink, "postprop", postprop)
-		if ver >= miningVer {
+		if ver >= payoutsVer {
 			bonus := 5_000_000                                 // block.go
 			assert.EqualValues(t, bonus-500, presink-postsink) // based on 75% in config/consensus.go
 			require.EqualValues(t, bonus+1500, postprop-preprop)
 		} else {
-			require.EqualValues(t, 2000, postsink-presink) // no mining yet
+			require.EqualValues(t, 2000, postsink-presink) // no payouts yet
 		}
 
 		ad0 := micros(dl.t, dl.generator, addrs[0])

@@ -212,15 +212,15 @@ func TestBlockEvaluator(t *testing.T) {
 	require.Equal(t, bal2new.MicroAlgos.Raw, bal2.MicroAlgos.Raw-minFee.Raw)
 }
 
-// TestMiningFees ensures that the proper portion of tx fees go to the proposer
-func TestMiningFees(t *testing.T) {
+// TestPayoutFees ensures that the proper portion of tx fees go to the proposer
+func TestPayoutFees(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	// Lots of balance checks that would be messed up by rewards
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis(ledgertesting.TurnOffRewards)
-	miningBegins := 40
-	ledgertesting.TestConsensusRange(t, miningBegins-1, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+	payoutsBegin := 40
+	ledgertesting.TestConsensusRange(t, payoutsBegin-1, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
 		dl := NewDoubleLedger(t, genBalances, cv, cfg)
 		defer dl.Close()
 
@@ -245,9 +245,9 @@ func TestMiningFees(t *testing.T) {
 		})
 
 		prp = lookup(dl.t, dl.generator, proposer)
-		require.Equal(t, ver >= miningBegins, prp.IncentiveEligible)
+		require.Equal(t, ver >= payoutsBegin, prp.IncentiveEligible)
 
-		dl.fullBlock() // start with an empty block, so no mining fees are paid at start of next one
+		dl.fullBlock() // start with an empty block, so no payouts from fees are paid at start of next one
 
 		presink := micros(dl.t, dl.generator, genBalances.FeeSink)
 		preprop := micros(dl.t, dl.generator, proposer)
@@ -264,7 +264,7 @@ func TestMiningFees(t *testing.T) {
 		vb := dl.endBlock(proposer)
 
 		const bonus1 = 5_000_000 // the first bonus value, set in config/consensus.go
-		if ver >= miningBegins {
+		if ver >= payoutsBegin {
 			require.True(t, dl.generator.GenesisProto().Payouts.Enabled)    // version sanity check
 			require.NotZero(t, dl.generator.GenesisProto().Payouts.Percent) // version sanity check
 			// new fields are in the header
@@ -295,7 +295,7 @@ func TestMiningFees(t *testing.T) {
 		t.Log(" postsink2", postsink)
 		t.Log(" postprop2", postprop)
 
-		if ver >= miningBegins {
+		if ver >= payoutsBegin {
 			require.EqualValues(t, bonus1+1500, postprop-preprop) // based on 75% in config/consensus.go
 			require.EqualValues(t, bonus1-500, presink-postsink)
 		} else {
@@ -312,8 +312,8 @@ func TestIncentiveEligible(t *testing.T) {
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
-	miningBegins := 40
-	ledgertesting.TestConsensusRange(t, miningBegins-1, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+	payoutsBegin := 40
+	ledgertesting.TestConsensusRange(t, payoutsBegin-1, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
 		dl := NewDoubleLedger(t, genBalances, cv, cfg)
 		defer dl.Close()
 
@@ -364,7 +364,7 @@ func TestIncentiveEligible(t *testing.T) {
 		require.False(t, a.IncentiveEligible)
 		a, _, _, err = dl.generator.LookupLatest(smallest)
 		require.NoError(t, err)
-		require.Equal(t, a.IncentiveEligible, ver >= miningBegins)
+		require.Equal(t, a.IncentiveEligible, ver >= payoutsBegin)
 	})
 }
 

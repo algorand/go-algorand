@@ -1392,15 +1392,15 @@ func (eval *BlockEvaluator) endOfBlock() error {
 
 		// agreement will check that the proposer is correct (we can't because
 		// we don't see the bundle), but agreement allows the proposer to be set
-		// even if Mining is not enabled (and unset any time).  So make sure
+		// even if Payouts is not enabled (and unset any time).  So make sure
 		// it's set iff it should be.
 		if eval.proto.Payouts.Enabled {
 			if eval.block.Proposer().IsZero() && !eval.generate { // if generating, proposer is set later by agreement
-				return fmt.Errorf("proposer missing when mining enabled")
+				return fmt.Errorf("proposer missing when payouts enabled")
 			}
 		} else {
 			if !eval.block.Proposer().IsZero() {
-				return fmt.Errorf("proposer %v present when mining disabled", eval.block.Proposer())
+				return fmt.Errorf("proposer %v present when payouts disabled", eval.block.Proposer())
 			}
 		}
 
@@ -1582,7 +1582,7 @@ func bitsMatch(a, b []byte, n int) bool {
 }
 
 func isAbsent(totalOnlineStake basics.MicroAlgos, acctStake basics.MicroAlgos, lastSeen basics.Round, current basics.Round) bool {
-	// Don't consider accounts that were online when mining went into effect as
+	// Don't consider accounts that were online when payouts went into effect as
 	// absent.  They get noticed the next time they propose or keyreg, which
 	// ought to be soon, if they are high stake or want to earn incentives.
 	if lastSeen == 0 {

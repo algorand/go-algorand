@@ -160,7 +160,7 @@ func endBlock(t testing.TB, ledger *Ledger, eval *eval.BlockEvaluator, proposer 
 		*vb = vb.WithProposer(committee.Seed(prp), prp, true)
 	} else {
 		// To more closely mimic the agreement code, we don't
-		// write the proposer when !Mining.Enabled.
+		// write the proposer when !Payouts.Enabled.
 		*vb = vb.WithProposer(committee.Seed(prp), basics.Address{}, false)
 	}
 

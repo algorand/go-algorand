@@ -965,9 +965,9 @@ const (
 	BlkSeed BlockField = iota
 	// BlkTimestamp is the Block's timestamp, seconds from epoch
 	BlkTimestamp
-	// BlkProposer is the Block's proposer, or ZeroAddress, pre EnableMining
+	// BlkProposer is the Block's proposer, or ZeroAddress, pre Payouts.Enabled
 	BlkProposer
-	// BlkFeesCollected is the sum of fees for the block, or 0, pre EnableMining
+	// BlkFeesCollected is the sum of fees for the block, or 0, pre Payouts.Enabled
 	BlkFeesCollected
 	// BlkBonus is the extra amount to be paid for the given block (from FeeSink)
 	BlkBonus

@@ -43,7 +43,7 @@ func (payment PaymentTxnFields) CheckSpender(header Header, spec SpecialAddresse
 		return fmt.Errorf("transaction cannot close account to its sender %v", header.Sender)
 	}
 
-	// the FeeSink account may only spend to the IncentivePool (not at all, if EnableMining)
+	// the FeeSink account may only spend to the IncentivePool (not at all, if Payouts.Enabled)
 	if header.Sender == spec.FeeSink {
 		if proto.Payouts.Enabled {
 			return fmt.Errorf("cannot spend from fee sink address %v", header.Sender)

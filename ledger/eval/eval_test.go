@@ -1727,7 +1727,7 @@ func TestActiveChallenge(t *testing.T) {
 	// ignore challenge if upgrade happened
 	oldHeader := bookkeeping.BlockHeader{
 		UpgradeState: bookkeeping.UpgradeState{
-			// We need a version from before mining rules got turned on
+			// We need a version from before payouts got turned on
 			CurrentProtocol: protocol.ConsensusV39,
 		},
 	}

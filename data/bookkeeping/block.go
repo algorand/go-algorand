@@ -61,11 +61,11 @@ type (
 		// Proposer is the proposer of this block. Like the Seed, agreement adds
 		// this after the block is assembled by the transaction pool, so that the same block can be prepared
 		// for multiple participating accounts in the same node. Therefore, it can not be used
-		// to influence block evaluation. Populated if proto.EnableMining
+		// to influence block evaluation. Populated if proto.Payouts.Enabled
 		Proposer basics.Address `codec:"prp"`
 
 		// FeesCollected is the sum of all fees paid by transactions in this
-		// block. Populated if proto.EnableMining.
+		// block. Populated if proto.Payouts.Enabled
 		FeesCollected basics.MicroAlgos `codec:"fc"`
 
 		// Bonus is the bonus incentive to be paid for proposing this block.  It
@@ -74,7 +74,7 @@ type (
 
 		// ProposerPayout is the amount that should be moved from the FeeSink to
 		// the Proposer at the start of the next block.  It is basically the
-		// bonus + the mining fraction of FeesCollected, but may be zero'd by
+		// bonus + the payouts percent of FeesCollected, but may be zero'd by
 		// proposer ineligibility.
 		ProposerPayout basics.MicroAlgos `codec:"pp"`
 
