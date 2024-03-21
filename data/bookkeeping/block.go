@@ -494,62 +494,26 @@ func ProcessUpgradeParams(prev BlockHeader) (uv UpgradeVote, us UpgradeState, er
 	return upgradeVote, upgradeState, err
 }
 
-type bonusPlan struct {
-	// baseRound is the earliest round this plan can apply. Of course, the
-	// consensus update must also have happened. So using a low value makes it
-	// go into effect immediately upon upgrade.
-	baseRound basics.Round
-	// baseAmount is the bonus to be paid when this plan first applies (see
-	// baseRound). If it is zero, then no explicit change is made to the bonus
-	// (useful for only changing the decay rate).
-	baseAmount basics.MicroAlgos
-	// decayInterval is the time in rounds between 1% decays. For simplicity,
-	// decay occurs based on round % decayInterval, so a decay can happen right
-	// after going into effect. The decayInterval goes into effect at upgrade
-	// time, regardless of `baseRound`.
-	decayInterval basics.Round
-}
-
-// bonusPlans should be extended, never changed, since old blocks must retain
-// their behavior.
-var bonusPlans = []bonusPlan{
-	0: {},
-	1: {
-		baseRound:  0, // goes into effect with upgrade
-		baseAmount: basics.MicroAlgos{Raw: 5_000_000},
-		// 2.9 sec rounds gives about 10.8M rounds per year.
-		decayInterval: 1_000_000, // .99^(10.8/1) ~ .897 ~ 10% decay per year
-	},
-	// If we need to change the decay rate (only), we would create a new plan like:
-	// { decayInterval: XXX} by using a zero baseAmount, the amount not affected.
-	// For a bigger change, we'd use a plan like:
-	// { baseRound:  <FUTURE round>, baseAmount: <new amount>, decayInterval: <new> }
-	// or just
-	// { baseAmount: <new amount>, decayInterval: <new> }
-	// the new decay rate would go into effect at upgrade time, and the new
-	// amount would be set at baseRound or at upgrade time.
-}
-
 // NextBonus determines the bonus that should be paid out for proposing the next block.
 func NextBonus(prev BlockHeader, params *config.ConsensusParams) basics.MicroAlgos {
-	current := prev.Round + 1
+	current := uint64(prev.Round + 1)
 	prevParams := config.Consensus[prev.CurrentProtocol] // presence ensured by ProcessUpgradeParams
-	return computeBonus(current, prev.Bonus, bonusPlans[params.BonusPlanVer], bonusPlans[prevParams.BonusPlanVer])
+	return computeBonus(current, prev.Bonus, params.Bonus, prevParams.Bonus)
 }
 
 // computeBonus is the guts of NextBonus that can be unit tested more effectively.
-func computeBonus(current basics.Round, prevBonus basics.MicroAlgos, curPlan bonusPlan, prevPlan bonusPlan) basics.MicroAlgos {
+func computeBonus(current uint64, prevBonus basics.MicroAlgos, curPlan config.BonusPlan, prevPlan config.BonusPlan) basics.MicroAlgos {
 	// Set the amount if it's non-zero...
-	if !curPlan.baseAmount.IsZero() {
+	if curPlan.BaseAmount != 0 {
 		upgrading := curPlan != prevPlan || current == 1
 		// The time has come if the baseRound arrives, or at upgrade time if
 		// baseRound has already passed.
-		if current == curPlan.baseRound || (upgrading && current > curPlan.baseRound) {
-			return curPlan.baseAmount
+		if current == curPlan.BaseRound || (upgrading && current > curPlan.BaseRound) {
+			return basics.MicroAlgos{Raw: curPlan.BaseAmount}
 		}
 	}
 
-	if curPlan.decayInterval != 0 && current%curPlan.decayInterval == 0 {
+	if curPlan.DecayInterval != 0 && current%curPlan.DecayInterval == 0 {
 		// decay
 		keep, _ := basics.NewPercent(99).DivvyAlgos(prevBonus)
 		return keep

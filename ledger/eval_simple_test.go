@@ -265,15 +265,15 @@ func TestMiningFees(t *testing.T) {
 
 		const bonus1 = 5_000_000 // the first bonus value, set in
 		if ver >= miningBegins {
-			require.True(t, dl.generator.GenesisProto().Mining().Enabled)    // version sanity check
-			require.NotZero(t, dl.generator.GenesisProto().Mining().Percent) // version sanity check
+			require.True(t, dl.generator.GenesisProto().Payouts.Enabled)    // version sanity check
+			require.NotZero(t, dl.generator.GenesisProto().Payouts.Percent) // version sanity check
 			// new fields are in the header
 			require.EqualValues(t, 2000, vb.Block().FeesCollected.Raw)
 			require.EqualValues(t, bonus1, vb.Block().Bonus.Raw)
 			require.EqualValues(t, bonus1+1_500, vb.Block().ProposerPayout().Raw)
 		} else {
-			require.False(t, dl.generator.GenesisProto().Mining().Enabled)
-			require.Zero(t, dl.generator.GenesisProto().Mining().Percent) // version sanity check
+			require.False(t, dl.generator.GenesisProto().Payouts.Enabled)
+			require.Zero(t, dl.generator.GenesisProto().Payouts.Percent) // version sanity check
 			require.Zero(t, vb.Block().FeesCollected)
 			require.Zero(t, vb.Block().Bonus)
 			require.Zero(t, vb.Block().ProposerPayout)

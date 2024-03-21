@@ -196,9 +196,9 @@ func verifyProposer(p unauthenticatedProposal, ledger LedgerReader) error {
 	// The BlockHeader isn't trustworthy yet, since we haven't checked the
 	// upgrade state. So, lacking the current consensus params, we confirm that
 	// the Proposer is *either* correct or missing. `eval` package will using
-	// Mining().Enabled to confirm which it should be.
+	// Mining.Enabled to confirm which it should be.
 	if !p.Proposer().IsZero() && p.Proposer() != value.OriginalProposer {
-		return fmt.Errorf("wrong proposer (%v != %v)", p.Proposer, value.OriginalProposer)
+		return fmt.Errorf("wrong proposer (%v != %v)", p.Proposer(), value.OriginalProposer)
 	}
 
 	cparams, err := ledger.ConsensusParams(ParamsRound(rnd))
@@ -214,7 +214,7 @@ func verifyProposer(p unauthenticatedProposal, ledger LedgerReader) error {
 	}
 	if !eligible && p.ProposerPayout().Raw > 0 {
 		return fmt.Errorf("proposer payout (%d) for ineligible Proposer %v",
-			p.ProposerPayout().Raw, p.Proposer)
+			p.ProposerPayout().Raw, p.Proposer())
 	}
 
 	var alpha crypto.Digest
@@ -267,16 +267,15 @@ func payoutEligible(rnd basics.Round, proposer basics.Address, ledger LedgerRead
 		return false, basics.OnlineAccountData{}, err
 	}
 
-	// It's only fair to compare balances from 320 rounds ago to the mining
-	// rules that were in effect then.  To make this work in a reasonable way
-	// when mining begins, the miningRules[0] in consensus.go has Min and Max.
+	// When mining begins, nobody could possible have IncentiveEligible set in
+	// the blanceRound rounds ago, so the min/max check is irrelevant.
 	balanceParams, err := ledger.ConsensusParams(balanceRound)
 	if err != nil {
 		return false, basics.OnlineAccountData{}, err
 	}
 	eligible := balanceRecord.IncentiveEligible &&
-		balanceRecord.MicroAlgosWithRewards.Raw >= balanceParams.Mining().MinBalance &&
-		balanceRecord.MicroAlgosWithRewards.Raw <= balanceParams.Mining().MaxBalance
+		balanceRecord.MicroAlgosWithRewards.Raw >= balanceParams.Payouts.MinBalance &&
+		balanceRecord.MicroAlgosWithRewards.Raw <= balanceParams.Payouts.MaxBalance
 	return eligible, balanceRecord, nil
 }
 

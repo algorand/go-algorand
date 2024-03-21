@@ -996,15 +996,3 @@ func TestTracksCatchpointsWithoutStoring(t *testing.T) {
 	require.Equal(t, true, cfg.TracksCatchpoints())
 	require.Equal(t, false, cfg.StoresCatchpoints())
 }
-
-func TestAllProtocolMiningVersions(t *testing.T) {
-	// in reality, this test will never even get a chance to run if it would
-	// fail, since checkSetMax will panic.
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-	a := assert.New(t)
-
-	for _, p := range Consensus {
-		a.Less(int(p.MiningRulesVer), len(miningRules))
-	}
-}

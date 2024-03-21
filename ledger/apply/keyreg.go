@@ -78,13 +78,13 @@ func Keyreg(keyreg transactions.KeyregTxnFields, header transactions.Header, bal
 			}
 		}
 		record.Status = basics.Online
-		if params.Mining().Enabled {
+		if params.Payouts.Enabled {
 			record.LastHeartbeat = header.FirstValid
 		}
 		record.VoteFirstValid = keyreg.VoteFirst
 		record.VoteLastValid = keyreg.VoteLast
 		record.VoteKeyDilution = keyreg.VoteKeyDilution
-		if header.Fee.Raw >= params.Mining().GoOnlineFee && params.Mining().Enabled {
+		if header.Fee.Raw >= params.Payouts.GoOnlineFee && params.Payouts.Enabled {
 			record.IncentiveEligible = true
 		}
 	}

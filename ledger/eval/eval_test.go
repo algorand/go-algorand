@@ -1704,7 +1704,7 @@ func TestActiveChallenge(t *testing.T) {
 	now := config.Consensus[nowHeader.CurrentProtocol]
 
 	// simplest test. when interval=X and grace=G, X+G+1 is a challenge
-	inChallenge := now.Mining().ChallengeInterval + now.Mining().ChallengeGracePeriod + 1
+	inChallenge := now.Payouts.ChallengeInterval + now.Payouts.ChallengeGracePeriod + 1
 	ch := activeChallenge(&now, inChallenge, singleSource(nowHeader))
 	a.NotZero(ch.round)
 
@@ -1715,13 +1715,13 @@ func TestActiveChallenge(t *testing.T) {
 	}
 
 	// ChallengeGracePeriod rounds allow challenges starting with inChallenge
-	for r := inChallenge; r < inChallenge+now.Mining().ChallengeGracePeriod; r++ {
+	for r := inChallenge; r < inChallenge+now.Payouts.ChallengeGracePeriod; r++ {
 		ch := activeChallenge(&now, r, singleSource(nowHeader))
-		a.EqualValues(ch.round, now.Mining().ChallengeInterval)
+		a.EqualValues(ch.round, now.Payouts.ChallengeInterval)
 	}
 
 	// And the next round is again challenge-less
-	ch = activeChallenge(&now, inChallenge+now.Mining().ChallengeGracePeriod, singleSource(nowHeader))
+	ch = activeChallenge(&now, inChallenge+now.Payouts.ChallengeGracePeriod, singleSource(nowHeader))
 	a.Zero(ch.round)
 
 	// ignore challenge if upgrade happened

@@ -44,7 +44,7 @@ func (payment PaymentTxnFields) CheckSpender(header Header, spec SpecialAddresse
 
 	// the FeeSink account may only spend to the IncentivePool (not at all, if EnableMining)
 	if header.Sender == spec.FeeSink {
-		if proto.Mining().Enabled {
+		if proto.Payouts.Enabled {
 			return fmt.Errorf("cannot spend from fee sink address %v", header.Sender)
 		}
 		if payment.Receiver != spec.RewardsPool {

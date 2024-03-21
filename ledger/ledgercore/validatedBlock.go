@@ -49,10 +49,10 @@ func (vb ValidatedBlock) WithProposer(s committee.Seed, proposer basics.Address,
 	// agreement does not consider the current config params, so here we decide
 	// what really goes into the BlockHeader.
 	proto := config.Consensus[vb.blk.CurrentProtocol]
-	if proto.Mining().Enabled {
+	if proto.Payouts.Enabled {
 		newblock.BlockHeader.Proposer = proposer
 	}
-	if !proto.Mining().Enabled || !eligible {
+	if !proto.Payouts.Enabled || !eligible {
 		newblock.BlockHeader.ProposerPayout = basics.MicroAlgos{}
 	}
 

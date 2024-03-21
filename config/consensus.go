@@ -530,18 +530,21 @@ type ConsensusParams struct {
 	// dynamic filter, it will be calculated and logged (but not used).
 	DynamicFilterTimeout bool
 
-	// MiningRulesVer is the version of mining related rules. It excludes anything
-	// related to block "bonuses" - extra payments made beyond what fees could
-	// provide. 0 disables mining and related tracking
-	MiningRulesVer uint8
+	// Payouts contains parameters for amounts and eligibility for block proposer
+	// payouts. It excludes information about the "unsustainable" payouts
+	// described in BonusPlan.
+	Payouts ProposerPayoutRules
 
-	// BonusPlanVer is the version of the block bonus plan. 0 indicates no block bonuses.
-	BonusPlanVer uint8
+	// Bonus contains parameters related to the extra payout made to block
+	// proposers, unrelated to the fees paid in that block.  For it to actually
+	// occur, extra funds need to be put into the FeeSink.  The bonus amount
+	// decays exponentially.
+	Bonus BonusPlan
 }
 
-// MiningRules puts several related consensus parameters in one place. The same
+// ProposerPayoutRules puts several related consensus parameters in one place. The same
 // care for backward compatibility with old blocks must be taken.
-type MiningRules struct {
+type ProposerPayoutRules struct {
 	// Enabled turns on several things needed for paying block incentives,
 	// including tracking of the proposer and fees collected.
 	Enabled bool
@@ -589,35 +592,30 @@ type MiningRules struct {
 	ChallengeBits int
 }
 
-// miningRules should be extended, never changed, since old blocks must retain
-// their behavior.
-var miningRules = [...]MiningRules{
-	{
-		Enabled: false,
-		// Because the eligibility check has a lookback, we need these set even
-		// here before mining begins.
-		MinBalance: 30_000_000_000,     // 30,000 algos
-		MaxBalance: 50_000_000_000_000, // 50M algos
-	},
-	{
-		Enabled:              true,
-		Percent:              75,
-		GoOnlineFee:          2_000_000,          // 2 algos
-		MinBalance:           30_000_000_000,     // 30,000 algos
-		MaxBalance:           50_000_000_000_000, // 50M algos
-		MaxMarkAbsent:        32,
-		ChallengeInterval:    1000,
-		ChallengeGracePeriod: 200,
-		ChallengeBits:        5,
-		// With about 31k rounds per day, we expect about (31k/interval)/2^bits ~= 1 challenge / day / account)
-	},
-}
+// If we need to change the decay rate (only), we would create a new plan like:
+//  BaseAmount: 0, DecayInterval: XXX
+// by using a zero baseAmount, the amount not affected.
+// For a bigger change, we'd use a plan like:
+//  BaseRound:  <FUTURE round>, BaseAmount: <new amount>, DecayInterval: <new>
+// or just
+//  BaseAmount: <new amount>, DecayInterval: <new>
+// the new decay rate would go into effect at upgrade time, and the new
+// amount would be set at baseRound or at upgrade time.
 
-// Mining returns the MiningRules of the ConsensusParams. These are the
-// consensus params related to tracking proposers and paying a portion of fees
-// to eligible recipients.
-func (cp ConsensusParams) Mining() MiningRules {
-	return miningRules[cp.MiningRulesVer]
+type BonusPlan struct {
+	// BonusBaseRound is the earliest round this plan can apply. Of course, the
+	// consensus update must also have happened. So using a low value makes it
+	// go into effect immediately upon upgrade.
+	BaseRound uint64
+	// BonusBaseAmount is the bonus to be paid when this plan first applies (see
+	// baseRound). If it is zero, then no explicit change is made to the bonus
+	// (useful for only changing the decay rate).
+	BaseAmount uint64
+	// BonusDecayInterval is the time in rounds between 1% decays. For simplicity,
+	// decay occurs based on round % BonusDecayInterval, so a decay can happen right
+	// after going into effect. The BonusDecayInterval goes into effect at upgrade
+	// time, regardless of `baseRound`.
+	DecayInterval uint64
 }
 
 // PaysetCommitType enumerates possible ways for the block header to commit to
@@ -773,7 +771,7 @@ func checkSetAllocBounds(p ConsensusParams) {
 	checkSetMax(p.MaxAppProgramLen, &MaxLogCalls)
 	checkSetMax(p.MaxInnerTransactions*p.MaxTxGroupSize, &MaxInnerTransactionsPerDelta)
 	checkSetMax(p.MaxProposedExpiredOnlineAccounts, &MaxProposedExpiredOnlineAccounts)
-	checkSetMax(p.Mining().MaxMarkAbsent, &MaxMarkAbsent)
+	checkSetMax(p.Payouts.MaxMarkAbsent, &MaxMarkAbsent)
 
 	// These bounds are exported to make them available to the msgp generator for calculating
 	// maximum valid message size for each message going across the wire.
@@ -1506,8 +1504,19 @@ func initConsensusProtocols() {
 
 	vFuture.LogicSigVersion = 11 // When moving this to a release, put a new higher LogicSigVersion here
 
-	vFuture.MiningRulesVer = 1
-	vFuture.BonusPlanVer = 1
+	vFuture.Payouts.Enabled = true
+	vFuture.Payouts.Percent = 75
+	vFuture.Payouts.GoOnlineFee = 2_000_000         // 2 algos
+	vFuture.Payouts.MinBalance = 30_000_000_000     // 30,000 algos
+	vFuture.Payouts.MaxBalance = 50_000_000_000_000 // 50M algos
+	vFuture.Payouts.MaxMarkAbsent = 32
+	vFuture.Payouts.ChallengeInterval = 1000
+	vFuture.Payouts.ChallengeGracePeriod = 200
+	vFuture.Payouts.ChallengeBits = 5
+
+	vFuture.Bonus.BaseAmount = 5_000_000 // 5 Algos
+	// 2.9 sec rounds gives about 10.8M rounds per year.
+	vFuture.Bonus.DecayInterval = 1_000_000 // .99^(10.8/1) ~ .897 ~ 10% decay per year
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 

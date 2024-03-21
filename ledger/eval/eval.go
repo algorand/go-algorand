@@ -1323,7 +1323,7 @@ func (eval *BlockEvaluator) endOfBlock() error {
 			eval.block.TxnCounter = 0
 		}
 
-		if eval.proto.Mining().Enabled {
+		if eval.proto.Payouts.Enabled {
 			// Determine how much the proposer should be paid. Agreement code
 			// can cancel this payment by zero'ing the ProposerPayout if the
 			// proposer is found to be ineligible. See WithProposer().
@@ -1383,7 +1383,7 @@ func (eval *BlockEvaluator) endOfBlock() error {
 		}
 
 		var expectedFeesCollected basics.MicroAlgos
-		if eval.proto.Mining().Enabled {
+		if eval.proto.Payouts.Enabled {
 			expectedFeesCollected = eval.state.feesCollected
 		}
 		if eval.block.FeesCollected != expectedFeesCollected {
@@ -1394,7 +1394,7 @@ func (eval *BlockEvaluator) endOfBlock() error {
 		// we don't see the bundle), but agreement allows the proposer to be set
 		// even if Mining is not enabled (and unset any time).  So make sure
 		// it's set iff it should be.
-		if eval.proto.Mining().Enabled {
+		if eval.proto.Payouts.Enabled {
 			if eval.block.Proposer().IsZero() && !eval.generate { // if generating, proposer is set later by agreement
 				return fmt.Errorf("proposer missing when mining enabled")
 			}
@@ -1408,7 +1408,7 @@ func (eval *BlockEvaluator) endOfBlock() error {
 		// ineligible, but we must check that it is correct if non-zero. We allow it
 		// to be too low. A proposer can be algruistic.
 		maxPayout := uint64(0)
-		if eval.proto.Mining().Enabled {
+		if eval.proto.Payouts.Enabled {
 			payout, err := eval.proposerPayout()
 			if err != nil {
 				return err
@@ -1473,7 +1473,7 @@ func (eval *BlockEvaluator) endOfBlock() error {
 }
 
 func (eval *BlockEvaluator) proposerPayout() (basics.MicroAlgos, error) {
-	incentive, _ := basics.NewPercent(eval.proto.Mining().Percent).DivvyAlgos(eval.block.FeesCollected)
+	incentive, _ := basics.NewPercent(eval.proto.Payouts.Percent).DivvyAlgos(eval.block.FeesCollected)
 	total, o := basics.OAddA(incentive, eval.block.Bonus)
 	if o {
 		return basics.MicroAlgos{}, fmt.Errorf("payout overflowed adding bonus incentive %d %d", incentive, eval.block.Bonus)
@@ -1507,14 +1507,13 @@ func (eval *BlockEvaluator) generateKnockOfflineAccountsList() {
 	current := eval.Round()
 
 	maxExpirations := eval.proto.MaxProposedExpiredOnlineAccounts
-	maxSuspensions := eval.proto.Mining().MaxMarkAbsent
+	maxSuspensions := eval.proto.Payouts.MaxMarkAbsent
 
 	updates := &eval.block.ParticipationUpdates
 
 	ch := activeChallenge(&eval.proto, uint64(eval.Round()), eval.state)
 
 	for _, accountAddr := range eval.state.modifiedAccounts() {
-		fmt.Printf("Check %v\n", accountAddr)
 		acctData, found := eval.state.mods.Accts.GetData(accountAddr)
 		if !found {
 			continue
@@ -1604,7 +1603,7 @@ type headerSource interface {
 }
 
 func activeChallenge(proto *config.ConsensusParams, current uint64, headers headerSource) challenge {
-	rules := proto.Mining()
+	rules := proto.Payouts
 	// are challenges active?
 	if rules.ChallengeInterval == 0 || current < rules.ChallengeInterval {
 		return challenge{}
@@ -1622,7 +1621,7 @@ func activeChallenge(proto *config.ConsensusParams, current uint64, headers head
 	}
 	challengeProto := config.Consensus[challengeHdr.CurrentProtocol]
 	// challenge is not considered if rules have changed since that round
-	if challengeProto.Mining() != rules {
+	if challengeProto.Payouts != rules {
 		return challenge{}
 	}
 	return challenge{round, challengeHdr.Seed, rules.ChallengeBits}
@@ -1686,7 +1685,7 @@ func (eval *BlockEvaluator) validateAbsentOnlineAccounts() error {
 	if !eval.validate {
 		return nil
 	}
-	maxSuspensions := eval.proto.Mining().MaxMarkAbsent
+	maxSuspensions := eval.proto.Payouts.MaxMarkAbsent
 	suspensionCount := len(eval.block.ParticipationUpdates.AbsentParticipationAccounts)
 
 	// If the length of the array is strictly greater than our max then we have an error.

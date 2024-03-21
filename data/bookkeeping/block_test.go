@@ -51,12 +51,12 @@ func init() {
 	}
 	params1.MinUpgradeWaitRounds = 0
 	params1.MaxUpgradeWaitRounds = 0
-	params1.BonusPlanVer = 0
 	config.Consensus[proto1] = params1
 
 	params2 := config.Consensus[protocol.ConsensusCurrentVersion]
 	params2.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
-	params2.BonusPlanVer = 1
+	params2.Bonus.BaseAmount = 5_000_000
+	params2.Bonus.DecayInterval = 1_000_000
 	config.Consensus[proto2] = params2
 
 	paramsDelay := config.Consensus[protocol.ConsensusCurrentVersion]
@@ -946,15 +946,15 @@ func TestBonusUpgrades(t *testing.T) {
 	ma198 := basics.MicroAlgos{Raw: 198}
 	ma200 := basics.MicroAlgos{Raw: 200}
 
-	old := bonusPlan{}
-	plan := bonusPlan{}
+	old := config.BonusPlan{}
+	plan := config.BonusPlan{}
 
 	// Nothing happens with empty plans
 	a.Equal(ma0, computeBonus(1, ma0, plan, old))
 	a.Equal(ma100, computeBonus(1, ma100, plan, old))
 
 	// When plan doesn't change, just expect decay on the intervals
-	plan.decayInterval = 100
+	plan.DecayInterval = 100
 	a.Equal(ma100, computeBonus(1, ma100, plan, plan))
 	a.Equal(ma100, computeBonus(99, ma100, plan, plan))
 	a.Equal(ma99, computeBonus(100, ma100, plan, plan))
@@ -962,19 +962,19 @@ func TestBonusUpgrades(t *testing.T) {
 	a.Equal(ma99, computeBonus(10000, ma100, plan, plan))
 
 	// When plan changes, the new decay is in effect
-	d90 := bonusPlan{decayInterval: 90}
+	d90 := config.BonusPlan{DecayInterval: 90}
 	a.Equal(ma100, computeBonus(100, ma100, d90, plan)) // no decay
 	a.Equal(ma99, computeBonus(180, ma100, d90, plan))  // decay
 
 	// When plan changes and amount is present, it is installed
-	d90.baseAmount = ma200
+	d90.BaseAmount = 200
 	a.Equal(ma200, computeBonus(100, ma100, d90, plan)) // no decay (wrong round and upgrade anyway)
 	a.Equal(ma200, computeBonus(180, ma100, d90, plan)) // no decay (upgrade)
 	a.Equal(ma198, computeBonus(180, ma200, d90, d90))  // decay
 	a.Equal(ma99, computeBonus(180, ma100, d90, d90))   // decay (no install)
 
 	// If there's a baseRound, the amount is installed accordingly
-	d90.baseRound = 150
+	d90.BaseRound = 150
 	a.Equal(ma99, computeBonus(90, ma100, d90, plan))   // decay because baseRound delays install
 	a.Equal(ma100, computeBonus(149, ma100, d90, plan)) // no decay (interval) but also not installed yet
 	a.Equal(ma200, computeBonus(150, ma100, d90, plan)) // no decay (upgrade and immediate change)
@@ -996,9 +996,10 @@ func TestFirstYearBonus(t *testing.T) {
 	yearSeconds := 365 * 24 * 60 * 60
 	yearRounds := int(float64(yearSeconds) / 2.9)
 
+	plan := config.Consensus[protocol.ConsensusFuture].Bonus
 	sum := uint64(0)
-	bonus := bonusPlans[1].baseAmount.Raw
-	interval := int(bonusPlans[1].decayInterval)
+	bonus := plan.BaseAmount
+	interval := int(plan.DecayInterval)
 	for i := 0; i < yearRounds; i++ {
 		sum += bonus
 		if i%interval == 0 {
@@ -1008,22 +1009,12 @@ func TestFirstYearBonus(t *testing.T) {
 	sum /= 1_000_000 // micro to Algos
 
 	fmt.Printf("paid %d algos\n", sum)
-	fmt.Printf("bonus start: %d end: %d\n", bonusPlans[1].baseAmount.Raw, bonus)
+	fmt.Printf("bonus start: %d end: %d\n", plan.BaseAmount, bonus)
 
 	// pays about 51M algos
 	a.InDelta(51_000_000, sum, 500_000)
 
 	// decline about 10%
-	a.InDelta(0.90, float64(bonus)/float64(bonusPlans[1].baseAmount.Raw), 0.01)
+	a.InDelta(0.90, float64(bonus)/float64(plan.BaseAmount), 0.01)
 
-}
-
-func TestAllProtocolBonusPlans(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-	a := assert.New(t)
-
-	for _, p := range config.Consensus {
-		a.Less(int(p.BonusPlanVer), len(bonusPlans))
-	}
 }

@@ -92,10 +92,10 @@ func TestPayAction(t *testing.T) {
 		vb := dl.endBlock(proposer)
 		const miningVer = 40
 		if ver >= miningVer {
-			require.True(t, dl.generator.GenesisProto().Mining().Enabled)
+			require.True(t, dl.generator.GenesisProto().Payouts.Enabled)
 			require.EqualValues(t, 2000, vb.Block().FeesCollected.Raw)
 		} else {
-			require.False(t, dl.generator.GenesisProto().Mining().Enabled)
+			require.False(t, dl.generator.GenesisProto().Payouts.Enabled)
 			require.Zero(t, vb.Block().FeesCollected)
 		}
 

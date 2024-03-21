@@ -156,11 +156,11 @@ func endBlock(t testing.TB, ledger *Ledger, eval *eval.BlockEvaluator, proposer 
 	// for tests. Doesn't matter that it makes them both the same.  Since this
 	// can't call the agreement code, the eligibility of the prp is not
 	// considered.
-	if ledger.GenesisProto().Mining().Enabled {
+	if ledger.GenesisProto().Payouts.Enabled {
 		*vb = vb.WithProposer(committee.Seed(prp), prp, true)
 	} else {
 		// To more closely mimic the agreement code, we don't
-		// write the proposer when !Mining().Enabled.
+		// write the proposer when !Mining.Enabled.
 		*vb = vb.WithProposer(committee.Seed(prp), basics.Address{}, false)
 	}
 

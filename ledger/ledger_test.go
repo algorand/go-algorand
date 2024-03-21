@@ -103,7 +103,7 @@ func initNextBlockHeader(correctHeader *bookkeeping.BlockHeader, lastBlock bookk
 // endOfBlock is simplified implementation of BlockEvaluator.endOfBlock so that
 // our test blocks can pass validation.
 func endOfBlock(blk *bookkeeping.Block) error {
-	if blk.ConsensusProtocol().Mining().Enabled {
+	if blk.ConsensusProtocol().Payouts.Enabled {
 		// This won't work for inner fees, and it's not bothering with overflow
 		for _, txn := range blk.Payset {
 			blk.FeesCollected.Raw += txn.Txn.Fee.Raw
