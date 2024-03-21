@@ -58,9 +58,8 @@ func (gauge *Gauge) Deregister(reg *Registry) {
 
 // Set sets gauge to x
 func (gauge *Gauge) Set(x uint64) {
-	if gauge.g.intValue.Swap(x) != x || x == 0 {
-		// What we just added is the whole value, this
-		// is the first Add. Create a dummy
+	if gauge.g.intValue.Swap(x) == 0 {
+		// This is the first Set. Create a dummy
 		// counterValue for the no-labels value.
 		// Dummy counterValue simplifies display in WriteMetric.
 		gauge.g.setLabels(0, nil)
