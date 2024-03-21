@@ -228,7 +228,7 @@ func TestMiningFees(t *testing.T) {
 		const eFee = 3_000_000
 		dl.txn(
 			&txntest.Txn{Type: "pay", Sender: addrs[1],
-				Receiver: proposer, Amount: eFee + 50_000_000*1_000_000 + 1},
+				Receiver: proposer, Amount: eFee + 50_000_000},
 		)
 
 		prp := lookup(dl.t, dl.generator, proposer)
@@ -263,7 +263,7 @@ func TestMiningFees(t *testing.T) {
 		dl.txns(&pay, pay.Args("again"))
 		vb := dl.endBlock(proposer)
 
-		const bonus1 = 5_000_000 // the first bonus value, set in
+		const bonus1 = 5_000_000 // the first bonus value, set in config/consensus.go
 		if ver >= miningBegins {
 			require.True(t, dl.generator.GenesisProto().Payouts.Enabled)    // version sanity check
 			require.NotZero(t, dl.generator.GenesisProto().Payouts.Percent) // version sanity check
@@ -276,7 +276,7 @@ func TestMiningFees(t *testing.T) {
 			require.Zero(t, dl.generator.GenesisProto().Payouts.Percent) // version sanity check
 			require.Zero(t, vb.Block().FeesCollected)
 			require.Zero(t, vb.Block().Bonus)
-			require.Zero(t, vb.Block().ProposerPayout)
+			require.Zero(t, vb.Block().ProposerPayout())
 		}
 
 		postsink := micros(dl.t, dl.generator, genBalances.FeeSink)

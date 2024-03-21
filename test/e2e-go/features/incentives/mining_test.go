@@ -87,7 +87,7 @@ func TestBasicMining(t *testing.T) {
 		a.NoError(err)
 
 		fmt.Printf(" 1 block %d proposed by %v\n", status.LastRound, block.Proposer)
-		a.Zero(block.ProposerPayout) // nobody is eligible yet (hasn't worked back to balance round)
+		a.Zero(block.ProposerPayout()) // nobody is eligible yet (hasn't worked back to balance round)
 		a.EqualValues(5_000_000, block.Bonus.Raw)
 		fixture.WaitForRoundWithTimeout(status.LastRound + 1)
 
@@ -129,12 +129,12 @@ func TestBasicMining(t *testing.T) {
 		// 01 would get paid (because under balance cap) 15 would not
 		switch block.Proposer.String() {
 		case account01.Address:
-			a.NotZero(block.ProposerPayout)
+			a.NotZero(block.ProposerPayout())
 			a.NotEqual(data01.MicroAlgos, next.MicroAlgos)
 			proposed01 = true
 			data01 = next
 		case account15.Address:
-			a.Zero(block.ProposerPayout)
+			a.Zero(block.ProposerPayout())
 			a.Equal(data15.MicroAlgos, next.MicroAlgos)
 			data15 = next
 			proposed15 = true

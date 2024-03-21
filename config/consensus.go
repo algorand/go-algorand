@@ -1516,7 +1516,7 @@ func initConsensusProtocols() {
 	vFuture.Payouts.Percent = 75
 	vFuture.Payouts.GoOnlineFee = 2_000_000         // 2 algos
 	vFuture.Payouts.MinBalance = 30_000_000_000     // 30,000 algos
-	vFuture.Payouts.MaxBalance = 50_000_000_000_000 // 50M algos
+	vFuture.Payouts.MaxBalance = 70_000_000_000_000 // 70M algos
 	vFuture.Payouts.MaxMarkAbsent = 32
 	vFuture.Payouts.ChallengeInterval = 1000
 	vFuture.Payouts.ChallengeGracePeriod = 200
