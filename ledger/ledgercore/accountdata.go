@@ -185,15 +185,8 @@ func (u AccountData) OnlineAccountData(proto config.ConsensusParams, rewardsLeve
 	)
 	return basics.OnlineAccountData{
 		MicroAlgosWithRewards: microAlgos,
-		VotingData: basics.VotingData{
-			VoteID:          u.VoteID,
-			SelectionID:     u.SelectionID,
-			StateProofID:    u.StateProofID,
-			VoteFirstValid:  u.VoteFirstValid,
-			VoteLastValid:   u.VoteLastValid,
-			VoteKeyDilution: u.VoteKeyDilution,
-		},
-		IncentiveEligible: u.IncentiveEligible,
+		VotingData:            u.VotingData,
+		IncentiveEligible:     u.IncentiveEligible,
 	}
 }
 
