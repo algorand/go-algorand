@@ -593,9 +593,9 @@ type ProposerPayoutRules struct {
 }
 
 // BonusPlan describes how the "extra" proposer payouts are to be made.  It
-// specifices an exponential decay in which the bonus decreases by 1% every n
-// rounds.
-// If we need to change the decay rate (only), we would create a new plan like:
+// specifies an exponential decay in which the bonus decreases by 1% every n
+// rounds.  If we need to change the decay rate (only), we would create a new
+// plan like:
 //
 //	BaseAmount: 0, DecayInterval: XXX
 //
