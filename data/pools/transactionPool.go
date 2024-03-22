@@ -30,6 +30,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger"
+	"github.com/algorand/go-algorand/ledger/eval"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
@@ -94,6 +95,9 @@ type TransactionPool struct {
 	// stateproofOverflowed indicates that a stateproof transaction was allowed to
 	// exceed the txPoolMaxSize. This flag is reset to false OnNewBlock
 	stateproofOverflowed bool
+
+	testEvalCtx   *testEvalContext
+	testEvalCtxMu deadlock.RWMutex
 }
 
 // BlockEvaluator defines the block evaluator interface exposed by the ledger package.
@@ -105,6 +109,33 @@ type BlockEvaluator interface {
 	Transaction(txn transactions.SignedTxn, ad transactions.ApplyData) error
 	GenerateBlock() (*ledgercore.ValidatedBlock, error)
 	ResetTxnBytes()
+}
+
+// testEvalContext implements the eval.TestEvalContext interface.
+type testEvalContext struct {
+	ledger   *ledger.Ledger
+	block    bookkeeping.Block
+	proto    config.ConsensusParams
+	specials transactions.SpecialAddresses
+}
+
+func newTestEvalCtx(ledger *ledger.Ledger, block bookkeeping.Block) *testEvalContext {
+	return &testEvalContext{
+		ledger: ledger,
+		block:  block,
+		proto:  config.Consensus[block.CurrentProtocol],
+		specials: transactions.SpecialAddresses{
+			FeeSink:     block.FeeSink,
+			RewardsPool: block.RewardsPool,
+		},
+	}
+}
+
+func (c *testEvalContext) Proto() config.ConsensusParams           { return c.proto }
+func (c *testEvalContext) Specials() transactions.SpecialAddresses { return c.specials }
+func (c *testEvalContext) TxnContext() transactions.TxnContext     { return c.block }
+func (c *testEvalContext) CheckDup(firstValid, lastValid basics.Round, txid transactions.Txid, txl ledgercore.Txlease) error {
+	return c.ledger.CheckDup(c.proto, c.block.BlockHeader.Round, firstValid, lastValid, txid, txl)
 }
 
 // MakeTransactionPool makes a transaction pool.
@@ -373,14 +404,14 @@ func (pool *TransactionPool) Test(txgroup []transactions.SignedTxn) error {
 		return err
 	}
 
-	pool.mu.Lock()
-	defer pool.mu.Unlock()
+	pool.testEvalCtxMu.RLock()
+	defer pool.testEvalCtxMu.RUnlock()
 
-	if pool.pendingBlockEvaluator == nil {
-		return fmt.Errorf("Test: pendingBlockEvaluator is nil")
+	if pool.testEvalCtx == nil {
+		return fmt.Errorf("Test: testEvalCtx is nil")
 	}
 
-	return pool.pendingBlockEvaluator.TestTransactionGroup(txgroup)
+	return eval.TestTransactionGroup(pool.testEvalCtx, txgroup)
 }
 
 type poolIngestParams struct {
@@ -714,6 +745,10 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 		pool.log.Warnf("TransactionPool.recomputeBlockEvaluator: cannot start evaluator: %v", err)
 		return
 	}
+
+	pool.testEvalCtxMu.Lock()
+	pool.testEvalCtx = newTestEvalCtx(pool.ledger, next)
+	pool.testEvalCtxMu.Unlock()
 
 	var asmStats telemetryspec.AssembleBlockMetrics
 	asmStats.StartCount = len(txgroups)
