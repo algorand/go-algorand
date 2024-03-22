@@ -99,7 +99,7 @@ func BenchmarkAssembleBlock(b *testing.B) {
 		cfg := config.GetDefaultLocal()
 		cfg.TxPoolSize = txPoolSize
 		cfg.EnableAssembleStats = false
-		tp := pools.MakeTransactionPool(l.Ledger, cfg, logging.Base())
+		tp := pools.MakeTransactionPool(l.Ledger, cfg, logging.Base(), nil)
 		errcount := 0
 		okcount := 0
 		var worstTxID transactions.Txid
@@ -220,7 +220,7 @@ func TestAssembleBlockTransactionPoolBehind(t *testing.T) {
 	cfg = config.GetDefaultLocal()
 	cfg.TxPoolSize = txPoolSize
 	cfg.EnableAssembleStats = false
-	tp := pools.MakeTransactionPool(l.Ledger, cfg, log)
+	tp := pools.MakeTransactionPool(l.Ledger, cfg, log, nil)
 
 	next := l.NextRound()
 	deadline := time.Now().Add(time.Second)
