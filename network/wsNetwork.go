@@ -88,7 +88,7 @@ const httpServerMaxHeaderBytes = 4096
 const connectionActivityMonitorInterval = 3 * time.Minute
 
 // maxPeerInactivityDuration is the maximum allowed duration for a
-// peer to remain completly idle (i.e. no inbound or outbound communication), before
+// peer to remain completely idle (i.e. no inbound or outbound communication), before
 // we discard the connection.
 const maxPeerInactivityDuration = 5 * time.Minute
 
@@ -244,8 +244,8 @@ type WebsocketNetwork struct {
 	requestsTracker *RequestTracker
 	requestsLogger  *RequestLogger
 
-	// lastPeerConnectionsSent is the last time the peer connections were sent ( or attempted to be sent ) to the telemetry server.
-	lastPeerConnectionsSent time.Time
+	// peerStater collects and report peers connectivity telemetry
+	peerStater peerConnectionStater
 
 	// connPerfMonitor is used on outgoing connections to measure their relative message timing
 	connPerfMonitor *connectionPerformanceMonitor
@@ -597,7 +597,6 @@ func (wn *WebsocketNetwork) setup() {
 	wn.upgrader.ReadBufferSize = 4096
 	wn.upgrader.WriteBufferSize = 4096
 	wn.upgrader.EnableCompression = false
-	wn.lastPeerConnectionsSent = time.Now()
 	wn.router = mux.NewRouter()
 	if wn.config.EnableGossipService {
 		wn.router.Handle(GossipNetworkPath, wn)
@@ -1614,7 +1613,7 @@ func (wn *WebsocketNetwork) meshThread() {
 		// send the currently connected peers information to the
 		// telemetry server; that would allow the telemetry server
 		// to construct a cross-node map of all the nodes interconnections.
-		wn.sendPeerConnectionsTelemetryStatus()
+		wn.peerStater.sendPeerConnectionsTelemetryStatus(wn)
 	}
 }
 
@@ -1776,27 +1775,38 @@ func (wn *WebsocketNetwork) OnNetworkAdvance() {
 	}
 }
 
+type peerConnectionStater struct {
+	log logging.Logger
+
+	peerConnectionsUpdateInterval time.Duration
+	lastPeerConnectionsSent       time.Time
+}
+
+type peerSnapshoter interface {
+	peerSnapshot(peers []*wsPeer) ([]*wsPeer, int32)
+}
+
 // sendPeerConnectionsTelemetryStatus sends a snapshot of the currently connected peers
 // to the telemetry server. Internally, it's using a timer to ensure that it would only
 // send the information once every hour ( configurable via PeerConnectionsUpdateInterval )
-func (wn *WebsocketNetwork) sendPeerConnectionsTelemetryStatus() {
-	if !wn.log.GetTelemetryEnabled() {
+func (pcs *peerConnectionStater) sendPeerConnectionsTelemetryStatus(snapshoter peerSnapshoter) {
+	if !pcs.log.GetTelemetryEnabled() {
 		return
 	}
 	now := time.Now()
-	if wn.lastPeerConnectionsSent.Add(time.Duration(wn.config.PeerConnectionsUpdateInterval)*time.Second).After(now) || wn.config.PeerConnectionsUpdateInterval <= 0 {
+	if pcs.lastPeerConnectionsSent.Add(pcs.peerConnectionsUpdateInterval).After(now) || pcs.peerConnectionsUpdateInterval <= 0 {
 		// it's not yet time to send the update.
 		return
 	}
-	wn.lastPeerConnectionsSent = now
+	pcs.lastPeerConnectionsSent = now
 
 	var peers []*wsPeer
-	peers, _ = wn.peerSnapshot(peers)
-	connectionDetails := wn.getPeerConnectionTelemetryDetails(now, peers)
-	wn.log.EventWithDetails(telemetryspec.Network, telemetryspec.PeerConnectionsEvent, connectionDetails)
+	peers, _ = snapshoter.peerSnapshot(peers)
+	connectionDetails := getPeerConnectionTelemetryDetails(now, peers)
+	pcs.log.EventWithDetails(telemetryspec.Network, telemetryspec.PeerConnectionsEvent, connectionDetails)
 }
 
-func (wn *WebsocketNetwork) getPeerConnectionTelemetryDetails(now time.Time, peers []*wsPeer) telemetryspec.PeersConnectionDetails {
+func getPeerConnectionTelemetryDetails(now time.Time, peers []*wsPeer) telemetryspec.PeersConnectionDetails {
 	var connectionDetails telemetryspec.PeersConnectionDetails
 	for _, peer := range peers {
 		connDetail := telemetryspec.PeerConnectionDetails{
@@ -2305,6 +2315,11 @@ func NewWebsocketNetwork(log logging.Logger, config config.Local, phonebookAddre
 		peerID:            peerID,
 		peerIDSigner:      idSigner,
 		resolveSRVRecords: tools_network.ReadFromSRV,
+		peerStater: peerConnectionStater{
+			log:                           log,
+			peerConnectionsUpdateInterval: time.Duration(config.PeerConnectionsUpdateInterval) * time.Second,
+			lastPeerConnectionsSent:       time.Now(),
+		},
 	}
 
 	wn.setup()

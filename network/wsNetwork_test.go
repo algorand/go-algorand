@@ -129,11 +129,12 @@ func makeTestWebsocketNodeWithConfig(t testing.TB, conf config.Local, opts ...te
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Warn)
 	wn := &WebsocketNetwork{
-		log:       log,
-		config:    conf,
-		phonebook: phonebook.MakePhonebook(1, 1*time.Millisecond),
-		GenesisID: genesisID,
-		NetworkID: config.Devtestnet,
+		log:        log,
+		config:     conf,
+		phonebook:  phonebook.MakePhonebook(1, 1*time.Millisecond),
+		GenesisID:  genesisID,
+		NetworkID:  config.Devtestnet,
+		peerStater: peerConnectionStater{log: log},
 	}
 	// apply options to newly-created WebsocketNetwork, if provided
 	for _, opt := range opts {
@@ -1055,11 +1056,12 @@ func makeTestFilterWebsocketNode(t *testing.T, nodename string) *WebsocketNetwor
 	dc.OutgoingMessageFilterBucketCount = 3
 	dc.OutgoingMessageFilterBucketSize = 128
 	wn := &WebsocketNetwork{
-		log:       logging.TestingLog(t).With("node", nodename),
-		config:    dc,
-		phonebook: phonebook.MakePhonebook(1, 1*time.Millisecond),
-		GenesisID: genesisID,
-		NetworkID: config.Devtestnet,
+		log:        logging.TestingLog(t).With("node", nodename),
+		config:     dc,
+		phonebook:  phonebook.MakePhonebook(1, 1*time.Millisecond),
+		GenesisID:  genesisID,
+		NetworkID:  config.Devtestnet,
+		peerStater: peerConnectionStater{log: logging.TestingLog(t).With("node", nodename)},
 	}
 	require.True(t, wn.config.EnableIncomingMessageFilter)
 	wn.setup()
@@ -2476,7 +2478,7 @@ func TestWebsocketNetwork_checkServerResponseVariables(t *testing.T) {
 	noVersionHeader := http.Header{}
 	noVersionHeader.Set(NodeRandomHeader, wn.RandomID+"tag")
 	noVersionHeader.Set(GenesisHeader, wn.GenesisID)
-	responseVariableOk, matchingVersion = wn.checkServerResponseVariables(noVersionHeader, "addressX")
+	responseVariableOk, _ = wn.checkServerResponseVariables(noVersionHeader, "addressX")
 	require.Equal(t, false, responseVariableOk)
 
 	noRandomHeader := http.Header{}
@@ -2565,11 +2567,12 @@ func TestSlowPeerDisconnection(t *testing.T) {
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Info)
 	wn := &WebsocketNetwork{
-		log:       log,
-		config:    defaultConfig,
-		phonebook: phonebook.MakePhonebook(1, 1*time.Millisecond),
-		GenesisID: genesisID,
-		NetworkID: config.Devtestnet,
+		log:        log,
+		config:     defaultConfig,
+		phonebook:  phonebook.MakePhonebook(1, 1*time.Millisecond),
+		GenesisID:  genesisID,
+		NetworkID:  config.Devtestnet,
+		peerStater: peerConnectionStater{log: log},
 	}
 	wn.setup()
 	wn.broadcaster.slowWritingPeerMonitorInterval = time.Millisecond * 50
@@ -2640,11 +2643,12 @@ func TestForceMessageRelaying(t *testing.T) {
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Level(defaultConfig.BaseLoggerDebugLevel))
 	wn := &WebsocketNetwork{
-		log:       log,
-		config:    defaultConfig,
-		phonebook: phonebook.MakePhonebook(1, 1*time.Millisecond),
-		GenesisID: genesisID,
-		NetworkID: config.Devtestnet,
+		log:        log,
+		config:     defaultConfig,
+		phonebook:  phonebook.MakePhonebook(1, 1*time.Millisecond),
+		GenesisID:  genesisID,
+		NetworkID:  config.Devtestnet,
+		peerStater: peerConnectionStater{log: log},
 	}
 	wn.setup()
 	wn.eventualReadyDelay = time.Second
@@ -2734,11 +2738,12 @@ func TestCheckProtocolVersionMatch(t *testing.T) {
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Level(defaultConfig.BaseLoggerDebugLevel))
 	wn := &WebsocketNetwork{
-		log:       log,
-		config:    defaultConfig,
-		phonebook: phonebook.MakePhonebook(1, 1*time.Millisecond),
-		GenesisID: genesisID,
-		NetworkID: config.Devtestnet,
+		log:        log,
+		config:     defaultConfig,
+		phonebook:  phonebook.MakePhonebook(1, 1*time.Millisecond),
+		GenesisID:  genesisID,
+		NetworkID:  config.Devtestnet,
+		peerStater: peerConnectionStater{log: log},
 	}
 	wn.setup()
 	wn.supportedProtocolVersions = []string{"2", "1"}
@@ -3778,9 +3783,9 @@ func TestWebsocketNetworkTelemetryTCP(t *testing.T) {
 	// get RTT from both ends and assert nonzero
 	var peersA, peersB []*wsPeer
 	peersA, _ = netA.peerSnapshot(peersA)
-	detailsA := netA.getPeerConnectionTelemetryDetails(time.Now(), peersA)
+	detailsA := getPeerConnectionTelemetryDetails(time.Now(), peersA)
 	peersB, _ = netB.peerSnapshot(peersB)
-	detailsB := netB.getPeerConnectionTelemetryDetails(time.Now(), peersB)
+	detailsB := getPeerConnectionTelemetryDetails(time.Now(), peersB)
 	require.Len(t, detailsA.IncomingPeers, 1)
 	assert.NotZero(t, detailsA.IncomingPeers[0].TCP.RTT)
 	require.Len(t, detailsB.OutgoingPeers, 1)
@@ -3801,8 +3806,8 @@ func TestWebsocketNetworkTelemetryTCP(t *testing.T) {
 	defer closeFunc2()
 	//  use stale peers snapshot from closed networks to get telemetry
 	// *net.OpError "use of closed network connection" err results in 0 rtt values
-	detailsA = netA.getPeerConnectionTelemetryDetails(time.Now(), peersA)
-	detailsB = netB.getPeerConnectionTelemetryDetails(time.Now(), peersB)
+	detailsA = getPeerConnectionTelemetryDetails(time.Now(), peersA)
+	detailsB = getPeerConnectionTelemetryDetails(time.Now(), peersB)
 	require.Len(t, detailsA.IncomingPeers, 1)
 	assert.Zero(t, detailsA.IncomingPeers[0].TCP.RTT)
 	require.Len(t, detailsB.OutgoingPeers, 1)
