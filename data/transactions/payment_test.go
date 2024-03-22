@@ -21,6 +21,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
@@ -67,4 +68,51 @@ func TestAlgosEncoding(t *testing.T) {
 	if err == nil {
 		panic("decode of bool into MicroAlgos succeeded")
 	}
+}
+
+func TestCheckSpender(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	paramsCurrent := config.Consensus[protocol.ConsensusCurrentVersion]
+	paramsV7 := config.Consensus[protocol.ConsensusV7]
+
+	secretSrc := keypair()
+	src := basics.Address(secretSrc.SignatureVerifier)
+
+	secretDst := keypair()
+	dst := basics.Address(secretDst.SignatureVerifier)
+
+	tx := Transaction{
+		Type: protocol.PaymentTx,
+		Header: Header{
+			Sender:     src,
+			Fee:        basics.MicroAlgos{Raw: 1},
+			FirstValid: basics.Round(100),
+			LastValid:  basics.Round(1000),
+		},
+		PaymentTxnFields: PaymentTxnFields{
+			Receiver: dst,
+			Amount:   basics.MicroAlgos{Raw: uint64(50)},
+		},
+	}
+
+	feeSink := basics.Address{0x01}
+	poolAddr := basics.Address{0x02}
+	var spec = SpecialAddresses{
+		FeeSink:     feeSink,
+		RewardsPool: poolAddr,
+	}
+
+	tx.Sender = basics.Address(feeSink)
+	require.Error(t, tx.PaymentTxnFields.checkSpender(tx.Header, spec, paramsCurrent))
+
+	tx.Receiver = poolAddr
+	require.NoError(t, tx.PaymentTxnFields.checkSpender(tx.Header, spec, paramsCurrent))
+
+	tx.CloseRemainderTo = poolAddr
+	require.Error(t, tx.PaymentTxnFields.checkSpender(tx.Header, spec, paramsCurrent))
+	require.Error(t, tx.PaymentTxnFields.checkSpender(tx.Header, spec, paramsV7))
+
+	tx.Sender = src
+	require.NoError(t, tx.PaymentTxnFields.checkSpender(tx.Header, spec, paramsV7))
 }
