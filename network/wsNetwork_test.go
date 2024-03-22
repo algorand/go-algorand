@@ -1186,7 +1186,7 @@ func TestGetPeers(t *testing.T) {
 	phbMulti.ReplacePeerList([]string{"a", "b", "c"}, "ph", phonebook.PhoneBookEntryRelayRole)
 
 	// A few for archival node roles
-	phbMulti.ReplacePeerList([]string{"d", "e", "f"}, "ph", PhoneBookEntryArchivalRole)
+	phbMulti.ReplacePeerList([]string{"d", "e", "f"}, "ph", phonebook.PhoneBookEntryArchivalRole)
 
 	//addrB, _ := netB.Address()
 

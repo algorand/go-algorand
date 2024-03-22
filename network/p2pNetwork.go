@@ -615,15 +615,6 @@ func (n *P2PNetwork) GetPeers(options ...PeerOption) []Peer {
 					n.log.Debugf("Archival node(s) from DHT: %v", addrs)
 				}
 			}
-		case PeersPhonebookArchivers:
-			// TODO: remove after merging with master
-			// temporary return all nodes
-			n.wsPeersLock.RLock()
-			for _, peer := range n.wsPeers {
-				peers = append(peers, Peer(peer))
-			}
-			n.wsPeersLock.RUnlock()
-
 		case PeersConnectedIn:
 			n.wsPeersLock.RLock()
 			for _, peer := range n.wsPeers {
