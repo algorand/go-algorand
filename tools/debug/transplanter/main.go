@@ -393,7 +393,11 @@ func main() {
 			os.Exit(1)
 		}
 
-		followerNode.Start()
+		err = followerNode.Start()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Cannot start follower node: %v", err)
+			os.Exit(1)
+		}
 
 		for followerNode.Ledger().Latest() < basics.Round(*roundStart) {
 			fmt.Printf("At round %d, waiting for %d\n", followerNode.Ledger().Latest(), *roundStart)

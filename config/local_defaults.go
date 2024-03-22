@@ -20,7 +20,7 @@
 package config
 
 var defaultLocal = Local{
-	Version:                                    33,
+	Version:                                    34,
 	AccountUpdatesStatsInterval:                5000000000,
 	AccountsRebuildSynchronousMode:             1,
 	AgreementIncomingBundlesQueueLength:        15,
@@ -64,6 +64,7 @@ var defaultLocal = Local{
 	EnableAgreementTimeMetrics:                 false,
 	EnableAssembleStats:                        false,
 	EnableBlockService:                         false,
+	EnableDHTProviders:                         false,
 	EnableDeveloperAPI:                         false,
 	EnableExperimentalAPI:                      false,
 	EnableFollowMode:                           false,
@@ -74,6 +75,7 @@ var defaultLocal = Local{
 	EnableMetricReporting:                      false,
 	EnableOutgoingNetworkMessageFiltering:      true,
 	EnableP2P:                                  false,
+	EnableP2PHybridMode:                        false,
 	EnablePingHandler:                          true,
 	EnableProcessBlockStats:                    false,
 	EnableProfiler:                             false,
@@ -116,6 +118,7 @@ var defaultLocal = Local{
 	OptimizeAccountsDatabaseOnStartup:          false,
 	OutgoingMessageFilterBucketCount:           3,
 	OutgoingMessageFilterBucketSize:            128,
+	P2PListenAddress:                           "",
 	P2PPersistPeerID:                           false,
 	P2PPrivateKeyLocation:                      "",
 	ParticipationKeysRefreshInterval:           60000000000,

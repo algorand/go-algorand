@@ -46,7 +46,7 @@ func prioResponseHandler(message IncomingMessage) OutgoingMessage {
 
 	addr, err := wn.prioScheme.VerifyPrioResponse(challenge, message.Data)
 	if err != nil {
-		wn.log.Warnf("prioScheme.VerifyPrioResponse from %s: %v", peer.rootURL, err)
+		wn.log.Warnf("prioScheme.VerifyPrioResponse from %s: %v", peer.GetAddress(), err)
 	} else {
 		weight := wn.prioScheme.GetPrioWeight(addr)
 

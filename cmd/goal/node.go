@@ -39,7 +39,7 @@ import (
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/libgoal"
-	"github.com/algorand/go-algorand/network"
+	naddr "github.com/algorand/go-algorand/network/addr"
 	"github.com/algorand/go-algorand/nodecontrol"
 	"github.com/algorand/go-algorand/util"
 	"github.com/algorand/go-algorand/util/tokens"
@@ -751,7 +751,7 @@ func verifyPeerDialArg() bool {
 
 	// make sure that the format of each entry is valid:
 	for _, peer := range strings.Split(peerDial, ";") {
-		_, err := network.ParseHostOrURLOrMultiaddr(peer)
+		_, err := naddr.ParseHostOrURLOrMultiaddr(peer)
 		if err != nil {
 			reportErrorf("Provided peer '%s' is not a valid peer address : %v", peer, err)
 			return false

@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package network
+package limitcaller
 
 import (
 	"errors"
@@ -24,22 +24,32 @@ import (
 	"github.com/algorand/go-algorand/util"
 )
 
-// rateLimitingTransport is the transport for execute a single HTTP transaction, obtaining the Response for a given Request.
-type rateLimitingTransport struct {
-	phonebook       Phonebook
-	innerTransport  *http.Transport
-	queueingTimeout time.Duration
+// ConnectionTimeStore is a subset of the phonebook that is used to store the connection times.
+type ConnectionTimeStore interface {
+	GetConnectionWaitTime(addrOrInfo interface{}) (bool, time.Duration, time.Time)
+	UpdateConnectionTime(addrOrInfo interface{}, provisionalTime time.Time) bool
 }
+
+// RateLimitingTransport is the transport for execute a single HTTP transaction, obtaining the Response for a given Request.
+type RateLimitingTransport struct {
+	phonebook       ConnectionTimeStore
+	innerTransport  http.RoundTripper
+	queueingTimeout time.Duration
+	targetAddr      interface{} // target address for the p2p http request
+}
+
+// DefaultQueueingTimeout is the default timeout for queueing the request.
+const DefaultQueueingTimeout = 10 * time.Second
 
 // ErrConnectionQueueingTimeout indicates that we've exceeded the time allocated for
 // queueing the current request before the request attempt could be made.
 var ErrConnectionQueueingTimeout = errors.New("rateLimitingTransport: queueing timeout")
 
-// makeRateLimitingTransport creates a rate limiting http transport that would limit the requests rate
+// MakeRateLimitingTransport creates a rate limiting http transport that would limit the requests rate
 // according to the entries in the phonebook.
-func makeRateLimitingTransport(phonebook Phonebook, queueingTimeout time.Duration, dialer *Dialer, maxIdleConnsPerHost int) rateLimitingTransport {
+func MakeRateLimitingTransport(phonebook ConnectionTimeStore, queueingTimeout time.Duration, dialer *Dialer, maxIdleConnsPerHost int) RateLimitingTransport {
 	defaultTransport := http.DefaultTransport.(*http.Transport)
-	return rateLimitingTransport{
+	return RateLimitingTransport{
 		phonebook: phonebook,
 		innerTransport: &http.Transport{
 			Proxy:                 defaultTransport.Proxy,
@@ -54,14 +64,30 @@ func makeRateLimitingTransport(phonebook Phonebook, queueingTimeout time.Duratio
 	}
 }
 
+// MakeRateLimitingTransportWithTransport creates a rate limiting http transport that would limit the requests rate
+// according to the entries in the phonebook.
+func MakeRateLimitingTransportWithTransport(phonebook ConnectionTimeStore, queueingTimeout time.Duration, rt http.RoundTripper, target interface{}, maxIdleConnsPerHost int) RateLimitingTransport {
+	return RateLimitingTransport{
+		phonebook:       phonebook,
+		innerTransport:  rt,
+		queueingTimeout: queueingTimeout,
+		targetAddr:      target,
+	}
+}
+
 // RoundTrip connects to the address on the named network using the provided context.
 // It waits if needed not to exceed connectionsRateLimitingCount.
-func (r *rateLimitingTransport) RoundTrip(req *http.Request) (res *http.Response, err error) {
+func (r *RateLimitingTransport) RoundTrip(req *http.Request) (res *http.Response, err error) {
 	var waitTime time.Duration
 	var provisionalTime time.Time
 	queueingDeadline := time.Now().Add(r.queueingTimeout)
+	var host interface{} = req.Host
+	if len(req.Host) == 0 && req.URL != nil && len(req.URL.Host) == 0 {
+		// p2p/http clients have per-connection transport and address info so use that
+		host = r.targetAddr
+	}
 	for {
-		_, waitTime, provisionalTime = r.phonebook.GetConnectionWaitTime(req.Host)
+		_, waitTime, provisionalTime = r.phonebook.GetConnectionWaitTime(host)
 		if waitTime == 0 {
 			break // break out of the loop and proceed to the connection
 		}
@@ -73,6 +99,6 @@ func (r *rateLimitingTransport) RoundTrip(req *http.Request) (res *http.Response
 		return nil, ErrConnectionQueueingTimeout
 	}
 	res, err = r.innerTransport.RoundTrip(req)
-	r.phonebook.UpdateConnectionTime(req.Host, provisionalTime)
+	r.phonebook.UpdateConnectionTime(host, provisionalTime)
 	return
 }

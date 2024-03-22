@@ -179,7 +179,11 @@ func main() {
 		*genesisID,
 		protocol.NetworkID(*networkID))
 	setDumpHandlers(n)
-	n.Start()
+	err := n.Start()
+	if err != nil {
+		log.Errorf("Failed to start network: %v", err)
+		return
+	}
 
 	for {
 		time.Sleep(time.Second)

@@ -32,7 +32,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
-	"github.com/algorand/go-algorand/network"
+	"github.com/algorand/go-algorand/network/addr"
 	"github.com/algorand/go-algorand/protocol"
 	toolsnet "github.com/algorand/go-algorand/tools/network"
 	"github.com/algorand/go-algorand/util"
@@ -276,7 +276,7 @@ func run() int {
 
 		// make sure that the format of each entry is valid:
 		for idx, peer := range peerOverrideArray {
-			addr, addrErr := network.ParseHostOrURLOrMultiaddr(peer)
+			addr, addrErr := addr.ParseHostOrURLOrMultiaddr(peer)
 			if addrErr != nil {
 				fmt.Fprintf(os.Stderr, "Provided command line parameter '%s' is not a valid host:port pair\n", peer)
 				return 1

@@ -31,6 +31,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
+	"github.com/algorand/go-algorand/network/addr"
 )
 
 const (
@@ -94,12 +95,12 @@ func makeTrackerRequest(remoteAddr, remoteHost, remotePort string, createTime ti
 //   - remoteAddr is used otherwise.
 func (tr *TrackerRequest) remoteAddress() string {
 	if len(tr.otherPublicAddr) != 0 {
-		url, err := ParseHostOrURL(tr.otherPublicAddr)
+		url, err := addr.ParseHostOrURL(tr.otherPublicAddr)
 		if err == nil && len(tr.remoteHost) > 0 && url.Hostname() == tr.remoteHost {
 			return tr.otherPublicAddr
 		}
 	}
-	url, err := ParseHostOrURL(tr.remoteAddr)
+	url, err := addr.ParseHostOrURL(tr.remoteAddr)
 	if err != nil {
 		// tr.remoteAddr can't be parsed so try to use tr.remoteHost
 		// there is a chance it came from a proxy and has a meaningful value
