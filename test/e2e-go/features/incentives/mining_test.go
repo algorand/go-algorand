@@ -86,16 +86,16 @@ func TestBasicPayouts(t *testing.T) {
 		block, err := client.BookkeepingBlock(status.LastRound)
 		a.NoError(err)
 
-		fmt.Printf(" 1 block %d proposed by %v\n", status.LastRound, block.Proposer)
+		fmt.Printf(" 1 block %d proposed by %v\n", status.LastRound, block.Proposer())
 		a.Zero(block.ProposerPayout()) // nobody is eligible yet (hasn't worked back to balance round)
 		a.EqualValues(5_000_000, block.Bonus.Raw)
 		fixture.WaitForRoundWithTimeout(status.LastRound + 1)
 
 		// incentives would pay out in the next round (they won't here, but makes the test realistic)
-		next, err := client.AccountData(block.Proposer.String())
+		next, err := client.AccountData(block.Proposer().String())
 		a.EqualValues(next.LastProposed, status.LastRound)
 		// regardless of proposer, nobody gets paid
-		switch block.Proposer.String() {
+		switch block.Proposer().String() {
 		case account01.Address:
 			a.Equal(data01.MicroAlgos, next.MicroAlgos)
 			data01 = next
@@ -118,16 +118,16 @@ func TestBasicPayouts(t *testing.T) {
 		block, err := client.BookkeepingBlock(status.LastRound)
 		a.NoError(err)
 
-		fmt.Printf(" 3 block %d proposed by %v\n", status.LastRound, block.Proposer)
+		fmt.Printf(" 3 block %d proposed by %v\n", status.LastRound, block.Proposer())
 		a.EqualValues(5_000_000, block.Bonus.Raw)
 
 		// incentives would pay out in the next round so wait to see them
 		fixture.WaitForRoundWithTimeout(status.LastRound + 1)
-		next, err := client.AccountData(block.Proposer.String())
-		fmt.Printf(" proposer %v has %d at round %d\n", block.Proposer, next.MicroAlgos.Raw, status.LastRound)
+		next, err := client.AccountData(block.Proposer().String())
+		fmt.Printf(" proposer %v has %d at round %d\n", block.Proposer(), next.MicroAlgos.Raw, status.LastRound)
 
 		// 01 would get paid (because under balance cap) 15 would not
-		switch block.Proposer.String() {
+		switch block.Proposer().String() {
 		case account01.Address:
 			a.NotZero(block.ProposerPayout())
 			a.NotEqual(data01.MicroAlgos, next.MicroAlgos)
@@ -188,8 +188,10 @@ func rekeyreg(f *fixtures.RestClientFixture, a *require.Assertions, client libgo
 	a.NoError(err)
 
 	data, err := client.AccountData(address)
-	a.True(data.LastHeartbeat == 0)
 	a.NoError(err)
+	a.Equal(basics.Online, data.Status) // must already be online for this to work
+	a.True(data.LastHeartbeat == 0)
+	a.False(data.IncentiveEligible)
 	reReg.KeyregTxnFields = transactions.KeyregTxnFields{
 		VotePK:          data.VoteID,
 		SelectionPK:     data.SelectionID,
@@ -208,8 +210,8 @@ func rekeyreg(f *fixtures.RestClientFixture, a *require.Assertions, client libgo
 	data, err = client.AccountData(address)
 	a.NoError(err)
 	a.Equal(basics.Online, data.Status)
-	a.True(data.IncentiveEligible)
 	a.True(data.LastHeartbeat > 0)
+	a.True(data.IncentiveEligible)
 	fmt.Printf(" %v has %v in round %d\n", address, data.MicroAlgos.Raw, *txn.ConfirmedRound)
 	return data
 }

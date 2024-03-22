@@ -1418,7 +1418,6 @@ func TestAbsenteeChecks(t *testing.T) {
 		}
 	}
 	challenged := basics.Address{(challenge >> 3) << 3, 0xaa}
-	fmt.Printf("challenge = %x challenged = %v\n", challenge, challenged)
 
 	pay := func(i int, a basics.Address) transactions.Transaction {
 		return transactions.Transaction{

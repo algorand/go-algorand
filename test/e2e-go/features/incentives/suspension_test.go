@@ -80,11 +80,11 @@ func TestBasicSuspension(t *testing.T) {
 		block, err := c10.BookkeepingBlock(status.LastRound)
 		a.NoError(err)
 
-		fmt.Printf(" block %d proposed by %v\n", status.LastRound, block.Proposer)
+		fmt.Printf(" block %d proposed by %v\n", status.LastRound, block.Proposer())
 
 		fixture.WaitForRoundWithTimeout(status.LastRound + 1)
 
-		switch block.Proposer.String() {
+		switch block.Proposer().String() {
 		case account10.Address:
 			proposed10 = true
 		case account20.Address:
