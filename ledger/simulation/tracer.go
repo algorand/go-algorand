@@ -98,14 +98,16 @@ type evalTracer struct {
 	// scratchSlots are the scratch slots changed on current opcode (currently either `store` or `stores`).
 	// NOTE: this field scratchSlots is used only for scratch change exposure.
 	scratchSlots []uint64
+
+	groups [][]transactions.SignedTxnWithAD
 }
 
-func makeEvalTracer(lastRound basics.Round, request Request, developerAPI bool) (*evalTracer, error) {
+func makeEvalTracer(lastRound basics.Round, group []transactions.SignedTxnWithAD, request Request, developerAPI bool) (*evalTracer, error) {
 	result, err := makeSimulationResult(lastRound, request, developerAPI)
 	if err != nil {
 		return nil, err
 	}
-	return &evalTracer{result: &result}, nil
+	return &evalTracer{result: &result, groups: [][]transactions.SignedTxnWithAD{group}}, nil
 }
 
 // handleError is responsible for setting the failedAt field properly.
@@ -511,5 +513,43 @@ func (tracer *evalTracer) AfterProgram(cx *logic.EvalContext, pass bool, evalErr
 		}
 	} else {
 		tracer.handleError(evalError)
+	}
+
+	fixAuthAddrs := true
+
+	// Since an app could rekey multiple accounts, we need to go over the
+	// rest of the txngroup and make sure all the auth addrs are correct
+	if fixAuthAddrs {
+		knownAuthAddrs := make(map[basics.Address]basics.Address)
+		// iterate over all txns in the group after this one
+		for i := groupIndex + 1; i < len(cx.TxnGroup); i++ {
+			stxn := &tracer.groups[0][i]
+			sender := stxn.Txn.Sender
+
+			// Check if we already know the auth addr
+			if authAddr, ok := knownAuthAddrs[sender]; ok {
+				stxn.AuthAddr = authAddr
+			} else {
+				// Get the auth addr from the ledger
+				data, err := cx.Ledger.AccountData(sender)
+				if err != nil {
+					panic(err)
+				}
+
+				// set the txn auth addr
+				stxn.AuthAddr = data.AuthAddr
+				knownAuthAddrs[sender] = data.AuthAddr
+			}
+
+			// If this is an appl, we can break since we know AfterProgram will be called afterwards
+			if stxn.Txn.Type == protocol.ApplicationCallTx {
+				break
+			}
+
+			// If this is a rekey, save the auth addr for the sender
+			if stxn.Txn.RekeyTo != (basics.Address{}) {
+				knownAuthAddrs[sender] = stxn.Txn.RekeyTo
+			}
+		}
 	}
 }
