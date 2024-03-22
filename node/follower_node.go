@@ -127,6 +127,11 @@ func MakeFollower(log logging.Logger, rootDir string, cfg config.Local, phoneboo
 	}
 
 	node.ledger.RegisterBlockListeners(blockListeners)
+
+	if cfg.IsGossipServer() {
+		rpcs.MakeHealthService(node.net)
+	}
+
 	node.blockService = rpcs.MakeBlockService(node.log, cfg, node.ledger, p2pNode, node.genesisID)
 	node.catchupBlockAuth = blockAuthenticatorImpl{Ledger: node.ledger, AsyncVoteVerifier: agreement.MakeAsyncVoteVerifier(node.lowPriorityCryptoVerificationPool)}
 	node.catchupService = catchup.MakeService(node.log, node.config, p2pNode, node.ledger, node.catchupBlockAuth, make(chan catchup.PendingUnmatchedCertificate), node.lowPriorityCryptoVerificationPool)

@@ -29,12 +29,12 @@ import (
 )
 
 const (
-	// peerRankInitialFirstPriority is the high-priority peers group ( typically, archivers )
+	// peerRankInitialFirstPriority is the high-priority peers group
 	peerRankInitialFirstPriority = 0
 	peerRank0LowBlockTime        = 1
 	peerRank0HighBlockTime       = 199
 
-	// peerRankInitialSecondPriority is the second priority peers group ( typically, relays )
+	// peerRankInitialSecondPriority is the second priority peers group
 	peerRankInitialSecondPriority = 200
 	peerRank1LowBlockTime         = 201
 	peerRank1HighBlockTime        = 399
@@ -54,6 +54,10 @@ const (
 	// peerRankNoBlockForRound is used for responses failed because of no block for round
 	// This indicates a peer is either behind or a block has not happened yet, or does not have a block that is old enough.
 	peerRankNoBlockForRound = 2000
+
+	// peerRankNoCatchpointForRound is used for responses failed because of no catchpoint for round
+	// This indicates a peer is either behind or a catchpoint has not been produced, or this node did not retain this catchpoint (aged out).
+	peerRankNoCatchpointForRound = 2000
 
 	// peerRankDownloadFailed is used for responses which could be temporary, such as missing files, or such that we don't
 	// have clear resolution

@@ -17,7 +17,7 @@ fi
 # as the algorand user.
 if [ "$(id -u)" = '0' ]; then
   chown -R algorand:algorand $ALGORAND_DATA
-  exec gosu algorand "$0" "$@"
+  exec su -p -c "$(readlink -f $0) $@" algorand
 fi
 
 # Script to configure or resume a network. Based on environment settings the

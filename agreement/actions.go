@@ -232,7 +232,7 @@ type ensureAction struct {
 	Payload proposal
 	// the certificate proving commitment
 	Certificate Certificate
-	// The time that the winning proposal-vote was validated for round credentialRoundLag back from the current one
+	// The time that the lowest proposal-vote was validated for `credentialRoundLag` rounds ago (R-credentialRoundLag). This may not have been the winning proposal, since we wait `credentialRoundLag` rounds to see if there was a better one.
 	voteValidatedAt time.Duration
 	// The dynamic filter timeout calculated for this round, even if not enabled, for reporting to telemetry.
 	dynamicFilterTimeout time.Duration
