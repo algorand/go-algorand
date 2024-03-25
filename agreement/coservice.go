@@ -22,7 +22,7 @@ import (
 	"github.com/algorand/go-algorand/logging"
 )
 
-//go:generate stringer -type=coserviceType
+//go:generate go run golang.org/x/tools/cmd/stringer@v0.17.0 -type=coserviceType
 const (
 	demuxCoserviceType coserviceType = iota
 	tokenizerCoserviceType

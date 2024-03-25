@@ -24,7 +24,7 @@ import (
 // LedgerType is an enum identifying a specific type of LedgerEvent
 // TODO Maybe this should be called LedgerEventType, since these are not actually types of ledgers
 //
-//go:generate stringer -type=LedgerType
+//go:generate go run golang.org/x/tools/cmd/stringer@v0.17.0 -type=LedgerType
 type LedgerType int
 
 const (

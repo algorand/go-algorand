@@ -70,7 +70,7 @@ type externalEvent interface {
 // interface.  The semantics of an event depends on the eventType and not on the
 // type of the implementing struct.
 //
-//go:generate stringer -type=eventType
+//go:generate go run golang.org/x/tools/cmd/stringer@v0.17.0 -type=eventType
 type eventType uint8
 
 const (

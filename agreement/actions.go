@@ -26,7 +26,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-//go:generate stringer -type=actionType
+//go:generate go run golang.org/x/tools/cmd/stringer@v0.17.0 -type=actionType
 type actionType uint8
 
 const (

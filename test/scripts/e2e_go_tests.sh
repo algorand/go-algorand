@@ -7,13 +7,8 @@ set -o pipefail
 
 export GOPATH=$(go env GOPATH)
 
-# Needed for now because circleci doesn't use makefile yet
-if [ -z "$(which gotestsum)" ]; then
-    GOTESTCOMMAND=${GOTESTCOMMAND:="go test"}
-else
-    TEST_RESULTS=${TEST_RESULTS:="$(pwd)"}
-    GOTESTCOMMAND=${GOTESTCOMMAND:="gotestsum --format testname --junitfile ${TEST_RESULTS}/results.xml --jsonfile ${TEST_RESULTS}/testresults.json --"}
-fi
+TEST_RESULTS=${TEST_RESULTS:="$(pwd)"}
+GOTESTCOMMAND=${GOTESTCOMMAND:="go run gotest.tools/gotestsum@v1.10.0 --format testname --junitfile ${TEST_RESULTS}/results.xml --jsonfile ${TEST_RESULTS}/testresults.json --"}
 
 echo "GOTESTCOMMAND will be: ${GOTESTCOMMAND}"
 

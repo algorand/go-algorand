@@ -32,7 +32,7 @@ idea of the performance difference, [here are some benchmarks for Transactions](
 
 ## Code generation
 
-Install `msgp` with [install_buildtools.sh](scripts/buildtools/install_buildtools.sh) and use it with `make msgp`.
+Generate messagepack code with `make msgp`.
 
 The generated Marshal and Unmarshal utilities are located in `msgp_gen.go`
 files. Update `MSGP_GENERATE` in the Makefile to add another package.
