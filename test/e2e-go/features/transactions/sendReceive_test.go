@@ -81,7 +81,7 @@ func testAccountsCanSendMoney(t *testing.T, templatePath string, numberOfSends i
 	pingAccount := pingAccountList[0].Address
 
 	pongClient := fixture.GetLibGoalClientForNamedNode("Node")
-	pongAccounts, err := fixture.GetNodeWalletsSortedByBalance(pongClient.DataDir())
+	pongAccounts, err := fixture.GetNodeWalletsSortedByBalance(pongClient)
 	a.NoError(err)
 	var pongAccount string
 	for _, acct := range pongAccounts {

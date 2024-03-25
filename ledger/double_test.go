@@ -48,6 +48,9 @@ type DoubleLedger struct {
 	validator *Ledger
 
 	eval *eval.BlockEvaluator
+
+	// proposer is the default proposer unless one is supplied to endBlock.
+	proposer basics.Address
 }
 
 func (dl DoubleLedger) Close() {
@@ -59,7 +62,7 @@ func (dl DoubleLedger) Close() {
 func NewDoubleLedger(t testing.TB, balances bookkeeping.GenesisBalances, cv protocol.ConsensusVersion, cfg config.Local, opts ...simpleLedgerOption) DoubleLedger {
 	g := newSimpleLedgerWithConsensusVersion(t, balances, cv, cfg, opts...)
 	v := newSimpleLedgerFull(t, balances, cv, g.GenesisHash(), cfg, opts...)
-	return DoubleLedger{t, g, v, nil}
+	return DoubleLedger{t, g, v, nil, balances.FeeSink} // FeeSink as proposer will make old code work as expected
 }
 
 func (dl *DoubleLedger) beginBlock() *eval.BlockEvaluator {
@@ -134,8 +137,13 @@ func (dl *DoubleLedger) fullBlock(txs ...*txntest.Txn) *ledgercore.ValidatedBloc
 	return dl.endBlock()
 }
 
-func (dl *DoubleLedger) endBlock() *ledgercore.ValidatedBlock {
-	vb := endBlock(dl.t, dl.generator, dl.eval)
+func (dl *DoubleLedger) endBlock(proposer ...basics.Address) *ledgercore.ValidatedBlock {
+	prp := dl.proposer
+	if len(proposer) > 0 {
+		require.Len(dl.t, proposer, 1, "endBlock() cannot specify multiple proposers")
+		prp = proposer[0]
+	}
+	vb := endBlock(dl.t, dl.generator, dl.eval, prp)
 	if dl.validator != nil { // Allows setting to nil while debugging, to simplify
 		checkBlock(dl.t, dl.validator, vb)
 	}
@@ -195,7 +203,10 @@ func checkBlock(t testing.TB, checkLedger *Ledger, vb *ledgercore.ValidatedBlock
 		require.NoError(t, err, "%+v", reconstituted.Payset)
 	}
 	check.SetGenerateForTesting(true)
-	cb := endBlock(t, checkLedger, check)
+	// We use the same value for seed and proposer. But the proposer is
+	// sometimes zero'd to account for mining being disabled. So we get the
+	// blocks to match by providing the Seed as the proposer.
+	cb := endBlock(t, checkLedger, check, basics.Address(vb.Block().BlockHeader.Seed))
 	check.SetGenerateForTesting(false)
 	require.Equal(t, vb.Block(), cb.Block())
 

@@ -231,7 +231,7 @@ func doBenchTemplate(b *testing.B, template string, moneynode string) {
 				time.Sleep(5 * time.Second)
 			}
 
-			_, err = fixture.WaitForConfirmedTxn(status.LastRound+100, addr, tx.ID().String())
+			_, err = fixture.WaitForConfirmedTxn(status.LastRound+100, tx.ID().String())
 			fmt.Printf("Waiting for confirmation transaction to commit..\n")
 			a.NoError(err)
 		}

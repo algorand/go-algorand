@@ -304,6 +304,11 @@ func (s *OneTimeSignatureSecrets) Sign(id OneTimeSignatureIdentifier, message Ha
 	return OneTimeSignature{}
 }
 
+// IsEmpty returns true if the verifier is empty/zero'd.
+func (v OneTimeSignatureVerifier) IsEmpty() bool {
+	return v == OneTimeSignatureVerifier{}
+}
+
 // Verify verifies that some Hashable signature was signed under some
 // OneTimeSignatureVerifier and some OneTimeSignatureIdentifier.
 //

@@ -25,25 +25,25 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-// testGenesisCfg provides a configuration object for NewTestGenesis.
-type testGenesisCfg struct {
+// GenesisCfg provides a configuration object for NewTestGenesis.
+type GenesisCfg struct {
 	rewardsPoolAmount basics.MicroAlgos
+	OnlineCount       int
 }
 
 // TestGenesisOption provides functional options for testGenesisCfg.
-type TestGenesisOption func(*testGenesisCfg)
+type TestGenesisOption func(*GenesisCfg)
 
-// TestGenesisRewardsPoolSize configures the rewards pool size in the genesis block.
-func TestGenesisRewardsPoolSize(amount basics.MicroAlgos) TestGenesisOption {
-	return func(cfg *testGenesisCfg) { cfg.rewardsPoolAmount = amount }
-}
+// TurnOffRewards turns off the rewards pool for tests that are sensitive to
+// "surprise" balance changes.
+var TurnOffRewards = func(cfg *GenesisCfg) { cfg.rewardsPoolAmount = basics.MicroAlgos{Raw: 100_000} }
 
 // NewTestGenesis creates a bunch of accounts, splits up 10B algos
 // between them and the rewardspool and feesink, and gives out the
 // addresses and secrets it creates to enable tests.  For special
 // scenarios, manipulate these return values before using newTestLedger.
 func NewTestGenesis(opts ...TestGenesisOption) (bookkeeping.GenesisBalances, []basics.Address, []*crypto.SignatureSecrets) {
-	var cfg testGenesisCfg
+	var cfg GenesisCfg
 	for _, opt := range opts {
 		opt(&cfg)
 	}
@@ -75,6 +75,15 @@ func NewTestGenesis(opts ...TestGenesisOption) (bookkeeping.GenesisBalances, []b
 
 		adata := basics.AccountData{
 			MicroAlgos: basics.MicroAlgos{Raw: amount},
+			Status:     basics.Offline,
+		}
+		if i < cfg.OnlineCount {
+			adata.Status = basics.Online
+			adata.VoteFirstValid = 0
+			adata.VoteLastValid = 1_000_000
+			crypto.RandBytes(adata.VoteID[:])
+			crypto.RandBytes(adata.SelectionID[:])
+			crypto.RandBytes(adata.StateProofID[:])
 		}
 		accts[addrs[i]] = adata
 	}

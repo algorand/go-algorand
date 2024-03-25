@@ -2621,20 +2621,21 @@ func TestAccountOnlineAccountsNewRound(t *testing.T) {
 	deltaC.newAcct[0].VoteFirstValid = 0
 	updates.deltas = []onlineAccountDelta{deltaC}
 	_, err = onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
-	require.Error(t, err)
+	require.ErrorContains(t, err, "empty voting data for online account")
 
-	// check errors: new non-online with non-empty voting data
+	// It used to be an error to go offline with non-empty voting data, but
+	// account suspension makes it legal.
 	deltaB.newStatus[0] = basics.Offline
 	deltaB.newAcct[0].VoteFirstValid = 1
 	updates.deltas = []onlineAccountDelta{deltaB}
 	_, err = onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
-	require.Error(t, err)
+	require.NoError(t, err)
 
 	// check errors: new online with empty voting data
 	deltaD.newStatus[0] = basics.Online
 	updates.deltas = []onlineAccountDelta{deltaD}
 	_, err = onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
-	require.Error(t, err)
+	require.ErrorContains(t, err, "empty voting data for online account")
 }
 
 func TestAccountOnlineAccountsNewRoundFlip(t *testing.T) {
@@ -2937,8 +2938,7 @@ func TestOnlineAccountsNewRoundError(t *testing.T) {
 	updates.deltas = append(updates.deltas, deltaA)
 	lastUpdateRound := basics.Round(1)
 	updated, err := onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
-	require.Error(t, err)
-	require.Equal(t, errMockOnlineAccountsErrorWriter, err)
+	require.ErrorIs(t, err, errMockOnlineAccountsErrorWriter)
 	require.Empty(t, updated)
 
 	// update acct A => exercise "update"
@@ -2965,8 +2965,7 @@ func TestOnlineAccountsNewRoundError(t *testing.T) {
 	updates.deltas = append(updates.deltas, deltaA2)
 	lastUpdateRound = basics.Round(3)
 	updated, err = onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
-	require.Error(t, err)
-	require.Equal(t, errMockOnlineAccountsErrorWriter, err)
+	require.ErrorIs(t, err, errMockOnlineAccountsErrorWriter)
 	require.Empty(t, updated)
 
 	// make acct A offline => exercise "deletion"
@@ -2993,8 +2992,7 @@ func TestOnlineAccountsNewRoundError(t *testing.T) {
 	updates.deltas = append(updates.deltas, deltaA3)
 	lastUpdateRound = basics.Round(4)
 	updated, err = onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
-	require.Error(t, err)
-	require.Equal(t, errMockOnlineAccountsErrorWriter, err)
+	require.ErrorIs(t, err, errMockOnlineAccountsErrorWriter)
 	require.Empty(t, updated)
 }
 
@@ -3200,8 +3198,7 @@ func TestAccountsNewRoundError(t *testing.T) {
 			}
 			lastUpdateRound := basics.Round(i + 1)
 			updatedAcct, updatedResources, updatedKvs, err := accountsNewRoundImpl(writer, updates, resources, kvs, creatables, proto, lastUpdateRound)
-			require.Error(t, err)
-			require.Equal(t, test.expErr, err)
+			require.ErrorIs(t, err, test.expErr)
 			require.Empty(t, updatedAcct)
 			require.Empty(t, updatedResources)
 			require.Empty(t, updatedKvs)

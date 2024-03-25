@@ -23,6 +23,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/stateproofmsg"
@@ -55,6 +56,7 @@ type Txn struct {
 	VoteLast         basics.Round
 	VoteKeyDilution  uint64
 	Nonparticipation bool
+	StateProofPK     merklesignature.Commitment
 
 	Receiver         basics.Address
 	Amount           uint64
@@ -147,30 +149,39 @@ func (tx *Txn) FillDefaults(params config.ConsensusParams) {
 		tx.LastValid = tx.FirstValid + basics.Round(params.MaxTxnLife)
 	}
 
-	if tx.Type == protocol.ApplicationCallTx &&
-		(tx.ApplicationID == 0 || tx.OnCompletion == transactions.UpdateApplicationOC) {
-
-		switch program := tx.ApprovalProgram.(type) {
-		case nil:
-			tx.ApprovalProgram = fmt.Sprintf("#pragma version %d\nint 1", params.LogicSigVersion)
-		case string:
-			if program != "" && !strings.Contains(program, "#pragma version") {
-				pragma := fmt.Sprintf("#pragma version %d\n", params.LogicSigVersion)
-				tx.ApprovalProgram = pragma + program
+	switch tx.Type {
+	case protocol.KeyRegistrationTx:
+		if !tx.VotePK.MsgIsZero() && !tx.SelectionPK.MsgIsZero() {
+			if tx.VoteLast == 0 {
+				tx.VoteLast = tx.VoteFirst + 1_000_000
 			}
-		case []byte:
+		}
+	case protocol.ApplicationCallTx:
+		// fill in empty programs
+		if tx.ApplicationID == 0 || tx.OnCompletion == transactions.UpdateApplicationOC {
+			switch program := tx.ApprovalProgram.(type) {
+			case nil:
+				tx.ApprovalProgram = fmt.Sprintf("#pragma version %d\nint 1", params.LogicSigVersion)
+			case string:
+				if program != "" && !strings.Contains(program, "#pragma version") {
+					pragma := fmt.Sprintf("#pragma version %d\n", params.LogicSigVersion)
+					tx.ApprovalProgram = pragma + program
+				}
+			case []byte:
+			}
+
+			switch program := tx.ClearStateProgram.(type) {
+			case nil:
+				tx.ClearStateProgram = tx.ApprovalProgram
+			case string:
+				if program != "" && !strings.Contains(program, "#pragma version") {
+					pragma := fmt.Sprintf("#pragma version %d\n", params.LogicSigVersion)
+					tx.ClearStateProgram = pragma + program
+				}
+			case []byte:
+			}
 		}
 
-		switch program := tx.ClearStateProgram.(type) {
-		case nil:
-			tx.ClearStateProgram = tx.ApprovalProgram
-		case string:
-			if program != "" && !strings.Contains(program, "#pragma version") {
-				pragma := fmt.Sprintf("#pragma version %d\n", params.LogicSigVersion)
-				tx.ClearStateProgram = pragma + program
-			}
-		case []byte:
-		}
 	}
 }
 
@@ -228,6 +239,7 @@ func (tx Txn) Txn() transactions.Transaction {
 			VoteLast:         tx.VoteLast,
 			VoteKeyDilution:  tx.VoteKeyDilution,
 			Nonparticipation: tx.Nonparticipation,
+			StateProofPK:     tx.StateProofPK,
 		},
 		PaymentTxnFields: transactions.PaymentTxnFields{
 			Receiver:         tx.Receiver,

@@ -26,6 +26,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/ledger/eval"
@@ -100,6 +101,9 @@ func fillDefaults(t testing.TB, ledger *Ledger, eval *eval.BlockEvaluator, txn *
 	if txn.FirstValid == 0 {
 		txn.FirstValid = eval.Round()
 	}
+	if txn.Type == protocol.KeyRegistrationTx && txn.VoteFirst == 0 {
+		txn.VoteFirst = eval.Round()
+	}
 
 	txn.FillDefaults(ledger.GenesisProto())
 }
@@ -136,11 +140,31 @@ func txgroup(t testing.TB, ledger *Ledger, eval *eval.BlockEvaluator, txns ...*t
 	return eval.TransactionGroup(transactions.WrapSignedTxnsWithAD(txgroup))
 }
 
-// endBlock completes the block being created, returns the ValidatedBlock for inspection
-func endBlock(t testing.TB, ledger *Ledger, eval *eval.BlockEvaluator) *ledgercore.ValidatedBlock {
-	validatedBlock, err := eval.GenerateBlock()
+// endBlock completes the block being created, returns the ValidatedBlock for
+// inspection. Proposer is optional - if unset, blocks will be finished with
+// ZeroAddress proposer.
+func endBlock(t testing.TB, ledger *Ledger, eval *eval.BlockEvaluator, proposer ...basics.Address) *ledgercore.ValidatedBlock {
+	vb, err := eval.GenerateBlock()
 	require.NoError(t, err)
-	err = ledger.AddValidatedBlock(*validatedBlock, agreement.Certificate{})
+
+	var prp basics.Address
+	if len(proposer) > 0 {
+		prp = proposer[0]
+	}
+
+	// We have this backdoor way to install a proposer or seed into the header
+	// for tests. Doesn't matter that it makes them both the same.  Since this
+	// can't call the agreement code, the eligibility of the prp is not
+	// considered.
+	if ledger.GenesisProto().Payouts.Enabled {
+		*vb = vb.WithProposer(committee.Seed(prp), prp, true)
+	} else {
+		// To more closely mimic the agreement code, we don't
+		// write the proposer when !Payouts.Enabled.
+		*vb = vb.WithProposer(committee.Seed(prp), basics.Address{}, false)
+	}
+
+	err = ledger.AddValidatedBlock(*vb, agreement.Certificate{})
 	require.NoError(t, err)
 	// `rndBQ` gives the latest known block round added to the ledger
 	// we should wait until `rndBQ` block to be committed to blockQueue,
@@ -152,7 +176,7 @@ func endBlock(t testing.TB, ledger *Ledger, eval *eval.BlockEvaluator) *ledgerco
 	// then we return the result and continue the execution.
 	rndBQ := ledger.Latest()
 	ledger.WaitForCommit(rndBQ)
-	return validatedBlock
+	return vb
 }
 
 // main wraps up some TEAL source in a header and footer so that it is

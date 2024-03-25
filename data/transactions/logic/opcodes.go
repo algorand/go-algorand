@@ -71,11 +71,13 @@ const fpVersion = 8         // changes for frame pointers and simpler function d
 
 const sharedResourcesVersion = 9 // apps can access resources from other transactions.
 
+const pairingVersion = 10 // bn256 opcodes. will add bls12-381, and unify the available opcodes.
+const spliceVersion = 10  // box splicing/resizing
+
 // EXPERIMENTAL. These should be revisited whenever a new LogicSigVersion is
 // moved from vFuture to a new consensus version. If they remain unready, bump
 // their version, and fixup TestAssemble() in assembler_test.go.
-const pairingVersion = 10 // bn256 opcodes. will add bls12-381, and unify the available opcodes.
-const spliceVersion = 10  // box splicing/resizing
+const incentiveVersion = 11 // block fields, heartbeat
 
 const spOpcodesVersion = 11 // falcon_verify, sumhash512
 

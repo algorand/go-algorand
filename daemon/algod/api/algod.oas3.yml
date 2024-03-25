@@ -1067,6 +1067,18 @@
             },
             "type": "array"
           },
+          "incentive-eligible": {
+            "description": "Whether or not the account can receive block incentives if its balance is in range at proposal time.",
+            "type": "boolean"
+          },
+          "last-heartbeat": {
+            "description": "The round in which this account last went online, or explicitly renewed their online status.",
+            "type": "integer"
+          },
+          "last-proposed": {
+            "description": "The round in which this account last proposed the block.",
+            "type": "integer"
+          },
           "min-balance": {
             "description": "MicroAlgo balance required by the account.\n\nThe requirement grows based on asset and application usage.",
             "type": "integer"

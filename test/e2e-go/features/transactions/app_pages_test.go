@@ -95,7 +95,7 @@ return
 	a.NoError(err)
 	txid, err := client.SignAndBroadcastTransaction(walletHandle, nil, tx)
 	a.NoError(err)
-	_, err = fixture.WaitForConfirmedTxn(status.LastRound+5, baseAcct, txid)
+	_, err = fixture.WaitForConfirmedTxn(status.LastRound+5, txid)
 	a.NoError(err)
 
 	app1CreateTxn, err := client.PendingTransactionInformation(txid)
@@ -116,7 +116,7 @@ return
 	a.NoError(err)
 	txid, err = client.SignAndBroadcastTransaction(walletHandle, nil, tx)
 	a.NoError(err)
-	_, err = fixture.WaitForConfirmedTxn(*app1CreateTxn.ConfirmedRound+5, baseAcct, txid)
+	_, err = fixture.WaitForConfirmedTxn(*app1CreateTxn.ConfirmedRound+5, txid)
 	a.NoError(err)
 
 	app1UpdateTxn, err := client.PendingTransactionInformation(txid)
@@ -136,7 +136,7 @@ return
 	a.NoError(err)
 	txid, err = client.SignAndBroadcastTransaction(walletHandle, nil, tx)
 	a.NoError(err)
-	_, err = fixture.WaitForConfirmedTxn(*app1UpdateTxn.ConfirmedRound+5, baseAcct, txid)
+	_, err = fixture.WaitForConfirmedTxn(*app1UpdateTxn.ConfirmedRound+5, txid)
 	a.NoError(err)
 
 	app2CreateTxn, err := client.PendingTransactionInformation(txid)
@@ -157,7 +157,7 @@ return
 	a.NoError(err)
 	txid, err = client.SignAndBroadcastTransaction(walletHandle, nil, tx)
 	a.NoError(err)
-	_, err = fixture.WaitForConfirmedTxn(*app2CreateTxn.ConfirmedRound+5, baseAcct, txid)
+	_, err = fixture.WaitForConfirmedTxn(*app2CreateTxn.ConfirmedRound+5, txid)
 	a.NoError(err)
 
 	app1DeleteTxn, err := client.PendingTransactionInformation(txid)
@@ -176,7 +176,7 @@ return
 	a.NoError(err)
 	txid, err = client.SignAndBroadcastTransaction(walletHandle, nil, tx)
 	a.NoError(err)
-	_, err = fixture.WaitForConfirmedTxn(*app1DeleteTxn.ConfirmedRound+5, baseAcct, txid)
+	_, err = fixture.WaitForConfirmedTxn(*app1DeleteTxn.ConfirmedRound+5, txid)
 	a.NoError(err)
 
 	accountInfo, err = client.AccountInformation(baseAcct, false)

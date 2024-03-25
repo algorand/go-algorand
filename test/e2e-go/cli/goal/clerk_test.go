@@ -68,14 +68,14 @@ func TestClerkSendNoteEncoding(t *testing.T) {
 
 	for i := uint64(0); i < maxRetry && (!foundTx1 || !foundTx2); i++ {
 		if !foundTx1 {
-			tx1, err := fixture.WaitForConfirmedTxn(status.LastRound+i, account, txID)
+			tx1, err := fixture.WaitForConfirmedTxn(status.LastRound+i, txID)
 			if err == nil {
 				foundTx1 = true
 				a.Equal(noteText, string(tx1.Txn.Txn.Note))
 			}
 		}
 		if !foundTx2 {
-			tx2, err := fixture.WaitForConfirmedTxn(status.LastRound+i, account, txID2)
+			tx2, err := fixture.WaitForConfirmedTxn(status.LastRound+i, txID2)
 			if err == nil {
 				foundTx2 = true
 				// If the note matches our original text, then goal is still expecting strings encoded

@@ -39,10 +39,13 @@ func TestLRUOnlineAccountsBasic(t *testing.T) {
 	// write 50 accounts
 	for i := 0; i < accountsNum; i++ {
 		acct := trackerdb.PersistedOnlineAccountData{
-			Addr:        basics.Address(crypto.Hash([]byte{byte(i)})),
-			Round:       basics.Round(i),
-			Ref:         mockEntryRef{int64(i)},
-			AccountData: trackerdb.BaseOnlineAccountData{MicroAlgos: basics.MicroAlgos{Raw: uint64(i)}},
+			Addr:  basics.Address(crypto.Hash([]byte{byte(i)})),
+			Round: basics.Round(i),
+			Ref:   mockEntryRef{int64(i)},
+			AccountData: trackerdb.BaseOnlineAccountData{
+				MicroAlgos:        basics.MicroAlgos{Raw: uint64(i)},
+				IncentiveEligible: i%2 == 0,
+			},
 		}
 		baseOnlineAcct.write(acct)
 	}
@@ -55,6 +58,7 @@ func TestLRUOnlineAccountsBasic(t *testing.T) {
 		require.Equal(t, basics.Round(i), acct.Round)
 		require.Equal(t, addr, acct.Addr)
 		require.Equal(t, uint64(i), acct.AccountData.MicroAlgos.Raw)
+		require.Equal(t, i%2 == 0, acct.AccountData.IncentiveEligible)
 		require.Equal(t, mockEntryRef{int64(i)}, acct.Ref)
 	}
 
@@ -79,6 +83,7 @@ func TestLRUOnlineAccountsBasic(t *testing.T) {
 			require.Equal(t, basics.Round(i), acct.Round)
 			require.Equal(t, addr, acct.Addr)
 			require.Equal(t, uint64(i), acct.AccountData.MicroAlgos.Raw)
+			require.Equal(t, i%2 == 0, acct.AccountData.IncentiveEligible)
 			require.Equal(t, mockEntryRef{int64(i)}, acct.Ref)
 		} else {
 			require.False(t, has)

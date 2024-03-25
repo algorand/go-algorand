@@ -165,8 +165,12 @@ func (b testValidatedBlock) Block() bookkeeping.Block {
 	return b.Inside
 }
 
-func (b testValidatedBlock) WithSeed(s committee.Seed) ValidatedBlock {
+func (b testValidatedBlock) WithProposer(s committee.Seed, proposer basics.Address, eligible bool) ValidatedBlock {
 	b.Inside.BlockHeader.Seed = s
+	b.Inside.BlockHeader.Proposer = proposer
+	if !eligible {
+		b.Inside.BlockHeader.ProposerPayout = basics.MicroAlgos{}
+	}
 	return b
 }
 
