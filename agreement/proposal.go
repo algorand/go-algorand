@@ -207,8 +207,11 @@ func verifyProposer(p unauthenticatedProposal, ledger LedgerReader) error {
 	}
 
 	// Similarly, we only check here that the payout is zero if
-	// ineligible. `eval` code must check that it is correct if > 0.
-	eligible, proposerRecord, err := payoutEligible(rnd, p.Proposer(), ledger, cparams)
+	// ineligible. `eval` code must check that it is correct if > 0. We pass
+	// OriginalProposer instead of p.Proposer so that the call returns the
+	// proper record, even before Payouts.Enabled (it will be used below to
+	// check the Seed).
+	eligible, proposerRecord, err := payoutEligible(rnd, value.OriginalProposer, ledger, cparams)
 	if err != nil {
 		return fmt.Errorf("failed to determine incentive eligibility %w", err)
 	}
@@ -258,7 +261,10 @@ func verifyProposer(p unauthenticatedProposal, ledger LedgerReader) error {
 	return nil
 }
 
-// payoutEligible determines whether the proposer is eligible for block incentive payout.
+// payoutEligible determines whether the proposer is eligible for block
+// incentive payout.  It will return false before payouts begin since no record
+// will be IncentiveEligible. But, since we feed the true proposer in even if
+// the header lacks it, the returned balanceRecord will be the right record.
 func payoutEligible(rnd basics.Round, proposer basics.Address, ledger LedgerReader, cparams config.ConsensusParams) (bool, basics.OnlineAccountData, error) {
 	// Check the balance from the agreement round
 	balanceRound := balanceRound(rnd, cparams)
@@ -268,7 +274,7 @@ func payoutEligible(rnd basics.Round, proposer basics.Address, ledger LedgerRead
 	}
 
 	// When payouts begin, nobody could possible have IncentiveEligible set in
-	// the blanceRound rounds ago, so the min/max check is irrelevant.
+	// the balanceRound, so the min/max check is irrelevant.
 	balanceParams, err := ledger.ConsensusParams(balanceRound)
 	if err != nil {
 		return false, basics.OnlineAccountData{}, err
