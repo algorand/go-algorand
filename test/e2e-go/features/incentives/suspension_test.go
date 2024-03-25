@@ -122,7 +122,7 @@ func TestBasicSuspension(t *testing.T) {
 	a.NotZero(account.VoteID)
 	a.False(account.IncentiveEligible) // suspension turns off flag
 
-	// n10's account is still online, because it's got less stake, not absent 10 x interval.
+	// n10's account is still online, because it's got less stake, has not been absent 10 x interval.
 	account, err = c10.AccountData(account10.Address)
 	a.NoError(err)
 	a.Equal(basics.Online, account.Status)
@@ -135,9 +135,11 @@ func TestBasicSuspension(t *testing.T) {
 	lg, err := fixture.StartNode(c20.DataDir())
 	a.NoError(err)
 
-	// Wait for newly restarted node to start. Presumably it'll catchup in
-	// seconds, and propose by round 90
+	// Wait for newly restarted node to start.
 	stat, err := lg.Status()
+	a.NoError(err)
+	// Waiting for this round should show it has started and caught up.
+	stat, err = lg.WaitForRound(afterStop.LastRound + 55)
 	a.NoError(err)
 
 	// Proceed until a round is proposed by n20. (Stop at 50 rounds, that's more likely a bug than luck)
@@ -154,9 +156,11 @@ func TestBasicSuspension(t *testing.T) {
 		}
 	}
 	// n20's account is back online, with same voting material
-	account, err = fixture.LibGoalClient.AccountData(account20.Address)
+	account, err = c10.AccountData(account20.Address)
 	a.NoError(err)
 	a.Equal(basics.Online, account.Status)
+	a.Greater(account.LastProposed, stat.LastRound)
+
 	a.Equal(voteID, account.VoteID)
 	a.False(account.IncentiveEligible)
 }
