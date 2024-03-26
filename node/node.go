@@ -1308,7 +1308,7 @@ func (vb validatedBlock) Block() bookkeeping.Block {
 }
 
 // AssembleBlock implements Ledger.AssembleBlock.
-func (node *AlgorandFullNode) AssembleBlock(round basics.Round) (agreement.ValidatedBlock, error) {
+func (node *AlgorandFullNode) AssembleBlock(round basics.Round) (bookkeeping.Block, error) {
 	deadline := time.Now().Add(node.config.ProposalAssemblyTime)
 	lvb, err := node.transactionPool.AssembleBlock(round, deadline)
 	if err != nil {
@@ -1327,9 +1327,9 @@ func (node *AlgorandFullNode) AssembleBlock(round basics.Round) (agreement.Valid
 			// the case where ledgerNextRound > round was not implemented here on purpose. This is the "normal case" where the
 			// ledger was advancing faster then the agreement by the catchup.
 		}
-		return nil, err
+		return bookkeeping.Block{}, err
 	}
-	return validatedBlock{vb: lvb}, nil
+	return lvb.Block(), nil
 }
 
 // getOfflineClosedStatus will return an int with the appropriate bit(s) set if it is offline and/or online

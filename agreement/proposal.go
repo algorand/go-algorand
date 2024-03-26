@@ -101,7 +101,18 @@ type proposal struct {
 	validatedAt time.Duration
 }
 
-func makeProposal(ve ValidatedBlock, pf crypto.VrfProof, origPer period, origProp basics.Address) proposal {
+// makeProposalFromBlock is called when making a new proposal message, from the output of AssembleBlock (from makeProposals -> proposalForBlock)
+func makeProposalFromBlock(e bookkeeping.Block, pf crypto.VrfProof, origPer period, origProp basics.Address) proposal {
+	var payload unauthenticatedProposal
+	payload.Block = e
+	payload.SeedProof = pf
+	payload.OriginalPeriod = origPer
+	payload.OriginalProposer = origProp
+	return proposal{unauthenticatedProposal: payload}
+}
+
+// makeProposal is called after successfully validating a proposal message, from the output of BlockValidator.Validate (from unauthenticatedProposal.validate)
+func makeProposalFromValidatedBlock(ve ValidatedBlock, pf crypto.VrfProof, origPer period, origProp basics.Address) proposal {
 	e := ve.Block()
 	var payload unauthenticatedProposal
 	payload.Block = e
@@ -244,15 +255,15 @@ func verifyNewSeed(p unauthenticatedProposal, ledger LedgerReader) error {
 	return nil
 }
 
-func proposalForBlock(address basics.Address, vrf *crypto.VRFSecrets, ve ValidatedBlock, period period, ledger LedgerReader) (proposal, proposalValue, error) {
-	rnd := ve.Block().Round()
+func proposalForBlock(address basics.Address, vrf *crypto.VRFSecrets, blk bookkeeping.Block, period period, ledger LedgerReader) (proposal, proposalValue, error) {
+	rnd := blk.Round()
 	newSeed, seedProof, err := deriveNewSeed(address, vrf, rnd, period, ledger)
 	if err != nil {
 		return proposal{}, proposalValue{}, fmt.Errorf("proposalForBlock: could not derive new seed: %v", err)
 	}
 
-	ve = ve.WithSeed(newSeed)
-	proposal := makeProposal(ve, seedProof, period, address)
+	blk = blk.WithSeed(newSeed)
+	proposal := makeProposalFromBlock(blk, seedProof, period, address)
 	value := proposalValue{
 		OriginalPeriod:   period,
 		OriginalProposer: address,
@@ -282,5 +293,5 @@ func (p unauthenticatedProposal) validate(ctx context.Context, current round, le
 		return invalid, fmt.Errorf("EntryValidator rejected entry: %v", err)
 	}
 
-	return makeProposal(ve, p.SeedProof, p.OriginalPeriod, p.OriginalProposer), nil
+	return makeProposalFromValidatedBlock(ve, p.SeedProof, p.OriginalPeriod, p.OriginalProposer), nil
 }

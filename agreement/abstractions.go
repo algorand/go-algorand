@@ -72,10 +72,10 @@ var ErrAssembleBlockRoundStale = errors.New("requested round for AssembleBlock i
 // An BlockFactory produces an Block which is suitable for proposal for a given
 // Round.
 type BlockFactory interface {
-	// AssembleBlock produces a new ValidatedBlock which is suitable for proposal
+	// AssembleBlock produces a new Block which is suitable for proposal
 	// at a given Round.
 	//
-	// AssembleBlock should produce a ValidatedBlock for which the corresponding
+	// AssembleBlock should produce a bookkeeping.Block for which the corresponding
 	// BlockValidator validates (i.e. for which BlockValidator.Validate
 	// returns true). If an insufficient number of nodes can assemble valid
 	// entries, the agreement protocol may lose liveness.
@@ -84,7 +84,7 @@ type BlockFactory interface {
 	// produce a ValidatedBlock for the given round. If an insufficient number of
 	// nodes on the network can assemble entries, the agreement protocol may
 	// lose liveness.
-	AssembleBlock(basics.Round) (ValidatedBlock, error)
+	AssembleBlock(basics.Round) (bookkeeping.Block, error)
 }
 
 // A Ledger represents the sequence of Entries agreed upon by the protocol.
