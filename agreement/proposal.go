@@ -101,25 +101,28 @@ type proposal struct {
 	validatedAt time.Duration
 }
 
-func makeUnauthenticatedProposal(e bookkeeping.Block, pf crypto.VrfProof, origPer period, origProp basics.Address) unauthenticatedProposal {
+// makeProposalFromAssembledBlock is called when making a new proposal message,
+// using the output of AssembleBlock (from makeProposals -> proposalForBlock)
+func makeProposalFromAssembledBlock(blk AssembledBlock, pf crypto.VrfProof, origPer period, origProp basics.Address) proposal {
+	e := blk.Block()
 	var payload unauthenticatedProposal
 	payload.Block = e
 	payload.SeedProof = pf
 	payload.OriginalPeriod = origPer
 	payload.OriginalProposer = origProp
-	return payload
+	return proposal{unauthenticatedProposal: payload}
 }
 
-// makeProposalFromAssembledBlock is called when making a new proposal message, from the output of AssembleBlock (from makeProposals -> proposalForBlock)
-func makeProposalFromAssembledBlock(blk AssembledBlock, pf crypto.VrfProof, origPer period, origProp basics.Address) proposal {
-	e := blk.Block()
-	return proposal{unauthenticatedProposal: makeUnauthenticatedProposal(e, pf, origPer, origProp)}
-}
-
-// makeProposal is called after successfully validating a proposal message, from the output of BlockValidator.Validate (from unauthenticatedProposal.validate)
+// makeProposalFromValidatedBlock is called after successfully validating a proposal message,
+// using the output of BlockValidator.Validate (from unauthenticatedProposal.validate)
 func makeProposalFromValidatedBlock(ve ValidatedBlock, pf crypto.VrfProof, origPer period, origProp basics.Address) proposal {
 	e := ve.Block()
-	return proposal{unauthenticatedProposal: makeUnauthenticatedProposal(e, pf, origPer, origProp), ve: ve}
+	var payload unauthenticatedProposal
+	payload.Block = e
+	payload.SeedProof = pf
+	payload.OriginalPeriod = origPer
+	payload.OriginalProposer = origProp
+	return proposal{unauthenticatedProposal: payload, ve: ve} // store ve to use when calling Ledger.EnsureValidatedBlock
 }
 
 func (p proposal) u() unauthenticatedProposal {

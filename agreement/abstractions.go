@@ -65,16 +65,16 @@ var ErrAssembleBlockRoundStale = errors.New("requested round for AssembleBlock i
 // An BlockFactory produces an Block which is suitable for proposal for a given
 // Round.
 type BlockFactory interface {
-	// AssembleBlock produces a new Block which is suitable for proposal
+	// AssembleBlock produces a new AssembledBlock which is suitable for proposal
 	// at a given Round.
 	//
-	// AssembleBlock should produce a bookkeeping.Block for which the corresponding
+	// AssembleBlock should produce a block for which the corresponding
 	// BlockValidator validates (i.e. for which BlockValidator.Validate
 	// returns true). If an insufficient number of nodes can assemble valid
 	// entries, the agreement protocol may lose liveness.
 	//
 	// AssembleBlock may return an error if the BlockFactory is unable to
-	// produce a ValidatedBlock for the given round. If an insufficient number of
+	// produce a AssembledBlock for the given round. If an insufficient number of
 	// nodes on the network can assemble entries, the agreement protocol may
 	// lose liveness.
 	AssembleBlock(basics.Round) (AssembledBlock, error)
