@@ -93,7 +93,7 @@ func (b testValidatedBlock) Block() bookkeeping.Block {
 	return b.Inside
 }
 
-func (b testValidatedBlock) WithSeed(s committee.Seed) agreement.ValidatedBlock {
+func (b testValidatedBlock) WithSeed(s committee.Seed) agreement.AssembledBlock {
 	b.Inside.BlockHeader.Seed = s
 	return b
 }
@@ -108,7 +108,7 @@ type testBlockFactory struct {
 	Owner int
 }
 
-func (f testBlockFactory) AssembleBlock(r basics.Round) (agreement.ValidatedBlock, error) {
+func (f testBlockFactory) AssembleBlock(r basics.Round) (agreement.AssembledBlock, error) {
 	return testValidatedBlock{Inside: bookkeeping.Block{BlockHeader: bookkeeping.BlockHeader{Round: r}}}, nil
 }
 

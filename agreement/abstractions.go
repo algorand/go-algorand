@@ -54,13 +54,6 @@ type BlockValidator interface {
 // and can now be recorded in the ledger.  This is an optimized version of
 // calling EnsureBlock() on the Ledger.
 type ValidatedBlock interface {
-	// WithSeed creates a copy of this ValidatedBlock with its
-	// cryptographically random seed set to the given value.
-	//
-	// Calls to Seed() or to Digest() on the copy's Block must
-	// reflect the value of the new seed.
-	WithSeed(committee.Seed) ValidatedBlock
-
 	// Block returns the underlying block that has been validated.
 	Block() bookkeeping.Block
 }
@@ -72,19 +65,33 @@ var ErrAssembleBlockRoundStale = errors.New("requested round for AssembleBlock i
 // An BlockFactory produces an Block which is suitable for proposal for a given
 // Round.
 type BlockFactory interface {
-	// AssembleBlock produces a new ValidatedBlock which is suitable for proposal
+	// AssembleBlock produces a new AssembledBlock which is suitable for proposal
 	// at a given Round.
 	//
-	// AssembleBlock should produce a ValidatedBlock for which the corresponding
+	// AssembleBlock should produce a block for which the corresponding
 	// BlockValidator validates (i.e. for which BlockValidator.Validate
 	// returns true). If an insufficient number of nodes can assemble valid
 	// entries, the agreement protocol may lose liveness.
 	//
 	// AssembleBlock may return an error if the BlockFactory is unable to
-	// produce a ValidatedBlock for the given round. If an insufficient number of
+	// produce a AssembledBlock for the given round. If an insufficient number of
 	// nodes on the network can assemble entries, the agreement protocol may
 	// lose liveness.
-	AssembleBlock(basics.Round) (ValidatedBlock, error)
+	AssembleBlock(basics.Round) (AssembledBlock, error)
+}
+
+// An AssembledBlock represents a Block produced by a BlockFactory
+// and can now be proposed by agreement.
+type AssembledBlock interface {
+	// WithSeed creates a copy of this AssembledBlock with its
+	// cryptographically random seed set to the given value.
+	//
+	// Calls to Seed() or to Digest() on the copy's Block must
+	// reflect the value of the new seed.
+	WithSeed(committee.Seed) AssembledBlock
+
+	// Block returns the underlying block that has been assembled.
+	Block() bookkeeping.Block
 }
 
 // A Ledger represents the sequence of Entries agreed upon by the protocol.

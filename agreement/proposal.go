@@ -101,14 +101,28 @@ type proposal struct {
 	validatedAt time.Duration
 }
 
-func makeProposal(ve ValidatedBlock, pf crypto.VrfProof, origPer period, origProp basics.Address) proposal {
+// makeProposalFromAssembledBlock is called when making a new proposal message,
+// using the output of AssembleBlock (from makeProposals -> proposalForBlock)
+func makeProposalFromAssembledBlock(blk AssembledBlock, pf crypto.VrfProof, origPer period, origProp basics.Address) proposal {
+	e := blk.Block()
+	var payload unauthenticatedProposal
+	payload.Block = e
+	payload.SeedProof = pf
+	payload.OriginalPeriod = origPer
+	payload.OriginalProposer = origProp
+	return proposal{unauthenticatedProposal: payload}
+}
+
+// makeProposalFromValidatedBlock is called after successfully validating a proposal message,
+// using the output of BlockValidator.Validate (from unauthenticatedProposal.validate)
+func makeProposalFromValidatedBlock(ve ValidatedBlock, pf crypto.VrfProof, origPer period, origProp basics.Address) proposal {
 	e := ve.Block()
 	var payload unauthenticatedProposal
 	payload.Block = e
 	payload.SeedProof = pf
 	payload.OriginalPeriod = origPer
 	payload.OriginalProposer = origProp
-	return proposal{unauthenticatedProposal: payload, ve: ve}
+	return proposal{unauthenticatedProposal: payload, ve: ve} // store ve to use when calling Ledger.EnsureValidatedBlock
 }
 
 func (p proposal) u() unauthenticatedProposal {
@@ -244,22 +258,22 @@ func verifyNewSeed(p unauthenticatedProposal, ledger LedgerReader) error {
 	return nil
 }
 
-func proposalForBlock(address basics.Address, vrf *crypto.VRFSecrets, ve ValidatedBlock, period period, ledger LedgerReader) (proposal, proposalValue, error) {
-	rnd := ve.Block().Round()
+func proposalForBlock(address basics.Address, vrf *crypto.VRFSecrets, blk AssembledBlock, period period, ledger LedgerReader) (proposal, proposalValue, error) {
+	rnd := blk.Block().Round()
 	newSeed, seedProof, err := deriveNewSeed(address, vrf, rnd, period, ledger)
 	if err != nil {
 		return proposal{}, proposalValue{}, fmt.Errorf("proposalForBlock: could not derive new seed: %v", err)
 	}
 
-	ve = ve.WithSeed(newSeed)
-	proposal := makeProposal(ve, seedProof, period, address)
+	blk = blk.WithSeed(newSeed)
+	prop := makeProposalFromAssembledBlock(blk, seedProof, period, address)
 	value := proposalValue{
 		OriginalPeriod:   period,
 		OriginalProposer: address,
-		BlockDigest:      proposal.Block.Digest(),
-		EncodingDigest:   crypto.HashObj(proposal),
+		BlockDigest:      prop.Block.Digest(),
+		EncodingDigest:   crypto.HashObj(prop),
 	}
-	return proposal, value, nil
+	return prop, value, nil
 }
 
 // validate returns true if the proposal is valid.
@@ -282,5 +296,5 @@ func (p unauthenticatedProposal) validate(ctx context.Context, current round, le
 		return invalid, fmt.Errorf("EntryValidator rejected entry: %v", err)
 	}
 
-	return makeProposal(ve, p.SeedProof, p.OriginalPeriod, p.OriginalProposer), nil
+	return makeProposalFromValidatedBlock(ve, p.SeedProof, p.OriginalPeriod, p.OriginalProposer), nil
 }

@@ -1295,11 +1295,18 @@ type validatedBlock struct {
 	vb *ledgercore.ValidatedBlock
 }
 
-// WithSeed satisfies the agreement.ValidatedBlock interface.
-func (vb validatedBlock) WithSeed(s committee.Seed) agreement.ValidatedBlock {
-	lvb := vb.vb.WithSeed(s)
-	return validatedBlock{vb: &lvb}
+type assembledBlock struct {
+	blk bookkeeping.Block
 }
+
+// WithSeed satisfies the agreement.AssembledBlock interface.
+func (ab assembledBlock) WithSeed(s committee.Seed) agreement.AssembledBlock {
+	blk := ab.blk.WithSeed(s)
+	return assembledBlock{blk: blk}
+}
+
+// Block satisfies the agreement.AssembledBlock interface.
+func (ab assembledBlock) Block() bookkeeping.Block { return ab.blk }
 
 // Block satisfies the agreement.ValidatedBlock interface.
 func (vb validatedBlock) Block() bookkeeping.Block {
@@ -1308,7 +1315,7 @@ func (vb validatedBlock) Block() bookkeeping.Block {
 }
 
 // AssembleBlock implements Ledger.AssembleBlock.
-func (node *AlgorandFullNode) AssembleBlock(round basics.Round) (agreement.ValidatedBlock, error) {
+func (node *AlgorandFullNode) AssembleBlock(round basics.Round) (agreement.AssembledBlock, error) {
 	deadline := time.Now().Add(node.config.ProposalAssemblyTime)
 	lvb, err := node.transactionPool.AssembleBlock(round, deadline)
 	if err != nil {
@@ -1329,7 +1336,7 @@ func (node *AlgorandFullNode) AssembleBlock(round basics.Round) (agreement.Valid
 		}
 		return nil, err
 	}
-	return validatedBlock{vb: lvb}, nil
+	return assembledBlock{blk: lvb.Block()}, nil
 }
 
 // getOfflineClosedStatus will return an int with the appropriate bit(s) set if it is offline and/or online
