@@ -266,14 +266,14 @@ func proposalForBlock(address basics.Address, vrf *crypto.VRFSecrets, blk Assemb
 	}
 
 	blk = blk.WithSeed(newSeed)
-	proposal := makeProposalFromAssembledBlock(blk, seedProof, period, address)
+	prop := makeProposalFromAssembledBlock(blk, seedProof, period, address)
 	value := proposalValue{
 		OriginalPeriod:   period,
 		OriginalProposer: address,
-		BlockDigest:      proposal.Block.Digest(),
-		EncodingDigest:   crypto.HashObj(proposal),
+		BlockDigest:      prop.Block.Digest(),
+		EncodingDigest:   crypto.HashObj(prop),
 	}
-	return proposal, value, nil
+	return prop, value, nil
 }
 
 // validate returns true if the proposal is valid.
