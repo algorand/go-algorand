@@ -313,6 +313,24 @@ func (block Block) ProposerPayout() basics.MicroAlgos {
 	return block.BlockHeader.ProposerPayout
 }
 
+// WithProposer returns a copy of the Block with a modified seed and associated proposer
+func (block Block) WithProposer(s committee.Seed, proposer basics.Address, eligible bool) Block {
+	newblock := block
+	newblock.BlockHeader.Seed = s
+	// agreement is telling us who the proposer is and if they're eligible, but
+	// agreement does not consider the current config params, so here we decide
+	// what really goes into the BlockHeader.
+	proto := config.Consensus[block.CurrentProtocol]
+	if proto.Payouts.Enabled {
+		newblock.BlockHeader.Proposer = proposer
+	}
+	if !proto.Payouts.Enabled || !eligible {
+		newblock.BlockHeader.ProposerPayout = basics.MicroAlgos{}
+	}
+
+	return newblock
+}
+
 // NextRewardsState computes the RewardsState of the subsequent round
 // given the subsequent consensus parameters, along with the incentive pool
 // balance and the total reward units in the system as of the current round.

@@ -54,16 +54,6 @@ type BlockValidator interface {
 // and can now be recorded in the ledger.  This is an optimized version of
 // calling EnsureBlock() on the Ledger.
 type ValidatedBlock interface {
-	// WithProposer creates a copy of this ValidatedBlock with its
-	// cryptographically random seed and proposer set. The block's
-	// ProposerPayout is zero'd if !eligible. Abstractly, it is how the
-	// agreement code "finishes" a block and makes it a proposal for a specific
-	// account.
-	//
-	// Calls to Seed() or to Digest() on the copy's Block must
-	// reflect the value of the new seed.
-	WithProposer(seed committee.Seed, proposer basics.Address, eligible bool) ValidatedBlock
-
 	// Block returns the underlying block that has been validated.
 	Block() bookkeeping.Block
 }
@@ -87,7 +77,24 @@ type BlockFactory interface {
 	// produce a ValidatedBlock for the given round. If an insufficient number of
 	// nodes on the network can assemble entries, the agreement protocol may
 	// lose liveness.
-	AssembleBlock(basics.Round) (ValidatedBlock, error)
+	AssembleBlock(basics.Round) (AssembledBlock, error)
+}
+
+// An AssembledBlock represents a Block produced by a BlockFactory
+// to be included in a proposal by agreement.
+type AssembledBlock interface {
+	// WithProposer creates a copy of this AssembledBlock with its
+	// cryptographically random seed and proposer set. The block's
+	// ProposerPayout is zero'd if !eligible. Abstractly, it is how the
+	// agreement code "finishes" a block and makes it a proposal for a specific
+	// account.
+	//
+	// Calls to Seed() or to Digest() on the copy's Block must
+	// reflect the value of the new seed.
+	WithProposer(seed committee.Seed, proposer basics.Address, eligible bool) AssembledBlock
+
+	// Block returns the underlying block that has been assembled.
+	Block() bookkeeping.Block
 }
 
 // A Ledger represents the sequence of Entries agreed upon by the protocol.
