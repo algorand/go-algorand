@@ -53,19 +53,19 @@ type entryFactoryImpl struct {
 }
 
 // AssembleBlock implements Ledger.AssembleBlock.
-func (i entryFactoryImpl) AssembleBlock(round basics.Round) (bookkeeping.Block, error) {
+func (i entryFactoryImpl) AssembleBlock(round basics.Round) (agreement.AssembledBlock, error) {
 	prev, err := i.l.BlockHdr(round - 1)
 	if err != nil {
-		return bookkeeping.Block{}, fmt.Errorf("could not make proposals: could not read block from ledger at round %v: %v", round, err)
+		return nil, fmt.Errorf("could not make proposals: could not read block from ledger at round %v: %v", round, err)
 	}
 
 	b := bookkeeping.MakeBlock(prev)
 	b.RewardsState = prev.RewardsState
-	return b, nil
+	return validatedBlock{blk: &b}, nil
 }
 
 // WithSeed implements the agreement.ValidatedBlock interface.
-func (ve validatedBlock) WithSeed(s committee.Seed) agreement.ValidatedBlock {
+func (ve validatedBlock) WithSeed(s committee.Seed) agreement.AssembledBlock {
 	newblock := ve.blk.WithSeed(s)
 	return validatedBlock{blk: &newblock}
 }
