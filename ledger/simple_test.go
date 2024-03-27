@@ -157,11 +157,11 @@ func endBlock(t testing.TB, ledger *Ledger, eval *eval.BlockEvaluator, proposer 
 	// can't call the agreement code, the eligibility of the prp is not
 	// considered.
 	if ledger.GenesisProto().Payouts.Enabled {
-		*vb = vb.WithProposer(committee.Seed(prp), prp, true)
+		*vb = ledgercore.MakeValidatedBlock(vb.Block().WithProposer(committee.Seed(prp), prp, true), vb.Delta())
 	} else {
 		// To more closely mimic the agreement code, we don't
 		// write the proposer when !Payouts.Enabled.
-		*vb = vb.WithProposer(committee.Seed(prp), basics.Address{}, false)
+		*vb = ledgercore.MakeValidatedBlock(vb.Block().WithProposer(committee.Seed(prp), basics.Address{}, false), vb.Delta())
 	}
 
 	err = ledger.AddValidatedBlock(*vb, agreement.Certificate{})
