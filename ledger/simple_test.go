@@ -17,6 +17,7 @@
 package ledger
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"testing"
@@ -28,6 +29,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/verify"
 	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/ledger/eval"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
@@ -140,14 +142,16 @@ func txgroup(t testing.TB, ledger *Ledger, eval *eval.BlockEvaluator, txns ...*t
 	return eval.TransactionGroup(transactions.WrapSignedTxnsWithAD(txgroup))
 }
 
-// endBlock completes the block being created, returns the ValidatedBlock for
+// endBlock completes the block being created, returning the ValidatedBlock for
 // inspection. Proposer is optional - if unset, blocks will be finished with
 // ZeroAddress proposer.
 func endBlock(t testing.TB, ledger *Ledger, eval *eval.BlockEvaluator, proposer ...basics.Address) *ledgercore.ValidatedBlock {
-	vb, err := eval.GenerateBlock()
+	gvb, err := eval.GenerateBlock()
 	require.NoError(t, err)
 
-	var prp basics.Address
+	// Making the proposer the feesink unless specified causes less disruption
+	// to existing tests. (Because block payouts don't change balances.)
+	prp := gvb.Block().BlockHeader.FeeSink
 	if len(proposer) > 0 {
 		prp = proposer[0]
 	}
@@ -157,14 +161,20 @@ func endBlock(t testing.TB, ledger *Ledger, eval *eval.BlockEvaluator, proposer 
 	// can't call the agreement code, the eligibility of the prp is not
 	// considered.
 	if ledger.GenesisProto().Payouts.Enabled {
-		*vb = vb.WithProposer(committee.Seed(prp), prp, true)
+		*gvb = gvb.WithProposer(committee.Seed(prp), prp, true)
 	} else {
 		// To more closely mimic the agreement code, we don't
 		// write the proposer when !Payouts.Enabled.
-		*vb = vb.WithProposer(committee.Seed(prp), basics.Address{}, false)
+		*gvb = gvb.WithProposer(committee.Seed(prp), basics.Address{}, false)
 	}
 
-	err = ledger.AddValidatedBlock(*vb, agreement.Certificate{})
+	vvb, err := validateWithoutSignatures(t, ledger, gvb.Block())
+	require.NoError(t, err)
+
+	// we could add some checks that ensure gvb and vvb are quite similar, but
+	// they will differ a bit, as noted above.
+
+	err = ledger.AddValidatedBlock(*vvb, agreement.Certificate{})
 	require.NoError(t, err)
 	// `rndBQ` gives the latest known block round added to the ledger
 	// we should wait until `rndBQ` block to be committed to blockQueue,
@@ -176,7 +186,14 @@ func endBlock(t testing.TB, ledger *Ledger, eval *eval.BlockEvaluator, proposer 
 	// then we return the result and continue the execution.
 	rndBQ := ledger.Latest()
 	ledger.WaitForCommit(rndBQ)
-	return vb
+	return vvb
+}
+
+func validateWithoutSignatures(t testing.TB, ledger *Ledger, blk bookkeeping.Block) (*ledgercore.ValidatedBlock, error) {
+	save := ledger.verifiedTxnCache
+	defer func() { ledger.verifiedTxnCache = save }()
+	ledger.verifiedTxnCache = verify.GetMockedCache(true) // validate the txns, but not signatures
+	return ledger.Validate(context.Background(), blk, nil)
 }
 
 // main wraps up some TEAL source in a header and footer so that it is

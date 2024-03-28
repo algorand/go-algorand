@@ -279,7 +279,7 @@ func (ad *AccountDeltas) Hydrate() {
 	}
 }
 
-// Dehydrate normalized the fields of this AccountDeltas, and clears any redundant internal caching.
+// Dehydrate normalizes the fields of this AccountDeltas, and clears any redundant internal caching.
 // This is useful for comparing AccountDeltas objects for equality.
 func (ad *AccountDeltas) Dehydrate() {
 	if ad.Accts == nil {
