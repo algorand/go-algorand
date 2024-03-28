@@ -987,8 +987,8 @@ func TestBonusUpgrades(t *testing.T) {
 	a.Equal(ma100, computeBonus(151, ma100, d90, d90)) // no decay (interval)
 }
 
-// TestFirstYearBonus shows what about a year's worth of block bonuses would pay out.
-func TestFirstYearBonus(t *testing.T) {
+// TestFirstYearsBonus shows what the bonuses look like
+func TestFirstYearsBonus(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 	a := require.New(t)

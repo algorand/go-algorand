@@ -263,7 +263,7 @@ func TestPayoutFees(t *testing.T) {
 		dl.txns(&pay, pay.Args("again"))
 		vb := dl.endBlock(proposer)
 
-		const bonus1 = 5_000_000 // the first bonus value, set in config/consensus.go
+		const bonus1 = 10_000_000 // the first bonus value, set in config/consensus.go
 		if ver >= payoutsBegin {
 			require.True(t, dl.generator.GenesisProto().Payouts.Enabled)    // version sanity check
 			require.NotZero(t, dl.generator.GenesisProto().Payouts.Percent) // version sanity check
