@@ -102,14 +102,24 @@ type proposal struct {
 	validatedAt time.Duration
 }
 
-func makeProposal(ve ValidatedBlock, pf crypto.VrfProof, origPer period, origProp basics.Address) proposal {
+func makeProposalFromAssembledBlock(blk AssembledBlock, pf crypto.VrfProof, origPer period, origProp basics.Address) proposal {
+	e := blk.Block()
+	var payload unauthenticatedProposal
+	payload.Block = e
+	payload.SeedProof = pf
+	payload.OriginalPeriod = origPer
+	payload.OriginalProposer = origProp
+	return proposal{unauthenticatedProposal: payload}
+}
+
+func makeProposalFromValidatedBlock(ve ValidatedBlock, pf crypto.VrfProof, origPer period, origProp basics.Address) proposal {
 	e := ve.Block()
 	var payload unauthenticatedProposal
 	payload.Block = e
 	payload.SeedProof = pf
 	payload.OriginalPeriod = origPer
 	payload.OriginalProposer = origProp
-	return proposal{unauthenticatedProposal: payload, ve: ve}
+	return proposal{unauthenticatedProposal: payload, ve: ve} // store ve to use when calling Ledger.EnsureValidatedBlock
 }
 
 func (p proposal) u() unauthenticatedProposal {
@@ -285,8 +295,8 @@ func payoutEligible(rnd basics.Round, proposer basics.Address, ledger LedgerRead
 	return eligible, balanceRecord, nil
 }
 
-func proposalForBlock(address basics.Address, vrf *crypto.VRFSecrets, ve ValidatedBlock, period period, ledger LedgerReader) (proposal, proposalValue, error) {
-	rnd := ve.Block().Round()
+func proposalForBlock(address basics.Address, vrf *crypto.VRFSecrets, blk AssembledBlock, period period, ledger LedgerReader) (proposal, proposalValue, error) {
+	rnd := blk.Block().Round()
 
 	cparams, err := ledger.ConsensusParams(ParamsRound(rnd))
 	if err != nil {
@@ -303,16 +313,16 @@ func proposalForBlock(address basics.Address, vrf *crypto.VRFSecrets, ve Validat
 		return proposal{}, proposalValue{}, fmt.Errorf("proposalForBlock: could determine eligibility: %w", err)
 	}
 
-	ve = ve.WithProposer(newSeed, address, eligible)
-	proposal := makeProposal(ve, seedProof, period, address)
-	proposal.ve = nil
+	blk = blk.WithProposer(newSeed, address, eligible)
+	prop := makeProposalFromAssembledBlock(blk, seedProof, period, address)
+
 	value := proposalValue{
 		OriginalPeriod:   period,
 		OriginalProposer: address,
-		BlockDigest:      proposal.Block.Digest(),
-		EncodingDigest:   crypto.HashObj(proposal),
+		BlockDigest:      prop.Block.Digest(),
+		EncodingDigest:   crypto.HashObj(prop),
 	}
-	return proposal, value, nil
+	return prop, value, nil
 }
 
 // validate returns true if the proposal is valid.
@@ -335,5 +345,5 @@ func (p unauthenticatedProposal) validate(ctx context.Context, current round, le
 		return invalid, fmt.Errorf("EntryValidator rejected entry: %w", err)
 	}
 
-	return makeProposal(ve, p.SeedProof, p.OriginalPeriod, p.OriginalProposer), nil
+	return makeProposalFromValidatedBlock(ve, p.SeedProof, p.OriginalPeriod, p.OriginalProposer), nil
 }

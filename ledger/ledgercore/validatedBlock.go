@@ -17,10 +17,7 @@
 package ledgercore
 
 import (
-	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/data/committee"
 )
 
 // ValidatedBlock represents the result of a block validation.  It can
@@ -39,27 +36,6 @@ func (vb ValidatedBlock) Block() bookkeeping.Block {
 // Delta returns the underlying Delta for a ValidatedBlock.
 func (vb ValidatedBlock) Delta() StateDelta {
 	return vb.delta
-}
-
-// WithProposer returns a copy of the ValidatedBlock with a modified seed and associated proposer
-func (vb ValidatedBlock) WithProposer(s committee.Seed, proposer basics.Address, eligible bool) ValidatedBlock {
-	newblock := vb.blk
-	newblock.BlockHeader.Seed = s
-	// agreement is telling us who the proposer is and if they're eligible, but
-	// agreement does not consider the current config params, so here we decide
-	// what really goes into the BlockHeader.
-	proto := config.Consensus[vb.blk.CurrentProtocol]
-	if proto.Payouts.Enabled {
-		newblock.BlockHeader.Proposer = proposer
-	}
-	if !proto.Payouts.Enabled || !eligible {
-		newblock.BlockHeader.ProposerPayout = basics.MicroAlgos{}
-	}
-
-	return ValidatedBlock{
-		blk:   newblock,
-		delta: vb.delta,
-	}
 }
 
 // MakeValidatedBlock creates a validated block.
