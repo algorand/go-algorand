@@ -791,39 +791,6 @@ func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, evalOpts 
 		return nil, fmt.Errorf("overflowed subtracting rewards for block %v", hdr.Round)
 	}
 
-	// Move last block's proposer payout to the proposer
-	if !prevHeader.Proposer.IsZero() {
-		// Payout the previous proposer.
-		if !prevHeader.ProposerPayout.IsZero() {
-			// Use the FeeSink from that header, since that's the checked
-			// balance. (Though we have no expectation it will ever change.)
-			err = eval.state.Move(prevHeader.FeeSink, prevHeader.Proposer, prevHeader.ProposerPayout, nil, nil)
-			if err != nil {
-				// Should be impossible, it was checked when put into the block
-				return nil, fmt.Errorf("unable to payout block incentive: %v", err)
-			}
-		}
-
-		// Increment LastProposed on the proposer account
-		prp, err := eval.state.Get(prevHeader.Proposer, false)
-		if err != nil {
-			return nil, err
-		}
-		prp.LastProposed = hdr.Round - 1
-
-		// An account could propose, even while suspended, because of the 320
-		// round lookback.  Doing so is evidence the account is
-		// back. Unsuspend. But the account will remain not IncentiveElgible
-		// until they repay the initial fee.
-		if prp.Suspended() {
-			prp.Status = basics.Online
-		}
-		err = eval.state.Put(prevHeader.Proposer, prp)
-		if err != nil {
-			return nil, err
-		}
-	}
-
 	if eval.Tracer != nil {
 		eval.Tracer.BeforeBlock(&eval.block.BlockHeader)
 	}
@@ -1390,33 +1357,35 @@ func (eval *BlockEvaluator) endOfBlock() error {
 			return fmt.Errorf("fees collected wrong: %v != %v", eval.block.FeesCollected, expectedFeesCollected)
 		}
 
-		// agreement will check that the proposer is correct (we can't because
-		// we don't see the bundle), but agreement allows the proposer to be set
-		// even if Payouts is not enabled (and unset any time).  So make sure
-		// it's set iff it should be.
 		if eval.proto.Payouts.Enabled {
-			if eval.block.Proposer().IsZero() && !eval.generate { // if generating, proposer is set later by agreement
-				return fmt.Errorf("proposer missing when payouts enabled")
+			// agreement will check that the payout is zero if the proposer is
+			// ineligible, but we must check that it is correct if non-zero. We
+			// allow it to be too low. A proposer can be algruistic.
+			expectedPayout, err := eval.proposerPayout()
+			if err != nil {
+				return err
+			}
+			payout := eval.block.ProposerPayout()
+			if payout.Raw > expectedPayout.Raw {
+				return fmt.Errorf("proposal wants %d payout, %d is allowed", payout.Raw, expectedPayout.Raw)
+			}
+			// agreement will check that the proposer is correct (we can't because
+			// we don't see the bundle), but agreement allows the proposer to be set
+			// even if Payouts is not enabled (and unset any time).  So make sure
+			// it's set only if it should be.
+			if !eval.generate { // if generating, proposer is set later by agreement
+				proposer := eval.block.Proposer()
+				if proposer.IsZero() {
+					return fmt.Errorf("proposer missing when payouts enabled")
+				}
 			}
 		} else {
 			if !eval.block.Proposer().IsZero() {
 				return fmt.Errorf("proposer %v present when payouts disabled", eval.block.Proposer())
 			}
-		}
-
-		// agreement will check that the payout is zero if the proposer is
-		// ineligible, but we must check that it is correct if non-zero. We allow it
-		// to be too low. A proposer can be algruistic.
-		maxPayout := uint64(0)
-		if eval.proto.Payouts.Enabled {
-			payout, err := eval.proposerPayout()
-			if err != nil {
-				return err
+			if !eval.block.ProposerPayout().IsZero() {
+				return fmt.Errorf("payout %d present when payouts disabled", eval.block.ProposerPayout().Raw)
 			}
-			maxPayout = payout.Raw
-		}
-		if eval.block.ProposerPayout().Raw > maxPayout {
-			return fmt.Errorf("proposal wants %d payout, %d is allowed", eval.block.ProposerPayout().Raw, maxPayout)
 		}
 
 		expectedVoters, expectedVotersWeight, err2 := eval.stateProofVotersAndTotal()
@@ -1457,6 +1426,45 @@ func (eval *BlockEvaluator) endOfBlock() error {
 		for ccType := range eval.block.StateProofTracking {
 			if ccType != protocol.StateProofBasic {
 				return fmt.Errorf("StateProofType %d unexpected", ccType)
+			}
+		}
+	}
+
+	// Try to pay the proposer.
+	{
+		proposer := eval.block.Proposer()
+		payout := eval.block.ProposerPayout()
+		// In effect, these checks mean we're only performing the payout when
+		// !generate, since the proposer won't be present yet.
+		if !proposer.IsZero() {
+			// We don't propagate the error here,
+			// we simply declare that an illegal payout is not made.  This
+			// protects us from stalling if there is ever an error in which
+			// the generation code thinks the payout will be legal, but it
+			// turns out not to be.  That would be a programming error in
+			// algod, but not worth stalling over.
+			if !payout.IsZero() {
+				err2 := eval.state.Move(eval.block.FeeSink, proposer, payout, nil, nil)
+				if err2 != nil {
+					logging.Base().Warnf("Unable to payout %d to %v: %s",
+						payout, proposer, err2)
+				}
+			}
+			prp, err2 := eval.state.Get(proposer, false)
+			if err2 != nil {
+				return err2
+			}
+			prp.LastProposed = eval.Round()
+			// An account could propose, even while suspended, because of the 320
+			// round lookback.  Doing so is evidence the account is
+			// back. Unsuspend. But the account will remain not IncentiveElgible
+			// until they keyreg again with the extra fee.
+			if prp.Suspended() {
+				prp.Status = basics.Online
+			}
+			err2 = eval.state.Put(proposer, prp)
+			if err2 != nil {
+				return err2
 			}
 		}
 	}

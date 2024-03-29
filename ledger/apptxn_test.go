@@ -102,13 +102,6 @@ func TestPayAction(t *testing.T) {
 		postsink := micros(dl.t, dl.generator, genBalances.FeeSink)
 		postprop := micros(dl.t, dl.generator, proposer)
 
-		// Payout checks
-		require.EqualValues(t, 0, postprop-preprop) // payout not moved yet
-		require.EqualValues(t, 2000, postsink-presink)
-
-		dl.fullBlock()
-		postsink = micros(dl.t, dl.generator, genBalances.FeeSink)
-		postprop = micros(dl.t, dl.generator, proposer)
 		dl.t.Log("postsink", postsink, "postprop", postprop)
 		if ver >= payoutsVer {
 			bonus := 10_000_000                                // config/consensus.go

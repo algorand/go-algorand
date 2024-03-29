@@ -32,6 +32,9 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
+// first bonus payout, set in config/consensus.go
+const bonus1 = 10_000_000
+
 // TestBasicPayouts shows proposers getting paid
 func TestBasicPayouts(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -61,12 +64,13 @@ func TestBasicPayouts(t *testing.T) {
 
 	c15, account15 := clientAndAccount("Node15")
 	c01, account01 := clientAndAccount("Node01")
+	relay, _ := clientAndAccount("Relay")
 
 	data01 := rekeyreg(&fixture, a, c01, account01.Address)
 	data15 := rekeyreg(&fixture, a, c15, account15.Address)
 
-	// have account01 burn some money to get below to eligibility cap
-	// Starts with 100M, so burn 60M and get under 50M cap.
+	// have account01 burn some money to get below the eligibility cap
+	// Starts with 100M, so burn 60M and get under 70M cap.
 	txn, err := c01.SendPaymentFromUnencryptedWallet(account01.Address, basics.Address{}.String(),
 		1000, 60_000_000_000_000, nil)
 	a.NoError(err)
@@ -86,12 +90,10 @@ func TestBasicPayouts(t *testing.T) {
 		block, err := client.BookkeepingBlock(status.LastRound)
 		a.NoError(err)
 
-		fmt.Printf(" 1 block %d proposed by %v\n", status.LastRound, block.Proposer())
+		fmt.Printf("block %d proposed by %v\n", status.LastRound, block.Proposer())
 		a.Zero(block.ProposerPayout()) // nobody is eligible yet (hasn't worked back to balance round)
-		a.EqualValues(5_000_000, block.Bonus.Raw)
-		fixture.WaitForRoundWithTimeout(status.LastRound + 1)
+		a.EqualValues(bonus1, block.Bonus.Raw)
 
-		// incentives would pay out in the next round (they won't here, but makes the test realistic)
 		next, err := client.AccountData(block.Proposer().String())
 		a.EqualValues(next.LastProposed, status.LastRound)
 		// regardless of proposer, nobody gets paid
@@ -105,6 +107,7 @@ func TestBasicPayouts(t *testing.T) {
 		default:
 			a.Fail("bad proposer", "%v proposed", block.Proposer)
 		}
+		fixture.WaitForRoundWithTimeout(status.LastRound + 1)
 		status, err = client.Status()
 		a.NoError(err)
 	}
@@ -117,33 +120,28 @@ func TestBasicPayouts(t *testing.T) {
 		a.NoError(err)
 		block, err := client.BookkeepingBlock(status.LastRound)
 		a.NoError(err)
+		a.EqualValues(bonus1, block.Bonus.Raw)
 
-		fmt.Printf(" 3 block %d proposed by %v\n", status.LastRound, block.Proposer())
-		a.EqualValues(5_000_000, block.Bonus.Raw)
-
-		// incentives would pay out in the next round so wait to see them
-		fixture.WaitForRoundWithTimeout(status.LastRound + 1)
 		next, err := client.AccountData(block.Proposer().String())
-		fmt.Printf(" proposer %v has %d at round %d\n", block.Proposer(), next.MicroAlgos.Raw, status.LastRound)
+		fmt.Printf(" proposer %v has %d after proposing round %d\n", block.Proposer(), next.MicroAlgos.Raw, status.LastRound)
 
 		// 01 would get paid (because under balance cap) 15 would not
 		switch block.Proposer().String() {
 		case account01.Address:
-			a.NotZero(block.ProposerPayout())
-			a.NotEqual(data01.MicroAlgos, next.MicroAlgos)
+			a.EqualValues(bonus1, block.ProposerPayout().Raw)
+			a.EqualValues(data01.MicroAlgos.Raw+bonus1, next.MicroAlgos.Raw) // 01 earns
 			proposed01 = true
 			data01 = next
 		case account15.Address:
 			a.Zero(block.ProposerPayout())
-			a.Equal(data15.MicroAlgos, next.MicroAlgos)
+			a.Equal(data15.MicroAlgos, next.MicroAlgos) // didn't earn
 			data15 = next
 			proposed15 = true
 		default:
 			a.Fail("bad proposer", "%v proposed", block.Proposer)
 		}
+		fixture.WaitForRoundWithTimeout(status.LastRound + 1)
 	}
-	a.True(proposed15)
-	a.True(proposed01) // There's some chance of this triggering flakily
 
 	// Now that we've proven incentives get paid, let's drain the FeeSink and
 	// ensure it happens gracefully.  Have account15 go offline so that (after
@@ -163,17 +161,27 @@ func TestBasicPayouts(t *testing.T) {
 		block, err := client.BookkeepingBlock(status.LastRound)
 		a.NoError(err)
 
+		a.EqualValues(bonus1, block.Bonus.Raw)
+
+		data, err := client.AccountData(block.Proposer().String())
+		a.NoError(err)
+		fmt.Printf(" proposer %v has %d after proposing round %d\n", block.Proposer(), data.MicroAlgos.Raw, status.LastRound)
+
 		feesink := block.BlockHeader.FeeSink
-		err = fixture.WaitForRoundWithTimeout(status.LastRound + 1)
-		a.NoError(err)
-		data, err := client.AccountData(feesink.String())
-		a.NoError(err)
-		fmt.Printf(" feesink has %d at round %d\n", data.MicroAlgos.Raw, status.LastRound)
+		// show all the node's belief about feesink, for debugging the payout
+		// effects appearing locally but not elsewhere (or vice versa)
+		for i, c := range []libgoal.Client{c01, c15, relay} {
+			data, err = c.AccountData(feesink.String())
+			a.NoError(err)
+			fmt.Printf(" feesink %d has %d at round %d\n", i, data.MicroAlgos.Raw, status.LastRound)
+		}
 		a.LessOrEqual(100000, int(data.MicroAlgos.Raw)) // won't go below minfee
 		if data.MicroAlgos.Raw == 100000 {
 			break
 		}
 		a.Less(i, 32+20)
+		err = fixture.WaitForRoundWithTimeout(status.LastRound + 1)
+		a.NoError(err)
 	}
 }
 
