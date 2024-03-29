@@ -270,6 +270,7 @@ func (nc *nodeConfigurator) registerDNSRecords() (err error) {
 		addrInfoString := fmt.Sprintf("/%s/%s/tcp/%d/p2p/%s", addrType, nc.dnsName, port, entry.peerID)
 		to := fmt.Sprintf("dnsaddr=%s", addrInfoString)
 
+		fmt.Fprintf(os.Stdout, "...... Adding P2P TXT Record '%s' -> '%s' .\n", dnsaddrsFrom, to)
 		const priority = 1
 		const proxied = false
 		dnsErr := cloudflareDNS.CreateDNSRecord(context.Background(), "TXT", dnsaddrsFrom, to, cloudflare.AutomaticTTL, priority, proxied)
