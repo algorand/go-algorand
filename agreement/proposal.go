@@ -305,6 +305,7 @@ func proposalForBlock(address basics.Address, vrf *crypto.VRFSecrets, ve Validat
 
 	ve = ve.WithProposer(newSeed, address, eligible)
 	proposal := makeProposal(ve, seedProof, period, address)
+	proposal.ve = nil
 	value := proposalValue{
 		OriginalPeriod:   period,
 		OriginalProposer: address,

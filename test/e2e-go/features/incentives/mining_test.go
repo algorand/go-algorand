@@ -59,6 +59,7 @@ func TestBasicPayouts(t *testing.T) {
 		accounts, err := fixture.GetNodeWalletsSortedByBalance(c)
 		a.NoError(err)
 		a.Len(accounts, 1)
+		fmt.Printf("Client %s is %v\n", name, accounts[0].Address)
 		return c, accounts[0]
 	}
 
@@ -94,6 +95,25 @@ func TestBasicPayouts(t *testing.T) {
 		a.Zero(block.ProposerPayout()) // nobody is eligible yet (hasn't worked back to balance round)
 		a.EqualValues(bonus1, block.Bonus.Raw)
 
+		// all nodes agree the proposer proposed. The paranoia here is
+		// justified. Block incentives are the first time we're making changes
+		// to the Delta in the "second" evaluation of the block.  That is, the
+		// payment and LastProposed change happen only if evaluating a block
+		// that `agreement` has already added to.  An easy bug to have is an
+		// optimization that avoids this re-evaluation in the algod that
+		// proposed the block.  We had such an optimization, and it would cause
+		// failures here.  The fix is throwing away the ValidatedBlock in
+		// proposalForBlock() after makeProposal.
+		for i, c := range []libgoal.Client{c15, c01, relay} {
+			fmt.Printf("checking block %v\n", block.Round())
+			data, err := c.AccountData(block.Proposer().String())
+			a.NoError(err)
+			bb, err := c.BookkeepingBlock(status.LastRound)
+			a.NoError(err)
+			a.Equal(block.Proposer(), bb.Proposer())
+			a.Equal(block.Round(), data.LastProposed, "client %d thinks %v", i, block.Proposer())
+		}
+
 		next, err := client.AccountData(block.Proposer().String())
 		a.EqualValues(next.LastProposed, status.LastRound)
 		// regardless of proposer, nobody gets paid
@@ -124,6 +144,13 @@ func TestBasicPayouts(t *testing.T) {
 
 		next, err := client.AccountData(block.Proposer().String())
 		fmt.Printf(" proposer %v has %d after proposing round %d\n", block.Proposer(), next.MicroAlgos.Raw, status.LastRound)
+
+		// all nodes agree the proposer proposed
+		for i, c := range []libgoal.Client{c15, c01, relay} {
+			data, err := c.AccountData(block.Proposer().String())
+			a.NoError(err)
+			a.Equal(block.Round(), data.LastProposed, i)
+		}
 
 		// 01 would get paid (because under balance cap) 15 would not
 		switch block.Proposer().String() {
@@ -170,7 +197,11 @@ func TestBasicPayouts(t *testing.T) {
 		feesink := block.BlockHeader.FeeSink
 		// show all the node's belief about feesink, for debugging the payout
 		// effects appearing locally but not elsewhere (or vice versa)
-		for i, c := range []libgoal.Client{c01, c15, relay} {
+		for i, c := range []libgoal.Client{relay, c01, c15} {
+			data, err = c.AccountData(block.Proposer().String())
+			a.NoError(err)
+			a.Equal(block.Round(), data.LastProposed)
+
 			data, err = c.AccountData(feesink.String())
 			a.NoError(err)
 			fmt.Printf(" feesink %d has %d at round %d\n", i, data.MicroAlgos.Raw, status.LastRound)

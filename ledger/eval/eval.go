@@ -1434,15 +1434,13 @@ func (eval *BlockEvaluator) endOfBlock() error {
 	{
 		proposer := eval.block.Proposer()
 		payout := eval.block.ProposerPayout()
-		// In effect, these checks mean we're only performing the payout when
-		// !generate, since the proposer won't be present yet.
+		// The proposer won't be present yet when generating a block
 		if !proposer.IsZero() {
-			// We don't propagate the error here,
-			// we simply declare that an illegal payout is not made.  This
-			// protects us from stalling if there is ever an error in which
-			// the generation code thinks the payout will be legal, but it
-			// turns out not to be.  That would be a programming error in
-			// algod, but not worth stalling over.
+			// We don't propagate the error here, we simply declare that an
+			// illegal payout is not made.  This protects us from stalling if
+			// there is ever an error in which the generation code thinks the
+			// payout will be legal, but it turns out not to be.  That would be
+			// a programming error in algod, but not worth stalling over.
 			if !payout.IsZero() {
 				err2 := eval.state.Move(eval.block.FeeSink, proposer, payout, nil, nil)
 				if err2 != nil {
