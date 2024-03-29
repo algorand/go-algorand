@@ -56,7 +56,6 @@ agents:
       - NETWORK=$NETWORK
       - NO_DEPLOY=$NO_DEPLOY
       - PACKAGES_DIR=$PACKAGES_DIR
-      - S3_SOURCE=$S3_SOURCE
       - STAGING=$STAGING
       - VERSION=$VERSION
     volumes:

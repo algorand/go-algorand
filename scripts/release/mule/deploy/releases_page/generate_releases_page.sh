@@ -8,13 +8,8 @@
 
 set -ex
 
-if [ -z "$NETWORK" ] || [ -z "$VERSION" ]
-then
-    echo "[$0] Network and version are required parameters."
-    exit 1
-fi
-
-CHANNEL=$(./scripts/release/mule/common/get_channel.sh "$NETWORK")
+CHANNEL=${CHANNEL:-$(./scripts/release/mule/common/get_channel.sh "$NETWORK")}
+VERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
 
 cd scripts/release/mule/deploy/releases_page
 

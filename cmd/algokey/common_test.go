@@ -14,29 +14,26 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package metrics
+package main
 
 import (
-	"sync/atomic"
+	"bytes"
+	"testing"
 
-	"github.com/algorand/go-deadlock"
+	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-// Counter represent a single counter variable.
-type Counter struct {
-	// Collects value for special fast-path with no labels through Inc(nil) AddUint64(x, nil)
-	intValue atomic.Uint64
-
-	deadlock.Mutex
-	name          string
-	description   string
-	values        []*counterValues
-	labels        map[string]int // map each label ( i.e. httpErrorCode ) to an index.
-	valuesIndices map[int]int
-}
-
-type counterValues struct {
-	counter         uint64
-	labels          map[string]string
-	formattedLabels string
+func Test_printDiscreetly(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	buf := new(bytes.Buffer)
+	var (
+		promptMsg = "Prompt Message"
+		secretMsg = "Secret Message"
+	)
+	require.NoError(t, printDiscreetly(buf, promptMsg, secretMsg))
+	require.Contains(t, buf.String(), promptMsg)
+	require.Contains(t, buf.String(), secretMsg)
 }

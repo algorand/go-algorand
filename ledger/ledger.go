@@ -462,9 +462,23 @@ func (l *Ledger) notifyCommit(r basics.Round) basics.Round {
 	if l.archival {
 		// Do not forget any blocks.
 		minToSave = 0
+	} else {
+		catchpointsMinToSave := r.SubSaturate(l.calcMinCatchpointRoundsLookback())
+		if catchpointsMinToSave < minToSave {
+			minToSave = catchpointsMinToSave
+		}
 	}
 
 	return minToSave
+}
+
+func (l *Ledger) calcMinCatchpointRoundsLookback() basics.Round {
+	// cfg.StoresCatchpoints checks that CatchpointInterval is positive
+	if !l.cfg.StoresCatchpoints() || l.cfg.CatchpointFileHistoryLength == 0 {
+		return 0
+	}
+
+	return basics.Round(2 * l.cfg.CatchpointInterval)
 }
 
 // GetLastCatchpointLabel returns the latest catchpoint label that was written to the
@@ -901,7 +915,7 @@ func (l *Ledger) FlushCaches() {
 // Validate uses the ledger to validate block blk as a candidate next block.
 // It returns an error if blk is not the expected next block, or if blk is
 // not a valid block (e.g., it has duplicate transactions, overspends some
-// account, etc).
+// account, etc.).
 func (l *Ledger) Validate(ctx context.Context, blk bookkeeping.Block, executionPool execpool.BacklogPool) (*ledgercore.ValidatedBlock, error) {
 	delta, err := eval.Eval(ctx, l, blk, true, l.verifiedTxnCache, executionPool, l.tracer)
 	if err != nil {

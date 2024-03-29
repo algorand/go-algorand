@@ -3310,3 +3310,67 @@ func TestLedgerMaxBlockHistoryLookback(t *testing.T) {
 	require.Error(t, err)
 	require.Empty(t, blk)
 }
+
+func TestLedgerRetainMinOffCatchpointInterval(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	// This test is to ensure that the ledger retains the minimum number of blocks off the catchpoint interval.
+	blocksToMake := 2000
+
+	// Cases:
+	// 1. Base Case: Archival = false, Stores catchpoints returns true, CatchpointFileHistoryLength = >= 1 - implies catchpoint interval > 0 - min formula
+	// 2. Archival = true, stores catchpoints returns false - we keep all blocks anyway
+	// 3. Archival = false, stores catchpoints returns false - we don't modify minToSave
+	// 4. Condition: Archival = false, storesCatchpoints returns true, CatchpointFileHistoryLength is -1 - keep all catchpoint files
+	// 5. Condition: Archival = false, storesCatchpoints returns true, CatchpointFileHistoryLength is 365 - the config default setting
+
+	catchpointIntervalBlockRetentionTestCases := []struct {
+		storeCatchpoints            bool
+		archival                    bool
+		catchpointFileHistoryLength int
+	}{
+		{true, false, 1},   // should use min catchpoint formula
+		{false, true, 1},   // all blocks get retained, archival mode dictates
+		{false, false, 1},  // should not modify min blocks retained based on catchpoint interval
+		{true, false, -1},  // should use min formula, this is the keep all catchpoints setting
+		{true, false, 365}, // should use min formula, this is the default setting for catchpoint file history length
+	}
+	for _, tc := range catchpointIntervalBlockRetentionTestCases {
+		func() {
+			var genHash crypto.Digest
+			crypto.RandBytes(genHash[:])
+			cfg := config.GetDefaultLocal()
+			// set config properties based on test case
+			cfg.MaxBlockHistoryLookback = 0 // max block history lookback is not used in this test
+			if tc.storeCatchpoints {
+				cfg.CatchpointTracking = config.CatchpointTrackingModeStored
+				cfg.CatchpointInterval = 100
+			} else {
+				cfg.CatchpointInterval = 0 // sufficient for cfg.StoresCatchpoints() to return false
+			}
+			cfg.CatchpointFileHistoryLength = tc.catchpointFileHistoryLength
+			cfg.Archival = tc.archival
+
+			l := &Ledger{}
+			l.cfg = cfg
+			l.archival = cfg.Archival
+
+			for i := 1; i <= blocksToMake; i++ {
+				minBlockToKeep := l.notifyCommit(basics.Round(i))
+
+				// In archival mode, all blocks should always be kept
+				if cfg.Archival {
+					require.Equal(t, basics.Round(0), minBlockToKeep)
+				} else {
+					// This happens to work for the test case where we don't store catchpoints since mintosave is always
+					// 0 in that case.
+					expectedCatchpointLookback := 2 * cfg.CatchpointInterval
+
+					expectedMinBlockToKeep := basics.Round(uint64(i)).SubSaturate(
+						basics.Round(expectedCatchpointLookback))
+					require.Equal(t, expectedMinBlockToKeep, minBlockToKeep)
+				}
+			}
+		}()
+	}
+
+}
