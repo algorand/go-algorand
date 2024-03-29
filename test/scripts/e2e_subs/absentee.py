@@ -1,10 +1,8 @@
 #!/usr/bin/env python
 
-import base64
 import os
 import sys
 from goal import Goal
-import algosdk.encoding as enc
 
 from datetime import datetime
 
