@@ -199,14 +199,13 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	// tie network, block fetcher, and agreement services together
 	var p2pNode network.GossipNode
 	if cfg.EnableP2PHybridMode {
-		p2pNode, err = network.NewHybridP2PNetwork(node.log, node.config, node.genesisDirs.RootGenesisDir, phonebookAddresses, genesis.ID(), genesis.Network, node)
+		p2pNode, err = network.NewHybridP2PNetwork(node.log, node.config, rootDir, phonebookAddresses, genesis.ID(), genesis.Network, node)
 		if err != nil {
 			log.Errorf("could not create hybrid p2p node: %v", err)
 			return nil, err
 		}
 	} else if cfg.EnableP2P {
-		// TODO: pass more appropriate genesisDir (hot/cold). Presently this is just used to store a peerID key.
-		p2pNode, err = network.NewP2PNetwork(node.log, node.config, node.genesisDirs.RootGenesisDir, phonebookAddresses, genesis.ID(), genesis.Network, node)
+		p2pNode, err = network.NewP2PNetwork(node.log, node.config, rootDir, phonebookAddresses, genesis.ID(), genesis.Network, node)
 		if err != nil {
 			log.Errorf("could not create p2p node: %v", err)
 			return nil, err

@@ -168,6 +168,7 @@ func (nd *nodeDir) configureP2PDNSBootstrap(p2pBootstrap bool) error {
 	if !p2pBootstrap {
 		return nil
 	}
+	fmt.Fprintf(os.Stdout, " - Configuring P2P DNS Bootstrap: %s\n", nd.Name)
 	if err := nd.ensureConfig(); err != nil {
 		return err
 	}
@@ -190,7 +191,7 @@ func (nd *nodeDir) configureP2PDNSBootstrap(p2pBootstrap bool) error {
 		netAddress = nd.config.P2PListenAddress
 	}
 
-	key, err := p2p.GetPrivKey(nd.config, nd.dataDir)
+	key, err := p2p.GetPrivKey(config.Local{P2PPersistPeerID: true}, nd.dataDir)
 	if err != nil {
 		return err
 	}
@@ -198,7 +199,7 @@ func (nd *nodeDir) configureP2PDNSBootstrap(p2pBootstrap bool) error {
 	if err != nil {
 		return err
 	}
-	nd.configurator.addP2PBootstrap(netAddress, string(peerID))
+	nd.configurator.addP2PBootstrap(netAddress, peerID.String())
 	return nil
 }
 
