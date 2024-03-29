@@ -1522,9 +1522,9 @@ func initConsensusProtocols() {
 	vFuture.Payouts.ChallengeGracePeriod = 200
 	vFuture.Payouts.ChallengeBits = 5
 
-	vFuture.Bonus.BaseAmount = 5_000_000 // 5 Algos
+	vFuture.Bonus.BaseAmount = 10_000_000 // 10 Algos
 	// 2.9 sec rounds gives about 10.8M rounds per year.
-	vFuture.Bonus.DecayInterval = 1_000_000 // .99^(10.8/1) ~ .897 ~ 10% decay per year
+	vFuture.Bonus.DecayInterval = 250_000 // .99^(10.8/0.25) ~ .648. So 35% decay per year
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 

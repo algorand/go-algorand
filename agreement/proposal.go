@@ -315,6 +315,7 @@ func proposalForBlock(address basics.Address, vrf *crypto.VRFSecrets, blk Assemb
 
 	blk = blk.WithProposer(newSeed, address, eligible)
 	prop := makeProposalFromAssembledBlock(blk, seedProof, period, address)
+
 	value := proposalValue{
 		OriginalPeriod:   period,
 		OriginalProposer: address,

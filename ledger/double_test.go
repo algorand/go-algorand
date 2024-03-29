@@ -19,6 +19,7 @@ package ledger
 import (
 	"testing"
 
+	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -62,7 +63,8 @@ func (dl DoubleLedger) Close() {
 func NewDoubleLedger(t testing.TB, balances bookkeeping.GenesisBalances, cv protocol.ConsensusVersion, cfg config.Local, opts ...simpleLedgerOption) DoubleLedger {
 	g := newSimpleLedgerWithConsensusVersion(t, balances, cv, cfg, opts...)
 	v := newSimpleLedgerFull(t, balances, cv, g.GenesisHash(), cfg, opts...)
-	return DoubleLedger{t, g, v, nil, balances.FeeSink} // FeeSink as proposer will make old code work as expected
+	// FeeSink as proposer will make old tests work as expected, because payouts will stay put.
+	return DoubleLedger{t, g, v, nil, balances.FeeSink}
 }
 
 func (dl *DoubleLedger) beginBlock() *eval.BlockEvaluator {
@@ -176,52 +178,34 @@ func (dl *DoubleLedger) reloadLedgers() {
 	require.NoError(dl.t, dl.validator.reloadLedger())
 }
 
-func checkBlock(t testing.TB, checkLedger *Ledger, vb *ledgercore.ValidatedBlock) {
-	bl := vb.Block()
+func checkBlock(t testing.TB, checkLedger *Ledger, gvb *ledgercore.ValidatedBlock) {
+	bl := gvb.Block()
 	msg := bl.MarshalMsg(nil)
 	var reconstituted bookkeeping.Block
 	_, err := reconstituted.UnmarshalMsg(msg)
 	require.NoError(t, err)
 
-	check := nextCheckBlock(t, checkLedger, reconstituted.RewardsState)
-	var group []transactions.SignedTxnWithAD
-	for _, stib := range reconstituted.Payset {
-		stxn, ad, err := reconstituted.BlockHeader.DecodeSignedTxn(stib)
-		require.NoError(t, err)
-		stad := transactions.SignedTxnWithAD{SignedTxn: stxn, ApplyData: ad}
-		// If txn we're looking at belongs in the current group, append
-		if group == nil || (!stxn.Txn.Group.IsZero() && group[0].Txn.Group == stxn.Txn.Group) {
-			group = append(group, stad)
-		} else if group != nil {
-			err := check.TransactionGroup(group)
-			require.NoError(t, err)
-			group = []transactions.SignedTxnWithAD{stad}
-		}
-	}
-	if group != nil {
-		err := check.TransactionGroup(group)
-		require.NoError(t, err, "%+v", reconstituted.Payset)
-	}
-	check.SetGenerateForTesting(true)
-	// We use the same value for seed and proposer. But the proposer is
-	// sometimes zero'd to account for mining being disabled. So we get the
-	// blocks to match by providing the Seed as the proposer.
-	cb := endBlock(t, checkLedger, check, basics.Address(vb.Block().BlockHeader.Seed))
-	check.SetGenerateForTesting(false)
-	require.Equal(t, vb.Block(), cb.Block())
+	cvb, err := validateWithoutSignatures(t, checkLedger, reconstituted)
+	require.NoError(t, err)
+	cvbd := cvb.Delta()
+	cvbd.Dehydrate()
+	gvbd := gvb.Delta()
+	gvbd.Dehydrate()
 
-	// vb.Delta() need not actually be Equal, in the sense of require.Equal
-	// because the order of the records in Accts is determined by the way the
-	// cb.sdeltas map (and then the maps in there) is iterated when the
-	// StateDelta is constructed by roundCowState.deltas().  They should be
-	// semantically equivalent, but those fields are not exported, so checking
-	// equivalence is hard.  If vb.Delta() is, in fact, different, even though
-	// vb.Block() is the same, then there is something seriously broken going
-	// on, that is unlikely to have anything to do with these tests.  So upshot:
-	// we skip trying a complicated equality check.
+	// There are some things in the deltas that won't be identical. Erase them.
+	// Hdr was put in here at _start_ of block, and not updated. So gvb is in
+	// initial state, cvd got to see the whole thing.
+	gvbd.Hdr = nil
+	cvbd.Hdr = nil
 
-	// This is the part of checking Delta() equality that wouldn't work right.
-	// require.Equal(t, vb.Delta().Accts, cb.Delta().Accts)
+	require.Equal(t, gvbd, cvbd)
+
+	// Hydration/Dehydration is done in-place, so rehydrate so to avoid external evidence
+	cvbd.Hydrate()
+	gvbd.Hydrate()
+
+	err = checkLedger.AddValidatedBlock(*cvb, agreement.Certificate{})
+	require.NoError(t, err)
 }
 
 func nextCheckBlock(t testing.TB, ledger *Ledger, rs bookkeeping.RewardsState) *eval.BlockEvaluator {

@@ -263,7 +263,14 @@ func TestPayoutFees(t *testing.T) {
 		dl.txns(&pay, pay.Args("again"))
 		vb := dl.endBlock(proposer)
 
-		const bonus1 = 5_000_000 // the first bonus value, set in config/consensus.go
+		postsink := micros(dl.t, dl.generator, genBalances.FeeSink)
+		postprop := micros(dl.t, dl.generator, proposer)
+		t.Log(" postsink", postsink)
+		t.Log(" postprop", postprop)
+
+		prp = lookup(dl.t, dl.generator, proposer)
+
+		const bonus1 = 10_000_000 // the first bonus value, set in config/consensus.go
 		if ver >= payoutsBegin {
 			require.True(t, dl.generator.GenesisProto().Payouts.Enabled)    // version sanity check
 			require.NotZero(t, dl.generator.GenesisProto().Payouts.Percent) // version sanity check
@@ -271,38 +278,58 @@ func TestPayoutFees(t *testing.T) {
 			require.EqualValues(t, 2000, vb.Block().FeesCollected.Raw)
 			require.EqualValues(t, bonus1, vb.Block().Bonus.Raw)
 			require.EqualValues(t, bonus1+1_500, vb.Block().ProposerPayout().Raw)
+			// This last one is really only testing the "fake" agreement that
+			// happens in dl.endBlock().
+			require.EqualValues(t, proposer, vb.Block().Proposer())
+
+			// At the end of the block, part of the fees + bonus have been moved to
+			// the proposer.
+			require.EqualValues(t, bonus1+1500, postprop-preprop) // based on 75% in config/consensus.go
+			require.EqualValues(t, bonus1-500, presink-postsink)
+			require.Equal(t, prp.LastProposed, dl.generator.Latest())
 		} else {
 			require.False(t, dl.generator.GenesisProto().Payouts.Enabled)
 			require.Zero(t, dl.generator.GenesisProto().Payouts.Percent) // version sanity check
 			require.Zero(t, vb.Block().FeesCollected)
 			require.Zero(t, vb.Block().Bonus)
 			require.Zero(t, vb.Block().ProposerPayout())
-		}
-
-		postsink := micros(dl.t, dl.generator, genBalances.FeeSink)
-		postprop := micros(dl.t, dl.generator, proposer)
-		t.Log(" postsink", postsink)
-		t.Log(" postprop", postprop)
-
-		// At the end of the block, all fees are still in the sink.
-		require.EqualValues(t, 2000, postsink-presink)
-		require.EqualValues(t, 0, postprop-preprop)
-
-		// Do the next block, which moves part of the fees + bonus to proposer
-		dl.fullBlock()
-		postsink = micros(dl.t, dl.generator, genBalances.FeeSink)
-		postprop = micros(dl.t, dl.generator, proposer)
-		t.Log(" postsink2", postsink)
-		t.Log(" postprop2", postprop)
-
-		if ver >= payoutsBegin {
-			require.EqualValues(t, bonus1+1500, postprop-preprop) // based on 75% in config/consensus.go
-			require.EqualValues(t, bonus1-500, presink-postsink)
-		} else {
-			// stayed in the feesink
+			// fees stayed in the feesink
 			require.EqualValues(t, 0, postprop-preprop, "%v", proposer)
 			require.EqualValues(t, 2000, postsink-presink)
+			require.Zero(t, prp.LastProposed)
 		}
+
+		// Do another block, make sure proposer doesn't get paid again. (Sanity
+		// check. The code used to award the payout used to be in block n+1).
+		vb = dl.fullBlock()
+		require.Equal(t, postsink, micros(dl.t, dl.generator, genBalances.FeeSink))
+		require.Equal(t, postprop, micros(dl.t, dl.generator, proposer))
+
+		// Rest of the tests only make sense with payout active
+		if ver < payoutsBegin {
+			return
+		}
+
+		// Get the feesink down low, then drain it by proposing.
+		feesink := vb.Block().FeeSink
+		data := lookup(t, dl.generator, feesink)
+		dl.txn(&txntest.Txn{
+			Type:     "pay",
+			Sender:   feesink,
+			Receiver: addrs[1],
+			Amount:   data.MicroAlgos.Raw - 12_000_000,
+		})
+		dl.beginBlock()
+		dl.endBlock(proposer)
+		require.EqualValues(t, micros(t, dl.generator, feesink), 2_000_000)
+
+		dl.beginBlock()
+		dl.endBlock(proposer)
+		require.EqualValues(t, micros(t, dl.generator, feesink), 100_000)
+
+		dl.beginBlock()
+		dl.endBlock(proposer)
+		require.EqualValues(t, micros(t, dl.generator, feesink), 100_000)
 	})
 }
 
@@ -416,9 +443,12 @@ func TestAbsentTracking(t *testing.T) {
 		})
 		dl.endBlock(proposer)
 
-		// no changes until the next block
 		prp := lookup(t, dl.validator, proposer)
-		require.Zero(t, prp.LastProposed)
+		if ver >= checkingBegins {
+			require.Equal(t, prp.LastProposed, dl.validator.Latest())
+		} else {
+			require.Zero(t, prp.LastProposed)
+		}
 		require.Zero(t, prp.LastHeartbeat)
 		require.False(t, prp.IncentiveEligible)
 
@@ -430,18 +460,6 @@ func TestAbsentTracking(t *testing.T) {
 		totals = newtotals
 
 		dl.fullBlock()
-
-		prp = lookup(t, dl.validator, proposer)
-		require.False(t, prp.IncentiveEligible)
-
-		if ver >= checkingBegins {
-			// version sanity check
-			require.NotZero(t, prp.LastProposed)
-			require.Zero(t, prp.LastHeartbeat) // genesis participants have never hb
-		} else {
-			require.Zero(t, prp.LastProposed)
-			require.Zero(t, prp.LastHeartbeat)
-		}
 
 		// addrs[2] was already offline
 		dl.txns(&txntest.Txn{Type: "keyreg", Sender: addrs[2]}) // OFFLINE keyreg
@@ -549,13 +567,11 @@ func TestAbsentTracking(t *testing.T) {
 		require.Equal(t, ver >= checkingBegins, lookup(t, dl.generator, addrs[2]).Status == basics.Offline)
 		require.False(t, lookup(t, dl.generator, addrs[2]).IncentiveEligible)
 
-		// now, addrs[2] proposes, so it gets back online, but not immediately,
-		// because processing happens after the proposing block
+		// now, addrs[2] proposes, so it gets back online, but stays ineligible
 		dl.proposer = addrs[2]
 		dl.fullBlock()
-		require.Equal(t, ver >= checkingBegins, lookup(t, dl.generator, addrs[2]).Status == basics.Offline)
-		dl.fullBlock()
 		require.Equal(t, basics.Online, lookup(t, dl.generator, addrs[2]).Status)
+		require.False(t, lookup(t, dl.generator, addrs[2]).IncentiveEligible)
 	})
 }
 

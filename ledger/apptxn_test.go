@@ -102,16 +102,9 @@ func TestPayAction(t *testing.T) {
 		postsink := micros(dl.t, dl.generator, genBalances.FeeSink)
 		postprop := micros(dl.t, dl.generator, proposer)
 
-		// Payout checks
-		require.EqualValues(t, 0, postprop-preprop) // payout not moved yet
-		require.EqualValues(t, 2000, postsink-presink)
-
-		dl.fullBlock()
-		postsink = micros(dl.t, dl.generator, genBalances.FeeSink)
-		postprop = micros(dl.t, dl.generator, proposer)
 		dl.t.Log("postsink", postsink, "postprop", postprop)
 		if ver >= payoutsVer {
-			bonus := 5_000_000                                 // block.go
+			bonus := 10_000_000                                // config/consensus.go
 			assert.EqualValues(t, bonus-500, presink-postsink) // based on 75% in config/consensus.go
 			require.EqualValues(t, bonus+1500, postprop-preprop)
 		} else {
@@ -3395,7 +3388,8 @@ ok:
 		vb := dl.endBlock()
 		deltas := vb.Delta()
 
-		params, _ := deltas.Accts.GetAppParams(addrs[0], appID)
+		params, ok := deltas.Accts.GetAppParams(addrs[0], appID)
+		require.True(t, ok)
 		require.Equal(t, basics.TealKeyValue{
 			"caller":  {Type: basics.TealBytesType, Bytes: string(addrs[0][:])},
 			"creator": {Type: basics.TealBytesType, Bytes: string(addrs[0][:])},

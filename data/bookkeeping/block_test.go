@@ -987,8 +987,8 @@ func TestBonusUpgrades(t *testing.T) {
 	a.Equal(ma100, computeBonus(151, ma100, d90, d90)) // no decay (interval)
 }
 
-// TestFirstYearBonus shows what about a year's worth of block bonuses would pay out.
-func TestFirstYearBonus(t *testing.T) {
+// TestFirstYearsBonus shows what the bonuses look like
+func TestFirstYearsBonus(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 	a := require.New(t)
@@ -1000,21 +1000,62 @@ func TestFirstYearBonus(t *testing.T) {
 	sum := uint64(0)
 	bonus := plan.BaseAmount
 	interval := int(plan.DecayInterval)
+	r := 0
 	for i := 0; i < yearRounds; i++ {
+		r++
 		sum += bonus
-		if i%interval == 0 {
+		if r%interval == 0 {
 			bonus, _ = basics.Muldiv(bonus, 99, 100)
 		}
 	}
-	sum /= 1_000_000 // micro to Algos
+	suma := sum / 1_000_000 // micro to Algos
 
-	fmt.Printf("paid %d algos\n", sum)
+	fmt.Printf("paid %d algos\n", suma)
 	fmt.Printf("bonus start: %d end: %d\n", plan.BaseAmount, bonus)
 
-	// pays about 51M algos
-	a.InDelta(51_000_000, sum, 500_000)
+	// pays about 88M algos
+	a.InDelta(88_500_000, suma, 100_000)
 
-	// decline about 10%
-	a.InDelta(0.90, float64(bonus)/float64(plan.BaseAmount), 0.01)
+	// decline about 35%
+	a.InDelta(0.65, float64(bonus)/float64(plan.BaseAmount), 0.01)
 
+	// year 2
+	for i := 0; i < yearRounds; i++ {
+		r++
+		sum += bonus
+		if r%interval == 0 {
+			bonus, _ = basics.Muldiv(bonus, 99, 100)
+		}
+	}
+
+	sum2 := sum / 1_000_000 // micro to Algos
+
+	fmt.Printf("paid %d algos after 2 years\n", sum2)
+	fmt.Printf("bonus end: %d\n", bonus)
+
+	// pays about 146M algos (total for 2 years)
+	a.InDelta(145_700_000, sum2, 100_000)
+
+	// decline about 58%
+	a.InDelta(0.42, float64(bonus)/float64(plan.BaseAmount), 0.01)
+
+	// year 3
+	for i := 0; i < yearRounds; i++ {
+		r++
+		sum += bonus
+		if r%interval == 0 {
+			bonus, _ = basics.Muldiv(bonus, 99, 100)
+		}
+	}
+
+	sum3 := sum / 1_000_000 // micro to Algos
+
+	fmt.Printf("paid %d algos after 3 years\n", sum3)
+	fmt.Printf("bonus end: %d\n", bonus)
+
+	// pays about 182M algos (total for 3 years)
+	a.InDelta(182_600_000, sum3, 100_000)
+
+	// declined to about 27% (but foundation funding probably gone anyway)
+	a.InDelta(0.27, float64(bonus)/float64(plan.BaseAmount), 0.01)
 }
