@@ -1155,7 +1155,8 @@ func (v2 *Handlers) AccountAssetsInformation(ctx echo.Context, address string, p
 	// 3. Prepare JSON response
 	lastRound := ledger.Latest()
 
-	records, lookupRound, err := ledger.LookupAssets(lastRound, addr, basics.AssetIndex(assetGreaterThan), *params.Limit)
+	// We intentionally request one more than the limit to determine if there are more assets.
+	records, lookupRound, err := ledger.LookupAssets(lastRound, addr, basics.AssetIndex(assetGreaterThan), *params.Limit+1)
 
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
@@ -1164,8 +1165,10 @@ func (v2 *Handlers) AccountAssetsInformation(ctx echo.Context, address string, p
 	// prepare JSON response
 	response := model.AccountAssetHoldingsResponse{Round: uint64(lookupRound)}
 
-	// We always are setting the next token, the client-side can use the total app counts to determine if there are more.
-	if len(records) > 0 {
+	// If the total count is greater than the limit, we set the next token to the last asset ID being returned
+	if uint64(len(records)) > *params.Limit {
+		// we do not include the last record in the response
+		records = records[:*params.Limit]
 		nextTk := strconv.FormatUint(uint64(records[len(records)-1].AssetID), 10)
 		response.NextToken = &nextTk
 	}
@@ -1178,21 +1181,17 @@ func (v2 *Handlers) AccountAssetsInformation(ctx echo.Context, address string, p
 			continue
 		}
 
-		if record.AssetParams == nil {
-			v2.Log.Warnf("AccountAssetsInformation: asset %d has no params - should not be possible", record.AssetID)
-			continue
-		}
-
-		asset := AssetParamsToAsset(record.Creator.String(), record.AssetID, record.AssetParams)
-
 		aah := model.AccountAssetHolding{
 			AssetHolding: model.AssetHolding{
 				Amount:   record.AssetHolding.Amount,
 				AssetID:  uint64(record.AssetID),
 				IsFrozen: record.AssetHolding.Frozen,
 			},
+		}
 
-			AssetParams: &asset.Params,
+		if record.AssetParams != nil {
+			asset := AssetParamsToAsset(record.Creator.String(), record.AssetID, record.AssetParams)
+			aah.AssetParams = &asset.Params
 		}
 
 		assetHoldings = append(assetHoldings, aah)
