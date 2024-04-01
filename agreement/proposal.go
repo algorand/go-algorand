@@ -259,7 +259,7 @@ func verifyNewSeed(p unauthenticatedProposal, ledger LedgerReader) error {
 }
 
 func proposalForBlock(address basics.Address, vrf *crypto.VRFSecrets, blk AssembledBlock, period period, ledger LedgerReader) (proposal, proposalValue, error) {
-	rnd := blk.Block().Round()
+	rnd := blk.Round()
 	newSeed, seedProof, err := deriveNewSeed(address, vrf, rnd, period, ledger)
 	if err != nil {
 		return proposal{}, proposalValue{}, fmt.Errorf("proposalForBlock: could not derive new seed: %v", err)

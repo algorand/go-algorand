@@ -165,7 +165,11 @@ func (b testValidatedBlock) Block() bookkeeping.Block {
 	return b.Inside
 }
 
-func (b testValidatedBlock) WithSeed(s committee.Seed) AssembledBlock {
+func (b testValidatedBlock) Round() basics.Round {
+	return b.Inside.Round()
+}
+
+func (b testValidatedBlock) FinalizeBlock(s committee.Seed, _ basics.Address) ProposableBlock {
 	b.Inside.BlockHeader.Seed = s
 	return b
 }
@@ -180,7 +184,7 @@ type testBlockFactory struct {
 	Owner int
 }
 
-func (f testBlockFactory) AssembleBlock(r basics.Round) (AssembledBlock, error) {
+func (f testBlockFactory) AssembleBlock(r basics.Round, _ []basics.Address) (AssembledBlock, error) {
 	return testValidatedBlock{Inside: bookkeeping.Block{BlockHeader: bookkeeping.BlockHeader{Round: r}}}, nil
 }
 
@@ -413,7 +417,7 @@ type testAccountData struct {
 }
 
 func makeProposalsTesting(accs testAccountData, round basics.Round, period period, factory BlockFactory, ledger Ledger) (ps []proposal, vs []vote) {
-	ve, err := factory.AssembleBlock(round)
+	ve, err := factory.AssembleBlock(round, accs.addresses)
 	if err != nil {
 		logging.Base().Errorf("Could not generate a proposal for round %d: %v", round, err)
 		return nil, nil
@@ -525,8 +529,9 @@ func (v *voteMakerHelper) MakeRandomProposalValue() *proposalValue {
 
 func (v *voteMakerHelper) MakeRandomProposalPayload(t *testing.T, r round) (*proposal, *proposalValue) {
 	f := testBlockFactory{Owner: 1}
-	ve, err := f.AssembleBlock(r)
+	ae, err := f.AssembleBlock(r, nil)
 	require.NoError(t, err)
+	ve := ae.FinalizeBlock(committee.Seed{}, basics.Address{})
 
 	var payload unauthenticatedProposal
 	payload.Block = ve.Block()

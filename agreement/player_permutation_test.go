@@ -25,13 +25,15 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func makeRandomProposalPayload(r round) *proposal {
 	f := testBlockFactory{Owner: 1}
-	ve, _ := f.AssembleBlock(r)
+	ae, _ := f.AssembleBlock(r, nil)
+	ve := ae.FinalizeBlock(committee.Seed{}, basics.Address{})
 
 	var payload unauthenticatedProposal
 	payload.Block = ve.Block()

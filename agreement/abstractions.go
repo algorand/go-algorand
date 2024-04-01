@@ -89,6 +89,8 @@ type AssembledBlock interface {
 	// Calls to Seed() or to Digest() on the copy's Block must
 	// reflect the value of the new seed.
 	FinalizeBlock(seed committee.Seed, proposer basics.Address) ProposableBlock
+
+	Round() basics.Round
 }
 
 // An ProposableBlock represents a Block produced by a BlockFactory,

@@ -1299,14 +1299,21 @@ type assembledBlock struct {
 	blk bookkeeping.Block
 }
 
+type proposableBlock struct {
+	blk bookkeeping.Block
+}
+
 // WithSeed satisfies the agreement.AssembledBlock interface.
-func (ab assembledBlock) WithSeed(s committee.Seed) agreement.AssembledBlock {
+func (ab assembledBlock) FinalizeBlock(s committee.Seed, addr basics.Address) agreement.ProposableBlock {
 	blk := ab.blk.WithSeed(s)
-	return assembledBlock{blk: blk}
+	return proposableBlock{blk: blk}
 }
 
 // Block satisfies the agreement.AssembledBlock interface.
-func (ab assembledBlock) Block() bookkeeping.Block { return ab.blk }
+func (ab assembledBlock) Round() basics.Round { return ab.blk.Round() }
+
+// Block satisfies the agreement.ProposableBlock interface.
+func (pb proposableBlock) Block() bookkeeping.Block { return pb.blk }
 
 // Block satisfies the agreement.ValidatedBlock interface.
 func (vb validatedBlock) Block() bookkeeping.Block {
@@ -1315,7 +1322,7 @@ func (vb validatedBlock) Block() bookkeeping.Block {
 }
 
 // AssembleBlock implements Ledger.AssembleBlock.
-func (node *AlgorandFullNode) AssembleBlock(round basics.Round) (agreement.AssembledBlock, error) {
+func (node *AlgorandFullNode) AssembleBlock(round basics.Round, addrs []basics.Address) (agreement.AssembledBlock, error) {
 	deadline := time.Now().Add(node.config.ProposalAssemblyTime)
 	lvb, err := node.transactionPool.AssembleBlock(round, deadline)
 	if err != nil {
