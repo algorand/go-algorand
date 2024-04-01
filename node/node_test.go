@@ -891,9 +891,7 @@ func TestNodeHybridTopology(t *testing.T) {
 		cfg.EnableP2PHybridMode = true
 		cfg.EnableDHTProviders = true
 		cfg.P2PPersistPeerID = true
-		genesisDirs, err := cfg.EnsureAndResolveGenesisDirs(ni.rootDir, ni.genesis.ID(), nil)
-		require.NoError(t, err)
-		privKey, err := p2p.GetPrivKey(cfg, genesisDirs.RootGenesisDir)
+		privKey, err := p2p.GetPrivKey(cfg, ni.rootDir)
 		require.NoError(t, err)
 		ni.p2pID, err = p2p.PeerIDFromPublicKey(privKey.GetPublic())
 		require.NoError(t, err)
@@ -984,9 +982,7 @@ func TestNodeP2PRelays(t *testing.T) {
 		cfg.EnableDHTProviders = true
 
 		cfg.P2PPersistPeerID = true
-		genesisDirs, err := cfg.EnsureAndResolveGenesisDirs(ni.rootDir, ni.genesis.ID(), nil)
-		require.NoError(t, err)
-		privKey, err := p2p.GetPrivKey(cfg, genesisDirs.RootGenesisDir)
+		privKey, err := p2p.GetPrivKey(cfg, ni.rootDir)
 		require.NoError(t, err)
 		ni.p2pID, err = p2p.PeerIDFromPublicKey(privKey.GetPublic())
 		require.NoError(t, err)
