@@ -284,7 +284,7 @@ func (n asyncPseudonode) makePseudonodeVerifier(voteVerifier *AsyncVoteVerifier)
 
 // makeProposals creates a slice of block proposals for the given round and period.
 func (n asyncPseudonode) makeProposals(round basics.Round, period period, accounts []account.ParticipationRecordForRound) ([]proposal, []unauthenticatedVote) {
-	ve, err := n.factory.AssembleBlock(round)
+	ve, err := n.factory.AssembleBlock(round, accounts)
 	if err != nil {
 		if err != ErrAssembleBlockRoundStale {
 			n.log.Errorf("pseudonode.makeProposals: could not generate a proposal for round %d: %v", round, err)

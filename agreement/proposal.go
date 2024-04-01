@@ -103,7 +103,7 @@ type proposal struct {
 
 // makeProposalFromAssembledBlock is called when making a new proposal message,
 // using the output of AssembleBlock (from makeProposals -> proposalForBlock)
-func makeProposalFromAssembledBlock(blk AssembledBlock, pf crypto.VrfProof, origPer period, origProp basics.Address) proposal {
+func makeProposalFromAssembledBlock(blk ProposableBlock, pf crypto.VrfProof, origPer period, origProp basics.Address) proposal {
 	e := blk.Block()
 	var payload unauthenticatedProposal
 	payload.Block = e
@@ -265,8 +265,8 @@ func proposalForBlock(address basics.Address, vrf *crypto.VRFSecrets, blk Assemb
 		return proposal{}, proposalValue{}, fmt.Errorf("proposalForBlock: could not derive new seed: %v", err)
 	}
 
-	blk = blk.WithSeed(newSeed)
-	prop := makeProposalFromAssembledBlock(blk, seedProof, period, address)
+	proposableBlock := blk.FinalizeBlock(newSeed, address)
+	prop := makeProposalFromAssembledBlock(proposableBlock, seedProof, period, address)
 	value := proposalValue{
 		OriginalPeriod:   period,
 		OriginalProposer: address,

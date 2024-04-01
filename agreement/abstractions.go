@@ -77,19 +77,24 @@ type BlockFactory interface {
 	// produce a AssembledBlock for the given round. If an insufficient number of
 	// nodes on the network can assemble entries, the agreement protocol may
 	// lose liveness.
-	AssembleBlock(basics.Round) (AssembledBlock, error)
+	AssembleBlock(rnd basics.Round, partAddresses []basics.Address) (AssembledBlock, error)
 }
 
 // An AssembledBlock represents a Block produced by a BlockFactory
-// and can now be proposed by agreement.
+// and must be finalized before being proposed by agreement.
 type AssembledBlock interface {
 	// WithSeed creates a copy of this AssembledBlock with its
 	// cryptographically random seed set to the given value.
 	//
 	// Calls to Seed() or to Digest() on the copy's Block must
 	// reflect the value of the new seed.
-	WithSeed(committee.Seed) AssembledBlock
+	FinalizeBlock(seed committee.Seed, proposer basics.Address) ProposableBlock
+}
 
+// An ProposableBlock represents a Block produced by a BlockFactory,
+// that was later finalized by providing the seed and the proposer,
+// and can now be proposed by agreement.
+type ProposableBlock interface {
 	// Block returns the underlying block that has been assembled.
 	Block() bookkeeping.Block
 }
