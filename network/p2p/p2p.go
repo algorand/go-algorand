@@ -18,6 +18,7 @@ package p2p
 
 import (
 	"context"
+	"encoding/base32"
 	"fmt"
 	"runtime"
 	"strings"
@@ -27,6 +28,7 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	pstore "github.com/algorand/go-algorand/network/p2p/peerstore"
 	"github.com/algorand/go-algorand/network/phonebook"
+	"github.com/algorand/go-algorand/util/metrics"
 	"github.com/algorand/go-deadlock"
 
 	"github.com/libp2p/go-libp2p"
@@ -86,6 +88,10 @@ type serviceImpl struct {
 // AlgorandWsProtocol defines a libp2p protocol name for algorand's websockets messages
 const AlgorandWsProtocol = "/algorand-ws/1.0.0"
 
+// algorandGUIDProtocolPrefix defines a libp2p protocol name for algorand node telemetry GUID exchange
+const algorandGUIDProtocolPrefix = "/algorand-telemetry/1.0.0/"
+const algorandGUIDProtocolTemplate = algorandGUIDProtocolPrefix + "%s/%s"
+
 const dialTimeout = 30 * time.Second
 
 // MakeHost creates a libp2p host but does not start listening.
@@ -118,6 +124,13 @@ func MakeHost(cfg config.Local, datadir string, pstore *pstore.PeerStore) (host.
 		return nil
 	}
 
+	var disableMetrics = func(cfg *libp2p.Config) error { return nil }
+	if !cfg.EnableMetricReporting {
+		disableMetrics = libp2p.DisableMetrics()
+	} else {
+		metrics.DefaultRegistry().Register(&metrics.PrometheusDefaultMetrics)
+	}
+
 	host, err := libp2p.New(
 		libp2p.Identity(privKey),
 		libp2p.UserAgent(ua),
@@ -126,6 +139,7 @@ func MakeHost(cfg config.Local, datadir string, pstore *pstore.PeerStore) (host.
 		libp2p.Peerstore(pstore),
 		noListenAddrs,
 		libp2p.Security(noise.ID, noise.New),
+		disableMetrics,
 	)
 	return &StreamChainingHost{
 		Host:     host,
@@ -178,12 +192,18 @@ func MakeService(ctx context.Context, log logging.Logger, cfg config.Local, h ho
 	h.SetStreamHandler(AlgorandWsProtocol, sm.streamHandler)
 	h.SetStreamHandler(libp2phttp.ProtocolIDForMultistreamSelect, sm.streamHandlerHTTP)
 
+	// set an empty handler for telemetryID/telemetryInstance protocol in order to allow other peers to know our telemetryID
+	telemetryID := log.GetTelemetryGUID()
+	telemetryInstance := log.GetInstanceName()
+	telemetryProtoInfo := formatPeerTelemetryInfoProtocolName(telemetryID, telemetryInstance)
+	h.SetStreamHandler(protocol.ID(telemetryProtoInfo), func(s network.Stream) { s.Close() })
+
 	ps, err := makePubSub(ctx, cfg, h)
 	if err != nil {
 		return nil, err
 	}
-
 	return &serviceImpl{
+
 		log:        log,
 		listenAddr: listenAddr,
 		host:       h,
@@ -293,4 +313,33 @@ func netAddressToListenAddress(netAddress string) (string, error) {
 	}
 
 	return fmt.Sprintf("/ip4/%s/tcp/%s", ip, parts[1]), nil
+}
+
+// GetPeerTelemetryInfo returns the telemetry ID of a peer by looking at its protocols
+func GetPeerTelemetryInfo(peerProtocols []protocol.ID) (telemetryID string, telemetryInstance string) {
+	for _, protocol := range peerProtocols {
+		if strings.HasPrefix(string(protocol), algorandGUIDProtocolPrefix) {
+			telemetryInfo := string(protocol[len(algorandGUIDProtocolPrefix):])
+			telemetryInfoParts := strings.Split(telemetryInfo, "/")
+			if len(telemetryInfoParts) == 2 {
+				telemetryIDBytes, err := base32.StdEncoding.DecodeString(telemetryInfoParts[0])
+				if err == nil {
+					telemetryID = string(telemetryIDBytes)
+				}
+				telemetryInstanceBytes, err := base32.StdEncoding.DecodeString(telemetryInfoParts[1])
+				if err == nil {
+					telemetryInstance = string(telemetryInstanceBytes)
+				}
+				return telemetryID, telemetryInstance
+			}
+		}
+	}
+	return "", ""
+}
+
+func formatPeerTelemetryInfoProtocolName(telemetryID string, telemetryInstance string) string {
+	return fmt.Sprintf(algorandGUIDProtocolTemplate,
+		base32.StdEncoding.EncodeToString([]byte(telemetryID)),
+		base32.StdEncoding.EncodeToString([]byte(telemetryInstance)),
+	)
 }

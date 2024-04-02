@@ -23,6 +23,7 @@ import (
 	"time"
 
 	dht "github.com/libp2p/go-libp2p-kad-dht"
+	dhtmetrics "github.com/libp2p/go-libp2p-kad-dht/metrics"
 	"github.com/libp2p/go-libp2p/core/discovery"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -30,9 +31,11 @@ import (
 	crouting "github.com/libp2p/go-libp2p/core/routing"
 	"github.com/libp2p/go-libp2p/p2p/discovery/backoff"
 	"github.com/libp2p/go-libp2p/p2p/discovery/routing"
+	"go.opencensus.io/stats/view"
 
 	"github.com/algorand/go-algorand/config"
 	algoproto "github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util/metrics"
 )
 
 const minBackoff = time.Second * 5
@@ -53,6 +56,14 @@ func MakeDHT(ctx context.Context, h host.Host, networkID algoproto.NetworkID, cf
 		dht.ProtocolPrefix(dhtProtocolPrefix(networkID)),
 		dht.BootstrapPeersFunc(bootstrapFunc),
 	}
+
+	if cfg.EnableMetricReporting {
+		if err := view.Register(dhtmetrics.DefaultViews...); err != nil {
+			return nil, err
+		}
+		metrics.DefaultRegistry().Register(&metrics.OpencensusDefaultMetrics)
+	}
+
 	return dht.New(ctx, h, dhtCfg...)
 }
 

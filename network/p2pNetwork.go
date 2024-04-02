@@ -27,6 +27,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/network/limitcaller"
 	"github.com/algorand/go-algorand/network/p2p"
 	"github.com/algorand/go-algorand/network/p2p/dnsaddr"
@@ -67,6 +68,7 @@ type P2PNetwork struct {
 	wsPeersLock                    deadlock.RWMutex
 	wsPeersChangeCounter           atomic.Int32
 	wsPeersConnectivityCheckTicker *time.Ticker
+	peerStater                     peerConnectionStater
 
 	relayMessages bool // True if we should relay messages from other nodes (nominally true for relays, false otherwise)
 	wantTXGossip  atomic.Bool
@@ -222,6 +224,11 @@ func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebo
 		nodeInfo:      node,
 		pstore:        pstore,
 		relayMessages: relayMessages,
+		peerStater: peerConnectionStater{
+			log:                           log,
+			peerConnectionsUpdateInterval: time.Duration(cfg.PeerConnectionsUpdateInterval) * time.Second,
+			lastPeerConnectionsSent:       time.Now(),
+		},
 	}
 
 	net.ctx, net.ctxCancel = context.WithCancel(context.Background())
@@ -419,6 +426,11 @@ func (n *P2PNetwork) meshThread() {
 		case <-n.ctx.Done():
 			return
 		}
+
+		// send the currently connected peers information to the
+		// telemetry server; that would allow the telemetry server
+		// to construct a cross-node map of all the nodes interconnections.
+		n.peerStater.sendPeerConnectionsTelemetryStatus(n)
 	}
 }
 
@@ -744,6 +756,12 @@ func (n *P2PNetwork) wsStreamHandler(ctx context.Context, p2ppeer peer.ID, strea
 		conn:       &wsPeerConnP2PImpl{stream: stream},
 		outgoing:   !incoming,
 	}
+	protos, err := n.pstore.GetProtocols(p2ppeer)
+	if err != nil {
+		n.log.Warnf("Error getting protocols for peer %s: %v", p2ppeer, err)
+	}
+	wsp.TelemetryGUID, wsp.InstanceName = p2p.GetPeerTelemetryInfo(protos)
+
 	wsp.init(n.config, outgoingMessagesBufferSize)
 	n.wsPeersLock.Lock()
 	n.wsPeers[p2ppeer] = wsp
@@ -766,14 +784,13 @@ func (n *P2PNetwork) wsStreamHandler(ctx context.Context, p2ppeer peer.ID, strea
 			n.log.Debugf("%s stream %s protocol %s", s.Stat().Direction.String(), s.ID(), s.Protocol())
 		}
 	}
-	// TODO: add telemetry
-	// n.log.EventWithDetails(telemetryspec.Network, telemetryspec.ConnectPeerEvent,
-	// 	telemetryspec.PeerEventDetails{
-	// 		Address:       addr,
-	// 		TelemetryGUID: trackedRequest.otherTelemetryGUID,
-	// 		Incoming:      true,
-	// 		InstanceName:  trackedRequest.otherInstanceName,
-	// 	})
+	n.log.EventWithDetails(telemetryspec.Network, telemetryspec.ConnectPeerEvent,
+		telemetryspec.PeerEventDetails{
+			Address:       addr,
+			TelemetryGUID: wsp.TelemetryGUID,
+			Incoming:      incoming,
+			InstanceName:  wsp.InstanceName,
+		})
 }
 
 // peerRemoteClose called from wsPeer to report that it has closed
@@ -784,6 +801,27 @@ func (n *P2PNetwork) peerRemoteClose(peer *wsPeer, reason disconnectReason) {
 	delete(n.wsPeersToIDs, peer)
 	n.wsPeersLock.Unlock()
 	n.wsPeersChangeCounter.Add(1)
+
+	eventDetails := telemetryspec.PeerEventDetails{
+		Address:       peer.GetAddress(), // p2p peers store p2p addresses
+		TelemetryGUID: peer.TelemetryGUID,
+		InstanceName:  peer.InstanceName,
+		Incoming:      !peer.outgoing,
+	}
+	if peer.outgoing {
+		eventDetails.Endpoint = peer.GetAddress()
+		eventDetails.MessageDelay = peer.peerMessageDelay
+	}
+
+	n.log.EventWithDetails(telemetryspec.Network, telemetryspec.DisconnectPeerEvent,
+		telemetryspec.DisconnectPeerEventDetails{
+			PeerEventDetails: eventDetails,
+			Reason:           string(reason),
+			TXCount:          peer.txMessageCount.Load(),
+			MICount:          peer.miMessageCount.Load(),
+			AVCount:          peer.avMessageCount.Load(),
+			PPCount:          peer.ppMessageCount.Load(),
+		})
 }
 
 func (n *P2PNetwork) peerSnapshot(dest []*wsPeer) ([]*wsPeer, int32) {
@@ -833,7 +871,7 @@ func (n *P2PNetwork) txTopicHandleLoop() {
 			if err != pubsub.ErrSubscriptionCancelled && err != context.Canceled {
 				n.log.Errorf("Error reading from subscription %v, peerId %s", err, n.service.ID())
 			}
-			n.log.Debugf("Canceling subscription to topic %s due Next error", p2p.TXTopicName)
+			n.log.Debugf("Cancelling subscription to topic %s due Subscription.Next error: %v", p2p.TXTopicName, err)
 			sub.Cancel()
 			return
 		}
@@ -845,7 +883,7 @@ func (n *P2PNetwork) txTopicHandleLoop() {
 
 		// participation or configuration change, cancel subscription and quit
 		if !n.wantTXGossip.Load() {
-			n.log.Debugf("Canceling subscription to topic %s due participation change", p2p.TXTopicName)
+			n.log.Debugf("Cancelling subscription to topic %s due participation change", p2p.TXTopicName)
 			sub.Cancel()
 			return
 		}
