@@ -65,8 +65,8 @@ var ErrAssembleBlockRoundStale = errors.New("requested round for AssembleBlock i
 // An BlockFactory produces an Block which is suitable for proposal for a given
 // Round.
 type BlockFactory interface {
-	// AssembleBlock produces a new AssembledBlock which is suitable for proposal
-	// at a given Round.
+	// AssembleBlock produces a new AssembledBlock for a given Round.
+	// It must be finalized before proposed by agreement.
 	//
 	// AssembleBlock should produce a block for which the corresponding
 	// BlockValidator validates (i.e. for which BlockValidator.Validate
