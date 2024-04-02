@@ -101,9 +101,9 @@ type proposal struct {
 	validatedAt time.Duration
 }
 
-// makeProposalFromAssembledBlock is called when making a new proposal message,
+// makeProposalFromProposableBlock is called when making a new proposal message,
 // using the output of AssembleBlock (from makeProposals -> proposalForBlock)
-func makeProposalFromAssembledBlock(blk ProposableBlock, pf crypto.VrfProof, origPer period, origProp basics.Address) proposal {
+func makeProposalFromProposableBlock(blk ProposableBlock, pf crypto.VrfProof, origPer period, origProp basics.Address) proposal {
 	e := blk.Block()
 	var payload unauthenticatedProposal
 	payload.Block = e
@@ -266,7 +266,7 @@ func proposalForBlock(address basics.Address, vrf *crypto.VRFSecrets, blk Assemb
 	}
 
 	proposableBlock := blk.FinalizeBlock(newSeed, address)
-	prop := makeProposalFromAssembledBlock(proposableBlock, seedProof, period, address)
+	prop := makeProposalFromProposableBlock(proposableBlock, seedProof, period, address)
 	value := proposalValue{
 		OriginalPeriod:   period,
 		OriginalProposer: address,
