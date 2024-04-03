@@ -53,7 +53,7 @@ type entryFactoryImpl struct {
 }
 
 // AssembleBlock implements Ledger.AssembleBlock.
-func (i entryFactoryImpl) AssembleBlock(round basics.Round) (agreement.AssembledBlock, error) {
+func (i entryFactoryImpl) AssembleBlock(round basics.Round, _ []basics.Address) (agreement.UnfinishedBlock, error) {
 	prev, err := i.l.BlockHdr(round - 1)
 	if err != nil {
 		return nil, fmt.Errorf("could not make proposals: could not read block from ledger at round %v: %v", round, err)
@@ -64,8 +64,8 @@ func (i entryFactoryImpl) AssembleBlock(round basics.Round) (agreement.Assembled
 	return validatedBlock{blk: &b}, nil
 }
 
-// WithProposer implements the agreement.AssembledBlock interface.
-func (ve validatedBlock) WithProposer(s committee.Seed, proposer basics.Address, eligible bool) agreement.AssembledBlock {
+// FinishBlock implements the agreement.UnfinishedBlock interface.
+func (ve validatedBlock) FinishBlock(s committee.Seed, proposer basics.Address, eligible bool) agreement.ProposableBlock {
 	newblock := *ve.blk
 	newblock.BlockHeader.Seed = s
 	newblock.BlockHeader.Proposer = proposer
@@ -78,6 +78,11 @@ func (ve validatedBlock) WithProposer(s committee.Seed, proposer basics.Address,
 // Block implements the agreement.ValidatedBlock interface.
 func (ve validatedBlock) Block() bookkeeping.Block {
 	return *ve.blk
+}
+
+// Round implements the agreement.UnfinishedBlock interface.
+func (ve validatedBlock) Round() basics.Round {
+	return ve.blk.Round()
 }
 
 type ledgerImpl struct {

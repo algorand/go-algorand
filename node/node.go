@@ -1301,24 +1301,34 @@ func (vb validatedBlock) Block() bookkeeping.Block {
 	return blk
 }
 
-// assembledBlock satisfies agreement.AssembledBlock
-type assembledBlock struct {
+// unfinishedBlock satisfies agreement.UnfinishedBlock
+type unfinishedBlock struct {
 	blk bookkeeping.Block
 }
 
-// WithProposer satisfies the agreement.ValidatedBlock interface.
-func (ab assembledBlock) WithProposer(s committee.Seed, proposer basics.Address, eligible bool) agreement.AssembledBlock {
-	nb := ab.blk.WithProposer(s, proposer, eligible)
-	return assembledBlock{blk: nb}
+// proposableBlock satisfies agreement.ProposableBlock
+type proposableBlock struct {
+	blk bookkeeping.Block
 }
 
-// Block satisfies the agreement.AssembledBlock interface.
-func (ab assembledBlock) Block() bookkeeping.Block {
+// FinishBlock satisfies the agreement.UnfinishedBlock interface.
+func (ab unfinishedBlock) FinishBlock(s committee.Seed, proposer basics.Address, eligible bool) agreement.ProposableBlock {
+	nb := ab.blk.WithProposer(s, proposer, eligible)
+	return proposableBlock{blk: nb}
+}
+
+// Round satisfies the agreement.UnfinishedBlock interface.
+func (ab unfinishedBlock) Round() basics.Round {
+	return ab.blk.Round()
+}
+
+// Block satisfies the agreement.ProposableBlock interface.
+func (ab proposableBlock) Block() bookkeeping.Block {
 	return ab.blk
 }
 
 // AssembleBlock implements Ledger.AssembleBlock.
-func (node *AlgorandFullNode) AssembleBlock(round basics.Round) (agreement.AssembledBlock, error) {
+func (node *AlgorandFullNode) AssembleBlock(round basics.Round, addrs []basics.Address) (agreement.UnfinishedBlock, error) {
 	deadline := time.Now().Add(node.config.ProposalAssemblyTime)
 	lvb, err := node.transactionPool.AssembleBlock(round, deadline)
 	if err != nil {
@@ -1339,7 +1349,7 @@ func (node *AlgorandFullNode) AssembleBlock(round basics.Round) (agreement.Assem
 		}
 		return nil, err
 	}
-	return assembledBlock{blk: lvb.Block()}, nil
+	return unfinishedBlock{blk: lvb.Block()}, nil
 }
 
 // getOfflineClosedStatus will return an int with the appropriate bit(s) set if it is offline and/or online

@@ -65,34 +65,39 @@ var ErrAssembleBlockRoundStale = errors.New("requested round for AssembleBlock i
 // An BlockFactory produces an Block which is suitable for proposal for a given
 // Round.
 type BlockFactory interface {
-	// AssembleBlock produces a new ValidatedBlock which is suitable for proposal
-	// at a given Round.
+	// AssembleBlock produces a new UnfinishedBlock for a given Round.
+	// It must be finalized before proposed by agreement. It is provided
+	// a list of participating addresses that may propose this block.
 	//
-	// AssembleBlock should produce a ValidatedBlock for which the corresponding
+	// AssembleBlock should produce a block for which the corresponding
 	// BlockValidator validates (i.e. for which BlockValidator.Validate
 	// returns true). If an insufficient number of nodes can assemble valid
 	// entries, the agreement protocol may lose liveness.
 	//
 	// AssembleBlock may return an error if the BlockFactory is unable to
-	// produce a ValidatedBlock for the given round. If an insufficient number of
+	// produce an UnfinishedBlock for the given round. If an insufficient number of
 	// nodes on the network can assemble entries, the agreement protocol may
 	// lose liveness.
-	AssembleBlock(basics.Round) (AssembledBlock, error)
+	AssembleBlock(rnd basics.Round, partAddresses []basics.Address) (UnfinishedBlock, error)
 }
 
-// An AssembledBlock represents a Block produced by a BlockFactory
-// to be included in a proposal by agreement.
-type AssembledBlock interface {
-	// WithProposer creates a copy of this AssembledBlock with its
-	// cryptographically random seed and proposer set. The block's
-	// ProposerPayout is zero'd if !eligible. Abstractly, it is how the
-	// agreement code "finishes" a block and makes it a proposal for a specific
-	// account.
+// An UnfinishedBlock represents a Block produced by a BlockFactory
+// and must be finalized before being proposed by agreement.
+type UnfinishedBlock interface {
+	// WithSeed creates a copy of this UnfinishedBlock with its
+	// cryptographically random seed set to the given value.
 	//
 	// Calls to Seed() or to Digest() on the copy's Block must
 	// reflect the value of the new seed.
-	WithProposer(seed committee.Seed, proposer basics.Address, eligible bool) AssembledBlock
+	FinishBlock(seed committee.Seed, proposer basics.Address, eligible bool) ProposableBlock
 
+	Round() basics.Round
+}
+
+// An ProposableBlock represents a Block produced by a BlockFactory,
+// that was later finalized by providing the seed and the proposer,
+// and can now be proposed by agreement.
+type ProposableBlock interface {
 	// Block returns the underlying block that has been assembled.
 	Block() bookkeeping.Block
 }

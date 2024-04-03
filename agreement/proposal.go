@@ -102,7 +102,7 @@ type proposal struct {
 	validatedAt time.Duration
 }
 
-func makeProposalFromAssembledBlock(blk AssembledBlock, pf crypto.VrfProof, origPer period, origProp basics.Address) proposal {
+func makeProposalFromProposableBlock(blk ProposableBlock, pf crypto.VrfProof, origPer period, origProp basics.Address) proposal {
 	e := blk.Block()
 	var payload unauthenticatedProposal
 	payload.Block = e
@@ -295,8 +295,8 @@ func payoutEligible(rnd basics.Round, proposer basics.Address, ledger LedgerRead
 	return eligible, balanceRecord, nil
 }
 
-func proposalForBlock(address basics.Address, vrf *crypto.VRFSecrets, blk AssembledBlock, period period, ledger LedgerReader) (proposal, proposalValue, error) {
-	rnd := blk.Block().Round()
+func proposalForBlock(address basics.Address, vrf *crypto.VRFSecrets, blk UnfinishedBlock, period period, ledger LedgerReader) (proposal, proposalValue, error) {
+	rnd := blk.Round()
 
 	cparams, err := ledger.ConsensusParams(ParamsRound(rnd))
 	if err != nil {
@@ -313,8 +313,8 @@ func proposalForBlock(address basics.Address, vrf *crypto.VRFSecrets, blk Assemb
 		return proposal{}, proposalValue{}, fmt.Errorf("proposalForBlock: could determine eligibility: %w", err)
 	}
 
-	blk = blk.WithProposer(newSeed, address, eligible)
-	prop := makeProposalFromAssembledBlock(blk, seedProof, period, address)
+	proposableBlock := blk.FinishBlock(newSeed, address, eligible)
+	prop := makeProposalFromProposableBlock(proposableBlock, seedProof, period, address)
 
 	value := proposalValue{
 		OriginalPeriod:   period,
