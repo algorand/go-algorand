@@ -86,10 +86,15 @@ def parse_metrics(fin):
                 continue
             m = metric_line_re.match(line)
             if m:
-                out[m.group(1)] = num(m.group(2))
+                key = m.group(1)
+                val = m.group(2)
             else:
                 ab = line.split()
-                out[ab[0]] = num(ab[1])
+                key = ab[0]
+                val = ab[1]
+            if key.endswith('{}'):
+                key = key[:-2]
+            out[key] = num(val)
     except:
         print(f'An exception occurred in parse_metrics: {sys.exc_info()}')
         pass
@@ -541,7 +546,7 @@ class nodestats:
         self.txPLists = {}
         self.txPSums = {}
         self.times = []
-        # algod_tx_pool_count{}
+        # algod_tx_pool_count
         self.txPool = []
         # objectBytes = [(curtime, algod_go_memory_classes_heap_objects_bytes), ...]
         self.objectBytes = []
@@ -601,13 +606,13 @@ class nodestats:
                 bi = bisource.get(curtime)
             if bi is None:
                 logger.warning('%s no blockinfo', path)
-            self.txPool.append(cur.get('algod_tx_pool_count{}'))
+            self.txPool.append(cur.get('algod_tx_pool_count'))
             objectBytes = cur.get('algod_go_memory_classes_heap_objects_bytes')
             if objectBytes:
                 self.objectBytes.append((curtime, objectBytes))
             #logger.debug('%s: %r', path, cur)
-            verifyGood = cur.get('algod_agreement_proposal_verify_good{}')
-            verifyMs = cur.get('algod_agreement_proposal_verify_ms{}')
+            verifyGood = cur.get('algod_agreement_proposal_verify_good')
+            verifyMs = cur.get('algod_agreement_proposal_verify_ms')
             if verifyGood and verifyMs:
                 # last writer wins
                 self.verifyMillis = verifyMs / verifyGood
@@ -626,8 +631,8 @@ class nodestats:
                     rounds = (bi.get('block',{}).get('rnd', 0) - prevbi.get('block',{}).get('rnd', 0))
                     if rounds != 0:
                         blocktime = dt/rounds
-                txBytes = d.get('algod_network_sent_bytes_total{}',0)
-                rxBytes = d.get('algod_network_received_bytes_total{}',0)
+                txBytes = d.get('algod_network_sent_bytes_total',0)
+                rxBytes = d.get('algod_network_received_bytes_total',0)
                 txBytesPerSec = txBytes / dt
                 rxBytesPerSec = rxBytes / dt
                 # TODO: gather algod_network_sent_bytes_* and algod_network_received_bytes_*
