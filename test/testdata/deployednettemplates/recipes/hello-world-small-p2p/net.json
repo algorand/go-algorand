@@ -68,7 +68,7 @@
           "APIToken": "{{APIToken}}",
           "EnableTelemetry": false,
           "TelemetryURI": "{{TelemetryURI}}",
-          "EnableMetrics": false,
+          "EnableMetrics": true,
           "MetricsURI": "{{MetricsURI}}",
           "EnableService": false,
           "EnableBlockStats": false,
@@ -91,7 +91,8 @@
           "APIEndpoint": "{{APIEndpoint}}",
           "APIToken": "{{APIToken}}",
           "EnableTelemetry": false,
-          "EnableMetrics": false,
+          "EnableMetrics": true,
+          "MetricsURI": "{{MetricsURI}}",
           "EnableService": false,
           "EnableBlockStats": false,
           "ConfigJSONOverride": "{  \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0, \"EnableP2P\": true }"
