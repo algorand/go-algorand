@@ -109,7 +109,7 @@ func makeProposalFromProposableBlock(blk ProposableBlock, pf crypto.VrfProof, or
 	payload.SeedProof = pf
 	payload.OriginalPeriod = origPer
 	payload.OriginalProposer = origProp
-	return proposal{unauthenticatedProposal: payload}
+	return proposal{unauthenticatedProposal: payload} // ve set to nil -- won't cache deltas
 }
 
 func makeProposalFromValidatedBlock(ve ValidatedBlock, pf crypto.VrfProof, origPer period, origProp basics.Address) proposal {

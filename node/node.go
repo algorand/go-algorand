@@ -228,7 +228,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		return nil, err
 	}
 
-	node.transactionPool = pools.MakeTransactionPool(node.ledger.Ledger, cfg, node.log)
+	node.transactionPool = pools.MakeTransactionPool(node.ledger.Ledger, cfg, node.log, node)
 
 	blockListeners := []ledgercore.BlockListener{
 		node.transactionPool,
@@ -1330,7 +1330,7 @@ func (ab proposableBlock) Block() bookkeeping.Block {
 // AssembleBlock implements Ledger.AssembleBlock.
 func (node *AlgorandFullNode) AssembleBlock(round basics.Round, addrs []basics.Address) (agreement.UnfinishedBlock, error) {
 	deadline := time.Now().Add(node.config.ProposalAssemblyTime)
-	lvb, err := node.transactionPool.AssembleBlock(round, deadline)
+	lvb, err := node.transactionPool.AssembleBlock(round, addrs, deadline)
 	if err != nil {
 		if errors.Is(err, pools.ErrStaleBlockAssemblyRequest) {
 			// convert specific error to one that would have special handling in the agreement code.
@@ -1367,6 +1367,20 @@ func getOfflineClosedStatus(acctData basics.OnlineAccountData) int {
 	}
 
 	return rval
+}
+
+// VotingAccountsForRound provides a list of addresses that have participation keys valid for the given round.
+// These accounts may not all be eligible to propose, but they are a superset of eligible proposers.
+func (node *AlgorandFullNode) VotingAccountsForRound(round basics.Round) []basics.Address {
+	if node.devMode {
+		return []basics.Address{}
+	}
+	parts := node.accountManager.Keys(round)
+	accounts := make([]basics.Address, len(parts))
+	for i, p := range parts {
+		accounts[i] = p.Account
+	}
+	return accounts
 }
 
 // VotingKeys implements the key manager's VotingKeys method, and provides additional validation with the ledger.

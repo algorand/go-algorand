@@ -1789,7 +1789,7 @@ func (eval *BlockEvaluator) suspendAbsentAccounts() error {
 // After a call to GenerateBlock, the BlockEvaluator can still be used to
 // accept transactions.  However, to guard against reuse, subsequent calls
 // to GenerateBlock on the same BlockEvaluator will fail.
-func (eval *BlockEvaluator) GenerateBlock() (*ledgercore.ValidatedBlock, error) {
+func (eval *BlockEvaluator) GenerateBlock(addrs []basics.Address) (*ledgercore.UnfinishedBlock, error) {
 	if !eval.generate {
 		logging.Base().Panicf("GenerateBlock() called but generate is false")
 	}
@@ -1803,7 +1803,17 @@ func (eval *BlockEvaluator) GenerateBlock() (*ledgercore.ValidatedBlock, error) 
 		return nil, err
 	}
 
-	vb := ledgercore.MakeValidatedBlock(eval.block, eval.state.deltas())
+	// look up set of participation accounts passed to GenerateBlock (possible proposers)
+	finalAccounts := make(map[basics.Address]ledgercore.AccountData, len(addrs))
+	for i := range addrs {
+		acct, err := eval.state.lookup(addrs[i])
+		if err != nil {
+			return nil, err
+		}
+		finalAccounts[addrs[i]] = acct
+	}
+
+	vb := ledgercore.MakeUnfinishedBlock(eval.block, eval.state.deltas(), finalAccounts)
 	eval.blockGenerated = true
 	proto, ok := config.Consensus[eval.block.BlockHeader.CurrentProtocol]
 	if !ok {

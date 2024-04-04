@@ -17,6 +17,7 @@
 package ledgercore
 
 import (
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 )
 
@@ -44,4 +45,33 @@ func MakeValidatedBlock(blk bookkeeping.Block, delta StateDelta) ValidatedBlock 
 		blk:   blk,
 		delta: delta,
 	}
+}
+
+// UnfinishedBlock represents a block that has been generated, but is
+// not yet ready for proposing until FinishBlock is called.
+type UnfinishedBlock struct {
+	finalAccounts map[basics.Address]AccountData // status of selected accounts at end of block
+	blk           bookkeeping.Block
+	deltas        StateDelta
+}
+
+// MakeUnfinishedBlock creates an unfinished block.
+func MakeUnfinishedBlock(blk bookkeeping.Block, deltas StateDelta, finalAccounts map[basics.Address]AccountData) UnfinishedBlock {
+	return UnfinishedBlock{
+		finalAccounts: finalAccounts,
+		blk:           blk,
+		deltas:        deltas,
+	}
+}
+
+// UnfinishedBlock returns the underlying Block. It should only be used for statistics and testing purposes,
+// as the block is not yet finished and ready for proposing.
+func (ub UnfinishedBlock) UnfinishedBlock() bookkeeping.Block {
+	return ub.blk
+}
+
+// UnfinishedDeltas returns the unfinished deltas. It should only be used for statistics and testing purposes,
+// as the block is not yet finished and ready for proposing.
+func (ub UnfinishedBlock) UnfinishedDeltas() StateDelta {
+	return ub.deltas
 }
