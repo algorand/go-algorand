@@ -44,6 +44,31 @@ func (ml *mockLedger) lookup(addr basics.Address) (ledgercore.AccountData, error
 	return ledgercore.ToAccountData(ml.balanceMap[addr]), nil
 }
 
+// convertToOnline is only suitable for test code because OnlineAccountData
+// should have rewards paid. Here, we ignore that for simple tests.
+func convertToOnline(ad ledgercore.AccountData) basics.OnlineAccountData {
+	return basics.OnlineAccountData{
+		MicroAlgosWithRewards: ad.MicroAlgos,
+		VotingData: basics.VotingData{
+			VoteID:          ad.VoteID,
+			SelectionID:     ad.SelectionID,
+			StateProofID:    ad.StateProofID,
+			VoteFirstValid:  ad.VoteFirstValid,
+			VoteLastValid:   ad.VoteLastValid,
+			VoteKeyDilution: ad.VoteKeyDilution,
+		},
+		IncentiveEligible: ad.IncentiveEligible,
+	}
+}
+
+func (ml *mockLedger) lookupAgreement(addr basics.Address) (basics.OnlineAccountData, error) {
+	ad, err := ml.lookup(addr)
+	if err != nil { //  impossible, look up 3 lines!
+		return basics.OnlineAccountData{}, err
+	}
+	return convertToOnline(ad), nil
+}
+
 func (ml *mockLedger) lookupAppParams(addr basics.Address, aidx basics.AppIndex, cacheOnly bool) (ledgercore.AppParamsDelta, bool, error) {
 	params, ok := ml.balanceMap[addr].AppParams[aidx]
 	return ledgercore.AppParamsDelta{Params: &params}, ok, nil // XXX make a copy?

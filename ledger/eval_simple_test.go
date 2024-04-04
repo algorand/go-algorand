@@ -585,7 +585,9 @@ func TestAbsenteeChallenges(t *testing.T) {
 	t.Parallel()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis(func(cfg *ledgertesting.GenesisCfg) {
-		cfg.OnlineCount = 5 // Make online stake big, so these accounts won't be expected to propose
+		// Get some big accounts online, so the accounts we create here will be
+		// a tiny fraction, not expected to propose often.
+		cfg.OnlineCount = 5
 	})
 	checkingBegins := 40
 
@@ -700,6 +702,103 @@ func TestAbsenteeChallenges(t *testing.T) {
 		acct = lookup(t, dl.generator, regguy)
 		require.Equal(t, basics.Online, acct.Status)
 		require.Equal(t, ver >= checkingBegins, acct.IncentiveEligible)
+	})
+}
+
+// TestVoterAccess ensures that the `voter` opcode works properly when hooked up
+// to a real ledger.
+func TestVoterAccess(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis(
+		ledgertesting.TurnOffRewards,
+		func(cfg *ledgertesting.GenesisCfg) {
+			cfg.OnlineCount = 1 // So that one is online from the start
+		})
+	getOnlineStake := `int 0; voter_params_get VoterBalance; itob; log; itob; log; int 1`
+
+	// `voter_params_get` introduced in 40
+	ledgertesting.TestConsensusRange(t, 40, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
+		defer dl.Close()
+
+		stib := dl.txn(&txntest.Txn{
+			Type:            "appl",
+			Sender:          addrs[0],
+			ApprovalProgram: getOnlineStake,
+		})
+		stakeChecker := stib.ApplicationID
+		require.NotZero(t, stakeChecker)
+
+		// have addrs[1] go online, though it won't be visible right away
+		dl.txn(&txntest.Txn{
+			Type:        "keyreg",
+			Sender:      addrs[1],
+			VotePK:      [32]byte{0xaa},
+			SelectionPK: [32]byte{0xbb},
+		})
+
+		one := basics.Address{0xaa, 0x11}
+		two := basics.Address{0xaa, 0x22}
+		three := basics.Address{0xaa, 0x33}
+
+		checkState := func(addr basics.Address, online bool, expected uint64) {
+			if !online {
+				require.Zero(t, expected)
+			}
+			stib = dl.txn(&txntest.Txn{
+				Type:          "appl",
+				Sender:        addr,
+				ApplicationID: stakeChecker,
+			})
+			logs := stib.ApplyData.EvalDelta.Logs
+			require.Len(t, logs, 2)
+			if online {
+				require.Equal(t, "\x00\x00\x00\x00\x00\x00\x00\x01", logs[0])
+				require.Equal(t, int(expected), int(binary.BigEndian.Uint64([]byte(logs[1]))))
+			} else {
+				require.Equal(t, "\x00\x00\x00\x00\x00\x00\x00\x00", logs[0])
+				require.Equal(t, int(expected), int(binary.BigEndian.Uint64([]byte(logs[1]))))
+			}
+		}
+
+		checkState(addrs[0], true, 833_333_333_333_333)
+		// checking again because addrs[0] just paid a fee, but we show online balance hasn't changed yet
+		checkState(addrs[0], true, 833_333_333_333_333)
+		for i := 1; i < 10; i++ {
+			checkState(addrs[i], false, 0)
+		}
+
+		// Fund the new accounts and have them go online.
+		for i, addr := range []basics.Address{one, two, three} {
+			dl.txns(&txntest.Txn{
+				Type:     "pay",
+				Sender:   addrs[0],
+				Receiver: addr,
+				Amount:   (uint64(i) + 1) * 1_000_000_000,
+			}, &txntest.Txn{
+				Type:        "keyreg",
+				Sender:      addr,
+				VotePK:      [32]byte{byte(i + 1)},
+				SelectionPK: [32]byte{byte(i + 1)},
+			})
+		}
+		// they don't have online stake yet
+		for _, addr := range []basics.Address{one, two, three} {
+			checkState(addr, false, 0)
+		}
+		for i := 0; i < 320; i++ {
+			dl.fullBlock()
+		}
+		// addr[1] is now visibly online
+		checkState(addrs[1], true, 833_333_333_333_333-2000) // keyreg fee and previous checkState fee
+		for i := 2; i < 10; i++ {
+			checkState(addrs[i], false, 0)
+		}
+		for i, addr := range []basics.Address{one, two, three} {
+			checkState(addr, true, (uint64(i)+1)*1_000_000_000-2000) // keyreg fee, and previous checkState fee
+		}
 	})
 }
 

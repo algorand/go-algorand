@@ -308,6 +308,26 @@ func (dl *dryrunLedger) LookupWithoutRewards(rnd basics.Round, addr basics.Addre
 	return ledgercore.ToAccountData(ad), rnd, nil
 }
 
+func (dl *dryrunLedger) LookupAgreement(rnd basics.Round, addr basics.Address) (basics.OnlineAccountData, error) {
+	// dryrun does not understand rewards, so we build the result without adding pending rewards
+	ad, rnd, err := dl.lookup(rnd, addr)
+	if err != nil {
+		return basics.OnlineAccountData{}, err
+	}
+	return basics.OnlineAccountData{
+		MicroAlgosWithRewards: ad.MicroAlgos,
+		VotingData: basics.VotingData{
+			VoteID:          ad.VoteID,
+			SelectionID:     ad.SelectionID,
+			StateProofID:    ad.StateProofID,
+			VoteFirstValid:  ad.VoteFirstValid,
+			VoteLastValid:   ad.VoteLastValid,
+			VoteKeyDilution: ad.VoteKeyDilution,
+		},
+		IncentiveEligible: ad.IncentiveEligible,
+	}, nil
+}
+
 func (dl *dryrunLedger) LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error) {
 	ad, _, err := dl.lookup(rnd, addr)
 	if err != nil {

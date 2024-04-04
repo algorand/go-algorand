@@ -336,6 +336,25 @@ func (l *localLedger) LookupWithoutRewards(rnd basics.Round, addr basics.Address
 	return ledgercore.ToAccountData(ad), rnd, nil
 }
 
+func (l *localLedger) LookupAgreement(rnd basics.Round, addr basics.Address) (basics.OnlineAccountData, error) {
+	// tealdbg does not understand rewards, so no pending rewards are applied.
+	// Further, it has no history, so we return the _current_ information,
+	// ignoring the `rnd` argument.
+	ad := l.balances[addr]
+	return basics.OnlineAccountData{
+		MicroAlgosWithRewards: ad.MicroAlgos,
+		VotingData: basics.VotingData{
+			VoteID:          ad.VoteID,
+			SelectionID:     ad.SelectionID,
+			StateProofID:    ad.StateProofID,
+			VoteFirstValid:  ad.VoteFirstValid,
+			VoteLastValid:   ad.VoteLastValid,
+			VoteKeyDilution: ad.VoteKeyDilution,
+		},
+		IncentiveEligible: ad.IncentiveEligible,
+	}, nil
+}
+
 func (l *localLedger) GetCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
 	switch ctype {
 	case basics.AssetCreatable:

@@ -48,6 +48,10 @@ func (ml *emptyLedger) lookup(addr basics.Address) (ledgercore.AccountData, erro
 	return ledgercore.AccountData{}, nil
 }
 
+func (ml *emptyLedger) lookupAgreement(addr basics.Address) (basics.OnlineAccountData, error) {
+	return basics.OnlineAccountData{}, nil
+}
+
 func (ml *emptyLedger) lookupAppParams(addr basics.Address, aidx basics.AppIndex, cacheOnly bool) (ledgercore.AppParamsDelta, bool, error) {
 	return ledgercore.AppParamsDelta{}, true, nil
 }

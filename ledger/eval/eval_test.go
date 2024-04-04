@@ -180,6 +180,7 @@ ok:
 // and the usage counts correctly propagated from parent cow to child cow and back
 func TestEvalAppStateCountsWithTxnGroup(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	_, _, err := testEvalAppGroup(t, basics.StateSchema{NumByteSlice: 1})
 	require.ErrorContains(t, err, "store bytes count 2 exceeds schema bytes count 1")
@@ -189,6 +190,7 @@ func TestEvalAppStateCountsWithTxnGroup(t *testing.T) {
 // produce correct results when a txn group has storage allocate and storage update actions
 func TestEvalAppAllocStateWithTxnGroup(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	eval, addr, err := testEvalAppGroup(t, basics.StateSchema{NumByteSlice: 2})
 	require.NoError(t, err)
@@ -203,6 +205,7 @@ func TestEvalAppAllocStateWithTxnGroup(t *testing.T) {
 // see TestBlockEvaluator for more
 func TestTestTransactionGroup(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	var txgroup []transactions.SignedTxn
 	eval := BlockEvaluator{}
@@ -219,6 +222,7 @@ func TestTestTransactionGroup(t *testing.T) {
 // some trivial checks that require no setup
 func TestPrivateTransactionGroup(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	var txgroup []transactions.SignedTxnWithAD
 	eval := BlockEvaluator{}
@@ -675,56 +679,6 @@ func testnetFixupExecution(t *testing.T, headerRound basics.Round, poolBonus uin
 	require.NoError(t, err)
 }
 
-// newTestGenesis creates a bunch of accounts, splits up 10B algos
-// between them and the rewardspool and feesink, and gives out the
-// addresses and secrets it creates to enable tests.  For special
-// scenarios, manipulate these return values before using newTestLedger.
-func newTestGenesis() (bookkeeping.GenesisBalances, []basics.Address, []*crypto.SignatureSecrets) {
-	// irrelevant, but deterministic
-	sink, err := basics.UnmarshalChecksumAddress("YTPRLJ2KK2JRFSZZNAF57F3K5Y2KCG36FZ5OSYLW776JJGAUW5JXJBBD7Q")
-	if err != nil {
-		panic(err)
-	}
-	rewards, err := basics.UnmarshalChecksumAddress("242H5OXHUEBYCGGWB3CQ6AZAMQB5TMCWJGHCGQOZPEIVQJKOO7NZXUXDQA")
-	if err != nil {
-		panic(err)
-	}
-
-	const count = 10
-	addrs := make([]basics.Address, count)
-	secrets := make([]*crypto.SignatureSecrets, count)
-	accts := make(map[basics.Address]basics.AccountData)
-
-	// 10 billion microalgos, across N accounts and pool and sink
-	amount := 10 * 1000000000 * 1000000 / uint64(count+2)
-
-	for i := 0; i < count; i++ {
-		// Create deterministic addresses, so that output stays the same, run to run.
-		var seed crypto.Seed
-		seed[0] = byte(i)
-		secrets[i] = crypto.GenerateSignatureSecrets(seed)
-		addrs[i] = basics.Address(secrets[i].SignatureVerifier)
-
-		adata := basics.AccountData{
-			MicroAlgos: basics.MicroAlgos{Raw: amount},
-		}
-		accts[addrs[i]] = adata
-	}
-
-	accts[sink] = basics.AccountData{
-		MicroAlgos: basics.MicroAlgos{Raw: amount},
-		Status:     basics.NotParticipating,
-	}
-
-	accts[rewards] = basics.AccountData{
-		MicroAlgos: basics.MicroAlgos{Raw: amount},
-	}
-
-	genBalances := bookkeeping.MakeGenesisBalances(accts, sink, rewards)
-
-	return genBalances, addrs, secrets
-}
-
 type evalTestLedger struct {
 	blocks              map[basics.Round]bookkeeping.Block
 	roundBalances       map[basics.Round]map[basics.Address]basics.AccountData
@@ -827,11 +781,16 @@ func (ledger *evalTestLedger) LatestTotals() (basics.Round, ledgercore.AccountTo
 	return basics.Round(len(ledger.blocks)).SubSaturate(1), ledger.latestTotals, nil
 }
 
-// LookupWithoutRewards is like Lookup but does not apply pending rewards up
-// to the requested round rnd.
+// LookupWithoutRewards is like Lookup but is not supposed to apply pending
+// rewards up to the requested round rnd.  Here Lookup doesn't do that anyway.
 func (ledger *evalTestLedger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (ledgercore.AccountData, basics.Round, error) {
-	ad := ledger.roundBalances[rnd][addr]
-	return ledgercore.ToAccountData(ad), rnd, nil
+	ad, err := ledger.Lookup(rnd, addr)
+	return ledgercore.ToAccountData(ad), rnd, err
+}
+
+func (ledger *evalTestLedger) LookupAgreement(rnd basics.Round, addr basics.Address) (basics.OnlineAccountData, error) {
+	ad, _, err := ledger.LookupWithoutRewards(rnd, addr)
+	return convertToOnline(ad), err
 }
 
 func (ledger *evalTestLedger) LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error) {
@@ -1055,6 +1014,10 @@ func (l *testCowBaseLedger) CheckDup(config.ConsensusParams, basics.Round, basic
 
 func (l *testCowBaseLedger) LookupWithoutRewards(basics.Round, basics.Address) (ledgercore.AccountData, basics.Round, error) {
 	return ledgercore.AccountData{}, basics.Round(0), errors.New("not implemented")
+}
+
+func (l *testCowBaseLedger) LookupAgreement(rnd basics.Round, addr basics.Address) (basics.OnlineAccountData, error) {
+	return basics.OnlineAccountData{}, errors.New("not implemented")
 }
 
 func (l *testCowBaseLedger) LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error) {

@@ -24,6 +24,7 @@ import (
 	"math/bits"
 	"sync"
 
+	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
@@ -46,6 +47,7 @@ type LedgerForCowBase interface {
 	GenesisHash() crypto.Digest
 	CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, ledgercore.Txlease) error
 	LookupWithoutRewards(basics.Round, basics.Address) (ledgercore.AccountData, basics.Round, error)
+	LookupAgreement(basics.Round, basics.Address) (basics.OnlineAccountData, error)
 	LookupAsset(basics.Round, basics.Address, basics.AssetIndex) (ledgercore.AssetResource, error)
 	LookupApplication(basics.Round, basics.Address, basics.AppIndex) (ledgercore.AppResource, error)
 	LookupKv(basics.Round, string) ([]byte, error)
@@ -129,6 +131,11 @@ type roundCowBase struct {
 	// The account data store here is always the account data without the rewards.
 	accounts map[basics.Address]ledgercore.AccountData
 
+	// The online accounts that we've already accessed during this round evaluation. This is a
+	// cache used to avoid looking up the same account data more than once during a single evaluator
+	// execution. The OnlineAccountData is historical and therefore won't be changing.
+	voters map[basics.Address]basics.OnlineAccountData
+
 	// Similarly to accounts cache that stores base account data, there are caches for params, states, holdings.
 	appParams      map[ledgercore.AccountApp]cachedAppParams
 	assetParams    map[ledgercore.AccountAsset]cachedAssetParams
@@ -150,6 +157,7 @@ func makeRoundCowBase(l LedgerForCowBase, rnd basics.Round, txnCount uint64, sta
 		stateProofNextRnd: stateProofNextRnd,
 		proto:             proto,
 		accounts:          make(map[basics.Address]ledgercore.AccountData),
+		voters:            make(map[basics.Address]basics.OnlineAccountData),
 		appParams:         make(map[ledgercore.AccountApp]cachedAppParams),
 		assetParams:       make(map[ledgercore.AccountAsset]cachedAssetParams),
 		appLocalStates:    make(map[ledgercore.AccountApp]cachedAppLocalState),
@@ -190,6 +198,29 @@ func (x *roundCowBase) lookup(addr basics.Address) (ledgercore.AccountData, erro
 	}
 
 	x.accounts[addr] = ad
+	return ad, err
+}
+
+// lookupAgreement returns the online accountdata for the provided account address. It uses an internal cache
+// to avoid repeated lookups against the ledger.
+func (x *roundCowBase) lookupAgreement(addr basics.Address) (basics.OnlineAccountData, error) {
+	if accountData, found := x.voters[addr]; found {
+		return accountData, nil
+	}
+
+	// We need to reproduce the way that the agreement package finds the round
+	// to consider for online accounts.
+	phdr, err := x.BlockHdr(agreement.ParamsRound(x.rnd))
+	if err != nil {
+		return basics.OnlineAccountData{}, err
+	}
+	agreementParams := config.Consensus[phdr.CurrentProtocol]
+	ad, err := x.l.LookupAgreement(agreement.BalanceRound(x.rnd, agreementParams), addr)
+	if err != nil {
+		return basics.OnlineAccountData{}, err
+	}
+
+	x.voters[addr] = ad
 	return ad, err
 }
 

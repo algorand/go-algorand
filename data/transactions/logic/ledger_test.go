@@ -310,6 +310,31 @@ func (l *Ledger) AccountData(addr basics.Address) (ledgercore.AccountData, error
 	}, nil
 }
 
+// AgreementData is not a very high-fidelity fake. There's no time delay, it
+// just returns the data that's in AccountData, reshaped into an
+// OnlineAccountData.
+func (l *Ledger) AgreementData(addr basics.Address) (basics.OnlineAccountData, error) {
+	ad, err := l.AccountData(addr)
+	if err != nil {
+		return basics.OnlineAccountData{}, err
+	}
+	// You might imagine this conversion function exists. It does, but requires
+	// rewards handling because OnlineAccountData should have rewards
+	// paid. Here, we ignore that for simple tests.
+	return basics.OnlineAccountData{
+		MicroAlgosWithRewards: ad.MicroAlgos,
+		VotingData: basics.VotingData{
+			VoteID:          ad.VoteID,
+			SelectionID:     ad.SelectionID,
+			StateProofID:    ad.StateProofID,
+			VoteFirstValid:  ad.VoteFirstValid,
+			VoteLastValid:   ad.VoteLastValid,
+			VoteKeyDilution: ad.VoteKeyDilution,
+		},
+		IncentiveEligible: ad.IncentiveEligible,
+	}, nil
+}
+
 // Authorizer returns the address that must authorize txns from a
 // given address.  It's either the address itself, or the value it has
 // been rekeyed to.

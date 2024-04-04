@@ -118,6 +118,13 @@ func (l *prefetcherAlignmentTestLedger) LookupWithoutRewards(_ basics.Round, add
 	}
 	return ledgercore.AccountData{}, 0, nil
 }
+func (l *prefetcherAlignmentTestLedger) LookupAgreement(_ basics.Round, addr basics.Address) (basics.OnlineAccountData, error) {
+	// prefetch alignment tests do not check for prefetching of online account data
+	// because it's quite different and can only occur in AVM opcodes, which
+	// aren't handled anyway (just as we don't know if a holding or app local
+	// will be accessed in AVM.)
+	return basics.OnlineAccountData{}, nil
+}
 func (l *prefetcherAlignmentTestLedger) LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error) {
 	l.mu.Lock()
 	if l.requestedApps == nil {

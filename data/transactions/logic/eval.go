@@ -244,6 +244,7 @@ func (NoHeaderLedger) GenesisHash() crypto.Digest {
 // LedgerForLogic represents ledger API for Stateful TEAL program
 type LedgerForLogic interface {
 	AccountData(addr basics.Address) (ledgercore.AccountData, error)
+	AgreementData(addr basics.Address) (basics.OnlineAccountData, error)
 	Authorizer(addr basics.Address) (basics.Address, error)
 	Round() basics.Round
 	PrevTimestamp() int64
@@ -5019,9 +5020,50 @@ func opAcctParamsGet(cx *EvalContext) error {
 		value.Uint = account.TotalBoxes
 	case AcctTotalBoxBytes:
 		value.Uint = account.TotalBoxBytes
+	case AcctIncentiveEligible:
+		value = boolToSV(account.IncentiveEligible)
+	case AcctLastHeartbeat:
+		value.Uint = uint64(account.LastHeartbeat)
+	case AcctLastProposed:
+		value.Uint = uint64(account.LastProposed)
+	default:
+		return fmt.Errorf("invalid account field %s", fs.field)
 	}
 	cx.Stack[last] = value
 	cx.Stack = append(cx.Stack, boolToSV(account.MicroAlgos.Raw > 0))
+	return nil
+}
+
+func opVoterParamsGet(cx *EvalContext) error {
+	last := len(cx.Stack) - 1 // acct
+	addr, _, err := cx.accountReference(cx.Stack[last])
+	if err != nil {
+		return err
+	}
+
+	paramField := VoterParamsField(cx.program[cx.pc+1])
+	fs, ok := voterParamsFieldSpecByField(paramField)
+	if !ok || fs.version > cx.version {
+		return fmt.Errorf("invalid voter_params_get field %d", paramField)
+	}
+
+	account, err := cx.Ledger.AgreementData(addr)
+	if err != nil {
+		return err
+	}
+
+	var value stackValue
+
+	switch fs.field {
+	case VoterBalance:
+		value.Uint = account.MicroAlgosWithRewards.Raw
+	case VoterIncentiveEligible:
+		value = boolToSV(account.IncentiveEligible)
+	default:
+		return fmt.Errorf("invalid voter field %s", fs.field)
+	}
+	cx.Stack[last] = value
+	cx.Stack = append(cx.Stack, boolToSV(account.MicroAlgosWithRewards.Raw > 0))
 	return nil
 }
 
