@@ -72,7 +72,7 @@ const MaxTealDryrunBytes = 1_000_000
 
 // MaxAssetResults sets a size limit for the number of assets returned in a single request to the
 // /v2/accounts/{address}/assets endpoint
-const MaxAssetResults = 10000
+const MaxAssetResults = 1000
 
 // DefaultAssetResults sets a default size limit for the number of assets returned in a single request to the
 // /v2/accounts/{address}/assets endpoint
