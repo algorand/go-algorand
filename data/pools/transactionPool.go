@@ -108,10 +108,7 @@ type BlockEvaluator interface {
 	ResetTxnBytes()
 }
 
-type UnfinishedBlock interface {
-	FinishBlock(proposer basics.Address) bookkeeping.Block
-}
-
+// VotingAccountChecker provides a list of possible participating account addresses valid for a given round.
 type VotingAccountChecker interface {
 	VotingAccountsForRound(basics.Round) []basics.Address
 }
