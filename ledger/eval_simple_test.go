@@ -34,6 +34,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/txntest"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -190,15 +191,18 @@ func TestBlockEvaluator(t *testing.T) {
 	err = eval.TestTransactionGroup(txgroup)
 	require.Error(t, err)
 
-	validatedBlock, err := eval.GenerateBlock()
+	unfinishedBlock, err := eval.GenerateBlock(nil) // XXX not providing proposer addresses
 	require.NoError(t, err)
+
+	// XXX not setting seed & proposer details with FinishBlock/WithProposer
+	validatedBlock := ledgercore.MakeValidatedBlock(unfinishedBlock.UnfinishedBlock(), unfinishedBlock.UnfinishedDeltas())
 
 	accts := genesisInitState.Accounts
 	bal0 := accts[addrs[0]]
 	bal1 := accts[addrs[1]]
 	bal2 := accts[addrs[2]]
 
-	l.AddValidatedBlock(*validatedBlock, agreement.Certificate{})
+	l.AddValidatedBlock(validatedBlock, agreement.Certificate{})
 
 	bal0new, _, _, err := l.LookupAccount(newBlock.Round(), addrs[0])
 	require.NoError(t, err)
@@ -935,10 +939,12 @@ func TestRekeying(t *testing.T) {
 				return err
 			}
 		}
-		validatedBlock, err := eval.GenerateBlock()
+		unfinishedBlock, err := eval.GenerateBlock(nil) // XXX not providing proposer addresses
 		if err != nil {
 			return err
 		}
+		// XXX not setting seed & proposer details with FinishBlock/WithProposer
+		validatedBlock := ledgercore.MakeValidatedBlock(unfinishedBlock.UnfinishedBlock(), unfinishedBlock.UnfinishedDeltas())
 
 		backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 		defer backlogPool.Shutdown()

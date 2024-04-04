@@ -70,10 +70,8 @@ type TransactionPool struct {
 	assemblyCond     sync.Cond
 	assemblyDeadline time.Time
 	// assemblyRound indicates which round number we're currently waiting for or waited for last.
-	assemblyRound basics.Round
-	// assemblyPartAddresses indicates which participating accounts we're currently using, or last used.
-	assemblyPartAddresses []basics.Address
-	assemblyResults       poolAsmResults
+	assemblyRound   basics.Round
+	assemblyResults poolAsmResults
 
 	// pendingMu protects pendingTxGroups and pendingTxids
 	pendingMu       deadlock.RWMutex
@@ -192,6 +190,13 @@ func (pool *TransactionPool) Reset() {
 	pool.pendingBlockEvaluator = nil
 	pool.statusCache.reset()
 	pool.recomputeBlockEvaluator(nil, 0)
+}
+
+func (pool *TransactionPool) getVotingAccountsForRound(rnd basics.Round) []basics.Address {
+	if pool.vac == nil {
+		return nil
+	}
+	return pool.vac.VotingAccountsForRound(rnd)
 }
 
 // NumExpired returns the number of transactions that expired at the
@@ -635,7 +640,7 @@ func (pool *TransactionPool) addToPendingBlockEvaluatorOnce(txgroup []transactio
 				}
 
 				blockGenerationStarts := time.Now()
-				lvb, gerr := pool.pendingBlockEvaluator.GenerateBlock(pool.vac.VotingAccountsForRound(evalRnd))
+				lvb, gerr := pool.pendingBlockEvaluator.GenerateBlock(pool.getVotingAccountsForRound(evalRnd))
 				if gerr != nil {
 					pool.assemblyResults.err = fmt.Errorf("could not generate block for %d: %v", pool.assemblyResults.roundStartedEvaluating, gerr)
 				} else {
@@ -789,7 +794,7 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 		pool.assemblyResults.ok = true
 		pool.assemblyResults.assemblyCompletedOrAbandoned = true // this is not strictly needed, since the value would only get inspected by this go-routine, but we'll adjust it along with "ok" for consistency
 		blockGenerationStarts := time.Now()
-		lvb, err := pool.pendingBlockEvaluator.GenerateBlock(pool.vac.VotingAccountsForRound(evalRnd))
+		lvb, err := pool.pendingBlockEvaluator.GenerateBlock(pool.getVotingAccountsForRound(evalRnd))
 		if err != nil {
 			pool.assemblyResults.err = fmt.Errorf("could not generate block for %d (end): %v", pool.assemblyResults.roundStartedEvaluating, err)
 		} else {
@@ -827,7 +832,7 @@ func (pool *TransactionPool) getStateProofStats(txib *transactions.SignedTxnInBl
 
 // AssembleBlock assembles a block for a given round, trying not to
 // take longer than deadline to finish.
-func (pool *TransactionPool) AssembleBlock(round basics.Round, addrs []basics.Address, deadline time.Time) (assembled *ledgercore.UnfinishedBlock, err error) {
+func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Time) (assembled *ledgercore.UnfinishedBlock, err error) {
 	var stats telemetryspec.AssembleBlockMetrics
 
 	if pool.logAssembleStats {
@@ -908,7 +913,6 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, addrs []basics.Ad
 
 	pool.assemblyDeadline = deadline
 	pool.assemblyRound = round
-	pool.assemblyPartAddresses = addrs
 
 	for time.Now().Before(deadline) && (!pool.assemblyResults.ok || pool.assemblyResults.roundStartedEvaluating != round) {
 		condvar.TimedWait(&pool.assemblyCond, time.Until(deadline))
@@ -993,7 +997,7 @@ func (pool *TransactionPool) assembleEmptyBlock(round basics.Round) (assembled *
 		err = fmt.Errorf("TransactionPool.assembleEmptyBlock: cannot start evaluator for %d: %w", round, err)
 		return nil, err
 	}
-	return blockEval.GenerateBlock(pool.vac.VotingAccountsForRound(round))
+	return blockEval.GenerateBlock(pool.getVotingAccountsForRound(round))
 }
 
 // AssembleDevModeBlock assemble a new block from the existing transaction pool. The pending evaluator is being
@@ -1006,6 +1010,6 @@ func (pool *TransactionPool) AssembleDevModeBlock() (assembled *ledgercore.Unfin
 
 	// The above was already pregenerating the entire block,
 	// so there won't be any waiting on this call.
-	assembled, err = pool.AssembleBlock(pool.pendingBlockEvaluator.Round(), nil, time.Now().Add(pool.proposalAssemblyTime))
+	assembled, err = pool.AssembleBlock(pool.pendingBlockEvaluator.Round(), time.Now().Add(pool.proposalAssemblyTime))
 	return
 }

@@ -146,8 +146,12 @@ func txgroup(t testing.TB, ledger *Ledger, eval *eval.BlockEvaluator, txns ...*t
 // inspection. Proposer is optional - if unset, blocks will be finished with
 // ZeroAddress proposer.
 func endBlock(t testing.TB, ledger *Ledger, eval *eval.BlockEvaluator, proposer ...basics.Address) *ledgercore.ValidatedBlock {
-	gvb, err := eval.GenerateBlock()
+	ub, err := eval.GenerateBlock(nil)
 	require.NoError(t, err)
+
+	// XXX not setting seed & proposer details with FinishBlock/WithProposer
+	validatedBlock := ledgercore.MakeValidatedBlock(ub.UnfinishedBlock(), ub.UnfinishedDeltas())
+	gvb := &validatedBlock
 
 	// Making the proposer the feesink unless specified causes less disruption
 	// to existing tests. (Because block payouts don't change balances.)

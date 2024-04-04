@@ -19,6 +19,7 @@ package ledgercore
 import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/committee"
 )
 
 // ValidatedBlock represents the result of a block validation.  It can
@@ -74,4 +75,20 @@ func (ub UnfinishedBlock) UnfinishedBlock() bookkeeping.Block {
 // as the block is not yet finished and ready for proposing.
 func (ub UnfinishedBlock) UnfinishedDeltas() StateDelta {
 	return ub.deltas
+}
+
+// ContainsAddress returns true if the balance data about the given address is present in the unfinished block.
+func (ub UnfinishedBlock) ContainsAddress(addr basics.Address) bool {
+	_, ok := ub.finalAccounts[addr]
+	return ok
+}
+
+// FinishBlock completes the block and returns a proposable block.
+func (ub UnfinishedBlock) FinishBlock(s committee.Seed, proposer basics.Address, eligible bool) bookkeeping.Block {
+	return ub.blk.WithProposer(s, proposer, eligible)
+}
+
+// Round returns the round of the block.
+func (ub UnfinishedBlock) Round() basics.Round {
+	return ub.blk.Round()
 }

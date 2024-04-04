@@ -985,15 +985,15 @@ func (ledger *evalTestLedger) nextBlock(t testing.TB) *BlockEvaluator {
 
 // endBlock completes the block being created, returns the ValidatedBlock for inspection
 func (ledger *evalTestLedger) endBlock(t testing.TB, eval *BlockEvaluator) *ledgercore.ValidatedBlock {
-	validatedBlock, err := eval.GenerateBlock()
+	unfinishedBlock, err := eval.GenerateBlock(nil)
 	require.NoError(t, err)
 	// fake agreement's setting of header fields so later validates work.
 	seed := committee.Seed{}
 	crypto.RandBytes(seed[:])
-	*validatedBlock = ledgercore.MakeValidatedBlock(validatedBlock.Block().WithProposer(seed, testPoolAddr, true), validatedBlock.Delta())
-	err = ledger.AddValidatedBlock(*validatedBlock, agreement.Certificate{})
+	validatedBlock := ledgercore.MakeValidatedBlock(unfinishedBlock.UnfinishedBlock().WithProposer(seed, testPoolAddr, true), unfinishedBlock.UnfinishedDeltas())
+	err = ledger.AddValidatedBlock(validatedBlock, agreement.Certificate{})
 	require.NoError(t, err)
-	return validatedBlock
+	return &validatedBlock
 }
 
 // lookup gets the current accountdata for an address
@@ -1208,11 +1208,11 @@ func TestEvalFunctionForExpiredAccounts(t *testing.T) {
 	// Make sure we validate our block as well
 	blkEval.validate = true
 
-	validatedBlock, err := blkEval.GenerateBlock()
+	unfinishedBlock, err := blkEval.GenerateBlock(nil)
 	require.NoError(t, err)
 
 	// fake agreement's setting of header fields so later validates work
-	*validatedBlock = ledgercore.MakeValidatedBlock(validatedBlock.Block().WithProposer(committee.Seed{}, testPoolAddr, true), validatedBlock.Delta())
+	validatedBlock := ledgercore.MakeValidatedBlock(unfinishedBlock.UnfinishedBlock().WithProposer(committee.Seed{}, testPoolAddr, true), unfinishedBlock.UnfinishedDeltas())
 
 	expired := false
 	for _, acct := range validatedBlock.Block().ExpiredParticipationAccounts {
@@ -1450,11 +1450,11 @@ func TestAbsenteeChecks(t *testing.T) {
 	// Make sure we validate our block as well
 	blkEval.validate = true
 
-	validatedBlock, err := blkEval.GenerateBlock()
+	unfinishedBlock, err := blkEval.GenerateBlock(nil)
 	require.NoError(t, err)
 
 	// fake agreement's setting of header fields so later validates work
-	*validatedBlock = ledgercore.MakeValidatedBlock(validatedBlock.Block().WithProposer(committee.Seed{}, testPoolAddr, true), validatedBlock.Delta())
+	validatedBlock := ledgercore.MakeValidatedBlock(unfinishedBlock.UnfinishedBlock().WithProposer(committee.Seed{}, testPoolAddr, true), unfinishedBlock.UnfinishedDeltas())
 
 	require.Zero(t, validatedBlock.Block().ExpiredParticipationAccounts)
 	require.Contains(t, validatedBlock.Block().AbsentParticipationAccounts, addrs[0], addrs[0].String())
@@ -1604,10 +1604,10 @@ func TestExpiredAccountGeneration(t *testing.T) {
 	// Make sure we validate our block as well
 	eval.validate = true
 
-	validatedBlock, err := eval.GenerateBlock()
+	unfinishedBlock, err := eval.GenerateBlock(nil)
 	require.NoError(t, err)
 
-	listOfExpiredAccounts := validatedBlock.Block().ParticipationUpdates.ExpiredParticipationAccounts
+	listOfExpiredAccounts := unfinishedBlock.UnfinishedBlock().ParticipationUpdates.ExpiredParticipationAccounts
 
 	require.Len(t, listOfExpiredAccounts, 1)
 	require.Equal(t, listOfExpiredAccounts[0], recvAddr)
