@@ -1248,16 +1248,31 @@ func (au *accountUpdates) lookupAssetResources(rnd basics.Round, addr basics.Add
 			data = make([]ledgercore.AssetResourceWithIDs, 0, len(persistedResources))
 			for _, pd := range persistedResources {
 				ah := pd.Data.GetAssetHolding()
-				ap := pd.Data.GetAssetParams()
-				data = append(data, ledgercore.AssetResourceWithIDs{
-					AssetID: basics.AssetIndex(pd.Aidx),
-					Creator: pd.Creator,
 
-					AssetResource: ledgercore.AssetResource{
-						AssetHolding: &ah,
-						AssetParams:  &ap,
-					},
-				})
+				var arwi ledgercore.AssetResourceWithIDs
+				if !pd.Creator.IsZero() {
+					ap := pd.Data.GetAssetParams()
+
+					arwi = ledgercore.AssetResourceWithIDs{
+						AssetID: basics.AssetIndex(pd.Aidx),
+						Creator: pd.Creator,
+
+						AssetResource: ledgercore.AssetResource{
+							AssetHolding: &ah,
+							AssetParams:  &ap,
+						},
+					}
+				} else {
+					arwi = ledgercore.AssetResourceWithIDs{
+						AssetID: basics.AssetIndex(pd.Aidx),
+
+						AssetResource: ledgercore.AssetResource{
+							AssetHolding: &ah,
+						},
+					}
+				}
+
+				data = append(data, arwi)
 			}
 			// We've found all the resources we could find for this address.
 			return data, currentDbRound, nil

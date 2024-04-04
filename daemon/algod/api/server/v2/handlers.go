@@ -1189,7 +1189,7 @@ func (v2 *Handlers) AccountAssetsInformation(ctx echo.Context, address string, p
 			},
 		}
 
-		if record.AssetParams != nil {
+		if !record.Creator.IsZero() {
 			asset := AssetParamsToAsset(record.Creator.String(), record.AssetID, record.AssetParams)
 			aah.AssetParams = &asset.Params
 		}

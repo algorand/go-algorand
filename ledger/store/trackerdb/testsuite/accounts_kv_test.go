@@ -27,6 +27,9 @@ func init() {
 	registerTest("accounts-crud", CustomTestAccountsCrud)
 	registerTest("resources-crud", CustomTestResourcesCrud)
 	registerTest("resources-query-all", CustomTestResourcesQueryAll)
+	// NOTE: this test is disabled because it is not supported by the kv implementation,
+	//       it is only supported by the sqlite implementation and is enabled there (see sqlitedb_test.go)
+	// registerTest("resources-query-all-limited", CustomTestResourcesQueryAllLimited)
 	registerTest("kv-crud", CustomTestAppKVCrud)
 	registerTest("creatables-crud", CustomTestCreatablesCrud)
 }
@@ -230,6 +233,146 @@ func CustomTestResourcesQueryAll(t *customT) {
 	require.Equal(t, aidxResA1, prs[1].Aidx)
 	require.Equal(t, expectedRound, prs[0].Round) // db round (inside resources)
 	require.Equal(t, expectedRound, rnd)          // db round (from the return)
+}
+
+func CustomTestResourcesQueryAllLimited(t *customT) {
+	aow, err := t.db.MakeAccountsOptimizedWriter(true, true, false, true)
+	require.NoError(t, err)
+
+	aor, err := t.db.MakeAccountsOptimizedReader()
+	require.NoError(t, err)
+
+	aw, err := t.db.MakeAccountsWriter()
+	require.NoError(t, err)
+
+	// set round to 3
+	// Note: this will be used to check that we read the round
+	expectedRound := basics.Round(3)
+	err = aw.UpdateAccountsRound(expectedRound)
+	require.NoError(t, err)
+
+	//
+	// pre-fill the db with two accounts for testing - one just owning a creatable
+	//
+
+	// account A - will own creatables
+	addrA := RandomAddress()
+	accDataA := trackerdb.BaseAccountData{RewardsBase: 1000}
+	refAccA, err := aow.InsertAccount(addrA, accDataA.NormalizedOnlineBalance(t.proto), accDataA)
+	require.NoError(t, err)
+
+	// account B - will opt into creatables
+	addrB := RandomAddress()
+	accDataB := trackerdb.BaseAccountData{RewardsBase: 1000}
+	refAccB, err := aow.InsertAccount(addrB, accDataB.NormalizedOnlineBalance(t.proto), accDataB)
+	require.NoError(t, err)
+
+	// resource A-0 for accounts A and B
+	resDataA0 := trackerdb.ResourcesData{}
+	aidxResA0 := basics.CreatableIndex(1)
+	_, err = aow.InsertResource(refAccA, aidxResA0, resDataA0)
+	require.NoError(t, err)
+	_, err = aow.InsertResource(refAccB, aidxResA0, resDataA0)
+	require.NoError(t, err)
+
+	// resource A-1 for accounts A and B
+	resDataA1 := trackerdb.ResourcesData{
+		Total: 10000,
+	}
+	aidxResA1 := basics.CreatableIndex(2)
+	_, err = aow.InsertResource(refAccA, aidxResA1, resDataA1)
+	require.NoError(t, err)
+	_, err = aow.InsertResource(refAccB, aidxResA1, resDataA1)
+	require.NoError(t, err)
+
+	// insert creator account A for A-0
+	resA0ctype := basics.AssetCreatable
+	cRefA0, err := aow.InsertCreatable(aidxResA0, resA0ctype, addrA[:])
+	require.NoError(t, err)
+	require.NotNil(t, cRefA0)
+
+	// insert creator account A for A-1
+	resA1ctype := basics.AssetCreatable
+	cRefA1, err := aow.InsertCreatable(aidxResA1, resA1ctype, addrA[:])
+	require.NoError(t, err)
+	require.NotNil(t, cRefA1)
+
+	// Lookup with limited resources for account A
+	prs, rnd, err := aor.LookupLimitedResources(addrA, 0, 2, basics.AssetCreatable)
+	require.NoError(t, err)
+	require.Equal(t, 2, len(prs))
+	require.Equal(t, aidxResA0, prs[0].Aidx)
+	require.Equal(t, aidxResA1, prs[1].Aidx)
+	require.Equal(t, addrA, prs[0].Creator)
+	require.Equal(t, addrA, prs[1].Creator)
+	require.Equal(t, expectedRound, prs[0].Round) // db round (inside resources)
+	require.Equal(t, expectedRound, prs[1].Round)
+	require.Equal(t, resDataA0, prs[0].Data)
+	require.Equal(t, resDataA1, prs[1].Data)
+	require.Equal(t, expectedRound, rnd) // db round (from the return)
+
+	// Lookup with limited resources for account B
+	prs, rnd, err = aor.LookupLimitedResources(addrB, 0, 2, basics.AssetCreatable)
+	require.NoError(t, err)
+	require.Equal(t, 2, len(prs))
+	require.Equal(t, aidxResA0, prs[0].Aidx)
+	require.Equal(t, aidxResA1, prs[1].Aidx)
+	// Creator should be present and set to address A
+	require.Equal(t, addrA, prs[0].Creator)
+	require.Equal(t, addrA, prs[1].Creator)
+	require.Equal(t, expectedRound, prs[0].Round) // db round (inside resources)
+	require.Equal(t, expectedRound, prs[1].Round)
+	require.Equal(t, resDataA0, prs[0].Data)
+	require.Equal(t, resDataA1, prs[1].Data)
+	require.Equal(t, expectedRound, rnd) // db round (from the return)
+
+	// Set limit to 1, should return only 1 resource
+	prs, rnd, err = aor.LookupLimitedResources(addrB, 0, 1, basics.AssetCreatable)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(prs))
+	require.Equal(t, aidxResA0, prs[0].Aidx)
+	require.Equal(t, addrA, prs[0].Creator)
+	require.Equal(t, expectedRound, prs[0].Round) // db round (inside resources)
+	require.Equal(t, resDataA0, prs[0].Data)
+	require.Equal(t, expectedRound, rnd) // db round (from the return)
+
+	// Set min to 1, should return only 1 resource (index 1)
+	prs, rnd, err = aor.LookupLimitedResources(addrB, 1, 1, basics.AssetCreatable)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(prs))
+	require.Equal(t, aidxResA1, prs[0].Aidx)
+	require.Equal(t, addrA, prs[0].Creator)
+	require.Equal(t, expectedRound, prs[0].Round) // db round (inside resources)
+	require.Equal(t, resDataA1, prs[0].Data)
+	require.Equal(t, expectedRound, rnd) // db round (from the return)
+
+	// Delete both resource creatables
+	rowsAffected, err := aow.DeleteCreatable(aidxResA0, basics.AssetCreatable)
+	require.NoError(t, err)
+	require.Equal(t, int64(1), rowsAffected)
+	rowsAffected, err = aow.DeleteCreatable(aidxResA1, basics.AssetCreatable)
+	require.NoError(t, err)
+	require.Equal(t, int64(1), rowsAffected)
+	_, err = aow.DeleteResource(refAccA, aidxResA0)
+	require.NoError(t, err)
+	_, err = aow.DeleteResource(refAccA, aidxResA1)
+	require.NoError(t, err)
+
+	// Account A should have no resources, account B should have 2 resources without a creator/params
+	prs, rnd, err = aor.LookupLimitedResources(addrA, 0, 2, basics.AssetCreatable)
+	require.NoError(t, err)
+	require.Equal(t, 0, len(prs))
+	prs, rnd, err = aor.LookupLimitedResources(addrB, 0, 2, basics.AssetCreatable)
+	require.NoError(t, err)
+	require.Equal(t, 2, len(prs))
+	require.Equal(t, aidxResA0, prs[0].Aidx)
+	require.Equal(t, aidxResA1, prs[1].Aidx)
+	require.True(t, prs[0].Creator.IsZero())
+	require.True(t, prs[1].Creator.IsZero())
+	require.Equal(t, expectedRound, prs[0].Round) // db round (inside resources)
+	require.Equal(t, expectedRound, prs[1].Round)
+	require.Equal(t, resDataA0, prs[0].Data)
+	require.Equal(t, resDataA1, prs[1].Data)
 }
 
 func CustomTestAppKVCrud(t *customT) {

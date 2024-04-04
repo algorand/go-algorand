@@ -87,7 +87,7 @@ func AccountsInitDbQueries(q db.Queryable) (*accountsDbQueries, error) {
 		return nil, err
 	}
 
-	qs.lookupLimitedResourcesStmt, err = q.Prepare("SELECT ab.rowid, ar.rnd, r.aidx, ac.creator, r.data, cr.data FROM acctrounds ar JOIN accountbase ab ON ab.address = ? JOIN resources r ON r.addrid = ab.addrid JOIN assetcreators ac ON r.aidx = ac.asset JOIN accountbase cab ON ac.creator = cab.address JOIN resources cr ON cr.addrid = cab.addrid AND cr.aidx = r.aidx WHERE ar.id = 'acctbase' AND ac.ctype = ? AND r.aidx > ? ORDER BY r.aidx ASC LIMIT ?")
+	qs.lookupLimitedResourcesStmt, err = q.Prepare("SELECT ab.rowid, ar.rnd, r.aidx, ac.creator, r.data, cr.data FROM acctrounds ar JOIN accountbase ab ON ab.address = ? JOIN resources r ON r.addrid = ab.addrid LEFT JOIN assetcreators ac ON r.aidx = ac.asset LEFT JOIN accountbase cab ON ac.creator = cab.address LEFT JOIN resources cr ON cr.addrid = cab.addrid AND cr.aidx = r.aidx WHERE ar.id = 'acctbase' AND r.aidx > ? ORDER BY r.aidx ASC LIMIT ?")
 	if err != nil {
 		return nil, err
 	}
@@ -429,7 +429,7 @@ func (qs *accountsDbQueries) LookupAllResources(addr basics.Address) (data []tra
 func (qs *accountsDbQueries) LookupLimitedResources(addr basics.Address, minIdx basics.CreatableIndex, maxCreatables uint64, ctype basics.CreatableType) (data []trackerdb.PersistedResourcesDataWithCreator, rnd basics.Round, err error) {
 	err = db.Retry(func() error {
 		// Query for all resources
-		rows, err0 := qs.lookupLimitedResourcesStmt.Query(addr[:], ctype, minIdx, maxCreatables)
+		rows, err0 := qs.lookupLimitedResourcesStmt.Query(addr[:], minIdx, maxCreatables)
 		if err0 != nil {
 			return err0
 		}
@@ -461,28 +461,43 @@ func (qs *accountsDbQueries) LookupLimitedResources(addr basics.Address, minIdx 
 			if err != nil {
 				return err
 			}
-			err = protocol.Decode(crtAssetBuf, &crtResData)
-			if err != nil {
-				return err
+
+			var prdwc trackerdb.PersistedResourcesDataWithCreator
+			if len(crtAssetBuf) > 0 {
+				err = protocol.Decode(crtAssetBuf, &crtResData)
+				if err != nil {
+					return err
+				}
+
+				// Update asset holding data in the creator resource data
+				crtResData.Amount = actResData.Amount
+				crtResData.Freeze = actResData.Freeze
+				crtResData.ResourceFlags = actResData.ResourceFlags
+
+				creatorAddr := basics.Address{}
+				copy(creatorAddr[:], creatorAddrBuf)
+
+				prdwc = trackerdb.PersistedResourcesDataWithCreator{
+					PersistedResourcesData: trackerdb.PersistedResourcesData{
+						AcctRef: sqlRowRef{addrid.Int64},
+						Aidx:    basics.CreatableIndex(aidx.Int64),
+						Data:    crtResData,
+						Round:   dbRound,
+					},
+					Creator: creatorAddr,
+				}
+			} else { // no creator found, asset was likely deleted, will not have asset params
+				prdwc = trackerdb.PersistedResourcesDataWithCreator{
+					PersistedResourcesData: trackerdb.PersistedResourcesData{
+						AcctRef: sqlRowRef{addrid.Int64},
+						Aidx:    basics.CreatableIndex(aidx.Int64),
+						Data:    actResData,
+						Round:   dbRound,
+					},
+				}
 			}
 
-			// Update asset holding data in the creator resource data
-			crtResData.Amount = actResData.Amount
-			crtResData.Freeze = actResData.Freeze
-			crtResData.ResourceFlags = actResData.ResourceFlags
-
-			creatorAddr := basics.Address{}
-			copy(creatorAddr[:], creatorAddrBuf)
-
-			data = append(data, trackerdb.PersistedResourcesDataWithCreator{
-				PersistedResourcesData: trackerdb.PersistedResourcesData{
-					AcctRef: sqlRowRef{addrid.Int64},
-					Aidx:    basics.CreatableIndex(aidx.Int64),
-					Data:    crtResData,
-					Round:   dbRound,
-				},
-				Creator: creatorAddr,
-			})
+			data = append(data, prdwc)
 
 			rnd = dbRound
 		}
