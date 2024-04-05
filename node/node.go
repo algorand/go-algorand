@@ -228,6 +228,21 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		return nil, err
 	}
 
+	registry, err := ensureParticipationDB(node.genesisDirs.ColdGenesisDir, node.log)
+	if err != nil {
+		log.Errorf("unable to initialize the participation registry database: %v", err)
+		return nil, err
+	}
+	node.accountManager = data.MakeAccountManager(log, registry)
+
+	err = node.loadParticipationKeys()
+	if err != nil {
+		log.Errorf("Cannot load participation keys: %v", err)
+		return nil, err
+	}
+
+	node.oldKeyDeletionNotify = make(chan struct{}, 1)
+
 	node.transactionPool = pools.MakeTransactionPool(node.ledger.Ledger, cfg, node.log, node)
 
 	blockListeners := []ledgercore.BlockListener{
@@ -299,21 +314,6 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	node.catchupBlockAuth = blockAuthenticatorImpl{Ledger: node.ledger, AsyncVoteVerifier: agreement.MakeAsyncVoteVerifier(node.lowPriorityCryptoVerificationPool)}
 	node.catchupService = catchup.MakeService(node.log, node.config, p2pNode, node.ledger, node.catchupBlockAuth, agreementLedger.UnmatchedPendingCertificates, node.lowPriorityCryptoVerificationPool)
 	node.txPoolSyncerService = rpcs.MakeTxSyncer(node.transactionPool, node.net, node.txHandler.SolicitedTxHandler(), time.Duration(cfg.TxSyncIntervalSeconds)*time.Second, time.Duration(cfg.TxSyncTimeoutSeconds)*time.Second, cfg.TxSyncServeResponseSize)
-
-	registry, err := ensureParticipationDB(node.genesisDirs.ColdGenesisDir, node.log)
-	if err != nil {
-		log.Errorf("unable to initialize the participation registry database: %v", err)
-		return nil, err
-	}
-	node.accountManager = data.MakeAccountManager(log, registry)
-
-	err = node.loadParticipationKeys()
-	if err != nil {
-		log.Errorf("Cannot load participation keys: %v", err)
-		return nil, err
-	}
-
-	node.oldKeyDeletionNotify = make(chan struct{}, 1)
 
 	catchpointCatchupState, err := node.ledger.GetCatchpointCatchupState(context.Background())
 	if err != nil {
