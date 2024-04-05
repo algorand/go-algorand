@@ -74,6 +74,11 @@ func TestPrometheusMetrics(t *testing.T) {
 	prometheus.DefaultRegisterer.MustRegister(counterLabels)
 	prometheus.DefaultRegisterer.MustRegister(counter)
 
+	defer prometheus.DefaultRegisterer.Unregister(gaugeLabels)
+	defer prometheus.DefaultRegisterer.Unregister(gauge)
+	defer prometheus.DefaultRegisterer.Unregister(counterLabels)
+	defer prometheus.DefaultRegisterer.Unregister(counter)
+
 	// set some values
 	tags := []string{"outbound", "protocol", "/test/proto"}
 	gaugeLabels.WithLabelValues(tags...).Set(float64(1))
@@ -127,4 +132,17 @@ func TestPrometheusMetrics(t *testing.T) {
 		m.AddMetric(values)
 		require.Len(t, values, 1)
 	}
+
+	// ensure the exported gatherer works
+	reg := MakeRegistry()
+	reg.Register(&PrometheusDefaultMetrics)
+	defer reg.Deregister(&PrometheusDefaultMetrics)
+
+	var buf strings.Builder
+	reg.WriteMetrics(&buf, "")
+
+	require.Contains(t, buf.String(), metricNamespace+"_streams")
+	require.Contains(t, buf.String(), metricNamespace+"_protocols_count")
+	require.Contains(t, buf.String(), metricNamespace+"_identify_total")
+	require.Contains(t, buf.String(), metricNamespace+"_counter_total")
 }

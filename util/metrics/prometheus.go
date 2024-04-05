@@ -33,7 +33,7 @@ type defaultPrometheusGatherer struct {
 // WriteMetric return prometheus converted to algorand format.
 // Supports only counter and gauge types and ignores go_ metrics.
 func (pg *defaultPrometheusGatherer) WriteMetric(buf *strings.Builder, parentLabels string) {
-	metrics := collectOpenCensusMetrics(pg.names)
+	metrics := collectPrometheusMetrics(pg.names)
 	for _, metric := range metrics {
 		metric.WriteMetric(buf, parentLabels)
 	}
