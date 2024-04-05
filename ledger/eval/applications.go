@@ -46,6 +46,15 @@ func (cs *roundCowState) AgreementData(addr basics.Address) (basics.OnlineAccoun
 	return record, nil
 }
 
+func (cs *roundCowState) OnlineStake() (basics.MicroAlgos, error) {
+	return cs.lookupParent.onlineStake()
+}
+
+// onlineStake is needed to implement roundCowParent
+func (cs *roundCowState) onlineStake() (basics.MicroAlgos, error) {
+	return cs.lookupParent.onlineStake()
+}
+
 func (cs *roundCowState) Authorizer(addr basics.Address) (basics.Address, error) {
 	record, err := cs.Get(addr, false) // pending rewards unneeded
 	if err != nil {

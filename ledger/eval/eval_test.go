@@ -793,6 +793,11 @@ func (ledger *evalTestLedger) LookupAgreement(rnd basics.Round, addr basics.Addr
 	return convertToOnline(ad), err
 }
 
+// OnlineCirculation just returns a deterministic value for a given round.
+func (ledge *evalTestLedger) OnlineCirculation(rnd, voteRound basics.Round) (basics.MicroAlgos, error) {
+	return basics.MicroAlgos{Raw: uint64(rnd) * 1_000_000}, nil
+}
+
 func (ledger *evalTestLedger) LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error) {
 	res := ledgercore.AppResource{}
 	ad, ok := ledger.roundBalances[rnd][addr]
@@ -1018,6 +1023,10 @@ func (l *testCowBaseLedger) LookupWithoutRewards(basics.Round, basics.Address) (
 
 func (l *testCowBaseLedger) LookupAgreement(rnd basics.Round, addr basics.Address) (basics.OnlineAccountData, error) {
 	return basics.OnlineAccountData{}, errors.New("not implemented")
+}
+
+func (l *testCowBaseLedger) OnlineCirculation(rnd, voteRnd basics.Round) (basics.MicroAlgos, error) {
+	return basics.MicroAlgos{}, errors.New("not implemented")
 }
 
 func (l *testCowBaseLedger) LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error) {

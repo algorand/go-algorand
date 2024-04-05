@@ -428,7 +428,7 @@ pushbytess "1" "2" "1"
 `
 
 const incentiveNonsense = `
-pushint 0
+online_stake
 voter_params_get VoterIncentiveEligible
 `
 
@@ -472,7 +472,7 @@ const spliceCompiled = "d2d3"
 
 const v10Compiled = v9Compiled + pairingCompiled + spliceCompiled
 
-const incentiveCompiled = "81007401"
+const incentiveCompiled = "757401"
 
 const stateProofCompiled = "80070123456789abcd86494985"
 

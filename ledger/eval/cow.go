@@ -46,6 +46,7 @@ type roundCowParent interface {
 
 	// lookup retrieves agreement data about an address, querying the ledger if necessary.
 	lookupAgreement(basics.Address) (basics.OnlineAccountData, error)
+	onlineStake() (basics.MicroAlgos, error)
 
 	// lookupAppParams, lookupAssetParams, lookupAppLocalState, and lookupAssetHolding retrieve data for a given address and ID.
 	// If cacheOnly is set, the ledger DB will not be queried, and only the cache will be consulted.

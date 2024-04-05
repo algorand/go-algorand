@@ -53,6 +53,7 @@ type LedgerForCowBase interface {
 	LookupKv(basics.Round, string) ([]byte, error)
 	GetCreatorForRound(basics.Round, basics.CreatableIndex, basics.CreatableType) (basics.Address, bool, error)
 	GetStateProofVerificationContext(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error)
+	OnlineCirculation(basics.Round, basics.Round) (basics.MicroAlgos, error)
 }
 
 // ErrRoundZero is self-explanatory
@@ -136,6 +137,10 @@ type roundCowBase struct {
 	// execution. The OnlineAccountData is historical and therefore won't be changing.
 	voters map[basics.Address]basics.OnlineAccountData
 
+	// totalOnline is the cached amount of online stake for rnd (so it's from
+	// rnd-320). The zero value indicates it is not yet cached.
+	totalOnline basics.MicroAlgos
+
 	// Similarly to accounts cache that stores base account data, there are caches for params, states, holdings.
 	appParams      map[ledgercore.AccountApp]cachedAppParams
 	assetParams    map[ledgercore.AccountAsset]cachedAssetParams
@@ -201,6 +206,17 @@ func (x *roundCowBase) lookup(addr basics.Address) (ledgercore.AccountData, erro
 	return ad, err
 }
 
+// balanceRound reproduces the way that the agreement package finds the round to
+// consider for online accounts.
+func (x *roundCowBase) balanceRound() (basics.Round, error) {
+	phdr, err := x.BlockHdr(agreement.ParamsRound(x.rnd))
+	if err != nil {
+		return 0, err
+	}
+	agreementParams := config.Consensus[phdr.CurrentProtocol]
+	return agreement.BalanceRound(x.rnd, agreementParams), nil
+}
+
 // lookupAgreement returns the online accountdata for the provided account address. It uses an internal cache
 // to avoid repeated lookups against the ledger.
 func (x *roundCowBase) lookupAgreement(addr basics.Address) (basics.OnlineAccountData, error) {
@@ -208,20 +224,36 @@ func (x *roundCowBase) lookupAgreement(addr basics.Address) (basics.OnlineAccoun
 		return accountData, nil
 	}
 
-	// We need to reproduce the way that the agreement package finds the round
-	// to consider for online accounts.
-	phdr, err := x.BlockHdr(agreement.ParamsRound(x.rnd))
+	brnd, err := x.balanceRound()
 	if err != nil {
 		return basics.OnlineAccountData{}, err
 	}
-	agreementParams := config.Consensus[phdr.CurrentProtocol]
-	ad, err := x.l.LookupAgreement(agreement.BalanceRound(x.rnd, agreementParams), addr)
+	ad, err := x.l.LookupAgreement(brnd, addr)
 	if err != nil {
 		return basics.OnlineAccountData{}, err
 	}
 
 	x.voters[addr] = ad
 	return ad, err
+}
+
+// lookupAgreement returns the online accountdata for the provided account address. It uses an internal cache
+// to avoid repeated lookups against the ledger.
+func (x *roundCowBase) onlineStake() (basics.MicroAlgos, error) {
+	if !x.totalOnline.IsZero() {
+		return x.totalOnline, nil
+	}
+
+	brnd, err := x.balanceRound()
+	if err != nil {
+		return basics.MicroAlgos{}, err
+	}
+	total, err := x.l.OnlineCirculation(brnd, x.rnd)
+	if err != nil {
+		return basics.MicroAlgos{}, err
+	}
+	x.totalOnline = total
+	return x.totalOnline, err
 }
 
 func (x *roundCowBase) updateAssetResourceCache(aa ledgercore.AccountAsset, r ledgercore.AssetResource) {

@@ -912,6 +912,10 @@ func (aul *accountUpdatesLedgerEvaluator) LookupAgreement(rnd basics.Round, addr
 	return aul.ao.LookupOnlineAccountData(rnd, addr)
 }
 
+func (aul *accountUpdatesLedgerEvaluator) OnlineCirculation(rnd basics.Round, voteRnd basics.Round) (basics.MicroAlgos, error) {
+	return aul.ao.onlineCirculation(rnd, voteRnd)
+}
+
 func (aul *accountUpdatesLedgerEvaluator) LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error) {
 	r, _, err := aul.au.lookupResource(rnd, addr, basics.CreatableIndex(aidx), basics.AppCreatable, false /* don't sync */)
 	return ledgercore.AppResource{AppParams: r.AppParams, AppLocalState: r.AppLocalState}, err

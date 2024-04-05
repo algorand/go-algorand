@@ -716,7 +716,7 @@ func TestVoterAccess(t *testing.T) {
 		func(cfg *ledgertesting.GenesisCfg) {
 			cfg.OnlineCount = 1 // So that one is online from the start
 		})
-	getOnlineStake := `int 0; voter_params_get VoterBalance; itob; log; itob; log; int 1`
+	getOnlineStake := `int 0; voter_params_get VoterBalance; itob; log; itob; log; online_stake; itob; log; int 1`
 
 	// `voter_params_get` introduced in 40
 	ledgertesting.TestConsensusRange(t, 40, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
@@ -743,7 +743,8 @@ func TestVoterAccess(t *testing.T) {
 		two := basics.Address{0xaa, 0x22}
 		three := basics.Address{0xaa, 0x33}
 
-		checkState := func(addr basics.Address, online bool, expected uint64) {
+		checkState := func(addr basics.Address, online bool, expected uint64, total uint64) {
+			t.Helper()
 			if !online {
 				require.Zero(t, expected)
 			}
@@ -753,7 +754,7 @@ func TestVoterAccess(t *testing.T) {
 				ApplicationID: stakeChecker,
 			})
 			logs := stib.ApplyData.EvalDelta.Logs
-			require.Len(t, logs, 2)
+			require.Len(t, logs, 3)
 			if online {
 				require.Equal(t, "\x00\x00\x00\x00\x00\x00\x00\x01", logs[0])
 				require.Equal(t, int(expected), int(binary.BigEndian.Uint64([]byte(logs[1]))))
@@ -761,13 +762,14 @@ func TestVoterAccess(t *testing.T) {
 				require.Equal(t, "\x00\x00\x00\x00\x00\x00\x00\x00", logs[0])
 				require.Equal(t, int(expected), int(binary.BigEndian.Uint64([]byte(logs[1]))))
 			}
+			require.Equal(t, int(total), int(binary.BigEndian.Uint64([]byte(logs[2]))))
 		}
 
-		checkState(addrs[0], true, 833_333_333_333_333)
+		checkState(addrs[0], true, 833_333_333_333_333, 833_333_333_333_333)
 		// checking again because addrs[0] just paid a fee, but we show online balance hasn't changed yet
-		checkState(addrs[0], true, 833_333_333_333_333)
+		checkState(addrs[0], true, 833_333_333_333_333, 833_333_333_333_333)
 		for i := 1; i < 10; i++ {
-			checkState(addrs[i], false, 0)
+			checkState(addrs[i], false, 0, 833_333_333_333_333)
 		}
 
 		// Fund the new accounts and have them go online.
@@ -786,18 +788,18 @@ func TestVoterAccess(t *testing.T) {
 		}
 		// they don't have online stake yet
 		for _, addr := range []basics.Address{one, two, three} {
-			checkState(addr, false, 0)
+			checkState(addr, false, 0, 833_333_333_333_333)
 		}
 		for i := 0; i < 320; i++ {
 			dl.fullBlock()
 		}
-		// addr[1] is now visibly online
-		checkState(addrs[1], true, 833_333_333_333_333-2000) // keyreg fee and previous checkState fee
-		for i := 2; i < 10; i++ {
-			checkState(addrs[i], false, 0)
+		// addr[1] is now visibly online. the total is across all five that are now online, minus various fees paid
+		checkState(addrs[1], true, 833_333_333_333_333-2000, 2*833_333_333_333_333-14000)
+		for i := 2; i < 10; i++ { // addrs[2-9] never came online
+			checkState(addrs[i], false, 0, 2*833_333_333_333_333-14000)
 		}
 		for i, addr := range []basics.Address{one, two, three} {
-			checkState(addr, true, (uint64(i)+1)*1_000_000_000-2000) // keyreg fee, and previous checkState fee
+			checkState(addr, true, (uint64(i)+1)*1_000_000_000-2000, 2*833_333_333_333_333-14000)
 		}
 	})
 }

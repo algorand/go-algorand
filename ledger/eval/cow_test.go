@@ -63,10 +63,14 @@ func convertToOnline(ad ledgercore.AccountData) basics.OnlineAccountData {
 
 func (ml *mockLedger) lookupAgreement(addr basics.Address) (basics.OnlineAccountData, error) {
 	ad, err := ml.lookup(addr)
-	if err != nil { //  impossible, look up 3 lines!
+	if err != nil { //  impossible, see lookup()
 		return basics.OnlineAccountData{}, err
 	}
 	return convertToOnline(ad), nil
+}
+
+func (ml *mockLedger) onlineStake() (basics.MicroAlgos, error) {
+	return basics.Algos(55_555), nil
 }
 
 func (ml *mockLedger) lookupAppParams(addr basics.Address, aidx basics.AppIndex, cacheOnly bool) (ledgercore.AppParamsDelta, bool, error) {

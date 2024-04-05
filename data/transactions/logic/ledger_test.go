@@ -216,6 +216,12 @@ func (l *Ledger) PrevTimestamp() int64 {
 	return int64(rand.Uint32() + 1)
 }
 
+// OnlineStake returns the online stake that applies to the latest round (so
+// it's actually the online stake from 320 rounds ago)
+func (l *Ledger) OnlineStake() (basics.MicroAlgos, error) {
+	return basics.Algos(3333), nil
+}
+
 // BlockHdr returns the block header for the given round, if it is available
 func (l *Ledger) BlockHdr(round basics.Round) (bookkeeping.BlockHeader, error) {
 	hdr := bookkeeping.BlockHeader{}
