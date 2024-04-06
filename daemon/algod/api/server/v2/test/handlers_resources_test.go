@@ -434,7 +434,7 @@ func accountAssetInformationResourceLimitsTest(t *testing.T, handlers v2.Handler
 	err := handlers.AccountAssetsInformation(ctx, addr.String(), params)
 	require.NoError(t, err)
 	require.Equal(t, 200, rec.Code)
-	var ret model.AccountAssetHoldingsResponse
+	var ret model.AccountAssetsInformationResponse
 	err = json.Unmarshal(rec.Body.Bytes(), &ret)
 	require.NoError(t, err)
 	assert.Equal(t, fakeLatestRound, basics.Round(ret.Round))

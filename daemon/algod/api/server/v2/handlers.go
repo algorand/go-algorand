@@ -1163,7 +1163,7 @@ func (v2 *Handlers) AccountAssetsInformation(ctx echo.Context, address string, p
 	}
 
 	// prepare JSON response
-	response := model.AccountAssetHoldingsResponse{Round: uint64(lookupRound)}
+	response := model.AccountAssetsInformationResponse{Round: uint64(lookupRound)}
 
 	// If the total count is greater than the limit, we set the next token to the last asset ID being returned
 	if uint64(len(records)) > *params.Limit {
