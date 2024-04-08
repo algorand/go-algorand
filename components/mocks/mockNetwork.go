@@ -91,6 +91,12 @@ func (network *MockNetwork) RegisterHandlers(dispatch []network.TaggedMessageHan
 func (network *MockNetwork) ClearHandlers() {
 }
 
+func (network *MockNetwork) RegisterProcessors(dispatch []network.TaggedMessageProcessor) {
+}
+
+func (network *MockNetwork) ClearProcessors() {
+}
+
 // RegisterHTTPHandler - empty implementation
 func (network *MockNetwork) RegisterHTTPHandler(path string, handler http.Handler) {
 }

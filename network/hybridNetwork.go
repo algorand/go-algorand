@@ -180,6 +180,18 @@ func (n *HybridP2PNetwork) ClearHandlers() {
 	n.wsNetwork.ClearHandlers()
 }
 
+// RegisterHandlers adds to the set of given message handlers.
+func (n *HybridP2PNetwork) RegisterProcessors(dispatch []TaggedMessageProcessor) {
+	n.p2pNetwork.RegisterProcessors(dispatch)
+	n.wsNetwork.RegisterProcessors(dispatch)
+}
+
+// ClearHandlers deregisters all the existing message handlers.
+func (n *HybridP2PNetwork) ClearProcessors() {
+	n.p2pNetwork.ClearProcessors()
+	n.wsNetwork.ClearProcessors()
+}
+
 // GetHTTPClient returns a http.Client with a suitable for the network Transport
 // that would also limit the number of outgoing connections.
 func (n *HybridP2PNetwork) GetHTTPClient(address string) (*http.Client, error) {

@@ -244,6 +244,20 @@ func (handler *TxHandler) Start() {
 		{Tag: protocol.TxnTag, MessageHandler: network.HandlerFunc(handler.processIncomingTxn)},
 	})
 
+	handler.net.RegisterProcessors([]network.TaggedMessageProcessor{
+		{
+			Tag: protocol.TxnTag,
+			// create anonymous struct to hold the two functions and satisfy the network.MessageProcessor interface
+			MessageProcessor: struct {
+				network.ProcessorValidateFunc
+				network.ProcessorHandleFunc
+			}{
+				network.ProcessorValidateFunc(handler.validateIncomingTxMessage),
+				network.ProcessorHandleFunc(handler.processIncomingTxMessage),
+			},
+		},
+	})
+
 	handler.backlogWg.Add(2)
 	go handler.backlogWorker()
 	go handler.backlogGaugeThread()
@@ -731,33 +745,37 @@ type validatedIncomingTxMessage struct {
 	capguard          *util.ErlCapacityGuard
 }
 
-func (handler *TxHandler) validateIncomingTxMessage(rawmsg network.IncomingMessage) (network.ForwardingPolicy, interface{}) {
+func (handler *TxHandler) validateIncomingTxMessage(rawmsg network.IncomingMessage) network.ValidatedMessage {
 	msgKey, capguard, isDup := handler.incomingMsgDupErlCheck(rawmsg.Data, rawmsg.Sender)
 	if isDup {
-		return network.Ignore, nil
+		return network.ValidatedMessage{Action: network.Ignore, ValidatorData: nil}
 	}
 
 	unverifiedTxGroup, consumed, drop := decodeMsg(rawmsg.Data)
 	if drop {
-		return network.Disconnect, nil
+		return network.ValidatedMessage{Action: network.Disconnect, ValidatorData: nil}
 	}
 
 	canonicalKey, drop := handler.incomingTxGroupDupRateLimit(unverifiedTxGroup, consumed, rawmsg.Sender)
 	if drop {
-		return network.Ignore, nil
+		return network.ValidatedMessage{Action: network.Ignore, ValidatorData: nil}
 	}
 
-	return network.Ignore, &validatedIncomingTxMessage{
-		rawmsg:            rawmsg,
-		unverifiedTxGroup: unverifiedTxGroup,
-		msgKey:            msgKey,
-		canonicalKey:      canonicalKey,
-		capguard:          capguard,
+	return network.ValidatedMessage{
+		Action: network.Ignore,
+		Tag:    rawmsg.Tag,
+		ValidatorData: &validatedIncomingTxMessage{
+			rawmsg:            rawmsg,
+			unverifiedTxGroup: unverifiedTxGroup,
+			msgKey:            msgKey,
+			canonicalKey:      canonicalKey,
+			capguard:          capguard,
+		},
 	}
 }
 
-func (handler *TxHandler) processIncomingTxMessage(validatedTxMessage interface{}) network.OutgoingMessage {
-	msg := validatedTxMessage.(*validatedIncomingTxMessage)
+func (handler *TxHandler) processIncomingTxMessage(validatedMessage network.ValidatedMessage) network.OutgoingMessage {
+	msg := validatedMessage.ValidatorData.(*validatedIncomingTxMessage)
 	select {
 	case handler.backlogQueue <- &txBacklogMsg{
 		rawmsg:                &msg.rawmsg,
