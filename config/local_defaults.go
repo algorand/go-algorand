@@ -20,7 +20,7 @@
 package config
 
 var defaultLocal = Local{
-	Version:                                    33,
+	Version:                                    34,
 	AccountUpdatesStatsInterval:                5000000000,
 	AccountsRebuildSynchronousMode:             1,
 	AgreementIncomingBundlesQueueLength:        15,
@@ -89,6 +89,7 @@ var defaultLocal = Local{
 	FallbackDNSResolverAddress:                 "",
 	ForceFetchTransactions:                     false,
 	ForceRelayMessages:                         false,
+	GoMemLimit:                                 0,
 	GossipFanout:                               4,
 	HeartbeatUpdateInterval:                    600,
 	HotDataDir:                                 "",
