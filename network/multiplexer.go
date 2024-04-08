@@ -82,7 +82,7 @@ func (m *Multiplexer) Handle(msg IncomingMessage) OutgoingMessage {
 	return OutgoingMessage{}
 }
 
-// Validate is the "input" side of the multiplexer. It dispatches the message to the previously defined handler.
+// Validate is an alternative "input" side of the multiplexer. It dispatches the message to the previously defined validator.
 func (m *Multiplexer) Validate(msg IncomingMessage) ValidatedMessage {
 	handler, ok := m.getProcessor(msg.Tag)
 
@@ -93,7 +93,7 @@ func (m *Multiplexer) Validate(msg IncomingMessage) ValidatedMessage {
 	return ValidatedMessage{}
 }
 
-// Handle is the "input" side of the multiplexer. It dispatches the message to the previously defined handler.
+// Process is the second step of message handling after validation. It dispatches the message to the previously defined processor.
 func (m *Multiplexer) Process(msg ValidatedMessage) OutgoingMessage {
 	handler, ok := m.getProcessor(msg.Tag)
 
@@ -145,7 +145,7 @@ func (m *Multiplexer) ClearHandlers(excludeTags []Tag) {
 	m.msgHandlers.Store(newMap)
 }
 
-// RegisterHandlers registers the set of given message handlers.
+// RegisterProcessors registers the set of given message handlers.
 func (m *Multiplexer) RegisterProcessors(dispatch []TaggedMessageProcessor) {
 	mp := make(map[Tag]MessageProcessor)
 	if existingMap := m.getProcessorsMap(); existingMap != nil {
@@ -162,7 +162,7 @@ func (m *Multiplexer) RegisterProcessors(dispatch []TaggedMessageProcessor) {
 	m.msgProcessors.Store(mp)
 }
 
-// ClearHandlers deregisters all the existing message handlers other than the one provided in the excludeTags list
+// ClearProcessors deregisters all the existing message handlers other than the one provided in the excludeTags list
 func (m *Multiplexer) ClearProcessors(excludeTags []Tag) {
 	if len(excludeTags) == 0 {
 		m.msgProcessors.Store(make(map[Tag]MessageProcessor))

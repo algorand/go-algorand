@@ -659,12 +659,12 @@ func (n *P2PNetwork) ClearHandlers() {
 	n.handler.ClearHandlers([]Tag{})
 }
 
-// RegisterHandlers adds to the set of given message handlers.
+// RegisterProcessors adds to the set of given message handlers.
 func (n *P2PNetwork) RegisterProcessors(dispatch []TaggedMessageProcessor) {
 	n.handler.RegisterProcessors(dispatch)
 }
 
-// ClearHandlers deregisters all the existing message handlers.
+// ClearProcessors deregisters all the existing message handlers.
 func (n *P2PNetwork) ClearProcessors() {
 	n.handler.ClearProcessors([]Tag{})
 }

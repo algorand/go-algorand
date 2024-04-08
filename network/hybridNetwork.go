@@ -180,13 +180,13 @@ func (n *HybridP2PNetwork) ClearHandlers() {
 	n.wsNetwork.ClearHandlers()
 }
 
-// RegisterHandlers adds to the set of given message handlers.
+// RegisterProcessors adds to the set of given message handlers.
 func (n *HybridP2PNetwork) RegisterProcessors(dispatch []TaggedMessageProcessor) {
 	n.p2pNetwork.RegisterProcessors(dispatch)
 	n.wsNetwork.RegisterProcessors(dispatch)
 }
 
-// ClearHandlers deregisters all the existing message handlers.
+// ClearProcessors deregisters all the existing message handlers.
 func (n *HybridP2PNetwork) ClearProcessors() {
 	n.p2pNetwork.ClearProcessors()
 	n.wsNetwork.ClearProcessors()

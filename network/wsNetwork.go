@@ -853,11 +853,11 @@ func (wn *WebsocketNetwork) ClearHandlers() {
 	wn.handler.ClearHandlers([]Tag{protocol.PingTag, protocol.PingReplyTag, protocol.NetPrioResponseTag})
 }
 
-// RegisterHandlers registers the set of given message handlers.
+// RegisterProcessors registers the set of given message handlers.
 func (wn *WebsocketNetwork) RegisterProcessors(dispatch []TaggedMessageProcessor) {
 }
 
-// ClearHandlers deregisters all the existing message handlers.
+// ClearProcessors deregisters all the existing message handlers.
 func (wn *WebsocketNetwork) ClearProcessors() {
 }
 
