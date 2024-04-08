@@ -243,6 +243,7 @@ func (handler *TxHandler) Start() {
 	handler.net.RegisterHandlers([]network.TaggedMessageHandler{
 		{Tag: protocol.TxnTag, MessageHandler: network.HandlerFunc(handler.processIncomingTxn)},
 	})
+
 	handler.backlogWg.Add(2)
 	go handler.backlogWorker()
 	go handler.backlogGaugeThread()
@@ -719,6 +720,65 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 		}
 	}
 
+	return network.OutgoingMessage{Action: network.Ignore}
+}
+
+type validatedIncomingTxMessage struct {
+	rawmsg            network.IncomingMessage
+	unverifiedTxGroup []transactions.SignedTxn
+	msgKey            *crypto.Digest
+	canonicalKey      *crypto.Digest
+	capguard          *util.ErlCapacityGuard
+}
+
+func (handler *TxHandler) validateIncomingTxMessage(rawmsg network.IncomingMessage) (network.ForwardingPolicy, interface{}) {
+	msgKey, capguard, isDup := handler.incomingMsgDupErlCheck(rawmsg.Data, rawmsg.Sender)
+	if isDup {
+		return network.Ignore, nil
+	}
+
+	unverifiedTxGroup, consumed, drop := decodeMsg(rawmsg.Data)
+	if drop {
+		return network.Disconnect, nil
+	}
+
+	canonicalKey, drop := handler.incomingTxGroupDupRateLimit(unverifiedTxGroup, consumed, rawmsg.Sender)
+	if drop {
+		return network.Ignore, nil
+	}
+
+	return network.Ignore, &validatedIncomingTxMessage{
+		rawmsg:            rawmsg,
+		unverifiedTxGroup: unverifiedTxGroup,
+		msgKey:            msgKey,
+		canonicalKey:      canonicalKey,
+		capguard:          capguard,
+	}
+}
+
+func (handler *TxHandler) processIncomingTxMessage(validatedTxMessage interface{}) network.OutgoingMessage {
+	msg := validatedTxMessage.(*validatedIncomingTxMessage)
+	select {
+	case handler.backlogQueue <- &txBacklogMsg{
+		rawmsg:                &msg.rawmsg,
+		unverifiedTxGroup:     msg.unverifiedTxGroup,
+		rawmsgDataHash:        msg.msgKey,
+		unverifiedTxGroupHash: msg.canonicalKey,
+		capguard:              msg.capguard,
+	}:
+	default:
+		// if we failed here we want to increase the corresponding metric. It might suggest that we
+		// want to increase the queue size.
+		transactionMessagesDroppedFromBacklog.Inc(nil)
+
+		// additionally, remove the txn from duplicate caches to ensure it can be re-submitted
+		if handler.txCanonicalCache != nil && msg.canonicalKey != nil {
+			handler.txCanonicalCache.Delete(msg.canonicalKey)
+		}
+		if handler.msgCache != nil && msg.msgKey != nil {
+			handler.msgCache.DeleteByKey(msg.msgKey)
+		}
+	}
 	return network.OutgoingMessage{Action: network.Ignore}
 }
 
