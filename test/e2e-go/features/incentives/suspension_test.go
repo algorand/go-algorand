@@ -50,6 +50,7 @@ func TestBasicSuspension(t *testing.T) {
 	// Run for 55 rounds, which is enough for 20% node to be suspended, but not 10%
 	// check neither suspended, send a tx from 20% to 10%, only 20% gets suspended
 	// TODO once we have heartbeats: bring them back up, make sure 20% gets back online
+	const suspend20 = 55
 
 	var fixture fixtures.RestClientFixture
 	// Make the seed lookback shorter, so the test runs faster
@@ -98,7 +99,7 @@ func TestBasicSuspension(t *testing.T) {
 	a.NoError(err)
 
 	// Advance 55 rounds
-	err = fixture.WaitForRoundWithTimeout(afterStop.LastRound + 55)
+	err = fixture.WaitForRoundWithTimeout(afterStop.LastRound + suspend20)
 	a.NoError(err)
 
 	// n20 is still online after 55 rounds of absence (the node is off, but the
@@ -112,8 +113,8 @@ func TestBasicSuspension(t *testing.T) {
 	// pay n10 & n20, so both could be noticed
 	richAccount, err := fixture.GetRichestAccount()
 	a.NoError(err)
-	fixture.SendMoneyAndWait(afterStop.LastRound+55, 5, 1000, richAccount.Address, account10.Address, "")
-	fixture.SendMoneyAndWait(afterStop.LastRound+55, 5, 1000, richAccount.Address, account20.Address, "")
+	fixture.SendMoneyAndWait(afterStop.LastRound+suspend20, 5, 1000, richAccount.Address, account10.Address, "")
+	fixture.SendMoneyAndWait(afterStop.LastRound+suspend20, 5, 1000, richAccount.Address, account20.Address, "")
 
 	// n20's account is now offline, but has voting key material (suspended)
 	account, err = c10.AccountData(account20.Address)
@@ -139,7 +140,7 @@ func TestBasicSuspension(t *testing.T) {
 	stat, err := lg.Status()
 	a.NoError(err)
 	// Waiting for this round should show it has started and caught up.
-	stat, err = lg.WaitForRound(afterStop.LastRound + 55)
+	stat, err = lg.WaitForRound(afterStop.LastRound + suspend20)
 	a.NoError(err)
 
 	// Proceed until a round is proposed by n20. (Stop at 50 rounds, that's more likely a bug than luck)
@@ -155,7 +156,7 @@ func TestBasicSuspension(t *testing.T) {
 			break
 		}
 	}
-	// n20's account is back online, with same voting material
+	// account20 is back online, with same voting material
 	account, err = c10.AccountData(account20.Address)
 	a.NoError(err)
 	a.Equal(basics.Online, account.Status)

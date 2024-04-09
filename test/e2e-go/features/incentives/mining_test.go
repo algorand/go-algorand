@@ -194,17 +194,21 @@ func TestBasicPayouts(t *testing.T) {
 		a.NoError(err)
 		fmt.Printf(" proposer %v has %d after proposing round %d\n", block.Proposer(), data.MicroAlgos.Raw, status.LastRound)
 
+		pdata, err := c15.AccountData(block.Proposer().String())
+		a.NoError(err)
 		feesink := block.BlockHeader.FeeSink
-		// show all the node's belief about feesink, for debugging the payout
-		// effects appearing locally but not elsewhere (or vice versa)
-		for i, c := range []libgoal.Client{relay, c01, c15} {
+		fdata, err := c15.AccountData(feesink.String())
+		a.NoError(err)
+
+		for _, c := range []libgoal.Client{c15, c01, relay} {
 			data, err = c.AccountData(block.Proposer().String())
 			a.NoError(err)
 			a.Equal(block.Round(), data.LastProposed)
+			a.Equal(pdata, data)
 
 			data, err = c.AccountData(feesink.String())
 			a.NoError(err)
-			fmt.Printf(" feesink %d has %d at round %d\n", i, data.MicroAlgos.Raw, status.LastRound)
+			a.Equal(fdata, data)
 		}
 		a.LessOrEqual(100000, int(data.MicroAlgos.Raw)) // won't go below minfee
 		if data.MicroAlgos.Raw == 100000 {
