@@ -173,7 +173,7 @@ func MakeAccountsSQLWriter(e db.Executable, hasAccounts, hasResources, hasKvPair
 			return
 		}
 
-		w.insertResourceStmt, err = e.Prepare("INSERT INTO resources(addrid, aidx, data) VALUES(?, ?, ?)")
+		w.insertResourceStmt, err = e.Prepare("INSERT INTO resources(addrid, aidx, data, ctype) VALUES(?, ?, ?, ?)")
 		if err != nil {
 			return
 		}
@@ -719,7 +719,15 @@ func (w accountsSQLWriter) InsertResource(accountRef trackerdb.AccountRef, aidx 
 		return nil, fmt.Errorf("no account could be found for rowid = nil: %w", err)
 	}
 	addrid := accountRef.(sqlRowRef).rowid
-	result, err := w.insertResourceStmt.Exec(addrid, aidx, protocol.Encode(&data))
+	var ctype basics.CreatableType
+	if data.IsAsset() {
+		ctype = basics.AssetCreatable
+	} else if data.IsApp() {
+		ctype = basics.AppCreatable
+	} else {
+		return nil, fmt.Errorf("unable to resolve creatable type for account ref %d, creatable idx %d", addrid, aidx)
+	}
+	result, err := w.insertResourceStmt.Exec(addrid, aidx, protocol.Encode(&data), ctype)
 	if err != nil {
 		return
 	}
