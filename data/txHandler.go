@@ -762,7 +762,7 @@ func (handler *TxHandler) validateIncomingTxMessage(rawmsg network.IncomingMessa
 	}
 
 	return network.ValidatedMessage{
-		Action: network.Ignore,
+		Action: network.Accept,
 		Tag:    rawmsg.Tag,
 		ValidatorData: &validatedIncomingTxMessage{
 			rawmsg:            rawmsg,

@@ -193,6 +193,9 @@ const (
 
 	// Respond - reply to the sender
 	Respond
+
+	// Accept - accept for further processing after successful validation
+	Accept
 )
 
 // MessageHandler takes a IncomingMessage (e.g., vote, transaction), processes it, and returns what (if anything)

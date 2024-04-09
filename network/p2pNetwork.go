@@ -938,15 +938,11 @@ func (n *P2PNetwork) txTopicValidator(ctx context.Context, peerID peer.ID, msg *
 	// there was a decision made in the handler about this message
 	switch outmsg.Action {
 	case Ignore:
-		// TODO: add a new ForwardingPolicy action?
-		if outmsg.ValidatorData != nil {
-			msg.ValidatorData = outmsg.ValidatorData
-			return pubsub.ValidationAccept
-		}
 		return pubsub.ValidationIgnore
 	case Disconnect:
 		return pubsub.ValidationReject
-	case Broadcast: // TxHandler.processIncomingTxn does not currently return this Action
+	case Accept:
+		msg.ValidatorData = outmsg
 		return pubsub.ValidationAccept
 	default:
 		n.log.Warnf("handler returned invalid action %d", outmsg.Action)
