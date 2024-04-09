@@ -31,44 +31,48 @@ type Multiplexer struct {
 // MakeMultiplexer creates an empty Multiplexer
 func MakeMultiplexer() *Multiplexer {
 	m := &Multiplexer{}
-	m.ClearHandlers([]Tag{}) // allocate the map
+	m.ClearHandlers(nil)   // allocate the map
+	m.ClearProcessors(nil) // allocate the map
 	return m
 }
 
-// getHandlersMap retrieves the handlers map.
-func (m *Multiplexer) getHandlersMap() map[Tag]MessageHandler {
-	handlersVal := m.msgHandlers.Load()
-	if handlers, valid := handlersVal.(map[Tag]MessageHandler); valid {
+// getMap retrieves a typed map from an atomic.Value.
+func getMap[T any](source *atomic.Value) map[Tag]T {
+	mp := source.Load()
+	if handlers, valid := mp.(map[Tag]T); valid {
 		return handlers
 	}
 	return nil
 }
 
-// getProcessorsMap retrieves the handlers map.
-func (m *Multiplexer) getProcessorsMap() map[Tag]MessageProcessor {
-	val := m.msgProcessors.Load()
-	if processor, valid := val.(map[Tag]MessageProcessor); valid {
-		return processor
-	}
-	return nil
+// getHandlersMap retrieves the handlers map.
+func (m *Multiplexer) getHandlersMap() map[Tag]MessageHandler {
+	return getMap[MessageHandler](&m.msgHandlers)
 }
 
-// Retrieves the handler for the given message Tag from the handlers array while taking a read lock.
-func (m *Multiplexer) getHandler(tag Tag) (MessageHandler, bool) {
-	if handlers := m.getHandlersMap(); handlers != nil {
+// getProcessorsMap retrieves the processors map.
+func (m *Multiplexer) getProcessorsMap() map[Tag]MessageProcessor {
+	return getMap[MessageProcessor](&m.msgHandlers)
+}
+
+// Retrieves the handler for the given message Tag from the given value while.
+func getHandler[T any](source *atomic.Value, tag Tag) (T, bool) {
+	if handlers := getMap[T](source); handlers != nil {
 		handler, ok := handlers[tag]
 		return handler, ok
 	}
-	return nil, false
+	var empty T
+	return empty, false
 }
 
-// Retrieves the handler for the given message Tag from the handlers array while taking a read lock.
+// Retrieves the handler for the given message Tag from the handlers array.
+func (m *Multiplexer) getHandler(tag Tag) (MessageHandler, bool) {
+	return getHandler[MessageHandler](&m.msgHandlers, tag)
+}
+
+// Retrieves the processor for the given message Tag from the processors array.
 func (m *Multiplexer) getProcessor(tag Tag) (MessageProcessor, bool) {
-	if mp := m.getProcessorsMap(); mp != nil {
-		processor, ok := mp[tag]
-		return processor, ok
-	}
-	return nil, false
+	return getHandler[MessageProcessor](&m.msgProcessors, tag)
 }
 
 // Handle is the "input" side of the multiplexer. It dispatches the message to the previously defined handler.
@@ -121,30 +125,6 @@ func (m *Multiplexer) RegisterHandlers(dispatch []TaggedMessageHandler) {
 	m.msgHandlers.Store(mp)
 }
 
-// ClearHandlers deregisters all the existing message handlers other than the one provided in the excludeTags list
-func (m *Multiplexer) ClearHandlers(excludeTags []Tag) {
-	if len(excludeTags) == 0 {
-		m.msgHandlers.Store(make(map[Tag]MessageHandler))
-		return
-	}
-
-	// convert into map, so that we can exclude duplicates.
-	excludeTagsMap := make(map[Tag]bool)
-	for _, tag := range excludeTags {
-		excludeTagsMap[tag] = true
-	}
-
-	currentHandlersMap := m.getHandlersMap()
-	newMap := make(map[Tag]MessageHandler, len(excludeTagsMap))
-	for tag, handler := range currentHandlersMap {
-		if excludeTagsMap[tag] {
-			newMap[tag] = handler
-		}
-	}
-
-	m.msgHandlers.Store(newMap)
-}
-
 // RegisterProcessors registers the set of given message handlers.
 func (m *Multiplexer) RegisterProcessors(dispatch []TaggedMessageProcessor) {
 	mp := make(map[Tag]MessageProcessor)
@@ -163,9 +143,9 @@ func (m *Multiplexer) RegisterProcessors(dispatch []TaggedMessageProcessor) {
 }
 
 // ClearProcessors deregisters all the existing message handlers other than the one provided in the excludeTags list
-func (m *Multiplexer) ClearProcessors(excludeTags []Tag) {
+func clear[T any](target *atomic.Value, excludeTags []Tag) {
 	if len(excludeTags) == 0 {
-		m.msgProcessors.Store(make(map[Tag]MessageProcessor))
+		target.Store(make(map[Tag]T))
 		return
 	}
 
@@ -175,13 +155,23 @@ func (m *Multiplexer) ClearProcessors(excludeTags []Tag) {
 		excludeTagsMap[tag] = true
 	}
 
-	currentProcessorsMap := m.getProcessorsMap()
-	newMap := make(map[Tag]MessageProcessor, len(excludeTagsMap))
-	for tag, handler := range currentProcessorsMap {
+	currentMap := getMap[T](target)
+	newMap := make(map[Tag]T, len(excludeTagsMap))
+	for tag, handler := range currentMap {
 		if excludeTagsMap[tag] {
 			newMap[tag] = handler
 		}
 	}
 
-	m.msgProcessors.Store(newMap)
+	target.Store(newMap)
+}
+
+// ClearHandlers deregisters all the existing message handlers other than the one provided in the excludeTags list
+func (m *Multiplexer) ClearHandlers(excludeTags []Tag) {
+	clear[MessageHandler](&m.msgHandlers, excludeTags)
+}
+
+// ClearProcessors deregisters all the existing message handlers other than the one provided in the excludeTags list
+func (m *Multiplexer) ClearProcessors(excludeTags []Tag) {
+	clear[MessageProcessor](&m.msgProcessors, excludeTags)
 }
