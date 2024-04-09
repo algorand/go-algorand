@@ -884,37 +884,29 @@ func (n *P2PNetwork) txTopicHandleLoop() {
 	}
 	n.log.Debugf("Subscribed to topic %s", p2p.TXTopicName)
 
-	var wg sync.WaitGroup
-	wg.Add(incomingThreads)
-	defer wg.Wait()
-	for i := 0; i < incomingThreads; i++ {
-		go func() {
-			defer wg.Done()
-			for {
-				msg, err := sub.Next(n.ctx)
-				if err != nil {
-					if err != pubsub.ErrSubscriptionCancelled && err != context.Canceled {
-						n.log.Errorf("Error reading from subscription %v, peerId %s", err, n.service.ID())
-					}
-					n.log.Debugf("Cancelling subscription to topic %s due Subscription.Next error: %v", p2p.TXTopicName, err)
-					sub.Cancel()
-					return
-				}
-				// if we sent the message no need to process it.
-				if msg.ReceivedFrom == n.service.ID() {
-					return
-				}
-
-				_ = n.handler.Process(msg.ValidatorData.(ValidatedMessage))
-
-				// participation or configuration change, cancel subscription and quit
-				if !n.wantTXGossip.Load() {
-					n.log.Debugf("Cancelling subscription to topic %s due participation change", p2p.TXTopicName)
-					sub.Cancel()
-					return
-				}
+	for {
+		msg, err := sub.Next(n.ctx)
+		if err != nil {
+			if err != pubsub.ErrSubscriptionCancelled && err != context.Canceled {
+				n.log.Errorf("Error reading from subscription %v, peerId %s", err, n.service.ID())
 			}
-		}()
+			n.log.Debugf("Cancelling subscription to topic %s due Subscription.Next error: %v", p2p.TXTopicName, err)
+			sub.Cancel()
+			return
+		}
+		// if we sent the message no need to process it.
+		if msg.ReceivedFrom == n.service.ID() {
+			return
+		}
+
+		_ = n.handler.Process(msg.ValidatorData.(ValidatedMessage))
+
+		// participation or configuration change, cancel subscription and quit
+		if !n.wantTXGossip.Load() {
+			n.log.Debugf("Cancelling subscription to topic %s due participation change", p2p.TXTopicName)
+			sub.Cancel()
+			return
+		}
 	}
 }
 
