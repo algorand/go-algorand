@@ -489,6 +489,9 @@ func testApp(t *testing.T, program string, ep *EvalParams, problems ...string) (
 	return testAppBytes(t, ops.Program, ep, problems...)
 }
 
+// testAppCreator is the creator of the 888 app that is inserted when testing an app call
+const testAppCreator = "47YPQTIGQEO7T4Y4RWDYWEKV6RTR2UNBQXBABEEGM72ESWDQNCQ52OPASU"
+
 func testAppBytes(t *testing.T, program []byte, ep *EvalParams, problems ...string) (transactions.EvalDelta, error) {
 	t.Helper()
 	if ep == nil {
@@ -499,6 +502,12 @@ func testAppBytes(t *testing.T, program []byte, ep *EvalParams, problems ...stri
 	aid := ep.TxnGroup[0].Txn.ApplicationID
 	if aid == 0 {
 		aid = basics.AppIndex(888)
+		// we're testing an app call without the caller specifying details about
+		// the app, so conjure up buring app params to make the `global
+		// AppCreator` work.
+		addr, err := basics.UnmarshalChecksumAddress(testAppCreator)
+		require.NoError(t, err)
+		ep.Ledger.(*Ledger).NewApp(addr, 888, basics.AppParams{})
 	}
 	return testAppFull(t, program, 0, aid, ep, problems...)
 }

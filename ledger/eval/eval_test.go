@@ -794,7 +794,7 @@ func (ledger *evalTestLedger) LookupAgreement(rnd basics.Round, addr basics.Addr
 }
 
 // OnlineCirculation just returns a deterministic value for a given round.
-func (ledge *evalTestLedger) OnlineCirculation(rnd, voteRound basics.Round) (basics.MicroAlgos, error) {
+func (ledger *evalTestLedger) OnlineCirculation(rnd, voteRound basics.Round) (basics.MicroAlgos, error) {
 	return basics.MicroAlgos{Raw: uint64(rnd) * 1_000_000}, nil
 }
 

@@ -309,8 +309,9 @@ func (dl *dryrunLedger) LookupWithoutRewards(rnd basics.Round, addr basics.Addre
 }
 
 func (dl *dryrunLedger) LookupAgreement(rnd basics.Round, addr basics.Address) (basics.OnlineAccountData, error) {
-	// dryrun does not understand rewards, so we build the result without adding pending rewards
-	ad, rnd, err := dl.lookup(rnd, addr)
+	// dryrun does not understand rewards, so we build the result without adding pending rewards.
+	// we also have no history, so we return current values
+	ad, _, err := dl.lookup(rnd, addr)
 	if err != nil {
 		return basics.OnlineAccountData{}, err
 	}

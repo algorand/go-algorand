@@ -3741,7 +3741,7 @@ func (cx *EvalContext) globalFieldToValue(fs globalFieldSpec) (sv stackValue, er
 		return sv, fmt.Errorf("invalid global field %s", fs.field)
 	}
 
-	if fs.ftype.AVMType != sv.avmType() {
+	if err == nil && fs.ftype.AVMType != sv.avmType() {
 		return sv, fmt.Errorf("%s expected field type is %s but got %s", fs.field, fs.ftype, sv.avmType())
 	}
 
