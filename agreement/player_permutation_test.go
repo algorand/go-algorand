@@ -39,7 +39,7 @@ func makeRandomProposalPayload(r round) *proposal {
 	payload.Block = pb.Block()
 	payload.SeedProof = crypto.VRFProof{}
 
-	return &proposal{unauthenticatedProposal: payload, ve: pb}
+	return &proposal{unauthenticatedProposal: payload}
 }
 
 var errTestVerifyFailed = makeSerErrStr("test error")
