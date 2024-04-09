@@ -32,14 +32,14 @@ import (
 
 func makeRandomProposalPayload(r round) *proposal {
 	f := testBlockFactory{Owner: 1}
-	ue, _ := f.AssembleBlock(r, nil)
-	ve := ue.FinishBlock(committee.Seed{}, basics.Address{}, false)
+	ub, _ := f.AssembleBlock(r, nil)
+	pb := ub.FinishBlock(committee.Seed{}, basics.Address{}, false)
 
 	var payload unauthenticatedProposal
-	payload.Block = ve.Block()
+	payload.Block = pb.Block()
 	payload.SeedProof = crypto.VRFProof{}
 
-	return &proposal{unauthenticatedProposal: payload, ve: ve}
+	return &proposal{unauthenticatedProposal: payload, ve: pb}
 }
 
 var errTestVerifyFailed = makeSerErrStr("test error")
