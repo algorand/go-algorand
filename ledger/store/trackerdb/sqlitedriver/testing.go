@@ -101,6 +101,9 @@ func AccountsInitTest(tb testing.TB, e db.Executable, initAccounts map[basics.Ad
 	err = performKVStoreNullBlobConversion(context.Background(), e)
 	require.NoError(tb, err)
 
+	err = accountsAddCreatableTypeColumn(context.Background(), e)
+	require.NoError(tb, err)
+
 	return newDB
 }
 
