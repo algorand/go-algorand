@@ -249,7 +249,32 @@
         },
         "description": "AccountApplicationResponse describes the account's application local state and global state (AppLocalState and AppParams, if either exists) for a specific application ID. Global state will only be returned if the provided address is the application's creator."
       },
-      "AccountAssetHoldingsResponse": {
+      "AccountAssetResponse": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "asset-holding": {
+                  "$ref": "#/components/schemas/AssetHolding"
+                },
+                "created-asset": {
+                  "$ref": "#/components/schemas/AssetParams"
+                },
+                "round": {
+                  "description": "The round for which this information is relevant.",
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "round"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "description": "AccountAssetResponse describes the account's asset holding and asset parameters (if either exist) for a specific asset ID. Asset parameters will only be returned if the provided address is the asset's creator."
+      },
+      "AccountAssetsInformationResponse": {
         "content": {
           "application/json": {
             "schema": {
@@ -276,32 +301,7 @@
             }
           }
         },
-        "description": "AccountAssetHoldingsResponse contains a list of assets held by an account."
-      },
-      "AccountAssetResponse": {
-        "content": {
-          "application/json": {
-            "schema": {
-              "properties": {
-                "asset-holding": {
-                  "$ref": "#/components/schemas/AssetHolding"
-                },
-                "created-asset": {
-                  "$ref": "#/components/schemas/AssetParams"
-                },
-                "round": {
-                  "description": "The round for which this information is relevant.",
-                  "type": "integer"
-                }
-              },
-              "required": [
-                "round"
-              ],
-              "type": "object"
-            }
-          }
-        },
-        "description": "AccountAssetResponse describes the account's asset holding and asset parameters (if either exist) for a specific asset ID. Asset parameters will only be returned if the provided address is the asset's creator."
+        "description": "AccountAssetsInformationResponse contains a list of assets held by an account."
       },
       "AccountResponse": {
         "content": {
@@ -3183,7 +3183,7 @@
                 }
               }
             },
-            "description": "AccountAssetHoldingsResponse contains a list of assets held by an account."
+            "description": "AccountAssetsInformationResponse contains a list of assets held by an account."
           },
           "400": {
             "content": {

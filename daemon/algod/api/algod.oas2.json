@@ -377,7 +377,7 @@
         ],
         "responses": {
           "200": {
-            "$ref": "#/responses/AccountAssetHoldingsResponse"
+            "$ref": "#/responses/AccountAssetsInformationResponse"
           },
           "400": {
             "description": "Malformed address",
@@ -4902,8 +4902,8 @@
         }
       }
     },
-    "AccountAssetHoldingsResponse": {
-      "description": "AccountAssetHoldingsResponse contains a list of assets held by an account.",
+    "AccountAssetsInformationResponse": {
+      "description": "AccountAssetsInformationResponse contains a list of assets held by an account.",
       "schema": {
         "type": "object",
         "required": [

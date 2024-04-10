@@ -213,12 +213,14 @@ func CustomTestResourcesQueryAll(t *customT) {
 
 	// resource A-0
 	resDataA0 := trackerdb.ResourcesData{}
+	resDataA0.SetAssetHolding(basics.AssetHolding{Amount: 0})
 	aidxResA0 := basics.CreatableIndex(0)
 	_, err = aow.InsertResource(refAccA, aidxResA0, resDataA0)
 	require.NoError(t, err)
 
 	// resource A-1
 	resDataA1 := trackerdb.ResourcesData{}
+	resDataA1.SetAssetHolding(basics.AssetHolding{Amount: 0})
 	aidxResA1 := basics.CreatableIndex(1)
 	_, err = aow.InsertResource(refAccA, aidxResA1, resDataA1)
 	require.NoError(t, err)
@@ -267,23 +269,48 @@ func CustomTestResourcesQueryAllLimited(t *customT) {
 	refAccB, err := aow.InsertAccount(addrB, accDataB.NormalizedOnlineBalance(t.proto), accDataB)
 	require.NoError(t, err)
 
-	// resource A-0 for accounts A and B
-	resDataA0 := trackerdb.ResourcesData{}
+	// asset A-0 for accounts A and B
+	resDataA0AcctA := trackerdb.ResourcesData{}
+	resDataA0AcctA.SetAssetHolding(basics.AssetHolding{Amount: 10})
+	resDataA0AcctA.SetAssetParams(basics.AssetParams{
+		Total: 100,
+	}, true)
+	// Non-creators will inherit asset params from the creator
+	resDataA0AcctB := trackerdb.ResourcesData{}
+	resDataA0AcctB.SetAssetHolding(basics.AssetHolding{Amount: 0})
 	aidxResA0 := basics.CreatableIndex(1)
-	_, err = aow.InsertResource(refAccA, aidxResA0, resDataA0)
+
+	_, err = aow.InsertResource(refAccA, aidxResA0, resDataA0AcctA)
 	require.NoError(t, err)
-	_, err = aow.InsertResource(refAccB, aidxResA0, resDataA0)
+	_, err = aow.InsertResource(refAccB, aidxResA0, resDataA0AcctB)
 	require.NoError(t, err)
 
 	// resource A-1 for accounts A and B
-	resDataA1 := trackerdb.ResourcesData{
+	resDataA1AcctA := trackerdb.ResourcesData{}
+	resDataA1AcctA.SetAssetHolding(basics.AssetHolding{Amount: 100})
+	resDataA1AcctA.SetAssetParams(basics.AssetParams{
 		Total: 10000,
-	}
+	}, true)
+	resDataA1AcctB := trackerdb.ResourcesData{}
+	resDataA1AcctB.SetAssetHolding(basics.AssetHolding{Amount: 200})
+
 	aidxResA1 := basics.CreatableIndex(2)
-	_, err = aow.InsertResource(refAccA, aidxResA1, resDataA1)
+	_, err = aow.InsertResource(refAccA, aidxResA1, resDataA1AcctA)
 	require.NoError(t, err)
-	_, err = aow.InsertResource(refAccB, aidxResA1, resDataA1)
+	_, err = aow.InsertResource(refAccB, aidxResA1, resDataA1AcctB)
 	require.NoError(t, err)
+
+	// Results for account B (opted in, not creator) we expect back will have asset params but the resource flags
+	// are explicitly set to be
+	resDataWithParamsA0AcctB := trackerdb.ResourcesData{}
+	resDataWithParamsA0AcctB.SetAssetHolding(resDataA0AcctB.GetAssetHolding())
+	resDataWithParamsA0AcctB.SetAssetParams(resDataA0AcctA.GetAssetParams(), true)
+	resDataWithParamsA0AcctB.ResourceFlags = resDataA0AcctB.ResourceFlags
+
+	resDataWithParamsA1AcctB := trackerdb.ResourcesData{}
+	resDataWithParamsA1AcctB.SetAssetHolding(resDataA1AcctB.GetAssetHolding())
+	resDataWithParamsA1AcctB.SetAssetParams(resDataA1AcctA.GetAssetParams(), true)
+	resDataWithParamsA1AcctB.ResourceFlags = resDataA1AcctB.ResourceFlags
 
 	// insert creator account A for A-0
 	resA0ctype := basics.AssetCreatable
@@ -307,8 +334,8 @@ func CustomTestResourcesQueryAllLimited(t *customT) {
 	require.Equal(t, addrA, prs[1].Creator)
 	require.Equal(t, expectedRound, prs[0].Round) // db round (inside resources)
 	require.Equal(t, expectedRound, prs[1].Round)
-	require.Equal(t, resDataA0, prs[0].Data)
-	require.Equal(t, resDataA1, prs[1].Data)
+	require.Equal(t, resDataA0AcctA, prs[0].Data)
+	require.Equal(t, resDataA1AcctA, prs[1].Data)
 	require.Equal(t, expectedRound, rnd) // db round (from the return)
 
 	// Lookup with limited resources for account B
@@ -322,8 +349,8 @@ func CustomTestResourcesQueryAllLimited(t *customT) {
 	require.Equal(t, addrA, prs[1].Creator)
 	require.Equal(t, expectedRound, prs[0].Round) // db round (inside resources)
 	require.Equal(t, expectedRound, prs[1].Round)
-	require.Equal(t, resDataA0, prs[0].Data)
-	require.Equal(t, resDataA1, prs[1].Data)
+	require.Equal(t, resDataWithParamsA0AcctB, prs[0].Data)
+	require.Equal(t, resDataWithParamsA1AcctB, prs[1].Data)
 	require.Equal(t, expectedRound, rnd) // db round (from the return)
 
 	// Set limit to 1, should return only 1 resource
@@ -333,7 +360,7 @@ func CustomTestResourcesQueryAllLimited(t *customT) {
 	require.Equal(t, aidxResA0, prs[0].Aidx)
 	require.Equal(t, addrA, prs[0].Creator)
 	require.Equal(t, expectedRound, prs[0].Round) // db round (inside resources)
-	require.Equal(t, resDataA0, prs[0].Data)
+	require.Equal(t, resDataWithParamsA0AcctB, prs[0].Data)
 	require.Equal(t, expectedRound, rnd) // db round (from the return)
 
 	// Set min to 1, should return only 1 resource (index 1)
@@ -343,7 +370,7 @@ func CustomTestResourcesQueryAllLimited(t *customT) {
 	require.Equal(t, aidxResA1, prs[0].Aidx)
 	require.Equal(t, addrA, prs[0].Creator)
 	require.Equal(t, expectedRound, prs[0].Round) // db round (inside resources)
-	require.Equal(t, resDataA1, prs[0].Data)
+	require.Equal(t, resDataWithParamsA1AcctB, prs[0].Data)
 	require.Equal(t, expectedRound, rnd) // db round (from the return)
 
 	// Delete both resource creatables
@@ -371,8 +398,9 @@ func CustomTestResourcesQueryAllLimited(t *customT) {
 	require.True(t, prs[1].Creator.IsZero())
 	require.Equal(t, expectedRound, prs[0].Round) // db round (inside resources)
 	require.Equal(t, expectedRound, prs[1].Round)
-	require.Equal(t, resDataA0, prs[0].Data)
-	require.Equal(t, resDataA1, prs[1].Data)
+	// Note these directly reflect what was inserted into resources table (no creator/params)
+	require.Equal(t, resDataA0AcctB, prs[0].Data)
+	require.Equal(t, resDataA1AcctB, prs[1].Data)
 }
 
 func CustomTestAppKVCrud(t *customT) {
@@ -402,6 +430,7 @@ func CustomTestAppKVCrud(t *customT) {
 	require.NoError(t, err)
 	// resource
 	resDataA0 := trackerdb.ResourcesData{}
+	resDataA0.SetAssetHolding(basics.AssetHolding{Amount: 0})
 	aidxResA0 := basics.CreatableIndex(0)
 	refResA0, err := aow.InsertResource(refAccA, aidxResA0, resDataA0)
 	require.NoError(t, err)
@@ -476,12 +505,14 @@ func CustomTestCreatablesCrud(t *customT) {
 
 	// resource A-0
 	resDataA0 := trackerdb.ResourcesData{}
+	resDataA0.SetAssetHolding(basics.AssetHolding{Amount: 0})
 	aidxResA0 := basics.CreatableIndex(0)
 	_, err = aow.InsertResource(refAccA, aidxResA0, resDataA0)
 	require.NoError(t, err)
 
 	// resource A-1
 	resDataA1 := trackerdb.ResourcesData{}
+	resDataA1.SetAssetHolding(basics.AssetHolding{Amount: 0})
 	aidxResA1 := basics.CreatableIndex(1)
 	_, err = aow.InsertResource(refAccA, aidxResA1, resDataA1)
 	require.NoError(t, err)

@@ -1088,17 +1088,6 @@ type AccountApplicationResponse struct {
 	Round uint64 `json:"round"`
 }
 
-// AccountAssetHoldingsResponse defines model for AccountAssetHoldingsResponse.
-type AccountAssetHoldingsResponse struct {
-	AssetHoldings *[]AccountAssetHolding `json:"asset-holdings,omitempty"`
-
-	// NextToken Used for pagination, when making another request provide this token with the next parameter.
-	NextToken *string `json:"next-token,omitempty"`
-
-	// Round The round for which this information is relevant.
-	Round uint64 `json:"round"`
-}
-
 // AccountAssetResponse defines model for AccountAssetResponse.
 type AccountAssetResponse struct {
 	// AssetHolding Describes an asset held by an account.
@@ -1114,6 +1103,17 @@ type AccountAssetResponse struct {
 	// Definition:
 	// data/transactions/asset.go : AssetParams
 	CreatedAsset *AssetParams `json:"created-asset,omitempty"`
+
+	// Round The round for which this information is relevant.
+	Round uint64 `json:"round"`
+}
+
+// AccountAssetsInformationResponse defines model for AccountAssetsInformationResponse.
+type AccountAssetsInformationResponse struct {
+	AssetHoldings *[]AccountAssetHolding `json:"asset-holdings,omitempty"`
+
+	// NextToken Used for pagination, when making another request provide this token with the next parameter.
+	NextToken *string `json:"next-token,omitempty"`
 
 	// Round The round for which this information is relevant.
 	Round uint64 `json:"round"`
