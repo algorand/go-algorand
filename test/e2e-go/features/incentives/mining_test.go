@@ -179,9 +179,9 @@ func TestBasicPayouts(t *testing.T) {
 	a.NoError(err)
 	wh, err := c15.GetUnencryptedWalletHandle()
 	a.NoError(err)
-	offlineTxId, err := c15.SignAndBroadcastTransaction(wh, nil, offline)
+	offlineTxID, err := c15.SignAndBroadcastTransaction(wh, nil, offline)
 	a.NoError(err)
-	offTxn, err := fixture.WaitForConfirmedTxn(uint64(offline.LastValid), offlineTxId)
+	offTxn, err := fixture.WaitForConfirmedTxn(uint64(offline.LastValid), offlineTxID)
 	a.NoError(err)
 
 	fmt.Printf(" c15 (%s) will be truly offline (not proposing) after round %d\n", account15.Address, *offTxn.ConfirmedRound+32)
