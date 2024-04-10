@@ -975,7 +975,7 @@ func accountsAddCreatableTypeColumn(ctx context.Context, e db.Executable) error 
 	}
 	defer updateStmt.Close()
 
-	rows, err := e.QueryContext(ctx, "SELECT ab.rowid, r.aidx, r.data FROM resources r JOIN accountbase ab ON r.addrid = ab.addrid")
+	rows, err := e.QueryContext(ctx, "SELECT addrid, aidx, data FROM resources r")
 	if err != nil {
 		return err
 	}
@@ -998,7 +998,10 @@ func accountsAddCreatableTypeColumn(ctx context.Context, e db.Executable) error 
 		}
 
 		var ct basics.CreatableType
-		if rd.IsAsset() {
+		if rd.IsAsset() && rd.IsApp() {
+			// This should never happen!
+			return fmt.Errorf("unable to discern creatable type for addrid %d, resource %d", addrid, aidx)
+		} else if rd.IsAsset() {
 			ct = basics.AssetCreatable
 		} else if rd.IsApp() {
 			ct = basics.AppCreatable
