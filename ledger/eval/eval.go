@@ -1436,33 +1436,32 @@ func (eval *BlockEvaluator) endOfBlock() error {
 		payout := eval.block.ProposerPayout()
 		// The proposer won't be present yet when generating a block
 		if !proposer.IsZero() {
-			// We don't propagate the error here, we simply declare that an
-			// illegal payout is not made.  This protects us from stalling if
-			// there is ever an error in which the generation code thinks the
-			// payout will be legal, but it turns out not to be.  That would be
-			// a programming error in algod, but not worth stalling over.
 			if !payout.IsZero() {
-				err2 := eval.state.Move(eval.block.FeeSink, proposer, payout, nil, nil)
-				if err2 != nil {
-					logging.Base().Warnf("Unable to payout %d to %v: %s",
-						payout, proposer, err2)
+				err := eval.state.Move(eval.block.FeeSink, proposer, payout, nil, nil)
+				if err != nil {
+					return err
 				}
 			}
-			prp, err2 := eval.state.Get(proposer, false)
-			if err2 != nil {
-				return err2
+			prp, err := eval.state.Get(proposer, false)
+			if err != nil {
+				return err
 			}
-			prp.LastProposed = eval.Round()
-			// An account could propose, even while suspended, because of the 320
-			// round lookback.  Doing so is evidence the account is
-			// back. Unsuspend. But the account will remain not IncentiveElgible
-			// until they keyreg again with the extra fee.
+			// Record the LastProposed round, except in the unlikely case that a
+			// proposer has closed their account, but is still voting (it takes
+			// 320 rounds to be effective). Recording would prevent GC.
+			if !prp.IsZero() {
+				prp.LastProposed = eval.Round()
+			}
+			// An account could propose, even while suspended, because of the
+			// 320 round lookback.  Doing so is evidence the account is
+			// operational. Unsuspend. But the account will remain not
+			// IncentiveElgible until they keyreg again with the extra fee.
 			if prp.Suspended() {
 				prp.Status = basics.Online
 			}
-			err2 = eval.state.Put(proposer, prp)
-			if err2 != nil {
-				return err2
+			err = eval.state.Put(proposer, prp)
+			if err != nil {
+				return err
 			}
 		}
 	}

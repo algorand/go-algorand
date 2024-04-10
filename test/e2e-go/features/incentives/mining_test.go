@@ -172,16 +172,21 @@ func TestBasicPayouts(t *testing.T) {
 
 	// Now that we've proven incentives get paid, let's drain the FeeSink and
 	// ensure it happens gracefully.  Have account15 go offline so that (after
-	// 32 rounds) only account01 is proposing. It is eligible and will drain the
-	// fee sink.
+	// 32 rounds) only account01 (who is eligible) is proposing, so drainage
+	// will happen soon after.
 
 	offline, err := c15.MakeUnsignedGoOfflineTx(account15.Address, 0, 0, 1000, [32]byte{})
 	a.NoError(err)
 	wh, err := c15.GetUnencryptedWalletHandle()
 	a.NoError(err)
-	_, err = c15.SignAndBroadcastTransaction(wh, nil, offline)
+	offlineTxId, err := c15.SignAndBroadcastTransaction(wh, nil, offline)
+	a.NoError(err)
+	offTxn, err := fixture.WaitForConfirmedTxn(uint64(offline.LastValid), offlineTxId)
 	a.NoError(err)
 
+	fmt.Printf(" c15 (%s) will be truly offline (not proposing) after round %d\n", account15.Address, *offTxn.ConfirmedRound+32)
+
+	var feesink basics.Address
 	for i := 0; i < 100; i++ {
 		status, err := client.Status()
 		a.NoError(err)
@@ -196,7 +201,7 @@ func TestBasicPayouts(t *testing.T) {
 
 		pdata, err := c15.AccountData(block.Proposer().String())
 		a.NoError(err)
-		feesink := block.BlockHeader.FeeSink
+		feesink = block.BlockHeader.FeeSink
 		fdata, err := c15.AccountData(feesink.String())
 		a.NoError(err)
 
@@ -218,6 +223,62 @@ func TestBasicPayouts(t *testing.T) {
 		err = fixture.WaitForRoundWithTimeout(status.LastRound + 1)
 		a.NoError(err)
 	}
+	// maybe it got drained before c15 stops proposing. wait.
+	err = fixture.WaitForRoundWithTimeout(*offTxn.ConfirmedRound + 32)
+	a.NoError(err)
+
+	// put 20 algos back into the feesink, show it pays out again
+	txn, err = c01.SendPaymentFromUnencryptedWallet(account01.Address, feesink.String(), 1000, 50_000_000, nil)
+	a.NoError(err)
+	refill, err := fixture.WaitForConfirmedTxn(uint64(txn.LastValid), txn.ID().String())
+	fmt.Printf("refilled fee sink in %d\n", *refill.ConfirmedRound)
+	a.NoError(err)
+	block, err := client.BookkeepingBlock(*refill.ConfirmedRound)
+	a.NoError(err)
+	// 01 is the only one online, so it proposed the block
+	require.Equal(t, account01.Address, block.Proposer().String())
+	// and therefore feesink is already down to ~40
+	data, err := relay.AccountData(feesink.String())
+	a.NoError(err)
+	a.Less(int(data.MicroAlgos.Raw), 41_000_000)
+	a.Greater(int(data.MicroAlgos.Raw), 39_000_000)
+
+	// Closeout c01.  This is pretty weird, it means nobody will be online.  But
+	// that will take 32 rounds.  We will stop the test before then, we just
+	// want to show that c01 does not get paid if it has closed.
+	wh, err = c01.GetUnencryptedWalletHandle()
+	a.NoError(err)
+	junk := basics.Address{0x01, 0x01}.String()
+	txn, err = c01.SendPaymentFromWallet(wh, nil, account01.Address, junk, 1000, 0, nil, junk /* close to */, 0, 0)
+	a.NoError(err)
+	close, err := fixture.WaitForConfirmedTxn(uint64(txn.LastValid), txn.ID().String())
+	a.NoError(err)
+	fmt.Printf("closed c01 in %d\n", *close.ConfirmedRound)
+	block, err = client.BookkeepingBlock(*close.ConfirmedRound)
+	a.NoError(err)
+	// 01 is the only one online, so it proposed the block
+	require.Equal(t, account01.Address, block.Proposer().String())
+
+	// The feesink got was 0.1A, and got 50A in refill.ConfirmedRound. c01
+	// closed out in close.ConfirmedRound. So the feesink should have about:
+	expected := 100_000 + 1_000_000*(50-10*(*close.ConfirmedRound-*refill.ConfirmedRound))
+
+	// account is gone anyway (it didn't get paid)
+	data, err = relay.AccountData(account01.Address)
+	a.Zero(data, "%+v", data)
+
+	data, err = relay.AccountData(feesink.String())
+	a.NoError(err)
+	// Don't want to bother dealing with the exact fees paid in/out.
+	a.Less(data.MicroAlgos.Raw, expected+5000)
+	a.Greater(data.MicroAlgos.Raw, expected-5000)
+
+	// Lest one be concerned about that cavalier attitude, wait for a few more
+	// rounds, and show feesink is unchanged.
+	a.NoError(fixture.WaitForRoundWithTimeout(*close.ConfirmedRound + 5))
+	after, err := relay.AccountData(feesink.String())
+	a.NoError(err)
+	a.Equal(data.MicroAlgos, after.MicroAlgos)
 }
 
 func rekeyreg(f *fixtures.RestClientFixture, a *require.Assertions, client libgoal.Client, address string) basics.AccountData {

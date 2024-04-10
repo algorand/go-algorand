@@ -85,7 +85,10 @@ func (ub UnfinishedBlock) ContainsAddress(addr basics.Address) bool {
 
 // FinishBlock completes the block and returns a proposable block.
 func (ub UnfinishedBlock) FinishBlock(s committee.Seed, proposer basics.Address, eligible bool) bookkeeping.Block {
-	// XXX here is where we could look up the proposer's balance
+	propData, ok := ub.finalAccounts[proposer]
+	if !ok || propData.MicroAlgos.IsZero() {
+		eligible = false
+	}
 	return ub.blk.WithProposer(s, proposer, eligible)
 }
 
