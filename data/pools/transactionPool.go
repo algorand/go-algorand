@@ -87,7 +87,7 @@ type TransactionPool struct {
 	rememberedTxids    map[transactions.Txid]transactions.SignedTxn
 
 	log logging.Logger
-	vac VotingAccountChecker
+	vac VotingAccountSupplier
 
 	// proposalAssemblyTime is the ProposalAssemblyTime configured for this node.
 	proposalAssemblyTime time.Duration
@@ -108,13 +108,13 @@ type BlockEvaluator interface {
 	ResetTxnBytes()
 }
 
-// VotingAccountChecker provides a list of possible participating account addresses valid for a given round.
-type VotingAccountChecker interface {
+// VotingAccountSupplier provides a list of possible participating account addresses valid for a given round.
+type VotingAccountSupplier interface {
 	VotingAccountsForRound(basics.Round) []basics.Address
 }
 
 // MakeTransactionPool makes a transaction pool.
-func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local, log logging.Logger, vac VotingAccountChecker) *TransactionPool {
+func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local, log logging.Logger, vac VotingAccountSupplier) *TransactionPool {
 	if cfg.TxPoolExponentialIncreaseFactor < 1 {
 		cfg.TxPoolExponentialIncreaseFactor = 1
 	}

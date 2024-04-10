@@ -533,12 +533,12 @@ func (v *voteMakerHelper) MakeRandomProposalValue() *proposalValue {
 
 func (v *voteMakerHelper) MakeRandomProposalPayload(t *testing.T, r round) (*proposal, *proposalValue) {
 	f := testBlockFactory{Owner: 1}
-	ue, err := f.AssembleBlock(r, nil)
+	ub, err := f.AssembleBlock(r, nil)
 	require.NoError(t, err)
-	ve := ue.FinishBlock(committee.Seed{}, basics.Address{}, false)
+	pb := ub.FinishBlock(committee.Seed{}, basics.Address{}, false)
 
 	var payload unauthenticatedProposal
-	payload.Block = ve.Block()
+	payload.Block = pb.Block()
 	payload.SeedProof = randomVRFProof()
 
 	propVal := proposalValue{
@@ -546,7 +546,7 @@ func (v *voteMakerHelper) MakeRandomProposalPayload(t *testing.T, r round) (*pro
 		EncodingDigest: crypto.HashObj(payload),
 	}
 
-	return &proposal{unauthenticatedProposal: payload, ve: ve}, &propVal
+	return &proposal{unauthenticatedProposal: payload}, &propVal
 }
 
 // make a vote for a fixed proposal value
