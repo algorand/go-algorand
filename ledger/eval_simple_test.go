@@ -594,13 +594,18 @@ func TestAbsenteeChallenges(t *testing.T) {
 		dl := NewDoubleLedger(t, genBalances, cv, cfg)
 		defer dl.Close()
 
+		// This address ends up being used as a proposer, because that's how we
+		// jam a specific seed into the block to control the challenge.
+		// Therefore, it must be an existing account.
+		seedAndProp := basics.Address{0xaa}
+
 		// We'll generate a challenge for accounts that start with 0xaa.
 		propguy := basics.Address{0xaa, 0xaa, 0xaa} // Will propose during the challenge window
 		regguy := basics.Address{0xaa, 0xbb, 0xbb}  // Will re-reg during the challenge window
 		badguy := basics.Address{0xaa, 0x11, 0x11}  // Will ignore the challenge
 
 		// Fund them all and have them go online. That makes them eligible to be challenged
-		for i, guy := range []basics.Address{propguy, regguy, badguy} {
+		for i, guy := range []basics.Address{seedAndProp, propguy, regguy, badguy} {
 			dl.txns(&txntest.Txn{
 				Type:     "pay",
 				Sender:   addrs[0],
@@ -629,7 +634,7 @@ func TestAbsenteeChallenges(t *testing.T) {
 		}
 		// make the BlockSeed start with 0xa in the challenge round
 		dl.beginBlock()
-		dl.endBlock(basics.Address{0xaa}) // This becomes the seed, which is used for the challenge
+		dl.endBlock(seedAndProp) // This becomes the seed, which is used for the challenge
 
 		for vb := dl.fullBlock(); vb.Block().Round() < 1200; vb = dl.fullBlock() {
 			// advance through first grace period
