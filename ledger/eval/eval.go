@@ -1378,6 +1378,16 @@ func (eval *BlockEvaluator) endOfBlock() error {
 				if proposer.IsZero() {
 					return fmt.Errorf("proposer missing when payouts enabled")
 				}
+				// a closed account cannot get payout
+				if !payout.IsZero() {
+					prp, err := eval.state.Get(proposer, false)
+					if err != nil {
+						return err
+					}
+					if prp.IsZero() {
+						return fmt.Errorf("proposer %v is closed but expects payout %d", proposer, payout.Raw)
+					}
+				}
 			}
 		} else {
 			if !eval.block.Proposer().IsZero() {
