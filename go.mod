@@ -3,6 +3,7 @@ module github.com/algorand/go-algorand
 go 1.20
 
 require (
+	filippo.io/edwards25519 v1.0.0
 	github.com/DataDog/zstd v1.5.2
 	github.com/algorand/avm-abi v0.2.0
 	github.com/algorand/falcon v0.1.0
