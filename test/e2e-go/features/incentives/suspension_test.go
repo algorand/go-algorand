@@ -63,6 +63,7 @@ func TestBasicSuspension(t *testing.T) {
 		accounts, err := fixture.GetNodeWalletsSortedByBalance(c)
 		a.NoError(err)
 		a.Len(accounts, 1)
+		fmt.Printf("Client %s is %v\n", name, accounts[0].Address)
 		return c, accounts[0]
 	}
 
@@ -150,18 +151,22 @@ func TestBasicSuspension(t *testing.T) {
 
 		// Once n20 proposes, break out early
 		if fixture.VerifyBlockProposed(account20.Address, 1) {
+			fmt.Printf("account20 proposed at round %d\n", r)
 			// wait one extra round, because changes are processed in block n+1.
 			err = fixture.WaitForRoundWithTimeout(r + 1)
 			a.NoError(err)
 			break
 		}
 	}
-	// account20 is back online, with same voting material
-	account, err = c10.AccountData(account20.Address)
-	a.NoError(err)
-	a.Equal(basics.Online, account.Status)
-	a.Greater(account.LastProposed, stat.LastRound)
+	// paranoia. see mining_test.go for more details.
+	r := require.New(t)
+	for i, c := range []libgoal.Client{c10, c20} {
+		account, err = c.AccountData(account20.Address)
+		a.NoError(err)
+		r.Equal(basics.Online, account.Status, i)
+		r.Greater(account.LastProposed, stat.LastRound, i)
 
-	a.Equal(voteID, account.VoteID)
-	a.False(account.IncentiveEligible)
+		r.Equal(voteID, account.VoteID, i)
+		r.False(account.IncentiveEligible, i)
+	}
 }
