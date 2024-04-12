@@ -96,14 +96,12 @@ func TestBasicPayouts(t *testing.T) {
 		a.EqualValues(bonus1, block.Bonus.Raw)
 
 		// all nodes agree the proposer proposed. The paranoia here is
-		// justified. Block incentives are the first time we're making changes
-		// to the Delta in the "second" evaluation of the block.  That is, the
-		// payment and LastProposed change happen only if evaluating a block
-		// that `agreement` has already added to.  An easy bug to have is an
-		// optimization that avoids this re-evaluation in the algod that
-		// proposed the block.  We had such an optimization, and it would cause
-		// failures here.  The fix is throwing away the ValidatedBlock in
-		// proposalForBlock() after makeProposal.
+		// justified. Block incentives are computed in two stages. A little bit
+		// of extra work is done when agreement "Finishes" the block.  An easy
+		// bug to have using the block the Deltas() computed on the block
+		// without the changes that come after agreement runs.  We had such an
+		// optimization, and it would cause failures here.  Interface changes
+		// made since they should make such a problem impossible, but...
 		for i, c := range []libgoal.Client{c15, c01, relay} {
 			fmt.Printf("checking block %v\n", block.Round())
 			data, err := c.AccountData(block.Proposer().String())
