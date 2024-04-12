@@ -1349,52 +1349,8 @@ func (eval *BlockEvaluator) endOfBlock() error {
 			return fmt.Errorf("txn count wrong: %d != %d", eval.block.TxnCounter, expectedTxnCount)
 		}
 
-		if eval.proto.Payouts.Enabled {
-			if eval.block.FeesCollected != eval.state.feesCollected {
-				return fmt.Errorf("fees collected wrong: %v != %v", eval.block.FeesCollected, eval.state.feesCollected)
-			}
-
-			// agreement will check that the payout is zero if the proposer is
-			// ineligible, but we must check that it is correct if non-zero. We
-			// allow it to be too low. A proposer can be algruistic.
-			expectedPayout, err := eval.proposerPayout()
-			if err != nil {
-				return err
-			}
-			payout := eval.block.ProposerPayout()
-			if payout.Raw > expectedPayout.Raw {
-				return fmt.Errorf("proposal wants %d payout, %d is allowed", payout.Raw, expectedPayout.Raw)
-			}
-			// agreement will check that the proposer is correct (we can't because
-			// we don't see the bundle), but agreement allows the proposer to be set
-			// even if Payouts is not enabled (and unset any time).  So make sure
-			// it's set only if it should be.
-			if !eval.generate { // if generating, proposer is set later by agreement
-				proposer := eval.block.Proposer()
-				if proposer.IsZero() {
-					return fmt.Errorf("proposer missing when payouts enabled")
-				}
-				// a closed account cannot get payout
-				if !payout.IsZero() {
-					prp, err := eval.state.Get(proposer, false)
-					if err != nil {
-						return err
-					}
-					if prp.IsZero() {
-						return fmt.Errorf("proposer %v is closed but expects payout %d", proposer, payout.Raw)
-					}
-				}
-			}
-		} else {
-			if !eval.block.FeesCollected.IsZero() {
-				return fmt.Errorf("feesCollected %d present when payouts disabled", eval.block.FeesCollected.Raw)
-			}
-			if !eval.block.Proposer().IsZero() {
-				return fmt.Errorf("proposer %v present when payouts disabled", eval.block.Proposer())
-			}
-			if !eval.block.ProposerPayout().IsZero() {
-				return fmt.Errorf("payout %d present when payouts disabled", eval.block.ProposerPayout().Raw)
-			}
+		if err := eval.validateForPayouts(); err != nil {
+			return err
 		}
 
 		expectedVoters, expectedVotersWeight, err2 := eval.stateProofVotersAndTotal()
@@ -1439,40 +1395,12 @@ func (eval *BlockEvaluator) endOfBlock() error {
 		}
 	}
 
-	// Try to pay the proposer.
-	{
-		proposer := eval.block.Proposer()
-		payout := eval.block.ProposerPayout()
-		// The proposer won't be present yet when generating a block
-		if !proposer.IsZero() {
-			if !payout.IsZero() {
-				err := eval.state.Move(eval.block.FeeSink, proposer, payout, nil, nil)
-				if err != nil {
-					return err
-				}
-			}
-			prp, err := eval.state.Get(proposer, false)
-			if err != nil {
-				return err
-			}
-			// Record the LastProposed round, except in the unlikely case that a
-			// proposer has closed their account, but is still voting (it takes
-			// 320 rounds to be effective). Recording would prevent GC.
-			if !prp.IsZero() {
-				prp.LastProposed = eval.Round()
-			}
-			// An account could propose, even while suspended, because of the
-			// 320 round lookback.  Doing so is evidence the account is
-			// operational. Unsuspend. But the account will remain not
-			// IncentiveElgible until they keyreg again with the extra fee.
-			if prp.Suspended() {
-				prp.Status = basics.Online
-			}
-			err = eval.state.Put(proposer, prp)
-			if err != nil {
-				return err
-			}
-		}
+	if err := eval.performPayout(); err != nil {
+		return err
+	}
+
+	if err := eval.recordProposal(); err != nil {
+		return err
 	}
 
 	if err := eval.state.CalculateTotals(); err != nil {
@@ -1483,6 +1411,108 @@ func (eval *BlockEvaluator) endOfBlock() error {
 		eval.Tracer.AfterBlock(&eval.block.BlockHeader)
 	}
 
+	return nil
+}
+
+func (eval *BlockEvaluator) validateForPayouts() error {
+	if !eval.proto.Payouts.Enabled {
+		if !eval.block.FeesCollected.IsZero() {
+			return fmt.Errorf("feesCollected %d present when payouts disabled", eval.block.FeesCollected.Raw)
+		}
+		if !eval.block.Proposer().IsZero() {
+			return fmt.Errorf("proposer %v present when payouts disabled", eval.block.Proposer())
+		}
+		if !eval.block.ProposerPayout().IsZero() {
+			return fmt.Errorf("payout %d present when payouts disabled", eval.block.ProposerPayout().Raw)
+		}
+		return nil
+	}
+
+	if eval.block.FeesCollected != eval.state.feesCollected {
+		return fmt.Errorf("fees collected wrong: %v != %v", eval.block.FeesCollected, eval.state.feesCollected)
+	}
+
+	// agreement will check that the payout is zero if the proposer is
+	// ineligible, but we must check that it is correct if non-zero. We
+	// allow it to be too low. A proposer can be algruistic.
+	expectedPayout, err := eval.proposerPayout()
+	if err != nil {
+		return err
+	}
+	payout := eval.block.ProposerPayout()
+	if payout.Raw > expectedPayout.Raw {
+		return fmt.Errorf("proposal wants %d payout, %d is allowed", payout.Raw, expectedPayout.Raw)
+	}
+
+	// agreement will check that the proposer is correct (we can't because
+	// we don't see the bundle), but agreement allows the proposer to be set
+	// even if Payouts is not enabled (and unset any time).  So make sure
+	// it's set only if it should be.
+	if !eval.generate { // if generating, proposer is set later by agreement
+		proposer := eval.block.Proposer()
+		if proposer.IsZero() {
+			return fmt.Errorf("proposer missing when payouts enabled")
+		}
+		// a closed account cannot get payout
+		if !payout.IsZero() {
+			prp, err := eval.state.Get(proposer, false)
+			if err != nil {
+				return err
+			}
+			if prp.IsZero() {
+				return fmt.Errorf("proposer %v is closed but expects payout %d", proposer, payout.Raw)
+			}
+		}
+	}
+	return nil
+}
+
+func (eval *BlockEvaluator) performPayout() error {
+	proposer := eval.block.Proposer()
+	// The proposer won't be present yet when generating a block, nor before enabled
+	if proposer.IsZero() {
+		return nil
+	}
+
+	payout := eval.block.ProposerPayout()
+
+	if !payout.IsZero() {
+		err := eval.state.Move(eval.block.FeeSink, proposer, payout, nil, nil)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (eval *BlockEvaluator) recordProposal() error {
+	proposer := eval.block.Proposer()
+	// The proposer won't be present yet when generating a block, nor before enabled
+	if proposer.IsZero() {
+		return nil
+	}
+
+	prp, err := eval.state.Get(proposer, false)
+	if err != nil {
+		return err
+	}
+	// Record the LastProposed round, except in the unlikely case that a
+	// proposer has closed their account, but is still voting (it takes
+	// 320 rounds to be effective). Recording would prevent GC.
+	if !prp.IsZero() {
+		prp.LastProposed = eval.Round()
+	}
+	// An account could propose, even while suspended, because of the
+	// 320 round lookback.  Doing so is evidence the account is
+	// operational. Unsuspend. But the account will remain not
+	// IncentiveElgible until they keyreg again with the extra fee.
+	if prp.Suspended() {
+		prp.Status = basics.Online
+	}
+	err = eval.state.Put(proposer, prp)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
