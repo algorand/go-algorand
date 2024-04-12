@@ -1349,15 +1349,11 @@ func (eval *BlockEvaluator) endOfBlock() error {
 			return fmt.Errorf("txn count wrong: %d != %d", eval.block.TxnCounter, expectedTxnCount)
 		}
 
-		var expectedFeesCollected basics.MicroAlgos
 		if eval.proto.Payouts.Enabled {
-			expectedFeesCollected = eval.state.feesCollected
-		}
-		if eval.block.FeesCollected != expectedFeesCollected {
-			return fmt.Errorf("fees collected wrong: %v != %v", eval.block.FeesCollected, expectedFeesCollected)
-		}
+			if eval.block.FeesCollected != eval.state.feesCollected {
+				return fmt.Errorf("fees collected wrong: %v != %v", eval.block.FeesCollected, eval.state.feesCollected)
+			}
 
-		if eval.proto.Payouts.Enabled {
 			// agreement will check that the payout is zero if the proposer is
 			// ineligible, but we must check that it is correct if non-zero. We
 			// allow it to be too low. A proposer can be algruistic.
@@ -1390,6 +1386,9 @@ func (eval *BlockEvaluator) endOfBlock() error {
 				}
 			}
 		} else {
+			if !eval.block.FeesCollected.IsZero() {
+				return fmt.Errorf("feesCollected %d present when payouts disabled", eval.block.FeesCollected.Raw)
+			}
 			if !eval.block.Proposer().IsZero() {
 				return fmt.Errorf("proposer %v present when payouts disabled", eval.block.Proposer())
 			}

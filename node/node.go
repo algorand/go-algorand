@@ -462,7 +462,7 @@ func (node *AlgorandFullNode) writeDevmodeBlock() (err error) {
 	}
 
 	// Make a new validated block from this UnfinishedBlock.
-	prevRound := vb.UnfinishedBlock().Round() - 1
+	prevRound := vb.Round() - 1
 	prev, err := node.ledger.BlockHdr(prevRound)
 	if err != nil {
 		return err
