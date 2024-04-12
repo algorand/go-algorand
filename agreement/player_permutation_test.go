@@ -25,6 +25,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -36,7 +37,7 @@ func makeRandomProposalPayload(r round) *proposal {
 	pb := ub.FinishBlock(committee.Seed{}, basics.Address{}, false)
 
 	var payload unauthenticatedProposal
-	payload.Block = pb.Block()
+	payload.Block = bookkeeping.Block(pb)
 	payload.SeedProof = crypto.VRFProof{}
 
 	return &proposal{unauthenticatedProposal: payload}

@@ -102,8 +102,8 @@ type proposal struct {
 	validatedAt time.Duration
 }
 
-func makeProposalFromProposableBlock(blk ProposableBlock, pf crypto.VrfProof, origPer period, origProp basics.Address) proposal {
-	e := blk.Block()
+func makeProposalFromProposableBlock(blk Block, pf crypto.VrfProof, origPer period, origProp basics.Address) proposal {
+	e := bookkeeping.Block(blk)
 	var payload unauthenticatedProposal
 	payload.Block = e
 	payload.SeedProof = pf
