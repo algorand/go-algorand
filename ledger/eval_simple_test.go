@@ -191,10 +191,9 @@ func TestBlockEvaluator(t *testing.T) {
 	err = eval.TestTransactionGroup(txgroup)
 	require.Error(t, err)
 
-	unfinishedBlock, err := eval.GenerateBlock(nil) // XXX not providing proposer addresses
+	unfinishedBlock, err := eval.GenerateBlock(nil)
 	require.NoError(t, err)
 
-	// XXX not setting seed & proposer details with FinishBlock/WithProposer
 	validatedBlock := ledgercore.MakeValidatedBlock(unfinishedBlock.UnfinishedBlock(), unfinishedBlock.UnfinishedDeltas())
 
 	accts := genesisInitState.Accounts
@@ -944,11 +943,10 @@ func TestRekeying(t *testing.T) {
 				return err
 			}
 		}
-		unfinishedBlock, err := eval.GenerateBlock(nil) // XXX not providing proposer addresses
+		unfinishedBlock, err := eval.GenerateBlock(nil)
 		if err != nil {
 			return err
 		}
-		// XXX not setting seed & proposer details with FinishBlock/WithProposer
 		validatedBlock := ledgercore.MakeValidatedBlock(unfinishedBlock.UnfinishedBlock(), unfinishedBlock.UnfinishedDeltas())
 
 		backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)

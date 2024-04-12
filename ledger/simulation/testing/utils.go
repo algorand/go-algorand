@@ -104,9 +104,9 @@ func (env *Environment) nextBlock() *eval.BlockEvaluator {
 // endBlock completes the block being created, returns the ValidatedBlock for inspection
 func (env *Environment) endBlock(evaluator *eval.BlockEvaluator) *ledgercore.ValidatedBlock {
 	env.t.Helper()
-	unfinishedBlock, err := evaluator.GenerateBlock(nil) // XXX not providing proposer addresses
+	unfinishedBlock, err := evaluator.GenerateBlock(nil)
 	require.NoError(env.t, err)
-	// XXX not setting seed & proposer details with FinishBlock/WithProposer
+	// Since we skip agreement, this block is imperfect w/ respect to seed/proposer/payouts
 	validatedBlock := ledgercore.MakeValidatedBlock(unfinishedBlock.UnfinishedBlock(), unfinishedBlock.UnfinishedDeltas())
 	err = env.Ledger.AddValidatedBlock(validatedBlock, agreement.Certificate{})
 	require.NoError(env.t, err)

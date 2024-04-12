@@ -517,15 +517,17 @@ func benchmarkPreparePaymentTransactionsTesting(b *testing.B, numTxns int, txnSo
 		var unfinishedBlock *ledgercore.UnfinishedBlock
 		var validatedBlock *ledgercore.ValidatedBlock
 
-		// there are might more transactions than MaxTxnBytesPerBlock allows
-		// so make smaller blocks to fit
+		// there might be more transactions than MaxTxnBytesPerBlock allows so
+		// make smaller blocks to fit
 		for i, stxn := range initSignedTxns {
 			err := bev.Transaction(stxn, transactions.ApplyData{})
 			require.NoError(b, err)
 			if maxTxnPerBlock > 0 && i%maxTxnPerBlock == 0 || i == len(initSignedTxns)-1 {
 				unfinishedBlock, err = bev.GenerateBlock(nil)
 				require.NoError(b, err)
-				// XXX not setting seed & proposer details with FinishBlock/WithProposer
+				// We are not setting seed & proposer details with
+				// FinishBlock/WithProposer. When agreement actually does that,
+				// it surely has some cost.
 				vb := ledgercore.MakeValidatedBlock(unfinishedBlock.UnfinishedBlock(), unfinishedBlock.UnfinishedDeltas())
 				validatedBlock = &vb
 				for _, l := range []*Ledger{l, l2} {
@@ -566,9 +568,9 @@ func benchmarkPreparePaymentTransactionsTesting(b *testing.B, numTxns int, txnSo
 		require.NoError(b, err)
 	}
 
+	// as above - this might be an underestimate because we skip agreement
 	unfinishedBlock, err := bev.GenerateBlock(nil)
 	require.NoError(b, err)
-	// XXX not setting seed & proposer details with FinishBlock/WithProposer
 	validatedBlock := ledgercore.MakeValidatedBlock(unfinishedBlock.UnfinishedBlock(), unfinishedBlock.UnfinishedDeltas())
 
 	blockBuildDone := time.Now()

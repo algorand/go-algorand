@@ -149,7 +149,7 @@ func endBlock(t testing.TB, ledger *Ledger, eval *eval.BlockEvaluator, proposer 
 	ub, err := eval.GenerateBlock(nil)
 	require.NoError(t, err)
 
-	// XXX not setting seed & proposer details with FinishBlock/WithProposer
+	// We fake some thigns that agreement would do, like setting proposer
 	validatedBlock := ledgercore.MakeValidatedBlock(ub.UnfinishedBlock(), ub.UnfinishedDeltas())
 	gvb := &validatedBlock
 
@@ -160,10 +160,10 @@ func endBlock(t testing.TB, ledger *Ledger, eval *eval.BlockEvaluator, proposer 
 		prp = proposer[0]
 	}
 
-	// We have this backdoor way to install a proposer or seed into the header
-	// for tests. Doesn't matter that it makes them both the same.  Since this
-	// can't call the agreement code, the eligibility of the prp is not
-	// considered.
+	// Since we can't do agreement, we have this backdoor way to install a
+	// proposer or seed into the header for tests. Doesn't matter that it makes
+	// them both the same.  Since this can't call the agreement code, the
+	// eligibility of the prp is not considered.
 	if ledger.GenesisProto().Payouts.Enabled {
 		*gvb = ledgercore.MakeValidatedBlock(gvb.Block().WithProposer(committee.Seed(prp), prp, true), gvb.Delta())
 	} else {

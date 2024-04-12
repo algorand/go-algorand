@@ -197,12 +197,12 @@ func (s Simulator) evaluate(hdr bookkeeping.BlockHeader, stxns []transactions.Si
 	}
 
 	// Finally, process any pending end-of-block state changes.
-	ub, err := eval.GenerateBlock(nil) // XXX not fetching proposer addresses
+	ub, err := eval.GenerateBlock(nil)
 	if err != nil {
 		return nil, err
 	}
 
-	// XXX not setting seed & proposer details with FinishBlock/WithProposer
+	// Since we skip agreement, this block is imperfect w/ respect to seed/proposer/payouts
 	vb := ledgercore.MakeValidatedBlock(ub.UnfinishedBlock(), ub.UnfinishedDeltas())
 
 	return &vb, nil
