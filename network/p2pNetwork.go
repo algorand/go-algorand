@@ -727,7 +727,7 @@ func (n *P2PNetwork) wsStreamHandler(ctx context.Context, p2pPeer peer.ID, strea
 		var initMsg [1]byte
 		rn, err := stream.Read(initMsg[:])
 		if rn == 0 || err != nil {
-			n.log.Warnf("wsStreamHandler: error reading initial message: %s, peer %s", err, p2pPeer)
+			n.log.Warnf("wsStreamHandler: error reading initial message: %s, peer %s (%s)", err, p2pPeer, stream.Conn().RemoteMultiaddr().String())
 			return
 		}
 	} else {

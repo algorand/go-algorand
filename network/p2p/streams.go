@@ -142,7 +142,7 @@ func (n *streamManager) Connected(net network.Network, conn network.Conn) {
 
 	stream, err := n.host.NewStream(n.ctx, remotePeer, AlgorandWsProtocol)
 	if err != nil {
-		n.log.Infof("Failed to open stream to %s: %v", remotePeer, err)
+		n.log.Infof("Failed to open stream to %s (%s): %v", remotePeer, conn.RemoteMultiaddr().String(), err)
 		return
 	}
 	n.streams[remotePeer] = stream
