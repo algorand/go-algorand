@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -31,8 +30,6 @@ import (
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
-
-const roundTime = 2 * time.Second // with speedup below, what's a good value?
 
 // TestBasicSuspension confirms that accounts that don't propose get suspended
 // (when a tx naming them occurs)
@@ -158,7 +155,7 @@ func TestBasicSuspension(t *testing.T) {
 			break
 		}
 	}
-	// paranoia. see mining_test.go for more details.
+	// paranoia. see payouts_test.go for more details.
 	r := require.New(t)
 	for i, c := range []libgoal.Client{c10, c20} {
 		account, err = c.AccountData(account20.Address)

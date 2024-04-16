@@ -46,7 +46,7 @@ func TestBasicPayouts(t *testing.T) {
 	var fixture fixtures.RestClientFixture
 	// Make the seed lookback shorter, otherwise we need to wait 320 rounds to become IncentiveEligible.
 	fixture.FasterConsensus(protocol.ConsensusFuture)
-	fixture.Setup(t, filepath.Join("nettemplates", "Mining.json"))
+	fixture.Setup(t, filepath.Join("nettemplates", "Payouts.json"))
 	defer fixture.Shutdown()
 
 	// Overview of this test:
