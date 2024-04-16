@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util"
 	"github.com/algorand/go-algorand/util/codecs"
 )
 
@@ -893,7 +894,7 @@ func moveDirIfExists(logger logger, srcdir, dstdir string, files ...string) erro
 	// then, check if any files exist in srcdir, and move them to dstdir
 	for _, file := range files {
 		if _, err := os.Stat(filepath.Join(srcdir, file)); err == nil {
-			if err := os.Rename(filepath.Join(srcdir, file), filepath.Join(dstdir, file)); err != nil {
+			if err := util.MoveFile(filepath.Join(srcdir, file), filepath.Join(dstdir, file)); err != nil {
 				return fmt.Errorf("failed to move file %s from %s to %s: %v", file, srcdir, dstdir, err)
 			}
 			logger.Infof("Moved DB file %s from ColdDataDir %s to HotDataDir %s", file, srcdir, dstdir)
