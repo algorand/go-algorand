@@ -18,16 +18,19 @@ package util
 
 import (
 	"os"
+	"os/exec"
 	"path"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestIsEmpty(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	testPath := path.Join(os.TempDir(), "this", "is", "a", "long", "path")
 	err := os.MkdirAll(testPath, os.ModePerm)
@@ -38,4 +41,58 @@ func TestIsEmpty(t *testing.T) {
 	_, err = os.Create(path.Join(testPath, "file.txt"))
 	assert.NoError(t, err)
 	assert.False(t, IsEmpty(testPath))
+}
+
+func testMoveFile(t *testing.T, src, dst string) {
+	t.Helper()
+
+	require.NoFileExists(t, src)
+	require.NoFileExists(t, dst)
+
+	defer os.Remove(src)
+	defer os.Remove(dst)
+
+	f, err := os.Create(src)
+	require.NoError(t, err)
+
+	_, err = f.WriteString("test file contents")
+	require.NoError(t, err)
+	require.NoError(t, f.Close())
+
+	err = MoveFile(src, dst)
+	require.NoError(t, err)
+
+	require.FileExists(t, dst)
+	require.NoFileExists(t, src)
+
+	dstContents, err := os.ReadFile(dst)
+	require.NoError(t, err)
+	assert.Equal(t, "test file contents", string(dstContents))
+}
+
+func TestMoveFile(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	src := path.Join(os.TempDir(), "src.txt")
+	dst := path.Join(os.TempDir(), "dst.txt")
+	testMoveFile(t, src, dst)
+}
+
+func TestMoveFileAcrossFilesystems(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	t.Skip("This is a manual test that must be run on a linux system")
+
+	os.Mkdir("/mnt/tmpfs", os.ModePerm)
+	defer os.Remove("/mnt/tmpfs")
+
+	err := exec.Command("mount", "-t", "tmpfs", "-o", "size=1K", "tmpfs", "/mnt/tmpfs").Run()
+	require.NoError(t, err)
+	defer exec.Command("umount", "/mnt/tmpfs").Run()
+
+	src := path.Join(os.TempDir(), "src.txt")
+	dst := path.Join("/mnt/tmpfs", "dst.txt")
+
+	testMoveFile(t, src, dst)
 }

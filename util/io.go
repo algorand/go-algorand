@@ -17,12 +17,36 @@
 package util
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 )
+
+func MoveFile(src, dst string) error {
+	err := os.Rename(src, dst)
+	var errno syscall.Errno
+	if err != nil && errors.As(err, &errno) && errno == syscall.EXDEV {
+		// os.Rename() failed because src and dst are on different filesystems
+		// Must manually copy and delete the original file
+		return manuallyMoveFile(src, dst)
+	}
+	return err
+}
+
+func manuallyMoveFile(src, dst string) error {
+	tmpDst := dst + ".tmp"
+	if _, err := CopyFile(src, tmpDst); err != nil {
+		return err
+	}
+	if err := os.Rename(tmpDst, dst); err != nil {
+		return err
+	}
+	return os.Remove(src)
+}
 
 // CopyFile uses io.Copy() to copy a file to another location
 // This was copied from https://opensource.com/article/18/6/copying-files-go
