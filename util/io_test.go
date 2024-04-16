@@ -32,7 +32,7 @@ func TestIsEmpty(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	testPath := path.Join(os.TempDir(), "this", "is", "a", "long", "path")
+	testPath := path.Join(t.TempDir(), "this", "is", "a", "long", "path")
 	err := os.MkdirAll(testPath, os.ModePerm)
 	assert.NoError(t, err)
 	defer os.RemoveAll(testPath)
@@ -74,8 +74,10 @@ func TestMoveFile(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	src := path.Join(os.TempDir(), "src.txt")
-	dst := path.Join(os.TempDir(), "dst.txt")
+	tmpDir := t.TempDir()
+
+	src := path.Join(tmpDir, "src.txt")
+	dst := path.Join(tmpDir, "dst.txt")
 	testMoveFile(t, src, dst)
 }
 
@@ -91,8 +93,8 @@ func TestMoveFileAcrossFilesystems(t *testing.T) {
 	require.NoError(t, err)
 	defer exec.Command("umount", "/mnt/tmpfs").Run()
 
-	src := path.Join(os.TempDir(), "src.txt")
-	dst := path.Join("/mnt/tmpfs", "dst.txt")
+	src := path.Join(t.TempDir(), "src.txt")
+	dst := "/mnt/tmpfs/dst.txt"
 
 	testMoveFile(t, src, dst)
 }

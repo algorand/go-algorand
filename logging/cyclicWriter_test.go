@@ -18,16 +18,17 @@ package logging
 
 import (
 	"os"
+	"os/exec"
+	"path"
 	"testing"
 
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
-func TestCyclicWrite(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	liveFileName := "live.test"
-	archiveFileName := "archive.test"
+func testCyclicWrite(t *testing.T, liveFileName, archiveFileName string) {
+	t.Helper()
+
 	defer os.Remove(liveFileName)
 	defer os.Remove(archiveFileName)
 
@@ -59,4 +60,34 @@ func TestCyclicWrite(t *testing.T) {
 	for i := 0; i < space; i++ {
 		require.Equal(t, byte('A'), oldData[i])
 	}
+}
+
+func TestCyclicWrite(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+
+	liveFileName := path.Join(tmpDir, "live.test")
+	archiveFileName := path.Join(tmpDir, "archive.test")
+
+	testCyclicWrite(t, liveFileName, archiveFileName)
+}
+
+func TestCyclicWriteAcrossFilesystems(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	t.Skip("This is a manual test that must be run on a linux system")
+
+	os.Mkdir("/mnt/tmpfs", os.ModePerm)
+	defer os.Remove("/mnt/tmpfs")
+
+	err := exec.Command("mount", "-t", "tmpfs", "-o", "size=2K", "tmpfs", "/mnt/tmpfs").Run()
+	require.NoError(t, err)
+	defer exec.Command("umount", "/mnt/tmpfs").Run()
+
+	liveFileName := path.Join(t.TempDir(), "live.test")
+	archiveFileName := "/mnt/tmpfs/archive.test"
+
+	testCyclicWrite(t, liveFileName, archiveFileName)
 }

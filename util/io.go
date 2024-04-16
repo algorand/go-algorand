@@ -26,6 +26,8 @@ import (
 	"syscall"
 )
 
+// MoveFile moves a file from src to dst. The advantages of using this over
+// os.Rename() is that it can move files across different filesystems.
 func MoveFile(src, dst string) error {
 	err := os.Rename(src, dst)
 	var errno syscall.Errno
