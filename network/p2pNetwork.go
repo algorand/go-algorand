@@ -717,9 +717,9 @@ func (n *P2PNetwork) GetHTTPRequestConnection(request *http.Request) (conn Deadl
 
 // wsStreamHandler is a callback that the p2p package calls when a new peer connects and establishes a
 // stream for the websocket protocol.
-func (n *P2PNetwork) wsStreamHandler(ctx context.Context, p2ppeer peer.ID, stream network.Stream, incoming bool) {
+func (n *P2PNetwork) wsStreamHandler(ctx context.Context, p2pPeer peer.ID, stream network.Stream, incoming bool) {
 	if stream.Protocol() != p2p.AlgorandWsProtocol {
-		n.log.Warnf("unknown protocol %s", stream.Protocol())
+		n.log.Warnf("unknown protocol %s from peer%s", stream.Protocol(), p2pPeer)
 		return
 	}
 
@@ -727,7 +727,7 @@ func (n *P2PNetwork) wsStreamHandler(ctx context.Context, p2ppeer peer.ID, strea
 		var initMsg [1]byte
 		rn, err := stream.Read(initMsg[:])
 		if rn == 0 || err != nil {
-			n.log.Warnf("wsStreamHandler: error reading initial message: %s", err)
+			n.log.Warnf("wsStreamHandler: error reading initial message: %s, peer %s", err, p2pPeer)
 			return
 		}
 	} else {
@@ -743,7 +743,7 @@ func (n *P2PNetwork) wsStreamHandler(ctx context.Context, p2ppeer peer.ID, strea
 		if numOutgoingPeers >= n.config.GossipFanout {
 			// this appears to be some auxiliary connection made by libp2p itself like DHT connection.
 			// skip this connection since there are already enough peers
-			n.log.Debugf("skipping outgoing connection to peer %s: num outgoing %d > fanout %d ", p2ppeer, numOutgoingPeers, n.config.GossipFanout)
+			n.log.Debugf("skipping outgoing connection to peer %s: num outgoing %d > fanout %d ", p2pPeer, numOutgoingPeers, n.config.GossipFanout)
 			stream.Close()
 			return
 		}
@@ -759,11 +759,11 @@ func (n *P2PNetwork) wsStreamHandler(ctx context.Context, p2ppeer peer.ID, strea
 	ma := stream.Conn().RemoteMultiaddr()
 	addr := ma.String()
 	if addr == "" {
-		n.log.Warnf("Could not get address for peer %s", p2ppeer)
+		n.log.Warnf("Could not get address for peer %s", p2pPeer)
 	}
 	// create a wsPeer for this stream and added it to the peers map.
 
-	addrInfo := &peer.AddrInfo{ID: p2ppeer, Addrs: []multiaddr.Multiaddr{ma}}
+	addrInfo := &peer.AddrInfo{ID: p2pPeer, Addrs: []multiaddr.Multiaddr{ma}}
 	maxIdleConnsPerHost := int(n.config.ConnectionsRateLimitingCount)
 	client, err := p2p.MakeHTTPClientWithRateLimit(addrInfo, n.pstore, limitcaller.DefaultQueueingTimeout, maxIdleConnsPerHost)
 	if err != nil {
@@ -775,16 +775,16 @@ func (n *P2PNetwork) wsStreamHandler(ctx context.Context, p2ppeer peer.ID, strea
 		conn:       &wsPeerConnP2PImpl{stream: stream},
 		outgoing:   !incoming,
 	}
-	protos, err := n.pstore.GetProtocols(p2ppeer)
+	protos, err := n.pstore.GetProtocols(p2pPeer)
 	if err != nil {
-		n.log.Warnf("Error getting protocols for peer %s: %v", p2ppeer, err)
+		n.log.Warnf("Error getting protocols for peer %s: %v", p2pPeer, err)
 	}
 	wsp.TelemetryGUID, wsp.InstanceName = p2p.GetPeerTelemetryInfo(protos)
 
 	wsp.init(n.config, outgoingMessagesBufferSize)
 	n.wsPeersLock.Lock()
-	n.wsPeers[p2ppeer] = wsp
-	n.wsPeersToIDs[wsp] = p2ppeer
+	n.wsPeers[p2pPeer] = wsp
+	n.wsPeersToIDs[wsp] = p2pPeer
 	n.wsPeersLock.Unlock()
 	n.wsPeersChangeCounter.Add(1)
 
@@ -795,7 +795,7 @@ func (n *P2PNetwork) wsStreamHandler(ctx context.Context, p2ppeer peer.ID, strea
 		msg = "Accepted incoming connection from peer %s"
 	}
 	localAddr, _ := n.Address()
-	n.log.With("event", event).With("remote", addr).With("local", localAddr).Infof(msg, p2ppeer.String())
+	n.log.With("event", event).With("remote", addr).With("local", localAddr).Infof(msg, p2pPeer.String())
 
 	if n.log.GetLevel() >= logging.Debug {
 		n.log.Debugf("streams for %s conn %s ", stream.Conn().Stat().Direction.String(), stream.Conn().ID())
