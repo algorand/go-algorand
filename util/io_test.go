@@ -19,7 +19,7 @@ package util
 import (
 	"os"
 	"os/exec"
-	"path"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -32,18 +32,18 @@ func TestIsEmpty(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	testPath := path.Join(t.TempDir(), "this", "is", "a", "long", "path")
+	testPath := filepath.Join(t.TempDir(), "this", "is", "a", "long", "path")
 	err := os.MkdirAll(testPath, os.ModePerm)
 	assert.NoError(t, err)
 	defer os.RemoveAll(testPath)
 	assert.True(t, IsEmpty(testPath))
 
-	_, err = os.Create(path.Join(testPath, "file.txt"))
+	_, err = os.Create(filepath.Join(testPath, "file.txt"))
 	assert.NoError(t, err)
 	assert.False(t, IsEmpty(testPath))
 }
 
-func testMoveFile(t *testing.T, src, dst string) {
+func testMoveFileSimple(t *testing.T, src, dst string) {
 	t.Helper()
 
 	require.NoFileExists(t, src)
@@ -76,9 +76,9 @@ func TestMoveFile(t *testing.T) {
 
 	tmpDir := t.TempDir()
 
-	src := path.Join(tmpDir, "src.txt")
-	dst := path.Join(tmpDir, "dst.txt")
-	testMoveFile(t, src, dst)
+	src := filepath.Join(tmpDir, "src.txt")
+	dst := filepath.Join(tmpDir, "dst.txt")
+	testMoveFileSimple(t, src, dst)
 }
 
 func TestMoveFileAcrossFilesystems(t *testing.T) {
@@ -93,8 +93,8 @@ func TestMoveFileAcrossFilesystems(t *testing.T) {
 	require.NoError(t, err)
 	defer exec.Command("umount", "/mnt/tmpfs").Run()
 
-	src := path.Join(t.TempDir(), "src.txt")
+	src := filepath.Join(t.TempDir(), "src.txt")
 	dst := "/mnt/tmpfs/dst.txt"
 
-	testMoveFile(t, src, dst)
+	testMoveFileSimple(t, src, dst)
 }

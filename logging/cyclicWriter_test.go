@@ -19,7 +19,7 @@ package logging
 import (
 	"os"
 	"os/exec"
-	"path"
+	"path/filepath"
 	"testing"
 
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -68,8 +68,8 @@ func TestCyclicWrite(t *testing.T) {
 
 	tmpDir := t.TempDir()
 
-	liveFileName := path.Join(tmpDir, "live.test")
-	archiveFileName := path.Join(tmpDir, "archive.test")
+	liveFileName := filepath.Join(tmpDir, "live.test")
+	archiveFileName := filepath.Join(tmpDir, "archive.test")
 
 	testCyclicWrite(t, liveFileName, archiveFileName)
 }
@@ -86,7 +86,7 @@ func TestCyclicWriteAcrossFilesystems(t *testing.T) {
 	require.NoError(t, err)
 	defer exec.Command("umount", "/mnt/tmpfs").Run()
 
-	liveFileName := path.Join(t.TempDir(), "live.test")
+	liveFileName := filepath.Join(t.TempDir(), "live.test")
 	archiveFileName := "/mnt/tmpfs/archive.test"
 
 	testCyclicWrite(t, liveFileName, archiveFileName)
