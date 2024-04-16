@@ -45,7 +45,9 @@ func TestBasicPayouts(t *testing.T) {
 
 	var fixture fixtures.RestClientFixture
 	// Make the seed lookback shorter, otherwise we need to wait 320 rounds to become IncentiveEligible.
-	fixture.FasterConsensus(protocol.ConsensusFuture)
+	faster := fixture.FasterConsensus(protocol.ConsensusFuture)
+	lookback := 4 * faster.SeedRefreshInterval
+	fmt.Printf("lookback is %d\n", lookback)
 	fixture.Setup(t, filepath.Join("nettemplates", "Payouts.json"))
 	defer fixture.Shutdown()
 
@@ -83,11 +85,10 @@ func TestBasicPayouts(t *testing.T) {
 	// Go 31 rounds after the burn happened. During this time, incentive
 	// eligibility is not in effect yet, so regardless of who proposes, they
 	// won't earn anything.
-
 	client := fixture.LibGoalClient
 	status, err := client.Status()
 	a.NoError(err)
-	for status.LastRound < *burn.ConfirmedRound+31 {
+	for status.LastRound < *burn.ConfirmedRound+lookback-1 {
 		block, err := client.BookkeepingBlock(status.LastRound)
 		a.NoError(err)
 
@@ -182,7 +183,7 @@ func TestBasicPayouts(t *testing.T) {
 	offTxn, err := fixture.WaitForConfirmedTxn(uint64(offline.LastValid), offlineTxID)
 	a.NoError(err)
 
-	fmt.Printf(" c15 (%s) will be truly offline (not proposing) after round %d\n", account15.Address, *offTxn.ConfirmedRound+32)
+	fmt.Printf(" c15 (%s) will be truly offline (not proposing) after round %d\n", account15.Address, *offTxn.ConfirmedRound+lookback)
 
 	var feesink basics.Address
 	for i := 0; i < 100; i++ {
@@ -217,12 +218,12 @@ func TestBasicPayouts(t *testing.T) {
 		if data.MicroAlgos.Raw == 100000 {
 			break
 		}
-		a.Less(i, 32+20)
+		a.Less(i, int(lookback+20))
 		err = fixture.WaitForRoundWithTimeout(status.LastRound + 1)
 		a.NoError(err)
 	}
 	// maybe it got drained before c15 stops proposing. wait.
-	err = fixture.WaitForRoundWithTimeout(*offTxn.ConfirmedRound + 32)
+	err = fixture.WaitForRoundWithTimeout(*offTxn.ConfirmedRound + lookback)
 	a.NoError(err)
 
 	// put 20 algos back into the feesink, show it pays out again
@@ -242,7 +243,7 @@ func TestBasicPayouts(t *testing.T) {
 	a.Greater(int(data.MicroAlgos.Raw), 39_000_000)
 
 	// Closeout c01.  This is pretty weird, it means nobody will be online.  But
-	// that will take 32 rounds.  We will stop the test before then, we just
+	// that will take `lookback` rounds.  We will stop the test before then, we just
 	// want to show that c01 does not get paid if it has closed.
 	wh, err = c01.GetUnencryptedWalletHandle()
 	a.NoError(err)

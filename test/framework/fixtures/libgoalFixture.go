@@ -70,7 +70,7 @@ func (f *RestClientFixture) SetConsensus(consensus config.ConsensusProtocols) {
 // refresh lookback is set to 8 (instead of 80), so the 320 round balance
 // lookback becomes 32.  And, if the architecture implies it can be handled,
 // round times are shortened by lowering vote timeouts.
-func (f *RestClientFixture) FasterConsensus(ver protocol.ConsensusVersion) {
+func (f *RestClientFixture) FasterConsensus(ver protocol.ConsensusVersion) config.ConsensusParams {
 	if f.consensus == nil {
 		f.consensus = make(config.ConsensusProtocols)
 	}
@@ -82,6 +82,7 @@ func (f *RestClientFixture) FasterConsensus(ver protocol.ConsensusVersion) {
 		fast.AgreementFilterTimeout = time.Second / 2
 	}
 	f.consensus[ver] = fast
+	return fast
 }
 
 // Setup is called to initialize the test fixture for the test(s)
