@@ -17,6 +17,7 @@
 package util
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -97,4 +98,67 @@ func TestMoveFileAcrossFilesystems(t *testing.T) {
 	dst := "/mnt/tmpfs/dst.txt"
 
 	testMoveFileSimple(t, src, dst)
+}
+
+func TestMoveFileSourceDoesNotExist(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+
+	src := filepath.Join(tmpDir, "src.txt")
+	dst := filepath.Join(tmpDir, "dst.txt")
+
+	err := MoveFile(src, dst)
+	var pathError *os.PathError
+	require.ErrorAs(t, err, &pathError)
+	require.Equal(t, "lstat", pathError.Op)
+	require.Equal(t, src, pathError.Path)
+}
+
+func TestMoveFileSourceIsASymlink(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+
+	root := filepath.Join(tmpDir, "root.txt")
+	src := filepath.Join(tmpDir, "src.txt")
+	dst := filepath.Join(tmpDir, "dst.txt")
+
+	_, err := os.Create(root)
+	require.NoError(t, err)
+
+	err = os.Symlink(root, src)
+	require.NoError(t, err)
+
+	// os.Rename should work in this case
+	err = MoveFile(src, dst)
+	require.NoError(t, err)
+
+	// Undo the move
+	require.NoError(t, MoveFile(dst, src))
+
+	// But our moveFileByCopying should fail, since we haven't implemented this case
+	err = moveFileByCopying(src, dst)
+	require.ErrorContains(t, err, fmt.Sprintf("cannot move source file '%s': it is not a regular file", src))
+}
+
+func TestMoveFileDestinationIsADirectory(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+
+	src := filepath.Join(tmpDir, "src.txt")
+	dst := filepath.Join(tmpDir, "dst.txt")
+
+	_, err := os.Create(src)
+	require.NoError(t, err)
+
+	err = os.Mkdir(dst, os.ModePerm)
+	require.NoError(t, err)
+
+	err = MoveFile(src, dst)
+	require.ErrorContains(t, err, fmt.Sprintf("cannot move source file '%s' to destination '%s': destination is a directory", src, dst))
 }
