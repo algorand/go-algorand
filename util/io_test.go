@@ -21,6 +21,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -82,32 +84,33 @@ func TestMoveFile(t *testing.T) {
 	testMoveFileSimple(t, src, dst)
 }
 
+func execCommand(t *testing.T, cmdAndArsg ...string) {
+	t.Helper()
+
+	cmd := exec.Command(cmdAndArsg[0], cmdAndArsg[1:]...)
+	var errOutput strings.Builder
+	cmd.Stderr = &errOutput
+	err := cmd.Run()
+	require.NoError(t, err, errOutput.String())
+}
+
 func TestMoveFileAcrossFilesystems(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	// Skip unless CIRCLECI or TEST_MOUNT_TMPFS is set
-	if os.Getenv("CIRCLECI") == "" && os.Getenv("TEST_MOUNT_TMPFS") == "" {
-		t.Skip("This is a manual test that must be run on a linux system")
+	isLinux := strings.HasPrefix(runtime.GOOS, "linux")
+
+	// Skip unless CIRCLECI or TEST_MOUNT_TMPFS is set, and we are on a linux system
+	if !isLinux || (os.Getenv("CIRCLECI") == "" && os.Getenv("TEST_MOUNT_TMPFS") == "") {
+		t.Skip("This test must be run on a linux system with administrator privileges")
 	}
 
-	os.Mkdir("/mnt/tmpfs", os.ModePerm)
-	defer os.Remove("/mnt/tmpfs")
+	mountDir := t.TempDir()
+	execCommand(t, "sudo", "mount", "-t", "tmpfs", "-o", "size=1K", "tmpfs", mountDir)
 
-	mountCmd := []string{"mount", "-t", "tmpfs", "-o", "size=1K", "tmpfs", "/mnt/tmpfs"}
-	if os.Getenv("CIRCLECI") != "" { // Use sudo on CircleCI
-		mountCmd = append([]string{"sudo"}, mountCmd...)
-	}
-	err := exec.Command(mountCmd[0], mountCmd[1:]...).Run()
-	require.NoError(t, err)
-
-	umountCmd := []string{"umount", "/mnt/tmpfs"}
-	if os.Getenv("CIRCLECI") != "" {
-		umountCmd = append([]string{"sudo"}, umountCmd...)
-	}
-	defer exec.Command(umountCmd[0], umountCmd[1:]...).Run()
+	defer execCommand(t, "sudo", "umount", mountDir)
 
 	src := filepath.Join(t.TempDir(), "src.txt")
-	dst := "/mnt/tmpfs/dst.txt"
+	dst := filepath.Join(mountDir, "dst.txt")
 
 	testMoveFileSimple(t, src, dst)
 }
