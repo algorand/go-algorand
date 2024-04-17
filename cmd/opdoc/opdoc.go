@@ -301,6 +301,7 @@ type OpRecord struct {
 	ArgEnum      []string        `json:",omitempty"`
 	ArgEnumDoc   []string        `json:",omitempty"`
 	ArgEnumTypes []string        `json:",omitempty"`
+	ArgEnumBytes []int           `json:",omitempty"`
 	ArgModes     []logic.RunMode `json:",omitempty"`
 
 	DocCost string
@@ -378,24 +379,26 @@ func typeStrings(types logic.StackTypes) []string {
 	return out
 }
 
-func fieldsAndTypes(group logic.FieldGroup, version uint64) ([]string, []string, []string, []logic.RunMode) {
+func fieldsAndTypes(group logic.FieldGroup, version uint64) ([]string, []string, []string, []logic.RunMode, []int) {
 	// reminder: group.Names can be "sparse" See: logic.TxnaFields
 	fields := make([]string, 0, len(group.Names))
 	docs := make([]string, 0, len(group.Names))
 	types := make([]logic.StackType, 0, len(group.Names))
 	modes := make([]logic.RunMode, 0, len(group.Names))
+	bytes := make([]int, 0, len(group.Names))
 	for _, name := range group.Names {
 		if spec, ok := group.SpecByName(name); ok && spec.Version() <= version {
 			fields = append(fields, name)
 			types = append(types, spec.Type())
 			docs = append(docs, spec.Note())
 			modes = append(modes, spec.Modes())
+			bytes = append(bytes, int(spec.Field()))
 		}
 	}
-	return fields, typeStrings(types), docs, modes
+	return fields, typeStrings(types), docs, modes, bytes
 }
 
-func argEnums(name string, version uint64) ([]string, []string, []string, []logic.RunMode) {
+func argEnums(name string, version uint64) ([]string, []string, []string, []logic.RunMode, []int) {
 	// reminder: this needs to be manually updated every time
 	// a new opcode is added with an associated FieldGroup
 	// it'd be nice to have this auto-update
@@ -431,7 +434,7 @@ func argEnums(name string, version uint64) ([]string, []string, []string, []logi
 	case "ec_add", "ec_scalar_mul", "ec_pairing_check", "ec_multi_scalar_mul", "ec_subgroup_check", "ec_map_to":
 		return fieldsAndTypes(logic.EcGroups, version)
 	default:
-		return nil, nil, nil, nil
+		return nil, nil, nil, nil, nil
 	}
 }
 
@@ -447,7 +450,7 @@ func buildLanguageSpec(opGroups map[string][]string, namedTypes []namedType, ver
 		records[i].Returns = typeStrings(spec.Return.Types)
 		records[i].Size = spec.OpDetails.Size
 		records[i].DocCost = spec.DocCost(version)
-		records[i].ArgEnum, records[i].ArgEnumTypes, records[i].ArgEnumDoc, records[i].ArgModes = argEnums(spec.Name, version)
+		records[i].ArgEnum, records[i].ArgEnumTypes, records[i].ArgEnumDoc, records[i].ArgModes, records[i].ArgEnumBytes = argEnums(spec.Name, version)
 		desc := logic.OpDescOf(spec.Name)
 		//FIXME
 		//records[i].Doc = strings.ReplaceAll(desc.Short, "<br />", "\n")
