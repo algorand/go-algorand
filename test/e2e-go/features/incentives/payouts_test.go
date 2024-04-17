@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -45,8 +46,8 @@ func TestBasicPayouts(t *testing.T) {
 
 	var fixture fixtures.RestClientFixture
 	// Make the seed lookback shorter, otherwise we need to wait 320 rounds to become IncentiveEligible.
-	faster := fixture.FasterConsensus(protocol.ConsensusFuture)
-	lookback := 4 * faster.SeedRefreshInterval
+	const lookback = 32
+	fixture.FasterConsensus(protocol.ConsensusFuture, time.Second/2, 32)
 	fmt.Printf("lookback is %d\n", lookback)
 	fixture.Setup(t, filepath.Join("nettemplates", "Payouts.json"))
 	defer fixture.Shutdown()

@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -50,8 +51,9 @@ func TestBasicSuspension(t *testing.T) {
 	const suspend20 = 55
 
 	var fixture fixtures.RestClientFixture
-	// Make the seed lookback shorter, so the test runs faster
-	fixture.FasterConsensus(protocol.ConsensusFuture)
+	// Speed up rounds, but keep long lookback, so 20% node has a chance to get
+	// back online after being suspended.
+	fixture.FasterConsensus(protocol.ConsensusFuture, time.Second/2, 320)
 	fixture.Setup(t, filepath.Join("nettemplates", "Suspension.json"))
 	defer fixture.Shutdown()
 
@@ -137,23 +139,23 @@ func TestBasicSuspension(t *testing.T) {
 	// Wait for newly restarted node to start.
 	stat, err := lg.Status()
 	a.NoError(err)
-	// Waiting for this round should show it has started and caught up.
-	stat, err = lg.WaitForRound(afterStop.LastRound + suspend20)
+
+	// Get the current round, and wait for the restarted node to get there.
+	stat, err = fixture.AlgodClient.Status()
 	a.NoError(err)
 
-	// Proceed until a round is proposed by n20. (Stop at 50 rounds, that's more likely a bug than luck)
-	for r := stat.LastRound; r < stat.LastRound+50; r++ {
-		err = fixture.WaitForRoundWithTimeout(r)
-		a.NoError(err)
+	// Wait for latest round to show n20 has started and caught up.
+	restartRound := stat.LastRound
+	stat, err = lg.WaitForRound(restartRound)
+	a.NoError(err)
 
-		// Once n20 proposes, break out early
-		if fixture.VerifyBlockProposed(account20.Address, 1) {
-			fmt.Printf("account20 proposed at round %d\n", r)
-			// wait one extra round, because changes are processed in block n+1.
-			err = fixture.WaitForRoundWithTimeout(r + 1)
-			a.NoError(err)
-			break
-		}
+	// Proceed until a round is proposed by n20.
+	attempts := 0
+	for !fixture.VerifyBlockProposed(account20.Address, 1) {
+		stat, err = lg.WaitForRound(stat.LastRound + 1)
+		a.NoError(err)
+		attempts++
+		a.Less(attempts, suspend20, "n20 didn't propose\n")
 	}
 	// paranoia. see payouts_test.go for more details.
 	r := require.New(t)
@@ -161,7 +163,7 @@ func TestBasicSuspension(t *testing.T) {
 		account, err = c.AccountData(account20.Address)
 		a.NoError(err)
 		r.Equal(basics.Online, account.Status, i)
-		r.Greater(account.LastProposed, stat.LastRound, i)
+		r.Greater(account.LastProposed, restartRound, i)
 
 		r.Equal(voteID, account.VoteID, i)
 		r.False(account.IncentiveEligible, i)

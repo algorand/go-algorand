@@ -36,6 +36,7 @@ import (
 	"github.com/algorand/go-algorand/crypto/merklearray"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/account"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/gen"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/netdeploy"
@@ -70,19 +71,22 @@ func (f *RestClientFixture) SetConsensus(consensus config.ConsensusProtocols) {
 // refresh lookback is set to 8 (instead of 80), so the 320 round balance
 // lookback becomes 32.  And, if the architecture implies it can be handled,
 // round times are shortened by lowering vote timeouts.
-func (f *RestClientFixture) FasterConsensus(ver protocol.ConsensusVersion) config.ConsensusParams {
+func (f *RestClientFixture) FasterConsensus(ver protocol.ConsensusVersion, timeout time.Duration, lookback basics.Round) {
 	if f.consensus == nil {
 		f.consensus = make(config.ConsensusProtocols)
 	}
 	fast := config.Consensus[ver]
-	fast.SeedRefreshInterval = 8 // so balanceRound ends up 2 * 8 * 2 = 32
+	// balanceRound is 4 * SeedRefreshInterval
+	if lookback%4 != 0 {
+		panic(fmt.Sprintf("lookback must be a multiple of 4, got %d", lookback))
+	}
+	fast.SeedRefreshInterval = uint64(lookback) / 4
 	// and speed up the rounds while we're at it
 	if runtime.GOARCH == "amd64" || runtime.GOARCH == "arm64" {
-		fast.AgreementFilterTimeoutPeriod0 = time.Second / 2
-		fast.AgreementFilterTimeout = time.Second / 2
+		fast.AgreementFilterTimeoutPeriod0 = timeout
+		fast.AgreementFilterTimeout = timeout
 	}
 	f.consensus[ver] = fast
-	return fast
 }
 
 // Setup is called to initialize the test fixture for the test(s)
