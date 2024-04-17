@@ -77,14 +77,26 @@ func TestCyclicWrite(t *testing.T) {
 func TestCyclicWriteAcrossFilesystems(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	t.Skip("This is a manual test that must be run on a linux system")
+	// Skip unless CIRCLECI or TEST_MOUNT_TMPFS is set
+	if os.Getenv("CIRCLECI") == "" && os.Getenv("TEST_MOUNT_TMPFS") == "" {
+		t.Skip("This is a manual test that must be run on a linux system")
+	}
 
 	os.Mkdir("/mnt/tmpfs", os.ModePerm)
 	defer os.Remove("/mnt/tmpfs")
 
-	err := exec.Command("mount", "-t", "tmpfs", "-o", "size=2K", "tmpfs", "/mnt/tmpfs").Run()
+	mountCmd := []string{"mount", "-t", "tmpfs", "-o", "size=2K", "tmpfs", "/mnt/tmpfs"}
+	if os.Getenv("CIRCLECI") != "" { // Use sudo on CircleCI
+		mountCmd = append([]string{"sudo"}, mountCmd...)
+	}
+	err := exec.Command(mountCmd[0], mountCmd[1:]...).Run()
 	require.NoError(t, err)
-	defer exec.Command("umount", "/mnt/tmpfs").Run()
+
+	umountCmd := []string{"umount", "/mnt/tmpfs"}
+	if os.Getenv("CIRCLECI") != "" {
+		umountCmd = append([]string{"sudo"}, umountCmd...)
+	}
+	defer exec.Command(umountCmd[0], umountCmd[1:]...).Run()
 
 	liveFileName := filepath.Join(t.TempDir(), "live.test")
 	archiveFileName := "/mnt/tmpfs/archive.test"
