@@ -50,8 +50,13 @@ func moveFileByCopying(src, dst string) error {
 		return fmt.Errorf("cannot move source file '%s': it is not a regular file (%v)", src, srcInfo.Mode())
 	}
 
-	if dstInfo, dstErr := os.Lstat(dst); dstErr == nil && dstInfo.Mode().IsDir() {
-		return fmt.Errorf("cannot move source file '%s' to destination '%s': destination is a directory", src, dst)
+	if dstInfo, dstErr := os.Lstat(dst); dstErr == nil {
+		if dstInfo.Mode().IsDir() {
+			return fmt.Errorf("cannot move source file '%s' to destination '%s': destination is a directory", src, dst)
+		}
+		if os.SameFile(dstInfo, srcInfo) {
+			return fmt.Errorf("cannot move source file '%s' to destination '%s': source and destination are the same file", src, dst)
+		}
 	}
 
 	dstDir := filepath.Dir(dst)

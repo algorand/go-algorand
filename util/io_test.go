@@ -144,6 +144,28 @@ func TestMoveFileSourceIsASymlink(t *testing.T) {
 	require.ErrorContains(t, err, fmt.Sprintf("cannot move source file '%s': it is not a regular file", src))
 }
 
+func TestMoveFileSourceAndDestinationAreSame(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	require.NoError(t, os.Mkdir(filepath.Join(tmpDir, "folder"), os.ModePerm))
+
+	src := filepath.Join(tmpDir, "src.txt")
+	dst := src[:len(src)-len("src.txt")] + "folder/../src.txt"
+
+	// dst refers to the same file as src, but with a different path
+	require.NotEqual(t, src, dst)
+	require.Equal(t, src, filepath.Clean(dst))
+
+	_, err := os.Create(src)
+	require.NoError(t, err)
+
+	// os.Rename can handle this case, but our moveFileByCopying should fail
+	err = moveFileByCopying(src, dst)
+	require.ErrorContains(t, err, fmt.Sprintf("cannot move source file '%s' to destination '%s': source and destination are the same file", src, dst))
+}
+
 func TestMoveFileDestinationIsADirectory(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
