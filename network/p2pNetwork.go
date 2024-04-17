@@ -255,6 +255,8 @@ func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebo
 		broadcastQueueBulk:     make(chan broadcastRequest, 100),
 	}
 
+	p2p.EnableP2PLogging(log, logging.Level(cfg.BaseLoggerDebugLevel))
+
 	h, la, err := p2p.MakeHost(cfg, datadir, pstore)
 	if err != nil {
 		return nil, err
