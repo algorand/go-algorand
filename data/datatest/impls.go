@@ -65,14 +65,14 @@ func (i entryFactoryImpl) AssembleBlock(round basics.Round, _ []basics.Address) 
 }
 
 // FinishBlock implements the agreement.UnfinishedBlock interface.
-func (ve validatedBlock) FinishBlock(s committee.Seed, proposer basics.Address, eligible bool) agreement.ProposableBlock {
+func (ve validatedBlock) FinishBlock(s committee.Seed, proposer basics.Address, eligible bool) agreement.Block {
 	newblock := *ve.blk
 	newblock.BlockHeader.Seed = s
 	newblock.BlockHeader.Proposer = proposer
 	if !eligible {
 		newblock.BlockHeader.ProposerPayout = basics.MicroAlgos{}
 	}
-	return validatedBlock{blk: &newblock}
+	return agreement.Block(newblock)
 }
 
 // Block implements the agreement.ValidatedBlock interface.

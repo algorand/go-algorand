@@ -169,13 +169,13 @@ func (b testValidatedBlock) Round() basics.Round {
 	return b.Inside.Round()
 }
 
-func (b testValidatedBlock) FinishBlock(s committee.Seed, proposer basics.Address, eligible bool) ProposableBlock {
+func (b testValidatedBlock) FinishBlock(s committee.Seed, proposer basics.Address, eligible bool) Block {
 	b.Inside.BlockHeader.Seed = s
 	b.Inside.BlockHeader.Proposer = proposer
 	if !eligible {
 		b.Inside.BlockHeader.ProposerPayout = basics.MicroAlgos{}
 	}
-	return b
+	return Block(b.Inside)
 }
 
 type testBlockValidator struct{}
@@ -538,7 +538,7 @@ func (v *voteMakerHelper) MakeRandomProposalPayload(t *testing.T, r round) (*pro
 	pb := ub.FinishBlock(committee.Seed{}, basics.Address{}, false)
 
 	var payload unauthenticatedProposal
-	payload.Block = pb.Block()
+	payload.Block = bookkeeping.Block(pb)
 	payload.SeedProof = randomVRFProof()
 
 	propVal := proposalValue{

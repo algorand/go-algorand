@@ -83,13 +83,13 @@ func (b testValidatedBlock) Round() basics.Round {
 	return b.Inside.Round()
 }
 
-func (b testValidatedBlock) FinishBlock(s committee.Seed, proposer basics.Address, eligible bool) agreement.ProposableBlock {
+func (b testValidatedBlock) FinishBlock(s committee.Seed, proposer basics.Address, eligible bool) agreement.Block {
 	b.Inside.BlockHeader.Seed = s
 	b.Inside.BlockHeader.Proposer = proposer
 	if !eligible {
 		b.Inside.BlockHeader.ProposerPayout = basics.MicroAlgos{}
 	}
-	return b
+	return agreement.Block(b.Inside)
 }
 
 type testBlockValidator struct{}

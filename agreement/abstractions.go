@@ -84,23 +84,22 @@ type BlockFactory interface {
 // An UnfinishedBlock represents a Block produced by a BlockFactory
 // and must be finalized before being proposed by agreement.
 type UnfinishedBlock interface {
-	// WithSeed creates a copy of this UnfinishedBlock with its
-	// cryptographically random seed set to the given value.
+	// FinishBlock creates a Proposaable block, having set the cryptographically
+	// random seed and payout related fields.
 	//
 	// Calls to Seed() or to Digest() on the copy's Block must
 	// reflect the value of the new seed.
-	FinishBlock(seed committee.Seed, proposer basics.Address, eligible bool) ProposableBlock
+	FinishBlock(seed committee.Seed, proposer basics.Address, eligible bool) Block
 
 	Round() basics.Round
 }
 
-// An ProposableBlock represents a Block produced by a BlockFactory,
-// that was later finalized by providing the seed and the proposer,
-// and can now be proposed by agreement.
-type ProposableBlock interface {
-	// Block returns the underlying block that has been assembled.
-	Block() bookkeeping.Block
-}
+// Block (in agreement) represents an UnfinishedBlock produced by a
+// BlockFactory, that was later finalized by providing the seed and the
+// proposer, and can now be proposed by agreement.
+//
+//msgp:ignore Block
+type Block bookkeeping.Block
 
 // A Ledger represents the sequence of Entries agreed upon by the protocol.
 // The Ledger consists of two parts: a LedgerReader and a LedgerWriter, which
