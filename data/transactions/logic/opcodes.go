@@ -793,6 +793,9 @@ var OpSpecs = []OpSpec{
 		costByField("g", &EcGroups, []int{
 			BN254g1: 630, BN254g2: 3_300,
 			BLS12_381g1: 1_950, BLS12_381g2: 8_150})},
+
+	{0xf0, "mimc_BN254", opMimcBN254, proto("b:b{32}"), 11, costByLength(1, 620, 32, 0)},
+	{0xf1, "mimc_BLS12_381", opMimcBLS12381, proto("b:b{32}"), 11, costByLength(1, 620, 32, 0)},
 }
 
 // OpcodesByVersion returns list of opcodes available in a specific version of TEAL
