@@ -54,6 +54,7 @@ type loggingCore struct {
 	zapcore.Core
 }
 
+// EnableP2PLogging enables libp2p logging into the provided logger with the provided level.
 func EnableP2PLogging(log logging.Logger, l logging.Level) {
 	core := loggingCore{
 		log:   log,
