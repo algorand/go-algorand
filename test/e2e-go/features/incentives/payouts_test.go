@@ -26,6 +26,7 @@ import (
 
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/protocol"
@@ -106,16 +107,20 @@ func TestBasicPayouts(t *testing.T) {
 		// made since they should make such a problem impossible, but...
 		for i, c := range []libgoal.Client{c15, c01, relay} {
 			fmt.Printf("checking block %v\n", block.Round())
-			data, err := c.AccountData(block.Proposer().String())
-			a.NoError(err)
-			bb, err := c.BookkeepingBlock(status.LastRound)
+			bb, err := getblock(c, status.LastRound)
 			a.NoError(err)
 			a.Equal(block.Proposer(), bb.Proposer())
-			a.Equal(block.Round(), data.LastProposed, "client %d thinks %v", i, block.Proposer())
+
+			// check that the LastProposed for the proposer has been incremented
+			data, err := c.AccountData(block.Proposer().String())
+			a.NoError(err)
+			// We use LOE instead of Equal because it's possible that by now
+			// the proposer has proposed again!
+			a.LessOrEqual(block.Round(), data.LastProposed, "client %d thinks %v", i, block.Proposer())
 		}
 
 		next, err := client.AccountData(block.Proposer().String())
-		a.EqualValues(next.LastProposed, status.LastRound)
+		a.LessOrEqual(int(status.LastRound), int(next.LastProposed))
 		// regardless of proposer, nobody gets paid
 		switch block.Proposer().String() {
 		case account01.Address:
@@ -279,6 +284,15 @@ func TestBasicPayouts(t *testing.T) {
 	after, err := relay.AccountData(feesink.String())
 	a.NoError(err)
 	a.Equal(data.MicroAlgos, after.MicroAlgos)
+}
+
+// getblock waits for the given block because we use when we might be talking to
+// a client that is behind the network (since it has low stake)
+func getblock(client libgoal.Client, round uint64) (bookkeeping.Block, error) {
+	if _, err := client.WaitForRound(round); err != nil {
+		return bookkeeping.Block{}, err
+	}
+	return client.BookkeepingBlock(round)
 }
 
 func rekeyreg(f *fixtures.RestClientFixture, a *require.Assertions, client libgoal.Client, address string) basics.AccountData {
