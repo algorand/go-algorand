@@ -197,6 +197,15 @@ type gossipSubPeer struct {
 
 func (p gossipSubPeer) GetNetwork() GossipNode { return p.net }
 
+func (p gossipSubPeer) OnClose(f func()) {
+	net := p.GetNetwork().(*P2PNetwork)
+	net.wsPeersLock.Lock()
+	defer net.wsPeersLock.Unlock()
+	if wsp, ok := net.wsPeers[p.peerID]; ok {
+		wsp.OnClose(f)
+	}
+}
+
 // NewP2PNetwork returns an instance of GossipNode that uses the p2p.Service
 func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebookAddresses []string, genesisID string, networkID protocol.NetworkID, node NodeInfo) (*P2PNetwork, error) {
 	const readBufferLen = 2048
