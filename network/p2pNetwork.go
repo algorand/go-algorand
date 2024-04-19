@@ -677,7 +677,7 @@ func (n *P2PNetwork) GetHTTPClient(address string) (*http.Client, error) {
 func (n *P2PNetwork) OnNetworkAdvance() {
 	if n.nodeInfo != nil {
 		old := n.wantTXGossip.Load()
-		new := n.nodeInfo.IsParticipating()
+		new := n.relayMessages || n.config.ForceFetchTransactions || n.nodeInfo.IsParticipating()
 		if old != new {
 			n.wantTXGossip.Store(new)
 			if new {
