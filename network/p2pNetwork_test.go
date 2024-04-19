@@ -907,9 +907,9 @@ func TestP2PWantTXGossip(t *testing.T) {
 		ctx:      ctx,
 		nodeInfo: &nopeNodeInfo{},
 	}
-	net.wantTXGossip.Store(false)
 
 	// ensure wantTXGossip from false to false is noop
+	net.wantTXGossip.Store(false)
 	net.OnNetworkAdvance()
 	require.Eventually(t, func() bool { net.wg.Wait(); return true }, 1*time.Second, 50*time.Millisecond)
 	require.Equal(t, int64(0), mockService.count.Load())
@@ -923,14 +923,52 @@ func TestP2PWantTXGossip(t *testing.T) {
 	require.False(t, net.wantTXGossip.Load())
 
 	// check false to true change triggers subscription
+	net.wantTXGossip.Store(false)
 	net.nodeInfo = &participatingNodeInfo{}
 	net.OnNetworkAdvance()
 	require.Eventually(t, func() bool { return mockService.count.Load() == 1 }, 1*time.Second, 50*time.Millisecond)
 	require.True(t, net.wantTXGossip.Load())
 
-	// check true to true change is noop
+	// check IsParticipating changes wantTXGossip
+	net.wantTXGossip.Store(true)
+	net.nodeInfo = &nopeNodeInfo{}
+	net.config.ForceFetchTransactions = false
+	net.relayMessages = false
 	net.OnNetworkAdvance()
-	require.Eventually(t, func() bool { return mockService.count.Load() == 1 }, 1*time.Second, 50*time.Millisecond)
+	require.Eventually(t, func() bool { net.wg.Wait(); return true }, 1*time.Second, 50*time.Millisecond)
+	require.False(t, net.wantTXGossip.Load())
+
+	// check ForceFetchTransactions and relayMessages also take effect
+	net.wantTXGossip.Store(false)
+	net.nodeInfo = &nopeNodeInfo{}
+	net.config.ForceFetchTransactions = true
+	net.relayMessages = false
+	net.OnNetworkAdvance()
+	require.Eventually(t, func() bool { return mockService.count.Load() == 2 }, 1*time.Second, 50*time.Millisecond)
+	require.True(t, net.wantTXGossip.Load())
+
+	net.wantTXGossip.Store(false)
+	net.nodeInfo = &nopeNodeInfo{}
+	net.config.ForceFetchTransactions = false
+	net.relayMessages = true
+	net.OnNetworkAdvance()
+	require.Eventually(t, func() bool { return mockService.count.Load() == 3 }, 1*time.Second, 50*time.Millisecond)
+	require.True(t, net.wantTXGossip.Load())
+
+	// ensure empty nodeInfo prevents changing the value
+	net.wantTXGossip.Store(false)
+	net.nodeInfo = nil
+	net.config.ForceFetchTransactions = true
+	net.relayMessages = true
+	net.OnNetworkAdvance()
+	require.Eventually(t, func() bool { net.wg.Wait(); return true }, 1*time.Second, 50*time.Millisecond)
+	require.False(t, net.wantTXGossip.Load())
+
+	// check true to true change is noop
+	net.wantTXGossip.Store(true)
+	net.nodeInfo = &participatingNodeInfo{}
+	net.OnNetworkAdvance()
+	require.Eventually(t, func() bool { return mockService.count.Load() == 3 }, 1*time.Second, 50*time.Millisecond)
 	require.True(t, net.wantTXGossip.Load())
 }
 
