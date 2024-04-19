@@ -34,10 +34,7 @@ import (
 
 func TestDevMode(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	testDevMode(t, protocol.ConsensusFuture)
-	if !testing.Short() {
-		testDevMode(t, protocol.ConsensusCurrentVersion)
-	}
+	fixtures.MultiProtocolTest(t, testDevMode, protocol.ConsensusFuture, protocol.ConsensusCurrentVersion)
 }
 
 func testDevMode(t *testing.T, version protocol.ConsensusVersion) {
@@ -82,10 +79,7 @@ func testDevMode(t *testing.T, version protocol.ConsensusVersion) {
 
 func TestTxnGroupDeltasDevMode(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	testTxnGroupDeltasDevMode(t, protocol.ConsensusFuture)
-	if !testing.Short() {
-		testTxnGroupDeltasDevMode(t, protocol.ConsensusCurrentVersion)
-	}
+	fixtures.MultiProtocolTest(t, testTxnGroupDeltasDevMode, protocol.ConsensusFuture, protocol.ConsensusCurrentVersion)
 }
 
 // Starts up a devmode network, sends a txn, and fetches the txn group delta for that txn
