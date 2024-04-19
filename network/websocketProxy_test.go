@@ -317,7 +317,7 @@ func TestWebsocketProxyWsNet(t *testing.T) {
 	peerB := netA.peers[0]
 	require.NotEmpty(t, peerB.originAddress)
 	require.Equal(t, fakeXForwardedFor, peerB.originAddress)
-	require.NotEqual(t, peerB.RoutingAddr(), peerB.IPAddr())
+	require.NotEqual(t, peerB.RoutingAddr(), peerB.ipAddr())
 	fakeXForwardedForParsed := net.ParseIP(fakeXForwardedFor)
 	require.NotEqual(t, fakeXForwardedForParsed, peerB.RoutingAddr())
 }
