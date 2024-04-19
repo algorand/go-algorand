@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/netdeploy"
 	"github.com/algorand/go-algorand/protocol"
 
 	"github.com/algorand/go-algorand/daemon/algod/api/client"
@@ -44,20 +45,20 @@ type RestClientFixture struct {
 }
 
 // Setup is called to initialize the test fixture for the test(s)
-func (f *RestClientFixture) Setup(t TestingTB, templateFile string) {
-	f.LibGoalFixture.Setup(t, templateFile)
+func (f *RestClientFixture) Setup(t TestingTB, templateFile string, overrides ...netdeploy.TemplateOverride) {
+	f.LibGoalFixture.Setup(t, templateFile, overrides...)
 	f.AlgodClient = f.GetAlgodClientForController(f.NC)
 }
 
 // SetupNoStart is called to initialize the test fixture for the test(s)
 // but does not start the network before returning.  Call NC.Start() to start later.
-func (f *RestClientFixture) SetupNoStart(t TestingTB, templateFile string) {
-	f.LibGoalFixture.SetupNoStart(t, templateFile)
+func (f *RestClientFixture) SetupNoStart(t TestingTB, templateFile string, overrides ...netdeploy.TemplateOverride) {
+	f.LibGoalFixture.SetupNoStart(t, templateFile, overrides...)
 }
 
 // SetupShared is called to initialize the test fixture that will be used for multiple tests
-func (f *RestClientFixture) SetupShared(testName string, templateFile string) {
-	f.LibGoalFixture.SetupShared(testName, templateFile)
+func (f *RestClientFixture) SetupShared(testName string, templateFile string, overrides ...netdeploy.TemplateOverride) {
+	f.LibGoalFixture.SetupShared(testName, templateFile, overrides...)
 	f.AlgodClient = f.GetAlgodClientForController(f.NC)
 }
 

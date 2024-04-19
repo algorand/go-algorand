@@ -26,20 +26,24 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/netdeploy"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestDevMode(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
-	if testing.Short() {
-		t.Skip()
+	testDevMode(t, protocol.ConsensusFuture)
+	if !testing.Short() {
+		testDevMode(t, protocol.ConsensusCurrentVersion)
 	}
+}
 
+func testDevMode(t *testing.T, version protocol.ConsensusVersion) {
 	// Start devmode network, and make sure everything is primed by sending a transaction.
 	var fixture fixtures.RestClientFixture
-	fixture.SetupNoStart(t, filepath.Join("nettemplates", "DevModeNetwork.json"))
+	fixture.SetupNoStart(t, filepath.Join("nettemplates", "DevModeNetwork.json"), netdeploy.OverrideConsensusVersion(version))
 	fixture.Start()
 	defer fixture.Shutdown()
 	sender, err := fixture.GetRichestAccount()
@@ -76,17 +80,19 @@ func TestDevMode(t *testing.T) {
 	}
 }
 
-// Starts up a devmode network, sends a txn, and fetches the txn group delta for that txn
 func TestTxnGroupDeltasDevMode(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
-	if testing.Short() {
-		t.Skip()
+	testTxnGroupDeltasDevMode(t, protocol.ConsensusFuture)
+	if !testing.Short() {
+		testTxnGroupDeltasDevMode(t, protocol.ConsensusCurrentVersion)
 	}
+}
 
+// Starts up a devmode network, sends a txn, and fetches the txn group delta for that txn
+func testTxnGroupDeltasDevMode(t *testing.T, version protocol.ConsensusVersion) {
 	// Start devmode network, and send a transaction.
 	var fixture fixtures.RestClientFixture
-	fixture.SetupNoStart(t, filepath.Join("nettemplates", "DevModeTxnTracerNetwork.json"))
+	fixture.SetupNoStart(t, filepath.Join("nettemplates", "DevModeTxnTracerNetwork.json"), netdeploy.OverrideConsensusVersion(version))
 	fixture.Start()
 	defer fixture.Shutdown()
 	sender, err := fixture.GetRichestAccount()
