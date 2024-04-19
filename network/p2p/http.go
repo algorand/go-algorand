@@ -21,6 +21,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network/limitcaller"
 	"github.com/gorilla/mux"
 	"github.com/libp2p/go-libp2p"
@@ -62,6 +63,7 @@ func MakeHTTPClient(addrInfo *peer.AddrInfo) (*http.Client, error) {
 	if err != nil {
 		return nil, err
 	}
+	logging.Base().Debugf("MakeHTTPClient made a new P2P host %s for %s", clientStreamHost.ID(), addrInfo.String())
 
 	client := libp2phttp.Host{StreamHost: clientStreamHost}
 
