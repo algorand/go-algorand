@@ -193,7 +193,7 @@ type p2pPeerStats struct {
 type gossipSubPeer struct {
 	peerID      peer.ID
 	net         GossipNode
-	routingAddr []byte
+	routingAddr [8]byte
 }
 
 func (p gossipSubPeer) GetNetwork() GossipNode { return p.net }
@@ -208,7 +208,7 @@ func (p gossipSubPeer) OnClose(f func()) {
 }
 
 func (p gossipSubPeer) RoutingAddr() []byte {
-	return p.routingAddr
+	return p.routingAddr[:]
 }
 
 // NewP2PNetwork returns an instance of GossipNode that uses the p2p.Service
@@ -919,13 +919,13 @@ func (n *P2PNetwork) txTopicHandleLoop() {
 
 // txTopicValidator calls txHandler to validate and process incoming transactions.
 func (n *P2PNetwork) txTopicValidator(ctx context.Context, peerID peer.ID, msg *pubsub.Message) pubsub.ValidationResult {
-	var routingAddr []byte
+	var routingAddr [8]byte
 	n.wsPeersLock.Lock()
 	if wsp, ok := n.wsPeers[peerID]; ok {
-		routingAddr = wsp.RoutingAddr()
+		copy(routingAddr[:], wsp.RoutingAddr())
 	} else {
 		// well, otherwise use last 8 bytes of peerID
-		routingAddr = []byte(peerID[len(peerID)-8:])
+		copy(routingAddr[:], peerID[len(peerID)-8:])
 	}
 	n.wsPeersLock.Unlock()
 
