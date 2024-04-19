@@ -201,6 +201,15 @@ func TestProposalUnauthenticated(t *testing.T) {
 	unauthenticatedProposal3.SeedProof = unauthenticatedProposal.SeedProof
 	_, err = unauthenticatedProposal3.validate(context.Background(), round, ledger, validator)
 	require.Error(t, err)
+
+	// validate mismatch proposer address between block and unauthenticatedProposal
+	proposal4, _, _ := proposalForBlock(accounts.addresses[accountIndex], accounts.vrfs[accountIndex], testBlockFactory, period, ledger)
+	accountIndex++
+	unauthenticatedProposal4 := proposal4.u()
+	unauthenticatedProposal4.OriginalProposer = accounts.addresses[0] // set to the wrong address
+	require.NotEqual(t, unauthenticatedProposal4.OriginalProposer, unauthenticatedProposal4.Block.Proposer())
+	_, err = unauthenticatedProposal4.validate(context.Background(), round, ledger, validator)
+	require.ErrorContains(t, err, "wrong proposer")
 }
 
 func unauthenticatedProposalBlockPanicWrapper(t *testing.T, message string, uap unauthenticatedProposal, validator BlockValidator) (block bookkeeping.Block) {
