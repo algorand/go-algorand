@@ -611,15 +611,15 @@ type ProposerPayoutRules struct {
 // the new decay rate would go into effect at upgrade time, and the new
 // amount would be set at baseRound or at upgrade time.
 type BonusPlan struct {
-	// BonusBaseRound is the earliest round this plan can apply. Of course, the
+	// BaseRound is the earliest round this plan can apply. Of course, the
 	// consensus update must also have happened. So using a low value makes it
 	// go into effect immediately upon upgrade.
 	BaseRound uint64
-	// BonusBaseAmount is the bonus to be paid when this plan first applies (see
+	// BaseAmount is the bonus to be paid when this plan first applies (see
 	// baseRound). If it is zero, then no explicit change is made to the bonus
 	// (useful for only changing the decay rate).
 	BaseAmount uint64
-	// BonusDecayInterval is the time in rounds between 1% decays. For simplicity,
+	// DecayInterval is the time in rounds between 1% decays. For simplicity,
 	// decay occurs based on round % BonusDecayInterval, so a decay can happen right
 	// after going into effect. The BonusDecayInterval goes into effect at upgrade
 	// time, regardless of `baseRound`.

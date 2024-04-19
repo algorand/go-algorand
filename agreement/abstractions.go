@@ -84,7 +84,7 @@ type BlockFactory interface {
 // An UnfinishedBlock represents a Block produced by a BlockFactory
 // and must be finalized before being proposed by agreement.
 type UnfinishedBlock interface {
-	// FinishBlock creates a Proposaable block, having set the cryptographically
+	// FinishBlock creates a proposable block, having set the cryptographically
 	// random seed and payout related fields.
 	//
 	// Calls to Seed() or to Digest() on the copy's Block must

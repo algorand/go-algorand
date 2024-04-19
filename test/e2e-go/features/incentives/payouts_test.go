@@ -101,7 +101,7 @@ func TestBasicPayouts(t *testing.T) {
 		// all nodes agree the proposer proposed. The paranoia here is
 		// justified. Block incentives are computed in two stages. A little bit
 		// of extra work is done when agreement "Finishes" the block.  An easy
-		// bug to have using the block the Deltas() computed on the block
+		// bug to have is using the block the Deltas() computed on the block
 		// without the changes that come after agreement runs.  We had such an
 		// optimization, and it would cause failures here.  Interface changes
 		// made since they should make such a problem impossible, but...
@@ -232,7 +232,7 @@ func TestBasicPayouts(t *testing.T) {
 	err = fixture.WaitForRoundWithTimeout(*offTxn.ConfirmedRound + lookback)
 	a.NoError(err)
 
-	// put 20 algos back into the feesink, show it pays out again
+	// put 50 algos back into the feesink, show it pays out again
 	txn, err = c01.SendPaymentFromUnencryptedWallet(account01.Address, feesink.String(), 1000, 50_000_000, nil)
 	a.NoError(err)
 	refill, err := fixture.WaitForConfirmedTxn(uint64(txn.LastValid), txn.ID().String())
