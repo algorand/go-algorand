@@ -944,44 +944,50 @@ func convertOnlineRoundParamsTail(ctx context.Context, e db.Executable) error {
 }
 
 func accountsAddCreatableTypeColumn(ctx context.Context, e db.Executable) error {
-	// Run resources migration if it hasn't run yet
+	// Run ctype resources migration if it hasn't run yet
 	var creatableTypeOnResourcesRun bool
 	err := e.QueryRow("SELECT 1 FROM pragma_table_info('resources') WHERE name='ctype'").Scan(&creatableTypeOnResourcesRun)
 	if !errors.Is(err, sql.ErrNoRows) {
 		return nil
 	}
 
-	applyNewResourcesTableStructure := []string{
-		`CREATE TABLE IF NOT EXISTS resources_ctype_migration (
+	// Create new resources table with ctype column
+	createStmt := `CREATE TABLE IF NOT EXISTS resources_ctype_migration (
 		addrid INTEGER NOT NULL,
 		aidx INTEGER NOT NULL,
 		data BLOB NOT NULL,
 		ctype INTEGER NOT NULL,
-		PRIMARY KEY (addrid, aidx) ) WITHOUT ROWID`,
-		`INSERT INTO resources_ctype_migration (addrid, aidx, data, ctype) SELECT addrid, aidx, data, ctype FROM resources`,
-		`ALTER TABLE resources RENAME TO resources_old`,
-		`ALTER TABLE resources_ctype_migration RENAME TO resources`,
-		`DROP TABLE IF EXISTS resources_old`,
-	}
+		PRIMARY KEY (addrid, aidx) ) WITHOUT ROWID`
 
-	_, err = e.ExecContext(ctx, "ALTER TABLE resources ADD COLUMN ctype INTEGER")
+	_, err = e.ExecContext(ctx, createStmt)
 	if err != nil {
 		return err
 	}
 
-	updateStmt, err := e.PrepareContext(ctx, "UPDATE resources SET ctype = ? WHERE addrid = ? AND aidx = ?")
+	// Insert into the new resources table using the data from the old resources table joined with the assetcreators table
+	insertStmt := `INSERT INTO resources_ctype_migration (addrid, aidx, data, ctype)
+		SELECT r.addrid, r.aidx, r.data, COALESCE(ac.ctype, -1)
+		FROM resources r
+		LEFT JOIN assetcreators ac ON r.aidx = ac.asset`
+	_, err = e.ExecContext(ctx, insertStmt)
+	if err != nil {
+		return err
+	}
+
+	updateStmt, err := e.PrepareContext(ctx, "UPDATE resources_ctype_migration SET ctype = ? WHERE addrid = ? AND aidx = ?")
 	if err != nil {
 		return err
 	}
 	defer updateStmt.Close()
 
-	rows, err := e.QueryContext(ctx, "SELECT addrid, aidx, data FROM resources r")
+	// Pull resource entries into memory where ctype is not set
+	rows, err := e.QueryContext(ctx, "SELECT addrid, aidx, data FROM resources_ctype_migration r WHERE ctype = -1")
 	if err != nil {
 		return err
 	}
 	defer rows.Close()
 
-	// Update the ctype column for all resources.
+	// Update the ctype column for subset of resources where ctype was not resolved from assetcreators
 	for rows.Next() {
 		var addrid int64
 		var aidx int64
@@ -1015,6 +1021,12 @@ func accountsAddCreatableTypeColumn(ctx context.Context, e db.Executable) error 
 		}
 	}
 
+	applyNewResourcesTableStructure := []string{
+		`ALTER TABLE resources RENAME TO resources_old`,
+		`ALTER TABLE resources_ctype_migration RENAME TO resources`,
+		`DROP TABLE IF EXISTS resources_old`,
+	}
+
 	// Rename the tables to apply the new structure.
 	for _, stmt := range applyNewResourcesTableStructure {
 		_, err = e.ExecContext(ctx, stmt)
@@ -1022,6 +1034,5 @@ func accountsAddCreatableTypeColumn(ctx context.Context, e db.Executable) error 
 			return err
 		}
 	}
-
 	return rows.Err()
 }
