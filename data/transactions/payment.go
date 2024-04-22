@@ -51,7 +51,7 @@ func (payment PaymentTxnFields) CheckSpender(header Header, spec SpecialAddresse
 		if payment.Receiver != spec.RewardsPool {
 			return fmt.Errorf("cannot spend from fee sink's address %v to non incentive pool address %v", header.Sender, payment.Receiver)
 		}
-		if payment.CloseRemainderTo != (basics.Address{}) {
+		if !payment.CloseRemainderTo.IsZero() {
 			return fmt.Errorf("cannot close fee sink %v to %v", header.Sender, payment.CloseRemainderTo)
 		}
 	}

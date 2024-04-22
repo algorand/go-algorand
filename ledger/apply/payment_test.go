@@ -111,8 +111,10 @@ func TestPaymentApply(t *testing.T) {
 func TestCheckSpender(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	mockBalV0 := makeMockBalances(protocol.ConsensusCurrentVersion)
 	mockBalV7 := makeMockBalances(protocol.ConsensusV7)
+	mockBalV39 := makeMockBalances(protocol.ConsensusV39)
+	mockBalCurrent := makeMockBalances(protocol.ConsensusCurrentVersion)
+	mockBalFuture := makeMockBalances(protocol.ConsensusFuture)
 
 	secretSrc := keypair()
 	src := basics.Address(secretSrc.SignatureVerifier)
@@ -134,19 +136,39 @@ func TestCheckSpender(t *testing.T) {
 		},
 	}
 
-	tx.Sender = basics.Address(feeSink)
-	require.Error(t, tx.PaymentTxnFields.CheckSpender(tx.Header, spec, mockBalV0.ConsensusParams()))
+	tx.Sender = feeSink
+	require.ErrorContains(t, tx.PaymentTxnFields.CheckSpender(tx.Header, spec, mockBalV7.ConsensusParams()),
+		"to non incentive pool address")
+	require.ErrorContains(t, tx.PaymentTxnFields.CheckSpender(tx.Header, spec, mockBalV39.ConsensusParams()),
+		"to non incentive pool address")
+	require.ErrorContains(t, tx.PaymentTxnFields.CheckSpender(tx.Header, spec, mockBalCurrent.ConsensusParams()),
+		"to non incentive pool address")
+	require.ErrorContains(t, tx.PaymentTxnFields.CheckSpender(tx.Header, spec, mockBalFuture.ConsensusParams()),
+		"cannot spend from fee sink")
 
-	poolAddr := basics.Address(poolAddr)
 	tx.Receiver = poolAddr
-	require.NoError(t, tx.PaymentTxnFields.CheckSpender(tx.Header, spec, mockBalV0.ConsensusParams()))
+	require.NoError(t, tx.PaymentTxnFields.CheckSpender(tx.Header, spec, mockBalCurrent.ConsensusParams()))
+	require.NoError(t, tx.PaymentTxnFields.CheckSpender(tx.Header, spec, mockBalV7.ConsensusParams()))
+	require.NoError(t, tx.PaymentTxnFields.CheckSpender(tx.Header, spec, mockBalV39.ConsensusParams()))
+	require.ErrorContains(t, tx.PaymentTxnFields.CheckSpender(tx.Header, spec, mockBalFuture.ConsensusParams()),
+		"cannot spend from fee sink")
 
 	tx.CloseRemainderTo = poolAddr
-	require.Error(t, tx.PaymentTxnFields.CheckSpender(tx.Header, spec, mockBalV0.ConsensusParams()))
-	require.Error(t, tx.PaymentTxnFields.CheckSpender(tx.Header, spec, mockBalV7.ConsensusParams()))
+	require.ErrorContains(t, tx.PaymentTxnFields.CheckSpender(tx.Header, spec, mockBalV7.ConsensusParams()),
+		"cannot close fee sink")
+	require.ErrorContains(t, tx.PaymentTxnFields.CheckSpender(tx.Header, spec, mockBalV39.ConsensusParams()),
+		"cannot close fee sink")
+	require.ErrorContains(t, tx.PaymentTxnFields.CheckSpender(tx.Header, spec, mockBalCurrent.ConsensusParams()),
+		"cannot close fee sink")
+	require.ErrorContains(t, tx.PaymentTxnFields.CheckSpender(tx.Header, spec, mockBalFuture.ConsensusParams()),
+		"cannot spend from fee sink")
 
+	// When not sending from fee sink, everything's fine
 	tx.Sender = src
 	require.NoError(t, tx.PaymentTxnFields.CheckSpender(tx.Header, spec, mockBalV7.ConsensusParams()))
+	require.NoError(t, tx.PaymentTxnFields.CheckSpender(tx.Header, spec, mockBalV39.ConsensusParams()))
+	require.NoError(t, tx.PaymentTxnFields.CheckSpender(tx.Header, spec, mockBalCurrent.ConsensusParams()))
+	require.NoError(t, tx.PaymentTxnFields.CheckSpender(tx.Header, spec, mockBalFuture.ConsensusParams()))
 }
 
 func TestPaymentValidation(t *testing.T) {
