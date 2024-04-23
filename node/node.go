@@ -228,7 +228,22 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		return nil, err
 	}
 
-	node.transactionPool = pools.MakeTransactionPool(node.ledger.Ledger, cfg, node.log)
+	registry, err := ensureParticipationDB(node.genesisDirs.ColdGenesisDir, node.log)
+	if err != nil {
+		log.Errorf("unable to initialize the participation registry database: %v", err)
+		return nil, err
+	}
+	node.accountManager = data.MakeAccountManager(log, registry)
+
+	err = node.loadParticipationKeys()
+	if err != nil {
+		log.Errorf("Cannot load participation keys: %v", err)
+		return nil, err
+	}
+
+	node.oldKeyDeletionNotify = make(chan struct{}, 1)
+
+	node.transactionPool = pools.MakeTransactionPool(node.ledger.Ledger, cfg, node.log, node)
 
 	blockListeners := []ledgercore.BlockListener{
 		node.transactionPool,
@@ -299,21 +314,6 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	node.catchupBlockAuth = blockAuthenticatorImpl{Ledger: node.ledger, AsyncVoteVerifier: agreement.MakeAsyncVoteVerifier(node.lowPriorityCryptoVerificationPool)}
 	node.catchupService = catchup.MakeService(node.log, node.config, p2pNode, node.ledger, node.catchupBlockAuth, agreementLedger.UnmatchedPendingCertificates, node.lowPriorityCryptoVerificationPool)
 	node.txPoolSyncerService = rpcs.MakeTxSyncer(node.transactionPool, node.net, node.txHandler.SolicitedTxHandler(), time.Duration(cfg.TxSyncIntervalSeconds)*time.Second, time.Duration(cfg.TxSyncTimeoutSeconds)*time.Second, cfg.TxSyncServeResponseSize)
-
-	registry, err := ensureParticipationDB(node.genesisDirs.ColdGenesisDir, node.log)
-	if err != nil {
-		log.Errorf("unable to initialize the participation registry database: %v", err)
-		return nil, err
-	}
-	node.accountManager = data.MakeAccountManager(log, registry)
-
-	err = node.loadParticipationKeys()
-	if err != nil {
-		log.Errorf("Cannot load participation keys: %v", err)
-		return nil, err
-	}
-
-	node.oldKeyDeletionNotify = make(chan struct{}, 1)
 
 	catchpointCatchupState, err := node.ledger.GetCatchpointCatchupState(context.Background())
 	if err != nil {
@@ -455,20 +455,20 @@ func (node *AlgorandFullNode) Ledger() *data.Ledger {
 
 // writeDevmodeBlock generates a new block for a devmode, and write it to the ledger.
 func (node *AlgorandFullNode) writeDevmodeBlock() (err error) {
-	var vb *ledgercore.ValidatedBlock
+	var vb *ledgercore.UnfinishedBlock
 	vb, err = node.transactionPool.AssembleDevModeBlock()
 	if err != nil || vb == nil {
 		return
 	}
 
-	// Make a new validated block.
-	prevRound := vb.Block().Round() - 1
+	// Make a new validated block from this UnfinishedBlock.
+	prevRound := vb.Round() - 1
 	prev, err := node.ledger.BlockHdr(prevRound)
 	if err != nil {
 		return err
 	}
 
-	blk := vb.Block()
+	blk := vb.UnfinishedBlock()
 
 	// Set block timestamp based on offset, if set.
 	// Make sure block timestamp is not greater than MaxInt64.
@@ -476,11 +476,10 @@ func (node *AlgorandFullNode) writeDevmodeBlock() (err error) {
 		blk.TimeStamp = prev.TimeStamp + *node.timestampOffset
 	}
 	blk.BlockHeader.Seed = committee.Seed(prev.Hash())
-	vb2 := ledgercore.MakeValidatedBlock(blk, vb.Delta())
-	vb = &vb2
+	vb2 := ledgercore.MakeValidatedBlock(blk, vb.UnfinishedDeltas())
 
 	// add the newly generated block to the ledger
-	err = node.ledger.AddValidatedBlock(*vb, agreement.Certificate{Round: vb.Block().Round()})
+	err = node.ledger.AddValidatedBlock(vb2, agreement.Certificate{Round: vb2.Block().Round()})
 	return err
 }
 
@@ -1290,27 +1289,23 @@ func (node *AlgorandFullNode) SetCatchpointCatchupMode(catchpointCatchupMode boo
 
 }
 
-// validatedBlock satisfies agreement.ValidatedBlock
-type validatedBlock struct {
-	vb *ledgercore.ValidatedBlock
+// unfinishedBlock satisfies agreement.UnfinishedBlock
+type unfinishedBlock struct {
+	blk *ledgercore.UnfinishedBlock
 }
 
-// WithSeed satisfies the agreement.ValidatedBlock interface.
-func (vb validatedBlock) WithSeed(s committee.Seed) agreement.ValidatedBlock {
-	lvb := vb.vb.WithSeed(s)
-	return validatedBlock{vb: &lvb}
-}
+// Round satisfies the agreement.UnfinishedBlock interface.
+func (ub unfinishedBlock) Round() basics.Round { return ub.blk.Round() }
 
-// Block satisfies the agreement.ValidatedBlock interface.
-func (vb validatedBlock) Block() bookkeeping.Block {
-	blk := vb.vb.Block()
-	return blk
+// FinishBlock satisfies the agreement.UnfinishedBlock interface.
+func (ub unfinishedBlock) FinishBlock(s committee.Seed, proposer basics.Address, eligible bool) agreement.Block {
+	return agreement.Block(ub.blk.FinishBlock(s, proposer, eligible))
 }
 
 // AssembleBlock implements Ledger.AssembleBlock.
-func (node *AlgorandFullNode) AssembleBlock(round basics.Round) (agreement.ValidatedBlock, error) {
+func (node *AlgorandFullNode) AssembleBlock(round basics.Round, addrs []basics.Address) (agreement.UnfinishedBlock, error) {
 	deadline := time.Now().Add(node.config.ProposalAssemblyTime)
-	lvb, err := node.transactionPool.AssembleBlock(round, deadline)
+	ub, err := node.transactionPool.AssembleBlock(round, deadline)
 	if err != nil {
 		if errors.Is(err, pools.ErrStaleBlockAssemblyRequest) {
 			// convert specific error to one that would have special handling in the agreement code.
@@ -1329,7 +1324,17 @@ func (node *AlgorandFullNode) AssembleBlock(round basics.Round) (agreement.Valid
 		}
 		return nil, err
 	}
-	return validatedBlock{vb: lvb}, nil
+
+	// ensure UnfinishedBlock contains provided addresses
+	for _, addr := range addrs {
+		if !ub.ContainsAddress(addr) {
+			// this should not happen: VotingKeys() and VotingAccountsForRound() should be in sync
+			node.log.Errorf("AlgorandFullNode.AssembleBlock: could not generate a proposal for round %d, proposer %s not in UnfinishedBlock", round, addr)
+			return nil, agreement.ErrAssembleBlockRoundStale
+		}
+	}
+
+	return unfinishedBlock{blk: ub}, nil
 }
 
 // getOfflineClosedStatus will return an int with the appropriate bit(s) set if it is offline and/or online
@@ -1347,6 +1352,20 @@ func getOfflineClosedStatus(acctData basics.OnlineAccountData) int {
 	}
 
 	return rval
+}
+
+// VotingAccountsForRound provides a list of addresses that have participation keys valid for the given round.
+// These accounts may not all be eligible to propose, but they are a superset of eligible proposers.
+func (node *AlgorandFullNode) VotingAccountsForRound(round basics.Round) []basics.Address {
+	if node.devMode {
+		return []basics.Address{}
+	}
+	parts := node.accountManager.Keys(round)
+	accounts := make([]basics.Address, len(parts))
+	for i, p := range parts {
+		accounts[i] = p.Account
+	}
+	return accounts
 }
 
 // VotingKeys implements the key manager's VotingKeys method, and provides additional validation with the ledger.

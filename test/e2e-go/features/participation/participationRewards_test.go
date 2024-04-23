@@ -181,7 +181,7 @@ func TestPartkeyOnlyRewards(t *testing.T) {
 	// do a balance poke by moving funds b/w accounts. this will cause balances to reflect received rewards
 	tx, err := fixture.LibGoalClient.SendPaymentFromUnencryptedWallet(richAccount.Address, account.String(), minFee, minBalance, nil)
 	r.NoError(err)
-	fixture.WaitForTxnConfirmation(arbitraryPostGenesisRound+uint64(10), tx.ID().String(), richAccount.Address)
+	fixture.WaitForTxnConfirmation(arbitraryPostGenesisRound+uint64(10), tx.ID().String())
 	finalBalance, err := client.GetBalance(account.String())
 	r.NoError(err)
 	delta := finalBalance - initialBalance

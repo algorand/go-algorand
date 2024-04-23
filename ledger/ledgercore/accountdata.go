@@ -39,6 +39,7 @@ type AccountBaseData struct {
 	RewardsBase        uint64
 	RewardedMicroAlgos basics.MicroAlgos
 	AuthAddr           basics.Address
+	IncentiveEligible  bool
 
 	TotalAppSchema      basics.StateSchema // Totals across created globals, and opted in locals.
 	TotalExtraAppPages  uint32             // Total number of extra pages across all created apps
@@ -48,6 +49,9 @@ type AccountBaseData struct {
 	TotalAssets         uint64             // Total of asset creations and optins (i.e. number of holdings)
 	TotalBoxes          uint64             // Total number of boxes associated to this account
 	TotalBoxBytes       uint64             // Total bytes for this account's boxes. keys _and_ values count
+
+	LastProposed  basics.Round // The last round that this account proposed the winning block.
+	LastHeartbeat basics.Round // The last round that this account sent a heartbeat to show it was online.
 }
 
 // VotingData holds participation information
@@ -65,6 +69,7 @@ type VotingData struct {
 type OnlineAccountData struct {
 	MicroAlgosWithRewards basics.MicroAlgos
 	VotingData
+	IncentiveEligible bool
 }
 
 // ToAccountData returns ledgercore.AccountData from basics.AccountData
@@ -75,8 +80,8 @@ func ToAccountData(acct basics.AccountData) AccountData {
 			MicroAlgos:         acct.MicroAlgos,
 			RewardsBase:        acct.RewardsBase,
 			RewardedMicroAlgos: acct.RewardedMicroAlgos,
-
-			AuthAddr: acct.AuthAddr,
+			AuthAddr:           acct.AuthAddr,
+			IncentiveEligible:  acct.IncentiveEligible,
 
 			TotalAppSchema:      acct.TotalAppSchema,
 			TotalExtraAppPages:  acct.TotalExtraAppPages,
@@ -86,6 +91,9 @@ func ToAccountData(acct basics.AccountData) AccountData {
 			TotalAppLocalStates: uint64(len(acct.AppLocalStates)),
 			TotalBoxes:          acct.TotalBoxes,
 			TotalBoxBytes:       acct.TotalBoxBytes,
+
+			LastProposed:  acct.LastProposed,
+			LastHeartbeat: acct.LastHeartbeat,
 		},
 		VotingData: VotingData{
 			VoteID:          acct.VoteID,
@@ -105,6 +113,8 @@ func AssignAccountData(a *basics.AccountData, acct AccountData) {
 	a.MicroAlgos = acct.MicroAlgos
 	a.RewardsBase = acct.RewardsBase
 	a.RewardedMicroAlgos = acct.RewardedMicroAlgos
+	a.AuthAddr = acct.AuthAddr
+	a.IncentiveEligible = acct.IncentiveEligible
 
 	a.VoteID = acct.VoteID
 	a.SelectionID = acct.SelectionID
@@ -113,11 +123,13 @@ func AssignAccountData(a *basics.AccountData, acct AccountData) {
 	a.VoteLastValid = acct.VoteLastValid
 	a.VoteKeyDilution = acct.VoteKeyDilution
 
-	a.AuthAddr = acct.AuthAddr
 	a.TotalAppSchema = acct.TotalAppSchema
 	a.TotalExtraAppPages = acct.TotalExtraAppPages
 	a.TotalBoxes = acct.TotalBoxes
 	a.TotalBoxBytes = acct.TotalBoxBytes
+
+	a.LastProposed = acct.LastProposed
+	a.LastHeartbeat = acct.LastHeartbeat
 }
 
 // WithUpdatedRewards calls basics account data WithUpdatedRewards
@@ -134,10 +146,23 @@ func (u *AccountData) ClearOnlineState() {
 	u.VotingData = VotingData{}
 }
 
+// Suspend sets the status to Offline, but does _not_ clear voting keys, so
+// that a heartbeat can bring the account back Online
+func (u *AccountData) Suspend() {
+	u.Status = basics.Offline
+	// To regain eligibility, the account will have to `keyreg` with the extra fee.
+	u.IncentiveEligible = false
+}
+
+// Suspended returns true if the account is suspended (offline with keys)
+func (u *AccountData) Suspended() bool {
+	return u.Status == basics.Offline && !u.VoteID.IsEmpty()
+}
+
 // MinBalance computes the minimum balance requirements for an account based on
 // some consensus parameters. MinBalance should correspond roughly to how much
 // storage the account is allowed to store on disk.
-func (u AccountData) MinBalance(proto *config.ConsensusParams) (res basics.MicroAlgos) {
+func (u AccountData) MinBalance(proto *config.ConsensusParams) basics.MicroAlgos {
 	return basics.MinBalance(
 		proto,
 		uint64(u.TotalAssets),
@@ -146,6 +171,15 @@ func (u AccountData) MinBalance(proto *config.ConsensusParams) (res basics.Micro
 		uint64(u.TotalExtraAppPages),
 		u.TotalBoxes, u.TotalBoxBytes,
 	)
+}
+
+// AvailableBalance returns the amount of MicroAlgos that are available for
+// spending without fully closing the account.
+func (u AccountData) AvailableBalance(proto *config.ConsensusParams) basics.MicroAlgos {
+	if left, o := basics.OSubA(u.MicroAlgos, u.MinBalance(proto)); !o {
+		return left
+	}
+	return basics.MicroAlgos{}
 }
 
 // IsZero checks if an AccountData value is the same as its zero value.
@@ -179,6 +213,7 @@ func (u AccountData) OnlineAccountData(proto config.ConsensusParams, rewardsLeve
 			VoteLastValid:   u.VoteLastValid,
 			VoteKeyDilution: u.VoteKeyDilution,
 		},
+		IncentiveEligible: u.IncentiveEligible,
 	}
 }
 
