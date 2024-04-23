@@ -1387,9 +1387,9 @@ func TestAbsenteeChecks(t *testing.T) {
 		tmp.LastHeartbeat = 1    // non-zero allows suspensions
 		switch i {
 		case 1:
-			tmp.LastHeartbeat = 1150 // lie hear so that addr[1] won't be suspended
+			tmp.LastHeartbeat = 1150 // lie here so that addr[1] won't be suspended
 		case 2:
-			tmp.LastProposed = 1150 // lie hear so that addr[2] won't be suspended
+			tmp.LastProposed = 1150 // lie here so that addr[2] won't be suspended
 		}
 
 		genesisInitState.Accounts[addr] = tmp
