@@ -207,19 +207,6 @@ func (m *mockNode) ListeningAddress() (string, bool) {
 
 func (m *mockNode) Stop() {}
 
-func (m *mockNode) ListTxns(addr basics.Address, minRound basics.Round, maxRound basics.Round) ([]node.TxnWithStatus, error) {
-	txns, ok := m.usertxns[addr]
-	if !ok {
-		return nil, fmt.Errorf("no txns for %s", addr)
-	}
-
-	return txns, nil
-}
-
-func (m *mockNode) GetTransaction(addr basics.Address, txID transactions.Txid, minRound basics.Round, maxRound basics.Round) (node.TxnWithStatus, bool) {
-	return node.TxnWithStatus{}, false
-}
-
 func (m *mockNode) IsArchival() bool {
 	return false
 }

@@ -577,58 +577,6 @@ func (node *AlgorandFullNode) Simulate(request simulation.Request) (result simul
 	return simulator.Simulate(request)
 }
 
-// ListTxns returns SignedTxns associated with a specific account in a range of Rounds (inclusive).
-// TxnWithStatus returns the round in which a particular transaction appeared,
-// since that information is not part of the SignedTxn itself.
-func (node *AlgorandFullNode) ListTxns(addr basics.Address, minRound basics.Round, maxRound basics.Round) ([]TxnWithStatus, error) {
-	result := make([]TxnWithStatus, 0)
-	for r := minRound; r <= maxRound; r++ {
-		h, err := node.ledger.AddressTxns(addr, r)
-		if err != nil {
-			return nil, err
-		}
-		for _, tx := range h {
-			result = append(result, TxnWithStatus{
-				Txn:            tx.SignedTxn,
-				ConfirmedRound: r,
-				ApplyData:      tx.ApplyData,
-			})
-		}
-	}
-	return result, nil
-}
-
-// GetTransaction looks for the required txID within with a specific account within a range of rounds (inclusive) and
-// returns the SignedTxn and true iff it finds the transaction.
-func (node *AlgorandFullNode) GetTransaction(addr basics.Address, txID transactions.Txid, minRound basics.Round, maxRound basics.Round) (TxnWithStatus, bool) {
-	// start with the most recent round, and work backwards:
-	// this will abort early if it hits pruned rounds
-	if maxRound < minRound {
-		return TxnWithStatus{}, false
-	}
-	r := maxRound
-	for {
-		h, err := node.ledger.AddressTxns(addr, r)
-		if err != nil {
-			return TxnWithStatus{}, false
-		}
-		for _, tx := range h {
-			if tx.ID() == txID {
-				return TxnWithStatus{
-					Txn:            tx.SignedTxn,
-					ConfirmedRound: r,
-					ApplyData:      tx.ApplyData,
-				}, true
-			}
-		}
-		if r == minRound {
-			break
-		}
-		r--
-	}
-	return TxnWithStatus{}, false
-}
-
 // GetPendingTransaction looks for the required txID in the recent ledger
 // blocks, in the txpool, and in the txpool's status cache.  It returns
 // the SignedTxn (with status information), and a bool to indicate if the
