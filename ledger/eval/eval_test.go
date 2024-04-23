@@ -1465,6 +1465,7 @@ func TestAbsenteeChecks(t *testing.T) {
 	require.Contains(t, validatedBlock.Block().AbsentParticipationAccounts, challenged, challenged.String())
 	for i := byte(0); i < 32; i++ {
 		if i == challenge>>3 {
+			require.Equal(t, basics.Address{i << 3, 0xaa}, challenged)
 			continue
 		}
 		require.NotContains(t, validatedBlock.Block().AbsentParticipationAccounts, basics.Address{i << 3, 0xaa})
