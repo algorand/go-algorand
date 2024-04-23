@@ -222,6 +222,6 @@ func (m *migrator) initialVersion(ctx context.Context) error {
 		return err
 	}
 
-	// KV store starts at version 10
-	return m.setVersion(ctx, 10)
+	// KV store starts at version 11
+	return m.setVersion(ctx, 11)
 }

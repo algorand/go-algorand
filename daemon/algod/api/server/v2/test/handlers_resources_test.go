@@ -523,7 +523,7 @@ func TestAccountAssetsInformation(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Equal(t, 400, rec.Code)
-	require.Equal(t, "{\"message\":\"limit 10001 exceeds max assets single batch limit 10000\"}\n", rec.Body.String())
+	require.Equal(t, "{\"message\":\"limit 1001 exceeds max assets single batch limit 1000\"}\n", rec.Body.String())
 
 	// 8b. Invalid limits - zero
 	ctx, rec = newReq(t)
