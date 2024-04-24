@@ -2231,7 +2231,7 @@ func TestLedgerReloadTxTailHistoryAccess(t *testing.T) {
 			return err0
 		}
 
-		if err0 := tx.Testing().AccountsUpdateSchemaTest(ctx); err != nil {
+		if err0 := tx.Testing().AccountsUpdateSchemaTest(ctx); err0 != nil {
 			return err0
 		}
 
