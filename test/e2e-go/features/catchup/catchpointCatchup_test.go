@@ -537,7 +537,7 @@ func TestNodeTxHandlerRestart(t *testing.T) {
 	a.NoError(err)
 	status, err := client1.Status()
 	a.NoError(err)
-	_, err = fixture.WaitForConfirmedTxn(status.LastRound+100, addrs1[0], tx.ID().String())
+	_, err = fixture.WaitForConfirmedTxn(status.LastRound+100, tx.ID().String())
 	a.NoError(err)
 	targetCatchpointRound := status.LastRound
 
@@ -563,7 +563,7 @@ func TestNodeTxHandlerRestart(t *testing.T) {
 
 	status, err = client2.Status()
 	a.NoError(err)
-	_, err = fixture.WaitForConfirmedTxn(status.LastRound+50, addrs2[0], tx.ID().String())
+	_, err = fixture.WaitForConfirmedTxn(status.LastRound+50, tx.ID().String())
 	a.NoError(err)
 }
 
@@ -645,7 +645,7 @@ func TestReadyEndpoint(t *testing.T) {
 	a.NoError(err)
 	status, err := client1.Status()
 	a.NoError(err)
-	_, err = fixture.WaitForConfirmedTxn(status.LastRound+100, addrs1[0], tx.ID().String())
+	_, err = fixture.WaitForConfirmedTxn(status.LastRound+100, tx.ID().String())
 	a.NoError(err)
 	targetCatchpointRound := status.LastRound
 
@@ -784,7 +784,7 @@ func TestNodeTxSyncRestart(t *testing.T) {
 	a.NoError(err)
 	status, err := client1.Status()
 	a.NoError(err)
-	_, err = fixture.WaitForConfirmedTxn(status.LastRound+100, addrs1[0], tx.ID().String())
+	_, err = fixture.WaitForConfirmedTxn(status.LastRound+100, tx.ID().String())
 	a.NoError(err)
 	targetCatchpointRound := status.LastRound
 
@@ -806,7 +806,7 @@ func TestNodeTxSyncRestart(t *testing.T) {
 	a.NoError(err)
 
 	// the transaction should not be confirmed yet
-	_, err = fixture.WaitForConfirmedTxn(0, addrs2[0], tx.ID().String())
+	_, err = fixture.WaitForConfirmedTxn(0, tx.ID().String())
 	a.Error(err)
 
 	// Wait for the catchup
@@ -826,6 +826,6 @@ func TestNodeTxSyncRestart(t *testing.T) {
 
 	status, err = client2.Status()
 	a.NoError(err)
-	_, err = fixture.WaitForConfirmedTxn(status.LastRound+50, addrs2[0], tx.ID().String())
+	_, err = fixture.WaitForConfirmedTxn(status.LastRound+50, tx.ID().String())
 	a.NoError(err)
 }

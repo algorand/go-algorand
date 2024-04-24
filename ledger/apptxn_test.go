@@ -22,10 +22,12 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
@@ -35,7 +37,7 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-// TestPayAction ensures a pay in teal affects balances
+// TestPayAction ensures a inner pay transaction affects balances
 func TestPayAction(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -58,6 +60,23 @@ func TestPayAction(t *testing.T) {
          itxn_submit
         `))
 
+		// We're going to test some payout effects here too, so that we have an inner transaction example.
+		proposer := basics.Address{0x01, 0x02, 0x03}
+		dl.txns(&txntest.Txn{
+			Type:     "pay",
+			Sender:   addrs[7],
+			Receiver: proposer,
+			Amount:   1_000_000 * 1_000_000, // 1 million algos is surely an eligible amount
+		}, &txntest.Txn{
+			Type:         "keyreg",
+			Sender:       proposer,
+			Fee:          3_000_000,
+			VotePK:       crypto.OneTimeSignatureVerifier{0x01},
+			SelectionPK:  crypto.VRFVerifier{0x02},
+			StateProofPK: merklesignature.Commitment{0x03},
+			VoteFirst:    1, VoteLast: 1000,
+		})
+
 		payout1 := txntest.Txn{
 			Type:          "appl",
 			Sender:        addrs[1],
@@ -65,7 +84,32 @@ func TestPayAction(t *testing.T) {
 			Accounts:      []basics.Address{addrs[1]}, // pay self
 		}
 
-		dl.fullBlock(&payout1)
+		presink := micros(dl.t, dl.generator, genBalances.FeeSink)
+		preprop := micros(dl.t, dl.generator, proposer)
+		dl.t.Log("presink", presink, "preprop", preprop)
+		dl.beginBlock()
+		dl.txns(&payout1)
+		vb := dl.endBlock(proposer)
+		const payoutsVer = 40
+		if ver >= payoutsVer {
+			require.True(t, dl.generator.GenesisProto().Payouts.Enabled)
+			require.EqualValues(t, 2000, vb.Block().FeesCollected.Raw)
+		} else {
+			require.False(t, dl.generator.GenesisProto().Payouts.Enabled)
+			require.Zero(t, vb.Block().FeesCollected)
+		}
+
+		postsink := micros(dl.t, dl.generator, genBalances.FeeSink)
+		postprop := micros(dl.t, dl.generator, proposer)
+
+		dl.t.Log("postsink", postsink, "postprop", postprop)
+		if ver >= payoutsVer {
+			bonus := 10_000_000                                // config/consensus.go
+			assert.EqualValues(t, bonus-500, presink-postsink) // based on 75% in config/consensus.go
+			require.EqualValues(t, bonus+1500, postprop-preprop)
+		} else {
+			require.EqualValues(t, 2000, postsink-presink) // no payouts yet
+		}
 
 		ad0 := micros(dl.t, dl.generator, addrs[0])
 		ad1 := micros(dl.t, dl.generator, addrs[1])
@@ -90,7 +134,7 @@ func TestPayAction(t *testing.T) {
 			ApplicationID: ai,
 			Accounts:      []basics.Address{addrs[2]}, // pay other
 		}
-		vb := dl.fullBlock(&payout2)
+		vb = dl.fullBlock(&payout2)
 		// confirm that modifiedAccounts can see account in inner txn
 
 		deltas := vb.Delta()
@@ -3344,7 +3388,8 @@ ok:
 		vb := dl.endBlock()
 		deltas := vb.Delta()
 
-		params, _ := deltas.Accts.GetAppParams(addrs[0], appID)
+		params, ok := deltas.Accts.GetAppParams(addrs[0], appID)
+		require.True(t, ok)
 		require.Equal(t, basics.TealKeyValue{
 			"caller":  {Type: basics.TealBytesType, Bytes: string(addrs[0][:])},
 			"creator": {Type: basics.TealBytesType, Bytes: string(addrs[0][:])},

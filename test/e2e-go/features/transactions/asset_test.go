@@ -774,7 +774,7 @@ func TestAssetSend(t *testing.T) {
 	tx, err = client.SendPaymentFromUnencryptedWallet(account0, extra, 0, 10000000000, nil)
 	a.NoError(err)
 	_, curRound = fixture.GetBalanceAndRound(account0)
-	fixture.WaitForConfirmedTxn(curRound+20, account0, tx.ID().String())
+	fixture.WaitForConfirmedTxn(curRound+20, tx.ID().String())
 
 	// Sending assets to account that hasn't opted in should fail, but
 	// after opting in, should succeed for non-frozen asset.
