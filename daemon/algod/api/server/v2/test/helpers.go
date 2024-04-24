@@ -24,7 +24,6 @@ import (
 
 	"github.com/stretchr/testify/mock"
 
-	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
@@ -36,7 +35,6 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
-	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/simulation"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/node"
@@ -95,7 +93,6 @@ type mockNode struct {
 	err             error
 	id              account.ParticipationID
 	keys            account.StateProofKeys
-	usertxns        map[basics.Address][]node.TxnWithStatus
 	status          node.StatusReport
 	devmode         bool
 	timestampOffset *int64
@@ -148,7 +145,6 @@ func makeMockNodeWithConfig(ledger v2.LedgerForAPI, genesisID string, nodeError 
 		genesisID: genesisID,
 		config:    cfg,
 		err:       nodeError,
-		usertxns:  map[basics.Address][]node.TxnWithStatus{},
 		status:    status,
 		devmode:   devMode,
 	}
@@ -198,31 +194,6 @@ func (m *mockNode) SuggestedFee() basics.MicroAlgos {
 // unused by handlers:
 func (m *mockNode) Config() config.Local {
 	return m.config
-}
-func (m *mockNode) Start() {}
-
-func (m *mockNode) ListeningAddress() (string, bool) {
-	return "mock listening addresses not implemented", false
-}
-
-func (m *mockNode) Stop() {}
-
-func (m *mockNode) IsArchival() bool {
-	return false
-}
-
-func (m *mockNode) OnNewBlock(block bookkeeping.Block, delta ledgercore.StateDelta) {}
-
-func (m *mockNode) Uint64() uint64 {
-	return 1
-}
-
-func (m *mockNode) GetTransactionByID(txid transactions.Txid, rnd basics.Round) (node.TxnWithStatus, error) {
-	return node.TxnWithStatus{}, fmt.Errorf("get transaction by id not implemented")
-}
-
-func (m *mockNode) AssembleBlock(round basics.Round) (agreement.ValidatedBlock, error) {
-	return nil, fmt.Errorf("assemble block not implemented")
 }
 
 func (m *mockNode) StartCatchup(catchpoint string) error {

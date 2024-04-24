@@ -1028,11 +1028,6 @@ func (node *AlgorandFullNode) txPoolGaugeThread(done <-chan struct{}) {
 	}
 }
 
-// IsArchival returns true the node is an archival node, false otherwise
-func (node *AlgorandFullNode) IsArchival() bool {
-	return node.config.Archival
-}
-
 // OnNewBlock implements the BlockListener interface so we're notified after each block is written to the ledger
 func (node *AlgorandFullNode) OnNewBlock(block bookkeeping.Block, delta ledgercore.StateDelta) {
 	if node.ledger.Latest() > block.Round() {
@@ -1106,20 +1101,6 @@ func (node *AlgorandFullNode) oldKeyDeletionThread(done <-chan struct{}) {
 // Uint64 implements the randomness by calling the crypto library.
 func (node *AlgorandFullNode) Uint64() uint64 {
 	return crypto.RandUint64()
-}
-
-// GetTransactionByID gets transaction by ID
-// this function is intended to be called externally via the REST api interface.
-func (node *AlgorandFullNode) GetTransactionByID(txid transactions.Txid, rnd basics.Round) (TxnWithStatus, error) {
-	stx, _, err := node.ledger.LookupTxid(txid, rnd)
-	if err != nil {
-		return TxnWithStatus{}, err
-	}
-	return TxnWithStatus{
-		Txn:            stx.SignedTxn,
-		ConfirmedRound: rnd,
-		ApplyData:      stx.ApplyData,
-	}, nil
 }
 
 // StartCatchup starts the catchpoint mode and attempt to get to the provided catchpoint
