@@ -148,13 +148,17 @@ func TestBasicPayouts(t *testing.T) {
 		a.EqualValues(bonus1, block.Bonus.Raw)
 
 		next, err := client.AccountData(block.Proposer().String())
+		a.NoError(err)
 		fmt.Printf(" proposer %v has %d after proposing round %d\n", block.Proposer(), next.MicroAlgos.Raw, status.LastRound)
 
 		// all nodes agree the proposer proposed
 		for i, c := range []libgoal.Client{c15, c01, relay} {
+			_, err := c.WaitForRound(status.LastRound)
+			a.NoError(err)
 			data, err := c.AccountData(block.Proposer().String())
 			a.NoError(err)
-			a.Equal(block.Round(), data.LastProposed, i)
+			// <= in case one node is behind, and the others have already advanced
+			a.LessOrEqual(block.Round(), data.LastProposed, i)
 		}
 
 		// 01 would get paid (because under balance cap) 15 would not
@@ -211,14 +215,21 @@ func TestBasicPayouts(t *testing.T) {
 		a.NoError(err)
 
 		for _, c := range []libgoal.Client{c15, c01, relay} {
+			_, err := c.WaitForRound(status.LastRound)
+			a.NoError(err)
 			data, err = c.AccountData(block.Proposer().String())
 			a.NoError(err)
-			a.Equal(block.Round(), data.LastProposed)
-			a.Equal(pdata, data)
+			// <= in case one node is behind, and the others have already advanced
+			a.LessOrEqual(block.Round(), data.LastProposed)
+			// <= in case one node is behind, and the others have already advanced
+			a.LessOrEqual(pdata.MicroAlgos.Raw, data.MicroAlgos.Raw)
+			a.Equal(pdata.Status, data.Status)
+			a.True(data.IncentiveEligible)
 
 			data, err = c.AccountData(feesink.String())
 			a.NoError(err)
-			a.Equal(fdata, data)
+			// >= in case one node is behind, and the others have already advanced
+			a.GreaterOrEqual(fdata.MicroAlgos.Raw, data.MicroAlgos.Raw)
 		}
 		a.LessOrEqual(100000, int(data.MicroAlgos.Raw)) // won't go below minfee
 		if data.MicroAlgos.Raw == 100000 {
