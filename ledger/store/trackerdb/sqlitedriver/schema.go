@@ -951,37 +951,32 @@ func accountsAddCreatableTypeColumn(ctx context.Context, e db.Executable) error 
 		return nil
 	}
 
-	// Create new resources table with ctype column
-	createStmt := `CREATE TABLE IF NOT EXISTS resources_ctype_migration (
-		addrid INTEGER NOT NULL,
-		aidx INTEGER NOT NULL,
-		data BLOB NOT NULL,
-		ctype INTEGER NOT NULL,
-		PRIMARY KEY (addrid, aidx) ) WITHOUT ROWID`
+	// Add ctype column
+	createStmt := `ALTER TABLE resources ADD COLUMN ctype INTEGER NOT NULL DEFAULT -1`
 
 	_, err = e.ExecContext(ctx, createStmt)
 	if err != nil {
 		return err
 	}
 
-	// Insert into the new resources table using the data from the old resources table joined with the assetcreators table
-	insertStmt := `INSERT INTO resources_ctype_migration (addrid, aidx, data, ctype)
-		SELECT r.addrid, r.aidx, r.data, COALESCE(ac.ctype, -1)
-		FROM resources r
-		LEFT JOIN assetcreators ac ON r.aidx = ac.asset`
-	_, err = e.ExecContext(ctx, insertStmt)
+	// Populate the new ctype column with the corresponding creatable type from assetcreators where available
+	updateStmt := `UPDATE resources SET ctype = (
+    SELECT COALESCE((SELECT ac.ctype FROM assetcreators ac WHERE ac.asset = resources.aidx),-1)
+	) WHERE ctype = -1`
+
+	_, err = e.ExecContext(ctx, updateStmt)
 	if err != nil {
 		return err
 	}
 
-	updateStmt, err := e.PrepareContext(ctx, "UPDATE resources_ctype_migration SET ctype = ? WHERE addrid = ? AND aidx = ?")
+	updatePrepStmt, err := e.PrepareContext(ctx, "UPDATE resources SET ctype = ? WHERE addrid = ? AND aidx = ?")
 	if err != nil {
 		return err
 	}
-	defer updateStmt.Close()
+	defer updatePrepStmt.Close()
 
 	// Pull resource entries into memory where ctype is not set
-	rows, err := e.QueryContext(ctx, "SELECT addrid, aidx, data FROM resources_ctype_migration r WHERE ctype = -1")
+	rows, err := e.QueryContext(ctx, "SELECT addrid, aidx, data FROM resources r WHERE ctype = -1")
 	if err != nil {
 		return err
 	}
@@ -1015,24 +1010,11 @@ func accountsAddCreatableTypeColumn(ctx context.Context, e db.Executable) error 
 			return fmt.Errorf("unable to discern creatable type for addrid %d, resource %d", addrid, aidx)
 		}
 
-		_, err = updateStmt.ExecContext(ctx, ct, addrid, aidx)
+		_, err = updatePrepStmt.ExecContext(ctx, ct, addrid, aidx)
 		if err != nil {
 			return err
 		}
 	}
 
-	applyNewResourcesTableStructure := []string{
-		`ALTER TABLE resources RENAME TO resources_old`,
-		`ALTER TABLE resources_ctype_migration RENAME TO resources`,
-		`DROP TABLE IF EXISTS resources_old`,
-	}
-
-	// Rename the tables to apply the new structure.
-	for _, stmt := range applyNewResourcesTableStructure {
-		_, err = e.ExecContext(ctx, stmt)
-		if err != nil {
-			return err
-		}
-	}
 	return rows.Err()
 }
