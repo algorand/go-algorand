@@ -288,7 +288,7 @@ func TestBasicPayouts(t *testing.T) {
 
 	// account is gone anyway (it didn't get paid)
 	data, err = relay.AccountData(account01.Address)
-	a.Error(err)
+	a.NoError(err)
 	a.Zero(data, "%+v", data)
 
 	data, err = relay.AccountData(feesink.String())
