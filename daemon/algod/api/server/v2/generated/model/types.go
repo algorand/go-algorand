@@ -279,8 +279,8 @@ type AppCallLogs struct {
 	// Logs An array of logs
 	Logs [][]byte `json:"logs"`
 
-	// Txid The transaction ID of the outer app call that lead to these logs
-	Txid string `json:"txid"`
+	// TxId The transaction ID of the outer app call that lead to these logs
+	TxId string `json:"txId"`
 }
 
 // Application Application index and its parameters

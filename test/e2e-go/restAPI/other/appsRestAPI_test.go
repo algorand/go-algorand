@@ -679,22 +679,22 @@ func TestBlockLogs(t *testing.T) {
 		Logs: []model.AppCallLogs{
 			{
 				ApplicationIndex: uint64(createdAppID),
-				Txid:             stxn0.ID().String(),
+				TxId:             stxn0.ID().String(),
 				Logs:             [][]byte{deadDood},
 			},
 			{
 				ApplicationIndex: uint64(createdAppID + 3),
-				Txid:             stxn0.ID().String(),
+				TxId:             stxn0.ID().String(),
 				Logs:             [][]byte{deadBeef},
 			},
 			{
 				ApplicationIndex: uint64(createdAppID),
-				Txid:             stxn1.ID().String(),
+				TxId:             stxn1.ID().String(),
 				Logs:             [][]byte{deadDood},
 			},
 			{
 				ApplicationIndex: uint64(createdAppID + 5),
-				Txid:             stxn1.ID().String(),
+				TxId:             stxn1.ID().String(),
 				Logs:             [][]byte{deadBeef},
 			},
 		},

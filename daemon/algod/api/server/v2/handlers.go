@@ -735,7 +735,7 @@ func (v2 *Handlers) GetBlockTxids(ctx echo.Context, round uint64) error {
 // NewAppCallLogs generates a new model.AppCallLogs struct.
 func NewAppCallLogs(txid string, logs []string, appIndex uint64) model.AppCallLogs {
 	return model.AppCallLogs{
-		Txid:             txid,
+		TxId:             txid,
 		Logs:             convertSlice(logs, func(s string) []byte { return []byte(s) }),
 		ApplicationIndex: appIndex,
 	}

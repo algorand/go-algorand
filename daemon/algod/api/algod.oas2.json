@@ -4512,7 +4512,7 @@
       "required": [
         "logs",
         "application-index",
-        "txid"
+        "txId"
       ],
       "properties": {
         "logs": {
@@ -4527,7 +4527,7 @@
           "description": "The application from which the logs were generated",
           "type": "integer"
         },
-        "txid": {
+        "txId": {
           "description": "The transaction ID of the outer app call that lead to these logs",
           "type": "string"
         }
