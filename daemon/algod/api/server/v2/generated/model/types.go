@@ -271,7 +271,7 @@ type AccountStateDelta struct {
 	Delta StateDelta `json:"delta"`
 }
 
-// AppCallLogs An array of logs for a given application ID and outer transaction ID
+// AppCallLogs The logged messages from an app call along with the app ID and outer transaction ID.
 type AppCallLogs struct {
 	// ApplicationIndex The application from which the logs were generated
 	ApplicationIndex uint64 `json:"application-index"`
