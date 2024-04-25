@@ -788,15 +788,7 @@ func (v2 *Handlers) GetBlockLogs(ctx echo.Context, round uint64) error {
 	blockLogs := []model.AppCallLogs{}
 
 	for _, txn := range txns {
-		txid := txn.ID().String()
-		if len(txn.EvalDelta.Logs) > 0 {
-			blockLogs = append(
-				blockLogs,
-				NewAppCallLogs(txid, txn.EvalDelta.Logs, getAppIndexFromTxn(txn)),
-			)
-		}
-
-		blockLogs = appendLogsFromTxns(blockLogs, txn.EvalDelta.InnerTxns, txid)
+		blockLogs = appendLogsFromTxns(blockLogs, append([]transactions.SignedTxnWithAD{txn}, txn.EvalDelta.InnerTxns...), txn.ID().String())
 	}
 
 	response := model.BlockLogsResponse{Logs: blockLogs}
