@@ -788,7 +788,7 @@ func (v2 *Handlers) GetBlockLogs(ctx echo.Context, round uint64) error {
 	blockLogs := []model.AppCallLogs{}
 
 	for _, txn := range txns {
-		blockLogs = appendLogsFromTxns(blockLogs, append([]transactions.SignedTxnWithAD{txn}, txn.EvalDelta.InnerTxns...), txn.ID().String())
+		blockLogs = appendLogsFromTxns(blockLogs, []transactions.SignedTxnWithAD{txn}, txn.ID().String())
 	}
 
 	response := model.BlockLogsResponse{Logs: blockLogs}
