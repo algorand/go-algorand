@@ -120,6 +120,7 @@ func TestBasicPayouts(t *testing.T) {
 		}
 
 		next, err := client.AccountData(block.Proposer().String())
+		a.NoError(err)
 		a.LessOrEqual(int(status.LastRound), int(next.LastProposed))
 		// regardless of proposer, nobody gets paid
 		switch block.Proposer().String() {
@@ -134,6 +135,12 @@ func TestBasicPayouts(t *testing.T) {
 		}
 		fixture.WaitForRoundWithTimeout(status.LastRound + 1)
 		status, err = client.Status()
+		a.NoError(err)
+	}
+
+	// all nodes are in sync
+	for _, c := range []libgoal.Client{c15, c01, relay} {
+		_, err := c.WaitForRound(status.LastRound)
 		a.NoError(err)
 	}
 
@@ -281,6 +288,7 @@ func TestBasicPayouts(t *testing.T) {
 
 	// account is gone anyway (it didn't get paid)
 	data, err = relay.AccountData(account01.Address)
+	a.Error(err)
 	a.Zero(data, "%+v", data)
 
 	data, err = relay.AccountData(feesink.String())
