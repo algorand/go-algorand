@@ -585,6 +585,10 @@ func TestBlockLogs(t *testing.T) {
 	b64InnerApproval := base64.StdEncoding.EncodeToString(innerApproval)
 
 	outerTEAL := fmt.Sprintf(`#pragma version 10
+	byte 0xDD0000DD
+	log
+	byte 0x
+	log
 	byte 0xDEADD00D
 	log
 	txn ApplicationID
@@ -631,8 +635,16 @@ func TestBlockLogs(t *testing.T) {
 	appFundTxn, err := testClient.SendPaymentFromWallet(wh, nil, someAddress, createdAppID.Address().String(), 0, 1_000_000, nil, "", 0, 0)
 	a.NoError(err)
 	appFundTxID := appFundTxn.ID()
-	_, err = helper.WaitForTransaction(t, testClient, appFundTxID.String(), 30*time.Second)
+	payConf, err := helper.WaitForTransaction(t, testClient, appFundTxID.String(), 30*time.Second)
 	a.NoError(err)
+
+	// get response when block has no app calls
+	resp, err := testClient.BlockLogs(*payConf.ConfirmedRound)
+	a.NoError(err)
+	expected := model.BlockLogsResponse{
+		Logs: []model.AppCallLogs{},
+	}
+	a.Equal(expected, resp)
 
 	// call app twice
 	appCallTxn, err := testClient.MakeUnsignedAppNoOpTx(
@@ -670,17 +682,19 @@ func TestBlockLogs(t *testing.T) {
 	a.NoError(err)
 	deadBeef, err := hex.DecodeString("deadbeef")
 	a.NoError(err)
-
-	// get block logs
-	resp, err := testClient.BlockLogs(*round)
+	dd0000dd, err := hex.DecodeString("dd0000dd")
 	a.NoError(err)
 
-	expected := model.BlockLogsResponse{
+	// get block logs
+	resp, err = testClient.BlockLogs(*round)
+	a.NoError(err)
+
+	expected = model.BlockLogsResponse{
 		Logs: []model.AppCallLogs{
 			{
 				ApplicationIndex: uint64(createdAppID),
 				TxId:             stxn0.ID().String(),
-				Logs:             [][]byte{deadDood},
+				Logs:             [][]byte{dd0000dd, {}, deadDood},
 			},
 			{
 				ApplicationIndex: uint64(createdAppID + 3),
@@ -690,7 +704,7 @@ func TestBlockLogs(t *testing.T) {
 			{
 				ApplicationIndex: uint64(createdAppID),
 				TxId:             stxn1.ID().String(),
-				Logs:             [][]byte{deadDood},
+				Logs:             [][]byte{dd0000dd, {}, deadDood},
 			},
 			{
 				ApplicationIndex: uint64(createdAppID + 5),
