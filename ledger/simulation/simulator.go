@@ -218,6 +218,11 @@ func (s Simulator) simulateWithTracer(txgroup []transactions.SignedTxnWithAD, tr
 		staticRekeys := make(map[basics.Address]basics.Address)
 
 		for i := range txgroup {
+			// Only fix transactions that have an empty signature
+			if !txnHasNoSignature(txgroup[i].SignedTxn) {
+				continue
+			}
+
 			sender := txgroup[i].SignedTxn.Txn.Sender
 
 			if authAddr, ok := staticRekeys[sender]; ok {

@@ -524,6 +524,12 @@ func (tracer *evalTracer) AfterProgram(cx *logic.EvalContext, pass bool, evalErr
 		// iterate over all txns in the group after this one
 		for i := groupIndex + 1; i < len(cx.TxnGroup); i++ {
 			stxn := &tracer.groups[0][i]
+
+			// Only fix transactions that have no signature
+			if !stxn.Sig.Blank() || !stxn.Msig.Blank() || !stxn.Lsig.Blank() {
+				continue
+			}
+
 			sender := stxn.Txn.Sender
 
 			// Check if we already know the auth addr
