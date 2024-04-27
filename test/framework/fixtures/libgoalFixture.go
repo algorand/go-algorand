@@ -90,19 +90,19 @@ func (f *RestClientFixture) FasterConsensus(ver protocol.ConsensusVersion, timeo
 }
 
 // Setup is called to initialize the test fixture for the test(s)
-func (f *LibGoalFixture) Setup(t TestingTB, templateFile string) {
-	f.setup(t, t.Name(), templateFile, true)
+func (f *LibGoalFixture) Setup(t TestingTB, templateFile string, overrides ...netdeploy.TemplateOverride) {
+	f.setup(t, t.Name(), templateFile, true, overrides...)
 }
 
 // SetupNoStart is called to initialize the test fixture for the test(s)
 // but does not start the network before returning.  Call NC.Start() to start later.
-func (f *LibGoalFixture) SetupNoStart(t TestingTB, templateFile string) {
-	f.setup(t, t.Name(), templateFile, false)
+func (f *LibGoalFixture) SetupNoStart(t TestingTB, templateFile string, overrides ...netdeploy.TemplateOverride) {
+	f.setup(t, t.Name(), templateFile, false, overrides...)
 }
 
 // SetupShared is called to initialize the test fixture that will be used for multiple tests
-func (f *LibGoalFixture) SetupShared(testName string, templateFile string) {
-	f.setup(nil, testName, templateFile, true)
+func (f *LibGoalFixture) SetupShared(testName string, templateFile string, overrides ...netdeploy.TemplateOverride) {
+	f.setup(nil, testName, templateFile, true, overrides...)
 }
 
 // Genesis returns the genesis data for this fixture
@@ -110,7 +110,7 @@ func (f *LibGoalFixture) Genesis() gen.GenesisData {
 	return f.network.Genesis()
 }
 
-func (f *LibGoalFixture) setup(test TestingTB, testName string, templateFile string, startNetwork bool) {
+func (f *LibGoalFixture) setup(test TestingTB, testName string, templateFile string, startNetwork bool, overrides ...netdeploy.TemplateOverride) {
 	// Call initialize for our base implementation
 	f.initialize(f)
 	f.t = SynchronizedTest(test)
@@ -122,7 +122,7 @@ func (f *LibGoalFixture) setup(test TestingTB, testName string, templateFile str
 	importKeys := false // Don't automatically import root keys when creating folders, we'll import on-demand
 	file, err := os.Open(templateFile)
 	f.failOnError(err, "Template file could not be opened: %v")
-	network, err := netdeploy.CreateNetworkFromTemplate("test", f.rootDir, file, f.binDir, importKeys, f.nodeExitWithError, f.consensus, false)
+	network, err := netdeploy.CreateNetworkFromTemplate("test", f.rootDir, file, f.binDir, importKeys, f.nodeExitWithError, f.consensus, overrides...)
 	f.failOnError(err, "CreateNetworkFromTemplate failed: %v")
 	f.network = network
 
