@@ -3039,6 +3039,10 @@
         "participation": {
           "$ref": "#/definitions/AccountParticipation"
         },
+        "incentive-eligible": {
+          "description": "Whether or not the account can receive block incentives if its balance is in range at proposal time.",
+          "type": "boolean"
+        },
         "pending-rewards": {
           "description": "amount of MicroAlgos of pending rewards in this account.",
           "type": "integer"
@@ -3072,6 +3076,14 @@
           "description": "\\[spend\\] the address against which signing should be checked. If empty, the address of the current account is used. This field can be updated in any transaction by setting the RekeyTo field.",
           "type": "string",
           "x-algorand-format": "Address"
+        },
+        "last-proposed": {
+          "description": "The round in which this account last proposed the block.",
+          "type": "integer"
+        },
+        "last-heartbeat": {
+          "description": "The round in which this account last went online, or explicitly renewed their online status.",
+          "type": "integer"
         }
       }
     },

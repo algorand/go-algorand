@@ -5509,18 +5509,15 @@ func opItxnSubmit(cx *EvalContext) (err error) {
 		parent = cx.currentTxID()
 	}
 	for itx := range cx.subtxns {
-		// The goal is to follow the same invariants used by the
-		// transaction pool. Namely that any transaction that makes it
-		// to Perform (which is equivalent to eval.applyTransaction)
-		// is authorized, and WellFormed.
-		txnErr := authorizedSender(cx, cx.subtxns[itx].Txn.Sender)
-		if txnErr != nil {
-			return txnErr
-		}
+		// The goal is to follow the same invariants used by the transaction
+		// pool. Namely that any transaction that makes it to Perform (which is
+		// equivalent to eval.applyTransaction) is WellFormed. Authorization
+		// must be checked later, to take state changes from earlier in the
+		// group into account.
 
 		// Recall that WellFormed does not care about individual
 		// transaction fees because of fee pooling. Checked above.
-		txnErr = cx.subtxns[itx].Txn.WellFormed(*cx.Specials, *cx.Proto)
+		txnErr := cx.subtxns[itx].Txn.WellFormed(*cx.Specials, *cx.Proto)
 		if txnErr != nil {
 			return txnErr
 		}
@@ -5639,7 +5636,11 @@ func opItxnSubmit(cx *EvalContext) (err error) {
 			ep.Tracer.BeforeTxn(ep, i)
 		}
 
-		err := cx.Ledger.Perform(i, ep)
+		err := authorizedSender(cx, ep.TxnGroup[i].Txn.Sender)
+		if err != nil {
+			return err
+		}
+		err = cx.Ledger.Perform(i, ep)
 
 		if ep.Tracer != nil {
 			ep.Tracer.AfterTxn(ep, i, ep.TxnGroup[i].ApplyData, err)
@@ -5700,17 +5701,21 @@ func opBlock(cx *EvalContext) error {
 	switch fs.field {
 	case BlkSeed:
 		cx.Stack[last].Bytes = hdr.Seed[:]
-		return nil
 	case BlkTimestamp:
-		cx.Stack[last].Bytes = nil
 		if hdr.TimeStamp < 0 {
 			return fmt.Errorf("block(%d) timestamp %d < 0", round, hdr.TimeStamp)
 		}
-		cx.Stack[last].Uint = uint64(hdr.TimeStamp)
-		return nil
+		cx.Stack[last] = stackValue{Uint: uint64(hdr.TimeStamp)}
+	case BlkProposer:
+		cx.Stack[last].Bytes = hdr.Proposer[:]
+	case BlkFeesCollected:
+		cx.Stack[last] = stackValue{Uint: hdr.FeesCollected.Raw}
+	case BlkBonus:
+		cx.Stack[last] = stackValue{Uint: hdr.Bonus.Raw}
 	default:
 		return fmt.Errorf("invalid block field %s", fs.field)
 	}
+	return nil
 }
 
 // pcDetails return PC and disassembled instructions at PC up to 2 opcodes back

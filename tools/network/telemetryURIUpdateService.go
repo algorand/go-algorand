@@ -17,6 +17,7 @@
 package network
 
 import (
+	"context"
 	"net/url"
 	"strings"
 	"time"
@@ -132,5 +133,5 @@ func (t *telemetryURIUpdater) lookupTelemetryURL() (url *url.URL) {
 }
 
 func (t *telemetryURIUpdater) readFromSRV(protocol string, bootstrapID string) (addrs []string, err error) {
-	return ReadFromSRV("telemetry", protocol, bootstrapID, t.cfg.FallbackDNSResolverAddress, t.cfg.DNSSecuritySRVEnforced())
+	return ReadFromSRV(context.Background(), "telemetry", protocol, bootstrapID, t.cfg.FallbackDNSResolverAddress, t.cfg.DNSSecuritySRVEnforced())
 }

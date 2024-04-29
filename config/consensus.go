@@ -447,8 +447,8 @@ type ConsensusParams struct {
 
 	EnableExtraPagesOnAppUpdate bool
 
-	// MaxProposedExpiredOnlineAccounts is the maximum number of online accounts, which need
-	// to be taken offline, that would be proposed to be taken offline.
+	// MaxProposedExpiredOnlineAccounts is the maximum number of online accounts
+	// that a proposer can take offline for having expired voting keys.
 	MaxProposedExpiredOnlineAccounts int
 
 	// EnableAccountDataResourceSeparation enables the support for extended application and asset storage
@@ -529,6 +529,101 @@ type ConsensusParams struct {
 	// arrival times or is set to a static value. Even if this flag disables the
 	// dynamic filter, it will be calculated and logged (but not used).
 	DynamicFilterTimeout bool
+
+	// Payouts contains parameters for amounts and eligibility for block proposer
+	// payouts. It excludes information about the "unsustainable" payouts
+	// described in BonusPlan.
+	Payouts ProposerPayoutRules
+
+	// Bonus contains parameters related to the extra payout made to block
+	// proposers, unrelated to the fees paid in that block.  For it to actually
+	// occur, extra funds need to be put into the FeeSink.  The bonus amount
+	// decays exponentially.
+	Bonus BonusPlan
+}
+
+// ProposerPayoutRules puts several related consensus parameters in one place. The same
+// care for backward compatibility with old blocks must be taken.
+type ProposerPayoutRules struct {
+	// Enabled turns on several things needed for paying block incentives,
+	// including tracking of the proposer and fees collected.
+	Enabled bool
+
+	// GoOnlineFee imparts a small cost on moving from offline to online. This
+	// will impose a cost to running unreliable nodes that get suspended and
+	// then come back online.
+	GoOnlineFee uint64
+
+	// Percent specifies the percent of fees paid in a block that go to the
+	// proposer instead of the FeeSink.
+	Percent uint64
+
+	// MinBalance is the minimum balance an account must have to be eligible for
+	// incentives. It ensures that smaller accounts continue to operate for the
+	// same motivations they had before block incentives were
+	// introduced. Without that assurance, it is difficult to model their
+	// behaviour - might many participants join for the hope of easy financial
+	// rewards, but without caring enough to run a high-quality node?
+	MinBalance uint64
+
+	// MaxBalance is the maximum balance an account can have to be eligible for
+	// incentives. It encourages large accounts to split their stake to add
+	// resilience to consensus in the case of outages.  Nothing in protocol can
+	// prevent such accounts from running nodes that share fate (same machine,
+	// same data center, etc), but this serves as a gentle reminder.
+	MaxBalance uint64
+
+	// MaxMarkAbsent is the maximum number of online accounts, that a proposer
+	// can suspend for not proposing "lately" (In 10x expected interval, or
+	// within a grace period from being challenged)
+	MaxMarkAbsent int
+
+	// Challenges occur once every challengeInterval rounds.
+	ChallengeInterval uint64
+	// Suspensions happen between 1 and 2 grace periods after a challenge. Must
+	// be less than half MaxTxnLife to ensure the Block header will be cached
+	// and less than half ChallengeInterval to avoid overlapping challenges. A larger
+	// grace period means larger stake nodes will probably propose before they
+	// need to consider an active heartbeat.
+	ChallengeGracePeriod uint64
+	// An account is challenged if the first challengeBits match the start of
+	// the account address. An online account will be challenged about once
+	// every interval*2^bits rounds.
+	ChallengeBits int
+}
+
+// BonusPlan describes how the "extra" proposer payouts are to be made.  It
+// specifies an exponential decay in which the bonus decreases by 1% every n
+// rounds.  If we need to change the decay rate (only), we would create a new
+// plan like:
+//
+//	BaseAmount: 0, DecayInterval: XXX
+//
+// by using a zero baseAmount, the amount not affected.
+// For a bigger change, we'd use a plan like:
+//
+//	BaseRound:  <FUTURE round>, BaseAmount: <new amount>, DecayInterval: <new>
+//
+// or just
+//
+//	BaseAmount: <new amount>, DecayInterval: <new>
+//
+// the new decay rate would go into effect at upgrade time, and the new
+// amount would be set at baseRound or at upgrade time.
+type BonusPlan struct {
+	// BaseRound is the earliest round this plan can apply. Of course, the
+	// consensus update must also have happened. So using a low value makes it
+	// go into effect immediately upon upgrade.
+	BaseRound uint64
+	// BaseAmount is the bonus to be paid when this plan first applies (see
+	// baseRound). If it is zero, then no explicit change is made to the bonus
+	// (useful for only changing the decay rate).
+	BaseAmount uint64
+	// DecayInterval is the time in rounds between 1% decays. For simplicity,
+	// decay occurs based on round % BonusDecayInterval, so a decay can happen right
+	// after going into effect. The BonusDecayInterval goes into effect at upgrade
+	// time, regardless of `baseRound`.
+	DecayInterval uint64
 }
 
 // PaysetCommitType enumerates possible ways for the block header to commit to
@@ -603,9 +698,13 @@ var MaxExtraAppProgramLen int
 // supported supported by any of the consensus protocols. used for decoding purposes.
 var MaxAvailableAppProgramLen int
 
-// MaxProposedExpiredOnlineAccounts is the maximum number of online accounts, which need
-// to be taken offline, that would be proposed to be taken offline.
+// MaxProposedExpiredOnlineAccounts is the maximum number of online accounts
+// that a proposer can take offline for having expired voting keys.
 var MaxProposedExpiredOnlineAccounts int
+
+// MaxMarkAbsent is the maximum number of online accounts that a proposer can
+// suspend for not proposing "lately"
+var MaxMarkAbsent int
 
 // MaxAppTotalArgLen is the maximum number of bytes across all arguments of an application
 // max sum([len(arg) for arg in txn.ApplicationArgs])
@@ -680,6 +779,7 @@ func checkSetAllocBounds(p ConsensusParams) {
 	checkSetMax(p.MaxAppProgramLen, &MaxLogCalls)
 	checkSetMax(p.MaxInnerTransactions*p.MaxTxGroupSize, &MaxInnerTransactionsPerDelta)
 	checkSetMax(p.MaxProposedExpiredOnlineAccounts, &MaxProposedExpiredOnlineAccounts)
+	checkSetMax(p.Payouts.MaxMarkAbsent, &MaxMarkAbsent)
 
 	// These bounds are exported to make them available to the msgp generator for calculating
 	// maximum valid message size for each message going across the wire.
@@ -1411,6 +1511,20 @@ func initConsensusProtocols() {
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
 	vFuture.LogicSigVersion = 11 // When moving this to a release, put a new higher LogicSigVersion here
+
+	vFuture.Payouts.Enabled = true
+	vFuture.Payouts.Percent = 75
+	vFuture.Payouts.GoOnlineFee = 2_000_000         // 2 algos
+	vFuture.Payouts.MinBalance = 30_000_000_000     // 30,000 algos
+	vFuture.Payouts.MaxBalance = 70_000_000_000_000 // 70M algos
+	vFuture.Payouts.MaxMarkAbsent = 32
+	vFuture.Payouts.ChallengeInterval = 1000
+	vFuture.Payouts.ChallengeGracePeriod = 200
+	vFuture.Payouts.ChallengeBits = 5
+
+	vFuture.Bonus.BaseAmount = 10_000_000 // 10 Algos
+	// 2.9 sec rounds gives about 10.8M rounds per year.
+	vFuture.Bonus.DecayInterval = 250_000 // .99^(10.8/0.25) ~ .648. So 35% decay per year
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 

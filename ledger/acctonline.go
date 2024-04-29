@@ -630,6 +630,7 @@ func (ao *onlineAccounts) LookupOnlineAccountData(rnd basics.Round, addr basics.
 	data.VotingData.VoteFirstValid = oad.VotingData.VoteFirstValid
 	data.VotingData.VoteLastValid = oad.VotingData.VoteLastValid
 	data.VotingData.VoteKeyDilution = oad.VotingData.VoteKeyDilution
+	data.IncentiveEligible = oad.IncentiveEligible
 
 	return
 }
