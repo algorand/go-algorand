@@ -47,7 +47,7 @@ func (sel selector) CommitteeSize(proto config.ConsensusParams) uint64 {
 	return sel.Step.committeeSize(proto)
 }
 
-// BalanceRound return the round that should be considered by agreement when
+// BalanceRound returns the round that should be considered by agreement when
 // looking at online stake (and status and key material). It is exported so that
 // AVM can provide opcodes that return the same data.
 func BalanceRound(r basics.Round, cparams config.ConsensusParams) basics.Round {

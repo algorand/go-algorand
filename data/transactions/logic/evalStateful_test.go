@@ -503,7 +503,7 @@ func testAppBytes(t *testing.T, program []byte, ep *EvalParams, problems ...stri
 	if aid == 0 {
 		aid = basics.AppIndex(888)
 		// we're testing an app call without the caller specifying details about
-		// the app, so conjure up buring app params to make the `global
+		// the app, so conjure up boring app params to make the `global
 		// AppCreator` work.
 		addr, err := basics.UnmarshalChecksumAddress(testAppCreator)
 		require.NoError(t, err)
