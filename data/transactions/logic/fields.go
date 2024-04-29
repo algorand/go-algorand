@@ -1404,13 +1404,16 @@ var AcctParamsFields = FieldGroup{
 type VoterParamsField int
 
 const (
-	// VoterBalance is the balance, with pending rewards
+	// VoterBalance is the balance, with pending rewards, from the balance
+	// round.  It is 0 if the account was offline then.
 	VoterBalance VoterParamsField = iota
 
 	// expose voter keys?
 
-	// VoterIncentiveEligible is whether this account opted into block payouts by
-	// paying extra in `keyreg`. Does not reflect eligibility based on balance.
+	// VoterIncentiveEligible is whether this account opted into block payouts
+	// by paying extra in `keyreg`. Does not reflect eligibility based on
+	// balance. The value is returned for the balance round and is _false_ if
+	// the account was offline then.
 	VoterIncentiveEligible
 
 	invalidVoterParamsField // compile-time constant for number of fields

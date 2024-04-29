@@ -250,7 +250,7 @@ var opDescByName = map[string]OpDesc{
 	"asset_params_get":  {"X is field F from asset A. Y is 1 if A exists, else 0", "params: Txn.ForeignAssets offset (or, since v4, an _available_ asset id. Return: did_exist flag (1 if the asset existed and 0 otherwise), value.", []string{"asset params field index"}},
 	"app_params_get":    {"X is field F from app A. Y is 1 if A exists, else 0", "params: Txn.ForeignApps offset or an _available_ app id. Return: did_exist flag (1 if the application existed and 0 otherwise), value.", []string{"app params field index"}},
 	"acct_params_get":   {"X is field F from account A. Y is 1 if A owns positive algos, else 0", "", []string{"account params field index"}},
-	"voter_params_get":  {"X is field F from online account A. Y is 1 if A had positive algos online in the agreement round, else 0", "", []string{"voter params field index"}},
+	"voter_params_get":  {"X is field F from online account A as of the balance round: 320 rounds before the current round. Y is 1 if A had positive algos online in the agreement round, else Y is 0 and X is a type specific zero-value", "", []string{"voter params field index"}},
 	"online_stake":      {"the total online stake in the agreement round", "", nil},
 	"assert":            {"immediately fail unless A is a non-zero number", "", nil},
 	"callsub":           {"branch unconditionally to TARGET, saving the next instruction on the call stack", "The call stack is separate from the data stack. Only `callsub`, `retsub`, and `proto` manipulate it.", []string{"branch offset"}},
