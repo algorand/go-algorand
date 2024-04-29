@@ -341,6 +341,10 @@ func (l *localLedger) LookupAgreement(rnd basics.Round, addr basics.Address) (ba
 	// Further, it has no history, so we return the _current_ information,
 	// ignoring the `rnd` argument.
 	ad := l.balances[addr]
+	if ad.Status != basics.Online {
+		return basics.OnlineAccountData{}, nil
+	}
+
 	return basics.OnlineAccountData{
 		MicroAlgosWithRewards: ad.MicroAlgos,
 		VotingData: basics.VotingData{
