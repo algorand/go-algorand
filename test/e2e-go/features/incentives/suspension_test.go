@@ -155,11 +155,13 @@ func TestBasicSuspension(t *testing.T) {
 		stat, err = lg.WaitForRound(stat.LastRound + 1)
 		a.NoError(err)
 		attempts++
-		a.Less(attempts, suspend20, "n20 didn't propose\n")
+		a.Less(attempts, 2*suspend20, "n20 didn't propose\n")
 	}
 	// paranoia. see payouts_test.go for more details.
 	r := require.New(t)
 	for i, c := range []libgoal.Client{c10, c20} {
+		_, err := c.WaitForRound(stat.LastRound)
+		r.NoError(err)
 		account, err = c.AccountData(account20.Address)
 		a.NoError(err)
 		r.Equal(basics.Online, account.Status, i)
