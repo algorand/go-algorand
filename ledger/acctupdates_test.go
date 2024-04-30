@@ -429,7 +429,7 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, ao *onlineAccounts, base
 			require.Equal(t, d, ledgercore.AccountData{})
 			od, err := ao.lookupOnlineAccountData(rnd, ledgertesting.RandomAddress())
 			require.NoError(t, err)
-			require.Equal(t, od, ledgercore.OnlineAccountData{})
+			require.Equal(t, od, basics.OnlineAccountData{})
 		}
 	}
 	checkAcctUpdatesConsistency(t, au, latestRnd)

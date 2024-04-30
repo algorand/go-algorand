@@ -621,11 +621,7 @@ func (l *Ledger) LookupAgreement(rnd basics.Round, addr basics.Address) (basics.
 
 	// Intentionally apply (pending) rewards up to rnd.
 	data, err := l.acctsOnline.LookupOnlineAccountData(rnd, addr)
-	if err != nil {
-		return basics.OnlineAccountData{}, err
-	}
-
-	return data, nil
+	return data, err
 }
 
 // LookupWithoutRewards is like Lookup but does not apply pending rewards up

@@ -18,8 +18,6 @@ package ledgercore
 
 import (
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
 )
 
@@ -29,7 +27,7 @@ import (
 // separately, to better support on-disk and in-memory schemas that do not store them together.
 type AccountData struct {
 	AccountBaseData
-	VotingData
+	basics.VotingData
 }
 
 // AccountBaseData contains base account info like balance, status and total number of resources
@@ -52,24 +50,6 @@ type AccountBaseData struct {
 
 	LastProposed  basics.Round // The last round that this account proposed the winning block.
 	LastHeartbeat basics.Round // The last round that this account sent a heartbeat to show it was online.
-}
-
-// VotingData holds participation information
-type VotingData struct {
-	VoteID       crypto.OneTimeSignatureVerifier
-	SelectionID  crypto.VRFVerifier
-	StateProofID merklesignature.Commitment
-
-	VoteFirstValid  basics.Round
-	VoteLastValid   basics.Round
-	VoteKeyDilution uint64
-}
-
-// OnlineAccountData holds MicroAlgosWithRewards and VotingData as needed for agreement
-type OnlineAccountData struct {
-	MicroAlgosWithRewards basics.MicroAlgos
-	VotingData
-	IncentiveEligible bool
 }
 
 // ToAccountData returns ledgercore.AccountData from basics.AccountData
@@ -95,7 +75,7 @@ func ToAccountData(acct basics.AccountData) AccountData {
 			LastProposed:  acct.LastProposed,
 			LastHeartbeat: acct.LastHeartbeat,
 		},
-		VotingData: VotingData{
+		VotingData: basics.VotingData{
 			VoteID:          acct.VoteID,
 			SelectionID:     acct.SelectionID,
 			StateProofID:    acct.StateProofID,
@@ -143,7 +123,7 @@ func (u AccountData) WithUpdatedRewards(proto config.ConsensusParams, rewardsLev
 // ClearOnlineState resets the account's fields to indicate that the account is an offline account
 func (u *AccountData) ClearOnlineState() {
 	u.Status = basics.Offline
-	u.VotingData = VotingData{}
+	u.VotingData = basics.VotingData{}
 }
 
 // Suspend sets the status to Offline, but does _not_ clear voting keys, so
@@ -194,26 +174,19 @@ func (u AccountData) Money(proto config.ConsensusParams, rewardsLevel uint64) (m
 }
 
 // OnlineAccountData calculates the online account data given an AccountData, by adding the rewards.
-func (u AccountData) OnlineAccountData(proto config.ConsensusParams, rewardsLevel uint64) OnlineAccountData {
+func (u AccountData) OnlineAccountData(proto config.ConsensusParams, rewardsLevel uint64) basics.OnlineAccountData {
 	if u.Status != basics.Online {
 		// if the account is not Online and agreement requests it for some reason, clear it out
-		return OnlineAccountData{}
+		return basics.OnlineAccountData{}
 	}
 
 	microAlgos, _, _ := basics.WithUpdatedRewards(
 		proto, u.Status, u.MicroAlgos, u.RewardedMicroAlgos, u.RewardsBase, rewardsLevel,
 	)
-	return OnlineAccountData{
+	return basics.OnlineAccountData{
 		MicroAlgosWithRewards: microAlgos,
-		VotingData: VotingData{
-			VoteID:          u.VoteID,
-			SelectionID:     u.SelectionID,
-			StateProofID:    u.StateProofID,
-			VoteFirstValid:  u.VoteFirstValid,
-			VoteLastValid:   u.VoteLastValid,
-			VoteKeyDilution: u.VoteKeyDilution,
-		},
-		IncentiveEligible: u.IncentiveEligible,
+		VotingData:            u.VotingData,
+		IncentiveEligible:     u.IncentiveEligible,
 	}
 }
 
