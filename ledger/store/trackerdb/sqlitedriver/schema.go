@@ -947,9 +947,12 @@ func accountsAddCreatableTypeColumn(ctx context.Context, e db.Executable, popula
 	// Run ctype resources migration if it hasn't run yet
 	var creatableTypeOnResourcesRun bool
 	err := e.QueryRow("SELECT 1 FROM pragma_table_info('resources') WHERE name='ctype'").Scan(&creatableTypeOnResourcesRun)
-	if !errors.Is(err, sql.ErrNoRows) {
+	if err == nil {
+		// Already exists.
 		return nil
-	}
+	} else if !errors.Is(err, sql.ErrNoRows) {
+		return err
+	} // A sql.ErrNoRows error means the column does not exist, so we need to create it
 
 	// Add ctype column
 	createStmt := `ALTER TABLE resources ADD COLUMN ctype INTEGER NOT NULL DEFAULT -1`

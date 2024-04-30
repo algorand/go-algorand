@@ -290,9 +290,9 @@ func CustomTestResourcesQueryAllLimited(t *customT) {
 	resDataA1AcctA := trackerdb.ResourcesData{}
 	appParams := ledgertesting.RandomAppParams()
 	resDataA1AcctA.SetAppParams(appParams, true)
+	resDataA1AcctA.SetAppLocalState(basics.AppLocalState{})
 	resDataA1AcctB := trackerdb.ResourcesData{}
-	appParamsB := ledgertesting.RandomAppParams()
-	resDataA1AcctB.SetAppParams(appParamsB, true)
+	resDataA1AcctB.SetAppLocalState(basics.AppLocalState{})
 	aidxResA1 := basics.CreatableIndex(2)
 	_, err = aow.InsertResource(refAccA, aidxResA1, resDataA1AcctA)
 	require.NoError(t, err)
@@ -382,6 +382,10 @@ func CustomTestResourcesQueryAllLimited(t *customT) {
 	require.Equal(t, expectedRound, prs[0].Round) // db round (inside resources)
 	require.Equal(t, resDataWithParamsA0AcctB, prs[0].Data)
 	require.Equal(t, expectedRound, rnd) // db round (from the return)
+
+	// Delete app owner for A-1
+	_, err = aow.DeleteCreatable(aidxResA1, basics.AppCreatable)
+	require.NoError(t, err)
 
 	// Set min to 1, should return only 1 resource (index 1)
 	prs, rnd, err = aor.LookupLimitedResources(addrB, 1, 1, basics.AssetCreatable)
