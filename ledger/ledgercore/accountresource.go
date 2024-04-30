@@ -34,6 +34,14 @@ type AssetResource struct {
 	AssetHolding *basics.AssetHolding
 }
 
+// AssetResourceWithIDs is used to retrieve a asset resource information from the data tier,
+// inclusive of the asset ID and creator address
+type AssetResourceWithIDs struct {
+	AssetResource
+	AssetID basics.AssetIndex
+	Creator basics.Address
+}
+
 // AppResource used to retrieve a generic app resource information from the data tier
 type AppResource struct {
 	AppLocalState *basics.AppLocalState

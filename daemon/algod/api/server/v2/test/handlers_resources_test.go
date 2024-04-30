@@ -107,6 +107,11 @@ func (l *mockLedger) LookupAsset(rnd basics.Round, addr basics.Address, aidx bas
 	}
 	return ar, nil
 }
+
+func (l *mockLedger) LookupAssets(rnd basics.Round, addr basics.Address, assetIDGT basics.AssetIndex, limit uint64) ([]ledgercore.AssetResourceWithIDs, error) {
+	panic("implement me")
+}
+
 func (l *mockLedger) LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ar ledgercore.AppResource, err error) {
 	ad, ok := l.accounts[addr]
 	if !ok {

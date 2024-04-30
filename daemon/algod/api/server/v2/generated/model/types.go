@@ -251,6 +251,23 @@ type Account struct {
 // * lsig
 type AccountSigType string
 
+// AccountAssetHolding AccountAssetHolding describes the account's asset holding and asset parameters (if either exist) for a specific asset ID.
+type AccountAssetHolding struct {
+	// AssetHolding Describes an asset held by an account.
+	//
+	// Definition:
+	// data/basics/userBalance.go : AssetHolding
+	AssetHolding AssetHolding `json:"asset-holding"`
+
+	// AssetParams AssetParams specifies the parameters for an asset.
+	//
+	// \[apar\] when part of an AssetConfig transaction.
+	//
+	// Definition:
+	// data/transactions/asset.go : AssetParams
+	AssetParams *AssetParams `json:"asset-params,omitempty"`
+}
+
 // AccountParticipation AccountParticipation describes the parameters used by this account in consensus protocol.
 type AccountParticipation struct {
 	// SelectionParticipationKey \[sel\] Selection public key (if any) currently registered for this round.
@@ -1071,6 +1088,17 @@ type AccountApplicationResponse struct {
 	Round uint64 `json:"round"`
 }
 
+// AccountAssetHoldingsResponse defines model for AccountAssetHoldingsResponse.
+type AccountAssetHoldingsResponse struct {
+	AssetHoldings *[]AccountAssetHolding `json:"asset-holdings,omitempty"`
+
+	// NextToken Used for pagination, when making another request provide this token with the next parameter.
+	NextToken *string `json:"next-token,omitempty"`
+
+	// Round The round for which this information is relevant.
+	Round uint64 `json:"round"`
+}
+
 // AccountAssetResponse defines model for AccountAssetResponse.
 type AccountAssetResponse struct {
 	// AssetHolding Describes an asset held by an account.
@@ -1424,6 +1452,15 @@ type AccountApplicationInformationParams struct {
 
 // AccountApplicationInformationParamsFormat defines parameters for AccountApplicationInformation.
 type AccountApplicationInformationParamsFormat string
+
+// AccountAssetsInformationParams defines parameters for AccountAssetsInformation.
+type AccountAssetsInformationParams struct {
+	// Limit Maximum number of results to return.
+	Limit *uint64 `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Next The next page of results. Use the next token provided by the previous results.
+	Next *string `form:"next,omitempty" json:"next,omitempty"`
+}
 
 // AccountAssetInformationParams defines parameters for AccountAssetInformation.
 type AccountAssetInformationParams struct {

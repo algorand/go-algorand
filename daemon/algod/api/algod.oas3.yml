@@ -249,6 +249,35 @@
         },
         "description": "AccountApplicationResponse describes the account's application local state and global state (AppLocalState and AppParams, if either exists) for a specific application ID. Global state will only be returned if the provided address is the application's creator."
       },
+      "AccountAssetHoldingsResponse": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "asset-holdings": {
+                  "items": {
+                    "$ref": "#/components/schemas/AccountAssetHolding"
+                  },
+                  "type": "array"
+                },
+                "next-token": {
+                  "description": "Used for pagination, when making another request provide this token with the next parameter.",
+                  "type": "string"
+                },
+                "round": {
+                  "description": "The round for which this information is relevant.",
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "round"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "description": "AccountAssetHoldingsResponse contains a list of assets held by an account."
+      },
       "AccountAssetResponse": {
         "content": {
           "application/json": {
@@ -1174,6 +1203,21 @@
           "total-assets-opted-in",
           "total-created-apps",
           "total-created-assets"
+        ],
+        "type": "object"
+      },
+      "AccountAssetHolding": {
+        "description": "AccountAssetHolding describes the account's asset holding and asset parameters (if either exist) for a specific asset ID.",
+        "properties": {
+          "asset-holding": {
+            "$ref": "#/components/schemas/AssetHolding"
+          },
+          "asset-params": {
+            "$ref": "#/components/schemas/AssetParams"
+          }
+        },
+        "required": [
+          "asset-holding"
         ],
         "type": "object"
       },
@@ -3076,6 +3120,110 @@
         "tags": [
           "public",
           "nonparticipating"
+        ]
+      }
+    },
+    "/v2/accounts/{address}/assets": {
+      "get": {
+        "description": "Lookup an account's asset holdings.",
+        "operationId": "AccountAssetsInformation",
+        "parameters": [
+          {
+            "description": "An account public key",
+            "in": "path",
+            "name": "address",
+            "required": true,
+            "schema": {
+              "pattern": "[A-Z0-9]{58}",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Maximum number of results to return.",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "The next page of results. Use the next token provided by the previous results.",
+            "in": "query",
+            "name": "next",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "asset-holdings": {
+                      "items": {
+                        "$ref": "#/components/schemas/AccountAssetHolding"
+                      },
+                      "type": "array"
+                    },
+                    "next-token": {
+                      "description": "Used for pagination, when making another request provide this token with the next parameter.",
+                      "type": "string"
+                    },
+                    "round": {
+                      "description": "The round for which this information is relevant.",
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "round"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "AccountAssetHoldingsResponse contains a list of assets held by an account."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Malformed address"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid API Token"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Error"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Get a list of assets held by an account, inclusive of asset params.",
+        "tags": [
+          "public",
+          "experimental"
         ]
       }
     },

@@ -19,7 +19,6 @@ package sqlitedriver
 import (
 	"database/sql"
 	"fmt"
-
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
@@ -30,12 +29,13 @@ import (
 // accountsDbQueries is used to cache a prepared SQL statement to look up
 // the state of a single account.
 type accountsDbQueries struct {
-	lookupAccountStmt      *sql.Stmt
-	lookupResourcesStmt    *sql.Stmt
-	lookupAllResourcesStmt *sql.Stmt
-	lookupKvPairStmt       *sql.Stmt
-	lookupKeysByRangeStmt  *sql.Stmt
-	lookupCreatorStmt      *sql.Stmt
+	lookupAccountStmt          *sql.Stmt
+	lookupResourcesStmt        *sql.Stmt
+	lookupAllResourcesStmt     *sql.Stmt
+	lookupLimitedResourcesStmt *sql.Stmt
+	lookupKvPairStmt           *sql.Stmt
+	lookupKeysByRangeStmt      *sql.Stmt
+	lookupCreatorStmt          *sql.Stmt
 }
 
 type onlineAccountsDbQueries struct {
@@ -83,6 +83,11 @@ func AccountsInitDbQueries(q db.Queryable) (*accountsDbQueries, error) {
 	}
 
 	qs.lookupAllResourcesStmt, err = q.Prepare("SELECT accountbase.rowid, acctrounds.rnd, resources.aidx, resources.data FROM acctrounds LEFT JOIN accountbase ON accountbase.address = ? LEFT JOIN resources ON accountbase.rowid = resources.addrid WHERE id='acctbase'")
+	if err != nil {
+		return nil, err
+	}
+
+	qs.lookupLimitedResourcesStmt, err = q.Prepare("SELECT ab.rowid, ar.rnd, r.aidx, ac.creator, r.data, cr.data FROM acctrounds ar JOIN accountbase ab ON ab.address = ? JOIN resources r ON r.addrid = ab.addrid JOIN assetcreators ac ON r.aidx = ac.asset JOIN accountbase cab ON ac.creator = cab.address JOIN resources cr ON cr.addrid = cab.addrid AND cr.aidx = r.aidx WHERE ar.id = 'acctbase' AND ac.ctype = ? AND r.aidx > ? ORDER BY r.aidx ASC LIMIT ?")
 	if err != nil {
 		return nil, err
 	}
@@ -379,9 +384,9 @@ func (qs *accountsDbQueries) LookupResources(addr basics.Address, aidx basics.Cr
 func (qs *accountsDbQueries) LookupAllResources(addr basics.Address) (data []trackerdb.PersistedResourcesData, rnd basics.Round, err error) {
 	err = db.Retry(func() error {
 		// Query for all resources
-		rows, err := qs.lookupAllResourcesStmt.Query(addr[:])
-		if err != nil {
-			return err
+		rows, err0 := qs.lookupAllResourcesStmt.Query(addr[:])
+		if err0 != nil {
+			return err0
 		}
 		defer rows.Close()
 
@@ -390,7 +395,7 @@ func (qs *accountsDbQueries) LookupAllResources(addr basics.Address) (data []tra
 		data = nil
 		var buf []byte
 		for rows.Next() {
-			err := rows.Scan(&addrid, &dbRound, &aidx, &buf)
+			err = rows.Scan(&addrid, &dbRound, &aidx, &buf)
 			if err != nil {
 				return err
 			}
@@ -414,6 +419,71 @@ func (qs *accountsDbQueries) LookupAllResources(addr basics.Address) (data []tra
 				Data:    resData,
 				Round:   dbRound,
 			})
+			rnd = dbRound
+		}
+		return nil
+	})
+	return
+}
+
+func (qs *accountsDbQueries) LookupLimitedResources(addr basics.Address, minIdx basics.CreatableIndex, maxCreatables uint64, ctype basics.CreatableType) (data []trackerdb.PersistedResourcesDataWithCreator, rnd basics.Round, err error) {
+	err = db.Retry(func() error {
+		// Query for all resources
+		rows, err0 := qs.lookupLimitedResourcesStmt.Query(addr[:], ctype, minIdx, maxCreatables)
+		if err0 != nil {
+			return err0
+		}
+		defer rows.Close()
+
+		var addrid, aidx sql.NullInt64
+		var dbRound basics.Round
+		data = nil
+		var actAssetBuf []byte
+		var crtAssetBuf []byte
+		var creatorAddrBuf []byte
+		for rows.Next() {
+			err = rows.Scan(&addrid, &dbRound, &aidx, &creatorAddrBuf, &actAssetBuf, &crtAssetBuf)
+			if err != nil {
+				return err
+			}
+			if !addrid.Valid || !aidx.Valid {
+				// we received an entry without any index. This would happen only on the first entry when there are no resources for this address.
+				// ensure this is the first entry, set the round and return
+				if len(data) != 0 {
+					return fmt.Errorf("LookupLimitedResources: unexpected invalid result on non-first resource record: (%v, %v)", addrid.Valid, aidx.Valid)
+				}
+				rnd = dbRound
+				break
+			}
+			var actResData trackerdb.ResourcesData
+			var crtResData trackerdb.ResourcesData
+			err = protocol.Decode(actAssetBuf, &actResData)
+			if err != nil {
+				return err
+			}
+			err = protocol.Decode(crtAssetBuf, &crtResData)
+			if err != nil {
+				return err
+			}
+
+			// Update asset holding data in the creator resource data
+			crtResData.Amount = actResData.Amount
+			crtResData.Freeze = actResData.Freeze
+			crtResData.ResourceFlags = actResData.ResourceFlags
+
+			creatorAddr := basics.Address{}
+			copy(creatorAddr[:], creatorAddrBuf)
+
+			data = append(data, trackerdb.PersistedResourcesDataWithCreator{
+				PersistedResourcesData: trackerdb.PersistedResourcesData{
+					AcctRef: sqlRowRef{addrid.Int64},
+					Aidx:    basics.CreatableIndex(aidx.Int64),
+					Data:    crtResData,
+					Round:   dbRound,
+				},
+				Creator: creatorAddr,
+			})
+
 			rnd = dbRound
 		}
 		return nil
@@ -541,6 +611,7 @@ func (qs *accountsDbQueries) Close() {
 		&qs.lookupAccountStmt,
 		&qs.lookupResourcesStmt,
 		&qs.lookupAllResourcesStmt,
+		&qs.lookupLimitedResourcesStmt,
 		&qs.lookupKvPairStmt,
 		&qs.lookupKeysByRangeStmt,
 		&qs.lookupCreatorStmt,
