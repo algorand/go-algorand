@@ -516,7 +516,7 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema9(ctx context.Context
 // upgradeDatabaseSchema10 upgrades the database schema from version 10 to version 11,
 // altering the resources table to add a new column, resources.ctype.
 func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema10(ctx context.Context, e db.Executable) (err error) {
-	err = accountsAddCreatableTypeColumn(ctx, e)
+	err = accountsAddCreatableTypeColumn(ctx, e, true)
 	if err != nil {
 		return err
 	}
