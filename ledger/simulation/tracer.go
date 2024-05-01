@@ -522,9 +522,7 @@ func (tracer *evalTracer) AfterProgram(cx *logic.EvalContext, pass bool, evalErr
 		// iterate over all txns in the group after this one
 		for i := groupIndex + 1; i < len(cx.TxnGroup); i++ {
 			stxn := &tracer.groups[0][i]
-
 			sender := stxn.Txn.Sender
-
 			blankSig := stxn.Sig.Blank() && stxn.Msig.Blank() && stxn.Lsig.Blank()
 
 			// Check if we already know the auth addr
