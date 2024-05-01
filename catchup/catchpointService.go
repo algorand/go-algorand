@@ -698,7 +698,7 @@ func (cs *CatchpointCatchupService) fetchBlock(round basics.Round, retryCount ui
 	return blk, cert, downloadDuration, psp, false, nil
 }
 
-// processStageLedgerDownload is the fifth catchpoint catchup stage. It completes the catchup process, swap the new tables and restart the node functionality.
+// processStageSwitch is the fifth catchpoint catchup stage. It completes the catchup process, swap the new tables and restart the node functionality.
 func (cs *CatchpointCatchupService) processStageSwitch() (err error) {
 	err = cs.ledgerAccessor.CompleteCatchup(cs.ctx)
 	if err != nil {

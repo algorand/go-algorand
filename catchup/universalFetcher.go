@@ -43,7 +43,7 @@ type universalBlockFetcher struct {
 	log    logging.Logger
 }
 
-// makeUniversalFetcher returns a fetcher for http and ws peers.
+// makeUniversalBlockFetcher returns a fetcher for http and ws peers.
 func makeUniversalBlockFetcher(log logging.Logger, net network.GossipNode, config config.Local) *universalBlockFetcher {
 	return &universalBlockFetcher{
 		config: config,
