@@ -523,15 +523,12 @@ func (tracer *evalTracer) AfterProgram(cx *logic.EvalContext, pass bool, evalErr
 		for i := groupIndex + 1; i < len(cx.TxnGroup); i++ {
 			stxn := &tracer.groups[0][i]
 
-			// Only fix transactions that have no signature
-			if !stxn.Sig.Blank() || !stxn.Msig.Blank() || !stxn.Lsig.Blank() {
-				continue
-			}
-
 			sender := stxn.Txn.Sender
 
+			blankSig := stxn.Sig.Blank() && stxn.Msig.Blank() && stxn.Lsig.Blank()
+
 			// Check if we already know the auth addr
-			if authAddr, ok := knownAuthAddrs[sender]; ok {
+			if authAddr, ok := knownAuthAddrs[sender]; ok && blankSig {
 				stxn.AuthAddr = authAddr
 			} else {
 				// Get the auth addr from the ledger
@@ -540,9 +537,11 @@ func (tracer *evalTracer) AfterProgram(cx *logic.EvalContext, pass bool, evalErr
 					panic(err)
 				}
 
-				// set the txn auth addr
-				stxn.AuthAddr = data.AuthAddr
 				knownAuthAddrs[sender] = data.AuthAddr
+
+				if blankSig {
+					stxn.AuthAddr = data.AuthAddr
+				}
 			}
 
 			// If this is an appl, we can break since we know AfterProgram will be called afterwards

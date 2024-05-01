@@ -8959,6 +8959,10 @@ int 1
 			txgroup[1] = txgroup[1].Txn.Sign(sender.Sk)
 		}
 
+		if signPayAfterInnerRekey {
+			txgroup[3] = txgroup[3].Txn.Sign(other.Sk)
+		}
+
 		request := simulation.Request{
 			TxnGroups:            [][]transactions.SignedTxn{txgroup},
 			AllowEmptySignatures: true,

@@ -218,13 +218,13 @@ func (s Simulator) simulateWithTracer(txgroup []transactions.SignedTxnWithAD, tr
 		staticRekeys := make(map[basics.Address]basics.Address)
 
 		for i := range txgroup {
-			stxn := txgroup[i].SignedTxn
+			stxn := &txgroup[i].SignedTxn
 			sender := stxn.Txn.Sender
 
-			if authAddr, ok := staticRekeys[sender]; ok && txnHasNoSignature(stxn) {
+			if authAddr, ok := staticRekeys[sender]; ok && txnHasNoSignature(*stxn) {
 				// If there is a static rekey for the sender set the auth addr to that address
 				stxn.AuthAddr = authAddr
-			} else if txnHasNoSignature(stxn) {
+			} else if txnHasNoSignature(*stxn) {
 				// Otherwise lookup the sender's account and set the txn auth addr to the account's auth addr
 				var data ledgercore.AccountData
 				data, _, _, err = s.ledger.LookupAccount(s.ledger.start, sender)
@@ -237,7 +237,6 @@ func (s Simulator) simulateWithTracer(txgroup []transactions.SignedTxnWithAD, tr
 			if stxn.Txn.RekeyTo != (basics.Address{}) {
 				staticRekeys[sender] = stxn.Txn.RekeyTo
 			}
-			txgroup[i].SignedTxn = stxn
 		}
 
 	}
