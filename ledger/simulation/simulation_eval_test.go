@@ -8897,7 +8897,7 @@ func TestUnnamedResourcesCrossProductLimits(t *testing.T) {
 	}
 }
 
-func TestFixAuthAddr(t *testing.T) {
+func TestFixSigners(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -8958,6 +8958,7 @@ int 1
 	request := simulation.Request{
 		TxnGroups:            [][]transactions.SignedTxn{txgroup},
 		AllowEmptySignatures: true,
+		FixSigners:           true,
 	}
 
 	result, err := simulation.MakeSimulator(env.Ledger, false).Simulate(request)

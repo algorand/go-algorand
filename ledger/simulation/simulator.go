@@ -41,6 +41,7 @@ type Request struct {
 	AllowUnnamedResources bool
 	ExtraOpcodeBudget     uint64
 	TraceConfig           ExecTraceConfig
+	FixSigners            bool
 }
 
 // simulatorLedger patches the ledger interface to use a constant latest round.
@@ -212,35 +213,31 @@ func (s Simulator) simulateWithTracer(txgroup []transactions.SignedTxnWithAD, tr
 	nextBlock := bookkeeping.MakeBlock(prevBlockHdr)
 	hdr := nextBlock.BlockHeader
 
-	fixAuthAddr := true
-	if fixAuthAddr {
+	if overrides.FixSigners {
 		// Map of rekeys for senders in the group
 		staticRekeys := make(map[basics.Address]basics.Address)
 
 		for i := range txgroup {
-			// Only fix transactions that have an empty signature
-			if !txnHasNoSignature(txgroup[i].SignedTxn) {
-				continue
-			}
+			stxn := txgroup[i].SignedTxn
+			sender := stxn.Txn.Sender
 
-			sender := txgroup[i].SignedTxn.Txn.Sender
-
-			if authAddr, ok := staticRekeys[sender]; ok {
+			if authAddr, ok := staticRekeys[sender]; ok && txnHasNoSignature(stxn) {
 				// If there is a static rekey for the sender set the auth addr to that address
-				txgroup[i].SignedTxn.AuthAddr = authAddr
-			} else {
+				stxn.AuthAddr = authAddr
+			} else if txnHasNoSignature(stxn) {
 				// Otherwise lookup the sender's account and set the txn auth addr to the account's auth addr
 				var data ledgercore.AccountData
 				data, _, _, err = s.ledger.LookupAccount(s.ledger.start, sender)
 				if err != nil {
 					return nil, err
 				}
-				txgroup[i].SignedTxn.AuthAddr = data.AuthAddr
+				stxn.AuthAddr = data.AuthAddr
 			}
 
-			if txgroup[i].SignedTxn.Txn.RekeyTo != (basics.Address{}) {
-				staticRekeys[sender] = txgroup[i].SignedTxn.Txn.RekeyTo
+			if stxn.Txn.RekeyTo != (basics.Address{}) {
+				staticRekeys[sender] = stxn.Txn.RekeyTo
 			}
+			txgroup[i].SignedTxn = stxn
 		}
 
 	}
@@ -268,6 +265,14 @@ func (s Simulator) simulateWithTracer(txgroup []transactions.SignedTxnWithAD, tr
 
 // Simulate simulates a transaction group using the simulator. Will error if the transaction group is not well-formed.
 func (s Simulator) Simulate(simulateRequest Request) (Result, error) {
+	if simulateRequest.FixSigners && !simulateRequest.AllowEmptySignatures {
+		return Result{}, InvalidRequestError{
+			SimulatorError{
+				errors.New("FixSigners requires AllowEmptySignatures to be enabled"),
+			},
+		}
+	}
+
 	if simulateRequest.Round != 0 {
 		s.ledger.start = simulateRequest.Round
 	} else {

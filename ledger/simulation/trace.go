@@ -90,6 +90,7 @@ type ResultEvalOverrides struct {
 	MaxLogCalls           *uint64
 	MaxLogSize            *uint64
 	ExtraOpcodeBudget     uint64
+	FixSigners            bool
 }
 
 // LogBytesLimit hardcode limit of how much bytes one can log per transaction during simulation (with AllowMoreLogging)
@@ -206,6 +207,7 @@ func makeSimulationResult(lastRound basics.Round, request Request, developerAPI 
 		AllowEmptySignatures:  request.AllowEmptySignatures,
 		ExtraOpcodeBudget:     request.ExtraOpcodeBudget,
 		AllowUnnamedResources: request.AllowUnnamedResources,
+		FixSigners:            request.FixSigners,
 	}.AllowMoreLogging(request.AllowMoreLogging)
 
 	if err := validateSimulateRequest(request, developerAPI); err != nil {

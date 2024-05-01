@@ -515,11 +515,9 @@ func (tracer *evalTracer) AfterProgram(cx *logic.EvalContext, pass bool, evalErr
 		tracer.handleError(evalError)
 	}
 
-	fixAuthAddrs := true
-
 	// Since an app could rekey multiple accounts, we need to go over the
 	// rest of the txngroup and make sure all the auth addrs are correct
-	if fixAuthAddrs {
+	if tracer.result.EvalOverrides.FixSigners {
 		knownAuthAddrs := make(map[basics.Address]basics.Address)
 		// iterate over all txns in the group after this one
 		for i := groupIndex + 1; i < len(cx.TxnGroup); i++ {
