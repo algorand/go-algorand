@@ -8897,18 +8897,18 @@ func TestUnnamedResourcesCrossProductLimits(t *testing.T) {
 	}
 }
 
-func TestFixSigners(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
+func fixSignersTest(t *testing.T, signPayAfterOuterRekey bool, signPayAfterInnerRekey bool) {
+	t.Run(fmt.Sprintf("signPayAfterOuterRekey=%t,signPayAfterInnerRekey=%t", signPayAfterOuterRekey, signPayAfterInnerRekey), func(t *testing.T) {
+		t.Parallel()
 
-	env := simulationtesting.PrepareSimulatorTest(t)
-	defer env.Close()
+		env := simulationtesting.PrepareSimulatorTest(t)
+		defer env.Close()
 
-	sender := env.Accounts[0]
-	other := env.Accounts[1]
+		sender := env.Accounts[0]
+		other := env.Accounts[1]
 
-	appID := env.CreateApp(sender.Addr, simulationtesting.AppParams{
-		ApprovalProgram: `#pragma version 9
+		appID := env.CreateApp(sender.Addr, simulationtesting.AppParams{
+			ApprovalProgram: `#pragma version 9
 txn ApplicationID
 bz end
 
@@ -8925,46 +8925,70 @@ itxn_submit
 end:
 int 1
 `,
-		ClearStateProgram: "#pragma version 9\nint 1",
-	})
-	env.TransferAlgos(sender.Addr, appID.Address(), 1_000_000)
+			ClearStateProgram: "#pragma version 9\nint 1",
+		})
+		env.TransferAlgos(sender.Addr, appID.Address(), 1_000_000)
 
-	pay0 := env.TxnInfo.NewTxn(txntest.Txn{
-		Type:     protocol.PaymentTx,
-		Sender:   sender.Addr,
-		Receiver: sender.Addr,
-		RekeyTo:  other.Addr,
-	})
-	pay1 := env.TxnInfo.NewTxn(txntest.Txn{
-		Type:     protocol.PaymentTx,
-		Sender:   sender.Addr,
-		Receiver: sender.Addr,
-		RekeyTo:  appID.Address(),
-	})
-	appCall := env.TxnInfo.NewTxn(txntest.Txn{
-		Type:            protocol.ApplicationCallTx,
-		Sender:          other.Addr,
-		ApplicationID:   appID,
-		ApplicationArgs: [][]byte{sender.Addr[:]},
-	})
-	pay2 := env.TxnInfo.NewTxn(txntest.Txn{
-		Type:     protocol.PaymentTx,
-		Sender:   sender.Addr,
-		Receiver: sender.Addr,
-	})
+		pay0 := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   sender.Addr,
+			Receiver: sender.Addr,
+			RekeyTo:  other.Addr,
+		})
+		pay1 := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   sender.Addr,
+			Receiver: sender.Addr,
+			RekeyTo:  appID.Address(),
+		})
+		appCall := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:            protocol.ApplicationCallTx,
+			Sender:          other.Addr,
+			ApplicationID:   appID,
+			ApplicationArgs: [][]byte{sender.Addr[:]},
+		})
+		pay2 := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   sender.Addr,
+			Receiver: sender.Addr,
+		})
 
-	txgroup := txntest.Group(&pay0, &pay1, &appCall, &pay2)
+		txgroup := txntest.Group(&pay0, &pay1, &appCall, &pay2)
 
-	request := simulation.Request{
-		TxnGroups:            [][]transactions.SignedTxn{txgroup},
-		AllowEmptySignatures: true,
-		FixSigners:           true,
-	}
+		if signPayAfterOuterRekey {
+			txgroup[1] = txgroup[1].Txn.Sign(sender.Sk)
+		}
 
-	result, err := simulation.MakeSimulator(env.Ledger, false).Simulate(request)
-	require.NoError(t, err)
+		request := simulation.Request{
+			TxnGroups:            [][]transactions.SignedTxn{txgroup},
+			AllowEmptySignatures: true,
+			FixSigners:           true,
+		}
 
-	require.Empty(t, result.TxnGroups[0].FailureMessage)
+		result, err := simulation.MakeSimulator(env.Ledger, false).Simulate(request)
+		require.NoError(t, err)
+
+		if !signPayAfterInnerRekey && !signPayAfterOuterRekey {
+			require.Empty(t, result.TxnGroups[0].FailureMessage)
+		}
+
+		if signPayAfterOuterRekey {
+			require.NotEmpty(t, result.TxnGroups[0].FailureMessage)
+			require.Equal(t, uint64(1), result.TxnGroups[0].FailedAt[0])
+		} else if signPayAfterInnerRekey {
+			require.NotEmpty(t, result.TxnGroups[0].FailureMessage)
+			require.Equal(t, uint64(3), result.TxnGroups[0].FailedAt[0])
+		}
+	})
+}
+
+func TestFixSigners(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	fixSignersTest(t, false, false)
+	fixSignersTest(t, true, false)
+	fixSignersTest(t, false, true)
 
 	// TODO: make sure output txn has the correct auth addr?
 }
