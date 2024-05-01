@@ -787,6 +787,62 @@
         }
       ]
     },
+    "/v2/blocks/{round}/logs": {
+      "get": {
+        "tags": [
+          "public",
+          "nonparticipating"
+        ],
+        "description": "Get all of the logs from outer and inner app calls in the given round",
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Get all of the logs from outer and inner app calls in the given round",
+        "operationId": "GetBlockLogs",
+        "parameters": [
+          {
+            "minimum": 0,
+            "type": "integer",
+            "description": "The round from which to fetch block log information.",
+            "name": "round",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/BlockLogsResponse"
+          },
+          "400": {
+            "description": "Bad Request - Non integer number",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Nonexistent block ",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        }
+      }
+    },
     "/v2/ledger/supply": {
       "get": {
         "tags": [
@@ -4461,6 +4517,33 @@
           }
         }
       }
+    },
+    "AppCallLogs": {
+      "description": "The logged messages from an app call along with the app ID and outer transaction ID. Logs appear in the same order that they were emitted.",
+      "type": "object",
+      "required": [
+        "logs",
+        "application-index",
+        "txId"
+      ],
+      "properties": {
+        "logs": {
+          "description": "An array of logs",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "byte"
+          }
+        },
+        "application-index": {
+          "description": "The application from which the logs were generated",
+          "type": "integer"
+        },
+        "txId": {
+          "description": "The transaction ID of the outer app call that lead to these logs",
+          "type": "string"
+        }
+      }
     }
   },
   "parameters": {
@@ -5114,6 +5197,23 @@
           },
           "initial-states": {
             "$ref": "#/definitions/SimulateInitialStates"
+          }
+        }
+      }
+    },
+    "BlockLogsResponse": {
+      "description": "All logs emitted in the given round. Each app call, whether top-level or inner, that contains logs results in a separate AppCallLogs object. Therefore there may be multiple AppCallLogs with the same application ID and outer transaction ID in the event of multiple inner app calls to the same app. App calls with no logs are not included in the response. AppCallLogs are returned in the same order that their corresponding app call appeared in the block (pre-order traversal of inner app calls)",
+      "schema": {
+        "type": "object",
+        "required": [
+          "logs"
+        ],
+        "properties": {
+          "logs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/AppCallLogs"
+            }
           }
         }
       }

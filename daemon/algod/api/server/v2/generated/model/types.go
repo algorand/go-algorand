@@ -280,6 +280,18 @@ type AccountStateDelta struct {
 	Delta StateDelta `json:"delta"`
 }
 
+// AppCallLogs The logged messages from an app call along with the app ID and outer transaction ID. Logs appear in the same order that they were emitted.
+type AppCallLogs struct {
+	// ApplicationIndex The application from which the logs were generated
+	ApplicationIndex uint64 `json:"application-index"`
+
+	// Logs An array of logs
+	Logs [][]byte `json:"logs"`
+
+	// TxId The transaction ID of the outer app call that lead to these logs
+	TxId string `json:"txId"`
+}
+
 // Application Application index and its parameters
 type Application struct {
 	// Id \[appidx\] application index.
@@ -1095,6 +1107,11 @@ type AssetResponse = Asset
 type BlockHashResponse struct {
 	// BlockHash Block header hash.
 	BlockHash string `json:"blockHash"`
+}
+
+// BlockLogsResponse defines model for BlockLogsResponse.
+type BlockLogsResponse struct {
+	Logs []AppCallLogs `json:"logs"`
 }
 
 // BlockResponse defines model for BlockResponse.

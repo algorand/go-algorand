@@ -735,6 +735,70 @@ func (v2 *Handlers) GetBlockTxids(ctx echo.Context, round uint64) error {
 	return ctx.JSON(http.StatusOK, response)
 }
 
+// NewAppCallLogs generates a new model.AppCallLogs struct.
+func NewAppCallLogs(txid string, logs []string, appIndex uint64) model.AppCallLogs {
+	return model.AppCallLogs{
+		TxId:             txid,
+		Logs:             convertSlice(logs, func(s string) []byte { return []byte(s) }),
+		ApplicationIndex: appIndex,
+	}
+}
+
+func getAppIndexFromTxn(txn transactions.SignedTxnWithAD) uint64 {
+	appIndex := uint64(txn.SignedTxn.Txn.ApplicationID)
+	if appIndex == 0 {
+		appIndex = uint64(txn.ApplyData.ApplicationID)
+	}
+
+	return appIndex
+}
+
+func appendLogsFromTxns(blockLogs []model.AppCallLogs, txns []transactions.SignedTxnWithAD, outerTxnID string) []model.AppCallLogs {
+
+	for _, txn := range txns {
+		if len(txn.EvalDelta.Logs) > 0 {
+			blockLogs = append(
+				blockLogs,
+				NewAppCallLogs(outerTxnID, txn.EvalDelta.Logs, getAppIndexFromTxn(txn)),
+			)
+		}
+
+		blockLogs = appendLogsFromTxns(blockLogs, txn.EvalDelta.InnerTxns, outerTxnID)
+	}
+
+	return blockLogs
+}
+
+// GetBlockLogs gets all of the logs (inner and outer app calls) for a given block
+// (GET /v2/blocks/{round}/logs)
+func (v2 *Handlers) GetBlockLogs(ctx echo.Context, round uint64) error {
+	ledger := v2.Node.LedgerForAPI()
+	block, err := ledger.Block(basics.Round(round))
+	if err != nil {
+		switch err.(type) {
+		case ledgercore.ErrNoEntry:
+			return notFound(ctx, err, errFailedLookingUpLedger, v2.Log)
+		default:
+			return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+		}
+	}
+
+	txns, err := block.DecodePaysetFlat()
+	if err != nil {
+		return internalError(ctx, err, "decoding transactions", v2.Log)
+	}
+
+	blockLogs := []model.AppCallLogs{}
+
+	for _, txn := range txns {
+		blockLogs = appendLogsFromTxns(blockLogs, []transactions.SignedTxnWithAD{txn}, txn.ID().String())
+	}
+
+	response := model.BlockLogsResponse{Logs: blockLogs}
+
+	return ctx.JSON(http.StatusOK, response)
+}
+
 // GetBlockHash gets the block hash for the given round.
 // (GET /v2/blocks/{round}/hash)
 func (v2 *Handlers) GetBlockHash(ctx echo.Context, round uint64) error {
