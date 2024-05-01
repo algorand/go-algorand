@@ -8972,12 +8972,19 @@ int 1
 		result, err := simulation.MakeSimulator(env.Ledger, false).Simulate(request)
 		require.NoError(t, err)
 
+		payAfterOuterRekey := result.TxnGroups[0].Txns[1]
+		payAfterInnerRekey := result.TxnGroups[0].Txns[3]
+
 		if !signPayAfterInnerRekey && !signPayAfterOuterRekey {
 			require.Empty(t, result.TxnGroups[0].FailureMessage)
 
 			// Ensure the txns have the correct auth addr
-			require.Equal(t, basics.Address{}, result.TxnGroups[0].Txns[1].Txn.SignedTxn.AuthAddr)
-			require.Equal(t, basics.Address{}, result.TxnGroups[0].Txns[3].Txn.SignedTxn.AuthAddr)
+			require.Equal(t, basics.Address{}, payAfterOuterRekey.Txn.SignedTxn.AuthAddr)
+			require.Equal(t, basics.Address{}, payAfterInnerRekey.Txn.SignedTxn.AuthAddr)
+
+			// Ensure the FixedSigner has been set correctly
+			require.Equal(t, other.Addr, payAfterOuterRekey.FixedSigner, other.Addr)
+			require.NotEmpty(t, sender.Addr, payAfterInnerRekey.FixedSigner)
 		}
 
 		if signPayAfterOuterRekey {
@@ -8988,8 +8995,12 @@ int 1
 			)
 
 			// Ensure the txns have the correct auth addr
-			require.Equal(t, basics.Address{}, result.TxnGroups[0].Txns[1].Txn.SignedTxn.AuthAddr)
-			require.Equal(t, basics.Address{}, result.TxnGroups[0].Txns[3].Txn.SignedTxn.AuthAddr)
+			require.Equal(t, basics.Address{}, payAfterOuterRekey.Txn.SignedTxn.AuthAddr)
+			require.Equal(t, basics.Address{}, payAfterInnerRekey.Txn.SignedTxn.AuthAddr)
+
+			// Ensure the FixedSigner has been set correctly
+			require.Empty(t, payAfterOuterRekey.FixedSigner)
+			require.NotEmpty(t, payAfterInnerRekey.FixedSigner)
 		} else if signPayAfterInnerRekey {
 			require.Regexp(
 				t,
@@ -8998,8 +9009,12 @@ int 1
 			)
 
 			// Ensure the txns have the correct auth addr
-			require.Equal(t, basics.Address{}, result.TxnGroups[0].Txns[1].Txn.SignedTxn.AuthAddr)
-			require.Equal(t, other.Addr, result.TxnGroups[0].Txns[3].Txn.SignedTxn.AuthAddr)
+			require.Equal(t, basics.Address{}, payAfterOuterRekey.Txn.SignedTxn.AuthAddr)
+			require.Equal(t, other.Addr, payAfterInnerRekey.Txn.SignedTxn.AuthAddr)
+
+			// Ensure the FixedSigner has been set correctly
+			require.Equal(t, other.Addr, payAfterOuterRekey.FixedSigner)
+			require.Empty(t, payAfterInnerRekey.FixedSigner)
 		}
 	})
 }

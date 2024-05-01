@@ -45,6 +45,10 @@ type TxnResult struct {
 	//
 	// In that case, it will be populated with the unnamed resources accessed by this transaction.
 	UnnamedResourcesAccessed *ResourceTracker
+
+	// If the signer needed to be changed, this will be the address of the required signer
+	// This will only be present if FixSigners is true in the EvalOverrides
+	FixedSigner basics.Address
 }
 
 // TxnGroupResult contains the simulation result for a single transaction group

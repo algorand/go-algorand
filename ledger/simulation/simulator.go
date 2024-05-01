@@ -342,5 +342,15 @@ func (s Simulator) Simulate(simulateRequest Request) (Result, error) {
 	}
 	simulatorTracer.result.TxnGroups[0].AppBudgetConsumed = totalCost
 
+	// Set the FixedSigner for each transaction that had a signer change during evaluation
+	for i := range simulatorTracer.result.TxnGroups[0].Txns {
+		resultSigner := simulatorTracer.result.TxnGroups[0].Txns[i].Txn.AuthAddr
+		tracerSigner := simulatorTracer.groups[0][i].SignedTxn.AuthAddr
+
+		if resultSigner != tracerSigner {
+			simulatorTracer.result.TxnGroups[0].Txns[i].FixedSigner = tracerSigner
+		}
+	}
+
 	return *simulatorTracer.result, nil
 }
