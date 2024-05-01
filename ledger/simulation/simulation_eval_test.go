@@ -8974,14 +8974,26 @@ int 1
 
 		if !signPayAfterInnerRekey && !signPayAfterOuterRekey {
 			require.Empty(t, result.TxnGroups[0].FailureMessage)
+
+			// Ensure the txns have the correct auth addr
+			require.Equal(t, basics.Address{}, result.TxnGroups[0].Txns[1].Txn.SignedTxn.AuthAddr)
+			require.Equal(t, basics.Address{}, result.TxnGroups[0].Txns[3].Txn.SignedTxn.AuthAddr)
 		}
 
 		if signPayAfterOuterRekey {
 			require.NotEmpty(t, result.TxnGroups[0].FailureMessage)
 			require.Equal(t, uint64(1), result.TxnGroups[0].FailedAt[0])
+
+			// Ensure the txns have the correct auth addr
+			require.Equal(t, basics.Address{}, result.TxnGroups[0].Txns[1].Txn.SignedTxn.AuthAddr)
+			require.Equal(t, basics.Address{}, result.TxnGroups[0].Txns[3].Txn.SignedTxn.AuthAddr)
 		} else if signPayAfterInnerRekey {
 			require.NotEmpty(t, result.TxnGroups[0].FailureMessage)
 			require.Equal(t, uint64(3), result.TxnGroups[0].FailedAt[0])
+
+			// Ensure the txns have the correct auth addr
+			require.Equal(t, basics.Address{}, result.TxnGroups[0].Txns[1].Txn.SignedTxn.AuthAddr)
+			require.Equal(t, other.Addr, result.TxnGroups[0].Txns[3].Txn.SignedTxn.AuthAddr)
 		}
 	})
 }
