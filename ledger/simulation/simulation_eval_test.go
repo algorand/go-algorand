@@ -8981,15 +8981,21 @@ int 1
 		}
 
 		if signPayAfterOuterRekey {
-			require.NotEmpty(t, result.TxnGroups[0].FailureMessage)
-			require.Equal(t, uint64(1), result.TxnGroups[0].FailedAt[0])
+			require.Equal(
+				t,
+				fmt.Sprintf("transaction %s: should have been authorized by %s but was actually authorized by %s", txgroup[1].Txn.ID(), other.Addr, sender.Addr),
+				result.TxnGroups[0].FailureMessage,
+			)
 
 			// Ensure the txns have the correct auth addr
 			require.Equal(t, basics.Address{}, result.TxnGroups[0].Txns[1].Txn.SignedTxn.AuthAddr)
 			require.Equal(t, basics.Address{}, result.TxnGroups[0].Txns[3].Txn.SignedTxn.AuthAddr)
 		} else if signPayAfterInnerRekey {
-			require.NotEmpty(t, result.TxnGroups[0].FailureMessage)
-			require.Equal(t, uint64(3), result.TxnGroups[0].FailedAt[0])
+			require.Regexp(
+				t,
+				fmt.Sprintf("transaction %s: should have been authorized by \\S+ but was actually authorized by %s", txgroup[3].Txn.ID(), other.Addr),
+				result.TxnGroups[0].FailureMessage,
+			)
 
 			// Ensure the txns have the correct auth addr
 			require.Equal(t, basics.Address{}, result.TxnGroups[0].Txns[1].Txn.SignedTxn.AuthAddr)
