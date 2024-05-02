@@ -237,6 +237,11 @@ func (s Simulator) simulateWithTracer(txgroup []transactions.SignedTxnWithAD, tr
 				}
 			}
 
+			// Stop processing transactions after the first application because auth addr correction will be done in AfterProgram
+			if stxn.Txn.Type == protocol.ApplicationCallTx {
+				break
+			}
+
 			if stxn.Txn.RekeyTo != (basics.Address{}) {
 				staticRekeys[sender] = stxn.Txn.RekeyTo
 			}
@@ -349,11 +354,6 @@ func (s Simulator) Simulate(simulateRequest Request) (Result, error) {
 
 		if resultSigner != tracerSigner {
 			simulatorTracer.result.TxnGroups[0].Txns[i].FixedSigner = tracerSigner
-		}
-
-		// Don't set FixedSigner for transactions after the failure because it may not be accurate
-		if simulatorTracer.failedAt != nil && i == int(simulatorTracer.failedAt[0]) {
-			break
 		}
 	}
 
