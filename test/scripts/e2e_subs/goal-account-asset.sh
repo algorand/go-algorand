@@ -41,8 +41,16 @@ ${gcmd} asset optin --account ${ACCOUNTB} --assetid ${ASSET_D_ID} --signer ${ACC
 # displays held assets
 ${gcmd} account info -a ${ACCOUNTB}
 
+# query account assets w/ details
+${gcmd} account assetdetails -a ${ACCOUNTA} -l 2 -n 1004
+${gcmd} account assetdetails -a ${ACCOUNTB}
+
 # delete one of the asset
 ${gcmd} asset destroy --assetid ${ASSET_B_ID} --creator ${ACCOUNTA} --signer ${ACCOUNTA}
+
+# query account assets w/ details
+${gcmd} account assetdetails -a ${ACCOUNTA} -l 2 -n 1004
+${gcmd} account assetdetails -a ${ACCOUNTB}
 
 # check account info display
 RES=$(${gcmd} account info -a ${ACCOUNTB})
