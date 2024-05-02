@@ -8907,8 +8907,10 @@ func fixSignersTest(t *testing.T, signPayAfterOuterRekey bool, signPayAfterInner
 		sender := env.Accounts[0]
 		other := env.Accounts[1]
 
+		innerRekeyAddr := env.Accounts[2].Addr
+
 		appID := env.CreateApp(sender.Addr, simulationtesting.AppParams{
-			ApprovalProgram: `#pragma version 9
+			ApprovalProgram: fmt.Sprintf(`#pragma version 9
 txn ApplicationID
 bz end
 
@@ -8917,14 +8919,13 @@ int pay
 itxn_field TypeEnum
 txn ApplicationArgs 0
 itxn_field Sender
-txn ApplicationArgs 0
-sha512_256 // essentially a random account
+addr %s
 itxn_field RekeyTo
 itxn_submit
 
 end:
 int 1
-`,
+`, innerRekeyAddr.GetUserAddress()),
 			ClearStateProgram: "#pragma version 9\nint 1",
 		})
 		env.TransferAlgos(sender.Addr, appID.Address(), 1_000_000)
@@ -8984,7 +8985,7 @@ int 1
 
 			// Ensure the FixedSigner has been set correctly
 			require.Equal(t, other.Addr, payAfterOuterRekey.FixedSigner, other.Addr)
-			require.NotEmpty(t, sender.Addr, payAfterInnerRekey.FixedSigner)
+			require.Equal(t, innerRekeyAddr, payAfterInnerRekey.FixedSigner)
 		}
 
 		if signPayAfterOuterRekey {
@@ -9000,7 +9001,9 @@ int 1
 
 			// Ensure the FixedSigner has been set correctly
 			require.Empty(t, payAfterOuterRekey.FixedSigner)
-			require.NotEmpty(t, payAfterInnerRekey.FixedSigner)
+
+			// This should not have a FixedSigner because the group failed before getting to this txn
+			require.Empty(t, payAfterInnerRekey.FixedSigner)
 		} else if signPayAfterInnerRekey {
 			require.Regexp(
 				t,

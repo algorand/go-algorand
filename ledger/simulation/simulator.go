@@ -350,6 +350,11 @@ func (s Simulator) Simulate(simulateRequest Request) (Result, error) {
 		if resultSigner != tracerSigner {
 			simulatorTracer.result.TxnGroups[0].Txns[i].FixedSigner = tracerSigner
 		}
+
+		// Don't set FixedSigner for transactions after the failure because it may not be accurate
+		if simulatorTracer.failedAt != nil && i == int(simulatorTracer.failedAt[0]) {
+			break
+		}
 	}
 
 	return *simulatorTracer.result, nil
