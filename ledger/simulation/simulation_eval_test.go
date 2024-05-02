@@ -9029,6 +9029,4 @@ func TestFixSigners(t *testing.T) {
 	fixSignersTest(t, false, false)
 	fixSignersTest(t, true, false)
 	fixSignersTest(t, false, true)
-
-	// TODO: make sure output txn has the correct auth addr?
 }
