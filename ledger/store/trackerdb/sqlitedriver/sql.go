@@ -87,8 +87,25 @@ func AccountsInitDbQueries(q db.Queryable) (*accountsDbQueries, error) {
 		return nil, err
 	}
 
-	qs.lookupLimitedResourcesStmt, err = q.Prepare("SELECT ab.rowid, ar.rnd, r.aidx, ac.creator, r.data, cr.data FROM acctrounds ar JOIN accountbase ab ON ab.address = ? JOIN resources r ON r.addrid = ab.addrid LEFT JOIN assetcreators ac ON r.aidx = ac.asset LEFT JOIN " +
-		"accountbase cab ON ac.creator = cab.address LEFT JOIN resources cr ON cr.addrid = cab.addrid AND cr.aidx = r.aidx WHERE ar.id = 'acctbase' AND r.ctype = ? AND r.aidx > ? ORDER BY r.aidx ASC LIMIT ?")
+	qs.lookupLimitedResourcesStmt, err = q.Prepare(
+		`SELECT ab.rowid,
+						ar.rnd,
+       					r.aidx,
+      	 				ac.creator,
+       					r.data,
+       					cr.data
+				FROM acctrounds ar
+				JOIN accountbase ab ON ab.address = ?
+				JOIN resources r ON r.addrid = ab.addrid
+				LEFT JOIN assetcreators ac ON r.aidx = ac.asset
+				LEFT JOIN accountbase cab ON ac.creator = cab.address
+				LEFT JOIN resources cr ON cr.addrid = cab.addrid
+				AND cr.aidx = r.aidx
+				WHERE ar.id = 'acctbase'
+  					AND r.ctype = ?
+  					AND r.aidx > ?
+				ORDER BY r.aidx ASC
+				LIMIT ?`)
 	if err != nil {
 		return nil, err
 	}
@@ -469,9 +486,13 @@ func (qs *accountsDbQueries) LookupLimitedResources(addr basics.Address, minIdx 
 					return err
 				}
 
-				// Update asset holding data in the creator resource data
+				// Since there is a creator, we want to return all of the asset params along with the asset holdings.
+				// The most simple way to do this is to set the necessary asset holding data on the creator resource data
+				// retrieved from the database. Note that this is unique way of setting resource flags, making this structure
+				// not suitable for use in other contexts (where the params would only be present colocated with the asset holding
+				// of the creator).
 				crtResData.Amount = actResData.Amount
-				crtResData.Freeze = actResData.Freeze
+				crtResData.Frozen = actResData.Frozen
 				crtResData.ResourceFlags = actResData.ResourceFlags
 
 				creatorAddr := basics.Address{}

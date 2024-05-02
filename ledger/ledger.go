@@ -584,8 +584,8 @@ func (l *Ledger) LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.
 }
 
 // LookupAssets loads asset resources that match the request parameters from the ledger.
-func (l *Ledger) LookupAssets(rnd basics.Round, addr basics.Address, assetIDGT basics.AssetIndex, limit uint64) ([]ledgercore.AssetResourceWithIDs, basics.Round, error) {
-	resources, lookupRound, err := l.accts.LookupAssetResources(rnd, addr, assetIDGT, limit)
+func (l *Ledger) LookupAssets(addr basics.Address, assetIDGT basics.AssetIndex, limit uint64) ([]ledgercore.AssetResourceWithIDs, basics.Round, error) {
+	resources, lookupRound, err := l.accts.LookupAssetResources(addr, assetIDGT, limit)
 	return resources, lookupRound, err
 }
 

@@ -948,11 +948,23 @@ func accountsAddCreatableTypeColumn(ctx context.Context, e db.Executable, popula
 	var creatableTypeOnResourcesRun bool
 	err := e.QueryRow("SELECT 1 FROM pragma_table_info('resources') WHERE name='ctype'").Scan(&creatableTypeOnResourcesRun)
 	if err == nil {
-		// Already exists.
+		// Check if any ctypes are invalid
+		var count uint64
+		err0 := e.QueryRow("SELECT COUNT(*) FROM resources WHERE ctype NOT IN (0, 1)").Scan(&count)
+		if err0 != nil {
+			return err0
+		}
+		if count > 0 {
+			// Invalid ctypes found, return an error
+			return fmt.Errorf("invalid ctypes found in resources table; database is corrupted and needs to be rebuilt")
+		}
+		// Column exists, no ctypes are invalid, no migration needed so return clean
 		return nil
 	} else if !errors.Is(err, sql.ErrNoRows) {
 		return err
-	} // A sql.ErrNoRows error means the column does not exist, so we need to create it
+	} // A sql.ErrNoRows error means the column does not exist, so we need to create it/run the migration
+
+	// If we reached here, a sql.ErrNoRows error was returned, so we need to create the column
 
 	// Add ctype column
 	createStmt := `ALTER TABLE resources ADD COLUMN ctype INTEGER NOT NULL DEFAULT -1`
@@ -1019,6 +1031,8 @@ func accountsAddCreatableTypeColumn(ctx context.Context, e db.Executable, popula
 				return err0
 			}
 		}
+
+		return rows.Err()
 	}
 
 	return nil

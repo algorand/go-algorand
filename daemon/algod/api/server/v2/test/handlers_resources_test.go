@@ -109,10 +109,10 @@ func (l *mockLedger) LookupAsset(rnd basics.Round, addr basics.Address, aidx bas
 	return ar, nil
 }
 
-func (l *mockLedger) LookupAssets(rnd basics.Round, addr basics.Address, assetIDGT basics.AssetIndex, limit uint64) ([]ledgercore.AssetResourceWithIDs, basics.Round, error) {
+func (l *mockLedger) LookupAssets(addr basics.Address, assetIDGT basics.AssetIndex, limit uint64) ([]ledgercore.AssetResourceWithIDs, basics.Round, error) {
 	ad, ok := l.accounts[addr]
 	if !ok {
-		return nil, rnd, nil
+		return nil, basics.Round(0), nil
 	}
 
 	var res []ledgercore.AssetResourceWithIDs
@@ -132,7 +132,7 @@ func (l *mockLedger) LookupAssets(rnd basics.Round, addr basics.Address, assetID
 			res = append(res, apr)
 		}
 	}
-	return res, rnd, nil
+	return res, basics.Round(0), nil
 }
 
 func (l *mockLedger) LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ar ledgercore.AppResource, err error) {
@@ -428,7 +428,6 @@ func accountInformationResourceLimitsTest(t *testing.T, accountMaker func(int) b
 
 func accountAssetInformationResourceLimitsTest(t *testing.T, handlers v2.Handlers, addr basics.Address,
 	acctData basics.AccountData, params model.AccountAssetsInformationParams, inputNextToken int, maxResults int, expectToken bool) {
-	fakeLatestRound := basics.Round(10)
 
 	ctx, rec := newReq(t)
 	err := handlers.AccountAssetsInformation(ctx, addr.String(), params)
@@ -437,7 +436,6 @@ func accountAssetInformationResourceLimitsTest(t *testing.T, handlers v2.Handler
 	var ret model.AccountAssetsInformationResponse
 	err = json.Unmarshal(rec.Body.Bytes(), &ret)
 	require.NoError(t, err)
-	assert.Equal(t, fakeLatestRound, basics.Round(ret.Round))
 
 	if expectToken {
 		nextRaw, err0 := strconv.ParseUint(*ret.NextToken, 10, 64)
@@ -477,43 +475,46 @@ func TestAccountAssetsInformation(t *testing.T) {
 	accountAssetInformationResourceLimitsTest(t, handlers, addr, acctData, model.AccountAssetsInformationParams{},
 		0, int(v2.DefaultAssetResults), false)
 
-	// 2. Query with limit<total resources, no next - should get the first (lowest asset id to highest) limit results back
 	rawLimit := 100
 	limit := uint64(rawLimit)
+	// 2. Query with limit<total resources, no next - should get the first (lowest asset id to highest) limit results back
 	accountAssetInformationResourceLimitsTest(t, handlers, addr, acctData,
 		model.AccountAssetsInformationParams{Limit: &limit}, 0, rawLimit, true)
 
-	// 3. Query with limit, next
-	rawNext := 100
+	// 3. Loop through all assets in the account in batches of 100, ensure we get all assets back.
+	// Exercises limit and next combined.
+	for rawNext := 0; rawNext < totalAssetHoldings; rawNext += rawLimit {
+		nextTk := strconv.FormatUint(uint64(rawNext), 10)
+		// We expect a next token for all but the last batch
+		expectToken := true
+		expectedResultsCount := rawLimit
+		if rawNext+rawLimit >= totalAssetHoldings {
+			expectToken = false
+			expectedResultsCount = totalAssetHoldings - rawNext
+		}
+		accountAssetInformationResourceLimitsTest(t, handlers, addr, acctData,
+			model.AccountAssetsInformationParams{Limit: &limit, Next: &nextTk}, rawNext, expectedResultsCount, expectToken)
+	}
+
+	// 4. Query with limit, next to provide batch, but no data in that range
+	rawNext := 1025
 	nextTk := strconv.FormatUint(uint64(rawNext), 10)
 	accountAssetInformationResourceLimitsTest(t, handlers, addr, acctData,
-		model.AccountAssetsInformationParams{Limit: &limit, Next: &nextTk}, rawNext, rawLimit, true)
-
-	//4. Query with limit, next to retrieve final batch
-	rawNext = 1019
-	nextTk = strconv.FormatUint(uint64(rawNext), 10)
-	accountAssetInformationResourceLimitsTest(t, handlers, addr, acctData,
 		model.AccountAssetsInformationParams{Limit: &limit, Next: &nextTk}, rawNext, totalAssetHoldings-rawNext, false)
 
-	// 5. Query with limit, next to provide batch, but no data in that range
-	rawNext = 1025
-	nextTk = strconv.FormatUint(uint64(rawNext), 10)
-	accountAssetInformationResourceLimitsTest(t, handlers, addr, acctData,
-		model.AccountAssetsInformationParams{Limit: &limit, Next: &nextTk}, rawNext, totalAssetHoldings-rawNext, false)
-
-	// 6. Malformed address
+	// 5. Malformed address
 	ctx, rec := newReq(t)
 	err := handlers.AccountAssetsInformation(ctx, "", model.AccountAssetsInformationParams{})
 	require.NoError(t, err)
 	require.Equal(t, 400, rec.Code)
 	require.Equal(t, "{\"message\":\"failed to parse the address\"}\n", rec.Body.String())
 
-	// 7. Unknown address (200 returned, just no asset data)
+	// 6. Unknown address (200 returned, just no asset data)
 	unknownAddress := basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
 	accountAssetInformationResourceLimitsTest(t, handlers, unknownAddress, basics.AccountData{}, model.AccountAssetsInformationParams{},
 		0, 0, false)
 
-	// 8a. Invalid limits - larger than configured max
+	// 7a. Invalid limits - larger than configured max
 	ctx, rec = newReq(t)
 	err = handlers.AccountAssetsInformation(ctx, addr.String(), model.AccountAssetsInformationParams{
 		Limit: func() *uint64 {
@@ -525,7 +526,7 @@ func TestAccountAssetsInformation(t *testing.T) {
 	require.Equal(t, 400, rec.Code)
 	require.Equal(t, "{\"message\":\"limit 1001 exceeds max assets single batch limit 1000\"}\n", rec.Body.String())
 
-	// 8b. Invalid limits - zero
+	// 7b. Invalid limits - zero
 	ctx, rec = newReq(t)
 	err = handlers.AccountAssetsInformation(ctx, addr.String(), model.AccountAssetsInformationParams{
 		Limit: func() *uint64 {

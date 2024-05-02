@@ -105,7 +105,7 @@ type LedgerForAPI interface {
 	ConsensusParams(r basics.Round) (config.ConsensusParams, error)
 	Latest() basics.Round
 	LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error)
-	LookupAssets(rnd basics.Round, addr basics.Address, assetIDGT basics.AssetIndex, limit uint64) ([]ledgercore.AssetResourceWithIDs, basics.Round, error)
+	LookupAssets(addr basics.Address, assetIDGT basics.AssetIndex, limit uint64) ([]ledgercore.AssetResourceWithIDs, basics.Round, error)
 	LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error)
 	BlockCert(rnd basics.Round) (blk bookkeeping.Block, cert agreement.Certificate, err error)
 	LatestTotals() (basics.Round, ledgercore.AccountTotals, error)
@@ -1153,10 +1153,9 @@ func (v2 *Handlers) AccountAssetsInformation(ctx echo.Context, address string, p
 	// 1. Get the account's asset holdings subject to limits
 	// 2. Handle empty response
 	// 3. Prepare JSON response
-	lastRound := ledger.Latest()
 
 	// We intentionally request one more than the limit to determine if there are more assets.
-	records, lookupRound, err := ledger.LookupAssets(lastRound, addr, basics.AssetIndex(assetGreaterThan), *params.Limit+1)
+	records, lookupRound, err := ledger.LookupAssets(addr, basics.AssetIndex(assetGreaterThan), *params.Limit+1)
 
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)

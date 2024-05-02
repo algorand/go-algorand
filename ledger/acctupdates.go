@@ -341,8 +341,8 @@ func (au *accountUpdates) LookupResource(rnd basics.Round, addr basics.Address, 
 	return au.lookupResource(rnd, addr, aidx, ctype, true /* take lock */)
 }
 
-func (au *accountUpdates) LookupAssetResources(rnd basics.Round, addr basics.Address, assetIDGT basics.AssetIndex, limit uint64) ([]ledgercore.AssetResourceWithIDs, basics.Round, error) {
-	return au.lookupAssetResources(rnd, addr, assetIDGT, limit, true /* take lock */)
+func (au *accountUpdates) LookupAssetResources(addr basics.Address, assetIDGT basics.AssetIndex, limit uint64) ([]ledgercore.AssetResourceWithIDs, basics.Round, error) {
+	return au.lookupAssetResources(addr, assetIDGT, limit)
 }
 
 func (au *accountUpdates) LookupKv(rnd basics.Round, key string) ([]byte, error) {
@@ -1212,88 +1212,53 @@ func (au *accountUpdates) lookupResource(rnd basics.Round, addr basics.Address, 
 	}
 }
 
-func (au *accountUpdates) lookupAssetResources(rnd basics.Round, addr basics.Address, assetIDGT basics.AssetIndex, limit uint64, synchronized bool) (data []ledgercore.AssetResourceWithIDs, validThrough basics.Round, err error) {
-	needUnlock := false
-	if synchronized {
-		au.accountsMu.RLock()
-		needUnlock = true
+// lookupAllResources returns all the resources for a given address, solely based on what is persisted to disk. It does not
+// take into account any in-memory deltas; the round number returned is the latest round number that is known to the database.
+func (au *accountUpdates) lookupAssetResources(addr basics.Address, assetIDGT basics.AssetIndex, limit uint64) (data []ledgercore.AssetResourceWithIDs, validThrough basics.Round, err error) {
+	// Look for resources on disk
+	persistedResources, resourceDbRound, err0 := au.accountsq.LookupLimitedResources(addr, basics.CreatableIndex(assetIDGT), limit, basics.AssetCreatable)
+	if err0 != nil {
+		return nil, basics.Round(0), err0
 	}
-	defer func() {
-		if needUnlock {
-			au.accountsMu.RUnlock()
-		}
-	}()
 
-	for {
-		currentDbRound := au.cachedDBRound
+	data = make([]ledgercore.AssetResourceWithIDs, 0, len(persistedResources))
+	for _, pd := range persistedResources {
+		ah := pd.Data.GetAssetHolding()
 
-		// This checks that the specified round is >= au.cachedDBRound - if not, it will return an error.
-		_, err = au.roundOffset(rnd)
-		if err != nil {
-			return
-		}
+		var arwi ledgercore.AssetResourceWithIDs
+		if !pd.Creator.IsZero() {
+			ap := pd.Data.GetAssetParams()
 
-		if synchronized {
-			au.accountsMu.RUnlock()
-			needUnlock = false
-		}
+			arwi = ledgercore.AssetResourceWithIDs{
+				AssetID: basics.AssetIndex(pd.Aidx),
+				Creator: pd.Creator,
 
-		// Look for resources on disk
-		persistedResources, resourceDbRound, err0 := au.accountsq.LookupLimitedResources(addr, basics.CreatableIndex(assetIDGT), limit, basics.AssetCreatable)
-		if err0 != nil {
-			return nil, basics.Round(0), err0
-		}
-
-		if resourceDbRound == currentDbRound || len(persistedResources) == 0 { // db round will return 0 in this case
-			data = make([]ledgercore.AssetResourceWithIDs, 0, len(persistedResources))
-			for _, pd := range persistedResources {
-				ah := pd.Data.GetAssetHolding()
-
-				var arwi ledgercore.AssetResourceWithIDs
-				if !pd.Creator.IsZero() {
-					ap := pd.Data.GetAssetParams()
-
-					arwi = ledgercore.AssetResourceWithIDs{
-						AssetID: basics.AssetIndex(pd.Aidx),
-						Creator: pd.Creator,
-
-						AssetResource: ledgercore.AssetResource{
-							AssetHolding: &ah,
-							AssetParams:  &ap,
-						},
-					}
-				} else {
-					arwi = ledgercore.AssetResourceWithIDs{
-						AssetID: basics.AssetIndex(pd.Aidx),
-
-						AssetResource: ledgercore.AssetResource{
-							AssetHolding: &ah,
-						},
-					}
-				}
-
-				data = append(data, arwi)
-			}
-			// We've found all the resources we could find for this address.
-			return data, currentDbRound, nil
-		}
-
-		if synchronized {
-			if resourceDbRound < currentDbRound {
-				au.log.Errorf("accountUpdates.lookupAssetResources: resource database round %d is behind in-memory round %d", resourceDbRound, currentDbRound)
-				return nil, basics.Round(0), &StaleDatabaseRoundError{databaseRound: resourceDbRound, memoryRound: currentDbRound}
-			}
-			au.accountsMu.RLock()
-			needUnlock = true
-			for currentDbRound >= au.cachedDBRound {
-				au.accountsReadCond.Wait()
+				AssetResource: ledgercore.AssetResource{
+					AssetHolding: &ah,
+					AssetParams:  &ap,
+				},
 			}
 		} else {
-			// in non-sync mode, we don't wait since we already assume that we're synchronized.
-			au.log.Errorf("accountUpdates.lookupAssetResources: database round %d mismatching in-memory round %d", resourceDbRound, currentDbRound)
-			return nil, basics.Round(0), &MismatchingDatabaseRoundError{databaseRound: resourceDbRound, memoryRound: currentDbRound}
+			arwi = ledgercore.AssetResourceWithIDs{
+				AssetID: basics.AssetIndex(pd.Aidx),
+
+				AssetResource: ledgercore.AssetResource{
+					AssetHolding: &ah,
+				},
+			}
 		}
+
+		data = append(data, arwi)
 	}
+	// We've found all the resources we could find for this address.
+	currentDbRound := resourceDbRound
+	// The resourceDbRound will not be set if there are no persisted resources
+	if len(data) == 0 {
+		au.accountsMu.RLock()
+		currentDbRound = au.cachedDBRound
+		au.accountsMu.RUnlock()
+	}
+	return data, currentDbRound, nil
 }
 
 func (au *accountUpdates) lookupStateDelta(rnd basics.Round) (ledgercore.StateDelta, error) {
