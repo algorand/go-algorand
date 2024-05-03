@@ -1542,40 +1542,29 @@ func (cx *EvalContext) step() error {
 	}
 
 	if opcost > cx.remainingBudget() {
-		requiredExtraBudget := uint64(opcost - cx.remainingBudget())
-		var budgetPerMinFee uint64
-
-		if cx.runMode == ModeSig {
-			budgetPerMinFee = cx.Proto.LogicSigMaxCost
-		} else if cx.runMode == ModeApp {
-			budgetPerMinFee = uint64(cx.Proto.MaxAppProgramCost)
-		} else {
-			return fmt.Errorf("unknown run mode %d", cx.runMode)
-		}
-
-		requiredMinFees := (requiredExtraBudget + budgetPerMinFee - 1) / budgetPerMinFee
-		shortfall := cx.Proto.MinTxnFee * requiredMinFees
-
-		if cx.FeeCredit == nil || *cx.FeeCredit < shortfall {
+		if cx.runMode != ModeApp {
 			return fmt.Errorf("pc=%3d dynamic cost budget exceeded, executing %s: local program cost was %d",
 				cx.pc, spec.Name, cx.cost)
 		}
-		*cx.FeeCredit -= shortfall
 
-		if cx.runMode == ModeApp {
-			*cx.pooledAllowedInners -= int(requiredMinFees)
-			if *cx.pooledAllowedInners < 0 {
-				return fmt.Errorf("pc=%3d dynamic group cost budget exceeded, executing %s: local program cost was %d",
-					cx.pc, spec.Name, cx.cost)
-			}
+		requiredExtraBudget := uint64(opcost - cx.remainingBudget())
+		budgetPerMinFee := uint64(cx.Proto.MaxAppProgramCost)
+		requiredMinFees := (requiredExtraBudget + budgetPerMinFee - 1) / budgetPerMinFee
+		requiredFee := cx.Proto.MinTxnFee * requiredMinFees
 
-			*cx.PooledApplicationBudget += int(budgetPerMinFee * requiredMinFees)
-		} else if cx.runMode == ModeSig {
-			// TODO: return error if we've used MaxTxGroupSize worth of lsig budget in the group
-			*cx.PooledLogicSigBudget += int(budgetPerMinFee * requiredMinFees)
-		} else {
-			return fmt.Errorf("unknown run mode %d", cx.runMode)
+		if cx.FeeCredit == nil || *cx.FeeCredit < requiredFee {
+			return fmt.Errorf("pc=%3d dynamic cost budget exceeded, executing %s: local program cost was %d",
+				cx.pc, spec.Name, cx.cost)
 		}
+		*cx.FeeCredit -= requiredFee
+
+		*cx.pooledAllowedInners -= int(requiredMinFees)
+		if *cx.pooledAllowedInners < 0 {
+			return fmt.Errorf("pc=%3d dynamic group cost budget exceeded, executing %s: local program cost was %d",
+				cx.pc, spec.Name, cx.cost)
+		}
+
+		*cx.PooledApplicationBudget += int(budgetPerMinFee * requiredMinFees)
 	}
 
 	cx.cost += opcost
