@@ -71,6 +71,9 @@ var (
 	listAccountInfo    bool
 	onlyShowAssetIds   bool
 	partKeyIDToDelete  string
+
+	next  string
+	limit uint64
 )
 
 func init() {
@@ -79,6 +82,7 @@ func init() {
 	accountCmd.AddCommand(listCmd)
 	accountCmd.AddCommand(renameCmd)
 	accountCmd.AddCommand(infoCmd)
+	accountCmd.AddCommand(assetDetailsCmd)
 	accountCmd.AddCommand(balanceCmd)
 	accountCmd.AddCommand(rewardsCmd)
 	accountCmd.AddCommand(changeOnlineCmd)
@@ -135,6 +139,12 @@ func init() {
 	infoCmd.Flags().StringVarP(&accountAddress, "address", "a", "", "Account address to look up (required)")
 	infoCmd.MarkFlagRequired("address")
 	infoCmd.Flags().BoolVar(&onlyShowAssetIds, "onlyShowAssetIds", false, "Only show ASA IDs and not pull asset metadata")
+
+	// Asset details flags
+	assetDetailsCmd.Flags().StringVarP(&accountAddress, "address", "a", "", "Account address to look up (required)")
+	assetDetailsCmd.MarkFlagRequired("address")
+	assetDetailsCmd.Flags().StringVarP(&next, "next", "n", "", "The next asset index to use for pagination")
+	assetDetailsCmd.Flags().Uint64VarP(&limit, "limit", "l", 0, "The maximum number of assets to return")
 
 	// Balance flags
 	balanceCmd.Flags().StringVarP(&accountAddress, "address", "a", "", "Account address to retrieve balance (required)")
@@ -539,6 +549,33 @@ var listCmd = &cobra.Command{
 	},
 }
 
+var assetDetailsCmd = &cobra.Command{
+	Use:   "assetdetails",
+	Short: "Retrieve information about the assets belonging to the specified account inclusive of asset metadata",
+	Long:  `Retrieve information about the assets the specified account has created or opted into, inclusive of asset metadata.`,
+	Args:  validateNoPosArgsFn,
+	Run: func(cmd *cobra.Command, args []string) {
+		dataDir := datadir.EnsureSingleDataDir()
+		client := ensureAlgodClient(dataDir)
+
+		var nextPtr *string
+		var limitPtr *uint64
+		if next != "" {
+			nextPtr = &next
+		}
+		if limit != 0 {
+			limitPtr = &limit
+		}
+		response, err := client.AccountAssetsInformation(accountAddress, nextPtr, limitPtr)
+
+		if err != nil {
+			reportErrorf(errorRequestFail, err)
+		}
+
+		printAccountAssetsInformation(accountAddress, response)
+
+	},
+}
 var infoCmd = &cobra.Command{
 	Use:   "info",
 	Short: "Retrieve information about the assets and applications belonging to the specified account",
@@ -729,6 +766,48 @@ func printAccountInfo(client libgoal.Client, address string, onlyShowAssetIds bo
 	}
 	fmt.Print(report.String())
 	return hasError
+}
+
+func printAccountAssetsInformation(address string, response model.AccountAssetsInformationResponse) {
+	fmt.Printf("Account: %s\n", address)
+	fmt.Printf("Round: %d\n", response.Round)
+	if response.NextToken != nil {
+		fmt.Printf("NextToken (to retrieve more account assets): %s\n", *response.NextToken)
+	}
+	fmt.Printf("Assets:\n")
+	for _, asset := range *response.AssetHoldings {
+		fmt.Printf("  Asset ID: %d\n", asset.AssetHolding.AssetID)
+
+		if asset.AssetParams != nil {
+			amount := assetDecimalsFmt(asset.AssetHolding.Amount, asset.AssetParams.Decimals)
+			fmt.Printf("    Amount: %s\n", amount)
+			fmt.Printf("    IsFrozen: %t\n", asset.AssetHolding.IsFrozen)
+			fmt.Printf("  Asset Params:\n")
+			fmt.Printf("    Creator: %s\n", asset.AssetParams.Creator)
+
+			name := "<unnamed>"
+			if asset.AssetParams.Name != nil {
+				_, name = unicodePrintable(*asset.AssetParams.Name)
+			}
+			fmt.Printf("    Name: %s\n", name)
+
+			units := "units"
+			if asset.AssetParams.UnitName != nil {
+				_, units = unicodePrintable(*asset.AssetParams.UnitName)
+			}
+			fmt.Printf("    Units: %s\n", units)
+			fmt.Printf("    Total: %d\n", asset.AssetParams.Total)
+			fmt.Printf("    Decimals: %d\n", asset.AssetParams.Decimals)
+			safeURL := ""
+			if asset.AssetParams.Url != nil {
+				_, safeURL = unicodePrintable(*asset.AssetParams.Url)
+			}
+			fmt.Printf("    URL: %s\n", safeURL)
+		} else {
+			fmt.Printf("    Amount (without formatting): %d\n", asset.AssetHolding.Amount)
+			fmt.Printf("    IsFrozen: %t\n", asset.AssetHolding.IsFrozen)
+		}
+	}
 }
 
 var balanceCmd = &cobra.Command{

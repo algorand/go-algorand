@@ -685,7 +685,9 @@ func testNewLedgerFromCatchpoint(t *testing.T, catchpointWriterReadAccess tracke
 	var initState ledgercore.InitState
 	initState.Block.CurrentProtocol = protocol.ConsensusCurrentVersion
 	conf := config.GetDefaultLocal()
-	l, err := OpenLedger(logging.TestingLog(t), t.Name()+"FromCatchpoint", true, initState, conf)
+	dbName := fmt.Sprintf("%s.%d", t.Name()+"FromCatchpoint", crypto.RandUint64())
+	dbName = strings.Replace(dbName, "/", "_", -1)
+	l, err := OpenLedger(logging.TestingLog(t), dbName, true, initState, conf)
 	require.NoError(t, err)
 	accessor := MakeCatchpointCatchupAccessor(l, l.log)
 
@@ -701,6 +703,8 @@ func testNewLedgerFromCatchpoint(t *testing.T, catchpointWriterReadAccess tracke
 
 	err = accessor.BuildMerkleTrie(context.Background(), nil)
 	require.NoError(t, err)
+
+	resetAccountDBToV6(t, l)
 
 	err = l.trackerDBs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) error {
 		cw, err := tx.MakeCatchpointWriter()

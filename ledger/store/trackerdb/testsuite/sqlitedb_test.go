@@ -38,6 +38,9 @@ func TestSqliteDB(t *testing.T) {
 		return db
 	}
 
+	// Run CustomTestResourcesQueryAllLimited, which is not supported by the k-v store implementation
+	registerTest("resources-query-all-limited", CustomTestResourcesQueryAllLimited)
+
 	// run the suite
 	runGenericTestsWithDB(t, dbFactory)
 }

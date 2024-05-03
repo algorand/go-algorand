@@ -19,4 +19,4 @@ package trackerdb
 // AccountDBVersion is the database version that this binary would know how to support and how to upgrade to.
 // details about the content of each of the versions can be found in the upgrade functions upgradeDatabaseSchemaXXXX
 // and their descriptions.
-var AccountDBVersion = int32(10)
+var AccountDBVersion = int32(11)

@@ -185,3 +185,39 @@ func (ar *accountsReader) LookupResources(addr basics.Address, aidx basics.Creat
 	// return primary results
 	return dataP, nil
 }
+
+func (ar *accountsReader) LookupLimitedResources(addr basics.Address, minIdx basics.CreatableIndex, maxCreatables uint64, ctype basics.CreatableType) (data []trackerdb.PersistedResourcesDataWithCreator, rnd basics.Round, err error) {
+	dataP, rndP, errP := ar.primary.LookupLimitedResources(addr, minIdx, maxCreatables, ctype)
+	dataS, rndS, errS := ar.secondary.LookupLimitedResources(addr, minIdx, maxCreatables, ctype)
+	// coalesce errors
+	err = coalesceErrors(errP, errS)
+	if err != nil {
+		return
+	}
+	// coalesce refs
+	if len(dataP) != len(dataS) {
+		err = ErrInconsistentResult
+		return
+	}
+	var ref trackerdb.AccountRef
+	for i := range dataP {
+		ref, err = coalesceAccountRefs(dataP[i].AcctRef, dataS[i].AcctRef)
+		if err != nil {
+			return data, rnd, err
+		}
+		// update ref in results
+		dataP[i].AcctRef = ref
+		dataS[i].AcctRef = ref
+	}
+	// check results match
+	if !cmp.Equal(dataP, dataS, allowAllUnexported) {
+		err = ErrInconsistentResult
+		return
+	}
+	if rndP != rndS {
+		err = ErrInconsistentResult
+		return
+	}
+	// return primary results
+	return dataP, rndP, nil
+}

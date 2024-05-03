@@ -136,6 +136,12 @@ func RunMigrations(ctx context.Context, e db.Executable, params trackerdb.Params
 					tu.log.Warnf("trackerDBInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 9 : %v", err)
 					return
 				}
+			case 10:
+				err = tu.upgradeDatabaseSchema10(ctx, e)
+				if err != nil {
+					tu.log.Warnf("trackerDBInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 10 : %v", err)
+					return
+				}
 			default:
 				return trackerdb.InitParams{}, fmt.Errorf("trackerDBInitialize unable to upgrade database from schema version %d", tu.schemaVersion)
 			}
@@ -505,6 +511,17 @@ func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema9(ctx context.Context
 
 	// update version
 	return tu.setVersion(ctx, e, 10)
+}
+
+// upgradeDatabaseSchema10 upgrades the database schema from version 10 to version 11,
+// altering the resources table to add a new column, resources.ctype.
+func (tu *trackerDBSchemaInitializer) upgradeDatabaseSchema10(ctx context.Context, e db.Executable) (err error) {
+	err = accountsAddCreatableTypeColumn(ctx, e, true)
+	if err != nil {
+		return err
+	}
+	// update version
+	return tu.setVersion(ctx, e, 11)
 }
 
 func removeEmptyDirsOnSchemaUpgrade(dbDirectory string) (err error) {

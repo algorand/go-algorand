@@ -377,6 +377,11 @@ type accountInformationParams struct {
 	Exclude string `url:"exclude"`
 }
 
+type pageParams struct {
+	Next  *string `url:"next,omitempty"`
+	Limit *uint64 `url:"limit,omitempty"`
+}
+
 type catchupParams struct {
 	Min uint64 `url:"min"`
 }
@@ -504,6 +509,20 @@ func (client RestClient) AccountAssetInformation(accountAddress string, assetID 
 func (client RestClient) RawAccountAssetInformation(accountAddress string, assetID uint64) (response []byte, err error) {
 	var blob Blob
 	err = client.getRaw(&blob, fmt.Sprintf("/v2/accounts/%s/assets/%d", accountAddress, assetID), rawFormat{Format: "msgpack"})
+	response = blob
+	return
+}
+
+// AccountAssetsInformation gets account information about a particular account's assets, subject to pagination.
+func (client RestClient) AccountAssetsInformation(accountAddress string, next *string, limit *uint64) (response model.AccountAssetsInformationResponse, err error) {
+	err = client.get(&response, fmt.Sprintf("/v2/accounts/%s/assets", accountAddress), pageParams{next, limit})
+	return
+}
+
+// RawAccountAssetsInformation gets account information about a particular account's assets, subject to pagination.
+func (client RestClient) RawAccountAssetsInformation(accountAddress string, next *string, limit *uint64) (response []byte, err error) {
+	var blob Blob
+	err = client.getRaw(&blob, fmt.Sprintf("/v2/accounts/%s/assets", accountAddress), pageParams{next, limit})
 	response = blob
 	return
 }

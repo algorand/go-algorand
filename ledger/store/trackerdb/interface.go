@@ -105,6 +105,7 @@ type AccountsReader interface {
 
 	LookupResources(addr basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (data PersistedResourcesData, err error)
 	LookupAllResources(addr basics.Address) (data []PersistedResourcesData, rnd basics.Round, err error)
+	LookupLimitedResources(addr basics.Address, minIdx basics.CreatableIndex, maxCreatables uint64, ctype basics.CreatableType) (data []PersistedResourcesDataWithCreator, rnd basics.Round, err error)
 
 	LookupKeyValue(key string) (pv PersistedKVData, err error)
 	LookupKeysByPrefix(prefix string, maxKeyNum uint64, results map[string]bool, resultCount uint64) (round basics.Round, err error)
