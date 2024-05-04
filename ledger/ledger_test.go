@@ -53,6 +53,8 @@ import (
 	"github.com/algorand/go-deadlock"
 )
 
+const preReleaseDBVersion = 6
+
 func sign(secrets map[basics.Address]*crypto.SignatureSecrets, t transactions.Transaction) transactions.SignedTxn {
 	var sig crypto.Signature
 	_, ok := secrets[t.Sender]
@@ -2178,6 +2180,42 @@ func TestLedgerReloadShrinkDeltas(t *testing.T) {
 	}
 }
 
+func resetAccountDBToV6(t *testing.T, l *Ledger) {
+	// reset tables and re-init again, similary to the catchpount apply code
+	// since the ledger has only genesis accounts, this recreates them
+	err := l.trackerDBs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) error {
+		arw, err := tx.MakeAccountsWriter()
+		if err != nil {
+			return err
+		}
+
+		err0 := arw.AccountsReset(ctx)
+		if err0 != nil {
+			return err0
+		}
+		tp := trackerdb.Params{
+			InitAccounts:      l.GenesisAccounts(),
+			InitProto:         l.GenesisProtoVersion(),
+			GenesisHash:       l.GenesisHash(),
+			FromCatchpoint:    true,
+			CatchpointEnabled: l.catchpoint.catchpointEnabled(),
+			DbPathPrefix:      l.catchpoint.dbDirectory,
+			BlockDb:           l.blockDBs,
+		}
+		_, err0 = tx.RunMigrations(ctx, tp, l.log, preReleaseDBVersion /*target database version*/)
+		if err0 != nil {
+			return err0
+		}
+
+		if err0 := tx.Testing().AccountsUpdateSchemaTest(ctx); err != nil {
+			return err0
+		}
+
+		return nil
+	})
+	require.NoError(t, err)
+}
+
 // TestLedgerReloadTxTailHistoryAccess checks txtail has MaxTxnLife + DeeperBlockHeaderHistory block headers
 // for TEAL after applying catchpoint.
 // Simulate catchpoints by the following:
@@ -2188,8 +2226,6 @@ func TestLedgerReloadShrinkDeltas(t *testing.T) {
 // 5. Expect the txn to be accepted
 func TestLedgerReloadTxTailHistoryAccess(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
-	const preReleaseDBVersion = 6
 
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	genesisInitState, initKeys := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 10_000_000_000)

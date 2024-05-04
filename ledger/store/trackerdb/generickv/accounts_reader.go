@@ -17,6 +17,7 @@
 package generickv
 
 import (
+	"errors"
 	"fmt"
 	"io"
 
@@ -176,6 +177,10 @@ func (r *accountsReader) LookupAllResources(addr basics.Address) (data []tracker
 	}
 
 	return
+}
+
+func (r *accountsReader) LookupLimitedResources(_ basics.Address, _ basics.CreatableIndex, _ uint64, _ basics.CreatableType) ([]trackerdb.PersistedResourcesDataWithCreator, basics.Round, error) {
+	return nil, 0, errors.New("not supported")
 }
 
 func (r *accountsReader) LookupKeyValue(key string) (pv trackerdb.PersistedKVData, err error) {

@@ -206,6 +206,14 @@ type PersistedResourcesData struct {
 	Round basics.Round
 }
 
+// PersistedResourcesDataWithCreator is exported view of persistedResourcesData inclusive of creator
+type PersistedResourcesDataWithCreator struct {
+	PersistedResourcesData
+
+	// the address of the account that created this resource
+	Creator basics.Address
+}
+
 // PersistedOnlineAccountData is exported view of persistedOnlineAccountData
 type PersistedOnlineAccountData struct {
 	Addr        basics.Address

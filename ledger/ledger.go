@@ -583,6 +583,12 @@ func (l *Ledger) LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.
 	return ledgercore.AssetResource{AssetParams: r.AssetParams, AssetHolding: r.AssetHolding}, err
 }
 
+// LookupAssets loads asset resources that match the request parameters from the ledger.
+func (l *Ledger) LookupAssets(addr basics.Address, assetIDGT basics.AssetIndex, limit uint64) ([]ledgercore.AssetResourceWithIDs, basics.Round, error) {
+	resources, lookupRound, err := l.accts.LookupAssetResources(addr, assetIDGT, limit)
+	return resources, lookupRound, err
+}
+
 // lookupResource loads a resource that matches the request parameters from the accounts update
 func (l *Ledger) lookupResource(rnd basics.Round, addr basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (ledgercore.AccountResource, error) {
 	l.trackerMu.RLock()
