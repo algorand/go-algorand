@@ -7,10 +7,9 @@ P2P network topology extraction script from node.log files.
 ```
 cd nodelog
 find . -name 'nodelog.tar.gz' -print | xargs -I{} tar -zxf {}
-rm *-host.log
 ```
-4. Run this script `python3 p2p-topology-extract.py nodelog`
-5. Save the result json and copy run p2p-topology-vis.py with it.
+4. Run this script `python3 topology-extract-p2p.py nodelog`
+5. Save the result json and copy run topology-viz.py with it.
 """
 
 import json
@@ -31,7 +30,7 @@ mapping = {}
 
 # Iterate through all files in the specified directory
 for filename in os.listdir(log_dir_path):
-    if filename.endswith(".log"):
+    if filename.endswith("-node.log"):
         with open(os.path.join(log_dir_path, filename), 'r') as file:
             mapped = filename[:len(filename) - len('-node.log')]
             mapped = mapped.replace('relay', 'R')
@@ -51,7 +50,7 @@ for filename in os.listdir(log_dir_path):
                             mapping[node_id] = mapped
                     
                     # Check for connections
-                    if "Made outgoing connection to peer" in data.get("msg", ""):
+                    elif "Made outgoing connection to peer" in data.get("msg", ""):
                         match = re.search(edge_pattern, data["msg"])
                         if match:
                             target_node_id = match.group(1)

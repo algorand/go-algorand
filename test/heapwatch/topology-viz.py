@@ -1,6 +1,6 @@
 """
 P2P network topology visualization script.
-See p2p-topology-extract.py for details.
+See topology-extract-p2p[-ws].py for details.
 """
 
 import json
