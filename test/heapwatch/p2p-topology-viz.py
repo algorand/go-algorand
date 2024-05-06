@@ -34,13 +34,22 @@ for node in G:
 # Calculate in-degrees
 in_degrees = dict(G.in_degree())
 out_degrees = dict(G.out_degree())
+degree_centrality = nx.degree_centrality(G)
+load_centrality = nx.algorithms.load_centrality(G)
 
 for node in G:
     size = max(2, in_degrees[node])
     G.nodes[node]['size'] = size
     G.nodes[node]['in_degree'] = in_degrees[node]
     G.nodes[node]['out_degree'] = out_degrees[node]
-    G.nodes[node]['hover'] = f'In: {in_degrees[node]}, Out: {out_degrees[node]}'
+    hover = f'In: {in_degrees[node]}, Out: {out_degrees[node]}'
+    hover += f'\nDegree centrality: {degree_centrality[node]:.2f}'
+    hover += f'\nLoad centrality: {load_centrality[node]:.2f}'
+    G.nodes[node]['hover'] = hover
+
+print('Transitivity:', nx.transitivity(G))
+print('Clustering coefficient:', nx.average_clustering(G))
+print('Avg shortest path length:', nx.average_shortest_path_length(G.to_undirected(as_view=True)))
 
 res = gv.d3(
     G,
