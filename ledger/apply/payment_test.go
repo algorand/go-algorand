@@ -108,62 +108,6 @@ func TestPaymentApply(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestCheckSpender(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	v7 := config.Consensus[protocol.ConsensusV7]
-	v39 := config.Consensus[protocol.ConsensusV39]
-	vFuture := config.Consensus[protocol.ConsensusFuture]
-
-	secretSrc := keypair()
-	src := basics.Address(secretSrc.SignatureVerifier)
-
-	secretDst := keypair()
-	dst := basics.Address(secretDst.SignatureVerifier)
-
-	tx := transactions.Transaction{
-		Type: protocol.PaymentTx,
-		Header: transactions.Header{
-			Sender:     src,
-			Fee:        basics.MicroAlgos{Raw: 1},
-			FirstValid: basics.Round(100),
-			LastValid:  basics.Round(1000),
-		},
-		PaymentTxnFields: transactions.PaymentTxnFields{
-			Receiver: dst,
-			Amount:   basics.MicroAlgos{Raw: uint64(50)},
-		},
-	}
-
-	tx.Sender = feeSink
-	require.ErrorContains(t, tx.PaymentTxnFields.CheckSpender(tx.Header, spec, v7),
-		"to non incentive pool address")
-	require.ErrorContains(t, tx.PaymentTxnFields.CheckSpender(tx.Header, spec, v39),
-		"to non incentive pool address")
-	require.ErrorContains(t, tx.PaymentTxnFields.CheckSpender(tx.Header, spec, vFuture),
-		"cannot spend from fee sink")
-
-	tx.Receiver = poolAddr
-	require.NoError(t, tx.PaymentTxnFields.CheckSpender(tx.Header, spec, v7))
-	require.NoError(t, tx.PaymentTxnFields.CheckSpender(tx.Header, spec, v39))
-	require.ErrorContains(t, tx.PaymentTxnFields.CheckSpender(tx.Header, spec, vFuture),
-		"cannot spend from fee sink")
-
-	tx.CloseRemainderTo = poolAddr
-	require.ErrorContains(t, tx.PaymentTxnFields.CheckSpender(tx.Header, spec, v7),
-		"cannot close fee sink")
-	require.ErrorContains(t, tx.PaymentTxnFields.CheckSpender(tx.Header, spec, v39),
-		"cannot close fee sink")
-	require.ErrorContains(t, tx.PaymentTxnFields.CheckSpender(tx.Header, spec, vFuture),
-		"cannot spend from fee sink")
-
-	// When not sending from fee sink, everything's fine
-	tx.Sender = src
-	require.NoError(t, tx.PaymentTxnFields.CheckSpender(tx.Header, spec, v7))
-	require.NoError(t, tx.PaymentTxnFields.CheckSpender(tx.Header, spec, v39))
-	require.NoError(t, tx.PaymentTxnFields.CheckSpender(tx.Header, spec, vFuture))
-}
-
 func TestPaymentValidation(t *testing.T) {
 	partitiontest.PartitionTest(t)
 

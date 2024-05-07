@@ -37,8 +37,8 @@ type PaymentTxnFields struct {
 	CloseRemainderTo basics.Address `codec:"close"`
 }
 
-// CheckSpender performs some stateless checks on the Sender of a pay transaction
-func (payment PaymentTxnFields) CheckSpender(header Header, spec SpecialAddresses, proto config.ConsensusParams) error {
+// checkSpender performs some stateless checks on the Sender of a pay transaction
+func (payment PaymentTxnFields) checkSpender(header Header, spec SpecialAddresses, proto config.ConsensusParams) error {
 	if header.Sender == payment.CloseRemainderTo {
 		return fmt.Errorf("transaction cannot close account to its sender %v", header.Sender)
 	}

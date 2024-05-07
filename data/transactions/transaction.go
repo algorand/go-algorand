@@ -352,7 +352,7 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 	switch tx.Type {
 	case protocol.PaymentTx:
 		// in case that the fee sink is spending, check that this spend is to a valid address
-		err := tx.CheckSpender(tx.Header, spec, proto)
+		err := tx.checkSpender(tx.Header, spec, proto)
 		if err != nil {
 			return err
 		}
