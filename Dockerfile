@@ -1,6 +1,6 @@
 FROM ubuntu:20.04 as builder
 
-ARG GO_VERSION="1.20.14"
+ARG GO_VERSION="1.21.9"
 
 ARG CHANNEL
 ARG URL

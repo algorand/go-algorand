@@ -69,7 +69,7 @@ var (
 	mnemonic           string
 	dumpOutFile        string
 	listAccountInfo    bool
-	onlyShowAssetIds   bool
+	onlyShowAssetIDs   bool
 	partKeyIDToDelete  string
 )
 
@@ -134,7 +134,7 @@ func init() {
 	// Info flags
 	infoCmd.Flags().StringVarP(&accountAddress, "address", "a", "", "Account address to look up (required)")
 	infoCmd.MarkFlagRequired("address")
-	infoCmd.Flags().BoolVar(&onlyShowAssetIds, "onlyShowAssetIds", false, "Only show ASA IDs and not pull asset metadata")
+	infoCmd.Flags().BoolVar(&onlyShowAssetIDs, "onlyShowAssetIDs", false, "Only show ASA IDs and not pull asset metadata")
 
 	// Balance flags
 	balanceCmd.Flags().StringVarP(&accountAddress, "address", "a", "", "Account address to retrieve balance (required)")
@@ -552,14 +552,14 @@ var infoCmd = &cobra.Command{
 			reportErrorf(errorRequestFail, err)
 		}
 
-		hasError := printAccountInfo(client, accountAddress, onlyShowAssetIds, response)
+		hasError := printAccountInfo(client, accountAddress, onlyShowAssetIDs, response)
 		if hasError {
 			os.Exit(1)
 		}
 	},
 }
 
-func printAccountInfo(client libgoal.Client, address string, onlyShowAssetIds bool, account model.Account) bool {
+func printAccountInfo(client libgoal.Client, address string, onlyShowAssetIDs bool, account model.Account) bool {
 	var createdAssets []model.Asset
 	if account.CreatedAssets != nil {
 		createdAssets = slices.Clone(*account.CreatedAssets)
@@ -627,7 +627,7 @@ func printAccountInfo(client libgoal.Client, address string, onlyShowAssetIds bo
 		fmt.Fprintln(report, "\t<none>")
 	}
 	for _, assetHolding := range heldAssets {
-		if onlyShowAssetIds {
+		if onlyShowAssetIDs {
 			fmt.Fprintf(report, "\tID %d\n", assetHolding.AssetID)
 			continue
 		}

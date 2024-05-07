@@ -1167,24 +1167,24 @@ func BenchmarkTransactionPoolRecompute(b *testing.B) {
 
 		// make args for recomputeBlockEvaluator() like OnNewBlock() would
 		var knownCommitted uint
-		committedTxIds := make(map[transactions.Txid]ledgercore.IncludedTransactions)
+		committedTxIDs := make(map[transactions.Txid]ledgercore.IncludedTransactions)
 		for i := 0; i < blockTxnCount; i++ {
 			knownCommitted++
 			// OK to use empty IncludedTransactions: recomputeBlockEvaluator is only checking map membership
-			committedTxIds[signedTransactions[i].ID()] = ledgercore.IncludedTransactions{}
+			committedTxIDs[signedTransactions[i].ID()] = ledgercore.IncludedTransactions{}
 		}
-		b.Logf("Made transactionPool with %d signedTransactions, %d committedTxIds, %d knownCommitted",
-			len(signedTransactions), len(committedTxIds), knownCommitted)
+		b.Logf("Made transactionPool with %d signedTransactions, %d committedTxIDs, %d knownCommitted",
+			len(signedTransactions), len(committedTxIDs), knownCommitted)
 		b.Logf("transactionPool pendingTxGroups %d rememberedTxGroups %d",
 			len(transactionPool.pendingTxGroups), len(transactionPool.rememberedTxGroups))
-		return transactionPool, committedTxIds, knownCommitted
+		return transactionPool, committedTxIDs, knownCommitted
 	}
 
 	transactionPool := make([]*TransactionPool, b.N)
-	committedTxIds := make([]map[transactions.Txid]ledgercore.IncludedTransactions, b.N)
+	committedTxIDs := make([]map[transactions.Txid]ledgercore.IncludedTransactions, b.N)
 	knownCommitted := make([]uint, b.N)
 	for i := 0; i < b.N; i++ {
-		transactionPool[i], committedTxIds[i], knownCommitted[i] = setupPool()
+		transactionPool[i], committedTxIDs[i], knownCommitted[i] = setupPool()
 	}
 	time.Sleep(time.Second)
 	runtime.GC()
@@ -1202,7 +1202,7 @@ func BenchmarkTransactionPoolRecompute(b *testing.B) {
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		transactionPool[i].recomputeBlockEvaluator(committedTxIds[i], knownCommitted[i])
+		transactionPool[i].recomputeBlockEvaluator(committedTxIDs[i], knownCommitted[i])
 	}
 	b.StopTimer()
 	if profF != nil {

@@ -508,10 +508,10 @@ func randomCreatables(numElementsPerSegement int) ([]basics.CreatableIndex,
 	map[basics.CreatableIndex]ledgercore.ModifiedCreatable) {
 	creatables := make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
 	creatablesList := make([]basics.CreatableIndex, numElementsPerSegement*10)
-	uniqueAssetIds := make(map[basics.CreatableIndex]bool)
+	uniqueAssetIDs := make(map[basics.CreatableIndex]bool)
 
 	for i := 0; i < numElementsPerSegement*10; i++ {
-		assetIndex, mc := randomCreatable(uniqueAssetIds)
+		assetIndex, mc := randomCreatable(uniqueAssetIDs)
 		creatables[assetIndex] = mc
 		creatablesList[i] = assetIndex
 	}
@@ -519,7 +519,7 @@ func randomCreatables(numElementsPerSegement int) ([]basics.CreatableIndex,
 }
 
 // randomCreatable generates a random creatable.
-func randomCreatable(uniqueAssetIds map[basics.CreatableIndex]bool) (
+func randomCreatable(uniqueAssetIDs map[basics.CreatableIndex]bool) (
 	assetIndex basics.CreatableIndex, mc ledgercore.ModifiedCreatable) {
 
 	var ctype basics.CreatableType
@@ -541,9 +541,9 @@ func randomCreatable(uniqueAssetIds map[basics.CreatableIndex]bool) (
 	var assetIdx basics.CreatableIndex
 	for {
 		assetIdx = basics.CreatableIndex(crypto.RandUint64() % (uint64(2) << 50))
-		_, found := uniqueAssetIds[assetIdx]
+		_, found := uniqueAssetIDs[assetIdx]
 		if !found {
-			uniqueAssetIds[assetIdx] = true
+			uniqueAssetIDs[assetIdx] = true
 			break
 		}
 	}
