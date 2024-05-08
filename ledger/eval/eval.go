@@ -135,7 +135,7 @@ type roundCowBase struct {
 	// The online accounts that we've already accessed during this round evaluation. This is a
 	// cache used to avoid looking up the same account data more than once during a single evaluator
 	// execution. The OnlineAccountData is historical and therefore won't be changing.
-	voters map[basics.Address]basics.OnlineAccountData
+	onlineAccounts map[basics.Address]basics.OnlineAccountData
 
 	// totalOnline is the cached amount of online stake for rnd (so it's from
 	// rnd-320). The zero value indicates it is not yet cached.
@@ -162,7 +162,7 @@ func makeRoundCowBase(l LedgerForCowBase, rnd basics.Round, txnCount uint64, sta
 		stateProofNextRnd: stateProofNextRnd,
 		proto:             proto,
 		accounts:          make(map[basics.Address]ledgercore.AccountData),
-		voters:            make(map[basics.Address]basics.OnlineAccountData),
+		onlineAccounts:    make(map[basics.Address]basics.OnlineAccountData),
 		appParams:         make(map[ledgercore.AccountApp]cachedAppParams),
 		assetParams:       make(map[ledgercore.AccountAsset]cachedAssetParams),
 		appLocalStates:    make(map[ledgercore.AccountApp]cachedAppLocalState),
@@ -220,7 +220,7 @@ func (x *roundCowBase) balanceRound() (basics.Round, error) {
 // lookupAgreement returns the online accountdata for the provided account address. It uses an internal cache
 // to avoid repeated lookups against the ledger.
 func (x *roundCowBase) lookupAgreement(addr basics.Address) (basics.OnlineAccountData, error) {
-	if accountData, found := x.voters[addr]; found {
+	if accountData, found := x.onlineAccounts[addr]; found {
 		return accountData, nil
 	}
 
@@ -233,7 +233,7 @@ func (x *roundCowBase) lookupAgreement(addr basics.Address) (basics.OnlineAccoun
 		return basics.OnlineAccountData{}, err
 	}
 
-	x.voters[addr] = ad
+	x.onlineAccounts[addr] = ad
 	return ad, err
 }
 
