@@ -2,7 +2,7 @@ module github.com/algorand/go-algorand/cmd/partitiontest_linter
 
 go 1.21
 
-toolchain go1.21.9
+toolchain go1.21.10
 
 require (
 	golang.org/x/mod v0.17.0 // indirect
