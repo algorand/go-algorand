@@ -324,6 +324,23 @@ func (v OneTimeSignatureVerifier) Verify(id OneTimeSignatureIdentifier, message 
 		Batch:    id.Batch,
 	}
 
+	if !useSingleVerifierDefault {
+		return v.batchVerify(batchID, offsetID, message, sig)
+	}
+
+	if !ed25519Verify(ed25519PublicKey(v), HashRep(batchID), sig.PK2Sig) {
+		return false
+	}
+	if !ed25519Verify(batchID.SubKeyPK, HashRep(offsetID), sig.PK1Sig) {
+		return false
+	}
+	if !ed25519Verify(offsetID.SubKeyPK, HashRep(message), sig.Sig) {
+		return false
+	}
+	return true
+}
+
+func (v OneTimeSignatureVerifier) batchVerify(batchID OneTimeSignatureSubkeyBatchID, offsetID OneTimeSignatureSubkeyOffsetID, message Hashable, sig OneTimeSignature) bool {
 	// serialize encoded batchID, offsetID, message into a continuous memory buffer with the layout
 	// hashRep(batchID)... hashRep(offsetID)... hashRep(message)...
 	const estimatedSize = 256
@@ -336,7 +353,7 @@ func (v OneTimeSignatureVerifier) Verify(id OneTimeSignatureIdentifier, message 
 	messageBuffer = HashRepToBuff(message, messageBuffer)
 	messageLen := uint64(len(messageBuffer)) - offsetIDLen - batchIDLen
 	msgLengths := []uint64{batchIDLen, offsetIDLen, messageLen}
-	allValid, _ := batchVerificationImpl(
+	allValid, _ := cgoBatchVerificationImpl(
 		messageBuffer,
 		msgLengths,
 		[]PublicKey{PublicKey(v), PublicKey(batchID.SubKeyPK), PublicKey(offsetID.SubKeyPK)},

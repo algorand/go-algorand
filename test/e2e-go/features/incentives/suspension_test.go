@@ -53,7 +53,7 @@ func TestBasicSuspension(t *testing.T) {
 	var fixture fixtures.RestClientFixture
 	// Speed up rounds, but keep long lookback, so 20% node has a chance to get
 	// back online after being suspended.
-	fixture.FasterConsensus(protocol.ConsensusFuture, time.Second/2, 320)
+	fixture.FasterConsensus(protocol.ConsensusFuture, time.Second, 320)
 	fixture.Setup(t, filepath.Join("nettemplates", "Suspension.json"))
 	defer fixture.Shutdown()
 
