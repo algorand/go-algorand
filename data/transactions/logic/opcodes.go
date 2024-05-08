@@ -17,6 +17,7 @@
 package logic
 
 import (
+	"cmp"
 	"fmt"
 	"strconv"
 	"strings"
@@ -836,8 +837,8 @@ func OpcodesByVersion(version uint64) []OpSpec {
 		}
 	}
 	result := maps.Values(subv)
-	slices.SortFunc(result, func(a, b OpSpec) bool {
-		return a.Opcode < b.Opcode
+	slices.SortFunc(result, func(a, b OpSpec) int {
+		return cmp.Compare(a.Opcode, b.Opcode)
 	})
 	return result
 }
