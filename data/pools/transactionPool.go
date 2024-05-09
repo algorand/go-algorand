@@ -668,7 +668,7 @@ func (pool *TransactionPool) addToPendingBlockEvaluator(txgroup []transactions.S
 // recomputeBlockEvaluator constructs a new BlockEvaluator and feeds all
 // in-pool transactions to it (removing any transactions that are rejected
 // by the BlockEvaluator). Expects that the pool.mu mutex would be already taken.
-func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transactions.Txid]ledgercore.IncludedTransactions, knownCommitted uint) (stats telemetryspec.ProcessBlockMetrics) {
+func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIDs map[transactions.Txid]ledgercore.IncludedTransactions, knownCommitted uint) (stats telemetryspec.ProcessBlockMetrics) {
 	pool.pendingBlockEvaluator = nil
 
 	latest := pool.ledger.Latest()
@@ -741,7 +741,7 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 			asmStats.InvalidCount++
 			continue
 		}
-		if _, alreadyCommitted := committedTxIds[txgroup[0].ID()]; alreadyCommitted {
+		if _, alreadyCommitted := committedTxIDs[txgroup[0].ID()]; alreadyCommitted {
 			asmStats.EarlyCommittedCount++
 			continue
 		}
