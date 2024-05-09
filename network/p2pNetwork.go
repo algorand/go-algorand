@@ -894,9 +894,9 @@ func (n *P2PNetwork) txTopicHandleLoop() {
 			sub.Cancel()
 			return
 		}
-		// if we sent the message no need to process it.
+		// if there is a self-sent the message no need to process it.
 		if msg.ReceivedFrom == n.service.ID() {
-			return
+			continue
 		}
 
 		_ = n.handler.Process(msg.ValidatorData.(ValidatedMessage))

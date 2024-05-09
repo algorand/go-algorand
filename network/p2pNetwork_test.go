@@ -18,6 +18,7 @@ package network
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -924,21 +925,31 @@ func TestP2PRelay(t *testing.T) {
 
 type mockSubPService struct {
 	mockService
-	count atomic.Int64
+	count          atomic.Int64
+	otherPeerID    peer.ID
+	shouldNextFail bool
 }
 
 type mockSubscription struct {
-	peerID peer.ID
+	peerID         peer.ID
+	shouldNextFail bool
 }
 
 func (m *mockSubscription) Next(ctx context.Context) (*pubsub.Message, error) {
+	if m.shouldNextFail {
+		return nil, errors.New("mockSubscription error")
+	}
 	return &pubsub.Message{ReceivedFrom: m.peerID}, nil
 }
 func (m *mockSubscription) Cancel() {}
 
 func (m *mockSubPService) Subscribe(topic string, val pubsub.ValidatorEx) (p2p.SubNextCancellable, error) {
 	m.count.Add(1)
-	return &mockSubscription{peerID: m.id}, nil
+	otherPeerID := m.otherPeerID
+	if otherPeerID == "" {
+		otherPeerID = "mockSubPServicePeerID"
+	}
+	return &mockSubscription{peerID: otherPeerID, shouldNextFail: m.shouldNextFail}, nil
 }
 
 // TestP2PWantTXGossip checks txTopicHandleLoop runs as expected on wantTXGossip changes
@@ -950,7 +961,7 @@ func TestP2PWantTXGossip(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	peerID := peer.ID("myPeerID")
-	mockService := &mockSubPService{mockService: mockService{id: peerID}}
+	mockService := &mockSubPService{mockService: mockService{id: peerID}, shouldNextFail: true}
 	net := &P2PNetwork{
 		service:  mockService,
 		log:      logging.TestingLog(t),
