@@ -29,6 +29,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -819,6 +820,33 @@ func TestExactAccountChunk(t *testing.T) {
 		selfpay.Note = ledgertesting.RandomNote()
 		dl.fullBlock(&selfpay)
 	}
+
+	// ensure both committed all pending changes before taking a catchpoint
+	// another approach is to modify the test and craft round numbers,
+	// and make the ledger to generate catchpoint itself when it is time
+	flushRound := func(l *Ledger) {
+		// Clear the timer to ensure a flush
+		l.trackers.mu.Lock()
+		l.trackers.lastFlushTime = time.Time{}
+		l.trackers.mu.Unlock()
+
+		r, _ := l.LatestCommitted()
+		l.trackers.committedUpTo(r)
+		l.trackers.waitAccountsWriting()
+	}
+	flushRound(dl.generator)
+	flushRound(dl.validator)
+
+	require.Eventually(t, func() bool {
+		dl.generator.accts.accountsMu.RLock()
+		dlg := len(dl.generator.accts.deltas)
+		dl.generator.accts.accountsMu.RUnlock()
+
+		dl.validator.accts.accountsMu.RLock()
+		dlv := len(dl.validator.accts.deltas)
+		dl.validator.accts.accountsMu.RUnlock()
+		return dlg == dlv && dl.generator.Latest() == dl.validator.Latest()
+	}, 10*time.Second, 100*time.Millisecond)
 
 	tempDir := t.TempDir()
 
