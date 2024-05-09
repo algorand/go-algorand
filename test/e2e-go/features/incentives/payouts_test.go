@@ -81,6 +81,11 @@ func TestBasicPayouts(t *testing.T) {
 	a.NoError(err)
 	burn, err := fixture.WaitForConfirmedTxn(uint64(txn.LastValid), txn.ID().String())
 	a.NoError(err)
+	// sync up with the network
+	status, err := fixture.LibGoalClient.Status()
+	a.NoError(err)
+	_, err = c01.WaitForRound(status.LastRound)
+	a.NoError(err)
 	data01, err = c01.AccountData(account01.Address)
 	a.NoError(err)
 
@@ -88,7 +93,7 @@ func TestBasicPayouts(t *testing.T) {
 	// eligibility is not in effect yet, so regardless of who proposes, they
 	// won't earn anything.
 	client := fixture.LibGoalClient
-	status, err := client.Status()
+	status, err = client.Status()
 	a.NoError(err)
 	for status.LastRound < *burn.ConfirmedRound+lookback-1 {
 		block, err := client.BookkeepingBlock(status.LastRound)
@@ -343,6 +348,11 @@ func rekeyreg(f *fixtures.RestClientFixture, a *require.Assertions, client libgo
 	onlineTxID, err := client.SignAndBroadcastTransaction(wh, nil, reReg)
 	a.NoError(err)
 	txn, err := f.WaitForConfirmedTxn(uint64(reReg.LastValid), onlineTxID)
+	a.NoError(err)
+	// sync up with the network
+	status, err := f.LibGoalClient.Status()
+	a.NoError(err)
+	_, err = client.WaitForRound(status.LastRound)
 	a.NoError(err)
 	data, err = client.AccountData(address)
 	a.NoError(err)
