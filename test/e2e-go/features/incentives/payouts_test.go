@@ -81,6 +81,9 @@ func TestBasicPayouts(t *testing.T) {
 	a.NoError(err)
 	burn, err := fixture.WaitForConfirmedTxn(uint64(txn.LastValid), txn.ID().String())
 	a.NoError(err)
+	// sync up with the network
+	_, err = c01.WaitForRound(*burn.ConfirmedRound)
+	a.NoError(err)
 	data01, err = c01.AccountData(account01.Address)
 	a.NoError(err)
 
@@ -343,6 +346,9 @@ func rekeyreg(f *fixtures.RestClientFixture, a *require.Assertions, client libgo
 	onlineTxID, err := client.SignAndBroadcastTransaction(wh, nil, reReg)
 	a.NoError(err)
 	txn, err := f.WaitForConfirmedTxn(uint64(reReg.LastValid), onlineTxID)
+	a.NoError(err)
+	// sync up with the network
+	_, err = client.WaitForRound(*txn.ConfirmedRound)
 	a.NoError(err)
 	data, err = client.AccountData(address)
 	a.NoError(err)

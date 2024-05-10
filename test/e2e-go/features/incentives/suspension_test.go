@@ -116,6 +116,12 @@ func TestBasicSuspension(t *testing.T) {
 	fixture.SendMoneyAndWait(afterStop.LastRound+suspend20, 5, 1000, richAccount.Address, account10.Address, "")
 	fixture.SendMoneyAndWait(afterStop.LastRound+suspend20, 5, 1000, richAccount.Address, account20.Address, "")
 
+	// make sure c10 node is in-sync with the network
+	status, err := fixture.LibGoalClient.Status()
+	a.NoError(err)
+	_, err = c10.WaitForRound(status.LastRound)
+	a.NoError(err)
+
 	// n20's account is now offline, but has voting key material (suspended)
 	account, err = c10.AccountData(account20.Address)
 	a.NoError(err)
