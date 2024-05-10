@@ -111,7 +111,7 @@ func testExpirationAccounts(t *testing.T, fixture *fixtures.RestClientFixture, f
 	a.NoError(err)
 	seededRound := sNodeStatus.LastRound
 
-	txnConfirmed := fixture.WaitForTxnConfirmation(seededRound+maxRoundsToWaitForTxnConfirm, sAccount, onlineTxID)
+	txnConfirmed := fixture.WaitForTxnConfirmation(seededRound+maxRoundsToWaitForTxnConfirm, onlineTxID)
 	a.True(txnConfirmed)
 
 	newAccountStatus, err = pClient.AccountInformation(sAccount, false)
@@ -156,7 +156,7 @@ func testExpirationAccounts(t *testing.T, fixture *fixtures.RestClientFixture, f
 
 	sendMoneyTxn := fixture.SendMoneyAndWait(latestRound, amountToSendInitial, transactionFee, richAccount, sAccount, "")
 
-	txnConfirmed = fixture.WaitForTxnConfirmation(latestRound+maxRoundsToWaitForTxnConfirm, sAccount, sendMoneyTxn.Txn.ID().String())
+	txnConfirmed = fixture.WaitForTxnConfirmation(latestRound+maxRoundsToWaitForTxnConfirm, sendMoneyTxn.Txn.ID().String())
 	a.True(txnConfirmed)
 
 	newAccountStatus, err = pClient.AccountInformation(sAccount, false)

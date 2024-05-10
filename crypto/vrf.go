@@ -134,6 +134,11 @@ func (pk VrfPubkey) verifyBytes(proof VrfProof, msg []byte) (bool, VrfOutput) {
 	return ret == 0, out
 }
 
+// IsEmpty returns true if the key is empty/zero'd.
+func (pk VrfPubkey) IsEmpty() bool {
+	return pk == VrfPubkey{}
+}
+
 // Verify checks a VRF proof of a given Hashable. If the proof is valid the pseudorandom VrfOutput will be returned.
 // For a given public key and message, there are potentially multiple valid proofs.
 // However, given a public key and message, all valid proofs will yield the same output.

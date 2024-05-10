@@ -95,6 +95,8 @@ type roundCowState struct {
 	// prevTotals contains the accounts totals for the previous round. It's being used to calculate the totals for the new round
 	// so that we could perform the validation test on these to ensure the block evaluator generate a valid changeset.
 	prevTotals ledgercore.AccountTotals
+
+	feesCollected basics.MicroAlgos
 }
 
 var childPool = sync.Pool{
@@ -299,6 +301,8 @@ func (cb *roundCowState) commitToParent() {
 		cb.commitParent.mods.Txids[txid] = ledgercore.IncludedTransactions{LastValid: incTxn.LastValid, Intra: commitParentBaseIdx + incTxn.Intra}
 	}
 	cb.commitParent.txnCount += cb.txnCount
+	// no overflow because max supply is uint64, can't exceed that in fees paid
+	cb.commitParent.feesCollected, _ = basics.OAddA(cb.commitParent.feesCollected, cb.feesCollected)
 
 	for txl, expires := range cb.mods.Txleases {
 		cb.commitParent.mods.AddTxLease(txl, expires)
@@ -342,6 +346,7 @@ func (cb *roundCowState) reset() {
 	cb.compatibilityMode = false
 	maps.Clear(cb.compatibilityGetKeyCache)
 	cb.prevTotals = ledgercore.AccountTotals{}
+	cb.feesCollected = basics.MicroAlgos{}
 }
 
 // recycle resets the roundcowstate and returns it to the sync.Pool

@@ -278,12 +278,12 @@ func runUntilProtocolUpgrades(a *require.Assertions, fixture *fixtures.RestClien
 
 	// wait for all transactions to confirm
 	for _, txid := range pingTxids {
-		_, err = fixture.WaitForConfirmedTxn(curStatus.LastRound+5, pingAccount, txid)
+		_, err = fixture.WaitForConfirmedTxn(curStatus.LastRound+5, txid)
 		a.NoError(err, "waiting for txn")
 	}
 
 	for _, txid := range pongTxids {
-		_, err = fixture.WaitForConfirmedTxn(curStatus.LastRound+5, pongAccount, txid)
+		_, err = fixture.WaitForConfirmedTxn(curStatus.LastRound+5, txid)
 		a.NoError(err, "waiting for txn")
 	}
 

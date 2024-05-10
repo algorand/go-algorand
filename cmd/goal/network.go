@@ -157,7 +157,11 @@ var networkCreateCmd = &cobra.Command{
 			consensus, _ = config.PreloadConfigurableConsensusProtocols(dataDir)
 		}
 
-		network, err := netdeploy.CreateNetworkFromTemplate(networkName, networkRootDir, templateReader, binDir, !noImportKeys, nil, consensus, devModeOverride)
+		var overrides []netdeploy.TemplateOverride
+		if devModeOverride {
+			overrides = append(overrides, netdeploy.OverrideDevMode)
+		}
+		network, err := netdeploy.CreateNetworkFromTemplate(networkName, networkRootDir, templateReader, binDir, !noImportKeys, nil, consensus, overrides...)
 		if err != nil {
 			if noClean {
 				reportInfof(" ** failed ** - Preserving network rootdir '%s'", networkRootDir)
