@@ -18,6 +18,7 @@ package network
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -98,15 +99,26 @@ func TestP2PSubmitTX(t *testing.T) {
 	// now we should be connected in a line: B <-> A <-> C where both B and C are connected to A but not each other
 
 	// Since we aren't using the transaction handler in this test, we need to register a pass-through handler
-	passThroughHandler := []TaggedMessageHandler{
-		{Tag: protocol.TxnTag, MessageHandler: HandlerFunc(func(msg IncomingMessage) OutgoingMessage {
-			return OutgoingMessage{Action: Broadcast}
-		})},
+	passThroughHandler := []TaggedMessageProcessor{
+		{
+			Tag: protocol.TxnTag,
+			MessageProcessor: struct {
+				ProcessorValidateFunc
+				ProcessorHandleFunc
+			}{
+				ProcessorValidateFunc(func(msg IncomingMessage) ValidatedMessage {
+					return ValidatedMessage{Action: Accept, Tag: msg.Tag, ValidatorData: nil}
+				}),
+				ProcessorHandleFunc(func(msg ValidatedMessage) OutgoingMessage {
+					return OutgoingMessage{Action: Ignore}
+				}),
+			},
+		},
 	}
 
-	netA.RegisterHandlers(passThroughHandler)
-	netB.RegisterHandlers(passThroughHandler)
-	netC.RegisterHandlers(passThroughHandler)
+	netA.RegisterProcessors(passThroughHandler)
+	netB.RegisterProcessors(passThroughHandler)
+	netC.RegisterProcessors(passThroughHandler)
 
 	// send messages from B and confirm that they get received by C (via A)
 	for i := 0; i < 10; i++ {
@@ -178,14 +190,26 @@ func TestP2PSubmitTXNoGossip(t *testing.T) {
 	time.Sleep(time.Second) // give time for peers to connect.
 
 	// ensure netC cannot receive messages
-	passThroughHandler := []TaggedMessageHandler{
-		{Tag: protocol.TxnTag, MessageHandler: HandlerFunc(func(msg IncomingMessage) OutgoingMessage {
-			return OutgoingMessage{Action: Broadcast}
-		})},
+
+	passThroughHandler := []TaggedMessageProcessor{
+		{
+			Tag: protocol.TxnTag,
+			MessageProcessor: struct {
+				ProcessorValidateFunc
+				ProcessorHandleFunc
+			}{
+				ProcessorValidateFunc(func(msg IncomingMessage) ValidatedMessage {
+					return ValidatedMessage{Action: Accept, Tag: msg.Tag, ValidatorData: nil}
+				}),
+				ProcessorHandleFunc(func(msg ValidatedMessage) OutgoingMessage {
+					return OutgoingMessage{Action: Ignore}
+				}),
+			},
+		},
 	}
 
-	netB.RegisterHandlers(passThroughHandler)
-	netC.RegisterHandlers(passThroughHandler)
+	netB.RegisterProcessors(passThroughHandler)
+	netC.RegisterProcessors(passThroughHandler)
 	for i := 0; i < 10; i++ {
 		err = netA.Broadcast(context.Background(), protocol.TxnTag, []byte(fmt.Sprintf("test %d", i)), false, nil)
 		require.NoError(t, err)
@@ -207,7 +231,7 @@ func TestP2PSubmitTXNoGossip(t *testing.T) {
 		50*time.Millisecond,
 	)
 
-	// check netB did not receive the messages
+	// check netC did not receive the messages
 	netC.peerStatsMu.Lock()
 	_, ok := netC.peerStats[netA.service.ID()]
 	netC.peerStatsMu.Unlock()
@@ -804,9 +828,33 @@ func TestP2PRelay(t *testing.T) {
 		return netA.hasPeers() && netB.hasPeers()
 	}, 2*time.Second, 50*time.Millisecond)
 
-	counter := newMessageCounter(t, 1)
-	counterDone := counter.done
-	netA.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.TxnTag, MessageHandler: counter}})
+	makeCounterHandler := func(numExpected int) ([]TaggedMessageProcessor, *int, chan struct{}) {
+		numActual := 0
+		counterDone := make(chan struct{})
+		counterHandler := []TaggedMessageProcessor{
+			{
+				Tag: protocol.TxnTag,
+				MessageProcessor: struct {
+					ProcessorValidateFunc
+					ProcessorHandleFunc
+				}{
+					ProcessorValidateFunc(func(msg IncomingMessage) ValidatedMessage {
+						return ValidatedMessage{Action: Accept, Tag: msg.Tag, ValidatorData: nil}
+					}),
+					ProcessorHandleFunc(func(msg ValidatedMessage) OutgoingMessage {
+						numActual++
+						if numActual >= numExpected {
+							close(counterDone)
+						}
+						return OutgoingMessage{Action: Ignore}
+					}),
+				},
+			},
+		}
+		return counterHandler, &numActual, counterDone
+	}
+	counterHandler, _, counterDone := makeCounterHandler(1)
+	netA.RegisterProcessors(counterHandler)
 
 	// send 5 messages from both netB to netA
 	// since there is no node with listening address set => no messages should be received
@@ -848,10 +896,9 @@ func TestP2PRelay(t *testing.T) {
 	}, 2*time.Second, 50*time.Millisecond)
 
 	const expectedMsgs = 10
-	counter = newMessageCounter(t, expectedMsgs)
-	counterDone = counter.done
-	netA.ClearHandlers()
-	netA.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.TxnTag, MessageHandler: counter}})
+	counterHandler, count, counterDone := makeCounterHandler(expectedMsgs)
+	netA.ClearProcessors()
+	netA.RegisterProcessors(counterHandler)
 
 	for i := 0; i < expectedMsgs/2; i++ {
 		err := netB.Relay(context.Background(), protocol.TxnTag, []byte{1, 2, 3, byte(i)}, true, nil)
@@ -868,28 +915,41 @@ func TestP2PRelay(t *testing.T) {
 	select {
 	case <-counterDone:
 	case <-time.After(2 * time.Second):
-		if counter.count < expectedMsgs {
-			require.Failf(t, "One or more messages failed to reach destination network", "%d > %d", expectedMsgs, counter.count)
-		} else if counter.count > expectedMsgs {
-			require.Failf(t, "One or more messages that were expected to be dropped, reached destination network", "%d < %d", expectedMsgs, counter.count)
+		if *count < expectedMsgs {
+			require.Failf(t, "One or more messages failed to reach destination network", "%d > %d", expectedMsgs, *count)
+		} else if *count > expectedMsgs {
+			require.Failf(t, "One or more messages that were expected to be dropped, reached destination network", "%d < %d", expectedMsgs, *count)
 		}
 	}
 }
 
 type mockSubPService struct {
 	mockService
-	count atomic.Int64
+	count          atomic.Int64
+	otherPeerID    peer.ID
+	shouldNextFail bool
 }
 
 type mockSubscription struct {
+	peerID         peer.ID
+	shouldNextFail bool
 }
 
-func (m *mockSubscription) Next(ctx context.Context) (*pubsub.Message, error) { return nil, nil }
-func (m *mockSubscription) Cancel()                                           {}
+func (m *mockSubscription) Next(ctx context.Context) (*pubsub.Message, error) {
+	if m.shouldNextFail {
+		return nil, errors.New("mockSubscription error")
+	}
+	return &pubsub.Message{ReceivedFrom: m.peerID}, nil
+}
+func (m *mockSubscription) Cancel() {}
 
 func (m *mockSubPService) Subscribe(topic string, val pubsub.ValidatorEx) (p2p.SubNextCancellable, error) {
 	m.count.Add(1)
-	return &mockSubscription{}, nil
+	otherPeerID := m.otherPeerID
+	if otherPeerID == "" {
+		otherPeerID = "mockSubPServicePeerID"
+	}
+	return &mockSubscription{peerID: otherPeerID, shouldNextFail: m.shouldNextFail}, nil
 }
 
 // TestP2PWantTXGossip checks txTopicHandleLoop runs as expected on wantTXGossip changes
@@ -900,7 +960,8 @@ func TestP2PWantTXGossip(t *testing.T) {
 	// cancelled context to trigger subscription.Next to return
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	mockService := &mockSubPService{}
+	peerID := peer.ID("myPeerID")
+	mockService := &mockSubPService{mockService: mockService{id: peerID}, shouldNextFail: true}
 	net := &P2PNetwork{
 		service:  mockService,
 		log:      logging.TestingLog(t),

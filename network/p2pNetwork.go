@@ -659,6 +659,16 @@ func (n *P2PNetwork) ClearHandlers() {
 	n.handler.ClearHandlers([]Tag{})
 }
 
+// RegisterProcessors adds to the set of given message handlers.
+func (n *P2PNetwork) RegisterProcessors(dispatch []TaggedMessageProcessor) {
+	n.handler.RegisterProcessors(dispatch)
+}
+
+// ClearProcessors deregisters all the existing message handlers.
+func (n *P2PNetwork) ClearProcessors() {
+	n.handler.ClearProcessors([]Tag{})
+}
+
 // GetHTTPClient returns a http.Client with a suitable for the network Transport
 // that would also limit the number of outgoing connections.
 func (n *P2PNetwork) GetHTTPClient(address string) (*http.Client, error) {
@@ -884,11 +894,12 @@ func (n *P2PNetwork) txTopicHandleLoop() {
 			sub.Cancel()
 			return
 		}
+		// if there is a self-sent the message no need to process it.
+		if msg.ReceivedFrom == n.service.ID() {
+			continue
+		}
 
-		// discard TX message.
-		// from gossipsub's point of view, it's just waiting to hear back from the validator,
-		// and txHandler does all its work in the validator, so we don't need to do anything here
-		_ = msg
+		_ = n.handler.Process(msg.ValidatorData.(ValidatedMessage))
 
 		// participation or configuration change, cancel subscription and quit
 		if !n.wantTXGossip.Load() {
@@ -923,14 +934,15 @@ func (n *P2PNetwork) txTopicValidator(ctx context.Context, peerID peer.ID, msg *
 	peerStats.txReceived.Add(1)
 	n.peerStatsMu.Unlock()
 
-	outmsg := n.handler.Handle(inmsg)
+	outmsg := n.handler.Validate(inmsg)
 	// there was a decision made in the handler about this message
 	switch outmsg.Action {
 	case Ignore:
 		return pubsub.ValidationIgnore
 	case Disconnect:
 		return pubsub.ValidationReject
-	case Broadcast: // TxHandler.processIncomingTxn does not currently return this Action
+	case Accept:
+		msg.ValidatorData = outmsg
 		return pubsub.ValidationAccept
 	default:
 		n.log.Warnf("handler returned invalid action %d", outmsg.Action)

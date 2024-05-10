@@ -88,6 +88,12 @@ type GossipNode interface {
 	// ClearHandlers deregisters all the existing message handlers.
 	ClearHandlers()
 
+	// RegisterProcessors adds to the set of given message processors.
+	RegisterProcessors(dispatch []TaggedMessageProcessor)
+
+	// ClearProcessors deregisters all the existing message processors.
+	ClearProcessors()
+
 	// GetHTTPClient returns a http.Client with a suitable for the network Transport
 	// that would also limit the number of outgoing connections.
 	GetHTTPClient(address string) (*http.Client, error)
@@ -162,6 +168,14 @@ type OutgoingMessage struct {
 	OnRelease func()
 }
 
+// ValidatedMessage is a message that has been validated and is ready to be processed.
+// Think as an intermediate one between IncomingMessage and OutgoingMessage
+type ValidatedMessage struct {
+	Action        ForwardingPolicy
+	Tag           Tag
+	ValidatorData interface{}
+}
+
 // ForwardingPolicy is an enum indicating to whom we should send a message
 //
 //msgp:ignore ForwardingPolicy
@@ -179,6 +193,9 @@ const (
 
 	// Respond - reply to the sender
 	Respond
+
+	// Accept - accept for further processing after successful validation
+	Accept
 )
 
 // MessageHandler takes a IncomingMessage (e.g., vote, transaction), processes it, and returns what (if anything)
@@ -189,11 +206,36 @@ type MessageHandler interface {
 	Handle(message IncomingMessage) OutgoingMessage
 }
 
-// HandlerFunc represents an implemenation of the MessageHandler interface
+// HandlerFunc represents an implementation of the MessageHandler interface
 type HandlerFunc func(message IncomingMessage) OutgoingMessage
 
-// Handle implements MessageHandler.Handle, calling the handler with the IncomingKessage and returning the OutgoingMessage
+// Handle implements MessageHandler.Handle, calling the handler with the IncomingMessage and returning the OutgoingMessage
 func (f HandlerFunc) Handle(message IncomingMessage) OutgoingMessage {
+	return f(message)
+}
+
+// MessageProcessor takes a IncomingMessage (e.g., vote, transaction), processes it, and returns what (if anything)
+// to send to the network in response.
+// This is an extension of the MessageHandler that works in two stages: validate ->[result]-> handle.
+type MessageProcessor interface {
+	Validate(message IncomingMessage) ValidatedMessage
+	Handle(message ValidatedMessage) OutgoingMessage
+}
+
+// ProcessorValidateFunc represents an implementation of the MessageProcessor interface
+type ProcessorValidateFunc func(message IncomingMessage) ValidatedMessage
+
+// ProcessorHandleFunc represents an implementation of the MessageProcessor interface
+type ProcessorHandleFunc func(message ValidatedMessage) OutgoingMessage
+
+// Validate implements MessageProcessor.Validate, calling the validator with the IncomingMessage and returning the action
+// and validation extra data that can be use as the handler input.
+func (f ProcessorValidateFunc) Validate(message IncomingMessage) ValidatedMessage {
+	return f(message)
+}
+
+// Handle implements MessageProcessor.Handle calling the handler with the ValidatedMessage and returning the OutgoingMessage
+func (f ProcessorHandleFunc) Handle(message ValidatedMessage) OutgoingMessage {
 	return f(message)
 }
 
@@ -201,6 +243,13 @@ func (f HandlerFunc) Handle(message IncomingMessage) OutgoingMessage {
 type TaggedMessageHandler struct {
 	Tag
 	MessageHandler
+}
+
+// TaggedMessageProcessor receives one type of broadcast messages
+// and performs two stage processing: validating and handling
+type TaggedMessageProcessor struct {
+	Tag
+	MessageProcessor
 }
 
 // Propagate is a convenience function to save typing in the common case of a message handler telling us to propagate an incoming message
