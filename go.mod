@@ -16,6 +16,7 @@ require (
 	github.com/algorand/oapi-codegen v1.12.0-algorand.0
 	github.com/algorand/sortition v1.0.0
 	github.com/algorand/websocket v1.4.6
+	github.com/algorandskiy/go-yamux/v4 v4.0.2-beta
 	github.com/aws/aws-sdk-go v1.34.0
 	github.com/cockroachdb/pebble v0.0.0-20230807162746-af8c5f279001
 	github.com/consensys/gnark-crypto v0.12.1
@@ -36,7 +37,6 @@ require (
 	github.com/libp2p/go-libp2p v0.33.2
 	github.com/libp2p/go-libp2p-kad-dht v0.24.3
 	github.com/libp2p/go-libp2p-pubsub v0.10.0
-	github.com/libp2p/go-yamux/v4 v4.0.1
 	github.com/mattn/go-sqlite3 v1.14.16
 	github.com/miekg/dns v1.1.58
 	github.com/multiformats/go-multiaddr v0.12.3
@@ -57,6 +57,8 @@ require (
 	gopkg.in/sohlich/elogrus.v3 v3.0.0-20180410122755-1fa29e2f2009
 	pgregory.net/rapid v0.6.2
 )
+
+// replace github.com/libp2p/go-yamux/v4 => github.com/algorandskiy/go-yamux/v4 v4.0.2-alpha
 
 require (
 	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
@@ -125,6 +127,7 @@ require (
 	github.com/libp2p/go-nat v0.2.0 // indirect
 	github.com/libp2p/go-netroute v0.2.1 // indirect
 	github.com/libp2p/go-reuseport v0.4.0 // indirect
+	github.com/libp2p/go-yamux/v4 v4.0.1 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/marten-seemann/tcp v0.0.0-20210406111302-dfbc87cc63fd // indirect
 	github.com/mattn/go-colorable v0.1.12 // indirect

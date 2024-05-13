@@ -36,6 +36,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-deadlock"
 
+	yamux "github.com/algorandskiy/go-yamux/v4"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -761,6 +762,8 @@ func (n *P2PNetwork) wsStreamHandler(ctx context.Context, p2pPeer peer.ID, strea
 			return
 		}
 	}
+
+	stream.SetWriteDeadline(yamux.HighPriorityWriteDeadlineMagicValue)
 
 	// get address for peer ID
 	ma := stream.Conn().RemoteMultiaddr()
