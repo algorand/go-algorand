@@ -115,6 +115,8 @@ def main():
     ap.add_argument('metrics_names', nargs='+', default=None, help='metric name(s) to track')
     ap.add_argument('-d', '--dir', type=str, default=None, help='dir path to find /*.metrics in')
     ap.add_argument('-l', '--list-nodes', default=False, action='store_true', help='list available node names with metrics')
+    ap.add_argument('--nick-re', action='append', default=[], help='regexp to filter node names, may be repeated')
+    ap.add_argument('--nick-lre', action='append', default=[], help='label:regexp to filter node names, may be repeated')
     ap.add_argument('-s', '--save', type=str, choices=['png', 'html'], default='html', help=f'save plot to \'{default_img_filename}\' or \'{default_html_filename}\' file instead of showing it')
     ap.add_argument('--diff', action='store_true', default=None, help='diff two gauge metrics instead of plotting their values. Requires two metrics names to be set')
     ap.add_argument('--verbose', default=False, action='store_true')
@@ -137,14 +139,42 @@ def main():
         ip_to_name = terraform_inventory_ip_not_names(tf_inventory_path)
         filesByNick2 = {}
         for nick in filesByNick.keys():
-            parsed = urlparse('//' + nick)
-            name: str = ip_to_name.get(parsed.hostname)
-            if name:
-                idx = name.find('_')
-                if idx != -1:
-                    name = name[:idx]
-                val = filesByNick[nick]
-                filesByNick2[name] = val
+            if args.nick_re or not args.nick_re and not args.nick_lre:
+                # filter by regexp or apply default renaming
+                for nick_re in args.nick_re:
+                    if re.match(nick_re, nick):
+                        break
+                else:
+                    if args.nick_re:
+                        # regex is given but not matched, continue to the next node
+                        continue
+
+                parsed = urlparse('//' + nick)
+                name: str = ip_to_name.get(parsed.hostname)
+                if name:
+                    idx = name.find('_')
+                    if idx != -1:
+                        name = name[:idx]
+                    val = filesByNick[nick]
+                    filesByNick2[name] = val
+
+            elif args.nick_lre:
+                # filter by label:regexp
+                label = None
+                for nick_lre in args.nick_lre:
+                    label, nick_re = nick_lre.split(':')
+                    if re.match(nick_re, nick):
+                        break
+                else:
+                    if args.nick_lre:
+                        # regex is given but not matched, continue to the next node
+                        continue
+
+                    val = filesByNick[nick]
+                    filesByNick2[label] = val
+            else:
+                raise RuntimeError('unexpected options combination')
+
         if filesByNick2:
             filesByNick = filesByNick2
 
