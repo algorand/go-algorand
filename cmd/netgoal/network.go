@@ -168,9 +168,9 @@ func runBuildNetwork() error {
 			return fmt.Errorf("error resolving bootstrap file: %v", err)
 		}
 		net.BootstrappedNet = fileTemplate
-		net.SetUseBoostrappedFiles(bootstrapLoadingFile)
+		net.SetUseBootstrappedFiles(bootstrapLoadingFile)
 	} else {
-		net.SetUseBoostrappedFiles(false)
+		net.SetUseBootstrappedFiles(false)
 	}
 
 	net.SetUseExistingGenesisFiles(networkUseGenesisFiles)
