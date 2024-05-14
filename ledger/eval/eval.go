@@ -237,8 +237,8 @@ func (x *roundCowBase) lookupAgreement(addr basics.Address) (basics.OnlineAccoun
 	return ad, err
 }
 
-// lookupAgreement returns the online accountdata for the provided account address. It uses an internal cache
-// to avoid repeated lookups against the ledger.
+// onlineStake returns the total online stake as of the start of the round. It
+// caches the result to prevent repeated calls to the ledger.
 func (x *roundCowBase) onlineStake() (basics.MicroAlgos, error) {
 	if !x.totalOnline.IsZero() {
 		return x.totalOnline, nil
