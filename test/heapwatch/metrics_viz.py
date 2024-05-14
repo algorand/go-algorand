@@ -108,13 +108,14 @@ def parse_metrics(fin: Iterable[str], nick: str, metrics_names: set=None, diff: 
 def main():
     os.environ['TZ'] = 'UTC'
     time.tzset()
-    default_output_file = 'metrics_viz.png'
+    default_img_filename = 'metrics_viz.png'
+    default_html_filename = 'metrics_viz.html'
 
     ap = argparse.ArgumentParser()
     ap.add_argument('metrics_names', nargs='+', default=None, help='metric name(s) to track')
     ap.add_argument('-d', '--dir', type=str, default=None, help='dir path to find /*.metrics in')
     ap.add_argument('-l', '--list-nodes', default=False, action='store_true', help='list available node names with metrics')
-    ap.add_argument('-s', '--save', action='store_true', default=None, help=f'save plot to \'{default_output_file}\' file instead of showing it')
+    ap.add_argument('-s', '--save', type=str, choices=['png', 'html'], default='html', help=f'save plot to \'{default_img_filename}\' or \'{default_html_filename}\' file instead of showing it')
     ap.add_argument('--diff', action='store_true', default=None, help='diff two gauge metrics instead of plotting their values. Requires two metrics names to be set')
     ap.add_argument('--verbose', default=False, action='store_true')
 
@@ -207,8 +208,12 @@ def main():
             ), i+1, 1)
 
     if args.save:
-        target_path = os.path.join(args.dir, default_output_file)
-        fig.write_image(target_path)
+        if args.save == 'html':
+            target_path = os.path.join(args.dir, default_html_filename)
+            fig.write_html(target_path)
+        else:
+            target_path = os.path.join(args.dir, default_img_filename)
+            fig.write_image(target_path)
         print(f'Saved plot to {target_path}')
     else:
         fig.show()
