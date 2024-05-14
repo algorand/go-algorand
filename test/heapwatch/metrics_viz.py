@@ -117,7 +117,7 @@ def main():
     ap.add_argument('-l', '--list-nodes', default=False, action='store_true', help='list available node names with metrics')
     ap.add_argument('--nick-re', action='append', default=[], help='regexp to filter node names, may be repeated')
     ap.add_argument('--nick-lre', action='append', default=[], help='label:regexp to filter node names, may be repeated')
-    ap.add_argument('-s', '--save', type=str, choices=['png', 'html'], default='html', help=f'save plot to \'{default_img_filename}\' or \'{default_html_filename}\' file instead of showing it')
+    ap.add_argument('-s', '--save', type=str, choices=['png', 'html'], help=f'save plot to \'{default_img_filename}\' or \'{default_html_filename}\' file instead of showing it')
     ap.add_argument('--diff', action='store_true', default=None, help='diff two gauge metrics instead of plotting their values. Requires two metrics names to be set')
     ap.add_argument('--verbose', default=False, action='store_true')
 
@@ -139,6 +139,15 @@ def main():
         ip_to_name = terraform_inventory_ip_not_names(tf_inventory_path)
         filesByNick2 = {}
         for nick in filesByNick.keys():
+            parsed = urlparse('//' + nick)
+            name: str = ip_to_name.get(parsed.hostname)
+            val = filesByNick[nick]
+            filesByNick2[name] = val
+
+        filesByNick = filesByNick2
+        filesByNick2 = {}
+
+        for nick in filesByNick.keys():
             if args.nick_re or not args.nick_re and not args.nick_lre:
                 # filter by regexp or apply default renaming
                 for nick_re in args.nick_re:
@@ -149,14 +158,13 @@ def main():
                         # regex is given but not matched, continue to the next node
                         continue
 
-                parsed = urlparse('//' + nick)
-                name: str = ip_to_name.get(parsed.hostname)
-                if name:
-                    idx = name.find('_')
-                    if idx != -1:
-                        name = name[:idx]
-                    val = filesByNick[nick]
-                    filesByNick2[name] = val
+                # apply default renaming
+                name = nick
+                idx = name.find('_')
+                if idx != -1:
+                    name = name[idx+1:]
+                val = filesByNick[nick]
+                filesByNick2[name] = val
 
             elif args.nick_lre:
                 # filter by label:regexp
@@ -170,8 +178,8 @@ def main():
                         # regex is given but not matched, continue to the next node
                         continue
 
-                    val = filesByNick[nick]
-                    filesByNick2[label] = val
+                val = filesByNick[nick]
+                filesByNick2[label] = val
             else:
                 raise RuntimeError('unexpected options combination')
 
@@ -195,10 +203,12 @@ def main():
 
     fig = make_subplots(
         rows=nrows, cols=1,
-        vertical_spacing=0.03, shared_xaxes=True)
+        vertical_spacing=0.03, shared_xaxes=True,
+        subplot_titles=[f'{name}' for name in sorted(metrics_names)],
+    )
 
     fig['layout']['margin'] = {
-        'l': 30, 'r': 10, 'b': 10, 't': 10
+        'l': 30, 'r': 10, 'b': 10, 't': 20
     }
     fig['layout']['height'] = 500 * nrows
     # fig.update_layout(template="plotly_dark")
