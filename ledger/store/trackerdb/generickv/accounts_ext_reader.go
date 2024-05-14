@@ -353,7 +353,7 @@ func (r *accountsReader) OnlineAccountsAll(maxAccounts uint64) ([]trackerdb.Pers
 }
 
 // ExpiredOnlineAccountsForRound implements trackerdb.AccountsReaderExt
-func (r *accountsReader) ExpiredOnlineAccountsForRound(rnd basics.Round, voteRnd basics.Round, proto config.ConsensusParams, rewardsLevel uint64) (data map[basics.Address]*ledgercore.OnlineAccountData, err error) {
+func (r *accountsReader) ExpiredOnlineAccountsForRound(rnd basics.Round, voteRnd basics.Round, proto config.ConsensusParams, rewardsLevel uint64) (data map[basics.Address]*basics.OnlineAccountData, err error) {
 	// The SQL at the time of writing:
 	//
 	// SELECT address, data, max(updround)
@@ -364,7 +364,7 @@ func (r *accountsReader) ExpiredOnlineAccountsForRound(rnd basics.Round, voteRnd
 	// ORDER BY address
 
 	// initialize return map
-	data = make(map[basics.Address]*ledgercore.OnlineAccountData)
+	data = make(map[basics.Address]*basics.OnlineAccountData)
 	expired := make(map[basics.Address]struct{})
 
 	// prepare iter over online accounts (by balance)

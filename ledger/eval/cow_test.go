@@ -282,6 +282,7 @@ func TestCowChildReflect(t *testing.T) {
 		"compatibilityMode":        {},
 		"compatibilityGetKeyCache": {},
 		"prevTotals":               {},
+		"feesCollected":            {},
 	}
 
 	cow := roundCowState{}
@@ -289,7 +290,7 @@ func TestCowChildReflect(t *testing.T) {
 	st := v.Type()
 	for i := 0; i < v.NumField(); i++ {
 		reflectedCowName := st.Field(i).Name
-		require.Containsf(t, cowFieldNames, reflectedCowName, "new field:\"%v\" added to roundCowState, please update roundCowState.reset() to handle it before fixing the test", reflectedCowName)
+		require.Containsf(t, cowFieldNames, reflectedCowName, "new field:\"%v\" added to roundCowState, please update roundCowState.reset() to handle it before fixing this test", reflectedCowName)
 	}
 }
 

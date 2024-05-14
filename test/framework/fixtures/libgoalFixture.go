@@ -22,6 +22,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 	"testing"
@@ -35,6 +36,7 @@ import (
 	"github.com/algorand/go-algorand/crypto/merklearray"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/account"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/gen"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/netdeploy"
@@ -65,20 +67,42 @@ func (f *RestClientFixture) SetConsensus(consensus config.ConsensusProtocols) {
 	f.consensus = consensus
 }
 
+// FasterConsensus speeds up the given consensus version in two ways. The seed
+// refresh lookback is set to 8 (instead of 80), so the 320 round balance
+// lookback becomes 32.  And, if the architecture implies it can be handled,
+// round times are shortened by lowering vote timeouts.
+func (f *RestClientFixture) FasterConsensus(ver protocol.ConsensusVersion, timeout time.Duration, lookback basics.Round) {
+	if f.consensus == nil {
+		f.consensus = make(config.ConsensusProtocols)
+	}
+	fast := config.Consensus[ver]
+	// balanceRound is 4 * SeedRefreshInterval
+	if lookback%4 != 0 {
+		panic(fmt.Sprintf("lookback must be a multiple of 4, got %d", lookback))
+	}
+	fast.SeedRefreshInterval = uint64(lookback) / 4
+	// and speed up the rounds while we're at it
+	if runtime.GOARCH == "amd64" || runtime.GOARCH == "arm64" {
+		fast.AgreementFilterTimeoutPeriod0 = timeout
+		fast.AgreementFilterTimeout = timeout
+	}
+	f.consensus[ver] = fast
+}
+
 // Setup is called to initialize the test fixture for the test(s)
-func (f *LibGoalFixture) Setup(t TestingTB, templateFile string) {
-	f.setup(t, t.Name(), templateFile, true)
+func (f *LibGoalFixture) Setup(t TestingTB, templateFile string, overrides ...netdeploy.TemplateOverride) {
+	f.setup(t, t.Name(), templateFile, true, overrides...)
 }
 
 // SetupNoStart is called to initialize the test fixture for the test(s)
 // but does not start the network before returning.  Call NC.Start() to start later.
-func (f *LibGoalFixture) SetupNoStart(t TestingTB, templateFile string) {
-	f.setup(t, t.Name(), templateFile, false)
+func (f *LibGoalFixture) SetupNoStart(t TestingTB, templateFile string, overrides ...netdeploy.TemplateOverride) {
+	f.setup(t, t.Name(), templateFile, false, overrides...)
 }
 
 // SetupShared is called to initialize the test fixture that will be used for multiple tests
-func (f *LibGoalFixture) SetupShared(testName string, templateFile string) {
-	f.setup(nil, testName, templateFile, true)
+func (f *LibGoalFixture) SetupShared(testName string, templateFile string, overrides ...netdeploy.TemplateOverride) {
+	f.setup(nil, testName, templateFile, true, overrides...)
 }
 
 // Genesis returns the genesis data for this fixture
@@ -86,7 +110,7 @@ func (f *LibGoalFixture) Genesis() gen.GenesisData {
 	return f.network.Genesis()
 }
 
-func (f *LibGoalFixture) setup(test TestingTB, testName string, templateFile string, startNetwork bool) {
+func (f *LibGoalFixture) setup(test TestingTB, testName string, templateFile string, startNetwork bool, overrides ...netdeploy.TemplateOverride) {
 	// Call initialize for our base implementation
 	f.initialize(f)
 	f.t = SynchronizedTest(test)
@@ -98,7 +122,7 @@ func (f *LibGoalFixture) setup(test TestingTB, testName string, templateFile str
 	importKeys := false // Don't automatically import root keys when creating folders, we'll import on-demand
 	file, err := os.Open(templateFile)
 	f.failOnError(err, "Template file could not be opened: %v")
-	network, err := netdeploy.CreateNetworkFromTemplate("test", f.rootDir, file, f.binDir, importKeys, f.nodeExitWithError, f.consensus, false)
+	network, err := netdeploy.CreateNetworkFromTemplate("test", f.rootDir, file, f.binDir, importKeys, f.nodeExitWithError, f.consensus, overrides...)
 	f.failOnError(err, "CreateNetworkFromTemplate failed: %v")
 	f.network = network
 

@@ -36,7 +36,9 @@ linters-settings:
     - (*github.com/spf13/pflag.FlagSet).MarkDeprecated
     - (*github.com/spf13/pflag.FlagSet).MarkShorthandDeprecated
   govet:
-    check-shadowing: true
+    # Enables these linters in addition to the default ones.
+    enable:
+        - shadow
     settings:
       shadow:
         # explanation of strict vs non-strict:
@@ -131,6 +133,10 @@ issues:
       linters:
         - staticcheck
       text: "SA4006: this value" # of X is never used
+    - path: _test\.go
+      linters:
+        - revive
+      text: "dot-imports: should not use dot imports"
     - linters:
         - staticcheck
       text: "SA1019: rand*"

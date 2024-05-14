@@ -5701,17 +5701,21 @@ func opBlock(cx *EvalContext) error {
 	switch fs.field {
 	case BlkSeed:
 		cx.Stack[last].Bytes = hdr.Seed[:]
-		return nil
 	case BlkTimestamp:
-		cx.Stack[last].Bytes = nil
 		if hdr.TimeStamp < 0 {
 			return fmt.Errorf("block(%d) timestamp %d < 0", round, hdr.TimeStamp)
 		}
-		cx.Stack[last].Uint = uint64(hdr.TimeStamp)
-		return nil
+		cx.Stack[last] = stackValue{Uint: uint64(hdr.TimeStamp)}
+	case BlkProposer:
+		cx.Stack[last].Bytes = hdr.Proposer[:]
+	case BlkFeesCollected:
+		cx.Stack[last] = stackValue{Uint: hdr.FeesCollected.Raw}
+	case BlkBonus:
+		cx.Stack[last] = stackValue{Uint: hdr.Bonus.Raw}
 	default:
 		return fmt.Errorf("invalid block field %s", fs.field)
 	}
+	return nil
 }
 
 // pcDetails return PC and disassembled instructions at PC up to 2 opcodes back

@@ -171,7 +171,7 @@ func BenchmarkBatchVerifierBigWithInvalid(b *testing.B) {
 				failed, err := bv.VerifyWithFeedback()
 				if err != nil {
 					for i, f := range failed {
-						if bv.signatures[i] == badSig {
+						if bv.(*cgoBatchVerifier).signatures[i] == badSig {
 							require.True(b, f)
 						} else {
 							require.False(b, f)

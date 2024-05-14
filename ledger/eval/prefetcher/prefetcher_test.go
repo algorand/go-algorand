@@ -48,7 +48,10 @@ func makeAddress(addressSeed int) (o basics.Address) {
 	return
 }
 
-const proto = protocol.ConsensusCurrentVersion
+// It would be nice to test current and future, but until that change is made,
+// it's better to test future, as that's likely to catch mistakes made while
+// developing something new (and likely to catch changes that affect current)
+const proto = protocol.ConsensusFuture
 
 type lookupError struct{}
 

@@ -1718,6 +1718,12 @@ block BlkSeed
 global AssetCreateMinBalance
 global AssetOptInMinBalance
 global GenesisHash
+pushint 1
+block BlkProposer
+pushint 1
+block BlkFeesCollected
+pushint 1
+block BlkBonus
 `, AssemblerMaxVersion)
 	for _, names := range [][]string{GlobalFieldNames[:], TxnFieldNames[:], blockFieldNames[:]} {
 		for _, f := range names {
