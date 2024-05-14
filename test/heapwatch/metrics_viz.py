@@ -19,6 +19,7 @@ import re
 import time
 from typing import Dict, Iterable, Tuple
 import sys
+from urllib.parse import urlparse
 
 import dash
 from dash import dcc, html
@@ -128,16 +129,23 @@ def main():
         return 1
 
     metrics_files = sorted(glob.glob(os.path.join(args.dir, '*.metrics')))
+    metrics_files.extend(glob.glob(os.path.join(args.dir, 'terraform-inventory.host')))
     tf_inventory_path, filesByNick = gather_metrics_files_by_nick(metrics_files)
     if tf_inventory_path:
         # remap ip addresses to node names
         ip_to_name = terraform_inventory_ip_not_names(tf_inventory_path)
+        filesByNick2 = {}
         for nick in filesByNick.keys():
-            name = ip_to_name.get(nick)
+            parsed = urlparse('//' + nick)
+            name: str = ip_to_name.get(parsed.hostname)
             if name:
+                idx = name.find('_')
+                if idx != -1:
+                    name = name[:idx]
                 val = filesByNick[nick]
-                filesByNick[name] = val
-                del filesByNick[nick]
+                filesByNick2[name] = val
+        if filesByNick2:
+            filesByNick = filesByNick2
 
     if args.list_nodes:
         print('Available nodes:', ', '.join(sorted(filesByNick.keys())))
@@ -199,7 +207,9 @@ def main():
             ), i+1, 1)
 
     if args.save:
-        fig.write_image(os.path.join(args.dir, default_output_file))
+        target_path = os.path.join(args.dir, default_output_file)
+        fig.write_image(target_path)
+        print(f'Saved plot to {target_path}')
     else:
         fig.show()
 
