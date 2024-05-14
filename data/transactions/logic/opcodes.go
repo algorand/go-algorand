@@ -78,6 +78,7 @@ const pairingVersion = 10 // bn256 opcodes. will add bls12-381, and unify the av
 const spliceVersion = 10  // box splicing/resizing
 
 const spOpcodesVersion = 11 // falcon_verify, sumhash512
+const mimcVersion = 11
 
 // Unlimited Global Storage opcodes
 const boxVersion = 8 // box_*
@@ -793,9 +794,27 @@ var OpSpecs = []OpSpec{
 		costByField("g", &EcGroups, []int{
 			BN254g1: 630, BN254g2: 3_300,
 			BLS12_381g1: 1_950, BLS12_381g2: 8_150})},
-
-	{0xf0, "mimc_BN254", opMimcBN254, proto("b:b{32}"), 11, costByLength(1, 620, 32, 0)},
-	{0xf1, "mimc_BLS12_381", opMimcBLS12381, proto("b:b{32}"), 11, costByLength(1, 620, 32, 0)},
+	{0xe6, "mimc", opMimc, proto("b:b{32}"), mimcVersion, costByFieldAndLength("g", &EcGroups, []linearCost{
+		BN254g1: {
+			baseCost:  10,
+			chunkCost: 650,
+			chunkSize: 32,
+		},
+		BN254g2: {
+			baseCost:  10,
+			chunkCost: 650,
+			chunkSize: 32,
+		},
+		BLS12_381g1: {
+			baseCost:  10,
+			chunkCost: 650,
+			chunkSize: 32,
+		},
+		BLS12_381g2: {
+			baseCost:  10,
+			chunkCost: 650,
+			chunkSize: 32,
+		}})},
 }
 
 // OpcodesByVersion returns list of opcodes available in a specific version of TEAL

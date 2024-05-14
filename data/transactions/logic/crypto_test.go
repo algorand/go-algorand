@@ -713,7 +713,7 @@ int ` + fmt.Sprintf("%d", testLogicBudget-2500-8) + `
 }
 
 func BenchmarkHashes(b *testing.B) {
-	for _, hash := range []string{"sha256", "keccak256" /* skip, same as keccak "sha3_256", */, "sha512_256", "sumhash512", "mimc_BN254", "mimc_BLS12_381"} {
+	for _, hash := range []string{"sha256", "keccak256" /* skip, same as keccak "sha3_256", */, "sha512_256", "sumhash512", "mimc BN254g1", "mimc BLS12_381g1"} {
 		for _, size := range []int{0, 32, 128, 512, 1024, 4096} {
 			b.Run(hash+"-"+strconv.Itoa(size), func(b *testing.B) {
 				benchmarkOperation(b, "", fmt.Sprintf("int %d; bzero; %s; pop", size, hash), "int 1")
