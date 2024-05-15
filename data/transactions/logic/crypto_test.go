@@ -126,22 +126,27 @@ func TestMimc(t *testing.T) {
 	// We test success for 32-byte and 96-byte preimages, and failure for preimage input size of 0,
 	// input size not multiple of 32 bytes, and chunks representing values greater than the modulus.
 
-	preImageTestVectors := []string{
-		// FAIL: zero-length
-		"0x",
-		// SUCCEED: 32 bytes, less than modulus
-		"0x23a950068dd3d1e21cee48e7919be7ae32cdef70311fc486336ea9d4b5042535",
-		// FAIL: 32 bytes, more than modulus
-		"0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000002",
-		// FAIL: less than 32 byte
-		"0xdeadf00d",
-		// SUCCEED: 32 bytes, less than modulus | 32 bytes, less than modulus | 32 bytes, less than modulus
-		"0x183de351a72141d79c51a27d10405549c98302cb2536c5968deeb3cba635121723a950068dd3d1e21cee48e7919be7ae32cdef70311fc486336ea9d4b504253530644e72e131a029b85045b68181585d2833e84879b9709143e1f593ef676981",
-		// FAIL: 32 bytes, less than modulus | 32 bytes, less than modulus | 32 bytes, more than modulus
-		"0x183de351a72141d79c51a27d10405549c98302cb2536c5968deeb3cba635121723a950068dd3d1e21cee48e7919be7ae32cdef70311fc486336ea9d4b504253573eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000002",
-		// FAIL: 32 bytes, less than modulus | 32 bytes, less than modulus | 32 bytes, more than modulus
-		"0x183de351a72141d79c51a27d10405549c98302cb2536c5968deeb3cba635121723a950068dd3d1e21cee48e7919be7ae32cdef70311fc486336ea9d4b5042535abba",
+	type PreImageTestVector struct {
+		PreImage      string
+		ShouldSucceed bool
 	}
+	preImageTestVectors := []PreImageTestVector{
+		{"0x",
+			false}, // zero-length input
+		{"0x23a950068dd3d1e21cee48e7919be7ae32cdef70311fc486336ea9d4b5042535",
+			true}, // 32 bytes, less than modulus
+		{"0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000002",
+			false}, // 32 bytes, more than modulus
+		{"0xdeadf00d",
+			false}, // less than 32 byte
+		{"0x183de351a72141d79c51a27d10405549c98302cb2536c5968deeb3cba635121723a950068dd3d1e21cee48e7919be7ae32cdef70311fc486336ea9d4b504253530644e72e131a029b85045b68181585d2833e84879b9709143e1f593ef676981",
+			true}, // 32 bytes, less than modulus | 32 bytes, less than modulus | 32 bytes, less than modulus
+		{"0x183de351a72141d79c51a27d10405549c98302cb2536c5968deeb3cba635121723a950068dd3d1e21cee48e7919be7ae32cdef70311fc486336ea9d4b504253573eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000002",
+			false}, //  32 bytes, less than modulus | 32 bytes, less than modulus | 32 bytes, more than modulus
+		{"0x183de351a72141d79c51a27d10405549c98302cb2536c5968deeb3cba635121723a950068dd3d1e21cee48e7919be7ae32cdef70311fc486336ea9d4b5042535abba",
+			false}, // 32 bytes, less than modulus | 32 bytes, less than modulus | less than 32 bytes
+	}
+
 	circuitHashTestVectors := map[string][]string{
 		"BN254": {
 			"20104241803663641422577121134203490505137011783614913652735802145961801733870",
@@ -162,10 +167,9 @@ func TestMimc(t *testing.T) {
 			"9873666029497961930790892458408217321483390383568592297687427911011295910871",
 		},
 	}
-	shouldSucceed := []bool{false, true, false, false, true, false, false}
 
 	for _, curve := range []string{"BN254", "BLS12_381"} {
-		for i, preImage := range preImageTestVectors {
+		for i, preImageTestVector := range preImageTestVectors {
 			var n big.Int
 			n.SetString(circuitHashTestVectors[curve][i], 10)
 			circuitHash := n.Bytes()
@@ -173,8 +177,8 @@ func TestMimc(t *testing.T) {
 mimc %sg1
 
 byte 0x%x
-==`, preImage, curve, circuitHash)
-			if shouldSucceed[i] {
+==`, preImageTestVector.PreImage, curve, circuitHash)
+			if preImageTestVector.ShouldSucceed {
 				testAccepts(t, progText, 11)
 			} else {
 				testPanics(t, progText, 11)
