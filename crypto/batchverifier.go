@@ -50,13 +50,19 @@ import (
 )
 
 // BatchVerifier enqueues signatures to be validated in batch.
-type BatchVerifier struct {
+type BatchVerifier interface {
+	EnqueueSignature(sigVerifier SignatureVerifier, message Hashable, sig Signature)
+	GetNumberOfEnqueuedSignatures() int
+	Verify() error
+	VerifyWithFeedback() (failed []bool, err error)
+}
+
+type cgoBatchVerifier struct {
 	messages   []Hashable          // contains a slice of messages to be hashed. Each message is varible length
 	publicKeys []SignatureVerifier // contains a slice of public keys. Each individual public key is 32 bytes.
 	signatures []Signature         // contains a slice of signatures keys. Each individual signature is 64 bytes.
+	useSingle  bool
 }
-
-const minBatchVerifierAlloc = 16
 
 // Batch verifications errors
 var (
@@ -69,27 +75,31 @@ func ed25519_randombytes_unsafe(p unsafe.Pointer, len C.size_t) {
 	RandBytes(randBuf)
 }
 
-// MakeBatchVerifier creates a BatchVerifier instance.
-func MakeBatchVerifier() *BatchVerifier {
+const minBatchVerifierAlloc = 16
+const useSingleVerifierDefault = true
+
+// MakeBatchVerifier creates a BatchVerifier instance with the provided options.
+func MakeBatchVerifier() BatchVerifier {
 	return MakeBatchVerifierWithHint(minBatchVerifierAlloc)
 }
 
-// MakeBatchVerifierWithHint creates a BatchVerifier instance. This function pre-allocates
+// MakeBatchVerifierWithHint creates a cgoBatchVerifier instance. This function pre-allocates
 // amount of free space to enqueue signatures without expanding
-func MakeBatchVerifierWithHint(hint int) *BatchVerifier {
+func MakeBatchVerifierWithHint(hint int) BatchVerifier {
 	// preallocate enough storage for the expected usage. We will reallocate as needed.
 	if hint < minBatchVerifierAlloc {
 		hint = minBatchVerifierAlloc
 	}
-	return &BatchVerifier{
+	return &cgoBatchVerifier{
 		messages:   make([]Hashable, 0, hint),
 		publicKeys: make([]SignatureVerifier, 0, hint),
 		signatures: make([]Signature, 0, hint),
+		useSingle:  useSingleVerifierDefault,
 	}
 }
 
 // EnqueueSignature enqueues a signature to be enqueued
-func (b *BatchVerifier) EnqueueSignature(sigVerifier SignatureVerifier, message Hashable, sig Signature) {
+func (b *cgoBatchVerifier) EnqueueSignature(sigVerifier SignatureVerifier, message Hashable, sig Signature) {
 	// do we need to reallocate ?
 	if len(b.messages) == cap(b.messages) {
 		b.expand()
@@ -99,7 +109,7 @@ func (b *BatchVerifier) EnqueueSignature(sigVerifier SignatureVerifier, message 
 	b.signatures = append(b.signatures, sig)
 }
 
-func (b *BatchVerifier) expand() {
+func (b *cgoBatchVerifier) expand() {
 	messages := make([]Hashable, len(b.messages), len(b.messages)*2)
 	publicKeys := make([]SignatureVerifier, len(b.publicKeys), len(b.publicKeys)*2)
 	signatures := make([]Signature, len(b.signatures), len(b.signatures)*2)
@@ -112,12 +122,12 @@ func (b *BatchVerifier) expand() {
 }
 
 // GetNumberOfEnqueuedSignatures returns the number of signatures currently enqueued into the BatchVerifier
-func (b *BatchVerifier) GetNumberOfEnqueuedSignatures() int {
+func (b *cgoBatchVerifier) GetNumberOfEnqueuedSignatures() int {
 	return len(b.messages)
 }
 
 // Verify verifies that all the signatures are valid. in that case nil is returned
-func (b *BatchVerifier) Verify() error {
+func (b *cgoBatchVerifier) Verify() error {
 	_, err := b.VerifyWithFeedback()
 	return err
 }
@@ -126,9 +136,13 @@ func (b *BatchVerifier) Verify() error {
 // if all sigs are valid, nil will be returned for err (failed will have all false)
 // if some signatures are invalid, true will be set in failed at the corresponding indexes, and
 // ErrBatchVerificationFailed for err
-func (b *BatchVerifier) VerifyWithFeedback() (failed []bool, err error) {
+func (b *cgoBatchVerifier) VerifyWithFeedback() (failed []bool, err error) {
 	if len(b.messages) == 0 {
 		return nil, nil
+	}
+
+	if b.useSingle {
+		return b.singleVerify()
 	}
 
 	const estimatedMessageSize = 64
@@ -141,17 +155,33 @@ func (b *BatchVerifier) VerifyWithFeedback() (failed []bool, err error) {
 		msgLengths = append(msgLengths, uint64(len(messages)-lenWas))
 		lenWas = len(messages)
 	}
-	allValid, failed := batchVerificationImpl(messages, msgLengths, b.publicKeys, b.signatures)
+	allValid, failed := cgoBatchVerificationImpl(messages, msgLengths, b.publicKeys, b.signatures)
 	if allValid {
 		return failed, nil
 	}
 	return failed, ErrBatchHasFailedSigs
 }
 
-// batchVerificationImpl invokes the ed25519 batch verification algorithm.
+func (b *cgoBatchVerifier) singleVerify() (failed []bool, err error) {
+	failed = make([]bool, len(b.messages))
+	var containsFailed bool
+
+	for i := range b.messages {
+		failed[i] = !ed25519Verify(ed25519PublicKey(b.publicKeys[i]), HashRep(b.messages[i]), ed25519Signature(b.signatures[i]))
+		if failed[i] {
+			containsFailed = true
+		}
+	}
+	if containsFailed {
+		return failed, ErrBatchHasFailedSigs
+	}
+	return failed, nil
+}
+
+// cgoBatchVerificationImpl invokes the ed25519 batch verification algorithm.
 // it returns true if all the signatures were authentically signed by the owners
 // otherwise, returns false, and sets the indexes of the failed sigs in failed
-func batchVerificationImpl(messages []byte, msgLengths []uint64, publicKeys []SignatureVerifier, signatures []Signature) (allSigsValid bool, failed []bool) {
+func cgoBatchVerificationImpl(messages []byte, msgLengths []uint64, publicKeys []SignatureVerifier, signatures []Signature) (allSigsValid bool, failed []bool) {
 
 	numberOfSignatures := len(msgLengths)
 	valid := make([]C.int, numberOfSignatures)

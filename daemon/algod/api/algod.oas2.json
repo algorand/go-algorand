@@ -344,6 +344,73 @@
         }
       ]
     },
+    "/v2/accounts/{address}/assets": {
+      "get": {
+        "description": "Lookup an account's asset holdings.",
+        "tags": [
+          "public",
+          "experimental"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Get a list of assets held by an account, inclusive of asset params.",
+        "operationId": "AccountAssetsInformation",
+        "parameters": [
+          {
+            "pattern": "[A-Z0-9]{58}",
+            "type": "string",
+            "description": "An account public key",
+            "name": "address",
+            "in": "path",
+            "required": true
+          },
+          {
+            "$ref": "#/parameters/limit"
+          },
+          {
+            "$ref": "#/parameters/next"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/AccountAssetsInformationResponse"
+          },
+          "400": {
+            "description": "Malformed address",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "type": "string",
+          "name": "address",
+          "in": "path",
+          "required": true
+        }
+      ]
+    },
     "/v2/accounts/{address}/applications/{application-id}": {
       "get": {
         "description": "Given a specific account public key and application ID, this call returns the account's application local state and global state (AppLocalState and AppParams, if either exists). Global state will only be returned if the provided address is the application's creator.",
@@ -786,6 +853,62 @@
           "required": true
         }
       ]
+    },
+    "/v2/blocks/{round}/logs": {
+      "get": {
+        "tags": [
+          "public",
+          "nonparticipating"
+        ],
+        "description": "Get all of the logs from outer and inner app calls in the given round",
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Get all of the logs from outer and inner app calls in the given round",
+        "operationId": "GetBlockLogs",
+        "parameters": [
+          {
+            "minimum": 0,
+            "type": "integer",
+            "description": "The round from which to fetch block log information.",
+            "name": "round",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/BlockLogsResponse"
+          },
+          "400": {
+            "description": "Bad Request - Non integer number",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Nonexistent block ",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        }
+      }
     },
     "/v2/ledger/supply": {
       "get": {
@@ -2983,6 +3106,10 @@
         "participation": {
           "$ref": "#/definitions/AccountParticipation"
         },
+        "incentive-eligible": {
+          "description": "Whether or not the account can receive block incentives if its balance is in range at proposal time.",
+          "type": "boolean"
+        },
         "pending-rewards": {
           "description": "amount of MicroAlgos of pending rewards in this account.",
           "type": "integer"
@@ -3016,6 +3143,31 @@
           "description": "\\[spend\\] the address against which signing should be checked. If empty, the address of the current account is used. This field can be updated in any transaction by setting the RekeyTo field.",
           "type": "string",
           "x-algorand-format": "Address"
+        },
+        "last-proposed": {
+          "description": "The round in which this account last proposed the block.",
+          "type": "integer"
+        },
+        "last-heartbeat": {
+          "description": "The round in which this account last went online, or explicitly renewed their online status.",
+          "type": "integer"
+        }
+      }
+    },
+    "AccountAssetHolding": {
+      "description": "AccountAssetHolding describes the account's asset holding and asset parameters (if either exist) for a specific asset ID.",
+      "type": "object",
+      "required": [
+        "asset-holding"
+      ],
+      "properties": {
+        "asset-holding": {
+          "description": "\\[asset\\] Details about the asset held by this account.\n\nThe raw account uses `AssetHolding` for this type.",
+          "$ref": "#/definitions/AssetHolding"
+        },
+        "asset-params": {
+          "description": "\\[apar\\] parameters of the asset held by this account.\n\nThe raw account uses `AssetParams` for this type.",
+          "$ref": "#/definitions/AssetParams"
         }
       }
     },
@@ -4449,6 +4601,33 @@
           }
         }
       }
+    },
+    "AppCallLogs": {
+      "description": "The logged messages from an app call along with the app ID and outer transaction ID. Logs appear in the same order that they were emitted.",
+      "type": "object",
+      "required": [
+        "logs",
+        "application-index",
+        "txId"
+      ],
+      "properties": {
+        "logs": {
+          "description": "An array of logs",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "byte"
+          }
+        },
+        "application-index": {
+          "description": "The application from which the logs were generated",
+          "type": "integer"
+        },
+        "txId": {
+          "description": "The transaction ID of the outer app call that lead to these logs",
+          "type": "string"
+        }
+      }
     }
   },
   "parameters": {
@@ -4719,6 +4898,31 @@
           "created-asset": {
             "description": "\\[apar\\] parameters of the asset created by this account.\n\nThe raw account uses `AssetParams` for this type.",
             "$ref": "#/definitions/AssetParams"
+          }
+        }
+      }
+    },
+    "AccountAssetsInformationResponse": {
+      "description": "AccountAssetsInformationResponse contains a list of assets held by an account.",
+      "schema": {
+        "type": "object",
+        "required": [
+          "round"
+        ],
+        "properties": {
+          "round": {
+            "description": "The round for which this information is relevant.",
+            "type": "integer"
+          },
+          "next-token": {
+            "description": "Used for pagination, when making another request provide this token with the next parameter.",
+            "type": "string"
+          },
+          "asset-holdings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/AccountAssetHolding"
+            }
           }
         }
       }
@@ -5102,6 +5306,23 @@
           },
           "initial-states": {
             "$ref": "#/definitions/SimulateInitialStates"
+          }
+        }
+      }
+    },
+    "BlockLogsResponse": {
+      "description": "All logs emitted in the given round. Each app call, whether top-level or inner, that contains logs results in a separate AppCallLogs object. Therefore there may be multiple AppCallLogs with the same application ID and outer transaction ID in the event of multiple inner app calls to the same app. App calls with no logs are not included in the response. AppCallLogs are returned in the same order that their corresponding app call appeared in the block (pre-order traversal of inner app calls)",
+      "schema": {
+        "type": "object",
+        "required": [
+          "logs"
+        ],
+        "properties": {
+          "logs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/AppCallLogs"
+            }
           }
         }
       }

@@ -111,12 +111,18 @@ type VotingData struct {
 type OnlineAccountData struct {
 	MicroAlgosWithRewards MicroAlgos
 	VotingData
+	IncentiveEligible bool
 }
 
 // AccountData contains the data associated with a given address.
 //
-// This includes the account balance, cryptographic public keys,
-// consensus delegation status, asset data, and application data.
+// This includes the account balance, cryptographic public keys, consensus
+// status, asset params (for assets made by this account), asset holdings (for
+// assets the account is opted into), and application data (globals if account
+// created, locals if opted-in).  This can be thought of as the fully "hydrated"
+// structure and could take an arbitrary number of db queries to fill. As such,
+// it is mostly used only for shuttling complete accounts into the ledger
+// (genesis, catchpoints, REST API). And a lot of legacy tests.
 type AccountData struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
@@ -172,6 +178,13 @@ type AccountData struct {
 	VoteLastValid   Round  `codec:"voteLst"`
 	VoteKeyDilution uint64 `codec:"voteKD"`
 
+	// LastProposed is the last round that the account is known to have
+	// proposed. It is updated at the start of the _next_ round.
+	LastProposed Round `codec:"lpr"`
+	// LastHeartbeat is the last round an account has indicated it is ready to
+	// vote by sending a heartbeat transaction, signed by its partkey.
+	LastHeartbeat Round `codec:"lhb"`
+
 	// If this account created an asset, AssetParams stores
 	// the parameters defining that asset.  The params are indexed
 	// by the Index of the AssetID; the Creator is this account's address.
@@ -208,6 +221,11 @@ type AccountData struct {
 	// A transaction may change an account's AuthAddr to "re-key" the account.
 	// This allows key rotation, changing the members in a multisig, etc.
 	AuthAddr Address `codec:"spend"`
+
+	// IncentiveEligible indicates whether the account came online with the
+	// extra fee required to be eligible for block incentives. At proposal time,
+	// balance limits must also be met to receive incentives.
+	IncentiveEligible bool `codec:"ie"`
 
 	// AppLocalStates stores the local states associated with any applications
 	// that this account has opted in to.
@@ -465,7 +483,7 @@ func (u AccountData) WithUpdatedRewards(proto config.ConsensusParams, rewardsLev
 // MinBalance computes the minimum balance requirements for an account based on
 // some consensus parameters. MinBalance should correspond roughly to how much
 // storage the account is allowed to store on disk.
-func (u AccountData) MinBalance(proto *config.ConsensusParams) (res MicroAlgos) {
+func (u AccountData) MinBalance(proto *config.ConsensusParams) MicroAlgos {
 	return MinBalance(
 		proto,
 		uint64(len(u.Assets)),
@@ -486,7 +504,7 @@ func MinBalance(
 	totalAppParams uint64, totalAppLocalStates uint64,
 	totalExtraAppPages uint64,
 	totalBoxes uint64, totalBoxBytes uint64,
-) (res MicroAlgos) {
+) MicroAlgos {
 	var min uint64
 
 	// First, base MinBalance
@@ -521,8 +539,7 @@ func MinBalance(
 	boxByteCost := MulSaturate(proto.BoxByteMinBalance, totalBoxBytes)
 	min = AddSaturate(min, boxByteCost)
 
-	res.Raw = min
-	return res
+	return MicroAlgos{min}
 }
 
 // OnlineAccountData returns subset of AccountData as OnlineAccountData data structure.
@@ -543,6 +560,7 @@ func (u AccountData) OnlineAccountData() OnlineAccountData {
 			VoteLastValid:   u.VoteLastValid,
 			VoteKeyDilution: u.VoteKeyDilution,
 		},
+		IncentiveEligible: u.IncentiveEligible,
 	}
 }
 

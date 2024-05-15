@@ -20,12 +20,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
+	"math/bits"
 	"sync"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/verify"
@@ -716,19 +719,19 @@ func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, evalOpts 
 
 	poolAddr := eval.prevHeader.RewardsPool
 	// get the reward pool account data without any rewards
-	incentivePoolData, _, err := l.LookupWithoutRewards(eval.prevHeader.Round, poolAddr)
+	rewardsPoolData, _, err := l.LookupWithoutRewards(eval.prevHeader.Round, poolAddr)
 	if err != nil {
 		return nil, err
 	}
 
 	// this is expected to be a no-op, but update the rewards on the rewards pool if it was configured to receive rewards ( unlike mainnet ).
-	incentivePoolData = incentivePoolData.WithUpdatedRewards(prevProto, eval.prevHeader.RewardsLevel)
+	rewardsPoolData = rewardsPoolData.WithUpdatedRewards(prevProto, eval.prevHeader.RewardsLevel)
 
 	if evalOpts.Generate {
 		if eval.proto.SupportGenesisHash {
 			eval.block.BlockHeader.GenesisHash = eval.genesisHash
 		}
-		eval.block.BlockHeader.RewardsState = eval.prevHeader.NextRewardsState(hdr.Round, proto, incentivePoolData.MicroAlgos, prevTotals.RewardUnits(), logging.Base())
+		eval.block.BlockHeader.RewardsState = eval.prevHeader.NextRewardsState(hdr.Round, proto, rewardsPoolData.MicroAlgos, prevTotals.RewardUnits(), logging.Base())
 	}
 	// set the eval state with the current header
 	eval.state = makeRoundCowState(base, eval.block.BlockHeader, proto, eval.prevHeader.TimeStamp, prevTotals, evalOpts.PaysetHint)
@@ -740,7 +743,7 @@ func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, evalOpts 
 		}
 
 		// Check that the rewards rate, level and residue match expected values
-		expectedRewardsState := eval.prevHeader.NextRewardsState(hdr.Round, proto, incentivePoolData.MicroAlgos, prevTotals.RewardUnits(), logging.Base())
+		expectedRewardsState := eval.prevHeader.NextRewardsState(hdr.Round, proto, rewardsPoolData.MicroAlgos, prevTotals.RewardUnits(), logging.Base())
 		if eval.block.RewardsState != expectedRewardsState {
 			return nil, fmt.Errorf("bad rewards state: %+v != %+v", eval.block.RewardsState, expectedRewardsState)
 		}
@@ -751,7 +754,7 @@ func StartEvaluator(l LedgerForEvaluator, hdr bookkeeping.BlockHeader, evalOpts 
 		}
 	}
 
-	// Withdraw rewards from the incentive pool
+	// Withdraw rewards from the pool
 	var ot basics.OverflowTracker
 	rewardsPerUnit := ot.Sub(eval.block.BlockHeader.RewardsLevel, eval.prevHeader.RewardsLevel)
 	if ot.Overflowed {
@@ -1165,12 +1168,27 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 	return nil
 }
 
+func (cs *roundCowState) takeFee(tx *transactions.Transaction, senderRewards *basics.MicroAlgos, ep *logic.EvalParams) error {
+	err := cs.Move(tx.Sender, ep.Specials.FeeSink, tx.Fee, senderRewards, nil)
+	if err != nil {
+		return err
+	}
+	// transactions from FeeSink should be exceedingly rare. But we can't count
+	// them in feesCollected because there are no net algos added to the Sink
+	if tx.Sender == ep.Specials.FeeSink {
+		return nil
+	}
+	// overflow impossible, since these sum the fees actually paid and max supply is uint64
+	cs.feesCollected, _ = basics.OAddA(cs.feesCollected, tx.Fee)
+	return nil
+
+}
+
 // applyTransaction changes the balances according to this transaction.
 func (eval *BlockEvaluator) applyTransaction(tx transactions.Transaction, cow *roundCowState, evalParams *logic.EvalParams, gi int, ctr uint64) (ad transactions.ApplyData, err error) {
 	params := cow.ConsensusParams()
 
-	// move fee to pool
-	err = cow.Move(tx.Sender, eval.specials.FeeSink, tx.Fee, &ad.SenderRewards, nil)
+	err = cow.takeFee(&tx, &ad.SenderRewards, evalParams)
 	if err != nil {
 		return
 	}
@@ -1272,7 +1290,18 @@ func (eval *BlockEvaluator) endOfBlock() error {
 			eval.block.TxnCounter = 0
 		}
 
-		eval.generateExpiredOnlineAccountsList()
+		if eval.proto.Payouts.Enabled {
+			// Determine how much the proposer should be paid. Agreement code
+			// can cancel this payment by zero'ing the ProposerPayout if the
+			// proposer is found to be ineligible. See WithProposer().
+			eval.block.FeesCollected = eval.state.feesCollected
+			eval.block.BlockHeader.ProposerPayout, err = eval.proposerPayout()
+			if err != nil {
+				return err
+			}
+		}
+
+		eval.generateKnockOfflineAccountsList()
 
 		if eval.proto.StateProofInterval > 0 {
 			var basicStateProof bookkeeping.StateProofTrackingData
@@ -1288,13 +1317,17 @@ func (eval *BlockEvaluator) endOfBlock() error {
 		}
 	}
 
-	err := eval.validateExpiredOnlineAccounts()
-	if err != nil {
+	if err := eval.validateExpiredOnlineAccounts(); err != nil {
+		return err
+	}
+	if err := eval.resetExpiredOnlineAccountsParticipationKeys(); err != nil {
 		return err
 	}
 
-	err = eval.resetExpiredOnlineAccountsParticipationKeys()
-	if err != nil {
+	if err := eval.validateAbsentOnlineAccounts(); err != nil {
+		return err
+	}
+	if err := eval.suspendAbsentAccounts(); err != nil {
 		return err
 	}
 
@@ -1314,6 +1347,10 @@ func (eval *BlockEvaluator) endOfBlock() error {
 		}
 		if eval.block.TxnCounter != expectedTxnCount {
 			return fmt.Errorf("txn count wrong: %d != %d", eval.block.TxnCounter, expectedTxnCount)
+		}
+
+		if err := eval.validateForPayouts(); err != nil {
+			return err
 		}
 
 		expectedVoters, expectedVotersWeight, err2 := eval.stateProofVotersAndTotal()
@@ -1358,8 +1395,15 @@ func (eval *BlockEvaluator) endOfBlock() error {
 		}
 	}
 
-	err = eval.state.CalculateTotals()
-	if err != nil {
+	if err := eval.performPayout(); err != nil {
+		return err
+	}
+
+	if err := eval.recordProposal(); err != nil {
+		return err
+	}
+
+	if err := eval.state.CalculateTotals(); err != nil {
 		return err
 	}
 
@@ -1370,41 +1414,265 @@ func (eval *BlockEvaluator) endOfBlock() error {
 	return nil
 }
 
-// generateExpiredOnlineAccountsList creates the list of the expired participation accounts by traversing over the
-// modified accounts in the state deltas and testing if any of them needs to be reset.
-func (eval *BlockEvaluator) generateExpiredOnlineAccountsList() {
+func (eval *BlockEvaluator) validateForPayouts() error {
+	if !eval.proto.Payouts.Enabled {
+		if !eval.block.FeesCollected.IsZero() {
+			return fmt.Errorf("feesCollected %d present when payouts disabled", eval.block.FeesCollected.Raw)
+		}
+		if !eval.block.Proposer().IsZero() {
+			return fmt.Errorf("proposer %v present when payouts disabled", eval.block.Proposer())
+		}
+		if !eval.block.ProposerPayout().IsZero() {
+			return fmt.Errorf("payout %d present when payouts disabled", eval.block.ProposerPayout().Raw)
+		}
+		return nil
+	}
+
+	if eval.block.FeesCollected != eval.state.feesCollected {
+		return fmt.Errorf("fees collected wrong: %v != %v", eval.block.FeesCollected, eval.state.feesCollected)
+	}
+
+	// agreement will check that the payout is zero if the proposer is
+	// ineligible, but we must check that it is correct if non-zero. We
+	// allow it to be too low. A proposer can be algruistic.
+	expectedPayout, err := eval.proposerPayout()
+	if err != nil {
+		return err
+	}
+	payout := eval.block.ProposerPayout()
+	if payout.Raw > expectedPayout.Raw {
+		return fmt.Errorf("proposal wants %d payout, %d is allowed", payout.Raw, expectedPayout.Raw)
+	}
+
+	// agreement will check that the proposer is correct (we can't because
+	// we don't see the bundle), but agreement allows the proposer to be set
+	// even if Payouts is not enabled (and unset any time).  So make sure
+	// it's set only if it should be.
+	if !eval.generate { // if generating, proposer is set later by agreement
+		proposer := eval.block.Proposer()
+		if proposer.IsZero() {
+			return fmt.Errorf("proposer missing when payouts enabled")
+		}
+		// a closed account cannot get payout
+		if !payout.IsZero() {
+			prp, err := eval.state.Get(proposer, false)
+			if err != nil {
+				return err
+			}
+			if prp.IsZero() {
+				return fmt.Errorf("proposer %v is closed but expects payout %d", proposer, payout.Raw)
+			}
+		}
+	}
+	return nil
+}
+
+func (eval *BlockEvaluator) performPayout() error {
+	proposer := eval.block.Proposer()
+	// The proposer won't be present yet when generating a block, nor before enabled
+	if proposer.IsZero() {
+		return nil
+	}
+
+	payout := eval.block.ProposerPayout()
+
+	if !payout.IsZero() {
+		err := eval.state.Move(eval.block.FeeSink, proposer, payout, nil, nil)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (eval *BlockEvaluator) recordProposal() error {
+	proposer := eval.block.Proposer()
+	// The proposer won't be present yet when generating a block, nor before enabled
+	if proposer.IsZero() {
+		return nil
+	}
+
+	prp, err := eval.state.Get(proposer, false)
+	if err != nil {
+		return err
+	}
+	// Record the LastProposed round, except in the unlikely case that a
+	// proposer has closed their account, but is still voting (it takes
+	// 320 rounds to be effective). Recording would prevent GC.
+	if !prp.IsZero() {
+		prp.LastProposed = eval.Round()
+	}
+	// An account could propose, even while suspended, because of the
+	// 320 round lookback.  Doing so is evidence the account is
+	// operational. Unsuspend. But the account will remain not
+	// IncentiveElgible until they keyreg again with the extra fee.
+	if prp.Suspended() {
+		prp.Status = basics.Online
+	}
+	err = eval.state.Put(proposer, prp)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (eval *BlockEvaluator) proposerPayout() (basics.MicroAlgos, error) {
+	incentive, _ := basics.NewPercent(eval.proto.Payouts.Percent).DivvyAlgos(eval.block.FeesCollected)
+	total, o := basics.OAddA(incentive, eval.block.Bonus)
+	if o {
+		return basics.MicroAlgos{}, fmt.Errorf("payout overflowed adding bonus incentive %d %d", incentive, eval.block.Bonus)
+	}
+
+	sink, err := eval.state.lookup(eval.block.FeeSink)
+	if err != nil {
+		return basics.MicroAlgos{}, err
+	}
+	available := sink.AvailableBalance(&eval.proto)
+	return basics.MinA(total, available), nil
+}
+
+type challenge struct {
+	// round is when the challenge occurred. 0 means this is not a challenge.
+	round basics.Round
+	// accounts that match the first `bits` of `seed` must propose or heartbeat to stay online
+	seed committee.Seed
+	bits int
+}
+
+// generateKnockOfflineAccountsList creates the lists of expired or absent
+// participation accounts by traversing over the modified accounts in the state
+// deltas and testing if any of them needs to be reset/suspended. Expiration
+// takes precedence - if an account is expired, it should be knocked offline and
+// key material deleted. If it is only suspended, the key material will remain.
+func (eval *BlockEvaluator) generateKnockOfflineAccountsList() {
 	if !eval.generate {
 		return
 	}
-	// We are going to find the list of modified accounts and the
-	// current round that is being evaluated.
-	// Then we are going to go through each modified account and
-	// see if it meets the criteria for adding it to the expired
-	// participation accounts list.
-	modifiedAccounts := eval.state.modifiedAccounts()
-	currentRound := eval.Round()
+	current := eval.Round()
 
-	expectedMaxNumberOfExpiredAccounts := eval.proto.MaxProposedExpiredOnlineAccounts
+	maxExpirations := eval.proto.MaxProposedExpiredOnlineAccounts
+	maxSuspensions := eval.proto.Payouts.MaxMarkAbsent
 
-	for i := 0; i < len(modifiedAccounts) && len(eval.block.ParticipationUpdates.ExpiredParticipationAccounts) < expectedMaxNumberOfExpiredAccounts; i++ {
-		accountAddr := modifiedAccounts[i]
-		acctDelta, found := eval.state.mods.Accts.GetData(accountAddr)
+	updates := &eval.block.ParticipationUpdates
+
+	ch := activeChallenge(&eval.proto, uint64(eval.Round()), eval.state)
+
+	for _, accountAddr := range eval.state.modifiedAccounts() {
+		acctData, found := eval.state.mods.Accts.GetData(accountAddr)
 		if !found {
 			continue
 		}
 
-		// true if the account is online
-		isOnline := acctDelta.Status == basics.Online
-		// true if the accounts last valid round has passed
-		pastCurrentRound := acctDelta.VoteLastValid < currentRound
+		// Regardless of being online or suspended, if voting data exists, the
+		// account can be expired to remove it.  This means an offline account
+		// can be expired (because it was already suspended).
+		if !acctData.VoteID.IsEmpty() {
+			expiresBeforeCurrent := acctData.VoteLastValid < current
+			if expiresBeforeCurrent &&
+				len(updates.ExpiredParticipationAccounts) < maxExpirations {
+				updates.ExpiredParticipationAccounts = append(
+					updates.ExpiredParticipationAccounts,
+					accountAddr,
+				)
+				continue // if marking expired, do not also suspend
+			}
+		}
 
-		if isOnline && pastCurrentRound {
-			eval.block.ParticipationUpdates.ExpiredParticipationAccounts = append(
-				eval.block.ParticipationUpdates.ExpiredParticipationAccounts,
-				accountAddr,
-			)
+		if len(updates.AbsentParticipationAccounts) >= maxSuspensions {
+			continue // no more room (don't break the loop, since we may have more expiries)
+		}
+
+		if acctData.Status == basics.Online {
+			lastSeen := max(acctData.LastProposed, acctData.LastHeartbeat)
+			if isAbsent(eval.state.prevTotals.Online.Money, acctData.MicroAlgos, lastSeen, current) ||
+				failsChallenge(ch, accountAddr, lastSeen) {
+				updates.AbsentParticipationAccounts = append(
+					updates.AbsentParticipationAccounts,
+					accountAddr,
+				)
+			}
 		}
 	}
+}
+
+// delete me in Go 1.21
+func max(a, b basics.Round) basics.Round {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+// bitsMatch checks if the first n bits of two byte slices match. Written to
+// work on arbitrary slices, but we expect that n is small. Only user today
+// calls with n=5.
+func bitsMatch(a, b []byte, n int) bool {
+	// Ensure n is a valid number of bits to compare
+	if n < 0 || n > len(a)*8 || n > len(b)*8 {
+		return false
+	}
+
+	// Compare entire bytes when n is bigger than 8
+	for i := 0; i < n/8; i++ {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	remaining := n % 8
+	if remaining == 0 {
+		return true
+	}
+	return bits.LeadingZeros8(a[n/8]^b[n/8]) >= remaining
+}
+
+func isAbsent(totalOnlineStake basics.MicroAlgos, acctStake basics.MicroAlgos, lastSeen basics.Round, current basics.Round) bool {
+	// Don't consider accounts that were online when payouts went into effect as
+	// absent.  They get noticed the next time they propose or keyreg, which
+	// ought to be soon, if they are high stake or want to earn incentives.
+	if lastSeen == 0 {
+		return false
+	}
+	// See if the account has exceeded 10x their expected observation interval.
+	allowableLag, o := basics.Muldiv(10, totalOnlineStake.Raw, acctStake.Raw)
+	if o {
+		// This can't happen with 10B total possible stake, but if we imagine
+		// another algorand network with huge possible stake, this seems reasonable.
+		allowableLag = math.MaxInt64 / acctStake.Raw
+	}
+	return lastSeen+basics.Round(allowableLag) < current
+}
+
+type headerSource interface {
+	BlockHdr(round basics.Round) (bookkeeping.BlockHeader, error)
+}
+
+func activeChallenge(proto *config.ConsensusParams, current uint64, headers headerSource) challenge {
+	rules := proto.Payouts
+	// are challenges active?
+	if rules.ChallengeInterval == 0 || current < rules.ChallengeInterval {
+		return challenge{}
+	}
+	lastChallenge := current - (current % rules.ChallengeInterval)
+	// challenge is in effect if we're after one grace period, but before the 2nd ends.
+	if current <= lastChallenge+rules.ChallengeGracePeriod ||
+		current > lastChallenge+2*rules.ChallengeGracePeriod {
+		return challenge{}
+	}
+	round := basics.Round(lastChallenge)
+	challengeHdr, err := headers.BlockHdr(round)
+	if err != nil {
+		panic(err)
+	}
+	challengeProto := config.Consensus[challengeHdr.CurrentProtocol]
+	// challenge is not considered if rules have changed since that round
+	if challengeProto.Payouts != rules {
+		return challenge{}
+	}
+	return challenge{round, challengeHdr.Seed, rules.ChallengeBits}
+}
+
+func failsChallenge(ch challenge, address basics.Address, lastSeen basics.Round) bool {
+	return ch.round != 0 && bitsMatch(ch.seed[:], address[:], ch.bits) && lastSeen < ch.round
 }
 
 // validateExpiredOnlineAccounts tests the expired online accounts specified in ExpiredParticipationAccounts, and verify
@@ -1427,7 +1695,7 @@ func (eval *BlockEvaluator) validateExpiredOnlineAccounts() error {
 	// are unique.  We make this map to keep track of previously seen address
 	addressSet := make(map[basics.Address]bool, lengthOfExpiredParticipationAccounts)
 
-	// Validate that all expired accounts meet the current criteria
+	// Validate that all proposed accounts have expired keys
 	currentRound := eval.Round()
 	for _, accountAddr := range eval.block.ParticipationUpdates.ExpiredParticipationAccounts {
 
@@ -1444,18 +1712,62 @@ func (eval *BlockEvaluator) validateExpiredOnlineAccounts() error {
 			return fmt.Errorf("endOfBlock was unable to retrieve account %v : %w", accountAddr, err)
 		}
 
-		// true if the account is online
-		isOnline := acctData.Status == basics.Online
-		// true if the accounts last valid round has passed
-		pastCurrentRound := acctData.VoteLastValid < currentRound
-
-		if !isOnline {
-			return fmt.Errorf("endOfBlock found %v was not online but %v", accountAddr, acctData.Status)
+		if acctData.VoteID.IsEmpty() {
+			return fmt.Errorf("endOfBlock found expiration candidate %v had no vote key", accountAddr)
 		}
 
-		if !pastCurrentRound {
+		if acctData.VoteLastValid >= currentRound {
 			return fmt.Errorf("endOfBlock found %v round (%d) was not less than current round (%d)", accountAddr, acctData.VoteLastValid, currentRound)
 		}
+	}
+	return nil
+}
+
+// validateAbsentOnlineAccounts tests the accounts specified in
+// AbsentParticipationAccounts, and verifies that they need to be suspended
+func (eval *BlockEvaluator) validateAbsentOnlineAccounts() error {
+	if !eval.validate {
+		return nil
+	}
+	maxSuspensions := eval.proto.Payouts.MaxMarkAbsent
+	suspensionCount := len(eval.block.ParticipationUpdates.AbsentParticipationAccounts)
+
+	// If the length of the array is strictly greater than our max then we have an error.
+	// This works when the expected number of accounts is zero (i.e. it is disabled) as well
+	if suspensionCount > maxSuspensions {
+		return fmt.Errorf("length of absent accounts (%d) was greater than expected (%d)",
+			suspensionCount, maxSuspensions)
+	}
+
+	// For consistency with expired account handling, we preclude duplicates
+	addressSet := make(map[basics.Address]bool, suspensionCount)
+
+	ch := activeChallenge(&eval.proto, uint64(eval.Round()), eval.state)
+
+	for _, accountAddr := range eval.block.ParticipationUpdates.AbsentParticipationAccounts {
+		if _, exists := addressSet[accountAddr]; exists {
+			return fmt.Errorf("duplicate address found: %v", accountAddr)
+		}
+		addressSet[accountAddr] = true
+
+		acctData, err := eval.state.lookup(accountAddr)
+		if err != nil {
+			return fmt.Errorf("unable to retrieve proposed absent account %v : %w", accountAddr, err)
+		}
+
+		if acctData.Status != basics.Online {
+			return fmt.Errorf("proposed absent account %v was %v, not Online", accountAddr, acctData.Status)
+		}
+
+		lastSeen := max(acctData.LastProposed, acctData.LastHeartbeat)
+		if isAbsent(eval.state.prevTotals.Online.Money, acctData.MicroAlgos, lastSeen, eval.Round()) {
+			continue // ok. it's "normal absent"
+		}
+		if failsChallenge(ch, accountAddr, lastSeen) {
+			continue // ok. it's "challenge absent"
+		}
+		return fmt.Errorf("proposed absent account %v is not absent in %d, %d",
+			accountAddr, acctData.LastProposed, acctData.LastHeartbeat)
 	}
 	return nil
 }
@@ -1490,6 +1802,24 @@ func (eval *BlockEvaluator) resetExpiredOnlineAccountsParticipationKeys() error 
 	return nil
 }
 
+// suspendAbsentAccounts suspends the proposed list of absent accounts.
+func (eval *BlockEvaluator) suspendAbsentAccounts() error {
+	for _, addr := range eval.block.ParticipationUpdates.AbsentParticipationAccounts {
+		acct, err := eval.state.lookup(addr)
+		if err != nil {
+			return err
+		}
+
+		acct.Suspend()
+
+		err = eval.state.putAccount(addr, acct)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // GenerateBlock produces a complete block from the BlockEvaluator.  This is
 // used during proposal to get an actual block that will be proposed, after
 // feeding in tentative transactions into this block evaluator.
@@ -1497,7 +1827,7 @@ func (eval *BlockEvaluator) resetExpiredOnlineAccountsParticipationKeys() error 
 // After a call to GenerateBlock, the BlockEvaluator can still be used to
 // accept transactions.  However, to guard against reuse, subsequent calls
 // to GenerateBlock on the same BlockEvaluator will fail.
-func (eval *BlockEvaluator) GenerateBlock() (*ledgercore.ValidatedBlock, error) {
+func (eval *BlockEvaluator) GenerateBlock(addrs []basics.Address) (*ledgercore.UnfinishedBlock, error) {
 	if !eval.generate {
 		logging.Base().Panicf("GenerateBlock() called but generate is false")
 	}
@@ -1511,7 +1841,17 @@ func (eval *BlockEvaluator) GenerateBlock() (*ledgercore.ValidatedBlock, error) 
 		return nil, err
 	}
 
-	vb := ledgercore.MakeValidatedBlock(eval.block, eval.state.deltas())
+	// look up set of participation accounts passed to GenerateBlock (possible proposers)
+	finalAccounts := make(map[basics.Address]ledgercore.AccountData, len(addrs))
+	for i := range addrs {
+		acct, err := eval.state.lookup(addrs[i])
+		if err != nil {
+			return nil, err
+		}
+		finalAccounts[addrs[i]] = acct
+	}
+
+	vb := ledgercore.MakeUnfinishedBlock(eval.block, eval.state.deltas(), finalAccounts)
 	eval.blockGenerated = true
 	proto, ok := config.Consensus[eval.block.BlockHeader.CurrentProtocol]
 	if !ok {

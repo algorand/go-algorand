@@ -166,7 +166,7 @@ func TestAccountDBTxTailLoad(t *testing.T) {
 	}
 }
 
-func TestRemoveOfflineStateProofID(t *testing.T) {
+func TestRemoveStrayStateProofID(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	accts := ledgertesting.RandomAccounts(20, true)
@@ -176,11 +176,10 @@ func TestRemoveOfflineStateProofID(t *testing.T) {
 		accts[addr] = acct
 
 		expectedAcct := acct
-		if acct.Status != basics.Online {
+		if acct.SelectionID.IsEmpty() {
 			expectedAcct.StateProofID = merklesignature.Commitment{}
 		}
 		expectedAccts[addr] = expectedAcct
-
 	}
 
 	buildDB := func(accounts map[basics.Address]basics.AccountData) (db.Pair, *sql.Tx) {
@@ -211,7 +210,7 @@ func TestRemoveOfflineStateProofID(t *testing.T) {
 	defer dbs.Close()
 	defer tx.Rollback()
 
-	// make second copy of DB to prepare exepected/fixed merkle trie
+	// make second copy of DB to prepare expected/fixed merkle trie
 	expectedDBs, expectedTx := buildDB(expectedAccts)
 	defer expectedDBs.Close()
 	defer expectedTx.Rollback()
@@ -237,8 +236,8 @@ func TestRemoveOfflineStateProofID(t *testing.T) {
 			var ba trackerdb.BaseAccountData
 			err = protocol.Decode(encodedAcctData, &ba)
 			require.NoError(t, err)
-			if expected && ba.Status != basics.Online {
-				require.Equal(t, merklesignature.Commitment{}, ba.StateProofID)
+			if expected && ba.SelectionID.IsEmpty() {
+				require.Zero(t, ba.StateProofID)
 			}
 			addHash := trackerdb.AccountHashBuilderV6(addr, &ba, encodedAcctData)
 			added, err := trie.Add(addHash)
@@ -287,8 +286,8 @@ func TestRemoveOfflineStateProofID(t *testing.T) {
 		var ba trackerdb.BaseAccountData
 		err = protocol.Decode(encodedAcctData, &ba)
 		require.NoError(t, err)
-		if ba.Status != basics.Online {
-			require.True(t, ba.StateProofID.IsEmpty())
+		if ba.SelectionID.IsEmpty() {
+			require.Zero(t, ba.StateProofID)
 		}
 	}
 }

@@ -231,3 +231,42 @@ func TestGetValueForLabels(t *testing.T) {
 	c.Inc(labels2)
 	require.Equal(t, uint64(1), c.GetUint64ValueForLabels(labels2))
 }
+
+func TestCounterLabels(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	m := MakeCounter(MetricName{Name: "testname", Description: "testhelp"})
+	m.Deregister(nil)
+
+	m.AddUint64(1, map[string]string{"a": "b"})
+	m.AddUint64(10, map[string]string{"c": "d"})
+	m.AddUint64(1, map[string]string{"a": "b"})
+	m.AddUint64(5, nil)
+
+	require.Equal(t, uint64(2), m.GetUint64ValueForLabels(map[string]string{"a": "b"}))
+	require.Equal(t, uint64(10), m.GetUint64ValueForLabels(map[string]string{"c": "d"}))
+
+	buf := strings.Builder{}
+	m.WriteMetric(&buf, "")
+	res := buf.String()
+	require.Contains(t, res, `testname{a="b"} 2`)
+	require.Contains(t, res, `testname{c="d"} 10`)
+	require.Contains(t, res, `testname 5`)
+	require.Equal(t, 1, strings.Count(res, "# HELP testname testhelp"))
+	require.Equal(t, 1, strings.Count(res, "# TYPE testname counter"))
+
+	buf = strings.Builder{}
+	m.WriteMetric(&buf, `p1=v1,p2="v2"`)
+	res = buf.String()
+	require.Contains(t, res, `testname{p1=v1,p2="v2",a="b"} 2`)
+	require.Contains(t, res, `testname{p1=v1,p2="v2",c="d"} 10`)
+
+	m = MakeCounter(MetricName{Name: "testname2", Description: "testhelp2"})
+	m.Deregister(nil)
+
+	m.AddUint64(101, nil)
+	buf = strings.Builder{}
+	m.WriteMetric(&buf, "")
+	res = buf.String()
+	require.Contains(t, res, `testname2 101`)
+}
