@@ -12,12 +12,13 @@ Also works with bdevscripts for cluster tests since it uses heapWatch.py for met
 
 import argparse
 from datetime import datetime
+from enum import Enum
 import glob
 import logging
 import os
 import re
 import time
-from typing import Dict, Iterable, Tuple
+from typing import Dict, Iterable, List, Union
 import sys
 from urllib.parse import urlparse
 
@@ -52,13 +53,53 @@ def gather_metrics_files_by_nick(metrics_files: Iterable[str]) -> Dict[str, Dict
     return tf_inventory_path, filesByNick
 
 
-TYPE_GAUGE = 0
-TYPE_COUNTER = 1
+class MetricType(Enum):
+    GAUGE = 0
+    COUNTER = 1
 
-def parse_metrics(fin: Iterable[str], nick: str, metrics_names: set=None, diff: bool=None) -> Tuple[Dict[str, float], Dict[str, int]]:
+class Metric:
+    """Metric with tags"""
+    def __init__(self, metric_name: str, type: MetricType, value: Union[int, float]):
+        full_name = metric_name.strip()
+        self.name = full_name
+        self.value = value
+        self.type = type
+        self.tags: Dict[str, str] = {}
+
+        det_idx = self.name.find('{')
+        if det_idx != -1:
+            self.name = self.name[:det_idx]
+            # ensure that the last character is '}'
+            idx = full_name.index('}')
+            if idx != len(full_name) - 1:
+                raise ValueError(f'Invalid metric name: {full_name}')
+            raw_tags = full_name[full_name.find('{')+1:full_name.find('}')]
+            tags = raw_tags.split(',')
+            for tag in tags:
+                key, value = tag.split('=')
+                self.tags[key] = value
+
+    def short_name(self):
+        return self.name
+
+    def __str__(self):
+        return self.string()
+
+    def string(self):
+        result = self.name
+        if self.tags:
+            result += '{' + ','.join([f'{k}={v}' for k, v in sorted(self.tags.items())]) + '}'
+        return result
+
+    def add_tag(self, key: str, value: str):
+        self.tags[key] = value
+
+
+def parse_metrics(
+    fin: Iterable[str], nick: str, metrics_names: set=None, diff: bool=None
+) -> Dict[str, List[Metric]]:
     """Parse metrics file and return dicts of values and types"""
     out = {}
-    types = {}
     try:
         last_type = None
         for line in fin:
@@ -71,9 +112,9 @@ def parse_metrics(fin: Iterable[str], nick: str, metrics_names: set=None, diff: 
                 if line.startswith('# TYPE'):
                     tpe = line.split()[-1]
                     if tpe == 'gauge':
-                        last_type = TYPE_GAUGE
+                        last_type = MetricType.GAUGE
                     elif tpe == 'counter':
-                        last_type = TYPE_COUNTER
+                        last_type = MetricType.COUNTER
                 continue
             m = metric_line_re.match(line)
             if m:
@@ -84,25 +125,23 @@ def parse_metrics(fin: Iterable[str], nick: str, metrics_names: set=None, diff: 
                 name = ab[0]
                 value = num(ab[1])
 
-            det_idx = name.find('{')
-            if det_idx != -1:
-                name = name[:det_idx]
-            fullname = f'{name}{{n={nick}}}'
-            if not metrics_names or name in metrics_names:
-                out[fullname] = value
-                types[fullname] = last_type
+            metric = Metric(name, last_type, value)
+            metric.add_tag('n', nick)
+            if not metrics_names or metric.name in metrics_names:
+                if metric.name not in out:
+                    out[metric.name] = [metric]
+                else:
+                    out[metric.name].append(metric)
     except:
         print(f'An exception occurred in parse_metrics: {sys.exc_info()}')
         pass
     if diff and metrics_names and len(metrics_names) == 2 and len(out) == 2:
         m = list(out.keys())
         name = f'{m[0]}_-_{m[1]}'
-        new_out = {name: out[m[0]] - out[m[1]]}
-        new_types = {name: TYPE_GAUGE}
-        out = new_out
-        types = new_types
+        metric = Metric(name, MetricType.GAUGE, out[m[0]].value - out[m[1]].value)
+        out = [{name: metric}]
 
-    return out, types
+    return out
 
 
 def main():
@@ -218,34 +257,44 @@ def main():
     }
     raw_series = {}
     for nick, items in filesByNick.items():
-        active_metrics = set()
+        active_metrics = {}
         for dt, metrics_file in items.items():
             data['time'].append(dt)
             with open(metrics_file, 'rt') as f:
-                metrics, types = parse_metrics(f, nick, metrics_names, args.diff)
-                for metric_name, metric_value in metrics.items():
-                    raw_value = metric_value
-                    if metric_name not in data:
-                        data[metric_name] = []
-                        raw_series[metric_name] = []
-                    if types[metric_name] == TYPE_COUNTER:
-                        if len(raw_series[metric_name]) > 0:
-                            metric_value = (metric_value - raw_series[metric_name][-1]) / (dt - data['time'][-2]).total_seconds()
-                        else:
-                            metric_value = 0
-                    data[metric_name].append(metric_value)
-                    raw_series[metric_name].append(raw_value)
+                metrics = parse_metrics(f, nick, metrics_names, args.diff)
+                for metric_name, metrics_seq in metrics.items():
+                    active_metric_names = []
+                    for metric in metrics_seq:
+                        raw_value = metric.value
+                        full_name = metric.string()
+                        if full_name not in data:
+                            data[full_name] = []
+                            raw_series[full_name] = []
+                        metric_value = metric.value
+                        if metric.type == MetricType.COUNTER:
+                            if len(raw_series[full_name]) > 0:
+                                metric_value = (metric_value - raw_series[full_name][-1]) / (dt - data['time'][-2]).total_seconds()
+                            else:
+                                metric_value = 0
 
-                    active_metrics.add(metric_name)
+                        data[full_name].append(metric_value)
+                        raw_series[full_name].append(raw_value)
 
-        for i, metric in enumerate(sorted(active_metrics)):
-            fig.append_trace(go.Scatter(
-                x=data['time'],
-                y=data[metric],
-                name=metric,
-                mode='lines+markers',
-                line=dict(width=1),
-            ), i+1, 1)
+                        active_metric_names.append(full_name)
+
+                    active_metric_names.sort()
+                    active_metrics[metric_name] = active_metric_names
+
+        for i, metric_pair in enumerate(sorted(active_metrics.items())):
+            metric_name, metric_fullnames = metric_pair
+            for metric_fullname in metric_fullnames:
+                fig.append_trace(go.Scatter(
+                    x=data['time'],
+                    y=data[metric_fullname],
+                    name=metric_fullname,
+                    mode='lines+markers',
+                    line=dict(width=1),
+                ), i+1, 1)
 
     if args.save:
         if args.save == 'html':
