@@ -47,6 +47,9 @@ func opMimc(cx *EvalContext) error {
 
 	last := len(cx.Stack) - 1
 	data := cx.Stack[last].Bytes
+	if len(data) == 0 {
+		return fmt.Errorf("the input data cannot be empty")
+	}
 	if len(data)%32 != 0 {
 		return fmt.Errorf("the input data must be a multiple of 32 bytes")
 	}
