@@ -248,6 +248,11 @@ type LedgerForLogic interface {
 	Round() basics.Round
 	PrevTimestamp() int64
 
+	// These are simplifications of the underlying Ledger methods that take a
+	// round argument. They implicitly use agreement's BalanceRound (320 back).
+	AgreementData(addr basics.Address) (basics.OnlineAccountData, error)
+	OnlineStake() (basics.MicroAlgos, error)
+
 	AssetHolding(addr basics.Address, assetIdx basics.AssetIndex) (basics.AssetHolding, error)
 	AssetParams(aidx basics.AssetIndex) (basics.AssetParams, basics.Address, error)
 	AppParams(aidx basics.AppIndex) (basics.AppParams, basics.Address, error)
@@ -3736,7 +3741,7 @@ func (cx *EvalContext) globalFieldToValue(fs globalFieldSpec) (sv stackValue, er
 		return sv, fmt.Errorf("invalid global field %s", fs.field)
 	}
 
-	if fs.ftype.AVMType != sv.avmType() {
+	if err == nil && fs.ftype.AVMType != sv.avmType() {
 		return sv, fmt.Errorf("%s expected field type is %s but got %s", fs.field, fs.ftype, sv.avmType())
 	}
 
@@ -5019,9 +5024,59 @@ func opAcctParamsGet(cx *EvalContext) error {
 		value.Uint = account.TotalBoxes
 	case AcctTotalBoxBytes:
 		value.Uint = account.TotalBoxBytes
+	case AcctIncentiveEligible:
+		value = boolToSV(account.IncentiveEligible)
+	case AcctLastHeartbeat:
+		value.Uint = uint64(account.LastHeartbeat)
+	case AcctLastProposed:
+		value.Uint = uint64(account.LastProposed)
+	default:
+		return fmt.Errorf("invalid account field %s", fs.field)
 	}
 	cx.Stack[last] = value
 	cx.Stack = append(cx.Stack, boolToSV(account.MicroAlgos.Raw > 0))
+	return nil
+}
+
+func opVoterParamsGet(cx *EvalContext) error {
+	last := len(cx.Stack) - 1 // acct
+	addr, _, err := cx.accountReference(cx.Stack[last])
+	if err != nil {
+		return err
+	}
+
+	paramField := VoterParamsField(cx.program[cx.pc+1])
+	fs, ok := voterParamsFieldSpecByField(paramField)
+	if !ok || fs.version > cx.version {
+		return fmt.Errorf("invalid voter_params_get field %d", paramField)
+	}
+
+	account, err := cx.Ledger.AgreementData(addr)
+	if err != nil {
+		return err
+	}
+
+	var value stackValue
+
+	switch fs.field {
+	case VoterBalance:
+		value.Uint = account.MicroAlgosWithRewards.Raw
+	case VoterIncentiveEligible:
+		value = boolToSV(account.IncentiveEligible)
+	default:
+		return fmt.Errorf("invalid voter field %s", fs.field)
+	}
+	cx.Stack[last] = value
+	cx.Stack = append(cx.Stack, boolToSV(account.MicroAlgosWithRewards.Raw > 0))
+	return nil
+}
+
+func opOnlineStake(cx *EvalContext) error {
+	amount, err := cx.Ledger.OnlineStake()
+	if err != nil {
+		return err
+	}
+	cx.Stack = append(cx.Stack, stackValue{Uint: amount.Raw})
 	return nil
 }
 
