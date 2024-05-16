@@ -277,7 +277,7 @@ func verifyProposer(p unauthenticatedProposal, ledger LedgerReader) error {
 // the header lacks it, the returned balanceRecord will be the right record.
 func payoutEligible(rnd basics.Round, proposer basics.Address, ledger LedgerReader, cparams config.ConsensusParams) (bool, basics.OnlineAccountData, error) {
 	// Check the balance from the agreement round
-	balanceRound := balanceRound(rnd, cparams)
+	balanceRound := BalanceRound(rnd, cparams)
 	balanceRecord, err := ledger.LookupAgreement(balanceRound, proposer)
 	if err != nil {
 		return false, basics.OnlineAccountData{}, err

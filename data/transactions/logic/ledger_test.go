@@ -216,6 +216,12 @@ func (l *Ledger) PrevTimestamp() int64 {
 	return int64(rand.Uint32() + 1)
 }
 
+// OnlineStake returns the online stake that applies to the latest round (so
+// it's actually the online stake from 320 rounds ago)
+func (l *Ledger) OnlineStake() (basics.MicroAlgos, error) {
+	return basics.Algos(3333), nil
+}
+
 // BlockHdr returns the block header for the given round, if it is available
 func (l *Ledger) BlockHdr(round basics.Round) (bookkeeping.BlockHeader, error) {
 	hdr := bookkeeping.BlockHeader{}
@@ -307,6 +313,31 @@ func (l *Ledger) AccountData(addr basics.Address) (ledgercore.AccountData, error
 			TotalBoxes:    uint64(boxesTotal),
 			TotalBoxBytes: uint64(boxBytesTotal),
 		},
+	}, nil
+}
+
+// AgreementData is not a very high-fidelity fake. There's no time delay, it
+// just returns the data that's in AccountData, reshaped into an
+// OnlineAccountData.
+func (l *Ledger) AgreementData(addr basics.Address) (basics.OnlineAccountData, error) {
+	ad, err := l.AccountData(addr)
+	if err != nil {
+		return basics.OnlineAccountData{}, err
+	}
+	// You might imagine this conversion function exists. It does, but requires
+	// rewards handling because OnlineAccountData should have rewards
+	// paid. Here, we ignore that for simple tests.
+	return basics.OnlineAccountData{
+		MicroAlgosWithRewards: ad.MicroAlgos,
+		VotingData: basics.VotingData{
+			VoteID:          ad.VoteID,
+			SelectionID:     ad.SelectionID,
+			StateProofID:    ad.StateProofID,
+			VoteFirstValid:  ad.VoteFirstValid,
+			VoteLastValid:   ad.VoteLastValid,
+			VoteKeyDilution: ad.VoteKeyDilution,
+		},
+		IncentiveEligible: ad.IncentiveEligible,
 	}, nil
 }
 
