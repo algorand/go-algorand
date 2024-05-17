@@ -77,7 +77,8 @@ type statCounter struct {
 
 // WriteMetric outputs Prometheus metrics for all labels/values in statCounter
 func (st *statCounter) WriteMetric(buf *strings.Builder, parentLabels string) {
-	counter := makeCounter(MetricName{st.name, st.description})
+	name := sanitizePrometheusName(st.name)
+	counter := makeCounter(MetricName{name, st.description})
 	for i := 0; i < len(st.labels); i++ {
 		counter.AddUint64(uint64(st.values[i]), st.labels[i])
 	}
@@ -103,7 +104,8 @@ type statDistribution struct {
 
 // WriteMetric outputs Prometheus metrics for all labels/values in statCounter
 func (st *statDistribution) WriteMetric(buf *strings.Builder, parentLabels string) {
-	gauge := makeGauge(MetricName{st.name, st.description})
+	name := sanitizePrometheusName(st.name)
+	gauge := makeGauge(MetricName{name, st.description})
 	for i := 0; i < len(st.labels); i++ {
 		gauge.SetLabels(uint64(st.values[i]), st.labels[i])
 	}
