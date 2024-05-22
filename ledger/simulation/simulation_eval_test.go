@@ -8952,9 +8952,15 @@ int 1
 			Type:     protocol.PaymentTx,
 			Sender:   sender.Addr,
 			Receiver: sender.Addr,
+			RekeyTo:  sender.Addr,
+		})
+		pay3 := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   sender.Addr,
+			Receiver: sender.Addr,
 		})
 
-		txgroup := txntest.Group(&pay0, &pay1, &appCall, &pay2)
+		txgroup := txntest.Group(&pay0, &pay1, &appCall, &pay2, &pay3)
 
 		if signPayAfterOuterRekey {
 			txgroup[1] = txgroup[1].Txn.Sign(sender.Sk)
@@ -8975,6 +8981,7 @@ int 1
 
 		payAfterOuterRekey := result.TxnGroups[0].Txns[1]
 		payAfterInnerRekey := result.TxnGroups[0].Txns[3]
+		finalTxn := result.TxnGroups[0].Txns[4]
 
 		if !signPayAfterInnerRekey && !signPayAfterOuterRekey {
 			require.Empty(t, result.TxnGroups[0].FailureMessage)
@@ -8982,10 +8989,12 @@ int 1
 			// Ensure the txns have the correct auth addr
 			require.Equal(t, basics.Address{}, payAfterOuterRekey.Txn.SignedTxn.AuthAddr)
 			require.Equal(t, basics.Address{}, payAfterInnerRekey.Txn.SignedTxn.AuthAddr)
+			require.Equal(t, basics.Address{}, finalTxn.Txn.SignedTxn.AuthAddr)
 
 			// Ensure the FixedSigner has been set correctly
 			require.Equal(t, other.Addr, payAfterOuterRekey.FixedSigner, other.Addr)
 			require.Equal(t, innerRekeyAddr, payAfterInnerRekey.FixedSigner)
+			require.Empty(t, finalTxn.FixedSigner)
 		}
 
 		if signPayAfterOuterRekey {

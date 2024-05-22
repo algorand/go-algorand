@@ -349,10 +349,18 @@ func (s Simulator) Simulate(simulateRequest Request) (Result, error) {
 
 	// Set the FixedSigner for each transaction that had a signer change during evaluation
 	for i := range simulatorTracer.result.TxnGroups[0].Txns {
-		resultSigner := simulatorTracer.result.TxnGroups[0].Txns[i].Txn.AuthAddr
+		givenSigner := simulatorTracer.result.TxnGroups[0].Txns[i].Txn.AuthAddr
 		tracerSigner := simulatorTracer.groups[0][i].SignedTxn.AuthAddr
 
-		if resultSigner != tracerSigner {
+		tracerSignerIsSender := tracerSigner == simulatorTracer.groups[0][i].SignedTxn.Txn.Sender
+		givenSignerIsEmpty := givenSigner == (basics.Address{})
+
+		// If the tracer signer is the sender and the given signer is empty, we can skip setting the FixedSigner
+		if tracerSignerIsSender && givenSignerIsEmpty {
+			continue
+		}
+
+		if givenSigner != tracerSigner {
 			simulatorTracer.result.TxnGroups[0].Txns[i].FixedSigner = tracerSigner
 		}
 	}
