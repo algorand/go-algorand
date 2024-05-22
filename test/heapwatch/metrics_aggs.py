@@ -1,20 +1,29 @@
-"""
-Tool for metrics files visualization.
-Expects metrics files in format <node nickname>.<date>_<time>.metrics like Primary.20230804_182932.metrics
-Works with metrics collected by heapWatch.py.
-
-Example usage for local net:
-python3 ./test/heapwatch/heapWatch.py --period 10 --metrics --blockinfo --runtime 20m -o nodedata ~/networks/mylocalnet/Primary
-python3 ./test/heapwatch/metrics_viz.py -d nodedata algod_transaction_messages_handled algod_tx_pool_count algod_transaction_messages_backlog_size algod_go_memory_classes_total_bytes
-
-Also works with bdevscripts for cluster tests since it uses heapWatch.py for metrics collection.
-"""
-
+#!/usr/bin/env python3
+# Copyright (C) 2019-2024 Algorand, Inc.
+# This file is part of go-algorand
+#
+# go-algorand is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# go-algorand is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
+#
+###
+#
+# Process and aggregate /metrics data captured by heapWatch.py
+# Useful for metrics with labels and bandwidth analysis.
+#
 import argparse
 import glob
 import logging
 import os
-import re
 import time
 import sys
 
@@ -22,6 +31,7 @@ import dash
 from dash import dcc, html
 import plotly.graph_objs as go
 from plotly.subplots import make_subplots
+
 
 from metrics_lib import MetricType, parse_metrics, gather_metrics_files_by_nick
 
@@ -31,17 +41,17 @@ logger = logging.getLogger(__name__)
 def main():
     os.environ['TZ'] = 'UTC'
     time.tzset()
-    default_img_filename = 'metrics_viz.png'
-    default_html_filename = 'metrics_viz.html'
+    default_img_filename = 'metrics_aggs.png'
+    default_html_filename = 'metrics_aggs.html'
 
     ap = argparse.ArgumentParser()
     ap.add_argument('metrics_names', nargs='+', default=None, help='metric name(s) to track')
     ap.add_argument('-d', '--dir', type=str, default=None, help='dir path to find /*.metrics in')
     ap.add_argument('-l', '--list-nodes', default=False, action='store_true', help='list available node names with metrics')
+    ap.add_argument('-t', '--tags', action='append', default=[], help='tag/label pairs in a=b format to aggregate by, may be repeated. Empty means aggregation by metric name')
     ap.add_argument('--nick-re', action='append', default=[], help='regexp to filter node names, may be repeated')
     ap.add_argument('--nick-lre', action='append', default=[], help='label:regexp to filter node names, may be repeated')
     ap.add_argument('-s', '--save', type=str, choices=['png', 'html'], help=f'save plot to \'{default_img_filename}\' or \'{default_html_filename}\' file instead of showing it')
-    ap.add_argument('--diff', action='store_true', default=None, help='diff two gauge metrics instead of plotting their values. Requires two metrics names to be set')
     ap.add_argument('--verbose', default=False, action='store_true')
 
     args = ap.parse_args()
@@ -50,9 +60,14 @@ def main():
     else:
         logging.basicConfig(level=logging.INFO)
 
-    if not args.dir:
-        logging.error('need at least one dir set with -d/--dir')
-        return 1
+    tags = {}
+    if args.tags:
+        for tag in args.tags:
+            if '=' not in tag:
+                raise (f'Invalid tag: {tag}')
+            k, v = tag.split('=', 1)
+            tags[k] = v
+    tag_keys = set(tags.keys())
 
     metrics_files = sorted(glob.glob(os.path.join(args.dir, '*.metrics')))
     metrics_files.extend(glob.glob(os.path.join(args.dir, 'terraform-inventory.host')))
@@ -71,7 +86,7 @@ def main():
         ])
     )
     metrics_names = set(args.metrics_names)
-    nrows = 1 if args.diff and len(args.metrics_names) == 2 else len(metrics_names)
+    nrows = len(metrics_names)
 
     fig = make_subplots(
         rows=nrows, cols=1,
@@ -83,7 +98,7 @@ def main():
         'l': 30, 'r': 10, 'b': 10, 't': 20
     }
     fig['layout']['height'] = 500 * nrows
-    # fig.update_layout(template="plotly_dark")
+
 
     for nick, files_by_date in filesByNick.items():
         active_metrics = {}
@@ -94,38 +109,44 @@ def main():
         for dt, metrics_file in files_by_date.items():
             data['time'].append(dt)
             with open(metrics_file, 'rt') as f:
-                metrics = parse_metrics(f, nick, metrics_names, args.diff)
+                metrics = parse_metrics(f, nick, metrics_names)
                 for metric_name, metrics_seq in metrics.items():
                     active_metric_names = []
+                    raw_value = 0
                     for metric in metrics_seq:
-                        raw_value = metric.value
+                        if metric.type != MetricType.COUNTER:
+                            raise RuntimeError('Only COUNT metrics are supported')
+                        if tags is None or tags is not None and metric.has_tags(tag_keys, tags):
+                            raw_value += metric.value
+                            full_name = metric.string(set(tag_keys).union({'n'}))
 
-                        full_name = metric.string()
-                        if full_name not in data:
-                            # handle gaps in data, sometimes metric file might miss a value
-                            # but the chart requires matching x and y series (time and metric value)
-                            # data is what does into the chart, and raw_series is used to calculate
-                            data[full_name] = [0] * len(files_by_date)
-                            raw_series[full_name] = []
-                            raw_times[full_name] = []
+                    if full_name is None:
+                        continue
 
-                        metric_value = metric.value
-                        if metric.type == MetricType.COUNTER:
-                            if len(raw_series[full_name]) > 0 and len(raw_times[full_name]) > 0:
-                                metric_value = (metric_value - raw_series[full_name][-1]) / (dt - raw_times[full_name][-1]).total_seconds()
-                            else:
-                                metric_value = 0
+                    if full_name not in data:
+                        # handle gaps in data, sometimes metric file might miss a value
+                        # but the chart requires matching x and y series (time and metric value)
+                        # data is what does into the chart, and raw_series is used to calculate
+                        data[full_name] = [0] * len(files_by_date)
+                        raw_series[full_name] = []
+                        raw_times[full_name] = []
 
-                        data[full_name][idx] = metric_value
-                        raw_series[full_name].append(raw_value)
-                        raw_times[full_name].append(dt)
+                    metric_value = raw_value
+                    if len(raw_series[full_name]) > 0 and len(raw_times[full_name]) > 0:
+                        metric_value = (metric_value - raw_series[full_name][-1]) / (dt - raw_times[full_name][-1]).total_seconds()
+                    else:
+                        metric_value = 0
 
-                        active_metric_names.append(full_name)
+                    data[full_name][idx] = metric_value
+                    raw_series[full_name].append(raw_value)
+                    raw_times[full_name].append(dt)
+
+                    active_metric_names.append(full_name)
 
                     active_metric_names.sort()
-                    active_metrics[metric_name] = active_metric_names
+                    active_metrics[full_name] = active_metric_names
             idx += 1
-
+        
         for i, metric_pair in enumerate(sorted(active_metrics.items())):
             metric_name, metric_fullnames = metric_pair
             for metric_fullname in metric_fullnames:
@@ -148,7 +169,6 @@ def main():
     else:
         fig.show()
 
-    # app.run_server(debug=True)
     return 0
 
 if __name__ == '__main__':

@@ -22,7 +22,6 @@
 # Generate text report on bandwidth in and out of relays/PN/NPN
 
 import argparse
-import configparser
 import contextlib
 import csv
 import glob
@@ -36,42 +35,10 @@ import statistics
 import sys
 import time
 
+from metrics_lib import num, hunum, terraform_inventory_ip_not_names, \
+    metric_line_re, test_metric_line_re
+
 logger = logging.getLogger(__name__)
-
-def num(x):
-    if '.' in x:
-        return float(x)
-    return int(x)
-
-def hunum(x):
-    if x >= 10000000000:
-        return '{:.1f}G'.format(x / 1000000000.0)
-    if x >= 1000000000:
-        return '{:.2f}G'.format(x / 1000000000.0)
-    if x >= 10000000:
-        return '{:.1f}M'.format(x / 1000000.0)
-    if x >= 1000000:
-        return '{:.2f}M'.format(x / 1000000.0)
-    if x >= 10000:
-        return '{:.1f}k'.format(x / 1000.0)
-    if x >= 1000:
-        return '{:.2f}k'.format(x / 1000.0)
-    return '{:.2f}x'.format(x)
-
-metric_line_re = re.compile(r'(\S+\{[^}]*\})\s+(.*)')
-
-def test_metric_line_re():
-    testlines = (
-        ('algod_network_connections_dropped_total{reason="write err"} 1', 1),
-        #('algod_network_sent_bytes_MS 274992', 274992), # handled by split
-    )
-    for line, n in testlines:
-        try:
-            m = metric_line_re.match(line)
-            assert int(m.group(2)) == n
-        except:
-            logger.error('failed on line %r', line, exc_info=True)
-            raise
 
 def parse_metrics(fin):
     out = dict()
@@ -375,21 +342,6 @@ label_colors = {
     'pn': (0,0,1.0),
     'npn': (.7,.7,0),
 }
-
-def terraform_inventory_ip_not_names(tf_inventory_path):
-    """return ip to nickname mapping"""
-    tf_inventory = configparser.ConfigParser(allow_no_value=True)
-    tf_inventory.read(tf_inventory_path)
-    ip_to_name = {}
-    for k, sub in tf_inventory.items():
-        if k.startswith('name_'):
-            for ip in sub:
-                if ip in ip_to_name:
-                    logger.warning('ip %r already named %r, also got %r', ip, ip_to_name[ip], k)
-                ip_to_name[ip] = k
-    #logger.debug('names: %r', sorted(ip_to_name.values()))
-    #logger.debug('ip to name %r', ip_to_name)
-    return ip_to_name
 
 def main():
     os.environ['TZ'] = 'UTC'
