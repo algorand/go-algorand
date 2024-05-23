@@ -8,10 +8,10 @@ P2P network topology extraction script from node.log files.
 cd nodelog
 find . -name 'nodelog.tar.gz' -print | xargs -I{} tar -zxf {}
 ```
-4. Run this script `python3 topology-extract-p2p.py nodelog`
-5. Save the result json and copy run topology-viz.py with it.
+4. Run this script `python3 topology-extract-p2p.py -o top.json nodelog`
+5. Run the visualizer `topology-viz.py top.json`
 """
-
+import argparse
 import json
 import re
 import os
@@ -21,8 +21,14 @@ import sys
 node_pattern = r"P2P host created: peer ID (\w{52})"
 edge_pattern = r"Made outgoing connection to peer (\w{52})"
 
+ap = argparse.ArgumentParser()
+ap.add_argument('log_dir_path', help='logs directory path')
+ap.add_argument('-o', '--output', type=argparse.FileType('wt', encoding='utf-8'), help=f'save topology to the file specified instead of showing it')
+
+args = ap.parse_args()
+
 # Directory containing log files
-log_dir_path = sys.argv[1]
+log_dir_path = args.log_dir_path
 
 nodes = []
 edges = []
@@ -36,6 +42,7 @@ for filename in os.listdir(log_dir_path):
             mapped = mapped.replace('relay', 'R')
             mapped = mapped.replace('nonParticipatingNode', 'NPN')
             mapped = mapped.replace('node', 'N')
+            node_id = None
             for line in file:
                 # Check if line contains relevant substrings before parsing as JSON
                 if "P2P host created" in line or "Made outgoing connection to peer" in line:
@@ -54,7 +61,12 @@ for filename in os.listdir(log_dir_path):
                         match = re.search(edge_pattern, data["msg"])
                         if match:
                             target_node_id = match.group(1)
-                            source_node_id = re.findall(r"/p2p/(\w{52})", data["local"])[0]
+                            match = re.findall(r"/p2p/(\w{52})", data["local"])
+                            if match:
+                                source_node_id = match[0]
+                            else:
+                                print('WARN: no local addr set', data, file=sys.stderr)
+                                source_node_id = node_id
                             edges.append((source_node_id, target_node_id))
 
 result = {
@@ -62,5 +74,9 @@ result = {
     "nodes": nodes,
     "edges": edges
 }
-json.dump(result, sys.stdout, indent=2)
-print(file=sys.stdout)
+
+if args.output:
+    json.dump(result, args.output, indent=2)
+else:
+    json.dump(result, sys.stdout, indent=2)
+    print(file=sys.stdout)

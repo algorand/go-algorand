@@ -2,16 +2,20 @@
 P2P network topology visualization script.
 See topology-extract-p2p[-ws].py for details.
 """
-
+import argparse
 import json
 import sys
 
 import gravis as gv
 import networkx as nx
 
-topology_filename = sys.argv[1]
+ap = argparse.ArgumentParser()
+ap.add_argument('topology_filename', help='topology json file')
+ap.add_argument('-o', '--output', type=argparse.FileType('wt', encoding='utf-8'), help=f'save plot to the file specified instead of showing it')
 
-with open(topology_filename, 'rt') as f:
+args = ap.parse_args()
+
+with open(args.topology_filename, 'rt') as f:
     topology = json.load(f)
 
 # Create a new directed graph
@@ -62,4 +66,10 @@ res = gv.d3(
     edge_curvature=0.1
     )
 
-res.display()
+if not args.output:
+    res.display()
+    sys.exit(0)
+
+# Save to file
+data = res.to_html()
+args.output.write(data)

@@ -804,7 +804,10 @@ func (n *P2PNetwork) wsStreamHandler(ctx context.Context, p2pPeer peer.ID, strea
 		event = "ConnectedIn"
 		msg = "Accepted incoming connection from peer %s"
 	}
-	localAddr, _ := n.Address()
+	localAddr, has := n.Address()
+	if !has {
+		n.log.Warn("Could not get local address")
+	}
 	n.log.With("event", event).With("remote", addr).With("local", localAddr).Infof(msg, p2pPeer.String())
 
 	if n.log.GetLevel() >= logging.Debug {

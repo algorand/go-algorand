@@ -8,25 +8,30 @@ WSNet network topology extraction script from node.log files.
 cd nodelog
 find . -name 'nodelog.tar.gz' -print | xargs -I{} tar -zxf {}
 ```
-4. Run this script `python3 topology-extract-ws.py ../terraform-inventory.json nodelog`
-5. Save the result json and copy run topology-viz.py with it.
+4. Run this script `python3 topology-extract-ws.py -o top.json -i ../terraform-inventory.json nodelog`
+5. Run the visualizer `topology-viz.py top.json`
 """
-
+import argparse
 import json
-import re
 import os
 import sys
 
+ap = argparse.ArgumentParser()
+ap.add_argument('log_dir_path', help='logs directory path')
+ap.add_argument('-i', '--inventory-file', type=argparse.FileType('rt', encoding='utf-8'), required=True, help='terraform inventory file path')
+ap.add_argument('-o', '--output', type=argparse.FileType('wt', encoding='utf-8'), help=f'save topology to the file specified instead of showing it')
+
+args = ap.parse_args()
+
 # Directory containing log files
-inventory_file = sys.argv[1]
-log_dir_path = sys.argv[2]
+log_dir_path = args.log_dir_path
+inventory_file = args.inventory_file
 
 nodes = []
 edges = []
 mapping = {}
 
-with open(inventory_file, 'rt') as f:
-    inventory = json.load(f)
+inventory = json.load(inventory_file)
 
 ip_to_name = {}
 for k, v in inventory.items():
@@ -83,5 +88,9 @@ result = {
     "nodes": nodes,
     "edges": edges
 }
-json.dump(result, sys.stdout, indent=2)
-print(file=sys.stdout)
+
+if args.output:
+    json.dump(result, args.output, indent=2)
+else:
+    json.dump(result, sys.stdout, indent=2)
+    print(file=sys.stdout)
