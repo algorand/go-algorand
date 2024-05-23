@@ -230,6 +230,9 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 			NodeExporterPath:          cfg.NodeExporterPath,
 		})
 
+	var algodEnvironmentAlgodVersionCounter = metrics.MakeCounter(metrics.MetricName{Name: "algod_environment_algod_version", Description: "Version of the Algod binary"})
+	algodEnvironmentAlgodVersionCounter.Inc(map[string]string{"version": config.GetAlgorandVersionAndBuild()})
+
 	var serverNode ServerNode
 	if cfg.EnableFollowMode {
 		var followerNode *node.AlgorandFollowerNode
