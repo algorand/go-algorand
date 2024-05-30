@@ -486,6 +486,19 @@ func (rt *RequestTracker) GetRequestConnection(request *http.Request) net.Conn {
 }
 
 func (rt *RequestTracker) ServeHTTP(response http.ResponseWriter, request *http.Request) {
+	// Check if the number of connections exceeds the limit
+	rt.httpConnectionsMu.Lock()
+	acceptedConnections := len(rt.acceptedConnections)
+	rt.httpConnectionsMu.Unlock()
+
+	healthServiceInvocation := request.URL.Path == "/status"
+
+	if acceptedConnections > rt.config.IncomingConnectionsLimit && !healthServiceInvocation {
+		// If the limit is exceeded, reject the connection
+		response.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
+
 	// this function is called only after we've fetched all the headers. on some malicious clients, this could get delayed, so we can't rely on the
 	// tcp-connection established time to align with current time.
 	rateLimitingWindowStartTime := time.Now().Add(-time.Duration(rt.config.ConnectionsRateLimitingWindowSeconds) * time.Second)
@@ -532,7 +545,7 @@ func (rt *RequestTracker) ServeHTTP(response http.ResponseWriter, request *http.
 	rateLimitedRemoteHost := (!rt.config.DisableLocalhostConnectionRateLimit) || (!isLocalhost(trackedRequest.remoteHost))
 	connectionLimitEnabled := rt.config.ConnectionsRateLimitingWindowSeconds > 0 && rt.config.ConnectionsRateLimitingCount > 0
 
-	if originConnections > rt.config.ConnectionsRateLimitingCount && connectionLimitEnabled && rateLimitedRemoteHost {
+	if originConnections > rt.config.ConnectionsRateLimitingCount && connectionLimitEnabled && rateLimitedRemoteHost && !healthServiceInvocation {
 		networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "incoming_connection_per_ip_rate_limit"})
 		rt.log.With("connection", "http").With("count", originConnections).Debugf("Rejected connection due to excessive connections attempt rate")
 		rt.log.EventWithDetails(telemetryspec.Network, telemetryspec.ConnectPeerFailEvent,
@@ -550,7 +563,6 @@ func (rt *RequestTracker) ServeHTTP(response http.ResponseWriter, request *http.
 
 	// send the request downstream; in our case, it would go to the router.
 	rt.downstreamHandler.ServeHTTP(response, request)
-
 }
 
 // remoteHostProxyFix updates the origin IP address in the trackedRequest
