@@ -2170,6 +2170,10 @@
             "description": "Applies extra opcode budget during simulation for each transaction group.",
             "type": "integer"
           },
+          "fix-signers": {
+            "description": "If true, signers for transactions that are missing signatures will be fixed during evaluation.",
+            "type": "boolean"
+          },
           "round": {
             "description": "If provided, specifies the round preceding the simulation. State changes through this round will be used to run this simulation. Usually only the 4 most recent rounds will be available (controlled by the node config value MaxAcctLookback). If not specified, defaults to the latest available round.",
             "type": "integer"
@@ -2276,6 +2280,11 @@
           "exec-trace": {
             "$ref": "#/components/schemas/SimulationTransactionExecTrace"
           },
+          "fixed-signer": {
+            "description": "The account that needed to sign this transaction when no signature was provided and the provided signer was incorrect.",
+            "type": "string",
+            "x-algorand-format": "Address"
+          },
           "logic-sig-budget-consumed": {
             "description": "Budget used during execution of a logic sig transaction.",
             "type": "integer"
@@ -2361,6 +2370,10 @@
           "extra-opcode-budget": {
             "description": "The extra opcode budget added to each transaction group during simulation",
             "type": "integer"
+          },
+          "fix-signers": {
+            "description": "If true, signers for transactions that are missing signatures will be fixed during evaluation.",
+            "type": "boolean"
           },
           "max-log-calls": {
             "description": "The maximum log calls one can make during simulation",
