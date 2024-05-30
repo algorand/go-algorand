@@ -24,6 +24,7 @@ import (
 	"net"
 	"net/http"
 	_ "net/http/pprof" // net/http/pprof is for registering the pprof URLs with the web server, so http://localhost:8080/debug/pprof/ works.
+	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -269,6 +270,19 @@ func makeListener(addr string) (net.Listener, error) {
 	return net.Listen("tcp", addr)
 }
 
+// helper to get port from an address
+func getPortFromAddress(addr string, logger logging.Logger) string {
+	u, err := url.Parse(addr)
+	if err == nil && u.Scheme != "" {
+		addr = u.Host
+	}
+	_, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		logger.Warnf("Error parsing address: %v", err)
+	}
+	return port
+}
+
 // Start starts a Node instance and its network services
 func (s *Server) Start() {
 	s.log.Info("Trying to start an Algorand node")
@@ -358,6 +372,13 @@ func (s *Server) Start() {
 		if err != nil {
 			fmt.Printf("netlistenfile error: %v\n", err)
 			os.Exit(1)
+		}
+
+		addrPort := getPortFromAddress(addr, s.log)
+		listenAddrPort := getPortFromAddress(listenAddr, s.log)
+
+		if addrPort == listenAddrPort {
+			s.log.Warnf("Warning: EndpointAddress port %v matches NetAddress port %v. This may lead to unexpected results when accessing endpoints.", addrPort, listenAddrPort)
 		}
 	}
 
