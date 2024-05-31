@@ -30,7 +30,7 @@
     "ConnectionsRateLimitingWindowSeconds": 1,
     "CrashDBDir": "",
     "DNSBootstrapID": "<network>.algorand.network?backup=<network>.algorand.net&dedup=<name>.algorand-<network>.(network|net)",
-    "DNSSecurityFlags": 1,
+    "DNSSecurityFlags": 9,
     "DeadlockDetection": 0,
     "DeadlockDetectionThreshold": 30,
     "DisableAPIAuth": false,

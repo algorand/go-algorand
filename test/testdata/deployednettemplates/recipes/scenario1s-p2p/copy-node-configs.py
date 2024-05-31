@@ -2,6 +2,7 @@
 Copies node.json, relay.json and nonPartNode.json from scenario1s:
 1. Append \"EnableP2P\": true to all configs
 2. Set P2PBootstrap: true to relay.json
+3. Set DNSSecurityFlags: 0 to all configs
 """
 
 import json
@@ -28,6 +29,7 @@ def main():
         if override:
             override_json = json.loads(override)
             override_json["EnableP2P"] = True
+            override_json["DNSSecurityFlags"] = 0x8000  # set to some unused value otherwise 0 would be migrated to default that enables DNSSEC
             config["ConfigJSONOverride"] = json.dumps(override_json)
         altconfigs = config.get("AltConfigs", [])
         if altconfigs:
@@ -36,6 +38,7 @@ def main():
                 if override:
                     override_json = json.loads(override)
                     override_json["EnableP2P"] = True
+                    override_json["DNSSecurityFlags"] = 0x8000  # set to some unused value otherwise 0 would be migrated to default that enables DNSSEC
                     altconfigs[i]["ConfigJSONOverride"] = json.dumps(override_json)
             config["AltConfigs"] = altconfigs
 

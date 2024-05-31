@@ -278,7 +278,7 @@ func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebo
 		cfg:               cfg,
 		networkID:         networkID,
 		phonebookPeers:    addrInfo,
-		resolveController: dnsaddr.NewMultiaddrDNSResolveController(cfg.DNSSecuritySRVEnforced(), ""),
+		resolveController: dnsaddr.NewMultiaddrDNSResolveController(cfg.DNSSecurityTXTEnforced(), ""),
 		log:               net.log,
 	}
 	net.bootstrapperStart = bootstrapper.start
@@ -406,7 +406,7 @@ func (n *P2PNetwork) meshThreadInner() {
 
 	// fetch peers from DNS
 	var dnsPeers, dhtPeers []peer.AddrInfo
-	dnsPeers = dnsLookupBootstrapPeers(n.log, n.config, n.networkID, dnsaddr.NewMultiaddrDNSResolveController(n.config.DNSSecuritySRVEnforced(), ""))
+	dnsPeers = dnsLookupBootstrapPeers(n.log, n.config, n.networkID, dnsaddr.NewMultiaddrDNSResolveController(n.config.DNSSecurityTXTEnforced(), ""))
 
 	// discover peers from DHT
 	if n.capabilitiesDiscovery != nil {
