@@ -18,6 +18,7 @@ package network
 
 import (
 	"context"
+	"math/rand"
 	"net"
 	"net/http"
 	"strings"
@@ -40,6 +41,7 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/p2p/discovery/backoff"
 	"github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr/net"
 )
@@ -401,7 +403,7 @@ func (n *P2PNetwork) innerStop() {
 }
 
 // meshThreadInner fetches nodes from DHT and attempts to connect to them
-func (n *P2PNetwork) meshThreadInner() {
+func (n *P2PNetwork) meshThreadInner() int {
 	defer n.service.DialPeersUntilTargetCount(n.config.GossipFanout)
 
 	// fetch peers from DNS
@@ -414,7 +416,6 @@ func (n *P2PNetwork) meshThreadInner() {
 		dhtPeers, err = n.capabilitiesDiscovery.PeersForCapability(p2p.Gossip, n.config.GossipFanout)
 		if err != nil {
 			n.log.Warnf("Error getting relay nodes from capabilities discovery: %v", err)
-			return
 		}
 		n.log.Debugf("Discovered %d gossip peers from DHT", len(dhtPeers))
 	}
@@ -424,21 +425,36 @@ func (n *P2PNetwork) meshThreadInner() {
 	for i := range peers {
 		replace = append(replace, &peers[i])
 	}
-	n.pstore.ReplacePeerList(replace, string(n.networkID), phonebook.PhoneBookEntryRelayRole)
+	if len(peers) > 0 {
+		n.pstore.ReplacePeerList(replace, string(n.networkID), phonebook.PhoneBookEntryRelayRole)
+	}
+	return len(peers)
 }
 
 func (n *P2PNetwork) meshThread() {
 	defer n.wg.Done()
+
 	timer := time.NewTicker(1) // start immediately and reset after
+
+	// Add exponential backoff with jitter to the mesh thread to handle new networks startup
+	// when no DNS or DHT peers are available.
+	// The parameters produce approximate the following delays (although they are random but the sequence give the idea):
+	// 2 2.4 4.6 9 20 19.5 28 24 14 14 35 60 60
+	ebf := backoff.NewExponentialDecorrelatedJitter(2*time.Second, meshThreadInterval, 3.0, rand.NewSource(rand.Int63()))
+	eb := ebf()
+
 	defer timer.Stop()
-	var resetTimer bool
 	for {
 		select {
 		case <-timer.C:
-			n.meshThreadInner()
-			if !resetTimer {
+			numPeers := n.meshThreadInner()
+			if numPeers > 0 {
+				// found something, reset timer to the default value
 				timer.Reset(meshThreadInterval)
-				resetTimer = true
+				eb.Reset()
+			} else {
+				// no peers found, backoff
+				timer.Reset(eb.Delay())
 			}
 		case <-n.ctx.Done():
 			return
