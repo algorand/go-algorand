@@ -47,6 +47,9 @@ type BaseAccountData struct {
 	TotalAppLocalStates        uint64            `codec:"l"`
 	TotalBoxes                 uint64            `codec:"m"`
 	TotalBoxBytes              uint64            `codec:"n"`
+	IncentiveEligible          bool              `codec:"o"`
+	LastProposed               basics.Round      `codec:"p"`
+	LastHeartbeat              basics.Round      `codec:"q"`
 
 	BaseVotingData
 
@@ -149,8 +152,9 @@ type BaseOnlineAccountData struct {
 
 	BaseVotingData
 
-	MicroAlgos  basics.MicroAlgos `codec:"Y"`
-	RewardsBase uint64            `codec:"Z"`
+	IncentiveEligible bool              `codec:"X"`
+	MicroAlgos        basics.MicroAlgos `codec:"Y"`
+	RewardsBase       uint64            `codec:"Z"`
 }
 
 // PersistedKVData represents the stored entry behind a application boxed key/value.
@@ -200,6 +204,14 @@ type PersistedResourcesData struct {
 	// the round number that is associated with the resourcesData. This field is the corresponding one to the round field
 	// in persistedAccountData, and serves the same purpose.
 	Round basics.Round
+}
+
+// PersistedResourcesDataWithCreator is exported view of persistedResourcesData inclusive of creator
+type PersistedResourcesDataWithCreator struct {
+	PersistedResourcesData
+
+	// the address of the account that created this resource
+	Creator basics.Address
 }
 
 // PersistedOnlineAccountData is exported view of persistedOnlineAccountData
@@ -286,6 +298,10 @@ func (ba *BaseAccountData) SetCoreAccountData(ad *ledgercore.AccountData) {
 	ba.TotalAppLocalStates = ad.TotalAppLocalStates
 	ba.TotalBoxes = ad.TotalBoxes
 	ba.TotalBoxBytes = ad.TotalBoxBytes
+	ba.IncentiveEligible = ad.IncentiveEligible
+
+	ba.LastProposed = ad.LastProposed
+	ba.LastHeartbeat = ad.LastHeartbeat
 
 	ba.BaseVotingData.SetCoreAccountData(ad)
 }
@@ -306,6 +322,10 @@ func (ba *BaseAccountData) SetAccountData(ad *basics.AccountData) {
 	ba.TotalAppLocalStates = uint64(len(ad.AppLocalStates))
 	ba.TotalBoxes = ad.TotalBoxes
 	ba.TotalBoxBytes = ad.TotalBoxBytes
+	ba.IncentiveEligible = ad.IncentiveEligible
+
+	ba.LastProposed = ad.LastProposed
+	ba.LastHeartbeat = ad.LastHeartbeat
 
 	ba.BaseVotingData.VoteID = ad.VoteID
 	ba.BaseVotingData.SelectionID = ad.SelectionID
@@ -342,12 +362,16 @@ func (ba *BaseAccountData) GetLedgerCoreAccountBaseData() ledgercore.AccountBase
 		TotalAssets:         ba.TotalAssets,
 		TotalBoxes:          ba.TotalBoxes,
 		TotalBoxBytes:       ba.TotalBoxBytes,
+		IncentiveEligible:   ba.IncentiveEligible,
+
+		LastProposed:  ba.LastProposed,
+		LastHeartbeat: ba.LastHeartbeat,
 	}
 }
 
 // GetLedgerCoreVotingData getter for voting data.
-func (ba *BaseAccountData) GetLedgerCoreVotingData() ledgercore.VotingData {
-	return ledgercore.VotingData{
+func (ba *BaseAccountData) GetLedgerCoreVotingData() basics.VotingData {
+	return basics.VotingData{
 		VoteID:          ba.VoteID,
 		SelectionID:     ba.SelectionID,
 		StateProofID:    ba.StateProofID,
@@ -365,6 +389,7 @@ func (ba *BaseAccountData) GetAccountData() basics.AccountData {
 		RewardsBase:        ba.RewardsBase,
 		RewardedMicroAlgos: ba.RewardedMicroAlgos,
 		AuthAddr:           ba.AuthAddr,
+		IncentiveEligible:  ba.IncentiveEligible,
 		TotalAppSchema: basics.StateSchema{
 			NumUint:      ba.TotalAppSchemaNumUint,
 			NumByteSlice: ba.TotalAppSchemaNumByteSlice,
@@ -379,6 +404,9 @@ func (ba *BaseAccountData) GetAccountData() basics.AccountData {
 		VoteFirstValid:  ba.VoteFirstValid,
 		VoteLastValid:   ba.VoteLastValid,
 		VoteKeyDilution: ba.VoteKeyDilution,
+
+		LastProposed:  ba.LastProposed,
+		LastHeartbeat: ba.LastHeartbeat,
 	}
 }
 
@@ -389,6 +417,7 @@ func (ba *BaseAccountData) IsEmpty() bool {
 		ba.RewardsBase == 0 &&
 		ba.RewardedMicroAlgos.Raw == 0 &&
 		ba.AuthAddr.IsZero() &&
+		!ba.IncentiveEligible &&
 		ba.TotalAppSchemaNumUint == 0 &&
 		ba.TotalAppSchemaNumByteSlice == 0 &&
 		ba.TotalExtraAppPages == 0 &&
@@ -398,6 +427,8 @@ func (ba *BaseAccountData) IsEmpty() bool {
 		ba.TotalAppLocalStates == 0 &&
 		ba.TotalBoxes == 0 &&
 		ba.TotalBoxBytes == 0 &&
+		ba.LastProposed == 0 &&
+		ba.LastHeartbeat == 0 &&
 		ba.BaseVotingData.IsEmpty()
 }
 
@@ -421,11 +452,11 @@ func (bo *BaseOnlineAccountData) IsVotingEmpty() bool {
 	return bo.BaseVotingData.IsEmpty()
 }
 
-// IsEmpty return true if any of the fields are non-zero.
+// IsEmpty return true if all of the fields are zero.
 func (bo *BaseOnlineAccountData) IsEmpty() bool {
 	return bo.IsVotingEmpty() &&
 		bo.MicroAlgos.Raw == 0 &&
-		bo.RewardsBase == 0
+		bo.RewardsBase == 0 && !bo.IncentiveEligible
 }
 
 // GetOnlineAccount returns ledgercore.OnlineAccount for top online accounts / voters
@@ -444,14 +475,14 @@ func (bo *BaseOnlineAccountData) GetOnlineAccount(addr basics.Address, normBalan
 
 // GetOnlineAccountData returns basics.OnlineAccountData for lookup agreement
 // TODO: unify with GetOnlineAccount/ledgercore.OnlineAccount
-func (bo *BaseOnlineAccountData) GetOnlineAccountData(proto config.ConsensusParams, rewardsLevel uint64) ledgercore.OnlineAccountData {
+func (bo *BaseOnlineAccountData) GetOnlineAccountData(proto config.ConsensusParams, rewardsLevel uint64) basics.OnlineAccountData {
 	microAlgos, _, _ := basics.WithUpdatedRewards(
 		proto, basics.Online, bo.MicroAlgos, basics.MicroAlgos{}, bo.RewardsBase, rewardsLevel,
 	)
 
-	return ledgercore.OnlineAccountData{
+	return basics.OnlineAccountData{
 		MicroAlgosWithRewards: microAlgos,
-		VotingData: ledgercore.VotingData{
+		VotingData: basics.VotingData{
 			VoteID:          bo.VoteID,
 			SelectionID:     bo.SelectionID,
 			StateProofID:    bo.StateProofID,
@@ -459,6 +490,7 @@ func (bo *BaseOnlineAccountData) GetOnlineAccountData(proto config.ConsensusPara
 			VoteLastValid:   bo.VoteLastValid,
 			VoteKeyDilution: bo.VoteKeyDilution,
 		},
+		IncentiveEligible: bo.IncentiveEligible,
 	}
 }
 
@@ -471,9 +503,10 @@ func (bo *BaseOnlineAccountData) NormalizedOnlineBalance(proto config.ConsensusP
 func (bo *BaseOnlineAccountData) SetCoreAccountData(ad *ledgercore.AccountData) {
 	bo.BaseVotingData.SetCoreAccountData(ad)
 
-	// MicroAlgos/RewardsBase are updated by the evaluator when accounts are touched
+	// These are updated by the evaluator when accounts are touched
 	bo.MicroAlgos = ad.MicroAlgos
 	bo.RewardsBase = ad.RewardsBase
+	bo.IncentiveEligible = ad.IncentiveEligible
 }
 
 // MakeResourcesData returns a new empty instance of resourcesData.

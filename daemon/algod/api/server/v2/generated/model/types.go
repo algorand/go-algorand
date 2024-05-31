@@ -185,6 +185,15 @@ type Account struct {
 	// Note: the raw account uses `map[int] -> Asset` for this type.
 	CreatedAssets *[]Asset `json:"created-assets,omitempty"`
 
+	// IncentiveEligible Whether or not the account can receive block incentives if its balance is in range at proposal time.
+	IncentiveEligible *bool `json:"incentive-eligible,omitempty"`
+
+	// LastHeartbeat The round in which this account last went online, or explicitly renewed their online status.
+	LastHeartbeat *uint64 `json:"last-heartbeat,omitempty"`
+
+	// LastProposed The round in which this account last proposed the block.
+	LastProposed *uint64 `json:"last-proposed,omitempty"`
+
 	// MinBalance MicroAlgo balance required by the account.
 	//
 	// The requirement grows based on asset and application usage.
@@ -242,6 +251,23 @@ type Account struct {
 // * lsig
 type AccountSigType string
 
+// AccountAssetHolding AccountAssetHolding describes the account's asset holding and asset parameters (if either exist) for a specific asset ID.
+type AccountAssetHolding struct {
+	// AssetHolding Describes an asset held by an account.
+	//
+	// Definition:
+	// data/basics/userBalance.go : AssetHolding
+	AssetHolding AssetHolding `json:"asset-holding"`
+
+	// AssetParams AssetParams specifies the parameters for an asset.
+	//
+	// \[apar\] when part of an AssetConfig transaction.
+	//
+	// Definition:
+	// data/transactions/asset.go : AssetParams
+	AssetParams *AssetParams `json:"asset-params,omitempty"`
+}
+
 // AccountParticipation AccountParticipation describes the parameters used by this account in consensus protocol.
 type AccountParticipation struct {
 	// SelectionParticipationKey \[sel\] Selection public key (if any) currently registered for this round.
@@ -269,6 +295,18 @@ type AccountStateDelta struct {
 
 	// Delta Application state delta.
 	Delta StateDelta `json:"delta"`
+}
+
+// AppCallLogs The logged messages from an app call along with the app ID and outer transaction ID. Logs appear in the same order that they were emitted.
+type AppCallLogs struct {
+	// ApplicationIndex The application from which the logs were generated
+	ApplicationIndex uint64 `json:"application-index"`
+
+	// Logs An array of logs
+	Logs [][]byte `json:"logs"`
+
+	// TxId The transaction ID of the outer app call that lead to these logs
+	TxId string `json:"txId"`
 }
 
 // Application Application index and its parameters
@@ -1079,6 +1117,17 @@ type AccountAssetResponse struct {
 	Round uint64 `json:"round"`
 }
 
+// AccountAssetsInformationResponse defines model for AccountAssetsInformationResponse.
+type AccountAssetsInformationResponse struct {
+	AssetHoldings *[]AccountAssetHolding `json:"asset-holdings,omitempty"`
+
+	// NextToken Used for pagination, when making another request provide this token with the next parameter.
+	NextToken *string `json:"next-token,omitempty"`
+
+	// Round The round for which this information is relevant.
+	Round uint64 `json:"round"`
+}
+
 // AccountResponse Account information at a given round.
 //
 // Definition:
@@ -1095,6 +1144,11 @@ type AssetResponse = Asset
 type BlockHashResponse struct {
 	// BlockHash Block header hash.
 	BlockHash string `json:"blockHash"`
+}
+
+// BlockLogsResponse defines model for BlockLogsResponse.
+type BlockLogsResponse struct {
+	Logs []AppCallLogs `json:"logs"`
 }
 
 // BlockResponse defines model for BlockResponse.
@@ -1407,6 +1461,15 @@ type AccountApplicationInformationParams struct {
 
 // AccountApplicationInformationParamsFormat defines parameters for AccountApplicationInformation.
 type AccountApplicationInformationParamsFormat string
+
+// AccountAssetsInformationParams defines parameters for AccountAssetsInformation.
+type AccountAssetsInformationParams struct {
+	// Limit Maximum number of results to return.
+	Limit *uint64 `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Next The next page of results. Use the next token provided by the previous results.
+	Next *string `form:"next,omitempty" json:"next,omitempty"`
+}
 
 // AccountAssetInformationParams defines parameters for AccountAssetInformation.
 type AccountAssetInformationParams struct {

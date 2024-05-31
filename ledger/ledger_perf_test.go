@@ -293,24 +293,24 @@ func benchmarkFullBlocks(params testParams, b *testing.B) {
 			}
 		}
 
-		lvb, err := eval.GenerateBlock()
+		lvb, err := eval.GenerateBlock(nil)
 		require.NoError(b, err)
 
 		// If this is the app creation block, add to both ledgers
 		if i == 1 {
-			err = l0.AddBlock(lvb.Block(), cert)
+			err = l0.AddBlock(lvb.UnfinishedBlock(), cert)
 			require.NoError(b, err)
-			err = l1.AddBlock(lvb.Block(), cert)
+			err = l1.AddBlock(lvb.UnfinishedBlock(), cert)
 			require.NoError(b, err)
 			continue
 		}
 
 		// For all other blocks, add just to the first ledger, and stash
 		// away to be replayed in the second ledger while running timer
-		err = l0.AddBlock(lvb.Block(), cert)
+		err = l0.AddBlock(lvb.UnfinishedBlock(), cert)
 		require.NoError(b, err)
 
-		blocks = append(blocks, lvb.Block())
+		blocks = append(blocks, lvb.UnfinishedBlock())
 	}
 
 	b.Logf("built %d blocks, each with %d txns", numBlocks, txPerBlock)

@@ -126,6 +126,10 @@ func configureCatchpointGeneration(a *require.Assertions, nodeController *nodeco
 	a.NoError(err)
 
 	cfg.CatchpointInterval = basicTestCatchpointInterval
+	cfg.Archival = false                 // make it explicit non-archival
+	cfg.MaxBlockHistoryLookback = 20000  // to save blocks beyond MaxTxnLife=13
+	cfg.CatchpointTracking = 2           // to enable catchpoints on non-archival nodes
+	cfg.CatchpointFileHistoryLength = 30 // to store more than 2 default catchpoints
 	cfg.MaxAcctLookback = 2
 	err = cfg.SaveToDisk(nodeController.GetDataDir())
 	a.NoError(err)
@@ -383,7 +387,6 @@ func TestCatchpointLabelGeneration(t *testing.T) {
 		expectLabels       bool
 	}{
 		{4, true, true},
-		{4, false, true},
 		{0, true, false},
 	}
 
@@ -506,8 +509,11 @@ func TestNodeTxHandlerRestart(t *testing.T) {
 	a.NoError(err)
 	const catchpointInterval = 16
 	cfg.CatchpointInterval = catchpointInterval
-	cfg.CatchpointTracking = 2
-	cfg.TxSyncIntervalSeconds = 200000 // disable txSync
+	cfg.Archival = false                 // make it explicit non-archival
+	cfg.MaxBlockHistoryLookback = 20000  // to save blocks beyond MaxTxnLife=13
+	cfg.CatchpointTracking = 2           // to enable catchpoints on non-archival nodes
+	cfg.CatchpointFileHistoryLength = 30 // to store more than 2 default catchpoints
+	cfg.TxSyncIntervalSeconds = 200000   // disable txSync
 	cfg.SaveToDisk(relayNode.GetDataDir())
 
 	fixture.Start()
@@ -531,7 +537,7 @@ func TestNodeTxHandlerRestart(t *testing.T) {
 	a.NoError(err)
 	status, err := client1.Status()
 	a.NoError(err)
-	_, err = fixture.WaitForConfirmedTxn(status.LastRound+100, addrs1[0], tx.ID().String())
+	_, err = fixture.WaitForConfirmedTxn(status.LastRound+100, tx.ID().String())
 	a.NoError(err)
 	targetCatchpointRound := status.LastRound
 
@@ -557,7 +563,7 @@ func TestNodeTxHandlerRestart(t *testing.T) {
 
 	status, err = client2.Status()
 	a.NoError(err)
-	_, err = fixture.WaitForConfirmedTxn(status.LastRound+50, addrs2[0], tx.ID().String())
+	_, err = fixture.WaitForConfirmedTxn(status.LastRound+50, tx.ID().String())
 	a.NoError(err)
 }
 
@@ -612,8 +618,11 @@ func TestReadyEndpoint(t *testing.T) {
 	a.NoError(err)
 	const catchpointInterval = 16
 	cfg.CatchpointInterval = catchpointInterval
-	cfg.CatchpointTracking = 2
-	cfg.TxSyncIntervalSeconds = 200000 // disable txSync
+	cfg.Archival = false                 // make it explicit non-archival
+	cfg.MaxBlockHistoryLookback = 20000  // to save blocks beyond MaxTxnLife=13
+	cfg.CatchpointTracking = 2           // to enable catchpoints on non-archival nodes
+	cfg.CatchpointFileHistoryLength = 30 // to store more than 2 default catchpoints
+	cfg.TxSyncIntervalSeconds = 200000   // disable txSync
 	cfg.SaveToDisk(relayNode.GetDataDir())
 
 	fixture.Start()
@@ -636,7 +645,7 @@ func TestReadyEndpoint(t *testing.T) {
 	a.NoError(err)
 	status, err := client1.Status()
 	a.NoError(err)
-	_, err = fixture.WaitForConfirmedTxn(status.LastRound+100, addrs1[0], tx.ID().String())
+	_, err = fixture.WaitForConfirmedTxn(status.LastRound+100, tx.ID().String())
 	a.NoError(err)
 	targetCatchpointRound := status.LastRound
 
@@ -775,7 +784,7 @@ func TestNodeTxSyncRestart(t *testing.T) {
 	a.NoError(err)
 	status, err := client1.Status()
 	a.NoError(err)
-	_, err = fixture.WaitForConfirmedTxn(status.LastRound+100, addrs1[0], tx.ID().String())
+	_, err = fixture.WaitForConfirmedTxn(status.LastRound+100, tx.ID().String())
 	a.NoError(err)
 	targetCatchpointRound := status.LastRound
 
@@ -797,7 +806,7 @@ func TestNodeTxSyncRestart(t *testing.T) {
 	a.NoError(err)
 
 	// the transaction should not be confirmed yet
-	_, err = fixture.WaitForConfirmedTxn(0, addrs2[0], tx.ID().String())
+	_, err = fixture.WaitForConfirmedTxn(0, tx.ID().String())
 	a.Error(err)
 
 	// Wait for the catchup
@@ -817,6 +826,6 @@ func TestNodeTxSyncRestart(t *testing.T) {
 
 	status, err = client2.Status()
 	a.NoError(err)
-	_, err = fixture.WaitForConfirmedTxn(status.LastRound+50, addrs2[0], tx.ID().String())
+	_, err = fixture.WaitForConfirmedTxn(status.LastRound+50, tx.ID().String())
 	a.NoError(err)
 }

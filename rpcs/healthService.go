@@ -14,29 +14,28 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package metrics
+package rpcs
 
 import (
-	"sync/atomic"
-
-	"github.com/algorand/go-deadlock"
+	"github.com/algorand/go-algorand/network"
+	"net/http"
 )
 
-// Counter represent a single counter variable.
-type Counter struct {
-	// Collects value for special fast-path with no labels through Inc(nil) AddUint64(x, nil)
-	intValue atomic.Uint64
+// HealthServiceStatusPath is the path to register HealthService as a handler for when using gorilla/mux
+const HealthServiceStatusPath = "/status"
 
-	deadlock.Mutex
-	name          string
-	description   string
-	values        []*counterValues
-	labels        map[string]int // map each label ( i.e. httpErrorCode ) to an index.
-	valuesIndices map[int]int
+// HealthService is a service that provides health information endpoints for the node
+type HealthService struct{}
+
+// MakeHealthService creates a new HealthService and registers it with the provided network if enabled
+func MakeHealthService(net network.GossipNode) HealthService {
+	service := HealthService{}
+
+	net.RegisterHTTPHandler(HealthServiceStatusPath, service)
+
+	return service
 }
 
-type counterValues struct {
-	counter         uint64
-	labels          map[string]string
-	formattedLabels string
+func (h HealthService) ServeHTTP(writer http.ResponseWriter, _ *http.Request) {
+	writer.WriteHeader(http.StatusOK)
 }

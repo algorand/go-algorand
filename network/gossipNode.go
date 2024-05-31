@@ -42,8 +42,6 @@ const (
 	PeersPhonebookRelays PeerOption = iota
 	// PeersPhonebookArchivalNodes specifies all archival nodes (relay or p2p)
 	PeersPhonebookArchivalNodes PeerOption = iota
-	// PeersPhonebookArchivers specifies all archivers in the phonebook
-	PeersPhonebookArchivers PeerOption = iota
 )
 
 // GossipNode represents a node in the gossip network

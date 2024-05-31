@@ -220,7 +220,7 @@ func (n *asyncPseudonode) loadRoundParticipationKeys(voteRound basics.Round) []a
 		n.participationKeys = nil
 		return nil
 	}
-	balanceRound := balanceRound(voteRound, cparams)
+	balanceRound := BalanceRound(voteRound, cparams)
 
 	// measure the time it takes to acquire the voting keys.
 	beforeVotingKeysTime := time.Now()
@@ -284,7 +284,11 @@ func (n asyncPseudonode) makePseudonodeVerifier(voteVerifier *AsyncVoteVerifier)
 
 // makeProposals creates a slice of block proposals for the given round and period.
 func (n asyncPseudonode) makeProposals(round basics.Round, period period, accounts []account.ParticipationRecordForRound) ([]proposal, []unauthenticatedVote) {
-	ve, err := n.factory.AssembleBlock(round)
+	addresses := make([]basics.Address, len(accounts))
+	for i := range accounts {
+		addresses[i] = accounts[i].Account
+	}
+	ve, err := n.factory.AssembleBlock(round, addresses)
 	if err != nil {
 		if err != ErrAssembleBlockRoundStale {
 			n.log.Errorf("pseudonode.makeProposals: could not generate a proposal for round %d: %v", round, err)

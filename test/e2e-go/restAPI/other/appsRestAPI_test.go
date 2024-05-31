@@ -17,6 +17,7 @@
 package other
 
 import (
+	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
@@ -548,4 +549,169 @@ end:
 	a.ErrorContains(err, "application does not exist")
 
 	assertBoxCount(numberOfBoxesRemaining)
+}
+
+func TestBlockLogs(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	a := require.New(fixtures.SynchronizedTest(t))
+	var localFixture fixtures.RestClientFixture
+	localFixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50EachFuture.json"))
+	defer localFixture.Shutdown()
+
+	testClient := localFixture.LibGoalClient
+
+	testClient.WaitForRound(1)
+
+	wh, err := testClient.GetUnencryptedWalletHandle()
+	a.NoError(err)
+	addresses, err := testClient.ListAddresses(wh)
+	a.NoError(err)
+	_, someAddress := helper.GetMaxBalAddr(t, testClient, addresses)
+	if someAddress == "" {
+		t.Error("no addr with funds")
+	}
+	a.NoError(err)
+
+	innerTEAL := "#pragma version 10\nbyte 0xdeadbeef\nlog\nint 1"
+
+	innerOps, err := logic.AssembleString(innerTEAL)
+	a.NoError(err)
+	innerApproval := innerOps.Program
+	a.NoError(err)
+	clearState := innerOps.Program
+
+	b64InnerApproval := base64.StdEncoding.EncodeToString(innerApproval)
+
+	outerTEAL := fmt.Sprintf(`#pragma version 10
+	byte 0xDD0000DD
+	log
+	byte 0x
+	log
+	byte 0xDEADD00D
+	log
+	txn ApplicationID
+	bz ret
+
+	itxn_begin
+	int appl
+	itxn_field TypeEnum
+	byte b64 %s
+	itxn_field ApprovalProgram
+	byte b64 %s
+	itxn_field ClearStateProgram
+	itxn_submit
+
+	ret:
+	int 1
+	return 
+	`, b64InnerApproval, b64InnerApproval)
+
+	outerOps, err := logic.AssembleString(outerTEAL)
+	a.NoError(err)
+	outerApproval := outerOps.Program
+
+	gl := basics.StateSchema{}
+	lc := basics.StateSchema{}
+
+	// create app
+	appCreateTxn, err := testClient.MakeUnsignedApplicationCallTx(
+		0, nil, nil, nil,
+		nil, nil, transactions.NoOpOC,
+		outerApproval, clearState, gl, lc, 0,
+	)
+	a.NoError(err)
+	appCreateTxn, err = testClient.FillUnsignedTxTemplate(someAddress, 0, 0, 0, appCreateTxn)
+	a.NoError(err)
+	appCreateTxID, err := testClient.SignAndBroadcastTransaction(wh, nil, appCreateTxn)
+	a.NoError(err)
+	createConf, err := helper.WaitForTransaction(t, testClient, appCreateTxID, 30*time.Second)
+	a.NoError(err)
+
+	createdAppID := basics.AppIndex(*createConf.ApplicationIndex)
+
+	// fund app account
+	appFundTxn, err := testClient.SendPaymentFromWallet(wh, nil, someAddress, createdAppID.Address().String(), 0, 1_000_000, nil, "", 0, 0)
+	a.NoError(err)
+	appFundTxID := appFundTxn.ID()
+	payConf, err := helper.WaitForTransaction(t, testClient, appFundTxID.String(), 30*time.Second)
+	a.NoError(err)
+
+	// get response when block has no app calls
+	resp, err := testClient.BlockLogs(*payConf.ConfirmedRound)
+	a.NoError(err)
+	expected := model.BlockLogsResponse{
+		Logs: []model.AppCallLogs{},
+	}
+	a.Equal(expected, resp)
+
+	// call app twice
+	appCallTxn, err := testClient.MakeUnsignedAppNoOpTx(
+		uint64(createdAppID), nil, nil, nil,
+		nil, nil,
+	)
+	a.NoError(err)
+	appCallTxn0, err := testClient.FillUnsignedTxTemplate(someAddress, 0, 0, 0, appCallTxn)
+	a.NoError(err)
+	appCallTxn0.Note = []byte("0")
+
+	appCallTxn1, err := testClient.FillUnsignedTxTemplate(someAddress, 0, 0, 0, appCallTxn)
+	appCallTxn1.Note = []byte("1")
+	a.NoError(err)
+
+	gid, err := testClient.GroupID([]transactions.Transaction{appCallTxn0, appCallTxn1})
+	a.NoError(err)
+	appCallTxn0.Group = gid
+	appCallTxn1.Group = gid
+
+	stxn0, err := testClient.SignTransactionWithWallet(wh, nil, appCallTxn0)
+	a.NoError(err)
+	stxn1, err := testClient.SignTransactionWithWallet(wh, nil, appCallTxn1)
+	a.NoError(err)
+
+	err = testClient.BroadcastTransactionGroup([]transactions.SignedTxn{stxn0, stxn1})
+	a.NoError(err)
+
+	callConf, err := helper.WaitForTransaction(t, testClient, stxn0.ID().String(), 30*time.Second)
+	a.NoError(err)
+
+	round := callConf.ConfirmedRound
+
+	deadDood, err := hex.DecodeString("deadd00d")
+	a.NoError(err)
+	deadBeef, err := hex.DecodeString("deadbeef")
+	a.NoError(err)
+	dd0000dd, err := hex.DecodeString("dd0000dd")
+	a.NoError(err)
+
+	// get block logs
+	resp, err = testClient.BlockLogs(*round)
+	a.NoError(err)
+
+	expected = model.BlockLogsResponse{
+		Logs: []model.AppCallLogs{
+			{
+				ApplicationIndex: uint64(createdAppID),
+				TxId:             stxn0.ID().String(),
+				Logs:             [][]byte{dd0000dd, {}, deadDood},
+			},
+			{
+				ApplicationIndex: uint64(createdAppID + 3),
+				TxId:             stxn0.ID().String(),
+				Logs:             [][]byte{deadBeef},
+			},
+			{
+				ApplicationIndex: uint64(createdAppID),
+				TxId:             stxn1.ID().String(),
+				Logs:             [][]byte{dd0000dd, {}, deadDood},
+			},
+			{
+				ApplicationIndex: uint64(createdAppID + 5),
+				TxId:             stxn1.ID().String(),
+				Logs:             [][]byte{deadBeef},
+			},
+		},
+	}
+	a.Equal(expected, resp)
 }

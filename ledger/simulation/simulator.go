@@ -197,12 +197,15 @@ func (s Simulator) evaluate(hdr bookkeeping.BlockHeader, group []transactions.Si
 	}
 
 	// Finally, process any pending end-of-block state changes.
-	vb, err := eval.GenerateBlock()
+	ub, err := eval.GenerateBlock(nil)
 	if err != nil {
 		return nil, err
 	}
 
-	return vb, nil
+	// Since we skip agreement, this block is imperfect w/ respect to seed/proposer/payouts
+	vb := ledgercore.MakeValidatedBlock(ub.UnfinishedBlock(), ub.UnfinishedDeltas())
+
+	return &vb, nil
 }
 
 func (s Simulator) simulateWithTracer(txgroup []transactions.SignedTxnWithAD, tracer logic.EvalTracer, overrides ResultEvalOverrides) (*ledgercore.ValidatedBlock, error) {

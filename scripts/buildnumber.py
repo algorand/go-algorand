@@ -7,9 +7,9 @@
 # e.g. if NOW is 5/28/2018 5:30am
 #   => 305
 
-from datetime import datetime
+from datetime import datetime, timezone
 
-epoch = datetime(2018, 5, 25, 0, 0, 0)
-d1 = datetime.utcnow()
+epoch = datetime(2018, 5, 25, 0, 0, 0, tzinfo=timezone.utc)
+d1 = datetime.now(timezone.utc)
 delta = d1 - epoch
 print("%d%02d" % (delta.days, d1.hour))
