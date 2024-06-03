@@ -7,7 +7,7 @@ To force colors when outputting to a file, set FORCE_COLOR=1 in the environment.
 """
 
 import argparse
-from datetime import datetime
+from datetime import datetime, timedelta
 import glob
 import json
 import logging
@@ -21,6 +21,13 @@ logger = logging.getLogger(__name__)
 filtered_events = frozenset(['Persisted'])
 
 def process_json_line(line: str, node_name: str, by_node: dict, events: list):
+    """Handles a single line of json log file, returns parsed event or None if it's not an agreement event.
+
+    line is a single line of json log file.
+    node_name is a name of the node that produced this line.
+    by_node is dict with unique nodes meta information.
+    events is a list of all parsed events. It is appended in this function to keep the caller code clean.
+    """
     try:
         evt = json.loads(line)
     except json.JSONDecodeError:
@@ -54,7 +61,22 @@ def process_json_line(line: str, node_name: str, by_node: dict, events: list):
             'node': node_name,
         }
         events.append(result)
-        by_node[node_name].append(result)
+        metadata = by_node.get(node_name)
+        if not metadata:
+            metadata = {
+                'type': evt.get('Type'),
+                'time': dt
+            }
+            by_node[node_name] = metadata
+        else:
+            if evt.get('Type') == 'RoundConcluded':
+                rt = dt - metadata['time']
+                result['round_time_ms'] = rt / timedelta(milliseconds=1)
+            elif evt.get('Type') == 'RoundStart':
+                metadata['time'] = dt
+                metadata['type'] = 'RoundStart'
+                by_node[node_name] = metadata
+
         return result
     return None
 
@@ -64,6 +86,7 @@ def main():
 
     ap = argparse.ArgumentParser()
     ap.add_argument('test_log_or_dir', help='Dir with log files or a single log file from e2e tests')
+    ap.add_argument('-e', '--end-round', type=int, help=f'Round to end at')
     args = ap.parse_args()
 
     by_node = {}
@@ -81,9 +104,12 @@ def main():
                     node_name = node_name.replace('relay', 'R')
                     node_name = node_name.replace('nonParticipatingNode', 'NPN')
                     node_name = node_name.replace('node', 'N')
-                    by_node[node_name] = []
                     for line in file:
-                        process_json_line(line, node_name, by_node, events)
+                        event = process_json_line(line, node_name, by_node, events)
+                        if event and args.end_round and \
+                            isinstance(event['round'], int) and event['round'] >= args.end_round:
+                            break
+
     else:
         logger.info('processing file %s', args.test_log_or_dir)
         with open(args.test_log_or_dir, 'r') as file:
@@ -95,11 +121,13 @@ def main():
             if line0[0] == '{':
                 # regular json line
                 node_name = 'node'
-                by_node[node_name] = []
                 process_json_line(line, node_name, by_node, events)
                 for line in file:
                     line = line.strip()
-                    process_json_line(line, node_name, by_node, events)
+                    event = process_json_line(line, node_name, by_node, events)
+                    if event and args.end_round and \
+                        isinstance(event['round'], int) and event['round'] >= args.end_round:
+                        break
             else:
                 # looks like e2e test output with lines line this:
                 """
@@ -117,7 +145,6 @@ def main():
                         node_name = line.split(' ')[1].split('/')[0]
                         logger.info('found node name: %s', node_name)
                     if node_name:
-                        by_node[node_name] = []
                         for line in file:
                             json_start = line.find('{')
                             if json_start == -1:
@@ -125,7 +152,10 @@ def main():
                                 node_name = None
                                 break
                             line = line[json_start:]
-                            process_json_line(line, node_name, by_node, events)
+                            event = process_json_line(line, node_name, by_node, events)
+                            if event and args.end_round and \
+                                isinstance(event['round'], int) and event['round'] >= args.end_round:
+                                break
 
     log = sorted(events, key=lambda x: x['time'])
 
@@ -136,8 +166,8 @@ def main():
         colors = colors * (len(by_node) // len(colors) + 1)
     node_color = {k: v for k, v in zip(by_node.keys(), colors)}
 
-    fmt = '%15s (%s,%s,%s) (%s,%s,%s) %4s|%-4s %-8s %-18s %8s %s'
-    print(fmt % ('TS', 'R', 'P', 'S', 'r', 'p', 's', 'W', 'WT', 'NODE', 'EVENT TYPE', 'HASH', 'SENDER'))
+    fmt = '%15s (%s,%s,%s) (%s,%s,%s) %4s|%-4s %-8s %-18s %8s %12s %5s'
+    print(fmt % ('TS', 'R', 'P', 'S', 'r', 'p', 's', 'W', 'WT', 'NODE', 'EVENT TYPE', 'HASH', 'SENDER', 'RT ms'))
     for e in log:
         color = node_color[e['node']]
         text = colored(fmt % (
@@ -146,7 +176,8 @@ def main():
                 e['object_round'], e['object_period'], e['object_step'],
                 e['weight'], e['weight_total'],
                 e['node'][:8],
-                e['type'], e['hash'], e['sender']),
+                e['type'], e['hash'], e['sender'],
+                int(e['round_time_ms']) if 'round_time_ms' in e else ''),
             color,
         )
         print(text)
