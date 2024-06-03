@@ -479,6 +479,7 @@ func convertTxnResult(txnResult simulation.TxnResult) PreEncodedSimulateTxnResul
 		LogicSigBudgetConsumed:   omitEmpty(txnResult.LogicSigBudgetConsumed),
 		TransactionTrace:         convertTxnTrace(txnResult.Trace),
 		UnnamedResourcesAccessed: convertUnnamedResourcesAccessed(txnResult.UnnamedResourcesAccessed),
+		FixedSigner:              omitEmpty(txnResult.FixedSigner.String()),
 	}
 }
 
@@ -588,6 +589,7 @@ func convertSimulationResult(result simulation.Result) PreEncodedSimulateRespons
 			MaxLogSize:            result.EvalOverrides.MaxLogSize,
 			MaxLogCalls:           result.EvalOverrides.MaxLogCalls,
 			ExtraOpcodeBudget:     omitEmpty(result.EvalOverrides.ExtraOpcodeBudget),
+			FixSigners:            omitEmpty(result.EvalOverrides.FixSigners),
 		}
 	}
 
@@ -614,6 +616,7 @@ func convertSimulationRequest(request PreEncodedSimulateRequest) simulation.Requ
 		AllowUnnamedResources: request.AllowUnnamedResources,
 		ExtraOpcodeBudget:     request.ExtraOpcodeBudget,
 		TraceConfig:           request.ExecTraceConfig,
+		FixSigners:            request.FixSigners,
 	}
 }
 

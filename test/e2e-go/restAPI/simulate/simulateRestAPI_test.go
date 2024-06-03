@@ -2743,7 +2743,7 @@ func TestSimulateWithFixSigners(t *testing.T) {
 			},
 		},
 		AllowEmptySignatures: true,
-		FixSigners:           true, // When this is true: HTTP 400 Bad Request: failed to decode object: json decode error [pos 1]: only encoded map or array can be decoded into a struct
+		FixSigners:           true,
 	}
 	result, err := testClient.SimulateTransactions(simulateRequest)
 	a.NoError(err)
