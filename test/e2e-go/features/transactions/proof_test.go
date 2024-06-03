@@ -92,7 +92,7 @@ func TestTxnMerkleProof(t *testing.T) {
 
 	txid := tx.ID()
 	txidSHA256 := tx.IDSha256() // only used for verification
-	confirmedTx, err := fixture.WaitForConfirmedTxn(status.LastRound+10, baseAcct, txid.String())
+	confirmedTx, err := fixture.WaitForConfirmedTxn(status.LastRound+10, txid.String())
 	a.NoError(err)
 	a.NotNil(confirmedTx.ConfirmedRound)
 
@@ -175,7 +175,7 @@ func TestTxnMerkleProofSHA256(t *testing.T) {
 	a.NoError(err)
 
 	txid := tx.ID()
-	confirmedTx, err := fixture.WaitForConfirmedTxn(status.LastRound+10, baseAcct, txid.String())
+	confirmedTx, err := fixture.WaitForConfirmedTxn(status.LastRound+10, txid.String())
 	a.NoError(err)
 	a.NotNil(confirmedTx.ConfirmedRound)
 

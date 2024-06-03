@@ -32,6 +32,8 @@ import (
 )
 
 // TxnGroupDeltaWithIds associates all the Ids (group and Txn) with a single state delta object
+//
+//revive:disable:var-naming
 type TxnGroupDeltaWithIds struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 	Ids     []string

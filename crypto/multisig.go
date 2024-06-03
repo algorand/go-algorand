@@ -240,7 +240,7 @@ func MultisigVerify(msg Hashable, addr Digest, sig MultisigSig) (err error) {
 
 // MultisigBatchPrep performs checks on the assembled MultisigSig and adds to the batch.
 // The caller must call batchVerifier.verify() to verify it.
-func MultisigBatchPrep(msg Hashable, addr Digest, sig MultisigSig, batchVerifier *BatchVerifier) error {
+func MultisigBatchPrep(msg Hashable, addr Digest, sig MultisigSig, batchVerifier BatchVerifier) error {
 	// short circuit: if msig doesn't have subsigs or if Subsigs are empty
 	// then terminate (the upper layer should now verify the unisig)
 	if (len(sig.Subsigs) == 0 || sig.Subsigs[0] == MultisigSubsig{}) {

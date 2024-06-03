@@ -26,6 +26,7 @@ import (
 	"math"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -69,6 +70,19 @@ const MaxTealSourceBytes = 200_000
 // become quite large, so we allow up to 1MB
 const MaxTealDryrunBytes = 1_000_000
 
+// MaxAssetResults sets a size limit for the number of assets returned in a single request to the
+// /v2/accounts/{address}/assets endpoint
+const MaxAssetResults = 1000
+
+// DefaultAssetResults sets a default size limit for the number of assets returned in a single request to the
+// /v2/accounts/{address}/assets endpoint
+const DefaultAssetResults = uint64(1000)
+
+const (
+	errInvalidLimit      = "limit parameter must be a positive integer"
+	errUnableToParseNext = "unable to parse next token"
+)
+
 // WaitForBlockTimeout is the timeout for the WaitForBlock endpoint.
 var WaitForBlockTimeout = 1 * time.Minute
 
@@ -91,6 +105,7 @@ type LedgerForAPI interface {
 	ConsensusParams(r basics.Round) (config.ConsensusParams, error)
 	Latest() basics.Round
 	LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error)
+	LookupAssets(addr basics.Address, assetIDGT basics.AssetIndex, limit uint64) ([]ledgercore.AssetResourceWithIDs, basics.Round, error)
 	LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error)
 	BlockCert(rnd basics.Round) (blk bookkeeping.Block, cert agreement.Certificate, err error)
 	LatestTotals() (basics.Round, ledgercore.AccountTotals, error)
@@ -495,7 +510,7 @@ func (v2 *Handlers) basicAccountInformation(ctx echo.Context, addr basics.Addres
 	}
 
 	var apiParticipation *model.AccountParticipation
-	if record.VoteID != (crypto.OneTimeSignatureVerifier{}) {
+	if !record.VoteID.IsEmpty() {
 		apiParticipation = &model.AccountParticipation{
 			VoteParticipationKey:      record.VoteID[:],
 			SelectionParticipationKey: record.SelectionID[:],
@@ -525,6 +540,7 @@ func (v2 *Handlers) basicAccountInformation(ctx echo.Context, addr basics.Addres
 		Status:                      record.Status.String(),
 		RewardBase:                  &record.RewardsBase,
 		Participation:               apiParticipation,
+		IncentiveEligible:           omitEmpty(record.IncentiveEligible),
 		TotalCreatedAssets:          record.TotalAssetParams,
 		TotalCreatedApps:            record.TotalAppParams,
 		TotalAssetsOptedIn:          record.TotalAssets,
@@ -538,6 +554,8 @@ func (v2 *Handlers) basicAccountInformation(ctx echo.Context, addr basics.Addres
 		TotalBoxes:          omitEmpty(record.TotalBoxes),
 		TotalBoxBytes:       omitEmpty(record.TotalBoxBytes),
 		MinBalance:          record.MinBalance(&consensus).Raw,
+		LastProposed:        omitEmpty(uint64(record.LastProposed)),
+		LastHeartbeat:       omitEmpty(uint64(record.LastHeartbeat)),
 	}
 	response := model.AccountResponse(account)
 	return ctx.JSON(http.StatusOK, response)
@@ -728,6 +746,70 @@ func (v2 *Handlers) GetBlockTxids(ctx echo.Context, round uint64) error {
 	}
 
 	response := model.BlockTxidsResponse{BlockTxids: txids}
+
+	return ctx.JSON(http.StatusOK, response)
+}
+
+// NewAppCallLogs generates a new model.AppCallLogs struct.
+func NewAppCallLogs(txid string, logs []string, appIndex uint64) model.AppCallLogs {
+	return model.AppCallLogs{
+		TxId:             txid,
+		Logs:             convertSlice(logs, func(s string) []byte { return []byte(s) }),
+		ApplicationIndex: appIndex,
+	}
+}
+
+func getAppIndexFromTxn(txn transactions.SignedTxnWithAD) uint64 {
+	appIndex := uint64(txn.SignedTxn.Txn.ApplicationID)
+	if appIndex == 0 {
+		appIndex = uint64(txn.ApplyData.ApplicationID)
+	}
+
+	return appIndex
+}
+
+func appendLogsFromTxns(blockLogs []model.AppCallLogs, txns []transactions.SignedTxnWithAD, outerTxnID string) []model.AppCallLogs {
+
+	for _, txn := range txns {
+		if len(txn.EvalDelta.Logs) > 0 {
+			blockLogs = append(
+				blockLogs,
+				NewAppCallLogs(outerTxnID, txn.EvalDelta.Logs, getAppIndexFromTxn(txn)),
+			)
+		}
+
+		blockLogs = appendLogsFromTxns(blockLogs, txn.EvalDelta.InnerTxns, outerTxnID)
+	}
+
+	return blockLogs
+}
+
+// GetBlockLogs gets all of the logs (inner and outer app calls) for a given block
+// (GET /v2/blocks/{round}/logs)
+func (v2 *Handlers) GetBlockLogs(ctx echo.Context, round uint64) error {
+	ledger := v2.Node.LedgerForAPI()
+	block, err := ledger.Block(basics.Round(round))
+	if err != nil {
+		switch err.(type) {
+		case ledgercore.ErrNoEntry:
+			return notFound(ctx, err, errFailedLookingUpLedger, v2.Log)
+		default:
+			return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+		}
+	}
+
+	txns, err := block.DecodePaysetFlat()
+	if err != nil {
+		return internalError(ctx, err, "decoding transactions", v2.Log)
+	}
+
+	blockLogs := []model.AppCallLogs{}
+
+	for _, txn := range txns {
+		blockLogs = appendLogsFromTxns(blockLogs, []transactions.SignedTxnWithAD{txn}, txn.ID().String())
+	}
+
+	response := model.BlockLogsResponse{Logs: blockLogs}
 
 	return ctx.JSON(http.StatusOK, response)
 }
@@ -1027,6 +1109,96 @@ func (v2 *Handlers) RawTransactionAsync(ctx echo.Context) error {
 		return serviceUnavailable(ctx, err, err.Error(), v2.Log)
 	}
 	return ctx.NoContent(http.StatusOK)
+}
+
+// AccountAssetsInformation looks up an account's asset holdings.
+// (GET /v2/accounts/{address}/assets)
+func (v2 *Handlers) AccountAssetsInformation(ctx echo.Context, address string, params model.AccountAssetsInformationParams) error {
+	if !v2.Node.Config().EnableExperimentalAPI {
+		return ctx.String(http.StatusNotFound, "/v2/accounts/{address}/assets was not enabled in the configuration file by setting the EnableExperimentalAPI to true")
+	}
+
+	addr, err := basics.UnmarshalChecksumAddress(address)
+	if err != nil {
+		return badRequest(ctx, err, errFailedToParseAddress, v2.Log)
+	}
+
+	var assetGreaterThan uint64 = 0
+	if params.Next != nil {
+		agt, err0 := strconv.ParseUint(*params.Next, 10, 64)
+		if err0 != nil {
+			return badRequest(ctx, err0, fmt.Sprintf("%s: %v", errUnableToParseNext, err0), v2.Log)
+		}
+		assetGreaterThan = agt
+	}
+
+	if params.Limit != nil {
+		if *params.Limit <= 0 {
+			return badRequest(ctx, errors.New(errInvalidLimit), errInvalidLimit, v2.Log)
+		}
+
+		if *params.Limit > MaxAssetResults {
+			limitErrMsg := fmt.Sprintf("limit %d exceeds max assets single batch limit %d", *params.Limit, MaxAssetResults)
+			return badRequest(ctx, errors.New(limitErrMsg), limitErrMsg, v2.Log)
+		}
+	} else {
+		// default limit
+		l := DefaultAssetResults
+		params.Limit = &l
+	}
+
+	ledger := v2.Node.LedgerForAPI()
+
+	// Logic
+	// 1. Get the account's asset holdings subject to limits
+	// 2. Handle empty response
+	// 3. Prepare JSON response
+
+	// We intentionally request one more than the limit to determine if there are more assets.
+	records, lookupRound, err := ledger.LookupAssets(addr, basics.AssetIndex(assetGreaterThan), *params.Limit+1)
+
+	if err != nil {
+		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+	}
+
+	// prepare JSON response
+	response := model.AccountAssetsInformationResponse{Round: uint64(lookupRound)}
+
+	// If the total count is greater than the limit, we set the next token to the last asset ID being returned
+	if uint64(len(records)) > *params.Limit {
+		// we do not include the last record in the response
+		records = records[:*params.Limit]
+		nextTk := strconv.FormatUint(uint64(records[len(records)-1].AssetID), 10)
+		response.NextToken = &nextTk
+	}
+
+	assetHoldings := make([]model.AccountAssetHolding, 0, len(records))
+
+	for _, record := range records {
+		if record.AssetHolding == nil {
+			v2.Log.Warnf("AccountAssetsInformation: asset %d has no holding - should not be possible", record.AssetID)
+			continue
+		}
+
+		aah := model.AccountAssetHolding{
+			AssetHolding: model.AssetHolding{
+				Amount:   record.AssetHolding.Amount,
+				AssetID:  uint64(record.AssetID),
+				IsFrozen: record.AssetHolding.Frozen,
+			},
+		}
+
+		if !record.Creator.IsZero() {
+			asset := AssetParamsToAsset(record.Creator.String(), record.AssetID, record.AssetParams)
+			aah.AssetParams = &asset.Params
+		}
+
+		assetHoldings = append(assetHoldings, aah)
+	}
+
+	response.AssetHoldings = &assetHoldings
+
+	return ctx.JSON(http.StatusOK, response)
 }
 
 // PreEncodedSimulateTxnResult mirrors model.SimulateTransactionResult
@@ -1403,10 +1575,7 @@ func (v2 *Handlers) getPendingTransactions(ctx echo.Context, max *uint64, format
 	}
 
 	// MatchAddress uses this to check FeeSink, we don't care about that here.
-	spec := transactions.SpecialAddresses{
-		FeeSink:     basics.Address{},
-		RewardsPool: basics.Address{},
-	}
+	spec := transactions.SpecialAddresses{}
 
 	txnLimit := uint64(math.MaxUint64)
 	if max != nil && *max != 0 {

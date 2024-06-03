@@ -17,24 +17,23 @@
 package metrics
 
 import (
-	"strconv"
 	"strings"
-	"sync/atomic"
 )
 
 // Gauge represent a single gauge variable.
 type Gauge struct {
-	value       atomic.Uint64
-	name        string
-	description string
+	g couge
 }
 
 // MakeGauge create a new gauge with the provided name and description.
 func MakeGauge(metric MetricName) *Gauge {
-	c := &Gauge{
-		description: metric.Description,
-		name:        metric.Name,
-	}
+	c := &Gauge{g: couge{
+		values:        make([]*cougeValues, 0),
+		description:   metric.Description,
+		name:          metric.Name,
+		labels:        make(map[string]int),
+		valuesIndices: make(map[int]int),
+	}}
 	c.Register(nil)
 	return c
 }
@@ -57,39 +56,32 @@ func (gauge *Gauge) Deregister(reg *Registry) {
 	}
 }
 
-// Add increases gauge by x
-func (gauge *Gauge) Add(x uint64) {
-	gauge.value.Add(x)
-}
-
 // Set sets gauge to x
 func (gauge *Gauge) Set(x uint64) {
-	gauge.value.Store(x)
+	if gauge.g.intValue.Swap(x) == 0 {
+		// This is the first Set. Create a dummy
+		// counterValue for the no-labels value.
+		// Dummy counterValue simplifies display in WriteMetric.
+		gauge.g.setLabels(0, nil)
+	}
+}
+
+// SetLabels sets gauge to x with labels
+func (gauge *Gauge) SetLabels(x uint64, labels map[string]string) {
+	gauge.g.setLabels(x, labels)
 }
 
 // WriteMetric writes the metric into the output stream
 func (gauge *Gauge) WriteMetric(buf *strings.Builder, parentLabels string) {
-	buf.WriteString("# HELP ")
-	buf.WriteString(gauge.name)
-	buf.WriteString(" ")
-	buf.WriteString(gauge.description)
-	buf.WriteString("\n# TYPE ")
-	buf.WriteString(gauge.name)
-	buf.WriteString(" gauge\n")
-	buf.WriteString(gauge.name)
-	buf.WriteString("{")
-	if len(parentLabels) > 0 {
-		buf.WriteString(parentLabels)
-	}
-	buf.WriteString("} ")
-	value := gauge.value.Load()
-	buf.WriteString(strconv.FormatUint(value, 10))
-	buf.WriteString("\n")
+	gauge.g.writeMetric(buf, "gauge", parentLabels)
 }
 
 // AddMetric adds the metric into the map
 func (gauge *Gauge) AddMetric(values map[string]float64) {
-	value := gauge.value.Load()
+	gauge.g.addMetric(values)
+}
 
-	values[sanitizeTelemetryName(gauge.name)] = float64(value)
+// GetUint64ValueForLabels returns the value of the counter for the given labels or 0 if it's not found.
+func (gauge *Gauge) GetUint64ValueForLabels(labels map[string]string) uint64 {
+	return gauge.g.getUint64ValueForLabels(labels)
 }

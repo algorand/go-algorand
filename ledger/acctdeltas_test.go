@@ -508,10 +508,10 @@ func randomCreatables(numElementsPerSegement int) ([]basics.CreatableIndex,
 	map[basics.CreatableIndex]ledgercore.ModifiedCreatable) {
 	creatables := make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
 	creatablesList := make([]basics.CreatableIndex, numElementsPerSegement*10)
-	uniqueAssetIds := make(map[basics.CreatableIndex]bool)
+	uniqueAssetIDs := make(map[basics.CreatableIndex]bool)
 
 	for i := 0; i < numElementsPerSegement*10; i++ {
-		assetIndex, mc := randomCreatable(uniqueAssetIds)
+		assetIndex, mc := randomCreatable(uniqueAssetIDs)
 		creatables[assetIndex] = mc
 		creatablesList[i] = assetIndex
 	}
@@ -519,7 +519,7 @@ func randomCreatables(numElementsPerSegement int) ([]basics.CreatableIndex,
 }
 
 // randomCreatable generates a random creatable.
-func randomCreatable(uniqueAssetIds map[basics.CreatableIndex]bool) (
+func randomCreatable(uniqueAssetIDs map[basics.CreatableIndex]bool) (
 	assetIndex basics.CreatableIndex, mc ledgercore.ModifiedCreatable) {
 
 	var ctype basics.CreatableType
@@ -541,9 +541,9 @@ func randomCreatable(uniqueAssetIds map[basics.CreatableIndex]bool) (
 	var assetIdx basics.CreatableIndex
 	for {
 		assetIdx = basics.CreatableIndex(crypto.RandUint64() % (uint64(2) << 50))
-		_, found := uniqueAssetIds[assetIdx]
+		_, found := uniqueAssetIDs[assetIdx]
 		if !found {
-			uniqueAssetIds[assetIdx] = true
+			uniqueAssetIDs[assetIdx] = true
 			break
 		}
 	}
@@ -2233,7 +2233,7 @@ func TestAccountOnlineQueries(t *testing.T) {
 				MicroAlgos: basics.MicroAlgos{Raw: 100_000_000},
 				Status:     basics.Online,
 			},
-			VotingData: ledgercore.VotingData{
+			VotingData: basics.VotingData{
 				VoteID: voteIDA,
 			},
 		}
@@ -2243,7 +2243,7 @@ func TestAccountOnlineQueries(t *testing.T) {
 				MicroAlgos: basics.MicroAlgos{Raw: 200_000_000},
 				Status:     basics.Online,
 			},
-			VotingData: ledgercore.VotingData{
+			VotingData: basics.VotingData{
 				VoteID: voteIDB,
 			},
 		}
@@ -2253,7 +2253,7 @@ func TestAccountOnlineQueries(t *testing.T) {
 				MicroAlgos: basics.MicroAlgos{Raw: 300_000_000},
 				Status:     basics.Online,
 			},
-			VotingData: ledgercore.VotingData{
+			VotingData: basics.VotingData{
 				VoteID: voteIDC,
 			},
 		}
@@ -2621,20 +2621,21 @@ func TestAccountOnlineAccountsNewRound(t *testing.T) {
 	deltaC.newAcct[0].VoteFirstValid = 0
 	updates.deltas = []onlineAccountDelta{deltaC}
 	_, err = onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
-	require.Error(t, err)
+	require.ErrorContains(t, err, "empty voting data for online account")
 
-	// check errors: new non-online with non-empty voting data
+	// It used to be an error to go offline with non-empty voting data, but
+	// account suspension makes it legal.
 	deltaB.newStatus[0] = basics.Offline
 	deltaB.newAcct[0].VoteFirstValid = 1
 	updates.deltas = []onlineAccountDelta{deltaB}
 	_, err = onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
-	require.Error(t, err)
+	require.NoError(t, err)
 
 	// check errors: new online with empty voting data
 	deltaD.newStatus[0] = basics.Online
 	updates.deltas = []onlineAccountDelta{deltaD}
 	_, err = onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
-	require.Error(t, err)
+	require.ErrorContains(t, err, "empty voting data for online account")
 }
 
 func TestAccountOnlineAccountsNewRoundFlip(t *testing.T) {
@@ -2937,8 +2938,7 @@ func TestOnlineAccountsNewRoundError(t *testing.T) {
 	updates.deltas = append(updates.deltas, deltaA)
 	lastUpdateRound := basics.Round(1)
 	updated, err := onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
-	require.Error(t, err)
-	require.Equal(t, errMockOnlineAccountsErrorWriter, err)
+	require.ErrorIs(t, err, errMockOnlineAccountsErrorWriter)
 	require.Empty(t, updated)
 
 	// update acct A => exercise "update"
@@ -2965,8 +2965,7 @@ func TestOnlineAccountsNewRoundError(t *testing.T) {
 	updates.deltas = append(updates.deltas, deltaA2)
 	lastUpdateRound = basics.Round(3)
 	updated, err = onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
-	require.Error(t, err)
-	require.Equal(t, errMockOnlineAccountsErrorWriter, err)
+	require.ErrorIs(t, err, errMockOnlineAccountsErrorWriter)
 	require.Empty(t, updated)
 
 	// make acct A offline => exercise "deletion"
@@ -2993,8 +2992,7 @@ func TestOnlineAccountsNewRoundError(t *testing.T) {
 	updates.deltas = append(updates.deltas, deltaA3)
 	lastUpdateRound = basics.Round(4)
 	updated, err = onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
-	require.Error(t, err)
-	require.Equal(t, errMockOnlineAccountsErrorWriter, err)
+	require.ErrorIs(t, err, errMockOnlineAccountsErrorWriter)
 	require.Empty(t, updated)
 }
 
@@ -3200,8 +3198,7 @@ func TestAccountsNewRoundError(t *testing.T) {
 			}
 			lastUpdateRound := basics.Round(i + 1)
 			updatedAcct, updatedResources, updatedKvs, err := accountsNewRoundImpl(writer, updates, resources, kvs, creatables, proto, lastUpdateRound)
-			require.Error(t, err)
-			require.Equal(t, test.expErr, err)
+			require.ErrorIs(t, err, test.expErr)
 			require.Empty(t, updatedAcct)
 			require.Empty(t, updatedResources)
 			require.Empty(t, updatedKvs)
