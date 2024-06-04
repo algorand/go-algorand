@@ -8908,26 +8908,61 @@ func fixSignersTest(t *testing.T, signPayAfterOuterRekey bool, signPayAfterInner
 		other := env.Accounts[1]
 
 		innerRekeyAddr := env.Accounts[2].Addr
+		innerProgram := fmt.Sprintf(`#pragma version 9
+		txn ApplicationID
+		bz end
+		
+		// Rekey to the the innerRekeyAddr
+		itxn_begin
+		int pay
+		itxn_field TypeEnum
+		txn ApplicationArgs 0
+		itxn_field Sender
+		addr %s
+		itxn_field RekeyTo
+		itxn_submit
+		
+		end:
+		int 1
+		`, innerRekeyAddr.GetUserAddress())
 
-		appID := env.CreateApp(sender.Addr, simulationtesting.AppParams{
-			ApprovalProgram: fmt.Sprintf(`#pragma version 9
-txn ApplicationID
-bz end
-
-itxn_begin
-int pay
-itxn_field TypeEnum
-txn ApplicationArgs 0
-itxn_field Sender
-addr %s
-itxn_field RekeyTo
-itxn_submit
-
-end:
-int 1
-`, innerRekeyAddr.GetUserAddress()),
+		innerAppID := env.CreateApp(sender.Addr, simulationtesting.AppParams{
+			ApprovalProgram:   innerProgram,
 			ClearStateProgram: "#pragma version 9\nint 1",
 		})
+
+		outerProgram := fmt.Sprintf(`#pragma version 9
+		txn ApplicationID
+		bz end
+
+		// Rekey to inner app
+		itxn_begin
+		int pay
+		itxn_field TypeEnum
+		txn ApplicationArgs 0
+		itxn_field Sender
+		addr %s
+		itxn_field RekeyTo
+		itxn_submit
+
+		// Call inner app
+		itxn_begin
+		int appl
+		itxn_field TypeEnum
+		int %d
+		itxn_field ApplicationID
+		txn ApplicationArgs 0
+		itxn_field ApplicationArgs
+		itxn_submit
+
+		end:
+		int 1`, innerAppID.Address().GetUserAddress(), innerAppID)
+
+		appID := env.CreateApp(sender.Addr, simulationtesting.AppParams{
+			ApprovalProgram:   outerProgram,
+			ClearStateProgram: "#pragma version 9\nint 1",
+		})
+
 		env.TransferAlgos(sender.Addr, appID.Address(), 1_000_000)
 
 		// rekey to EOA
@@ -8937,7 +8972,7 @@ int 1
 			Receiver: sender.Addr,
 			RekeyTo:  other.Addr,
 		})
-		// rekey to app
+		// rekey to outer app, which rekeys to inner app, which rekeys to another app
 		pay1 := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:     protocol.PaymentTx,
 			Sender:   sender.Addr,
@@ -8950,6 +8985,7 @@ int 1
 			Sender:          other.Addr,
 			ApplicationID:   appID,
 			ApplicationArgs: [][]byte{sender.Addr[:]},
+			ForeignApps:     []basics.AppIndex{innerAppID},
 		})
 		// rekey back to sender (original address)
 		pay2 := env.TxnInfo.NewTxn(txntest.Txn{
