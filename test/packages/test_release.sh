@@ -69,7 +69,8 @@ EOF
         then
             WITH_PACMAN=$(echo -e "${TOKENIZED//\{\{PACMAN\}\}/RUN DEBIAN_FRONTEND=noninteractive apt-get update && apt-get install -y curl}")
         else
-            WITH_PACMAN=$(echo -e "${TOKENIZED//\{\{PACMAN\}\}/RUN dnf install -y curl}")
+            # fedora and centos already have curl installed.
+            WITH_PACMAN=$(echo -e "${TOKENIZED//\{\{PACMAN\}\}/}")
         fi
 
         echo -e "$BLUE_FG[$0]$END_FG_COLOR Testing $item..."
