@@ -8930,30 +8930,35 @@ int 1
 		})
 		env.TransferAlgos(sender.Addr, appID.Address(), 1_000_000)
 
+		// rekey to EOA
 		pay0 := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:     protocol.PaymentTx,
 			Sender:   sender.Addr,
 			Receiver: sender.Addr,
 			RekeyTo:  other.Addr,
 		})
+		// rekey to app
 		pay1 := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:     protocol.PaymentTx,
 			Sender:   sender.Addr,
 			Receiver: sender.Addr,
 			RekeyTo:  appID.Address(),
 		})
+		// app rekeys to random address
 		appCall := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:            protocol.ApplicationCallTx,
 			Sender:          other.Addr,
 			ApplicationID:   appID,
 			ApplicationArgs: [][]byte{sender.Addr[:]},
 		})
+		// rekey back to sender (original address)
 		pay2 := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:     protocol.PaymentTx,
 			Sender:   sender.Addr,
 			Receiver: sender.Addr,
 			RekeyTo:  sender.Addr,
 		})
+		// send txn from sender
 		pay3 := env.TxnInfo.NewTxn(txntest.Txn{
 			Type:     protocol.PaymentTx,
 			Sender:   sender.Addr,
@@ -8986,7 +8991,7 @@ int 1
 		if !signPayAfterInnerRekey && !signPayAfterOuterRekey {
 			require.Empty(t, result.TxnGroups[0].FailureMessage)
 
-			// Ensure the txns have the correct auth addr
+			// Ensure the txns have the correct auth addr and simulate did not modify the actual transactions
 			require.Equal(t, basics.Address{}, payAfterOuterRekey.Txn.SignedTxn.AuthAddr)
 			require.Equal(t, basics.Address{}, payAfterInnerRekey.Txn.SignedTxn.AuthAddr)
 			require.Equal(t, basics.Address{}, finalTxn.Txn.SignedTxn.AuthAddr)
@@ -8994,9 +8999,11 @@ int 1
 			// Ensure the FixedSigner has been set correctly
 			require.Equal(t, other.Addr, payAfterOuterRekey.FixedSigner, other.Addr)
 			require.Equal(t, innerRekeyAddr, payAfterInnerRekey.FixedSigner)
+			// Since the final tranasction should be authorized by the sender, the FixedSigner should be empty
 			require.Empty(t, finalTxn.FixedSigner)
 		}
 
+		// FixSigner should only work if the signature for the transaction is missing. If the transaction has the WRONG signature, it should fail
 		if signPayAfterOuterRekey {
 			require.Equal(
 				t,
