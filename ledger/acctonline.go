@@ -118,6 +118,9 @@ type onlineAccounts struct {
 
 	// disableCache (de)activates the LRU cache use in onlineAccounts
 	disableCache bool
+
+	// cache for expired online circulation stake since the underlying query is quite heavy
+	expiredCirculationCache *expiredCirculationCache
 }
 
 // initialize initializes the accountUpdates structure
@@ -125,6 +128,9 @@ func (ao *onlineAccounts) initialize(cfg config.Local) {
 	ao.accountsReadCond = sync.NewCond(ao.accountsMu.RLocker())
 	ao.acctLookback = cfg.MaxAcctLookback
 	ao.disableCache = cfg.DisableLedgerLRUCache
+	// 2 pages * 256 entries look large enough to handle
+	// both early and late votes, and well as a current and previous stateproof periods
+	ao.expiredCirculationCache = makeExpiredCirculationCache(512)
 }
 
 // loadFromDisk is the 2nd level initialization, and is required before the onlineAccounts becomes functional
@@ -549,7 +555,7 @@ func (ao *onlineAccounts) onlineCirculation(rnd basics.Round, voteRnd basics.Rou
 		if rnd == 0 {
 			return totalStake, nil
 		}
-		expiredStake, err := ao.ExpiredOnlineCirculation(rnd, voteRnd)
+		expiredStake, err := ao.expiredOnlineCirculation(rnd, voteRnd)
 		if err != nil {
 			return basics.MicroAlgos{}, err
 		}
@@ -965,7 +971,7 @@ func (ao *onlineAccounts) TopOnlineAccounts(rnd basics.Round, voteRnd basics.Rou
 
 		// If set, return total online stake minus all future expired stake by voteRnd
 		if params.ExcludeExpiredCirculation {
-			expiredStake, err := ao.ExpiredOnlineCirculation(rnd, voteRnd)
+			expiredStake, err := ao.expiredOnlineCirculation(rnd, voteRnd)
 			if err != nil {
 				return nil, basics.MicroAlgos{}, err
 			}
@@ -1086,9 +1092,13 @@ func (ao *onlineAccounts) onlineAcctsExpiredByRound(rnd, voteRnd basics.Round) (
 	return expiredAccounts, nil
 }
 
-// ExpiredOnlineCirculation returns the total online stake for accounts with participation keys registered
+// expiredOnlineCirculation returns the total online stake for accounts with participation keys registered
 // at round `rnd` that are expired by round `voteRnd`.
-func (ao *onlineAccounts) ExpiredOnlineCirculation(rnd, voteRnd basics.Round) (basics.MicroAlgos, error) {
+func (ao *onlineAccounts) expiredOnlineCirculation(rnd, voteRnd basics.Round) (basics.MicroAlgos, error) {
+	if expiredStake, ok := ao.expiredCirculationCache.get(rnd, voteRnd); ok {
+		return expiredStake, nil
+	}
+
 	expiredAccounts, err := ao.onlineAcctsExpiredByRound(rnd, voteRnd)
 	if err != nil {
 		return basics.MicroAlgos{}, err
@@ -1101,6 +1111,7 @@ func (ao *onlineAccounts) ExpiredOnlineCirculation(rnd, voteRnd basics.Round) (b
 			return basics.MicroAlgos{}, fmt.Errorf("ExpiredOnlineCirculation: overflow totaling expired stake")
 		}
 	}
+	ao.expiredCirculationCache.put(rnd, voteRnd, expiredStake)
 	return expiredStake, nil
 }
 
