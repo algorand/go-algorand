@@ -296,3 +296,42 @@ func TestGlobalVsLocalResources(t *testing.T) {
 		}, groupAssignment.localTxnResources[2].Apps)
 	})
 }
+
+func TestPopulatorWithLocalResources(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	txns := make([]transactions.SignedTxnWithAD, 1)
+	txns[0].Txn.Type = protocol.ApplicationCallTx
+
+	populator := MakeResourcePopulator(txns)
+
+	proto := config.Consensus[protocol.ConsensusFuture]
+	groupTracker := makeGroupResourceTracker(txns, &proto)
+
+	// Note we don't need to test a box here since it will never be a local txn resource
+	addr := basics.Address{1, 1, 1}
+	app := basics.AppIndex(12345)
+	asset := basics.AssetIndex(12345)
+
+	groupTracker.localTxnResources[0].Accounts = make(map[basics.Address]struct{})
+	groupTracker.localTxnResources[0].Assets = make(map[basics.AssetIndex]struct{})
+	groupTracker.localTxnResources[0].Apps = make(map[basics.AppIndex]struct{})
+
+	groupTracker.localTxnResources[0].Accounts[addr] = struct{}{}
+	groupTracker.localTxnResources[0].Assets[asset] = struct{}{}
+	groupTracker.localTxnResources[0].Apps[app] = struct{}{}
+
+	populator.populateResources(groupTracker)
+
+	require.Equal(
+		t,
+		PopulatedArrays{
+			Assets:   []basics.AssetIndex{asset},
+			Apps:     []basics.AppIndex{app},
+			Accounts: []basics.Address{addr},
+			Boxes:    []logic.BoxRef{},
+		},
+		populator.TxnResources[0].getPopulatedArrays(),
+	)
+}
