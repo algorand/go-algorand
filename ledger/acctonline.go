@@ -130,7 +130,7 @@ func (ao *onlineAccounts) initialize(cfg config.Local) {
 	ao.disableCache = cfg.DisableLedgerLRUCache
 	// 2 pages * 256 entries look large enough to handle
 	// both early and late votes, and well as a current and previous stateproof periods
-	ao.expiredCirculationCache = makeExpiredCirculationCache(512)
+	ao.expiredCirculationCache = makeExpiredCirculationCache(256)
 }
 
 // loadFromDisk is the 2nd level initialization, and is required before the onlineAccounts becomes functional
