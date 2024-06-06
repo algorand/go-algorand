@@ -671,6 +671,7 @@ func (r *TxnResources) hasAccount(addr basics.Address) bool {
 	_, hasStatic := r.StaticAccounts[addr]
 	_, hasRef := r.Accounts[addr]
 	_, hasField := r.AccountsFromFields[addr]
+	// TODO: Check app addresses
 
 	return hasField || hasStatic || hasRef
 }
@@ -835,6 +836,29 @@ func (p *ResourcePopulator) addApp(app basics.AppIndex) error {
 	return fmt.Errorf("no room for app")
 }
 
+func (p *ResourcePopulator) addBox(app basics.AppIndex, name string) error {
+	// First try to find txn with app already available
+	for i := range p.TxnResources {
+		if p.TxnResources[i].hasApp(app) {
+			if p.TxnResources[i].hasRoom() {
+				p.TxnResources[i].addBox(app, name)
+				return nil
+			}
+		}
+	}
+
+	// Then try to find txn with room for both app and box
+	for i := range p.TxnResources {
+		if p.TxnResources[i].hasRoomForBoxWithApp() {
+			p.TxnResources[i].addApp(app)
+			p.TxnResources[i].addBox(app, name)
+			return nil
+		}
+	}
+
+	return fmt.Errorf("no room for box")
+}
+
 func (p *ResourcePopulator) populateResources(groupResourceTracker groupResourceTracker) error {
 	for i, tracker := range groupResourceTracker.localTxnResources {
 		for asset := range tracker.Assets {
@@ -866,6 +890,13 @@ func (p *ResourcePopulator) populateResources(groupResourceTracker groupResource
 
 	for account := range groupResourceTracker.globalResources.Accounts {
 		err := p.addAccount(account)
+		if err != nil {
+			return err
+		}
+	}
+
+	for box := range groupResourceTracker.globalResources.Boxes {
+		err := p.addBox(box.App, box.Name)
 		if err != nil {
 			return err
 		}

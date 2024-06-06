@@ -341,38 +341,57 @@ func TestPopulatorWithGlobalResources(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	txns := make([]transactions.SignedTxnWithAD, 1)
+	txns := make([]transactions.SignedTxnWithAD, 2)
 	txns[0].Txn.Type = protocol.ApplicationCallTx
+	txns[1].Txn.Type = protocol.ApplicationCallTx
+	txns[1].Txn.ApplicationID = basics.AppIndex(1)
 
 	populator := MakeResourcePopulator(txns)
 
 	proto := config.Consensus[protocol.ConsensusFuture]
 	groupTracker := makeGroupResourceTracker(txns, &proto)
 
-	// Note we don't need to test a box here since it will never be a local txn resource
 	addr := basics.Address{1, 1, 1}
 	app := basics.AppIndex(12345)
 	asset := basics.AssetIndex(12345)
+	box1 := logic.BoxRef{App: basics.AppIndex(1), Name: "box"}
+	box100 := logic.BoxRef{App: basics.AppIndex(100), Name: "box"}
 
 	groupTracker.globalResources.Accounts = make(map[basics.Address]struct{})
 	groupTracker.globalResources.Assets = make(map[basics.AssetIndex]struct{})
 	groupTracker.globalResources.Apps = make(map[basics.AppIndex]struct{})
+	groupTracker.globalResources.Boxes = make(map[logic.BoxRef]uint64)
 
 	groupTracker.globalResources.Accounts[addr] = struct{}{}
 	groupTracker.globalResources.Assets[asset] = struct{}{}
 	groupTracker.globalResources.Apps[app] = struct{}{}
+	groupTracker.globalResources.Boxes[box1] = 1
+	groupTracker.globalResources.Boxes[box100] = 1
 
 	err := populator.populateResources(groupTracker)
 	require.NoError(t, err)
 
+	// Transaction 0 has all the resources except for the app 1 box
 	require.Equal(
 		t,
 		PopulatedArrays{
 			Assets:   []basics.AssetIndex{asset},
-			Apps:     []basics.AppIndex{app},
+			Apps:     []basics.AppIndex{app, box100.App},
 			Accounts: []basics.Address{addr},
-			Boxes:    []logic.BoxRef{},
+			Boxes:    []logic.BoxRef{box100},
 		},
 		populator.TxnResources[0].getPopulatedArrays(),
+	)
+
+	// Transaction 1 has the app 1 box because the app ID is 1
+	require.Equal(
+		t,
+		PopulatedArrays{
+			Assets:   []basics.AssetIndex{},
+			Apps:     []basics.AppIndex{},
+			Accounts: []basics.Address{},
+			Boxes:    []logic.BoxRef{box1},
+		},
+		populator.TxnResources[1].getPopulatedArrays(),
 	)
 }
