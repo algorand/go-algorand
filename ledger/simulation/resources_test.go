@@ -371,6 +371,7 @@ func TestPopulatorWithGlobalResources(t *testing.T) {
 	app11 := basics.AppIndex(11)
 	app12 := basics.AppIndex(12)
 	addr13 := basics.Address{13}
+	emptyBox := logic.BoxRef{App: 0, Name: ""}
 
 	// Holdings
 	holding6_7 := ledgercore.AccountAsset{Address: addr6, Asset: asa7}    // new addr and asa
@@ -401,6 +402,8 @@ func TestPopulatorWithGlobalResources(t *testing.T) {
 	groupTracker.globalResources.AppLocals[local1_12] = struct{}{}
 	groupTracker.globalResources.AppLocals[local13_1] = struct{}{}
 
+	groupTracker.globalResources.NumEmptyBoxRefs = 1
+
 	err := populator.populateResources(groupTracker)
 	require.NoError(t, err)
 
@@ -415,9 +418,9 @@ func TestPopulatorWithGlobalResources(t *testing.T) {
 	require.ElementsMatch(t, pop0.Accounts, []basics.Address{addr2, holding6_7.Address, local10_11.Address})
 	require.ElementsMatch(t, pop0.Assets, []basics.AssetIndex{holding6_7.Asset})
 
-	// Txn 1 has the asset because it is added last and txn 0 is full
+	// Txn 1 has the asset and empty boxes because they are added last and txn 0 is full
 	require.ElementsMatch(t, pop1.Apps, []basics.AppIndex{})
-	require.ElementsMatch(t, pop1.Boxes, []logic.BoxRef{})
+	require.ElementsMatch(t, pop1.Boxes, []logic.BoxRef{emptyBox, emptyBox})
 	require.ElementsMatch(t, pop1.Accounts, []basics.Address{})
 	require.ElementsMatch(t, pop1.Assets, []basics.AssetIndex{asset4})
 

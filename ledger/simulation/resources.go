@@ -614,7 +614,7 @@ type TxnResources struct {
 	StaticAssets   map[basics.AssetIndex]struct{}
 	StaticApps     map[basics.AppIndex]struct{}
 	StaticAccounts map[basics.Address]struct{}
-	StaticBoxes    map[logic.BoxRef]struct{}
+	StaticBoxes    []logic.BoxRef
 
 	// The following fields are fields that are implicitly available to the transaction group from transaction fields
 	AssetFromField     basics.AssetIndex
@@ -624,7 +624,7 @@ type TxnResources struct {
 	// These are the fields currently being populated, thus we can mutate them however we'd like
 	Assets   map[basics.AssetIndex]struct{}
 	Apps     map[basics.AppIndex]struct{}
-	Boxes    map[logic.BoxRef]struct{}
+	Boxes    []logic.BoxRef
 	Accounts map[basics.Address]struct{}
 
 	MaxTotalRefs int
@@ -704,7 +704,7 @@ func (r *TxnResources) addApp(aid basics.AppIndex) {
 }
 
 func (r *TxnResources) addBox(app basics.AppIndex, name string) {
-	r.Boxes[logic.BoxRef{App: app, Name: name}] = struct{}{}
+	r.Boxes = append(r.Boxes, logic.BoxRef{App: app, Name: name})
 }
 
 func (r *TxnResources) addAddressFromField(addr basics.Address) {
@@ -746,10 +746,10 @@ func (r *TxnResources) getPopulatedArrays() PopulatedArrays {
 	}
 
 	boxes := make([]logic.BoxRef, 0, len(r.Boxes)+len(r.StaticBoxes))
-	for box := range r.Boxes {
+	for _, box := range r.Boxes {
 		boxes = append(boxes, box)
 	}
-	for box := range r.StaticBoxes {
+	for _, box := range r.StaticBoxes {
 		boxes = append(boxes, box)
 	}
 
@@ -770,12 +770,12 @@ func (p *ResourcePopulator) addTransaction(txn transactions.Transaction, groupIn
 		StaticAssets:       make(map[basics.AssetIndex]struct{}),
 		StaticApps:         make(map[basics.AppIndex]struct{}),
 		StaticAccounts:     make(map[basics.Address]struct{}),
-		StaticBoxes:        make(map[logic.BoxRef]struct{}),
+		StaticBoxes:        []logic.BoxRef{},
 		AccountsFromFields: make(map[basics.Address]struct{}),
 		Assets:             make(map[basics.AssetIndex]struct{}),
 		Apps:               make(map[basics.AppIndex]struct{}),
 		Accounts:           make(map[basics.Address]struct{}),
-		Boxes:              make(map[logic.BoxRef]struct{}),
+		Boxes:              []logic.BoxRef{},
 		// TODO: Get these values from the consensus params
 		MaxTotalRefs: 8,
 		MaxAccounts:  4,
@@ -800,7 +800,7 @@ func (p *ResourcePopulator) addTransaction(txn transactions.Transaction, groupIn
 
 		for _, box := range txn.Boxes {
 			ref := logic.BoxRef{App: txn.ForeignApps[box.Index], Name: string(box.Name)}
-			p.TxnResources[groupIndex].StaticBoxes[ref] = struct{}{}
+			p.TxnResources[groupIndex].StaticBoxes = append(p.TxnResources[groupIndex].StaticBoxes, ref)
 		}
 
 		p.TxnResources[groupIndex].AppFromField = txn.ApplicationID
@@ -1007,6 +1007,13 @@ func (p *ResourcePopulator) populateResources(groupResourceTracker groupResource
 
 	for asset := range groupResourceTracker.globalResources.Assets {
 		err := p.addAsset(asset)
+		if err != nil {
+			return err
+		}
+	}
+
+	for i := 0; i <= groupResourceTracker.globalResources.NumEmptyBoxRefs; i++ {
+		err := p.addBox(0, "")
 		if err != nil {
 			return err
 		}
