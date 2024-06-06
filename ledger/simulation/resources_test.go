@@ -411,7 +411,7 @@ func TestPopulatorWithGlobalResources(t *testing.T) {
 	groupTracker.globalResources.Assets[asa7] = struct{}{}     // asa from holding
 	groupTracker.globalResources.Apps[app5] = struct{}{}       // app from box
 
-	groupTracker.globalResources.NumEmptyBoxRefs = 10
+	groupTracker.globalResources.NumEmptyBoxRefs = 11
 
 	err := populator.populateResources(groupTracker)
 	require.NoError(t, err)

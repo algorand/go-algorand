@@ -1027,7 +1027,7 @@ func (p *ResourcePopulator) populateResources(groupResourceTracker groupResource
 		}
 	}
 
-	for i := 0; i <= groupResourceTracker.globalResources.NumEmptyBoxRefs; i++ {
+	for i := 0; i < groupResourceTracker.globalResources.NumEmptyBoxRefs; i++ {
 		err := p.addBox(0, "")
 		if err != nil {
 			return err
