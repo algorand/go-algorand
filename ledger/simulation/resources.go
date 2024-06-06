@@ -765,7 +765,7 @@ func (p *ResourcePopulator) addTransaction(txn transactions.Transaction, groupIn
 
 	// The Sender and RekeyTo will always be implicitly available for every transaction type
 	p.TxnResources[groupIndex].AccountsFromFields[txn.Sender] = struct{}{}
-	p.TxnResources[groupIndex].StaticAccounts[txn.RekeyTo] = struct{}{}
+	p.TxnResources[groupIndex].AccountsFromFields[txn.RekeyTo] = struct{}{}
 
 	if txn.Type == protocol.ApplicationCallTx {
 		for _, asset := range txn.ForeignAssets {

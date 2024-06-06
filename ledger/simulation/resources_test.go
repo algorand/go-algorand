@@ -409,14 +409,14 @@ func TestPopulatorWithGlobalResources(t *testing.T) {
 	pop2 := populator.TxnResources[2].getPopulatedArrays()
 
 	// Txn 0 has all the new multi-resources (ie. both resources are not already in a txn)
-	// Txn 0 also has the single address because it is populated before assets and apps
-	require.ElementsMatch(t, pop0.Apps, []basics.AppIndex{box5.App, local10_11.App})
+	// Txn 0 also gets the app and address resource because they are added before assets
+	require.ElementsMatch(t, pop0.Apps, []basics.AppIndex{box5.App, local10_11.App, app3})
 	require.ElementsMatch(t, pop0.Boxes, []logic.BoxRef{box5})
 	require.ElementsMatch(t, pop0.Accounts, []basics.Address{addr2, holding6_7.Address, local10_11.Address})
 	require.ElementsMatch(t, pop0.Assets, []basics.AssetIndex{holding6_7.Asset})
 
-	// TODO: Figure out why txn 0 isn't getting one of these... it only has 7 resources
-	require.ElementsMatch(t, pop1.Apps, []basics.AppIndex{app3})
+	// Txn 1 has the asset because it is added last and txn 0 is full
+	require.ElementsMatch(t, pop1.Apps, []basics.AppIndex{})
 	require.ElementsMatch(t, pop1.Boxes, []logic.BoxRef{})
 	require.ElementsMatch(t, pop1.Accounts, []basics.Address{})
 	require.ElementsMatch(t, pop1.Assets, []basics.AssetIndex{asset4})
