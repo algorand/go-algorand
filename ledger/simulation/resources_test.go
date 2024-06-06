@@ -305,7 +305,8 @@ func TestPopulatorWithLocalResources(t *testing.T) {
 	txns := make([]transactions.SignedTxnWithAD, 1)
 	txns[0].Txn.Type = protocol.ApplicationCallTx
 
-	populator := MakeResourcePopulator(txns, 16)
+	consensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	populator := MakeResourcePopulator(txns, consensusParams)
 
 	proto := config.Consensus[protocol.ConsensusFuture]
 	groupTracker := makeGroupResourceTracker(txns, &proto)
@@ -350,7 +351,8 @@ func TestPopulatorWithGlobalResources(t *testing.T) {
 	app1 := basics.AppIndex(1)
 	txns[2].Txn.ApplicationID = app1
 
-	populator := MakeResourcePopulator(txns, 16)
+	consensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	populator := MakeResourcePopulator(txns, consensusParams)
 
 	proto := config.Consensus[protocol.ConsensusFuture]
 	groupTracker := makeGroupResourceTracker(txns, &proto)
@@ -413,7 +415,7 @@ func TestPopulatorWithGlobalResources(t *testing.T) {
 
 	err := populator.populateResources(groupTracker)
 	require.NoError(t, err)
-	require.Equal(t, 16, len(populator.TxnResources))
+	require.Equal(t, consensusParams.MaxTxGroupSize, len(populator.TxnResources))
 
 	pop0 := populator.TxnResources[0].getPopulatedArrays()
 	pop1 := populator.TxnResources[1].getPopulatedArrays()
@@ -446,7 +448,7 @@ func TestPopulatorWithGlobalResources(t *testing.T) {
 	require.ElementsMatch(t, pop3.Boxes, []logic.BoxRef{emptyBox})
 
 	// The rest of the populated arrays should be empty
-	for i := 4; i < 16; i++ {
+	for i := 4; i < consensusParams.MaxTxGroupSize; i++ {
 		require.Empty(t, populator.TxnResources[i].getPopulatedArrays().Accounts)
 		require.Empty(t, populator.TxnResources[i].getPopulatedArrays().Apps)
 		require.Empty(t, populator.TxnResources[i].getPopulatedArrays().Assets)

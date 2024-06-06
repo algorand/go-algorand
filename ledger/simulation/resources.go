@@ -765,7 +765,7 @@ type ResourcePopulator struct {
 	TxnResources []TxnResources
 }
 
-func (p *ResourcePopulator) addTransaction(txn transactions.Transaction, groupIndex int) {
+func (p *ResourcePopulator) addTransaction(txn transactions.Transaction, groupIndex int, consensusParams config.ConsensusParams) {
 	p.TxnResources[groupIndex] = TxnResources{
 		StaticAssets:       make(map[basics.AssetIndex]struct{}),
 		StaticApps:         make(map[basics.AppIndex]struct{}),
@@ -776,9 +776,8 @@ func (p *ResourcePopulator) addTransaction(txn transactions.Transaction, groupIn
 		Apps:               make(map[basics.AppIndex]struct{}),
 		Accounts:           make(map[basics.Address]struct{}),
 		Boxes:              []logic.BoxRef{},
-		// TODO: Get these values from the consensus params
-		MaxTotalRefs: 8,
-		MaxAccounts:  4,
+		MaxTotalRefs:       consensusParams.MaxAppTotalTxnReferences,
+		MaxAccounts:        consensusParams.MaxAppTxnAccounts,
 	}
 
 	// The Sender and RekeyTo will always be implicitly available for every transaction type
@@ -1038,16 +1037,16 @@ func (p *ResourcePopulator) populateResources(groupResourceTracker groupResource
 	return nil
 }
 
-func MakeResourcePopulator(txnGroup []transactions.SignedTxnWithAD, maxGroupSize int) ResourcePopulator {
+func MakeResourcePopulator(txnGroup []transactions.SignedTxnWithAD, consensusParams config.ConsensusParams) ResourcePopulator {
 	populator := ResourcePopulator{
-		TxnResources: make([]TxnResources, maxGroupSize),
+		TxnResources: make([]TxnResources, consensusParams.MaxTxGroupSize),
 	}
 
 	for i, txn := range txnGroup {
-		populator.addTransaction(txn.Txn, i)
+		populator.addTransaction(txn.Txn, i, consensusParams)
 	}
 
-	for i := len(txnGroup); i < maxGroupSize; i++ {
+	for i := len(txnGroup); i < consensusParams.MaxTxGroupSize; i++ {
 		populator.TxnResources[i] = TxnResources{
 			StaticAssets:       make(map[basics.AssetIndex]struct{}),
 			StaticApps:         make(map[basics.AppIndex]struct{}),
@@ -1058,9 +1057,8 @@ func MakeResourcePopulator(txnGroup []transactions.SignedTxnWithAD, maxGroupSize
 			Apps:               make(map[basics.AppIndex]struct{}),
 			Accounts:           make(map[basics.Address]struct{}),
 			Boxes:              []logic.BoxRef{},
-			// TODO: Get these values from the consensus params
-			MaxTotalRefs: 8,
-			MaxAccounts:  4,
+			MaxTotalRefs:       consensusParams.MaxAppTotalTxnReferences,
+			MaxAccounts:        consensusParams.MaxAppTxnAccounts,
 		}
 	}
 
