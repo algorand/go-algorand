@@ -880,7 +880,7 @@ func (ao *onlineAccounts) TopOnlineAccounts(rnd basics.Round, voteRnd basics.Rou
 		for uint64(len(candidates)) < n+uint64(len(modifiedAccounts)) {
 			var accts map[basics.Address]*ledgercore.OnlineAccount
 			start := time.Now()
-			ledgerAccountsonlinetopCount.Inc(nil)
+			ledgerAccountsOnlineTopCount.Inc(nil)
 			err = ao.dbs.Snapshot(func(ctx context.Context, tx trackerdb.SnapshotScope) (err error) {
 				ar, err := tx.MakeAccountsReader()
 				if err != nil {
@@ -894,7 +894,7 @@ func (ao *onlineAccounts) TopOnlineAccounts(rnd basics.Round, voteRnd basics.Rou
 				dbRound, err = ar.AccountsRound()
 				return
 			})
-			ledgerAccountsonlinetopMicros.AddMicrosecondsSince(start, nil)
+			ledgerAccountsOnlineTopMicros.AddMicrosecondsSince(start, nil)
 			if err != nil {
 				return nil, basics.MicroAlgos{}, err
 			}
@@ -1033,6 +1033,9 @@ func (ao *onlineAccounts) onlineAcctsExpiredByRound(rnd, voteRnd basics.Round) (
 		rewardsParams := config.Consensus[roundParams.CurrentProtocol]
 		rewardsLevel := roundParams.RewardsLevel
 
+		start := time.Now()
+		ledgerAccountExpiredByRoundCount.Inc(nil)
+
 		// Step 1: get all online accounts from DB for rnd
 		// Not unlocking ao.accountsMu yet, to stay consistent with Step 2
 		var dbRound basics.Round
@@ -1048,6 +1051,7 @@ func (ao *onlineAccounts) onlineAcctsExpiredByRound(rnd, voteRnd basics.Round) (
 			dbRound, err = ar.AccountsRound()
 			return err
 		})
+		ledgerAccountsExpiredByRoundMicros.AddMicrosecondsSince(start, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -1115,5 +1119,7 @@ func (ao *onlineAccounts) expiredOnlineCirculation(rnd, voteRnd basics.Round) (b
 	return expiredStake, nil
 }
 
-var ledgerAccountsonlinetopCount = metrics.NewCounter("ledger_accountsonlinetop_count", "calls")
-var ledgerAccountsonlinetopMicros = metrics.NewCounter("ledger_accountsonlinetop_micros", "µs spent")
+var ledgerAccountsOnlineTopCount = metrics.NewCounter("ledger_accountsonlinetop_count", "calls")
+var ledgerAccountsOnlineTopMicros = metrics.NewCounter("ledger_accountsonlinetop_micros", "µs spent")
+var ledgerAccountExpiredByRoundCount = metrics.NewCounter("ledger_accountsexpired_count", "calls")
+var ledgerAccountsExpiredByRoundMicros = metrics.NewCounter("ledger_accountsexpired_micros", "µs spent")
