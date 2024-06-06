@@ -345,7 +345,9 @@ func TestPopulatorWithGlobalResources(t *testing.T) {
 	txns := make([]transactions.SignedTxnWithAD, 2)
 	txns[0].Txn.Type = protocol.ApplicationCallTx
 	txns[1].Txn.Type = protocol.ApplicationCallTx
-	txns[1].Txn.ApplicationID = basics.AppIndex(1)
+
+	app1 := basics.AppIndex(1)
+	txns[1].Txn.ApplicationID = app1
 
 	populator := MakeResourcePopulator(txns)
 
@@ -353,18 +355,24 @@ func TestPopulatorWithGlobalResources(t *testing.T) {
 	groupTracker := makeGroupResourceTracker(txns, &proto)
 
 	// Resources that will go in the first transaction
-	addr := basics.Address{1, 1, 1}
-	app := basics.AppIndex(12345)
-	asset := basics.AssetIndex(12345)
-	box100 := logic.BoxRef{App: basics.AppIndex(100), Name: "box"}
-	addr100 := basics.Address{100}
-	asa100 := basics.AssetIndex(100)
+	addr2 := basics.Address{2}
+	app3 := basics.AppIndex(3)
+	asset4 := basics.AssetIndex(4)
+	app5 := basics.AppIndex(5)
+	box5 := logic.BoxRef{App: app5, Name: "box"}
+	addr6 := basics.Address{6}
+	asa7 := basics.AssetIndex(7)
 
 	// Resources that will go in the second transaction
-	box1 := logic.BoxRef{App: basics.AppIndex(1), Name: "box"}
-	app1Addr := basics.AppIndex(1).Address()
-	asa1 := basics.AssetIndex(1)
-	addr1 := basics.Address{1}
+	box1 := logic.BoxRef{App: app1, Name: "box"}
+	app1Addr := app1.Address()
+	asa8 := basics.AssetIndex(8)
+	addr9 := basics.Address{9}
+
+	// Holdings
+	holding6_7 := ledgercore.AccountAsset{Address: addr6, Asset: asa7}
+	holding1_8 := ledgercore.AccountAsset{Address: app1Addr, Asset: asa8}
+	holding9_8 := ledgercore.AccountAsset{Address: addr9, Asset: asa8}
 
 	groupTracker.globalResources.Accounts = make(map[basics.Address]struct{})
 	groupTracker.globalResources.Assets = make(map[basics.AssetIndex]struct{})
@@ -372,14 +380,14 @@ func TestPopulatorWithGlobalResources(t *testing.T) {
 	groupTracker.globalResources.Boxes = make(map[logic.BoxRef]uint64)
 	groupTracker.globalResources.AssetHoldings = make(map[ledgercore.AccountAsset]struct{})
 
-	groupTracker.globalResources.Accounts[addr] = struct{}{}
-	groupTracker.globalResources.Assets[asset] = struct{}{}
-	groupTracker.globalResources.Apps[app] = struct{}{}
+	groupTracker.globalResources.Accounts[addr2] = struct{}{}
+	groupTracker.globalResources.Assets[asset4] = struct{}{}
+	groupTracker.globalResources.Apps[app3] = struct{}{}
 	groupTracker.globalResources.Boxes[box1] = 1
-	groupTracker.globalResources.Boxes[box100] = 1
-	groupTracker.globalResources.AssetHoldings[ledgercore.AccountAsset{Address: addr100, Asset: asa100}] = struct{}{}
-	groupTracker.globalResources.AssetHoldings[ledgercore.AccountAsset{Address: app1Addr, Asset: asa1}] = struct{}{}
-	groupTracker.globalResources.AssetHoldings[ledgercore.AccountAsset{Address: addr1, Asset: asa1}] = struct{}{}
+	groupTracker.globalResources.Boxes[box5] = 1
+	groupTracker.globalResources.AssetHoldings[holding6_7] = struct{}{}
+	groupTracker.globalResources.AssetHoldings[holding1_8] = struct{}{}
+	groupTracker.globalResources.AssetHoldings[holding9_8] = struct{}{}
 
 	err := populator.populateResources(groupTracker)
 	require.NoError(t, err)
@@ -387,14 +395,14 @@ func TestPopulatorWithGlobalResources(t *testing.T) {
 	pop0 := populator.TxnResources[0].getPopulatedArrays()
 	pop1 := populator.TxnResources[1].getPopulatedArrays()
 
-	require.ElementsMatch(t, pop0.Apps, []basics.AppIndex{app, box100.App})
-	require.ElementsMatch(t, pop0.Boxes, []logic.BoxRef{box100})
-	require.ElementsMatch(t, pop0.Accounts, []basics.Address{addr, addr100})
-	require.ElementsMatch(t, pop0.Assets, []basics.AssetIndex{asset, asa100})
+	require.ElementsMatch(t, pop0.Apps, []basics.AppIndex{app3, box5.App})
+	require.ElementsMatch(t, pop0.Boxes, []logic.BoxRef{box5})
+	require.ElementsMatch(t, pop0.Accounts, []basics.Address{addr2, holding6_7.Address})
+	require.ElementsMatch(t, pop0.Assets, []basics.AssetIndex{asset4, holding6_7.Asset})
 
 	// Txn 1 has all the resources that had partial requirements already in tnx 1
 	require.ElementsMatch(t, pop1.Apps, []basics.AppIndex{})
 	require.ElementsMatch(t, pop1.Boxes, []logic.BoxRef{box1})
-	require.ElementsMatch(t, pop1.Accounts, []basics.Address{addr1})
-	require.ElementsMatch(t, pop1.Assets, []basics.AssetIndex{asa1})
+	require.ElementsMatch(t, pop1.Accounts, []basics.Address{holding9_8.Address})
+	require.ElementsMatch(t, pop1.Assets, []basics.AssetIndex{holding1_8.Asset})
 }
