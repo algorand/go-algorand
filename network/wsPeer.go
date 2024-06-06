@@ -93,6 +93,9 @@ var networkMessageReceivedByTag *metrics.TagCounter
 var networkMessageSentTotal = metrics.MakeCounter(metrics.NetworkMessageSentTotal)
 var networkMessageSentByTag *metrics.TagCounter
 
+var networkHandleMicrosByTag *metrics.TagCounter
+var networkHandleCountByTag *metrics.TagCounter
+
 var networkConnectionsDroppedTotal = metrics.MakeCounter(metrics.NetworkConnectionsDroppedTotal)
 var networkMessageQueueMicrosTotal = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_message_sent_queue_micros_total", Description: "Total microseconds message spent waiting in queue to be sent"})
 
