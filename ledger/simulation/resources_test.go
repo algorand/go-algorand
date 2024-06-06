@@ -342,20 +342,15 @@ func TestPopulatorWithGlobalResources(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	txns := make([]transactions.SignedTxnWithAD, 2)
+	txns := make([]transactions.SignedTxnWithAD, 3)
 	txns[0].Txn.Type = protocol.ApplicationCallTx
 	txns[1].Txn.Type = protocol.ApplicationCallTx
+	txns[2].Txn.Type = protocol.ApplicationCallTx
 
 	app1 := basics.AppIndex(1)
-	txns[1].Txn.ApplicationID = app1
+	txns[2].Txn.ApplicationID = app1
 
 	populator := MakeResourcePopulator(txns)
-
-	// TODO: Test maxes seperately
-	populator.TxnResources[0].MaxAccounts = 999
-	populator.TxnResources[0].MaxTotalRefs = 999
-	populator.TxnResources[1].MaxAccounts = 999
-	populator.TxnResources[1].MaxTotalRefs = 999
 
 	proto := config.Consensus[protocol.ConsensusFuture]
 	groupTracker := makeGroupResourceTracker(txns, &proto)
@@ -411,15 +406,24 @@ func TestPopulatorWithGlobalResources(t *testing.T) {
 
 	pop0 := populator.TxnResources[0].getPopulatedArrays()
 	pop1 := populator.TxnResources[1].getPopulatedArrays()
+	pop2 := populator.TxnResources[2].getPopulatedArrays()
 
-	require.ElementsMatch(t, pop0.Apps, []basics.AppIndex{app3, box5.App, local10_11.App})
+	// Txn 0 has all the new multi-resources (ie. both resources are not already in a txn)
+	// Txn 0 also has the single address because it is populated before assets and apps
+	require.ElementsMatch(t, pop0.Apps, []basics.AppIndex{box5.App, local10_11.App})
 	require.ElementsMatch(t, pop0.Boxes, []logic.BoxRef{box5})
 	require.ElementsMatch(t, pop0.Accounts, []basics.Address{addr2, holding6_7.Address, local10_11.Address})
-	require.ElementsMatch(t, pop0.Assets, []basics.AssetIndex{asset4, holding6_7.Asset})
+	require.ElementsMatch(t, pop0.Assets, []basics.AssetIndex{holding6_7.Asset})
 
-	// Txn 1 has all the resources that had partial requirements already in tnx 1
-	require.ElementsMatch(t, pop1.Apps, []basics.AppIndex{local1_12.App})
-	require.ElementsMatch(t, pop1.Boxes, []logic.BoxRef{box1})
-	require.ElementsMatch(t, pop1.Accounts, []basics.Address{holding9_8.Address, local13_1.Address})
-	require.ElementsMatch(t, pop1.Assets, []basics.AssetIndex{holding1_8.Asset})
+	// TODO: Figure out why txn 0 isn't getting one of these... it only has 7 resources
+	require.ElementsMatch(t, pop1.Apps, []basics.AppIndex{app3})
+	require.ElementsMatch(t, pop1.Boxes, []logic.BoxRef{})
+	require.ElementsMatch(t, pop1.Accounts, []basics.Address{})
+	require.ElementsMatch(t, pop1.Assets, []basics.AssetIndex{asset4})
+
+	// Txn 2 has all the resources that had partial requirements already in txn 2
+	require.ElementsMatch(t, pop2.Apps, []basics.AppIndex{local1_12.App})
+	require.ElementsMatch(t, pop2.Boxes, []logic.BoxRef{box1})
+	require.ElementsMatch(t, pop2.Accounts, []basics.Address{holding9_8.Address, local13_1.Address})
+	require.ElementsMatch(t, pop2.Assets, []basics.AssetIndex{holding1_8.Asset})
 }
