@@ -956,6 +956,7 @@ func (p *ResourcePopulator) addLocal(addr basics.Address, aid basics.AppIndex) e
 }
 
 func (p *ResourcePopulator) populateResources(groupResourceTracker groupResourceTracker) error {
+	// First populate resources that HAVE to be assigned to a specific transaction
 	for i, tracker := range groupResourceTracker.localTxnResources {
 		for asset := range tracker.Assets {
 			p.TxnResources[i].addAsset(asset)
@@ -970,11 +971,16 @@ func (p *ResourcePopulator) populateResources(groupResourceTracker groupResource
 		}
 	}
 
+	// Then assign cross-reference resources because they have the most strict requirements (one account and another resource)
 	for holding := range groupResourceTracker.globalResources.AssetHoldings {
 		err := p.addHolding(holding.Address, holding.Asset)
 		if err != nil {
 			return err
 		}
+
+		// Remove the resources from the global tracker in case they were added seperately
+		delete(groupResourceTracker.globalResources.Assets, holding.Asset)
+		delete(groupResourceTracker.globalResources.Accounts, holding.Address)
 	}
 
 	for local := range groupResourceTracker.globalResources.AppLocals {
@@ -982,15 +988,24 @@ func (p *ResourcePopulator) populateResources(groupResourceTracker groupResource
 		if err != nil {
 			return err
 		}
+
+		// Remove the resources from the global tracker in case they were added seperately
+		delete(groupResourceTracker.globalResources.Apps, local.App)
+		delete(groupResourceTracker.globalResources.Accounts, local.Address)
 	}
 
+	// Then assign boxes because they can take up to two slots
 	for box := range groupResourceTracker.globalResources.Boxes {
 		err := p.addBox(box.App, box.Name)
 		if err != nil {
 			return err
 		}
+
+		// Remove the app from the global tracker in case it was added seperately
+		delete(groupResourceTracker.globalResources.Apps, box.App)
 	}
 
+	// Then assign accounts because they have a lower limit than other resources
 	for account := range groupResourceTracker.globalResources.Accounts {
 		err := p.addAccount(account)
 		if err != nil {
@@ -998,6 +1013,7 @@ func (p *ResourcePopulator) populateResources(groupResourceTracker groupResource
 		}
 	}
 
+	// Finally assign the remaining resources which just require one slot
 	for app := range groupResourceTracker.globalResources.Apps {
 		err := p.addApp(app)
 		if err != nil {

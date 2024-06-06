@@ -402,17 +402,25 @@ func TestPopulatorWithGlobalResources(t *testing.T) {
 	groupTracker.globalResources.AppLocals[local1_12] = struct{}{}
 	groupTracker.globalResources.AppLocals[local13_1] = struct{}{}
 
+	// These resources should not have an effect on the population because they are inlcuded in a cross-reference or box
+	groupTracker.globalResources.Apps[app12] = struct{}{}      // app from appLocal
+	groupTracker.globalResources.Accounts[addr10] = struct{}{} // addr from appLocal
+	groupTracker.globalResources.Accounts[addr6] = struct{}{}  // addr from holding
+	groupTracker.globalResources.Assets[asa7] = struct{}{}     // asa from holding
+	groupTracker.globalResources.Apps[app5] = struct{}{}       // app from box
+
 	groupTracker.globalResources.NumEmptyBoxRefs = 1
 
 	err := populator.populateResources(groupTracker)
 	require.NoError(t, err)
+	require.Equal(t, 3, len(populator.TxnResources))
 
 	pop0 := populator.TxnResources[0].getPopulatedArrays()
 	pop1 := populator.TxnResources[1].getPopulatedArrays()
 	pop2 := populator.TxnResources[2].getPopulatedArrays()
 
 	// Txn 0 has all the new multi-resources (ie. both resources are not already in a txn)
-	// Txn 0 also gets the app and address resource because they are added before assets
+	// Txn 0 also gets the app and address resource because they are added before other resources
 	require.ElementsMatch(t, pop0.Apps, []basics.AppIndex{box5.App, local10_11.App, app3})
 	require.ElementsMatch(t, pop0.Boxes, []logic.BoxRef{box5})
 	require.ElementsMatch(t, pop0.Accounts, []basics.Address{addr2, holding6_7.Address, local10_11.Address})
