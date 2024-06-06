@@ -707,6 +707,12 @@ func (r *TxnResources) addBox(app basics.AppIndex, name string) {
 	r.Boxes[logic.BoxRef{App: app, Name: name}] = struct{}{}
 }
 
+func (r *TxnResources) addAddressFromField(addr basics.Address) {
+	if !addr.IsZero() {
+		r.AccountsFromFields[addr] = struct{}{}
+	}
+}
+
 type PopulatedArrays struct {
 	Accounts []basics.Address
 	Assets   []basics.AssetIndex
@@ -719,9 +725,15 @@ func (r *TxnResources) getPopulatedArrays() PopulatedArrays {
 	for account := range r.Accounts {
 		accounts = append(accounts, account)
 	}
+	for account := range r.StaticAccounts {
+		accounts = append(accounts, account)
+	}
 
 	assets := make([]basics.AssetIndex, 0, len(r.Assets)+len(r.StaticAssets))
 	for asset := range r.Assets {
+		assets = append(assets, asset)
+	}
+	for asset := range r.StaticAssets {
 		assets = append(assets, asset)
 	}
 
@@ -729,9 +741,15 @@ func (r *TxnResources) getPopulatedArrays() PopulatedArrays {
 	for app := range r.Apps {
 		apps = append(apps, app)
 	}
+	for app := range r.StaticApps {
+		apps = append(apps, app)
+	}
 
 	boxes := make([]logic.BoxRef, 0, len(r.Boxes)+len(r.StaticBoxes))
 	for box := range r.Boxes {
+		boxes = append(boxes, box)
+	}
+	for box := range r.StaticBoxes {
 		boxes = append(boxes, box)
 	}
 
@@ -764,8 +782,8 @@ func (p *ResourcePopulator) addTransaction(txn transactions.Transaction, groupIn
 	}
 
 	// The Sender and RekeyTo will always be implicitly available for every transaction type
-	p.TxnResources[groupIndex].AccountsFromFields[txn.Sender] = struct{}{}
-	p.TxnResources[groupIndex].AccountsFromFields[txn.RekeyTo] = struct{}{}
+	p.TxnResources[groupIndex].addAddressFromField(txn.Sender)
+	p.TxnResources[groupIndex].addAddressFromField(txn.RekeyTo)
 
 	if txn.Type == protocol.ApplicationCallTx {
 		for _, asset := range txn.ForeignAssets {
@@ -792,17 +810,16 @@ func (p *ResourcePopulator) addTransaction(txn transactions.Transaction, groupIn
 
 	if txn.Type == protocol.AssetTransferTx {
 		p.TxnResources[groupIndex].AssetFromField = txn.XferAsset
-
-		p.TxnResources[groupIndex].AccountsFromFields[txn.AssetReceiver] = struct{}{}
-		p.TxnResources[groupIndex].AccountsFromFields[txn.AssetCloseTo] = struct{}{}
-		p.TxnResources[groupIndex].AccountsFromFields[txn.AssetSender] = struct{}{}
+		p.TxnResources[groupIndex].addAddressFromField(txn.AssetReceiver)
+		p.TxnResources[groupIndex].addAddressFromField(txn.AssetCloseTo)
+		p.TxnResources[groupIndex].addAddressFromField(txn.AssetSender)
 
 		return
 	}
 
 	if txn.Type == protocol.PaymentTx {
-		p.TxnResources[groupIndex].AccountsFromFields[txn.Receiver] = struct{}{}
-		p.TxnResources[groupIndex].AccountsFromFields[txn.CloseRemainderTo] = struct{}{}
+		p.TxnResources[groupIndex].addAddressFromField(txn.Receiver)
+		p.TxnResources[groupIndex].addAddressFromField(txn.CloseRemainderTo)
 
 		return
 	}
@@ -815,7 +832,7 @@ func (p *ResourcePopulator) addTransaction(txn transactions.Transaction, groupIn
 
 	if txn.Type == protocol.AssetFreezeTx {
 		p.TxnResources[groupIndex].AssetFromField = txn.FreezeAsset
-		p.TxnResources[groupIndex].AccountsFromFields[txn.FreezeAccount] = struct{}{}
+		p.TxnResources[groupIndex].addAddressFromField(txn.FreezeAccount)
 
 		return
 	}
