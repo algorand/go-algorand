@@ -2730,7 +2730,7 @@ func TestTxHandlerCapGuard(t *testing.T) {
 
 	signedTx := tx.Sign(secrets[0])
 	blob := protocol.Encode(&signedTx)
-	blob[0] += 1 // make it invalid
+	blob[0]++ // make it invalid
 
 	var completed atomic.Bool
 	go func() {
