@@ -906,6 +906,38 @@ func (p *ResourcePopulator) addHolding(addr basics.Address, aid basics.AssetInde
 	return fmt.Errorf("no room for holding")
 }
 
+func (p *ResourcePopulator) addLocal(addr basics.Address, aid basics.AppIndex) error {
+	// First try to find txn with account already available
+	for i := range p.TxnResources {
+		if p.TxnResources[i].hasAccount(addr) {
+			if p.TxnResources[i].hasRoom() {
+				p.TxnResources[i].addApp(aid)
+				return nil
+			}
+		}
+	}
+
+	// Then try to find txn with app already available
+	for i := range p.TxnResources {
+		if p.TxnResources[i].hasApp(aid) {
+			if p.TxnResources[i].hasRoomForAccount() {
+				p.TxnResources[i].addAccount(addr)
+				return nil
+			}
+		}
+	}
+
+	// Finally try to find txn with room for both account and app
+	for i := range p.TxnResources {
+		if p.TxnResources[i].hasRoomForCrossRef() {
+			p.TxnResources[i].addApp(aid)
+			p.TxnResources[i].addAccount(addr)
+			return nil
+		}
+	}
+	return fmt.Errorf("no room for local")
+}
+
 func (p *ResourcePopulator) populateResources(groupResourceTracker groupResourceTracker) error {
 	for i, tracker := range groupResourceTracker.localTxnResources {
 		for asset := range tracker.Assets {
@@ -923,6 +955,13 @@ func (p *ResourcePopulator) populateResources(groupResourceTracker groupResource
 
 	for holding := range groupResourceTracker.globalResources.AssetHoldings {
 		err := p.addHolding(holding.Address, holding.Asset)
+		if err != nil {
+			return err
+		}
+	}
+
+	for local := range groupResourceTracker.globalResources.AppLocals {
+		err := p.addLocal(local.Address, local.App)
 		if err != nil {
 			return err
 		}

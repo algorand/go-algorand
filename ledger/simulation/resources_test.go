@@ -351,10 +351,16 @@ func TestPopulatorWithGlobalResources(t *testing.T) {
 
 	populator := MakeResourcePopulator(txns)
 
+	// TODO: Test maxes seperately
+	populator.TxnResources[0].MaxAccounts = 999
+	populator.TxnResources[0].MaxTotalRefs = 999
+	populator.TxnResources[1].MaxAccounts = 999
+	populator.TxnResources[1].MaxTotalRefs = 999
+
 	proto := config.Consensus[protocol.ConsensusFuture]
 	groupTracker := makeGroupResourceTracker(txns, &proto)
 
-	// Resources that will go in the first transaction
+	// Resources
 	addr2 := basics.Address{2}
 	app3 := basics.AppIndex(3)
 	asset4 := basics.AssetIndex(4)
@@ -362,23 +368,31 @@ func TestPopulatorWithGlobalResources(t *testing.T) {
 	box5 := logic.BoxRef{App: app5, Name: "box"}
 	addr6 := basics.Address{6}
 	asa7 := basics.AssetIndex(7)
-
-	// Resources that will go in the second transaction
 	box1 := logic.BoxRef{App: app1, Name: "box"}
 	app1Addr := app1.Address()
 	asa8 := basics.AssetIndex(8)
 	addr9 := basics.Address{9}
+	addr10 := basics.Address{10}
+	app11 := basics.AppIndex(11)
+	app12 := basics.AppIndex(12)
+	addr13 := basics.Address{13}
 
 	// Holdings
-	holding6_7 := ledgercore.AccountAsset{Address: addr6, Asset: asa7}
-	holding1_8 := ledgercore.AccountAsset{Address: app1Addr, Asset: asa8}
-	holding9_8 := ledgercore.AccountAsset{Address: addr9, Asset: asa8}
+	holding6_7 := ledgercore.AccountAsset{Address: addr6, Asset: asa7}    // new addr and asa
+	holding1_8 := ledgercore.AccountAsset{Address: app1Addr, Asset: asa8} // new asa
+	holding9_8 := ledgercore.AccountAsset{Address: addr9, Asset: asa8}    // new addr
+
+	// Locals
+	local10_11 := ledgercore.AccountApp{Address: addr10, App: app11}  // new addr and app
+	local1_12 := ledgercore.AccountApp{Address: app1Addr, App: app12} // new app
+	local13_1 := ledgercore.AccountApp{Address: addr13, App: app1}    // new addr
 
 	groupTracker.globalResources.Accounts = make(map[basics.Address]struct{})
 	groupTracker.globalResources.Assets = make(map[basics.AssetIndex]struct{})
 	groupTracker.globalResources.Apps = make(map[basics.AppIndex]struct{})
 	groupTracker.globalResources.Boxes = make(map[logic.BoxRef]uint64)
 	groupTracker.globalResources.AssetHoldings = make(map[ledgercore.AccountAsset]struct{})
+	groupTracker.globalResources.AppLocals = make(map[ledgercore.AccountApp]struct{})
 
 	groupTracker.globalResources.Accounts[addr2] = struct{}{}
 	groupTracker.globalResources.Assets[asset4] = struct{}{}
@@ -388,6 +402,9 @@ func TestPopulatorWithGlobalResources(t *testing.T) {
 	groupTracker.globalResources.AssetHoldings[holding6_7] = struct{}{}
 	groupTracker.globalResources.AssetHoldings[holding1_8] = struct{}{}
 	groupTracker.globalResources.AssetHoldings[holding9_8] = struct{}{}
+	groupTracker.globalResources.AppLocals[local10_11] = struct{}{}
+	groupTracker.globalResources.AppLocals[local1_12] = struct{}{}
+	groupTracker.globalResources.AppLocals[local13_1] = struct{}{}
 
 	err := populator.populateResources(groupTracker)
 	require.NoError(t, err)
@@ -395,14 +412,14 @@ func TestPopulatorWithGlobalResources(t *testing.T) {
 	pop0 := populator.TxnResources[0].getPopulatedArrays()
 	pop1 := populator.TxnResources[1].getPopulatedArrays()
 
-	require.ElementsMatch(t, pop0.Apps, []basics.AppIndex{app3, box5.App})
+	require.ElementsMatch(t, pop0.Apps, []basics.AppIndex{app3, box5.App, local10_11.App})
 	require.ElementsMatch(t, pop0.Boxes, []logic.BoxRef{box5})
-	require.ElementsMatch(t, pop0.Accounts, []basics.Address{addr2, holding6_7.Address})
+	require.ElementsMatch(t, pop0.Accounts, []basics.Address{addr2, holding6_7.Address, local10_11.Address})
 	require.ElementsMatch(t, pop0.Assets, []basics.AssetIndex{asset4, holding6_7.Asset})
 
 	// Txn 1 has all the resources that had partial requirements already in tnx 1
-	require.ElementsMatch(t, pop1.Apps, []basics.AppIndex{})
+	require.ElementsMatch(t, pop1.Apps, []basics.AppIndex{local1_12.App})
 	require.ElementsMatch(t, pop1.Boxes, []logic.BoxRef{box1})
-	require.ElementsMatch(t, pop1.Accounts, []basics.Address{holding9_8.Address})
+	require.ElementsMatch(t, pop1.Accounts, []basics.Address{holding9_8.Address, local13_1.Address})
 	require.ElementsMatch(t, pop1.Assets, []basics.AssetIndex{holding1_8.Asset})
 }
