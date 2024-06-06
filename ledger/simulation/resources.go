@@ -871,7 +871,7 @@ func (p *ResourcePopulator) addApp(app basics.AppIndex) error {
 func (p *ResourcePopulator) addBox(app basics.AppIndex, name string) error {
 	// First try to find txn with app already available
 	for i := range p.TxnResources {
-		if p.TxnResources[i].hasApp(app) {
+		if app == basics.AppIndex(0) || p.TxnResources[i].hasApp(app) {
 			if p.TxnResources[i].hasRoom() {
 				p.TxnResources[i].addBox(app, name)
 				return nil
@@ -1038,13 +1038,30 @@ func (p *ResourcePopulator) populateResources(groupResourceTracker groupResource
 	return nil
 }
 
-func MakeResourcePopulator(txnGroup []transactions.SignedTxnWithAD) ResourcePopulator {
+func MakeResourcePopulator(txnGroup []transactions.SignedTxnWithAD, maxGroupSize int) ResourcePopulator {
 	populator := ResourcePopulator{
-		TxnResources: make([]TxnResources, len(txnGroup)),
+		TxnResources: make([]TxnResources, maxGroupSize),
 	}
 
 	for i, txn := range txnGroup {
 		populator.addTransaction(txn.Txn, i)
+	}
+
+	for i := len(txnGroup); i < maxGroupSize; i++ {
+		populator.TxnResources[i] = TxnResources{
+			StaticAssets:       make(map[basics.AssetIndex]struct{}),
+			StaticApps:         make(map[basics.AppIndex]struct{}),
+			StaticAccounts:     make(map[basics.Address]struct{}),
+			StaticBoxes:        []logic.BoxRef{},
+			AccountsFromFields: make(map[basics.Address]struct{}),
+			Assets:             make(map[basics.AssetIndex]struct{}),
+			Apps:               make(map[basics.AppIndex]struct{}),
+			Accounts:           make(map[basics.Address]struct{}),
+			Boxes:              []logic.BoxRef{},
+			// TODO: Get these values from the consensus params
+			MaxTotalRefs: 8,
+			MaxAccounts:  4,
+		}
 	}
 
 	return populator
