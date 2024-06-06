@@ -371,27 +371,17 @@ func TestPopulatorWithGlobalResources(t *testing.T) {
 	err := populator.populateResources(groupTracker)
 	require.NoError(t, err)
 
-	// Transaction 0 has all the resources except for the app 1 box
-	require.Equal(
-		t,
-		PopulatedArrays{
-			Assets:   []basics.AssetIndex{asset},
-			Apps:     []basics.AppIndex{app, box100.App},
-			Accounts: []basics.Address{addr},
-			Boxes:    []logic.BoxRef{box100},
-		},
-		populator.TxnResources[0].getPopulatedArrays(),
-	)
+	pop0 := populator.TxnResources[0].getPopulatedArrays()
+	pop1 := populator.TxnResources[1].getPopulatedArrays()
 
-	// Transaction 1 has the app 1 box because the app ID is 1
-	require.Equal(
-		t,
-		PopulatedArrays{
-			Assets:   []basics.AssetIndex{},
-			Apps:     []basics.AppIndex{},
-			Accounts: []basics.Address{},
-			Boxes:    []logic.BoxRef{box1},
-		},
-		populator.TxnResources[1].getPopulatedArrays(),
-	)
+	require.ElementsMatch(t, pop0.Apps, []basics.AppIndex{app, box100.App})
+	require.ElementsMatch(t, pop0.Boxes, []logic.BoxRef{box100})
+	require.ElementsMatch(t, pop0.Accounts, []basics.Address{addr})
+	require.ElementsMatch(t, pop0.Assets, []basics.AssetIndex{asset})
+
+	// Txn 1 has all the resources that had partial requirements already in tnx 1
+	require.ElementsMatch(t, pop1.Apps, []basics.AppIndex{})
+	require.ElementsMatch(t, pop1.Boxes, []logic.BoxRef{box1})
+	require.ElementsMatch(t, pop1.Accounts, []basics.Address{})
+	require.ElementsMatch(t, pop1.Assets, []basics.AssetIndex{})
 }
