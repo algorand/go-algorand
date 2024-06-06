@@ -805,7 +805,37 @@ func (p *ResourcePopulator) addTransaction(txn transactions.Transaction, groupIn
 	}
 }
 
-func (p *ResourcePopulator) populateResources(groupResourceTracker groupResourceTracker) {
+func (p *ResourcePopulator) addAccount(addr basics.Address) error {
+	for i := range p.TxnResources {
+		if p.TxnResources[i].hasRoomForAccount() {
+			p.TxnResources[i].addAccount(addr)
+			return nil
+		}
+	}
+	return fmt.Errorf("no room for account")
+}
+
+func (p *ResourcePopulator) addAsset(asset basics.AssetIndex) error {
+	for i := range p.TxnResources {
+		if p.TxnResources[i].hasRoomForCrossRef() {
+			p.TxnResources[i].addAsset(asset)
+			return nil
+		}
+	}
+	return fmt.Errorf("no room for asset")
+}
+
+func (p *ResourcePopulator) addApp(app basics.AppIndex) error {
+	for i := range p.TxnResources {
+		if p.TxnResources[i].hasRoomForCrossRef() {
+			p.TxnResources[i].addApp(app)
+			return nil
+		}
+	}
+	return fmt.Errorf("no room for app")
+}
+
+func (p *ResourcePopulator) populateResources(groupResourceTracker groupResourceTracker) error {
 	for i, tracker := range groupResourceTracker.localTxnResources {
 		for asset := range tracker.Assets {
 			p.TxnResources[i].addAsset(asset)
@@ -819,6 +849,29 @@ func (p *ResourcePopulator) populateResources(groupResourceTracker groupResource
 			p.TxnResources[i].addAccount(account)
 		}
 	}
+
+	for asset := range groupResourceTracker.globalResources.Assets {
+		err := p.addAsset(asset)
+		if err != nil {
+			return err
+		}
+	}
+
+	for app := range groupResourceTracker.globalResources.Apps {
+		err := p.addApp(app)
+		if err != nil {
+			return err
+		}
+	}
+
+	for account := range groupResourceTracker.globalResources.Accounts {
+		err := p.addAccount(account)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func MakeResourcePopulator(txnGroup []transactions.SignedTxnWithAD) ResourcePopulator {

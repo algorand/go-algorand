@@ -322,7 +322,48 @@ func TestPopulatorWithLocalResources(t *testing.T) {
 	groupTracker.localTxnResources[0].Assets[asset] = struct{}{}
 	groupTracker.localTxnResources[0].Apps[app] = struct{}{}
 
-	populator.populateResources(groupTracker)
+	err := populator.populateResources(groupTracker)
+	require.NoError(t, err)
+
+	require.Equal(
+		t,
+		PopulatedArrays{
+			Assets:   []basics.AssetIndex{asset},
+			Apps:     []basics.AppIndex{app},
+			Accounts: []basics.Address{addr},
+			Boxes:    []logic.BoxRef{},
+		},
+		populator.TxnResources[0].getPopulatedArrays(),
+	)
+}
+
+func TestPopulatorWithGlobalResources(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	txns := make([]transactions.SignedTxnWithAD, 1)
+	txns[0].Txn.Type = protocol.ApplicationCallTx
+
+	populator := MakeResourcePopulator(txns)
+
+	proto := config.Consensus[protocol.ConsensusFuture]
+	groupTracker := makeGroupResourceTracker(txns, &proto)
+
+	// Note we don't need to test a box here since it will never be a local txn resource
+	addr := basics.Address{1, 1, 1}
+	app := basics.AppIndex(12345)
+	asset := basics.AssetIndex(12345)
+
+	groupTracker.globalResources.Accounts = make(map[basics.Address]struct{})
+	groupTracker.globalResources.Assets = make(map[basics.AssetIndex]struct{})
+	groupTracker.globalResources.Apps = make(map[basics.AppIndex]struct{})
+
+	groupTracker.globalResources.Accounts[addr] = struct{}{}
+	groupTracker.globalResources.Assets[asset] = struct{}{}
+	groupTracker.globalResources.Apps[app] = struct{}{}
+
+	err := populator.populateResources(groupTracker)
+	require.NoError(t, err)
 
 	require.Equal(
 		t,
