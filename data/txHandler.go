@@ -604,8 +604,8 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 		// if we failed to put the item onto the backlog, we should release the capacity if any
 		if !accepted {
 			if capguard != nil {
-				if err := capguard.Release(); err != nil {
-					logging.Base().Warnf("Failed to release capacity to ElasticRateLimiter: %v", err)
+				if capErr := capguard.Release(); capErr != nil {
+					logging.Base().Warnf("Failed to release capacity to ElasticRateLimiter: %v", capErr)
 				}
 			}
 		}
