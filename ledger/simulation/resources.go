@@ -671,7 +671,22 @@ func (r *TxnResources) hasAccount(addr basics.Address) bool {
 	_, hasStatic := r.StaticAccounts[addr]
 	_, hasRef := r.Accounts[addr]
 	_, hasField := r.AccountsFromFields[addr]
-	// TODO: Check app addresses
+
+	if r.AppFromField.Address() == addr {
+		return true
+	}
+
+	for app := range r.Apps {
+		if app.Address() == addr {
+			return true
+		}
+	}
+
+	for app := range r.StaticApps {
+		if app.Address() == addr {
+			return true
+		}
+	}
 
 	return hasField || hasStatic || hasRef
 }
@@ -818,7 +833,7 @@ func (p *ResourcePopulator) addAccount(addr basics.Address) error {
 
 func (p *ResourcePopulator) addAsset(asset basics.AssetIndex) error {
 	for i := range p.TxnResources {
-		if p.TxnResources[i].hasRoomForCrossRef() {
+		if p.TxnResources[i].hasRoom() {
 			p.TxnResources[i].addAsset(asset)
 			return nil
 		}
@@ -828,7 +843,7 @@ func (p *ResourcePopulator) addAsset(asset basics.AssetIndex) error {
 
 func (p *ResourcePopulator) addApp(app basics.AppIndex) error {
 	for i := range p.TxnResources {
-		if p.TxnResources[i].hasRoomForCrossRef() {
+		if p.TxnResources[i].hasRoom() {
 			p.TxnResources[i].addApp(app)
 			return nil
 		}
@@ -859,6 +874,38 @@ func (p *ResourcePopulator) addBox(app basics.AppIndex, name string) error {
 	return fmt.Errorf("no room for box")
 }
 
+func (p *ResourcePopulator) addHolding(addr basics.Address, aid basics.AssetIndex) error {
+	// First try to find txn with account already available
+	for i := range p.TxnResources {
+		if p.TxnResources[i].hasAccount(addr) {
+			if p.TxnResources[i].hasRoom() {
+				p.TxnResources[i].addAsset(aid)
+				return nil
+			}
+		}
+	}
+
+	// Then try to find txn with asset already available
+	for i := range p.TxnResources {
+		if p.TxnResources[i].hasAsset(aid) {
+			if p.TxnResources[i].hasRoomForAccount() {
+				p.TxnResources[i].addAccount(addr)
+				return nil
+			}
+		}
+	}
+
+	// Finally try to find txn with room for both account and holding
+	for i := range p.TxnResources {
+		if p.TxnResources[i].hasRoomForCrossRef() {
+			p.TxnResources[i].addAccount(addr)
+			p.TxnResources[i].addAsset(aid)
+			return nil
+		}
+	}
+	return fmt.Errorf("no room for holding")
+}
+
 func (p *ResourcePopulator) populateResources(groupResourceTracker groupResourceTracker) error {
 	for i, tracker := range groupResourceTracker.localTxnResources {
 		for asset := range tracker.Assets {
@@ -874,15 +921,15 @@ func (p *ResourcePopulator) populateResources(groupResourceTracker groupResource
 		}
 	}
 
-	for asset := range groupResourceTracker.globalResources.Assets {
-		err := p.addAsset(asset)
+	for holding := range groupResourceTracker.globalResources.AssetHoldings {
+		err := p.addHolding(holding.Address, holding.Asset)
 		if err != nil {
 			return err
 		}
 	}
 
-	for app := range groupResourceTracker.globalResources.Apps {
-		err := p.addApp(app)
+	for box := range groupResourceTracker.globalResources.Boxes {
+		err := p.addBox(box.App, box.Name)
 		if err != nil {
 			return err
 		}
@@ -895,8 +942,15 @@ func (p *ResourcePopulator) populateResources(groupResourceTracker groupResource
 		}
 	}
 
-	for box := range groupResourceTracker.globalResources.Boxes {
-		err := p.addBox(box.App, box.Name)
+	for app := range groupResourceTracker.globalResources.Apps {
+		err := p.addApp(app)
+		if err != nil {
+			return err
+		}
+	}
+
+	for asset := range groupResourceTracker.globalResources.Assets {
+		err := p.addAsset(asset)
 		if err != nil {
 			return err
 		}

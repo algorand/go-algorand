@@ -23,6 +23,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
@@ -351,22 +352,34 @@ func TestPopulatorWithGlobalResources(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusFuture]
 	groupTracker := makeGroupResourceTracker(txns, &proto)
 
+	// Resources that will go in the first transaction
 	addr := basics.Address{1, 1, 1}
 	app := basics.AppIndex(12345)
 	asset := basics.AssetIndex(12345)
-	box1 := logic.BoxRef{App: basics.AppIndex(1), Name: "box"}
 	box100 := logic.BoxRef{App: basics.AppIndex(100), Name: "box"}
+	addr100 := basics.Address{100}
+	asa100 := basics.AssetIndex(100)
+
+	// Resources that will go in the second transaction
+	box1 := logic.BoxRef{App: basics.AppIndex(1), Name: "box"}
+	app1Addr := basics.AppIndex(1).Address()
+	asa1 := basics.AssetIndex(1)
+	addr1 := basics.Address{1}
 
 	groupTracker.globalResources.Accounts = make(map[basics.Address]struct{})
 	groupTracker.globalResources.Assets = make(map[basics.AssetIndex]struct{})
 	groupTracker.globalResources.Apps = make(map[basics.AppIndex]struct{})
 	groupTracker.globalResources.Boxes = make(map[logic.BoxRef]uint64)
+	groupTracker.globalResources.AssetHoldings = make(map[ledgercore.AccountAsset]struct{})
 
 	groupTracker.globalResources.Accounts[addr] = struct{}{}
 	groupTracker.globalResources.Assets[asset] = struct{}{}
 	groupTracker.globalResources.Apps[app] = struct{}{}
 	groupTracker.globalResources.Boxes[box1] = 1
 	groupTracker.globalResources.Boxes[box100] = 1
+	groupTracker.globalResources.AssetHoldings[ledgercore.AccountAsset{Address: addr100, Asset: asa100}] = struct{}{}
+	groupTracker.globalResources.AssetHoldings[ledgercore.AccountAsset{Address: app1Addr, Asset: asa1}] = struct{}{}
+	groupTracker.globalResources.AssetHoldings[ledgercore.AccountAsset{Address: addr1, Asset: asa1}] = struct{}{}
 
 	err := populator.populateResources(groupTracker)
 	require.NoError(t, err)
@@ -376,12 +389,12 @@ func TestPopulatorWithGlobalResources(t *testing.T) {
 
 	require.ElementsMatch(t, pop0.Apps, []basics.AppIndex{app, box100.App})
 	require.ElementsMatch(t, pop0.Boxes, []logic.BoxRef{box100})
-	require.ElementsMatch(t, pop0.Accounts, []basics.Address{addr})
-	require.ElementsMatch(t, pop0.Assets, []basics.AssetIndex{asset})
+	require.ElementsMatch(t, pop0.Accounts, []basics.Address{addr, addr100})
+	require.ElementsMatch(t, pop0.Assets, []basics.AssetIndex{asset, asa100})
 
 	// Txn 1 has all the resources that had partial requirements already in tnx 1
 	require.ElementsMatch(t, pop1.Apps, []basics.AppIndex{})
 	require.ElementsMatch(t, pop1.Boxes, []logic.BoxRef{box1})
-	require.ElementsMatch(t, pop1.Accounts, []basics.Address{})
-	require.ElementsMatch(t, pop1.Assets, []basics.AssetIndex{})
+	require.ElementsMatch(t, pop1.Accounts, []basics.Address{addr1})
+	require.ElementsMatch(t, pop1.Assets, []basics.AssetIndex{asa1})
 }
