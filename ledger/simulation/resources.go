@@ -606,8 +606,9 @@ func (p *resourcePolicy) AvailableBox(app basics.AppIndex, name string, operatio
 	return p.tracker.addBox(app, name, readSize, *p.initialBoxSurplusReadBudget, p.ep.Proto.BytesPerBoxReference)
 }
 
+// TxnResources tracks the resources being added to a tranasction during resource population
 type TxnResources struct {
-	// The static fields are resource arrays that were given in the transaciton group and thus cannot be removed
+	// The static fields are resource arrays that were given in the txn group and thus cannot be removed
 	// The assumption is that these are prefilled because of one of the following reaons:
 	//   - This transaction has already been signed
 	//   - One of the foreign arrays is accessed on-chain
@@ -713,6 +714,7 @@ func (r *TxnResources) addAddressFromField(addr basics.Address) {
 	}
 }
 
+// PopulatedArrays is a struct that contains all the populated arrays for a txn
 type PopulatedArrays struct {
 	Accounts []basics.Address
 	Assets   []basics.AssetIndex
@@ -746,12 +748,8 @@ func (r *TxnResources) getPopulatedArrays() PopulatedArrays {
 	}
 
 	boxes := make([]logic.BoxRef, 0, len(r.Boxes)+len(r.StaticBoxes))
-	for _, box := range r.Boxes {
-		boxes = append(boxes, box)
-	}
-	for _, box := range r.StaticBoxes {
-		boxes = append(boxes, box)
-	}
+	boxes = append(boxes, r.Boxes...)
+	boxes = append(boxes, r.StaticBoxes...)
 
 	return PopulatedArrays{
 		Accounts: accounts,
@@ -761,6 +759,7 @@ func (r *TxnResources) getPopulatedArrays() PopulatedArrays {
 	}
 }
 
+// ResourcePopulator is used to populate app resources for a transaction group
 type ResourcePopulator struct {
 	TxnResources []TxnResources
 }
@@ -977,7 +976,7 @@ func (p *ResourcePopulator) populateResources(groupResourceTracker groupResource
 			return err
 		}
 
-		// Remove the resources from the global tracker in case they were added seperately
+		// Remove the resources from the global tracker in case they were added separately
 		delete(groupResourceTracker.globalResources.Assets, holding.Asset)
 		delete(groupResourceTracker.globalResources.Accounts, holding.Address)
 	}
@@ -988,7 +987,7 @@ func (p *ResourcePopulator) populateResources(groupResourceTracker groupResource
 			return err
 		}
 
-		// Remove the resources from the global tracker in case they were added seperately
+		// Remove the resources from the global tracker in case they were added separately
 		delete(groupResourceTracker.globalResources.Apps, local.App)
 		delete(groupResourceTracker.globalResources.Accounts, local.Address)
 	}
@@ -1000,7 +999,7 @@ func (p *ResourcePopulator) populateResources(groupResourceTracker groupResource
 			return err
 		}
 
-		// Remove the app from the global tracker in case it was added seperately
+		// Remove the app from the global tracker in case it was added separately
 		delete(groupResourceTracker.globalResources.Apps, box.App)
 	}
 
@@ -1037,6 +1036,7 @@ func (p *ResourcePopulator) populateResources(groupResourceTracker groupResource
 	return nil
 }
 
+// MakeResourcePopulator creates a ResourcePopulator from a transaction group
 func MakeResourcePopulator(txnGroup []transactions.SignedTxnWithAD, consensusParams config.ConsensusParams) ResourcePopulator {
 	populator := ResourcePopulator{
 		TxnResources: make([]TxnResources, consensusParams.MaxTxGroupSize),
