@@ -528,6 +528,9 @@ func (tracer *evalTracer) AfterProgram(cx *logic.EvalContext, pass bool, evalErr
 			// Check if we already know the auth addr
 			if authAddr, ok := knownAuthAddrs[sender]; ok && blankSig {
 				stxn.AuthAddr = authAddr
+				if stxn.AuthAddr == sender {
+					stxn.AuthAddr = basics.Address{}
+				}
 			} else {
 				// Get the auth addr from the ledger
 				data, err := cx.Ledger.AccountData(sender)
@@ -539,6 +542,9 @@ func (tracer *evalTracer) AfterProgram(cx *logic.EvalContext, pass bool, evalErr
 
 				if blankSig {
 					stxn.AuthAddr = data.AuthAddr
+					if stxn.AuthAddr == sender {
+						stxn.AuthAddr = basics.Address{}
+					}
 				}
 			}
 

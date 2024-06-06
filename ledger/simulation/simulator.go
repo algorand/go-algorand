@@ -227,6 +227,9 @@ func (s Simulator) simulateWithTracer(txgroup []transactions.SignedTxnWithAD, tr
 			if authAddr, ok := staticRekeys[sender]; ok && txnHasNoSignature(*stxn) {
 				// If there is a static rekey for the sender set the auth addr to that address
 				stxn.AuthAddr = authAddr
+				if stxn.AuthAddr == sender {
+					stxn.AuthAddr = basics.Address{}
+				}
 			} else {
 				// Otherwise lookup the sender's account and set the txn auth addr to the account's auth addr
 				var data ledgercore.AccountData
@@ -237,6 +240,9 @@ func (s Simulator) simulateWithTracer(txgroup []transactions.SignedTxnWithAD, tr
 
 				if txnHasNoSignature(*stxn) {
 					stxn.AuthAddr = data.AuthAddr
+					if stxn.AuthAddr == sender {
+						stxn.AuthAddr = basics.Address{}
+					}
 				}
 			}
 
@@ -352,19 +358,21 @@ func (s Simulator) Simulate(simulateRequest Request) (Result, error) {
 
 	// Set the FixedSigner for each transaction that had a signer change during evaluation
 	for i := range simulatorTracer.result.TxnGroups[0].Txns {
-		givenSigner := simulatorTracer.result.TxnGroups[0].Txns[i].Txn.AuthAddr
-		tracerSigner := simulatorTracer.groups[0][i].SignedTxn.AuthAddr
-
-		tracerSignerIsSender := tracerSigner == simulatorTracer.groups[0][i].SignedTxn.Txn.Sender
-		givenSignerIsEmpty := givenSigner == (basics.Address{})
-
-		// If the tracer signer is the sender and the given signer is empty, we can skip setting the FixedSigner
-		if tracerSignerIsSender && givenSignerIsEmpty {
-			continue
+		sender := simulatorTracer.result.TxnGroups[0].Txns[i].Txn.Txn.Sender
+		inputSigner := simulatorTracer.result.TxnGroups[0].Txns[i].Txn.AuthAddr
+		if inputSigner.IsZero() {
+			// A zero AuthAddr indicates the sender is the signer
+			inputSigner = sender
 		}
 
-		if givenSigner != tracerSigner {
-			simulatorTracer.result.TxnGroups[0].Txns[i].FixedSigner = tracerSigner
+		actualSigner := simulatorTracer.groups[0][i].SignedTxn.AuthAddr
+		if actualSigner.IsZero() {
+			// A zero AuthAddr indicates the sender is the signer
+			actualSigner = sender
+		}
+
+		if inputSigner != actualSigner {
+			simulatorTracer.result.TxnGroups[0].Txns[i].FixedSigner = actualSigner
 		}
 	}
 
