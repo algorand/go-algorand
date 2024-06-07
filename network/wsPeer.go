@@ -63,6 +63,8 @@ func init() {
 	networkReceivedBytesByTag = metrics.NewTagCounterFiltered("algod_network_received_bytes_{TAG}", "Number of bytes that were received from the network for {TAG} messages", tagStringList, "UNK")
 	networkMessageReceivedByTag = metrics.NewTagCounterFiltered("algod_network_message_received_{TAG}", "Number of complete messages that were received from the network for {TAG} messages", tagStringList, "UNK")
 	networkMessageSentByTag = metrics.NewTagCounterFiltered("algod_network_message_sent_{TAG}", "Number of complete messages that were sent to the network for {TAG} messages", tagStringList, "UNK")
+	networkHandleCountByTag = metrics.NewTagCounterFiltered("algod_network_rx_handle_countbytag_{TAG}", "count of handler calls in the receive thread for {TAG} messages", tagStringList, "UNK")
+	networkHandleMicrosByTag = metrics.NewTagCounterFiltered("algod_network_rx_handle_microsbytag_{TAG}", "microseconds spent by protocol handlers in the receive thread for {TAG} messages", tagStringList, "UNK")
 
 	matched := false
 	for _, version := range SupportedProtocolVersions {
@@ -90,6 +92,9 @@ var networkMessageReceivedTotal = metrics.MakeCounter(metrics.NetworkMessageRece
 var networkMessageReceivedByTag *metrics.TagCounter
 var networkMessageSentTotal = metrics.MakeCounter(metrics.NetworkMessageSentTotal)
 var networkMessageSentByTag *metrics.TagCounter
+
+var networkHandleMicrosByTag *metrics.TagCounter
+var networkHandleCountByTag *metrics.TagCounter
 
 var networkConnectionsDroppedTotal = metrics.MakeCounter(metrics.NetworkConnectionsDroppedTotal)
 var networkMessageQueueMicrosTotal = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_message_sent_queue_micros_total", Description: "Total microseconds message spent waiting in queue to be sent"})

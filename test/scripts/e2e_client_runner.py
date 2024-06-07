@@ -106,7 +106,7 @@ def _script_thread_inner(runset, scriptname, timeout):
 
     # create a wallet for the test
     walletname = base64.b16encode(os.urandom(16)).decode()
-    winfo = kmd.create_wallet(walletname, '')
+    winfo = kmd.create_wallet(walletname, '', timeout=120) # 2 minute timeout
     handle = kmd.init_wallet_handle(winfo['id'], '')
     addr = kmd.generate_key(handle)
 
