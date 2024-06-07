@@ -779,7 +779,10 @@ func (n *P2PNetwork) wsStreamHandler(ctx context.Context, p2pPeer peer.ID, strea
 		}
 	}
 
-	stream.SetWriteDeadline(yamux.HighPriorityWriteDeadlineMagicValue)
+	err := stream.SetWriteDeadline(yamux.HighPriorityWriteDeadlineMagicValue)
+	if err != nil {
+		n.log.Warnf("wsStreamHandler: failed to activate high prio mux queue: %s", err)
+	}
 
 	// get address for peer ID
 	ma := stream.Conn().RemoteMultiaddr()

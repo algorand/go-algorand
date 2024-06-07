@@ -30,8 +30,10 @@ import (
 	yamux "github.com/algorandskiy/go-yamux/v4"
 )
 
+// DefaultTransport is the default transport for libp2p connections.
 var DefaultTransport *Transport
 
+// ID is the protocol ID for yamux.
 const ID = "/yamux/1.0.0"
 
 func init() {
@@ -59,6 +61,7 @@ type Transport yamux.Config
 
 var _ network.Multiplexer = &Transport{}
 
+// NewConn constructs a new MuxedConn from a net.Conn.
 func (t *Transport) NewConn(nc net.Conn, isServer bool, scope network.PeerScope) (network.MuxedConn, error) {
 	var newSpan func() (yamux.MemoryManager, error)
 	if scope != nil {
@@ -78,6 +81,7 @@ func (t *Transport) NewConn(nc net.Conn, isServer bool, scope network.PeerScope)
 	return NewMuxedConn(s), nil
 }
 
+// Config returns the yamux.Config.
 func (t *Transport) Config() *yamux.Config {
 	return (*yamux.Config)(t)
 }
