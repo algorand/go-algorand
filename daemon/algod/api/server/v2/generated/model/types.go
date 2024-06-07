@@ -562,6 +562,15 @@ type BuildVersion struct {
 	Minor       uint64 `json:"minor"`
 }
 
+// DebugExtraProf algod mutex and blocking profiling state.
+type DebugExtraProf struct {
+	// BlockRate The rate of blocking events. The profiler aims to sample an average of one blocking event per rate nanoseconds spent blocked. To turn off profiling entirely, pass rate 0.
+	BlockRate *uint64 `json:"block-rate,omitempty"`
+
+	// MutexRate The rate of mutex events. On average 1/rate events are reported. To turn off profiling entirely, pass rate 0
+	MutexRate *uint64 `json:"mutex-rate,omitempty"`
+}
+
 // DryrunRequest Request data type for dryrun endpoint. Given the Transactions and simulated ledger state upload, run TEAL scripts and return debugging information.
 type DryrunRequest struct {
 	Accounts []Account     `json:"accounts"`
@@ -1188,6 +1197,9 @@ type CompileResponse struct {
 	// Sourcemap JSON of the source map
 	Sourcemap *map[string]interface{} `json:"sourcemap,omitempty"`
 }
+
+// DebugExtraProfResponse algod mutex and blocking profiling state.
+type DebugExtraProfResponse = DebugExtraProf
 
 // DisassembleResponse defines model for DisassembleResponse.
 type DisassembleResponse struct {

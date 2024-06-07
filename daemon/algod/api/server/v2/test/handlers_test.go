@@ -2439,3 +2439,68 @@ func TestGeneratePartkeys(t *testing.T) {
 	}
 
 }
+
+func debugExtraProfEndpointTestHelper(
+	t *testing.T, method string, body []byte, expectedCode int) []byte {
+
+	handler := v2.Handlers{
+		Node: nil,
+		Log:  logging.Base(),
+	}
+	e := echo.New()
+
+	var bodyReader io.Reader
+	if body != nil {
+		bodyReader = bytes.NewReader(body)
+	}
+
+	req := httptest.NewRequest(method, "/debug/extra/pprof", bodyReader)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	if method == http.MethodPut {
+		handler.PutDebugExtraProf(c)
+	} else {
+		handler.GetDebugExtraProf(c)
+	}
+	require.Equal(t, expectedCode, rec.Code)
+
+	return rec.Body.Bytes()
+}
+
+func TestDebugExtraPprofEndpoint(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	// check original values
+	body := debugExtraProfEndpointTestHelper(t, http.MethodGet, nil, http.StatusOK)
+	require.Contains(t, string(body), `"mutex-rate":0`)
+	require.Contains(t, string(body), `"block-rate":0`)
+
+	// enable mutex and blocking profiling, should return the original zero values
+	body = debugExtraProfEndpointTestHelper(t, http.MethodPut, []byte(`{"mutex-rate":1000, "block-rate":2000}`), http.StatusOK)
+	require.Contains(t, string(body), `"mutex-rate":0`)
+	require.Contains(t, string(body), `"block-rate":0`)
+
+	// check the new values
+	body = debugExtraProfEndpointTestHelper(t, http.MethodGet, nil, http.StatusOK)
+	require.Contains(t, string(body), `"mutex-rate":1000`)
+	require.Contains(t, string(body), `"block-rate":2000`)
+
+	// set invalid values
+	body = debugExtraProfEndpointTestHelper(t, http.MethodPut, []byte(`{"mutex-rate":-1, "block-rate":2000}`), http.StatusBadRequest)
+	require.Contains(t, string(body), "failed to decode object")
+
+	body = debugExtraProfEndpointTestHelper(t, http.MethodPut, []byte(`{"mutex-rate":1000, "block-rate":-2}`), http.StatusBadRequest)
+	require.Contains(t, string(body), "failed to decode object")
+
+	// disable mutex and blocking profiling
+	body = debugExtraProfEndpointTestHelper(t, http.MethodPut, []byte(`{"mutex-rate":0, "block-rate":0}`), http.StatusOK)
+	require.Contains(t, string(body), `"mutex-rate":1000`)
+	require.Contains(t, string(body), `"block-rate":2000`)
+
+	// check it is disabled
+	body = debugExtraProfEndpointTestHelper(t, http.MethodGet, nil, http.StatusOK)
+	require.Contains(t, string(body), `"mutex-rate":0`)
+	require.Contains(t, string(body), `"block-rate":0`)
+
+}

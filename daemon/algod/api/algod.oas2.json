@@ -1305,6 +1305,44 @@
         }
       ]
     },
+    "/debug/extra/pprof": {
+      "get": {
+        "description": "Retrieves the current settings for blocking and mutex profiles",
+        "tags": [
+          "private"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "operationId": "GetDebugExtraProf",
+        "responses": {
+          "200": {
+            "$ref": "#/responses/DebugExtraProfResponse"
+          }
+        }
+      },
+      "put": {
+        "description": "Enables blocking and mutex profiles, and returns the old settings",
+        "tags": [
+          "private"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "operationId": "PutDebugExtraProf",
+        "responses": {
+          "200": {
+            "$ref": "#/responses/DebugExtraProfResponse"
+          }
+        }
+      }
+    },
     "/v2/shutdown": {
       "post": {
         "description": "Special management endpoint to shutdown the node. Optionally provide a timeout parameter to indicate that the node should begin shutting down after a number of seconds.",
@@ -4053,6 +4091,26 @@
         }
       }
     },
+    "DebugExtraProf": {
+      "description": "algod mutex and blocking profiling state.",
+      "type": "object",
+      "title": "algod mutex and blocking profiling state.",
+      "tags": [
+        "private"
+      ],
+      "properties": {
+        "block-rate": {
+          "description": "The rate of blocking events. The profiler aims to sample an average of one blocking event per rate nanoseconds spent blocked. To turn off profiling entirely, pass rate 0.",
+          "example": 1000,
+          "type": "integer"
+        },
+        "mutex-rate": {
+          "description": "The rate of mutex events. On average 1/rate events are reported. To turn off profiling entirely, pass rate 0",
+          "example": 1000,
+          "type": "integer"
+        }
+      }
+    },
     "BuildVersion": {
       "tags": [
         "common"
@@ -5499,6 +5557,12 @@
       "description": "VersionsResponse is the response to 'GET /versions'",
       "schema": {
         "$ref": "#/definitions/Version"
+      }
+    },
+    "DebugExtraProfResponse": {
+      "description": "DebugPprof is the response to the /debug/extra/pprof endpoint",
+      "schema": {
+        "$ref": "#/definitions/DebugExtraProf"
       }
     }
   },
