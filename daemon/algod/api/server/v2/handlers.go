@@ -2089,12 +2089,12 @@ func (v2 *Handlers) SetBlockTimeStampOffset(ctx echo.Context, offset uint64) err
 // savedBlockingRate is the current blocking rate
 var savedBlockingRate atomic.Int32
 
-// GetDebugExtraProf returns the current mutex and blocking rates.
-func (v2 *Handlers) GetDebugExtraProf(ctx echo.Context) error {
+// GetDebugSettingsProf returns the current mutex and blocking rates.
+func (v2 *Handlers) GetDebugSettingsProf(ctx echo.Context) error {
 	mutexRate := uint64(runtime.SetMutexProfileFraction(-1))
 	blockingRate := uint64(savedBlockingRate.Load())
 
-	response := model.DebugExtraProf{
+	response := model.DebugSettingsProf{
 		MutexRate: &mutexRate,
 		BlockRate: &blockingRate,
 	}
@@ -2102,8 +2102,8 @@ func (v2 *Handlers) GetDebugExtraProf(ctx echo.Context) error {
 	return ctx.JSON(http.StatusOK, response)
 }
 
-// PutDebugExtraProf sets the mutex and blocking rates and returns the old values.
-func (v2 *Handlers) PutDebugExtraProf(ctx echo.Context) error {
+// PutDebugSettingsProf sets the mutex and blocking rates and returns the old values.
+func (v2 *Handlers) PutDebugSettingsProf(ctx echo.Context) error {
 	req := ctx.Request()
 	buf := new(bytes.Buffer)
 	req.Body = http.MaxBytesReader(nil, req.Body, 128)
@@ -2113,13 +2113,13 @@ func (v2 *Handlers) PutDebugExtraProf(ctx echo.Context) error {
 	}
 	data := buf.Bytes()
 
-	var opts model.DebugExtraProf
+	var opts model.DebugSettingsProf
 	err = decode(protocol.JSONStrictHandle, data, &opts)
 	if err != nil {
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
 
-	var response model.DebugExtraProf
+	var response model.DebugSettingsProf
 
 	// validate input fiest
 	if opts.MutexRate != nil && *opts.MutexRate > math.MaxInt32 {

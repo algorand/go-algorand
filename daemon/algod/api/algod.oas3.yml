@@ -520,11 +520,11 @@
         },
         "description": "Teal compile Result"
       },
-      "DebugExtraProfResponse": {
+      "DebugSettingsProfResponse": {
         "content": {
           "application/json": {
             "schema": {
-              "$ref": "#/components/schemas/DebugExtraProf"
+              "$ref": "#/components/schemas/DebugSettingsProf"
             }
           }
         },
@@ -1800,7 +1800,7 @@
         "title": "BuildVersion contains the current algod build version information.",
         "type": "object"
       },
-      "DebugExtraProf": {
+      "DebugSettingsProf": {
         "description": "algod mutex and blocking profiling state.",
         "properties": {
           "block-rate": {
@@ -2775,16 +2775,16 @@
   },
   "openapi": "3.0.1",
   "paths": {
-    "/debug/extra/pprof": {
+    "/debug/settings/pprof": {
       "get": {
         "description": "Retrieves the current settings for blocking and mutex profiles",
-        "operationId": "GetDebugExtraProf",
+        "operationId": "GetDebugSettingsProf",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DebugExtraProf"
+                  "$ref": "#/components/schemas/DebugSettingsProf"
                 }
               }
             },
@@ -2797,13 +2797,13 @@
       },
       "put": {
         "description": "Enables blocking and mutex profiles, and returns the old settings",
-        "operationId": "PutDebugExtraProf",
+        "operationId": "PutDebugSettingsProf",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DebugExtraProf"
+                  "$ref": "#/components/schemas/DebugSettingsProf"
                 }
               }
             },

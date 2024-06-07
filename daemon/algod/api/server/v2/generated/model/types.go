@@ -562,8 +562,8 @@ type BuildVersion struct {
 	Minor       uint64 `json:"minor"`
 }
 
-// DebugExtraProf algod mutex and blocking profiling state.
-type DebugExtraProf struct {
+// DebugSettingsProf algod mutex and blocking profiling state.
+type DebugSettingsProf struct {
 	// BlockRate The rate of blocking events. The profiler aims to sample an average of one blocking event per rate nanoseconds spent blocked. To turn off profiling entirely, pass rate 0.
 	BlockRate *uint64 `json:"block-rate,omitempty"`
 
@@ -1198,8 +1198,8 @@ type CompileResponse struct {
 	Sourcemap *map[string]interface{} `json:"sourcemap,omitempty"`
 }
 
-// DebugExtraProfResponse algod mutex and blocking profiling state.
-type DebugExtraProfResponse = DebugExtraProf
+// DebugSettingsProfResponse algod mutex and blocking profiling state.
+type DebugSettingsProfResponse = DebugSettingsProf
 
 // DisassembleResponse defines model for DisassembleResponse.
 type DisassembleResponse struct {

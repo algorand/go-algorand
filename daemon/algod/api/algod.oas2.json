@@ -178,6 +178,44 @@
         }
       }
     },
+    "/debug/settings/pprof": {
+      "get": {
+        "description": "Retrieves the current settings for blocking and mutex profiles",
+        "tags": [
+          "private"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "operationId": "GetDebugSettingsProf",
+        "responses": {
+          "200": {
+            "$ref": "#/responses/DebugSettingsProfResponse"
+          }
+        }
+      },
+      "put": {
+        "description": "Enables blocking and mutex profiles, and returns the old settings",
+        "tags": [
+          "private"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "operationId": "PutDebugSettingsProf",
+        "responses": {
+          "200": {
+            "$ref": "#/responses/DebugSettingsProfResponse"
+          }
+        }
+      }
+    },
     "/v2/accounts/{address}": {
       "get": {
         "description": "Given a specific account public key, this call returns the accounts status, balance and spendable amounts",
@@ -1304,44 +1342,6 @@
           "required": true
         }
       ]
-    },
-    "/debug/extra/pprof": {
-      "get": {
-        "description": "Retrieves the current settings for blocking and mutex profiles",
-        "tags": [
-          "private"
-        ],
-        "produces": [
-          "application/json"
-        ],
-        "schemes": [
-          "http"
-        ],
-        "operationId": "GetDebugExtraProf",
-        "responses": {
-          "200": {
-            "$ref": "#/responses/DebugExtraProfResponse"
-          }
-        }
-      },
-      "put": {
-        "description": "Enables blocking and mutex profiles, and returns the old settings",
-        "tags": [
-          "private"
-        ],
-        "produces": [
-          "application/json"
-        ],
-        "schemes": [
-          "http"
-        ],
-        "operationId": "PutDebugExtraProf",
-        "responses": {
-          "200": {
-            "$ref": "#/responses/DebugExtraProfResponse"
-          }
-        }
-      }
     },
     "/v2/shutdown": {
       "post": {
@@ -4091,7 +4091,7 @@
         }
       }
     },
-    "DebugExtraProf": {
+    "DebugSettingsProf": {
       "description": "algod mutex and blocking profiling state.",
       "type": "object",
       "title": "algod mutex and blocking profiling state.",
@@ -5559,10 +5559,10 @@
         "$ref": "#/definitions/Version"
       }
     },
-    "DebugExtraProfResponse": {
+    "DebugSettingsProfResponse": {
       "description": "DebugPprof is the response to the /debug/extra/pprof endpoint",
       "schema": {
-        "$ref": "#/definitions/DebugExtraProf"
+        "$ref": "#/definitions/DebugSettingsProf"
       }
     }
   },
