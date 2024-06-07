@@ -170,7 +170,7 @@ func (tbp *txnSigBatchProcessor) ProcessBatch(txns []execpool.InputJob) {
 	tbp.postProcessVerifiedJobs(ctx, failed, err)
 }
 
-func (tbp *txnSigBatchProcessor) preProcessUnverifiedTxns(uTxns []execpool.InputJob) (batchVerifier *crypto.BatchVerifier, ctx interface{}) {
+func (tbp *txnSigBatchProcessor) preProcessUnverifiedTxns(uTxns []execpool.InputJob) (batchVerifier crypto.BatchVerifier, ctx interface{}) {
 	batchVerifier = crypto.MakeBatchVerifier()
 	bl := makeBatchLoad(len(uTxns))
 	// TODO: separate operations here, and get the sig verification inside the LogicSig to the batch here

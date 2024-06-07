@@ -17,6 +17,7 @@
 package logic
 
 import (
+	"cmp"
 	"fmt"
 	"strconv"
 	"strings"
@@ -71,11 +72,13 @@ const fpVersion = 8         // changes for frame pointers and simpler function d
 
 const sharedResourcesVersion = 9 // apps can access resources from other transactions.
 
+const pairingVersion = 10 // bn256 opcodes. will add bls12-381, and unify the available opcodes.
+const spliceVersion = 10  // box splicing/resizing
+
 // EXPERIMENTAL. These should be revisited whenever a new LogicSigVersion is
 // moved from vFuture to a new consensus version. If they remain unready, bump
 // their version, and fixup TestAssemble() in assembler_test.go.
-const pairingVersion = 10 // bn256 opcodes. will add bls12-381, and unify the available opcodes.
-const spliceVersion = 10  // box splicing/resizing
+const incentiveVersion = 11 // block fields, heartbeat
 
 const spOpcodesVersion = 11 // falcon_verify, sumhash512
 
@@ -638,6 +641,8 @@ var OpSpecs = []OpSpec{
 	{0x71, "asset_params_get", opAssetParamsGet, proto("i:aT"), 2, field("f", &AssetParamsFields).only(ModeApp)},
 	{0x72, "app_params_get", opAppParamsGet, proto("i:aT"), 5, field("f", &AppParamsFields).only(ModeApp)},
 	{0x73, "acct_params_get", opAcctParamsGet, proto("a:aT"), 6, field("f", &AcctParamsFields).only(ModeApp)},
+	{0x74, "voter_params_get", opVoterParamsGet, proto("a:aT"), incentiveVersion, field("f", &VoterParamsFields).only(ModeApp)},
+	{0x75, "online_stake", opOnlineStake, proto(":i"), incentiveVersion, only(ModeApp)},
 
 	{0x78, "min_balance", opMinBalance, proto("i:i"), 3, only(ModeApp)},
 	{0x78, "min_balance", opMinBalance, proto("a:i"), directRefEnabledVersion, only(ModeApp)},
@@ -835,12 +840,7 @@ func OpcodesByVersion(version uint64) []OpSpec {
 	}
 	result := maps.Values(subv)
 	slices.SortFunc(result, func(a, b OpSpec) int {
-		if a.Opcode == b.Opcode {
-			return 0
-		} else if a.Opcode > b.Opcode {
-			return 1
-		}
-		return -1
+		return cmp.Compare(a.Opcode, b.Opcode)
 	})
 	return result
 }

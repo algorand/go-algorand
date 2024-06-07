@@ -1,6 +1,8 @@
 module github.com/algorand/go-algorand/tools/x-repo-types
 
-go 1.20
+go 1.21
+
+toolchain go1.21.10
 
 replace github.com/algorand/go-algorand => ../..
 

@@ -26,6 +26,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/util/execpool"
@@ -59,7 +60,7 @@ func (i blockValidatorImpl) Validate(ctx context.Context, e bookkeeping.Block) (
 		return nil, err
 	}
 
-	return validatedBlock{vb: lvb}, nil
+	return lvb, nil
 }
 
 // agreementLedger implements the agreement.Ledger interface.
@@ -86,7 +87,7 @@ func (l agreementLedger) EnsureBlock(e bookkeeping.Block, c agreement.Certificat
 
 // EnsureValidatedBlock implements agreement.LedgerWriter.EnsureValidatedBlock.
 func (l agreementLedger) EnsureValidatedBlock(ve agreement.ValidatedBlock, c agreement.Certificate) {
-	l.Ledger.EnsureValidatedBlock(ve.(validatedBlock).vb, c)
+	l.Ledger.EnsureValidatedBlock(ve.(*ledgercore.ValidatedBlock), c)
 	// let the network know that we've made some progress.
 	l.n.OnNetworkAdvance()
 }

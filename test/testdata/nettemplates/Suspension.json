@@ -1,0 +1,28 @@
+{
+  "Genesis": {
+    "NetworkName": "tbd",
+    "ConsensusProtocol": "future",
+    "LastPartKeyRound": 500,
+    "Wallets": [
+      { "Name": "Relay", "Stake": 70, "Online": true },
+      { "Name": "Wallet20", "Stake": 20, "Online": true },
+      { "Name": "Wallet10", "Stake": 10, "Online": true }
+    ],
+    "RewardsPoolBalance": 0
+  },
+  "Nodes": [
+    {
+      "Name": "Relay",
+      "Wallets": [{ "Name": "Relay", "ParticipationOnly": false }],
+      "IsRelay": true
+    },
+    {
+      "Name": "Node20",
+      "Wallets": [{ "Name": "Wallet20", "ParticipationOnly": false }]
+    },
+    {
+      "Name": "Node10",
+      "Wallets": [{ "Name": "Wallet10", "ParticipationOnly": false }]
+    }
+  ]
+}

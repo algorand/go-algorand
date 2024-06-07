@@ -245,7 +245,7 @@ func (m *proposalManager) handleMessageEvent(r routerHandle, p player, e filtera
 	}
 }
 
-// filterVote filters a vote, checking if it is both fresh and not a duplicate, returning
+// filterProposalVote filters a vote, checking if it is both fresh and not a duplicate, returning
 // an errProposalManagerPVNotFresh or errProposalManagerPVDuplicate if so, else nil.
 // It also returns a bool indicating whether this proposal-vote should still be verified for tracking credential history.
 func (m *proposalManager) filterProposalVote(p player, r routerHandle, uv unauthenticatedVote, freshData freshnessData) (bool, error) {

@@ -46,8 +46,9 @@ ${gcmd} clerk send --fee=1000 --from-program ${TEMPDIR}/atomic.teal -a=0 -t=${ZE
 
 # Check balance
 BALANCEB=$(${gcmd} account balance -a ${ACCOUNTB} | awk '{ print $1 }')
-if [ $BALANCEB -ne 9999000 ]; then
-    date '+htlc-teal-test FAIL wanted balance=9999000 but got ${BALANCEB} %Y%m%d_%H%M%S'
+# Use >= 9999000 to account for rewards which may have accumulated
+if [ $BALANCEB -lt 9999000 ]; then
+    date "+htlc-teal-test FAIL wanted balance>=9999000 but got ${BALANCEB} %Y%m%d_%H%M%S"
     false
 fi
 

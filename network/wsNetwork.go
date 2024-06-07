@@ -1178,6 +1178,8 @@ func (wn *msgHandler) messageHandlerThread(wg *sync.WaitGroup, peersConnectivity
 			networkIncomingBufferMicros.AddUint64(uint64(bufferNanos/1000), nil)
 			handleTime := handled.Sub(start)
 			networkHandleMicros.AddUint64(uint64(handleTime.Nanoseconds()/1000), nil)
+			networkHandleMicrosByTag.Add(string(msg.Tag), uint64(handleTime.Nanoseconds()/1000))
+			networkHandleCountByTag.Add(string(msg.Tag), 1)
 			switch outmsg.Action {
 			case Disconnect:
 				wg.Add(1)

@@ -385,11 +385,15 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, ao *onlineAccounts, base
 				// TODO: make lookupOnlineAccountData returning extended version of ledgercore.VotingData ?
 				od, err := ao.lookupOnlineAccountData(rnd, addr)
 				require.NoError(t, err)
-				require.Equal(t, od.VoteID, data.VoteID)
-				require.Equal(t, od.SelectionID, data.SelectionID)
-				require.Equal(t, od.VoteFirstValid, data.VoteFirstValid)
-				require.Equal(t, od.VoteLastValid, data.VoteLastValid)
-				require.Equal(t, od.VoteKeyDilution, data.VoteKeyDilution)
+
+				// If lookupOnlineAccountData returned something, it should agree with `data`.
+				if !od.VoteID.IsEmpty() {
+					require.Equal(t, od.VoteID, data.VoteID)
+					require.Equal(t, od.SelectionID, data.SelectionID)
+					require.Equal(t, od.VoteFirstValid, data.VoteFirstValid)
+					require.Equal(t, od.VoteLastValid, data.VoteLastValid)
+					require.Equal(t, od.VoteKeyDilution, data.VoteKeyDilution)
+				}
 
 				rewardsDelta := rewards[rnd] - d.RewardsBase
 				switch d.Status {
@@ -425,7 +429,7 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, ao *onlineAccounts, base
 			require.Equal(t, d, ledgercore.AccountData{})
 			od, err := ao.lookupOnlineAccountData(rnd, ledgertesting.RandomAddress())
 			require.NoError(t, err)
-			require.Equal(t, od, ledgercore.OnlineAccountData{})
+			require.Equal(t, od, basics.OnlineAccountData{})
 		}
 	}
 	checkAcctUpdatesConsistency(t, au, latestRnd)
@@ -504,6 +508,11 @@ func checkOnlineAcctUpdatesConsistency(t *testing.T, ao *onlineAccounts, rnd bas
 	for i := 0; i < latest.Len(); i++ {
 		addr, acct := latest.GetByIdx(i)
 		od, err := ao.lookupOnlineAccountData(rnd, addr)
+		if od.VoteID.IsEmpty() {
+			// suspended accounts will be in `latest` (from ao.deltas), but
+			// `lookupOnlineAccountData` will return {}.
+			continue
+		}
 		require.NoError(t, err)
 		require.Equal(t, acct.VoteID, od.VoteID)
 		require.Equal(t, acct.SelectionID, od.SelectionID)

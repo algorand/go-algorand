@@ -61,13 +61,13 @@ func TestPeerstore(t *testing.T) {
 
 	// add peer addresses
 	var addrs []string
-	var peerIDS []peer.ID
+	var peerIDs []peer.ID
 	for i := 0; i < 4; i++ {
 		privKey, _, err := libp2p_crypto.GenerateEd25519Key(rand.Reader)
 		require.NoError(t, err)
 		peerID, err := peer.IDFromPrivateKey(privKey)
 		require.NoError(t, err)
-		peerIDS = append(peerIDS, peerID)
+		peerIDs = append(peerIDs, peerID)
 		maddrStr := fmt.Sprintf("/ip4/1.2.3.4/tcp/%d/p2p/%s", 4000+i, peerID.String())
 		addrs = append(addrs, maddrStr)
 	}
@@ -83,7 +83,7 @@ func TestPeerstore(t *testing.T) {
 	require.Equal(t, 8, len(peers))
 
 	// remove a peer addr
-	ps.ClearAddrs(peerIDS[0])
+	ps.ClearAddrs(peerIDs[0])
 	peers = ps.PeersWithAddrs()
 	require.Equal(t, 7, len(peers))
 

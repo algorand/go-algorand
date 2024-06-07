@@ -49,7 +49,7 @@ type onlineAcctModel interface {
 
 	LookupAgreement(rnd basics.Round, addr basics.Address) onlineAcctModelAcct
 	OnlineCirculation(rnd basics.Round, voteRnd basics.Round) basics.MicroAlgos
-	ExpiredOnlineCirculation(rnd, voteRnd basics.Round) basics.MicroAlgos
+	expiredOnlineCirculation(rnd, voteRnd basics.Round) basics.MicroAlgos
 }
 
 // mapOnlineAcctModel provides a reference implementation for tracking online accounts used
@@ -133,7 +133,7 @@ func (m *mapOnlineAcctModel) OnlineCirculation(rnd basics.Round, voteRnd basics.
 	return m.sumAcctStake(accts)
 }
 
-func (m *mapOnlineAcctModel) ExpiredOnlineCirculation(rnd, voteRnd basics.Round) basics.MicroAlgos {
+func (m *mapOnlineAcctModel) expiredOnlineCirculation(rnd, voteRnd basics.Round) basics.MicroAlgos {
 	accts := m.onlineAcctsExpiredByRound(rnd, voteRnd)
 	return m.sumAcctStake(accts)
 }
@@ -244,9 +244,8 @@ type doubleLedgerAcctModel struct {
 }
 
 func newDoubleLedgerAcctModel(t testing.TB, proto protocol.ConsensusVersion, inMem bool) *doubleLedgerAcctModel {
-	// set 1 Algo for rewards pool size -- rewards math not supported by newMapOnlineAcctModel
-	genesisOpt := ledgertesting.TestGenesisRewardsPoolSize(basics.MicroAlgos{Raw: 1_000_000})
-	genBalances, genAddrs, genSecrets := ledgertesting.NewTestGenesis(genesisOpt)
+	// rewards math not supported by newMapOnlineAcctModel
+	genBalances, genAddrs, genSecrets := ledgertesting.NewTestGenesis(ledgertesting.TurnOffRewards)
 	cfg := config.GetDefaultLocal()
 	opts := []simpleLedgerOption{simpleLedgerNotArchival()}
 	if !inMem {
@@ -386,7 +385,7 @@ func (m *doubleLedgerAcctModel) OnlineCirculation(rnd basics.Round, voteRnd basi
 	// has already subtracted the expired stake. So to get the total, add
 	// it back in by querying ExpiredOnlineCirculation.
 	if m.params.ExcludeExpiredCirculation {
-		expiredStake := m.ExpiredOnlineCirculation(rnd, rnd+320)
+		expiredStake := m.expiredOnlineCirculation(rnd, rnd+320)
 		valStake = m.ops.Add(valStake, expiredStake)
 	}
 
@@ -405,20 +404,26 @@ func (l *Ledger) OnlineTotalStake(rnd basics.Round) (basics.MicroAlgos, error) {
 	return totalStake, err
 }
 
-// ExpiredOnlineCirculation is a wrapper to call onlineAccounts.ExpiredOnlineCirculation safely.
-func (l *Ledger) ExpiredOnlineCirculation(rnd, voteRnd basics.Round) (basics.MicroAlgos, error) {
+// expiredOnlineCirculation is a wrapper to call onlineAccounts.expiredOnlineCirculation safely.
+func (l *Ledger) expiredOnlineCirculation(rnd, voteRnd basics.Round) (basics.MicroAlgos, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.acctsOnline.ExpiredOnlineCirculation(rnd, voteRnd)
+	return l.acctsOnline.expiredOnlineCirculation(rnd, voteRnd)
 }
 
-// ExpiredOnlineCirculation returns the total expired stake at rnd this model produced, while
+// expiredOnlineCirculation returns the total expired stake at rnd this model produced, while
 // also asserting that the validator and generator Ledgers both agree.
-func (m *doubleLedgerAcctModel) ExpiredOnlineCirculation(rnd, voteRnd basics.Round) basics.MicroAlgos {
-	valStake, err := m.dl.validator.ExpiredOnlineCirculation(rnd, voteRnd)
+func (m *doubleLedgerAcctModel) expiredOnlineCirculation(rnd, voteRnd basics.Round) basics.MicroAlgos {
+	valStake, err := m.dl.validator.expiredOnlineCirculation(rnd, voteRnd)
 	require.NoError(m.t, err)
-	genStake, err := m.dl.generator.ExpiredOnlineCirculation(rnd, voteRnd)
+	valCachedStake, has := m.dl.validator.acctsOnline.expiredCirculationCache.get(rnd, voteRnd)
+	require.True(m.t, has)
+	require.Equal(m.t, valStake, valCachedStake)
+	genStake, err := m.dl.generator.expiredOnlineCirculation(rnd, voteRnd)
 	require.NoError(m.t, err)
+	genCachedStake, has := m.dl.generator.acctsOnline.expiredCirculationCache.get(rnd, voteRnd)
+	require.True(m.t, has)
+	require.Equal(m.t, genStake, genCachedStake)
 	require.Equal(m.t, valStake, genStake)
 	return valStake
 }
@@ -484,7 +489,7 @@ func testOnlineAcctModelSimple(t *testing.T, m onlineAcctModel) {
 	a.Equal(basics.MicroAlgos{Raw: 43_210_000}, onlineStake)
 
 	// expired stake is acct 2 + acct 4
-	expiredStake := m.ExpiredOnlineCirculation(680, 1000)
+	expiredStake := m.expiredOnlineCirculation(680, 1000)
 	a.Equal(basics.MicroAlgos{Raw: 22_110_000}, expiredStake)
 }
 
@@ -520,15 +525,6 @@ type goOfflineAction struct{ addr basics.Address }
 
 func (a goOfflineAction) apply(t *testing.T, m onlineAcctModel) { m.goOffline(a.addr) }
 
-type updateStakeAction struct {
-	addr  basics.Address
-	stake uint64
-}
-
-func (a updateStakeAction) apply(t *testing.T, m onlineAcctModel) {
-	m.updateStake(a.addr, basics.MicroAlgos{Raw: a.stake})
-}
-
 type checkOnlineStakeAction struct {
 	rnd, voteRnd    basics.Round
 	online, expired uint64
@@ -536,7 +532,7 @@ type checkOnlineStakeAction struct {
 
 func (a checkOnlineStakeAction) apply(t *testing.T, m onlineAcctModel) {
 	onlineStake := m.OnlineCirculation(a.rnd, a.voteRnd)
-	expiredStake := m.ExpiredOnlineCirculation(a.rnd, a.voteRnd)
+	expiredStake := m.expiredOnlineCirculation(a.rnd, a.voteRnd)
 	require.Equal(t, basics.MicroAlgos{Raw: a.online}, onlineStake, "round %d, cur %d", a.rnd, m.currentRound())
 	require.Equal(t, basics.MicroAlgos{Raw: a.expired}, expiredStake, "rnd %d voteRnd %d, cur %d", a.rnd, a.voteRnd, m.currentRound())
 }
@@ -682,7 +678,7 @@ func BenchmarkExpiredOnlineCirculation(b *testing.B) {
 		// query expired circulation across the available range (last 320 rounds, from ~680 to ~1000)
 		startRnd := m.currentRound() - 320
 		offset := basics.Round(i % 320)
-		_, err := m.dl.validator.ExpiredOnlineCirculation(startRnd+offset, startRnd+offset+320)
+		_, err := m.dl.validator.expiredOnlineCirculation(startRnd+offset, startRnd+offset+320)
 		require.NoError(b, err)
 		//total, err := m.dl.validator.OnlineTotalStake(startRnd + offset)
 		//b.Log("expired circulation", startRnd+offset, startRnd+offset+320, "returned", expiredStake, "total", total)

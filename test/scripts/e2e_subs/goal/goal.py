@@ -121,8 +121,8 @@ class Goal:
                     wallet = w
 
             assert wallet, f"No wallet named '{name}'"
-            self.handle = self.kmd.init_wallet_handle(wallet["id"], "")
-            keys = self.kmd.list_keys(self.handle)
+            self.handle = self.kmd.init_wallet_handle(wallet["id"], "", timeout=120)
+            keys = self.kmd.list_keys(self.handle, timeout=120)
             assert len(keys) == 1
             self.account = keys[0]
 
@@ -240,21 +240,21 @@ class Goal:
         return tx
 
     def keyreg(self, sender, votekey=None, selkey=None, votefst=None,
-               votelst=None, votekd=None,
+               votelst=None, votekd=None, sprfkey=None,
                send=None, **kwargs):
-        params = self.algod.suggested_params()
+        params = self.params(kwargs.pop("lifetime", 1000), kwargs.pop("fee", None))
         tx = txn.KeyregTxn(sender, params,
-                           votekey, selkey, votefst, votelst, votekd,
+                           votekey, selkey, votefst, votelst, votekd, sprfkey=sprfkey,
                            **kwargs)
         return self.finish(tx, send)
 
     def pay(self, sender, receiver, amt: int, send=None, **kwargs):
-        params = self.algod.suggested_params()
+        params = self.params(kwargs.pop("lifetime", 1000), kwargs.pop("fee", None))
         tx = txn.PaymentTxn(sender, params, receiver, amt, **kwargs)
         return self.finish(tx, send)
 
     def acfg(self, sender, send=None, **kwargs):
-        params = self.algod.suggested_params()
+        params = self.params(kwargs.pop("lifetime", 1000), kwargs.pop("fee", None))
         tx = txn.AssetConfigTxn(
             sender, params, **kwargs, strict_empty_address_check=False
         )
@@ -265,7 +265,7 @@ class Goal:
         return self.acfg(sender, **kwargs)
 
     def axfer(self, sender, receiver, amt: int, index: int, send=None, **kwargs):
-        params = self.algod.suggested_params()
+        params = self.params(kwargs.pop("lifetime", 1000), kwargs.pop("fee", None))
         tx = txn.AssetTransferTxn(
             sender, params, receiver, amt, index, **kwargs
         )
@@ -276,7 +276,7 @@ class Goal:
         return self.axfer(sender, sender, 0, index, **kwargs)
 
     def afrz(self, sender, index: int, target, frozen, send=None, **kwargs):
-        params = self.algod.suggested_params()
+        params = self.params(kwargs.pop("lifetime", 1000), kwargs.pop("fee", None))
         tx = txn.AssetFreezeTxn(sender, params, index, target, frozen, **kwargs)
         return self.finish(tx, send)
 
@@ -287,9 +287,19 @@ class Goal:
             return values
         return txn.StateSchema(num_uints=values[0], num_byte_slices=values[1])
 
+
+    def params(self, lifetime=None, fee=None):
+        params = self.algod.suggested_params()
+        if lifetime is not None:
+            params.last = params.first + lifetime
+        if fee is not None:
+            params.flat_fee = True
+            params.fee = fee
+        return params
+
     def appl(self, sender, index: int, on_complete=txn.OnComplete.NoOpOC,
              send=None, **kwargs):
-        params = self.algod.suggested_params()
+        params = self.params(kwargs.pop("lifetime", 1000), kwargs.pop("fee", None))
         local_schema = self.coerce_schema(kwargs.pop("local_schema", None))
         global_schema = self.coerce_schema(kwargs.pop("global_schema", None))
         tx = txn.ApplicationCallTxn(

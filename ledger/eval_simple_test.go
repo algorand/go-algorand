@@ -29,10 +29,12 @@ import (
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/txntest"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -189,15 +191,17 @@ func TestBlockEvaluator(t *testing.T) {
 	err = eval.TestTransactionGroup(txgroup)
 	require.Error(t, err)
 
-	validatedBlock, err := eval.GenerateBlock()
+	unfinishedBlock, err := eval.GenerateBlock(nil)
 	require.NoError(t, err)
+
+	validatedBlock := ledgercore.MakeValidatedBlock(unfinishedBlock.UnfinishedBlock(), unfinishedBlock.UnfinishedDeltas())
 
 	accts := genesisInitState.Accounts
 	bal0 := accts[addrs[0]]
 	bal1 := accts[addrs[1]]
 	bal2 := accts[addrs[2]]
 
-	l.AddValidatedBlock(*validatedBlock, agreement.Certificate{})
+	l.AddValidatedBlock(validatedBlock, agreement.Certificate{})
 
 	bal0new, _, _, err := l.LookupAccount(newBlock.Round(), addrs[0])
 	require.NoError(t, err)
@@ -209,6 +213,694 @@ func TestBlockEvaluator(t *testing.T) {
 	require.Equal(t, bal0new.MicroAlgos.Raw, bal0.MicroAlgos.Raw-minFee.Raw-100)
 	require.Equal(t, bal1new.MicroAlgos.Raw, bal1.MicroAlgos.Raw+100)
 	require.Equal(t, bal2new.MicroAlgos.Raw, bal2.MicroAlgos.Raw-minFee.Raw)
+}
+
+// TestPayoutFees ensures that the proper portion of tx fees go to the proposer
+func TestPayoutFees(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// Lots of balance checks that would be messed up by rewards
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis(ledgertesting.TurnOffRewards)
+	payoutsBegin := 40
+	ledgertesting.TestConsensusRange(t, payoutsBegin-1, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
+		defer dl.Close()
+
+		proposer := basics.Address{0x01, 0x011}
+		const eFee = 3_000_000
+		dl.txn(
+			&txntest.Txn{Type: "pay", Sender: addrs[1],
+				Receiver: proposer, Amount: eFee + 50_000_000},
+		)
+
+		prp := lookup(dl.t, dl.generator, proposer)
+		require.False(t, prp.IncentiveEligible)
+
+		dl.txn(&txntest.Txn{
+			Type:         "keyreg",
+			Sender:       proposer,
+			Fee:          eFee,
+			VotePK:       crypto.OneTimeSignatureVerifier{0x01},
+			SelectionPK:  crypto.VRFVerifier{0x02},
+			StateProofPK: merklesignature.Commitment{0x03},
+			VoteFirst:    1, VoteLast: 1000,
+		})
+
+		prp = lookup(dl.t, dl.generator, proposer)
+		require.Equal(t, ver >= payoutsBegin, prp.IncentiveEligible)
+
+		dl.fullBlock() // start with an empty block, so no payouts from fees are paid at start of next one
+
+		presink := micros(dl.t, dl.generator, genBalances.FeeSink)
+		preprop := micros(dl.t, dl.generator, proposer)
+		t.Log(" presink", presink)
+		t.Log(" preprop", preprop)
+		dl.beginBlock()
+		pay := txntest.Txn{
+			Type:     "pay",
+			Sender:   addrs[1],
+			Receiver: addrs[2],
+			Amount:   100000,
+		}
+		dl.txns(&pay, pay.Args("again"))
+		vb := dl.endBlock(proposer)
+
+		postsink := micros(dl.t, dl.generator, genBalances.FeeSink)
+		postprop := micros(dl.t, dl.generator, proposer)
+		t.Log(" postsink", postsink)
+		t.Log(" postprop", postprop)
+
+		prp = lookup(dl.t, dl.generator, proposer)
+
+		const bonus1 = 10_000_000 // the first bonus value, set in config/consensus.go
+		if ver >= payoutsBegin {
+			require.True(t, dl.generator.GenesisProto().Payouts.Enabled)    // version sanity check
+			require.NotZero(t, dl.generator.GenesisProto().Payouts.Percent) // version sanity check
+			// new fields are in the header
+			require.EqualValues(t, 2000, vb.Block().FeesCollected.Raw)
+			require.EqualValues(t, bonus1, vb.Block().Bonus.Raw)
+			require.EqualValues(t, bonus1+1_500, vb.Block().ProposerPayout().Raw)
+			// This last one is really only testing the "fake" agreement that
+			// happens in dl.endBlock().
+			require.EqualValues(t, proposer, vb.Block().Proposer())
+
+			// At the end of the block, part of the fees + bonus have been moved to
+			// the proposer.
+			require.EqualValues(t, bonus1+1500, postprop-preprop) // based on 75% in config/consensus.go
+			require.EqualValues(t, bonus1-500, presink-postsink)
+			require.Equal(t, prp.LastProposed, dl.generator.Latest())
+		} else {
+			require.False(t, dl.generator.GenesisProto().Payouts.Enabled)
+			require.Zero(t, dl.generator.GenesisProto().Payouts.Percent) // version sanity check
+			require.Zero(t, vb.Block().FeesCollected)
+			require.Zero(t, vb.Block().Bonus)
+			require.Zero(t, vb.Block().ProposerPayout())
+			// fees stayed in the feesink
+			require.EqualValues(t, 0, postprop-preprop, "%v", proposer)
+			require.EqualValues(t, 2000, postsink-presink)
+			require.Zero(t, prp.LastProposed)
+		}
+
+		// Do another block, make sure proposer doesn't get paid again. (Sanity
+		// check. The code used to award the payout used to be in block n+1).
+		vb = dl.fullBlock()
+		require.Equal(t, postsink, micros(dl.t, dl.generator, genBalances.FeeSink))
+		require.Equal(t, postprop, micros(dl.t, dl.generator, proposer))
+
+		// Rest of the tests only make sense with payout active
+		if ver < payoutsBegin {
+			return
+		}
+
+		// Get the feesink down low, then drain it by proposing.
+		feesink := vb.Block().FeeSink
+		data := lookup(t, dl.generator, feesink)
+		dl.txn(&txntest.Txn{
+			Type:     "pay",
+			Sender:   feesink,
+			Receiver: addrs[1],
+			Amount:   data.MicroAlgos.Raw - 12_000_000,
+		})
+		dl.beginBlock()
+		dl.endBlock(proposer)
+		require.EqualValues(t, micros(t, dl.generator, feesink), 2_000_000)
+
+		dl.beginBlock()
+		dl.endBlock(proposer)
+		require.EqualValues(t, micros(t, dl.generator, feesink), 100_000)
+
+		dl.beginBlock()
+		dl.endBlock(proposer)
+		require.EqualValues(t, micros(t, dl.generator, feesink), 100_000)
+	})
+}
+
+// TestIncentiveEligible checks that keyreg with extra fee turns on the incentive eligible flag
+func TestIncentiveEligible(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+	payoutsBegin := 40
+	ledgertesting.TestConsensusRange(t, payoutsBegin-1, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
+		defer dl.Close()
+
+		tooSmall := basics.Address{0x01, 0x011}
+		smallest := basics.Address{0x01, 0x022}
+
+		// They begin ineligible
+		for _, addr := range []basics.Address{tooSmall, smallest} {
+			acct, _, _, err := dl.generator.LookupLatest(addr)
+			require.NoError(t, err)
+			require.False(t, acct.IncentiveEligible)
+		}
+
+		// Fund everyone
+		dl.txns(&txntest.Txn{Type: "pay", Sender: addrs[1], Receiver: tooSmall, Amount: 10_000_000},
+			&txntest.Txn{Type: "pay", Sender: addrs[1], Receiver: smallest, Amount: 10_000_000},
+		)
+
+		// Keyreg (but offline) with various fees. No effect on incentive eligible
+		dl.txns(&txntest.Txn{Type: "keyreg", Sender: tooSmall, Fee: 2_000_000 - 1},
+			&txntest.Txn{Type: "keyreg", Sender: smallest, Fee: 2_000_000},
+		)
+
+		for _, addr := range []basics.Address{tooSmall, smallest} {
+			acct, _, _, err := dl.generator.LookupLatest(addr)
+			require.NoError(t, err)
+			require.False(t, acct.IncentiveEligible)
+		}
+
+		// Keyreg to get online with various fees. Sufficient fee gets `smallest` eligible
+		keyreg := txntest.Txn{
+			Type:         "keyreg",
+			VotePK:       crypto.OneTimeSignatureVerifier{0x01},
+			SelectionPK:  crypto.VRFVerifier{0x02},
+			StateProofPK: merklesignature.Commitment{0x03},
+			VoteFirst:    1, VoteLast: 1000,
+		}
+		tooSmallKR := keyreg
+		tooSmallKR.Sender = tooSmall
+		tooSmallKR.Fee = 2_000_000 - 1
+
+		smallKR := keyreg
+		smallKR.Sender = smallest
+		smallKR.Fee = 2_000_000
+		dl.txns(&tooSmallKR, &smallKR)
+		a, _, _, err := dl.generator.LookupLatest(tooSmall)
+		require.NoError(t, err)
+		require.False(t, a.IncentiveEligible)
+		a, _, _, err = dl.generator.LookupLatest(smallest)
+		require.NoError(t, err)
+		require.Equal(t, a.IncentiveEligible, ver >= payoutsBegin)
+	})
+}
+
+// TestAbsentTracking checks that LastProposed and LastHeartbeat are updated
+// properly.
+func TestAbsentTracking(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis(func(cfg *ledgertesting.GenesisCfg) {
+		cfg.OnlineCount = 2 // So we know proposer should propose every 2 rounds, on average
+	}, ledgertesting.TurnOffRewards)
+	getOnlineStake := `
+		int 0; voter_params_get VoterBalance; itob; log; itob; log;
+		int 0; voter_params_get VoterIncentiveEligible; itob; log; itob; log;
+		int 1`
+
+	checkingBegins := 40
+	ledgertesting.TestConsensusRange(t, checkingBegins, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
+		defer dl.Close()
+
+		// we use stakeChecker for testing `voter_params_get` on suspended accounts
+		stib := dl.txn(&txntest.Txn{ // #1
+			Type:            "appl",
+			Sender:          addrs[3], // use non-online account, Totals unchanged
+			ApprovalProgram: getOnlineStake,
+		})
+		stakeChecker := stib.ApplicationID
+		require.NotZero(t, stakeChecker)
+
+		checkState := func(addr basics.Address, online bool, eligible bool, expected uint64) {
+			t.Helper()
+			if !online {
+				require.Zero(t, expected)
+			}
+			stib = dl.txn(&txntest.Txn{
+				Type:          "appl",
+				Sender:        addr,
+				ApplicationID: stakeChecker,
+			})
+			logs := stib.ApplyData.EvalDelta.Logs
+			require.Len(t, logs, 4)
+			tBytes := "\x00\x00\x00\x00\x00\x00\x00\x01"
+			fBytes := "\x00\x00\x00\x00\x00\x00\x00\x00"
+			onlBytes := fBytes
+			if online {
+				onlBytes = tBytes
+			}
+			elgBytes := fBytes
+			if eligible {
+				elgBytes = tBytes
+			}
+			require.Equal(t, onlBytes, logs[0], "online")
+			require.Equal(t, int(expected), int(binary.BigEndian.Uint64([]byte(logs[1]))))
+			require.Equal(t, onlBytes, logs[2], "online")
+			require.Equal(t, elgBytes, logs[3], "eligible")
+		}
+
+		// have addrs[1] go online explicitly, which makes it eligible for suspension.
+		// use a large fee, so we can see IncentiveEligible change
+		dl.txn(&txntest.Txn{ // #2
+			Type:        "keyreg",
+			Fee:         10_000_000,
+			Sender:      addrs[1],
+			VotePK:      [32]byte{1},
+			SelectionPK: [32]byte{1},
+		})
+
+		// as configured above, only the first two accounts should be online
+		require.True(t, lookup(t, dl.generator, addrs[0]).Status == basics.Online)
+		require.True(t, lookup(t, dl.generator, addrs[1]).Status == basics.Online)
+		require.False(t, lookup(t, dl.generator, addrs[2]).Status == basics.Online)
+		checkState(addrs[0], true, false, 833_333_333_333_333) // #3
+		require.Equal(t, int(lookup(t, dl.generator, addrs[0]).MicroAlgos.Raw), 833_333_333_332_333)
+		// although addr[1] just paid to be eligible, it won't be for 320 rounds
+		checkState(addrs[1], true, false, 833_333_333_333_333) // #4
+		checkState(addrs[2], false, false, 0)                  // #5
+
+		// genesis accounts don't begin IncentiveEligible, even if online
+		require.False(t, lookup(t, dl.generator, addrs[0]).IncentiveEligible)
+		// but addr[1] paid extra fee. Note this is _current_ state, not really "online"
+		require.True(t, lookup(t, dl.generator, addrs[1]).IncentiveEligible)
+		require.False(t, lookup(t, dl.generator, addrs[2]).IncentiveEligible)
+
+		vb := dl.fullBlock() // #6
+		totals, err := dl.generator.Totals(vb.Block().Round())
+		require.NoError(t, err)
+		require.NotZero(t, totals.Online.Money.Raw)
+
+		// although it's not even online, we'll use addrs[7] as the proposer
+		proposer := addrs[7]
+		dl.beginBlock()
+		dl.txns(&txntest.Txn{
+			Type:     "pay",
+			Sender:   addrs[1],
+			Receiver: addrs[2],
+			Amount:   100_000,
+		})
+		dl.endBlock(proposer) // #7
+
+		prp := lookup(t, dl.validator, proposer)
+		require.Equal(t, prp.LastProposed, dl.validator.Latest())
+		require.Zero(t, prp.LastHeartbeat)
+		require.False(t, prp.IncentiveEligible)
+
+		// addr[1] paid to an offline account, so Online totals decrease
+		newtotals, err := dl.generator.Totals(dl.generator.Latest())
+		require.NoError(t, err)
+		// payment and fee left the online account
+		require.Equal(t, totals.Online.Money.Raw-100_000-1000, newtotals.Online.Money.Raw)
+		totals = newtotals
+
+		dl.fullBlock()
+
+		// addrs[2] was already offline
+		dl.txns(&txntest.Txn{Type: "keyreg", Sender: addrs[2]}) // OFFLINE keyreg #9
+		regger := lookup(t, dl.validator, addrs[2])
+
+		// totals were unchanged by an offline keyreg from an offline account
+		newtotals, err = dl.generator.Totals(dl.generator.Latest())
+		require.NoError(t, err)
+		require.Equal(t, totals.Online.Money.Raw, newtotals.Online.Money.Raw)
+
+		// an offline keyreg transaction records no activity
+		require.Zero(t, regger.LastProposed)
+		require.Zero(t, regger.LastHeartbeat)
+
+		// ONLINE keyreg without extra fee
+		dl.txns(&txntest.Txn{
+			Type:        "keyreg",
+			Sender:      addrs[2],
+			VotePK:      [32]byte{1},
+			SelectionPK: [32]byte{1},
+		}) // #10
+		// online totals have grown, addr[2] was added
+		newtotals, err = dl.generator.Totals(dl.generator.Latest())
+		require.NoError(t, err)
+		require.Greater(t, newtotals.Online.Money.Raw, totals.Online.Money.Raw)
+
+		regger = lookup(t, dl.validator, addrs[2])
+		require.Zero(t, regger.LastProposed)
+		require.True(t, regger.Status == basics.Online)
+
+		// But nothing has changed, since we're not past 320
+		checkState(addrs[0], true, false, 833_333_333_333_333) // #11
+		checkState(addrs[1], true, false, 833_333_333_333_333) // #12
+		checkState(addrs[2], false, false, 0)                  // #13
+
+		require.NotZero(t, regger.LastHeartbeat) // online keyreg caused update
+		require.False(t, regger.IncentiveEligible)
+
+		// ONLINE keyreg with extra fee
+		vb = dl.fullBlock(&txntest.Txn{
+			Type:        "keyreg",
+			Fee:         2_000_000,
+			Sender:      addrs[2],
+			VotePK:      [32]byte{1},
+			SelectionPK: [32]byte{1},
+		}) // #14
+		twoEligible := vb.Block().Round()
+		require.EqualValues(t, 14, twoEligible) // sanity check
+
+		regger = lookup(t, dl.validator, addrs[2])
+		require.True(t, regger.IncentiveEligible)
+
+		for i := 0; i < 5; i++ {
+			dl.fullBlock() // #15-19
+			require.True(t, lookup(t, dl.generator, addrs[0]).Status == basics.Online)
+			require.True(t, lookup(t, dl.generator, addrs[1]).Status == basics.Online)
+			require.True(t, lookup(t, dl.generator, addrs[2]).Status == basics.Online)
+		}
+
+		// all are still online after a few blocks
+		require.True(t, lookup(t, dl.generator, addrs[0]).Status == basics.Online)
+		require.True(t, lookup(t, dl.generator, addrs[1]).Status == basics.Online)
+		require.True(t, lookup(t, dl.generator, addrs[2]).Status == basics.Online)
+
+		for i := 0; i < 30; i++ {
+			dl.fullBlock() // #20-49
+		}
+
+		// addrs 0-2 all have about 1/3 of stake, so seemingly (see next block
+		// of checks) become eligible for suspension after 30 rounds. We're at
+		// about 35. But, since blocks are empty, nobody's suspendible account
+		// is noticed.
+		require.Equal(t, basics.Online, lookup(t, dl.generator, addrs[0]).Status)
+		require.Equal(t, basics.Online, lookup(t, dl.generator, addrs[1]).Status)
+		require.Equal(t, basics.Online, lookup(t, dl.generator, addrs[2]).Status)
+		require.True(t, lookup(t, dl.generator, addrs[2]).IncentiveEligible)
+
+		// when 2 pays 0, they both get noticed but addr[0] is not considered
+		// absent because it is a genesis account
+		vb = dl.fullBlock(&txntest.Txn{
+			Type:     "pay",
+			Sender:   addrs[2],
+			Receiver: addrs[0],
+			Amount:   0,
+		}) // #50
+		require.Equal(t, vb.Block().AbsentParticipationAccounts, []basics.Address{addrs[2]})
+
+		twoPaysZero := vb.Block().Round()
+		require.EqualValues(t, 50, twoPaysZero)
+		// addr[0] has never proposed or heartbeat so it is not considered absent
+		require.Equal(t, basics.Online, lookup(t, dl.generator, addrs[0]).Status)
+		// addr[1] still hasn't been "noticed"
+		require.Equal(t, basics.Online, lookup(t, dl.generator, addrs[1]).Status)
+		require.Equal(t, basics.Offline, lookup(t, dl.generator, addrs[2]).Status)
+		require.False(t, lookup(t, dl.generator, addrs[2]).IncentiveEligible)
+
+		// separate the payments by a few blocks so it will be easier to test
+		// when the changes go into effect
+		for i := 0; i < 4; i++ {
+			dl.fullBlock() // #51-54
+		}
+		// now, when 2 pays 1, 1 gets suspended (unlike 0, we had 1 keyreg early on, so LastHeartbeat>0)
+		vb = dl.fullBlock(&txntest.Txn{
+			Type:     "pay",
+			Sender:   addrs[2],
+			Receiver: addrs[1],
+			Amount:   0,
+		}) // #55
+		twoPaysOne := vb.Block().Round()
+		require.EqualValues(t, 55, twoPaysOne)
+		require.Equal(t, vb.Block().AbsentParticipationAccounts, []basics.Address{addrs[1]})
+		require.Equal(t, basics.Online, lookup(t, dl.generator, addrs[0]).Status)
+		require.Equal(t, basics.Offline, lookup(t, dl.generator, addrs[1]).Status)
+		require.False(t, lookup(t, dl.generator, addrs[1]).IncentiveEligible)
+		require.Equal(t, basics.Offline, lookup(t, dl.generator, addrs[2]).Status)
+		require.False(t, lookup(t, dl.generator, addrs[2]).IncentiveEligible)
+
+		// now, addrs[2] proposes, so it gets back online, but stays ineligible
+		dl.proposer = addrs[2]
+		dl.fullBlock()
+		require.Equal(t, basics.Online, lookup(t, dl.generator, addrs[2]).Status)
+		require.False(t, lookup(t, dl.generator, addrs[2]).IncentiveEligible)
+
+		// "synchronize" so the loop below ends on 320
+		for dl.fullBlock().Block().Round()%4 != 3 {
+		}
+		// keep in mind that each call to checkState also advances the round, so
+		// each loop advances by 4.
+		for rnd := dl.fullBlock().Block().Round(); rnd < 320; rnd = dl.fullBlock().Block().Round() {
+			// STILL nothing has changed, as we're under 320
+			checkState(addrs[0], true, false, 833_333_333_333_333)
+			checkState(addrs[1], true, false, 833_333_333_333_333)
+			checkState(addrs[2], false, false, 0)
+		}
+		// rnd was 320 in the last fullBlock
+
+		// We will soon see effects visible to `vote_params_get`
+		// In first block, addr[3] created an app. No effect on 0-2
+		checkState(addrs[1], true, false, 833_333_333_333_333) // 321
+		// in second block, the checkstate app was created
+		checkState(addrs[1], true, false, 833_333_333_333_333) // 322
+		// addr[1] spent 10A on a fee in rnd 3, so online stake and eligibility adjusted in 323
+		checkState(addrs[1], true, true, 833_333_323_333_333) // 323
+
+		for rnd := dl.fullBlock().Block().Round(); rnd < 320+twoEligible-1; rnd = dl.fullBlock().Block().Round() {
+		}
+		checkState(addrs[2], true, false, 833_333_333_429_333)
+		checkState(addrs[2], true, true, 833_333_331_429_333) // after keyreg w/ 2A is effective
+
+		for rnd := dl.fullBlock().Block().Round(); rnd < 320+twoPaysZero-1; rnd = dl.fullBlock().Block().Round() {
+		}
+		// we're at the round before two's suspension kicks in
+		checkState(addrs[2], true, true, 833_333_331_429_333)  // still "online"
+		checkState(addrs[0], true, false, 833_333_333_331_333) // paid fee in #5 and #11, we're at ~371
+		// 2 was noticed & suspended after paying 0, eligible and amount go to 0
+		checkState(addrs[2], false, false, 0)
+		checkState(addrs[0], true, false, 833_333_333_331_333) // addr 0 didn't get suspended (genesis)
+
+		// roughly the same check, except for addr 1, which was genesis, but
+		// after doing a keyreg, became susceptible to suspension
+		for rnd := dl.fullBlock().Block().Round(); rnd < 320+twoPaysOne-1; rnd = dl.fullBlock().Block().Round() {
+		}
+		checkState(addrs[1], true, true, 833_333_323_230_333) // still online, balance irrelevant
+		// 1 was noticed & suspended after being paid by 2, so eligible and amount go to 0
+		checkState(addrs[1], false, false, 0)
+	})
+}
+
+// TestAbsenteeChallenges ensures that online accounts that don't (do) respond
+// to challenges end up off (on) line.
+func TestAbsenteeChallenges(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis(func(cfg *ledgertesting.GenesisCfg) {
+		// Get some big accounts online, so the accounts we create here will be
+		// a tiny fraction, not expected to propose often.
+		cfg.OnlineCount = 5
+	})
+	checkingBegins := 40
+
+	ledgertesting.TestConsensusRange(t, checkingBegins-1, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
+		defer dl.Close()
+
+		// This address ends up being used as a proposer, because that's how we
+		// jam a specific seed into the block to control the challenge.
+		// Therefore, it must be an existing account.
+		seedAndProp := basics.Address{0xaa}
+
+		// We'll generate a challenge for accounts that start with 0xaa.
+		propguy := basics.Address{0xaa, 0xaa, 0xaa} // Will propose during the challenge window
+		regguy := basics.Address{0xaa, 0xbb, 0xbb}  // Will re-reg during the challenge window
+		badguy := basics.Address{0xaa, 0x11, 0x11}  // Will ignore the challenge
+
+		// Fund them all and have them go online. That makes them eligible to be challenged
+		for i, guy := range []basics.Address{seedAndProp, propguy, regguy, badguy} {
+			dl.txns(&txntest.Txn{
+				Type:     "pay",
+				Sender:   addrs[0],
+				Receiver: guy,
+				Amount:   10_000_000,
+			}, &txntest.Txn{
+				Type:        "keyreg",
+				Fee:         5_000_000, // enough to be incentive eligible
+				Sender:      guy,
+				VotePK:      [32]byte{byte(i + 1)},
+				SelectionPK: [32]byte{byte(i + 1)},
+			})
+			acct := lookup(t, dl.generator, guy)
+			require.Equal(t, basics.Online, acct.Status)
+			require.Equal(t, ver >= checkingBegins, acct.IncentiveEligible, guy)
+		}
+
+		for vb := dl.fullBlock(); vb.Block().Round() < 999; vb = dl.fullBlock() {
+			// we just advancing to one before the challenge round
+		}
+		// All still online, same eligibility
+		for _, guy := range []basics.Address{propguy, regguy, badguy} {
+			acct := lookup(t, dl.generator, guy)
+			require.Equal(t, basics.Online, acct.Status)
+			require.Equal(t, ver >= checkingBegins, acct.IncentiveEligible, guy)
+		}
+		// make the BlockSeed start with 0xa in the challenge round
+		dl.beginBlock()
+		dl.endBlock(seedAndProp) // This becomes the seed, which is used for the challenge
+
+		for vb := dl.fullBlock(); vb.Block().Round() < 1200; vb = dl.fullBlock() {
+			// advance through first grace period
+		}
+		dl.beginBlock()
+		dl.endBlock(propguy) // propose, which is a fine (though less likely) way to respond
+
+		// All still online, unchanged eligibility
+		for _, guy := range []basics.Address{propguy, regguy, badguy} {
+			acct := lookup(t, dl.generator, guy)
+			require.Equal(t, basics.Online, acct.Status)
+			require.Equal(t, ver >= checkingBegins, acct.IncentiveEligible, guy)
+		}
+
+		for vb := dl.fullBlock(); vb.Block().Round() < 1220; vb = dl.fullBlock() {
+			// advance into knockoff period. but no transactions means
+			// unresponsive accounts go unnoticed.
+		}
+		// All still online, same eligibility
+		for _, guy := range []basics.Address{propguy, regguy, badguy} {
+			acct := lookup(t, dl.generator, guy)
+			require.Equal(t, basics.Online, acct.Status)
+			require.Equal(t, ver >= checkingBegins, acct.IncentiveEligible, guy)
+		}
+
+		// badguy never responded, he gets knocked off when paid
+		vb := dl.fullBlock(&txntest.Txn{
+			Type:     "pay",
+			Sender:   addrs[0],
+			Receiver: badguy,
+		})
+		if ver >= checkingBegins {
+			require.Equal(t, vb.Block().AbsentParticipationAccounts, []basics.Address{badguy})
+		}
+		acct := lookup(t, dl.generator, badguy)
+		require.Equal(t, ver >= checkingBegins, basics.Offline == acct.Status) // if checking, badguy fails
+		require.False(t, acct.IncentiveEligible)
+
+		// propguy proposed during the grace period, he stays on even when paid
+		dl.txns(&txntest.Txn{
+			Type:     "pay",
+			Sender:   addrs[0],
+			Receiver: propguy,
+		})
+		acct = lookup(t, dl.generator, propguy)
+		require.Equal(t, basics.Online, acct.Status)
+		require.Equal(t, ver >= checkingBegins, acct.IncentiveEligible)
+
+		// regguy keyregs before he's caught, which is a heartbeat, he stays on as well
+		dl.txns(&txntest.Txn{
+			Type:        "keyreg", // Does not pay extra fee, since he's still eligible
+			Sender:      regguy,
+			VotePK:      [32]byte{1},
+			SelectionPK: [32]byte{1},
+		})
+		acct = lookup(t, dl.generator, regguy)
+		require.Equal(t, basics.Online, acct.Status)
+		require.Equal(t, ver >= checkingBegins, acct.IncentiveEligible)
+		dl.txns(&txntest.Txn{
+			Type:     "pay",
+			Sender:   addrs[0],
+			Receiver: regguy,
+		})
+		acct = lookup(t, dl.generator, regguy)
+		require.Equal(t, basics.Online, acct.Status)
+		require.Equal(t, ver >= checkingBegins, acct.IncentiveEligible)
+	})
+}
+
+// TestVoterAccess ensures that the `voter` opcode works properly when hooked up
+// to a real ledger.
+func TestVoterAccess(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis(
+		ledgertesting.TurnOffRewards,
+		func(cfg *ledgertesting.GenesisCfg) {
+			cfg.OnlineCount = 1 // So that one is online from the start
+		})
+	getOnlineStake := `int 0; voter_params_get VoterBalance; itob; log; itob; log; online_stake; itob; log; int 1`
+
+	// `voter_params_get` introduced in 40
+	ledgertesting.TestConsensusRange(t, 40, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
+		defer dl.Close()
+
+		stib := dl.txn(&txntest.Txn{
+			Type:            "appl",
+			Sender:          addrs[0],
+			ApprovalProgram: getOnlineStake,
+		})
+		stakeChecker := stib.ApplicationID
+		require.NotZero(t, stakeChecker)
+
+		// have addrs[1] go online, though it won't be visible right away
+		dl.txn(&txntest.Txn{
+			Type:        "keyreg",
+			Sender:      addrs[1],
+			VotePK:      [32]byte{0xaa},
+			SelectionPK: [32]byte{0xbb},
+		})
+
+		one := basics.Address{0xaa, 0x11}
+		two := basics.Address{0xaa, 0x22}
+		three := basics.Address{0xaa, 0x33}
+
+		checkState := func(addr basics.Address, online bool, expected uint64, total uint64) {
+			t.Helper()
+			if !online {
+				require.Zero(t, expected)
+			}
+			stib = dl.txn(&txntest.Txn{
+				Type:          "appl",
+				Sender:        addr,
+				ApplicationID: stakeChecker,
+			})
+			logs := stib.ApplyData.EvalDelta.Logs
+			require.Len(t, logs, 3)
+			if online {
+				require.Equal(t, "\x00\x00\x00\x00\x00\x00\x00\x01", logs[0])
+				require.Equal(t, int(expected), int(binary.BigEndian.Uint64([]byte(logs[1]))))
+			} else {
+				require.Equal(t, "\x00\x00\x00\x00\x00\x00\x00\x00", logs[0])
+				require.Equal(t, int(expected), int(binary.BigEndian.Uint64([]byte(logs[1]))))
+			}
+			require.Equal(t, int(total), int(binary.BigEndian.Uint64([]byte(logs[2]))))
+		}
+
+		checkState(addrs[0], true, 833_333_333_333_333, 833_333_333_333_333)
+		// checking again because addrs[0] just paid a fee, but we show online balance hasn't changed yet
+		checkState(addrs[0], true, 833_333_333_333_333, 833_333_333_333_333)
+		for i := 1; i < 10; i++ {
+			checkState(addrs[i], false, 0, 833_333_333_333_333)
+		}
+
+		// Fund the new accounts and have them go online.
+		for i, addr := range []basics.Address{one, two, three} {
+			dl.txns(&txntest.Txn{
+				Type:     "pay",
+				Sender:   addrs[0],
+				Receiver: addr,
+				Amount:   (uint64(i) + 1) * 1_000_000_000,
+			}, &txntest.Txn{
+				Type:        "keyreg",
+				Sender:      addr,
+				VotePK:      [32]byte{byte(i + 1)},
+				SelectionPK: [32]byte{byte(i + 1)},
+			})
+		}
+		// they don't have online stake yet
+		for _, addr := range []basics.Address{one, two, three} {
+			checkState(addr, false, 0, 833_333_333_333_333)
+		}
+		for i := 0; i < 320; i++ {
+			dl.fullBlock()
+		}
+		// addr[1] is now visibly online. the total is across all five that are now online, minus various fees paid
+		checkState(addrs[1], true, 833_333_333_333_333-2000, 2*833_333_333_333_333-14000)
+		for i := 2; i < 10; i++ { // addrs[2-9] never came online
+			checkState(addrs[i], false, 0, 2*833_333_333_333_333-14000)
+		}
+		for i, addr := range []basics.Address{one, two, three} {
+			checkState(addr, true, (uint64(i)+1)*1_000_000_000-2000, 2*833_333_333_333_333-14000)
+		}
+	})
 }
 
 // TestHoldingGet tests some of the corner cases for the asset_holding_get
@@ -451,10 +1143,11 @@ func TestRekeying(t *testing.T) {
 				return err
 			}
 		}
-		validatedBlock, err := eval.GenerateBlock()
+		unfinishedBlock, err := eval.GenerateBlock(nil)
 		if err != nil {
 			return err
 		}
+		validatedBlock := ledgercore.MakeValidatedBlock(unfinishedBlock.UnfinishedBlock(), unfinishedBlock.UnfinishedDeltas())
 
 		backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 		defer backlogPool.Shutdown()
