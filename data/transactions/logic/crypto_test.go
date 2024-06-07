@@ -606,8 +606,8 @@ ecdsa_verify Secp256r1
 
 	ri, si, err := ecdsa.Sign(rand.Reader, key, msg[:])
 	require.NoError(t, err)
-	r := ri.Bytes()
-	s := si.Bytes()
+	r := ri.FillBytes(make([]byte, 32))
+	s := si.FillBytes(make([]byte, 32))
 
 	rTampered := slices.Clone(r)
 	rTampered[0] += byte(1) // intentional overflow
@@ -826,8 +826,8 @@ func benchmarkEcdsaGenData(b *testing.B, curve EcdsaCurve) (data []benchmarkEcds
 		} else if curve == Secp256r1 {
 			r, s, err := ecdsa.Sign(rand.Reader, key, data[i].msg[:])
 			require.NoError(b, err)
-			data[i].r = r.Bytes()
-			data[i].s = s.Bytes()
+			data[i].r = r.FillBytes(make([]byte, 32))
+			data[i].s = s.FillBytes(make([]byte, 32))
 		}
 	}
 	return data

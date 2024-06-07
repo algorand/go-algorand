@@ -153,23 +153,24 @@ func (dl *DoubleLedger) endBlock(proposer ...basics.Address) *ledgercore.Validat
 	return vb
 }
 
-func (dl *DoubleLedger) fundedApp(sender basics.Address, amount uint64, source string) basics.AppIndex {
+func (dl *DoubleLedger) createApp(sender basics.Address, source string) basics.AppIndex {
 	createapp := txntest.Txn{
 		Type:            "appl",
 		Sender:          sender,
 		ApprovalProgram: source,
 	}
 	vb := dl.fullBlock(&createapp)
-	appIndex := vb.Block().Payset[0].ApplyData.ApplicationID
+	return vb.Block().Payset[0].ApplyData.ApplicationID
+}
 
-	fund := txntest.Txn{
+func (dl *DoubleLedger) fundedApp(sender basics.Address, amount uint64, source string) basics.AppIndex {
+	appIndex := dl.createApp(sender, source)
+	dl.fullBlock(&txntest.Txn{
 		Type:     "pay",
 		Sender:   sender,
 		Receiver: appIndex.Address(),
 		Amount:   amount,
-	}
-
-	dl.txn(&fund)
+	})
 	return appIndex
 }
 

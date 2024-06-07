@@ -18,6 +18,7 @@ package prefetcher_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 
@@ -117,6 +118,16 @@ func (l *prefetcherAlignmentTestLedger) LookupWithoutRewards(_ basics.Round, add
 		return data, 0, nil
 	}
 	return ledgercore.AccountData{}, 0, nil
+}
+func (l *prefetcherAlignmentTestLedger) LookupAgreement(_ basics.Round, addr basics.Address) (basics.OnlineAccountData, error) {
+	// prefetch alignment tests do not check for prefetching of online account data
+	// because it's quite different and can only occur in AVM opcodes, which
+	// aren't handled anyway (just as we don't know if a holding or app local
+	// will be accessed in AVM.)
+	return basics.OnlineAccountData{}, errors.New("not implemented")
+}
+func (l *prefetcherAlignmentTestLedger) OnlineCirculation(rnd, voteRnd basics.Round) (basics.MicroAlgos, error) {
+	return basics.MicroAlgos{}, errors.New("not implemented")
 }
 func (l *prefetcherAlignmentTestLedger) LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error) {
 	l.mu.Lock()

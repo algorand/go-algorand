@@ -308,7 +308,7 @@ func (l logger) SetOutput(w io.Writer) {
 }
 
 func (l logger) setOutput(w io.Writer) {
-	l.entry.Logger.Out = w
+	l.entry.Logger.SetOutput(w)
 }
 
 func (l logger) getOutput() io.Writer {
