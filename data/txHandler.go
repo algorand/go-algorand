@@ -609,19 +609,6 @@ func (handler *TxHandler) incomingMsgDupErlCheck(data []byte, sender network.Dis
 	}
 
 	var err error
-	var capguard *util.ErlCapacityGuard
-	accepted := false
-	defer func() {
-		// if we failed to put the item onto the backlog, we should release the capacity if any
-		if !accepted {
-			if capguard != nil {
-				if capErr := capguard.Release(); capErr != nil {
-					logging.Base().Warnf("Failed to release capacity to ElasticRateLimiter: %v", capErr)
-				}
-			}
-		}
-	}()
-
 	if handler.erl != nil {
 		congestedERL := float64(cap(handler.backlogQueue))*handler.backlogCongestionThreshold < float64(len(handler.backlogQueue))
 		// consume a capacity unit
@@ -720,6 +707,19 @@ func (handler *TxHandler) incomingTxGroupDupRateLimit(unverifiedTxGroup []transa
 //   - transactions are checked for duplicates
 func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) network.OutgoingMessage {
 	msgKey, capguard, shouldDrop := handler.incomingMsgDupErlCheck(rawmsg.Data, rawmsg.Sender)
+
+	accepted := false
+	defer func() {
+		// if we failed to put the item onto the backlog, we should release the capacity if any
+		if !accepted {
+			if capguard != nil {
+				if capErr := capguard.Release(); capErr != nil {
+					logging.Base().Warnf("processIncomingTxn: failed to release capacity to ElasticRateLimiter: %v", capErr)
+				}
+			}
+		}
+	}()
+
 	if shouldDrop {
 		// this TX message was found in the duplicate cache, or ERL rate-limited it
 		return network.OutgoingMessage{Action: network.Ignore}
@@ -775,6 +775,19 @@ type validatedIncomingTxMessage struct {
 // validateIncomingTxMessage is the validator for the MessageProcessor implementation used by P2PNetwork.
 func (handler *TxHandler) validateIncomingTxMessage(rawmsg network.IncomingMessage) network.ValidatedMessage {
 	msgKey, capguard, shouldDrop := handler.incomingMsgDupErlCheck(rawmsg.Data, rawmsg.Sender)
+
+	accepted := false
+	defer func() {
+		// if we failed to put the item onto the backlog, we should release the capacity if any
+		if !accepted {
+			if capguard != nil {
+				if capErr := capguard.Release(); capErr != nil {
+					logging.Base().Warnf("validateIncomingTxMessage: failed to release capacity to ElasticRateLimiter: %v", capErr)
+				}
+			}
+		}
+	}()
+
 	if shouldDrop {
 		// this TX message was found in the duplicate cache, or ERL rate-limited it
 		return network.ValidatedMessage{Action: network.Ignore, ValidatorData: nil}
@@ -793,6 +806,7 @@ func (handler *TxHandler) validateIncomingTxMessage(rawmsg network.IncomingMessa
 		return network.ValidatedMessage{Action: network.Ignore, ValidatorData: nil}
 	}
 
+	accepted = true
 	return network.ValidatedMessage{
 		Action: network.Accept,
 		Tag:    rawmsg.Tag,
@@ -828,6 +842,11 @@ func (handler *TxHandler) processIncomingTxMessage(validatedMessage network.Vali
 		}
 		if handler.msgCache != nil && msg.msgKey != nil {
 			handler.msgCache.DeleteByKey(msg.msgKey)
+		}
+		if msg.capguard != nil {
+			if capErr := msg.capguard.Release(); capErr != nil {
+				logging.Base().Warnf("processIncomingTxMessage: failed to release capacity to ElasticRateLimiter: %v", capErr)
+			}
 		}
 	}
 	return network.OutgoingMessage{Action: network.Ignore}
