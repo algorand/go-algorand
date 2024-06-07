@@ -178,6 +178,44 @@
         }
       }
     },
+    "/debug/settings/pprof": {
+      "get": {
+        "description": "Retrieves the current settings for blocking and mutex profiles",
+        "tags": [
+          "private"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "operationId": "GetDebugSettingsProf",
+        "responses": {
+          "200": {
+            "$ref": "#/responses/DebugSettingsProfResponse"
+          }
+        }
+      },
+      "put": {
+        "description": "Enables blocking and mutex profiles, and returns the old settings",
+        "tags": [
+          "private"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "operationId": "PutDebugSettingsProf",
+        "responses": {
+          "200": {
+            "$ref": "#/responses/DebugSettingsProfResponse"
+          }
+        }
+      }
+    },
     "/v2/accounts/{address}": {
       "get": {
         "description": "Given a specific account public key, this call returns the accounts status, balance and spendable amounts",
@@ -4053,6 +4091,26 @@
         }
       }
     },
+    "DebugSettingsProf": {
+      "description": "algod mutex and blocking profiling state.",
+      "type": "object",
+      "title": "algod mutex and blocking profiling state.",
+      "tags": [
+        "private"
+      ],
+      "properties": {
+        "block-rate": {
+          "description": "The rate of blocking events. The profiler aims to sample an average of one blocking event per rate nanoseconds spent blocked. To turn off profiling entirely, pass rate 0.",
+          "example": 1000,
+          "type": "integer"
+        },
+        "mutex-rate": {
+          "description": "The rate of mutex events. On average 1/rate events are reported. To turn off profiling entirely, pass rate 0",
+          "example": 1000,
+          "type": "integer"
+        }
+      }
+    },
     "BuildVersion": {
       "tags": [
         "common"
@@ -5499,6 +5557,12 @@
       "description": "VersionsResponse is the response to 'GET /versions'",
       "schema": {
         "$ref": "#/definitions/Version"
+      }
+    },
+    "DebugSettingsProfResponse": {
+      "description": "DebugPprof is the response to the /debug/extra/pprof endpoint",
+      "schema": {
+        "$ref": "#/definitions/DebugSettingsProf"
       }
     }
   },
