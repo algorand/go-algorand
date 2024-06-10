@@ -164,23 +164,17 @@ crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a:
 		$(MAKE) && \
 		$(MAKE) install
 
-hostarch_amd64_libsodium: EXTRA_CONFIGURE_FLAGS = CFLAGS="-arch x86_64" --host=x86_64-apple-darwin
-hostarch_amd64_libsodium: crypto/libs/darwin/amd64/lib/libsodium.a
-
-hostarch_arm64_libsodium: EXTRA_CONFIGURE_FLAGS = CFLAGS="-arch arm64" --host=aarch64-apple-darwin
-hostarch_arm64_libsodium: crypto/libs/darwin/arm64/lib/libsodium.a
-
 universal:
 ifeq ($(OS_TYPE),darwin)
-# build amd64 Mac binaries
+	# build amd64 Mac binaries
 	mkdir -p $(GOPATH1)/bin-darwin-amd64
-	BUILDARCH=amd64 $(MAKE) hostarch_amd64_libsodium
-	BUILDARCH=amd64 GOBIN=$(GOPATH1)/bin-darwin-amd64 make
-# build arm64 Mac binaries
+	BUILDARCH=amd64 GOBIN=$(GOPATH1)/bin-darwin-amd64 EXTRA_CONFIGURE_FLAGS='CFLAGS="-arch x86_64" --host=x86_64-apple-darwin' $(MAKE)
+
+	# build arm64 Mac binaries
 	mkdir -p $(GOPATH1)/bin-darwin-arm64
-	BUILDARCH=arm64 $(MAKE) hostarch_arm64_libsodium
-	BUILDARCH=arm64 GOBIN=$(GOPATH1)/bin-darwin-arm64 make
-# lipo together
+	BUILDARCH=arm64 GOBIN=$(GOPATH1)/bin-darwin-arm64 EXTRA_CONFIGURE_FLAGS='CFLAGS="-arch arm64" --host=aarch64-apple-darwin' $(MAKE)
+
+	# lipo together
 	mkdir -p $(GOPATH1)/bin-darwin-universal
 	for binary in $$(ls $(GOPATH1)/bin-darwin-arm64); do \
 		if [ -f $(GOPATH1)/bin-darwin-amd64/$$binary ]; then \
@@ -369,7 +363,7 @@ dump: $(addprefix gen/,$(addsuffix /genesis.dump, $(NETWORKS)))
 install: build
 	scripts/dev_install.sh -p $(GOPATH1)/bin
 
-.PHONY: default fmt lint check_shell sanity cover prof deps build test fulltest shorttest clean cleango deploy node_exporter install %gen gen NONGO_BIN check-go-version rebuild_kmd_swagger hostarch_amd64_libsodium hostarch_arm64_libsodium universal
+.PHONY: default fmt lint check_shell sanity cover prof deps build test fulltest shorttest clean cleango deploy node_exporter install %gen gen NONGO_BIN check-go-version rebuild_kmd_swagger universal
 
 ###### TARGETS FOR CICD PROCESS ######
 include ./scripts/release/mule/Makefile.mule
