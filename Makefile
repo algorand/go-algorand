@@ -11,6 +11,13 @@ endif
 SRCPATH     := $(shell pwd)
 ARCH        := $(shell ./scripts/archtype.sh)
 OS_TYPE     := $(shell ./scripts/ostype.sh)
+# overrides for cross-compiling platform-specific binaries
+ifdef BUILDARCH
+  ARCH := $(BUILDARCH)
+  GO_INSTALL := CGO_ENABLED=1 GOOS=$(OS_TYPE) GOARCH=$(ARCH) go build -o $(GOPATH1)/bin-$(OS_TYPE)-$(ARCH)
+else
+  GO_INSTALL := go install
+endif
 S3_RELEASE_BUCKET = $$S3_RELEASE_BUCKET
 
 GOLANG_VERSIONS				:= $(shell ./scripts/get_golang_version.sh all)
@@ -153,9 +160,40 @@ crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a:
 	cp -R crypto/libsodium-fork/. crypto/copies/$(OS_TYPE)/$(ARCH)/libsodium-fork
 	cd crypto/copies/$(OS_TYPE)/$(ARCH)/libsodium-fork && \
 		./autogen.sh --prefix $(SRCPATH)/crypto/libs/$(OS_TYPE)/$(ARCH) && \
-		./configure --disable-shared --prefix="$(SRCPATH)/crypto/libs/$(OS_TYPE)/$(ARCH)" && \
+		./configure --disable-shared --prefix="$(SRCPATH)/crypto/libs/$(OS_TYPE)/$(ARCH)" $(EXTRA_CONFIGURE_FLAGS) && \
 		$(MAKE) && \
 		$(MAKE) install
+
+hostarch_amd64_libsodium: EXTRA_CONFIGURE_FLAGS = CFLAGS="-arch x86_64" --host=x86_64-apple-darwin
+hostarch_amd64_libsodium: crypto/libs/darwin/amd64/lib/libsodium.a
+
+hostarch_arm64_libsodium: EXTRA_CONFIGURE_FLAGS = CFLAGS="-arch arm64" --host=aarch64-apple-darwin
+hostarch_arm64_libsodium: crypto/libs/darwin/arm64/lib/libsodium.a
+
+universal:
+ifeq ($(OS_TYPE),darwin)
+# build amd64 Mac binaries
+	mkdir -p $(GOPATH1)/bin-darwin-amd64
+	BUILDARCH=amd64 $(MAKE) hostarch_amd64_libsodium
+	BUILDARCH=amd64 GOBIN=$(GOPATH1)/bin-darwin-amd64 make
+# build arm64 Mac binaries
+	mkdir -p $(GOPATH1)/bin-darwin-arm64
+	BUILDARCH=arm64 $(MAKE) hostarch_arm64_libsodium
+	BUILDARCH=arm64 GOBIN=$(GOPATH1)/bin-darwin-arm64 make
+# lipo together
+	mkdir -p $(GOPATH1)/bin-darwin-universal
+	for binary in $$(ls $(GOPATH1)/bin-darwin-arm64); do \
+		if [ -f $(GOPATH1)/bin-darwin-amd64/$$binary ]; then \
+			lipo -create -output $(GOPATH1)/bin-darwin-universal/$$binary \
+			$(GOPATH1)/bin-darwin-arm64/$$binary \
+			$(GOPATH1)/bin-darwin-amd64/$$binary; \
+		else \
+			echo "Warning: Binary $$binary exists in arm64 but not in amd64"; \
+		fi \
+	done
+else
+	$(error OS_TYPE must be darwin for universal builds)
+endif
 
 deps:
 	./scripts/check_deps.sh
@@ -212,11 +250,11 @@ ${GOCACHE}/file.txt:
 	touch "${GOCACHE}"/file.txt
 
 buildsrc: check-go-version crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a node_exporter NONGO_BIN ${GOCACHE}/file.txt
-	go install $(GOTRIMPATH) $(GOTAGS) $(GOBUILDMODE) -ldflags="$(GOLDFLAGS)" ./...
+	$(GO_INSTALL) $(GOTRIMPATH) $(GOTAGS) $(GOBUILDMODE) -ldflags="$(GOLDFLAGS)" ./...
 
 buildsrc-special:
 	cd tools/block-generator && \
-	go install $(GOTRIMPATH) $(GOTAGS) $(GOBUILDMODE) -ldflags="$(GOLDFLAGS)" ./...
+	$(GO_INSTALL) $(GOTRIMPATH) $(GOTAGS) $(GOBUILDMODE) -ldflags="$(GOLDFLAGS)" ./...
 
 check-go-version:
 	./scripts/check_golang_version.sh build
