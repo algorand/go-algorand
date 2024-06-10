@@ -2932,13 +2932,20 @@ func testVotersReloadFromDiskAfterOneStateProofCommitted(t *testing.T, cfg confi
 	}
 
 	triggerDeleteVoters(t, l, genesisInitState)
-	l.acctsOnline.voters.votersMu.Lock()
-	vtSnapshot := l.acctsOnline.voters.votersForRoundCache
 
-	// verifying that the tree for round 512 is still in the cache, but the tree for round 256 is evicted.
-	require.Contains(t, vtSnapshot, basics.Round(496))
-	require.NotContains(t, vtSnapshot, basics.Round(240))
-	l.acctsOnline.voters.votersMu.Unlock()
+	var vtSnapshot map[basics.Round]*ledgercore.VotersForRound
+	func() {
+		// grab internal lock in order to access the voters tracker
+		// since the assert below might fail, use a nested scope to ensure the lock is released
+		l.acctsOnline.voters.votersMu.Lock()
+		defer l.acctsOnline.voters.votersMu.Unlock()
+
+		vtSnapshot = l.acctsOnline.voters.votersForRoundCache
+
+		// verifying that the tree for round 512 is still in the cache, but the tree for round 256 is evicted.
+		require.Contains(t, vtSnapshot, basics.Round(496))
+		require.NotContains(t, vtSnapshot, basics.Round(240))
+	}()
 
 	err = l.reloadLedger()
 	require.NoError(t, err)
