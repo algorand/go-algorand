@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v3.5.3
+        uses: actions/checkout@v4
 
       - name: Generate Container Metadata
         id: meta
@@ -59,7 +59,7 @@ jobs:
   #   if: github.ref == format('refs/heads/{0}', 'master')
   #   steps:
   #     - name: Checkout Code
-  #       uses: actions/checkout@v3.5.3
+  #       uses: actions/checkout@v4
 
   #     - name: Update DockerHub Repository Description
   #       uses: peter-evans/dockerhub-description@v3

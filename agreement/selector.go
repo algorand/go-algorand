@@ -47,7 +47,10 @@ func (sel selector) CommitteeSize(proto config.ConsensusParams) uint64 {
 	return sel.Step.committeeSize(proto)
 }
 
-func balanceRound(r basics.Round, cparams config.ConsensusParams) basics.Round {
+// BalanceRound returns the round that should be considered by agreement when
+// looking at online stake (and status and key material). It is exported so that
+// AVM can provide opcodes that return the same data.
+func BalanceRound(r basics.Round, cparams config.ConsensusParams) basics.Round {
 	return r.SubSaturate(basics.Round(2 * cparams.SeedRefreshInterval * cparams.SeedLookback))
 }
 
@@ -61,7 +64,7 @@ func membership(l LedgerReader, addr basics.Address, r basics.Round, p period, s
 	if err != nil {
 		return
 	}
-	balanceRound := balanceRound(r, cparams)
+	balanceRound := BalanceRound(r, cparams)
 	seedRound := seedRound(r, cparams)
 
 	record, err := l.LookupAgreement(balanceRound, addr)

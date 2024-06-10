@@ -24,6 +24,7 @@ import (
 	"math/bits"
 	"sync"
 
+	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
@@ -46,11 +47,13 @@ type LedgerForCowBase interface {
 	GenesisHash() crypto.Digest
 	CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, ledgercore.Txlease) error
 	LookupWithoutRewards(basics.Round, basics.Address) (ledgercore.AccountData, basics.Round, error)
+	LookupAgreement(basics.Round, basics.Address) (basics.OnlineAccountData, error)
 	LookupAsset(basics.Round, basics.Address, basics.AssetIndex) (ledgercore.AssetResource, error)
 	LookupApplication(basics.Round, basics.Address, basics.AppIndex) (ledgercore.AppResource, error)
 	LookupKv(basics.Round, string) ([]byte, error)
 	GetCreatorForRound(basics.Round, basics.CreatableIndex, basics.CreatableType) (basics.Address, bool, error)
 	GetStateProofVerificationContext(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error)
+	OnlineCirculation(basics.Round, basics.Round) (basics.MicroAlgos, error)
 }
 
 // ErrRoundZero is self-explanatory
@@ -129,6 +132,15 @@ type roundCowBase struct {
 	// The account data store here is always the account data without the rewards.
 	accounts map[basics.Address]ledgercore.AccountData
 
+	// The online accounts that we've already accessed during this round evaluation. This is a
+	// cache used to avoid looking up the same account data more than once during a single evaluator
+	// execution. The OnlineAccountData is historical and therefore won't be changing.
+	onlineAccounts map[basics.Address]basics.OnlineAccountData
+
+	// totalOnline is the cached amount of online stake for rnd (so it's from
+	// rnd-320). The zero value indicates it is not yet cached.
+	totalOnline basics.MicroAlgos
+
 	// Similarly to accounts cache that stores base account data, there are caches for params, states, holdings.
 	appParams      map[ledgercore.AccountApp]cachedAppParams
 	assetParams    map[ledgercore.AccountAsset]cachedAssetParams
@@ -150,6 +162,7 @@ func makeRoundCowBase(l LedgerForCowBase, rnd basics.Round, txnCount uint64, sta
 		stateProofNextRnd: stateProofNextRnd,
 		proto:             proto,
 		accounts:          make(map[basics.Address]ledgercore.AccountData),
+		onlineAccounts:    make(map[basics.Address]basics.OnlineAccountData),
 		appParams:         make(map[ledgercore.AccountApp]cachedAppParams),
 		assetParams:       make(map[ledgercore.AccountAsset]cachedAssetParams),
 		appLocalStates:    make(map[ledgercore.AccountApp]cachedAppLocalState),
@@ -191,6 +204,56 @@ func (x *roundCowBase) lookup(addr basics.Address) (ledgercore.AccountData, erro
 
 	x.accounts[addr] = ad
 	return ad, err
+}
+
+// balanceRound reproduces the way that the agreement package finds the round to
+// consider for online accounts.
+func (x *roundCowBase) balanceRound() (basics.Round, error) {
+	phdr, err := x.BlockHdr(agreement.ParamsRound(x.rnd))
+	if err != nil {
+		return 0, err
+	}
+	agreementParams := config.Consensus[phdr.CurrentProtocol]
+	return agreement.BalanceRound(x.rnd, agreementParams), nil
+}
+
+// lookupAgreement returns the online accountdata for the provided account address. It uses an internal cache
+// to avoid repeated lookups against the ledger.
+func (x *roundCowBase) lookupAgreement(addr basics.Address) (basics.OnlineAccountData, error) {
+	if accountData, found := x.onlineAccounts[addr]; found {
+		return accountData, nil
+	}
+
+	brnd, err := x.balanceRound()
+	if err != nil {
+		return basics.OnlineAccountData{}, err
+	}
+	ad, err := x.l.LookupAgreement(brnd, addr)
+	if err != nil {
+		return basics.OnlineAccountData{}, err
+	}
+
+	x.onlineAccounts[addr] = ad
+	return ad, err
+}
+
+// onlineStake returns the total online stake as of the start of the round. It
+// caches the result to prevent repeated calls to the ledger.
+func (x *roundCowBase) onlineStake() (basics.MicroAlgos, error) {
+	if !x.totalOnline.IsZero() {
+		return x.totalOnline, nil
+	}
+
+	brnd, err := x.balanceRound()
+	if err != nil {
+		return basics.MicroAlgos{}, err
+	}
+	total, err := x.l.OnlineCirculation(brnd, x.rnd)
+	if err != nil {
+		return basics.MicroAlgos{}, err
+	}
+	x.totalOnline = total
+	return x.totalOnline, err
 }
 
 func (x *roundCowBase) updateAssetResourceCache(aa ledgercore.AccountAsset, r ledgercore.AssetResource) {

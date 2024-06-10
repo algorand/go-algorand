@@ -1160,8 +1160,6 @@ int 1
 &&
 `
 
-const testAddr = "47YPQTIGQEO7T4Y4RWDYWEKV6RTR2UNBQXBABEEGM72ESWDQNCQ52OPASU"
-
 const globalV2TestProgram = globalV1TestProgram + `
 global LogicSigVersion
 int 1
@@ -1182,7 +1180,7 @@ int 888
 `
 const globalV3TestProgram = globalV2TestProgram + `
 global CreatorAddress
-addr ` + testAddr + `
+addr ` + testAppCreator + `
 ==
 &&
 `
@@ -1239,10 +1237,10 @@ const globalV11TestProgram = globalV10TestProgram + `
 // No new globals in v11
 `
 
-func TestGlobal(t *testing.T) {
+func TestAllGlobals(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
 	t.Parallel()
+
 	type desc struct {
 		lastField GlobalField
 		program   string
@@ -1270,10 +1268,6 @@ func TestGlobal(t *testing.T) {
 	require.Equal(t, tests[AssemblerMaxVersion].lastField, invalidGlobalField-1,
 		"did you add a new global field?")
 
-	ledger := NewLedger(nil)
-	addr, err := basics.UnmarshalChecksumAddress(testAddr)
-	require.NoError(t, err)
-	ledger.NewApp(addr, 888, basics.AppParams{})
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		_, ok := tests[v]
 		require.True(t, ok)
@@ -1294,7 +1288,6 @@ func TestGlobal(t *testing.T) {
 			appcall.Txn.Group = crypto.Digest{0x07, 0x06}
 
 			ep := defaultAppParams(appcall)
-			ep.Ledger = ledger
 			testApp(t, tests[v].program, ep)
 		})
 	}
