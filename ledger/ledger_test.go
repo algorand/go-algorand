@@ -2931,7 +2931,17 @@ func testVotersReloadFromDiskAfterOneStateProofCommitted(t *testing.T, cfg confi
 		require.NoError(t, err)
 	}
 
-	triggerDeleteVoters(t, l, genesisInitState)
+	// wait all pending commits to finish
+	l.trackers.accountsWriting.Wait()
+
+	// quit the commitSyncer goroutine
+	l.trackers.ctxCancel()
+	l.trackers.ctxCancel = nil
+	<-l.trackers.commitSyncerClosed
+	l.trackers.commitSyncerClosed = nil
+
+	// flush one final time
+	triggerTrackerFlush(t, l)
 
 	var vtSnapshot map[basics.Round]*ledgercore.VotersForRound
 	func() {
@@ -2960,6 +2970,7 @@ func TestVotersReloadFromDiskAfterOneStateProofCommitted(t *testing.T) {
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = false
 	cfg.MaxAcctLookback = proto.StateProofInterval - proto.StateProofVotersLookback - 10
+	cfg.CatchpointInterval = 0 // no need catchpoint for this test
 
 	ledgertesting.WithAndWithoutLRUCache(t, cfg, testVotersReloadFromDiskAfterOneStateProofCommitted)
 }
