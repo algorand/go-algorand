@@ -156,6 +156,9 @@ const peerShutdownDisconnectionAckDuration = 50 * time.Millisecond
 // Contains {genesisID} param to be handled by gorilla/mux
 const GossipNetworkPath = "/v1/{genesisID}/gossip"
 
+// HealthServiceStatusPath is the path to register HealthService as a handler for when using gorilla/mux
+const HealthServiceStatusPath = "/status"
+
 // NodeInfo helps the network get information about the node it is running on
 type NodeInfo interface {
 	// IsParticipating returns true if this node has stake and may vote on blocks or propose blocks.

@@ -491,7 +491,7 @@ func (rt *RequestTracker) ServeHTTP(response http.ResponseWriter, request *http.
 	acceptedConnections := len(rt.acceptedConnections)
 	rt.httpConnectionsMu.Unlock()
 
-	healthServiceInvocation := request.URL.Path == "/status"
+	healthServiceInvocation := request.URL.Path == HealthServiceStatusPath
 
 	if acceptedConnections > rt.config.IncomingConnectionsLimit && !healthServiceInvocation {
 		// If the limit is exceeded, reject the connection
