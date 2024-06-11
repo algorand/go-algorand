@@ -493,8 +493,15 @@ func (rt *RequestTracker) ServeHTTP(response http.ResponseWriter, request *http.
 
 	healthServiceInvocation := request.URL.Path == HealthServiceStatusPath
 
+	// get the connection local address. Note that it's the interface of a immutable object, so it will be unique and matching the original connection interface.
+	localAddr := request.Context().Value(http.LocalAddrContextKey).(net.Addr)
+
 	if acceptedConnections > rt.config.IncomingConnectionsLimit && !healthServiceInvocation {
 		// If the limit is exceeded, reject the connection
+		networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "rt_incoming_connection_limit"})
+		rt.log.EventWithDetails(telemetryspec.Network, telemetryspec.ConnectPeerFailEvent,
+			telemetryspec.ConnectPeerFailEventDetails{
+				Address: localAddr.String(), Incoming: true, Reason: "RequestTracker Connection Limit"})
 		response.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
@@ -502,9 +509,6 @@ func (rt *RequestTracker) ServeHTTP(response http.ResponseWriter, request *http.
 	// this function is called only after we've fetched all the headers. on some malicious clients, this could get delayed, so we can't rely on the
 	// tcp-connection established time to align with current time.
 	rateLimitingWindowStartTime := time.Now().Add(-time.Duration(rt.config.ConnectionsRateLimitingWindowSeconds) * time.Second)
-
-	// get the connection local address. Note that it's the interface of a immutable object, so it will be unique and matching the original connection interface.
-	localAddr := request.Context().Value(http.LocalAddrContextKey).(net.Addr)
 
 	rt.hostRequestsMu.Lock()
 	trackedRequest := rt.acceptedConnections[localAddr]
@@ -545,7 +549,7 @@ func (rt *RequestTracker) ServeHTTP(response http.ResponseWriter, request *http.
 	rateLimitedRemoteHost := (!rt.config.DisableLocalhostConnectionRateLimit) || (!isLocalhost(trackedRequest.remoteHost))
 	connectionLimitEnabled := rt.config.ConnectionsRateLimitingWindowSeconds > 0 && rt.config.ConnectionsRateLimitingCount > 0
 
-	if originConnections > rt.config.ConnectionsRateLimitingCount && connectionLimitEnabled && rateLimitedRemoteHost && !healthServiceInvocation {
+	if originConnections > rt.config.ConnectionsRateLimitingCount && connectionLimitEnabled && rateLimitedRemoteHost {
 		networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "incoming_connection_per_ip_rate_limit"})
 		rt.log.With("connection", "http").With("count", originConnections).Debugf("Rejected connection due to excessive connections attempt rate")
 		rt.log.EventWithDetails(telemetryspec.Network, telemetryspec.ConnectPeerFailEvent,
