@@ -378,7 +378,7 @@ func (s *Server) Start() {
 		listenAddrPort := getPortFromAddress(listenAddr, s.log)
 
 		if addrPort == listenAddrPort {
-			s.log.Warnf("Warning: EndpointAddress port %v matches NetAddress port %v. This may lead to unexpected results when accessing endpoints.", addrPort, listenAddrPort)
+			s.log.Warnf("EndpointAddress port %v matches NetAddress port %v. This may lead to unexpected results when accessing endpoints.", addrPort, listenAddrPort)
 		}
 	}
 
