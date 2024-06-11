@@ -271,16 +271,16 @@ func makeListener(addr string) (net.Listener, error) {
 }
 
 // helper to get port from an address
-func getPortFromAddress(addr string, logger logging.Logger) string {
+func getPortFromAddress(addr string) (string, error) {
 	u, err := url.Parse(addr)
 	if err == nil && u.Scheme != "" {
 		addr = u.Host
 	}
 	_, port, err := net.SplitHostPort(addr)
 	if err != nil {
-		logger.Warnf("Error parsing address: %v", err)
+		return "", fmt.Errorf("Error parsing address: %v", err)
 	}
-	return port
+	return port, nil
 }
 
 // Start starts a Node instance and its network services
@@ -374,8 +374,15 @@ func (s *Server) Start() {
 			os.Exit(1)
 		}
 
-		addrPort := getPortFromAddress(addr, s.log)
-		listenAddrPort := getPortFromAddress(listenAddr, s.log)
+		addrPort, err := getPortFromAddress(addr)
+		if err != nil {
+			s.log.Errorf("Error getting port from EndpointAddress: %v", err)
+		}
+
+		listenAddrPort, err := getPortFromAddress(listenAddr)
+		if err != nil {
+			s.log.Errorf("Error getting port from NetAddress: %v", err)
+		}
 
 		if addrPort == listenAddrPort {
 			s.log.Warnf("EndpointAddress port %v matches NetAddress port %v. This may lead to unexpected results when accessing endpoints.", addrPort, listenAddrPort)
