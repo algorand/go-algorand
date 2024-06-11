@@ -486,17 +486,19 @@ func (rt *RequestTracker) GetRequestConnection(request *http.Request) net.Conn {
 }
 
 func (rt *RequestTracker) ServeHTTP(response http.ResponseWriter, request *http.Request) {
-	// Check if the number of connections exceeds the limit
-	rt.hostRequestsMu.Lock()
-	acceptedConnections := len(rt.acceptedConnections)
-	rt.hostRequestsMu.Unlock()
-
-	healthServiceInvocation := request.URL.Path == HealthServiceStatusPath
+	// this function is called only after we've fetched all the headers. on some malicious clients, this could get delayed, so we can't rely on the
+	// tcp-connection established time to align with current time.
+	rateLimitingWindowStartTime := time.Now().Add(-time.Duration(rt.config.ConnectionsRateLimitingWindowSeconds) * time.Second)
 
 	// get the connection local address. Note that it's the interface of a immutable object, so it will be unique and matching the original connection interface.
 	localAddr := request.Context().Value(http.LocalAddrContextKey).(net.Addr)
 
-	if acceptedConnections > rt.config.IncomingConnectionsLimit && !healthServiceInvocation {
+	rt.hostRequestsMu.Lock()
+	// Check if the number of connections exceeds the limit
+	acceptedConnections := len(rt.acceptedConnections)
+
+	if acceptedConnections > rt.config.IncomingConnectionsLimit && request.URL.Path != HealthServiceStatusPath {
+		rt.hostRequestsMu.Unlock()
 		// If the limit is exceeded, reject the connection
 		networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "rt_incoming_connection_limit"})
 		rt.log.EventWithDetails(telemetryspec.Network, telemetryspec.ConnectPeerFailEvent,
@@ -506,11 +508,6 @@ func (rt *RequestTracker) ServeHTTP(response http.ResponseWriter, request *http.
 		return
 	}
 
-	// this function is called only after we've fetched all the headers. on some malicious clients, this could get delayed, so we can't rely on the
-	// tcp-connection established time to align with current time.
-	rateLimitingWindowStartTime := time.Now().Add(-time.Duration(rt.config.ConnectionsRateLimitingWindowSeconds) * time.Second)
-
-	rt.hostRequestsMu.Lock()
 	trackedRequest := rt.acceptedConnections[localAddr]
 	if trackedRequest != nil {
 		// update the original tracker request so that it won't get pruned.
