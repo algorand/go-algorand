@@ -523,7 +523,7 @@ func (tracer *evalTracer) AfterProgram(cx *logic.EvalContext, pass bool, evalErr
 		for i := groupIndex + 1; i < len(cx.TxnGroup); i++ {
 			stxn := &tracer.groups[0][i]
 			sender := stxn.Txn.Sender
-			blankSig := stxn.Sig.Blank() && stxn.Msig.Blank() && stxn.Lsig.Blank()
+			blankSig := txnHasNoSignature(stxn.SignedTxn)
 
 			// Check if we already know the auth addr
 			if authAddr, ok := knownAuthAddrs[sender]; ok && blankSig {
