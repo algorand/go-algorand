@@ -39,6 +39,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	libp2phttp "github.com/libp2p/go-libp2p/p2p/http"
+	"github.com/libp2p/go-libp2p/p2p/muxer/yamux"
 	"github.com/libp2p/go-libp2p/p2p/security/noise"
 	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
 	"github.com/multiformats/go-multiaddr"
@@ -103,7 +104,7 @@ func MakeHost(cfg config.Local, datadir string, pstore *pstore.PeerStore) (host.
 	}
 
 	// muxer supports tweaking fields from yamux.Config
-	ymx := *DefaultTransport
+	ymx := *yamux.DefaultTransport
 	// user-agent copied from wsNetwork.go
 	version := config.GetCurrentVersion()
 	ua := fmt.Sprintf("algod/%d.%d (%s; commit=%s; %d) %s(%s)", version.Major, version.Minor, version.Channel, version.CommitHash, version.BuildNumber, runtime.GOOS, runtime.GOARCH)
