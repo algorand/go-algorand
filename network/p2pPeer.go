@@ -26,8 +26,8 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/websocket"
 
-	yamux "github.com/algorandskiy/go-yamux/v4"
 	"github.com/libp2p/go-libp2p/core/network"
+	yamux "github.com/libp2p/go-yamux/v4"
 	mnet "github.com/multiformats/go-multiaddr/net"
 )
 

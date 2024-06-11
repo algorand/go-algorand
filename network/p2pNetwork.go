@@ -37,7 +37,6 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-deadlock"
 
-	yamux "github.com/algorandskiy/go-yamux/v4"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -777,11 +776,6 @@ func (n *P2PNetwork) wsStreamHandler(ctx context.Context, p2pPeer peer.ID, strea
 			n.log.Warnf("wsStreamHandler: error sending initial message: %s", err)
 			return
 		}
-	}
-
-	err := stream.SetWriteDeadline(yamux.HighPriorityWriteDeadlineMagicValue)
-	if err != nil {
-		n.log.Warnf("wsStreamHandler: failed to activate high prio mux queue: %s", err)
 	}
 
 	// get address for peer ID

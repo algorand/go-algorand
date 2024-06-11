@@ -35,8 +35,6 @@ github.com/algorand/sortition v1.0.0 h1:PJiZtdSTBm4nArQrZXBnhlljHXhuyAXRJBqVWowQ
 github.com/algorand/sortition v1.0.0/go.mod h1:23CZwAbTWPv0bBsq+Php/2J6Y/iXDyzlfcZyepeY5Fo=
 github.com/algorand/websocket v1.4.6 h1:I0kV4EYwatuUrKtNiwzYYgojgwh6pksDmlqntKG2Woc=
 github.com/algorand/websocket v1.4.6/go.mod h1:HJmdGzFtnlUQ4nTzZP6WrT29oGYf1t6Ybi64vROcT+M=
-github.com/algorandskiy/go-yamux/v4 v4.0.2-beta h1:8ngA/WH1iksiVq41elyFHhln+8NKQd8TQnDYd5F3wP4=
-github.com/algorandskiy/go-yamux/v4 v4.0.2-beta/go.mod h1:R87E0GWJvT4I1vJROLgzyt9CHw4E12St1DiBh3osLmU=
 github.com/anmitsu/go-shlex v0.0.0-20161002113705-648efa622239/go.mod h1:2FmKhYUyUczH0OGQWaF5ceTx0UBShxjsH6f8oGKYe2c=
 github.com/armon/consul-api v0.0.0-20180202201655-eb2c6b5be1b6/go.mod h1:grANhF5doyWs3UAsr3K4I6qtAmlQcZDesFNEHPZAzj8=
 github.com/aws/aws-sdk-go v1.34.0 h1:brux2dRrlwCF5JhTL7MUT3WUwo9zfDHZZp3+g3Mvlmo=

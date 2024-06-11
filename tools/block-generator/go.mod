@@ -25,7 +25,6 @@ require (
 	github.com/algorand/oapi-codegen v1.12.0-algorand.0 // indirect
 	github.com/algorand/sortition v1.0.0 // indirect
 	github.com/algorand/websocket v1.4.6 // indirect
-	github.com/algorandskiy/go-yamux/v4 v4.0.2-beta // indirect
 	github.com/aws/aws-sdk-go v1.34.0 // indirect
 	github.com/benbjohnson/clock v1.3.5 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
