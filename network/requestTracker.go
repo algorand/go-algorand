@@ -415,7 +415,7 @@ func (rt *RequestTracker) sendBlockedConnectionResponse(conn net.Conn, requestTi
 	}
 }
 
-// pruneAcceptedConnections clean stale items form the acceptedConnections map; it's syncornized via the acceptedConnectionsMu mutex which is expected to be taken by the caller.
+// pruneAcceptedConnections clean stale items form the acceptedConnections map; it's syncornized via the hostRequestsMu mutex which is expected to be taken by the caller.
 // in case the created is 0, the pruning is disabled for this connection. The HTTP handlers would call Close to have this entry cleared out.
 func (rt *RequestTracker) pruneAcceptedConnections(pruneStartDate time.Time) {
 	localAddrToRemove := []net.Addr{}
@@ -487,9 +487,9 @@ func (rt *RequestTracker) GetRequestConnection(request *http.Request) net.Conn {
 
 func (rt *RequestTracker) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 	// Check if the number of connections exceeds the limit
-	rt.httpConnectionsMu.Lock()
+	rt.hostRequestsMu.Lock()
 	acceptedConnections := len(rt.acceptedConnections)
-	rt.httpConnectionsMu.Unlock()
+	rt.hostRequestsMu.Unlock()
 
 	healthServiceInvocation := request.URL.Path == HealthServiceStatusPath
 
