@@ -523,15 +523,9 @@ func (tracer *evalTracer) AfterProgram(cx *logic.EvalContext, pass bool, evalErr
 		for i := groupIndex + 1; i < len(cx.TxnGroup); i++ {
 			stxn := &tracer.groups[0][i]
 			sender := stxn.Txn.Sender
-			blankSig := txnHasNoSignature(stxn.SignedTxn)
 
-			// Check if we already know the auth addr
-			if authAddr, ok := knownAuthAddrs[sender]; ok && blankSig {
-				stxn.AuthAddr = authAddr
-				if stxn.AuthAddr == sender {
-					stxn.AuthAddr = basics.Address{}
-				}
-			} else {
+			// If we don't already know the auth addr, get it from the ledger
+			if _, authAddrKnown := knownAuthAddrs[sender]; !authAddrKnown {
 				// Get the auth addr from the ledger
 				data, err := cx.Ledger.AccountData(sender)
 				if err != nil {
@@ -539,12 +533,13 @@ func (tracer *evalTracer) AfterProgram(cx *logic.EvalContext, pass bool, evalErr
 				}
 
 				knownAuthAddrs[sender] = data.AuthAddr
+			}
 
-				if blankSig {
-					stxn.AuthAddr = data.AuthAddr
-					if stxn.AuthAddr == sender {
-						stxn.AuthAddr = basics.Address{}
-					}
+			// Fix the current auth addr if this txn doesn't have a signature
+			if txnHasNoSignature(stxn.SignedTxn) {
+				stxn.AuthAddr = knownAuthAddrs[sender]
+				if stxn.AuthAddr == sender {
+					stxn.AuthAddr = basics.Address{}
 				}
 			}
 
