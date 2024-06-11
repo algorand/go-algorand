@@ -643,11 +643,12 @@ func lines(s string, num int) (bool, string) {
 }
 
 func summarize(trace *strings.Builder) string {
-	truncated, msg := lines(trace.String(), 50)
-	if !truncated {
-		return msg
+	all := trace.String()
+	if strings.Count(all, "\n") < 50 {
+		return all
 	}
-	return msg + "(trace truncated)\n"
+	lines := strings.Split(trace.String(), "\n")
+	return strings.Join(lines[:20], "\n") + "\n(some trace elided)\n" + strings.Join(lines[len(lines)-20:], "\n")
 }
 
 func testProg(t testing.TB, source string, ver uint64, expected ...expect) *OpStream {
@@ -1713,6 +1714,11 @@ pushint 1
 block BlkFeesCollected
 pushint 1
 block BlkBonus
+global PayoutsEnabled
+global PayoutsGoOnlineFee
+global PayoutsPercent
+global PayoutsMinBalance
+global PayoutsMaxBalance
 `, AssemblerMaxVersion)
 	for _, names := range [][]string{GlobalFieldNames[:], TxnFieldNames[:], blockFieldNames[:]} {
 		for _, f := range names {

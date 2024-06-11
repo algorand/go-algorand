@@ -3732,6 +3732,16 @@ func (cx *EvalContext) globalFieldToValue(fs globalFieldSpec) (sv stackValue, er
 	case GenesisHash:
 		gh := cx.SigLedger.GenesisHash()
 		sv.Bytes = gh[:]
+	case PayoutsEnabled:
+		sv.Uint = boolToUint(cx.Proto.Payouts.Enabled)
+	case PayoutsGoOnlineFee:
+		sv.Uint = cx.Proto.Payouts.GoOnlineFee
+	case PayoutsPercent:
+		sv.Uint = cx.Proto.Payouts.Percent
+	case PayoutsMinBalance:
+		sv.Uint = cx.Proto.Payouts.MinBalance
+	case PayoutsMaxBalance:
+		sv.Uint = cx.Proto.Payouts.MaxBalance
 	default:
 		return sv, fmt.Errorf("invalid global field %s", fs.field)
 	}
