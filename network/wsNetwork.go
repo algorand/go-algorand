@@ -110,7 +110,7 @@ const wsMaxHeaderBytes = 4096
 // Reserved ports for the health check endpoint. This reserves capacity to query the health check service when a node is
 // serving maximum peers. The file descriptors will be used from the ReservedFDs pool, as this pool is meant for
 // short-lived usage (dns queries, disk i/o, etc.)
-const reservedHealthserviceConnections = 10
+const ReservedHealthServiceConnections = 10
 
 var networkIncomingConnections = metrics.MakeGauge(metrics.NetworkIncomingConnections)
 var networkOutgoingConnections = metrics.MakeGauge(metrics.NetworkOutgoingConnections)
@@ -692,7 +692,7 @@ func (wn *WebsocketNetwork) Start() {
 		}
 		// wrap the original listener with a limited connection listener
 		listener = limitlistener.RejectingLimitListener(
-			listener, uint64(wn.config.IncomingConnectionsLimit)+reservedHealthserviceConnections, wn.log)
+			listener, uint64(wn.config.IncomingConnectionsLimit)+ReservedHealthServiceConnections, wn.log)
 		// wrap the limited connection listener with a requests tracker listener
 		wn.listener = wn.requestsTracker.Listener(listener)
 		wn.log.Debugf("listening on %s", wn.listener.Addr().String())
