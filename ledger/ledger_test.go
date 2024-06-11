@@ -2931,14 +2931,31 @@ func testVotersReloadFromDiskAfterOneStateProofCommitted(t *testing.T, cfg confi
 		require.NoError(t, err)
 	}
 
-	triggerDeleteVoters(t, l, genesisInitState)
-	l.acctsOnline.voters.votersMu.Lock()
-	vtSnapshot := l.acctsOnline.voters.votersForRoundCache
+	// wait all pending commits to finish
+	l.trackers.accountsWriting.Wait()
 
-	// verifying that the tree for round 512 is still in the cache, but the tree for round 256 is evicted.
-	require.Contains(t, vtSnapshot, basics.Round(496))
-	require.NotContains(t, vtSnapshot, basics.Round(240))
-	l.acctsOnline.voters.votersMu.Unlock()
+	// quit the commitSyncer goroutine
+	l.trackers.ctxCancel()
+	l.trackers.ctxCancel = nil
+	<-l.trackers.commitSyncerClosed
+	l.trackers.commitSyncerClosed = nil
+
+	// flush one final time
+	triggerTrackerFlush(t, l)
+
+	var vtSnapshot map[basics.Round]*ledgercore.VotersForRound
+	func() {
+		// grab internal lock in order to access the voters tracker
+		// since the assert below might fail, use a nested scope to ensure the lock is released
+		l.acctsOnline.voters.votersMu.Lock()
+		defer l.acctsOnline.voters.votersMu.Unlock()
+
+		vtSnapshot = l.acctsOnline.voters.votersForRoundCache
+
+		// verifying that the tree for round 512 is still in the cache, but the tree for round 256 is evicted.
+		require.Contains(t, vtSnapshot, basics.Round(496))
+		require.NotContains(t, vtSnapshot, basics.Round(240))
+	}()
 
 	err = l.reloadLedger()
 	require.NoError(t, err)
@@ -2953,6 +2970,7 @@ func TestVotersReloadFromDiskAfterOneStateProofCommitted(t *testing.T) {
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = false
 	cfg.MaxAcctLookback = proto.StateProofInterval - proto.StateProofVotersLookback - 10
+	cfg.CatchpointInterval = 0 // no need catchpoint for this test
 
 	ledgertesting.WithAndWithoutLRUCache(t, cfg, testVotersReloadFromDiskAfterOneStateProofCommitted)
 }
