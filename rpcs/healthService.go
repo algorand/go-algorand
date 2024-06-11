@@ -17,12 +17,10 @@
 package rpcs
 
 import (
-	"github.com/algorand/go-algorand/network"
 	"net/http"
-)
 
-// HealthServiceStatusPath is the path to register HealthService as a handler for when using gorilla/mux
-const HealthServiceStatusPath = "/status"
+	"github.com/algorand/go-algorand/network"
+)
 
 // HealthService is a service that provides health information endpoints for the node
 type HealthService struct{}
@@ -31,7 +29,7 @@ type HealthService struct{}
 func MakeHealthService(net network.GossipNode) HealthService {
 	service := HealthService{}
 
-	net.RegisterHTTPHandler(HealthServiceStatusPath, service)
+	net.RegisterHTTPHandler(network.HealthServiceStatusPath, service)
 
 	return service
 }
