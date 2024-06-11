@@ -1939,7 +1939,7 @@ func TestAcctOnline_ExpiredOnlineCirculation(t *testing.T) {
 	initialOnlineStake, err := oa.onlineCirculation(0, basics.Round(oa.maxBalLookback()))
 	a.NoError(err)
 	a.Equal(totalStake, initialOnlineStake)
-	initialExpired, err := oa.ExpiredOnlineCirculation(0, 1000)
+	initialExpired, err := oa.expiredOnlineCirculation(0, 1000)
 	a.NoError(err)
 	a.Equal(basics.MicroAlgos{Raw: 0}, initialExpired)
 
@@ -2146,10 +2146,10 @@ func TestAcctOnline_ExpiredOnlineCirculation(t *testing.T) {
 				a.Fail("unknown db seed")
 			}
 			a.Equal(targetVoteRnd, rnd+basics.Round(params.MaxBalLookback))
-			_, err := oa.ExpiredOnlineCirculation(rnd, targetVoteRnd)
+			_, err := oa.expiredOnlineCirculation(rnd, targetVoteRnd)
 			a.Error(err)
 			a.Contains(err.Error(), fmt.Sprintf("round %d too high", rnd))
-			expiredStake, err := oa.ExpiredOnlineCirculation(rnd-1, targetVoteRnd)
+			expiredStake, err := oa.expiredOnlineCirculation(rnd-1, targetVoteRnd)
 			a.NoError(err)
 			a.Equal(expectedExpiredStake, expiredStake)
 

@@ -186,8 +186,6 @@ func VersionsHandler(ctx lib.ReqContext, context echo.Context) {
 		},
 	}
 	json.NewEncoder(w).Encode(response.Body)
-
-	return
 }
 
 // CORS
