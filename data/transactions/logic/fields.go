@@ -550,7 +550,7 @@ const (
 	// PayoutsMinBalance is the minimum algo balance an account must have to receive block payouts (in the agreement round).
 	PayoutsMinBalance
 
-	// PayoutsMaxBalance is the minimum algo balance an account must have to receive block payouts (in the agreement round).
+	// PayoutsMaxBalance is the maximum algo balance an account can have to receive block payouts (in the agreement round).
 	PayoutsMaxBalance
 
 	invalidGlobalField // compile-time constant for number of fields
@@ -628,7 +628,7 @@ var globalFieldSpecs = [...]globalFieldSpec{
 	{PayoutsMinBalance, StackUint64, modeAny, incentiveVersion,
 		"The minimum algo balance an account must have in the agreement round to receive block payouts in the proposal round."},
 	{PayoutsMaxBalance, StackUint64, modeAny, incentiveVersion,
-		"The minimum algo balance an account must have in the agreement round to receive block payouts in the proposal round."},
+		"The maximum algo balance an account can have in the agreement round to receive block payouts in the proposal round."},
 }
 
 func globalFieldSpecByField(f GlobalField) (globalFieldSpec, bool) {

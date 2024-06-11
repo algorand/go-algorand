@@ -626,28 +626,12 @@ func assembleWithTrace(text string, ver uint64) (*OpStream, error) {
 	return &ops, err
 }
 
-func lines(s string, num int) (bool, string) {
-	if num < 1 {
-		return true, ""
-	}
-	found := 0
-	for i := 0; i < len(s); i++ {
-		if s[i] == '\n' {
-			found++
-			if found == num {
-				return true, s[0 : i+1]
-			}
-		}
-	}
-	return false, s
-}
-
 func summarize(trace *strings.Builder) string {
 	all := trace.String()
 	if strings.Count(all, "\n") < 50 {
 		return all
 	}
-	lines := strings.Split(trace.String(), "\n")
+	lines := strings.Split(all, "\n")
 	return strings.Join(lines[:20], "\n") + "\n(some trace elided)\n" + strings.Join(lines[len(lines)-20:], "\n")
 }
 
