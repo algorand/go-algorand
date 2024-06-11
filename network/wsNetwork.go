@@ -107,9 +107,9 @@ const testingPublicAddress = "testing"
 // Maximum number of bytes to read from a header when trying to establish a websocket connection.
 const wsMaxHeaderBytes = 4096
 
-// Reserved ports for the health check endpoint. This reserves capacity to query the health check service when a node is
-// serving maximum peers. The file descriptors will be used from the ReservedFDs pool, as this pool is meant for
-// short-lived usage (dns queries, disk i/o, etc.)
+// ReservedHealthServiceConnections reserves additional connections for the health check endpoint. This reserves
+// capacity to query the health check service when a node is serving maximum peers. The file descriptors will be
+// used from the ReservedFDs pool, as this pool is meant for short-lived usage (dns queries, disk i/o, etc.)
 const ReservedHealthServiceConnections = 10
 
 var networkIncomingConnections = metrics.MakeGauge(metrics.NetworkIncomingConnections)
