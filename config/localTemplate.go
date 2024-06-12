@@ -130,7 +130,7 @@ type Local struct {
 	LogArchiveDir string `version[31]:""`
 
 	// IncomingConnectionsLimit specifies the max number of incoming connections
-	// for the port configured in NetAddress. 0 means no connections allowed. Must be non-negative.
+	// for the gossip protocol configured in NetAddress. 0 means no connections allowed. Must be non-negative.
 	// Estimating 1.5MB per incoming connection, 1.5MB*2400 = 3.6GB
 	IncomingConnectionsLimit int `version[0]:"-1" version[1]:"10000" version[17]:"800" version[27]:"2400"`
 
@@ -620,6 +620,10 @@ type Local struct {
 
 	// DisableAPIAuth turns off authentication for public (non-admin) API endpoints.
 	DisableAPIAuth bool `version[30]:"false"`
+
+	// GoMemLimit provides the Go runtime with a soft memory limit. The default behavior is no limit,
+	// unless the GOMEMLIMIT environment variable is set.
+	GoMemLimit uint64 `version[34]:"0"`
 }
 
 // DNSBootstrapArray returns an array of one or more DNS Bootstrap identifiers

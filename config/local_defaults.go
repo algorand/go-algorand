@@ -91,6 +91,7 @@ var defaultLocal = Local{
 	FallbackDNSResolverAddress:                 "",
 	ForceFetchTransactions:                     false,
 	ForceRelayMessages:                         false,
+	GoMemLimit:                                 0,
 	GossipFanout:                               4,
 	HeartbeatUpdateInterval:                    600,
 	HotDataDir:                                 "",

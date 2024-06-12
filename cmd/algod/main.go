@@ -22,6 +22,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"time"
@@ -171,6 +172,11 @@ func run() int {
 	if err != nil && !os.IsNotExist(err) {
 		// log is not setup yet, this will log to stderr
 		log.Fatalf("Cannot load config: %v", err)
+	}
+
+	// set soft memory limit, if configured
+	if cfg.GoMemLimit > 0 {
+		debug.SetMemoryLimit(int64(cfg.GoMemLimit))
 	}
 
 	_, err = cfg.ValidateDNSBootstrapArray(genesis.Network)

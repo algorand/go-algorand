@@ -24,6 +24,7 @@ import (
 	"net"
 	"net/http"
 	_ "net/http/pprof" // net/http/pprof is for registering the pprof URLs with the web server, so http://localhost:8080/debug/pprof/ works.
+	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -40,6 +41,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
+	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/network/limitlistener"
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/util"
@@ -146,7 +148,7 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 
 	if cfg.IsGossipServer() {
 		var ot basics.OverflowTracker
-		fdRequired = ot.Add(fdRequired, uint64(cfg.IncomingConnectionsLimit))
+		fdRequired = ot.Add(fdRequired, uint64(cfg.IncomingConnectionsLimit)+network.ReservedHealthServiceConnections)
 		if ot.Overflowed {
 			return errors.New("Initialize() overflowed when adding up IncomingConnectionsLimit to the existing RLIMIT_NOFILE value; decrease RestConnectionsHardLimit or IncomingConnectionsLimit")
 		}
@@ -268,6 +270,19 @@ func makeListener(addr string) (net.Listener, error) {
 	return net.Listen("tcp", addr)
 }
 
+// helper to get port from an address
+func getPortFromAddress(addr string) (string, error) {
+	u, err := url.Parse(addr)
+	if err == nil && u.Scheme != "" {
+		addr = u.Host
+	}
+	_, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return "", fmt.Errorf("Error parsing address: %v", err)
+	}
+	return port, nil
+}
+
 // Start starts a Node instance and its network services
 func (s *Server) Start() {
 	s.log.Info("Trying to start an Algorand node")
@@ -362,6 +377,20 @@ func (s *Server) Start() {
 		if err != nil {
 			fmt.Printf("netlistenfile error: %v\n", err)
 			os.Exit(1)
+		}
+
+		addrPort, err := getPortFromAddress(addr)
+		if err != nil {
+			s.log.Warnf("Error getting port from EndpointAddress: %v", err)
+		}
+
+		listenAddrPort, err := getPortFromAddress(listenAddr)
+		if err != nil {
+			s.log.Warnf("Error getting port from NetAddress: %v", err)
+		}
+
+		if addrPort == listenAddrPort {
+			s.log.Warnf("EndpointAddress port %v matches NetAddress port %v. This may lead to unexpected results when accessing endpoints.", addrPort, listenAddrPort)
 		}
 	}
 

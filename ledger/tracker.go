@@ -547,6 +547,8 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) error {
 	offset := dcc.offset
 	dbRound := dcc.oldBase
 
+	tr.log.Debugf("commitRound called for (%d-%d)", dbRound, dbRound+basics.Round(offset))
+
 	// we can exit right away, as this is the result of mis-ordered call to committedUpTo.
 	if tr.dbRound < dbRound || offset < uint64(tr.dbRound-dbRound) {
 		tr.log.Warnf("out of order deferred commit: offset %d, dbRound %d but current tracker DB round is %d", offset, dbRound, tr.dbRound)
@@ -574,6 +576,7 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) error {
 	dcc.offset = offset
 	dcc.oldBase = dbRound
 	dcc.flushTime = time.Now()
+	tr.log.Debugf("commitRound advancing tracker db snapshot (%d-%d)", dbRound, dbRound+basics.Round(offset))
 
 	var err error
 	for _, lt := range tr.trackers {
