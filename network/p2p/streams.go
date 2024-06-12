@@ -75,7 +75,7 @@ func (n *streamManager) streamHandler(stream network.Stream) {
 			n.streams[stream.Conn().RemotePeer()] = stream
 
 			// streamHandler is supposed to be called for accepted streams, so we expect incoming here
-			incoming := stream.Stat().Direction == network.DirInbound
+			incoming := stream.Conn().Stat().Direction == network.DirInbound
 			if !incoming {
 				if stream.Stat().Direction == network.DirUnknown {
 					n.log.Warnf("Unknown direction for a steam %s to/from %s", stream.ID(), remotePeer)
@@ -93,7 +93,7 @@ func (n *streamManager) streamHandler(stream network.Stream) {
 	// no old stream
 	n.streams[stream.Conn().RemotePeer()] = stream
 	// streamHandler is supposed to be called for accepted streams, so we expect incoming here
-	incoming := stream.Stat().Direction == network.DirInbound
+	incoming := stream.Conn().Stat().Direction == network.DirInbound
 	if !incoming {
 		if stream.Stat().Direction == network.DirUnknown {
 			n.log.Warnf("streamHandler: unknown direction for a steam %s to/from %s", stream.ID(), remotePeer)
@@ -142,7 +142,7 @@ func (n *streamManager) Connected(net network.Network, conn network.Conn) {
 
 	stream, err := n.host.NewStream(n.ctx, remotePeer, AlgorandWsProtocol)
 	if err != nil {
-		n.log.Infof("Failed to open stream to %s: %v", remotePeer, err)
+		n.log.Infof("Failed to open stream to %s (%s): %v", remotePeer, conn.RemoteMultiaddr().String(), err)
 		return
 	}
 	n.streams[remotePeer] = stream
@@ -153,7 +153,7 @@ func (n *streamManager) Connected(net network.Network, conn network.Conn) {
 	n.streamsLock.Unlock()
 
 	// a new stream created above, expected direction is outbound
-	incoming := stream.Stat().Direction == network.DirInbound
+	incoming := stream.Conn().Stat().Direction == network.DirInbound
 	if incoming {
 		n.log.Warnf("Unexpected incoming stream in streamHandler for connection %s (%s): %s vs %s stream", stream.Conn().ID(), remotePeer, stream.Conn().Stat().Direction, stream.Stat().Direction.String())
 	} else {

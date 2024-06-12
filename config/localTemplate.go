@@ -362,8 +362,9 @@ type Local struct {
 	// 0x01 (dnssecSRV) - validate SRV response
 	// 0x02 (dnssecRelayAddr) - validate relays' names to addresses resolution
 	// 0x04 (dnssecTelemetryAddr) - validate telemetry and metrics names to addresses resolution
+	// 0x08 (dnssecTXT) - validate TXT response
 	// ...
-	DNSSecurityFlags uint32 `version[6]:"1"`
+	DNSSecurityFlags uint32 `version[6]:"1" version[34]:"9"`
 
 	// EnablePingHandler controls whether the gossip node would respond to ping messages with a pong message.
 	EnablePingHandler bool `version[6]:"true"`
@@ -688,9 +689,14 @@ func (cfg Local) DNSSecurityRelayAddrEnforced() bool {
 	return cfg.DNSSecurityFlags&dnssecRelayAddr != 0
 }
 
-// DNSSecurityTelemeryAddrEnforced returns true if relay name to ip addr resolution enforced
-func (cfg Local) DNSSecurityTelemeryAddrEnforced() bool {
+// DNSSecurityTelemetryAddrEnforced returns true if relay name to ip addr resolution enforced
+func (cfg Local) DNSSecurityTelemetryAddrEnforced() bool {
 	return cfg.DNSSecurityFlags&dnssecTelemetryAddr != 0
+}
+
+// DNSSecurityTXTEnforced returns true if TXT response verification enforced
+func (cfg Local) DNSSecurityTXTEnforced() bool {
+	return cfg.DNSSecurityFlags&dnssecTXT != 0
 }
 
 // CatchupVerifyCertificate returns true if certificate verification is needed

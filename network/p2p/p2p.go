@@ -245,10 +245,17 @@ func (s *serviceImpl) IDSigner() *PeerIDChallengeSigner {
 func (s *serviceImpl) DialPeersUntilTargetCount(targetConnCount int) {
 	ps := s.host.Peerstore().(*pstore.PeerStore)
 	peerIDs := ps.GetAddresses(targetConnCount, phonebook.PhoneBookEntryRelayRole)
+	conns := s.host.Network().Conns()
+	var numOutgoingConns int
+	for _, conn := range conns {
+		if conn.Stat().Direction == network.DirOutbound {
+			numOutgoingConns++
+		}
+	}
 	for _, peerInfo := range peerIDs {
 		peerInfo := peerInfo.(*peer.AddrInfo)
 		// if we are at our target count stop trying to connect
-		if len(s.host.Network().Conns()) == targetConnCount {
+		if numOutgoingConns >= targetConnCount {
 			return
 		}
 		// if we are already connected to this peer, skip it

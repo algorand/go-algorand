@@ -57,6 +57,7 @@ func TestDHTOpenCensusMetrics(t *testing.T) {
 
 	err := view.Register(receivedBytesView, sentMessagesView)
 	require.NoError(t, err)
+	defer view.Unregister(receivedBytesView, sentMessagesView)
 
 	ctx := context.Background()
 	tags1 := []tag.Mutator{
@@ -132,4 +133,15 @@ func TestDHTOpenCensusMetrics(t *testing.T) {
 			}
 		}
 	}
+
+	// ensure the exported gatherer works
+	reg := MakeRegistry()
+	reg.Register(&OpencensusDefaultMetrics)
+	defer reg.Deregister(&OpencensusDefaultMetrics)
+
+	var buf strings.Builder
+	reg.WriteMetrics(&buf, "")
+
+	require.Contains(t, buf.String(), "my_sent_messages")
+	require.Contains(t, buf.String(), "my_received_bytes")
 }

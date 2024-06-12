@@ -93,7 +93,9 @@ func makePubSub(ctx context.Context, cfg config.Local, host host.Host) (*pubsub.
 		pubsub.WithSubscriptionFilter(pubsub.WrapLimitSubscriptionFilter(pubsub.NewAllowlistSubscriptionFilter(TXTopicName), 100)),
 		// pubsub.WithEventTracer(jsonTracer),
 		pubsub.WithValidateQueueSize(256),
+		pubsub.WithMessageSignaturePolicy(pubsub.StrictNoSign),
 		// pubsub.WithValidateThrottle(cfg.TxBacklogSize),
+		pubsub.WithValidateWorkers(20), // match to number wsNetwork workers
 	}
 
 	return pubsub.NewGossipSub(ctx, host, options...)
