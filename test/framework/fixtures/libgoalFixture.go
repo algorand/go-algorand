@@ -381,6 +381,7 @@ func (f *LibGoalFixture) dumpLogs(filePath string) {
 	for scanner.Scan() {
 		fmt.Fprint(os.Stderr, scanner.Text())
 	}
+	fmt.Fprintln(os.Stderr)
 }
 
 // intercept baseFixture.failOnError so we can clean up any algods that are still alive
