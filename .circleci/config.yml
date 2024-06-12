@@ -303,7 +303,7 @@ jobs:
     parameters:
       platform:
         type: string
-    executor: << parameters.platform >>_medium
+    executor: << parameters.platform >>_large
     working_directory: << pipeline.parameters.build_dir >>/project
     parallelism: 10
     environment:
@@ -319,7 +319,7 @@ jobs:
     parameters:
       platform:
         type: string
-    executor: << parameters.platform >>_medium
+    executor: << parameters.platform >>_large
     working_directory: << pipeline.parameters.build_dir >>/project
     parallelism: 2
     environment:

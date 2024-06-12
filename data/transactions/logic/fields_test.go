@@ -29,7 +29,8 @@ import (
 
 // ensure v2+ fields fail in TEAL assembler and evaluator on a version before they introduced
 // ensure v2+ fields error in v1 program
-func TestGlobalFieldsVersions(t *testing.T) {
+// ensure the types of the returned values are correct
+func TestGlobalVersionsAndTypes(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -42,7 +43,7 @@ func TestGlobalFieldsVersions(t *testing.T) {
 	require.Greater(t, len(fields), 1)
 
 	for _, field := range fields {
-		text := fmt.Sprintf("global %s", field.field.String())
+		text := "global " + field.field.String()
 		// check assembler fails if version before introduction
 		testLine(t, text, assemblerNoVersion, "...was introduced in...")
 		for v := uint64(0); v < field.version; v++ {
@@ -50,6 +51,32 @@ func TestGlobalFieldsVersions(t *testing.T) {
 		}
 		testLine(t, text, field.version, "")
 
+		// tack on a type check, and return a value (`int` gets compiled
+		// differently in different versions, so use intc_0 explicitly
+		switch field.ftype.AVMType {
+		case avmUint64: // ensure the return type is uint64 by using !
+			text = "intcblock 1;" + text + "; !; pop; intc_0"
+		case avmBytes: // ensure the return type is bytes by using len
+			text = "intcblock 1;" + text + "; len; pop; intc_0"
+		case avmAny:
+			text = "intcblock 1;" + text + "; pop; intc_0"
+		}
+
+		// check success in AssemblerMaxVersion and fs.version
+		for _, ver := range []uint64{AssemblerMaxVersion, field.version} {
+			ops := testProg(t, text, ver)
+			switch field.mode {
+			case ModeSig:
+				testLogicBytes(t, ops.Program, defaultSigParamsWithVersion(ver))
+			case ModeApp:
+				testAppBytes(t, ops.Program, defaultAppParamsWithVersion(ver))
+			case modeAny:
+				testLogicBytes(t, ops.Program, defaultSigParamsWithVersion(ver))
+				testAppBytes(t, ops.Program, defaultAppParamsWithVersion(ver))
+			default:
+				t.Fail()
+			}
+		}
 		ops := testProg(t, text, AssemblerMaxVersion)
 
 		// check on a version before the field version

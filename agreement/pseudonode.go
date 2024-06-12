@@ -220,7 +220,7 @@ func (n *asyncPseudonode) loadRoundParticipationKeys(voteRound basics.Round) []a
 		n.participationKeys = nil
 		return nil
 	}
-	balanceRound := balanceRound(voteRound, cparams)
+	balanceRound := BalanceRound(voteRound, cparams)
 
 	// measure the time it takes to acquire the voting keys.
 	beforeVotingKeysTime := time.Now()
@@ -422,6 +422,9 @@ func (t pseudonodeVotesTask) execute(verifier *AsyncVoteVerifier, quit chan stru
 				Type:         logspec.VoteBroadcast,
 				Sender:       vote.R.Sender.String(),
 				Hash:         vote.R.Proposal.BlockDigest.String(),
+				Round:        uint64(t.round),
+				Period:       uint64(t.period),
+				Step:         uint64(t.step),
 				ObjectRound:  uint64(vote.R.Round),
 				ObjectPeriod: uint64(vote.R.Period),
 				ObjectStep:   uint64(vote.R.Step),
@@ -549,6 +552,8 @@ func (t pseudonodeProposalsTask) execute(verifier *AsyncVoteVerifier, quit chan 
 		logEvent := logspec.AgreementEvent{
 			Type:         logspec.ProposalBroadcast,
 			Hash:         vote.R.Proposal.BlockDigest.String(),
+			Round:        uint64(t.round),
+			Period:       uint64(t.period),
 			ObjectRound:  uint64(vote.R.Round),
 			ObjectPeriod: uint64(vote.R.Period),
 		}
