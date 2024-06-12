@@ -376,12 +376,12 @@ func (s *Server) Start() {
 
 		addrPort, err := getPortFromAddress(addr)
 		if err != nil {
-			s.log.Errorf("Error getting port from EndpointAddress: %v", err)
+			s.log.Warnf("Error getting port from EndpointAddress: %v", err)
 		}
 
 		listenAddrPort, err := getPortFromAddress(listenAddr)
 		if err != nil {
-			s.log.Errorf("Error getting port from NetAddress: %v", err)
+			s.log.Warnf("Error getting port from NetAddress: %v", err)
 		}
 
 		if addrPort == listenAddrPort {
