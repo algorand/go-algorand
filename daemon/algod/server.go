@@ -40,6 +40,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
+	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/network/limitlistener"
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/util"
@@ -146,7 +147,7 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 
 	if cfg.IsGossipServer() {
 		var ot basics.OverflowTracker
-		fdRequired = ot.Add(fdRequired, uint64(cfg.IncomingConnectionsLimit))
+		fdRequired = ot.Add(fdRequired, uint64(cfg.IncomingConnectionsLimit)+network.ReservedHealthServiceConnections)
 		if ot.Overflowed {
 			return errors.New("Initialize() overflowed when adding up IncomingConnectionsLimit to the existing RLIMIT_NOFILE value; decrease RestConnectionsHardLimit or IncomingConnectionsLimit")
 		}
