@@ -121,8 +121,8 @@ class Goal:
                     wallet = w
 
             assert wallet, f"No wallet named '{name}'"
-            self.handle = self.kmd.init_wallet_handle(wallet["id"], "")
-            keys = self.kmd.list_keys(self.handle)
+            self.handle = self.kmd.init_wallet_handle(wallet["id"], "", timeout=120)
+            keys = self.kmd.list_keys(self.handle, timeout=120)
             assert len(keys) == 1
             self.account = keys[0]
 
