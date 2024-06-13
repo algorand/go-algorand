@@ -145,7 +145,7 @@ func (f *LibGoalFixture) nodeExitWithError(nc *nodecontrol.NodeController, err e
 	}
 
 	debugLog := func() {
-		f.t.Logf("Node at %s has terminated with an error: %v. Dumping logs...", nc.GetDataDir(), err)
+		fmt.Fprintf(os.Stderr, "Node at %s has terminated with an error: %v. Dumping logs...", nc.GetDataDir(), err)
 		f.dumpLogs(filepath.Join(nc.GetDataDir(), "node.log"))
 	}
 
@@ -158,7 +158,7 @@ func (f *LibGoalFixture) nodeExitWithError(nc *nodecontrol.NodeController, err e
 	ws := exitError.Sys().(syscall.WaitStatus)
 	exitCode := ws.ExitStatus()
 
-	f.t.Logf("Node at %s has terminated with error code %d (%v)", nc.GetDataDir(), exitCode, *exitError)
+	fmt.Fprintf(os.Stderr, "Node at %s has terminated with error code %d (%v)", nc.GetDataDir(), exitCode, *exitError)
 	debugLog()
 	require.NoError(f.t, err)
 }
@@ -369,18 +369,19 @@ func (f *LibGoalFixture) ShutdownImpl(preserveData bool) {
 func (f *LibGoalFixture) dumpLogs(filePath string) {
 	file, err := os.Open(filePath)
 	if err != nil {
-		f.t.Logf("could not open %s", filePath)
+		fmt.Fprintf(os.Stderr, "could not open %s", filePath)
 		return
 	}
 	defer file.Close()
 
-	f.t.Log("=================================\n")
+	fmt.Fprintf(os.Stderr, "=================================\n")
 	parts := strings.Split(filePath, "/")
-	f.t.Logf("%s/%s:", parts[len(parts)-2], parts[len(parts)-1]) // Primary/node.log
+	fmt.Fprintf(os.Stderr, "%s/%s:", parts[len(parts)-2], parts[len(parts)-1]) // Primary/node.log
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
-		f.t.Logf(scanner.Text())
+		fmt.Fprint(os.Stderr, scanner.Text())
 	}
+	fmt.Fprintln(os.Stderr)
 }
 
 // intercept baseFixture.failOnError so we can clean up any algods that are still alive
