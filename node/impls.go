@@ -44,6 +44,8 @@ func (i blockAuthenticatorImpl) Authenticate(block *bookkeeping.Block, cert *agr
 }
 
 func (i blockAuthenticatorImpl) Quit() {
+	logging.Base().Debug("block authenticator is stopping")
+	defer logging.Base().Debug("block authenticator has stopped")
 	i.AsyncVoteVerifier.Quit()
 }
 

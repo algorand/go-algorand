@@ -128,6 +128,7 @@ func runCatchupOverGossip(t fixtures.TestingTB,
 		a.NoError(err)
 		a.Empty(cfg.NetworkProtocolVersion)
 		cfg.NetworkProtocolVersion = ledgerNodeDowngradeTo
+		cfg.BaseLoggerDebugLevel = 5 // debug logging while debugging this test
 		cfg.SaveToDisk(dir)
 	}
 
