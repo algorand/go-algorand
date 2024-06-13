@@ -121,6 +121,41 @@ func TestLocal_MergeConfig(t *testing.T) {
 	require.Equal(t, c1.GossipFanout, c2.GossipFanout)
 }
 
+func TestLocal_FixupConfig(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	c1 := Local{
+		NetAddress:   "test1",
+		GossipFanout: defaultLocal.GossipFanout,
+	}
+	c2, err := fixupConfig(c1)
+	require.NoError(t, err)
+	require.NotEqual(t, c1, c2)
+	require.False(t, c1.EnableLedgerService)
+	require.False(t, c1.EnableBlockService)
+	require.Equal(t, c1.GossipFanout, defaultLocal.GossipFanout)
+	require.True(t, c2.EnableLedgerService)
+	require.True(t, c2.EnableBlockService)
+	require.Equal(t, c2.GossipFanout, defaultRelayGossipFanout)
+
+	c1 = Local{
+		EnableP2PHybridMode: true,
+	}
+	c2, err = fixupConfig(c1)
+	require.Error(t, err)
+
+	c1 = Local{
+		EnableP2PHybridMode: true,
+		PublicAddress:       "test2",
+	}
+	c2, err = fixupConfig(c1)
+	require.NoError(t, err)
+	require.Equal(t, c1, c2)
+	require.True(t, c2.EnableP2PHybridMode)
+	require.NotEmpty(t, c2.PublicAddress)
+}
+
 func saveFullPhonebook(phonebook phonebookBlackWhiteList, saveToDir string) error {
 	filename := filepath.Join(saveToDir, PhonebookFilename)
 	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)

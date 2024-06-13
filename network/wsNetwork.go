@@ -214,9 +214,6 @@ type WebsocketNetwork struct {
 	NetworkID protocol.NetworkID
 	RandomID  string
 
-	peerID       p2p.PeerID
-	peerIDSigner identityChallengeSigner
-
 	ready     atomic.Int32
 	readyChan chan struct{}
 
@@ -631,8 +628,6 @@ func (wn *WebsocketNetwork) setup() {
 	wn.outgoingMessagesBufferSize = outgoingMessagesBufferSize
 	wn.wsMaxHeaderBytes = wsMaxHeaderBytes
 
-	wn.identityTracker = NewIdentityTracker()
-
 	wn.broadcaster = msgBroadcaster{
 		ctx:                    wn.ctx,
 		log:                    wn.log,
@@ -699,7 +694,7 @@ func (wn *WebsocketNetwork) Start() error {
 		wn.messagesOfInterestEnc = MarshallMessageOfInterestMap(wn.messagesOfInterest)
 	}
 
-	if wn.config.IsGossipServer() {
+	if wn.config.IsGossipServer() || wn.config.ForceRelayMessages {
 		listener, err := net.Listen("tcp", wn.config.NetAddress)
 		if err != nil {
 			wn.log.Errorf("network could not listen %v: %s", wn.config.NetAddress, err)
@@ -736,16 +731,11 @@ func (wn *WebsocketNetwork) Start() error {
 		}
 	}
 	// if the network has a public address or a libp2p peer ID, use that as the name for connection deduplication
-	if wn.config.PublicAddress != "" || (wn.peerID != "" && wn.peerIDSigner != nil) {
+	if wn.config.PublicAddress != "" || wn.identityScheme != nil {
 		wn.RegisterHandlers(identityHandlers)
 	}
 	if wn.identityScheme == nil {
-		if wn.peerID != "" && wn.peerIDSigner != nil {
-			wn.identityScheme = NewIdentityChallengeSchemeWithSigner(string(wn.peerID), wn.peerIDSigner)
-		}
-		if wn.config.PublicAddress != "" {
-			wn.identityScheme = NewIdentityChallengeScheme(wn.config.PublicAddress)
-		}
+		wn.identityScheme = NewIdentityChallengeScheme(NetIdentityDedupNames(wn.config.PublicAddress))
 	}
 
 	wn.meshUpdateRequests <- meshRequest{false, nil}
@@ -2305,7 +2295,7 @@ func (wn *WebsocketNetwork) SetPeerData(peer Peer, key string, value interface{}
 }
 
 // NewWebsocketNetwork constructor for websockets based gossip network
-func NewWebsocketNetwork(log logging.Logger, config config.Local, phonebookAddresses []string, genesisID string, networkID protocol.NetworkID, nodeInfo NodeInfo, peerID p2p.PeerID, idSigner identityChallengeSigner) (wn *WebsocketNetwork, err error) {
+func NewWebsocketNetwork(log logging.Logger, config config.Local, phonebookAddresses []string, genesisID string, networkID protocol.NetworkID, nodeInfo NodeInfo, identityOpts *identityOpts) (wn *WebsocketNetwork, err error) {
 	pb := phonebook.MakePhonebook(config.ConnectionsRateLimitingCount,
 		time.Duration(config.ConnectionsRateLimitingWindowSeconds)*time.Second)
 
@@ -2324,8 +2314,6 @@ func NewWebsocketNetwork(log logging.Logger, config config.Local, phonebookAddre
 		GenesisID:         genesisID,
 		NetworkID:         networkID,
 		nodeInfo:          nodeInfo,
-		peerID:            peerID,
-		peerIDSigner:      idSigner,
 		resolveSRVRecords: tools_network.ReadFromSRV,
 		peerStater: peerConnectionStater{
 			log:                           log,
@@ -2334,13 +2322,22 @@ func NewWebsocketNetwork(log logging.Logger, config config.Local, phonebookAddre
 		},
 	}
 
+	// initialize net identity tracker either from the provided options or with a new one
+	if identityOpts != nil {
+		wn.identityScheme = identityOpts.scheme
+		wn.identityTracker = identityOpts.tracker
+	}
+	if wn.identityTracker == nil {
+		wn.identityTracker = NewIdentityTracker()
+	}
+
 	wn.setup()
 	return wn, nil
 }
 
 // NewWebsocketGossipNode constructs a websocket network node and returns it as a GossipNode interface implementation
 func NewWebsocketGossipNode(log logging.Logger, config config.Local, phonebookAddresses []string, genesisID string, networkID protocol.NetworkID) (gn GossipNode, err error) {
-	return NewWebsocketNetwork(log, config, phonebookAddresses, genesisID, networkID, nil, "", nil)
+	return NewWebsocketNetwork(log, config, phonebookAddresses, genesisID, networkID, nil, nil)
 }
 
 // SetPrioScheme specifies the network priority scheme for a network node

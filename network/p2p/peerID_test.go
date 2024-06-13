@@ -25,6 +25,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data/hashable"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -102,4 +104,23 @@ func TestGetPrivKeyUserGeneratedEphemeral(t *testing.T) {
 	// make sure it was not persisted
 	_, err = loadPrivateKeyFromFile(path.Join(tempdir, DefaultPrivKeyPath))
 	assert.True(t, os.IsNotExist(err))
+}
+
+func TestPeerIDChallengeSigner(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	privKey, err := generatePrivKey()
+	require.NoError(t, err)
+
+	data := make([]byte, 111)
+	crypto.RandBytes(data)
+	msg := hashable.Message{Message: string(data)}
+
+	signer := PeerIDChallengeSigner{key: privKey}
+	sig := signer.Sign(msg)
+	require.True(t, signer.Verify(msg, sig))
+	pubKey := privKey.GetPublic()
+	pubKeyRaw, err := pubKey.Raw()
+	require.NoError(t, err)
+	require.Equal(t, crypto.PublicKey(pubKeyRaw), signer.PublicKey())
 }

@@ -144,7 +144,17 @@ func mergeConfigFromFile(configpath string, source Local) (Local, error) {
 	defer f.Close()
 
 	err = loadConfig(f, &source)
+	if err != nil {
+		return source, err
+	}
+	source, err = fixupConfig(source)
+	return source, err
+}
 
+// fixupConfig makes the following tweaks to the config:
+// - If NetAddress is set, enable the ledger and block services
+// - If EnableP2PHybridMode is set, require PublicAddress to be set
+func fixupConfig(source Local) (Local, error) {
 	if source.NetAddress != "" {
 		source.EnableLedgerService = true
 		source.EnableBlockService = true
@@ -155,8 +165,12 @@ func mergeConfigFromFile(configpath string, source Local) (Local, error) {
 			source.GossipFanout = defaultRelayGossipFanout
 		}
 	}
-
-	return source, err
+	// In hybrid mode we want to prevent connections from the same node over both P2P and WS.
+	// The only way it is supported at the moment is to use net identity challenge that is based on PublicAddress.
+	if source.EnableP2PHybridMode && source.PublicAddress == "" {
+		return source, errors.New("PublicAddress must be specified when EnableP2PHybridMode is set")
+	}
+	return source, nil
 }
 
 func loadConfig(reader io.Reader, config *Local) error {
