@@ -128,6 +128,15 @@ func runCatchupOverGossip(t fixtures.TestingTB,
 		a.NoError(err)
 		a.Empty(cfg.NetworkProtocolVersion)
 		cfg.NetworkProtocolVersion = ledgerNodeDowngradeTo
+		cfg.BaseLoggerDebugLevel = 5 // debug logging while debugging this test
+		cfg.SaveToDisk(dir)
+	} else {
+		// TODO: remove when TestCatchupOverGossip is fixed
+		dir, err := fixture.GetNodeDir("Node")
+		a.NoError(err)
+		cfg, err := config.LoadConfigFromDisk(dir)
+		a.NoError(err)
+		cfg.BaseLoggerDebugLevel = 5 // debug logging while debugging this test
 		cfg.SaveToDisk(dir)
 	}
 
@@ -138,6 +147,14 @@ func runCatchupOverGossip(t fixtures.TestingTB,
 		a.NoError(err)
 		a.Empty(cfg.NetworkProtocolVersion)
 		cfg.NetworkProtocolVersion = fetcherNodeDowngradeTo
+		cfg.BaseLoggerDebugLevel = 5 // debug logging while debugging this test
+		cfg.SaveToDisk(dir)
+	} else {
+		// TODO: remove when TestCatchupOverGossip is fixed
+		dir := fixture.PrimaryDataDir()
+		cfg, err := config.LoadConfigFromDisk(dir)
+		a.NoError(err)
+		cfg.BaseLoggerDebugLevel = 5 // debug logging while debugging this test
 		cfg.SaveToDisk(dir)
 	}
 

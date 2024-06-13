@@ -97,6 +97,9 @@ func (syncer *TxSyncer) Start(canStart chan struct{}) {
 
 // Stop stops periodic syncing
 func (syncer *TxSyncer) Stop() {
+	syncer.log.Debug("transaction syncer is stopping")
+	defer syncer.log.Debug("transaction syncer has stopped")
+
 	syncer.cancel()
 	syncer.wg.Wait()
 }
