@@ -599,6 +599,18 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 
 	var err error
 	var capguard *util.ErlCapacityGuard
+	accepted := false
+	defer func() {
+		// if we failed to put the item onto the backlog, we should release the capacity if any
+		if !accepted {
+			if capguard != nil {
+				if capErr := capguard.Release(); capErr != nil {
+					logging.Base().Warnf("Failed to release capacity to ElasticRateLimiter: %v", capErr)
+				}
+			}
+		}
+	}()
+
 	if handler.erl != nil {
 		congestedERL := float64(cap(handler.backlogQueue))*handler.backlogCongestionThreshold < float64(len(handler.backlogQueue))
 		// consume a capacity unit
@@ -679,6 +691,7 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 		unverifiedTxGroupHash: canonicalKey,
 		capguard:              capguard,
 	}:
+		accepted = true
 	default:
 		// if we failed here we want to increase the corresponding metric. It might suggest that we
 		// want to increase the queue size.

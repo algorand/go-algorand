@@ -38,6 +38,23 @@ func (cs *roundCowState) AccountData(addr basics.Address) (ledgercore.AccountDat
 	return record, nil
 }
 
+func (cs *roundCowState) AgreementData(addr basics.Address) (basics.OnlineAccountData, error) {
+	record, err := cs.lookupAgreement(addr)
+	if err != nil {
+		return basics.OnlineAccountData{}, err
+	}
+	return record, nil
+}
+
+func (cs *roundCowState) OnlineStake() (basics.MicroAlgos, error) {
+	return cs.lookupParent.onlineStake()
+}
+
+// onlineStake is needed to implement roundCowParent
+func (cs *roundCowState) onlineStake() (basics.MicroAlgos, error) {
+	return cs.lookupParent.onlineStake()
+}
+
 func (cs *roundCowState) Authorizer(addr basics.Address) (basics.Address, error) {
 	record, err := cs.Get(addr, false) // pending rewards unneeded
 	if err != nil {

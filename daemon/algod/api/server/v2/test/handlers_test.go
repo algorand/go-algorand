@@ -2439,3 +2439,66 @@ func TestGeneratePartkeys(t *testing.T) {
 	}
 
 }
+
+func TestDebugExtraPprofEndpoint(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	submit := func(t *testing.T, method string, body []byte, expectedCode int) []byte {
+		handler := v2.Handlers{
+			Node: nil,
+			Log:  logging.Base(),
+		}
+		e := echo.New()
+
+		var bodyReader io.Reader
+		if body != nil {
+			bodyReader = bytes.NewReader(body)
+		}
+
+		req := httptest.NewRequest(method, "/debug/extra/pprof", bodyReader)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+
+		if method == http.MethodPut {
+			handler.PutDebugSettingsProf(c)
+		} else {
+			handler.GetDebugSettingsProf(c)
+		}
+		require.Equal(t, expectedCode, rec.Code)
+
+		return rec.Body.Bytes()
+	}
+
+	// check original values
+	body := submit(t, http.MethodGet, nil, http.StatusOK)
+	require.Contains(t, string(body), `"mutex-rate":0`)
+	require.Contains(t, string(body), `"block-rate":0`)
+
+	// enable mutex and blocking profiling, should return the original zero values
+	body = submit(t, http.MethodPut, []byte(`{"mutex-rate":1000, "block-rate":2000}`), http.StatusOK)
+	require.Contains(t, string(body), `"mutex-rate":0`)
+	require.Contains(t, string(body), `"block-rate":0`)
+
+	// check the new values
+	body = submit(t, http.MethodGet, nil, http.StatusOK)
+	require.Contains(t, string(body), `"mutex-rate":1000`)
+	require.Contains(t, string(body), `"block-rate":2000`)
+
+	// set invalid values
+	body = submit(t, http.MethodPut, []byte(`{"mutex-rate":-1, "block-rate":2000}`), http.StatusBadRequest)
+	require.Contains(t, string(body), "failed to decode object")
+
+	body = submit(t, http.MethodPut, []byte(`{"mutex-rate":1000, "block-rate":-2}`), http.StatusBadRequest)
+	require.Contains(t, string(body), "failed to decode object")
+
+	// disable mutex and blocking profiling
+	body = submit(t, http.MethodPut, []byte(`{"mutex-rate":0, "block-rate":0}`), http.StatusOK)
+	require.Contains(t, string(body), `"mutex-rate":1000`)
+	require.Contains(t, string(body), `"block-rate":2000`)
+
+	// check it is disabled
+	body = submit(t, http.MethodGet, nil, http.StatusOK)
+	require.Contains(t, string(body), `"mutex-rate":0`)
+	require.Contains(t, string(body), `"block-rate":0`)
+
+}
