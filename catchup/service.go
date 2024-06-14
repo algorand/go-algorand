@@ -161,6 +161,9 @@ func (s *Service) Start() {
 
 // Stop informs the catchup service that it should stop, and waits for it to stop (when periodicSync() exits)
 func (s *Service) Stop() {
+	s.log.Debug("catchup service is stopping")
+	defer s.log.Debug("catchup service has stopped")
+
 	s.cancel()
 	s.workers.Wait()
 	if s.initialSyncNotified.CompareAndSwap(0, 1) {

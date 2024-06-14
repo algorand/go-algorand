@@ -396,6 +396,8 @@ func (node *AlgorandFullNode) startMonitoringRoutines() {
 // waitMonitoringRoutines waits for all the monitoring routines to exit. Note that
 // the node.mu must not be taken, and that the node's context should have been canceled.
 func (node *AlgorandFullNode) waitMonitoringRoutines() {
+	node.log.Debug("waiting on node monitoring routines to exit")
+	defer node.log.Debug("done waiting on node monitoring routines to exit")
 	node.monitoringRoutinesWaitGroup.Wait()
 }
 
@@ -409,6 +411,9 @@ func (node *AlgorandFullNode) ListeningAddress() (string, bool) {
 
 // Stop stops running the node. Once a node is closed, it can never start again.
 func (node *AlgorandFullNode) Stop() {
+	node.log.Debug("algorand node is stopping")
+	defer node.log.Debug("algorand node has stopped")
+
 	node.mu.Lock()
 	defer func() {
 		node.mu.Unlock()
@@ -431,9 +436,11 @@ func (node *AlgorandFullNode) Stop() {
 		node.ledgerService.Stop()
 	}
 	node.catchupBlockAuth.Quit()
+	node.log.Debug("crypto worker pools are stopping")
 	node.highPriorityCryptoVerificationPool.Shutdown()
 	node.lowPriorityCryptoVerificationPool.Shutdown()
 	node.cryptoPool.Shutdown()
+	node.log.Debug("crypto worker pools have stopped")
 	node.cancelCtx()
 }
 

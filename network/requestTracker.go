@@ -415,7 +415,7 @@ func (rt *RequestTracker) sendBlockedConnectionResponse(conn net.Conn, requestTi
 	}
 }
 
-// pruneAcceptedConnections clean stale items form the acceptedConnections map; it's syncornized via the acceptedConnectionsMu mutex which is expected to be taken by the caller.
+// pruneAcceptedConnections clean stale items form the acceptedConnections map; it's syncornized via the hostRequestsMu mutex which is expected to be taken by the caller.
 // in case the created is 0, the pruning is disabled for this connection. The HTTP handlers would call Close to have this entry cleared out.
 func (rt *RequestTracker) pruneAcceptedConnections(pruneStartDate time.Time) {
 	localAddrToRemove := []net.Addr{}
@@ -494,6 +494,20 @@ func (rt *RequestTracker) ServeHTTP(response http.ResponseWriter, request *http.
 	localAddr := request.Context().Value(http.LocalAddrContextKey).(net.Addr)
 
 	rt.hostRequestsMu.Lock()
+	// Check if the number of connections exceeds the limit
+	acceptedConnections := len(rt.acceptedConnections)
+
+	if acceptedConnections > rt.config.IncomingConnectionsLimit && request.URL.Path != HealthServiceStatusPath {
+		rt.hostRequestsMu.Unlock()
+		// If the limit is exceeded, reject the connection
+		networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "rt_incoming_connection_limit"})
+		rt.log.EventWithDetails(telemetryspec.Network, telemetryspec.ConnectPeerFailEvent,
+			telemetryspec.ConnectPeerFailEventDetails{
+				Address: localAddr.String(), Incoming: true, Reason: "RequestTracker Connection Limit"})
+		response.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
+
 	trackedRequest := rt.acceptedConnections[localAddr]
 	if trackedRequest != nil {
 		// update the original tracker request so that it won't get pruned.
@@ -550,7 +564,6 @@ func (rt *RequestTracker) ServeHTTP(response http.ResponseWriter, request *http.
 
 	// send the request downstream; in our case, it would go to the router.
 	rt.downstreamHandler.ServeHTTP(response, request)
-
 }
 
 // remoteHostProxyFix updates the origin IP address in the trackedRequest

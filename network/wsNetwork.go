@@ -107,6 +107,11 @@ const testingPublicAddress = "testing"
 // Maximum number of bytes to read from a header when trying to establish a websocket connection.
 const wsMaxHeaderBytes = 4096
 
+// ReservedHealthServiceConnections reserves additional connections for the health check endpoint. This reserves
+// capacity to query the health check service when a node is serving maximum peers. The file descriptors will be
+// used from the ReservedFDs pool, as this pool is meant for short-lived usage (dns queries, disk i/o, etc.)
+const ReservedHealthServiceConnections = 10
+
 var networkIncomingConnections = metrics.MakeGauge(metrics.NetworkIncomingConnections)
 var networkOutgoingConnections = metrics.MakeGauge(metrics.NetworkOutgoingConnections)
 
@@ -150,6 +155,9 @@ const peerShutdownDisconnectionAckDuration = 50 * time.Millisecond
 // GossipNetworkPath is the URL path to connect to the websocket gossip node at.
 // Contains {genesisID} param to be handled by gorilla/mux
 const GossipNetworkPath = "/v1/{genesisID}/gossip"
+
+// HealthServiceStatusPath is the path to register HealthService as a handler for when using gorilla/mux
+const HealthServiceStatusPath = "/status"
 
 // NodeInfo helps the network get information about the node it is running on
 type NodeInfo interface {
@@ -684,7 +692,7 @@ func (wn *WebsocketNetwork) Start() {
 		}
 		// wrap the original listener with a limited connection listener
 		listener = limitlistener.RejectingLimitListener(
-			listener, uint64(wn.config.IncomingConnectionsLimit), wn.log)
+			listener, uint64(wn.config.IncomingConnectionsLimit)+ReservedHealthServiceConnections, wn.log)
 		// wrap the limited connection listener with a requests tracker listener
 		wn.listener = wn.requestsTracker.Listener(listener)
 		wn.log.Debugf("listening on %s", wn.listener.Addr().String())
@@ -785,6 +793,9 @@ func (wn *WebsocketNetwork) innerStop() {
 // Stop closes network connections and stops threads.
 // Stop blocks until all activity on this node is done.
 func (wn *WebsocketNetwork) Stop() {
+	wn.log.Debug("network is stopping")
+	defer wn.log.Debug("network has stopped")
+
 	wn.handler.ClearHandlers([]Tag{})
 
 	// if we have a working ticker, just stop it and clear it out. The access to this variable is safe since the Start()/Stop() are synced by the
@@ -1147,6 +1158,8 @@ func (wn *msgHandler) messageHandlerThread(wg *sync.WaitGroup, peersConnectivity
 			networkIncomingBufferMicros.AddUint64(uint64(bufferNanos/1000), nil)
 			handleTime := handled.Sub(start)
 			networkHandleMicros.AddUint64(uint64(handleTime.Nanoseconds()/1000), nil)
+			networkHandleMicrosByTag.Add(string(msg.Tag), uint64(handleTime.Nanoseconds()/1000))
+			networkHandleCountByTag.Add(string(msg.Tag), 1)
 			switch outmsg.Action {
 			case Disconnect:
 				wg.Add(1)

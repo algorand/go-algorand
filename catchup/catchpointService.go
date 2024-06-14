@@ -185,6 +185,9 @@ func (cs *CatchpointCatchupService) Abort() {
 // Stop stops the catchpoint catchup service - unlike Abort, this is not intended to abort the process but rather to allow
 // cleanup of in-memory resources for the purpose of clean shutdown.
 func (cs *CatchpointCatchupService) Stop() {
+	cs.log.Debug("catchpoint service is stopping")
+	defer cs.log.Debug("catchpoint service has stopped")
+
 	// signal the running goroutine that we want to stop
 	cs.cancelCtxFunc()
 	// wait for the running goroutine to terminate.
@@ -698,7 +701,7 @@ func (cs *CatchpointCatchupService) fetchBlock(round basics.Round, retryCount ui
 	return blk, cert, downloadDuration, psp, false, nil
 }
 
-// processStageLedgerDownload is the fifth catchpoint catchup stage. It completes the catchup process, swap the new tables and restart the node functionality.
+// processStageSwitch is the fifth catchpoint catchup stage. It completes the catchup process, swap the new tables and restart the node functionality.
 func (cs *CatchpointCatchupService) processStageSwitch() (err error) {
 	err = cs.ledgerAccessor.CompleteCatchup(cs.ctx)
 	if err != nil {
