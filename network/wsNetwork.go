@@ -793,6 +793,9 @@ func (wn *WebsocketNetwork) innerStop() {
 // Stop closes network connections and stops threads.
 // Stop blocks until all activity on this node is done.
 func (wn *WebsocketNetwork) Stop() {
+	wn.log.Debug("network is stopping")
+	defer wn.log.Debug("network has stopped")
+
 	wn.handler.ClearHandlers([]Tag{})
 
 	// if we have a working ticker, just stop it and clear it out. The access to this variable is safe since the Start()/Stop() are synced by the

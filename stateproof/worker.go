@@ -142,6 +142,9 @@ func (spw *Worker) initDb(inMemory bool) error {
 // Stop stops any goroutines associated with this worker. It is the caller responsibility to remove the register
 // network handlers
 func (spw *Worker) Stop() {
+	spw.log.Debug("stateproof worker is stopping")
+	defer spw.log.Debug("stateproof worker has stopped")
+
 	spw.shutdown()
 	spw.wg.Wait()
 

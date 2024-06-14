@@ -185,6 +185,9 @@ func (cs *CatchpointCatchupService) Abort() {
 // Stop stops the catchpoint catchup service - unlike Abort, this is not intended to abort the process but rather to allow
 // cleanup of in-memory resources for the purpose of clean shutdown.
 func (cs *CatchpointCatchupService) Stop() {
+	cs.log.Debug("catchpoint service is stopping")
+	defer cs.log.Debug("catchpoint service has stopped")
+
 	// signal the running goroutine that we want to stop
 	cs.cancelCtxFunc()
 	// wait for the running goroutine to terminate.
