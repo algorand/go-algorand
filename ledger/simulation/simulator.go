@@ -232,13 +232,13 @@ func (s Simulator) simulateWithTracer(txgroup []transactions.SignedTxnWithAD, tr
 				}
 			} else {
 				// Otherwise lookup the sender's account and set the txn auth addr to the account's auth addr
-				var data ledgercore.AccountData
-				data, _, _, err = s.ledger.LookupAccount(s.ledger.start, sender)
-				if err != nil {
-					return nil, err
-				}
-
 				if txnHasNoSignature(*stxn) {
+					var data ledgercore.AccountData
+					data, _, _, err = s.ledger.LookupAccount(s.ledger.start, sender)
+					if err != nil {
+						return nil, err
+					}
+
 					stxn.AuthAddr = data.AuthAddr
 					if stxn.AuthAddr == sender {
 						stxn.AuthAddr = basics.Address{}
