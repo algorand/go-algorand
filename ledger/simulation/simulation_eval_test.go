@@ -8896,3 +8896,451 @@ func TestUnnamedResourcesCrossProductLimits(t *testing.T) {
 		})
 	}
 }
+
+func TestFixSigners(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	t.Run("AllowEmptySignatures=false", func(t *testing.T) {
+		t.Parallel()
+		env := simulationtesting.PrepareSimulatorTest(t)
+		defer env.Close()
+
+		sender := env.Accounts[0]
+
+		txn := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   sender.Addr,
+			Receiver: sender.Addr,
+		}).SignedTxn()
+
+		simRequest := simulation.Request{
+			TxnGroups: [][]transactions.SignedTxn{
+				{txn},
+			},
+			AllowEmptySignatures: false,
+			FixSigners:           true,
+		}
+
+		_, err := simulation.MakeSimulator(env.Ledger, false).Simulate(simRequest)
+		require.ErrorAs(t, err, &simulation.InvalidRequestError{})
+		require.ErrorContains(t, err, "FixSigners requires AllowEmptySignatures to be enabled")
+	})
+
+	type testInputs struct {
+		txgroup        []transactions.SignedTxn
+		sender         simulationtesting.Account
+		other          simulationtesting.Account
+		innerRekeyAddr basics.Address
+	}
+
+	makeTestInputs := func(env *simulationtesting.Environment) testInputs {
+		sender := env.Accounts[0]
+		other := env.Accounts[1]
+
+		innerRekeyAddr := env.Accounts[2].Addr
+		innerProgram := fmt.Sprintf(`#pragma version 9
+		txn ApplicationID
+		bz end
+		
+		// Rekey to the the innerRekeyAddr
+		itxn_begin
+		int pay
+		itxn_field TypeEnum
+		txn ApplicationArgs 0
+		itxn_field Sender
+		addr %s
+		itxn_field RekeyTo
+		itxn_submit
+		
+		end:
+		int 1
+		`, innerRekeyAddr)
+
+		innerAppID := env.CreateApp(sender.Addr, simulationtesting.AppParams{
+			ApprovalProgram:   innerProgram,
+			ClearStateProgram: "#pragma version 9\nint 1",
+		})
+
+		outerProgram := fmt.Sprintf(`#pragma version 9
+		txn ApplicationID
+		bz end
+
+		// Rekey to inner app
+		itxn_begin
+		int pay
+		itxn_field TypeEnum
+		txn ApplicationArgs 0
+		itxn_field Sender
+		addr %s
+		itxn_field RekeyTo
+		itxn_submit
+
+		// Call inner app
+		itxn_begin
+		int appl
+		itxn_field TypeEnum
+		int %d
+		itxn_field ApplicationID
+		txn ApplicationArgs 0
+		itxn_field ApplicationArgs
+		itxn_submit
+
+		end:
+		int 1`, innerAppID.Address(), innerAppID)
+
+		appID := env.CreateApp(sender.Addr, simulationtesting.AppParams{
+			ApprovalProgram:   outerProgram,
+			ClearStateProgram: "#pragma version 9\nint 1",
+		})
+
+		env.TransferAlgos(sender.Addr, appID.Address(), 1_000_000)
+
+		// rekey to EOA
+		pay0 := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   sender.Addr,
+			Receiver: sender.Addr,
+			RekeyTo:  other.Addr,
+		})
+		// rekey to outer app, which rekeys to inner app, which rekeys to another app
+		pay1 := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   sender.Addr,
+			Receiver: sender.Addr,
+			RekeyTo:  appID.Address(),
+		})
+		// app rekeys to random address
+		appCall := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:            protocol.ApplicationCallTx,
+			Sender:          other.Addr,
+			ApplicationID:   appID,
+			ApplicationArgs: [][]byte{sender.Addr[:]},
+			ForeignApps:     []basics.AppIndex{innerAppID},
+		})
+		// rekey back to sender (original address)
+		pay2 := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   sender.Addr,
+			Receiver: sender.Addr,
+			RekeyTo:  sender.Addr,
+		})
+		// send txn from sender
+		pay3 := env.TxnInfo.NewTxn(txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   sender.Addr,
+			Receiver: sender.Addr,
+		})
+
+		txgroup := txntest.Group(&pay0, &pay1, &appCall, &pay2, &pay3)
+
+		return testInputs{
+			txgroup:        txgroup,
+			sender:         sender,
+			other:          other,
+			innerRekeyAddr: innerRekeyAddr,
+		}
+	}
+
+	// Convenience function for getting the expected app call result. This is a function instead of
+	// a variable because it's used by multiple tests, and the expected result is modified with the
+	// input transactions before comparison by each test.
+	expectedAppCallResultFn := func() simulation.TxnResult {
+		return simulation.TxnResult{
+			AppBudgetConsumed: ignoreAppBudgetConsumed,
+			Txn: transactions.SignedTxnWithAD{
+				ApplyData: transactions.ApplyData{
+					EvalDelta: transactions.EvalDelta{
+						InnerTxns: []transactions.SignedTxnWithAD{
+							{},
+							{
+								ApplyData: transactions.ApplyData{
+									EvalDelta: transactions.EvalDelta{
+										InnerTxns: []transactions.SignedTxnWithAD{
+											{},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+	}
+
+	t.Run("no signatures", func(t *testing.T) {
+		t.Parallel()
+		simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+			inputs := makeTestInputs(&env)
+
+			// Do not sign any of the transactions
+
+			return simulationTestCase{
+				input: simulation.Request{
+					TxnGroups:            [][]transactions.SignedTxn{inputs.txgroup},
+					AllowEmptySignatures: true,
+					FixSigners:           true,
+				},
+				expected: simulation.Result{
+					Version:   simulation.ResultLatestVersion,
+					LastRound: env.TxnInfo.LatestRound(),
+					EvalOverrides: simulation.ResultEvalOverrides{
+						AllowEmptySignatures: true,
+						FixSigners:           true,
+					},
+					TxnGroups: []simulation.TxnGroupResult{
+						{
+							Txns: []simulation.TxnResult{
+								{}, // pay0
+								{ // pay1
+									FixedSigner: inputs.other.Addr,
+								},
+								// appCall
+								expectedAppCallResultFn(),
+								{ // pay2
+									FixedSigner: inputs.innerRekeyAddr,
+								},
+								{}, // pay3
+							},
+							AppBudgetConsumed: ignoreAppBudgetConsumed,
+							AppBudgetAdded:    2800,
+						},
+					},
+				},
+			}
+		})
+	})
+
+	t.Run("sign pay after outer rekey", func(t *testing.T) {
+		t.Parallel()
+		simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+			inputs := makeTestInputs(&env)
+
+			// Sign txn 1, payment after the outer rekey, with the wrong AuthAddr. This renders the
+			// group invalid, since the AuthAddr will not be corrected if a signature is provided.
+			inputs.txgroup[1] = inputs.txgroup[1].Txn.Sign(inputs.sender.Sk)
+
+			return simulationTestCase{
+				input: simulation.Request{
+					TxnGroups:            [][]transactions.SignedTxn{inputs.txgroup},
+					AllowEmptySignatures: true,
+					FixSigners:           true,
+				},
+				expectedError: fmt.Sprintf("should have been authorized by %s but was actually authorized by %s", inputs.other.Addr, inputs.sender.Addr),
+				expected: simulation.Result{
+					Version:   simulation.ResultLatestVersion,
+					LastRound: env.TxnInfo.LatestRound(),
+					EvalOverrides: simulation.ResultEvalOverrides{
+						AllowEmptySignatures: true,
+						FixSigners:           true,
+					},
+					TxnGroups: []simulation.TxnGroupResult{
+						{
+							FailedAt: simulation.TxnPath{1},
+							Txns: []simulation.TxnResult{
+								{}, // pay0
+								{}, // pay1, does NOT contain FixedSigner
+								{}, // appCall
+								{}, // pay2
+								{}, // pay3
+							},
+							AppBudgetConsumed: 0,
+							// This is here even though we don't make it to the app call because
+							// pooled app budget is determined before the group is evaluated.
+							AppBudgetAdded: 700,
+						},
+					},
+				},
+			}
+		})
+	})
+
+	t.Run("sign pay after inner rekey", func(t *testing.T) {
+		t.Parallel()
+		simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+			inputs := makeTestInputs(&env)
+
+			// Sign txn 3, payment after the inner rekey, with the wrong AuthAddr. This renders the
+			// group invalid, since the AuthAddr will not be corrected if a signature is provided.
+			inputs.txgroup[3] = inputs.txgroup[3].Txn.Sign(inputs.other.Sk)
+
+			return simulationTestCase{
+				input: simulation.Request{
+					TxnGroups:            [][]transactions.SignedTxn{inputs.txgroup},
+					AllowEmptySignatures: true,
+					FixSigners:           true,
+				},
+				expectedError: fmt.Sprintf("should have been authorized by %s but was actually authorized by %s", inputs.innerRekeyAddr, inputs.other.Addr),
+				expected: simulation.Result{
+					Version:   simulation.ResultLatestVersion,
+					LastRound: env.TxnInfo.LatestRound(),
+					EvalOverrides: simulation.ResultEvalOverrides{
+						AllowEmptySignatures: true,
+						FixSigners:           true,
+					},
+					TxnGroups: []simulation.TxnGroupResult{
+						{
+							FailedAt: simulation.TxnPath{3},
+							Txns: []simulation.TxnResult{
+								{}, // pay0
+								{ // pay1
+									FixedSigner: inputs.other.Addr,
+								},
+								// appCall
+								expectedAppCallResultFn(),
+								{}, // pay2, does NOT contained FixedSigner
+								{}, // pay3
+							},
+							AppBudgetConsumed: ignoreAppBudgetConsumed,
+							AppBudgetAdded:    2800,
+						},
+					},
+				},
+			}
+		})
+	})
+
+	// Edge case tests below
+
+	t.Run("sender account is empty", func(t *testing.T) {
+		t.Parallel()
+		simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+			sender := env.Accounts[0]
+
+			appID := env.CreateApp(sender.Addr, simulationtesting.AppParams{
+				ApprovalProgram:   "#pragma version 9\nint 1",
+				ClearStateProgram: "#pragma version 9\nint 1",
+			})
+
+			var noBalanceAccount1 basics.Address
+			crypto.RandBytes(noBalanceAccount1[:])
+
+			var noBalanceAccount2 basics.Address
+			crypto.RandBytes(noBalanceAccount2[:])
+
+			noBalPay1 := env.TxnInfo.NewTxn(txntest.Txn{
+				Type:     protocol.PaymentTx,
+				Sender:   noBalanceAccount1,
+				Receiver: noBalanceAccount1,
+				Fee:      0,
+				Note:     []byte{1},
+			})
+			appCall := env.TxnInfo.NewTxn(txntest.Txn{
+				Type:          protocol.ApplicationCallTx,
+				Sender:        sender.Addr,
+				ApplicationID: appID,
+				Fee:           env.TxnInfo.CurrentProtocolParams().MinTxnFee * 3,
+			})
+			noBalPay2 := env.TxnInfo.NewTxn(txntest.Txn{
+				Type:     protocol.PaymentTx,
+				Sender:   noBalanceAccount2,
+				Receiver: noBalanceAccount2,
+				Fee:      0,
+				Note:     []byte{2},
+			})
+			txgroup := txntest.Group(&noBalPay1, &appCall, &noBalPay2)
+
+			// Testing that our ledger lookup of accounts to retreive their AuthAddr does not crash
+			// and burn when the account is empty.
+
+			return simulationTestCase{
+				input: simulation.Request{
+					TxnGroups:            [][]transactions.SignedTxn{txgroup},
+					AllowEmptySignatures: true,
+					FixSigners:           true,
+				},
+				expected: simulation.Result{
+					Version:   simulation.ResultLatestVersion,
+					LastRound: env.TxnInfo.LatestRound(),
+					EvalOverrides: simulation.ResultEvalOverrides{
+						AllowEmptySignatures: true,
+						FixSigners:           true,
+					},
+					TxnGroups: []simulation.TxnGroupResult{
+						{
+							Txns: []simulation.TxnResult{
+								{}, // noBalPay1
+								{ // appCall
+									AppBudgetConsumed: ignoreAppBudgetConsumed,
+								},
+								{}, // noBalPay2
+							},
+							AppBudgetAdded:    700,
+							AppBudgetConsumed: ignoreAppBudgetConsumed,
+						},
+					},
+				},
+			}
+		})
+	})
+
+	t.Run("fixed AuthAddr is sender address", func(t *testing.T) {
+		t.Parallel()
+		simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+			acct0 := env.Accounts[0]
+			acct1 := env.Accounts[1]
+			acct2 := env.Accounts[2]
+
+			appID := env.CreateApp(acct0.Addr, simulationtesting.AppParams{
+				ApprovalProgram:   "#pragma version 9\nint 1",
+				ClearStateProgram: "#pragma version 9\nint 1",
+			})
+
+			pay1 := env.TxnInfo.NewTxn(txntest.Txn{
+				Type:     protocol.PaymentTx,
+				Sender:   acct1.Addr,
+				Receiver: acct1.Addr,
+				Note:     []byte{1},
+			})
+			appCall := env.TxnInfo.NewTxn(txntest.Txn{
+				Type:          protocol.ApplicationCallTx,
+				Sender:        acct0.Addr,
+				ApplicationID: appID,
+			})
+			pay2 := env.TxnInfo.NewTxn(txntest.Txn{
+				Type:     protocol.PaymentTx,
+				Sender:   acct1.Addr,
+				Receiver: acct1.Addr,
+				Note:     []byte{2},
+			})
+			txgroup := txntest.Group(&pay1, &appCall, &pay2)
+
+			txgroup[0].AuthAddr = acct2.Addr
+			txgroup[2].AuthAddr = acct2.Addr
+
+			return simulationTestCase{
+				input: simulation.Request{
+					TxnGroups:            [][]transactions.SignedTxn{txgroup},
+					AllowEmptySignatures: true,
+					FixSigners:           true,
+				},
+				expected: simulation.Result{
+					Version:   simulation.ResultLatestVersion,
+					LastRound: env.TxnInfo.LatestRound(),
+					EvalOverrides: simulation.ResultEvalOverrides{
+						AllowEmptySignatures: true,
+						FixSigners:           true,
+					},
+					TxnGroups: []simulation.TxnGroupResult{
+						{
+							Txns: []simulation.TxnResult{
+								{ // pay1
+									FixedSigner: acct1.Addr,
+								},
+								{ // appCall
+									AppBudgetConsumed: ignoreAppBudgetConsumed,
+								},
+								{ // pay2
+									FixedSigner: acct1.Addr,
+								},
+							},
+							AppBudgetAdded:    700,
+							AppBudgetConsumed: ignoreAppBudgetConsumed,
+						},
+					},
+				},
+			}
+		})
+	})
+}

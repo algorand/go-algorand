@@ -1210,6 +1210,7 @@ type PreEncodedSimulateTxnResult struct {
 	LogicSigBudgetConsumed   *uint64                                 `codec:"logic-sig-budget-consumed,omitempty"`
 	TransactionTrace         *model.SimulationTransactionExecTrace   `codec:"exec-trace,omitempty"`
 	UnnamedResourcesAccessed *model.SimulateUnnamedResourcesAccessed `codec:"unnamed-resources-accessed,omitempty"`
+	FixedSigner              *string                                 `codec:"fixed-signer,omitempty"`
 }
 
 // PreEncodedSimulateTxnGroupResult mirrors model.SimulateTransactionGroupResult
@@ -1246,6 +1247,7 @@ type PreEncodedSimulateRequest struct {
 	AllowUnnamedResources bool                                        `codec:"allow-unnamed-resources,omitempty"`
 	ExtraOpcodeBudget     uint64                                      `codec:"extra-opcode-budget,omitempty"`
 	ExecTraceConfig       simulation.ExecTraceConfig                  `codec:"exec-trace-config,omitempty"`
+	FixSigners            bool                                        `codec:"fix-signers,omitempty"`
 }
 
 // SimulateTransaction simulates broadcasting a raw transaction to the network, returning relevant simulation results.
