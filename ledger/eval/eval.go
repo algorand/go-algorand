@@ -1110,7 +1110,8 @@ func (eval *BlockEvaluator) TransactionGroup(txgroup []transactions.SignedTxnWit
 	}
 
 	// Take the fees from each txn except for closed accounts, which already had the fee taken
-	for _, txad := range txgroup {
+	for i := range txgroup {
+		txad := txgroup[i]
 		if txad.Txn.CloseRemainderTo.IsZero() {
 			err = cow.takeFee(&txad.Txn, &txad.SenderRewards, evalParams)
 			if err != nil {
