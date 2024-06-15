@@ -1045,7 +1045,7 @@ func (eval *BlockEvaluator) TransactionGroup(txgroup []transactions.SignedTxnWit
 			eval.Tracer.BeforeTxn(evalParams, gi)
 		}
 
-		err := eval.transaction(txad.SignedTxn, evalParams, gi, txad.ApplyData, cow, &txib)
+		err = eval.transaction(txad.SignedTxn, evalParams, gi, txad.ApplyData, cow, &txib)
 
 		if eval.Tracer != nil {
 			eval.Tracer.AfterTxn(evalParams, gi, txib.ApplyData, err)
@@ -1103,7 +1103,7 @@ func (eval *BlockEvaluator) TransactionGroup(txgroup []transactions.SignedTxnWit
 	// if we cannot provide account data that contains enough information to
 	// compute the correct minimum balance (the case with indexer which does not store it).
 	if eval.validate || eval.generate {
-		err := eval.checkMinBalance(cow)
+		err = eval.checkMinBalance(cow)
 		if err != nil {
 			return err
 		}
