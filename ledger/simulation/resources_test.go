@@ -302,14 +302,14 @@ func TestPopulatorWithLocalResources(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	txns := make([]transactions.SignedTxnWithAD, 1)
+	txns := make([]transactions.SignedTxn, 1)
 	txns[0].Txn.Type = protocol.ApplicationCallTx
 
 	consensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
 	populator := MakeResourcePopulator(txns, consensusParams)
 
 	proto := config.Consensus[protocol.ConsensusFuture]
-	groupTracker := makeGroupResourceTracker(txns, &proto)
+	groupTracker := makeGroupResourceTracker(transactions.WrapSignedTxnsWithAD(txns), &proto)
 
 	// Note we don't need to test a box here since it will never be a local txn resource
 	addr := basics.Address{1, 1, 1}
@@ -327,9 +327,11 @@ func TestPopulatorWithLocalResources(t *testing.T) {
 	err := populator.populateResources(groupTracker)
 	require.NoError(t, err)
 
+	require.Len(t, populator.getPopulatedArrays(), 1)
+
 	require.Equal(
 		t,
-		PopulatedArrays{
+		PopulatedResourceArrays{
 			Assets:   []basics.AssetIndex{asset},
 			Apps:     []basics.AppIndex{app},
 			Accounts: []basics.Address{addr},
@@ -343,7 +345,7 @@ func TestPopulatorWithGlobalResources(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	txns := make([]transactions.SignedTxnWithAD, 3)
+	txns := make([]transactions.SignedTxn, 3)
 	txns[0].Txn.Type = protocol.ApplicationCallTx
 	txns[1].Txn.Type = protocol.ApplicationCallTx
 	txns[2].Txn.Type = protocol.ApplicationCallTx
@@ -355,7 +357,8 @@ func TestPopulatorWithGlobalResources(t *testing.T) {
 	populator := MakeResourcePopulator(txns, consensusParams)
 
 	proto := config.Consensus[protocol.ConsensusFuture]
-	groupTracker := makeGroupResourceTracker(txns, &proto)
+
+	groupTracker := makeGroupResourceTracker(transactions.WrapSignedTxnsWithAD(txns), &proto)
 
 	// Resources
 	addr2 := basics.Address{2}
@@ -446,6 +449,8 @@ func TestPopulatorWithGlobalResources(t *testing.T) {
 	require.Empty(t, pop3.Apps)
 	require.Empty(t, pop3.Assets)
 	require.ElementsMatch(t, pop3.Boxes, []logic.BoxRef{emptyBox})
+
+	require.Len(t, populator.getPopulatedArrays(), 4)
 
 	// The rest of the populated arrays should be empty
 	for i := 4; i < consensusParams.MaxTxGroupSize; i++ {

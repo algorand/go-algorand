@@ -72,6 +72,12 @@ type TxnGroupResult struct {
 	// will be placed in the corresponding `UnnamedResourcesAccessed` field in the appropriate
 	// TxnResult struct.
 	UnnamedResourcesAccessed *ResourceTracker
+
+	// PopulatedResourceArrays will be present if PopulateResourceArrays is true in the Request.
+	// In that case, it will be an array of resource arrays for each transaction in the group.
+	// There may be more resource arrays given than transactions in the group, which means more
+	// app call transactions would be needed for the extra resources.
+	PopulatedResourceArrays []PopulatedResourceArrays
 }
 
 func makeTxnGroupResult(txgroup []transactions.SignedTxn) TxnGroupResult {

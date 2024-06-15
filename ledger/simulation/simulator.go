@@ -34,14 +34,15 @@ import (
 
 // Request packs simulation related txn-group(s), and configurations that are overlapping the ones in real transactions.
 type Request struct {
-	Round                 basics.Round
-	TxnGroups             [][]transactions.SignedTxn
-	AllowEmptySignatures  bool
-	AllowMoreLogging      bool
-	AllowUnnamedResources bool
-	ExtraOpcodeBudget     uint64
-	TraceConfig           ExecTraceConfig
-	FixSigners            bool
+	Round                  basics.Round
+	TxnGroups              [][]transactions.SignedTxn
+	AllowEmptySignatures   bool
+	AllowMoreLogging       bool
+	AllowUnnamedResources  bool
+	ExtraOpcodeBudget      uint64
+	TraceConfig            ExecTraceConfig
+	FixSigners             bool
+	PopulateResourceArrays bool
 }
 
 // simulatorLedger patches the ledger interface to use a constant latest round.
@@ -376,5 +377,19 @@ func (s Simulator) Simulate(simulateRequest Request) (Result, error) {
 		}
 	}
 
+	if simulateRequest.PopulateResourceArrays {
+		consensusParams, err := s.ledger.ConsensusParams(s.ledger.start)
+		if err != nil {
+			return Result{}, err
+		}
+		resourcePopulator := MakeResourcePopulator(simulateRequest.TxnGroups[0], consensusParams)
+
+		err = resourcePopulator.populateResources(simulatorTracer.unnamedResourcePolicy.tracker)
+		if err != nil {
+			return Result{}, err
+		}
+
+		simulatorTracer.result.TxnGroups[0].PopulatedResourceArrays = resourcePopulator.getPopulatedArrays()
+	}
 	return *simulatorTracer.result, nil
 }

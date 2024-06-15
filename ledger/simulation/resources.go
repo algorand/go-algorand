@@ -714,15 +714,15 @@ func (r *TxnResources) addAddressFromField(addr basics.Address) {
 	}
 }
 
-// PopulatedArrays is a struct that contains all the populated arrays for a txn
-type PopulatedArrays struct {
+// PopulatedResourceArrays is a struct that contains all the populated arrays for a txn
+type PopulatedResourceArrays struct {
 	Accounts []basics.Address
 	Assets   []basics.AssetIndex
 	Apps     []basics.AppIndex
 	Boxes    []logic.BoxRef
 }
 
-func (r *TxnResources) getPopulatedArrays() PopulatedArrays {
+func (r *TxnResources) getPopulatedArrays() PopulatedResourceArrays {
 	accounts := make([]basics.Address, 0, len(r.Accounts)+len(r.StaticAccounts))
 	for account := range r.Accounts {
 		accounts = append(accounts, account)
@@ -751,7 +751,7 @@ func (r *TxnResources) getPopulatedArrays() PopulatedArrays {
 	boxes = append(boxes, r.Boxes...)
 	boxes = append(boxes, r.StaticBoxes...)
 
-	return PopulatedArrays{
+	return PopulatedResourceArrays{
 		Accounts: accounts,
 		Assets:   assets,
 		Apps:     apps,
@@ -762,6 +762,7 @@ func (r *TxnResources) getPopulatedArrays() PopulatedArrays {
 // ResourcePopulator is used to populate app resources for a transaction group
 type ResourcePopulator struct {
 	TxnResources []TxnResources
+	GroupSize    int
 }
 
 func (p *ResourcePopulator) addTransaction(txn transactions.Transaction, groupIndex int, consensusParams config.ConsensusParams) {
@@ -1036,10 +1037,23 @@ func (p *ResourcePopulator) populateResources(groupResourceTracker groupResource
 	return nil
 }
 
+func (p *ResourcePopulator) getPopulatedArrays() []PopulatedResourceArrays {
+	populatedArrays := []PopulatedResourceArrays{}
+	for i, resources := range p.TxnResources {
+		pop := resources.getPopulatedArrays()
+		if i >= p.GroupSize && len(pop.Accounts)+len(pop.Assets)+len(pop.Apps)+len(pop.Boxes) == 0 {
+			break
+		}
+		populatedArrays = append(populatedArrays, resources.getPopulatedArrays())
+	}
+	return populatedArrays
+}
+
 // MakeResourcePopulator creates a ResourcePopulator from a transaction group
-func MakeResourcePopulator(txnGroup []transactions.SignedTxnWithAD, consensusParams config.ConsensusParams) ResourcePopulator {
+func MakeResourcePopulator(txnGroup []transactions.SignedTxn, consensusParams config.ConsensusParams) ResourcePopulator {
 	populator := ResourcePopulator{
 		TxnResources: make([]TxnResources, consensusParams.MaxTxGroupSize),
+		GroupSize:    len(txnGroup),
 	}
 
 	for i, txn := range txnGroup {
