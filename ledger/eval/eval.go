@@ -1097,6 +1097,18 @@ func (eval *BlockEvaluator) TransactionGroup(txgroup []transactions.SignedTxnWit
 		}
 	}
 
+	// Check if any affected accounts dipped below MinBalance (unless they are
+	// completely zero, which means the account will be deleted.)
+	// Only do those checks if we are validating or generating. It is useful to skip them
+	// if we cannot provide account data that contains enough information to
+	// compute the correct minimum balance (the case with indexer which does not store it).
+	if eval.validate || eval.generate {
+		err := eval.checkMinBalance(cow)
+		if err != nil {
+			return err
+		}
+	}
+
 	eval.block.Payset = append(eval.block.Payset, txibs...)
 	eval.blockTxBytes += groupTxBytes
 	cow.commitToParent()
@@ -1211,18 +1223,6 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 	*txib, err = eval.block.EncodeSignedTxn(txn, applyData)
 	if err != nil {
 		return err
-	}
-
-	// Check if any affected accounts dipped below MinBalance (unless they are
-	// completely zero, which means the account will be deleted.)
-	// Only do those checks if we are validating or generating. It is useful to skip them
-	// if we cannot provide account data that contains enough information to
-	// compute the correct minimum balance (the case with indexer which does not store it).
-	if eval.validate || eval.generate {
-		err := eval.checkMinBalance(cow)
-		if err != nil {
-			return fmt.Errorf("transaction %v: %w", txid, err)
-		}
 	}
 
 	// Remember this txn
