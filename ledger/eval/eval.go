@@ -1109,6 +1109,16 @@ func (eval *BlockEvaluator) TransactionGroup(txgroup []transactions.SignedTxnWit
 		}
 	}
 
+	// Take the fees from each txn except for closed accounts, which already had the fee taken
+	for _, txad := range txgroup {
+		if txad.Txn.CloseRemainderTo.IsZero() {
+			err = cow.takeFee(&txad.Txn, &txad.SenderRewards, evalParams)
+			if err != nil {
+				return
+			}
+		}
+	}
+
 	eval.block.Payset = append(eval.block.Payset, txibs...)
 	eval.blockTxBytes += groupTxBytes
 	cow.commitToParent()
@@ -1251,9 +1261,13 @@ func (cs *roundCowState) takeFee(tx *transactions.Transaction, senderRewards *ba
 func (eval *BlockEvaluator) applyTransaction(tx transactions.Transaction, cow *roundCowState, evalParams *logic.EvalParams, gi int, ctr uint64) (ad transactions.ApplyData, err error) {
 	params := cow.ConsensusParams()
 
-	err = cow.takeFee(&tx, &ad.SenderRewards, evalParams)
-	if err != nil {
-		return
+	// Only take the fee right now for transactions that are closing an account
+	// The rest of the fees will be taken after the group evaluation
+	if !tx.CloseRemainderTo.IsZero() {
+		err = cow.takeFee(&tx, &ad.SenderRewards, evalParams)
+		if err != nil {
+			return
+		}
 	}
 
 	err = apply.Rekey(cow, &tx)
