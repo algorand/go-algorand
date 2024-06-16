@@ -107,6 +107,7 @@ func NewRouter(logger logging.Logger, node APINodeInterface, shutdown <-chan str
 		middleware.RemoveTrailingSlash())
 	e.Use(
 		middlewares.MakeLogger(logger),
+		middlewares.MakePNA(),
 		middlewares.MakeCORS(TokenHeader),
 	)
 
