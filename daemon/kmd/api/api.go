@@ -141,6 +141,7 @@ func Handler(sm *session.Manager, log logging.Logger, allowedOrigins []string, a
 	rootRouter := mux.NewRouter()
 
 	// Send the appropriate CORS headers
+	rootRouter.Use(AllowPNA())
 	rootRouter.Use(corsMiddleware(allowedOrigins))
 
 	// Handle OPTIONS requests
