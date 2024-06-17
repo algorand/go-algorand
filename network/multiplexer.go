@@ -108,10 +108,9 @@ func (m *Multiplexer) Process(msg ValidatedMessage) OutgoingMessage {
 	return OutgoingMessage{}
 }
 
-// RegisterHandlers registers the set of given message handlers.
-func (m *Multiplexer) RegisterHandlers(dispatch []TaggedMessageHandler) {
-	mp := make(map[Tag]MessageHandler)
-	if existingMap := m.getHandlersMap(); existingMap != nil {
+func register[T any](target *atomic.Value, dispatch []taggedMessageDispatcher[T]) {
+	mp := make(map[Tag]T)
+	if existingMap := getMap[T](target); existingMap != nil {
 		for k, v := range existingMap {
 			mp[k] = v
 		}
@@ -120,29 +119,21 @@ func (m *Multiplexer) RegisterHandlers(dispatch []TaggedMessageHandler) {
 		if _, has := mp[v.Tag]; has {
 			panic(fmt.Sprintf("Already registered a handler for tag %v", v.Tag))
 		}
-		mp[v.Tag] = v.MessageHandler
+		mp[v.Tag] = v.Dispatcher
 	}
-	m.msgHandlers.Store(mp)
+	target.Store(mp)
+}
+
+// RegisterHandlers registers the set of given message handlers.
+func (m *Multiplexer) RegisterHandlers(dispatch []TaggedMessageHandler) {
+	register[MessageHandler](&m.msgHandlers, dispatch)
 }
 
 // RegisterProcessors registers the set of given message handlers.
 func (m *Multiplexer) RegisterProcessors(dispatch []TaggedMessageProcessor) {
-	mp := make(map[Tag]MessageProcessor)
-	if existingMap := m.getProcessorsMap(); existingMap != nil {
-		for k, v := range existingMap {
-			mp[k] = v
-		}
-	}
-	for _, v := range dispatch {
-		if _, has := mp[v.Tag]; has {
-			panic(fmt.Sprintf("Already registered a handler for tag %v", v.Tag))
-		}
-		mp[v.Tag] = v.MessageProcessor
-	}
-	m.msgProcessors.Store(mp)
+	register[MessageProcessor](&m.msgProcessors, dispatch)
 }
 
-// ClearProcessors deregisters all the existing message handlers other than the one provided in the excludeTags list
 func clear[T any](target *atomic.Value, excludeTags []Tag) {
 	if len(excludeTags) == 0 {
 		target.Store(make(map[Tag]T))

@@ -239,18 +239,17 @@ func (f ProcessorHandleFunc) Handle(message ValidatedMessage) OutgoingMessage {
 	return f(message)
 }
 
-// TaggedMessageHandler receives one type of broadcast messages
-type TaggedMessageHandler struct {
+type taggedMessageDispatcher[T any] struct {
 	Tag
-	MessageHandler
+	Dispatcher T
 }
+
+// TaggedMessageHandler receives one type of broadcast messages
+type TaggedMessageHandler = taggedMessageDispatcher[MessageHandler]
 
 // TaggedMessageProcessor receives one type of broadcast messages
 // and performs two stage processing: validating and handling
-type TaggedMessageProcessor struct {
-	Tag
-	MessageProcessor
-}
+type TaggedMessageProcessor = taggedMessageDispatcher[MessageProcessor]
 
 // Propagate is a convenience function to save typing in the common case of a message handler telling us to propagate an incoming message
 // "return network.Propagate(msg)" instead of "return network.OutgoingMsg{network.Broadcast, msg.Tag, msg.Data}"
