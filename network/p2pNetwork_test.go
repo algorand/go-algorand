@@ -103,7 +103,7 @@ func TestP2PSubmitTX(t *testing.T) {
 	passThroughHandler := []TaggedMessageProcessor{
 		{
 			Tag: protocol.TxnTag,
-			MessageProcessor: struct {
+			MessageHandler: struct {
 				ProcessorValidateFunc
 				ProcessorHandleFunc
 			}{
@@ -195,7 +195,7 @@ func TestP2PSubmitTXNoGossip(t *testing.T) {
 	passThroughHandler := []TaggedMessageProcessor{
 		{
 			Tag: protocol.TxnTag,
-			MessageProcessor: struct {
+			MessageHandler: struct {
 				ProcessorValidateFunc
 				ProcessorHandleFunc
 			}{
@@ -835,7 +835,7 @@ func TestP2PRelay(t *testing.T) {
 		counterHandler := []TaggedMessageProcessor{
 			{
 				Tag: protocol.TxnTag,
-				MessageProcessor: struct {
+				MessageHandler: struct {
 					ProcessorValidateFunc
 					ProcessorHandleFunc
 				}{

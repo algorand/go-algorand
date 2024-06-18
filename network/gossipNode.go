@@ -241,7 +241,7 @@ func (f ProcessorHandleFunc) Handle(message ValidatedMessage) OutgoingMessage {
 
 type taggedMessageDispatcher[T any] struct {
 	Tag
-	Dispatcher T
+	MessageHandler T
 }
 
 // TaggedMessageHandler receives one type of broadcast messages
