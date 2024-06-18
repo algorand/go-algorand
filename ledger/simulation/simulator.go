@@ -333,6 +333,26 @@ func (s Simulator) Simulate(simulateRequest Request) (Result, error) {
 	}
 
 	if simulatorTracer.result.TxnGroups[0].UnnamedResourcesAccessed != nil {
+		if simulateRequest.PopulateResourceArrays {
+			consensusParams, err := s.ledger.ConsensusParams(s.ledger.start)
+			if err != nil {
+				return Result{}, err
+			}
+			resourcePopulator := MakeResourcePopulator(simulateRequest.TxnGroups[0], consensusParams)
+
+			txnResources := make([]ResourceTracker, len(simulatorTracer.result.TxnGroups[0].Txns))
+			for i := range simulatorTracer.result.TxnGroups[0].Txns {
+				txnResources[i] = *simulatorTracer.result.TxnGroups[0].Txns[i].UnnamedResourcesAccessed
+			}
+
+			err = resourcePopulator.populateResources(*simulatorTracer.result.TxnGroups[0].UnnamedResourcesAccessed, txnResources)
+			if err != nil {
+				return Result{}, err
+			}
+
+			simulatorTracer.result.TxnGroups[0].PopulatedResourceArrays = resourcePopulator.getPopulatedArrays()
+		}
+
 		// Remove private fields for easier test comparison
 		simulatorTracer.result.TxnGroups[0].UnnamedResourcesAccessed.removePrivateFields()
 		if !simulatorTracer.result.TxnGroups[0].UnnamedResourcesAccessed.HasResources() {
@@ -377,24 +397,5 @@ func (s Simulator) Simulate(simulateRequest Request) (Result, error) {
 		}
 	}
 
-	if simulateRequest.PopulateResourceArrays {
-		consensusParams, err := s.ledger.ConsensusParams(s.ledger.start)
-		if err != nil {
-			return Result{}, err
-		}
-		resourcePopulator := MakeResourcePopulator(simulateRequest.TxnGroups[0], consensusParams)
-
-		txnResources := make([]ResourceTracker, len(simulatorTracer.result.TxnGroups[0].Txns))
-		for i := range simulatorTracer.result.TxnGroups[0].Txns {
-			txnResources[i] = *simulatorTracer.result.TxnGroups[0].Txns[i].UnnamedResourcesAccessed
-		}
-
-		err = resourcePopulator.populateResources(*simulatorTracer.result.TxnGroups[0].UnnamedResourcesAccessed, txnResources)
-		if err != nil {
-			return Result{}, err
-		}
-
-		simulatorTracer.result.TxnGroups[0].PopulatedResourceArrays = resourcePopulator.getPopulatedArrays()
-	}
 	return *simulatorTracer.result, nil
 }

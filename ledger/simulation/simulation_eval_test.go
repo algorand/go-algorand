@@ -9344,3 +9344,84 @@ func TestFixSigners(t *testing.T) {
 		})
 	})
 }
+
+func TestPopulateResources(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	env := simulationtesting.PrepareSimulatorTest(t)
+
+	sender := env.Accounts[0]
+	foreignAccount := env.Accounts[1]
+
+	program := fmt.Sprintf(`#pragma version 8
+	txn ApplicationID
+	bz end
+	
+	addr %s
+	balance
+	pop
+	
+	end:
+	int 1
+	`, foreignAccount.Addr.String())
+
+	appID := env.CreateApp(sender.Addr, simulationtesting.AppParams{
+		ApprovalProgram:   program,
+		ClearStateProgram: "#pragma version 8\nint 1",
+	})
+
+	appCall := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:          protocol.ApplicationCallTx,
+		Sender:        sender.Addr,
+		ApplicationID: appID,
+	})
+
+	proto := env.TxnInfo.CurrentProtocolParams()
+
+	expectedTxnResources := &simulation.ResourceTracker{
+		MaxAccounts:  proto.MaxAppTxnAccounts + proto.MaxAppTxnForeignApps,
+		MaxAssets:    proto.MaxAppTxnForeignAssets,
+		MaxApps:      proto.MaxAppTxnForeignApps,
+		MaxBoxes:     proto.MaxAppBoxReferences,
+		MaxTotalRefs: proto.MaxAppTotalTxnReferences,
+	}
+
+	expectedTxnResources.Accounts = mapWithKeys([]basics.Address{foreignAccount.Addr}, struct{}{})
+
+	expectedPopulatedArrays := []simulation.PopulatedResourceArrays{
+		{
+			Accounts: []basics.Address{foreignAccount.Addr},
+			Assets:   []basics.AssetIndex{},
+			Apps:     []basics.AppIndex{},
+			Boxes:    []logic.BoxRef{},
+		},
+	}
+
+	runSimulationTestCase(t, env, simulationTestCase{
+		input: simulation.Request{
+			TxnGroups:              [][]transactions.SignedTxn{{appCall.SignedTxn()}},
+			AllowEmptySignatures:   true,
+			AllowUnnamedResources:  true,
+			PopulateResourceArrays: true,
+		},
+		expected: simulation.Result{
+			Version:   simulation.ResultLatestVersion,
+			LastRound: env.TxnInfo.LatestRound(),
+			EvalOverrides: simulation.ResultEvalOverrides{
+				AllowEmptySignatures:  true,
+				AllowUnnamedResources: true,
+			},
+			TxnGroups: []simulation.TxnGroupResult{{
+				Txns: []simulation.TxnResult{{
+					AppBudgetConsumed:        ignoreAppBudgetConsumed,
+					UnnamedResourcesAccessed: expectedTxnResources,
+				}},
+				PopulatedResourceArrays:  expectedPopulatedArrays,
+				AppBudgetConsumed:        ignoreAppBudgetConsumed,
+				AppBudgetAdded:           700,
+				UnnamedResourcesAccessed: nil,
+			}},
+		},
+	})
+}
