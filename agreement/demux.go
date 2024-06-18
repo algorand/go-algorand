@@ -114,7 +114,7 @@ func (d *demux) tokenizeMessages(ctx context.Context, net Network, tag protocol.
 		defer func() {
 			close(decoded)
 		}()
-		util.SetGoroutineLabels("func", "demux.tokenizeMessages", "tag", string(tag))
+		util.SetGoroutineLabels("tokenizeTag", string(tag))
 		for {
 			select {
 			case raw, ok := <-networkMessages:

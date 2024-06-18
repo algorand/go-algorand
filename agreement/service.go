@@ -25,7 +25,6 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/util"
 	"github.com/algorand/go-algorand/util/db"
 	"github.com/algorand/go-algorand/util/execpool"
 	"github.com/algorand/go-algorand/util/timers"
@@ -190,7 +189,6 @@ func (s *Service) DumpDemuxQueues(w io.Writer) {
 
 // demuxLoop repeatedly executes pending actions and then requests the next event from the Service.demux.
 func (s *Service) demuxLoop(ctx context.Context, input chan<- externalEvent, output <-chan []action, ready <-chan externalDemuxSignals) {
-	util.SetGoroutineLabels("func", "agreement.demuxLoop")
 	for a := range output {
 		s.do(ctx, a)
 		extSignals := <-ready
@@ -215,7 +213,6 @@ func (s *Service) demuxLoop(ctx context.Context, input chan<- externalEvent, out
 // 3. Drive the state machine with this input to obtain a slice of pending actions.
 // 4. If necessary, persist state to disk.
 func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, ready chan<- externalDemuxSignals) {
-	util.SetGoroutineLabels("func", "agreement.mainLoop")
 	// setup
 	var clock timers.Clock[TimeoutType]
 	var router rootRouter

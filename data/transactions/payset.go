@@ -19,19 +19,12 @@ package transactions
 import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/msgp/msgp"
 )
 
 type (
 	// A Payset represents a common, unforgeable, consistent, ordered set of SignedTxn objects.
 	//msgp:allocbound Payset 100000
 	Payset []SignedTxnInBlock
-)
-
-type (
-	// A Payset represents a common, unforgeable, consistent, ordered set of SignedTxn objects.
-	//msgp:allocbound Payset 100000
-	RawPayset msgp.Raw
 )
 
 // CommitFlat returns a commitment to the Payset, as a flat array.

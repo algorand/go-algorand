@@ -296,7 +296,6 @@ func (handler *TxHandler) backlogWorker() {
 	// Note: TestIncomingTxHandle and TestIncomingTxGroupHandle emulate this function.
 	// Changes to the behavior in this function should be reflected in the test.
 	defer handler.backlogWg.Done()
-	util.SetGoroutineLabels("func", "TxHandler.backlogWorker")
 	for {
 		// prioritize the postVerificationQueue
 		select {

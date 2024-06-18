@@ -26,7 +26,6 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
-	"github.com/algorand/go-algorand/util"
 )
 
 type blockDeltaPair struct {
@@ -46,7 +45,6 @@ type blockNotifier struct {
 
 func (bn *blockNotifier) worker() {
 	defer bn.closing.Done()
-	util.SetGoroutineLabels("func", "blockNotifier.worker")
 	bn.mu.Lock()
 
 	for {
