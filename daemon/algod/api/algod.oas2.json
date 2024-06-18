@@ -178,6 +178,44 @@
         }
       }
     },
+    "/debug/settings/pprof": {
+      "get": {
+        "description": "Retrieves the current settings for blocking and mutex profiles",
+        "tags": [
+          "private"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "operationId": "GetDebugSettingsProf",
+        "responses": {
+          "200": {
+            "$ref": "#/responses/DebugSettingsProfResponse"
+          }
+        }
+      },
+      "put": {
+        "description": "Enables blocking and mutex profiles, and returns the old settings",
+        "tags": [
+          "private"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "operationId": "PutDebugSettingsProf",
+        "responses": {
+          "200": {
+            "$ref": "#/responses/DebugSettingsProfResponse"
+          }
+        }
+      }
+    },
     "/v2/accounts/{address}": {
       "get": {
         "description": "Given a specific account public key, this call returns the accounts status, balance and spendable amounts",
@@ -3906,6 +3944,10 @@
         },
         "exec-trace-config": {
           "$ref": "#/definitions/SimulateTraceConfig"
+        },
+        "fix-signers": {
+          "description": "If true, signers for transactions that are missing signatures will be fixed during evaluation.",
+          "type": "boolean"
         }
       }
     },
@@ -4050,6 +4092,26 @@
           "items": {
             "type": "string"
           }
+        }
+      }
+    },
+    "DebugSettingsProf": {
+      "description": "algod mutex and blocking profiling state.",
+      "type": "object",
+      "title": "algod mutex and blocking profiling state.",
+      "tags": [
+        "private"
+      ],
+      "properties": {
+        "block-rate": {
+          "description": "The rate of blocking events. The profiler aims to sample an average of one blocking event per rate nanoseconds spent blocked. To turn off profiling entirely, pass rate 0.",
+          "example": 1000,
+          "type": "integer"
+        },
+        "mutex-rate": {
+          "description": "The rate of mutex events. On average 1/rate events are reported. To turn off profiling entirely, pass rate 0",
+          "example": 1000,
+          "type": "integer"
         }
       }
     },
@@ -4229,6 +4291,11 @@
         },
         "unnamed-resources-accessed": {
           "$ref": "#/definitions/SimulateUnnamedResourcesAccessed"
+        },
+        "fixed-signer":{
+          "description": "The account that needed to sign this transaction when no signature was provided and the provided signer was incorrect.",
+          "type": "string",
+          "x-algorand-format": "Address"
         }
       }
     },
@@ -4335,6 +4402,10 @@
         "extra-opcode-budget": {
           "description": "The extra opcode budget added to each transaction group during simulation",
           "type": "integer"
+        },
+        "fix-signers": {
+          "description": "If true, signers for transactions that are missing signatures will be fixed during evaluation.",
+          "type": "boolean"
         }
       }
     },
@@ -5499,6 +5570,12 @@
       "description": "VersionsResponse is the response to 'GET /versions'",
       "schema": {
         "$ref": "#/definitions/Version"
+      }
+    },
+    "DebugSettingsProfResponse": {
+      "description": "DebugPprof is the response to the /debug/extra/pprof endpoint",
+      "schema": {
+        "$ref": "#/definitions/DebugSettingsProf"
       }
     }
   },

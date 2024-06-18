@@ -26,8 +26,10 @@ import (
 	"math"
 	"net/http"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/labstack/echo/v4"
@@ -1208,6 +1210,7 @@ type PreEncodedSimulateTxnResult struct {
 	LogicSigBudgetConsumed   *uint64                                 `codec:"logic-sig-budget-consumed,omitempty"`
 	TransactionTrace         *model.SimulationTransactionExecTrace   `codec:"exec-trace,omitempty"`
 	UnnamedResourcesAccessed *model.SimulateUnnamedResourcesAccessed `codec:"unnamed-resources-accessed,omitempty"`
+	FixedSigner              *string                                 `codec:"fixed-signer,omitempty"`
 }
 
 // PreEncodedSimulateTxnGroupResult mirrors model.SimulateTransactionGroupResult
@@ -1244,6 +1247,7 @@ type PreEncodedSimulateRequest struct {
 	AllowUnnamedResources bool                                        `codec:"allow-unnamed-resources,omitempty"`
 	ExtraOpcodeBudget     uint64                                      `codec:"extra-opcode-budget,omitempty"`
 	ExecTraceConfig       simulation.ExecTraceConfig                  `codec:"exec-trace-config,omitempty"`
+	FixSigners            bool                                        `codec:"fix-signers,omitempty"`
 }
 
 // SimulateTransaction simulates broadcasting a raw transaction to the network, returning relevant simulation results.
@@ -2082,4 +2086,67 @@ func (v2 *Handlers) SetBlockTimeStampOffset(ctx echo.Context, offset uint64) err
 		return badRequest(ctx, err, fmt.Sprintf(errFailedSettingTimeStampOffset, err), v2.Log)
 	}
 	return ctx.NoContent(http.StatusOK)
+}
+
+// savedBlockingRate is the current blocking rate
+var savedBlockingRate atomic.Int32
+
+// GetDebugSettingsProf returns the current mutex and blocking rates.
+func (v2 *Handlers) GetDebugSettingsProf(ctx echo.Context) error {
+	mutexRate := uint64(runtime.SetMutexProfileFraction(-1))
+	blockingRate := uint64(savedBlockingRate.Load())
+
+	response := model.DebugSettingsProf{
+		MutexRate: &mutexRate,
+		BlockRate: &blockingRate,
+	}
+
+	return ctx.JSON(http.StatusOK, response)
+}
+
+// PutDebugSettingsProf sets the mutex and blocking rates and returns the old values.
+func (v2 *Handlers) PutDebugSettingsProf(ctx echo.Context) error {
+	req := ctx.Request()
+	buf := new(bytes.Buffer)
+	req.Body = http.MaxBytesReader(nil, req.Body, 128)
+	_, err := buf.ReadFrom(ctx.Request().Body)
+	if err != nil {
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
+	data := buf.Bytes()
+
+	var opts model.DebugSettingsProf
+	err = decode(protocol.JSONStrictHandle, data, &opts)
+	if err != nil {
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
+
+	var response model.DebugSettingsProf
+
+	// validate input fiest
+	if opts.MutexRate != nil && *opts.MutexRate > math.MaxInt32 {
+		err = errors.New("blocking rate cannot be larger than max int32 value")
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
+	if opts.BlockRate != nil && *opts.BlockRate > math.MaxInt32 {
+		err = errors.New("blocking rate cannot be larger than max int32 value")
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
+
+	if opts.MutexRate != nil {
+		newMutexRate := int(*opts.MutexRate)
+		oldMutexRate := uint64(runtime.SetMutexProfileFraction(newMutexRate))
+		response.MutexRate = &oldMutexRate
+	}
+
+	if opts.BlockRate != nil {
+		newBlockingRate := int(*opts.BlockRate)
+		runtime.SetBlockProfileRate(newBlockingRate)
+
+		oldBlockingRate := uint64(savedBlockingRate.Load())
+		response.BlockRate = &oldBlockingRate
+		savedBlockingRate.Store(int32(newBlockingRate))
+	}
+
+	return ctx.JSON(http.StatusOK, response)
 }

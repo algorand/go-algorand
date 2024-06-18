@@ -23,7 +23,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-//go:generate stringer -type=TxnField,GlobalField,AssetParamsField,AppParamsField,AcctParamsField,AssetHoldingField,OnCompletionConstType,EcdsaCurve,EcGroup,Base64Encoding,JSONRefType,VrfStandard,BlockField -output=fields_string.go
+//go:generate stringer -type=TxnField,GlobalField,AssetParamsField,AppParamsField,AcctParamsField,AssetHoldingField,OnCompletionConstType,EcdsaCurve,EcGroup,Base64Encoding,JSONRefType,VoterParamsField,VrfStandard,BlockField -output=fields_string.go
 
 // FieldSpec unifies the various specs for assembly, disassembly, and doc generation.
 type FieldSpec interface {
@@ -538,6 +538,21 @@ const (
 	// GenesisHash is the genesis hash for the network
 	GenesisHash
 
+	// PayoutsEnabled is whether block proposal payouts are enabled
+	PayoutsEnabled
+
+	// PayoutsGoOnlineFee is the fee required in a keyreg transaction to make an account incentive eligible
+	PayoutsGoOnlineFee
+
+	// PayoutsPercent is the percentage of transaction fees in a block that can be paid to the block proposer.
+	PayoutsPercent
+
+	// PayoutsMinBalance is the minimum algo balance an account must have to receive block payouts (in the agreement round).
+	PayoutsMinBalance
+
+	// PayoutsMaxBalance is the maximum algo balance an account can have to receive block payouts (in the agreement round).
+	PayoutsMaxBalance
+
 	invalidGlobalField // compile-time constant for number of fields
 )
 
@@ -603,6 +618,17 @@ var globalFieldSpecs = [...]globalFieldSpec{
 	{AssetOptInMinBalance, StackUint64, modeAny, 10,
 		"The additional minimum balance required to opt-in to an asset."},
 	{GenesisHash, StackBytes32, modeAny, 10, "The Genesis Hash for the network."},
+
+	{PayoutsEnabled, StackBoolean, modeAny, incentiveVersion,
+		"Whether block proposal payouts are enabled."},
+	{PayoutsGoOnlineFee, StackUint64, modeAny, incentiveVersion,
+		"The fee required in a keyreg transaction to make an account incentive eligible."},
+	{PayoutsPercent, StackUint64, modeAny, incentiveVersion,
+		"The percentage of transaction fees in a block that can be paid to the block proposer."},
+	{PayoutsMinBalance, StackUint64, modeAny, incentiveVersion,
+		"The minimum algo balance an account must have in the agreement round to receive block payouts in the proposal round."},
+	{PayoutsMaxBalance, StackUint64, modeAny, incentiveVersion,
+		"The maximum algo balance an account can have in the agreement round to receive block payouts in the proposal round."},
 }
 
 func globalFieldSpecByField(f GlobalField) (globalFieldSpec, bool) {
@@ -1319,6 +1345,14 @@ const (
 	// AcctTotalBoxBytes is the number of bytes in all boxes of this app account
 	AcctTotalBoxBytes
 
+	// AcctIncentiveEligible is whether this account opted into block payouts by
+	// paying extra in `keyreg`. Does not reflect eligibility based on balance.
+	AcctIncentiveEligible
+	// AcctLastProposed is the last time this account proposed. Does not include _this_ round.
+	AcctLastProposed
+	// AcctLastHeartbeat is the last heartbeat from this account.
+	AcctLastHeartbeat
+
 	// AcctTotalAppSchema - consider how to expose
 
 	invalidAcctParamsField // compile-time constant for number of fields
@@ -1363,6 +1397,10 @@ var acctParamsFieldSpecs = [...]acctParamsFieldSpec{
 	{AcctTotalAssets, StackUint64, 8, "The numbers of ASAs held by this account (including ASAs this account created)."},
 	{AcctTotalBoxes, StackUint64, boxVersion, "The number of existing boxes created by this account's app."},
 	{AcctTotalBoxBytes, StackUint64, boxVersion, "The total number of bytes used by this account's app's box keys and values."},
+
+	{AcctIncentiveEligible, StackBoolean, incentiveVersion, "Has this account opted into block payouts"},
+	{AcctLastProposed, StackUint64, incentiveVersion, "The round number of the last block this account proposed."},
+	{AcctLastHeartbeat, StackUint64, incentiveVersion, "The round number of the last block this account sent a heartbeat."},
 }
 
 func acctParamsFieldSpecByField(f AcctParamsField) (acctParamsFieldSpec, bool) {
@@ -1386,6 +1424,78 @@ var AcctParamsFields = FieldGroup{
 	"acct_params", "Fields",
 	acctParamsFieldNames[:],
 	acctParamsFieldSpecByName,
+}
+
+// VoterParamsField is an enum for `voter_params_get` opcode
+type VoterParamsField int
+
+const (
+	// VoterBalance is the balance, with pending rewards, from the balance
+	// round.  It is 0 if the account was offline then.
+	VoterBalance VoterParamsField = iota
+
+	// expose voter keys?
+
+	// VoterIncentiveEligible is whether this account opted into block payouts
+	// by paying extra in `keyreg`. Does not reflect eligibility based on
+	// balance. The value is returned for the balance round and is _false_ if
+	// the account was offline then.
+	VoterIncentiveEligible
+
+	invalidVoterParamsField // compile-time constant for number of fields
+)
+
+var voterParamsFieldNames [invalidVoterParamsField]string
+
+type voterParamsFieldSpec struct {
+	field   VoterParamsField
+	ftype   StackType
+	version uint64
+	doc     string
+}
+
+func (fs voterParamsFieldSpec) Field() byte {
+	return byte(fs.field)
+}
+func (fs voterParamsFieldSpec) Type() StackType {
+	return fs.ftype
+}
+func (fs voterParamsFieldSpec) OpVersion() uint64 {
+	return incentiveVersion
+}
+func (fs voterParamsFieldSpec) Version() uint64 {
+	return fs.version
+}
+func (fs voterParamsFieldSpec) Note() string {
+	return fs.doc
+}
+
+var voterParamsFieldSpecs = [...]voterParamsFieldSpec{
+	{VoterBalance, StackUint64, 6, "Online stake in microalgos"},
+	{VoterIncentiveEligible, StackBoolean, incentiveVersion, "Had this account opted into block payouts"},
+}
+
+func voterParamsFieldSpecByField(f VoterParamsField) (voterParamsFieldSpec, bool) {
+	if int(f) >= len(voterParamsFieldSpecs) {
+		return voterParamsFieldSpec{}, false
+	}
+	return voterParamsFieldSpecs[f], true
+}
+
+var voterParamsFieldSpecByName = make(voterNameSpecMap, len(voterParamsFieldNames))
+
+type voterNameSpecMap map[string]voterParamsFieldSpec
+
+func (s voterNameSpecMap) get(name string) (FieldSpec, bool) {
+	fs, ok := s[name]
+	return fs, ok
+}
+
+// VoterParamsFields describes voter_params_get's immediates
+var VoterParamsFields = FieldGroup{
+	"voter_params", "Fields",
+	voterParamsFieldNames[:],
+	voterParamsFieldSpecByName,
 }
 
 func init() {
@@ -1477,6 +1587,13 @@ func init() {
 		equal(int(s.field), i)
 		acctParamsFieldNames[i] = s.field.String()
 		acctParamsFieldSpecByName[s.field.String()] = s
+	}
+
+	equal(len(voterParamsFieldSpecs), len(voterParamsFieldNames))
+	for i, s := range voterParamsFieldSpecs {
+		equal(int(s.field), i)
+		voterParamsFieldNames[i] = s.field.String()
+		voterParamsFieldSpecByName[s.field.String()] = s
 	}
 
 	txnTypeMap = make(map[string]uint64)

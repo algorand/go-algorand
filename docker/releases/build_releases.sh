@@ -76,7 +76,7 @@ case $NETWORK in
 esac
 
 IFS='' read -r -d '' DOCKERFILE <<EOF
-FROM ubuntu
+FROM ubuntu:22.04
 
 RUN apt-get update && apt-get -y dist-upgrade && apt-get install -y ca-certificates curl --no-install-recommends && \
     curl --silent -L https://github.com/algorand/go-algorand-doc/blob/master/downloads/installers/linux_amd64/install_master_linux-amd64.tar.gz?raw=true | tar xzf - && \
@@ -91,7 +91,7 @@ then
   CACHED_ARG='--no-cache'
 fi
 
-if ! echo "$DOCKERFILE" | docker build $CACHED_ARG -t "algorand/$IMAGE_NAME:$TAGNAME" -
+if ! echo "$DOCKERFILE" | docker build --platform=linux/amd64 $CACHED_ARG -t "algorand/$IMAGE_NAME:$TAGNAME" -
 then
     echo -e "\n$RED_FG[$0]$END_FG_COLOR The algorand/$IMAGE_NAME:$TAGNAME image could not be built."
     exit 1

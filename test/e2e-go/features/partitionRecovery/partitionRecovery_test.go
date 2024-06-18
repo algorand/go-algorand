@@ -251,6 +251,7 @@ func TestPartitionHalfOffline(t *testing.T) {
 		a.NoError(err)
 		// adjust the refresh interval for one hour, so that we won't be reloading the participation key during this test.
 		cfg.ParticipationKeysRefreshInterval = time.Hour
+		cfg.GoMemLimit = 1 * 1024 * 1024 * 1024 // 1GB
 		cfg.SaveToDisk(nodeDir)
 	}
 	fixture.Start()

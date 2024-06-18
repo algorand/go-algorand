@@ -1179,7 +1179,7 @@ const maxAppArgs = 16
 // minus 1 for the final app argument becoming a tuple of the remaining method args
 const methodArgsTupleThreshold = maxAppArgs - 2
 
-// parseArgJSONtoByteSlice convert input method arguments to ABI encoded bytes
+// parseMethodArgJSONtoByteSlice convert input method arguments to ABI encoded bytes
 // it converts funcArgTypes into a tuple type and apply changes over input argument string (in JSON format)
 // if there are greater or equal to 15 inputs, then we compact the tailing inputs into one tuple
 func parseMethodArgJSONtoByteSlice(argTypes []string, jsonArgs []string, applicationArgs *[][]byte) error {

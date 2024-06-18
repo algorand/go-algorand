@@ -520,6 +520,16 @@
         },
         "description": "Teal compile Result"
       },
+      "DebugSettingsProfResponse": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/DebugSettingsProf"
+            }
+          }
+        },
+        "description": "DebugPprof is the response to the /debug/extra/pprof endpoint"
+      },
       "DisassembleResponse": {
         "content": {
           "application/json": {
@@ -1790,6 +1800,23 @@
         "title": "BuildVersion contains the current algod build version information.",
         "type": "object"
       },
+      "DebugSettingsProf": {
+        "description": "algod mutex and blocking profiling state.",
+        "properties": {
+          "block-rate": {
+            "description": "The rate of blocking events. The profiler aims to sample an average of one blocking event per rate nanoseconds spent blocked. To turn off profiling entirely, pass rate 0.",
+            "example": 1000,
+            "type": "integer"
+          },
+          "mutex-rate": {
+            "description": "The rate of mutex events. On average 1/rate events are reported. To turn off profiling entirely, pass rate 0",
+            "example": 1000,
+            "type": "integer"
+          }
+        },
+        "title": "algod mutex and blocking profiling state.",
+        "type": "object"
+      },
       "DryrunRequest": {
         "description": "Request data type for dryrun endpoint. Given the Transactions and simulated ledger state upload, run TEAL scripts and return debugging information.",
         "properties": {
@@ -2275,6 +2302,10 @@
             "description": "Applies extra opcode budget during simulation for each transaction group.",
             "type": "integer"
           },
+          "fix-signers": {
+            "description": "If true, signers for transactions that are missing signatures will be fixed during evaluation.",
+            "type": "boolean"
+          },
           "round": {
             "description": "If provided, specifies the round preceding the simulation. State changes through this round will be used to run this simulation. Usually only the 4 most recent rounds will be available (controlled by the node config value MaxAcctLookback). If not specified, defaults to the latest available round.",
             "type": "integer"
@@ -2381,6 +2412,11 @@
           "exec-trace": {
             "$ref": "#/components/schemas/SimulationTransactionExecTrace"
           },
+          "fixed-signer": {
+            "description": "The account that needed to sign this transaction when no signature was provided and the provided signer was incorrect.",
+            "type": "string",
+            "x-algorand-format": "Address"
+          },
           "logic-sig-budget-consumed": {
             "description": "Budget used during execution of a logic sig transaction.",
             "type": "integer"
@@ -2466,6 +2502,10 @@
           "extra-opcode-budget": {
             "description": "The extra opcode budget added to each transaction group during simulation",
             "type": "integer"
+          },
+          "fix-signers": {
+            "description": "If true, signers for transactions that are missing signatures will be fixed during evaluation.",
+            "type": "boolean"
           },
           "max-log-calls": {
             "description": "The maximum log calls one can make during simulation",
@@ -2748,6 +2788,46 @@
   },
   "openapi": "3.0.1",
   "paths": {
+    "/debug/settings/pprof": {
+      "get": {
+        "description": "Retrieves the current settings for blocking and mutex profiles",
+        "operationId": "GetDebugSettingsProf",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DebugSettingsProf"
+                }
+              }
+            },
+            "description": "DebugPprof is the response to the /debug/extra/pprof endpoint"
+          }
+        },
+        "tags": [
+          "private"
+        ]
+      },
+      "put": {
+        "description": "Enables blocking and mutex profiles, and returns the old settings",
+        "operationId": "PutDebugSettingsProf",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DebugSettingsProf"
+                }
+              }
+            },
+            "description": "DebugPprof is the response to the /debug/extra/pprof endpoint"
+          }
+        },
+        "tags": [
+          "private"
+        ]
+      }
+    },
     "/genesis": {
       "get": {
         "description": "Returns the entire genesis file in json.",

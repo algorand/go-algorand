@@ -49,6 +49,14 @@ func (e *NodeNotRunningError) Error() string {
 	return fmt.Sprintf("no running node in directory '%s'", e.algodDataDir)
 }
 
+// NodeKilledError thrown when StopAlgod is called but the node was killed by SIGKILL instead of a clean shutdown with SIGTERM
+type NodeKilledError struct {
+}
+
+func (e *NodeKilledError) Error() string {
+	return "node was killed"
+}
+
 // MissingDataDirError thrown when StopAlgod is called but requested directory does not exist
 type MissingDataDirError struct {
 	algodDataDir string
@@ -176,6 +184,7 @@ func (nc *NodeController) StopAlgod() (err error) {
 		if killed {
 			// delete the pid file.
 			os.Remove(nc.algodPidFile)
+			return &NodeKilledError{}
 		}
 	} else {
 		return &NodeNotRunningError{algodDataDir: nc.algodDataDir}

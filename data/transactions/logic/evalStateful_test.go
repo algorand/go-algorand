@@ -348,6 +348,8 @@ log
 			"int 0; int 0; app_params_get AppApprovalProgram": 5,
 			"byte 0x01; log":                                  5,
 			sender + "acct_params_get AcctBalance":            7,
+			sender + "voter_params_get VoterBalance":          11,
+			"online_stake":                                    11,
 
 			"byte 0x1234; int 12; box_create":             8,
 			"byte 0x1234; int 12; int 4; box_extract":     8,
@@ -487,6 +489,9 @@ func testApp(t *testing.T, program string, ep *EvalParams, problems ...string) (
 	return testAppBytes(t, ops.Program, ep, problems...)
 }
 
+// testAppCreator is the creator of the 888 app that is inserted when testing an app call
+const testAppCreator = "47YPQTIGQEO7T4Y4RWDYWEKV6RTR2UNBQXBABEEGM72ESWDQNCQ52OPASU"
+
 func testAppBytes(t *testing.T, program []byte, ep *EvalParams, problems ...string) (transactions.EvalDelta, error) {
 	t.Helper()
 	if ep == nil {
@@ -497,6 +502,12 @@ func testAppBytes(t *testing.T, program []byte, ep *EvalParams, problems ...stri
 	aid := ep.TxnGroup[0].Txn.ApplicationID
 	if aid == 0 {
 		aid = basics.AppIndex(888)
+		// we're testing an app call without the caller specifying details about
+		// the app, so conjure up boring app params to make the `global
+		// AppCreator` work.
+		addr, err := basics.UnmarshalChecksumAddress(testAppCreator)
+		require.NoError(t, err)
+		ep.Ledger.(*Ledger).NewApp(addr, 888, basics.AppParams{})
 	}
 	return testAppFull(t, program, 0, aid, ep, problems...)
 }
@@ -1598,6 +1609,49 @@ func TestAcctParams(t *testing.T) {
 		ledger.NewAsset(tx.Sender, 3000, basics.AssetParams{})
 		test("txn Sender; acct_params_get AcctTotalAssetsCreated; assert; int 1; ==")
 		test("txn Sender; acct_params_get AcctTotalAssets; assert; int 1; ==")
+
+		if ep.Proto.LogicSigVersion < 11 {
+			return // the rest uses fields that came at 11
+		}
+		test("txn Sender; acct_params_get AcctIncentiveEligible; assert; !")
+		test("txn Sender; acct_params_get AcctLastHeartbeat; assert; !")
+		test("txn Sender; acct_params_get AcctLastProposed; assert; !")
+	})
+}
+
+func TestVoterParams(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// start at 11 for acct_params_get
+	testLogicRange(t, 11, 0, func(t *testing.T, ep *EvalParams, tx *transactions.Transaction, ledger *Ledger) {
+		test := func(source string) {
+			t.Helper()
+			testApp(t, source, ep)
+		}
+
+		test("txn Sender; voter_params_get VoterBalance; !; assert; int 0; ==")
+		test("txn Sender; voter_params_get VoterIncentiveEligible; !; assert; int 0; ==")
+
+		// The logic package test ledger just returns current values
+		ledger.NewAccount(tx.Sender, 42)
+		test("txn Sender; voter_params_get VoterBalance; assert; int 42; ==")
+		test("txn Sender; voter_params_get VoterIncentiveEligible; assert; !")
+	})
+}
+
+func TestOnlineStake(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// start at 11 for online_stake
+	testLogicRange(t, 11, 0, func(t *testing.T, ep *EvalParams, tx *transactions.Transaction, ledger *Ledger) {
+		test := func(source string) {
+			t.Helper()
+			testApp(t, source, ep)
+		}
+
+		test("online_stake; int 3333000000; ==") // test ledger hard codes 3333 algos
 	})
 }
 

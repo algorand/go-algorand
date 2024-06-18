@@ -562,6 +562,15 @@ type BuildVersion struct {
 	Minor       uint64 `json:"minor"`
 }
 
+// DebugSettingsProf algod mutex and blocking profiling state.
+type DebugSettingsProf struct {
+	// BlockRate The rate of blocking events. The profiler aims to sample an average of one blocking event per rate nanoseconds spent blocked. To turn off profiling entirely, pass rate 0.
+	BlockRate *uint64 `json:"block-rate,omitempty"`
+
+	// MutexRate The rate of mutex events. On average 1/rate events are reported. To turn off profiling entirely, pass rate 0
+	MutexRate *uint64 `json:"mutex-rate,omitempty"`
+}
+
 // DryrunRequest Request data type for dryrun endpoint. Given the Transactions and simulated ledger state upload, run TEAL scripts and return debugging information.
 type DryrunRequest struct {
 	Accounts []Account     `json:"accounts"`
@@ -789,6 +798,9 @@ type SimulateRequest struct {
 	// ExtraOpcodeBudget Applies extra opcode budget during simulation for each transaction group.
 	ExtraOpcodeBudget *uint64 `json:"extra-opcode-budget,omitempty"`
 
+	// FixSigners If true, signers for transactions that are missing signatures will be fixed during evaluation.
+	FixSigners *bool `json:"fix-signers,omitempty"`
+
 	// Round If provided, specifies the round preceding the simulation. State changes through this round will be used to run this simulation. Usually only the 4 most recent rounds will be available (controlled by the node config value MaxAcctLookback). If not specified, defaults to the latest available round.
 	Round *uint64 `json:"round,omitempty"`
 
@@ -846,6 +858,9 @@ type SimulateTransactionResult struct {
 	// ExecTrace The execution trace of calling an app or a logic sig, containing the inner app call trace in a recursive way.
 	ExecTrace *SimulationTransactionExecTrace `json:"exec-trace,omitempty"`
 
+	// FixedSigner The account that needed to sign this transaction when no signature was provided and the provided signer was incorrect.
+	FixedSigner *string `json:"fixed-signer,omitempty"`
+
 	// LogicSigBudgetConsumed Budget used during execution of a logic sig transaction.
 	LogicSigBudgetConsumed *uint64 `json:"logic-sig-budget-consumed,omitempty"`
 
@@ -890,6 +905,9 @@ type SimulationEvalOverrides struct {
 
 	// ExtraOpcodeBudget The extra opcode budget added to each transaction group during simulation
 	ExtraOpcodeBudget *uint64 `json:"extra-opcode-budget,omitempty"`
+
+	// FixSigners If true, signers for transactions that are missing signatures will be fixed during evaluation.
+	FixSigners *bool `json:"fix-signers,omitempty"`
 
 	// MaxLogCalls The maximum log calls one can make during simulation
 	MaxLogCalls *uint64 `json:"max-log-calls,omitempty"`
@@ -1188,6 +1206,9 @@ type CompileResponse struct {
 	// Sourcemap JSON of the source map
 	Sourcemap *map[string]interface{} `json:"sourcemap,omitempty"`
 }
+
+// DebugSettingsProfResponse algod mutex and blocking profiling state.
+type DebugSettingsProfResponse = DebugSettingsProf
 
 // DisassembleResponse defines model for DisassembleResponse.
 type DisassembleResponse struct {
