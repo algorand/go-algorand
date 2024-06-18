@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -22,7 +22,8 @@ import (
 	"strings"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -35,7 +36,7 @@ import (
 )
 
 // DryrunRequest object uploaded to /v2/teal/dryrun
-// It is the same as generated.DryrunRequest but Txns deserialized properly.
+// It is the same as model.DryrunRequest but Txns deserialized properly.
 // Given the Transactions and simulated ledger state upload, run TEAL scripts and return debugging information.
 // This is also used for msgp-decoding
 type DryrunRequest struct {
@@ -43,9 +44,9 @@ type DryrunRequest struct {
 	Txns []transactions.SignedTxn `codec:"txns"` // not supposed to be serialized
 
 	// Optional, useful for testing Application Call txns.
-	Accounts []generated.Account `codec:"accounts"`
+	Accounts []model.Account `codec:"accounts"`
 
-	Apps []generated.Application `codec:"apps"`
+	Apps []model.Application `codec:"apps"`
 
 	// ProtocolVersion specifies a specific version string to operate under, otherwise whatever the current protocol of the network this algod is running in.
 	ProtocolVersion string `codec:"protocol-version"`
@@ -56,12 +57,12 @@ type DryrunRequest struct {
 	// LatestTimestamp is available to some TEAL scripts. Defaults to the latest confirmed timestamp this algod is attached to.
 	LatestTimestamp int64 `codec:"latest-timestamp"`
 
-	Sources []generated.DryrunSource `codec:"sources"`
+	Sources []model.DryrunSource `codec:"sources"`
 }
 
-// DryrunRequestFromGenerated converts generated.DryrunRequest to DryrunRequest field by fields
+// DryrunRequestFromGenerated converts model.DryrunRequest to DryrunRequest field by fields
 // and re-types Txns []transactions.SignedTxn
-func DryrunRequestFromGenerated(gdr *generated.DryrunRequest) (dr DryrunRequest, err error) {
+func DryrunRequestFromGenerated(gdr *model.DryrunRequest) (dr DryrunRequest, err error) {
 	dr.Txns = make([]transactions.SignedTxn, 0, len(gdr.Txns))
 	for _, raw := range gdr.Txns {
 		// no transactions.SignedTxn in OAS, map[string]interface{} is not good enough
@@ -88,7 +89,12 @@ func (dr *DryrunRequest) ExpandSources() error {
 	for i, s := range dr.Sources {
 		ops, err := logic.AssembleString(s.Source)
 		if err != nil {
-			return fmt.Errorf("dryrun Source[%d]: %v", i, err)
+			if len(ops.Errors) <= 1 {
+				return fmt.Errorf("dryrun Source[%d]: %w", i, err)
+			}
+			var sb strings.Builder
+			ops.ReportMultipleErrors("", &sb)
+			return fmt.Errorf("dryrun Source[%d]: %d errors\n%s", i, len(ops.Errors), sb.String())
 		}
 		switch s.FieldName {
 		case "lsig":
@@ -114,7 +120,7 @@ func (dr *DryrunRequest) ExpandSources() error {
 type dryrunDebugReceiver struct {
 	disassembly   string
 	lines         []string
-	history       []generated.DryrunState
+	history       []model.DryrunState
 	scratchActive []bool
 }
 
@@ -151,14 +157,14 @@ func (ddr *dryrunDebugReceiver) updateScratch() {
 	}
 }
 
-func (ddr *dryrunDebugReceiver) stateToState(state *logic.DebugState) generated.DryrunState {
-	st := generated.DryrunState{
+func (ddr *dryrunDebugReceiver) stateToState(state *logic.DebugState) model.DryrunState {
+	st := model.DryrunState{
 		Line: uint64(state.Line),
 		Pc:   uint64(state.PC),
 	}
-	st.Stack = make([]generated.TealValue, len(state.Stack))
+	st.Stack = make([]model.TealValue, len(state.Stack))
 	for i, v := range state.Stack {
-		st.Stack[i] = generated.TealValue{
+		st.Stack[i] = model.TealValue{
 			Uint:  v.Uint,
 			Bytes: v.Bytes,
 			Type:  uint64(v.Type),
@@ -169,9 +175,9 @@ func (ddr *dryrunDebugReceiver) stateToState(state *logic.DebugState) generated.
 		*st.Error = state.Error
 	}
 
-	scratch := make([]generated.TealValue, len(state.Scratch))
+	scratch := make([]model.TealValue, len(state.Scratch))
 	for i, v := range state.Scratch {
-		scratch[i] = generated.TealValue{
+		scratch[i] = model.TealValue{
 			Uint:  v.Uint,
 			Bytes: v.Bytes,
 			Type:  uint64(v.Type),
@@ -181,24 +187,22 @@ func (ddr *dryrunDebugReceiver) stateToState(state *logic.DebugState) generated.
 	return st
 }
 
-// Register is fired on program creation (DebuggerHook interface)
-func (ddr *dryrunDebugReceiver) Register(state *logic.DebugState) error {
+// Register is fired on program creation (logic.Debugger interface)
+func (ddr *dryrunDebugReceiver) Register(state *logic.DebugState) {
 	ddr.disassembly = state.Disassembly
 	ddr.lines = strings.Split(state.Disassembly, "\n")
-	return nil
 }
 
-// Update is fired on every step (DebuggerHook interface)
-func (ddr *dryrunDebugReceiver) Update(state *logic.DebugState) error {
+// Update is fired on every step (logic.Debugger interface)
+func (ddr *dryrunDebugReceiver) Update(state *logic.DebugState) {
 	st := ddr.stateToState(state)
 	ddr.history = append(ddr.history, st)
 	ddr.updateScratch()
-	return nil
 }
 
-// Complete is called when the program exits (DebuggerHook interface)
-func (ddr *dryrunDebugReceiver) Complete(state *logic.DebugState) error {
-	return ddr.Update(state)
+// Complete is called when the program exits (logic.Debugger interface)
+func (ddr *dryrunDebugReceiver) Complete(state *logic.DebugState) {
+	ddr.Update(state)
 }
 
 type dryrunLedger struct {
@@ -243,12 +247,16 @@ func (dl *dryrunLedger) BlockHdr(basics.Round) (bookkeeping.BlockHeader, error) 
 	return bookkeeping.BlockHeader{}, nil
 }
 
-func (dl *dryrunLedger) BlockHdrCached(basics.Round) (bookkeeping.BlockHeader, error) {
-	return bookkeeping.BlockHeader{}, nil
+func (dl *dryrunLedger) GenesisHash() crypto.Digest {
+	return crypto.Digest{}
 }
 
 func (dl *dryrunLedger) CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, ledgercore.Txlease) error {
 	return nil
+}
+
+func (dl *dryrunLedger) GetStateProofVerificationContext(_ basics.Round) (*ledgercore.StateProofVerificationContext, error) {
+	return nil, fmt.Errorf("dryrunLedger: GetStateProofVerificationContext, needed for state proof verification, is not implemented in dryrun")
 }
 
 func (dl *dryrunLedger) lookup(rnd basics.Round, addr basics.Address) (basics.AccountData, basics.Round, error) {
@@ -300,6 +308,32 @@ func (dl *dryrunLedger) LookupWithoutRewards(rnd basics.Round, addr basics.Addre
 	return ledgercore.ToAccountData(ad), rnd, nil
 }
 
+func (dl *dryrunLedger) LookupAgreement(rnd basics.Round, addr basics.Address) (basics.OnlineAccountData, error) {
+	// dryrun does not understand rewards, so we build the result without adding pending rewards.
+	// we also have no history, so we return current values
+	ad, _, err := dl.lookup(rnd, addr)
+	if err != nil || ad.Status != basics.Online {
+		return basics.OnlineAccountData{}, err
+	}
+	return basics.OnlineAccountData{
+		MicroAlgosWithRewards: ad.MicroAlgos,
+		VotingData: basics.VotingData{
+			VoteID:          ad.VoteID,
+			SelectionID:     ad.SelectionID,
+			StateProofID:    ad.StateProofID,
+			VoteFirstValid:  ad.VoteFirstValid,
+			VoteLastValid:   ad.VoteLastValid,
+			VoteKeyDilution: ad.VoteKeyDilution,
+		},
+		IncentiveEligible: ad.IncentiveEligible,
+	}, nil
+}
+
+func (dl *dryrunLedger) OnlineCirculation(rnd basics.Round, voteRnd basics.Round) (basics.MicroAlgos, error) {
+	// dryrun doesn't support setting the global online stake, so we'll just return a constant
+	return basics.Algos(1_000_000_000), nil // 1B
+}
+
 func (dl *dryrunLedger) LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error) {
 	ad, _, err := dl.lookup(rnd, addr)
 	if err != nil {
@@ -328,6 +362,10 @@ func (dl *dryrunLedger) LookupAsset(rnd basics.Round, addr basics.Address, aidx 
 		result.AssetHolding = &p
 	}
 	return result, nil
+}
+
+func (dl *dryrunLedger) LookupKv(rnd basics.Round, key string) ([]byte, error) {
+	return nil, fmt.Errorf("boxes not implemented in dry run")
 }
 
 func (dl *dryrunLedger) GetCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
@@ -377,7 +415,7 @@ func makeBalancesAdapter(dl *dryrunLedger, txn *transactions.Transaction, appIdx
 // if dr.Sources is set it overrides appropriate entires in stxn.Lsig.Logic or Apps[i]
 // important: dr.Accounts are not used for program lookup for application execution
 // important: dr.ProtocolVersion is used by underlying ledger implementation so that it must exist in config.Consensus
-func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
+func doDryrunRequest(dr *DryrunRequest, response *model.DryrunResponse) {
 	err := dr.ExpandSources()
 	if err != nil {
 		response.Error = err.Error()
@@ -393,7 +431,8 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 	proto := config.Consensus[protocol.ConsensusVersion(dr.ProtocolVersion)]
 	txgroup := transactions.WrapSignedTxnsWithAD(dr.Txns)
 	specials := transactions.SpecialAddresses{}
-	ep := logic.NewEvalParams(txgroup, &proto, &specials)
+	ep := logic.NewAppEvalParams(txgroup, &proto, &specials)
+	sep := logic.NewSigEvalParams(dr.Txns, &proto, &dl)
 
 	origEnableAppCostPooling := proto.EnableAppCostPooling
 	// Enable EnableAppCostPooling so that dryrun
@@ -412,14 +451,13 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 	}
 	ep.PooledApplicationBudget = &pooledAppBudget
 
-	response.Txns = make([]generated.DryrunTxnResult, len(dr.Txns))
+	response.Txns = make([]model.DryrunTxnResult, len(dr.Txns))
 	for ti, stxn := range dr.Txns {
-		var result generated.DryrunTxnResult
-		if len(stxn.Lsig.Logic) > 0 {
+		var result model.DryrunTxnResult
+		if !stxn.Lsig.Blank() {
 			var debug dryrunDebugReceiver
-			ep.Debugger = &debug
-			ep.SigLedger = &dl
-			pass, err := logic.EvalSignature(ti, ep)
+			sep.Tracer = logic.MakeEvalTracerDebuggerAdaptor(&debug)
+			pass, err := logic.EvalSignature(ti, sep)
 			var messages []string
 			result.Disassembly = debug.lines          // Keep backwards compat
 			result.LogicSigDisassembly = &debug.lines // Also add to Lsig specific
@@ -446,9 +484,9 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 			if stxn.Txn.OnCompletion == transactions.OptInOC {
 				if idx, ok := dl.accountsIn[stxn.Txn.Sender]; ok {
 					acct := dl.dr.Accounts[idx]
-					ls := generated.ApplicationLocalState{
+					ls := model.ApplicationLocalState{
 						Id:       uint64(appIdx),
-						KeyValue: new(generated.TealKeyValueStore),
+						KeyValue: new(model.TealKeyValueStore),
 					}
 					for _, app := range dr.Apps {
 						if basics.AppIndex(app.Id) == appIdx {
@@ -459,7 +497,7 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 						}
 					}
 					if acct.AppsLocalState == nil {
-						lss := []generated.ApplicationLocalState{ls}
+						lss := []model.ApplicationLocalState{ls}
 						acct.AppsLocalState = &lss
 					} else {
 						found := false
@@ -470,7 +508,7 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 							}
 						}
 						if !found {
-							(*acct.AppsLocalState) = append(*acct.AppsLocalState, ls)
+							*acct.AppsLocalState = append(*acct.AppsLocalState, ls)
 						}
 					}
 					dl.dr.Accounts[idx] = acct
@@ -501,7 +539,7 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 				messages[0] = fmt.Sprintf("uploaded state did not include app id %d referenced in txn[%d]", appIdx, ti)
 			} else {
 				var debug dryrunDebugReceiver
-				ep.Debugger = &debug
+				ep.Tracer = logic.MakeEvalTracerDebuggerAdaptor(&debug)
 				var program []byte
 				messages = make([]string, 1)
 				if stxn.Txn.OnCompletion == transactions.ClearStateOC {
@@ -519,13 +557,13 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 				result.AppCallTrace = &debug.history
 				result.GlobalDelta = StateDeltaToStateDelta(delta.GlobalDelta)
 				if len(delta.LocalDeltas) > 0 {
-					localDeltas := make([]generated.AccountStateDelta, 0, len(delta.LocalDeltas))
+					localDeltas := make([]model.AccountStateDelta, 0, len(delta.LocalDeltas))
 					for k, v := range delta.LocalDeltas {
 						ldaddr, err2 := stxn.Txn.AddressByIndex(k, stxn.Txn.Sender)
 						if err2 != nil {
 							messages = append(messages, err2.Error())
 						}
-						localDeltas = append(localDeltas, generated.AccountStateDelta{
+						localDeltas = append(localDeltas, model.AccountStateDelta{
 							Address: ldaddr.String(),
 							Delta:   *StateDeltaToStateDelta(v),
 						})
@@ -550,11 +588,8 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 				// This is necessary because the fields can only be represented as unsigned
 				// integers, so a negative cost would underflow. The two fields also provide
 				// more information, which can be useful for testing purposes.
-				// cost = budgetConsumed - budgetAdded
-				netCost := uint64(cost)
 				budgetAdded := uint64(proto.MaxAppProgramCost * numInnerTxns(delta))
 				budgetConsumed := uint64(cost) + budgetAdded
-				result.Cost = &netCost
 				result.BudgetAdded = &budgetAdded
 				result.BudgetConsumed = &budgetConsumed
 				maxCurrentBudget = pooledAppBudget
@@ -581,15 +616,15 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 	}
 }
 
-// StateDeltaToStateDelta converts basics.StateDelta to generated.StateDelta
-func StateDeltaToStateDelta(sd basics.StateDelta) *generated.StateDelta {
+// StateDeltaToStateDelta converts basics.StateDelta to model.StateDelta
+func StateDeltaToStateDelta(sd basics.StateDelta) *model.StateDelta {
 	if len(sd) == 0 {
 		return nil
 	}
 
-	gsd := make(generated.StateDelta, 0, len(sd))
+	gsd := make(model.StateDelta, 0, len(sd))
 	for k, v := range sd {
-		value := generated.EvalDelta{Action: uint64(v.Action)}
+		value := model.EvalDelta{Action: uint64(v.Action)}
 		if v.Action == basics.SetBytesAction {
 			bytesVal := base64.StdEncoding.EncodeToString([]byte(v.Bytes))
 			value.Bytes = &bytesVal
@@ -598,7 +633,7 @@ func StateDeltaToStateDelta(sd basics.StateDelta) *generated.StateDelta {
 			value.Uint = &uintVal
 		}
 		// basics.DeleteAction does not require Uint/Bytes
-		kv := generated.EvalDeltaKeyValue{
+		kv := model.EvalDeltaKeyValue{
 			Key:   base64.StdEncoding.EncodeToString([]byte(k)),
 			Value: value,
 		}

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -64,7 +64,7 @@ func TestBlockAssemblerPipeline(t *testing.T) {
 
 	round := player.Round
 	period := player.Period
-	testBlockFactory, err := factory.AssembleBlock(player.Round)
+	testBlockFactory, err := factory.AssembleBlock(player.Round, accounts.addresses)
 	require.NoError(t, err, "Could not generate a proposal for round %d: %v", round, err)
 
 	accountIndex := 0
@@ -132,7 +132,7 @@ func TestBlockAssemblerBind(t *testing.T) {
 
 	player, _, accounts, factory, ledger := testSetup(0)
 
-	testBlockFactory, err := factory.AssembleBlock(player.Round)
+	testBlockFactory, err := factory.AssembleBlock(player.Round, accounts.addresses)
 	require.NoError(t, err, "Could not generate a proposal for round %d: %v", player.Round, err)
 
 	accountIndex := 0
@@ -200,7 +200,7 @@ func TestBlockAssemblerAuthenticator(t *testing.T) {
 
 	player, _, accounts, factory, ledger := testSetup(0)
 
-	testBlockFactory, err := factory.AssembleBlock(player.Round)
+	testBlockFactory, err := factory.AssembleBlock(player.Round, accounts.addresses)
 	require.NoError(t, err, "Could not generate a proposal for round %d: %v", player.Round, err)
 	accountIndex := 0
 	proposalPayload, _, _ := proposalForBlock(accounts.addresses[accountIndex], accounts.vrfs[accountIndex], testBlockFactory, player.Period, ledger)
@@ -266,7 +266,7 @@ func TestBlockAssemblerTrim(t *testing.T) {
 
 	player, _, accounts, factory, ledger := testSetup(0)
 
-	testBlockFactory, err := factory.AssembleBlock(player.Round)
+	testBlockFactory, err := factory.AssembleBlock(player.Round, accounts.addresses)
 	require.NoError(t, err, "Could not generate a proposal for round %d: %v", player.Round, err)
 	accountIndex := 0
 	proposalPayload, _, _ := proposalForBlock(accounts.addresses[accountIndex], accounts.vrfs[accountIndex], testBlockFactory, player.Period, ledger)
@@ -339,7 +339,7 @@ func TestProposalStoreT(t *testing.T) {
 
 	player, _, accounts, factory, ledger := testSetup(0)
 
-	testBlockFactory, err := factory.AssembleBlock(player.Round)
+	testBlockFactory, err := factory.AssembleBlock(player.Round, accounts.addresses)
 	require.NoError(t, err, "Could not generate a proposal for round %d: %v", player.Round, err)
 	accountIndex := 0
 	proposalPayload, proposalV, _ := proposalForBlock(accounts.addresses[accountIndex], accounts.vrfs[accountIndex], testBlockFactory, player.Period, ledger)
@@ -413,7 +413,7 @@ func TestProposalStoreUnderlying(t *testing.T) {
 
 	player, _, accounts, factory, ledger := testSetup(0)
 
-	testBlockFactory, err := factory.AssembleBlock(player.Round)
+	testBlockFactory, err := factory.AssembleBlock(player.Round, accounts.addresses)
 	require.NoError(t, err, "Could not generate a proposal for round %d: %v", player.Round, err)
 	accountIndex := 0
 	proposalPayload, proposalV, _ := proposalForBlock(accounts.addresses[accountIndex], accounts.vrfs[accountIndex], testBlockFactory, player.Period, ledger)
@@ -477,7 +477,7 @@ func TestProposalStoreHandle(t *testing.T) {
 
 	proposalVoteEventBatch, proposalPayloadEventBatch, _ := generateProposalEvents(t, player, accounts, factory, ledger)
 
-	testBlockFactory, err := factory.AssembleBlock(player.Round)
+	testBlockFactory, err := factory.AssembleBlock(player.Round, accounts.addresses)
 	require.NoError(t, err, "Could not generate a proposal for round %d: %v", player.Round, err)
 	accountIndex := 0
 	_, proposalV0, _ := proposalForBlock(accounts.addresses[accountIndex], accounts.vrfs[accountIndex], testBlockFactory, player.Period, ledger)
@@ -661,7 +661,7 @@ func TestProposalStoreGetPinnedValue(t *testing.T) {
 
 	// create proposal Store
 	player, router, accounts, factory, ledger := testPlayerSetup()
-	testBlockFactory, err := factory.AssembleBlock(player.Round)
+	testBlockFactory, err := factory.AssembleBlock(player.Round, accounts.addresses)
 	require.NoError(t, err, "Could not generate a proposal for round %d: %v", player.Round, err)
 	accountIndex := 0
 	// create a route handler for the proposal store

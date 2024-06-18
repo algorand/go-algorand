@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,6 +19,7 @@ package main
 import (
 	"github.com/spf13/cobra"
 
+	"github.com/algorand/go-algorand/cmd/util/datadir"
 	"github.com/algorand/go-algorand/nodecontrol"
 	"github.com/algorand/go-algorand/util"
 )
@@ -69,7 +70,7 @@ var startKMDCmd = &cobra.Command{
 			panic(err)
 		}
 
-		onDataDirs(func(dataDir string) {
+		datadir.OnDataDirs(func(dataDir string) {
 			kdd := resolveKmdDataDir(dataDir)
 			startKMDForDataDir(binDir, dataDir, kdd)
 		})
@@ -86,7 +87,7 @@ var stopKMDCmd = &cobra.Command{
 			panic(err)
 		}
 
-		onDataDirs(func(dataDir string) {
+		datadir.OnDataDirs(func(dataDir string) {
 			nc := nodecontrol.MakeNodeController(binDir, dataDir)
 			kdd := resolveKmdDataDir(dataDir)
 			nc.SetKMDDataDir(kdd)

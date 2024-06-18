@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -27,8 +27,10 @@ import (
 )
 
 type proposalVoteCounter struct {
+	_struct struct{} `codec:","`
+
 	Count uint64
-	Votes map[basics.Address]vote
+	Votes map[basics.Address]vote `codec:"Votes,allocbound=-"`
 }
 
 // A voteTracker is a voteMachineStep which handles duplication and
@@ -40,20 +42,21 @@ type proposalVoteCounter struct {
 // It returns the following type(s) of event: none and
 // {soft,cert,next}Threshold.
 type voteTracker struct {
+	_struct struct{} `codec:","`
 	// Voters holds the set of voters which have voted in the current step.
 	// It is used to track whether a voter has equivocated.
-	Voters map[basics.Address]vote
+	Voters map[basics.Address]vote `codec:"Voters,allocbound=-"`
 
 	// Counts holds the weighted sum of the votes for a given proposal.
 	// it also hold the individual votes.
 	// preconditions :
 	// Any proposalValue in Counts is gurenteed to contain at least one vote
-	Counts map[proposalValue]proposalVoteCounter
+	Counts map[proposalValue]proposalVoteCounter `codec:"Counts,allocbound=-"`
 
 	// Equivocators holds the set of voters which have already equivocated
 	// once.  Future votes from these voters are dropped and not
 	// propagated.
-	Equivocators map[basics.Address]equivocationVote
+	Equivocators map[basics.Address]equivocationVote `codec:"Equivocators,allocbound=-"`
 
 	// EquivocatorsCount holds the number of equivocating votes which count
 	// for any proposal-value.

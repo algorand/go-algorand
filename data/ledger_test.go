@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,6 +19,9 @@ package data
 import (
 	"context"
 	"fmt"
+	"regexp"
+	"strconv"
+	"strings"
 	"sync"
 	"testing"
 
@@ -28,6 +31,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	basics_testing "github.com/algorand/go-algorand/data/basics/testing"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger"
@@ -78,12 +82,12 @@ func testGenerateInitState(tb testing.TB, proto protocol.ConsensusVersion) (gene
 		if i%2 == 0 {
 			accountStatus = basics.NotParticipating
 		}
-		initAccounts[genaddrs[i]] = basics.MakeAccountData(accountStatus, basics.MicroAlgos{Raw: uint64((i + 100) * 100000)})
+		initAccounts[genaddrs[i]] = basics_testing.MakeAccountData(accountStatus, basics.MicroAlgos{Raw: uint64((i + 100) * 100000)})
 	}
 	initKeys[poolAddr] = poolSecret
-	initAccounts[poolAddr] = basics.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 1234567})
+	initAccounts[poolAddr] = basics_testing.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 1234567})
 	initKeys[sinkAddr] = sinkSecret
-	initAccounts[sinkAddr] = basics.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 7654321})
+	initAccounts[sinkAddr] = basics_testing.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 7654321})
 
 	incentivePoolBalanceAtGenesis := initAccounts[poolAddr].MicroAlgos
 	initialRewardsPerRound := incentivePoolBalanceAtGenesis.Raw / uint64(params.RewardsRateRefreshInterval)
@@ -119,7 +123,8 @@ func testGenerateInitState(tb testing.TB, proto protocol.ConsensusVersion) (gene
 func TestLedgerCirculation(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	genesisInitState, keys := testGenerateInitState(t, protocol.ConsensusCurrentVersion)
+	proto := protocol.ConsensusCurrentVersion
+	genesisInitState, keys := testGenerateInitState(t, proto)
 
 	const inMem = true
 	cfg := config.GetDefaultLocal()
@@ -170,6 +175,8 @@ func TestLedgerCirculation(t *testing.T) {
 	srcAccountKey := keys[sourceAccount]
 	require.NotNil(t, srcAccountKey)
 
+	params := config.Consensus[proto]
+
 	for rnd := basics.Round(1); rnd < basics.Round(600); rnd++ {
 		blk.BlockHeader.Round++
 		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
@@ -190,6 +197,8 @@ func TestLedgerCirculation(t *testing.T) {
 		require.NoError(t, l.AddBlock(blk, agreement.Certificate{}))
 		l.WaitForCommit(rnd)
 
+		var voteRoundOffset = basics.Round(2 * params.SeedRefreshInterval * params.SeedLookback)
+
 		// test most recent round
 		if rnd < basics.Round(500) {
 			data, validThrough, _, err = realLedger.LookupAccount(rnd, destAccount)
@@ -201,11 +210,11 @@ func TestLedgerCirculation(t *testing.T) {
 			require.Equal(t, rnd, validThrough)
 			require.Equal(t, baseDestValue+uint64(rnd), data.MicroAlgos.Raw)
 
-			roundCirculation, err := realLedger.OnlineTotals(rnd)
+			roundCirculation, err := realLedger.OnlineCirculation(rnd, rnd+voteRoundOffset)
 			require.NoError(t, err)
 			require.Equal(t, baseCirculation-uint64(rnd)*(10001), roundCirculation.Raw)
 
-			roundCirculation, err = l.OnlineTotals(rnd)
+			roundCirculation, err = l.OnlineCirculation(rnd, rnd+voteRoundOffset)
 			require.NoError(t, err)
 			require.Equal(t, baseCirculation-uint64(rnd)*(10001), roundCirculation.Raw)
 		} else if rnd < basics.Round(510) {
@@ -219,11 +228,11 @@ func TestLedgerCirculation(t *testing.T) {
 			require.Equal(t, rnd-1, validThrough)
 			require.Equal(t, baseDestValue+uint64(rnd)-1, data.MicroAlgos.Raw)
 
-			roundCirculation, err := realLedger.OnlineTotals(rnd - 1)
+			roundCirculation, err := realLedger.OnlineCirculation(rnd-1, rnd-1+voteRoundOffset)
 			require.NoError(t, err)
 			require.Equal(t, baseCirculation-uint64(rnd-1)*(10001), roundCirculation.Raw)
 
-			roundCirculation, err = l.OnlineTotals(rnd - 1)
+			roundCirculation, err = l.OnlineCirculation(rnd-1, rnd-1+voteRoundOffset)
 			require.NoError(t, err)
 			require.Equal(t, baseCirculation-uint64(rnd-1)*(10001), roundCirculation.Raw)
 		} else if rnd < basics.Round(520) {
@@ -235,17 +244,17 @@ func TestLedgerCirculation(t *testing.T) {
 			require.Error(t, err)
 			require.Equal(t, uint64(0), data.MicroAlgos.Raw)
 
-			_, err = realLedger.OnlineTotals(rnd + 1)
+			_, err = realLedger.OnlineCirculation(rnd+1, rnd+1+voteRoundOffset)
 			require.Error(t, err)
 
-			_, err = l.OnlineTotals(rnd + 1)
+			_, err = l.OnlineCirculation(rnd+1, rnd+1+voteRoundOffset)
 			require.Error(t, err)
 		} else if rnd < basics.Round(520) {
 			// test expired round ( expected error )
-			_, err = realLedger.OnlineTotals(rnd - 500)
+			_, err = realLedger.OnlineCirculation(rnd-500, rnd-500+voteRoundOffset)
 			require.Error(t, err)
 
-			_, err = l.OnlineTotals(rnd - 500)
+			_, err = l.OnlineCirculation(rnd-500, rnd-500+voteRoundOffset)
 			require.Error(t, err)
 		}
 	}
@@ -326,6 +335,10 @@ func TestLedgerSeed(t *testing.T) {
 
 func TestConsensusVersion(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	if testing.Short() {
+		t.Log("this is a long test and skipping for -short")
+		return
+	}
 
 	// find a consensus protocol that leads to ConsensusCurrentVersion
 	var previousProtocol protocol.ConsensusVersion
@@ -353,9 +366,11 @@ func TestConsensusVersion(t *testing.T) {
 	require.NotNil(t, &l)
 
 	blk := genesisInitState.Block
+	flushOffset := uint64(129) // pendingDeltasFlushThreshold = 128 will flush every 128 rounds (RewardsPool acct)
+	// txTailRetainSize = MaxTxnLife + DeeperBlockHeaderHistory = 1000 + 1
 
-	// add 5 blocks.
-	for rnd := basics.Round(1); rnd < basics.Round(consensusParams.MaxTxnLife+5); rnd++ {
+	// add some blocks.
+	for rnd := basics.Round(1); rnd < basics.Round(consensusParams.MaxTxnLife+flushOffset); rnd++ {
 		blk.BlockHeader.Round++
 		blk.BlockHeader.Seed[0] = byte(uint64(rnd))
 		blk.BlockHeader.Seed[1] = byte(uint64(rnd) / 256)
@@ -365,31 +380,38 @@ func TestConsensusVersion(t *testing.T) {
 		require.NoError(t, l.AddBlock(blk, agreement.Certificate{}))
 		l.WaitForCommit(rnd)
 	}
-	// ensure that all the first 5 has the expected version.
-	for rnd := basics.Round(consensusParams.MaxTxnLife); rnd < basics.Round(consensusParams.MaxTxnLife+5); rnd++ {
+	// ensure that all the first flushOffset have the expected version.
+	for rnd := basics.Round(consensusParams.MaxTxnLife); rnd < basics.Round(consensusParams.MaxTxnLife+flushOffset); rnd++ {
 		ver, err := l.ConsensusVersion(rnd)
 		require.NoError(t, err)
 		require.Equal(t, previousProtocol, ver)
 	}
 	// the next UpgradeVoteRounds can also be known to have the previous version.
-	for rnd := basics.Round(consensusParams.MaxTxnLife + 5); rnd < basics.Round(consensusParams.MaxTxnLife+5+consensusParams.UpgradeVoteRounds); rnd++ {
+	for rnd := basics.Round(consensusParams.MaxTxnLife + flushOffset); rnd < basics.Round(consensusParams.MaxTxnLife+
+		flushOffset+consensusParams.UpgradeVoteRounds); rnd++ {
 		ver, err := l.ConsensusVersion(rnd)
 		require.NoError(t, err)
 		require.Equal(t, previousProtocol, ver)
 	}
 
 	// but two rounds ahead is not known.
-	ver, err := l.ConsensusVersion(basics.Round(consensusParams.MaxTxnLife + 6 + consensusParams.UpgradeVoteRounds))
+	ver, err := l.ConsensusVersion(basics.Round(consensusParams.MaxTxnLife + flushOffset + 1 + consensusParams.UpgradeVoteRounds))
 	require.Equal(t, protocol.ConsensusVersion(""), ver)
-	require.Equal(t, ledgercore.ErrNoEntry{Round: basics.Round(consensusParams.MaxTxnLife + 6 + consensusParams.UpgradeVoteRounds), Latest: basics.Round(consensusParams.MaxTxnLife + 4), Committed: basics.Round(consensusParams.MaxTxnLife + 4)}, err)
+	require.Equal(t, ledgercore.ErrNoEntry{
+		Round:     basics.Round(consensusParams.MaxTxnLife + flushOffset + 1 + consensusParams.UpgradeVoteRounds),
+		Latest:    basics.Round(consensusParams.MaxTxnLife + flushOffset - 1),
+		Committed: basics.Round(consensusParams.MaxTxnLife + flushOffset - 1)}, err)
 
 	// check round #1 which was already dropped.
 	ver, err = l.ConsensusVersion(basics.Round(1))
 	require.Equal(t, protocol.ConsensusVersion(""), ver)
-	require.Equal(t, ledgercore.ErrNoEntry{Round: basics.Round(1), Latest: basics.Round(consensusParams.MaxTxnLife + 4), Committed: basics.Round(consensusParams.MaxTxnLife + 4)}, err)
+	require.Equal(t, ledgercore.ErrNoEntry{
+		Round:     basics.Round(1),
+		Latest:    basics.Round(consensusParams.MaxTxnLife + flushOffset - 1),
+		Committed: basics.Round(consensusParams.MaxTxnLife + flushOffset - 1)}, err)
 
 	// add another round, with upgrade
-	rnd := basics.Round(consensusParams.MaxTxnLife + 5)
+	rnd := basics.Round(consensusParams.MaxTxnLife + flushOffset)
 	blk.BlockHeader.Round++
 	blk.BlockHeader.Seed[0] = byte(uint64(rnd))
 	blk.BlockHeader.Seed[1] = byte(uint64(rnd) / 256)
@@ -491,8 +513,8 @@ func TestLedgerErrorValidate(t *testing.T) {
 	blk.BlockHeader.GenesisHash = crypto.Hash([]byte(t.Name()))
 
 	accts := make(map[basics.Address]basics.AccountData)
-	accts[testPoolAddr] = basics.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 0})
-	accts[testSinkAddr] = basics.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 0})
+	accts[testPoolAddr] = basics_testing.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 0})
+	accts[testSinkAddr] = basics_testing.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 0})
 
 	genesisInitState := ledgercore.InitState{
 		Accounts:    accts,
@@ -513,7 +535,7 @@ func TestLedgerErrorValidate(t *testing.T) {
 	defer realLedger.Close()
 
 	l := Ledger{Ledger: realLedger, log: log}
-	l.log.SetLevel(logging.Debug)
+	l.log.SetLevel(logging.Warn)
 	require.NotNil(t, &l)
 
 	totalsRound, _, err := realLedger.LatestTotals()
@@ -615,10 +637,52 @@ func TestLedgerErrorValidate(t *testing.T) {
 		for more {
 			select {
 			case err := <-errChan:
+				if strings.Contains(err.Error(), "before dbRound") {
+					// handle race eval errors like "round 1933 before dbRound 1934"
+					// see explanation in unexpectedMessages
+					re := regexp.MustCompile(`round (\d+) before dbRound (\d+)`)
+					result := re.FindStringSubmatch(err.Error())
+					require.NotNil(t, result)
+					require.Len(t, result, 3)
+					evalRound, err1 := strconv.Atoi(result[1])
+					require.NoError(t, err1)
+					dbRound, err1 := strconv.Atoi(result[2])
+					require.NoError(t, err1)
+					require.GreaterOrEqual(t, int(l.Latest()), dbRound+int(cfg.MaxAcctLookback))
+					require.Less(t, evalRound, dbRound)
+					err = nil
+				}
 				require.NoError(t, err)
 			case <-expectedMessages:
 				// only debug messages should be reported
 			case um := <-unexpectedMessages:
+				if strings.Contains(um, "before dbRound") {
+					// EnsureBlock might log the following:
+					// data.EnsureBlock: could not write block 774 to the ledger: round 773 before dbRound 774
+					// it happens because of simultaneous EnsureValidatedBlock and EnsureBlock calls
+					// that pass round check and then EnsureBlock yields after StartEvaluator.
+					// Meanwhile EnsureValidatedBlock finishes and adds the block to the ledger.
+					// After that trackersDB commit happen and account data get flushed.
+					// The EnsureBlock goroutine then tries to evaluate a first transaction and fails because
+					// the trackerDB advanced further.
+					// This is okay to ignore if
+					// - attempted round is less or equal than dbRound
+					// - ledger latest round is greater than dbRound + cfg.MaxAcctLookback
+					re := regexp.MustCompile(`could not write block (\d+) to the ledger: round (\d+) before dbRound (\d+)`)
+					result := re.FindStringSubmatch(um)
+					require.NotNil(t, result)
+					require.Len(t, result, 4)
+					attemptedRound, err := strconv.Atoi(result[1])
+					require.NoError(t, err)
+					evalRound, err := strconv.Atoi(result[2])
+					require.NoError(t, err)
+					dbRound, err := strconv.Atoi(result[3])
+					require.NoError(t, err)
+					require.Equal(t, attemptedRound, evalRound+1)
+					require.LessOrEqual(t, attemptedRound, dbRound)
+					require.GreaterOrEqual(t, int(l.Latest()), dbRound+int(cfg.MaxAcctLookback))
+					um = ""
+				}
 				require.Empty(t, um, um)
 			default:
 				more = false

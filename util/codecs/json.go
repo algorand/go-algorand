@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,6 +18,7 @@ package codecs
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -48,6 +49,16 @@ func LoadObjectFromFile(filename string, object interface{}) (err error) {
 	return
 }
 
+func writeBytes(writer io.Writer, object interface{}, prettyFormat bool) error {
+	var enc *json.Encoder
+	if prettyFormat {
+		enc = NewFormattedJSONEncoder(writer)
+	} else {
+		enc = json.NewEncoder(writer)
+	}
+	return enc.Encode(object)
+}
+
 // SaveObjectToFile implements the common pattern for saving an object to a file as json
 func SaveObjectToFile(filename string, object interface{}, prettyFormat bool) error {
 	f, err := os.Create(filename)
@@ -55,22 +66,13 @@ func SaveObjectToFile(filename string, object interface{}, prettyFormat bool) er
 		return err
 	}
 	defer f.Close()
-	var enc *json.Encoder
-	if prettyFormat {
-		enc = NewFormattedJSONEncoder(f)
-	} else {
-		enc = json.NewEncoder(f)
-	}
-	err = enc.Encode(object)
-	return err
+	return writeBytes(f, object, prettyFormat)
 }
 
-// SaveNonDefaultValuesToFile saves an object to a file as json, but only fields that are not
+// WriteNonDefaultValues writes object to a writer as json, but only fields that are not
 // currently set to be the default value.
 // Optionally, you can specify an array of field names to always include.
-func SaveNonDefaultValuesToFile(filename string, object, defaultObject interface{}, ignore []string, prettyFormat bool) error {
-	// Serialize object to temporary file.
-	// Read file into string array
+func WriteNonDefaultValues(writer io.Writer, object, defaultObject interface{}, ignore []string) error {
 	// Iterate one line at a time, parse Name
 	// If ignore contains Name, don't delete
 	// Use reflection to compare object[Name].value == defaultObject[Name].value
@@ -78,25 +80,13 @@ func SaveNonDefaultValuesToFile(filename string, object, defaultObject interface
 	// When done, ensure last value line doesn't include comma
 	// Write string array to file.
 
-	file, err := os.CreateTemp("", "encsndv")
+	var buf bytes.Buffer
+	err := writeBytes(&buf, object, true)
 	if err != nil {
 		return err
 	}
-	name := file.Name()
-	file.Close()
+	content := buf.Bytes()
 
-	defer os.Remove(name)
-	// Save object to file pretty-formatted so we can read one value-per-line
-	err = SaveObjectToFile(name, object, true)
-	if err != nil {
-		return err
-	}
-
-	// Read lines from encoded file into string array
-	content, err := os.ReadFile(name)
-	if err != nil {
-		return err
-	}
 	valueLines := strings.Split(string(content), "\n")
 
 	// Create maps of the name->value pairs for the object and the defaults
@@ -155,19 +145,30 @@ func SaveNonDefaultValuesToFile(filename string, object, defaultObject interface
 		}
 	}
 
+	combined := strings.Join(newFile, "\n")
+	combined = strings.TrimRight(combined, "\r\n ")
+	_, err = writer.Write([]byte(combined))
+	return err
+}
+
+// SaveNonDefaultValuesToFile saves an object to a file as json, but only fields that are not
+// currently set to be the default value.
+// Optionally, you can specify an array of field names to always include.
+func SaveNonDefaultValuesToFile(filename string, object, defaultObject interface{}, ignore []string) error {
 	outFile, err := os.Create(filename)
 	if err != nil {
 		return err
 	}
 	defer outFile.Close()
 	writer := bufio.NewWriter(outFile)
-	combined := strings.Join(newFile, "\n")
-	combined = strings.TrimRight(combined, "\r\n ")
-	_, err = writer.WriteString(combined)
-	if err == nil {
-		writer.Flush()
+
+	err = WriteNonDefaultValues(writer, object, defaultObject, ignore)
+	if err != nil {
+		return err
 	}
-	return err
+
+	writer.Flush()
+	return nil
 }
 
 func extractValueName(line string) (name string) {

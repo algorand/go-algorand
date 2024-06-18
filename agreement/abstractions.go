@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -54,13 +54,6 @@ type BlockValidator interface {
 // and can now be recorded in the ledger.  This is an optimized version of
 // calling EnsureBlock() on the Ledger.
 type ValidatedBlock interface {
-	// WithSeed creates a copy of this ValidatedBlock with its
-	// cryptographically random seed set to the given value.
-	//
-	// Calls to Seed() or to Digest() on the copy's Block must
-	// reflect the value of the new seed.
-	WithSeed(committee.Seed) ValidatedBlock
-
 	// Block returns the underlying block that has been validated.
 	Block() bookkeeping.Block
 }
@@ -72,20 +65,41 @@ var ErrAssembleBlockRoundStale = errors.New("requested round for AssembleBlock i
 // An BlockFactory produces an Block which is suitable for proposal for a given
 // Round.
 type BlockFactory interface {
-	// AssembleBlock produces a new ValidatedBlock which is suitable for proposal
-	// at a given Round.
+	// AssembleBlock produces a new UnfinishedBlock for a given Round.
+	// It must be finalized before proposed by agreement. It is provided
+	// a list of participating addresses that may propose this block.
 	//
-	// AssembleBlock should produce a ValidatedBlock for which the corresponding
+	// AssembleBlock should produce a block for which the corresponding
 	// BlockValidator validates (i.e. for which BlockValidator.Validate
 	// returns true). If an insufficient number of nodes can assemble valid
 	// entries, the agreement protocol may lose liveness.
 	//
 	// AssembleBlock may return an error if the BlockFactory is unable to
-	// produce a ValidatedBlock for the given round. If an insufficient number of
+	// produce an UnfinishedBlock for the given round. If an insufficient number of
 	// nodes on the network can assemble entries, the agreement protocol may
 	// lose liveness.
-	AssembleBlock(basics.Round) (ValidatedBlock, error)
+	AssembleBlock(rnd basics.Round, partAddresses []basics.Address) (UnfinishedBlock, error)
 }
+
+// An UnfinishedBlock represents a Block produced by a BlockFactory
+// and must be finalized before being proposed by agreement.
+type UnfinishedBlock interface {
+	// FinishBlock creates a proposable block, having set the cryptographically
+	// random seed and payout related fields.
+	//
+	// Calls to Seed() or to Digest() on the copy's Block must
+	// reflect the value of the new seed.
+	FinishBlock(seed committee.Seed, proposer basics.Address, eligible bool) Block
+
+	Round() basics.Round
+}
+
+// Block (in agreement) represents an UnfinishedBlock produced by a
+// BlockFactory, that was later finalized by providing the seed and the
+// proposer, and can now be proposed by agreement.
+//
+//msgp:ignore Block
+type Block bookkeeping.Block
 
 // A Ledger represents the sequence of Entries agreed upon by the protocol.
 // The Ledger consists of two parts: a LedgerReader and a LedgerWriter, which
@@ -133,14 +147,14 @@ type LedgerReader interface {
 	// protocol may lose liveness.
 	LookupAgreement(basics.Round, basics.Address) (basics.OnlineAccountData, error)
 
-	// Circulation returns the total amount of money in circulation at the
-	// conclusion of a given round.
+	// Circulation returns the total amount of online money in circulation at the
+	// conclusion of a given round rnd that is eligible for voting at voteRnd.
 	//
 	// This method returns an error if the given Round has not yet been
 	// confirmed. It may also return an error if the given Round is
 	// unavailable by the storage device. In that case, the agreement
 	// protocol may lose liveness.
-	Circulation(basics.Round) (basics.MicroAlgos, error)
+	Circulation(rnd basics.Round, voteRnd basics.Round) (basics.MicroAlgos, error)
 
 	// LookupDigest returns the Digest of the entry that was agreed on in a
 	// given round.

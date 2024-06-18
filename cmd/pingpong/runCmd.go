@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,11 +19,14 @@ package main
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"runtime/pprof"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -56,6 +59,20 @@ var teal string
 var groupSize uint32
 var numAsset uint32
 var numApp uint32
+
+/*
+Note on box workloads:
+
+two different box workloads are supported in order to exercise different
+portions of the performance critical codepath while keeping the app programs
+relatively simple. The BoxUpdate workload updates the content of the boxes
+during every app call, to verify that box manipulation is performant. The BoxRead
+workload only reads the box contents, which requires every box read to work its
+way through the in memory state deltas, into the box cache, and potentially all the
+way to the database.
+*/
+var numBoxUpdate uint32
+var numBoxRead uint32
 var numAppOptIn uint32
 var appProgOps uint32
 var appProgHashes uint32
@@ -67,16 +84,24 @@ var rekey bool
 var nftAsaPerSecond uint32
 var pidFile string
 var cpuprofile string
+var randSeed int64
+var deterministicKeys bool
+var generatedAccountsCount uint64
+var generatedAccountsOffset uint64
+var generatedAccountSampleMethod string
+var configPath string
+var latencyPath string
+var asyncSending bool
 
 func init() {
 	rootCmd.AddCommand(runCmd)
 	runCmd.PersistentFlags().StringVarP(&dataDir, "datadir", "d", "", "Data directory for the node")
 
-	runCmd.Flags().StringVarP(&srcAddress, "src", "s", "", "Account address to use as funding source for new accounts)")
+	runCmd.Flags().StringVarP(&srcAddress, "src", "s", "", "Account address to use as funding source for new accounts")
 	runCmd.Flags().Uint32VarP(&numAccounts, "numaccounts", "n", 0, "The number of accounts to include in the transfers")
 	runCmd.Flags().Uint64VarP(&maxAmount, "ma", "a", 0, "The (max) amount to be transferred")
 	runCmd.Flags().Uint64VarP(&minAccountFunds, "minaccount", "", 0, "The minimum amount to fund a test account with")
-	runCmd.Flags().Uint64VarP(&txnPerSec, "tps", "t", 200, "Number of Txn per second that pingpong sends")
+	runCmd.Flags().Uint64VarP(&txnPerSec, "tps", "t", 0, "Number of Txn per second that pingpong sends")
 	runCmd.Flags().Int64VarP(&maxFee, "mf", "f", -1, "The MAX fee to be used for transactions, a value of '0' tells the server to use a suggested fee.")
 	runCmd.Flags().Uint64VarP(&minFee, "minf", "m", 1000, "The MIN fee to be used for randomFee transactions")
 	runCmd.Flags().BoolVar(&randomAmount, "ra", false, "Set to enable random amounts (up to maxamount)")
@@ -87,6 +112,8 @@ func init() {
 	runCmd.Flags().StringVar(&runTime, "run", "", "Duration of time (seconds) to run transfers before resting (0 means non-stop)")
 	runCmd.Flags().StringVar(&refreshTime, "refresh", "", "Duration of time (seconds) between refilling accounts with money (0 means no refresh)")
 	runCmd.Flags().StringVar(&logicProg, "program", "", "File containing the compiled program to include as a logic sig")
+	runCmd.Flags().StringVar(&configPath, "config", "", "path to read config json from, or json literal")
+	runCmd.Flags().StringVar(&latencyPath, "latency", "", "path to write txn latency log to (.gz for compressed)")
 	runCmd.Flags().BoolVar(&saveConfig, "save", false, "Save the effective configuration to disk")
 	runCmd.Flags().BoolVar(&useDefault, "reset", false, "Reset to the default configuration (not read from disk)")
 	runCmd.Flags().BoolVar(&quietish, "quiet", false, "quietish stdout logging")
@@ -95,6 +122,8 @@ func init() {
 	runCmd.Flags().Uint32Var(&groupSize, "groupsize", 1, "The number of transactions in each group")
 	runCmd.Flags().Uint32Var(&numAsset, "numasset", 0, "The number of assets each account holds")
 	runCmd.Flags().Uint32Var(&numApp, "numapp", 0, "The total number of apps to create")
+	runCmd.Flags().Uint32Var(&numBoxUpdate, "numboxupdate", 0, "The total number of boxes each app holds, where boxes are updated each app call. Only one of numboxupdate and numboxread can be set")
+	runCmd.Flags().Uint32Var(&numBoxRead, "numboxread", 0, "The total number of boxes each app holds, where boxes are only read each app call. Only one of numboxupdate and numboxread can be set.")
 	runCmd.Flags().Uint32Var(&numAppOptIn, "numappoptin", 0, "The number of apps each account opts in to")
 	runCmd.Flags().Uint32Var(&appProgOps, "appprogops", 0, "The approximate number of TEAL operations to perform in each ApplicationCall transaction")
 	runCmd.Flags().Uint32Var(&appProgHashes, "appproghashes", 0, "The number of hashes to include in the Application")
@@ -104,9 +133,15 @@ func init() {
 	runCmd.Flags().BoolVar(&randomLease, "randomlease", false, "set the lease to contain a random value")
 	runCmd.Flags().BoolVar(&rekey, "rekey", false, "Create RekeyTo transactions. Requires groupsize=2 and any of random flags exc random dst")
 	runCmd.Flags().Uint32Var(&duration, "duration", 0, "The number of seconds to run the pingpong test, forever if 0")
+	runCmd.Flags().BoolVar(&asyncSending, "async", false, "Use async sending mode")
 	runCmd.Flags().Uint32Var(&nftAsaPerSecond, "nftasapersecond", 0, "The number of NFT-style ASAs to create per second")
 	runCmd.Flags().StringVar(&pidFile, "pidfile", "", "path to write process id of this pingpong")
 	runCmd.Flags().StringVar(&cpuprofile, "cpuprofile", "", "write cpu profile to `file`")
+	runCmd.Flags().Int64Var(&randSeed, "seed", 0, "input to math/rand.Seed(), defaults to time.Now().UnixNano()")
+	runCmd.Flags().BoolVar(&deterministicKeys, "deterministicKeys", false, "Draw from set of netgoal-created accounts using deterministic keys")
+	runCmd.Flags().Uint64Var(&generatedAccountsCount, "genaccounts", 0, "The total number of accounts pre-generated by netgoal")
+	runCmd.Flags().Uint64Var(&generatedAccountsOffset, "genaccountsoffset", 0, "The initial offset for sampling from the total # of pre-generated accounts")
+	runCmd.Flags().StringVar(&generatedAccountSampleMethod, "gensamplemethod", "", "The method of sampling from the total # of pre-generated accounts")
 }
 
 var runCmd = &cobra.Command{
@@ -120,14 +155,14 @@ var runCmd = &cobra.Command{
 			reportErrorf("Cannot make temp dir: %v\n", err)
 		}
 		if cpuprofile != "" {
-			proff, err := os.Create(cpuprofile)
-			if err != nil {
-				reportErrorf("%s: %v\n", cpuprofile, err)
+			proff, profErr := os.Create(cpuprofile)
+			if profErr != nil {
+				reportErrorf("%s: %v\n", cpuprofile, profErr)
 			}
 			defer proff.Close()
-			err = pprof.StartCPUProfile(proff)
-			if err != nil {
-				reportErrorf("%s: StartCPUProfile %v\n", cpuprofile, err)
+			profErr = pprof.StartCPUProfile(proff)
+			if profErr != nil {
+				reportErrorf("%s: StartCPUProfile %v\n", cpuprofile, profErr)
 			}
 			defer pprof.StopCPUProfile()
 		}
@@ -139,31 +174,59 @@ var runCmd = &cobra.Command{
 		}
 
 		if pidFile != "" {
-			pidf, err := os.Create(pidFile)
-			if err != nil {
-				reportErrorf("%s: %v\n", pidFile, err)
+			pidf, pidErr := os.Create(pidFile)
+			if pidErr != nil {
+				reportErrorf("%s: %v\n", pidFile, pidErr)
 			}
 			defer os.Remove(pidFile)
-			_, err = fmt.Fprintf(pidf, "%d", os.Getpid())
-			if err != nil {
-				reportErrorf("%s: %v\n", pidFile, err)
+			_, pidErr = fmt.Fprintf(pidf, "%d", os.Getpid())
+			if pidErr != nil {
+				reportErrorf("%s: %v\n", pidFile, pidErr)
 			}
-			err = pidf.Close()
-			if err != nil {
-				reportErrorf("%s: %v\n", pidFile, err)
+			pidErr = pidf.Close()
+			if pidErr != nil {
+				reportErrorf("%s: %v\n", pidFile, pidErr)
 			}
 		}
 
 		// Prepare configuration
+		dataDirCfgPath := filepath.Join(ac.DataDir(), pingpong.ConfigFilename)
 		var cfg pingpong.PpConfig
-		cfgPath := filepath.Join(ac.DataDir(), pingpong.ConfigFilename)
-		if useDefault {
-			cfg = pingpong.DefaultConfig
-		} else {
-			cfg, err = pingpong.LoadConfigFromFile(cfgPath)
-			if err != nil && !os.IsNotExist(err) {
-				reportErrorf("Error loading configuration from '%s': %v\n", cfgPath, err)
+		if configPath != "" {
+			if configPath[0] == '{' {
+				// json literal as arg
+				cfg = pingpong.DefaultConfig
+				lf := strings.NewReader(configPath)
+				dec := json.NewDecoder(lf)
+				err = dec.Decode(&cfg)
+				if err != nil {
+					reportErrorf("-config: bad config json, %v", err)
+				}
+				fmt.Fprintf(os.Stdout, "config from --config:\n")
+				cfg.Dump(os.Stdout)
+			} else {
+				cfg, err = pingpong.LoadConfigFromFile(configPath)
+				if err != nil {
+					reportErrorf("%s: bad config json, %v", configPath, err)
+				}
+				fmt.Fprintf(os.Stdout, "config from %#v:\n", configPath)
+				cfg.Dump(os.Stdout)
 			}
+		} else {
+			if useDefault {
+				cfg = pingpong.DefaultConfig
+			} else {
+				cfg, err = pingpong.LoadConfigFromFile(dataDirCfgPath)
+				if err != nil && !os.IsNotExist(err) {
+					reportErrorf("Error loading configuration from '%s': %v\n", dataDirCfgPath, err)
+				}
+			}
+		}
+
+		if randSeed == 0 {
+			rand.Seed(time.Now().UnixNano())
+		} else {
+			rand.Seed(randSeed)
 		}
 
 		if srcAddress != "" {
@@ -185,10 +248,12 @@ var runCmd = &cobra.Command{
 			cfg.MinAccountFunds = minAccountFunds
 		}
 
-		if txnPerSec == 0 {
+		if txnPerSec != 0 {
+			cfg.TxnPerSec = txnPerSec
+		}
+		if cfg.TxnPerSec == 0 {
 			reportErrorf("cannot set tps to 0")
 		}
-		cfg.TxnPerSec = txnPerSec
 
 		if randomFee {
 			if cfg.MinFee > cfg.MaxFee {
@@ -205,15 +270,15 @@ var runCmd = &cobra.Command{
 		if randomAmount {
 			cfg.RandomizeAmt = true
 		}
-		cfg.RandomLease = randomLease
+		cfg.RandomLease = randomLease || cfg.RandomLease
 		if noRandomAmount {
 			if randomAmount {
 				reportErrorf("Error --ra and --nra can't both be specified\n")
 			}
 			cfg.RandomizeAmt = false
 		}
-		cfg.RandomizeDst = randomDst
-		cfg.Quiet = quietish
+		cfg.RandomizeDst = randomDst || cfg.RandomizeDst
+		cfg.Quiet = quietish || cfg.Quiet
 		if runTime != "" {
 			val, err := strconv.ParseUint(runTime, 10, 32)
 			if err != nil {
@@ -230,6 +295,9 @@ var runCmd = &cobra.Command{
 		}
 		if duration > 0 {
 			cfg.MaxRuntime = time.Duration(uint32(duration)) * time.Second
+		}
+		if asyncSending {
+			cfg.AsyncSending = true
 		}
 		if randomNote {
 			cfg.RandomNote = true
@@ -255,7 +323,7 @@ var runCmd = &cobra.Command{
 			}
 			ops, err := logic.AssembleString(programStr)
 			if err != nil {
-				ops.ReportProblems(teal, os.Stderr)
+				ops.ReportMultipleErrors(teal, os.Stderr)
 				reportErrorf("Internal error, cannot assemble %v \n", programStr)
 			}
 			cfg.Program = ops.Program
@@ -274,17 +342,27 @@ var runCmd = &cobra.Command{
 			reportErrorf("Invalid group size: %v\n", groupSize)
 		}
 
-		if numAsset <= 1000 {
+		if numAsset == 0 {
+			// nop
+		} else if numAsset <= 1000 {
 			cfg.NumAsset = numAsset
 		} else {
 			reportErrorf("Invalid number of assets: %d, (valid number: 0 - 1000)\n", numAsset)
 		}
 
-		cfg.AppProgOps = appProgOps
-		cfg.AppProgHashes = appProgHashes
-		cfg.AppProgHashSize = appProgHashSize
+		if appProgOps != 0 {
+			cfg.AppProgOps = appProgOps
+		}
+		if appProgHashes != 0 {
+			cfg.AppProgHashes = appProgHashes
+		}
+		if appProgHashSize != "sha256" {
+			cfg.AppProgHashSize = appProgHashSize
+		}
 
-		if numApp <= 1000 {
+		if numApp == 0 {
+			// nop
+		} else if numApp <= 1000 {
 			cfg.NumApp = numApp
 		} else {
 			reportErrorf("Invalid number of apps: %d, (valid number: 0 - 1000)\n", numApp)
@@ -294,7 +372,9 @@ var runCmd = &cobra.Command{
 			reportErrorf("Cannot opt in %d times of %d total apps\n", numAppOptIn, numApp)
 		}
 
-		cfg.NumAppOptIn = numAppOptIn
+		if numAppOptIn != 0 {
+			cfg.NumAppOptIn = numAppOptIn
+		}
 
 		if appProgGlobKeys > 0 {
 			cfg.AppGlobKeys = appProgGlobKeys
@@ -303,8 +383,30 @@ var runCmd = &cobra.Command{
 			cfg.AppLocalKeys = appProgLocalKeys
 		}
 
-		if numAsset != 0 && numApp != 0 {
-			reportErrorf("only one of numapp and numasset may be specified\n")
+		// verify and set numBoxUpdate
+		if numBoxUpdate != 0 && numApp == 0 {
+			reportErrorf("If number of boxes is nonzero than number of apps must also be nonzero")
+		}
+
+		if numBoxUpdate <= 8 {
+			cfg.NumBoxUpdate = numBoxUpdate
+		} else {
+			reportErrorf("Invalid number of boxes: %d, (valid number: 0 - 8)\n", numBoxUpdate)
+		}
+
+		// verify and set numBoxRead
+		if numBoxRead != 0 && numApp == 0 {
+			reportErrorf("If number of boxes is nonzero than number of apps must also be nonzero")
+		}
+
+		if numBoxRead != 0 && numBoxUpdate != 0 {
+			reportErrorf("Only one of numboxread or numboxupdate can be nonzero")
+		}
+
+		if numBoxRead <= 8 {
+			cfg.NumBoxRead = numBoxRead
+		} else {
+			reportErrorf("Invalid number of boxes: %d, (valid number: 0 - 8)\n", numBoxRead)
 		}
 
 		if rekey {
@@ -317,7 +419,45 @@ var runCmd = &cobra.Command{
 			}
 		}
 
-		cfg.NftAsaPerSecond = nftAsaPerSecond
+		if nftAsaPerSecond != 0 {
+			cfg.NftAsaPerSecond = nftAsaPerSecond
+		}
+
+		if deterministicKeys && generatedAccountsCount == 0 {
+			reportErrorf("deterministicKeys requires setting generatedAccountsCount")
+		}
+		if !deterministicKeys && generatedAccountsCount > 0 {
+			reportErrorf("generatedAccountsCount requires deterministicKeys=true")
+		}
+		if deterministicKeys && uint64(numAccounts) > generatedAccountsCount {
+			reportErrorf("numAccounts must be <= generatedAccountsCount")
+		}
+		cfg.DeterministicKeys = deterministicKeys || cfg.DeterministicKeys
+		if generatedAccountsCount != 0 {
+			cfg.GeneratedAccountsCount = generatedAccountsCount
+		}
+		if generatedAccountsOffset != 0 {
+			cfg.GeneratedAccountsOffset = generatedAccountsOffset
+		}
+		if generatedAccountSampleMethod != "" {
+			cfg.GeneratedAccountSampleMethod = generatedAccountSampleMethod
+		}
+		// check if numAccounts is greater than the length of the mnemonic list, if provided
+		if cfg.DeterministicKeys &&
+			len(cfg.GeneratedAccountsMnemonics) > 0 &&
+			cfg.NumPartAccounts > uint32(len(cfg.GeneratedAccountsMnemonics)) {
+			reportErrorf("numAccounts is greater than number of account mnemonics provided")
+		}
+
+		if latencyPath != "" {
+			cfg.TotalLatencyOut = latencyPath
+		}
+
+		cfg.SetDefaultWeights()
+		err = cfg.Check()
+		if err != nil {
+			reportErrorf("%v", err)
+		}
 
 		reportInfof("Preparing to initialize PingPong with config:\n")
 		cfg.Dump(os.Stdout)
@@ -325,20 +465,23 @@ var runCmd = &cobra.Command{
 		pps := pingpong.NewPingpong(cfg)
 
 		// Initialize accounts if necessary
-		err = pps.PrepareAccounts(ac)
+		err = pps.PrepareAccounts(&ac)
 		if err != nil {
 			reportErrorf("Error preparing accounts for transfers: %v\n", err)
 		}
 
 		if saveConfig {
-			cfg.Save(cfgPath)
+			err = cfg.Save(dataDirCfgPath)
+			if err != nil {
+				reportErrorf("%s: could not save config, %v\n", dataDirCfgPath, err)
+			}
 		}
 
 		reportInfof("Preparing to run PingPong with config:\n")
 		cfg.Dump(os.Stdout)
 
 		// Kick off the real processing
-		pps.RunPingPong(context.Background(), ac)
+		pps.RunPingPong(context.Background(), &ac)
 	},
 }
 

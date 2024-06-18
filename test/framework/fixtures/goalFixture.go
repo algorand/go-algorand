@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -58,17 +58,25 @@ const (
 	nodeCmd  = "node"
 	startCmd = "start"
 	stopCmd  = "stop"
+
+	networkCmd = "network"
+	pregenCmd  = "pregen"
+	createCmd  = "create"
 )
 
-func (f *GoalFixture) executeCommand(args ...string) (retStdout string, retStderr string, err error) {
+func (f *GoalFixture) executeRawCommand(args ...string) (retStdout string, retStderr string, err error) {
+	// Executes a command without a specified data directory
 	cmd := filepath.Join(f.binDir, goalCmd)
-	// We always execute goal against the PrimaryDataDir() instance
-	args = append(args, "-d", f.PrimaryDataDir())
 	retStdout, retStderr, err = util.ExecAndCaptureOutput(cmd, args...)
 	retStdout = strings.TrimRight(retStdout, "\n")
 	retStderr = strings.TrimRight(retStderr, "\n")
-	//fmt.Printf("command: %v %v\nret: %v\n", cmd, args, ret)
 	return
+}
+
+func (f *GoalFixture) executeCommand(args ...string) (retStdout string, retStderr string, err error) {
+	// We always execute goal against the PrimaryDataDir() instance
+	args = append(args, "-d", f.PrimaryDataDir())
+	return f.executeRawCommand(args...)
 }
 
 // combine the error and the output so that we could return it as a single error object.
@@ -225,5 +233,65 @@ func (f *GoalFixture) AccountImportRootKey(wallet string, createDefaultUnencrypt
 		args = append(args, "-u")
 	}
 	_, _, err = f.executeCommand(args...)
+	return
+}
+
+// NetworkPregen exposes the `goal network pregen` command
+func (f *GoalFixture) NetworkPregen(template, pregendir string) (stdErr string, err error) {
+	args := []string{
+		networkCmd,
+		pregenCmd,
+		"-p",
+		pregendir,
+	}
+	if template != "" {
+		args = append(args, "-t", template)
+	}
+	_, stdErr, err = f.executeRawCommand(args...)
+	return
+}
+
+// NetworkCreate exposes the `goal network create` command
+func (f *GoalFixture) NetworkCreate(networkdir, networkName, template, pregendir string) (err error) {
+	args := []string{
+		networkCmd,
+		createCmd,
+		"-r",
+		networkdir,
+	}
+	if networkName != "" {
+		args = append(args, "-n", networkName)
+	}
+	if template != "" {
+		args = append(args, "-t", template)
+	}
+	if pregendir != "" {
+		args = append(args, "-p", pregendir)
+	}
+	_, _, err = f.executeRawCommand(args...)
+	return
+}
+
+// NetworkStart exposes the `goal network start` command
+func (f *GoalFixture) NetworkStart(networkdir string) (err error) {
+	args := []string{
+		networkCmd,
+		startCmd,
+		"-r",
+		networkdir,
+	}
+	_, _, err = f.executeRawCommand(args...)
+	return
+}
+
+// NetworkStop exposes the `goal network stop` command
+func (f *GoalFixture) NetworkStop(networkdir string) (err error) {
+	args := []string{
+		networkCmd,
+		stopCmd,
+		"-r",
+		networkdir,
+	}
+	_, _, err = f.executeRawCommand(args...)
 	return
 }

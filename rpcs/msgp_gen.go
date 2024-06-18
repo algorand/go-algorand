@@ -4,6 +4,9 @@ package rpcs
 
 import (
 	"github.com/algorand/msgp/msgp"
+
+	"github.com/algorand/go-algorand/agreement"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 )
 
 // The following msgp objects are implemented in this file:
@@ -11,9 +14,11 @@ import (
 //         |-----> (*) MarshalMsg
 //         |-----> (*) CanMarshalMsg
 //         |-----> (*) UnmarshalMsg
+//         |-----> (*) UnmarshalMsgWithState
 //         |-----> (*) CanUnmarshalMsg
 //         |-----> (*) Msgsize
 //         |-----> (*) MsgIsZero
+//         |-----> EncodedBlockCertMaxSize()
 //
 
 // MarshalMsg implements msgp.Marshaler
@@ -35,7 +40,12 @@ func (_ *EncodedBlockCert) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *EncodedBlockCert) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *EncodedBlockCert) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0001 int
@@ -49,7 +59,7 @@ func (z *EncodedBlockCert) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).Block.UnmarshalMsg(bts)
+			bts, err = (*z).Block.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Block")
 				return
@@ -57,7 +67,7 @@ func (z *EncodedBlockCert) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).Certificate.UnmarshalMsg(bts)
+			bts, err = (*z).Certificate.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Certificate")
 				return
@@ -87,13 +97,13 @@ func (z *EncodedBlockCert) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 			switch string(field) {
 			case "block":
-				bts, err = (*z).Block.UnmarshalMsg(bts)
+				bts, err = (*z).Block.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "Block")
 					return
 				}
 			case "cert":
-				bts, err = (*z).Certificate.UnmarshalMsg(bts)
+				bts, err = (*z).Certificate.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "Certificate")
 					return
@@ -111,6 +121,9 @@ func (z *EncodedBlockCert) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *EncodedBlockCert) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *EncodedBlockCert) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*EncodedBlockCert)
 	return ok
@@ -125,4 +138,10 @@ func (z *EncodedBlockCert) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *EncodedBlockCert) MsgIsZero() bool {
 	return ((*z).Block.MsgIsZero()) && ((*z).Certificate.MsgIsZero())
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func EncodedBlockCertMaxSize() (s int) {
+	s = 1 + 6 + bookkeeping.BlockMaxSize() + 5 + agreement.CertificateMaxSize()
+	return
 }

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,7 +17,9 @@
 package pingpong
 
 import (
+	"encoding/binary"
 	"fmt"
+	"log"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -27,20 +29,85 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
-	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	"github.com/algorand/go-algorand/crypto/passphrase"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	algodAcct "github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/libgoal"
-	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
 )
 
-func (pps *WorkerState) ensureAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]*pingPongAccount, cfg PpConfig, err error) {
-	accounts = make(map[string]*pingPongAccount)
-	cfg = initCfg
+func deterministicAccounts(initCfg PpConfig) <-chan *crypto.SignatureSecrets {
+	out := make(chan *crypto.SignatureSecrets)
+	if initCfg.GeneratedAccountSampleMethod == "" || initCfg.GeneratedAccountSampleMethod == "random" {
+		go randomDeterministicAccounts(initCfg, out)
+	} else if initCfg.GeneratedAccountSampleMethod == "sequential" {
+		go sequentialDeterministicAccounts(initCfg, out)
+	} else if initCfg.GeneratedAccountSampleMethod == "mnemonic" {
+		go mnemonicDeterministicAccounts(initCfg, out)
+	}
+	return out
+}
 
+func randomDeterministicAccounts(initCfg PpConfig, out chan *crypto.SignatureSecrets) {
+	numAccounts := initCfg.NumPartAccounts
+	totalAccounts := initCfg.GeneratedAccountsCount
+	if totalAccounts < uint64(numAccounts)*4 {
+		// simpler rand strategy for smaller totalAccounts
+		order := rand.Perm(int(totalAccounts))[:numAccounts]
+		for _, acct := range order {
+			var seed crypto.Seed
+			binary.LittleEndian.PutUint64(seed[:], uint64(acct))
+			out <- crypto.GenerateSignatureSecrets(seed)
+		}
+	} else {
+		// randomly select numAccounts from generatedAccountsCount
+		// better for generatedAccountsCount much bigger than numAccounts
+		selected := make(map[uint32]bool, numAccounts)
+		for uint32(len(selected)) < numAccounts {
+			acct := uint32(rand.Int31n(int32(totalAccounts)))
+			if selected[acct] {
+				continue // already picked this account
+			}
+			// generate deterministic secret key from integer ID
+			// same uint64 seed used as netdeploy/remote/deployedNetwork.go
+			var seed crypto.Seed
+			binary.LittleEndian.PutUint64(seed[:], uint64(acct))
+			out <- crypto.GenerateSignatureSecrets(seed)
+			selected[acct] = true
+		}
+	}
+	close(out)
+}
+
+func sequentialDeterministicAccounts(initCfg PpConfig, out chan *crypto.SignatureSecrets) {
+	for i := uint32(0); i < initCfg.NumPartAccounts; i++ {
+		acct := uint64(i) + uint64(initCfg.GeneratedAccountsOffset)
+		var seed crypto.Seed
+		binary.LittleEndian.PutUint64(seed[:], uint64(acct))
+		out <- crypto.GenerateSignatureSecrets(seed)
+	}
+	close(out)
+}
+
+func mnemonicDeterministicAccounts(initCfg PpConfig, out chan *crypto.SignatureSecrets) {
+	for _, mnemonic := range initCfg.GeneratedAccountsMnemonics {
+		seedbytes, err := passphrase.MnemonicToKey(mnemonic)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Cannot recover key seed from mnemonic: %v\n", err)
+			os.Exit(1)
+		}
+		var seed crypto.Seed
+		copy(seed[:], seedbytes)
+		out <- crypto.GenerateSignatureSecrets(seed)
+	}
+	close(out)
+}
+
+// load accounts from ${ALGORAND_DATA}/${netname}-${version}/*.rootkey
+func fileAccounts(ac *libgoal.Client) (out <-chan *crypto.SignatureSecrets, err error) {
 	genID, err2 := ac.GenesisID()
 	if err2 != nil {
 		err = err2
@@ -53,10 +120,12 @@ func (pps *WorkerState) ensureAccounts(ac libgoal.Client, initCfg PpConfig) (acc
 		return
 	}
 
-	var srcAcctPresent bool
-	var richestAccount string
-	var richestBalance uint64
+	ch := make(chan *crypto.SignatureSecrets)
+	go enumerateFileAccounts(files, genesisDir, ch)
+	return ch, nil
+}
 
+func enumerateFileAccounts(files []os.DirEntry, genesisDir string, out chan<- *crypto.SignatureSecrets) {
 	for _, info := range files {
 		var handle db.Accessor
 
@@ -66,7 +135,7 @@ func (pps *WorkerState) ensureAccounts(ac libgoal.Client, initCfg PpConfig) (acc
 		}
 
 		// Fetch a handle to this database
-		handle, err = db.MakeErasableAccessor(filepath.Join(genesisDir, info.Name()))
+		handle, err := db.MakeErasableAccessor(filepath.Join(genesisDir, info.Name()))
 		if err != nil {
 			// Couldn't open it, skip it
 			continue
@@ -80,339 +149,319 @@ func (pps *WorkerState) ensureAccounts(ac libgoal.Client, initCfg PpConfig) (acc
 			continue
 		}
 
-		publicKey := root.Secrets().SignatureVerifier
-		accountAddress := basics.Address(publicKey)
+		out <- root.Secrets()
+	}
+	close(out)
+}
 
-		if accountAddress.String() == cfg.SrcAccount {
-			srcAcctPresent = true
-		}
+func (pps *WorkerState) ensureAccounts(ac *libgoal.Client) (err error) {
+	if pps.accounts == nil {
+		pps.accounts = make(map[string]*pingPongAccount)
+	}
 
-		amt, err := ac.GetBalance(accountAddress.String())
-		if err != nil {
-			return nil, PpConfig{}, err
-		}
+	if pps.cinfo.OptIns == nil {
+		pps.cinfo.OptIns = make(map[uint64][]string, pps.cfg.NumAsset+pps.cfg.NumApp)
+	}
+	if pps.cinfo.AssetParams == nil {
+		pps.cinfo.AssetParams = make(map[uint64]model.AssetParams, pps.cfg.NumAsset)
+	}
+	if pps.cinfo.AppParams == nil {
+		pps.cinfo.AppParams = make(map[uint64]model.ApplicationParams, pps.cfg.NumApp)
+	}
 
-		if !srcAcctPresent && amt > richestBalance {
-			richestAccount = accountAddress.String()
-			richestBalance = amt
-		}
+	sources := make([]<-chan *crypto.SignatureSecrets, 0, 2)
+	// read file accounts for local big source money
+	var fileSource <-chan *crypto.SignatureSecrets
+	fileSource, err = fileAccounts(ac)
+	if err != nil {
+		return
+	}
+	sources = append(sources, fileSource)
+	if pps.cfg.DeterministicKeys {
+		// add deterministic key accounts for re-use across runs
+		detSource := deterministicAccounts(pps.cfg)
+		sources = append(sources, detSource)
+	}
 
-		if !initCfg.Quiet {
-			fmt.Printf("Found local account: %s -> %v\n", accountAddress.String(), amt)
-		}
+	var srcAcctPresent bool
+	var richestAccount string
+	var richestBalance uint64
 
-		accounts[accountAddress.String()] = &pingPongAccount{
-			balance: amt,
-			sk:      root.Secrets(),
-			pk:      accountAddress,
+	for _, source := range sources {
+		for secret := range source {
+			publicKey := secret.SignatureVerifier
+			accountAddress := basics.Address(publicKey)
+			addr := accountAddress.String()
+
+			if addr == pps.cfg.SrcAccount {
+				srcAcctPresent = true
+			}
+
+			ai, aiErr := ac.AccountInformation(addr, true)
+			if aiErr != nil {
+				return aiErr
+			}
+			amt := ai.Amount
+
+			if !srcAcctPresent && amt > richestBalance {
+				richestAccount = addr
+				richestBalance = amt
+			}
+
+			ppa := &pingPongAccount{
+				sk: secret,
+				pk: accountAddress,
+			}
+			ppa.balance.Store(amt)
+
+			pps.integrateAccountInfo(addr, ppa, ai)
+
+			if !pps.cfg.Quiet {
+				fmt.Printf("Found local account: %s\n", ppa.String())
+			}
+
+			pps.accounts[addr] = ppa
 		}
 	}
 
 	if !srcAcctPresent {
-		if cfg.SrcAccount != "" {
-			err = fmt.Errorf("specified Source Account '%s' not found", cfg.SrcAccount)
+		if pps.cfg.SrcAccount != "" {
+			err = fmt.Errorf("specified Source Account '%s' not found", pps.cfg.SrcAccount)
 			return
 		}
 
-		if richestBalance >= cfg.MinAccountFunds {
-			cfg.SrcAccount = richestAccount
+		if richestBalance >= pps.cfg.MinAccountFunds {
+			pps.cfg.SrcAccount = richestAccount
 
 			fmt.Printf("Identified richest account to use for Source Account: %s -> %v\n", richestAccount, richestBalance)
 		} else {
-			err = fmt.Errorf("no accounts found with sufficient stake (> %d)", cfg.MinAccountFunds)
+			err = fmt.Errorf("no accounts found with sufficient stake (> %d)", pps.cfg.MinAccountFunds)
 			return
 		}
 	} else {
-		fmt.Printf("Located Source Account: %s -> %v\n", cfg.SrcAccount, accounts[cfg.SrcAccount])
+		fmt.Printf("Located Source Account: %s -> %v\n", pps.cfg.SrcAccount, pps.accounts[pps.cfg.SrcAccount])
 	}
 
 	return
 }
 
-// Prepare assets for asset transaction testing
-// Step 1) Create X assets for each of the participant accounts
-// Step 2) For each participant account, opt-in to assets of all other participant accounts
-// Step 3) Evenly distribute the assets across all participant accounts
-func (pps *WorkerState) prepareAssets(accounts map[string]*pingPongAccount, client libgoal.Client) (resultAssetMaps map[uint64]v1.AssetParams, optIns map[uint64][]string, err error) {
-	proto, err := getProto(client)
+func (pps *WorkerState) integrateAccountInfo(addr string, ppa *pingPongAccount, ai model.Account) {
+	ppa.balance.Store(ai.Amount)
+	// assets this account has created
+	if ai.CreatedAssets != nil {
+		for _, ap := range *ai.CreatedAssets {
+			assetID := ap.Index
+			pps.cinfo.OptIns[assetID] = uniqueAppend(pps.cinfo.OptIns[assetID], addr)
+			pps.cinfo.AssetParams[assetID] = ap.Params
+		}
+	}
+	// assets held
+	if ai.Assets != nil {
+		for _, holding := range *ai.Assets {
+			assetID := holding.AssetID
+			pps.cinfo.OptIns[assetID] = uniqueAppend(pps.cinfo.OptIns[assetID], addr)
+			if ppa.holdings == nil {
+				ppa.holdings = make(map[uint64]uint64)
+			}
+			ppa.holdings[assetID] = holding.Amount
+		}
+	}
+	// apps created by this account
+	if ai.CreatedApps != nil {
+		for _, ap := range *ai.CreatedApps {
+			appID := ap.Id
+			pps.cinfo.OptIns[appID] = uniqueAppend(pps.cinfo.OptIns[appID], addr)
+			pps.cinfo.AppParams[appID] = ap.Params
+		}
+	}
+	// apps opted into
+	if ai.AppsLocalState != nil {
+		for _, localState := range *ai.AppsLocalState {
+			appID := localState.Id
+			pps.cinfo.OptIns[appID] = uniqueAppend(pps.cinfo.OptIns[appID], addr)
+		}
+	}
+}
+
+type assetopti struct {
+	assetID uint64
+	params  model.AssetParams
+	optins  []string // addr strings
+}
+
+type assetSet []assetopti
+
+// Len is part of sort.Interface
+func (as *assetSet) Len() int {
+	return len(*as)
+}
+
+// Less is part of sort.Interface
+// This is a reversed sort, higher values first
+func (as *assetSet) Less(a, b int) bool {
+	return len((*as)[a].optins) > len((*as)[b].optins)
+}
+
+// Swap is part of sort.Interface
+func (as *assetSet) Swap(a, b int) {
+	t := (*as)[a]
+	(*as)[a] = (*as)[b]
+	(*as)[b] = t
+}
+
+func (pps *WorkerState) prepareAssets(client *libgoal.Client) (err error) {
+	if pps.cinfo.AssetParams == nil {
+		pps.cinfo.AssetParams = make(map[uint64]model.AssetParams)
+	}
+	if pps.cinfo.OptIns == nil {
+		pps.cinfo.OptIns = make(map[uint64][]string)
+	}
+
+	// create new assets as needed
+	err = pps.makeNewAssets(client)
 	if err != nil {
 		return
 	}
 
-	resultAssetMaps = make(map[uint64]v1.AssetParams)
-
-	// optIns contains own and explicitly opted-in assets
-	optIns = make(map[uint64][]string)
-	numCreatedAssetsByAddr := make(map[string]int, len(accounts))
-
-	nextSendTime := time.Now()
-
-	// 1) Create X assets for each of the participant accounts
-	for addr := range accounts {
-		if addr == pps.cfg.SrcAccount {
-			continue
+	// find the most-opted-in assets to work with
+	assets := make([]assetopti, len(pps.cinfo.AssetParams))
+	pos := 0
+	for assetID, params := range pps.cinfo.AssetParams {
+		assets[pos].assetID = assetID
+		assets[pos].params = params
+		assets[pos].optins = pps.cinfo.OptIns[assetID]
+		pos++
+	}
+	ta := assetSet(assets)
+	sort.Sort(&ta)
+	if len(assets) > int(pps.cfg.NumAsset) {
+		assets = assets[:pps.cfg.NumAsset]
+		nap := make(map[uint64]model.AssetParams, pps.cfg.NumAsset)
+		for _, asset := range assets {
+			nap[asset.assetID] = asset.params
 		}
-		addrAccount, addrErr := client.AccountInformation(addr)
-		if addrErr != nil {
-			fmt.Printf("Cannot lookup source account %v\n", addr)
-			err = addrErr
-			return
-		}
+		pps.cinfo.AssetParams = nap
+	}
 
-		toCreate := int(pps.cfg.NumAsset) - len(addrAccount.AssetParams)
-		numCreatedAssetsByAddr[addr] = toCreate
+	// opt-in more accounts as needed
+	for assetID := range pps.cinfo.AssetParams {
+		for addr, acct := range pps.accounts {
+			_, has := acct.holdings[assetID]
+			if !has {
+				tx, sendErr := client.MakeUnsignedAssetSendTx(assetID, 0, addr, "", "")
+				if sendErr != nil {
+					fmt.Printf("Cannot initiate asset optin %v in account %v\n", assetID, addr)
+					err = sendErr
+					continue
+				}
 
-		fmt.Printf("Creating %v create asset transaction for account %v \n", toCreate, addr)
-		fmt.Printf("cfg.NumAsset %v, addrAccount.AssetParams %v\n", pps.cfg.NumAsset, addrAccount.AssetParams)
+				tx, err = client.FillUnsignedTxTemplate(addr, 0, 0, pps.cfg.MaxFee, tx)
+				if err != nil {
+					fmt.Printf("Cannot fill asset optin %v in account %v\n", assetID, addr)
+					continue
+				}
+				tx.Note = pps.makeNextUniqueNoteField()
 
-		totalSupply := pps.cfg.MinAccountAsset * uint64(pps.cfg.NumPartAccounts) * 9 * uint64(pps.cfg.GroupSize) * uint64(pps.cfg.RefreshTime.Seconds()) / pps.cfg.TxnPerSec
-
-		// create assets in participant account
-		for i := 0; i < toCreate; i++ {
-			var metaLen = 32
-			meta := make([]byte, metaLen)
-			crypto.RandBytes(meta[:])
-
-			if totalSupply < pps.cfg.MinAccountAsset { // overflow
-				fmt.Printf("Too many NumPartAccounts\n")
-				return
-			}
-			assetName := fmt.Sprintf("pong%d", i)
-			if !pps.cfg.Quiet {
-				fmt.Printf("Creating asset %s\n", assetName)
-			}
-			tx, createErr := client.MakeUnsignedAssetCreateTx(totalSupply, false, addr, addr, addr, addr, "ping", assetName, "", meta, 0)
-			if createErr != nil {
-				fmt.Printf("Cannot make asset create txn with meta %v\n", meta)
-				err = createErr
-				return
-			}
-			tx, err = client.FillUnsignedTxTemplate(addr, 0, 0, pps.cfg.MaxFee, tx)
-			if err != nil {
-				fmt.Printf("Cannot fill asset creation txn\n")
-				return
-			}
-			tx.Note = pps.makeNextUniqueNoteField()
-			schedule(pps.cfg.TxnPerSec, &nextSendTime)
-			_, err = signAndBroadcastTransaction(accounts[addr], tx, client)
-			if err != nil {
-				_, _ = fmt.Fprintf(os.Stderr, "signing and broadcasting asset creation failed with error %v\n", err)
-				return
+				pps.schedule(1)
+				_, err = signAndBroadcastTransaction(acct, tx, client)
+				if err != nil {
+					_, _ = fmt.Fprintf(os.Stderr, "signing and broadcasting asset optin failed with error %v\n", err)
+					continue
+				}
+				pps.cinfo.OptIns[assetID] = uniqueAppend(pps.cinfo.OptIns[assetID], addr)
 			}
 		}
 	}
 
-	// wait until all the assets created
-	allAssets := make(map[uint64]string, int(pps.cfg.NumAsset)*len(accounts))
-	for addr := range accounts {
-		if addr == pps.cfg.SrcAccount {
-			continue
+	// Could distribute value here, but just waits till constructAssetTxn()
+	return
+}
+
+const totalSupply = 10_000_000_000_000_000
+
+func (pps *WorkerState) makeNewAssets(client *libgoal.Client) (err error) {
+	if len(pps.cinfo.AssetParams) >= int(pps.cfg.NumAsset) {
+		return
+	}
+	assetsNeeded := int(pps.cfg.NumAsset) - len(pps.cinfo.AssetParams)
+	newAssetAddrs := make(map[string]*pingPongAccount, assetsNeeded)
+	for addr, acct := range pps.accounts {
+		if assetsNeeded <= 0 {
+			break
 		}
-		var account v1.Account
-		deadline := time.Now().Add(3 * time.Minute)
-		for {
-			account, err = client.AccountInformation(addr)
+		assetsNeeded--
+		var meta [32]byte
+		crypto.RandBytes(meta[:])
+		assetName := fmt.Sprintf("pong%d_%d", len(pps.cinfo.AssetParams), rand.Intn(8999)+1000)
+		if !pps.cfg.Quiet {
+			fmt.Printf("Creating asset %s\n", assetName)
+		}
+		tx, createErr := client.MakeUnsignedAssetCreateTx(totalSupply, false, addr, addr, addr, addr, "ping", assetName, "", meta[:], 0)
+		if createErr != nil {
+			fmt.Printf("Cannot make asset create txn with meta %v\n", meta)
+			err = createErr
+			return
+		}
+		tx, err = client.FillUnsignedTxTemplate(addr, 0, 0, pps.cfg.MaxFee, tx)
+		if err != nil {
+			fmt.Printf("Cannot fill asset creation txn\n")
+			return
+		}
+		tx.Note = pps.makeNextUniqueNoteField()
+		pps.schedule(1)
+		_, err = signAndBroadcastTransaction(pps.accounts[addr], tx, client)
+		if err != nil {
+			_, _ = fmt.Fprintf(os.Stderr, "signing and broadcasting asset creation failed with error %v\n", err)
+			return
+		}
+		newAssetAddrs[addr] = acct
+	}
+	// wait for new assets to be created, fetch account data for them
+	newAssets := make(map[uint64]model.AssetParams, assetsNeeded)
+	timeout := time.Now().Add(10 * time.Second)
+	for len(newAssets) < assetsNeeded {
+		for addr, acct := range newAssetAddrs {
+			ai, err := client.AccountInformation(addr, true)
 			if err != nil {
 				fmt.Printf("Warning: cannot lookup source account after assets creation")
 				time.Sleep(1 * time.Second)
 				continue
 			}
-			if len(account.AssetParams) >= numCreatedAssetsByAddr[addr] {
-				break
-			}
-			if time.Now().After(deadline) {
-				err = fmt.Errorf("asset creation took too long")
-				fmt.Printf("Error: %s\n", err.Error())
-				return
-			}
-			waitForNextRoundOrSleep(client, 500*time.Millisecond)
-		}
-		assetParams := account.AssetParams
-		if !pps.cfg.Quiet {
-			fmt.Printf("Configured %d assets %+v\n", len(assetParams), assetParams)
-		}
-		// add own asset to opt-ins since asset creators are auto-opted in
-		for k := range account.AssetParams {
-			optIns[k] = append(optIns[k], addr)
-			allAssets[k] = addr
-		}
-	}
-
-	// optInsByAddr tracks only explicitly opted-in assetsA
-	optInsByAddr := make(map[string]map[uint64]bool)
-
-	// 2) For each participant account, opt-in up to proto.MaxAssetsPerAccount assets of all other participant accounts
-	for addr := range accounts {
-		if addr == pps.cfg.SrcAccount {
-			continue
-		}
-		if !pps.cfg.Quiet {
-			fmt.Printf("Opting to account %v\n", addr)
-		}
-
-		acct, addrErr := client.AccountInformation(addr)
-		if addrErr != nil {
-			fmt.Printf("Cannot lookup optin account\n")
-			err = addrErr
-			return
-		}
-		maxAssetsPerAccount := proto.MaxAssetsPerAccount
-		// TODO : given that we've added unlimited asset support, we should revise this
-		// code so that we'll have control on how many asset/account we want to create.
-		// for now, I'm going to keep the previous max values until we have refactored this code.
-		if maxAssetsPerAccount == 0 {
-			maxAssetsPerAccount = config.Consensus[protocol.ConsensusV30].MaxAssetsPerAccount
-		}
-		numSlots := maxAssetsPerAccount - len(acct.Assets)
-		optInsByAddr[addr] = make(map[uint64]bool)
-		for k, creator := range allAssets {
-			if creator == addr {
-				continue
-			}
-			// do we have any more asset slots for this?
-			if numSlots <= 0 {
-				break
-			}
-			numSlots--
-
-			// opt-in asset k for addr
-			tx, sendErr := client.MakeUnsignedAssetSendTx(k, 0, addr, "", "")
-			if sendErr != nil {
-				fmt.Printf("Cannot initiate asset optin %v in account %v\n", k, addr)
-				err = sendErr
-				return
-			}
-
-			tx, err = client.FillUnsignedTxTemplate(addr, 0, 0, pps.cfg.MaxFee, tx)
-			if err != nil {
-				fmt.Printf("Cannot fill asset optin %v in account %v\n", k, addr)
-				return
-			}
-			tx.Note = pps.makeNextUniqueNoteField()
-
-			schedule(pps.cfg.TxnPerSec, &nextSendTime)
-			_, err = signAndBroadcastTransaction(accounts[addr], tx, client)
-			if err != nil {
-				_, _ = fmt.Fprintf(os.Stderr, "signing and broadcasting asset optin failed with error %v\n", err)
-				return
-			}
-			optIns[k] = append(optIns[k], addr)
-			optInsByAddr[addr][k] = true
-		}
-	}
-
-	// wait until all opt-ins completed
-	waitForNextRoundOrSleep(client, 500*time.Millisecond)
-	for addr := range accounts {
-		if addr == pps.cfg.SrcAccount {
-			continue
-		}
-		expectedAssets := numCreatedAssetsByAddr[addr] + len(optInsByAddr[addr])
-		var account v1.Account
-		deadline := time.Now().Add(3 * time.Minute)
-		for {
-			account, err = client.AccountInformation(addr)
-			if err != nil {
-				fmt.Printf("Warning: cannot lookup source account after assets opt in")
-				time.Sleep(1 * time.Second)
-				continue
-			}
-			if len(account.Assets) == expectedAssets {
-				break
-			} else if len(account.Assets) > expectedAssets {
-				err = fmt.Errorf("account %v has too many assets %d > %d ", addr, len(account.Assets), expectedAssets)
-				return
-			}
-
-			if time.Now().After(deadline) {
-				err = fmt.Errorf("asset opting in took too long")
-				fmt.Printf("Error: %s\n", err.Error())
-				return
-			}
-			waitForNextRoundOrSleep(client, 500*time.Millisecond)
-		}
-	}
-
-	// Step 3) Evenly distribute the assets across all opted-in accounts
-	for k, creator := range allAssets {
-		if !pps.cfg.Quiet {
-			fmt.Printf("Distributing asset %+v from account %v\n", k, creator)
-		}
-		creatorAccount, creatorErr := client.AccountInformation(creator)
-		if creatorErr != nil {
-			fmt.Printf("Cannot lookup source account\n")
-			err = creatorErr
-			return
-		}
-		assetParams := creatorAccount.AssetParams
-
-		for _, addr := range optIns[k] {
-			assetAmt := assetParams[k].Total / uint64(len(optIns[k]))
-			if !pps.cfg.Quiet {
-				fmt.Printf("Distributing assets from %v to %v \n", creator, addr)
-			}
-
-			tx, sendErr := client.MakeUnsignedAssetSendTx(k, assetAmt, addr, "", "")
-			if sendErr != nil {
-				_, _ = fmt.Fprintf(os.Stdout, "error making unsigned asset send tx %v\n", sendErr)
-				err = fmt.Errorf("error making unsigned asset send tx : %w", sendErr)
-				return
-			}
-			tx.Note = pps.makeNextUniqueNoteField()
-			tx, sendErr = client.FillUnsignedTxTemplate(creator, 0, 0, pps.cfg.MaxFee, tx)
-			if sendErr != nil {
-				_, _ = fmt.Fprintf(os.Stdout, "error making unsigned asset send tx %v\n", sendErr)
-				err = fmt.Errorf("error making unsigned asset send tx : %w", sendErr)
-				return
-			}
-			tx.LastValid = tx.FirstValid + 5
-			if pps.cfg.MaxFee == 0 {
-				var suggestedFee uint64
-				suggestedFee, err = client.SuggestedFee()
-				if err != nil {
-					_, _ = fmt.Fprintf(os.Stdout, "error retrieving suggestedFee: %v\n", err)
-					return
-				}
-				if suggestedFee > tx.Fee.Raw {
-					tx.Fee.Raw = suggestedFee
+			if ai.CreatedAssets != nil {
+				for _, ap := range *ai.CreatedAssets {
+					assetID := ap.Index
+					pps.cinfo.OptIns[assetID] = uniqueAppend(pps.cinfo.OptIns[assetID], addr)
+					_, has := pps.cinfo.AssetParams[assetID]
+					if !has {
+						newAssets[assetID] = ap.Params
+					}
 				}
 			}
-
-			schedule(pps.cfg.TxnPerSec, &nextSendTime)
-			_, err = signAndBroadcastTransaction(accounts[creator], tx, client)
-			if err != nil {
-				_, _ = fmt.Fprintf(os.Stderr, "signing and broadcasting asset distribution failed with error %v\n", err)
-				return
+			if ai.Assets != nil {
+				for _, holding := range *ai.Assets {
+					assetID := holding.AssetID
+					pps.cinfo.OptIns[assetID] = uniqueAppend(pps.cinfo.OptIns[assetID], addr)
+					if acct.holdings == nil {
+						acct.holdings = make(map[uint64]uint64)
+					}
+					acct.holdings[assetID] = holding.Amount
+				}
 			}
 		}
-		// append the asset to the result assets
-		resultAssetMaps[k] = assetParams[k]
-	}
-
-	// wait for all transfers acceptance
-	waitForNextRoundOrSleep(client, 500*time.Millisecond)
-	deadline := time.Now().Add(3 * time.Minute)
-	var pending v1.PendingTransactions
-	for {
-		pending, err = client.GetPendingTransactions(100)
-		if err != nil {
-			fmt.Printf("Warning: cannot get pending txn")
-			time.Sleep(1 * time.Second)
-			continue
-		}
-		if pending.TotalTxns == 0 {
+		if time.Now().After(timeout) {
+			// complain, but try to keep running on what assets we have
+			log.Printf("WARNING took too long to create new assets")
+			// TODO: error?
 			break
 		}
-		if time.Now().After(deadline) {
-			fmt.Printf("Warning: assets distribution took too long")
-			break
-		}
-		waitForNextRoundOrSleep(client, 500*time.Millisecond)
 	}
-	return
+	for assetID, ap := range newAssets {
+		pps.cinfo.AssetParams[assetID] = ap
+	}
+	return nil
 }
 
-func signAndBroadcastTransaction(senderAccount *pingPongAccount, tx transactions.Transaction, client libgoal.Client) (txID string, err error) {
+func signAndBroadcastTransaction(senderAccount *pingPongAccount, tx transactions.Transaction, client *libgoal.Client) (txID string, err error) {
 	signedTx := tx.Sign(senderAccount.sk)
 	txID, err = client.BroadcastTransaction(signedTx)
 	if err != nil {
@@ -445,7 +494,67 @@ func genBigNoOpAndBigHashes(numOps uint32, numHashes uint32, hashSize string) []
 	return ops.Program
 }
 
-func genAppProgram(numOps uint32, numHashes uint32, hashSize string, numGlobalKeys uint32, numLocalKeys uint32) ([]byte, string) {
+func genAppProgram(numOps uint32, numHashes uint32, hashSize string, numGlobalKeys, numLocalKeys, numBoxUpdate, numBoxRead uint32) ([]byte, string) {
+	if numBoxUpdate != 0 || numBoxRead != 0 {
+		prologue := `#pragma version 8
+			txn ApplicationID
+			bz done
+		`
+		createBoxes := `
+			byte "%d"
+			int 1024
+			box_create
+			pop
+		`
+		updateBoxes := `
+			byte "%d"
+			int 0
+			byte "1"
+			box_replace
+		`
+		getBoxes := `
+			byte "%d"
+			box_get
+			assert
+			pop
+		`
+		done := `
+			done:
+			int 1
+			return
+		`
+
+		progParts := []string{prologue}
+
+		// note: only one of numBoxUpdate or numBoxRead should be nonzero
+		if numBoxUpdate != 0 {
+			for i := uint32(0); i < numBoxUpdate; i++ {
+				progParts = append(progParts, fmt.Sprintf(createBoxes, i))
+			}
+
+			for i := uint32(0); i < numBoxUpdate; i++ {
+				progParts = append(progParts, fmt.Sprintf(updateBoxes, i))
+			}
+		} else {
+			for i := uint32(0); i < numBoxRead; i++ {
+				progParts = append(progParts, fmt.Sprintf(createBoxes, i))
+			}
+
+			for i := uint32(0); i < numBoxRead; i++ {
+				progParts = append(progParts, fmt.Sprintf(getBoxes, i))
+			}
+		}
+		progParts = append(progParts, done)
+
+		// assemble
+		progAsm := strings.Join(progParts, "\n")
+		ops, err := logic.AssembleString(progAsm)
+		if err != nil {
+			panic(err)
+		}
+		return ops.Program, progAsm
+	}
+
 	prologueSize := uint32(2 + 3 + 2 + 1 + 1 + 3)
 	prologue := `#pragma version 2
 		txn ApplicationID
@@ -580,7 +689,7 @@ func genAppProgram(numOps uint32, numHashes uint32, hashSize string, numGlobalKe
 	return ops.Program, progAsm
 }
 
-func waitForNextRoundOrSleep(client libgoal.Client, waitTime time.Duration) {
+func waitForNextRoundOrSleep(client *libgoal.Client, waitTime time.Duration) {
 	status, err := client.Status()
 	if err == nil {
 		status, err = client.WaitForRound(status.LastRound)
@@ -591,7 +700,7 @@ func waitForNextRoundOrSleep(client libgoal.Client, waitTime time.Duration) {
 	time.Sleep(waitTime)
 }
 
-func (pps *WorkerState) sendAsGroup(txgroup []transactions.Transaction, client libgoal.Client, senders []string) (err error) {
+func (pps *WorkerState) sendAsGroup(txgroup []transactions.Transaction, client *libgoal.Client, senders []string) (err error) {
 	if len(txgroup) == 0 {
 		err = fmt.Errorf("sendAsGroup: empty group")
 		return
@@ -623,7 +732,7 @@ repeat:
 
 var proto *config.ConsensusParams
 
-func getProto(client libgoal.Client) (config.ConsensusParams, error) {
+func getProto(client *libgoal.Client) (config.ConsensusParams, error) {
 	if proto == nil {
 		var err error
 		status, err := client.Status()
@@ -640,208 +749,213 @@ func getProto(client libgoal.Client) (config.ConsensusParams, error) {
 	return *proto, nil
 }
 
-func (pps *WorkerState) prepareApps(accounts map[string]*pingPongAccount, client libgoal.Client, cfg PpConfig) (appParams map[uint64]v1.AppParams, optIns map[uint64][]string, err error) {
-	proto, err := getProto(client)
-	if err != nil {
-		return
+// ensure that cfg.NumPartAccounts have cfg.NumAppOptIn opted in selecting from cfg.NumApp
+func (pps *WorkerState) prepareApps(client *libgoal.Client) (err error) {
+	if pps.cinfo.AppParams == nil {
+		pps.cinfo.AppParams = make(map[uint64]model.ApplicationParams)
 	}
 
-	toCreate := int(cfg.NumApp)
-	appsPerAcct := proto.MaxAppsCreated
-	// TODO : given that we've added unlimited app support, we should revise this
-	// code so that we'll have control on how many app/account we want to create.
-	// for now, I'm going to keep the previous max values until we have refactored this code.
-	if appsPerAcct == 0 {
-		appsPerAcct = config.Consensus[protocol.ConsensusV30].MaxAppsCreated
+	if pps.cinfo.OptIns == nil {
+		pps.cinfo.OptIns = make(map[uint64][]string, pps.cfg.NumAsset+pps.cfg.NumApp)
 	}
 
-	// create min(groupSize, maxAppsPerAcct) per account to optimize sending in batches
-	groupSize := proto.MaxTxGroupSize
-	if appsPerAcct > groupSize {
-		appsPerAcct = groupSize
-	}
+	// generate new apps
+	// cycle through accts and create apps until the desired quantity is reached
+	var txgroup []transactions.Transaction
+	var senders []string
+	var newAppAddrs []string
+	appsPerAddr := make(map[string]int)
+	totalAppCnt := len(pps.cinfo.AppParams)
+	for totalAppCnt < int(pps.cfg.NumApp) {
+		for addr, acct := range pps.accounts {
+			if totalAppCnt >= int(pps.cfg.NumApp) {
+				break
+			}
 
-	acctNeeded := toCreate / appsPerAcct
-	if toCreate%appsPerAcct != 0 {
-		acctNeeded++
-	}
-	if acctNeeded >= len(accounts) { // >= because cfg.SrcAccount is skipped
-		err = fmt.Errorf("need %d accts to create %d apps but got only %d accts", acctNeeded, toCreate, len(accounts))
-		return
-	}
-	maxOptIn := uint32(config.Consensus[protocol.ConsensusCurrentVersion].MaxAppsOptedIn)
-	if maxOptIn > 0 && cfg.NumAppOptIn > maxOptIn {
-		err = fmt.Errorf("each acct can only opt in to %d but %d requested", maxOptIn, cfg.NumAppOptIn)
-		return
-	}
-
-	appAccounts := make([]v1.Account, len(accounts))
-	accountsCount := 0
-	for acctAddr := range accounts {
-		if acctAddr == cfg.SrcAccount {
-			continue
-		}
-		appAccounts[accountsCount], err = client.AccountInformation(acctAddr)
-		if err != nil {
-			fmt.Printf("Warning, cannot lookup acctAddr account %s", acctAddr)
-			return
-		}
-		accountsCount++
-		if accountsCount == acctNeeded {
-			break
-		}
-	}
-	appAccounts = appAccounts[:accountsCount]
-
-	if !cfg.Quiet {
-		fmt.Printf("Selected temp account:\n")
-		for _, acct := range appAccounts {
-			fmt.Printf("%s\n", acct.Address)
-		}
-	}
-
-	// generate app program with roughly some number of operations
-	prog, asm := genAppProgram(cfg.AppProgOps, cfg.AppProgHashes, cfg.AppProgHashSize, cfg.AppGlobKeys, cfg.AppLocalKeys)
-	if !cfg.Quiet {
-		fmt.Printf("generated program: \n%s\n", asm)
-	}
-	globSchema := basics.StateSchema{NumByteSlice: proto.MaxGlobalSchemaEntries}
-	locSchema := basics.StateSchema{NumByteSlice: proto.MaxLocalSchemaEntries}
-
-	// for each account, store the number of expected applications.
-	accountsApplicationCount := make(map[string]int)
-
-	// create apps
-	for idx, appAccount := range appAccounts {
-		begin := idx * appsPerAcct
-		end := (idx + 1) * appsPerAcct
-		if end > toCreate {
-			end = toCreate
-		}
-
-		var txgroup []transactions.Transaction
-		var senders []string
-		for i := begin; i < end; i++ {
 			var tx transactions.Transaction
-
-			tx, err = client.MakeUnsignedAppCreateTx(transactions.NoOpOC, prog, prog, globSchema, locSchema, nil, nil, nil, nil, 0)
+			tx, err = pps.newApp(addr, client)
 			if err != nil {
-				fmt.Printf("Cannot create app txn\n")
-				panic(err)
-				// TODO : if we fail here for too long, we should re-create new accounts, etc.
+				return
 			}
-
-			tx, err = client.FillUnsignedTxTemplate(appAccount.Address, 0, 0, cfg.MaxFee, tx)
-			if err != nil {
-				fmt.Printf("Cannot fill app creation txn\n")
-				panic(err)
-				// TODO : if we fail here for too long, we should re-create new accounts, etc.
-			}
-
-			// Ensure different txids
-			tx.Note = pps.makeNextUniqueNoteField()
-
+			newAppAddrs = append(newAppAddrs, addr)
+			acct.addBalance(-int64(pps.cfg.MaxFee))
 			txgroup = append(txgroup, tx)
-			accounts[appAccount.Address].addBalance(-int64(tx.Fee.Raw))
-			senders = append(senders, appAccount.Address)
-			accountsApplicationCount[appAccount.Address]++
-		}
+			senders = append(senders, addr)
+			if len(txgroup) == int(pps.cfg.GroupSize) {
+				pps.schedule(len(txgroup))
+				err = pps.sendAsGroup(txgroup, client, senders)
+				if err != nil {
+					return
+				}
+				txgroup = txgroup[:0]
+				senders = senders[:0]
+			}
 
+			appsPerAddr[addr]++
+			totalAppCnt++
+		}
+	}
+	if len(txgroup) > 0 {
+		pps.schedule(len(txgroup))
 		err = pps.sendAsGroup(txgroup, client, senders)
 		if err != nil {
-			balance, err2 := client.GetBalance(appAccount.Address)
-			if err2 == nil {
-				fmt.Printf("account %v balance is %d, logged balance is %d\n", appAccount.Address, balance, accounts[appAccount.Address].getBalance())
-			} else {
-				fmt.Printf("account %v balance cannot be determined : %v\n", appAccount.Address, err2)
-			}
 			return
 		}
-		if !cfg.Quiet {
-			fmt.Printf("Created new %d apps\n", len(txgroup))
-		}
+		txgroup = txgroup[:0]
+		senders = senders[:0]
 	}
 
-	// get these apps
-	var aidxs []uint64
-	appParams = make(map[uint64]v1.AppParams)
-	for _, appAccount := range appAccounts {
-		var account v1.Account
+	// update pps.cinfo.AppParams to ensure newly created apps are present
+	for _, addr := range newAppAddrs {
+		var ai model.Account
 		for {
-			account, err = client.AccountInformation(appAccount.Address)
+			ai, err = client.AccountInformation(addr, true)
 			if err != nil {
 				fmt.Printf("Warning, cannot lookup source account")
 				return
 			}
-			if len(account.AppParams) >= accountsApplicationCount[appAccount.Address] {
+			if ai.CreatedApps != nil && len(*ai.CreatedApps) >= appsPerAddr[addr] {
 				break
 			}
 			waitForNextRoundOrSleep(client, 500*time.Millisecond)
 			// TODO : if we fail here for too long, we should re-create new accounts, etc.
 		}
-		for idx, v := range account.AppParams {
-			appParams[idx] = v
-			aidxs = append(aidxs, idx)
+		ai, err = client.AccountInformation(addr, true)
+		if err != nil {
+			return
+		}
+
+		for _, ap := range *ai.CreatedApps {
+			appID := ap.Id
+			pps.cinfo.OptIns[appID] = uniqueAppend(pps.cinfo.OptIns[appID], addr)
+			pps.cinfo.AppParams[appID] = ap.Params
 		}
 	}
-	if len(aidxs) != len(appParams) {
-		err = fmt.Errorf("duplicates in aidxs, %d != %d", len(aidxs), len(appParams))
-		return
-	}
 
-	// time to opt in to these apps
-	if cfg.NumAppOptIn > 0 {
-		optIns = make(map[uint64][]string)
-		for addr := range accounts {
-			if addr == cfg.SrcAccount {
-				continue
+	// opt-in more accounts to apps
+	acctPerApp := (pps.cfg.NumAppOptIn * pps.cfg.NumPartAccounts) / pps.cfg.NumApp
+	for appid := range pps.cinfo.AppParams {
+		optins := pps.cinfo.OptIns[appid]
+		for addr, acct := range pps.accounts {
+			if len(optins) >= int(acctPerApp) {
+				break
 			}
-			var txgroup []transactions.Transaction
-			var senders []string
-			permAppIndices := rand.Perm(len(aidxs))
-			for i := uint32(0); i < cfg.NumAppOptIn; i++ {
-				j := permAppIndices[i]
-				aidx := aidxs[j]
-				var tx transactions.Transaction
-				tx, err = client.MakeUnsignedAppOptInTx(aidx, nil, nil, nil, nil)
-				if err != nil {
-					fmt.Printf("Cannot create app txn\n")
-					panic(err)
-				}
-
-				tx, err = client.FillUnsignedTxTemplate(addr, 0, 0, cfg.MaxFee, tx)
-				if err != nil {
-					fmt.Printf("Cannot fill app creation txn\n")
-					panic(err)
-				}
-
-				// Ensure different txids
-				tx.Note = pps.makeNextUniqueNoteField()
-
-				optIns[aidx] = append(optIns[aidx], addr)
-
-				txgroup = append(txgroup, tx)
-				senders = append(senders, addr)
-				if len(txgroup) == groupSize {
-					err = pps.sendAsGroup(txgroup, client, senders)
-					if err != nil {
-						return
-					}
-					txgroup = txgroup[:0]
-					senders = senders[:0]
-				}
+			// opt-in the account to the app
+			var tx transactions.Transaction
+			tx, err = pps.appOptIn(addr, appid, client)
+			if err != nil {
+				return
 			}
-			// broadcast leftovers
-			if len(txgroup) > 0 {
+			acct.addBalance(-int64(pps.cfg.MaxFee))
+			txgroup = append(txgroup, tx)
+			senders = append(senders, addr)
+			if len(txgroup) == int(pps.cfg.GroupSize) {
+				pps.schedule(len(txgroup))
 				err = pps.sendAsGroup(txgroup, client, senders)
 				if err != nil {
 					return
 				}
+				txgroup = txgroup[:0]
+				senders = senders[:0]
 			}
+
+		}
+	}
+	if len(txgroup) > 0 {
+		pps.schedule(len(txgroup))
+		err = pps.sendAsGroup(txgroup, client, senders)
+		if err != nil {
+			return
+		}
+		//txgroup = txgroup[:0]
+		//senders = senders[:0]
+	}
+
+	for appid := range pps.cinfo.AppParams {
+		// use source account to fund all apps
+		err = pps.appFundFromSourceAccount(appid, client)
+		if err != nil {
+			return
 		}
 	}
 
 	return
+}
+
+func (pps *WorkerState) newApp(addr string, client *libgoal.Client) (tx transactions.Transaction, err error) {
+	// generate app program with roughly some number of operations
+	prog, asm := genAppProgram(pps.cfg.AppProgOps, pps.cfg.AppProgHashes, pps.cfg.AppProgHashSize, pps.cfg.AppGlobKeys, pps.cfg.AppLocalKeys, pps.cfg.NumBoxUpdate, pps.cfg.NumBoxRead)
+	if !pps.cfg.Quiet {
+		fmt.Printf("generated program: \n%s\n", asm)
+	}
+	globSchema := basics.StateSchema{NumByteSlice: proto.MaxGlobalSchemaEntries}
+	locSchema := basics.StateSchema{NumByteSlice: proto.MaxLocalSchemaEntries}
+
+	tx, err = client.MakeUnsignedAppCreateTx(transactions.NoOpOC, prog, prog, globSchema, locSchema, nil, nil, nil, nil, nil, 0)
+	if err != nil {
+		fmt.Printf("Cannot create app txn\n")
+		panic(err)
+		// TODO : if we fail here for too long, we should re-create new accounts, etc.
+	}
+
+	tx, err = client.FillUnsignedTxTemplate(addr, 0, 0, pps.cfg.MaxFee, tx)
+	if err != nil {
+		fmt.Printf("Cannot fill app creation txn\n")
+		panic(err)
+		// TODO : if we fail here for too long, we should re-create new accounts, etc.
+	}
+
+	// Ensure different txids
+	tx.Note = pps.makeNextUniqueNoteField()
+
+	return tx, err
+}
+
+func (pps *WorkerState) appOptIn(addr string, appID uint64, client *libgoal.Client) (tx transactions.Transaction, err error) {
+	tx, err = client.MakeUnsignedAppOptInTx(appID, nil, nil, nil, nil, nil)
+	if err != nil {
+		fmt.Printf("Cannot create app txn\n")
+		panic(err)
+	}
+
+	tx, err = client.FillUnsignedTxTemplate(addr, 0, 0, pps.cfg.MaxFee, tx)
+	if err != nil {
+		fmt.Printf("Cannot fill app creation txn\n")
+		panic(err)
+	}
+
+	// Ensure different txids
+	tx.Note = pps.makeNextUniqueNoteField()
+	return
+}
+
+func (pps *WorkerState) appFundFromSourceAccount(appID uint64, client *libgoal.Client) (err error) {
+	// currently, apps only need to be funded if boxes are used
+	if pps.getNumBoxes() > 0 {
+		var srcFunds uint64
+		srcFunds, err = client.GetBalance(pps.cfg.SrcAccount)
+		if err != nil {
+			return err
+		}
+
+		appAddr := basics.AppIndex(appID).Address()
+		mbr := proto.MinBalance +
+			proto.BoxFlatMinBalance*uint64(pps.getNumBoxes()) +
+			proto.BoxByteMinBalance*(proto.MaxBoxSize+uint64(proto.MaxAppKeyLen))*uint64(pps.getNumBoxes())
+
+		pps.schedule(1)
+		var txn transactions.Transaction
+		txn, err = pps.sendPaymentFromSourceAccount(client, appAddr.String(), 0, mbr, pps.accounts[pps.cfg.SrcAccount])
+		if err != nil {
+			return err
+		}
+
+		srcFunds -= mbr
+		srcFunds -= txn.Fee.Raw
+		pps.accounts[pps.cfg.SrcAccount].setBalance(srcFunds)
+	}
+
+	return nil
 }
 
 func takeTopAccounts(allAccounts map[string]*pingPongAccount, numAccounts uint32, srcAccount string) (accounts map[string]*pingPongAccount) {
@@ -871,17 +985,28 @@ func takeTopAccounts(allAccounts map[string]*pingPongAccount, numAccounts uint32
 	return
 }
 
-func generateAccounts(allAccounts map[string]*pingPongAccount, numAccounts uint32) {
+// generate random ephemeral accounts
+// TODO: don't do this and _always_ use the deterministic account mechanism?
+func (pps *WorkerState) generateAccounts() {
 	var seed crypto.Seed
 
-	for accountsRequired := int(numAccounts+1) - len(allAccounts); accountsRequired > 0; accountsRequired-- {
+	for accountsRequired := int(pps.cfg.NumPartAccounts+1) - len(pps.accounts); accountsRequired > 0; accountsRequired-- {
 		crypto.RandBytes(seed[:])
 		privateKey := crypto.GenerateSignatureSecrets(seed)
 		publicKey := basics.Address(privateKey.SignatureVerifier)
 
-		allAccounts[publicKey.String()] = &pingPongAccount{
+		pps.accounts[publicKey.String()] = &pingPongAccount{
 			sk: privateKey,
 			pk: publicKey,
 		}
 	}
+}
+
+func uniqueAppend(they []string, x string) []string {
+	for _, v := range they {
+		if v == x {
+			return they
+		}
+	}
+	return append(they, x)
 }

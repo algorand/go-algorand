@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -26,7 +26,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-// RemoteHookAdapter provides HTTP transport for WebDebuggerHook
+// RemoteHookAdapter provides HTTP transport for WebDebugger
 type RemoteHookAdapter struct {
 	debugger *Debugger
 }
@@ -38,7 +38,7 @@ func MakeRemoteHook(debugger *Debugger) *RemoteHookAdapter {
 	return r
 }
 
-// Setup adds HTTP handlers for remote WebDebuggerHook
+// Setup adds HTTP handlers for remote WebDebugger
 func (rha *RemoteHookAdapter) Setup(router *mux.Router) {
 	router.HandleFunc("/exec/register", rha.registerHandler).Methods("POST")
 	router.HandleFunc("/exec/update", rha.updateHandler).Methods("POST")
@@ -59,11 +59,7 @@ func (rha *RemoteHookAdapter) registerHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	// Register, and wait for user to acknowledge registration
-	err = rha.debugger.Register(&state)
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
+	rha.debugger.Register(&state)
 
 	// Proceed!
 	w.WriteHeader(http.StatusOK)
@@ -78,7 +74,7 @@ func (rha *RemoteHookAdapter) updateHandler(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Ask debugger to process and wait to continue
-	err = rha.debugger.Update(&state)
+	err = rha.debugger.update(&state)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -96,7 +92,7 @@ func (rha *RemoteHookAdapter) completeHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	// Ask debugger to process and wait to continue
-	err = rha.debugger.Complete(&state)
+	err = rha.debugger.complete(&state)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return

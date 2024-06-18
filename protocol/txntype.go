@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,6 +21,9 @@ package protocol
 
 // TxType is the type of the transaction written to the ledger
 type TxType string
+
+//msgp:allocbound TxType txTypeMaxLen
+const txTypeMaxLen = 7
 
 const (
 	// PaymentTx indicates a payment transaction

@@ -1,0 +1,79 @@
+// Copyright (C) 2019-2024 Algorand, Inc.
+// This file is part of go-algorand
+//
+// go-algorand is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as
+// published by the Free Software Foundation, either version 3 of the
+// License, or (at your option) any later version.
+//
+// go-algorand is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
+
+package main
+
+import (
+	"fmt"
+	"os"
+
+	xpkg "{{.XModulePath}}/{{.XPackagePath}}"
+	ypkg "{{.YModulePath}}/{{.YPackagePath}}"
+)
+
+func main() { 
+	xRoot := MakeType(xpkg.{{.XTypeInstance}}{})
+	yRoot := MakeType(ypkg.{{.YTypeInstance}}{})
+
+	// ---- BUILD ---- //
+	x, y := xRoot.Type, yRoot.Type
+
+	fmt.Printf("Build the Type Tree for %s\n\n", &xRoot)
+	xCycle := xRoot.Build()
+	xTgt := Target{ChildName{Name: fmt.Sprintf("%q", x)}, xRoot}
+
+	fmt.Printf("Build the Type Tree for %s\n\n", &yRoot)
+	yCycle := yRoot.Build()
+	yTgt := Target{ChildName{Name: fmt.Sprintf("%q", y)}, yRoot}
+
+	fmt.Printf("Potential CYCLE in %s:\n%s\n\n", &xRoot, xCycle)
+	fmt.Printf("Potential CYCLE in %s:\n%s\n\n", &yRoot, yCycle)
+
+	// ---- DEBUG ---- //
+
+	/*
+		xRoot.Print()
+		fmt.Printf("\n\nSerialization Tree of %q\n\n", x)
+		xTgt.PrintSerializable()
+
+		yRoot.Print()
+		fmt.Printf("\n\nSerialization Tree of %q\n\n", y)
+		yTgt.PrintSerializable()
+	*/
+
+	// ---- STATS ---- //
+
+	LeafStatsReport(xTgt)
+	LeafStatsReport(yTgt)
+
+	MaxDepthReport(xTgt)
+	MaxDepthReport(yTgt)
+
+	// ---- DIFF ---- //
+
+	fmt.Printf("\n\nCompare the Type Trees %q v %q\n", x, y)
+	xType, yType, diff, err := StructDiff(xpkg.{{.XTypeInstance}}{}, ypkg.{{.YTypeInstance}}{}, diffExclusions)
+	if err != nil {
+		fmt.Printf("Error: %s\n", err)
+		os.Exit(1)
+	}
+	fmt.Println(Report(xType, yType, diff))
+
+	if !diff.Empty() {
+		// signal that this "test" has failed
+		os.Exit(1)
+	}
+}

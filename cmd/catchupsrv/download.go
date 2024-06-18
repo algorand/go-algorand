@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -175,6 +175,7 @@ func fetcher(server string, wg *sync.WaitGroup) {
 	wg.Done()
 }
 
+// TODO: We may want to implement conditional fallback to backup bootstrap logic here
 func download() {
 	if *genesisFlag == "" {
 		panic("Must specify -genesis")
@@ -184,8 +185,9 @@ func download() {
 		serverList = strings.Split(*serversFlag, ";")
 	} else if *networkFlag != "" {
 		cfg := config.GetDefaultLocal()
-		bootstrapID := cfg.DNSBootstrap(protocol.NetworkID(*networkFlag))
-		_, records, err := net.LookupSRV("algobootstrap", "tcp", bootstrapID)
+		// only using first dnsBootstrap entry (if more than one are configured) and just the primary SRV, not backup
+		dnsBootstrap := cfg.DNSBootstrapArray(protocol.NetworkID(*networkFlag))[0]
+		_, records, err := net.LookupSRV("algobootstrap", "tcp", dnsBootstrap.PrimarySRVBootstrap)
 		if err != nil {
 			dnsAddr, err2 := net.ResolveIPAddr("ip", cfg.FallbackDNSResolverAddress)
 			if err2 != nil {
@@ -195,7 +197,7 @@ func download() {
 
 			var resolver tools_network.Resolver
 			resolver.SetFallbackResolverAddress(*dnsAddr)
-			_, records, err = resolver.LookupSRV(context.Background(), "algobootstrap", "tcp", bootstrapID)
+			_, records, err = resolver.LookupSRV(context.Background(), "algobootstrap", "tcp", dnsBootstrap.PrimarySRVBootstrap)
 			if err != nil {
 				panic(err)
 			}

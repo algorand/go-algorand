@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,6 +18,7 @@ package telemetryspec
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -44,6 +45,10 @@ type AssembleBlockStats struct {
 	StartCount                int
 	IncludedCount             int // number of transactions that are included in a block
 	InvalidCount              int // number of transaction groups that are included in a block
+	MinFeeErrorCount          int // number of transactions excluded because the fee is too low
+	ExpiredCount              int // number of transactions removed because of expiration
+	ExpiredLongLivedCount     int // number of expired transactions with non-super short LastValid values
+	LeaseErrorCount           int // number of transactions removed because it has an already used lease
 	MinFee                    uint64
 	MaxFee                    uint64
 	AverageFee                uint64
@@ -56,7 +61,7 @@ type AssembleBlockStats struct {
 	TotalLength               uint64
 	EarlyCommittedCount       uint64 // number of transaction groups that were pending on the transaction pool but have been included in previous block
 	Nanoseconds               int64
-	ProcessingTime            transactionProcessingTimeDistibution
+	ProcessingTime            transactionProcessingTimeDistribution
 	BlockGenerationDuration   uint64
 	TransactionsLoopStartTime int64
 	StateProofNextRound       uint64 // next round for which state proof if expected
@@ -72,21 +77,30 @@ type StateProofStats struct {
 	TxnSize        int
 }
 
-// AssembleBlockTimeout represents AssemblePayset exiting due to timeout
+// AssembleBlockTimeout represents AssembleBlock exiting due to timeout
 const AssembleBlockTimeout = "timeout"
 
-// AssembleBlockFull represents AssemblePayset exiting due to block being full
+// AssembleBlockTimeoutEmpty represents AssembleBlock giving up after a timeout and returning an empty block
+const AssembleBlockTimeoutEmpty = "timeout-empty"
+
+// AssembleBlockFull represents AssembleBlock exiting due to block being full
 const AssembleBlockFull = "block-full"
 
-// AssembleBlockEmpty represents AssemblePayset exiting due to no more txns
+// AssembleBlockEmpty represents AssembleBlock exiting due to no more txns
 const AssembleBlockEmpty = "pool-empty"
+
+// AssembleBlockPoolBehind represents the transaction pool being more than two roudns behind
+const AssembleBlockPoolBehind = "pool-behind"
+
+// AssembleBlockEvalOld represents the assembled block that was returned being a round too old
+const AssembleBlockEvalOld = "eval-old"
 
 // AssembleBlockAbandon represents the block generation being abandoned since it won't be needed.
 const AssembleBlockAbandon = "block-abandon"
 
 const assembleBlockMetricsIdentifier Metric = "AssembleBlock"
 
-// AssembleBlockMetrics is the set of metrics captured when we compute AssemblePayset
+// AssembleBlockMetrics is the set of metrics captured when we compute AssembleBlock
 type AssembleBlockMetrics struct {
 	AssembleBlockStats
 }
@@ -100,6 +114,10 @@ func (m AssembleBlockStats) String() string {
 	b.WriteString(fmt.Sprintf("StartCount:%d, ", m.StartCount))
 	b.WriteString(fmt.Sprintf("IncludedCount:%d, ", m.IncludedCount))
 	b.WriteString(fmt.Sprintf("InvalidCount:%d, ", m.InvalidCount))
+	b.WriteString(fmt.Sprintf("MinFeeErrorCount:%d, ", m.MinFeeErrorCount))
+	b.WriteString(fmt.Sprintf("ExpiredCount:%d, ", m.ExpiredCount))
+	b.WriteString(fmt.Sprintf("ExpiredLongLivedCount:%d, ", m.ExpiredLongLivedCount))
+	b.WriteString(fmt.Sprintf("LeaseErrorCount:%d, ", m.LeaseErrorCount))
 	b.WriteString(fmt.Sprintf("MinFee:%d, ", m.MinFee))
 	b.WriteString(fmt.Sprintf("MaxFee:%d, ", m.MaxFee))
 	b.WriteString(fmt.Sprintf("AverageFee:%d, ", m.AverageFee))
@@ -184,7 +202,7 @@ func (m RoundTimingMetrics) Identifier() Metric {
 	return roundTimingMetricsIdentifier
 }
 
-//-------------------------------------------------------
+// -------------------------------------------------------
 // AccountsUpdate
 const accountsUpdateMetricsIdentifier Metric = "AccountsUpdate"
 
@@ -207,7 +225,7 @@ func (m AccountsUpdateMetrics) Identifier() Metric {
 	return accountsUpdateMetricsIdentifier
 }
 
-type transactionProcessingTimeDistibution struct {
+type transactionProcessingTimeDistribution struct {
 	// 10 buckets: 0-100Kns, 100Kns-200Kns .. 900Kns-1ms
 	// 9 buckets: 1ms-2ms .. 9ms-10ms
 	// 9 buckets: 10ms-20ms .. 90ms-100ms
@@ -218,7 +236,7 @@ type transactionProcessingTimeDistibution struct {
 
 // MarshalJSON supports json.Marshaler interface
 // generate comma delimited text representing the transaction processing timing
-func (t transactionProcessingTimeDistibution) MarshalJSON() ([]byte, error) {
+func (t transactionProcessingTimeDistribution) MarshalJSON() ([]byte, error) {
 	var outStr strings.Builder
 	outStr.WriteString("[")
 	for i, bucket := range t.transactionBuckets {
@@ -231,7 +249,7 @@ func (t transactionProcessingTimeDistibution) MarshalJSON() ([]byte, error) {
 	return []byte(outStr.String()), nil
 }
 
-func (t *transactionProcessingTimeDistibution) AddTransaction(duration time.Duration) {
+func (t *transactionProcessingTimeDistribution) AddTransaction(duration time.Duration) {
 	var idx int64
 	if duration < 10*time.Millisecond {
 		if duration < time.Millisecond {
@@ -251,4 +269,54 @@ func (t *transactionProcessingTimeDistibution) AddTransaction(duration time.Dura
 	if idx >= 0 && idx <= 37 {
 		t.transactionBuckets[idx]++
 	}
+}
+
+func (t *transactionProcessingTimeDistribution) UnmarshalJSON(data []byte) error {
+	var arr []json.Number
+	if err := json.Unmarshal(data, &arr); err != nil {
+		return err
+	}
+	if len(arr) != len(t.transactionBuckets) {
+		return fmt.Errorf("array has %d buckets, should have %d", len(arr), len(t.transactionBuckets))
+	}
+	for i := range t.transactionBuckets {
+		val, err := arr[i].Int64()
+		if err != nil {
+			return fmt.Errorf("bucket has invalid value %s", arr[i])
+		}
+		t.transactionBuckets[i] = int(val)
+	}
+	return nil
+}
+
+func (t *transactionProcessingTimeDistribution) MarshalString() string {
+	var out strings.Builder
+	var offset int
+	var base, mul time.Duration
+bucketloop:
+	for i, val := range t.transactionBuckets {
+		switch {
+		case i < 10:
+			mul = 100000 * time.Nanosecond
+		case i < 19:
+			mul = time.Millisecond
+			base = mul
+			offset = 10
+		case i < 28:
+			mul = 10 * time.Millisecond
+			base = mul
+			offset = 19
+		case i < 37:
+			mul = 100 * time.Millisecond
+			base = mul
+			offset = 28
+		case i == 37:
+			break bucketloop
+		}
+		start := base + time.Duration(i-offset)*mul
+		end := base + time.Duration(i+1-offset)*mul
+		out.WriteString(fmt.Sprintf("%s - %s: %d\n", start, end, val))
+	}
+	out.WriteString(fmt.Sprintf(">1s: %d\n", t.transactionBuckets[37]))
+	return out.String()
 }

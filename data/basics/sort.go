@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -22,6 +22,7 @@ import (
 
 // SortUint64 implements sorting by uint64 keys for
 // canonical encoding of maps in msgpack format.
+//
 //msgp:ignore SortUint64
 //msgp:sort uint64 SortUint64
 type SortUint64 []uint64
@@ -32,6 +33,7 @@ func (a SortUint64) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 
 // SortAssetIndex implements sorting by AssetIndex keys for
 // canonical encoding of maps in msgpack format.
+//
 //msgp:ignore SortAssetIndex
 //msgp:sort AssetIndex SortAssetIndex
 type SortAssetIndex []AssetIndex
@@ -42,6 +44,7 @@ func (a SortAssetIndex) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 
 // SortAppIndex implements sorting by AppIndex keys for
 // canonical encoding of maps in msgpack format.
+//
 //msgp:ignore SortAppIndex
 //msgp:sort AppIndex SortAppIndex
 type SortAppIndex []AppIndex
@@ -52,6 +55,7 @@ func (a SortAppIndex) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 
 // SortString implements sorting by string keys for
 // canonical encoding of maps in msgpack format.
+//
 //msgp:ignore SortString
 //msgp:sort string SortString
 type SortString []string
@@ -62,6 +66,7 @@ func (a SortString) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 
 // SortAddress implements sorting by Address keys for
 // canonical encoding of maps in msgpack format.
+//
 //msgp:ignore SortAddress
 //msgp:sort Address SortAddress
 type SortAddress []Address

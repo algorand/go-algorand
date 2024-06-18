@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -192,7 +192,7 @@ func TestEvalDeltaEqual(t *testing.T) {
 // TestUnchangedAllocBounds ensure that the allocbounds on EvalDelta have not
 // changed.  If they change, EvalDelta.checkAllocBounds must be changed, or at
 // least reconsidered, as well. We must give plenty of thought to whether a new
-// allocound, used by new versions, is compatible with old code. If the change
+// allocbound, used by new versions, is compatible with old code. If the change
 // can only show up in new protocol versions, it should be ok. But if we change
 // a bound, it will go into effect immediately, not with Protocol upgrade. So we
 // must be extremely careful that old protocol versions can not emit messages

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -175,7 +175,7 @@ func parseInput() (genesis bookkeeping.Genesis) {
 		alloc := bookkeeping.GenesisAllocation{
 			Address: record.Address,
 			Comment: record.Comment,
-			State: basics.AccountData{
+			State: bookkeeping.GenesisAccountData{
 				Status:          record.Status,
 				MicroAlgos:      basics.MicroAlgos{Raw: record.Algos * 1e6},
 				VoteID:          record.VoteID,

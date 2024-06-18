@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -29,7 +29,7 @@ type asyncVerifyVoteRequest struct {
 	l       LedgerReader
 	uv      *unauthenticatedVote
 	uev     *unauthenticatedEquivocationVote
-	index   int
+	index   uint64
 	message message
 
 	// a channel that holds the response
@@ -39,7 +39,7 @@ type asyncVerifyVoteRequest struct {
 type asyncVerifyVoteResponse struct {
 	v         vote
 	ev        equivocationVote
-	index     int
+	index     uint64
 	message   message
 	err       error
 	cancelled bool
@@ -131,7 +131,7 @@ func (avv *AsyncVoteVerifier) executeEqVoteVerification(task interface{}) interf
 	}
 }
 
-func (avv *AsyncVoteVerifier) verifyVote(verctx context.Context, l LedgerReader, uv unauthenticatedVote, index int, message message, out chan<- asyncVerifyVoteResponse) error {
+func (avv *AsyncVoteVerifier) verifyVote(verctx context.Context, l LedgerReader, uv unauthenticatedVote, index uint64, message message, out chan<- asyncVerifyVoteResponse) error {
 	select {
 	case <-avv.ctx.Done(): // if we're quitting, don't enqueue the request
 	// case <-verctx.Done(): DO NOT DO THIS! otherwise we will lose the vote (and forget to clean up)!
@@ -151,7 +151,7 @@ func (avv *AsyncVoteVerifier) verifyVote(verctx context.Context, l LedgerReader,
 	return nil
 }
 
-func (avv *AsyncVoteVerifier) verifyEqVote(verctx context.Context, l LedgerReader, uev unauthenticatedEquivocationVote, index int, message message, out chan<- asyncVerifyVoteResponse) error {
+func (avv *AsyncVoteVerifier) verifyEqVote(verctx context.Context, l LedgerReader, uev unauthenticatedEquivocationVote, index uint64, message message, out chan<- asyncVerifyVoteResponse) error {
 	select {
 	case <-avv.ctx.Done(): // if we're quitting, don't enqueue the request
 	// case <-verctx.Done(): DO NOT DO THIS! otherwise we will lose the vote (and forget to clean up)!

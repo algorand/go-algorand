@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -27,4 +27,9 @@ type InitState struct {
 	Block       bookkeeping.Block
 	Accounts    map[basics.Address]basics.AccountData
 	GenesisHash crypto.Digest
+}
+
+// BlockListener represents an object that needs to get notified on new blocks.
+type BlockListener interface {
+	OnNewBlock(block bookkeeping.Block, delta StateDelta)
 }

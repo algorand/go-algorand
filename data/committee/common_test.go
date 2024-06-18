@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -47,11 +47,19 @@ func signTx(s *crypto.SignatureSecrets, t transactions.Transaction) transactions
 	return t.Sign(s)
 }
 
-func testingenv(t testing.TB, numAccounts, numTxs int) (selectionParameterFn, selectionParameterListFn, basics.Round, []basics.Address, []*crypto.SignatureSecrets, []*crypto.VrfPrivkey, []*crypto.OneTimeSignatureSecrets, []transactions.SignedTxn) {
-	return testingenvMoreKeys(t, numAccounts, numTxs, uint(5))
+// testingenv creates a random set of participating accounts and random transactions between them, and
+// the associated selection parameters for use testing committee membership and credential validation.
+// seedGen is provided as an external source of randomness for the selection seed and transaction notes;
+// if the caller persists seedGen between calls to testingenv, each iteration that calls testingenv will
+// exercise a new selection seed.
+func testingenv(t testing.TB, numAccounts, numTxs int, seedGen io.Reader) (selectionParameterFn, selectionParameterListFn, basics.Round, []basics.Address, []*crypto.SignatureSecrets, []*crypto.VrfPrivkey, []*crypto.OneTimeSignatureSecrets, []transactions.SignedTxn) {
+	return testingenvMoreKeys(t, numAccounts, numTxs, uint(5), seedGen)
 }
 
-func testingenvMoreKeys(t testing.TB, numAccounts, numTxs int, keyBatchesForward uint) (selectionParameterFn, selectionParameterListFn, basics.Round, []basics.Address, []*crypto.SignatureSecrets, []*crypto.VrfPrivkey, []*crypto.OneTimeSignatureSecrets, []transactions.SignedTxn) {
+func testingenvMoreKeys(t testing.TB, numAccounts, numTxs int, keyBatchesForward uint, seedGen io.Reader) (selectionParameterFn, selectionParameterListFn, basics.Round, []basics.Address, []*crypto.SignatureSecrets, []*crypto.VrfPrivkey, []*crypto.OneTimeSignatureSecrets, []transactions.SignedTxn) {
+	if seedGen == nil {
+		seedGen = rand.New(rand.NewSource(1)) // same source as setting GODEBUG=randautoseed=0, same as pre-Go 1.20 default seed
+	}
 	P := numAccounts          // n accounts
 	TXs := numTxs             // n txns
 	maxMoneyAtStart := 100000 // max money start
@@ -89,7 +97,7 @@ func testingenvMoreKeys(t testing.TB, numAccounts, numTxs int, keyBatchesForward
 	}
 
 	var seed Seed
-	rand.Read(seed[:])
+	seedGen.Read(seed[:])
 
 	tx := make([]transactions.SignedTxn, TXs)
 	for i := 0; i < TXs; i++ {
@@ -115,7 +123,7 @@ func testingenvMoreKeys(t testing.TB, numAccounts, numTxs int, keyBatchesForward
 				Amount:   amt,
 			},
 		}
-		rand.Read(t.Note)
+		seedGen.Read(t.Note) // to match output from previous versions, which shared global RNG for seed & note
 		tx[i] = t.Sign(secrets[send])
 	}
 

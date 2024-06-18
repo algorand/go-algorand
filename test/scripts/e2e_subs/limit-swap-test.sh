@@ -73,7 +73,7 @@ while [ $ROUND -lt $TIMEOUT_ROUND ]; do
 done
 
 echo "recover asset"
-${gcmd} asset send --assetid ${ASSET_ID} -t ${ZERO_ADDRESS} -a 0 -c ${ACCOUNT} -f ${ACCOUNT_ASSET_TRADER} -o ${TEMPDIR}/bclose.tx
+${gcmd} asset send --firstvalid $((${TIMEOUT_ROUND} +  1)) --assetid ${ASSET_ID} -t ${ZERO_ADDRESS} -a 0 -c ${ACCOUNT} -f ${ACCOUNT_ASSET_TRADER} -o ${TEMPDIR}/bclose.tx
 
 ${gcmd} clerk sign -i ${TEMPDIR}/bclose.tx -p ${TEMPDIR}/limit-order-b.teal -o ${TEMPDIR}/bclose.stx
 

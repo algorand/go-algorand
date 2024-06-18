@@ -1,0 +1,61 @@
+{
+    "Genesis": {
+        "NetworkName": "tbd",
+        "LastPartKeyRound": 5000,
+        "Wallets": [
+            {
+                "Name": "LargeWallet",
+                "Stake": 85,
+                "Online": true
+            },
+            {
+                "Name": "SmallWallet",
+                "Stake": 10,
+                "Online": true
+            },
+            {
+                "Name": "NonPartWallet",
+                "Stake": 5,
+                "Online": true
+            }
+        ]
+    },
+    "Nodes": [
+        {
+            "Name": "Relay1",
+            "ConfigJSONOverride": "{\"EnableP2P\":true}",
+            "IsRelay": true
+        },
+        {
+            "Name": "Relay2",
+            "ConfigJSONOverride": "{\"EnableP2P\":true}",
+            "IsRelay": true
+        },
+        {
+            "Name": "PartNode1",
+            "ConfigJSONOverride": "{\"EnableP2P\":true}",
+            "Wallets": [{
+                "Name": "LargeWallet",
+                "ParticipationOnly": true
+            }],
+            "PeerList": "Relay1;Relay2"
+        },
+        {
+            "Name": "PartNode2",
+            "ConfigJSONOverride": "{\"EnableP2P\":true}",
+            "Wallets": [{
+                "Name": "SmallWallet",
+                "ParticipationOnly": true
+            }],
+            "PeerList": "Relay2"
+        },
+        {
+            "Name": "NonPartNode",
+            "ConfigJSONOverride": "{\"EnableP2P\":true}",
+            "Wallets": [{
+                "Name": "NonPartWallet"
+            }],
+            "PeerList": "Relay1"
+        }
+    ]
+}

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,7 +18,15 @@ package agreement
 
 import (
 	"fmt"
+
+	"github.com/algorand/go-algorand/util/metrics"
 )
+
+var proposalAlreadyFilledCounter = metrics.MakeCounter(
+	metrics.MetricName{Name: "algod_agreement_proposal_already_filled", Description: "Number of times a duplicate proposal payload was received before validation"})
+
+var proposalAlreadyAssembledCounter = metrics.MakeCounter(
+	metrics.MetricName{Name: "algod_agreement_proposal_already_assembled", Description: "Number of times a duplicate proposal payload was received after validation"})
 
 // An blockAssembler contains the proposal data associated with some
 // proposal-value.
@@ -29,6 +37,7 @@ import (
 // Once a proposal is successfully validated, it is stored by the
 // blockAssembler.
 type blockAssembler struct {
+	_struct struct{} `codec:","`
 	// Pipeline contains a proposal which has not yet been validated.  The
 	// proposal might be inside the cryptoVerifier, or it might be a
 	// pipelined proposal from the next round.
@@ -45,17 +54,19 @@ type blockAssembler struct {
 	// for a given proposal-value.  When a proposal payload is relayed by
 	// the state machine, a matching can be concatenated with the vote to
 	// ensure that peers do not drop the proposal payload.
-	Authenticators []vote
+	Authenticators []vote `codec:"Authenticators,allocbound=-"`
 }
 
 // pipeline adds the given unvalidated proposal to the blockAssembler, returning
 // an error if the pipelining operation is redundant.
 func (a blockAssembler) pipeline(p unauthenticatedProposal) (blockAssembler, error) {
 	if a.Assembled {
+		proposalAlreadyAssembledCounter.Inc(nil)
 		return a, fmt.Errorf("blockAssembler.pipeline: already assembled")
 	}
 
 	if a.Filled {
+		proposalAlreadyFilledCounter.Inc(nil)
 		return a, fmt.Errorf("blockAssembler.pipeline: already filled")
 	}
 
@@ -74,6 +85,9 @@ func (a blockAssembler) bind(p proposal) (blockAssembler, error) {
 
 	a.Payload = p
 	a.Assembled = true
+
+	// remember when the original unauthenticatedProposal was received
+	a.Payload.receivedAt = a.Pipeline.receivedAt
 
 	return a, nil
 }
@@ -110,11 +124,12 @@ func (a blockAssembler) trim(p period) blockAssembler {
 // It returns the following type(s) of event: none, voteFiltered,
 // proposal{Accepted,Committable}, and payload{Pipelined,Rejected}.
 type proposalStore struct {
+	_struct struct{} `codec:","`
 	// Relevant contains a current collection of important proposal-values
 	// in the round. Relevant is indexed by period, and the proposalValue is
 	// the last one reported by the corresponding proposalMachinePeriod.
 	// Each corresponding proposal is tracked in Assemblers.
-	Relevant map[period]proposalValue
+	Relevant map[period]proposalValue `codec:"Relevant,allocbound=-"`
 	// Pinned contains the extra proposal-value, not tracked in Relevant,
 	// for which a certificate may have formed (i.e., vbar in the spec).
 	// The proposal corresponding to Pinned is tracked in Assemblers.
@@ -122,7 +137,7 @@ type proposalStore struct {
 
 	// Assemblers contains the set of proposal-values currently tracked and
 	// held by the proposalStore.
-	Assemblers map[proposalValue]blockAssembler
+	Assemblers map[proposalValue]blockAssembler `codec:"Assemblers,allocbound=-"`
 }
 
 func (store *proposalStore) T() stateMachineTag {
@@ -135,53 +150,53 @@ func (store *proposalStore) underlying() listener {
 
 // A proposalStore handles six types of events:
 //
-// - A voteVerified event is delivered when a relevant proposal-vote has passed
-//   cryptographic verification.  The proposalStore dispatches the event to the
-//   proposalMachinePeriod and returns the resulting event.  If the
-//   proposalMachinePeriod accepts the event, the set of relevant
-//   proposal-values is updated to match the one in the event.  If there exists
-//   a validated proposal payload matching the proposal-value specified by the
-//   proposal-vote, it is attached to the event.  The proposalStore is then
-//   trimmed.  The valid vote is cached as an authenticator.
+//   - A voteVerified event is delivered when a relevant proposal-vote has passed
+//     cryptographic verification.  The proposalStore dispatches the event to the
+//     proposalMachinePeriod and returns the resulting event.  If the
+//     proposalMachinePeriod accepts the event, the set of relevant
+//     proposal-values is updated to match the one in the event.  If there exists
+//     a validated proposal payload matching the proposal-value specified by the
+//     proposal-vote, it is attached to the event.  The proposalStore is then
+//     trimmed.  The valid vote is cached as an authenticator.
 //
-// - A payloadPresent event is delivered when the state machine receives a
-//   proposal payloads.  If the payload fails to match any relevant proposal, or
-//   if the payload has already been seen by the state machine, payloadRejected
-//   is returned.  Otherwise, a payloadPipelined event is returned, with a
-//   cached proposal-vote possibly set.
+//   - A payloadPresent event is delivered when the state machine receives a
+//     proposal payloads.  If the payload fails to match any relevant proposal, or
+//     if the payload has already been seen by the state machine, payloadRejected
+//     is returned.  Otherwise, a payloadPipelined event is returned, with a
+//     cached proposal-vote possibly set.
 //
-// - A payloadVerified event is delivered when a relevant proposal payload has
-//   passed cryptographic verification.  If the payload fails to match any
-//   relevant proposal, or if the payload has already been seen by the state
-//   machine, payloadRejected is returned.  Otherwise, either a
-//   proposalCommittable event or a payloadAccepted event is returned, depending
-//   on whether the proposal matches the current staging value.  This returned
-//   event may have a cached authenticator set.
+//   - A payloadVerified event is delivered when a relevant proposal payload has
+//     passed cryptographic verification.  If the payload fails to match any
+//     relevant proposal, or if the payload has already been seen by the state
+//     machine, payloadRejected is returned.  Otherwise, either a
+//     proposalCommittable event or a payloadAccepted event is returned, depending
+//     on whether the proposal matches the current staging value.  This returned
+//     event may have a cached authenticator set.
 //
-// - A newPeriod event is delivered when the player state machine enters a new
-//   period.  When this happens, the proposalStore updates Pinned, cleans up old
-//   state, and then returns an empty event.
+//   - A newPeriod event is delivered when the player state machine enters a new
+//     period.  When this happens, the proposalStore updates Pinned, cleans up old
+//     state, and then returns an empty event.
 //
-// - A newRound event is delivered when the player state machine enters a new
-//   round.  When this happens, the proposalStore returns a payloadPipelined
-//   event with the proposal payload for the proposal-vote with the lowest
-//   credential it has seen and possibly a cached authenticator (if not, it
-//   returns an empty event).
+//   - A newRound event is delivered when the player state machine enters a new
+//     round.  When this happens, the proposalStore returns a payloadPipelined
+//     event with the proposal payload for the proposal-vote with the lowest
+//     credential it has seen and possibly a cached authenticator (if not, it
+//     returns an empty event).
 //
-// - A soft/certThreshold event is delivered when the player state has observed a
-//   quorum of soft/cert votes for the current round and period.  The proposalStore
-//   dispatches this event to the proposalMachinePeriod.  If the proposalStore
-//   has the proposal payload corresponding to the proposal-value of the quorum,
-//   it returns a proposalCommittable event; otherwise, it propagates the
-//   proposalAccepted event.
+//   - A soft/certThreshold event is delivered when the player state has observed a
+//     quorum of soft/cert votes for the current round and period.  The proposalStore
+//     dispatches this event to the proposalMachinePeriod.  If the proposalStore
+//     has the proposal payload corresponding to the proposal-value of the quorum,
+//     it returns a proposalCommittable event; otherwise, it propagates the
+//     proposalAccepted event.
 //
-// - A readStaging event is dispatched to the proposalMachinePeriod.  The proposalStore
-//   sets the matching proposal payload (if one exists) in the response.
+//   - A readStaging event is dispatched to the proposalMachinePeriod.  The proposalStore
+//     sets the matching proposal payload (if one exists) in the response.
 //
-// - A readPinned event is delivered when the player wants to query the current
-//   pinned proposalValue, and corresponding payload if one exists. This occurs
-//   during resynchronization when players may relay the pinned value.
-//   The event is handled exclusively by the proposalStore and not forwarded.
+//   - A readPinned event is delivered when the player wants to query the current
+//     pinned proposalValue, and corresponding payload if one exists. This occurs
+//     during resynchronization when players may relay the pinned value.
+//     The event is handled exclusively by the proposalStore and not forwarded.
 func (store *proposalStore) handle(r routerHandle, p player, e event) event {
 	if store.Relevant == nil {
 		store.Relevant = make(map[period]proposalValue)
@@ -337,6 +352,9 @@ func (store *proposalStore) handle(r routerHandle, p player, e event) event {
 		se.Committable = ea.Assembled
 		se.Payload = ea.Payload
 		return se
+	case readLowestVote:
+		re := e.(readLowestEvent)
+		return r.dispatch(p, re, proposalMachinePeriod, re.Round, re.Period, 0).(readLowestEvent)
 	case readPinned:
 		se := e.(pinnedValueEvent)
 		ea := store.Assemblers[store.Pinned] // If pinned is bottom, assembled/payloadOK = false, payload = bottom

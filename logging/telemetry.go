@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -242,12 +242,6 @@ func (t *telemetryState) logMetrics(l logger, category telemetryspec.Category, m
 
 func (t *telemetryState) logEvent(l logger, category telemetryspec.Category, identifier telemetryspec.Event, details interface{}) {
 	t.logTelemetry(l, buildMessage(string(category), string(identifier)), details)
-}
-
-func (t *telemetryState) logStartOperation(l logger, category telemetryspec.Category, identifier telemetryspec.Operation) TelemetryOperation {
-	op := makeTelemetryOperation(t, category, identifier)
-	t.logTelemetry(l, buildMessage(string(category), string(identifier), "Start"), nil)
-	return op
 }
 
 func buildMessage(args ...string) string {

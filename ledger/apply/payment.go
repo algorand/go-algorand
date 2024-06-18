@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,27 +19,9 @@ package apply
 import (
 	"fmt"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 )
-
-func checkSpender(payment transactions.PaymentTxnFields, header transactions.Header, spec transactions.SpecialAddresses, proto config.ConsensusParams) error {
-	if header.Sender == payment.CloseRemainderTo {
-		return fmt.Errorf("transaction cannot close account to its sender %v", header.Sender)
-	}
-
-	// the FeeSink account may only spend to the IncentivePool
-	if header.Sender == spec.FeeSink {
-		if payment.Receiver != spec.RewardsPool {
-			return fmt.Errorf("cannot spend from fee sink's address %v to non incentive pool address %v", header.Sender, payment.Receiver)
-		}
-		if payment.CloseRemainderTo != (basics.Address{}) {
-			return fmt.Errorf("cannot close fee sink %v to %v", header.Sender, payment.CloseRemainderTo)
-		}
-	}
-	return nil
-}
 
 // Payment changes the balances according to this transaction.
 // The ApplyData argument should reflect the changes made by
@@ -97,6 +79,15 @@ func Payment(payment transactions.PaymentTxnFields, header transactions.Header, 
 		totalAppLocalStates := rec.TotalAppLocalStates
 		if totalAppLocalStates > 0 {
 			return fmt.Errorf("cannot close: %d outstanding applications opted in. Please opt out or clear them", totalAppLocalStates)
+		}
+
+		// Confirm that there is no box-related state in the account
+		if rec.TotalBoxes > 0 {
+			return fmt.Errorf("cannot close: %d outstanding boxes", rec.TotalBoxes)
+		}
+		if rec.TotalBoxBytes > 0 {
+			// This should be impossible because every box byte comes from the existence of a box.
+			return fmt.Errorf("cannot close: %d outstanding box bytes", rec.TotalBoxBytes)
 		}
 
 		// Can't have created apps remaining either

@@ -1,0 +1,37 @@
+{
+    "Genesis": {
+        "NetworkName": "tbd",
+        "LastPartKeyRound": 3000,
+        "Wallets": [
+            {
+                "Name": "Wallet1",
+                "Stake": 50,
+                "Online": true
+            },
+            {
+                "Name": "Wallet2",
+                "Stake": 50,
+                "Online": true
+            }
+        ]
+    },
+    "Nodes": [
+        {
+            "Name": "Primary",
+            "IsRelay": true,
+            "ConfigJSONOverride": "{\"EnableP2P\":true}",
+            "Wallets": [
+                { "Name": "Wallet1",
+                  "ParticipationOnly": false }
+            ]
+        },
+        {
+            "Name": "Node",
+            "ConfigJSONOverride": "{\"EnableP2P\":true}",
+            "Wallets": [
+                { "Name": "Wallet2",
+                  "ParticipationOnly": false }
+            ]
+        }
+    ]
+}

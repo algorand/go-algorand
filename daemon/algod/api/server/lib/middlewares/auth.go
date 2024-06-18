@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -72,9 +72,9 @@ func (auth *AuthMiddleware) handler(next echo.HandlerFunc) echo.HandlerFunc {
 		providedToken := []byte(ctx.Request().Header.Get(auth.header))
 		if len(providedToken) == 0 {
 			// Accept tokens provided in a bearer token format.
-			authentication := strings.SplitN(ctx.Request().Header.Get("Authorization"), " ", 2)
-			if len(authentication) == 2 && strings.EqualFold("Bearer", authentication[0]) {
-				providedToken = []byte(authentication[1])
+			bearer, token, found := strings.Cut(ctx.Request().Header.Get("Authorization"), " ")
+			if found && strings.EqualFold("Bearer", bearer) {
+				providedToken = []byte(token)
 			}
 		}
 

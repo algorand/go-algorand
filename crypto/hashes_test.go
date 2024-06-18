@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -53,7 +53,6 @@ func TestHashSum(t *testing.T) {
 
 	dgst := HashObj(TestingHashable{})
 	a.Equal(GenericHashObj(h, TestingHashable{}), dgst[:])
-
 }
 
 func TestEmptyHash(t *testing.T) {

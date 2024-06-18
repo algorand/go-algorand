@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,14 +18,23 @@ package test
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
+
+	"github.com/algorand/go-algorand/data/transactions/logic"
+
+	"github.com/labstack/echo/v4"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
-	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -34,15 +43,24 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/labstack/echo/v4"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 type mockLedger struct {
+	mock.Mock
 	accounts map[basics.Address]basics.AccountData
+	kvstore  map[string][]byte
 	latest   basics.Round
 	blocks   []bookkeeping.Block
+	tracer   logic.EvalTracer
+}
+
+func (l *mockLedger) GetTracer() logic.EvalTracer {
+	return l.tracer
+}
+
+func (l *mockLedger) GetStateDeltaForRound(rnd basics.Round) (ledgercore.StateDelta, error) {
+	args := l.Called(rnd)
+	return args.Get(0).(ledgercore.StateDelta), args.Error(1)
 }
 
 func (l *mockLedger) LookupAccount(round basics.Round, addr basics.Address) (ledgercore.AccountData, basics.Round, basics.MicroAlgos, error) {
@@ -58,6 +76,17 @@ func (l *mockLedger) LookupLatest(addr basics.Address) (basics.AccountData, basi
 		return basics.AccountData{}, l.latest, basics.MicroAlgos{Raw: 0}, nil
 	}
 	return ad, l.latest, basics.MicroAlgos{Raw: 0}, nil
+}
+
+func (l *mockLedger) LookupKv(round basics.Round, key string) ([]byte, error) {
+	if value, ok := l.kvstore[key]; ok {
+		return value, nil
+	}
+	return nil, fmt.Errorf("Key %v does not exist", key)
+}
+
+func (l *mockLedger) LookupKeysByPrefix(round basics.Round, keyPrefix string, maxKeyNum uint64) ([]string, error) {
+	panic("not implemented")
 }
 
 func (l *mockLedger) ConsensusParams(r basics.Round) (config.ConsensusParams, error) {
@@ -79,6 +108,33 @@ func (l *mockLedger) LookupAsset(rnd basics.Round, addr basics.Address, aidx bas
 	}
 	return ar, nil
 }
+
+func (l *mockLedger) LookupAssets(addr basics.Address, assetIDGT basics.AssetIndex, limit uint64) ([]ledgercore.AssetResourceWithIDs, basics.Round, error) {
+	ad, ok := l.accounts[addr]
+	if !ok {
+		return nil, basics.Round(0), nil
+	}
+
+	var res []ledgercore.AssetResourceWithIDs
+	for i := assetIDGT + 1; i < assetIDGT+1+basics.AssetIndex(limit); i++ {
+		apr := ledgercore.AssetResourceWithIDs{}
+		if ap, ok := ad.AssetParams[i]; ok {
+			apr.AssetParams = &ap
+			apr.Creator = basics.Address{}
+		}
+
+		if ah, ok := ad.Assets[i]; ok {
+			apr.AssetHolding = &ah
+		}
+
+		if apr.AssetParams != nil || apr.AssetHolding != nil {
+			apr.AssetID = i
+			res = append(res, apr)
+		}
+	}
+	return res, basics.Round(0), nil
+}
+
 func (l *mockLedger) LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ar ledgercore.AppResource, err error) {
 	ad, ok := l.accounts[addr]
 	if !ok {
@@ -98,10 +154,17 @@ func (l *mockLedger) BlockCert(rnd basics.Round) (blk bookkeeping.Block, cert ag
 func (l *mockLedger) LatestTotals() (rnd basics.Round, at ledgercore.AccountTotals, err error) {
 	panic("not implemented")
 }
-func (l *mockLedger) BlockHdr(rnd basics.Round) (blk bookkeeping.BlockHeader, err error) {
-	panic("not implemented")
+func (l *mockLedger) BlockHdr(rnd basics.Round) (bookkeeping.BlockHeader, error) {
+	blk, err := l.Block(rnd)
+	if err != nil {
+		return bookkeeping.BlockHeader{}, err
+	}
+	return blk.BlockHeader, nil
 }
 func (l *mockLedger) Wait(r basics.Round) chan struct{} {
+	panic("not implemented")
+}
+func (l *mockLedger) WaitWithCancel(r basics.Round) (chan struct{}, func()) {
 	panic("not implemented")
 }
 func (l *mockLedger) GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (c basics.Address, ok bool, err error) {
@@ -111,7 +174,11 @@ func (l *mockLedger) EncodedBlockCert(rnd basics.Round) (blk []byte, cert []byte
 	panic("not implemented")
 }
 func (l *mockLedger) Block(rnd basics.Round) (blk bookkeeping.Block, err error) {
-	panic("not implemented")
+	if len(l.blocks) == 0 {
+		err = fmt.Errorf("mockledger error: no block")
+		return
+	}
+	return l.blocks[0], nil
 }
 
 func (l *mockLedger) AddressTxns(id basics.Address, r basics.Round) ([]transactions.SignedTxnWithAD, error) {
@@ -172,6 +239,23 @@ func randomAccountWithAssetParams(N int) basics.AccountData {
 	return a
 }
 
+func randomAccountWithSomeAssetHoldingsAndOverlappingAssetParams(overlapN int, nonOverlapAssetHoldingsN int) basics.AccountData {
+	a := ledgertesting.RandomAccountData(0)
+	a.AssetParams = make(map[basics.AssetIndex]basics.AssetParams)
+	a.Assets = make(map[basics.AssetIndex]basics.AssetHolding)
+	// overlapN assets have both asset params and asset holdings
+	for i := 1; i <= overlapN; i++ {
+		a.AssetParams[basics.AssetIndex(i)] = ledgertesting.RandomAssetParams()
+		a.Assets[basics.AssetIndex(i)] = ledgertesting.RandomAssetHolding(false)
+	}
+
+	// nonOverlapAssetHoldingsN assets have only asset holdings
+	for i := overlapN + 1; i <= (overlapN + nonOverlapAssetHoldingsN); i++ {
+		a.Assets[basics.AssetIndex(i)] = ledgertesting.RandomAssetHolding(false)
+	}
+	return a
+}
+
 func randomAccountWithAppLocalState(N int) basics.AccountData {
 	a := ledgertesting.RandomAccountData(0)
 	a.AppLocalStates = make(map[basics.AppIndex]basics.AppLocalState)
@@ -200,8 +284,9 @@ func setupTestForLargeResources(t *testing.T, acctSize, maxResults int, accountM
 	acctData = accountMaker(acctSize)
 	ml.accounts[fakeAddr] = acctData
 
-	mockNode := makeMockNode(&ml, t.Name(), nil)
+	mockNode := makeMockNode(&ml, t.Name(), nil, cannedStatusReportGolden, false)
 	mockNode.config.MaxAPIResourcesPerAccount = uint64(maxResults)
+	mockNode.config.EnableExperimentalAPI = true
 	dummyShutdownChan := make(chan struct{})
 	handlers = v2.Handlers{
 		Node:     mockNode,
@@ -221,9 +306,9 @@ func newReq(t *testing.T) (ctx echo.Context, rec *httptest.ResponseRecorder) {
 
 func accountInformationResourceLimitsTest(t *testing.T, accountMaker func(int) basics.AccountData, acctSize, maxResults int, exclude string, expectedCode int) {
 	handlers, addr, acctData := setupTestForLargeResources(t, acctSize, maxResults, accountMaker)
-	params := generatedV2.AccountInformationParams{}
+	params := model.AccountInformationParams{}
 	if exclude != "" {
-		params.Exclude = &exclude
+		params.Exclude = (*model.AccountInformationParamsExclude)(&exclude)
 	}
 	ctx, rec := newReq(t)
 	err := handlers.AccountInformation(ctx, addr.String(), params)
@@ -280,26 +365,26 @@ func accountInformationResourceLimitsTest(t *testing.T, accountMaker func(int) b
 	for i := 0; i < ret.TotalAssets; i++ {
 		ctx, rec = newReq(t)
 		aidx := basics.AssetIndex(i * 4)
-		err = handlers.AccountAssetInformation(ctx, addr.String(), uint64(aidx), generatedV2.AccountAssetInformationParams{})
+		err = handlers.AccountAssetInformation(ctx, addr.String(), uint64(aidx), model.AccountAssetInformationParams{})
 		require.NoError(t, err)
 		require.Equal(t, 200, rec.Code)
-		var ret generatedV2.AccountAssetResponse
+		var ret model.AccountAssetResponse
 		err = json.Unmarshal(rec.Body.Bytes(), &ret)
 		require.NoError(t, err)
 		assert.Nil(t, ret.CreatedAsset)
-		assert.Equal(t, ret.AssetHolding, &generatedV2.AssetHolding{
+		assert.Equal(t, ret.AssetHolding, &model.AssetHolding{
 			Amount:   acctData.Assets[aidx].Amount,
-			AssetId:  uint64(aidx),
+			AssetID:  uint64(aidx),
 			IsFrozen: acctData.Assets[aidx].Frozen,
 		})
 	}
 	for i := 0; i < ret.TotalCreatedAssets; i++ {
 		ctx, rec = newReq(t)
 		aidx := basics.AssetIndex(i*4 + 1)
-		err = handlers.AccountAssetInformation(ctx, addr.String(), uint64(aidx), generatedV2.AccountAssetInformationParams{})
+		err = handlers.AccountAssetInformation(ctx, addr.String(), uint64(aidx), model.AccountAssetInformationParams{})
 		require.NoError(t, err)
 		require.Equal(t, 200, rec.Code)
-		var ret generatedV2.AccountAssetResponse
+		var ret model.AccountAssetResponse
 		err = json.Unmarshal(rec.Body.Bytes(), &ret)
 		require.NoError(t, err)
 		assert.Nil(t, ret.AssetHolding)
@@ -310,10 +395,10 @@ func accountInformationResourceLimitsTest(t *testing.T, accountMaker func(int) b
 	for i := 0; i < ret.TotalApps; i++ {
 		ctx, rec = newReq(t)
 		aidx := basics.AppIndex(i*4 + 2)
-		err = handlers.AccountApplicationInformation(ctx, addr.String(), uint64(aidx), generatedV2.AccountApplicationInformationParams{})
+		err = handlers.AccountApplicationInformation(ctx, addr.String(), uint64(aidx), model.AccountApplicationInformationParams{})
 		require.NoError(t, err)
 		require.Equal(t, 200, rec.Code)
-		var ret generatedV2.AccountApplicationResponse
+		var ret model.AccountApplicationResponse
 		err = json.Unmarshal(rec.Body.Bytes(), &ret)
 		require.NoError(t, err)
 		assert.Nil(t, ret.CreatedApp)
@@ -326,10 +411,10 @@ func accountInformationResourceLimitsTest(t *testing.T, accountMaker func(int) b
 	for i := 0; i < ret.TotalCreatedApps; i++ {
 		ctx, rec = newReq(t)
 		aidx := basics.AppIndex(i*4 + 3)
-		err = handlers.AccountApplicationInformation(ctx, addr.String(), uint64(aidx), generatedV2.AccountApplicationInformationParams{})
+		err = handlers.AccountApplicationInformation(ctx, addr.String(), uint64(aidx), model.AccountApplicationInformationParams{})
 		require.NoError(t, err)
 		require.Equal(t, 200, rec.Code)
-		var ret generatedV2.AccountApplicationResponse
+		var ret model.AccountApplicationResponse
 		err = json.Unmarshal(rec.Body.Bytes(), &ret)
 		require.NoError(t, err)
 		assert.Nil(t, ret.AppLocalState)
@@ -339,6 +424,120 @@ func accountInformationResourceLimitsTest(t *testing.T, accountMaker func(int) b
 		assert.EqualValues(t, expAp.Params.ClearStateProgram, ret.CreatedApp.ClearStateProgram)
 		assert.EqualValues(t, expAp.Params.Creator, ret.CreatedApp.Creator)
 	}
+}
+
+func accountAssetInformationResourceLimitsTest(t *testing.T, handlers v2.Handlers, addr basics.Address,
+	acctData basics.AccountData, params model.AccountAssetsInformationParams, inputNextToken int, maxResults int, expectToken bool) {
+
+	ctx, rec := newReq(t)
+	err := handlers.AccountAssetsInformation(ctx, addr.String(), params)
+	require.NoError(t, err)
+	require.Equal(t, 200, rec.Code)
+	var ret model.AccountAssetsInformationResponse
+	err = json.Unmarshal(rec.Body.Bytes(), &ret)
+	require.NoError(t, err)
+
+	if expectToken {
+		nextRaw, err0 := strconv.ParseUint(*ret.NextToken, 10, 64)
+		require.NoError(t, err0)
+		// The next token decoded is actually the last asset id returned
+		assert.Equal(t, (*ret.AssetHoldings)[maxResults-1].AssetHolding.AssetID, nextRaw)
+	}
+	assert.Equal(t, maxResults, len(*ret.AssetHoldings))
+
+	// Asset holdings should match the first limit assets from the account data
+	minForResults := 0
+	if inputNextToken > 0 {
+		minForResults = inputNextToken
+	}
+	for i := minForResults; i < minForResults+maxResults; i++ {
+		expectedIndex := i + 1
+
+		assert.Equal(t, acctData.Assets[basics.AssetIndex(expectedIndex)].Amount, (*ret.AssetHoldings)[i-minForResults].AssetHolding.Amount)
+		assert.Equal(t, acctData.Assets[basics.AssetIndex(expectedIndex)].Frozen, (*ret.AssetHoldings)[i-minForResults].AssetHolding.IsFrozen)
+		assert.Equal(t, uint64(expectedIndex), (*ret.AssetHoldings)[i-minForResults].AssetHolding.AssetID)
+	}
+}
+
+// TestAccountAssetsInformation tests the account asset information endpoint
+func TestAccountAssetsInformation(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	accountOverlappingAssetParamsHoldingsCount := 1000
+	accountNonOverlappingAssetHoldingsCount := 25
+	totalAssetHoldings := accountOverlappingAssetParamsHoldingsCount + accountNonOverlappingAssetHoldingsCount
+
+	handlers, addr, acctData := setupTestForLargeResources(t, accountOverlappingAssetParamsHoldingsCount, 50, func(N int) basics.AccountData {
+		return randomAccountWithSomeAssetHoldingsAndOverlappingAssetParams(N, accountNonOverlappingAssetHoldingsCount)
+	})
+
+	// 1. Query with no limit/pagination - should get DefaultAssetResults back
+	accountAssetInformationResourceLimitsTest(t, handlers, addr, acctData, model.AccountAssetsInformationParams{},
+		0, int(v2.DefaultAssetResults), false)
+
+	rawLimit := 100
+	limit := uint64(rawLimit)
+	// 2. Query with limit<total resources, no next - should get the first (lowest asset id to highest) limit results back
+	accountAssetInformationResourceLimitsTest(t, handlers, addr, acctData,
+		model.AccountAssetsInformationParams{Limit: &limit}, 0, rawLimit, true)
+
+	// 3. Loop through all assets in the account in batches of 100, ensure we get all assets back.
+	// Exercises limit and next combined.
+	for rawNext := 0; rawNext < totalAssetHoldings; rawNext += rawLimit {
+		nextTk := strconv.FormatUint(uint64(rawNext), 10)
+		// We expect a next token for all but the last batch
+		expectToken := true
+		expectedResultsCount := rawLimit
+		if rawNext+rawLimit >= totalAssetHoldings {
+			expectToken = false
+			expectedResultsCount = totalAssetHoldings - rawNext
+		}
+		accountAssetInformationResourceLimitsTest(t, handlers, addr, acctData,
+			model.AccountAssetsInformationParams{Limit: &limit, Next: &nextTk}, rawNext, expectedResultsCount, expectToken)
+	}
+
+	// 4. Query with limit, next to provide batch, but no data in that range
+	rawNext := 1025
+	nextTk := strconv.FormatUint(uint64(rawNext), 10)
+	accountAssetInformationResourceLimitsTest(t, handlers, addr, acctData,
+		model.AccountAssetsInformationParams{Limit: &limit, Next: &nextTk}, rawNext, totalAssetHoldings-rawNext, false)
+
+	// 5. Malformed address
+	ctx, rec := newReq(t)
+	err := handlers.AccountAssetsInformation(ctx, "", model.AccountAssetsInformationParams{})
+	require.NoError(t, err)
+	require.Equal(t, 400, rec.Code)
+	require.Equal(t, "{\"message\":\"failed to parse the address\"}\n", rec.Body.String())
+
+	// 6. Unknown address (200 returned, just no asset data)
+	unknownAddress := basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
+	accountAssetInformationResourceLimitsTest(t, handlers, unknownAddress, basics.AccountData{}, model.AccountAssetsInformationParams{},
+		0, 0, false)
+
+	// 7a. Invalid limits - larger than configured max
+	ctx, rec = newReq(t)
+	err = handlers.AccountAssetsInformation(ctx, addr.String(), model.AccountAssetsInformationParams{
+		Limit: func() *uint64 {
+			l := uint64(v2.MaxAssetResults + 1)
+			return &l
+		}(),
+	})
+	require.NoError(t, err)
+	require.Equal(t, 400, rec.Code)
+	require.Equal(t, "{\"message\":\"limit 1001 exceeds max assets single batch limit 1000\"}\n", rec.Body.String())
+
+	// 7b. Invalid limits - zero
+	ctx, rec = newReq(t)
+	err = handlers.AccountAssetsInformation(ctx, addr.String(), model.AccountAssetsInformationParams{
+		Limit: func() *uint64 {
+			l := uint64(0)
+			return &l
+		}(),
+	})
+	require.NoError(t, err)
+	require.Equal(t, 400, rec.Code)
+	require.Equal(t, "{\"message\":\"limit parameter must be a positive integer\"}\n", rec.Body.String())
+
 }
 
 func TestAccountInformationResourceLimits(t *testing.T) {

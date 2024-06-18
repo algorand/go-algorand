@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,6 +17,7 @@
 package catchup
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -35,9 +36,6 @@ func TestBasicCatchup(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
 
-	if testing.Short() {
-		t.Skip()
-	}
 	t.Parallel()
 	a := require.New(fixtures.SynchronizedTest(t))
 
@@ -48,12 +46,12 @@ func TestBasicCatchup(t *testing.T) {
 
 	var fixture fixtures.RestClientFixture
 	// Give the second node (which starts up last) all the stake so that its proposal always has better credentials,
-	// and so that its proposal isn't dropped. Otherwise the test burns 17s to recover. We don't care about stake
+	// and so that its proposal isn't dropped. Otherwise, the test burns 17s to recover. We don't care about stake
 	// distribution for catchup so this is fine.
 	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes100Second.json"))
 	defer fixture.Shutdown()
 
-	// Get 2nd node so we wait until we know they're at target block
+	// Get 2nd node, so we wait until we know they're at target block
 	nc, err := fixture.GetNodeController("Node")
 	a.NoError(err)
 
@@ -83,20 +81,23 @@ func TestCatchupOverGossip(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
 
-	t.Parallel()
-
 	syncTest := fixtures.SynchronizedTest(t)
 	supportedVersions := network.SupportedProtocolVersions
 	require.LessOrEqual(syncTest, len(supportedVersions), 3)
+
+	subTest := func(tt *testing.T, ledgerVer, fetcherVer string) {
+		tt.Run(fmt.Sprintf("ledger=%s,fetcher=%s", ledgerVer, fetcherVer),
+			func(t *testing.T) { runCatchupOverGossip(t, ledgerVer, fetcherVer) })
+	}
 
 	// ledger node upgraded version, fetcher node upgraded version
 	// Run with the default values. Instead of "", pass the default value
 	// to exercise loading it from the config file.
 	runCatchupOverGossip(syncTest, supportedVersions[0], supportedVersions[0])
 	for i := 1; i < len(supportedVersions); i++ {
-		runCatchupOverGossip(t, supportedVersions[i], "")
-		runCatchupOverGossip(t, "", supportedVersions[i])
-		runCatchupOverGossip(t, supportedVersions[i], supportedVersions[i])
+		subTest(t, supportedVersions[i], "")
+		subTest(t, "", supportedVersions[i])
+		subTest(t, supportedVersions[i], supportedVersions[i])
 	}
 }
 
@@ -127,6 +128,15 @@ func runCatchupOverGossip(t fixtures.TestingTB,
 		a.NoError(err)
 		a.Empty(cfg.NetworkProtocolVersion)
 		cfg.NetworkProtocolVersion = ledgerNodeDowngradeTo
+		cfg.BaseLoggerDebugLevel = 5 // debug logging while debugging this test
+		cfg.SaveToDisk(dir)
+	} else {
+		// TODO: remove when TestCatchupOverGossip is fixed
+		dir, err := fixture.GetNodeDir("Node")
+		a.NoError(err)
+		cfg, err := config.LoadConfigFromDisk(dir)
+		a.NoError(err)
+		cfg.BaseLoggerDebugLevel = 5 // debug logging while debugging this test
 		cfg.SaveToDisk(dir)
 	}
 
@@ -137,6 +147,14 @@ func runCatchupOverGossip(t fixtures.TestingTB,
 		a.NoError(err)
 		a.Empty(cfg.NetworkProtocolVersion)
 		cfg.NetworkProtocolVersion = fetcherNodeDowngradeTo
+		cfg.BaseLoggerDebugLevel = 5 // debug logging while debugging this test
+		cfg.SaveToDisk(dir)
+	} else {
+		// TODO: remove when TestCatchupOverGossip is fixed
+		dir := fixture.PrimaryDataDir()
+		cfg, err := config.LoadConfigFromDisk(dir)
+		a.NoError(err)
+		cfg.BaseLoggerDebugLevel = 5 // debug logging while debugging this test
 		cfg.SaveToDisk(dir)
 	}
 

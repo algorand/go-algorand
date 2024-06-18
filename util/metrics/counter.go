@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,22 +17,24 @@
 package metrics
 
 import (
-	"math"
-	"strconv"
 	"strings"
-	"sync/atomic"
 	"time"
 )
 
+// Counter represent a single counter variable.
+type Counter struct {
+	c couge
+}
+
 // MakeCounter create a new counter with the provided name and description.
 func MakeCounter(metric MetricName) *Counter {
-	c := &Counter{
-		values:        make([]*counterValues, 0),
+	c := &Counter{c: couge{
+		values:        make([]*cougeValues, 0),
 		description:   metric.Description,
 		name:          metric.Name,
 		labels:        make(map[string]int),
 		valuesIndices: make(map[int]int),
-	}
+	}}
 	c.Register(nil)
 	return c
 }
@@ -64,44 +66,19 @@ func (counter *Counter) Deregister(reg *Registry) {
 // Much faster if labels is nil or empty.
 func (counter *Counter) Inc(labels map[string]string) {
 	if len(labels) == 0 {
-		counter.fastAddUint64(1)
+		counter.c.fastAddUint64(1)
 	} else {
-		counter.Add(1.0, labels)
-	}
-}
-
-// Add increases counter by x
-// For adding an integer, see AddUint64(x)
-func (counter *Counter) Add(x float64, labels map[string]string) {
-	counter.Lock()
-	defer counter.Unlock()
-
-	labelIndex := counter.findLabelIndex(labels)
-
-	// find where we have the same labels.
-	if counterIdx, has := counter.valuesIndices[labelIndex]; !has {
-		// we need to add a new counter.
-		val := &counterValues{
-			counter: x,
-			labels:  labels,
-		}
-		val.createFormattedLabel()
-		counter.values = append(counter.values, val)
-		counter.valuesIndices[labelIndex] = len(counter.values) - 1
-	} else {
-		// update existing value.
-		counter.values[counterIdx].counter += x
+		counter.c.addLabels(1.0, labels)
 	}
 }
 
 // AddUint64 increases counter by x
-// If labels is nil this is much faster than Add()
-// Calls through to Add() if labels is not nil.
+// If labels is nil this is much faster than if labels is not nil.
 func (counter *Counter) AddUint64(x uint64, labels map[string]string) {
 	if len(labels) == 0 {
-		counter.fastAddUint64(x)
+		counter.c.fastAddUint64(x)
 	} else {
-		counter.Add(float64(x), labels)
+		counter.c.addLabels(x, labels)
 	}
 }
 
@@ -111,106 +88,22 @@ func (counter *Counter) AddMicrosecondsSince(t time.Time, labels map[string]stri
 	counter.AddUint64(uint64(time.Since(t).Microseconds()), labels)
 }
 
-func (counter *Counter) fastAddUint64(x uint64) {
-	if atomic.AddUint64(&counter.intValue, x) == x {
-		// What we just added is the whole value, this
-		// is the first Add. Create a dummy
-		// counterValue for the no-labels value.
-		// Dummy counterValue simplifies display in WriteMetric.
-		counter.Add(0, nil)
-	}
+// GetUint64Value returns the value of the counter.
+func (counter *Counter) GetUint64Value() (x uint64) {
+	return counter.c.intValue.Load()
 }
 
-func (counter *Counter) findLabelIndex(labels map[string]string) int {
-	accumulatedIndex := 0
-	for k, v := range labels {
-		t := k + ":" + v
-		// do we already have this key ( label ) in our map ?
-		if i, has := counter.labels[t]; has {
-			// yes, we do. use this index.
-			accumulatedIndex += i
-		} else {
-			// no, we don't have it.
-			counter.labels[t] = int(math.Exp2(float64(len(counter.labels))))
-			accumulatedIndex += counter.labels[t]
-		}
-	}
-	return accumulatedIndex
-}
-
-func (cv *counterValues) createFormattedLabel() {
-	var buf strings.Builder
-	if len(cv.labels) < 1 {
-		return
-	}
-	for k, v := range cv.labels {
-		buf.WriteString("," + k + "=\"" + v + "\"")
-	}
-
-	cv.formattedLabels = buf.String()[1:]
+// GetUint64ValueForLabels returns the value of the counter for the given labels or 0 if it's not found.
+func (counter *Counter) GetUint64ValueForLabels(labels map[string]string) uint64 {
+	return counter.c.getUint64ValueForLabels(labels)
 }
 
 // WriteMetric writes the metric into the output stream
 func (counter *Counter) WriteMetric(buf *strings.Builder, parentLabels string) {
-	counter.Lock()
-	defer counter.Unlock()
-
-	buf.WriteString("# HELP ")
-	buf.WriteString(counter.name)
-	buf.WriteString(" ")
-	buf.WriteString(counter.description)
-	buf.WriteString("\n# TYPE ")
-	buf.WriteString(counter.name)
-	buf.WriteString(" counter\n")
-	// if counter is zero, report 0 using parentLabels and no tags
-	if len(counter.values) == 0 {
-		buf.WriteString(counter.name)
-		if len(parentLabels) > 0 {
-			buf.WriteString("{" + parentLabels + "}")
-		}
-		buf.WriteString(" 0")
-		buf.WriteString("\n")
-		return
-	}
-	// otherwise iterate through values and write one line per label
-	for _, l := range counter.values {
-		buf.WriteString(counter.name)
-		buf.WriteString("{")
-		if len(parentLabels) > 0 {
-			buf.WriteString(parentLabels)
-			if len(l.formattedLabels) > 0 {
-				buf.WriteString(",")
-			}
-		}
-		buf.WriteString(l.formattedLabels)
-		buf.WriteString("} ")
-		value := l.counter
-		if len(l.labels) == 0 {
-			value += float64(atomic.LoadUint64(&counter.intValue))
-		}
-		buf.WriteString(strconv.FormatFloat(value, 'f', -1, 32))
-		buf.WriteString("\n")
-	}
+	counter.c.writeMetric(buf, "counter", parentLabels)
 }
 
 // AddMetric adds the metric into the map
 func (counter *Counter) AddMetric(values map[string]float64) {
-	counter.Lock()
-	defer counter.Unlock()
-
-	if len(counter.values) < 1 {
-		return
-	}
-
-	for _, l := range counter.values {
-		sum := l.counter
-		if len(l.labels) == 0 {
-			sum += float64(atomic.LoadUint64(&counter.intValue))
-		}
-		var suffix string
-		if len(l.formattedLabels) > 0 {
-			suffix = ":" + l.formattedLabels
-		}
-		values[sanitizeTelemetryName(counter.name+suffix)] = sum
-	}
+	counter.c.addMetric(values)
 }

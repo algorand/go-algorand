@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,8 +23,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
-	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
-	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -170,7 +169,20 @@ func (c *Client) BroadcastTransaction(stx transactions.SignedTxn) (txid string, 
 	if err != nil {
 		return
 	}
-	return resp.TxID, nil
+	return resp.TxId, nil
+}
+
+// BroadcastTransactionAsync broadcasts a signed transaction to the network by appending it into tx handler queue.
+func (c *Client) BroadcastTransactionAsync(stx transactions.SignedTxn) error {
+	algod, err := c.ensureAlgodClient()
+	if err != nil {
+		return err
+	}
+	_, err = algod.SendRawTransactionAsync(stx)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // BroadcastTransactionGroup broadcasts a signed transaction group to the network using algod
@@ -196,7 +208,7 @@ func (c *Client) SignAndBroadcastTransaction(walletHandle, pw []byte, utx transa
 
 // generateRegistrationTransaction returns a transaction object for registering a Participation with its parent this is
 // similar to account.Participation.GenerateRegistrationTransaction.
-func generateRegistrationTransaction(part generated.ParticipationKey, fee basics.MicroAlgos, txnFirstValid, txnLastValid basics.Round, leaseBytes [32]byte) (transactions.Transaction, error) {
+func generateRegistrationTransaction(part model.ParticipationKey, fee basics.MicroAlgos, txnFirstValid, txnLastValid basics.Round, leaseBytes [32]byte) (transactions.Transaction, error) {
 	addr, err := basics.UnmarshalChecksumAddress(part.Address)
 	if err != nil {
 		return transactions.Transaction{}, err
@@ -253,7 +265,7 @@ func generateRegistrationTransaction(part generated.ParticipationKey, fee basics
 func (c *Client) MakeRegistrationTransactionWithGenesisID(part account.Participation, fee, txnFirstValid, txnLastValid uint64, leaseBytes [32]byte, includeStateProofKeys bool) (transactions.Transaction, error) {
 
 	// Get current round, protocol, genesis ID
-	params, err := c.SuggestedParams()
+	params, err := c.cachedSuggestedParams()
 	if err != nil {
 		return transactions.Transaction{}, err
 	}
@@ -274,7 +286,7 @@ func (c *Client) MakeRegistrationTransactionWithGenesisID(part account.Participa
 		basics.Round(txnLastValid),
 		leaseBytes, includeStateProofKeys)
 
-	goOnlineTx.Header.GenesisID = params.GenesisID
+	goOnlineTx.Header.GenesisID = params.GenesisId
 
 	// Check if the protocol supports genesis hash
 	if config.Consensus[protocol.ConsensusFuture].SupportGenesisHash {
@@ -293,7 +305,7 @@ func (c *Client) MakeUnsignedGoOnlineTx(address string, firstValid, lastValid, f
 	}
 
 	// Get current round, protocol, genesis ID
-	params, err := c.SuggestedParams()
+	params, err := c.cachedSuggestedParams()
 	if err != nil {
 		return transactions.Transaction{}, err
 	}
@@ -350,7 +362,7 @@ func (c *Client) MakeUnsignedGoOfflineTx(address string, firstValid, lastValid, 
 		return transactions.Transaction{}, err
 	}
 
-	params, err := c.SuggestedParams()
+	params, err := c.cachedSuggestedParams()
 	if err != nil {
 		return transactions.Transaction{}, err
 	}
@@ -405,7 +417,7 @@ func (c *Client) MakeUnsignedBecomeNonparticipatingTx(address string, firstValid
 		return transactions.Transaction{}, err
 	}
 
-	params, err := c.SuggestedParams()
+	params, err := c.cachedSuggestedParams()
 	if err != nil {
 		return transactions.Transaction{}, err
 	}
@@ -460,7 +472,7 @@ func (c *Client) FillUnsignedTxTemplate(sender string, firstValid, lastValid, fe
 		return transactions.Transaction{}, err
 	}
 
-	params, err := c.SuggestedParams()
+	params, err := c.cachedSuggestedParams()
 	if err != nil {
 		return transactions.Transaction{}, err
 	}
@@ -503,50 +515,50 @@ func (c *Client) FillUnsignedTxTemplate(sender string, firstValid, lastValid, fe
 }
 
 // MakeUnsignedAppCreateTx makes a transaction for creating an application
-func (c *Client) MakeUnsignedAppCreateTx(onComplete transactions.OnCompletion, approvalProg []byte, clearProg []byte, globalSchema basics.StateSchema, localSchema basics.StateSchema, appArgs [][]byte, accounts []string, foreignApps []uint64, foreignAssets []uint64, extrapages uint32) (tx transactions.Transaction, err error) {
-	return c.MakeUnsignedApplicationCallTx(0, appArgs, accounts, foreignApps, foreignAssets, onComplete, approvalProg, clearProg, globalSchema, localSchema, extrapages)
+func (c *Client) MakeUnsignedAppCreateTx(onComplete transactions.OnCompletion, approvalProg []byte, clearProg []byte, globalSchema basics.StateSchema, localSchema basics.StateSchema, appArgs [][]byte, accounts []string, foreignApps []uint64, foreignAssets []uint64, boxes []transactions.BoxRef, extrapages uint32) (tx transactions.Transaction, err error) {
+	return c.MakeUnsignedApplicationCallTx(0, appArgs, accounts, foreignApps, foreignAssets, boxes, onComplete, approvalProg, clearProg, globalSchema, localSchema, extrapages)
 }
 
 // MakeUnsignedAppUpdateTx makes a transaction for updating an application's programs
-func (c *Client) MakeUnsignedAppUpdateTx(appIdx uint64, appArgs [][]byte, accounts []string, foreignApps []uint64, foreignAssets []uint64, approvalProg []byte, clearProg []byte) (tx transactions.Transaction, err error) {
-	return c.MakeUnsignedApplicationCallTx(appIdx, appArgs, accounts, foreignApps, foreignAssets, transactions.UpdateApplicationOC, approvalProg, clearProg, emptySchema, emptySchema, 0)
+func (c *Client) MakeUnsignedAppUpdateTx(appIdx uint64, appArgs [][]byte, accounts []string, foreignApps []uint64, foreignAssets []uint64, boxes []transactions.BoxRef, approvalProg []byte, clearProg []byte) (tx transactions.Transaction, err error) {
+	return c.MakeUnsignedApplicationCallTx(appIdx, appArgs, accounts, foreignApps, foreignAssets, boxes, transactions.UpdateApplicationOC, approvalProg, clearProg, emptySchema, emptySchema, 0)
 }
 
 // MakeUnsignedAppDeleteTx makes a transaction for deleting an application
-func (c *Client) MakeUnsignedAppDeleteTx(appIdx uint64, appArgs [][]byte, accounts []string, foreignApps []uint64, foreignAssets []uint64) (tx transactions.Transaction, err error) {
-	return c.MakeUnsignedApplicationCallTx(appIdx, appArgs, accounts, foreignApps, foreignAssets, transactions.DeleteApplicationOC, nil, nil, emptySchema, emptySchema, 0)
+func (c *Client) MakeUnsignedAppDeleteTx(appIdx uint64, appArgs [][]byte, accounts []string, foreignApps []uint64, foreignAssets []uint64, boxes []transactions.BoxRef) (tx transactions.Transaction, err error) {
+	return c.MakeUnsignedApplicationCallTx(appIdx, appArgs, accounts, foreignApps, foreignAssets, boxes, transactions.DeleteApplicationOC, nil, nil, emptySchema, emptySchema, 0)
 }
 
 // MakeUnsignedAppOptInTx makes a transaction for opting in to (allocating
 // some account-specific state for) an application
-func (c *Client) MakeUnsignedAppOptInTx(appIdx uint64, appArgs [][]byte, accounts []string, foreignApps []uint64, foreignAssets []uint64) (tx transactions.Transaction, err error) {
-	return c.MakeUnsignedApplicationCallTx(appIdx, appArgs, accounts, foreignApps, foreignAssets, transactions.OptInOC, nil, nil, emptySchema, emptySchema, 0)
+func (c *Client) MakeUnsignedAppOptInTx(appIdx uint64, appArgs [][]byte, accounts []string, foreignApps []uint64, foreignAssets []uint64, boxes []transactions.BoxRef) (tx transactions.Transaction, err error) {
+	return c.MakeUnsignedApplicationCallTx(appIdx, appArgs, accounts, foreignApps, foreignAssets, boxes, transactions.OptInOC, nil, nil, emptySchema, emptySchema, 0)
 }
 
 // MakeUnsignedAppCloseOutTx makes a transaction for closing out of
 // (deallocating all account-specific state for) an application
-func (c *Client) MakeUnsignedAppCloseOutTx(appIdx uint64, appArgs [][]byte, accounts []string, foreignApps []uint64, foreignAssets []uint64) (tx transactions.Transaction, err error) {
-	return c.MakeUnsignedApplicationCallTx(appIdx, appArgs, accounts, foreignApps, foreignAssets, transactions.CloseOutOC, nil, nil, emptySchema, emptySchema, 0)
+func (c *Client) MakeUnsignedAppCloseOutTx(appIdx uint64, appArgs [][]byte, accounts []string, foreignApps []uint64, foreignAssets []uint64, boxes []transactions.BoxRef) (tx transactions.Transaction, err error) {
+	return c.MakeUnsignedApplicationCallTx(appIdx, appArgs, accounts, foreignApps, foreignAssets, boxes, transactions.CloseOutOC, nil, nil, emptySchema, emptySchema, 0)
 }
 
 // MakeUnsignedAppClearStateTx makes a transaction for clearing out all
 // account-specific state for an application. It may not be rejected by the
 // application's logic.
-func (c *Client) MakeUnsignedAppClearStateTx(appIdx uint64, appArgs [][]byte, accounts []string, foreignApps []uint64, foreignAssets []uint64) (tx transactions.Transaction, err error) {
-	return c.MakeUnsignedApplicationCallTx(appIdx, appArgs, accounts, foreignApps, foreignAssets, transactions.ClearStateOC, nil, nil, emptySchema, emptySchema, 0)
+func (c *Client) MakeUnsignedAppClearStateTx(appIdx uint64, appArgs [][]byte, accounts []string, foreignApps []uint64, foreignAssets []uint64, boxes []transactions.BoxRef) (tx transactions.Transaction, err error) {
+	return c.MakeUnsignedApplicationCallTx(appIdx, appArgs, accounts, foreignApps, foreignAssets, boxes, transactions.ClearStateOC, nil, nil, emptySchema, emptySchema, 0)
 }
 
 // MakeUnsignedAppNoOpTx makes a transaction for interacting with an existing
 // application, potentially updating any account-specific local state and
 // global state associated with it.
-func (c *Client) MakeUnsignedAppNoOpTx(appIdx uint64, appArgs [][]byte, accounts []string, foreignApps []uint64, foreignAssets []uint64) (tx transactions.Transaction, err error) {
-	return c.MakeUnsignedApplicationCallTx(appIdx, appArgs, accounts, foreignApps, foreignAssets, transactions.NoOpOC, nil, nil, emptySchema, emptySchema, 0)
+func (c *Client) MakeUnsignedAppNoOpTx(appIdx uint64, appArgs [][]byte, accounts []string, foreignApps []uint64, foreignAssets []uint64, boxes []transactions.BoxRef) (tx transactions.Transaction, err error) {
+	return c.MakeUnsignedApplicationCallTx(appIdx, appArgs, accounts, foreignApps, foreignAssets, boxes, transactions.NoOpOC, nil, nil, emptySchema, emptySchema, 0)
 }
 
 // MakeUnsignedApplicationCallTx is a helper for the above ApplicationCall
 // transaction constructors. A fully custom ApplicationCall transaction may
 // be constructed using this method.
-func (c *Client) MakeUnsignedApplicationCallTx(appIdx uint64, appArgs [][]byte, accounts []string, foreignApps []uint64, foreignAssets []uint64, onCompletion transactions.OnCompletion, approvalProg []byte, clearProg []byte, globalSchema basics.StateSchema, localSchema basics.StateSchema, extrapages uint32) (tx transactions.Transaction, err error) {
+func (c *Client) MakeUnsignedApplicationCallTx(appIdx uint64, appArgs [][]byte, accounts []string, foreignApps []uint64, foreignAssets []uint64, boxes []transactions.BoxRef, onCompletion transactions.OnCompletion, approvalProg []byte, clearProg []byte, globalSchema basics.StateSchema, localSchema basics.StateSchema, extrapages uint32) (tx transactions.Transaction, err error) {
 	tx.Type = protocol.ApplicationCallTx
 	tx.ApplicationID = basics.AppIndex(appIdx)
 	tx.OnCompletion = onCompletion
@@ -559,6 +571,7 @@ func (c *Client) MakeUnsignedApplicationCallTx(appIdx uint64, appArgs [][]byte, 
 
 	tx.ForeignApps = parseTxnForeignApps(foreignApps)
 	tx.ForeignAssets = parseTxnForeignAssets(foreignAssets)
+	tx.Boxes = boxes
 	tx.ApprovalProgram = approvalProg
 	tx.ClearStateProgram = clearProg
 	tx.LocalStateSchema = localSchema
@@ -637,7 +650,7 @@ func (c *Client) MakeUnsignedAssetCreateTx(total uint64, defaultFrozen bool, man
 	}
 
 	// Get consensus params so we can get max field lengths
-	params, err := c.SuggestedParams()
+	params, err := c.cachedSuggestedParams()
 	if err != nil {
 		return transactions.Transaction{}, err
 	}
@@ -706,42 +719,32 @@ func (c *Client) MakeUnsignedAssetDestroyTx(index uint64) (transactions.Transact
 func (c *Client) MakeUnsignedAssetConfigTx(creator string, index uint64, newManager *string, newReserve *string, newFreeze *string, newClawback *string) (transactions.Transaction, error) {
 	var tx transactions.Transaction
 	var err error
-	var ok bool
 
-	// If the creator was passed in blank, look up asset info by index
-	var params v1.AssetParams
-	if creator == "" {
-		params, err = c.AssetInformation(index)
-		if err != nil {
-			return tx, err
-		}
-	} else {
-		// Fetch the current state, to fill in as a template
-		current, err := c.AccountInformation(creator)
-		if err != nil {
-			return tx, err
-		}
+	asset, err := c.AssetInformation(index)
+	if err != nil {
+		return tx, err
+	}
+	params := asset.Params
 
-		params, ok = current.AssetParams[index]
-		if !ok {
-			return tx, fmt.Errorf("asset ID %d not found in account %s", index, creator)
-		}
+	// If creator was passed in, check that the asset params match.
+	if creator != "" && creator != params.Creator {
+		return tx, fmt.Errorf("creator %s does not match asset ID %d", creator, index)
 	}
 
 	if newManager == nil {
-		newManager = &params.ManagerAddr
+		newManager = params.Manager
 	}
 
 	if newReserve == nil {
-		newReserve = &params.ReserveAddr
+		newReserve = params.Reserve
 	}
 
 	if newFreeze == nil {
-		newFreeze = &params.FreezeAddr
+		newFreeze = params.Freeze
 	}
 
 	if newClawback == nil {
-		newClawback = &params.ClawbackAddr
+		newClawback = params.Clawback
 	}
 
 	tx.Type = protocol.AssetConfigTx

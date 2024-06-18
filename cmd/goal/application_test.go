@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -26,6 +26,7 @@ import (
 
 func TestParseMethodArgJSONtoByteSlice(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	makeRepeatSlice := func(size int, value string) []string {
 		slice := make([]string, size)
@@ -133,7 +134,9 @@ func TestParseMethodArgJSONtoByteSlice(t *testing.T) {
 	}
 
 	for i, test := range tests {
+		test := test
 		t.Run(fmt.Sprintf("index=%d", i), func(t *testing.T) {
+			t.Parallel()
 			applicationArgs := [][]byte{}
 			err := parseMethodArgJSONtoByteSlice(test.argTypes, test.jsonArgs, &applicationArgs)
 			require.NoError(t, err)

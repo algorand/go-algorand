@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,14 +23,17 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
+	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestAccount(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	proto := config.Consensus[protocol.ConsensusFuture]
 	appIdx1 := basics.AppIndex(1)
 	appIdx2 := basics.AppIndex(2)
@@ -135,8 +138,8 @@ func TestAccount(t *testing.T) {
 	verifyCreatedApp(0, appIdx1, appParams1)
 	verifyCreatedApp(1, appIdx2, appParams2)
 
-	makeTKV := func(k string, v interface{}) generated.TealKeyValue {
-		value := generated.TealValue{}
+	makeTKV := func(k string, v interface{}) model.TealKeyValue {
+		value := model.TealValue{}
 		switch v.(type) {
 		case int:
 			value.Uint = uint64(v.(int))
@@ -147,13 +150,13 @@ func TestAccount(t *testing.T) {
 		default:
 			panic(fmt.Sprintf("Unknown teal type %v", t))
 		}
-		return generated.TealKeyValue{
+		return model.TealKeyValue{
 			Key:   b64(k),
 			Value: value,
 		}
 	}
 
-	verifyAppLocalState := func(index int, appIdx basics.AppIndex, numUints, numByteSlices uint64, keyValues generated.TealKeyValueStore) {
+	verifyAppLocalState := func(index int, appIdx basics.AppIndex, numUints, numByteSlices uint64, keyValues model.TealKeyValueStore) {
 		require.Equal(t, uint64(appIdx), (*conv.AppsLocalState)[index].Id)
 		require.Equal(t, numUints, (*conv.AppsLocalState)[index].Schema.NumUint)
 		require.Equal(t, numByteSlices, (*conv.AppsLocalState)[index].Schema.NumByteSlice)
@@ -165,8 +168,8 @@ func TestAccount(t *testing.T) {
 
 	require.NotNil(t, conv.AppsLocalState)
 	require.Equal(t, 2, len(*conv.AppsLocalState))
-	verifyAppLocalState(0, appIdx1, 10, 0, generated.TealKeyValueStore{makeTKV("bytes", "value1"), makeTKV("uint", 1)})
-	verifyAppLocalState(1, appIdx2, 10, 0, generated.TealKeyValueStore{makeTKV("bytes", "value2"), makeTKV("uint", 2)})
+	verifyAppLocalState(0, appIdx1, 10, 0, model.TealKeyValueStore{makeTKV("bytes", "value1"), makeTKV("uint", 1)})
+	verifyAppLocalState(1, appIdx2, 10, 0, model.TealKeyValueStore{makeTKV("bytes", "value2"), makeTKV("uint", 2)})
 
 	verifyCreatedAsset := func(index int, assetIdx basics.AssetIndex, params basics.AssetParams) {
 		require.Equal(t, uint64(assetIdx), (*conv.CreatedAssets)[index].Index)
@@ -194,7 +197,7 @@ func TestAccount(t *testing.T) {
 
 	t.Run("IsDeterministic", func(t *testing.T) {
 		// convert the same account a few more times to make sure we always
-		// produce the same generated.Account
+		// produce the same model.Account
 		for i := 0; i < 10; i++ {
 			anotherConv, err := AccountDataToAccount(addr, &b, round, &proto, a.MicroAlgos)
 			require.NoError(t, err)
@@ -202,4 +205,22 @@ func TestAccount(t *testing.T) {
 			require.Equal(t, protocol.EncodeJSON(conv), protocol.EncodeJSON(anotherConv))
 		}
 	})
+}
+
+func TestAccountRandomRoundTrip(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	for _, simple := range []bool{true, false} {
+		accts := ledgertesting.RandomAccounts(20, simple)
+		for addr, acct := range accts {
+			round := basics.Round(2)
+			proto := config.Consensus[protocol.ConsensusFuture]
+			conv, err := AccountDataToAccount(addr.String(), &acct, round, &proto, acct.MicroAlgos)
+			require.NoError(t, err)
+			c, err := AccountToAccountData(&conv)
+			require.NoError(t, err)
+			require.Equal(t, acct, c)
+		}
+	}
 }

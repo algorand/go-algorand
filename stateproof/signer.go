@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,13 +17,16 @@
 package stateproof
 
 import (
+	"context"
+	"database/sql"
+	"errors"
 	"time"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/stateproofmsg"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -43,14 +46,7 @@ func (spw *Worker) signer(latest basics.Round) {
 	for { // Start signing StateProofs from nextRnd onwards
 		select {
 		case <-spw.ledger.Wait(nextRnd):
-			hdr, err := spw.ledger.BlockHdr(nextRnd)
-			if err != nil {
-				spw.log.Warnf("spw.signer(): BlockHdr(next %d): %v", nextRnd, err)
-				time.Sleep(1 * time.Second)
-				nextRnd = spw.nextStateProofRound(spw.ledger.Latest())
-				continue
-			}
-			spw.signStateProof(hdr)
+			spw.signStateProof(nextRnd)
 			spw.invokeBuilder(nextRnd)
 			nextRnd++
 
@@ -84,94 +80,114 @@ func (spw *Worker) nextStateProofRound(latest basics.Round) basics.Round {
 	return nextrnd
 }
 
-func (spw *Worker) signStateProof(hdr bookkeeping.BlockHeader) {
-	proto := config.Consensus[hdr.CurrentProtocol]
+func (spw *Worker) signStateProof(round basics.Round) {
+	proto, err := spw.getProto(round)
+	if err != nil {
+		spw.log.Warnf("spw.signStateProof(%d): getProto: %v", round, err)
+		return
+	}
+
 	if proto.StateProofInterval == 0 {
 		return
 	}
 
 	// Only sign blocks that are a multiple of StateProofInterval.
-	if hdr.Round%basics.Round(proto.StateProofInterval) != 0 {
+	if round%basics.Round(proto.StateProofInterval) != 0 {
 		return
 	}
 
-	keys := spw.accts.StateProofKeys(hdr.Round)
+	keys := spw.accts.StateProofKeys(round)
 	if len(keys) == 0 {
 		// No keys, nothing to do.
 		return
 	}
 
-	// votersRound is the round containing the merkle root commitment
-	// for the voters that are going to sign this block.
-	votersRound := hdr.Round.SubSaturate(basics.Round(proto.StateProofInterval))
-	votersHdr, err := spw.ledger.BlockHdr(votersRound)
+	stateProofMessage, err := spw.getStateProofMessage(round)
 	if err != nil {
-		spw.log.Warnf("spw.signBlock(%d): BlockHdr(%d): %v", hdr.Round, votersRound, err)
+		spw.log.Warnf("spw.signStateProof(%d): getStateProofMessage: %v", round, err)
 		return
 	}
 
-	if votersHdr.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment.IsEmpty() {
-		// No voter commitment, perhaps because state proofs were
-		// just enabled.
-		return
+	spw.signStateProofMessage(&stateProofMessage, round, keys)
+}
+
+func (spw *Worker) getProto(round basics.Round) (*config.ConsensusParams, error) {
+	protoHdr, err := spw.ledger.BlockHdr(round)
+	if err != nil {
+		// IMPORTANT: This doesn't support modification of the state proof interval at the moment. Actually supporting
+		// it will probably require using (and slightly modifying) the stateProofVerificationTracker.
+		latestRound := spw.ledger.Latest()
+		protoHdr, err = spw.ledger.BlockHdr(latestRound)
+		if err != nil {
+			return nil, err
+		}
 	}
+
+	proto := config.Consensus[protoHdr.CurrentProtocol]
+	return &proto, nil
+}
+
+func (spw *Worker) getStateProofMessage(round basics.Round) (stateproofmsg.Message, error) {
+	var msg stateproofmsg.Message
+	err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		msg, err = getMessage(tx, round)
+		return err
+	})
+	if err == nil {
+		return msg, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		spw.log.Errorf("getStateProofMessage(%d): error while fetching prover from DB: %v", round, err)
+	}
+
+	return GenerateStateProofMessage(spw.ledger, round)
+}
+
+func (spw *Worker) signStateProofMessage(message *stateproofmsg.Message, round basics.Round, keys []account.StateProofSecretsForRound) {
+	hashedStateproofMessage := message.Hash()
 
 	sigs := make([]sigFromAddr, 0, len(keys))
-	ids := make([]account.ParticipationID, 0, len(keys))
-	usedSigners := make([]*merklesignature.Signer, 0, len(keys))
-
-	stateproofMessage, err := GenerateStateProofMessage(spw.ledger, uint64(votersHdr.Round), hdr)
-	if err != nil {
-		spw.log.Warnf("spw.signBlock(%d): GenerateStateProofMessage: %v", hdr.Round, err)
-		return
-	}
-	hashedStateproofMessage := stateproofMessage.Hash()
 
 	for _, key := range keys {
-		if key.FirstValid > hdr.Round || hdr.Round > key.LastValid {
+		if key.FirstValid > round || round > key.LastValid {
 			continue
 		}
 
 		if key.StateProofSecrets == nil {
-			spw.log.Warnf("spw.signBlock(%d): empty state proof secrets for round", hdr.Round)
+			spw.log.Warnf("spw.signStateProofMessage(%d): empty state proof secrets for round", round)
+			continue
+		}
+
+		var exists bool
+		err := spw.db.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+			exists, err = sigExistsInDB(tx, round, key.Account)
+			return err
+		})
+		if err != nil {
+			spw.log.Warnf("spw.signStateProofMessage(%d): couldn't figure if sig exists in DB: %v", round, err)
+		} else if exists {
 			continue
 		}
 
 		sig, err := key.StateProofSecrets.SignBytes(hashedStateproofMessage[:])
 		if err != nil {
-			spw.log.Warnf("spw.signBlock(%d): StateProofSecrets.Sign: %v", hdr.Round, err)
+			spw.log.Warnf("spw.signStateProofMessage(%d): StateProofSecrets.Sign: %v", round, err)
 			continue
 		}
 
 		sigs = append(sigs, sigFromAddr{
 			SignerAddress: key.Account,
-			Round:         hdr.Round,
+			Round:         round,
 			Sig:           sig,
 		})
-		ids = append(ids, key.ParticipationID)
-		usedSigners = append(usedSigners, key.StateProofSecrets)
 	}
 
 	// any error in handle sig indicates the signature wasn't stored in disk, thus we cannot delete the key.
-	for i, sfa := range sigs {
+	for _, sfa := range sigs {
 		if _, err := spw.handleSig(sfa, nil); err != nil {
-			spw.log.Warnf("spw.signBlock(%d): handleSig: %v", hdr.Round, err)
+			spw.log.Warnf("spw.signStateProofMessage(%d): handleSig: %v", round, err)
 			continue
 		}
-
-		spw.log.Infof("spw.signBlock(%d): sp message was signed with address %v", hdr.Round, sfa.SignerAddress)
-		firstRoundInKeyLifetime, err := usedSigners[i].FirstRoundInKeyLifetime() // Calculate first round of the key in order to delete all previous keys (and keep the current one for now)
-		if err != nil {
-			spw.log.Warnf("spw.signBlock(%d): Signer.FirstRoundInKeyLifetime: %v", hdr.Round, err)
-			continue
-		}
-		if firstRoundInKeyLifetime == 0 {
-			continue // No previous keys to delete (also underflows when subtracting 1)
-		}
-
-		// Safe to delete key for sfa.Round because the signature is now stored in the disk.
-		if err := spw.accts.DeleteStateProofKey(ids[i], basics.Round(firstRoundInKeyLifetime-1)); err != nil { // Subtract 1 to delete all keys up to this one
-			spw.log.Warnf("spw.signBlock(%d): DeleteStateProofKey: %v", hdr.Round, err)
-		}
+		spw.log.Infof("spw.signStateProofMessage(%d): sp message was signed with address %v", round, sfa.SignerAddress)
 	}
 }

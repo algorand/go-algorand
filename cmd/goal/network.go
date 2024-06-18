@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,13 +17,18 @@
 package main
 
 import (
+	_ "embed"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 
+	"github.com/algorand/go-algorand/cmd/util/datadir"
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/gen"
 	"github.com/algorand/go-algorand/netdeploy"
 	"github.com/algorand/go-algorand/util"
 )
@@ -35,26 +40,47 @@ var startNode string
 var noImportKeys bool
 var noClean bool
 var devModeOverride bool
+var startOnCreation bool
+var pregenDir string
 
 func init() {
 	networkCmd.AddCommand(networkCreateCmd)
 	networkCmd.PersistentFlags().StringVarP(&networkRootDir, "rootdir", "r", "", "Root directory for the private network directories")
-	networkCmd.MarkPersistentFlagRequired("rootdir")
 
 	networkCreateCmd.Flags().StringVarP(&networkName, "network", "n", "", "Specify the name to use for the private network")
 	networkCreateCmd.Flags().StringVarP(&networkTemplateFile, "template", "t", "", "Specify the path to the template file for the network")
-	networkCreateCmd.MarkFlagRequired("template")
 	networkCreateCmd.Flags().BoolVarP(&noImportKeys, "noimportkeys", "K", false, "Do not import root keys when creating the network (by default will import)")
 	networkCreateCmd.Flags().BoolVar(&noClean, "noclean", false, "Prevents auto-cleanup on error - for diagnosing problems")
 	networkCreateCmd.Flags().BoolVar(&devModeOverride, "devMode", false, "Forces the configuration to enable DevMode, returns an error if the template is not compatible with DevMode.")
-
-	networkStartCmd.Flags().StringVarP(&startNode, "node", "n", "", "Specify the name of a specific node to start")
+	networkCreateCmd.Flags().BoolVarP(&startOnCreation, "start", "s", false, "Automatically start the network after creating it.")
+	networkCreateCmd.Flags().StringVarP(&pregenDir, "pregendir", "p", "", "Specify the path to the directory with pregenerated genesis.json, root and partkeys to import into the network directory. By default, the genesis.json and keys will be generated on start. This should only be used on private networks.")
+	networkCreateCmd.MarkFlagRequired("rootdir")
 
 	networkCmd.AddCommand(networkStartCmd)
+	networkStartCmd.Flags().StringVarP(&startNode, "node", "n", "", "Specify the name of a specific node to start")
+	networkStartCmd.MarkFlagRequired("rootdir")
+
 	networkCmd.AddCommand(networkRestartCmd)
+	networkRestartCmd.MarkFlagRequired("rootdir")
+
 	networkCmd.AddCommand(networkStopCmd)
+	networkStopCmd.MarkFlagRequired("rootdir")
+
 	networkCmd.AddCommand(networkStatusCmd)
+	networkStatusCmd.MarkFlagRequired("rootdir")
+
 	networkCmd.AddCommand(networkDeleteCmd)
+	networkDeleteCmd.MarkFlagRequired("rootdir")
+
+	networkCmd.AddCommand(networkPregenCmd)
+	networkPregenCmd.Flags().StringVarP(&networkTemplateFile, "template", "t", "", "Specify the path to the template file for the network")
+	networkPregenCmd.Flags().StringVarP(&pregenDir, "pregendir", "p", "", "Specify the path to the directory to export genesis.json, root and partkey files. This should only be used on private networks.")
+	networkPregenCmd.MarkFlagRequired("pregendir")
+	// Hide rootdir flag as it is unused and will error if used with this command.
+	networkPregenCmd.SetHelpFunc(func(command *cobra.Command, strings []string) {
+		_ = command.Flags().MarkHidden("rootdir")
+		command.Parent().HelpFunc()(command, strings)
+	})
 }
 
 var networkCmd = &cobra.Command{
@@ -70,6 +96,9 @@ The basic idea is that we create one or more data directories and wallets to for
 	},
 }
 
+//go:embed defaultNetworkTemplate.json
+var defaultNetworkTemplate string
+
 var networkCreateCmd = &cobra.Command{
 	Use:   "create",
 	Short: "Create a private named network from a template",
@@ -80,13 +109,40 @@ var networkCreateCmd = &cobra.Command{
 		if err != nil {
 			panic(err)
 		}
-		networkTemplateFile, err := filepath.Abs(networkTemplateFile)
-		if err != nil {
-			panic(err)
+
+		var templateReader io.Reader
+
+		if networkTemplateFile == "" {
+			templateReader = strings.NewReader(defaultNetworkTemplate)
+		} else {
+			networkTemplateFile, err = filepath.Abs(networkTemplateFile)
+			if err != nil {
+				panic(err)
+			}
+			file, osErr := os.Open(networkTemplateFile)
+			if osErr != nil {
+				reportErrorf(errorCreateNetwork, osErr)
+			}
+
+			defer file.Close()
+			templateReader = file
 		}
+
 		// Make sure target directory does not exist or is empty
 		if util.FileExists(networkRootDir) && !util.IsEmpty(networkRootDir) {
 			reportErrorf(infoNetworkAlreadyExists, networkRootDir)
+		}
+
+		// If pregendir is specified, copy files over
+		if pregenDir != "" {
+			pregenDir, err = filepath.Abs(pregenDir)
+			if err != nil {
+				panic(err)
+			}
+			err = util.CopyFolder(pregenDir, networkRootDir)
+			if err != nil {
+				panic(err)
+			}
 		}
 
 		binDir, err := util.ExeDir()
@@ -94,14 +150,18 @@ var networkCreateCmd = &cobra.Command{
 			panic(err)
 		}
 
-		dataDir := maybeSingleDataDir()
+		dataDir := datadir.MaybeSingleDataDir()
 		var consensus config.ConsensusProtocols
 		if dataDir != "" {
 			// try to load the consensus from there. If there is none, we can just use the built in one.
 			consensus, _ = config.PreloadConfigurableConsensusProtocols(dataDir)
 		}
 
-		network, err := netdeploy.CreateNetworkFromTemplate(networkName, networkRootDir, networkTemplateFile, binDir, !noImportKeys, nil, consensus, devModeOverride)
+		var overrides []netdeploy.TemplateOverride
+		if devModeOverride {
+			overrides = append(overrides, netdeploy.OverrideDevMode)
+		}
+		network, err := netdeploy.CreateNetworkFromTemplate(networkName, networkRootDir, templateReader, binDir, !noImportKeys, nil, consensus, overrides...)
 		if err != nil {
 			if noClean {
 				reportInfof(" ** failed ** - Preserving network rootdir '%s'", networkRootDir)
@@ -112,6 +172,15 @@ var networkCreateCmd = &cobra.Command{
 		}
 
 		reportInfof(infoNetworkCreated, network.Name(), networkRootDir)
+
+		if startOnCreation {
+			network, binDir := getNetworkAndBinDir()
+			err := network.Start(binDir, false)
+			if err != nil {
+				reportErrorf(errorStartingNetwork, err)
+			}
+			reportInfof(infoNetworkStarted, networkRootDir)
+		}
 	},
 }
 
@@ -212,5 +281,67 @@ var networkDeleteCmd = &cobra.Command{
 			reportErrorf("Error stopping or deleting network: %v\n", err)
 		}
 		reportInfof(infoNetworkDeleted, networkRootDir)
+	},
+}
+
+var networkPregenCmd = &cobra.Command{
+	Use:   "pregen",
+	Short: "Pregenerate private network",
+	Long:  "Pregenerates the root and participation keys for a private network. The pregen directory can then be passed to the 'goal network create' to start the network more quickly.",
+	Args:  validateNoPosArgsFn,
+	Run: func(cmd *cobra.Command, _ []string) {
+		var err error
+		if networkRootDir != "" {
+			reportErrorf("This command does not take a network directory as an argument. Use --pregendir flag instead.")
+		}
+
+		pregenDir, err = filepath.Abs(pregenDir)
+		if err != nil {
+			panic(err)
+		}
+
+		var templateReader io.Reader
+
+		if networkTemplateFile == "" {
+			templateReader = strings.NewReader(defaultNetworkTemplate)
+		} else {
+			networkTemplateFile, err = filepath.Abs(networkTemplateFile)
+			if err != nil {
+				panic(err)
+			}
+			file, osErr := os.Open(networkTemplateFile)
+			if osErr != nil {
+				reportErrorf(errorCreateNetwork, osErr)
+			}
+
+			defer file.Close()
+			templateReader = file
+		}
+
+		// Make sure target directory does not exist or is empty
+		if util.FileExists(pregenDir) && !util.IsEmpty(pregenDir) {
+			reportErrorf(infoNetworkAlreadyExists, pregenDir)
+		}
+
+		var template netdeploy.NetworkTemplate
+		err = netdeploy.LoadTemplateFromReader(templateReader, &template)
+		if err != nil {
+			reportErrorf("Error in loading template: %v\n", err)
+		}
+
+		dataDir := datadir.MaybeSingleDataDir()
+		var consensus config.ConsensusProtocols
+		if dataDir != "" {
+			// try to load the consensus from there. If there is none, we can just use the built in one.
+			consensus, _ = config.PreloadConfigurableConsensusProtocols(dataDir)
+		}
+		if err = template.Validate(); err != nil {
+			reportErrorf("Error in template validation: %v\n", err)
+		}
+
+		err = gen.GenerateGenesisFiles(template.Genesis, config.Consensus.Merge(consensus), pregenDir, os.Stdout)
+		if err != nil {
+			reportErrorf("Cannot write genesis files: %s", err)
+		}
 	},
 }

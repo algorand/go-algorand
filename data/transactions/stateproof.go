@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -41,8 +41,9 @@ func (sp StateProofTxnFields) Empty() bool {
 		sp.Message.MsgIsZero()
 }
 
-//msgp:ignore specialAddr
 // specialAddr is used to form a unique address that will send out state proofs.
+//
+//msgp:ignore specialAddr
 type specialAddr string
 
 // ToBeHashed implements the crypto.Hashable interface

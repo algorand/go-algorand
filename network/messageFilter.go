@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -26,7 +26,7 @@ import (
 // IncomingMessage represents a message arriving from some peer in our p2p network
 type messageFilter struct {
 	deadlock.Mutex
-	buckets          []map[crypto.Digest]bool
+	buckets          []map[crypto.Digest]struct{}
 	maxBucketSize    int
 	currentTopBucket int
 	nonce            [16]byte
@@ -34,14 +34,12 @@ type messageFilter struct {
 
 func makeMessageFilter(bucketsCount, maxBucketSize int) *messageFilter {
 	mf := &messageFilter{
-		buckets:          make([]map[crypto.Digest]bool, bucketsCount),
+		buckets:          make([]map[crypto.Digest]struct{}, bucketsCount),
 		maxBucketSize:    maxBucketSize,
 		currentTopBucket: 0,
 	}
-	for i := range mf.buckets {
-		mf.buckets[i] = make(map[crypto.Digest]bool)
-	}
 	crypto.RandBytes(mf.nonce[:])
+	mf.buckets[mf.currentTopBucket] = make(map[crypto.Digest]struct{}, mf.maxBucketSize)
 	return mf
 }
 
@@ -69,19 +67,19 @@ func (f *messageFilter) CheckDigest(msgHash crypto.Digest, add bool, promote boo
 
 	if !has {
 		// we don't have this entry. add it.
-		f.buckets[f.currentTopBucket][msgHash] = true
+		f.buckets[f.currentTopBucket][msgHash] = struct{}{}
 	} else {
 		// we already have it.
 		// do we need to promote it ?
 		if promote && f.currentTopBucket != idx {
 			delete(f.buckets[idx], msgHash)
-			f.buckets[f.currentTopBucket][msgHash] = true
+			f.buckets[f.currentTopBucket][msgHash] = struct{}{}
 		}
 	}
 	// check to see if the current bucket reached capacity.
 	if len(f.buckets[f.currentTopBucket]) >= f.maxBucketSize {
 		f.currentTopBucket = (f.currentTopBucket + len(f.buckets) - 1) % len(f.buckets)
-		f.buckets[f.currentTopBucket] = make(map[crypto.Digest]bool)
+		f.buckets[f.currentTopBucket] = make(map[crypto.Digest]struct{}, f.maxBucketSize)
 	}
 
 	return has

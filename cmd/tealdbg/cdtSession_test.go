@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -33,6 +33,8 @@ import (
 
 func TestCdtSessionProto11Common(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	sid := "test"
 	dbg := MockDebugControl{}
 	ch := make(chan Notification)
@@ -97,6 +99,8 @@ func TestCdtSessionProto11Common(t *testing.T) {
 
 func TestCdtSessionProto11Breakpoints(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	sid := "test"
 	dbg := MockDebugControl{}
 	ch := make(chan Notification)
@@ -182,6 +186,8 @@ func TestCdtSessionProto11Breakpoints(t *testing.T) {
 
 func TestCdtSessionProto11Events(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	sid := "test"
 	dbg := MockDebugControl{}
 	ch := make(chan Notification)
@@ -216,6 +222,8 @@ func TestCdtSessionProto11Events(t *testing.T) {
 
 func TestCdtSessionProto11Controls(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	sid := "test"
 	dbg := MockDebugControl{}
 	ch := make(chan Notification)
@@ -260,6 +268,8 @@ func TestCdtSessionProto11Controls(t *testing.T) {
 
 func TestCdtSessionProto11Evaluate(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	sid := "test"
 	dbg := MockDebugControl{}
 	ch := make(chan Notification)
@@ -299,6 +309,8 @@ func TestCdtSessionProto11Evaluate(t *testing.T) {
 
 func TestCdtSessionProto11CallOnFunc(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	sid := "test"
 	dbg := MockDebugControl{}
 	ch := make(chan Notification)
@@ -388,6 +400,8 @@ func TestCdtSessionProto11CallOnFunc(t *testing.T) {
 
 func TestCdtSessionProto11GetProps(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	sid := "test"
 	dbg := MockDebugControl{}
 	ch := make(chan Notification)
@@ -422,6 +436,8 @@ func TestCdtSessionProto11GetProps(t *testing.T) {
 
 func TestCdtSessionStateToEvent(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	sid := "test"
 	dbg := MockDebugControl{}
 	ch := make(chan Notification)
@@ -461,6 +477,7 @@ func TestCdtSessionStateToEvent(t *testing.T) {
 
 func TestCdtSessionGetObjects(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 	sid := "test"
 	dbg := MockDebugControl{}
 	ch := make(chan Notification)
@@ -504,9 +521,7 @@ func TestCdtSessionGetObjects(t *testing.T) {
 			{Type: basics.TealUintType, Uint: 1},
 			{Type: basics.TealBytesType, Bytes: "\x01\x02"},
 		},
-		pc:   atomicInt{1},
-		line: atomicInt{1},
-		err:  e,
+		err: e,
 		AppState: AppState{
 			appIdx: basics.AppIndex(1),
 			schemas: basics.StateSchemas{
@@ -565,6 +580,8 @@ func TestCdtSessionGetObjects(t *testing.T) {
 			},
 		},
 	}
+	state.pc.Store(1)
+	state.line.Store(1)
 
 	req.Method = "Runtime.getProperties"
 	req.Params = map[string]interface{}{}

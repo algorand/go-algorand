@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -35,7 +35,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	clientApi "github.com/algorand/go-algorand/daemon/algod/api/client"
-	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
@@ -115,10 +115,10 @@ func getAccountInformation(
 	expectedCountAssets uint64,
 	address string,
 	context string,
-	log logging.Logger) (info generated.Account, err error) {
+	log logging.Logger) (info model.Account, err error) {
 
 	for x := 0; x < 5; x++ { // retry only 5 times
-		info, err = fixture.AlgodClient.AccountInformationV2(address, true)
+		info, err = fixture.AlgodClient.AccountInformation(address, true)
 		if err != nil {
 			return
 		}
@@ -138,7 +138,7 @@ func getAccountInformation(
 func getAccountApplicationInformation(
 	fixture *fixtures.RestClientFixture,
 	address string,
-	appID uint64) (appInfo generated.AccountApplicationResponse, err error) {
+	appID uint64) (appInfo model.AccountApplicationResponse, err error) {
 
 	appInfo, err = fixture.AlgodClient.AccountApplicationInformation(address, appID)
 	return
@@ -249,6 +249,7 @@ func test5MAssets(t *testing.T, scenario int) {
 	ba := generateKeys(1)
 	baseAcct := ba[0]
 	sender, err := basics.UnmarshalChecksumAddress(wAcct)
+	require.NoError(t, err)
 	satxn := sendAlgoTransaction(t, 0, sender, baseAcct.pk, 1000000000000000, 1, genesisHash)
 	err = signAndBroadcastTransaction(0, &satxn, fixture.LibGoalClient, &fixture)
 	require.NoError(t, err)
@@ -542,7 +543,7 @@ func scenarioA(
 				ownAllAccount.pk,
 				tLife,
 				genesisHash,
-				basics.AssetIndex(asset.AssetId),
+				basics.AssetIndex(asset.AssetID),
 				ownAllAccount.pk,
 				uint64(0))
 
@@ -581,7 +582,7 @@ func scenarioA(
 				nacc.pk,
 				tLife,
 				genesisHash,
-				basics.AssetIndex(asset.AssetId),
+				basics.AssetIndex(asset.AssetID),
 				ownAllAccount.pk,
 				asset.Amount)
 			counter, txnGroup = queueTransaction(nacc.sk, assSend, txnChan, txnGrpChan, counter, txnGroup)
@@ -612,7 +613,7 @@ func scenarioA(
 			default:
 			}
 
-			assHold, err := fixture.AlgodClient.AccountAssetInformation(ownAllAccount.pk.String(), asset.AssetId)
+			assHold, err := fixture.AlgodClient.AccountAssetInformation(ownAllAccount.pk.String(), asset.AssetID)
 			require.NoError(t, err)
 
 			tAssetAmt += assHold.AssetHolding.Amount
@@ -673,18 +674,19 @@ func scenarioB(
 	counter, firstValid, err = checkPoint(counter, firstValid, tLife, true, fixture, log)
 	require.NoError(t, err)
 
-	info, err := fixture.AlgodClient.AccountInformationV2(baseAcct.pk.String(), false)
+	info, err := fixture.AlgodClient.AccountInformation(baseAcct.pk.String(), false)
 	require.NoError(t, err)
 	require.Equal(t, numberOfAssets, info.TotalAssetsOptedIn)
 	require.Equal(t, numberOfAssets, info.TotalCreatedAssets)
 
 	log.Infof("Verifying assets...")
-	// Verify the assets are transfered here
+	// Verify the assets are transferred here
 	tAssetAmt := uint64(0)
 	counter = 0
-	// this loop iterates over all the range of potentail assets, tries to confirm all of them.
+	// this loop iterates over all the range of potential assets, tries to confirm all of them.
 	// many of these are expected to be non-existing.
-	for aid := uint64(0); counter < numberOfAssets && aid < 2*numberOfAssets; aid++ {
+	startIdx := uint64(1000) // tx counter starts from 1000
+	for aid := startIdx; counter < numberOfAssets && aid < 2*startIdx*numberOfAssets; aid++ {
 		select {
 		case <-stopChan:
 			require.False(t, true, "Test interrupted")
@@ -1155,7 +1157,7 @@ int 1
 
 	// create the app
 	appTx, err = client.MakeUnsignedAppCreateTx(
-		transactions.OptInOC, approvalOps.Program, clearstateOps.Program, schema, schema, nil, nil, nil, nil, 0)
+		transactions.OptInOC, approvalOps.Program, clearstateOps.Program, schema, schema, nil, nil, nil, nil, nil, 0)
 	require.NoError(t, err)
 
 	note := make([]byte, 8)
@@ -1182,7 +1184,7 @@ func makeOptInAppTransaction(
 	tLife uint64,
 	genesisHash crypto.Digest) (appTx transactions.Transaction) {
 
-	appTx, err := client.MakeUnsignedAppOptInTx(uint64(appIdx), nil, nil, nil, nil)
+	appTx, err := client.MakeUnsignedAppOptInTx(uint64(appIdx), nil, nil, nil, nil, nil)
 	require.NoError(t, err)
 
 	appTx.Header = transactions.Header{
@@ -1198,7 +1200,7 @@ func makeOptInAppTransaction(
 // checks and verifies the app params by comparing them against the baseline
 func checkApplicationParams(
 	acTF transactions.ApplicationCallTxnFields,
-	app generated.ApplicationParams,
+	app model.ApplicationParams,
 	creator string,
 	globalStateCheck *[]bool,
 	globalStateCheckMu *deadlock.Mutex) (pass bool) {
@@ -1288,7 +1290,7 @@ func callAppTransaction(
 	tLife uint64,
 	genesisHash crypto.Digest) (appTx transactions.Transaction) {
 
-	appTx, err := client.MakeUnsignedAppNoOpTx(uint64(appIdx), nil, nil, nil, nil)
+	appTx, err := client.MakeUnsignedAppNoOpTx(uint64(appIdx), nil, nil, nil, nil, nil)
 	require.NoError(t, err)
 
 	appTx.Header = transactions.Header{

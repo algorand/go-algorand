@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,6 +23,71 @@ import (
 	"path/filepath"
 	"strings"
 )
+
+// MoveFile moves a file from src to dst. The advantages of using this over
+// os.Rename() is that it can move files across different filesystems.
+func MoveFile(src, dst string) error {
+	err := os.Rename(src, dst)
+	if err != nil {
+		// os.Rename() may have failed because src and dst are on different
+		// filesystems. Let's try to move the file by copying and deleting the
+		// source file.
+		return moveFileByCopying(src, dst)
+	}
+	return err
+}
+
+func moveFileByCopying(src, dst string) error {
+	// Lstat is specifically used to detect if src is a symlink. We could
+	// support moving symlinks by deleting src and creating a new symlink at
+	// dst, but we don't currently expect to encounter that case, so it has not
+	// been implemented.
+	srcInfo, srcErr := os.Lstat(src)
+	if srcErr != nil {
+		return srcErr
+	}
+	if !srcInfo.Mode().IsRegular() {
+		return fmt.Errorf("cannot move source file '%s': it is not a regular file (%v)", src, srcInfo.Mode())
+	}
+
+	if dstInfo, dstErr := os.Lstat(dst); dstErr == nil {
+		if dstInfo.Mode().IsDir() {
+			return fmt.Errorf("cannot move source file '%s' to destination '%s': destination is a directory", src, dst)
+		}
+		if os.SameFile(dstInfo, srcInfo) {
+			return fmt.Errorf("cannot move source file '%s' to destination '%s': source and destination are the same file", src, dst)
+		}
+	}
+
+	dstDir := filepath.Dir(dst)
+	dstBase := filepath.Base(dst)
+
+	tmpDstFile, errTmp := os.CreateTemp(dstDir, dstBase+".tmp-")
+	if errTmp != nil {
+		return errTmp
+	}
+	tmpDst := tmpDstFile.Name()
+	if errClose := tmpDstFile.Close(); errClose != nil {
+		return errClose
+	}
+
+	if _, err := CopyFile(src, tmpDst); err != nil {
+		// If the copy fails, try to clean up the temporary file
+		_ = os.Remove(tmpDst)
+		return err
+	}
+	if err := os.Rename(tmpDst, dst); err != nil {
+		// If the rename fails, try to clean up the temporary file
+		_ = os.Remove(tmpDst)
+		return err
+	}
+	if err := os.Remove(src); err != nil {
+		// Don't try to clean up the destination file here. Duplicate data is
+		// better than lost/incomplete data.
+		return fmt.Errorf("failed to remove source file '%s' after moving it to '%s': %w", src, dst, err)
+	}
+	return nil
+}
 
 // CopyFile uses io.Copy() to copy a file to another location
 // This was copied from https://opensource.com/article/18/6/copying-files-go

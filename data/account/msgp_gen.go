@@ -4,6 +4,10 @@ package account
 
 import (
 	"github.com/algorand/msgp/msgp"
+
+	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
+	"github.com/algorand/go-algorand/data/basics"
 )
 
 // The following msgp objects are implemented in this file:
@@ -11,17 +15,21 @@ import (
 //             |-----> (*) MarshalMsg
 //             |-----> (*) CanMarshalMsg
 //             |-----> (*) UnmarshalMsg
+//             |-----> (*) UnmarshalMsgWithState
 //             |-----> (*) CanUnmarshalMsg
 //             |-----> (*) Msgsize
 //             |-----> (*) MsgIsZero
+//             |-----> ParticipationKeyIdentityMaxSize()
 //
 // StateProofKeys
 //        |-----> MarshalMsg
 //        |-----> CanMarshalMsg
 //        |-----> (*) UnmarshalMsg
+//        |-----> (*) UnmarshalMsgWithState
 //        |-----> (*) CanUnmarshalMsg
 //        |-----> Msgsize
 //        |-----> MsgIsZero
+//        |-----> StateProofKeysMaxSize()
 //
 
 // MarshalMsg implements msgp.Marshaler
@@ -97,7 +105,12 @@ func (_ *ParticipationKeyIdentity) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *ParticipationKeyIdentity) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *ParticipationKeyIdentity) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0001 int
@@ -111,7 +124,7 @@ func (z *ParticipationKeyIdentity) UnmarshalMsg(bts []byte) (o []byte, err error
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).Parent.UnmarshalMsg(bts)
+			bts, err = (*z).Parent.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Parent")
 				return
@@ -119,7 +132,7 @@ func (z *ParticipationKeyIdentity) UnmarshalMsg(bts []byte) (o []byte, err error
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).VRFSK.UnmarshalMsg(bts)
+			bts, err = (*z).VRFSK.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "VRFSK")
 				return
@@ -127,7 +140,7 @@ func (z *ParticipationKeyIdentity) UnmarshalMsg(bts []byte) (o []byte, err error
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).VoteID.UnmarshalMsg(bts)
+			bts, err = (*z).VoteID.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "VoteID")
 				return
@@ -135,7 +148,7 @@ func (z *ParticipationKeyIdentity) UnmarshalMsg(bts []byte) (o []byte, err error
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).FirstValid.UnmarshalMsg(bts)
+			bts, err = (*z).FirstValid.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "FirstValid")
 				return
@@ -143,7 +156,7 @@ func (z *ParticipationKeyIdentity) UnmarshalMsg(bts []byte) (o []byte, err error
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).LastValid.UnmarshalMsg(bts)
+			bts, err = (*z).LastValid.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "LastValid")
 				return
@@ -181,31 +194,31 @@ func (z *ParticipationKeyIdentity) UnmarshalMsg(bts []byte) (o []byte, err error
 			}
 			switch string(field) {
 			case "addr":
-				bts, err = (*z).Parent.UnmarshalMsg(bts)
+				bts, err = (*z).Parent.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "Parent")
 					return
 				}
 			case "vrfsk":
-				bts, err = (*z).VRFSK.UnmarshalMsg(bts)
+				bts, err = (*z).VRFSK.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "VRFSK")
 					return
 				}
 			case "vote-id":
-				bts, err = (*z).VoteID.UnmarshalMsg(bts)
+				bts, err = (*z).VoteID.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "VoteID")
 					return
 				}
 			case "fv":
-				bts, err = (*z).FirstValid.UnmarshalMsg(bts)
+				bts, err = (*z).FirstValid.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "FirstValid")
 					return
 				}
 			case "lv":
-				bts, err = (*z).LastValid.UnmarshalMsg(bts)
+				bts, err = (*z).LastValid.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "LastValid")
 					return
@@ -229,6 +242,9 @@ func (z *ParticipationKeyIdentity) UnmarshalMsg(bts []byte) (o []byte, err error
 	return
 }
 
+func (z *ParticipationKeyIdentity) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *ParticipationKeyIdentity) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*ParticipationKeyIdentity)
 	return ok
@@ -243,6 +259,12 @@ func (z *ParticipationKeyIdentity) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *ParticipationKeyIdentity) MsgIsZero() bool {
 	return ((*z).Parent.MsgIsZero()) && ((*z).VRFSK.MsgIsZero()) && ((*z).VoteID.MsgIsZero()) && ((*z).FirstValid.MsgIsZero()) && ((*z).LastValid.MsgIsZero()) && ((*z).KeyDilution == 0)
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func ParticipationKeyIdentityMaxSize() (s int) {
+	s = 1 + 5 + basics.AddressMaxSize() + 6 + crypto.VrfPrivkeyMaxSize() + 8 + crypto.OneTimeSignatureVerifierMaxSize() + 3 + basics.RoundMaxSize() + 3 + basics.RoundMaxSize() + 3 + msgp.Uint64Size
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -268,7 +290,12 @@ func (_ StateProofKeys) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *StateProofKeys) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *StateProofKeys) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var zb0002 int
 	var zb0003 bool
 	zb0002, zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
@@ -289,7 +316,7 @@ func (z *StateProofKeys) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		(*z) = make(StateProofKeys, zb0002)
 	}
 	for zb0001 := range *z {
-		bts, err = (*z)[zb0001].UnmarshalMsg(bts)
+		bts, err = (*z)[zb0001].UnmarshalMsgWithState(bts, st)
 		if err != nil {
 			err = msgp.WrapError(err, zb0001)
 			return
@@ -299,6 +326,9 @@ func (z *StateProofKeys) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *StateProofKeys) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *StateProofKeys) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*StateProofKeys)
 	return ok
@@ -316,4 +346,11 @@ func (z StateProofKeys) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z StateProofKeys) MsgIsZero() bool {
 	return len(z) == 0
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func StateProofKeysMaxSize() (s int) {
+	// Calculating size of slice: z
+	s += msgp.ArrayHeaderSize + ((1000) * (merklesignature.KeyRoundPairMaxSize()))
+	return
 }

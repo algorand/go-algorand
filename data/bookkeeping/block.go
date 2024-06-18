@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -53,10 +53,30 @@ type (
 		TimeStamp int64 `codec:"ts"`
 
 		// Genesis ID to which this block belongs.
-		GenesisID string `codec:"gen"`
+		GenesisID string `codec:"gen,allocbound=config.MaxGenesisIDLen"`
 
 		// Genesis hash to which this block belongs.
 		GenesisHash crypto.Digest `codec:"gh"`
+
+		// Proposer is the proposer of this block. Like the Seed, agreement adds
+		// this after the block is assembled by the transaction pool, so that the same block can be prepared
+		// for multiple participating accounts in the same node. Therefore, it can not be used
+		// to influence block evaluation. Populated if proto.Payouts.Enabled
+		Proposer basics.Address `codec:"prp"`
+
+		// FeesCollected is the sum of all fees paid by transactions in this
+		// block. Populated if proto.Payouts.Enabled
+		FeesCollected basics.MicroAlgos `codec:"fc"`
+
+		// Bonus is the bonus incentive to be paid for proposing this block.  It
+		// begins as a consensus parameter value, and decays periodically.
+		Bonus basics.MicroAlgos `codec:"bi"`
+
+		// ProposerPayout is the amount that should be moved from the FeeSink to
+		// the Proposer at the start of the next block.  It is basically the
+		// bonus + the payouts percent of FeesCollected, but may be zero'd by
+		// proposer ineligibility.
+		ProposerPayout basics.MicroAlgos `codec:"pp"`
 
 		// Rewards.
 		//
@@ -109,14 +129,9 @@ type (
 		UpgradeState
 		UpgradeVote
 
-		// TxnCounter counts the number of transactions committed in the
-		// ledger, from the time at which support for this feature was
-		// introduced.
-		//
-		// Specifically, TxnCounter is the number of the next transaction
-		// that will be committed after this block.  It is 0 when no
-		// transactions have ever been committed (since TxnCounter
-		// started being supported).
+		// TxnCounter is the number of the next transaction that will be
+		// committed after this block.  Genesis blocks can start at either
+		// 0 or 1000, depending on a consensus parameter (AppForbidLowResources).
 		TxnCounter uint64 `codec:"tc"`
 
 		// StateProofTracking tracks the status of the state proofs, potentially
@@ -150,6 +165,10 @@ type (
 		// that needs to be converted to offline since their
 		// participation key expired.
 		ExpiredParticipationAccounts []basics.Address `codec:"partupdrmv,allocbound=config.MaxProposedExpiredOnlineAccounts"`
+
+		// AbsentParticipationAccounts contains a list of online accounts that
+		// needs to be converted to offline since they are not proposing.
+		AbsentParticipationAccounts []basics.Address `codec:"partupdabs,allocbound=config.MaxMarkAbsent"`
 	}
 
 	// RewardsState represents the global parameters controlling the rate
@@ -239,7 +258,7 @@ type (
 	// A Block contains the Payset and metadata corresponding to a given Round.
 	Block struct {
 		BlockHeader
-		Payset transactions.Payset `codec:"txns"`
+		Payset transactions.Payset `codec:"txns,maxtotalbytes=config.MaxTxnBytesPerBlock"`
 	}
 )
 
@@ -279,16 +298,37 @@ func (block Block) GenesisHash() crypto.Digest {
 	return block.BlockHeader.GenesisHash
 }
 
-// WithSeed returns a copy of the Block with the seed set to s.
-func (block Block) WithSeed(s committee.Seed) Block {
-	c := block
-	c.BlockHeader.Seed = s
-	return c
+// Seed returns the Block's random seed.
+func (block Block) Seed() committee.Seed {
+	return block.BlockHeader.Seed
 }
 
-// Seed returns the Block's random seed.
-func (block *Block) Seed() committee.Seed {
-	return block.BlockHeader.Seed
+// Proposer returns the Block's proposer.
+func (block Block) Proposer() basics.Address {
+	return block.BlockHeader.Proposer
+}
+
+// ProposerPayout returns the Block's proposer payout.
+func (block Block) ProposerPayout() basics.MicroAlgos {
+	return block.BlockHeader.ProposerPayout
+}
+
+// WithProposer returns a copy of the Block with a modified seed and associated proposer
+func (block Block) WithProposer(s committee.Seed, proposer basics.Address, eligible bool) Block {
+	newblock := block
+	newblock.BlockHeader.Seed = s
+	// agreement is telling us who the proposer is and if they're eligible, but
+	// agreement does not consider the current config params, so here we decide
+	// what really goes into the BlockHeader.
+	proto := config.Consensus[block.CurrentProtocol]
+	if proto.Payouts.Enabled {
+		newblock.BlockHeader.Proposer = proposer
+	}
+	if !proto.Payouts.Enabled || !eligible {
+		newblock.BlockHeader.ProposerPayout = basics.MicroAlgos{}
+	}
+
+	return newblock
 }
 
 // NextRewardsState computes the RewardsState of the subsequent round
@@ -472,6 +512,33 @@ func ProcessUpgradeParams(prev BlockHeader) (uv UpgradeVote, us UpgradeState, er
 	return upgradeVote, upgradeState, err
 }
 
+// NextBonus determines the bonus that should be paid out for proposing the next block.
+func NextBonus(prev BlockHeader, params *config.ConsensusParams) basics.MicroAlgos {
+	current := uint64(prev.Round + 1)
+	prevParams := config.Consensus[prev.CurrentProtocol] // presence ensured by ProcessUpgradeParams
+	return computeBonus(current, prev.Bonus, params.Bonus, prevParams.Bonus)
+}
+
+// computeBonus is the guts of NextBonus that can be unit tested more effectively.
+func computeBonus(current uint64, prevBonus basics.MicroAlgos, curPlan config.BonusPlan, prevPlan config.BonusPlan) basics.MicroAlgos {
+	// Set the amount if it's non-zero...
+	if curPlan.BaseAmount != 0 {
+		upgrading := curPlan != prevPlan || current == 1
+		// The time has come if the baseRound arrives, or at upgrade time if
+		// baseRound has already passed.
+		if current == curPlan.BaseRound || (upgrading && current > curPlan.BaseRound) {
+			return basics.MicroAlgos{Raw: curPlan.BaseAmount}
+		}
+	}
+
+	if curPlan.DecayInterval != 0 && current%curPlan.DecayInterval == 0 {
+		// decay
+		keep, _ := basics.NewPercent(99).DivvyAlgos(prevBonus)
+		return keep
+	}
+	return prevBonus
+}
+
 // MakeBlock constructs a new valid block with an empty payset and an unset Seed.
 func MakeBlock(prev BlockHeader) Block {
 	upgradeVote, upgradeState, err := ProcessUpgradeParams(prev)
@@ -493,16 +560,19 @@ func MakeBlock(prev BlockHeader) Block {
 		}
 	}
 
+	bonus := NextBonus(prev, &params)
+
 	// the merkle root of TXs will update when fillpayset is called
 	blk := Block{
 		BlockHeader: BlockHeader{
 			Round:        prev.Round + 1,
 			Branch:       prev.Hash(),
-			UpgradeVote:  upgradeVote,
-			UpgradeState: upgradeState,
 			TimeStamp:    timestamp,
 			GenesisID:    prev.GenesisID,
 			GenesisHash:  prev.GenesisHash,
+			UpgradeVote:  upgradeVote,
+			UpgradeState: upgradeState,
+			Bonus:        bonus,
 		},
 	}
 	blk.TxnCommitments, err = blk.PaysetCommit()
@@ -616,6 +686,12 @@ func (bh BlockHeader) PreCheck(prev BlockHeader) error {
 		} else if bh.TimeStamp > prev.TimeStamp+params.MaxTimestampIncrement {
 			return fmt.Errorf("bad timestamp: current %v > previous %v, max increment = %v ", bh.TimeStamp, prev.TimeStamp, params.MaxTimestampIncrement)
 		}
+	}
+
+	// check bonus
+	expectedBonus := NextBonus(prev, &params)
+	if bh.Bonus != expectedBonus {
+		return fmt.Errorf("bad bonus: %d != %d ", bh.Bonus, expectedBonus)
 	}
 
 	// Check genesis ID value against previous block, if set

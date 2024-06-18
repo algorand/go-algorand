@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -44,35 +44,31 @@ func (s *atomicString) Length() int {
 }
 
 type atomicBool struct {
-	value uint32
+	value atomic.Bool
 }
 
 func (b *atomicBool) SetTo(other bool) {
-	var converted uint32 = 0
-	if other {
-		converted = 1
-	}
-	atomic.StoreUint32(&b.value, converted)
+	b.value.Store(other)
 }
 
 func (b *atomicBool) IsSet() bool {
-	return atomic.LoadUint32(&b.value) != 0
+	return b.value.Load()
 }
 
 type atomicInt struct {
-	value int32
+	value atomic.Int32
 }
 
 func (i *atomicInt) Store(other int) {
-	atomic.StoreInt32(&i.value, int32(other))
+	i.value.Store(int32(other))
 }
 
 func (i *atomicInt) Load() int {
-	return int(atomic.LoadInt32(&i.value))
+	return int(i.value.Load())
 }
 
 func (i *atomicInt) Add(other int) int {
-	return int(atomic.AddInt32(&i.value, int32(other)))
+	return int(i.value.Add(int32(other)))
 }
 
 // IsText checks if the input has all printable characters with strconv.IsPrint

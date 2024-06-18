@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,6 +23,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -120,7 +121,7 @@ func (genesis Genesis) Balances() (GenesisBalances, error) {
 			return GenesisBalances{}, fmt.Errorf("repeated allocation to %s", entry.Address)
 		}
 
-		genalloc[addr] = entry.State
+		genalloc[addr] = entry.State.AccountData()
 	}
 
 	feeSink, err := basics.UnmarshalChecksumAddress(genesis.FeeSink)
@@ -159,7 +160,7 @@ type GenesisAllocation struct {
 
 	Address string             `codec:"addr"`
 	Comment string             `codec:"comment"`
-	State   basics.AccountData `codec:"state"`
+	State   GenesisAccountData `codec:"state"`
 }
 
 // ToBeHashed impements the crypto.Hashable interface.
@@ -173,6 +174,34 @@ type GenesisBalances struct {
 	FeeSink     basics.Address
 	RewardsPool basics.Address
 	Timestamp   int64
+}
+
+// GenesisAccountData contains a subset of account information that is present in the genesis file.
+type GenesisAccountData struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	Status          basics.Status                   `codec:"onl"`
+	MicroAlgos      basics.MicroAlgos               `codec:"algo"`
+	VoteID          crypto.OneTimeSignatureVerifier `codec:"vote"`
+	StateProofID    merklesignature.Commitment      `codec:"stprf"`
+	SelectionID     crypto.VRFVerifier              `codec:"sel"`
+	VoteFirstValid  basics.Round                    `codec:"voteFst"`
+	VoteLastValid   basics.Round                    `codec:"voteLst"`
+	VoteKeyDilution uint64                          `codec:"voteKD"`
+}
+
+// AccountData returns a basics.AccountData type for this genesis account.
+func (ga *GenesisAccountData) AccountData() basics.AccountData {
+	return basics.AccountData{
+		Status:          ga.Status,
+		MicroAlgos:      ga.MicroAlgos,
+		VoteID:          ga.VoteID,
+		StateProofID:    ga.StateProofID,
+		SelectionID:     ga.SelectionID,
+		VoteFirstValid:  ga.VoteFirstValid,
+		VoteLastValid:   ga.VoteLastValid,
+		VoteKeyDilution: ga.VoteKeyDilution,
+	}
 }
 
 // MakeGenesisBalances returns the information needed to bootstrap the ledger based on the current time
@@ -221,6 +250,12 @@ func MakeGenesisBlock(proto protocol.ConsensusVersion, genesisBal GenesisBalance
 			},
 			UpgradeVote: UpgradeVote{},
 		},
+	}
+
+	// If a new network is being created in which AVM can't access low numbered
+	// resources, bump the TxnCounter so there won't be any such resources.
+	if params.AppForbidLowResources {
+		blk.TxnCounter = 1000
 	}
 
 	if params.SupportGenesisHash {

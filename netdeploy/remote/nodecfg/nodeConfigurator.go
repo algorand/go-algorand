@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -39,6 +39,7 @@ type nodeConfigurator struct {
 	genesisData             bookkeeping.Genesis
 	bootstrappedBlockFile   string
 	bootstrappedTrackerFile string
+	bootstrappedTrackerDir  string
 	relayEndpoints          []srvEntry
 	metricsEndpoints        []srvEntry
 }
@@ -78,6 +79,12 @@ func (nc *nodeConfigurator) apply(rootConfigDir, rootNodeDir string) (err error)
 		nc.bootstrappedTrackerFile = trackerFile
 	}
 
+	trackerDir := filepath.Join(rootConfigDir, "genesisdata", "bootstrapped")
+	trackerDirExists := util.FileExists(trackerDir)
+	if trackerDirExists {
+		nc.bootstrappedTrackerDir = trackerDir
+	}
+
 	nc.genesisFile = filepath.Join(rootConfigDir, "genesisdata", config.GenesisJSONFile)
 	nc.genesisData, err = bookkeeping.LoadGenesisFromFile(nc.genesisFile)
 	nodeDirs, err := nc.prepareNodeDirs(nc.config.Nodes, rootConfigDir, rootNodeDir)
@@ -87,7 +94,7 @@ func (nc *nodeConfigurator) apply(rootConfigDir, rootNodeDir string) (err error)
 
 	for _, nodeDir := range nodeDirs {
 		nodeDir.delaySave = true
-		err = nodeDir.configure(nc.dnsName)
+		err = nodeDir.configure()
 		if err != nil {
 			break
 		}
@@ -96,7 +103,7 @@ func (nc *nodeConfigurator) apply(rootConfigDir, rootNodeDir string) (err error)
 		nodeDir.saveConfig()
 	}
 
-	if err == nil {
+	if err == nil && nc.dnsName != "" {
 		fmt.Fprint(os.Stdout, "... registering DNS / SRV records\n")
 		err = nc.registerDNSRecords()
 	}
@@ -150,20 +157,30 @@ func (nc *nodeConfigurator) prepareNodeDirs(configs []remote.NodeConfig, rootCon
 		}
 
 		// Copy the bootstrapped files into current ledger folder
-		if nc.bootstrappedBlockFile != "" && nc.bootstrappedTrackerFile != "" {
+		if nc.bootstrappedBlockFile != "" &&
+			(nc.bootstrappedTrackerFile != "" || nc.bootstrappedTrackerDir != "") {
 			fmt.Fprintf(os.Stdout, "... copying block database file to ledger folder ...\n")
 			dest := filepath.Join(nodeDest, genesisDir, fmt.Sprintf("%s.block.sqlite", config.LedgerFilenamePrefix))
 			_, err = util.CopyFile(nc.bootstrappedBlockFile, dest)
 			if err != nil {
 				return nil, fmt.Errorf("failed to copy database file %s from %s to %s : %w", "bootstrapped.block.sqlite", filepath.Dir(nc.bootstrappedBlockFile), dest, err)
 			}
-			fmt.Fprintf(os.Stdout, "... copying tracker database file to ledger folder ...\n")
-			dest = filepath.Join(nodeDest, genesisDir, fmt.Sprintf("%s.tracker.sqlite", config.LedgerFilenamePrefix))
-			_, err = util.CopyFile(nc.bootstrappedTrackerFile, dest)
-			if err != nil {
-				return nil, fmt.Errorf("failed to copy database file %s from %s to %s : %w", "bootstrapped.tracker.sqlite", filepath.Dir(nc.bootstrappedBlockFile), dest, err)
+			if nc.bootstrappedTrackerFile != "" {
+				fmt.Fprintf(os.Stdout, "... copying tracker database file to ledger folder ...\n")
+				dest = filepath.Join(nodeDest, genesisDir, fmt.Sprintf("%s.tracker.sqlite", config.LedgerFilenamePrefix))
+				_, err = util.CopyFile(nc.bootstrappedTrackerFile, dest)
+				if err != nil {
+					return nil, fmt.Errorf("failed to copy database file %s from %s to %s : %w", filepath.Base(nc.bootstrappedBlockFile), filepath.Dir(nc.bootstrappedBlockFile), dest, err)
+				}
 			}
-
+			if nc.bootstrappedTrackerDir != "" {
+				fmt.Fprintf(os.Stdout, "... copying tracker database directory to ledger folder ...\n")
+				dest = filepath.Join(nodeDest, genesisDir, config.LedgerFilenamePrefix)
+				err = util.CopyFolder(nc.bootstrappedTrackerDir, dest)
+				if err != nil {
+					return nil, fmt.Errorf("failed to copy database directory from %s to %s : %w", nc.bootstrappedTrackerDir, dest, err)
+				}
+			}
 		}
 
 		nodeDirs = append(nodeDirs, nodeDir{

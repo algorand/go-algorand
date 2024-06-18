@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -27,9 +27,20 @@ import (
 // ErrNoSpace indicates insufficient space for transaction in block
 var ErrNoSpace = errors.New("block does not have space for transaction")
 
-// TransactionInLedgerError is returned when a transaction cannot be added because it has already been done
+// TxnNotWellFormedError indicates a transaction was not well-formed when evaluated by the BlockEvaluator
+//
+//msgp:ignore TxnNotWellFormedError
+type TxnNotWellFormedError string
+
+func (err *TxnNotWellFormedError) Error() string {
+	return string(*err)
+}
+
+// TransactionInLedgerError is returned when a transaction cannot be added because it has already been committed, either
+// to the blockchain's ledger or to the history of changes tracked by a BlockEvaluator.
 type TransactionInLedgerError struct {
-	Txid transactions.Txid
+	Txid             transactions.Txid
+	InBlockEvaluator bool
 }
 
 // Error satisfies builtin interface `error`
@@ -39,23 +50,25 @@ func (tile TransactionInLedgerError) Error() string {
 
 // LeaseInLedgerError is returned when a transaction cannot be added because it has a lease that already being used in the relevant rounds
 type LeaseInLedgerError struct {
-	txid  transactions.Txid
-	lease Txlease
+	txid             transactions.Txid
+	lease            Txlease
+	InBlockEvaluator bool
 }
 
 // MakeLeaseInLedgerError builds a LeaseInLedgerError object
-func MakeLeaseInLedgerError(txid transactions.Txid, lease Txlease) *LeaseInLedgerError {
+func MakeLeaseInLedgerError(txid transactions.Txid, lease Txlease, inBlockEvaluator bool) *LeaseInLedgerError {
 	return &LeaseInLedgerError{
-		txid:  txid,
-		lease: lease,
+		txid:             txid,
+		lease:            lease,
+		InBlockEvaluator: inBlockEvaluator,
 	}
 }
 
 // Error implements the error interface for the LeaseInLedgerError stuct
 func (lile *LeaseInLedgerError) Error() string {
 	// format the lease as address.
-	addr := basics.Address(lile.lease.Lease)
-	return fmt.Sprintf("transaction %v using an overlapping lease %s", lile.txid, addr.String())
+	leaseValue := basics.Address(lile.lease.Lease)
+	return fmt.Sprintf("transaction %v using an overlapping lease (sender, lease):(%s, %s)", lile.txid, lile.lease.Sender.String(), leaseValue.String())
 }
 
 // BlockInLedgerError is returned when a block cannot be added because it has already been done
@@ -81,21 +94,6 @@ func (err ErrNoEntry) Error() string {
 	return fmt.Sprintf("ledger does not have entry %d (latest %d, committed %d)", err.Round, err.Latest, err.Committed)
 }
 
-// LogicEvalError indicates TEAL evaluation failure
-type LogicEvalError struct {
-	Err     error
-	Details string
-}
-
-// Error satisfies builtin interface `error`
-func (err LogicEvalError) Error() string {
-	msg := fmt.Sprintf("logic eval error: %v", err.Err)
-	if len(err.Details) > 0 {
-		msg = fmt.Sprintf("%s. Details: %s", msg, err.Details)
-	}
-	return msg
-}
-
 // ErrNonSequentialBlockEval provides feedback when the evaluator cannot be created for
 // stale/future rounds.
 type ErrNonSequentialBlockEval struct {
@@ -106,4 +104,32 @@ type ErrNonSequentialBlockEval struct {
 // Error satisfies builtin interface `error`
 func (err ErrNonSequentialBlockEval) Error() string {
 	return fmt.Sprintf("block evaluation for round %d requires sequential evaluation while the latest round is %d", err.EvaluatorRound, err.LatestRound)
+}
+
+// TxGroupMalformedErrorReasonCode is a reason code for TxGroupMalformed
+//
+//msgp:ignore TxGroupMalformedErrorReasonCode
+type TxGroupMalformedErrorReasonCode int
+
+const (
+	// TxGroupMalformedErrorReasonGeneric is a generic (not specific) reason code
+	TxGroupMalformedErrorReasonGeneric TxGroupMalformedErrorReasonCode = iota
+	// TxGroupMalformedErrorReasonExceedMaxSize indicates too large txgroup
+	TxGroupMalformedErrorReasonExceedMaxSize
+	// TxGroupMalformedErrorReasonInconsistentGroupID indicates different group IDs in a txgroup
+	TxGroupMalformedErrorReasonInconsistentGroupID
+	// TxGroupMalformedErrorReasonEmptyGroupID is for empty group ID but multiple transactions in a txgroup
+	TxGroupMalformedErrorReasonEmptyGroupID
+	// TxGroupMalformedErrorReasonIncompleteGroup indicates expected group ID does not match to provided
+	TxGroupMalformedErrorReasonIncompleteGroup
+)
+
+// TxGroupMalformedError indicates txgroup has group ID problems or too large
+type TxGroupMalformedError struct {
+	Msg    string
+	Reason TxGroupMalformedErrorReasonCode
+}
+
+func (e *TxGroupMalformedError) Error() string {
+	return e.Msg
 }

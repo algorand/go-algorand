@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -22,12 +22,12 @@ import (
 	"strconv"
 )
 
-//go:generate $GOROOT/bin/go run ./defaultsGenerator/defaultsGenerator.go -h ../scripts/LICENSE_HEADER -p config -o ./local_defaults.go -j ../installer/config.json.example
+//go:generate $GOROOT/bin/go run ./defaultsGenerator/defaultsGenerator.go -h ../scripts/LICENSE_HEADER -p config -o ./local_defaults.go -j ../installer/config.json.example -t ../test/testdata/configs/config-v%d.json
 //go:generate $GOROOT/bin/go fmt local_defaults.go
 
 // AutogenLocal - this variable is the "input" for the config default generator which automatically updates the above defaultLocal variable.
 // it's implemented in ./config/defaults_gen.go, and should be the only "consumer" of this exported variable
-var AutogenLocal = getVersionedDefaultLocalConfig(getLatestConfigVersion())
+var AutogenLocal = GetVersionedDefaultLocalConfig(getLatestConfigVersion())
 
 func migrate(cfg Local) (newCfg Local, err error) {
 	newCfg = cfg
@@ -42,7 +42,7 @@ func migrate(cfg Local) (newCfg Local, err error) {
 		if newCfg.Version == latestConfigVersion {
 			break
 		}
-		defaultCurrentConfig := getVersionedDefaultLocalConfig(newCfg.Version)
+		defaultCurrentConfig := GetVersionedDefaultLocalConfig(newCfg.Version)
 		localType := reflect.TypeOf(Local{})
 		nextVersion := newCfg.Version + 1
 		for fieldNum := 0; fieldNum < localType.NumField(); fieldNum++ {
@@ -127,12 +127,10 @@ func getLatestConfigVersion() uint32 {
 	}
 }
 
-func getVersionedDefaultLocalConfig(version uint32) (local Local) {
-	if version < 0 {
-		return
-	}
+// GetVersionedDefaultLocalConfig returns the default config for the given version.
+func GetVersionedDefaultLocalConfig(version uint32) (local Local) {
 	if version > 0 {
-		local = getVersionedDefaultLocalConfig(version - 1)
+		local = GetVersionedDefaultLocalConfig(version - 1)
 	}
 	// apply version specific changes.
 	localType := reflect.TypeOf(local)
@@ -197,4 +195,26 @@ func getVersionedDefaultLocalConfig(version uint32) (local Local) {
 		}
 	}
 	return
+}
+
+// GetNonDefaultConfigValues takes a provided cfg and list of field names, and returns a map of all values in cfg
+// that are not set to the default for the latest version.
+func GetNonDefaultConfigValues(cfg Local, fieldNames []string) map[string]interface{} {
+	defCfg := GetDefaultLocal()
+	ret := make(map[string]interface{})
+
+	for _, fieldName := range fieldNames {
+		defField := reflect.ValueOf(defCfg).FieldByName(fieldName)
+		if !defField.IsValid() {
+			continue
+		}
+		cfgField := reflect.ValueOf(cfg).FieldByName(fieldName)
+		if !cfgField.IsValid() {
+			continue
+		}
+		if !reflect.DeepEqual(defField.Interface(), cfgField.Interface()) {
+			ret[fieldName] = cfgField.Interface()
+		}
+	}
+	return ret
 }

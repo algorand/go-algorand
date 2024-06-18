@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -37,7 +37,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
-	"github.com/algorand/go-algorand/ledger/internal"
+	"github.com/algorand/go-algorand/ledger/eval"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
@@ -309,7 +309,7 @@ func BenchmarkBlockEvaluatorDiskAppCalls(b *testing.B) {
 	// the setup time for this test is 1.5 minutes long. By setting the b.N = 2, we
 	// set up for success on the first iteration, and preventing a second iteration.
 	if b.N < 2 {
-		b.N = 2
+		b.N = 2 //nolint:staticcheck // intentionally setting b.N
 	}
 	// program sets all 16 available keys of len 64 bytes to same values of 64 bytes
 	source := `#pragma version 5
@@ -491,7 +491,7 @@ func benchmarkBlockEvaluator(b *testing.B, inMem bool, withCrypto bool, proto pr
 		if withCrypto {
 			_, err = l2.Validate(context.Background(), validatedBlock.Block(), backlogPool)
 		} else {
-			_, err = internal.Eval(context.Background(), l2, validatedBlock.Block(), false, nil, nil)
+			_, err = eval.Eval(context.Background(), l2, validatedBlock.Block(), false, nil, nil, l2.tracer)
 		}
 		require.NoError(b, err)
 	}
@@ -505,7 +505,7 @@ func benchmarkBlockEvaluator(b *testing.B, inMem bool, withCrypto bool, proto pr
 
 func benchmarkPreparePaymentTransactionsTesting(b *testing.B, numTxns int, txnSource BenchTxnGenerator, genesisInitState ledgercore.InitState, addrs []basics.Address, keys []*crypto.SignatureSecrets, l, l2 *Ledger) *ledgercore.ValidatedBlock {
 	newBlock := bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader)
-	bev, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0)
+	bev, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0, nil)
 	require.NoError(b, err)
 
 	genHash := l.GenesisHash()
@@ -514,22 +514,28 @@ func benchmarkPreparePaymentTransactionsTesting(b *testing.B, numTxns int, txnSo
 	if len(initSignedTxns) > 0 {
 
 		var numBlocks uint64 = 0
+		var unfinishedBlock *ledgercore.UnfinishedBlock
 		var validatedBlock *ledgercore.ValidatedBlock
 
-		// there are might more transactions than MaxTxnBytesPerBlock allows
-		// so make smaller blocks to fit
+		// there might be more transactions than MaxTxnBytesPerBlock allows so
+		// make smaller blocks to fit
 		for i, stxn := range initSignedTxns {
 			err := bev.Transaction(stxn, transactions.ApplyData{})
 			require.NoError(b, err)
 			if maxTxnPerBlock > 0 && i%maxTxnPerBlock == 0 || i == len(initSignedTxns)-1 {
-				validatedBlock, err = bev.GenerateBlock()
+				unfinishedBlock, err = bev.GenerateBlock(nil)
 				require.NoError(b, err)
+				// We are not setting seed & proposer details with
+				// FinishBlock/WithProposer. When agreement actually does that,
+				// it surely has some cost.
+				vb := ledgercore.MakeValidatedBlock(unfinishedBlock.UnfinishedBlock(), unfinishedBlock.UnfinishedDeltas())
+				validatedBlock = &vb
 				for _, l := range []*Ledger{l, l2} {
 					err = l.AddValidatedBlock(*validatedBlock, agreement.Certificate{})
 					require.NoError(b, err)
 				}
 				newBlock = bookkeeping.MakeBlock(validatedBlock.Block().BlockHeader)
-				bev, err = l.StartEvaluator(newBlock.BlockHeader, 0, 0)
+				bev, err = l.StartEvaluator(newBlock.BlockHeader, 0, 0, nil)
 				require.NoError(b, err)
 				numBlocks++
 			}
@@ -550,7 +556,7 @@ func benchmarkPreparePaymentTransactionsTesting(b *testing.B, numTxns int, txnSo
 		wg.Wait()
 
 		newBlock = bookkeeping.MakeBlock(validatedBlock.Block().BlockHeader)
-		bev, err = l.StartEvaluator(newBlock.BlockHeader, 0, 0)
+		bev, err = l.StartEvaluator(newBlock.BlockHeader, 0, 0, nil)
 		require.NoError(b, err)
 	}
 
@@ -562,12 +568,14 @@ func benchmarkPreparePaymentTransactionsTesting(b *testing.B, numTxns int, txnSo
 		require.NoError(b, err)
 	}
 
-	validatedBlock, err := bev.GenerateBlock()
+	// as above - this might be an underestimate because we skip agreement
+	unfinishedBlock, err := bev.GenerateBlock(nil)
 	require.NoError(b, err)
+	validatedBlock := ledgercore.MakeValidatedBlock(unfinishedBlock.UnfinishedBlock(), unfinishedBlock.UnfinishedDeltas())
 
 	blockBuildDone := time.Now()
 	blockBuildTime := blockBuildDone.Sub(setupDone)
 	b.ReportMetric(float64(blockBuildTime)/float64(numTxns), "ns/block_build_tx")
 
-	return validatedBlock
+	return &validatedBlock
 }

@@ -15,273 +15,341 @@ import (
 //    |-----> (*) MarshalMsg
 //    |-----> (*) CanMarshalMsg
 //    |-----> (*) UnmarshalMsg
+//    |-----> (*) UnmarshalMsgWithState
 //    |-----> (*) CanUnmarshalMsg
 //    |-----> (*) Msgsize
 //    |-----> (*) MsgIsZero
+//    |-----> DigestMaxSize()
 //
 // FalconPrivateKey
 //         |-----> (*) MarshalMsg
 //         |-----> (*) CanMarshalMsg
 //         |-----> (*) UnmarshalMsg
+//         |-----> (*) UnmarshalMsgWithState
 //         |-----> (*) CanUnmarshalMsg
 //         |-----> (*) Msgsize
 //         |-----> (*) MsgIsZero
+//         |-----> FalconPrivateKeyMaxSize()
 //
 // FalconPublicKey
 //        |-----> (*) MarshalMsg
 //        |-----> (*) CanMarshalMsg
 //        |-----> (*) UnmarshalMsg
+//        |-----> (*) UnmarshalMsgWithState
 //        |-----> (*) CanUnmarshalMsg
 //        |-----> (*) Msgsize
 //        |-----> (*) MsgIsZero
+//        |-----> FalconPublicKeyMaxSize()
 //
 // FalconSeed
 //      |-----> (*) MarshalMsg
 //      |-----> (*) CanMarshalMsg
 //      |-----> (*) UnmarshalMsg
+//      |-----> (*) UnmarshalMsgWithState
 //      |-----> (*) CanUnmarshalMsg
 //      |-----> (*) Msgsize
 //      |-----> (*) MsgIsZero
+//      |-----> FalconSeedMaxSize()
 //
 // FalconSignature
 //        |-----> MarshalMsg
 //        |-----> CanMarshalMsg
 //        |-----> (*) UnmarshalMsg
+//        |-----> (*) UnmarshalMsgWithState
 //        |-----> (*) CanUnmarshalMsg
 //        |-----> Msgsize
 //        |-----> MsgIsZero
+//        |-----> FalconSignatureMaxSize()
 //
 // FalconSigner
 //       |-----> (*) MarshalMsg
 //       |-----> (*) CanMarshalMsg
 //       |-----> (*) UnmarshalMsg
+//       |-----> (*) UnmarshalMsgWithState
 //       |-----> (*) CanUnmarshalMsg
 //       |-----> (*) Msgsize
 //       |-----> (*) MsgIsZero
+//       |-----> FalconSignerMaxSize()
 //
 // FalconVerifier
 //        |-----> (*) MarshalMsg
 //        |-----> (*) CanMarshalMsg
 //        |-----> (*) UnmarshalMsg
+//        |-----> (*) UnmarshalMsgWithState
 //        |-----> (*) CanUnmarshalMsg
 //        |-----> (*) Msgsize
 //        |-----> (*) MsgIsZero
+//        |-----> FalconVerifierMaxSize()
 //
 // GenericDigest
 //       |-----> MarshalMsg
 //       |-----> CanMarshalMsg
 //       |-----> (*) UnmarshalMsg
+//       |-----> (*) UnmarshalMsgWithState
 //       |-----> (*) CanUnmarshalMsg
 //       |-----> Msgsize
 //       |-----> MsgIsZero
+//       |-----> GenericDigestMaxSize()
 //
 // HashFactory
 //      |-----> (*) MarshalMsg
 //      |-----> (*) CanMarshalMsg
 //      |-----> (*) UnmarshalMsg
+//      |-----> (*) UnmarshalMsgWithState
 //      |-----> (*) CanUnmarshalMsg
 //      |-----> (*) Msgsize
 //      |-----> (*) MsgIsZero
+//      |-----> HashFactoryMaxSize()
 //
 // HashType
 //     |-----> MarshalMsg
 //     |-----> CanMarshalMsg
 //     |-----> (*) UnmarshalMsg
+//     |-----> (*) UnmarshalMsgWithState
 //     |-----> (*) CanUnmarshalMsg
 //     |-----> Msgsize
 //     |-----> MsgIsZero
+//     |-----> HashTypeMaxSize()
 //
 // MasterDerivationKey
 //          |-----> (*) MarshalMsg
 //          |-----> (*) CanMarshalMsg
 //          |-----> (*) UnmarshalMsg
+//          |-----> (*) UnmarshalMsgWithState
 //          |-----> (*) CanUnmarshalMsg
 //          |-----> (*) Msgsize
 //          |-----> (*) MsgIsZero
+//          |-----> MasterDerivationKeyMaxSize()
 //
 // MultisigSig
 //      |-----> (*) MarshalMsg
 //      |-----> (*) CanMarshalMsg
 //      |-----> (*) UnmarshalMsg
+//      |-----> (*) UnmarshalMsgWithState
 //      |-----> (*) CanUnmarshalMsg
 //      |-----> (*) Msgsize
 //      |-----> (*) MsgIsZero
+//      |-----> MultisigSigMaxSize()
 //
 // MultisigSubsig
 //        |-----> (*) MarshalMsg
 //        |-----> (*) CanMarshalMsg
 //        |-----> (*) UnmarshalMsg
+//        |-----> (*) UnmarshalMsgWithState
 //        |-----> (*) CanUnmarshalMsg
 //        |-----> (*) Msgsize
 //        |-----> (*) MsgIsZero
+//        |-----> MultisigSubsigMaxSize()
 //
 // OneTimeSignature
 //         |-----> (*) MarshalMsg
 //         |-----> (*) CanMarshalMsg
 //         |-----> (*) UnmarshalMsg
+//         |-----> (*) UnmarshalMsgWithState
 //         |-----> (*) CanUnmarshalMsg
 //         |-----> (*) Msgsize
 //         |-----> (*) MsgIsZero
+//         |-----> OneTimeSignatureMaxSize()
 //
 // OneTimeSignatureSecrets
 //            |-----> (*) MarshalMsg
 //            |-----> (*) CanMarshalMsg
 //            |-----> (*) UnmarshalMsg
+//            |-----> (*) UnmarshalMsgWithState
 //            |-----> (*) CanUnmarshalMsg
 //            |-----> (*) Msgsize
 //            |-----> (*) MsgIsZero
+//            |-----> OneTimeSignatureSecretsMaxSize()
 //
 // OneTimeSignatureSecretsPersistent
 //                 |-----> (*) MarshalMsg
 //                 |-----> (*) CanMarshalMsg
 //                 |-----> (*) UnmarshalMsg
+//                 |-----> (*) UnmarshalMsgWithState
 //                 |-----> (*) CanUnmarshalMsg
 //                 |-----> (*) Msgsize
 //                 |-----> (*) MsgIsZero
+//                 |-----> OneTimeSignatureSecretsPersistentMaxSize()
 //
 // OneTimeSignatureSubkeyBatchID
 //               |-----> (*) MarshalMsg
 //               |-----> (*) CanMarshalMsg
 //               |-----> (*) UnmarshalMsg
+//               |-----> (*) UnmarshalMsgWithState
 //               |-----> (*) CanUnmarshalMsg
 //               |-----> (*) Msgsize
 //               |-----> (*) MsgIsZero
+//               |-----> OneTimeSignatureSubkeyBatchIDMaxSize()
 //
 // OneTimeSignatureSubkeyOffsetID
 //                |-----> (*) MarshalMsg
 //                |-----> (*) CanMarshalMsg
 //                |-----> (*) UnmarshalMsg
+//                |-----> (*) UnmarshalMsgWithState
 //                |-----> (*) CanUnmarshalMsg
 //                |-----> (*) Msgsize
 //                |-----> (*) MsgIsZero
+//                |-----> OneTimeSignatureSubkeyOffsetIDMaxSize()
 //
 // OneTimeSignatureVerifier
 //             |-----> (*) MarshalMsg
 //             |-----> (*) CanMarshalMsg
 //             |-----> (*) UnmarshalMsg
+//             |-----> (*) UnmarshalMsgWithState
 //             |-----> (*) CanUnmarshalMsg
 //             |-----> (*) Msgsize
 //             |-----> (*) MsgIsZero
+//             |-----> OneTimeSignatureVerifierMaxSize()
 //
 // PrivateKey
 //      |-----> (*) MarshalMsg
 //      |-----> (*) CanMarshalMsg
 //      |-----> (*) UnmarshalMsg
+//      |-----> (*) UnmarshalMsgWithState
 //      |-----> (*) CanUnmarshalMsg
 //      |-----> (*) Msgsize
 //      |-----> (*) MsgIsZero
+//      |-----> PrivateKeyMaxSize()
 //
 // PublicKey
 //     |-----> (*) MarshalMsg
 //     |-----> (*) CanMarshalMsg
 //     |-----> (*) UnmarshalMsg
+//     |-----> (*) UnmarshalMsgWithState
 //     |-----> (*) CanUnmarshalMsg
 //     |-----> (*) Msgsize
 //     |-----> (*) MsgIsZero
+//     |-----> PublicKeyMaxSize()
 //
 // Seed
 //   |-----> (*) MarshalMsg
 //   |-----> (*) CanMarshalMsg
 //   |-----> (*) UnmarshalMsg
+//   |-----> (*) UnmarshalMsgWithState
 //   |-----> (*) CanUnmarshalMsg
 //   |-----> (*) Msgsize
 //   |-----> (*) MsgIsZero
+//   |-----> SeedMaxSize()
 //
 // Signature
 //     |-----> (*) MarshalMsg
 //     |-----> (*) CanMarshalMsg
 //     |-----> (*) UnmarshalMsg
+//     |-----> (*) UnmarshalMsgWithState
 //     |-----> (*) CanUnmarshalMsg
 //     |-----> (*) Msgsize
 //     |-----> (*) MsgIsZero
+//     |-----> SignatureMaxSize()
 //
 // SignatureSecrets
 //         |-----> (*) MarshalMsg
 //         |-----> (*) CanMarshalMsg
 //         |-----> (*) UnmarshalMsg
+//         |-----> (*) UnmarshalMsgWithState
 //         |-----> (*) CanUnmarshalMsg
 //         |-----> (*) Msgsize
 //         |-----> (*) MsgIsZero
+//         |-----> SignatureSecretsMaxSize()
 //
 // VRFSecrets
 //      |-----> (*) MarshalMsg
 //      |-----> (*) CanMarshalMsg
 //      |-----> (*) UnmarshalMsg
+//      |-----> (*) UnmarshalMsgWithState
 //      |-----> (*) CanUnmarshalMsg
 //      |-----> (*) Msgsize
 //      |-----> (*) MsgIsZero
+//      |-----> VRFSecretsMaxSize()
 //
 // VrfOutput
 //     |-----> (*) MarshalMsg
 //     |-----> (*) CanMarshalMsg
 //     |-----> (*) UnmarshalMsg
+//     |-----> (*) UnmarshalMsgWithState
 //     |-----> (*) CanUnmarshalMsg
 //     |-----> (*) Msgsize
 //     |-----> (*) MsgIsZero
+//     |-----> VrfOutputMaxSize()
 //
 // VrfPrivkey
 //      |-----> (*) MarshalMsg
 //      |-----> (*) CanMarshalMsg
 //      |-----> (*) UnmarshalMsg
+//      |-----> (*) UnmarshalMsgWithState
 //      |-----> (*) CanUnmarshalMsg
 //      |-----> (*) Msgsize
 //      |-----> (*) MsgIsZero
+//      |-----> VrfPrivkeyMaxSize()
 //
 // VrfProof
 //     |-----> (*) MarshalMsg
 //     |-----> (*) CanMarshalMsg
 //     |-----> (*) UnmarshalMsg
+//     |-----> (*) UnmarshalMsgWithState
 //     |-----> (*) CanUnmarshalMsg
 //     |-----> (*) Msgsize
 //     |-----> (*) MsgIsZero
+//     |-----> VrfProofMaxSize()
 //
 // VrfPubkey
 //     |-----> (*) MarshalMsg
 //     |-----> (*) CanMarshalMsg
 //     |-----> (*) UnmarshalMsg
+//     |-----> (*) UnmarshalMsgWithState
 //     |-----> (*) CanUnmarshalMsg
 //     |-----> (*) Msgsize
 //     |-----> (*) MsgIsZero
+//     |-----> VrfPubkeyMaxSize()
 //
 // ed25519PrivateKey
 //         |-----> (*) MarshalMsg
 //         |-----> (*) CanMarshalMsg
 //         |-----> (*) UnmarshalMsg
+//         |-----> (*) UnmarshalMsgWithState
 //         |-----> (*) CanUnmarshalMsg
 //         |-----> (*) Msgsize
 //         |-----> (*) MsgIsZero
+//         |-----> Ed25519PrivateKeyMaxSize()
 //
 // ed25519PublicKey
 //         |-----> (*) MarshalMsg
 //         |-----> (*) CanMarshalMsg
 //         |-----> (*) UnmarshalMsg
+//         |-----> (*) UnmarshalMsgWithState
 //         |-----> (*) CanUnmarshalMsg
 //         |-----> (*) Msgsize
 //         |-----> (*) MsgIsZero
+//         |-----> Ed25519PublicKeyMaxSize()
 //
 // ed25519Seed
 //      |-----> (*) MarshalMsg
 //      |-----> (*) CanMarshalMsg
 //      |-----> (*) UnmarshalMsg
+//      |-----> (*) UnmarshalMsgWithState
 //      |-----> (*) CanUnmarshalMsg
 //      |-----> (*) Msgsize
 //      |-----> (*) MsgIsZero
+//      |-----> Ed25519SeedMaxSize()
 //
 // ed25519Signature
 //         |-----> (*) MarshalMsg
 //         |-----> (*) CanMarshalMsg
 //         |-----> (*) UnmarshalMsg
+//         |-----> (*) UnmarshalMsgWithState
 //         |-----> (*) CanUnmarshalMsg
 //         |-----> (*) Msgsize
 //         |-----> (*) MsgIsZero
+//         |-----> Ed25519SignatureMaxSize()
 //
 // ephemeralSubkey
 //        |-----> (*) MarshalMsg
 //        |-----> (*) CanMarshalMsg
 //        |-----> (*) UnmarshalMsg
+//        |-----> (*) UnmarshalMsgWithState
 //        |-----> (*) CanUnmarshalMsg
 //        |-----> (*) Msgsize
 //        |-----> (*) MsgIsZero
+//        |-----> EphemeralSubkeyMaxSize()
 //
 
 // MarshalMsg implements msgp.Marshaler
@@ -297,7 +365,12 @@ func (_ *Digest) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *Digest) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *Digest) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -307,6 +380,9 @@ func (z *Digest) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *Digest) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *Digest) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*Digest)
 	return ok
@@ -323,6 +399,13 @@ func (z *Digest) MsgIsZero() bool {
 	return (*z) == (Digest{})
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func DigestMaxSize() (s int) {
+	// Calculating size of array: z
+	s = msgp.ArrayHeaderSize + ((DigestSize) * (msgp.ByteSize))
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z *FalconPrivateKey) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -336,7 +419,12 @@ func (_ *FalconPrivateKey) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *FalconPrivateKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *FalconPrivateKey) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -346,6 +434,9 @@ func (z *FalconPrivateKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *FalconPrivateKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *FalconPrivateKey) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*FalconPrivateKey)
 	return ok
@@ -362,6 +453,13 @@ func (z *FalconPrivateKey) MsgIsZero() bool {
 	return (*z) == (FalconPrivateKey{})
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func FalconPrivateKeyMaxSize() (s int) {
+	// Calculating size of array: z
+	s = msgp.ArrayHeaderSize + ((cfalcon.PrivateKeySize) * (msgp.ByteSize))
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z *FalconPublicKey) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -375,7 +473,12 @@ func (_ *FalconPublicKey) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *FalconPublicKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *FalconPublicKey) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -385,6 +488,9 @@ func (z *FalconPublicKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *FalconPublicKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *FalconPublicKey) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*FalconPublicKey)
 	return ok
@@ -401,6 +507,13 @@ func (z *FalconPublicKey) MsgIsZero() bool {
 	return (*z) == (FalconPublicKey{})
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func FalconPublicKeyMaxSize() (s int) {
+	// Calculating size of array: z
+	s = msgp.ArrayHeaderSize + ((cfalcon.PublicKeySize) * (msgp.ByteSize))
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z *FalconSeed) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -414,7 +527,12 @@ func (_ *FalconSeed) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *FalconSeed) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *FalconSeed) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -424,6 +542,9 @@ func (z *FalconSeed) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *FalconSeed) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *FalconSeed) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*FalconSeed)
 	return ok
@@ -438,6 +559,13 @@ func (z *FalconSeed) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *FalconSeed) MsgIsZero() bool {
 	return (*z) == (FalconSeed{})
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func FalconSeedMaxSize() (s int) {
+	// Calculating size of array: z
+	s = msgp.ArrayHeaderSize + ((FalconSeedSize) * (msgp.ByteSize))
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -456,7 +584,12 @@ func (_ FalconSignature) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *FalconSignature) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *FalconSignature) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	{
 		var zb0001 []byte
 		var zb0002 int
@@ -480,6 +613,9 @@ func (z *FalconSignature) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *FalconSignature) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *FalconSignature) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*FalconSignature)
 	return ok
@@ -494,6 +630,12 @@ func (z FalconSignature) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z FalconSignature) MsgIsZero() bool {
 	return len(z) == 0
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func FalconSignatureMaxSize() (s int) {
+	s = msgp.BytesPrefixSize + FalconMaxSignatureSize
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -533,7 +675,12 @@ func (_ *FalconSigner) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *FalconSigner) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *FalconSigner) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0003 int
@@ -609,6 +756,9 @@ func (z *FalconSigner) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *FalconSigner) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *FalconSigner) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*FalconSigner)
 	return ok
@@ -623,6 +773,17 @@ func (z *FalconSigner) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *FalconSigner) MsgIsZero() bool {
 	return ((*z).PublicKey == (FalconPublicKey{})) && ((*z).PrivateKey == (FalconPrivateKey{}))
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func FalconSignerMaxSize() (s int) {
+	s = 1 + 3
+	// Calculating size of array: z.PublicKey
+	s += msgp.ArrayHeaderSize + ((cfalcon.PublicKeySize) * (msgp.ByteSize))
+	s += 3
+	// Calculating size of array: z.PrivateKey
+	s += msgp.ArrayHeaderSize + ((cfalcon.PrivateKeySize) * (msgp.ByteSize))
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -653,7 +814,12 @@ func (_ *FalconVerifier) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *FalconVerifier) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *FalconVerifier) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0002 int
@@ -715,6 +881,9 @@ func (z *FalconVerifier) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *FalconVerifier) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *FalconVerifier) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*FalconVerifier)
 	return ok
@@ -729,6 +898,14 @@ func (z *FalconVerifier) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *FalconVerifier) MsgIsZero() bool {
 	return ((*z).PublicKey == (FalconPublicKey{}))
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func FalconVerifierMaxSize() (s int) {
+	s = 1 + 2
+	// Calculating size of array: z.PublicKey
+	s += msgp.ArrayHeaderSize + ((cfalcon.PublicKeySize) * (msgp.ByteSize))
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -747,7 +924,12 @@ func (_ GenericDigest) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *GenericDigest) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *GenericDigest) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	{
 		var zb0001 []byte
 		var zb0002 int
@@ -771,6 +953,9 @@ func (z *GenericDigest) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *GenericDigest) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *GenericDigest) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*GenericDigest)
 	return ok
@@ -785,6 +970,12 @@ func (z GenericDigest) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z GenericDigest) MsgIsZero() bool {
 	return len(z) == 0
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func GenericDigestMaxSize() (s int) {
+	s = msgp.BytesPrefixSize + MaxHashDigestSize
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -815,7 +1006,12 @@ func (_ *HashFactory) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *HashFactory) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *HashFactory) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0001 int
@@ -888,6 +1084,9 @@ func (z *HashFactory) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *HashFactory) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *HashFactory) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*HashFactory)
 	return ok
@@ -902,6 +1101,12 @@ func (z *HashFactory) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *HashFactory) MsgIsZero() bool {
 	return ((*z).HashType == 0)
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func HashFactoryMaxSize() (s int) {
+	s = 1 + 2 + msgp.Uint16Size
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -920,7 +1125,12 @@ func (_ HashType) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *HashType) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *HashType) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	{
 		var zb0001 uint16
 		zb0001, bts, err = msgp.ReadUint16Bytes(bts)
@@ -934,6 +1144,9 @@ func (z *HashType) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *HashType) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *HashType) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*HashType)
 	return ok
@@ -950,6 +1163,12 @@ func (z HashType) MsgIsZero() bool {
 	return z == 0
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func HashTypeMaxSize() (s int) {
+	s = msgp.Uint16Size
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z *MasterDerivationKey) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -963,7 +1182,12 @@ func (_ *MasterDerivationKey) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *MasterDerivationKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *MasterDerivationKey) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -973,6 +1197,9 @@ func (z *MasterDerivationKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *MasterDerivationKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *MasterDerivationKey) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*MasterDerivationKey)
 	return ok
@@ -987,6 +1214,13 @@ func (z *MasterDerivationKey) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *MasterDerivationKey) MsgIsZero() bool {
 	return (*z) == (MasterDerivationKey{})
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func MasterDerivationKeyMaxSize() (s int) {
+	// Calculating size of array: z
+	s = msgp.ArrayHeaderSize + ((masterDerivationKeyLenBytes) * (msgp.ByteSize))
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -1042,7 +1276,12 @@ func (_ *MultisigSig) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *MultisigSig) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *MultisigSig) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0002 int
@@ -1092,7 +1331,7 @@ func (z *MultisigSig) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				(*z).Subsigs = make([]MultisigSubsig, zb0004)
 			}
 			for zb0001 := range (*z).Subsigs {
-				bts, err = (*z).Subsigs[zb0001].UnmarshalMsg(bts)
+				bts, err = (*z).Subsigs[zb0001].UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "Subsigs", zb0001)
 					return
@@ -1155,7 +1394,7 @@ func (z *MultisigSig) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					(*z).Subsigs = make([]MultisigSubsig, zb0006)
 				}
 				for zb0001 := range (*z).Subsigs {
-					bts, err = (*z).Subsigs[zb0001].UnmarshalMsg(bts)
+					bts, err = (*z).Subsigs[zb0001].UnmarshalMsgWithState(bts, st)
 					if err != nil {
 						err = msgp.WrapError(err, "Subsigs", zb0001)
 						return
@@ -1174,6 +1413,9 @@ func (z *MultisigSig) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *MultisigSig) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *MultisigSig) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*MultisigSig)
 	return ok
@@ -1191,6 +1433,14 @@ func (z *MultisigSig) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *MultisigSig) MsgIsZero() bool {
 	return ((*z).Version == 0) && ((*z).Threshold == 0) && (len((*z).Subsigs) == 0)
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func MultisigSigMaxSize() (s int) {
+	s = 1 + 2 + msgp.Uint8Size + 4 + msgp.Uint8Size + 7
+	// Calculating size of slice: z.Subsigs
+	s += msgp.ArrayHeaderSize + ((maxMultisig) * (MultisigSubsigMaxSize()))
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -1230,7 +1480,12 @@ func (_ *MultisigSubsig) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *MultisigSubsig) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *MultisigSubsig) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0003 int
@@ -1306,6 +1561,9 @@ func (z *MultisigSubsig) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *MultisigSubsig) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *MultisigSubsig) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*MultisigSubsig)
 	return ok
@@ -1320,6 +1578,17 @@ func (z *MultisigSubsig) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *MultisigSubsig) MsgIsZero() bool {
 	return ((*z).Key == (PublicKey{})) && ((*z).Sig == (Signature{}))
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func MultisigSubsigMaxSize() (s int) {
+	s = 1 + 3
+	// Calculating size of array: z.Key
+	s += msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	s += 2
+	// Calculating size of array: z.Sig
+	s += msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -1353,7 +1622,12 @@ func (_ *OneTimeSignature) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *OneTimeSignature) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *OneTimeSignature) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0007 int
@@ -1485,6 +1759,9 @@ func (z *OneTimeSignature) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *OneTimeSignature) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *OneTimeSignature) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*OneTimeSignature)
 	return ok
@@ -1499,6 +1776,29 @@ func (z *OneTimeSignature) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *OneTimeSignature) MsgIsZero() bool {
 	return ((*z).Sig == (ed25519Signature{})) && ((*z).PK == (ed25519PublicKey{})) && ((*z).PKSigOld == (ed25519Signature{})) && ((*z).PK2 == (ed25519PublicKey{})) && ((*z).PK1Sig == (ed25519Signature{})) && ((*z).PK2Sig == (ed25519Signature{}))
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func OneTimeSignatureMaxSize() (s int) {
+	s = 1 + 2
+	// Calculating size of array: z.Sig
+	s += msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
+	s += 2
+	// Calculating size of array: z.PK
+	s += msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	s += 3
+	// Calculating size of array: z.PKSigOld
+	s += msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
+	s += 3
+	// Calculating size of array: z.PK2
+	s += msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	s += 4
+	// Calculating size of array: z.PK1Sig
+	s += msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
+	s += 4
+	// Calculating size of array: z.PK2Sig
+	s += msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -1597,7 +1897,12 @@ func (_ *OneTimeSignatureSecrets) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *OneTimeSignatureSecrets) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *OneTimeSignatureSecrets) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0006 int
@@ -1642,7 +1947,7 @@ func (z *OneTimeSignatureSecrets) UnmarshalMsg(bts []byte) (o []byte, err error)
 				(*z).OneTimeSignatureSecretsPersistent.Batches = make([]ephemeralSubkey, zb0008)
 			}
 			for zb0002 := range (*z).OneTimeSignatureSecretsPersistent.Batches {
-				bts, err = (*z).OneTimeSignatureSecretsPersistent.Batches[zb0002].UnmarshalMsg(bts)
+				bts, err = (*z).OneTimeSignatureSecretsPersistent.Batches[zb0002].UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "Batches", zb0002)
 					return
@@ -1674,7 +1979,7 @@ func (z *OneTimeSignatureSecrets) UnmarshalMsg(bts []byte) (o []byte, err error)
 				(*z).OneTimeSignatureSecretsPersistent.Offsets = make([]ephemeralSubkey, zb0010)
 			}
 			for zb0003 := range (*z).OneTimeSignatureSecretsPersistent.Offsets {
-				bts, err = (*z).OneTimeSignatureSecretsPersistent.Offsets[zb0003].UnmarshalMsg(bts)
+				bts, err = (*z).OneTimeSignatureSecretsPersistent.Offsets[zb0003].UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "Offsets", zb0003)
 					return
@@ -1748,7 +2053,7 @@ func (z *OneTimeSignatureSecrets) UnmarshalMsg(bts []byte) (o []byte, err error)
 					(*z).OneTimeSignatureSecretsPersistent.Batches = make([]ephemeralSubkey, zb0012)
 				}
 				for zb0002 := range (*z).OneTimeSignatureSecretsPersistent.Batches {
-					bts, err = (*z).OneTimeSignatureSecretsPersistent.Batches[zb0002].UnmarshalMsg(bts)
+					bts, err = (*z).OneTimeSignatureSecretsPersistent.Batches[zb0002].UnmarshalMsgWithState(bts, st)
 					if err != nil {
 						err = msgp.WrapError(err, "Batches", zb0002)
 						return
@@ -1776,7 +2081,7 @@ func (z *OneTimeSignatureSecrets) UnmarshalMsg(bts []byte) (o []byte, err error)
 					(*z).OneTimeSignatureSecretsPersistent.Offsets = make([]ephemeralSubkey, zb0014)
 				}
 				for zb0003 := range (*z).OneTimeSignatureSecretsPersistent.Offsets {
-					bts, err = (*z).OneTimeSignatureSecretsPersistent.Offsets[zb0003].UnmarshalMsg(bts)
+					bts, err = (*z).OneTimeSignatureSecretsPersistent.Offsets[zb0003].UnmarshalMsgWithState(bts, st)
 					if err != nil {
 						err = msgp.WrapError(err, "Offsets", zb0003)
 						return
@@ -1807,6 +2112,9 @@ func (z *OneTimeSignatureSecrets) UnmarshalMsg(bts []byte) (o []byte, err error)
 	return
 }
 
+func (z *OneTimeSignatureSecrets) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *OneTimeSignatureSecrets) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*OneTimeSignatureSecrets)
 	return ok
@@ -1829,6 +2137,26 @@ func (z *OneTimeSignatureSecrets) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *OneTimeSignatureSecrets) MsgIsZero() bool {
 	return ((*z).OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier == (OneTimeSignatureVerifier{})) && ((*z).OneTimeSignatureSecretsPersistent.FirstBatch == 0) && (len((*z).OneTimeSignatureSecretsPersistent.Batches) == 0) && ((*z).OneTimeSignatureSecretsPersistent.FirstOffset == 0) && (len((*z).OneTimeSignatureSecretsPersistent.Offsets) == 0) && ((*z).OneTimeSignatureSecretsPersistent.OffsetsPK2 == (ed25519PublicKey{})) && ((*z).OneTimeSignatureSecretsPersistent.OffsetsPK2Sig == (ed25519Signature{}))
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func OneTimeSignatureSecretsMaxSize() (s int) {
+	s = 1 + 25
+	// Calculating size of array: z.OneTimeSignatureSecretsPersistent.OneTimeSignatureVerifier
+	s += msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	s += 6 + msgp.Uint64Size + 4
+	// Calculating size of slice: z.OneTimeSignatureSecretsPersistent.Batches
+	panic("Slice z.OneTimeSignatureSecretsPersistent.Batches is unbounded")
+	s += 9 + msgp.Uint64Size + 8
+	// Calculating size of slice: z.OneTimeSignatureSecretsPersistent.Offsets
+	panic("Slice z.OneTimeSignatureSecretsPersistent.Offsets is unbounded")
+	s += 7
+	// Calculating size of array: z.OneTimeSignatureSecretsPersistent.OffsetsPK2
+	s += msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	s += 10
+	// Calculating size of array: z.OneTimeSignatureSecretsPersistent.OffsetsPK2Sig
+	s += msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -1927,7 +2255,12 @@ func (_ *OneTimeSignatureSecretsPersistent) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *OneTimeSignatureSecretsPersistent) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *OneTimeSignatureSecretsPersistent) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0006 int
@@ -1972,7 +2305,7 @@ func (z *OneTimeSignatureSecretsPersistent) UnmarshalMsg(bts []byte) (o []byte, 
 				(*z).Batches = make([]ephemeralSubkey, zb0008)
 			}
 			for zb0002 := range (*z).Batches {
-				bts, err = (*z).Batches[zb0002].UnmarshalMsg(bts)
+				bts, err = (*z).Batches[zb0002].UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "Batches", zb0002)
 					return
@@ -2004,7 +2337,7 @@ func (z *OneTimeSignatureSecretsPersistent) UnmarshalMsg(bts []byte) (o []byte, 
 				(*z).Offsets = make([]ephemeralSubkey, zb0010)
 			}
 			for zb0003 := range (*z).Offsets {
-				bts, err = (*z).Offsets[zb0003].UnmarshalMsg(bts)
+				bts, err = (*z).Offsets[zb0003].UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "Offsets", zb0003)
 					return
@@ -2078,7 +2411,7 @@ func (z *OneTimeSignatureSecretsPersistent) UnmarshalMsg(bts []byte) (o []byte, 
 					(*z).Batches = make([]ephemeralSubkey, zb0012)
 				}
 				for zb0002 := range (*z).Batches {
-					bts, err = (*z).Batches[zb0002].UnmarshalMsg(bts)
+					bts, err = (*z).Batches[zb0002].UnmarshalMsgWithState(bts, st)
 					if err != nil {
 						err = msgp.WrapError(err, "Batches", zb0002)
 						return
@@ -2106,7 +2439,7 @@ func (z *OneTimeSignatureSecretsPersistent) UnmarshalMsg(bts []byte) (o []byte, 
 					(*z).Offsets = make([]ephemeralSubkey, zb0014)
 				}
 				for zb0003 := range (*z).Offsets {
-					bts, err = (*z).Offsets[zb0003].UnmarshalMsg(bts)
+					bts, err = (*z).Offsets[zb0003].UnmarshalMsgWithState(bts, st)
 					if err != nil {
 						err = msgp.WrapError(err, "Offsets", zb0003)
 						return
@@ -2137,6 +2470,9 @@ func (z *OneTimeSignatureSecretsPersistent) UnmarshalMsg(bts []byte) (o []byte, 
 	return
 }
 
+func (z *OneTimeSignatureSecretsPersistent) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *OneTimeSignatureSecretsPersistent) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*OneTimeSignatureSecretsPersistent)
 	return ok
@@ -2161,6 +2497,26 @@ func (z *OneTimeSignatureSecretsPersistent) MsgIsZero() bool {
 	return ((*z).OneTimeSignatureVerifier == (OneTimeSignatureVerifier{})) && ((*z).FirstBatch == 0) && (len((*z).Batches) == 0) && ((*z).FirstOffset == 0) && (len((*z).Offsets) == 0) && ((*z).OffsetsPK2 == (ed25519PublicKey{})) && ((*z).OffsetsPK2Sig == (ed25519Signature{}))
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func OneTimeSignatureSecretsPersistentMaxSize() (s int) {
+	s = 1 + 25
+	// Calculating size of array: z.OneTimeSignatureVerifier
+	s += msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	s += 6 + msgp.Uint64Size + 4
+	// Calculating size of slice: z.Batches
+	panic("Slice z.Batches is unbounded")
+	s += 9 + msgp.Uint64Size + 8
+	// Calculating size of slice: z.Offsets
+	panic("Slice z.Offsets is unbounded")
+	s += 7
+	// Calculating size of array: z.OffsetsPK2
+	s += msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	s += 10
+	// Calculating size of array: z.OffsetsPK2Sig
+	s += msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z *OneTimeSignatureSubkeyBatchID) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -2180,7 +2536,12 @@ func (_ *OneTimeSignatureSubkeyBatchID) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *OneTimeSignatureSubkeyBatchID) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *OneTimeSignatureSubkeyBatchID) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0002 int
@@ -2256,6 +2617,9 @@ func (z *OneTimeSignatureSubkeyBatchID) UnmarshalMsg(bts []byte) (o []byte, err 
 	return
 }
 
+func (z *OneTimeSignatureSubkeyBatchID) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *OneTimeSignatureSubkeyBatchID) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*OneTimeSignatureSubkeyBatchID)
 	return ok
@@ -2270,6 +2634,15 @@ func (z *OneTimeSignatureSubkeyBatchID) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *OneTimeSignatureSubkeyBatchID) MsgIsZero() bool {
 	return ((*z).SubKeyPK == (ed25519PublicKey{})) && ((*z).Batch == 0)
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func OneTimeSignatureSubkeyBatchIDMaxSize() (s int) {
+	s = 1 + 3
+	// Calculating size of array: z.SubKeyPK
+	s += msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	s += 6 + msgp.Uint64Size
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -2294,7 +2667,12 @@ func (_ *OneTimeSignatureSubkeyOffsetID) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *OneTimeSignatureSubkeyOffsetID) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *OneTimeSignatureSubkeyOffsetID) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0002 int
@@ -2384,6 +2762,9 @@ func (z *OneTimeSignatureSubkeyOffsetID) UnmarshalMsg(bts []byte) (o []byte, err
 	return
 }
 
+func (z *OneTimeSignatureSubkeyOffsetID) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *OneTimeSignatureSubkeyOffsetID) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*OneTimeSignatureSubkeyOffsetID)
 	return ok
@@ -2400,6 +2781,15 @@ func (z *OneTimeSignatureSubkeyOffsetID) MsgIsZero() bool {
 	return ((*z).SubKeyPK == (ed25519PublicKey{})) && ((*z).Batch == 0) && ((*z).Offset == 0)
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func OneTimeSignatureSubkeyOffsetIDMaxSize() (s int) {
+	s = 1 + 3
+	// Calculating size of array: z.SubKeyPK
+	s += msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	s += 6 + msgp.Uint64Size + 4 + msgp.Uint64Size
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z *OneTimeSignatureVerifier) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -2413,7 +2803,12 @@ func (_ *OneTimeSignatureVerifier) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *OneTimeSignatureVerifier) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *OneTimeSignatureVerifier) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -2423,6 +2818,9 @@ func (z *OneTimeSignatureVerifier) UnmarshalMsg(bts []byte) (o []byte, err error
 	return
 }
 
+func (z *OneTimeSignatureVerifier) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *OneTimeSignatureVerifier) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*OneTimeSignatureVerifier)
 	return ok
@@ -2439,6 +2837,13 @@ func (z *OneTimeSignatureVerifier) MsgIsZero() bool {
 	return (*z) == (OneTimeSignatureVerifier{})
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func OneTimeSignatureVerifierMaxSize() (s int) {
+	// Calculating size of array: z
+	s = msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z *PrivateKey) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -2452,7 +2857,12 @@ func (_ *PrivateKey) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *PrivateKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *PrivateKey) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -2462,6 +2872,9 @@ func (z *PrivateKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *PrivateKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *PrivateKey) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*PrivateKey)
 	return ok
@@ -2478,6 +2891,13 @@ func (z *PrivateKey) MsgIsZero() bool {
 	return (*z) == (PrivateKey{})
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func PrivateKeyMaxSize() (s int) {
+	// Calculating size of array: z
+	s = msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z *PublicKey) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -2491,7 +2911,12 @@ func (_ *PublicKey) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *PublicKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *PublicKey) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -2501,6 +2926,9 @@ func (z *PublicKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *PublicKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *PublicKey) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*PublicKey)
 	return ok
@@ -2517,6 +2945,13 @@ func (z *PublicKey) MsgIsZero() bool {
 	return (*z) == (PublicKey{})
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func PublicKeyMaxSize() (s int) {
+	// Calculating size of array: z
+	s = msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z *Seed) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -2530,7 +2965,12 @@ func (_ *Seed) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *Seed) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *Seed) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -2540,6 +2980,9 @@ func (z *Seed) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *Seed) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *Seed) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*Seed)
 	return ok
@@ -2556,6 +2999,13 @@ func (z *Seed) MsgIsZero() bool {
 	return (*z) == (Seed{})
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func SeedMaxSize() (s int) {
+	// Calculating size of array: z
+	s = msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z *Signature) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -2569,7 +3019,12 @@ func (_ *Signature) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *Signature) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *Signature) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -2579,6 +3034,9 @@ func (z *Signature) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *Signature) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *Signature) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*Signature)
 	return ok
@@ -2595,6 +3053,13 @@ func (z *Signature) MsgIsZero() bool {
 	return (*z) == (Signature{})
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func SignatureMaxSize() (s int) {
+	// Calculating size of array: z
+	s = msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z *SignatureSecrets) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -2604,7 +3069,7 @@ func (z *SignatureSecrets) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.AppendBytes(o, ((*z).SK)[:])
 	// string "SignatureVerifier"
 	o = append(o, 0xb1, 0x53, 0x69, 0x67, 0x6e, 0x61, 0x74, 0x75, 0x72, 0x65, 0x56, 0x65, 0x72, 0x69, 0x66, 0x69, 0x65, 0x72)
-	o = (*z).SignatureVerifier.MarshalMsg(o)
+	o = msgp.AppendBytes(o, ((*z).SignatureVerifier)[:])
 	return
 }
 
@@ -2614,36 +3079,41 @@ func (_ *SignatureSecrets) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *SignatureSecrets) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *SignatureSecrets) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
-	var zb0002 int
-	var zb0003 bool
-	zb0002, zb0003, bts, err = msgp.ReadMapHeaderBytes(bts)
+	var zb0003 int
+	var zb0004 bool
+	zb0003, zb0004, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
-		zb0002, zb0003, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		zb0003, zb0004, bts, err = msgp.ReadArrayHeaderBytes(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0002 > 0 {
-			zb0002--
-			bts, err = (*z).SignatureVerifier.UnmarshalMsg(bts)
+		if zb0003 > 0 {
+			zb0003--
+			bts, err = msgp.ReadExactBytes(bts, ((*z).SignatureVerifier)[:])
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "SignatureVerifier")
 				return
 			}
 		}
-		if zb0002 > 0 {
-			zb0002--
+		if zb0003 > 0 {
+			zb0003--
 			bts, err = msgp.ReadExactBytes(bts, ((*z).SK)[:])
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "SK")
 				return
 			}
 		}
-		if zb0002 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0002)
+		if zb0003 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0003)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array")
 				return
@@ -2654,11 +3124,11 @@ func (z *SignatureSecrets) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0003 {
+		if zb0004 {
 			(*z) = SignatureSecrets{}
 		}
-		for zb0002 > 0 {
-			zb0002--
+		for zb0003 > 0 {
+			zb0003--
 			field, bts, err = msgp.ReadMapKeyZC(bts)
 			if err != nil {
 				err = msgp.WrapError(err)
@@ -2666,7 +3136,7 @@ func (z *SignatureSecrets) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 			switch string(field) {
 			case "SignatureVerifier":
-				bts, err = (*z).SignatureVerifier.UnmarshalMsg(bts)
+				bts, err = msgp.ReadExactBytes(bts, ((*z).SignatureVerifier)[:])
 				if err != nil {
 					err = msgp.WrapError(err, "SignatureVerifier")
 					return
@@ -2690,6 +3160,9 @@ func (z *SignatureSecrets) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *SignatureSecrets) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *SignatureSecrets) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*SignatureSecrets)
 	return ok
@@ -2697,13 +3170,24 @@ func (_ *SignatureSecrets) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *SignatureSecrets) Msgsize() (s int) {
-	s = 1 + 18 + (*z).SignatureVerifier.Msgsize() + 3 + msgp.ArrayHeaderSize + (64 * (msgp.ByteSize))
+	s = 1 + 18 + msgp.ArrayHeaderSize + (32 * (msgp.ByteSize)) + 3 + msgp.ArrayHeaderSize + (64 * (msgp.ByteSize))
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *SignatureSecrets) MsgIsZero() bool {
-	return ((*z).SignatureVerifier.MsgIsZero()) && ((*z).SK == (ed25519PrivateKey{}))
+	return ((*z).SignatureVerifier == (PublicKey{})) && ((*z).SK == (ed25519PrivateKey{}))
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func SignatureSecretsMaxSize() (s int) {
+	s = 1 + 18
+	// Calculating size of array: z.SignatureVerifier
+	s += msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	s += 3
+	// Calculating size of array: z.SK
+	s += msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -2725,7 +3209,12 @@ func (_ *VRFSecrets) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *VRFSecrets) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *VRFSecrets) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0003 int
@@ -2801,6 +3290,9 @@ func (z *VRFSecrets) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *VRFSecrets) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *VRFSecrets) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*VRFSecrets)
 	return ok
@@ -2817,6 +3309,17 @@ func (z *VRFSecrets) MsgIsZero() bool {
 	return ((*z).PK == (VrfPubkey{})) && ((*z).SK == (VrfPrivkey{}))
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func VRFSecretsMaxSize() (s int) {
+	s = 1 + 3
+	// Calculating size of array: z.PK
+	s += msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	s += 3
+	// Calculating size of array: z.SK
+	s += msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z *VrfOutput) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -2830,7 +3333,12 @@ func (_ *VrfOutput) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *VrfOutput) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *VrfOutput) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -2840,6 +3348,9 @@ func (z *VrfOutput) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *VrfOutput) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *VrfOutput) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*VrfOutput)
 	return ok
@@ -2856,6 +3367,13 @@ func (z *VrfOutput) MsgIsZero() bool {
 	return (*z) == (VrfOutput{})
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func VrfOutputMaxSize() (s int) {
+	// Calculating size of array: z
+	s = msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z *VrfPrivkey) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -2869,7 +3387,12 @@ func (_ *VrfPrivkey) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *VrfPrivkey) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *VrfPrivkey) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -2879,6 +3402,9 @@ func (z *VrfPrivkey) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *VrfPrivkey) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *VrfPrivkey) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*VrfPrivkey)
 	return ok
@@ -2895,6 +3421,13 @@ func (z *VrfPrivkey) MsgIsZero() bool {
 	return (*z) == (VrfPrivkey{})
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func VrfPrivkeyMaxSize() (s int) {
+	// Calculating size of array: z
+	s = msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z *VrfProof) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -2908,7 +3441,12 @@ func (_ *VrfProof) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *VrfProof) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *VrfProof) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -2918,6 +3456,9 @@ func (z *VrfProof) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *VrfProof) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *VrfProof) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*VrfProof)
 	return ok
@@ -2934,6 +3475,13 @@ func (z *VrfProof) MsgIsZero() bool {
 	return (*z) == (VrfProof{})
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func VrfProofMaxSize() (s int) {
+	// Calculating size of array: z
+	s = msgp.ArrayHeaderSize + ((80) * (msgp.ByteSize))
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z *VrfPubkey) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -2947,7 +3495,12 @@ func (_ *VrfPubkey) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *VrfPubkey) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *VrfPubkey) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -2957,6 +3510,9 @@ func (z *VrfPubkey) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *VrfPubkey) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *VrfPubkey) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*VrfPubkey)
 	return ok
@@ -2973,6 +3529,13 @@ func (z *VrfPubkey) MsgIsZero() bool {
 	return (*z) == (VrfPubkey{})
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func VrfPubkeyMaxSize() (s int) {
+	// Calculating size of array: z
+	s = msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z *ed25519PrivateKey) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -2986,7 +3549,12 @@ func (_ *ed25519PrivateKey) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *ed25519PrivateKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *ed25519PrivateKey) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -2996,6 +3564,9 @@ func (z *ed25519PrivateKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *ed25519PrivateKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *ed25519PrivateKey) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*ed25519PrivateKey)
 	return ok
@@ -3012,6 +3583,13 @@ func (z *ed25519PrivateKey) MsgIsZero() bool {
 	return (*z) == (ed25519PrivateKey{})
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func Ed25519PrivateKeyMaxSize() (s int) {
+	// Calculating size of array: z
+	s = msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z *ed25519PublicKey) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -3025,7 +3603,12 @@ func (_ *ed25519PublicKey) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *ed25519PublicKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *ed25519PublicKey) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -3035,6 +3618,9 @@ func (z *ed25519PublicKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *ed25519PublicKey) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *ed25519PublicKey) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*ed25519PublicKey)
 	return ok
@@ -3051,6 +3637,13 @@ func (z *ed25519PublicKey) MsgIsZero() bool {
 	return (*z) == (ed25519PublicKey{})
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func Ed25519PublicKeyMaxSize() (s int) {
+	// Calculating size of array: z
+	s = msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z *ed25519Seed) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -3064,7 +3657,12 @@ func (_ *ed25519Seed) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *ed25519Seed) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *ed25519Seed) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -3074,6 +3672,9 @@ func (z *ed25519Seed) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *ed25519Seed) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *ed25519Seed) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*ed25519Seed)
 	return ok
@@ -3090,6 +3691,13 @@ func (z *ed25519Seed) MsgIsZero() bool {
 	return (*z) == (ed25519Seed{})
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func Ed25519SeedMaxSize() (s int) {
+	// Calculating size of array: z
+	s = msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z *ed25519Signature) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -3103,7 +3711,12 @@ func (_ *ed25519Signature) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *ed25519Signature) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *ed25519Signature) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -3113,6 +3726,9 @@ func (z *ed25519Signature) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *ed25519Signature) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *ed25519Signature) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*ed25519Signature)
 	return ok
@@ -3127,6 +3743,13 @@ func (z *ed25519Signature) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *ed25519Signature) MsgIsZero() bool {
 	return (*z) == (ed25519Signature{})
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func Ed25519SignatureMaxSize() (s int) {
+	// Calculating size of array: z
+	s = msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -3154,7 +3777,12 @@ func (_ *ephemeralSubkey) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *ephemeralSubkey) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *ephemeralSubkey) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0005 int
@@ -3258,6 +3886,9 @@ func (z *ephemeralSubkey) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *ephemeralSubkey) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *ephemeralSubkey) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*ephemeralSubkey)
 	return ok
@@ -3272,4 +3903,21 @@ func (z *ephemeralSubkey) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *ephemeralSubkey) MsgIsZero() bool {
 	return ((*z).PK == (ed25519PublicKey{})) && ((*z).SK == (ed25519PrivateKey{})) && ((*z).PKSigOld == (ed25519Signature{})) && ((*z).PKSigNew == (ed25519Signature{}))
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func EphemeralSubkeyMaxSize() (s int) {
+	s = 1 + 3
+	// Calculating size of array: z.PK
+	s += msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	s += 3
+	// Calculating size of array: z.SK
+	s += msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
+	s += 6
+	// Calculating size of array: z.PKSigOld
+	s += msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
+	s += 5
+	// Calculating size of array: z.PKSigNew
+	s += msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
+	return
 }

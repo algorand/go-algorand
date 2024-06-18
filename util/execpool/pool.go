@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -108,7 +108,7 @@ func (p *pool) GetOwner() interface{} {
 //
 // Enqueue blocks until the task is enqueued correctly, or until the passed-in
 // context is cancelled.
-///
+// /
 // Enqueue returns nil if task was enqueued successfully or the result of the
 // expired context error.
 func (p *pool) Enqueue(enqueueCtx context.Context, t ExecFunc, arg interface{}, i Priority, out chan interface{}) error {

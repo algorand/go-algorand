@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -24,6 +24,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+	"golang.org/x/exp/slices"
 )
 
 // An Autopsy is a trace of the ordered input events and output
@@ -102,9 +103,7 @@ func (m *multiCloser) Close() error {
 
 // makeMultiCloser returns a Closer that closes all the given closers.
 func makeMultiCloser(closers ...io.Closer) io.Closer {
-	r := make([]io.Closer, len(closers))
-	copy(r, closers)
-	return &multiCloser{r}
+	return &multiCloser{slices.Clone(closers)}
 }
 
 type autopsyTrace struct {

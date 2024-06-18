@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -105,10 +105,9 @@ var listRecordsCmd = &cobra.Command{
 	Long:  "List the A/SRV entries of the given network",
 	Run: func(cmd *cobra.Command, args []string) {
 		recordType = strings.ToUpper(recordType)
-		if recordType == "" || recordType == "A" || recordType == "CNAME" || recordType == "SRV" {
-			listEntries(listNetwork, recordType)
-		} else {
-			fmt.Fprintf(os.Stderr, "Invalid recordType specified.\n")
+		err := listEntries(listNetwork, recordType)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%v\n", err)
 			os.Exit(1)
 		}
 	},
@@ -179,6 +178,19 @@ var exportCmd = &cobra.Command{
 			os.Exit(1)
 		}
 	},
+}
+
+func doAddTXT(from string, to string) error {
+	cfZoneID, cfToken, err := getClouldflareCredentials()
+	if err != nil {
+		return fmt.Errorf("error getting DNS credentials: %v", err)
+	}
+
+	cloudflareDNS := cloudflare.NewDNS(cfZoneID, cfToken)
+
+	const priority = 1
+	const proxied = false
+	return cloudflareDNS.CreateDNSRecord(context.Background(), "TXT", from, to, cloudflare.AutomaticTTL, priority, proxied)
 }
 
 func doAddDNS(from string, to string) (err error) {
@@ -315,7 +327,7 @@ func doDeleteDNS(network string, noPrompt bool, excludePattern string, includePa
 
 	cloudflareDNS := cloudflare.NewDNS(cfZoneID, cfToken)
 
-	idsToDelete := make(map[string]string) // Maps record ID to Name
+	var idsToDelete []cloudflare.DNSRecordResponseEntry
 	services := []string{"_algobootstrap", "_metrics"}
 	servicesRegexp, err := regexp.Compile("^(_algobootstrap|_metrics)\\._tcp\\..*algodev.network$")
 
@@ -355,7 +367,7 @@ func doDeleteDNS(network string, noPrompt bool, excludePattern string, includePa
 
 			if includeRegex == nil || (includeRegex.MatchString(r.Name) && servicesRegexp.MatchString(r.Name)) {
 				fmt.Printf("Found SRV record: %s\n", r.Name)
-				idsToDelete[r.ID] = r.Name
+				idsToDelete = append(idsToDelete, r)
 			}
 		}
 	}
@@ -367,7 +379,7 @@ func doDeleteDNS(network string, noPrompt bool, excludePattern string, includePa
 		networkSuffix = "." + network + ".algodev.network"
 	}
 
-	for _, recordType := range []string{"A", "CNAME"} {
+	for _, recordType := range []string{"A", "CNAME", "TXT"} {
 		records, err := cloudflareDNS.ListDNSRecord(context.Background(), recordType, "", "", "", "", "")
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error listing DNS '%s' entries: %v\n", recordType, err)
@@ -384,21 +396,29 @@ func doDeleteDNS(network string, noPrompt bool, excludePattern string, includePa
 
 				if includeRegex == nil || includeRegex.MatchString(r.Name) {
 					fmt.Printf("Found DNS '%s' record: %s\n", recordType, r.Name)
-					idsToDelete[r.ID] = r.Name
+					idsToDelete = append(idsToDelete, r)
 				}
 			}
 		}
 	}
 
-	if len(idsToDelete) == 0 {
+	err = checkedDelete(idsToDelete, cloudflareDNS)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error deleting: %s\n", err)
+	}
+	return true
+}
+
+func checkedDelete(toDelete []cloudflare.DNSRecordResponseEntry, cloudflareDNS *cloudflare.DNS) error {
+	if len(toDelete) == 0 {
 		fmt.Printf("No DNS/SRV records found\n")
-		return true
+		return nil
 	}
 
 	var text string
 	if !noPrompt {
 		reader := bufio.NewReader(os.Stdin)
-		fmt.Printf("Delete these %d entries (type 'yes' to delete)? ", len(idsToDelete))
+		fmt.Printf("Delete these %d entries (type 'yes' to delete)? ", len(toDelete))
 		text, _ = reader.ReadString('\n')
 		text = strings.Replace(text, "\n", "", -1)
 	} else {
@@ -406,42 +426,59 @@ func doDeleteDNS(network string, noPrompt bool, excludePattern string, includePa
 	}
 
 	if text == "yes" {
-		for id, name := range idsToDelete {
-			fmt.Fprintf(os.Stdout, "Deleting %s\n", name)
-			err = cloudflareDNS.DeleteDNSRecord(context.Background(), id)
+		for _, entry := range toDelete {
+			fmt.Fprintf(os.Stdout, "Deleting %s\n", entry.Name)
+			err := cloudflareDNS.DeleteDNSRecord(context.Background(), entry.ID)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, " !! error deleting %s: %v\n", name, err)
+				return fmt.Errorf(" !! error deleting %s: %v", entry.Name, err)
 			}
 		}
 	}
-	return true
+	return nil
 }
 
-func listEntries(listNetwork string, recordType string) {
+func getEntries(getNetwork string, recordType string) ([]cloudflare.DNSRecordResponseEntry, error) {
+	recordTypes := []string{"A", "CNAME", "SRV", "TXT"}
+	isKnown := false
+	for _, known := range append(recordTypes, "") {
+		if recordType == known {
+			isKnown = true
+			break
+		}
+	}
+	if !isKnown {
+		return nil, fmt.Errorf("invalid recordType specified %s", recordType)
+	}
 	cfZoneID, cfToken, err := getClouldflareCredentials()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error getting DNS credentials: %v", err)
-		return
+		return nil, fmt.Errorf("error getting DNS credentials: %v", err)
 	}
 
 	cloudflareDNS := cloudflare.NewDNS(cfZoneID, cfToken)
-	recordTypes := []string{"A", "CNAME", "SRV"}
 	if recordType != "" {
 		recordTypes = []string{recordType}
 	}
+	var records []cloudflare.DNSRecordResponseEntry
 	for _, recType := range recordTypes {
-		records, err := cloudflareDNS.ListDNSRecord(context.Background(), recType, "", "", "", "", "")
+		records, err = cloudflareDNS.ListDNSRecord(context.Background(), recType, getNetwork, "", "", "", "")
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error listing DNS entries: %v\n", err)
-			os.Exit(1)
-		}
-
-		for _, record := range records {
-			if strings.HasSuffix(record.Name, listNetwork) {
-				fmt.Printf("%v\n", record.Name)
-			}
+			return nil, fmt.Errorf("error listing DNS entries %w", err)
 		}
 	}
+	return records, nil
+}
+
+func listEntries(listNetwork string, recordType string) error {
+	records, err := getEntries("", recordType)
+	if err != nil {
+		return err
+	}
+	for _, record := range records {
+		if strings.HasSuffix(record.Name, listNetwork) {
+			fmt.Printf("%v\n", record.Name)
+		}
+	}
+	return nil
 }
 
 func doExportZone(network string, outputFilename string) bool {

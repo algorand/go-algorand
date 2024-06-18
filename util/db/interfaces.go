@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -31,6 +31,7 @@ import (
 // be added here as needed.
 type Queryable interface {
 	Prepare(query string) (*sql.Stmt, error)
+	PrepareContext(ctx context.Context, query string) (*sql.Stmt, error)
 	Query(query string, args ...interface{}) (*sql.Rows, error)
 	QueryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error)
 	QueryRow(query string, args ...interface{}) *sql.Row

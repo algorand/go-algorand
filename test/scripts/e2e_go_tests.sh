@@ -21,7 +21,6 @@ echo "GOTESTCOMMAND will be: ${GOTESTCOMMAND}"
 
 TESTPATTERNS=()
 NORACEBUILD=""
-export RUN_EXPECT="FALSE"
 while [ "$1" != "" ]; do
     case "$1" in
         -e)
@@ -46,6 +45,10 @@ done
 if [[ -n $TESTPATTERNS && -n $RUN_EXPECT ]]; then
     echo "-t and -e are mutually exclusive."
     exit 1
+fi
+
+if [[ -z $RUN_EXPECT ]]; then
+    RUN_EXPECT="FALSE"
 fi
 
 # Anchor our repo root reference location

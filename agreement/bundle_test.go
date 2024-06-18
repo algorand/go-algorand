@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -108,7 +108,7 @@ func makeBundlePanicWrapper(t *testing.T, message string, proposal proposalValue
 	return uab
 }
 
-//Test Bundle Creation with Validation for duplicate votes from same sender
+// Test Bundle Creation with Validation for duplicate votes from same sender
 func TestBundleCreationWithVotesFromSameAddress(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -173,7 +173,7 @@ func TestBundleCreationWithVotesFromSameAddress(t *testing.T) {
 
 }
 
-//Test Bundle Creation with Validation
+// Test Bundle Creation with Validation
 func TestBundleCreationWithEquivocationVotes(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -283,7 +283,7 @@ func TestBundleCreationWithEquivocationVotes(t *testing.T) {
 
 }
 
-//Test Bundle Creation with Validation
+// Test Bundle Creation with Validation
 func TestBundleCertificationWithEquivocationVotes(t *testing.T) {
 	partitiontest.PartitionTest(t)
 

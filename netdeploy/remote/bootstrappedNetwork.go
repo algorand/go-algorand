@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,7 +21,7 @@ import (
 	"os"
 )
 
-//BootstrappedNetwork contains the specs for generating db files
+// BootstrappedNetwork contains the specs for generating db files
 type BootstrappedNetwork struct {
 	NumRounds                 uint64  `json:"numRounds"`
 	RoundTransactionsCount    uint64  `json:"roundTransactionsCount"`
@@ -30,6 +30,7 @@ type BootstrappedNetwork struct {
 	GeneratedApplicationCount uint64  `json:"generatedApplicationCount"`
 	SourceWalletName          string  `json:"sourceWalletName"`
 	BalanceRange              []int64 `json:"acctBalanceRange"`
+	DeterministicKeys         bool    `json:"deterministicKeys"`
 }
 
 // LoadBootstrappedData loads a bootstrappedFile structure from a json file

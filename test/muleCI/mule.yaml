@@ -40,6 +40,8 @@ agents:
       - VERSION=$VERSION
       - BUILD_NUMBER=$BUILD_NUMBER
       - GOHOSTARCH=amd64
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
     buildArgs:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
       - ARCH=amd64
@@ -59,22 +61,6 @@ agents:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
       - ARCH=arm64v8
       - GOARCH=arm64
-  - name: cicd.ubuntu.arm
-    dockerFilePath: docker/build/cicd.ubuntu.Dockerfile
-    image: algorand/go-algorand-ci-linux
-    version: scripts/configure_dev-deps.sh
-    arch: arm32v7
-    env:
-      - TRAVIS_BRANCH=${GIT_BRANCH}
-      - NETWORK=$NETWORK
-      - VERSION=$VERSION
-      - BUILD_NUMBER=$BUILD_NUMBER
-      - GOHOSTARCH=arm
-      - FULLVERSION=${FULLVERSION}
-    buildArgs:
-      - GOLANG_VERSION=`./scripts/get_golang_version.sh`
-      - ARCH=arm32v7
-      - GOARCH=armv6l
   - name: docker-ubuntu
     dockerFilePath: docker/build/docker.ubuntu.Dockerfile
     image: algorand/go-algorand-docker-linux-ubuntu
@@ -120,10 +106,6 @@ tasks:
     name: build.arm64
     agent: cicd.ubuntu.arm64
     target: ci-build
-  - task: docker.Make
-    name: build.arm
-    agent: cicd.ubuntu.arm
-    target: ci-build
 
   - task: docker.Make
     name: archive
@@ -166,12 +148,6 @@ tasks:
     globSpecs:
       - tmp/node_pkgs/**/*
   - task: stash.Stash
-    name: linux-arm
-    bucketName: go-algorand-ci-cache
-    stashId: ${JENKINS_JOB_CACHE_ID}/linux-arm
-    globSpecs:
-      - tmp/node_pkgs/**/*
-  - task: stash.Stash
     name: packages
     bucketName: go-algorand-ci-cache
     stashId: ${JENKINS_JOB_CACHE_ID}/packages
@@ -191,10 +167,6 @@ tasks:
     name: darwin-amd64
     bucketName: go-algorand-ci-cache
     stashId: ${JENKINS_JOB_CACHE_ID}/darwin-amd64
-  - task: stash.Unstash
-    name: linux-arm
-    bucketName: go-algorand-ci-cache
-    stashId: ${JENKINS_JOB_CACHE_ID}/linux-arm
   - task: stash.Unstash
     name: darwin-arm64
     bucketName: go-algorand-ci-cache
@@ -231,15 +203,10 @@ jobs:
     tasks:
       - docker.Make.build.arm64
       - stash.Stash.linux-arm64
-  build-linux-arm32:
-    tasks:
-      - docker.Make.build.arm
-      - stash.Stash.linux-arm
   package-all:
     tasks:
       - stash.Unstash.linux-amd64
       - stash.Unstash.linux-arm64
-      - stash.Unstash.linux-arm
       - stash.Unstash.darwin-arm64
       - stash.Unstash.darwin-amd64
       - docker.Make.deb.amd64

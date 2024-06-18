@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -33,5 +33,5 @@ func (lsl Program) ToBeHashed() (protocol.HashID, []byte) {
 // This Digest can be used as an Address for a logic controlled account.
 func HashProgram(program []byte) crypto.Digest {
 	pb := Program(program)
-	return crypto.HashObj(&pb)
+	return crypto.HashObj(pb)
 }

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,6 +21,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
@@ -67,4 +68,67 @@ func TestAlgosEncoding(t *testing.T) {
 	if err == nil {
 		panic("decode of bool into MicroAlgos succeeded")
 	}
+}
+
+func TestCheckSpender(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	v7 := config.Consensus[protocol.ConsensusV7]
+	v39 := config.Consensus[protocol.ConsensusV39]
+	vFuture := config.Consensus[protocol.ConsensusFuture]
+
+	secretSrc := keypair()
+	src := basics.Address(secretSrc.SignatureVerifier)
+
+	secretDst := keypair()
+	dst := basics.Address(secretDst.SignatureVerifier)
+
+	tx := Transaction{
+		Type: protocol.PaymentTx,
+		Header: Header{
+			Sender:     src,
+			Fee:        basics.MicroAlgos{Raw: 1},
+			FirstValid: basics.Round(100),
+			LastValid:  basics.Round(1000),
+		},
+		PaymentTxnFields: PaymentTxnFields{
+			Receiver: dst,
+			Amount:   basics.MicroAlgos{Raw: uint64(50)},
+		},
+	}
+
+	feeSink := basics.Address{0x01}
+	poolAddr := basics.Address{0x02}
+	var spec = SpecialAddresses{
+		FeeSink:     feeSink,
+		RewardsPool: poolAddr,
+	}
+
+	tx.Sender = feeSink
+	require.ErrorContains(t, tx.PaymentTxnFields.checkSpender(tx.Header, spec, v7),
+		"to non incentive pool address")
+	require.ErrorContains(t, tx.PaymentTxnFields.checkSpender(tx.Header, spec, v39),
+		"to non incentive pool address")
+	require.ErrorContains(t, tx.PaymentTxnFields.checkSpender(tx.Header, spec, vFuture),
+		"cannot spend from fee sink")
+
+	tx.Receiver = poolAddr
+	require.NoError(t, tx.PaymentTxnFields.checkSpender(tx.Header, spec, v7))
+	require.NoError(t, tx.PaymentTxnFields.checkSpender(tx.Header, spec, v39))
+	require.ErrorContains(t, tx.PaymentTxnFields.checkSpender(tx.Header, spec, vFuture),
+		"cannot spend from fee sink")
+
+	tx.CloseRemainderTo = poolAddr
+	require.ErrorContains(t, tx.PaymentTxnFields.checkSpender(tx.Header, spec, v7),
+		"cannot close fee sink")
+	require.ErrorContains(t, tx.PaymentTxnFields.checkSpender(tx.Header, spec, v39),
+		"cannot close fee sink")
+	require.ErrorContains(t, tx.PaymentTxnFields.checkSpender(tx.Header, spec, vFuture),
+		"cannot spend from fee sink")
+
+	// When not sending from fee sink, everything's fine
+	tx.Sender = src
+	require.NoError(t, tx.PaymentTxnFields.checkSpender(tx.Header, spec, v7))
+	require.NoError(t, tx.PaymentTxnFields.checkSpender(tx.Header, spec, v39))
+	require.NoError(t, tx.PaymentTxnFields.checkSpender(tx.Header, spec, vFuture))
 }

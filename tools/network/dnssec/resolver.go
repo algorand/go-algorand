@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -33,7 +33,6 @@ References
 5. DNSSEC clarifications https://tools.ietf.org/html/rfc6840
 6. DNSSEC keys management https://tools.ietf.org/html/rfc6781
 7. DNS SRV https://tools.ietf.org/html/rfc2782
-
 */
 package dnssec
 

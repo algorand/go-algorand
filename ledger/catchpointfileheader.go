@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -33,6 +33,7 @@ type CatchpointFileHeader struct {
 	Totals            ledgercore.AccountTotals `codec:"accountTotals"`
 	TotalAccounts     uint64                   `codec:"accountsCount"`
 	TotalChunks       uint64                   `codec:"chunksCount"`
+	TotalKVs          uint64                   `codec:"kvsCount"`
 	Catchpoint        string                   `codec:"catchpoint"`
 	BlockHeaderDigest crypto.Digest            `codec:"blockHeaderDigest"`
 }

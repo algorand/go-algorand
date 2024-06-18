@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -98,7 +98,8 @@ func (s *Secrets) Persist(store db.Accessor) error {
 		return fmt.Errorf("Secrets.Persist: %w", ErrKeyLifetimeIsZero)
 	}
 	round := indexToRound(s.FirstValid, s.KeyLifetime, 0)
-	encodedKey := protocol.GetEncodingBuf()
+	encodedBuf := protocol.GetEncodingBuf()
+	encodedKey := encodedBuf.Bytes()
 	err := store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		err := InstallStateProofTable(tx) // assumes schema table already exists (created by partInstallDatabase)
 		if err != nil {
@@ -126,7 +127,7 @@ func (s *Secrets) Persist(store db.Accessor) error {
 
 		return nil
 	})
-	protocol.PutEncodingBuf(encodedKey)
+	protocol.PutEncodingBuf(encodedBuf.Update(encodedKey))
 	if err != nil {
 		return fmt.Errorf("Secrets.Persist: %w", err)
 	}

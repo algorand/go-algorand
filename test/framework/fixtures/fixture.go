@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,6 +19,7 @@ package fixtures
 import (
 	"testing"
 
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-deadlock"
 )
 
@@ -161,11 +162,13 @@ func (st *synchTest) Helper() {
 	st.t.Helper()
 }
 func (st *synchTest) Log(args ...interface{}) {
+	st.t.Helper()
 	st.Lock()
 	defer st.Unlock()
 	st.t.Log(args...)
 }
 func (st *synchTest) Logf(format string, args ...interface{}) {
+	st.t.Helper()
 	st.Lock()
 	defer st.Unlock()
 	st.t.Logf(format, args...)
@@ -203,4 +206,17 @@ func (st *synchTest) Skipped() bool {
 	st.Lock()
 	defer st.Unlock()
 	return st.t.Skipped()
+}
+
+// MultiProtocolTest runs a test for multiple consensus versions. It only runs
+// against the *first* version when doing Short tests.
+func MultiProtocolTest(t *testing.T, test func(t *testing.T, version protocol.ConsensusVersion), versions ...protocol.ConsensusVersion) {
+	for _, version := range versions {
+		t.Run(string(version), func(t *testing.T) {
+			test(t, version)
+		})
+		if testing.Short() {
+			break // supply most important version first, probably future
+		}
+	}
 }

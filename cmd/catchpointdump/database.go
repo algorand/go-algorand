@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,6 +17,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"database/sql"
 	"fmt"
@@ -26,17 +27,22 @@ import (
 
 	"github.com/algorand/go-algorand/crypto/merkletrie"
 	"github.com/algorand/go-algorand/ledger"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb/sqlitedriver"
 	"github.com/algorand/go-algorand/util/db"
 )
 
 var ledgerTrackerFilename string
+var ledgerTrackerStaging bool
 
 func init() {
 	databaseCmd.Flags().StringVarP(&ledgerTrackerFilename, "tracker", "t", "", "Specify the ledger tracker file name ( i.e. ./ledger.tracker.sqlite )")
 	databaseCmd.Flags().StringVarP(&outFileName, "output", "o", "", "Specify an outfile for the dump ( i.e. ledger.dump.txt )")
+	databaseCmd.Flags().BoolVarP(&ledgerTrackerStaging, "staging", "s", false, "Specify whether to look in the catchpoint staging or regular tables. (default false)")
 	databaseCmd.AddCommand(checkCmd)
 
 	checkCmd.Flags().StringVarP(&ledgerTrackerFilename, "tracker", "t", "", "Specify the ledger tracker file name ( i.e. ./ledger.tracker.sqlite )")
+	checkCmd.Flags().BoolVarP(&ledgerTrackerStaging, "staging", "s", false, "Specify whether to look in the catchpoint staging or regular tables. (default false)")
 }
 
 var databaseCmd = &cobra.Command{
@@ -58,11 +64,69 @@ var databaseCmd = &cobra.Command{
 			}
 			defer outFile.Close()
 		}
-		err = printAccountsDatabase(ledgerTrackerFilename, ledger.CatchpointFileHeader{}, outFile, nil)
+
+		var version uint64
+		version, err = getVersion(ledgerTrackerFilename, ledgerTrackerStaging)
+		if err != nil {
+			reportErrorf("Unable to read version : %v", err)
+		}
+		printDbVersion(ledgerTrackerStaging, version, outFile)
+		err = printAccountsDatabase(ledgerTrackerFilename, ledgerTrackerStaging, ledger.CatchpointFileHeader{}, outFile, nil)
 		if err != nil {
 			reportErrorf("Unable to print account database : %v", err)
 		}
+		err = printKeyValueStore(ledgerTrackerFilename, ledgerTrackerStaging, outFile)
+		if err != nil {
+			reportErrorf("Unable to print key value store : %v", err)
+		}
+		// state proof verification can be found on tracker db version >= 10 or
+		// catchpoint file version >= 7 (i.e staging tables)
+		if !ledgerTrackerStaging && version < 10 || ledgerTrackerStaging && version < ledger.CatchpointFileVersionV7 {
+			return
+		}
+		err = printStateProofVerificationContext(ledgerTrackerFilename, ledgerTrackerStaging, outFile)
+		if err != nil {
+			reportErrorf("Unable to print state proof verification database : %v", err)
+		}
 	},
+}
+
+func printDbVersion(staging bool, version uint64, outFile *os.File) {
+	fileWriter := bufio.NewWriterSize(outFile, 1024*1024)
+	defer fileWriter.Flush()
+
+	if staging {
+		fmt.Fprintf(outFile, "Catchpoint version: %d \n", version)
+	} else {
+		fmt.Fprintf(outFile, "Ledger db version: %d \n", version)
+	}
+}
+
+func getVersion(filename string, staging bool) (uint64, error) {
+	dbAccessor, err := db.MakeAccessor(filename, true, false)
+	if err != nil || dbAccessor.Handle == nil {
+		return 0, err
+	}
+	defer dbAccessor.Close()
+	var version uint64
+	err = dbAccessor.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		if staging {
+			// writing the version of the catchpoint file start only on ver >= CatchpointFileVersionV7.
+			// in case the catchpoint version does not exists ReadCatchpointStateUint64 returns 0
+			cw := sqlitedriver.NewCatchpointSQLReaderWriter(tx)
+			version, err = cw.ReadCatchpointStateUint64(ctx, trackerdb.CatchpointStateCatchupVersion)
+			return err
+		}
+
+		versionAsInt32, err := db.GetUserVersion(ctx, tx)
+		version = uint64(versionAsInt32)
+		return err
+	})
+	if err != nil {
+		return 0, err
+	}
+
+	return version, nil
 }
 
 var checkCmd = &cobra.Command{
@@ -99,14 +163,19 @@ func checkDatabase(databaseName string, outFile *os.File) error {
 
 	var stats merkletrie.Stats
 	err = dbAccessor.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		committer, err := ledger.MakeMerkleCommitter(tx, false)
+		committer, err := sqlitedriver.MakeMerkleCommitter(tx, ledgerTrackerStaging)
 		if err != nil {
 			return err
 		}
-		trie, err := merkletrie.MakeTrie(committer, ledger.TrieMemoryConfig)
+		trie, err := merkletrie.MakeTrie(committer, trackerdb.TrieMemoryConfig)
 		if err != nil {
 			return err
 		}
+		root, err := trie.RootHash()
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(outFile, " Root: %s\n", root)
 		stats, err = trie.GetStats()
 		if err != nil {
 			return err

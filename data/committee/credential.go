@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -24,9 +24,9 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/data/committee/sortition"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/sortition"
 )
 
 type (
@@ -103,7 +103,7 @@ func (cred UnauthenticatedCredential) Verify(proto config.ConsensusParams, m Mem
 	} else if m.TotalMoney.IsZero() || expectedSelection == 0 || expectedSelection > float64(m.TotalMoney.Raw) {
 		logging.Base().Panicf("UnauthenticatedCredential.Verify: m.TotalMoney %v, expectedSelection %v", m.TotalMoney.Raw, expectedSelection)
 	} else if !userMoney.IsZero() {
-		weight = sortition.Select(userMoney.Raw, m.TotalMoney.Raw, expectedSelection, h)
+		weight = sortition.Select(userMoney.Raw, m.TotalMoney.Raw, expectedSelection, sortition.Digest(h))
 	}
 
 	if weight == 0 {

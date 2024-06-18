@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,15 +20,16 @@ import (
 	"sync"
 	"time"
 
-	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/rpcs"
 )
 
 var log = logging.Base()
 
 type blockListener interface {
 	init(uint64)
-	onBlock(v1.Block)
+	onBlock(rpcs.EncodedBlockCert)
 }
 
 type blockWatcher struct {
@@ -75,7 +76,8 @@ func (bw *blockWatcher) run(watchers []blockListener, stallDetect time.Duration,
 	for {
 		// Inner loop needed during catchup.
 		for {
-			block, err := bw.client.Block(curBlock)
+			// Get the raw block from the client, then parse the block so we can get the bookkeeping block and certificate for proposer address.
+			resp, err := bw.client.RawBlock(curBlock)
 
 			// Generally this error will be due to the new block not being ready. In the case of a stall we will
 			// return, causing the loop to restart and handle any possible stall/catchup.
@@ -87,6 +89,13 @@ func (bw *blockWatcher) run(watchers []blockListener, stallDetect time.Duration,
 					return false
 				}
 				break
+			}
+
+			// Parse the raw block
+			var block rpcs.EncodedBlockCert
+			err = protocol.DecodeReflect(resp, &block)
+			if err != nil {
+				return false
 			}
 
 			curBlock++

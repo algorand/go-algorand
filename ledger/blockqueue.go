@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -29,6 +29,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/ledger/store/blockdb"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/metrics"
@@ -51,48 +52,68 @@ type blockQueue struct {
 	closed  chan struct{}
 }
 
-func bqInit(l *Ledger) (*blockQueue, error) {
+func newBlockQueue(l *Ledger) (*blockQueue, error) {
 	bq := &blockQueue{}
 	bq.cond = sync.NewCond(&bq.mu)
 	bq.l = l
+	return bq, nil
+}
+
+func (bq *blockQueue) start() error {
+	bq.mu.Lock()
+	defer bq.mu.Unlock()
+
+	if bq.running {
+		// this should be harmless, but it should also be impossible
+		bq.l.log.Warn("blockQueue.start() already started")
+		return nil
+	}
+	if bq.closed != nil {
+		// a previus close() is still waiting on a previous syncer() to finish
+		oldsyncer := bq.closed
+		bq.mu.Unlock()
+		<-oldsyncer
+		bq.mu.Lock()
+	}
 	bq.running = true
 	bq.closed = make(chan struct{})
 	ledgerBlockqInitCount.Inc(nil)
 	start := time.Now()
 	err := bq.l.blockDBs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var err0 error
-		bq.lastCommitted, err0 = blockLatest(tx)
+		bq.lastCommitted, err0 = blockdb.BlockLatest(tx)
 		return err0
 	})
 	ledgerBlockqInitMicros.AddMicrosecondsSince(start, nil)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	go bq.syncer()
-	return bq, nil
+	return nil
 }
 
-func (bq *blockQueue) close() {
+func (bq *blockQueue) stop() {
 	bq.mu.Lock()
-	defer func() {
-		bq.mu.Unlock()
-		// we want to block here until the sync go routine is done.
-		// it's not (just) for the sake of a complete cleanup, but rather
-		// to ensure that the sync goroutine isn't busy in a notifyCommit
-		// call which might be blocked inside one of the trackers.
-		<-bq.closed
-	}()
-
+	closechan := bq.closed
 	if bq.running {
 		bq.running = false
 		bq.cond.Broadcast()
 	}
+	bq.mu.Unlock()
 
+	// we want to block here until the sync go routine is done.
+	// it's not (just) for the sake of a complete cleanup, but rather
+	// to ensure that the sync goroutine isn't busy in a notifyCommit
+	// call which might be blocked inside one of the trackers.
+	if closechan != nil {
+		<-closechan
+	}
 }
 
+const maxDeletionBatchSize = 10_000
+
 func (bq *blockQueue) syncer() {
-	defer close(bq.closed)
 	bq.mu.Lock()
 	for {
 		for bq.running && len(bq.q) == 0 {
@@ -100,6 +121,8 @@ func (bq *blockQueue) syncer() {
 		}
 
 		if !bq.running {
+			close(bq.closed)
+			bq.closed = nil
 			bq.mu.Unlock()
 			return
 		}
@@ -111,7 +134,7 @@ func (bq *blockQueue) syncer() {
 		ledgerSyncBlockputCount.Inc(nil)
 		err := bq.l.blockDBs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 			for _, e := range workQ {
-				err0 := blockPut(tx, e.block, e.cert)
+				err0 := blockdb.BlockPut(tx, e.block, e.cert)
 				if err0 != nil {
 					return err0
 				}
@@ -143,10 +166,25 @@ func (bq *blockQueue) syncer() {
 			bq.mu.Unlock()
 
 			minToSave := bq.l.notifyCommit(committed)
+			var earliest basics.Round
+			err = bq.l.blockDBs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+				var err0 error
+				earliest, err0 = blockdb.BlockEarliest(tx)
+				if err0 != nil {
+					bq.l.log.Warnf("blockQueue.syncer: BlockEarliest(): %v", err0)
+				}
+				return err0
+			})
+			if err == nil {
+				if basics.SubSaturate(minToSave, earliest) > maxDeletionBatchSize {
+					minToSave = basics.AddSaturate(earliest, maxDeletionBatchSize)
+				}
+			}
+
 			bfstart := time.Now()
 			ledgerSyncBlockforgetCount.Inc(nil)
 			err = bq.l.blockDBs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-				return blockForgetBefore(tx, minToSave)
+				return blockdb.BlockForgetBefore(tx, minToSave)
 			})
 			ledgerSyncBlockforgetMicros.AddMicrosecondsSince(bfstart, nil)
 			if err != nil {
@@ -261,7 +299,7 @@ func (bq *blockQueue) getBlock(r basics.Round) (blk bookkeeping.Block, err error
 	ledgerGetblockCount.Inc(nil)
 	err = bq.l.blockDBs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var err0 error
-		blk, err0 = blockGet(tx, r)
+		blk, err0 = blockdb.BlockGet(tx, r)
 		return err0
 	})
 	ledgerGetblockMicros.AddMicrosecondsSince(start, nil)
@@ -283,7 +321,7 @@ func (bq *blockQueue) getBlockHdr(r basics.Round) (hdr bookkeeping.BlockHeader, 
 	ledgerGetblockhdrCount.Inc(nil)
 	err = bq.l.blockDBs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var err0 error
-		hdr, err0 = blockGetHdr(tx, r)
+		hdr, err0 = blockdb.BlockGetHdr(tx, r)
 		return err0
 	})
 	ledgerGetblockhdrMicros.AddMicrosecondsSince(start, nil)
@@ -309,7 +347,7 @@ func (bq *blockQueue) getEncodedBlockCert(r basics.Round) (blk []byte, cert []by
 	ledgerGeteblockcertCount.Inc(nil)
 	err = bq.l.blockDBs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var err0 error
-		blk, cert, err0 = blockGetEncodedCert(tx, r)
+		blk, cert, err0 = blockdb.BlockGetEncodedCert(tx, r)
 		return err0
 	})
 	ledgerGeteblockcertMicros.AddMicrosecondsSince(start, nil)
@@ -331,7 +369,7 @@ func (bq *blockQueue) getBlockCert(r basics.Round) (blk bookkeeping.Block, cert 
 	ledgerGetblockcertCount.Inc(nil)
 	err = bq.l.blockDBs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var err0 error
-		blk, cert, err0 = blockGetCert(tx, r)
+		blk, cert, err0 = blockdb.BlockGetCert(tx, r)
 		return err0
 	})
 	ledgerGetblockcertMicros.AddMicrosecondsSince(start, nil)

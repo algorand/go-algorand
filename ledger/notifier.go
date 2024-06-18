@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,7 +18,6 @@ package ledger
 
 import (
 	"context"
-	"database/sql"
 	"sync"
 
 	"github.com/algorand/go-deadlock"
@@ -26,13 +25,9 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/util"
 )
-
-// BlockListener represents an object that needs to get notified on new blocks.
-type BlockListener interface {
-	OnNewBlock(block bookkeeping.Block, delta ledgercore.StateDelta)
-}
 
 type blockDeltaPair struct {
 	block bookkeeping.Block
@@ -42,7 +37,7 @@ type blockDeltaPair struct {
 type blockNotifier struct {
 	mu            deadlock.Mutex
 	cond          *sync.Cond
-	listeners     []BlockListener
+	listeners     []ledgercore.BlockListener
 	pendingBlocks []blockDeltaPair
 	running       bool
 	// closing is the waitgroup used to synchronize closing the worker goroutine. It's being increased during loadFromDisk, and the worker is responsible to call Done on it once it's aborting it's goroutine. The close function waits on this to complete.
@@ -98,7 +93,7 @@ func (bn *blockNotifier) loadFromDisk(l ledgerForTracker, _ basics.Round) error 
 	return nil
 }
 
-func (bn *blockNotifier) register(listeners []BlockListener) {
+func (bn *blockNotifier) register(listeners []ledgercore.BlockListener) {
 	bn.mu.Lock()
 	defer bn.mu.Unlock()
 
@@ -120,7 +115,7 @@ func (bn *blockNotifier) prepareCommit(dcc *deferredCommitContext) error {
 	return nil
 }
 
-func (bn *blockNotifier) commitRound(context.Context, *sql.Tx, *deferredCommitContext) error {
+func (bn *blockNotifier) commitRound(context.Context, trackerdb.TransactionScope, *deferredCommitContext) error {
 	return nil
 }
 
@@ -130,7 +125,11 @@ func (bn *blockNotifier) postCommit(ctx context.Context, dcc *deferredCommitCont
 func (bn *blockNotifier) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
 }
 
-func (bn *blockNotifier) handleUnorderedCommit(*deferredCommitContext) {
+func (bn *blockNotifier) handleUnorderedCommit(dcc *deferredCommitContext) {
+}
+func (bn *blockNotifier) handlePrepareCommitError(dcc *deferredCommitContext) {
+}
+func (bn *blockNotifier) handleCommitError(dcc *deferredCommitContext) {
 }
 
 func (bn *blockNotifier) produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcr *deferredCommitRange) *deferredCommitRange {

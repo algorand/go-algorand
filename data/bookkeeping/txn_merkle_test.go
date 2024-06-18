@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -162,6 +162,7 @@ func BenchmarkTxnRoots(b *testing.B) {
 		crypto.RandBytes(txn.PaymentTxnFields.Receiver[:])
 
 		sigtxn := transactions.SignedTxn{Txn: txn}
+		crypto.RandBytes(sigtxn.Sig[:])
 		ad := transactions.ApplyData{}
 
 		stib, err := blk.BlockHeader.EncodeSignedTxn(sigtxn, ad)
@@ -173,7 +174,7 @@ func BenchmarkTxnRoots(b *testing.B) {
 			break
 		}
 	}
-
+	b.Logf("Made block with %d transactions and %d txn bytes", len(blk.Payset), len(protocol.Encode(blk.Payset)))
 	var r crypto.Digest
 
 	b.Run("FlatCommit", func(b *testing.B) {
@@ -188,6 +189,14 @@ func BenchmarkTxnRoots(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			var err error
 			r, err = blk.paysetCommit(config.PaysetCommitMerkle)
+			require.NoError(b, err)
+		}
+	})
+
+	b.Run("SHA256MerkleCommit", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			var err error
+			r, err = blk.paysetCommitSHA256()
 			require.NoError(b, err)
 		}
 	})

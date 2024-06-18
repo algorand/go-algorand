@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -37,17 +37,21 @@ type PaymentTxnFields struct {
 	CloseRemainderTo basics.Address `codec:"close"`
 }
 
+// checkSpender performs some stateless checks on the Sender of a pay transaction
 func (payment PaymentTxnFields) checkSpender(header Header, spec SpecialAddresses, proto config.ConsensusParams) error {
 	if header.Sender == payment.CloseRemainderTo {
 		return fmt.Errorf("transaction cannot close account to its sender %v", header.Sender)
 	}
 
-	// the FeeSink account may only spend to the IncentivePool
+	// the FeeSink account may only spend to the IncentivePool (not at all, if Payouts.Enabled)
 	if header.Sender == spec.FeeSink {
+		if proto.Payouts.Enabled {
+			return fmt.Errorf("cannot spend from fee sink address %v", header.Sender)
+		}
 		if payment.Receiver != spec.RewardsPool {
 			return fmt.Errorf("cannot spend from fee sink's address %v to non incentive pool address %v", header.Sender, payment.Receiver)
 		}
-		if payment.CloseRemainderTo != (basics.Address{}) {
+		if !payment.CloseRemainderTo.IsZero() {
 			return fmt.Errorf("cannot close fee sink %v to %v", header.Sender, payment.CloseRemainderTo)
 		}
 	}

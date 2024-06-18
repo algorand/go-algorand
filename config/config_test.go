@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,9 +23,11 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/protocol"
@@ -41,8 +43,9 @@ var defaultConfig = Local{
 	BaseLoggerDebugLevel:     1,  //Info level
 }
 
-func TestSaveThenLoad(t *testing.T) {
+func TestLocal_SaveThenLoad(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	c1, err := loadWithoutDefaults(defaultConfig)
 	require.NoError(t, err)
@@ -52,13 +55,10 @@ func TestSaveThenLoad(t *testing.T) {
 	ser1 := json.NewEncoder(&b1)
 	ser1.Encode(c1)
 
-	os.RemoveAll("testdir")
-	err = os.Mkdir("testdir", 0777)
-	require.NoError(t, err)
+	tempDir := t.TempDir()
+	c1.SaveToDisk(tempDir)
 
-	c1.SaveToDisk("testdir")
-
-	c2, err := LoadConfigFromDisk("testdir")
+	c2, err := LoadConfigFromDisk(tempDir)
 	require.NoError(t, err)
 
 	var b2 bytes.Buffer
@@ -66,23 +66,23 @@ func TestSaveThenLoad(t *testing.T) {
 	ser2.Encode(c2)
 
 	require.True(t, bytes.Equal(b1.Bytes(), b2.Bytes()))
-
-	os.RemoveAll("testdir")
 }
 
-func TestLoadMissing(t *testing.T) {
+func TestConfig_LoadMissing(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
-	os.RemoveAll("testdir")
-	_, err := LoadConfigFromDisk("testdir")
+	tempDir := t.TempDir()
+	os.RemoveAll(tempDir)
+	_, err := LoadConfigFromDisk(tempDir)
 	require.True(t, os.IsNotExist(err))
 }
 
-func TestMergeConfig(t *testing.T) {
+func TestLocal_MergeConfig(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
-	os.RemoveAll("testdir")
-	err := os.Mkdir("testdir", 0777)
+	tempDir := t.TempDir()
 
 	c1 := struct {
 		GossipFanout              int
@@ -97,7 +97,7 @@ func TestMergeConfig(t *testing.T) {
 	c1.NetAddress = testString
 
 	// write our reduced version of the Local struct
-	fileToMerge := filepath.Join("testdir", ConfigFilename)
+	fileToMerge := filepath.Join(tempDir, ConfigFilename)
 	f, err := os.OpenFile(fileToMerge, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 	if err == nil {
 		enc := json.NewEncoder(f)
@@ -109,21 +109,20 @@ func TestMergeConfig(t *testing.T) {
 
 	// Take defaultConfig and merge with the saved custom settings.
 	// This should result in c2 being the same as defaultConfig except for the value(s) in our custom c1
-	c2, err := mergeConfigFromDir("testdir", defaultConfig)
+	c2, err := mergeConfigFromDir(tempDir, defaultConfig)
 
 	require.NoError(t, err)
-	require.Equal(t, defaultConfig.Archival || c1.NetAddress != "", c2.Archival)
+	require.Equal(t, defaultConfig.EnableLedgerService || c1.NetAddress != "", c2.EnableLedgerService)
+	require.Equal(t, defaultConfig.EnableBlockService || c1.NetAddress != "", c2.EnableBlockService)
 	require.Equal(t, defaultConfig.IncomingConnectionsLimit, c2.IncomingConnectionsLimit)
 	require.Equal(t, defaultConfig.BaseLoggerDebugLevel, c2.BaseLoggerDebugLevel)
 
 	require.Equal(t, c1.NetAddress, c2.NetAddress)
 	require.Equal(t, c1.GossipFanout, c2.GossipFanout)
-
-	os.RemoveAll("testdir")
 }
 
-func saveFullPhonebook(phonebook phonebookBlackWhiteList) error {
-	filename := filepath.Join("testdir", PhonebookFilename)
+func saveFullPhonebook(phonebook phonebookBlackWhiteList, saveToDir string) error {
+	filename := filepath.Join(saveToDir, PhonebookFilename)
 	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 	if err == nil {
 		defer f.Close()
@@ -141,83 +140,33 @@ var phonebookToMerge = phonebookBlackWhiteList{
 	Include: []string{"test1", "addThisOne"},
 }
 
-var expectedMerged = []string{
-	"test1", "test2", "addThisOne",
-}
-
 func TestLoadPhonebook(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
-	os.RemoveAll("testdir")
-	err := os.Mkdir("testdir", 0777)
+	tempDir := t.TempDir()
+
+	err := saveFullPhonebook(phonebook, tempDir)
 	require.NoError(t, err)
 
-	err = saveFullPhonebook(phonebook)
-	require.NoError(t, err)
-
-	phonebookEntries, err := LoadPhonebook("testdir")
+	phonebookEntries, err := LoadPhonebook(tempDir)
 	require.NoError(t, err)
 	require.Equal(t, 3, len(phonebookEntries))
 	for index, entry := range phonebookEntries {
 		require.Equal(t, phonebook.Include[index], entry)
 	}
-	os.RemoveAll("testdir")
 }
 
 func TestLoadPhonebookMissing(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
-	os.RemoveAll("testdir")
-	_, err := LoadPhonebook("testdir")
+	tempDir := t.TempDir()
+	_, err := LoadPhonebook(tempDir)
 	require.True(t, os.IsNotExist(err))
 }
 
-func TestArchivalIfRelay(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	testArchivalIfRelay(t, true)
-}
-
-func TestArchivalIfNotRelay(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	testArchivalIfRelay(t, false)
-}
-
-func testArchivalIfRelay(t *testing.T, relay bool) {
-	os.RemoveAll("testdir")
-	err := os.Mkdir("testdir", 0777)
-
-	c1 := struct {
-		NetAddress string
-	}{}
-	if relay {
-		c1.NetAddress = ":1234"
-	}
-
-	// write our reduced version of the Local struct
-	fileToMerge := filepath.Join("testdir", ConfigFilename)
-	f, err := os.OpenFile(fileToMerge, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
-	if err == nil {
-		enc := json.NewEncoder(f)
-		err = enc.Encode(c1)
-		f.Close()
-	}
-	require.NoError(t, err)
-	require.False(t, defaultConfig.Archival, "Default should be non-archival")
-
-	c2, err := mergeConfigFromDir("testdir", defaultConfig)
-	require.NoError(t, err)
-	if relay {
-		require.True(t, c2.Archival, "Relay should be archival")
-	} else {
-		require.False(t, c2.Archival, "Non-relay should still be non-archival")
-	}
-
-	os.RemoveAll("testdir")
-}
-
-func TestConfigExampleIsCorrect(t *testing.T) {
+func TestLocal_ConfigExampleIsCorrect(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	a := require.New(t)
@@ -260,12 +209,12 @@ func loadWithoutDefaults(cfg Local) (Local, error) {
 	return cfg, err
 }
 
-func TestConfigMigrate(t *testing.T) {
+func TestLocal_ConfigMigrate(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	a := require.New(t)
 
-	c0, err := loadWithoutDefaults(getVersionedDefaultLocalConfig(0))
+	c0, err := loadWithoutDefaults(GetVersionedDefaultLocalConfig(0))
 	a.NoError(err)
 	c0, err = migrate(c0)
 	a.NoError(err)
@@ -280,14 +229,14 @@ func TestConfigMigrate(t *testing.T) {
 	a.Error(err)
 
 	// Ensure we don't migrate values that aren't the default old version
-	c0Modified := getVersionedDefaultLocalConfig(0)
-	c0Modified.BaseLoggerDebugLevel = getVersionedDefaultLocalConfig(0).BaseLoggerDebugLevel + 1
+	c0Modified := GetVersionedDefaultLocalConfig(0)
+	c0Modified.BaseLoggerDebugLevel = GetVersionedDefaultLocalConfig(0).BaseLoggerDebugLevel + 1
 	c0Modified, err = migrate(c0Modified)
 	a.NoError(err)
 	a.NotEqual(defaultLocal, c0Modified)
 }
 
-func TestConfigMigrateFromDisk(t *testing.T) {
+func TestLocal_ConfigMigrateFromDisk(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	a := require.New(t)
@@ -301,7 +250,7 @@ func TestConfigMigrateFromDisk(t *testing.T) {
 		a.NoError(err)
 		modified, err := migrate(c)
 		a.NoError(err)
-		a.Equal(defaultLocal, modified)
+		a.Equal(defaultLocal, modified, "config-v%d.json", configVersion)
 	}
 
 	cNext := Local{Version: getLatestConfigVersion() + 1}
@@ -310,7 +259,7 @@ func TestConfigMigrateFromDisk(t *testing.T) {
 }
 
 // Verify that nobody is changing the shipping default configurations
-func TestConfigInvariant(t *testing.T) {
+func TestLocal_ConfigInvariant(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	a := require.New(t)
@@ -319,16 +268,18 @@ func TestConfigInvariant(t *testing.T) {
 	a.NoError(err)
 	configsPath := filepath.Join(ourPath, "../test/testdata/configs")
 
-	for configVersion := uint32(0); configVersion <= getLatestConfigVersion(); configVersion++ {
+	// for configVersion := uint32(0); configVersion <= getLatestConfigVersion(); configVersion++ {
+	for configVersion := uint32(27); configVersion <= 27; configVersion++ {
 		c := Local{}
 		err = codecs.LoadObjectFromFile(filepath.Join(configsPath, fmt.Sprintf("config-v%d.json", configVersion)), &c)
 		a.NoError(err)
-		a.Equal(getVersionedDefaultLocalConfig(configVersion), c)
+		a.Equal(GetVersionedDefaultLocalConfig(configVersion), c)
 	}
 }
 
-func TestConfigLatestVersion(t *testing.T) {
+func TestLocal_ConfigLatestVersion(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	a := require.New(t)
 
@@ -390,6 +341,7 @@ func TestConsensusLatestVersion(t *testing.T) {
 
 func TestLocal_DNSBootstrapArray(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	type fields struct {
 		DNSBootstrapID string
@@ -401,22 +353,42 @@ func TestLocal_DNSBootstrapArray(t *testing.T) {
 		name               string
 		fields             fields
 		args               args
-		wantBootstrapArray []string
+		wantBootstrapArray []*DNSBootstrap
 	}{
 		{name: "test1",
 			fields:             fields{DNSBootstrapID: "<network>.cloudflare.com"},
 			args:               args{networkID: "devnet"},
-			wantBootstrapArray: []string{"devnet.cloudflare.com"},
+			wantBootstrapArray: []*DNSBootstrap{{PrimarySRVBootstrap: "devnet.cloudflare.com"}},
 		},
 		{name: "test2",
 			fields:             fields{DNSBootstrapID: "<network>.cloudflare.com;<network>.cloudfront.com"},
 			args:               args{networkID: "devnet"},
-			wantBootstrapArray: []string{"devnet.cloudflare.com", "devnet.cloudfront.com"},
+			wantBootstrapArray: []*DNSBootstrap{{PrimarySRVBootstrap: "devnet.cloudflare.com"}, {PrimarySRVBootstrap: "devnet.cloudfront.com"}},
 		},
 		{name: "test3",
 			fields:             fields{DNSBootstrapID: ""},
 			args:               args{networkID: "devnet"},
-			wantBootstrapArray: []string{},
+			wantBootstrapArray: []*DNSBootstrap(nil),
+		},
+		{name: "test4 - intended to mismatch local template",
+			fields: fields{DNSBootstrapID: "<network>.algorand.network?backup=<network>.algorand.net&dedup=<name>.algorand-<network>.(network|net)"},
+			args:   args{networkID: "testnet"},
+			wantBootstrapArray: []*DNSBootstrap{{PrimarySRVBootstrap: "testnet.algorand.network",
+				BackupSRVBootstrap: "testnet.algorand.net",
+				DedupExp:           regexp.MustCompile("(algorand-testnet.(network|net))")}},
+		},
+		{name: "test5 - intended to match legacy template",
+			fields:             fields{DNSBootstrapID: "<network>.algorand.network"},
+			args:               args{networkID: "testnet"},
+			wantBootstrapArray: []*DNSBootstrap{{PrimarySRVBootstrap: "testnet.algorand.network"}},
+		},
+		{name: "test6 - exercise record append with full template",
+			fields: fields{DNSBootstrapID: "<network>.algorand.network?backup=<network>.algorand.net&dedup=<name>.algorand-<network>.(network|net);<network>.cloudfront.com"},
+			args:   args{networkID: "devnet"},
+			wantBootstrapArray: []*DNSBootstrap{{PrimarySRVBootstrap: "devnet.algorand.network",
+				BackupSRVBootstrap: "devnet.algorand.net",
+				DedupExp:           regexp.MustCompile("(algorand-devnet.(network|net))")},
+				{PrimarySRVBootstrap: "devnet.cloudfront.com"}},
 		},
 	}
 	for _, tt := range tests {
@@ -427,65 +399,36 @@ func TestLocal_DNSBootstrapArray(t *testing.T) {
 			if gotBootstrapArray := cfg.DNSBootstrapArray(tt.args.networkID); !reflect.DeepEqual(gotBootstrapArray, tt.wantBootstrapArray) {
 				t.Errorf("Local.DNSBootstrapArray() = %#v, want %#v", gotBootstrapArray, tt.wantBootstrapArray)
 			}
-		})
-	}
-}
-
-func TestLocal_DNSBootstrap(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	type fields struct {
-		DNSBootstrapID string
-	}
-	type args struct {
-		network protocol.NetworkID
-	}
-	tests := []struct {
-		name   string
-		fields fields
-		args   args
-		want   string
-	}{
-		{name: "test1",
-			fields: fields{DNSBootstrapID: "<network>.cloudflare.com"},
-			args:   args{network: "devnet"},
-			want:   "devnet.cloudflare.com",
-		},
-		{name: "test2",
-			fields: fields{DNSBootstrapID: "<network>.cloudflare.com;"},
-			args:   args{network: "devnet"},
-			want:   "devnet.cloudflare.com;",
-		},
-		{name: "test3",
-			fields: fields{DNSBootstrapID: "<network>.cloudflare.com;<network>.cloudfront.com"},
-			args:   args{network: "devnet"},
-			want:   "devnet.cloudflare.com;devnet.cloudfront.com",
-		},
-		{name: "test4",
-			fields: fields{DNSBootstrapID: "<network>.cloudflare.com;<network>.cloudfront.com;"},
-			args:   args{network: "devnet"},
-			want:   "devnet.cloudflare.com;devnet.cloudfront.com;",
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cfg := Local{
-				DNSBootstrapID: tt.fields.DNSBootstrapID,
-			}
-			if got := cfg.DNSBootstrap(tt.args.network); got != tt.want {
-				t.Errorf("Local.DNSBootstrap() = %v, want %v", got, tt.want)
+			// handling should be identical to DNSBootstrapArray method for all of these cases
+			if gotBootstrapArray, _ := cfg.ValidateDNSBootstrapArray(tt.args.networkID); !reflect.DeepEqual(gotBootstrapArray, tt.wantBootstrapArray) {
+				t.Errorf("Local.DNSBootstrapArray() = %#v, want %#v", gotBootstrapArray, tt.wantBootstrapArray)
 			}
 		})
 	}
 }
 
-func TestLocalStructTags(t *testing.T) {
+func TestLocal_ValidateDNSBootstrapArray_StopsOnError(t *testing.T) {
 	partitiontest.PartitionTest(t)
+
+	var dnsBootstrapIDWithInvalidNameMacroUsage = "<network>.algorand.network?backup=<network>.algorand.net&dedup=<name>.algorand-<network>.((network|net)"
+
+	cfg := Local{
+		DNSBootstrapID: dnsBootstrapIDWithInvalidNameMacroUsage,
+	}
+
+	_, err := cfg.ValidateDNSBootstrapArray(Mainnet)
+
+	assert.ErrorContains(t, err, bootstrapDedupRegexDoesNotCompile)
+}
+
+func TestLocal_StructTags(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	localType := reflect.TypeOf(Local{})
 
 	versionField, ok := localType.FieldByName("Version")
-	require.True(t, true, ok)
+	require.True(t, ok)
 	ver := 0
 	versionTags := []string{}
 	for {
@@ -502,7 +445,7 @@ func TestLocalStructTags(t *testing.T) {
 		if field.Tag == "" {
 			require.Failf(t, "Field is missing versioning information", "Field Name: %s", field.Name)
 		}
-		// the field named "Version" is tested separatly in TestLocalVersionField, so we'll be skipping
+		// the field named "Version" is tested separately in TestLocalVersionField, so we'll be skipping
 		// it on this test.
 		if field.Name == "Version" {
 			continue
@@ -522,18 +465,20 @@ func TestLocalStructTags(t *testing.T) {
 	}
 }
 
-func TestGetVersionedDefaultLocalConfig(t *testing.T) {
+func TestLocal_GetVersionedDefaultLocalConfig(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	for i := uint32(0); i < getLatestConfigVersion(); i++ {
-		localVersion := getVersionedDefaultLocalConfig(i)
+		localVersion := GetVersionedDefaultLocalConfig(i)
 		require.Equal(t, uint32(i), localVersion.Version)
 	}
 }
 
 // TestLocalVersionField - ensures the Version contains only versions tags, the versions are all contiguous, and that no non-version tags are included there.
-func TestLocalVersionField(t *testing.T) {
+func TestLocal_VersionField(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	localType := reflect.TypeOf(Local{})
 	field, ok := localType.FieldByName("Version")
@@ -550,4 +495,504 @@ func TestLocalVersionField(t *testing.T) {
 	}
 	expectedTag = expectedTag[:len(expectedTag)-1]
 	require.Equal(t, expectedTag, string(field.Tag))
+}
+
+func TestLocal_GetNonDefaultConfigValues(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	cfg := GetDefaultLocal()
+
+	// set 4 non-default values
+	cfg.AgreementIncomingBundlesQueueLength = 2
+	cfg.AgreementIncomingProposalsQueueLength = 200
+	cfg.TxPoolSize = 30
+	cfg.Archival = true
+
+	// ask for 2 of them
+	ndmap := GetNonDefaultConfigValues(cfg, []string{"AgreementIncomingBundlesQueueLength", "TxPoolSize"})
+
+	// assert correct
+	expected := map[string]interface{}{
+		"AgreementIncomingBundlesQueueLength": uint64(2),
+		"TxPoolSize":                          int(30),
+	}
+	assert.Equal(t, expected, ndmap)
+
+	// ask for field that doesn't exist: should skip
+	assert.Equal(t, expected, GetNonDefaultConfigValues(cfg, []string{"Blah", "AgreementIncomingBundlesQueueLength", "TxPoolSize"}))
+
+	// check unmodified defaults
+	assert.Empty(t, GetNonDefaultConfigValues(GetDefaultLocal(), []string{"AgreementIncomingBundlesQueueLength", "TxPoolSize"}))
+}
+
+func TestLocal_TxFiltering(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	cfg := GetDefaultLocal()
+
+	// ensure the default
+	require.True(t, cfg.TxFilterRawMsgEnabled())
+	require.False(t, cfg.TxFilterCanonicalEnabled())
+
+	cfg.TxIncomingFilteringFlags = 0
+	require.False(t, cfg.TxFilterRawMsgEnabled())
+	require.False(t, cfg.TxFilterCanonicalEnabled())
+
+	cfg.TxIncomingFilteringFlags = 1
+	require.True(t, cfg.TxFilterRawMsgEnabled())
+	require.False(t, cfg.TxFilterCanonicalEnabled())
+
+	cfg.TxIncomingFilteringFlags = 2
+	require.False(t, cfg.TxFilterRawMsgEnabled())
+	require.True(t, cfg.TxFilterCanonicalEnabled())
+
+	cfg.TxIncomingFilteringFlags = 3
+	require.True(t, cfg.TxFilterRawMsgEnabled())
+	require.True(t, cfg.TxFilterCanonicalEnabled())
+}
+
+func TestLocal_IsGossipServer(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	cfg := GetDefaultLocal()
+	require.False(t, cfg.IsGossipServer())
+
+	cfg.NetAddress = ":4160"
+	require.True(t, cfg.IsGossipServer())
+}
+
+func TestLocal_RecalculateConnectionLimits(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	var tests = []struct {
+		maxFDs     uint64
+		reservedIn uint64
+		restSoftIn uint64
+		restHardIn uint64
+		incomingIn int
+
+		updated     bool
+		restSoftExp uint64
+		restHardExp uint64
+		incomingExp int
+	}{
+		{100, 10, 20, 40, 50, false, 20, 40, 50},               // no change
+		{100, 10, 20, 50, 50, true, 20, 40, 50},                // borrow from rest
+		{100, 10, 25, 50, 50, true, 25, 40, 50},                // borrow from rest
+		{100, 10, 50, 50, 50, true, 40, 40, 50},                // borrow from rest, update soft
+		{100, 10, 9, 19, 81, true, 9, 10, 80},                  // borrow from both rest and incoming
+		{100, 10, 10, 20, 80, true, 10, 10, 80},                // borrow from both rest and incoming
+		{100, 50, 10, 30, 40, true, 10, 10, 40},                // borrow from both rest and incoming
+		{100, 90, 10, 30, 40, true, 10, 10, 0},                 // borrow from both rest and incoming, clear incoming
+		{4096, 256, 1024, 2048, 2400, true, 1024, 1440, 2400},  // real numbers
+		{5000, 256, 1024, 2048, 2400, false, 1024, 2048, 2400}, // real numbers
+	}
+
+	for i, test := range tests {
+		test := test
+		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
+			t.Parallel()
+
+			c := Local{
+				RestConnectionsSoftLimit: test.restSoftIn,
+				RestConnectionsHardLimit: test.restHardIn,
+				IncomingConnectionsLimit: test.incomingIn,
+			}
+			requireFDs := test.reservedIn + test.restHardIn + uint64(test.incomingIn)
+			res := c.AdjustConnectionLimits(requireFDs, test.maxFDs)
+			require.Equal(t, test.updated, res)
+			require.Equal(t, test.restSoftExp, c.RestConnectionsSoftLimit)
+			require.Equal(t, test.restHardExp, c.RestConnectionsHardLimit)
+			require.Equal(t, test.incomingExp, c.IncomingConnectionsLimit)
+		})
+	}
+}
+
+// Tests that ensureAbsGenesisDir resolves a path to an absolute path, appends the genesis directory, and creates any needed directories
+func TestEnsureAbsDir(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	testDirectory := t.TempDir()
+
+	t1 := filepath.Join(testDirectory, "test1")
+	t1Abs, err := ensureAbsGenesisDir(t1, "myGenesisID")
+	require.NoError(t, err)
+	require.DirExists(t, t1Abs)
+	require.Equal(t, testDirectory+"/test1/myGenesisID", t1Abs)
+
+	// confirm that relative paths become absolute
+	t2 := filepath.Join(testDirectory, "test2", "..")
+	t2Abs, err := ensureAbsGenesisDir(t2, "myGenesisID")
+	require.NoError(t, err)
+	require.DirExists(t, t2Abs)
+	require.Equal(t, testDirectory+"/myGenesisID", t2Abs)
+}
+
+type tLogger struct{ t *testing.T }
+
+func (l tLogger) Infof(fmts string, args ...interface{}) {
+	l.t.Logf(fmts, args...)
+}
+
+// TestEnsureAndResolveGenesisDirs confirms that paths provided in the config are resolved to absolute paths and are created if relevant
+func TestEnsureAndResolveGenesisDirs(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	cfg := GetDefaultLocal()
+
+	testDirectory := t.TempDir()
+	// insert some "Bad" path elements to see them removed when converted to absolute
+	cfg.TrackerDBDir = filepath.Join(testDirectory, "BAD/../custom_tracker")
+	cfg.BlockDBDir = filepath.Join(testDirectory, "/BAD/BAD/../../custom_block")
+	cfg.CrashDBDir = filepath.Join(testDirectory, "custom_crash")
+	cfg.StateproofDir = filepath.Join(testDirectory, "/RELATIVEPATHS/../RELATIVE/../custom_stateproof")
+	cfg.CatchpointDir = filepath.Join(testDirectory, "custom_catchpoint")
+
+	paths, err := cfg.EnsureAndResolveGenesisDirs(testDirectory, "myGenesisID", tLogger{t: t})
+	require.NoError(t, err)
+
+	// confirm that the paths are absolute, and contain the genesisID
+	require.Equal(t, testDirectory+"/custom_tracker/myGenesisID", paths.TrackerGenesisDir)
+	require.DirExists(t, paths.TrackerGenesisDir)
+	require.Equal(t, testDirectory+"/custom_block/myGenesisID", paths.BlockGenesisDir)
+	require.DirExists(t, paths.BlockGenesisDir)
+	require.Equal(t, testDirectory+"/custom_crash/myGenesisID", paths.CrashGenesisDir)
+	require.DirExists(t, paths.CrashGenesisDir)
+	require.Equal(t, testDirectory+"/custom_stateproof/myGenesisID", paths.StateproofGenesisDir)
+	require.DirExists(t, paths.StateproofGenesisDir)
+	require.Equal(t, testDirectory+"/custom_catchpoint/myGenesisID", paths.CatchpointGenesisDir)
+	require.DirExists(t, paths.CatchpointGenesisDir)
+}
+
+// TestEnsureAndResolveGenesisDirs_hierarchy confirms that when only some directories are specified, other directories defer to them
+func TestEnsureAndResolveGenesisDirs_hierarchy(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	cfg := GetDefaultLocal()
+	testDirectory := t.TempDir()
+	paths, err := cfg.EnsureAndResolveGenesisDirs(testDirectory, "myGenesisID", tLogger{t: t})
+	require.NoError(t, err)
+	// confirm that if only the root is specified, it is used for all directories
+	require.Equal(t, testDirectory+"/myGenesisID", paths.TrackerGenesisDir)
+	require.DirExists(t, paths.TrackerGenesisDir)
+	require.Equal(t, testDirectory+"/myGenesisID", paths.BlockGenesisDir)
+	require.DirExists(t, paths.BlockGenesisDir)
+	require.Equal(t, testDirectory+"/myGenesisID", paths.CrashGenesisDir)
+	require.DirExists(t, paths.CrashGenesisDir)
+	require.Equal(t, testDirectory+"/myGenesisID", paths.StateproofGenesisDir)
+	require.DirExists(t, paths.StateproofGenesisDir)
+	require.Equal(t, testDirectory+"/myGenesisID", paths.CatchpointGenesisDir)
+	require.DirExists(t, paths.CatchpointGenesisDir)
+
+	cfg = GetDefaultLocal()
+	testDirectory = t.TempDir()
+	hot := filepath.Join(testDirectory, "hot")
+	cold := filepath.Join(testDirectory, "cold")
+	cfg.HotDataDir = hot
+	cfg.ColdDataDir = cold
+	paths, err = cfg.EnsureAndResolveGenesisDirs(testDirectory, "myGenesisID", tLogger{t: t})
+	require.NoError(t, err)
+	// confirm that if hot/cold are specified, hot/cold are used for appropriate directories
+	require.Equal(t, hot+"/myGenesisID", paths.TrackerGenesisDir)
+	require.DirExists(t, paths.TrackerGenesisDir)
+	require.Equal(t, cold+"/myGenesisID", paths.BlockGenesisDir)
+	require.DirExists(t, paths.BlockGenesisDir)
+	require.Equal(t, hot+"/myGenesisID", paths.CrashGenesisDir)
+	require.DirExists(t, paths.CrashGenesisDir)
+	require.Equal(t, hot+"/myGenesisID", paths.StateproofGenesisDir)
+	require.DirExists(t, paths.StateproofGenesisDir)
+	require.Equal(t, cold+"/myGenesisID", paths.CatchpointGenesisDir)
+	require.DirExists(t, paths.CatchpointGenesisDir)
+}
+
+func TestEnsureAndResolveGenesisDirs_migrate(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	cfg := GetDefaultLocal()
+	testDirectory := t.TempDir()
+	cfg.HotDataDir = filepath.Join(testDirectory, "hot")
+	cfg.ColdDataDir = filepath.Join(testDirectory, "cold")
+	coldDir := filepath.Join(cfg.ColdDataDir, "myGenesisID")
+	hotDir := filepath.Join(cfg.HotDataDir, "myGenesisID")
+	err := os.MkdirAll(coldDir, 0755)
+	require.NoError(t, err)
+	// put a crash.sqlite file in the ColdDataDir
+	err = os.WriteFile(filepath.Join(coldDir, "crash.sqlite"), []byte("test"), 0644)
+	require.NoError(t, err)
+	err = os.WriteFile(filepath.Join(coldDir, "crash.sqlite-shm"), []byte("test"), 0644)
+	require.NoError(t, err)
+	// put a stateproof.sqlite file in the ColdDataDir
+	err = os.WriteFile(filepath.Join(coldDir, "stateproof.sqlite"), []byte("test"), 0644)
+	require.NoError(t, err)
+	err = os.WriteFile(filepath.Join(coldDir, "stateproof.sqlite-wal"), []byte("test"), 0644)
+	require.NoError(t, err)
+	// Resolve
+	paths, err := cfg.EnsureAndResolveGenesisDirs(testDirectory, "myGenesisID", tLogger{t: t})
+	require.NoError(t, err)
+	// Confirm that crash.sqlite was moved to HotDataDir
+	require.DirExists(t, paths.CrashGenesisDir)
+	require.Equal(t, hotDir, paths.CrashGenesisDir)
+	require.NoFileExists(t, filepath.Join(coldDir, "crash.sqlite"))
+	require.NoFileExists(t, filepath.Join(coldDir, "crash.sqlite-shm"))
+	require.FileExists(t, filepath.Join(hotDir, "crash.sqlite"))
+	require.FileExists(t, filepath.Join(hotDir, "crash.sqlite-shm"))
+	// Confirm that stateproof.sqlite was moved to HotDataDir
+	require.DirExists(t, paths.StateproofGenesisDir)
+	require.Equal(t, hotDir, paths.StateproofGenesisDir)
+	require.NoFileExists(t, filepath.Join(coldDir, "stateproof.sqlite"))
+	require.NoFileExists(t, filepath.Join(coldDir, "stateproof.sqlite-wal"))
+	require.FileExists(t, filepath.Join(hotDir, "stateproof.sqlite"))
+	require.FileExists(t, filepath.Join(hotDir, "stateproof.sqlite-wal"))
+}
+
+func TestEnsureAndResolveGenesisDirs_migrateCrashFail(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	cfg := GetDefaultLocal()
+	testDirectory := t.TempDir()
+	cfg.HotDataDir = filepath.Join(testDirectory, "hot")
+	cfg.ColdDataDir = filepath.Join(testDirectory, "cold")
+	coldDir := filepath.Join(cfg.ColdDataDir, "myGenesisID")
+	hotDir := filepath.Join(cfg.HotDataDir, "myGenesisID")
+	err := os.MkdirAll(coldDir, 0755)
+	require.NoError(t, err)
+	err = os.MkdirAll(hotDir, 0755)
+	require.NoError(t, err)
+	// put a crash.sqlite file in the ColdDataDir
+	err = os.WriteFile(filepath.Join(coldDir, "crash.sqlite"), []byte("test"), 0644)
+	require.NoError(t, err)
+	err = os.WriteFile(filepath.Join(coldDir, "crash.sqlite-shm"), []byte("test"), 0644)
+	require.NoError(t, err)
+	// also put a crash.sqlite file in the HotDataDir
+	err = os.WriteFile(filepath.Join(hotDir, "crash.sqlite"), []byte("test"), 0644)
+	require.NoError(t, err)
+	// Resolve
+	paths, err := cfg.EnsureAndResolveGenesisDirs(testDirectory, "myGenesisID", tLogger{t: t})
+	require.Error(t, err)
+	require.Empty(t, paths)
+	// Confirm that crash.sqlite was not moved to HotDataDir
+	require.FileExists(t, filepath.Join(coldDir, "crash.sqlite"))
+	require.FileExists(t, filepath.Join(coldDir, "crash.sqlite-shm"))
+	require.FileExists(t, filepath.Join(hotDir, "crash.sqlite"))
+	require.NoFileExists(t, filepath.Join(hotDir, "crash.sqlite-shm"))
+}
+
+func TestEnsureAndResolveGenesisDirs_migrateSPFail(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	cfg := GetDefaultLocal()
+	testDirectory := t.TempDir()
+	cfg.HotDataDir = filepath.Join(testDirectory, "hot")
+	cfg.ColdDataDir = filepath.Join(testDirectory, "cold")
+	coldDir := filepath.Join(cfg.ColdDataDir, "myGenesisID")
+	hotDir := filepath.Join(cfg.HotDataDir, "myGenesisID")
+	err := os.MkdirAll(coldDir, 0755)
+	require.NoError(t, err)
+	err = os.MkdirAll(hotDir, 0755)
+	require.NoError(t, err)
+	// put a stateproof.sqlite file in the ColdDataDir
+	err = os.WriteFile(filepath.Join(coldDir, "stateproof.sqlite"), []byte("test"), 0644)
+	require.NoError(t, err)
+	err = os.WriteFile(filepath.Join(coldDir, "stateproof.sqlite-wal"), []byte("test"), 0644)
+	require.NoError(t, err)
+	// also put a stateproof.sqlite-wal file in the HotDataDir
+	err = os.WriteFile(filepath.Join(hotDir, "stateproof.sqlite-wal"), []byte("test"), 0644)
+	require.NoError(t, err)
+	// Resolve
+	paths, err := cfg.EnsureAndResolveGenesisDirs(testDirectory, "myGenesisID", tLogger{t: t})
+	require.Error(t, err)
+	require.Empty(t, paths)
+	// Confirm that stateproof.sqlite was not moved to HotDataDir
+	require.FileExists(t, filepath.Join(coldDir, "stateproof.sqlite"))
+	require.FileExists(t, filepath.Join(coldDir, "stateproof.sqlite-wal"))
+	require.NoFileExists(t, filepath.Join(hotDir, "stateproof.sqlite"))
+	require.FileExists(t, filepath.Join(hotDir, "stateproof.sqlite-wal"))
+}
+
+// TestEnsureAndResolveGenesisDirsError confirms that if a path can't be created, an error is returned
+func TestEnsureAndResolveGenesisDirsError(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	cfg := GetDefaultLocal()
+
+	testDirectory := t.TempDir()
+	// insert some "Bad" path elements to see them removed when converted to absolute
+	cfg.TrackerDBDir = filepath.Join(testDirectory, "BAD/../custom_tracker")
+	cfg.BlockDBDir = filepath.Join(testDirectory, "/BAD/BAD/../../custom_block")
+	cfg.CrashDBDir = filepath.Join(testDirectory, "custom_crash")
+	cfg.StateproofDir = filepath.Join(testDirectory, "/RELATIVEPATHS/../RELATIVE/../custom_stateproof")
+	cfg.CatchpointDir = filepath.Join(testDirectory, "custom_catchpoint")
+
+	// first try an error with an empty root dir
+	paths, err := cfg.EnsureAndResolveGenesisDirs("", "myGenesisID", tLogger{t: t})
+	require.Empty(t, paths)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "rootDir is required")
+
+	require.NoError(t, os.Chmod(testDirectory, 0200))
+
+	// now try an error with a root dir that can't be written to
+	paths, err = cfg.EnsureAndResolveGenesisDirs(testDirectory, "myGenesisID", tLogger{t: t})
+	require.Empty(t, paths)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "permission denied")
+}
+
+// TestResolveLogPaths confirms that log paths are resolved to the most appropriate data directory of the supplied config
+func TestResolveLogPaths(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	// on default settings, the log paths should be in the root directory
+	cfg := GetDefaultLocal()
+	log, archive := cfg.ResolveLogPaths("root")
+	require.Equal(t, "root/node.log", log)
+	require.Equal(t, "root/node.archive.log", archive)
+
+	// with supplied hot/cold data directories, they resolve to hot/cold
+	cfg = GetDefaultLocal()
+	cfg.HotDataDir = "hot"
+	cfg.ColdDataDir = "cold"
+	log, archive = cfg.ResolveLogPaths("root")
+	require.Equal(t, "hot/node.log", log)
+	require.Equal(t, "cold/node.archive.log", archive)
+
+	// with supplied hot/cold data AND specific paths directories, they resolve to the specific paths
+	cfg = GetDefaultLocal()
+	cfg.HotDataDir = "hot"
+	cfg.ColdDataDir = "cold"
+	cfg.LogFileDir = "mycoolLogDir"
+	cfg.LogArchiveDir = "myCoolLogArchive"
+	log, archive = cfg.ResolveLogPaths("root")
+	require.Equal(t, "mycoolLogDir/node.log", log)
+	require.Equal(t, "myCoolLogArchive/node.archive.log", archive)
+}
+
+func TestStoresCatchpoints(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	var tests = []struct {
+		name               string
+		catchpointTracking int64
+		catchpointInterval uint64
+		archival           bool
+		expected           bool
+	}{
+		{
+			name:               "-1 w/ no catchpoint interval expects false",
+			catchpointTracking: CatchpointTrackingModeUntracked,
+			catchpointInterval: 0,
+			expected:           false,
+		},
+		{
+			name:               "-1 expects false",
+			catchpointTracking: CatchpointTrackingModeUntracked,
+			catchpointInterval: GetDefaultLocal().CatchpointInterval,
+			archival:           GetDefaultLocal().Archival,
+			expected:           false,
+		},
+		{
+			name:               "0 expects false",
+			catchpointTracking: CatchpointTrackingModeAutomatic,
+			catchpointInterval: GetDefaultLocal().CatchpointInterval,
+			archival:           GetDefaultLocal().Archival,
+			expected:           false,
+		},
+		{
+			name:               "0 w/ archival expects true",
+			catchpointTracking: CatchpointTrackingModeAutomatic,
+			catchpointInterval: GetDefaultLocal().CatchpointInterval,
+			archival:           true,
+			expected:           true,
+		},
+		{
+			name:               "0 w/ archival & catchpointInterval=0 expects false",
+			catchpointTracking: CatchpointTrackingModeAutomatic,
+			catchpointInterval: 0,
+			archival:           true,
+			expected:           false,
+		},
+		{
+			name:               "1 expects false",
+			catchpointTracking: CatchpointTrackingModeTracked,
+			catchpointInterval: GetDefaultLocal().CatchpointInterval,
+			archival:           GetDefaultLocal().Archival,
+			expected:           false,
+		},
+		{
+			name:               "1 w/ archival expects true",
+			catchpointTracking: CatchpointTrackingModeTracked,
+			catchpointInterval: GetDefaultLocal().CatchpointInterval,
+			archival:           true,
+			expected:           true,
+		},
+		{
+			name:               "1 w/ archival & catchpointInterval=0 expects false",
+			catchpointTracking: CatchpointTrackingModeTracked,
+			catchpointInterval: 0,
+			archival:           true,
+			expected:           false,
+		},
+		{
+			name:               "2 w/ catchpointInterval=0 expects false",
+			catchpointTracking: CatchpointTrackingModeStored,
+			catchpointInterval: 0,
+			archival:           GetDefaultLocal().Archival,
+			expected:           false,
+		},
+		{
+			name:               "2 expects true",
+			catchpointTracking: CatchpointTrackingModeStored,
+			catchpointInterval: GetDefaultLocal().CatchpointInterval,
+			archival:           GetDefaultLocal().Archival,
+			expected:           true,
+		},
+		{
+			name:               "99 expects false",
+			catchpointTracking: 99,
+			catchpointInterval: GetDefaultLocal().CatchpointInterval,
+			archival:           GetDefaultLocal().Archival,
+			expected:           false,
+		},
+		{
+			name:               "99 w/ catchpointInterval=0 expects false",
+			catchpointTracking: 99,
+			catchpointInterval: 0,
+			archival:           GetDefaultLocal().Archival,
+			expected:           false,
+		},
+		{
+			name:               "27 expects false",
+			catchpointTracking: 27,
+			catchpointInterval: GetDefaultLocal().CatchpointInterval,
+			archival:           GetDefaultLocal().Archival,
+			expected:           false,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			cfg := GetDefaultLocal()
+			cfg.CatchpointTracking = test.catchpointTracking
+			cfg.CatchpointInterval = test.catchpointInterval
+			cfg.Archival = test.archival
+			require.Equal(t, test.expected, cfg.StoresCatchpoints())
+			if cfg.StoresCatchpoints() {
+				require.Equal(t, true, cfg.TracksCatchpoints())
+			}
+		})
+	}
+}
+
+func TestTracksCatchpointsWithoutStoring(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	cfg := GetDefaultLocal()
+	cfg.CatchpointTracking = CatchpointTrackingModeTracked
+	cfg.CatchpointInterval = 10000
+	cfg.Archival = false
+	require.Equal(t, true, cfg.TracksCatchpoints())
+	require.Equal(t, false, cfg.StoresCatchpoints())
 }

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -136,7 +136,6 @@ func (rps roundperiodstep) Format(f fmt.State, c rune) {
 	fmt.Fprintf(f, "%s%s.%s.%s", leadingspaces, colorize(r), colorize(p), colorize(s))
 }
 
-//
 func setupInputStream() io.ReadCloser {
 	var inputStream io.ReadCloser = os.Stdin
 

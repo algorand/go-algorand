@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -31,6 +31,7 @@ import (
 
 	"github.com/algorand/go-deadlock"
 
+	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/timers"
@@ -48,7 +49,7 @@ type NetworkFacadeMessage struct {
 type NetworkFacade struct {
 	network.GossipNode
 	NetworkFilter
-	timers.Clock
+	timers.Clock[agreement.TimeoutType]
 	nodeID                         int
 	mux                            *network.Multiplexer
 	fuzzer                         *Fuzzer
@@ -77,7 +78,7 @@ func MakeNetworkFacade(fuzzer *Fuzzer, nodeID int) *NetworkFacade {
 	n := &NetworkFacade{
 		fuzzer:         fuzzer,
 		nodeID:         nodeID,
-		mux:            network.MakeMultiplexer(fuzzer.log),
+		mux:            network.MakeMultiplexer(),
 		clocks:         make(map[int]chan time.Time),
 		eventsQueues:   make(map[string]int),
 		eventsQueuesCh: make(chan int, 1000),
@@ -121,7 +122,7 @@ func (n *NetworkFacade) DumpQueues() {
 	}
 	n.eventsQueuesMu.Unlock()
 	queues += "----------------------\n"
-	fmt.Printf(queues)
+	fmt.Print(queues)
 }
 
 func (n *NetworkFacade) WaitForEventsQueue(cleared bool) {
@@ -150,7 +151,7 @@ func (n *NetworkFacade) WaitForEventsQueue(cleared bool) {
 				n.DumpQueues()
 				//panic("Waiting for event processing for 0 took too long")
 				pprof.Lookup("goroutine").WriteTo(os.Stdout, 1)
-				os.Exit(1)
+				panic(fmt.Sprintf("maxWait %d sec exceeded", maxEventQueueWait/time.Second))
 			}
 
 		}
@@ -345,7 +346,7 @@ func (n *NetworkFacade) Disconnect(sender network.Peer) {
 	n.fuzzer.Disconnect(n.nodeID, sourceNode)
 }
 
-func (n *NetworkFacade) Zero() timers.Clock {
+func (n *NetworkFacade) Zero() timers.Clock[agreement.TimeoutType] {
 	n.clockSync.Lock()
 	defer n.clockSync.Unlock()
 
@@ -375,7 +376,7 @@ func (n *NetworkFacade) Rezero() {
 // Since implements the Clock interface.
 func (n *NetworkFacade) Since() time.Duration { return 0 }
 
-func (n *NetworkFacade) TimeoutAt(d time.Duration) <-chan time.Time {
+func (n *NetworkFacade) TimeoutAt(d time.Duration, timeoutType agreement.TimeoutType) <-chan time.Time {
 	defer n.timeoutAtInitOnce.Do(func() {
 		n.timeoutAtInitWait.Done()
 	})
@@ -414,7 +415,7 @@ func (n *NetworkFacade) Encode() []byte {
 	return buf.Bytes()
 }
 
-func (n *NetworkFacade) Decode(in []byte) (timers.Clock, error) {
+func (n *NetworkFacade) Decode(in []byte) (timers.Clock[agreement.TimeoutType], error) {
 	n.clockSync.Lock()
 	defer n.clockSync.Unlock()
 

@@ -1,0 +1,45 @@
+#pragma version 8
+txn ApplicationID      // on creation, always approve
+bz end
+
+txn NumAppArgs
+int 1
+==
+assert
+
+txn ApplicationArgs 0
+btoi
+callsub subroutine_manipulating_stack
+itob
+log
+b end
+
+subroutine_manipulating_stack:
+  proto 1 1
+  int 0                                   // [0]
+  dup                                     // [0, 0]
+  dupn 4                                  // [0, 0, 0, 0, 0, 0]
+  frame_dig -1                            // [0, 0, 0, 0, 0, 0, arg_0]
+  frame_bury 0                            // [arg_0, 0, 0, 0, 0, 0]
+  dig 5                                   // [arg_0, 0, 0, 0, 0, 0, arg_0]
+  cover 5                                 // [arg_0, arg_0, 0, 0, 0, 0, 0]
+  frame_dig 0                             // [arg_0, arg_0, 0, 0, 0, 0, 0, arg_0]
+  frame_dig 1                             // [arg_0, arg_0, 0, 0, 0, 0, 0, arg_0, arg_0]
+  +                                       // [arg_0, arg_0, 0, 0, 0, 0, 0, arg_0 * 2]
+  bury 7                                  // [arg_0 * 2, arg_0, 0, 0, 0, 0, 0]
+  popn 5                                  // [arg_0 * 2, arg_0]
+  uncover 1                               // [arg_0, arg_0 * 2]
+  swap                                    // [arg_0 * 2, arg_0]
+  +                                       // [arg_0 * 3]
+  pushbytess "1!" "5!"                    // [arg_0 * 3, "1!", "5!"]
+  pushints 0 2 1 1 5 18446744073709551615 // [arg_0 * 3, "1!", "5!", 0, 2, 1, 1, 5, 18446744073709551615]
+  store 1                                 // [arg_0 * 3, "1!", "5!", 0, 2, 1, 1, 5]
+  load 1                                  // [arg_0 * 3, "1!", "5!", 0, 2, 1, 1, 5, 18446744073709551615]
+  stores                                  // [arg_0 * 3, "1!", "5!", 0, 2, 1, 1]
+  load 1                                  // [arg_0 * 3, "1!", "5!", 0, 2, 1, 1, 18446744073709551615]
+  store 1                                 // [arg_0 * 3, "1!", "5!", 0, 2, 1, 1]
+  retsub
+
+end:
+  int 1
+  return

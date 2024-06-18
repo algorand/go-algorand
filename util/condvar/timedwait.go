@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -32,12 +32,12 @@ import (
 // This function does not indicate whether a timeout occurred or not;
 // the caller should check time.Now() as needed.
 func TimedWait(c *sync.Cond, timeout time.Duration) {
-	var done int32
+	var done atomic.Bool
 
 	go func() {
 		util.NanoSleep(timeout)
 
-		for atomic.LoadInt32(&done) == 0 {
+		for !done.Load() {
 			c.Broadcast()
 
 			// It is unlikely but possible that the parent
@@ -49,5 +49,5 @@ func TimedWait(c *sync.Cond, timeout time.Duration) {
 	}()
 
 	c.Wait()
-	atomic.StoreInt32(&done, 1)
+	done.Store(true)
 }

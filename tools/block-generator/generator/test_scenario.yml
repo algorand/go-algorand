@@ -1,0 +1,23 @@
+name: Test Config
+# genesis accounts
+genesis_accounts: 10
+genesis_account_balance: 40000000000000
+
+tx_per_block: 10
+
+# every 100 payment transactions, create an account
+tx_pay_fraction: 0.5
+tx_asset_fraction: 0.5
+
+# transaction distribution
+pay_acct_create_fraction: 0.5
+pay_xfer_fraction: 0.5
+
+# asset distribution
+asset_create_fraction: 0.25
+asset_optin_fraction: 0.25
+asset_close_fraction: 0.25
+asset_xfer_fraction: 0.25
+asset_destroy_fraction: 0.0
+
+

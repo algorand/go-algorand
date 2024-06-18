@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,19 +17,32 @@
 package verify
 
 import (
-	"testing"
-
-	"github.com/stretchr/testify/require"
-
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/stateproofmsg"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
+	"github.com/stretchr/testify/require"
+	"testing"
 )
+
+func invokeValidateStateProof(latestRoundInIntervalHdr *bookkeeping.BlockHeader,
+	stateProof *stateproof.StateProof,
+	votersHdr *bookkeeping.BlockHeader,
+	atRound basics.Round,
+	msg *stateproofmsg.Message) error {
+	verificationContext := ledgercore.StateProofVerificationContext{
+		LastAttestedRound: latestRoundInIntervalHdr.Round,
+		VotersCommitment:  votersHdr.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment,
+		OnlineTotalWeight: votersHdr.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight,
+		Version:           votersHdr.CurrentProtocol,
+	}
+	return ValidateStateProof(&verificationContext, stateProof, atRound, msg)
+}
 
 func TestValidateStateProof(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -41,55 +54,52 @@ func TestValidateStateProof(t *testing.T) {
 	msg := &stateproofmsg.Message{BlockHeadersCommitment: []byte("this is an arbitrary message")}
 
 	// will definitely fail with nothing set up
-	err := ValidateStateProof(spHdr, sp, votersHdr, atRound, msg)
+	err := invokeValidateStateProof(spHdr, sp, votersHdr, atRound, msg)
 	require.ErrorIs(t, err, errStateProofNotEnabled)
 
-	spHdr.CurrentProtocol = "TestValidateStateProof"
-	spHdr.Round = 1
+	votersHdr.CurrentProtocol = "TestValidateStateProof"
 	proto := config.Consensus[spHdr.CurrentProtocol]
-	proto.StateProofInterval = 2
+	proto.StateProofInterval = 256
 	proto.StateProofStrengthTarget = 256
 	proto.StateProofWeightThreshold = (1 << 32) * 30 / 100
-	config.Consensus[spHdr.CurrentProtocol] = proto
+	config.Consensus[votersHdr.CurrentProtocol] = proto
 
-	err = ValidateStateProof(spHdr, sp, votersHdr, atRound, msg)
+	spHdr.Round = 1
+	err = invokeValidateStateProof(spHdr, sp, votersHdr, atRound, msg)
 	require.ErrorIs(t, err, errNotAtRightMultiple)
 
-	spHdr.Round = 4
-	votersHdr.Round = 4
-	err = ValidateStateProof(spHdr, sp, votersHdr, atRound, msg)
-	require.ErrorIs(t, err, errInvalidVotersRound)
-
-	votersHdr.Round = 2
-	err = ValidateStateProof(spHdr, sp, votersHdr, atRound, msg)
-	require.ErrorIs(t, err, errStateProofParamCreation)
-
-	votersHdr.CurrentProtocol = spHdr.CurrentProtocol
-	err = ValidateStateProof(spHdr, sp, votersHdr, atRound, msg)
-	// since proven weight is zero, we cann't create the verifier
+	votersHdr.Round = 256
+	spHdr.Round = votersHdr.Round + basics.Round(proto.StateProofInterval)
+	sp.SignedWeight = 1
+	atRound = 800
+	err = invokeValidateStateProof(spHdr, sp, votersHdr, atRound, msg)
 	require.ErrorIs(t, err, stateproof.ErrIllegalInputForLnApprox)
 
 	votersHdr.StateProofTracking = make(map[protocol.StateProofType]bookkeeping.StateProofTrackingData)
 	cc := votersHdr.StateProofTracking[protocol.StateProofBasic]
 	cc.StateProofOnlineTotalWeight.Raw = 100
 	votersHdr.StateProofTracking[protocol.StateProofBasic] = cc
-	err = ValidateStateProof(spHdr, sp, votersHdr, atRound, msg)
-	require.ErrorIs(t, err, errInsufficientWeight)
-
 	// Require 100% of the weight to be signed in order to accept stateproof before interval/2 rounds has passed from the latest round attested (optimal case)
 	sp.SignedWeight = 99 // suboptimal signed weight
-	err = ValidateStateProof(spHdr, sp, votersHdr, atRound, msg)
+	atRound = votersHdr.Round + basics.Round(proto.StateProofInterval)
+	err = invokeValidateStateProof(spHdr, sp, votersHdr, atRound, msg)
 	require.ErrorIs(t, err, errInsufficientWeight)
 
-	latestRoundInProof := votersHdr.Round + basics.Round(proto.StateProofInterval)
-	atRound = latestRoundInProof + basics.Round(proto.StateProofInterval/2)
-	err = ValidateStateProof(spHdr, sp, votersHdr, atRound, msg)
-	require.ErrorIs(t, err, errInsufficientWeight)
-
-	// This suboptimal signed weight should be enough for this round
 	atRound++
-	err = ValidateStateProof(spHdr, sp, votersHdr, atRound, msg)
-	// still err, but a different err case to cover
+	err = invokeValidateStateProof(spHdr, sp, votersHdr, atRound, msg)
+	require.ErrorIs(t, err, errInsufficientWeight)
+
+	// we don't pass the scaled weight
+	sp.SignedWeight = 96
+	latestRoundInProof := votersHdr.Round + basics.Round(proto.StateProofInterval)
+	atRound = latestRoundInProof + basics.Round(proto.StateProofInterval/2) + 5
+	err = invokeValidateStateProof(spHdr, sp, votersHdr, atRound, msg)
+	require.ErrorIs(t, err, errInsufficientWeight)
+
+	// we will pass the threshold since the network is now willing to take any state proof that has signedWeight over the threshold
+	sp.SignedWeight = 30
+	atRound = votersHdr.Round + 2*basics.Round(proto.StateProofInterval)
+	err = invokeValidateStateProof(spHdr, sp, votersHdr, atRound, msg)
 	require.ErrorIs(t, err, errStateProofCrypto)
 
 	// Above cases leave validateStateProof() with 100% coverage.

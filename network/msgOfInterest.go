@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -26,6 +26,7 @@ import (
 var errUnableUnmarshallMessage = errors.New("unmarshalMessageOfInterest: could not unmarshall message")
 var errInvalidMessageOfInterest = errors.New("unmarshalMessageOfInterest: message missing the tags key")
 var errInvalidMessageOfInterestLength = errors.New("unmarshalMessageOfInterest: message length is too long")
+var errInvalidMessageOfInterestInvalidTag = errors.New("unmarshalMessageOfInterest: invalid tag")
 
 const maxMessageOfInterestTags = 1024
 const topicsEncodingSeparator = ","
@@ -46,6 +47,12 @@ func unmarshallMessageOfInterest(data []byte) (map[protocol.Tag]bool, error) {
 	// convert the tags into a tags map.
 	msgTagsMap := make(map[protocol.Tag]bool, len(tags))
 	for _, tag := range strings.Split(string(tags), topicsEncodingSeparator) {
+		if len(tag) != protocol.TagLength {
+			return nil, errInvalidMessageOfInterestInvalidTag
+		}
+		if _, ok := protocol.TagMap[protocol.Tag(tag)]; !ok {
+			return nil, errInvalidMessageOfInterestInvalidTag
+		}
 		msgTagsMap[protocol.Tag(tag)] = true
 	}
 	return msgTagsMap, nil
@@ -79,4 +86,14 @@ func MarshallMessageOfInterestMap(tagmap map[protocol.Tag]bool) []byte {
 	}
 	topics := Topics{Topic{key: "tags", data: []byte(tags)}}
 	return topics.MarshallTopics()
+}
+
+// MessageOfInterestMaxSize returns the maximum size of a MI message sent over the network
+// by encoding all of the tags currenttly in use.
+func MessageOfInterestMaxSize() int {
+	allTags := make(map[protocol.Tag]bool, len(protocol.TagList))
+	for _, tag := range protocol.TagList {
+		allTags[tag] = true
+	}
+	return len(MarshallMessageOfInterest(protocol.TagList))
 }

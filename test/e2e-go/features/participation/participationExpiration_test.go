@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -64,7 +64,7 @@ func testExpirationAccounts(t *testing.T, fixture *fixtures.RestClientFixture, f
 
 	a.GreaterOrEqual(newAmt, initialAmt)
 
-	newAccountStatus, err := pClient.AccountInformation(sAccount)
+	newAccountStatus, err := pClient.AccountInformation(sAccount, false)
 	a.NoError(err)
 	a.Equal(basics.Offline.String(), newAccountStatus.Status)
 
@@ -111,10 +111,10 @@ func testExpirationAccounts(t *testing.T, fixture *fixtures.RestClientFixture, f
 	a.NoError(err)
 	seededRound := sNodeStatus.LastRound
 
-	txnConfirmed := fixture.WaitForTxnConfirmation(seededRound+maxRoundsToWaitForTxnConfirm, sAccount, onlineTxID)
+	txnConfirmed := fixture.WaitForTxnConfirmation(seededRound+maxRoundsToWaitForTxnConfirm, onlineTxID)
 	a.True(txnConfirmed)
 
-	newAccountStatus, err = pClient.AccountInformation(sAccount)
+	newAccountStatus, err = pClient.AccountInformation(sAccount, false)
 	a.NoError(err)
 	a.Equal(basics.Online.String(), newAccountStatus.Status)
 
@@ -135,7 +135,7 @@ func testExpirationAccounts(t *testing.T, fixture *fixtures.RestClientFixture, f
 
 	// We want to wait until we get to one round past the last valid round
 	err = fixture.WaitForRoundWithTimeout(uint64(lastValidRound) + 1)
-	newAccountStatus, err = pClient.AccountInformation(sAccount)
+	newAccountStatus, err = pClient.AccountInformation(sAccount, false)
 	a.NoError(err)
 
 	// The account should be online still...
@@ -150,16 +150,16 @@ func testExpirationAccounts(t *testing.T, fixture *fixtures.RestClientFixture, f
 	_, err = sClient.WaitForRound(uint64(lastValidRound + 1))
 	a.NoError(err)
 
-	blk, err := sClient.Block(latestRound)
+	blk, err := sClient.BookkeepingBlock(latestRound)
 	a.NoError(err)
-	a.Equal(blk.CurrentProtocol, protocolCheck)
+	a.Equal(string(blk.CurrentProtocol), protocolCheck)
 
 	sendMoneyTxn := fixture.SendMoneyAndWait(latestRound, amountToSendInitial, transactionFee, richAccount, sAccount, "")
 
-	txnConfirmed = fixture.WaitForTxnConfirmation(latestRound+maxRoundsToWaitForTxnConfirm, sAccount, sendMoneyTxn.TxID)
+	txnConfirmed = fixture.WaitForTxnConfirmation(latestRound+maxRoundsToWaitForTxnConfirm, sendMoneyTxn.Txn.ID().String())
 	a.True(txnConfirmed)
 
-	newAccountStatus, err = pClient.AccountInformation(sAccount)
+	newAccountStatus, err = pClient.AccountInformation(sAccount, false)
 	a.NoError(err)
 
 	// The account should be equal to the target status now

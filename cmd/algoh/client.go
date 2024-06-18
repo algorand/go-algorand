@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,14 +19,13 @@ package main
 import (
 	"context"
 
-	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
-	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 )
 
 // Client is a minimal interface for the RestClient
 type Client interface {
-	Status() (generatedV2.NodeStatusResponse, error)
-	Block(round uint64) (v1.Block, error)
+	Status() (model.NodeStatusResponse, error)
+	RawBlock(round uint64) ([]byte, error)
 	GetGoRoutines(ctx context.Context) (string, error)
 	HealthCheck() error
 }

@@ -91,4 +91,5 @@ txinfo, err = goal.send(tx)
 assert "round 0 is not available" in str(err), err
 assert "outside [1-" in str(err), err  # confirms that we can look back to 1
 
+stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 print(f"{os.path.basename(sys.argv[0])} OK {stamp}")

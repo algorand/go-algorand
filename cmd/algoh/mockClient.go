@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,26 +20,29 @@ import (
 	"context"
 	"fmt"
 
-	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
-	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
+	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/rpcs"
 )
 
 //////////////////////////////////////
 // Helpers to initialize mockClient //
 //////////////////////////////////////
 
-func makeNodeStatuses(blocks ...uint64) (ret []generatedV2.NodeStatusResponse) {
-	ret = make([]generatedV2.NodeStatusResponse, 0, len(blocks))
+func makeNodeStatuses(blocks ...uint64) (ret []model.NodeStatusResponse) {
+	ret = make([]model.NodeStatusResponse, 0, len(blocks))
 	for _, block := range blocks {
-		ret = append(ret, generatedV2.NodeStatusResponse{LastRound: block})
+		ret = append(ret, model.NodeStatusResponse{LastRound: block})
 	}
 	return ret
 }
 
-func makeBlocks(blocks ...uint64) (ret map[uint64]v1.Block) {
-	ret = map[uint64]v1.Block{}
+func makeBlocks(blocks ...uint64) (ret map[uint64]rpcs.EncodedBlockCert) {
+	ret = map[uint64]rpcs.EncodedBlockCert{}
 	for _, block := range blocks {
-		ret[block] = v1.Block{Round: block}
+		ret[block] = rpcs.EncodedBlockCert{Block: bookkeeping.Block{BlockHeader: bookkeeping.BlockHeader{Round: basics.Round(block)}}}
 	}
 	return ret
 }
@@ -52,12 +55,12 @@ type mockClient struct {
 	GetGoRoutinesCalls int
 	HealthCheckCalls   int
 	error              []error
-	status             []generatedV2.NodeStatusResponse
+	status             []model.NodeStatusResponse
 	routine            []string
-	block              map[uint64]v1.Block
+	block              map[uint64]rpcs.EncodedBlockCert
 }
 
-func makeMockClient(error []error, status []generatedV2.NodeStatusResponse, block map[uint64]v1.Block, routine []string) mockClient {
+func makeMockClient(error []error, status []model.NodeStatusResponse, block map[uint64]rpcs.EncodedBlockCert, routine []string) mockClient {
 	return mockClient{
 		BlockCalls: make(map[uint64]int),
 		error:      error,
@@ -79,7 +82,7 @@ func (c *mockClient) nextError() (e error) {
 	return
 }
 
-func (c *mockClient) Status() (s generatedV2.NodeStatusResponse, e error) {
+func (c *mockClient) Status() (s model.NodeStatusResponse, e error) {
 	c.StatusCalls++
 	s = c.status[0]
 	// Repeat last status...
@@ -90,15 +93,16 @@ func (c *mockClient) Status() (s generatedV2.NodeStatusResponse, e error) {
 	return
 }
 
-func (c *mockClient) Block(block uint64) (b v1.Block, e error) {
+func (c *mockClient) RawBlock(block uint64) (b []byte, e error) {
 	c.BlockCalls[block]++
 	e = c.nextError()
-	b, ok := c.block[block]
+	bl, ok := c.block[block]
 	if !ok {
 		if e == nil {
 			e = fmt.Errorf("test is missing block %d", block)
 		}
 	}
+	b = protocol.EncodeReflect(bl)
 	return
 }
 

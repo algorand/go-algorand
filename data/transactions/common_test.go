@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,7 +17,6 @@
 package transactions
 
 import (
-	"errors"
 	"math/rand"
 
 	"github.com/algorand/go-algorand/config"
@@ -25,64 +24,6 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
 )
-
-var poolAddr = basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
-
-// BalanceMap is a simple implementation of the balances interface.
-type BalanceMap map[basics.Address]basics.BalanceRecord
-
-func (b BalanceMap) Move(src, dst basics.Address, amount basics.MicroAlgos) error {
-	var overflowed bool
-	var tmp basics.MicroAlgos
-	srcBal, ok := b[src]
-	if !ok {
-		return errors.New("Move() called with src not in tx.RelevantAddrs")
-	}
-	tmp, overflowed = basics.OSubA(srcBal.MicroAlgos, amount)
-	if overflowed {
-		return errors.New("Move(): sender overspent")
-	}
-	srcBal.MicroAlgos = tmp
-	b[src] = srcBal
-
-	dstBal, ok := b[dst]
-	if !ok {
-		return errors.New("Move() called with dst not in tx.RelevantAddrs")
-	}
-	tmp, overflowed = basics.OAddA(dstBal.MicroAlgos, amount)
-	if overflowed {
-		return errors.New("Move(): recipient balance overflowed")
-	}
-	dstBal.MicroAlgos = tmp
-	b[dst] = dstBal
-
-	return nil
-}
-
-func (b BalanceMap) Get(addr basics.Address) (basics.BalanceRecord, error) {
-	record, ok := b[addr]
-	if !ok {
-		return basics.BalanceRecord{}, errors.New("Get() called on an address not in tx.RelevantAddrs")
-	}
-	return record, nil
-}
-
-func (b BalanceMap) Put(record basics.BalanceRecord) error {
-	if _, ok := b[record.Addr]; !ok {
-		return errors.New("Put() called on an account whose address was not in tx.RelevantAddrs")
-	}
-	b[record.Addr] = record
-	return nil
-}
-
-// set up a BalanceMap for a transaction containing only the transactions RelevantAddrs.
-func makeTestBalancesForTransaction(tx Transaction) BalanceMap {
-	bals := make(BalanceMap)
-	for _, addr := range tx.RelevantAddrs(SpecialAddresses{RewardsPool: poolAddr}) {
-		bals[addr] = basics.BalanceRecord{Addr: addr}
-	}
-	return bals
-}
 
 func generateTestObjects(numTxs, numAccs int) ([]Transaction, []SignedTxn, []*crypto.SignatureSecrets, []basics.Address) {
 	txs := make([]Transaction, numTxs)

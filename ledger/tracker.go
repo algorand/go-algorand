@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,19 +18,21 @@ package ledger
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"reflect"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/ledger/internal"
+	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/ledger/eval"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
@@ -107,7 +109,7 @@ type ledgerTracker interface {
 	// commitRound is called for each of the trackers after a deferredCommitContext was agreed upon
 	// by all the prepareCommit calls. The commitRound is being executed within a single transactional
 	// context, and so, if any of the tracker's commitRound calls fails, the transaction is rolled back.
-	commitRound(context.Context, *sql.Tx, *deferredCommitContext) error
+	commitRound(context.Context, trackerdb.TransactionScope, *deferredCommitContext) error
 	// postCommit is called only on a successful commitRound. In that case, each of the trackers have
 	// the chance to update it's internal data structures, knowing that the given deferredCommitContext
 	// has completed. An optional context is provided for long-running operations.
@@ -118,10 +120,16 @@ type ledgerTracker interface {
 	// An optional context is provided for long-running operations.
 	postCommitUnlocked(context.Context, *deferredCommitContext)
 
-	// handleUnorderedCommit is a special method for handling deferred commits that are out of order.
-	// Tracker might update own state in this case. For example, account updates tracker cancels
-	// scheduled catchpoint writing that deferred commit.
+	// handleUnorderedCommit is a control method for handling deferred commits that are out of order
+	// Tracker might update its own state in this case. For example, account updates tracker cancels
+	// scheduled catchpoint writing flag for this batch.
 	handleUnorderedCommit(*deferredCommitContext)
+	// handlePrepareCommitError is a control method for handling self-cleanup or update if any trackers report
+	// error during the prepare commit phase of commitRound
+	handlePrepareCommitError(*deferredCommitContext)
+	// handleCommitError is a control method for handling self-cleanup or update if any trackers report
+	// error during the commit phase of commitRound
+	handleCommitError(*deferredCommitContext)
 
 	// close terminates the tracker, reclaiming any resources
 	// like open database connections or goroutines.  close may
@@ -133,10 +141,10 @@ type ledgerTracker interface {
 // ledgerForTracker defines the part of the ledger that a tracker can
 // access.  This is particularly useful for testing trackers in isolation.
 type ledgerForTracker interface {
-	trackerDB() db.Pair
+	trackerDB() trackerdb.Store
 	blockDB() db.Pair
 	trackerLog() logging.Logger
-	trackerEvalVerified(bookkeeping.Block, internal.LedgerForEvaluator) (ledgercore.StateDelta, error)
+	trackerEvalVerified(bookkeeping.Block, eval.LedgerForEvaluator) (ledgercore.StateDelta, error)
 
 	Latest() basics.Round
 	Block(basics.Round) (bookkeeping.Block, error)
@@ -168,12 +176,14 @@ type trackerRegistry struct {
 
 	// accountsWriting provides synchronization around the background writing of account balances.
 	accountsWriting sync.WaitGroup
+	// accountsCommitting is set when trackers registry writing accounts into DB.
+	accountsCommitting atomic.Bool
 
 	// dbRound is always exactly accountsRound(),
 	// cached to avoid SQL queries.
 	dbRound basics.Round
 
-	dbs db.Pair
+	dbs trackerdb.Store
 	log logging.Logger
 
 	// the synchronous mode that would be used for the account database.
@@ -189,7 +199,15 @@ type trackerRegistry struct {
 	lastFlushTime time.Time
 
 	cfg config.Local
+
+	// maxAccountDeltas is a maximum number of in-memory deltas stored by trackers.
+	// When exceeded trackerRegistry will attempt to flush, and its Available() method will return false.
+	// Too many in-memory deltas could cause the node to run out of memory.
+	maxAccountDeltas uint64
 }
+
+// defaultMaxAccountDeltas is a default value for maxAccountDeltas.
+const defaultMaxAccountDeltas = 256
 
 // deferredCommitRange is used during the calls to produceCommittingTask, and used as a data structure
 // to syncronize the various trackers and create a uniformity around which rounds need to be persisted
@@ -214,12 +232,6 @@ type deferredCommitRange struct {
 	// a catchpoint data file, in this commit cycle iteration.
 	catchpointFirstStage bool
 
-	// catchpointDataWriting is a pointer to a variable with the same name in the
-	// catchpointTracker. It's used in order to reset the catchpointDataWriting flag from
-	// the acctupdates's prepareCommit/commitRound (which is called before the
-	// corresponding catchpoint tracker method.
-	catchpointDataWriting *int32
-
 	// enableGeneratingCatchpointFiles controls whether the node produces catchpoint files or not.
 	enableGeneratingCatchpointFiles bool
 
@@ -227,12 +239,11 @@ type deferredCommitRange struct {
 	catchpointSecondStage bool
 }
 
-// deferredCommitContext is used in order to syncornize the persistence of a given deferredCommitRange.
+// deferredCommitContext is used in order to synchronize the persistence of a given deferredCommitRange.
 // prepareCommit, commitRound and postCommit are all using it to exchange data.
 type deferredCommitContext struct {
 	deferredCommitRange
 
-	newBase   basics.Round
 	flushTime time.Time
 
 	genesisProto config.ConsensusParams
@@ -243,18 +254,23 @@ type deferredCommitContext struct {
 
 	compactAccountDeltas   compactAccountDeltas
 	compactResourcesDeltas compactResourcesDeltas
+	compactKvDeltas        map[string]modifiedKvValue
 	compactCreatableDeltas map[basics.CreatableIndex]ledgercore.ModifiedCreatable
 
-	updatedPersistedAccounts  []persistedAccountData
-	updatedPersistedResources map[basics.Address][]persistedResourcesData
+	updatedPersistedAccounts  []trackerdb.PersistedAccountData
+	updatedPersistedResources map[basics.Address][]trackerdb.PersistedResourcesData
+	updatedPersistedKVs       map[string]trackerdb.PersistedKVData
 
 	compactOnlineAccountDeltas     compactOnlineAccountDeltas
-	updatedPersistedOnlineAccounts []persistedOnlineAccountData
+	updatedPersistedOnlineAccounts []trackerdb.PersistedOnlineAccountData
 
 	updatingBalancesDuration time.Duration
 
 	// Block hashes for the committed rounds range.
 	committedRoundDigests []crypto.Digest
+
+	// Consensus versions for the committed rounds range.
+	committedProtocolVersion []protocol.ConsensusVersion
 
 	// on catchpoint rounds, the transaction tail would fill up this field with the hash of the recent 1001 rounds
 	// of the txtail data. The catchpointTracker would be able to use that for calculating the catchpoint label.
@@ -268,21 +284,33 @@ type deferredCommitContext struct {
 
 	stats       telemetryspec.AccountsUpdateMetrics
 	updateStats bool
+
+	spVerification struct {
+		// state proof verification deletion information
+		lastDeleteIndex           int
+		earliestLastAttestedRound basics.Round
+
+		// state proof verification commit information
+		commitContext []verificationCommitContext
+	}
 }
 
-var errMissingAccountUpdateTracker = errors.New("initializeTrackerCaches : called without a valid accounts update tracker")
+func (dcc deferredCommitContext) newBase() basics.Round {
+	return dcc.oldBase + basics.Round(dcc.offset)
+}
+
+var errMissingAccountUpdateTracker = errors.New("trackers replay : called without a valid accounts update tracker")
 
 func (tr *trackerRegistry) initialize(l ledgerForTracker, trackers []ledgerTracker, cfg config.Local) (err error) {
+	tr.mu.Lock()
+	defer tr.mu.Unlock()
 	tr.dbs = l.trackerDB()
 	tr.log = l.trackerLog()
 
-	err = tr.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		tr.dbRound, err = accountsRound(tx)
-		return err
-	})
-
-	if err != nil {
-		return err
+	tr.maxAccountDeltas = defaultMaxAccountDeltas
+	if cfg.MaxAcctLookback > tr.maxAccountDeltas {
+		tr.maxAccountDeltas = cfg.MaxAcctLookback + 1
+		tr.log.Infof("maxAccountDeltas was overridden to %d because of MaxAcctLookback=%d: this combination might use lots of RAM. To preserve some blocks in blockdb consider using MaxBlockHistoryLookback config option instead of MaxAcctLookback", tr.maxAccountDeltas, cfg.MaxAcctLookback)
 	}
 
 	tr.ctx, tr.ctxCancel = context.WithCancel(context.Background())
@@ -311,24 +339,38 @@ func (tr *trackerRegistry) initialize(l ledgerForTracker, trackers []ledgerTrack
 }
 
 func (tr *trackerRegistry) loadFromDisk(l ledgerForTracker) error {
+	var dbRound basics.Round
+	err := tr.dbs.Snapshot(func(ctx context.Context, tx trackerdb.SnapshotScope) (err error) {
+		ar, err0 := tx.MakeAccountsReader()
+		if err0 != nil {
+			return err0
+		}
+
+		dbRound, err0 = ar.AccountsRound()
+		return err0
+	})
+	if err != nil {
+		return err
+	}
+
 	tr.mu.RLock()
-	dbRound := tr.dbRound
+	tr.dbRound = dbRound
 	tr.mu.RUnlock()
 
 	for _, lt := range tr.trackers {
-		err := lt.loadFromDisk(l, dbRound)
-		if err != nil {
+		err0 := lt.loadFromDisk(l, dbRound)
+		if err0 != nil {
 			// find the tracker name.
 			trackerName := reflect.TypeOf(lt).String()
-			return fmt.Errorf("tracker %s failed to loadFromDisk : %w", trackerName, err)
+			return fmt.Errorf("tracker %s failed to loadFromDisk : %w", trackerName, err0)
 		}
 	}
 
-	err := tr.replay(l)
-	if err != nil {
-		err = fmt.Errorf("initializeTrackerCaches failed : %w", err)
+	if err0 := tr.replay(l); err0 != nil {
+		return fmt.Errorf("trackers replay failed : %w", err0)
 	}
-	return err
+
+	return nil
 }
 
 func (tr *trackerRegistry) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
@@ -392,20 +434,60 @@ func (tr *trackerRegistry) scheduleCommit(blockqRound, maxLookback basics.Round)
 	// ( unless we're creating a catchpoint, in which case we want to flush it right away
 	//   so that all the instances of the catchpoint would contain exactly the same data )
 	flushTime := time.Now()
-	if dcc != nil && !flushTime.After(tr.lastFlushTime.Add(balancesFlushInterval)) && !dcc.catchpointFirstStage && !dcc.catchpointSecondStage && dcc.pendingDeltas < pendingDeltasFlushThreshold {
-		dcc = nil
+
+	// Some tracker want to flush
+	if dcc != nil {
+		// skip this flush if none of these conditions met:
+		// - has it been at least balancesFlushInterval since the last flush?
+		flushIntervalPassed := flushTime.After(tr.lastFlushTime.Add(balancesFlushInterval))
+		// - does this commit task also include catchpoint file creation activity for the dcc.oldBase+dcc.offset?
+		flushForCatchpoint := dcc.catchpointFirstStage || dcc.catchpointSecondStage
+		// - have more than pendingDeltasFlushThreshold accounts been modified since the last flush?
+		flushAccounts := dcc.pendingDeltas >= pendingDeltasFlushThreshold
+		if !(flushIntervalPassed || flushForCatchpoint || flushAccounts) {
+			dcc = nil
+		}
 	}
 	tr.mu.RUnlock()
 
 	if dcc != nil {
+		// Increment the waitgroup first, otherwise this goroutine can be interrupted
+		// and commitSyncer attempts calling Done() on empty wait group.
 		tr.accountsWriting.Add(1)
-		tr.deferredCommits <- dcc
+		select {
+		case tr.deferredCommits <- dcc:
+		default:
+			// Do NOT block if deferredCommits cannot accept this task, skip it.
+			// Note: the next attempt will include these rounds plus some extra rounds.
+			// The main reason for slow commits is catchpoint file creation (when commitSyncer calls
+			// commitRound, which calls postCommitUnlocked). This producer thread is called by
+			// blockQueue.syncer() upon successful block DB flush, which calls ledger.notifyCommit()
+			// and trackerRegistry.committedUpTo() after taking the trackerMu.Lock().
+			// This means a blocking write to deferredCommits will block Ledger reads (TODO use more fine-grained locks).
+			// Dropping this dcc allows the blockqueue syncer to continue persisting other blocks
+			// and ledger reads to proceed without being blocked by trackerMu lock.
+			tr.accountsWriting.Done()
+		}
 	}
 }
 
 // waitAccountsWriting waits for all the pending ( or current ) account writing to be completed.
 func (tr *trackerRegistry) waitAccountsWriting() {
 	tr.accountsWriting.Wait()
+}
+
+func (tr *trackerRegistry) isBehindCommittingDeltas(latest basics.Round) bool {
+	tr.mu.RLock()
+	dbRound := tr.dbRound
+	tr.mu.RUnlock()
+
+	numDeltas := uint64(latest.SubSaturate(dbRound))
+	if numDeltas < tr.maxAccountDeltas {
+		return false
+	}
+
+	// there is a large number of deltas check if commitSyncer is not writing accounts
+	return tr.accountsCommitting.Load()
 }
 
 func (tr *trackerRegistry) close() {
@@ -439,7 +521,7 @@ func (tr *trackerRegistry) commitSyncer(deferredCommits chan *deferredCommitCont
 			}
 			err := tr.commitRound(commit)
 			if err != nil {
-				tr.log.Warnf("Could not commit round: %w", err)
+				tr.log.Warnf("Could not commit round: %v", err)
 			}
 		case <-tr.ctx.Done():
 			// drain the pending commits queue:
@@ -464,6 +546,8 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) error {
 
 	offset := dcc.offset
 	dbRound := dcc.oldBase
+
+	tr.log.Debugf("commitRound called for (%d-%d)", dbRound, dbRound+basics.Round(offset))
 
 	// we can exit right away, as this is the result of mis-ordered call to committedUpTo.
 	if tr.dbRound < dbRound || offset < uint64(tr.dbRound-dbRound) {
@@ -491,22 +575,40 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) error {
 
 	dcc.offset = offset
 	dcc.oldBase = dbRound
-	dcc.newBase = newBase
 	dcc.flushTime = time.Now()
+	tr.log.Debugf("commitRound advancing tracker db snapshot (%d-%d)", dbRound, dbRound+basics.Round(offset))
 
+	var err error
 	for _, lt := range tr.trackers {
-		err := lt.prepareCommit(dcc)
+		err = lt.prepareCommit(dcc)
 		if err != nil {
 			tr.log.Errorf(err.Error())
-			tr.mu.RUnlock()
-			return err
+			break
 		}
 	}
+	if err != nil {
+		for _, lt := range tr.trackers {
+			lt.handlePrepareCommitError(dcc)
+		}
+		tr.mu.RUnlock()
+		return err
+	}
+
 	tr.mu.RUnlock()
 
 	start := time.Now()
 	ledgerCommitroundCount.Inc(nil)
-	err := tr.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+	err = tr.dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
+		tr.accountsCommitting.Store(true)
+		defer func() {
+			tr.accountsCommitting.Store(false)
+		}()
+
+		aw, err := tx.MakeAccountsWriter()
+		if err != nil {
+			return err
+		}
+
 		for _, lt := range tr.trackers {
 			err0 := lt.commitRound(ctx, tx, dcc)
 			if err0 != nil {
@@ -514,12 +616,23 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) error {
 			}
 		}
 
-		return updateAccountsRound(tx, dbRound+basics.Round(offset))
+		return aw.UpdateAccountsRound(dbRound + basics.Round(offset))
 	})
 	ledgerCommitroundMicros.AddMicrosecondsSince(start, nil)
 
 	if err != nil {
+
+		for _, lt := range tr.trackers {
+			lt.handleCommitError(dcc)
+		}
 		tr.log.Warnf("unable to advance tracker db snapshot (%d-%d): %v", dbRound, dbRound+basics.Round(offset), err)
+
+		// if the error is an IO error, shut down the node.
+		var trackerIOErr *trackerdb.ErrIoErr
+		if errors.As(err, &trackerIOErr) {
+			tr.log.Fatalf("Fatal IO error during CommitRound, exiting: %v", err)
+		}
+
 		return err
 	}
 
@@ -626,7 +739,7 @@ func (tr *trackerRegistry) replay(l ledgerForTracker) (err error) {
 	defer func() {
 		if rollbackSynchronousMode {
 			// restore default synchronous mode
-			err0 := tr.dbs.Wdb.SetSynchronousMode(context.Background(), tr.synchronousMode, tr.synchronousMode >= db.SynchronousModeFull)
+			err0 := tr.dbs.SetSynchronousMode(context.Background(), tr.synchronousMode, tr.synchronousMode >= db.SynchronousModeFull)
 			// override the returned error only in case there is no error - since this
 			// operation has a lower criticality.
 			if err == nil {
@@ -657,7 +770,7 @@ func (tr *trackerRegistry) replay(l ledgerForTracker) (err error) {
 
 			if !rollbackSynchronousMode {
 				// switch to rebuild synchronous mode to improve performance
-				err0 := tr.dbs.Wdb.SetSynchronousMode(context.Background(), tr.accountsRebuildSynchronousMode, tr.accountsRebuildSynchronousMode >= db.SynchronousModeFull)
+				err0 := tr.dbs.SetSynchronousMode(context.Background(), tr.accountsRebuildSynchronousMode, tr.accountsRebuildSynchronousMode >= db.SynchronousModeFull)
 				if err0 != nil {
 					tr.log.Warnf("trackerRegistry.replay was unable to switch to rbuild synchronous mode : %v", err0)
 				} else {
@@ -678,8 +791,8 @@ func (tr *trackerRegistry) replay(l ledgerForTracker) (err error) {
 			roundsBehind = blk.Round() - tr.dbRound
 			tr.mu.RUnlock()
 
-			// are we too far behind ? ( taking into consideration the catchpoint writing, which can stall the writing for quite a bit )
-			if roundsBehind > initializeCachesRoundFlushInterval+basics.Round(catchpointInterval) {
+			// are we farther behind than we need to be? Consider: catchpoint interval, flush interval and max acct lookback.
+			if roundsBehind > basics.Round(maxAcctLookback) && roundsBehind > initializeCachesRoundFlushInterval+basics.Round(catchpointInterval) {
 				// we're unable to persist changes. This is unexpected, but there is no point in keep trying batching additional changes since any further changes
 				// would just accumulate in memory.
 				close(blockEvalFailed)
@@ -713,4 +826,114 @@ func (tr *trackerRegistry) replay(l ledgerForTracker) (err error) {
 		err = blockRetrievalError
 	}
 	return
+}
+
+// getDbRound accesses dbRound with protection by the trackerRegistry's mutex.
+func (tr *trackerRegistry) getDbRound() basics.Round {
+	tr.mu.RLock()
+	dbRound := tr.dbRound
+	tr.mu.RUnlock()
+	return dbRound
+}
+
+// accountUpdatesLedgerEvaluator is a "ledger emulator" which is used *only* by initializeCaches, as a way to shortcut
+// the locks taken by the real ledger object when making requests that are being served by the accountUpdates.
+// Using this struct allow us to take the tracker lock *before* calling the loadFromDisk, and having the operation complete
+// without taking any locks. Note that it's not only the locks performance that is gained : by having the loadFrom disk
+// not requiring any external locks, we can safely take a trackers lock on the ledger during reloadLedger, which ensures
+// that even during catchpoint catchup mode switch, we're still correctly protected by a mutex.
+type accountUpdatesLedgerEvaluator struct {
+	// au is the associated accountUpdates structure which invoking the trackerEvalVerified function, passing this structure as input.
+	// the accountUpdatesLedgerEvaluator would access the underlying accountUpdates function directly, bypassing the balances mutex lock.
+	au *accountUpdates
+	// ao is onlineAccounts for voters access
+	ao *onlineAccounts
+	// txtail allows BlockHdr to serve blockHdr without going to disk
+	tail *txTail
+	// prevHeader is the previous header to the current one. The usage of this is only in the context of initializeCaches where we iteratively
+	// building the ledgercore.StateDelta, which requires a peek on the "previous" header information.
+	prevHeader bookkeeping.BlockHeader
+}
+
+func (aul *accountUpdatesLedgerEvaluator) FlushCaches() {}
+
+// GenesisHash returns the genesis hash
+func (aul *accountUpdatesLedgerEvaluator) GenesisHash() crypto.Digest {
+	return aul.au.ledger.GenesisHash()
+}
+
+// GenesisProto returns the genesis consensus params
+func (aul *accountUpdatesLedgerEvaluator) GenesisProto() config.ConsensusParams {
+	return aul.au.ledger.GenesisProto()
+}
+
+// VotersForStateProof returns the top online accounts at round rnd.
+func (aul *accountUpdatesLedgerEvaluator) VotersForStateProof(rnd basics.Round) (voters *ledgercore.VotersForRound, err error) {
+	return aul.ao.voters.VotersForStateProof(rnd)
+}
+
+func (aul *accountUpdatesLedgerEvaluator) GetStateProofVerificationContext(_ basics.Round) (*ledgercore.StateProofVerificationContext, error) {
+	// Since state proof transaction is not being verified (we only apply the change) during replay, we don't need to implement this function at the moment.
+	return nil, fmt.Errorf("accountUpdatesLedgerEvaluator: GetStateProofVerificationContext, needed for state proof verification, is not implemented in accountUpdatesLedgerEvaluator")
+}
+
+// BlockHdr returns the header of the given round. When the evaluator is running, it's only referring to the previous header, which is what we
+// are providing here. Any attempt to access a different header would get denied.
+func (aul *accountUpdatesLedgerEvaluator) BlockHdr(r basics.Round) (bookkeeping.BlockHeader, error) {
+	if r == aul.prevHeader.Round {
+		return aul.prevHeader, nil
+	}
+	hdr, ok := aul.tail.blockHeader(r)
+	if ok {
+		return hdr, nil
+	}
+	return bookkeeping.BlockHeader{}, ledgercore.ErrNoEntry{}
+}
+
+// LatestTotals returns the totals of all accounts for the most recent round, as well as the round number
+func (aul *accountUpdatesLedgerEvaluator) LatestTotals() (basics.Round, ledgercore.AccountTotals, error) {
+	return aul.au.latestTotalsImpl()
+}
+
+// CheckDup test to see if the given transaction id/lease already exists. It's not needed by the accountUpdatesLedgerEvaluator and implemented as a stub.
+func (aul *accountUpdatesLedgerEvaluator) CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, ledgercore.Txlease) error {
+	// this is a non-issue since this call will never be made on non-validating evaluation
+	return fmt.Errorf("accountUpdatesLedgerEvaluator: tried to check for dup during accountUpdates initialization ")
+}
+
+// LookupWithoutRewards returns the account balance for a given address at a given round, without the reward
+func (aul *accountUpdatesLedgerEvaluator) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (ledgercore.AccountData, basics.Round, error) {
+	data, validThrough, _, _, err := aul.au.lookupWithoutRewards(rnd, addr, false /*don't sync*/)
+	if err != nil {
+		return ledgercore.AccountData{}, 0, err
+	}
+
+	return data, validThrough, err
+}
+
+func (aul *accountUpdatesLedgerEvaluator) LookupAgreement(rnd basics.Round, addr basics.Address) (basics.OnlineAccountData, error) {
+	return aul.ao.LookupOnlineAccountData(rnd, addr)
+}
+
+func (aul *accountUpdatesLedgerEvaluator) OnlineCirculation(rnd basics.Round, voteRnd basics.Round) (basics.MicroAlgos, error) {
+	return aul.ao.onlineCirculation(rnd, voteRnd)
+}
+
+func (aul *accountUpdatesLedgerEvaluator) LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error) {
+	r, _, err := aul.au.lookupResource(rnd, addr, basics.CreatableIndex(aidx), basics.AppCreatable, false /* don't sync */)
+	return ledgercore.AppResource{AppParams: r.AppParams, AppLocalState: r.AppLocalState}, err
+}
+
+func (aul *accountUpdatesLedgerEvaluator) LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error) {
+	r, _, err := aul.au.lookupResource(rnd, addr, basics.CreatableIndex(aidx), basics.AssetCreatable, false /* don't sync */)
+	return ledgercore.AssetResource{AssetParams: r.AssetParams, AssetHolding: r.AssetHolding}, err
+}
+
+func (aul *accountUpdatesLedgerEvaluator) LookupKv(rnd basics.Round, key string) ([]byte, error) {
+	return aul.au.lookupKv(rnd, key, false /* don't sync */)
+}
+
+// GetCreatorForRound returns the asset/app creator for a given asset/app index at a given round
+func (aul *accountUpdatesLedgerEvaluator) GetCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (creator basics.Address, ok bool, err error) {
+	return aul.au.getCreatorForRound(rnd, cidx, ctype, false /* don't sync */)
 }

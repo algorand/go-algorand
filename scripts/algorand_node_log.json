@@ -1,0 +1,58 @@
+{
+    "algorand_node_log" : {
+        "title" : "Algorand Node Log Format",
+        "description" : "Log format for logrus, used by go-algorand.",
+        "url" : "https://github.com/sirupsen/logrus",
+        "level-field" : "level",
+		"timestamp-field" : "time",
+		"json": true,
+		"body-field": "msg",
+		"line-format" : [
+			{ "field" : "time", "timestamp-format": "%b %d %H:%M:%S" },
+			" ",
+			{ "field" : "level", "text-transform": "uppercase", "min-width": 4, "max-width": 4, "overflow": "truncate"},
+			" ",
+			"[", { "field": "file" }, ":", {"field": "line"}, "]",
+			" ",
+			{ "field": "Context" },
+			" ",
+			{ "field" : "msg" },
+			" [", { "field": "function" }, "]"
+		],
+		"hide-extra": true,
+		"level" : {
+			"info"	: "info",
+			"error" : "error",
+			"warning" : "warning",
+			"debug" : "debug"
+		},
+		"value": {
+			"file": {
+				"kind": "string",
+				"identifier": true
+			},
+			"line": {
+				"kind": "integer",
+				"foreign-key": true
+			},
+			"function": {
+				"kind": "string",
+				"identifier": true
+			},
+			"Context": {
+				"kind": "string",
+				"identifier": true
+			}
+		},
+		"sample": [
+			{
+				"line": "{\"file\":\"trackerdbV2.go\",\"function\":\"github.com/algorand/go-algorand/ledger/store.(*trackerDBSchemaInitializer).upgradeDatabaseSchema0\",\"level\":\"info\",\"line\":203,\"msg\":\"upgradeDatabaseSchema0 initializing schema\",\"name\":\"\",\"time\":\"2022-12-29T16:26:58.478738+02:00\"}",
+				"level": "info"
+			},
+			{
+				"line": "{\"Context\":\"sync\",\"details\":{\"StartRound\":0},\"file\":\"telemetry.go\",\"function\":\"github.com/algorand/go-algorand/logging.(*telemetryState).logTelemetry\",\"instanceName\":\"iFepr+AcMdoqEg+2\",\"level\":\"info\",\"line\":261,\"msg\":\"/ApplicationState/CatchupStart\",\"name\":\"\",\"session\":\"\",\"time\":\"2022-12-29T16:26:58.763458+02:00\",\"v\":\"3.14.167910\"}",
+				"level": "info"
+			}
+		]
+	}
+}

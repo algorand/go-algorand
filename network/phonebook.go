@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -22,22 +22,25 @@ import (
 	"time"
 
 	"github.com/algorand/go-deadlock"
+	"golang.org/x/exp/slices"
 )
 
-// when using GetAddresses with getAllAddresses, all the addresses will be retrieved, regardless
+// getAllAddresses when using GetAddresses with getAllAddresses, all the addresses will be retrieved, regardless
 // of how many addresses the phonebook actually has. ( with the retry-after logic applied )
 const getAllAddresses = math.MaxInt32
 
 // PhoneBookEntryRoles defines the roles that a single entry on the phonebook can take.
-// currently, we have two roles : relay role and archiver role, which are mutually exclusive.
+// currently, we have two roles : relay role and archival role, which are mutually exclusive.
+//
+//msgp:ignore PhoneBookEntryRoles
 type PhoneBookEntryRoles int
 
 // PhoneBookEntryRelayRole used for all the relays that are provided either via the algobootstrap SRV record
 // or via a configuration file.
 const PhoneBookEntryRelayRole = 1
 
-// PhoneBookEntryArchiverRole used for all the archivers that are provided via the archive SRV record.
-const PhoneBookEntryArchiverRole = 2
+// PhoneBookEntryArchivalRole used for all the archival nodes that are provided via the archive SRV record.
+const PhoneBookEntryArchivalRole = 2
 
 // Phonebook stores or looks up addresses of nodes we might contact
 type Phonebook interface {
@@ -65,8 +68,9 @@ type Phonebook interface {
 	// matching entries don't change
 	ReplacePeerList(dnsAddresses []string, networkName string, role PhoneBookEntryRoles)
 
-	// ExtendPeerList adds unique addresses to this set of addresses
-	ExtendPeerList(more []string, networkName string, role PhoneBookEntryRoles)
+	// AddPersistentPeers stores addresses of peers which are persistent.
+	// i.e. they won't be replaced by ReplacePeerList calls
+	AddPersistentPeers(dnsAddresses []string, networkName string, role PhoneBookEntryRoles)
 }
 
 // addressData: holds the information associated with each phonebook address.
@@ -83,14 +87,18 @@ type addressData struct {
 
 	// role is the role that this address serves.
 	role PhoneBookEntryRoles
+
+	// persistent is set true for peers whose record should not be removed for the peer list
+	persistent bool
 }
 
 // makePhonebookEntryData creates a new addressData entry for provided network name and role.
-func makePhonebookEntryData(networkName string, role PhoneBookEntryRoles) addressData {
+func makePhonebookEntryData(networkName string, role PhoneBookEntryRoles, persistent bool) addressData {
 	pbData := addressData{
 		networkNames:          make(map[string]bool),
 		recentConnectionTimes: make([]time.Time, 0),
 		role:                  role,
+		persistent:            persistent,
 	}
 	pbData.networkNames[networkName] = true
 	return pbData
@@ -162,7 +170,7 @@ func (e *phonebookImpl) ReplacePeerList(addressesThey []string, networkName stri
 	// prepare a map of items we'd like to remove.
 	removeItems := make(map[string]bool, 0)
 	for k, pbd := range e.data {
-		if pbd.networkNames[networkName] && pbd.role == role {
+		if pbd.networkNames[networkName] && pbd.role == role && !pbd.persistent {
 			removeItems[k] = true
 		}
 	}
@@ -177,13 +185,30 @@ func (e *phonebookImpl) ReplacePeerList(addressesThey []string, networkName stri
 			delete(removeItems, addr)
 		} else {
 			// we don't have this item. add it.
-			e.data[addr] = makePhonebookEntryData(networkName, role)
+			e.data[addr] = makePhonebookEntryData(networkName, role, false)
 		}
 	}
 
 	// remove items that were missing in addressesThey
 	for k := range removeItems {
 		e.deletePhonebookEntry(k, networkName)
+	}
+}
+
+func (e *phonebookImpl) AddPersistentPeers(dnsAddresses []string, networkName string, role PhoneBookEntryRoles) {
+	e.lock.Lock()
+	defer e.lock.Unlock()
+
+	for _, addr := range dnsAddresses {
+		if pbData, has := e.data[addr]; has {
+			// we already have this.
+			// Make sure the persistence field is set to true
+			pbData.persistent = true
+
+		} else {
+			// we don't have this item. add it.
+			e.data[addr] = makePhonebookEntryData(networkName, role, true)
+		}
 	}
 }
 
@@ -285,8 +310,7 @@ func shuffleStrings(set []string) {
 func shuffleSelect(set []string, n int) []string {
 	if n >= len(set) || n == getAllAddresses {
 		// return shuffled copy of everything
-		out := make([]string, len(set))
-		copy(out, set)
+		out := slices.Clone(set)
 		shuffleStrings(out)
 		return out
 	}
@@ -312,19 +336,6 @@ func (e *phonebookImpl) GetAddresses(n int, role PhoneBookEntryRoles) []string {
 	e.lock.RLock()
 	defer e.lock.RUnlock()
 	return shuffleSelect(e.filterRetryTime(time.Now(), role), n)
-}
-
-// ExtendPeerList adds unique addresses to this set of addresses
-func (e *phonebookImpl) ExtendPeerList(more []string, networkName string, role PhoneBookEntryRoles) {
-	e.lock.Lock()
-	defer e.lock.Unlock()
-	for _, addr := range more {
-		if pbEntry, has := e.data[addr]; has {
-			pbEntry.networkNames[networkName] = true
-			continue
-		}
-		e.data[addr] = makePhonebookEntryData(networkName, role)
-	}
 }
 
 // Length returns the number of addrs contained

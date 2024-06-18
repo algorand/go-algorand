@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,10 +21,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"text/template"
 	"time"
 
+	"github.com/algorand/go-algorand/util"
 	"github.com/algorand/go-deadlock"
 )
 
@@ -124,6 +126,16 @@ func (cyclic *CyclicFileWriter) Write(p []byte) (n int, err error) {
 
 	if uint64(len(p)) > cyclic.limit {
 		// there's no hope for writing this entry to the log
+
+		// for the large lines this is a clear indication something does wrong, dump data into stderr
+		const minDebugLogLineSize = 10 * 1024 * 1024
+		if len(p) >= minDebugLogLineSize {
+			buf := make([]byte, 16*1024)
+			stlen := runtime.Stack(buf, false)
+			fmt.Fprintf(os.Stderr, "Attempt to write a large log line:\n%s\n", string(buf[:stlen]))
+			fmt.Fprintf(os.Stderr, "The offending line:\n%s\n", string(p[:4096]))
+		}
+
 		return 0, fmt.Errorf("CyclicFileWriter: input too long to write. Len = %v", len(p))
 	}
 
@@ -162,7 +174,7 @@ func (cyclic *CyclicFileWriter) Write(p []byte) (n int, err error) {
 			shouldBz2 = true
 			archivePath = archivePath[:len(archivePath)-4]
 		}
-		if err = os.Rename(cyclic.liveLog, archivePath); err != nil {
+		if err = util.MoveFile(cyclic.liveLog, archivePath); err != nil {
 			panic(fmt.Sprintf("CyclicFileWriter: cannot archive full log %v", err))
 		}
 		if shouldGz {

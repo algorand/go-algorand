@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,8 +23,8 @@ import (
 	"time"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
+	"github.com/algorand/go-algorand/rpcs"
 )
 
 type deadManWatcher struct {
@@ -88,8 +88,8 @@ func (w deadManWatcher) run(initBlock uint64) {
 	}
 }
 
-func (w deadManWatcher) onBlock(block v1.Block) {
-	w.newBlockChan <- block.Round
+func (w deadManWatcher) onBlock(block rpcs.EncodedBlockCert) {
+	w.newBlockChan <- uint64(block.Block.BlockHeader.Round)
 }
 
 func (w deadManWatcher) reportDeadManTimeout(curBlock uint64) (err error) {

@@ -4,7 +4,7 @@ import os
 import sys
 from goal import Goal
 
-import algosdk.future.transaction as txn
+import algosdk.transaction as txn
 from datetime import datetime
 
 stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -19,7 +19,7 @@ flo = goal.new_account()
 
 pay = goal.pay(goal.account, receiver=joe, amt=10000)  # under min balance
 txid, err = goal.send(pay, confirm=False)              # errors early
-assert err
+assert "balance 10000 below min 100000" in str(err), err
 
 pay = goal.pay(goal.account, receiver=joe, amt=500_000)
 txinfo, err = goal.send(pay)

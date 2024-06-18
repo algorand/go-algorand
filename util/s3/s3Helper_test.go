@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,6 +17,7 @@
 package s3
 
 import (
+	"fmt"
 	"os"
 	"reflect"
 	"testing"
@@ -114,8 +115,6 @@ func TestMakeS3SessionForUploadWithBucket(t *testing.T) {
 	const emptyBucket = ""
 	type args struct {
 		awsBucket string
-		awsID     string
-		awsSecret string
 	}
 	tests := []struct {
 		name       string
@@ -123,21 +122,12 @@ func TestMakeS3SessionForUploadWithBucket(t *testing.T) {
 		wantHelper Helper
 		wantErr    bool
 	}{
-		{name: "test1", args: args{awsBucket: bucket1, awsID: "AWS_ID", awsSecret: "AWS_SECRET"}, wantHelper: Helper{bucket: bucket1}, wantErr: false},
-		{name: "test2", args: args{awsBucket: emptyBucket, awsID: "AWS_ID", awsSecret: "AWS_SECRET"}, wantHelper: Helper{bucket: emptyBucket}, wantErr: true},
-		{name: "test3", args: args{awsBucket: bucket1, awsID: "", awsSecret: "AWS_SECRET"}, wantHelper: Helper{bucket: bucket1}, wantErr: true},
-		{name: "test4", args: args{awsBucket: bucket1, awsID: "AWS_ID", awsSecret: ""}, wantHelper: Helper{bucket: bucket1}, wantErr: true},
-		{name: "test5", args: args{awsBucket: bucket1, awsID: "", awsSecret: ""}, wantHelper: Helper{bucket: bucket1}, wantErr: true},
-		// public upload bucket requires AWS credentials for uploads
-		{name: "test6", args: args{awsBucket: publicUploadBucket, awsID: "AWS_ID", awsSecret: "AWS_SECRET"}, wantHelper: Helper{bucket: publicUploadBucket}, wantErr: false},
-		{name: "test7", args: args{awsBucket: publicUploadBucket, awsID: "", awsSecret: "AWS_SECRET"}, wantHelper: Helper{bucket: publicUploadBucket}, wantErr: true},
-		{name: "test8", args: args{awsBucket: publicUploadBucket, awsID: "AWS_ID", awsSecret: ""}, wantHelper: Helper{bucket: publicUploadBucket}, wantErr: true},
-		{name: "test9", args: args{awsBucket: publicUploadBucket, awsID: "", awsSecret: ""}, wantHelper: Helper{bucket: publicUploadBucket}, wantErr: true},
+		{name: "test1", args: args{awsBucket: bucket1}, wantHelper: Helper{bucket: bucket1}, wantErr: false},
+		{name: "test2", args: args{awsBucket: emptyBucket}, wantHelper: Helper{bucket: emptyBucket}, wantErr: true},
+		{name: "test6", args: args{awsBucket: publicUploadBucket}, wantHelper: Helper{bucket: publicUploadBucket}, wantErr: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			os.Setenv("AWS_ACCESS_KEY_ID", tt.args.awsID)
-			os.Setenv("AWS_SECRET_ACCESS_KEY", tt.args.awsSecret)
 			gotHelper, err := MakeS3SessionForUploadWithBucket(tt.args.awsBucket)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("MakeS3SessionForUploadWithBucket() error = %v, wantErr %v", err, tt.wantErr)
@@ -158,8 +148,6 @@ func TestMakeS3SessionForDownloadWithBucket(t *testing.T) {
 	const emptyBucket = ""
 	type args struct {
 		awsBucket string
-		awsID     string
-		awsSecret string
 	}
 	tests := []struct {
 		name       string
@@ -167,21 +155,12 @@ func TestMakeS3SessionForDownloadWithBucket(t *testing.T) {
 		wantHelper Helper
 		wantErr    bool
 	}{
-		{name: "test1", args: args{awsBucket: bucket1, awsID: "AWS_ID", awsSecret: "AWS_SECRET"}, wantHelper: Helper{bucket: bucket1}, wantErr: false},
-		{name: "test2", args: args{awsBucket: emptyBucket, awsID: "AWS_ID", awsSecret: "AWS_SECRET"}, wantHelper: Helper{bucket: emptyBucket}, wantErr: true},
-		{name: "test3", args: args{awsBucket: bucket1, awsID: "", awsSecret: "AWS_SECRET"}, wantHelper: Helper{bucket: bucket1}, wantErr: true},
-		{name: "test4", args: args{awsBucket: bucket1, awsID: "AWS_ID", awsSecret: ""}, wantHelper: Helper{bucket: bucket1}, wantErr: true},
-		{name: "test5", args: args{awsBucket: bucket1, awsID: "", awsSecret: ""}, wantHelper: Helper{bucket: bucket1}, wantErr: true},
-		// public release bucket does not require AWS credentials for downloads
-		{name: "test6", args: args{awsBucket: publicReleaseBucket, awsID: "AWS_ID", awsSecret: "AWS_SECRET"}, wantHelper: Helper{bucket: publicReleaseBucket}, wantErr: false},
-		{name: "test7", args: args{awsBucket: publicReleaseBucket, awsID: "", awsSecret: "AWS_SECRET"}, wantHelper: Helper{bucket: publicReleaseBucket}, wantErr: false},
-		{name: "test8", args: args{awsBucket: publicReleaseBucket, awsID: "AWS_ID", awsSecret: ""}, wantHelper: Helper{bucket: publicReleaseBucket}, wantErr: false},
-		{name: "test9", args: args{awsBucket: publicReleaseBucket, awsID: "", awsSecret: ""}, wantHelper: Helper{bucket: publicReleaseBucket}, wantErr: false},
+		{name: "test1", args: args{awsBucket: bucket1}, wantHelper: Helper{bucket: bucket1}, wantErr: false},
+		{name: "test2", args: args{awsBucket: emptyBucket}, wantHelper: Helper{bucket: emptyBucket}, wantErr: true},
+		{name: "test6", args: args{awsBucket: publicReleaseBucket}, wantHelper: Helper{bucket: publicReleaseBucket}, wantErr: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			os.Setenv("AWS_ACCESS_KEY_ID", tt.args.awsID)
-			os.Setenv("AWS_SECRET_ACCESS_KEY", tt.args.awsSecret)
 			gotHelper, err := MakeS3SessionForDownloadWithBucket(tt.args.awsBucket)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("MakeS3SessionForDownloadWithBucket() error = %v, wantErr %v", err, tt.wantErr)
@@ -196,6 +175,7 @@ func TestMakeS3SessionForDownloadWithBucket(t *testing.T) {
 
 func TestGetVersionFromName(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	type args struct {
 		name     string
@@ -203,12 +183,12 @@ func TestGetVersionFromName(t *testing.T) {
 		expected uint64
 	}
 	tests := []args{
-		{name: "test 1 (major)", version: "_1.0.0", expected: 1 * 1 << 32},
-		{name: "test 2 (major)", version: "_2.0.0", expected: 2 * 1 << 32},
-		{name: "test 3 (minor)", version: "_1.1.0", expected: 1*1<<32 + 1*1<<16},
-		{name: "test 4 (minor)", version: "_1.2.0", expected: 1*1<<32 + 2*1<<16},
-		{name: "test 5 (patch)", version: "_1.0.1", expected: 1*1<<32 + 1},
-		{name: "test 6 (patch)", version: "_1.0.2", expected: 1*1<<32 + 2},
+		{name: "test 1 (major)", version: "_1.0.0", expected: 1 * 1 << 40},
+		{name: "test 2 (major)", version: "_2.0.0", expected: 2 * 1 << 40},
+		{name: "test 3 (minor)", version: "_1.1.0", expected: 1*1<<40 + 1*1<<24},
+		{name: "test 4 (minor)", version: "_1.2.0", expected: 1*1<<40 + 2*1<<24},
+		{name: "test 5 (patch)", version: "_1.0.1", expected: 1*1<<40 + 1},
+		{name: "test 6 (patch)", version: "_1.0.2", expected: 1*1<<40 + 2},
 	}
 
 	for _, test := range tests {
@@ -218,8 +198,24 @@ func TestGetVersionFromName(t *testing.T) {
 	}
 }
 
+func TestGetVersionFromNameCompare(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	name1 := "config_3.13.170018.tar.gz"
+	name2 := "config_3.15.157.tar.gz"
+
+	ver1, err := GetVersionFromName(name1)
+	require.NoError(t, err)
+	ver2, err := GetVersionFromName(name2)
+	require.NoError(t, err)
+
+	require.Less(t, ver1, ver2)
+}
+
 func TestGetPartsFromVersion(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	type args struct {
 		name     string
@@ -229,12 +225,13 @@ func TestGetPartsFromVersion(t *testing.T) {
 		expPatch uint64
 	}
 	tests := []args{
-		{name: "test 1 (major)", version: 1 * 1 << 32, expMajor: 1, expMinor: 0, expPatch: 0},
-		{name: "test 2 (major)", version: 2 * 1 << 32, expMajor: 2, expMinor: 0, expPatch: 0},
-		{name: "test 3 (minor)", version: 1*1<<32 + 1*1<<16, expMajor: 1, expMinor: 1, expPatch: 0},
-		{name: "test 4 (minor)", version: 1*1<<32 + 2*1<<16, expMajor: 1, expMinor: 2, expPatch: 0},
-		{name: "test 5 (patch)", version: 1*1<<32 + 1, expMajor: 1, expMinor: 0, expPatch: 1},
-		{name: "test 6 (patch)", version: 1*1<<32 + 2, expMajor: 1, expMinor: 0, expPatch: 2},
+		{name: "test 1 (major)", version: 1 * 1 << 40, expMajor: 1, expMinor: 0, expPatch: 0},
+		{name: "test 2 (major)", version: 2 * 1 << 40, expMajor: 2, expMinor: 0, expPatch: 0},
+		{name: "test 3 (minor)", version: 1*1<<40 + 1*1<<24, expMajor: 1, expMinor: 1, expPatch: 0},
+		{name: "test 4 (minor)", version: 1*1<<40 + 2*1<<24, expMajor: 1, expMinor: 2, expPatch: 0},
+		{name: "test 5 (patch)", version: 1*1<<40 + 1, expMajor: 1, expMinor: 0, expPatch: 1},
+		{name: "test 6 (patch)", version: 1*1<<40 + 2, expMajor: 1, expMinor: 0, expPatch: 2},
+		{name: "test 6 (patch)", version: 3298803318784, expMajor: 3, expMinor: 16, expPatch: 0},
 	}
 
 	for _, test := range tests {
@@ -245,6 +242,35 @@ func TestGetPartsFromVersion(t *testing.T) {
 		require.Equal(t, test.expPatch, actualPatch, test.name)
 	}
 
-	_, _, _, err := GetVersionPartsFromVersion(1<<32 - 1)
+	_, _, _, err := GetVersionPartsFromVersion(1<<40 - 1)
 	require.Error(t, err, "Versions less than 1.0.0 should not be parsed.")
+}
+
+func TestGetPartsFromVersionEndToEnd(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	type args struct {
+		major uint64
+		minor uint64
+		patch uint64
+	}
+	tests := []args{
+		{major: 1, minor: 0, patch: 0},
+		{major: 3, minor: 13, patch: 170018},
+		{major: 3, minor: 15, patch: 157},
+	}
+
+	for _, test := range tests {
+		name := fmt.Sprintf("config_%d.%d.%d.tar.gz", test.major, test.minor, test.patch)
+		t.Run(name, func(t *testing.T) {
+			ver, err := GetVersionFromName(name)
+			require.NoError(t, err)
+			actualMajor, actualMinor, actualPatch, err := GetVersionPartsFromVersion(ver)
+			require.NoError(t, err)
+			require.Equal(t, test.major, actualMajor)
+			require.Equal(t, test.minor, actualMinor)
+			require.Equal(t, test.patch, actualPatch)
+		})
+	}
 }

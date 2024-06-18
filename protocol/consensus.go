@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -22,7 +22,13 @@ import (
 
 // ConsensusVersion is a string that identifies a version of the
 // consensus protocol.
+//
+//msgp:allocbound ConsensusVersion maxConsensusVersionLen
 type ConsensusVersion string
+
+// maxConsensusVersionLen is used for generating MaxSize functions on types that contain ConsensusVersion
+// as it's member. 128 is slightly larger than the existing URL length of consensus version URL+hash=89
+const maxConsensusVersionLen = 128
 
 // DEPRECATEDConsensusV0 is a baseline version of the Algorand consensus protocol.
 // at the time versioning was introduced.
@@ -182,7 +188,7 @@ const ConsensusV33 = ConsensusVersion(
 	"https://github.com/algorandfoundation/specs/tree/830a4e673148498cc7230a0d1ba1ed0a5471acc6",
 )
 
-// ConsensusV34 enables the TEAL v7 opcodes, stateproofs, shorter lambda.
+// ConsensusV34 enables the TEAL v7 opcodes, stateproofs, shorter lambda to 1.7s.
 const ConsensusV34 = ConsensusVersion(
 	"https://github.com/algorandfoundation/specs/tree/2dd5435993f6f6d65691140f592ebca5ef19ffbd",
 )
@@ -190,6 +196,31 @@ const ConsensusV34 = ConsensusVersion(
 // ConsensusV35 updates the calculation of total stake in state proofs.
 const ConsensusV35 = ConsensusVersion(
 	"https://github.com/algorandfoundation/specs/tree/433d8e9a7274b6fca703d91213e05c7e6a589e69",
+)
+
+// ConsensusV36 adds box storage in TEAL v8
+const ConsensusV36 = ConsensusVersion(
+	"https://github.com/algorandfoundation/specs/tree/44fa607d6051730f5264526bf3c108d51f0eadb6",
+)
+
+// ConsensusV37 is a technical upgrade and released in the same time as ConsensusV38.
+// It is needed to allow nodes to build up a necessary state to support state proofs related
+// options in ConsensusV38
+const ConsensusV37 = ConsensusVersion(
+	"https://github.com/algorandfoundation/specs/tree/1ac4dd1f85470e1fb36c8a65520e1313d7dfed5e",
+)
+
+// ConsensusV38 enables state proof verification using a special tracker,
+// TEAL v9 resources sharing, pre-check ECDSA curve and extra features, and
+// shortens the lambda to 1.5s.
+const ConsensusV38 = ConsensusVersion(
+	"https://github.com/algorandfoundation/specs/tree/abd3d4823c6f77349fc04c3af7b1e99fe4df699f",
+)
+
+// ConsensusV39 enables dynamic filter timeouts, a deadline timeout of 4 seconds,
+// TEAL v10 logicSig opcode budget pooling along with elliptic curve ops on some pairing friendly curves.
+const ConsensusV39 = ConsensusVersion(
+	"https://github.com/algorandfoundation/specs/tree/925a46433742afb0b51bb939354bd907fa88bf95",
 )
 
 // ConsensusFuture is a protocol that should not appear in any production
@@ -212,13 +243,16 @@ const ConsensusVAlpha3 = ConsensusVersion("alpha3")
 // ConsensusVAlpha4 uses the same parameters as ConsensusV34.
 const ConsensusVAlpha4 = ConsensusVersion("alpha4")
 
+// ConsensusVAlpha5 uses the same parameters as ConsensusV36.
+const ConsensusVAlpha5 = ConsensusVersion("alpha5")
+
 // !!! ********************* !!!
 // !!! *** Please update ConsensusCurrentVersion when adding new protocol versions *** !!!
 // !!! ********************* !!!
 
 // ConsensusCurrentVersion is the latest version and should be used
 // when a specific version is not provided.
-const ConsensusCurrentVersion = ConsensusV35
+const ConsensusCurrentVersion = ConsensusV39
 
 // Error is used to indicate that an unsupported protocol has been detected.
 type Error ConsensusVersion

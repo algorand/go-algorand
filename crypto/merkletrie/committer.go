@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -16,6 +16,8 @@
 
 package merkletrie
 
+import "golang.org/x/exp/slices"
+
 // Committer is the interface supporting serializing tries into persistent storage.
 type Committer interface {
 	StorePage(page uint64, content []byte) error
@@ -26,7 +28,7 @@ const (
 	inMemoryCommitterPageSize = int64(512)
 )
 
-// InMemoryCommitter is a fully function in-memory committer, supporting
+// InMemoryCommitter is a fully functional in-memory committer, supporting
 // persistence of pages.
 type InMemoryCommitter struct {
 	memStore map[uint64][]byte
@@ -40,9 +42,7 @@ func (mc *InMemoryCommitter) StorePage(page uint64, content []byte) error {
 	if content == nil {
 		delete(mc.memStore, page)
 	} else {
-		storedContent := make([]byte, len(content))
-		copy(storedContent, content)
-		mc.memStore[page] = storedContent
+		mc.memStore[page] = slices.Clone(content)
 	}
 	return nil
 }

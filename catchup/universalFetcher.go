@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,9 +19,9 @@ package catchup
 import (
 	"context"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/algorand/go-deadlock"
@@ -43,7 +43,7 @@ type universalBlockFetcher struct {
 	log    logging.Logger
 }
 
-// makeUniversalFetcher returns a fetcher for http and ws peers.
+// makeUniversalBlockFetcher returns a fetcher for http and ws peers.
 func makeUniversalBlockFetcher(log logging.Logger, net network.GossipNode, config config.Local) *universalBlockFetcher {
 	return &universalBlockFetcher{
 		config: config,
@@ -132,7 +132,7 @@ func (w *wsFetcherClient) getBlockBytes(ctx context.Context, r basics.Round) ([]
 	defer func() {
 		cancelFunc()
 		// note that we don't need to have additional Unlock here since
-		// we already have a defered Unlock above ( which executes in reversed order )
+		// we already have a deferred Unlock above ( which executes in reversed order )
 		w.mu.Lock()
 	}()
 
@@ -151,23 +151,31 @@ func (w *wsFetcherClient) address() string {
 	return fmt.Sprintf("[ws] (%s)", w.target.GetAddress())
 }
 
-// requestBlock send a request for block <round> and wait until it receives a response or a context expires.
-func (w *wsFetcherClient) requestBlock(ctx context.Context, round basics.Round) ([]byte, error) {
+// makeBlockRequestTopics builds topics for requesting a block.
+func makeBlockRequestTopics(r basics.Round) network.Topics {
 	roundBin := make([]byte, binary.MaxVarintLen64)
-	binary.PutUvarint(roundBin, uint64(round))
-	topics := network.Topics{
+	binary.PutUvarint(roundBin, uint64(r))
+	return network.Topics{
 		network.MakeTopic(rpcs.RequestDataTypeKey,
 			[]byte(rpcs.BlockAndCertValue)),
 		network.MakeTopic(
 			rpcs.RoundKey,
 			roundBin),
 	}
+}
+
+// requestBlock send a request for block <round> and wait until it receives a response or a context expires.
+func (w *wsFetcherClient) requestBlock(ctx context.Context, round basics.Round) ([]byte, error) {
+	topics := makeBlockRequestTopics(round)
 	resp, err := w.target.Request(ctx, protocol.UniEnsBlockReqTag, topics)
 	if err != nil {
 		return nil, makeErrWsFetcherRequestFailed(round, w.target.GetAddress(), err.Error())
 	}
 
 	if errMsg, found := resp.Topics.GetValue(network.ErrorKey); found {
+		if latest, lfound := resp.Topics.GetValue(rpcs.LatestRoundKey); lfound {
+			return nil, noBlockForRoundError{round: round, latest: basics.Round(binary.BigEndian.Uint64(latest))}
+		}
 		return nil, makeErrWsFetcherRequestFailed(round, w.target.GetAddress(), string(errMsg))
 	}
 
@@ -187,10 +195,14 @@ func (w *wsFetcherClient) requestBlock(ctx context.Context, round basics.Round) 
 	return blockCertBytes, nil
 }
 
-// set max fetcher size to 5MB, this is enough to fit the block and certificate
-const fetcherMaxBlockBytes = 5 << 20
+// set max fetcher size to 10MB, this is enough to fit the block and certificate
+const fetcherMaxBlockBytes = 10 << 20
 
-var errNoBlockForRound = errors.New("No block available for given round")
+type noBlockForRoundError struct {
+	latest, round basics.Round
+}
+
+func (noBlockForRoundError) Error() string { return "no block available for given round" }
 
 // HTTPFetcher implements FetcherClient doing an HTTP GET of the block
 type HTTPFetcher struct {
@@ -234,7 +246,13 @@ func (hf *HTTPFetcher) getBlockBytes(ctx context.Context, r basics.Round) (data 
 	case http.StatusOK:
 	case http.StatusNotFound: // server could not find a block with that round numbers.
 		response.Body.Close()
-		return nil, errNoBlockForRound
+		noBlockErr := noBlockForRoundError{round: r}
+		if latestBytes := response.Header.Get(rpcs.BlockResponseLatestRoundHeader); latestBytes != "" {
+			if latest, pErr := strconv.ParseUint(latestBytes, 10, 64); pErr == nil {
+				noBlockErr.latest = basics.Round(latest)
+			}
+		}
+		return nil, noBlockErr
 	default:
 		bodyBytes, err := rpcs.ResponseBytes(response, hf.log, fetcherMaxBlockBytes)
 		hf.log.Warnf("HTTPFetcher.getBlockBytes: response status code %d from '%s'. Response body '%s' ", response.StatusCode, blockURL, string(bodyBytes))

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -136,20 +136,20 @@ func TestKeyregApply(t *testing.T) {
 
 	// Going from offline to online should be okay
 	mockBal.addrs[src] = basics.AccountData{Status: basics.Offline}
-	err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(0))
+	err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{}, nil, basics.Round(0))
 	require.NoError(t, err)
 
 	// Going from online to nonparticipatory should be okay, if the protocol supports that
 	if mockBal.ConsensusParams().SupportBecomeNonParticipatingTransactions {
 		tx.KeyregTxnFields = transactions.KeyregTxnFields{}
 		tx.KeyregTxnFields.Nonparticipation = true
-		err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(0))
+		err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{}, nil, basics.Round(0))
 		require.NoError(t, err)
 
 		// Nonparticipatory accounts should not be able to change status
 		mockBal.addrs[src] = basics.AccountData{Status: basics.NotParticipating}
-		err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(0))
-		require.Error(t, err)
+		err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{}, nil, basics.Round(0))
+		require.ErrorContains(t, err, "cannot change online/offline status of non-participating account")
 	}
 
 	mockBal.version = "future"
@@ -171,25 +171,25 @@ func TestKeyregApply(t *testing.T) {
 			},
 		}
 		mockBal.addrs[src] = basics.AccountData{Status: basics.Offline}
-		err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(999))
+		err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{}, nil, basics.Round(999))
 		require.NoError(t, err)
 
-		err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(1000))
+		err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{}, nil, basics.Round(1000))
 		require.Equal(t, errKeyregGoingOnlineExpiredParticipationKey, err)
 
-		err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(1001))
+		err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{}, nil, basics.Round(1001))
 		require.Equal(t, errKeyregGoingOnlineExpiredParticipationKey, err)
 
 		tx.KeyregTxnFields.VoteFirst = basics.Round(1100)
 		tx.KeyregTxnFields.VoteLast = basics.Round(1200)
 
-		err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(1098))
+		err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{}, nil, basics.Round(1098))
 		require.Equal(t, errKeyregGoingOnlineFirstVotingInFuture, err)
 
-		err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(1099))
+		err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{}, nil, basics.Round(1099))
 		require.NoError(t, err)
 
-		err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(1100))
+		err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{}, nil, basics.Round(1100))
 		require.NoError(t, err)
 
 		testStateProofPKBeingStored(t, tx, mockBal)
@@ -197,7 +197,7 @@ func TestKeyregApply(t *testing.T) {
 }
 
 func testStateProofPKBeingStored(t *testing.T, tx transactions.Transaction, mockBal *keyregTestBalances) {
-	err := Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(1100))
+	err := Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{}, nil, basics.Round(1100))
 	require.NoError(t, err) // expects no error with empty keyRegistration attempt
 
 	rec, err := mockBal.Get(tx.Header.Sender, false)
@@ -215,7 +215,7 @@ func TestStateProofPKKeyReg(t *testing.T) {
 
 	tx := createTestTxn(t, src, secretParticipation, vrfSecrets)
 	mockBal := makeMockBalances(protocol.ConsensusV30)
-	err := Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(0))
+	err := Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{}, nil, basics.Round(0))
 	require.NoError(t, err)
 
 	acct, err := mockBal.Get(tx.Src(), false)
@@ -223,7 +223,7 @@ func TestStateProofPKKeyReg(t *testing.T) {
 	require.True(t, acct.StateProofID.IsEmpty())
 
 	mockBal = makeMockBalances(protocol.ConsensusCurrentVersion)
-	err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(0))
+	err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{}, nil, basics.Round(0))
 	require.NoError(t, err)
 
 	acct, err = mockBal.Get(tx.Src(), false)
@@ -232,7 +232,7 @@ func TestStateProofPKKeyReg(t *testing.T) {
 
 	// go offline in current consensus version: StateProofID should be empty
 	emptyKeyreg := transactions.KeyregTxnFields{}
-	err = Keyreg(emptyKeyreg, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(0))
+	err = Keyreg(emptyKeyreg, tx.Header, mockBal, transactions.SpecialAddresses{}, nil, basics.Round(0))
 	require.NoError(t, err)
 
 	acct, err = mockBal.Get(tx.Src(), false)
@@ -241,7 +241,7 @@ func TestStateProofPKKeyReg(t *testing.T) {
 
 	// run same test using vFuture
 	mockBal = makeMockBalances(protocol.ConsensusFuture)
-	err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(0))
+	err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{}, nil, basics.Round(0))
 	require.NoError(t, err)
 
 	acct, err = mockBal.Get(tx.Src(), false)
@@ -249,7 +249,7 @@ func TestStateProofPKKeyReg(t *testing.T) {
 	require.False(t, acct.StateProofID.IsEmpty())
 
 	// go offline in vFuture: StateProofID should be empty
-	err = Keyreg(emptyKeyreg, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(0))
+	err = Keyreg(emptyKeyreg, tx.Header, mockBal, transactions.SpecialAddresses{}, nil, basics.Round(0))
 	require.NoError(t, err)
 
 	acct, err = mockBal.Get(tx.Src(), false)

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -35,6 +35,7 @@ import "C"
 
 import (
 	"fmt"
+	"unsafe"
 
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/util/metrics"
@@ -64,6 +65,30 @@ func init() {
 	_ = [C.crypto_sign_ed25519_PUBLICKEYBYTES]byte(ed25519PublicKey{})
 	_ = [C.crypto_sign_ed25519_SECRETKEYBYTES]byte(ed25519PrivateKey{})
 	_ = [C.crypto_sign_ed25519_SEEDBYTES]byte(ed25519Seed{})
+
+	// Check that this platform makes slices []Signature and []SignatureVerifier that use a backing
+	// array of contiguously allocated 64- and 32-byte segments, respectively, with no padding.
+	// These slice's backing arrays are passed to C.ed25519_batch_wrapper. In practice, this check
+	// should always succeed, but to be careful we can double-check, since the Go specification does
+	// not explicitly define platform-specific alignment sizes and slice allocation behavior.
+	length := 1024
+	sigs := make([]Signature, length)        // same as [][64]byte
+	pks := make([]SignatureVerifier, length) // same as [][32]byte
+
+	for i := 1; i < length; i++ {
+		if uintptr(unsafe.Pointer(&sigs[i]))-uintptr(unsafe.Pointer(&sigs[0])) != uintptr(i)*C.crypto_sign_ed25519_BYTES {
+			panic("Unexpected alignment for a slice of signatures")
+		}
+		if uintptr(unsafe.Pointer(&pks[i]))-uintptr(unsafe.Pointer(&pks[0])) != uintptr(i)*C.crypto_sign_ed25519_PUBLICKEYBYTES {
+			panic("Unexpected alignment for a slice of public keys")
+		}
+	}
+	if uintptr(unsafe.Pointer(&sigs[length-1]))-uintptr(unsafe.Pointer(&sigs[0])) != uintptr(length-1)*C.crypto_sign_ed25519_BYTES {
+		panic("Unexpected total size for a backing array of signatures")
+	}
+	if uintptr(unsafe.Pointer(&pks[length-1]))-uintptr(unsafe.Pointer(&pks[0])) != uintptr(length-1)*C.crypto_sign_ed25519_PUBLICKEYBYTES {
+		panic("Unexpected total size for a backing array of public keys")
+	}
 }
 
 // A Seed holds the entropy needed to generate cryptographic keys.
@@ -210,7 +235,6 @@ func (s *SignatureSecrets) SignBytes(message []byte) Signature {
 // signed a Hashable message.
 //
 // It returns true if this is the case; otherwise, it returns false.
-//
 func (v SignatureVerifier) Verify(message Hashable, sig Signature) bool {
 	cryptoSigSecretsVerifyTotal.Inc(nil)
 	return ed25519Verify(ed25519PublicKey(v), HashRep(message), ed25519Signature(sig))

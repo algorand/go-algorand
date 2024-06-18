@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,6 +19,7 @@ package agreement
 import (
 	"testing"
 
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
@@ -209,6 +210,69 @@ func TestProposalManagerRejectsUnknownEvent(t *testing.T) {
 	require.Errorf(t, panicErr, "proposalManager must reject bundleVerified event")
 }
 
+func TestLateVotes(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	const r = 100
+	const p = 3
+	const s = soft
+	currentPlayerState := freshnessData{
+		PlayerRound:          r,
+		PlayerPeriod:         p,
+		PlayerStep:           s,
+		PlayerLastConcluding: 0,
+	}
+	b := testCaseBuilder{}
+	_, pM, helper := setupManager(t, r)
+
+	// vote from credentialRoundLag rounds ago and period 0 should continue
+	// processing only for the purpose of tracking credentials.
+	pV := helper.MakeRandomProposalValue()
+	v1 := helper.MakeVerifiedVote(t, 0, r-credentialRoundLag, 0, 0, *pV)
+	inMsg1 := filterableMessageEvent{
+		FreshnessData: currentPlayerState,
+		messageEvent: messageEvent{
+			T: voteVerified,
+			Input: message{
+				UnauthenticatedVote: v1.u(),
+				Vote:                v1,
+			},
+		},
+	}
+
+	v2 := helper.MakeVerifiedVote(t, 0, r-credentialRoundLag, 0, 0, *pV)
+	inMsg2 := filterableMessageEvent{
+		FreshnessData: currentPlayerState,
+		messageEvent: messageEvent{
+			T: voteVerified,
+			Input: message{
+				UnauthenticatedVote: v2.u(),
+				Vote:                v2,
+			},
+		},
+	}
+
+	// Order the messages such that the first message's credential is lower
+	// (i.e., preferred). The first vote should be the best credential we get,
+	// so the second credential should be filtered without impacting the
+	// credential tracking mechanism.
+	v1.Cred.VrfOut = crypto.Digest{1}
+	v2.Cred.VrfOut = crypto.Digest{2}
+	if v1.Cred.Less(v2.Cred) {
+		require.False(t, v2.Cred.Less(v1.Cred))
+		b.AddInOutPair(inMsg1, filteredEvent{T: voteFiltered, LateCredentialTrackingNote: VerifiedBetterLateCredentialForTracking})
+		b.AddInOutPair(inMsg2, filteredEvent{T: voteFiltered, LateCredentialTrackingNote: NoLateCredentialTrackingImpact})
+	} else {
+		require.True(t, v2.Cred.Less(v1.Cred))
+		b.AddInOutPair(inMsg2, filteredEvent{T: voteFiltered, LateCredentialTrackingNote: VerifiedBetterLateCredentialForTracking})
+		b.AddInOutPair(inMsg1, filteredEvent{T: voteFiltered, LateCredentialTrackingNote: NoLateCredentialTrackingImpact})
+	}
+
+	res, err := b.Build().Validate(pM)
+	require.NoError(t, err)
+	require.NoErrorf(t, res, "VerifiedVote resulted in unexpected output")
+}
+
 func TestProposalFreshAdjacentPeriods(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -312,6 +376,63 @@ func TestProposalFreshAdjacentPeriods(t *testing.T) {
 	// vote > r + 1 should be filtered
 	pV = helper.MakeRandomProposalValue()
 	uv = helper.MakeUnauthenticatedVote(t, 0, r+2, 0, s, *pV)
+	inMsg = filterableMessageEvent{
+		FreshnessData: currentPlayerState,
+		messageEvent: messageEvent{
+			T: votePresent,
+			Input: message{
+				UnauthenticatedVote: uv,
+			},
+		},
+	}
+	b.AddInOutPair(inMsg, filteredEvent{T: voteFiltered})
+
+	// vote from credentialRoundLag rounds ago and period 0 should continue
+	// processing only for the purpose of tracking credentials.
+	pV = helper.MakeRandomProposalValue()
+	uv = helper.MakeUnauthenticatedVote(t, 0, r-credentialRoundLag, 0, 0, *pV)
+	inMsg = filterableMessageEvent{
+		FreshnessData: currentPlayerState,
+		messageEvent: messageEvent{
+			T: votePresent,
+			Input: message{
+				UnauthenticatedVote: uv,
+			},
+		},
+	}
+	b.AddInOutPair(inMsg, filteredEvent{T: voteFiltered, LateCredentialTrackingNote: UnverifiedLateCredentialForTracking})
+
+	// vote from credentialRoundLag ago and period > 0 should be filtered
+	pV = helper.MakeRandomProposalValue()
+	uv = helper.MakeUnauthenticatedVote(t, 0, r-credentialRoundLag, 1, 0, *pV)
+	inMsg = filterableMessageEvent{
+		FreshnessData: currentPlayerState,
+		messageEvent: messageEvent{
+			T: votePresent,
+			Input: message{
+				UnauthenticatedVote: uv,
+			},
+		},
+	}
+	b.AddInOutPair(inMsg, filteredEvent{T: voteFiltered})
+
+	// vote older than credentialRoundLag should be rejected even if period 0
+	pV = helper.MakeRandomProposalValue()
+	uv = helper.MakeUnauthenticatedVote(t, 0, r-credentialRoundLag-1, 0, 0, *pV)
+	inMsg = filterableMessageEvent{
+		FreshnessData: currentPlayerState,
+		messageEvent: messageEvent{
+			T: votePresent,
+			Input: message{
+				UnauthenticatedVote: uv,
+			},
+		},
+	}
+	b.AddInOutPair(inMsg, filteredEvent{T: voteFiltered})
+
+	// vote older than credentialRoundLag should be rejected on any period
+	pV = helper.MakeRandomProposalValue()
+	uv = helper.MakeUnauthenticatedVote(t, 0, r-credentialRoundLag-1, 1, 0, *pV)
 	inMsg = filterableMessageEvent{
 		FreshnessData: currentPlayerState,
 		messageEvent: messageEvent{

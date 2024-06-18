@@ -39,7 +39,7 @@ XFER3=99999
 XFER4=11
 
 APP_CREATED_STR='Created app with app index'
-ERR_APP_CL_STR='only clearing out is supported for applications that do not exist'
+ERR_APP_CL_STR='only ClearState is supported for an application'
 ERR_APP_NE_STR='application does not exist'
 ERR_APP_OI_STR1='has not opted in to application'
 ERR_APP_OI_STR2='not opted in to app'

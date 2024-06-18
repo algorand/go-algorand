@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,7 +18,6 @@ package ledger
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 
 	"github.com/algorand/go-deadlock"
@@ -29,6 +28,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/logging"
 )
 
@@ -76,10 +76,13 @@ type txTail struct {
 	// lowestBlockHeaderRound is the lowest round in blockHeaderData, used as a starting point for old entries removal
 	lowestBlockHeaderRound basics.Round
 
-	// tailMu is the synchronization mutex for accessing roundTailHashes, roundTailSerializedDeltas and blockHeaderData.
+	// tailMu is the synchronization mutex for accessing internal data including
+	// lastValid, recent, lowWaterMark, roundTailHashes, roundTailSerializedDeltas and blockHeaderData.
 	tailMu deadlock.RWMutex
 
-	lastValid map[basics.Round]map[transactions.Txid]struct{} // map tx.LastValid -> tx confirmed set
+	// lastValid allows looking up all of the transactions that expire in a given round.
+	// The map for an expiration round gives the round the transaction was originally confirmed, so it can be found for the /pending endpoint.
+	lastValid map[basics.Round]map[transactions.Txid]uint16 // map tx.LastValid -> tx confirmed map: txid -> (last valid - confirmed) delta
 
 	// duplicate detection queries with LastValid before
 	// lowWaterMark are not guaranteed to succeed
@@ -90,15 +93,22 @@ type txTail struct {
 }
 
 func (t *txTail) loadFromDisk(l ledgerForTracker, dbRound basics.Round) error {
-	rdb := l.trackerDB().Rdb
+	t.tailMu.Lock()
+	defer t.tailMu.Unlock()
+
 	t.log = l.trackerLog()
 
-	var roundData []*txTailRound
+	var roundData []*trackerdb.TxTailRound
 	var roundTailHashes []crypto.Digest
 	var baseRound basics.Round
 	if dbRound > 0 {
-		err := rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-			roundData, roundTailHashes, baseRound, err = loadTxTail(ctx, tx, dbRound)
+		err := l.trackerDB().Snapshot(func(ctx context.Context, tx trackerdb.SnapshotScope) (err error) {
+			ar, err := tx.MakeAccountsReader()
+			if err != nil {
+				return err
+			}
+
+			roundData, roundTailHashes, baseRound, err = ar.LoadTxTail(ctx, dbRound)
 			return
 		})
 		if err != nil {
@@ -107,14 +117,18 @@ func (t *txTail) loadFromDisk(l ledgerForTracker, dbRound basics.Round) error {
 	}
 
 	t.lowWaterMark = l.Latest()
-	t.lastValid = make(map[basics.Round]map[transactions.Txid]struct{})
+	t.lastValid = make(map[basics.Round]map[transactions.Txid]uint16)
 	t.recent = make(map[basics.Round]roundLeases)
 
 	// the lastValid is a temporary map used during the execution of
 	// loadFromDisk, allowing us to construct the lastValid maps in their
 	// optimal size. This would ensure that upon startup, we don't preallocate
 	// more memory than we truly need.
-	lastValid := make(map[basics.Round][]transactions.Txid)
+	type lastValidEntry struct {
+		rnd  basics.Round
+		txid transactions.Txid
+	}
+	lastValid := make(map[basics.Round][]lastValidEntry)
 
 	// the roundTailHashes and blockHeaderData need a single element to start with
 	// in order to allow lookups on zero offsets when they are empty (new database)
@@ -145,16 +159,16 @@ func (t *txTail) loadFromDisk(l ledgerForTracker, dbRound basics.Round) error {
 				list := lastValid[txTailRound.LastValid[i]]
 				// if the list reached capacity, resize.
 				if len(list) == cap(list) {
-					var newList []transactions.Txid
+					var newList []lastValidEntry
 					if cap(list) == 0 {
-						newList = make([]transactions.Txid, 0, initialLastValidArrayLen)
+						newList = make([]lastValidEntry, 0, initialLastValidArrayLen)
 					} else {
-						newList = make([]transactions.Txid, len(list), len(list)*2)
+						newList = make([]lastValidEntry, len(list), len(list)*2)
 					}
 					copy(newList[:], list[:])
 					list = newList
 				}
-				list = append(list, txTailRound.TxnIDs[i])
+				list = append(list, lastValidEntry{txTailRound.Hdr.Round, txTailRound.TxnIDs[i]})
 				lastValid[txTailRound.LastValid[i]] = list
 			}
 		}
@@ -165,11 +179,15 @@ func (t *txTail) loadFromDisk(l ledgerForTracker, dbRound basics.Round) error {
 
 	// add all the entries in roundsLastValids to their corresponding map entry in t.lastValid
 	for lastValid, list := range lastValid {
-		lastValueMap := make(map[transactions.Txid]struct{}, len(list))
-		for _, id := range list {
-			lastValueMap[id] = struct{}{}
+		lastValidMap := make(map[transactions.Txid]uint16, len(list))
+		for _, entry := range list {
+			if lastValid < entry.rnd {
+				return fmt.Errorf("txTail: invalid lastValid %d / rnd %d for txid %s", lastValid, entry.rnd, entry.txid)
+			}
+			deltaR := uint16(lastValid - entry.rnd)
+			lastValidMap[entry.txid] = deltaR
 		}
-		t.lastValid[lastValid] = lastValueMap
+		t.lastValid[lastValid] = lastValidMap
 	}
 
 	if enableTxTailHashes {
@@ -187,32 +205,38 @@ func (t *txTail) close() {
 func (t *txTail) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 	rnd := blk.Round()
 
+	t.tailMu.Lock()
+	defer t.tailMu.Unlock()
+
 	if _, has := t.recent[rnd]; has {
 		// Repeat, ignore
 		return
 	}
 
-	var tail txTailRound
+	var tail trackerdb.TxTailRound
 	tail.TxnIDs = make([]transactions.Txid, len(delta.Txids))
 	tail.LastValid = make([]basics.Round, len(delta.Txids))
 	tail.Hdr = blk.BlockHeader
 
 	for txid, txnInc := range delta.Txids {
-		t.putLV(txnInc.LastValid, txid)
+		if _, ok := t.lastValid[txnInc.LastValid]; !ok {
+			t.lastValid[txnInc.LastValid] = make(map[transactions.Txid]uint16)
+		}
+		deltaR := uint16(txnInc.LastValid - blk.BlockHeader.Round)
+		t.lastValid[txnInc.LastValid][txid] = deltaR
+
 		tail.TxnIDs[txnInc.Intra] = txid
 		tail.LastValid[txnInc.Intra] = txnInc.LastValid
 		if blk.Payset[txnInc.Intra].Txn.Lease != [32]byte{} {
-			tail.Leases = append(tail.Leases, txTailRoundLease{
+			tail.Leases = append(tail.Leases, trackerdb.TxTailRoundLease{
 				Sender: blk.Payset[txnInc.Intra].Txn.Sender,
 				Lease:  blk.Payset[txnInc.Intra].Txn.Lease,
 				TxnIdx: txnInc.Intra,
 			})
 		}
 	}
-	encodedTail, tailHash := tail.encode()
+	encodedTail, tailHash := tail.Encode()
 
-	t.tailMu.Lock()
-	defer t.tailMu.Unlock()
 	t.recent[rnd] = roundLeases{
 		txleases: delta.Txleases,
 		proto:    config.Consensus[blk.CurrentProtocol],
@@ -225,6 +249,9 @@ func (t *txTail) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 }
 
 func (t *txTail) committedUpTo(rnd basics.Round) (retRound, lookback basics.Round) {
+	t.tailMu.Lock()
+	defer t.tailMu.Unlock()
+
 	proto := t.recent[rnd].proto
 	maxlife := basics.Round(proto.MaxTxnLife)
 
@@ -248,10 +275,10 @@ func (t *txTail) prepareCommit(dcc *deferredCommitContext) (err error) {
 		dcc.txTailDeltas = append(dcc.txTailDeltas, t.roundTailSerializedDeltas[i])
 	}
 	lowest := t.lowestBlockHeaderRound
-	proto, ok := config.Consensus[t.blockHeaderData[dcc.newBase].CurrentProtocol]
+	proto, ok := config.Consensus[t.blockHeaderData[dcc.newBase()].CurrentProtocol]
 	t.tailMu.RUnlock()
 	if !ok {
-		return fmt.Errorf("round %d not found in blockHeaderData: lowest=%d, base=%d", dcc.newBase, lowest, dcc.oldBase)
+		return fmt.Errorf("round %d not found in blockHeaderData: lowest=%d, base=%d", dcc.newBase(), lowest, dcc.oldBase)
 	}
 	// get the MaxTxnLife from the consensus params of the latest round in this commit range
 	// preserve data for MaxTxnLife + DeeperBlockHeaderHistory
@@ -268,12 +295,17 @@ func (t *txTail) prepareCommit(dcc *deferredCommitContext) (err error) {
 	return
 }
 
-func (t *txTail) commitRound(ctx context.Context, tx *sql.Tx, dcc *deferredCommitContext) error {
+func (t *txTail) commitRound(ctx context.Context, tx trackerdb.TransactionScope, dcc *deferredCommitContext) error {
+	aw, err := tx.MakeAccountsWriter()
+	if err != nil {
+		return err
+	}
+
 	// determine the round to remove data
 	// the formula is similar to the committedUpTo: rnd + 1 - retain size
-	forgetBeforeRound := (dcc.newBase + 1).SubSaturate(basics.Round(dcc.txTailRetainSize))
+	forgetBeforeRound := (dcc.newBase() + 1).SubSaturate(basics.Round(dcc.txTailRetainSize))
 	baseRound := dcc.oldBase + 1
-	if err := txtailNewRound(ctx, tx, baseRound, dcc.txTailDeltas, forgetBeforeRound); err != nil {
+	if err := aw.TxtailNewRound(ctx, baseRound, dcc.txTailDeltas, forgetBeforeRound); err != nil {
 		return fmt.Errorf("txTail: unable to persist new round %d : %w", baseRound, err)
 	}
 	return nil
@@ -287,7 +319,7 @@ func (t *txTail) postCommit(ctx context.Context, dcc *deferredCommitContext) {
 
 	// get the MaxTxnLife from the consensus params of the latest round in this commit range
 	// preserve data for MaxTxnLife + DeeperBlockHeaderHistory rounds
-	newLowestRound := (dcc.newBase + 1).SubSaturate(basics.Round(dcc.txTailRetainSize))
+	newLowestRound := (dcc.newBase() + 1).SubSaturate(basics.Round(dcc.txTailRetainSize))
 	for t.lowestBlockHeaderRound < newLowestRound {
 		delete(t.blockHeaderData, t.lowestBlockHeaderRound)
 		t.lowestBlockHeaderRound++
@@ -304,7 +336,11 @@ func (t *txTail) postCommit(ctx context.Context, dcc *deferredCommitContext) {
 func (t *txTail) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
 }
 
-func (t *txTail) handleUnorderedCommit(*deferredCommitContext) {
+func (t *txTail) handleUnorderedCommit(dcc *deferredCommitContext) {
+}
+func (t *txTail) handlePrepareCommitError(dcc *deferredCommitContext) {
+}
+func (t *txTail) handleCommitError(dcc *deferredCommitContext) {
 }
 
 func (t *txTail) produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcr *deferredCommitRange) *deferredCommitRange {
@@ -324,6 +360,12 @@ func (t errTxTailMissingRound) Error() string {
 // checkDup test to see if the given transaction id/lease already exists. It returns nil if neither exists, or
 // TransactionInLedgerError / LeaseInLedgerError respectively.
 func (t *txTail) checkDup(proto config.ConsensusParams, current basics.Round, firstValid basics.Round, lastValid basics.Round, txid transactions.Txid, txl ledgercore.Txlease) error {
+	// txTail does not use l.trackerMu, instead uses t.tailMu to make it thread-safe
+	// t.tailMu is sufficient because the state of txTail does not depend on any outside data field
+
+	t.tailMu.RLock()
+	defer t.tailMu.RUnlock()
+
 	if lastValid < t.lowWaterMark {
 		return &errTxTailMissingRound{round: lastValid}
 	}
@@ -339,22 +381,28 @@ func (t *txTail) checkDup(proto config.ConsensusParams, current basics.Round, fi
 		for rnd := firstChecked; rnd <= lastChecked; rnd++ {
 			expires, ok := t.recent[rnd].txleases[txl]
 			if ok && current <= expires {
-				return ledgercore.MakeLeaseInLedgerError(txid, txl)
+				return ledgercore.MakeLeaseInLedgerError(txid, txl, false)
 			}
 		}
 	}
 
 	if _, confirmed := t.lastValid[lastValid][txid]; confirmed {
-		return &ledgercore.TransactionInLedgerError{Txid: txid}
+		return &ledgercore.TransactionInLedgerError{Txid: txid, InBlockEvaluator: false}
 	}
 	return nil
 }
 
-func (t *txTail) putLV(lastValid basics.Round, id transactions.Txid) {
-	if _, ok := t.lastValid[lastValid]; !ok {
-		t.lastValid[lastValid] = make(map[transactions.Txid]struct{})
+// checkConfirmed test to see if the given transaction id already exists.
+func (t *txTail) checkConfirmed(txid transactions.Txid) (basics.Round, bool) {
+	t.tailMu.RLock()
+	defer t.tailMu.RUnlock()
+
+	for lastValidRound, lastValid := range t.lastValid {
+		if deltaR, confirmed := lastValid[txid]; confirmed {
+			return lastValidRound - basics.Round(deltaR), true
+		}
 	}
-	t.lastValid[lastValid][id] = struct{}{}
+	return 0, false
 }
 
 func (t *txTail) recentTailHash(offset uint64, retainSize uint64) (crypto.Digest, error) {
@@ -378,8 +426,5 @@ func (t *txTail) blockHeader(rnd basics.Round) (bookkeeping.BlockHeader, bool) {
 	t.tailMu.RLock()
 	defer t.tailMu.RUnlock()
 	hdr, ok := t.blockHeaderData[rnd]
-	if !ok {
-		t.log.Warnf("txtail failed to fetch blockHeader from rnd: %d", rnd)
-	}
 	return hdr, ok
 }

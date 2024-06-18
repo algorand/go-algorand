@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,25 +23,28 @@ import (
 // A voteMachine should track a new vote.
 //
 // Preconditions:
-//  - e.T = voteAccepted or voteFilterRequest
-//  - v.R.Step != propose
-//  - for all votes v = e.Vote, v.R.Step is the same
-//  - (Algorand safety assumptions on the equivocation of votes)
+//   - e.T = voteAccepted or voteFilterRequest
+//   - v.R.Step != propose
+//   - for all votes v = e.Vote, v.R.Step is the same
+//   - (Algorand safety assumptions on the equivocation of votes)
 //
 // Postconditions (let e be the returned event):
-//  if Input is of type voteAccepted:
-//  - e.T is one of {none, {soft,cert,next}Threshold}
-//  - e.T corresponds to the input event's step (e.g. if the input event had v.R.Step = soft, then e.T is either none or softThreshold)
-//  - e.T != none if and only if e.Bundle contains a valid bundle for e.Proposal
-//  - if e.T is a {soft,cert}Threshold event, it will be emitted at most once and e.Proposal != bottom
-//  - if e.T is a {next}Threshold event, it will be emitted at most once and e.Proposal != bottom
-//  if Input is of type voteFilterRequest:
-//  - e.T is one of {none, voteFilteredStep}
-//  - e.T = none for a given input only once (the first time the vote is seen, if we have not previously detected equivocation
+//
+//	if Input is of type voteAccepted:
+//	- e.T is one of {none, {soft,cert,next}Threshold}
+//	- e.T corresponds to the input event's step (e.g. if the input event had v.R.Step = soft, then e.T is either none or softThreshold)
+//	- e.T != none if and only if e.Bundle contains a valid bundle for e.Proposal
+//	- if e.T is a {soft,cert}Threshold event, it will be emitted at most once and e.Proposal != bottom
+//	- if e.T is a {next}Threshold event, it will be emitted at most once and e.Proposal != bottom
+//	if Input is of type voteFilterRequest:
+//	- e.T is one of {none, voteFilteredStep}
+//	- e.T = none for a given input only once (the first time the vote is seen, if we have not previously detected equivocation
 //
 // Trace properties
-//  - voteFilterRequest is idempotent
+//   - voteFilterRequest is idempotent
 type voteTrackerContract struct {
+	_struct struct{} `codec:","`
+
 	Step   step
 	StepOk bool
 

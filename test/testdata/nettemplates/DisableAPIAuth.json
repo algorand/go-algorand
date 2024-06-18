@@ -1,0 +1,25 @@
+{
+    "Genesis": {
+        "NetworkName": "tbd",
+        "ConsensusProtocol": "future",
+        "LastPartKeyRound": 3000,
+        "Wallets": [
+            {
+                "Name": "Wallet1",
+                "Stake": 100,
+                "Online": true
+            }
+        ]
+    },
+    "Nodes": [
+        {
+            "Name": "Primary",
+            "IsRelay": true,
+            "ConfigJSONOverride": "{\"DisableAPIAuth\":true}",
+            "Wallets": [
+                { "Name": "Wallet1",
+                  "ParticipationOnly": false }
+            ]
+        }
+    ]
+}

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -110,7 +110,7 @@ func createApplication(ac *transactions.ApplicationCallTxnFields, balances Balan
 	// Update the cached TotalExtraAppPages for this account, used
 	// when computing MinBalance
 	totalExtraPages := record.TotalExtraAppPages
-	totalExtraPages = basics.AddSaturate32(totalExtraPages, ac.ExtraProgramPages)
+	totalExtraPages = basics.AddSaturate(totalExtraPages, ac.ExtraProgramPages)
 	record.TotalExtraAppPages = totalExtraPages
 
 	// Write back to the creator's balance record
@@ -161,7 +161,7 @@ func deleteApplication(balances Balances, creator basics.Address, appIdx basics.
 		proto := balances.ConsensusParams()
 		if proto.EnableExtraPagesOnAppUpdate {
 			extraPages := params.ExtraProgramPages
-			totalExtraPages = basics.SubSaturate32(totalExtraPages, extraPages)
+			totalExtraPages = basics.SubSaturate(totalExtraPages, extraPages)
 		}
 		record.TotalExtraAppPages = totalExtraPages
 	}
@@ -379,13 +379,13 @@ func ApplicationCall(ac transactions.ApplicationCallTxnFields, header transactio
 	// Ensure that the only operation we can do is ClearState if the application
 	// does not exist
 	if !exists && ac.OnCompletion != transactions.ClearStateOC {
-		return fmt.Errorf("only clearing out is supported for applications that do not exist")
+		return fmt.Errorf("only ClearState is supported for an application (%d) that does not exist", appIdx)
 	}
 
 	// If this txn is going to set new programs (either for creation or
 	// update), check that the programs are valid and not too expensive
 	if ac.ApplicationID == 0 || ac.OnCompletion == transactions.UpdateApplicationOC {
-		err := transactions.CheckContractVersions(ac.ApprovalProgram, ac.ClearStateProgram, params, evalParams.Proto)
+		err = transactions.CheckContractVersions(ac.ApprovalProgram, ac.ClearStateProgram, params, evalParams.Proto)
 		if err != nil {
 			return err
 		}
@@ -401,9 +401,9 @@ func ApplicationCall(ac transactions.ApplicationCallTxnFields, header transactio
 	// execute the ClearStateProgram, whose failures are ignored.
 	if ac.OnCompletion == transactions.ClearStateOC {
 		// Ensure that the user is already opted in
-		ok, err := balances.HasAppLocalState(header.Sender, appIdx)
-		if err != nil {
-			return err
+		ok, hasErr := balances.HasAppLocalState(header.Sender, appIdx)
+		if hasErr != nil {
+			return hasErr
 		}
 		if !ok {
 			return fmt.Errorf("cannot clear state: %v is not currently opted in to app %d", header.Sender, appIdx)
@@ -411,16 +411,16 @@ func ApplicationCall(ac transactions.ApplicationCallTxnFields, header transactio
 
 		// If the app still exists, run the ClearStateProgram
 		if exists {
-			pass, evalDelta, err := balances.StatefulEval(gi, evalParams, appIdx, params.ClearStateProgram)
-			if err != nil {
-				// Fail on non-logic eval errors and ignore LogicEvalError errors
-				if _, ok := err.(ledgercore.LogicEvalError); !ok {
-					return err
+			pass, evalDelta, evalErr := balances.StatefulEval(gi, evalParams, appIdx, params.ClearStateProgram)
+			if evalErr != nil {
+				// ClearStateProgram evaluation can't make the txn fail.
+				if _, ok := evalErr.(logic.EvalError); !ok {
+					return evalErr
 				}
 			}
 
 			// We will have applied any changes if and only if we passed
-			if err == nil && pass {
+			if evalErr == nil && pass {
 				// Fill in applyData, so that consumers don't have to implement a
 				// stateful TEAL interpreter to apply state changes
 				ad.EvalDelta = evalDelta

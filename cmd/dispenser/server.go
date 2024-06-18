@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,6 +17,9 @@
 package main
 
 import (
+	_ "embed"
+	"html"
+
 	// "bytes"
 	"encoding/json"
 	"flag"
@@ -63,61 +66,8 @@ type dispenserSiteConfig struct {
 	topPage string
 }
 
-const topPageTemplate = `
-<html>
-  <head>
-    <title>Algorand dispenser</title>
-    <script src='https://www.google.com/recaptcha/api.js'>
-    </script>
-    <script src="https://code.jquery.com/jquery-3.3.1.min.js"
-    integrity="sha256-FgpCb/KJQlLNfOu91ta32o/NMZxltwRo8QtmkMRdAu8="
-    crossorigin="anonymous">
-    </script>
-    <script>
-      function loadparam() {
-        const queryString = window.location.search;
-        const urlParams = new URLSearchParams(queryString);
-        $('#target').val(urlParams.get('account'));
-      }
-
-      function onload() {
-        loadparam();
-        $('#dispense').click(function(e) {
-          var recaptcha = grecaptcha.getResponse();
-          var target = $('#target').val();
-
-          $('#status').html('Sending request..');
-          var req = $.post('/dispense', {
-            recaptcha: recaptcha,
-            target: target,
-          }, function(data) {
-            $('#status').html('Code ' + req.status + ' ' + req.statusText + ': ' + req.responseText);
-          }).fail(function() {
-            $('#status').html('Code ' + req.status + ' ' + req.statusText + ': ' + req.responseText);
-          });
-        });
-      }
-    </script>
-  </head>
-  <body onload="onload()">
-    <h1>Algorand dispenser</h1>
-    <div class="g-recaptcha" data-sitekey="{{.RecaptchaSiteKey}}">
-    </div>
-    <div>
-      <p>The dispensed Algos have no monetary value and should only be used to test applications.</p>
-      <p>This service is gracefully provided to enable development on the Algorand blockchain test networks.</p>
-      <p>Please do not abuse it by requesting more Algos than needed.</p>
-    </div>
-    <div>
-      <input id="target" placeholder="target address" size="80">
-      <button id="dispense">Dispense</button>
-    </div>
-    <div>
-      Status: <span id="status"></span>
-    </div>
-  </body>
-</html>
-`
+//go:embed index.html.tpl
+var topPageTemplate string
 
 func getConfig(r *http.Request) dispenserSiteConfig {
 	return configMap[r.Host]
@@ -190,7 +140,7 @@ func dispense(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	target := targets[0]
+	target := html.EscapeString(targets[0])
 
 	c, ok := client[r.Host]
 	if !ok {

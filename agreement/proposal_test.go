@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -46,7 +46,7 @@ func testSetup(periodCount uint64) (player, rootRouter, testAccountData, testBlo
 }
 
 func createProposalsTesting(accs testAccountData, round basics.Round, period period, factory BlockFactory, ledger Ledger) (ps []proposal, vs []vote) {
-	ve, err := factory.AssembleBlock(round)
+	ve, err := factory.AssembleBlock(round, accs.addresses)
 	if err != nil {
 		logging.Base().Errorf("Could not generate a proposal for round %d: %v", round, err)
 		return nil, nil
@@ -122,7 +122,7 @@ func TestProposalFunctions(t *testing.T) {
 	player, _, accs, factory, ledger := testSetup(0)
 	round := player.Round
 	period := player.Period
-	ve, err := factory.AssembleBlock(player.Round)
+	ve, err := factory.AssembleBlock(player.Round, accs.addresses)
 	require.NoError(t, err, "Could not generate a proposal for round %d: %v", round, err)
 
 	validator := testBlockValidator{}
@@ -162,7 +162,7 @@ func TestProposalUnauthenticated(t *testing.T) {
 
 	round := player.Round
 	period := player.Period
-	testBlockFactory, err := factory.AssembleBlock(player.Round)
+	testBlockFactory, err := factory.AssembleBlock(player.Round, accounts.addresses)
 	require.NoError(t, err, "Could not generate a proposal for round %d: %v", round, err)
 
 	validator := testBlockValidator{}
@@ -201,6 +201,15 @@ func TestProposalUnauthenticated(t *testing.T) {
 	unauthenticatedProposal3.SeedProof = unauthenticatedProposal.SeedProof
 	_, err = unauthenticatedProposal3.validate(context.Background(), round, ledger, validator)
 	require.Error(t, err)
+
+	// validate mismatch proposer address between block and unauthenticatedProposal
+	proposal4, _, _ := proposalForBlock(accounts.addresses[accountIndex], accounts.vrfs[accountIndex], testBlockFactory, period, ledger)
+	accountIndex++
+	unauthenticatedProposal4 := proposal4.u()
+	unauthenticatedProposal4.OriginalProposer = accounts.addresses[0] // set to the wrong address
+	require.NotEqual(t, unauthenticatedProposal4.OriginalProposer, unauthenticatedProposal4.Block.Proposer())
+	_, err = unauthenticatedProposal4.validate(context.Background(), round, ledger, validator)
+	require.ErrorContains(t, err, "wrong proposer")
 }
 
 func unauthenticatedProposalBlockPanicWrapper(t *testing.T, message string, uap unauthenticatedProposal, validator BlockValidator) (block bookkeeping.Block) {

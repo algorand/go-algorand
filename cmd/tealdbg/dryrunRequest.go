@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,7 +23,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
-	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 )
 
 // ddrFromParams converts serialized DryrunRequest to v2.DryrunRequest
@@ -32,7 +32,7 @@ func ddrFromParams(dp *DebugParams) (ddr v2.DryrunRequest, err error) {
 		return
 	}
 
-	var gdr generatedV2.DryrunRequest
+	var gdr model.DryrunRequest
 	err1 := protocol.DecodeJSON(dp.DdrBlob, &gdr)
 	if err1 == nil {
 		ddr, err = v2.DryrunRequestFromGenerated(&gdr)
@@ -44,23 +44,6 @@ func ddrFromParams(dp *DebugParams) (ddr v2.DryrunRequest, err error) {
 		}
 	}
 
-	return
-}
-
-func convertAccounts(accounts []generatedV2.Account) (records []basics.BalanceRecord, err error) {
-	for _, a := range accounts {
-		var addr basics.Address
-		addr, err = basics.UnmarshalChecksumAddress(a.Address)
-		if err != nil {
-			return
-		}
-		var ad basics.AccountData
-		ad, err = v2.AccountToAccountData(&a)
-		if err != nil {
-			return
-		}
-		records = append(records, basics.BalanceRecord{Addr: addr, AccountData: ad})
-	}
 	return
 }
 

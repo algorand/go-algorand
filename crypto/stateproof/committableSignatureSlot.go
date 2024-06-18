@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -37,6 +37,7 @@ var ErrIndexOutOfBound = errors.New("index is out of bound")
 // committableSignatureSlotArray is used to create a merkle tree on the stateproof's
 // signature array. it serializes the MSS signatures using a specific format
 // state proof signature array.
+//
 //msgp:ignore committableSignatureSlotArray
 type committableSignatureSlotArray []sigslot
 

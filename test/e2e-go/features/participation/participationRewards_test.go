@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -42,15 +42,16 @@ func getFirstAccountFromNamedNode(fixture *fixtures.RestClientFixture, r *requir
 }
 
 func waitUntilRewards(t *testing.T, fixture *fixtures.RestClientFixture, round uint64) (uint64, error) {
-	block, err := fixture.AlgodClient.Block(round)
 	a := require.New(fixtures.SynchronizedTest(t))
+
+	block, err := fixture.LibGoalClient.BookkeepingBlock(round)
 	a.NoError(err)
 
 	for {
 		round++
 		err := fixture.WaitForRoundWithTimeout(round + 1)
 		a.NoError(err)
-		nextBlock, err := fixture.AlgodClient.Block(round)
+		nextBlock, err := fixture.LibGoalClient.BookkeepingBlock(round)
 		a.NoError(err)
 
 		if nextBlock.RewardsLevel > block.RewardsLevel {
@@ -126,7 +127,7 @@ func TestOnlineOfflineRewards(t *testing.T) {
 	finalOnlineBalance, _ := onlineClient.GetBalance(onlineAccount)
 	finalOfflineBalance, _ := offlineClient.GetBalance(offlineAccount)
 
-	blk, err := fixture.AlgodClient.Block(initialRound)
+	blk, err := fixture.LibGoalClient.BookkeepingBlock(initialRound)
 	r.NoError(err)
 	rewardUnit := config.Consensus[protocol.ConsensusVersion(blk.CurrentProtocol)].RewardUnit
 	// online account should be rewarded at least the expected amount
@@ -180,7 +181,7 @@ func TestPartkeyOnlyRewards(t *testing.T) {
 	// do a balance poke by moving funds b/w accounts. this will cause balances to reflect received rewards
 	tx, err := fixture.LibGoalClient.SendPaymentFromUnencryptedWallet(richAccount.Address, account.String(), minFee, minBalance, nil)
 	r.NoError(err)
-	fixture.WaitForTxnConfirmation(arbitraryPostGenesisRound+uint64(10), tx.ID().String(), richAccount.Address)
+	fixture.WaitForTxnConfirmation(arbitraryPostGenesisRound+uint64(10), tx.ID().String())
 	finalBalance, err := client.GetBalance(account.String())
 	r.NoError(err)
 	delta := finalBalance - initialBalance
@@ -217,7 +218,7 @@ func TestRewardUnitThreshold(t *testing.T) {
 
 	minFee, minBalance, err := fixture.MinFeeAndBalance(initialRound)
 	r.NoError(err)
-	blk, err := client.Block(initialRound)
+	blk, err := client.BookkeepingBlock(initialRound)
 	r.NoError(err)
 	rewardUnit := config.Consensus[protocol.ConsensusVersion(blk.CurrentProtocol)].RewardUnit
 	// accrue rewards by letting time pass
@@ -254,8 +255,8 @@ func TestRewardUnitThreshold(t *testing.T) {
 	r.NoError(err)
 	// newAccount should NOT be rewarded
 	// poorAccount should be rewarded
-	updatedBalancePoorAccount, _ := client.AccountInformation(poorAccount)
-	updatedBalanceNewAccount, _ := client.AccountInformation(newAccount)
+	updatedBalancePoorAccount, _ := client.AccountInformation(poorAccount, false)
+	updatedBalanceNewAccount, _ := client.AccountInformation(newAccount, false)
 	poorAccountDelta := updatedBalancePoorAccount.Amount - initialBalancePoorAccount
 	r.Truef(initialBalancePoorAccount/rewardUnit <= poorAccountDelta, "non-empty account with balance > rewardunit (%d) should accrue rewards. started with %d, given %d, now has %d. Expected %d", rewardUnit, initialBalancePoorAccount, amountRichAccountPokesWith, updatedBalancePoorAccount.Amount, amountRichAccountPokesWith+initialBalancePoorAccount/rewardUnit)
 	r.Truef(initialBalancePoorAccount/rewardUnit <= updatedBalancePoorAccount.Rewards, "non-empty account with balance > rewardunit (%d) should accrue rewards. started with %d, given %d, now has %d, actual rewards %d", rewardUnit, initialBalancePoorAccount, amountRichAccountPokesWith, updatedBalancePoorAccount.Amount, updatedBalancePoorAccount.Rewards)
@@ -288,7 +289,7 @@ func TestRewardUnitThreshold(t *testing.T) {
 	client.WaitForRound(rewardRound2)
 
 	// Ensure that a reward for newAccount's one reward unit is now pending
-	latestBalanceNewAccount, _ := client.AccountInformation(newAccount)
+	latestBalanceNewAccount, _ := client.AccountInformation(newAccount, false)
 	r.Truef((initialBalanceNewAccount+amountRichAccountPokesWith)/rewardUnit >= 1, "new account needs at least one reward unit")
 	r.Truef(latestBalanceNewAccount.Amount >= initialBalanceNewAccount+(initialBalanceNewAccount+amountRichAccountPokesWith)/rewardUnit,
 		"account sent at least %d should have accrued rewards. started with %d, was bumped to %d, so increase should be more than the %d seen",
@@ -298,7 +299,7 @@ func TestRewardUnitThreshold(t *testing.T) {
 	r.Equal(initialBalanceNewAccount+amountRichAccountPokesWith, latestBalanceNewAccount.AmountWithoutPendingRewards, "rewards should be pending")
 
 	// since we poked, previous rewards should no longer be pending for poor account
-	latestBalancePoorAccount, _ := client.AccountInformation(poorAccount)
+	latestBalancePoorAccount, _ := client.AccountInformation(poorAccount, false)
 	r.Truef(latestBalancePoorAccount.AmountWithoutPendingRewards >= updatedBalancePoorAccount.Amount+amountRichAccountPokesWith, "rewards should have been applied")
 
 	// Test e2e REST API convenience computations
@@ -347,10 +348,9 @@ func TestRewardRateRecalculation(t *testing.T) {
 	r.NoError(err)
 	minFee, minBal, err := fixture.MinFeeAndBalance(curStatus.LastRound)
 	r.NoError(err)
-	deadline := curStatus.LastRound + uint64(5)
-	fixture.SendMoneyAndWait(deadline, amountToSend, minFee, richAccount.Address, rewardsAccount, "")
+	fixture.SendMoneyAndWait(curStatus.LastRound, amountToSend, minFee, richAccount.Address, rewardsAccount, "")
 
-	blk, err := client.Block(curStatus.LastRound)
+	blk, err := client.BookkeepingBlock(curStatus.LastRound)
 	r.NoError(err)
 	r.Equal(protocol.ConsensusVersion(blk.CurrentProtocol), consensusTestRapidRewardRecalculation)
 	consensusParams := consensus[protocol.ConsensusVersion(blk.CurrentProtocol)]
@@ -360,10 +360,10 @@ func TestRewardRateRecalculation(t *testing.T) {
 	if roundQueried != rewardRecalcRound-1 {
 		r.FailNow("", "got rewards pool balance on round %d but wanted the balance on round %d, failing out", rewardRecalcRound-1, roundQueried)
 	}
-	lastRoundBeforeRewardRecals, err := client.Block(rewardRecalcRound - 1)
+	lastRoundBeforeRewardRecals, err := client.BookkeepingBlock(rewardRecalcRound - 1)
 	r.NoError(err)
 	r.NoError(fixture.WaitForRoundWithTimeout(rewardRecalcRound))
-	blk, err = client.Block(rewardRecalcRound)
+	blk, err = client.BookkeepingBlock(rewardRecalcRound)
 	r.NoError(err)
 	if !consensusParams.PendingResidueRewards {
 		lastRoundBeforeRewardRecals.RewardsResidue = 0
@@ -373,8 +373,7 @@ func TestRewardRateRecalculation(t *testing.T) {
 
 	curStatus, err = client.Status()
 	r.NoError(err)
-	deadline = curStatus.LastRound + uint64(5)
-	fixture.SendMoneyAndWait(deadline, amountToSend, minFee, richAccount.Address, rewardsAccount, "")
+	fixture.SendMoneyAndWait(curStatus.LastRound, amountToSend, minFee, richAccount.Address, rewardsAccount, "")
 
 	rewardRecalcRound = rewardRecalcRound + consensusParams.RewardsRateRefreshInterval
 
@@ -383,11 +382,11 @@ func TestRewardRateRecalculation(t *testing.T) {
 	if roundQueried != rewardRecalcRound-1 {
 		r.FailNow("", "got rewards pool balance on round %d but wanted the balance on round %d, failing out", rewardRecalcRound-1, roundQueried)
 	}
-	lastRoundBeforeRewardRecals, err = client.Block(rewardRecalcRound - 1)
+	lastRoundBeforeRewardRecals, err = client.BookkeepingBlock(rewardRecalcRound - 1)
 	r.NoError(err)
 	consensusParams = consensus[protocol.ConsensusVersion(lastRoundBeforeRewardRecals.CurrentProtocol)]
 	r.NoError(fixture.WaitForRoundWithTimeout(rewardRecalcRound))
-	blk, err = client.Block(rewardRecalcRound)
+	blk, err = client.BookkeepingBlock(rewardRecalcRound)
 	r.NoError(err)
 	if !consensusParams.PendingResidueRewards {
 		lastRoundBeforeRewardRecals.RewardsResidue = 0

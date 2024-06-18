@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -32,6 +32,12 @@ type LimitedReaderSlurper struct {
 	// remainedUnallocatedSpace is how much more memory we are allowed to allocate for this reader beyond the base allocation.
 	remainedUnallocatedSpace uint64
 
+	// currentMessageBytesRead is the size of the message we are currently reading.
+	currentMessageBytesRead uint64
+
+	// currentMessageMaxSize is the maximum number of bytes the current message type is allowed to have.
+	currentMessageMaxSize uint64
+
 	// the buffers array contain the memory buffers used to store the data. The first level array is preallocated
 	// dependening on the desired base allocation. The rest of the levels are dynamically allocated on demand.
 	buffers [][]byte
@@ -48,6 +54,8 @@ func MakeLimitedReaderSlurper(baseAllocation, maxAllocation uint64) *LimitedRead
 	lrs := &LimitedReaderSlurper{
 		remainedUnallocatedSpace: maxAllocation - baseAllocation,
 		lastBuffer:               0,
+		currentMessageBytesRead:  0,
+		currentMessageMaxSize:    0,
 		buffers:                  make([][]byte, 1+(maxAllocation-baseAllocation+allocationStep-1)/allocationStep),
 	}
 	lrs.buffers[0] = make([]byte, 0, baseAllocation)
@@ -91,6 +99,10 @@ func (s *LimitedReaderSlurper) Read(reader io.Reader) error {
 		entireBuffer := readBuffer[:cap(readBuffer)]
 		// read the data into the unused area of the read buffer.
 		n, err := reader.Read(entireBuffer[len(readBuffer):])
+		s.currentMessageBytesRead += uint64(n)
+		if s.currentMessageMaxSize > 0 && s.currentMessageBytesRead > s.currentMessageMaxSize {
+			return ErrIncomingMsgTooLarge
+		}
 		if err != nil {
 			if err == io.EOF {
 				s.buffers[s.lastBuffer] = readBuffer[:len(readBuffer)+n]
@@ -110,12 +122,14 @@ func (s *LimitedReaderSlurper) Size() (size uint64) {
 	return
 }
 
-// Reset clears the buffered data
-func (s *LimitedReaderSlurper) Reset() {
+// Reset clears the buffered data and sets a limit for the upcoming message
+func (s *LimitedReaderSlurper) Reset(n uint64) {
 	for i := 1; i <= s.lastBuffer; i++ {
 		s.remainedUnallocatedSpace += uint64(cap(s.buffers[i]))
 		s.buffers[i] = nil
 	}
+	s.currentMessageMaxSize = n
+	s.currentMessageBytesRead = 0
 	s.buffers[0] = s.buffers[0][:0]
 	s.lastBuffer = 0
 }

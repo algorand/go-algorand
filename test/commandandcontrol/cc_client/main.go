@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -129,7 +129,7 @@ func main() {
 func closeServiceConnection(serverWs *websocket.Conn) {
 	err := serverWs.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
 	if err != nil {
-		log.Errorf("write close:", err)
+		log.Error("write close:", err)
 		return
 	}
 }

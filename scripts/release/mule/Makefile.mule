@@ -28,7 +28,7 @@ ci-integration:
 	SRCROOT=$(SRCPATH) \
 	test/scripts/e2e.sh -c $(CHANNEL) -n
 
-ci-build: ci-clean buildsrc ci-setup
+ci-build: ci-clean build ci-setup
 	CHANNEL=$(CHANNEL) PKG_ROOT=$(PKG_DIR) NO_BUILD=True VARIATIONS=$(OS_TYPE)-$(ARCH) \
 	scripts/build_packages.sh $(OS_TYPE)/$(ARCH) && \
 	mkdir -p $(PKG_DIR)/data && \

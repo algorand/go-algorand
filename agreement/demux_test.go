@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -422,14 +422,14 @@ func TestDemuxNext(t *testing.T) {
 }
 
 // implement timers.Clock
-func (t *demuxTester) Zero() timers.Clock {
+func (t *demuxTester) Zero() timers.Clock[TimeoutType] {
 	// we don't care about this function in this test.
 	return t
 }
 
 // implement timers.Clock
-func (t *demuxTester) TimeoutAt(delta time.Duration) <-chan time.Time {
-	if delta == fastTimeoutChTime {
+func (t *demuxTester) TimeoutAt(delta time.Duration, timeoutType TimeoutType) <-chan time.Time {
+	if timeoutType == TimeoutFastRecovery {
 		return nil
 	}
 
@@ -450,7 +450,7 @@ func (t *demuxTester) Encode() []byte {
 }
 
 // implement timers.Clock
-func (t *demuxTester) Decode([]byte) (timers.Clock, error) {
+func (t *demuxTester) Decode([]byte) (timers.Clock[TimeoutType], error) {
 	// we don't care about this function in this test.
 	return t, nil
 }
@@ -495,7 +495,7 @@ func (t *demuxTester) LookupAgreement(basics.Round, basics.Address) (basics.Onli
 }
 
 // implement Ledger
-func (t *demuxTester) Circulation(basics.Round) (basics.MicroAlgos, error) {
+func (t *demuxTester) Circulation(basics.Round, basics.Round) (basics.MicroAlgos, error) {
 	// we don't care about this function in this test.
 	return basics.MicroAlgos{}, nil
 }
@@ -675,7 +675,7 @@ func (t *demuxTester) TestUsecase(testcase demuxTestUsecase) bool {
 		close(s.quit)
 	}
 
-	e, ok := dmx.next(s, time.Second, fastTimeoutChTime, 300)
+	e, ok := dmx.next(s, Deadline{Duration: time.Second, Type: TimeoutDeadline}, Deadline{Duration: fastTimeoutChTime, Type: TimeoutFastRecovery}, 300)
 
 	if !assert.Equal(t, testcase.ok, ok) {
 		return false

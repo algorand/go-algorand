@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,6 +17,7 @@
 package transactions
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 	"testing"
@@ -24,6 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/libgoal/participation"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -64,17 +66,17 @@ func testAccountsCanChangeOnlineState(t *testing.T, templatePath string) {
 	becomesNonparticipating := accountList[2].Address // 10% stake
 
 	// assert that initiallyOfflineAccount is offline
-	initiallyOfflineAccountStatus, err := client.AccountInformation(initiallyOffline)
+	initiallyOfflineAccountStatus, err := client.AccountInformation(initiallyOffline, false)
 	a.NoError(err)
 	a.Equal(initiallyOfflineAccountStatus.Status, basics.Offline.String())
 
 	// assert that initiallyOnlineAccount is online
-	initiallyOnlineAccountStatus, err := client.AccountInformation(initiallyOnline)
+	initiallyOnlineAccountStatus, err := client.AccountInformation(initiallyOnline, false)
 	a.NoError(err)
 	a.Equal(initiallyOnlineAccountStatus.Status, basics.Online.String())
 
 	// assert that the account that will become nonparticipating hasn't yet been marked as such
-	unmarkedAccountStatus, err := client.AccountInformation(becomesNonparticipating)
+	unmarkedAccountStatus, err := client.AccountInformation(becomesNonparticipating, false)
 	a.NoError(err)
 	a.NotEqual(unmarkedAccountStatus.Status, basics.NotParticipating.String())
 
@@ -132,18 +134,18 @@ func testAccountsCanChangeOnlineState(t *testing.T, templatePath string) {
 	fixture.WaitForRoundWithTimeout(curRound + uint64(1))
 
 	// assert that initiallyOffline is now online
-	initiallyOfflineAccountStatus, err = client.AccountInformation(initiallyOffline)
+	initiallyOfflineAccountStatus, err = client.AccountInformation(initiallyOffline, false)
 	a.NoError(err)
 	a.Equal(initiallyOfflineAccountStatus.Status, basics.Online.String())
 
 	// assert that initiallyOnline is now offline
-	initiallyOnlineAccountStatus, err = client.AccountInformation(initiallyOnline)
+	initiallyOnlineAccountStatus, err = client.AccountInformation(initiallyOnline, false)
 	a.NoError(err)
 	a.Equal(initiallyOnlineAccountStatus.Status, basics.Offline.String())
 
 	if doNonparticipationTest {
 		// assert that becomesNonparticipating is no longer participating
-		unmarkedAccountStatus, err = client.AccountInformation(becomesNonparticipating)
+		unmarkedAccountStatus, err = client.AccountInformation(becomesNonparticipating, false)
 		a.NoError(err)
 		a.Equal(unmarkedAccountStatus.Status, basics.NotParticipating.String())
 	}
@@ -171,7 +173,10 @@ func TestCloseOnError(t *testing.T) {
 	_, curRound := fixture.GetBalanceAndRound(initiallyOnline)
 
 	var partkeyFile string
-	_, partkeyFile, err = client.GenParticipationKeysTo(initiallyOffline, 0, curRound+1000, 0, t.TempDir())
+	installFunc := func(keyPath string) error {
+		return errors.New("the install directory is provided, so keys should not be installed")
+	}
+	_, partkeyFile, err = participation.GenParticipationKeysTo(initiallyOffline, 0, curRound+1000, 0, t.TempDir(), installFunc)
 	a.NoError(err)
 
 	// make a participation key for initiallyOffline

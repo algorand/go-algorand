@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -33,7 +33,7 @@ func TestApplicationCallFieldsNotChanged(t *testing.T) {
 	af := ApplicationCallTxnFields{}
 	s := reflect.ValueOf(&af).Elem()
 
-	if s.NumField() != 12 {
+	if s.NumField() != 13 {
 		t.Errorf("You added or removed a field from transactions.ApplicationCallTxnFields. " +
 			"Please ensure you have updated the Empty() method and then " +
 			"fix this test")
@@ -76,6 +76,10 @@ func TestApplicationCallFieldsEmpty(t *testing.T) {
 	a.False(ac.Empty())
 
 	ac.LocalStateSchema = basics.StateSchema{}
+	ac.Boxes = make([]BoxRef, 1)
+	a.False(ac.Empty())
+
+	ac.Boxes = nil
 	ac.GlobalStateSchema = basics.StateSchema{NumUint: 1}
 	a.False(ac.Empty())
 
@@ -115,32 +119,8 @@ func TestEncodedAppTxnAllocationBounds(t *testing.T) {
 		if proto.MaxAppTxnForeignAssets > encodedMaxForeignAssets {
 			require.Failf(t, "proto.MaxAppTxnForeignAssets > encodedMaxForeignAssets", "protocol version = %s", protoVer)
 		}
+		if proto.MaxAppBoxReferences > encodedMaxBoxes {
+			require.Failf(t, "proto.MaxAppBoxReferences > encodedMaxBoxes", "protocol version = %s", protoVer)
+		}
 	}
-}
-
-func TestIDByIndex(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	a := require.New(t)
-	ac := ApplicationCallTxnFields{}
-	ac.ApplicationID = 1
-	appID, err := ac.AppIDByIndex(0)
-	a.NoError(err)
-	a.Equal(basics.AppIndex(1), appID)
-	appID, err = ac.AppIDByIndex(1)
-	a.Contains(err.Error(), "invalid Foreign App reference")
-
-}
-
-func TestIndexByID(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	a := require.New(t)
-	ac := ApplicationCallTxnFields{}
-	ac.ApplicationID = 1
-	aidx, err := ac.IndexByAppID(1)
-	a.NoError(err)
-	a.Equal(uint64(0), aidx)
-	aidx, err = ac.IndexByAppID(2)
-	a.Contains(err.Error(), "invalid Foreign App reference")
 }

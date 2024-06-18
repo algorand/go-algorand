@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -103,6 +103,11 @@ func main() {
 
 	if err != nil && !os.IsNotExist(err) {
 		log.Fatalf("Cannot load config: %v", err)
+	}
+
+	_, err = algodConfig.ValidateDNSBootstrapArray(genesis.Network)
+	if err != nil {
+		log.Fatalf("Error validating DNSBootstrap input: %v", err)
 	}
 
 	if _, err := os.Stat(absolutePath); err != nil {

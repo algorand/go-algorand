@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -344,7 +344,7 @@ func setupTestDBAtVer2(partDB db.Accessor, part Participation) error {
 		keyDilution INTEGER NOT NULL DEFAULT 0
 	);`)
 		if err != nil {
-			return nil
+			return err
 		}
 
 		if err := setupSchemaForTest(tx, 2); err != nil {
@@ -362,12 +362,12 @@ func setupTestDBAtVer2(partDB db.Accessor, part Participation) error {
 func setupSchemaForTest(tx *sql.Tx, version int) error {
 	_, err := tx.Exec(`CREATE TABLE schema (tablename TEXT PRIMARY KEY, version INTEGER);`)
 	if err != nil {
-		return nil
+		return err
 	}
 
 	_, err = tx.Exec("INSERT INTO schema (tablename, version) VALUES (?, ?)", PartTableSchemaName, version)
 	if err != nil {
-		return nil
+		return err
 	}
 	return err
 }
@@ -531,7 +531,7 @@ func TestFillDBWithParticipationKeys(t *testing.T) {
 	a.NoError(err)
 }
 
-func TestKeyregValidityPeriod(t *testing.T) {
+func TestKeyregValidityPeriod(t *testing.T) { //nolint:paralleltest // Not parallel because it modifies config.Consensus
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
 
@@ -605,4 +605,14 @@ func BenchmarkParticipationSign(b *testing.B) {
 		ephID := basics.OneTimeIDForRound(basics.Round(rnd), keyDilution)
 		_ = part.Voting.Sign(ephID, msg)
 	}
+}
+
+func BenchmarkID(b *testing.B) {
+	pki := ParticipationKeyIdentity{}
+	b.Run("existing", func(b *testing.B) {
+		b.ReportAllocs() // demonstrate this is a single alloc
+		for i := 0; i < b.N; i++ {
+			pki.ID()
+		}
+	})
 }

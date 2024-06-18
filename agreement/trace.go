@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -74,7 +74,7 @@ type tracer struct {
 
 const cadaverSizeMinimum = 100 * 1024 // 100 KB
 
-func makeTracer(log serviceLogger, cadaverFilename string, cadaverSizeTarget uint64, verboseReportFlag bool, timingReportFlag bool) *tracer {
+func makeTracer(log serviceLogger, cadaverFilename string, cadaverSizeTarget uint64, cadaverDirectory string, verboseReportFlag bool, timingReportFlag bool) (*tracer, error) {
 	t := new(tracer)
 	t.log = log
 	t.verboseReports = verboseReportFlag
@@ -85,15 +85,20 @@ func makeTracer(log serviceLogger, cadaverFilename string, cadaverSizeTarget uin
 	if fileSizeTarget == 0 {
 		// disabled
 	} else if fileSizeTarget < 0 {
-		log.Errorf("agreement: cadaver filesize too large: int64(%v) < 0", cadaverSizeTarget)
+		return nil, fmt.Errorf("agreement: cadaver filesize too large: int64(%v) < 0", cadaverSizeTarget)
 	} else if fileSizeTarget < cadaverSizeMinimum {
-		log.Errorf("agreement: cadaver filesize too small: %v < %v", fileSizeTarget, cadaverSizeMinimum)
+		return nil, fmt.Errorf("agreement: cadaver filesize too small: %v < %v", fileSizeTarget, cadaverSizeMinimum)
 	} else if fileSizeTarget > 0 {
 		t.cadaver.baseFilename = cadaverFilename
+		t.cadaver.baseDirectory = cadaverDirectory
 		t.cadaver.fileSizeTarget = fileSizeTarget
-		log.Infof("agreement: cadaver set to %v", cadaverFilename)
+		log.Infof("agreement: cadaver set to %s", t.cadaver.filename())
+		err := t.cadaver.init()
+		if err != nil {
+			return nil, err
+		}
 	}
-	return t
+	return t, nil
 }
 
 // call this method to setup timing generators before entering target round, pipelining properly.

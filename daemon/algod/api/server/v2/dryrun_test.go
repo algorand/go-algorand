@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -30,7 +30,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
@@ -47,7 +47,7 @@ func unB64(x string) []byte {
 	return out
 }
 
-func tvStr(tv generated.TealValue) string {
+func tvStr(tv model.TealValue) string {
 	if tv.Type == uint64(basics.TealBytesType) {
 		return tv.Bytes
 	} else if tv.Type == uint64(basics.TealUintType) {
@@ -56,7 +56,7 @@ func tvStr(tv generated.TealValue) string {
 	return "UNKNOWN TEAL VALUE"
 }
 
-func dbStack(stack []generated.TealValue) string {
+func dbStack(stack []model.TealValue) string {
 	parts := make([]string, len(stack))
 	for i, sv := range stack {
 		parts[i] = tvStr(sv)
@@ -68,7 +68,7 @@ func b64(s string) string {
 	return base64.StdEncoding.EncodeToString([]byte(s))
 }
 
-func logTrace(t *testing.T, lines []string, trace []generated.DryrunState) {
+func logTrace(t *testing.T, lines []string, trace []model.DryrunState) {
 	var disasm string
 	for _, ds := range trace {
 		var line string
@@ -84,13 +84,13 @@ func logTrace(t *testing.T, lines []string, trace []generated.DryrunState) {
 	}
 }
 
-func logStateDelta(t *testing.T, sd generated.StateDelta) {
+func logStateDelta(t *testing.T, sd model.StateDelta) {
 	for _, vd := range sd {
 		t.Logf("\t%s: %#v", vd.Key, vd)
 	}
 }
 
-func logResponse(t *testing.T, response *generated.DryrunResponse) {
+func logResponse(t *testing.T, response *model.DryrunResponse) {
 	t.Log(response.Error)
 	for i, rt := range response.Txns {
 		t.Logf("txn[%d]", i)
@@ -132,13 +132,55 @@ func logResponse(t *testing.T, response *generated.DryrunResponse) {
 var dryrunProtoVersion protocol.ConsensusVersion = protocol.ConsensusFuture
 var dryrunMakeLedgerProto protocol.ConsensusVersion = "dryrunMakeLedgerProto"
 
+func TestDryrunSources(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	goodSource := model.DryrunSource{
+		AppIndex:  1007,
+		FieldName: "approv",
+		Source: `#pragma version 10
+int 1`,
+	}
+	badSource := model.DryrunSource{
+		AppIndex:  1007,
+		FieldName: "approv",
+		Source: `#pragma version 10
+int 1
+pop
+fake_opcode
+int not_an_int`,
+	}
+
+	dr := DryrunRequest{
+		Sources: []model.DryrunSource{
+			goodSource,
+		},
+		Apps: []model.Application{
+			{
+				Id: 1007,
+			},
+		},
+	}
+	var response model.DryrunResponse
+
+	doDryrunRequest(&dr, &response)
+	require.Empty(t, response.Error)
+
+	dr.Sources[0] = badSource
+	doDryrunRequest(&dr, &response)
+	require.Contains(t, response.Error, "dryrun Source[0]: 2 errors")
+	require.Contains(t, response.Error, "4: unknown opcode: fake_opcode")
+	require.Contains(t, response.Error, "5:4: unable to parse \"not_an_int\" as integer")
+}
+
 func TestDryrunLogicSig(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	// {"txns":[{"lsig":{"l":"AiABASI="},"txn":{}}]}
 	t.Parallel()
 
 	var dr DryrunRequest
-	var response generated.DryrunResponse
+	var response model.DryrunResponse
 
 	dr.ProtocolVersion = string(dryrunProtoVersion)
 
@@ -163,12 +205,12 @@ func TestDryrunLogicSigSource(t *testing.T) {
 	t.Parallel()
 
 	var dr DryrunRequest
-	var response generated.DryrunResponse
+	var response model.DryrunResponse
 
 	dr.ProtocolVersion = string(dryrunProtoVersion)
 
 	dr.Txns = []transactions.SignedTxn{{}}
-	dr.Sources = []generated.DryrunSource{
+	dr.Sources = []model.DryrunSource{
 		{
 			Source:    "int 1",
 			FieldName: "lsig",
@@ -362,7 +404,8 @@ func init() {
 	config.Consensus[dryrunMakeLedgerProto] = proto
 }
 
-func checkLogicSigPass(t *testing.T, response *generated.DryrunResponse) {
+func checkLogicSigPass(t *testing.T, response *model.DryrunResponse) {
+	t.Helper()
 	if len(response.Txns) < 1 {
 		t.Error("no response txns")
 	} else if len(response.Txns) == 0 {
@@ -375,7 +418,7 @@ func checkLogicSigPass(t *testing.T, response *generated.DryrunResponse) {
 	}
 }
 
-func checkAppCallResponse(t *testing.T, response *generated.DryrunResponse, msg string) {
+func checkAppCallResponse(t *testing.T, response *model.DryrunResponse, msg string) {
 	if len(response.Txns) < 1 {
 		t.Error("no response txns")
 	} else if len(response.Txns) == 0 {
@@ -388,17 +431,17 @@ func checkAppCallResponse(t *testing.T, response *generated.DryrunResponse, msg 
 			if response.Txns[idx].AppCallMessages != nil {
 				messages := *response.Txns[idx].AppCallMessages
 				assert.GreaterOrEqual(t, len(messages), 1)
-				assert.Equal(t, msg, messages[len(messages)-1])
+				assert.Contains(t, messages[len(messages)-1], msg)
 			}
 		}
 	}
 }
 
-func checkAppCallPass(t *testing.T, response *generated.DryrunResponse) {
+func checkAppCallPass(t *testing.T, response *model.DryrunResponse) {
 	checkAppCallResponse(t, response, "PASS")
 }
 
-func checkAppCallReject(t *testing.T, response *generated.DryrunResponse) {
+func checkAppCallReject(t *testing.T, response *model.DryrunResponse) {
 	checkAppCallResponse(t, response, "REJECT")
 }
 
@@ -407,7 +450,7 @@ type expectedSlotType struct {
 	tt   basics.TealType
 }
 
-func checkAppCallScratchType(t *testing.T, response *generated.DryrunResponse, txnIdx int, expected []expectedSlotType) {
+func checkAppCallScratchType(t *testing.T, response *model.DryrunResponse, txnIdx int, expected []expectedSlotType) {
 	txn := response.Txns[txnIdx]
 	// We should have a trace
 	assert.NotNil(t, txn.AppCallTrace)
@@ -428,7 +471,7 @@ func TestDryrunGlobal1(t *testing.T) {
 	t.Parallel()
 
 	var dr DryrunRequest
-	var response generated.DryrunResponse
+	var response model.DryrunResponse
 
 	dr.ProtocolVersion = string(dryrunProtoVersion)
 
@@ -445,19 +488,19 @@ func TestDryrunGlobal1(t *testing.T) {
 			},
 		},
 	}
-	gkv := generated.TealKeyValueStore{
-		generated.TealKeyValue{
+	gkv := model.TealKeyValueStore{
+		model.TealKeyValue{
 			Key:   b64("foo"),
-			Value: generated.TealValue{Type: uint64(basics.TealBytesType), Bytes: b64("bar")},
+			Value: model.TealValue{Type: uint64(basics.TealBytesType), Bytes: b64("bar")},
 		},
 	}
-	dr.Apps = []generated.Application{
+	dr.Apps = []model.Application{
 		{
 			Id: 1,
-			Params: generated.ApplicationParams{
+			Params: model.ApplicationParams{
 				ApprovalProgram: globalTestProgram,
 				GlobalState:     &gkv,
-				GlobalStateSchema: &generated.ApplicationStateSchema{
+				GlobalStateSchema: &model.ApplicationStateSchema{
 					NumByteSlice: 10,
 					NumUint:      10,
 				},
@@ -477,7 +520,7 @@ func TestDryrunGlobal2(t *testing.T) {
 	t.Parallel()
 
 	var dr DryrunRequest
-	var response generated.DryrunResponse
+	var response model.DryrunResponse
 
 	dr.ProtocolVersion = string(dryrunProtoVersion)
 
@@ -486,7 +529,7 @@ func TestDryrunGlobal2(t *testing.T) {
 			Txn: transactions.Transaction{
 				Type: protocol.ApplicationCallTx,
 				ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
-					ApplicationID: 1,
+					ApplicationID: 1234,
 					ApplicationArgs: [][]byte{
 						[]byte("check"),
 						[]byte("bar"),
@@ -495,16 +538,16 @@ func TestDryrunGlobal2(t *testing.T) {
 			},
 		},
 	}
-	gkv := generated.TealKeyValueStore{
-		generated.TealKeyValue{
+	gkv := model.TealKeyValueStore{
+		model.TealKeyValue{
 			Key:   b64("foo"),
-			Value: generated.TealValue{Type: uint64(basics.TealBytesType), Bytes: b64("bar")},
+			Value: model.TealValue{Type: uint64(basics.TealBytesType), Bytes: b64("bar")},
 		},
 	}
-	dr.Apps = []generated.Application{
+	dr.Apps = []model.Application{
 		{
-			Id: 1,
-			Params: generated.ApplicationParams{
+			Id: 1234,
+			Params: model.ApplicationParams{
 				ApprovalProgram: globalTestProgram,
 				GlobalState:     &gkv,
 			},
@@ -530,7 +573,7 @@ func TestDryrunLocal1(t *testing.T) {
 	t.Parallel()
 
 	var dr DryrunRequest
-	var response generated.DryrunResponse
+	var response model.DryrunResponse
 
 	dr.ProtocolVersion = string(dryrunProtoVersion)
 
@@ -548,23 +591,23 @@ func TestDryrunLocal1(t *testing.T) {
 			},
 		},
 	}
-	dr.Apps = []generated.Application{
+	dr.Apps = []model.Application{
 		{
 			Id: 1,
-			Params: generated.ApplicationParams{
+			Params: model.ApplicationParams{
 				ApprovalProgram: localStateCheckProg,
-				LocalStateSchema: &generated.ApplicationStateSchema{
+				LocalStateSchema: &model.ApplicationStateSchema{
 					NumByteSlice: 10,
 					NumUint:      10,
 				},
 			},
 		},
 	}
-	dr.Accounts = []generated.Account{
+	dr.Accounts = []model.Account{
 		{
 			Status:         "Online",
 			Address:        basics.Address{}.String(),
-			AppsLocalState: &[]generated.ApplicationLocalState{{Id: 1}},
+			AppsLocalState: &[]model.ApplicationLocalState{{Id: 1}},
 		},
 	}
 	doDryrunRequest(&dr, &response)
@@ -604,7 +647,7 @@ func TestDryrunLocal1A(t *testing.T) {
 	t.Parallel()
 
 	var dr DryrunRequest
-	var response generated.DryrunResponse
+	var response model.DryrunResponse
 
 	dr.ProtocolVersion = string(dryrunProtoVersion)
 
@@ -622,26 +665,26 @@ func TestDryrunLocal1A(t *testing.T) {
 			},
 		},
 	}
-	dr.Apps = []generated.Application{
+	dr.Apps = []model.Application{
 		{
 			Id: 1,
-			Params: generated.ApplicationParams{
-				LocalStateSchema: &generated.ApplicationStateSchema{
+			Params: model.ApplicationParams{
+				LocalStateSchema: &model.ApplicationStateSchema{
 					NumByteSlice: 10,
 					NumUint:      10,
 				},
 			},
 		},
 	}
-	dr.Accounts = []generated.Account{
+	dr.Accounts = []model.Account{
 		{
 			Status:         "Online",
 			Address:        basics.Address{}.String(),
-			AppsLocalState: &[]generated.ApplicationLocalState{{Id: 1}},
+			AppsLocalState: &[]model.ApplicationLocalState{{Id: 1}},
 		},
 	}
 
-	dr.Sources = []generated.DryrunSource{
+	dr.Sources = []model.DryrunSource{
 		{
 			Source:    localStateCheckSource,
 			FieldName: "approv",
@@ -682,7 +725,7 @@ func TestDryrunLocalCheck(t *testing.T) {
 	// {"txns":[{"lsig":{"l":"AiABASI="},"txn":{}}]}
 	t.Parallel()
 	var dr DryrunRequest
-	var response generated.DryrunResponse
+	var response model.DryrunResponse
 
 	dr.ProtocolVersion = string(dryrunProtoVersion)
 
@@ -691,7 +734,7 @@ func TestDryrunLocalCheck(t *testing.T) {
 			Txn: transactions.Transaction{
 				Type: protocol.ApplicationCallTx,
 				ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
-					ApplicationID: 1,
+					ApplicationID: 1234,
 					ApplicationArgs: [][]byte{
 						[]byte("check"),
 						[]byte("bar"),
@@ -700,29 +743,29 @@ func TestDryrunLocalCheck(t *testing.T) {
 			},
 		},
 	}
-	dr.Apps = []generated.Application{
+	dr.Apps = []model.Application{
 		{
-			Id: 1,
-			Params: generated.ApplicationParams{
+			Id: 1234,
+			Params: model.ApplicationParams{
 				ApprovalProgram: localStateCheckProg,
 			},
 		},
 	}
-	localv := make(generated.TealKeyValueStore, 1)
-	localv[0] = generated.TealKeyValue{
+	localv := make(model.TealKeyValueStore, 1234)
+	localv[0] = model.TealKeyValue{
 		Key: b64("foo"),
-		Value: generated.TealValue{
+		Value: model.TealValue{
 			Type:  uint64(basics.TealBytesType),
 			Bytes: b64("bar"),
 		},
 	}
 
-	dr.Accounts = []generated.Account{
+	dr.Accounts = []model.Account{
 		{
 			Status:  "Online",
 			Address: basics.Address{}.String(),
-			AppsLocalState: &[]generated.ApplicationLocalState{{
-				Id:       1,
+			AppsLocalState: &[]model.ApplicationLocalState{{
+				Id:       1234,
 				KeyValue: &localv,
 			}},
 		},
@@ -737,7 +780,7 @@ func TestDryrunMultipleTxns(t *testing.T) {
 	t.Parallel()
 
 	var dr DryrunRequest
-	var response generated.DryrunResponse
+	var response model.DryrunResponse
 
 	dr.ProtocolVersion = string(dryrunProtoVersion)
 
@@ -754,19 +797,19 @@ func TestDryrunMultipleTxns(t *testing.T) {
 	}
 
 	dr.Txns = []transactions.SignedTxn{txn, txn}
-	gkv := generated.TealKeyValueStore{
-		generated.TealKeyValue{
+	gkv := model.TealKeyValueStore{
+		model.TealKeyValue{
 			Key:   b64("foo"),
-			Value: generated.TealValue{Type: uint64(basics.TealBytesType), Bytes: b64("bar")},
+			Value: model.TealValue{Type: uint64(basics.TealBytesType), Bytes: b64("bar")},
 		},
 	}
-	dr.Apps = []generated.Application{
+	dr.Apps = []model.Application{
 		{
 			Id: 1,
-			Params: generated.ApplicationParams{
+			Params: model.ApplicationParams{
 				ApprovalProgram: globalTestProgram,
 				GlobalState:     &gkv,
-				GlobalStateSchema: &generated.ApplicationStateSchema{
+				GlobalStateSchema: &model.ApplicationStateSchema{
 					NumByteSlice: 10,
 					NumUint:      10,
 				},
@@ -784,7 +827,7 @@ func TestDryrunEncodeDecode(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	var gdr generated.DryrunRequest
+	var gdr model.DryrunRequest
 	txns := []transactions.SignedTxn{
 		{
 			Txn: transactions.Transaction{
@@ -805,25 +848,25 @@ func TestDryrunEncodeDecode(t *testing.T) {
 		gdr.Txns = append(gdr.Txns, enc)
 	}
 
-	gdr.Apps = []generated.Application{
+	gdr.Apps = []model.Application{
 		{
 			Id: 1,
-			Params: generated.ApplicationParams{
+			Params: model.ApplicationParams{
 				ApprovalProgram: localStateCheckProg,
 			},
 		},
 	}
-	localv := make(generated.TealKeyValueStore, 1)
-	localv[0] = generated.TealKeyValue{
+	localv := make(model.TealKeyValueStore, 1)
+	localv[0] = model.TealKeyValue{
 		Key:   b64("foo"),
-		Value: generated.TealValue{Type: uint64(basics.TealBytesType), Bytes: b64("bar")},
+		Value: model.TealValue{Type: uint64(basics.TealBytesType), Bytes: b64("bar")},
 	}
 
-	gdr.Accounts = []generated.Account{
+	gdr.Accounts = []model.Account{
 		{
 			Status:  "Online",
 			Address: basics.Address{}.String(),
-			AppsLocalState: &[]generated.ApplicationLocalState{{
+			AppsLocalState: &[]model.ApplicationLocalState{{
 				Id:       1,
 				KeyValue: &localv,
 			}},
@@ -832,14 +875,14 @@ func TestDryrunEncodeDecode(t *testing.T) {
 
 	// use protocol
 	encoded := protocol.EncodeJSON(&gdr)
-	var decoded generated.DryrunRequest
+	var decoded model.DryrunRequest
 	err := protocol.DecodeJSON(encoded, &decoded)
 	require.NoError(t, err)
 	require.Equal(t, gdr, decoded)
 
 	buf := bytes.NewBuffer(encoded)
 	dec := protocol.NewJSONDecoder(buf)
-	decoded = generated.DryrunRequest{}
+	decoded = model.DryrunRequest{}
 	err = dec.Decode(&decoded)
 	require.NoError(t, err)
 	require.Equal(t, gdr, decoded)
@@ -847,7 +890,7 @@ func TestDryrunEncodeDecode(t *testing.T) {
 	// use json
 	data, err := json.Marshal(&gdr)
 	require.NoError(t, err)
-	gdr = generated.DryrunRequest{}
+	gdr = model.DryrunRequest{}
 	err = json.Unmarshal(data, &gdr)
 	require.NoError(t, err)
 
@@ -915,10 +958,10 @@ func TestDryrunMakeLedger(t *testing.T) {
 			},
 		},
 	}
-	dr.Apps = []generated.Application{
+	dr.Apps = []model.Application{
 		{
 			Id: 1,
-			Params: generated.ApplicationParams{
+			Params: model.ApplicationParams{
 				Creator:         sender.String(),
 				ApprovalProgram: localStateCheckProg,
 			},
@@ -1002,7 +1045,7 @@ func TestDryrunRequestJSON(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	var gdr generated.DryrunRequest
+	var gdr model.DryrunRequest
 	buf := bytes.NewBuffer(dataJSON)
 	dec := protocol.NewJSONDecoder(buf)
 	err := dec.Decode(&gdr)
@@ -1014,7 +1057,7 @@ func TestDryrunRequestJSON(t *testing.T) {
 	require.Equal(t, 1, len(dr.Accounts))
 	require.Equal(t, 1, len(dr.Apps))
 
-	var response generated.DryrunResponse
+	var response model.DryrunResponse
 
 	dr.ProtocolVersion = string(dryrunProtoVersion)
 
@@ -1092,8 +1135,8 @@ int 1`)
 	require.NoError(t, err)
 	approval := ops.Program
 	ops, err = logic.AssembleString("int 1")
-	clst := ops.Program
 	require.NoError(t, err)
+	clst := ops.Program
 	var appIdx basics.AppIndex = 1
 	creator := randomAddress()
 	sender := randomAddress()
@@ -1110,18 +1153,18 @@ int 1`)
 				},
 			},
 		},
-		Apps: []generated.Application{
+		Apps: []model.Application{
 			{
 				Id: uint64(appIdx),
-				Params: generated.ApplicationParams{
+				Params: model.ApplicationParams{
 					Creator:           creator.String(),
 					ApprovalProgram:   approval,
 					ClearStateProgram: clst,
-					LocalStateSchema:  &generated.ApplicationStateSchema{NumByteSlice: 1},
+					LocalStateSchema:  &model.ApplicationStateSchema{NumByteSlice: 1},
 				},
 			},
 		},
-		Accounts: []generated.Account{
+		Accounts: []model.Account{
 			{
 				Address: sender.String(),
 				Status:  "Online",
@@ -1131,7 +1174,7 @@ int 1`)
 	}
 	dr.ProtocolVersion = string(dryrunProtoVersion)
 
-	var response generated.DryrunResponse
+	var response model.DryrunResponse
 	doDryrunRequest(&dr, &response)
 	require.NoError(t, err)
 	checkAppCallPass(t, &response)
@@ -1201,27 +1244,27 @@ return
 				},
 			},
 		},
-		Apps: []generated.Application{
+		Apps: []model.Application{
 			{
 				Id: uint64(appIdx),
-				Params: generated.ApplicationParams{
+				Params: model.ApplicationParams{
 					Creator:           creator.String(),
 					ApprovalProgram:   approval,
 					ClearStateProgram: clst,
-					LocalStateSchema:  &generated.ApplicationStateSchema{NumByteSlice: 1},
+					LocalStateSchema:  &model.ApplicationStateSchema{NumByteSlice: 1},
 				},
 			},
 			{
 				Id: uint64(appIdx + 1),
-				Params: generated.ApplicationParams{
+				Params: model.ApplicationParams{
 					Creator:           creator.String(),
 					ApprovalProgram:   approv,
 					ClearStateProgram: clst,
-					LocalStateSchema:  &generated.ApplicationStateSchema{NumByteSlice: 1},
+					LocalStateSchema:  &model.ApplicationStateSchema{NumByteSlice: 1},
 				},
 			},
 		},
-		Accounts: []generated.Account{
+		Accounts: []model.Account{
 			{
 				Address: sender.String(),
 				Status:  "Online",
@@ -1231,7 +1274,7 @@ return
 	}
 	dr.ProtocolVersion = string(dryrunProtoVersion)
 
-	var response generated.DryrunResponse
+	var response model.DryrunResponse
 	doDryrunRequest(&dr, &response)
 	require.NoError(t, err)
 	checkAppCallPass(t, &response)
@@ -1338,70 +1381,60 @@ int 1`)
 						},
 					},
 				},
-				Apps: []generated.Application{
+				Apps: []model.Application{
 					{
 						Id: uint64(appIdx),
-						Params: generated.ApplicationParams{
+						Params: model.ApplicationParams{
 							Creator:           creator.String(),
 							ApprovalProgram:   app1,
 							ClearStateProgram: clst,
-							LocalStateSchema:  &generated.ApplicationStateSchema{NumByteSlice: 1},
+							LocalStateSchema:  &model.ApplicationStateSchema{NumByteSlice: 1},
 						},
 					},
 					{
 						Id: uint64(appIdx + 1),
-						Params: generated.ApplicationParams{
+						Params: model.ApplicationParams{
 							Creator:           creator.String(),
 							ApprovalProgram:   app2,
 							ClearStateProgram: clst,
-							LocalStateSchema:  &generated.ApplicationStateSchema{NumByteSlice: 1},
+							LocalStateSchema:  &model.ApplicationStateSchema{NumByteSlice: 1},
 						},
 					},
 					{
 						Id: uint64(appIdx + 2),
-						Params: generated.ApplicationParams{
+						Params: model.ApplicationParams{
 							Creator:           creator.String(),
 							ApprovalProgram:   app3,
 							ClearStateProgram: clst,
-							LocalStateSchema:  &generated.ApplicationStateSchema{NumByteSlice: 1},
+							LocalStateSchema:  &model.ApplicationStateSchema{NumByteSlice: 1},
 						},
 					},
 				},
-				Accounts: []generated.Account{
+				Accounts: []model.Account{
 					{
-						Address: sender.String(),
-						Status:  "Online",
-						Amount:  10000000,
+						Address:                     (appIdx + 2).Address().String(),
+						Status:                      "Online",
+						AmountWithoutPendingRewards: 105_000,
 					},
 				},
 			}
 			dr.ProtocolVersion = string(dryrunProtoVersion)
-			var response generated.DryrunResponse
+			var response model.DryrunResponse
 			doDryrunRequest(&dr, &response)
 			require.Empty(t, response.Error)
-			require.Equal(t, 3, len(response.Txns))
+			require.Len(t, response.Txns, 3)
 
 			for i, txn := range response.Txns {
 				messages := *txn.AppCallMessages
-				require.GreaterOrEqual(t, len(messages), 1)
-				cost := int64(*txn.BudgetConsumed) - int64(*txn.BudgetAdded)
-				require.NotNil(t, cost)
-				require.Equal(t, expectedCosts[i], cost)
-				require.Equal(t, expectedBudgetAdded[i], *txn.BudgetAdded)
-				statusMatches := false
-				costExceedFound := false
-				for _, msg := range messages {
-					if strings.Contains(msg, "cost budget exceeded") {
-						costExceedFound = true
-					}
-					if msg == test.msg {
-						statusMatches = true
-					}
-				}
+				require.Contains(t, messages, test.msg, "Wrong result") // PASS or REJECT
+
 				if test.msg == "REJECT" {
-					require.True(t, costExceedFound, "budget error not found in messages")
+					require.Contains(t, messages[2], "cost budget exceeded", "Failed for a surprise reason")
 				}
-				require.True(t, statusMatches, "expected status not found in messages")
+
+				cost := int64(*txn.BudgetConsumed) - int64(*txn.BudgetAdded)
+				require.Equal(t, expectedCosts[i], cost, "txn %d cost", i)
+				require.Equal(t, expectedBudgetAdded[i], *txn.BudgetAdded, "txn %d added", i)
 			}
 		})
 	}
@@ -1434,8 +1467,8 @@ int 1`
 	approval := ops.Program
 
 	ops, err = logic.AssembleString("int 1")
-	clst := ops.Program
 	require.NoError(t, err)
+	clst := ops.Program
 
 	sender, err := basics.UnmarshalChecksumAddress("47YPQTIGQEO7T4Y4RWDYWEKV6RTR2UNBQXBABEEGM72ESWDQNCQ52OPASU")
 	a.NoError(err)
@@ -1449,15 +1482,15 @@ int 1`
 			Sender:        sender,
 			ApplicationID: appIdx,
 		}.SignedTxn()},
-		Apps: []generated.Application{{
+		Apps: []model.Application{{
 			Id: uint64(appIdx),
-			Params: generated.ApplicationParams{
+			Params: model.ApplicationParams{
 				Creator:           sender.String(),
 				ApprovalProgram:   approval,
 				ClearStateProgram: clst,
 			},
 		}},
-		Accounts: []generated.Account{
+		Accounts: []model.Account{
 			{
 				Address:                     sender.String(),
 				Status:                      "Online",
@@ -1473,7 +1506,7 @@ int 1`
 		},
 	}
 
-	var response generated.DryrunResponse
+	var response model.DryrunResponse
 	doDryrunRequest(&dr, &response)
 	checkAppCallPass(t, &response)
 	if t.Failed() {
@@ -1493,8 +1526,8 @@ int 0
 	require.NoError(t, err)
 	approval := ops.Program
 	ops, err = logic.AssembleString("int 1")
-	clst := ops.Program
 	require.NoError(t, err)
+	clst := ops.Program
 	var appIdx basics.AppIndex = 1
 	creator := randomAddress()
 	rewardBase := uint64(10000000)
@@ -1510,18 +1543,18 @@ int 0
 				},
 			},
 		},
-		Apps: []generated.Application{
+		Apps: []model.Application{
 			{
 				Id: uint64(appIdx),
-				Params: generated.ApplicationParams{
+				Params: model.ApplicationParams{
 					Creator:           creator.String(),
 					ApprovalProgram:   approval,
 					ClearStateProgram: clst,
-					LocalStateSchema:  &generated.ApplicationStateSchema{NumByteSlice: 1},
+					LocalStateSchema:  &model.ApplicationStateSchema{NumByteSlice: 1},
 				},
 			},
 		},
-		Accounts: []generated.Account{
+		Accounts: []model.Account{
 			{
 				Address:                     creator.String(),
 				Status:                      "Online",
@@ -1533,7 +1566,7 @@ int 0
 	}
 	dr.ProtocolVersion = string(dryrunProtoVersion)
 
-	var response generated.DryrunResponse
+	var response model.DryrunResponse
 	doDryrunRequest(&dr, &response)
 	require.NoError(t, err)
 	checkAppCallPass(t, &response)
@@ -1561,8 +1594,8 @@ int 1
 	require.NoError(t, err)
 
 	ops, err := logic.AssembleString("int 1")
-	clst := ops.Program
 	require.NoError(t, err)
+	clst := ops.Program
 
 	sender, err := basics.UnmarshalChecksumAddress("47YPQTIGQEO7T4Y4RWDYWEKV6RTR2UNBQXBABEEGM72ESWDQNCQ52OPASU")
 	a.NoError(err)
@@ -1575,20 +1608,20 @@ int 1
 			Sender:        sender,
 			ApplicationID: appIdx,
 		}.SignedTxn()},
-		Apps: []generated.Application{{
+		Apps: []model.Application{{
 			Id: uint64(appIdx),
-			Params: generated.ApplicationParams{
+			Params: model.ApplicationParams{
 				ApprovalProgram:   paySender.Program,
 				ClearStateProgram: clst,
 			},
 		}},
 		// Sender must exist (though no fee is ever taken)
 		// AppAccount must exist and be able to pay the inner fee and the pay amount (but min balance not checked)
-		Accounts: []generated.Account{
+		Accounts: []model.Account{
 			{Address: sender.String(), Status: "Offline"},                                                // sender
 			{Address: appIdx.Address().String(), Status: "Offline", AmountWithoutPendingRewards: 1_010}}, // app account
 	}
-	var response generated.DryrunResponse
+	var response model.DryrunResponse
 	doDryrunRequest(&dr, &response)
 	checkAppCallPass(t, &response)
 	if t.Failed() {
@@ -1638,22 +1671,22 @@ int 1`)
 	require.NoError(t, err)
 
 	ops, err := logic.AssembleString("int 1")
-	clst := ops.Program
 	require.NoError(t, err)
+	clst := ops.Program
 
 	sender, err := basics.UnmarshalChecksumAddress("47YPQTIGQEO7T4Y4RWDYWEKV6RTR2UNBQXBABEEGM72ESWDQNCQ52OPASU")
 	a.NoError(err)
 
 	txns := make([]transactions.SignedTxn, 0, 4)
-	apps := make([]generated.Application, 0, 4)
+	apps := make([]model.Application, 0, 4)
 	for appIdx := basics.AppIndex(1); appIdx <= basics.AppIndex(4); appIdx++ {
 		txns = append(txns, txntest.Txn{
 			Type:          protocol.ApplicationCallTx,
 			Sender:        sender,
 			ApplicationID: appIdx}.SignedTxn())
-		apps = append(apps, generated.Application{
+		apps = append(apps, model.Application{
 			Id: uint64(appIdx),
-			Params: generated.ApplicationParams{
+			Params: model.ApplicationParams{
 				ApprovalProgram:   approvalOps.Program,
 				ClearStateProgram: clst,
 			},
@@ -1663,11 +1696,11 @@ int 1`)
 		ProtocolVersion: string(dryrunProtoVersion),
 		Txns:            txns,
 		Apps:            apps,
-		Accounts: []generated.Account{
+		Accounts: []model.Account{
 			{Address: sender.String(), Status: "Offline", Amount: 100_000_000}, // sender
 		},
 	}
-	var response generated.DryrunResponse
+	var response model.DryrunResponse
 	doDryrunRequest(&dr, &response)
 
 	checkAppCallScratchType(t, &response, 1, []expectedSlotType{
@@ -1686,9 +1719,9 @@ int 1`)
 }
 
 func checkEvalDelta(t *testing.T,
-	response generated.DryrunResponse,
-	expectedGlobalDelta generated.StateDelta,
-	expectedLocalDelta generated.AccountStateDelta,
+	response model.DryrunResponse,
+	expectedGlobalDelta model.StateDelta,
+	expectedLocalDelta model.AccountStateDelta,
 ) {
 	for _, rt := range response.Txns {
 		if rt.GlobalDelta != nil && len(*rt.GlobalDelta) > 0 {
@@ -1713,26 +1746,26 @@ func TestDryrunCheckEvalDeltasReturned(t *testing.T) {
 	t.Parallel()
 
 	var dr DryrunRequest
-	var response generated.DryrunResponse
+	var response model.DryrunResponse
 
 	// Expected responses.
 	expectedByte := b64("val")
 	expectedUint := uint64(1)
-	expectedGlobalDelta := generated.StateDelta{
+	expectedGlobalDelta := model.StateDelta{
 		{
 			Key: b64("key"),
-			Value: generated.EvalDelta{
+			Value: model.EvalDelta{
 				Action: uint64(basics.SetBytesAction),
 				Bytes:  &expectedByte,
 			},
 		},
 	}
-	expectedLocalDelta := generated.AccountStateDelta{
+	expectedLocalDelta := model.AccountStateDelta{
 		Address: basics.Address{}.String(),
-		Delta: generated.StateDelta{
+		Delta: model.StateDelta{
 			{
 				Key: b64("key"),
-				Value: generated.EvalDelta{
+				Value: model.EvalDelta{
 					Action: uint64(basics.SetUintAction),
 					Uint:   &expectedUint,
 				},
@@ -1742,7 +1775,7 @@ func TestDryrunCheckEvalDeltasReturned(t *testing.T) {
 
 	// Test that a PASS and REJECT dryrun both return the dryrun evaldelta.
 	for i := range []int{0, 1} {
-		ops, _ := logic.AssembleString(fmt.Sprintf(`
+		ops, err := logic.AssembleString(fmt.Sprintf(`
 #pragma version 6
 txna ApplicationArgs 0
 txna ApplicationArgs 1
@@ -1752,6 +1785,7 @@ txna ApplicationArgs 0
 int %d
 app_local_put
 int %d`, expectedUint, i))
+		require.NoError(t, err)
 		dr.ProtocolVersion = string(dryrunProtoVersion)
 
 		dr.Txns = []transactions.SignedTxn{
@@ -1768,27 +1802,27 @@ int %d`, expectedUint, i))
 				},
 			},
 		}
-		dr.Apps = []generated.Application{
+		dr.Apps = []model.Application{
 			{
 				Id: 1,
-				Params: generated.ApplicationParams{
+				Params: model.ApplicationParams{
 					ApprovalProgram: ops.Program,
-					GlobalStateSchema: &generated.ApplicationStateSchema{
+					GlobalStateSchema: &model.ApplicationStateSchema{
 						NumByteSlice: 1,
 						NumUint:      1,
 					},
-					LocalStateSchema: &generated.ApplicationStateSchema{
+					LocalStateSchema: &model.ApplicationStateSchema{
 						NumByteSlice: 1,
 						NumUint:      1,
 					},
 				},
 			},
 		}
-		dr.Accounts = []generated.Account{
+		dr.Accounts = []model.Account{
 			{
 				Status:         "Online",
 				Address:        basics.Address{}.String(),
-				AppsLocalState: &[]generated.ApplicationLocalState{{Id: 1}},
+				AppsLocalState: &[]model.ApplicationLocalState{{Id: 1}},
 			},
 		}
 
@@ -1803,5 +1837,41 @@ int %d`, expectedUint, i))
 			logResponse(t, &response)
 		}
 	}
+}
 
+// TestDryrunEarlyExit is a regression test. Ensures that we no longer exit so
+// early in eval() that problems are caused by the debugState being nil.
+func TestDryrunEarlyExit(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	var dr DryrunRequest
+	var response model.DryrunResponse
+
+	ops, err := logic.AssembleString("#pragma version 5 \n int 1")
+	require.NoError(t, err)
+	dr.ProtocolVersion = string(dryrunProtoVersion)
+
+	dr.Txns = []transactions.SignedTxn{
+		txntest.Txn{
+			ApplicationID: 1,
+			Type:          protocol.ApplicationCallTx,
+		}.SignedTxn(),
+	}
+	dr.Apps = []model.Application{{
+		Id: 1,
+		Params: model.ApplicationParams{
+			ApprovalProgram: ops.Program,
+		},
+	}}
+	dr.Accounts = []model.Account{{
+		Status:  "Online",
+		Address: basics.Address{}.String(),
+	}}
+	doDryrunRequest(&dr, &response)
+	checkAppCallPass(t, &response)
+
+	ops.Program[0] = 100 // version too high
+	doDryrunRequest(&dr, &response)
+	checkAppCallResponse(t, &response, "program version 100 greater than max")
 }

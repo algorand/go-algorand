@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -25,11 +25,29 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
+// GenesisCfg provides a configuration object for NewTestGenesis.
+type GenesisCfg struct {
+	rewardsPoolAmount basics.MicroAlgos
+	OnlineCount       int
+}
+
+// TestGenesisOption provides functional options for testGenesisCfg.
+type TestGenesisOption func(*GenesisCfg)
+
+// TurnOffRewards turns off the rewards pool for tests that are sensitive to
+// "surprise" balance changes.
+var TurnOffRewards = func(cfg *GenesisCfg) { cfg.rewardsPoolAmount = basics.MicroAlgos{Raw: 100_000} }
+
 // NewTestGenesis creates a bunch of accounts, splits up 10B algos
 // between them and the rewardspool and feesink, and gives out the
 // addresses and secrets it creates to enable tests.  For special
 // scenarios, manipulate these return values before using newTestLedger.
-func NewTestGenesis() (bookkeeping.GenesisBalances, []basics.Address, []*crypto.SignatureSecrets) {
+func NewTestGenesis(opts ...TestGenesisOption) (bookkeeping.GenesisBalances, []basics.Address, []*crypto.SignatureSecrets) {
+	var cfg GenesisCfg
+	for _, opt := range opts {
+		opt(&cfg)
+	}
+
 	// irrelevant, but deterministic
 	sink, err := basics.UnmarshalChecksumAddress("YTPRLJ2KK2JRFSZZNAF57F3K5Y2KCG36FZ5OSYLW776JJGAUW5JXJBBD7Q")
 	if err != nil {
@@ -57,6 +75,15 @@ func NewTestGenesis() (bookkeeping.GenesisBalances, []basics.Address, []*crypto.
 
 		adata := basics.AccountData{
 			MicroAlgos: basics.MicroAlgos{Raw: amount},
+			Status:     basics.Offline,
+		}
+		if i < cfg.OnlineCount {
+			adata.Status = basics.Online
+			adata.VoteFirstValid = 0
+			adata.VoteLastValid = 1_000_000
+			crypto.RandBytes(adata.VoteID[:])
+			crypto.RandBytes(adata.SelectionID[:])
+			crypto.RandBytes(adata.StateProofID[:])
 		}
 		accts[addrs[i]] = adata
 	}
@@ -66,8 +93,12 @@ func NewTestGenesis() (bookkeeping.GenesisBalances, []basics.Address, []*crypto.
 		Status:     basics.NotParticipating,
 	}
 
+	poolBal := basics.MicroAlgos{Raw: amount}
+	if cfg.rewardsPoolAmount.Raw > 0 {
+		poolBal = cfg.rewardsPoolAmount
+	}
 	accts[rewards] = basics.AccountData{
-		MicroAlgos: basics.MicroAlgos{Raw: amount},
+		MicroAlgos: poolBal,
 	}
 
 	genBalances := bookkeeping.MakeGenesisBalances(accts, sink, rewards)

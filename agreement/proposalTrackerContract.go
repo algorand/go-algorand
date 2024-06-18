@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,6 +21,8 @@ import (
 )
 
 type proposalTrackerContract struct {
+	_struct struct{} `codec:","`
+
 	SawOneVote       bool
 	Froze            bool
 	SawSoftThreshold bool
@@ -30,7 +32,7 @@ type proposalTrackerContract struct {
 // TODO check concrete types of events
 func (c *proposalTrackerContract) pre(p player, in event) (pre []error) {
 	switch in.t() {
-	case voteVerified, proposalFrozen, softThreshold, certThreshold, voteFilterRequest, readStaging:
+	case voteVerified, proposalFrozen, softThreshold, certThreshold, voteFilterRequest, readStaging, readLowestVote:
 	default:
 		pre = append(pre, fmt.Errorf("incoming event has invalid type: %v", in.t()))
 	}

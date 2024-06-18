@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -34,12 +34,7 @@ import (
 
 func TestNewAppEvalParams(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
-	params := []config.ConsensusParams{
-		{Application: true, MaxAppProgramCost: 700},
-		config.Consensus[protocol.ConsensusV29],
-		config.Consensus[protocol.ConsensusFuture],
-	}
+	t.Parallel()
 
 	// Create some sample transactions. The main reason this a blackbox test
 	// (_test package) is to have access to txntest.
@@ -77,10 +72,18 @@ func TestNewAppEvalParams(t *testing.T) {
 		{[]transactions.SignedTxnWithAD{appcall1, payment, appcall2}, 2},
 	}
 
+	params := []config.ConsensusParams{
+		{Application: true, MaxAppProgramCost: 700},
+		config.Consensus[protocol.ConsensusV29],
+		config.Consensus[protocol.ConsensusFuture],
+	}
 	for i, param := range params {
+		param := param
 		for j, testCase := range cases {
+			i, j, param, testCase := i, j, param, testCase
 			t.Run(fmt.Sprintf("i=%d,j=%d", i, j), func(t *testing.T) {
-				ep := logic.NewEvalParams(testCase.group, &param, nil)
+				t.Parallel()
+				ep := logic.NewAppEvalParams(testCase.group, &param, nil)
 				require.NotNil(t, ep)
 				require.Equal(t, ep.TxnGroup, testCase.group)
 				require.Equal(t, *ep.Proto, param)

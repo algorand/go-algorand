@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,14 +17,10 @@
 package network
 
 import (
-	"fmt"
-	"math/rand"
-	"sync"
 	"testing"
 	"time"
 
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -92,7 +88,7 @@ func TestArrayPhonebookAll(t *testing.T) {
 	set := []string{"a", "b", "c", "d", "e"}
 	ph := MakePhonebook(1, 1).(*phonebookImpl)
 	for _, e := range set {
-		ph.data[e] = makePhonebookEntryData("", PhoneBookEntryRelayRole)
+		ph.data[e] = makePhonebookEntryData("", PhoneBookEntryRelayRole, false)
 	}
 	testPhonebookAll(t, set, ph)
 }
@@ -103,7 +99,7 @@ func TestArrayPhonebookUniform1(t *testing.T) {
 	set := []string{"a", "b", "c", "d", "e"}
 	ph := MakePhonebook(1, 1).(*phonebookImpl)
 	for _, e := range set {
-		ph.data[e] = makePhonebookEntryData("", PhoneBookEntryRelayRole)
+		ph.data[e] = makePhonebookEntryData("", PhoneBookEntryRelayRole, false)
 	}
 	testPhonebookUniform(t, set, ph, 1)
 }
@@ -114,85 +110,9 @@ func TestArrayPhonebookUniform3(t *testing.T) {
 	set := []string{"a", "b", "c", "d", "e"}
 	ph := MakePhonebook(1, 1).(*phonebookImpl)
 	for _, e := range set {
-		ph.data[e] = makePhonebookEntryData("", PhoneBookEntryRelayRole)
+		ph.data[e] = makePhonebookEntryData("", PhoneBookEntryRelayRole, false)
 	}
 	testPhonebookUniform(t, set, ph, 3)
-}
-
-// TestPhonebookExtension tests for extending different phonebooks with
-// addresses.
-func TestPhonebookExtension(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	setA := []string{"a"}
-	moreB := []string{"b"}
-	ph := MakePhonebook(1, 1).(*phonebookImpl)
-	ph.ReplacePeerList(setA, "default", PhoneBookEntryRelayRole)
-	ph.ExtendPeerList(moreB, "default", PhoneBookEntryRelayRole)
-	ph.ExtendPeerList(setA, "other", PhoneBookEntryRelayRole)
-	assert.Equal(t, 2, ph.Length())
-	assert.Equal(t, true, ph.data["a"].networkNames["default"])
-	assert.Equal(t, true, ph.data["a"].networkNames["other"])
-	assert.Equal(t, true, ph.data["b"].networkNames["default"])
-	assert.Equal(t, false, ph.data["b"].networkNames["other"])
-}
-
-func extenderThread(th *phonebookImpl, more []string, wg *sync.WaitGroup, repetitions int) {
-	defer wg.Done()
-	for i := 0; i <= repetitions; i++ {
-		start := rand.Intn(len(more))
-		end := rand.Intn(len(more)-start) + start
-		th.ExtendPeerList(more[start:end], "default", PhoneBookEntryRelayRole)
-	}
-	th.ExtendPeerList(more, "default", PhoneBookEntryRelayRole)
-}
-
-func TestThreadsafePhonebookExtension(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	set := []string{"a", "b", "c", "d", "e"}
-	more := []string{"f", "g", "h", "i", "j"}
-	ph := MakePhonebook(1, 1).(*phonebookImpl)
-	ph.ReplacePeerList(set, "default", PhoneBookEntryRelayRole)
-	wg := sync.WaitGroup{}
-	wg.Add(5)
-	for ti := 0; ti < 5; ti++ {
-		go extenderThread(ph, more, &wg, 1000)
-	}
-	wg.Wait()
-
-	assert.Equal(t, 10, ph.Length())
-}
-
-func threadTestThreadsafePhonebookExtensionLong(wg *sync.WaitGroup, ph *phonebookImpl, setSize, repetitions int) {
-	set := make([]string, setSize)
-	for i := range set {
-		set[i] = fmt.Sprintf("%06d", i)
-	}
-	rand.Shuffle(len(set), func(i, j int) { t := set[i]; set[i] = set[j]; set[j] = t })
-	extenderThread(ph, set, wg, repetitions)
-}
-
-func TestThreadsafePhonebookExtensionLong(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	if testing.Short() {
-		t.SkipNow()
-		return
-	}
-	ph := MakePhonebook(1, 1).(*phonebookImpl)
-	wg := sync.WaitGroup{}
-	const threads = 5
-	const setSize = 1000
-	const repetitions = 100
-	wg.Add(threads)
-	for i := 0; i < threads; i++ {
-		go threadTestThreadsafePhonebookExtensionLong(&wg, ph, setSize, repetitions)
-	}
-
-	wg.Wait()
-
-	assert.Equal(t, setSize, ph.Length())
 }
 
 func TestMultiPhonebook(t *testing.T) {
@@ -214,6 +134,34 @@ func TestMultiPhonebook(t *testing.T) {
 	testPhonebookAll(t, set, mp)
 	testPhonebookUniform(t, set, mp, 1)
 	testPhonebookUniform(t, set, mp, 3)
+}
+
+// TestMultiPhonebookPersistentPeers validates that the peers added via Phonebook.AddPersistentPeers
+// are not replaced when Phonebook.ReplacePeerList is called
+func TestMultiPhonebookPersistentPeers(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	persistentPeers := []string{"a"}
+	set := []string{"b", "c", "d", "e", "f", "g", "h", "i", "j", "k"}
+	pha := make([]string, 0)
+	for _, e := range set[:5] {
+		pha = append(pha, e)
+	}
+	phb := make([]string, 0)
+	for _, e := range set[5:] {
+		phb = append(phb, e)
+	}
+	mp := MakePhonebook(1, 1*time.Millisecond)
+	mp.AddPersistentPeers(persistentPeers, "pha", PhoneBookEntryRelayRole)
+	mp.AddPersistentPeers(persistentPeers, "phb", PhoneBookEntryRelayRole)
+	mp.ReplacePeerList(pha, "pha", PhoneBookEntryRelayRole)
+	mp.ReplacePeerList(phb, "phb", PhoneBookEntryRelayRole)
+
+	testPhonebookAll(t, append(set, persistentPeers...), mp)
+	allAddresses := mp.GetAddresses(len(set)+len(persistentPeers), PhoneBookEntryRelayRole)
+	for _, pp := range persistentPeers {
+		require.Contains(t, allAddresses, pp)
+	}
 }
 
 func TestMultiPhonebookDuplicateFiltering(t *testing.T) {
@@ -388,21 +336,6 @@ func TestWaitAndAddConnectionTimeShortWindow(t *testing.T) {
 	require.Equal(t, 1, len(phBookData))
 }
 
-func BenchmarkThreadsafePhonebook(b *testing.B) {
-	ph := MakePhonebook(1, 1).(*phonebookImpl)
-	threads := 5
-	if b.N < threads {
-		threads = b.N
-	}
-	wg := sync.WaitGroup{}
-	wg.Add(threads)
-	repetitions := b.N / threads
-	for t := 0; t < threads; t++ {
-		go threadTestThreadsafePhonebookExtensionLong(&wg, ph, 1000, repetitions)
-	}
-	wg.Wait()
-}
-
 // TestPhonebookRoles tests that the filtering by roles for different
 // phonebooks entries works as expected.
 func TestPhonebookRoles(t *testing.T) {
@@ -413,11 +346,11 @@ func TestPhonebookRoles(t *testing.T) {
 
 	ph := MakePhonebook(1, 1).(*phonebookImpl)
 	ph.ReplacePeerList(relaysSet, "default", PhoneBookEntryRelayRole)
-	ph.ReplacePeerList(archiverSet, "default", PhoneBookEntryArchiverRole)
+	ph.ReplacePeerList(archiverSet, "default", PhoneBookEntryArchivalRole)
 	require.Equal(t, len(relaysSet)+len(archiverSet), len(ph.data))
 	require.Equal(t, len(relaysSet)+len(archiverSet), ph.Length())
 
-	for _, role := range []PhoneBookEntryRoles{PhoneBookEntryRelayRole, PhoneBookEntryArchiverRole} {
+	for _, role := range []PhoneBookEntryRoles{PhoneBookEntryRelayRole, PhoneBookEntryArchivalRole} {
 		for k := 0; k < 100; k++ {
 			for l := 0; l < 3; l++ {
 				entries := ph.GetAddresses(l, role)
@@ -425,7 +358,7 @@ func TestPhonebookRoles(t *testing.T) {
 					for _, entry := range entries {
 						require.Contains(t, entry, "relay")
 					}
-				} else if role == PhoneBookEntryArchiverRole {
+				} else if role == PhoneBookEntryArchivalRole {
 					for _, entry := range entries {
 						require.Contains(t, entry, "archiver")
 					}

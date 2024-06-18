@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -50,7 +50,7 @@ const (
 // a longer output is introduced.
 const MaxHashDigestSize = SumhashDigestSize
 
-//size of each hash
+// size of each hash
 const (
 	Sha512_256Size    = sha512.Size256
 	SumhashDigestSize = sumhash.Sumhash512DigestSize
@@ -58,6 +58,7 @@ const (
 )
 
 // HashFactory is responsible for generating new hashes accordingly to the type it stores.
+//
 //msgp:postunmarshalcheck HashFactory Validate
 type HashFactory struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
@@ -117,7 +118,7 @@ func (z *HashFactory) Validate() error {
 }
 
 // GenericHashObj Makes it easier to sum using hash interface and Hashable interface
-func GenericHashObj(hsh hash.Hash, h Hashable) []byte {
+func GenericHashObj[H Hashable](hsh hash.Hash, h H) []byte {
 	rep := HashRep(h)
 	return hashBytes(hsh, rep)
 }

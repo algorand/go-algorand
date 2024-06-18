@@ -1,7 +1,7 @@
 #!/bin/bash
 # shellcheck disable=2009,2093,2164
 
-UPDATER_MIN_VERSION="3.8.0"
+UPDATER_MIN_VERSION="3.12.2"
 UPDATER_CHANNEL="stable"
 FILENAME=$(basename -- "$0")
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
@@ -272,7 +272,7 @@ function check_for_updater() {
 
         # try signature validation
         if [ "$GPG_VERIFY" = "1" ]; then
-            local UPDATER_SIGFILE="$UPDATER_TEMPDIR/updater.sig" UPDATER_PUBKEYFILE="key.pub"
+            local UPDATER_SIGFILE="$UPDATER_TEMPDIR/updater.sig" UPDATER_PUBKEYFILE="$UPDATER_TEMPDIR/key.pub"
             # try downloading public key
             if curl -sSL "$UPDATER_PUBKEYURL" -o "$UPDATER_PUBKEYFILE"; then
                 GNUPGHOME="$(mktemp -d)"; export GNUPGHOME
@@ -334,7 +334,7 @@ function check_for_updater() {
 function check_for_update() {
     determine_current_version
     check_for_updater
-    LATEST="$(${SCRIPTPATH}/updater ver check -c ${CHANNEL} ${BUCKET} | sed -n '2 p')"
+    LATEST="$(${SCRIPTPATH}/updater ver check -c ${CHANNEL} ${BUCKET} | tail -1)"
     if [ $? -ne 0 ]; then
         echo "No remote updates found"
         return 1
@@ -537,7 +537,7 @@ function install_new_binaries() {
     if [ ! -d ${UPDATESRCDIR}/bin ]; then
         return 0
     else
-        echo "Installing new binary files..."
+        echo "Installing new binary files into ${BINDIR}"
         ROLLBACKBIN=1
         rm -rf ${BINDIR}/new
         mkdir ${BINDIR}/new

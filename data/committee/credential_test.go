@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,6 +20,7 @@ import (
 	"math/rand" // used for replicability of sortition benchmark
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/data/basics"
@@ -31,9 +32,10 @@ import (
 func TestAccountSelected(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
+	seedGen := rand.New(rand.NewSource(1))
 	N := 1
 	for i := 0; i < N; i++ {
-		selParams, _, round, addresses, _, vrfSecrets, _, _ := testingenv(t, 100, 2000)
+		selParams, _, round, addresses, _, vrfSecrets, _, _ := testingenv(t, 100, 2000, seedGen)
 		period := Period(0)
 
 		leaders := uint64(0)
@@ -85,13 +87,18 @@ func TestAccountSelected(t *testing.T) {
 		if (committee < uint64(0.8*float64(step.CommitteeSize(proto)))) || (committee > uint64(1.2*float64(step.CommitteeSize(proto)))) {
 			t.Errorf("bad number of committee members %v expected %v", committee, step.CommitteeSize(proto))
 		}
+		if i == 0 {
+			// pin down deterministic outputs for first iteration
+			assert.EqualValues(t, 17, leaders)
+			assert.EqualValues(t, 2918, committee)
+		}
 	}
 }
 
 func TestRichAccountSelected(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	selParams, _, round, addresses, _, vrfSecrets, _, _ := testingenv(t, 10, 2000)
+	selParams, _, round, addresses, _, vrfSecrets, _, _ := testingenv(t, 10, 2000, nil)
 
 	period := Period(0)
 	ok, record, selectionSeed, _ := selParams(addresses[0])
@@ -139,16 +146,20 @@ func TestRichAccountSelected(t *testing.T) {
 	if (ccred.Weight < uint64(0.4*float64(step.CommitteeSize(proto)))) || (ccred.Weight > uint64(.6*float64(step.CommitteeSize(proto)))) {
 		t.Errorf("bad number of committee members %v expected %v", ccred.Weight, step.CommitteeSize(proto))
 	}
+	// pin down deterministic outputs, given initial seed values
+	assert.EqualValues(t, 6, lcred.Weight)
+	assert.EqualValues(t, 735, ccred.Weight)
 }
 
 func TestPoorAccountSelectedLeaders(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
+	seedGen := rand.New(rand.NewSource(1))
 	N := 2
 	failsLeaders := 0
 	leaders := make([]uint64, N)
 	for i := 0; i < N; i++ {
-		selParams, _, round, addresses, _, vrfSecrets, _, _ := testingenv(t, 100, 2000)
+		selParams, _, round, addresses, _, vrfSecrets, _, _ := testingenv(t, 100, 2000, seedGen)
 		period := Period(0)
 		for j := range addresses {
 			ok, record, selectionSeed, _ := selParams(addresses[j])
@@ -184,15 +195,19 @@ func TestPoorAccountSelectedLeaders(t *testing.T) {
 	if failsLeaders == 2 {
 		t.Errorf("bad number of leaders %v expected %v", leaders, proto.NumProposers)
 	}
+	// pin down deterministic outputs, given initial seed values
+	assert.EqualValues(t, 18, leaders[0])
+	assert.EqualValues(t, 20, leaders[1])
 }
 
 func TestPoorAccountSelectedCommittee(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
+	seedGen := rand.New(rand.NewSource(1))
 	N := 1
 	committee := uint64(0)
 	for i := 0; i < N; i++ {
-		selParams, _, round, addresses, _, vrfSecrets, _, _ := testingenv(t, 100, 2000)
+		selParams, _, round, addresses, _, vrfSecrets, _, _ := testingenv(t, 100, 2000, seedGen)
 		period := Period(0)
 
 		step := Cert
@@ -223,15 +238,19 @@ func TestPoorAccountSelectedCommittee(t *testing.T) {
 		if (committee < uint64(0.8*float64(step.CommitteeSize(proto)))) || (committee > uint64(1.2*float64(step.CommitteeSize(proto)))) {
 			t.Errorf("bad number of committee members %v expected %v", committee, step.CommitteeSize(proto))
 		}
+		if i == 0 { // pin down deterministic committee size, given initial seed value
+			assert.EqualValues(t, 1513, committee)
+		}
 	}
 }
 
 func TestNoMoneyAccountNotSelected(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
+	seedGen := rand.New(rand.NewSource(1))
 	N := 1
 	for i := 0; i < N; i++ {
-		selParams, _, round, addresses, _, _, _, _ := testingenv(t, 10, 2000)
+		selParams, _, round, addresses, _, _, _, _ := testingenv(t, 10, 2000, seedGen)
 		lookback := basics.Round(2*proto.SeedRefreshInterval + proto.SeedLookback + 1)
 		gen := rand.New(rand.NewSource(2))
 		_, _, zeroVRFSecret, _ := newAccount(t, gen, lookback, 5)
@@ -262,7 +281,7 @@ func TestNoMoneyAccountNotSelected(t *testing.T) {
 func TestLeadersSelected(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	selParams, _, round, addresses, _, vrfSecrets, _, _ := testingenv(t, 100, 2000)
+	selParams, _, round, addresses, _, vrfSecrets, _, _ := testingenv(t, 100, 2000, nil)
 
 	period := Period(0)
 	step := Propose
@@ -294,7 +313,7 @@ func TestLeadersSelected(t *testing.T) {
 func TestCommitteeSelected(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	selParams, _, round, addresses, _, vrfSecrets, _, _ := testingenv(t, 100, 2000)
+	selParams, _, round, addresses, _, vrfSecrets, _, _ := testingenv(t, 100, 2000, nil)
 
 	period := Period(0)
 	step := Soft
@@ -326,7 +345,7 @@ func TestCommitteeSelected(t *testing.T) {
 func TestAccountNotSelected(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	selParams, _, round, addresses, _, vrfSecrets, _, _ := testingenv(t, 100, 2000)
+	selParams, _, round, addresses, _, vrfSecrets, _, _ := testingenv(t, 100, 2000, nil)
 	period := Period(0)
 	leaders := uint64(0)
 	for i := range addresses {
@@ -356,7 +375,7 @@ func TestAccountNotSelected(t *testing.T) {
 
 // TODO update to remove VRF verification overhead
 func BenchmarkSortition(b *testing.B) {
-	selParams, _, round, addresses, _, vrfSecrets, _, _ := testingenv(b, 100, 2000)
+	selParams, _, round, addresses, _, vrfSecrets, _, _ := testingenv(b, 100, 2000, nil)
 
 	period := Period(0)
 	step := Soft

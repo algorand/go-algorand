@@ -17,8 +17,8 @@ jobs:
     name: Performance regression check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-go@v3
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v4.0.1
         with:
           go-version-file: 'go.mod'
       - run: go version
@@ -29,7 +29,7 @@ jobs:
       # degradation, (2) `eval` degradation.  (2) suggests a broader performance
       # issue. 
       - name: Run benchmark
-        run: go test ./data/transactions/logic -bench 'BenchmarkUintMath' | tee benchmark_output.txt
+        run: go test ./data/transactions/logic -bench 'BenchmarkUintMath' -run=^$ | tee benchmark_output.txt
       - name: Push benchmark result to gh-pages branch
         if: github.event_name == 'push'
         uses: benchmark-action/github-action-benchmark@v1
@@ -49,3 +49,9 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           alert-threshold: '200%'
           comment-on-alert: true
+      - name: Slack Notification
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+        run: |
+          curl -X POST --data-urlencode "payload={\"text\": \"Benchmark workflow failed. ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }} \"}" $SLACK_WEBHOOK
+        if: ${{ failure() && (contains(github.ref_name, 'rel/nightly') || contains(github.ref_name, 'rel/beta') || contains(github.ref_name, 'rel/stable') || contains(github.ref_name, 'master')) }}

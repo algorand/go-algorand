@@ -81,9 +81,9 @@ if { [catch {
     set TEAL_PROGS_DIR "$TEST_DATA_DIR/../scripts/e2e_subs/tealprogs"
     set APP_ID [::AlgorandGoal::AppCreate0 $PRIMARY_WALLET_NAME "" $NEW_ACCOUNT_ADDRESS ${TEAL_PROGS_DIR}/clear_program_state.teal $GLOBAL_BYTE_SLICES $LOCAL_BYTE_SLICES ${TEAL_PROGS_DIR}/clear_program_state.teal $TEST_PRIMARY_NODE_DIR]
 
-    # expect app idx = 2 since a pre-recorded response is checked down the road
-    if { $APP_ID != 2 } {
-        ::AlgorandGoal::Abort "Expected app id to be 2 but got $APP_ID. Have you posted additional transactions? Only transfer txn is expected before app call txn"
+    # expect app idx = 1002 since a pre-recorded response is checked down the road
+    if { $APP_ID != 1002 } {
+        ::AlgorandGoal::Abort "Expected app id to be 1002 but got $APP_ID. Have you posted additional transactions? Only transfer txn is expected before app call txn"
     }
 
     # check JSON output to stdout
@@ -91,7 +91,7 @@ if { [catch {
   \"addr\": \"47YPQTIGQEO7T4Y4RWDYWEKV6RTR2UNBQXBABEEGM72ESWDQNCQ52OPASU\",
   \"algo\": 299000,
   \"appp\": {
-    \"2\": {
+    \"1002\": {
       \"approv\": \"AiABASI=\",
       \"clearp\": \"AiABASI=\",
       \"gsch\": {
@@ -110,7 +110,7 @@ if { [catch {
     }
 
     # check msgpack output to a file with zero exit code
-    set MSGP_EXPECTED_BASE64 "hKRhZGRyxCDn8PhNBoEd+fMcjYeLEVX0Zx1RoYXCAJCGZ/RJWHBooaRhbGdvzgAEj/ikYXBwcIECg6ZhcHByb3bEBQIgAQEipmNsZWFycMQFAiABASKkZ3NjaIGjbmJzAaR0c2NogaNuYnMB"
+    set MSGP_EXPECTED_BASE64 "hKRhZGRyxCDn8PhNBoEd+fMcjYeLEVX0Zx1RoYXCAJCGZ/RJWHBooaRhbGdvzgAEj/ikYXBwcIHNA+qDpmFwcHJvdsQFAiABASKmY2xlYXJwxAUCIAEBIqRnc2NogaNuYnMBpHRzY2iBo25icwE="
     set MSGP_EXPECTED [ exec echo -n $MSGP_EXPECTED_BASE64 | base64 --decode ]
     set BALREC_FILE "$TEST_ROOT_DIR/brec.msgp"
     spawn goal account dump -a $NEW_ACCOUNT_ADDRESS -o $BALREC_FILE --datadir $TEST_PRIMARY_NODE_DIR

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -51,8 +51,8 @@ type cdtSession struct {
 	verbose bool
 }
 
-var contextCounter int32 = 0
-var scriptCounter int32 = 0
+var contextCounter atomic.Int32
+var scriptCounter atomic.Int32
 
 func makeCdtSession(uuid string, debugger Control, ch chan Notification) *cdtSession {
 	s := new(cdtSession)
@@ -60,8 +60,8 @@ func makeCdtSession(uuid string, debugger Control, ch chan Notification) *cdtSes
 	s.debugger = debugger
 	s.notifications = ch
 	s.done = make(chan struct{})
-	s.contextID = int(atomic.AddInt32(&contextCounter, 1))
-	s.scriptID = strconv.Itoa(int(atomic.AddInt32(&scriptCounter, 1)))
+	s.contextID = int(contextCounter.Add(1))
+	s.scriptID = strconv.Itoa(int(scriptCounter.Add(1)))
 	return s
 }
 

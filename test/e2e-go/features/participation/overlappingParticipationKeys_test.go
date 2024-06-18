@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -44,7 +44,8 @@ import (
 // ((Network Round - 1) Mod 10) = nodeIdx and nodeIdx is used to pull out from an
 // "array" of nodes similar to {Node1, Node2, Node3} etc.  The Mod 10 simply pulls the
 // "digit" from the number:
-//    Round: 13 -> 13 - 1 = 12 ->  12 Mod 10 -> 2 -> Node3 with nodeIdx == 2
+//
+//	Round: 13 -> 13 - 1 = 12 ->  12 Mod 10 -> 2 -> Node3 with nodeIdx == 2
 //
 // The keys are overlapped in the sense that a key is registered to a node and
 // "overlaps" with other installed keys that are also valid.  Meaning there might be:
@@ -65,8 +66,8 @@ func TestOverlappingParticipationKeys(t *testing.T) {
 	// new keys must exist at least 4 rounds prior use
 	shortPartKeysProtocol.SeedLookback = 2
 	shortPartKeysProtocol.SeedRefreshInterval = 1
-	if runtime.GOARCH == "amd64" {
-		// amd64 platforms are generally quite capable, so accelerate the round times to make the test run faster.
+	if runtime.GOARCH == "amd64" || runtime.GOARCH == "arm64" {
+		// amd64 and arm64 platforms are generally quite capable, so accelerate the round times to make the test run faster.
 		shortPartKeysProtocol.AgreementFilterTimeoutPeriod0 = 1 * time.Second
 		shortPartKeysProtocol.AgreementFilterTimeout = 1 * time.Second
 	}

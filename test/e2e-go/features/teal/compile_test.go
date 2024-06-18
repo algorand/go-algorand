@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -24,6 +24,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -50,7 +51,7 @@ func TestTealCompile(t *testing.T) {
 	// get lib goal client
 	libGoalClient := fixture.LibGoalFixture.GetLibGoalClientFromNodeController(primaryNode)
 
-	compiledProgram, _, err := libGoalClient.Compile([]byte(""))
+	compiledProgram, _, _, err := libGoalClient.Compile([]byte(""), false)
 	a.Nil(compiledProgram)
 	a.Equal(err.Error(), "HTTP 404 Not Found: /teal/compile was not enabled in the configuration file by setting the EnableDeveloperAPI to true")
 
@@ -65,19 +66,22 @@ func TestTealCompile(t *testing.T) {
 	fixture.Start()
 
 	var hash crypto.Digest
-	compiledProgram, hash, err = libGoalClient.Compile([]byte("int 1"))
+	var srcMap *logic.SourceMap
+	compiledProgram, hash, srcMap, err = libGoalClient.Compile([]byte("int 1"), true)
 	a.NotNil(compiledProgram)
 	a.NoError(err, "A valid v1 program should result in a compilation success")
+	a.NotNil(srcMap)
 	a.Equal([]byte{0x1, 0x20, 0x1, 0x1, 0x22}, compiledProgram)
 	a.Equal("6Z3C3LDVWGMX23BMSYMANACQOSINPFIRF77H7N3AWJZYV6OH6GWQ", hash.String())
 
-	compiledProgram, hash, err = libGoalClient.Compile([]byte("#pragma version 2\nint 1"))
+	compiledProgram, hash, srcMap, err = libGoalClient.Compile([]byte("#pragma version 2\nint 1"), true)
 	a.NotNil(compiledProgram)
 	a.NoError(err, "A valid v2 program should result in a compilation success")
+	a.NotNil(srcMap)
 	a.Equal([]byte{0x2, 0x20, 0x1, 0x1, 0x22}, compiledProgram)
 	a.Equal("YOE6C22GHCTKAN3HU4SE5PGIPN5UKXAJTXCQUPJ3KKF5HOAH646A", hash.String())
 
-	compiledProgram, hash, err = libGoalClient.Compile([]byte("bad program"))
+	compiledProgram, hash, _, err = libGoalClient.Compile([]byte("bad program"), false)
 	a.Error(err, "An invalid program should result in a compilation failure")
 	a.Nil(compiledProgram)
 	a.Equal(crypto.Digest{}, hash)

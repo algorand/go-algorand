@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -85,7 +85,7 @@ func (d deleteStateProofKeysOp) apply(db *participationDB) error {
 	})
 
 	if err != nil {
-		db.log.Warnf("participationDB unable to delete stateProof key: %w", err)
+		db.log.Warnf("participationDB unable to delete stateProof key: %v", err)
 	}
 	return err
 }
@@ -150,7 +150,7 @@ func (i *insertOp) apply(db *participationDB) (err error) {
 	}
 
 	err = db.store.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		result, err := tx.Exec(
+		result, err2 := tx.Exec(
 			insertKeysetQuery,
 			i.id[:],
 			i.record.Parent[:],
@@ -159,17 +159,17 @@ func (i *insertOp) apply(db *participationDB) (err error) {
 			i.record.KeyDilution,
 			rawVRF,
 			rawStateProofContext)
-		if err = verifyExecWithOneRowEffected(err, result, "insert keyset"); err != nil {
-			return err
+		if err2 = verifyExecWithOneRowEffected(err2, result, "insert keyset"); err2 != nil {
+			return err2
 		}
-		pk, err := result.LastInsertId()
-		if err != nil {
-			return fmt.Errorf("unable to get pk from keyset: %w", err)
+		pk, err2 := result.LastInsertId()
+		if err2 != nil {
+			return fmt.Errorf("unable to get pk from keyset: %w", err2)
 		}
 
 		// Create Rolling entry
-		result, err = tx.Exec(insertRollingQuery, pk, rawVoting)
-		return verifyExecWithOneRowEffected(err, result, "insert rolling")
+		result, err2 = tx.Exec(insertRollingQuery, pk, rawVoting)
+		return verifyExecWithOneRowEffected(err2, result, "insert rolling")
 	})
 	return err
 }

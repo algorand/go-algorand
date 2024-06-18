@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -34,6 +34,8 @@ import (
 
 func TestCdtHandlers(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	params := CdtFrontendParams{
 		router:     mux.NewRouter(),
 		apiAddress: "127.0.0.1:12345",
@@ -151,6 +153,8 @@ func (c *MockDebugControl) GetStates(s *logic.DebugState) AppState {
 
 func TestCdtFrontendSessionStarted(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	params := CdtFrontendParams{
 		router:     mux.NewRouter(),
 		apiAddress: "127.0.0.1:12345",
@@ -188,6 +192,8 @@ func TestCdtFrontendSessionStarted(t *testing.T) {
 
 func TestCdtAdapterSessionEnded(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	params := CdtFrontendParams{
 		router:     mux.NewRouter(),
 		apiAddress: "127.0.0.1:12345",

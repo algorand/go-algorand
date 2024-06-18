@@ -58,7 +58,7 @@ def openalgod(algodata):
     algodnet = open(algodnetpath, 'rt').read().strip()
     algodtokenpath = os.path.join(algodata,'algod.token')
     algodtoken = open(algodtokenpath, 'rt').read().strip()
-    algod = algosdk.algod.AlgodClient(algodtoken, 'http://' + algodnet)
+    algod = algosdk.v2client.algod.AlgodClient(algodtoken, 'http://' + algodnet)
     return algod
 
 def read_script_for_timeout(fname):
@@ -106,24 +106,25 @@ def _script_thread_inner(runset, scriptname, timeout):
 
     # create a wallet for the test
     walletname = base64.b16encode(os.urandom(16)).decode()
-    winfo = kmd.create_wallet(walletname, '')
+    winfo = kmd.create_wallet(walletname, '', timeout=120) # 2 minute timeout
     handle = kmd.init_wallet_handle(winfo['id'], '')
     addr = kmd.generate_key(handle)
 
     # send one million Algos to the test wallet's account
     params = algod.suggested_params()
-    round = params['lastRound']
+    round = params.first
     max_init_wait_rounds = 5
-    txn = algosdk.transaction.PaymentTxn(sender=maxpubaddr, fee=params['minFee'], first=round, last=round+max_init_wait_rounds, gh=params['genesishashb64'], receiver=addr, amt=1000000000000, flat_fee=True)
+    params.last = params.first + max_init_wait_rounds
+    txn = algosdk.transaction.PaymentTxn(maxpubaddr, params, addr, 1_000_000_000_000)
     stxn = kmd.sign_transaction(pubw, '', txn)
     txid = algod.send_transaction(stxn)
     ptxinfo = None
-    for i in range(max_init_wait_rounds):
+    for _ in range(max_init_wait_rounds):
         txinfo = algod.pending_transaction_info(txid)
         if txinfo.get('round'):
             break
         status = algod.status_after_block(round_num=round)
-        round = status['lastRound']
+        round = status['last-round']
 
     if ptxinfo is not None:
         sys.stderr.write('failed to initialize temporary test wallet account for test ({}) for {} rounds.\n'.format(scriptname, max_init_wait_rounds))
@@ -446,11 +447,25 @@ def main():
     retcode = 0
     capv = args.version.capitalize()
     xrun(['goal', 'network', 'create', '-r', netdir, '-n', 'tbd', '-t', os.path.join(repodir, f'test/testdata/nettemplates/TwoNodes50Each{capv}.json')], timeout=90)
+    nodeDataDir = os.path.join(netdir, 'Node')
+    primaryDataDir = os.path.join(netdir, 'Primary')
+
+    # Set EnableDeveloperAPI to true for both nodes
+    for dataDir in (nodeDataDir, primaryDataDir):
+        configFile = os.path.join(dataDir, 'config.json')
+        with open(configFile, 'r') as f:
+            configOptions = json.load(f)
+
+        configOptions['EnableDeveloperAPI'] = True
+
+        with open(configFile, 'w') as f:
+            json.dump(configOptions, f)
+
     xrun(['goal', 'network', 'start', '-r', netdir], timeout=90)
     atexit.register(goal_network_stop, netdir, env)
 
-    env['ALGORAND_DATA'] = os.path.join(netdir, 'Node')
-    env['ALGORAND_DATA2'] = os.path.join(netdir, 'Primary')
+    env['ALGORAND_DATA'] = nodeDataDir
+    env['ALGORAND_DATA2'] = primaryDataDir
 
     if args.unsafe_scrypt:
         create_kmd_config_with_unsafe_scrypt(env['ALGORAND_DATA'])

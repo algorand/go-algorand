@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -38,7 +38,7 @@ func TestValidRounds(t *testing.T) {
 	validRounds = 0
 	fv, lv, err := computeValidityRounds(firstValid, lastValid, validRounds, lastRound, maxTxnLife)
 	a.NoError(err)
-	a.Equal(lastRound+1, fv)
+	a.Equal(lastRound, fv)
 	a.Equal(fv+maxTxnLife, lv)
 
 	firstValid = 0
@@ -46,34 +46,34 @@ func TestValidRounds(t *testing.T) {
 	validRounds = maxTxnLife + 1
 	fv, lv, err = computeValidityRounds(firstValid, lastValid, validRounds, lastRound, maxTxnLife)
 	a.NoError(err)
-	a.Equal(lastRound+1, fv)
+	a.Equal(lastRound, fv)
 	a.Equal(fv+maxTxnLife, lv)
 
 	firstValid = 0
 	lastValid = 0
 	validRounds = maxTxnLife + 2
-	fv, lv, err = computeValidityRounds(firstValid, lastValid, validRounds, lastRound, maxTxnLife)
+	_, _, err = computeValidityRounds(firstValid, lastValid, validRounds, lastRound, maxTxnLife)
 	a.Error(err)
 	a.Equal("cannot construct transaction: txn validity period 1001 is greater than protocol max txn lifetime 1000", err.Error())
 
 	firstValid = 0
 	lastValid = 1
 	validRounds = 2
-	fv, lv, err = computeValidityRounds(firstValid, lastValid, validRounds, lastRound, maxTxnLife)
+	_, _, err = computeValidityRounds(firstValid, lastValid, validRounds, lastRound, maxTxnLife)
 	a.Error(err)
 	a.Equal("cannot construct transaction: ambiguous input: lastValid = 1, validRounds = 2", err.Error())
 
 	firstValid = 2
 	lastValid = 1
 	validRounds = 0
-	fv, lv, err = computeValidityRounds(firstValid, lastValid, validRounds, lastRound, maxTxnLife)
+	_, _, err = computeValidityRounds(firstValid, lastValid, validRounds, lastRound, maxTxnLife)
 	a.Error(err)
 	a.Equal("cannot construct transaction: txn would first be valid on round 2 which is after last valid round 1", err.Error())
 
 	firstValid = 1
 	lastValid = maxTxnLife + 2
 	validRounds = 0
-	fv, lv, err = computeValidityRounds(firstValid, lastValid, validRounds, lastRound, maxTxnLife)
+	_, _, err = computeValidityRounds(firstValid, lastValid, validRounds, lastRound, maxTxnLife)
 	a.Error(err)
 	a.Equal("cannot construct transaction: txn validity period ( 1 to 1002 ) is greater than protocol max txn lifetime 1000", err.Error())
 
@@ -90,7 +90,7 @@ func TestValidRounds(t *testing.T) {
 	validRounds = 0
 	fv, lv, err = computeValidityRounds(firstValid, lastValid, validRounds, lastRound, maxTxnLife)
 	a.NoError(err)
-	a.Equal(lastRound+1, fv)
+	a.Equal(lastRound, fv)
 	a.Equal(lastRound+1, lv)
 
 	firstValid = 0
@@ -98,16 +98,16 @@ func TestValidRounds(t *testing.T) {
 	validRounds = 1
 	fv, lv, err = computeValidityRounds(firstValid, lastValid, validRounds, lastRound, maxTxnLife)
 	a.NoError(err)
-	a.Equal(lastRound+1, fv)
-	a.Equal(lastRound+1, lv)
+	a.Equal(lastRound, fv)
+	a.Equal(lastRound, lv)
 
 	firstValid = 0
 	lastValid = 0
 	validRounds = maxTxnLife
 	fv, lv, err = computeValidityRounds(firstValid, lastValid, validRounds, lastRound, maxTxnLife)
 	a.NoError(err)
-	a.Equal(lastRound+1, fv)
-	a.Equal(lastRound+maxTxnLife, lv)
+	a.Equal(lastRound, fv)
+	a.Equal(lastRound+maxTxnLife-1, lv)
 
 	firstValid = 1
 	lastValid = 0

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -112,7 +112,7 @@ func (at *AccountTotals) All() basics.MicroAlgos {
 	return res
 }
 
-// Participating returns the sum of algos held under ``participating''
+// Participating returns the sum of algos held under “participating”
 // account status values (Online and Offline).  It excludes MicroAlgos held
 // by NotParticipating accounts.
 func (at *AccountTotals) Participating() basics.MicroAlgos {
@@ -123,7 +123,7 @@ func (at *AccountTotals) Participating() basics.MicroAlgos {
 	return res
 }
 
-// RewardUnits returns the sum of reward units held under ``participating''
+// RewardUnits returns the sum of reward units held under “participating”
 // account status values (Online and Offline).  It excludes units held
 // by NotParticipating accounts.
 func (at *AccountTotals) RewardUnits() uint64 {

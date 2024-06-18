@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -28,7 +28,7 @@ type workerState struct {
 	// maxidx is the total number of elements to process, and nextidx
 	// is the next element that a worker should process.
 	maxidx  uint64
-	nextidx uint64
+	nextidx atomic.Uint64
 
 	// nworkers is the number of workers that can be started.
 	// This field gets decremented once workers are launched,
@@ -65,7 +65,7 @@ func newWorkerState(max uint64) *workerState {
 // by delta.  This implicitly means that the worker that calls next
 // is promising to process delta elements at the returned position.
 func (ws *workerState) next(delta uint64) uint64 {
-	return atomic.AddUint64(&ws.nextidx, delta) - delta
+	return ws.nextidx.Add(delta) - delta
 }
 
 // wait waits for all of the workers to finish.
@@ -82,7 +82,7 @@ func (ws *workerState) nextWorker() bool {
 
 	_ = <-ws.starting
 
-	curidx := atomic.LoadUint64(&ws.nextidx)
+	curidx := ws.nextidx.Load()
 	if curidx >= ws.maxidx {
 		return false
 	}

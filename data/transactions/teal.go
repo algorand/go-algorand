@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,6 +21,8 @@ import (
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
+	"golang.org/x/exp/maps"
+	"golang.org/x/exp/slices"
 )
 
 // EvalDelta stores StateDeltas for an application's global key/value store, as
@@ -32,10 +34,17 @@ type EvalDelta struct {
 	GlobalDelta basics.StateDelta `codec:"gd"`
 
 	// When decoding EvalDeltas, the integer key represents an offset into
-	// [txn.Sender, txn.Accounts[0], txn.Accounts[1], ...]
+	// [txn.Sender, txn.Accounts[0], txn.Accounts[1], ..., SharedAccts[0], SharedAccts[1], ...]
 	LocalDeltas map[uint64]basics.StateDelta `codec:"ld,allocbound=config.MaxEvalDeltaAccounts"`
 
-	Logs []string `codec:"lg,allocbound=config.MaxLogCalls"`
+	// If a program modifies the local of an account that is not the Sender, or
+	// in txn.Accounts, it must be recorded here, so that the key in LocalDeltas
+	// can refer to it.
+	SharedAccts []basics.Address `codec:"sa,allocbound=config.MaxEvalDeltaAccounts"`
+
+	// The total allocbound calculation here accounts for the worse possible case of having config.MaxLogCalls individual log entries
+	// with the legnth of all of them summing up to config.MaxEvalDeltaTotalLogSize which is the limit for the sum of individual log lengths
+	Logs []string `codec:"lg,allocbound=config.MaxLogCalls,maxtotalbytes=(config.MaxLogCalls*msgp.StringPrefixSize) + config.MaxEvalDeltaTotalLogSize"`
 
 	InnerTxns []SignedTxnWithAD `codec:"itx,allocbound=config.MaxInnerTransactionsPerDelta"`
 }
@@ -45,23 +54,8 @@ type EvalDelta struct {
 // because the msgpack codec will encode/decode an empty map as nil, and we want
 // an empty generated EvalDelta to equal an empty one we decode off the wire.
 func (ed EvalDelta) Equal(o EvalDelta) bool {
-	// LocalDeltas length should be the same
-	if len(ed.LocalDeltas) != len(o.LocalDeltas) {
+	if !maps.EqualFunc(ed.LocalDeltas, o.LocalDeltas, maps.Equal[basics.StateDelta, basics.StateDelta]) {
 		return false
-	}
-
-	// All keys and local StateDeltas should be the same
-	for k, v := range ed.LocalDeltas {
-		// Other LocalDelta must have value for key
-		ov, ok := o.LocalDeltas[k]
-		if !ok {
-			return false
-		}
-
-		// Other LocalDelta must have same value for key
-		if !ov.Equal(v) {
-			return false
-		}
 	}
 
 	// GlobalDeltas must be equal
@@ -70,13 +64,8 @@ func (ed EvalDelta) Equal(o EvalDelta) bool {
 	}
 
 	// Logs must be equal
-	if len(ed.Logs) != len(o.Logs) {
+	if !slices.Equal(ed.Logs, o.Logs) {
 		return false
-	}
-	for i, l := range ed.Logs {
-		if l != o.Logs[i] {
-			return false
-		}
 	}
 
 	// InnerTxns must be equal
@@ -100,9 +89,13 @@ func (ed EvalDelta) Equal(o EvalDelta) bool {
 // tedious) field comparisons. == is not defined on almost any of the
 // subfields because of slices.
 func (stx SignedTxn) equal(o SignedTxn) bool {
-	stxenc := stx.MarshalMsg(protocol.GetEncodingBuf())
-	defer protocol.PutEncodingBuf(stxenc)
-	oenc := o.MarshalMsg(protocol.GetEncodingBuf())
-	defer protocol.PutEncodingBuf(oenc)
+	buf1 := protocol.GetEncodingBuf()
+	stxenc := stx.MarshalMsg(buf1.Bytes())
+	defer protocol.PutEncodingBuf(buf1.Update(stxenc))
+
+	buf2 := protocol.GetEncodingBuf()
+	oenc := o.MarshalMsg(buf2.Bytes())
+	defer protocol.PutEncodingBuf(buf2.Update(oenc))
+
 	return bytes.Equal(stxenc, oenc)
 }

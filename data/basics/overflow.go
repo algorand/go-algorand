@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,8 +17,9 @@
 package basics
 
 import (
-	"math"
 	"math/bits"
+
+	"golang.org/x/exp/constraints"
 )
 
 // OverflowTracker is used to track when an operation causes an overflow
@@ -26,43 +27,22 @@ type OverflowTracker struct {
 	Overflowed bool
 }
 
-// OAdd16 adds 2 uint16 values with overflow detection
-func OAdd16(a uint16, b uint16) (res uint16, overflowed bool) {
-	res = a + b
-	overflowed = res < a
-	return
-}
-
-// OAdd32 adds 2 uint32 values with overflow detection
-func OAdd32(a uint32, b uint32) (res uint32, overflowed bool) {
-	res = a + b
-	overflowed = res < a
-	return
-}
-
 // OAdd adds 2 values with overflow detection
-func OAdd(a uint64, b uint64) (res uint64, overflowed bool) {
+func OAdd[T constraints.Unsigned](a, b T) (res T, overflowed bool) {
 	res = a + b
 	overflowed = res < a
 	return
 }
 
 // OSub subtracts b from a with overflow detection
-func OSub(a uint64, b uint64) (res uint64, overflowed bool) {
-	res = a - b
-	overflowed = res > a
-	return
-}
-
-// OSub32 subtracts b from a with overflow detection
-func OSub32(a uint32, b uint32) (res uint32, overflowed bool) {
+func OSub[T constraints.Unsigned](a, b T) (res T, overflowed bool) {
 	res = a - b
 	overflowed = res > a
 	return
 }
 
 // OMul multiplies 2 values with overflow detection
-func OMul(a uint64, b uint64) (res uint64, overflowed bool) {
+func OMul[T constraints.Unsigned](a, b T) (res T, overflowed bool) {
 	if b == 0 {
 		return 0, false
 	}
@@ -75,34 +55,27 @@ func OMul(a uint64, b uint64) (res uint64, overflowed bool) {
 }
 
 // MulSaturate multiplies 2 values with saturation on overflow
-func MulSaturate(a uint64, b uint64) uint64 {
+func MulSaturate[T constraints.Unsigned](a, b T) T {
 	res, overflowed := OMul(a, b)
 	if overflowed {
-		return math.MaxUint64
+		var defaultT T
+		return ^defaultT
 	}
 	return res
 }
 
 // AddSaturate adds 2 values with saturation on overflow
-func AddSaturate(a uint64, b uint64) uint64 {
+func AddSaturate[T constraints.Unsigned](a, b T) T {
 	res, overflowed := OAdd(a, b)
 	if overflowed {
-		return math.MaxUint64
-	}
-	return res
-}
-
-// AddSaturate32 adds 2 uint32 values with saturation on overflow
-func AddSaturate32(a uint32, b uint32) uint32 {
-	res, overflowed := OAdd32(a, b)
-	if overflowed {
-		return math.MaxUint32
+		var defaultT T
+		return ^defaultT
 	}
 	return res
 }
 
 // SubSaturate subtracts 2 values with saturation on underflow
-func SubSaturate(a uint64, b uint64) uint64 {
+func SubSaturate[T constraints.Unsigned](a, b T) T {
 	res, overflowed := OSub(a, b)
 	if overflowed {
 		return 0
@@ -110,26 +83,8 @@ func SubSaturate(a uint64, b uint64) uint64 {
 	return res
 }
 
-// SubSaturate32 subtracts 2 uint32 values with saturation on underflow
-func SubSaturate32(a uint32, b uint32) uint32 {
-	res, overflowed := OSub32(a, b)
-	if overflowed {
-		return 0
-	}
-	return res
-}
-
-// Add16 adds 2 uint16 values with overflow detection
-func (t *OverflowTracker) Add16(a uint16, b uint16) uint16 {
-	res, overflowed := OAdd16(a, b)
-	if overflowed {
-		t.Overflowed = true
-	}
-	return res
-}
-
 // Add adds 2 values with overflow detection
-func (t *OverflowTracker) Add(a uint64, b uint64) uint64 {
+func (t *OverflowTracker) Add(a, b uint64) uint64 {
 	res, overflowed := OAdd(a, b)
 	if overflowed {
 		t.Overflowed = true
@@ -138,7 +93,7 @@ func (t *OverflowTracker) Add(a uint64, b uint64) uint64 {
 }
 
 // Sub subtracts b from a with overflow detection
-func (t *OverflowTracker) Sub(a uint64, b uint64) uint64 {
+func (t *OverflowTracker) Sub(a, b uint64) uint64 {
 	res, overflowed := OSub(a, b)
 	if overflowed {
 		t.Overflowed = true
@@ -146,8 +101,8 @@ func (t *OverflowTracker) Sub(a uint64, b uint64) uint64 {
 	return res
 }
 
-// Mul multiplies b from a with overflow detection
-func (t *OverflowTracker) Mul(a uint64, b uint64) uint64 {
+// Mul multiplies b by a with overflow detection
+func (t *OverflowTracker) Mul(a, b uint64) uint64 {
 	res, overflowed := OMul(a, b)
 	if overflowed {
 		t.Overflowed = true
@@ -156,13 +111,13 @@ func (t *OverflowTracker) Mul(a uint64, b uint64) uint64 {
 }
 
 // OAddA adds 2 MicroAlgos values with overflow tracking
-func OAddA(a MicroAlgos, b MicroAlgos) (res MicroAlgos, overflowed bool) {
+func OAddA(a, b MicroAlgos) (res MicroAlgos, overflowed bool) {
 	res.Raw, overflowed = OAdd(a.Raw, b.Raw)
 	return
 }
 
 // OSubA subtracts b from a with overflow tracking
-func OSubA(a MicroAlgos, b MicroAlgos) (res MicroAlgos, overflowed bool) {
+func OSubA(a, b MicroAlgos) (res MicroAlgos, overflowed bool) {
 	res.Raw, overflowed = OSub(a.Raw, b.Raw)
 	return
 }
@@ -173,28 +128,26 @@ func MulAIntSaturate(a MicroAlgos, b int) MicroAlgos {
 }
 
 // AddA adds 2 MicroAlgos values with overflow tracking
-func (t *OverflowTracker) AddA(a MicroAlgos, b MicroAlgos) MicroAlgos {
-	return MicroAlgos{Raw: t.Add(uint64(a.Raw), uint64(b.Raw))}
+func (t *OverflowTracker) AddA(a, b MicroAlgos) MicroAlgos {
+	return MicroAlgos{Raw: t.Add(a.Raw, b.Raw)}
 }
 
 // SubA subtracts b from a with overflow tracking
-func (t *OverflowTracker) SubA(a MicroAlgos, b MicroAlgos) MicroAlgos {
-	return MicroAlgos{Raw: t.Sub(uint64(a.Raw), uint64(b.Raw))}
-}
-
-// AddR adds 2 Round values with overflow tracking
-func (t *OverflowTracker) AddR(a Round, b Round) Round {
-	return Round(t.Add(uint64(a), uint64(b)))
-}
-
-// SubR subtracts b from a with overflow tracking
-func (t *OverflowTracker) SubR(a Round, b Round) Round {
-	return Round(t.Sub(uint64(a), uint64(b)))
+func (t *OverflowTracker) SubA(a, b MicroAlgos) MicroAlgos {
+	return MicroAlgos{Raw: t.Sub(a.Raw, b.Raw)}
 }
 
 // ScalarMulA multiplies an Algo amount by a scalar
 func (t *OverflowTracker) ScalarMulA(a MicroAlgos, b uint64) MicroAlgos {
 	return MicroAlgos{Raw: t.Mul(a.Raw, b)}
+}
+
+// MinA returns the smaller of 2 MicroAlgos values
+func MinA(a, b MicroAlgos) MicroAlgos {
+	if a.Raw < b.Raw {
+		return a
+	}
+	return b
 }
 
 // Muldiv computes a*b/c.  The overflow flag indicates that
@@ -206,4 +159,12 @@ func Muldiv(a uint64, b uint64, c uint64) (res uint64, overflow bool) {
 	}
 	quo, _ := bits.Div64(hi, lo, c)
 	return quo, false
+}
+
+// DivCeil provides `math.Ceil` semantics using integer division.  The technique
+// avoids slower floating point operations as suggested in https://stackoverflow.com/a/2745086.
+//
+// The method assumes both numbers are positive and does _not_ check for divide-by-zero.
+func DivCeil[T constraints.Integer](numerator, denominator T) T {
+	return (numerator + denominator - 1) / denominator
 }

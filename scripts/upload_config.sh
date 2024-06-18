@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -e
+trap 'echo "ERROR: ${BASH_SOURCE}:${LINENO} ${BASH_COMMAND}"' ERR
 
 # upload_config.sh - Archives and uploads a netgoal configuration package from a specified directory
 #           NOTE: Will only work if you have the required AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY vars set
@@ -33,11 +34,14 @@ SRCPATH=${SCRIPTPATH}/..
 export CHANNEL=$2
 export FULLVERSION=$($SRCPATH/scripts/compute_build_number.sh -f)
 
-TEMPDIR=$(mktemp -d 2>/dev/null || mktemp -d -t "tmp")
+# prevent ._* files from being included in the tarball
+export COPYFILE_DISABLE=true
+
+TEMPDIR=$(mktemp -d -t "upload_config.tmp.XXXXXX")
 TARFILE=${TEMPDIR}/config_${CHANNEL}_${FULLVERSION}.tar.gz
 
 cd $1
-tar -zcf ${TARFILE} * >/dev/null 2>&1
+tar -zcf ${TARFILE} * >/dev/null
 
 ${GOPATH}/bin/updater send -s ${TEMPDIR} -c ${CHANNEL} -b "${S3_RELEASE_BUCKET}"
 rm ${TARFILE}

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,12 +19,10 @@ package logging
 import (
 	"encoding/json"
 	"fmt"
-	"os"
-	"testing"
-	"time"
-
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
+	"os"
+	"testing"
 
 	"github.com/algorand/go-deadlock"
 
@@ -159,17 +157,11 @@ func TestTelemetryHook(t *testing.T) {
 
 	f.telem.logMetrics(f.l, testString1, testMetrics{}, nil)
 	f.telem.logEvent(f.l, testString1, testString2, nil)
-	op := f.telem.logStartOperation(f.l, testString1, testString2)
-	time.Sleep(1 * time.Millisecond)
-	op.Stop(f.l, nil)
 
 	entries := f.hookEntries()
-	a.Equal(4, len(entries))
+	a.Equal(2, len(entries))
 	a.Equal(buildMessage(testString1, testString2), entries[0])
 	a.Equal(buildMessage(testString1, testString2), entries[1])
-	a.Equal(buildMessage(testString1, testString2, "Start"), entries[2])
-	a.Equal(buildMessage(testString1, testString2, "Stop"), entries[3])
-	a.NotZero(f.hookData()[3]["duration"])
 }
 
 func TestNilMetrics(t *testing.T) {
@@ -180,23 +172,6 @@ func TestNilMetrics(t *testing.T) {
 	f.telem.logMetrics(f.l, testString1, nil, nil)
 
 	a.Zero(len(f.hookEntries()))
-}
-
-func TestMultipleOperationStop(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	a := require.New(t)
-	f := makeTelemetryTestFixture(logrus.InfoLevel)
-
-	op := f.telem.logStartOperation(f.l, testString1, testString2)
-	op.Stop(f.l, nil)
-
-	// Start and stop should result in 2 entries
-	a.Equal(2, len(f.hookEntries()))
-
-	op.Stop(f.l, nil)
-
-	// Calling stop again should not result in another entry
-	a.Equal(2, len(f.hookEntries()))
 }
 
 func TestDetails(t *testing.T) {

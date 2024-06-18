@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -202,7 +202,8 @@ func (b unauthenticatedBundle) verifyAsync(ctx context.Context, l LedgerReader, 
 
 		rv := rawVote{Sender: auth.Sender, Round: b.Round, Period: b.Period, Step: b.Step, Proposal: b.Proposal}
 		uv := unauthenticatedVote{R: rv, Cred: auth.Cred, Sig: auth.Sig}
-		avv.verifyVote(ctx, l, uv, i, message{}, results)
+
+		avv.verifyVote(ctx, l, uv, uint64(i), message{}, results) //nolint:errcheck // verifyVote will call EnqueueBacklog, which blocks until the verify task is queued, or returns an error when ctx.Done(), which we are already checking
 	}
 
 	// create verification requests for equivocation votes
@@ -222,7 +223,8 @@ func (b unauthenticatedBundle) verifyAsync(ctx context.Context, l LedgerReader, 
 			Proposals: auth.Proposals,
 			Sigs:      auth.Sigs,
 		}
-		avv.verifyEqVote(ctx, l, uev, i, message{}, results)
+		avv.verifyEqVote(ctx, l, uev, uint64(i), message{}, results) //nolint:errcheck // verifyVote will call EnqueueBacklog, which blocks until the verify task is queued, or returns an error when ctx.Done(), which we are already checking
+
 	}
 
 	return func() (bundle, error) {

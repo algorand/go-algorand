@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,6 +23,7 @@ import (
 
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/exp/slices"
 )
 
 func TestOpSpecs(t *testing.T) {
@@ -58,15 +59,11 @@ func (os *OpSpec) equals(oso *OpSpec) bool {
 	return true
 }
 
-func TestOpcodesByVersionReordered(t *testing.T) {
+func TestOpcodesByVersionReordered(t *testing.T) { // nolint:paralleltest // manipulates global OpSpecs
 	partitiontest.PartitionTest(t)
 
 	// Make a copy to restore to the original
-	OpSpecsOrig := make([]OpSpec, len(OpSpecs))
-	for idx, opspec := range OpSpecs {
-		cp := opspec
-		OpSpecsOrig[idx] = cp
-	}
+	OpSpecsOrig := slices.Clone(OpSpecs)
 	defer func() {
 		OpSpecs = OpSpecsOrig
 	}()
@@ -82,16 +79,13 @@ func TestOpcodesByVersionReordered(t *testing.T) {
 
 func TestOpcodesByVersion(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 	testOpcodesByVersion(t)
 }
 
 func testOpcodesByVersion(t *testing.T) {
 	// Make a copy of the OpSpecs to check if OpcodesByVersion will change it
-	OpSpecs2 := make([]OpSpec, len(OpSpecs))
-	for idx, opspec := range OpSpecs {
-		cp := opspec
-		OpSpecs2[idx] = cp
-	}
+	OpSpecs2 := slices.Clone(OpSpecs)
 
 	opSpecs := make([][]OpSpec, LogicVersion)
 	for v := uint64(1); v <= LogicVersion; v++ {

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -323,7 +323,7 @@ func makewhiteholeNetwork(domain *whiteholeDomain) *whiteholeNetwork {
 	w := &whiteholeNetwork{
 		peer:         atomic.AddUint32(&domain.peerIdx, 1),
 		lastMsgRead:  uint32(len(domain.messages)),
-		mux:          network.MakeMultiplexer(domain.log),
+		mux:          network.MakeMultiplexer(),
 		domain:       domain,
 		disconnected: make(map[uint32]bool),
 	}

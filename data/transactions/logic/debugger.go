@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -29,23 +29,85 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
 
-// DebuggerHook functions are called by eval function during TEAL program execution
-// if provided
-type DebuggerHook interface {
+// Debugger is an interface that supports the first version of AVM debuggers.
+// It consists of a set of functions called by eval function during AVM program execution.
+//
+// Deprecated: This interface does not support non-app call or inner transactions. Use EvalTracer
+// instead.
+type Debugger interface {
 	// Register is fired on program creation
-	Register(state *DebugState) error
+	Register(state *DebugState)
 	// Update is fired on every step
-	Update(state *DebugState) error
+	Update(state *DebugState)
 	// Complete is called when the program exits
-	Complete(state *DebugState) error
+	Complete(state *DebugState)
 }
 
-// WebDebuggerHook represents a connection to tealdbg
-type WebDebuggerHook struct {
+type debuggerEvalTracerAdaptor struct {
+	NullEvalTracer
+
+	debugger   Debugger
+	txnDepth   int
+	debugState *DebugState
+}
+
+// MakeEvalTracerDebuggerAdaptor creates an adaptor that externally adheres to the EvalTracer
+// interface, but drives a Debugger interface
+//
+// Warning: The output EvalTracer is specifically designed to be invoked under the exact same
+// circumstances that the previous Debugger interface was invoked. This means that it will only work
+// properly if you attach it directly to a logic.EvalParams and execute a program. If you attempt to
+// run this EvalTracer under a different entry point (such as by attaching it to a BlockEvaluator),
+// it WILL NOT work properly.
+func MakeEvalTracerDebuggerAdaptor(debugger Debugger) EvalTracer {
+	return &debuggerEvalTracerAdaptor{debugger: debugger}
+}
+
+// BeforeTxnGroup updates inner txn depth
+func (a *debuggerEvalTracerAdaptor) BeforeTxnGroup(ep *EvalParams) {
+	a.txnDepth++
+}
+
+// AfterTxnGroup updates inner txn depth
+func (a *debuggerEvalTracerAdaptor) AfterTxnGroup(ep *EvalParams, deltas *ledgercore.StateDelta, evalError error) {
+	a.txnDepth--
+}
+
+// BeforeProgram invokes the debugger's Register hook
+func (a *debuggerEvalTracerAdaptor) BeforeProgram(cx *EvalContext) {
+	if a.txnDepth > 0 {
+		// only report updates for top-level transactions, for backwards compatibility
+		return
+	}
+	a.debugState = makeDebugState(cx)
+	a.debugger.Register(a.refreshDebugState(cx, nil))
+}
+
+// BeforeOpcode invokes the debugger's Update hook
+func (a *debuggerEvalTracerAdaptor) BeforeOpcode(cx *EvalContext) {
+	if a.txnDepth > 0 {
+		// only report updates for top-level transactions, for backwards compatibility
+		return
+	}
+	a.debugger.Update(a.refreshDebugState(cx, nil))
+}
+
+// AfterProgram invokes the debugger's Complete hook
+func (a *debuggerEvalTracerAdaptor) AfterProgram(cx *EvalContext, pass bool, evalError error) {
+	if a.txnDepth > 0 {
+		// only report updates for top-level transactions, for backwards compatibility
+		return
+	}
+	a.debugger.Complete(a.refreshDebugState(cx, evalError))
+}
+
+// WebDebugger represents a connection to tealdbg
+type WebDebugger struct {
 	URL string
 }
 
@@ -115,18 +177,18 @@ func makeDebugState(cx *EvalContext) *DebugState {
 	globals := make([]basics.TealValue, len(globalFieldSpecs))
 	for _, fs := range globalFieldSpecs {
 		// Don't try to grab app only fields when evaluating a signature
-		if (cx.runModeFlags&modeSig) != 0 && fs.mode == modeApp {
+		if cx.runMode == ModeSig && fs.mode == ModeApp {
 			continue
 		}
 		sv, err := cx.globalFieldToValue(fs)
 		if err != nil {
 			sv = stackValue{Bytes: []byte(err.Error())}
 		}
-		globals[fs.field] = stackValueToTealValue(&sv)
+		globals[fs.field] = sv.toEncodedTealValue()
 	}
 	ds.Globals = globals
 
-	if (cx.runModeFlags & modeApp) != 0 {
+	if cx.runMode == ModeApp {
 		ds.EvalDelta = cx.txn.EvalDelta
 	}
 
@@ -182,32 +244,23 @@ func (d *DebugState) PCToLine(pc int) int {
 	return len(strings.Split(d.Disassembly[:offset], "\n")) - one
 }
 
-func stackValueToTealValue(sv *stackValue) basics.TealValue {
-	tv := sv.toTealValue()
-	return basics.TealValue{
-		Type:  tv.Type,
-		Bytes: base64.StdEncoding.EncodeToString([]byte(tv.Bytes)),
-		Uint:  tv.Uint,
+// toEncodedTealValue converts stackValue to basics.TealValue, with the Bytes
+// field b64 encoded, so it is suitable for conversion to JSON.
+func (sv stackValue) toEncodedTealValue() basics.TealValue {
+	if sv.avmType() == avmBytes {
+		return basics.TealValue{Type: basics.TealBytesType, Bytes: base64.StdEncoding.EncodeToString(sv.Bytes)}
 	}
-}
-
-// valueDeltaToValueDelta converts delta's bytes to base64 in a new struct
-func valueDeltaToValueDelta(vd *basics.ValueDelta) basics.ValueDelta {
-	return basics.ValueDelta{
-		Action: vd.Action,
-		Bytes:  base64.StdEncoding.EncodeToString([]byte(vd.Bytes)),
-		Uint:   vd.Uint,
-	}
+	return basics.TealValue{Type: basics.TealUintType, Uint: sv.Uint}
 }
 
 // parseCallStack initializes an array of CallFrame objects from the raw
 // callstack.
-func (d *DebugState) parseCallstack(callstack []int) []CallFrame {
+func (d *DebugState) parseCallstack(callstack []frame) []CallFrame {
 	callFrames := make([]CallFrame, 0)
 	lines := strings.Split(d.Disassembly, "\n")
-	for _, pc := range callstack {
+	for _, fr := range callstack {
 		// The callsub is pc - 3 from the callstack pc
-		callsubLineNum := d.PCToLine(pc - 3)
+		callsubLineNum := d.PCToLine(fr.retpc - 3)
 		callSubLine := strings.Fields(lines[callsubLineNum])
 		label := ""
 		if callSubLine[0] == "callsub" {
@@ -221,8 +274,8 @@ func (d *DebugState) parseCallstack(callstack []int) []CallFrame {
 	return callFrames
 }
 
-func (cx *EvalContext) refreshDebugState(evalError error) *DebugState {
-	ds := cx.debugState
+func (a *debuggerEvalTracerAdaptor) refreshDebugState(cx *EvalContext, evalError error) *DebugState {
+	ds := a.debugState
 
 	// Update pc, line, error, stack, scratch space, callstack,
 	// and opcode budget
@@ -232,14 +285,14 @@ func (cx *EvalContext) refreshDebugState(evalError error) *DebugState {
 		ds.Error = evalError.Error()
 	}
 
-	stack := make([]basics.TealValue, len(cx.stack))
-	for i, sv := range cx.stack {
-		stack[i] = stackValueToTealValue(&sv)
+	stack := make([]basics.TealValue, len(cx.Stack))
+	for i, sv := range cx.Stack {
+		stack[i] = sv.toEncodedTealValue()
 	}
 
-	scratch := make([]basics.TealValue, len(cx.scratch))
-	for i, sv := range cx.scratch {
-		scratch[i] = stackValueToTealValue(&sv)
+	scratch := make([]basics.TealValue, len(cx.Scratch))
+	for i, sv := range cx.Scratch {
+		scratch[i] = sv.toEncodedTealValue()
 	}
 
 	ds.Stack = stack
@@ -247,14 +300,14 @@ func (cx *EvalContext) refreshDebugState(evalError error) *DebugState {
 	ds.OpcodeBudget = cx.remainingBudget()
 	ds.CallStack = ds.parseCallstack(cx.callstack)
 
-	if (cx.runModeFlags & modeApp) != 0 {
+	if cx.runMode == ModeApp {
 		ds.EvalDelta = cx.txn.EvalDelta
 	}
 
 	return ds
 }
 
-func (dbg *WebDebuggerHook) postState(state *DebugState, endpoint string) error {
+func (dbg *WebDebugger) postState(state *DebugState, endpoint string) error {
 	var body bytes.Buffer
 	enc := protocol.NewJSONEncoder(&body)
 	err := enc.Encode(state)
@@ -285,7 +338,7 @@ func (dbg *WebDebuggerHook) postState(state *DebugState, endpoint string) error 
 }
 
 // Register sends state to remote debugger
-func (dbg *WebDebuggerHook) Register(state *DebugState) error {
+func (dbg *WebDebugger) Register(state *DebugState) {
 	u, err := url.Parse(dbg.URL)
 	if err != nil {
 		logging.Base().Errorf("Failed to parse url: %s", err.Error())
@@ -295,15 +348,24 @@ func (dbg *WebDebuggerHook) Register(state *DebugState) error {
 	if h != "localhost" && h != "127.0.0.1" && h != "::1" {
 		logging.Base().Warnf("Unsecured communication with non-local debugger: %s", h)
 	}
-	return dbg.postState(state, "exec/register")
+	err = dbg.postState(state, "exec/register")
+	if err != nil {
+		logging.Base().Errorf("Failed to post state to exec/register: %s", err.Error())
+	}
 }
 
 // Update sends state to remote debugger
-func (dbg *WebDebuggerHook) Update(state *DebugState) error {
-	return dbg.postState(state, "exec/update")
+func (dbg *WebDebugger) Update(state *DebugState) {
+	err := dbg.postState(state, "exec/update")
+	if err != nil {
+		logging.Base().Errorf("Failed to post state to exec/update: %s", err.Error())
+	}
 }
 
 // Complete sends state to remote debugger
-func (dbg *WebDebuggerHook) Complete(state *DebugState) error {
-	return dbg.postState(state, "exec/complete")
+func (dbg *WebDebugger) Complete(state *DebugState) {
+	err := dbg.postState(state, "exec/complete")
+	if err != nil {
+		logging.Base().Errorf("Failed to post state to exec/complete: %s", err.Error())
+	}
 }

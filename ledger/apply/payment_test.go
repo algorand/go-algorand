@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -104,49 +104,8 @@ func TestPaymentApply(t *testing.T) {
 		},
 	}
 	var ad transactions.ApplyData
-	err := Payment(tx.PaymentTxnFields, tx.Header, mockBalV0, transactions.SpecialAddresses{FeeSink: feeSink}, &ad)
+	err := Payment(tx.PaymentTxnFields, tx.Header, mockBalV0, transactions.SpecialAddresses{}, &ad)
 	require.NoError(t, err)
-}
-
-func TestCheckSpender(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	mockBalV0 := makeMockBalances(protocol.ConsensusCurrentVersion)
-	mockBalV7 := makeMockBalances(protocol.ConsensusV7)
-
-	secretSrc := keypair()
-	src := basics.Address(secretSrc.SignatureVerifier)
-
-	secretDst := keypair()
-	dst := basics.Address(secretDst.SignatureVerifier)
-
-	tx := transactions.Transaction{
-		Type: protocol.PaymentTx,
-		Header: transactions.Header{
-			Sender:     src,
-			Fee:        basics.MicroAlgos{Raw: 1},
-			FirstValid: basics.Round(100),
-			LastValid:  basics.Round(1000),
-		},
-		PaymentTxnFields: transactions.PaymentTxnFields{
-			Receiver: dst,
-			Amount:   basics.MicroAlgos{Raw: uint64(50)},
-		},
-	}
-
-	tx.Sender = basics.Address(feeSink)
-	require.Error(t, checkSpender(tx.PaymentTxnFields, tx.Header, spec, mockBalV0.ConsensusParams()))
-
-	poolAddr := basics.Address(poolAddr)
-	tx.Receiver = poolAddr
-	require.NoError(t, checkSpender(tx.PaymentTxnFields, tx.Header, spec, mockBalV0.ConsensusParams()))
-
-	tx.CloseRemainderTo = poolAddr
-	require.Error(t, checkSpender(tx.PaymentTxnFields, tx.Header, spec, mockBalV0.ConsensusParams()))
-	require.Error(t, checkSpender(tx.PaymentTxnFields, tx.Header, spec, mockBalV7.ConsensusParams()))
-
-	tx.Sender = src
-	require.NoError(t, checkSpender(tx.PaymentTxnFields, tx.Header, spec, mockBalV7.ConsensusParams()))
 }
 
 func TestPaymentValidation(t *testing.T) {

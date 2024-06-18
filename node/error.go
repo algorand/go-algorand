@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -61,4 +61,27 @@ func (e *CatchpointUnableToStartError) Error() string {
 		"unable to start catchpoint catchup for '%s' - already catching up '%s'",
 		e.catchpointRequested,
 		e.catchpointRunning)
+}
+
+// StartCatchpointError is returned when the catchpoint service cannot start up.
+type StartCatchpointError struct {
+	catchpointRequested string
+	err                 error
+}
+
+// MakeStartCatchpointError creates a StartCatchpointError for a given catchpoint
+func MakeStartCatchpointError(catchpointRequested string, err error) *StartCatchpointError {
+	return &StartCatchpointError{
+		catchpointRequested: catchpointRequested,
+		err:                 err,
+	}
+}
+
+// Error satisfies the builtin interface `error`
+func (e *StartCatchpointError) Error() string {
+	return fmt.Sprintf(
+		"unable to start catchpoint service for requested catchpoint %s: %s",
+		e.catchpointRequested,
+		e.err,
+	)
 }

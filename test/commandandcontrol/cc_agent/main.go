@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -120,7 +120,7 @@ func main() {
 
 	serverWs, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
 	if err != nil {
-		log.Errorf("dial:", err)
+		log.Error("dial:", err)
 	}
 	serverWs.Unsafe = true
 	defer func() {
@@ -168,7 +168,7 @@ func main() {
 		case t := <-ticker.C:
 			err := serverWs.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf("heartbeat from agent %s with time %s", component.GetHostAgent().Host.Name, t.String())))
 			if err != nil {
-				log.Errorf("write:", err)
+				log.Error("write:", err)
 				return
 			}
 		case <-interrupt:
@@ -177,7 +177,7 @@ func main() {
 			// waiting (with timeout) for the server to close the connection.
 			err := serverWs.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
 			if err != nil {
-				log.Errorf("write close:", err)
+				log.Error("write close:", err)
 				return
 			}
 			select {

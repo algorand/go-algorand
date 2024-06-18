@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -24,6 +24,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/algorand/go-algorand/cmd/util/datadir"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/util/codecs"
 )
@@ -45,10 +46,10 @@ var resetCmd = &cobra.Command{
 	Args:  cobra.NoArgs,
 	Run: func(cmd *cobra.Command, _ []string) {
 		anyError := false
-		onDataDirs(func(dataDir string) {
+		datadir.OnDataDirs(func(dataDir string) {
 			cfg, err := config.LoadConfigFromDisk(dataDir)
 			if err != nil && !os.IsNotExist(err) {
-				reportWarnf("Error loading config file from '%s'", dataDir)
+				reportWarnf("Error loading config file from '%s' - %s", dataDir, err)
 				anyError = true
 				return
 			}
@@ -62,7 +63,7 @@ var resetCmd = &cobra.Command{
 			}
 
 			file := filepath.Join(dataDir, config.ConfigFilename)
-			err = codecs.SaveNonDefaultValuesToFile(file, cfg, defaults, nil, true)
+			err = codecs.SaveNonDefaultValuesToFile(file, cfg, defaults, nil)
 			if err != nil {
 				reportWarnf("Error saving updated config file '%s' - %s", file, err)
 				anyError = true

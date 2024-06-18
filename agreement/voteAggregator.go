@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -29,7 +29,9 @@ import (
 // bundlePresent, and bundleVerified.
 // It returns the following type(s) of event: none, vote{Filtered,Malformed},
 // bundle{Filtered,Malformed}, and {soft,cert,next}Threshold.
-type voteAggregator struct{}
+type voteAggregator struct {
+	_struct struct{} `codec:","`
+}
 
 func (agg *voteAggregator) T() stateMachineTag {
 	return voteMachine
@@ -41,32 +43,38 @@ func (agg *voteAggregator) underlying() listener {
 
 // A voteAggregator handles four types of events:
 //
-//  - votePresent is issued when a new vote arrives at the state machine.  A
-//    voteFiltered event is emitted in response if the vote is either stale or
-//    an equivocating duplicate.  Otherwise an empty event is returned.
+//   - votePresent is issued when a new vote arrives at the state machine.  A
+//     voteFiltered event is emitted in response if the vote is either stale or
+//     an equivocating duplicate.  Otherwise an empty event is returned.
 //
-//  - voteVerified is issued after the agreement service has attempted
-//    cryptographic verification on a given vote.
-//     - A voteMalformed event is emitted if the ill-formed vote was the result
-//       of some corrupt process.
-//     - A voteFiltered event is emitted if the vote is either stale or an
-//       equivocating duplicate.
-//     - Otherwise, the vote is observed. thresholdEvents occur in the current
-//       round are propagated up to the parent, while thresholdEvents that occur
-//       the next round are pipelined for the next round.
+//   - voteVerified is issued after the agreement service has attempted
+//     cryptographic verification on a given vote.
 //
-//  - bundlePresent is issued when a new bundle arrives at the state machine.  A
-//    bundleFiltered event is emitted in response if the bundle is stale.
-//    Otherwise an empty event is returned.
+//   - A voteMalformed event is emitted if the ill-formed vote was the result
+//     of some corrupt process.
 //
-//  - bundleVerified is issued after agreement service has attempted
-//    cryptographic verification on a given bundle.
-//     - A bundleMalformed event is emitted if the ill-formed bundle was the
-//       result of some corrupt process.
-//     - A bundleFiltered event is emitted if the bundle is stale.
-//     - Otherwise, the bundle is observed.  If observing the bundle causes a
-//       thresholdEvent to occur, the thresholdEvent is propagated to the
-//       parent.  Otherwise, a bundleFiltered event is propagated to the parent.
+//   - A voteFiltered event is emitted if the vote is either stale or an
+//     equivocating duplicate.
+//
+//   - Otherwise, the vote is observed. thresholdEvents occur in the current
+//     round are propagated up to the parent, while thresholdEvents that occur
+//     the next round are pipelined for the next round.
+//
+//   - bundlePresent is issued when a new bundle arrives at the state machine.  A
+//     bundleFiltered event is emitted in response if the bundle is stale.
+//     Otherwise an empty event is returned.
+//
+//   - bundleVerified is issued after agreement service has attempted
+//     cryptographic verification on a given bundle.
+//
+//   - A bundleMalformed event is emitted if the ill-formed bundle was the
+//     result of some corrupt process.
+//
+//   - A bundleFiltered event is emitted if the bundle is stale.
+//
+//   - Otherwise, the bundle is observed.  If observing the bundle causes a
+//     thresholdEvent to occur, the thresholdEvent is propagated to the
+//     parent.  Otherwise, a bundleFiltered event is propagated to the parent.
 func (agg *voteAggregator) handle(r routerHandle, pr player, em event) (res event) {
 	e := em.(filterableMessageEvent)
 	defer func() {

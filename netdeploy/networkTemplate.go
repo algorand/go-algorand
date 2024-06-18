@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -33,6 +33,7 @@ import (
 	"github.com/algorand/go-algorand/gen"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/netdeploy/remote"
+	"github.com/algorand/go-algorand/network/p2p"
 	"github.com/algorand/go-algorand/util"
 )
 
@@ -47,7 +48,7 @@ var defaultNetworkTemplate = NetworkTemplate{
 	Genesis: gen.DefaultGenesis,
 }
 
-func (t NetworkTemplate) generateGenesisAndWallets(targetFolder, networkName, binDir string) error {
+func (t NetworkTemplate) generateGenesisAndWallets(targetFolder, networkName string) error {
 	genesisData := t.Genesis
 	genesisData.NetworkName = networkName
 	mergedConsensus := config.Consensus.Merge(t.Consensus)
@@ -70,7 +71,7 @@ func (t NetworkTemplate) createNodeDirectories(targetFolder string, binDir strin
 
 	relaysCount := countRelayNodes(t.Nodes)
 
-	for _, cfg := range t.Nodes {
+	for i, cfg := range t.Nodes {
 		nodeDir := filepath.Join(targetFolder, cfg.Name)
 		err = os.Mkdir(nodeDir, os.ModePerm)
 		if err != nil {
@@ -133,22 +134,39 @@ func (t NetworkTemplate) createNodeDirectories(targetFolder string, binDir strin
 		if importKeys && hasWallet {
 			var client libgoal.Client
 			client, err = libgoal.MakeClientWithBinDir(binDir, nodeDir, "", libgoal.KmdClient)
+			if err != nil {
+				return
+			}
 			_, err = client.CreateWallet(libgoal.UnencryptedWalletName, nil, crypto.MasterDerivationKey{})
 			if err != nil {
 				return
 			}
 
-			_, _, err = util.ExecAndCaptureOutput(importKeysCmd, "account", "importrootkey", "-w", string(libgoal.UnencryptedWalletName), "-d", nodeDir)
-			if err != nil {
-				return
+			stdout, stderr, execErr := util.ExecAndCaptureOutput(importKeysCmd, "account", "importrootkey", "-w", string(libgoal.UnencryptedWalletName), "-d", nodeDir)
+			if execErr != nil {
+				return nil, nil, fmt.Errorf("goal account importrootkey failed: %w\nstdout: %s\nstderr: %s", execErr, stdout, stderr)
 			}
 		}
 
 		// Create any necessary config.json file for this node
 		nodeCfg := filepath.Join(nodeDir, config.ConfigFilename)
-		err = createConfigFile(cfg, nodeCfg, len(t.Nodes)-1, relaysCount) // minus 1 to avoid counting self
+		var mergedCfg config.Local
+		mergedCfg, err = createConfigFile(cfg, nodeCfg, len(t.Nodes)-1, relaysCount) // minus 1 to avoid counting self
 		if err != nil {
 			return
+		}
+
+		if mergedCfg.EnableP2P {
+			// generate peer ID file for this node
+			sk, pkErr := p2p.GetPrivKey(config.Local{P2PPersistPeerID: true}, genesisDir)
+			if pkErr != nil {
+				return nil, nil, pkErr
+			}
+			pid, pErr := p2p.PeerIDFromPublicKey(sk.GetPublic())
+			if pErr != nil {
+				return nil, nil, pErr
+			}
+			t.Nodes[i].P2PPeerID = string(pid)
 		}
 	}
 	return
@@ -162,16 +180,17 @@ func loadTemplate(templateFile string) (NetworkTemplate, error) {
 	}
 	defer f.Close()
 
+	err = LoadTemplateFromReader(f, &template)
+	return template, err
+}
+
+// LoadTemplateFromReader loads and decodes a network template
+func LoadTemplateFromReader(reader io.Reader, template *NetworkTemplate) error {
+
 	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
 		// for arm machines, use smaller key dilution
 		template.Genesis.PartKeyDilution = 100
 	}
-
-	err = loadTemplateFromReader(f, &template)
-	return template, err
-}
-
-func loadTemplateFromReader(reader io.Reader, template *NetworkTemplate) error {
 	dec := json.NewDecoder(reader)
 	return dec.Decode(template)
 }
@@ -206,7 +225,6 @@ func (t NetworkTemplate) Validate() error {
 	}
 
 	// No wallet can be assigned to more than one node
-	// At least one relay is required
 	wallets := make(map[string]bool)
 	for _, cfg := range t.Nodes {
 		for _, wallet := range cfg.Wallets {
@@ -218,15 +236,51 @@ func (t NetworkTemplate) Validate() error {
 		}
 	}
 
+	// At least one relay is required
 	if len(t.Nodes) > 1 && countRelayNodes(t.Nodes) == 0 {
 		return fmt.Errorf("invalid template: at least one relay is required when more than a single node presents")
 	}
 
+	// Validate JSONOverride decoding
+	for _, cfg := range t.Nodes {
+		local := config.GetDefaultLocal()
+		err := decodeJSONOverride(cfg.ConfigJSONOverride, &local)
+		if err != nil {
+			return fmt.Errorf("invalid template: unable to decode JSONOverride: %w", err)
+		}
+	}
+
+	// Follow nodes cannot be relays
+	// Relays cannot have peer list
+	for _, cfg := range t.Nodes {
+		if cfg.IsRelay && isEnableFollowMode(cfg.ConfigJSONOverride) {
+			return fmt.Errorf("invalid template: follower nodes may not be relays")
+		}
+		if cfg.IsRelay && len(cfg.PeerList) > 0 {
+			return fmt.Errorf("invalid template: relays may not have a peer list")
+		}
+	}
+
 	if t.Genesis.DevMode && len(t.Nodes) != 1 {
-		return fmt.Errorf("invalid template: DevMode should only have a single node")
+		if countRelayNodes(t.Nodes) != 1 {
+			return fmt.Errorf("invalid template: devmode configurations may have at most one relay")
+		}
+
+		for _, cfg := range t.Nodes {
+			if !cfg.IsRelay && !isEnableFollowMode(cfg.ConfigJSONOverride) {
+				return fmt.Errorf("invalid template: devmode configurations may only contain one relay and follower nodes")
+			}
+		}
 	}
 
 	return nil
+}
+
+func isEnableFollowMode(JSONOverride string) bool {
+	local := config.GetDefaultLocal()
+	// decode error is checked elsewhere
+	_ = decodeJSONOverride(JSONOverride, &local)
+	return local.EnableFollowMode
 }
 
 // countRelayNodes counts the total number of relays
@@ -239,7 +293,19 @@ func countRelayNodes(nodeCfgs []remote.NodeConfigGoal) (relayCount int) {
 	return
 }
 
-func createConfigFile(node remote.NodeConfigGoal, configFile string, numNodes int, relaysCount int) error {
+func decodeJSONOverride(override string, cfg *config.Local) error {
+	if override != "" {
+		reader := strings.NewReader(override)
+		dec := json.NewDecoder(reader)
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(&cfg); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func createConfigFile(node remote.NodeConfigGoal, configFile string, numNodes int, relaysCount int) (config.Local, error) {
 	cfg := config.GetDefaultLocal()
 	cfg.GossipFanout = numNodes
 	// Override default :8080 REST endpoint, and disable SRV lookup
@@ -247,6 +313,7 @@ func createConfigFile(node remote.NodeConfigGoal, configFile string, numNodes in
 	cfg.DNSBootstrapID = ""
 	cfg.EnableProfiler = true
 	cfg.EnableRuntimeMetrics = true
+	cfg.EnableExperimentalAPI = true
 	if relaysCount == 0 {
 		cfg.DisableNetworking = true
 	}
@@ -254,6 +321,9 @@ func createConfigFile(node remote.NodeConfigGoal, configFile string, numNodes in
 	if node.IsRelay {
 		// Have relays listen on any localhost port
 		cfg.NetAddress = "127.0.0.1:0"
+
+		cfg.Archival = false                // make it explicit non-archival
+		cfg.MaxBlockHistoryLookback = 20000 // to save blocks beyond MaxTxnLife=13
 	} else {
 		// Non-relays should not open incoming connections
 		cfg.IncomingConnectionsLimit = 0
@@ -262,5 +332,11 @@ func createConfigFile(node remote.NodeConfigGoal, configFile string, numNodes in
 	if node.DeadlockDetection != 0 {
 		cfg.DeadlockDetection = node.DeadlockDetection
 	}
-	return cfg.SaveToFile(configFile)
+
+	err := decodeJSONOverride(node.ConfigJSONOverride, &cfg)
+	if err != nil {
+		return config.Local{}, err
+	}
+
+	return cfg, cfg.SaveToFile(configFile)
 }

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -22,7 +22,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -57,7 +56,7 @@ func (th *testHandler) SawMsg(msg IncomingMessage) bool {
 func TestMultiplexer(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	m := MakeMultiplexer(logging.TestingLog(t))
+	m := MakeMultiplexer()
 	handler := &testHandler{}
 
 	// Handler shouldn't be called before it is registered
@@ -78,7 +77,7 @@ func TestMultiplexer(t *testing.T) {
 				panicked = true
 			}
 		}()
-		m := MakeMultiplexer(logging.TestingLog(t))
+		m := MakeMultiplexer()
 		m.RegisterHandlers([]TaggedMessageHandler{{protocol.TxnTag, handler}, {protocol.TxnTag, handler}})
 
 	}()
@@ -90,7 +89,7 @@ func TestMultiplexer(t *testing.T) {
 				panicked = true
 			}
 		}()
-		m := MakeMultiplexer(logging.TestingLog(t))
+		m := MakeMultiplexer()
 		m.RegisterHandlers([]TaggedMessageHandler{{protocol.TxnTag, handler}})
 		m.RegisterHandlers([]TaggedMessageHandler{{protocol.TxnTag, handler}})
 

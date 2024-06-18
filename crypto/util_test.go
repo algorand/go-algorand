@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,8 +17,10 @@
 package crypto
 
 import (
+	"fmt"
 	"testing"
 
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
@@ -45,4 +47,33 @@ func TestDigest_IsZero(t *testing.T) {
 	require.False(t, d2.IsZero())
 	require.NotZero(t, d2)
 
+}
+
+type testToBeHashed struct {
+	i int
+}
+
+func (tbh *testToBeHashed) ToBeHashed() (protocol.HashID, []byte) {
+	data := make([]byte, tbh.i)
+	for x := 0; x < tbh.i; x++ {
+		data[x] = byte(tbh.i)
+	}
+	return protocol.HashID(fmt.Sprintf("ID%d", tbh.i)), data
+}
+
+func TestHashRepToBuff(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	values := []int{32, 64, 512, 1024}
+	buffer := make([]byte, 0, 128)
+	for _, val := range values {
+		tbh := &testToBeHashed{i: val}
+		buffer = HashRepToBuff(tbh, buffer)
+	}
+	pos := 0
+	for _, val := range values {
+		tbh := &testToBeHashed{i: val}
+		data := HashRep(tbh)
+		require.Equal(t, data, buffer[pos:pos+len(data)])
+		pos = pos + len(data)
+	}
 }

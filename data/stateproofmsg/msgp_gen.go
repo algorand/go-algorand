@@ -13,9 +13,11 @@ import (
 //    |-----> (*) MarshalMsg
 //    |-----> (*) CanMarshalMsg
 //    |-----> (*) UnmarshalMsg
+//    |-----> (*) UnmarshalMsgWithState
 //    |-----> (*) CanUnmarshalMsg
 //    |-----> (*) Msgsize
 //    |-----> (*) MsgIsZero
+//    |-----> MessageMaxSize()
 //
 
 // MarshalMsg implements msgp.Marshaler
@@ -82,7 +84,12 @@ func (_ *Message) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *Message) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *Message) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0001 int
@@ -240,6 +247,9 @@ func (z *Message) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *Message) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *Message) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*Message)
 	return ok
@@ -254,4 +264,10 @@ func (z *Message) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *Message) MsgIsZero() bool {
 	return (len((*z).BlockHeadersCommitment) == 0) && (len((*z).VotersCommitment) == 0) && ((*z).LnProvenWeight == 0) && ((*z).FirstAttestedRound == 0) && ((*z).LastAttestedRound == 0)
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func MessageMaxSize() (s int) {
+	s = 1 + 2 + msgp.BytesPrefixSize + crypto.Sha256Size + 2 + msgp.BytesPrefixSize + crypto.SumhashDigestSize + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size
+	return
 }

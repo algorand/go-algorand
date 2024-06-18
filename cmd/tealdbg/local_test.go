@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -108,6 +108,8 @@ func allErrors(es []error) assert.Comparison {
 
 func TestTxnJSONInput(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	a := require.New(t)
 
 	dp := DebugParams{
@@ -129,6 +131,8 @@ func TestTxnJSONInput(t *testing.T) {
 
 func TestTxnMessagePackInput(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	a := require.New(t)
 
 	var txn transactions.SignedTxn
@@ -281,6 +285,8 @@ func makeSampleBalanceRecord(addr basics.Address, assetIdx basics.AssetIndex, ap
 
 func TestBalanceJSONInput(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	a := require.New(t)
 
 	addr, err := basics.UnmarshalChecksumAddress("47YPQTIGQEO7T4Y4RWDYWEKV6RTR2UNBQXBABEEGM72ESWDQNCQ52OPASU")
@@ -304,6 +310,8 @@ func TestBalanceJSONInput(t *testing.T) {
 
 func TestBalanceMessagePackInput(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	a := require.New(t)
 	addr, err := basics.UnmarshalChecksumAddress("47YPQTIGQEO7T4Y4RWDYWEKV6RTR2UNBQXBABEEGM72ESWDQNCQ52OPASU")
 	a.NoError(err)
@@ -332,6 +340,8 @@ func TestBalanceMessagePackInput(t *testing.T) {
 
 func TestDebugEnvironment(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	a := require.New(t)
 
 	sender, err := basics.UnmarshalChecksumAddress("47YPQTIGQEO7T4Y4RWDYWEKV6RTR2UNBQXBABEEGM72ESWDQNCQ52OPASU")
@@ -513,7 +523,7 @@ int 100
 		ProgramBlobs:    [][]byte{[]byte(source)},
 		BalanceBlob:     balanceBlob,
 		TxnBlob:         txnBlob,
-		Proto:           string(protocol.ConsensusCurrentVersion),
+		Proto:           string(protocol.ConsensusV37),
 		Round:           222,
 		LatestTimestamp: 333,
 		GroupIndex:      0,
@@ -570,6 +580,8 @@ byte 0x676c6f62616c // global
 
 func TestDebugFromPrograms(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	a := require.New(t)
 
 	txnBlob := []byte("[" + strings.Join([]string{txnSample, txnSample}, ",") + "]")
@@ -649,6 +661,8 @@ func TestDebugFromPrograms(t *testing.T) {
 
 func TestRunMode(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	a := require.New(t)
 
 	txnBlob := []byte("[" + strings.Join([]string{txnSample, txnSample}, ",") + "]")
@@ -736,6 +750,8 @@ func TestRunMode(t *testing.T) {
 
 func TestDebugFromTxn(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	a := require.New(t)
 
 	sender, err := basics.UnmarshalChecksumAddress("47YPQTIGQEO7T4Y4RWDYWEKV6RTR2UNBQXBABEEGM72ESWDQNCQ52OPASU")
@@ -963,6 +979,8 @@ func checkBalanceAdapter(
 
 func TestLocalBalanceAdapter(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	a := require.New(t)
 
 	sender, err := basics.UnmarshalChecksumAddress("47YPQTIGQEO7T4Y4RWDYWEKV6RTR2UNBQXBABEEGM72ESWDQNCQ52OPASU")
@@ -1024,6 +1042,8 @@ func TestLocalBalanceAdapter(t *testing.T) {
 
 func TestLocalBalanceAdapterIndexer(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	a := require.New(t)
 
 	sender, err := basics.UnmarshalChecksumAddress("47YPQTIGQEO7T4Y4RWDYWEKV6RTR2UNBQXBABEEGM72ESWDQNCQ52OPASU")
@@ -1116,6 +1136,8 @@ func TestLocalBalanceAdapterIndexer(t *testing.T) {
 
 func TestDebugTxSubmit(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	a := require.New(t)
 
 	sender, err := basics.UnmarshalChecksumAddress("47YPQTIGQEO7T4Y4RWDYWEKV6RTR2UNBQXBABEEGM72ESWDQNCQ52OPASU")
@@ -1189,6 +1211,8 @@ int 1`
 
 func TestDebugFeePooling(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	a := require.New(t)
 
 	sender, err := basics.UnmarshalChecksumAddress("47YPQTIGQEO7T4Y4RWDYWEKV6RTR2UNBQXBABEEGM72ESWDQNCQ52OPASU")
@@ -1208,21 +1232,6 @@ int 1`
 	ops, err := logic.AssembleString(source)
 	a.NoError(err)
 	prog := ops.Program
-
-	stxn := transactions.SignedTxn{
-		Txn: transactions.Transaction{
-			Type: protocol.ApplicationCallTx,
-			Header: transactions.Header{
-				Sender: sender,
-				Note:   []byte{1, 2, 3},
-			},
-			ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
-				ApplicationID:     0,
-				ApprovalProgram:   prog,
-				ClearStateProgram: prog,
-			},
-		},
-	}
 
 	appIdx := basics.AppIndex(1)
 	br := basics.BalanceRecord{
@@ -1256,9 +1265,24 @@ int 1`
 	}
 
 	for _, test := range tests {
+		test := test
 		t.Run(fmt.Sprintf("fee=%d", test.fee), func(t *testing.T) {
-
-			stxn.Txn.Fee = basics.MicroAlgos{Raw: test.fee}
+			t.Parallel()
+			stxn := transactions.SignedTxn{
+				Txn: transactions.Transaction{
+					Type: protocol.ApplicationCallTx,
+					Header: transactions.Header{
+						Fee:    basics.MicroAlgos{Raw: test.fee},
+						Sender: sender,
+						Note:   []byte{1, 2, 3},
+					},
+					ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+						ApplicationID:     0,
+						ApprovalProgram:   prog,
+						ClearStateProgram: prog,
+					},
+				},
+			}
 			encoded := protocol.EncodeJSON(&stxn)
 
 			ds := DebugParams{
@@ -1274,7 +1298,7 @@ int 1`
 			}
 
 			local := MakeLocalRunner(nil)
-			err = local.Setup(&ds)
+			err := local.Setup(&ds)
 			a.NoError(err)
 
 			r := runAllResultFromInvocation(*local)
@@ -1285,6 +1309,8 @@ int 1`
 
 func TestDebugCostPooling(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	a := require.New(t)
 
 	sender, err := basics.UnmarshalChecksumAddress("47YPQTIGQEO7T4Y4RWDYWEKV6RTR2UNBQXBABEEGM72ESWDQNCQ52OPASU")
@@ -1331,18 +1357,6 @@ byte 0x5ce9454909639d2d17a3f753ce7d93fa0b9ab12e // addr
 
 	appIdx := basics.AppIndex(1)
 	trivialAppIdx := basics.AppIndex(2)
-	trivialStxn := transactions.SignedTxn{
-		Txn: transactions.Transaction{
-			Type: protocol.ApplicationCallTx,
-			Header: transactions.Header{
-				Sender: sender,
-				Fee:    basics.MicroAlgos{Raw: 1000},
-			},
-			ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
-				ApplicationID: trivialAppIdx,
-			},
-		},
-	}
 
 	br := basics.BalanceRecord{
 		Addr: sender,
@@ -1381,12 +1395,26 @@ byte 0x5ce9454909639d2d17a3f753ce7d93fa0b9ab12e // addr
 		}},
 	}
 	for _, test := range tests {
+		test := test
 		t.Run(fmt.Sprintf("txn-count=%d", test.additionalApps+1), func(t *testing.T) {
+			t.Parallel()
 			txnBlob := protocol.EncodeMsgp(&stxn)
 			for i := 0; i < test.additionalApps; i++ {
 				val, err := getRandomAddress()
 				a.NoError(err)
-				trivialStxn.Txn.Note = val[:]
+				trivialStxn := transactions.SignedTxn{
+					Txn: transactions.Transaction{
+						Type: protocol.ApplicationCallTx,
+						Header: transactions.Header{
+							Sender: sender,
+							Fee:    basics.MicroAlgos{Raw: 1000},
+							Note:   val[:],
+						},
+						ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+							ApplicationID: trivialAppIdx,
+						},
+					},
+				}
 				txnBlob = append(txnBlob, protocol.EncodeMsgp(&trivialStxn)...)
 			}
 
@@ -1403,7 +1431,7 @@ byte 0x5ce9454909639d2d17a3f753ce7d93fa0b9ab12e // addr
 			}
 
 			local := MakeLocalRunner(nil)
-			err = local.Setup(&ds)
+			err := local.Setup(&ds)
 			a.NoError(err)
 
 			test.expected(*local, runAllResultFromInvocation(*local))
@@ -1412,8 +1440,9 @@ byte 0x5ce9454909639d2d17a3f753ce7d93fa0b9ab12e // addr
 }
 
 func TestGroupTxnIdx(t *testing.T) {
-
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	a := require.New(t)
 
 	ddrBlob := `{
@@ -1511,8 +1540,9 @@ func TestGroupTxnIdx(t *testing.T) {
 }
 
 func TestRunAllGloads(t *testing.T) {
-
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	a := require.New(t)
 
 	sourceA := `#pragma version 6

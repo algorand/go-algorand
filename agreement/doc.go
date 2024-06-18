@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,20 +23,27 @@
 //
 // Clients instantiate an Service by providing it several
 // parameters:
-//  - Ledger represents a data store which supports the reading and
-//    writing of data stored within Blocks.
-//  - BlockFactory produces Blocks for a given round.
-//  - BlockValidator validates Blocks for a given round.
-//  - KeyManager holds the participation keys necessary to participate
-//    in the protocol.
-//  - Network provides an abstraction over the underlying network.
-//  - timers.Clock provides timekeeping services for timeouts.
-//  - db.Accessor provides persistent storage for internal state.
 //
-//  Blocks for which consensus is completed are written using
-//  Ledger.EnsureBlock alongside Certificate objects, which are
-//  cryptographic proofs that a Block was confirmed for a given
-//  round.
+//   - Ledger represents a data store which supports the reading and
+//     writing of data stored within Blocks.
+//
+//   - BlockFactory produces Blocks for a given round.
+//
+//   - BlockValidator validates Blocks for a given round.
+//
+//   - KeyManager holds the participation keys necessary to participate
+//     in the protocol.
+//
+//   - Network provides an abstraction over the underlying network.
+//
+//   - timers.Clock provides timekeeping services for timeouts.
+//
+//   - db.Accessor provides persistent storage for internal state.
+//
+//     Blocks for which consensus is completed are written using
+//     Ledger.EnsureBlock alongside Certificate objects, which are
+//     cryptographic proofs that a Block was confirmed for a given
+//     round.
 //
 // If Ledger and db.Accessor provide crash-safe storage, agreement
 // will also recover safely after crashes.

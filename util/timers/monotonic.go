@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,56 +23,66 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
+type timeout struct {
+	delta time.Duration
+	ch    <-chan time.Time
+}
+
 // Monotonic uses the system's monotonic clock to emit timeouts.
-type Monotonic struct {
+type Monotonic[TimeoutType comparable] struct {
 	zero     time.Time
-	timeouts map[time.Duration]<-chan time.Time
+	timeouts map[TimeoutType]timeout
 }
 
 // MakeMonotonicClock creates a new monotonic clock with a given zero point.
-func MakeMonotonicClock(zero time.Time) Clock {
-	return &Monotonic{
+func MakeMonotonicClock[TimeoutType comparable](zero time.Time) Clock[TimeoutType] {
+	return &Monotonic[TimeoutType]{
 		zero: zero,
 	}
 }
 
 // Zero returns a new Clock reset to the current time.
-func (m *Monotonic) Zero() Clock {
+func (m *Monotonic[TimeoutType]) Zero() Clock[TimeoutType] {
 	z := time.Now()
 	logging.Base().Debugf("Clock zeroed to %v", z)
-	return MakeMonotonicClock(z)
+	return MakeMonotonicClock[TimeoutType](z)
 }
 
 // TimeoutAt returns a channel that will signal when the duration has elapsed.
-func (m *Monotonic) TimeoutAt(delta time.Duration) <-chan time.Time {
+func (m *Monotonic[TimeoutType]) TimeoutAt(delta time.Duration, timeoutType TimeoutType) <-chan time.Time {
 	if m.timeouts == nil {
-		m.timeouts = make(map[time.Duration]<-chan time.Time)
+		m.timeouts = make(map[TimeoutType]timeout)
 	}
-	timeoutCh, ok := m.timeouts[delta]
-	if ok {
-		return timeoutCh
+
+	tmt, ok := m.timeouts[timeoutType]
+	if ok && tmt.delta == delta {
+		// if the new timeout is the same as the current one for that type,
+		// return the existing channel.
+		return tmt.ch
 	}
+
+	tmt = timeout{delta: delta}
 
 	target := m.zero.Add(delta)
 	left := target.Sub(time.Now())
 	if left < 0 {
-		timeout := make(chan time.Time)
-		close(timeout)
-		timeoutCh = timeout
+		ch := make(chan time.Time)
+		close(ch)
+		tmt.ch = ch
 	} else {
-		timeoutCh = time.After(left)
+		tmt.ch = time.After(left)
 	}
-	m.timeouts[delta] = timeoutCh
-	return timeoutCh
+	m.timeouts[timeoutType] = tmt
+	return tmt.ch
 }
 
 // Encode implements Clock.Encode.
-func (m *Monotonic) Encode() []byte {
+func (m *Monotonic[TimeoutType]) Encode() []byte {
 	return protocol.EncodeReflect(m.zero)
 }
 
 // Decode implements Clock.Decode.
-func (m *Monotonic) Decode(data []byte) (Clock, error) {
+func (m *Monotonic[TimeoutType]) Decode(data []byte) (Clock[TimeoutType], error) {
 	var zero time.Time
 	err := protocol.DecodeReflect(data, &zero)
 	if err == nil {
@@ -80,14 +90,14 @@ func (m *Monotonic) Decode(data []byte) (Clock, error) {
 	} else {
 		logging.Base().Errorf("Clock decoded with zero at %v (err: %v)", zero, err)
 	}
-	return MakeMonotonicClock(zero), err
+	return MakeMonotonicClock[TimeoutType](zero), err
 }
 
-func (m *Monotonic) String() string {
+func (m *Monotonic[TimeoutType]) String() string {
 	return time.Time(m.zero).String()
 }
 
 // Since returns the time that has passed between the time the clock was last zeroed out and now
-func (m *Monotonic) Since() time.Duration {
+func (m *Monotonic[TimeoutType]) Since() time.Duration {
 	return time.Since(m.zero)
 }

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -64,11 +64,11 @@ func TestAccountsCanClose(t *testing.T) {
 	// Transfer some money to acct0 and wait.
 	tx, err := client.SendPaymentFromUnencryptedWallet(baseAcct, acct0, 1000, 10000000, nil)
 	a.NoError(err)
-	fixture.WaitForConfirmedTxn(status.LastRound+10, baseAcct, tx.ID().String())
+	fixture.WaitForConfirmedTxn(status.LastRound+10, tx.ID().String())
 
 	tx, err = client.SendPaymentFromWallet(walletHandle, nil, acct0, acct1, 1000, 1000000, nil, acct2, 0, 0)
 	a.NoError(err)
-	fixture.WaitForConfirmedTxn(status.LastRound+10, acct0, tx.ID().String())
+	fixture.WaitForConfirmedTxn(status.LastRound+10, tx.ID().String())
 
 	bal0, err := client.GetBalance(acct0)
 	a.NoError(err)

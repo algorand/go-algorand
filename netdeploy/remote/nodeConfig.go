@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,6 +23,7 @@ type NodeConfig struct {
 	NetAddress         string `json:",omitempty"`
 	APIEndpoint        string `json:",omitempty"`
 	APIToken           string `json:",omitempty"`
+	AdminAPIToken      string `json:",omitempty"`
 	EnableTelemetry    bool   // Needs to also be configured host-wide (assign logging host name)
 	TelemetryURI       string `json:",omitempty"` // Needs to be HostConfig
 	EnableMetrics      bool   // Needs to also be configured host-wide (register DNS entry)
@@ -53,8 +54,11 @@ func (nc NodeConfig) IsRelay() bool {
 
 // NodeConfigGoal represents is a simplified version of NodeConfig used with 'goal network' commands
 type NodeConfigGoal struct {
-	Name              string
-	IsRelay           bool `json:",omitempty"`
-	Wallets           []NodeWalletData
-	DeadlockDetection int `json:"-"`
+	Name               string
+	IsRelay            bool `json:",omitempty"`
+	Wallets            []NodeWalletData
+	P2PPeerID          string `json:",omitempty"`
+	DeadlockDetection  int    `json:"-"`
+	ConfigJSONOverride string `json:",omitempty"` // Raw json to merge into config.json after other modifications are complete
+	PeerList           string `json:",omitempty"` // Semicolon separated list of peers to connect to. Only applicable for non-relays
 }

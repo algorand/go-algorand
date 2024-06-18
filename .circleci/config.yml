@@ -5,23 +5,28 @@
 version: 2.1
 
 orbs:
-  win: circleci/windows@2.3.0
-  go: circleci/go@1.7.0
-  slack: circleci/slack@4.4.2
+  win: circleci/windows@5.0.0
+  go: circleci/go@1.7.3
+  slack: circleci/slack@4.12.5
 
 parameters:
   ubuntu_image:
     type: string
-    default: "ubuntu-2004:202104-01"
+    default: "ubuntu-2004:2023.04.2"
   build_dir:
     type: string
     default: "/opt/cibuild"
   result_path:
     type: string
-    default: "/tmp/build_test_results"
+    default: "/tmp/build_test_results_<< pipeline.id >>"
   valid_nightly_branch:
     type: string
     default: /hotfix\/.*/
+  # The following is intentional - hardcoding a token for public repos
+  # is recommended here to allow fork access
+  codecov:
+    type: string
+    default: "8b4a1f91-f154-4c26-b84c-c9aaa90159c6"
 
 executors:
   amd64_medium:
@@ -42,19 +47,20 @@ executors:
     resource_class: arm.large
   mac_amd64_medium:
     macos:
-      xcode: 13.2.1
-    resource_class: medium
+      xcode: 14.2.0
+    resource_class: macos.x86.medium.gen2
     environment:
       HOMEBREW_NO_AUTO_UPDATE: "true"
   mac_amd64_large:
     macos:
-      xcode: 13.2.1
-    resource_class: large
+      xcode: 14.2.0
+    # Since they removed the large class for amd64, we will use medium here too.
+    resource_class: macos.x86.medium.gen2
     environment:
       HOMEBREW_NO_AUTO_UPDATE: "true"
   mac_arm64: &executor-mac-arm64
     machine: true
-    resource_class: algorand/macstadium-m1-macos11
+    resource_class: algorand/macstadium-m1
     environment:
       HOMEBREW_NO_AUTO_UPDATE: "true"
   # these are required b/c jobs explicitly assign sizes to the executors
@@ -64,9 +70,17 @@ executors:
   mac_arm64_large:
     <<: *executor-mac-arm64
 
+slack-fail-stop-step: &slack-fail-post-step
+  post-steps:
+    - slack/notify:
+        branch_pattern: "master,rel/beta,rel/nightly,rel/stable"
+        event: fail
+        template: basic_fail_1
+
+# ===== Workflow Definitions =====
 workflows:
   version: 2
-  "circleci_build_and_test":
+  nightly_build_and_test:
     jobs:
       - build_nightly:
           name: << matrix.platform >>_build_nightly
@@ -79,17 +93,7 @@ workflows:
                 - /rel\/.*/
                 - << pipeline.parameters.valid_nightly_branch >>
           context: slack-secrets
-
-      - test:
-          name: << matrix.platform >>_test
-          matrix: &matrix-default
-            parameters:
-              platform: ["amd64", "arm64"]
-          filters: &filters-default
-            branches:
-              ignore:
-                - /rel\/.*/
-                - << pipeline.parameters.valid_nightly_branch >>
+          <<: *slack-fail-post-step
 
       - test_nightly:
           name: << matrix.platform >>_test_nightly
@@ -98,13 +102,7 @@ workflows:
           requires:
             - << matrix.platform >>_build_nightly
           context: slack-secrets
-
-      - integration:
-          name: << matrix.platform >>_integration
-          matrix:
-            <<: *matrix-default
-          filters:
-            <<: *filters-default
+          <<: *slack-fail-post-step
 
       - integration_nightly:
           name: << matrix.platform >>_integration_nightly
@@ -113,13 +111,7 @@ workflows:
           requires:
             - << matrix.platform >>_build_nightly
           context: slack-secrets
-
-      - e2e_expect:
-          name: << matrix.platform >>_e2e_expect
-          matrix:
-            <<: *matrix-default
-          filters:
-            <<: *filters-default
+          <<: *slack-fail-post-step
 
       - e2e_expect_nightly:
           name: << matrix.platform >>_e2e_expect_nightly
@@ -128,13 +120,7 @@ workflows:
           requires:
             - << matrix.platform >>_build_nightly
           context: slack-secrets
-
-      - e2e_subs:
-          name: << matrix.platform >>_e2e_subs
-          matrix:
-            <<: *matrix-default
-          filters:
-            <<: *filters-default
+          <<: *slack-fail-post-step
 
       - e2e_subs_nightly:
           name: << matrix.platform >>_e2e_subs_nightly
@@ -145,15 +131,7 @@ workflows:
           context:
             - slack-secrets
             - aws-secrets
-
-      - tests_verification_job:
-          name: << matrix.platform >>_<< matrix.job_type >>_verification
-          matrix:
-            parameters:
-              platform: ["amd64", "arm64"]
-              job_type: ["test", "integration", "e2e_expect"]
-          requires:
-            - << matrix.platform >>_<< matrix.job_type >>
+          <<: *slack-fail-post-step
 
       - tests_verification_job_nightly:
           name: << matrix.platform >>_<< matrix.job_type >>_verification
@@ -164,6 +142,7 @@ workflows:
           requires:
             - << matrix.platform >>_<< matrix.job_type >>
           context: slack-secrets
+          <<: *slack-fail-post-step
 
       - upload_binaries:
           name: << matrix.platform >>_upload_binaries
@@ -174,17 +153,280 @@ workflows:
             - << matrix.platform >>_integration_nightly_verification
             - << matrix.platform >>_e2e_expect_nightly_verification
             - << matrix.platform >>_e2e_subs_nightly
-          filters:
-            branches:
-              only:
-                - /rel\/.*/
-                - << pipeline.parameters.valid_nightly_branch >>
           context:
             - slack-secrets
             - aws-secrets
+          <<: *slack-fail-post-step
 
-      #- windows_x64_build
+  "circleci_build_and_test":
+    jobs:
+      - test:
+          name: << matrix.platform >>_test
+          matrix: &matrix-default
+            parameters:
+              platform: ["amd64"]
+          filters: &filters-default
+            branches:
+              ignore:
+                - /rel\/.*/
+                - << pipeline.parameters.valid_nightly_branch >>
+          context: slack-secrets
+          <<: *slack-fail-post-step
 
+      - integration:
+          name: << matrix.platform >>_integration
+          matrix:
+            <<: *matrix-default
+          filters:
+            <<: *filters-default
+          context: slack-secrets
+          <<: *slack-fail-post-step
+
+      - e2e_expect:
+          name: << matrix.platform >>_e2e_expect
+          matrix:
+            <<: *matrix-default
+          filters:
+            <<: *filters-default
+          context: slack-secrets
+          <<: *slack-fail-post-step
+
+      - e2e_subs:
+          name: << matrix.platform >>_e2e_subs
+          matrix:
+            <<: *matrix-default
+          filters:
+            <<: *filters-default
+          context: slack-secrets
+          <<: *slack-fail-post-step
+
+      - tests_verification_job:
+          name: << matrix.platform >>_<< matrix.job_type >>_verification
+          matrix:
+            parameters:
+              platform: ["amd64"]
+              job_type: ["test", "integration", "e2e_expect"]
+          requires:
+            - << matrix.platform >>_<< matrix.job_type >>
+          context: slack-secrets
+          <<: *slack-fail-post-step
+
+# ===== Job Definitions =====
+jobs:
+  build_nightly:
+    description: "Persists build artifacts to workspace in order to support `upload_binaries`."
+    parameters:
+      platform:
+        type: string
+      build_dir:
+        type: string
+        default: << pipeline.parameters.build_dir >>
+    executor: << parameters.platform >>_medium
+    working_directory: << pipeline.parameters.build_dir >>/project
+    steps:
+      - generic_build
+      - persist_to_workspace:
+          root: << parameters.build_dir >>
+          paths:
+            - project
+            - go
+            - gimme
+            - .gimme
+
+  test:
+    parameters:
+      platform:
+        type: string
+    executor: << parameters.platform >>_medium
+    working_directory: << pipeline.parameters.build_dir >>/project
+    parallelism: 32
+    environment:
+      CODECOV_TOKEN: << pipeline.parameters.codecov >>
+    steps:
+      - generic_build
+      - generic_test:
+          platform: << parameters.platform >>
+          result_subdir: << parameters.platform >>_test
+          short_test_flag: "-short"
+      - upload_coverage
+
+  test_nightly:
+    parameters:
+      platform:
+        type: string
+    executor: << parameters.platform >>_large
+    working_directory: << pipeline.parameters.build_dir >>/project
+    parallelism: 4
+    environment:
+      CODECOV_TOKEN: << pipeline.parameters.codecov >>
+    steps:
+      - generic_build
+      - generic_test:
+          platform: << parameters.platform >>
+          result_subdir: << parameters.platform >>_test_nightly
+          no_output_timeout: 45m
+      - upload_coverage
+
+  integration:
+    parameters:
+      platform:
+        type: string
+    executor: << parameters.platform >>_large
+    working_directory: << pipeline.parameters.build_dir >>/project
+    parallelism: 16
+    environment:
+      E2E_TEST_FILTER: "GO"
+    steps:
+      - generic_build
+      - generic_integration:
+          platform: << parameters.platform >>
+          result_subdir: << parameters.platform >>_integration
+          short_test_flag: "-short"
+
+  integration_nightly:
+    parameters:
+      platform:
+        type: string
+    executor: << parameters.platform >>_large
+    working_directory: << pipeline.parameters.build_dir >>/project
+    parallelism: 4
+    environment:
+      E2E_TEST_FILTER: "GO"
+    steps:
+      - generic_build
+      - generic_integration:
+          platform: << parameters.platform >>
+          result_subdir: << parameters.platform >>_integration_nightly
+          no_output_timeout: 45m
+
+  e2e_expect:
+    parameters:
+      platform:
+        type: string
+    executor: << parameters.platform >>_large
+    working_directory: << pipeline.parameters.build_dir >>/project
+    parallelism: 10
+    environment:
+      E2E_TEST_FILTER: "EXPECT"
+    steps:
+      - generic_build
+      - generic_integration:
+          platform: << parameters.platform >>
+          result_subdir: << parameters.platform >>_e2e_expect
+          short_test_flag: "-short"
+
+  e2e_expect_nightly:
+    parameters:
+      platform:
+        type: string
+    executor: << parameters.platform >>_large
+    working_directory: << pipeline.parameters.build_dir >>/project
+    parallelism: 2
+    environment:
+      E2E_TEST_FILTER: "EXPECT"
+    steps:
+      - generic_build
+      - generic_integration:
+          platform: << parameters.platform >>
+          result_subdir: << parameters.platform>>_e2e_expect_nightly
+          no_output_timeout: 45m
+
+  e2e_subs:
+    parameters:
+      platform:
+        type: string
+    executor: << parameters.platform >>_large
+    working_directory: << pipeline.parameters.build_dir >>/project
+    environment:
+      E2E_TEST_FILTER: "SCRIPTS"
+    steps:
+      - generic_build
+      - generic_integration:
+          platform: << parameters.platform >>
+          result_subdir: << parameters.platform >>_e2e_subs
+          short_test_flag: "-short"
+
+  e2e_subs_nightly:
+    parameters:
+      platform:
+        type: string
+    executor: << parameters.platform >>_large
+    working_directory: << pipeline.parameters.build_dir >>/project
+    environment:
+      E2E_TEST_FILTER: "SCRIPTS"
+      CI_PLATFORM: << parameters.platform >>
+      # This platform is arbitrary, basically we just want to keep temps for
+      # one of the platforms in the matrix.
+      CI_KEEP_TEMP_PLATFORM: "amd64"
+    steps:
+      - generic_build
+      - generic_integration:
+          platform: << parameters.platform >>
+          result_subdir: << parameters.platform >>_e2e_subs_nightly
+          no_output_timeout: 45m
+
+  windows_x64_build:
+    executor:
+      name: win/default
+      size: large
+    steps:
+      - checkout
+      - prepare_windows
+      - run:
+          no_output_timeout: 45m
+          command: |
+            # export PATH=$(echo "$PATH" | sed -e 's|:/home/circleci/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
+            export GOPATH="/home/circleci/go"
+            export ALGORAND_DEADLOCK=enable
+            export SKIP_GO_INSTALLATION=True
+            export PATH=/mingw64/bin:/C/tools/msys64/mingw64/bin:/usr/bin:$PATH
+            export MAKE=mingw32-make
+            $msys2 scripts/travis/build_test.sh
+          shell: bash.exe
+
+  tests_verification_job:
+    docker:
+      - image: python:3.9.6-alpine
+    resource_class: small
+    working_directory: << pipeline.parameters.build_dir >>/project
+    parameters:
+      platform:
+        type: string
+      job_type:
+        type: string
+    steps:
+      - checkout
+      - tests_verification_command:
+          result_subdir: << parameters.platform >>_<< parameters.job_type >>
+
+  tests_verification_job_nightly:
+    docker:
+      - image: python:3.9.6-alpine
+    resource_class: small
+    working_directory: << pipeline.parameters.build_dir >>/project
+    parameters:
+      platform:
+        type: string
+      job_type:
+        type: string
+    steps:
+      - checkout
+      - tests_verification_command:
+          result_subdir: << parameters.platform >>_<< parameters.job_type >>
+
+  upload_binaries:
+    working_directory: << pipeline.parameters.build_dir >>/project
+    parameters:
+      platform:
+        type: string
+    executor: << parameters.platform >>_medium
+    steps:
+      - prepare_build_dir
+      - prepare_go
+      - upload_binaries_command:
+          platform: << parameters.platform >>
+
+# ===== Command Definitions =====
 commands:
   prepare_go:
     description: Clean out existing Go so we can use our preferred version
@@ -202,6 +444,7 @@ commands:
       - run:
           working_directory: /tmp
           command: |
+            sudo rm -rf ${HOME}/node_pkg/*
             sudo rm -rf << parameters.build_dir >>
             sudo mkdir -p << parameters.build_dir >>
             sudo chown -R $USER:$GROUP << parameters.build_dir >>
@@ -214,7 +457,7 @@ commands:
           shell: bash.exe
           command: |
             choco install -y msys2 pacman make wget --force
-            choco install -y golang --version=1.17.13 --force
+            choco install -y golang --version=$(./scripts/get_golang_version.sh) --force
             choco install -y python3 --version=3.7.3 --force
             export msys2='cmd //C RefreshEnv.cmd '
             export msys2+='& set MSYS=winsymlinks:nativestrict '
@@ -239,14 +482,7 @@ commands:
       - checkout
       - prepare_go
       - restore_libsodium
-      - restore_cache:
-          keys:
-            - 'go-mod-1.17.13-v4-{{ arch }}-{{ checksum "go.mod" }}-{{ checksum "go.sum" }}'
-      - restore_cache:
-          keys:
-            - 'go-cache-v4-{{ arch }}-{{ .Branch }}-{{ .Revision }}'
-            - 'go-cache-v4-{{ arch }}-{{ .Branch }}-'
-            - 'go-cache-v4-{{ arch }}-'
+      - restore_go_caches
       - run:
           name: scripts/travis/build.sh --make_debug
           command: |
@@ -258,14 +494,41 @@ commands:
             export GIMME_VERSION_PREFIX=<< parameters.build_dir >>/.gimme/versions
             scripts/travis/build.sh --make_debug
       - cache_libsodium
+      - save_go_caches
+
+  save_go_caches:
+    description: Cache Go source and build caches
+    parameters:
+      build_dir:
+        type: string
+        default: << pipeline.parameters.build_dir >>
+    steps:
       - save_cache:
-          key: 'go-mod-1.17.13-v4-{{ arch }}-{{ checksum "go.mod" }}-{{ checksum "go.sum" }}'
+          name: Saving Go mod source cache
+          key: go-mod-v5-{{ .Branch }}-{{ checksum "go.sum" }}
           paths:
             - << parameters.build_dir >>/go/pkg/mod
       - save_cache:
-          key: 'go-cache-v4-{{ arch }}-{{ .Branch }}-{{ .Revision }}'
+          name: Saving Go build cache
+          key: go-cache-v5-{{ arch }}-{{ .Branch }}-{{ checksum "go.sum" }}
           paths:
             - tmp/go-cache
+
+  restore_go_caches:
+    description: Restore Go source and build caches
+    steps:
+      - restore_cache:
+          name: Restoring Go mod source cache
+          keys:
+            - go-mod-v5-{{ .Branch }}-{{ checksum "go.sum" }}
+            - go-mod-v5-{{ .Branch }}-
+            - go-mod-v5-master-
+      - restore_cache:
+          name: Restoring Go build cache
+          keys:
+            - go-cache-v5-{{ arch }}-{{ .Branch }}-{{ checksum "go.sum" }}
+            - go-cache-v5-{{ arch }}-{{ .Branch }}-
+            - go-cache-v5-{{ arch }}-master-
 
   cache_libsodium:
     description: Cache libsodium for build
@@ -276,6 +539,7 @@ commands:
             mkdir -p tmp
             find crypto/libsodium-fork -type f -exec openssl md5 "{}" + > tmp/libsodium.md5
       - save_cache:
+          name: Save cached libsodium build
           key: 'libsodium-fork-v4-{{ arch }}-{{ checksum "tmp/libsodium.md5" }}'
           paths:
             - crypto/libs
@@ -289,6 +553,7 @@ commands:
             mkdir -p tmp
             find crypto/libsodium-fork -type f -exec openssl md5 "{}" + > tmp/libsodium.md5
       - restore_cache:
+          name: Restore cached libsodium build
           keys:
             - 'libsodium-fork-v4-{{ arch }}-{{ checksum "tmp/libsodium.md5" }}'
 
@@ -445,9 +710,6 @@ commands:
                 TestAlgohWithExpect \
                 TestGoalWithExpect \
                 TestTealdbgWithExpect
-      - store_artifacts:
-          path: << parameters.result_path >>/<< parameters.result_subdir >>
-          destination: << parameters.result_subdir >>/combined-test-results
 
   upload_binaries_command:
     description: save build artifacts for potential deployments
@@ -480,229 +742,3 @@ commands:
                   command: |
                     export TRAVIS_BRANCH=${CIRCLE_BRANCH}
                     scripts/travis/test_release.sh
-
-jobs:
-  build_nightly:
-    description: "Persists build artifacts to workspace in order to support `upload_binaries`."
-    parameters:
-      platform:
-        type: string
-      build_dir:
-        type: string
-        default: << pipeline.parameters.build_dir >>
-    executor: << parameters.platform >>_medium
-    working_directory: << pipeline.parameters.build_dir >>/project
-    steps:
-      - generic_build
-      - persist_to_workspace:
-          root: << parameters.build_dir >>
-          paths:
-            - project
-            - go
-            - gimme
-            - .gimme
-      - slack/notify: &slack-fail-event
-          event: fail
-          template: basic_fail_1
-
-  test:
-    parameters:
-      platform:
-        type: string
-    executor: << parameters.platform >>_medium
-    working_directory: << pipeline.parameters.build_dir >>/project
-    parallelism: 32
-    steps:
-      - generic_build
-      - generic_test:
-          platform: << parameters.platform >>
-          result_subdir: << parameters.platform >>_test
-          short_test_flag: "-short"
-      - upload_coverage
-
-  test_nightly:
-    parameters:
-      platform:
-        type: string
-    executor: << parameters.platform >>_medium
-    working_directory: << pipeline.parameters.build_dir >>/project
-    parallelism: 4
-    steps:
-      - generic_build
-      - generic_test:
-          platform: << parameters.platform >>
-          result_subdir: << parameters.platform >>_test_nightly
-          no_output_timeout: 45m
-      - upload_coverage
-      - slack/notify: &slack-fail-event
-          event: fail
-          template: basic_fail_1
-
-  integration:
-    parameters:
-      platform:
-        type: string
-    executor: << parameters.platform >>_large
-    working_directory: << pipeline.parameters.build_dir >>/project
-    parallelism: 16
-    environment:
-      E2E_TEST_FILTER: "GO"
-    steps:
-      - generic_build
-      - generic_integration:
-          platform: << parameters.platform >>
-          result_subdir: << parameters.platform >>_integration
-          short_test_flag: "-short"
-
-  integration_nightly:
-    parameters:
-      platform:
-        type: string
-    executor: << parameters.platform >>_large
-    working_directory: << pipeline.parameters.build_dir >>/project
-    parallelism: 4
-    environment:
-      E2E_TEST_FILTER: "GO"
-    steps:
-      - generic_build
-      - generic_integration:
-          platform: << parameters.platform >>
-          result_subdir: << parameters.platform >>_integration_nightly
-          no_output_timeout: 45m
-      - slack/notify:
-          <<: *slack-fail-event
-
-  e2e_expect:
-    parameters:
-      platform:
-        type: string
-    executor: << parameters.platform >>_medium
-    working_directory: << pipeline.parameters.build_dir >>/project
-    parallelism: 10
-    environment:
-      E2E_TEST_FILTER: "EXPECT"
-    steps:
-      - generic_build
-      - generic_integration:
-          platform: << parameters.platform >>
-          result_subdir: << parameters.platform >>_e2e_expect
-          short_test_flag: "-short"
-
-  e2e_expect_nightly:
-    parameters:
-      platform:
-        type: string
-    executor: << parameters.platform >>_medium
-    working_directory: << pipeline.parameters.build_dir >>/project
-    parallelism: 2
-    environment:
-      E2E_TEST_FILTER: "EXPECT"
-    steps:
-      - generic_build
-      - generic_integration:
-          platform: << parameters.platform >>
-          result_subdir: << parameters.platform>>_e2e_expect_nightly
-          no_output_timeout: 45m
-      - slack/notify:
-          <<: *slack-fail-event
-
-  e2e_subs:
-    parameters:
-      platform:
-        type: string
-    executor: << parameters.platform >>_large
-    working_directory: << pipeline.parameters.build_dir >>/project
-    environment:
-      E2E_TEST_FILTER: "SCRIPTS"
-    steps:
-      - generic_build
-      - generic_integration:
-          platform: << parameters.platform >>
-          result_subdir: << parameters.platform >>_e2e_subs
-          short_test_flag: "-short"
-
-  e2e_subs_nightly:
-    parameters:
-      platform:
-        type: string
-    executor: << parameters.platform >>_large
-    working_directory: << pipeline.parameters.build_dir >>/project
-    environment:
-      E2E_TEST_FILTER: "SCRIPTS"
-      CI_PLATFORM: << parameters.platform >>
-      # This platform is arbitrary, basically we just want to keep temps for
-      # one of the platforms in the matrix.
-      CI_KEEP_TEMP_PLATFORM: "amd64"
-    steps:
-      - generic_build
-      - generic_integration:
-          platform: << parameters.platform >>
-          result_subdir: << parameters.platform >>_e2e_subs_nightly
-          no_output_timeout: 45m
-      - slack/notify:
-          <<: *slack-fail-event
-
-  windows_x64_build:
-    executor:
-      name: win/default
-      size: large
-    steps:
-      - checkout
-      - prepare_windows
-      - run:
-          no_output_timeout: 45m
-          command: |
-            # export PATH=$(echo "$PATH" | sed -e 's|:/home/circleci/\.go_workspace/bin||g' | sed -e 's|:/usr/local/go/bin||g')
-            export GOPATH="/home/circleci/go"
-            export ALGORAND_DEADLOCK=enable
-            export SKIP_GO_INSTALLATION=True
-            export PATH=/mingw64/bin:/C/tools/msys64/mingw64/bin:/usr/bin:$PATH
-            export MAKE=mingw32-make
-            $msys2 scripts/travis/build_test.sh
-          shell: bash.exe
-
-  tests_verification_job:
-    docker:
-      - image: python:3.9.6-alpine
-    resource_class: small
-    working_directory: << pipeline.parameters.build_dir >>/project
-    parameters:
-      platform:
-        type: string
-      job_type:
-        type: string
-    steps:
-      - checkout
-      - tests_verification_command:
-          result_subdir: << parameters.platform >>_<< parameters.job_type >>
-
-  tests_verification_job_nightly:
-    docker:
-      - image: python:3.9.6-alpine
-    resource_class: small
-    working_directory: << pipeline.parameters.build_dir >>/project
-    parameters:
-      platform:
-        type: string
-      job_type:
-        type: string
-    steps:
-      - checkout
-      - tests_verification_command:
-          result_subdir: << parameters.platform >>_<< parameters.job_type >>
-      - slack/notify:
-          <<: *slack-fail-event
-
-  upload_binaries:
-    working_directory: << pipeline.parameters.build_dir >>/project
-    parameters:
-      platform:
-        type: string
-    executor: << parameters.platform >>_medium
-    steps:
-      - prepare_build_dir
-      - prepare_go
-      - upload_binaries_command:
-          platform: << parameters.platform >>
-      - slack/notify:
-          <<: *slack-fail-event

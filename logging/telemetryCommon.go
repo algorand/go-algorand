@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,23 +17,10 @@
 package logging
 
 import (
-	"sync"
-	"time"
-
 	"github.com/algorand/go-deadlock"
 	"github.com/sirupsen/logrus"
-
-	"github.com/algorand/go-algorand/logging/telemetryspec"
+	"sync"
 )
-
-// TelemetryOperation wraps the context for an ongoing telemetry.StartOperation call
-type TelemetryOperation struct {
-	startTime      time.Time
-	category       telemetryspec.Category
-	identifier     telemetryspec.Operation
-	telemetryState *telemetryState
-	pending        int32
-}
 
 type telemetryHook interface {
 	Fire(entry *logrus.Entry) error

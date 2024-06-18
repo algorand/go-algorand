@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand"
 	"net/http"
 	"testing"
 	"time"
@@ -73,7 +74,9 @@ func TestUGetBlockWs(t *testing.T) {
 	block, cert, duration, err = fetcher.fetchBlock(context.Background(), next+1, up)
 
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "requested block is not available")
+	require.Error(t, noBlockForRoundError{}, err)
+	require.Equal(t, next+1, err.(noBlockForRoundError).round)
+	require.Equal(t, next, err.(noBlockForRoundError).latest)
 	require.Nil(t, block)
 	require.Nil(t, cert)
 	require.Equal(t, int64(duration), int64(0))
@@ -93,7 +96,6 @@ func TestUGetBlockHTTP(t *testing.T) {
 
 	blockServiceConfig := config.GetDefaultLocal()
 	blockServiceConfig.EnableBlockService = true
-	blockServiceConfig.EnableBlockServiceFallbackToArchiver = false
 
 	net := &httpTestPeerSource{}
 	ls := rpcs.MakeBlockService(logging.Base(), blockServiceConfig, ledger, net, "test genesisID")
@@ -118,8 +120,10 @@ func TestUGetBlockHTTP(t *testing.T) {
 
 	block, cert, duration, err = fetcher.fetchBlock(context.Background(), next+1, net.GetPeers()[0])
 
-	require.Error(t, errNoBlockForRound, err)
-	require.Contains(t, err.Error(), "No block available for given round")
+	require.Error(t, noBlockForRoundError{}, err)
+	require.Equal(t, next+1, err.(noBlockForRoundError).round)
+	require.Equal(t, next, err.(noBlockForRoundError).latest)
+	require.Contains(t, err.Error(), "no block available for given round")
 	require.Nil(t, block)
 	require.Nil(t, cert)
 	require.Equal(t, int64(duration), int64(0))
@@ -311,4 +315,19 @@ func TestErrorTypes(t *testing.T) {
 
 	err6 := errHTTPResponseContentType{contentTypeCount: 1, contentType: "UNDEFINED"}
 	require.Equal(t, "HTTPFetcher.getBlockBytes: invalid content type: UNDEFINED", err6.Error())
+}
+
+// Block Request topics request is a handrolled msgpack message with deterministic size. This test ensures that it matches the defined
+// constant in protocol
+func TestMaxBlockRequestSize(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	round := rand.Uint64()
+	topics := makeBlockRequestTopics(basics.Round(round))
+	nonce := rand.Uint64() - 1
+	nonceTopic := network.MakeNonceTopic(nonce)
+	topics = append(topics, nonceTopic)
+	serializedMsg := topics.MarshallTopics()
+	require.Equal(t, uint64(len(serializedMsg)), protocol.UniEnsBlockReqTag.MaxMessageSize())
+
 }

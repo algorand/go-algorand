@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,6 +17,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/sha512"
 	"encoding/base64"
 	"encoding/binary"
@@ -24,7 +25,6 @@ import (
 	"fmt"
 	"os"
 	"strconv"
-	"strings"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
@@ -59,16 +59,16 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	substrings := strings.SplitN(string(data), string(splitbytes[:]), 2)
+	before, after, found := bytes.Cut(data, splitbytes[:])
 	fmt.Println(splitbytes[:])
 
-	if len(substrings) == 1 {
+	if !found {
 		fmt.Println("split-string not found")
 		return
 	}
 
-	hash0 := sha512.Sum512_256([]byte(substrings[0]))
-	hash1 := sha512.Sum512_256([]byte(substrings[1]))
+	hash0 := sha512.Sum512_256(before)
+	hash1 := sha512.Sum512_256(after)
 
 	encfn := func(str []byte) string {
 		return "0x" + hex.EncodeToString(str)
@@ -83,8 +83,10 @@ func main() {
 			}
 			var writebytes [8]byte
 			binary.BigEndian.PutUint64(writebytes[:], writenum)
-			program := append([]byte(substrings[0]), writebytes[:]...)
-			program = append(program, []byte(substrings[1])...)
+			// append to empty slice to avoid modifying `data` (which before points to)
+			program := append([]byte{}, before...)
+			program = append(program, writebytes[:]...)
+			program = append(program, after...)
 
 			obj := logic.Program(program)
 			lhash := crypto.HashObj(&obj)
@@ -93,9 +95,9 @@ func main() {
 		}
 	}
 
-	fmt.Println("hash0:", encfn([]byte(hash0[:])))
-	fmt.Println("hash1:", encfn([]byte(hash1[:])))
-	fmt.Println("sub0:", encfn([]byte(substrings[0])))
-	fmt.Println("sub1:", encfn([]byte(substrings[1])))
-	fmt.Println("data:", encfn([]byte(data)))
+	fmt.Println("hash0:", encfn(hash0[:]))
+	fmt.Println("hash1:", encfn(hash1[:]))
+	fmt.Println("sub0:", encfn(before))
+	fmt.Println("sub1:", encfn(after))
+	fmt.Println("data:", encfn(data))
 }

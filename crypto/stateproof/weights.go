@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -114,7 +114,6 @@ func verifyWeights(signedWeight uint64, lnProvenWeight uint64, numOfReveals uint
 //
 // T and b are defined in the code as the constants ln2IntApproximation and precisionBits respectively,
 // and P is set to lnProvenWeight argument.
-//
 //
 // more details can be found on the Algorand's spec
 func numReveals(signedWeight uint64, lnProvenWeight uint64, strengthTarget uint64) (uint64, error) {

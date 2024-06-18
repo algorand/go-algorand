@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -22,6 +22,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -277,23 +278,25 @@ func TestBackwardCompatTEALv1(t *testing.T) {
 		Data:        data[:],
 	})
 
-	ep, tx, _ := makeSampleEnvWithVersion(1)
+	stxn := makeSampleTxn()
 	// RekeyTo disallowed on AVM v0/v1
-	tx.RekeyTo = basics.Address{}
+	stxn.Txn.RekeyTo = basics.Address{}
+	stxn.Lsig.Logic = program
+	stxn.Lsig.Args = [][]byte{data[:], sig[:], pk[:], stxn.Txn.Sender[:], stxn.Txn.Note}
 
-	ep.TxnGroup[0].Lsig.Logic = program
-	ep.TxnGroup[0].Lsig.Args = [][]byte{data[:], sig[:], pk[:], tx.Sender[:], tx.Note}
-
-	// ensure v1 program runs well on latest TEAL evaluator
+	// ensure v1 program runs well on latest evaluator
 	require.Equal(t, uint8(1), program[0])
 
-	// Cost should stay exactly 2140
-	ep.Proto.LogicSigMaxCost = 2139
-	err = CheckSignature(0, ep)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "static cost")
+	maxCost := func(cost uint64) protoOpt {
+		return func(p *config.ConsensusParams) {
+			p.LogicSigMaxCost = cost
+		}
+	}
 
-	ep.Proto.LogicSigMaxCost = 2140
+	// Cost should stay exactly 2140 for v1, even as future changes are made
+	err = CheckSignature(0, optSigParams(maxCost(2139), stxn))
+	require.ErrorContains(t, err, "static cost")
+	ep := optSigParams(maxCost(2140), stxn)
 	err = CheckSignature(0, ep)
 	require.NoError(t, err)
 
@@ -305,42 +308,29 @@ func TestBackwardCompatTEALv1(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, pass)
 
-	// Costs for v2 should be higher because of hash opcode cost changes
-	ep2, tx, _ := makeSampleEnvWithVersion(2)
-	ep2.Proto.LogicSigMaxCost = 2307
-	ep2.TxnGroup[0].Lsig.Args = [][]byte{data[:], sig[:], pk[:], tx.Sender[:], tx.Note}
+	// Costs for v2 programs should be higher because of hash opcode cost changes
 	// Eval doesn't fail, but it would be ok (better?) if it did
-	testLogicBytes(t, opsV2.Program, ep2, "static cost", "")
+	testLogicBytes(t, opsV2.Program, optSigParams(maxCost(2307), stxn), "static cost", "")
+	testLogicBytes(t, opsV2.Program, optSigParams(maxCost(2308), stxn))
 
-	ep2.Proto.LogicSigMaxCost = 2308
-	testLogicBytes(t, opsV2.Program, ep2)
-
-	// ensure v0 program runs well on latest TEAL evaluator
-	ep, tx, _ = makeSampleEnv()
+	// ensure v0 program runs well on latest evaluator
 	program[0] = 0
 	sig = c.Sign(Msg{
 		ProgramHash: crypto.HashObj(Program(program)),
 		Data:        data[:],
 	})
-	ep.TxnGroup[0].Lsig.Logic = program
-	ep.TxnGroup[0].Lsig.Args = [][]byte{data[:], sig[:], pk[:], tx.Sender[:], tx.Note}
+	stxn.Lsig.Logic = program
+	stxn.Lsig.Args = [][]byte{data[:], sig[:], pk[:], stxn.Txn.Sender[:], stxn.Txn.Note}
 
 	// Cost remains the same, because v0 does not get dynamic treatment
-	ep.Proto.LogicSigMaxCost = 2139
-	ep.MinAvmVersion = new(uint64) // Was higher because sample txn has a rekey
-	testLogicBytes(t, program, ep, "static cost", "")
-
-	ep.Proto.LogicSigMaxCost = 2140
-	testLogicBytes(t, program, ep)
+	testLogicBytes(t, program, optSigParams(maxCost(2139), stxn), "static cost", "")
+	testLogicBytes(t, program, optSigParams(maxCost(2140), stxn))
 
 	// But in v4, cost is now dynamic and exactly 1 less than v2/v3,
 	// because bnz skips "err". It's caught during Eval
 	program[0] = 4
-	ep.Proto.LogicSigMaxCost = 2306
-	testLogicBytes(t, program, ep, "dynamic cost")
-
-	ep.Proto.LogicSigMaxCost = 2307
-	testLogicBytes(t, program, ep)
+	testLogicBytes(t, program, optSigParams(maxCost(2306), stxn), "dynamic cost")
+	testLogicBytes(t, program, optSigParams(maxCost(2307), stxn))
 }
 
 // ensure v2 fields error on pre v2 logicsig version
@@ -367,24 +357,22 @@ func TestBackwardCompatGlobalFields(t *testing.T) {
 
 		ops := testProg(t, text, AssemblerMaxVersion)
 
-		ep, _, _ := makeSampleEnvWithVersion(1)
-		ep.TxnGroup[0].Txn.RekeyTo = basics.Address{} // avoid min version issues
-		ep.TxnGroup[0].Lsig.Logic = ops.Program
+		stxn := makeSampleTxn()
+		stxn.Txn.RekeyTo = basics.Address{} // would mess up minavmversion
+		stxn.Lsig.Logic = ops.Program
+		ep := defaultSigParamsWithVersion(1, stxn)
 		_, err := EvalSignature(0, ep)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "greater than protocol supported version")
+		require.ErrorContains(t, err, "greater than protocol supported version")
 
 		// check opcodes failures
 		ep.TxnGroup[0].Lsig.Logic[0] = 1 // set version to 1
 		_, err = EvalSignature(0, ep)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "invalid global field")
+		require.ErrorContains(t, err, "invalid global field")
 
 		// check opcodes failures
 		ep.TxnGroup[0].Lsig.Logic[0] = 0 // set version to 0
 		_, err = EvalSignature(0, ep)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "invalid global field")
+		require.ErrorContains(t, err, "invalid global field")
 	}
 }
 
@@ -431,29 +419,22 @@ func TestBackwardCompatTxnFields(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			ep, tx, _ := makeSampleEnvWithVersion(1)
-			// We'll reject too early if we have a nonzero RekeyTo, because that
-			// field must be zero for every txn in the group if this is an old
-			// AVM version
-			tx.RekeyTo = basics.Address{}
+			ep := defaultSigParamsWithVersion(1)
 			ep.TxnGroup[0].Lsig.Logic = ops.Program
 
 			// check failure with version check
 			_, err = EvalSignature(0, ep)
-			require.Error(t, err)
-			require.Contains(t, err.Error(), "greater than protocol supported version")
+			require.ErrorContains(t, err, "greater than protocol supported version")
 
 			// check opcodes failures
 			ops.Program[0] = 1 // set version to 1
 			_, err = EvalSignature(0, ep)
-			require.Error(t, err)
-			require.Contains(t, err.Error(), "invalid txn field")
+			require.ErrorContains(t, err, "invalid txn field")
 
 			// check opcodes failures
 			ops.Program[0] = 0 // set version to 0
 			_, err = EvalSignature(0, ep)
-			require.Error(t, err)
-			require.Contains(t, err.Error(), "invalid txn field")
+			require.ErrorContains(t, err, "invalid txn field")
 		}
 	}
 }
@@ -464,29 +445,35 @@ func TestBackwardCompatAssemble(t *testing.T) {
 	// v1 does not allow branching to the last line
 	// v2 makes such programs legal
 	t.Parallel()
-	source := "int 1; int 1; bnz done; done:"
 
-	t.Run("v=default", func(t *testing.T) {
-		testProg(t, source, assemblerNoVersion, Expect{1, "label \"done\" is too far away"})
-	})
+	// Label is ok, it just can't be branched to
+	source := "int 1; done:"
+	testProg(t, source, assemblerNoVersion)
+	testProg(t, source, 0)
+	testProg(t, source, 1)
 
-	t.Run("v=default", func(t *testing.T) {
-		testProg(t, source, 0, Expect{1, "label \"done\" is too far away"})
-	})
-
-	t.Run("v=default", func(t *testing.T) {
-		testProg(t, source, 1, Expect{1, "label \"done\" is too far away"})
-	})
+	// use multiple lines, so that error report is checked better
+	source = `int 1;
+ int 1;
+ bnz done;
+ done:
+`
+	testProg(t, source, assemblerNoVersion, exp(3, "label \"done\" is too far away", 5))
+	testProg(t, source, 0, exp(3, "label \"done\" is too far away", 5))
+	testProg(t, source, 1, exp(3, "label \"done\" is too far away", 5))
 
 	for v := uint64(2); v <= AssemblerMaxVersion; v++ {
+		v := v
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			testLogic(t, source, v, defaultEvalParams(nil))
+			t.Parallel()
+			testLogic(t, source, v, nil)
 		})
 	}
 }
 
 func TestExplicitConstants(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	require.Equal(t, 4096, maxStringSize, "constant changed, make it version dependent")
 	require.Equal(t, 64, maxByteMathSize, "constant changed, move it version dependent")

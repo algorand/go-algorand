@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,12 +23,14 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-func TestCreateSignedTx(t *testing.T) {
+func TestCreateSignedTxBasic(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	var networkState netState
 	networkState.nApplications = 2
@@ -36,6 +38,7 @@ func TestCreateSignedTx(t *testing.T) {
 	networkState.nAccounts = 10
 	networkState.roundTxnCnt = 4
 	networkState.txnState = protocol.PaymentTx
+	networkState.log = logging.TestingLog(t)
 
 	params := config.Consensus[protocol.ConsensusCurrentVersion]
 
@@ -50,7 +53,8 @@ func TestCreateSignedTx(t *testing.T) {
 		require.Equal(t, protocol.PaymentTx, sntx.Txn.Type)
 	}
 
-	initialAccounts := networkState.accounts
+	initialAccounts := make([]basics.Address, len(networkState.accounts))
+	copy(initialAccounts, networkState.accounts)
 
 	//	should be creating assets next
 	sgtxns, _ = createSignedTx(src, basics.Round(1), params, &networkState)
@@ -59,7 +63,7 @@ func TestCreateSignedTx(t *testing.T) {
 	require.Equal(t, protocol.ApplicationCallTx, networkState.txnState)
 	require.Equal(t, uint64(0), networkState.nAssets)
 	//	same accounts should be used
-	require.Equal(t, initialAccounts[0], accounts[0])
+	require.Equal(t, initialAccounts, accounts)
 	for _, sntx := range sgtxns {
 		require.Equal(t, protocol.AssetConfigTx, sntx.Txn.Type)
 	}
@@ -69,7 +73,7 @@ func TestCreateSignedTx(t *testing.T) {
 	require.Equal(t, 2, len(sgtxns))
 	require.Equal(t, protocol.PaymentTx, networkState.txnState)
 	require.Equal(t, uint64(0), networkState.nApplications)
-	require.Equal(t, initialAccounts[0], accounts[0])
+	require.Equal(t, initialAccounts, accounts)
 	for _, sntx := range sgtxns {
 		require.Equal(t, protocol.ApplicationCallTx, sntx.Txn.Type)
 	}
@@ -78,14 +82,23 @@ func TestCreateSignedTx(t *testing.T) {
 	sgtxns, _ = createSignedTx(src, basics.Round(1), params, &networkState)
 	require.Equal(t, 4, len(sgtxns))
 	require.Equal(t, protocol.PaymentTx, networkState.txnState)
-	//new accounts should be created
-	accounts = networkState.accounts
-	require.NotEqual(t, initialAccounts[0], accounts[0])
+	require.Equal(t, initialAccounts, accounts)
 	for _, sntx := range sgtxns {
 		require.Equal(t, protocol.PaymentTx, sntx.Txn.Type)
 	}
+}
 
+func TestCreateSignedTxAssets(t *testing.T) {
 	//	assets per account should not exceed limit
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	params := config.Consensus[protocol.ConsensusCurrentVersion]
+	secretDst := keypair()
+	src := basics.Address(secretDst.SignatureVerifier)
+
+	var networkState netState
+	networkState.log = logging.TestingLog(t)
 	networkState.txnState = protocol.PaymentTx
 	networkState.nAssets = 10
 	networkState.nApplications = 10
@@ -116,6 +129,7 @@ func TestCreateSignedTx(t *testing.T) {
 
 func TestAccountsNeeded(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	params := config.Consensus[protocol.ConsensusCurrentVersion]
 	params.MaxAppsCreated = 10

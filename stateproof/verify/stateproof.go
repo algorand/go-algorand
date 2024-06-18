@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -25,17 +25,16 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/stateproofmsg"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
 
 var (
-	errStateProofCrypto        = errors.New("state proof crypto error")
-	errStateProofParamCreation = errors.New("state proof param creation error")
-	errStateProofNotEnabled    = errors.New("state proofs are not enabled")
-	errNotAtRightMultiple      = errors.New("state proof is not in a valid round multiple")
-	errInvalidVotersRound      = errors.New("invalid voters round")
-	errInsufficientWeight      = errors.New("insufficient state proof weight")
+	errStateProofCrypto     = errors.New("state proof crypto error")
+	errStateProofNotEnabled = errors.New("state proofs are not enabled")
+	errNotAtRightMultiple   = errors.New("state proof is not in a valid round multiple")
+	errInsufficientWeight   = errors.New("insufficient state proof weight")
 )
 
 // AcceptableStateProofWeight computes the acceptable signed weight
@@ -51,11 +50,16 @@ func AcceptableStateProofWeight(votersHdr *bookkeeping.BlockHeader, firstValid b
 	latestRoundInProof := votersHdr.Round + basics.Round(proto.StateProofInterval)
 	total := votersHdr.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight
 
+	return calculateAcceptableStateProofWeight(total, &proto, latestRoundInProof, firstValid, logger)
+}
+
+func calculateAcceptableStateProofWeight(total basics.MicroAlgos, proto *config.ConsensusParams, lastAttestedRound basics.Round, firstValid basics.Round, logger logging.Logger) uint64 {
+	halfPeriodForInterval := proto.StateProofInterval / 2
 	// The acceptable weight depends on the elapsed time (in rounds)
 	// from the block we are trying to construct a proof for.
 	// Start by subtracting the latest round number in the state proof interval.
 	// If that round hasn't even passed yet, require 100% votes in proof.
-	offset := firstValid.SubSaturate(latestRoundInProof)
+	offset := firstValid.SubSaturate(lastAttestedRound)
 	if offset == 0 {
 		return total.ToUint64()
 	}
@@ -63,7 +67,7 @@ func AcceptableStateProofWeight(votersHdr *bookkeeping.BlockHeader, firstValid b
 	// During the first proto.StateProofInterval/2 blocks, the
 	// signatures are still being broadcast, so, continue requiring
 	// 100% votes.
-	offset = offset.SubSaturate(basics.Round(proto.StateProofInterval / 2))
+	offset = offset.SubSaturate(basics.Round(halfPeriodForInterval))
 	if offset == 0 {
 		return total.ToUint64()
 	}
@@ -75,35 +79,35 @@ func AcceptableStateProofWeight(votersHdr *bookkeeping.BlockHeader, firstValid b
 	provenWeight, overflowed := basics.Muldiv(total.ToUint64(), uint64(proto.StateProofWeightThreshold), 1<<32)
 	if overflowed || provenWeight > total.ToUint64() {
 		// Shouldn't happen, but a safe fallback is to accept a larger proof.
-		logger.Warnf("AcceptableStateProofWeight(%d, %d, %d, %d) overflow provenWeight",
-			total, proto.StateProofInterval, latestRoundInProof, firstValid)
+		logger.Warnf("calculateAcceptableStateProofWeight(%d, %d, %d, %d) overflow provenWeight",
+			total, proto.StateProofInterval, lastAttestedRound, firstValid)
 		return 0
 	}
 
-	if offset >= basics.Round(proto.StateProofInterval/2) {
+	if offset >= basics.Round(halfPeriodForInterval) {
 		return provenWeight
 	}
 
-	scaledWeight, overflowed := basics.Muldiv(total.ToUint64()-provenWeight, proto.StateProofInterval/2-uint64(offset), proto.StateProofInterval/2)
+	scaledWeight, overflowed := basics.Muldiv(total.ToUint64()-provenWeight, halfPeriodForInterval-uint64(offset), halfPeriodForInterval)
 	if overflowed {
 		// Shouldn't happen, but a safe fallback is to accept a larger state proof.
-		logger.Warnf("AcceptableStateProofWeight(%d, %d, %d, %d) overflow scaledWeight",
-			total, proto.StateProofInterval, latestRoundInProof, firstValid)
+		logger.Warnf("calculateAcceptableStateProofWeight(%d, %d, %d, %d) overflow scaledWeight",
+			total, proto.StateProofInterval, lastAttestedRound, firstValid)
 		return 0
 	}
 
 	w, overflowed := basics.OAdd(provenWeight, scaledWeight)
 	if overflowed {
 		// Shouldn't happen, but a safe fallback is to accept a larger state proof.
-		logger.Warnf("AcceptableStateProofWeight(%d, %d, %d, %d) overflow provenWeight (%d) + scaledWeight (%d)",
-			total, proto.StateProofInterval, latestRoundInProof, firstValid, provenWeight, scaledWeight)
+		logger.Warnf("calculateAcceptableStateProofWeight(%d, %d, %d, %d) overflow provenWeight (%d) + scaledWeight (%d)",
+			total, proto.StateProofInterval, lastAttestedRound, firstValid, provenWeight, scaledWeight)
 		return 0
 	}
 
 	return w
 }
 
-// GetProvenWeight computes the parameters for building or verifying
+// GetProvenWeight computes the parameters for proving or verifying
 // a state proof for the interval (votersHdr, latestRoundInProofHdr], using voters from block votersHdr.
 func GetProvenWeight(votersHdr *bookkeeping.BlockHeader, latestRoundInProofHdr *bookkeeping.BlockHeader) (uint64, error) {
 	proto := config.Consensus[votersHdr.CurrentProtocol]
@@ -136,42 +140,38 @@ func GetProvenWeight(votersHdr *bookkeeping.BlockHeader, latestRoundInProofHdr *
 }
 
 // ValidateStateProof checks that a state proof is valid.
-func ValidateStateProof(latestRoundInIntervalHdr *bookkeeping.BlockHeader, stateProof *stateproof.StateProof, votersHdr *bookkeeping.BlockHeader, atRound basics.Round, msg *stateproofmsg.Message) error {
-	proto := config.Consensus[latestRoundInIntervalHdr.CurrentProtocol]
+func ValidateStateProof(verificationContext *ledgercore.StateProofVerificationContext, stateProof *stateproof.StateProof, atRound basics.Round, msg *stateproofmsg.Message) error {
+	proto := config.Consensus[verificationContext.Version]
 
 	if proto.StateProofInterval == 0 {
 		return fmt.Errorf("rounds = %d: %w", proto.StateProofInterval, errStateProofNotEnabled)
 	}
 
-	if latestRoundInIntervalHdr.Round%basics.Round(proto.StateProofInterval) != 0 {
-		return fmt.Errorf("state proof at %d for non-multiple of %d: %w", latestRoundInIntervalHdr.Round, proto.StateProofInterval, errNotAtRightMultiple)
+	if verificationContext.LastAttestedRound%basics.Round(proto.StateProofInterval) != 0 {
+		return fmt.Errorf("state proof at %d for non-multiple of %d: %w", verificationContext.LastAttestedRound, proto.StateProofInterval, errNotAtRightMultiple)
 	}
 
-	votersRound := latestRoundInIntervalHdr.Round.SubSaturate(basics.Round(proto.StateProofInterval))
-	if votersRound != votersHdr.Round {
-		return fmt.Errorf("new state proof is for %d (voters %d), but votersHdr from %d: %w",
-			latestRoundInIntervalHdr.Round, votersRound, votersHdr.Round, errInvalidVotersRound)
-	}
-
-	acceptableWeight := AcceptableStateProofWeight(votersHdr, atRound, logging.Base())
+	acceptableWeight := calculateAcceptableStateProofWeight(verificationContext.OnlineTotalWeight, &proto, verificationContext.LastAttestedRound, atRound, logging.Base())
 	if stateProof.SignedWeight < acceptableWeight {
 		return fmt.Errorf("insufficient weight at round %d: %d < %d: %w",
 			atRound, stateProof.SignedWeight, acceptableWeight, errInsufficientWeight)
 	}
 
-	provenWeight, err := GetProvenWeight(votersHdr, latestRoundInIntervalHdr)
-	if err != nil {
-		return fmt.Errorf("%v: %w", err, errStateProofParamCreation)
+	provenWeight, overflowed := basics.Muldiv(verificationContext.OnlineTotalWeight.ToUint64(), uint64(proto.StateProofWeightThreshold), 1<<32)
+	if overflowed {
+		return fmt.Errorf("overflow computing provenWeight[%d]: %d * %d / (1<<32)",
+			verificationContext.LastAttestedRound, verificationContext.OnlineTotalWeight.ToUint64(), proto.StateProofWeightThreshold)
+
 	}
 
-	verifier, err := stateproof.MkVerifier(votersHdr.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment,
+	verifier, err := stateproof.MkVerifier(verificationContext.VotersCommitment,
 		provenWeight,
-		config.Consensus[votersHdr.CurrentProtocol].StateProofStrengthTarget)
+		proto.StateProofStrengthTarget)
 	if err != nil {
 		return err
 	}
 
-	err = verifier.Verify(uint64(latestRoundInIntervalHdr.Round), msg.Hash(), stateProof)
+	err = verifier.Verify(uint64(verificationContext.LastAttestedRound), msg.Hash(), stateProof)
 	if err != nil {
 		return fmt.Errorf("%v: %w", err, errStateProofCrypto)
 	}

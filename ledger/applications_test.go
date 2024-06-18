@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,15 +18,20 @@ package ledger
 
 import (
 	"encoding/hex"
+	"fmt"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -198,10 +203,9 @@ return`
 		Header:                   txHeader,
 		ApplicationCallTxnFields: appCreateFields,
 	}
-	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCreate, transactions.ApplyData{ApplicationID: 1})
+	appIdx := basics.AppIndex(1001) // first tnx => idx = 1001
+	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCreate, transactions.ApplyData{ApplicationID: appIdx})
 	a.NoError(err)
-
-	appIdx := basics.AppIndex(1) // first tnx => idx = 1
 
 	// opt-in, do no write
 	txHeader.Sender = userOptin
@@ -250,48 +254,45 @@ return`
 	commitRound(1, 3, l)
 
 	// dump accounts
-	var rowid int64
-	var dbRound basics.Round
-	var buf []byte
-	err = l.accts.accountsq.lookupStmt.QueryRow(creator[:]).Scan(&rowid, &dbRound, &buf)
+	entryAcc, err := l.accts.accountsq.LookupAccount(creator)
 	a.NoError(err)
-	a.Equal(basics.Round(4), dbRound)
-	a.Equal(expectedCreatorBase, buf)
-	err = l.accts.accountsq.lookupResourcesStmt.QueryRow(creator[:], basics.CreatableIndex(appIdx)).Scan(&rowid, &dbRound, &buf)
+	a.Equal(basics.Round(4), entryAcc.Round)
+	a.Equal(expectedCreatorBase, protocol.Encode(&entryAcc.AccountData))
+	entryRes, err := l.accts.accountsq.LookupResources(creator, basics.CreatableIndex(appIdx), basics.AppCreatable)
 	a.NoError(err)
-	a.Equal(basics.Round(4), dbRound)
-	a.Equal(expectedCreatorResource, buf)
+	a.Equal(basics.Round(4), entryRes.Round)
+	a.Equal(expectedCreatorResource, protocol.Encode(&entryRes.Data))
 
-	err = l.accts.accountsq.lookupStmt.QueryRow(userOptin[:]).Scan(&rowid, &dbRound, &buf)
+	entryAcc, err = l.accts.accountsq.LookupAccount(userOptin)
 	a.NoError(err)
-	a.Equal(basics.Round(4), dbRound)
-	a.Equal(expectedUserOptInBase, buf)
-	err = l.accts.accountsq.lookupResourcesStmt.QueryRow(userOptin[:], basics.CreatableIndex(appIdx)).Scan(&rowid, &dbRound, &buf)
+	a.Equal(basics.Round(4), entryAcc.Round)
+	a.Equal(expectedUserOptInBase, protocol.Encode(&entryAcc.AccountData))
+	entryRes, err = l.accts.accountsq.LookupResources(userOptin, basics.CreatableIndex(appIdx), basics.AppCreatable)
 	a.NoError(err)
-	a.Equal(basics.Round(4), dbRound)
-	a.Equal(expectedUserOptInResource, buf)
+	a.Equal(basics.Round(4), entryRes.Round)
+	a.Equal(expectedUserOptInResource, protocol.Encode(&entryRes.Data))
 
-	pad, err := l.accts.accountsq.lookup(userOptin)
+	pad, err := l.accts.accountsq.LookupAccount(userOptin)
 	a.NoError(err)
 	a.NotEmpty(pad)
-	prd, err := l.accts.accountsq.lookupResources(userOptin, basics.CreatableIndex(appIdx), basics.AppCreatable)
+	prd, err := l.accts.accountsq.LookupResources(userOptin, basics.CreatableIndex(appIdx), basics.AppCreatable)
 	a.NoError(err)
-	a.Nil(prd.data.GetAppLocalState().KeyValue)
+	a.Nil(prd.Data.GetAppLocalState().KeyValue)
 	ad, rnd, _, err := l.LookupLatest(userOptin)
-	a.Equal(dbRound, rnd)
+	a.Equal(basics.Round(4), rnd)
 	a.NoError(err)
 	a.Nil(ad.AppLocalStates[appIdx].KeyValue)
 
-	err = l.accts.accountsq.lookupStmt.QueryRow(userLocal[:]).Scan(&rowid, &dbRound, &buf)
+	entryAcc, err = l.accts.accountsq.LookupAccount(userLocal)
 	a.NoError(err)
-	a.Equal(basics.Round(4), dbRound)
-	a.Equal(expectedUserLocalBase, buf)
-	err = l.accts.accountsq.lookupResourcesStmt.QueryRow(userLocal[:], basics.CreatableIndex(appIdx)).Scan(&rowid, &dbRound, &buf)
+	a.Equal(basics.Round(4), entryAcc.Round)
+	a.Equal(expectedUserLocalBase, protocol.Encode(&entryAcc.AccountData))
+	entryRes, err = l.accts.accountsq.LookupResources(userLocal, basics.CreatableIndex(appIdx), basics.AppCreatable)
 	a.NoError(err)
-	a.Equal(basics.Round(4), dbRound)
-	a.Equal(expectedUserLocalResource, buf)
+	a.Equal(basics.Round(4), entryRes.Round)
+	a.Equal(expectedUserLocalResource, protocol.Encode(&entryRes.Data))
 
-	ar, err := l.LookupApplication(dbRound, userLocal, appIdx)
+	ar, err := l.LookupApplication(basics.Round(4), userLocal, appIdx)
 	a.NoError(err)
 	a.Equal("local", ar.AppLocalState.KeyValue["lk"].Bytes)
 
@@ -428,10 +429,9 @@ return`
 		Header:                   txHeader,
 		ApplicationCallTxnFields: appCreateFields,
 	}
-	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCreate, transactions.ApplyData{ApplicationID: 1})
+	appIdx := basics.AppIndex(1001) // first txn => idx = 1001 since AppForbidLowResources sets tx counter to 1000
+	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCreate, transactions.ApplyData{ApplicationID: appIdx})
 	a.NoError(err)
-
-	appIdx := basics.AppIndex(1) // first tnx => idx = 1
 
 	// opt-in, write to local
 	txHeader.Sender = userLocal
@@ -671,10 +671,9 @@ return`
 		Header:                   txHeader,
 		ApplicationCallTxnFields: appCreateFields,
 	}
-	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCreate, transactions.ApplyData{ApplicationID: 1})
+	appIdx := basics.AppIndex(1001) // first tnx => idx = 1001
+	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCreate, transactions.ApplyData{ApplicationID: appIdx})
 	a.NoError(err)
-
-	appIdx := basics.AppIndex(1) // first tnx => idx = 1
 
 	// opt-in, write to local
 	txHeader.Sender = userLocal
@@ -753,15 +752,15 @@ return`
 	a.NoError(err)
 	a.Empty(blk.Payset[0].ApplyData.EvalDelta.LocalDeltas)
 
-	pad, err := l.accts.accountsq.lookup(userLocal)
+	pad, err := l.accts.accountsq.LookupAccount(userLocal)
 	a.NoError(err)
-	a.Equal(baseAccountData{}, pad.accountData)
-	a.Zero(pad.rowid)
-	prd, err := l.accts.accountsq.lookupResources(userLocal, basics.CreatableIndex(appIdx), basics.AppCreatable)
+	a.Equal(trackerdb.BaseAccountData{}, pad.AccountData)
+	a.Nil(pad.Ref)
+	prd, err := l.accts.accountsq.LookupResources(userLocal, basics.CreatableIndex(appIdx), basics.AppCreatable)
 	a.NoError(err)
-	a.Zero(prd.addrid)
-	emptyResourceData := makeResourcesData(0)
-	a.Equal(emptyResourceData, prd.data)
+	a.Nil(prd.AcctRef)
+	emptyResourceData := trackerdb.MakeResourcesData(0)
+	a.Equal(emptyResourceData, prd.Data)
 }
 
 func TestAppEmptyAccountsGlobal(t *testing.T) {
@@ -825,10 +824,9 @@ return`
 		Header:                   txHeader,
 		ApplicationCallTxnFields: appCreateFields,
 	}
-	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCreate, transactions.ApplyData{ApplicationID: 1})
+	appIdx := basics.AppIndex(1001) // first tnx => idx = 1001
+	err = l.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCreate, transactions.ApplyData{ApplicationID: appIdx})
 	a.NoError(err)
-
-	appIdx := basics.AppIndex(1) // first tnx => idx = 1
 
 	// destoy the app
 	txHeader.Sender = creator
@@ -889,15 +887,15 @@ return`
 	a.Contains(blk.Payset[0].ApplyData.EvalDelta.GlobalDelta, "gk")
 	a.Equal(blk.Payset[0].ApplyData.EvalDelta.GlobalDelta["gk"].Bytes, "global")
 
-	pad, err := l.accts.accountsq.lookup(creator)
+	pad, err := l.accts.accountsq.LookupAccount(creator)
 	a.NoError(err)
-	a.Empty(pad.accountData)
-	a.Zero(pad.rowid)
-	prd, err := l.accts.accountsq.lookupResources(creator, basics.CreatableIndex(appIdx), basics.AppCreatable)
+	a.Empty(pad.AccountData)
+	a.Nil(pad.Ref)
+	prd, err := l.accts.accountsq.LookupResources(creator, basics.CreatableIndex(appIdx), basics.AppCreatable)
 	a.NoError(err)
-	a.Zero(prd.addrid)
-	emptyResourceData := makeResourcesData(0)
-	a.Equal(emptyResourceData, prd.data)
+	a.Nil(prd.AcctRef)
+	emptyResourceData := trackerdb.MakeResourcesData(0)
+	a.Equal(emptyResourceData, prd.Data)
 }
 
 func TestAppAccountDeltaIndicesCompatibility1(t *testing.T) {
@@ -1148,7 +1146,7 @@ int 1
 			}
 
 			// create application
-			appIdx := basics.AppIndex(1) // first tnx => idx = 1
+			appIdx := basics.AppIndex(1001) // first tnx => idx = 1001
 
 			approvalProgram := program
 			clearStateProgram := []byte("\x02") // empty
@@ -1301,4 +1299,134 @@ int 1
 	}
 	err = l.appendUnvalidatedSignedTx(t, genesisInitState.Accounts, signedLsigPayment, transactions.ApplyData{})
 	a.NoError(err)
+}
+
+func TestAppEmptyBox(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	a := require.New(t)
+	source := `#pragma version 8
+txn ApplicationID
+int 0
+==
+bnz create_box
+// otherwise delete the box
+byte "boxname"
+box_del
+return
+
+create_box:
+byte "boxname"
+int 0
+box_create
+return
+`
+
+	ops, err := logic.AssembleString(source)
+	a.NoError(err, ops.Errors)
+	a.Greater(len(ops.Program), 1)
+	program := ops.Program
+
+	proto := config.Consensus[protocol.ConsensusFuture]
+	genesisInitState, initKeys := ledgertesting.GenerateInitState(t, protocol.ConsensusFuture, 1000000)
+
+	creator, err := basics.UnmarshalChecksumAddress("3LN5DBFC2UTPD265LQDP3LMTLGZCQ5M3JV7XTVTGRH5CKSVNQVDFPN6FG4")
+	a.NoError(err)
+	a.Contains(genesisInitState.Accounts, creator)
+
+	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
+	dbPrefix := filepath.Join(t.TempDir(), dbName)
+
+	cfg := config.GetDefaultLocal()
+	cfg.MaxAcctLookback = 2
+	l1, err := OpenLedger(logging.Base(), dbPrefix, false, genesisInitState, cfg)
+	a.NoError(err)
+	defer l1.Close()
+
+	genesisID := t.Name()
+	txHeader := transactions.Header{
+		Sender:      creator,
+		Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee * 2},
+		FirstValid:  l1.Latest() + 1,
+		LastValid:   l1.Latest() + 10,
+		GenesisID:   genesisID,
+		GenesisHash: genesisInitState.GenesisHash,
+	}
+
+	appIdx := basics.AppIndex(1002) // second tnx => idx = 1002
+
+	// fund app account
+	fundingPayment := transactions.Transaction{
+		Type:   protocol.PaymentTx,
+		Header: txHeader,
+		PaymentTxnFields: transactions.PaymentTxnFields{
+			Receiver: appIdx.Address(),
+			Amount:   basics.MicroAlgos{Raw: 100*proto.MinBalance + proto.MinTxnFee},
+		},
+	}
+	err = l1.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, fundingPayment, transactions.ApplyData{})
+	a.NoError(err)
+
+	// create application
+	approvalProgram := program
+	clearStateProgram := []byte("\x08") // empty
+	appCreateFields := transactions.ApplicationCallTxnFields{
+		ApprovalProgram:   approvalProgram,
+		ClearStateProgram: clearStateProgram,
+		GlobalStateSchema: basics.StateSchema{NumByteSlice: 0},
+		LocalStateSchema:  basics.StateSchema{NumByteSlice: 0},
+		Boxes:             []transactions.BoxRef{{Name: []byte("boxname")}},
+	}
+	appCreate := transactions.Transaction{
+		Type:                     protocol.ApplicationCallTx,
+		Header:                   txHeader,
+		ApplicationCallTxnFields: appCreateFields,
+	}
+	err = l1.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCreate, transactions.ApplyData{ApplicationID: appIdx})
+	a.NoError(err)
+
+	// few empty blocks to reset deltas and flush
+	for i := 0; i < 10; i++ {
+		blk := makeNewEmptyBlock(t, l1, genesisID, genesisInitState.Accounts)
+		l1.AddBlock(blk, agreement.Certificate{})
+	}
+
+	app, err := l1.LookupApplication(l1.Latest(), creator, appIdx)
+	a.NoError(err)
+	a.Greater(len(app.AppParams.ApprovalProgram), 0)
+
+	commitRound(10, 0, l1)
+
+	// restart
+	l1.Close()
+
+	l2, err := OpenLedger(logging.Base(), dbPrefix, false, genesisInitState, cfg)
+	a.NoError(err)
+	defer l2.Close()
+
+	app, err = l2.LookupApplication(l2.Latest(), creator, appIdx)
+	a.NoError(err)
+	a.Greater(len(app.AppParams.ApprovalProgram), 0)
+
+	txHeader = transactions.Header{
+		Sender:      creator,
+		Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee * 2},
+		FirstValid:  l2.Latest() + 1,
+		LastValid:   l2.Latest() + 10,
+		GenesisID:   genesisID,
+		GenesisHash: genesisInitState.GenesisHash,
+	}
+
+	appCallFields := transactions.ApplicationCallTxnFields{
+		ApplicationID: appIdx,
+		Boxes:         []transactions.BoxRef{{Name: []byte("boxname")}},
+	}
+	appCall := transactions.Transaction{
+		Type:                     protocol.ApplicationCallTx,
+		Header:                   txHeader,
+		ApplicationCallTxnFields: appCallFields,
+	}
+	err = l2.appendUnvalidatedTx(t, genesisInitState.Accounts, initKeys, appCall, transactions.ApplyData{})
+	a.NoError(err)
+
 }

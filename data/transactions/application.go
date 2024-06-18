@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"github.com/algorand/go-algorand/data/basics"
+	"golang.org/x/exp/slices"
 )
 
 const (
@@ -46,10 +47,17 @@ const (
 	// can contain. Its value is verified against consensus parameters in
 	// TestEncodedAppTxnAllocationBounds
 	encodedMaxForeignAssets = 32
+
+	// encodedMaxBoxes sets the allocation bound for the maximum
+	// number of Boxes that a transaction decoded off of the wire
+	// can contain. Its value is verified against consensus parameters in
+	// TestEncodedAppTxnAllocationBounds
+	encodedMaxBoxes = 32
 )
 
 // OnCompletion is an enum representing some layer 1 side effect that an
 // ApplicationCall transaction will have if it is included in a block.
+//
 //go:generate stringer -type=OnCompletion -output=application_string.go
 type OnCompletion uint64
 
@@ -100,7 +108,7 @@ type ApplicationCallTxnFields struct {
 
 	// ApplicationArgs are arguments accessible to the executing
 	// ApprovalProgram or ClearStateProgram.
-	ApplicationArgs [][]byte `codec:"apaa,allocbound=encodedMaxApplicationArgs"`
+	ApplicationArgs [][]byte `codec:"apaa,allocbound=encodedMaxApplicationArgs,maxtotalbytes=config.MaxAppTotalArgLen"`
 
 	// Accounts are accounts whose balance records are accessible
 	// by the executing ApprovalProgram or ClearStateProgram. To
@@ -114,6 +122,12 @@ type ApplicationCallTxnFields struct {
 	// this one whose GlobalState (or Local, since v4) may be read
 	// by the executing ApprovalProgram or ClearStateProgram.
 	ForeignApps []basics.AppIndex `codec:"apfa,allocbound=encodedMaxForeignApps"`
+
+	// Boxes are the boxes that can be accessed by this transaction (and others
+	// in the same group). The Index in the BoxRef is the slot of ForeignApps
+	// that the name is associated with (shifted by 1, so 0 indicates "current
+	// app")
+	Boxes []BoxRef `codec:"apbx,allocbound=encodedMaxBoxes"`
 
 	// ForeignAssets are asset IDs for assets whose AssetParams
 	// (and since v4, Holdings) may be read by the executing
@@ -155,6 +169,14 @@ type ApplicationCallTxnFields struct {
 	// method below!
 }
 
+// BoxRef names a box by the slot
+type BoxRef struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	Index uint64 `codec:"i"`
+	Name  []byte `codec:"n,allocbound=config.MaxBytesKeyValueLen"`
+}
+
 // Empty indicates whether or not all the fields in the
 // ApplicationCallTxnFields are zeroed out
 func (ac *ApplicationCallTxnFields) Empty() bool {
@@ -174,6 +196,9 @@ func (ac *ApplicationCallTxnFields) Empty() bool {
 		return false
 	}
 	if ac.ForeignAssets != nil {
+		return false
+	}
+	if ac.Boxes != nil {
 		return false
 	}
 	if ac.LocalStateSchema != (basics.StateSchema{}) {
@@ -207,8 +232,7 @@ func (ac *ApplicationCallTxnFields) AddressByIndex(accountIdx uint64, sender bas
 	// An index > 0 corresponds to an offset into txn.Accounts. Check to
 	// make sure the index is valid.
 	if accountIdx > uint64(len(ac.Accounts)) {
-		err := fmt.Errorf("invalid Account reference %d", accountIdx)
-		return basics.Address{}, err
+		return basics.Address{}, fmt.Errorf("invalid Account reference %d", accountIdx)
 	}
 
 	// accountIdx must be in [1, len(ac.Accounts)]
@@ -225,53 +249,9 @@ func (ac *ApplicationCallTxnFields) IndexByAddress(target basics.Address, sender
 	}
 
 	// Otherwise we index into ac.Accounts
-	for idx, addr := range ac.Accounts {
-		if target == addr {
-			return uint64(idx) + 1, nil
-		}
+	if idx := slices.Index(ac.Accounts, target); idx != -1 {
+		return uint64(idx) + 1, nil
 	}
 
 	return 0, fmt.Errorf("invalid Account reference %s", target)
-}
-
-// AppIDByIndex converts an integer index into an application id associated with the
-// transaction. Index 0 corresponds to the current app, and an index > 0
-// corresponds to an offset into txn.ForeignApps. Returns an error if the index is
-// not valid.
-func (ac *ApplicationCallTxnFields) AppIDByIndex(i uint64) (basics.AppIndex, error) {
-
-	// Index 0 always corresponds to the current app
-	if i == 0 {
-		return ac.ApplicationID, nil
-	}
-
-	// An index > 0 corresponds to an offset into txn.ForeignApps. Check to
-	// make sure the index is valid.
-	if i > uint64(len(ac.ForeignApps)) {
-		err := fmt.Errorf("invalid Foreign App reference %d", i)
-		return basics.AppIndex(0), err
-	}
-
-	// aidx must be in [1, len(ac.ForeignApps)]
-	return ac.ForeignApps[i-1], nil
-}
-
-// IndexByAppID converts an application id into an integer offset into [current app,
-// txn.ForeignApps[0], ...], returning the index at the first match. It returns
-// an error if there is no such match.
-func (ac *ApplicationCallTxnFields) IndexByAppID(appID basics.AppIndex) (uint64, error) {
-
-	// Index 0 always corresponds to the current app
-	if appID == ac.ApplicationID {
-		return 0, nil
-	}
-
-	// Otherwise we index into ac.ForeignApps
-	for i, id := range ac.ForeignApps {
-		if appID == id {
-			return uint64(i) + 1, nil
-		}
-	}
-
-	return 0, fmt.Errorf("invalid Foreign App reference %d", appID)
 }

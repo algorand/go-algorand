@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -24,8 +24,14 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/netdeploy"
+	"github.com/algorand/go-algorand/protocol"
+
 	"github.com/algorand/go-algorand/daemon/algod/api/client"
-	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
+
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/nodecontrol"
 	"github.com/algorand/go-algorand/test/e2e-go/globals"
@@ -39,20 +45,20 @@ type RestClientFixture struct {
 }
 
 // Setup is called to initialize the test fixture for the test(s)
-func (f *RestClientFixture) Setup(t TestingTB, templateFile string) {
-	f.LibGoalFixture.Setup(t, templateFile)
+func (f *RestClientFixture) Setup(t TestingTB, templateFile string, overrides ...netdeploy.TemplateOverride) {
+	f.LibGoalFixture.Setup(t, templateFile, overrides...)
 	f.AlgodClient = f.GetAlgodClientForController(f.NC)
 }
 
 // SetupNoStart is called to initialize the test fixture for the test(s)
 // but does not start the network before returning.  Call NC.Start() to start later.
-func (f *RestClientFixture) SetupNoStart(t TestingTB, templateFile string) {
-	f.LibGoalFixture.SetupNoStart(t, templateFile)
+func (f *RestClientFixture) SetupNoStart(t TestingTB, templateFile string, overrides ...netdeploy.TemplateOverride) {
+	f.LibGoalFixture.SetupNoStart(t, templateFile, overrides...)
 }
 
 // SetupShared is called to initialize the test fixture that will be used for multiple tests
-func (f *RestClientFixture) SetupShared(testName string, templateFile string) {
-	f.LibGoalFixture.SetupShared(testName, templateFile)
+func (f *RestClientFixture) SetupShared(testName string, templateFile string, overrides ...netdeploy.TemplateOverride) {
+	f.LibGoalFixture.SetupShared(testName, templateFile, overrides...)
 	f.AlgodClient = f.GetAlgodClientForController(f.NC)
 }
 
@@ -165,7 +171,7 @@ func (f *RestClientFixture) GetFirstAccount() (account string, err error) {
 }
 
 // GetRichestAccount returns the first account when calling GetWalletsSortedByBalance, which should be the richest account
-func (f *RestClientFixture) GetRichestAccount() (richest v1.Account, err error) {
+func (f *RestClientFixture) GetRichestAccount() (richest model.Account, err error) {
 	list, err := f.GetWalletsSortedByBalance()
 	if len(list) > 0 {
 		richest = list[0]
@@ -190,17 +196,13 @@ func (f *RestClientFixture) GetBalanceAndRound(account string) (balance uint64, 
 
 // GetWalletsSortedByBalance returns the Primary node's accounts sorted DESC by balance
 // the richest account will be at accounts[0]
-func (f *RestClientFixture) GetWalletsSortedByBalance() (accounts []v1.Account, err error) {
-	return f.getNodeWalletsSortedByBalance(f.LibGoalClient)
+func (f *RestClientFixture) GetWalletsSortedByBalance() (accounts []model.Account, err error) {
+	return f.GetNodeWalletsSortedByBalance(f.LibGoalClient)
 }
 
 // GetNodeWalletsSortedByBalance returns the specified node's accounts sorted DESC by balance
 // the richest account will be at accounts[0]
-func (f *RestClientFixture) GetNodeWalletsSortedByBalance(nodeDataDir string) (accounts []v1.Account, err error) {
-	return f.getNodeWalletsSortedByBalance(f.GetLibGoalClientFromDataDir(nodeDataDir))
-}
-
-func (f *RestClientFixture) getNodeWalletsSortedByBalance(client libgoal.Client) (accounts []v1.Account, err error) {
+func (f *RestClientFixture) GetNodeWalletsSortedByBalance(client libgoal.Client) (accounts []model.Account, err error) {
 	wh, err := client.GetUnencryptedWalletHandle()
 	if err != nil {
 		return nil, fmt.Errorf("unable to retrieve wallet handle : %v", err)
@@ -210,7 +212,7 @@ func (f *RestClientFixture) getNodeWalletsSortedByBalance(client libgoal.Client)
 		return nil, fmt.Errorf("unable to list wallet addresses : %v", err)
 	}
 	for _, addr := range addresses {
-		info, err := client.AccountInformation(addr)
+		info, err := client.AccountInformation(addr, true)
 		f.failOnError(err, "failed to get account info: %v")
 		accounts = append(accounts, info)
 	}
@@ -223,15 +225,15 @@ func (f *RestClientFixture) getNodeWalletsSortedByBalance(client libgoal.Client)
 // WaitForTxnConfirmation waits until either the passed txid is confirmed
 // or until the passed roundTimeout passes
 // or until waiting for a round to pass times out
-func (f *RestClientFixture) WaitForTxnConfirmation(roundTimeout uint64, accountAddress, txid string) bool {
-	_, err := f.WaitForConfirmedTxn(roundTimeout, accountAddress, txid)
+func (f *RestClientFixture) WaitForTxnConfirmation(roundTimeout uint64, txid string) bool {
+	_, err := f.WaitForConfirmedTxn(roundTimeout, txid)
 	return err == nil
 }
 
 // WaitForConfirmedTxn waits until either the passed txid is confirmed
 // or until the passed roundTimeout passes
 // or until waiting for a round to pass times out
-func (f *RestClientFixture) WaitForConfirmedTxn(roundTimeout uint64, accountAddress, txid string) (txn v1.Transaction, err error) {
+func (f *RestClientFixture) WaitForConfirmedTxn(roundTimeout uint64, txid string) (txn v2.PreEncodedTxInfo, err error) {
 	client := f.AlgodClient
 	for {
 		// Get current round information
@@ -240,11 +242,17 @@ func (f *RestClientFixture) WaitForConfirmedTxn(roundTimeout uint64, accountAddr
 		curRound := curStatus.LastRound
 
 		// Check if we know about the transaction yet
-		txn, err = client.TransactionInformation(accountAddress, txid)
+		var resp []byte
+		resp, err = client.RawPendingTransactionInformation(txid)
 		if err == nil {
-			return
+			err = protocol.DecodeReflect(resp, &txn)
+			require.NoError(f.t, err)
 		}
 
+		// Check if transaction was confirmed
+		if txn.ConfirmedRound != nil && *txn.ConfirmedRound > 0 {
+			return
+		}
 		// Check if we should wait a round
 		if curRound > roundTimeout {
 			err = fmt.Errorf("failed to see confirmed transaction by round %v", roundTimeout)
@@ -263,24 +271,43 @@ func (f *RestClientFixture) WaitForAllTxnsToConfirm(roundTimeout uint64, txidsAn
 		return true
 	}
 	for txid, addr := range txidsAndAddresses {
-		_, err := f.WaitForConfirmedTxn(roundTimeout, addr, txid)
+		_, err := f.WaitForConfirmedTxn(roundTimeout, txid)
 		if err != nil {
-			f.t.Logf("txn failed to confirm: ", addr, txid)
-			pendingTxns, err := f.AlgodClient.GetPendingTransactions(0)
+			f.t.Logf("txn failed to confirm: addr=%s, txid=%s", addr, txid)
+			pendingTxns, err := f.LibGoalClient.GetParsedPendingTransactions(0)
 			if err == nil {
-				pendingTxids := make([]string, 0, pendingTxns.TotalTxns)
-				for _, txn := range pendingTxns.TruncatedTxns.Transactions {
-					pendingTxids = append(pendingTxids, txn.TxID)
+				pendingTxids := make([]string, 0, pendingTxns.TotalTransactions)
+				for _, txn := range pendingTxns.TopTransactions {
+					pendingTxids = append(pendingTxids, txn.Txn.ID().String())
 				}
-				f.t.Logf("pending txids: ", pendingTxids)
+				f.t.Logf("pending txids: %v", pendingTxids)
 			} else {
-				f.t.Logf("unable to log pending txns, ", err)
+				f.t.Logf("unable to log pending txns: %v", err)
 			}
 			allTxids := make([]string, 0, len(txidsAndAddresses))
 			for txID := range txidsAndAddresses {
 				allTxids = append(allTxids, txID)
 			}
-			f.t.Logf("all txids: ", allTxids)
+			f.t.Logf("all txids: %s", allTxids)
+
+			dataDirs := f.network.NodeDataDirs()
+			for _, nodedir := range dataDirs {
+				client, err := libgoal.MakeClientWithBinDir(f.binDir, nodedir, nodedir, libgoal.FullClient)
+				if err != nil {
+					f.t.Logf("failed to make a node client for %s: %v", nodedir, err)
+					continue
+				}
+				pendingTxns, err := client.GetParsedPendingTransactions(0)
+				if err != nil {
+					f.t.Logf("failed to get pending txns for %s: %v", nodedir, err)
+					continue
+				}
+				pendingTxids := make([]string, 0, pendingTxns.TotalTransactions)
+				for _, txn := range pendingTxns.TopTransactions {
+					pendingTxids = append(pendingTxids, txn.Txn.ID().String())
+				}
+				f.t.Logf("pending txids at node %s: %v", nodedir, pendingTxids)
+			}
 			return false
 		}
 	}
@@ -299,7 +326,7 @@ func (f *RestClientFixture) WaitForAccountFunded(roundTimeout uint64, accountAdd
 		curRound := curStatus.LastRound
 
 		// Check if we know about the transaction yet
-		acct, acctErr := client.AccountInformation(accountAddress)
+		acct, acctErr := client.AccountInformation(accountAddress, false)
 		require.NoError(f.t, acctErr, "fixture should be able to get account info")
 		if acct.Amount > 0 {
 			return nil
@@ -317,7 +344,7 @@ func (f *RestClientFixture) WaitForAccountFunded(roundTimeout uint64, accountAdd
 
 // SendMoneyAndWait uses the rest client to send money and WaitForTxnConfirmation to wait for the send to confirm
 // it adds some extra error checking as well
-func (f *RestClientFixture) SendMoneyAndWait(curRound, amountToSend, transactionFee uint64, fromAccount, toAccount string, closeToAccount string) (txn v1.Transaction) {
+func (f *RestClientFixture) SendMoneyAndWait(curRound, amountToSend, transactionFee uint64, fromAccount, toAccount string, closeToAccount string) (txn v2.PreEncodedTxInfo) {
 	client := f.LibGoalClient
 	wh, err := client.GetUnencryptedWalletHandle()
 	require.NoError(f.t, err, "client should be able to get unencrypted wallet handle")
@@ -326,13 +353,14 @@ func (f *RestClientFixture) SendMoneyAndWait(curRound, amountToSend, transaction
 }
 
 // SendMoneyAndWaitFromWallet is as above, but for a specific wallet
-func (f *RestClientFixture) SendMoneyAndWaitFromWallet(walletHandle, walletPassword []byte, curRound, amountToSend, transactionFee uint64, fromAccount, toAccount string, closeToAccount string) (txn v1.Transaction) {
+func (f *RestClientFixture) SendMoneyAndWaitFromWallet(walletHandle, walletPassword []byte, curRound, amountToSend, transactionFee uint64, fromAccount, toAccount string, closeToAccount string) (txn v2.PreEncodedTxInfo) {
 	client := f.LibGoalClient
-	fundingTx, err := client.SendPaymentFromWallet(walletHandle, walletPassword, fromAccount, toAccount, transactionFee, amountToSend, nil, closeToAccount, 0, 0)
+	// use one curRound - 1 in case other nodes are behind
+	fundingTx, err := client.SendPaymentFromWallet(walletHandle, walletPassword, fromAccount, toAccount, transactionFee, amountToSend, nil, closeToAccount, basics.Round(curRound).SubSaturate(1), 0)
 	require.NoError(f.t, err, "client should be able to send money from rich to poor account")
 	require.NotEmpty(f.t, fundingTx.ID().String(), "transaction ID should not be empty")
 	waitingDeadline := curRound + uint64(5)
-	txn, err = f.WaitForConfirmedTxn(waitingDeadline, fromAccount, fundingTx.ID().String())
+	txn, err = f.WaitForConfirmedTxn(waitingDeadline, fundingTx.ID().String())
 	require.NoError(f.t, err)
 	return
 }
@@ -342,9 +370,9 @@ func (f *RestClientFixture) SendMoneyAndWaitFromWallet(walletHandle, walletPassw
 func (f *RestClientFixture) VerifyBlockProposedRange(account string, fromRound, countDownNumRounds int) (blockWasProposed bool) {
 	c := f.LibGoalClient
 	for i := 0; i < countDownNumRounds; i++ {
-		block, err := c.Block(uint64(fromRound - i))
+		cert, err := c.EncodedBlockCert(uint64(fromRound - i))
 		require.NoError(f.t, err, "client failed to get block %d", fromRound-i)
-		if block.Proposer == account {
+		if cert.Certificate.Proposal.OriginalProposer.GetUserAddress() == account {
 			blockWasProposed = true
 			break
 		}
@@ -403,14 +431,4 @@ func (f *RestClientFixture) AssertValidTxid(txid string) {
 		}
 	}
 	require.True(f.t, allLettersOrNumbers, "txid should be all letters")
-}
-
-// AccountListContainsAddress searches the passed account list for the passed account address
-func (f *RestClientFixture) AccountListContainsAddress(searchList []v1.Account, address string) bool {
-	for _, item := range searchList {
-		if item.Address == address {
-			return true
-		}
-	}
-	return false
 }

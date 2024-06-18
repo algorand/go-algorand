@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,6 +20,7 @@ import (
 	"container/list"
 
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 )
 
 // Worst case memory usage = 2500 * 320 * 150B = 120MB
@@ -34,17 +35,17 @@ type onlineAccountsCache struct {
 
 // init initializes the onlineAccountsCache for use.
 // thread locking semantics : write lock
-func (o *onlineAccountsCache) init(accts []persistedOnlineAccountData, maxCacheSize int) {
+func (o *onlineAccountsCache) init(accts []trackerdb.PersistedOnlineAccountData, maxCacheSize int) {
 	o.accounts = make(map[basics.Address]*list.List)
 	o.maxCacheSize = maxCacheSize
 
 	for _, acct := range accts {
 		// if cache full, stop writing
 		cachedAcct := cachedOnlineAccount{
-			baseOnlineAccountData: acct.accountData,
-			updRound:              acct.updRound,
+			BaseOnlineAccountData: acct.AccountData,
+			updRound:              acct.UpdRound,
 		}
-		if !o.writeFront(acct.addr, cachedAcct) {
+		if !o.writeFront(acct.Addr, cachedAcct) {
 			break
 		}
 	}

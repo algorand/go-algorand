@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -25,6 +25,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/algorand/go-algorand/cmd/util/datadir"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/passphrase"
 	"github.com/algorand/go-algorand/daemon/kmd/lib/kmdapi"
@@ -53,7 +54,7 @@ var walletCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		// Update the default wallet
 		if defaultWalletName != "" {
-			dataDir := ensureSingleDataDir()
+			dataDir := datadir.EnsureSingleDataDir()
 			accountList := makeAccountsList(dataDir)
 
 			// Check that the new default wallet exists and isn't a duplicate
@@ -84,7 +85,7 @@ var newWalletCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		var err error
 
-		dataDir := ensureSingleDataDir()
+		dataDir := datadir.EnsureSingleDataDir()
 		accountList := makeAccountsList(dataDir)
 		client := ensureKmdClient(dataDir)
 		walletName := []byte(args[0])
@@ -188,7 +189,7 @@ var listWalletsCmd = &cobra.Command{
 	Short: "List wallets managed by kmd",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
-		onDataDirs(func(dataDir string) {
+		datadir.OnDataDirs(func(dataDir string) {
 			client := ensureKmdClient(dataDir)
 			wallets, err := client.ListWallets()
 			if err != nil {

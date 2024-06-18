@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -27,10 +27,13 @@ import (
 
 func TestGetVersion(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	testValidVersion(t, "algonode_update_0.1.0.log", uint64(0x00010000))
-	testValidVersion(t, "algo_update_0.1.0", uint64(0x00010000))
-	testValidVersion(t, "algo_update_65535.1.0", uint64(0xFFFF00010000))
-	testValidVersion(t, "algo_update_65535.65535.65535", uint64(0xFFFFFFFFFFFF))
+	t.Parallel()
+
+	testValidVersion(t, "algonode_update_0.1.0.log", uint64(0x01000000))
+	testValidVersion(t, "algo_update_0.1.0", uint64(0x01000000))
+	testValidVersion(t, "algo_update_65535.1.0", uint64(0x00FFFF0001000000))
+	testValidVersion(t, "algo_update_65535.65535.65535", uint64(0xFFFFFFFF00FFFF))
+	testValidVersion(t, "algo_update_65535.65535.16777215", uint64(0xFFFFFFFFFFFFFF))
 
 	testInvalidVersion(t, "algo_update_0.-1.0")
 	testInvalidVersion(t, "algo_update_1e5.0.0")

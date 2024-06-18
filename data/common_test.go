@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -26,6 +26,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
+	basics_testing "github.com/algorand/go-algorand/data/basics/testing"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
@@ -103,16 +104,16 @@ func testingenv(t testing.TB, numAccounts, numTxs int, offlineAccounts bool) (*L
 		short := root.Address()
 
 		if offlineAccounts && i > P/2 {
-			genesis[short] = basics.MakeAccountData(basics.Offline, startamt)
+			genesis[short] = basics_testing.MakeAccountData(basics.Offline, startamt)
 		} else {
-			data := basics.MakeAccountData(basics.Online, startamt)
+			data := basics_testing.MakeAccountData(basics.Online, startamt)
 			data.SelectionID = parts[i].VRFSecrets().PK
 			data.VoteID = parts[i].VotingSecrets().OneTimeSignatureVerifier
 			genesis[short] = data
 		}
 	}
 
-	genesis[poolAddr] = basics.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 100000 * uint64(proto.RewardsRateRefreshInterval)})
+	genesis[poolAddr] = basics_testing.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 100000 * uint64(proto.RewardsRateRefreshInterval)})
 
 	bootstrap := bookkeeping.MakeGenesisBalances(genesis, poolAddr, sinkAddr)
 

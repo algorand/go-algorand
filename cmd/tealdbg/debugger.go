@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -26,6 +26,7 @@ import (
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/logging"
 )
 
 // Notification is sent to the client over their websocket connection
@@ -84,11 +85,11 @@ func MakeDebugger() *Debugger {
 }
 
 type programMeta struct {
-	name         string
-	program      []byte
-	source       string
-	offsetToLine map[int]int
-	states       AppState
+	name           string
+	program        []byte
+	source         string
+	offsetToSource map[int]logic.SourceLocation
+	states         AppState
 }
 
 // debugConfig contains information about control execution and breakpoints.
@@ -159,11 +160,11 @@ type session struct {
 	disassembly string
 	lines       []string
 
-	programName  string
-	program      []byte
-	source       string
-	offsetToLine map[int]int // pc to source line
-	pcOffset     map[int]int // disassembly line to pc
+	programName    string
+	program        []byte
+	source         string
+	offsetToSource map[int]logic.SourceLocation // pc to source line/col
+	pcOffset       map[int]int                  // disassembly line to pc
 
 	breakpoints []breakpoint
 	line        atomicInt
@@ -363,28 +364,27 @@ func (s *session) GetSourceMap() ([]byte, error) {
 	lines := make([]string, len(s.lines))
 	const targetCol int = 0
 	const sourceIdx int = 0
-	sourceLine := 0
-	const sourceCol int = 0
-	prevSourceLine := 0
+	prevLoc := logic.SourceLocation{Line: 0, Column: 0}
 
 	// the very first entry is needed by CDT
-	lines[0] = logic.MakeSourceMapLine(targetCol, sourceIdx, 0, sourceCol)
+	lines[0] = logic.MakeSourceMapLine(targetCol, sourceIdx, 0, 0)
 	for targetLine := 1; targetLine < len(s.lines); targetLine++ {
 		if pc, ok := s.pcOffset[targetLine]; ok && pc != 0 {
-			sourceLine, ok = s.offsetToLine[pc]
+			source, ok := s.offsetToSource[pc]
 			if !ok {
 				lines[targetLine] = ""
 			} else {
-				lines[targetLine] = logic.MakeSourceMapLine(targetCol, sourceIdx, sourceLine-prevSourceLine, sourceCol)
-				prevSourceLine = sourceLine
+				lines[targetLine] = logic.MakeSourceMapLine(targetCol, sourceIdx, source.Line-prevLoc.Line, source.Column-prevLoc.Column)
+				prevLoc = source
 			}
 		} else {
-			delta := 0
+			ldelta, cdelta := 0, 0
 			// the very last empty line, increment by number src number by 1
 			if targetLine == len(s.lines)-1 {
-				delta = 1
+				ldelta = 1
+				cdelta = -prevLoc.Column
 			}
-			lines[targetLine] = logic.MakeSourceMapLine(targetCol, sourceIdx, delta, sourceCol)
+			lines[targetLine] = logic.MakeSourceMapLine(targetCol, sourceIdx, ldelta, cdelta)
 		}
 	}
 
@@ -488,7 +488,7 @@ func (d *Debugger) createSession(sid string, disassembly string, line int, pcOff
 		s.programName = meta.name
 		s.program = meta.program
 		s.source = meta.source
-		s.offsetToLine = meta.offsetToLine
+		s.offsetToSource = meta.offsetToSource
 		s.pcOffset = pcOffset
 		s.states = meta.states
 	}
@@ -512,7 +512,7 @@ func (d *Debugger) AddAdapter(da DebugAdapter) {
 
 // SaveProgram stores program, source and offsetToLine for later use
 func (d *Debugger) SaveProgram(
-	name string, program []byte, source string, offsetToLine map[int]int,
+	name string, program []byte, source string, offsetToSource map[int]logic.SourceLocation,
 	states AppState,
 ) {
 	hash := logic.GetProgramID(program)
@@ -522,13 +522,13 @@ func (d *Debugger) SaveProgram(
 		name,
 		program,
 		source,
-		offsetToLine,
+		offsetToSource,
 		states,
 	}
 }
 
 // Register setups new session and notifies frontends if any
-func (d *Debugger) Register(state *logic.DebugState) error {
+func (d *Debugger) Register(state *logic.DebugState) {
 	sid := state.ExecID
 	pcOffset := make(map[int]int, len(state.PCOffset))
 	for _, pco := range state.PCOffset {
@@ -556,12 +556,17 @@ func (d *Debugger) Register(state *logic.DebugState) error {
 
 	// Wait for acknowledgement
 	<-s.acknowledged
-
-	return nil
 }
 
 // Update process state update notifications: pauses or continues as needed
-func (d *Debugger) Update(state *logic.DebugState) error {
+func (d *Debugger) Update(state *logic.DebugState) {
+	err := d.update(state)
+	if err != nil {
+		logging.Base().Errorf("error in Update hook: %s", err.Error())
+	}
+}
+
+func (d *Debugger) update(state *logic.DebugState) error {
 	sid := state.ExecID
 	s, err := d.getSession(sid)
 	if err != nil {
@@ -596,7 +601,14 @@ func (d *Debugger) Update(state *logic.DebugState) error {
 }
 
 // Complete terminates session and notifies frontends if any
-func (d *Debugger) Complete(state *logic.DebugState) error {
+func (d *Debugger) Complete(state *logic.DebugState) {
+	err := d.complete(state)
+	if err != nil {
+		logging.Base().Errorf("error in Complete hook: %s", err.Error())
+	}
+}
+
+func (d *Debugger) complete(state *logic.DebugState) error {
 	sid := state.ExecID
 	s, err := d.getSession(sid)
 	if err != nil {

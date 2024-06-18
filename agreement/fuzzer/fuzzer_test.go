@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -47,7 +47,7 @@ type Fuzzer struct {
 	wallClock        int32
 	agreements       []*agreement.Service
 	facades          []*NetworkFacade
-	clocks           []timers.Clock
+	clocks           []timers.Clock[agreement.TimeoutType]
 	disconnected     [][]bool
 	crashAccessors   []db.Accessor
 	router           *Router
@@ -80,7 +80,7 @@ func MakeFuzzer(config FuzzerConfig) *Fuzzer {
 		networkName:      config.FuzzerName,
 		agreements:       make([]*agreement.Service, config.NodesCount),
 		facades:          make([]*NetworkFacade, config.NodesCount),
-		clocks:           make([]timers.Clock, config.NodesCount),
+		clocks:           make([]timers.Clock[agreement.TimeoutType], config.NodesCount),
 		disconnected:     make([][]bool, config.NodesCount),
 		crashAccessors:   make([]db.Accessor, config.NodesCount),
 		accounts:         make([]account.Participation, config.NodesCount),
@@ -150,7 +150,10 @@ func (n *Fuzzer) initAgreementNode(nodeID int, filters ...NetworkFilterFactory) 
 		cadaverFilename = ""
 	}
 
-	n.agreements[nodeID] = agreement.MakeService(n.agreementParams[nodeID])
+	n.agreements[nodeID], err = agreement.MakeService(n.agreementParams[nodeID])
+	if err != nil {
+		return false
+	}
 
 	n.agreements[nodeID].SetTracerFilename(cadaverFilename)
 
@@ -255,6 +258,13 @@ func (n *Fuzzer) Start() {
 	for _, f := range n.facades {
 		// wait until no activity.
 		f.WaitForEventsQueue(true)
+	}
+}
+
+// DumpQueues dumps the queues of all the nodes.
+func (n *Fuzzer) DumpQueues() {
+	for _, f := range n.agreements {
+		f.DumpDemuxQueues(os.Stderr)
 	}
 }
 
@@ -578,7 +588,11 @@ func (n *Fuzzer) CrashNode(nodeID int) {
 	n.ledgers[nodeID].ClearNotifications()
 
 	n.agreementParams[nodeID].Network = gossip.WrapNetwork(n.facades[nodeID], n.log, config.GetDefaultLocal())
-	n.agreements[nodeID] = agreement.MakeService(n.agreementParams[nodeID])
+	var err error
+	n.agreements[nodeID], err = agreement.MakeService(n.agreementParams[nodeID])
+	if err != nil {
+		panic(err)
+	}
 
 	cadaverFilename := fmt.Sprintf("%v-%v", n.networkName, nodeID)
 	if n.disableTraces == true {

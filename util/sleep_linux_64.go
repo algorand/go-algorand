@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -30,5 +30,5 @@ func NanoSleep(d time.Duration) {
 		Nsec: d.Nanoseconds() % time.Second.Nanoseconds(),
 		Sec:  d.Nanoseconds() / time.Second.Nanoseconds(),
 	}
-	syscall.Nanosleep(timeSpec, nil) // nolint:errcheck // ignoring error
+	syscall.Nanosleep(timeSpec, nil) //nolint:errcheck // ignoring error
 }

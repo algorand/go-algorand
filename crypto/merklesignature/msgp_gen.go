@@ -6,6 +6,7 @@ import (
 	"github.com/algorand/msgp/msgp"
 
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/merklearray"
 )
 
 // The following msgp objects are implemented in this file:
@@ -13,49 +14,61 @@ import (
 //      |-----> (*) MarshalMsg
 //      |-----> (*) CanMarshalMsg
 //      |-----> (*) UnmarshalMsg
+//      |-----> (*) UnmarshalMsgWithState
 //      |-----> (*) CanUnmarshalMsg
 //      |-----> (*) Msgsize
 //      |-----> (*) MsgIsZero
+//      |-----> CommitmentMaxSize()
 //
 // KeyRoundPair
 //       |-----> (*) MarshalMsg
 //       |-----> (*) CanMarshalMsg
 //       |-----> (*) UnmarshalMsg
+//       |-----> (*) UnmarshalMsgWithState
 //       |-----> (*) CanUnmarshalMsg
 //       |-----> (*) Msgsize
 //       |-----> (*) MsgIsZero
+//       |-----> KeyRoundPairMaxSize()
 //
 // Secrets
 //    |-----> (*) MarshalMsg
 //    |-----> (*) CanMarshalMsg
 //    |-----> (*) UnmarshalMsg
+//    |-----> (*) UnmarshalMsgWithState
 //    |-----> (*) CanUnmarshalMsg
 //    |-----> (*) Msgsize
 //    |-----> (*) MsgIsZero
+//    |-----> SecretsMaxSize()
 //
 // Signature
 //     |-----> (*) MarshalMsg
 //     |-----> (*) CanMarshalMsg
 //     |-----> (*) UnmarshalMsg
+//     |-----> (*) UnmarshalMsgWithState
 //     |-----> (*) CanUnmarshalMsg
 //     |-----> (*) Msgsize
 //     |-----> (*) MsgIsZero
+//     |-----> SignatureMaxSize()
 //
 // SignerContext
 //       |-----> (*) MarshalMsg
 //       |-----> (*) CanMarshalMsg
 //       |-----> (*) UnmarshalMsg
+//       |-----> (*) UnmarshalMsgWithState
 //       |-----> (*) CanUnmarshalMsg
 //       |-----> (*) Msgsize
 //       |-----> (*) MsgIsZero
+//       |-----> SignerContextMaxSize()
 //
 // Verifier
 //     |-----> (*) MarshalMsg
 //     |-----> (*) CanMarshalMsg
 //     |-----> (*) UnmarshalMsg
+//     |-----> (*) UnmarshalMsgWithState
 //     |-----> (*) CanUnmarshalMsg
 //     |-----> (*) Msgsize
 //     |-----> (*) MsgIsZero
+//     |-----> VerifierMaxSize()
 //
 
 // MarshalMsg implements msgp.Marshaler
@@ -71,7 +84,12 @@ func (_ *Commitment) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *Commitment) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *Commitment) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -81,6 +99,9 @@ func (z *Commitment) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *Commitment) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *Commitment) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*Commitment)
 	return ok
@@ -95,6 +116,13 @@ func (z *Commitment) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *Commitment) MsgIsZero() bool {
 	return (*z) == (Commitment{})
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func CommitmentMaxSize() (s int) {
+	// Calculating size of array: z
+	s = msgp.ArrayHeaderSize + ((MerkleSignatureSchemeRootSize) * (msgp.ByteSize))
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -138,7 +166,12 @@ func (_ *KeyRoundPair) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *KeyRoundPair) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *KeyRoundPair) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0001 int
@@ -170,7 +203,7 @@ func (z *KeyRoundPair) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				if (*z).Key == nil {
 					(*z).Key = new(crypto.FalconSigner)
 				}
-				bts, err = (*z).Key.UnmarshalMsg(bts)
+				bts, err = (*z).Key.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "Key")
 					return
@@ -217,7 +250,7 @@ func (z *KeyRoundPair) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					if (*z).Key == nil {
 						(*z).Key = new(crypto.FalconSigner)
 					}
-					bts, err = (*z).Key.UnmarshalMsg(bts)
+					bts, err = (*z).Key.UnmarshalMsgWithState(bts, st)
 					if err != nil {
 						err = msgp.WrapError(err, "Key")
 						return
@@ -236,6 +269,9 @@ func (z *KeyRoundPair) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *KeyRoundPair) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *KeyRoundPair) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*KeyRoundPair)
 	return ok
@@ -255,6 +291,13 @@ func (z *KeyRoundPair) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *KeyRoundPair) MsgIsZero() bool {
 	return ((*z).Round == 0) && ((*z).Key == nil)
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func KeyRoundPairMaxSize() (s int) {
+	s = 1 + 4 + msgp.Uint64Size + 4
+	s += crypto.FalconSignerMaxSize()
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -303,7 +346,12 @@ func (_ *Secrets) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *Secrets) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *Secrets) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0002 int
@@ -333,7 +381,7 @@ func (z *Secrets) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0002 > 0 {
 			zb0002--
-			bts, err = (*z).SignerContext.Tree.UnmarshalMsg(bts)
+			bts, err = (*z).SignerContext.Tree.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Tree")
 				return
@@ -375,7 +423,7 @@ func (z *Secrets) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "tree":
-				bts, err = (*z).SignerContext.Tree.UnmarshalMsg(bts)
+				bts, err = (*z).SignerContext.Tree.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "Tree")
 					return
@@ -393,6 +441,9 @@ func (z *Secrets) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *Secrets) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *Secrets) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*Secrets)
 	return ok
@@ -407,6 +458,12 @@ func (z *Secrets) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *Secrets) MsgIsZero() bool {
 	return ((*z).SignerContext.FirstValid == 0) && ((*z).SignerContext.KeyLifetime == 0) && ((*z).SignerContext.Tree.MsgIsZero())
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func SecretsMaxSize() (s int) {
+	s = 1 + 3 + msgp.Uint64Size + 3 + msgp.Uint64Size + 5 + merklearray.TreeMaxSize()
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -464,7 +521,12 @@ func (_ *Signature) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *Signature) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *Signature) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0001 int
@@ -478,7 +540,7 @@ func (z *Signature) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).Signature.UnmarshalMsg(bts)
+			bts, err = (*z).Signature.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Signature")
 				return
@@ -494,7 +556,7 @@ func (z *Signature) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).Proof.UnmarshalMsg(bts)
+			bts, err = (*z).Proof.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Proof")
 				return
@@ -502,7 +564,7 @@ func (z *Signature) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).VerifyingKey.UnmarshalMsg(bts)
+			bts, err = (*z).VerifyingKey.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "VerifyingKey")
 				return
@@ -532,7 +594,7 @@ func (z *Signature) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 			switch string(field) {
 			case "sig":
-				bts, err = (*z).Signature.UnmarshalMsg(bts)
+				bts, err = (*z).Signature.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "Signature")
 					return
@@ -544,13 +606,13 @@ func (z *Signature) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "prf":
-				bts, err = (*z).Proof.UnmarshalMsg(bts)
+				bts, err = (*z).Proof.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "Proof")
 					return
 				}
 			case "vkey":
-				bts, err = (*z).VerifyingKey.UnmarshalMsg(bts)
+				bts, err = (*z).VerifyingKey.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "VerifyingKey")
 					return
@@ -568,6 +630,9 @@ func (z *Signature) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *Signature) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *Signature) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*Signature)
 	return ok
@@ -582,6 +647,12 @@ func (z *Signature) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *Signature) MsgIsZero() bool {
 	return ((*z).Signature.MsgIsZero()) && ((*z).VectorCommitmentIndex == 0) && ((*z).Proof.MsgIsZero()) && ((*z).VerifyingKey.MsgIsZero())
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func SignatureMaxSize() (s int) {
+	s = 1 + 4 + crypto.FalconSignatureMaxSize() + 4 + msgp.Uint64Size + 4 + merklearray.SingleLeafProofMaxSize() + 5 + crypto.FalconVerifierMaxSize()
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -630,7 +701,12 @@ func (_ *SignerContext) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *SignerContext) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *SignerContext) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0001 int
@@ -660,7 +736,7 @@ func (z *SignerContext) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).Tree.UnmarshalMsg(bts)
+			bts, err = (*z).Tree.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Tree")
 				return
@@ -702,7 +778,7 @@ func (z *SignerContext) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "tree":
-				bts, err = (*z).Tree.UnmarshalMsg(bts)
+				bts, err = (*z).Tree.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "Tree")
 					return
@@ -720,6 +796,9 @@ func (z *SignerContext) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *SignerContext) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *SignerContext) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*SignerContext)
 	return ok
@@ -734,6 +813,12 @@ func (z *SignerContext) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *SignerContext) MsgIsZero() bool {
 	return ((*z).FirstValid == 0) && ((*z).KeyLifetime == 0) && ((*z).Tree.MsgIsZero())
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func SignerContextMaxSize() (s int) {
+	s = 1 + 3 + msgp.Uint64Size + 3 + msgp.Uint64Size + 5 + merklearray.TreeMaxSize()
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -773,7 +858,12 @@ func (_ *Verifier) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *Verifier) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *Verifier) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0002 int
@@ -849,6 +939,9 @@ func (z *Verifier) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *Verifier) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *Verifier) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*Verifier)
 	return ok
@@ -863,4 +956,13 @@ func (z *Verifier) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *Verifier) MsgIsZero() bool {
 	return ((*z).Commitment == (Commitment{})) && ((*z).KeyLifetime == 0)
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func VerifierMaxSize() (s int) {
+	s = 1 + 4
+	// Calculating size of array: z.Commitment
+	s += msgp.ArrayHeaderSize + ((MerkleSignatureSchemeRootSize) * (msgp.ByteSize))
+	s += 3 + msgp.Uint64Size
+	return
 }

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,190 +17,62 @@ package server
 
 import (
 	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/suite"
 
 	"github.com/algorand/go-algorand/daemon/algod/api/server/lib"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v1/routes"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-type TestSuite struct {
-	suite.Suite
-	calls int
-	e     *echo.Echo
-}
-
-func (s *TestSuite) SetupSuite() {
-	s.e = echo.New()
-	handler := func(context lib.ReqContext, context2 echo.Context) {
-		s.calls++
-	}
-	// Make a deep copy of the routes array with dummy handlers that log a call.
+func setupRouter() *echo.Echo {
+	e := echo.New()
+	// Make a deep copy of the routes array with handlers.
 	v1RoutesCopy := make([]lib.Route, len(routes.V1Routes))
 	for _, route := range routes.V1Routes {
 		v1RoutesCopy = append(v1RoutesCopy, lib.Route{
 			Name:        route.Name,
 			Method:      route.Method,
 			Path:        route.Path,
-			HandlerFunc: handler,
+			HandlerFunc: route.HandlerFunc,
 		})
 	}
+	// Make a ReqContext with an initialized logger to prevent nil dereferencing.
+	reqCtx := lib.ReqContext{Log: logging.NewLogger()}
 	// Registering v1 routes
-	registerHandlers(s.e, apiV1Tag, v1RoutesCopy, lib.ReqContext{})
+	registerHandlers(e, apiV1Tag, v1RoutesCopy, reqCtx)
+	return e
 }
-func (s *TestSuite) SetupTest() {
-	s.calls = 0
-}
-func (s *TestSuite) TestBaselineRoute() {
-	// partitiontest.PartitionTest(s.T())
-	// Partitioning in TestTestSuite()
-	ctx := s.e.NewContext(nil, nil)
-	s.e.Router().Find(http.MethodGet, "/v0/this/is/no/endpoint", ctx)
-	assert.Equal(s.T(), echo.ErrNotFound, ctx.Handler()(ctx))
-	assert.Equal(s.T(), 0, s.calls)
-}
-func (s *TestSuite) TestAccountPendingTransaction() {
-	// partitiontest.PartitionTest(s.T())
-	// Partitioning in TestTestSuite()
-	ctx := s.e.NewContext(nil, nil)
-	s.e.Router().Find(http.MethodGet, "/v1/account/address-param/transactions/pending", ctx)
-	assert.Equal(s.T(), "/v1/account/:addr/transactions/pending", ctx.Path())
-	assert.Equal(s.T(), "address-param", ctx.Param("addr"))
 
-	// Ensure that a handler in the route array was called by checking that the 'calls' variable is incremented.
-	callsBefore := s.calls
-	assert.Equal(s.T(), nil, ctx.Handler()(ctx))
-	assert.Equal(s.T(), callsBefore+1, s.calls)
-}
-func (s *TestSuite) TestWaitAfterBlock() {
-	// partitiontest.PartitionTest(s.T())
-	// Partitioning in TestTestSuite()
-	ctx := s.e.NewContext(nil, nil)
-	s.e.Router().Find(http.MethodGet, "/v1/status/wait-for-block-after/123456", ctx)
-	assert.Equal(s.T(), "/v1/status/wait-for-block-after/:round", ctx.Path())
-	assert.Equal(s.T(), "123456", ctx.Param("round"))
-
-	// Ensure that a handler in the route array was called by checking that the 'calls' variable is incremented.
-	callsBefore := s.calls
-	assert.Equal(s.T(), nil, ctx.Handler()(ctx))
-	assert.Equal(s.T(), callsBefore+1, s.calls)
-}
-func (s *TestSuite) TestAccountInformation() {
-	// partitiontest.PartitionTest(s.T())
-	// Partitioning in TestTestSuite()
-	ctx := s.e.NewContext(nil, nil)
-	s.e.Router().Find(http.MethodGet, "/v1/account/ZBBRQD73JH5KZ7XRED6GALJYJUXOMBBP3X2Z2XFA4LATV3MUJKKMKG7SHA", ctx)
-	assert.Equal(s.T(), "/v1/account/:addr", ctx.Path())
-	assert.Equal(s.T(), "ZBBRQD73JH5KZ7XRED6GALJYJUXOMBBP3X2Z2XFA4LATV3MUJKKMKG7SHA", ctx.Param("addr"))
-
-	// Ensure that a handler in the route array was called by checking that the 'calls' variable is incremented.
-	callsBefore := s.calls
-	assert.Equal(s.T(), nil, ctx.Handler()(ctx))
-	assert.Equal(s.T(), callsBefore+1, s.calls)
-}
-func (s *TestSuite) TestTransactionInformation() {
-	// partitiontest.PartitionTest(s.T())
-	// Partitioning in TestTestSuite()
-	ctx := s.e.NewContext(nil, nil)
-	addr := "ZBBRQD73JH5KZ7XRED6GALJYJUXOMBBP3X2Z2XFA4LATV3MUJKKMKG7SHA"
-	txid := "ASPB5E72OT2UWSOCQGD5OPT3W4KV4LZZDL7L5MBCC3EBAIJCDHAA"
-	s.e.Router().Find(http.MethodGet, "/v1/account/"+addr+"/transaction/"+txid, ctx)
-	assert.Equal(s.T(), "/v1/account/:addr/transaction/:txid", ctx.Path())
-	assert.Equal(s.T(), addr, ctx.Param("addr"))
-	assert.Equal(s.T(), txid, ctx.Param("txid"))
-
-	// Ensure that a handler in the route array was called by checking that the 'calls' variable is incremented.
-	callsBefore := s.calls
-	assert.Equal(s.T(), nil, ctx.Handler()(ctx))
-	assert.Equal(s.T(), callsBefore+1, s.calls)
-}
-func (s *TestSuite) TestAccountTransaction() {
-	// partitiontest.PartitionTest(s.T())
-	// Partitioning in TestTestSuite()
-	ctx := s.e.NewContext(nil, nil)
-	addr := "ZBBRQD73JH5KZ7XRED6GALJYJUXOMBBP3X2Z2XFA4LATV3MUJKKMKG7SHA"
-	s.e.Router().Find(http.MethodGet, "/v1/account/"+addr+"/transactions", ctx)
-	assert.Equal(s.T(), "/v1/account/:addr/transactions", ctx.Path())
-	assert.Equal(s.T(), addr, ctx.Param("addr"))
-
-	// Ensure that a handler in the route array was called by checking that the 'calls' variable is incremented.
-	callsBefore := s.calls
-	assert.Equal(s.T(), nil, ctx.Handler()(ctx))
-	assert.Equal(s.T(), callsBefore+1, s.calls)
-}
-func (s *TestSuite) TestBlock() {
-	// partitiontest.PartitionTest(s.T())
-	// Partitioning in TestTestSuite()
-	ctx := s.e.NewContext(nil, nil)
-	s.e.Router().Find(http.MethodGet, "/v1/block/123456", ctx)
-	assert.Equal(s.T(), "/v1/block/:round", ctx.Path())
-	assert.Equal(s.T(), "123456", ctx.Param("round"))
-
-	// Ensure that a handler in the route array was called by checking that the 'calls' variable is incremented.
-	callsBefore := s.calls
-	assert.Equal(s.T(), nil, ctx.Handler()(ctx))
-	assert.Equal(s.T(), callsBefore+1, s.calls)
-}
-func (s *TestSuite) TestPendingTransactionID() {
-	// partitiontest.PartitionTest(s.T())
-	// Partitioning in TestTestSuite()
-	ctx := s.e.NewContext(nil, nil)
-	txid := "ASPB5E72OT2UWSOCQGD5OPT3W4KV4LZZDL7L5MBCC3EBAIJCDHAA"
-	s.e.Router().Find(http.MethodGet, "/v1/transactions/pending/"+txid, ctx)
-	assert.Equal(s.T(), "/v1/transactions/pending/:txid", ctx.Path())
-	assert.Equal(s.T(), txid, ctx.Param("txid"))
-
-	// Ensure that a handler in the route array was called by checking that the 'calls' variable is incremented.
-	callsBefore := s.calls
-	assert.Equal(s.T(), nil, ctx.Handler()(ctx))
-	assert.Equal(s.T(), callsBefore+1, s.calls)
-}
-func (s *TestSuite) TestPendingTransactionInformationByAddress() {
-	// partitiontest.PartitionTest(s.T())
-	// Partitioning in TestTestSuite()
-	ctx := s.e.NewContext(nil, nil)
-	addr := "ZBBRQD73JH5KZ7XRED6GALJYJUXOMBBP3X2Z2XFA4LATV3MUJKKMKG7SHA"
-	s.e.Router().Find(http.MethodGet, "/v1/account/"+addr+"/transactions/pending", ctx)
-	assert.Equal(s.T(), "/v1/account/:addr/transactions/pending", ctx.Path())
-	assert.Equal(s.T(), addr, ctx.Param("addr"))
-
-	// Ensure that a handler in the route array was called by checking that the 'calls' variable is incremented.
-	callsBefore := s.calls
-	assert.Equal(s.T(), nil, ctx.Handler()(ctx))
-	assert.Equal(s.T(), callsBefore+1, s.calls)
-}
-func (s *TestSuite) TestGetAsset() {
-	// partitiontest.PartitionTest(s.T())
-	// Partitioning in TestTestSuite()
-	ctx := s.e.NewContext(nil, nil)
-	s.e.Router().Find(http.MethodGet, "/v1/asset/123456", ctx)
-	assert.Equal(s.T(), "/v1/asset/:index", ctx.Path())
-	assert.Equal(s.T(), "123456", ctx.Param("index"))
-
-	// Ensure that a handler in the route array was called by checking that the 'calls' variable is incremented.
-	callsBefore := s.calls
-	assert.Equal(s.T(), nil, ctx.Handler()(ctx))
-	assert.Equal(s.T(), callsBefore+1, s.calls)
-}
-func (s *TestSuite) TestGetTransactionByID() {
-	// partitiontest.PartitionTest(s.T())
-	// Partitioning in TestTestSuite()
-	ctx := s.e.NewContext(nil, nil)
-	txid := "ASPB5E72OT2UWSOCQGD5OPT3W4KV4LZZDL7L5MBCC3EBAIJCDHAA"
-	s.e.Router().Find(http.MethodGet, "/v1/transaction/"+txid, ctx)
-	assert.Equal(s.T(), "/v1/transaction/:txid", ctx.Path())
-	assert.Equal(s.T(), txid, ctx.Param("txid"))
-
-	// Ensure that a handler in the route array was called by checking that the 'calls' variable is incremented.
-	callsBefore := s.calls
-	assert.Equal(s.T(), nil, ctx.Handler()(ctx))
-	assert.Equal(s.T(), callsBefore+1, s.calls)
-}
-func TestTestSuite(t *testing.T) {
+func TestGetTransactionV1Sunset(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	suite.Run(t, new(TestSuite))
+
+	testCases := []struct {
+		path  string
+		route string
+	}{
+		{"/v1/account/address-param/transactions/pending", "/v1/account/:addr/transactions/pending"},
+		{"/v1/status/wait-for-block-after/123456", "/v1/status/wait-for-block-after/:round"},
+		{"/v1/block/123456", "/v1/block/:round"},
+		{"/v1/transactions/pending/ASPB5E72OT2UWSOCQGD5OPT3W4KV4LZZDL7L5MBCC3EBAIJCDHAA", "/v1/transactions/pending/:txid"},
+		{"/v1/asset/123456", "/v1/asset/:index"},
+	}
+
+	rec := httptest.NewRecorder()
+	e := setupRouter()
+	ctx := e.NewContext(nil, rec)
+
+	for _, testCase := range testCases {
+		e.Router().Find(http.MethodGet, testCase.path, ctx)
+		assert.Equal(t, testCase.route, ctx.Path())
+
+		// Check that router correctly routes to the v1Sunset handler.
+		assert.Equal(t, nil, ctx.Handler()(ctx))
+		assert.NotNil(t, rec.Body)
+		assert.Equal(t, http.StatusGone, rec.Code)
+	}
 }

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -61,7 +61,8 @@ func BenchmarkServiceFetchBlocks(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		inMem := true
-		local, err := data.LoadLedger(logging.TestingLog(b), b.Name()+"empty"+strconv.Itoa(i), inMem, protocol.ConsensusCurrentVersion, genesisBalances, "", crypto.Digest{}, nil, cfg)
+		prefix := b.Name() + "empty" + strconv.Itoa(i)
+		local, err := data.LoadLedger(logging.TestingLog(b), prefix, inMem, protocol.ConsensusCurrentVersion, genesisBalances, "", crypto.Digest{}, nil, cfg)
 		require.NoError(b, err)
 
 		// Make Service
@@ -148,7 +149,8 @@ func benchenv(t testing.TB, numAccounts, numBlocks int) (ledger, emptyLedger *da
 	const inMem = true
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
-	emptyLedger, err = data.LoadLedger(logging.TestingLog(t), t.Name()+"empty", inMem, protocol.ConsensusCurrentVersion, genesisBalances, "", crypto.Digest{}, nil, cfg)
+	prefix := t.Name() + "empty"
+	emptyLedger, err = data.LoadLedger(logging.TestingLog(t), prefix, inMem, protocol.ConsensusCurrentVersion, genesisBalances, "", crypto.Digest{}, nil, cfg)
 	require.NoError(t, err)
 
 	ledger, err = datatest.FabricateLedger(logging.TestingLog(t), t.Name(), parts, genesisBalances, emptyLedger.LastRound()+basics.Round(numBlocks))

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -93,7 +93,7 @@ func makeMessage(msgHandle int, tag protocol.Tag, sender basics.Address, l Ledge
 		}
 
 		return message{
-			MessageHandle:       MessageHandle(msgHandle),
+			messageHandle:       MessageHandle(msgHandle),
 			Tag:                 tag,
 			UnauthenticatedVote: makeUnauthenticatedVote(l, sender, selection, voting, Round, Period, Step, proposal),
 		}
@@ -103,13 +103,13 @@ func makeMessage(msgHandle int, tag protocol.Tag, sender basics.Address, l Ledge
 			Block: e,
 		}
 		return message{
-			MessageHandle:           MessageHandle(msgHandle),
+			messageHandle:           MessageHandle(msgHandle),
 			Tag:                     tag,
 			UnauthenticatedProposal: payload,
 		}
 	default: // protocol.VoteBundleTag
 		return message{
-			MessageHandle: MessageHandle(msgHandle),
+			messageHandle: MessageHandle(msgHandle),
 			Tag:           tag,
 			UnauthenticatedBundle: unauthenticatedBundle{
 				Round:    Round,
@@ -180,9 +180,9 @@ func TestCryptoVerifierBuffers(t *testing.T) {
 	for _, msgType := range msgTypes {
 		for i := getSelectorCapacity(msgType) * 5; i > 0; i-- {
 			msg := <-verifier.Verified(msgType)
-			_, has := usedMsgIDs[msg.MessageHandle]
+			_, has := usedMsgIDs[msg.messageHandle]
 			assert.True(t, has)
-			delete(usedMsgIDs, msg.MessageHandle)
+			delete(usedMsgIDs, msg.messageHandle)
 		}
 		assert.False(t, verifier.ChannelFull(msgType))
 		assert.Zero(t, len(verifier.Verified(msgType)))
@@ -230,8 +230,8 @@ func TestCryptoVerifierBuffers(t *testing.T) {
 		}
 		msgIDMutex.Lock()
 		defer msgIDMutex.Unlock()
-		_, has := usedMsgIDs[msg.MessageHandle]
-		delete(usedMsgIDs, msg.MessageHandle)
+		_, has := usedMsgIDs[msg.messageHandle]
+		delete(usedMsgIDs, msg.messageHandle)
 		return assert.True(t, has)
 	}
 
@@ -333,7 +333,7 @@ func BenchmarkCryptoVerifierProposalVertification(b *testing.B) {
 	c := verifier.Verified(protocol.ProposalPayloadTag)
 	request := cryptoProposalRequest{
 		message: message{
-			MessageHandle:           MessageHandle(0),
+			messageHandle:           MessageHandle(0),
 			Tag:                     protocol.ProposalPayloadTag,
 			UnauthenticatedProposal: proposals[0].unauthenticatedProposal,
 		},
@@ -402,11 +402,11 @@ func TestCryptoVerifierVerificationFailures(t *testing.T) {
 	cryptoVerifier := makeCryptoVerifier(nil, nil, voteVerifier, logging.TestingLog(t))
 	defer cryptoVerifier.Quit()
 
-	cryptoVerifier.VerifyVote(context.Background(), cryptoVoteRequest{message: message{Tag: protocol.AgreementVoteTag}, Round: basics.Round(8), TaskIndex: 14})
+	cryptoVerifier.VerifyVote(context.Background(), cryptoVoteRequest{message: message{Tag: protocol.AgreementVoteTag}, Round: basics.Round(8), TaskIndex: uint64(14)})
 	// read the failed response from VerifiedVotes:
 	votesout := cryptoVerifier.VerifiedVotes()
 	voteResponse := <-votesout
 	require.Equal(t, context.Canceled, voteResponse.err)
 	require.True(t, voteResponse.cancelled)
-	require.Equal(t, 14, voteResponse.index)
+	require.Equal(t, uint64(14), voteResponse.index)
 }

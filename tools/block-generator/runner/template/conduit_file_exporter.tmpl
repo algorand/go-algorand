@@ -1,0 +1,65 @@
+# Log verbosity: PANIC, FATAL, ERROR, WARN, INFO, DEBUG, TRACE
+log-level: {{.LogLevel}}
+
+# If no log file is provided logs are written to stdout.
+log-file: {{.LogFile}}
+
+# Number of retries to perform after a pipeline plugin error.
+retry-count: 120
+
+# Time duration to wait between retry attempts.
+retry-delay: "1s"
+
+# Optional filepath to use for pidfile.
+#pid-filepath: /path/to/pidfile
+
+# Whether or not to print the conduit banner on startup.
+hide-banner: false
+
+# When enabled prometheus metrics are available on '/metrics'
+metrics:
+  mode: ON
+  addr: "{{.MetricsPort}}"
+  prefix: "conduit"
+
+# The importer is typically an algod follower node.
+importer:
+  name: algod
+  config:
+    # The mode of operation, either "archival" or "follower".
+    # * archival mode allows you to start processing on any round but does not
+    # contain the ledger state delta objects required for the postgres writer.
+    # * follower mode allows you to use a lightweight non-archival node as the
+    # data source. In addition, it will provide ledger state delta objects to
+    # the processors and exporter.
+    mode: "follower"
+
+    # Algod API address.
+    netaddr: "{{.AlgodNet}}"
+
+    # Algod API token.
+    token: ""
+
+
+# Zero or more processors may be defined to manipulate what data
+# reaches the exporter.
+processors:
+
+# An exporter is defined to do something with the data.
+exporter:
+  name: "file_writer"
+  config:
+    # BlocksDir is the path to a directory where block data should be stored.
+    # The directory is created if it doesn't exist. If no directory is provided
+    # blocks are written to the Conduit data directory.
+    #block-dir: "/path/to/block/files"
+
+    # FilenamePattern is the format used to write block files. It uses go
+    # string formatting and should accept one number for the round.
+    # If the file has a '.gz' extension, blocks will be gzipped.
+    # Default: "%[1]d_block.msgp.gz"
+    filename-pattern: "%[1]d_block.msgp.gz"
+
+    # DropCertificate is used to remove the vote certificate from the block data before writing files.
+    drop-certificate: false
+

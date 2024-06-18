@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -900,7 +900,7 @@ func TestVoteAggregatorOldVote(t *testing.T) {
 	results := make(chan asyncVerifyVoteResponse, len(uvs))
 
 	for i, uv := range uvs {
-		avv.verifyVote(context.Background(), ledger, uv, i, message{}, results)
+		avv.verifyVote(context.Background(), ledger, uv, uint64(i), message{}, results)
 		result := <-results
 		require.True(t, result.cancelled)
 	}

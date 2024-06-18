@@ -1,28 +1,28 @@
 | rel/stable <br> [![CircleCI](https://circleci.com/gh/algorand/go-algorand/tree/rel%2Fstable.svg?style=svg)](https://circleci.com/gh/algorand/go-algorand/tree/rel%2Fstable) | rel/beta  <br> [![CircleCI](https://circleci.com/gh/algorand/go-algorand/tree/rel%2Fbeta.svg?style=svg)](https://circleci.com/gh/algorand/go-algorand/tree/rel%2Fbeta) | rel/nightly  <br> [![CircleCI](https://circleci.com/gh/algorand/go-algorand/tree/rel%2Fnightly.svg?style=svg)](https://circleci.com/gh/algorand/go-algorand/tree/rel%2Fnightly) |
 | --- | --- | --- |
 
-go-algorand
-====================
+# go-algorand
+
 Algorand's official implementation in Go.
 
 Algorand is a permissionless, pure proof-of-stake blockchain that delivers
 decentralization, scalability, security, and transaction finality.
 
-## Getting Started ##
+## Getting Started
 
 Our [developer website][developer site url] has the most up to date information
 about using and installing the Algorand platform.
 
-## Building from source ##
+## Building from source
 
 Development is done using the [Go Programming Language](https://golang.org/).
 The version of go is specified in the project's [go.mod](go.mod) file. This document assumes that you have a functioning
 environment setup. If you need assistance setting up an environment please visit
 the [official Go documentation website](https://golang.org/doc/).
 
-### Linux / OSX ###
+### Linux / OSX
 
-We currently strive to support Debian-based distributions with Ubuntu 18.04
+We currently strive to support Debian-based distributions with Ubuntu 20.04
 being our official release target.
 Building on Arch Linux works as well.
 Our core engineering team uses Linux and OSX, so both environments are well
@@ -89,17 +89,18 @@ ${GOPATH}/bin/goal node start -d ~/testnet_data
 Genesis files for mainnet, testnet, and betanet can be found in
 `installer/genesis/`.
 
-## Contributing (Code, Documentation, Bugs, Etc) ##
+## Contributing
 
 Please refer to our [CONTRIBUTING](CONTRIBUTING.md) document.
 
 
-## Project Layout ##
+## Project Layout
 
-`go-algorand` is split into various subpackages.
+`go-algorand` is split into various subsystems containing various packages.
 
-The following packages provide core functionality to the `algod` and `kmd`
-daemons, as well as other tools and commands:
+### Core
+
+Provides core functionality to the `algod` and `kmd` daemons, as well as other tools and commands:
 
   - `crypto` contains the cryptographic constructions we're using for hashing,
     signatures, and VRFs. There are also some Algorand-specific details here
@@ -147,7 +148,9 @@ daemons, as well as other tools and commands:
   - `node` integrates the components above and handles initialization and
     shutdown.  It provides queries into these components.
 
-`daemon` defines the two daemons which provide Algorand clients with services:
+### Daemon
+
+Contains the two daemons which provide Algorand clients with services:
 
   - `daemon/algod` holds the `algod` daemon, which implements a participating
     node.  `algod` allows a node to participate in the agreement protocol,
@@ -158,7 +161,9 @@ daemons, as well as other tools and commands:
     daemon allows a node to sign transactions.  Because `kmd` is separate from
     `algod`, `kmd` allows a user to sign transactions on an air-gapped computer.
 
-The following packages allow developers to interface with the Algorand system:
+### Interfacing
+
+Allows developers to interface with the Algorand system:
 
   - `cmd` holds the primary commands defining entry points into the system.
      - `cmd/catchupsrv` ([README](cmd/catchupsrv/README.md)) is a tool to
@@ -168,8 +173,8 @@ The following packages allow developers to interface with the Algorand system:
   - `tools/debug` holds secondary commands which assist developers during debugging.
   - `tools/misc` ([README](tools/misc/README.md)) small tools that are sometimes handy in a pinch.
 
-The following packages contain tools to help Algorand developers deploy networks
-of their own:
+### Deployment
+Help Algorand developers deploy networks of their own:
 
   - `nodecontrol`
   - `docker`
@@ -178,12 +183,14 @@ of their own:
   - `components`
   - `netdeploy`
 
-A number of packages provide utilities for the various components:
+### Utilities
+Provides utilities for the various components:
 
   - `logging` is a wrapper around `logrus`.
   - `util` contains a variety of utilities, including a codec, a SQLite wrapper,
     a goroutine pool, a timer interface, node metrics, and more.
 
+### Test
 `test` ([README](test/README.md)) contains end-to-end tests and utilities for the above components.
 
 
@@ -192,6 +199,6 @@ A number of packages provide utilities for the various components:
 
 Please see the [COPYING_FAQ](COPYING_FAQ) for details about how to apply our license.
 
-Copyright (C) 2019-2022, Algorand Inc.
+Copyright (C) 2019-2024, Algorand Inc.
 
 [developer site url]: https://developer.algorand.org/

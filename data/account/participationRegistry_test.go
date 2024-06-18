@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,14 +23,12 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"math"
 	"os"
 	"path/filepath"
 	"strconv"
-	"sync/atomic"
-
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -100,7 +98,7 @@ func makeTestParticipationWithLifetime(a *require.Assertions, addrID int, first,
 
 	// Generate part keys like in partGenerateCmd and FillDBWithParticipationKeys
 	if dilution == 0 {
-		dilution = 1 + uint64(math.Sqrt(float64(last-first)))
+		dilution = DefaultKeyDilution(first, last)
 	}
 
 	// Compute how many distinct participation keys we should generate
@@ -739,7 +737,7 @@ func TestParticipion_Blobs(t *testing.T) {
 	registry, dbfile := getRegistry(t)
 	defer registryCloseTest(t, registry, dbfile)
 
-	access, err := db.MakeAccessor("writetest_root", false, true)
+	access, err := db.MakeAccessor(t.Name()+"_writetest_root", false, true)
 	if err != nil {
 		panic(err)
 	}
@@ -747,7 +745,7 @@ func TestParticipion_Blobs(t *testing.T) {
 	access.Close()
 	a.NoError(err)
 
-	access, err = db.MakeAccessor("writetest", false, true)
+	access, err = db.MakeAccessor(t.Name()+"_writetest", false, true)
 	if err != nil {
 		panic(err)
 	}
@@ -782,7 +780,7 @@ func TestParticipion_EmptyBlobs(t *testing.T) {
 	registry, dbfile := getRegistry(t)
 	defer registryCloseTest(t, registry, dbfile)
 
-	access, err := db.MakeAccessor("writetest_root", false, true)
+	access, err := db.MakeAccessor(t.Name()+"_writetest_root", false, true)
 	if err != nil {
 		panic(err)
 	}
@@ -790,7 +788,7 @@ func TestParticipion_EmptyBlobs(t *testing.T) {
 	access.Close()
 	a.NoError(err)
 
-	access, err = db.MakeAccessor("writetest", false, true)
+	access, err = db.MakeAccessor(t.Name()+"_writetest", false, true)
 	if err != nil {
 		panic(err)
 	}
@@ -958,6 +956,36 @@ func TestAddStateProofKeys(t *testing.T) {
 	}
 }
 
+func TestGetRoundSecretsWithNilStateProofVerifier(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := assert.New(t)
+	registry, dbfile := getRegistry(t)
+	defer registryCloseTest(t, registry, dbfile)
+
+	access, err := db.MakeAccessor(t.Name()+"_stateprooftest", false, true)
+	if err != nil {
+		panic(err)
+	}
+	root, err := GenerateRoot(access)
+	p, err := FillDBWithParticipationKeys(access, root.Address(), 0, basics.Round(stateProofIntervalForTests*2), 3)
+	access.Close()
+	a.NoError(err)
+
+	// Install a key for testing
+	id, err := registry.Insert(p.Participation)
+	a.NoError(err)
+
+	// ensuring that GetStateProof will receive from cache a participationRecord without StateProof field.
+	prt := registry.cache[id]
+	prt.StateProof = nil
+	registry.cache[id] = prt
+
+	a.NoError(registry.Flush(defaultTimeout))
+
+	_, err = registry.GetStateProofSecretsForRound(id, basics.Round(stateProofIntervalForTests)-1)
+	a.ErrorIs(err, ErrStateProofVerifierNotFound)
+}
+
 func TestSecretNotFound(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
@@ -983,7 +1011,7 @@ func TestAddingSecretTwice(t *testing.T) {
 	registry, dbfile := getRegistry(t)
 	defer registryCloseTest(t, registry, dbfile)
 
-	access, err := db.MakeAccessor("stateprooftest", false, true)
+	access, err := db.MakeAccessor(t.Name()+"_stateprooftest", false, true)
 	if err != nil {
 		panic(err)
 	}
@@ -1021,7 +1049,7 @@ func TestGetRoundSecretsWithoutStateProof(t *testing.T) {
 	registry, dbfile := getRegistry(t)
 	defer registryCloseTest(t, registry, dbfile)
 
-	access, err := db.MakeAccessor("stateprooftest", false, true)
+	access, err := db.MakeAccessor(t.Name()+"_stateprooftest", false, true)
 	if err != nil {
 		panic(err)
 	}
@@ -1148,7 +1176,7 @@ func TestFlushResetsLastError(t *testing.T) {
 	registry, dbfile := getRegistry(t)
 	defer registryCloseTest(t, registry, dbfile)
 
-	access, err := db.MakeAccessor("stateprooftest", false, true)
+	access, err := db.MakeAccessor(t.Name()+"_stateprooftest", false, true)
 	a.NoError(err)
 
 	root, err := GenerateRoot(access)

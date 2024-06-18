@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -26,7 +26,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
-	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -42,7 +42,7 @@ type AccountIndexerResponse struct {
 	//
 	// Definition:
 	// data/basics/userBalance.go : AccountData
-	Account generated.Account `json:"account"`
+	Account model.Account `json:"account"`
 
 	// Round at which the results were computed.
 	CurrentRound uint64 `json:"current-round"`
@@ -52,7 +52,7 @@ type AccountIndexerResponse struct {
 type ApplicationIndexerResponse struct {
 
 	// Application index and its parameters
-	Application generated.Application `json:"application,omitempty"`
+	Application model.Application `json:"application,omitempty"`
 
 	// Round at which the results were computed.
 	CurrentRound uint64 `json:"current-round"`
@@ -281,8 +281,12 @@ func (l *localLedger) BlockHdr(basics.Round) (bookkeeping.BlockHeader, error) {
 	return bookkeeping.BlockHeader{}, nil
 }
 
-func (l *localLedger) BlockHdrCached(basics.Round) (bookkeeping.BlockHeader, error) {
-	return bookkeeping.BlockHeader{}, nil
+func (l *localLedger) GenesisHash() crypto.Digest {
+	return crypto.Digest{}
+}
+
+func (l *localLedger) GetStateProofVerificationContext(_ basics.Round) (*ledgercore.StateProofVerificationContext, error) {
+	return nil, fmt.Errorf("localLedger: GetStateProofVerificationContext, needed for state proof verification, is not implemented in debugger")
 }
 
 func (l *localLedger) CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, ledgercore.Txlease) error {
@@ -321,11 +325,43 @@ func (l *localLedger) LookupApplication(rnd basics.Round, addr basics.Address, a
 	return result, nil
 }
 
+func (l *localLedger) LookupKv(rnd basics.Round, name string) ([]byte, error) {
+	return nil, fmt.Errorf("boxes not implemented in debugger")
+}
+
 func (l *localLedger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (ledgercore.AccountData, basics.Round, error) {
 	ad := l.balances[addr]
 	// Clear RewardsBase since tealdbg has no idea about rewards level so the underlying calculation with reward will fail.
 	ad.RewardsBase = 0
 	return ledgercore.ToAccountData(ad), rnd, nil
+}
+
+func (l *localLedger) LookupAgreement(rnd basics.Round, addr basics.Address) (basics.OnlineAccountData, error) {
+	// tealdbg does not understand rewards, so no pending rewards are applied.
+	// Further, it has no history, so we return the _current_ information,
+	// ignoring the `rnd` argument.
+	ad := l.balances[addr]
+	if ad.Status != basics.Online {
+		return basics.OnlineAccountData{}, nil
+	}
+
+	return basics.OnlineAccountData{
+		MicroAlgosWithRewards: ad.MicroAlgos,
+		VotingData: basics.VotingData{
+			VoteID:          ad.VoteID,
+			SelectionID:     ad.SelectionID,
+			StateProofID:    ad.StateProofID,
+			VoteFirstValid:  ad.VoteFirstValid,
+			VoteLastValid:   ad.VoteLastValid,
+			VoteKeyDilution: ad.VoteKeyDilution,
+		},
+		IncentiveEligible: ad.IncentiveEligible,
+	}, nil
+}
+
+func (l *localLedger) OnlineCirculation(rnd basics.Round, voteRound basics.Round) (basics.MicroAlgos, error) {
+	// A constant is fine for tealdbg
+	return basics.Algos(1_000_000_000), nil // 1B
 }
 
 func (l *localLedger) GetCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {

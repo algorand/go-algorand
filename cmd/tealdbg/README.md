@@ -9,6 +9,7 @@
     - [Protocol](#protocol)
     - [Transaction and Transaction Group](#transaction-and-transaction-group)
     - [Balance records](#balance-records)
+    - [Indexer Support](#indexer-support)
     - [Execution mode](#execution-mode)
   - [Chrome DevTools Frontend Features](#chrome-devtools-frontend-features)
     - [Configure the Listener](#configure-the-listener)
@@ -44,7 +45,7 @@ and balance records (see [Setting Debug Context](#setting-debug-context) for det
 
 Remote debugger might be useful for debugging unit tests for TEAL (currently in Golang only) or for hacking **algod** `eval` and breaking on any TEAL evaluation.
 The protocol consist of three REST endpoints and one data structure describing the evaluator state.
-See `WebDebuggerHook` and `TestWebDebuggerManual` in [go-algorand sources](https://github.com/algorand/go-algorand/tree/master/data/transactions/logic) for more details.
+See `WebDebugger` and `TestWebDebuggerManual` in [go-algorand sources](https://github.com/algorand/go-algorand/tree/master/data/transactions/logic) for more details.
 
 ### Frontends
 
@@ -206,13 +207,18 @@ Refer to the [Chrome DevTools debugging](https://developers.google.com/web/tools
 
 The evaluator accepts a new `Debugger` parameter described as the interface:
 ```golang
-type DebuggerHook interface {
+// Debugger is an interface that supports the first version of AVM debuggers.
+// It consists of a set of functions called by eval function during AVM program execution.
+//
+// Deprecated: This interface does not support non-app call or inner transactions. Use EvalTracer
+// instead.
+type Debugger interface {
 	// Register is fired on program creation
-	Register(state *DebugState) error
+	Register(state *DebugState)
 	// Update is fired on every step
-	Update(state *DebugState) error
+	Update(state *DebugState)
 	// Complete is called when the program exits
-	Complete(state *DebugState) error
+	Complete(state *DebugState)
 }
 ```
 If `Debugger` is set the evaluator calls `Register` on creation, `Update` on every step and `Complete` on exit.
@@ -251,13 +257,13 @@ The core calls `SessionEnded` on `Complete` call.
 
 If one needs to debug TEAL in as much real environment as possible then do
 
-1. Add `WebDebuggerHook` to `data/transactions/logic/eval.go`:
+1. Add `WebDebugger` to `data/transactions/logic/eval.go`:
     ```golang
     cx.program = program
 
     // begin new code
     debugURL := os.Getenv("TEAL_DEBUGGER_URL")
-    cx.Debugger = &WebDebuggerHook{URL: debugURL}
+    cx.Debugger = &WebDebugger{URL: debugURL}
     // end new code
 
     if cx.Debugger != nil {

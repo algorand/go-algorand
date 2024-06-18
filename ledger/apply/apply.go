@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -30,6 +30,8 @@ type StateProofsApplier interface {
 	BlockHdr(r basics.Round) (bookkeeping.BlockHeader, error)
 	GetStateProofNextRound() basics.Round
 	SetStateProofNextRound(rnd basics.Round)
+	GetStateProofVerificationContext(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error)
+	ConsensusParams() config.ConsensusParams
 }
 
 // Balances allow to move MicroAlgos from one address to another and to update balance records, or to access and modify individual balance records

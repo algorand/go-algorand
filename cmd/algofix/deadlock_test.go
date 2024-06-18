@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -132,7 +132,11 @@ func main() {
 
 func TestDeadlockRewrite(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// nolint:paralleltest // Subtests modify shared resources.
 	t.Run("simple", func(t *testing.T) { testDeadlock(t, deadlockSimpleSrc, deadlockSimpleDest) })
+	// nolint:paralleltest // Subtests modify shared resources.
 	t.Run("onoff", func(t *testing.T) { testDeadlock(t, deadlockTestSrc, deadlockTestFin) })
 }
 

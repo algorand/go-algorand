@@ -1,7 +1,7 @@
 # kmd - Key Management Daemon
 
 ## Overview
-kmd is the Key Management Daemon, the process responsible for securely managing spending keys. It is the implementation of the design [specified here.](https://docs.google.com/document/d/1j7sLC2BphSFqd76GEIJvw4GpY2tNW7nmk_Ea7UfBEWc/edit?usp=sharing)
+kmd is the Key Management Daemon, the process responsible for securely managing spending keys.
 
 ## Useful facts
 - kmd has a data directory separate from algod's data directory. By default, however, the kmd data directory is in the `kmd` subdirectory of algod's data directory.

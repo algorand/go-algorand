@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,7 +19,6 @@ package main
 import (
 	"encoding/base64"
 	"fmt"
-	"math"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -58,7 +57,7 @@ var partGenerateCmd = &cobra.Command{
 		}
 
 		if partKeyDilution == 0 {
-			partKeyDilution = 1 + uint64(math.Sqrt(float64(partLastRound-partFirstRound)))
+			partKeyDilution = account.DefaultKeyDilution(basics.Round(partFirstRound), basics.Round(partLastRound))
 		}
 
 		var err error

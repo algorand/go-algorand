@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -56,8 +56,9 @@ func TelemetryOverride(env string, telemetryConfig *TelemetryConfig) bool {
 
 // createTelemetryConfig creates a new TelemetryConfig structure with a generated GUID and the appropriate Telemetry endpoint.
 // Note: This should only be used/persisted when initially creating 'TelemetryConfigFilename'. Because the methods are called
-//       from various tools and goal commands and affect the future default settings for telemetry, we need to inject
-//       a "dev" branch check.
+//
+//	from various tools and goal commands and affect the future default settings for telemetry, we need to inject
+//	a "dev" branch check.
 func createTelemetryConfig() TelemetryConfig {
 	enable := false
 

@@ -78,12 +78,15 @@ echo "RUN_KMD_WITH_UNSAFE_SCRYPT = ${RUN_KMD_WITH_UNSAFE_SCRYPT}"
 
 export BINDIR=${TEMPDIR}/bin
 export DATADIR=${TEMPDIR}/data
+export NETWORKDIR=${TEMPDIR}/net
 
 function reset_dirs() {
     rm -rf ${BINDIR}
     rm -rf ${DATADIR}
+    rm -rf ${NETWORKDIR}
     mkdir -p ${BINDIR}
     mkdir -p ${DATADIR}
+    mkdir -p ${NETWORKDIR}
 }
 
 # $1 - Message
@@ -121,11 +124,11 @@ if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "SCRIPTS" ]; then
     python3 -m venv "${TEMPDIR}/ve"
     . "${TEMPDIR}/ve/bin/activate"
     "${TEMPDIR}/ve/bin/pip3" install --upgrade pip
-    "${TEMPDIR}/ve/bin/pip3" install --upgrade cryptograpy
 
-    # Pin a version of our python SDK's so that breaking changes don't spuriously break our tests.
-    # Please update as necessary.
-    "${TEMPDIR}/ve/bin/pip3" install py-algorand-sdk==1.9.0b1
+    # Pin major version of our python SDK's so that breaking changes
+    # don't spuriously break our tests.  If a minor version breaks our
+    # tests, we ought to find out.
+    "${TEMPDIR}/ve/bin/pip3" install 'py-algorand-sdk==2.*'
 
     # Enable remote debugging:
     "${TEMPDIR}/ve/bin/pip3" install --upgrade debugpy
@@ -155,8 +158,15 @@ if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "SCRIPTS" ]; then
         exit
     fi
 
-    ./timeout 200 ./e2e_basic_start_stop.sh
+    goal network create \
+      -r $NETWORKDIR \
+      -n tbd \
+      -t ../testdata/nettemplates/TwoNodes50EachFuture.json
+
+    ./timeout 200 ./e2e_basic_start_stop.sh $NETWORKDIR
     duration "e2e_basic_start_stop.sh"
+
+    goal network delete -r $NETWORKDIR
 
     KEEP_TEMPS_CMD_STR=""
 
@@ -186,10 +196,6 @@ if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "SCRIPTS" ]; then
         RSTAMP=$(TZ=UTC python -c 'import time; print("{:08x}".format(0xffffffff - int(time.time() - time.mktime((2020,1,1,0,0,0,-1,-1,-1)))))')
         echo aws s3 cp --acl public-read "${TEMPDIR}/${CI_E2E_FILENAME}.tar.bz2" "s3://algorand-testdata/indexer/e2e4/${RSTAMP}/${CI_E2E_FILENAME}.tar.bz2"
         aws s3 cp --acl public-read "${TEMPDIR}/${CI_E2E_FILENAME}.tar.bz2" "s3://algorand-testdata/indexer/e2e4/${RSTAMP}/${CI_E2E_FILENAME}.tar.bz2"
-        # get git commit hash
-        COMMIT_HASH=$(git rev-parse --short HEAD)
-        echo aws s3 cp --acl public-read "${TEMPDIR}/${CI_E2E_FILENAME}.tar.bz2" "s3://algorand-testdata/indexer/e2e4/${COMMIT_HASH}/${CI_E2E_FILENAME}.tar.bz2"
-        aws s3 cp --acl public-read "${TEMPDIR}/${CI_E2E_FILENAME}.tar.bz2" "s3://algorand-testdata/indexer/e2e4/${COMMIT_HASH}/${CI_E2E_FILENAME}/.tar.bz2"
         popd
     fi
 

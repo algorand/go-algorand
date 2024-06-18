@@ -154,4 +154,5 @@ assert not err, err
 _, err = goal.app_call(joe, app1ID, app_args=[0x01], foreign_apps=[int(app2ID), int(app3ID)])
 assert not err, err
 
+stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 print(f"{os.path.basename(sys.argv[0])} OK {stamp}")

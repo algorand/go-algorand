@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -32,9 +32,9 @@ func TestAddingToCache(t *testing.T) {
 
 	icache := MakeVerifiedTransactionCache(500)
 	impl := icache.(*verifiedTransactionCache)
-	_, signedTxn, secrets, addrs := generateTestObjects(10, 5, 50)
-	txnGroups := generateTransactionGroups(signedTxn, secrets, addrs)
-	groupCtx, err := PrepareGroupContext(txnGroups[0], blockHeader, nil)
+	_, signedTxn, secrets, addrs := generateTestObjects(10, 5, 0, 50)
+	txnGroups := generateTransactionGroups(protoMaxGroupSize, signedTxn, secrets, addrs)
+	groupCtx, err := PrepareGroupContext(txnGroups[0], blockHeader, nil, nil)
 	require.NoError(t, err)
 	impl.Add(txnGroups[0], groupCtx)
 	// make it was added.
@@ -52,10 +52,10 @@ func TestBucketCycling(t *testing.T) {
 	entriesPerBucket := 100
 	icache := MakeVerifiedTransactionCache(entriesPerBucket * (bucketCount - 1))
 	impl := icache.(*verifiedTransactionCache)
-	_, signedTxn, _, _ := generateTestObjects(entriesPerBucket*bucketCount*2, bucketCount, 0)
+	_, signedTxn, _, _ := generateTestObjects(entriesPerBucket*bucketCount*2, bucketCount, 0, 0)
 
 	require.Equal(t, entriesPerBucket*bucketCount*2, len(signedTxn))
-	groupCtx, err := PrepareGroupContext([]transactions.SignedTxn{signedTxn[0]}, blockHeader, nil)
+	groupCtx, err := PrepareGroupContext([]transactions.SignedTxn{signedTxn[0]}, blockHeader, nil, nil)
 	require.NoError(t, err)
 
 	// fill up the cache with entries.
@@ -76,14 +76,14 @@ func TestBucketCycling(t *testing.T) {
 	require.Equal(t, 1, len(impl.buckets[0]))
 }
 
-func TestGetUnverifiedTranscationGroups50(t *testing.T) {
+func TestGetUnverifiedTransactionGroups50(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	size := 300
 	icache := MakeVerifiedTransactionCache(size * 2)
 	impl := icache.(*verifiedTransactionCache)
-	_, signedTxn, secrets, addrs := generateTestObjects(size*2, 10+size/1000, 0)
-	txnGroups := generateTransactionGroups(signedTxn, secrets, addrs)
+	_, signedTxn, secrets, addrs := generateTestObjects(size*2, 10+size/1000, 0, 0)
+	txnGroups := generateTransactionGroups(protoMaxGroupSize, signedTxn, secrets, addrs)
 
 	expectedUnverifiedGroups := make([][]transactions.SignedTxn, 0, len(txnGroups)/2)
 	// add every even transaction to the cache.
@@ -92,23 +92,23 @@ func TestGetUnverifiedTranscationGroups50(t *testing.T) {
 		if i%2 == 0 {
 			expectedUnverifiedGroups = append(expectedUnverifiedGroups, txnGroups[i])
 		} else {
-			groupCtx, _ := PrepareGroupContext(txnGroups[i], blockHeader, nil)
+			groupCtx, _ := PrepareGroupContext(txnGroups[i], blockHeader, nil, nil)
 			impl.Add(txnGroups[i], groupCtx)
 		}
 	}
 
-	unverifiedGroups := impl.GetUnverifiedTranscationGroups(txnGroups, spec, protocol.ConsensusCurrentVersion)
+	unverifiedGroups := impl.GetUnverifiedTransactionGroups(txnGroups, spec, protocol.ConsensusCurrentVersion)
 	require.Equal(t, len(expectedUnverifiedGroups), len(unverifiedGroups))
 }
 
-func BenchmarkGetUnverifiedTranscationGroups50(b *testing.B) {
+func BenchmarkGetUnverifiedTransactionGroups50(b *testing.B) {
 	if b.N < 20000 {
 		b.N = 20000
 	}
 	icache := MakeVerifiedTransactionCache(b.N * 2)
 	impl := icache.(*verifiedTransactionCache)
-	_, signedTxn, secrets, addrs := generateTestObjects(b.N*2, 10+b.N/1000, 0)
-	txnGroups := generateTransactionGroups(signedTxn, secrets, addrs)
+	_, signedTxn, secrets, addrs := generateTestObjects(b.N*2, 10+b.N/1000, 0, 0)
+	txnGroups := generateTransactionGroups(protoMaxGroupSize, signedTxn, secrets, addrs)
 
 	queryTxnGroups := make([][]transactions.SignedTxn, 0, b.N)
 	// add every even transaction to the cache.
@@ -116,7 +116,7 @@ func BenchmarkGetUnverifiedTranscationGroups50(b *testing.B) {
 		if i%2 == 1 {
 			queryTxnGroups = append(queryTxnGroups, txnGroups[i])
 		} else {
-			groupCtx, _ := PrepareGroupContext(txnGroups[i], blockHeader, nil)
+			groupCtx, _ := PrepareGroupContext(txnGroups[i], blockHeader, nil, nil)
 			impl.Add(txnGroups[i], groupCtx)
 		}
 	}
@@ -125,7 +125,7 @@ func BenchmarkGetUnverifiedTranscationGroups50(b *testing.B) {
 	startTime := time.Now()
 	measuringMultipler := 1000
 	for i := 0; i < measuringMultipler; i++ {
-		impl.GetUnverifiedTranscationGroups(queryTxnGroups, spec, protocol.ConsensusCurrentVersion)
+		impl.GetUnverifiedTransactionGroups(queryTxnGroups, spec, protocol.ConsensusCurrentVersion)
 	}
 	duration := time.Now().Sub(startTime)
 	// calculate time per 10K verified entries:
@@ -140,12 +140,12 @@ func TestUpdatePinned(t *testing.T) {
 	size := 100
 	icache := MakeVerifiedTransactionCache(size * 10)
 	impl := icache.(*verifiedTransactionCache)
-	_, signedTxn, secrets, addrs := generateTestObjects(size*2, 10, 0)
-	txnGroups := generateTransactionGroups(signedTxn, secrets, addrs)
+	_, signedTxn, secrets, addrs := generateTestObjects(size*2, 10, 0, 0)
+	txnGroups := generateTransactionGroups(protoMaxGroupSize, signedTxn, secrets, addrs)
 
 	// insert some entries.
 	for i := 0; i < len(txnGroups); i++ {
-		groupCtx, _ := PrepareGroupContext(txnGroups[i], blockHeader, nil)
+		groupCtx, _ := PrepareGroupContext(txnGroups[i], blockHeader, nil, nil)
 		impl.Add(txnGroups[i], groupCtx)
 	}
 
@@ -169,12 +169,12 @@ func TestPinningTransactions(t *testing.T) {
 	size := 100
 	icache := MakeVerifiedTransactionCache(size)
 	impl := icache.(*verifiedTransactionCache)
-	_, signedTxn, secrets, addrs := generateTestObjects(size*2, 10, 0)
-	txnGroups := generateTransactionGroups(signedTxn, secrets, addrs)
+	_, signedTxn, secrets, addrs := generateTestObjects(size*2, 10, 0, 0)
+	txnGroups := generateTransactionGroups(protoMaxGroupSize, signedTxn, secrets, addrs)
 
 	// insert half of the entries.
 	for i := 0; i < len(txnGroups)/2; i++ {
-		groupCtx, _ := PrepareGroupContext(txnGroups[i], blockHeader, nil)
+		groupCtx, _ := PrepareGroupContext(txnGroups[i], blockHeader, nil, nil)
 		impl.Add(txnGroups[i], groupCtx)
 	}
 

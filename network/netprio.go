@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,7 +18,6 @@ package network
 
 import (
 	"container/heap"
-	"sync/atomic"
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
@@ -126,7 +125,7 @@ func (pt *prioTracker) setPriority(peer *wsPeer, addr basics.Address, weight uin
 	peer.prioAddress = addr
 	peer.prioWeight = weight
 	heap.Fix(peersHeap{wn}, peer.peerIndex)
-	atomic.AddInt32(&wn.peersChangeCounter, 1)
+	wn.peersChangeCounter.Add(1)
 }
 
 func (pt *prioTracker) removePeer(peer *wsPeer) {

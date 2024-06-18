@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -22,7 +22,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	"github.com/algorand/go-algorand/rpcs"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
@@ -40,6 +40,8 @@ func bw(client Client) *blockWatcher {
 // Then blockIfStalled will block until the next block is reported
 func TestBlockIfStalled(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	client := mockClient{
 		error:   []error{nil, nil, nil},
 		status:  makeNodeStatuses(300, 300, 300, 301),
@@ -62,6 +64,8 @@ func TestBlockIfStalled(t *testing.T) {
 // Then blockIfCatchup will block until a block is reported twice
 func TestBlockIfCatchup(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	client := mockClient{
 		error:   []error{nil, nil, nil},
 		status:  makeNodeStatuses(301, 302, 303, 304, 305, 306, 307, 308, 309, 310, 310),
@@ -84,6 +88,8 @@ func TestBlockIfCatchup(t *testing.T) {
 // Then blockIfCatchup will return after the first status call.
 func TestBlockIfCaughtUp(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	client := mockClient{
 		error:   []error{nil, nil, nil},
 		status:  makeNodeStatuses(300),
@@ -110,12 +116,14 @@ func (l *testlistener) init(block uint64) {
 	atomic.AddUint32(&(l.initCount), 1)
 }
 
-func (l *testlistener) onBlock(block v1.Block) {
+func (l *testlistener) onBlock(rpcs.EncodedBlockCert) {
 	atomic.AddUint32(&(l.blockCount), 1)
 }
 
 func TestE2E(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	client := makeMockClient(
 		[]error{nil, nil, nil},
 		makeNodeStatuses(300, 301, 302, 302, 302, 302, 302, 302, 310, 320, 321, 321, 321, 322),
@@ -165,6 +173,8 @@ func TestE2E(t *testing.T) {
 
 func TestAbortDuringStall(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	client := makeMockClient(
 		[]error{},
 		makeNodeStatuses(300),

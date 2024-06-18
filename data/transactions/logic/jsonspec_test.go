@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -32,6 +32,7 @@ import (
 
 func TestParseScalar(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 	intScalar := `{"key0": 4160}`
 	_, err := parseJSON([]byte(intScalar))
 	require.NoError(t, err)
@@ -42,6 +43,7 @@ func TestParseScalar(t *testing.T) {
 
 func TestParseTrailingCommas(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 	for i := 1; i <= 10; i++ {
 		commas := strings.Repeat(",", i)
 		intScalar := `{"key0": 4160` + commas + `}`
@@ -55,6 +57,7 @@ func TestParseTrailingCommas(t *testing.T) {
 
 func TestParseComments(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 	text := `{"key0": /*comment*/"algo"}`
 	_, err := parseJSON([]byte(text))
 	require.Error(t, err)
@@ -65,6 +68,7 @@ func TestParseComments(t *testing.T) {
 
 func TestParseUnclosed(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 	text := `{"key0": ["algo"}`
 	_, err := parseJSON([]byte(text))
 	require.Error(t, err)
@@ -84,6 +88,7 @@ func TestParseUnclosed(t *testing.T) {
 
 func TestParseNested(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 	text := `{"key0": [[1,2,3],[4,5,6]], "key1":{"key10":{"key100":"algo"}}}`
 	_, err := parseJSON([]byte(text))
 	require.NoError(t, err)
@@ -91,6 +96,7 @@ func TestParseNested(t *testing.T) {
 
 func TestParseWhiteSpace(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 	//empty text
 	text := ""
 	_, err := parseJSON([]byte(text))
@@ -107,6 +113,7 @@ func TestParseWhiteSpace(t *testing.T) {
 
 func TestParseSpecialValues(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 	text := `{"key0": NaN}`
 	_, err := parseJSON([]byte(text))
 	require.Error(t, err)
@@ -129,6 +136,7 @@ func TestParseSpecialValues(t *testing.T) {
 
 func TestParseHexValue(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 	text := `{"key0": 0x1}`
 	_, err := parseJSON([]byte(text))
 	require.Error(t, err)
@@ -139,6 +147,7 @@ func TestParseHexValue(t *testing.T) {
 
 func TestParseBigNum(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 	// values in range uint64 parsed correctly
 	// parse 0
 	text := `{"key0":0}`
@@ -162,6 +171,7 @@ func TestParseBigNum(t *testing.T) {
 
 func TestParseArrays(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 	text := `{"key0": [,1,]}`
 	_, err := parseJSON([]byte(text))
 	require.Error(t, err)
@@ -175,6 +185,7 @@ func TestParseArrays(t *testing.T) {
 
 func TestParseKeys(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 	text := `{"": 1}`
 	_, err := parseJSON([]byte(text))
 	require.NoError(t, err)
@@ -211,6 +222,7 @@ func TestParseKeys(t *testing.T) {
 
 func TestParseFileEncoding(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 	// create utf-8, utf-16, and utf-32 encoded text and check which is supported by json
 	// it appears that json only supports utf-8 encoded json text
 
@@ -250,6 +262,7 @@ func TestParseFileEncoding(t *testing.T) {
 
 func TestParseByteOrderMark(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 	// byte order mark is not allowed at the beginning of a JSON text,
 	// it is treated as an error
 	text := "\uFEFF{\"key0\": 1}"
@@ -259,6 +272,7 @@ func TestParseByteOrderMark(t *testing.T) {
 
 func TestParseControlChar(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 	// control chars (u0000 - u001F) must be escaped
 	for i := 0x0; i <= 0x1f; i++ {
 		text := fmt.Sprintf("{\"key0\":\"\\u%04X\"}", i)
@@ -269,6 +283,7 @@ func TestParseControlChar(t *testing.T) {
 
 func TestParseEscapeChar(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 	// escaped control char
 	text := "{\"key0\": \"\\u0000\"}"
 	_, err := parseJSON([]byte(text))
@@ -287,6 +302,7 @@ func TestParseEscapeChar(t *testing.T) {
 
 func TestParseEscapedInvalidChar(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 	// unicode escape sequence remains in string
 	// accepted surrogate pair
 	text := `{"key0": "\uD801\udc37"}`
@@ -307,6 +323,7 @@ func TestParseEscapedInvalidChar(t *testing.T) {
 
 func TestParseRawNonUnicodeChar(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 	text := `{"key0": "πζθ"}`
 	_, err := parseJSON([]byte(text))
 	require.NoError(t, err)

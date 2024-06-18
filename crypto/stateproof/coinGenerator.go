@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -76,7 +76,7 @@ func makeCoinGenerator(choice *coinChoiceSeed) coinGenerator {
 	choice.version = VersionForCoinGenerator
 	rep := crypto.HashRep(choice)
 	shk := sha3.NewShake256()
-	shk.Write(rep) //nolint:errcheck // ShakeHash.Write may panic, but does not return error
+	shk.Write(rep) // hash.Hash interface's Write may panic, but does not return error
 
 	threshold := prepareRejectionSamplingThreshold(choice.signedWeight)
 	return coinGenerator{shkContext: shk, signedWeight: choice.signedWeight, threshold: threshold}

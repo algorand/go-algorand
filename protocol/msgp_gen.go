@@ -11,57 +11,71 @@ import (
 //         |-----> MarshalMsg
 //         |-----> CanMarshalMsg
 //         |-----> (*) UnmarshalMsg
+//         |-----> (*) UnmarshalMsgWithState
 //         |-----> (*) CanUnmarshalMsg
 //         |-----> Msgsize
 //         |-----> MsgIsZero
+//         |-----> ConsensusVersionMaxSize()
 //
 // Error
 //   |-----> MarshalMsg
 //   |-----> CanMarshalMsg
 //   |-----> (*) UnmarshalMsg
+//   |-----> (*) UnmarshalMsgWithState
 //   |-----> (*) CanUnmarshalMsg
 //   |-----> Msgsize
 //   |-----> MsgIsZero
+//   |-----> ErrorMaxSize()
 //
 // HashID
 //    |-----> MarshalMsg
 //    |-----> CanMarshalMsg
 //    |-----> (*) UnmarshalMsg
+//    |-----> (*) UnmarshalMsgWithState
 //    |-----> (*) CanUnmarshalMsg
 //    |-----> Msgsize
 //    |-----> MsgIsZero
+//    |-----> HashIDMaxSize()
 //
 // NetworkID
 //     |-----> MarshalMsg
 //     |-----> CanMarshalMsg
 //     |-----> (*) UnmarshalMsg
+//     |-----> (*) UnmarshalMsgWithState
 //     |-----> (*) CanUnmarshalMsg
 //     |-----> Msgsize
 //     |-----> MsgIsZero
+//     |-----> NetworkIDMaxSize()
 //
 // StateProofType
 //        |-----> MarshalMsg
 //        |-----> CanMarshalMsg
 //        |-----> (*) UnmarshalMsg
+//        |-----> (*) UnmarshalMsgWithState
 //        |-----> (*) CanUnmarshalMsg
 //        |-----> Msgsize
 //        |-----> MsgIsZero
+//        |-----> StateProofTypeMaxSize()
 //
 // Tag
 //  |-----> MarshalMsg
 //  |-----> CanMarshalMsg
 //  |-----> (*) UnmarshalMsg
+//  |-----> (*) UnmarshalMsgWithState
 //  |-----> (*) CanUnmarshalMsg
 //  |-----> Msgsize
 //  |-----> MsgIsZero
+//  |-----> TagMaxSize()
 //
 // TxType
 //    |-----> MarshalMsg
 //    |-----> CanMarshalMsg
 //    |-----> (*) UnmarshalMsg
+//    |-----> (*) UnmarshalMsgWithState
 //    |-----> (*) CanUnmarshalMsg
 //    |-----> Msgsize
 //    |-----> MsgIsZero
+//    |-----> TxTypeMaxSize()
 //
 
 // MarshalMsg implements msgp.Marshaler
@@ -80,9 +94,24 @@ func (_ ConsensusVersion) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *ConsensusVersion) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *ConsensusVersion) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	{
 		var zb0001 string
+		var zb0002 int
+		zb0002, err = msgp.ReadBytesBytesHeader(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0002 > maxConsensusVersionLen {
+			err = msgp.ErrOverflow(uint64(zb0002), uint64(maxConsensusVersionLen))
+			return
+		}
 		zb0001, bts, err = msgp.ReadStringBytes(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
@@ -94,6 +123,9 @@ func (z *ConsensusVersion) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *ConsensusVersion) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *ConsensusVersion) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*ConsensusVersion)
 	return ok
@@ -108,6 +140,12 @@ func (z ConsensusVersion) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z ConsensusVersion) MsgIsZero() bool {
 	return z == ""
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func ConsensusVersionMaxSize() (s int) {
+	s = msgp.StringPrefixSize + maxConsensusVersionLen
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -126,7 +164,12 @@ func (_ Error) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *Error) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *Error) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	{
 		var zb0001 string
 		zb0001, bts, err = msgp.ReadStringBytes(bts)
@@ -140,6 +183,9 @@ func (z *Error) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *Error) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *Error) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*Error)
 	return ok
@@ -154,6 +200,12 @@ func (z Error) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z Error) MsgIsZero() bool {
 	return z == ""
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func ErrorMaxSize() (s int) {
+	panic("Unable to determine max size: String type string(z) is unbounded")
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -172,7 +224,12 @@ func (_ HashID) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *HashID) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *HashID) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	{
 		var zb0001 string
 		zb0001, bts, err = msgp.ReadStringBytes(bts)
@@ -186,6 +243,9 @@ func (z *HashID) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *HashID) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *HashID) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*HashID)
 	return ok
@@ -200,6 +260,12 @@ func (z HashID) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z HashID) MsgIsZero() bool {
 	return z == ""
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func HashIDMaxSize() (s int) {
+	panic("Unable to determine max size: String type string(z) is unbounded")
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -218,7 +284,12 @@ func (_ NetworkID) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *NetworkID) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *NetworkID) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	{
 		var zb0001 string
 		zb0001, bts, err = msgp.ReadStringBytes(bts)
@@ -232,6 +303,9 @@ func (z *NetworkID) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *NetworkID) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *NetworkID) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*NetworkID)
 	return ok
@@ -246,6 +320,12 @@ func (z NetworkID) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z NetworkID) MsgIsZero() bool {
 	return z == ""
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func NetworkIDMaxSize() (s int) {
+	panic("Unable to determine max size: String type string(z) is unbounded")
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -264,7 +344,12 @@ func (_ StateProofType) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *StateProofType) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *StateProofType) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	{
 		var zb0001 uint64
 		zb0001, bts, err = msgp.ReadUint64Bytes(bts)
@@ -278,6 +363,9 @@ func (z *StateProofType) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *StateProofType) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *StateProofType) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*StateProofType)
 	return ok
@@ -292,6 +380,12 @@ func (z StateProofType) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z StateProofType) MsgIsZero() bool {
 	return z == 0
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func StateProofTypeMaxSize() (s int) {
+	s = msgp.Uint64Size
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -310,7 +404,12 @@ func (_ Tag) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *Tag) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *Tag) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	{
 		var zb0001 string
 		zb0001, bts, err = msgp.ReadStringBytes(bts)
@@ -324,6 +423,9 @@ func (z *Tag) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *Tag) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *Tag) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*Tag)
 	return ok
@@ -338,6 +440,12 @@ func (z Tag) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z Tag) MsgIsZero() bool {
 	return z == ""
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func TagMaxSize() (s int) {
+	panic("Unable to determine max size: String type string(z) is unbounded")
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -356,9 +464,24 @@ func (_ TxType) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *TxType) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *TxType) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	{
 		var zb0001 string
+		var zb0002 int
+		zb0002, err = msgp.ReadBytesBytesHeader(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0002 > txTypeMaxLen {
+			err = msgp.ErrOverflow(uint64(zb0002), uint64(txTypeMaxLen))
+			return
+		}
 		zb0001, bts, err = msgp.ReadStringBytes(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
@@ -370,6 +493,9 @@ func (z *TxType) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *TxType) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *TxType) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*TxType)
 	return ok
@@ -384,4 +510,10 @@ func (z TxType) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z TxType) MsgIsZero() bool {
 	return z == ""
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func TxTypeMaxSize() (s int) {
+	s = msgp.StringPrefixSize + txTypeMaxLen
+	return
 }

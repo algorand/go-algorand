@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -238,6 +238,10 @@ func cleanupSqliteDb(t *testing.T, path string) {
 
 func TestDBConcurrencyRW(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	if testing.Short() {
+		// Since it is a long operation and can only be affected by the db package, we can skip this test when running short tests only.
+		t.Skip("skipped as part of short test suite")
+	}
 
 	dbFolder := "/dev/shm"
 	os := runtime.GOOS
@@ -491,6 +495,11 @@ func TestLockingTableWhileWritingJournal(t *testing.T) {
 func testLockingTableWhileWriting(t *testing.T, useWAL bool) {
 	partitiontest.PartitionTest(t)
 	a := require.New(t)
+
+	if testing.Short() {
+		// Since it is a long operation and can only be affected by the db package, we can skip this test when running short tests only.
+		t.Skip("skipped as part of short test suite")
+	}
 
 	dbParams := []string{"_secure_delete=on"} // not required but used in ErasableAccessor, so I'd like it to be tested here as well
 	if useWAL {

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -27,8 +27,9 @@ import (
 // DefaultGenesis should be used as the default initial state for any GenesisData
 // instance (because we have no ctors...)
 var DefaultGenesis = GenesisData{
-	FirstPartKeyRound: 0,
-	LastPartKeyRound:  3000000,
+	FirstPartKeyRound:  0,
+	LastPartKeyRound:   3000000,
+	RewardsPoolBalance: defaultIncentivePoolBalanceAtInception,
 }
 
 // WalletData represents a wallet's name, percent stake, and initial online status for a genesis.json file
@@ -40,17 +41,18 @@ type WalletData struct {
 
 // GenesisData represents the genesis data for creating a genesis.json and wallets
 type GenesisData struct {
-	NetworkName       string
-	VersionModifier   string
-	ConsensusProtocol protocol.ConsensusVersion
-	FirstPartKeyRound uint64
-	LastPartKeyRound  uint64
-	PartKeyDilution   uint64
-	Wallets           []WalletData
-	FeeSink           basics.Address
-	RewardsPool       basics.Address
-	DevMode           bool
-	Comment           string
+	NetworkName        string
+	VersionModifier    string
+	ConsensusProtocol  protocol.ConsensusVersion
+	FirstPartKeyRound  uint64
+	LastPartKeyRound   uint64
+	PartKeyDilution    uint64
+	Wallets            []WalletData
+	FeeSink            basics.Address
+	RewardsPool        basics.Address
+	RewardsPoolBalance uint64 // Values < `ConsensusParams.MinBalance` are adjusted to `ConsensusParams.MinBalance`
+	DevMode            bool
+	Comment            string
 }
 
 // LoadGenesisData loads a GenesisData structure from a json file

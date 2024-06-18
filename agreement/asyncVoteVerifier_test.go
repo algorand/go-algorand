@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -33,6 +33,9 @@ type expiredExecPool struct {
 func (fp *expiredExecPool) EnqueueBacklog(enqueueCtx context.Context, t execpool.ExecFunc, arg interface{}, out chan interface{}) error {
 	// generate an error, to see if we correctly report that on the verifyVote() call.
 	return context.Canceled
+}
+func (fp *expiredExecPool) BufferSize() (length, capacity int) {
+	return
 }
 
 // Test async vote verifier against a full execution pool.

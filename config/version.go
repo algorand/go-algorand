@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -33,7 +33,7 @@ const VersionMajor = 3
 
 // VersionMinor is the Minor semantic version number (x.#.z) - changed when backwards-compatible features are introduced.
 // Not enforced until after initial public release (x > 0).
-const VersionMinor = 9
+const VersionMinor = 26
 
 // Version is the type holding our full version information.
 type Version struct {
@@ -72,7 +72,7 @@ func (v Version) AsUInt64() (versionInfo uint64) {
 	versionInfo = uint64(v.Major)
 	versionInfo <<= 16
 	versionInfo |= uint64(v.Minor)
-	versionInfo <<= 16
+	versionInfo <<= 24
 	versionInfo |= uint64(v.BuildNumber)
 	return
 }

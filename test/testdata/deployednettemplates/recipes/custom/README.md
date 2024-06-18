@@ -1,5 +1,7 @@
 # Custom Recipe
-This custom recipe serves as a template for performance testing on algonet (new network on AWS EC2 machines). With this recipe, you can modify the number of nodes, the type of machines, introduce new parameters to modify the network's configs and consensus parameters.
+This custom recipe serves as a template for performance testing on algonet (new network on AWS EC2 machines).
+With this recipe, you can modify the number of nodes, the type of machines, introduce new parameters to modify the
+network's configs and consensus parameters.
 
 N = participating Nodes
 NPN = Non-Participating Nodes
@@ -8,7 +10,8 @@ R = relays
 ## Running a Small Network (less than 20 total nodes)
 If you are running a network with less than 20 nodes, then you will need to update the default "FractionApply"
 1. Modify `configs/node.json` folder
-    - `"FractionApply"` in configs/node.json represents the number of nodes to report to telemetry. We don't want to overwhelm the telemetry server, so use something small like "0.2" on a large network.
+    - `"FractionApply"` in configs/node.json represents the number of nodes to report to telemetry. We don't want to
+    overwhelm the telemetry server, so use something small like "0.2" on a large network.
     - For small networks, update this value to "1.0"
 
 ## Quick Start - Jenkins
@@ -21,15 +24,29 @@ Build and create the recipe.
 - See Update config.json (below) to update config.json
 
 ## "Quick" Start - Manual recipe generation (not using Jenkins)
-Generate the recipe with the `network-tpl.json` file
-- (See the first section above for small networks.)
+Generate the recipe with the `network-tpl.json` file. You will need netgoal set up in your local environment/path.
+- (See the first section above for small networks. See Troubleshooting for netgoal path set up)
 1. Make sure you're in the same directory as this README and `cp network_templates/network-tpl.json network-tpl.json`
 2. Generate the recipe with a python script:
 ```
 cd go-algorand
-python3 test/testdata/deployednettemplates/generate-recipe/generate_network.py -f test/testdata/deployednettemplates/recipes/custom/network-tpl.json
+python3 test/testdata/deployednettemplates/generate-recipe/generate_network.py -f test/testdata/deployednettemplates/recipes/custom/network_templates/network-tpl.json
 ```
 3. This will create a new set of files in the `generated` folder
+
+## "Quick" Start - Manual recipe generation based off of Network Performance Rules (not using Jenkins)
+If you have a network_performance_Rules file in the following format on each line `group1 group2 minrtt`, you can
+first generate a template and then generate the recipe. You will need netgoal set up in your local environment/path.
+1. Generate the template:
+```
+cd go-algorand
+python3 test/testdata/deployednettemplates/generate-recipe/generate_network_tpl.py --network-rules-file example/npr/five-relays.txt --out test/testdata/deployednettemplates/recipes/custom/network_templates/five-relays.json
+```
+2. Generate the recipe:
+```
+cp test/testdata/deployednettemplates/recipes/custom/network_templates/five-relays.json test/testdata/deployednettemplates/recipes/custom/.
+python3 test/testdata/deployednettemplates/generate-recipe/generate_network.py -f test/testdata/deployednettemplates/recipes/custom/five-relays.json
+```
 
 ## Network Templates
 With the custom recipe, you can store multiple network templates in the network_templates directory.
@@ -67,7 +84,7 @@ Most parameters that can be modified by config.json can be found in `go-algorand
 
 ## Troubleshooting
 ### Can't find netgoal
-- Make sure you have netgoal installed
+- Make sure you have netgoal installed (you can either download it or run through the go-algorand build process)
 - Make sure you export GOBIN and GOPATH in your environment and add it to your path.
 On a mac, update by editing `~/.zshrc`, add
 ```

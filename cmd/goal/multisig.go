@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,6 +23,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/algorand/go-algorand/cmd/util/datadir"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -90,7 +91,7 @@ var addSigCmd = &cobra.Command{
 			reportErrorf(addrNoSigError)
 		}
 
-		dataDir := ensureSingleDataDir()
+		dataDir := datadir.EnsureSingleDataDir()
 		client := ensureKmdClient(dataDir)
 		wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
 
@@ -146,7 +147,7 @@ var signProgramCmd = &cobra.Command{
 	Long:  `Start a multisig LogicSig, or add a signature to an existing multisig, for a given program.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
-		dataDir := ensureSingleDataDir()
+		dataDir := datadir.EnsureSingleDataDir()
 		client := ensureKmdClient(dataDir)
 		wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
 		var program []byte
@@ -163,7 +164,7 @@ var signProgramCmd = &cobra.Command{
 			}
 			ops, err := logic.AssembleString(string(text))
 			if err != nil {
-				ops.ReportProblems(programSource, os.Stderr)
+				ops.ReportMultipleErrors(programSource, os.Stderr)
 				reportErrorf("%s: %s", programSource, err)
 			}
 			if outname == "" {

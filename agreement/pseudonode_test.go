@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -449,7 +449,7 @@ func TestPseudonodeLoadingOfParticipationKeys(t *testing.T) {
 	for rnd := basics.Round(3); rnd < 1000; rnd += 43 {
 		keyManagerProxy.target = func(votingRound, balanceRnd basics.Round) []account.ParticipationRecordForRound {
 			require.Equal(t, rnd, votingRound)
-			require.Equal(t, balanceRound(rnd, cparams), balanceRnd)
+			require.Equal(t, BalanceRound(rnd, cparams), balanceRnd)
 			return keyManager.VotingKeys(votingRound, balanceRnd)
 		}
 		pb.loadRoundParticipationKeys(basics.Round(rnd))

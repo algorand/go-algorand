@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -149,7 +149,6 @@ func setDumpHandlers(n network.GossipNode) {
 		{Tag: protocol.ProposalPayloadTag, MessageHandler: &dh},
 		{Tag: protocol.TopicMsgRespTag, MessageHandler: &dh},
 		{Tag: protocol.TxnTag, MessageHandler: &dh},
-		{Tag: protocol.UniCatchupReqTag, MessageHandler: &dh},
 		{Tag: protocol.UniEnsBlockReqTag, MessageHandler: &dh},
 		{Tag: protocol.VoteBundleTag, MessageHandler: &dh},
 	}

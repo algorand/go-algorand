@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,6 +18,8 @@ package logging
 
 import (
 	"testing"
+
+	"github.com/sirupsen/logrus"
 )
 
 // TestLogWriter is an io.Writer that wraps a testing.T (or a testing.B) -- anything written to it gets logged with t.Log(...)
@@ -37,6 +39,18 @@ func (tb TestLogWriter) Write(p []byte) (n int, err error) {
 	}
 	tb.Log(string(p))
 	return len(p), nil
+}
+
+// TestingLogWithoutFatalExit is a test-only convenience function to configure logging for testing in situations where Fatal() may be called
+// (e.g. in the case of an expected failure)
+// Calls to Fatal() will still call any registered exit handlers
+func TestingLogWithoutFatalExit(tb testing.TB) Logger {
+	l := logrus.New()
+	l.ExitFunc = func(code int) {}
+	wl := NewWrappedLogger(l)
+	wl.SetLevel(Debug)
+	wl.SetOutput(TestLogWriter{tb})
+	return wl
 }
 
 // TestingLog is a test-only convenience function to configure logging for testing

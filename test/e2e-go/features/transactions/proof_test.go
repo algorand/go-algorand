@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -92,16 +92,17 @@ func TestTxnMerkleProof(t *testing.T) {
 
 	txid := tx.ID()
 	txidSHA256 := tx.IDSha256() // only used for verification
-	confirmedTx, err := fixture.WaitForConfirmedTxn(status.LastRound+10, baseAcct, txid.String())
+	confirmedTx, err := fixture.WaitForConfirmedTxn(status.LastRound+10, txid.String())
+	a.NoError(err)
+	a.NotNil(confirmedTx.ConfirmedRound)
+
+	blk, err := client.BookkeepingBlock(*confirmedTx.ConfirmedRound)
 	a.NoError(err)
 
-	blk, err := client.BookkeepingBlock(confirmedTx.ConfirmedRound)
+	proofresp, proof, err := fixture.TransactionProof(txid.String(), *confirmedTx.ConfirmedRound, crypto.Sha512_256)
 	a.NoError(err)
 
-	proofresp, proof, err := fixture.TransactionProof(txid.String(), confirmedTx.ConfirmedRound, crypto.Sha512_256)
-	a.NoError(err)
-
-	proofrespSHA256, proofSHA256, err := fixture.TransactionProof(txid.String(), confirmedTx.ConfirmedRound, crypto.Sha256)
+	proofrespSHA256, proofSHA256, err := fixture.TransactionProof(txid.String(), *confirmedTx.ConfirmedRound, crypto.Sha256)
 	a.NoError(err)
 
 	element := TxnMerkleElemRaw{Txn: crypto.Digest(txid)}
@@ -174,10 +175,11 @@ func TestTxnMerkleProofSHA256(t *testing.T) {
 	a.NoError(err)
 
 	txid := tx.ID()
-	confirmedTx, err := fixture.WaitForConfirmedTxn(status.LastRound+10, baseAcct, txid.String())
+	confirmedTx, err := fixture.WaitForConfirmedTxn(status.LastRound+10, txid.String())
 	a.NoError(err)
+	a.NotNil(confirmedTx.ConfirmedRound)
 
-	blk, err := client.BookkeepingBlock(confirmedTx.ConfirmedRound)
+	blk, err := client.BookkeepingBlock(*confirmedTx.ConfirmedRound)
 	a.NoError(err)
 	proto := config.Consensus[blk.CurrentProtocol]
 	a.False(proto.EnableSHA256TxnCommitmentHeader)

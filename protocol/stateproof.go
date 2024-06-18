@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -35,6 +35,7 @@ const (
 
 // SortStateProofType implements sorting by StateProofType keys for
 // canonical encoding of maps in msgpack format.
+//
 //msgp:ignore SortStateProofType
 //msgp:sort StateProofType SortStateProofType
 type SortStateProofType []StateProofType

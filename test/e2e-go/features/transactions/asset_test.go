@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -26,7 +26,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
-	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/libgoal"
@@ -37,7 +37,7 @@ import (
 
 type assetIDParams struct {
 	idx    uint64
-	params v1.AssetParams
+	params model.AssetParams
 }
 
 func helperFillSignBroadcast(client libgoal.Client, wh []byte, sender string, tx transactions.Transaction, err error) (string, error) {
@@ -80,7 +80,7 @@ func TestAssetValidRounds(t *testing.T) {
 	validRounds = cparams.MaxTxnLife + 1
 	firstValid, lastValid, lastRound, err = client.ComputeValidityRounds(firstValid, lastValid, validRounds)
 	a.NoError(err)
-	a.Equal(lastRound+1, firstValid)
+	a.True(firstValid == 1 || firstValid == lastRound)
 	a.Equal(firstValid+cparams.MaxTxnLife, lastValid)
 
 	firstValid = 0
@@ -163,7 +163,7 @@ func TestAssetValidRounds(t *testing.T) {
 	// ledger may advance between SuggestedParams and FillUnsignedTxTemplate calls
 	// expect validity sequence
 	var firstValidRange, lastValidRange []uint64
-	for i := lastRoundBefore + 1; i <= lastRoundAfter+1; i++ {
+	for i := lastRoundBefore; i <= lastRoundAfter+1; i++ {
 		firstValidRange = append(firstValidRange, i)
 		lastValidRange = append(lastValidRange, i+cparams.MaxTxnLife)
 	}
@@ -226,9 +226,10 @@ func TestAssetConfig(t *testing.T) {
 	a.NoError(err)
 
 	// There should be no assets to start with
-	info, err := client.AccountInformation(account0)
+	info, err := client.AccountInformation(account0, true)
 	a.NoError(err)
-	a.Equal(len(info.AssetParams), 0)
+	a.NotNil(info.CreatedAssets)
+	a.Equal(len(*info.CreatedAssets), 0)
 
 	// Create max number of assets, or 1000 if the number of assets are unlimitd.
 	maxAssetsCount := config.Consensus[protocol.ConsensusFuture].MaxAssetsPerAccount
@@ -268,21 +269,38 @@ func TestAssetConfig(t *testing.T) {
 		a.True(strings.Contains(err.Error(), "too many assets in account:"))
 	}
 
+	// Helper methods for dereferencing asset fields
+	derefString := func(sp *string) string {
+		if sp != nil {
+			return *sp
+		}
+		return ""
+	}
+	derefByteArray := func(ba *[]byte) []byte {
+		if ba != nil {
+			return *ba
+		}
+		return []byte{}
+	}
+
 	// Check that assets are visible
-	info, err = client.AccountInformation(account0)
+	info, err = client.AccountInformation(account0, true)
 	a.NoError(err)
-	a.Equal(maxAssetsCount, len(info.AssetParams))
+	a.NotNil(info.Assets)
+	a.Equal(maxAssetsCount, len(*info.CreatedAssets))
 	var assets []assetIDParams
-	for idx, cp := range info.AssetParams {
+	for _, asset := range *info.CreatedAssets {
+		idx := asset.Index
+		cp := asset.Params
 		assets = append(assets, assetIDParams{idx, cp})
-		a.Equal(cp.UnitName, fmt.Sprintf("test%d", cp.Total-1))
-		a.Equal(cp.AssetName, fmt.Sprintf("testname%d", cp.Total-1))
-		a.Equal(cp.ManagerAddr, manager)
-		a.Equal(cp.ReserveAddr, reserve)
-		a.Equal(cp.FreezeAddr, freeze)
-		a.Equal(cp.ClawbackAddr, clawback)
-		a.Equal(cp.MetadataHash, assetMetadataHash)
-		a.Equal(cp.URL, assetURL)
+		a.Equal(derefString(cp.UnitName), fmt.Sprintf("test%d", cp.Total-1))
+		a.Equal(derefString(cp.Name), fmt.Sprintf("testname%d", cp.Total-1))
+		a.Equal(derefString(cp.Manager), manager)
+		a.Equal(derefString(cp.Reserve), reserve)
+		a.Equal(derefString(cp.Freeze), freeze)
+		a.Equal(derefString(cp.Clawback), clawback)
+		a.Equal(derefByteArray(cp.MetadataHash), assetMetadataHash)
+		a.Equal(derefString(cp.Url), assetURL)
 	}
 
 	// re-generate wh, since this test takes a while and sometimes
@@ -334,41 +352,44 @@ func TestAssetConfig(t *testing.T) {
 	confirmed = fixture.WaitForAllTxnsToConfirm(status.LastRound+20, txids)
 	a.True(confirmed, "changing keys")
 
-	info, err = client.AccountInformation(account0)
+	info, err = client.AccountInformation(account0, true)
 	a.NoError(err)
-	a.Equal(maxAssetsCount, len(info.AssetParams))
-	for idx, cp := range info.AssetParams {
-		a.Equal(cp.UnitName, fmt.Sprintf("test%d", cp.Total-1))
-		a.Equal(cp.AssetName, fmt.Sprintf("testname%d", cp.Total-1))
+	a.NotNil(info.CreatedAssets)
+	a.Equal(maxAssetsCount, len(*info.CreatedAssets))
+	for _, asset := range *info.CreatedAssets {
+		idx := asset.Index
+		cp := asset.Params
+		a.Equal(derefString(cp.UnitName), fmt.Sprintf("test%d", cp.Total-1))
+		a.Equal(derefString(cp.Name), fmt.Sprintf("testname%d", cp.Total-1))
 
 		if idx == assets[0].idx {
-			a.Equal(cp.ManagerAddr, account0)
+			a.Equal(derefString(cp.Manager), account0)
 		} else {
-			a.Equal(cp.ManagerAddr, manager)
+			a.Equal(derefString(cp.Manager), manager)
 		}
 
 		if idx == assets[1].idx {
-			a.Equal(cp.ReserveAddr, account0)
+			a.Equal(derefString(cp.Reserve), account0)
 		} else if idx == assets[4].idx {
-			a.Equal(cp.ReserveAddr, "")
+			a.Equal(derefString(cp.Reserve), "")
 		} else {
-			a.Equal(cp.ReserveAddr, reserve)
+			a.Equal(derefString(cp.Reserve), reserve)
 		}
 
 		if idx == assets[2].idx {
-			a.Equal(cp.FreezeAddr, account0)
+			a.Equal(derefString(cp.Freeze), account0)
 		} else if idx == assets[5].idx {
-			a.Equal(cp.FreezeAddr, "")
+			a.Equal(derefString(cp.Freeze), "")
 		} else {
-			a.Equal(cp.FreezeAddr, freeze)
+			a.Equal(derefString(cp.Freeze), freeze)
 		}
 
 		if idx == assets[3].idx {
-			a.Equal(cp.ClawbackAddr, account0)
+			a.Equal(derefString(cp.Clawback), account0)
 		} else if idx == assets[6].idx {
-			a.Equal(cp.ClawbackAddr, "")
+			a.Equal(derefString(cp.Clawback), "")
 		} else {
-			a.Equal(cp.ClawbackAddr, clawback)
+			a.Equal(derefString(cp.Clawback), clawback)
 		}
 	}
 
@@ -385,7 +406,8 @@ func TestAssetConfig(t *testing.T) {
 
 	// Destroy assets
 	txids = make(map[string]string)
-	for idx := range info.AssetParams {
+	for _, asset := range *info.CreatedAssets {
+		idx := asset.Index
 		// re-generate wh, since this test takes a while and sometimes
 		// the wallet handle expires.
 		wh, err = client.GetUnencryptedWalletHandle()
@@ -451,12 +473,7 @@ func TestAssetInformation(t *testing.T) {
 	a.NoError(err)
 
 	// There should be no assets to start with
-	info, err := client.AccountInformation(account0)
-	a.NoError(err)
-	a.Equal(len(info.AssetParams), 0)
-
-	// There should be no assets to start with
-	info2, err := client.AccountInformationV2(account0, true)
+	info2, err := client.AccountInformation(account0, true)
 	a.NoError(err)
 	a.NotNil(info2.CreatedAssets)
 	a.Equal(len(*info2.CreatedAssets), 0)
@@ -475,27 +492,19 @@ func TestAssetInformation(t *testing.T) {
 	a.True(confirmed, "creating assets")
 
 	// Check that AssetInformation returns the correct AssetParams
-	info, err = client.AccountInformation(account0)
-	a.NoError(err)
-	for idx, cp := range info.AssetParams {
-		assetInfo, err := client.AssetInformation(idx)
-		a.NoError(err)
-		a.Equal(cp, assetInfo)
-	}
-
-	// Check that AssetInformationV2 returns the correct AssetParams
-	info2, err = client.AccountInformationV2(account0, true)
+	info2, err = client.AccountInformation(account0, true)
 	a.NoError(err)
 	a.NotNil(info2.CreatedAssets)
 	for _, cp := range *info2.CreatedAssets {
-		asset, err := client.AssetInformationV2(cp.Index)
+		asset, err := client.AssetInformation(cp.Index)
 		a.NoError(err)
 		a.Equal(cp, asset)
 	}
 
 	// Destroy assets
 	txids = make(map[string]string)
-	for idx := range info.AssetParams {
+	for _, asset := range *info2.CreatedAssets {
+		idx := asset.Index
 		tx, err := client.MakeUnsignedAssetDestroyTx(idx)
 		txid, err := helperFillSignBroadcast(client, wh, manager, tx, err)
 		a.NoError(err)
@@ -540,7 +549,7 @@ func TestAssetGroupCreateSendDestroy(t *testing.T) {
 	a.NoError(err)
 	account1 := accountList[0]
 
-	txCount := uint64(0)
+	txCount := uint64(1000) // starting with v38 tx count is initialized to 1000
 	fee := uint64(1000000)
 
 	manager := account0
@@ -639,10 +648,13 @@ func TestAssetGroupCreateSendDestroy(t *testing.T) {
 	txids = make(map[string]string)
 
 	// asset 1 (create + send) exists and available
-	assetParams, err := client1.AssetInformation(assetID1)
+	asset, err := client1.AssetInformation(assetID1)
+	assetParams := asset.Params
 	a.NoError(err)
-	a.Equal(assetName1, assetParams.AssetName)
-	a.Equal(assetUnitName1, assetParams.UnitName)
+	a.NotNil(assetParams.Name)
+	a.Equal(assetName1, *assetParams.Name)
+	a.NotNil(*assetParams.UnitName)
+	a.Equal(assetUnitName1, *assetParams.UnitName)
 	a.Equal(account0, assetParams.Creator)
 	a.Equal(assetTotal, assetParams.Total)
 	// sending it should succeed
@@ -730,16 +742,19 @@ func TestAssetSend(t *testing.T) {
 	confirmed := fixture.WaitForAllTxnsToConfirm(curRound+20, txids)
 	a.True(confirmed, "creating assets")
 
-	info, err := client.AccountInformation(account0)
+	info, err := client.AccountInformation(account0, true)
 	a.NoError(err)
-	a.Equal(len(info.AssetParams), 2)
+	a.NotNil(info.CreatedAssets)
+	a.Equal(len(*info.CreatedAssets), 2)
 	var frozenIdx, nonFrozenIdx uint64
-	for idx, cp := range info.AssetParams {
-		if cp.UnitName == "frozen" {
+	for _, asset := range *info.CreatedAssets {
+		idx := asset.Index
+		cp := asset.Params
+		if cp.UnitName != nil && *cp.UnitName == "frozen" {
 			frozenIdx = idx
 		}
 
-		if cp.UnitName == "nofreeze" {
+		if cp.UnitName != nil && *cp.UnitName == "nofreeze" {
 			nonFrozenIdx = idx
 		}
 	}
@@ -759,7 +774,7 @@ func TestAssetSend(t *testing.T) {
 	tx, err = client.SendPaymentFromUnencryptedWallet(account0, extra, 0, 10000000000, nil)
 	a.NoError(err)
 	_, curRound = fixture.GetBalanceAndRound(account0)
-	fixture.WaitForConfirmedTxn(curRound+20, account0, tx.ID().String())
+	fixture.WaitForConfirmedTxn(curRound+20, tx.ID().String())
 
 	// Sending assets to account that hasn't opted in should fail, but
 	// after opting in, should succeed for non-frozen asset.
@@ -820,13 +835,19 @@ func TestAssetSend(t *testing.T) {
 	confirmed = fixture.WaitForAllTxnsToConfirm(curRound+20, txids)
 	a.True(confirmed, "creating asset slots")
 
-	info, err = client.AccountInformation(extra)
+	info, err = client.AccountInformation(extra, true)
 	a.NoError(err)
-	a.Equal(len(info.Assets), 2)
-	a.Equal(info.Assets[frozenIdx].Amount, uint64(0))
-	a.Equal(info.Assets[frozenIdx].Frozen, true)
-	a.Equal(info.Assets[nonFrozenIdx].Amount, uint64(10))
-	a.Equal(info.Assets[nonFrozenIdx].Frozen, false)
+	a.NotNil(info.Assets)
+	a.Equal(len(*info.Assets), 2)
+	for _, asset := range *info.Assets {
+		if asset.AssetID == frozenIdx {
+			a.Equal(asset.Amount, uint64(0))
+			a.Equal(asset.IsFrozen, true)
+		} else if asset.AssetID == nonFrozenIdx {
+			a.Equal(asset.Amount, uint64(10))
+			a.Equal(asset.IsFrozen, false)
+		}
+	}
 
 	// Should not be able to send more than is available
 	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 11, extra, "", "")
@@ -893,17 +914,29 @@ func TestAssetSend(t *testing.T) {
 	a.True(confirmed, "clawback")
 
 	// Check that the asset balances are correct
-	info, err = client.AccountInformation(account0)
+	info, err = client.AccountInformation(account0, true)
 	a.NoError(err)
-	a.Equal(len(info.Assets), 2)
-	a.Equal(info.Assets[frozenIdx].Amount, uint64(95))
-	a.Equal(info.Assets[nonFrozenIdx].Amount, uint64(95))
+	a.NotNil(info.Assets)
+	a.Equal(len(*info.Assets), 2)
+	for _, asset := range *info.Assets {
+		if asset.AssetID == frozenIdx {
+			a.Equal(asset.Amount, uint64(95))
+		} else if asset.AssetID == nonFrozenIdx {
+			a.Equal(asset.Amount, uint64(95))
+		}
+	}
 
-	info, err = client.AccountInformation(extra)
+	info, err = client.AccountInformation(extra, true)
 	a.NoError(err)
-	a.Equal(len(info.Assets), 2)
-	a.Equal(info.Assets[frozenIdx].Amount, uint64(5))
-	a.Equal(info.Assets[nonFrozenIdx].Amount, uint64(5))
+	a.NotNil(info.Assets)
+	a.Equal(len(*info.Assets), 2)
+	for _, asset := range *info.Assets {
+		if asset.AssetID == frozenIdx {
+			a.Equal(asset.Amount, uint64(5))
+		} else if asset.AssetID == nonFrozenIdx {
+			a.Equal(asset.Amount, uint64(5))
+		}
+	}
 
 	// Should be able to close out asset slots and close entire account.
 	tx, err = client.MakeUnsignedAssetFreezeTx(nonFrozenIdx, extra, false)
@@ -930,22 +963,24 @@ func TestAssetCreateWaitRestartDelete(t *testing.T) {
 	defer fixture.Shutdown()
 
 	// There should be no assets to start with
-	info, err := client.AccountInformation(account0)
+	info, err := client.AccountInformation(account0, true)
 	a.NoError(err)
-	a.Equal(len(info.AssetParams), 0)
+	a.NotNil(info.CreatedAssets)
+	a.Equal(len(*info.CreatedAssets), 0)
 
 	manager, reserve, freeze, clawback := setupActors(account0, client, a)
 	createAsset("test", account0, manager, reserve, freeze, clawback, client, fixture, a)
 
 	// Check that asset is visible
-	info, err = client.AccountInformation(account0)
+	info, err = client.AccountInformation(account0, true)
 	a.NoError(err)
-	a.Equal(len(info.AssetParams), 1)
-	var asset v1.AssetParams
+	a.NotNil(info.CreatedAssets)
+	a.Equal(len(*info.CreatedAssets), 1)
+	var asset model.AssetParams
 	var assetIndex uint64
-	for idx, cp := range info.AssetParams {
-		asset = cp
-		assetIndex = idx
+	for _, cp := range *info.CreatedAssets {
+		asset = cp.Params
+		assetIndex = cp.Index
 	}
 
 	assetURL := "foo://bar"
@@ -961,12 +996,13 @@ func TestAssetCreateWaitRestartDelete(t *testing.T) {
 	client = &fixture.LibGoalClient
 
 	// Check again that asset is visible
-	info, err = client.AccountInformation(account0)
+	info, err = client.AccountInformation(account0, true)
 	a.NoError(err)
-	a.Equal(len(info.AssetParams), 1)
-	for idx, cp := range info.AssetParams {
-		asset = cp
-		assetIndex = idx
+	a.NotNil(info.CreatedAssets)
+	a.Equal(len(*info.CreatedAssets), 1)
+	for _, cp := range *info.CreatedAssets {
+		asset = cp.Params
+		assetIndex = cp.Index
 	}
 	verifyAssetParameters(asset, "test", "testunit", manager, reserve, freeze, clawback,
 		assetMetadataHash, assetURL, a)
@@ -984,9 +1020,11 @@ func TestAssetCreateWaitRestartDelete(t *testing.T) {
 	submitAndWaitForTransaction(manager, tx, "destroying assets", client, fixture, a)
 
 	// Check again that asset is destroyed
-	info, err = client.AccountInformation(account0)
+	info, err = client.AccountInformation(account0, true)
 	a.NoError(err)
-	a.Equal(len(info.AssetParams), 0)
+	a.NoError(err)
+	a.NotNil(info.CreatedAssets)
+	a.Equal(len(*info.CreatedAssets), 0)
 
 	// Should be able to close now
 	wh, err := client.GetUnencryptedWalletHandle()
@@ -1026,22 +1064,24 @@ func TestAssetCreateWaitBalLookbackDelete(t *testing.T) {
 	defer fixture.Shutdown()
 
 	// There should be no assets to start with
-	info, err := client.AccountInformation(account0)
+	info, err := client.AccountInformation(account0, true)
 	a.NoError(err)
-	a.Equal(len(info.AssetParams), 0)
+	a.NotNil(info.CreatedAssets)
+	a.Equal(len(*info.CreatedAssets), 0)
 
 	manager, reserve, freeze, clawback := setupActors(account0, client, a)
 	createAsset("test", account0, manager, reserve, freeze, clawback, client, fixture, a)
 
 	// Check that asset is visible
-	info, err = client.AccountInformation(account0)
+	info, err = client.AccountInformation(account0, true)
 	a.NoError(err)
-	a.Equal(len(info.AssetParams), 1)
-	var asset v1.AssetParams
+	a.NotNil(info.CreatedAssets)
+	a.Equal(len(*info.CreatedAssets), 1)
+	var asset model.AssetParams
 	var assetIndex uint64
-	for idx, cp := range info.AssetParams {
-		asset = cp
-		assetIndex = idx
+	for _, cp := range *info.CreatedAssets {
+		asset = cp.Params
+		assetIndex = cp.Index
 	}
 
 	assetURL := "foo://bar"
@@ -1059,12 +1099,13 @@ func TestAssetCreateWaitBalLookbackDelete(t *testing.T) {
 	a.NoError(err)
 
 	// Check again that asset is visible
-	info, err = client.AccountInformation(account0)
+	info, err = client.AccountInformation(account0, true)
 	a.NoError(err)
-	a.Equal(len(info.AssetParams), 1)
-	for idx, cp := range info.AssetParams {
-		asset = cp
-		assetIndex = idx
+	a.NotNil(info.CreatedAssets)
+	a.Equal(len(*info.CreatedAssets), 1)
+	for _, cp := range *info.CreatedAssets {
+		asset = cp.Params
+		assetIndex = cp.Index
 	}
 	verifyAssetParameters(asset, "test", "testunit", manager, reserve, freeze, clawback,
 		assetMetadataHash, assetURL, a)
@@ -1082,9 +1123,10 @@ func TestAssetCreateWaitBalLookbackDelete(t *testing.T) {
 	submitAndWaitForTransaction(manager, tx, "destroying assets", client, fixture, a)
 
 	// Check again that asset is destroyed
-	info, err = client.AccountInformation(account0)
+	info, err = client.AccountInformation(account0, true)
 	a.NoError(err)
-	a.Equal(len(info.AssetParams), 0)
+	a.NotNil(info.CreatedAssets)
+	a.Equal(len(*info.CreatedAssets), 0)
 
 	// Should be able to close now
 	wh, err := client.GetUnencryptedWalletHandle()
@@ -1182,16 +1224,16 @@ func submitAndWaitForTransaction(sender string, tx transactions.Transaction, mes
 	asser.True(confirmed, message)
 }
 
-func verifyAssetParameters(asset v1.AssetParams,
+func verifyAssetParameters(asset model.AssetParams,
 	unitName, assetName, manager, reserve, freeze, clawback string,
 	metadataHash []byte, assetURL string, asser *require.Assertions) {
 
-	asser.Equal(asset.UnitName, unitName)
-	asser.Equal(asset.AssetName, assetName)
-	asser.Equal(asset.ManagerAddr, manager)
-	asser.Equal(asset.ReserveAddr, reserve)
-	asser.Equal(asset.FreezeAddr, freeze)
-	asser.Equal(asset.ClawbackAddr, clawback)
-	asser.Equal(asset.MetadataHash, metadataHash)
-	asser.Equal(asset.URL, assetURL)
+	asser.Equal(*asset.UnitName, unitName)
+	asser.Equal(*asset.Name, assetName)
+	asser.Equal(*asset.Manager, manager)
+	asser.Equal(*asset.Reserve, reserve)
+	asser.Equal(*asset.Freeze, freeze)
+	asser.Equal(*asset.Clawback, clawback)
+	asser.Equal(*asset.MetadataHash, metadataHash)
+	asser.Equal(*asset.Url, assetURL)
 }

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,11 +18,15 @@ package logging
 
 import (
 	"context"
+	"runtime"
 	"sync"
 	"time"
 
 	"github.com/algorand/go-algorand/util"
+	"github.com/algorand/go-algorand/util/metrics"
 )
+
+var ramUsageGauge = metrics.MakeGauge(metrics.MetricName{Name: "algod_ram_usage", Description: "number of bytes runtime.ReadMemStats().HeapInuse"})
 
 // UsageLogThread utility logging method
 func UsageLogThread(ctx context.Context, log Logger, period time.Duration, wg *sync.WaitGroup) {
@@ -34,6 +38,7 @@ func UsageLogThread(ctx context.Context, log Logger, period time.Duration, wg *s
 	var prevUtime, prevStime int64
 	var Utime, Stime int64
 	var prevTime time.Time
+	var mst runtime.MemStats
 
 	ticker := time.NewTicker(period)
 	hasPrev := false
@@ -48,13 +53,16 @@ func UsageLogThread(ctx context.Context, log Logger, period time.Duration, wg *s
 		now = time.Now()
 		Utime, Stime, _ = util.GetCurrentProcessTimes()
 
+		runtime.ReadMemStats(&mst)
+		ramUsageGauge.Set(uint64(mst.HeapInuse))
+
 		if hasPrev {
 			userNanos := Utime - prevUtime
 			sysNanos := Stime - prevStime
 			wallNanos := now.Sub(prevTime).Nanoseconds()
 			userf := float64(userNanos) / float64(wallNanos)
 			sysf := float64(sysNanos) / float64(wallNanos)
-			log.Infof("usage nanos wall=%d user=%d sys=%d pu=%0.4f%% ps=%0.4f%%", wallNanos, userNanos, sysNanos, userf*100.0, sysf*100.0)
+			log.Infof("usage nanos wall=%d user=%d sys=%d pu=%0.4f%% ps=%0.4f%% inuse=%d", wallNanos, userNanos, sysNanos, userf*100.0, sysf*100.0, mst.HeapInuse)
 		} else {
 			hasPrev = true
 		}

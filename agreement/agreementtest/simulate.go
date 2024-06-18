@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -31,7 +31,6 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
-	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
 	"github.com/algorand/go-algorand/util/timers"
 )
@@ -52,7 +51,7 @@ func makeInstant() *instant {
 	return i
 }
 
-func (i *instant) Decode([]byte) (timers.Clock, error) {
+func (i *instant) Decode([]byte) (timers.Clock[agreement.TimeoutType], error) {
 	return i, nil
 }
 
@@ -60,7 +59,7 @@ func (i *instant) Encode() []byte {
 	return nil
 }
 
-func (i *instant) TimeoutAt(d time.Duration) <-chan time.Time {
+func (i *instant) TimeoutAt(d time.Duration, timeoutType agreement.TimeoutType) <-chan time.Time {
 	ta := make(chan time.Time)
 	select {
 	case <-i.timeoutAtCalled:
@@ -69,13 +68,13 @@ func (i *instant) TimeoutAt(d time.Duration) <-chan time.Time {
 		return ta
 	}
 
-	if d == agreement.FilterTimeout(0, protocol.ConsensusCurrentVersion) && !i.HasPending("pseudonode") {
+	if timeoutType == agreement.TimeoutFilter && !i.HasPending("pseudonode") {
 		close(ta)
 	}
 	return ta
 }
 
-func (i *instant) Zero() timers.Clock {
+func (i *instant) Zero() timers.Clock[agreement.TimeoutType] {
 	i.Z0 <- struct{}{}
 	// pause here until runRound is called
 	i.Z1 <- struct{}{}
@@ -129,7 +128,7 @@ func (b *blackhole) Address() (string, bool) {
 // CryptoRandomSource is a random source that is based off our crypto library.
 type CryptoRandomSource struct{}
 
-// Uint64 implements the randomness by calling hte crypto library.
+// Uint64 implements the randomness by calling the crypto library.
 func (c *CryptoRandomSource) Uint64() uint64 {
 	return crypto.RandUint64()
 }
@@ -170,7 +169,10 @@ func Simulate(dbname string, n basics.Round, roundDeadline time.Duration, ledger
 	}
 	_ = accessor
 
-	service := agreement.MakeService(parameters)
+	service, err := agreement.MakeService(parameters)
+	if err != nil {
+		return err
+	}
 	service.Start()
 	defer service.Shutdown()
 	defer stopwatch.shutdown()

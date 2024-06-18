@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -34,7 +34,7 @@ type (
 		keyLifetime uint64
 	}
 
-	// CommittablePublicKey  is used to create a binary representation of public keys in the merkle
+	// CommittablePublicKey is used to create a binary representation of public keys in the merkle
 	// signature scheme.
 	CommittablePublicKey struct {
 		VerifyingKey crypto.FalconVerifier

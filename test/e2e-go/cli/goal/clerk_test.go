@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -68,19 +68,19 @@ func TestClerkSendNoteEncoding(t *testing.T) {
 
 	for i := uint64(0); i < maxRetry && (!foundTx1 || !foundTx2); i++ {
 		if !foundTx1 {
-			tx1, err := fixture.WaitForConfirmedTxn(status.LastRound+i, account, txID)
+			tx1, err := fixture.WaitForConfirmedTxn(status.LastRound+i, txID)
 			if err == nil {
 				foundTx1 = true
-				a.Equal(noteText, string(tx1.Note))
+				a.Equal(noteText, string(tx1.Txn.Txn.Note))
 			}
 		}
 		if !foundTx2 {
-			tx2, err := fixture.WaitForConfirmedTxn(status.LastRound+i, account, txID2)
+			tx2, err := fixture.WaitForConfirmedTxn(status.LastRound+i, txID2)
 			if err == nil {
 				foundTx2 = true
 				// If the note matches our original text, then goal is still expecting strings encoded
 				// with StdEncoding.EncodeToString() when using --noteb64 parameter
-				a.Equal(originalNoteb64Text, string(tx2.Note), "goal should decode noteb64 with base64.StdEncoding")
+				a.Equal(originalNoteb64Text, string(tx2.Txn.Txn.Note), "goal should decode noteb64 with base64.StdEncoding")
 			}
 		}
 	}

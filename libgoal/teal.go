@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,13 +18,14 @@ package libgoal
 
 import (
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 )
 
 // Compile compiles the given program and returned the compiled program
-func (c *Client) Compile(program []byte) (compiledProgram []byte, compiledProgramHash crypto.Digest, err error) {
+func (c *Client) Compile(program []byte, useSourceMap bool) (compiledProgram []byte, compiledProgramHash crypto.Digest, sourcemap *logic.SourceMap, err error) {
 	algod, err2 := c.ensureAlgodClient()
 	if err2 != nil {
-		return nil, crypto.Digest{}, err2
+		return nil, crypto.Digest{}, nil, err2
 	}
-	return algod.Compile(program)
+	return algod.Compile(program, useSourceMap)
 }

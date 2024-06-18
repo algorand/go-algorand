@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,114 +21,112 @@ import (
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v1/handlers"
 )
 
-// KeyLength is the an Algorand's public address length
-const KeyLength = 58
-
 // V1Routes contains all routes for v1
+// v1 algod paths will route to the sunset message, resulting in a 410 Gone response.
 var V1Routes = lib.Routes{
 	lib.Route{
 		Name:        "status",
 		Method:      "GET",
 		Path:        "/status",
-		HandlerFunc: handlers.Status,
+		HandlerFunc: handlers.V1Sunset,
 	},
 
 	lib.Route{
 		Name:        "wait-for-block",
 		Method:      "GET",
 		Path:        "/status/wait-for-block-after/:round",
-		HandlerFunc: handlers.WaitForBlock,
+		HandlerFunc: handlers.V1Sunset,
 	},
 
 	lib.Route{
 		Name:        "raw-transaction",
 		Method:      "POST",
 		Path:        "/transactions",
-		HandlerFunc: handlers.RawTransaction,
+		HandlerFunc: handlers.V1Sunset,
 	},
 
 	lib.Route{
 		Name:        "account-information",
 		Method:      "GET",
 		Path:        "/account/:addr",
-		HandlerFunc: handlers.AccountInformation,
+		HandlerFunc: handlers.V1Sunset,
 	},
 
 	lib.Route{
 		Name:        "transaction-information",
 		Method:      "GET",
 		Path:        "/account/:addr/transaction/:txid",
-		HandlerFunc: handlers.TransactionInformation,
+		HandlerFunc: handlers.V1Sunset,
 	},
 
 	lib.Route{
 		Name:        "suggested-fee",
 		Method:      "GET",
 		Path:        "/transactions/fee",
-		HandlerFunc: handlers.SuggestedFee,
+		HandlerFunc: handlers.V1Sunset,
 	},
 
 	lib.Route{
 		Name:        "suggested-params",
 		Method:      "GET",
 		Path:        "/transactions/params",
-		HandlerFunc: handlers.SuggestedParams,
+		HandlerFunc: handlers.V1Sunset,
 	},
 
 	lib.Route{
 		Name:        "transactions",
 		Method:      "GET",
 		Path:        "/account/:addr/transactions",
-		HandlerFunc: handlers.Transactions,
+		HandlerFunc: handlers.V1Sunset,
 	},
 
 	lib.Route{
 		Name:        "block",
 		Method:      "GET",
 		Path:        "/block/:round",
-		HandlerFunc: handlers.GetBlock,
+		HandlerFunc: handlers.V1Sunset,
 	},
 
 	lib.Route{
 		Name:        "ledger-supply",
 		Method:      "GET",
 		Path:        "/ledger/supply",
-		HandlerFunc: handlers.GetSupply,
+		HandlerFunc: handlers.V1Sunset,
 	},
 
 	lib.Route{
 		Name:        "list-pending-transactions",
 		Method:      "GET",
 		Path:        "/transactions/pending",
-		HandlerFunc: handlers.GetPendingTransactions,
+		HandlerFunc: handlers.V1Sunset,
 	},
 
 	lib.Route{
 		Name:        "pending-transaction-information",
 		Method:      "GET",
 		Path:        "/transactions/pending/:txid",
-		HandlerFunc: handlers.PendingTransactionInformation,
+		HandlerFunc: handlers.V1Sunset,
 	},
 
 	lib.Route{
 		Name:        "pending-transaction-information-by-address",
 		Method:      "GET",
 		Path:        "/account/:addr/transactions/pending",
-		HandlerFunc: handlers.GetPendingTransactionsByAddress,
+		HandlerFunc: handlers.V1Sunset,
 	},
 
 	lib.Route{
 		Name:        "asset-information-by-id",
 		Method:      "GET",
 		Path:        "/asset/:index",
-		HandlerFunc: handlers.AssetInformation,
+		HandlerFunc: handlers.V1Sunset,
 	},
 
 	lib.Route{
 		Name:        "list-assets",
 		Method:      "GET",
 		Path:        "/assets",
-		HandlerFunc: handlers.Assets,
+		HandlerFunc: handlers.V1Sunset,
 	},
 
 	// ----- This can only be active when indexer is live
@@ -137,6 +135,6 @@ var V1Routes = lib.Routes{
 		Name:        "get-transaction-by-id",
 		Method:      "GET",
 		Path:        "/transaction/:txid",
-		HandlerFunc: handlers.GetTransactionByID,
+		HandlerFunc: handlers.V1Sunset,
 	},
 }

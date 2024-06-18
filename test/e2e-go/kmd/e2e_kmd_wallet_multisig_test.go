@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -440,7 +440,6 @@ func TestMultisigSignProgram(t *testing.T) {
 	err = protocol.Decode(resp3.Multisig, &msig)
 	a.NoError(err)
 
-	ok, err := crypto.MultisigVerify(logic.Program(program), crypto.Digest(msigAddr), msig)
+	err = crypto.MultisigVerify(logic.Program(program), crypto.Digest(msigAddr), msig)
 	a.NoError(err)
-	a.True(ok)
 }

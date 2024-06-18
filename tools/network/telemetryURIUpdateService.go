@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,6 +17,7 @@
 package network
 
 import (
+	"context"
 	"net/url"
 	"strings"
 	"time"
@@ -81,32 +82,33 @@ func (t *telemetryURIUpdater) Start() {
 	}()
 }
 
+// TODO: Support secondary telemetry SRV record lookup
 func (t *telemetryURIUpdater) lookupTelemetryURL() (url *url.URL) {
 	bootstrapArray := t.cfg.DNSBootstrapArray(t.genesisNetwork)
-	bootstrapArray = append(bootstrapArray, "default.algodev.network")
-	for _, bootstrapID := range bootstrapArray {
-		addrs, err := t.srvReader.readFromSRV("tls", bootstrapID)
+	bootstrapArray = append(bootstrapArray, &config.DNSBootstrap{PrimarySRVBootstrap: "default.algodev.network"})
+	for _, dnsBootstrap := range bootstrapArray {
+		addrs, err := t.srvReader.readFromSRV("tls", dnsBootstrap.PrimarySRVBootstrap)
 		if err != nil {
-			t.log.Infof("An issue occurred reading telemetry entry for '_telemetry._tls.%s': %v", bootstrapID, err)
+			t.log.Infof("An issue occurred reading telemetry entry for '_telemetry._tls.%s': %v", dnsBootstrap.PrimarySRVBootstrap, err)
 		} else if len(addrs) == 0 {
-			t.log.Infof("No telemetry entry for: '_telemetry._tls.%s'", bootstrapID)
+			t.log.Infof("No telemetry entry for: '_telemetry._tls.%s'", dnsBootstrap.PrimarySRVBootstrap)
 		} else {
 			for _, addr := range addrs {
 				// the addr that we received from ReadFromSRV contains host:port, we need to prefix that with the schema. since it's the tls, we want to use https.
 				url, err = url.Parse("https://" + addr)
 				if err != nil {
-					t.log.Infof("a telemetry endpoint '%s' was retrieved for '_telemerty._tls.%s'. This does not seems to be a valid endpoint and will be ignored(%v).", addr, bootstrapID, err)
+					t.log.Infof("a telemetry endpoint '%s' was retrieved for '_telemerty._tls.%s'. This does not seems to be a valid endpoint and will be ignored(%v).", addr, dnsBootstrap.PrimarySRVBootstrap, err)
 					continue
 				}
 				return url
 			}
 		}
 
-		addrs, err = t.srvReader.readFromSRV("tcp", bootstrapID)
+		addrs, err = t.srvReader.readFromSRV("tcp", dnsBootstrap.PrimarySRVBootstrap)
 		if err != nil {
-			t.log.Infof("An issue occurred reading telemetry entry for '_telemetry._tcp.%s': %v", bootstrapID, err)
+			t.log.Infof("An issue occurred reading telemetry entry for '_telemetry._tcp.%s': %v", dnsBootstrap.PrimarySRVBootstrap, err)
 		} else if len(addrs) == 0 {
-			t.log.Infof("No telemetry entry for: '_telemetry._tcp.%s'", bootstrapID)
+			t.log.Infof("No telemetry entry for: '_telemetry._tcp.%s'", dnsBootstrap.PrimarySRVBootstrap)
 		} else {
 			for _, addr := range addrs {
 				if strings.HasPrefix(addr, "https://") {
@@ -118,7 +120,7 @@ func (t *telemetryURIUpdater) lookupTelemetryURL() (url *url.URL) {
 				}
 
 				if err != nil {
-					t.log.Infof("a telemetry endpoint '%s' was retrieved for '_telemerty._tcp.%s'. This does not seems to be a valid endpoint and will be ignored(%v).", addr, bootstrapID, err)
+					t.log.Infof("a telemetry endpoint '%s' was retrieved for '_telemerty._tcp.%s'. This does not seems to be a valid endpoint and will be ignored(%v).", addr, dnsBootstrap.PrimarySRVBootstrap, err)
 					continue
 				}
 				return url
@@ -131,5 +133,5 @@ func (t *telemetryURIUpdater) lookupTelemetryURL() (url *url.URL) {
 }
 
 func (t *telemetryURIUpdater) readFromSRV(protocol string, bootstrapID string) (addrs []string, err error) {
-	return ReadFromSRV("telemetry", protocol, bootstrapID, t.cfg.FallbackDNSResolverAddress, t.cfg.DNSSecuritySRVEnforced())
+	return ReadFromSRV(context.Background(), "telemetry", protocol, bootstrapID, t.cfg.FallbackDNSResolverAddress, t.cfg.DNSSecuritySRVEnforced())
 }

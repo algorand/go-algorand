@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,6 +23,7 @@ import (
 
 // AgreementType is an enum identifying a specific type of AgreementEvent
 // TODO Maybe this should be called AgreementEventType, since these are not actually types of agreements
+//
 //go:generate stringer -type=AgreementType
 type AgreementType int
 

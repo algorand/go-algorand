@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,6 +18,7 @@ package agreement
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
@@ -51,6 +52,10 @@ type (
 		R       rawVote                 `codec:"r"`
 		Cred    committee.Credential    `codec:"cred"`
 		Sig     crypto.OneTimeSignature `codec:"sig,omitempty,omitemptycheckstruct"`
+
+		// validatedAt indicates the time at which this vote was verified (as a voteVerified messageEvent),
+		// relative to the zero of that round. It is only set for step 0.
+		validatedAt time.Duration
 	}
 
 	// unauthenticatedEquivocationVote is a pair of votes which has not
@@ -143,7 +148,7 @@ func (uv unauthenticatedVote) verify(l LedgerReader) (vote, error) {
 
 // makeVote creates a new unauthenticated vote from its constituent components.
 //
-// makeVote returns an error it it fails.
+// makeVote returns an error if it fails.
 func makeVote(rv rawVote, voting crypto.OneTimeSigner, selection *crypto.VRFSecrets, l Ledger) (unauthenticatedVote, error) {
 	m, err := membership(l, rv.Sender, rv.Round, rv.Period, rv.Step)
 	if err != nil {

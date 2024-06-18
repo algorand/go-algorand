@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -166,8 +166,9 @@ func killProcess(pid int) error {
 }
 
 // NOTE: Unlike Unix, Windows tries to open the target process in order to kill it.
-//       ERROR_INVALID_PARAMETER is returned if the process does not exists.
-//       To mimic other OS behavior, if the process does not exist, don't return an error
+//
+//	ERROR_INVALID_PARAMETER is returned if the process does not exists.
+//	To mimic other OS behavior, if the process does not exist, don't return an error
 func isInvalidParameterError(err error) bool {
 	var syscallError syscall.Errno
 

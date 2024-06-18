@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -52,7 +52,7 @@ type pattern struct {
 	Patterns []pattern          `json:"patterns,omitempty"`
 }
 
-func buildSyntaxHighlight() *tmLanguage {
+func buildSyntaxHighlight(version uint64) *tmLanguage {
 	tm := tmLanguage{
 		Schema:    "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
 		Name:      "Algorand TEAL",
@@ -126,11 +126,17 @@ func buildSyntaxHighlight() *tmLanguage {
 	allNamedFields = append(allNamedFields, logic.TxnTypeNames[:]...)
 	allNamedFields = append(allNamedFields, logic.OnCompletionNames[:]...)
 	accumulated := make(map[string]bool)
-	opSpecs := logic.OpcodesByVersion(uint64(docVersion))
+	opSpecs := logic.OpcodesByVersion(version)
 	for _, spec := range opSpecs {
 		for _, imm := range spec.OpDetails.Immediates {
 			if imm.Group != nil && !accumulated[imm.Group.Name] {
-				allNamedFields = append(allNamedFields, imm.Group.Names...)
+				for _, name := range imm.Group.Names {
+					spec, ok := imm.Group.SpecByName(name)
+					if !ok || spec.Version() > version {
+						continue
+					}
+					allNamedFields = append(allNamedFields, name)
+				}
 				accumulated[imm.Group.Name] = true
 			}
 		}
@@ -169,6 +175,7 @@ func buildSyntaxHighlight() *tmLanguage {
 			},
 		},
 	}
+	var allAccess []string
 	var allArithmetics []string
 
 	var keys []string
@@ -192,16 +199,13 @@ func buildSyntaxHighlight() *tmLanguage {
 				Name:  "keyword.other.teal",
 				Match: fmt.Sprintf("^(%s)\\b", strings.Join(loading, "|")),
 			})
-		case "State Access":
-			keywords.Patterns = append(keywords.Patterns, pattern{
-				Name:  "keyword.other.unit.teal",
-				Match: fmt.Sprintf("^(%s)\\b", strings.Join(names, "|")),
-			})
+		case "State Access", "Box Access":
+			allAccess = append(allAccess, names...)
 		// For these, accumulate into allArithmetics,
 		// and only add to keyword.Patterns later, when all
 		// have been collected.
 		case "Arithmetic", "Byte Array Manipulation", "Byte Array Arithmetic",
-			"Byte Array Logic", "Inner Transactions":
+			"Byte Array Logic", "Cryptography", "Inner Transactions":
 			escape := map[rune]bool{
 				'*': true,
 				'+': true,
@@ -230,6 +234,10 @@ func buildSyntaxHighlight() *tmLanguage {
 			panic(fmt.Sprintf("Unknown ops group: %s", grp))
 		}
 	}
+	keywords.Patterns = append(keywords.Patterns, pattern{
+		Name:  "keyword.other.unit.teal",
+		Match: fmt.Sprintf("^(%s)\\b", strings.Join(allAccess, "|")),
+	})
 	keywords.Patterns = append(keywords.Patterns, pattern{
 		Name:  "keyword.operator.teal",
 		Match: fmt.Sprintf("^(%s)\\b", strings.Join(allArithmetics, "|")),

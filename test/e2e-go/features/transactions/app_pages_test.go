@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -50,7 +50,7 @@ func TestExtraProgramPages(t *testing.T) {
 	walletHandle, err := client.GetUnencryptedWalletHandle()
 	a.NoError(err)
 
-	accountInfo, err := client.AccountInformationV2(baseAcct, false)
+	accountInfo, err := client.AccountInformation(baseAcct, false)
 	a.NoError(err)
 	if accountInfo.AppsTotalExtraPages != nil {
 		a.Equal(*accountInfo.AppsTotalExtraPages, uint64(0))
@@ -89,97 +89,97 @@ return
 
 	// create app 1 with 1 extra page
 	app1ExtraPages := uint32(1)
-	tx, err := client.MakeUnsignedAppCreateTx(transactions.NoOpOC, smallProgram, smallProgram, globalSchema, localSchema, nil, nil, nil, nil, app1ExtraPages)
+	tx, err := client.MakeUnsignedAppCreateTx(transactions.NoOpOC, smallProgram, smallProgram, globalSchema, localSchema, nil, nil, nil, nil, nil, app1ExtraPages)
 	a.NoError(err)
 	tx, err = client.FillUnsignedTxTemplate(baseAcct, 0, 0, 0, tx)
 	a.NoError(err)
 	txid, err := client.SignAndBroadcastTransaction(walletHandle, nil, tx)
 	a.NoError(err)
-	_, err = fixture.WaitForConfirmedTxn(status.LastRound+5, baseAcct, txid)
+	_, err = fixture.WaitForConfirmedTxn(status.LastRound+5, txid)
 	a.NoError(err)
 
-	app1CreateTxn, err := client.PendingTransactionInformationV2(txid)
+	app1CreateTxn, err := client.PendingTransactionInformation(txid)
 	a.NoError(err)
 	a.NotNil(app1CreateTxn.ConfirmedRound)
 	a.NotNil(app1CreateTxn.ApplicationIndex)
 	app1ID := *app1CreateTxn.ApplicationIndex
 
-	accountInfo, err = client.AccountInformationV2(baseAcct, false)
+	accountInfo, err = client.AccountInformation(baseAcct, false)
 	a.NoError(err)
 	a.NotNil(accountInfo.AppsTotalExtraPages)
 	a.Equal(*accountInfo.AppsTotalExtraPages, uint64(app1ExtraPages))
 
 	// update app 1 and ensure the extra page still works
-	tx, err = client.MakeUnsignedAppUpdateTx(app1ID, nil, nil, nil, nil, bigProgram, smallProgram)
+	tx, err = client.MakeUnsignedAppUpdateTx(app1ID, nil, nil, nil, nil, nil, bigProgram, smallProgram)
 	a.NoError(err)
 	tx, err = client.FillUnsignedTxTemplate(baseAcct, 0, 0, 0, tx)
 	a.NoError(err)
 	txid, err = client.SignAndBroadcastTransaction(walletHandle, nil, tx)
 	a.NoError(err)
-	_, err = fixture.WaitForConfirmedTxn(*app1CreateTxn.ConfirmedRound+5, baseAcct, txid)
+	_, err = fixture.WaitForConfirmedTxn(*app1CreateTxn.ConfirmedRound+5, txid)
 	a.NoError(err)
 
-	app1UpdateTxn, err := client.PendingTransactionInformationV2(txid)
+	app1UpdateTxn, err := client.PendingTransactionInformation(txid)
 	a.NoError(err)
 	a.NotNil(app1CreateTxn.ConfirmedRound)
 
-	accountInfo, err = client.AccountInformationV2(baseAcct, false)
+	accountInfo, err = client.AccountInformation(baseAcct, false)
 	a.NoError(err)
 	a.NotNil(accountInfo.AppsTotalExtraPages)
 	a.Equal(*accountInfo.AppsTotalExtraPages, uint64(app1ExtraPages))
 
 	// create app 2 with 2 extra pages
 	app2ExtraPages := uint32(2)
-	tx, err = client.MakeUnsignedAppCreateTx(transactions.NoOpOC, bigProgram, smallProgram, globalSchema, localSchema, nil, nil, nil, nil, app2ExtraPages)
+	tx, err = client.MakeUnsignedAppCreateTx(transactions.NoOpOC, bigProgram, smallProgram, globalSchema, localSchema, nil, nil, nil, nil, nil, app2ExtraPages)
 	a.NoError(err)
 	tx, err = client.FillUnsignedTxTemplate(baseAcct, 0, 0, 0, tx)
 	a.NoError(err)
 	txid, err = client.SignAndBroadcastTransaction(walletHandle, nil, tx)
 	a.NoError(err)
-	_, err = fixture.WaitForConfirmedTxn(*app1UpdateTxn.ConfirmedRound+5, baseAcct, txid)
+	_, err = fixture.WaitForConfirmedTxn(*app1UpdateTxn.ConfirmedRound+5, txid)
 	a.NoError(err)
 
-	app2CreateTxn, err := client.PendingTransactionInformationV2(txid)
+	app2CreateTxn, err := client.PendingTransactionInformation(txid)
 	a.NoError(err)
 	a.NotNil(app2CreateTxn.ConfirmedRound)
 	a.NotNil(app2CreateTxn.ApplicationIndex)
 	app2ID := *app2CreateTxn.ApplicationIndex
 
-	accountInfo, err = client.AccountInformationV2(baseAcct, false)
+	accountInfo, err = client.AccountInformation(baseAcct, false)
 	a.NoError(err)
 	a.NotNil(accountInfo.AppsTotalExtraPages)
 	a.Equal(*accountInfo.AppsTotalExtraPages, uint64(app1ExtraPages+app2ExtraPages))
 
 	// delete app 1
-	tx, err = client.MakeUnsignedAppDeleteTx(app1ID, nil, nil, nil, nil)
+	tx, err = client.MakeUnsignedAppDeleteTx(app1ID, nil, nil, nil, nil, nil)
 	a.NoError(err)
 	tx, err = client.FillUnsignedTxTemplate(baseAcct, 0, 0, 0, tx)
 	a.NoError(err)
 	txid, err = client.SignAndBroadcastTransaction(walletHandle, nil, tx)
 	a.NoError(err)
-	_, err = fixture.WaitForConfirmedTxn(*app2CreateTxn.ConfirmedRound+5, baseAcct, txid)
+	_, err = fixture.WaitForConfirmedTxn(*app2CreateTxn.ConfirmedRound+5, txid)
 	a.NoError(err)
 
-	app1DeleteTxn, err := client.PendingTransactionInformationV2(txid)
+	app1DeleteTxn, err := client.PendingTransactionInformation(txid)
 	a.NoError(err)
 	a.NotNil(app1DeleteTxn.ConfirmedRound)
 
-	accountInfo, err = client.AccountInformationV2(baseAcct, false)
+	accountInfo, err = client.AccountInformation(baseAcct, false)
 	a.NoError(err)
 	a.NotNil(accountInfo.AppsTotalExtraPages)
 	a.Equal(*accountInfo.AppsTotalExtraPages, uint64(app2ExtraPages))
 
 	// delete app 2
-	tx, err = client.MakeUnsignedAppDeleteTx(app2ID, nil, nil, nil, nil)
+	tx, err = client.MakeUnsignedAppDeleteTx(app2ID, nil, nil, nil, nil, nil)
 	a.NoError(err)
 	tx, err = client.FillUnsignedTxTemplate(baseAcct, 0, 0, 0, tx)
 	a.NoError(err)
 	txid, err = client.SignAndBroadcastTransaction(walletHandle, nil, tx)
 	a.NoError(err)
-	_, err = fixture.WaitForConfirmedTxn(*app1DeleteTxn.ConfirmedRound+5, baseAcct, txid)
+	_, err = fixture.WaitForConfirmedTxn(*app1DeleteTxn.ConfirmedRound+5, txid)
 	a.NoError(err)
 
-	accountInfo, err = client.AccountInformationV2(baseAcct, false)
+	accountInfo, err = client.AccountInformation(baseAcct, false)
 	a.NoError(err)
 	if accountInfo.AppsTotalExtraPages != nil {
 		a.Equal(*accountInfo.AppsTotalExtraPages, uint64(0))

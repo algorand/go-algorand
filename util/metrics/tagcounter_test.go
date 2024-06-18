@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -79,6 +79,84 @@ func TestTagCounter(t *testing.T) {
 			t.Errorf("tag[%d] %v wanted %d got %d", i, tag, countin, endcount)
 		}
 	}
+}
+
+func TestTagCounterFilter(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	tags := make([]string, 17)
+	for i := range tags {
+		tags[i] = fmt.Sprintf("A%c", 'A'+i)
+	}
+	goodTags := tags[:10]
+	badTags := tags[10:]
+	badCount := uint64(0)
+	//t.Logf("tags %v", tags)
+	countsIn := make([]uint64, len(tags))
+	for i := range countsIn {
+		countsIn[i] = uint64(10 * (i + 1))
+		if i >= 10 {
+			badCount += countsIn[i]
+		}
+	}
+
+	tc := NewTagCounterFiltered("tc", "wat", goodTags, "UNK")
+	DefaultRegistry().Deregister(tc)
+
+	// check that empty TagCounter cleanly returns no results
+	var sb strings.Builder
+	tc.WriteMetric(&sb, "")
+	require.Equal(t, "", sb.String())
+
+	result := make(map[string]float64)
+	tc.AddMetric(result)
+	require.Equal(t, 0, len(result))
+
+	var wg sync.WaitGroup
+	wg.Add(len(tags))
+
+	runf := func(tag string, count uint64) {
+		for i := 0; i < int(count); i++ {
+			tc.Add(tag, 1)
+		}
+		wg.Done()
+	}
+
+	for i, tag := range tags {
+		go runf(tag, countsIn[i])
+	}
+	wg.Wait()
+
+	endtags := tc.tagptr.Load().(map[string]*uint64)
+	for i, tag := range goodTags {
+		countin := countsIn[i]
+		endcountp := endtags[tag]
+		if endcountp == nil {
+			t.Errorf("tag[%d] %s nil counter", i, tag)
+			continue
+		}
+		endcount := *endcountp
+		if endcount != countin {
+			t.Errorf("tag[%d] %v wanted %d got %d", i, tag, countin, endcount)
+		}
+	}
+	for _, tag := range badTags {
+		endcountp := endtags[tag]
+		if endcountp == nil {
+			// best, nil entry, never touched the struct
+			continue
+		}
+		endcount := *endcountp
+		if endcount != 0 {
+			t.Errorf("bad tag %v wanted %d got %d", tag, 0, endcount)
+		}
+	}
+	endcountp := endtags["UNK"]
+	endcount := uint64(0)
+	if endcountp != nil {
+		endcount = *endcountp
+	}
+	require.Equal(t, badCount, endcount)
 }
 
 func TestTagCounterWriteMetric(t *testing.T) {

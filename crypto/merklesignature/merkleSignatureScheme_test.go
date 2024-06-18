@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -509,7 +509,7 @@ func TestGetAllKeys(t *testing.T) {
 	a.Equal(0, len(keys))
 }
 
-//#region Helper Functions
+// #region Helper Functions
 func makeSig(signer *Secrets, sigRound uint64, a *require.Assertions) ([]byte, Signature) {
 	msg := genMsgForTest()
 

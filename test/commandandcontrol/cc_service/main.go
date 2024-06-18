@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -56,7 +56,7 @@ func main() {
 func handleClientConnections(w http.ResponseWriter, r *http.Request) {
 	ws, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Errorf("upgrade:", err)
+		log.Error("upgrade:", err)
 		return
 	}
 	ws.Unsafe = true
@@ -72,7 +72,7 @@ func handleAgentConnections(w http.ResponseWriter, r *http.Request) {
 	// Upgrade initial GET request to a websocket
 	ws, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Errorf("problem initializing agent web socket", err)
+		log.Error("problem initializing agent web socket", err)
 		return
 	}
 	ws.Unsafe = true

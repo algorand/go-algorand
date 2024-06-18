@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -1172,12 +1172,13 @@ func merkleCommitBench(b *testing.B, hashType crypto.HashType) {
 		msg := make(TestBuf, sz)
 		crypto.RandBytes(msg[:])
 
-		for cnt := 10; cnt <= 10000000; cnt *= 10 {
+		for cnt := 10; cnt <= 100000; cnt *= 10 {
 			var a TestRepeatingArray
 			a.item = msg
 			a.count = uint64(cnt)
 
 			b.Run(fmt.Sprintf("Item%d/Count%d", sz, cnt), func(b *testing.B) {
+				b.ReportAllocs()
 				for i := 0; i < b.N; i++ {
 					tree, err := Build(a, crypto.HashFactory{HashType: hashType})
 					require.NoError(b, err)
@@ -1205,6 +1206,7 @@ func benchmarkMerkleProve1M(b *testing.B, hashType crypto.HashType) {
 	require.NoError(b, err)
 
 	b.ResetTimer()
+	b.ReportAllocs()
 
 	for i := uint64(0); i < uint64(b.N); i++ {
 		_, err := tree.Prove([]uint64{i % a.count})
@@ -1238,6 +1240,7 @@ func benchmarkMerkleVerify1M(b *testing.B, hashType crypto.HashType) {
 	}
 
 	b.ResetTimer()
+	b.ReportAllocs()
 
 	for i := uint64(0); i < uint64(b.N); i++ {
 		err := Verify(root, map[uint64]crypto.Hashable{i % a.count: msg}, proofs[i])

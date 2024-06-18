@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,9 +17,12 @@
 package ledger
 
 import (
-	"github.com/algorand/go-algorand/test/partitiontest"
 	"testing"
 	"time"
+
+	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/test/partitiontest"
+	"github.com/stretchr/testify/require"
 )
 
 const epsilon = 5 * time.Millisecond
@@ -98,4 +101,110 @@ func TestBulletin(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Errorf("<-Wait(10) finished late")
 	}
+}
+
+func TestCancelWait(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	bul := makeBulletin()
+
+	// Calling Wait before CancelWait
+	waitCh := bul.Wait(5)
+	bul.CancelWait(5)
+	bul.committedUpTo(5)
+	select {
+	case <-waitCh:
+		t.Errorf("<-Wait(5) should have been cancelled")
+	case <-time.After(epsilon):
+		// Correct
+	}
+	require.NotContains(t, bul.pendingNotificationRequests, basics.Round(5))
+
+	// Calling CancelWait before Wait
+	bul.CancelWait(6)
+	select {
+	case <-bul.Wait(6):
+		t.Errorf("<-Wait(6) should have been cancelled")
+	case <-time.After(epsilon):
+		// Correct
+	}
+	require.Contains(t, bul.pendingNotificationRequests, basics.Round(6))
+	require.Equal(t, bul.pendingNotificationRequests[basics.Round(6)].count, 1)
+	bul.CancelWait(6)
+	require.NotContains(t, bul.pendingNotificationRequests, basics.Round(6))
+
+	// Two Waits, one cancelled
+	waitCh1 := bul.Wait(7)
+	waitCh2 := bul.Wait(7)
+	require.Equal(t, waitCh1, waitCh2)
+	bul.CancelWait(7)
+	select {
+	case <-waitCh1:
+		t.Errorf("<-Wait(7) should not be notified yet")
+	case <-time.After(epsilon):
+		// Correct
+	}
+	// Still one waiter
+	require.Contains(t, bul.pendingNotificationRequests, basics.Round(7))
+	require.Equal(t, bul.pendingNotificationRequests[basics.Round(7)].count, 1)
+
+	bul.committedUpTo(7)
+	select {
+	case <-waitCh1:
+		// Correct
+	case <-time.After(epsilon):
+		t.Errorf("<-Wait(7) should have been notified")
+	}
+	require.NotContains(t, bul.pendingNotificationRequests, basics.Round(7))
+
+	// Wait followed by Cancel for a round that already completed
+	waitCh = bul.Wait(5)
+	bul.CancelWait(5)
+	require.NotContains(t, bul.pendingNotificationRequests, basics.Round(5))
+	select {
+	case <-waitCh:
+		// Correct
+	case <-time.After(epsilon):
+		t.Errorf("<-Wait(5) should have been notified right away")
+	}
+
+	// Cancel Wait after Wait triggered
+	waitCh = bul.Wait(8)
+	require.Contains(t, bul.pendingNotificationRequests, basics.Round(8))
+	require.Equal(t, bul.pendingNotificationRequests[basics.Round(8)].count, 1)
+	bul.committedUpTo(8)
+	require.NotContains(t, bul.pendingNotificationRequests, basics.Round(8))
+	select {
+	case <-waitCh:
+		// Correct
+	case <-time.After(epsilon):
+		t.Errorf("<-Wait(8) should have been notified")
+	}
+	require.NotContains(t, bul.pendingNotificationRequests, basics.Round(8))
+	bul.CancelWait(8) // should do nothing
+
+	// Cancel Wait after Wait triggered, but before Wait returned
+	waitCh = bul.Wait(9)
+	require.Contains(t, bul.pendingNotificationRequests, basics.Round(9))
+	require.Equal(t, bul.pendingNotificationRequests[basics.Round(9)].count, 1)
+	bul.committedUpTo(9)
+	require.NotContains(t, bul.pendingNotificationRequests, basics.Round(9))
+	bul.CancelWait(9) // should do nothing
+	select {
+	case <-waitCh:
+		// Correct
+	case <-time.After(epsilon):
+		t.Errorf("<-Wait(9) should have been notified")
+	}
+	require.NotContains(t, bul.pendingNotificationRequests, basics.Round(9))
+
+	// Two waits, both cancelled
+	waitCh1 = bul.Wait(10)
+	waitCh2 = bul.Wait(10)
+	require.Equal(t, waitCh1, waitCh2)
+	bul.CancelWait(10)
+	require.Contains(t, bul.pendingNotificationRequests, basics.Round(10))
+	require.Equal(t, bul.pendingNotificationRequests[basics.Round(10)].count, 1)
+	bul.CancelWait(10)
+	require.NotContains(t, bul.pendingNotificationRequests, basics.Round(10))
 }

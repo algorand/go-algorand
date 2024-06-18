@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -27,6 +27,7 @@ import (
 
 func TestSubSaturate(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	a := Round(1)
 	b := Round(2)
@@ -37,27 +38,131 @@ func TestSubSaturate(t *testing.T) {
 
 func TestSubSaturate32(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
-	require.Equal(t, uint32(0), SubSaturate32(0, 1))
-	require.Equal(t, uint32(0), SubSaturate32(1, 2))
-	require.Equal(t, uint32(0), SubSaturate32(1, 1))
-	require.Equal(t, uint32(0), SubSaturate32(1, math.MaxUint32))
-	require.Equal(t, uint32(1), SubSaturate32(2, 1))
-	require.Equal(t, uint32(math.MaxUint32-1), SubSaturate32(math.MaxUint32, 1))
+	require.Equal(t, uint32(0), SubSaturate(uint32(0), uint32(1)))
+	require.Equal(t, uint32(0), SubSaturate(uint32(1), uint32(2)))
+	require.Equal(t, uint32(0), SubSaturate(uint32(1), uint32(1)))
+	require.Equal(t, uint32(0), SubSaturate(uint32(1), math.MaxUint32))
+	require.Equal(t, uint32(1), SubSaturate(uint32(2), uint32(1)))
+	require.Equal(t, uint32(math.MaxUint32-1), SubSaturate(math.MaxUint32, uint32(1)))
 }
 
 func TestAddSaturate32(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
-	require.Equal(t, uint32(1), AddSaturate32(0, 1))
-	require.Equal(t, uint32(math.MaxUint32-1), AddSaturate32(math.MaxUint32-2, 1))
-	require.Equal(t, uint32(math.MaxUint32), AddSaturate32(math.MaxUint32, 0))
-	require.Equal(t, uint32(math.MaxUint32), AddSaturate32(math.MaxUint32-1, 1))
-	require.Equal(t, uint32(math.MaxUint32), AddSaturate32(math.MaxUint32, 2))
+	require.Equal(t, uint32(1), AddSaturate(uint32(0), uint32(1)))
+	require.Equal(t, uint32(math.MaxUint32-1), AddSaturate(math.MaxUint32-2, uint32(1)))
+	require.Equal(t, uint32(math.MaxUint32), AddSaturate(math.MaxUint32, uint32(0)))
+	require.Equal(t, uint32(math.MaxUint32), AddSaturate(math.MaxUint32-1, uint32(1)))
+	require.Equal(t, uint32(math.MaxUint32), AddSaturate(math.MaxUint32, uint32(2)))
+}
+
+func BenchmarkAddSaturateGenerics(b *testing.B) {
+	startVar := uint64(0xdeadbeef)
+	for n := uint64(0); n < uint64(b.N); n++ {
+		temp := AddSaturate(n, startVar)
+		startVar = temp
+	}
+}
+
+// oldOAdd adds 2 values with overflow detection
+func oldOAdd(a uint64, b uint64) (res uint64, overflowed bool) {
+	res = a + b
+	overflowed = res < a
+	return
+}
+
+// addSaturateU64Old adds 2 values with saturation on overflow (OLD IMPLEMENTATION)
+func addSaturateU64Old(a uint64, b uint64) uint64 {
+	res, overflowed := oldOAdd(a, b)
+	if overflowed {
+		return math.MaxUint64
+	}
+	return res
+}
+
+func BenchmarkAddSaturateU64Old(b *testing.B) {
+	startVar := uint64(0xdeadbeef)
+	for n := uint64(0); n < uint64(b.N); n++ {
+		temp := addSaturateU64Old(n, startVar)
+		startVar = temp
+	}
+}
+
+func BenchmarkSubSaturateGenerics(b *testing.B) {
+	startVar := uint64(0xdeadbeef)
+	for n := uint64(0); n < uint64(b.N); n++ {
+		temp := SubSaturate(n, startVar)
+		startVar = temp
+	}
+}
+
+// oldOSub subtracts b from a with overflow detection
+func oldOSub(a uint64, b uint64) (res uint64, overflowed bool) {
+	res = a - b
+	overflowed = res > a
+	return
+}
+
+// subSaturateU64Old subtracts 2 values with saturation on underflow (OLD IMPLEMENTATION)
+func subSaturateU64Old(a uint64, b uint64) uint64 {
+	res, overflowed := oldOSub(a, b)
+	if overflowed {
+		return 0
+	}
+	return res
+}
+
+func BenchmarkSubSaturateU64Old(b *testing.B) {
+	startVar := uint64(0xdeadbeef)
+	for n := uint64(0); n < uint64(b.N); n++ {
+		temp := subSaturateU64Old(n, startVar)
+		startVar = temp
+	}
+}
+
+func BenchmarkMulSaturateGenerics(b *testing.B) {
+	startVar := uint64(0xdeadbeef)
+	for n := uint64(1); n <= uint64(b.N); n++ {
+		temp := MulSaturate(n, startVar)
+		startVar = temp
+	}
+}
+
+// oldOMul multiplies 2 values with overflow detection
+func oldOMul(a uint64, b uint64) (res uint64, overflowed bool) {
+	if b == 0 {
+		return 0, false
+	}
+	c := a * b
+	if c/b != a {
+		return 0, true
+	}
+	return c, false
+}
+
+// mulSaturateU64Old multiplies 2 values with saturation on overflow (OLD IMPLEMENTATION)
+func mulSaturateU64Old(a uint64, b uint64) uint64 {
+	res, overflowed := oldOMul(a, b)
+	if overflowed {
+		return math.MaxUint64
+	}
+	return res
+}
+
+func BenchmarkMulSaturateU64Old(b *testing.B) {
+	startVar := uint64(0xdeadbeef)
+	for n := uint64(1); n <= uint64(b.N); n++ {
+		temp := mulSaturateU64Old(n, startVar)
+		startVar = temp
+	}
 }
 
 func TestRoundUpToMultipleOf(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	r := Round(24)
 	for n := Round(1); n < Round(100); n++ {
@@ -67,6 +172,24 @@ func TestRoundUpToMultipleOf(t *testing.T) {
 		if n < r {
 			prevMul := nextMul - n
 			require.True(t, prevMul < r)
+		}
+	}
+}
+
+func TestRoundDownToMultipleOf(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	a := require.New(t)
+
+	r := Round(24)
+	for n := Round(1); n < Round(100); n++ {
+		mul := r.RoundDownToMultipleOf(n)
+		a.True(mul <= r)
+		a.Equal(Round(0), mul%n)
+		if r < n {
+			a.Equal(Round(0), mul)
+		} else if r == n {
+			a.Equal(n, mul)
 		}
 	}
 }

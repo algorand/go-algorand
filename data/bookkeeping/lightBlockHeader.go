@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,6 +17,7 @@
 package bookkeeping
 
 import (
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/committee"
@@ -38,8 +39,15 @@ type LightBlockHeader struct {
 		In addition, we make sure that the Seed (The unpredictable value) would be the first field that gets
 		hashed (give it the lowest codec value in the LightBlockHeader struct) to mitigate a collision attack
 		on the merkle damgard construction.
+
+		The BlockHash serves a similar role, in that it also depends on the seed and introduces some
+		uncontrollable input.  It is slightly weaker, in the sense that an adversary can influence
+		the BlockHash to some degree (e.g., by including specific transactions in the payset), but
+		it comes with the added benefit of allowing to authenticate the entire blockchain based on
+		the BlockHash value.
 	*/
 	Seed                committee.Seed       `codec:"0"`
+	BlockHash           BlockHash            `codec:"1"`
 	Round               basics.Round         `codec:"r"`
 	GenesisHash         crypto.Digest        `codec:"gh"`
 	Sha256TxnCommitment crypto.GenericDigest `codec:"tc,allocbound=crypto.Sha256Size"`
@@ -47,12 +55,20 @@ type LightBlockHeader struct {
 
 // ToLightBlockHeader creates returns a LightBlockHeader from a given block header
 func (bh *BlockHeader) ToLightBlockHeader() LightBlockHeader {
-	return LightBlockHeader{
-		Seed:                bh.Seed,
+	res := LightBlockHeader{
 		GenesisHash:         bh.GenesisHash,
 		Round:               bh.Round,
 		Sha256TxnCommitment: bh.Sha256Commitment[:],
 	}
+
+	proto := config.Consensus[bh.CurrentProtocol]
+	if proto.StateProofBlockHashInLightHeader {
+		res.BlockHash = bh.Hash()
+	} else {
+		res.Seed = bh.Seed
+	}
+
+	return res
 }
 
 // ToBeHashed implements the crypto.Hashable interface

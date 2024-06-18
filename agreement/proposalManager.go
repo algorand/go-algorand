@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -28,7 +28,10 @@ import (
 // payload{Present,Verified}, roundInterruption, {soft,cert,next}Threshold.
 // It returns the following type(s) of event: none, vote{Filtered,Malformed},
 // payload{Pipelined,Rejected,Accepted}, and proposal{Accepted,Committable}.
-type proposalManager struct{}
+
+type proposalManager struct {
+	_struct struct{} `codec:","`
+}
 
 func (m *proposalManager) T() stateMachineTag {
 	return proposalMachine
@@ -40,15 +43,15 @@ func (m *proposalManager) underlying() listener {
 
 // A proposalManager handles eight types of events:
 //
-// - It applies message relay rules to votePresent, voteVerified,
-//   payloadPresent, and payloadVerified events.
+//   - It applies message relay rules to votePresent, voteVerified,
+//     payloadPresent, and payloadVerified events.
 //
 // - It enters a new round given a roundInterruption.
 //
-// - It enters a new period given a nextThreshold event.  It also enters a new
-//   period given a softThreshold/certThreshold event, if necessary.
-//    - On entering a new period due to a softThreshold/certThreshold, it
-//      dispatches this event to the proposalMachineRound.
+//   - It enters a new period given a nextThreshold event.  It also enters a new
+//     period given a softThreshold/certThreshold event, if necessary.
+//   - On entering a new period due to a softThreshold/certThreshold, it
+//     dispatches this event to the proposalMachineRound.
 //
 // For more details, see each method's respective documentation below.
 func (m *proposalManager) handle(r routerHandle, p player, e event) event {
@@ -96,30 +99,30 @@ func (m *proposalManager) handleNewPeriod(r routerHandle, p player, e thresholdE
 
 // handleMessageEvent is called for {vote,payload}{Present,Verified} events.
 //
-// - A votePresent event is delivered when the state machine receives a new
-//   proposal-vote.  A voteFiltered event is returned if the proposal-vote is
-//   not fresh or is a duplicate.  Otherwise, an empty event is returned.
+//   - A votePresent event is delivered when the state machine receives a new
+//     proposal-vote.  A voteFiltered event is returned if the proposal-vote is
+//     not fresh or is a duplicate.  Otherwise, an empty event is returned.
 //
-// - A voteVerified event is delievered after verification was attempted on a
-//   proposal-vote.  A voteMalformed event is returned if the proposal-vote is
-//   ill-formed and resulted from a corrupt process.  A voteFiltered event is
-//   emitted if the vote is not fresh or is a duplicate.  Otherwise the
-//   proposal-vote is dispatched to the proposalMachineRound, and a voteFiltered
-//   or a proposalAccepted event is returned.
+//   - A voteVerified event is delievered after verification was attempted on a
+//     proposal-vote.  A voteMalformed event is returned if the proposal-vote is
+//     ill-formed and resulted from a corrupt process.  A voteFiltered event is
+//     emitted if the vote is not fresh or is a duplicate.  Otherwise the
+//     proposal-vote is dispatched to the proposalMachineRound, and a voteFiltered
+//     or a proposalAccepted event is returned.
 //
-// - A payloadPresent event is delivered when the state machine receives a new
-//   proposal payload.  The payload is dispatched to both the
-//   proposalMachineRound for the current round and the proposalMachineRound for
-//   the next round.  If both state machines return payloadRejected,
-//   proposalManager also returns payloadRejected.  Otherwise, one state machine
-//   returned payloadPipelined, and the proposalManager propagates this event to
-//   the parent, setting the event's round properly.
+//   - A payloadPresent event is delivered when the state machine receives a new
+//     proposal payload.  The payload is dispatched to both the
+//     proposalMachineRound for the current round and the proposalMachineRound for
+//     the next round.  If both state machines return payloadRejected,
+//     proposalManager also returns payloadRejected.  Otherwise, one state machine
+//     returned payloadPipelined, and the proposalManager propagates this event to
+//     the parent, setting the event's round properly.
 //
-// - A payloadVerified event is delivered after validation was attempted on a
-//   proposal payload.  If the proposal payload was invalid, a payloadMalformed
-//   event is returned.  Otherwise, the event is dispatched to the
-//   proposalMachineRound, and then the resulting payload{Rejected,Accepted} or
-//   proposalCommittable event is returned.
+//   - A payloadVerified event is delivered after validation was attempted on a
+//     proposal payload.  If the proposal payload was invalid, a payloadMalformed
+//     event is returned.  Otherwise, the event is dispatched to the
+//     proposalMachineRound, and then the resulting payload{Rejected,Accepted} or
+//     proposalCommittable event is returned.
 func (m *proposalManager) handleMessageEvent(r routerHandle, p player, e filterableMessageEvent) (res event) {
 	var pipelinedRound round
 	var pipelinedPeriod period
@@ -129,9 +132,15 @@ func (m *proposalManager) handleMessageEvent(r routerHandle, p player, e filtera
 
 	switch e.t() {
 	case votePresent:
-		err := m.filterProposalVote(p, r, e.Input.UnauthenticatedVote, e.FreshnessData)
+		verifyForCredHistory, err := m.filterProposalVote(p, r, e.Input.UnauthenticatedVote, e.FreshnessData)
 		if err != nil {
-			return filteredEvent{T: voteFiltered, Err: makeSerErr(err)}
+			credTrackingNote := NoLateCredentialTrackingImpact
+			if verifyForCredHistory {
+				// mark filtered votes that may still update the best credential arrival time
+				// the freshness check failed, but we still want to verify this proposal-vote for credential tracking
+				credTrackingNote = UnverifiedLateCredentialForTracking
+			}
+			return filteredEvent{T: voteFiltered, Err: makeSerErr(err), LateCredentialTrackingNote: credTrackingNote}
 		}
 		return emptyEvent{}
 
@@ -147,9 +156,14 @@ func (m *proposalManager) handleMessageEvent(r routerHandle, p player, e filtera
 		v := e.Input.Vote
 
 		err := proposalFresh(e.FreshnessData, v.u())
+		keepForLateCredentialTracking := false
 		if err != nil {
-			err := makeSerErrf("proposalManager: ignoring proposal-vote due to age: %v", err)
-			return filteredEvent{T: voteFiltered, Err: err}
+			// if we should keep processing this credential message only to record its timestamp, we continue
+			keepForLateCredentialTracking = proposalUsefulForCredentialHistory(e.FreshnessData.PlayerRound, v.u())
+			if !keepForLateCredentialTracking {
+				err := makeSerErrf("proposalManager: ignoring proposal-vote due to age: %v", err)
+				return filteredEvent{T: voteFiltered, Err: err}
+			}
 		}
 
 		if v.R.Round == p.Round {
@@ -158,7 +172,26 @@ func (m *proposalManager) handleMessageEvent(r routerHandle, p player, e filtera
 			r.t.timeRPlus1().RecVoteReceived(v)
 		}
 
-		return r.dispatch(p, e.messageEvent, proposalMachineRound, v.R.Round, v.R.Period, 0)
+		e := r.dispatch(p, e.messageEvent, proposalMachineRound, v.R.Round, v.R.Period, 0)
+
+		if keepForLateCredentialTracking {
+			// we only continued processing this vote to see whether it updates the credential arrival time
+			err := makeSerErrf("proposalManager: ignoring proposal-vote due to age: %v", err)
+			if e.t() == voteFiltered {
+				credNote := e.(filteredEvent).LateCredentialTrackingNote
+				if credNote != VerifiedBetterLateCredentialForTracking && credNote != NoLateCredentialTrackingImpact {
+					// It should be impossible to hit this condition
+					r.t.log.Debugf("vote verified may only be tagged with VerifiedBetterLateCredential/NoLateCredentialTrackingImpact but saw %v", credNote)
+					credNote = NoLateCredentialTrackingImpact
+				}
+				// indicate whether it updated
+				return filteredEvent{T: voteFiltered, Err: err, LateCredentialTrackingNote: credNote}
+			}
+			// the proposalMachineRound didn't filter the vote, so it must have had a better credential,
+			// indicate that it did cause updating its state
+			return filteredEvent{T: voteFiltered, Err: err, LateCredentialTrackingNote: VerifiedBetterLateCredentialForTracking}
+		}
+		return e
 
 	case payloadPresent:
 		propRound := e.Input.UnauthenticatedProposal.Round()
@@ -212,19 +245,48 @@ func (m *proposalManager) handleMessageEvent(r routerHandle, p player, e filtera
 	}
 }
 
-// filterVote filters a vote, checking if it is both fresh and not a duplicate.
-func (m *proposalManager) filterProposalVote(p player, r routerHandle, uv unauthenticatedVote, freshData freshnessData) error {
-	err := proposalFresh(freshData, uv)
-	if err != nil {
-		return fmt.Errorf("proposalManager: filtered proposal-vote due to age: %v", err)
+// filterProposalVote filters a vote, checking if it is both fresh and not a duplicate, returning
+// an errProposalManagerPVNotFresh or errProposalManagerPVDuplicate if so, else nil.
+// It also returns a bool indicating whether this proposal-vote should still be verified for tracking credential history.
+func (m *proposalManager) filterProposalVote(p player, r routerHandle, uv unauthenticatedVote, freshData freshnessData) (bool, error) {
+	// check if the vote is within the credential history window
+	credHistory := proposalUsefulForCredentialHistory(freshData.PlayerRound, uv)
+
+	// checkDup asks proposalTracker if the vote is a duplicate, returning true if so
+	checkDup := func() bool {
+		qe := voteFilterRequestEvent{RawVote: uv.R}
+		sawVote := r.dispatch(p, qe, proposalMachinePeriod, uv.R.Round, uv.R.Period, 0)
+		return sawVote.t() == voteFiltered
 	}
 
-	qe := voteFilterRequestEvent{RawVote: uv.R}
-	sawVote := r.dispatch(p, qe, proposalMachinePeriod, uv.R.Round, uv.R.Period, 0)
-	if sawVote.t() == voteFiltered {
-		return fmt.Errorf("proposalManager: filtered proposal-vote: sender %v had already sent a vote in round %d period %d", uv.R.Sender, uv.R.Round, uv.R.Period)
+	// check the vote against the current player's freshness rules
+	err := proposalFresh(freshData, uv)
+	if err != nil {
+		// not fresh, but possibly useful for credential history: ensure not a duplicate
+		if credHistory && checkDup() {
+			credHistory = false
+		}
+		return credHistory, fmt.Errorf("proposalManager: filtered proposal-vote due to age: %v", err)
 	}
-	return nil
+
+	if checkDup() {
+		return credHistory, fmt.Errorf("proposalManager: filtered proposal-vote: sender %v had already sent a vote in round %d period %d", uv.R.Sender, uv.R.Round, uv.R.Period)
+
+	}
+	return credHistory, nil
+}
+
+func proposalUsefulForCredentialHistory(curRound round, vote unauthenticatedVote) bool {
+	if vote.R.Round < curRound && curRound <= vote.R.Round+credentialRoundLag &&
+		vote.R.Period == 0 &&
+		vote.R.Step == propose {
+		if dynamicFilterCredentialArrivalHistory > 0 {
+			// continue processing old period 0 votes so we could track their
+			// arrival times and inform setting the filter timeout dynamically.
+			return true
+		}
+	}
+	return false
 }
 
 // voteFresh determines whether a proposal satisfies freshness rules.

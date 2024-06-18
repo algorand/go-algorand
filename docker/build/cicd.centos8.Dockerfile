@@ -3,14 +3,14 @@ ARG ARCH="amd64"
 FROM quay.io/centos/centos:stream8
 ARG GOLANG_VERSION
 ARG ARCH="amd64"
-RUN dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm && \
+RUN dnf update rpm -y && \
+    dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm && \
     dnf update -y && \
-    dnf install -y autoconf wget awscli git gnupg2 nfs-utils python3-devel boost-devel expect jq \
+    dnf install -y autoconf wget awscli git gnupg2 nfs-utils python3-devel expect jq \
     libtool gcc-c++ libstdc++-devel rpmdevtools createrepo rpm-sign bzip2 which \
     libffi-devel openssl-devel
 RUN dnf install -y epel-release && \
     dnf update && \
-    dnf -y install sqlite && \
     dnf -y --enablerepo=powertools install libstdc++-static && \
     dnf -y install make
 RUN echo "${BOLD}Downloading and installing binaries...${RESET}" && \
@@ -28,6 +28,7 @@ COPY . $GOPATH/src/github.com/algorand/go-algorand
 ENV PATH=$GOPATH/bin:$GOROOT/bin:$PATH \
     GOPROXY=https://proxy.golang.org,https://pkg.go.dev,https://goproxy.io,direct
 WORKDIR $GOPATH/src/github.com/algorand/go-algorand
+RUN git config --global --add safe.directory '*'
 RUN make clean
 RUN rm -rf $GOPATH/src/github.com/algorand/go-algorand && \
     mkdir -p $GOPATH/src/github.com/algorand/go-algorand

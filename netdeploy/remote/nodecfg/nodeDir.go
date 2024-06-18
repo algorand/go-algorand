@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -40,19 +40,19 @@ type nodeDir struct {
 }
 
 // * Configure:
-// 		* IsRelay
-// 		* NetAddress
-// 		* APIEndpoint
-// 		* APIToken
-// 		* EnableTelemetry
-// 		* TelemetryURI
-// 		* EnableMetrics
-// 		* EnableService
-// 		* CronTabSchedule
-//		* EnableBlockStats
-//		* DashboardEndpoint
-//		* DeadlockOverride
-func (nd *nodeDir) configure(dnsName string) (err error) {
+//   - IsRelay
+//   - NetAddress
+//   - APIEndpoint
+//   - APIToken
+//   - EnableTelemetry
+//   - TelemetryURI
+//   - EnableMetrics
+//   - EnableService
+//   - CronTabSchedule
+//   - EnableBlockStats
+//   - DashboardEndpoint
+//   - DeadlockOverride
+func (nd *nodeDir) configure() (err error) {
 	fmt.Fprintf(os.Stdout, "Configuring Node %s\n", nd.Name)
 	if err = nd.configureRelay(nd.IsRelay()); err != nil {
 		fmt.Fprintf(os.Stdout, "Error during configureRelay: %s\n", err)
@@ -64,6 +64,10 @@ func (nd *nodeDir) configure(dnsName string) (err error) {
 	}
 	if err = nd.configureAPIToken(nd.APIToken); err != nil {
 		fmt.Fprintf(os.Stdout, "Error during configureAPIToken: %s\n", err)
+		return
+	}
+	if err = nd.configureAdminAPIToken(nd.AdminAPIToken); err != nil {
+		fmt.Fprintf(os.Stdout, "Error during configureAdminAPIToken: %s\n", err)
 		return
 	}
 	if err = nd.configureTelemetry(nd.EnableTelemetry); err != nil {
@@ -144,8 +148,9 @@ func (nd *nodeDir) configureNetAddress() (err error) {
 	nd.config.NetAddress = nd.NetAddress
 	if nd.IsRelay() && nd.NetAddress[0] == ':' {
 		fmt.Fprintf(os.Stdout, " - adding to relay addresses\n")
-		domainName := strings.Replace(nd.config.DNSBootstrapID, "<network>", string(nd.configurator.genesisData.Network), -1)
-		nd.configurator.addRelaySrv(domainName, nd.NetAddress)
+		for _, bootstrapRecord := range nd.config.DNSBootstrapArray(nd.configurator.genesisData.Network) {
+			nd.configurator.addRelaySrv(bootstrapRecord.PrimarySRVBootstrap, nd.NetAddress)
+		}
 	}
 	err = nd.saveConfig()
 	return
@@ -174,6 +179,21 @@ func (nd *nodeDir) configureAPIToken(token string) (err error) {
 	}
 	fmt.Fprintf(os.Stdout, " - Assigning APIToken: %s\n", token)
 	err = os.WriteFile(filepath.Join(nd.dataDir, tokens.AlgodTokenFilename), []byte(token), 0600)
+	if err != nil {
+		return err
+	}
+	return nd.saveConfig()
+}
+
+func (nd *nodeDir) configureAdminAPIToken(token string) (err error) {
+	if token == "" {
+		return
+	}
+	if err = nd.ensureConfig(); err != nil {
+		return
+	}
+	fmt.Fprintf(os.Stdout, " - Assigning AdminAPIToken: %s\n", token)
+	err = os.WriteFile(filepath.Join(nd.dataDir, tokens.AlgodAdminTokenFilename), []byte(token), 0600)
 	if err != nil {
 		return err
 	}
@@ -309,7 +329,8 @@ func (nd *nodeDir) configureDNSBootstrap() (err error) {
 	}
 
 	if nd.config.DNSBootstrapID == config.GetDefaultLocal().DNSBootstrapID {
-		nd.config.DNSBootstrapID = strings.Replace(nd.config.DNSBootstrapID, "algorand", "algodev", -1)
+		// Ensure using our testing network without fallback support
+		nd.config.DNSBootstrapID = "<network>.algodev.network"
 		err = nd.saveConfig()
 	}
 	return

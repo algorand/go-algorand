@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,10 +18,10 @@ package stateproofs
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -35,15 +35,14 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklearray"
 	sp "github.com/algorand/go-algorand/crypto/stateproof"
-	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
-	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
-	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/stateproofmsg"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/libgoal"
+	"github.com/algorand/go-algorand/libgoal/participation"
 	"github.com/algorand/go-algorand/nodecontrol"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
@@ -115,7 +114,7 @@ func TestStateProofs(t *testing.T) {
 
 	var fixture fixtures.RestClientFixture
 	fixture.SetConsensus(configurableConsensus)
-	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
+	if testing.Short() {
 		fixture.Setup(t, filepath.Join("nettemplates", "StateProofSmall.json"))
 	} else {
 		fixture.Setup(t, filepath.Join("nettemplates", "StateProof.json"))
@@ -200,7 +199,7 @@ func verifyStateProofsCreation(t *testing.T, fixture *fixtures.RestClientFixture
 
 			t.Logf("found a state proof for round %d at round %d", nextStateProofRound, blk.Round())
 			// Find the state proof transaction
-			stateProofMessage, nextStateProofBlock := verifyStateProofForRound(r, fixture, nextStateProofRound, lastStateProofMessage, lastStateProofBlock, consensusParams, expectedNumberOfStateProofs)
+			stateProofMessage, nextStateProofBlock := verifyStateProofForRound(r, fixture, nextStateProofRound, lastStateProofMessage, lastStateProofBlock, consensusParams)
 			lastStateProofMessage = stateProofMessage
 			lastStateProofBlock = nextStateProofBlock
 		}
@@ -233,12 +232,8 @@ func TestStateProofOverlappingKeys(t *testing.T) {
 	var fixture fixtures.RestClientFixture
 	pNodes := 5
 	fixture.SetConsensus(configurableConsensus)
-	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
-		fixture.Setup(t, filepath.Join("nettemplates", "StateProofSmall.json"))
-		pNodes = 2
-	} else {
-		fixture.Setup(t, filepath.Join("nettemplates", "StateProof.json"))
-	}
+	fixture.Setup(t, filepath.Join("nettemplates", "StateProof.json"))
+
 	defer fixture.Shutdown()
 
 	// Get node libgoal clients in order to update their participation keys
@@ -262,16 +257,14 @@ func TestStateProofOverlappingKeys(t *testing.T) {
 	var lastStateProofMessage stateproofmsg.Message
 	libgoalClient := fixture.LibGoalClient
 
-	k, err := libgoalNodeClients[0].GetParticipationKeys()
-	r.NoError(err)
-	voteLastValid := k[0].Key.VoteLastValid
-	expectedNumberOfStateProofs := uint64(10)
+	expectedNumberOfStateProofs := uint64(8)
 	for rnd := uint64(1); rnd <= consensusParams.StateProofInterval*(expectedNumberOfStateProofs+1); rnd++ {
-		if rnd == voteLastValid-64 { // allow some buffer period before the voting keys are expired (for the keyreg to take effect)
+		if rnd == consensusParams.StateProofInterval*(5) { // allow some buffer period before the voting keys are expired (for the keyreg to take effect)
+			fmt.Println("at round.. installing", rnd)
 			// Generate participation keys (for the same accounts)
 			for i := 0; i < pNodes; i++ {
 				// Overlapping stateproof keys (the key for round 0 is valid up to 256)
-				_, part, err := installParticipationKey(t, libgoalNodeClients[i], accounts[i], 0, 200)
+				_, part, err := installParticipationKey(t, libgoalNodeClients[i], accounts[i], 0, 400)
 				r.NoError(err)
 				participations[i] = part
 			}
@@ -288,7 +281,7 @@ func TestStateProofOverlappingKeys(t *testing.T) {
 			amount: 1,
 		}.sendPayment(r, &fixture, rnd)
 
-		err = fixture.WaitForRound(rnd, timeoutUntilNextRound)
+		err := fixture.WaitForRound(rnd, timeoutUntilNextRound)
 		r.NoError(err)
 
 		blk, err := libgoalClient.BookkeepingBlock(rnd)
@@ -311,7 +304,7 @@ func TestStateProofOverlappingKeys(t *testing.T) {
 
 			t.Logf("found a state proof for round %d at round %d", nextStateProofRound, blk.Round())
 			// Find the state proof transaction
-			stateProofMessage, nextStateProofBlock := verifyStateProofForRound(r, &fixture, nextStateProofRound, lastStateProofMessage, lastStateProofBlock, consensusParams, expectedNumberOfStateProofs)
+			stateProofMessage, nextStateProofBlock := verifyStateProofForRound(r, &fixture, nextStateProofRound, lastStateProofMessage, lastStateProofBlock, consensusParams)
 			lastStateProofMessage = stateProofMessage
 			lastStateProofBlock = nextStateProofBlock
 		}
@@ -330,10 +323,12 @@ func TestStateProofMessageCommitmentVerification(t *testing.T) {
 	consensusVersion := protocol.ConsensusVersion("test-fast-stateproofs")
 	consensusParams := getDefaultStateProofConsensusParams()
 	configurableConsensus[consensusVersion] = consensusParams
+	oldConsensus := config.SetConfigurableConsensusProtocols(configurableConsensus)
+	defer config.SetConfigurableConsensusProtocols(oldConsensus)
 
 	var fixture fixtures.RestClientFixture
 	fixture.SetConsensus(configurableConsensus)
-	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
+	if testing.Short() {
 		fixture.Setup(t, filepath.Join("nettemplates", "StateProofSmall.json"))
 	} else {
 		fixture.Setup(t, filepath.Join("nettemplates", "StateProof.json"))
@@ -362,7 +357,7 @@ func TestStateProofMessageCommitmentVerification(t *testing.T) {
 		nextStateProofRound = uint64(blk.StateProofTracking[protocol.StateProofBasic].StateProofNextRound)
 	}
 
-	_, stateProofMessage := getStateProofByLastRound(r, &fixture, firstStateProofRound, 1)
+	_, stateProofMessage := getStateProofByLastRound(r, &fixture, firstStateProofRound)
 	t.Logf("found first stateproof, attesting to rounds %d - %d. Verifying.\n", stateProofMessage.FirstAttestedRound, stateProofMessage.LastAttestedRound)
 
 	for rnd := stateProofMessage.FirstAttestedRound; rnd <= stateProofMessage.LastAttestedRound; rnd++ {
@@ -382,8 +377,8 @@ func TestStateProofMessageCommitmentVerification(t *testing.T) {
 }
 
 func getDefaultStateProofConsensusParams() config.ConsensusParams {
-	consensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
-	consensusParams.StateProofInterval = 16
+	consensusParams := config.Consensus[protocol.ConsensusFuture]
+
 	consensusParams.StateProofTopVoters = 1024
 	consensusParams.StateProofVotersLookback = 2
 	consensusParams.StateProofWeightThreshold = (1 << 32) * 30 / 100
@@ -393,42 +388,39 @@ func getDefaultStateProofConsensusParams() config.ConsensusParams {
 	consensusParams.AgreementFilterTimeout = 1500 * time.Millisecond
 	consensusParams.AgreementFilterTimeoutPeriod0 = 1500 * time.Millisecond
 
+	if testing.Short() {
+		consensusParams.StateProofInterval = 16
+	} else {
+		consensusParams.StateProofInterval = 32
+	}
+
 	return consensusParams
 }
 
-func getStateProofByLastRound(r *require.Assertions, fixture *fixtures.RestClientFixture, stateProofLatestRound uint64, expectedNumberOfStateProofs uint64) (sp.StateProof, stateproofmsg.Message) {
+func getStateProofByLastRound(r *require.Assertions, fixture *fixtures.RestClientFixture, stateProofLatestRound uint64) (sp.StateProof, stateproofmsg.Message) {
 	restClient, err := fixture.NC.AlgodClient()
 	r.NoError(err)
 
-	curRound, err := fixture.LibGoalClient.CurrentRound()
+	res, err := restClient.StateProofs(stateProofLatestRound)
 	r.NoError(err)
-
-	res, err := restClient.TransactionsByAddr(transactions.StateProofSender.String(), 0, curRound, expectedNumberOfStateProofs+1)
-	r.NoError(err)
+	r.Equal(res.Message.LastAttestedRound, stateProofLatestRound)
 
 	var stateProof sp.StateProof
-	var stateProofMessage stateproofmsg.Message
-	for _, txn := range res.Transactions {
-		r.Equal(txn.Type, string(protocol.StateProofTx))
-		r.True(txn.StateProof != nil)
-		err = protocol.Decode(txn.StateProof.StateProofMessage, &stateProofMessage)
-		r.NoError(err)
-		if stateProofMessage.LastAttestedRound == stateProofLatestRound {
-			err = protocol.Decode(txn.StateProof.StateProof, &stateProof)
-			r.NoError(err)
+	err = protocol.Decode(res.StateProof, &stateProof)
+	r.NoError(err)
 
-			return stateProof, stateProofMessage
-		}
+	msg := stateproofmsg.Message{
+		BlockHeadersCommitment: res.Message.BlockHeadersCommitment,
+		VotersCommitment:       res.Message.VotersCommitment,
+		LnProvenWeight:         res.Message.LnProvenWeight,
+		FirstAttestedRound:     res.Message.FirstAttestedRound,
+		LastAttestedRound:      res.Message.LastAttestedRound,
 	}
-
-	r.FailNow("no state proof with latest round %d found", stateProofLatestRound)
-
-	// Should never get here
-	return sp.StateProof{}, stateproofmsg.Message{}
+	return stateProof, msg
 }
 
-func verifyStateProofForRound(r *require.Assertions, fixture *fixtures.RestClientFixture, nextStateProofRound uint64, prevStateProofMessage stateproofmsg.Message, lastStateProofBlock bookkeeping.Block, consensusParams config.ConsensusParams, expectedNumberOfStateProofs uint64) (stateproofmsg.Message, bookkeeping.Block) {
-	stateProof, stateProofMessage := getStateProofByLastRound(r, fixture, nextStateProofRound, expectedNumberOfStateProofs)
+func verifyStateProofForRound(r *require.Assertions, fixture *fixtures.RestClientFixture, nextStateProofRound uint64, prevStateProofMessage stateproofmsg.Message, lastStateProofBlock bookkeeping.Block, consensusParams config.ConsensusParams) (stateproofmsg.Message, bookkeeping.Block) {
+	stateProof, stateProofMessage := getStateProofByLastRound(r, fixture, nextStateProofRound)
 
 	nextStateProofBlock, err := fixture.LibGoalClient.BookkeepingBlock(nextStateProofRound)
 
@@ -454,15 +446,15 @@ func verifyStateProofForRound(r *require.Assertions, fixture *fixtures.RestClien
 	return stateProofMessage, nextStateProofBlock
 }
 
-// TestRecoverFromLaggingStateProofChain simulates a situation where the stateproof chain is lagging after the main chain.
+// TestStateProofRecoveryDuringRecoveryInterval simulates a situation where the stateproof chain is lagging after the main chain.
 // If the missing data is being accepted before  StateProofMaxRecoveryIntervals * StateProofInterval rounds have passed, nodes should
 // be able to produce stateproofs and continue as normal
-func TestRecoverFromLaggingStateProofChain(t *testing.T) {
+func TestStateProofRecoveryDuringRecoveryPeriod(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
 
-	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
-		t.Skip("This test is difficult for ARM")
+	if testing.Short() {
+		t.Skip()
 	}
 
 	r := require.New(fixtures.SynchronizedTest(t))
@@ -545,7 +537,7 @@ func TestRecoverFromLaggingStateProofChain(t *testing.T) {
 
 			t.Logf("found a state proof for round %d at round %d", nextStateProofRound, blk.Round())
 			// Find the state proof transaction
-			stateProofMessage, nextStateProofBlock := verifyStateProofForRound(r, &fixture, nextStateProofRound, lastStateProofMessage, lastStateProofBlock, consensusParams, expectedNumberOfStateProofs)
+			stateProofMessage, nextStateProofBlock := verifyStateProofForRound(r, &fixture, nextStateProofRound, lastStateProofMessage, lastStateProofBlock, consensusParams)
 			lastStateProofMessage = stateProofMessage
 			lastStateProofBlock = nextStateProofBlock
 		}
@@ -553,14 +545,13 @@ func TestRecoverFromLaggingStateProofChain(t *testing.T) {
 	r.Equalf(int(consensusParams.StateProofInterval*expectedNumberOfStateProofs), int(lastStateProofBlock.Round()), "the expected last state proof block wasn't the one that was observed")
 }
 
-// TestUnableToRecoverFromLaggingStateProofChain simulates a situation where the stateproof chain is lagging after the main chain.
-// unlike TestRecoverFromLaggingStateProofChain, in this test the node will start at a later round and the network will not be able to produce stateproofs/
-func TestUnableToRecoverFromLaggingStateProofChain(t *testing.T) {
+// TestStateProofRecovery test that the state proof chain can be recovered even after the StateProofMaxRecoveryIntervals has passed.
+func TestStateProofRecovery(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
 
-	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
-		t.Skip("This test is difficult for ARM")
+	if testing.Short() {
+		t.Skip()
 	}
 
 	r := require.New(fixtures.SynchronizedTest(t))
@@ -577,7 +568,12 @@ func TestUnableToRecoverFromLaggingStateProofChain(t *testing.T) {
 	// for that reason we need to the decrease the StateProofStrengthTarget creating a "weak cert"
 	consensusParams.StateProofWeightThreshold = (1 << 32) * 90 / 100
 	consensusParams.StateProofStrengthTarget = 4
-	consensusParams.StateProofMaxRecoveryIntervals = 4
+	consensusParams.StateProofMaxRecoveryIntervals = 2
+	consensusParams.StateProofUseTrackerVerification = true
+	consensusParams.SeedLookback = 2
+	consensusParams.SeedRefreshInterval = 2
+	consensusParams.MaxBalLookback = 2 * consensusParams.SeedLookback * consensusParams.SeedRefreshInterval // 8
+	consensusParams.MaxTxnLife = 13
 	configurableConsensus[consensusVersion] = consensusParams
 
 	var fixture fixtures.RestClientFixture
@@ -596,10 +592,13 @@ func TestUnableToRecoverFromLaggingStateProofChain(t *testing.T) {
 	var lastStateProofBlock bookkeeping.Block
 	libgoal := fixture.LibGoalClient
 
-	expectedNumberOfStateProofs := uint64(4)
-	// Loop through the rounds enough to check for expectedNumberOfStateProofs state proofs
-	for rnd := uint64(2); rnd <= consensusParams.StateProofInterval*(expectedNumberOfStateProofs+1); rnd++ {
-		if rnd == (consensusParams.StateProofMaxRecoveryIntervals+2)*consensusParams.StateProofInterval {
+	var lastStateProofMessage stateproofmsg.Message
+
+	expectedNumberOfStateProofs := uint64(7)
+	numberOfGraceIntervals := uint64(3)
+	rnd := uint64(2)
+	for ; rnd <= consensusParams.StateProofInterval*(expectedNumberOfStateProofs); rnd++ {
+		if rnd == (consensusParams.StateProofMaxRecoveryIntervals+4)*consensusParams.StateProofInterval {
 			t.Logf("at round %d starting node\n", rnd)
 			dir, err = fixture.GetNodeDir("Node4")
 			r.NoError(err)
@@ -633,19 +632,59 @@ func TestUnableToRecoverFromLaggingStateProofChain(t *testing.T) {
 
 		if lastStateProofBlock.Round()+basics.Round(consensusParams.StateProofInterval) < blk.StateProofTracking[protocol.StateProofBasic].StateProofNextRound &&
 			lastStateProofBlock.Round() != 0 {
-			r.FailNow("found a state proof at round %d", blk.Round())
+			nextStateProofRound := uint64(lastStateProofBlock.Round()) + consensusParams.StateProofInterval
+
+			t.Logf("found a state proof for round %d at round %d", nextStateProofRound, blk.Round())
+			// Find the state proof transaction
+			stateProofMessage, nextStateProofBlock := verifyStateProofForRound(r, &fixture, nextStateProofRound, lastStateProofMessage, lastStateProofBlock, consensusParams)
+			lastStateProofMessage = stateProofMessage
+			lastStateProofBlock = nextStateProofBlock
 		}
 	}
+
+	// at this point we expect the state proof chain to be completely caught up. However, In order to avoid flakiness on
+	// heavily loaded machines, we would wait some extra round for the state proofs to catch up
+	for ; rnd <= consensusParams.StateProofInterval*(expectedNumberOfStateProofs+numberOfGraceIntervals); rnd++ {
+
+		err = fixture.WaitForRound(rnd, timeoutUntilNextRound)
+		r.NoError(err)
+
+		blk, err := libgoal.BookkeepingBlock(rnd)
+		r.NoErrorf(err, "failed to retrieve block from algod on round %d", rnd)
+
+		if lastStateProofBlock.Round() == 0 {
+			lastStateProofBlock = blk
+		}
+
+		if lastStateProofBlock.Round()+basics.Round(consensusParams.StateProofInterval) < blk.StateProofTracking[protocol.StateProofBasic].StateProofNextRound &&
+			lastStateProofBlock.Round() != 0 {
+			nextStateProofRound := uint64(lastStateProofBlock.Round()) + consensusParams.StateProofInterval
+
+			t.Logf("found a state proof for round %d at round %d", nextStateProofRound, blk.Round())
+			// Find the state proof transaction
+			stateProofMessage, nextStateProofBlock := verifyStateProofForRound(r, &fixture, nextStateProofRound, lastStateProofMessage, lastStateProofBlock, consensusParams)
+			lastStateProofMessage = stateProofMessage
+			lastStateProofBlock = nextStateProofBlock
+		}
+
+		if int(consensusParams.StateProofInterval*expectedNumberOfStateProofs) <= int(lastStateProofBlock.Round()) {
+			return
+		}
+	}
+	r.Equalf(int(consensusParams.StateProofInterval*expectedNumberOfStateProofs), int(lastStateProofBlock.Round()), "the expected last state proof block wasn't the one that was observed")
 }
 
 // installParticipationKey generates a new key for a given account and installs it with the client.
-func installParticipationKey(t *testing.T, client libgoal.Client, addr string, firstValid, lastValid uint64) (resp generated.PostParticipationResponse, part account.Participation, err error) {
+func installParticipationKey(t *testing.T, client libgoal.Client, addr string, firstValid, lastValid uint64) (resp model.PostParticipationResponse, part account.Participation, err error) {
 	dir, err := os.MkdirTemp("", "temporary_partkey_dir")
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 
 	// Install overlapping participation keys...
-	part, filePath, err := client.GenParticipationKeysTo(addr, firstValid, lastValid, 100, dir)
+	installFunc := func(keyPath string) error {
+		return errors.New("the install directory is provided, so keys should not be installed")
+	}
+	part, filePath, err := participation.GenParticipationKeysTo(addr, firstValid, lastValid, 100, dir, installFunc)
 	require.NoError(t, err)
 	require.NotNil(t, filePath)
 	require.Equal(t, addr, part.Parent.String())
@@ -654,7 +693,7 @@ func installParticipationKey(t *testing.T, client libgoal.Client, addr string, f
 	return
 }
 
-func registerParticipationAndWait(t *testing.T, client libgoal.Client, part account.Participation) generated.NodeStatusResponse {
+func registerParticipationAndWait(t *testing.T, client libgoal.Client, part account.Participation) model.NodeStatusResponse {
 	currentRnd, err := client.CurrentRound()
 	require.NoError(t, err)
 	sAccount := part.Address().String()
@@ -675,13 +714,9 @@ func registerParticipationAndWait(t *testing.T, client libgoal.Client, part acco
 // After making the first Stateproof, we transfer three-quarters of the stake of the
 // rich node to the poor node. For both cases, we assert different stakes, that is, to
 // conclude whether the poor node is used to create the StateProof or the rich node.
-func TestAttestorsChangeTest(t *testing.T) {
+func TestAttestorsChange(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
-
-	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
-		t.Skip("This test is difficult for ARM")
-	}
 
 	a := require.New(fixtures.SynchronizedTest(t))
 
@@ -735,6 +770,7 @@ func TestAttestorsChangeTest(t *testing.T) {
 		}
 
 		a.NoError(fixture.WaitForRound(rnd, timeoutUntilNextRound))
+
 		blk, err := libgoal.BookkeepingBlock(rnd)
 		a.NoErrorf(err, "failed to retrieve block from algod on round %d", rnd)
 
@@ -742,20 +778,6 @@ func TestAttestorsChangeTest(t *testing.T) {
 			// Must have a merkle commitment for participants
 			a.True(len(blk.StateProofTracking[protocol.StateProofBasic].StateProofVotersCommitment) > 0)
 			a.True(blk.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight != basics.MicroAlgos{})
-
-			stake := blk.BlockHeader.StateProofTracking[protocol.StateProofBasic].StateProofOnlineTotalWeight.ToUint64()
-
-			// the main part of the test (computing the total stake of the nodes):
-			sum := uint64(0)
-			for i := 1; i <= 3; i++ {
-				sum += accountFetcher{fmt.Sprintf("Node%d", i), 0}.getBalance(a, &fixture)
-			}
-
-			richNodeStake := accountFetcher{"richNode", 0}.getBalance(a, &fixture)
-			poorNodeStake := accountFetcher{"poorNode", 0}.getBalance(a, &fixture)
-			sum = sum + richNodeStake + poorNodeStake
-
-			a.Equal(sum, stake)
 
 			// Special case: bootstrap validation with the first block
 			// that has a merkle root.
@@ -772,7 +794,7 @@ func TestAttestorsChangeTest(t *testing.T) {
 
 			t.Logf("found a state proof for round %d at round %d", nextStateProofRound, blk.Round())
 			// Find the state proof transaction
-			stateProofMessage, nextStateProofBlock := verifyStateProofForRound(a, &fixture, nextStateProofRound, lastStateProofMessage, lastStateProofBlock, consensusParams, expectedNumberOfStateProofs)
+			stateProofMessage, nextStateProofBlock := verifyStateProofForRound(a, &fixture, nextStateProofRound, lastStateProofMessage, lastStateProofBlock, consensusParams)
 			lastStateProofMessage = stateProofMessage
 			lastStateProofBlock = nextStateProofBlock
 		}
@@ -791,7 +813,6 @@ func TestTotalWeightChanges(t *testing.T) {
 	consensusParams.StateProofWeightThreshold = (1 << 32) * 90 / 100
 	consensusParams.StateProofStrengthTarget = 4
 	consensusParams.StateProofTopVoters = 4
-	//consensusParams.StateProofInterval = 32
 
 	configurableConsensus := config.ConsensusProtocols{
 		protocol.ConsensusVersion("test-fast-stateproofs"): consensusParams,
@@ -799,7 +820,7 @@ func TestTotalWeightChanges(t *testing.T) {
 
 	var fixture fixtures.RestClientFixture
 	fixture.SetConsensus(configurableConsensus)
-	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
+	if testing.Short() {
 		fixture.Setup(t, filepath.Join("nettemplates", "RichAccountStateProofSmall.json"))
 	} else {
 		fixture.Setup(t, filepath.Join("nettemplates", "RichAccountStateProof.json"))
@@ -817,12 +838,16 @@ func TestTotalWeightChanges(t *testing.T) {
 
 	for rnd := uint64(1); rnd <= consensusParams.StateProofInterval*(expectedNumberOfStateProofs+1); rnd++ {
 		// Rich node goes offline
-		if consensusParams.StateProofInterval*2-8 == rnd {
+		if consensusParams.StateProofInterval*2-(consensusParams.StateProofInterval/2) == rnd {
 			// subtract 8 rounds since the total online stake is calculated prior to the actual state proof round (lookback)
 			richNode.goOffline(a, &fixture, rnd)
 		}
 
-		a.NoError(fixture.WaitForRound(rnd, 30*time.Second))
+		if testing.Short() {
+			a.NoError(fixture.WaitForRound(rnd, 30*time.Second))
+		} else {
+			a.NoError(fixture.WaitForRound(rnd, 60*time.Second))
+		}
 		blk, err := libgoal.BookkeepingBlock(rnd)
 		a.NoErrorf(err, "failed to retrieve block from algod on round %d", rnd)
 
@@ -853,7 +878,7 @@ func TestTotalWeightChanges(t *testing.T) {
 
 			t.Logf("found a state proof for round %d at round %d", nextStateProofRound, blk.Round())
 			// Find the state proof transaction
-			stateProofMessage, nextStateProofBlock := verifyStateProofForRound(a, &fixture, nextStateProofRound, lastStateProofMessage, lastStateProofBlock, consensusParams, expectedNumberOfStateProofs)
+			stateProofMessage, nextStateProofBlock := verifyStateProofForRound(a, &fixture, nextStateProofRound, lastStateProofMessage, lastStateProofBlock, consensusParams)
 			lastStateProofMessage = stateProofMessage
 			lastStateProofBlock = nextStateProofBlock
 		}
@@ -910,16 +935,13 @@ func TestSPWithTXPoolFull(t *testing.T) {
 		err = fixture.WaitForRound(round+1, 6*time.Second)
 		require.NoError(t, err)
 
-		b, err := relay.Block(round + 1)
+		b, err := relay.BookkeepingBlock(round + 1)
 		require.NoError(t, err)
-		if len(b.Transactions.Transactions) == 0 {
+		if len(b.Payset) == 0 {
 			continue
 		}
-		require.Equal(t, string(protocol.StateProofTx), b.Transactions.Transactions[0].Type)
-		var msg stateproofmsg.Message
-		err = protocol.Decode(b.Transactions.Transactions[0].StateProof.StateProofMessage, &msg)
-		require.NoError(t, err)
-		require.Equal(t, uint64(8), msg.LastAttestedRound)
+		require.Equal(t, protocol.StateProofTx, b.Payset[0].Txn.Type)
+		require.Equal(t, uint64(8), b.Payset[0].Txn.StateProofTxnFields.Message.LastAttestedRound)
 		break
 	}
 	require.Less(t, round, uint64(20))
@@ -969,12 +991,12 @@ func TestAtMostOneSPFullPool(t *testing.T) {
 		err := fixture.WaitForRound(round+1, 6*time.Second)
 		require.NoError(t, err)
 
-		b, err := relay.Block(round + 1)
+		b, err := relay.BookkeepingBlock(round + 1)
 		require.NoError(t, err)
 
 		params, err = relay.SuggestedParams()
 		require.NoError(t, err)
-		if len(b.Transactions.Transactions) == 0 {
+		if len(b.Payset) == 0 {
 			continue
 		}
 		tid := 0
@@ -982,14 +1004,11 @@ func TestAtMostOneSPFullPool(t *testing.T) {
 		// Since the pool is full, only one additional SP transaction is allowed in. So only one SP can be added to be block
 		// break after finding it, and look for the next one in a subsequent block
 		// In case two SP transactions get into the same block, the following loop will not find the second one, and fail the test
-		for ; tid < len(b.Transactions.Transactions); tid++ {
-			if b.Transactions.Transactions[tid].Type == string(protocol.StateProofTx) {
-				require.Equal(t, string(protocol.StateProofTx), b.Transactions.Transactions[tid].Type)
+		for ; tid < len(b.Payset); tid++ {
+			if string(b.Payset[tid].Txn.Type) == string(protocol.StateProofTx) {
+				require.Equal(t, protocol.StateProofTx, b.Payset[tid].Txn.Type)
 
-				var msg stateproofmsg.Message
-				err = protocol.Decode(b.Transactions.Transactions[tid].StateProof.StateProofMessage, &msg)
-				require.NoError(t, err)
-				require.Equal(t, int(expectedSPRound), int(msg.LastAttestedRound))
+				require.Equal(t, int(expectedSPRound), int(b.Payset[tid].Txn.StateProofTxnFields.Message.LastAttestedRound))
 
 				expectedSPRound = expectedSPRound + consensusParams.StateProofInterval
 				break
@@ -1109,12 +1128,12 @@ func TestAtMostOneSPFullPoolWithLoad(t *testing.T) {
 		err := fixture.WaitForRound(round+1, 6*time.Second)
 		require.NoError(t, err)
 
-		b, err := relay.Block(round + 1)
+		b, err := relay.BookkeepingBlock(round + 1)
 		require.NoError(t, err)
 
 		params, err = relay.SuggestedParams()
 		require.NoError(t, err)
-		if len(b.Transactions.Transactions) == 0 {
+		if len(b.Payset) == 0 {
 			continue
 		}
 		tid := 0
@@ -1122,14 +1141,11 @@ func TestAtMostOneSPFullPoolWithLoad(t *testing.T) {
 		// Since the pool is full, only one additional SP transaction is allowed in. So only one SP can be added to be block
 		// break after finding it, and look for the next one in a subsequent block
 		// In case two SP transactions get into the same block, the following loop will not find the second one, and fail the test
-		for ; tid < len(b.Transactions.Transactions); tid++ {
-			if b.Transactions.Transactions[tid].Type == string(protocol.StateProofTx) {
-				require.Equal(t, string(protocol.StateProofTx), b.Transactions.Transactions[tid].Type)
+		for ; tid < len(b.Payset); tid++ {
+			if string(b.Payset[tid].Txn.Type) == string(protocol.StateProofTx) {
+				require.Equal(t, protocol.StateProofTx, b.Payset[tid].Txn.Type)
 
-				var msg stateproofmsg.Message
-				err = protocol.Decode(b.Transactions.Transactions[tid].StateProof.StateProofMessage, &msg)
-				require.NoError(t, err)
-				require.Equal(t, int(expectedSPRound), int(msg.LastAttestedRound))
+				require.Equal(t, int(expectedSPRound), int(b.Payset[tid].Txn.StateProofTxnFields.Message.LastAttestedRound))
 
 				expectedSPRound = expectedSPRound + consensusParams.StateProofInterval
 				break
@@ -1210,8 +1226,8 @@ func TestStateProofCheckTotalStake(t *testing.T) {
 	var lastStateProofBlock bookkeeping.Block
 	libgoalClient := fixture.LibGoalClient
 
-	var totalSupplyAtRound [100]v1.Supply
-	var accountSnapshotAtRound [100][]generatedV2.Account
+	var totalSupplyAtRound [1000]model.SupplyResponse
+	var accountSnapshotAtRound [1000][]model.Account
 
 	for rnd := uint64(1); rnd <= consensusParams.StateProofInterval*(expectedNumberOfStateProofs+1); rnd++ {
 		if rnd == consensusParams.StateProofInterval+consensusParams.StateProofVotersLookback { // here we register the keys of address 0 so it won't be able the sign a state proof (its stake would be removed for the total)
@@ -1238,12 +1254,12 @@ func TestStateProofCheckTotalStake(t *testing.T) {
 			totalSupply, err := libgoalClient.LedgerSupply()
 			r.NoError(err)
 
-			r.Equal(rnd, totalSupply.Round, "could not capture total stake at the target round. The machine might be too slow for this test")
+			r.Equal(rnd, totalSupply.CurrentRound, "could not capture total stake at the target round. The machine might be too slow for this test")
 			totalSupplyAtRound[rnd] = totalSupply
 
-			accountSnapshotAtRound[rnd] = make([]generatedV2.Account, pNodes, pNodes)
+			accountSnapshotAtRound[rnd] = make([]model.Account, pNodes, pNodes)
 			for i := 0; i < pNodes; i++ {
-				accountSnapshotAtRound[rnd][i], err = libgoalClient.AccountInformationV2(accountsAddresses[i], false)
+				accountSnapshotAtRound[rnd][i], err = libgoalClient.AccountInformation(accountsAddresses[i], false)
 				r.NoError(err)
 				r.NotEqual(accountSnapshotAtRound[rnd][i].Amount, uint64(0))
 				r.Equal(rnd, accountSnapshotAtRound[rnd][i].Round, "could not capture the account at the target round. The machine might be too slow for this test")
@@ -1276,7 +1292,7 @@ func TestStateProofCheckTotalStake(t *testing.T) {
 
 			t.Logf("found a state proof for round %d at round %d", nextStateProofRound, blk.Round())
 
-			stateProof, stateProofMsg := getStateProofByLastRound(r, &fixture, nextStateProofRound, expectedNumberOfStateProofs)
+			stateProof, stateProofMsg := getStateProofByLastRound(r, &fixture, nextStateProofRound)
 
 			accountSnapshot := accountSnapshotAtRound[stateProofMsg.LastAttestedRound-consensusParams.StateProofInterval-consensusParams.StateProofVotersLookback]
 

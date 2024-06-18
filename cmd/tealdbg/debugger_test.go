@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -94,6 +94,8 @@ func (d *testDbgAdapter) eventLoop() {
 
 func TestDebuggerSimple(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	proto := config.Consensus[protocol.ConsensusV18]
 	require.Greater(t, proto.LogicSigVersion, uint64(0))
 	debugger := MakeDebugger()
@@ -101,17 +103,13 @@ func TestDebuggerSimple(t *testing.T) {
 	da := makeTestDbgAdapter(t)
 	debugger.AddAdapter(da)
 
-	ep := logic.NewEvalParams(make([]transactions.SignedTxnWithAD, 1), &proto, nil)
-	ep.Debugger = debugger
-	ep.SigLedger = logic.NoHeaderLedger{}
-
-	source := `int 0
-int 1
-+
-`
-	ops, err := logic.AssembleStringWithVersion(source, 1)
+	ops, err := logic.AssembleStringWithVersion("int 0; int 1; +", 1)
 	require.NoError(t, err)
-	ep.TxnGroup[0].Lsig.Logic = ops.Program
+	txn := transactions.SignedTxn{}
+	txn.Lsig.Logic = ops.Program
+
+	ep := logic.NewSigEvalParams([]transactions.SignedTxn{txn}, &proto, logic.NoHeaderLedger{})
+	ep.Tracer = logic.MakeEvalTracerDebuggerAdaptor(debugger)
 
 	_, err = logic.EvalSignature(0, ep)
 	require.NoError(t, err)
@@ -132,15 +130,15 @@ func createSessionFromSource(t *testing.T, program string) *session {
 
 	// create a sample disassembly line to pc mapping
 	// this simple source is similar to disassembly except intcblock at the beginning
-	pcOffset := make(map[int]int, len(ops.OffsetToLine))
-	for pc, line := range ops.OffsetToLine {
-		pcOffset[line+1] = pc
+	pcOffset := make(map[int]int, len(ops.OffsetToSource))
+	for pc, location := range ops.OffsetToSource {
+		pcOffset[location.Line+1] = pc
 	}
 
 	s := makeSession(disassembly, 0)
 	s.source = source
 	s.programName = "test"
-	s.offsetToLine = ops.OffsetToLine
+	s.offsetToSource = ops.OffsetToSource
 	s.pcOffset = pcOffset
 
 	return s
@@ -148,6 +146,8 @@ func createSessionFromSource(t *testing.T, program string) *session {
 
 func TestSession(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	s := createSessionFromSource(t, "#pragma version %d\nint 1\ndup\n+\n")
 	err := s.SetBreakpoint(2)
 	require.NoError(t, err)
@@ -199,6 +199,7 @@ func TestSession(t *testing.T) {
 // that call stack is inspected correctly.
 func TestCallStackControl(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	newTestCase := func() (*session, chan struct{}, func(), *int) {
 		s := createSessionFromSource(t, "#pragma version %d\nlab1:\nint 1\ncallsub lab1\ndup\n+\n")
@@ -344,6 +345,7 @@ func TestCallStackControl(t *testing.T) {
 		},
 	}
 
+	// nolint:paralleltest // Linter is not following formulation of subtests.
 	for name, f := range cases {
 		t.Run(name, f)
 	}
@@ -351,6 +353,8 @@ func TestCallStackControl(t *testing.T) {
 
 func TestSourceMaps(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	s := createSessionFromSource(t, "#pragma version %d\nint 1\n")
 
 	// Source and source map checks

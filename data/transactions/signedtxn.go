@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -71,15 +71,17 @@ func (s SignedTxnInBlock) ID() {
 
 // GetEncodedLength returns the length in bytes of the encoded transaction
 func (s SignedTxn) GetEncodedLength() int {
-	enc := s.MarshalMsg(protocol.GetEncodingBuf())
-	defer protocol.PutEncodingBuf(enc)
+	buf := protocol.GetEncodingBuf()
+	enc := s.MarshalMsg(buf.Bytes())
+	defer protocol.PutEncodingBuf(buf.Update(enc))
 	return len(enc)
 }
 
 // GetEncodedLength returns the length in bytes of the encoded transaction
 func (s SignedTxnInBlock) GetEncodedLength() int {
-	enc := s.MarshalMsg(protocol.GetEncodingBuf())
-	defer protocol.PutEncodingBuf(enc)
+	buf := protocol.GetEncodingBuf()
+	enc := s.MarshalMsg(buf.Bytes())
+	defer protocol.PutEncodingBuf(buf.Update(enc))
 	return len(enc)
 }
 
@@ -116,16 +118,17 @@ func (s *SignedTxnInBlock) ToBeHashed() (protocol.HashID, []byte) {
 
 // Hash implements an optimized version of crypto.HashObj(s).
 func (s *SignedTxnInBlock) Hash() crypto.Digest {
-	enc := s.MarshalMsg(append(protocol.GetEncodingBuf(), []byte(protocol.SignedTxnInBlock)...))
-	defer protocol.PutEncodingBuf(enc)
-
+	buf := protocol.GetEncodingBuf()
+	enc := s.MarshalMsg(append(buf.Bytes(), []byte(protocol.SignedTxnInBlock)...))
+	defer protocol.PutEncodingBuf(buf.Update(enc))
 	return crypto.Hash(enc)
 }
 
 // HashSHA256 implements an optimized version of crypto.HashObj(s) using SHA256 instead of the default SHA512_256.
 func (s *SignedTxnInBlock) HashSHA256() crypto.Digest {
-	enc := s.MarshalMsg(append(protocol.GetEncodingBuf(), []byte(protocol.SignedTxnInBlock)...))
-	defer protocol.PutEncodingBuf(enc)
+	buf := protocol.GetEncodingBuf()
+	enc := s.MarshalMsg(append(buf.Bytes(), []byte(protocol.SignedTxnInBlock)...))
+	defer protocol.PutEncodingBuf(buf.Update(enc))
 
 	return sha256.Sum256(enc)
 }

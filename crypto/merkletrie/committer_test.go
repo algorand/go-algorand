@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"golang.org/x/exp/slices"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -33,9 +34,7 @@ func (mc *InMemoryCommitter) Duplicate(flat bool) (out *InMemoryCommitter) {
 		if flat {
 			out.memStore[k] = v
 		} else {
-			bytes := make([]byte, len(v))
-			copy(bytes[:], v[:])
-			out.memStore[k] = bytes
+			out.memStore[k] = slices.Clone(v)
 		}
 	}
 	return
@@ -140,18 +139,18 @@ func TestNoRedundentPages(t *testing.T) {
 	require.Equal(t, nodesCount, mt1.cache.cachedNodeCount)
 }
 
-// decodePage decodes a byte array into a page content
+// decodePageHeaderSize decodes a page header at the start of a byte array
 func decodePageHeaderSize(bytes []byte) (headerSize int, err error) {
 	version, versionLength := binary.Uvarint(bytes[:])
 	if versionLength <= 0 {
-		return 0, ErrPageDecodingFailuire
+		return 0, ErrPageDecodingFailure
 	}
-	if version != NodePageVersion {
-		return 0, ErrPageDecodingFailuire
+	if version != nodePageVersion {
+		return 0, ErrPageDecodingFailure
 	}
 	_, nodesCountLength := binary.Varint(bytes[versionLength:])
 	if nodesCountLength <= 0 {
-		return 0, ErrPageDecodingFailuire
+		return 0, ErrPageDecodingFailure
 	}
 	return nodesCountLength + versionLength, nil
 }

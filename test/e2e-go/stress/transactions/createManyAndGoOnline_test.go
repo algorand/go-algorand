@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -173,10 +173,12 @@ func TestManyAccountsCanGoOnline(t *testing.T) {
 
 	i = 0 // for assert debug messages
 	for txid, account := range txidsToAccountsGoOnline {
-		accountStatus, err := client.AccountInformation(account)
+		accountStatus, err := client.AccountInformation(account, false)
+		a.NoError(err)
 		_, round := fixture.GetBalanceAndRound(account)
-		curTxStatus, err := client.TransactionInformation(account, txid)
-		a.True(curTxStatus.ConfirmedRound <= round, "go online transaction confirmed on round %d, current round is %d\n", curTxStatus.ConfirmedRound, round)
+		curTxStatus, err := client.PendingTransactionInformation(txid)
+		a.NotNil(curTxStatus.ConfirmedRound)
+		a.True(*curTxStatus.ConfirmedRound <= round, "go online transaction confirmed on round %d, current round is %d\n", curTxStatus.ConfirmedRound, round)
 		a.NoError(err, "should be no error when querying account information (query number %v regarding account %v)", i, account)
 		a.Equal(byte(basics.Online), accountStatus.Status, "account %v should be online by now", account)
 		i++

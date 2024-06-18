@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -38,11 +38,9 @@ type createDNSRecord struct {
 // https://community.cloudflare.com/t/cloudflare-api-v4-srv-dns-creation-failure-in-php/25677/7
 type createSRVRecord struct {
 	Type string `json:"type"`
+	Name string `json:"name"`
 	Data struct {
-		Name     string `json:"name"`
 		TTL      uint   `json:"ttl"`
-		Service  string `json:"service"`
-		Proto    string `json:"proto"`
 		Weight   uint   `json:"weight"`
 		Port     uint   `json:"port"`
 		Priority uint   `json:"priority"`
@@ -90,10 +88,8 @@ func createSRVRecordRequest(zoneID string, authToken string, name string, servic
 	requestJSON := createSRVRecord{
 		Type: "SRV",
 	}
-	requestJSON.Data.Name = name
+	requestJSON.Name = service + "." + protocol + "." + name
 	requestJSON.Data.TTL = ttl
-	requestJSON.Data.Service = service
-	requestJSON.Data.Proto = protocol
 	requestJSON.Data.Weight = weight
 	requestJSON.Data.Port = port
 	requestJSON.Data.Priority = priority

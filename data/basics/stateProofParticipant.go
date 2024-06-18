@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -73,6 +73,7 @@ func (p Participant) ToBeHashed() (protocol.HashID, []byte) {
 
 // ParticipantsArray implements merklearray.Array and is used to commit
 // to a Merkle tree of online accounts.
+//
 //msgp:ignore ParticipantsArray
 type ParticipantsArray []Participant
 

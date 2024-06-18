@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/algorand/go-algorand/logging"
 )
@@ -111,7 +112,7 @@ func (t *ioTrace) String() string {
 	var buf bytes.Buffer
 	buf.WriteString("{\n")
 	for i := 0; i < len(t.events); i++ {
-		buf.WriteString(fmt.Sprintf("\t%v |", t.events[i]))
+		buf.WriteString(fmt.Sprintf("\t%v |", t.events[i].ComparableStr()))
 		if i%2 == 0 {
 			buf.WriteString("\n")
 		}
@@ -138,6 +139,21 @@ func (t ioTrace) Contains(e event) bool {
 	return t.ContainsFn(func(b event) bool {
 		return e.ComparableStr() == b.ComparableStr()
 	})
+}
+
+func (t ioTrace) ContainsString(s string) bool {
+	return t.ContainsFn(func(b event) bool {
+		return strings.Contains(b.ComparableStr(), s)
+	})
+}
+
+func (t ioTrace) CountEvent(b event) (count int) {
+	for _, e := range t.events {
+		if e.ComparableStr() == b.ComparableStr() {
+			count++
+		}
+	}
+	return
 }
 
 // for each event, passes it into the given fn; if returns true, returns true.
@@ -541,7 +557,7 @@ func (e wrappedActionEvent) String() string {
 }
 
 func (e wrappedActionEvent) ComparableStr() string {
-	return e.action.String()
+	return e.action.ComparableStr()
 }
 
 // ioAutomataConcretePlayer is a concrete wrapper around root router, implementing ioAutomata.

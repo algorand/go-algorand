@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -163,6 +163,8 @@ func checkBoundsLimitingTag(val reflect.Value, datapath string, structTag string
 		objType = "slice"
 	} else if val.Kind() == reflect.Map {
 		objType = "map"
+	} else if val.Kind() == reflect.String {
+		objType = "string"
 	}
 
 	if structTag != "" {
@@ -240,8 +242,21 @@ func randomizeValue(v reflect.Value, datapath string, tag string, remainingChang
 		v.SetInt(int64(rand.Uint64()))
 		*remainingChanges--
 	case reflect.String:
+		hasAllocBound := checkBoundsLimitingTag(v, datapath, tag)
 		var buf []byte
-		len := rand.Int() % 64
+		var len int
+		if strings.HasSuffix(v.Type().PkgPath(), "go-algorand/agreement") && v.Type().Name() == "serializableError" {
+			// Don't generate empty strings for serializableError since nil values of *string type
+			// will serialize differently by msgp and go-codec
+			len = rand.Int()%63 + 1
+		} else if strings.HasSuffix(v.Type().PkgPath(), "go-algorand/protocol") && v.Type().Name() == "TxType" {
+			// protocol.TxType has allocbound defined as a custom msgp:allocbound directive so not supported by reflect
+			len = rand.Int()%6 + 1
+		} else if hasAllocBound {
+			len = 1
+		} else {
+			len = rand.Int() % 64
+		}
 		for i := 0; i < len; i++ {
 			buf = append(buf, byte(rand.Uint32()))
 		}
@@ -268,6 +283,10 @@ func randomizeValue(v reflect.Value, datapath string, tag string, remainingChang
 
 			if f.PkgPath != "" && !f.Anonymous {
 				// unexported
+				continue
+			}
+			if st.Name() == "messageEvent" && f.Name == "Tail" {
+				// Don't try and set the Tail field since it's recursive
 				continue
 			}
 			if rawMsgpType == f.Type {

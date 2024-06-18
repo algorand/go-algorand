@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -25,6 +25,7 @@ import (
 
 func TestBlockToPath(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 	require.Equal(t, "00/00/000000", blockToPath(0))
 	require.Equal(t, "00/00/0000rs", blockToPath(1000))
 	require.Equal(t, "05/yc/05ycfo", blockToPath(10000500))
@@ -33,6 +34,7 @@ func TestBlockToPath(t *testing.T) {
 
 func TestBlockToFileName(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 	require.Equal(t, "000000", blockToFileName(0))
 	require.Equal(t, "0000rs", blockToFileName(1000))
 	require.Equal(t, "05ycfo", blockToFileName(10000500))
@@ -40,6 +42,7 @@ func TestBlockToFileName(t *testing.T) {
 }
 
 func TestBlockToString(t *testing.T) {
+	t.Parallel()
 	partitiontest.PartitionTest(t)
 	require.Equal(t, "0", blockToString(0))
 	require.Equal(t, "rs", blockToString(1000))

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,11 +18,11 @@ package ledger
 
 import (
 	"context"
-	"database/sql"
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/util/metrics"
 )
 
@@ -30,12 +30,14 @@ type metricsTracker struct {
 	ledgerTransactionsTotal *metrics.Counter
 	ledgerRewardClaimsTotal *metrics.Counter
 	ledgerRound             *metrics.Gauge
+	ledgerDBRound           *metrics.Gauge
 }
 
 func (mt *metricsTracker) loadFromDisk(l ledgerForTracker, _ basics.Round) error {
 	mt.ledgerTransactionsTotal = metrics.MakeCounter(metrics.LedgerTransactionsTotal)
 	mt.ledgerRewardClaimsTotal = metrics.MakeCounter(metrics.LedgerRewardClaimsTotal)
 	mt.ledgerRound = metrics.MakeGauge(metrics.LedgerRound)
+	mt.ledgerDBRound = metrics.MakeGauge(metrics.LedgerDBRound)
 	return nil
 }
 
@@ -52,14 +54,18 @@ func (mt *metricsTracker) close() {
 		mt.ledgerRound.Deregister(nil)
 		mt.ledgerRound = nil
 	}
+	if mt.ledgerDBRound != nil {
+		mt.ledgerDBRound.Deregister(nil)
+		mt.ledgerDBRound = nil
+	}
 }
 
 func (mt *metricsTracker) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 	rnd := blk.Round()
-	mt.ledgerRound.Set(float64(rnd), map[string]string{})
-	mt.ledgerTransactionsTotal.Add(float64(len(blk.Payset)), map[string]string{})
+	mt.ledgerRound.Set(uint64(rnd))
+	mt.ledgerTransactionsTotal.AddUint64(uint64(len(blk.Payset)), nil)
 	// TODO rewards: need to provide meaningful metric here.
-	mt.ledgerRewardClaimsTotal.Add(float64(1), map[string]string{})
+	mt.ledgerRewardClaimsTotal.Inc(nil)
 }
 
 func (mt *metricsTracker) committedUpTo(committedRnd basics.Round) (retRound, lookback basics.Round) {
@@ -70,17 +76,22 @@ func (mt *metricsTracker) prepareCommit(dcc *deferredCommitContext) error {
 	return nil
 }
 
-func (mt *metricsTracker) commitRound(context.Context, *sql.Tx, *deferredCommitContext) error {
+func (mt *metricsTracker) commitRound(context.Context, trackerdb.TransactionScope, *deferredCommitContext) error {
 	return nil
 }
 
 func (mt *metricsTracker) postCommit(ctx context.Context, dcc *deferredCommitContext) {
+	mt.ledgerDBRound.Set(uint64(dcc.newBase()))
 }
 
 func (mt *metricsTracker) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
 }
 
-func (mt *metricsTracker) handleUnorderedCommit(*deferredCommitContext) {
+func (mt *metricsTracker) handleUnorderedCommit(dcc *deferredCommitContext) {
+}
+func (mt *metricsTracker) handlePrepareCommitError(dcc *deferredCommitContext) {
+}
+func (mt *metricsTracker) handleCommitError(dcc *deferredCommitContext) {
 }
 
 func (mt *metricsTracker) produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcr *deferredCommitRange) *deferredCommitRange {

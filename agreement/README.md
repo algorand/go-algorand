@@ -40,7 +40,7 @@ parameters:
 If `Ledger` and `db.Accessor` provide crash-safe storage, `agreement`
 will also recover safely after crashes.
 
-# Specification
+## Specification
 
 The specification for the protocol implemented by this package is
 located [here](https://github.com/algorandfoundation/specs).
@@ -48,7 +48,7 @@ located [here](https://github.com/algorandfoundation/specs).
 Optimizations from and other deviations from the spec will be noted
 throughout this file.
 
-## Terminology
+### Terminology
 
 Certain terms in this implementation are used as shorthands for
 specific concepts:
@@ -68,7 +68,7 @@ specific concepts:
    a quorum of soft votes (i.e., sigma(S, r, p)).
  - Additional terminology is described in the [agreement service doc](../docs/agreement_service.md).
 
-# Design
+## Design
 
 At the top level, an `agreement.Service` encapsulates the parameters
 and the goroutines which execute the protocol.
@@ -97,7 +97,7 @@ data structures, such as `vote`, `bundle`, and `proposal`. These data
 types have distinct unauthenticated versions, which allows routines to
 specify that they accept untrusted input.
 
-# Concurrent Component
+## Concurrent Component
 
 The `demux` object demultiplexes over a variety of channels which all
 represent inputs to the system. Inputs include:
@@ -121,7 +121,7 @@ machine validates these messages in the same way it validates real
 network messages and relays them back into the network as
 appropriate.
 
-## Spec Notes: Additional Events
+### Spec Notes: Additional Events
 
 Because signature verification is expected to be a computational
 bottleneck in the agreement code, it executes concurrently with
@@ -154,7 +154,7 @@ verification concurrently.  Moreover, the implementation abstracts
 over multiple keys by generating synthetic network events from the
 `pseudonode`.
 
-# Serialized State Machine
+## Serialized State Machine
 
 The logic of the agreement protocol is implemented as a state machine.
 This state machine is composed of many smaller state machines, which
@@ -356,5 +356,5 @@ a given period.
 The staging slot for a given period is important because its state is
 the precursor to cert and next votes. Once both a soft threshold for a
 value and the `Block` corresponding to this value has been observed by
-the node, a `proposalCommittableEvent` is emitted, which indicates
+the node, a proposal `committableEvent` is emitted, which indicates
 that the node may cert or next-vote for the proposal.

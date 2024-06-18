@@ -4,6 +4,9 @@ package committee
 
 import (
 	"github.com/algorand/msgp/msgp"
+
+	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data/basics"
 )
 
 // The following msgp objects are implemented in this file:
@@ -11,33 +14,41 @@ import (
 //      |-----> (*) MarshalMsg
 //      |-----> (*) CanMarshalMsg
 //      |-----> (*) UnmarshalMsg
+//      |-----> (*) UnmarshalMsgWithState
 //      |-----> (*) CanUnmarshalMsg
 //      |-----> (*) Msgsize
 //      |-----> (*) MsgIsZero
+//      |-----> CredentialMaxSize()
 //
 // Seed
 //   |-----> (*) MarshalMsg
 //   |-----> (*) CanMarshalMsg
 //   |-----> (*) UnmarshalMsg
+//   |-----> (*) UnmarshalMsgWithState
 //   |-----> (*) CanUnmarshalMsg
 //   |-----> (*) Msgsize
 //   |-----> (*) MsgIsZero
+//   |-----> SeedMaxSize()
 //
 // UnauthenticatedCredential
 //             |-----> (*) MarshalMsg
 //             |-----> (*) CanMarshalMsg
 //             |-----> (*) UnmarshalMsg
+//             |-----> (*) UnmarshalMsgWithState
 //             |-----> (*) CanUnmarshalMsg
 //             |-----> (*) Msgsize
 //             |-----> (*) MsgIsZero
+//             |-----> UnauthenticatedCredentialMaxSize()
 //
 // hashableCredential
 //          |-----> (*) MarshalMsg
 //          |-----> (*) CanMarshalMsg
 //          |-----> (*) UnmarshalMsg
+//          |-----> (*) UnmarshalMsgWithState
 //          |-----> (*) CanUnmarshalMsg
 //          |-----> (*) Msgsize
 //          |-----> (*) MsgIsZero
+//          |-----> HashableCredentialMaxSize()
 //
 
 // MarshalMsg implements msgp.Marshaler
@@ -104,7 +115,12 @@ func (_ *Credential) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *Credential) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *Credential) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0001 int
@@ -126,7 +142,7 @@ func (z *Credential) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).VrfOut.UnmarshalMsg(bts)
+			bts, err = (*z).VrfOut.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "VrfOut")
 				return
@@ -142,7 +158,7 @@ func (z *Credential) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).Hashable.UnmarshalMsg(bts)
+			bts, err = (*z).Hashable.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Hashable")
 				return
@@ -150,7 +166,7 @@ func (z *Credential) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).UnauthenticatedCredential.Proof.UnmarshalMsg(bts)
+			bts, err = (*z).UnauthenticatedCredential.Proof.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Proof")
 				return
@@ -186,7 +202,7 @@ func (z *Credential) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "h":
-				bts, err = (*z).VrfOut.UnmarshalMsg(bts)
+				bts, err = (*z).VrfOut.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "VrfOut")
 					return
@@ -198,13 +214,13 @@ func (z *Credential) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "hc":
-				bts, err = (*z).Hashable.UnmarshalMsg(bts)
+				bts, err = (*z).Hashable.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "Hashable")
 					return
 				}
 			case "pf":
-				bts, err = (*z).UnauthenticatedCredential.Proof.UnmarshalMsg(bts)
+				bts, err = (*z).UnauthenticatedCredential.Proof.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "Proof")
 					return
@@ -222,6 +238,9 @@ func (z *Credential) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *Credential) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *Credential) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*Credential)
 	return ok
@@ -238,6 +257,12 @@ func (z *Credential) MsgIsZero() bool {
 	return ((*z).Weight == 0) && ((*z).VrfOut.MsgIsZero()) && ((*z).DomainSeparationEnabled == false) && ((*z).Hashable.MsgIsZero()) && ((*z).UnauthenticatedCredential.Proof.MsgIsZero())
 }
 
+// MaxSize returns a maximum valid message size for this message type
+func CredentialMaxSize() (s int) {
+	s = 1 + 3 + msgp.Uint64Size + 2 + crypto.DigestMaxSize() + 3 + msgp.BoolSize + 3 + HashableCredentialMaxSize() + 3 + crypto.VrfProofMaxSize()
+	return
+}
+
 // MarshalMsg implements msgp.Marshaler
 func (z *Seed) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
@@ -251,7 +276,12 @@ func (_ *Seed) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *Seed) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *Seed) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -261,6 +291,9 @@ func (z *Seed) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *Seed) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *Seed) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*Seed)
 	return ok
@@ -275,6 +308,13 @@ func (z *Seed) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *Seed) MsgIsZero() bool {
 	return (*z) == (Seed{})
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func SeedMaxSize() (s int) {
+	// Calculating size of array: z
+	s = msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -305,7 +345,12 @@ func (_ *UnauthenticatedCredential) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *UnauthenticatedCredential) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *UnauthenticatedCredential) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0001 int
@@ -319,7 +364,7 @@ func (z *UnauthenticatedCredential) UnmarshalMsg(bts []byte) (o []byte, err erro
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).Proof.UnmarshalMsg(bts)
+			bts, err = (*z).Proof.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Proof")
 				return
@@ -349,7 +394,7 @@ func (z *UnauthenticatedCredential) UnmarshalMsg(bts []byte) (o []byte, err erro
 			}
 			switch string(field) {
 			case "pf":
-				bts, err = (*z).Proof.UnmarshalMsg(bts)
+				bts, err = (*z).Proof.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "Proof")
 					return
@@ -367,6 +412,9 @@ func (z *UnauthenticatedCredential) UnmarshalMsg(bts []byte) (o []byte, err erro
 	return
 }
 
+func (z *UnauthenticatedCredential) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *UnauthenticatedCredential) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*UnauthenticatedCredential)
 	return ok
@@ -381,6 +429,12 @@ func (z *UnauthenticatedCredential) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *UnauthenticatedCredential) MsgIsZero() bool {
 	return ((*z).Proof.MsgIsZero())
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func UnauthenticatedCredentialMaxSize() (s int) {
+	s = 1 + 3 + crypto.VrfProofMaxSize()
+	return
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -429,7 +483,12 @@ func (_ *hashableCredential) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *hashableCredential) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *hashableCredential) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0001 int
@@ -443,7 +502,7 @@ func (z *hashableCredential) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).RawOut.UnmarshalMsg(bts)
+			bts, err = (*z).RawOut.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "RawOut")
 				return
@@ -451,7 +510,7 @@ func (z *hashableCredential) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).Member.UnmarshalMsg(bts)
+			bts, err = (*z).Member.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Member")
 				return
@@ -489,13 +548,13 @@ func (z *hashableCredential) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 			switch string(field) {
 			case "v":
-				bts, err = (*z).RawOut.UnmarshalMsg(bts)
+				bts, err = (*z).RawOut.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "RawOut")
 					return
 				}
 			case "m":
-				bts, err = (*z).Member.UnmarshalMsg(bts)
+				bts, err = (*z).Member.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "Member")
 					return
@@ -519,6 +578,9 @@ func (z *hashableCredential) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *hashableCredential) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *hashableCredential) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*hashableCredential)
 	return ok
@@ -533,4 +595,10 @@ func (z *hashableCredential) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *hashableCredential) MsgIsZero() bool {
 	return ((*z).RawOut.MsgIsZero()) && ((*z).Member.MsgIsZero()) && ((*z).Iter == 0)
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func HashableCredentialMaxSize() (s int) {
+	s = 1 + 2 + crypto.VrfOutputMaxSize() + 2 + basics.AddressMaxSize() + 2 + msgp.Uint64Size
+	return
 }

@@ -52,29 +52,52 @@ proc ::AlgorandGoal::Abort { ERROR } {
         puts "GLOBAL_TEST_ROOT_DIR $::GLOBAL_TEST_ROOT_DIR"
         puts "GLOBAL_NETWORK_NAME $::GLOBAL_NETWORK_NAME"
 
+        # dump system and processes information to check memory consumption and if algod procs are still alive
+        if { $::tcl_platform(os) == "Darwin" } {
+            exec >@stdout 2>@stderr top -l 1
+        } elseif { $::tcl_platform(os) == "Linux" } {
+            exec >@stdout 2>@stderr top -b -n 1
+        } else {
+            # no logging for other platforms
+        }
+
         ::AlgorandGoal::StopNetwork $::GLOBAL_NETWORK_NAME $::GLOBAL_TEST_ROOT_DIR
 
         log_user 1
         set NODE_DATA_DIR $::GLOBAL_TEST_ROOT_DIR/Primary
         if { [file exists $NODE_DATA_DIR] } {
             set outLog [exec cat $NODE_DATA_DIR/algod-out.log]
-            puts "\n$NODE_DATA_DIR/algod-out.log:\r\n$outLog"
+            puts "\n$NODE_DATA_DIR/algod-out.log:\n$outLog"
             set errLog [exec cat $NODE_DATA_DIR/algod-err.log]
-            puts "\n$NODE_DATA_DIR/algod-err.log:\r\n$errLog"
+            puts "\n$NODE_DATA_DIR/algod-err.log:\n$errLog"
             set nodeLog [exec -- tail -n 50 $NODE_DATA_DIR/node.log]
-            puts "\n$NODE_DATA_DIR/node.log:\r\n$nodeLog"
+            puts "\n$NODE_DATA_DIR/node.log:\n$nodeLog"
             set LOGS_COLLECTED 1
+
+            set outLog [exec cat $NODE_DATA_DIR/kmd-v0.5/kmd-out.log]
+            puts "\n$NODE_DATA_DIR/kmd-v0.5/kmd-out.log:\n$outLog"
+            set errLog [exec cat $NODE_DATA_DIR/kmd-v0.5/kmd-err.log]
+            puts "\n$NODE_DATA_DIR/kmd-v0.5/kmd-err.log:\n$errLog"
+            set kmdLog [exec -- tail -n 50 $NODE_DATA_DIR/kmd-v0.5/kmd.log]
+            puts "\n$NODE_DATA_DIR/kmd-v0.5/kmd.log:\n$kmdLog"
         }
         set NODE_DATA_DIR $::GLOBAL_TEST_ROOT_DIR/Node
         puts "Node path $NODE_DATA_DIR"
         if { [file exists $NODE_DATA_DIR] } {
             set outLog [exec cat $NODE_DATA_DIR/algod-out.log]
-            puts "\n$NODE_DATA_DIR/algod-out.log:\r\n$outLog"
+            puts "\n$NODE_DATA_DIR/algod-out.log:\n$outLog"
             set errLog [exec cat $NODE_DATA_DIR/algod-err.log]
-            puts "\n$NODE_DATA_DIR/algod-err.log:\r\n$errLog"
+            puts "\n$NODE_DATA_DIR/algod-err.log:\n$errLog"
             set nodeLog [exec -- tail -n 50 $NODE_DATA_DIR/node.log]
-            puts "\n$NODE_DATA_DIR/node.log:\r\n$nodeLog"
+            puts "\n$NODE_DATA_DIR/node.log:\n$nodeLog"
             set LOGS_COLLECTED 1
+
+            set outLog [exec cat $NODE_DATA_DIR/kmd-v0.5/kmd-out.log]
+            puts "\n$NODE_DATA_DIR/kmd-v0.5/kmd-out.log:\n$outLog"
+            set errLog [exec cat $NODE_DATA_DIR/kmd-v0.5/kmd-err.log]
+            puts "\n$NODE_DATA_DIR/kmd-v0.5/kmd-err.log:\n$errLog"
+            set kmdLog [exec -- tail -n 50 $NODE_DATA_DIR/kmd-v0.5/kmd.log]
+            puts "\n$NODE_DATA_DIR/kmd-v0.5/kmd.log:\n$kmdLog"
         }
     }
 
@@ -86,11 +109,18 @@ proc ::AlgorandGoal::Abort { ERROR } {
         if { $LOGS_COLLECTED == 0 } {
             log_user 1
             set outLog [exec cat $::GLOBAL_TEST_ALGO_DIR/algod-out.log]
-            puts "\n$::GLOBAL_TEST_ALGO_DIR/algod-out.log:\r\n$outLog"
+            puts "\n$::GLOBAL_TEST_ALGO_DIR/algod-out.log:\n$outLog"
             set errLog [exec cat $::GLOBAL_TEST_ALGO_DIR/algod-err.log]
-            puts "\n$::GLOBAL_TEST_ALGO_DIR/algod-err.log:\r\n$errLog"
+            puts "\n$::GLOBAL_TEST_ALGO_DIR/algod-err.log:\n$errLog"
             set nodeLog [exec -- tail -n 50 $::GLOBAL_TEST_ALGO_DIR/node.log]
-            puts "\n$::GLOBAL_TEST_ALGO_DIR/node.log:\r\n$nodeLog"
+            puts "\n$::GLOBAL_TEST_ALGO_DIR/node.log:\n$nodeLog"
+
+            set outLog [exec cat $GLOBAL_TEST_ALGO_DIR/kmd-v0.5/kmd-out.log]
+            puts "\n$GLOBAL_TEST_ALGO_DIR/kmd-v0.5/kmd-out.log:\n$outLog"
+            set errLog [exec cat $GLOBAL_TEST_ALGO_DIR/kmd-v0.5/kmd-err.log]
+            puts "\n$GLOBAL_TEST_ALGO_DIR/kmd-v0.5/kmd-err.log:\n$errLog"
+            set kmdLog [exec -- tail -n 50 $GLOBAL_TEST_ALGO_DIR/kmd-v0.5/kmd.log]
+            puts "\n$GLOBAL_TEST_ALGO_DIR/kmd-v0.5/kmd.log:\n$kmdLog"
         }
     }
 
@@ -829,7 +859,7 @@ proc ::AlgorandGoal::VerifyMultisigInfoForOneOfTwoMultisig { MULTISIG_ADDRESS AD
         spawn goal account multisig info --address $MULTISIG_ADDRESS -d $TEST_PRIMARY_NODE_DIR -w $WALLET_NAME
         expect {
             timeout { ::AlgorandGoal::Abort "Timed out querying info about multisig account $MULTISIG_ADDRESS"  }
-            -re {Version: (\d+)\r\nThreshold: (\d+)\r\nPublic keys:\r\n  ([a-zA-Z0-9]+)\r\n  ([a-zA-Z0-9]+)\r\n} {
+            -re {Version: (\d+)\s+Threshold: (\d+)\s+Public keys:\s+([a-zA-Z0-9]+)\s+([a-zA-Z0-9]+)\s+} {
                 set VERSION $expect_out(1,string);
                 set THRESHOLD $expect_out(2,string);
                 set ADDRESS_RESPONSE_1 $expect_out(3,string);
@@ -914,7 +944,7 @@ proc ::AlgorandGoal::StartCatchup { NODE_DATA_DIR CATCHPOINT } {
     return $CATCHPOINT
 }
 
-# Wait for node to get into catchup mode
+# Wait for node to get into fast catchup mode
 proc ::AlgorandGoal::WaitCatchup { TEST_PRIMARY_NODE_DIR WAIT_DURATION_SEC } {
     if { [catch {
         set i 0

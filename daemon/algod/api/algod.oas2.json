@@ -26,6 +26,7 @@
     "/health": {
       "get": {
         "tags": [
+          "public",
           "common"
         ],
         "produces": [
@@ -46,9 +47,40 @@
         }
       }
     },
+    "/ready": {
+      "get": {
+        "tags": [
+          "public",
+          "common"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "scheme": [
+          "http"
+        ],
+        "summary": "Returns OK if healthy and fully caught up.",
+        "operationId": "GetReady",
+        "responses": {
+          "200": {
+            "description": "OK."
+          },
+          "500": {
+            "description": "Internal Error"
+          },
+          "503": {
+            "description": "Node not ready yet"
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
     "/metrics": {
       "get": {
         "tags": [
+          "public",
           "common"
         ],
         "produces": [
@@ -73,6 +105,7 @@
       "get": {
         "description": "Returns the entire genesis file in json.",
         "tags": [
+          "public",
           "common"
         ],
         "produces": [
@@ -100,6 +133,7 @@
       "get": {
         "description": "Returns the entire swagger spec in json.",
         "tags": [
+          "public",
           "common"
         ],
         "produces": [
@@ -127,6 +161,7 @@
       "get": {
         "description": "Retrieves the supported API versions, binary build versions, and genesis information.",
         "tags": [
+          "public",
           "common"
         ],
         "produces": [
@@ -143,9 +178,51 @@
         }
       }
     },
+    "/debug/settings/pprof": {
+      "get": {
+        "description": "Retrieves the current settings for blocking and mutex profiles",
+        "tags": [
+          "private"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "operationId": "GetDebugSettingsProf",
+        "responses": {
+          "200": {
+            "$ref": "#/responses/DebugSettingsProfResponse"
+          }
+        }
+      },
+      "put": {
+        "description": "Enables blocking and mutex profiles, and returns the old settings",
+        "tags": [
+          "private"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "operationId": "PutDebugSettingsProf",
+        "responses": {
+          "200": {
+            "$ref": "#/responses/DebugSettingsProfResponse"
+          }
+        }
+      }
+    },
     "/v2/accounts/{address}": {
       "get": {
         "description": "Given a specific account public key, this call returns the accounts status, balance and spendable amounts",
+        "tags": [
+          "public",
+          "nonparticipating"
+        ],
         "produces": [
           "application/json",
           "application/msgpack"
@@ -227,6 +304,10 @@
     "/v2/accounts/{address}/assets/{asset-id}": {
       "get": {
         "description": "Given a specific account public key and asset ID, this call returns the account's asset holding and asset parameters (if either exist). Asset parameters will only be returned if the provided address is the asset's creator.",
+        "tags": [
+          "public",
+          "nonparticipating"
+        ],
         "produces": [
           "application/json",
           "application/msgpack"
@@ -301,9 +382,80 @@
         }
       ]
     },
+    "/v2/accounts/{address}/assets": {
+      "get": {
+        "description": "Lookup an account's asset holdings.",
+        "tags": [
+          "public",
+          "experimental"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Get a list of assets held by an account, inclusive of asset params.",
+        "operationId": "AccountAssetsInformation",
+        "parameters": [
+          {
+            "pattern": "[A-Z0-9]{58}",
+            "type": "string",
+            "description": "An account public key",
+            "name": "address",
+            "in": "path",
+            "required": true
+          },
+          {
+            "$ref": "#/parameters/limit"
+          },
+          {
+            "$ref": "#/parameters/next"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/AccountAssetsInformationResponse"
+          },
+          "400": {
+            "description": "Malformed address",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "type": "string",
+          "name": "address",
+          "in": "path",
+          "required": true
+        }
+      ]
+    },
     "/v2/accounts/{address}/applications/{application-id}": {
       "get": {
         "description": "Given a specific account public key and application ID, this call returns the account's application local state and global state (AppLocalState and AppParams, if either exists). Global state will only be returned if the provided address is the application's creator.",
+        "tags": [
+          "public",
+          "nonparticipating"
+        ],
         "produces": [
           "application/json",
           "application/msgpack"
@@ -381,6 +533,10 @@
     "/v2/accounts/{address}/transactions/pending": {
       "get": {
         "description": "Get the list of pending transactions by address, sorted by priority, in decreasing order, truncated at the end at MAX. If MAX = 0, returns all pending transactions.\n",
+        "tags": [
+          "public",
+          "participating"
+        ],
         "produces": [
           "application/json",
           "application/msgpack"
@@ -450,6 +606,10 @@
     },
     "/v2/blocks/{round}": {
       "get": {
+        "tags": [
+          "public",
+          "nonparticipating"
+        ],
         "produces": [
           "application/json",
           "application/msgpack"
@@ -523,8 +683,128 @@
         }
       ]
     },
+    "/v2/blocks/{round}/txids": {
+      "get": {
+        "tags": [
+          "public",
+          "nonparticipating"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Get the top level transaction IDs for the block on the given round.",
+        "operationId": "GetBlockTxids",
+        "parameters": [
+          {
+            "minimum": 0,
+            "type": "integer",
+            "description": "The round from which to fetch block transaction IDs.",
+            "name": "round",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/BlockTxidsResponse"
+          },
+          "400": {
+            "description": "Bad Request - Non integer number",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Non existing block",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
+    "/v2/blocks/{round}/hash": {
+      "get": {
+        "tags": [
+          "public",
+          "nonparticipating"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Get the block hash for the block on the given round.",
+        "operationId": "GetBlockHash",
+        "parameters": [
+          {
+            "minimum": 0,
+            "type": "integer",
+            "description": "The round from which to fetch block hash information.",
+            "name": "round",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/BlockHashResponse"
+          },
+          "400": {
+            "description": "Bad Request - Non integer number",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "None existing block ",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
     "/v2/blocks/{round}/transactions/{txid}/proof": {
       "get": {
+        "tags": [
+          "public",
+          "nonparticipating"
+        ],
         "produces": [
           "application/json"
         ],
@@ -612,8 +892,68 @@
         }
       ]
     },
+    "/v2/blocks/{round}/logs": {
+      "get": {
+        "tags": [
+          "public",
+          "nonparticipating"
+        ],
+        "description": "Get all of the logs from outer and inner app calls in the given round",
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Get all of the logs from outer and inner app calls in the given round",
+        "operationId": "GetBlockLogs",
+        "parameters": [
+          {
+            "minimum": 0,
+            "type": "integer",
+            "description": "The round from which to fetch block log information.",
+            "name": "round",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/BlockLogsResponse"
+          },
+          "400": {
+            "description": "Bad Request - Non integer number",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Nonexistent block ",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        }
+      }
+    },
     "/v2/ledger/supply": {
       "get": {
+        "tags": [
+          "public",
+          "nonparticipating"
+        ],
         "produces": [
           "application/json"
         ],
@@ -641,7 +981,8 @@
     "/v2/participation": {
       "get": {
         "tags": [
-          "private"
+          "private",
+          "participating"
         ],
         "description": "Return a list of participation keys",
         "produces": [
@@ -688,7 +1029,8 @@
       },
       "post": {
         "tags": [
-          "private"
+          "private",
+          "participating"
         ],
         "consumes": [
           "application/msgpack"
@@ -753,10 +1095,91 @@
         }
       }
     },
+    "/v2/participation/generate/{address}": {
+      "post": {
+        "tags": [
+          "private",
+          "participating"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Generate and install participation keys to the node.",
+        "operationId": "GenerateParticipationKeys",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "An account public key",
+            "name": "address",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "integer",
+            "description": "Key dilution for two-level participation keys (defaults to sqrt of validity window).",
+            "name": "dilution",
+            "in": "query"
+          },
+          {
+            "type": "integer",
+            "description": "First round for participation key.",
+            "name": "first",
+            "in": "query",
+            "required": true
+          },
+          {
+            "type": "integer",
+            "description": "Last round for participation key.",
+            "name": "last",
+            "in": "query",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "An empty JSON object is returned if the generation process was started. Currently no status is available.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "503": {
+            "description": "Service Temporarily Unavailable",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
     "/v2/participation/{participation-id}": {
       "delete": {
         "tags": [
-          "private"
+          "private",
+          "participating"
         ],
         "description": "Delete a given participation key by ID",
         "produces": [
@@ -802,7 +1225,8 @@
       },
       "get": {
         "tags": [
-          "private"
+          "private",
+          "participating"
         ],
         "description": "Given a participation ID, return information about that participation key",
         "produces": [
@@ -849,7 +1273,8 @@
       },
       "post": {
         "tags": [
-          "private"
+          "private",
+          "participating"
         ],
         "description": "Given a participation ID, append state proof keys to a particular set of participation keys",
         "consumes": [
@@ -922,7 +1347,8 @@
       "post": {
         "description": "Special management endpoint to shutdown the node. Optionally provide a timeout parameter to indicate that the node should begin shutting down after a number of seconds.",
         "tags": [
-          "private"
+          "private",
+          "nonparticipating"
         ],
         "operationId": "ShutdownNode",
         "parameters": [
@@ -944,6 +1370,10 @@
     },
     "/v2/status": {
       "get": {
+        "tags": [
+          "public",
+          "nonparticipating"
+        ],
         "produces": [
           "application/json"
         ],
@@ -976,14 +1406,18 @@
     },
     "/v2/status/wait-for-block-after/{round}": {
       "get": {
-        "description": "Waits for a block to appear after round {round} and returns the node's status at the time.",
+        "tags": [
+          "public",
+          "nonparticipating"
+        ],
+        "description": "Waits for a block to appear after round {round} and returns the node's status at the time. There is a 1 minute timeout, when reached the current status is returned regardless of whether or not it is the round after the given round.",
         "produces": [
           "application/json"
         ],
         "schemes": [
           "http"
         ],
-        "summary": "Gets the node status after waiting for the given round.",
+        "summary": "Gets the node status after waiting for a round after the given round.",
         "operationId": "WaitForBlock",
         "parameters": [
           {
@@ -997,10 +1431,11 @@
         ],
         "responses": {
           "200": {
+            "description": "The round after the given round, or the current round if a timeout occurs.",
             "$ref": "#/responses/NodeStatusResponse"
           },
           "400": {
-            "description": "Bad Request -- number must be non-negative integer ",
+            "description": "Bad Request -- number must be non-negative integer",
             "schema": {
               "$ref": "#/definitions/ErrorResponse"
             }
@@ -1039,6 +1474,10 @@
     },
     "/v2/transactions": {
       "post": {
+        "tags": [
+          "public",
+          "participating"
+        ],
         "consumes": [
           "application/x-binary"
         ],
@@ -1048,7 +1487,7 @@
         "schemes": [
           "http"
         ],
-        "summary": "Broadcasts a raw transaction to the network.",
+        "summary": "Broadcasts a raw transaction or transaction group to the network.",
         "operationId": "RawTransaction",
         "parameters": [
           {
@@ -1096,8 +1535,138 @@
         }
       }
     },
+    "/v2/transactions/async": {
+      "post": {
+        "tags": [
+          "experimental"
+        ],
+        "consumes": [
+          "application/x-binary"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Fast track for broadcasting a raw transaction or transaction group to the network through the tx handler without performing most of the checks and reporting detailed errors. Should be only used for development and performance testing.",
+        "operationId": "RawTransactionAsync",
+        "parameters": [
+          {
+            "description": "The byte encoded signed transaction to broadcast to network",
+            "name": "rawtxn",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "binary"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "type": "object"
+          },
+          "400": {
+            "description": "Bad Request - Malformed Algorand transaction ",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "503": {
+            "description": "Service Temporarily Unavailable",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
+    "/v2/transactions/simulate": {
+      "post": {
+        "tags": [
+          "public",
+          "nonparticipating"
+        ],
+        "consumes": [
+          "application/json",
+          "application/msgpack"
+        ],
+        "produces": [
+          "application/json",
+          "application/msgpack"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Simulates a raw transaction or transaction group as it would be evaluated on the network. The simulation will use blockchain state from the latest committed round.",
+        "operationId": "SimulateTransaction",
+        "parameters": [
+          {
+            "description": "The transactions to simulate, along with any other inputs.",
+            "name": "request",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/SimulateRequest"
+            }
+          },
+          {
+            "$ref": "#/parameters/format"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/SimulateResponse"
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "503": {
+            "description": "Service Temporarily Unavailable",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
     "/v2/transactions/params": {
       "get": {
+        "tags": [
+          "public",
+          "nonparticipating"
+        ],
         "produces": [
           "application/json"
         ],
@@ -1137,6 +1706,10 @@
     "/v2/transactions/pending": {
       "get": {
         "description": "Get the list of pending transactions, sorted by priority, in decreasing order, truncated at the end at MAX. If MAX = 0, returns all pending transactions.\n",
+        "tags": [
+          "public",
+          "participating"
+        ],
         "produces": [
           "application/json",
           "application/msgpack"
@@ -1185,6 +1758,10 @@
     "/v2/transactions/pending/{txid}": {
       "get": {
         "description": "Given a transaction ID of a recently submitted transaction, it returns information about it.  There are several cases when this might succeed:\n- transaction committed (committed round \u003e 0)\n- transaction still in the pool (committed round = 0, pool error = \"\")\n- transaction removed from pool due to error (committed round = 0, pool error != \"\")\nOr the transaction may have happened sufficiently long ago that the node no longer remembers it, and this will return an error.\n",
+        "tags": [
+          "public",
+          "participating"
+        ],
         "produces": [
           "application/json",
           "application/msgpack"
@@ -1246,8 +1823,219 @@
         }
       ]
     },
+    "/v2/deltas/{round}": {
+      "get": {
+        "description": "Get ledger deltas for a round.",
+        "tags": [
+            "public",
+            "nonparticipating"
+        ],
+        "produces": [
+          "application/json",
+          "application/msgpack"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Get a LedgerStateDelta object for a given round",
+        "operationId": "GetLedgerStateDelta",
+        "parameters": [
+          {
+            "type": "integer",
+            "description": "The round for which the deltas are desired.",
+            "name": "round",
+            "in": "path",
+            "required": true,
+            "minimum": 0
+          },
+          {
+            "$ref": "#/parameters/format"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/LedgerStateDeltaResponse"
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Could not find a delta for round",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "408": {
+            "description": "timed out on request",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "503": {
+            "description": "Service Temporarily Unavailable",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
+    "/v2/deltas/{round}/txn/group": {
+      "get": {
+        "description": "Get ledger deltas for transaction groups in a given round.",
+        "tags": [
+          "public",
+          "nonparticipating"
+        ],
+        "produces": [
+          "application/json",
+          "application/msgpack"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Get LedgerStateDelta objects for all transaction groups in a given round",
+        "operationId": "GetTransactionGroupLedgerStateDeltasForRound",
+        "parameters": [
+          {
+            "type": "integer",
+            "description": "The round for which the deltas are desired.",
+            "name": "round",
+            "in": "path",
+            "required": true,
+            "minimum": 0
+          },
+          {
+            "$ref": "#/parameters/format"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/TransactionGroupLedgerStateDeltasForRoundResponse"
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Could not find deltas for round",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "408": {
+            "description": "timed out on request",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "501": {
+            "description": "Not Implemented",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
+    "/v2/deltas/txn/group/{id}": {
+      "get": {
+        "description": "Get a ledger delta for a given transaction group.",
+        "tags": [
+          "public",
+          "nonparticipating"
+        ],
+        "produces": [
+          "application/json",
+          "application/msgpack"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Get a LedgerStateDelta object for a given transaction group",
+        "operationId": "GetLedgerStateDeltaForTransactionGroup",
+        "parameters": [
+          {
+            "pattern": "[A-Z0-9]+",
+            "type": "string",
+            "description": "A transaction ID, or transaction group ID",
+            "name": "id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "$ref": "#/parameters/format"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/LedgerStateDeltaForTransactionGroupResponse"
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Could not find a delta for transaction ID or group ID",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "408": {
+            "description": "timed out on request",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "501": {
+            "description": "Not Implemented",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
     "/v2/stateproofs/{round}": {
       "get": {
+        "tags": [
+          "public",
+          "nonparticipating"
+        ],
         "produces": [
           "application/json"
         ],
@@ -1282,6 +2070,12 @@
               "$ref": "#/definitions/ErrorResponse"
             }
           },
+          "408": {
+            "description": "timed out on request",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
           "500": {
             "description": "Internal Error",
             "schema": {
@@ -1310,6 +2104,10 @@
     },
     "/v2/blocks/{round}/lightheader/proof": {
       "get": {
+        "tags": [
+          "public",
+          "nonparticipating"
+        ],
         "produces": [
           "application/json"
         ],
@@ -1334,6 +2132,12 @@
           },
           "401": {
             "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "408": {
+            "description": "timed out on request",
             "schema": {
               "$ref": "#/definitions/ErrorResponse"
             }
@@ -1373,6 +2177,10 @@
     "/v2/applications/{application-id}": {
       "get": {
         "description": "Given a application ID, it returns application information including creator, approval and clear programs, global and local schemas, and global state.",
+        "tags": [
+          "public",
+          "nonparticipating"
+        ],
         "produces": [
           "application/json"
         ],
@@ -1433,9 +2241,160 @@
         }
       ]
     },
+    "/v2/applications/{application-id}/boxes": {
+      "get": {
+        "description": "Given an application ID, return all Box names. No particular ordering is guaranteed. Request fails when client or server-side configured limits prevent returning all Box names.",
+        "tags": [
+          "public",
+          "nonparticipating"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Get all box names for a given application.",
+        "operationId": "GetApplicationBoxes",
+        "parameters": [
+          {
+            "type": "integer",
+            "description": "An application identifier",
+            "name": "application-id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "integer",
+            "description": "Max number of box names to return. If max is not set, or max == 0, returns all box-names.",
+            "name": "max",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "$ref": "#/responses/BoxesResponse"
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "type": "integer",
+          "name": "application-id",
+          "in": "path",
+          "required": true
+        }
+      ]
+    },
+    "/v2/applications/{application-id}/box": {
+      "get": {
+        "description": "Given an application ID and box name, it returns the round, box name, and value (each base64 encoded). Box names must be in the goal app call arg encoding form 'encoding:value'. For ints, use the form 'int:1234'. For raw bytes, use the form 'b64:A=='. For printable strings, use the form 'str:hello'. For addresses, use the form 'addr:XYZ...'.",
+        "tags": [
+          "public",
+          "nonparticipating"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Get box information for a given application.",
+        "operationId": "GetApplicationBoxByName",
+        "parameters": [
+          {
+            "type": "integer",
+            "description": "An application identifier",
+            "name": "application-id",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "string",
+            "description": "A box name, in the goal app call arg form 'encoding:value'. For ints, use the form 'int:1234'. For raw bytes, use the form 'b64:A=='. For printable strings, use the form 'str:hello'. For addresses, use the form 'addr:XYZ...'.",
+            "name": "name",
+            "in": "query",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "$ref": "#/responses/BoxResponse"
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Box Not Found",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "type": "integer",
+          "name": "application-id",
+          "in": "path",
+          "required": true
+        },
+        {
+          "type": "string",
+          "name": "name",
+          "in": "query",
+          "required": true
+        }
+      ]
+    },
     "/v2/assets/{asset-id}": {
       "get": {
         "description": "Given a asset ID, it returns asset information including creator, name, total supply and special addresses.",
+        "tags": [
+          "public",
+          "nonparticipating"
+        ],
         "produces": [
           "application/json"
         ],
@@ -1496,9 +2455,159 @@
         }
       ]
     },
+    "/v2/ledger/sync": {
+      "delete": {
+        "description": "Unset the ledger sync round.",
+        "tags": [
+          "public",
+          "data"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Removes minimum sync round restriction from the ledger.",
+        "operationId": "UnsetSyncRound",
+        "responses": {
+          "200": {
+            "type": "object"
+          },
+          "400": {
+            "description": "Sync round not set.",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "503": {
+            "description": "Service Temporarily Unavailable",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      },
+      "get": {
+        "description": "Gets the minimum sync round for the ledger.",
+        "tags": [
+          "public",
+          "data"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Returns the minimum sync round the ledger is keeping in cache.",
+        "operationId": "GetSyncRound",
+        "responses": {
+          "200": {
+            "$ref": "#/responses/GetSyncRoundResponse"
+          },
+          "400": {
+            "description": "Sync round not set.",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "503": {
+            "description": "Service Temporarily Unavailable",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
+    "/v2/ledger/sync/{round}": {
+      "post": {
+        "description": "Sets the minimum sync round on the ledger.",
+        "tags": [
+          "public",
+          "data"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Given a round, tells the ledger to keep that round in its cache.",
+        "operationId": "SetSyncRound",
+        "parameters": [
+          {
+            "type": "integer",
+            "description": "The round for which the deltas are desired.",
+            "name": "round",
+            "in": "path",
+            "required": true,
+            "minimum": 0
+          }
+        ],
+        "responses": {
+          "200": {
+            "type": "object"
+          },
+          "400": {
+            "description": "Can not set sync round to an earlier round than the current round.",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "503": {
+            "description": "Service Temporarily Unavailable",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
     "/v2/teal/compile": {
       "post": {
         "description": "Given TEAL source code in plain text, return base64 encoded program bytes and base32 SHA512_256 hash of program bytes (Address style). This endpoint is only enabled when a node's configuration file sets EnableDeveloperAPI to true.",
+        "tags": [
+          "public",
+          "nonparticipating"
+        ],
         "consumes": [
           "text/plain"
         ],
@@ -1563,6 +2672,10 @@
     "/v2/teal/disassemble": {
       "post": {
         "description": "Given the program bytes, return the TEAL source code in plain text. This endpoint is only enabled when a node's configuration file sets EnableDeveloperAPI to true.",
+        "tags": [
+          "public",
+          "nonparticipating"
+        ],
         "consumes": [
           "application/x-binary"
         ],
@@ -1621,7 +2734,8 @@
     "/v2/catchup/{catchpoint}": {
       "post": {
         "tags": [
-          "private"
+          "private",
+          "nonparticipating"
         ],
         "description": "Given a catchpoint, it starts catching up to this catchpoint",
         "produces": [
@@ -1635,6 +2749,12 @@
         "parameters": [
           {
             "$ref": "#/parameters/catchpoint"
+          },
+          {
+            "name": "min",
+            "description": "Specify the minimum number of blocks which the ledger must be advanced by in order to start the catchup. This is useful for simplifying tools which support fast catchup, they can run the catchup unconditionally and the node will skip the catchup if it is not needed.",
+            "in": "query",
+            "type": "integer"
           }
         ],
         "responses": {
@@ -1658,6 +2778,12 @@
               "$ref": "#/definitions/ErrorResponse"
             }
           },
+          "408": {
+            "description": "Request Timeout",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
           "500": {
             "description": "Internal Error",
             "schema": {
@@ -1671,7 +2797,8 @@
       },
       "delete": {
         "tags": [
-          "private"
+          "private",
+          "nonparticipating"
         ],
         "description": "Given a catchpoint, it aborts catching up to this catchpoint",
         "produces": [
@@ -1726,6 +2853,10 @@
     "/v2/teal/dryrun": {
       "post": {
         "description": "Executes TEAL program(s) in context and returns debugging information about the execution. This endpoint is only enabled when a node's configuration file sets EnableDeveloperAPI to true.",
+        "tags": [
+          "public",
+          "nonparticipating"
+        ],
         "consumes": [
           "application/json",
           "application/msgpack"
@@ -1779,9 +2910,143 @@
           }
         }
       }
+    },
+    "/v2/experimental": {
+      "get": {
+        "tags": [
+          "public",
+          "experimental"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Returns OK if experimental API is enabled.",
+        "operationId": "ExperimentalCheck",
+        "responses": {
+          "200": {
+            "description": "Experimental API enabled"
+          },
+          "404": {
+            "description": "Experimental API not enabled"
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
+    "/v2/devmode/blocks/offset": {
+      "get": {
+        "description": "Gets the current timestamp offset.",
+        "tags": [
+          "public",
+          "nonparticipating"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Returns the timestamp offset. Timestamp offsets can only be set in dev mode.",
+        "operationId": "GetBlockTimeStampOffset",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "$ref": "#/responses/GetBlockTimeStampOffsetResponse"
+          },
+          "400": {
+            "description": "TimeStamp offset not set.",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
+    "/v2/devmode/blocks/offset/{offset}": {
+      "post": {
+        "description": "Sets the timestamp offset (seconds) for blocks in dev mode. Providing an offset of 0 will unset this value and try to use the real clock for the timestamp.",
+        "tags": [
+          "public",
+          "nonparticipating"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Given a timestamp offset in seconds, adds the offset to every subsequent block header's timestamp.",
+        "operationId": "SetBlockTimeStampOffset",
+        "parameters": [
+          {
+            "type": "integer",
+            "description": "The timestamp offset for blocks in dev mode.",
+            "name": "offset",
+            "in": "path",
+            "required": true,
+            "minimum": 0
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "type": "object"
+          },
+          "400": {
+            "description": "Cannot set timestamp offset to a negative integer.",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
     }
   },
   "definitions": {
+    "LedgerStateDelta": {
+      "description": "Ledger StateDelta object",
+      "type": "object",
+      "x-algorand-format": "StateDelta"
+    },
+    "LedgerStateDeltaForTransactionGroup": {
+      "description": "Contains a ledger delta for a single transaction group",
+      "type": "object",
+      "required": [
+        "Delta",
+        "Ids"
+      ],
+      "properties": {
+        "Delta": {
+          "$ref": "#/definitions/LedgerStateDelta"
+        },
+        "Ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
     "Account": {
       "description": "Account information at a given round.\n\nDefinition:\ndata/basics/userBalance.go : AccountData\n",
       "type": "object",
@@ -1868,8 +3133,20 @@
           "description": "The count of all assets (AssetParams objects) created by this account.",
           "type": "integer"
         },
+        "total-boxes": {
+          "description": "\\[tbx\\] The number of existing boxes created by this account's app.",
+          "type": "integer"
+        },
+        "total-box-bytes": {
+          "description": "\\[tbxb\\] The total number of bytes used by this account's app's box keys and values.",
+          "type": "integer"
+        },
         "participation": {
           "$ref": "#/definitions/AccountParticipation"
+        },
+        "incentive-eligible": {
+          "description": "Whether or not the account can receive block incentives if its balance is in range at proposal time.",
+          "type": "boolean"
         },
         "pending-rewards": {
           "description": "amount of MicroAlgos of pending rewards in this account.",
@@ -1904,6 +3181,31 @@
           "description": "\\[spend\\] the address against which signing should be checked. If empty, the address of the current account is used. This field can be updated in any transaction by setting the RekeyTo field.",
           "type": "string",
           "x-algorand-format": "Address"
+        },
+        "last-proposed": {
+          "description": "The round in which this account last proposed the block.",
+          "type": "integer"
+        },
+        "last-heartbeat": {
+          "description": "The round in which this account last went online, or explicitly renewed their online status.",
+          "type": "integer"
+        }
+      }
+    },
+    "AccountAssetHolding": {
+      "description": "AccountAssetHolding describes the account's asset holding and asset parameters (if either exist) for a specific asset ID.",
+      "type": "object",
+      "required": [
+        "asset-holding"
+      ],
+      "properties": {
+        "asset-holding": {
+          "description": "\\[asset\\] Details about the asset held by this account.\n\nThe raw account uses `AssetHolding` for this type.",
+          "$ref": "#/definitions/AssetHolding"
+        },
+        "asset-params": {
+          "description": "\\[apar\\] parameters of the asset held by this account.\n\nThe raw account uses `AssetParams` for this type.",
+          "$ref": "#/definitions/AssetParams"
         }
       }
     },
@@ -2067,6 +3369,46 @@
         }
       }
     },
+    "AssetHoldingReference": {
+      "description": "References an asset held by an account.",
+      "type": "object",
+      "required": [
+        "account",
+        "asset"
+      ],
+      "properties": {
+        "account": {
+          "description": "Address of the account holding the asset.",
+          "type": "string",
+          "x-algorand-format": "Address"
+        },
+        "asset": {
+          "description": "Asset ID of the holding.",
+          "type": "integer",
+          "x-algorand-format": "uint64"
+        }
+      }
+    },
+    "ApplicationLocalReference": {
+      "description": "References an account's local state for an application.",
+      "type": "object",
+      "required": [
+        "account",
+        "app"
+      ],
+      "properties": {
+        "account": {
+          "description": "Address of the account with the local state.",
+          "type": "string",
+          "x-algorand-format": "Address"
+        },
+        "app": {
+          "description": "Application ID of the local state application.",
+          "type": "integer",
+          "x-algorand-format": "uint64"
+        }
+      }
+    },
     "ApplicationStateSchema": {
       "description": "Specifies maximums on the number of each type that may be stored.",
       "type": "object",
@@ -2200,6 +3542,46 @@
         }
       }
     },
+    "AvmValue": {
+      "description": "Represents an AVM value.",
+      "type": "object",
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "description": "value type. Value `1` refers to **bytes**, value `2` refers to **uint64**",
+          "type": "integer"
+        },
+        "bytes": {
+          "description": "bytes value.",
+          "type": "string",
+          "format": "byte"
+        },
+        "uint": {
+          "description": "uint value.",
+          "type": "integer",
+          "x-algorand-format": "uint64"
+        }
+      }
+    },
+    "AvmKeyValue": {
+      "description": "Represents an AVM key-value pair in an application store.",
+      "type": "object",
+      "required": [
+        "key",
+        "value"
+      ],
+      "properties": {
+        "key": {
+          "type": "string",
+          "format": "byte"
+        },
+        "value": {
+          "$ref": "#/definitions/AvmValue"
+        }
+      }
+    },
     "StateDelta": {
       "description": "Application state delta.",
       "type": "array",
@@ -2310,15 +3692,15 @@
           "type": "integer"
         },
         "local-state-schema": {
-          "description": "[\\lsch\\] local schema",
+          "description": "\\[lsch\\] local schema",
           "$ref": "#/definitions/ApplicationStateSchema"
         },
         "global-state-schema": {
-          "description": "[\\gsch\\] global schema",
+          "description": "\\[gsch\\] global schema",
           "$ref": "#/definitions/ApplicationStateSchema"
         },
         "global-state": {
-          "description": "[\\gs\\] global schema",
+          "description": "\\[gs\\] global state",
           "$ref": "#/definitions/TealKeyValueStore"
         }
       }
@@ -2426,10 +3808,6 @@
         "budget-consumed": {
           "description": "Budget consumed during execution of app call transaction.",
           "type": "integer"
-        },
-        "cost": {
-          "description": "Net cost of app execution. Field is DEPRECATED and is subject for removal. Instead, use `budget-added` and `budget-consumed.",
-          "type": "integer"
         }
       }
     },
@@ -2530,6 +3908,164 @@
         }
       }
     },
+    "SimulateRequest": {
+      "description": "Request type for simulation endpoint.",
+      "type": "object",
+      "required": [
+        "txn-groups"
+      ],
+      "properties": {
+        "txn-groups": {
+          "description": "The transaction groups to simulate.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SimulateRequestTransactionGroup"
+          }
+        },
+        "round": {
+          "description": "If provided, specifies the round preceding the simulation. State changes through this round will be used to run this simulation. Usually only the 4 most recent rounds will be available (controlled by the node config value MaxAcctLookback). If not specified, defaults to the latest available round.",
+          "type": "integer"
+        },
+        "allow-empty-signatures": {
+          "description": "Allows transactions without signatures to be simulated as if they had correct signatures.",
+          "type": "boolean"
+        },
+        "allow-more-logging": {
+          "description": "Lifts limits on log opcode usage during simulation.",
+          "type": "boolean"
+        },
+        "allow-unnamed-resources": {
+          "description": "Allows access to unnamed resources during simulation.",
+          "type": "boolean"
+        },
+        "extra-opcode-budget": {
+          "description": "Applies extra opcode budget during simulation for each transaction group.",
+          "type": "integer"
+        },
+        "exec-trace-config": {
+          "$ref": "#/definitions/SimulateTraceConfig"
+        },
+        "fix-signers": {
+          "description": "If true, signers for transactions that are missing signatures will be fixed during evaluation.",
+          "type": "boolean"
+        }
+      }
+    },
+    "SimulateRequestTransactionGroup": {
+      "description": "A transaction group to simulate.",
+      "type": "object",
+      "required": [
+        "txns"
+      ],
+      "properties": {
+        "txns": {
+          "description": "An atomic transaction group.",
+          "type": "array",
+          "items": {
+            "description": "SignedTxn object. Must be canonically encoded.",
+            "type": "string",
+            "format": "json",
+            "x-algorand-format": "SignedTransaction"
+          }
+        }
+      }
+    },
+    "SimulateTraceConfig": {
+      "description": "An object that configures simulation execution trace.",
+      "type": "object",
+      "properties": {
+        "enable": {
+          "description": "A boolean option for opting in execution trace features simulation endpoint.",
+          "type": "boolean"
+        },
+        "stack-change": {
+          "description": "A boolean option enabling returning stack changes together with execution trace during simulation.",
+          "type": "boolean"
+        },
+        "scratch-change": {
+          "description": "A boolean option enabling returning scratch slot changes together with execution trace during simulation.",
+          "type": "boolean"
+        },
+        "state-change": {
+          "description": "A boolean option enabling returning application state changes (global, local, and box changes) with the execution trace during simulation.",
+          "type": "boolean"
+        }
+      }
+    },
+    "Box": {
+      "description": "Box name and its content.",
+      "type": "object",
+      "required": [
+        "round",
+        "name",
+        "value"
+      ],
+      "properties": {
+        "round": {
+          "description": "The round for which this information is relevant",
+          "type": "integer"
+        },
+        "name": {
+          "description": "\\[name\\] box name, base64 encoded",
+          "type": "string",
+          "format": "byte"
+        },
+        "value": {
+          "description": "\\[value\\] box value, base64 encoded.",
+          "type": "string",
+          "format": "byte"
+        }
+      }
+    },
+    "BoxDescriptor": {
+      "description": "Box descriptor describes a Box.",
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "description": "Base64 encoded box name",
+          "type": "string",
+          "format": "byte"
+        }
+      }
+    },
+    "BoxReference": {
+      "description": "References a box of an application.",
+      "type": "object",
+      "required": [
+        "app",
+        "name"
+      ],
+      "properties": {
+        "app": {
+          "description": "Application ID which this box belongs to",
+          "type": "integer"
+        },
+        "name": {
+          "description": "Base64 encoded box name",
+          "type": "string",
+          "format": "byte"
+        }
+      }
+    },
+    "KvDelta": {
+      "description": "A single Delta containing the key, the previous value and the current value for a single round.",
+      "type": "object",
+      "properties": {
+        "key": {
+          "description": "The key, base64 encoded.",
+          "type": "string",
+          "format": "byte"
+        },
+        "value": {
+          "description": "The new value of the KV store entry, base64 encoded.",
+          "type": "string",
+          "format": "byte"
+        }
+      }
+    },
     "Version": {
       "description": "algod version information.",
       "type": "object",
@@ -2556,6 +4092,26 @@
           "items": {
             "type": "string"
           }
+        }
+      }
+    },
+    "DebugSettingsProf": {
+      "description": "algod mutex and blocking profiling state.",
+      "type": "object",
+      "title": "algod mutex and blocking profiling state.",
+      "tags": [
+        "private"
+      ],
+      "properties": {
+        "block-rate": {
+          "description": "The rate of blocking events. The profiler aims to sample an average of one blocking event per rate nanoseconds spent blocked. To turn off profiling entirely, pass rate 0.",
+          "example": 1000,
+          "type": "integer"
+        },
+        "mutex-rate": {
+          "description": "The rate of mutex events. On average 1/rate events are reported. To turn off profiling entirely, pass rate 0",
+          "example": 1000,
+          "type": "integer"
         }
       }
     },
@@ -2642,18 +4198,18 @@
           "type": "integer"
         },
         "local-state-delta": {
-          "description": "\\[ld\\] Local state key/value changes for the application being executed by this transaction.",
+          "description": "Local state key/value changes for the application being executed by this transaction.",
           "type": "array",
           "items": {
             "$ref": "#/definitions/AccountStateDelta"
           }
         },
         "global-state-delta": {
-          "description": "\\[gd\\] Global state key/value changes for the application being executed by this transaction.",
+          "description": "Global state key/value changes for the application being executed by this transaction.",
           "$ref": "#/definitions/StateDelta"
         },
         "logs": {
-          "description": "\\[lg\\] Logs for the application being executed by this transaction.",
+          "description": "Logs for the application being executed by this transaction.",
           "type": "array",
           "items": {
             "type": "string",
@@ -2671,6 +4227,75 @@
           "description": "The raw signed transaction.",
           "type": "object",
           "x-algorand-format": "SignedTransaction"
+        }
+      }
+    },
+    "SimulateTransactionGroupResult": {
+      "description": "Simulation result for an atomic transaction group",
+      "type": "object",
+      "required": [
+        "txn-results"
+      ],
+      "properties": {
+        "txn-results": {
+          "description": "Simulation result for individual transactions",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SimulateTransactionResult"
+          }
+        },
+        "failure-message": {
+          "description": "If present, indicates that the transaction group failed and specifies why that happened",
+          "type": "string"
+        },
+        "failed-at": {
+          "description": "If present, indicates which transaction in this group caused the failure. This array represents the path to the failing transaction. Indexes are zero based, the first element indicates the top-level transaction, and successive elements indicate deeper inner transactions.",
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        },
+        "app-budget-added": {
+          "description": "Total budget added during execution of app calls in the transaction group.",
+          "type": "integer"
+        },
+        "app-budget-consumed": {
+          "description": "Total budget consumed during execution of app calls in the transaction group.",
+          "type": "integer"
+        },
+        "unnamed-resources-accessed": {
+          "$ref": "#/definitions/SimulateUnnamedResourcesAccessed"
+        }
+      }
+    },
+    "SimulateTransactionResult": {
+      "description": "Simulation result for an individual transaction",
+      "type": "object",
+      "required": [
+        "txn-result"
+      ],
+      "properties": {
+        "txn-result": {
+          "$ref": "#/definitions/PendingTransactionResponse"
+        },
+        "app-budget-consumed": {
+          "description": "Budget used during execution of an app call transaction. This value includes budged used by inner app calls spawned by this transaction.",
+          "type": "integer"
+        },
+        "logic-sig-budget-consumed": {
+          "description": "Budget used during execution of a logic sig transaction.",
+          "type": "integer"
+        },
+        "exec-trace": {
+          "$ref": "#/definitions/SimulationTransactionExecTrace"
+        },
+        "unnamed-resources-accessed": {
+          "$ref": "#/definitions/SimulateUnnamedResourcesAccessed"
+        },
+        "fixed-signer":{
+          "description": "The account that needed to sign this transaction when no signature was provided and the provided signer was incorrect.",
+          "type": "string",
+          "x-algorand-format": "Address"
         }
       }
     },
@@ -2751,6 +4376,327 @@
           "description": "The last round the message attests to.",
           "type": "integer",
           "x-algorand-format": "uint64"
+        }
+      }
+    },
+    "SimulationEvalOverrides": {
+      "description": "The set of parameters and limits override during simulation. If this set of parameters is present, then evaluation parameters may differ from standard evaluation in certain ways.",
+      "type": "object",
+      "properties": {
+        "allow-empty-signatures": {
+          "description": "If true, transactions without signatures are allowed and simulated as if they were properly signed.",
+          "type": "boolean"
+        },
+        "allow-unnamed-resources": {
+          "description": "If true, allows access to unnamed resources during simulation.",
+          "type": "boolean"
+        },
+        "max-log-calls": {
+          "description": "The maximum log calls one can make during simulation",
+          "type": "integer"
+        },
+        "max-log-size": {
+          "description": "The maximum byte number to log during simulation",
+          "type": "integer"
+        },
+        "extra-opcode-budget": {
+          "description": "The extra opcode budget added to each transaction group during simulation",
+          "type": "integer"
+        },
+        "fix-signers": {
+          "description": "If true, signers for transactions that are missing signatures will be fixed during evaluation.",
+          "type": "boolean"
+        }
+      }
+    },
+    "ScratchChange": {
+      "description": "A write operation into a scratch slot.",
+      "type": "object",
+      "required": [
+        "slot",
+        "new-value"
+      ],
+      "properties": {
+        "slot": {
+          "description": "The scratch slot written.",
+          "type": "integer"
+        },
+        "new-value": {
+          "$ref": "#/definitions/AvmValue"
+        }
+      }
+    },
+    "ApplicationStateOperation": {
+      "description": "An operation against an application's global/local/box state.",
+      "required": [
+        "operation",
+        "app-state-type",
+        "key"
+      ],
+      "properties": {
+        "operation": {
+          "description": "Operation type. Value `w` is **write**, `d` is **delete**.",
+          "type": "string"
+        },
+        "app-state-type": {
+          "description": "Type of application state. Value `g` is **global state**, `l` is **local state**, `b` is **boxes**.",
+          "type": "string"
+        },
+        "key": {
+          "description": "The key (name) of the global/local/box state.",
+          "type": "string",
+          "format": "byte"
+        },
+        "new-value": {
+          "$ref": "#/definitions/AvmValue"
+        },
+        "account": {
+          "description": "For local state changes, the address of the account associated with the local state.",
+          "type": "string",
+          "x-algorand-format": "Address"
+        }
+      }
+    },
+    "ApplicationKVStorage": {
+      "description": "An application's global/local/box state.",
+      "required": [
+        "kvs"
+      ],
+      "properties": {
+        "kvs": {
+          "description": "Key-Value pairs representing application states.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/AvmKeyValue"
+          }
+        },
+        "account": {
+          "description": "The address of the account associated with the local state.",
+          "type": "string",
+          "x-algorand-format": "Address"
+        }
+      }
+    },
+    "ApplicationInitialStates": {
+      "description": "An application's initial global/local/box states that were accessed during simulation.",
+      "required": [
+        "id"
+      ],
+      "properties": {
+        "id": {
+          "description": "Application index.",
+          "type": "integer",
+          "x-algorand-format": "uint64"
+        },
+        "app-locals": {
+          "description": "An application's initial local states tied to different accounts.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ApplicationKVStorage"
+          }
+        },
+        "app-globals": {
+          "$ref": "#/definitions/ApplicationKVStorage"
+        },
+        "app-boxes": {
+          "$ref": "#/definitions/ApplicationKVStorage"
+        }
+      }
+    },
+    "SimulationOpcodeTraceUnit": {
+      "description": "The set of trace information and effect from evaluating a single opcode.",
+      "type": "object",
+      "required": [
+        "pc"
+      ],
+      "properties": {
+        "pc": {
+          "description": "The program counter of the current opcode being evaluated.",
+          "type": "integer"
+        },
+        "scratch-changes": {
+          "description": "The writes into scratch slots.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ScratchChange"
+          }
+        },
+        "state-changes": {
+          "description": "The operations against the current application's states.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ApplicationStateOperation"
+          }
+        },
+        "spawned-inners": {
+          "description": "The indexes of the traces for inner transactions spawned by this opcode, if any.",
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        },
+        "stack-pop-count": {
+          "description": "The number of deleted stack values by this opcode.",
+          "type": "integer"
+        },
+        "stack-additions": {
+          "description": "The values added by this opcode to the stack.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/AvmValue"
+          }
+        }
+      }
+    },
+    "SimulationTransactionExecTrace": {
+      "description": "The execution trace of calling an app or a logic sig, containing the inner app call trace in a recursive way.",
+      "type": "object",
+      "properties": {
+        "approval-program-trace": {
+          "description": "Program trace that contains a trace of opcode effects in an approval program.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SimulationOpcodeTraceUnit"
+          }
+        },
+        "approval-program-hash": {
+          "description": "SHA512_256 hash digest of the approval program executed in transaction.",
+          "type": "string",
+          "format": "byte"
+        },
+        "clear-state-program-trace": {
+          "description": "Program trace that contains a trace of opcode effects in a clear state program.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SimulationOpcodeTraceUnit"
+          }
+        },
+        "clear-state-program-hash": {
+          "description": "SHA512_256 hash digest of the clear state program executed in transaction.",
+          "type": "string",
+          "format": "byte"
+        },
+        "clear-state-rollback": {
+          "description": "If true, indicates that the clear state program failed and any persistent state changes it produced should be reverted once the program exits.",
+          "type": "boolean"
+        },
+        "clear-state-rollback-error": {
+          "description": "The error message explaining why the clear state program failed. This field will only be populated if clear-state-rollback is true and the failure was due to an execution error.",
+          "type": "string"
+        },
+        "logic-sig-trace": {
+          "description": "Program trace that contains a trace of opcode effects in a logic sig.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SimulationOpcodeTraceUnit"
+          }
+        },
+        "logic-sig-hash": {
+          "description": "SHA512_256 hash digest of the logic sig executed in transaction.",
+          "type": "string",
+          "format": "byte"
+        },
+        "inner-trace": {
+          "description": "An array of SimulationTransactionExecTrace representing the execution trace of any inner transactions executed.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SimulationTransactionExecTrace"
+          }
+        }
+      }
+    },
+    "SimulateUnnamedResourcesAccessed": {
+      "description": "These are resources that were accessed by this group that would normally have caused failure, but were allowed in simulation. Depending on where this object is in the response, the unnamed resources it contains may or may not qualify for group resource sharing. If this is a field in SimulateTransactionGroupResult, the resources do qualify, but if this is a field in SimulateTransactionResult, they do not qualify. In order to make this group valid for actual submission, resources that qualify for group sharing can be made available by any transaction of the group; otherwise, resources must be placed in the same transaction which accessed them.",
+      "type": "object",
+      "properties": {
+        "accounts": {
+          "description": "The unnamed accounts that were referenced. The order of this array is arbitrary.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "x-algorand-format": "Address"
+          }
+        },
+        "assets": {
+          "description": "The unnamed assets that were referenced. The order of this array is arbitrary.",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "x-algorand-format": "uint64"
+          }
+        },
+        "apps": {
+          "description": "The unnamed applications that were referenced. The order of this array is arbitrary.",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "x-algorand-format": "uint64"
+          }
+        },
+        "boxes": {
+          "description": "The unnamed boxes that were referenced. The order of this array is arbitrary.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/BoxReference"
+          }
+        },
+        "extra-box-refs": {
+          "description": "The number of extra box references used to increase the IO budget. This is in addition to the references defined in the input transaction group and any referenced to unnamed boxes.",
+          "type": "integer"
+        },
+        "asset-holdings": {
+          "description": "The unnamed asset holdings that were referenced. The order of this array is arbitrary.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/AssetHoldingReference"
+          }
+        },
+        "app-locals": {
+          "description": "The unnamed application local states that were referenced. The order of this array is arbitrary.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ApplicationLocalReference"
+          }
+        }
+      }
+    },
+    "SimulateInitialStates": {
+      "description": "Initial states of resources that were accessed during simulation.",
+      "type": "object",
+      "properties": {
+        "app-initial-states": {
+          "description": "The initial states of accessed application before simulation. The order of this array is arbitrary.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ApplicationInitialStates"
+          }
+        }
+      }
+    },
+    "AppCallLogs": {
+      "description": "The logged messages from an app call along with the app ID and outer transaction ID. Logs appear in the same order that they were emitted.",
+      "type": "object",
+      "required": [
+        "logs",
+        "application-index",
+        "txId"
+      ],
+      "properties": {
+        "logs": {
+          "description": "An array of logs",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "byte"
+          }
+        },
+        "application-index": {
+          "description": "The application from which the logs were generated",
+          "type": "integer"
+        },
+        "txId": {
+          "description": "The transaction ID of the outer app call that lead to these logs",
+          "type": "string"
         }
       }
     }
@@ -2838,7 +4784,7 @@
         "msgpack"
       ],
       "type": "string",
-      "description": "Configures whether the response object is JSON or MessagePack encoded.",
+      "description": "Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.",
       "name": "format",
       "in": "query"
     },
@@ -2927,6 +4873,65 @@
     }
   },
   "responses": {
+    "GetBlockTimeStampOffsetResponse": {
+      "description": "Response containing the timestamp offset in seconds",
+      "schema": {
+        "type": "object",
+        "required": [
+          "offset"
+        ],
+        "properties": {
+          "offset": {
+            "description": "Timestamp offset in seconds.",
+            "type": "integer"
+          }
+        }
+      }
+    },
+    "GetSyncRoundResponse": {
+      "description": "Response containing the ledger's minimum sync round",
+      "schema": {
+        "type": "object",
+        "required": [
+          "round"
+        ],
+        "properties": {
+          "round": {
+            "description": "The minimum sync round for the ledger.",
+            "type": "integer"
+          }
+        }
+      }
+    },
+    "LedgerStateDeltaForTransactionGroupResponse": {
+      "description": "Response containing a ledger state delta for a single transaction group.",
+      "schema": {
+        "$ref": "#/definitions/LedgerStateDelta"
+      }
+    },
+    "TransactionGroupLedgerStateDeltasForRoundResponse": {
+      "description": "Response containing all ledger state deltas for transaction groups, with their associated Ids, in a single round.",
+      "schema": {
+        "type": "object",
+        "required": [
+          "Deltas"
+        ],
+        "properties": {
+          "Deltas": {
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/LedgerStateDeltaForTransactionGroup"
+            }
+          }
+        }
+      }
+    },
+    "LedgerStateDeltaResponse": {
+      "description": "Contains ledger deltas",
+      "schema": {
+        "$ref": "#/definitions/LedgerStateDelta"
+      }
+    },
     "LightBlockHeaderProofResponse": {
       "description": "Proof of a light block header.",
       "schema": {
@@ -2964,6 +4969,31 @@
           "created-asset": {
             "description": "\\[apar\\] parameters of the asset created by this account.\n\nThe raw account uses `AssetParams` for this type.",
             "$ref": "#/definitions/AssetParams"
+          }
+        }
+      }
+    },
+    "AccountAssetsInformationResponse": {
+      "description": "AccountAssetsInformationResponse contains a list of assets held by an account.",
+      "schema": {
+        "type": "object",
+        "required": [
+          "round"
+        ],
+        "properties": {
+          "round": {
+            "description": "The round for which this information is relevant.",
+            "type": "integer"
+          },
+          "next-token": {
+            "description": "Used for pagination, when making another request provide this token with the next parameter.",
+            "type": "string"
+          },
+          "asset-holdings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/AccountAssetHolding"
+            }
           }
         }
       }
@@ -3008,6 +5038,39 @@
             "description": "Optional certificate object. This is only included when the format is set to message pack.",
             "type": "object",
             "x-algorand-format": "BlockCertificate"
+          }
+        }
+      }
+    },
+    "BlockTxidsResponse": {
+      "description": "Top level transaction IDs in a block.",
+      "schema": {
+        "type": "object",
+        "required": [
+          "blockTxids"
+        ],
+        "properties": {
+          "blockTxids": {
+            "description": "Block transaction IDs.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "BlockHashResponse": {
+      "description": "Hash of a block header.",
+      "schema": {
+        "type": "object",
+        "required": [
+          "blockHash"
+        ],
+        "properties": {
+          "blockHash": {
+            "description": "Block header hash.",
+            "type": "string"
           }
         }
       }
@@ -3156,12 +5219,56 @@
             "description": "The number of accounts from the current catchpoint that have been verified so far as part of the catchup",
             "type": "integer"
           },
+          "catchpoint-total-kvs": {
+            "description": "The total number of key-values (KVs) included in the current catchpoint",
+            "type": "integer"
+          },
+          "catchpoint-processed-kvs": {
+            "description": "The number of key-values (KVs) from the current catchpoint that have been processed so far as part of the catchup",
+            "type": "integer"
+          },
+          "catchpoint-verified-kvs": {
+            "description": "The number of key-values (KVs) from the current catchpoint that have been verified so far as part of the catchup",
+            "type": "integer"
+          },
           "catchpoint-total-blocks": {
             "description": "The total number of blocks that are required to complete the current catchpoint catchup",
             "type": "integer"
           },
           "catchpoint-acquired-blocks": {
             "description": "The number of blocks that have already been obtained by the node as part of the catchup",
+            "type": "integer"
+          },
+          "upgrade-delay": {
+            "description": "Upgrade delay",
+            "type": "integer"
+          },
+          "upgrade-node-vote": {
+            "description": "This node's upgrade vote",
+            "type": "boolean"
+          },
+          "upgrade-votes-required": {
+            "description": "Yes votes required for consensus upgrade",
+            "type": "integer"
+          },
+          "upgrade-votes": {
+            "description": "Total votes cast for consensus upgrade",
+            "type": "integer"
+          },
+          "upgrade-yes-votes": {
+            "description": "Yes votes cast for consensus upgrade",
+            "type": "integer"
+          },
+          "upgrade-no-votes": {
+            "description": "No votes cast for consensus upgrade",
+            "type": "integer"
+          },
+          "upgrade-next-protocol-vote-before": {
+            "description": "Next protocol round",
+            "type": "integer"
+          },
+          "upgrade-vote-rounds": {
+            "description": "Total voting rounds for current upgrade",
             "type": "integer"
           }
         }
@@ -3237,6 +5344,60 @@
         }
       }
     },
+    "SimulateResponse": {
+      "description": "Result of a transaction group simulation.",
+      "schema": {
+        "type": "object",
+        "required": [
+          "version",
+          "last-round",
+          "txn-groups"
+        ],
+        "properties": {
+          "version": {
+            "description": "The version of this response object.",
+            "type": "integer"
+          },
+          "last-round": {
+            "description": "The round immediately preceding this simulation. State changes through this round were used to run this simulation.",
+            "type": "integer"
+          },
+          "txn-groups": {
+            "description": "A result object for each transaction group that was simulated.",
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/SimulateTransactionGroupResult"
+            }
+          },
+          "eval-overrides": {
+            "$ref": "#/definitions/SimulationEvalOverrides"
+          },
+          "exec-trace-config": {
+            "$ref": "#/definitions/SimulateTraceConfig"
+          },
+          "initial-states": {
+            "$ref": "#/definitions/SimulateInitialStates"
+          }
+        }
+      }
+    },
+    "BlockLogsResponse": {
+      "description": "All logs emitted in the given round. Each app call, whether top-level or inner, that contains logs results in a separate AppCallLogs object. Therefore there may be multiple AppCallLogs with the same application ID and outer transaction ID in the event of multiple inner app calls to the same app. App calls with no logs are not included in the response. AppCallLogs are returned in the same order that their corresponding app call appeared in the block (pre-order traversal of inner app calls)",
+      "schema": {
+        "type": "object",
+        "required": [
+          "logs"
+        ],
+        "properties": {
+          "logs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/AppCallLogs"
+            }
+          }
+        }
+      }
+    },
     "SupplyResponse": {
       "description": "Supply represents the current supply of MicroAlgos in the system.",
       "schema": {
@@ -3302,14 +5463,36 @@
             "description": "The minimum transaction fee (not per byte) required for the\ntxn to validate for the current network protocol.",
             "type": "integer"
           }
-        },
-        "x-go-package": "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+        }
       }
     },
     "ApplicationResponse": {
       "description": "Application information",
       "schema": {
         "$ref": "#/definitions/Application"
+      }
+    },
+    "BoxesResponse": {
+      "description": "Box names of an application",
+      "schema": {
+        "type": "object",
+        "required": [
+          "boxes"
+        ],
+        "properties": {
+          "boxes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/BoxDescriptor"
+            }
+          }
+        }
+      }
+    },
+    "BoxResponse": {
+      "description": "Box information",
+      "schema": {
+        "$ref": "#/definitions/Box"
       }
     },
     "AssetResponse": {
@@ -3387,6 +5570,12 @@
       "description": "VersionsResponse is the response to 'GET /versions'",
       "schema": {
         "$ref": "#/definitions/Version"
+      }
+    },
+    "DebugSettingsProfResponse": {
+      "description": "DebugPprof is the response to the /debug/extra/pprof endpoint",
+      "schema": {
+        "$ref": "#/definitions/DebugSettingsProf"
       }
     }
   },

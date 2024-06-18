@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,6 +19,7 @@ package crypto
 import "bytes"
 
 // GenericDigest is a digest that implements CustomSizeDigest, and can be used as hash output.
+//
 //msgp:allocbound GenericDigest MaxHashDigestSize
 type GenericDigest []byte
 

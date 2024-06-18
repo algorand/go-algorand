@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,42 +21,42 @@ import (
 )
 
 // Frozen is a dummy frozen clock that never fires.
-type Frozen struct {
+type Frozen[TimeoutType comparable] struct {
 	timeoutCh chan time.Time
 }
 
 // MakeFrozenClock creates a new frozen clock.
-func MakeFrozenClock() Clock {
-	return &Frozen{
+func MakeFrozenClock[TimeoutType comparable]() Clock[TimeoutType] {
+	return &Frozen[TimeoutType]{
 		timeoutCh: make(chan time.Time, 1),
 	}
 }
 
 // Zero returns a new Clock reset to the current time.
-func (m *Frozen) Zero() Clock {
-	return MakeFrozenClock()
+func (m *Frozen[TimeoutType]) Zero() Clock[TimeoutType] {
+	return MakeFrozenClock[TimeoutType]()
 }
 
 // TimeoutAt returns a channel that will signal when the duration has elapsed.
-func (m *Frozen) TimeoutAt(delta time.Duration) <-chan time.Time {
+func (m *Frozen[TimeoutType]) TimeoutAt(delta time.Duration, timeoutType TimeoutType) <-chan time.Time {
 	return m.timeoutCh
 }
 
 // Encode implements Clock.Encode.
-func (m *Frozen) Encode() []byte {
+func (m *Frozen[TimeoutType]) Encode() []byte {
 	return []byte{}
 }
 
 // Decode implements Clock.Decode.
-func (m *Frozen) Decode([]byte) (Clock, error) {
-	return MakeFrozenClock(), nil
+func (m *Frozen[TimeoutType]) Decode([]byte) (Clock[TimeoutType], error) {
+	return MakeFrozenClock[TimeoutType](), nil
 }
 
-func (m *Frozen) String() string {
+func (m *Frozen[TimeoutType]) String() string {
 	return ""
 }
 
 // Since implements the Clock interface.
-func (m *Frozen) Since() time.Duration {
+func (m *Frozen[TimeoutType]) Since() time.Duration {
 	return 0
 }

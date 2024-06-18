@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,11 +18,17 @@ package util
 
 import (
 	"errors"
+	"math"
 	"syscall"
 	"time"
 )
 
 /* misc */
+
+// GetFdLimits returns a current values for file descriptors limits.
+func GetFdLimits() (soft uint64, hard uint64, err error) {
+	return math.MaxUint64, math.MaxUint64, nil // syscall.RLIM_INFINITY
+}
 
 // SetFdSoftLimit sets a new file descriptors soft limit.
 func SetFdSoftLimit(_ uint64) error {

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,6 +17,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"unicode"
 	"unicode/utf8"
 
@@ -190,9 +191,19 @@ func heuristicFormatVal(val basics.TealValue) basics.TealValue {
 }
 
 func heuristicFormat(state map[string]basics.TealValue) map[string]basics.TealValue {
-	result := make(map[string]basics.TealValue)
+	result := make(map[string]basics.TealValue, len(state))
 	for k, v := range state {
 		result[heuristicFormatKey(k)] = heuristicFormatVal(v)
 	}
 	return result
+}
+
+// Encode bytes as an app call bytes string.
+// Will use `str:` if the string is printable, otherwise `b64:`.
+func encodeBytesAsAppCallBytes(value []byte) string {
+	if isPrintable, _ := unicodePrintable(string(value)); isPrintable {
+		return "str:" + string(value)
+	}
+
+	return "b64:" + base64.StdEncoding.EncodeToString(value)
 }

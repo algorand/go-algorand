@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -104,9 +104,9 @@ func waitForAccountToProposeBlock(a *require.Assertions, fixture *fixtures.RestC
 }
 
 // TestNewAccountCanGoOnlineAndParticipate tests two behaviors:
-// - When the account does not have enough stake, or after receivning algos, but before the lookback rounds,
-//   it should not be proposing blocks
-// - When the account balance receives enough stake, it should be proposing after lookback rounds
+//   - When the account does not have enough stake, or after receivning algos, but before the lookback rounds,
+//     it should not be proposing blocks
+//   - When the account balance receives enough stake, it should be proposing after lookback rounds
 func TestNewAccountCanGoOnlineAndParticipate(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
@@ -124,8 +124,8 @@ func TestNewAccountCanGoOnlineAndParticipate(t *testing.T) {
 	shortPartKeysProtocol.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 	shortPartKeysProtocol.SeedLookback = 2
 	shortPartKeysProtocol.SeedRefreshInterval = 8
-	if runtime.GOARCH == "amd64" {
-		// amd64 platforms are generally quite capable, so accelerate the round times to make the test run faster.
+	if runtime.GOARCH == "amd64" || runtime.GOARCH == "arm64" {
+		// amd64 and arm64 platforms are generally quite capable, so accelerate the round times to make the test run faster.
 		shortPartKeysProtocol.AgreementFilterTimeoutPeriod0 = 1 * time.Second
 		shortPartKeysProtocol.AgreementFilterTimeout = 1 * time.Second
 	}
@@ -196,17 +196,18 @@ func TestNewAccountCanGoOnlineAndParticipate(t *testing.T) {
 
 	fixture.AssertValidTxid(onlineTxID)
 	maxRoundsToWaitForTxnConfirm := uint64(5)
-	fixture.WaitForTxnConfirmation(seededRound+maxRoundsToWaitForTxnConfirm, newAccount, onlineTxID)
+	fixture.WaitForTxnConfirmation(seededRound+maxRoundsToWaitForTxnConfirm, onlineTxID)
 	nodeStatus, _ = client.Status()
 	onlineRound := nodeStatus.LastRound
-	newAccountStatus, err := client.AccountInformation(newAccount)
+	newAccountStatus, err := client.AccountInformation(newAccount, false)
 	a.NoError(err, "client should be able to get information about new account")
 	a.Equal(basics.Online.String(), newAccountStatus.Status, "new account should be online")
 
 	// transfer the funds and close to the new account
 	amountToSend := richBalance - 3*transactionFee - amountToSendInitial - minAcctBalance
 	txn := fixture.SendMoneyAndWait(onlineRound, amountToSend, transactionFee, richAccount, newAccount, newAccount)
-	fundedRound := txn.ConfirmedRound
+	a.NotNil(txn.ConfirmedRound)
+	fundedRound := *txn.ConfirmedRound
 
 	nodeStatus, _ = client.Status()
 	params, err := client.ConsensusParams(nodeStatus.LastRound)
@@ -246,11 +247,7 @@ func TestAccountGoesOnlineForShortPeriod(t *testing.T) {
 	t.Parallel()
 	a := require.New(fixtures.SynchronizedTest(t))
 
-	// Make the seed lookback shorter, otherwise will wait for 320 rounds
-	consensus := make(config.ConsensusProtocols)
-
 	var fixture fixtures.RestClientFixture
-	fixture.SetConsensus(consensus)
 	fixture.SetupNoStart(t, filepath.Join("nettemplates", "TwoNodes50EachFuture.json"))
 
 	// update the config file by setting the ParticipationKeysRefreshInterval to 5 second.
@@ -308,11 +305,12 @@ func TestAccountGoesOnlineForShortPeriod(t *testing.T) {
 	fixture.AssertValidTxid(onlineTxID)
 	maxRoundsToWaitForTxnConfirm := uint64(5)
 	nodeStatus, err := client.Status()
+	a.NoError(err)
 	seededRound := nodeStatus.LastRound
-	fixture.WaitForTxnConfirmation(seededRound+maxRoundsToWaitForTxnConfirm, newAccount, onlineTxID)
+	fixture.WaitForTxnConfirmation(seededRound+maxRoundsToWaitForTxnConfirm, onlineTxID)
 	nodeStatus, _ = client.Status()
 
-	accountStatus, err := client.AccountInformation(newAccount)
+	accountStatus, err := client.AccountInformation(newAccount, false)
 	a.NoError(err, "client should be able to get information about new account")
 	a.Equal(basics.Online.String(), accountStatus.Status, "new account should be online")
 }

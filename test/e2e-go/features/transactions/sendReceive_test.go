@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,7 +23,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
+
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -80,7 +81,7 @@ func testAccountsCanSendMoney(t *testing.T, templatePath string, numberOfSends i
 	pingAccount := pingAccountList[0].Address
 
 	pongClient := fixture.GetLibGoalClientForNamedNode("Node")
-	pongAccounts, err := fixture.GetNodeWalletsSortedByBalance(pongClient.DataDir())
+	pongAccounts, err := fixture.GetNodeWalletsSortedByBalance(pongClient)
 	a.NoError(err)
 	var pongAccount string
 	for _, acct := range pongAccounts {
@@ -125,12 +126,12 @@ func testAccountsCanSendMoney(t *testing.T, templatePath string, numberOfSends i
 		expectedPingBalance = expectedPingBalance - transactionFee - amountPingSendsPong + amountPongSendsPing
 		expectedPongBalance = expectedPongBalance - transactionFee - amountPongSendsPing + amountPingSendsPong
 
-		var pongTxInfo, pingTxInfo v1.Transaction
+		var pongTxInfo, pingTxInfo model.PendingTransactionResponse
 		pongTxInfo, err = pongClient.PendingTransactionInformation(pongTx.ID().String())
 		if err == nil {
 			pingTxInfo, err = pingClient.PendingTransactionInformation(pingTx.ID().String())
 		}
-		waitForTransaction = err != nil || pongTxInfo.ConfirmedRound == 0 || pingTxInfo.ConfirmedRound == 0
+		waitForTransaction = err != nil || (pongTxInfo.ConfirmedRound != nil && *pongTxInfo.ConfirmedRound == 0) || (pingTxInfo.ConfirmedRound != nil && *pingTxInfo.ConfirmedRound == 0)
 		if waitForTransaction {
 			curStatus, _ := pongClient.Status()
 			curRound := curStatus.LastRound

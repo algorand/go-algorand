@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,6 +19,7 @@ package agreement
 // A voteTrackerPeriod is a voteMachinePeriod which indicates whether a
 // next-threshold of votes was observed for a some value in a period.
 type voteTrackerPeriod struct {
+	_struct struct{} `codec:","`
 	// Make it explicit that we are serializing player fields for crash recovery;
 	// we should probably adopt this convention over the rest of player at some point.
 	Cached nextThresholdStatusEvent
@@ -88,17 +89,19 @@ func (t *voteTrackerPeriod) handle(r routerHandle, p player, e event) event {
 //
 // Bundle "freshness" is an ordering relation defined on thresholdEvents.  The
 // relation is defined as follows:
-//  - certThresholds are fresher than other kinds of thresholdEvent.
-//  - other thresholdEvents are fresher than thresholdEvents from older periods.
-//  - nextThresholds are fresher than softThreshold in the same period.
-//  - nextThresholds for the bottom proposal-value are fresher than
-//    nextThresholds for another proposal-value.
+//   - certThresholds are fresher than other kinds of thresholdEvent.
+//   - other thresholdEvents are fresher than thresholdEvents from older periods.
+//   - nextThresholds are fresher than softThreshold in the same period.
+//   - nextThresholds for the bottom proposal-value are fresher than
+//     nextThresholds for another proposal-value.
+//
 // (Note that the step of a nextThreshold does not affect its freshness.)
 //
 // It handles the following type(s) of event: voteAcceptedEvent, freshestBundleRequest, nextThreshold
 // It returns the following type(s) of event: none and
 // {soft,cert,next}Threshold, and freshestBundle
 type voteTrackerRound struct {
+	_struct struct{} `codec:","`
 	// Freshest holds the freshest thresholdEvent seen this round.
 	Freshest thresholdEvent
 	// Ok is set if any thresholdEvent has been seen.

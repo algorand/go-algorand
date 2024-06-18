@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,6 +17,9 @@
 package crypto
 
 import (
+	"fmt"
+	"math/rand"
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -119,8 +122,163 @@ func BenchmarkBatchVerifier(b *testing.B) {
 	require.NoError(b, bv.Verify())
 }
 
+// BenchmarkBatchVerifierBig with b.N over 1000 will report the expected performance
+// gain as the batchsize increases. All sigs are valid.
+func BenchmarkBatchVerifierBig(b *testing.B) {
+	c := makeCurve25519Secret()
+	for batchSize := 1; batchSize <= 96; batchSize++ {
+		bv := MakeBatchVerifierWithHint(batchSize)
+		for i := 0; i < batchSize; i++ {
+			str := randString()
+			bv.EnqueueSignature(c.SignatureVerifier, str, c.Sign(str))
+		}
+		b.Run(fmt.Sprintf("running batchsize %d", batchSize), func(b *testing.B) {
+			totalTransactions := b.N
+			count := totalTransactions / batchSize
+			if count*batchSize < totalTransactions {
+				count++
+			}
+			for x := 0; x < count; x++ {
+				require.NoError(b, bv.Verify())
+			}
+		})
+	}
+}
+
+// BenchmarkBatchVerifierBigWithInvalid builds over BenchmarkBatchVerifierBig by introducing
+// invalid sigs to even numbered batch sizes. This shows the impact of invalid sigs on the
+// performance. Basically, all the gains from batching disappear.
+func BenchmarkBatchVerifierBigWithInvalid(b *testing.B) {
+	c := makeCurve25519Secret()
+	badSig := Signature{}
+	for batchSize := 1; batchSize <= 96; batchSize++ {
+		bv := MakeBatchVerifierWithHint(batchSize)
+		for i := 0; i < batchSize; i++ {
+			str := randString()
+			if batchSize%2 == 0 && (i == 0 || rand.Float32() < 0.1) {
+				bv.EnqueueSignature(c.SignatureVerifier, str, badSig)
+			} else {
+				bv.EnqueueSignature(c.SignatureVerifier, str, c.Sign(str))
+			}
+		}
+		b.Run(fmt.Sprintf("running batchsize %d", batchSize), func(b *testing.B) {
+			totalTransactions := b.N
+			count := totalTransactions / batchSize
+			if count*batchSize < totalTransactions {
+				count++
+			}
+			for x := 0; x < count; x++ {
+				failed, err := bv.VerifyWithFeedback()
+				if err != nil {
+					for i, f := range failed {
+						if bv.(*cgoBatchVerifier).signatures[i] == badSig {
+							require.True(b, f)
+						} else {
+							require.False(b, f)
+						}
+					}
+				}
+			}
+		})
+	}
+}
+
 func TestEmpty(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	bv := MakeBatchVerifier()
-	require.Error(t, bv.Verify())
+	require.NoError(t, bv.Verify())
+
+	failed, err := bv.VerifyWithFeedback()
+	require.NoError(t, err)
+	require.Empty(t, failed)
+}
+
+// TestBatchVerifierIndividualResults tests that VerifyWithFeedback
+// returns the correct failed signature indexes
+func TestBatchVerifierIndividualResults(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	for i := 1; i < 64*2+3; i++ {
+		n := i
+		bv := MakeBatchVerifierWithHint(n)
+		var s Seed
+		badSigs := make([]bool, n, n)
+		hasBadSig := false
+		for i := 0; i < n; i++ {
+			msg := randString()
+			RandBytes(s[:])
+			sigSecrets := GenerateSignatureSecrets(s)
+			sig := sigSecrets.Sign(msg)
+			if rand.Float32() > 0.5 {
+				// make a bad sig
+				sig[0] = sig[0] + 1
+				badSigs[i] = true
+				hasBadSig = true
+			}
+			bv.EnqueueSignature(sigSecrets.SignatureVerifier, msg, sig)
+		}
+		require.Equal(t, n, bv.GetNumberOfEnqueuedSignatures())
+		failed, err := bv.VerifyWithFeedback()
+		if hasBadSig {
+			require.ErrorIs(t, err, ErrBatchHasFailedSigs)
+		} else {
+			require.NoError(t, err)
+		}
+		require.Equal(t, len(badSigs), len(failed))
+		for i := range badSigs {
+			require.Equal(t, badSigs[i], failed[i])
+		}
+	}
+}
+
+// TestBatchVerifierIndividualResultsAllValid tests that VerifyWithFeedback
+// returns the correct failed signature indexes when all are valid
+func TestBatchVerifierIndividualResultsAllValid(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	for i := 1; i < 64*2+3; i++ {
+		n := i
+		bv := MakeBatchVerifierWithHint(n)
+		var s Seed
+		for i := 0; i < n; i++ {
+			msg := randString()
+			RandBytes(s[:])
+			sigSecrets := GenerateSignatureSecrets(s)
+			sig := sigSecrets.Sign(msg)
+			bv.EnqueueSignature(sigSecrets.SignatureVerifier, msg, sig)
+		}
+		require.Equal(t, n, bv.GetNumberOfEnqueuedSignatures())
+		failed, err := bv.VerifyWithFeedback()
+		require.NoError(t, err)
+		require.Equal(t, bv.GetNumberOfEnqueuedSignatures(), len(failed))
+		for _, f := range failed {
+			require.False(t, f)
+		}
+	}
+}
+
+func TestBatchVerifierGC(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	const n = 128
+	for i := 0; i < 100; i++ {
+		t.Run("", func(t *testing.T) {
+			t.Parallel()
+
+			bv := MakeBatchVerifierWithHint(n)
+			var s Seed
+
+			for i := 0; i < n; i++ {
+				msg := randString()
+				RandBytes(s[:])
+				sigSecrets := GenerateSignatureSecrets(s)
+				sig := sigSecrets.Sign(msg)
+				bv.EnqueueSignature(sigSecrets.SignatureVerifier, msg, sig)
+			}
+			require.NoError(t, bv.Verify())
+
+			runtime.GC()
+		})
+	}
+
 }

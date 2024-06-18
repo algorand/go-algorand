@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -62,6 +62,7 @@ func (s *siblings) get(l uint64, i uint64) (res crypto.GenericDigest, err error)
 // partialLayer represents a subset of a Layer (i.e., nodes at some
 // level in the Merkle tree).  layerItem represents one element in the
 // partial Layer.
+//
 //msgp:ignore partialLayer
 type partialLayer []layerItem
 
@@ -117,7 +118,7 @@ func (pl partialLayer) up(s *siblings, l uint64, doHash bool, hsh hash.Hash) (pa
 				p.l = siblingHash
 				p.r = posHash
 			}
-			nextLayerHash = crypto.GenericHashObj(hsh, &p)
+			nextLayerHash = crypto.GenericHashObj(hsh, p)
 		}
 
 		res = append(res, layerItem{

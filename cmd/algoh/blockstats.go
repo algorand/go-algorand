@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,8 +19,8 @@ package main
 import (
 	"time"
 
-	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
+	"github.com/algorand/go-algorand/rpcs"
 )
 
 const downtimeLimit time.Duration = 5 * time.Minute
@@ -34,20 +34,21 @@ type blockstats struct {
 func (stats *blockstats) init(block uint64) {
 }
 
-func (stats *blockstats) onBlock(block v1.Block) {
+func (stats *blockstats) onBlock(block rpcs.EncodedBlockCert) {
 	now := time.Now()
+	blockHeader := block.Block.BlockHeader
 
 	// Ensure we only create stats from consecutive blocks.
-	if stats.lastBlock+1 != block.Round {
-		stats.lastBlock = block.Round
+	if stats.lastBlock+1 != uint64(blockHeader.Round) {
+		stats.lastBlock = uint64(blockHeader.Round)
 		stats.lastBlockTime = now
 		return
 	}
 
 	// Grab unique users.
 	users := make(map[string]bool)
-	for _, tx := range block.Transactions.Transactions {
-		users[tx.From] = true
+	for _, tx := range block.Block.Payset {
+		users[tx.Txn.Sender.String()] = true
 	}
 
 	duration := now.Sub(stats.lastBlockTime)
@@ -57,15 +58,15 @@ func (stats *blockstats) onBlock(block v1.Block) {
 	}
 
 	stats.log.EventWithDetails(telemetryspec.Agreement, telemetryspec.BlockStatsEvent, telemetryspec.BlockStatsEventDetails{
-		Hash:                block.Hash,
-		OriginalProposer:    block.Proposer,
-		Round:               block.Round,
-		Transactions:        uint64(len(block.Transactions.Transactions)),
+		Hash:                block.Block.Hash().String(),
+		OriginalProposer:    block.Certificate.Proposal.OriginalProposer.String(),
+		Round:               uint64(blockHeader.Round),
+		Transactions:        uint64(len(block.Block.Payset)),
 		ActiveUsers:         uint64(len(users)),
 		AgreementDurationMs: uint64(duration.Nanoseconds() / 1000 / 1000),
 		NetworkDowntimeMs:   uint64(downtime.Nanoseconds() / 1000 / 1000),
 	})
 
-	stats.lastBlock = block.Round
+	stats.lastBlock = uint64(blockHeader.Round)
 	stats.lastBlockTime = now
 }

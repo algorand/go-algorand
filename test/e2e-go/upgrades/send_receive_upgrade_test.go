@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -278,12 +278,12 @@ func runUntilProtocolUpgrades(a *require.Assertions, fixture *fixtures.RestClien
 
 	// wait for all transactions to confirm
 	for _, txid := range pingTxids {
-		_, err = fixture.WaitForConfirmedTxn(curStatus.LastRound+5, pingAccount, txid)
+		_, err = fixture.WaitForConfirmedTxn(curStatus.LastRound+5, txid)
 		a.NoError(err, "waiting for txn")
 	}
 
 	for _, txid := range pongTxids {
-		_, err = fixture.WaitForConfirmedTxn(curStatus.LastRound+5, pongAccount, txid)
+		_, err = fixture.WaitForConfirmedTxn(curStatus.LastRound+5, txid)
 		a.NoError(err, "waiting for txn")
 	}
 

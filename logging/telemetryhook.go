@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -26,7 +26,8 @@ import (
 	"github.com/algorand/go-algorand/util/metrics"
 )
 
-var telemetryDrops = metrics.MakeCounter(metrics.MetricName{Name: "algod_telemetry_drops_total", Description: "telemetry messages not sent to server"})
+var telemetryDrops = metrics.MakeCounter(metrics.MetricName{Name: "algod_telemetry_drops_total", Description: "telemetry messages dropped due to full queues"})
+var telemetryErrors = metrics.MakeCounter(metrics.MetricName{Name: "algod_telemetry_errs_total", Description: "telemetry messages dropped due to server error"})
 
 func createAsyncHook(wrappedHook logrus.Hook, channelDepth uint, maxQueueDepth int) *asyncTelemetryHook {
 	return createAsyncHookLevels(wrappedHook, channelDepth, maxQueueDepth, makeLevels(logrus.InfoLevel))
@@ -88,7 +89,8 @@ func createAsyncHookLevels(wrappedHook logrus.Hook, channelDepth uint, maxQueueD
 					if entry != nil {
 						err := hook.wrappedHook.Fire(entry)
 						if err != nil {
-							Base().Warnf("Unable to write event %#v to telemetry : %v", entry, err)
+							Base().WithFields(Fields{"TelemetryError": true}).Warnf("Unable to write event %#v to telemetry : %v", entry, err)
+							telemetryErrors.Inc(nil)
 						}
 						hook.wg.Done()
 					} else {
@@ -146,6 +148,9 @@ func (hook *asyncTelemetryHook) waitForEventAndReady() bool {
 
 // Fire is required to implement logrus hook interface
 func (hook *asyncTelemetryHook) Fire(entry *logrus.Entry) error {
+	if _, ok := entry.Data["TelemetryError"]; ok {
+		return nil
+	}
 	hook.wg.Add(1)
 	select {
 	case <-hook.quit:
@@ -217,9 +222,9 @@ func (el elasticClientLogger) Printf(format string, v ...interface{}) {
 	case logrus.InfoLevel:
 		el.logger.Infof(format, v...)
 	case logrus.WarnLevel:
-		el.logger.Warnf(format, v...)
+		el.logger.WithFields(Fields{"TelemetryError": true}).Warnf(format, v...)
 	default:
-		el.logger.Errorf(format, v...)
+		el.logger.WithFields(Fields{"TelemetryError": true}).Errorf(format, v...)
 	}
 }
 
@@ -269,7 +274,8 @@ func createTelemetryHook(cfg TelemetryConfig, history *logBuffer, hookFactory ho
 }
 
 // Note: This will be removed with the externalized telemetry project. Return whether or not the URI was successfully
-//       updated.
+//
+//	updated.
 func (hook *asyncTelemetryHook) UpdateHookURI(uri string) (err error) {
 	updated := false
 

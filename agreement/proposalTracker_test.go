@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -63,36 +63,57 @@ func TestProposalTrackerProposalSeeker(t *testing.T) {
 	var err error
 	assert.False(t, s.Frozen)
 	assert.False(t, s.Filled)
+	assert.False(t, s.hasLowestIncludingLate)
 
 	// issue events in the following order: 2, 3, 1, (freeze), 0
-	s, err = s.accept(votes[2])
+	var effect LateCredentialTrackingEffect
+	s, effect, err = s.accept(votes[2])
 	assert.NoError(t, err)
+	assert.Equal(t, effect, VerifiedBetterLateCredentialForTracking)
 	assert.False(t, s.Frozen)
 	assert.True(t, s.Filled)
 	assert.True(t, s.Lowest.equals(votes[2]))
+	assert.True(t, s.hasLowestIncludingLate)
+	assert.Equal(t, s.Lowest, s.lowestIncludingLate)
 
-	s, err = s.accept(votes[3])
+	s, effect, err = s.accept(votes[3])
 	assert.Error(t, err)
+	assert.Equal(t, effect, NoLateCredentialTrackingImpact)
 	assert.False(t, s.Frozen)
 	assert.True(t, s.Filled)
 	assert.True(t, s.Lowest.equals(votes[2]))
+	assert.True(t, s.hasLowestIncludingLate)
+	assert.Equal(t, s.Lowest, s.lowestIncludingLate)
 
-	s, err = s.accept(votes[1])
+	s, effect, err = s.accept(votes[1])
 	assert.NoError(t, err)
+	assert.Equal(t, effect, VerifiedBetterLateCredentialForTracking)
 	assert.False(t, s.Frozen)
 	assert.True(t, s.Filled)
 	assert.True(t, s.Lowest.equals(votes[1]))
+	assert.True(t, s.hasLowestIncludingLate)
+	assert.Equal(t, s.Lowest, s.lowestIncludingLate)
 
+	lowestBeforeFreeze := s.Lowest
 	s = s.freeze()
 	assert.True(t, s.Frozen)
 	assert.True(t, s.Filled)
 	assert.True(t, s.Lowest.equals(votes[1]))
+	assert.True(t, s.hasLowestIncludingLate)
+	assert.Equal(t, s.Lowest, s.lowestIncludingLate)
 
-	s, err = s.accept(votes[0])
+	s, effect, err = s.accept(votes[0])
 	assert.Error(t, err)
+	assert.Equal(t, effect, VerifiedBetterLateCredentialForTracking)
+	assert.Equal(t, s.Lowest, lowestBeforeFreeze)
 	assert.True(t, s.Frozen)
 	assert.True(t, s.Filled)
 	assert.True(t, s.Lowest.equals(votes[1]))
+	assert.True(t, s.hasLowestIncludingLate)
+	assert.True(t, s.lowestIncludingLate.equals(votes[0]))
+	assert.NotEqual(t, s.Lowest, s.lowestIncludingLate)
+	assert.True(t, !s.Lowest.Cred.Less(s.lowestIncludingLate.Cred))
+	assert.True(t, s.lowestIncludingLate.Cred.Less(s.Lowest.Cred))
 }
 
 // mimics a proposalTracker, producing a trace of events

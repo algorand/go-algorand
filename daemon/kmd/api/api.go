@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,35 +18,35 @@
 //
 // API for KMD (Key Management Daemon)
 //
-//     Schemes: http
-//     Host: localhost
-//     BasePath: /
-//     Version: 0.0.1
-//     License:
-//     Contact: contact@algorand.com
+//	Schemes: http
+//	Host: localhost
+//	BasePath: /
+//	Version: 0.0.1
+//	License:
+//	Contact: contact@algorand.com
 //
-//     Consumes:
-//     - application/json
+//	Consumes:
+//	- application/json
 //
-//     Produces:
-//     - application/json
+//	Produces:
+//	- application/json
 //
-//     Security:
-//     - api_key:
+//	Security:
+//	- api_key:
 //
-//     SecurityDefinitions:
-//     api_key:
-//       type: apiKey
-//       name: X-KMD-API-Token
-//       in: header
-//       description: >-
-//         Generated header parameter. This value can be found in `/kmd/data/dir/kmd.token`. Example value:
-//         '330b2e4fc9b20f4f89812cf87f1dabeb716d23e3f11aec97a61ff5f750563b78'
-//       required: true
-//       x-example: 330b2e4fc9b20f4f89812cf87f1dabeb716d23e3f11aec97a61ff5f750563b78
+//	SecurityDefinitions:
+//	api_key:
+//	  type: apiKey
+//	  name: X-KMD-API-Token
+//	  in: header
+//	  description: >-
+//	    Generated header parameter. This value can be found in `/kmd/data/dir/kmd.token`. Example value:
+//	    '330b2e4fc9b20f4f89812cf87f1dabeb716d23e3f11aec97a61ff5f750563b78'
+//	  required: true
+//	  x-example: 330b2e4fc9b20f4f89812cf87f1dabeb716d23e3f11aec97a61ff5f750563b78
 //
 // swagger:meta
-//---
+// ---
 // IF YOU MODIFY SUBPACKAGES: IMPORTANT
 // MAKE SURE YOU REGENERATE THE SWAGGER SPEC (using go:generate)
 // MAKE SURE IT VALIDATES
@@ -58,6 +58,7 @@
 // Autogenerate the swagger json.
 // Base path must be a fully specified package name (else, it seems that swagger feeds a relative path to
 // loader.Config.Import(), and that breaks the vendor directory if the source is symlinked from elsewhere)
+//
 //go:generate swagger generate spec -m -o="./swagger.json"
 //go:generate swagger validate ./swagger.json --stop-on-error
 //go:generate sh ../lib/kmdapi/bundle_swagger_json.sh

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -46,6 +46,12 @@ func MakeValidator(conf *ValidatorConfig, tb testing.TB) *Validator {
 func (v *Validator) Go(netConfig *FuzzerConfig) {
 	network := MakeFuzzer(*netConfig)
 	require.NotNil(v.tb, network)
+
+	defer func() {
+		if r := recover(); r != nil {
+			network.DumpQueues()
+		}
+	}()
 
 	network.Start()
 	//_, runRes := network.Run(v.config.NetworkRunDuration /*time.Millisecond*5000*/, time.Millisecond*3000, time.Second)

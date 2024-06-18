@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -24,6 +24,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/algorand/go-algorand/cmd/util/datadir"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/logging"
 )
@@ -51,7 +52,7 @@ var loggingCmd = &cobra.Command{
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 		reportWarnln("`goal logging` deprecated, use `diagcfg telemetry status`")
-		dataDir := ensureSingleDataDir()
+		dataDir := datadir.EnsureSingleDataDir()
 		cfg, err := logging.EnsureTelemetryConfig(&dataDir, "")
 
 		// If error loading config, can't disable / no need to disable
@@ -73,7 +74,7 @@ var enableCmd = &cobra.Command{
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 		reportWarnln("`goal logging enable` deprecated, use `diagcfg telemetry enable`")
-		dataDir := ensureSingleDataDir()
+		dataDir := datadir.EnsureSingleDataDir()
 		cfg, err := logging.EnsureTelemetryConfig(&dataDir, "")
 		if err != nil {
 			fmt.Println(err)
@@ -94,7 +95,7 @@ var disableCmd = &cobra.Command{
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 		reportWarnf("`goal logging disable` deprecated, use `diagcfg telemetry disable`")
-		dataDir := ensureSingleDataDir()
+		dataDir := datadir.EnsureSingleDataDir()
 		cfg, err := logging.EnsureTelemetryConfig(&dataDir, "")
 
 		// If error loading config, can't disable / no need to disable
@@ -125,7 +126,7 @@ var loggingSendCmd = &cobra.Command{
 		counter := uint(1)
 		errcount := 0
 		var firsterr error = nil
-		onDataDirs(func(dataDir string) {
+		datadir.OnDataDirs(func(dataDir string) {
 			cfg, err := logging.EnsureTelemetryConfig(&dataDir, "")
 			if err != nil {
 				fmt.Println(err)

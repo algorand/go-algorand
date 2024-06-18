@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -16,9 +16,14 @@
 
 package agreement
 
+import (
+	"github.com/algorand/go-algorand/config"
+)
+
 // A stateMachineTag uniquely identifies the type of a state machine.
 //
 // Rounds, periods, and steps may be used to further identify different state machine instances of the same type.
+//
 //msgp:ignore stateMachineTag
 type stateMachineTag int
 
@@ -47,6 +52,28 @@ type routerHandle struct {
 	src stateMachineTag
 }
 
+// credentialRoundLag the maximal number of rounds that could pass before a credential from
+// an honest party for an old round may arrive. It uses the
+// dynamicFilterTimeoutLowerBound parameter as the minimal round time.
+var credentialRoundLag round
+
+func init() {
+	// credential arrival time should be at most 2*config.Protocol.SmallLambda after it was sent
+	// Note that the credentialRoundLag is inversely proportional to the dynamicFilterTimeoutLowerBound
+	// in the default formula. Since we are adjusting this lower bound over time,
+	// for consistency in analytics we are setting the minimum to be 8 rounds
+	// (equivalent to a dynamicFilterTimeoutLowerBound of 500 ms).
+	minCredentialRoundLag := round(8) // round 2*2000ms / 500ms
+	credentialRoundLag = round(2 * config.Protocol.SmallLambda / dynamicFilterTimeoutLowerBound)
+
+	if credentialRoundLag < minCredentialRoundLag {
+		credentialRoundLag = minCredentialRoundLag
+	}
+	if credentialRoundLag*round(dynamicFilterTimeoutLowerBound) < round(2*config.Protocol.SmallLambda) {
+		credentialRoundLag++
+	}
+}
+
 // dispatch sends an event to the given state machine listener with the given stateMachineTag.
 //
 // If there are many state machines of this type (for instance, there is one voteMachineStep for each step)
@@ -66,6 +93,8 @@ type router interface {
 }
 
 type rootRouter struct {
+	_struct struct{} `codec:","`
+
 	root         actor    // playerMachine   (not restored: explicitly set on construction)
 	proposalRoot listener // proposalMachine
 	voteRoot     listener // voteMachine
@@ -73,20 +102,24 @@ type rootRouter struct {
 	ProposalManager proposalManager
 	VoteAggregator  voteAggregator
 
-	Children map[round]*roundRouter
+	Children map[round]*roundRouter `codec:"Children,allocbound=-"`
 }
 
 type roundRouter struct {
+	_struct struct{} `codec:","`
+
 	proposalRoot listener // proposalMachineRound
 	voteRoot     listener // voteMachineRound
 
 	ProposalStore    proposalStore
 	VoteTrackerRound voteTrackerRound
 
-	Children map[period]*periodRouter
+	Children map[period]*periodRouter `codec:"Children,allocbound=-"`
 }
 
 type periodRouter struct {
+	_struct struct{} `codec:","`
+
 	proposalRoot listener // proposalMachinePeriod
 	voteRoot     listener // voteMachinePeriod
 
@@ -95,10 +128,11 @@ type periodRouter struct {
 
 	ProposalTrackerContract proposalTrackerContract
 
-	Children map[step]*stepRouter
+	Children map[step]*stepRouter `codec:"Children,allocbound=-"`
 }
 
 type stepRouter struct {
+	_struct  struct{} `codec:","`
 	voteRoot listener // voteMachineStep
 
 	VoteTracker voteTracker
@@ -128,7 +162,11 @@ func (router *rootRouter) update(state player, r round, gc bool) {
 	if gc {
 		children := make(map[round]*roundRouter)
 		for r, c := range router.Children {
-			if r >= state.Round {
+			// We may still receive credential messages from old rounds. Keep
+			// old round routers around, for as long as those credentials may
+			// arrive to keep track of them.
+			rr := r + credentialRoundLag
+			if rr >= state.Round {
 				children[r] = c
 			}
 		}
@@ -193,7 +231,6 @@ func (router *roundRouter) update(state player, p period, gc bool) {
 				// TODO may want regression test for correct pipelining behavior
 				children[p] = c
 			}
-
 		}
 		router.Children = children
 	}
