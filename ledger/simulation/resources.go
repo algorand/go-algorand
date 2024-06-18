@@ -954,9 +954,9 @@ func (p *ResourcePopulator) addLocal(addr basics.Address, aid basics.AppIndex) e
 	return fmt.Errorf("no room for local")
 }
 
-func (p *ResourcePopulator) populateResources(groupResourceTracker groupResourceTracker) error {
+func (p *ResourcePopulator) populateResources(groupResources ResourceTracker, txnResources []ResourceTracker) error {
 	// First populate resources that HAVE to be assigned to a specific transaction
-	for i, tracker := range groupResourceTracker.localTxnResources {
+	for i, tracker := range txnResources {
 		for asset := range tracker.Assets {
 			p.TxnResources[i].addAsset(asset)
 		}
@@ -971,41 +971,41 @@ func (p *ResourcePopulator) populateResources(groupResourceTracker groupResource
 	}
 
 	// Then assign cross-reference resources because they have the most strict requirements (one account and another resource)
-	for holding := range groupResourceTracker.globalResources.AssetHoldings {
+	for holding := range groupResources.AssetHoldings {
 		err := p.addHolding(holding.Address, holding.Asset)
 		if err != nil {
 			return err
 		}
 
 		// Remove the resources from the global tracker in case they were added separately
-		delete(groupResourceTracker.globalResources.Assets, holding.Asset)
-		delete(groupResourceTracker.globalResources.Accounts, holding.Address)
+		delete(groupResources.Assets, holding.Asset)
+		delete(groupResources.Accounts, holding.Address)
 	}
 
-	for local := range groupResourceTracker.globalResources.AppLocals {
+	for local := range groupResources.AppLocals {
 		err := p.addLocal(local.Address, local.App)
 		if err != nil {
 			return err
 		}
 
 		// Remove the resources from the global tracker in case they were added separately
-		delete(groupResourceTracker.globalResources.Apps, local.App)
-		delete(groupResourceTracker.globalResources.Accounts, local.Address)
+		delete(groupResources.Apps, local.App)
+		delete(groupResources.Accounts, local.Address)
 	}
 
 	// Then assign boxes because they can take up to two slots
-	for box := range groupResourceTracker.globalResources.Boxes {
+	for box := range groupResources.Boxes {
 		err := p.addBox(box.App, box.Name)
 		if err != nil {
 			return err
 		}
 
 		// Remove the app from the global tracker in case it was added separately
-		delete(groupResourceTracker.globalResources.Apps, box.App)
+		delete(groupResources.Apps, box.App)
 	}
 
 	// Then assign accounts because they have a lower limit than other resources
-	for account := range groupResourceTracker.globalResources.Accounts {
+	for account := range groupResources.Accounts {
 		err := p.addAccount(account)
 		if err != nil {
 			return err
@@ -1013,21 +1013,21 @@ func (p *ResourcePopulator) populateResources(groupResourceTracker groupResource
 	}
 
 	// Finally assign the remaining resources which just require one slot
-	for app := range groupResourceTracker.globalResources.Apps {
+	for app := range groupResources.Apps {
 		err := p.addApp(app)
 		if err != nil {
 			return err
 		}
 	}
 
-	for asset := range groupResourceTracker.globalResources.Assets {
+	for asset := range groupResources.Assets {
 		err := p.addAsset(asset)
 		if err != nil {
 			return err
 		}
 	}
 
-	for i := 0; i < groupResourceTracker.globalResources.NumEmptyBoxRefs; i++ {
+	for i := 0; i < groupResources.NumEmptyBoxRefs; i++ {
 		err := p.addBox(0, "")
 		if err != nil {
 			return err

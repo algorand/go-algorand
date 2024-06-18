@@ -308,23 +308,22 @@ func TestPopulatorWithLocalResources(t *testing.T) {
 	consensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
 	populator := MakeResourcePopulator(txns, consensusParams)
 
-	proto := config.Consensus[protocol.ConsensusFuture]
-	groupTracker := makeGroupResourceTracker(transactions.WrapSignedTxnsWithAD(txns), &proto)
+	txnResources := make([]ResourceTracker, 1)
 
 	// Note we don't need to test a box here since it will never be a local txn resource
 	addr := basics.Address{1, 1, 1}
 	app := basics.AppIndex(12345)
 	asset := basics.AssetIndex(12345)
 
-	groupTracker.localTxnResources[0].Accounts = make(map[basics.Address]struct{})
-	groupTracker.localTxnResources[0].Assets = make(map[basics.AssetIndex]struct{})
-	groupTracker.localTxnResources[0].Apps = make(map[basics.AppIndex]struct{})
+	txnResources[0].Accounts = make(map[basics.Address]struct{})
+	txnResources[0].Assets = make(map[basics.AssetIndex]struct{})
+	txnResources[0].Apps = make(map[basics.AppIndex]struct{})
 
-	groupTracker.localTxnResources[0].Accounts[addr] = struct{}{}
-	groupTracker.localTxnResources[0].Assets[asset] = struct{}{}
-	groupTracker.localTxnResources[0].Apps[app] = struct{}{}
+	txnResources[0].Accounts[addr] = struct{}{}
+	txnResources[0].Assets[asset] = struct{}{}
+	txnResources[0].Apps[app] = struct{}{}
 
-	err := populator.populateResources(groupTracker)
+	err := populator.populateResources(ResourceTracker{}, txnResources)
 	require.NoError(t, err)
 
 	require.Len(t, populator.getPopulatedArrays(), 1)
@@ -356,9 +355,8 @@ func TestPopulatorWithGlobalResources(t *testing.T) {
 	consensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
 	populator := MakeResourcePopulator(txns, consensusParams)
 
-	proto := config.Consensus[protocol.ConsensusFuture]
-
-	groupTracker := makeGroupResourceTracker(transactions.WrapSignedTxnsWithAD(txns), &proto)
+	txnResources := make([]ResourceTracker, 3)
+	groupResources := ResourceTracker{}
 
 	// Resources
 	addr2 := basics.Address{2}
@@ -388,35 +386,35 @@ func TestPopulatorWithGlobalResources(t *testing.T) {
 	local1_12 := ledgercore.AccountApp{Address: app1Addr, App: app12} // new app
 	local13_1 := ledgercore.AccountApp{Address: addr13, App: app1}    // new addr
 
-	groupTracker.globalResources.Accounts = make(map[basics.Address]struct{})
-	groupTracker.globalResources.Assets = make(map[basics.AssetIndex]struct{})
-	groupTracker.globalResources.Apps = make(map[basics.AppIndex]struct{})
-	groupTracker.globalResources.Boxes = make(map[logic.BoxRef]uint64)
-	groupTracker.globalResources.AssetHoldings = make(map[ledgercore.AccountAsset]struct{})
-	groupTracker.globalResources.AppLocals = make(map[ledgercore.AccountApp]struct{})
+	groupResources.Accounts = make(map[basics.Address]struct{})
+	groupResources.Assets = make(map[basics.AssetIndex]struct{})
+	groupResources.Apps = make(map[basics.AppIndex]struct{})
+	groupResources.Boxes = make(map[logic.BoxRef]uint64)
+	groupResources.AssetHoldings = make(map[ledgercore.AccountAsset]struct{})
+	groupResources.AppLocals = make(map[ledgercore.AccountApp]struct{})
 
-	groupTracker.globalResources.Accounts[addr2] = struct{}{}
-	groupTracker.globalResources.Assets[asset4] = struct{}{}
-	groupTracker.globalResources.Apps[app3] = struct{}{}
-	groupTracker.globalResources.Boxes[box1] = 1
-	groupTracker.globalResources.Boxes[box5] = 1
-	groupTracker.globalResources.AssetHoldings[holding6_7] = struct{}{}
-	groupTracker.globalResources.AssetHoldings[holding1_8] = struct{}{}
-	groupTracker.globalResources.AssetHoldings[holding9_8] = struct{}{}
-	groupTracker.globalResources.AppLocals[local10_11] = struct{}{}
-	groupTracker.globalResources.AppLocals[local1_12] = struct{}{}
-	groupTracker.globalResources.AppLocals[local13_1] = struct{}{}
+	groupResources.Accounts[addr2] = struct{}{}
+	groupResources.Assets[asset4] = struct{}{}
+	groupResources.Apps[app3] = struct{}{}
+	groupResources.Boxes[box1] = 1
+	groupResources.Boxes[box5] = 1
+	groupResources.AssetHoldings[holding6_7] = struct{}{}
+	groupResources.AssetHoldings[holding1_8] = struct{}{}
+	groupResources.AssetHoldings[holding9_8] = struct{}{}
+	groupResources.AppLocals[local10_11] = struct{}{}
+	groupResources.AppLocals[local1_12] = struct{}{}
+	groupResources.AppLocals[local13_1] = struct{}{}
 
 	// These resources should not have an effect on the population because they are inlcuded in a cross-reference or box
-	groupTracker.globalResources.Apps[app12] = struct{}{}      // app from appLocal
-	groupTracker.globalResources.Accounts[addr10] = struct{}{} // addr from appLocal
-	groupTracker.globalResources.Accounts[addr6] = struct{}{}  // addr from holding
-	groupTracker.globalResources.Assets[asa7] = struct{}{}     // asa from holding
-	groupTracker.globalResources.Apps[app5] = struct{}{}       // app from box
+	groupResources.Apps[app12] = struct{}{}      // app from appLocal
+	groupResources.Accounts[addr10] = struct{}{} // addr from appLocal
+	groupResources.Accounts[addr6] = struct{}{}  // addr from holding
+	groupResources.Assets[asa7] = struct{}{}     // asa from holding
+	groupResources.Apps[app5] = struct{}{}       // app from box
 
-	groupTracker.globalResources.NumEmptyBoxRefs = 11
+	groupResources.NumEmptyBoxRefs = 11
 
-	err := populator.populateResources(groupTracker)
+	err := populator.populateResources(groupResources, txnResources)
 	require.NoError(t, err)
 	require.Equal(t, consensusParams.MaxTxGroupSize, len(populator.TxnResources))
 
