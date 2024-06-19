@@ -781,9 +781,8 @@ func (p *resourcePopulator) addTransaction(txn transactions.Transaction, groupIn
 		maxAccounts:        consensusParams.MaxAppTxnAccounts,
 	}
 
-	// The Sender and RekeyTo will always be implicitly available for every transaction type
+	// The Sender will always be implicitly available for every transaction type
 	p.txnResources[groupIndex].addAddressFromField(txn.Sender)
-	p.txnResources[groupIndex].addAddressFromField(txn.RekeyTo)
 
 	if txn.Type == protocol.ApplicationCallTx {
 		for _, asset := range txn.ForeignAssets {
