@@ -306,7 +306,7 @@ func TestPopulatorWithLocalResources(t *testing.T) {
 	txns[0].Txn.Type = protocol.ApplicationCallTx
 
 	consensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
-	populator := MakeResourcePopulator(txns, consensusParams)
+	populator := makeResourcePopulator(txns, consensusParams)
 
 	txnResources := make([]ResourceTracker, 1)
 
@@ -336,7 +336,7 @@ func TestPopulatorWithLocalResources(t *testing.T) {
 			Accounts: []basics.Address{addr},
 			Boxes:    []logic.BoxRef{},
 		},
-		populator.TxnResources[0].getPopulatedArrays(),
+		populator.txnResources[0].getPopulatedArrays(),
 	)
 }
 
@@ -354,7 +354,7 @@ func TestPopulatorWithGlobalResources(t *testing.T) {
 	txns[3].Txn.ApplicationID = app1
 
 	consensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
-	populator := MakeResourcePopulator(txns, consensusParams)
+	populator := makeResourcePopulator(txns, consensusParams)
 
 	txnResources := make([]ResourceTracker, 3)
 	groupResources := ResourceTracker{}
@@ -417,14 +417,14 @@ func TestPopulatorWithGlobalResources(t *testing.T) {
 
 	err := populator.populateResources(groupResources, txnResources)
 	require.NoError(t, err)
-	require.Equal(t, consensusParams.MaxTxGroupSize-1, len(populator.TxnResources))
+	require.Equal(t, consensusParams.MaxTxGroupSize-1, len(populator.txnResources))
 
-	require.Nil(t, populator.TxnResources[0])
+	require.Nil(t, populator.txnResources[0])
 
-	pop1 := populator.TxnResources[1].getPopulatedArrays()
-	pop2 := populator.TxnResources[2].getPopulatedArrays()
-	pop3 := populator.TxnResources[3].getPopulatedArrays()
-	pop4 := populator.TxnResources[4].getPopulatedArrays()
+	pop1 := populator.txnResources[1].getPopulatedArrays()
+	pop2 := populator.txnResources[2].getPopulatedArrays()
+	pop3 := populator.txnResources[3].getPopulatedArrays()
+	pop4 := populator.txnResources[4].getPopulatedArrays()
 
 	// Txn 1 has all the new multi-resources (ie. both resources are not already in a txn)
 	// Txn 1 also gets the app and address resource because they are added before other resources
@@ -455,9 +455,9 @@ func TestPopulatorWithGlobalResources(t *testing.T) {
 
 	// The rest of the populated arrays should be empty
 	for i := 5; i < consensusParams.MaxTxGroupSize; i++ {
-		require.Empty(t, populator.TxnResources[i].getPopulatedArrays().Accounts)
-		require.Empty(t, populator.TxnResources[i].getPopulatedArrays().Apps)
-		require.Empty(t, populator.TxnResources[i].getPopulatedArrays().Assets)
-		require.Empty(t, populator.TxnResources[i].getPopulatedArrays().Boxes)
+		require.Empty(t, populator.txnResources[i].getPopulatedArrays().Accounts)
+		require.Empty(t, populator.txnResources[i].getPopulatedArrays().Apps)
+		require.Empty(t, populator.txnResources[i].getPopulatedArrays().Assets)
+		require.Empty(t, populator.txnResources[i].getPopulatedArrays().Boxes)
 	}
 }
