@@ -761,12 +761,13 @@ func (r *TxnResources) getPopulatedArrays() PopulatedResourceArrays {
 
 // ResourcePopulator is used to populate app resources for a transaction group
 type ResourcePopulator struct {
-	TxnResources []TxnResources
-	GroupSize    int
+	TxnResources   map[int]*TxnResources
+	AppCallIndexes []int
+	GroupSize      int
 }
 
 func (p *ResourcePopulator) addTransaction(txn transactions.Transaction, groupIndex int, consensusParams config.ConsensusParams) {
-	p.TxnResources[groupIndex] = TxnResources{
+	p.TxnResources[groupIndex] = &TxnResources{
 		StaticAssets:       make(map[basics.AssetIndex]struct{}),
 		StaticApps:         make(map[basics.AppIndex]struct{}),
 		StaticAccounts:     make(map[basics.Address]struct{}),
@@ -838,7 +839,7 @@ func (p *ResourcePopulator) addTransaction(txn transactions.Transaction, groupIn
 }
 
 func (p *ResourcePopulator) addAccount(addr basics.Address) error {
-	for i := range p.TxnResources {
+	for _, i := range p.AppCallIndexes {
 		if p.TxnResources[i].hasRoomForAccount() {
 			p.TxnResources[i].addAccount(addr)
 			return nil
@@ -848,7 +849,7 @@ func (p *ResourcePopulator) addAccount(addr basics.Address) error {
 }
 
 func (p *ResourcePopulator) addAsset(asset basics.AssetIndex) error {
-	for i := range p.TxnResources {
+	for _, i := range p.AppCallIndexes {
 		if p.TxnResources[i].hasRoom() {
 			p.TxnResources[i].addAsset(asset)
 			return nil
@@ -858,7 +859,7 @@ func (p *ResourcePopulator) addAsset(asset basics.AssetIndex) error {
 }
 
 func (p *ResourcePopulator) addApp(app basics.AppIndex) error {
-	for i := range p.TxnResources {
+	for _, i := range p.AppCallIndexes {
 		if p.TxnResources[i].hasRoom() {
 			p.TxnResources[i].addApp(app)
 			return nil
@@ -869,7 +870,7 @@ func (p *ResourcePopulator) addApp(app basics.AppIndex) error {
 
 func (p *ResourcePopulator) addBox(app basics.AppIndex, name string) error {
 	// First try to find txn with app already available
-	for i := range p.TxnResources {
+	for _, i := range p.AppCallIndexes {
 		if app == basics.AppIndex(0) || p.TxnResources[i].hasApp(app) {
 			if p.TxnResources[i].hasRoom() {
 				p.TxnResources[i].addBox(app, name)
@@ -879,7 +880,7 @@ func (p *ResourcePopulator) addBox(app basics.AppIndex, name string) error {
 	}
 
 	// Then try to find txn with room for both app and box
-	for i := range p.TxnResources {
+	for _, i := range p.AppCallIndexes {
 		if p.TxnResources[i].hasRoomForBoxWithApp() {
 			p.TxnResources[i].addApp(app)
 			p.TxnResources[i].addBox(app, name)
@@ -892,7 +893,7 @@ func (p *ResourcePopulator) addBox(app basics.AppIndex, name string) error {
 
 func (p *ResourcePopulator) addHolding(addr basics.Address, aid basics.AssetIndex) error {
 	// First try to find txn with account already available
-	for i := range p.TxnResources {
+	for _, i := range p.AppCallIndexes {
 		if p.TxnResources[i].hasAccount(addr) {
 			if p.TxnResources[i].hasRoom() {
 				p.TxnResources[i].addAsset(aid)
@@ -902,7 +903,7 @@ func (p *ResourcePopulator) addHolding(addr basics.Address, aid basics.AssetInde
 	}
 
 	// Then try to find txn with asset already available
-	for i := range p.TxnResources {
+	for _, i := range p.AppCallIndexes {
 		if p.TxnResources[i].hasAsset(aid) {
 			if p.TxnResources[i].hasRoomForAccount() {
 				p.TxnResources[i].addAccount(addr)
@@ -912,7 +913,7 @@ func (p *ResourcePopulator) addHolding(addr basics.Address, aid basics.AssetInde
 	}
 
 	// Finally try to find txn with room for both account and holding
-	for i := range p.TxnResources {
+	for _, i := range p.AppCallIndexes {
 		if p.TxnResources[i].hasRoomForCrossRef() {
 			p.TxnResources[i].addAccount(addr)
 			p.TxnResources[i].addAsset(aid)
@@ -924,7 +925,7 @@ func (p *ResourcePopulator) addHolding(addr basics.Address, aid basics.AssetInde
 
 func (p *ResourcePopulator) addLocal(addr basics.Address, aid basics.AppIndex) error {
 	// First try to find txn with account already available
-	for i := range p.TxnResources {
+	for _, i := range p.AppCallIndexes {
 		if p.TxnResources[i].hasAccount(addr) {
 			if p.TxnResources[i].hasRoom() {
 				p.TxnResources[i].addApp(aid)
@@ -934,7 +935,7 @@ func (p *ResourcePopulator) addLocal(addr basics.Address, aid basics.AppIndex) e
 	}
 
 	// Then try to find txn with app already available
-	for i := range p.TxnResources {
+	for _, i := range p.AppCallIndexes {
 		if p.TxnResources[i].hasApp(aid) {
 			if p.TxnResources[i].hasRoomForAccount() {
 				p.TxnResources[i].addAccount(addr)
@@ -944,7 +945,7 @@ func (p *ResourcePopulator) addLocal(addr basics.Address, aid basics.AppIndex) e
 	}
 
 	// Finally try to find txn with room for both account and app
-	for i := range p.TxnResources {
+	for _, i := range p.AppCallIndexes {
 		if p.TxnResources[i].hasRoomForCrossRef() {
 			p.TxnResources[i].addApp(aid)
 			p.TxnResources[i].addAccount(addr)
@@ -1037,14 +1038,19 @@ func (p *ResourcePopulator) populateResources(groupResources ResourceTracker, tx
 	return nil
 }
 
-func (p *ResourcePopulator) getPopulatedArrays() []PopulatedResourceArrays {
-	populatedArrays := []PopulatedResourceArrays{}
-	for i, resources := range p.TxnResources {
+func (p *ResourcePopulator) getPopulatedArrays() map[int]PopulatedResourceArrays {
+	populatedArrays := map[int]PopulatedResourceArrays{}
+	for _, i := range p.AppCallIndexes {
+		resources := p.TxnResources[i]
+		if resources == nil {
+			continue
+		}
+
 		pop := resources.getPopulatedArrays()
 		if i >= p.GroupSize && len(pop.Accounts)+len(pop.Assets)+len(pop.Apps)+len(pop.Boxes) == 0 {
 			break
 		}
-		populatedArrays = append(populatedArrays, resources.getPopulatedArrays())
+		populatedArrays[i] = resources.getPopulatedArrays()
 	}
 	return populatedArrays
 }
@@ -1052,16 +1058,23 @@ func (p *ResourcePopulator) getPopulatedArrays() []PopulatedResourceArrays {
 // MakeResourcePopulator creates a ResourcePopulator from a transaction group
 func MakeResourcePopulator(txnGroup []transactions.SignedTxn, consensusParams config.ConsensusParams) ResourcePopulator {
 	populator := ResourcePopulator{
-		TxnResources: make([]TxnResources, consensusParams.MaxTxGroupSize),
-		GroupSize:    len(txnGroup),
+		TxnResources:   map[int]*TxnResources{},
+		AppCallIndexes: []int{},
+		GroupSize:      len(txnGroup),
 	}
 
 	for i, txn := range txnGroup {
+		if txn.Txn.Type != protocol.ApplicationCallTx {
+			continue
+		}
+
+		populator.AppCallIndexes = append(populator.AppCallIndexes, i)
 		populator.addTransaction(txn.Txn, i, consensusParams)
 	}
 
 	for i := len(txnGroup); i < consensusParams.MaxTxGroupSize; i++ {
-		populator.TxnResources[i] = TxnResources{
+		populator.AppCallIndexes = append(populator.AppCallIndexes, i)
+		populator.TxnResources[i] = &TxnResources{
 			StaticAssets:       make(map[basics.AssetIndex]struct{}),
 			StaticApps:         make(map[basics.AppIndex]struct{}),
 			StaticAccounts:     make(map[basics.Address]struct{}),

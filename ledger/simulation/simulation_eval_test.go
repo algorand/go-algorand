@@ -9376,25 +9376,36 @@ func populateResourceTest(t *testing.T, groupSharing bool) {
 		ClearStateProgram: program,
 	})
 
+	pay := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:     protocol.PaymentTx,
+		Sender:   sender.Addr,
+		Receiver: sender.Addr,
+		Amount:   0,
+	})
+
 	appCall := env.TxnInfo.NewTxn(txntest.Txn{
 		Type:          protocol.ApplicationCallTx,
 		Sender:        sender.Addr,
 		ApplicationID: appID,
 	})
 
+	txgroup := txntest.Group(&pay, &appCall)
+
 	proto := env.TxnInfo.CurrentProtocolParams()
 
 	var expectedTxnResources *simulation.ResourceTracker
 	var expectedGroupResources *simulation.ResourceTracker
 
+	maxAppls := proto.MaxTxGroupSize - 1
+
 	if groupSharing {
 		expectedGroupResources = &simulation.ResourceTracker{
-			MaxAccounts:               (proto.MaxAppTxnAccounts + proto.MaxAppTxnForeignApps) * proto.MaxTxGroupSize,
-			MaxAssets:                 proto.MaxAppTxnForeignAssets * proto.MaxTxGroupSize,
-			MaxApps:                   proto.MaxAppTxnForeignApps * proto.MaxTxGroupSize,
-			MaxBoxes:                  proto.MaxAppBoxReferences * proto.MaxTxGroupSize,
-			MaxTotalRefs:              proto.MaxAppTotalTxnReferences * proto.MaxTxGroupSize,
-			MaxCrossProductReferences: 1280,
+			MaxAccounts:               (proto.MaxAppTxnAccounts + proto.MaxAppTxnForeignApps) * maxAppls,
+			MaxAssets:                 proto.MaxAppTxnForeignAssets * maxAppls,
+			MaxApps:                   proto.MaxAppTxnForeignApps * maxAppls,
+			MaxBoxes:                  proto.MaxAppBoxReferences * maxAppls,
+			MaxTotalRefs:              proto.MaxAppTotalTxnReferences * maxAppls,
+			MaxCrossProductReferences: 80 * maxAppls,
 			Accounts:                  mapWithKeys([]basics.Address{foreignAccount.Addr}, struct{}{}),
 		}
 		expectedTxnResources = nil
@@ -9410,8 +9421,8 @@ func populateResourceTest(t *testing.T, groupSharing bool) {
 		}
 	}
 
-	expectedPopulatedArrays := []simulation.PopulatedResourceArrays{
-		{
+	expectedPopulatedArrays := map[int]simulation.PopulatedResourceArrays{
+		1: {
 			Accounts: []basics.Address{foreignAccount.Addr},
 			Assets:   []basics.AssetIndex{},
 			Apps:     []basics.AppIndex{},
@@ -9421,7 +9432,7 @@ func populateResourceTest(t *testing.T, groupSharing bool) {
 
 	runSimulationTestCase(t, env, simulationTestCase{
 		input: simulation.Request{
-			TxnGroups:              [][]transactions.SignedTxn{{appCall.SignedTxn()}},
+			TxnGroups:              [][]transactions.SignedTxn{txgroup},
 			AllowEmptySignatures:   true,
 			AllowUnnamedResources:  true,
 			PopulateResourceArrays: true,
@@ -9434,10 +9445,12 @@ func populateResourceTest(t *testing.T, groupSharing bool) {
 				AllowUnnamedResources: true,
 			},
 			TxnGroups: []simulation.TxnGroupResult{{
-				Txns: []simulation.TxnResult{{
-					AppBudgetConsumed:        ignoreAppBudgetConsumed,
-					UnnamedResourcesAccessed: expectedTxnResources,
-				}},
+				Txns: []simulation.TxnResult{
+					{},
+					{
+						AppBudgetConsumed:        ignoreAppBudgetConsumed,
+						UnnamedResourcesAccessed: expectedTxnResources,
+					}},
 				PopulatedResourceArrays:  expectedPopulatedArrays,
 				AppBudgetConsumed:        ignoreAppBudgetConsumed,
 				AppBudgetAdded:           700,

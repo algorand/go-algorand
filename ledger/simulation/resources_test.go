@@ -344,13 +344,14 @@ func TestPopulatorWithGlobalResources(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	txns := make([]transactions.SignedTxn, 3)
-	txns[0].Txn.Type = protocol.ApplicationCallTx
+	txns := make([]transactions.SignedTxn, 4)
+	txns[0].Txn.Type = protocol.PaymentTx // include payment to ensure it doesn't get resources
 	txns[1].Txn.Type = protocol.ApplicationCallTx
 	txns[2].Txn.Type = protocol.ApplicationCallTx
+	txns[3].Txn.Type = protocol.ApplicationCallTx
 
 	app1 := basics.AppIndex(1)
-	txns[2].Txn.ApplicationID = app1
+	txns[3].Txn.ApplicationID = app1
 
 	consensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
 	populator := MakeResourcePopulator(txns, consensusParams)
@@ -416,42 +417,44 @@ func TestPopulatorWithGlobalResources(t *testing.T) {
 
 	err := populator.populateResources(groupResources, txnResources)
 	require.NoError(t, err)
-	require.Equal(t, consensusParams.MaxTxGroupSize, len(populator.TxnResources))
+	require.Equal(t, consensusParams.MaxTxGroupSize-1, len(populator.TxnResources))
 
-	pop0 := populator.TxnResources[0].getPopulatedArrays()
+	require.Nil(t, populator.TxnResources[0])
+
 	pop1 := populator.TxnResources[1].getPopulatedArrays()
 	pop2 := populator.TxnResources[2].getPopulatedArrays()
 	pop3 := populator.TxnResources[3].getPopulatedArrays()
+	pop4 := populator.TxnResources[4].getPopulatedArrays()
 
-	// Txn 0 has all the new multi-resources (ie. both resources are not already in a txn)
-	// Txn 0 also gets the app and address resource because they are added before other resources
-	require.ElementsMatch(t, pop0.Apps, []basics.AppIndex{box5.App, local10_11.App, app3})
-	require.ElementsMatch(t, pop0.Boxes, []logic.BoxRef{box5})
-	require.ElementsMatch(t, pop0.Accounts, []basics.Address{addr2, holding6_7.Address, local10_11.Address})
-	require.ElementsMatch(t, pop0.Assets, []basics.AssetIndex{holding6_7.Asset})
+	// Txn 1 has all the new multi-resources (ie. both resources are not already in a txn)
+	// Txn 1 also gets the app and address resource because they are added before other resources
+	require.ElementsMatch(t, pop1.Apps, []basics.AppIndex{box5.App, local10_11.App, app3})
+	require.ElementsMatch(t, pop1.Boxes, []logic.BoxRef{box5})
+	require.ElementsMatch(t, pop1.Accounts, []basics.Address{addr2, holding6_7.Address, local10_11.Address})
+	require.ElementsMatch(t, pop1.Assets, []basics.AssetIndex{holding6_7.Asset})
 
-	// Txn 1 has the asset and empty boxes because they are added last and txn 0 is full
-	require.ElementsMatch(t, pop1.Apps, []basics.AppIndex{})
-	require.ElementsMatch(t, pop1.Boxes, []logic.BoxRef{emptyBox, emptyBox, emptyBox, emptyBox, emptyBox, emptyBox, emptyBox})
-	require.ElementsMatch(t, pop1.Accounts, []basics.Address{})
-	require.ElementsMatch(t, pop1.Assets, []basics.AssetIndex{asset4})
+	// Txn 2 has the asset and empty boxes because they are added last and txn 0 is full
+	require.ElementsMatch(t, pop2.Apps, []basics.AppIndex{})
+	require.ElementsMatch(t, pop2.Boxes, []logic.BoxRef{emptyBox, emptyBox, emptyBox, emptyBox, emptyBox, emptyBox, emptyBox})
+	require.ElementsMatch(t, pop2.Accounts, []basics.Address{})
+	require.ElementsMatch(t, pop2.Assets, []basics.AssetIndex{asset4})
 
-	// Txn 2 has all the resources that had partial requirements already in txn 2 and leftover empty boxes
-	require.ElementsMatch(t, pop2.Apps, []basics.AppIndex{local1_12.App})
-	require.ElementsMatch(t, pop2.Boxes, []logic.BoxRef{box1, emptyBox, emptyBox, emptyBox})
-	require.ElementsMatch(t, pop2.Accounts, []basics.Address{holding9_8.Address, local13_1.Address})
-	require.ElementsMatch(t, pop2.Assets, []basics.AssetIndex{holding1_8.Asset})
+	// Txn 3 has all the resources that had partial requirements already in txn 2 and leftover empty boxes
+	require.ElementsMatch(t, pop3.Apps, []basics.AppIndex{local1_12.App})
+	require.ElementsMatch(t, pop3.Boxes, []logic.BoxRef{box1, emptyBox, emptyBox, emptyBox})
+	require.ElementsMatch(t, pop3.Accounts, []basics.Address{holding9_8.Address, local13_1.Address})
+	require.ElementsMatch(t, pop3.Assets, []basics.AssetIndex{holding1_8.Asset})
 
-	// The third populated array does not map to a transaction, but it will contain the overflow of resources
-	require.Empty(t, pop3.Accounts)
-	require.Empty(t, pop3.Apps)
-	require.Empty(t, pop3.Assets)
-	require.ElementsMatch(t, pop3.Boxes, []logic.BoxRef{emptyBox})
+	// The 4th populated array does not map to a transaction, but it will contain the overflow of resources
+	require.Empty(t, pop4.Accounts)
+	require.Empty(t, pop4.Apps)
+	require.Empty(t, pop4.Assets)
+	require.ElementsMatch(t, pop4.Boxes, []logic.BoxRef{emptyBox})
 
 	require.Len(t, populator.getPopulatedArrays(), 4)
 
 	// The rest of the populated arrays should be empty
-	for i := 4; i < consensusParams.MaxTxGroupSize; i++ {
+	for i := 5; i < consensusParams.MaxTxGroupSize; i++ {
 		require.Empty(t, populator.TxnResources[i].getPopulatedArrays().Accounts)
 		require.Empty(t, populator.TxnResources[i].getPopulatedArrays().Apps)
 		require.Empty(t, populator.TxnResources[i].getPopulatedArrays().Assets)
