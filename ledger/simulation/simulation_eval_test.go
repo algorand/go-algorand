@@ -9465,13 +9465,11 @@ func TestPopulateResources(t *testing.T) {
 	t.Parallel()
 
 	t.Run("group sharing", func(t *testing.T) {
-		partitiontest.PartitionTest(t)
 		t.Parallel()
 		populateResourceTest(t, true)
 	})
 
 	t.Run("no group sharing", func(t *testing.T) {
-		partitiontest.PartitionTest(t)
 		t.Parallel()
 		populateResourceTest(t, false)
 	})
