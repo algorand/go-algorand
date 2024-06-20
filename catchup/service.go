@@ -760,6 +760,13 @@ func (s *Service) fetchRound(cert agreement.Certificate, verifier *agreement.Asy
 		psp, getPeerErr := ps.getNextPeer()
 		if getPeerErr != nil {
 			s.log.Debugf("fetchRound: was unable to obtain a peer to retrieve the block from")
+			select {
+			case <-s.ctx.Done():
+				logging.Base().Debugf("fetchRound was asked to quit while collecting peers")
+				return
+			default:
+			}
+
 			s.net.RequestConnectOutgoing(true, s.ctx.Done())
 			continue
 		}
