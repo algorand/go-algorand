@@ -711,11 +711,9 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 	accepted := false
 	defer func() {
 		// if we failed to put the item onto the backlog, we should release the capacity if any
-		if !accepted {
-			if capguard != nil {
-				if capErr := capguard.Release(); capErr != nil {
-					logging.Base().Warnf("processIncomingTxn: failed to release capacity to ElasticRateLimiter: %v", capErr)
-				}
+		if !accepted && capguard != nil {
+			if capErr := capguard.Release(); capErr != nil {
+				logging.Base().Warnf("processIncomingTxn: failed to release capacity to ElasticRateLimiter: %v", capErr)
 			}
 		}
 	}()
@@ -779,11 +777,9 @@ func (handler *TxHandler) validateIncomingTxMessage(rawmsg network.IncomingMessa
 	accepted := false
 	defer func() {
 		// if we failed to put the item onto the backlog, we should release the capacity if any
-		if !accepted {
-			if capguard != nil {
-				if capErr := capguard.Release(); capErr != nil {
-					logging.Base().Warnf("validateIncomingTxMessage: failed to release capacity to ElasticRateLimiter: %v", capErr)
-				}
+		if !accepted && capguard != nil {
+			if capErr := capguard.Release(); capErr != nil {
+				logging.Base().Warnf("validateIncomingTxMessage: failed to release capacity to ElasticRateLimiter: %v", capErr)
 			}
 		}
 	}()
