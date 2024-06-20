@@ -41,7 +41,7 @@ type HybridP2PNetwork struct {
 func NewHybridP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebookAddresses []string, genesisID string, networkID protocol.NetworkID, nodeInfo NodeInfo) (*HybridP2PNetwork, error) {
 	// supply alternate NetAddress for P2P network
 	p2pcfg := cfg
-	p2pcfg.NetAddress = cfg.P2PListenAddress
+	p2pcfg.NetAddress = cfg.P2PNetAddress
 	p2pnet, err := NewP2PNetwork(log, p2pcfg, datadir, phonebookAddresses, genesisID, networkID, nodeInfo)
 	if err != nil {
 		return nil, err

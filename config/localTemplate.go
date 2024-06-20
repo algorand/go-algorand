@@ -603,8 +603,8 @@ type Local struct {
 	// EnableP2PHybridMode turns on both websockets and P2P networking.
 	EnableP2PHybridMode bool `version[34]:"false"`
 
-	// P2PListenAddress sets the listen address used for P2P networking, if hybrid mode is set.
-	P2PListenAddress string `version[34]:""`
+	// P2PNetAddress sets the listen address used for P2P networking, if hybrid mode is set.
+	P2PNetAddress string `version[34]:""`
 
 	// EnableDHT will turn on the hash table for use with capabilities advertisement
 	EnableDHTProviders bool `version[34]:"false"`

@@ -896,7 +896,7 @@ func TestNodeHybridTopology(t *testing.T) {
 		ni.p2pID, err = p2p.PeerIDFromPublicKey(privKey.GetPublic())
 		require.NoError(t, err)
 
-		cfg.P2PListenAddress = ni.p2pNetAddr()
+		cfg.P2PNetAddress = ni.p2pNetAddr()
 		return ni, cfg
 	}
 

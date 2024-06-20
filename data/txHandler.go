@@ -240,10 +240,12 @@ func (handler *TxHandler) Start() {
 	if handler.msgCache != nil {
 		handler.msgCache.Start(handler.ctx, 60*time.Second)
 	}
+	// wsNetwork handler
 	handler.net.RegisterHandlers([]network.TaggedMessageHandler{
 		{Tag: protocol.TxnTag, MessageHandler: network.HandlerFunc(handler.processIncomingTxn)},
 	})
 
+	// libp2p pubsub validator and handler abstracted as TaggedMessageProcessor
 	handler.net.RegisterProcessors([]network.TaggedMessageProcessor{
 		{
 			Tag: protocol.TxnTag,
