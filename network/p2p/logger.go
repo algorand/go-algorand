@@ -70,7 +70,8 @@ func EnableP2PLogging(log logging.Logger, l logging.Level) {
 }
 
 func (c *loggingCore) Enabled(l zapcore.Level) bool {
-	return c.log.IsLevelEnabled(c.level)
+	level := levelsMap[l]
+	return c.log.IsLevelEnabled(level)
 }
 
 func (c *loggingCore) With(fields []zapcore.Field) zapcore.Core {
