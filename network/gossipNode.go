@@ -171,9 +171,9 @@ type OutgoingMessage struct {
 // ValidatedMessage is a message that has been validated and is ready to be processed.
 // Think as an intermediate one between IncomingMessage and OutgoingMessage
 type ValidatedMessage struct {
-	Action        ForwardingPolicy
-	Tag           Tag
-	ValidatorData interface{}
+	Action           ForwardingPolicy
+	Tag              Tag
+	ValidatedMessage interface{}
 }
 
 // ForwardingPolicy is an enum indicating to whom we should send a message

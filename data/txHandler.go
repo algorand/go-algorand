@@ -786,27 +786,27 @@ func (handler *TxHandler) validateIncomingTxMessage(rawmsg network.IncomingMessa
 
 	if shouldDrop {
 		// this TX message was found in the duplicate cache, or ERL rate-limited it
-		return network.ValidatedMessage{Action: network.Ignore, ValidatorData: nil}
+		return network.ValidatedMessage{Action: network.Ignore, ValidatedMessage: nil}
 	}
 
 	unverifiedTxGroup, consumed, invalid := decodeMsg(rawmsg.Data)
 	if invalid {
 		// invalid encoding or exceeding txgroup, disconnect from this peer
-		return network.ValidatedMessage{Action: network.Disconnect, ValidatorData: nil}
+		return network.ValidatedMessage{Action: network.Disconnect, ValidatedMessage: nil}
 	}
 
 	canonicalKey, drop := handler.incomingTxGroupDupRateLimit(unverifiedTxGroup, consumed, rawmsg.Sender)
 	if drop {
 		// this re-serialized txgroup was detected as a duplicate by the canonical message cache,
 		// or it was rate-limited by the per-app rate limiter
-		return network.ValidatedMessage{Action: network.Ignore, ValidatorData: nil}
+		return network.ValidatedMessage{Action: network.Ignore, ValidatedMessage: nil}
 	}
 
 	accepted = true
 	return network.ValidatedMessage{
 		Action: network.Accept,
 		Tag:    rawmsg.Tag,
-		ValidatorData: &validatedIncomingTxMessage{
+		ValidatedMessage: &validatedIncomingTxMessage{
 			rawmsg:            rawmsg,
 			unverifiedTxGroup: unverifiedTxGroup,
 			msgKey:            msgKey,
@@ -818,7 +818,7 @@ func (handler *TxHandler) validateIncomingTxMessage(rawmsg network.IncomingMessa
 
 // processIncomingTxMessage is the handler for the MessageProcessor implementation used by P2PNetwork.
 func (handler *TxHandler) processIncomingTxMessage(validatedMessage network.ValidatedMessage) network.OutgoingMessage {
-	msg := validatedMessage.ValidatorData.(*validatedIncomingTxMessage)
+	msg := validatedMessage.ValidatedMessage.(*validatedIncomingTxMessage)
 	select {
 	case handler.backlogQueue <- &txBacklogMsg{
 		rawmsg:                &msg.rawmsg,
