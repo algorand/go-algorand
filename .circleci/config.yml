@@ -45,19 +45,6 @@ executors:
     machine:
       image: << pipeline.parameters.ubuntu_image >>
     resource_class: arm.large
-  mac_amd64_medium:
-    macos:
-      xcode: 14.2.0
-    resource_class: macos.x86.medium.gen2
-    environment:
-      HOMEBREW_NO_AUTO_UPDATE: "true"
-  mac_amd64_large:
-    macos:
-      xcode: 14.2.0
-    # Since they removed the large class for amd64, we will use medium here too.
-    resource_class: macos.x86.medium.gen2
-    environment:
-      HOMEBREW_NO_AUTO_UPDATE: "true"
   mac_arm64: &executor-mac-arm64
     machine: true
     resource_class: algorand/macstadium-m1
@@ -86,7 +73,7 @@ workflows:
           name: << matrix.platform >>_build_nightly
           matrix: &matrix-nightly
             parameters:
-              platform: ["amd64", "arm64", "mac_amd64", "mac_arm64"]
+              platform: ["amd64", "arm64", "mac_arm64"]
           filters: &filters-nightly
             branches:
               only:
@@ -137,7 +124,7 @@ workflows:
           name: << matrix.platform >>_<< matrix.job_type >>_verification
           matrix:
             parameters:
-              platform: ["amd64", "arm64", "mac_amd64", "mac_arm64"]
+              platform: ["amd64", "arm64", "mac_arm64"]
               job_type: ["test_nightly", "integration_nightly", "e2e_expect_nightly"]
           requires:
             - << matrix.platform >>_<< matrix.job_type >>
