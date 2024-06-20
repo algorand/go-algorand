@@ -248,7 +248,7 @@ func (handler *TxHandler) Start() {
 		{
 			Tag: protocol.TxnTag,
 			// create anonymous struct to hold the two functions and satisfy the network.MessageProcessor interface
-			MessageProcessor: struct {
+			MessageHandler: struct {
 				network.ProcessorValidateFunc
 				network.ProcessorHandleFunc
 			}{

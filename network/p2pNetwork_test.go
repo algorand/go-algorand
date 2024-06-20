@@ -103,7 +103,7 @@ func TestP2PSubmitTX(t *testing.T) {
 	passThroughHandler := []TaggedMessageProcessor{
 		{
 			Tag: protocol.TxnTag,
-			MessageProcessor: struct {
+			MessageHandler: struct {
 				ProcessorValidateFunc
 				ProcessorHandleFunc
 			}{
@@ -195,7 +195,7 @@ func TestP2PSubmitTXNoGossip(t *testing.T) {
 	passThroughHandler := []TaggedMessageProcessor{
 		{
 			Tag: protocol.TxnTag,
-			MessageProcessor: struct {
+			MessageHandler: struct {
 				ProcessorValidateFunc
 				ProcessorHandleFunc
 			}{
@@ -829,13 +829,13 @@ func TestP2PRelay(t *testing.T) {
 		return netA.hasPeers() && netB.hasPeers()
 	}, 2*time.Second, 50*time.Millisecond)
 
-	makeCounterHandler := func(numExpected int) ([]TaggedMessageProcessor, *int, chan struct{}) {
-		numActual := 0
+	makeCounterHandler := func(numExpected int) ([]TaggedMessageProcessor, *atomic.Uint32, chan struct{}) {
+		var numActual atomic.Uint32
 		counterDone := make(chan struct{})
 		counterHandler := []TaggedMessageProcessor{
 			{
 				Tag: protocol.TxnTag,
-				MessageProcessor: struct {
+				MessageHandler: struct {
 					ProcessorValidateFunc
 					ProcessorHandleFunc
 				}{
@@ -843,8 +843,7 @@ func TestP2PRelay(t *testing.T) {
 						return ValidatedMessage{Action: Accept, Tag: msg.Tag, ValidatorData: nil}
 					}),
 					ProcessorHandleFunc(func(msg ValidatedMessage) OutgoingMessage {
-						numActual++
-						if numActual >= numExpected {
+						if count := numActual.Add(1); int(count) >= numExpected {
 							close(counterDone)
 						}
 						return OutgoingMessage{Action: Ignore}
@@ -916,10 +915,10 @@ func TestP2PRelay(t *testing.T) {
 	select {
 	case <-counterDone:
 	case <-time.After(2 * time.Second):
-		if *count < expectedMsgs {
-			require.Failf(t, "One or more messages failed to reach destination network", "%d > %d", expectedMsgs, *count)
-		} else if *count > expectedMsgs {
-			require.Failf(t, "One or more messages that were expected to be dropped, reached destination network", "%d < %d", expectedMsgs, *count)
+		if c := count.Load(); c < expectedMsgs {
+			require.Failf(t, "One or more messages failed to reach destination network", "%d > %d", expectedMsgs, c)
+		} else if c > expectedMsgs {
+			require.Failf(t, "One or more messages that were expected to be dropped, reached destination network", "%d < %d", expectedMsgs, c)
 		}
 	}
 }
