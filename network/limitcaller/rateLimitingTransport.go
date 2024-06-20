@@ -64,9 +64,9 @@ func MakeRateLimitingTransport(phonebook ConnectionTimeStore, queueingTimeout ti
 	}
 }
 
-// MakeRateLimitingTransportWithTransport creates a rate limiting http transport that would limit the requests rate
+// MakeRateLimitingTransportWithRoundTripper creates a rate limiting http transport that would limit the requests rate
 // according to the entries in the phonebook.
-func MakeRateLimitingTransportWithTransport(phonebook ConnectionTimeStore, queueingTimeout time.Duration, rt http.RoundTripper, target interface{}, maxIdleConnsPerHost int) RateLimitingTransport {
+func MakeRateLimitingTransportWithRoundTripper(phonebook ConnectionTimeStore, queueingTimeout time.Duration, rt http.RoundTripper, target interface{}, maxIdleConnsPerHost int) RateLimitingTransport {
 	return RateLimitingTransport{
 		phonebook:       phonebook,
 		innerTransport:  rt,
@@ -82,8 +82,8 @@ func (r *RateLimitingTransport) RoundTrip(req *http.Request) (res *http.Response
 	var provisionalTime time.Time
 	queueingDeadline := time.Now().Add(r.queueingTimeout)
 	var host interface{} = req.Host
+	// p2p/http clients have per-connection transport and address info so use that
 	if len(req.Host) == 0 && req.URL != nil && len(req.URL.Host) == 0 {
-		// p2p/http clients have per-connection transport and address info so use that
 		host = r.targetAddr
 	}
 	for {
