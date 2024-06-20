@@ -20,9 +20,7 @@
 package util
 
 import (
-	"context"
 	"fmt"
-	"runtime/pprof"
 	"syscall"
 )
 
@@ -73,9 +71,4 @@ func GetCurrentProcessTimes() (utime int64, stime int64, err error) {
 		stime = 0
 	}
 	return
-}
-
-// SetGoroutineLabels sets profiler labels for identifying goroutines using the pprof package.
-func SetGoroutineLabels(args ...string) {
-	pprof.SetGoroutineLabels(pprof.WithLabels(context.Background(), pprof.Labels(args...)))
 }
