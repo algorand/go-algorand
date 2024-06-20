@@ -135,7 +135,7 @@ func (w *whiteholeNetwork) Relay(ctx context.Context, tag protocol.Tag, data []b
 func (w *whiteholeNetwork) BroadcastSimple(tag protocol.Tag, data []byte) error {
 	return w.Broadcast(context.Background(), tag, data, true, nil)
 }
-func (w *whiteholeNetwork) Disconnect(badnode network.DisconnectablePeer) {
+func (w *whiteholeNetwork) Disconnect(badnode network.DeadlineSettableConn) {
 	return
 }
 func (w *whiteholeNetwork) DisconnectPeers() {

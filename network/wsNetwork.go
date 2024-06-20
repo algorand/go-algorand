@@ -362,7 +362,7 @@ type networkPeerManager interface {
 
 	// used by msgHandler
 	Broadcast(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except Peer) error
-	disconnectThread(badnode DisconnectablePeer, reason disconnectReason)
+	disconnectThread(badnode DeadlineSettableConn, reason disconnectReason)
 	checkPeersConnectivity()
 }
 
@@ -477,13 +477,13 @@ func (wn *WebsocketNetwork) RelayArray(ctx context.Context, tags []protocol.Tag,
 	return nil
 }
 
-func (wn *WebsocketNetwork) disconnectThread(badnode DisconnectablePeer, reason disconnectReason) {
+func (wn *WebsocketNetwork) disconnectThread(badnode DeadlineSettableConn, reason disconnectReason) {
 	defer wn.wg.Done()
 	wn.disconnect(badnode, reason)
 }
 
 // Disconnect from a peer, probably due to protocol errors.
-func (wn *WebsocketNetwork) Disconnect(node DisconnectablePeer) {
+func (wn *WebsocketNetwork) Disconnect(node DeadlineSettableConn) {
 	wn.disconnect(node, disconnectBadData)
 }
 

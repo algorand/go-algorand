@@ -597,7 +597,7 @@ func (handler *TxHandler) dedupCanonical(unverifiedTxGroup []transactions.Signed
 // - the key used for insertion if the message was not found in the cache
 // - the capacity guard returned by the elastic rate limiter
 // - a boolean indicating if the message was a duplicate or the sender is rate limited
-func (handler *TxHandler) incomingMsgDupErlCheck(data []byte, sender network.DisconnectablePeer) (*crypto.Digest, *util.ErlCapacityGuard, bool) {
+func (handler *TxHandler) incomingMsgDupErlCheck(data []byte, sender network.DeadlineSettableConn) (*crypto.Digest, *util.ErlCapacityGuard, bool) {
 	var msgKey *crypto.Digest
 	var capguard *util.ErlCapacityGuard
 	var isDup bool
@@ -681,7 +681,7 @@ func decodeMsg(data []byte) (unverifiedTxGroup []transactions.SignedTxn, consume
 // incomingTxGroupDupRateLimit checks
 // - if the incoming transaction group has been seen before after reencoding to canonical representation, and
 // - if the sender is rate limited by the per-application rate limiter.
-func (handler *TxHandler) incomingTxGroupDupRateLimit(unverifiedTxGroup []transactions.SignedTxn, encodedExpectedSize int, sender network.DisconnectablePeer) (*crypto.Digest, bool) {
+func (handler *TxHandler) incomingTxGroupDupRateLimit(unverifiedTxGroup []transactions.SignedTxn, encodedExpectedSize int, sender network.DeadlineSettableConn) (*crypto.Digest, bool) {
 	var canonicalKey *crypto.Digest
 	if handler.txCanonicalCache != nil {
 		var isDup bool

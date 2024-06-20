@@ -527,7 +527,7 @@ func (n *P2PNetwork) Relay(ctx context.Context, tag protocol.Tag, data []byte, w
 }
 
 // Disconnect from a peer, probably due to protocol errors.
-func (n *P2PNetwork) Disconnect(badpeer DisconnectablePeer) {
+func (n *P2PNetwork) Disconnect(badpeer DeadlineSettableConn) {
 	var peerID peer.ID
 	var wsp *wsPeer
 
@@ -555,7 +555,7 @@ func (n *P2PNetwork) Disconnect(badpeer DisconnectablePeer) {
 	}
 }
 
-func (n *P2PNetwork) disconnectThread(badnode DisconnectablePeer, reason disconnectReason) {
+func (n *P2PNetwork) disconnectThread(badnode DeadlineSettableConn, reason disconnectReason) {
 	defer n.wg.Done()
 	n.Disconnect(badnode) // ignores reason
 }
