@@ -53,6 +53,8 @@ const (
 // TXTopicName defines a pubsub topic for TX messages
 const TXTopicName = "/algo/tx/0.1.0"
 
+const incomingThreads = 20 // matches to number wsNetwork workers
+
 func makePubSub(ctx context.Context, cfg config.Local, host host.Host) (*pubsub.PubSub, error) {
 	//defaultParams := pubsub.DefaultGossipSubParams()
 
@@ -95,7 +97,7 @@ func makePubSub(ctx context.Context, cfg config.Local, host host.Host) (*pubsub.
 		pubsub.WithValidateQueueSize(256),
 		pubsub.WithMessageSignaturePolicy(pubsub.StrictNoSign),
 		// pubsub.WithValidateThrottle(cfg.TxBacklogSize),
-		pubsub.WithValidateWorkers(20), // match to number wsNetwork workers
+		pubsub.WithValidateWorkers(incomingThreads),
 	}
 
 	return pubsub.NewGossipSub(ctx, host, options...)
