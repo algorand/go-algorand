@@ -45,17 +45,18 @@ executors:
     machine:
       image: << pipeline.parameters.ubuntu_image >>
     resource_class: arm.large
-  mac_arm64: &executor-mac-arm64
-    machine: true
-    resource_class: algorand/macstadium-m1
+  mac_arm64_medium:
+    macos:
+      xcode: 14.2.0
+    resource_class: macos.m1.medium.gen1
     environment:
       HOMEBREW_NO_AUTO_UPDATE: "true"
-  # these are required b/c jobs explicitly assign sizes to the executors
-  # for `mac_arm64` there is only one size
-  mac_arm64_medium:
-    <<: *executor-mac-arm64
   mac_arm64_large:
-    <<: *executor-mac-arm64
+    macos:
+      xcode: 14.2.0
+    resource_class: macos.m1.large.gen1
+    environment:
+      HOMEBREW_NO_AUTO_UPDATE: "true"
 
 slack-fail-stop-step: &slack-fail-post-step
   post-steps:
