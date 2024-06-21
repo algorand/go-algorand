@@ -903,9 +903,7 @@ func TestNodeHybridTopology(t *testing.T) {
 	phonebookHook := func(ni []nodeInfo, i int) []string {
 		switch i {
 		case 0:
-			// node 0 (N) only accept connections to work around the peer selector
-			// ConnectedOut priority. TODO: merge switching to archival peers from master
-			// when ready.
+			// node 0 (N) only accept connections at the beginning to learn about archival node from DHT
 			t.Logf("Node%d phonebook: empty", i)
 			return []string{}
 		case 1:
