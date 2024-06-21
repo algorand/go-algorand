@@ -127,12 +127,12 @@ func (ps *PeerStore) UpdateRetryAfter(addr string, retryAfter time.Time) {
 // The connection should be established when the waitTime is 0.
 // It will register a provisional next connection time when the waitTime is 0.
 // The provisional time should be updated after the connection with UpdateConnectionTime
-func (ps *PeerStore) GetConnectionWaitTime(addr interface{}) (bool, time.Duration, time.Time) {
+func (ps *PeerStore) GetConnectionWaitTime(addrOrPeerID string) (bool, time.Duration, time.Time) {
 	curTime := time.Now()
-	info := addr.(*peer.AddrInfo)
 	var timeSince time.Duration
 	var numElmtsToRemove int
-	metadata, err := ps.Get(info.ID, addressDataKey)
+	peerID := peer.ID(addrOrPeerID)
+	metadata, err := ps.Get(peerID, addressDataKey)
 	if err != nil {
 		return false, 0 /* not used */, curTime /* not used */
 	}
@@ -151,9 +151,9 @@ func (ps *PeerStore) GetConnectionWaitTime(addr interface{}) (bool, time.Duratio
 	}
 
 	// Remove the expired elements from e.data[addr].recentConnectionTimes
-	ps.popNElements(numElmtsToRemove, info.ID)
+	ps.popNElements(numElmtsToRemove, peerID)
 	// If there are max number of connections within the time window, wait
-	metadata, _ = ps.Get(info.ID, addressDataKey)
+	metadata, _ = ps.Get(peerID, addressDataKey)
 	ad, ok = metadata.(addressData)
 	if !ok {
 		return false, 0 /* not used */, curTime /* not used */
@@ -169,14 +169,14 @@ func (ps *PeerStore) GetConnectionWaitTime(addr interface{}) (bool, time.Duratio
 	// Update curTime, since it may have significantly changed if waited
 	provisionalTime := time.Now()
 	// Append the provisional time for the next connection request
-	ps.appendTime(info.ID, provisionalTime)
+	ps.appendTime(peerID, provisionalTime)
 	return true, 0 /* no wait. proceed */, provisionalTime
 }
 
 // UpdateConnectionTime updates the connection time for the given address.
-func (ps *PeerStore) UpdateConnectionTime(addr interface{}, provisionalTime time.Time) bool {
-	info := addr.(*peer.AddrInfo)
-	metadata, err := ps.Get(info.ID, addressDataKey)
+func (ps *PeerStore) UpdateConnectionTime(addrOrPeerID string, provisionalTime time.Time) bool {
+	peerID := peer.ID(addrOrPeerID)
+	metadata, err := ps.Get(peerID, addressDataKey)
 	if err != nil {
 		return false
 	}
@@ -185,7 +185,7 @@ func (ps *PeerStore) UpdateConnectionTime(addr interface{}, provisionalTime time
 		return false
 	}
 	defer func() {
-		_ = ps.Put(info.ID, addressDataKey, ad)
+		_ = ps.Put(peerID, addressDataKey, ad)
 
 	}()
 
