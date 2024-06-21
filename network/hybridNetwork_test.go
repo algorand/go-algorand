@@ -42,7 +42,7 @@ func TestHybridNetwork_DuplicateConn(t *testing.T) {
 	log := logging.TestingLog(t)
 	const p2pKeyDir = ""
 
-	identDiscValue := int(networkPeerIdentityDisconnect.GetUint64Value())
+	identDiscValue := networkPeerIdentityDisconnect.GetUint64Value()
 
 	relayCfg := cfg
 	relayCfg.ForceRelayMessages = true
@@ -101,7 +101,7 @@ func TestHybridNetwork_DuplicateConn(t *testing.T) {
 
 	// ensure initial connections are done
 	require.Eventually(t, func() bool {
-		return len(netA.GetPeers(PeersConnectedIn)) == 2+identDiscValue
+		return len(netA.GetPeers(PeersConnectedIn)) == 2
 	}, 3*time.Second, 50*time.Millisecond)
 
 	// start the second half of the hybrid net
@@ -113,24 +113,36 @@ func TestHybridNetwork_DuplicateConn(t *testing.T) {
 	// wait for connection attempts. nodes need some time to make connections,
 	// and instead of `time.Sleep(1 * time.Second)` the networkPeerIdentityDisconnect net identity counter is used.
 	// Since this test is not parallel the networkPeerIdentityDisconnect should not be modified from outside.
+	// Both netB and netC are attempting to connect but netA could also open an outgoing stream in netB or netC connection.
+	// So, the counter should be at least 2+identDiscValue.
 	require.Eventually(t, func() bool {
-		return networkPeerIdentityDisconnect.GetUint64Value() == 2
-	}, 2*time.Second, 50*time.Millisecond)
+		return networkPeerIdentityDisconnect.GetUint64Value() >= 2+identDiscValue
+	}, 3*time.Second, 50*time.Millisecond)
 
 	// now count connections
 	// netA should have 2 connections, not 4
 	// netB should have 1 connection (via p2p)
 	// netC should have 1 connection (via ws)
 
+	var netAIn, netAOut, netBIn, netBOut, netCIn, netCOut int
 	require.Eventually(t, func() bool {
 		return len(netB.GetPeers(PeersConnectedOut)) == 1
-	}, time.Second, 50*time.Millisecond)
+	}, 3*time.Second, 50*time.Millisecond)
 
 	require.Eventually(t, func() bool {
 		return len(netC.GetPeers(PeersConnectedOut)) == 1
-	}, time.Second, 50*time.Millisecond)
+	}, 3*time.Second, 50*time.Millisecond)
 
 	require.Eventually(t, func() bool {
-		return len(netA.GetPeers(PeersConnectedIn)) == 2
+		netAIn = len(netA.GetPeers(PeersConnectedIn))
+		netAOut = len(netA.GetPeers(PeersConnectedOut))
+		netBIn = len(netB.GetPeers(PeersConnectedIn))
+		netBOut = len(netB.GetPeers(PeersConnectedOut))
+		netCIn = len(netC.GetPeers(PeersConnectedIn))
+		netCOut = len(netC.GetPeers(PeersConnectedOut))
+		if netAIn != 2 {
+			log.Infof("netA in/out: %d/%d, netB in/out: %d/%d, netC in/out: %d/%d\n", netAIn, netAOut, netBIn, netBOut, netCIn, netCOut)
+		}
+		return netAIn == 2
 	}, 3*time.Second, 50*time.Millisecond)
 }
