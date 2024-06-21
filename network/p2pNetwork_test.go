@@ -108,7 +108,7 @@ func TestP2PSubmitTX(t *testing.T) {
 				ProcessorHandleFunc
 			}{
 				ProcessorValidateFunc(func(msg IncomingMessage) ValidatedMessage {
-					return ValidatedMessage{Action: Accept, Tag: msg.Tag, ValidatorData: nil}
+					return ValidatedMessage{Action: Accept, Tag: msg.Tag, ValidatedMessage: nil}
 				}),
 				ProcessorHandleFunc(func(msg ValidatedMessage) OutgoingMessage {
 					return OutgoingMessage{Action: Ignore}
@@ -200,7 +200,7 @@ func TestP2PSubmitTXNoGossip(t *testing.T) {
 				ProcessorHandleFunc
 			}{
 				ProcessorValidateFunc(func(msg IncomingMessage) ValidatedMessage {
-					return ValidatedMessage{Action: Accept, Tag: msg.Tag, ValidatorData: nil}
+					return ValidatedMessage{Action: Accept, Tag: msg.Tag, ValidatedMessage: nil}
 				}),
 				ProcessorHandleFunc(func(msg ValidatedMessage) OutgoingMessage {
 					return OutgoingMessage{Action: Ignore}
@@ -840,7 +840,7 @@ func TestP2PRelay(t *testing.T) {
 					ProcessorHandleFunc
 				}{
 					ProcessorValidateFunc(func(msg IncomingMessage) ValidatedMessage {
-						return ValidatedMessage{Action: Accept, Tag: msg.Tag, ValidatorData: nil}
+						return ValidatedMessage{Action: Accept, Tag: msg.Tag, ValidatedMessage: nil}
 					}),
 					ProcessorHandleFunc(func(msg ValidatedMessage) OutgoingMessage {
 						if count := numActual.Add(1); int(count) >= numExpected {

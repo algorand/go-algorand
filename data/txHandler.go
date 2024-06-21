@@ -240,10 +240,12 @@ func (handler *TxHandler) Start() {
 	if handler.msgCache != nil {
 		handler.msgCache.Start(handler.ctx, 60*time.Second)
 	}
+	// wsNetwork handler
 	handler.net.RegisterHandlers([]network.TaggedMessageHandler{
 		{Tag: protocol.TxnTag, MessageHandler: network.HandlerFunc(handler.processIncomingTxn)},
 	})
 
+	// libp2p pubsub validator and handler abstracted as TaggedMessageProcessor
 	handler.net.RegisterProcessors([]network.TaggedMessageProcessor{
 		{
 			Tag: protocol.TxnTag,
@@ -595,7 +597,7 @@ func (handler *TxHandler) dedupCanonical(unverifiedTxGroup []transactions.Signed
 // - the key used for insertion if the message was not found in the cache
 // - the capacity guard returned by the elastic rate limiter
 // - a boolean indicating if the message was a duplicate or the sender is rate limited
-func (handler *TxHandler) incomingMsgDupErlCheck(data []byte, sender network.DisconnectablePeer) (*crypto.Digest, *util.ErlCapacityGuard, bool) {
+func (handler *TxHandler) incomingMsgDupErlCheck(data []byte, sender network.DeadlineSettableConn) (*crypto.Digest, *util.ErlCapacityGuard, bool) {
 	var msgKey *crypto.Digest
 	var capguard *util.ErlCapacityGuard
 	var isDup bool
@@ -679,7 +681,7 @@ func decodeMsg(data []byte) (unverifiedTxGroup []transactions.SignedTxn, consume
 // incomingTxGroupDupRateLimit checks
 // - if the incoming transaction group has been seen before after reencoding to canonical representation, and
 // - if the sender is rate limited by the per-application rate limiter.
-func (handler *TxHandler) incomingTxGroupDupRateLimit(unverifiedTxGroup []transactions.SignedTxn, encodedExpectedSize int, sender network.DisconnectablePeer) (*crypto.Digest, bool) {
+func (handler *TxHandler) incomingTxGroupDupRateLimit(unverifiedTxGroup []transactions.SignedTxn, encodedExpectedSize int, sender network.DeadlineSettableConn) (*crypto.Digest, bool) {
 	var canonicalKey *crypto.Digest
 	if handler.txCanonicalCache != nil {
 		var isDup bool
@@ -711,11 +713,9 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 	accepted := false
 	defer func() {
 		// if we failed to put the item onto the backlog, we should release the capacity if any
-		if !accepted {
-			if capguard != nil {
-				if capErr := capguard.Release(); capErr != nil {
-					logging.Base().Warnf("processIncomingTxn: failed to release capacity to ElasticRateLimiter: %v", capErr)
-				}
+		if !accepted && capguard != nil {
+			if capErr := capguard.Release(); capErr != nil {
+				logging.Base().Warnf("processIncomingTxn: failed to release capacity to ElasticRateLimiter: %v", capErr)
 			}
 		}
 	}()
@@ -779,38 +779,36 @@ func (handler *TxHandler) validateIncomingTxMessage(rawmsg network.IncomingMessa
 	accepted := false
 	defer func() {
 		// if we failed to put the item onto the backlog, we should release the capacity if any
-		if !accepted {
-			if capguard != nil {
-				if capErr := capguard.Release(); capErr != nil {
-					logging.Base().Warnf("validateIncomingTxMessage: failed to release capacity to ElasticRateLimiter: %v", capErr)
-				}
+		if !accepted && capguard != nil {
+			if capErr := capguard.Release(); capErr != nil {
+				logging.Base().Warnf("validateIncomingTxMessage: failed to release capacity to ElasticRateLimiter: %v", capErr)
 			}
 		}
 	}()
 
 	if shouldDrop {
 		// this TX message was found in the duplicate cache, or ERL rate-limited it
-		return network.ValidatedMessage{Action: network.Ignore, ValidatorData: nil}
+		return network.ValidatedMessage{Action: network.Ignore, ValidatedMessage: nil}
 	}
 
 	unverifiedTxGroup, consumed, invalid := decodeMsg(rawmsg.Data)
 	if invalid {
 		// invalid encoding or exceeding txgroup, disconnect from this peer
-		return network.ValidatedMessage{Action: network.Disconnect, ValidatorData: nil}
+		return network.ValidatedMessage{Action: network.Disconnect, ValidatedMessage: nil}
 	}
 
 	canonicalKey, drop := handler.incomingTxGroupDupRateLimit(unverifiedTxGroup, consumed, rawmsg.Sender)
 	if drop {
 		// this re-serialized txgroup was detected as a duplicate by the canonical message cache,
 		// or it was rate-limited by the per-app rate limiter
-		return network.ValidatedMessage{Action: network.Ignore, ValidatorData: nil}
+		return network.ValidatedMessage{Action: network.Ignore, ValidatedMessage: nil}
 	}
 
 	accepted = true
 	return network.ValidatedMessage{
 		Action: network.Accept,
 		Tag:    rawmsg.Tag,
-		ValidatorData: &validatedIncomingTxMessage{
+		ValidatedMessage: &validatedIncomingTxMessage{
 			rawmsg:            rawmsg,
 			unverifiedTxGroup: unverifiedTxGroup,
 			msgKey:            msgKey,
@@ -822,7 +820,7 @@ func (handler *TxHandler) validateIncomingTxMessage(rawmsg network.IncomingMessa
 
 // processIncomingTxMessage is the handler for the MessageProcessor implementation used by P2PNetwork.
 func (handler *TxHandler) processIncomingTxMessage(validatedMessage network.ValidatedMessage) network.OutgoingMessage {
-	msg := validatedMessage.ValidatorData.(*validatedIncomingTxMessage)
+	msg := validatedMessage.ValidatedMessage.(*validatedIncomingTxMessage)
 	select {
 	case handler.backlogQueue <- &txBacklogMsg{
 		rawmsg:                &msg.rawmsg,

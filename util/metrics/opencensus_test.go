@@ -37,9 +37,9 @@ func TestDHTOpenCensusMetrics(t *testing.T) {
 
 	defaultBytesDistribution := view.Distribution(1024, 2048, 4096, 16384, 65536, 262144, 1048576, 4194304, 16777216, 67108864, 268435456, 1073741824, 4294967296)
 
-	keyMessageType, _ := tag.NewKey("message_type")
-	keyPeerID, _ := tag.NewKey("peer_id")
-	keyInstanceID, _ := tag.NewKey("instance_id")
+	keyMessageType := tag.MustNewKey("message_type")
+	keyPeerID := tag.MustNewKey("peer_id")
+	keyInstanceID := tag.MustNewKey("instance_id")
 
 	sentMessages := stats.Int64("my_sent_messages", "Total number of messages sent per RPC", stats.UnitDimensionless)
 	receivedBytes := stats.Int64("my_received_bytes", "Total received bytes per RPC", stats.UnitBytes)

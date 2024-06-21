@@ -174,21 +174,21 @@ func (nd *nodeDir) configureP2PDNSBootstrap(p2pBootstrap bool) error {
 	}
 	// ensure p2p config params set are what is expected:
 	// - EnableP2P or EnableP2PHybridMode
-	// - NetAddress or P2PListenAddress is set
+	// - NetAddress or P2PNetAddress is set
 	// - EnableGossipService
 	if !nd.config.EnableP2P && !nd.config.EnableP2PHybridMode {
 		return errors.New("p2p bootstrap requires EnableP2P or EnableP2PHybridMode to be set")
 	}
-	if nd.NetAddress == "" && nd.config.P2PListenAddress == "" {
-		return errors.New("p2p bootstrap requires NetAddress or P2PListenAddress to be set")
+	if nd.NetAddress == "" && nd.config.P2PNetAddress == "" {
+		return errors.New("p2p bootstrap requires NetAddress or P2PNetAddress to be set")
 	}
 	if !nd.config.EnableGossipService {
 		return errors.New("p2p bootstrap requires EnableGossipService to be set")
 	}
 
 	netAddress := nd.NetAddress
-	if nd.config.P2PListenAddress != "" {
-		netAddress = nd.config.P2PListenAddress
+	if nd.config.P2PNetAddress != "" {
+		netAddress = nd.config.P2PNetAddress
 	}
 
 	key, err := p2p.GetPrivKey(config.Local{P2PPersistPeerID: true}, nd.dataDir)

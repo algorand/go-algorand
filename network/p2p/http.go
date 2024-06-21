@@ -85,7 +85,7 @@ func MakeHTTPClientWithRateLimit(addrInfo *peer.AddrInfo, pstore limitcaller.Con
 	if err != nil {
 		return nil, err
 	}
-	rlrt := limitcaller.MakeRateLimitingTransportWithTransport(pstore, queueingTimeout, cl.Transport, addrInfo, maxIdleConnsPerHost)
+	rlrt := limitcaller.MakeRateLimitingTransportWithRoundTripper(pstore, queueingTimeout, cl.Transport, addrInfo, maxIdleConnsPerHost)
 	cl.Transport = &rlrt
 	return cl, nil
 

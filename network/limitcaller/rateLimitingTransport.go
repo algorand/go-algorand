@@ -22,12 +22,13 @@ import (
 	"time"
 
 	"github.com/algorand/go-algorand/util"
+	"github.com/libp2p/go-libp2p/core/peer"
 )
 
 // ConnectionTimeStore is a subset of the phonebook that is used to store the connection times.
 type ConnectionTimeStore interface {
-	GetConnectionWaitTime(addrOrInfo interface{}) (bool, time.Duration, time.Time)
-	UpdateConnectionTime(addrOrInfo interface{}, provisionalTime time.Time) bool
+	GetConnectionWaitTime(addrOrPeerID string) (bool, time.Duration, time.Time)
+	UpdateConnectionTime(addrOrPeerID string, provisionalTime time.Time) bool
 }
 
 // RateLimitingTransport is the transport for execute a single HTTP transaction, obtaining the Response for a given Request.
@@ -64,9 +65,9 @@ func MakeRateLimitingTransport(phonebook ConnectionTimeStore, queueingTimeout ti
 	}
 }
 
-// MakeRateLimitingTransportWithTransport creates a rate limiting http transport that would limit the requests rate
+// MakeRateLimitingTransportWithRoundTripper creates a rate limiting http transport that would limit the requests rate
 // according to the entries in the phonebook.
-func MakeRateLimitingTransportWithTransport(phonebook ConnectionTimeStore, queueingTimeout time.Duration, rt http.RoundTripper, target interface{}, maxIdleConnsPerHost int) RateLimitingTransport {
+func MakeRateLimitingTransportWithRoundTripper(phonebook ConnectionTimeStore, queueingTimeout time.Duration, rt http.RoundTripper, target interface{}, maxIdleConnsPerHost int) RateLimitingTransport {
 	return RateLimitingTransport{
 		phonebook:       phonebook,
 		innerTransport:  rt,
@@ -81,13 +82,17 @@ func (r *RateLimitingTransport) RoundTrip(req *http.Request) (res *http.Response
 	var waitTime time.Duration
 	var provisionalTime time.Time
 	queueingDeadline := time.Now().Add(r.queueingTimeout)
-	var host interface{} = req.Host
+	addrOrPeerID := req.Host
+	// p2p/http clients have per-connection transport and address info so use that
 	if len(req.Host) == 0 && req.URL != nil && len(req.URL.Host) == 0 {
-		// p2p/http clients have per-connection transport and address info so use that
-		host = r.targetAddr
+		addrInfo, ok := r.targetAddr.(*peer.AddrInfo)
+		if !ok {
+			return nil, errors.New("rateLimitingTransport: request without Host/URL and targetAddr is not a peer.AddrInfo")
+		}
+		addrOrPeerID = string(addrInfo.ID)
 	}
 	for {
-		_, waitTime, provisionalTime = r.phonebook.GetConnectionWaitTime(host)
+		_, waitTime, provisionalTime = r.phonebook.GetConnectionWaitTime(addrOrPeerID)
 		if waitTime == 0 {
 			break // break out of the loop and proceed to the connection
 		}
@@ -99,6 +104,6 @@ func (r *RateLimitingTransport) RoundTrip(req *http.Request) (res *http.Response
 		return nil, ErrConnectionQueueingTimeout
 	}
 	res, err = r.innerTransport.RoundTrip(req)
-	r.phonebook.UpdateConnectionTime(host, provisionalTime)
+	r.phonebook.UpdateConnectionTime(addrOrPeerID, provisionalTime)
 	return
 }

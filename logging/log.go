@@ -319,7 +319,7 @@ func (l logger) getOutput() io.Writer {
 }
 
 func (l logger) SetJSONFormatter() {
-	l.entry.Logger.Formatter = &logrus.JSONFormatter{TimestampFormat: "2006-01-02T15:04:05.000000Z07:00"}
+	l.entry.Logger.SetFormatter(&logrus.JSONFormatter{TimestampFormat: "2006-01-02T15:04:05.000000Z07:00"})
 }
 
 func (l logger) Entry() *logrus.Entry {

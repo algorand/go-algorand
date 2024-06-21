@@ -289,7 +289,7 @@ func (s *Server) Start() {
 	fmt.Print("Initializing the Algorand node... ")
 	err := s.node.Start()
 	if err != nil {
-		msg := fmt.Sprintf("Failed to start alg Algorand node: %v", err)
+		msg := fmt.Sprintf("Failed to start an Algorand node: %v", err)
 		s.log.Error(msg)
 		fmt.Println(msg)
 		os.Exit(1)

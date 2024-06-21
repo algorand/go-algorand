@@ -45,7 +45,6 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util"
 	"github.com/algorand/go-algorand/util/db"
-	"github.com/algorand/go-algorand/util/execpool"
 )
 
 var expectedAgreementTime = 2*config.Protocol.BigLambda + config.Protocol.SmallLambda + config.Consensus[protocol.ConsensusCurrentVersion].AgreementFilterTimeout + 2*time.Second
@@ -86,7 +85,7 @@ func (ni nodeInfo) p2pMultiAddr() string {
 type configHook func(ni nodeInfo, cfg config.Local) (nodeInfo, config.Local)
 type phonebookHook func([]nodeInfo, int) []string
 
-func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationPool execpool.BacklogPool, customConsensus config.ConsensusProtocols) ([]*AlgorandFullNode, []string) {
+func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, customConsensus config.ConsensusProtocols) ([]*AlgorandFullNode, []string) {
 	minMoneyAtStart := 10000
 	maxMoneyAtStart := 100000
 	gen := rand.New(rand.NewSource(2))
@@ -111,14 +110,14 @@ func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationP
 		}
 		return phonebook
 	}
-	nodes, wallets := setupFullNodesEx(t, proto, verificationPool, customConsensus, acctStake, configHook, phonebookHook)
+	nodes, wallets := setupFullNodesEx(t, proto, customConsensus, acctStake, configHook, phonebookHook)
 	require.Len(t, nodes, numAccounts)
 	require.Len(t, wallets, numAccounts)
 	return nodes, wallets
 }
 
 func setupFullNodesEx(
-	t *testing.T, proto protocol.ConsensusVersion, verificationPool execpool.BacklogPool, customConsensus config.ConsensusProtocols,
+	t *testing.T, proto protocol.ConsensusVersion, customConsensus config.ConsensusProtocols,
 	acctStake []basics.MicroAlgos, configHook configHook, phonebookHook phonebookHook,
 ) ([]*AlgorandFullNode, []string) {
 
@@ -264,10 +263,7 @@ func TestSyncingFullNode(t *testing.T) {
 		t.Skip("Test is too heavy for amd64 builder running in parallel with other packages")
 	}
 
-	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
-	defer backlogPool.Shutdown()
-
-	nodes, wallets := setupFullNodes(t, protocol.ConsensusCurrentVersion, backlogPool, nil)
+	nodes, wallets := setupFullNodes(t, protocol.ConsensusCurrentVersion, nil)
 	for i := 0; i < len(nodes); i++ {
 		defer os.Remove(wallets[i])
 		defer nodes[i].Stop()
@@ -329,10 +325,7 @@ func TestInitialSync(t *testing.T) {
 		t.Skip("Test is too heavy for amd64 builder running in parallel with other packages")
 	}
 
-	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
-	defer backlogPool.Shutdown()
-
-	nodes, wallets := setupFullNodes(t, protocol.ConsensusCurrentVersion, backlogPool, nil)
+	nodes, wallets := setupFullNodes(t, protocol.ConsensusCurrentVersion, nil)
 	for i := 0; i < len(nodes); i++ {
 		defer os.Remove(wallets[i])
 		defer nodes[i].Stop()
@@ -370,9 +363,6 @@ func TestSimpleUpgrade(t *testing.T) {
 		t.Skip("Test is too heavy for amd64 builder running in parallel with other packages")
 	}
 
-	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
-	defer backlogPool.Shutdown()
-
 	// ConsensusTest0 is a version of ConsensusV0 used for testing
 	// (it has different approved upgrade paths).
 	const consensusTest0 = protocol.ConsensusVersion("test0")
@@ -409,7 +399,7 @@ func TestSimpleUpgrade(t *testing.T) {
 	testParams1.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 	configurableConsensus[consensusTest1] = testParams1
 
-	nodes, wallets := setupFullNodes(t, consensusTest0, backlogPool, configurableConsensus)
+	nodes, wallets := setupFullNodes(t, consensusTest0, configurableConsensus)
 	for i := 0; i < len(nodes); i++ {
 		defer os.Remove(wallets[i])
 		defer nodes[i].Stop()
@@ -896,16 +886,14 @@ func TestNodeHybridTopology(t *testing.T) {
 		ni.p2pID, err = p2p.PeerIDFromPublicKey(privKey.GetPublic())
 		require.NoError(t, err)
 
-		cfg.P2PListenAddress = ni.p2pNetAddr()
+		cfg.P2PNetAddress = ni.p2pNetAddr()
 		return ni, cfg
 	}
 
 	phonebookHook := func(ni []nodeInfo, i int) []string {
 		switch i {
 		case 0:
-			// node 0 (N) only accept connections to work around the peer selector
-			// ConnectedOut priority. TODO: merge switching to archival peers from master
-			// when ready.
+			// node 0 (N) only accept connections at the beginning to learn about archival node from DHT
 			t.Logf("Node%d phonebook: empty", i)
 			return []string{}
 		case 1:
@@ -923,10 +911,7 @@ func TestNodeHybridTopology(t *testing.T) {
 		return nil
 	}
 
-	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
-	defer backlogPool.Shutdown()
-
-	nodes, wallets := setupFullNodesEx(t, consensusTest0, backlogPool, configurableConsensus, acctStake, configHook, phonebookHook)
+	nodes, wallets := setupFullNodesEx(t, consensusTest0, configurableConsensus, acctStake, configHook, phonebookHook)
 	require.Len(t, nodes, 3)
 	require.Len(t, wallets, 3)
 	for i := 0; i < len(nodes); i++ {
@@ -1017,10 +1002,7 @@ func TestNodeP2PRelays(t *testing.T) {
 		return nil
 	}
 
-	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
-	defer backlogPool.Shutdown()
-
-	nodes, wallets := setupFullNodesEx(t, consensusTest0, backlogPool, configurableConsensus, acctStake, configHook, phonebookHook)
+	nodes, wallets := setupFullNodesEx(t, consensusTest0, configurableConsensus, acctStake, configHook, phonebookHook)
 	require.Len(t, nodes, 3)
 	require.Len(t, wallets, 3)
 	for i := 0; i < len(nodes); i++ {

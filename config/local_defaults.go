@@ -119,7 +119,7 @@ var defaultLocal = Local{
 	OptimizeAccountsDatabaseOnStartup:          false,
 	OutgoingMessageFilterBucketCount:           3,
 	OutgoingMessageFilterBucketSize:            128,
-	P2PListenAddress:                           "",
+	P2PNetAddress:                              "",
 	P2PPersistPeerID:                           false,
 	P2PPrivateKeyLocation:                      "",
 	ParticipationKeysRefreshInterval:           60000000000,

@@ -55,12 +55,12 @@ type Phonebook interface {
 	// The connection should be established when the waitTime is 0.
 	// It will register a provisional next connection time when the waitTime is 0.
 	// The provisional time should be updated after the connection with UpdateConnectionTime
-	GetConnectionWaitTime(addr interface{}) (addrInPhonebook bool,
+	GetConnectionWaitTime(addrOrPeerID string) (addrInPhonebook bool,
 		waitTime time.Duration, provisionalTime time.Time)
 
 	// UpdateConnectionTime will update the provisional connection time.
 	// Returns true of the addr was in the phonebook
-	UpdateConnectionTime(addr interface{}, provisionalTime time.Time) bool
+	UpdateConnectionTime(addrOrPeerID string, provisionalTime time.Time) bool
 
 	// ReplacePeerList merges a set of addresses with that passed in for networkName
 	// new entries in dnsAddresses are being added
@@ -231,10 +231,10 @@ func (e *phonebookImpl) UpdateRetryAfter(addr string, retryAfter time.Time) {
 // The connection should be established when the waitTime is 0.
 // It will register a provisional next connection time when the waitTime is 0.
 // The provisional time should be updated after the connection with UpdateConnectionTime
-func (e *phonebookImpl) GetConnectionWaitTime(a interface{}) (addrInPhonebook bool,
+func (e *phonebookImpl) GetConnectionWaitTime(addrOrPeerID string) (addrInPhonebook bool,
 	waitTime time.Duration, provisionalTime time.Time) {
 
-	addr := a.(string)
+	addr := addrOrPeerID
 	e.lock.Lock()
 	defer e.lock.Unlock()
 
@@ -278,8 +278,8 @@ func (e *phonebookImpl) GetConnectionWaitTime(a interface{}) (addrInPhonebook bo
 
 // UpdateConnectionTime will update the provisional connection time.
 // Returns true of the addr was in the phonebook
-func (e *phonebookImpl) UpdateConnectionTime(a interface{}, provisionalTime time.Time) bool {
-	addr := a.(string)
+func (e *phonebookImpl) UpdateConnectionTime(addrOrPeerID string, provisionalTime time.Time) bool {
+	addr := addrOrPeerID
 	e.lock.Lock()
 	defer e.lock.Unlock()
 

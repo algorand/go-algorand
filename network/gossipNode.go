@@ -29,8 +29,8 @@ import (
 // Peer opaque interface for referring to a neighbor in the network
 type Peer interface{}
 
-// DisconnectablePeer is a Peer with a long-living connection to a network that can be disconnected
-type DisconnectablePeer interface {
+// DeadlineSettableConn is a Peer with a long-living connection to a network that can be disconnected
+type DeadlineSettableConn interface {
 	GetNetwork() GossipNode
 }
 
@@ -62,7 +62,7 @@ type GossipNode interface {
 	Address() (string, bool)
 	Broadcast(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except Peer) error
 	Relay(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except Peer) error
-	Disconnect(badnode DisconnectablePeer)
+	Disconnect(badnode DeadlineSettableConn)
 	DisconnectPeers() // only used by testing
 
 	// RegisterHTTPHandler path accepts gorilla/mux path annotations
@@ -127,7 +127,7 @@ var outgoingMessagesBufferSize = int(
 
 // IncomingMessage represents a message arriving from some peer in our p2p network
 type IncomingMessage struct {
-	Sender DisconnectablePeer
+	Sender DeadlineSettableConn
 	Tag    Tag
 	Data   []byte
 	Err    error
@@ -171,9 +171,9 @@ type OutgoingMessage struct {
 // ValidatedMessage is a message that has been validated and is ready to be processed.
 // Think as an intermediate one between IncomingMessage and OutgoingMessage
 type ValidatedMessage struct {
-	Action        ForwardingPolicy
-	Tag           Tag
-	ValidatorData interface{}
+	Action           ForwardingPolicy
+	Tag              Tag
+	ValidatedMessage interface{}
 }
 
 // ForwardingPolicy is an enum indicating to whom we should send a message

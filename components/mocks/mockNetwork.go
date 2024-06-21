@@ -60,7 +60,7 @@ func (network *MockNetwork) RequestConnectOutgoing(replace bool, quit <-chan str
 }
 
 // Disconnect - unused function
-func (network *MockNetwork) Disconnect(badpeer network.DisconnectablePeer) {
+func (network *MockNetwork) Disconnect(badpeer network.DeadlineSettableConn) {
 }
 
 // DisconnectPeers - unused function
