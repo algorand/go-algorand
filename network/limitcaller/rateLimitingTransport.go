@@ -85,7 +85,11 @@ func (r *RateLimitingTransport) RoundTrip(req *http.Request) (res *http.Response
 	addrOrPeerID := req.Host
 	// p2p/http clients have per-connection transport and address info so use that
 	if len(req.Host) == 0 && req.URL != nil && len(req.URL.Host) == 0 {
-		addrOrPeerID = string(r.targetAddr.(*peer.AddrInfo).ID)
+		addrInfo, ok := r.targetAddr.(*peer.AddrInfo)
+		if !ok {
+			return nil, errors.New("rateLimitingTransport: request without Host/URL and targetAddr is not a peer.AddrInfo")
+		}
+		addrOrPeerID = string(addrInfo.ID)
 	}
 	for {
 		_, waitTime, provisionalTime = r.phonebook.GetConnectionWaitTime(addrOrPeerID)
