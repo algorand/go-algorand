@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/algorand/go-algorand/network/phonebook"
+	"github.com/algorand/go-deadlock"
 	"github.com/libp2p/go-libp2p/core/peer"
 	libp2p "github.com/libp2p/go-libp2p/core/peerstore"
 	mempstore "github.com/libp2p/go-libp2p/p2p/host/peerstore/pstoremem"
@@ -53,6 +54,7 @@ type addressData struct {
 
 	// networkNames: lists the networks to which the given address belongs.
 	networkNames map[string]bool
+	mu           *deadlock.RWMutex
 
 	// role is the role that this address serves.
 	role phonebook.PhoneBookEntryRoles
@@ -216,9 +218,11 @@ func (ps *PeerStore) ReplacePeerList(addressesThey []interface{}, networkName st
 		data, _ := ps.Get(pid, addressDataKey)
 		if data != nil {
 			ad := data.(addressData)
+			ad.mu.RLock()
 			if ad.networkNames[networkName] && ad.role == role && !ad.persistent {
 				removeItems[pid] = true
 			}
+			ad.mu.RUnlock()
 		}
 
 	}
@@ -229,7 +233,9 @@ func (ps *PeerStore) ReplacePeerList(addressesThey []interface{}, networkName st
 			// we already have this.
 			// Update the networkName
 			ad := data.(addressData)
+			ad.mu.Lock()
 			ad.networkNames[networkName] = true
+			ad.mu.Unlock()
 
 			// do not remove this entry
 			delete(removeItems, info.ID)
@@ -278,6 +284,7 @@ func (ps *PeerStore) Length() int {
 func makePhonebookEntryData(networkName string, role phonebook.PhoneBookEntryRoles, persistent bool) addressData {
 	pbData := addressData{
 		networkNames:          make(map[string]bool),
+		mu:                    &deadlock.RWMutex{},
 		recentConnectionTimes: make([]time.Time, 0),
 		role:                  role,
 		persistent:            persistent,
@@ -292,8 +299,11 @@ func (ps *PeerStore) deletePhonebookEntry(peerID peer.ID, networkName string) {
 		return
 	}
 	ad := data.(addressData)
+	ad.mu.Lock()
 	delete(ad.networkNames, networkName)
-	if len(ad.networkNames) == 0 {
+	isEmpty := len(ad.networkNames) == 0
+	ad.mu.Unlock()
+	if isEmpty {
 		ps.ClearAddrs(peerID)
 		_ = ps.Put(peerID, addressDataKey, nil)
 	}
