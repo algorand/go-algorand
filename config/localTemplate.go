@@ -597,7 +597,8 @@ type Local struct {
 	// When it exceeds this capacity, it redirects the block requests to a different node
 	BlockServiceMemCap uint64 `version[28]:"500000000"`
 
-	// EnableP2P turns on the peer to peer network
+	// EnableP2P turns on the peer to peer network.
+	// When both EnableP2P and EnableP2PHybridMode (below) are set, EnableP2PHybridMode takes precedence.
 	EnableP2P bool `version[31]:"false"`
 
 	// EnableP2PHybridMode turns on both websockets and P2P networking.
