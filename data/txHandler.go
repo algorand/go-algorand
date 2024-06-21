@@ -271,6 +271,9 @@ func (handler *TxHandler) Start() {
 
 // Stop suspends the processing of incoming messages at the transaction handler
 func (handler *TxHandler) Stop() {
+	logging.Base().Debug("transaction handler is stopping")
+	defer logging.Base().Debug("transaction handler is stopping")
+
 	handler.ctxCancel()
 	if handler.erl != nil {
 		handler.erl.Stop()

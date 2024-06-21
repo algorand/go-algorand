@@ -102,6 +102,9 @@ func (ls *LedgerService) Start() {
 // Stop servicing catchup requests
 func (ls *LedgerService) Stop() {
 	if ls.enableService {
+		logging.Base().Debug("ledger service is stopping")
+		defer logging.Base().Debug("ledger service has stopped")
+
 		ls.running.Store(0)
 		ls.stopping.Wait()
 	}

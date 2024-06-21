@@ -161,6 +161,9 @@ func (s *Service) Start() {
 
 // Stop informs the catchup service that it should stop, and waits for it to stop (when periodicSync() exits)
 func (s *Service) Stop() {
+	s.log.Debug("catchup service is stopping")
+	defer s.log.Debug("catchup service has stopped")
+
 	s.cancel()
 	s.workers.Wait()
 	if s.initialSyncNotified.CompareAndSwap(0, 1) {
@@ -757,6 +760,13 @@ func (s *Service) fetchRound(cert agreement.Certificate, verifier *agreement.Asy
 		psp, getPeerErr := ps.getNextPeer()
 		if getPeerErr != nil {
 			s.log.Debugf("fetchRound: was unable to obtain a peer to retrieve the block from")
+			select {
+			case <-s.ctx.Done():
+				logging.Base().Debugf("fetchRound was asked to quit while collecting peers")
+				return
+			default:
+			}
+
 			s.net.RequestConnectOutgoing(true, s.ctx.Done())
 			continue
 		}

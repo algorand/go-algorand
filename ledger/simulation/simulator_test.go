@@ -142,7 +142,7 @@ int 1`,
 
 	mockTracer := &mocktracer.Tracer{}
 	s.ledger.start = s.ledger.Ledger.Latest() // Set starting round for simulation
-	block, err := s.simulateWithTracer(txgroup, mockTracer, ResultEvalOverrides{})
+	block, err := s.simulateWithTracer(transactions.WrapSignedTxnsWithAD(txgroup), mockTracer, ResultEvalOverrides{})
 	require.NoError(t, err)
 
 	evalBlock := block.Block()

@@ -3944,6 +3944,10 @@
         },
         "exec-trace-config": {
           "$ref": "#/definitions/SimulateTraceConfig"
+        },
+        "fix-signers": {
+          "description": "If true, signers for transactions that are missing signatures will be fixed during evaluation.",
+          "type": "boolean"
         }
       }
     },
@@ -4287,6 +4291,11 @@
         },
         "unnamed-resources-accessed": {
           "$ref": "#/definitions/SimulateUnnamedResourcesAccessed"
+        },
+        "fixed-signer":{
+          "description": "The account that needed to sign this transaction when no signature was provided and the provided signer was incorrect.",
+          "type": "string",
+          "x-algorand-format": "Address"
         }
       }
     },
@@ -4393,6 +4402,10 @@
         "extra-opcode-budget": {
           "description": "The extra opcode budget added to each transaction group during simulation",
           "type": "integer"
+        },
+        "fix-signers": {
+          "description": "If true, signers for transactions that are missing signatures will be fixed during evaluation.",
+          "type": "boolean"
         }
       }
     },

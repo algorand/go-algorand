@@ -415,13 +415,14 @@ func (n Network) StartNode(binDir, nodeDir string, redirectOutput bool) (err err
 
 // Stop the network, ensuring primary relay stops first
 // No return code - we try to kill them if we can (if we read valid PID file)
-func (n Network) Stop(binDir string) {
-	c := make(chan struct{}, len(n.cfg.RelayDirs)+len(n.nodeDirs))
+func (n Network) Stop(binDir string) (err error) {
+	c := make(chan error, len(n.cfg.RelayDirs)+len(n.nodeDirs))
 	stopNodeContoller := func(nc *nodecontrol.NodeController) {
+		var stopErr error
 		defer func() {
-			c <- struct{}{}
+			c <- stopErr
 		}()
-		nc.FullStop()
+		stopErr = nc.FullStop()
 	}
 	for _, relayDir := range n.cfg.RelayDirs {
 		relayDataDir := n.getNodeFullPath(relayDir)
@@ -439,9 +440,13 @@ func (n Network) Stop(binDir string) {
 	}
 	// wait until we finish stopping all the node controllers.
 	for i := cap(c); i > 0; i-- {
-		<-c
+		stopErr := <-c
+		if stopErr != nil {
+			err = stopErr
+		}
 	}
 	close(c)
+	return err
 }
 
 // NetworkNodeStatus represents the result from checking the status of a particular node instance

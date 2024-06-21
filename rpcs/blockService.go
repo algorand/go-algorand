@@ -170,6 +170,9 @@ func (bs *BlockService) Start() {
 
 // Stop servicing catchup requests over ws
 func (bs *BlockService) Stop() {
+	bs.log.Debug("block service is stopping")
+	defer bs.log.Debug("block service has stopped")
+
 	bs.mu.Lock()
 	close(bs.stop)
 	bs.mu.Unlock()
