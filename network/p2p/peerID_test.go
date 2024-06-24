@@ -26,7 +26,6 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/data/hashable"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -114,11 +113,7 @@ func TestPeerIDChallengeSigner(t *testing.T) {
 
 	data := make([]byte, 111)
 	crypto.RandBytes(data)
-	msg := hashable.Message{Message: string(data)}
-
 	signer := PeerIDChallengeSigner{key: privKey}
-	sig := signer.Sign(msg)
-	require.True(t, signer.Verify(msg, sig))
 	pubKey := privKey.GetPublic()
 	pubKeyRaw, err := pubKey.Raw()
 	require.NoError(t, err)

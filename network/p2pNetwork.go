@@ -272,7 +272,10 @@ func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebo
 		net.identityTracker = noopIdentityTracker{}
 	}
 
-	p2p.EnableP2PLogging(log, logging.Level(cfg.BaseLoggerDebugLevel))
+	err = p2p.EnableP2PLogging(log, logging.Level(cfg.BaseLoggerDebugLevel))
+	if err != nil {
+		return nil, err
+	}
 
 	h, la, err := p2p.MakeHost(cfg, datadir, pstore)
 	if err != nil {
@@ -387,7 +390,16 @@ func (n *P2PNetwork) Stop() {
 		n.wsPeersConnectivityCheckTicker = nil
 	}
 	n.innerStop()
+
+	// This is a workaround for a race between PubSub.processLoop (triggered by context cancellation below) termination
+	// and this function returning that causes main goroutine to exit before
+	// PubSub.processLoop goroutine finishes logging its termination message
+	// to already closed logger. Not seen in wild, only in tests.
+	if n.log.GetLevel() >= logging.Warn {
+		_ = p2p.SetP2PLogLevel(logging.Warn)
+	}
 	n.ctxCancel()
+
 	n.service.Close()
 	n.bootstrapperStop()
 	n.httpServer.Close()

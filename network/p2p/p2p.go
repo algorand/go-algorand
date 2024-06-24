@@ -155,7 +155,6 @@ func MakeService(ctx context.Context, log logging.Logger, cfg config.Local, h ho
 		return nil, err
 	}
 	return &serviceImpl{
-
 		log:        log,
 		listenAddr: listenAddr,
 		host:       h,
