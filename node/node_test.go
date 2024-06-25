@@ -165,9 +165,6 @@ func setupFullNodesEx(
 
 		t.Logf("Root directory of node %d (%s): %s\n", i, ni.wsNetAddr(), rootDirectory)
 
-		// // Save empty phonebook - we'll add peers after they've been assigned listening ports
-		// err := config.SavePhonebookToDisk(make([]string, 0), rootDirectory)
-		// require.NoError(t, err)
 
 		genesisDir := filepath.Join(rootDirectory, g.ID())
 		os.Mkdir(genesisDir, 0700)
