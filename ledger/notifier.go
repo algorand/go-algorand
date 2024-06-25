@@ -74,6 +74,8 @@ func (bn *blockNotifier) worker() {
 
 func (bn *blockNotifier) close() {
 	bn.mu.Lock()
+	bn.pendingBlocks = nil
+	bn.listeners = nil
 	if bn.running {
 		bn.running = false
 		bn.cond.Broadcast()
