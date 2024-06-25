@@ -452,6 +452,10 @@ func (pool *TransactionPool) ingest(txgroup []transactions.SignedTxn, params poo
 			if pool.pendingBlockEvaluator == nil {
 				return ErrNoPendingBlockEvaluator
 			}
+			// recheck if the pool is shutting down since TimedWait above releases the lock
+			if pool.shutdown {
+				return errPoolShutdown
+			}
 		}
 
 		err := pool.checkSufficientFee(txgroup)
