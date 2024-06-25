@@ -309,7 +309,8 @@ func TestCapabilities_Varying(t *testing.T) {
 			wg.Wait()
 
 			for _, disc := range capsDisc[3:] {
-				disc.Close()
+				err := disc.Close()
+				require.NoError(t, err)
 				// Make sure it actually closes
 				disc.wg.Wait()
 			}
@@ -347,6 +348,7 @@ func TestCapabilities_ExcludesSelf(t *testing.T) {
 		"Found self when searching for capability",
 	)
 
-	disc[0].Close()
+	err := disc[0].Close()
+	require.NoError(t, err)
 	disc[0].wg.Wait()
 }
