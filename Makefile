@@ -12,8 +12,8 @@ SRCPATH     := $(shell pwd)
 ARCH        := $(shell ./scripts/archtype.sh)
 OS_TYPE     := $(shell ./scripts/ostype.sh)
 # overrides for cross-compiling platform-specific binaries
-ifdef BUILDARCH
-  ARCH := $(BUILDARCH)
+ifdef CROSS_COMPILE_ARCH
+  ARCH := $(CROSS_COMPILE_ARCH)
   GO_INSTALL := CGO_ENABLED=1 GOOS=$(OS_TYPE) GOARCH=$(ARCH) go build -o $(GOPATH1)/bin-$(OS_TYPE)-$(ARCH)
 else
   GO_INSTALL := go install
@@ -168,11 +168,11 @@ universal:
 ifeq ($(OS_TYPE),darwin)
 	# build amd64 Mac binaries
 	mkdir -p $(GOPATH1)/bin-darwin-amd64
-	BUILDARCH=amd64 GOBIN=$(GOPATH1)/bin-darwin-amd64 EXTRA_CONFIGURE_FLAGS='CFLAGS="-arch x86_64" --host=x86_64-apple-darwin' $(MAKE)
+	CROSS_COMPILE_ARCH=amd64 GOBIN=$(GOPATH1)/bin-darwin-amd64 EXTRA_CONFIGURE_FLAGS='CFLAGS="-arch x86_64" --host=x86_64-apple-darwin' $(MAKE)
 
 	# build arm64 Mac binaries
 	mkdir -p $(GOPATH1)/bin-darwin-arm64
-	BUILDARCH=arm64 GOBIN=$(GOPATH1)/bin-darwin-arm64 EXTRA_CONFIGURE_FLAGS='CFLAGS="-arch arm64" --host=aarch64-apple-darwin' $(MAKE)
+	CROSS_COMPILE_ARCH=arm64 GOBIN=$(GOPATH1)/bin-darwin-arm64 EXTRA_CONFIGURE_FLAGS='CFLAGS="-arch arm64" --host=aarch64-apple-darwin' $(MAKE)
 
 	# lipo together
 	mkdir -p $(GOPATH1)/bin-darwin-universal
