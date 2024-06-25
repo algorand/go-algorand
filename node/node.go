@@ -154,6 +154,7 @@ type AlgorandFullNode struct {
 	tracer messagetracer.MessageTracer
 
 	stateProofWorker *stateproof.Worker
+	partHandles      []db.Accessor
 }
 
 // TxnWithStatus represents information about a single transaction,
@@ -447,6 +448,12 @@ func (node *AlgorandFullNode) Stop() {
 	defer func() {
 		node.mu.Unlock()
 		node.waitMonitoringRoutines()
+
+		// oldKeyDeletionThread uses accountManager registry so must be stopped before accountManager is closed
+		node.accountManager.Registry().Close()
+		for h := range node.partHandles {
+			node.partHandles[h].Close()
+		}
 	}()
 
 	node.net.ClearHandlers()
@@ -459,6 +466,7 @@ func (node *AlgorandFullNode) Stop() {
 		node.stateProofWorker.Stop()
 		node.txHandler.Stop()
 		node.agreementService.Shutdown()
+		node.agreementService.Accessor.Close()
 		node.catchupService.Stop()
 		node.txPoolSyncerService.Stop()
 		node.blockService.Stop()
@@ -470,8 +478,9 @@ func (node *AlgorandFullNode) Stop() {
 	node.lowPriorityCryptoVerificationPool.Shutdown()
 	node.cryptoPool.Shutdown()
 	node.log.Debug("crypto worker pools have stopped")
-	node.ledger.Close()
+	node.transactionPool.Shutdown()
 	node.cancelCtx()
+	node.ledger.Close()
 }
 
 // note: unlike the other two functions, this accepts a whole filename
@@ -1017,12 +1026,12 @@ func (node *AlgorandFullNode) loadParticipationKeys() error {
 			// These files are not ephemeral and must be deleted eventually since
 			// this function is called to load files located in the node on startup
 			added := node.accountManager.AddParticipation(part, false)
-			if added {
-				node.log.Infof("Loaded participation keys from storage: %s %s", part.Address(), info.Name())
-			} else {
+			if !added {
 				part.Close()
 				continue
 			}
+			node.log.Infof("Loaded participation keys from storage: %s %s", part.Address(), info.Name())
+			node.partHandles = append(node.partHandles, handle)
 			err = insertStateProofToRegistry(part, node)
 			if err != nil {
 				return err
@@ -1054,7 +1063,7 @@ func (node *AlgorandFullNode) txPoolGaugeThread(done <-chan struct{}) {
 	defer node.monitoringRoutinesWaitGroup.Done()
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
-	for true {
+	for {
 		select {
 		case <-ticker.C:
 			txPoolGauge.Set(uint64(node.transactionPool.PendingCount()))
