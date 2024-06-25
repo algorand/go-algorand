@@ -777,21 +777,19 @@ type validatedIncomingTxMessage struct {
 
 // validateIncomingTxMessage is the validator for the MessageProcessor implementation used by P2PNetwork.
 func (handler *TxHandler) validateIncomingTxMessage(rawmsg network.IncomingMessage) network.ValidatedMessage {
-	msgKey, capguard, shouldDrop := handler.incomingMsgDupErlCheck(rawmsg.Data, rawmsg.Sender)
+	var msgKey *crypto.Digest
+	var isDup bool
 
-	accepted := false
-	defer func() {
-		// if we failed to put the item onto the backlog, we should release the capacity if any
-		if !accepted && capguard != nil {
-			if capErr := capguard.Release(); capErr != nil {
-				logging.Base().Warnf("validateIncomingTxMessage: failed to release capacity to ElasticRateLimiter: %v", capErr)
-			}
+	if handler.msgCache != nil {
+		// check for duplicate messages
+		// this helps against relaying duplicates
+
+		// note, this is the same check as in incomingMsgDupErlCheck prologue
+		// but for p2p network handlers no ERL needed because libp2p has own congestion control
+		if msgKey, isDup = handler.msgCache.CheckAndPut(rawmsg.Data); isDup {
+			transactionMessagesDupRawMsg.Inc(nil)
+			return network.ValidatedMessage{Action: network.Ignore, ValidatedMessage: nil}
 		}
-	}()
-
-	if shouldDrop {
-		// this TX message was found in the duplicate cache, or ERL rate-limited it
-		return network.ValidatedMessage{Action: network.Ignore, ValidatedMessage: nil}
 	}
 
 	unverifiedTxGroup, consumed, invalid := decodeMsg(rawmsg.Data)
@@ -807,7 +805,6 @@ func (handler *TxHandler) validateIncomingTxMessage(rawmsg network.IncomingMessa
 		return network.ValidatedMessage{Action: network.Ignore, ValidatedMessage: nil}
 	}
 
-	accepted = true
 	return network.ValidatedMessage{
 		Action: network.Accept,
 		Tag:    rawmsg.Tag,
@@ -816,7 +813,7 @@ func (handler *TxHandler) validateIncomingTxMessage(rawmsg network.IncomingMessa
 			unverifiedTxGroup: unverifiedTxGroup,
 			msgKey:            msgKey,
 			canonicalKey:      canonicalKey,
-			capguard:          capguard,
+			capguard:          nil,
 		},
 	}
 }
