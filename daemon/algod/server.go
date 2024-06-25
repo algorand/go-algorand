@@ -28,6 +28,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 	"time"
@@ -230,8 +231,15 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 			NodeExporterPath:          cfg.NodeExporterPath,
 		})
 
-	var algodEnvironmentAlgodVersionCounter = metrics.MakeCounter(metrics.MetricName{Name: "algod_environment_algod_version", Description: "Version of the Algod binary"})
-	algodEnvironmentAlgodVersionCounter.Inc(map[string]string{"version": config.GetAlgorandVersionAndBuild()})
+	var currentVersion = config.GetCurrentVersion()
+	var algodEnvironmentAlgodVersionGauge = metrics.MakeGauge(metrics.MetricName{Name: "algod_environment_algod_version", Description: "Version of the Algod binary"})
+	algodEnvironmentAlgodVersionGauge.SetLabels(1, map[string]string{
+		"version": fmt.Sprintf("%d.%d.%d", currentVersion.Major, currentVersion.Minor, currentVersion.BuildNumber),
+		"goarch":  runtime.GOARCH,
+		"goos":    runtime.GOOS,
+		"commit":  currentVersion.CommitHash,
+		"channel": currentVersion.Channel,
+	})
 
 	var serverNode ServerNode
 	if cfg.EnableFollowMode {

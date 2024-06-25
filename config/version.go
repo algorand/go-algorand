@@ -18,7 +18,6 @@ package config
 
 import (
 	"fmt"
-	"runtime"
 	"strconv"
 )
 
@@ -134,11 +133,6 @@ func UpdateVersionDataDir(dataDir string) {
 // GetAlgorandVersion retrieves the current version formatted as a simple version string (Major.Minor.BuildNumber)
 func GetAlgorandVersion() string {
 	return currentVersion.String()
-}
-
-// GetAlgorandVersionAndBuild retrieves the current version and build
-func GetAlgorandVersionAndBuild() string {
-	return fmt.Sprintf("algod/%d.%d.%d (%s; commit=%s) %s(%s)", currentVersion.Major, currentVersion.Minor, currentVersion.BuildNumber, currentVersion.Channel, currentVersion.CommitHash, runtime.GOOS, runtime.GOARCH)
 }
 
 // GetLicenseInfo retrieves the current license information
