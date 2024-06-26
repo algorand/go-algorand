@@ -426,6 +426,11 @@ func (l *Ledger) RegisterBlockListeners(listeners []ledgercore.BlockListener) {
 	l.notifier.register(listeners)
 }
 
+// ClearBlockListeners removes all listeners block listeners.
+func (l *Ledger) ClearBlockListeners() {
+	l.notifier.clear()
+}
+
 // RegisterVotersCommitListener registers a listener that will be called when a
 // commit is about to cover a round.
 func (l *Ledger) RegisterVotersCommitListener(listener ledgercore.VotersCommitListener) {

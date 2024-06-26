@@ -116,7 +116,7 @@ func MakeFollower(log logging.Logger, rootDir string, cfg config.Local, phoneboo
 		DBFilePrefix:        config.LedgerFilenamePrefix,
 		ResolvedGenesisDirs: node.genesisDirs,
 	}
-	node.ledger, err = data.LoadLedger(node.log, ledgerPaths, false, genesis.Proto, genalloc, node.genesisID, node.genesisHash, []ledgercore.BlockListener{}, cfg)
+	node.ledger, err = data.LoadLedger(node.log, ledgerPaths, false, genesis.Proto, genalloc, node.genesisID, node.genesisHash, cfg)
 	if err != nil {
 		log.Errorf("Cannot initialize ledger (%v): %v", ledgerPaths, err)
 		return nil, err
