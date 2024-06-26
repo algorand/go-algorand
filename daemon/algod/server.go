@@ -234,7 +234,7 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 	var currentVersion = config.GetCurrentVersion()
 	var algodEnvironmentAlgodVersionGauge = metrics.MakeGauge(metrics.MetricName{Name: "algod_environment_algod_version", Description: "Version of the Algod binary"})
 	algodEnvironmentAlgodVersionGauge.SetLabels(1, map[string]string{
-		"version": fmt.Sprintf("%d.%d.%d", currentVersion.Major, currentVersion.Minor, currentVersion.BuildNumber),
+		"version": currentVersion.String(),
 		"goarch":  runtime.GOARCH,
 		"goos":    runtime.GOOS,
 		"commit":  currentVersion.CommitHash,
