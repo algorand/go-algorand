@@ -766,7 +766,7 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 		transactionMessagesDroppedFromBacklog.Inc(nil)
 
 		// additionally, remove the txn from duplicate caches to ensure it can be re-submitted
-		handler.deleteFromCaches(canonicalKey, msgKey)
+		handler.deleteFromCaches(msgKey, canonicalKey)
 	}
 
 	return network.OutgoingMessage{Action: network.Ignore}
