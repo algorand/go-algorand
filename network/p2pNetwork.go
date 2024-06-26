@@ -365,7 +365,10 @@ func (n *P2PNetwork) Start() error {
 // Stop closes sockets and stop threads.
 func (n *P2PNetwork) Stop() {
 	if n.capabilitiesDiscovery != nil {
-		n.capabilitiesDiscovery.Close()
+		err := n.capabilitiesDiscovery.Close()
+		if err != nil {
+			n.log.Warnf("Error closing capabilities discovery: %v", err)
+		}
 	}
 
 	n.handler.ClearHandlers([]Tag{})

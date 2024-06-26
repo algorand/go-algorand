@@ -67,9 +67,10 @@ func (c *CapabilitiesDiscovery) FindPeers(ctx context.Context, ns string, opts .
 }
 
 // Close should be called when fully shutting down the node
-func (c *CapabilitiesDiscovery) Close() {
-	_ = c.dht.Close()
+func (c *CapabilitiesDiscovery) Close() error {
+	err := c.dht.Close()
 	c.wg.Wait()
+	return err
 }
 
 // Host exposes the underlying libp2p host.Host object
