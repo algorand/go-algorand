@@ -28,6 +28,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 	"time"
@@ -229,6 +230,16 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 			Labels:                    metricLabels,
 			NodeExporterPath:          cfg.NodeExporterPath,
 		})
+
+	var currentVersion = config.GetCurrentVersion()
+	var algodBuildInfoGauge = metrics.MakeGauge(metrics.MetricName{Name: "algod_build_info", Description: "Algod build info"})
+	algodBuildInfoGauge.SetLabels(1, map[string]string{
+		"version": currentVersion.String(),
+		"goarch":  runtime.GOARCH,
+		"goos":    runtime.GOOS,
+		"commit":  currentVersion.CommitHash,
+		"channel": currentVersion.Channel,
+	})
 
 	var serverNode ServerNode
 	if cfg.EnableFollowMode {
