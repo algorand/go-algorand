@@ -613,7 +613,7 @@ func (handler *TxHandler) incomingMsgDupCheck(data []byte) (*crypto.Digest, bool
 	return msgKey, false
 }
 
-// incomingMsgErlCheck runs the rate limiting check on a raw incoming message.
+// incomingMsgErlCheck runs the rate limiting check on a sender.
 // Returns:
 // - the capacity guard returned by the elastic rate limiter
 // - a boolean indicating if the sender is rate limited
