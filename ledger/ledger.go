@@ -210,6 +210,10 @@ func (l *Ledger) reloadLedger() error {
 	l.trackerMu.Lock()
 	defer l.trackerMu.Unlock()
 
+	// save block listeners to recover them later
+	blockListeners := make([]ledgercore.BlockListener, 0, len(l.notifier.listeners))
+	blockListeners = append(blockListeners, l.notifier.listeners...)
+
 	// close the trackers.
 	l.trackers.close()
 
@@ -255,6 +259,10 @@ func (l *Ledger) reloadLedger() error {
 		err = fmt.Errorf("reloadLedger.loadFromDisk %w", err)
 		return err
 	}
+
+	// restore block listeners since l.notifier might not survive a reload
+	l.notifier.clearListeners()
+	l.notifier.register(blockListeners)
 
 	// post-init actions
 	if trackerDBInitParams.VacuumOnStartup || l.cfg.OptimizeAccountsDatabaseOnStartup {
@@ -424,11 +432,6 @@ func (l *Ledger) Close() {
 // new block is added to the ledger.
 func (l *Ledger) RegisterBlockListeners(listeners []ledgercore.BlockListener) {
 	l.notifier.register(listeners)
-}
-
-// ClearBlockListeners removes all listeners block listeners.
-func (l *Ledger) ClearBlockListeners() {
-	l.notifier.clearListeners()
 }
 
 // RegisterVotersCommitListener registers a listener that will be called when a

@@ -438,7 +438,6 @@ func (node *AlgorandFullNode) Stop() {
 		node.blockService.Stop()
 		node.ledgerService.Stop()
 	}
-	node.ledger.ClearBlockListeners()
 	node.catchupBlockAuth.Quit()
 	node.log.Debug("crypto worker pools are stopping")
 	node.highPriorityCryptoVerificationPool.Shutdown()
@@ -1196,7 +1195,6 @@ func (node *AlgorandFullNode) SetCatchpointCatchupMode(catchpointCatchupMode boo
 			node.txPoolSyncerService.Stop()
 			node.blockService.Stop()
 			node.ledgerService.Stop()
-			node.ledger.ClearBlockListeners()
 
 			prevNodeCancelFunc := node.cancelCtx
 
@@ -1210,8 +1208,6 @@ func (node *AlgorandFullNode) SetCatchpointCatchupMode(catchpointCatchupMode boo
 		defer node.mu.Unlock()
 
 		// start
-		// catchpoint service reloads the ledger, need to re-register the listeners
-		node.ledger.RegisterBlockListeners([]ledgercore.BlockListener{node.transactionPool, node})
 		node.transactionPool.Reset()
 		node.catchupService.Start()
 		node.agreementService.Start()

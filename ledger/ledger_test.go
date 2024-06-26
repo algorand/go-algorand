@@ -3422,5 +3422,40 @@ func TestLedgerRetainMinOffCatchpointInterval(t *testing.T) {
 			}
 		}()
 	}
+}
 
+type testBlockListener struct {
+	id int
+}
+
+func (t *testBlockListener) OnNewBlock(bookkeeping.Block, ledgercore.StateDelta) {}
+
+// TestLedgerRegisterBlockListeners ensures that the block listeners survive reloadLedger
+func TestLedgerRegisterBlockListeners(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genBalances, _, _ := ledgertesting.NewTestGenesis()
+	var genHash crypto.Digest
+	crypto.RandBytes(genHash[:])
+	cfg := config.GetDefaultLocal()
+	l := newSimpleLedgerFull(t, genBalances, protocol.ConsensusCurrentVersion, genHash, cfg)
+	defer l.Close()
+
+	l.RegisterBlockListeners([]ledgercore.BlockListener{&testBlockListener{1}, &testBlockListener{2}})
+	l.RegisterBlockListeners([]ledgercore.BlockListener{&testBlockListener{3}})
+
+	require.Equal(t, 3, len(l.notifier.listeners))
+	var ids []int
+	for _, bl := range l.notifier.listeners {
+		ids = append(ids, bl.(*testBlockListener).id)
+	}
+	require.Equal(t, []int{1, 2, 3}, ids)
+
+	l.reloadLedger()
+
+	ids = nil
+	for _, bl := range l.notifier.listeners {
+		ids = append(ids, bl.(*testBlockListener).id)
+	}
+	require.Equal(t, []int{1, 2, 3}, ids)
 }

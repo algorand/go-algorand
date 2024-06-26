@@ -214,7 +214,6 @@ func (node *AlgorandFollowerNode) Stop() {
 		node.catchupService.Stop()
 		node.blockService.Stop()
 	}
-	node.ledger.ClearBlockListeners()
 	node.catchupBlockAuth.Quit()
 	node.lowPriorityCryptoVerificationPool.Shutdown()
 	node.cryptoPool.Shutdown()
@@ -404,7 +403,6 @@ func (node *AlgorandFollowerNode) SetCatchpointCatchupMode(catchpointCatchupMode
 			node.net.ClearHandlers()
 			node.catchupService.Stop()
 			node.blockService.Stop()
-			node.ledger.ClearBlockListeners()
 
 			prevNodeCancelFunc := node.cancelCtx
 
@@ -425,7 +423,6 @@ func (node *AlgorandFollowerNode) SetCatchpointCatchupMode(catchpointCatchupMode
 		}
 
 		// start
-		node.ledger.RegisterBlockListeners([]ledgercore.BlockListener{node})
 		node.catchupService.Start()
 		node.blockService.Start()
 
