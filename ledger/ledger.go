@@ -261,7 +261,6 @@ func (l *Ledger) reloadLedger() error {
 	}
 
 	// restore block listeners since l.notifier might not survive a reload
-	l.notifier.clearListeners()
 	l.notifier.register(blockListeners)
 
 	// post-init actions
@@ -431,6 +430,8 @@ func (l *Ledger) Close() {
 // RegisterBlockListeners registers listeners that will be called when a
 // new block is added to the ledger.
 func (l *Ledger) RegisterBlockListeners(listeners []ledgercore.BlockListener) {
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
 	l.notifier.register(listeners)
 }
 

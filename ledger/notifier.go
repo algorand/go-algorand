@@ -100,12 +100,6 @@ func (bn *blockNotifier) register(listeners []ledgercore.BlockListener) {
 	bn.listeners = append(bn.listeners, listeners...)
 }
 
-func (bn *blockNotifier) clearListeners() {
-	bn.mu.Lock()
-	defer bn.mu.Unlock()
-	bn.listeners = nil
-}
-
 func (bn *blockNotifier) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 	bn.mu.Lock()
 	defer bn.mu.Unlock()
