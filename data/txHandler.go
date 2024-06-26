@@ -595,24 +595,30 @@ func (handler *TxHandler) dedupCanonical(unverifiedTxGroup []transactions.Signed
 	return &d, false
 }
 
-// incomingMsgDupErlCheck runs the duplicate and rate limiting checks on a raw incoming messages.
+// incomingMsgDupCheck runs the duplicate check on a raw incoming message.
 // Returns:
 // - the key used for insertion if the message was not found in the cache
-// - the capacity guard returned by the elastic rate limiter
-// - a boolean indicating if the message was a duplicate or the sender is rate limited
-func (handler *TxHandler) incomingMsgDupErlCheck(data []byte, sender network.DeadlineSettableConn) (*crypto.Digest, *util.ErlCapacityGuard, bool) {
+// - a boolean indicating if the message was a duplicate
+func (handler *TxHandler) incomingMsgDupCheck(data []byte) (*crypto.Digest, bool) {
 	var msgKey *crypto.Digest
-	var capguard *util.ErlCapacityGuard
 	var isDup bool
 	if handler.msgCache != nil {
 		// check for duplicate messages
 		// this helps against relaying duplicates
 		if msgKey, isDup = handler.msgCache.CheckAndPut(data); isDup {
 			transactionMessagesDupRawMsg.Inc(nil)
-			return msgKey, capguard, true
+			return msgKey, true
 		}
 	}
+	return msgKey, false
+}
 
+// incomingMsgErlCheck runs the rate limiting check on a raw incoming message.
+// Returns:
+// - the capacity guard returned by the elastic rate limiter
+// - a boolean indicating if the sender is rate limited
+func (handler *TxHandler) incomingMsgErlCheck(sender network.DeadlineSettableConn) (*util.ErlCapacityGuard, bool) {
+	var capguard *util.ErlCapacityGuard
 	var err error
 	if handler.erl != nil {
 		congestedERL := float64(cap(handler.backlogQueue))*handler.backlogCongestionThreshold < float64(len(handler.backlogQueue))
@@ -625,14 +631,14 @@ func (handler *TxHandler) incomingMsgDupErlCheck(data []byte, sender network.Dea
 			handler.erl.EnableCongestionControl()
 			// if there is no capacity, it is the same as if we failed to put the item onto the backlog, so report such
 			transactionMessagesDroppedFromBacklog.Inc(nil)
-			return msgKey, capguard, true
+			return capguard, true
 		}
 		// if the backlog Queue has 50% of its buffer back, turn congestion control off
 		if !congestedERL {
 			handler.erl.DisableCongestionControl()
 		}
 	}
-	return msgKey, capguard, false
+	return capguard, false
 }
 
 // decodeMsg decodes TX message buffer into transactions.SignedTxn,
@@ -711,8 +717,12 @@ func (handler *TxHandler) incomingTxGroupDupRateLimit(unverifiedTxGroup []transa
 //   - message are checked for duplicates
 //   - transactions are checked for duplicates
 func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) network.OutgoingMessage {
-	msgKey, capguard, shouldDrop := handler.incomingMsgDupErlCheck(rawmsg.Data, rawmsg.Sender)
+	msgKey, shouldDrop := handler.incomingMsgDupCheck(rawmsg.Data)
+	if shouldDrop {
+		return network.OutgoingMessage{Action: network.Ignore}
+	}
 
+	capguard, shouldDrop := handler.incomingMsgErlCheck(rawmsg.Sender)
 	accepted := false
 	defer func() {
 		// if we failed to put the item onto the backlog, we should release the capacity if any
@@ -724,7 +734,7 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 	}()
 
 	if shouldDrop {
-		// this TX message was found in the duplicate cache, or ERL rate-limited it
+		// this TX message was rate-limited by ERL
 		return network.OutgoingMessage{Action: network.Ignore}
 	}
 
@@ -777,19 +787,9 @@ type validatedIncomingTxMessage struct {
 
 // validateIncomingTxMessage is the validator for the MessageProcessor implementation used by P2PNetwork.
 func (handler *TxHandler) validateIncomingTxMessage(rawmsg network.IncomingMessage) network.ValidatedMessage {
-	var msgKey *crypto.Digest
-	var isDup bool
-
-	if handler.msgCache != nil {
-		// check for duplicate messages
-		// this helps against relaying duplicates
-
-		// note, this is the same check as in incomingMsgDupErlCheck prologue
-		// but for p2p network handlers no ERL needed because libp2p has own congestion control
-		if msgKey, isDup = handler.msgCache.CheckAndPut(rawmsg.Data); isDup {
-			transactionMessagesDupRawMsg.Inc(nil)
-			return network.ValidatedMessage{Action: network.Ignore, ValidatedMessage: nil}
-		}
+	msgKey, isDup := handler.incomingMsgDupCheck(rawmsg.Data)
+	if isDup {
+		return network.ValidatedMessage{Action: network.Ignore, ValidatedMessage: nil}
 	}
 
 	unverifiedTxGroup, consumed, invalid := decodeMsg(rawmsg.Data)
