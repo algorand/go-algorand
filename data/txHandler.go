@@ -766,12 +766,7 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 		transactionMessagesDroppedFromBacklog.Inc(nil)
 
 		// additionally, remove the txn from duplicate caches to ensure it can be re-submitted
-		if handler.txCanonicalCache != nil && canonicalKey != nil {
-			handler.txCanonicalCache.Delete(canonicalKey)
-		}
-		if handler.msgCache != nil && msgKey != nil {
-			handler.msgCache.DeleteByKey(msgKey)
-		}
+		handler.deleteFromCaches(canonicalKey, msgKey)
 	}
 
 	return network.OutgoingMessage{Action: network.Ignore}
@@ -782,7 +777,6 @@ type validatedIncomingTxMessage struct {
 	unverifiedTxGroup []transactions.SignedTxn
 	msgKey            *crypto.Digest
 	canonicalKey      *crypto.Digest
-	capguard          *util.ErlCapacityGuard
 }
 
 // validateIncomingTxMessage is the validator for the MessageProcessor implementation used by P2PNetwork.
@@ -813,7 +807,6 @@ func (handler *TxHandler) validateIncomingTxMessage(rawmsg network.IncomingMessa
 			unverifiedTxGroup: unverifiedTxGroup,
 			msgKey:            msgKey,
 			canonicalKey:      canonicalKey,
-			capguard:          nil,
 		},
 	}
 }
@@ -827,7 +820,7 @@ func (handler *TxHandler) processIncomingTxMessage(validatedMessage network.Vali
 		unverifiedTxGroup:     msg.unverifiedTxGroup,
 		rawmsgDataHash:        msg.msgKey,
 		unverifiedTxGroupHash: msg.canonicalKey,
-		capguard:              msg.capguard,
+		capguard:              nil,
 	}:
 	default:
 		// if we failed here we want to increase the corresponding metric. It might suggest that we
@@ -835,17 +828,7 @@ func (handler *TxHandler) processIncomingTxMessage(validatedMessage network.Vali
 		transactionMessagesDroppedFromBacklog.Inc(nil)
 
 		// additionally, remove the txn from duplicate caches to ensure it can be re-submitted
-		if handler.txCanonicalCache != nil && msg.canonicalKey != nil {
-			handler.txCanonicalCache.Delete(msg.canonicalKey)
-		}
-		if handler.msgCache != nil && msg.msgKey != nil {
-			handler.msgCache.DeleteByKey(msg.msgKey)
-		}
-		if msg.capguard != nil {
-			if capErr := msg.capguard.Release(); capErr != nil {
-				logging.Base().Warnf("processIncomingTxMessage: failed to release capacity to ElasticRateLimiter: %v", capErr)
-			}
-		}
+		handler.deleteFromCaches(msg.msgKey, msg.canonicalKey)
 	}
 	return network.OutgoingMessage{Action: network.Ignore}
 }
