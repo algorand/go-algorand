@@ -215,7 +215,7 @@ func MakeService(ctx context.Context, log logging.Logger, cfg config.Local, h ho
 	}, nil
 }
 
-// Close shuts down the P2P service
+// Start starts the P2P service
 func (s *serviceImpl) Start() error {
 	listenAddr, err := multiaddr.NewMultiaddr(s.listenAddr)
 	if err != nil {
