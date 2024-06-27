@@ -133,16 +133,6 @@ func (p *PeerIDChallengeSigner) SignBytes(message []byte) algocrypto.Signature {
 	return algocrypto.Signature(sig)
 }
 
-// Verify implements the identityChallengeSigner interface.
-func (p *PeerIDChallengeSigner) Verify(message algocrypto.Hashable, sig algocrypto.Signature) bool {
-	// libp2p Ed25519PublicKey.Verify() returns a bool and no error
-	ret, err := p.key.GetPublic().Verify(algocrypto.HashRep(message), sig[:])
-	if err != nil {
-		panic(err)
-	}
-	return ret
-}
-
 // PublicKey implements the identityChallengeSigner interface.
 func (p *PeerIDChallengeSigner) PublicKey() algocrypto.PublicKey {
 	// libp2p Ed25519PublicKey.Raw() returns a 32-byte public key and no error

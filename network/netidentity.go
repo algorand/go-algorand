@@ -97,7 +97,6 @@ type identityChallengeScheme interface {
 type identityChallengeSigner interface {
 	Sign(message crypto.Hashable) crypto.Signature
 	SignBytes(message []byte) crypto.Signature
-	Verify(message crypto.Hashable, sig crypto.Signature) bool
 	PublicKey() crypto.PublicKey
 }
 
@@ -111,10 +110,6 @@ func (s *identityChallengeLegacySigner) Sign(message crypto.Hashable) crypto.Sig
 
 func (s *identityChallengeLegacySigner) SignBytes(message []byte) crypto.Signature {
 	return s.keys.SignBytes(message)
-}
-
-func (s *identityChallengeLegacySigner) Verify(message crypto.Hashable, sig crypto.Signature) bool {
-	return s.keys.SignatureVerifier.Verify(message, sig)
 }
 
 func (s *identityChallengeLegacySigner) PublicKey() crypto.PublicKey {
