@@ -1803,14 +1803,14 @@ type peerConnectionStater struct {
 	lastPeerConnectionsSent       time.Time
 }
 
-type peerSnapshoter interface {
+type peerSnapshotter interface {
 	peerSnapshot(peers []*wsPeer) ([]*wsPeer, int32)
 }
 
 // sendPeerConnectionsTelemetryStatus sends a snapshot of the currently connected peers
 // to the telemetry server. Internally, it's using a timer to ensure that it would only
 // send the information once every hour ( configurable via PeerConnectionsUpdateInterval )
-func (pcs *peerConnectionStater) sendPeerConnectionsTelemetryStatus(snapshoter peerSnapshoter) {
+func (pcs *peerConnectionStater) sendPeerConnectionsTelemetryStatus(snapshotter peerSnapshotter) {
 	if !pcs.log.GetTelemetryEnabled() {
 		return
 	}
@@ -1822,7 +1822,7 @@ func (pcs *peerConnectionStater) sendPeerConnectionsTelemetryStatus(snapshoter p
 	pcs.lastPeerConnectionsSent = now
 
 	var peers []*wsPeer
-	peers, _ = snapshoter.peerSnapshot(peers)
+	peers, _ = snapshotter.peerSnapshot(peers)
 	connectionDetails := getPeerConnectionTelemetryDetails(now, peers)
 	pcs.log.EventWithDetails(telemetryspec.Network, telemetryspec.PeerConnectionsEvent, connectionDetails)
 }
