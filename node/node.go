@@ -216,9 +216,9 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	}
 	node.net = p2pNode
 
-	node.cryptoPool = execpool.MakePool(node)
-	node.lowPriorityCryptoVerificationPool = execpool.MakeBacklog(node.cryptoPool, 2*node.cryptoPool.GetParallelism(), execpool.LowPriority, node)
-	node.highPriorityCryptoVerificationPool = execpool.MakeBacklog(node.cryptoPool, 2*node.cryptoPool.GetParallelism(), execpool.HighPriority, node)
+	node.cryptoPool = execpool.MakePool(node, "worker", "cryptoPool")
+	node.lowPriorityCryptoVerificationPool = execpool.MakeBacklog(node.cryptoPool, 2*node.cryptoPool.GetParallelism(), execpool.LowPriority, node, "worker", "lowPriorityCryptoVerificationPool")
+	node.highPriorityCryptoVerificationPool = execpool.MakeBacklog(node.cryptoPool, 2*node.cryptoPool.GetParallelism(), execpool.HighPriority, node, "worker", "highPriorityCryptoVerificationPool")
 	ledgerPaths := ledger.DirsAndPrefix{
 		DBFilePrefix:        config.LedgerFilenamePrefix,
 		ResolvedGenesisDirs: node.genesisDirs,
@@ -1061,6 +1061,7 @@ func (node *AlgorandFullNode) OnNewBlock(block bookkeeping.Block, delta ledgerco
 // don't have to delete key for each block we received.
 func (node *AlgorandFullNode) oldKeyDeletionThread(done <-chan struct{}) {
 	defer node.monitoringRoutinesWaitGroup.Done()
+
 	for {
 		select {
 		case <-done:
