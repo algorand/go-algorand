@@ -223,7 +223,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		DBFilePrefix:        config.LedgerFilenamePrefix,
 		ResolvedGenesisDirs: node.genesisDirs,
 	}
-	node.ledger, err = data.LoadLedger(node.log, ledgerPaths, false, genesis.Proto, genalloc, node.genesisID, node.genesisHash, []ledgercore.BlockListener{}, cfg)
+	node.ledger, err = data.LoadLedger(node.log, ledgerPaths, false, genesis.Proto, genalloc, node.genesisID, node.genesisHash, cfg)
 	if err != nil {
 		log.Errorf("Cannot initialize ledger (%v): %v", ledgerPaths, err)
 		return nil, err
@@ -246,12 +246,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 
 	node.transactionPool = pools.MakeTransactionPool(node.ledger.Ledger, cfg, node.log, node)
 
-	blockListeners := []ledgercore.BlockListener{
-		node.transactionPool,
-		node,
-	}
-
-	node.ledger.RegisterBlockListeners(blockListeners)
+	node.ledger.RegisterBlockListeners([]ledgercore.BlockListener{node.transactionPool, node})
 	txHandlerOpts := data.TxHandlerOpts{
 		TxPool:        node.transactionPool,
 		ExecutionPool: node.lowPriorityCryptoVerificationPool,
@@ -1211,6 +1206,7 @@ func (node *AlgorandFullNode) SetCatchpointCatchupMode(catchpointCatchupMode boo
 			return
 		}
 		defer node.mu.Unlock()
+
 		// start
 		node.transactionPool.Reset()
 		node.catchupService.Start()

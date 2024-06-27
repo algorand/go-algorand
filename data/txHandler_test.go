@@ -109,7 +109,7 @@ func BenchmarkTxHandlerProcessing(b *testing.B) {
 	cfg.Archival = true
 	cfg.TxBacklogReservedCapacityPerPeer = 1
 	cfg.IncomingConnectionsLimit = 10
-	ledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, nil, cfg)
+	ledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, cfg)
 	require.NoError(b, err)
 	defer ledger.Close()
 
@@ -1027,7 +1027,7 @@ func TestTxHandlerProcessIncomingCacheTxPoolDrop(t *testing.T) {
 	cfg.Archival = true
 	cfg.EnableTxBacklogRateLimiting = false
 	cfg.TxIncomingFilteringFlags = 3 // txFilterRawMsg + txFilterCanonical
-	ledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, nil, cfg)
+	ledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, cfg)
 	require.NoError(t, err)
 	defer ledger.Close()
 
@@ -1196,7 +1196,7 @@ func incomingTxHandlerProcessing(maxGroupSize, numberOfTransactionGroups int, t 
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
 	cfg.EnableTxBacklogRateLimiting = false
-	ledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, nil, cfg)
+	ledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, cfg)
 	require.NoError(t, err)
 	defer ledger.Close()
 
@@ -1641,7 +1641,7 @@ func (g *txGenerator) makeLedger(tb testing.TB, cfg config.Local, log logging.Lo
 	ledgerName := fmt.Sprintf("%s-in_mem-w_inv=%d", namePrefix, ivrString)
 	ledgerName = strings.Replace(ledgerName, "#", "-", 1)
 	const inMem = true
-	ledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, nil, cfg)
+	ledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, cfg)
 	require.NoError(tb, err)
 	return ledger
 }
@@ -2183,7 +2183,7 @@ func TestTxHandlerRememberReportErrorsWithTxPool(t *testing.T) { //nolint:parall
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
 	cfg.TxPoolSize = config.MaxTxGroupSize + 1
-	ledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, nil, cfg)
+	ledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, cfg)
 	require.NoError(t, err)
 	defer ledger.Close()
 
@@ -2419,7 +2419,7 @@ func TestTxHandlerRestartWithBacklogAndTxPool(t *testing.T) { //nolint:parallelt
 	const inMem = true
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
-	ledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, nil, cfg)
+	ledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, cfg)
 	require.NoError(t, err)
 	defer ledger.Ledger.Close()
 
@@ -2524,7 +2524,7 @@ func TestTxHandlerAppRateLimiterERLEnabled(t *testing.T) {
 	cfg.TxBacklogServiceRateWindowSeconds = 1
 	cfg.TxBacklogAppTxPerSecondRate = 3
 	cfg.TxBacklogSize = 3
-	ledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, bookkeeping.GenesisBalances{}, genesisID, genesisHash, nil, cfg)
+	ledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, bookkeeping.GenesisBalances{}, genesisID, genesisHash, cfg)
 	require.NoError(t, err)
 	defer ledger.Close()
 
@@ -2636,7 +2636,7 @@ func TestTxHandlerAppRateLimiter(t *testing.T) {
 	cfg.TxBacklogAppTxRateLimiterMaxSize = 100
 	cfg.TxBacklogServiceRateWindowSeconds = 1
 	cfg.TxBacklogAppTxPerSecondRate = 3
-	ledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, nil, cfg)
+	ledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, cfg)
 	require.NoError(t, err)
 	defer ledger.Close()
 
@@ -2705,7 +2705,7 @@ func TestTxHandlerCapGuard(t *testing.T) {
 	cfg.IncomingConnectionsLimit = 1
 	cfg.TxBacklogSize = 3
 
-	ledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, nil, cfg)
+	ledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, cfg)
 	require.NoError(t, err)
 	defer ledger.Close()
 

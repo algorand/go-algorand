@@ -81,7 +81,7 @@ type roundSeed struct {
 func LoadLedger[T string | ledger.DirsAndPrefix](
 	log logging.Logger, dir T, memory bool,
 	genesisProto protocol.ConsensusVersion, genesisBal bookkeeping.GenesisBalances, genesisID string, genesisHash crypto.Digest,
-	blockListeners []ledgercore.BlockListener, cfg config.Local,
+	cfg config.Local,
 ) (*Ledger, error) {
 	if genesisBal.Balances == nil {
 		genesisBal.Balances = make(map[basics.Address]basics.AccountData)
@@ -115,7 +115,6 @@ func LoadLedger[T string | ledger.DirsAndPrefix](
 	}
 
 	l.Ledger = ll
-	l.RegisterBlockListeners(blockListeners)
 	return l, nil
 }
 
