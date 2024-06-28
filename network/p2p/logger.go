@@ -20,6 +20,7 @@ package p2p
 
 import (
 	"runtime"
+	"strings"
 
 	p2plogging "github.com/ipfs/go-log/v2"
 	"github.com/sirupsen/logrus"
@@ -103,8 +104,11 @@ func (c *loggingCore) Write(e zapcore.Entry, fields []zapcore.Field) error {
 		}
 	}
 	event := c.log.WithFields(loggingFields).With("libp2p", e.LoggerName)
+	file := e.Caller.File
+	slash := strings.LastIndex(file, "/")
+	file = file[slash+1:]
 	event = event.WithFields(logrus.Fields{
-		"file": e.Caller.File,
+		"file": file,
 		"line": e.Caller.Line,
 	})
 	if function := runtime.FuncForPC(e.Caller.PC); function != nil {
