@@ -63,7 +63,7 @@ type LedgerForService interface {
 // httpGossipNode is a reduced interface for the gossipNode that only includes the methods needed by the LedgerService
 type httpGossipNode interface {
 	RegisterHTTPHandler(path string, handler http.Handler)
-	GetHTTPRequestConnection(request *http.Request) (conn network.DeadlineSettable)
+	GetHTTPRequestConnection(request *http.Request) (conn network.DeadlineSettableConn)
 }
 
 // LedgerService represents the Ledger RPC API

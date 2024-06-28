@@ -531,7 +531,7 @@ func (n *P2PNetwork) Relay(ctx context.Context, tag protocol.Tag, data []byte, w
 }
 
 // Disconnect from a peer, probably due to protocol errors.
-func (n *P2PNetwork) Disconnect(badpeer DeadlineSettableConn) {
+func (n *P2PNetwork) Disconnect(badpeer DisconnectablePeer) {
 	var peerID peer.ID
 	var wsp *wsPeer
 
@@ -559,7 +559,7 @@ func (n *P2PNetwork) Disconnect(badpeer DeadlineSettableConn) {
 	}
 }
 
-func (n *P2PNetwork) disconnectThread(badnode DeadlineSettableConn, reason disconnectReason) {
+func (n *P2PNetwork) disconnectThread(badnode DisconnectablePeer, reason disconnectReason) {
 	defer n.wg.Done()
 	n.Disconnect(badnode) // ignores reason
 }
@@ -727,7 +727,7 @@ func (n *P2PNetwork) OnNetworkAdvance() {
 
 // GetHTTPRequestConnection returns the underlying connection for the given request. Note that the request must be the same
 // request that was provided to the http handler ( or provide a fallback Context() to that )
-func (n *P2PNetwork) GetHTTPRequestConnection(request *http.Request) (conn DeadlineSettable) {
+func (n *P2PNetwork) GetHTTPRequestConnection(request *http.Request) (conn DeadlineSettableConn) {
 	addr := request.Context().Value(http.LocalAddrContextKey).(net.Addr)
 	peerID, err := peer.Decode(addr.String())
 	if err != nil {

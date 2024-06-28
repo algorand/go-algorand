@@ -362,7 +362,7 @@ type networkPeerManager interface {
 
 	// used by msgHandler
 	Broadcast(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except Peer) error
-	disconnectThread(badnode DeadlineSettableConn, reason disconnectReason)
+	disconnectThread(badnode DisconnectablePeer, reason disconnectReason)
 	checkPeersConnectivity()
 }
 
@@ -477,13 +477,13 @@ func (wn *WebsocketNetwork) RelayArray(ctx context.Context, tags []protocol.Tag,
 	return nil
 }
 
-func (wn *WebsocketNetwork) disconnectThread(badnode DeadlineSettableConn, reason disconnectReason) {
+func (wn *WebsocketNetwork) disconnectThread(badnode DisconnectablePeer, reason disconnectReason) {
 	defer wn.wg.Done()
 	wn.disconnect(badnode, reason)
 }
 
 // Disconnect from a peer, probably due to protocol errors.
-func (wn *WebsocketNetwork) Disconnect(node DeadlineSettableConn) {
+func (wn *WebsocketNetwork) Disconnect(node DisconnectablePeer) {
 	wn.disconnect(node, disconnectBadData)
 }
 
@@ -1035,7 +1035,7 @@ func (wn *WebsocketNetwork) checkIncomingConnectionVariables(response http.Respo
 // request that was provided to the http handler ( or provide a fallback Context() to that )
 // if the provided request has no associated connection, it returns nil. ( this should not happen for any http request that was registered
 // by WebsocketNetwork )
-func (wn *WebsocketNetwork) GetHTTPRequestConnection(request *http.Request) (conn DeadlineSettable) {
+func (wn *WebsocketNetwork) GetHTTPRequestConnection(request *http.Request) (conn DeadlineSettableConn) {
 	if wn.requestsTracker != nil {
 		conn = wn.requestsTracker.GetRequestConnection(request)
 	}

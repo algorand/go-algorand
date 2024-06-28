@@ -60,7 +60,7 @@ func (network *MockNetwork) RequestConnectOutgoing(replace bool, quit <-chan str
 }
 
 // Disconnect - unused function
-func (network *MockNetwork) Disconnect(badpeer network.DeadlineSettableConn) {
+func (network *MockNetwork) Disconnect(badpeer network.DisconnectablePeer) {
 }
 
 // DisconnectPeers - unused function
@@ -107,7 +107,7 @@ func (network *MockNetwork) RegisterHTTPHandler(path string, handler http.Handle
 func (network *MockNetwork) OnNetworkAdvance() {}
 
 // GetHTTPRequestConnection - empty implementation
-func (network *MockNetwork) GetHTTPRequestConnection(request *http.Request) (conn network.DeadlineSettable) {
+func (network *MockNetwork) GetHTTPRequestConnection(request *http.Request) (conn network.DeadlineSettableConn) {
 	return nil
 }
 

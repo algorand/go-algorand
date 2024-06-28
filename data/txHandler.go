@@ -617,7 +617,7 @@ func (handler *TxHandler) incomingMsgDupCheck(data []byte) (*crypto.Digest, bool
 // Returns:
 // - the capacity guard returned by the elastic rate limiter
 // - a boolean indicating if the sender is rate limited
-func (handler *TxHandler) incomingMsgErlCheck(sender network.DeadlineSettableConn) (*util.ErlCapacityGuard, bool) {
+func (handler *TxHandler) incomingMsgErlCheck(sender network.DisconnectablePeer) (*util.ErlCapacityGuard, bool) {
 	var capguard *util.ErlCapacityGuard
 	var err error
 	if handler.erl != nil {
@@ -690,7 +690,7 @@ func decodeMsg(data []byte) (unverifiedTxGroup []transactions.SignedTxn, consume
 // incomingTxGroupDupRateLimit checks
 // - if the incoming transaction group has been seen before after reencoding to canonical representation, and
 // - if the sender is rate limited by the per-application rate limiter.
-func (handler *TxHandler) incomingTxGroupDupRateLimit(unverifiedTxGroup []transactions.SignedTxn, encodedExpectedSize int, sender network.DeadlineSettableConn) (*crypto.Digest, bool) {
+func (handler *TxHandler) incomingTxGroupDupRateLimit(unverifiedTxGroup []transactions.SignedTxn, encodedExpectedSize int, sender network.DisconnectablePeer) (*crypto.Digest, bool) {
 	var canonicalKey *crypto.Digest
 	if handler.txCanonicalCache != nil {
 		var isDup bool

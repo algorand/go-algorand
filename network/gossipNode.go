@@ -29,8 +29,8 @@ import (
 // Peer opaque interface for referring to a neighbor in the network
 type Peer interface{}
 
-// DeadlineSettableConn is a Peer with a long-living connection to a network that can be disconnected
-type DeadlineSettableConn interface {
+// DisconnectablePeer is a Peer with a long-living connection to a network that can be disconnected
+type DisconnectablePeer interface {
 	GetNetwork() GossipNode
 }
 
@@ -50,8 +50,8 @@ const (
 	PeersPhonebookArchivalNodes PeerOption = iota
 )
 
-// DeadlineSettable abstracts net.Conn and related types as deadline-settable
-type DeadlineSettable interface {
+// DeadlineSettableConn abstracts net.Conn and related types as deadline-settable
+type DeadlineSettableConn interface {
 	SetDeadline(time.Time) error
 	SetReadDeadline(time.Time) error
 	SetWriteDeadline(time.Time) error
@@ -62,7 +62,7 @@ type GossipNode interface {
 	Address() (string, bool)
 	Broadcast(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except Peer) error
 	Relay(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except Peer) error
-	Disconnect(badnode DeadlineSettableConn)
+	Disconnect(badnode DisconnectablePeer)
 	DisconnectPeers() // only used by testing
 
 	// RegisterHTTPHandler path accepts gorilla/mux path annotations
@@ -106,7 +106,7 @@ type GossipNode interface {
 
 	// GetHTTPRequestConnection returns the underlying connection for the given request. Note that the request must be the same
 	// request that was provided to the http handler ( or provide a fallback Context() to that )
-	GetHTTPRequestConnection(request *http.Request) (conn DeadlineSettable)
+	GetHTTPRequestConnection(request *http.Request) (conn DeadlineSettableConn)
 
 	// GetGenesisID returns the network-specific genesisID.
 	GetGenesisID() string
@@ -127,7 +127,7 @@ var outgoingMessagesBufferSize = int(
 
 // IncomingMessage represents a message arriving from some peer in our p2p network
 type IncomingMessage struct {
-	Sender DeadlineSettableConn
+	Sender DisconnectablePeer
 	Tag    Tag
 	Data   []byte
 	Err    error

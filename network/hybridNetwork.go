@@ -115,7 +115,7 @@ func (n *HybridP2PNetwork) Relay(ctx context.Context, tag protocol.Tag, data []b
 }
 
 // Disconnect implements GossipNode
-func (n *HybridP2PNetwork) Disconnect(badnode DeadlineSettableConn) {
+func (n *HybridP2PNetwork) Disconnect(badnode DisconnectablePeer) {
 	net := badnode.GetNetwork()
 	if net == n.p2pNetwork {
 		n.p2pNetwork.Disconnect(badnode)
@@ -214,7 +214,7 @@ func (n *HybridP2PNetwork) OnNetworkAdvance() {
 
 // GetHTTPRequestConnection returns the underlying connection for the given request. Note that the request must be the same
 // request that was provided to the http handler ( or provide a fallback Context() to that )
-func (n *HybridP2PNetwork) GetHTTPRequestConnection(request *http.Request) (conn DeadlineSettable) {
+func (n *HybridP2PNetwork) GetHTTPRequestConnection(request *http.Request) (conn DeadlineSettableConn) {
 	conn = n.wsNetwork.GetHTTPRequestConnection(request)
 	if conn != nil {
 		return conn

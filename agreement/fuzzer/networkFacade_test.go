@@ -348,7 +348,7 @@ func (n *NetworkFacade) ReceiveMessage(sourceNode int, tag protocol.Tag, data []
 	n.pushPendingReceivedMessage()
 }
 
-func (n *NetworkFacade) Disconnect(sender network.DeadlineSettableConn) {
+func (n *NetworkFacade) Disconnect(sender network.DisconnectablePeer) {
 	sourceNode := n.peerToNode[sender.(*facadePeer)]
 	n.fuzzer.Disconnect(n.nodeID, sourceNode)
 }
