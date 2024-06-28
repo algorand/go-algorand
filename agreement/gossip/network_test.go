@@ -18,7 +18,6 @@ package gossip
 
 import (
 	"context"
-	"net"
 	"net/http"
 	"sync"
 	"sync/atomic"
@@ -136,7 +135,7 @@ func (w *whiteholeNetwork) Relay(ctx context.Context, tag protocol.Tag, data []b
 func (w *whiteholeNetwork) BroadcastSimple(tag protocol.Tag, data []byte) error {
 	return w.Broadcast(context.Background(), tag, data, true, nil)
 }
-func (w *whiteholeNetwork) Disconnect(badnode network.Peer) {
+func (w *whiteholeNetwork) Disconnect(badnode network.DisconnectablePeer) {
 	return
 }
 func (w *whiteholeNetwork) DisconnectPeers() {
@@ -156,11 +155,11 @@ func (w *whiteholeNetwork) GetPeers(options ...network.PeerOption) []network.Pee
 }
 func (w *whiteholeNetwork) RegisterHTTPHandler(path string, handler http.Handler) {
 }
-func (w *whiteholeNetwork) GetHTTPRequestConnection(request *http.Request) (conn net.Conn) {
+func (w *whiteholeNetwork) GetHTTPRequestConnection(request *http.Request) (conn network.DeadlineSettableConn) {
 	return nil
 }
 
-func (w *whiteholeNetwork) Start() {
+func (w *whiteholeNetwork) Start() error {
 	w.quit = make(chan struct{})
 	go func(w *whiteholeNetwork) {
 		w.domain.messagesMu.Lock()
@@ -216,7 +215,7 @@ func (w *whiteholeNetwork) Start() {
 			atomic.AddUint32(&w.lastMsgRead, 1)
 		}
 	}(w)
-	return
+	return nil
 }
 func (w *whiteholeNetwork) getMux() *network.Multiplexer {
 	return w.mux

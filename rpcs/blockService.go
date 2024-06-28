@@ -41,6 +41,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
+	"github.com/algorand/go-algorand/network/addr"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/metrics"
 )
@@ -381,7 +382,6 @@ func (bs *BlockService) handleCatchupReq(ctx context.Context, reqMsg network.Inc
 		return
 	}
 	respTopics, n = topicBlockBytes(bs.log, bs.ledger, basics.Round(round), string(requestType))
-	return
 }
 
 // redirectRequest redirects the request to the next round robin fallback endpoint if available
@@ -392,18 +392,24 @@ func (bs *BlockService) redirectRequest(round uint64, response http.ResponseWrit
 		return false
 	}
 
-	parsedURL, err := network.ParseHostOrURL(peerAddress)
-	if err != nil {
-		bs.log.Debugf("redirectRequest: %s", err.Error())
-		return false
+	var redirectURL string
+	if addr.IsMultiaddr(peerAddress) {
+		redirectURL = strings.Replace(FormatBlockQuery(round, "", bs.net), "{genesisID}", bs.genesisID, 1)
+	} else {
+		parsedURL, err := addr.ParseHostOrURL(peerAddress)
+		if err != nil {
+			bs.log.Debugf("redirectRequest: %s", err.Error())
+			return false
+		}
+		parsedURL.Path = strings.Replace(FormatBlockQuery(round, parsedURL.Path, bs.net), "{genesisID}", bs.genesisID, 1)
+		redirectURL = parsedURL.String()
 	}
-	parsedURL.Path = strings.Replace(FormatBlockQuery(round, parsedURL.Path, bs.net), "{genesisID}", bs.genesisID, 1)
-	http.Redirect(response, request, parsedURL.String(), http.StatusTemporaryRedirect)
-	bs.log.Debugf("redirectRequest: redirected block request to %s", parsedURL.String())
+	http.Redirect(response, request, redirectURL, http.StatusTemporaryRedirect)
+	bs.log.Debugf("redirectRequest: redirected block request to %s", redirectURL)
 	return true
 }
 
-// getNextCustomFallbackEndpoint returns the next custorm fallback endpoint in RR ordering
+// getNextCustomFallbackEndpoint returns the next custom fallback endpoint in RR ordering
 func (bs *BlockService) getNextCustomFallbackEndpoint() (endpointAddress string) {
 	if len(bs.fallbackEndpoints.endpoints) == 0 {
 		return
@@ -487,7 +493,7 @@ func RawBlockBytes(l LedgerForBlockService, round basics.Round) ([]byte, error) 
 
 // FormatBlockQuery formats a block request query for the given network and round number
 func FormatBlockQuery(round uint64, parsedURL string, net network.GossipNode) string {
-	return net.SubstituteGenesisID(path.Join(parsedURL, "/v1/{genesisID}/block/"+strconv.FormatUint(uint64(round), 36)))
+	return network.SubstituteGenesisID(net, path.Join(parsedURL, "/v1/{genesisID}/block/"+strconv.FormatUint(uint64(round), 36)))
 }
 
 func makeFallbackEndpoints(log logging.Logger, customFallbackEndpoints string) (fe fallbackEndpoints) {
@@ -496,12 +502,16 @@ func makeFallbackEndpoints(log logging.Logger, customFallbackEndpoints string) (
 	}
 	endpoints := strings.Split(customFallbackEndpoints, ",")
 	for _, ep := range endpoints {
-		parsed, err := network.ParseHostOrURL(ep)
-		if err != nil {
-			log.Warnf("makeFallbackEndpoints: error parsing %s %s", ep, err.Error())
-			continue
+		if addr.IsMultiaddr(ep) {
+			fe.endpoints = append(fe.endpoints, ep)
+		} else {
+			parsed, err := addr.ParseHostOrURL(ep)
+			if err != nil {
+				log.Warnf("makeFallbackEndpoints: error parsing %s %s", ep, err.Error())
+				continue
+			}
+			fe.endpoints = append(fe.endpoints, parsed.String())
 		}
-		fe.endpoints = append(fe.endpoints, parsed.String())
 	}
 	return
 }

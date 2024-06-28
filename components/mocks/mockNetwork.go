@@ -18,7 +18,7 @@ package mocks
 
 import (
 	"context"
-	"net"
+	"errors"
 	"net/http"
 
 	"github.com/algorand/go-algorand/network"
@@ -28,6 +28,7 @@ import (
 // MockNetwork is a dummy network that doesn't do anything
 type MockNetwork struct {
 	network.GossipNode
+	GenesisID string
 }
 
 // Broadcast - unused function
@@ -46,7 +47,8 @@ func (network *MockNetwork) Address() (string, bool) {
 }
 
 // Start - unused function
-func (network *MockNetwork) Start() {
+func (network *MockNetwork) Start() error {
+	return nil
 }
 
 // Stop - unused function
@@ -58,7 +60,7 @@ func (network *MockNetwork) RequestConnectOutgoing(replace bool, quit <-chan str
 }
 
 // Disconnect - unused function
-func (network *MockNetwork) Disconnect(badpeer network.Peer) {
+func (network *MockNetwork) Disconnect(badpeer network.DisconnectablePeer) {
 }
 
 // DisconnectPeers - unused function
@@ -72,11 +74,6 @@ func (network *MockNetwork) RegisterRPCName(name string, rcvr interface{}) {
 // GetPeers - unused function
 func (network *MockNetwork) GetPeers(options ...network.PeerOption) []network.Peer {
 	return nil
-}
-
-// GetRoundTripper -- returns the network round tripper
-func (network *MockNetwork) GetRoundTripper() http.RoundTripper {
-	return http.DefaultTransport
 }
 
 // Ready - always ready
@@ -94,6 +91,14 @@ func (network *MockNetwork) RegisterHandlers(dispatch []network.TaggedMessageHan
 func (network *MockNetwork) ClearHandlers() {
 }
 
+// RegisterProcessors - empty implementation.
+func (network *MockNetwork) RegisterProcessors(dispatch []network.TaggedMessageProcessor) {
+}
+
+// ClearProcessors - empty implementation
+func (network *MockNetwork) ClearProcessors() {
+}
+
 // RegisterHTTPHandler - empty implementation
 func (network *MockNetwork) RegisterHTTPHandler(path string, handler http.Handler) {
 }
@@ -102,11 +107,19 @@ func (network *MockNetwork) RegisterHTTPHandler(path string, handler http.Handle
 func (network *MockNetwork) OnNetworkAdvance() {}
 
 // GetHTTPRequestConnection - empty implementation
-func (network *MockNetwork) GetHTTPRequestConnection(request *http.Request) (conn net.Conn) {
+func (network *MockNetwork) GetHTTPRequestConnection(request *http.Request) (conn network.DeadlineSettableConn) {
 	return nil
 }
 
-// SubstituteGenesisID - empty implementation
-func (network *MockNetwork) SubstituteGenesisID(rawURL string) string {
-	return rawURL
+// GetGenesisID - empty implementation
+func (network *MockNetwork) GetGenesisID() string {
+	if network.GenesisID == "" {
+		return "mocknet"
+	}
+	return network.GenesisID
+}
+
+// GetHTTPClient returns a http.Client with a suitable for the network
+func (network *MockNetwork) GetHTTPClient(address string) (*http.Client, error) {
+	return nil, errors.New("not implemented")
 }

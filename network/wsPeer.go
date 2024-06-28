@@ -172,7 +172,7 @@ type wsPeerCore struct {
 	readBuffer    chan<- IncomingMessage
 	rootURL       string
 	originAddress string // incoming connection remote host
-	client        http.Client
+	client        *http.Client
 }
 
 type disconnectReason string
@@ -329,7 +329,6 @@ type HTTPPeer interface {
 
 // IPAddressable is addressable with either IPv4 or IPv6 address
 type IPAddressable interface {
-	IPAddr() []byte
 	RoutingAddr() []byte
 }
 
@@ -352,21 +351,20 @@ type TCPInfoUnicastPeer interface {
 }
 
 // Create a wsPeerCore object
-func makePeerCore(ctx context.Context, net GossipNode, log logging.Logger, readBuffer chan<- IncomingMessage, rootURL string, roundTripper http.RoundTripper, originAddress string) wsPeerCore {
+func makePeerCore(ctx context.Context, net GossipNode, log logging.Logger, readBuffer chan<- IncomingMessage, addr string, client *http.Client, originAddress string) wsPeerCore {
 	return wsPeerCore{
 		net:           net,
 		netCtx:        ctx,
 		log:           log,
 		readBuffer:    readBuffer,
-		rootURL:       rootURL,
+		rootURL:       addr,
 		originAddress: originAddress,
-		client:        http.Client{Transport: roundTripper},
+		client:        client,
 	}
 }
 
-// GetAddress returns the root url to use to connect to this peer.
-// This implements HTTPPeer interface and used by external services to determine where to connect to.
-// TODO: should GetAddress be added to Peer interface?
+// GetAddress returns the root url to use to identify or connect to this peer.
+// This implements HTTPPeer interface and used to distinguish between peers.
 func (wp *wsPeerCore) GetAddress() string {
 	return wp.rootURL
 }
@@ -374,7 +372,11 @@ func (wp *wsPeerCore) GetAddress() string {
 // GetHTTPClient returns a client for this peer.
 // http.Client will maintain a cache of connections with some keepalive.
 func (wp *wsPeerCore) GetHTTPClient() *http.Client {
-	return &wp.client
+	return wp.client
+}
+
+func (wp *wsPeerCore) GetNetwork() GossipNode {
+	return wp.net
 }
 
 // Version returns the matching version from network.SupportedProtocolVersions
@@ -382,7 +384,7 @@ func (wp *wsPeer) Version() string {
 	return wp.version
 }
 
-func (wp *wsPeer) IPAddr() []byte {
+func (wp *wsPeer) ipAddr() []byte {
 	remote := wp.conn.RemoteAddr()
 	if remote == nil {
 		return nil
@@ -417,7 +419,7 @@ func (wp *wsPeer) RoutingAddr() []byte {
 	if wp.wsPeerCore.originAddress != "" {
 		ip = net.ParseIP(wp.wsPeerCore.originAddress)
 	} else {
-		ip = wp.IPAddr()
+		ip = wp.ipAddr()
 	}
 
 	if len(ip) != net.IPv6len {
@@ -511,7 +513,7 @@ func (wp *wsPeer) Respond(ctx context.Context, reqMsg IncomingMessage, outMsg Ou
 
 // setup values not trivially assigned
 func (wp *wsPeer) init(config config.Local, sendBufferLength int) {
-	wp.log.Debugf("wsPeer init outgoing=%v %#v", wp.outgoing, wp.rootURL)
+	wp.log.Debugf("wsPeer init outgoing=%v %#v", wp.outgoing, wp.GetAddress())
 	wp.closing = make(chan struct{})
 	wp.sendBufferHighPrio = make(chan sendMessages, sendBufferLength)
 	wp.sendBufferBulk = make(chan sendMessages, sendBufferLength)

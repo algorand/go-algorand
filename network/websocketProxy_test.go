@@ -28,6 +28,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/algorand/go-algorand/network/addr"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/websocket"
 	"github.com/stretchr/testify/require"
@@ -71,7 +72,7 @@ func (w *websocketProxy) ServeHTTP(response http.ResponseWriter, request *http.R
 	}
 
 	// set X-Forwarded-For
-	url, err := ParseHostOrURL(request.RemoteAddr)
+	url, err := addr.ParseHostOrURL(request.RemoteAddr)
 	if err != nil {
 		http.Error(response, err.Error(), http.StatusInternalServerError)
 		return
@@ -254,7 +255,7 @@ func TestWebsocketProxyWsNet(t *testing.T) {
 	gossipA, err := netA.addrToGossipAddr(addrA)
 	require.NoError(t, err)
 
-	parsedA, err := ParseHostOrURL(gossipA)
+	parsedA, err := addr.ParseHostOrURL(gossipA)
 	require.NoError(t, err)
 
 	// setup the proxy
@@ -316,7 +317,7 @@ func TestWebsocketProxyWsNet(t *testing.T) {
 	peerB := netA.peers[0]
 	require.NotEmpty(t, peerB.originAddress)
 	require.Equal(t, fakeXForwardedFor, peerB.originAddress)
-	require.NotEqual(t, peerB.RoutingAddr(), peerB.IPAddr())
+	require.NotEqual(t, peerB.RoutingAddr(), peerB.ipAddr())
 	fakeXForwardedForParsed := net.ParseIP(fakeXForwardedFor)
 	require.NotEqual(t, fakeXForwardedForParsed, peerB.RoutingAddr())
 }

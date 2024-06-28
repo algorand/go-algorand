@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	"github.com/algorand/go-algorand/network"
+	"github.com/algorand/go-algorand/network/addr"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
@@ -36,7 +37,7 @@ func TestHealthService_ServeHTTP(t *testing.T) {
 
 	_ = MakeHealthService(nodeA)
 
-	parsedURL, err := network.ParseHostOrURL(nodeA.rootURL())
+	parsedURL, err := addr.ParseHostOrURL(nodeA.rootURL())
 	require.NoError(t, err)
 
 	client := http.Client{}

@@ -94,12 +94,34 @@ type identityChallengeScheme interface {
 	VerifyResponse(h http.Header, c identityChallengeValue) (crypto.PublicKey, []byte, error)
 }
 
+type identityChallengeSigner interface {
+	Sign(message crypto.Hashable) crypto.Signature
+	SignBytes(message []byte) crypto.Signature
+	PublicKey() crypto.PublicKey
+}
+
+type identityChallengeLegacySigner struct {
+	keys *crypto.SignatureSecrets
+}
+
+func (s *identityChallengeLegacySigner) Sign(message crypto.Hashable) crypto.Signature {
+	return s.keys.Sign(message)
+}
+
+func (s *identityChallengeLegacySigner) SignBytes(message []byte) crypto.Signature {
+	return s.keys.SignBytes(message)
+}
+
+func (s *identityChallengeLegacySigner) PublicKey() crypto.PublicKey {
+	return s.keys.SignatureVerifier
+}
+
 // identityChallengePublicKeyScheme implements IdentityChallengeScheme by
 // exchanging and verifying public key challenges and attaching them to headers,
 // or returning the message payload to be sent
 type identityChallengePublicKeyScheme struct {
 	dedupName    string
-	identityKeys *crypto.SignatureSecrets
+	identityKeys identityChallengeSigner
 }
 
 // NewIdentityChallengeScheme will create a default Identification Scheme
@@ -108,13 +130,19 @@ func NewIdentityChallengeScheme(dn string) *identityChallengePublicKeyScheme {
 	if dn == "" {
 		return &identityChallengePublicKeyScheme{}
 	}
+
 	var seed crypto.Seed
 	crypto.RandBytes(seed[:])
 
 	return &identityChallengePublicKeyScheme{
 		dedupName:    dn,
-		identityKeys: crypto.GenerateSignatureSecrets(seed),
+		identityKeys: &identityChallengeLegacySigner{keys: crypto.GenerateSignatureSecrets(seed)},
 	}
+}
+
+// NewIdentityChallengeSchemeWithSigner will create an identification Scheme with a given signer
+func NewIdentityChallengeSchemeWithSigner(dn string, signer identityChallengeSigner) *identityChallengePublicKeyScheme {
+	return &identityChallengePublicKeyScheme{dedupName: dn, identityKeys: signer}
 }
 
 // AttachChallenge will generate a new identity challenge and will encode and attach the challenge
@@ -126,7 +154,7 @@ func (i identityChallengePublicKeyScheme) AttachChallenge(attachTo http.Header, 
 		return identityChallengeValue{}
 	}
 	c := identityChallenge{
-		Key:           i.identityKeys.SignatureVerifier,
+		Key:           i.identityKeys.PublicKey(),
 		Challenge:     newIdentityChallengeValue(),
 		PublicAddress: []byte(addr),
 	}
@@ -173,7 +201,7 @@ func (i identityChallengePublicKeyScheme) VerifyRequestAndAttachResponse(attachT
 	}
 	// make the response object, encode it and attach it to the header
 	r := identityChallengeResponse{
-		Key:               i.identityKeys.SignatureVerifier,
+		Key:               i.identityKeys.PublicKey(),
 		Challenge:         idChal.Msg.Challenge,
 		ResponseChallenge: newIdentityChallengeValue(),
 	}
@@ -271,12 +299,12 @@ type identityVerificationMessageSigned struct {
 	Signature crypto.Signature            `codec:"sig"`
 }
 
-func (i identityChallenge) signAndEncodeB64(s *crypto.SignatureSecrets) string {
+func (i identityChallenge) signAndEncodeB64(s identityChallengeSigner) string {
 	signedChal := i.Sign(s)
 	return base64.StdEncoding.EncodeToString(protocol.Encode(&signedChal))
 }
 
-func (i identityChallenge) Sign(secrets *crypto.SignatureSecrets) identityChallengeSigned {
+func (i identityChallenge) Sign(secrets identityChallengeSigner) identityChallengeSigned {
 	return identityChallengeSigned{Msg: i, Signature: secrets.Sign(i)}
 }
 
@@ -289,12 +317,12 @@ func (i identityChallengeSigned) Verify() bool {
 	return i.Msg.Key.Verify(i.Msg, i.Signature)
 }
 
-func (i identityChallengeResponse) signAndEncodeB64(s *crypto.SignatureSecrets) string {
+func (i identityChallengeResponse) signAndEncodeB64(s identityChallengeSigner) string {
 	signedChalResp := i.Sign(s)
 	return base64.StdEncoding.EncodeToString(protocol.Encode(&signedChalResp))
 }
 
-func (i identityChallengeResponse) Sign(secrets *crypto.SignatureSecrets) identityChallengeResponseSigned {
+func (i identityChallengeResponse) Sign(secrets identityChallengeSigner) identityChallengeResponseSigned {
 	return identityChallengeResponseSigned{Msg: i, Signature: secrets.Sign(i)}
 }
 
@@ -307,7 +335,7 @@ func (i identityChallengeResponseSigned) Verify() bool {
 	return i.Msg.Key.Verify(i.Msg, i.Signature)
 }
 
-func (i identityVerificationMessage) Sign(secrets *crypto.SignatureSecrets) identityVerificationMessageSigned {
+func (i identityVerificationMessage) Sign(secrets identityChallengeSigner) identityVerificationMessageSigned {
 	return identityVerificationMessageSigned{Msg: i, Signature: secrets.Sign(i)}
 }
 

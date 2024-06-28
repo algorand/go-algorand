@@ -94,7 +94,7 @@ func MakeFollower(log logging.Logger, rootDir string, cfg config.Local, phoneboo
 	node.config = cfg
 
 	// tie network, block fetcher, and agreement services together
-	p2pNode, err := network.NewWebsocketNetwork(node.log, node.config, phonebookAddresses, genesis.ID(), genesis.Network, nil)
+	p2pNode, err := network.NewWebsocketNetwork(node.log, node.config, phonebookAddresses, genesis.ID(), genesis.Network, nil, "", nil)
 	if err != nil {
 		log.Errorf("could not create websocket node: %v", err)
 		return nil, err
@@ -163,7 +163,7 @@ func (node *AlgorandFollowerNode) Config() config.Local {
 }
 
 // Start the node: connect to peers while obtaining a lock. Doesn't wait for initial sync.
-func (node *AlgorandFollowerNode) Start() {
+func (node *AlgorandFollowerNode) Start() error {
 	node.mu.Lock()
 	defer node.mu.Unlock()
 
@@ -173,22 +173,30 @@ func (node *AlgorandFollowerNode) Start() {
 	// The start network is being called only after the various services start up.
 	// We want to do so in order to let the services register their callbacks with the
 	// network package before any connections are being made.
-	startNetwork := func() {
+	startNetwork := func() error {
 		if !node.config.DisableNetworking {
 			// start accepting connections
-			node.net.Start()
+			err := node.net.Start()
+			if err != nil {
+				return err
+			}
 			node.config.NetAddress, _ = node.net.Address()
 		}
+		return nil
 	}
 
+	var err error
 	if node.catchpointCatchupService != nil {
-		startNetwork()
-		_ = node.catchpointCatchupService.Start(node.ctx)
+		err = startNetwork()
+		if err == nil {
+			err = node.catchpointCatchupService.Start(node.ctx)
+		}
 	} else {
 		node.catchupService.Start()
 		node.blockService.Start()
-		startNetwork()
+		err = startNetwork()
 	}
+	return err
 }
 
 // ListeningAddress retrieves the node's current listening address, if any.

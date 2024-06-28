@@ -288,32 +288,32 @@ func TestWsPeerIPAddr(t *testing.T) {
 	}
 	// some raw IPv4 address
 	conn.addr.IP = []byte{127, 0, 0, 1}
-	require.Equal(t, []byte{127, 0, 0, 1}, peer.IPAddr())
+	require.Equal(t, []byte{127, 0, 0, 1}, peer.ipAddr())
 	require.Equal(t, []byte{127, 0, 0, 1}, peer.RoutingAddr())
 
 	// IPv4 constructed from net.IPv4
 	conn.addr.IP = net.IPv4(127, 0, 0, 2)
-	require.Equal(t, []byte{127, 0, 0, 2}, peer.IPAddr())
+	require.Equal(t, []byte{127, 0, 0, 2}, peer.ipAddr())
 	require.Equal(t, []byte{127, 0, 0, 2}, peer.RoutingAddr())
 
 	// some IPv6 address
 	conn.addr.IP = net.IPv6linklocalallrouters
-	require.Equal(t, []byte(net.IPv6linklocalallrouters), peer.IPAddr())
+	require.Equal(t, []byte(net.IPv6linklocalallrouters), peer.ipAddr())
 	require.Equal(t, []byte(net.IPv6linklocalallrouters[0:8]), peer.RoutingAddr())
 
 	// embedded IPv4 into IPv6
 	conn.addr.IP = []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 127, 0, 0, 3}
 	require.Equal(t, 16, len(conn.addr.IP))
-	require.Equal(t, []byte{127, 0, 0, 3}, peer.IPAddr())
+	require.Equal(t, []byte{127, 0, 0, 3}, peer.ipAddr())
 	require.Equal(t, []byte{127, 0, 0, 3}, peer.RoutingAddr())
 	conn.addr.IP = []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 127, 0, 0, 4}
 	require.Equal(t, 16, len(conn.addr.IP))
-	require.Equal(t, []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 127, 0, 0, 4}, peer.IPAddr())
+	require.Equal(t, []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 127, 0, 0, 4}, peer.ipAddr())
 	require.Equal(t, []byte{127, 0, 0, 4}, peer.RoutingAddr())
 
 	// check incoming peer with originAddress set
 	conn.addr.IP = []byte{127, 0, 0, 1}
 	peer.wsPeerCore.originAddress = "127.0.0.2"
-	require.Equal(t, []byte{127, 0, 0, 1}, peer.IPAddr())
+	require.Equal(t, []byte{127, 0, 0, 1}, peer.ipAddr())
 	require.Equal(t, []byte{127, 0, 0, 2}, peer.RoutingAddr())
 }

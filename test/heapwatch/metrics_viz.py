@@ -11,13 +11,11 @@ Also works with bdevscripts for cluster tests since it uses heapWatch.py for met
 """
 
 import argparse
-from datetime import datetime
 import glob
 import logging
 import os
 import re
 import time
-from typing import Dict, Iterable, Tuple
 import sys
 
 import dash
@@ -25,95 +23,24 @@ from dash import dcc, html
 import plotly.graph_objs as go
 from plotly.subplots import make_subplots
 
-from metrics_delta import metric_line_re, num, terraform_inventory_ip_not_names
-from client_ram_report import dapp
+from metrics_lib import MetricType, parse_metrics, gather_metrics_files_by_nick
 
 logger = logging.getLogger(__name__)
-
-metrics_fname_re = re.compile(r'(.*?)\.(\d+_\d+)\.metrics')
-
-def gather_metrics_files_by_nick(metrics_files: Iterable[str]) -> Dict[str, Dict[datetime, str]]:
-    """return {"node nickname": {datetime: path, ...}, ...}}"""
-    filesByNick = {}
-    tf_inventory_path = None
-    for path in metrics_files:
-        fname = os.path.basename(path)
-        if fname == 'terraform-inventory.host':
-            tf_inventory_path = path
-            continue
-        m = metrics_fname_re.match(fname)
-        if not m:
-            continue
-        nick = m.group(1)
-        timestamp = m.group(2)
-        timestamp = datetime.strptime(timestamp, '%Y%m%d_%H%M%S')
-        dapp(filesByNick, nick, timestamp, path)
-    return tf_inventory_path, filesByNick
-
-
-TYPE_GAUGE = 0
-TYPE_COUNTER = 1
-
-def parse_metrics(fin: Iterable[str], nick: str, metrics_names: set=None, diff: bool=None) -> Tuple[Dict[str, float], Dict[str, int]]:
-    """Parse metrics file and return dicts of values and types"""
-    out = {}
-    types = {}
-    try:
-        last_type = None
-        for line in fin:
-            if not line:
-                continue
-            line = line.strip()
-            if not line:
-                continue
-            if line[0] == '#':
-                if line.startswith('# TYPE'):
-                    tpe = line.split()[-1]
-                    if tpe == 'gauge':
-                        last_type = TYPE_GAUGE
-                    elif tpe == 'counter':
-                        last_type = TYPE_COUNTER
-                continue
-            m = metric_line_re.match(line)
-            if m:
-                name = m.group(1)
-                value = num(m.group(2))
-            else:
-                ab = line.split()
-                name = ab[0]
-                value = num(ab[1])
-
-            det_idx = name.find('{')
-            if det_idx != -1:
-                name = name[:det_idx]
-            fullname = f'{name}{{n={nick}}}'
-            if not metrics_names or name in metrics_names:
-                out[fullname] = value
-                types[fullname] = last_type
-    except:
-        print(f'An exception occurred in parse_metrics: {sys.exc_info()}')
-        pass
-    if diff and metrics_names and len(metrics_names) == 2 and len(out) == 2:
-        m = list(out.keys())
-        name = f'{m[0]}_-_{m[1]}'
-        new_out = {name: out[m[0]] - out[m[1]]}
-        new_types = {name: TYPE_GAUGE}
-        out = new_out
-        types = new_types
-
-    return out, types
 
 
 def main():
     os.environ['TZ'] = 'UTC'
     time.tzset()
-    default_output_file = 'metrics_viz.png'
+    default_img_filename = 'metrics_viz.png'
+    default_html_filename = 'metrics_viz.html'
 
     ap = argparse.ArgumentParser()
     ap.add_argument('metrics_names', nargs='+', default=None, help='metric name(s) to track')
     ap.add_argument('-d', '--dir', type=str, default=None, help='dir path to find /*.metrics in')
     ap.add_argument('-l', '--list-nodes', default=False, action='store_true', help='list available node names with metrics')
-    ap.add_argument('-s', '--save', action='store_true', default=None, help=f'save plot to \'{default_output_file}\' file instead of showing it')
+    ap.add_argument('--nick-re', action='append', default=[], help='regexp to filter node names, may be repeated')
+    ap.add_argument('--nick-lre', action='append', default=[], help='label:regexp to filter node names, may be repeated')
+    ap.add_argument('-s', '--save', type=str, choices=['png', 'html'], help=f'save plot to \'{default_img_filename}\' or \'{default_html_filename}\' file instead of showing it')
     ap.add_argument('--diff', action='store_true', default=None, help='diff two gauge metrics instead of plotting their values. Requires two metrics names to be set')
     ap.add_argument('--verbose', default=False, action='store_true')
 
@@ -128,16 +55,8 @@ def main():
         return 1
 
     metrics_files = sorted(glob.glob(os.path.join(args.dir, '*.metrics')))
-    tf_inventory_path, filesByNick = gather_metrics_files_by_nick(metrics_files)
-    if tf_inventory_path:
-        # remap ip addresses to node names
-        ip_to_name = terraform_inventory_ip_not_names(tf_inventory_path)
-        for nick in filesByNick.keys():
-            name = ip_to_name.get(nick)
-            if name:
-                val = filesByNick[nick]
-                filesByNick[name] = val
-                del filesByNick[nick]
+    metrics_files.extend(glob.glob(os.path.join(args.dir, 'terraform-inventory.host')))
+    filesByNick = gather_metrics_files_by_nick(metrics_files, args.nick_re, args.nick_lre)
 
     if args.list_nodes:
         print('Available nodes:', ', '.join(sorted(filesByNick.keys())))
@@ -156,50 +75,76 @@ def main():
 
     fig = make_subplots(
         rows=nrows, cols=1,
-        vertical_spacing=0.03, shared_xaxes=True)
+        vertical_spacing=0.03, shared_xaxes=True,
+        subplot_titles=[f'{name}' for name in sorted(metrics_names)],
+    )
 
     fig['layout']['margin'] = {
-        'l': 30, 'r': 10, 'b': 10, 't': 10
+        'l': 30, 'r': 10, 'b': 10, 't': 20
     }
     fig['layout']['height'] = 500 * nrows
     # fig.update_layout(template="plotly_dark")
 
-    data = {
-        'time': [],
-    }
-    raw_series = {}
-    for nick, items in filesByNick.items():
-        active_metrics = set()
-        for dt, metrics_file in items.items():
+    for nick, files_by_date in filesByNick.items():
+        active_metrics = {}
+        data = {'time': []}
+        raw_series = {}
+        raw_times = {}
+        idx = 0
+        for dt, metrics_file in files_by_date.items():
             data['time'].append(dt)
             with open(metrics_file, 'rt') as f:
-                metrics, types = parse_metrics(f, nick, metrics_names, args.diff)
-                for metric_name, metric_value in metrics.items():
-                    raw_value = metric_value
-                    if metric_name not in data:
-                        data[metric_name] = []
-                        raw_series[metric_name] = []
-                    if types[metric_name] == TYPE_COUNTER:
-                        if len(raw_series[metric_name]) > 0:
-                            metric_value = (metric_value - raw_series[metric_name][-1]) / (dt - data['time'][-2]).total_seconds()
-                        else:
-                            metric_value = 0
-                    data[metric_name].append(metric_value)
-                    raw_series[metric_name].append(raw_value)
+                metrics = parse_metrics(f, nick, metrics_names, args.diff)
+                for metric_name, metrics_seq in metrics.items():
+                    active_metric_names = []
+                    for metric in metrics_seq:
+                        raw_value = metric.value
 
-                    active_metrics.add(metric_name)
+                        full_name = metric.string()
+                        if full_name not in data:
+                            # handle gaps in data, sometimes metric file might miss a value
+                            # but the chart requires matching x and y series (time and metric value)
+                            # data is what does into the chart, and raw_series is used to calculate
+                            data[full_name] = [0] * len(files_by_date)
+                            raw_series[full_name] = []
+                            raw_times[full_name] = []
 
-        for i, metric in enumerate(sorted(active_metrics)):
-            fig.append_trace(go.Scatter(
-                x=data['time'],
-                y=data[metric],
-                name=metric,
-                mode='lines+markers',
-                line=dict(width=1),
-            ), i+1, 1)
+                        metric_value = metric.value
+                        if metric.type == MetricType.COUNTER:
+                            if len(raw_series[full_name]) > 0 and len(raw_times[full_name]) > 0:
+                                metric_value = (metric_value - raw_series[full_name][-1]) / (dt - raw_times[full_name][-1]).total_seconds()
+                            else:
+                                metric_value = 0
+
+                        data[full_name][idx] = metric_value
+                        raw_series[full_name].append(raw_value)
+                        raw_times[full_name].append(dt)
+
+                        active_metric_names.append(full_name)
+
+                    active_metric_names.sort()
+                    active_metrics[metric_name] = active_metric_names
+            idx += 1
+
+        for i, metric_pair in enumerate(sorted(active_metrics.items())):
+            metric_name, metric_fullnames = metric_pair
+            for metric_fullname in metric_fullnames:
+                fig.append_trace(go.Scatter(
+                    x=data['time'],
+                    y=data[metric_fullname],
+                    name=metric_fullname,
+                    mode='lines+markers',
+                    line=dict(width=1),
+                ), i+1, 1)
 
     if args.save:
-        fig.write_image(os.path.join(args.dir, default_output_file))
+        if args.save == 'html':
+            target_path = os.path.join(args.dir, default_html_filename)
+            fig.write_html(target_path)
+        else:
+            target_path = os.path.join(args.dir, default_img_filename)
+            fig.write_image(target_path)
+        print(f'Saved plot to {target_path}')
     else:
         fig.show()
 
