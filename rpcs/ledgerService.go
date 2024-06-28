@@ -34,7 +34,6 @@ import (
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
-	"github.com/algorand/go-algorand/network"
 )
 
 const (
@@ -63,7 +62,6 @@ type LedgerForService interface {
 // httpGossipNode is a reduced interface for the gossipNode that only includes the methods needed by the LedgerService
 type httpGossipNode interface {
 	RegisterHTTPHandler(path string, handler http.Handler)
-	GetHTTPRequestConnection(request *http.Request) (conn network.DeadlineSettableConn)
 }
 
 // LedgerService represents the Ledger RPC API
@@ -211,17 +209,16 @@ func (ls *LedgerService) ServeHTTP(response http.ResponseWriter, request *http.R
 		response.WriteHeader(http.StatusOK)
 		return
 	}
-	if conn := ls.net.GetHTTPRequestConnection(request); conn != nil {
-		maxCatchpointFileWritingDuration := 2 * time.Minute
+	rc := http.NewResponseController(response)
+	maxCatchpointFileWritingDuration := 2 * time.Minute
 
-		catchpointFileSize, err := cs.Size()
-		if err != nil || catchpointFileSize <= 0 {
-			maxCatchpointFileWritingDuration += maxCatchpointFileSize * time.Second / expectedWorstUploadSpeedBytesPerSecond
-		} else {
-			maxCatchpointFileWritingDuration += time.Duration(catchpointFileSize) * time.Second / expectedWorstUploadSpeedBytesPerSecond
-		}
-		conn.SetWriteDeadline(time.Now().Add(maxCatchpointFileWritingDuration))
+	catchpointFileSize, err := cs.Size()
+	if err != nil || catchpointFileSize <= 0 {
+		maxCatchpointFileWritingDuration += maxCatchpointFileSize * time.Second / expectedWorstUploadSpeedBytesPerSecond
 	} else {
+		maxCatchpointFileWritingDuration += time.Duration(catchpointFileSize) * time.Second / expectedWorstUploadSpeedBytesPerSecond
+	}
+	if err := rc.SetWriteDeadline(time.Now().Add(maxCatchpointFileWritingDuration)); err != nil {
 		logging.Base().Warnf("LedgerService.ServeHTTP unable to set connection timeout")
 	}
 

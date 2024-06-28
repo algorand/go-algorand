@@ -106,11 +106,6 @@ func (network *MockNetwork) RegisterHTTPHandler(path string, handler http.Handle
 // OnNetworkAdvance - empty implementation
 func (network *MockNetwork) OnNetworkAdvance() {}
 
-// GetHTTPRequestConnection - empty implementation
-func (network *MockNetwork) GetHTTPRequestConnection(request *http.Request) (conn network.DeadlineSettableConn) {
-	return nil
-}
-
 // GetGenesisID - empty implementation
 func (network *MockNetwork) GetGenesisID() string {
 	if network.GenesisID == "" {

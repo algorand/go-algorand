@@ -155,9 +155,6 @@ func (w *whiteholeNetwork) GetPeers(options ...network.PeerOption) []network.Pee
 }
 func (w *whiteholeNetwork) RegisterHTTPHandler(path string, handler http.Handler) {
 }
-func (w *whiteholeNetwork) GetHTTPRequestConnection(request *http.Request) (conn network.DeadlineSettableConn) {
-	return nil
-}
 
 func (w *whiteholeNetwork) Start() error {
 	w.quit = make(chan struct{})

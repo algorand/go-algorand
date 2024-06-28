@@ -1031,17 +1031,6 @@ func (wn *WebsocketNetwork) checkIncomingConnectionVariables(response http.Respo
 	return http.StatusOK
 }
 
-// GetHTTPRequestConnection returns the underlying connection for the given request. Note that the request must be the same
-// request that was provided to the http handler ( or provide a fallback Context() to that )
-// if the provided request has no associated connection, it returns nil. ( this should not happen for any http request that was registered
-// by WebsocketNetwork )
-func (wn *WebsocketNetwork) GetHTTPRequestConnection(request *http.Request) (conn DeadlineSettableConn) {
-	if wn.requestsTracker != nil {
-		conn = wn.requestsTracker.GetRequestConnection(request)
-	}
-	return
-}
-
 // ServerHTTP handles the gossip network functions over websockets
 func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 	if !wn.config.EnableGossipService {
