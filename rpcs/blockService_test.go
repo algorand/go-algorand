@@ -533,7 +533,7 @@ func makeLedger(t *testing.T, namePostfix string) *data.Ledger {
 	prefix := t.Name() + namePostfix
 	ledger, err := data.LoadLedger(
 		log, prefix, inMem, protocol.ConsensusCurrentVersion, genBal, "", genHash,
-		nil, cfg,
+		cfg,
 	)
 	require.NoError(t, err)
 	return ledger

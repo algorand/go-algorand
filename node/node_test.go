@@ -165,7 +165,6 @@ func setupFullNodesEx(
 
 		t.Logf("Root directory of node %d (%s): %s\n", i, ni.wsNetAddr(), rootDirectory)
 
-
 		genesisDir := filepath.Join(rootDirectory, g.ID())
 		os.Mkdir(genesisDir, 0700)
 

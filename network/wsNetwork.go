@@ -767,10 +767,10 @@ func (wn *WebsocketNetwork) Start() error {
 	for i := 0; i < incomingThreads; i++ {
 		wn.wg.Add(1)
 		// We pass the peersConnectivityCheckTicker.C here so that we don't need to syncronize the access to the ticker's data structure.
-		go wn.handler.messageHandlerThread(&wn.wg, wn.peersConnectivityCheckTicker.C, wn)
+		go wn.handler.messageHandlerThread(&wn.wg, wn.peersConnectivityCheckTicker.C, wn, "network", "WebsocketNetwork")
 	}
 	wn.wg.Add(1)
-	go wn.broadcaster.broadcastThread(&wn.wg, wn)
+	go wn.broadcaster.broadcastThread(&wn.wg, wn, "network", "WebsocketNetwork")
 	if wn.prioScheme != nil {
 		wn.wg.Add(1)
 		go wn.prioWeightRefresh()
@@ -1160,8 +1160,9 @@ func (wn *WebsocketNetwork) maybeSendMessagesOfInterest(peer *wsPeer, messagesOf
 	}
 }
 
-func (wn *msgHandler) messageHandlerThread(wg *sync.WaitGroup, peersConnectivityCheckCh <-chan time.Time, net networkPeerManager) {
+func (wn *msgHandler) messageHandlerThread(wg *sync.WaitGroup, peersConnectivityCheckCh <-chan time.Time, net networkPeerManager, profLabels ...string) {
 	defer wg.Done()
+	util.SetGoroutineLabels(append(profLabels, "func", "msgHandler.messageHandlerThread")...)
 
 	for {
 		select {
@@ -1262,8 +1263,9 @@ func (wn *msgHandler) sendFilterMessage(msg IncomingMessage, net networkPeerMana
 	}
 }
 
-func (wn *msgBroadcaster) broadcastThread(wg *sync.WaitGroup, net networkPeerManager) {
+func (wn *msgBroadcaster) broadcastThread(wg *sync.WaitGroup, net networkPeerManager, profLabels ...string) {
 	defer wg.Done()
+	util.SetGoroutineLabels(append(profLabels, "func", "msgHandler.broadcastThread")...)
 
 	slowWritingPeerCheckTicker := time.NewTicker(wn.slowWritingPeerMonitorInterval)
 	defer slowWritingPeerCheckTicker.Stop()

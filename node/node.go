@@ -223,14 +223,14 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	}
 	node.net = p2pNode
 
-	node.cryptoPool = execpool.MakePool(node)
-	node.lowPriorityCryptoVerificationPool = execpool.MakeBacklog(node.cryptoPool, 2*node.cryptoPool.GetParallelism(), execpool.LowPriority, node)
-	node.highPriorityCryptoVerificationPool = execpool.MakeBacklog(node.cryptoPool, 2*node.cryptoPool.GetParallelism(), execpool.HighPriority, node)
+	node.cryptoPool = execpool.MakePool(node, "worker", "cryptoPool")
+	node.lowPriorityCryptoVerificationPool = execpool.MakeBacklog(node.cryptoPool, 2*node.cryptoPool.GetParallelism(), execpool.LowPriority, node, "worker", "lowPriorityCryptoVerificationPool")
+	node.highPriorityCryptoVerificationPool = execpool.MakeBacklog(node.cryptoPool, 2*node.cryptoPool.GetParallelism(), execpool.HighPriority, node, "worker", "highPriorityCryptoVerificationPool")
 	ledgerPaths := ledger.DirsAndPrefix{
 		DBFilePrefix:        config.LedgerFilenamePrefix,
 		ResolvedGenesisDirs: node.genesisDirs,
 	}
-	node.ledger, err = data.LoadLedger(node.log, ledgerPaths, false, genesis.Proto, genalloc, node.genesisID, node.genesisHash, []ledgercore.BlockListener{}, cfg)
+	node.ledger, err = data.LoadLedger(node.log, ledgerPaths, false, genesis.Proto, genalloc, node.genesisID, node.genesisHash, cfg)
 	if err != nil {
 		log.Errorf("Cannot initialize ledger (%v): %v", ledgerPaths, err)
 		return nil, err
@@ -253,12 +253,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 
 	node.transactionPool = pools.MakeTransactionPool(node.ledger.Ledger, cfg, node.log, node)
 
-	blockListeners := []ledgercore.BlockListener{
-		node.transactionPool,
-		node,
-	}
-
-	node.ledger.RegisterBlockListeners(blockListeners)
+	node.ledger.RegisterBlockListeners([]ledgercore.BlockListener{node.transactionPool, node})
 	txHandlerOpts := data.TxHandlerOpts{
 		TxPool:        node.transactionPool,
 		ExecutionPool: node.lowPriorityCryptoVerificationPool,
@@ -1095,6 +1090,7 @@ func (node *AlgorandFullNode) OnNewBlock(block bookkeeping.Block, delta ledgerco
 // don't have to delete key for each block we received.
 func (node *AlgorandFullNode) oldKeyDeletionThread(done <-chan struct{}) {
 	defer node.monitoringRoutinesWaitGroup.Done()
+
 	for {
 		select {
 		case <-done:
@@ -1240,6 +1236,7 @@ func (node *AlgorandFullNode) SetCatchpointCatchupMode(catchpointCatchupMode boo
 			return
 		}
 		defer node.mu.Unlock()
+
 		// start
 		node.transactionPool.Reset()
 		node.catchupService.Start()
