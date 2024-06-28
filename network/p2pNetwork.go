@@ -138,11 +138,11 @@ func (n *P2PNetwork) Start() {
 	for i := 0; i < incomingThreads; i++ {
 		n.wg.Add(1)
 		// We pass the peersConnectivityCheckTicker.C here so that we don't need to syncronize the access to the ticker's data structure.
-		go n.handler.messageHandlerThread(&n.wg, n.wsPeersConnectivityCheckTicker.C, n)
+		go n.handler.messageHandlerThread(&n.wg, n.wsPeersConnectivityCheckTicker.C, n, "network", "P2PNetwork")
 	}
 
 	n.wg.Add(1)
-	go n.broadcaster.broadcastThread(&n.wg, n)
+	go n.broadcaster.broadcastThread(&n.wg, n, "network", "P2PNetwork")
 	n.service.DialPeersUntilTargetCount(n.config.GossipFanout)
 
 	n.wg.Add(1)
