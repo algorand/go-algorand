@@ -192,6 +192,7 @@ type p2pPeerStats struct {
 	txReceived atomic.Uint64
 }
 
+// gossipSubPeer implements the DeadlineSettableConn, IPAddressable, and ErlClient interfaces.
 type gossipSubPeer struct {
 	peerID      peer.ID
 	net         GossipNode
