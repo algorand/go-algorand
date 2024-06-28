@@ -218,7 +218,7 @@ func (ls *LedgerService) ServeHTTP(response http.ResponseWriter, request *http.R
 	} else {
 		maxCatchpointFileWritingDuration += time.Duration(catchpointFileSize) * time.Second / expectedWorstUploadSpeedBytesPerSecond
 	}
-	if err := rc.SetWriteDeadline(time.Now().Add(maxCatchpointFileWritingDuration)); err != nil {
+	if wdErr := rc.SetWriteDeadline(time.Now().Add(maxCatchpointFileWritingDuration)); wdErr != nil {
 		logging.Base().Warnf("LedgerService.ServeHTTP unable to set connection timeout")
 	}
 
