@@ -758,23 +758,6 @@ func (n *P2PNetwork) wsStreamHandler(ctx context.Context, p2pPeer peer.ID, strea
 			return
 		}
 	} else {
-		n.wsPeersLock.Lock()
-		numOutgoingPeers := 0
-		for _, peer := range n.wsPeers {
-			if peer.outgoing {
-				n.log.Debugf("outgoing peer orig=%s addr=%s", peer.OriginAddress(), peer.GetAddress())
-				numOutgoingPeers++
-			}
-		}
-		n.wsPeersLock.Unlock()
-		if numOutgoingPeers >= n.config.GossipFanout {
-			// this appears to be some auxiliary connection made by libp2p itself like DHT connection.
-			// skip this connection since there are already enough peers
-			n.log.Debugf("skipping outgoing connection to peer %s: num outgoing %d > fanout %d ", p2pPeer, numOutgoingPeers, n.config.GossipFanout)
-			stream.Close()
-			return
-		}
-
 		_, err := stream.Write([]byte("1"))
 		if err != nil {
 			n.log.Warnf("wsStreamHandler: error sending initial message: %s", err)
