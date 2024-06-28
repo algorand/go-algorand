@@ -125,11 +125,7 @@ func MakeHost(cfg config.Local, datadir string, pstore *pstore.PeerStore) (host.
 	}
 
 	var disableMetrics = func(cfg *libp2p.Config) error { return nil }
-	if !cfg.EnableMetricReporting {
-		disableMetrics = libp2p.DisableMetrics()
-	} else {
-		metrics.DefaultRegistry().Register(&metrics.PrometheusDefaultMetrics)
-	}
+	metrics.DefaultRegistry().Register(&metrics.PrometheusDefaultMetrics)
 
 	host, err := libp2p.New(
 		libp2p.Identity(privKey),

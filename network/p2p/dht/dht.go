@@ -57,12 +57,10 @@ func MakeDHT(ctx context.Context, h host.Host, networkID algoproto.NetworkID, cf
 		dht.BootstrapPeersFunc(bootstrapFunc),
 	}
 
-	if cfg.EnableMetricReporting {
-		if err := view.Register(dhtmetrics.DefaultViews...); err != nil {
-			return nil, err
-		}
-		metrics.DefaultRegistry().Register(&metrics.OpencensusDefaultMetrics)
+	if err := view.Register(dhtmetrics.DefaultViews...); err != nil {
+		return nil, err
 	}
+	metrics.DefaultRegistry().Register(&metrics.OpencensusDefaultMetrics)
 
 	return dht.New(ctx, h, dhtCfg...)
 }
