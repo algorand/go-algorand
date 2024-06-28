@@ -104,6 +104,11 @@ func (nd *nodeDir) configure() (err error) {
 		return
 	}
 
+	if err = nd.configurePublicAddress(nd.PublicAddress); err != nil {
+		fmt.Fprintf(os.Stdout, "Error during configurePublicAddress: %s\n", err)
+		return
+	}
+
 	if err = nd.configureP2PDNSBootstrap(nd.P2PBootstrap); err != nil {
 		fmt.Fprintf(os.Stdout, "Error during configureP2PDNSBootstrap: %s\n", err)
 		return
@@ -160,8 +165,33 @@ func (nd *nodeDir) configureNetAddress() (err error) {
 			nd.configurator.addRelaySrv(bootstrapRecord.PrimarySRVBootstrap, nd.NetAddress)
 		}
 	}
+	if nd.P2PNetAddress != "" {
+		fmt.Fprintf(os.Stdout, " - Assigning P2PNetAddress: %s\n", nd.P2PNetAddress)
+		nd.config.P2PNetAddress = nd.P2PNetAddress
+	}
 	err = nd.saveConfig()
 	return
+}
+
+func (nd *nodeDir) configurePublicAddress(publicAddress bool) error {
+	if !publicAddress {
+		return nil
+	}
+
+	if err := nd.ensureConfig(); err != nil {
+		return err
+	}
+
+	if !nd.IsRelay() {
+		return errors.New("publicAddress is only valid for relay nodes")
+	}
+
+	if nd.NetAddress[0] == ':' {
+		networkHostName := nd.configurator.getNetworkHostName() + nd.NetAddress
+		nd.config.PublicAddress = networkHostName
+	}
+
+	return nil
 }
 
 func (nd *nodeDir) configureP2PDNSBootstrap(p2pBootstrap bool) error {
@@ -179,7 +209,7 @@ func (nd *nodeDir) configureP2PDNSBootstrap(p2pBootstrap bool) error {
 	if !nd.config.EnableP2P && !nd.config.EnableP2PHybridMode {
 		return errors.New("p2p bootstrap requires EnableP2P or EnableP2PHybridMode to be set")
 	}
-	if nd.NetAddress == "" && nd.config.P2PNetAddress == "" {
+	if nd.NetAddress == "" && nd.P2PNetAddress == "" {
 		return errors.New("p2p bootstrap requires NetAddress or P2PNetAddress to be set")
 	}
 	if !nd.config.EnableGossipService {
@@ -187,8 +217,8 @@ func (nd *nodeDir) configureP2PDNSBootstrap(p2pBootstrap bool) error {
 	}
 
 	netAddress := nd.NetAddress
-	if nd.config.P2PNetAddress != "" {
-		netAddress = nd.config.P2PNetAddress
+	if nd.P2PNetAddress != "" {
+		netAddress = nd.P2PNetAddress
 	}
 
 	key, err := p2p.GetPrivKey(config.Local{P2PPersistPeerID: true}, nd.dataDir)

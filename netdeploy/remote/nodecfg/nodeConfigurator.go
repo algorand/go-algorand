@@ -93,6 +93,10 @@ func (nc *nodeConfigurator) apply(rootConfigDir, rootNodeDir string) (err error)
 
 	nc.genesisFile = filepath.Join(rootConfigDir, "genesisdata", config.GenesisJSONFile)
 	nc.genesisData, err = bookkeeping.LoadGenesisFromFile(nc.genesisFile)
+	if err != nil {
+		return fmt.Errorf("error loading genesis from '%s': %v", nc.genesisFile, err)
+
+	}
 	nodeDirs, err := nc.prepareNodeDirs(nc.config.Nodes, rootConfigDir, rootNodeDir)
 	if err != nil {
 		return fmt.Errorf("error preparing node directories: %v", err)
@@ -198,6 +202,11 @@ func (nc *nodeConfigurator) prepareNodeDirs(configs []remote.NodeConfig, rootCon
 	return
 }
 
+// getHostName creates a DNS name for a host
+func (nc *nodeConfigurator) getNetworkHostName() string {
+	return nc.config.Name + "." + string(nc.genesisData.Network) + ".algodev.network"
+}
+
 func (nc *nodeConfigurator) registerDNSRecords() (err error) {
 	cfZoneID, cfToken, err := getClouldflareCredentials()
 	if err != nil {
@@ -215,7 +224,7 @@ func (nc *nodeConfigurator) registerDNSRecords() (err error) {
 	// If we need to register anything, first register a DNS entry
 	// to map our network DNS name to our public name (or IP) provided to nodecfg
 	// Network HostName = eg r1.testnet.algodev.network
-	networkHostName := nc.config.Name + "." + string(nc.genesisData.Network) + ".algodev.network"
+	networkHostName := nc.getNetworkHostName()
 	isIP := net.ParseIP(nc.dnsName) != nil
 	var recordType string
 	if isIP {
