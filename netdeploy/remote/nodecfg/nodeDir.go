@@ -18,6 +18,7 @@ package nodecfg
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -27,6 +28,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/netdeploy/remote"
+	"github.com/algorand/go-algorand/network/p2p"
 	"github.com/algorand/go-algorand/shared/algoh"
 	"github.com/algorand/go-algorand/util/tokens"
 )
@@ -101,6 +103,12 @@ func (nd *nodeDir) configure() (err error) {
 		fmt.Fprintf(os.Stdout, "Error during configureNetAddress: %s\n", err)
 		return
 	}
+
+	if err = nd.configureP2PDNSBootstrap(nd.P2PBootstrap); err != nil {
+		fmt.Fprintf(os.Stdout, "Error during configureP2PDNSBootstrap: %s\n", err)
+		return
+	}
+
 	fmt.Println("Done configuring node directory.")
 	return
 }
@@ -154,6 +162,45 @@ func (nd *nodeDir) configureNetAddress() (err error) {
 	}
 	err = nd.saveConfig()
 	return
+}
+
+func (nd *nodeDir) configureP2PDNSBootstrap(p2pBootstrap bool) error {
+	if !p2pBootstrap {
+		return nil
+	}
+	fmt.Fprintf(os.Stdout, " - Configuring P2P DNS Bootstrap: %s\n", nd.Name)
+	if err := nd.ensureConfig(); err != nil {
+		return err
+	}
+	// ensure p2p config params set are what is expected:
+	// - EnableP2P or EnableP2PHybridMode
+	// - NetAddress or P2PNetAddress is set
+	// - EnableGossipService
+	if !nd.config.EnableP2P && !nd.config.EnableP2PHybridMode {
+		return errors.New("p2p bootstrap requires EnableP2P or EnableP2PHybridMode to be set")
+	}
+	if nd.NetAddress == "" && nd.config.P2PNetAddress == "" {
+		return errors.New("p2p bootstrap requires NetAddress or P2PNetAddress to be set")
+	}
+	if !nd.config.EnableGossipService {
+		return errors.New("p2p bootstrap requires EnableGossipService to be set")
+	}
+
+	netAddress := nd.NetAddress
+	if nd.config.P2PNetAddress != "" {
+		netAddress = nd.config.P2PNetAddress
+	}
+
+	key, err := p2p.GetPrivKey(config.Local{P2PPersistPeerID: true}, nd.dataDir)
+	if err != nil {
+		return err
+	}
+	peerID, err := p2p.PeerIDFromPublicKey(key.GetPublic())
+	if err != nil {
+		return err
+	}
+	nd.configurator.addP2PBootstrap(netAddress, peerID.String())
+	return nil
 }
 
 func (nd *nodeDir) configureAPIEndpoint(address string) (err error) {

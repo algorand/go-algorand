@@ -268,6 +268,7 @@ const (
 	dnssecSRV = 1 << iota
 	dnssecRelayAddr
 	dnssecTelemetryAddr
+	dnssecTXT
 )
 
 const (

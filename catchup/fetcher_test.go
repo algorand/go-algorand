@@ -21,7 +21,6 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"strings"
 	"testing"
 
 	"github.com/gorilla/mux"
@@ -173,8 +172,8 @@ func (b *basicRPCNode) GetPeers(options ...network.PeerOption) []network.Peer {
 	return b.peers
 }
 
-func (b *basicRPCNode) SubstituteGenesisID(rawURL string) string {
-	return strings.Replace(rawURL, "{genesisID}", "test genesisID", -1)
+func (b *basicRPCNode) GetGenesisID() string {
+	return "test genesisID"
 }
 
 type httpTestPeerSource struct {
@@ -191,8 +190,8 @@ func (s *httpTestPeerSource) RegisterHandlers(dispatch []network.TaggedMessageHa
 	s.dispatchHandlers = append(s.dispatchHandlers, dispatch...)
 }
 
-func (s *httpTestPeerSource) SubstituteGenesisID(rawURL string) string {
-	return strings.Replace(rawURL, "{genesisID}", "test genesisID", -1)
+func (s *httpTestPeerSource) GetGenesisID() string {
+	return "test genesisID"
 }
 
 // implement network.HTTPPeer
@@ -201,8 +200,13 @@ type testHTTPPeer string
 func (p *testHTTPPeer) GetAddress() string {
 	return string(*p)
 }
+
 func (p *testHTTPPeer) GetHTTPClient() *http.Client {
-	return &http.Client{}
+	return &http.Client{
+		Transport: &network.HTTPPAddressBoundTransport{
+			Addr:           p.GetAddress(),
+			InnerTransport: http.DefaultTransport},
+	}
 }
 func (p *testHTTPPeer) GetHTTPPeer() network.HTTPPeer {
 	return p
@@ -237,6 +241,8 @@ type testUnicastPeer struct {
 func (p *testUnicastPeer) GetAddress() string {
 	return "test"
 }
+
+func (p *testUnicastPeer) GetNetwork() network.GossipNode { return p.gn }
 
 func (p *testUnicastPeer) Request(ctx context.Context, tag protocol.Tag, topics network.Topics) (resp *network.Response, e error) {
 

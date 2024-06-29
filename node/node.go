@@ -28,6 +28,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/algorand/go-deadlock"
+
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/agreement/gossip"
 	"github.com/algorand/go-algorand/catchup"
@@ -47,6 +49,7 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/network/messagetracer"
+	"github.com/algorand/go-algorand/network/p2p"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/rpcs"
 	"github.com/algorand/go-algorand/stateproof"
@@ -54,7 +57,6 @@ import (
 	"github.com/algorand/go-algorand/util/execpool"
 	"github.com/algorand/go-algorand/util/metrics"
 	"github.com/algorand/go-algorand/util/timers"
-	"github.com/algorand/go-deadlock"
 )
 
 const (
@@ -197,16 +199,21 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 
 	// tie network, block fetcher, and agreement services together
 	var p2pNode network.GossipNode
-	if cfg.EnableP2P {
-		// TODO: pass more appropriate genesisDir (hot/cold). Presently this is just used to store a peerID key.
-		p2pNode, err = network.NewP2PNetwork(node.log, node.config, node.genesisDirs.RootGenesisDir, phonebookAddresses, genesis.ID(), genesis.Network)
+	if cfg.EnableP2PHybridMode {
+		p2pNode, err = network.NewHybridP2PNetwork(node.log, node.config, rootDir, phonebookAddresses, genesis.ID(), genesis.Network, node)
+		if err != nil {
+			log.Errorf("could not create hybrid p2p node: %v", err)
+			return nil, err
+		}
+	} else if cfg.EnableP2P {
+		p2pNode, err = network.NewP2PNetwork(node.log, node.config, rootDir, phonebookAddresses, genesis.ID(), genesis.Network, node)
 		if err != nil {
 			log.Errorf("could not create p2p node: %v", err)
 			return nil, err
 		}
 	} else {
 		var wsNode *network.WebsocketNetwork
-		wsNode, err = network.NewWebsocketNetwork(node.log, node.config, phonebookAddresses, genesis.ID(), genesis.Network, node)
+		wsNode, err = network.NewWebsocketNetwork(node.log, node.config, phonebookAddresses, genesis.ID(), genesis.Network, node, "", nil)
 		if err != nil {
 			log.Errorf("could not create websocket node: %v", err)
 			return nil, err
@@ -340,7 +347,7 @@ func (node *AlgorandFullNode) Config() config.Local {
 }
 
 // Start the node: connect to peers and run the agreement service while obtaining a lock. Doesn't wait for initial sync.
-func (node *AlgorandFullNode) Start() {
+func (node *AlgorandFullNode) Start() error {
 	node.mu.Lock()
 	defer node.mu.Unlock()
 
@@ -350,12 +357,16 @@ func (node *AlgorandFullNode) Start() {
 	// The start network is being called only after the various services start up.
 	// We want to do so in order to let the services register their callbacks with the
 	// network package before any connections are being made.
-	startNetwork := func() {
+	startNetwork := func() error {
 		if !node.config.DisableNetworking {
 			// start accepting connections
-			node.net.Start()
+			err := node.net.Start()
+			if err != nil {
+				return err
+			}
 			node.config.NetAddress, _ = node.net.Address()
 		}
+		return nil
 	}
 
 	if node.catchpointCatchupService != nil {
@@ -369,11 +380,29 @@ func (node *AlgorandFullNode) Start() {
 		node.ledgerService.Start()
 		node.txHandler.Start()
 		node.stateProofWorker.Start()
-		startNetwork()
+		err := startNetwork()
+		if err != nil {
+			return err
+		}
 
 		node.startMonitoringRoutines()
 	}
+	return nil
+}
 
+// Capabilities returns the node's capabilities for advertising to other nodes.
+func (node *AlgorandFullNode) Capabilities() []p2p.Capability {
+	var caps []p2p.Capability
+	if node.config.Archival {
+		caps = append(caps, p2p.Archival)
+	}
+	if node.config.StoresCatchpoints() {
+		caps = append(caps, p2p.Catchpoints)
+	}
+	if node.config.EnableGossipService && node.config.IsGossipServer() {
+		caps = append(caps, p2p.Gossip)
+	}
+	return caps
 }
 
 // startMonitoringRoutines starts the internal monitoring routines used by the node.

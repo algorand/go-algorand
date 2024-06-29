@@ -18,8 +18,9 @@ package network
 
 import (
 	"context"
-	"net"
 	"net/http"
+	"strings"
+	"time"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/protocol"
@@ -27,6 +28,11 @@ import (
 
 // Peer opaque interface for referring to a neighbor in the network
 type Peer interface{}
+
+// DisconnectablePeer is a Peer with a long-living connection to a network that can be disconnected
+type DisconnectablePeer interface {
+	GetNetwork() GossipNode
+}
 
 // PeerOption allows users to specify a subset of peers to query
 //
@@ -44,12 +50,19 @@ const (
 	PeersPhonebookArchivalNodes PeerOption = iota
 )
 
+// DeadlineSettableConn abstracts net.Conn and related types as deadline-settable
+type DeadlineSettableConn interface {
+	SetDeadline(time.Time) error
+	SetReadDeadline(time.Time) error
+	SetWriteDeadline(time.Time) error
+}
+
 // GossipNode represents a node in the gossip network
 type GossipNode interface {
 	Address() (string, bool)
 	Broadcast(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except Peer) error
 	Relay(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except Peer) error
-	Disconnect(badnode Peer)
+	Disconnect(badnode DisconnectablePeer)
 	DisconnectPeers() // only used by testing
 
 	// RegisterHTTPHandler path accepts gorilla/mux path annotations
@@ -64,7 +77,7 @@ type GossipNode interface {
 	GetPeers(options ...PeerOption) []Peer
 
 	// Start threads, listen on sockets.
-	Start()
+	Start() error
 
 	// Close sockets. Stop threads.
 	Stop()
@@ -75,8 +88,15 @@ type GossipNode interface {
 	// ClearHandlers deregisters all the existing message handlers.
 	ClearHandlers()
 
-	// GetRoundTripper returns a Transport that would limit the number of outgoing connections.
-	GetRoundTripper() http.RoundTripper
+	// RegisterProcessors adds to the set of given message processors.
+	RegisterProcessors(dispatch []TaggedMessageProcessor)
+
+	// ClearProcessors deregisters all the existing message processors.
+	ClearProcessors()
+
+	// GetHTTPClient returns a http.Client with a suitable for the network Transport
+	// that would also limit the number of outgoing connections.
+	GetHTTPClient(address string) (*http.Client, error)
 
 	// OnNetworkAdvance notifies the network library that the agreement protocol was able to make a notable progress.
 	// this is the only indication that we have that we haven't formed a clique, where all incoming messages
@@ -86,10 +106,10 @@ type GossipNode interface {
 
 	// GetHTTPRequestConnection returns the underlying connection for the given request. Note that the request must be the same
 	// request that was provided to the http handler ( or provide a fallback Context() to that )
-	GetHTTPRequestConnection(request *http.Request) (conn net.Conn)
+	GetHTTPRequestConnection(request *http.Request) (conn DeadlineSettableConn)
 
-	// SubstituteGenesisID substitutes the "{genesisID}" with their network-specific genesisID.
-	SubstituteGenesisID(rawURL string) string
+	// GetGenesisID returns the network-specific genesisID.
+	GetGenesisID() string
 
 	// called from wsPeer to report that it has closed
 	peerRemoteClose(peer *wsPeer, reason disconnectReason)
@@ -107,7 +127,7 @@ var outgoingMessagesBufferSize = int(
 
 // IncomingMessage represents a message arriving from some peer in our p2p network
 type IncomingMessage struct {
-	Sender Peer
+	Sender DisconnectablePeer
 	Tag    Tag
 	Data   []byte
 	Err    error
@@ -148,6 +168,14 @@ type OutgoingMessage struct {
 	OnRelease func()
 }
 
+// ValidatedMessage is a message that has been validated and is ready to be processed.
+// Think as an intermediate one between IncomingMessage and OutgoingMessage
+type ValidatedMessage struct {
+	Action           ForwardingPolicy
+	Tag              Tag
+	ValidatedMessage interface{}
+}
+
 // ForwardingPolicy is an enum indicating to whom we should send a message
 //
 //msgp:ignore ForwardingPolicy
@@ -165,6 +193,9 @@ const (
 
 	// Respond - reply to the sender
 	Respond
+
+	// Accept - accept for further processing after successful validation
+	Accept
 )
 
 // MessageHandler takes a IncomingMessage (e.g., vote, transaction), processes it, and returns what (if anything)
@@ -175,19 +206,50 @@ type MessageHandler interface {
 	Handle(message IncomingMessage) OutgoingMessage
 }
 
-// HandlerFunc represents an implemenation of the MessageHandler interface
+// HandlerFunc represents an implementation of the MessageHandler interface
 type HandlerFunc func(message IncomingMessage) OutgoingMessage
 
-// Handle implements MessageHandler.Handle, calling the handler with the IncomingKessage and returning the OutgoingMessage
+// Handle implements MessageHandler.Handle, calling the handler with the IncomingMessage and returning the OutgoingMessage
 func (f HandlerFunc) Handle(message IncomingMessage) OutgoingMessage {
 	return f(message)
 }
 
-// TaggedMessageHandler receives one type of broadcast messages
-type TaggedMessageHandler struct {
-	Tag
-	MessageHandler
+// MessageProcessor takes a IncomingMessage (e.g., vote, transaction), processes it, and returns what (if anything)
+// to send to the network in response.
+// This is an extension of the MessageHandler that works in two stages: validate ->[result]-> handle.
+type MessageProcessor interface {
+	Validate(message IncomingMessage) ValidatedMessage
+	Handle(message ValidatedMessage) OutgoingMessage
 }
+
+// ProcessorValidateFunc represents an implementation of the MessageProcessor interface
+type ProcessorValidateFunc func(message IncomingMessage) ValidatedMessage
+
+// ProcessorHandleFunc represents an implementation of the MessageProcessor interface
+type ProcessorHandleFunc func(message ValidatedMessage) OutgoingMessage
+
+// Validate implements MessageProcessor.Validate, calling the validator with the IncomingMessage and returning the action
+// and validation extra data that can be use as the handler input.
+func (f ProcessorValidateFunc) Validate(message IncomingMessage) ValidatedMessage {
+	return f(message)
+}
+
+// Handle implements MessageProcessor.Handle calling the handler with the ValidatedMessage and returning the OutgoingMessage
+func (f ProcessorHandleFunc) Handle(message ValidatedMessage) OutgoingMessage {
+	return f(message)
+}
+
+type taggedMessageDispatcher[T any] struct {
+	Tag
+	MessageHandler T
+}
+
+// TaggedMessageHandler receives one type of broadcast messages
+type TaggedMessageHandler = taggedMessageDispatcher[MessageHandler]
+
+// TaggedMessageProcessor receives one type of broadcast messages
+// and performs two stage processing: validating and handling
+type TaggedMessageProcessor = taggedMessageDispatcher[MessageProcessor]
 
 // Propagate is a convenience function to save typing in the common case of a message handler telling us to propagate an incoming message
 // "return network.Propagate(msg)" instead of "return network.OutgoingMsg{network.Broadcast, msg.Tag, msg.Data}"
@@ -204,4 +266,9 @@ func max(numbers ...uint64) (maxNum uint64) {
 		}
 	}
 	return
+}
+
+// SubstituteGenesisID substitutes the "{genesisID}" with their network-specific genesisID.
+func SubstituteGenesisID(net GossipNode, rawURL string) string {
+	return strings.Replace(rawURL, "{genesisID}", net.GetGenesisID(), -1)
 }

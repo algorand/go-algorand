@@ -53,6 +53,8 @@ const (
 // TXTopicName defines a pubsub topic for TX messages
 const TXTopicName = "/algo/tx/0.1.0"
 
+const incomingThreads = 20 // matches to number wsNetwork workers
+
 func makePubSub(ctx context.Context, cfg config.Local, host host.Host) (*pubsub.PubSub, error) {
 	//defaultParams := pubsub.DefaultGossipSubParams()
 
@@ -93,7 +95,9 @@ func makePubSub(ctx context.Context, cfg config.Local, host host.Host) (*pubsub.
 		pubsub.WithSubscriptionFilter(pubsub.WrapLimitSubscriptionFilter(pubsub.NewAllowlistSubscriptionFilter(TXTopicName), 100)),
 		// pubsub.WithEventTracer(jsonTracer),
 		pubsub.WithValidateQueueSize(256),
+		pubsub.WithMessageSignaturePolicy(pubsub.StrictNoSign),
 		// pubsub.WithValidateThrottle(cfg.TxBacklogSize),
+		pubsub.WithValidateWorkers(incomingThreads),
 	}
 
 	return pubsub.NewGossipSub(ctx, host, options...)
@@ -133,7 +137,7 @@ func (s *serviceImpl) getOrCreateTopic(topicName string) (*pubsub.Topic, error) 
 }
 
 // Subscribe returns a subscription to the given topic
-func (s *serviceImpl) Subscribe(topic string, val pubsub.ValidatorEx) (*pubsub.Subscription, error) {
+func (s *serviceImpl) Subscribe(topic string, val pubsub.ValidatorEx) (SubNextCancellable, error) {
 	if err := s.pubsub.RegisterTopicValidator(topic, val); err != nil {
 		return nil, err
 	}
