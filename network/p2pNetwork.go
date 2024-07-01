@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/algorand/go-algorand/config"
+	algocrypto "github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/network/limitcaller"
@@ -81,6 +82,8 @@ type P2PNetwork struct {
 	nodeInfo          NodeInfo
 	pstore            *peerstore.PeerStore
 	httpServer        *p2p.HTTPServer
+
+	identityTracker identityTracker
 }
 
 type bootstrapper struct {
@@ -214,7 +217,7 @@ func (p gossipSubPeer) RoutingAddr() []byte {
 }
 
 // NewP2PNetwork returns an instance of GossipNode that uses the p2p.Service
-func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebookAddresses []string, genesisID string, networkID protocol.NetworkID, node NodeInfo) (*P2PNetwork, error) {
+func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebookAddresses []string, genesisID string, networkID protocol.NetworkID, node NodeInfo, identityOpts *identityOpts) (*P2PNetwork, error) {
 	const readBufferLen = 2048
 
 	// create Peerstore and add phonebook addresses
@@ -262,7 +265,17 @@ func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebo
 		broadcastQueueBulk:     make(chan broadcastRequest, 100),
 	}
 
-	p2p.EnableP2PLogging(log, logging.Level(cfg.BaseLoggerDebugLevel))
+	if identityOpts != nil {
+		net.identityTracker = identityOpts.tracker
+	}
+	if net.identityTracker == nil {
+		net.identityTracker = noopIdentityTracker{}
+	}
+
+	err = p2p.EnableP2PLogging(log, logging.Level(cfg.BaseLoggerDebugLevel))
+	if err != nil {
+		return nil, err
+	}
 
 	h, la, err := p2p.MakeHost(cfg, datadir, pstore)
 	if err != nil {
@@ -377,7 +390,16 @@ func (n *P2PNetwork) Stop() {
 		n.wsPeersConnectivityCheckTicker = nil
 	}
 	n.innerStop()
+
+	// This is a workaround for a race between PubSub.processLoop (triggered by context cancellation below) termination
+	// and this function returning that causes main goroutine to exit before
+	// PubSub.processLoop goroutine finishes logging its termination message
+	// to already closed logger. Not seen in wild, only in tests.
+	if n.log.GetLevel() >= logging.Warn {
+		_ = p2p.SetP2PLogLevel(logging.Warn)
+	}
 	n.ctxCancel()
+
 	n.service.Close()
 	n.bootstrapperStop()
 	n.httpServer.Close()
@@ -751,27 +773,51 @@ func (n *P2PNetwork) wsStreamHandler(ctx context.Context, p2pPeer peer.ID, strea
 	ma := stream.Conn().RemoteMultiaddr()
 	addr := ma.String()
 	if addr == "" {
-		n.log.Warnf("Could not get address for peer %s", p2pPeer)
+		n.log.Warnf("Cannot get address for peer %s", p2pPeer)
 	}
-	// create a wsPeer for this stream and added it to the peers map.
 
+	// create a wsPeer for this stream and added it to the peers map.
 	addrInfo := &peer.AddrInfo{ID: p2pPeer, Addrs: []multiaddr.Multiaddr{ma}}
 	maxIdleConnsPerHost := int(n.config.ConnectionsRateLimitingCount)
 	client, err := p2p.MakeHTTPClientWithRateLimit(addrInfo, n.pstore, limitcaller.DefaultQueueingTimeout, maxIdleConnsPerHost)
 	if err != nil {
 		client = nil
 	}
+	var netIdentPeerID algocrypto.PublicKey
+	if p2pPeerPubKey, err0 := p2pPeer.ExtractPublicKey(); err0 == nil {
+		if b, err0 := p2pPeerPubKey.Raw(); err0 == nil {
+			netIdentPeerID = algocrypto.PublicKey(b)
+		} else {
+			n.log.Warnf("Cannot get raw pubkey for peer %s", p2pPeer)
+		}
+	} else {
+		n.log.Warnf("Cannot get pubkey for peer %s", p2pPeer)
+	}
 	peerCore := makePeerCore(ctx, n, n.log, n.handler.readBuffer, addr, client, addr)
 	wsp := &wsPeer{
 		wsPeerCore: peerCore,
 		conn:       &wsPeerConnP2PImpl{stream: stream},
 		outgoing:   !incoming,
+		identity:   netIdentPeerID,
 	}
 	protos, err := n.pstore.GetProtocols(p2pPeer)
 	if err != nil {
 		n.log.Warnf("Error getting protocols for peer %s: %v", p2pPeer, err)
 	}
 	wsp.TelemetryGUID, wsp.InstanceName = p2p.GetPeerTelemetryInfo(protos)
+
+	localAddr, has := n.Address()
+	if !has {
+		n.log.Warn("Could not get local address")
+	}
+	n.wsPeersLock.Lock()
+	ok := n.identityTracker.setIdentity(wsp)
+	n.wsPeersLock.Unlock()
+	if !ok {
+		networkPeerIdentityDisconnect.Inc(nil)
+		n.log.With("remote", addr).With("local", localAddr).Warn("peer deduplicated before adding because the identity is already known")
+		stream.Close()
+	}
 
 	wsp.init(n.config, outgoingMessagesBufferSize)
 	n.wsPeersLock.Lock()
@@ -785,10 +831,6 @@ func (n *P2PNetwork) wsStreamHandler(ctx context.Context, p2pPeer peer.ID, strea
 	if incoming {
 		event = "ConnectedIn"
 		msg = "Accepted incoming connection from peer %s"
-	}
-	localAddr, has := n.Address()
-	if !has {
-		n.log.Warn("Could not get local address")
 	}
 	n.log.With("event", event).With("remote", addr).With("local", localAddr).Infof(msg, p2pPeer.String())
 
@@ -811,6 +853,7 @@ func (n *P2PNetwork) wsStreamHandler(ctx context.Context, p2pPeer peer.ID, strea
 func (n *P2PNetwork) peerRemoteClose(peer *wsPeer, reason disconnectReason) {
 	remotePeerID := peer.conn.(*wsPeerConnP2PImpl).stream.Conn().RemotePeer()
 	n.wsPeersLock.Lock()
+	n.identityTracker.removeIdentity(peer)
 	delete(n.wsPeers, remotePeerID)
 	delete(n.wsPeersToIDs, peer)
 	n.wsPeersLock.Unlock()

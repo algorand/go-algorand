@@ -875,6 +875,7 @@ func TestNodeHybridTopology(t *testing.T) {
 
 		cfg.NetAddress = ni.wsNetAddr()
 		cfg.EnableP2PHybridMode = true
+		cfg.PublicAddress = ni.wsNetAddr()
 		cfg.EnableDHTProviders = true
 		cfg.P2PPersistPeerID = true
 		privKey, err := p2p.GetPrivKey(cfg, ni.rootDir)

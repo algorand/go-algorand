@@ -3,15 +3,17 @@ PARAMS=-w 20 -R 8 -N 20 -n 20 --npn-algod-nodes 10 --node-template node.json --r
 
 .PHONY:	clean all
 
+HYBRID ?= no
+
 all:	net.json genesis.json topology.json
 
-node.json nonPartNode.json relay.json:
-	python3 copy-node-configs.py
+node.json nonPartNode.json relay.json: copy-node-configs.py
+	python3 copy-node-configs.py --hybrid=${HYBRID}
 
-net.json:	node.json nonPartNode.json relay.json ${GOPATH}/bin/netgoal Makefile
+net.json:	node.json nonPartNode.json relay.json Makefile
 	netgoal generate -t net -r /tmp/wat -o net.json ${PARAMS}
 
-genesis.json:	${GOPATH}/bin/netgoal Makefile
+genesis.json:	Makefile
 	netgoal generate -t genesis -r /tmp/wat -o genesis.l.json ${PARAMS}
 	jq '.LastPartKeyRound=5000|.NetworkName="s1s-p2p"|.ConsensusProtocol="future"' < genesis.l.json > genesis.json
 	rm genesis.l.json

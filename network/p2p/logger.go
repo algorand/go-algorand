@@ -19,6 +19,7 @@
 package p2p
 
 import (
+	"errors"
 	"runtime"
 	"strings"
 
@@ -55,19 +56,37 @@ type loggingCore struct {
 	zapcore.Core
 }
 
+// ErrInvalidLogLevel is returned when an invalid log level is provided.
+var ErrInvalidLogLevel = errors.New("invalid log level")
+
 // EnableP2PLogging enables libp2p logging into the provided logger with the provided level.
-func EnableP2PLogging(log logging.Logger, l logging.Level) {
+func EnableP2PLogging(log logging.Logger, l logging.Level) error {
 	core := loggingCore{
 		log:   log,
 		level: l,
 	}
+	err := SetP2PLogLevel(l)
+	if err != nil {
+		return err
+	}
+	p2plogging.SetPrimaryCore(&core)
+	return nil
+}
+
+// SetP2PLogLevel sets the log level for libp2p logging.
+func SetP2PLogLevel(l logging.Level) error {
+	var seen bool
 	for p2pLevel, logLevel := range levelsMap {
 		if logLevel == l {
 			p2plogging.SetAllLoggers(p2plogging.LogLevel(p2pLevel))
+			seen = true
 			break
 		}
 	}
-	p2plogging.SetPrimaryCore(&core)
+	if !seen {
+		return ErrInvalidLogLevel
+	}
+	return nil
 }
 
 func (c *loggingCore) Enabled(l zapcore.Level) bool {
