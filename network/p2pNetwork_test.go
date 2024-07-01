@@ -366,10 +366,6 @@ func (s *mockService) Publish(ctx context.Context, topic string, data []byte) er
 	return nil
 }
 
-func (s *mockService) GetStream(peer.ID) (network.Stream, bool) {
-	return nil, false
-}
-
 func makeMockService(id peer.ID, addrs []ma.Multiaddr) *mockService {
 	return &mockService{
 		id:    id,
@@ -725,8 +721,9 @@ type p2phttpHandler struct {
 func (h *p2phttpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(h.retData))
 	if r.URL.Path == "/check-conn" {
-		c := h.net.GetHTTPRequestConnection(r)
-		require.NotNil(h.tb, c)
+		rc := http.NewResponseController(w)
+		err := rc.SetWriteDeadline(time.Now().Add(10 * time.Second))
+		require.NoError(h.tb, err)
 	}
 }
 
