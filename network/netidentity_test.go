@@ -35,10 +35,10 @@ func TestIdentityChallengeSchemeAttachIfEnabled(t *testing.T) {
 	i0 := NewIdentityChallengeScheme()
 	i := NewIdentityChallengeScheme(NetIdentityDedupNames(""))
 	require.Equal(t, i0, i)
-	require.Empty(t, i)
+	require.Zero(t, *i)
 	chal := i.AttachChallenge(h, "other")
-	require.Empty(t, h.Get(IdentityChallengeHeader))
-	require.Empty(t, chal)
+	require.Zero(t, h.Get(IdentityChallengeHeader))
+	require.Zero(t, chal)
 
 	j := NewIdentityChallengeScheme(NetIdentityDedupNames("yes"))
 	chal = j.AttachChallenge(h, "other")
@@ -386,7 +386,7 @@ func TestNewIdentityChallengeScheme(t *testing.T) {
 	require.Equal(t, s1, s2)
 	require.Equal(t, s2, s3)
 	require.Equal(t, s3, s4)
-	require.Empty(t, s1)
+	require.Zero(t, *s1)
 
 	s1 = NewIdentityChallengeScheme(NetIdentityDedupNames("a", "a"))
 	s2 = NewIdentityChallengeScheme(NetIdentityDedupNames("a"), NetIdentityDedupNames("a"))
