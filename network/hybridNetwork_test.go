@@ -115,34 +115,68 @@ func TestHybridNetwork_DuplicateConn(t *testing.T) {
 	// Since this test is not parallel the networkPeerIdentityDisconnect should not be modified from outside.
 	// Both netB and netC are attempting to connect but netA could also open an outgoing stream in netB or netC connection.
 	// So, the counter should be at least 2+identDiscValue.
+	const waitFor = 3 * time.Second
+	const checkEvery = 50 * time.Millisecond
+	const maxTicks = int(waitFor / checkEvery)
+	const debugThreshold = maxTicks - maxTicks/20 // log last 5% of ticks
+	require.Greater(t, debugThreshold, 1)
+	require.Less(t, debugThreshold, maxTicks)
+	tickCounter := 0
 	require.Eventually(t, func() bool {
+		if tickCounter >= debugThreshold {
+			log.Infof("networkPeerIdentityDisconnect: %d\n", networkPeerIdentityDisconnect.GetUint64Value())
+		}
+		tickCounter++
 		return networkPeerIdentityDisconnect.GetUint64Value() >= 2+identDiscValue
-	}, 3*time.Second, 50*time.Millisecond)
+	}, waitFor, checkEvery)
 
 	// now count connections
 	// netA should have 2 connections, not 4
 	// netB should have 1 connection (via p2p)
 	// netC should have 1 connection (via ws)
 
-	var netAIn, netAOut, netBIn, netBOut, netCIn, netCOut int
+	tickCounter = 0
 	require.Eventually(t, func() bool {
-		return len(netB.GetPeers(PeersConnectedOut)) == 1
-	}, 3*time.Second, 50*time.Millisecond)
-
-	require.Eventually(t, func() bool {
-		return len(netC.GetPeers(PeersConnectedOut)) == 1
-	}, 3*time.Second, 50*time.Millisecond)
-
-	require.Eventually(t, func() bool {
-		netAIn = len(netA.GetPeers(PeersConnectedIn))
-		netAOut = len(netA.GetPeers(PeersConnectedOut))
-		netBIn = len(netB.GetPeers(PeersConnectedIn))
-		netBOut = len(netB.GetPeers(PeersConnectedOut))
-		netCIn = len(netC.GetPeers(PeersConnectedIn))
-		netCOut = len(netC.GetPeers(PeersConnectedOut))
-		if netAIn != 2 {
+		if tickCounter >= debugThreshold {
+			netAIn := len(netA.GetPeers(PeersConnectedIn))
+			netAOut := len(netA.GetPeers(PeersConnectedOut))
+			netBIn := len(netB.GetPeers(PeersConnectedIn))
+			netBOut := len(netB.GetPeers(PeersConnectedOut))
+			netCIn := len(netC.GetPeers(PeersConnectedIn))
+			netCOut := len(netC.GetPeers(PeersConnectedOut))
 			log.Infof("netA in/out: %d/%d, netB in/out: %d/%d, netC in/out: %d/%d\n", netAIn, netAOut, netBIn, netBOut, netCIn, netCOut)
 		}
-		return netAIn == 2
+		tickCounter++
+		return len(netB.GetPeers(PeersConnectedOut)) == 1
+	}, waitFor, checkEvery)
+
+	tickCounter = 0
+	require.Eventually(t, func() bool {
+		if tickCounter >= debugThreshold {
+			netAIn := len(netA.GetPeers(PeersConnectedIn))
+			netAOut := len(netA.GetPeers(PeersConnectedOut))
+			netBIn := len(netB.GetPeers(PeersConnectedIn))
+			netBOut := len(netB.GetPeers(PeersConnectedOut))
+			netCIn := len(netC.GetPeers(PeersConnectedIn))
+			netCOut := len(netC.GetPeers(PeersConnectedOut))
+			log.Infof("netA in/out: %d/%d, netB in/out: %d/%d, netC in/out: %d/%d\n", netAIn, netAOut, netBIn, netBOut, netCIn, netCOut)
+		}
+		tickCounter++
+		return len(netC.GetPeers(PeersConnectedOut)) == 1
+	}, waitFor, checkEvery)
+
+	tickCounter = 0
+	require.Eventually(t, func() bool {
+		if tickCounter >= debugThreshold {
+			netAIn := len(netA.GetPeers(PeersConnectedIn))
+			netAOut := len(netA.GetPeers(PeersConnectedOut))
+			netBIn := len(netB.GetPeers(PeersConnectedIn))
+			netBOut := len(netB.GetPeers(PeersConnectedOut))
+			netCIn := len(netC.GetPeers(PeersConnectedIn))
+			netCOut := len(netC.GetPeers(PeersConnectedOut))
+			log.Infof("netA in/out: %d/%d, netB in/out: %d/%d, netC in/out: %d/%d\n", netAIn, netAOut, netBIn, netBOut, netCIn, netCOut)
+		}
+		tickCounter++
+		return len(netA.GetPeers(PeersConnectedIn)) == 2
 	}, 3*time.Second, 50*time.Millisecond)
 }
