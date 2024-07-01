@@ -143,6 +143,20 @@ func TestLocal_FixupConfig(t *testing.T) {
 		EnableP2PHybridMode: true,
 	}
 	c2, err = fixupConfig(c1)
+	require.NoError(t, err)
+
+	c1 = Local{
+		NetAddress:          "test1",
+		EnableP2PHybridMode: true,
+	}
+	c2, err = fixupConfig(c1)
+	require.ErrorContains(t, err, "PublicAddress must be specified when EnableP2PHybridMode is set")
+
+	c1 = Local{
+		P2PNetAddress:       "test1",
+		EnableP2PHybridMode: true,
+	}
+	c2, err = fixupConfig(c1)
 	require.ErrorContains(t, err, "PublicAddress must be specified when EnableP2PHybridMode is set")
 
 	c1 = Local{

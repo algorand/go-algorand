@@ -48,6 +48,9 @@ def make_hybrid_p2p_net(*args):
         config["ConfigJSONOverride"] = json.dumps(override_json)
 
         net_address = config.get("NetAddress")
+        if net_address:
+            config["P2PBootstrap"] = True
+
         altconfigs = config.get("AltConfigs")
         altconfig = None
         if altconfigs:

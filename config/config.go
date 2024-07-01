@@ -167,7 +167,7 @@ func fixupConfig(source Local) (Local, error) {
 	}
 	// In hybrid mode we want to prevent connections from the same node over both P2P and WS.
 	// The only way it is supported at the moment is to use net identity challenge that is based on PublicAddress.
-	if source.EnableP2PHybridMode && source.PublicAddress == "" {
+	if (source.NetAddress != "" || source.P2PNetAddress != "") && source.EnableP2PHybridMode && source.PublicAddress == "" {
 		return source, errors.New("PublicAddress must be specified when EnableP2PHybridMode is set")
 	}
 	return source, nil
