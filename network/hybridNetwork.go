@@ -212,16 +212,6 @@ func (n *HybridP2PNetwork) OnNetworkAdvance() {
 	})
 }
 
-// GetHTTPRequestConnection returns the underlying connection for the given request. Note that the request must be the same
-// request that was provided to the http handler ( or provide a fallback Context() to that )
-func (n *HybridP2PNetwork) GetHTTPRequestConnection(request *http.Request) (conn DeadlineSettableConn) {
-	conn = n.wsNetwork.GetHTTPRequestConnection(request)
-	if conn != nil {
-		return conn
-	}
-	return n.p2pNetwork.GetHTTPRequestConnection(request)
-}
-
 // GetGenesisID returns the network-specific genesisID.
 func (n *HybridP2PNetwork) GetGenesisID() string {
 	return n.genesisID
