@@ -34,6 +34,7 @@ type NodeConfig struct {
 	DashboardEndpoint  string `json:",omitempty"`
 	DeadlockOverride   int    `json:",omitempty"` // -1 = Disable deadlock detection, 0 = Use Default for build, 1 = Enable
 	ConfigJSONOverride string `json:",omitempty"` // Raw json to merge into config.json after other modifications are complete
+	P2PBootstrap       bool   // True if this node should be a p2p bootstrap node and registered in DNS
 
 	// NodeNameMatchRegex is tested against Name in generated configs and if matched the rest of the configs in this record are applied as a template
 	NodeNameMatchRegex string `json:",omitempty"`

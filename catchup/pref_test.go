@@ -62,7 +62,7 @@ func BenchmarkServiceFetchBlocks(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		inMem := true
 		prefix := b.Name() + "empty" + strconv.Itoa(i)
-		local, err := data.LoadLedger(logging.TestingLog(b), prefix, inMem, protocol.ConsensusCurrentVersion, genesisBalances, "", crypto.Digest{}, nil, cfg)
+		local, err := data.LoadLedger(logging.TestingLog(b), prefix, inMem, protocol.ConsensusCurrentVersion, genesisBalances, "", crypto.Digest{}, cfg)
 		require.NoError(b, err)
 
 		// Make Service
@@ -150,7 +150,7 @@ func benchenv(t testing.TB, numAccounts, numBlocks int) (ledger, emptyLedger *da
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
 	prefix := t.Name() + "empty"
-	emptyLedger, err = data.LoadLedger(logging.TestingLog(t), prefix, inMem, protocol.ConsensusCurrentVersion, genesisBalances, "", crypto.Digest{}, nil, cfg)
+	emptyLedger, err = data.LoadLedger(logging.TestingLog(t), prefix, inMem, protocol.ConsensusCurrentVersion, genesisBalances, "", crypto.Digest{}, cfg)
 	require.NoError(t, err)
 
 	ledger, err = datatest.FabricateLedger(logging.TestingLog(t), t.Name(), parts, genesisBalances, emptyLedger.LastRound()+basics.Round(numBlocks))

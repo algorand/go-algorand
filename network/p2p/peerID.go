@@ -25,6 +25,7 @@ import (
 	"path"
 
 	"github.com/algorand/go-algorand/config"
+	algocrypto "github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/util"
 
 	"github.com/libp2p/go-libp2p/core/crypto"
@@ -37,6 +38,10 @@ const DefaultPrivKeyPath = "peerIDPrivKey.pem"
 
 // PeerID is a string representation of a peer's public key, primarily used to avoid importing libp2p into packages that shouldn't need it
 type PeerID string
+
+func (id PeerID) String() string {
+	return peer.ID(id).String()
+}
 
 // GetPrivKey manages loading and creation of private keys for network PeerIDs
 // It prioritizes, in this order:
@@ -103,4 +108,40 @@ func writePrivateKeyToFile(path string, privKey crypto.PrivKey) error {
 func generatePrivKey() (crypto.PrivKey, error) {
 	priv, _, err := crypto.GenerateEd25519Key(rand.Reader)
 	return priv, err
+}
+
+// PeerIDChallengeSigner implements the identityChallengeSigner interface in the network package.
+type PeerIDChallengeSigner struct {
+	key crypto.PrivKey
+}
+
+// Sign implements the identityChallengeSigner interface.
+func (p *PeerIDChallengeSigner) Sign(message algocrypto.Hashable) algocrypto.Signature {
+	return p.SignBytes(algocrypto.HashRep(message))
+}
+
+// SignBytes implements the identityChallengeSigner interface.
+func (p *PeerIDChallengeSigner) SignBytes(message []byte) algocrypto.Signature {
+	// libp2p Ed25519PrivateKey.Sign() returns a signature with a length of 64 bytes and no error
+	sig, err := p.key.Sign(message)
+	if len(sig) != len(algocrypto.Signature{}) {
+		panic(fmt.Sprintf("invalid signature length: %d", len(sig)))
+	}
+	if err != nil {
+		panic(err)
+	}
+	return algocrypto.Signature(sig)
+}
+
+// PublicKey implements the identityChallengeSigner interface.
+func (p *PeerIDChallengeSigner) PublicKey() algocrypto.PublicKey {
+	// libp2p Ed25519PublicKey.Raw() returns a 32-byte public key and no error
+	pub, err := p.key.GetPublic().Raw()
+	if len(pub) != len(algocrypto.PublicKey{}) {
+		panic(fmt.Sprintf("invalid public key length: %d", len(pub)))
+	}
+	if err != nil {
+		panic(err)
+	}
+	return algocrypto.PublicKey(pub)
 }

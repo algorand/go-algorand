@@ -73,7 +73,17 @@ func (n *streamManager) streamHandler(stream network.Stream) {
 				n.log.Infof("Failed to check old stream with %s: %v", remotePeer, err)
 			}
 			n.streams[stream.Conn().RemotePeer()] = stream
-			n.handler(n.ctx, remotePeer, stream, true)
+
+			// streamHandler is supposed to be called for accepted streams, so we expect incoming here
+			incoming := stream.Conn().Stat().Direction == network.DirInbound
+			if !incoming {
+				if stream.Stat().Direction == network.DirUnknown {
+					n.log.Warnf("Unknown direction for a steam %s to/from %s", stream.ID(), remotePeer)
+				} else {
+					n.log.Warnf("Unexpected outgoing stream in streamHandler for connection %s (%s): %s vs %s stream", stream.Conn().ID(), remotePeer, stream.Conn().Stat().Direction, stream.Stat().Direction.String())
+				}
+			}
+			n.handler(n.ctx, remotePeer, stream, incoming)
 			return
 		}
 		// otherwise, the old stream is still open, so we can close the new one
@@ -82,7 +92,16 @@ func (n *streamManager) streamHandler(stream network.Stream) {
 	}
 	// no old stream
 	n.streams[stream.Conn().RemotePeer()] = stream
-	n.handler(n.ctx, remotePeer, stream, true)
+	// streamHandler is supposed to be called for accepted streams, so we expect incoming here
+	incoming := stream.Conn().Stat().Direction == network.DirInbound
+	if !incoming {
+		if stream.Stat().Direction == network.DirUnknown {
+			n.log.Warnf("streamHandler: unknown direction for a steam %s to/from %s", stream.ID(), remotePeer)
+		} else {
+			n.log.Warnf("Unexpected outgoing stream in streamHandler for connection %s (%s): %s vs %s stream", stream.Conn().ID(), remotePeer, stream.Conn().Stat().Direction, stream.Stat().Direction.String())
+		}
+	}
+	n.handler(n.ctx, remotePeer, stream, incoming)
 }
 
 // Connected is called when a connection is opened
@@ -95,8 +114,13 @@ func (n *streamManager) Connected(net network.Network, conn network.Conn) {
 		return
 	}
 
+	needUnlock := true
 	n.streamsLock.Lock()
-	defer n.streamsLock.Unlock()
+	defer func() {
+		if needUnlock {
+			n.streamsLock.Unlock()
+		}
+	}()
 	_, ok := n.streams[remotePeer]
 	if ok {
 		return // there's already an active stream with this peer for our protocol
@@ -104,12 +128,26 @@ func (n *streamManager) Connected(net network.Network, conn network.Conn) {
 
 	stream, err := n.host.NewStream(n.ctx, remotePeer, AlgorandWsProtocol)
 	if err != nil {
-		n.log.Infof("Failed to open stream to %s: %v", remotePeer, err)
+		n.log.Infof("Failed to open stream to %s (%s): %v", remotePeer, conn.RemoteMultiaddr().String(), err)
 		return
 	}
-
 	n.streams[remotePeer] = stream
-	n.handler(n.ctx, remotePeer, stream, false)
+
+	// release the lock to let handler do its thing
+	// otherwise reading/writing to the stream will deadlock
+	needUnlock = false
+	n.streamsLock.Unlock()
+
+	// a new stream created above, expected direction is outbound
+	incoming := stream.Conn().Stat().Direction == network.DirInbound
+	if incoming {
+		n.log.Warnf("Unexpected incoming stream in streamHandler for connection %s (%s): %s vs %s stream", stream.Conn().ID(), remotePeer, stream.Conn().Stat().Direction, stream.Stat().Direction.String())
+	} else {
+		if stream.Stat().Direction == network.DirUnknown {
+			n.log.Warnf("Connected: unknown direction for a steam %s to/from %s", stream.ID(), remotePeer)
+		}
+	}
+	n.handler(n.ctx, remotePeer, stream, incoming)
 }
 
 // Disconnected is called when a connection is closed

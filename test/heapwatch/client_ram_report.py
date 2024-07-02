@@ -202,6 +202,10 @@ def main():
     heap_totals = get_heap_inuse_totals(args.dir)
     heap_details = get_heap_metrics(args.dir)
 
+    if not heap_totals and not heap_details:
+        print('no data found', file=sys.stderr)
+        return 0
+
     if args.csv:
         if args.csv == '-':
             csvf = sys.stdout
