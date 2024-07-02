@@ -162,10 +162,11 @@ func (nd *nodeDir) configureNetAddress() (err error) {
 	if nd.IsRelay() && nd.NetAddress[0] == ':' {
 		if nd.config.EnableP2P && !nd.config.EnableP2PHybridMode {
 			fmt.Fprintf(os.Stdout, " - skipping relay addresses - p2p mode\n")
-		}
-		fmt.Fprintf(os.Stdout, " - adding to relay addresses\n")
-		for _, bootstrapRecord := range nd.config.DNSBootstrapArray(nd.configurator.genesisData.Network) {
-			nd.configurator.addRelaySrv(bootstrapRecord.PrimarySRVBootstrap, nd.NetAddress)
+		} else {
+			fmt.Fprintf(os.Stdout, " - adding to relay addresses\n")
+			for _, bootstrapRecord := range nd.config.DNSBootstrapArray(nd.configurator.genesisData.Network) {
+				nd.configurator.addRelaySrv(bootstrapRecord.PrimarySRVBootstrap, nd.NetAddress)
+			}
 		}
 	}
 	if nd.P2PNetAddress != "" {
@@ -194,9 +195,9 @@ func (nd *nodeDir) configurePublicAddress(publicAddress bool) error {
 	if nd.NetAddress[0] == ':' {
 		networkHostName := nd.configurator.getNetworkHostName() + nd.NetAddress
 		nd.config.PublicAddress = networkHostName
+		fmt.Fprintf(os.Stdout, " - Assigning PublicAddress: %s\n", networkHostName)
 	}
-
-	return nil
+	return nd.saveConfig()
 }
 
 func (nd *nodeDir) configureP2PDNSBootstrap(p2pBootstrap bool) error {
