@@ -986,7 +986,7 @@ func assembleFileImpl(fname string, printWarnings bool) *logic.OpStream {
 			reportErrorf(tealAppSize, fname, len(ops.Program), config.MaxAvailableAppProgramLen)
 		}
 	} else {
-		if uint64(len(ops.Program)) > params.LogicSigMaxSize {
+		if !params.EnableLogicSigSizePooling && uint64(len(ops.Program)) > params.LogicSigMaxSize {
 			reportErrorf(tealLogicSigSize, fname, len(ops.Program), params.LogicSigMaxSize)
 		}
 	}
@@ -1179,14 +1179,19 @@ var dryrunCmd = &cobra.Command{
 		if timeStamp <= 0 {
 			timeStamp = time.Now().Unix()
 		}
+
+		lSigPooledSize := 0
 		for i, txn := range stxns {
 			if txn.Lsig.Blank() {
 				continue
 			}
-			if uint64(txn.Lsig.Len()) > params.LogicSigMaxSize {
+			lsigLen := txn.Lsig.Len()
+			lSigPooledSize += lsigLen
+			if !params.EnableLogicSigSizePooling && uint64(lsigLen) > params.LogicSigMaxSize {
 				reportErrorf("program size too large: %d > %d", len(txn.Lsig.Logic), params.LogicSigMaxSize)
 			}
 			ep := logic.NewSigEvalParams(stxns, &params, logic.NoHeaderLedger{})
+
 			err := logic.CheckSignature(i, ep)
 			if err != nil {
 				reportErrorf("program failed Check: %s", err)
@@ -1203,6 +1208,10 @@ var dryrunCmd = &cobra.Command{
 			if err != nil {
 				fmt.Fprintf(os.Stdout, "ERROR: %s\n", err.Error())
 			}
+		}
+		lSigMaxPooledSize := len(stxns) * int(params.LogicSigMaxSize)
+		if params.EnableLogicSigSizePooling && lSigPooledSize > lSigMaxPooledSize {
+			reportErrorf("total lsigs size too large: %d > %d", lSigPooledSize, lSigMaxPooledSize)
 		}
 
 	},

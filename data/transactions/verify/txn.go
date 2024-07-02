@@ -214,6 +214,7 @@ func txnGroupBatchPrep(stxs []transactions.SignedTxn, contextHdr *bookkeeping.Bl
 
 	minFeeCount := uint64(0)
 	feesPaid := uint64(0)
+	lSigPooledSize := 0
 	for i, stxn := range stxs {
 		prepErr := txnBatchPrep(i, groupCtx, verifier)
 		if prepErr != nil {
@@ -225,6 +226,18 @@ func txnGroupBatchPrep(stxs []transactions.SignedTxn, contextHdr *bookkeeping.Bl
 			minFeeCount++
 		}
 		feesPaid = basics.AddSaturate(feesPaid, stxn.Txn.Fee.Raw)
+		lSigPooledSize += stxn.Lsig.Len()
+	}
+	if groupCtx.consensusParams.EnableLogicSigSizePooling {
+		lSigMaxPooledSize := len(stxs) * int(groupCtx.consensusParams.LogicSigMaxSize)
+		if lSigPooledSize > lSigMaxPooledSize {
+			errorMsg := fmt.Sprintf(
+				"txgroup had %d bytes of LogicSigs, more than the available pool of %d bytes",
+				lSigPooledSize, lSigMaxPooledSize,
+			)
+			err = &TxGroupError{err: errors.New(errorMsg), GroupIndex: -1, Reason: TxGroupErrorReasonLogicSigFailed}
+			return nil, err
+		}
 	}
 	feeNeeded, overflow := basics.OMul(groupCtx.consensusParams.MinTxnFee, minFeeCount)
 	if overflow {
@@ -361,7 +374,7 @@ func logicSigSanityCheckBatchPrep(gi int, groupCtx *GroupContext, batchVerifier 
 	if version > groupCtx.consensusParams.LogicSigVersion {
 		return errors.New("LogicSig.Logic version too new")
 	}
-	if uint64(lsig.Len()) > groupCtx.consensusParams.LogicSigMaxSize {
+	if !groupCtx.consensusParams.EnableLogicSigSizePooling && uint64(lsig.Len()) > groupCtx.consensusParams.LogicSigMaxSize {
 		return errors.New("LogicSig.Logic too long")
 	}
 
