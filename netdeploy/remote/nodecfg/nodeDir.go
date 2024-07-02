@@ -160,6 +160,9 @@ func (nd *nodeDir) configureNetAddress() (err error) {
 	fmt.Fprintf(os.Stdout, " - Assigning NetAddress: %s\n", nd.NetAddress)
 	nd.config.NetAddress = nd.NetAddress
 	if nd.IsRelay() && nd.NetAddress[0] == ':' {
+		if nd.config.EnableP2P && !nd.config.EnableP2PHybridMode {
+			fmt.Fprintf(os.Stdout, " - skipping relay addresses - p2p mode\n")
+		}
 		fmt.Fprintf(os.Stdout, " - adding to relay addresses\n")
 		for _, bootstrapRecord := range nd.config.DNSBootstrapArray(nd.configurator.genesisData.Network) {
 			nd.configurator.addRelaySrv(bootstrapRecord.PrimarySRVBootstrap, nd.NetAddress)
@@ -177,13 +180,15 @@ func (nd *nodeDir) configurePublicAddress(publicAddress bool) error {
 	if !publicAddress {
 		return nil
 	}
+	if !nd.IsRelay() {
+		return errors.New("publicAddress is only valid for relay nodes")
+	}
+	if nd.config.EnableP2P && !nd.config.EnableP2PHybridMode {
+		return errors.New("publicAddress is only valid websocket gossip node or a hybrid mode node")
+	}
 
 	if err := nd.ensureConfig(); err != nil {
 		return err
-	}
-
-	if !nd.IsRelay() {
-		return errors.New("publicAddress is only valid for relay nodes")
 	}
 
 	if nd.NetAddress[0] == ':' {

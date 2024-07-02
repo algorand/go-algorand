@@ -219,6 +219,7 @@ func (nc *nodeConfigurator) registerDNSRecords() (err error) {
 	const weight = 1
 	const relayBootstrap = "_algobootstrap"
 	const metricsSrv = "_metrics"
+	const tcpProto = "_tcp"
 	const proxied = false
 
 	// If we need to register anything, first register a DNS entry
@@ -241,9 +242,10 @@ func (nc *nodeConfigurator) registerDNSRecords() (err error) {
 		if parseErr != nil {
 			return parseErr
 		}
-		fmt.Fprintf(os.Stdout, "...... Adding Relay SRV Record '%s' -> '%s' .\n", entry.srvName, networkHostName)
+		fmt.Fprintf(os.Stdout, "...... Adding Relay SRV Record [%s.%s] '%s' [%d %d] -> '%s' .\n",
+			relayBootstrap, tcpProto, entry.srvName, priority, port, networkHostName)
 		err = cloudflareDNS.SetSRVRecord(context.Background(), entry.srvName, networkHostName,
-			cloudflare.AutomaticTTL, priority, uint(port), relayBootstrap, "_tcp", weight)
+			cloudflare.AutomaticTTL, priority, uint(port), relayBootstrap, tcpProto, weight)
 		if err != nil {
 			return
 		}
@@ -255,9 +257,10 @@ func (nc *nodeConfigurator) registerDNSRecords() (err error) {
 			fmt.Fprintf(os.Stdout, "Error parsing port for srv record: %s (port %v)\n", parseErr, entry)
 			return parseErr
 		}
-		fmt.Fprintf(os.Stdout, "...... Adding Metrics SRV Record '%s' -> '%s' .\n", entry.srvName, networkHostName)
+		fmt.Fprintf(os.Stdout, "...... Adding Metrics SRV Record [%s.%s] '%s' [%d %d] -> '%s' .\n",
+			metricsSrv, tcpProto, entry.srvName, priority, port, networkHostName)
 		err = cloudflareDNS.SetSRVRecord(context.Background(), entry.srvName, networkHostName,
-			cloudflare.AutomaticTTL, priority, uint(port), metricsSrv, "_tcp", weight)
+			cloudflare.AutomaticTTL, priority, uint(port), metricsSrv, tcpProto, weight)
 		if err != nil {
 			fmt.Fprintf(os.Stdout, "Error creating srv record: %s (%v)\n", err, entry)
 			return
