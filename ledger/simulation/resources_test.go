@@ -23,6 +23,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
@@ -295,4 +296,168 @@ func TestGlobalVsLocalResources(t *testing.T) {
 			app2: {},
 		}, groupAssignment.localTxnResources[2].Apps)
 	})
+}
+
+func TestPopulatorWithLocalResources(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	txns := make([]transactions.SignedTxn, 1)
+	txns[0].Txn.Type = protocol.ApplicationCallTx
+
+	consensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	populator := makeResourcePopulator(txns, consensusParams)
+
+	txnResources := make([]ResourceTracker, 1)
+
+	// Note we don't need to test a box here since it will never be a local txn resource
+	addr := basics.Address{1, 1, 1}
+	app := basics.AppIndex(12345)
+	asset := basics.AssetIndex(12345)
+
+	txnResources[0].Accounts = make(map[basics.Address]struct{})
+	txnResources[0].Assets = make(map[basics.AssetIndex]struct{})
+	txnResources[0].Apps = make(map[basics.AppIndex]struct{})
+
+	txnResources[0].Accounts[addr] = struct{}{}
+	txnResources[0].Assets[asset] = struct{}{}
+	txnResources[0].Apps[app] = struct{}{}
+
+	err := populator.populateResources(ResourceTracker{}, txnResources)
+	require.NoError(t, err)
+
+	require.Len(t, populator.getPopulatedArrays(), 1)
+
+	require.Equal(
+		t,
+		PopulatedResourceArrays{
+			Assets:   []basics.AssetIndex{asset},
+			Apps:     []basics.AppIndex{app},
+			Accounts: []basics.Address{addr},
+			Boxes:    []logic.BoxRef{},
+		},
+		populator.txnResources[0].getPopulatedArrays(),
+	)
+}
+
+func TestPopulatorWithGlobalResources(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	txns := make([]transactions.SignedTxn, 4)
+	txns[0].Txn.Type = protocol.PaymentTx // include payment to ensure it doesn't get resources
+	txns[1].Txn.Type = protocol.ApplicationCallTx
+	txns[2].Txn.Type = protocol.ApplicationCallTx
+	txns[3].Txn.Type = protocol.ApplicationCallTx
+
+	app1 := basics.AppIndex(1)
+	txns[3].Txn.ApplicationID = app1
+
+	consensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	populator := makeResourcePopulator(txns, consensusParams)
+
+	txnResources := make([]ResourceTracker, 3)
+	groupResources := ResourceTracker{}
+
+	// Resources
+	addr2 := basics.Address{2}
+	app3 := basics.AppIndex(3)
+	asset4 := basics.AssetIndex(4)
+	app5 := basics.AppIndex(5)
+	box5 := logic.BoxRef{App: app5, Name: "box"}
+	addr6 := basics.Address{6}
+	asa7 := basics.AssetIndex(7)
+	box1 := logic.BoxRef{App: app1, Name: "box"}
+	app1Addr := app1.Address()
+	asa8 := basics.AssetIndex(8)
+	addr9 := basics.Address{9}
+	addr10 := basics.Address{10}
+	app11 := basics.AppIndex(11)
+	app12 := basics.AppIndex(12)
+	addr13 := basics.Address{13}
+	emptyBox := logic.BoxRef{App: 0, Name: ""}
+
+	// Holdings
+	holding6_7 := ledgercore.AccountAsset{Address: addr6, Asset: asa7}    // new addr and asa
+	holding1_8 := ledgercore.AccountAsset{Address: app1Addr, Asset: asa8} // new asa
+	holding9_8 := ledgercore.AccountAsset{Address: addr9, Asset: asa8}    // new addr
+
+	// Locals
+	local10_11 := ledgercore.AccountApp{Address: addr10, App: app11}  // new addr and app
+	local1_12 := ledgercore.AccountApp{Address: app1Addr, App: app12} // new app
+	local13_1 := ledgercore.AccountApp{Address: addr13, App: app1}    // new addr
+
+	groupResources.Accounts = make(map[basics.Address]struct{})
+	groupResources.Assets = make(map[basics.AssetIndex]struct{})
+	groupResources.Apps = make(map[basics.AppIndex]struct{})
+	groupResources.Boxes = make(map[logic.BoxRef]uint64)
+	groupResources.AssetHoldings = make(map[ledgercore.AccountAsset]struct{})
+	groupResources.AppLocals = make(map[ledgercore.AccountApp]struct{})
+
+	groupResources.Accounts[addr2] = struct{}{}
+	groupResources.Assets[asset4] = struct{}{}
+	groupResources.Apps[app3] = struct{}{}
+	groupResources.Boxes[box1] = 1
+	groupResources.Boxes[box5] = 1
+	groupResources.AssetHoldings[holding6_7] = struct{}{}
+	groupResources.AssetHoldings[holding1_8] = struct{}{}
+	groupResources.AssetHoldings[holding9_8] = struct{}{}
+	groupResources.AppLocals[local10_11] = struct{}{}
+	groupResources.AppLocals[local1_12] = struct{}{}
+	groupResources.AppLocals[local13_1] = struct{}{}
+
+	// These resources should not have an effect on the population because they are inlcuded in a cross-reference or box
+	groupResources.Apps[app12] = struct{}{}      // app from appLocal
+	groupResources.Accounts[addr10] = struct{}{} // addr from appLocal
+	groupResources.Accounts[addr6] = struct{}{}  // addr from holding
+	groupResources.Assets[asa7] = struct{}{}     // asa from holding
+	groupResources.Apps[app5] = struct{}{}       // app from box
+
+	groupResources.NumEmptyBoxRefs = 11
+
+	err := populator.populateResources(groupResources, txnResources)
+	require.NoError(t, err)
+	require.Equal(t, consensusParams.MaxTxGroupSize-1, len(populator.txnResources))
+
+	require.Nil(t, populator.txnResources[0])
+
+	pop1 := populator.txnResources[1].getPopulatedArrays()
+	pop2 := populator.txnResources[2].getPopulatedArrays()
+	pop3 := populator.txnResources[3].getPopulatedArrays()
+	pop4 := populator.txnResources[4].getPopulatedArrays()
+
+	// Txn 1 has all the new multi-resources (ie. both resources are not already in a txn)
+	// Txn 1 also gets the app and address resource because they are added before other resources
+	require.ElementsMatch(t, pop1.Apps, []basics.AppIndex{box5.App, local10_11.App, app3})
+	require.ElementsMatch(t, pop1.Boxes, []logic.BoxRef{box5})
+	require.ElementsMatch(t, pop1.Accounts, []basics.Address{addr2, holding6_7.Address, local10_11.Address})
+	require.ElementsMatch(t, pop1.Assets, []basics.AssetIndex{holding6_7.Asset})
+
+	// Txn 2 has the asset and empty boxes because they are added last and txn 0 is full
+	require.ElementsMatch(t, pop2.Apps, []basics.AppIndex{})
+	require.ElementsMatch(t, pop2.Boxes, []logic.BoxRef{emptyBox, emptyBox, emptyBox, emptyBox, emptyBox, emptyBox, emptyBox})
+	require.ElementsMatch(t, pop2.Accounts, []basics.Address{})
+	require.ElementsMatch(t, pop2.Assets, []basics.AssetIndex{asset4})
+
+	// Txn 3 has all the resources that had partial requirements already in txn 2 and leftover empty boxes
+	require.ElementsMatch(t, pop3.Apps, []basics.AppIndex{local1_12.App})
+	require.ElementsMatch(t, pop3.Boxes, []logic.BoxRef{box1, emptyBox, emptyBox, emptyBox})
+	require.ElementsMatch(t, pop3.Accounts, []basics.Address{holding9_8.Address, local13_1.Address})
+	require.ElementsMatch(t, pop3.Assets, []basics.AssetIndex{holding1_8.Asset})
+
+	// The 4th populated array does not map to a transaction, but it will contain the overflow of resources
+	require.Empty(t, pop4.Accounts)
+	require.Empty(t, pop4.Apps)
+	require.Empty(t, pop4.Assets)
+	require.ElementsMatch(t, pop4.Boxes, []logic.BoxRef{emptyBox})
+
+	require.Len(t, populator.getPopulatedArrays(), 4)
+
+	// The rest of the populated arrays should be empty
+	for i := 5; i < consensusParams.MaxTxGroupSize; i++ {
+		require.Empty(t, populator.txnResources[i].getPopulatedArrays().Accounts)
+		require.Empty(t, populator.txnResources[i].getPopulatedArrays().Apps)
+		require.Empty(t, populator.txnResources[i].getPopulatedArrays().Assets)
+		require.Empty(t, populator.txnResources[i].getPopulatedArrays().Boxes)
+	}
 }

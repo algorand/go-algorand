@@ -605,3 +605,488 @@ func (p *resourcePolicy) AvailableBox(app basics.AppIndex, name string, operatio
 	}
 	return p.tracker.addBox(app, name, readSize, *p.initialBoxSurplusReadBudget, p.ep.Proto.BytesPerBoxReference)
 }
+
+// txnResources tracks the resources being added to a tranasction during resource population
+type txnResources struct {
+	// The static fields are resource arrays that were given in the txn group and thus cannot be removed
+	// The assumption is that these are prefilled because of one of the following reaons:
+	//   - This transaction has already been signed
+	//   - One of the foreign arrays is accessed on-chain
+	staticAssets   map[basics.AssetIndex]struct{}
+	staticApps     map[basics.AppIndex]struct{}
+	staticAccounts map[basics.Address]struct{}
+	staticBoxes    []logic.BoxRef
+
+	// The following fields are fields that are implicitly available to the transaction group from transaction fields
+	assetFromField     basics.AssetIndex
+	appFromField       basics.AppIndex
+	accountsFromFields map[basics.Address]struct{}
+
+	// These are the fields currently being populated, thus we can mutate them however we'd like
+	assets   map[basics.AssetIndex]struct{}
+	apps     map[basics.AppIndex]struct{}
+	boxes    []logic.BoxRef
+	accounts map[basics.Address]struct{}
+
+	maxTotalRefs int
+	maxAccounts  int
+}
+
+func (r *txnResources) getTotalRefs() int {
+	return len(r.accounts) + len(r.assets) + len(r.apps) + len(r.boxes) + len(r.staticAccounts) + len(r.staticAssets) + len(r.staticApps) + len(r.staticBoxes)
+}
+
+// Methods for determining room for specific references
+
+func (r *txnResources) hasRoom() bool {
+	return r.getTotalRefs() < r.maxTotalRefs
+}
+
+func (r *txnResources) hasRoomForAccount() bool {
+	return r.hasRoom() && (len(r.accounts)+len(r.staticAccounts)) < r.maxAccounts
+}
+
+func (r *txnResources) hasRoomForCrossRef() bool {
+	return r.hasRoomForAccount() && r.getTotalRefs() < r.maxTotalRefs-1
+}
+
+func (r *txnResources) hasRoomForBoxWithApp() bool {
+	return r.getTotalRefs() < r.maxTotalRefs-1
+}
+
+// Methods for determining if a resource is available
+
+func (r *txnResources) hasApp(app basics.AppIndex) bool {
+	_, hasStatic := r.staticApps[app]
+	_, hasRef := r.apps[app]
+	return r.appFromField == app || hasStatic || hasRef
+}
+
+func (r *txnResources) hasAsset(aid basics.AssetIndex) bool {
+	_, hasStatic := r.staticAssets[aid]
+	_, hasRef := r.assets[aid]
+	return r.assetFromField == aid || hasStatic || hasRef
+}
+
+func (r *txnResources) hasAccount(addr basics.Address) bool {
+	_, hasStatic := r.staticAccounts[addr]
+	_, hasRef := r.accounts[addr]
+	_, hasField := r.accountsFromFields[addr]
+
+	if r.appFromField.Address() == addr {
+		return true
+	}
+
+	for app := range r.apps {
+		if app.Address() == addr {
+			return true
+		}
+	}
+
+	for app := range r.staticApps {
+		if app.Address() == addr {
+			return true
+		}
+	}
+
+	return hasField || hasStatic || hasRef
+}
+
+func (r *txnResources) addAccount(addr basics.Address) {
+	r.accounts[addr] = struct{}{}
+}
+
+func (r *txnResources) addAsset(aid basics.AssetIndex) {
+	r.assets[aid] = struct{}{}
+}
+
+func (r *txnResources) addApp(aid basics.AppIndex) {
+	r.apps[aid] = struct{}{}
+}
+
+func (r *txnResources) addBox(app basics.AppIndex, name string) {
+	r.boxes = append(r.boxes, logic.BoxRef{App: app, Name: name})
+}
+
+func (r *txnResources) addAddressFromField(addr basics.Address) {
+	if !addr.IsZero() {
+		r.accountsFromFields[addr] = struct{}{}
+	}
+}
+
+// PopulatedResourceArrays is a struct that contains all the populated arrays for a txn
+type PopulatedResourceArrays struct {
+	Accounts []basics.Address
+	Assets   []basics.AssetIndex
+	Apps     []basics.AppIndex
+	Boxes    []logic.BoxRef
+}
+
+func (r *txnResources) getPopulatedArrays() PopulatedResourceArrays {
+	accounts := make([]basics.Address, 0, len(r.accounts)+len(r.staticAccounts))
+	for account := range r.accounts {
+		accounts = append(accounts, account)
+	}
+	for account := range r.staticAccounts {
+		accounts = append(accounts, account)
+	}
+
+	assets := make([]basics.AssetIndex, 0, len(r.assets)+len(r.staticAssets))
+	for asset := range r.assets {
+		assets = append(assets, asset)
+	}
+	for asset := range r.staticAssets {
+		assets = append(assets, asset)
+	}
+
+	apps := make([]basics.AppIndex, 0, len(r.apps)+len(r.staticApps))
+	for app := range r.apps {
+		apps = append(apps, app)
+	}
+	for app := range r.staticApps {
+		apps = append(apps, app)
+	}
+
+	boxes := make([]logic.BoxRef, 0, len(r.boxes)+len(r.staticBoxes))
+	boxes = append(boxes, r.boxes...)
+	boxes = append(boxes, r.staticBoxes...)
+
+	return PopulatedResourceArrays{
+		Accounts: accounts,
+		Assets:   assets,
+		Apps:     apps,
+		Boxes:    boxes,
+	}
+}
+
+// resourcePopulator is used to populate app resources for a transaction group
+type resourcePopulator struct {
+	txnResources   map[int]*txnResources
+	appCallIndexes []int
+	groupSize      int
+}
+
+func (p *resourcePopulator) addTransaction(txn transactions.Transaction, groupIndex int, consensusParams config.ConsensusParams) {
+	p.txnResources[groupIndex] = &txnResources{
+		staticAssets:       make(map[basics.AssetIndex]struct{}),
+		staticApps:         make(map[basics.AppIndex]struct{}),
+		staticAccounts:     make(map[basics.Address]struct{}),
+		staticBoxes:        []logic.BoxRef{},
+		accountsFromFields: make(map[basics.Address]struct{}),
+		assets:             make(map[basics.AssetIndex]struct{}),
+		apps:               make(map[basics.AppIndex]struct{}),
+		accounts:           make(map[basics.Address]struct{}),
+		boxes:              []logic.BoxRef{},
+		maxTotalRefs:       consensusParams.MaxAppTotalTxnReferences,
+		maxAccounts:        consensusParams.MaxAppTxnAccounts,
+	}
+
+	// The Sender will always be implicitly available for every transaction type
+	p.txnResources[groupIndex].addAddressFromField(txn.Sender)
+
+	if txn.Type == protocol.ApplicationCallTx {
+		for _, asset := range txn.ForeignAssets {
+			p.txnResources[groupIndex].staticAssets[asset] = struct{}{}
+		}
+
+		for _, app := range txn.ForeignApps {
+			p.txnResources[groupIndex].staticApps[app] = struct{}{}
+		}
+
+		for _, account := range txn.Accounts {
+			p.txnResources[groupIndex].staticAccounts[account] = struct{}{}
+		}
+
+		for _, box := range txn.Boxes {
+			ref := logic.BoxRef{App: txn.ForeignApps[box.Index], Name: string(box.Name)}
+			p.txnResources[groupIndex].staticBoxes = append(p.txnResources[groupIndex].staticBoxes, ref)
+		}
+
+		p.txnResources[groupIndex].appFromField = txn.ApplicationID
+
+		return
+	}
+
+	if txn.Type == protocol.AssetTransferTx {
+		p.txnResources[groupIndex].assetFromField = txn.XferAsset
+		p.txnResources[groupIndex].addAddressFromField(txn.AssetReceiver)
+		p.txnResources[groupIndex].addAddressFromField(txn.AssetCloseTo)
+		p.txnResources[groupIndex].addAddressFromField(txn.AssetSender)
+
+		return
+	}
+
+	if txn.Type == protocol.PaymentTx {
+		p.txnResources[groupIndex].addAddressFromField(txn.Receiver)
+		p.txnResources[groupIndex].addAddressFromField(txn.CloseRemainderTo)
+
+		return
+	}
+
+	if txn.Type == protocol.AssetConfigTx {
+		p.txnResources[groupIndex].assetFromField = txn.ConfigAsset
+
+		return
+	}
+
+	if txn.Type == protocol.AssetFreezeTx {
+		p.txnResources[groupIndex].assetFromField = txn.FreezeAsset
+		p.txnResources[groupIndex].addAddressFromField(txn.FreezeAccount)
+
+		return
+	}
+}
+
+func (p *resourcePopulator) addAccount(addr basics.Address) error {
+	for _, i := range p.appCallIndexes {
+		if p.txnResources[i].hasRoomForAccount() {
+			p.txnResources[i].addAccount(addr)
+			return nil
+		}
+	}
+	return fmt.Errorf("no room for account")
+}
+
+func (p *resourcePopulator) addAsset(asset basics.AssetIndex) error {
+	for _, i := range p.appCallIndexes {
+		if p.txnResources[i].hasRoom() {
+			p.txnResources[i].addAsset(asset)
+			return nil
+		}
+	}
+	return fmt.Errorf("no room for asset")
+}
+
+func (p *resourcePopulator) addApp(app basics.AppIndex) error {
+	for _, i := range p.appCallIndexes {
+		if p.txnResources[i].hasRoom() {
+			p.txnResources[i].addApp(app)
+			return nil
+		}
+	}
+	return fmt.Errorf("no room for app")
+}
+
+func (p *resourcePopulator) addBox(app basics.AppIndex, name string) error {
+	// First try to find txn with app already available
+	for _, i := range p.appCallIndexes {
+		if app == basics.AppIndex(0) || p.txnResources[i].hasApp(app) {
+			if p.txnResources[i].hasRoom() {
+				p.txnResources[i].addBox(app, name)
+				return nil
+			}
+		}
+	}
+
+	// Then try to find txn with room for both app and box
+	for _, i := range p.appCallIndexes {
+		if p.txnResources[i].hasRoomForBoxWithApp() {
+			p.txnResources[i].addApp(app)
+			p.txnResources[i].addBox(app, name)
+			return nil
+		}
+	}
+
+	return fmt.Errorf("no room for box")
+}
+
+func (p *resourcePopulator) addHolding(addr basics.Address, aid basics.AssetIndex) error {
+	// First try to find txn with account already available
+	for _, i := range p.appCallIndexes {
+		if p.txnResources[i].hasAccount(addr) {
+			if p.txnResources[i].hasRoom() {
+				p.txnResources[i].addAsset(aid)
+				return nil
+			}
+		}
+	}
+
+	// Then try to find txn with asset already available
+	for _, i := range p.appCallIndexes {
+		if p.txnResources[i].hasAsset(aid) {
+			if p.txnResources[i].hasRoomForAccount() {
+				p.txnResources[i].addAccount(addr)
+				return nil
+			}
+		}
+	}
+
+	// Finally try to find txn with room for both account and holding
+	for _, i := range p.appCallIndexes {
+		if p.txnResources[i].hasRoomForCrossRef() {
+			p.txnResources[i].addAccount(addr)
+			p.txnResources[i].addAsset(aid)
+			return nil
+		}
+	}
+	return fmt.Errorf("no room for holding")
+}
+
+func (p *resourcePopulator) addLocal(addr basics.Address, aid basics.AppIndex) error {
+	// First try to find txn with account already available
+	for _, i := range p.appCallIndexes {
+		if p.txnResources[i].hasAccount(addr) {
+			if p.txnResources[i].hasRoom() {
+				p.txnResources[i].addApp(aid)
+				return nil
+			}
+		}
+	}
+
+	// Then try to find txn with app already available
+	for _, i := range p.appCallIndexes {
+		if p.txnResources[i].hasApp(aid) {
+			if p.txnResources[i].hasRoomForAccount() {
+				p.txnResources[i].addAccount(addr)
+				return nil
+			}
+		}
+	}
+
+	// Finally try to find txn with room for both account and app
+	for _, i := range p.appCallIndexes {
+		if p.txnResources[i].hasRoomForCrossRef() {
+			p.txnResources[i].addApp(aid)
+			p.txnResources[i].addAccount(addr)
+			return nil
+		}
+	}
+	return fmt.Errorf("no room for local")
+}
+
+func (p *resourcePopulator) populateResources(groupResources ResourceTracker, txnResources []ResourceTracker) error {
+	// First populate resources that HAVE to be assigned to a specific transaction
+	for i, tracker := range txnResources {
+		for asset := range tracker.Assets {
+			p.txnResources[i].addAsset(asset)
+		}
+
+		for app := range tracker.Apps {
+			p.txnResources[i].addApp(app)
+		}
+
+		for account := range tracker.Accounts {
+			p.txnResources[i].addAccount(account)
+		}
+	}
+
+	// Then assign cross-reference resources because they have the most strict requirements (one account and another resource)
+	for holding := range groupResources.AssetHoldings {
+		err := p.addHolding(holding.Address, holding.Asset)
+		if err != nil {
+			return err
+		}
+
+		// Remove the resources from the global tracker in case they were added separately
+		delete(groupResources.Assets, holding.Asset)
+		delete(groupResources.Accounts, holding.Address)
+	}
+
+	for local := range groupResources.AppLocals {
+		err := p.addLocal(local.Address, local.App)
+		if err != nil {
+			return err
+		}
+
+		// Remove the resources from the global tracker in case they were added separately
+		delete(groupResources.Apps, local.App)
+		delete(groupResources.Accounts, local.Address)
+	}
+
+	// Then assign boxes because they can take up to two slots
+	for box := range groupResources.Boxes {
+		err := p.addBox(box.App, box.Name)
+		if err != nil {
+			return err
+		}
+
+		// Remove the app from the global tracker in case it was added separately
+		delete(groupResources.Apps, box.App)
+	}
+
+	// Then assign accounts because they have a lower limit than other resources
+	for account := range groupResources.Accounts {
+		err := p.addAccount(account)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Finally assign the remaining resources which just require one slot
+	for app := range groupResources.Apps {
+		err := p.addApp(app)
+		if err != nil {
+			return err
+		}
+	}
+
+	for asset := range groupResources.Assets {
+		err := p.addAsset(asset)
+		if err != nil {
+			return err
+		}
+	}
+
+	for i := 0; i < groupResources.NumEmptyBoxRefs; i++ {
+		err := p.addBox(0, "")
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (p *resourcePopulator) getPopulatedArrays() map[int]PopulatedResourceArrays {
+	populatedArrays := map[int]PopulatedResourceArrays{}
+	for _, i := range p.appCallIndexes {
+		resources := p.txnResources[i]
+		if resources == nil {
+			continue
+		}
+
+		pop := resources.getPopulatedArrays()
+		if i >= p.groupSize && len(pop.Accounts)+len(pop.Assets)+len(pop.Apps)+len(pop.Boxes) == 0 {
+			break
+		}
+		populatedArrays[i] = resources.getPopulatedArrays()
+	}
+	return populatedArrays
+}
+
+// makeResourcePopulator creates a ResourcePopulator from a transaction group
+func makeResourcePopulator(txnGroup []transactions.SignedTxn, consensusParams config.ConsensusParams) resourcePopulator {
+	populator := resourcePopulator{
+		txnResources:   map[int]*txnResources{},
+		appCallIndexes: []int{},
+		groupSize:      len(txnGroup),
+	}
+
+	for i, txn := range txnGroup {
+		if txn.Txn.Type != protocol.ApplicationCallTx {
+			continue
+		}
+
+		populator.appCallIndexes = append(populator.appCallIndexes, i)
+		populator.addTransaction(txn.Txn, i, consensusParams)
+	}
+
+	for i := len(txnGroup); i < consensusParams.MaxTxGroupSize; i++ {
+		populator.appCallIndexes = append(populator.appCallIndexes, i)
+		populator.txnResources[i] = &txnResources{
+			staticAssets:       make(map[basics.AssetIndex]struct{}),
+			staticApps:         make(map[basics.AppIndex]struct{}),
+			staticAccounts:     make(map[basics.Address]struct{}),
+			staticBoxes:        []logic.BoxRef{},
+			accountsFromFields: make(map[basics.Address]struct{}),
+			assets:             make(map[basics.AssetIndex]struct{}),
+			apps:               make(map[basics.AppIndex]struct{}),
+			accounts:           make(map[basics.Address]struct{}),
+			boxes:              []logic.BoxRef{},
+			maxTotalRefs:       consensusParams.MaxAppTotalTxnReferences,
+			maxAccounts:        consensusParams.MaxAppTxnAccounts,
+		}
+	}
+
+	return populator
+}

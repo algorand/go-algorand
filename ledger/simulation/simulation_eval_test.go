@@ -9344,3 +9344,133 @@ func TestFixSigners(t *testing.T) {
 		})
 	})
 }
+
+func populateResourceTest(t *testing.T, groupSharing bool) {
+
+	var programVersion int
+	if groupSharing {
+		programVersion = 9
+	} else {
+		programVersion = 8
+	}
+
+	env := simulationtesting.PrepareSimulatorTest(t)
+
+	sender := env.Accounts[0]
+	foreignAccount := env.Accounts[1]
+
+	program := fmt.Sprintf(`#pragma version %d
+	txn ApplicationID
+	bz end
+	
+	addr %s
+	balance
+	pop
+	
+	end:
+	int 1
+	`, programVersion, foreignAccount.Addr.String())
+
+	appID := env.CreateApp(sender.Addr, simulationtesting.AppParams{
+		ApprovalProgram:   program,
+		ClearStateProgram: program,
+	})
+
+	pay := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:     protocol.PaymentTx,
+		Sender:   sender.Addr,
+		Receiver: sender.Addr,
+		Amount:   0,
+	})
+
+	appCall := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:          protocol.ApplicationCallTx,
+		Sender:        sender.Addr,
+		ApplicationID: appID,
+	})
+
+	txgroup := txntest.Group(&pay, &appCall)
+
+	proto := env.TxnInfo.CurrentProtocolParams()
+
+	var expectedTxnResources *simulation.ResourceTracker
+	var expectedGroupResources *simulation.ResourceTracker
+
+	maxAppls := proto.MaxTxGroupSize - 1
+
+	if groupSharing {
+		expectedGroupResources = &simulation.ResourceTracker{
+			MaxAccounts:               (proto.MaxAppTxnAccounts + proto.MaxAppTxnForeignApps) * maxAppls,
+			MaxAssets:                 proto.MaxAppTxnForeignAssets * maxAppls,
+			MaxApps:                   proto.MaxAppTxnForeignApps * maxAppls,
+			MaxBoxes:                  proto.MaxAppBoxReferences * maxAppls,
+			MaxTotalRefs:              proto.MaxAppTotalTxnReferences * maxAppls,
+			MaxCrossProductReferences: 80 * maxAppls,
+			Accounts:                  mapWithKeys([]basics.Address{foreignAccount.Addr}, struct{}{}),
+		}
+		expectedTxnResources = nil
+	} else {
+		expectedGroupResources = nil
+		expectedTxnResources = &simulation.ResourceTracker{
+			MaxAccounts:  proto.MaxAppTxnAccounts + proto.MaxAppTxnForeignApps,
+			MaxAssets:    proto.MaxAppTxnForeignAssets,
+			MaxApps:      proto.MaxAppTxnForeignApps,
+			MaxBoxes:     proto.MaxAppBoxReferences,
+			MaxTotalRefs: proto.MaxAppTotalTxnReferences,
+			Accounts:     mapWithKeys([]basics.Address{foreignAccount.Addr}, struct{}{}),
+		}
+	}
+
+	expectedPopulatedArrays := map[int]simulation.PopulatedResourceArrays{
+		1: {
+			Accounts: []basics.Address{foreignAccount.Addr},
+			Assets:   []basics.AssetIndex{},
+			Apps:     []basics.AppIndex{},
+			Boxes:    []logic.BoxRef{},
+		},
+	}
+
+	runSimulationTestCase(t, env, simulationTestCase{
+		input: simulation.Request{
+			TxnGroups:              [][]transactions.SignedTxn{txgroup},
+			AllowEmptySignatures:   true,
+			AllowUnnamedResources:  true,
+			PopulateResourceArrays: true,
+		},
+		expected: simulation.Result{
+			Version:   simulation.ResultLatestVersion,
+			LastRound: env.TxnInfo.LatestRound(),
+			EvalOverrides: simulation.ResultEvalOverrides{
+				AllowEmptySignatures:  true,
+				AllowUnnamedResources: true,
+			},
+			TxnGroups: []simulation.TxnGroupResult{{
+				Txns: []simulation.TxnResult{
+					{},
+					{
+						AppBudgetConsumed:        ignoreAppBudgetConsumed,
+						UnnamedResourcesAccessed: expectedTxnResources,
+					}},
+				PopulatedResourceArrays:  expectedPopulatedArrays,
+				AppBudgetConsumed:        ignoreAppBudgetConsumed,
+				AppBudgetAdded:           700,
+				UnnamedResourcesAccessed: expectedGroupResources,
+			}},
+		},
+	})
+}
+
+func TestPopulateResources(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	t.Run("group sharing", func(t *testing.T) {
+		t.Parallel()
+		populateResourceTest(t, true)
+	})
+
+	t.Run("no group sharing", func(t *testing.T) {
+		t.Parallel()
+		populateResourceTest(t, false)
+	})
+}
