@@ -36,7 +36,6 @@ import (
 	"github.com/algorand/go-algorand/network/phonebook"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/algorand/go-algorand/util"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/crypto"
@@ -1118,23 +1117,4 @@ func TestMergeP2PAddrInfoResolvedAddresses(t *testing.T) {
 			}
 		})
 	}
-}
-
-// TestP2PGossipSubPeerCasts checks that gossipSubPeer implements the ErlClient and IPAddressable interfaces
-// needed by TxHandler
-func TestP2PGossipSubPeerCasts(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-
-	var g interface{} = gossipSubPeer{}
-	_, ok := g.(util.ErlClient)
-	require.True(t, ok)
-
-	_, ok = g.(IPAddressable)
-	require.True(t, ok)
-
-	// check that gossipSubPeer is hashable as ERL wants
-	var m map[util.ErlClient]struct{}
-	require.Equal(t, m[gossipSubPeer{}], struct{}{})
-	require.Equal(t, m[g.(util.ErlClient)], struct{}{})
 }

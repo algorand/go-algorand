@@ -194,28 +194,6 @@ type p2pPeerStats struct {
 	txReceived atomic.Uint64
 }
 
-// gossipSubPeer implements the DeadlineSettableConn, IPAddressable, and ErlClient interfaces.
-type gossipSubPeer struct {
-	peerID      peer.ID
-	net         GossipNode
-	routingAddr [8]byte
-}
-
-func (p gossipSubPeer) GetNetwork() GossipNode { return p.net }
-
-func (p gossipSubPeer) OnClose(f func()) {
-	net := p.GetNetwork().(*P2PNetwork)
-	net.wsPeersLock.Lock()
-	defer net.wsPeersLock.Unlock()
-	if wsp, ok := net.wsPeers[p.peerID]; ok {
-		wsp.OnClose(f)
-	}
-}
-
-func (p gossipSubPeer) RoutingAddr() []byte {
-	return p.routingAddr[:]
-}
-
 // NewP2PNetwork returns an instance of GossipNode that uses the p2p.Service
 func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebookAddresses []string, genesisID string, networkID protocol.NetworkID, node NodeInfo, identityOpts *identityOpts) (*P2PNetwork, error) {
 	const readBufferLen = 2048
@@ -559,8 +537,6 @@ func (n *P2PNetwork) Disconnect(badpeer DisconnectablePeer) {
 	n.wsPeersLock.Lock()
 	defer n.wsPeersLock.Unlock()
 	switch p := badpeer.(type) {
-	case gossipSubPeer: // Disconnect came from a message received via GossipSub
-		peerID, wsp = p.peerID, n.wsPeers[p.peerID]
 	case *wsPeer: // Disconnect came from a message received via wsPeer
 		peerID, wsp = n.wsPeersToIDs[p], p
 	default:
@@ -952,7 +928,9 @@ func (n *P2PNetwork) txTopicHandleLoop() {
 func (n *P2PNetwork) txTopicValidator(ctx context.Context, peerID peer.ID, msg *pubsub.Message) pubsub.ValidationResult {
 	var routingAddr [8]byte
 	n.wsPeersLock.Lock()
-	if wsp, ok := n.wsPeers[peerID]; ok {
+	var wsp *wsPeer
+	var ok bool
+	if wsp, ok = n.wsPeers[peerID]; ok {
 		copy(routingAddr[:], wsp.RoutingAddr())
 	} else {
 		// well, otherwise use last 8 bytes of peerID
@@ -961,7 +939,8 @@ func (n *P2PNetwork) txTopicValidator(ctx context.Context, peerID peer.ID, msg *
 	n.wsPeersLock.Unlock()
 
 	inmsg := IncomingMessage{
-		Sender:   gossipSubPeer{peerID: msg.ReceivedFrom, net: n, routingAddr: routingAddr},
+		// Sender:   gossipSubPeer{peerID: msg.ReceivedFrom, net: n, routingAddr: routingAddr},
+		Sender:   wsp,
 		Tag:      protocol.TxnTag,
 		Data:     msg.Data,
 		Net:      n,
