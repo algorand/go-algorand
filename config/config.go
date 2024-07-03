@@ -23,6 +23,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"strings"
 
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/codecs"
@@ -169,6 +170,9 @@ func fixupConfig(source Local) (Local, error) {
 	// The only way it is supported at the moment is to use net identity challenge that is based on PublicAddress.
 	if (source.NetAddress != "" || source.P2PNetAddress != "") && source.EnableP2PHybridMode && source.PublicAddress == "" {
 		return source, errors.New("PublicAddress must be specified when EnableP2PHybridMode is set")
+	}
+	if source.PublicAddress != "" {
+		source.PublicAddress = strings.ToLower(source.PublicAddress)
 	}
 	return source, nil
 }

@@ -2105,7 +2105,8 @@ func (wn *WebsocketNetwork) tryConnect(netAddr, gossipAddr string) {
 
 	var idChallenge identityChallengeValue
 	if wn.identityScheme != nil {
-		idChallenge = wn.identityScheme.AttachChallenge(requestHeader, netAddr)
+		theirAddr := strings.ToLower(netAddr)
+		idChallenge = wn.identityScheme.AttachChallenge(requestHeader, theirAddr)
 	}
 
 	// for backward compatibility, include the ProtocolVersion header as well.

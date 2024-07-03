@@ -168,6 +168,13 @@ func TestLocal_FixupConfig(t *testing.T) {
 	require.Equal(t, c1, c2)
 	require.True(t, c2.EnableP2PHybridMode)
 	require.NotEmpty(t, c2.PublicAddress)
+
+	c1 = Local{
+		PublicAddress: "R1.test3.my-domain.tld",
+	}
+	c2, err = fixupConfig(c1)
+	require.NoError(t, err)
+	require.Equal(t, "r1.test3.my-domain.tld", c2.PublicAddress)
 }
 
 func saveFullPhonebook(phonebook phonebookBlackWhiteList, saveToDir string) error {

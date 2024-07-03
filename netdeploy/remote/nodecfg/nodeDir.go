@@ -194,7 +194,7 @@ func (nd *nodeDir) configurePublicAddress(publicAddress bool) error {
 
 	if nd.NetAddress[0] == ':' {
 		networkHostName := nd.configurator.getNetworkHostName() + nd.NetAddress
-		nd.config.PublicAddress = networkHostName
+		nd.config.PublicAddress = strings.ToLower(networkHostName)
 		fmt.Fprintf(os.Stdout, " - Assigning PublicAddress: %s\n", networkHostName)
 	}
 	return nd.saveConfig()
