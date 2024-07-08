@@ -2104,6 +2104,11 @@ func (v2 *Handlers) GetDebugSettingsProf(ctx echo.Context) error {
 	return ctx.JSON(http.StatusOK, response)
 }
 
+// GetConfig returns the merged (defaults + overrides) config file in json.
+func (v2 *Handlers) GetConfig(ctx echo.Context) error {
+	return ctx.JSON(http.StatusOK, v2.Node.Config())
+}
+
 // PutDebugSettingsProf sets the mutex and blocking rates and returns the old values.
 func (v2 *Handlers) PutDebugSettingsProf(ctx echo.Context) error {
 	req := ctx.Request()

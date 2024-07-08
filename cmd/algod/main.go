@@ -17,6 +17,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"math/rand"
@@ -172,6 +173,14 @@ func run() int {
 	if err != nil && !os.IsNotExist(err) {
 		// log is not setup yet, this will log to stderr
 		log.Fatalf("Cannot load config: %v", err)
+	}
+
+	// log is not setup yet
+	fmt.Printf("Config loaded from %s\n", absolutePath)
+	fmt.Println("Configuration after loading/defaults merge: ")
+	err = json.NewEncoder(os.Stdout).Encode(cfg)
+	if err != nil {
+		fmt.Println("Error encoding config: ", err)
 	}
 
 	// set soft memory limit, if configured
