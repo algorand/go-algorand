@@ -795,7 +795,9 @@ func TestP2PRelay(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	cfg := config.GetDefaultLocal()
+	cfg.DNSBootstrapID = "" // disable DNS lookups since the test uses phonebook addresses
 	cfg.ForceFetchTransactions = true
+	cfg.BaseLoggerDebugLevel = 5
 	log := logging.TestingLog(t)
 	log.Debugln("Starting netA")
 	netA, err := NewP2PNetwork(log.With("net", "netA"), cfg, "", nil, genesisID, config.Devtestnet, &nopeNodeInfo{})
