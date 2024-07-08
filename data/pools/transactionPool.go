@@ -785,19 +785,19 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIDs map[transact
 			case *ledgercore.LeaseInLedgerError:
 				asmStats.LeaseErrorCount++
 				stats.RemovedInvalidCount++
-				pool.log.Infof("Cannot re-add pending transaction to pool: %v", err)
+				pool.log.Infof("Pending transaction in pool no longer valid: %v", err)
 			case *transactions.MinFeeError:
 				asmStats.MinFeeErrorCount++
 				stats.RemovedInvalidCount++
-				pool.log.Infof("Cannot re-add pending transaction to pool: %v", err)
+				pool.log.Infof("Pending transaction in pool no longer valid: %v", err)
 			case logic.EvalError:
 				asmStats.LogicErrorCount++
 				stats.RemovedInvalidCount++
-				pool.log.Infof("Cannot re-add pending transaction to pool: %v", err)
+				pool.log.Infof("Pending transaction in pool no longer valid: %v", err)
 			default:
 				asmStats.InvalidCount++
 				stats.RemovedInvalidCount++
-				pool.log.Infof("Cannot re-add pending transaction to pool: %v", err)
+				pool.log.Infof("Pending transaction in pool no longer valid: %v", err)
 			}
 		}
 	}
