@@ -155,7 +155,7 @@ func mergeConfigFromFile(configpath string, source Local) (Local, error) {
 // fixupConfig makes the following tweaks to the config:
 // - If NetAddress is set, enable the ledger and block services
 // - If EnableP2PHybridMode is set, require PublicAddress to be set
-func fixupConfig(source Local) (Local, error) {
+func enrichNetworkingConfig(source Local) (Local, error) {
 	if source.NetAddress != "" {
 		source.EnableLedgerService = true
 		source.EnableBlockService = true
@@ -171,9 +171,7 @@ func fixupConfig(source Local) (Local, error) {
 	if (source.NetAddress != "" || source.P2PNetAddress != "") && source.EnableP2PHybridMode && source.PublicAddress == "" {
 		return source, errors.New("PublicAddress must be specified when EnableP2PHybridMode is set")
 	}
-	if source.PublicAddress != "" {
-		source.PublicAddress = strings.ToLower(source.PublicAddress)
-	}
+	source.PublicAddress = strings.ToLower(source.PublicAddress)
 	return source, nil
 }
 

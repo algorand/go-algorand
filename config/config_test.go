@@ -121,7 +121,7 @@ func TestLocal_MergeConfig(t *testing.T) {
 	require.Equal(t, c1.GossipFanout, c2.GossipFanout)
 }
 
-func TestLocal_FixupConfig(t *testing.T) {
+func TestLocal_EnrichNetworkingConfig(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
