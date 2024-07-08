@@ -216,6 +216,33 @@
         }
       }
     },
+    "/debug/settings/config": {
+      "get": {
+        "description": "Returns the merged (defaults + overrides) config file in json.",
+        "tags": [
+          "private"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Gets the merged config file.",
+        "operationId": "GetConfig",
+        "responses": {
+          "200": {
+            "description": "The merged config file in json.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
     "/v2/accounts/{address}": {
       "get": {
         "description": "Given a specific account public key, this call returns the accounts status, balance and spendable amounts",
