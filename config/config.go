@@ -148,11 +148,11 @@ func mergeConfigFromFile(configpath string, source Local) (Local, error) {
 	if err != nil {
 		return source, err
 	}
-	source, err = fixupConfig(source)
+	source, err = enrichNetworkingConfig(source)
 	return source, err
 }
 
-// fixupConfig makes the following tweaks to the config:
+// enrichNetworkingConfig makes the following tweaks to the config:
 // - If NetAddress is set, enable the ledger and block services
 // - If EnableP2PHybridMode is set, require PublicAddress to be set
 func enrichNetworkingConfig(source Local) (Local, error) {

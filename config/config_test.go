@@ -129,7 +129,7 @@ func TestLocal_EnrichNetworkingConfig(t *testing.T) {
 		NetAddress:   "test1",
 		GossipFanout: defaultLocal.GossipFanout,
 	}
-	c2, err := fixupConfig(c1)
+	c2, err := enrichNetworkingConfig(c1)
 	require.NoError(t, err)
 	require.NotEqual(t, c1, c2)
 	require.False(t, c1.EnableLedgerService)
@@ -142,28 +142,28 @@ func TestLocal_EnrichNetworkingConfig(t *testing.T) {
 	c1 = Local{
 		EnableP2PHybridMode: true,
 	}
-	c2, err = fixupConfig(c1)
+	c2, err = enrichNetworkingConfig(c1)
 	require.NoError(t, err)
 
 	c1 = Local{
 		NetAddress:          "test1",
 		EnableP2PHybridMode: true,
 	}
-	c2, err = fixupConfig(c1)
+	c2, err = enrichNetworkingConfig(c1)
 	require.ErrorContains(t, err, "PublicAddress must be specified when EnableP2PHybridMode is set")
 
 	c1 = Local{
 		P2PNetAddress:       "test1",
 		EnableP2PHybridMode: true,
 	}
-	c2, err = fixupConfig(c1)
+	c2, err = enrichNetworkingConfig(c1)
 	require.ErrorContains(t, err, "PublicAddress must be specified when EnableP2PHybridMode is set")
 
 	c1 = Local{
 		EnableP2PHybridMode: true,
 		PublicAddress:       "test2",
 	}
-	c2, err = fixupConfig(c1)
+	c2, err = enrichNetworkingConfig(c1)
 	require.NoError(t, err)
 	require.Equal(t, c1, c2)
 	require.True(t, c2.EnableP2PHybridMode)
@@ -172,7 +172,7 @@ func TestLocal_EnrichNetworkingConfig(t *testing.T) {
 	c1 = Local{
 		PublicAddress: "R1.test3.my-domain.tld",
 	}
-	c2, err = fixupConfig(c1)
+	c2, err = enrichNetworkingConfig(c1)
 	require.NoError(t, err)
 	require.Equal(t, "r1.test3.my-domain.tld", c2.PublicAddress)
 }
