@@ -2788,6 +2788,32 @@
   },
   "openapi": "3.0.1",
   "paths": {
+    "/debug/settings/config": {
+      "get": {
+        "description": "Returns the merged (defaults + overrides) config file in json.",
+        "operationId": "GetConfig",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The merged config file in json."
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Gets the merged config file.",
+        "tags": [
+          "private"
+        ]
+      }
+    },
     "/debug/settings/pprof": {
       "get": {
         "description": "Retrieves the current settings for blocking and mutex profiles",

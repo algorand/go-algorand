@@ -20,7 +20,6 @@ import (
 	"context"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/protocol"
@@ -49,13 +48,6 @@ const (
 	// PeersPhonebookArchivalNodes specifies all archival nodes (relay or p2p)
 	PeersPhonebookArchivalNodes PeerOption = iota
 )
-
-// DeadlineSettableConn abstracts net.Conn and related types as deadline-settable
-type DeadlineSettableConn interface {
-	SetDeadline(time.Time) error
-	SetReadDeadline(time.Time) error
-	SetWriteDeadline(time.Time) error
-}
 
 // GossipNode represents a node in the gossip network
 type GossipNode interface {
@@ -103,10 +95,6 @@ type GossipNode interface {
 	// arrive very quickly, but might be missing some votes. The usage of this call is expected to have similar
 	// characteristics as with a watchdog timer.
 	OnNetworkAdvance()
-
-	// GetHTTPRequestConnection returns the underlying connection for the given request. Note that the request must be the same
-	// request that was provided to the http handler ( or provide a fallback Context() to that )
-	GetHTTPRequestConnection(request *http.Request) (conn DeadlineSettableConn)
 
 	// GetGenesisID returns the network-specific genesisID.
 	GetGenesisID() string

@@ -51,7 +51,7 @@ func TestHostIncomingRequestsOrdering(t *testing.T) {
 	now := time.Now()
 	perm := rand.Perm(100)
 	for i := 0; i < 100; i++ {
-		trackedRequest := makeTrackerRequest("remoteaddr", "host", "port", now.Add(time.Duration(perm[i])*time.Minute), nil)
+		trackedRequest := makeTrackerRequest("remoteaddr", "host", "port", now.Add(time.Duration(perm[i])*time.Minute))
 		hir.add(trackedRequest)
 	}
 	require.Equal(t, 100, len(hir.requests))
@@ -178,7 +178,7 @@ func TestRemoteAddress(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	tr := makeTrackerRequest("127.0.0.1:444", "", "", time.Now(), nil)
+	tr := makeTrackerRequest("127.0.0.1:444", "", "", time.Now())
 	require.Equal(t, "127.0.0.1:444", tr.remoteAddr)
 	require.Equal(t, "127.0.0.1", tr.remoteHost)
 	require.Equal(t, "444", tr.remotePort)

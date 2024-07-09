@@ -38,7 +38,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
-	libp2phttp "github.com/libp2p/go-libp2p/p2p/http"
 	"github.com/libp2p/go-libp2p/p2p/muxer/yamux"
 	"github.com/libp2p/go-libp2p/p2p/security/noise"
 	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
@@ -67,8 +66,6 @@ type Service interface {
 	ListPeersForTopic(topic string) []peer.ID
 	Subscribe(topic string, val pubsub.ValidatorEx) (SubNextCancellable, error)
 	Publish(ctx context.Context, topic string, data []byte) error
-
-	GetStream(peer.ID) (network.Stream, bool)
 }
 
 // serviceImpl manages integration with libp2p and implements the Service interface
@@ -137,47 +134,7 @@ func MakeHost(cfg config.Local, datadir string, pstore *pstore.PeerStore) (host.
 		libp2p.Security(noise.ID, noise.New),
 		disableMetrics,
 	)
-	return &StreamChainingHost{
-		Host:     host,
-		handlers: map[protocol.ID][]network.StreamHandler{},
-	}, listenAddr, err
-}
-
-// StreamChainingHost is a wrapper around host.Host that overrides SetStreamHandler
-// to allow chaining multiple handlers for the same protocol.
-// Note, there should be probably only single handler that writes/reads streams.
-type StreamChainingHost struct {
-	host.Host
-	handlers map[protocol.ID][]network.StreamHandler
-	mutex    deadlock.Mutex
-}
-
-// SetStreamHandler overrides the host.Host.SetStreamHandler method for chaining multiple handlers.
-// Function objects are not comparable so theoretically it could have duplicates.
-// The main use case is to track HTTP streams for ProtocolIDForMultistreamSelect = "/http/1.1"
-// so it could just filter for such protocol if there any issues with other protocols like kad or mesh.
-func (h *StreamChainingHost) SetStreamHandler(pid protocol.ID, handler network.StreamHandler) {
-	h.mutex.Lock()
-	defer h.mutex.Unlock()
-
-	handlers := h.handlers[pid]
-	if len(handlers) == 0 {
-		// no other handlers, do not set a proxy handler
-		h.Host.SetStreamHandler(pid, handler)
-		h.handlers[pid] = append(handlers, handler)
-		return
-	}
-	// otherwise chain the handlers with a copy of the existing handlers
-	handlers = append(handlers, handler)
-	// copy to save it in the closure and call lock free
-	currentHandlers := make([]network.StreamHandler, len(handlers))
-	copy(currentHandlers, handlers)
-	h.Host.SetStreamHandler(pid, func(s network.Stream) {
-		for _, h := range currentHandlers {
-			h(s)
-		}
-	})
-	h.handlers[pid] = handlers
+	return host, listenAddr, err
 }
 
 // MakeService creates a P2P service instance
@@ -186,7 +143,6 @@ func MakeService(ctx context.Context, log logging.Logger, cfg config.Local, h ho
 	sm := makeStreamManager(ctx, log, h, wsStreamHandler)
 	h.Network().Notify(sm)
 	h.SetStreamHandler(AlgorandWsProtocol, sm.streamHandler)
-	h.SetStreamHandler(libp2phttp.ProtocolIDForMultistreamSelect, sm.streamHandlerHTTP)
 
 	// set an empty handler for telemetryID/telemetryInstance protocol in order to allow other peers to know our telemetryID
 	telemetryID := log.GetTelemetryGUID()
@@ -292,10 +248,6 @@ func (s *serviceImpl) Conns() []network.Conn {
 // ClosePeer closes a connection to the provided peer
 func (s *serviceImpl) ClosePeer(peer peer.ID) error {
 	return s.host.Network().ClosePeer(peer)
-}
-
-func (s *serviceImpl) GetStream(peerID peer.ID) (network.Stream, bool) {
-	return s.streams.getStream(peerID)
 }
 
 // netAddressToListenAddress converts a netAddress in "ip:port" format to a listen address

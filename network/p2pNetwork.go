@@ -19,7 +19,6 @@ package network
 import (
 	"context"
 	"math/rand"
-	"net"
 	"net/http"
 	"strings"
 	"sync"
@@ -723,23 +722,6 @@ func (n *P2PNetwork) OnNetworkAdvance() {
 			}
 		}
 	}
-}
-
-// GetHTTPRequestConnection returns the underlying connection for the given request. Note that the request must be the same
-// request that was provided to the http handler ( or provide a fallback Context() to that )
-func (n *P2PNetwork) GetHTTPRequestConnection(request *http.Request) (conn DeadlineSettableConn) {
-	addr := request.Context().Value(http.LocalAddrContextKey).(net.Addr)
-	peerID, err := peer.Decode(addr.String())
-	if err != nil {
-		n.log.Infof("GetHTTPRequestConnection failed to decode %s", addr.String())
-		return nil
-	}
-	conn, ok := n.service.GetStream(peerID)
-	if !ok {
-		n.log.Warnf("GetHTTPRequestConnection no such stream for peer %s", peerID.String())
-		return nil
-	}
-	return conn
 }
 
 // wsStreamHandler is a callback that the p2p package calls when a new peer connects and establishes a
