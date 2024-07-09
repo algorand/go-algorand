@@ -174,6 +174,11 @@ ifeq ($(OS_TYPE),darwin)
 	mkdir -p $(GOPATH1)/bin-darwin-arm64
 	CROSS_COMPILE_ARCH=arm64 GOBIN=$(GOPATH1)/bin-darwin-arm64 MACOSX_DEPLOYMENT_TARGET=12.0 EXTRA_CONFIGURE_FLAGS='CFLAGS="-arch arm64 -mmacos-version-min=12.0" --host=aarch64-apple-darwin' $(MAKE)
 
+	# same for buildsrc-special
+	cd tools/block-generator && \
+	CROSS_COMPILE_ARCH=amd64 GOBIN=$(GOPATH1)/bin-darwin-amd64 MACOSX_DEPLOYMENT_TARGET=12.0 EXTRA_CONFIGURE_FLAGS='CFLAGS="-arch x86_64 -mmacos-version-min=12.0" --host=x86_64-apple-darwin' $(MAKE)
+	CROSS_COMPILE_ARCH=arm64 GOBIN=$(GOPATH1)/bin-darwin-arm64 MACOSX_DEPLOYMENT_TARGET=12.0 EXTRA_CONFIGURE_FLAGS='CFLAGS="-arch arm64 -mmacos-version-min=12.0" --host=aarch64-apple-darwin' $(MAKE)
+
 	# lipo together
 	mkdir -p $(GOPATH1)/bin-darwin-universal
 	for binary in $$(ls $(GOPATH1)/bin-darwin-arm64); do \
@@ -186,7 +191,7 @@ ifeq ($(OS_TYPE),darwin)
 		fi \
 	done
 else
-	$(error OS_TYPE must be darwin for universal builds)
+	echo "OS_TYPE must be darwin for universal builds, skipping"
 endif
 
 deps:
@@ -244,11 +249,45 @@ ${GOCACHE}/file.txt:
 	touch "${GOCACHE}"/file.txt
 
 buildsrc: check-go-version crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a node_exporter NONGO_BIN ${GOCACHE}/file.txt
+ifeq ($(OS_TYPE),darwin)
+ifeq ($(ARCH),arm64)
+ifeq (,$(CROSS_COMPILE_ARCH))
+	# If we're on an M1 Mac, we need to build the universal binaries
+	# We should only do this if we're not already cross-compiling
+	$(MAKE) universal
+else
+	# cross-compiling darwin arm64
 	$(GO_INSTALL) $(GOTRIMPATH) $(GOTAGS) $(GOBUILDMODE) -ldflags="$(GOLDFLAGS)" ./...
+endif
+else
+	# cross-compiling darwin amd64 or just building on mac amd64
+	$(GO_INSTALL) $(GOTRIMPATH) $(GOTAGS) $(GOBUILDMODE) -ldflags="$(GOLDFLAGS)" ./...
+endif
+else
+	# everything else like linux
+	$(GO_INSTALL) $(GOTRIMPATH) $(GOTAGS) $(GOBUILDMODE) -ldflags="$(GOLDFLAGS)" ./...
+endif
 
 buildsrc-special:
+ifeq ($(OS_TYPE),darwin)
+ifeq ($(ARCH),arm64)
+ifeq (,$(CROSS_COMPILE_ARCH))
+	echo "Covered under universal target"
+else
+	# cross-compiling darwin arm64
 	cd tools/block-generator && \
 	$(GO_INSTALL) $(GOTRIMPATH) $(GOTAGS) $(GOBUILDMODE) -ldflags="$(GOLDFLAGS)" ./...
+endif
+else
+	# cross-compiling darwin amd64 or just building on mac amd64
+	cd tools/block-generator && \
+	$(GO_INSTALL) $(GOTRIMPATH) $(GOTAGS) $(GOBUILDMODE) -ldflags="$(GOLDFLAGS)" ./...
+endif
+else
+	# everything else like linux
+	cd tools/block-generator && \
+	$(GO_INSTALL) $(GOTRIMPATH) $(GOTAGS) $(GOBUILDMODE) -ldflags="$(GOLDFLAGS)" ./...
+endif
 
 check-go-version:
 	./scripts/check_golang_version.sh build
