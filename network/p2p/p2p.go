@@ -150,7 +150,7 @@ func MakeService(ctx context.Context, log logging.Logger, cfg config.Local, h ho
 	telemetryProtoInfo := formatPeerTelemetryInfoProtocolName(telemetryID, telemetryInstance)
 	h.SetStreamHandler(protocol.ID(telemetryProtoInfo), func(s network.Stream) { s.Close() })
 
-	ps, err := makePubSub(ctx, cfg, h)
+	ps, err := makePubSub(ctx, log, cfg, h)
 	if err != nil {
 		return nil, err
 	}
