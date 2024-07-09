@@ -49,6 +49,7 @@ def make_hybrid_p2p_net(*args):
 
         net_address = config.get("NetAddress")
         if net_address:
+            # in p2p-only mode all relays are P2PBootstrap-able
             config["P2PBootstrap"] = True
 
         altconfigs = config.get("AltConfigs")
@@ -125,15 +126,15 @@ def main():
     with open(os.path.join(SCENARIO1S_DIR, "nonPartNode.json"), "r") as f:
         non_part_node = json.load(f)
 
-    # in p2p-only mode all relays are P2PBootstrap-able
-    if not  hybrid_mode:
-        make_p2p_net(node, relay, non_part_node)
-    elif  hybrid_mode == 'p2p':
+    if  hybrid_mode == 'p2p':
+        print('making hybrid p2p network...')
         make_hybrid_p2p_net(node, relay, non_part_node)
     elif  hybrid_mode == 'ws':
+        print('making hybrid ws network...')
         make_hybrid_ws_net(node, relay, non_part_node)
     else:
-        raise ValueError(f"Invalid hybrid mode: { hybrid_mode }")
+        print('making pure p2p network...')
+        make_p2p_net(node, relay, non_part_node)
 
     with open("node.json", "w") as f:
         json.dump(node, f, indent=4)
