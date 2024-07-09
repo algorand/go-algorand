@@ -880,7 +880,7 @@ func TestP2PRelay(t *testing.T) {
 	// add a netC with listening address set and enable relaying on netB
 	// ensure all messages from netB and netC are received by netA
 	cfg.NetAddress = "127.0.0.1:0"
-	log.Debugf("Starting netB with phonebook addresses %v", phoneBookAddresses)
+	log.Debugf("Starting netC with phonebook addresses %v", phoneBookAddresses)
 	netC, err := NewP2PNetwork(log.With("net", "netC"), cfg, "", phoneBookAddresses, genesisID, config.Devtestnet, &nopeNodeInfo{})
 	require.NoError(t, err)
 	err = netC.Start()
@@ -892,11 +892,11 @@ func TestP2PRelay(t *testing.T) {
 	require.Eventually(
 		t,
 		func() bool {
-			return len(netA.service.ListPeersForTopic(p2p.TXTopicName)) > 0 &&
+			return len(netA.service.ListPeersForTopic(p2p.TXTopicName)) >= 2 &&
 				len(netB.service.ListPeersForTopic(p2p.TXTopicName)) > 0 &&
 				len(netC.service.ListPeersForTopic(p2p.TXTopicName)) > 0
 		},
-		2*time.Second,
+		10*time.Second, // wait until netC node gets actually connected to netA after starting
 		50*time.Millisecond,
 	)
 
