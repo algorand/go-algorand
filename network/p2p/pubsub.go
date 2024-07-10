@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/logging"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pubsub_pb "github.com/libp2p/go-libp2p-pubsub/pb"
 	"github.com/libp2p/go-libp2p/core/host"
@@ -56,7 +55,7 @@ const TXTopicName = "/algo/tx/0.1.0"
 
 const incomingThreads = 20 // matches to number wsNetwork workers
 
-func makePubSub(ctx context.Context, log logging.Logger, cfg config.Local, host host.Host) (*pubsub.PubSub, error) {
+func makePubSub(ctx context.Context, cfg config.Local, host host.Host) (*pubsub.PubSub, error) {
 	//defaultParams := pubsub.DefaultGossipSubParams()
 
 	options := []pubsub.Option{
@@ -99,32 +98,9 @@ func makePubSub(ctx context.Context, log logging.Logger, cfg config.Local, host 
 		pubsub.WithMessageSignaturePolicy(pubsub.StrictNoSign),
 		// pubsub.WithValidateThrottle(cfg.TxBacklogSize),
 		pubsub.WithValidateWorkers(incomingThreads),
-		pubsub.WithEventTracer(&pubsubEventTracer{log: log}),
 	}
 
 	return pubsub.NewGossipSub(ctx, host, options...)
-}
-
-type pubsubEventTracer struct {
-	pubsub.EventTracer
-	log logging.Logger
-}
-
-func (t *pubsubEventTracer) Trace(evt *pubsub_pb.TraceEvent) {
-	log := t.log.With("pubsub", "trace").With("type", evt.GetType().String()).With("peerID", peer.ID(evt.GetPeerID()).String())
-	if evt.DeliverMessage != nil {
-		log = log.With("msg-from", peer.ID(evt.DeliverMessage.GetReceivedFrom()).String())
-	}
-	if evt.RecvRPC != nil {
-		log = log.With("rpc-from", peer.ID(evt.RecvRPC.GetReceivedFrom()).String())
-	}
-	if evt.RejectMessage != nil {
-		log = log.With("rej-from", peer.ID(evt.RejectMessage.GetReceivedFrom()).String())
-	}
-	if evt.DuplicateMessage != nil {
-		log = log.With("dup-from", peer.ID(evt.DuplicateMessage.GetReceivedFrom()).String())
-	}
-	log.Debugf("%s", evt)
 }
 
 func txMsgID(m *pubsub_pb.Message) string {

@@ -893,7 +893,6 @@ func TestP2PRelay(t *testing.T) {
 	log.Debugf("Starting netC with phonebook addresses %v", phoneBookAddresses)
 	netC, err := NewP2PNetwork(log.With("net", "netC"), cfg, "", phoneBookAddresses, genesisID, config.Devtestnet, &nopeNodeInfo{})
 	require.NoError(t, err)
-	require.True(t, netC.relayMessages)
 	err = netC.Start()
 	require.NoError(t, err)
 	defer netC.Stop()
