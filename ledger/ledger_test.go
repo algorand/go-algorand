@@ -1801,6 +1801,9 @@ func TestLedgerMemoryLeak(t *testing.T) {
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Info)   // prevent spamming with ledger.AddValidatedBlock debug message
 	deadlock.Opts.Disable = true // catchpoint writing might take long
+	defer func() {
+		deadlock.Opts.Disable = false
+	}()
 	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	defer l.Close()
@@ -2907,7 +2910,7 @@ func testVotersReloadFromDiskAfterOneStateProofCommitted(t *testing.T, cfg confi
 	const inMem = true
 
 	log := logging.TestingLog(t)
-	log.SetLevel(logging.Info)
+	log.SetLevel(logging.Debug)
 	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	defer l.Close()

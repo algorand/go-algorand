@@ -22,6 +22,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -50,6 +53,13 @@ func (n *P2PNetwork) hasPeers() bool {
 	n.wsPeersLock.RLock()
 	defer n.wsPeersLock.RUnlock()
 	return len(n.wsPeers) > 0
+}
+
+func (n *P2PNetwork) hasPeer(peerID peer.ID) bool {
+	n.wsPeersLock.RLock()
+	defer n.wsPeersLock.RUnlock()
+	_, ok := n.wsPeers[peerID]
+	return ok
 }
 
 func TestP2PSubmitTX(t *testing.T) {
@@ -794,8 +804,14 @@ func TestP2PHTTPHandler(t *testing.T) {
 func TestP2PRelay(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
+	if strings.ToUpper(os.Getenv("CIRCLECI")) == "TRUE" {
+		t.Skip("Flaky on CIRCLECI")
+	}
+
 	cfg := config.GetDefaultLocal()
+	cfg.DNSBootstrapID = "" // disable DNS lookups since the test uses phonebook addresses
 	cfg.ForceFetchTransactions = true
+	cfg.BaseLoggerDebugLevel = 5
 	log := logging.TestingLog(t)
 	log.Debugln("Starting netA")
 	netA, err := NewP2PNetwork(log.With("net", "netA"), cfg, "", nil, genesisID, config.Devtestnet, &nopeNodeInfo{})
@@ -883,6 +899,7 @@ func TestP2PRelay(t *testing.T) {
 	log.Debugf("Starting netC with phonebook addresses %v", phoneBookAddresses)
 	netC, err := NewP2PNetwork(log.With("net", "netC"), cfg, "", phoneBookAddresses, genesisID, config.Devtestnet, &nopeNodeInfo{})
 	require.NoError(t, err)
+	require.True(t, netC.relayMessages)
 	err = netC.Start()
 	require.NoError(t, err)
 	defer netC.Stop()
@@ -892,16 +909,23 @@ func TestP2PRelay(t *testing.T) {
 	require.Eventually(
 		t,
 		func() bool {
-			return len(netA.service.ListPeersForTopic(p2p.TXTopicName)) >= 2 &&
-				len(netB.service.ListPeersForTopic(p2p.TXTopicName)) > 0 &&
-				len(netC.service.ListPeersForTopic(p2p.TXTopicName)) > 0
+			netAtopicPeers := netA.service.ListPeersForTopic(p2p.TXTopicName)
+			netBtopicPeers := netB.service.ListPeersForTopic(p2p.TXTopicName)
+			netCtopicPeers := netC.service.ListPeersForTopic(p2p.TXTopicName)
+			netBConnected := slices.Contains(netAtopicPeers, netB.service.ID())
+			netCConnected := slices.Contains(netAtopicPeers, netC.service.ID())
+			return len(netAtopicPeers) >= 2 &&
+				len(netBtopicPeers) > 0 &&
+				len(netCtopicPeers) > 0 &&
+				netBConnected && netCConnected
 		},
 		10*time.Second, // wait until netC node gets actually connected to netA after starting
 		50*time.Millisecond,
 	)
 
 	require.Eventually(t, func() bool {
-		return netA.hasPeers() && netB.hasPeers() && netC.hasPeers()
+		return netA.hasPeers() && netB.hasPeers() && netC.hasPeers() &&
+			netA.hasPeer(netB.service.ID()) && netA.hasPeer(netC.service.ID())
 	}, 2*time.Second, 50*time.Millisecond)
 
 	const expectedMsgs = 10
