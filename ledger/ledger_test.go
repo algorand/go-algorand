@@ -1683,6 +1683,15 @@ func TestLedgerVerifiesOldStateProofs(t *testing.T) {
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	defer backlogPool.Shutdown()
 
+	// wait all pending commits to finish
+	l.trackers.accountsWriting.Wait()
+
+	// quit the commitSyncer goroutine: this test flushes manually with triggerTrackerFlush
+	l.trackers.ctxCancel()
+	l.trackers.ctxCancel = nil
+	<-l.trackers.commitSyncerClosed
+	l.trackers.commitSyncerClosed = nil
+
 	triggerTrackerFlush(t, l)
 	l.WaitForCommit(l.Latest())
 	blk := createBlkWithStateproof(t, maxBlocks, proto, genesisInitState, l, accounts)
@@ -1714,7 +1723,7 @@ func TestLedgerVerifiesOldStateProofs(t *testing.T) {
 	}
 	l.acctsOnline.voters.votersMu.Unlock()
 
-	// However, we are still able to very a state proof sicne we use the tracker
+	// However, we are still able to very a state proof since we use the tracker
 	blk = createBlkWithStateproof(t, maxBlocks, proto, genesisInitState, l, accounts)
 	_, err = l.Validate(context.Background(), blk, backlogPool)
 	require.ErrorContains(t, err, "state proof crypto error")
@@ -2934,7 +2943,7 @@ func testVotersReloadFromDiskAfterOneStateProofCommitted(t *testing.T, cfg confi
 	// wait all pending commits to finish
 	l.trackers.accountsWriting.Wait()
 
-	// quit the commitSyncer goroutine
+	// quit the commitSyncer goroutine: this test flushes manually with triggerTrackerFlush
 	l.trackers.ctxCancel()
 	l.trackers.ctxCancel = nil
 	<-l.trackers.commitSyncerClosed
