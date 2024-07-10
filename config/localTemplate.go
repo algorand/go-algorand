@@ -610,6 +610,10 @@ type Local struct {
 	// EnableDHT will turn on the hash table for use with capabilities advertisement
 	EnableDHTProviders bool `version[34]:"false"`
 
+	// DisableP2PRelayTransport disables the relay transport for the P2P network. Relay transport is
+	// enabled by default when EnableP2P or EnableP2PHybridMode is set to true.
+	DisableP2PRelayTransport bool `version[34]:"false"`
+
 	// P2PPersistPeerID will write the private key used for the node's PeerID to the P2PPrivateKeyLocation.
 	// This is only used when P2PEnable is true. If P2PPrivateKey is not specified, it uses the default location.
 	P2PPersistPeerID bool `version[29]:"false"`

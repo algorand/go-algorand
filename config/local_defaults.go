@@ -59,6 +59,7 @@ var defaultLocal = Local{
 	DisableLocalhostConnectionRateLimit:        true,
 	DisableNetworking:                          false,
 	DisableOutgoingConnectionThrottling:        false,
+	DisableP2PRelayTransport:                   false,
 	EnableAccountUpdatesStats:                  false,
 	EnableAgreementReporting:                   false,
 	EnableAgreementTimeMetrics:                 false,

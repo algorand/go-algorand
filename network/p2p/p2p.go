@@ -115,9 +115,14 @@ func MakeHost(cfg config.Local, datadir string, pstore *pstore.PeerStore) (host.
 		listenAddr = "/ip4/0.0.0.0/tcp/0"
 	}
 
-	// the libp2p.NoListenAddrs builtin disables relays but this one does not
-	var noListenAddrs = func(cfg *libp2p.Config) error {
-		cfg.ListenAddrs = []multiaddr.Multiaddr{}
+	// the libp2p.NoListenAddrs builtin disables relays but this one only does if
+	// DisableP2PRelayTransport is set to true
+	var noListenAddrs = func(p2pCfg *libp2p.Config) error {
+		if cfg.DisableP2PRelayTransport {
+			return libp2p.NoListenAddrs(p2pCfg)
+		}
+
+		p2pCfg.ListenAddrs = []multiaddr.Multiaddr{}
 		return nil
 	}
 
