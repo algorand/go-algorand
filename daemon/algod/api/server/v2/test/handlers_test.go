@@ -2502,3 +2502,19 @@ func TestDebugExtraPprofEndpoint(t *testing.T) {
 	require.Contains(t, string(body), `"block-rate":0`)
 
 }
+
+func TestGetConfigEndpoint(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
+	defer releasefunc()
+
+	err := handler.GetConfig(c)
+	require.NoError(t, err)
+	require.Equal(t, 200, rec.Code)
+	var responseConfig config.Local
+
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &responseConfig))
+
+	require.Equal(t, handler.Node.Config(), responseConfig)
+}
