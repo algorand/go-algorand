@@ -251,6 +251,10 @@ ${GOCACHE}/file.txt:
 buildsrc: check-go-version crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a node_exporter NONGO_BIN ${GOCACHE}/file.txt
 	$(GO_INSTALL) $(GOTRIMPATH) $(GOTAGS) $(GOBUILDMODE) -ldflags="$(GOLDFLAGS)" ./...
 
+buildsrc-special:
+	cd tools/block-generator && \
+	$(GO_INSTALL) $(GOTRIMPATH) $(GOTAGS) $(GOBUILDMODE) -ldflags="$(GOLDFLAGS)" ./...
+
 check-go-version:
 	./scripts/check_golang_version.sh build
 
