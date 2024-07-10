@@ -38,6 +38,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
+	rcmgr "github.com/libp2p/go-libp2p/p2p/host/resource-manager"
 	"github.com/libp2p/go-libp2p/p2p/muxer/yamux"
 	"github.com/libp2p/go-libp2p/p2p/security/noise"
 	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
@@ -115,14 +116,20 @@ func MakeHost(cfg config.Local, datadir string, pstore *pstore.PeerStore) (host.
 		listenAddr = "/ip4/0.0.0.0/tcp/0"
 	}
 
-	// the libp2p.NoListenAddrs builtin disables relays but this one does not
+	// the libp2p.NoListenAddrs builtin disables relays but this one does not.
+	// libp2p.Host is started with listening disabled to prevent listening before Start() is called.
 	var noListenAddrs = func(cfg *libp2p.Config) error {
 		cfg.ListenAddrs = []multiaddr.Multiaddr{}
 		return nil
 	}
 
-	var disableMetrics = func(cfg *libp2p.Config) error { return nil }
+	var enableMetrics = func(cfg *libp2p.Config) error { cfg.DisableMetrics = false; return nil }
 	metrics.DefaultRegistry().Register(&metrics.PrometheusDefaultMetrics)
+
+	rm, err := configureResourceManager(cfg)
+	if err != nil {
+		return nil, "", err
+	}
 
 	host, err := libp2p.New(
 		libp2p.Identity(privKey),
@@ -132,9 +139,27 @@ func MakeHost(cfg config.Local, datadir string, pstore *pstore.PeerStore) (host.
 		libp2p.Peerstore(pstore),
 		noListenAddrs,
 		libp2p.Security(noise.ID, noise.New),
-		disableMetrics,
+		enableMetrics,
+		libp2p.ResourceManager(rm),
 	)
 	return host, listenAddr, err
+}
+
+func configureResourceManager(cfg config.Local) (network.ResourceManager, error) {
+	// see https://github.com/libp2p/go-libp2p/tree/master/p2p/host/resource-manager for more details
+	scalingLimits := rcmgr.DefaultLimits
+	libp2p.SetDefaultServiceLimits(&scalingLimits)
+	scaledDefaultLimits := scalingLimits.AutoScale()
+
+	limitConfig := rcmgr.PartialLimitConfig{
+		System: rcmgr.ResourceLimits{
+			Conns: rcmgr.LimitVal(cfg.IncomingConnectionsLimit),
+		},
+		// Everything else is default. The exact values will come from `scaledDefaultLimits` above.
+	}
+	limiter := rcmgr.NewFixedLimiter(limitConfig.Build(scaledDefaultLimits))
+	rm, err := rcmgr.NewResourceManager(limiter)
+	return rm, err
 }
 
 // MakeService creates a P2P service instance
