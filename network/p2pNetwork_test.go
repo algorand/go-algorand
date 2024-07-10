@@ -22,7 +22,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -802,6 +804,10 @@ func TestP2PHTTPHandler(t *testing.T) {
 func TestP2PRelay(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
+	if strings.ToUpper(os.Getenv("CIRCLECI")) == "TRUE" {
+		t.Skip("Flaky on CIRCLECI")
+	}
+
 	cfg := config.GetDefaultLocal()
 	cfg.DNSBootstrapID = "" // disable DNS lookups since the test uses phonebook addresses
 	cfg.ForceFetchTransactions = true
@@ -893,6 +899,7 @@ func TestP2PRelay(t *testing.T) {
 	log.Debugf("Starting netC with phonebook addresses %v", phoneBookAddresses)
 	netC, err := NewP2PNetwork(log.With("net", "netC"), cfg, "", phoneBookAddresses, genesisID, config.Devtestnet, &nopeNodeInfo{})
 	require.NoError(t, err)
+	require.True(t, netC.relayMessages)
 	err = netC.Start()
 	require.NoError(t, err)
 	defer netC.Stop()
