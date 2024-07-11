@@ -362,7 +362,7 @@ func run() int {
 
 		// If the telemetry URI is not set, periodically check SRV records for new telemetry URI
 		if remoteTelemetryEnabled && log.GetTelemetryURI() == "" {
-			toolsnet.StartTelemetryURIUpdateService(time.Minute, cfg, s.Genesis.Network, log, done)
+			toolsnet.StartTelemetryURIUpdateService(time.Minute, cfgCopy, s.Genesis.Network, log, done)
 		}
 
 		currentVersion := config.GetCurrentVersion()
