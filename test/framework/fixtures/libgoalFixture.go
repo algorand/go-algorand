@@ -390,7 +390,7 @@ func (f *LibGoalFixture) dumpLogs(filePath string) {
 	fmt.Fprintf(os.Stderr, "%s/%s:\n", parts[len(parts)-2], parts[len(parts)-1]) // Primary/node.log
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
-		fmt.Fprint(os.Stderr, scanner.Text())
+		fmt.Fprintln(os.Stderr, scanner.Text())
 	}
 	fmt.Fprintln(os.Stderr)
 }
