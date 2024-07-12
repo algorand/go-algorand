@@ -735,10 +735,19 @@ func (cfg Local) TxFilterCanonicalEnabled() bool {
 	return cfg.TxIncomingFilteringFlags&txFilterCanonical != 0
 }
 
-// IsGossipServer returns true if NetAddress is set and this node supposed
-// to start websocket server
+// IsGossipServer returns true if this node supposed to start websocket or p2p server
 func (cfg Local) IsGossipServer() bool {
-	return cfg.NetAddress != ""
+	return cfg.isWsGossipServer() || cfg.isP2PGossipServer()
+}
+
+// isWsGossipServer returns true if a node configured to run a listening ws net
+func (cfg Local) isWsGossipServer() bool {
+	return cfg.NetAddress != "" && !cfg.EnableP2P
+}
+
+// isP2PGossipServer returns true if a node configured to run a listening p2p net
+func (cfg Local) isP2PGossipServer() bool {
+	return cfg.EnableP2P && cfg.NetAddress != "" || cfg.EnableP2PHybridMode && cfg.P2PNetAddress != ""
 }
 
 // ensureAbsGenesisDir will convert a path to absolute, and will attempt to make a genesis directory there

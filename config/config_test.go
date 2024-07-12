@@ -615,9 +615,53 @@ func TestLocal_IsGossipServer(t *testing.T) {
 
 	cfg := GetDefaultLocal()
 	require.False(t, cfg.IsGossipServer())
+	require.False(t, cfg.isWsGossipServer())
+	require.False(t, cfg.isP2PGossipServer())
 
 	cfg.NetAddress = ":4160"
 	require.True(t, cfg.IsGossipServer())
+	require.True(t, cfg.isWsGossipServer())
+	require.False(t, cfg.isP2PGossipServer())
+
+	cfg.EnableGossipService = false
+	// EnableGossipService does not matter
+	require.True(t, cfg.IsGossipServer())
+	require.True(t, cfg.isWsGossipServer())
+	require.False(t, cfg.isP2PGossipServer())
+
+	cfg.EnableP2P = true
+	cfg.NetAddress = ":4160"
+	require.True(t, cfg.IsGossipServer())
+	require.False(t, cfg.isWsGossipServer())
+	require.True(t, cfg.isP2PGossipServer())
+
+	cfg.EnableP2P = false
+
+	cfg.EnableP2PHybridMode = true
+	// with net address set it is ws net gossip server
+	require.True(t, cfg.IsGossipServer())
+	require.True(t, cfg.isWsGossipServer())
+	require.False(t, cfg.isP2PGossipServer())
+
+	cfg.EnableP2PHybridMode = true
+	cfg.NetAddress = ""
+	require.False(t, cfg.IsGossipServer())
+	require.False(t, cfg.isWsGossipServer())
+	require.False(t, cfg.isP2PGossipServer())
+
+	cfg.EnableP2PHybridMode = true
+	cfg.P2PNetAddress = ":4190"
+	require.True(t, cfg.IsGossipServer())
+	require.False(t, cfg.isWsGossipServer())
+	require.True(t, cfg.isP2PGossipServer())
+
+	cfg.EnableP2PHybridMode = true
+	cfg.NetAddress = ":4160"
+	cfg.P2PNetAddress = ":4190"
+	require.True(t, cfg.IsGossipServer())
+	require.True(t, cfg.isWsGossipServer())
+	require.True(t, cfg.isP2PGossipServer())
+
 }
 
 func TestLocal_RecalculateConnectionLimits(t *testing.T) {
