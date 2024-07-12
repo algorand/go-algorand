@@ -115,12 +115,6 @@ func MakeHost(cfg config.Local, datadir string, pstore *pstore.PeerStore) (host.
 		listenAddr = "/ip4/0.0.0.0/tcp/0"
 	}
 
-	// the libp2p.NoListenAddrs builtin disables relays but this one does not
-	var noListenAddrs = func(cfg *libp2p.Config) error {
-		cfg.ListenAddrs = []multiaddr.Multiaddr{}
-		return nil
-	}
-
 	var disableMetrics = func(cfg *libp2p.Config) error { return nil }
 	metrics.DefaultRegistry().Register(&metrics.PrometheusDefaultMetrics)
 
@@ -130,7 +124,7 @@ func MakeHost(cfg config.Local, datadir string, pstore *pstore.PeerStore) (host.
 		libp2p.Transport(tcp.NewTCPTransport),
 		libp2p.Muxer("/yamux/1.0.0", &ymx),
 		libp2p.Peerstore(pstore),
-		noListenAddrs,
+		libp2p.NoListenAddrs,
 		libp2p.Security(noise.ID, noise.New),
 		disableMetrics,
 	)
