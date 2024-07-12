@@ -134,6 +134,8 @@ type Local struct {
 	// Estimating 1.5MB per incoming connection, 1.5MB*2400 = 3.6GB
 	IncomingConnectionsLimit int `version[0]:"-1" version[1]:"10000" version[17]:"800" version[27]:"2400"`
 
+	P2PIncomingConnectionsLimit int `version[34]:"1200"`
+
 	// BroadcastConnectionsLimit specifies the number of connections that
 	// will receive broadcast (gossip) messages from this node. If the
 	// node has more connections than this number, it will send broadcasts
@@ -737,16 +739,16 @@ func (cfg Local) TxFilterCanonicalEnabled() bool {
 
 // IsGossipServer returns true if this node supposed to start websocket or p2p server
 func (cfg Local) IsGossipServer() bool {
-	return cfg.isWsGossipServer() || cfg.isP2PGossipServer()
+	return cfg.IsWsGossipServer() || cfg.IsP2PGossipServer()
 }
 
-// isWsGossipServer returns true if a node configured to run a listening ws net
-func (cfg Local) isWsGossipServer() bool {
+// IsWsGossipServer returns true if a node configured to run a listening ws net
+func (cfg Local) IsWsGossipServer() bool {
 	return cfg.NetAddress != "" && !cfg.EnableP2P
 }
 
-// isP2PGossipServer returns true if a node configured to run a listening p2p net
-func (cfg Local) isP2PGossipServer() bool {
+// IsP2PGossipServer returns true if a node configured to run a listening p2p net
+func (cfg Local) IsP2PGossipServer() bool {
 	return cfg.EnableP2P && cfg.NetAddress != "" || cfg.EnableP2PHybridMode && cfg.P2PNetAddress != ""
 }
 
@@ -945,10 +947,23 @@ func (cfg *Local) AdjustConnectionLimits(requiredFDs, maxFDs uint64) bool {
 	if cfg.RestConnectionsHardLimit <= diff+reservedRESTConns {
 		restDelta := diff + reservedRESTConns - cfg.RestConnectionsHardLimit
 		cfg.RestConnectionsHardLimit = reservedRESTConns
-		if cfg.IncomingConnectionsLimit > int(restDelta) {
-			cfg.IncomingConnectionsLimit -= int(restDelta)
-		} else {
-			cfg.IncomingConnectionsLimit = 0
+		splitRatio := 1
+		if cfg.IsWsGossipServer() && cfg.IsP2PGossipServer() {
+			splitRatio = 2
+		}
+		if cfg.IsWsGossipServer() {
+			if cfg.IncomingConnectionsLimit > int(restDelta) {
+				cfg.IncomingConnectionsLimit -= int(restDelta) / splitRatio
+			} else {
+				cfg.IncomingConnectionsLimit = 0
+			}
+		}
+		if cfg.IsP2PGossipServer() {
+			if cfg.P2PIncomingConnectionsLimit > int(restDelta) {
+				cfg.P2PIncomingConnectionsLimit -= int(restDelta) / splitRatio
+			} else {
+				cfg.P2PIncomingConnectionsLimit = 0
+			}
 		}
 	} else {
 		cfg.RestConnectionsHardLimit -= diff

@@ -615,52 +615,52 @@ func TestLocal_IsGossipServer(t *testing.T) {
 
 	cfg := GetDefaultLocal()
 	require.False(t, cfg.IsGossipServer())
-	require.False(t, cfg.isWsGossipServer())
-	require.False(t, cfg.isP2PGossipServer())
+	require.False(t, cfg.IsWsGossipServer())
+	require.False(t, cfg.IsP2PGossipServer())
 
 	cfg.NetAddress = ":4160"
 	require.True(t, cfg.IsGossipServer())
-	require.True(t, cfg.isWsGossipServer())
-	require.False(t, cfg.isP2PGossipServer())
+	require.True(t, cfg.IsWsGossipServer())
+	require.False(t, cfg.IsP2PGossipServer())
 
 	cfg.EnableGossipService = false
 	// EnableGossipService does not matter
 	require.True(t, cfg.IsGossipServer())
-	require.True(t, cfg.isWsGossipServer())
-	require.False(t, cfg.isP2PGossipServer())
+	require.True(t, cfg.IsWsGossipServer())
+	require.False(t, cfg.IsP2PGossipServer())
 
 	cfg.EnableP2P = true
 	cfg.NetAddress = ":4160"
 	require.True(t, cfg.IsGossipServer())
-	require.False(t, cfg.isWsGossipServer())
-	require.True(t, cfg.isP2PGossipServer())
+	require.False(t, cfg.IsWsGossipServer())
+	require.True(t, cfg.IsP2PGossipServer())
 
 	cfg.EnableP2P = false
 
 	cfg.EnableP2PHybridMode = true
 	// with net address set it is ws net gossip server
 	require.True(t, cfg.IsGossipServer())
-	require.True(t, cfg.isWsGossipServer())
-	require.False(t, cfg.isP2PGossipServer())
+	require.True(t, cfg.IsWsGossipServer())
+	require.False(t, cfg.IsP2PGossipServer())
 
 	cfg.EnableP2PHybridMode = true
 	cfg.NetAddress = ""
 	require.False(t, cfg.IsGossipServer())
-	require.False(t, cfg.isWsGossipServer())
-	require.False(t, cfg.isP2PGossipServer())
+	require.False(t, cfg.IsWsGossipServer())
+	require.False(t, cfg.IsP2PGossipServer())
 
 	cfg.EnableP2PHybridMode = true
 	cfg.P2PNetAddress = ":4190"
 	require.True(t, cfg.IsGossipServer())
-	require.False(t, cfg.isWsGossipServer())
-	require.True(t, cfg.isP2PGossipServer())
+	require.False(t, cfg.IsWsGossipServer())
+	require.True(t, cfg.IsP2PGossipServer())
 
 	cfg.EnableP2PHybridMode = true
 	cfg.NetAddress = ":4160"
 	cfg.P2PNetAddress = ":4190"
 	require.True(t, cfg.IsGossipServer())
-	require.True(t, cfg.isWsGossipServer())
-	require.True(t, cfg.isP2PGossipServer())
+	require.True(t, cfg.IsWsGossipServer())
+	require.True(t, cfg.IsP2PGossipServer())
 
 }
 
@@ -669,45 +669,59 @@ func TestLocal_RecalculateConnectionLimits(t *testing.T) {
 	t.Parallel()
 
 	var tests = []struct {
-		maxFDs     uint64
-		reservedIn uint64
-		restSoftIn uint64
-		restHardIn uint64
-		incomingIn int
+		maxFDs        uint64
+		reservedIn    uint64
+		restSoftIn    uint64
+		restHardIn    uint64
+		incomingIn    int
+		p2pIncomingIn int
 
-		updated     bool
-		restSoftExp uint64
-		restHardExp uint64
-		incomingExp int
+		updated        bool
+		restSoftExp    uint64
+		restHardExp    uint64
+		incomingExp    int
+		p2pIncomingExp int
 	}{
-		{100, 10, 20, 40, 50, false, 20, 40, 50},               // no change
-		{100, 10, 20, 50, 50, true, 20, 40, 50},                // borrow from rest
-		{100, 10, 25, 50, 50, true, 25, 40, 50},                // borrow from rest
-		{100, 10, 50, 50, 50, true, 40, 40, 50},                // borrow from rest, update soft
-		{100, 10, 9, 19, 81, true, 9, 10, 80},                  // borrow from both rest and incoming
-		{100, 10, 10, 20, 80, true, 10, 10, 80},                // borrow from both rest and incoming
-		{100, 50, 10, 30, 40, true, 10, 10, 40},                // borrow from both rest and incoming
-		{100, 90, 10, 30, 40, true, 10, 10, 0},                 // borrow from both rest and incoming, clear incoming
-		{4096, 256, 1024, 2048, 2400, true, 1024, 1440, 2400},  // real numbers
-		{5000, 256, 1024, 2048, 2400, false, 1024, 2048, 2400}, // real numbers
+		{100, 10, 20, 40, 50, 0, false, 20, 40, 50, 0},                     // no change
+		{100, 10, 20, 50, 50, 0, true, 20, 40, 50, 0},                      // borrow from rest
+		{100, 10, 25, 50, 50, 0, true, 25, 40, 50, 0},                      // borrow from rest
+		{100, 10, 25, 50, 50, 50, true, 10, 10, 40, 40},                    // borrow from rest for incoming and p2p incoming
+		{100, 10, 50, 50, 50, 0, true, 40, 40, 50, 0},                      // borrow from rest, update soft
+		{100, 10, 50, 50, 40, 10, true, 40, 40, 40, 10},                    // borrow from rest, update soft for incoming and p2p incoming
+		{100, 10, 9, 19, 81, 0, true, 9, 10, 80, 0},                        // borrow from both rest and incoming
+		{100, 10, 9, 19, 41, 41, true, 9, 10, 40, 40},                      // borrow from both rest and incoming for incoming and p2p incoming
+		{100, 90, 10, 30, 40, 0, true, 10, 10, 0, 0},                       // borrow from both rest and incoming, clear incoming
+		{100, 90, 10, 30, 40, 40, true, 10, 10, 0, 0},                      // borrow from both rest and incoming, clear incoming
+		{100, 90, 10, 30, 50, 40, true, 10, 10, 0, 0},                      // borrow from both rest and incoming, clear incoming
+		{4096, 256, 1024, 2048, 2400, 0, true, 1024, 1440, 2400, 0},        // real numbers
+		{5000, 256, 1024, 2048, 2400, 0, false, 1024, 2048, 2400, 0},       // real numbers
+		{4096, 256, 1024, 2048, 2400, 1200, true, 240, 240, 2400, 1200},    // real numbers
+		{6000, 256, 1024, 2048, 2400, 1200, false, 1024, 2048, 2400, 1200}, // real numbers
 	}
 
 	for i, test := range tests {
 		test := test
-		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
+		t.Run(fmt.Sprintf("test=%d", i), func(t *testing.T) {
 			t.Parallel()
 
 			c := Local{
-				RestConnectionsSoftLimit: test.restSoftIn,
-				RestConnectionsHardLimit: test.restHardIn,
-				IncomingConnectionsLimit: test.incomingIn,
+				NetAddress:                  ":4160",
+				RestConnectionsSoftLimit:    test.restSoftIn,
+				RestConnectionsHardLimit:    test.restHardIn,
+				IncomingConnectionsLimit:    test.incomingIn,
+				P2PIncomingConnectionsLimit: test.p2pIncomingIn,
 			}
-			requireFDs := test.reservedIn + test.restHardIn + uint64(test.incomingIn)
+			if test.p2pIncomingIn > 0 {
+				c.EnableP2PHybridMode = true
+				c.P2PNetAddress = ":4190"
+			}
+			requireFDs := test.reservedIn + test.restHardIn + uint64(test.incomingIn) + uint64(test.p2pIncomingIn)
 			res := c.AdjustConnectionLimits(requireFDs, test.maxFDs)
 			require.Equal(t, test.updated, res)
-			require.Equal(t, test.restSoftExp, c.RestConnectionsSoftLimit)
-			require.Equal(t, test.restHardExp, c.RestConnectionsHardLimit)
-			require.Equal(t, test.incomingExp, c.IncomingConnectionsLimit)
+			require.Equal(t, int(test.restSoftExp), int(c.RestConnectionsSoftLimit))
+			require.Equal(t, int(test.restHardExp), int(c.RestConnectionsHardLimit))
+			require.Equal(t, int(test.incomingExp), int(c.IncomingConnectionsLimit))
+			require.Equal(t, int(test.p2pIncomingExp), int(c.P2PIncomingConnectionsLimit))
 		})
 	}
 }
