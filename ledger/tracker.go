@@ -492,6 +492,7 @@ func (tr *trackerRegistry) isBehindCommittingDeltas(latest basics.Round) bool {
 }
 
 func (tr *trackerRegistry) close() {
+	fmt.Printf("trackerRegistry: %v\n", tr.log)
 	tr.log.Debugf("trackerRegistry is closing")
 	if tr.ctxCancel != nil {
 		tr.ctxCancel()
