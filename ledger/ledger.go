@@ -215,6 +215,7 @@ func (l *Ledger) reloadLedger() error {
 	blockListeners = append(blockListeners, l.notifier.listeners...)
 
 	// close the trackers.
+	l.trackers.log = l.trackerLog()
 	l.trackers.close()
 
 	// init block queue
