@@ -64,8 +64,8 @@ import (
 // MaxTealSourceBytes sets a size limit for TEAL source programs for requests
 // Max TEAL program size is currently 8k
 // but we allow for comments, spacing, and repeated consts
-// in the source TEAL, so we allow up to 200KB
-const MaxTealSourceBytes = 200_000
+// in the source TEAL, so we allow up to 1MB
+const MaxTealSourceBytes = 1_000_000
 
 // MaxTealDryrunBytes sets a size limit for dryrun requests
 // With the ability to hold unlimited assets DryrunRequests can
