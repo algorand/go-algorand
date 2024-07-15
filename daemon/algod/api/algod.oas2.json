@@ -1565,6 +1565,7 @@
     "/v2/transactions/async": {
       "post": {
         "tags": [
+          "public",
           "experimental"
         ],
         "consumes": [
@@ -1602,6 +1603,9 @@
             "schema": {
               "$ref": "#/definitions/ErrorResponse"
             }
+          },
+          "404": {
+            "description": "Developer or Experimental API not enabled"
           },
           "500": {
             "description": "Internal Error",
