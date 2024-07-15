@@ -88,7 +88,7 @@ func NewRouter(logger logging.Logger, node APINodeInterface, shutdown <-chan str
 		middleware.BodyLimit(MaxRequestBodyBytes),
 	}
 	if apiToken == "" {
-		logger.Warn("Running with with public API authentication disabled")
+		logger.Warn("Running with public API authentication disabled")
 	} else {
 		if err := tokens.ValidateAPIToken(apiToken); err != nil {
 			logger.Errorf("Invalid apiToken was passed to NewRouter ('%s'): %v", apiToken, err)
