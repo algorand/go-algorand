@@ -70,8 +70,7 @@ func TestDisabledAPIConfig(t *testing.T) {
 	a.NoError(err)
 
 	// check admin api works with the generated token
-	adminClient := localFixture.LibGoalClient
-	_, err = adminClient.GetParticipationKeys()
+	_, err = libgoalClient.GetParticipationKeys()
 	assert.NoError(t, err)
 
 	// check admin api doesn't work with an invalid token
