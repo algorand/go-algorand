@@ -132,6 +132,10 @@ type TxHandler struct {
 	erl                        *util.ElasticRateLimiter
 	appLimiter                 *appRateLimiter
 	appLimiterBacklogThreshold int
+
+	batchProcessor         execpool.BatchProcessor
+	streamVerifierDropped2 chan *verify.UnverifiedTxnSigJob
+	postVerificationQueue2 chan *verify.VerificationResult
 }
 
 // TxHandlerOpts is TxHandler configuration options
@@ -173,6 +177,9 @@ func MakeTxHandler(opts TxHandlerOpts) (*TxHandler, error) {
 		net:                   opts.Net,
 		streamVerifierChan:    make(chan execpool.InputJob),
 		streamVerifierDropped: make(chan *verify.UnverifiedTxnSigJob),
+
+		postVerificationQueue2: make(chan *verify.VerificationResult, 1),
+		streamVerifierDropped2: make(chan *verify.UnverifiedTxnSigJob, 1),
 	}
 
 	if opts.Config.TxFilterRawMsgEnabled() {
@@ -207,6 +214,14 @@ func MakeTxHandler(opts TxHandlerOpts) (*TxHandler, error) {
 			// set appLimiter triggering threshold at 50% of the base backlog size
 			handler.appLimiterBacklogThreshold = int(float64(opts.Config.TxBacklogSize) * float64(opts.Config.TxBacklogRateLimitingCongestionPct) / 100)
 		}
+	}
+
+	// prepare the batch processor for pubsub synchronous verification
+	var err0 error
+	handler.batchProcessor, err0 = verify.MakeSigVerifyJobProcessor(handler.ledger, handler.ledger.VerifiedTransactionCache(),
+		handler.postVerificationQueue2, handler.streamVerifierDropped2)
+	if err0 != nil {
+		return nil, err0
 	}
 
 	// prepare the transaction stream verifier
@@ -246,6 +261,7 @@ func (handler *TxHandler) Start() {
 	})
 
 	// libp2p pubsub validator and handler abstracted as TaggedMessageProcessor
+	// TODO: rename to validators
 	handler.net.RegisterProcessors([]network.TaggedMessageProcessor{
 		{
 			Tag: protocol.TxnTag,
@@ -348,7 +364,7 @@ func (handler *TxHandler) backlogWorker() {
 				}
 				continue
 			}
-			// handler.streamVerifierChan does not receive if ctx is cancled
+			// handler.streamVerifierChan does not receive if ctx is cancelled
 			select {
 			case handler.streamVerifierChan <- &verify.UnverifiedTxnSigJob{TxnGroup: wi.unverifiedTxGroup, BacklogMessage: wi}:
 			case <-handler.ctx.Done():
@@ -799,37 +815,82 @@ func (handler *TxHandler) validateIncomingTxMessage(rawmsg network.IncomingMessa
 		return network.ValidatedMessage{Action: network.Ignore, ValidatedMessage: nil}
 	}
 
-	return network.ValidatedMessage{
-		Action: network.Accept,
-		Tag:    rawmsg.Tag,
-		ValidatedMessage: &validatedIncomingTxMessage{
-			rawmsg:            rawmsg,
-			unverifiedTxGroup: unverifiedTxGroup,
-			msgKey:            msgKey,
-			canonicalKey:      canonicalKey,
-		},
+	// apply backlog worker logic
+
+	wi := &txBacklogMsg{
+		rawmsg:                &rawmsg,
+		unverifiedTxGroup:     unverifiedTxGroup,
+		rawmsgDataHash:        msgKey,
+		unverifiedTxGroupHash: canonicalKey,
+		capguard:              nil,
+	}
+
+	if handler.checkAlreadyCommitted(wi) {
+		transactionMessagesAlreadyCommitted.Inc(nil)
+		return network.ValidatedMessage{
+			Action:           network.Ignore,
+			ValidatedMessage: nil,
+		}
+	}
+
+	jobs := []execpool.InputJob{&verify.UnverifiedTxnSigJob{TxnGroup: wi.unverifiedTxGroup, BacklogMessage: wi}}
+	handler.batchProcessor.ProcessBatch(jobs)
+
+	select {
+	case wi := <-handler.postVerificationQueue2:
+		m := wi.BacklogMessage.(*txBacklogMsg)
+		if wi.Err != nil {
+			handler.postProcessReportErrors(wi.Err)
+			logging.Base().Warnf("Received a malformed tx group %v: %v", m.unverifiedTxGroup, wi.Err)
+			return network.ValidatedMessage{
+				Action:           network.Disconnect,
+				ValidatedMessage: nil,
+			}
+		}
+		// at this point, we've verified the transaction, so we can safely treat the transaction as a verified transaction.
+		verifiedTxGroup := m.unverifiedTxGroup
+
+		// save the transaction, if it has high enough fee and not already in the cache
+		err := handler.txPool.Remember(verifiedTxGroup)
+		if err != nil {
+			handler.rememberReportErrors(err)
+			logging.Base().Debugf("could not remember tx: %v", err)
+			return network.ValidatedMessage{
+				Action:           network.Ignore,
+				ValidatedMessage: nil,
+			}
+		}
+
+		transactionMessagesRemember.Inc(nil)
+
+		// if we remembered without any error ( i.e. txpool wasn't full ), then we should pin these transactions.
+		err = handler.ledger.VerifiedTransactionCache().Pin(verifiedTxGroup)
+		if err != nil {
+			logging.Base().Infof("unable to pin transaction: %v", err)
+		}
+		return network.ValidatedMessage{
+			Action:           network.Accept,
+			ValidatedMessage: nil,
+		}
+
+	case <-handler.streamVerifierDropped2:
+		transactionMessagesDroppedFromBacklog.Inc(nil)
+		return network.ValidatedMessage{
+			Action:           network.Ignore,
+			ValidatedMessage: nil,
+		}
+	case <-handler.ctx.Done():
+		transactionMessagesDroppedFromBacklog.Inc(nil)
+		return network.ValidatedMessage{
+			Action:           network.Ignore,
+			ValidatedMessage: nil,
+		}
 	}
 }
 
 // processIncomingTxMessage is the handler for the MessageProcessor implementation used by P2PNetwork.
 func (handler *TxHandler) processIncomingTxMessage(validatedMessage network.ValidatedMessage) network.OutgoingMessage {
-	msg := validatedMessage.ValidatedMessage.(*validatedIncomingTxMessage)
-	select {
-	case handler.backlogQueue <- &txBacklogMsg{
-		rawmsg:                &msg.rawmsg,
-		unverifiedTxGroup:     msg.unverifiedTxGroup,
-		rawmsgDataHash:        msg.msgKey,
-		unverifiedTxGroupHash: msg.canonicalKey,
-		capguard:              nil,
-	}:
-	default:
-		// if we failed here we want to increase the corresponding metric. It might suggest that we
-		// want to increase the queue size.
-		transactionMessagesDroppedFromBacklog.Inc(nil)
-
-		// additionally, remove the txn from duplicate caches to ensure it can be re-submitted
-		handler.deleteFromCaches(msg.msgKey, msg.canonicalKey)
-	}
+	// process is noop, all work is done in validateIncomingTxMessage above
 	return network.OutgoingMessage{Action: network.Ignore}
 }
 
