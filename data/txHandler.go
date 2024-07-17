@@ -178,8 +178,9 @@ func MakeTxHandler(opts TxHandlerOpts) (*TxHandler, error) {
 		streamVerifierChan:    make(chan execpool.InputJob),
 		streamVerifierDropped: make(chan *verify.UnverifiedTxnSigJob),
 
-		postVerificationQueue2: make(chan *verify.VerificationResult, 1),
-		streamVerifierDropped2: make(chan *verify.UnverifiedTxnSigJob, 1),
+		// match to the number of validator workers
+		postVerificationQueue2: make(chan *verify.VerificationResult, 20),
+		streamVerifierDropped2: make(chan *verify.UnverifiedTxnSigJob, 20),
 	}
 
 	if opts.Config.TxFilterRawMsgEnabled() {
