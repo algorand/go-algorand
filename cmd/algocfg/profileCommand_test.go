@@ -17,6 +17,7 @@
 package main
 
 import (
+	"github.com/algorand/go-algorand/config"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -76,7 +77,7 @@ func Test_getConfigForArg(t *testing.T) {
 		require.True(t, cfg.EnableBlockService)
 		require.Equal(t, ":4160", cfg.NetAddress)
 		require.True(t, cfg.EnableGossipService)
-		require.Equal(t, "PLEASE_SET_ME", cfg.PublicAddress)
+		require.Equal(t, config.PlaceholderPublicAddress, cfg.PublicAddress)
 
 		require.True(t, cfg.EnableP2PHybridMode)
 		require.Equal(t, ":4190", cfg.P2PNetAddress)
@@ -96,7 +97,7 @@ func Test_getConfigForArg(t *testing.T) {
 		require.True(t, cfg.EnableBlockService)
 		require.Equal(t, ":4160", cfg.NetAddress)
 		require.False(t, cfg.EnableGossipService)
-		require.Equal(t, "PLEASE_SET_ME", cfg.PublicAddress)
+		require.Equal(t, config.PlaceholderPublicAddress, cfg.PublicAddress)
 
 		require.True(t, cfg.EnableP2PHybridMode)
 		require.Equal(t, ":4190", cfg.P2PNetAddress)
@@ -120,7 +121,7 @@ func Test_getConfigForArg(t *testing.T) {
 		require.Equal(t, "", cfg.PublicAddress)
 
 		require.True(t, cfg.EnableP2PHybridMode)
-		require.Equal(t, ":4190", cfg.P2PNetAddress)
+		require.Equal(t, "", cfg.P2PNetAddress)
 		require.True(t, cfg.EnableDHTProviders)
 	})
 }
