@@ -823,6 +823,8 @@ func (handler *TxHandler) validateIncomingTxMessage(rawmsg network.IncomingMessa
 		}
 	}
 
+	// TODO: implement a proper batching when more messages can be batched together
+	// and each validator waits on a channel for its result.
 	jobs := []execpool.InputJob{&verify.UnverifiedTxnSigJob{TxnGroup: wi.unverifiedTxGroup, BacklogMessage: wi}}
 	handler.batchProcessor.ProcessBatch(jobs)
 

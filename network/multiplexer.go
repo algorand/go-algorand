@@ -24,15 +24,15 @@ import (
 // Multiplexer is a message handler that sorts incoming messages by Tag and passes
 // them along to the relevant message handler for that type of message.
 type Multiplexer struct {
-	msgHandlers   atomic.Value // stores map[Tag]MessageHandler, an immutable map.
-	msgProcessors atomic.Value // stores map[Tag]MessageProcessor, an immutable map.
+	msgHandlers          atomic.Value // stores map[Tag]MessageHandler, an immutable map.
+	msgValidatorHandlers atomic.Value // stores map[Tag]MessageValidatorHandler, an immutable map.
 }
 
 // MakeMultiplexer creates an empty Multiplexer
 func MakeMultiplexer() *Multiplexer {
 	m := &Multiplexer{}
-	m.ClearHandlers(nil)   // allocate the map
-	m.ClearProcessors(nil) // allocate the map
+	m.ClearHandlers(nil)          // allocate the map
+	m.ClearValidatorHandlers(nil) // allocate the map
 	return m
 }
 
@@ -60,9 +60,9 @@ func (m *Multiplexer) getHandler(tag Tag) (MessageHandler, bool) {
 	return getHandler[MessageHandler](&m.msgHandlers, tag)
 }
 
-// Retrieves the processor for the given message Tag from the processors array.
-func (m *Multiplexer) getProcessor(tag Tag) (MessageValidatorHandler, bool) {
-	return getHandler[MessageValidatorHandler](&m.msgProcessors, tag)
+// Retrieves the validating handler for the given message Tag from the validating handlers array.
+func (m *Multiplexer) getValidatorHandler(tag Tag) (MessageValidatorHandler, bool) {
+	return getHandler[MessageValidatorHandler](&m.msgValidatorHandlers, tag)
 }
 
 // Handle is the "input" side of the multiplexer. It dispatches the message to the previously defined handler.
@@ -73,9 +73,9 @@ func (m *Multiplexer) Handle(msg IncomingMessage) OutgoingMessage {
 	return OutgoingMessage{}
 }
 
-// Validate is an alternative "input" side of the multiplexer. It dispatches the message to the previously defined validator.
-func (m *Multiplexer) Validate(msg IncomingMessage) OutgoingMessage {
-	if handler, ok := m.getProcessor(msg.Tag); ok {
+// ValidateHandle is an alternative "input" side of the multiplexer. It dispatches the message to the previously defined validator.
+func (m *Multiplexer) ValidateHandle(msg IncomingMessage) OutgoingMessage {
+	if handler, ok := m.getValidatorHandler(msg.Tag); ok {
 		return handler.ValidateHandle(msg)
 	}
 	return OutgoingMessage{}
@@ -104,7 +104,7 @@ func (m *Multiplexer) RegisterHandlers(dispatch []TaggedMessageHandler) {
 
 // RegisterValidatorHandlers registers the set of given message handlers.
 func (m *Multiplexer) RegisterValidatorHandlers(dispatch []TaggedMessageValidatorHandler) {
-	registerMultiplexer(&m.msgProcessors, dispatch)
+	registerMultiplexer(&m.msgValidatorHandlers, dispatch)
 }
 
 func clearMultiplexer[T any](target *atomic.Value, excludeTags []Tag) {
@@ -135,7 +135,7 @@ func (m *Multiplexer) ClearHandlers(excludeTags []Tag) {
 	clearMultiplexer[MessageHandler](&m.msgHandlers, excludeTags)
 }
 
-// ClearProcessors deregisters all the existing message handlers other than the one provided in the excludeTags list
-func (m *Multiplexer) ClearProcessors(excludeTags []Tag) {
-	clearMultiplexer[MessageValidatorHandler](&m.msgProcessors, excludeTags)
+// ClearValidatorHandlers deregisters all the existing message handlers other than the one provided in the excludeTags list
+func (m *Multiplexer) ClearValidatorHandlers(excludeTags []Tag) {
+	clearMultiplexer[MessageValidatorHandler](&m.msgValidatorHandlers, excludeTags)
 }

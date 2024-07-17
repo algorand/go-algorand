@@ -692,7 +692,7 @@ func (n *P2PNetwork) RegisterValidatorHandlers(dispatch []TaggedMessageValidator
 
 // ClearProcessors deregisters all the existing message handlers.
 func (n *P2PNetwork) ClearProcessors() {
-	n.handler.ClearProcessors([]Tag{})
+	n.handler.ClearValidatorHandlers([]Tag{})
 }
 
 // GetHTTPClient returns a http.Client with a suitable for the network Transport
@@ -933,7 +933,7 @@ func (n *P2PNetwork) txTopicValidator(ctx context.Context, peerID peer.ID, msg *
 	peerStats.txReceived.Add(1)
 	n.peerStatsMu.Unlock()
 
-	outmsg := n.handler.Validate(inmsg)
+	outmsg := n.handler.ValidateHandle(inmsg)
 	// there was a decision made in the handler about this message
 	switch outmsg.Action {
 	case Ignore:
