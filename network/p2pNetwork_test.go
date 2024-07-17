@@ -67,6 +67,7 @@ func TestP2PSubmitTX(t *testing.T) {
 
 	cfg := config.GetDefaultLocal()
 	cfg.ForceFetchTransactions = true
+	cfg.NetAddress = "127.0.0.1:0"
 	log := logging.TestingLog(t)
 	netA, err := NewP2PNetwork(log, cfg, "", nil, genesisID, config.Devtestnet, &nopeNodeInfo{})
 	require.NoError(t, err)
@@ -159,6 +160,7 @@ func TestP2PSubmitTXNoGossip(t *testing.T) {
 
 	cfg := config.GetDefaultLocal()
 	cfg.ForceFetchTransactions = true
+	cfg.NetAddress = "127.0.0.1:0"
 	log := logging.TestingLog(t)
 	netA, err := NewP2PNetwork(log, cfg, "", nil, genesisID, config.Devtestnet, &nopeNodeInfo{})
 	require.NoError(t, err)
@@ -189,6 +191,8 @@ func TestP2PSubmitTXNoGossip(t *testing.T) {
 
 	// run netC in NPN mode (no relay => no gossip sup => no TX receiving)
 	cfg.ForceFetchTransactions = false
+	// Have to unset NetAddress to get IsGossipServer to return false
+	cfg.NetAddress = ""
 	netC, err := NewP2PNetwork(log, cfg, "", phoneBookAddresses, genesisID, config.Devtestnet, &nopeNodeInfo{})
 	require.NoError(t, err)
 	netC.Start()
@@ -253,6 +257,7 @@ func TestP2PSubmitWS(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	cfg := config.GetDefaultLocal()
+	cfg.NetAddress = "127.0.0.1:0"
 	log := logging.TestingLog(t)
 	netA, err := NewP2PNetwork(log, cfg, "", nil, genesisID, config.Devtestnet, &nopeNodeInfo{})
 	require.NoError(t, err)
@@ -584,6 +589,7 @@ func TestP2PNetworkDHTCapabilities(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	cfg := config.GetDefaultLocal()
+	cfg.NetAddress = "127.0.0.1:0"
 	cfg.EnableDHTProviders = true
 	log := logging.TestingLog(t)
 
@@ -744,6 +750,7 @@ func TestP2PHTTPHandler(t *testing.T) {
 	cfg := config.GetDefaultLocal()
 	cfg.EnableDHTProviders = true
 	cfg.GossipFanout = 1
+	cfg.NetAddress = "127.0.0.1:0"
 	log := logging.TestingLog(t)
 
 	netA, err := NewP2PNetwork(log, cfg, "", nil, genesisID, config.Devtestnet, &nopeNodeInfo{})
@@ -812,6 +819,7 @@ func TestP2PRelay(t *testing.T) {
 	cfg.DNSBootstrapID = "" // disable DNS lookups since the test uses phonebook addresses
 	cfg.ForceFetchTransactions = true
 	cfg.BaseLoggerDebugLevel = 5
+	cfg.NetAddress = "127.0.0.1:0"
 	log := logging.TestingLog(t)
 	log.Debugln("Starting netA")
 	netA, err := NewP2PNetwork(log.With("net", "netA"), cfg, "", nil, genesisID, config.Devtestnet, &nopeNodeInfo{})
@@ -829,6 +837,8 @@ func TestP2PRelay(t *testing.T) {
 	multiAddrStr := addrsA[0].String()
 	phoneBookAddresses := []string{multiAddrStr}
 
+	// Explicitly unset NetAddress for netB
+	cfg.NetAddress = ""
 	log.Debugf("Starting netB with phonebook addresses %v", phoneBookAddresses)
 	netB, err := NewP2PNetwork(log.With("net", "netB"), cfg, "", phoneBookAddresses, genesisID, config.Devtestnet, &nopeNodeInfo{})
 	require.NoError(t, err)
@@ -880,8 +890,8 @@ func TestP2PRelay(t *testing.T) {
 	counterHandler, counterDone := makeCounterHandler(1, &counter, nil)
 	netA.RegisterProcessors(counterHandler)
 
-	// send 5 messages from both netB to netA
-	// since there is no node with listening address set => no messages should be received
+	// send 5 messages from netB to netA
+	// since relaying is disabled on net B => no messages should be received by net A
 	for i := 0; i < 5; i++ {
 		err := netB.Relay(context.Background(), protocol.TxnTag, []byte{1, 2, 3, byte(i)}, true, nil)
 		require.NoError(t, err)
@@ -1031,6 +1041,7 @@ func TestP2PWantTXGossip(t *testing.T) {
 	net.wantTXGossip.Store(true)
 	net.nodeInfo = &nopeNodeInfo{}
 	net.config.ForceFetchTransactions = false
+	net.config.NetAddress = ""
 	net.relayMessages = false
 	net.OnNetworkAdvance()
 	require.Eventually(t, func() bool { net.wg.Wait(); return true }, 1*time.Second, 50*time.Millisecond)
@@ -1040,6 +1051,7 @@ func TestP2PWantTXGossip(t *testing.T) {
 	net.wantTXGossip.Store(false)
 	net.nodeInfo = &nopeNodeInfo{}
 	net.config.ForceFetchTransactions = true
+	net.config.NetAddress = "127.0.0.1:0"
 	net.relayMessages = false
 	net.OnNetworkAdvance()
 	require.Eventually(t, func() bool { return mockService.count.Load() == 2 }, 1*time.Second, 50*time.Millisecond)
@@ -1048,6 +1060,7 @@ func TestP2PWantTXGossip(t *testing.T) {
 	net.wantTXGossip.Store(false)
 	net.nodeInfo = &nopeNodeInfo{}
 	net.config.ForceFetchTransactions = false
+	net.config.NetAddress = ""
 	net.relayMessages = true
 	net.OnNetworkAdvance()
 	require.Eventually(t, func() bool { return mockService.count.Load() == 3 }, 1*time.Second, 50*time.Millisecond)
