@@ -160,7 +160,7 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 			}
 		}
 		if cfg.IsP2PGossipServer() {
-			fdRequired = ot.Add(fdRequired, uint64(cfg.P2PIncomingConnectionsLimit)+network.ReservedHealthServiceConnections)
+			fdRequired = ot.Add(fdRequired, uint64(cfg.P2PIncomingConnectionsLimit))
 			if ot.Overflowed {
 				return errors.New("Initialize() overflowed when adding up P2PIncomingConnectionsLimit to the existing RLIMIT_NOFILE value; decrease P2PIncomingConnectionsLimit")
 			}
