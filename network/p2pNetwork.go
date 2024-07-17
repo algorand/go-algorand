@@ -471,6 +471,10 @@ func (n *P2PNetwork) meshThread() {
 
 func (n *P2PNetwork) httpdThread() {
 	defer n.wg.Done()
+	if n.config.NetAddress == "" {
+		// don't start HTTP server if not configured to listen
+		return
+	}
 	err := n.httpServer.Serve()
 	if err != nil {
 		n.log.Errorf("Error serving libp2phttp: %v", err)
