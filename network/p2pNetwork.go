@@ -685,9 +685,9 @@ func (n *P2PNetwork) ClearHandlers() {
 	n.handler.ClearHandlers([]Tag{})
 }
 
-// RegisterProcessors adds to the set of given message handlers.
-func (n *P2PNetwork) RegisterProcessors(dispatch []TaggedMessageProcessor) {
-	n.handler.RegisterProcessors(dispatch)
+// RegisterValidatorHandlers adds to the set of given message handlers.
+func (n *P2PNetwork) RegisterValidatorHandlers(dispatch []TaggedMessageValidatorHandler) {
+	n.handler.RegisterValidatorHandlers(dispatch)
 }
 
 // ClearProcessors deregisters all the existing message handlers.
@@ -880,7 +880,8 @@ func (n *P2PNetwork) txTopicHandleLoop() {
 	n.log.Debugf("Subscribed to topic %s", p2p.TXTopicName)
 
 	for {
-		msg, err := sub.Next(n.ctx)
+		// msg from sub.Next not used since all work done by txTopicValidator
+		_, err := sub.Next(n.ctx)
 		if err != nil {
 			if err != pubsub.ErrSubscriptionCancelled && err != context.Canceled {
 				n.log.Errorf("Error reading from subscription %v, peerId %s", err, n.service.ID())
@@ -889,13 +890,6 @@ func (n *P2PNetwork) txTopicHandleLoop() {
 			sub.Cancel()
 			return
 		}
-		// if there is a self-sent the message no need to process it.
-		if msg.ReceivedFrom == n.service.ID() {
-			continue
-		}
-
-		_ = n.handler.Process(msg.ValidatorData.(ValidatedMessage))
-
 		// participation or configuration change, cancel subscription and quit
 		if !n.wantTXGossip.Load() {
 			n.log.Debugf("Cancelling subscription to topic %s due participation change", p2p.TXTopicName)

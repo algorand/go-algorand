@@ -262,16 +262,14 @@ func (handler *TxHandler) Start() {
 
 	// libp2p pubsub validator and handler abstracted as TaggedMessageProcessor
 	// TODO: rename to validators
-	handler.net.RegisterProcessors([]network.TaggedMessageProcessor{
+	handler.net.RegisterValidatorHandlers([]network.TaggedMessageValidatorHandler{
 		{
 			Tag: protocol.TxnTag,
 			// create anonymous struct to hold the two functions and satisfy the network.MessageProcessor interface
 			MessageHandler: struct {
-				network.ProcessorValidateFunc
-				network.ProcessorHandleFunc
+				network.ValidateHandleFunc
 			}{
-				network.ProcessorValidateFunc(handler.validateIncomingTxMessage),
-				network.ProcessorHandleFunc(handler.processIncomingTxMessage),
+				network.ValidateHandleFunc(handler.validateIncomingTxMessage),
 			},
 		},
 	})
@@ -788,31 +786,24 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 	return network.OutgoingMessage{Action: network.Ignore}
 }
 
-type validatedIncomingTxMessage struct {
-	rawmsg            network.IncomingMessage
-	unverifiedTxGroup []transactions.SignedTxn
-	msgKey            *crypto.Digest
-	canonicalKey      *crypto.Digest
-}
-
 // validateIncomingTxMessage is the validator for the MessageProcessor implementation used by P2PNetwork.
-func (handler *TxHandler) validateIncomingTxMessage(rawmsg network.IncomingMessage) network.ValidatedMessage {
+func (handler *TxHandler) validateIncomingTxMessage(rawmsg network.IncomingMessage) network.OutgoingMessage {
 	msgKey, isDup := handler.incomingMsgDupCheck(rawmsg.Data)
 	if isDup {
-		return network.ValidatedMessage{Action: network.Ignore, ValidatedMessage: nil}
+		return network.OutgoingMessage{Action: network.Ignore}
 	}
 
 	unverifiedTxGroup, consumed, invalid := decodeMsg(rawmsg.Data)
 	if invalid {
 		// invalid encoding or exceeding txgroup, disconnect from this peer
-		return network.ValidatedMessage{Action: network.Disconnect, ValidatedMessage: nil}
+		return network.OutgoingMessage{Action: network.Disconnect}
 	}
 
 	canonicalKey, drop := handler.incomingTxGroupDupRateLimit(unverifiedTxGroup, consumed, rawmsg.Sender)
 	if drop {
 		// this re-serialized txgroup was detected as a duplicate by the canonical message cache,
 		// or it was rate-limited by the per-app rate limiter
-		return network.ValidatedMessage{Action: network.Ignore, ValidatedMessage: nil}
+		return network.OutgoingMessage{Action: network.Ignore}
 	}
 
 	// apply backlog worker logic
@@ -827,9 +818,8 @@ func (handler *TxHandler) validateIncomingTxMessage(rawmsg network.IncomingMessa
 
 	if handler.checkAlreadyCommitted(wi) {
 		transactionMessagesAlreadyCommitted.Inc(nil)
-		return network.ValidatedMessage{
-			Action:           network.Ignore,
-			ValidatedMessage: nil,
+		return network.OutgoingMessage{
+			Action: network.Ignore,
 		}
 	}
 
@@ -842,9 +832,8 @@ func (handler *TxHandler) validateIncomingTxMessage(rawmsg network.IncomingMessa
 		if wi.Err != nil {
 			handler.postProcessReportErrors(wi.Err)
 			logging.Base().Warnf("Received a malformed tx group %v: %v", m.unverifiedTxGroup, wi.Err)
-			return network.ValidatedMessage{
-				Action:           network.Disconnect,
-				ValidatedMessage: nil,
+			return network.OutgoingMessage{
+				Action: network.Disconnect,
 			}
 		}
 		// at this point, we've verified the transaction, so we can safely treat the transaction as a verified transaction.
@@ -855,9 +844,8 @@ func (handler *TxHandler) validateIncomingTxMessage(rawmsg network.IncomingMessa
 		if err != nil {
 			handler.rememberReportErrors(err)
 			logging.Base().Debugf("could not remember tx: %v", err)
-			return network.ValidatedMessage{
-				Action:           network.Ignore,
-				ValidatedMessage: nil,
+			return network.OutgoingMessage{
+				Action: network.Ignore,
 			}
 		}
 
@@ -868,30 +856,21 @@ func (handler *TxHandler) validateIncomingTxMessage(rawmsg network.IncomingMessa
 		if err != nil {
 			logging.Base().Infof("unable to pin transaction: %v", err)
 		}
-		return network.ValidatedMessage{
-			Action:           network.Accept,
-			ValidatedMessage: nil,
+		return network.OutgoingMessage{
+			Action: network.Accept,
 		}
 
 	case <-handler.streamVerifierDropped2:
 		transactionMessagesDroppedFromBacklog.Inc(nil)
-		return network.ValidatedMessage{
-			Action:           network.Ignore,
-			ValidatedMessage: nil,
+		return network.OutgoingMessage{
+			Action: network.Ignore,
 		}
 	case <-handler.ctx.Done():
 		transactionMessagesDroppedFromBacklog.Inc(nil)
-		return network.ValidatedMessage{
-			Action:           network.Ignore,
-			ValidatedMessage: nil,
+		return network.OutgoingMessage{
+			Action: network.Ignore,
 		}
 	}
-}
-
-// processIncomingTxMessage is the handler for the MessageProcessor implementation used by P2PNetwork.
-func (handler *TxHandler) processIncomingTxMessage(validatedMessage network.ValidatedMessage) network.OutgoingMessage {
-	// process is noop, all work is done in validateIncomingTxMessage above
-	return network.OutgoingMessage{Action: network.Ignore}
 }
 
 var errBackLogFullLocal = errors.New("backlog full")

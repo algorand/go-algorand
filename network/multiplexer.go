@@ -61,8 +61,8 @@ func (m *Multiplexer) getHandler(tag Tag) (MessageHandler, bool) {
 }
 
 // Retrieves the processor for the given message Tag from the processors array.
-func (m *Multiplexer) getProcessor(tag Tag) (MessageProcessor, bool) {
-	return getHandler[MessageProcessor](&m.msgProcessors, tag)
+func (m *Multiplexer) getProcessor(tag Tag) (MessageValidatorHandler, bool) {
+	return getHandler[MessageValidatorHandler](&m.msgProcessors, tag)
 }
 
 // Handle is the "input" side of the multiplexer. It dispatches the message to the previously defined handler.
@@ -74,17 +74,9 @@ func (m *Multiplexer) Handle(msg IncomingMessage) OutgoingMessage {
 }
 
 // Validate is an alternative "input" side of the multiplexer. It dispatches the message to the previously defined validator.
-func (m *Multiplexer) Validate(msg IncomingMessage) ValidatedMessage {
+func (m *Multiplexer) Validate(msg IncomingMessage) OutgoingMessage {
 	if handler, ok := m.getProcessor(msg.Tag); ok {
-		return handler.Validate(msg)
-	}
-	return ValidatedMessage{}
-}
-
-// Process is the second step of message handling after validation. It dispatches the message to the previously defined processor.
-func (m *Multiplexer) Process(msg ValidatedMessage) OutgoingMessage {
-	if handler, ok := m.getProcessor(msg.Tag); ok {
-		return handler.Handle(msg)
+		return handler.ValidateHandle(msg)
 	}
 	return OutgoingMessage{}
 }
@@ -110,8 +102,8 @@ func (m *Multiplexer) RegisterHandlers(dispatch []TaggedMessageHandler) {
 	registerMultiplexer(&m.msgHandlers, dispatch)
 }
 
-// RegisterProcessors registers the set of given message handlers.
-func (m *Multiplexer) RegisterProcessors(dispatch []TaggedMessageProcessor) {
+// RegisterValidatorHandlers registers the set of given message handlers.
+func (m *Multiplexer) RegisterValidatorHandlers(dispatch []TaggedMessageValidatorHandler) {
 	registerMultiplexer(&m.msgProcessors, dispatch)
 }
 
@@ -145,5 +137,5 @@ func (m *Multiplexer) ClearHandlers(excludeTags []Tag) {
 
 // ClearProcessors deregisters all the existing message handlers other than the one provided in the excludeTags list
 func (m *Multiplexer) ClearProcessors(excludeTags []Tag) {
-	clearMultiplexer[MessageProcessor](&m.msgProcessors, excludeTags)
+	clearMultiplexer[MessageValidatorHandler](&m.msgProcessors, excludeTags)
 }

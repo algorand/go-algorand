@@ -864,8 +864,8 @@ func (wn *WebsocketNetwork) ClearHandlers() {
 	wn.handler.ClearHandlers([]Tag{protocol.PingTag, protocol.PingReplyTag, protocol.NetPrioResponseTag})
 }
 
-// RegisterProcessors registers the set of given message handlers.
-func (wn *WebsocketNetwork) RegisterProcessors(dispatch []TaggedMessageProcessor) {
+// RegisterValidatorHandlers registers the set of given message handlers.
+func (wn *WebsocketNetwork) RegisterValidatorHandlers(dispatch []TaggedMessageValidatorHandler) {
 }
 
 // ClearProcessors deregisters all the existing message handlers.

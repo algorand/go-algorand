@@ -110,26 +110,22 @@ func TestP2PSubmitTX(t *testing.T) {
 	// now we should be connected in a line: B <-> A <-> C where both B and C are connected to A but not each other
 
 	// Since we aren't using the transaction handler in this test, we need to register a pass-through handler
-	passThroughHandler := []TaggedMessageProcessor{
+	passThroughHandler := []TaggedMessageValidatorHandler{
 		{
 			Tag: protocol.TxnTag,
 			MessageHandler: struct {
-				ProcessorValidateFunc
-				ProcessorHandleFunc
+				ValidateHandleFunc
 			}{
-				ProcessorValidateFunc(func(msg IncomingMessage) ValidatedMessage {
-					return ValidatedMessage{Action: Accept, Tag: msg.Tag, ValidatedMessage: nil}
-				}),
-				ProcessorHandleFunc(func(msg ValidatedMessage) OutgoingMessage {
-					return OutgoingMessage{Action: Ignore}
+				ValidateHandleFunc(func(msg IncomingMessage) OutgoingMessage {
+					return OutgoingMessage{Action: Accept, Tag: msg.Tag}
 				}),
 			},
 		},
 	}
 
-	netA.RegisterProcessors(passThroughHandler)
-	netB.RegisterProcessors(passThroughHandler)
-	netC.RegisterProcessors(passThroughHandler)
+	netA.RegisterValidatorHandlers(passThroughHandler)
+	netB.RegisterValidatorHandlers(passThroughHandler)
+	netC.RegisterValidatorHandlers(passThroughHandler)
 
 	// send messages from B and confirm that they get received by C (via A)
 	for i := 0; i < 10; i++ {
@@ -202,25 +198,21 @@ func TestP2PSubmitTXNoGossip(t *testing.T) {
 
 	// ensure netC cannot receive messages
 
-	passThroughHandler := []TaggedMessageProcessor{
+	passThroughHandler := []TaggedMessageValidatorHandler{
 		{
 			Tag: protocol.TxnTag,
 			MessageHandler: struct {
-				ProcessorValidateFunc
-				ProcessorHandleFunc
+				ValidateHandleFunc
 			}{
-				ProcessorValidateFunc(func(msg IncomingMessage) ValidatedMessage {
-					return ValidatedMessage{Action: Accept, Tag: msg.Tag, ValidatedMessage: nil}
-				}),
-				ProcessorHandleFunc(func(msg ValidatedMessage) OutgoingMessage {
-					return OutgoingMessage{Action: Ignore}
+				ValidateHandleFunc(func(msg IncomingMessage) OutgoingMessage {
+					return OutgoingMessage{Action: Accept, Tag: msg.Tag}
 				}),
 			},
 		},
 	}
 
-	netB.RegisterProcessors(passThroughHandler)
-	netC.RegisterProcessors(passThroughHandler)
+	netB.RegisterValidatorHandlers(passThroughHandler)
+	netC.RegisterValidatorHandlers(passThroughHandler)
 	for i := 0; i < 10; i++ {
 		err = netA.Broadcast(context.Background(), protocol.TxnTag, []byte(fmt.Sprintf("test %d", i)), false, nil)
 		require.NoError(t, err)
@@ -850,26 +842,22 @@ func TestP2PRelay(t *testing.T) {
 		return netA.hasPeers() && netB.hasPeers()
 	}, 2*time.Second, 50*time.Millisecond)
 
-	makeCounterHandler := func(numExpected int, counter *atomic.Uint32, msgs *[][]byte) ([]TaggedMessageProcessor, chan struct{}) {
+	makeCounterHandler := func(numExpected int, counter *atomic.Uint32, msgs *[][]byte) ([]TaggedMessageValidatorHandler, chan struct{}) {
 		counterDone := make(chan struct{})
-		counterHandler := []TaggedMessageProcessor{
+		counterHandler := []TaggedMessageValidatorHandler{
 			{
 				Tag: protocol.TxnTag,
 				MessageHandler: struct {
-					ProcessorValidateFunc
-					ProcessorHandleFunc
+					ValidateHandleFunc
 				}{
-					ProcessorValidateFunc(func(msg IncomingMessage) ValidatedMessage {
-						return ValidatedMessage{Action: Accept, Tag: msg.Tag, ValidatedMessage: msg.Data}
-					}),
-					ProcessorHandleFunc(func(msg ValidatedMessage) OutgoingMessage {
+					ValidateHandleFunc(func(msg IncomingMessage) OutgoingMessage {
 						if msgs != nil {
-							*msgs = append(*msgs, msg.ValidatedMessage.([]byte))
+							*msgs = append(*msgs, msg.Data)
 						}
 						if count := counter.Add(1); int(count) >= numExpected {
 							close(counterDone)
 						}
-						return OutgoingMessage{Action: Ignore}
+						return OutgoingMessage{Action: Accept, Tag: msg.Tag}
 					}),
 				},
 			},
@@ -878,7 +866,7 @@ func TestP2PRelay(t *testing.T) {
 	}
 	var counter atomic.Uint32
 	counterHandler, counterDone := makeCounterHandler(1, &counter, nil)
-	netA.RegisterProcessors(counterHandler)
+	netA.RegisterValidatorHandlers(counterHandler)
 
 	// send 5 messages from both netB to netA
 	// since there is no node with listening address set => no messages should be received
@@ -933,7 +921,7 @@ func TestP2PRelay(t *testing.T) {
 	var loggedMsgs [][]byte
 	counterHandler, counterDone = makeCounterHandler(expectedMsgs, &counter, &loggedMsgs)
 	netA.ClearProcessors()
-	netA.RegisterProcessors(counterHandler)
+	netA.RegisterValidatorHandlers(counterHandler)
 
 	for i := 0; i < expectedMsgs/2; i++ {
 		err := netB.Relay(context.Background(), protocol.TxnTag, []byte{5, 6, 7, byte(i)}, true, nil)
