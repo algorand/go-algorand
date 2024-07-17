@@ -662,6 +662,21 @@ func TestLocal_IsGossipServer(t *testing.T) {
 	require.True(t, cfg.IsWsGossipServer())
 	require.True(t, cfg.IsP2PGossipServer())
 
+	cfg.EnableP2PHybridMode = true
+	cfg.EnableP2P = true
+	cfg.NetAddress = ":4160"
+	cfg.P2PNetAddress = ":4190"
+	require.True(t, cfg.IsGossipServer())
+	require.True(t, cfg.IsWsGossipServer())
+	require.True(t, cfg.IsP2PGossipServer())
+
+	cfg.EnableP2PHybridMode = true
+	cfg.EnableP2P = true
+	cfg.NetAddress = ":4160"
+	cfg.P2PNetAddress = ""
+	require.True(t, cfg.IsGossipServer())
+	require.True(t, cfg.IsWsGossipServer())
+	require.False(t, cfg.IsP2PGossipServer())
 }
 
 func TestLocal_RecalculateConnectionLimits(t *testing.T) {

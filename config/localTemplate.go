@@ -744,12 +744,14 @@ func (cfg Local) IsGossipServer() bool {
 
 // IsWsGossipServer returns true if a node configured to run a listening ws net
 func (cfg Local) IsWsGossipServer() bool {
-	return cfg.NetAddress != "" && !cfg.EnableP2P
+	// 1. NetAddress is set and EnableP2P is not set
+	// 2. NetAddress is set and EnableP2PHybridMode is set then EnableP2P is overridden  by EnableP2PHybridMode
+	return cfg.NetAddress != "" && (!cfg.EnableP2P || cfg.EnableP2PHybridMode)
 }
 
 // IsP2PGossipServer returns true if a node configured to run a listening p2p net
 func (cfg Local) IsP2PGossipServer() bool {
-	return cfg.EnableP2P && cfg.NetAddress != "" || cfg.EnableP2PHybridMode && cfg.P2PNetAddress != ""
+	return cfg.EnableP2P && !cfg.EnableP2PHybridMode && cfg.NetAddress != "" || cfg.EnableP2PHybridMode && cfg.P2PNetAddress != ""
 }
 
 // ensureAbsGenesisDir will convert a path to absolute, and will attempt to make a genesis directory there
@@ -949,6 +951,7 @@ func (cfg *Local) AdjustConnectionLimits(requiredFDs, maxFDs uint64) bool {
 		cfg.RestConnectionsHardLimit = reservedRESTConns
 		splitRatio := 1
 		if cfg.IsWsGossipServer() && cfg.IsP2PGossipServer() {
+			// split the rest of the delta between ws and p2p evenly
 			splitRatio = 2
 		}
 		if cfg.IsWsGossipServer() {
