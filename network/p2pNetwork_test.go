@@ -1051,7 +1051,6 @@ func TestP2PWantTXGossip(t *testing.T) {
 	net.wantTXGossip.Store(false)
 	net.nodeInfo = &nopeNodeInfo{}
 	net.config.ForceFetchTransactions = true
-	net.config.NetAddress = "127.0.0.1:0"
 	net.relayMessages = false
 	net.OnNetworkAdvance()
 	require.Eventually(t, func() bool { return mockService.count.Load() == 2 }, 1*time.Second, 50*time.Millisecond)
