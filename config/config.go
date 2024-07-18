@@ -148,6 +148,11 @@ func mergeConfigFromFile(configpath string, source Local) (Local, error) {
 
 	err = loadConfig(f, &source)
 
+	// If the PublicAddress in config file has the PlaceholderPublicAddress, treat it as if it were empty
+	if source.PublicAddress == PlaceholderPublicAddress {
+		source.PublicAddress = ""
+	}
+
 	if source.NetAddress != "" {
 		source.EnableLedgerService = true
 		source.EnableBlockService = true
