@@ -337,8 +337,11 @@ func (n *P2PNetwork) Start() error {
 		go n.handler.messageHandlerThread(&n.wg, n.wsPeersConnectivityCheckTicker.C, n, "network", "P2PNetwork")
 	}
 
-	n.wg.Add(1)
-	go n.httpdThread()
+	// start the HTTP server if configured to listen
+	if n.config.NetAddress != "" {
+		n.wg.Add(1)
+		go n.httpdThread()
+	}
 
 	n.wg.Add(1)
 	go n.broadcaster.broadcastThread(&n.wg, n, "network", "P2PNetwork")
@@ -471,6 +474,7 @@ func (n *P2PNetwork) meshThread() {
 
 func (n *P2PNetwork) httpdThread() {
 	defer n.wg.Done()
+
 	err := n.httpServer.Serve()
 	if err != nil {
 		n.log.Errorf("Error serving libp2phttp: %v", err)

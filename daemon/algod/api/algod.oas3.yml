@@ -7012,6 +7012,10 @@
             },
             "description": "Invalid API Token"
           },
+          "404": {
+            "content": {},
+            "description": "Developer or Experimental API not enabled"
+          },
           "500": {
             "content": {
               "application/json": {
@@ -7039,6 +7043,7 @@
         },
         "summary": "Fast track for broadcasting a raw transaction or transaction group to the network through the tx handler without performing most of the checks and reporting detailed errors. Should be only used for development and performance testing.",
         "tags": [
+          "public",
           "experimental"
         ],
         "x-codegen-request-body-name": "rawtxn"

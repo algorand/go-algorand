@@ -39,12 +39,12 @@ func TestDisabledAPIConfig(t *testing.T) {
 	localFixture.Setup(t, filepath.Join("nettemplates", "DisableAPIAuth.json"))
 	defer localFixture.Shutdown()
 
-	testClient := localFixture.LibGoalClient
+	libgoalClient := localFixture.LibGoalClient
 
-	statusResponse, err := testClient.Status()
+	statusResponse, err := libgoalClient.Status()
 	a.NoError(err)
 	a.NotEmpty(statusResponse)
-	statusResponse2, err := testClient.Status()
+	statusResponse2, err := libgoalClient.Status()
 	a.NoError(err)
 	a.NotEmpty(statusResponse2)
 	a.True(statusResponse2.LastRound >= statusResponse.LastRound)
@@ -58,12 +58,21 @@ func TestDisabledAPIConfig(t *testing.T) {
 	assert.True(t, os.IsNotExist(err))
 
 	// check public api works without a token
-	testClient.WaitForRound(1)
+	url, err := localFixture.NC.ServerURL()
+	a.NoError(err)
+	testClient := client.MakeRestClient(url, "") // empty token
+
+	_, err = testClient.WaitForBlock(1)
+	assert.NoError(t, err)
 	_, err = testClient.Block(1)
 	assert.NoError(t, err)
+	_, err = testClient.Status()
+	a.NoError(err)
+
 	// check admin api works with the generated token
-	_, err = testClient.GetParticipationKeys()
+	_, err = libgoalClient.GetParticipationKeys()
 	assert.NoError(t, err)
+
 	// check admin api doesn't work with an invalid token
 	algodURL, err := nc.ServerURL()
 	assert.NoError(t, err)

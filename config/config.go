@@ -105,6 +105,9 @@ const CatchpointTrackingModeTracked = 1
 // as long as CatchpointInterval > 0
 const CatchpointTrackingModeStored = 2
 
+// PlaceholderPublicAddress is a placeholder for the public address generated in certain profiles
+const PlaceholderPublicAddress = "PLEASE_SET_ME"
+
 // LoadConfigFromDisk returns a Local config structure based on merging the defaults
 // with settings loaded from the config file from the custom dir.  If the custom file
 // cannot be loaded, the default config is returned (with the error from loading the
@@ -156,6 +159,11 @@ func mergeConfigFromFile(configpath string, source Local) (Local, error) {
 // - If NetAddress is set, enable the ledger and block services
 // - If EnableP2PHybridMode is set, require PublicAddress to be set
 func enrichNetworkingConfig(source Local) (Local, error) {
+	// If the PublicAddress in config file has the PlaceholderPublicAddress, treat it as if it were empty
+	if source.PublicAddress == PlaceholderPublicAddress {
+		source.PublicAddress = ""
+	}
+
 	if source.NetAddress != "" {
 		source.EnableLedgerService = true
 		source.EnableBlockService = true
