@@ -1012,6 +1012,29 @@ func TestTxHandlerProcessIncomingCacheBacklogDrop(t *testing.T) {
 	require.Equal(t, initialValue+1, currentValue)
 }
 
+func makeTxns(addresses []basics.Address, secrets []*crypto.SignatureSecrets, sendIdx, recvIdx int, gh crypto.Digest) ([]transactions.SignedTxn, []byte) {
+	note := make([]byte, 2)
+	crypto.RandBytes(note)
+	tx := transactions.Transaction{
+		Type: protocol.PaymentTx,
+		Header: transactions.Header{
+			Sender:      addresses[sendIdx],
+			Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee * 2},
+			FirstValid:  0,
+			LastValid:   basics.Round(proto.MaxTxnLife),
+			Note:        note,
+			GenesisHash: gh,
+		},
+		PaymentTxnFields: transactions.PaymentTxnFields{
+			Receiver: addresses[recvIdx],
+			Amount:   basics.MicroAlgos{Raw: mockBalancesMinBalance + (rand.Uint64() % 10000)},
+		},
+	}
+	signedTx := tx.Sign(secrets[sendIdx])
+	blob := protocol.Encode(&signedTx)
+	return []transactions.SignedTxn{signedTx}, blob
+}
+
 func TestTxHandlerProcessIncomingCacheTxPoolDrop(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -1048,27 +1071,7 @@ loop:
 		}
 	}
 
-	makeTxns := func(sendIdx, recvIdx int) ([]transactions.SignedTxn, []byte) {
-		tx := transactions.Transaction{
-			Type: protocol.PaymentTx,
-			Header: transactions.Header{
-				Sender:     addresses[sendIdx],
-				Fee:        basics.MicroAlgos{Raw: proto.MinTxnFee * 2},
-				FirstValid: 0,
-				LastValid:  basics.Round(proto.MaxTxnLife),
-				Note:       make([]byte, 2),
-			},
-			PaymentTxnFields: transactions.PaymentTxnFields{
-				Receiver: addresses[recvIdx],
-				Amount:   basics.MicroAlgos{Raw: mockBalancesMinBalance + (rand.Uint64() % 10000)},
-			},
-		}
-		signedTx := tx.Sign(secrets[sendIdx])
-		blob := protocol.Encode(&signedTx)
-		return []transactions.SignedTxn{signedTx}, blob
-	}
-
-	stxns, blob := makeTxns(1, 2)
+	stxns, blob := makeTxns(addresses, secrets, 1, 2, genesisHash)
 
 	action := handler.processIncomingTxn(network.IncomingMessage{Data: blob})
 	require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, action)
@@ -2744,4 +2747,46 @@ func TestTxHandlerCapGuard(t *testing.T) {
 	}()
 
 	require.Eventually(t, func() bool { return completed.Load() }, 1*time.Second, 10*time.Millisecond)
+}
+
+func TestTxHandlerValidateIncomingTxMessage(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	const numUsers = 10
+	addresses, secrets, genesis := makeTestGenesisAccounts(t, numUsers)
+	genBal := bookkeeping.MakeGenesisBalances(genesis, sinkAddr, poolAddr)
+
+	ledgerName := fmt.Sprintf("%s-mem", t.Name())
+	const inMem = true
+	log := logging.TestingLog(t)
+	log.SetLevel(logging.Panic)
+
+	cfg := config.GetDefaultLocal()
+	ledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, cfg)
+	require.NoError(t, err)
+	defer ledger.Close()
+
+	handler, err := makeTestTxHandler(ledger, cfg)
+	require.NoError(t, err)
+
+	// valid message
+	_, blob := makeTxns(addresses, secrets, 1, 2, genesisHash)
+	outmsg := handler.validateIncomingTxMessage(network.IncomingMessage{Data: blob})
+	require.Equal(t, outmsg.Action, network.Accept)
+
+	// invalid signature
+	stxns, _ := makeTxns(addresses, secrets, 1, 2, genesisHash)
+	stxns[0].Sig[0] = stxns[0].Sig[0] + 1
+	blob2 := protocol.Encode(&stxns[0])
+	outmsg = handler.validateIncomingTxMessage(network.IncomingMessage{Data: blob2})
+	require.Equal(t, outmsg.Action, network.Disconnect)
+
+	// invalid message
+	_, blob = makeTxns(addresses, secrets, 1, 2, genesisHash)
+	blob[0] = blob[0] + 1
+	outmsg = handler.validateIncomingTxMessage(network.IncomingMessage{Data: blob})
+	require.Equal(t, outmsg.Action, network.Disconnect)
 }

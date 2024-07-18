@@ -133,9 +133,8 @@ type TxHandler struct {
 	appLimiter                 *appRateLimiter
 	appLimiterBacklogThreshold int
 
-	batchProcessor         execpool.BatchProcessor
-	streamVerifierDropped2 chan *verify.UnverifiedTxnSigJob
-	postVerificationQueue2 chan *verify.VerificationResult
+	// batchVerifier provides synchronous verification of transaction groups
+	batchVerifier verify.TxnGroupBatchSigVerifier
 }
 
 // TxHandlerOpts is TxHandler configuration options
@@ -177,10 +176,6 @@ func MakeTxHandler(opts TxHandlerOpts) (*TxHandler, error) {
 		net:                   opts.Net,
 		streamVerifierChan:    make(chan execpool.InputJob),
 		streamVerifierDropped: make(chan *verify.UnverifiedTxnSigJob),
-
-		// match to the number of validator workers
-		postVerificationQueue2: make(chan *verify.VerificationResult, 20),
-		streamVerifierDropped2: make(chan *verify.UnverifiedTxnSigJob, 20),
 	}
 
 	if opts.Config.TxFilterRawMsgEnabled() {
@@ -219,8 +214,7 @@ func MakeTxHandler(opts TxHandlerOpts) (*TxHandler, error) {
 
 	// prepare the batch processor for pubsub synchronous verification
 	var err0 error
-	handler.batchProcessor, err0 = verify.MakeSigVerifyJobProcessor(handler.ledger, handler.ledger.VerifiedTransactionCache(),
-		handler.postVerificationQueue2, handler.streamVerifierDropped2)
+	handler.batchVerifier, err0 = verify.MakeSigVerifier(handler.ledger, handler.ledger.VerifiedTransactionCache())
 	if err0 != nil {
 		return nil, err0
 	}
@@ -824,55 +818,35 @@ func (handler *TxHandler) validateIncomingTxMessage(rawmsg network.IncomingMessa
 		}
 	}
 
-	// TODO: implement a proper batching when more messages can be batched together
-	// and each validator waits on a channel for its result.
-	jobs := []execpool.InputJob{&verify.UnverifiedTxnSigJob{TxnGroup: wi.unverifiedTxGroup, BacklogMessage: wi}}
-	handler.batchProcessor.ProcessBatch(jobs)
-
-	select {
-	case wi := <-handler.postVerificationQueue2:
-		m := wi.BacklogMessage.(*txBacklogMsg)
-		if wi.Err != nil {
-			handler.postProcessReportErrors(wi.Err)
-			logging.Base().Warnf("Received a malformed tx group %v: %v", m.unverifiedTxGroup, wi.Err)
-			return network.OutgoingMessage{
-				Action: network.Disconnect,
-			}
-		}
-		// at this point, we've verified the transaction, so we can safely treat the transaction as a verified transaction.
-		verifiedTxGroup := m.unverifiedTxGroup
-
-		// save the transaction, if it has high enough fee and not already in the cache
-		err := handler.txPool.Remember(verifiedTxGroup)
-		if err != nil {
-			handler.rememberReportErrors(err)
-			logging.Base().Debugf("could not remember tx: %v", err)
-			return network.OutgoingMessage{
-				Action: network.Ignore,
-			}
-		}
-
-		transactionMessagesRemember.Inc(nil)
-
-		// if we remembered without any error ( i.e. txpool wasn't full ), then we should pin these transactions.
-		err = handler.ledger.VerifiedTransactionCache().Pin(verifiedTxGroup)
-		if err != nil {
-			logging.Base().Infof("unable to pin transaction: %v", err)
-		}
+	err := handler.batchVerifier.Verify(wi.unverifiedTxGroup)
+	if err != nil {
+		handler.postProcessReportErrors(err)
+		logging.Base().Warnf("Received a malformed tx group %v: %v", wi.unverifiedTxGroup, err)
 		return network.OutgoingMessage{
-			Action: network.Accept,
+			Action: network.Disconnect,
 		}
+	}
+	verifiedTxGroup := wi.unverifiedTxGroup
 
-	case <-handler.streamVerifierDropped2:
-		transactionMessagesDroppedFromBacklog.Inc(nil)
+	// save the transaction, if it has high enough fee and not already in the cache
+	err = handler.txPool.Remember(verifiedTxGroup)
+	if err != nil {
+		handler.rememberReportErrors(err)
+		logging.Base().Debugf("could not remember tx: %v", err)
 		return network.OutgoingMessage{
 			Action: network.Ignore,
 		}
-	case <-handler.ctx.Done():
-		transactionMessagesDroppedFromBacklog.Inc(nil)
-		return network.OutgoingMessage{
-			Action: network.Ignore,
-		}
+	}
+
+	transactionMessagesRemember.Inc(nil)
+
+	// if we remembered without any error ( i.e. txpool wasn't full ), then we should pin these transactions.
+	err = handler.ledger.VerifiedTransactionCache().Pin(verifiedTxGroup)
+	if err != nil {
+		logging.Base().Infof("unable to pin transaction: %v", err)
+	}
+	return network.OutgoingMessage{
+		Action: network.Accept,
 	}
 }
 
