@@ -102,7 +102,7 @@ var (
 			cfg.EnableBlockService = true
 			cfg.NetAddress = ":4160"
 			// This should be set to the public address of the node if public access is desired
-			cfg.PublicAddress = "PLEASE_SET_ME"
+			cfg.PublicAddress = config.PlaceholderPublicAddress
 
 			// P2P config defaults
 			cfg.EnableP2PHybridMode = true
