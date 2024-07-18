@@ -30,10 +30,11 @@ import (
 
 // streamManager implements network.Notifiee to create and manage streams for use with non-gossipsub protocols.
 type streamManager struct {
-	ctx     context.Context
-	log     logging.Logger
-	host    host.Host
-	handler StreamHandler
+	ctx                 context.Context
+	log                 logging.Logger
+	host                host.Host
+	handler             StreamHandler
+	allowIncomingGossip bool
 
 	streams     map[peer.ID]network.Stream
 	streamsLock deadlock.Mutex
@@ -42,18 +43,25 @@ type streamManager struct {
 // StreamHandler is called when a new bidirectional stream for a given protocol and peer is opened.
 type StreamHandler func(ctx context.Context, pid peer.ID, s network.Stream, incoming bool)
 
-func makeStreamManager(ctx context.Context, log logging.Logger, h host.Host, handler StreamHandler) *streamManager {
+func makeStreamManager(ctx context.Context, log logging.Logger, h host.Host, handler StreamHandler, allowIncomingGossip bool) *streamManager {
 	return &streamManager{
-		ctx:     ctx,
-		log:     log,
-		host:    h,
-		handler: handler,
-		streams: make(map[peer.ID]network.Stream),
+		ctx:                 ctx,
+		log:                 log,
+		host:                h,
+		handler:             handler,
+		allowIncomingGossip: allowIncomingGossip,
+		streams:             make(map[peer.ID]network.Stream),
 	}
 }
 
 // streamHandler is called by libp2p when a new stream is accepted
 func (n *streamManager) streamHandler(stream network.Stream) {
+	if stream.Conn().Stat().Direction == network.DirInbound && !n.allowIncomingGossip {
+		n.log.Debugf("rejecting stream from incoming connection from %s", stream.Conn().RemotePeer().String())
+		stream.Close()
+		return
+	}
+
 	n.streamsLock.Lock()
 	defer n.streamsLock.Unlock()
 
@@ -74,15 +82,7 @@ func (n *streamManager) streamHandler(stream network.Stream) {
 			}
 			n.streams[stream.Conn().RemotePeer()] = stream
 
-			// streamHandler is supposed to be called for accepted streams, so we expect incoming here
 			incoming := stream.Conn().Stat().Direction == network.DirInbound
-			if !incoming {
-				if stream.Stat().Direction == network.DirUnknown {
-					n.log.Warnf("Unknown direction for a steam %s to/from %s", stream.ID(), remotePeer)
-				} else {
-					n.log.Warnf("Unexpected outgoing stream in streamHandler for connection %s (%s): %s vs %s stream", stream.Conn().ID(), remotePeer, stream.Conn().Stat().Direction, stream.Stat().Direction.String())
-				}
-			}
 			n.handler(n.ctx, remotePeer, stream, incoming)
 			return
 		}
@@ -92,20 +92,18 @@ func (n *streamManager) streamHandler(stream network.Stream) {
 	}
 	// no old stream
 	n.streams[stream.Conn().RemotePeer()] = stream
-	// streamHandler is supposed to be called for accepted streams, so we expect incoming here
 	incoming := stream.Conn().Stat().Direction == network.DirInbound
-	if !incoming {
-		if stream.Stat().Direction == network.DirUnknown {
-			n.log.Warnf("streamHandler: unknown direction for a steam %s to/from %s", stream.ID(), remotePeer)
-		} else {
-			n.log.Warnf("Unexpected outgoing stream in streamHandler for connection %s (%s): %s vs %s stream", stream.Conn().ID(), remotePeer, stream.Conn().Stat().Direction, stream.Stat().Direction.String())
-		}
-	}
 	n.handler(n.ctx, remotePeer, stream, incoming)
 }
 
-// Connected is called when a connection is opened
+// Connected is called when a connection is opened.
+// It is called for both incoming (listener -> addConn) and outgoing (dialer -> addConn) connections.
 func (n *streamManager) Connected(net network.Network, conn network.Conn) {
+	if conn.Stat().Direction == network.DirInbound && !n.allowIncomingGossip {
+		n.log.Debugf("ignoring incoming connection from %s", conn.RemotePeer().String())
+		return
+	}
+
 	remotePeer := conn.RemotePeer()
 	localPeer := n.host.ID()
 
@@ -138,15 +136,7 @@ func (n *streamManager) Connected(net network.Network, conn network.Conn) {
 	needUnlock = false
 	n.streamsLock.Unlock()
 
-	// a new stream created above, expected direction is outbound
 	incoming := stream.Conn().Stat().Direction == network.DirInbound
-	if incoming {
-		n.log.Warnf("Unexpected incoming stream in streamHandler for connection %s (%s): %s vs %s stream", stream.Conn().ID(), remotePeer, stream.Conn().Stat().Direction, stream.Stat().Direction.String())
-	} else {
-		if stream.Stat().Direction == network.DirUnknown {
-			n.log.Warnf("Connected: unknown direction for a steam %s to/from %s", stream.ID(), remotePeer)
-		}
-	}
 	n.handler(n.ctx, remotePeer, stream, incoming)
 }
 
