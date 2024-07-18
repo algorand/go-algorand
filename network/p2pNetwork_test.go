@@ -192,7 +192,7 @@ func TestP2PSubmitTXNoGossip(t *testing.T) {
 	cfg.ForceFetchTransactions = false
 	// Have to unset NetAddress to get IsGossipServer to return false
 	cfg.NetAddress = ""
-	netC, err := NewP2PNetwork(log, cfg, "", phoneBookAddresses, genesisID, config.Devtestnet, &nopeNodeInfo{})
+	netC, err := NewP2PNetwork(log, cfg, "", phoneBookAddresses, genesisID, config.Devtestnet, &nopeNodeInfo{}, nil)
 	require.NoError(t, err)
 	netC.Start()
 	defer netC.Stop()
