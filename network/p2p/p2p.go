@@ -112,7 +112,8 @@ func MakeHost(cfg config.Local, datadir string, pstore *pstore.PeerStore) (host.
 			listenAddr = parsedListenAddr
 		}
 	} else {
-		listenAddr = "/ip4/0.0.0.0/tcp/0"
+		// don't listen if NetAddress is not set.
+		listenAddr = ""
 	}
 
 	var disableMetrics = func(cfg *libp2p.Config) error { return nil }
@@ -163,6 +164,11 @@ func MakeService(ctx context.Context, log logging.Logger, cfg config.Local, h ho
 
 // Start starts the P2P service
 func (s *serviceImpl) Start() error {
+	if s.listenAddr == "" {
+		// don't listen if no listen address configured
+		return nil
+	}
+
 	listenAddr, err := multiaddr.NewMultiaddr(s.listenAddr)
 	if err != nil {
 		s.log.Errorf("failed to create multiaddress: %s", err)
