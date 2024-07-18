@@ -148,6 +148,7 @@ func (tbp txnSigBatchProcessor) sendResult(veTxnGroup []transactions.SignedTxn, 
 	}
 }
 
+// MakeSigVerifier creats a new TxnGroupBatchSigVerifier for synchronous verification of transactions
 func MakeSigVerifier(ledger LedgerForStreamVerifier, cache VerifiedTransactionCache) (TxnGroupBatchSigVerifier, error) {
 	latest := ledger.Latest()
 	latestHdr, err := ledger.BlockHdr(latest)
@@ -183,6 +184,7 @@ func MakeSigVerifyJobProcessor(
 	}, nil
 }
 
+// Verify synchronously verifies the signatures of the transactions in the group
 func (sv *TxnGroupBatchSigVerifier) Verify(stxs []transactions.SignedTxn) error {
 	blockHeader := sv.nbw.getBlockHeader()
 	_, err := txnGroup(stxs, blockHeader, sv.cache, sv.ledger, nil)
