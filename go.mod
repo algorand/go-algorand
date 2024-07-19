@@ -31,7 +31,7 @@ require (
 	github.com/ipfs/go-log v1.0.5
 	github.com/ipfs/go-log/v2 v2.5.1
 	github.com/jmoiron/sqlx v1.2.0
-	github.com/karalabe/usb v0.0.2
+	github.com/karalabe/usb v0.0.3-0.20230711191512-61db3e06439c
 	github.com/labstack/echo/v4 v4.9.1
 	github.com/libp2p/go-libp2p v0.33.2
 	github.com/libp2p/go-libp2p-kad-dht v0.24.3
