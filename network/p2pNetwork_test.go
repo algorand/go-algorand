@@ -1247,6 +1247,8 @@ func TestP2PEnableGossipService_NodeDisable(t *testing.T) {
 	}
 }
 
+// TestP2PEnableGossipService_BothDisable checks if both relay and node have EnableGossipService=false
+// they do not connect to each other.
 func TestP2PEnableGossipService_BothDisable(t *testing.T) {
 	partitiontest.PartitionTest(t)
 

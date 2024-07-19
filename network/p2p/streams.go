@@ -96,8 +96,8 @@ func (n *streamManager) streamHandler(stream network.Stream) {
 	n.handler(n.ctx, remotePeer, stream, incoming)
 }
 
-// Connected is called when a connection is opened.
-// It is called for both incoming (listener -> addConn) and outgoing (dialer -> addConn) connections.
+// Connected is called when a connection is opened
+// for both incoming (listener -> addConn) and outgoing (dialer -> addConn) connections.
 func (n *streamManager) Connected(net network.Network, conn network.Conn) {
 	if conn.Stat().Direction == network.DirInbound && !n.allowIncomingGossip {
 		n.log.Debugf("ignoring incoming connection from %s", conn.RemotePeer().String())
