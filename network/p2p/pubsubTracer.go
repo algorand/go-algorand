@@ -26,7 +26,7 @@ import (
 
 var _ = pubsub.RawTracer(pubsubTracer{})
 
-var transactionMessagesDroppedFromBacklog = metrics.MakeCounter(metrics.TransactionMessagesDroppedFromBacklog)
+var transactionMessagesDroppedFromBacklogP2P = metrics.MakeCounter(metrics.TransactionMessagesDroppedFromBacklogP2P)
 var transactionMessagesDupRawMsg = metrics.MakeCounter(metrics.TransactionMessagesDupRawMsg)
 
 // pubsubTracer is a tracer for pubsub events used to track metrics.
@@ -60,7 +60,7 @@ func (t pubsubTracer) DeliverMessage(msg *pubsub.Message) {}
 // The reason argument can be one of the named strings Reject*.
 func (t pubsubTracer) RejectMessage(msg *pubsub.Message, reason string) {
 	if reason == pubsub.RejectValidationThrottled || reason == pubsub.RejectValidationQueueFull {
-		transactionMessagesDroppedFromBacklog.Inc(nil)
+		transactionMessagesDroppedFromBacklogP2P.Inc(nil)
 	}
 }
 

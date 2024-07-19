@@ -93,6 +93,8 @@ var (
 	TransactionMessagesHandled = MetricName{Name: "algod_transaction_messages_handled", Description: "Number of transaction messages handled"}
 	// TransactionMessagesDroppedFromBacklog "Number of transaction messages dropped from backlog"
 	TransactionMessagesDroppedFromBacklog = MetricName{Name: "algod_transaction_messages_dropped_backlog", Description: "Number of transaction messages dropped from backlog"}
+	// TransactionMessagesDroppedFromBacklogP2P "Number of transaction messages throttled with p2p pubsub"
+	TransactionMessagesDroppedFromBacklogP2P = MetricName{Name: "algod_transaction_messages_dropped_backlog_p2p", Description: "Number of transaction messages throttled with p2p pubsub"}
 	// TransactionMessagesDroppedFromPool "Number of transaction messages dropped from pool"
 	TransactionMessagesDroppedFromPool = MetricName{Name: "algod_transaction_messages_dropped_pool", Description: "Number of transaction messages dropped from pool"}
 	// TransactionMessagesAlreadyCommitted "Number of duplicate or error transaction messages before placing into a backlog"
