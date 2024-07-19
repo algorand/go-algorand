@@ -751,7 +751,7 @@ func (cfg Local) IsWsGossipServer() bool {
 
 // IsP2PGossipServer returns true if a node configured to run a listening p2p net
 func (cfg Local) IsP2PGossipServer() bool {
-	return cfg.EnableP2P && !cfg.EnableP2PHybridMode && cfg.NetAddress != "" || cfg.EnableP2PHybridMode && cfg.P2PNetAddress != ""
+	return (cfg.EnableP2P && !cfg.EnableP2PHybridMode && cfg.NetAddress != "") || (cfg.EnableP2PHybridMode && cfg.P2PNetAddress != "")
 }
 
 // ensureAbsGenesisDir will convert a path to absolute, and will attempt to make a genesis directory there
