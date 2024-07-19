@@ -1005,6 +1005,16 @@ func createHostSpec(host HostConfig, template cloudHost) (hostSpec cloudHostSpec
 				portList = append(portList, strconv.Itoa(port))
 			}
 		}
+		if node.P2PNetAddress != "" {
+			port, err = extractPublicPort(node.P2PNetAddress)
+			if err != nil {
+				return
+			}
+			if !ports[port] {
+				ports[port] = true
+				portList = append(portList, strconv.Itoa(port))
+			}
+		}
 
 		// See if the APIEndpoint is open to the public, and if so add it
 		// Error means it's not valid/specified as public port

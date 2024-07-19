@@ -7,8 +7,15 @@ This is a copy of scenario1s with the following changes in nodes configuration:
 ## Build
 
 ```sh
-export GOPATH=~/go
 make
+```
+
+If want to configure a hybrid net, set the `HYBRID` mode parameter to:
+  - `p2p` meaning all nodes are p2pnet and 50% of them are hybrid
+  - `ws` meaning all nodes are wsnet and 50% of them are hybrid
+
+```sh
+make -D HYBRID=p2p
 ```
 
 ## Run

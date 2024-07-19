@@ -93,6 +93,10 @@ func (nc *nodeConfigurator) apply(rootConfigDir, rootNodeDir string) (err error)
 
 	nc.genesisFile = filepath.Join(rootConfigDir, "genesisdata", config.GenesisJSONFile)
 	nc.genesisData, err = bookkeeping.LoadGenesisFromFile(nc.genesisFile)
+	if err != nil {
+		return fmt.Errorf("error loading genesis from '%s': %v", nc.genesisFile, err)
+
+	}
 	nodeDirs, err := nc.prepareNodeDirs(nc.config.Nodes, rootConfigDir, rootNodeDir)
 	if err != nil {
 		return fmt.Errorf("error preparing node directories: %v", err)
@@ -198,6 +202,11 @@ func (nc *nodeConfigurator) prepareNodeDirs(configs []remote.NodeConfig, rootCon
 	return
 }
 
+// getHostName creates a DNS name for a host
+func (nc *nodeConfigurator) getNetworkHostName() string {
+	return nc.config.Name + "." + string(nc.genesisData.Network) + ".algodev.network"
+}
+
 func (nc *nodeConfigurator) registerDNSRecords() (err error) {
 	cfZoneID, cfToken, err := getClouldflareCredentials()
 	if err != nil {
@@ -210,12 +219,13 @@ func (nc *nodeConfigurator) registerDNSRecords() (err error) {
 	const weight = 1
 	const relayBootstrap = "_algobootstrap"
 	const metricsSrv = "_metrics"
+	const tcpProto = "_tcp"
 	const proxied = false
 
 	// If we need to register anything, first register a DNS entry
 	// to map our network DNS name to our public name (or IP) provided to nodecfg
 	// Network HostName = eg r1.testnet.algodev.network
-	networkHostName := nc.config.Name + "." + string(nc.genesisData.Network) + ".algodev.network"
+	networkHostName := nc.getNetworkHostName()
 	isIP := net.ParseIP(nc.dnsName) != nil
 	var recordType string
 	if isIP {
@@ -232,9 +242,10 @@ func (nc *nodeConfigurator) registerDNSRecords() (err error) {
 		if parseErr != nil {
 			return parseErr
 		}
-		fmt.Fprintf(os.Stdout, "...... Adding Relay SRV Record '%s' -> '%s' .\n", entry.srvName, networkHostName)
+		fmt.Fprintf(os.Stdout, "...... Adding Relay SRV Record [%s.%s] '%s' [%d %d] -> '%s' .\n",
+			relayBootstrap, tcpProto, entry.srvName, priority, port, networkHostName)
 		err = cloudflareDNS.SetSRVRecord(context.Background(), entry.srvName, networkHostName,
-			cloudflare.AutomaticTTL, priority, uint(port), relayBootstrap, "_tcp", weight)
+			cloudflare.AutomaticTTL, priority, uint(port), relayBootstrap, tcpProto, weight)
 		if err != nil {
 			return
 		}
@@ -246,9 +257,10 @@ func (nc *nodeConfigurator) registerDNSRecords() (err error) {
 			fmt.Fprintf(os.Stdout, "Error parsing port for srv record: %s (port %v)\n", parseErr, entry)
 			return parseErr
 		}
-		fmt.Fprintf(os.Stdout, "...... Adding Metrics SRV Record '%s' -> '%s' .\n", entry.srvName, networkHostName)
+		fmt.Fprintf(os.Stdout, "...... Adding Metrics SRV Record [%s.%s] '%s' [%d %d] -> '%s' .\n",
+			metricsSrv, tcpProto, entry.srvName, priority, port, networkHostName)
 		err = cloudflareDNS.SetSRVRecord(context.Background(), entry.srvName, networkHostName,
-			cloudflare.AutomaticTTL, priority, uint(port), metricsSrv, "_tcp", weight)
+			cloudflare.AutomaticTTL, priority, uint(port), metricsSrv, tcpProto, weight)
 		if err != nil {
 			fmt.Fprintf(os.Stdout, "Error creating srv record: %s (%v)\n", err, entry)
 			return

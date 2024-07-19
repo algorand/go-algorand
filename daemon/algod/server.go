@@ -149,9 +149,21 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 
 	if cfg.IsGossipServer() {
 		var ot basics.OverflowTracker
-		fdRequired = ot.Add(fdRequired, uint64(cfg.IncomingConnectionsLimit)+network.ReservedHealthServiceConnections)
+		fdRequired = ot.Add(fdRequired, network.ReservedHealthServiceConnections)
 		if ot.Overflowed {
-			return errors.New("Initialize() overflowed when adding up IncomingConnectionsLimit to the existing RLIMIT_NOFILE value; decrease RestConnectionsHardLimit or IncomingConnectionsLimit")
+			return errors.New("Initialize() overflowed when adding up ReservedHealthServiceConnections to the existing RLIMIT_NOFILE value; decrease RestConnectionsHardLimit")
+		}
+		if cfg.IsWsGossipServer() {
+			fdRequired = ot.Add(fdRequired, uint64(cfg.IncomingConnectionsLimit))
+			if ot.Overflowed {
+				return errors.New("Initialize() overflowed when adding up IncomingConnectionsLimit to the existing RLIMIT_NOFILE value; decrease IncomingConnectionsLimit")
+			}
+		}
+		if cfg.IsP2PGossipServer() {
+			fdRequired = ot.Add(fdRequired, uint64(cfg.P2PIncomingConnectionsLimit))
+			if ot.Overflowed {
+				return errors.New("Initialize() overflowed when adding up P2PIncomingConnectionsLimit to the existing RLIMIT_NOFILE value; decrease P2PIncomingConnectionsLimit")
+			}
 		}
 		_, hard, fdErr := util.GetFdLimits()
 		if fdErr != nil {
@@ -164,13 +176,17 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 				// but try to keep cfg.ReservedFDs untouched by decreasing other limits
 				if cfg.AdjustConnectionLimits(fdRequired, hard) {
 					s.log.Warnf(
-						"Updated connection limits: RestConnectionsSoftLimit=%d, RestConnectionsHardLimit=%d, IncomingConnectionsLimit=%d",
+						"Updated connection limits: RestConnectionsSoftLimit=%d, RestConnectionsHardLimit=%d, IncomingConnectionsLimit=%d, P2PIncomingConnectionsLimit=%d",
 						cfg.RestConnectionsSoftLimit,
 						cfg.RestConnectionsHardLimit,
 						cfg.IncomingConnectionsLimit,
+						cfg.P2PIncomingConnectionsLimit,
 					)
-					if cfg.IncomingConnectionsLimit == 0 {
+					if cfg.IsWsGossipServer() && cfg.IncomingConnectionsLimit == 0 {
 						return errors.New("Initialize() failed to adjust connection limits")
+					}
+					if cfg.IsP2PGossipServer() && cfg.P2PIncomingConnectionsLimit == 0 {
+						return errors.New("Initialize() failed to adjust p2p connection limits")
 					}
 				}
 			}
