@@ -351,7 +351,7 @@ func (s *Service) fetchAndWrite(ctx context.Context, r basics.Round, prevFetchCo
 			// for no reason.
 			select {
 			case <-ctx.Done():
-				s.log.Infof("fetchAndWrite(%d): Aborted while waiting for lookback block to ledger after failing once : %v", r, err)
+				s.log.Infof("fetchAndWrite(%v): Aborted while waiting for lookback block to ledger", r)
 				return false
 			case <-lookbackComplete:
 			}
