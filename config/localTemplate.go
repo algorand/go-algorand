@@ -134,6 +134,8 @@ type Local struct {
 	// Estimating 1.5MB per incoming connection, 1.5MB*2400 = 3.6GB
 	IncomingConnectionsLimit int `version[0]:"-1" version[1]:"10000" version[17]:"800" version[27]:"2400"`
 
+	P2PIncomingConnectionsLimit int `version[34]:"1200"`
+
 	// BroadcastConnectionsLimit specifies the number of connections that
 	// will receive broadcast (gossip) messages from this node. If the
 	// node has more connections than this number, it will send broadcasts
@@ -602,6 +604,7 @@ type Local struct {
 	EnableP2P bool `version[31]:"false"`
 
 	// EnableP2PHybridMode turns on both websockets and P2P networking.
+	// Enabling this setting also requires PublicAddress to be set.
 	EnableP2PHybridMode bool `version[34]:"false"`
 
 	// P2PNetAddress sets the listen address used for P2P networking, if hybrid mode is set.
@@ -734,10 +737,21 @@ func (cfg Local) TxFilterCanonicalEnabled() bool {
 	return cfg.TxIncomingFilteringFlags&txFilterCanonical != 0
 }
 
-// IsGossipServer returns true if NetAddress is set and this node supposed
-// to start websocket server
+// IsGossipServer returns true if this node supposed to start websocket or p2p server
 func (cfg Local) IsGossipServer() bool {
-	return cfg.NetAddress != ""
+	return cfg.IsWsGossipServer() || cfg.IsP2PGossipServer()
+}
+
+// IsWsGossipServer returns true if a node configured to run a listening ws net
+func (cfg Local) IsWsGossipServer() bool {
+	// 1. NetAddress is set and EnableP2P is not set
+	// 2. NetAddress is set and EnableP2PHybridMode is set then EnableP2P is overridden  by EnableP2PHybridMode
+	return cfg.NetAddress != "" && (!cfg.EnableP2P || cfg.EnableP2PHybridMode)
+}
+
+// IsP2PGossipServer returns true if a node configured to run a listening p2p net
+func (cfg Local) IsP2PGossipServer() bool {
+	return (cfg.EnableP2P && !cfg.EnableP2PHybridMode && cfg.NetAddress != "") || (cfg.EnableP2PHybridMode && cfg.P2PNetAddress != "")
 }
 
 // ensureAbsGenesisDir will convert a path to absolute, and will attempt to make a genesis directory there
@@ -935,10 +949,24 @@ func (cfg *Local) AdjustConnectionLimits(requiredFDs, maxFDs uint64) bool {
 	if cfg.RestConnectionsHardLimit <= diff+reservedRESTConns {
 		restDelta := diff + reservedRESTConns - cfg.RestConnectionsHardLimit
 		cfg.RestConnectionsHardLimit = reservedRESTConns
-		if cfg.IncomingConnectionsLimit > int(restDelta) {
-			cfg.IncomingConnectionsLimit -= int(restDelta)
-		} else {
-			cfg.IncomingConnectionsLimit = 0
+		splitRatio := 1
+		if cfg.IsWsGossipServer() && cfg.IsP2PGossipServer() {
+			// split the rest of the delta between ws and p2p evenly
+			splitRatio = 2
+		}
+		if cfg.IsWsGossipServer() {
+			if cfg.IncomingConnectionsLimit > int(restDelta) {
+				cfg.IncomingConnectionsLimit -= int(restDelta) / splitRatio
+			} else {
+				cfg.IncomingConnectionsLimit = 0
+			}
+		}
+		if cfg.IsP2PGossipServer() {
+			if cfg.P2PIncomingConnectionsLimit > int(restDelta) {
+				cfg.P2PIncomingConnectionsLimit -= int(restDelta) / splitRatio
+			} else {
+				cfg.P2PIncomingConnectionsLimit = 0
+			}
 		}
 	} else {
 		cfg.RestConnectionsHardLimit -= diff

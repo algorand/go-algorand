@@ -119,6 +119,7 @@ var defaultLocal = Local{
 	OptimizeAccountsDatabaseOnStartup:          false,
 	OutgoingMessageFilterBucketCount:           3,
 	OutgoingMessageFilterBucketSize:            128,
+	P2PIncomingConnectionsLimit:                1200,
 	P2PNetAddress:                              "",
 	P2PPersistPeerID:                           false,
 	P2PPrivateKeyLocation:                      "",

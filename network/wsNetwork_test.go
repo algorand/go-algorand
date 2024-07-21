@@ -128,12 +128,13 @@ func makeTestWebsocketNodeWithConfig(t testing.TB, conf config.Local, opts ...te
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Warn)
 	wn := &WebsocketNetwork{
-		log:        log,
-		config:     conf,
-		phonebook:  phonebook.MakePhonebook(1, 1*time.Millisecond),
-		GenesisID:  genesisID,
-		NetworkID:  config.Devtestnet,
-		peerStater: peerConnectionStater{log: log},
+		log:             log,
+		config:          conf,
+		phonebook:       phonebook.MakePhonebook(1, 1*time.Millisecond),
+		GenesisID:       genesisID,
+		NetworkID:       config.Devtestnet,
+		peerStater:      peerConnectionStater{log: log},
+		identityTracker: NewIdentityTracker(),
 	}
 	// apply options to newly-created WebsocketNetwork, if provided
 	for _, opt := range opts {
@@ -1055,12 +1056,13 @@ func makeTestFilterWebsocketNode(t *testing.T, nodename string) *WebsocketNetwor
 	dc.OutgoingMessageFilterBucketCount = 3
 	dc.OutgoingMessageFilterBucketSize = 128
 	wn := &WebsocketNetwork{
-		log:        logging.TestingLog(t).With("node", nodename),
-		config:     dc,
-		phonebook:  phonebook.MakePhonebook(1, 1*time.Millisecond),
-		GenesisID:  genesisID,
-		NetworkID:  config.Devtestnet,
-		peerStater: peerConnectionStater{log: logging.TestingLog(t).With("node", nodename)},
+		log:             logging.TestingLog(t).With("node", nodename),
+		config:          dc,
+		phonebook:       phonebook.MakePhonebook(1, 1*time.Millisecond),
+		GenesisID:       genesisID,
+		NetworkID:       config.Devtestnet,
+		peerStater:      peerConnectionStater{log: logging.TestingLog(t).With("node", nodename)},
+		identityTracker: noopIdentityTracker{},
 	}
 	require.True(t, wn.config.EnableIncomingMessageFilter)
 	wn.setup()
@@ -1696,7 +1698,7 @@ type mockIdentityScheme struct {
 }
 
 func newMockIdentityScheme(t *testing.T) *mockIdentityScheme {
-	return &mockIdentityScheme{t: t, realScheme: NewIdentityChallengeScheme("any")}
+	return &mockIdentityScheme{t: t, realScheme: NewIdentityChallengeScheme(NetIdentityDedupNames("any"))}
 }
 func (i mockIdentityScheme) AttachChallenge(attach http.Header, addr string) identityChallengeValue {
 	if i.attachChallenge != nil {
@@ -1768,7 +1770,7 @@ func TestPeeringWithBadIdentityChallenge(t *testing.T) {
 		{
 			name: "incorrect address",
 			attachChallenge: func(attach http.Header, addr string) identityChallengeValue {
-				s := NewIdentityChallengeScheme("does not matter") // make a scheme to use its keys
+				s := NewIdentityChallengeScheme(NetIdentityDedupNames("does not matter")) // make a scheme to use its keys
 				c := identityChallenge{
 					Key:           s.identityKeys.PublicKey(),
 					Challenge:     newIdentityChallengeValue(),
@@ -1786,7 +1788,7 @@ func TestPeeringWithBadIdentityChallenge(t *testing.T) {
 		{
 			name: "bad signature",
 			attachChallenge: func(attach http.Header, addr string) identityChallengeValue {
-				s := NewIdentityChallengeScheme("does not matter") // make a scheme to use its keys
+				s := NewIdentityChallengeScheme(NetIdentityDedupNames("does not matter")) // make a scheme to use its keys
 				c := identityChallenge{
 					Key:           s.identityKeys.PublicKey(),
 					Challenge:     newIdentityChallengeValue(),
@@ -1901,7 +1903,7 @@ func TestPeeringWithBadIdentityChallengeResponse(t *testing.T) {
 		{
 			name: "incorrect original challenge",
 			verifyAndAttachResponse: func(attach http.Header, h http.Header) (identityChallengeValue, crypto.PublicKey, error) {
-				s := NewIdentityChallengeScheme("does not matter") // make a scheme to use its keys
+				s := NewIdentityChallengeScheme(NetIdentityDedupNames("does not matter")) // make a scheme to use its keys
 				// decode the header to an identityChallenge
 				msg, _ := base64.StdEncoding.DecodeString(h.Get(IdentityChallengeHeader))
 				idChal := identityChallenge{}
@@ -1924,7 +1926,7 @@ func TestPeeringWithBadIdentityChallengeResponse(t *testing.T) {
 		{
 			name: "bad signature",
 			verifyAndAttachResponse: func(attach http.Header, h http.Header) (identityChallengeValue, crypto.PublicKey, error) {
-				s := NewIdentityChallengeScheme("does not matter") // make a scheme to use its keys
+				s := NewIdentityChallengeScheme(NetIdentityDedupNames("does not matter")) // make a scheme to use its keys
 				// decode the header to an identityChallenge
 				msg, _ := base64.StdEncoding.DecodeString(h.Get(IdentityChallengeHeader))
 				idChal := identityChallenge{}
@@ -2056,7 +2058,7 @@ func TestPeeringWithBadIdentityVerification(t *testing.T) {
 				resp := identityChallengeResponseSigned{}
 				err = protocol.Decode(msg, &resp)
 				require.NoError(t, err)
-				s := NewIdentityChallengeScheme("does not matter") // make a throwaway key
+				s := NewIdentityChallengeScheme(NetIdentityDedupNames("does not matter")) // make a throwaway key
 				ver := identityVerificationMessageSigned{
 					// fill in correct ResponseChallenge field
 					Msg:       identityVerificationMessage{ResponseChallenge: resp.Msg.ResponseChallenge},
@@ -2074,7 +2076,7 @@ func TestPeeringWithBadIdentityVerification(t *testing.T) {
 			// when the verification signature doesn't match the peer's expectation (the previously exchanged identity), peer is disconnected
 			name: "bad signature",
 			verifyResponse: func(t *testing.T, h http.Header, c identityChallengeValue) (crypto.PublicKey, []byte, error) {
-				s := NewIdentityChallengeScheme("does not matter") // make a throwaway key
+				s := NewIdentityChallengeScheme(NetIdentityDedupNames("does not matter")) // make a throwaway key
 				ver := identityVerificationMessageSigned{
 					// fill in wrong ResponseChallenge field
 					Msg:       identityVerificationMessage{ResponseChallenge: newIdentityChallengeValue()},
@@ -2566,12 +2568,13 @@ func TestSlowPeerDisconnection(t *testing.T) {
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Info)
 	wn := &WebsocketNetwork{
-		log:        log,
-		config:     defaultConfig,
-		phonebook:  phonebook.MakePhonebook(1, 1*time.Millisecond),
-		GenesisID:  genesisID,
-		NetworkID:  config.Devtestnet,
-		peerStater: peerConnectionStater{log: log},
+		log:             log,
+		config:          defaultConfig,
+		phonebook:       phonebook.MakePhonebook(1, 1*time.Millisecond),
+		GenesisID:       genesisID,
+		NetworkID:       config.Devtestnet,
+		peerStater:      peerConnectionStater{log: log},
+		identityTracker: noopIdentityTracker{},
 	}
 	wn.setup()
 	wn.broadcaster.slowWritingPeerMonitorInterval = time.Millisecond * 50
@@ -2642,12 +2645,13 @@ func TestForceMessageRelaying(t *testing.T) {
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Level(defaultConfig.BaseLoggerDebugLevel))
 	wn := &WebsocketNetwork{
-		log:        log,
-		config:     defaultConfig,
-		phonebook:  phonebook.MakePhonebook(1, 1*time.Millisecond),
-		GenesisID:  genesisID,
-		NetworkID:  config.Devtestnet,
-		peerStater: peerConnectionStater{log: log},
+		log:             log,
+		config:          defaultConfig,
+		phonebook:       phonebook.MakePhonebook(1, 1*time.Millisecond),
+		GenesisID:       genesisID,
+		NetworkID:       config.Devtestnet,
+		peerStater:      peerConnectionStater{log: log},
+		identityTracker: noopIdentityTracker{},
 	}
 	wn.setup()
 	wn.eventualReadyDelay = time.Second
@@ -2737,12 +2741,13 @@ func TestCheckProtocolVersionMatch(t *testing.T) {
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Level(defaultConfig.BaseLoggerDebugLevel))
 	wn := &WebsocketNetwork{
-		log:        log,
-		config:     defaultConfig,
-		phonebook:  phonebook.MakePhonebook(1, 1*time.Millisecond),
-		GenesisID:  genesisID,
-		NetworkID:  config.Devtestnet,
-		peerStater: peerConnectionStater{log: log},
+		log:             log,
+		config:          defaultConfig,
+		phonebook:       phonebook.MakePhonebook(1, 1*time.Millisecond),
+		GenesisID:       genesisID,
+		NetworkID:       config.Devtestnet,
+		peerStater:      peerConnectionStater{log: log},
+		identityTracker: noopIdentityTracker{},
 	}
 	wn.setup()
 	wn.supportedProtocolVersions = []string{"2", "1"}
@@ -4560,7 +4565,6 @@ func TestWsNetworkPhonebookMix(t *testing.T) {
 		"test",
 		"net",
 		nil,
-		"",
 		nil,
 	)
 	require.NoError(t, err)

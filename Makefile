@@ -52,6 +52,7 @@ endif
 # M1 Mac--homebrew install location in /opt/homebrew
 ifeq ($(OS_TYPE), darwin)
 ifeq ($(ARCH), arm64)
+EXTLDFLAGS := -Wl,-no_warn_duplicate_libraries
 export CPATH=/opt/homebrew/include
 export LIBRARY_PATH=/opt/homebrew/lib
 endif
