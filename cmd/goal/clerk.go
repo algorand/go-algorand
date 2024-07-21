@@ -986,7 +986,7 @@ func assembleFileImpl(fname string, printWarnings bool) *logic.OpStream {
 			reportErrorf(tealAppSize, fname, len(ops.Program), config.MaxAvailableAppProgramLen)
 		}
 	} else {
-		if !params.EnableLogicSigSizePooling && uint64(len(ops.Program)) > params.LogicSigMaxSize {
+		if len(ops.Program) > config.MaxLogicSigMaxSize {
 			reportErrorf(tealLogicSigSize, fname, len(ops.Program), params.LogicSigMaxSize)
 		}
 	}

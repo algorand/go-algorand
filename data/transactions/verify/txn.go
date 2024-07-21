@@ -93,7 +93,7 @@ type TxGroupErrorReason int
 const (
 	// TxGroupErrorReasonGeneric is a generic (not tracked) reason code
 	TxGroupErrorReasonGeneric TxGroupErrorReason = iota
-	// TxGroupErrorReasonNotWellFormed is txn.WellFormed failure
+	// TxGroupErrorReasonNotWellFormed is txn.WellFormed failure or malformed logic signature
 	TxGroupErrorReasonNotWellFormed
 	// TxGroupErrorReasonInvalidFee is invalid fee pooling in transaction group
 	TxGroupErrorReasonInvalidFee
@@ -235,7 +235,7 @@ func txnGroupBatchPrep(stxs []transactions.SignedTxn, contextHdr *bookkeeping.Bl
 				"txgroup had %d bytes of LogicSigs, more than the available pool of %d bytes",
 				lSigPooledSize, lSigMaxPooledSize,
 			)
-			err = &TxGroupError{err: errors.New(errorMsg), GroupIndex: -1, Reason: TxGroupErrorReasonLogicSigFailed}
+			err = &TxGroupError{err: errors.New(errorMsg), GroupIndex: -1, Reason: TxGroupErrorReasonNotWellFormed}
 			return nil, err
 		}
 	}
@@ -375,7 +375,7 @@ func logicSigSanityCheckBatchPrep(gi int, groupCtx *GroupContext, batchVerifier 
 		return errors.New("LogicSig.Logic version too new")
 	}
 	if !groupCtx.consensusParams.EnableLogicSigSizePooling && uint64(lsig.Len()) > groupCtx.consensusParams.LogicSigMaxSize {
-		return errors.New("LogicSig.Logic too long")
+		return errors.New("LogicSig too long")
 	}
 
 	err := logic.CheckSignature(gi, groupCtx.evalParams)
