@@ -50,16 +50,9 @@ export GOTESTCOMMAND=gotestsum --format pkgname --jsonfile testresults.json --
 endif
 
 ifeq ($(OS_TYPE), darwin)
-# Check if Xcode or CLTools version is >= 15
-XCODE_GE_15 := $(shell \
-    XCODE_VERSION=$$(xcodebuild -version 2>/dev/null | grep Xcode | awk '{print $$2}' | cut -d. -f1); \
-    CLT_VERSION=$$(pkgutil --pkg-info=com.apple.pkg.CLTools_Executables 2>/dev/null | grep version | awk '{print $$2}' | cut -d. -f1); \
-    if [ -n "$$XCODE_VERSION" ] && [ $$XCODE_VERSION -ge 15 ]; then echo true; \
-    elif [ -n "$$CLT_VERSION" ] && [ $$CLT_VERSION -ge 15 ]; then echo true; \
-    else echo false; \
-    fi)
 # For Xcode >= 15, set -no_warn_duplicate_libraries linker option
-ifeq ($(XCODE_GE_15), true)
+CLANG_MAJOR_VERSION := $(shell clang --version | grep '^Apple clang version ' | awk '{print $$4}' | cut -d. -f1)
+ifeq ($(shell [ $(CLANG_MAJOR_VERSION) -ge 15 ] && echo true), true)
 EXTLDFLAGS := -Wl,-no_warn_duplicate_libraries
 endif
 # M1 Mac--homebrew install location in /opt/homebrew
