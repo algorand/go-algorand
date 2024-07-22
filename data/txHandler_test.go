@@ -2640,7 +2640,7 @@ func TestTxHandlerAppRateLimiter(t *testing.T) {
 
 	cfg := config.GetDefaultLocal()
 	cfg.EnableTxBacklogRateLimiting = true
-	cfg.TxBacklogAppTxRateLimiterMaxSize = numBuckets * 2 // this is to ensure each bucket is not cleared on each invocation
+	cfg.TxBacklogAppTxRateLimiterMaxSize = 100
 	cfg.TxBacklogServiceRateWindowSeconds = 1
 	cfg.TxBacklogAppTxPerSecondRate = 3
 	l, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, cfg)
