@@ -2515,8 +2515,14 @@ func TestTxHandlerAppRateLimiterERLEnabled(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
+	// technically we don't need any users for this test
+	// but we need to create the genesis accounts to prevent this warning:
+	// "cannot start evaluator: overflowed subtracting rewards for block 1"
+	_, _, genesis := makeTestGenesisAccounts(t, 0)
+	genBal := bookkeeping.MakeGenesisBalances(genesis, sinkAddr, poolAddr)
 	ledgerName := fmt.Sprintf("%s-mem", t.Name())
 	const inMem = true
+
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Panic)
 
@@ -2525,11 +2531,9 @@ func TestTxHandlerAppRateLimiterERLEnabled(t *testing.T) {
 	cfg.TxBacklogServiceRateWindowSeconds = 1
 	cfg.TxBacklogAppTxPerSecondRate = 3
 	cfg.TxBacklogSize = 3
-	ledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, bookkeeping.GenesisBalances{}, genesisID, genesisHash, cfg)
+	l, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, cfg)
 	require.NoError(t, err)
-	defer ledger.Close()
-
-	l := ledger
+	defer l.Close()
 
 	func() {
 		cfg.EnableTxBacklogRateLimiting = false
@@ -2618,6 +2622,8 @@ func TestTxHandlerAppRateLimiterERLEnabled(t *testing.T) {
 	require.Equal(t, 1, handler.appLimiter.len())
 }
 
+// TestTxHandlerAppRateLimiter submits few app txns to make the app rate limit to filter one the last txn
+// to ensure it is propely integrated with the txHandler
 func TestTxHandlerAppRateLimiter(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -2634,19 +2640,19 @@ func TestTxHandlerAppRateLimiter(t *testing.T) {
 
 	cfg := config.GetDefaultLocal()
 	cfg.EnableTxBacklogRateLimiting = true
-	cfg.TxBacklogAppTxRateLimiterMaxSize = 100
+	cfg.TxBacklogAppTxRateLimiterMaxSize = numBuckets * 2 // this is to ensure each bucket is not cleared on each invocation
 	cfg.TxBacklogServiceRateWindowSeconds = 1
 	cfg.TxBacklogAppTxPerSecondRate = 3
-	ledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, cfg)
+	l, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, cfg)
 	require.NoError(t, err)
-	defer ledger.Close()
+	defer l.Close()
 
-	l := ledger
 	handler, err := makeTestTxHandler(l, cfg)
 	require.NoError(t, err)
 	defer handler.txVerificationPool.Shutdown()
 	defer close(handler.streamVerifierDropped)
 
+	handler.appLimiterBacklogThreshold = -1 // force the rate limiter to start checking transactions
 	tx := transactions.Transaction{
 		Type: protocol.ApplicationCallTx,
 		Header: transactions.Header{
@@ -2667,21 +2673,21 @@ func TestTxHandlerAppRateLimiter(t *testing.T) {
 	require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, action)
 	require.Equal(t, 1, len(handler.backlogQueue))
 
+	counterBefore := transactionMessagesAppLimiterDrop.GetUint64Value()
 	// trigger the rate limiter and ensure the txn is ignored
-	tx2 := tx
-	for i := 0; i < cfg.TxBacklogAppTxPerSecondRate*cfg.TxBacklogServiceRateWindowSeconds; i++ {
-		tx2.ForeignApps = append(tx2.ForeignApps, 1)
+	numTxnToTriggerARL := cfg.TxBacklogAppTxPerSecondRate * cfg.TxBacklogServiceRateWindowSeconds
+	for i := 0; i < numTxnToTriggerARL; i++ {
+		tx2 := tx
+		tx2.Header.Sender = addresses[i+1]
+		signedTx2 := tx2.Sign(secrets[i])
+		blob2 := protocol.Encode(&signedTx2)
+
+		action = handler.processIncomingTxn(network.IncomingMessage{Data: blob2, Sender: mockSender{}})
+		require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, action)
 	}
-	signedTx2 := tx.Sign(secrets[1])
-	blob2 := protocol.Encode(&signedTx2)
-
-	action = handler.processIncomingTxn(network.IncomingMessage{Data: blob2, Sender: mockSender{}})
-	require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, action)
-	require.Equal(t, 1, len(handler.backlogQueue))
-
-	// backlogQueue has the first txn, but the second one is dropped
-	msg := <-handler.backlogQueue
-	require.Equal(t, msg.rawmsg.Data, blob, blob)
+	// last txn should be dropped
+	require.Equal(t, 1+numTxnToTriggerARL-1, len(handler.backlogQueue))
+	require.Equal(t, counterBefore+1, transactionMessagesAppLimiterDrop.GetUint64Value())
 }
 
 // TestTxHandlerCapGuard checks there is no cap guard leak in case of invalid input.
