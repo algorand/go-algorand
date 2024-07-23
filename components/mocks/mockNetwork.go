@@ -103,7 +103,7 @@ func (network *MockNetwork) ClearProcessors() {
 func (network *MockNetwork) RegisterHTTPHandler(path string, handler http.Handler) {
 }
 
-// RegisterHTTPHandler - empty implementation
+// RegisterHTTPHandlerFunc - empty implementation
 func (network *MockNetwork) RegisterHTTPHandlerFunc(path string, handler func(http.ResponseWriter, *http.Request)) {
 }
 

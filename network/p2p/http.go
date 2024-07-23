@@ -57,6 +57,7 @@ func (s *HTTPServer) RegisterHTTPHandler(path string, handler http.Handler) {
 	})
 }
 
+// RegisterHTTPHandlerFunc registers a http handler with a given path.
 func (s *HTTPServer) RegisterHTTPHandlerFunc(path string, handler func(http.ResponseWriter, *http.Request)) {
 	s.p2phttpMux.HandleFunc(path, handler)
 	s.p2phttpMuxRegistrarOnce.Do(func() {
