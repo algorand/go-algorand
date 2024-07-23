@@ -48,7 +48,7 @@ done
 BALANCEB=$(${gcmd} account balance -a ${ACCOUNTB}|awk '{ print $1 }')
 
 if [ $BALANCEB -ne 300000 ]; then
-    date '+periodic-teal-test FAIL wanted balance=3000000 but got ${BALANCEB} %Y%m%d_%H%M%S'
+    date "+periodic-teal-test FAIL wanted balance=3000000 but got ${BALANCEB} %Y%m%d_%H%M%S"
     false
 fi
 

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,7 +20,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/http"
-	"sync/atomic"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/protocol"
@@ -95,26 +94,103 @@ type identityChallengeScheme interface {
 	VerifyResponse(h http.Header, c identityChallengeValue) (crypto.PublicKey, []byte, error)
 }
 
+type identityChallengeSigner interface {
+	Sign(message crypto.Hashable) crypto.Signature
+	SignBytes(message []byte) crypto.Signature
+	PublicKey() crypto.PublicKey
+}
+
+type identityOpts struct {
+	scheme  identityChallengeScheme
+	tracker identityTracker
+}
+
+type identityChallengeLegacySigner struct {
+	keys *crypto.SignatureSecrets
+}
+
+func (s *identityChallengeLegacySigner) Sign(message crypto.Hashable) crypto.Signature {
+	return s.keys.Sign(message)
+}
+
+func (s *identityChallengeLegacySigner) SignBytes(message []byte) crypto.Signature {
+	return s.keys.SignBytes(message)
+}
+
+func (s *identityChallengeLegacySigner) PublicKey() crypto.PublicKey {
+	return s.keys.SignatureVerifier
+}
+
 // identityChallengePublicKeyScheme implements IdentityChallengeScheme by
 // exchanging and verifying public key challenges and attaching them to headers,
 // or returning the message payload to be sent
 type identityChallengePublicKeyScheme struct {
-	dedupName    string
-	identityKeys *crypto.SignatureSecrets
+	dedupNames   map[string]struct{}
+	identityKeys identityChallengeSigner
+}
+
+type identityChallengeSchemeConfig struct {
+	dedupNames []string
+	signer     identityChallengeSigner
+}
+
+// IdentityChallengeSchemeOption is a function that can be passed to NewIdentityChallengeScheme
+type IdentityChallengeSchemeOption func(*identityChallengeSchemeConfig)
+
+// NetIdentityDedupNames is an option to set the deduplication names for the identity challenge scheme
+func NetIdentityDedupNames(dn ...string) IdentityChallengeSchemeOption {
+	return func(c *identityChallengeSchemeConfig) {
+		c.dedupNames = append(c.dedupNames, dn...)
+	}
+}
+
+// NetIdentitySigner is an option to set the signer for the identity challenge scheme
+func NetIdentitySigner(s identityChallengeSigner) IdentityChallengeSchemeOption {
+	return func(c *identityChallengeSchemeConfig) {
+		c.signer = s
+	}
 }
 
 // NewIdentityChallengeScheme will create a default Identification Scheme
-func NewIdentityChallengeScheme(dn string) *identityChallengePublicKeyScheme {
-	// without an deduplication name, there is no identityto manage, so just return an empty scheme
-	if dn == "" {
+func NewIdentityChallengeScheme(opts ...IdentityChallengeSchemeOption) *identityChallengePublicKeyScheme {
+	// without an deduplication name, there is no identity to manage, so just return an empty scheme
+	if len(opts) == 0 {
 		return &identityChallengePublicKeyScheme{}
 	}
+
+	config := identityChallengeSchemeConfig{}
+	for _, opt := range opts {
+		opt(&config)
+	}
+
+	if len(config.dedupNames) == 0 {
+		return &identityChallengePublicKeyScheme{}
+	}
+
+	hasNonEmpty := false
+	dedupNames := make(map[string]struct{}, len(config.dedupNames))
+	for _, name := range config.dedupNames {
+		if len(name) > 0 {
+			dedupNames[name] = struct{}{}
+			hasNonEmpty = true
+		}
+	}
+	if !hasNonEmpty {
+		return &identityChallengePublicKeyScheme{}
+	}
+
+	if config.signer != nil {
+		return &identityChallengePublicKeyScheme{
+			dedupNames:   dedupNames,
+			identityKeys: config.signer,
+		}
+	}
+
 	var seed crypto.Seed
 	crypto.RandBytes(seed[:])
-
 	return &identityChallengePublicKeyScheme{
-		dedupName:    dn,
-		identityKeys: crypto.GenerateSignatureSecrets(seed),
+		dedupNames:   dedupNames,
+		identityKeys: &identityChallengeLegacySigner{keys: crypto.GenerateSignatureSecrets(seed)},
 	}
 }
 
@@ -123,11 +199,11 @@ func NewIdentityChallengeScheme(dn string) *identityChallengePublicKeyScheme {
 // confirm it later (by passing it to VerifyResponse), or returns an empty challenge if dedupName is
 // not set.
 func (i identityChallengePublicKeyScheme) AttachChallenge(attachTo http.Header, addr string) identityChallengeValue {
-	if i.dedupName == "" || addr == "" {
+	if len(i.dedupNames) == 0 || addr == "" {
 		return identityChallengeValue{}
 	}
 	c := identityChallenge{
-		Key:           i.identityKeys.SignatureVerifier,
+		Key:           i.identityKeys.PublicKey(),
 		Challenge:     newIdentityChallengeValue(),
 		PublicAddress: []byte(addr),
 	}
@@ -145,7 +221,7 @@ func (i identityChallengePublicKeyScheme) AttachChallenge(attachTo http.Header, 
 // or returns empty values if the header did not end up getting set
 func (i identityChallengePublicKeyScheme) VerifyRequestAndAttachResponse(attachTo http.Header, h http.Header) (identityChallengeValue, crypto.PublicKey, error) {
 	// if dedupName is not set, this scheme is not configured to exchange identity
-	if i.dedupName == "" {
+	if len(i.dedupNames) == 0 {
 		return identityChallengeValue{}, crypto.PublicKey{}, nil
 	}
 	// if the headerString is not populated, the peer isn't participating in identity exchange
@@ -166,15 +242,16 @@ func (i identityChallengePublicKeyScheme) VerifyRequestAndAttachResponse(attachT
 	if !idChal.Verify() {
 		return identityChallengeValue{}, crypto.PublicKey{}, fmt.Errorf("identity challenge incorrectly signed")
 	}
+
 	// if the address is not meant for this host, return without attaching headers,
 	// but also do not emit an error. This is because if an operator were to incorrectly
 	// specify their dedupName, it could result in inappropriate disconnections from valid peers
-	if string(idChal.Msg.PublicAddress) != i.dedupName {
+	if _, ok := i.dedupNames[string(idChal.Msg.PublicAddress)]; !ok {
 		return identityChallengeValue{}, crypto.PublicKey{}, nil
 	}
 	// make the response object, encode it and attach it to the header
 	r := identityChallengeResponse{
-		Key:               i.identityKeys.SignatureVerifier,
+		Key:               i.identityKeys.PublicKey(),
 		Challenge:         idChal.Msg.Challenge,
 		ResponseChallenge: newIdentityChallengeValue(),
 	}
@@ -189,7 +266,7 @@ func (i identityChallengePublicKeyScheme) VerifyRequestAndAttachResponse(attachT
 // encoded identityVerificationMessage to send to the peer. Otherwise, it returns empty values.
 func (i identityChallengePublicKeyScheme) VerifyResponse(h http.Header, c identityChallengeValue) (crypto.PublicKey, []byte, error) {
 	// if we are not participating in identity challenge exchange, do nothing (no error and no value)
-	if i.dedupName == "" {
+	if len(i.dedupNames) == 0 {
 		return crypto.PublicKey{}, []byte{}, nil
 	}
 	headerString := h.Get(IdentityChallengeHeader)
@@ -272,12 +349,12 @@ type identityVerificationMessageSigned struct {
 	Signature crypto.Signature            `codec:"sig"`
 }
 
-func (i identityChallenge) signAndEncodeB64(s *crypto.SignatureSecrets) string {
+func (i identityChallenge) signAndEncodeB64(s identityChallengeSigner) string {
 	signedChal := i.Sign(s)
 	return base64.StdEncoding.EncodeToString(protocol.Encode(&signedChal))
 }
 
-func (i identityChallenge) Sign(secrets *crypto.SignatureSecrets) identityChallengeSigned {
+func (i identityChallenge) Sign(secrets identityChallengeSigner) identityChallengeSigned {
 	return identityChallengeSigned{Msg: i, Signature: secrets.Sign(i)}
 }
 
@@ -290,12 +367,12 @@ func (i identityChallengeSigned) Verify() bool {
 	return i.Msg.Key.Verify(i.Msg, i.Signature)
 }
 
-func (i identityChallengeResponse) signAndEncodeB64(s *crypto.SignatureSecrets) string {
+func (i identityChallengeResponse) signAndEncodeB64(s identityChallengeSigner) string {
 	signedChalResp := i.Sign(s)
 	return base64.StdEncoding.EncodeToString(protocol.Encode(&signedChalResp))
 }
 
-func (i identityChallengeResponse) Sign(secrets *crypto.SignatureSecrets) identityChallengeResponseSigned {
+func (i identityChallengeResponse) Sign(secrets identityChallengeSigner) identityChallengeResponseSigned {
 	return identityChallengeResponseSigned{Msg: i, Signature: secrets.Sign(i)}
 }
 
@@ -308,7 +385,7 @@ func (i identityChallengeResponseSigned) Verify() bool {
 	return i.Msg.Key.Verify(i.Msg, i.Signature)
 }
 
-func (i identityVerificationMessage) Sign(secrets *crypto.SignatureSecrets) identityVerificationMessageSigned {
+func (i identityVerificationMessage) Sign(secrets identityChallengeSigner) identityVerificationMessageSigned {
 	return identityVerificationMessageSigned{Msg: i, Signature: secrets.Sign(i)}
 }
 
@@ -329,7 +406,7 @@ func identityVerificationHandler(message IncomingMessage) OutgoingMessage {
 
 	peer := message.Sender.(*wsPeer)
 	// avoid doing work (crypto and potentially taking a lock) if the peer is already verified
-	if atomic.LoadUint32(&peer.identityVerified) == 1 {
+	if peer.identityVerified.Load() == 1 {
 		return OutgoingMessage{}
 	}
 	localAddr, _ := peer.net.Address()
@@ -350,7 +427,7 @@ func identityVerificationHandler(message IncomingMessage) OutgoingMessage {
 		peer.log.With("remote", peer.OriginAddress()).With("local", localAddr).Warn("peer identity verification is incorrectly signed, disconnecting")
 		return OutgoingMessage{Action: Disconnect, reason: disconnectBadIdentityData}
 	}
-	atomic.StoreUint32(&peer.identityVerified, 1)
+	peer.identityVerified.Store(1)
 	// if the identity could not be claimed by this peer, it means the identity is in use
 	wn.peersLock.Lock()
 	ok := wn.identityTracker.setIdentity(peer)
@@ -373,9 +450,16 @@ type identityTracker interface {
 	setIdentity(p *wsPeer) bool
 }
 
+// noopIdentityTracker implements identityTracker by doing nothing.
+// Intended for pure p2p mode when libp2p is handling identities itself.
+type noopIdentityTracker struct{}
+
+func (noopIdentityTracker) setIdentity(p *wsPeer) bool { return true }
+func (noopIdentityTracker) removeIdentity(p *wsPeer)   {}
+
 // publicKeyIdentTracker implements identityTracker by
 // mapping from PublicKeys exchanged in identity challenges to a peer
-// this structure is not thread-safe; it is protected by wn.peersLock.
+// this structure is not thread-safe; it is protected by wn.peersLock or p2p.wsPeersLock
 type publicKeyIdentTracker struct {
 	peersByID map[crypto.PublicKey]*wsPeer
 }

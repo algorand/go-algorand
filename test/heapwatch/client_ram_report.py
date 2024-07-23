@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (C) 2019-2023 Algorand, Inc.
+# Copyright (C) 2019-2024 Algorand, Inc.
 # This file is part of go-algorand
 #
 # go-algorand is free software: you can redistribute it and/or modify
@@ -181,8 +181,9 @@ def hostports_to_nicks(args, hostports, metrics=None):
         if not hit:
             hit = hp
         out.append(hit)
+    out.sort()
     if metrics:
-        return ['{}#{}'.format(hp, m) for hp in hostports for m in metrics]
+        return ['{}#{}'.format(hp, m) for hp in out for m in metrics]
     return out
 
 
@@ -200,6 +201,10 @@ def main():
 
     heap_totals = get_heap_inuse_totals(args.dir)
     heap_details = get_heap_metrics(args.dir)
+
+    if not heap_totals and not heap_details:
+        print('no data found', file=sys.stderr)
+        return 0
 
     if args.csv:
         if args.csv == '-':

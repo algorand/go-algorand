@@ -9,6 +9,7 @@ Several scenarios were designed to mimic different block traffic patterns. Scena
 ### Organic Traffic
 
 Simulate the current mainnet traffic pattern. Approximately:
+
 * 15% payment transactions
 * 10% application transactions
 * 75% asset transactions
@@ -33,7 +34,7 @@ Block generator uses a YAML config file to describe the composition of each rand
 
 The block generator supports **payment**, **asset**, and **application** transactions. The settings are hopefully, more or less, obvious. Distributions are specified as fractions of 1.0, and the sum of all options must add up to ~1.0.
 
-Here is an example which uses all of the current options. Notice that the synthetic blocks are not required to follow algod limits, in this case the block size is specified as 99,999:
+Here is an example which uses all of the current options. Notice that the synthetic blocks are not required to follow algod limits, and that in this case the block size is specified as 99,999:
 
 ```yml
 name: "Mixed (99,999)"
@@ -104,6 +105,7 @@ Flags:
   -c, --config string   Specify the block configuration yaml file.
   -h, --help            help for daemon
   -p, --port uint       Port to start the server at. (default 4010)
+  -v, --verbose         If set the daemon will print debugging information from the generator and ledger.
 ```
 
 ### runner
@@ -143,7 +145,7 @@ final_overall_transactions_per_second:8493.40
 final_uptime_seconds:3600.06
 ```
 
-Here is the help output for **runner**:
+We recommend printing out the help information for the **runner**:
 
 ```bash
 ~$ ./block-generator runner -h
@@ -152,36 +154,19 @@ Run an automated test suite using the block-generator daemon and a provided cond
 Usage:
   block-generator runner [flags]
 
-Flags:
-  -i, --conduit-binary string               Path to conduit binary.
-  -l, --conduit-log-level string            LogLevel to use when starting Conduit. [panic, fatal, error, warn, info, debug, trace] (default "error")
-      --cpuprofile string                   Path where Conduit writes its CPU profile.
-  -f, --genesis-file string                 file path to the genesis associated with the db snapshot
-  -h, --help                                help for runner
-  -k, --keep-data-dir                       If set the validator will not delete the data directory after tests complete.
-  -p, --metrics-port uint                   Port to start the metrics server at. (default 9999)
-  -c, --postgres-connection-string string   Postgres connection string.
-  -r, --report-directory string             Location to place test reports.
-      --reset-db                            If set database will be deleted before running tests.
-      --reset-report-dir                    If set any existing report directory will be deleted before running tests.
-  -s, --scenario string                     Directory containing scenarios, or specific scenario file.
-  -d, --test-duration duration              Duration to use for each scenario. (default 5m0s)
-      --validate                            If set the validator will run after test-duration has elapsed to verify data is correct. An extra line in each report indicates validator success or failure.
-  -v, --verbose                             If set the runner will print debugging information from the generator and ledger.
- ```
+... etc ...
+```
 
-## Example Run using Conduit and Postgres
+## Example Runs using Conduit
 
 A typical **runner** scenario involves:
 
-* a [scenario configuration](#scenario-configuration) file, e.g. [test_config.yml](./test_config.yml)
-* access to a `conduit` binary to query the block generator's mock Algod endpoint and ingest the synthetic blocks
+* a [scenario configuration](#scenario-configuration) file, e.g. [config.asset.xfer.yml](./scenarios/config.asset.xfer.yml) or for the example below [test_scenario.yml](./generator/test_scenario.yml)
+* access to a `conduit` binary to query the block generator's mock Algod endpoint and ingest the synthetic blocks (below it's assumed to be set in the `CONDUIT_BINARY` environment variable)
 * a datastore -such as a postgres database- to collect `conduit`'s output
 * a `conduit` config file to define its import/export behavior
 
-The `block-generator runner` subcommand has a number of options to configure behavion.
-
-### Sample Run
+### Sample Run with Postgres
 
 First you'll need to get a `conduit` binary. For example you can follow the [developer portal's instructions](https://developer.algorand.org/docs/get-details/conduit/GettingStarted/#installation) or run `go build .` inside of the directory `cmd/conduit` after downloading the `conduit` repo.
 
@@ -204,5 +189,133 @@ block-generator runner \
 
 ### Scenario Report
 
-If all goes well, the run will generate a directory named reports.
+If all goes well, the run will generate a directory named `reports`
+in the same directory in which the command was run.
 In that directory you can see the statistics of the run in the file ending with `.report`.
+
+The `block-generator runner` subcommand has a number of options to configure behavior.
+
+## Sample Run with the File Exporter
+
+It's possible to save the generated blocks to the file system.
+This enables running benchmarks and stress tests at a later time and without
+needing a live block generator. The setup is very similar to the previous Postgres example. The main change compared to the previous is to _**specify a different conduit configuration**_ template.
+
+The `block-generator runner` command in this case would look like:
+
+```sh
+block-generator runner \
+  --conduit-binary "$CONDUIT_BINARY" \
+  --report-directory reports \
+  --test-duration 30s \
+  --conduit-log-level trace \
+  --template file-exporter \
+  --keep-data-dir \
+  --scenario generator/test_scenario.yml
+```
+
+### Generated Blocks
+
+If all goes well, the run will generate a directory named `reports`
+in the same directory in which the command was run.
+In addition to the statistical report and run logs,
+there will be a directory ending with `_data` - this is conduit's
+data directory (which is saved thanks to the `--keep-data-dir` flag).
+In that directory under `exporter_file_writer/`
+the generated blocks and a genesis file will be saved.
+
+## Scenario Distribution - Configuration vs. Reality
+
+This section follows up on the [Scenario Configuration](#scenario-configuration) section to detail how each kind of transaction is actually chosen.
+Note that -especially for early rounds- there is no guarantee that the
+percentages of transaction types will resemble the configured distribution.
+
+For example consider the [Organic 25,000](scenarios/benchmarks/organic.25000.yml) scenario:
+
+```yml
+name: "Organic (25000)"
+genesis_accounts: 10000
+genesis_account_balance: 1000000000000
+tx_per_block: 25000
+
+# transaction distribution
+tx_pay_fraction: 0.05
+tx_asset_fraction: 0.75
+tx_app_fraction: 0.20
+
+# payment config
+pay_acct_create_fraction: 0.10
+pay_xfer_fraction: 0.90
+
+# asset config
+asset_create_fraction: 0.001
+asset_optin_fraction: 0.1
+asset_close_fraction: 0.05
+asset_xfer_fraction: 0.849
+asset_delete_fraction: 0
+
+# app kind config
+app_boxes_fraction: 1.0
+app_swap_fraction: 0.0
+
+# app boxes config
+app_boxes_create_fraction: 0.01
+app_boxes_optin_fraction: 0.1
+app_boxes_call_fraction: 0.89
+```
+
+We are _actually_ asking the generator for the following distribution:
+
+* `pay_acct_create_fraction = 0.005 (= 0.05 * 0.10)`
+* `pay_xfer_fraction =  0.045 (= 0.05 * 0.90)`
+* `asset_create_fraction = 0.00075 (= 0.75 * 0.001)`
+* `asset_optin_fraction = 0.075 (= 0.75 * 0.1)`
+* `asset_close_fraction = 0.0375 (= 0.75 * 0.05)`
+* `asset_xfer_fraction = 0.63675 (= 0.75 * 0.849)`
+* `asset_delete_fraction = 0`
+* `app_boxes_create_fraction = 0.002 (= 0.20 * 1.0 * 0.01)`
+* `app_boxes_optin_fraction = 0.02 (= 0.20 * 1.0 * 0.1)`
+* `app_boxes_call_fraction = 0.178 (= 0.20 * 1.0 * 0.89)`
+
+The block generator randomly chooses
+
+1. the transaction type (pay, asset, or app) according to the `transaction distribution`
+2. based on the type:
+
+   a. for payments and assets, the specific type based on the `payment config` and `asset config` distributions
+
+   b. for apps, the app kind (boxes or swaps) based on the `app kind config` distribution
+
+3. For _apps only_: the specific app call based on the `app boxes config` (and perhaps in the future `app swap config`)
+
+As each of the steps above is itself random, we only expect _approximate matching_ to the configured distribution.
+
+Furthermore, for certain asset and app transactions there may be a substitution that occurs based on the type. In particular:
+
+* for **assets**:
+  * when a requested asset txn is **create**, it is never substituted
+  * when there are no assets, an **asset create** is always substituted
+  * when a requested asset txn is **delete** but the creator doesn't hold all asset funds, an **asset close** is substitued (which itself may be substituted using the **close** rule below)
+  * when a requested asset txn is **opt in** but all accounts are already opted in, an  **asset close** is substituted (which itself may be substituted using the **close** rule below)
+  * when a requested asset txn is **transfer** but there is only one account holding it,  an **asset opt in** is substituted (which itself may be substituted using the **asset opt in** rule above)
+  * when a requested asset txn is **close** but there is only one account holding it, an **asset opt in** is substituted (which itself may be substituted using the **asset opt in** rule above)
+* for **apps**:
+  * when a requested app txn is **create**, it is never substituted
+  * when a requested app txn is **opt in**:
+    * if the sender is already opted in, an **app call** is substituted
+    * otherwise, if the sender's opt-in is pending for the round, an **app create** is substituted
+  * when a requested app txn is **call** but it's not opted into, an **app opt in** is attempted to be substituted (but this may itself be substituted for given the **app opt in** rule above)
+
+Over time, we expect the state of the generator to stabilize so that very few substitutions occur. However, especially for the first few rounds, there may be drastic differences between the config distribution and observed percentages.
+
+In particular:
+
+* for Round 1, all app transactions are replaced by **app create**
+* for Round 2, all **app call** transactions are replaced by **app opt in**
+
+Therefore, for scenarios involving a variety of app transactions, only for Round 3 and higher do we expect to see distributions comparable to those configured.
+
+> NOTE: Even in the steady state, we still expect fundamental deviations 
+> from the configured distributions in the cases of apps. This is because
+> an app call may have associated group and inner transactions. For example,
+> if an app call requires 1 sibling asset call in its group and has 2 inner payments, this single app call will generate 1 additional asset txn and 2 payment txns.

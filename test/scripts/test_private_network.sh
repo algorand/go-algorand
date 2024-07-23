@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
+
+set -euf -o pipefail
+
 echo "######################################################################"
 echo "  test_private_network"
 echo "######################################################################"
-set -e
 
 # Suppress telemetry reporting for tests
 export ALGOTEST=1

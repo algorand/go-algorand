@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -43,8 +43,11 @@ import (
 	"github.com/algorand/go-algorand/tools/block-generator/util"
 )
 
-//go:embed template/conduit.yml.tmpl
-var conduitConfigTmpl string
+//go:embed template/conduit_pg_exporter.tmpl
+var conduitPostgresConfigTmpl string
+
+//go:embed template/conduit_file_exporter.tmpl
+var conduitFileExporterConfigTmpl string
 
 const pad = "  "
 
@@ -54,6 +57,7 @@ type Args struct {
 	Path                     string
 	ConduitBinary            string
 	MetricsPort              uint64
+	Template string
 	PostgresConnectionString string
 	CPUProfilePath           string
 	RunDuration              time.Duration
@@ -153,20 +157,29 @@ func (r *Args) run(reportDirectory string) error {
 	// get next db round
 	var nextRound uint64
 	var err error
-	if r.ResetDB {
-		fmt.Printf("%sPostgreSQL resetting.\n", pad)
-		if err = util.EmptyDB(r.PostgresConnectionString); err != nil {
-			return fmt.Errorf("emptyDB err: %w", err)
-		}
-		nextRound = 0
-	} else {
-		nextRound, err = util.GetNextRound(r.PostgresConnectionString)
-		if err != nil && err == util.ErrorNotInitialized {
+	switch r.Template {
+	case "file-exporter":
+		fmt.Printf("%sUsing File Exporter to persist blocks.\n", pad)
+	case "postgres-exporter":
+		fmt.Printf("%sUsing PostgreSQL Exporter to persist blocks.\n", pad)
+		if r.ResetDB {
+			fmt.Printf("%sPostgreSQL resetting.\n", pad)
+			if err = util.EmptyDB(r.PostgresConnectionString); err != nil {
+				return fmt.Errorf("emptyDB err: %w", err)
+			}
 			nextRound = 0
-		} else if err != nil {
-			return fmt.Errorf("getNextRound err: %w", err)
+		} else {
+			nextRound, err = util.GetNextRound(r.PostgresConnectionString)
+			if err != nil && err == util.ErrorNotInitialized {
+				nextRound = 0
+			} else if err != nil {
+				return fmt.Errorf("getNextRound err: %w", err)
+			}
+			fmt.Printf("%sPostgreSQL next round: %d\n", pad, nextRound)
 		}
-		fmt.Printf("%sPostgreSQL next round: %d\n", pad, nextRound)
+	default:
+		// TODO: the default case should attempt to read the supplied template name as a file under ./template/
+		return fmt.Errorf("unknown template type: %s", r.Template)
 	}
 
 	if r.StartDelay > 0 {
@@ -188,6 +201,16 @@ func (r *Args) run(reportDirectory string) error {
 	}()
 
 	// create conduit config from template
+	var conduitConfigTmpl string
+	switch r.Template {
+	case "file-exporter":
+		conduitConfigTmpl = conduitFileExporterConfigTmpl
+	case "postgres-exporter":
+		conduitConfigTmpl = conduitPostgresConfigTmpl
+	default:
+		return fmt.Errorf("unknown template type: %s", r.Template)
+	}
+
 	t, err := template.New("conduit").Parse(conduitConfigTmpl)
 	if err != nil {
 		return fmt.Errorf("unable to parse conduit config template: %w", err)
@@ -296,14 +319,14 @@ func recordDataToWriter(start time.Time, entry Entry, prefix string, out io.Writ
 	tps := totalTxn / importTimeS
 	key := "overall_transactions_per_second"
 	msg := fmt.Sprintf("%s_%s:%.2f\n", prefix, key, tps)
-	if _, err := fmt.Fprintf(out, msg); err != nil {
+	if _, err := fmt.Fprint(out, msg); err != nil {
 		return fmt.Errorf("unable to write metric '%s': %w", key, err)
 	}
 
 	// Uptime
 	key = "uptime_seconds"
 	msg = fmt.Sprintf("%s_%s:%.2f\n", prefix, key, time.Since(start).Seconds())
-	if _, err := fmt.Fprintf(out, msg); err != nil {
+	if _, err := fmt.Fprint(out, msg); err != nil {
 		return fmt.Errorf("unable to write metric '%s': %w", key, err)
 	}
 
@@ -323,7 +346,7 @@ func recordMetricToWriter(entry Entry, outputKey, metricSuffix string, t metricT
 		msg = fmt.Sprintf("%s:%.2f\n", outputKey, value)
 	}
 
-	if _, err := fmt.Fprintf(out, msg); err != nil {
+	if _, err := fmt.Fprint(out, msg); err != nil {
 		return fmt.Errorf("unable to write metric '%s': %w", outputKey, err)
 	}
 
@@ -383,7 +406,7 @@ func getMetric(entry Entry, suffix string, rateMetric bool) (float64, error) {
 func writeReport(w io.Writer, scenario string, start time.Time, runDuration time.Duration, generatorReport generator.Report, collector *MetricsCollector) error {
 	write := func(pattern string, parts ...any) error {
 		str := fmt.Sprintf(pattern, parts...)
-		if _, err := fmt.Fprintf(w, str); err != nil {
+		if _, err := fmt.Fprint(w, str); err != nil {
 			return fmt.Errorf("unable to write '%s': %w", str, err)
 		}
 		return nil
@@ -426,12 +449,12 @@ func writeReport(w io.Writer, scenario string, start time.Time, runDuration time
 		txCount := effects[metric]
 		allTxns += txCount
 		str := fmt.Sprintf("transaction_%s_total:%d\n", metric, txCount)
-		if _, err := fmt.Fprintf(w, str); err != nil {
+		if _, err := fmt.Fprint(w, str); err != nil {
 			return fmt.Errorf("unable to write '%s' metric: %w", str, err)
 		}
 	}
 	str := fmt.Sprintf("transaction_%s_total:%d\n", "ALL", allTxns)
-	if _, err := fmt.Fprintf(w, str); err != nil {
+	if _, err := fmt.Fprint(w, str); err != nil {
 		return fmt.Errorf("unable to write '%s' metric: %w", str, err)
 	}
 

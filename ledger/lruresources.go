@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,6 +20,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/util"
 )
 
 //msgp:ignore cachedResourceData
@@ -35,11 +36,11 @@ type cachedResourceData struct {
 type lruResources struct {
 	// resourcesList contain the list of persistedResourceData, where the front ones are the most "fresh"
 	// and the ones on the back are the oldest.
-	resourcesList *persistedResourcesDataList
+	resourcesList *util.List[*cachedResourceData]
 
 	// resources provides fast access to the various elements in the list by using the account address
 	// if lruResources is set with pendingWrites 0, then resources is nil
-	resources map[accountCreatable]*persistedResourcesDataListNode
+	resources map[accountCreatable]*util.ListNode[*cachedResourceData]
 
 	// pendingResources are used as a way to avoid taking a write-lock. When the caller needs to "materialize" these,
 	// it would call flushPendingWrites and these would be merged into the resources/resourcesList
@@ -61,8 +62,8 @@ type lruResources struct {
 // thread locking semantics : write lock
 func (m *lruResources) init(log logging.Logger, pendingWrites int, pendingWritesWarnThreshold int) {
 	if pendingWrites > 0 {
-		m.resourcesList = newPersistedResourcesList().allocateFreeNodes(pendingWrites)
-		m.resources = make(map[accountCreatable]*persistedResourcesDataListNode, pendingWrites)
+		m.resourcesList = util.NewList[*cachedResourceData]().AllocateFreeNodes(pendingWrites)
+		m.resources = make(map[accountCreatable]*util.ListNode[*cachedResourceData], pendingWrites)
 		m.pendingResources = make(chan cachedResourceData, pendingWrites)
 		m.notFound = make(map[accountCreatable]struct{}, pendingWrites)
 		m.pendingNotFound = make(chan accountCreatable, pendingWrites)
@@ -163,10 +164,10 @@ func (m *lruResources) write(resData trackerdb.PersistedResourcesData, addr basi
 			// we update with a newer version.
 			el.Value = &cachedResourceData{PersistedResourcesData: resData, address: addr}
 		}
-		m.resourcesList.moveToFront(el)
+		m.resourcesList.MoveToFront(el)
 	} else {
 		// new entry.
-		m.resources[accountCreatable{address: addr, index: resData.Aidx}] = m.resourcesList.pushFront(&cachedResourceData{PersistedResourcesData: resData, address: addr})
+		m.resources[accountCreatable{address: addr, index: resData.Aidx}] = m.resourcesList.PushFront(&cachedResourceData{PersistedResourcesData: resData, address: addr})
 	}
 }
 
@@ -181,9 +182,9 @@ func (m *lruResources) prune(newSize int) (removed int) {
 		if len(m.resources) <= newSize {
 			break
 		}
-		back := m.resourcesList.back()
+		back := m.resourcesList.Back()
 		delete(m.resources, accountCreatable{address: back.Value.address, index: back.Value.Aidx})
-		m.resourcesList.remove(back)
+		m.resourcesList.Remove(back)
 		removed++
 	}
 

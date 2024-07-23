@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -75,28 +75,30 @@ func help(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "Use /v2/blocks/:blocknum: to get a block.")
 }
 
-func maybeWriteError(w http.ResponseWriter, err error) {
+func maybeWriteError(handler string, w http.ResponseWriter, err error) {
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		msg := fmt.Sprintf("%s handler: error encountered while writing response for: %v\n", handler, err)
+		fmt.Println(msg)
+		http.Error(w, msg, http.StatusInternalServerError)
 		return
 	}
 }
 
 func getReportHandler(gen Generator) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		maybeWriteError(w, gen.WriteReport(w))
+		maybeWriteError("report", w, gen.WriteReport(w))
 	}
 }
 
 func getStatusWaitHandler(gen Generator) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		maybeWriteError(w, gen.WriteStatus(w))
+		maybeWriteError("status wait", w, gen.WriteStatus(w))
 	}
 }
 
 func getGenesisHandler(gen Generator) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		maybeWriteError(w, gen.WriteGenesis(w))
+		maybeWriteError("genesis", w, gen.WriteGenesis(w))
 	}
 }
 
@@ -113,7 +115,7 @@ func getBlockHandler(gen Generator) func(w http.ResponseWriter, r *http.Request)
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		maybeWriteError(w, gen.WriteBlock(w, round))
+		maybeWriteError("block", w, gen.WriteBlock(w, round))
 	}
 }
 
@@ -125,7 +127,7 @@ func getAccountHandler(gen Generator) func(w http.ResponseWriter, r *http.Reques
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		maybeWriteError(w, gen.WriteAccount(w, account))
+		maybeWriteError("account", w, gen.WriteAccount(w, account))
 	}
 }
 
@@ -141,7 +143,7 @@ func getDeltasHandler(gen Generator) func(w http.ResponseWriter, r *http.Request
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		maybeWriteError(w, gen.WriteDeltas(w, round))
+		maybeWriteError("deltas", w, gen.WriteDeltas(w, round))
 	}
 }
 

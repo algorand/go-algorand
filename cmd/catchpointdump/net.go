@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -78,7 +78,7 @@ var netCmd = &cobra.Command{
 		if relayAddress != "" {
 			addrs = []string{relayAddress}
 		} else {
-			addrs, err = tools.ReadFromSRV("algobootstrap", "tcp", networkName, "", false)
+			addrs, err = tools.ReadFromSRV(context.Background(), "algobootstrap", "tcp", networkName, "", false)
 			if err != nil || len(addrs) == 0 {
 				reportErrorf("Unable to bootstrap records for '%s' : %v", networkName, err)
 			}

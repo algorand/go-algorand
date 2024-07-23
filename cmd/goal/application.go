@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -488,7 +488,7 @@ var createAppCmd = &cobra.Command{
 				reportErrorf(errorBroadcastingTX, err2)
 			}
 
-			reportInfof("Attempting to create app (approval size %d, hash %v; clear size %d, hash %v)", len(approvalProg), crypto.HashObj(logic.Program(approvalProg)), len(clearProg), crypto.HashObj(logic.Program(clearProg)))
+			reportInfof("Attempting to create app (approval size %d, hash %v; clear size %d, hash %v)", len(approvalProg), crypto.HashObj(logic.Program(approvalProg)), len(clearProg), logic.HashProgram(clearProg))
 			reportInfof("Issued transaction from account %s, txid %s (fee %d)", tx.Sender, txid, tx.Fee.Raw)
 
 			if !noWaitAfterSend {
@@ -563,7 +563,7 @@ var updateAppCmd = &cobra.Command{
 				reportErrorf(errorBroadcastingTX, err2)
 			}
 
-			reportInfof("Attempting to update app (approval size %d, hash %v; clear size %d, hash %v)", len(approvalProg), crypto.HashObj(logic.Program(approvalProg)), len(clearProg), crypto.HashObj(logic.Program(clearProg)))
+			reportInfof("Attempting to update app (approval size %d, hash %v; clear size %d, hash %v)", len(approvalProg), crypto.HashObj(logic.Program(approvalProg)), len(clearProg), logic.HashProgram(clearProg))
 			reportInfof("Issued transaction from account %s, txid %s (fee %d)", tx.Sender, txid, tx.Fee.Raw)
 
 			if !noWaitAfterSend {
@@ -1179,7 +1179,7 @@ const maxAppArgs = 16
 // minus 1 for the final app argument becoming a tuple of the remaining method args
 const methodArgsTupleThreshold = maxAppArgs - 2
 
-// parseArgJSONtoByteSlice convert input method arguments to ABI encoded bytes
+// parseMethodArgJSONtoByteSlice convert input method arguments to ABI encoded bytes
 // it converts funcArgTypes into a tuple type and apply changes over input argument string (in JSON format)
 // if there are greater or equal to 15 inputs, then we compact the tailing inputs into one tuple
 func parseMethodArgJSONtoByteSlice(argTypes []string, jsonArgs []string, applicationArgs *[][]byte) error {
@@ -1455,9 +1455,9 @@ var methodAppCmd = &cobra.Command{
 
 		// Report tx details to user
 		if methodCreatesApp {
-			reportInfof("Attempting to create app (approval size %d, hash %v; clear size %d, hash %v)", len(approvalProg), crypto.HashObj(logic.Program(approvalProg)), len(clearProg), crypto.HashObj(logic.Program(clearProg)))
+			reportInfof("Attempting to create app (approval size %d, hash %v; clear size %d, hash %v)", len(approvalProg), crypto.HashObj(logic.Program(approvalProg)), len(clearProg), logic.HashProgram(clearProg))
 		} else if onCompletionEnum == transactions.UpdateApplicationOC {
-			reportInfof("Attempting to update app (approval size %d, hash %v; clear size %d, hash %v)", len(approvalProg), crypto.HashObj(logic.Program(approvalProg)), len(clearProg), crypto.HashObj(logic.Program(clearProg)))
+			reportInfof("Attempting to update app (approval size %d, hash %v; clear size %d, hash %v)", len(approvalProg), crypto.HashObj(logic.Program(approvalProg)), len(clearProg), logic.HashProgram(clearProg))
 		}
 
 		reportInfof("Issued %d transaction(s):", len(signedTxnGroup))

@@ -13,6 +13,7 @@ import (
 //        |-----> (*) MarshalMsg
 //        |-----> (*) CanMarshalMsg
 //        |-----> (*) UnmarshalMsg
+//        |-----> (*) UnmarshalMsgWithState
 //        |-----> (*) CanUnmarshalMsg
 //        |-----> (*) Msgsize
 //        |-----> (*) MsgIsZero
@@ -56,7 +57,12 @@ func (_ *creatableEntry) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *creatableEntry) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *creatableEntry) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0001 int
@@ -70,7 +76,7 @@ func (z *creatableEntry) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).Ctype.UnmarshalMsg(bts)
+			bts, err = (*z).Ctype.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Ctype")
 				return
@@ -108,7 +114,7 @@ func (z *creatableEntry) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 			switch string(field) {
 			case "Ctype":
-				bts, err = (*z).Ctype.UnmarshalMsg(bts)
+				bts, err = (*z).Ctype.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "Ctype")
 					return
@@ -132,6 +138,9 @@ func (z *creatableEntry) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *creatableEntry) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *creatableEntry) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*creatableEntry)
 	return ok

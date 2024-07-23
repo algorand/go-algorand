@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -179,7 +179,11 @@ func main() {
 		*genesisID,
 		protocol.NetworkID(*networkID))
 	setDumpHandlers(n)
-	n.Start()
+	err := n.Start()
+	if err != nil {
+		log.Errorf("Failed to start network: %v", err)
+		return
+	}
 
 	for {
 		time.Sleep(time.Second)

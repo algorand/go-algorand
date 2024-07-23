@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -89,14 +89,16 @@ const BlockAcceptedEvent Event = "BlockAccepted"
 
 // BlockAcceptedEventDetails contains details for the BlockAcceptedEvent
 type BlockAcceptedEventDetails struct {
-	Address      string
-	Hash         string
-	Round        uint64
-	ValidatedAt  time.Duration
-	ReceivedAt   time.Duration
-	PreValidated bool
-	PropBufLen   uint64
-	VoteBufLen   uint64
+	Address              string
+	Hash                 string
+	Round                uint64
+	ValidatedAt          time.Duration
+	ReceivedAt           time.Duration
+	VoteValidatedAt      time.Duration
+	DynamicFilterTimeout time.Duration
+	PreValidated         bool
+	PropBufLen           uint64
+	VoteBufLen           uint64
 }
 
 // AccountRegisteredEvent event

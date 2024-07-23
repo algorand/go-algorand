@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -70,8 +70,15 @@ type NetworkFacade struct {
 	rand                           *rand.Rand
 	timeoutAtInitOnce              sync.Once
 	timeoutAtInitWait              sync.WaitGroup
-	peerToNode                     map[network.Peer]int
+	peerToNode                     map[*facadePeer]int
 }
+
+type facadePeer struct {
+	id  int
+	net network.GossipNode
+}
+
+func (p *facadePeer) GetNetwork() network.GossipNode { return p.net }
 
 // MakeNetworkFacade creates a facade with a given nodeID.
 func MakeNetworkFacade(fuzzer *Fuzzer, nodeID int) *NetworkFacade {
@@ -83,12 +90,12 @@ func MakeNetworkFacade(fuzzer *Fuzzer, nodeID int) *NetworkFacade {
 		eventsQueues:   make(map[string]int),
 		eventsQueuesCh: make(chan int, 1000),
 		rand:           rand.New(rand.NewSource(int64(nodeID))),
-		peerToNode:     make(map[network.Peer]int, fuzzer.nodesCount),
+		peerToNode:     make(map[*facadePeer]int, fuzzer.nodesCount),
 		debugMessages:  false,
 	}
 	n.timeoutAtInitWait.Add(1)
 	for i := 0; i < fuzzer.nodesCount; i++ {
-		n.peerToNode[network.Peer(new(int))] = i
+		n.peerToNode[&facadePeer{id: i, net: n}] = i
 	}
 	return n
 }
@@ -122,7 +129,7 @@ func (n *NetworkFacade) DumpQueues() {
 	}
 	n.eventsQueuesMu.Unlock()
 	queues += "----------------------\n"
-	fmt.Printf(queues)
+	fmt.Print(queues)
 }
 
 func (n *NetworkFacade) WaitForEventsQueue(cleared bool) {
@@ -151,7 +158,7 @@ func (n *NetworkFacade) WaitForEventsQueue(cleared bool) {
 				n.DumpQueues()
 				//panic("Waiting for event processing for 0 took too long")
 				pprof.Lookup("goroutine").WriteTo(os.Stdout, 1)
-				os.Exit(1)
+				panic(fmt.Sprintf("maxWait %d sec exceeded", maxEventQueueWait/time.Second))
 			}
 
 		}
@@ -179,7 +186,7 @@ func (n *NetworkFacade) WaitForEventsQueue(cleared bool) {
 func (n *NetworkFacade) Broadcast(ctx context.Context, tag protocol.Tag, data []byte, wait bool, exclude network.Peer) error {
 	excludeNode := -1
 	if exclude != nil {
-		excludeNode = n.peerToNode[exclude]
+		excludeNode = n.peerToNode[exclude.(*facadePeer)]
 	}
 	return n.broadcast(tag, data, excludeNode, "NetworkFacade service-%v Broadcast %v %v\n")
 }
@@ -240,7 +247,7 @@ func (n *NetworkFacade) PushDownstreamMessage(newMsg context.CancelFunc) bool {
 func (n *NetworkFacade) Address() (string, bool) { return "mock network", true }
 
 // Start - unused function
-func (n *NetworkFacade) Start() {}
+func (n *NetworkFacade) Start() error { return nil }
 
 // Stop - unused function
 func (n *NetworkFacade) Stop() {}
@@ -341,8 +348,8 @@ func (n *NetworkFacade) ReceiveMessage(sourceNode int, tag protocol.Tag, data []
 	n.pushPendingReceivedMessage()
 }
 
-func (n *NetworkFacade) Disconnect(sender network.Peer) {
-	sourceNode := n.peerToNode[sender]
+func (n *NetworkFacade) Disconnect(sender network.DisconnectablePeer) {
+	sourceNode := n.peerToNode[sender.(*facadePeer)]
 	n.fuzzer.Disconnect(n.nodeID, sourceNode)
 }
 

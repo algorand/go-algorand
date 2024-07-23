@@ -274,6 +274,35 @@
         },
         "description": "AccountAssetResponse describes the account's asset holding and asset parameters (if either exist) for a specific asset ID. Asset parameters will only be returned if the provided address is the asset's creator."
       },
+      "AccountAssetsInformationResponse": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "asset-holdings": {
+                  "items": {
+                    "$ref": "#/components/schemas/AccountAssetHolding"
+                  },
+                  "type": "array"
+                },
+                "next-token": {
+                  "description": "Used for pagination, when making another request provide this token with the next parameter.",
+                  "type": "string"
+                },
+                "round": {
+                  "description": "The round for which this information is relevant.",
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "round"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "description": "AccountAssetsInformationResponse contains a list of assets held by an account."
+      },
       "AccountResponse": {
         "content": {
           "application/json": {
@@ -322,6 +351,27 @@
           }
         },
         "description": "Hash of a block header."
+      },
+      "BlockLogsResponse": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "logs": {
+                  "items": {
+                    "$ref": "#/components/schemas/AppCallLogs"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "logs"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "description": "All logs emitted in the given round. Each app call, whether top-level or inner, that contains logs results in a separate AppCallLogs object. Therefore there may be multiple AppCallLogs with the same application ID and outer transaction ID in the event of multiple inner app calls to the same app. App calls with no logs are not included in the response. AppCallLogs are returned in the same order that their corresponding app call appeared in the block (pre-order traversal of inner app calls)"
       },
       "BlockResponse": {
         "content": {
@@ -469,6 +519,16 @@
           }
         },
         "description": "Teal compile Result"
+      },
+      "DebugSettingsProfResponse": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/DebugSettingsProf"
+            }
+          }
+        },
+        "description": "DebugPprof is the response to the /debug/extra/pprof endpoint"
       },
       "DisassembleResponse": {
         "content": {
@@ -815,6 +875,9 @@
                 "exec-trace-config": {
                   "$ref": "#/components/schemas/SimulateTraceConfig"
                 },
+                "initial-states": {
+                  "$ref": "#/components/schemas/SimulateInitialStates"
+                },
                 "last-round": {
                   "description": "The round immediately preceding this simulation. State changes through this round were used to run this simulation.",
                   "type": "integer"
@@ -1064,6 +1127,18 @@
             },
             "type": "array"
           },
+          "incentive-eligible": {
+            "description": "Whether or not the account can receive block incentives if its balance is in range at proposal time.",
+            "type": "boolean"
+          },
+          "last-heartbeat": {
+            "description": "The round in which this account last went online, or explicitly renewed their online status.",
+            "type": "integer"
+          },
+          "last-proposed": {
+            "description": "The round in which this account last proposed the block.",
+            "type": "integer"
+          },
           "min-balance": {
             "description": "MicroAlgo balance required by the account.\n\nThe requirement grows based on asset and application usage.",
             "type": "integer"
@@ -1141,6 +1216,21 @@
         ],
         "type": "object"
       },
+      "AccountAssetHolding": {
+        "description": "AccountAssetHolding describes the account's asset holding and asset parameters (if either exist) for a specific asset ID.",
+        "properties": {
+          "asset-holding": {
+            "$ref": "#/components/schemas/AssetHolding"
+          },
+          "asset-params": {
+            "$ref": "#/components/schemas/AssetParams"
+          }
+        },
+        "required": [
+          "asset-holding"
+        ],
+        "type": "object"
+      },
       "AccountParticipation": {
         "description": "AccountParticipation describes the parameters used by this account in consensus protocol.",
         "properties": {
@@ -1200,6 +1290,34 @@
         ],
         "type": "object"
       },
+      "AppCallLogs": {
+        "description": "The logged messages from an app call along with the app ID and outer transaction ID. Logs appear in the same order that they were emitted.",
+        "properties": {
+          "application-index": {
+            "description": "The application from which the logs were generated",
+            "type": "integer"
+          },
+          "logs": {
+            "description": "An array of logs",
+            "items": {
+              "format": "byte",
+              "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "txId": {
+            "description": "The transaction ID of the outer app call that lead to these logs",
+            "type": "string"
+          }
+        },
+        "required": [
+          "application-index",
+          "logs",
+          "txId"
+        ],
+        "type": "object"
+      },
       "Application": {
         "description": "Application index and its parameters",
         "properties": {
@@ -1214,6 +1332,54 @@
         "required": [
           "id",
           "params"
+        ],
+        "type": "object"
+      },
+      "ApplicationInitialStates": {
+        "description": "An application's initial global/local/box states that were accessed during simulation.",
+        "properties": {
+          "app-boxes": {
+            "$ref": "#/components/schemas/ApplicationKVStorage"
+          },
+          "app-globals": {
+            "$ref": "#/components/schemas/ApplicationKVStorage"
+          },
+          "app-locals": {
+            "description": "An application's initial local states tied to different accounts.",
+            "items": {
+              "$ref": "#/components/schemas/ApplicationKVStorage"
+            },
+            "type": "array"
+          },
+          "id": {
+            "description": "Application index.",
+            "type": "integer",
+            "x-algorand-format": "uint64"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "ApplicationKVStorage": {
+        "description": "An application's global/local/box state.",
+        "properties": {
+          "account": {
+            "description": "The address of the account associated with the local state.",
+            "type": "string",
+            "x-algorand-format": "Address"
+          },
+          "kvs": {
+            "description": "Key-Value pairs representing application states.",
+            "items": {
+              "$ref": "#/components/schemas/AvmKeyValue"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "kvs"
         ],
         "type": "object"
       },
@@ -1495,6 +1661,24 @@
         ],
         "type": "object"
       },
+      "AvmKeyValue": {
+        "description": "Represents an AVM key-value pair in an application store.",
+        "properties": {
+          "key": {
+            "format": "byte",
+            "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+            "type": "string"
+          },
+          "value": {
+            "$ref": "#/components/schemas/AvmValue"
+          }
+        },
+        "required": [
+          "key",
+          "value"
+        ],
+        "type": "object"
+      },
       "AvmValue": {
         "description": "Represents an AVM value.",
         "properties": {
@@ -1614,6 +1798,23 @@
           "minor"
         ],
         "title": "BuildVersion contains the current algod build version information.",
+        "type": "object"
+      },
+      "DebugSettingsProf": {
+        "description": "algod mutex and blocking profiling state.",
+        "properties": {
+          "block-rate": {
+            "description": "The rate of blocking events. The profiler aims to sample an average of one blocking event per rate nanoseconds spent blocked. To turn off profiling entirely, pass rate 0.",
+            "example": 1000,
+            "type": "integer"
+          },
+          "mutex-rate": {
+            "description": "The rate of mutex events. On average 1/rate events are reported. To turn off profiling entirely, pass rate 0",
+            "example": 1000,
+            "type": "integer"
+          }
+        },
+        "title": "algod mutex and blocking profiling state.",
         "type": "object"
       },
       "DryrunRequest": {
@@ -2066,6 +2267,19 @@
         ],
         "type": "object"
       },
+      "SimulateInitialStates": {
+        "description": "Initial states of resources that were accessed during simulation.",
+        "properties": {
+          "app-initial-states": {
+            "description": "The initial states of accessed application before simulation. The order of this array is arbitrary.",
+            "items": {
+              "$ref": "#/components/schemas/ApplicationInitialStates"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
       "SimulateRequest": {
         "description": "Request type for simulation endpoint.",
         "properties": {
@@ -2087,6 +2301,10 @@
           "extra-opcode-budget": {
             "description": "Applies extra opcode budget during simulation for each transaction group.",
             "type": "integer"
+          },
+          "fix-signers": {
+            "description": "If true, signers for transactions that are missing signatures will be fixed during evaluation.",
+            "type": "boolean"
           },
           "round": {
             "description": "If provided, specifies the round preceding the simulation. State changes through this round will be used to run this simulation. Usually only the 4 most recent rounds will be available (controlled by the node config value MaxAcctLookback). If not specified, defaults to the latest available round.",
@@ -2194,6 +2412,11 @@
           "exec-trace": {
             "$ref": "#/components/schemas/SimulationTransactionExecTrace"
           },
+          "fixed-signer": {
+            "description": "The account that needed to sign this transaction when no signature was provided and the provided signer was incorrect.",
+            "type": "string",
+            "x-algorand-format": "Address"
+          },
           "logic-sig-budget-consumed": {
             "description": "Budget used during execution of a logic sig transaction.",
             "type": "integer"
@@ -2280,6 +2503,10 @@
             "description": "The extra opcode budget added to each transaction group during simulation",
             "type": "integer"
           },
+          "fix-signers": {
+            "description": "If true, signers for transactions that are missing signatures will be fixed during evaluation.",
+            "type": "boolean"
+          },
           "max-log-calls": {
             "description": "The maximum log calls one can make during simulation",
             "type": "integer"
@@ -2364,6 +2591,14 @@
               "$ref": "#/components/schemas/SimulationOpcodeTraceUnit"
             },
             "type": "array"
+          },
+          "clear-state-rollback": {
+            "description": "If true, indicates that the clear state program failed and any persistent state changes it produced should be reverted once the program exits.",
+            "type": "boolean"
+          },
+          "clear-state-rollback-error": {
+            "description": "The error message explaining why the clear state program failed. This field will only be populated if clear-state-rollback is true and the failure was due to an execution error.",
+            "type": "string"
           },
           "inner-trace": {
             "description": "An array of SimulationTransactionExecTrace representing the execution trace of any inner transactions executed.",
@@ -2553,6 +2788,72 @@
   },
   "openapi": "3.0.1",
   "paths": {
+    "/debug/settings/config": {
+      "get": {
+        "description": "Returns the merged (defaults + overrides) config file in json.",
+        "operationId": "GetConfig",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The merged config file in json."
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Gets the merged config file.",
+        "tags": [
+          "private"
+        ]
+      }
+    },
+    "/debug/settings/pprof": {
+      "get": {
+        "description": "Retrieves the current settings for blocking and mutex profiles",
+        "operationId": "GetDebugSettingsProf",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DebugSettingsProf"
+                }
+              }
+            },
+            "description": "DebugPprof is the response to the /debug/extra/pprof endpoint"
+          }
+        },
+        "tags": [
+          "private"
+        ]
+      },
+      "put": {
+        "description": "Enables blocking and mutex profiles, and returns the old settings",
+        "operationId": "PutDebugSettingsProf",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DebugSettingsProf"
+                }
+              }
+            },
+            "description": "DebugPprof is the response to the /debug/extra/pprof endpoint"
+          }
+        },
+        "tags": [
+          "private"
+        ]
+      }
+    },
     "/genesis": {
       "get": {
         "description": "Returns the entire genesis file in json.",
@@ -2925,6 +3226,110 @@
         "tags": [
           "public",
           "nonparticipating"
+        ]
+      }
+    },
+    "/v2/accounts/{address}/assets": {
+      "get": {
+        "description": "Lookup an account's asset holdings.",
+        "operationId": "AccountAssetsInformation",
+        "parameters": [
+          {
+            "description": "An account public key",
+            "in": "path",
+            "name": "address",
+            "required": true,
+            "schema": {
+              "pattern": "[A-Z0-9]{58}",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Maximum number of results to return.",
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "The next page of results. Use the next token provided by the previous results.",
+            "in": "query",
+            "name": "next",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "asset-holdings": {
+                      "items": {
+                        "$ref": "#/components/schemas/AccountAssetHolding"
+                      },
+                      "type": "array"
+                    },
+                    "next-token": {
+                      "description": "Used for pagination, when making another request provide this token with the next parameter.",
+                      "type": "string"
+                    },
+                    "round": {
+                      "description": "The round for which this information is relevant.",
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "round"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "AccountAssetsInformationResponse contains a list of assets held by an account."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Malformed address"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid API Token"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Error"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Get a list of assets held by an account, inclusive of asset params.",
+        "tags": [
+          "public",
+          "experimental"
         ]
       }
     },
@@ -3886,6 +4291,92 @@
         ]
       }
     },
+    "/v2/blocks/{round}/logs": {
+      "get": {
+        "description": "Get all of the logs from outer and inner app calls in the given round",
+        "operationId": "GetBlockLogs",
+        "parameters": [
+          {
+            "description": "The round from which to fetch block log information.",
+            "in": "path",
+            "name": "round",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "logs": {
+                      "items": {
+                        "$ref": "#/components/schemas/AppCallLogs"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "logs"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "All logs emitted in the given round. Each app call, whether top-level or inner, that contains logs results in a separate AppCallLogs object. Therefore there may be multiple AppCallLogs with the same application ID and outer transaction ID in the event of multiple inner app calls to the same app. App calls with no logs are not included in the response. AppCallLogs are returned in the same order that their corresponding app call appeared in the block (pre-order traversal of inner app calls)"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request - Non integer number"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid API Token"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Nonexistent block "
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Error"
+          }
+        },
+        "summary": "Get all of the logs from outer and inner app calls in the given round",
+        "tags": [
+          "public",
+          "nonparticipating"
+        ]
+      }
+    },
     "/v2/blocks/{round}/transactions/{txid}/proof": {
       "get": {
         "operationId": "GetTransactionProof",
@@ -4220,6 +4711,14 @@
               "x-algorand-format": "Catchpoint String"
             },
             "x-algorand-format": "Catchpoint String"
+          },
+          {
+            "description": "Specify the minimum number of blocks which the ledger must be advanced by in order to start the catchup. This is useful for simplifying tools which support fast catchup, they can run the catchup unconditionally and the node will skip the catchup if it is not needed.",
+            "in": "query",
+            "name": "min",
+            "schema": {
+              "type": "integer"
+            }
           }
         ],
         "responses": {
@@ -5287,6 +5786,109 @@
           "participating"
         ],
         "x-codegen-request-body-name": "participationkey"
+      }
+    },
+    "/v2/participation/generate/{address}": {
+      "post": {
+        "operationId": "GenerateParticipationKeys",
+        "parameters": [
+          {
+            "description": "An account public key",
+            "in": "path",
+            "name": "address",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Key dilution for two-level participation keys (defaults to sqrt of validity window).",
+            "in": "query",
+            "name": "dilution",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "First round for participation key.",
+            "in": "query",
+            "name": "first",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Last round for participation key.",
+            "in": "query",
+            "name": "last",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "An empty JSON object is returned if the generation process was started. Currently no status is available."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid API Token"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Temporarily Unavailable"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Generate and install participation keys to the node.",
+        "tags": [
+          "private",
+          "participating"
+        ]
       }
     },
     "/v2/participation/{participation-id}": {
@@ -6410,6 +7012,10 @@
             },
             "description": "Invalid API Token"
           },
+          "404": {
+            "content": {},
+            "description": "Developer or Experimental API not enabled"
+          },
           "500": {
             "content": {
               "application/json": {
@@ -6437,6 +7043,7 @@
         },
         "summary": "Fast track for broadcasting a raw transaction or transaction group to the network through the tx handler without performing most of the checks and reporting detailed errors. Should be only used for development and performance testing.",
         "tags": [
+          "public",
           "experimental"
         ],
         "x-codegen-request-body-name": "rawtxn"
@@ -6820,6 +7427,9 @@
                     "exec-trace-config": {
                       "$ref": "#/components/schemas/SimulateTraceConfig"
                     },
+                    "initial-states": {
+                      "$ref": "#/components/schemas/SimulateInitialStates"
+                    },
                     "last-round": {
                       "description": "The round immediately preceding this simulation. State changes through this round were used to run this simulation.",
                       "type": "integer"
@@ -6852,6 +7462,9 @@
                     },
                     "exec-trace-config": {
                       "$ref": "#/components/schemas/SimulateTraceConfig"
+                    },
+                    "initial-states": {
+                      "$ref": "#/components/schemas/SimulateInitialStates"
                     },
                     "last-round": {
                       "description": "The round immediately preceding this simulation. State changes through this round were used to run this simulation.",
@@ -6993,5 +7606,6 @@
     {
       "name": "private"
     }
-  ]
+  ],
+  "x-original-swagger-version": "2.0"
 }

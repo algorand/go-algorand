@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,6 +19,7 @@ package ledger
 import (
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/util"
 )
 
 //msgp:ignore cachedKVData
@@ -35,11 +36,11 @@ type cachedKVData struct {
 type lruKV struct {
 	// kvList contain the list of persistedKVData, where the front ones are the most "fresh"
 	// and the ones on the back are the oldest.
-	kvList *persistedKVDataList
+	kvList *util.List[*cachedKVData]
 
 	// kvs provides fast access to the various elements in the list by using the key
 	// if lruKV is set with pendingWrites 0, then kvs is nil
-	kvs map[string]*persistedKVDataListNode
+	kvs map[string]*util.ListNode[*cachedKVData]
 
 	// pendingKVs are used as a way to avoid taking a write-lock. When the caller needs to "materialize" these,
 	// it would call flushPendingWrites and these would be merged into the kvs/kvList
@@ -57,8 +58,8 @@ type lruKV struct {
 // thread locking semantics : write lock
 func (m *lruKV) init(log logging.Logger, pendingWrites int, pendingWritesWarnThreshold int) {
 	if pendingWrites > 0 {
-		m.kvList = newPersistedKVList().allocateFreeNodes(pendingWrites)
-		m.kvs = make(map[string]*persistedKVDataListNode, pendingWrites)
+		m.kvList = util.NewList[*cachedKVData]().AllocateFreeNodes(pendingWrites)
+		m.kvs = make(map[string]*util.ListNode[*cachedKVData], pendingWrites)
 		m.pendingKVs = make(chan cachedKVData, pendingWrites)
 	}
 	m.log = log
@@ -116,10 +117,10 @@ func (m *lruKV) write(kvData trackerdb.PersistedKVData, key string) {
 			// we update with a newer version.
 			el.Value = &cachedKVData{PersistedKVData: kvData, key: key}
 		}
-		m.kvList.moveToFront(el)
+		m.kvList.MoveToFront(el)
 	} else {
 		// new entry.
-		m.kvs[key] = m.kvList.pushFront(&cachedKVData{PersistedKVData: kvData, key: key})
+		m.kvs[key] = m.kvList.PushFront(&cachedKVData{PersistedKVData: kvData, key: key})
 	}
 }
 
@@ -134,9 +135,9 @@ func (m *lruKV) prune(newSize int) (removed int) {
 		if len(m.kvs) <= newSize {
 			break
 		}
-		back := m.kvList.back()
+		back := m.kvList.Back()
 		delete(m.kvs, back.Value.key)
-		m.kvList.remove(back)
+		m.kvList.Remove(back)
 		removed++
 	}
 	return

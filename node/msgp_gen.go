@@ -14,6 +14,7 @@ import (
 //        |-----> (*) MarshalMsg
 //        |-----> (*) CanMarshalMsg
 //        |-----> (*) UnmarshalMsg
+//        |-----> (*) UnmarshalMsgWithState
 //        |-----> (*) CanUnmarshalMsg
 //        |-----> (*) Msgsize
 //        |-----> (*) MsgIsZero
@@ -23,6 +24,7 @@ import (
 //           |-----> (*) MarshalMsg
 //           |-----> (*) CanMarshalMsg
 //           |-----> (*) UnmarshalMsg
+//           |-----> (*) UnmarshalMsgWithState
 //           |-----> (*) CanUnmarshalMsg
 //           |-----> (*) Msgsize
 //           |-----> (*) MsgIsZero
@@ -57,7 +59,12 @@ func (_ *netPrioResponse) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *netPrioResponse) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *netPrioResponse) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0001 int
@@ -139,6 +146,9 @@ func (z *netPrioResponse) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *netPrioResponse) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *netPrioResponse) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*netPrioResponse)
 	return ok
@@ -229,7 +239,12 @@ func (_ *netPrioResponseSigned) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *netPrioResponseSigned) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *netPrioResponseSigned) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0001 int
@@ -321,7 +336,7 @@ func (z *netPrioResponseSigned) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).Round.UnmarshalMsg(bts)
+			bts, err = (*z).Round.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Round")
 				return
@@ -329,7 +344,7 @@ func (z *netPrioResponseSigned) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).Sender.UnmarshalMsg(bts)
+			bts, err = (*z).Sender.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Sender")
 				return
@@ -337,7 +352,7 @@ func (z *netPrioResponseSigned) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).Sig.UnmarshalMsg(bts)
+			bts, err = (*z).Sig.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Sig")
 				return
@@ -443,19 +458,19 @@ func (z *netPrioResponseSigned) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					}
 				}
 			case "Round":
-				bts, err = (*z).Round.UnmarshalMsg(bts)
+				bts, err = (*z).Round.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "Round")
 					return
 				}
 			case "Sender":
-				bts, err = (*z).Sender.UnmarshalMsg(bts)
+				bts, err = (*z).Sender.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "Sender")
 					return
 				}
 			case "Sig":
-				bts, err = (*z).Sig.UnmarshalMsg(bts)
+				bts, err = (*z).Sig.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "Sig")
 					return
@@ -473,6 +488,9 @@ func (z *netPrioResponseSigned) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *netPrioResponseSigned) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *netPrioResponseSigned) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*netPrioResponseSigned)
 	return ok

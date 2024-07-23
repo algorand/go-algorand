@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -178,21 +178,22 @@ func (g *generator) evaluateBlock(hdr bookkeeping.BlockHeader, txGroups [][]txn.
 	}
 	for i, txGroup := range txGroups {
 		for {
-			err := eval.TransactionGroup(txGroup)
-			if err != nil {
-				if strings.Contains(err.Error(), "database table is locked") {
+			txErr := eval.TransactionGroup(txGroup)
+			if txErr != nil {
+				if strings.Contains(txErr.Error(), "database table is locked") {
 					time.Sleep(waitDelay)
 					commitWaitTime += waitDelay
 					// sometimes the database is locked, so we retry
 					continue
 				}
-				return nil, 0, 0, fmt.Errorf("could not evaluate transaction group %d: %w", i, err)
+				return nil, 0, 0, fmt.Errorf("could not evaluate transaction group %d: %w", i, txErr)
 			}
 			break
 		}
 	}
-	lvb, err := eval.GenerateBlock()
-	return lvb, eval.TestingTxnCounter(), commitWaitTime, err
+	ub, err := eval.GenerateBlock(nil)
+	lvb := ledgercore.MakeValidatedBlock(ub.UnfinishedBlock(), ub.UnfinishedDeltas())
+	return &lvb, eval.TestingTxnCounter(), commitWaitTime, err
 }
 
 func countInners(ad txn.ApplyData) int {

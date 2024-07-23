@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -1105,7 +1105,7 @@ func TestBaseAccountDataIsEmpty(t *testing.T) {
 	structureTesting := func(t *testing.T) {
 		encoding, err := json.Marshal(&empty)
 		zeros32 := "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0"
-		expectedEncoding := `{"Status":0,"MicroAlgos":{"Raw":0},"RewardsBase":0,"RewardedMicroAlgos":{"Raw":0},"AuthAddr":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ","TotalAppSchemaNumUint":0,"TotalAppSchemaNumByteSlice":0,"TotalExtraAppPages":0,"TotalAssetParams":0,"TotalAssets":0,"TotalAppParams":0,"TotalAppLocalStates":0,"TotalBoxes":0,"TotalBoxBytes":0,"VoteID":[` + zeros32 + `],"SelectionID":[` + zeros32 + `],"VoteFirstValid":0,"VoteLastValid":0,"VoteKeyDilution":0,"StateProofID":[` + zeros32 + `,` + zeros32 + `],"UpdateRound":0}`
+		expectedEncoding := `{"Status":0,"MicroAlgos":{"Raw":0},"RewardsBase":0,"RewardedMicroAlgos":{"Raw":0},"AuthAddr":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ","TotalAppSchemaNumUint":0,"TotalAppSchemaNumByteSlice":0,"TotalExtraAppPages":0,"TotalAssetParams":0,"TotalAssets":0,"TotalAppParams":0,"TotalAppLocalStates":0,"TotalBoxes":0,"TotalBoxBytes":0,"IncentiveEligible":false,"LastProposed":0,"LastHeartbeat":0,"VoteID":[` + zeros32 + `],"SelectionID":[` + zeros32 + `],"VoteFirstValid":0,"VoteLastValid":0,"VoteKeyDilution":0,"StateProofID":[` + zeros32 + `,` + zeros32 + `],"UpdateRound":0}`
 		require.NoError(t, err)
 		require.Equal(t, expectedEncoding, string(encoding))
 	}
@@ -1152,7 +1152,7 @@ func TestBaseOnlineAccountDataIsEmpty(t *testing.T) {
 	structureTesting := func(t *testing.T) {
 		encoding, err := json.Marshal(&empty)
 		zeros32 := "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0"
-		expectedEncoding := `{"VoteID":[` + zeros32 + `],"SelectionID":[` + zeros32 + `],"VoteFirstValid":0,"VoteLastValid":0,"VoteKeyDilution":0,"StateProofID":[` + zeros32 + `,` + zeros32 + `],"MicroAlgos":{"Raw":0},"RewardsBase":0}`
+		expectedEncoding := `{"VoteID":[` + zeros32 + `],"SelectionID":[` + zeros32 + `],"VoteFirstValid":0,"VoteLastValid":0,"VoteKeyDilution":0,"StateProofID":[` + zeros32 + `,` + zeros32 + `],"IncentiveEligible":false,"MicroAlgos":{"Raw":0},"RewardsBase":0}`
 		require.NoError(t, err)
 		require.Equal(t, expectedEncoding, string(encoding))
 	}
@@ -1249,7 +1249,7 @@ func TestBaseOnlineAccountDataReflect(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	require.Equal(t, 4, reflect.TypeOf(BaseOnlineAccountData{}).NumField(), "update all getters and setters for baseOnlineAccountData and change the field count")
+	require.Equal(t, 5, reflect.TypeOf(BaseOnlineAccountData{}).NumField(), "update all getters and setters for baseOnlineAccountData and change the field count")
 }
 
 func TestBaseVotingDataReflect(t *testing.T) {

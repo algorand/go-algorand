@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,6 +17,8 @@
 package basics
 
 import (
+	"math"
+
 	"github.com/algorand/go-codec/codec"
 	"github.com/algorand/msgp/msgp"
 
@@ -94,6 +96,14 @@ func (*MicroAlgos) CanUnmarshalMsg(z interface{}) bool {
 
 // UnmarshalMsg implements msgp.Unmarshaler
 func (a *MicroAlgos) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return a.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
+
+// UnmarshalMsgWithState implements msgp.Unmarshaler
+func (a *MicroAlgos) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		return nil, msgp.ErrMaxDepthExceeded{}
+	}
 	a.Raw, o, err = msgp.ReadUint64Bytes(bts)
 	return
 }
@@ -112,6 +122,17 @@ func (a MicroAlgos) MsgIsZero() bool {
 // It is expected by msgp generated MaxSize functions
 func MicroAlgosMaxSize() (s int) {
 	return msgp.Uint64Size
+}
+
+// Algos is a convenience function so that whole Algos can be written easily. It
+// panics on overflow because it should only be used for constants - things that
+// are best human-readable in source code - not used on arbitrary values from,
+// say, transactions.
+func Algos(algos uint64) MicroAlgos {
+	if algos > math.MaxUint64/1_000_000 {
+		panic(algos)
+	}
+	return MicroAlgos{Raw: algos * 1_000_000}
 }
 
 // Round represents a protocol round index

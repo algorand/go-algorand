@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -104,11 +104,13 @@ func (env *Environment) nextBlock() *eval.BlockEvaluator {
 // endBlock completes the block being created, returns the ValidatedBlock for inspection
 func (env *Environment) endBlock(evaluator *eval.BlockEvaluator) *ledgercore.ValidatedBlock {
 	env.t.Helper()
-	validatedBlock, err := evaluator.GenerateBlock()
+	unfinishedBlock, err := evaluator.GenerateBlock(nil)
 	require.NoError(env.t, err)
-	err = env.Ledger.AddValidatedBlock(*validatedBlock, agreement.Certificate{})
+	// Since we skip agreement, this block is imperfect w/ respect to seed/proposer/payouts
+	validatedBlock := ledgercore.MakeValidatedBlock(unfinishedBlock.UnfinishedBlock(), unfinishedBlock.UnfinishedDeltas())
+	err = env.Ledger.AddValidatedBlock(validatedBlock, agreement.Certificate{})
 	require.NoError(env.t, err)
-	return validatedBlock
+	return &validatedBlock
 }
 
 // Txn creates and executes a new block with the given transaction and returns its ApplyData

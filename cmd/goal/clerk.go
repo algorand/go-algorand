@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -1010,9 +1010,35 @@ func assembleFile(fname string, printWarnings bool) (program []byte) {
 	return ops.Program
 }
 
-func assembleFileWithMap(fname string, printWarnings bool) ([]byte, logic.SourceMap) {
-	ops := assembleFileImpl(fname, printWarnings)
-	return ops.Program, logic.GetSourceMap([]string{fname}, ops.OffsetToLine)
+func assembleFileWithMap(sourceFile string, outFile string, printWarnings bool) ([]byte, logic.SourceMap, error) {
+	ops := assembleFileImpl(sourceFile, printWarnings)
+	pathToSourceFromSourceMap, err := determinePathToSourceFromSourceMap(sourceFile, outFile)
+	if err != nil {
+		return nil, logic.SourceMap{}, err
+	}
+	return ops.Program, logic.GetSourceMap([]string{pathToSourceFromSourceMap}, ops.OffsetToSource), nil
+}
+
+func determinePathToSourceFromSourceMap(sourceFile string, outFile string) (string, error) {
+	if sourceFile == stdinFileNameValue {
+		return "<stdin>", nil
+	}
+	sourceFileAbsolute, err := filepath.Abs(sourceFile)
+	if err != nil {
+		return "", fmt.Errorf("could not determine absolute path to source file '%s': %w", sourceFile, err)
+	}
+	if outFile == stdoutFilenameValue {
+		return sourceFileAbsolute, nil
+	}
+	outFileAbsolute, err := filepath.Abs(outFile)
+	if err != nil {
+		return "", fmt.Errorf("could not determine absolute path to output file '%s': %w", outFile, err)
+	}
+	pathToSourceFromSourceMap, err := filepath.Rel(filepath.Dir(outFileAbsolute), sourceFileAbsolute)
+	if err != nil {
+		return "", fmt.Errorf("could not determine path from source map to source: %w", err)
+	}
+	return pathToSourceFromSourceMap, nil
 }
 
 func disassembleFile(fname, outname string) {
@@ -1070,7 +1096,10 @@ var compileCmd = &cobra.Command{
 				}
 			}
 			shouldPrintAdditionalInfo := outname != stdoutFilenameValue
-			program, sourceMap := assembleFileWithMap(fname, true)
+			program, sourceMap, err := assembleFileWithMap(fname, outname, true)
+			if err != nil {
+				reportErrorf("Could not assemble: %s", err)
+			}
 			outblob := program
 			if signProgram {
 				dataDir := datadir.EnsureSingleDataDir()

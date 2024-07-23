@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -75,12 +75,12 @@ type DeployedNetworkConfig struct {
 
 // DeployedNetwork represents the complete configuration specification for a deployed network
 type DeployedNetwork struct {
-	useExistingGenesis       bool
-	createBoostrappedNetwork bool
-	GenesisData              gen.GenesisData
-	Topology                 topology
-	Hosts                    []HostConfig
-	BootstrappedNet          BootstrappedNetwork
+	useExistingGenesis        bool
+	createBootstrappedNetwork bool
+	GenesisData               gen.GenesisData
+	Topology                  topology
+	Hosts                     []HostConfig
+	BootstrappedNet           BootstrappedNetwork
 }
 
 type netState struct {
@@ -253,12 +253,12 @@ func (cfg *DeployedNetwork) SetUseExistingGenesisFiles(useExisting bool) bool {
 	return old
 }
 
-// SetUseBoostrappedFiles sets the override flag indicating we should use existing genesis
+// SetUseBootstrappedFiles sets the override flag indicating we should use existing genesis
 // files instead of generating new ones.  This is useful for permanent networks like devnet and testnet.
 // Returns the previous value.
-func (cfg *DeployedNetwork) SetUseBoostrappedFiles(boostrappedFile bool) bool {
-	old := cfg.createBoostrappedNetwork
-	cfg.createBoostrappedNetwork = boostrappedFile
+func (cfg *DeployedNetwork) SetUseBootstrappedFiles(bootstrappedFile bool) bool {
+	old := cfg.createBootstrappedNetwork
+	cfg.createBootstrappedNetwork = bootstrappedFile
 	return old
 }
 
@@ -346,7 +346,7 @@ func (cfg DeployedNetwork) BuildNetworkFromTemplate(buildCfg BuildConfig, rootDi
 		return
 	}
 
-	if cfg.createBoostrappedNetwork {
+	if cfg.createBootstrappedNetwork {
 		fmt.Println("Generating db files ")
 
 		cfg.GenerateDatabaseFiles(cfg.BootstrappedNet, genesisFolder)
@@ -997,6 +997,16 @@ func createHostSpec(host HostConfig, template cloudHost) (hostSpec cloudHostSpec
 		if node.IsRelay() {
 			relayCount++
 			port, err = extractPublicPort(node.NetAddress)
+			if err != nil {
+				return
+			}
+			if !ports[port] {
+				ports[port] = true
+				portList = append(portList, strconv.Itoa(port))
+			}
+		}
+		if node.P2PNetAddress != "" {
+			port, err = extractPublicPort(node.P2PNetAddress)
 			if err != nil {
 				return
 			}

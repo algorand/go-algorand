@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -29,6 +29,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -685,7 +686,9 @@ func testNewLedgerFromCatchpoint(t *testing.T, catchpointWriterReadAccess tracke
 	var initState ledgercore.InitState
 	initState.Block.CurrentProtocol = protocol.ConsensusCurrentVersion
 	conf := config.GetDefaultLocal()
-	l, err := OpenLedger(logging.TestingLog(t), t.Name()+"FromCatchpoint", true, initState, conf)
+	dbName := fmt.Sprintf("%s.%d", t.Name()+"FromCatchpoint", crypto.RandUint64())
+	dbName = strings.Replace(dbName, "/", "_", -1)
+	l, err := OpenLedger(logging.TestingLog(t), dbName, true, initState, conf)
 	require.NoError(t, err)
 	accessor := MakeCatchpointCatchupAccessor(l, l.log)
 
@@ -701,6 +704,8 @@ func testNewLedgerFromCatchpoint(t *testing.T, catchpointWriterReadAccess tracke
 
 	err = accessor.BuildMerkleTrie(context.Background(), nil)
 	require.NoError(t, err)
+
+	resetAccountDBToV6(t, l)
 
 	err = l.trackerDBs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) error {
 		cw, err := tx.MakeCatchpointWriter()
@@ -815,6 +820,33 @@ func TestExactAccountChunk(t *testing.T) {
 		selfpay.Note = ledgertesting.RandomNote()
 		dl.fullBlock(&selfpay)
 	}
+
+	// ensure both committed all pending changes before taking a catchpoint
+	// another approach is to modify the test and craft round numbers,
+	// and make the ledger to generate catchpoint itself when it is time
+	flushRound := func(l *Ledger) {
+		// Clear the timer to ensure a flush
+		l.trackers.mu.Lock()
+		l.trackers.lastFlushTime = time.Time{}
+		l.trackers.mu.Unlock()
+
+		r, _ := l.LatestCommitted()
+		l.trackers.committedUpTo(r)
+		l.trackers.waitAccountsWriting()
+	}
+	flushRound(dl.generator)
+	flushRound(dl.validator)
+
+	require.Eventually(t, func() bool {
+		dl.generator.accts.accountsMu.RLock()
+		dlg := len(dl.generator.accts.deltas)
+		dl.generator.accts.accountsMu.RUnlock()
+
+		dl.validator.accts.accountsMu.RLock()
+		dlv := len(dl.validator.accts.deltas)
+		dl.validator.accts.accountsMu.RUnlock()
+		return dlg == dlv && dl.generator.Latest() == dl.validator.Latest()
+	}, 10*time.Second, 100*time.Millisecond)
 
 	tempDir := t.TempDir()
 

@@ -14,6 +14,7 @@ import (
 //      |-----> (*) MarshalMsg
 //      |-----> (*) CanMarshalMsg
 //      |-----> (*) UnmarshalMsg
+//      |-----> (*) UnmarshalMsgWithState
 //      |-----> (*) CanUnmarshalMsg
 //      |-----> (*) Msgsize
 //      |-----> (*) MsgIsZero
@@ -23,6 +24,7 @@ import (
 //   |-----> (*) MarshalMsg
 //   |-----> (*) CanMarshalMsg
 //   |-----> (*) UnmarshalMsg
+//   |-----> (*) UnmarshalMsgWithState
 //   |-----> (*) CanUnmarshalMsg
 //   |-----> (*) Msgsize
 //   |-----> (*) MsgIsZero
@@ -32,6 +34,7 @@ import (
 //             |-----> (*) MarshalMsg
 //             |-----> (*) CanMarshalMsg
 //             |-----> (*) UnmarshalMsg
+//             |-----> (*) UnmarshalMsgWithState
 //             |-----> (*) CanUnmarshalMsg
 //             |-----> (*) Msgsize
 //             |-----> (*) MsgIsZero
@@ -41,6 +44,7 @@ import (
 //          |-----> (*) MarshalMsg
 //          |-----> (*) CanMarshalMsg
 //          |-----> (*) UnmarshalMsg
+//          |-----> (*) UnmarshalMsgWithState
 //          |-----> (*) CanUnmarshalMsg
 //          |-----> (*) Msgsize
 //          |-----> (*) MsgIsZero
@@ -111,7 +115,12 @@ func (_ *Credential) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *Credential) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *Credential) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0001 int
@@ -133,7 +142,7 @@ func (z *Credential) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).VrfOut.UnmarshalMsg(bts)
+			bts, err = (*z).VrfOut.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "VrfOut")
 				return
@@ -149,7 +158,7 @@ func (z *Credential) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).Hashable.UnmarshalMsg(bts)
+			bts, err = (*z).Hashable.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Hashable")
 				return
@@ -157,7 +166,7 @@ func (z *Credential) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).UnauthenticatedCredential.Proof.UnmarshalMsg(bts)
+			bts, err = (*z).UnauthenticatedCredential.Proof.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Proof")
 				return
@@ -193,7 +202,7 @@ func (z *Credential) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "h":
-				bts, err = (*z).VrfOut.UnmarshalMsg(bts)
+				bts, err = (*z).VrfOut.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "VrfOut")
 					return
@@ -205,13 +214,13 @@ func (z *Credential) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "hc":
-				bts, err = (*z).Hashable.UnmarshalMsg(bts)
+				bts, err = (*z).Hashable.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "Hashable")
 					return
 				}
 			case "pf":
-				bts, err = (*z).UnauthenticatedCredential.Proof.UnmarshalMsg(bts)
+				bts, err = (*z).UnauthenticatedCredential.Proof.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "Proof")
 					return
@@ -229,6 +238,9 @@ func (z *Credential) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *Credential) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *Credential) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*Credential)
 	return ok
@@ -264,7 +276,12 @@ func (_ *Seed) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *Seed) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *Seed) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	bts, err = msgp.ReadExactBytes(bts, (*z)[:])
 	if err != nil {
 		err = msgp.WrapError(err)
@@ -274,6 +291,9 @@ func (z *Seed) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *Seed) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *Seed) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*Seed)
 	return ok
@@ -325,7 +345,12 @@ func (_ *UnauthenticatedCredential) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *UnauthenticatedCredential) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *UnauthenticatedCredential) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0001 int
@@ -339,7 +364,7 @@ func (z *UnauthenticatedCredential) UnmarshalMsg(bts []byte) (o []byte, err erro
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).Proof.UnmarshalMsg(bts)
+			bts, err = (*z).Proof.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Proof")
 				return
@@ -369,7 +394,7 @@ func (z *UnauthenticatedCredential) UnmarshalMsg(bts []byte) (o []byte, err erro
 			}
 			switch string(field) {
 			case "pf":
-				bts, err = (*z).Proof.UnmarshalMsg(bts)
+				bts, err = (*z).Proof.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "Proof")
 					return
@@ -387,6 +412,9 @@ func (z *UnauthenticatedCredential) UnmarshalMsg(bts []byte) (o []byte, err erro
 	return
 }
 
+func (z *UnauthenticatedCredential) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *UnauthenticatedCredential) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*UnauthenticatedCredential)
 	return ok
@@ -455,7 +483,12 @@ func (_ *hashableCredential) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *hashableCredential) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *hashableCredential) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0001 int
@@ -469,7 +502,7 @@ func (z *hashableCredential) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).RawOut.UnmarshalMsg(bts)
+			bts, err = (*z).RawOut.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "RawOut")
 				return
@@ -477,7 +510,7 @@ func (z *hashableCredential) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0001 > 0 {
 			zb0001--
-			bts, err = (*z).Member.UnmarshalMsg(bts)
+			bts, err = (*z).Member.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Member")
 				return
@@ -515,13 +548,13 @@ func (z *hashableCredential) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 			switch string(field) {
 			case "v":
-				bts, err = (*z).RawOut.UnmarshalMsg(bts)
+				bts, err = (*z).RawOut.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "RawOut")
 					return
 				}
 			case "m":
-				bts, err = (*z).Member.UnmarshalMsg(bts)
+				bts, err = (*z).Member.UnmarshalMsgWithState(bts, st)
 				if err != nil {
 					err = msgp.WrapError(err, "Member")
 					return
@@ -545,6 +578,9 @@ func (z *hashableCredential) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *hashableCredential) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *hashableCredential) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*hashableCredential)
 	return ok

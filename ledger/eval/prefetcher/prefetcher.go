@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -102,13 +102,10 @@ func PrefetchAccounts(ctx context.Context, l Ledger, rnd basics.Round, txnGroups
 type groupTask struct {
 	// incompleteCount is the number of resources+balances still pending and need to be loaded
 	// this variable is used by as atomic variable to synchronize the readiness of the group taks.
-	// in order to ensure support on 32-bit platforms, this variable need to be 64-bit aligned.
-	incompleteCount int64
+	incompleteCount atomic.Int64
 	// the group task index - aligns with the index of the transaction group in the
-	// provided groups slice. The usage of int64 here is to made sure the size of the
-	// structure is 64-bit aligned. If this not the case, then it would fail the atomic
-	// operations on the incompleteCount on 32-bit systems.
-	groupTaskIndex int64
+	// provided groups slice.
+	groupTaskIndex atomic.Int64
 	// balances contains the loaded balances each transaction group have
 	balances []LoadedAccountDataEntry
 	// balancesCount is the number of balances that nees to be loaded per transaction group
@@ -385,21 +382,22 @@ func (p *accountPrefetcher) prefetch(ctx context.Context) {
 	const dependencyFreeGroup = -int64(^uint64(0)/2) - 1
 	for grpIdx := range groupsReady {
 		gr := groupsReady[grpIdx]
-		gr.groupTaskIndex = int64(grpIdx)
-		gr.incompleteCount = int64(gr.balancesCount + gr.resourcesCount)
+		gr.groupTaskIndex.Store(int64(grpIdx))
+		gr.incompleteCount.Store(int64(gr.balancesCount + gr.resourcesCount))
 		gr.balances = allBalances[usedBalances : usedBalances+gr.balancesCount]
 		if gr.resourcesCount > 0 {
 			gr.resources = allResources[usedResources : usedResources+gr.resourcesCount]
 			usedResources += gr.resourcesCount
 		}
 		usedBalances += gr.balancesCount
-		if gr.incompleteCount == 0 {
-			gr.incompleteCount = dependencyFreeGroup
+		if gr.incompleteCount.Load() == 0 {
+			gr.incompleteCount.Store(dependencyFreeGroup)
 		}
 	}
 
-	taskIdx := int64(-1)
-	defer atomic.StoreInt64(&taskIdx, tasksCount)
+	var taskIdx atomic.Int64
+	taskIdx.Store(-1)
+	defer taskIdx.Store(tasksCount)
 	// create few go-routines to load asyncroniously the account data.
 	for i := 0; i < asyncAccountLoadingThreadCount; i++ {
 		go p.asyncPrefetchRoutine(&tasksQueue, &taskIdx, groupDoneCh)
@@ -409,7 +407,7 @@ func (p *accountPrefetcher) prefetch(ctx context.Context) {
 	completed := make(map[int64]bool)
 	for i := int64(0); i < int64(len(p.txnGroups)); {
 	wait:
-		incompleteCount := atomic.LoadInt64(&groupsReady[i].incompleteCount)
+		incompleteCount := groupsReady[i].incompleteCount.Load()
 		if incompleteCount > 0 || (incompleteCount != dependencyFreeGroup && !completed[i]) {
 			select {
 			case done := <-groupDoneCh:
@@ -462,27 +460,27 @@ func (p *accountPrefetcher) prefetch(ctx context.Context) {
 
 func (gt *groupTask) markCompletionAcct(idx int, br LoadedAccountDataEntry, groupDoneCh chan groupTaskDone) {
 	gt.balances[idx] = br
-	if atomic.AddInt64(&gt.incompleteCount, -1) == 0 {
-		groupDoneCh <- groupTaskDone{groupIdx: gt.groupTaskIndex}
+	if gt.incompleteCount.Add(-1) == 0 {
+		groupDoneCh <- groupTaskDone{groupIdx: gt.groupTaskIndex.Load()}
 	}
 }
 
 func (gt *groupTask) markCompletionResource(idx int, res LoadedResourcesEntry, groupDoneCh chan groupTaskDone) {
 	gt.resources[idx] = res
-	if atomic.AddInt64(&gt.incompleteCount, -1) == 0 {
-		groupDoneCh <- groupTaskDone{groupIdx: gt.groupTaskIndex}
+	if gt.incompleteCount.Add(-1) == 0 {
+		groupDoneCh <- groupTaskDone{groupIdx: gt.groupTaskIndex.Load()}
 	}
 }
 
 func (gt *groupTask) markCompletionAcctError(err error, task *preloaderTask, groupDoneCh chan groupTaskDone) {
 	for {
-		curVal := atomic.LoadInt64(&gt.incompleteCount)
+		curVal := gt.incompleteCount.Load()
 		if curVal <= 0 {
 			return
 		}
-		if atomic.CompareAndSwapInt64(&gt.incompleteCount, curVal, 0) {
+		if gt.incompleteCount.CompareAndSwap(curVal, 0) {
 			groupDoneCh <- groupTaskDone{
-				groupIdx: gt.groupTaskIndex,
+				groupIdx: gt.groupTaskIndex.Load(),
 				err:      err,
 				task:     task,
 			}
@@ -491,11 +489,11 @@ func (gt *groupTask) markCompletionAcctError(err error, task *preloaderTask, gro
 	}
 }
 
-func (p *accountPrefetcher) asyncPrefetchRoutine(queue *preloaderTaskQueue, taskIdx *int64, groupDoneCh chan groupTaskDone) {
+func (p *accountPrefetcher) asyncPrefetchRoutine(queue *preloaderTaskQueue, taskIdx *atomic.Int64, groupDoneCh chan groupTaskDone) {
 	var task *preloaderTask
 	var err error
 	for {
-		nextTaskIdx := atomic.AddInt64(taskIdx, 1)
+		nextTaskIdx := taskIdx.Add(1)
 		queue, task = queue.getTaskAtIndex(int(nextTaskIdx))
 		if task == nil {
 			// no more tasks.

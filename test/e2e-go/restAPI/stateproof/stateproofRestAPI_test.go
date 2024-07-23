@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -100,7 +100,7 @@ func TestStateProofInParticipationInfo(t *testing.T) {
 	}
 	txID, err := testClient.SignAndBroadcastTransaction(wh, nil, tx)
 	a.NoError(err)
-	_, err = helper.WaitForTransaction(t, testClient, someAddress, txID, 120*time.Second)
+	_, err = helper.WaitForTransaction(t, testClient, txID, 120*time.Second)
 	a.NoError(err)
 
 	account, err := testClient.AccountInformation(someAddress, false)
@@ -197,7 +197,7 @@ func TestNilStateProofInParticipationInfo(t *testing.T) {
 	}
 	txID, err := testClient.SignAndBroadcastTransaction(wh, nil, tx)
 	a.NoError(err)
-	_, err = helper.WaitForTransaction(t, testClient, someAddress, txID, 30*time.Second)
+	_, err = helper.WaitForTransaction(t, testClient, txID, 30*time.Second)
 	a.NoError(err)
 
 	account, err := testClient.AccountInformation(someAddress, false)

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -45,6 +45,10 @@ type TxnResult struct {
 	//
 	// In that case, it will be populated with the unnamed resources accessed by this transaction.
 	UnnamedResourcesAccessed *ResourceTracker
+
+	// If the signer needed to be changed, this will be the address of the required signer
+	// This will only be present if FixSigners is true in the EvalOverrides
+	FixedSigner basics.Address
 }
 
 // TxnGroupResult contains the simulation result for a single transaction group
@@ -90,6 +94,7 @@ type ResultEvalOverrides struct {
 	MaxLogCalls           *uint64
 	MaxLogSize            *uint64
 	ExtraOpcodeBudget     uint64
+	FixSigners            bool
 }
 
 // LogBytesLimit hardcode limit of how much bytes one can log per transaction during simulation (with AllowMoreLogging)
@@ -141,6 +146,7 @@ type Result struct {
 	EvalOverrides ResultEvalOverrides
 	Block         *ledgercore.ValidatedBlock
 	TraceConfig   ExecTraceConfig
+	InitialStates *ResourcesInitialStates
 }
 
 // ReturnTrace reads from Result object and decides if simulation returns PC.
@@ -205,6 +211,7 @@ func makeSimulationResult(lastRound basics.Round, request Request, developerAPI 
 		AllowEmptySignatures:  request.AllowEmptySignatures,
 		ExtraOpcodeBudget:     request.ExtraOpcodeBudget,
 		AllowUnnamedResources: request.AllowUnnamedResources,
+		FixSigners:            request.FixSigners,
 	}.AllowMoreLogging(request.AllowMoreLogging)
 
 	if err := validateSimulateRequest(request, developerAPI); err != nil {
@@ -217,6 +224,7 @@ func makeSimulationResult(lastRound basics.Round, request Request, developerAPI 
 		TxnGroups:     groups,
 		EvalOverrides: resultEvalConstants,
 		TraceConfig:   request.TraceConfig,
+		InitialStates: newResourcesInitialStates(request),
 	}, nil
 }
 
@@ -281,16 +289,26 @@ type TransactionTrace struct {
 	ApprovalProgramTrace []OpcodeTraceUnit
 	// ApprovalProgramHash stands for the hash digest of approval program bytecode executed during simulation
 	ApprovalProgramHash crypto.Digest
+
 	// ClearStateProgramTrace stands for a slice of OpcodeTraceUnit over application call on clear-state program
 	ClearStateProgramTrace []OpcodeTraceUnit
 	// ClearStateProgramHash stands for the hash digest of clear state program bytecode executed during simulation
 	ClearStateProgramHash crypto.Digest
+	// ClearStateRollback, if true, indicates that the clear state program failed and any persistent state changes
+	// it produced should be reverted once the program exits.
+	ClearStateRollback bool
+	// ClearStateRollbackError contains the error message explaining why the clear state program failed. This
+	// field will only be populated if ClearStateRollback is true and the failure was due to an execution error.
+	ClearStateRollbackError string
+
 	// LogicSigTrace contains the trace for a logicsig evaluation, if the transaction is approved by a logicsig.
 	LogicSigTrace []OpcodeTraceUnit
 	// LogicSigHash stands for the hash digest of logic sig bytecode executed during simulation
 	LogicSigHash crypto.Digest
+
 	// programTraceRef points to one of ApprovalProgramTrace, ClearStateProgramTrace, and LogicSigTrace during simulation.
 	programTraceRef *[]OpcodeTraceUnit
+
 	// InnerTraces contains the traces for inner transactions, if this transaction spawned any. This
 	// object only contains traces for inners that are immediate children of this transaction.
 	// Grandchild traces will be present inside the TransactionTrace of their parent.

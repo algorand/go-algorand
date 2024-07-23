@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -205,7 +205,7 @@ func buildSyntaxHighlight(version uint64) *tmLanguage {
 		// and only add to keyword.Patterns later, when all
 		// have been collected.
 		case "Arithmetic", "Byte Array Manipulation", "Byte Array Arithmetic",
-			"Byte Array Logic", "Inner Transactions":
+			"Byte Array Logic", "Cryptography", "Inner Transactions":
 			escape := map[rune]bool{
 				'*': true,
 				'+': true,

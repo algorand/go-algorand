@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -338,10 +338,23 @@ int 1`
 		a.LessOrEqual(followerSyncRound+i+1, binary.BigEndian.Uint64((*result.TxnGroups[0].Txns[0].Txn.Logs)[0]))
 	}
 
-	// There should be a failure when the round is too far back
+	// If the round is too far back, we should get an error saying so.
 	simulateRequest.Round = basics.Round(followerSyncRound - 3)
-	result, err = simulateTransactions(simulateRequest)
-	a.Error(err)
+	endTime := time.Now().Add(6 * time.Second)
+	for {
+		result, err = simulateTransactions(simulateRequest)
+		if err != nil || endTime.After(time.Now()) {
+			break
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	if err == nil {
+		// NOTE: The ledger can have variability in when it commits rounds to the database. It's
+		// possible that older rounds are still available because of this. If so, let's bail on the
+		// test.
+		t.Logf("Still producing a result for round %d", simulateRequest.Round)
+		return
+	}
 	var httpErr client.HTTPError
 	a.ErrorAs(err, &httpErr)
 	a.Equal(http.StatusInternalServerError, httpErr.StatusCode)
@@ -468,7 +481,7 @@ int 1`
 	// sign and broadcast
 	appCreateTxID, err := testClient.SignAndBroadcastTransaction(wh, nil, appCreateTxn)
 	a.NoError(err)
-	submittedAppCreateTxn, err := helper.WaitForTransaction(t, testClient, senderAddress, appCreateTxID, 30*time.Second)
+	submittedAppCreateTxn, err := helper.WaitForTransaction(t, testClient, appCreateTxID, 30*time.Second)
 	a.NoError(err)
 
 	// get app ID
@@ -483,7 +496,7 @@ int 1`
 	)
 	a.NoError(err)
 	appFundTxID := appFundTxn.ID()
-	_, err = helper.WaitForTransaction(t, testClient, senderAddress, appFundTxID.String(), 30*time.Second)
+	_, err = helper.WaitForTransaction(t, testClient, appFundTxID.String(), 30*time.Second)
 	a.NoError(err)
 
 	// construct app call
@@ -596,7 +609,7 @@ int 1`
 	// sign and broadcast
 	appCreateTxID, err := testClient.SignAndBroadcastTransaction(wh, nil, appCreateTxn)
 	a.NoError(err)
-	submittedAppCreateTxn, err := helper.WaitForTransaction(t, testClient, senderAddress, appCreateTxID, 30*time.Second)
+	submittedAppCreateTxn, err := helper.WaitForTransaction(t, testClient, appCreateTxID, 30*time.Second)
 	a.NoError(err)
 
 	// get app ID
@@ -611,7 +624,7 @@ int 1`
 	)
 	a.NoError(err)
 	appFundTxID := appFundTxn.ID()
-	_, err = helper.WaitForTransaction(t, testClient, senderAddress, appFundTxID.String(), 30*time.Second)
+	_, err = helper.WaitForTransaction(t, testClient, appFundTxID.String(), 30*time.Second)
 	a.NoError(err)
 
 	// construct app call
@@ -862,7 +875,7 @@ func TestMaxDepthAppWithPCandStackTrace(t *testing.T) {
 
 	appCreateTxID, err := testClient.SignAndBroadcastTransaction(wh, nil, appCreateTxn)
 	a.NoError(err)
-	submittedAppCreateTxn, err := helper.WaitForTransaction(t, testClient, senderAddress, appCreateTxID, 30*time.Second)
+	submittedAppCreateTxn, err := helper.WaitForTransaction(t, testClient, appCreateTxID, 30*time.Second)
 	a.NoError(err)
 	futureAppID := basics.AppIndex(*submittedAppCreateTxn.ApplicationIndex)
 
@@ -1710,7 +1723,7 @@ func TestSimulateScratchSlotChange(t *testing.T) {
 
 	appCreateTxID, err := testClient.SignAndBroadcastTransaction(wh, nil, appCreateTxn)
 	a.NoError(err)
-	submittedAppCreateTxn, err := helper.WaitForTransaction(t, testClient, senderAddress, appCreateTxID, 30*time.Second)
+	submittedAppCreateTxn, err := helper.WaitForTransaction(t, testClient, appCreateTxID, 30*time.Second)
 	a.NoError(err)
 	futureAppID := basics.AppIndex(*submittedAppCreateTxn.ApplicationIndex)
 
@@ -1904,7 +1917,7 @@ end:
 
 	appCreateTxID, err := testClient.SignAndBroadcastTransaction(wh, nil, appCreateTxn)
 	a.NoError(err)
-	submittedAppCreateTxn, err := helper.WaitForTransaction(t, testClient, senderAddress, appCreateTxID, 30*time.Second)
+	submittedAppCreateTxn, err := helper.WaitForTransaction(t, testClient, appCreateTxID, 30*time.Second)
 	a.NoError(err)
 	futureAppID := basics.AppIndex(*submittedAppCreateTxn.ApplicationIndex)
 
@@ -2094,6 +2107,340 @@ end:
 	}, *resp.TxnGroups[0].Txns[2].TransactionTrace.ApprovalProgramTrace)
 }
 
+func TestSimulateExecTraceAppInitialState(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	a := require.New(fixtures.SynchronizedTest(t))
+	var localFixture fixtures.RestClientFixture
+	localFixture.SetupNoStart(t, filepath.Join("nettemplates", "OneNodeFuture.json"))
+
+	// Get primary node
+	primaryNode, err := localFixture.GetNodeController("Primary")
+	a.NoError(err)
+
+	localFixture.Start()
+	defer primaryNode.FullStop()
+
+	// get lib goal client
+	testClient := localFixture.LibGoalFixture.GetLibGoalClientFromNodeController(primaryNode)
+
+	_, err = testClient.WaitForRound(1)
+	a.NoError(err)
+
+	wh, err := testClient.GetUnencryptedWalletHandle()
+	a.NoError(err)
+	addresses, err := testClient.ListAddresses(wh)
+	a.NoError(err)
+	_, senderAddress := helper.GetMaxBalAddr(t, testClient, addresses)
+	a.NotEmpty(senderAddress, "no addr with funds")
+
+	addressDigest, err := basics.UnmarshalChecksumAddress(senderAddress)
+	a.NoError(err)
+
+	ops, err := logic.AssembleString(
+		`#pragma version 8
+txn ApplicationID
+bz end // Do nothing during create
+
+txn OnCompletion
+int OptIn
+==
+bnz end // Always allow optin
+
+byte "local"
+byte "global"
+txn ApplicationArgs 0
+match local global
+err // Unknown command
+
+local:
+  txn Sender
+  byte "local-int-key"
+  int 0xcafeb0ba
+  app_local_put
+  int 0
+  byte "local-bytes-key"
+  byte "xqcL"
+  app_local_put
+  b end
+
+global:
+  byte "global-int-key"
+  int 0xdeadbeef
+  app_global_put
+  byte "global-bytes-key"
+  byte "welt am draht"
+  app_global_put
+  b end
+
+end:
+  int 1`)
+	a.NoError(err)
+	approval := ops.Program
+
+	ops, err = logic.AssembleString("#pragma version 8\nint 1")
+	a.NoError(err)
+	clearState := ops.Program
+
+	gl := basics.StateSchema{NumByteSlice: 1, NumUint: 1}
+	lc := basics.StateSchema{NumByteSlice: 1, NumUint: 1}
+
+	MinFee := config.Consensus[protocol.ConsensusFuture].MinTxnFee
+	MinBalance := config.Consensus[protocol.ConsensusFuture].MinBalance
+
+	// create app and get the application ID
+	appCreateTxn, err := testClient.MakeUnsignedAppCreateTx(
+		transactions.NoOpOC, approval, clearState, gl,
+		lc, nil, nil, nil, nil, nil, 0)
+	a.NoError(err)
+	appCreateTxn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, 0, appCreateTxn)
+	a.NoError(err)
+
+	appCreateTxID, err := testClient.SignAndBroadcastTransaction(wh, nil, appCreateTxn)
+	a.NoError(err)
+	submittedAppCreateTxn, err := helper.WaitForTransaction(t, testClient, appCreateTxID, 30*time.Second)
+	a.NoError(err)
+	futureAppID := basics.AppIndex(*submittedAppCreateTxn.ApplicationIndex)
+
+	// fund app account
+	_, err = testClient.ConstructPayment(
+		senderAddress, futureAppID.Address().String(),
+		0, MinBalance*2, nil, "", [32]byte{}, 0, 0,
+	)
+	a.NoError(err)
+
+	// construct app call "global"
+	appCallGlobalTxn, err := testClient.MakeUnsignedAppNoOpTx(
+		uint64(futureAppID), [][]byte{[]byte("global")}, nil, nil, nil, nil,
+	)
+	a.NoError(err)
+	appCallGlobalTxn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, MinFee, appCallGlobalTxn)
+	a.NoError(err)
+	// construct app optin
+	appOptInTxn, err := testClient.MakeUnsignedAppOptInTx(uint64(futureAppID), nil, nil, nil, nil, nil)
+	a.NoError(err)
+	appOptInTxn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, MinFee, appOptInTxn)
+	// construct app call "local"
+	appCallLocalTxn, err := testClient.MakeUnsignedAppNoOpTx(
+		uint64(futureAppID), [][]byte{[]byte("local")}, nil, nil, nil, nil,
+	)
+	a.NoError(err)
+	appCallLocalTxn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, MinFee, appCallLocalTxn)
+	a.NoError(err)
+
+	gid, err := testClient.GroupID([]transactions.Transaction{appCallGlobalTxn, appOptInTxn, appCallLocalTxn})
+	a.NoError(err)
+	appCallGlobalTxn.Group = gid
+	appOptInTxn.Group = gid
+	appCallLocalTxn.Group = gid
+
+	appCallTxnGlobalSigned, err := testClient.SignTransactionWithWallet(wh, nil, appCallGlobalTxn)
+	a.NoError(err)
+	appOptInSigned, err := testClient.SignTransactionWithWallet(wh, nil, appOptInTxn)
+	a.NoError(err)
+	appCallTxnLocalSigned, err := testClient.SignTransactionWithWallet(wh, nil, appCallLocalTxn)
+	a.NoError(err)
+
+	a.NoError(testClient.BroadcastTransactionGroup([]transactions.SignedTxn{
+		appCallTxnGlobalSigned,
+		appOptInSigned,
+		appCallTxnLocalSigned,
+	}))
+	_, err = helper.WaitForTransaction(t, testClient, appCallTxnGlobalSigned.Txn.ID().String(), 30*time.Second)
+	a.NoError(err)
+
+	// construct simulation request, with state change enabled
+	execTraceConfig := simulation.ExecTraceConfig{
+		Enable: true,
+		State:  true,
+	}
+
+	appCallGlobalTxn.Note = []byte("note for global")
+	appCallGlobalTxn.Group = crypto.Digest{}
+	appCallLocalTxn.Note = []byte("note for local")
+	appCallLocalTxn.Group = crypto.Digest{}
+
+	gid, err = testClient.GroupID([]transactions.Transaction{appCallGlobalTxn, appCallLocalTxn})
+	a.NoError(err)
+	appCallGlobalTxn.Group = gid
+	appCallLocalTxn.Group = gid
+
+	appCallTxnGlobalSigned, err = testClient.SignTransactionWithWallet(wh, nil, appCallGlobalTxn)
+	a.NoError(err)
+	appCallTxnLocalSigned, err = testClient.SignTransactionWithWallet(wh, nil, appCallLocalTxn)
+	a.NoError(err)
+
+	simulateRequest := v2.PreEncodedSimulateRequest{
+		TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
+			{Txns: []transactions.SignedTxn{appCallTxnGlobalSigned, appCallTxnLocalSigned}},
+		},
+		ExecTraceConfig: execTraceConfig,
+	}
+
+	// update the configuration file to enable EnableDeveloperAPI
+	err = primaryNode.FullStop()
+	a.NoError(err)
+	cfg, err := config.LoadConfigFromDisk(primaryNode.GetDataDir())
+	a.NoError(err)
+	cfg.EnableDeveloperAPI = true
+	err = cfg.SaveToDisk(primaryNode.GetDataDir())
+	require.NoError(t, err)
+	localFixture.Start()
+
+	// start real simulating
+	resp, err := testClient.SimulateTransactions(simulateRequest)
+	a.NoError(err)
+
+	// assertions
+	a.Len(resp.TxnGroups, 1)
+	a.Nil(resp.TxnGroups[0].FailureMessage)
+	a.Len(resp.TxnGroups[0].Txns, 2)
+
+	a.Equal([]model.SimulationOpcodeTraceUnit{
+		{Pc: 1},
+		{Pc: 4},
+		{Pc: 6},
+		{Pc: 9},
+		{Pc: 11},
+		{Pc: 12},
+		{Pc: 13},
+		{Pc: 16},
+		{Pc: 23},
+		{Pc: 31},
+		{Pc: 34},
+		{Pc: 94},
+		{Pc: 110},
+		{
+			Pc: 116,
+			StateChanges: &[]model.ApplicationStateOperation{
+				{
+					Operation:    "w",
+					AppStateType: "g",
+					Key:          []byte("global-int-key"),
+					NewValue: &model.AvmValue{
+						Type: uint64(basics.TealUintType),
+						Uint: toPtr[uint64](0xdeadbeef),
+					},
+				},
+			},
+		},
+		{Pc: 117},
+		{Pc: 135},
+		{
+			Pc: 150,
+			StateChanges: &[]model.ApplicationStateOperation{
+				{
+					Operation:    "w",
+					AppStateType: "g",
+					Key:          []byte("global-bytes-key"),
+					NewValue: &model.AvmValue{
+						Type:  uint64(basics.TealBytesType),
+						Bytes: toPtr([]byte("welt am draht")),
+					},
+				},
+			},
+		},
+		{Pc: 151},
+		{Pc: 154},
+	}, *resp.TxnGroups[0].Txns[0].TransactionTrace.ApprovalProgramTrace)
+	a.Equal([]model.SimulationOpcodeTraceUnit{
+		{Pc: 1},
+		{Pc: 4},
+		{Pc: 6},
+		{Pc: 9},
+		{Pc: 11},
+		{Pc: 12},
+		{Pc: 13},
+		{Pc: 16},
+		{Pc: 23},
+		{Pc: 31},
+		{Pc: 34},
+		{Pc: 41},
+		{Pc: 43},
+		{Pc: 58},
+		{
+			Pc: 64,
+			StateChanges: &[]model.ApplicationStateOperation{
+				{
+					Operation:    "w",
+					AppStateType: "l",
+					Key:          []byte("local-int-key"),
+					NewValue: &model.AvmValue{
+						Type: uint64(basics.TealUintType),
+						Uint: toPtr[uint64](0xcafeb0ba),
+					},
+					Account: toPtr(addressDigest.String()),
+				},
+			},
+		},
+		{Pc: 65},
+		{Pc: 67},
+		{Pc: 84},
+		{
+			Pc: 90,
+			StateChanges: &[]model.ApplicationStateOperation{
+				{
+					Operation:    "w",
+					AppStateType: "l",
+					Key:          []byte("local-bytes-key"),
+					NewValue: &model.AvmValue{
+						Type:  uint64(basics.TealBytesType),
+						Bytes: toPtr([]byte("xqcL")),
+					},
+					Account: toPtr(addressDigest.String()),
+				},
+			},
+		},
+		{Pc: 91},
+		{Pc: 154},
+	}, *resp.TxnGroups[0].Txns[1].TransactionTrace.ApprovalProgramTrace)
+
+	a.NotNil(resp.InitialStates)
+	a.Len(*resp.InitialStates.AppInitialStates, 1)
+
+	a.Len((*resp.InitialStates.AppInitialStates)[0].AppGlobals.Kvs, 2)
+
+	globalKVs := (*resp.InitialStates.AppInitialStates)[0].AppGlobals.Kvs
+	globalKVMap := make(map[string]model.AvmValue)
+	for _, kv := range globalKVs {
+		globalKVMap[string(kv.Key)] = kv.Value
+	}
+	expectedGlobalKVMap := map[string]model.AvmValue{
+		"global-int-key": {
+			Type: 2,
+			Uint: toPtr[uint64](0xdeadbeef),
+		},
+		"global-bytes-key": {
+			Type:  1,
+			Bytes: toPtr([]byte("welt am draht")),
+		},
+	}
+	a.Equal(expectedGlobalKVMap, globalKVMap)
+
+	a.Len(*(*resp.InitialStates.AppInitialStates)[0].AppLocals, 1)
+
+	localKVs := (*(*resp.InitialStates.AppInitialStates)[0].AppLocals)[0]
+	a.NotNil(localKVs.Account)
+	a.Equal(senderAddress, *localKVs.Account)
+
+	localKVMap := make(map[string]model.AvmValue)
+	for _, kv := range localKVs.Kvs {
+		localKVMap[string(kv.Key)] = kv.Value
+	}
+	expectedLocalKVMap := map[string]model.AvmValue{
+		"local-int-key": {
+			Type: 2,
+			Uint: toPtr[uint64](0xcafeb0ba),
+		},
+		"local-bytes-key": {
+			Type:  1,
+			Bytes: toPtr([]byte("xqcL")),
+		},
+	}
+	a.Equal(expectedLocalKVMap, localKVMap)
+}
+
 func TestSimulateWithUnnamedResources(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -2125,7 +2472,7 @@ func TestSimulateWithUnnamedResources(t *testing.T) {
 	)
 	a.NoError(err)
 	txID := txn.ID().String()
-	_, err = helper.WaitForTransaction(t, testClient, senderAddress, txID, 30*time.Second)
+	_, err = helper.WaitForTransaction(t, testClient, txID, 30*time.Second)
 	a.NoError(err)
 
 	// create asset
@@ -2136,7 +2483,7 @@ func TestSimulateWithUnnamedResources(t *testing.T) {
 	// sign and broadcast
 	txID, err = testClient.SignAndBroadcastTransaction(wh, nil, txn)
 	a.NoError(err)
-	confirmedTxn, err := helper.WaitForTransaction(t, testClient, senderAddress, txID, 30*time.Second)
+	confirmedTxn, err := helper.WaitForTransaction(t, testClient, txID, 30*time.Second)
 	a.NoError(err)
 	// get asset ID
 	a.NotNil(confirmedTxn.AssetIndex)
@@ -2151,7 +2498,7 @@ func TestSimulateWithUnnamedResources(t *testing.T) {
 	// sign and broadcast
 	txID, err = testClient.SignAndBroadcastTransaction(wh, nil, txn)
 	a.NoError(err)
-	_, err = helper.WaitForTransaction(t, testClient, otherAddress, txID, 30*time.Second)
+	_, err = helper.WaitForTransaction(t, testClient, txID, 30*time.Second)
 	a.NoError(err)
 
 	// transfer asset
@@ -2162,7 +2509,7 @@ func TestSimulateWithUnnamedResources(t *testing.T) {
 	// sign and broadcast
 	txID, err = testClient.SignAndBroadcastTransaction(wh, nil, txn)
 	a.NoError(err)
-	_, err = helper.WaitForTransaction(t, testClient, senderAddress, txID, 30*time.Second)
+	_, err = helper.WaitForTransaction(t, testClient, txID, 30*time.Second)
 	a.NoError(err)
 
 	ops, err := logic.AssembleString("#pragma version 9\n int 1")
@@ -2180,7 +2527,7 @@ func TestSimulateWithUnnamedResources(t *testing.T) {
 	// sign and broadcast
 	txID, err = testClient.SignAndBroadcastTransaction(wh, nil, txn)
 	a.NoError(err)
-	confirmedTxn, err = helper.WaitForTransaction(t, testClient, otherAddress, txID, 30*time.Second)
+	confirmedTxn, err = helper.WaitForTransaction(t, testClient, txID, 30*time.Second)
 	a.NoError(err)
 	// get app ID
 	a.NotNil(confirmedTxn.ApplicationIndex)
@@ -2258,7 +2605,7 @@ int 1
 	// sign and broadcast
 	txID, err = testClient.SignAndBroadcastTransaction(wh, nil, txn)
 	a.NoError(err)
-	confirmedTxn, err = helper.WaitForTransaction(t, testClient, senderAddress, txID, 30*time.Second)
+	confirmedTxn, err = helper.WaitForTransaction(t, testClient, txID, 30*time.Second)
 	a.NoError(err)
 	// get app ID
 	a.NotNil(confirmedTxn.ApplicationIndex)
@@ -2272,7 +2619,7 @@ int 1
 	)
 	a.NoError(err)
 	txID = txn.ID().String()
-	_, err = helper.WaitForTransaction(t, testClient, senderAddress, txID, 30*time.Second)
+	_, err = helper.WaitForTransaction(t, testClient, txID, 30*time.Second)
 	a.NoError(err)
 
 	// construct app call
@@ -2347,4 +2694,87 @@ int 1
 		},
 	}
 	a.Equal(expectedResult, resp)
+}
+
+func TestSimulateWithFixSigners(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	a := require.New(fixtures.SynchronizedTest(t))
+	var localFixture fixtures.RestClientFixture
+	localFixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50EachFuture.json"))
+	defer localFixture.Shutdown()
+
+	testClient := localFixture.LibGoalClient
+
+	_, err := testClient.WaitForRound(1)
+	a.NoError(err)
+
+	wh, err := testClient.GetUnencryptedWalletHandle()
+	a.NoError(err)
+	addresses, err := testClient.ListAddresses(wh)
+	a.NoError(err)
+	_, senderAddress := helper.GetMaxBalAddr(t, testClient, addresses)
+	if senderAddress == "" {
+		t.Error("no addr with funds")
+	}
+	a.NoError(err)
+
+	rekeyTxn, err := testClient.ConstructPayment(senderAddress, senderAddress, 0, 1, nil, "", [32]byte{}, 0, 0)
+	a.NoError(err)
+
+	var authAddr basics.Address
+	crypto.RandBytes(authAddr[:])
+	rekeyTxn.RekeyTo = authAddr
+
+	txn, err := testClient.ConstructPayment(senderAddress, senderAddress, 0, 1, nil, "", [32]byte{}, 0, 0)
+	a.NoError(err)
+
+	gid, err := testClient.GroupID([]transactions.Transaction{rekeyTxn, txn})
+	a.NoError(err)
+
+	rekeyTxn.Group = gid
+	txn.Group = gid
+
+	simulateRequest := v2.PreEncodedSimulateRequest{
+		TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
+			{
+				Txns: []transactions.SignedTxn{{Txn: rekeyTxn}, {Txn: txn}},
+			},
+		},
+		AllowEmptySignatures: true,
+		FixSigners:           true,
+	}
+	result, err := testClient.SimulateTransactions(simulateRequest)
+	a.NoError(err)
+
+	allowEmptySignatures := true
+	fixSigners := true
+	authAddrStr := authAddr.String()
+	expectedResult := v2.PreEncodedSimulateResponse{
+		Version:   2,
+		LastRound: result.LastRound,
+		TxnGroups: []v2.PreEncodedSimulateTxnGroupResult{
+			{
+				Txns: []v2.PreEncodedSimulateTxnResult{
+					{
+						Txn: v2.PreEncodedTxInfo{
+							Txn: transactions.SignedTxn{Txn: rekeyTxn},
+						},
+					},
+					{
+						Txn: v2.PreEncodedTxInfo{
+							Txn: transactions.SignedTxn{Txn: txn},
+						},
+						FixedSigner: &authAddrStr,
+					},
+				},
+			},
+		},
+		EvalOverrides: &model.SimulationEvalOverrides{
+			AllowEmptySignatures: &allowEmptySignatures,
+			FixSigners:           &fixSigners,
+		},
+	}
+	a.Equal(expectedResult, result)
 }

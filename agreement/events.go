@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -197,6 +197,10 @@ const (
 	// readPinned is sent to the proposalStore to read the pinned value, if it exists.
 	readPinned
 
+	// readLowestVote is sent to the proposalPeriodMachine to read the
+	// proposal-vote with the lowest credential.
+	readLowestVote
+
 	/*
 	 * The following are event types that replace queries, and may warrant
 	 * a revision to make them more state-machine-esque.
@@ -292,7 +296,7 @@ func (e messageEvent) String() string {
 }
 
 func (e messageEvent) ComparableStr() string {
-	return e.T.String()
+	return fmt.Sprintf("{T:%s %d Err:%v}", e.t().String(), e.ConsensusRound(), e.Err)
 }
 
 func (e messageEvent) ConsensusRound() round {
@@ -404,6 +408,41 @@ func (e newRoundEvent) String() string {
 }
 
 func (e newRoundEvent) ComparableStr() string {
+	return e.String()
+}
+
+type readLowestEvent struct {
+	// T currently only supports readLowestVote
+	T eventType
+
+	// Round and Period are the round and period for which to query the
+	// lowest-credential vote, value or payload.  This type of event is only
+	// sent for reading the lowest period 0 credential, but the Period is here
+	// anyway to route to the appropriate proposalMachinePeriod.
+	Round  round
+	Period period
+
+	// Vote holds the lowest-credential vote.
+	Vote vote
+	// LowestIncludingLate holds the lowest-credential vote that was received, including
+	// after Vote has been frozen.
+	LowestIncludingLate vote
+
+	// Filled and HasLowestIncludingLate indicates whether the Vote or LowestIncludingLate
+	// fields are filled, respectively.
+	Filled                 bool
+	HasLowestIncludingLate bool
+}
+
+func (e readLowestEvent) t() eventType {
+	return e.T
+}
+
+func (e readLowestEvent) String() string {
+	return fmt.Sprintf("%s: %d %d", e.t().String(), e.Round, e.Period)
+}
+
+func (e readLowestEvent) ComparableStr() string {
 	return e.String()
 }
 
@@ -557,9 +596,35 @@ func (e payloadProcessedEvent) ComparableStr() string {
 	return fmt.Sprintf("%v: %.5v", e.t().String(), e.Proposal.BlockDigest.String())
 }
 
+// LateCredentialTrackingEffect indicates the impact of a vote that was filtered (due to age)
+// on the credential tracking system (in credentialArrivalHistory), for the purpose of tracking
+// the time it took the best credential to arrive, even if it was late.
+type LateCredentialTrackingEffect uint8
+
+const (
+	// NoLateCredentialTrackingImpact indicates the filtered event would have no impact on
+	// the credential tracking mechanism.
+	NoLateCredentialTrackingImpact LateCredentialTrackingEffect = iota
+
+	// UnverifiedLateCredentialForTracking indicates the filtered event could impact
+	// the credential tracking mechanism and more processing (validation) may be required.
+	// It may be set by proposalManager when handling votePresent events.
+	UnverifiedLateCredentialForTracking
+
+	// VerifiedBetterLateCredentialForTracking indicates that the filtered event provides a new best
+	// credential for its round.
+	// It may be set by proposalManager when handling voteVerified events.
+	VerifiedBetterLateCredentialForTracking
+)
+
 type filteredEvent struct {
 	// {proposal,vote,bundle}{Filtered,Malformed}
 	T eventType
+
+	// LateCredentialTrackingNote indicates the impact of the filtered event on the
+	// credential tracking machinery used for dynamically setting the filter
+	// timeout.
+	LateCredentialTrackingNote LateCredentialTrackingEffect
 
 	// Err is the reason cryptographic verification failed and is set for
 	// events {proposal,vote,bundle}Malformed.
@@ -941,18 +1006,52 @@ func (e checkpointEvent) AttachConsensusVersion(v ConsensusVersionView) external
 	return e
 }
 
-func (e messageEvent) AttachValidatedAt(d time.Duration) messageEvent {
-	e.Input.Proposal.validatedAt = d
+// This timestamp is assigned to messages that arrive for round R+1 while the current player
+// is still waiting for quorum on R.
+const pipelinedMessageTimestamp = time.Nanosecond
+
+//msgp:ignore constantRoundStartTimer
+type constantRoundStartTimer time.Duration
+
+func (c constantRoundStartTimer) Since() time.Duration { return time.Duration(c) }
+
+// clockForRound retrieves the roundStartTimer used for AttachValidatedAt and AttachReceivedAt.
+func clockForRound(currentRound round, currentClock roundStartTimer, historicalClocks map[round]roundStartTimer) func(round) roundStartTimer {
+	return func(eventRound round) roundStartTimer {
+		if eventRound > currentRound {
+			return constantRoundStartTimer(pipelinedMessageTimestamp)
+		}
+		if eventRound == currentRound {
+			return currentClock
+		}
+		if clock, ok := historicalClocks[eventRound]; ok {
+			return clock
+		}
+		return constantRoundStartTimer(0)
+	}
+}
+
+// AttachValidatedAt looks for a validated proposal or vote inside a
+// payloadVerified or voteVerified messageEvent, and attaches the given time to
+// the proposal's validatedAt field.
+func (e messageEvent) AttachValidatedAt(getClock func(eventRound round) roundStartTimer) messageEvent {
+	switch e.T {
+	case payloadVerified:
+		e.Input.Proposal.validatedAt = getClock(e.Input.Proposal.Round()).Since()
+	case voteVerified:
+		e.Input.Vote.validatedAt = getClock(e.Input.Vote.R.Round).Since()
+	}
 	return e
 }
 
 // AttachReceivedAt looks for an unauthenticatedProposal inside a
 // payloadPresent or votePresent messageEvent, and attaches the given
 // time to the proposal's receivedAt field.
-func (e messageEvent) AttachReceivedAt(d time.Duration) messageEvent {
-	if e.T == payloadPresent {
-		e.Input.UnauthenticatedProposal.receivedAt = d
-	} else if e.T == votePresent {
+func (e messageEvent) AttachReceivedAt(getClock func(eventRound round) roundStartTimer) messageEvent {
+	switch e.T {
+	case payloadPresent:
+		e.Input.UnauthenticatedProposal.receivedAt = getClock(e.Input.UnauthenticatedProposal.Round()).Since()
+	case votePresent:
 		// Check for non-nil Tail, indicating this votePresent event
 		// contains a synthetic payloadPresent event that was attached
 		// to it by setupCompoundMessage.
@@ -960,7 +1059,7 @@ func (e messageEvent) AttachReceivedAt(d time.Duration) messageEvent {
 			// The tail event is payloadPresent, serialized together
 			// with the proposal vote as a single CompoundMessage
 			// using a protocol.ProposalPayloadTag network message.
-			e.Tail.Input.UnauthenticatedProposal.receivedAt = d
+			e.Tail.Input.UnauthenticatedProposal.receivedAt = getClock(e.Tail.Input.UnauthenticatedProposal.Round()).Since()
 		}
 	}
 	return e

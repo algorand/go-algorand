@@ -11,6 +11,7 @@ import (
 //         |-----> MarshalMsg
 //         |-----> CanMarshalMsg
 //         |-----> (*) UnmarshalMsg
+//         |-----> (*) UnmarshalMsgWithState
 //         |-----> (*) CanUnmarshalMsg
 //         |-----> Msgsize
 //         |-----> MsgIsZero
@@ -20,6 +21,7 @@ import (
 //   |-----> MarshalMsg
 //   |-----> CanMarshalMsg
 //   |-----> (*) UnmarshalMsg
+//   |-----> (*) UnmarshalMsgWithState
 //   |-----> (*) CanUnmarshalMsg
 //   |-----> Msgsize
 //   |-----> MsgIsZero
@@ -29,6 +31,7 @@ import (
 //    |-----> MarshalMsg
 //    |-----> CanMarshalMsg
 //    |-----> (*) UnmarshalMsg
+//    |-----> (*) UnmarshalMsgWithState
 //    |-----> (*) CanUnmarshalMsg
 //    |-----> Msgsize
 //    |-----> MsgIsZero
@@ -38,6 +41,7 @@ import (
 //     |-----> MarshalMsg
 //     |-----> CanMarshalMsg
 //     |-----> (*) UnmarshalMsg
+//     |-----> (*) UnmarshalMsgWithState
 //     |-----> (*) CanUnmarshalMsg
 //     |-----> Msgsize
 //     |-----> MsgIsZero
@@ -47,6 +51,7 @@ import (
 //        |-----> MarshalMsg
 //        |-----> CanMarshalMsg
 //        |-----> (*) UnmarshalMsg
+//        |-----> (*) UnmarshalMsgWithState
 //        |-----> (*) CanUnmarshalMsg
 //        |-----> Msgsize
 //        |-----> MsgIsZero
@@ -56,6 +61,7 @@ import (
 //  |-----> MarshalMsg
 //  |-----> CanMarshalMsg
 //  |-----> (*) UnmarshalMsg
+//  |-----> (*) UnmarshalMsgWithState
 //  |-----> (*) CanUnmarshalMsg
 //  |-----> Msgsize
 //  |-----> MsgIsZero
@@ -65,6 +71,7 @@ import (
 //    |-----> MarshalMsg
 //    |-----> CanMarshalMsg
 //    |-----> (*) UnmarshalMsg
+//    |-----> (*) UnmarshalMsgWithState
 //    |-----> (*) CanUnmarshalMsg
 //    |-----> Msgsize
 //    |-----> MsgIsZero
@@ -87,7 +94,12 @@ func (_ ConsensusVersion) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *ConsensusVersion) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *ConsensusVersion) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	{
 		var zb0001 string
 		var zb0002 int
@@ -111,6 +123,9 @@ func (z *ConsensusVersion) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *ConsensusVersion) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *ConsensusVersion) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*ConsensusVersion)
 	return ok
@@ -149,7 +164,12 @@ func (_ Error) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *Error) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *Error) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	{
 		var zb0001 string
 		zb0001, bts, err = msgp.ReadStringBytes(bts)
@@ -163,6 +183,9 @@ func (z *Error) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *Error) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *Error) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*Error)
 	return ok
@@ -201,7 +224,12 @@ func (_ HashID) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *HashID) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *HashID) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	{
 		var zb0001 string
 		zb0001, bts, err = msgp.ReadStringBytes(bts)
@@ -215,6 +243,9 @@ func (z *HashID) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *HashID) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *HashID) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*HashID)
 	return ok
@@ -253,7 +284,12 @@ func (_ NetworkID) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *NetworkID) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *NetworkID) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	{
 		var zb0001 string
 		zb0001, bts, err = msgp.ReadStringBytes(bts)
@@ -267,6 +303,9 @@ func (z *NetworkID) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *NetworkID) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *NetworkID) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*NetworkID)
 	return ok
@@ -305,7 +344,12 @@ func (_ StateProofType) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *StateProofType) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *StateProofType) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	{
 		var zb0001 uint64
 		zb0001, bts, err = msgp.ReadUint64Bytes(bts)
@@ -319,6 +363,9 @@ func (z *StateProofType) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *StateProofType) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *StateProofType) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*StateProofType)
 	return ok
@@ -357,7 +404,12 @@ func (_ Tag) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *Tag) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *Tag) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	{
 		var zb0001 string
 		zb0001, bts, err = msgp.ReadStringBytes(bts)
@@ -371,6 +423,9 @@ func (z *Tag) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *Tag) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *Tag) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*Tag)
 	return ok
@@ -409,7 +464,12 @@ func (_ TxType) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *TxType) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *TxType) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	{
 		var zb0001 string
 		var zb0002 int
@@ -433,6 +493,9 @@ func (z *TxType) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *TxType) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *TxType) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*TxType)
 	return ok

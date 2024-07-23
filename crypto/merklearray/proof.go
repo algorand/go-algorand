@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -149,7 +149,7 @@ func (p *SingleLeafProof) GetConcatenatedProof() []byte {
 }
 
 // ProofDataToSingleLeafProof receives serialized proof data and uses it to construct a proof object.
-func ProofDataToSingleLeafProof(hashTypeData string, treeDepth uint64, proofBytes []byte) (SingleLeafProof, error) {
+func ProofDataToSingleLeafProof(hashTypeData string, proofBytes []byte) (SingleLeafProof, error) {
 	hashType, err := crypto.UnmarshalHashType(hashTypeData)
 	if err != nil {
 		return SingleLeafProof{}, err
@@ -158,7 +158,7 @@ func ProofDataToSingleLeafProof(hashTypeData string, treeDepth uint64, proofByte
 	var proof SingleLeafProof
 
 	proof.HashFactory = crypto.HashFactory{HashType: hashType}
-	proof.TreeDepth = uint8(treeDepth)
+	proof.TreeDepth = 0
 
 	digestSize := proof.HashFactory.NewHash().Size()
 	if len(proofBytes)%digestSize != 0 {
@@ -172,6 +172,7 @@ func ProofDataToSingleLeafProof(hashTypeData string, treeDepth uint64, proofByte
 		copy(d[:], proofBytes)
 		proofPath = append(proofPath, d[:])
 		proofBytes = proofBytes[len(d):]
+		proof.TreeDepth++
 	}
 
 	proof.Path = proofPath

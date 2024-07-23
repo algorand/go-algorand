@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -44,7 +44,7 @@ func getSimpleTracerTestCases(mode RunMode) []tracerTestCase {
 				},
 				mocktracer.OpcodeEvents(35, false),
 				{
-					mocktracer.AfterProgram(mode, false),
+					mocktracer.AfterProgram(mode, mocktracer.ProgramResultPass),
 				},
 			}),
 		},
@@ -58,7 +58,7 @@ func getSimpleTracerTestCases(mode RunMode) []tracerTestCase {
 				},
 				mocktracer.OpcodeEvents(36, false),
 				{
-					mocktracer.AfterProgram(mode, false),
+					mocktracer.AfterProgram(mode, mocktracer.ProgramResultReject),
 				},
 			}),
 		},
@@ -72,7 +72,7 @@ func getSimpleTracerTestCases(mode RunMode) []tracerTestCase {
 				},
 				mocktracer.OpcodeEvents(36, true),
 				{
-					mocktracer.AfterProgram(mode, true),
+					mocktracer.AfterProgram(mode, mocktracer.ProgramResultError),
 				},
 			}),
 		},
@@ -90,7 +90,7 @@ func getPanicTracerTestCase(mode RunMode) tracerTestCase {
 			},
 			mocktracer.OpcodeEvents(36, true),
 			{
-				mocktracer.AfterProgram(mode, true),
+				mocktracer.AfterProgram(mode, mocktracer.ProgramResultError),
 			},
 		}),
 	}

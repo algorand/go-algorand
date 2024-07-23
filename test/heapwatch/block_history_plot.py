@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (C) 2019-2023 Algorand, Inc.
+# Copyright (C) 2019-2024 Algorand, Inc.
 # This file is part of go-algorand
 #
 # go-algorand is free software: you can redistribute it and/or modify
@@ -138,19 +138,21 @@ def process(path, args):
         min(tpsv[start:end]), max(tpsv[start:end]),
     ))
     print('long round times: {}'.format(' '.join(list(map(str,filter(lambda x: x >= 9,dtv[start:end]))))))
-    fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2,2)
-    ax1.set_title('round time (seconds)')
+    fig, ((ax1, ax2, ax3), (ax4, ax5, ax6)) = plt.subplots(2,3, figsize=(10, 5))
+    ax1.set_title('round time histogram (sec)')
     ax1.hist(list(filter(lambda x: x < 9,dtv[start:end])),bins=20)
 
-    if args.rtime:
-        ax2.set_title('round time')
-        ax2.plot(dtv)
-    else:
-        ax2.set_title('TPS')
-        ax2.hist(tpsv[start:end],bins=20)
+    ax4.set_title('round time')
+    ax4.plot(dtv[start:end])
 
-    ax3.set_title('txn/block')
-    ax3.hist(txnv[start:end],bins=20)
+    ax2.set_title('txn/block histogram')
+    ax2.hist(txnv[start:end],bins=20)
+
+    ax5.set_title('txn/block')
+    ax5.plot(txnv[start:end])
+
+    ax3.set_title('TPS')
+    ax3.hist(tpsv[start:end],bins=20)
 
     # 10 round moving average TPS
     tpsv10 = []
@@ -165,12 +167,12 @@ def process(path, args):
         dtxn = tca-tc0
         tpsv10.append(dtxn/dt)
     if args.tps1:
-        ax4.set_title('TPS')
-        ax4.plot(tpsv[start:end])
+        ax6.set_title('TPS')
+        ax6.plot(tpsv[start:end])
         print('fullish block sizes: {}'.format(list(filter(lambda x: x > 100, txnv))))
     else:
-        ax4.set_title('TPS(10 round window)')
-        ax4.plot(tpsv10)
+        ax6.set_title('TPS(10 round window)')
+        ax6.plot(tpsv10)
     fig.tight_layout()
     plt.savefig(path + '_hist.svg', format='svg')
     plt.savefig(path + '_hist.png', format='png')

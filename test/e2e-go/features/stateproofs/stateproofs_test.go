@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,6 +18,7 @@ package stateproofs
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -41,6 +42,7 @@ import (
 	"github.com/algorand/go-algorand/data/stateproofmsg"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/libgoal"
+	"github.com/algorand/go-algorand/libgoal/participation"
 	"github.com/algorand/go-algorand/nodecontrol"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
@@ -321,6 +323,8 @@ func TestStateProofMessageCommitmentVerification(t *testing.T) {
 	consensusVersion := protocol.ConsensusVersion("test-fast-stateproofs")
 	consensusParams := getDefaultStateProofConsensusParams()
 	configurableConsensus[consensusVersion] = consensusParams
+	oldConsensus := config.SetConfigurableConsensusProtocols(configurableConsensus)
+	defer config.SetConfigurableConsensusProtocols(oldConsensus)
 
 	var fixture fixtures.RestClientFixture
 	fixture.SetConsensus(configurableConsensus)
@@ -677,7 +681,10 @@ func installParticipationKey(t *testing.T, client libgoal.Client, addr string, f
 	defer os.RemoveAll(dir)
 
 	// Install overlapping participation keys...
-	part, filePath, err := client.GenParticipationKeysTo(addr, firstValid, lastValid, 100, dir)
+	installFunc := func(keyPath string) error {
+		return errors.New("the install directory is provided, so keys should not be installed")
+	}
+	part, filePath, err := participation.GenParticipationKeysTo(addr, firstValid, lastValid, 100, dir, installFunc)
 	require.NoError(t, err)
 	require.NotNil(t, filePath)
 	require.Equal(t, addr, part.Parent.String())
@@ -836,7 +843,11 @@ func TestTotalWeightChanges(t *testing.T) {
 			richNode.goOffline(a, &fixture, rnd)
 		}
 
-		a.NoError(fixture.WaitForRound(rnd, 30*time.Second))
+		if testing.Short() {
+			a.NoError(fixture.WaitForRound(rnd, 30*time.Second))
+		} else {
+			a.NoError(fixture.WaitForRound(rnd, 60*time.Second))
+		}
 		blk, err := libgoal.BookkeepingBlock(rnd)
 		a.NoErrorf(err, "failed to retrieve block from algod on round %d", rnd)
 

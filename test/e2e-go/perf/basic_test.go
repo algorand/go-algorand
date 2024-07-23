@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -231,7 +231,7 @@ func doBenchTemplate(b *testing.B, template string, moneynode string) {
 				time.Sleep(5 * time.Second)
 			}
 
-			_, err = fixture.WaitForConfirmedTxn(status.LastRound+100, addr, tx.ID().String())
+			_, err = fixture.WaitForConfirmedTxn(status.LastRound+100, tx.ID().String())
 			fmt.Printf("Waiting for confirmation transaction to commit..\n")
 			a.NoError(err)
 		}

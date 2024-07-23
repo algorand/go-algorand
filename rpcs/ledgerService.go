@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -34,7 +34,6 @@ import (
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
-	"github.com/algorand/go-algorand/network"
 )
 
 const (
@@ -60,19 +59,24 @@ type LedgerForService interface {
 	GetCatchpointStream(round basics.Round) (ledger.ReadCloseSizer, error)
 }
 
+// httpGossipNode is a reduced interface for the gossipNode that only includes the methods needed by the LedgerService
+type httpGossipNode interface {
+	RegisterHTTPHandler(path string, handler http.Handler)
+}
+
 // LedgerService represents the Ledger RPC API
 type LedgerService struct {
 	// running is non-zero once the service is running, and zero when it's not running. it needs to be at a 32-bit aligned address for RasPI support.
-	running       int32
+	running       atomic.Int32
 	ledger        LedgerForService
 	genesisID     string
-	net           network.GossipNode
+	net           httpGossipNode
 	enableService bool
 	stopping      sync.WaitGroup
 }
 
 // MakeLedgerService creates a LedgerService around the provider Ledger and registers it with the HTTP router
-func MakeLedgerService(config config.Local, ledger LedgerForService, net network.GossipNode, genesisID string) *LedgerService {
+func MakeLedgerService(config config.Local, ledger LedgerForService, net httpGossipNode, genesisID string) *LedgerService {
 	service := &LedgerService{
 		ledger:        ledger,
 		genesisID:     genesisID,
@@ -89,14 +93,17 @@ func MakeLedgerService(config config.Local, ledger LedgerForService, net network
 // Start listening to catchup requests
 func (ls *LedgerService) Start() {
 	if ls.enableService {
-		atomic.StoreInt32(&ls.running, 1)
+		ls.running.Store(1)
 	}
 }
 
 // Stop servicing catchup requests
 func (ls *LedgerService) Stop() {
 	if ls.enableService {
-		atomic.StoreInt32(&ls.running, 0)
+		logging.Base().Debug("ledger service is stopping")
+		defer logging.Base().Debug("ledger service has stopped")
+
+		ls.running.Store(0)
 		ls.stopping.Wait()
 	}
 }
@@ -107,7 +114,7 @@ func (ls *LedgerService) Stop() {
 func (ls *LedgerService) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 	ls.stopping.Add(1)
 	defer ls.stopping.Done()
-	if atomic.AddInt32(&ls.running, 0) == 0 {
+	if ls.running.Add(0) == 0 {
 		response.WriteHeader(http.StatusNotFound)
 		return
 	}
@@ -202,17 +209,16 @@ func (ls *LedgerService) ServeHTTP(response http.ResponseWriter, request *http.R
 		response.WriteHeader(http.StatusOK)
 		return
 	}
-	if conn := ls.net.GetHTTPRequestConnection(request); conn != nil {
-		maxCatchpointFileWritingDuration := 2 * time.Minute
+	rc := http.NewResponseController(response)
+	maxCatchpointFileWritingDuration := 2 * time.Minute
 
-		catchpointFileSize, err := cs.Size()
-		if err != nil || catchpointFileSize <= 0 {
-			maxCatchpointFileWritingDuration += maxCatchpointFileSize * time.Second / expectedWorstUploadSpeedBytesPerSecond
-		} else {
-			maxCatchpointFileWritingDuration += time.Duration(catchpointFileSize) * time.Second / expectedWorstUploadSpeedBytesPerSecond
-		}
-		conn.SetWriteDeadline(time.Now().Add(maxCatchpointFileWritingDuration))
+	catchpointFileSize, err := cs.Size()
+	if err != nil || catchpointFileSize <= 0 {
+		maxCatchpointFileWritingDuration += maxCatchpointFileSize * time.Second / expectedWorstUploadSpeedBytesPerSecond
 	} else {
+		maxCatchpointFileWritingDuration += time.Duration(catchpointFileSize) * time.Second / expectedWorstUploadSpeedBytesPerSecond
+	}
+	if wdErr := rc.SetWriteDeadline(time.Now().Add(maxCatchpointFileWritingDuration)); wdErr != nil {
 		logging.Base().Warnf("LedgerService.ServeHTTP unable to set connection timeout")
 	}
 

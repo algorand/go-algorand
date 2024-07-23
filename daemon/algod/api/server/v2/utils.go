@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,6 +18,7 @@ package v2
 
 import (
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -44,7 +45,12 @@ import (
 // returnError logs an internal message while returning the encoded response.
 func returnError(ctx echo.Context, code int, internal error, external string, logger logging.Logger) error {
 	logger.Info(internal)
-	return ctx.JSON(code, model.ErrorResponse{Message: external})
+	var data *map[string]any
+	var se *basics.SError
+	if errors.As(internal, &se) {
+		data = &se.Attrs
+	}
+	return ctx.JSON(code, model.ErrorResponse{Message: external, Data: data})
 }
 
 func badRequest(ctx echo.Context, internal error, external string, log logging.Logger) error {
@@ -75,6 +81,16 @@ func convertSlice[X any, Y any](input []X, fn func(X) Y) []Y {
 	output := make([]Y, len(input))
 	for i := range input {
 		output[i] = fn(input[i])
+	}
+	return output
+}
+
+func convertMap[X comparable, Y, Z any](input map[X]Y, fn func(X, Y) Z) []Z {
+	output := make([]Z, len(input))
+	counter := 0
+	for x, y := range input {
+		output[counter] = fn(x, y)
+		counter++
 	}
 	return output
 }
@@ -440,12 +456,14 @@ func convertTxnTrace(txnTrace *simulation.TransactionTrace) *model.SimulationTra
 		return nil
 	}
 	return &model.SimulationTransactionExecTrace{
-		ApprovalProgramTrace:   sliceOrNil(convertSlice(txnTrace.ApprovalProgramTrace, convertOpcodeTraceUnit)),
-		ApprovalProgramHash:    digestOrNil(txnTrace.ApprovalProgramHash),
-		ClearStateProgramTrace: sliceOrNil(convertSlice(txnTrace.ClearStateProgramTrace, convertOpcodeTraceUnit)),
-		ClearStateProgramHash:  digestOrNil(txnTrace.ClearStateProgramHash),
-		LogicSigTrace:          sliceOrNil(convertSlice(txnTrace.LogicSigTrace, convertOpcodeTraceUnit)),
-		LogicSigHash:           digestOrNil(txnTrace.LogicSigHash),
+		ApprovalProgramTrace:    sliceOrNil(convertSlice(txnTrace.ApprovalProgramTrace, convertOpcodeTraceUnit)),
+		ApprovalProgramHash:     digestOrNil(txnTrace.ApprovalProgramHash),
+		ClearStateProgramTrace:  sliceOrNil(convertSlice(txnTrace.ClearStateProgramTrace, convertOpcodeTraceUnit)),
+		ClearStateProgramHash:   digestOrNil(txnTrace.ClearStateProgramHash),
+		ClearStateRollback:      omitEmpty(txnTrace.ClearStateRollback),
+		ClearStateRollbackError: omitEmpty(txnTrace.ClearStateRollbackError),
+		LogicSigTrace:           sliceOrNil(convertSlice(txnTrace.LogicSigTrace, convertOpcodeTraceUnit)),
+		LogicSigHash:            digestOrNil(txnTrace.LogicSigHash),
 		InnerTrace: sliceOrNil(convertSlice(txnTrace.InnerTraces,
 			func(trace simulation.TransactionTrace) model.SimulationTransactionExecTrace {
 				return *convertTxnTrace(&trace)
@@ -455,13 +473,20 @@ func convertTxnTrace(txnTrace *simulation.TransactionTrace) *model.SimulationTra
 }
 
 func convertTxnResult(txnResult simulation.TxnResult) PreEncodedSimulateTxnResult {
-	return PreEncodedSimulateTxnResult{
+	result := PreEncodedSimulateTxnResult{
 		Txn:                      ConvertInnerTxn(&txnResult.Txn),
 		AppBudgetConsumed:        omitEmpty(txnResult.AppBudgetConsumed),
 		LogicSigBudgetConsumed:   omitEmpty(txnResult.LogicSigBudgetConsumed),
 		TransactionTrace:         convertTxnTrace(txnResult.Trace),
 		UnnamedResourcesAccessed: convertUnnamedResourcesAccessed(txnResult.UnnamedResourcesAccessed),
 	}
+
+	if !txnResult.FixedSigner.IsZero() {
+		fixedSigner := txnResult.FixedSigner.String()
+		result.FixedSigner = &fixedSigner
+	}
+
+	return result
 }
 
 func convertUnnamedResourcesAccessed(resources *simulation.ResourceTracker) *model.SimulateUnnamedResourcesAccessed {
@@ -491,6 +516,51 @@ func convertUnnamedResourcesAccessed(resources *simulation.ResourceTracker) *mod
 				App:     uint64(local.App),
 			}
 		})),
+	}
+}
+
+func convertAppKVStorePtr(address basics.Address, appKVPairs simulation.AppKVPairs) *model.ApplicationKVStorage {
+	if len(appKVPairs) == 0 && address.IsZero() {
+		return nil
+	}
+	return &model.ApplicationKVStorage{
+		Account: addrOrNil(address),
+		Kvs: convertMap(appKVPairs, func(key string, value basics.TealValue) model.AvmKeyValue {
+			return model.AvmKeyValue{
+				Key:   []byte(key),
+				Value: convertToAVMValue(value),
+			}
+		}),
+	}
+}
+
+func convertAppKVStoreInstance(address basics.Address, appKVPairs simulation.AppKVPairs) model.ApplicationKVStorage {
+	return model.ApplicationKVStorage{
+		Account: addrOrNil(address),
+		Kvs: convertMap(appKVPairs, func(key string, value basics.TealValue) model.AvmKeyValue {
+			return model.AvmKeyValue{
+				Key:   []byte(key),
+				Value: convertToAVMValue(value),
+			}
+		}),
+	}
+}
+
+func convertApplicationInitialStates(appID basics.AppIndex, states simulation.SingleAppInitialStates) model.ApplicationInitialStates {
+	return model.ApplicationInitialStates{
+		Id:         uint64(appID),
+		AppBoxes:   convertAppKVStorePtr(basics.Address{}, states.AppBoxes),
+		AppGlobals: convertAppKVStorePtr(basics.Address{}, states.AppGlobals),
+		AppLocals:  sliceOrNil(convertMap(states.AppLocals, convertAppKVStoreInstance)),
+	}
+}
+
+func convertSimulateInitialStates(initialStates *simulation.ResourcesInitialStates) *model.SimulateInitialStates {
+	if initialStates == nil {
+		return nil
+	}
+	return &model.SimulateInitialStates{
+		AppInitialStates: sliceOrNil(convertMap(initialStates.AllAppsInitialStates, convertApplicationInitialStates)),
 	}
 }
 
@@ -525,22 +595,18 @@ func convertSimulationResult(result simulation.Result) PreEncodedSimulateRespons
 			MaxLogSize:            result.EvalOverrides.MaxLogSize,
 			MaxLogCalls:           result.EvalOverrides.MaxLogCalls,
 			ExtraOpcodeBudget:     omitEmpty(result.EvalOverrides.ExtraOpcodeBudget),
+			FixSigners:            omitEmpty(result.EvalOverrides.FixSigners),
 		}
 	}
 
-	encodedSimulationResult := PreEncodedSimulateResponse{
+	return PreEncodedSimulateResponse{
 		Version:         result.Version,
 		LastRound:       uint64(result.LastRound),
-		TxnGroups:       make([]PreEncodedSimulateTxnGroupResult, len(result.TxnGroups)),
+		TxnGroups:       convertSlice(result.TxnGroups, convertTxnGroupResult),
 		EvalOverrides:   evalOverrides,
 		ExecTraceConfig: result.TraceConfig,
+		InitialStates:   convertSimulateInitialStates(result.InitialStates),
 	}
-
-	for i, txnGroup := range result.TxnGroups {
-		encodedSimulationResult.TxnGroups[i] = convertTxnGroupResult(txnGroup)
-	}
-
-	return encodedSimulationResult
 }
 
 func convertSimulationRequest(request PreEncodedSimulateRequest) simulation.Request {
@@ -556,6 +622,7 @@ func convertSimulationRequest(request PreEncodedSimulateRequest) simulation.Requ
 		AllowUnnamedResources: request.AllowUnnamedResources,
 		ExtraOpcodeBudget:     request.ExtraOpcodeBudget,
 		TraceConfig:           request.ExecTraceConfig,
+		FixSigners:            request.FixSigners,
 	}
 }
 

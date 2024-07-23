@@ -106,7 +106,7 @@ def _script_thread_inner(runset, scriptname, timeout):
 
     # create a wallet for the test
     walletname = base64.b16encode(os.urandom(16)).decode()
-    winfo = kmd.create_wallet(walletname, '')
+    winfo = kmd.create_wallet(walletname, '', timeout=120) # 2 minute timeout
     handle = kmd.init_wallet_handle(winfo['id'], '')
     addr = kmd.generate_key(handle)
 
@@ -114,11 +114,12 @@ def _script_thread_inner(runset, scriptname, timeout):
     params = algod.suggested_params()
     round = params.first
     max_init_wait_rounds = 5
-    txn = algosdk.transaction.PaymentTxn(sender=maxpubaddr, fee=params.min_fee, first=round, last=round+max_init_wait_rounds, gh=params.gh, receiver=addr, amt=1000000000000, flat_fee=True)
+    params.last = params.first + max_init_wait_rounds
+    txn = algosdk.transaction.PaymentTxn(maxpubaddr, params, addr, 1_000_000_000_000)
     stxn = kmd.sign_transaction(pubw, '', txn)
     txid = algod.send_transaction(stxn)
     ptxinfo = None
-    for i in range(max_init_wait_rounds):
+    for _ in range(max_init_wait_rounds):
         txinfo = algod.pending_transaction_info(txid)
         if txinfo.get('round'):
             break

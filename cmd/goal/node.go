@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -39,7 +39,7 @@ import (
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/libgoal"
-	"github.com/algorand/go-algorand/network"
+	naddr "github.com/algorand/go-algorand/network/addr"
 	"github.com/algorand/go-algorand/nodecontrol"
 	"github.com/algorand/go-algorand/util"
 	"github.com/algorand/go-algorand/util/tokens"
@@ -61,6 +61,7 @@ var newNodeFullConfig bool
 var watchMillisecond uint64
 var abortCatchup bool
 var fastCatchupForce bool
+var minCatchupRounds uint64
 
 const catchpointURL = "https://algorand-catchpoints.s3.us-east-2.amazonaws.com/channel/%s/latest.catchpoint"
 
@@ -116,6 +117,7 @@ func init() {
 
 	catchupCmd.Flags().BoolVarP(&abortCatchup, "abort", "x", false, "Aborts the current catchup process")
 	catchupCmd.Flags().BoolVar(&fastCatchupForce, "force", false, "Forces fast catchup with implicit catchpoint to start without a consent prompt")
+	catchupCmd.Flags().Uint64VarP(&minCatchupRounds, "min", "m", 0, "Catchup only if the catchpoint would advance the node by the specified minimum number of rounds")
 
 }
 
@@ -161,22 +163,38 @@ var catchupCmd = &cobra.Command{
 	Example: "goal node catchup 6500000#1234567890ABCDEF01234567890ABCDEF0\tStart catching up to round 6500000 with the provided catchpoint\ngoal node catchup --abort\t\t\t\t\tAbort the current catchup",
 	Args:    catchpointCmdArgument,
 	Run: func(cmd *cobra.Command, args []string) {
+		var catchpoint string
+		// assume first positional parameter is the catchpoint
+		if len(args) != 0 {
+			catchpoint = args[0]
+		}
 		datadir.OnDataDirs(func(dataDir string) {
-			if !abortCatchup && len(args) == 0 {
-				client := ensureAlgodClient(dataDir)
+			client := ensureAlgodClient(dataDir)
+
+			if abortCatchup {
+				err := client.AbortCatchup()
+				if err != nil {
+					reportErrorf(errorNodeStatus, err)
+				}
+				return
+			}
+
+			// lookup missing catchpoint
+			if catchpoint == "" {
 				vers, err := client.AlgodVersions()
 				if err != nil {
 					reportErrorf(errorNodeStatus, err)
 				}
 				genesis := strings.Split(vers.GenesisID, "-")[0]
 				URL := fmt.Sprintf(catchpointURL, genesis)
-				label, err := getMissingCatchpointLabel(URL)
+				catchpoint, err = getMissingCatchpointLabel(URL)
 				if err != nil {
 					reportErrorf(errorCatchpointLabelMissing, errorUnableToLookupCatchpointLabel, err.Error())
 				}
-				args = append(args, label)
+
+				// Prompt user to confirm using an implicit catchpoint.
 				if !fastCatchupForce {
-					fmt.Printf(nodeConfirmImplicitCatchpoint, label)
+					fmt.Printf(nodeConfirmImplicitCatchpoint, catchpoint)
 					reader := bufio.NewReader(os.Stdin)
 					text, _ := reader.ReadString('\n')
 					text = strings.Replace(text, "\n", "", -1)
@@ -185,7 +203,14 @@ var catchupCmd = &cobra.Command{
 					}
 				}
 			}
-			catchup(dataDir, args)
+
+			resp, err := client.Catchup(catchpoint, minCatchupRounds)
+			if err != nil {
+				reportErrorf(errorNodeStatus, err)
+			}
+			if resp.CatchupMessage != catchpoint {
+				reportInfof("node response: %s", resp.CatchupMessage)
+			}
 		})
 	},
 }
@@ -718,21 +743,6 @@ var createCmd = &cobra.Command{
 	},
 }
 
-func catchup(dataDir string, args []string) {
-	client := ensureAlgodClient(datadir.EnsureSingleDataDir())
-	if abortCatchup {
-		err := client.AbortCatchup()
-		if err != nil {
-			reportErrorf(errorNodeStatus, err)
-		}
-		return
-	}
-	err := client.Catchup(args[0])
-	if err != nil {
-		reportErrorf(errorNodeStatus, err)
-	}
-}
-
 // verifyPeerDialArg verifies that the peers provided in peerDial are valid peers.
 func verifyPeerDialArg() bool {
 	if peerDial == "" {
@@ -741,7 +751,7 @@ func verifyPeerDialArg() bool {
 
 	// make sure that the format of each entry is valid:
 	for _, peer := range strings.Split(peerDial, ";") {
-		_, err := network.ParseHostOrURLOrMultiaddr(peer)
+		_, err := naddr.ParseHostOrURLOrMultiaddr(peer)
 		if err != nil {
 			reportErrorf("Provided peer '%s' is not a valid peer address : %v", peer, err)
 			return false

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -47,7 +47,7 @@ func opImmediateNoteSyntaxMarkdown(name string, oids []logic.OpImmediateDetails)
 		argDocs[idx] = fmt.Sprintf("%s: %s", oid.Name, argNote)
 	}
 
-	return fmt.Sprintf("`%s %s` ∋ %s", name, strings.Join(argNames, " "), strings.Join(argDocs, ", "))
+	return fmt.Sprintf("`%s %s` where %s", name, strings.Join(argNames, " "), strings.Join(argDocs, ", "))
 }
 
 func opImmediateNoteEncoding(opcode byte, oids []logic.OpImmediateDetails) string {
@@ -466,7 +466,7 @@ func main() {
 			AVMType:      t.AVMType.String(),
 		})
 	}
-	sort.Slice(named, func(i, j int) bool { return named[i].Name > named[j].Name })
+	sort.Slice(named, func(i, j int) bool { return named[i].Name < named[j].Name })
 
 	constants := create("named_integer_constants.md")
 	integerConstantsTableMarkdown(constants)

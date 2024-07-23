@@ -1,48 +1,39 @@
 {
   "Version": 2,
-  "LogicSigVersion": 9,
+  "LogicSigVersion": 10,
   "NamedTypes": [
     {
-      "Name": "uint64",
-      "Abbreviation": "i",
+      "Name": "[]byte",
+      "Abbreviation": "b",
       "Bound": [
         0,
-        18446744073709551615
-      ],
-      "AVMType": "uint64"
-    },
-    {
-      "Name": "stateKey",
-      "Abbreviation": "K",
-      "Bound": [
-        0,
-        64
+        4096
       ],
       "AVMType": "[]byte"
     },
     {
-      "Name": "none",
-      "Abbreviation": "x",
+      "Name": "address",
+      "Abbreviation": "A",
+      "Bound": [
+        32,
+        32
+      ],
+      "AVMType": "[]byte"
+    },
+    {
+      "Name": "any",
+      "Abbreviation": "a",
       "Bound": [
         0,
         0
       ],
-      "AVMType": "none"
+      "AVMType": "any"
     },
     {
-      "Name": "method",
-      "Abbreviation": "M",
+      "Name": "bigint",
+      "Abbreviation": "I",
       "Bound": [
-        4,
-        4
-      ],
-      "AVMType": "[]byte"
-    },
-    {
-      "Name": "boxName",
-      "Abbreviation": "N",
-      "Bound": [
-        1,
+        0,
         64
       ],
       "AVMType": "[]byte"
@@ -57,8 +48,35 @@
       "AVMType": "uint64"
     },
     {
-      "Name": "bigint",
-      "Abbreviation": "I",
+      "Name": "boxName",
+      "Abbreviation": "N",
+      "Bound": [
+        1,
+        64
+      ],
+      "AVMType": "[]byte"
+    },
+    {
+      "Name": "method",
+      "Abbreviation": "M",
+      "Bound": [
+        4,
+        4
+      ],
+      "AVMType": "[]byte"
+    },
+    {
+      "Name": "none",
+      "Abbreviation": "x",
+      "Bound": [
+        0,
+        0
+      ],
+      "AVMType": "none"
+    },
+    {
+      "Name": "stateKey",
+      "Abbreviation": "K",
       "Bound": [
         0,
         64
@@ -66,40 +84,13 @@
       "AVMType": "[]byte"
     },
     {
-      "Name": "any",
-      "Abbreviation": "a",
+      "Name": "uint64",
+      "Abbreviation": "i",
       "Bound": [
         0,
-        0
+        18446744073709551615
       ],
-      "AVMType": "any"
-    },
-    {
-      "Name": "address",
-      "Abbreviation": "A",
-      "Bound": [
-        32,
-        32
-      ],
-      "AVMType": "[]byte"
-    },
-    {
-      "Name": "[]byte",
-      "Abbreviation": "b",
-      "Bound": [
-        0,
-        4096
-      ],
-      "AVMType": "[]byte"
-    },
-    {
-      "Name": "[32]byte",
-      "Abbreviation": "H",
-      "Bound": [
-        32,
-        32
-      ],
-      "AVMType": "[]byte"
+      "AVMType": "uint64"
     }
   ],
   "Ops": [
@@ -128,7 +119,7 @@
       "Doc": "SHA256 hash of value A, yields [32]byte",
       "IntroducedVersion": 1,
       "Groups": [
-        "Arithmetic"
+        "Cryptography"
       ]
     },
     {
@@ -145,7 +136,7 @@
       "Doc": "Keccak256 hash of value A, yields [32]byte",
       "IntroducedVersion": 1,
       "Groups": [
-        "Arithmetic"
+        "Cryptography"
       ]
     },
     {
@@ -162,7 +153,7 @@
       "Doc": "SHA512_256 hash of value A, yields [32]byte",
       "IntroducedVersion": 1,
       "Groups": [
-        "Arithmetic"
+        "Cryptography"
       ]
     },
     {
@@ -170,8 +161,8 @@
       "Name": "ed25519verify",
       "Args": [
         "[]byte",
-        "[]byte",
-        "[]byte"
+        "[64]byte",
+        "[32]byte"
       ],
       "Returns": [
         "bool"
@@ -182,7 +173,7 @@
       "DocExtra": "The 32 byte public key is the last element on the stack, preceded by the 64 byte signature at the second-to-last element on the stack, preceded by the data which was signed at the third-to-last element on the stack.",
       "IntroducedVersion": 1,
       "Groups": [
-        "Arithmetic"
+        "Cryptography"
       ]
     },
     {
@@ -435,7 +426,7 @@
       "Doc": "yields length of byte value A",
       "IntroducedVersion": 1,
       "Groups": [
-        "Arithmetic"
+        "Byte Array Manipulation"
       ]
     },
     {
@@ -445,7 +436,7 @@
         "uint64"
       ],
       "Returns": [
-        "[]byte"
+        "[8]byte"
       ],
       "Size": 1,
       "DocCost": "1",
@@ -1422,7 +1413,7 @@
       "DocExtra": "`concat` fails if the result would be greater than 4096 bytes.",
       "IntroducedVersion": 2,
       "Groups": [
-        "Arithmetic"
+        "Byte Array Manipulation"
       ]
     },
     {
@@ -1515,7 +1506,7 @@
       "Name": "app_local_get",
       "Args": [
         "uint64",
-        "[]byte"
+        "stateKey"
       ],
       "Returns": [
         "any"
@@ -1535,7 +1526,7 @@
       "Args": [
         "uint64",
         "uint64",
-        "[]byte"
+        "stateKey"
       ],
       "Returns": [
         "any",
@@ -1554,7 +1545,7 @@
       "Opcode": 100,
       "Name": "app_global_get",
       "Args": [
-        "[]byte"
+        "stateKey"
       ],
       "Returns": [
         "any"
@@ -1573,7 +1564,7 @@
       "Name": "app_global_get_ex",
       "Args": [
         "uint64",
-        "[]byte"
+        "stateKey"
       ],
       "Returns": [
         "any",
@@ -1593,7 +1584,7 @@
       "Name": "app_local_put",
       "Args": [
         "uint64",
-        "[]byte",
+        "stateKey",
         "any"
       ],
       "Size": 1,
@@ -1609,7 +1600,7 @@
       "Opcode": 103,
       "Name": "app_global_put",
       "Args": [
-        "[]byte",
+        "stateKey",
         "any"
       ],
       "Size": 1,
@@ -1625,7 +1616,7 @@
       "Name": "app_local_del",
       "Args": [
         "uint64",
-        "[]byte"
+        "stateKey"
       ],
       "Size": 1,
       "DocCost": "1",
@@ -1640,7 +1631,7 @@
       "Opcode": 105,
       "Name": "app_global_del",
       "Args": [
-        "[]byte"
+        "stateKey"
       ],
       "Size": 1,
       "DocCost": "1",

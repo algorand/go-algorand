@@ -3,7 +3,7 @@
 import os
 import sys
 import algosdk.encoding as enc
-import algosdk.future.transaction as txn
+import algosdk.transaction as txn
 from goal import Goal
 
 from datetime import datetime

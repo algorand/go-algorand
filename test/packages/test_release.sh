@@ -15,11 +15,12 @@ then
 fi
 
 OS_LIST=(
-    centos:7
-    quay.io/centos/centos:stream8
-    fedora:38
+    quay.io/centos/centos:stream9
+    fedora:39
+    fedora:40
     ubuntu:20.04
     ubuntu:22.04
+    ubuntu:24.04
 )
 
 BUCKET=algorand-builds
@@ -68,7 +69,8 @@ EOF
         then
             WITH_PACMAN=$(echo -e "${TOKENIZED//\{\{PACMAN\}\}/RUN DEBIAN_FRONTEND=noninteractive apt-get update && apt-get install -y curl}")
         else
-            WITH_PACMAN=$(echo -e "${TOKENIZED//\{\{PACMAN\}\}/RUN yum install -y curl}")
+            # fedora and centos already have curl installed.
+            WITH_PACMAN=$(echo -e "${TOKENIZED//\{\{PACMAN\}\}/}")
         fi
 
         echo -e "$BLUE_FG[$0]$END_FG_COLOR Testing $item..."

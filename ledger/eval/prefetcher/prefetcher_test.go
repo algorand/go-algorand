@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -48,7 +48,10 @@ func makeAddress(addressSeed int) (o basics.Address) {
 	return
 }
 
-const proto = protocol.ConsensusCurrentVersion
+// It would be nice to test current and future, but until that change is made,
+// it's better to test future, as that's likely to catch mistakes made while
+// developing something new (and likely to catch changes that affect current)
+const proto = protocol.ConsensusFuture
 
 type lookupError struct{}
 

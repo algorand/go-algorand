@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,7 +21,6 @@ package dnssec
 
 import (
 	"fmt"
-	"runtime/debug"
 	"time"
 	"unsafe"
 
@@ -94,24 +93,30 @@ type fixedInfoWithOverlay struct {
 // See GetNetworkParams for details:
 // https://docs.microsoft.com/en-us/windows/win32/api/iphlpapi/nf-iphlpapi-getnetworkparams
 func SystemConfig() (servers []ResolverAddress, timeout time.Duration, err error) {
-	// disable GC to prevent fi collection earlier than lookups in fi completed
-	pct := debug.SetGCPercent(-1)
-	defer debug.SetGCPercent(pct)
+	ulSize := uint32(unsafe.Sizeof(fixedInfoWithOverlay{}))
 
-	var fi fixedInfoWithOverlay
-	var ulSize uint32 = uint32(unsafe.Sizeof(fi))
+	buf, err := windows.LocalAlloc(windows.LMEM_FIXED|windows.LMEM_ZEROINIT, ulSize)
+	if err != nil {
+		err = fmt.Errorf("GetNetworkParams failed to allocate %d bytes of memory for fixedInfoWithOverlay", ulSize)
+		return
+	}
+
+	defer windows.LocalFree(windows.Handle(buf))
+
 	ret, _, _ := networkParamsProc.Call(
-		uintptr(unsafe.Pointer(&fi)),
+		buf,
 		uintptr(unsafe.Pointer(&ulSize)),
 	)
 	if ret != 0 {
 		if windows.Errno(ret) == windows.ERROR_BUFFER_OVERFLOW {
-			err = fmt.Errorf("GetNetworkParams requested %d bytes of memory, max supported is %d. Error code is %x", ulSize, unsafe.Sizeof(fi), ret)
+			err = fmt.Errorf("GetNetworkParams requested %d bytes of memory, max supported is %d. Error code is %x", ulSize, unsafe.Sizeof(fixedInfoWithOverlay{}), ret)
 			return
 		}
 		err = fmt.Errorf("GetNetworkParams failed with code is %x", ret)
 		return
 	}
+
+	fi := (*fixedInfoWithOverlay)(unsafe.Pointer(buf))
 
 	var p *ipAddrString = &fi.DnsServerList
 	for {

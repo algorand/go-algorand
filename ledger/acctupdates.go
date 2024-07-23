@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -93,7 +93,7 @@ const initializingAccountCachesMessageTimeout = 3 * time.Second
 // where we end up batching up to 1000 rounds in a single update.
 const accountsUpdatePerRoundHighWatermark = 1 * time.Second
 
-// forceCatchpointFileGeneration defines the CatchpointTracking mode that would be used to
+// forceCatchpointFileGenerationTrackingMode defines the CatchpointTracking mode that would be used to
 // force a node to generate catchpoint files.
 const forceCatchpointFileGenerationTrackingMode = 99
 
@@ -339,6 +339,10 @@ func (au *accountUpdates) flushCaches() {
 
 func (au *accountUpdates) LookupResource(rnd basics.Round, addr basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (ledgercore.AccountResource, basics.Round, error) {
 	return au.lookupResource(rnd, addr, aidx, ctype, true /* take lock */)
+}
+
+func (au *accountUpdates) LookupAssetResources(addr basics.Address, assetIDGT basics.AssetIndex, limit uint64) ([]ledgercore.AssetResourceWithIDs, basics.Round, error) {
+	return au.lookupAssetResources(addr, assetIDGT, limit)
 }
 
 func (au *accountUpdates) LookupKv(rnd basics.Round, key string) ([]byte, error) {
@@ -1206,6 +1210,55 @@ func (au *accountUpdates) lookupResource(rnd basics.Round, addr basics.Address, 
 			return ledgercore.AccountResource{}, basics.Round(0), &MismatchingDatabaseRoundError{databaseRound: persistedData.Round, memoryRound: currentDbRound}
 		}
 	}
+}
+
+// lookupAllResources returns all the resources for a given address, solely based on what is persisted to disk. It does not
+// take into account any in-memory deltas; the round number returned is the latest round number that is known to the database.
+func (au *accountUpdates) lookupAssetResources(addr basics.Address, assetIDGT basics.AssetIndex, limit uint64) (data []ledgercore.AssetResourceWithIDs, validThrough basics.Round, err error) {
+	// Look for resources on disk
+	persistedResources, resourceDbRound, err0 := au.accountsq.LookupLimitedResources(addr, basics.CreatableIndex(assetIDGT), limit, basics.AssetCreatable)
+	if err0 != nil {
+		return nil, basics.Round(0), err0
+	}
+
+	data = make([]ledgercore.AssetResourceWithIDs, 0, len(persistedResources))
+	for _, pd := range persistedResources {
+		ah := pd.Data.GetAssetHolding()
+
+		var arwi ledgercore.AssetResourceWithIDs
+		if !pd.Creator.IsZero() {
+			ap := pd.Data.GetAssetParams()
+
+			arwi = ledgercore.AssetResourceWithIDs{
+				AssetID: basics.AssetIndex(pd.Aidx),
+				Creator: pd.Creator,
+
+				AssetResource: ledgercore.AssetResource{
+					AssetHolding: &ah,
+					AssetParams:  &ap,
+				},
+			}
+		} else {
+			arwi = ledgercore.AssetResourceWithIDs{
+				AssetID: basics.AssetIndex(pd.Aidx),
+
+				AssetResource: ledgercore.AssetResource{
+					AssetHolding: &ah,
+				},
+			}
+		}
+
+		data = append(data, arwi)
+	}
+	// We've found all the resources we could find for this address.
+	currentDbRound := resourceDbRound
+	// The resourceDbRound will not be set if there are no persisted resources
+	if len(data) == 0 {
+		au.accountsMu.RLock()
+		currentDbRound = au.cachedDBRound
+		au.accountsMu.RUnlock()
+	}
+	return data, currentDbRound, nil
 }
 
 func (au *accountUpdates) lookupStateDelta(rnd basics.Round) (ledgercore.StateDelta, error) {

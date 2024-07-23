@@ -157,7 +157,14 @@ printf '\x02' | dd of=${TEMPDIR}/true2.lsig bs=1 seek=0 count=1 conv=notrunc
 ${gcmd} clerk compile ${TEAL}/quine.teal -m
 trap 'rm ${TEAL}/quine.teal.*' EXIT
 if ! diff ${TEAL}/quine.map ${TEAL}/quine.teal.tok.map; then
-    echo "produced source maps do not match"
+    echo "produced source maps do not match: ${TEAL}/quine.map vs ${TEAL}/quine.teal.tok.map"
+    exit 1
+fi
+
+${gcmd} clerk compile ${TEAL}/sourcemap-test.teal -m
+trap 'rm ${TEAL}/sourcemap-test.teal.*' EXIT
+if ! diff ${TEAL}/sourcemap-test.map ${TEAL}/sourcemap-test.teal.tok.map; then
+    echo "produced source maps do not match: ${TEAL}/sourcemap-test.map vs ${TEAL}/sourcemap-test.teal.tok.map"
     exit 1
 fi
 

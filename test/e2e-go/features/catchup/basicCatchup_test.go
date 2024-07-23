@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,6 +17,7 @@
 package catchup
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -72,24 +73,6 @@ func TestBasicCatchup(t *testing.T) {
 	// Now, catch up
 	err = fixture.LibGoalFixture.ClientWaitForRoundWithTimeout(cloneClient, waitForRound)
 	a.NoError(err)
-
-	cloneNC := fixture.GetNodeControllerForDataDir(cloneDataDir)
-	cloneRestClient := fixture.GetAlgodClientForController(cloneNC)
-
-	// an immediate call for ready will error, for sync time != 0
-	a.Error(cloneRestClient.ReadyCheck())
-
-	for {
-		status, err := cloneRestClient.Status()
-		a.NoError(err)
-
-		if status.LastRound < 10 {
-			time.Sleep(250 * time.Millisecond)
-			continue
-		}
-		a.NoError(cloneRestClient.ReadyCheck())
-		break
-	}
 }
 
 // TestCatchupOverGossip tests catchup across network versions
@@ -98,20 +81,23 @@ func TestCatchupOverGossip(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
 
-	t.Parallel()
-
 	syncTest := fixtures.SynchronizedTest(t)
 	supportedVersions := network.SupportedProtocolVersions
 	require.LessOrEqual(syncTest, len(supportedVersions), 3)
+
+	subTest := func(tt *testing.T, ledgerVer, fetcherVer string) {
+		tt.Run(fmt.Sprintf("ledger=%s,fetcher=%s", ledgerVer, fetcherVer),
+			func(t *testing.T) { runCatchupOverGossip(t, ledgerVer, fetcherVer) })
+	}
 
 	// ledger node upgraded version, fetcher node upgraded version
 	// Run with the default values. Instead of "", pass the default value
 	// to exercise loading it from the config file.
 	runCatchupOverGossip(syncTest, supportedVersions[0], supportedVersions[0])
 	for i := 1; i < len(supportedVersions); i++ {
-		runCatchupOverGossip(t, supportedVersions[i], "")
-		runCatchupOverGossip(t, "", supportedVersions[i])
-		runCatchupOverGossip(t, supportedVersions[i], supportedVersions[i])
+		subTest(t, supportedVersions[i], "")
+		subTest(t, "", supportedVersions[i])
+		subTest(t, supportedVersions[i], supportedVersions[i])
 	}
 }
 

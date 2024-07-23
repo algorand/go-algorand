@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -28,6 +28,7 @@ import (
 	"runtime/pprof"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -60,7 +61,11 @@ var txBacklogSize = config.GetDefaultLocal().TxBacklogSize
 // mock sender is used to implement OnClose, since TXHandlers expect to use Senders and ERL Clients
 type mockSender struct{}
 
-func (m mockSender) OnClose(func()) {}
+func (m mockSender) OnClose(func())                 {}
+func (m mockSender) GetNetwork() network.GossipNode { panic("not implemented") }
+
+func (m mockSender) IPAddr() []byte      { return nil }
+func (m mockSender) RoutingAddr() []byte { return nil }
 
 // txHandlerConfig is a subset of tx handler related options from config.Local
 type txHandlerConfig struct {
@@ -105,7 +110,7 @@ func BenchmarkTxHandlerProcessing(b *testing.B) {
 	cfg.Archival = true
 	cfg.TxBacklogReservedCapacityPerPeer = 1
 	cfg.IncomingConnectionsLimit = 10
-	ledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, nil, cfg)
+	ledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, cfg)
 	require.NoError(b, err)
 	defer ledger.Close()
 
@@ -791,7 +796,7 @@ func TestTxHandlerProcessIncomingCensoring(t *testing.T) {
 // makeTestTxHandlerOrphaned creates a tx handler without any backlog consumer.
 // It is caller responsibility to run a consumer thread.
 func makeTestTxHandlerOrphaned(backlogSize int) *TxHandler {
-	return makeTestTxHandlerOrphanedWithContext(context.Background(), txBacklogSize, txBacklogSize, txHandlerConfig{true, false}, 0)
+	return makeTestTxHandlerOrphanedWithContext(context.Background(), backlogSize, backlogSize, txHandlerConfig{true, false}, 0)
 }
 
 func makeTestTxHandlerOrphanedWithContext(ctx context.Context, backlogSize int, cacheSize int, txHandlerConfig txHandlerConfig, refreshInterval time.Duration) *TxHandler {
@@ -817,7 +822,7 @@ func makeTestTxHandlerOrphanedWithContext(ctx context.Context, backlogSize int, 
 }
 
 func makeTestTxHandler(dl *Ledger, cfg config.Local) (*TxHandler, error) {
-	tp := pools.MakeTransactionPool(dl.Ledger, cfg, logging.Base())
+	tp := pools.MakeTransactionPool(dl.Ledger, cfg, logging.Base(), nil)
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	opts := TxHandlerOpts{
 		tp, backlogPool, dl, &mocks.MockNetwork{}, "", crypto.Digest{}, cfg,
@@ -1023,7 +1028,7 @@ func TestTxHandlerProcessIncomingCacheTxPoolDrop(t *testing.T) {
 	cfg.Archival = true
 	cfg.EnableTxBacklogRateLimiting = false
 	cfg.TxIncomingFilteringFlags = 3 // txFilterRawMsg + txFilterCanonical
-	ledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, nil, cfg)
+	ledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, cfg)
 	require.NoError(t, err)
 	defer ledger.Close()
 
@@ -1192,7 +1197,7 @@ func incomingTxHandlerProcessing(maxGroupSize, numberOfTransactionGroups int, t 
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
 	cfg.EnableTxBacklogRateLimiting = false
-	ledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, nil, cfg)
+	ledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, cfg)
 	require.NoError(t, err)
 	defer ledger.Close()
 
@@ -1637,7 +1642,7 @@ func (g *txGenerator) makeLedger(tb testing.TB, cfg config.Local, log logging.Lo
 	ledgerName := fmt.Sprintf("%s-in_mem-w_inv=%d", namePrefix, ivrString)
 	ledgerName = strings.Replace(ledgerName, "#", "-", 1)
 	const inMem = true
-	ledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, nil, cfg)
+	ledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, cfg)
 	require.NoError(tb, err)
 	return ledger
 }
@@ -2179,7 +2184,7 @@ func TestTxHandlerRememberReportErrorsWithTxPool(t *testing.T) { //nolint:parall
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
 	cfg.TxPoolSize = config.MaxTxGroupSize + 1
-	ledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, nil, cfg)
+	ledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, cfg)
 	require.NoError(t, err)
 	defer ledger.Close()
 
@@ -2415,7 +2420,7 @@ func TestTxHandlerRestartWithBacklogAndTxPool(t *testing.T) { //nolint:parallelt
 	const inMem = true
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
-	ledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, nil, cfg)
+	ledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, cfg)
 	require.NoError(t, err)
 	defer ledger.Ledger.Close()
 
@@ -2502,4 +2507,241 @@ func TestTxHandlerRestartWithBacklogAndTxPool(t *testing.T) { //nolint:parallelt
 		_, inBad := badTxnGroups[u]
 		require.False(t, inBad, "invalid transaction accepted")
 	}
+}
+
+// check ERL and AppRateLimiter enablement with separate config values,
+// and the app limiter kicks in after congestion.
+func TestTxHandlerAppRateLimiterERLEnabled(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	ledgerName := fmt.Sprintf("%s-mem", t.Name())
+	const inMem = true
+	log := logging.TestingLog(t)
+	log.SetLevel(logging.Panic)
+
+	cfg := config.GetDefaultLocal()
+	cfg.TxBacklogAppTxRateLimiterMaxSize = 100
+	cfg.TxBacklogServiceRateWindowSeconds = 1
+	cfg.TxBacklogAppTxPerSecondRate = 3
+	cfg.TxBacklogSize = 3
+	ledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, bookkeeping.GenesisBalances{}, genesisID, genesisHash, cfg)
+	require.NoError(t, err)
+	defer ledger.Close()
+
+	l := ledger
+
+	func() {
+		cfg.EnableTxBacklogRateLimiting = false
+		cfg.EnableTxBacklogAppRateLimiting = false
+		handler, err := makeTestTxHandler(l, cfg)
+		require.NoError(t, err)
+		defer handler.txVerificationPool.Shutdown()
+		defer close(handler.streamVerifierDropped)
+
+		require.Nil(t, handler.erl)
+		require.Nil(t, handler.appLimiter)
+	}()
+
+	func() {
+		cfg.EnableTxBacklogRateLimiting = true
+		cfg.EnableTxBacklogAppRateLimiting = false
+		handler, err := makeTestTxHandler(l, cfg)
+		require.NoError(t, err)
+		defer handler.txVerificationPool.Shutdown()
+		defer close(handler.streamVerifierDropped)
+
+		require.NotNil(t, handler.erl)
+		require.Nil(t, handler.appLimiter)
+	}()
+
+	cfg.EnableTxBacklogRateLimiting = true
+	cfg.EnableTxBacklogAppRateLimiting = true
+	handler, err := makeTestTxHandler(l, cfg)
+	require.NoError(t, err)
+	defer handler.txVerificationPool.Shutdown()
+	defer close(handler.streamVerifierDropped)
+	require.NotNil(t, handler.erl)
+	require.NotNil(t, handler.appLimiter)
+
+	var addr basics.Address
+	crypto.RandBytes(addr[:])
+
+	tx := transactions.Transaction{
+		Type: protocol.ApplicationCallTx,
+		Header: transactions.Header{
+			Sender:     addr,
+			Fee:        basics.MicroAlgos{Raw: proto.MinTxnFee * 2},
+			FirstValid: 0,
+			LastValid:  basics.Round(proto.MaxTxnLife),
+			Note:       make([]byte, 2),
+		},
+		ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+			ApplicationID: 1,
+		},
+	}
+	signedTx := tx.Sign(keypair()) // some random key
+	blob := protocol.Encode(&signedTx)
+	sender := mockSender{}
+
+	// submit and ensure it is accepted
+	pct := float64(cfg.TxBacklogRateLimitingCongestionPct) / 100
+	limit := int(float64(cfg.TxBacklogSize) * pct)
+	congested := len(handler.backlogQueue) > limit
+	require.False(t, congested)
+
+	action := handler.processIncomingTxn(network.IncomingMessage{Data: blob, Sender: sender})
+	require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, action)
+	require.Equal(t, 1, len(handler.backlogQueue))
+
+	// repeat the same txn, we are still not congested
+	congested = len(handler.backlogQueue) > limit
+	require.False(t, congested)
+
+	signedTx = tx.Sign(keypair())
+	blob = protocol.Encode(&signedTx)
+	action = handler.processIncomingTxn(network.IncomingMessage{Data: blob, Sender: sender})
+	require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, action)
+	require.Equal(t, 2, len(handler.backlogQueue))
+	require.Equal(t, 0, handler.appLimiter.len()) // no rate limiting yet
+
+	congested = len(handler.backlogQueue) > limit
+	require.True(t, congested)
+
+	// submit it again and the app rate limiter should kick in
+	signedTx = tx.Sign(keypair())
+	blob = protocol.Encode(&signedTx)
+	action = handler.processIncomingTxn(network.IncomingMessage{Data: blob, Sender: sender})
+	require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, action)
+	require.Equal(t, 3, len(handler.backlogQueue))
+
+	require.Equal(t, 1, handler.appLimiter.len())
+}
+
+func TestTxHandlerAppRateLimiter(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	const numUsers = 10
+	log := logging.TestingLog(t)
+	log.SetLevel(logging.Panic)
+
+	// prepare the accounts
+	addresses, secrets, genesis := makeTestGenesisAccounts(t, numUsers)
+	genBal := bookkeeping.MakeGenesisBalances(genesis, sinkAddr, poolAddr)
+	ledgerName := fmt.Sprintf("%s-mem", t.Name())
+	const inMem = true
+
+	cfg := config.GetDefaultLocal()
+	cfg.EnableTxBacklogRateLimiting = true
+	cfg.TxBacklogAppTxRateLimiterMaxSize = 100
+	cfg.TxBacklogServiceRateWindowSeconds = 1
+	cfg.TxBacklogAppTxPerSecondRate = 3
+	ledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, cfg)
+	require.NoError(t, err)
+	defer ledger.Close()
+
+	l := ledger
+	handler, err := makeTestTxHandler(l, cfg)
+	require.NoError(t, err)
+	defer handler.txVerificationPool.Shutdown()
+	defer close(handler.streamVerifierDropped)
+
+	tx := transactions.Transaction{
+		Type: protocol.ApplicationCallTx,
+		Header: transactions.Header{
+			Sender:     addresses[0],
+			Fee:        basics.MicroAlgos{Raw: proto.MinTxnFee * 2},
+			FirstValid: 0,
+			LastValid:  basics.Round(proto.MaxTxnLife),
+			Note:       make([]byte, 2),
+		},
+		ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+			ApplicationID: 1,
+		},
+	}
+	signedTx := tx.Sign(secrets[1])
+	blob := protocol.Encode(&signedTx)
+
+	action := handler.processIncomingTxn(network.IncomingMessage{Data: blob, Sender: mockSender{}})
+	require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, action)
+	require.Equal(t, 1, len(handler.backlogQueue))
+
+	// trigger the rate limiter and ensure the txn is ignored
+	tx2 := tx
+	for i := 0; i < cfg.TxBacklogAppTxPerSecondRate*cfg.TxBacklogServiceRateWindowSeconds; i++ {
+		tx2.ForeignApps = append(tx2.ForeignApps, 1)
+	}
+	signedTx2 := tx.Sign(secrets[1])
+	blob2 := protocol.Encode(&signedTx2)
+
+	action = handler.processIncomingTxn(network.IncomingMessage{Data: blob2, Sender: mockSender{}})
+	require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, action)
+	require.Equal(t, 1, len(handler.backlogQueue))
+
+	// backlogQueue has the first txn, but the second one is dropped
+	msg := <-handler.backlogQueue
+	require.Equal(t, msg.rawmsg.Data, blob, blob)
+}
+
+// TestTxHandlerCapGuard checks there is no cap guard leak in case of invalid input.
+func TestTxHandlerCapGuard(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	const numUsers = 10
+	addresses, secrets, genesis := makeTestGenesisAccounts(t, numUsers)
+	genBal := bookkeeping.MakeGenesisBalances(genesis, sinkAddr, poolAddr)
+	ledgerName := fmt.Sprintf("%s-mem", t.Name())
+	const inMem = true
+	log := logging.TestingLog(t)
+	log.SetLevel(logging.Error)
+
+	cfg := config.GetDefaultLocal()
+	cfg.EnableTxBacklogRateLimiting = true
+	cfg.EnableTxBacklogAppRateLimiting = false
+	cfg.TxIncomingFilteringFlags = 0
+	cfg.TxBacklogServiceRateWindowSeconds = 1
+	cfg.TxBacklogReservedCapacityPerPeer = 1
+	cfg.IncomingConnectionsLimit = 1
+	cfg.TxBacklogSize = 3
+
+	ledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, cfg)
+	require.NoError(t, err)
+	defer ledger.Close()
+
+	handler, err := makeTestTxHandler(ledger, cfg)
+	require.NoError(t, err)
+	defer handler.txVerificationPool.Shutdown()
+	defer close(handler.streamVerifierDropped)
+
+	tx := transactions.Transaction{
+		Type: protocol.PaymentTx,
+		Header: transactions.Header{
+			Sender:     addresses[0],
+			Fee:        basics.MicroAlgos{Raw: proto.MinTxnFee * 2},
+			FirstValid: 0,
+			LastValid:  basics.Round(proto.MaxTxnLife),
+		},
+		PaymentTxnFields: transactions.PaymentTxnFields{
+			Receiver: addresses[1],
+			Amount:   basics.MicroAlgos{Raw: 1000},
+		},
+	}
+
+	signedTx := tx.Sign(secrets[0])
+	blob := protocol.Encode(&signedTx)
+	blob[0]++ // make it invalid
+
+	var completed atomic.Bool
+	go func() {
+		for i := 0; i < 10; i++ {
+			outgoing := handler.processIncomingTxn(network.IncomingMessage{Data: blob, Sender: mockSender{}})
+			require.Equal(t, network.OutgoingMessage{Action: network.Disconnect}, outgoing)
+			require.Equal(t, 0, len(handler.backlogQueue))
+		}
+		completed.Store(true)
+	}()
+
+	require.Eventually(t, func() bool { return completed.Load() }, 1*time.Second, 10*time.Millisecond)
 }

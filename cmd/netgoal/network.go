@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -168,9 +168,9 @@ func runBuildNetwork() error {
 			return fmt.Errorf("error resolving bootstrap file: %v", err)
 		}
 		net.BootstrappedNet = fileTemplate
-		net.SetUseBoostrappedFiles(bootstrapLoadingFile)
+		net.SetUseBootstrappedFiles(bootstrapLoadingFile)
 	} else {
-		net.SetUseBoostrappedFiles(false)
+		net.SetUseBootstrappedFiles(false)
 	}
 
 	net.SetUseExistingGenesisFiles(networkUseGenesisFiles)

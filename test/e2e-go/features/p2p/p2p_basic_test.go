@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -55,11 +55,6 @@ func testP2PWithConfig(t *testing.T, cfgname string) {
 func TestP2PTwoNodes(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	testP2PWithConfig(t, "TwoNodes50EachP2P.json")
-}
-
-func TestP2PThreeNodesEvenDist(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	testP2PWithConfig(t, "ThreeNodesEvenDistP2P.json")
 }
 
 func TestP2PFiveNodes(t *testing.T) {

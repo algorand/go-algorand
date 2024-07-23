@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -128,6 +128,7 @@ func getSampleAccountData() AccountData {
 		AppLocalStates:     make(map[AppIndex]AppLocalState),
 		AppParams:          make(map[AppIndex]AppParams),
 		AuthAddr:           Address(crypto.Hash([]byte{1, 2, 3, 4})),
+		IncentiveEligible:  true,
 	}
 }
 
@@ -190,4 +191,5 @@ func TestOnlineAccountData(t *testing.T) {
 	require.Equal(t, ad.MicroAlgos, oad.MicroAlgosWithRewards)
 	require.Equal(t, ad.VoteID, oad.VoteID)
 	require.Equal(t, ad.SelectionID, oad.SelectionID)
+	require.Equal(t, ad.IncentiveEligible, oad.IncentiveEligible)
 }

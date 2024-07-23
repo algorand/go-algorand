@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -285,7 +285,7 @@ func TestClientCanSendAndGetNote(t *testing.T) {
 	note := make([]byte, maxTxnNoteBytes)
 	tx, err := testClient.SendPaymentFromWallet(wh, nil, someAddress, toAddress, 10000, 100000, note, "", 0, 0)
 	a.NoError(err)
-	txStatus, err := WaitForTransaction(t, testClient, someAddress, tx.ID().String(), 30*time.Second)
+	txStatus, err := WaitForTransaction(t, testClient, tx.ID().String(), 30*time.Second)
 	a.NoError(err)
 	a.Equal(note, txStatus.Txn.Txn.Note)
 }
@@ -311,7 +311,7 @@ func TestClientCanGetTransactionStatus(t *testing.T) {
 	t.Log(string(protocol.EncodeJSON(tx)))
 	a.NoError(err)
 	t.Log(tx.ID().String())
-	_, err = WaitForTransaction(t, testClient, someAddress, tx.ID().String(), 30*time.Second)
+	_, err = WaitForTransaction(t, testClient, tx.ID().String(), 30*time.Second)
 	a.NoError(err)
 }
 
@@ -336,7 +336,7 @@ func TestAccountBalance(t *testing.T) {
 	a.NoError(err)
 	tx, err := testClient.SendPaymentFromWallet(wh, nil, someAddress, toAddress, 10000, 100000, nil, "", 0, 0)
 	a.NoError(err)
-	_, err = WaitForTransaction(t, testClient, someAddress, tx.ID().String(), 30*time.Second)
+	_, err = WaitForTransaction(t, testClient, tx.ID().String(), 30*time.Second)
 	a.NoError(err)
 
 	account, err := testClient.AccountInformation(toAddress, false)
@@ -403,7 +403,7 @@ func TestAccountParticipationInfo(t *testing.T) {
 	}
 	txID, err := testClient.SignAndBroadcastTransaction(wh, nil, tx)
 	a.NoError(err)
-	_, err = WaitForTransaction(t, testClient, someAddress, txID, 30*time.Second)
+	_, err = WaitForTransaction(t, testClient, txID, 30*time.Second)
 	a.NoError(err)
 
 	account, err := testClient.AccountInformation(someAddress, false)

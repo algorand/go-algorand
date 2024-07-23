@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -139,7 +139,7 @@ The base64 encoding of the signature will always be printed to stdout. Optionall
 				reportErrorf(tealsignEmptyLogic)
 			}
 
-			progHash = crypto.HashObj(logic.Program(stxn.Lsig.Logic))
+			progHash = logic.HashProgram(stxn.Lsig.Logic)
 		} else {
 			// Otherwise, the contract address is the logic hash
 			parsedAddr, err := basics.UnmarshalChecksumAddress(contractAddr)

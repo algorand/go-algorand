@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -105,6 +105,7 @@ type AccountsReader interface {
 
 	LookupResources(addr basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (data PersistedResourcesData, err error)
 	LookupAllResources(addr basics.Address) (data []PersistedResourcesData, rnd basics.Round, err error)
+	LookupLimitedResources(addr basics.Address, minIdx basics.CreatableIndex, maxCreatables uint64, ctype basics.CreatableType) (data []PersistedResourcesDataWithCreator, rnd basics.Round, err error)
 
 	LookupKeyValue(key string) (pv PersistedKVData, err error)
 	LookupKeysByPrefix(prefix string, maxKeyNum uint64, results map[string]bool, resultCount uint64) (round basics.Round, err error)
@@ -129,7 +130,7 @@ type AccountsReaderExt interface {
 	LookupOnlineAccountDataByAddress(addr basics.Address) (ref OnlineAccountRef, data []byte, err error)
 	AccountsOnlineTop(rnd basics.Round, offset uint64, n uint64, proto config.ConsensusParams) (map[basics.Address]*ledgercore.OnlineAccount, error)
 	AccountsOnlineRoundParams() (onlineRoundParamsData []ledgercore.OnlineRoundParamsData, endRound basics.Round, err error)
-	ExpiredOnlineAccountsForRound(rnd, voteRnd basics.Round, proto config.ConsensusParams, rewardsLevel uint64) (map[basics.Address]*ledgercore.OnlineAccountData, error)
+	ExpiredOnlineAccountsForRound(rnd, voteRnd basics.Round, proto config.ConsensusParams, rewardsLevel uint64) (map[basics.Address]*basics.OnlineAccountData, error)
 	OnlineAccountsAll(maxAccounts uint64) ([]PersistedOnlineAccountData, error)
 	LoadTxTail(ctx context.Context, dbRound basics.Round) (roundData []*TxTailRound, roundHash []crypto.Digest, baseRound basics.Round, err error)
 	LoadAllFullAccounts(ctx context.Context, balancesTable string, resourcesTable string, acctCb func(basics.Address, basics.AccountData)) (count int, err error)

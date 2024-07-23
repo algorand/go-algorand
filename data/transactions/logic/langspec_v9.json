@@ -1,48 +1,39 @@
 {
   "Version": 9,
-  "LogicSigVersion": 9,
+  "LogicSigVersion": 10,
   "NamedTypes": [
     {
-      "Name": "uint64",
-      "Abbreviation": "i",
+      "Name": "[]byte",
+      "Abbreviation": "b",
       "Bound": [
         0,
-        18446744073709551615
-      ],
-      "AVMType": "uint64"
-    },
-    {
-      "Name": "stateKey",
-      "Abbreviation": "K",
-      "Bound": [
-        0,
-        64
+        4096
       ],
       "AVMType": "[]byte"
     },
     {
-      "Name": "none",
-      "Abbreviation": "x",
+      "Name": "address",
+      "Abbreviation": "A",
+      "Bound": [
+        32,
+        32
+      ],
+      "AVMType": "[]byte"
+    },
+    {
+      "Name": "any",
+      "Abbreviation": "a",
       "Bound": [
         0,
         0
       ],
-      "AVMType": "none"
+      "AVMType": "any"
     },
     {
-      "Name": "method",
-      "Abbreviation": "M",
+      "Name": "bigint",
+      "Abbreviation": "I",
       "Bound": [
-        4,
-        4
-      ],
-      "AVMType": "[]byte"
-    },
-    {
-      "Name": "boxName",
-      "Abbreviation": "N",
-      "Bound": [
-        1,
+        0,
         64
       ],
       "AVMType": "[]byte"
@@ -57,8 +48,35 @@
       "AVMType": "uint64"
     },
     {
-      "Name": "bigint",
-      "Abbreviation": "I",
+      "Name": "boxName",
+      "Abbreviation": "N",
+      "Bound": [
+        1,
+        64
+      ],
+      "AVMType": "[]byte"
+    },
+    {
+      "Name": "method",
+      "Abbreviation": "M",
+      "Bound": [
+        4,
+        4
+      ],
+      "AVMType": "[]byte"
+    },
+    {
+      "Name": "none",
+      "Abbreviation": "x",
+      "Bound": [
+        0,
+        0
+      ],
+      "AVMType": "none"
+    },
+    {
+      "Name": "stateKey",
+      "Abbreviation": "K",
       "Bound": [
         0,
         64
@@ -66,40 +84,13 @@
       "AVMType": "[]byte"
     },
     {
-      "Name": "any",
-      "Abbreviation": "a",
+      "Name": "uint64",
+      "Abbreviation": "i",
       "Bound": [
         0,
-        0
+        18446744073709551615
       ],
-      "AVMType": "any"
-    },
-    {
-      "Name": "address",
-      "Abbreviation": "A",
-      "Bound": [
-        32,
-        32
-      ],
-      "AVMType": "[]byte"
-    },
-    {
-      "Name": "[]byte",
-      "Abbreviation": "b",
-      "Bound": [
-        0,
-        4096
-      ],
-      "AVMType": "[]byte"
-    },
-    {
-      "Name": "[32]byte",
-      "Abbreviation": "H",
-      "Bound": [
-        32,
-        32
-      ],
-      "AVMType": "[]byte"
+      "AVMType": "uint64"
     }
   ],
   "Ops": [
@@ -128,7 +119,7 @@
       "Doc": "SHA256 hash of value A, yields [32]byte",
       "IntroducedVersion": 1,
       "Groups": [
-        "Arithmetic"
+        "Cryptography"
       ]
     },
     {
@@ -145,7 +136,7 @@
       "Doc": "Keccak256 hash of value A, yields [32]byte",
       "IntroducedVersion": 1,
       "Groups": [
-        "Arithmetic"
+        "Cryptography"
       ]
     },
     {
@@ -162,7 +153,7 @@
       "Doc": "SHA512_256 hash of value A, yields [32]byte",
       "IntroducedVersion": 1,
       "Groups": [
-        "Arithmetic"
+        "Cryptography"
       ]
     },
     {
@@ -170,8 +161,8 @@
       "Name": "ed25519verify",
       "Args": [
         "[]byte",
-        "[]byte",
-        "[]byte"
+        "[64]byte",
+        "[32]byte"
       ],
       "Returns": [
         "bool"
@@ -182,18 +173,18 @@
       "DocExtra": "The 32 byte public key is the last element on the stack, preceded by the 64 byte signature at the second-to-last element on the stack, preceded by the data which was signed at the third-to-last element on the stack.",
       "IntroducedVersion": 1,
       "Groups": [
-        "Arithmetic"
+        "Cryptography"
       ]
     },
     {
       "Opcode": 5,
       "Name": "ecdsa_verify",
       "Args": [
-        "[]byte",
-        "[]byte",
-        "[]byte",
-        "[]byte",
-        "[]byte"
+        "[32]byte",
+        "[32]byte",
+        "[32]byte",
+        "[32]byte",
+        "[32]byte"
       ],
       "Returns": [
         "bool"
@@ -216,18 +207,18 @@
       ],
       "IntroducedVersion": 5,
       "Groups": [
-        "Arithmetic"
+        "Cryptography"
       ]
     },
     {
       "Opcode": 6,
       "Name": "ecdsa_pk_decompress",
       "Args": [
-        "[]byte"
+        "[33]byte"
       ],
       "Returns": [
-        "[]byte",
-        "[]byte"
+        "[32]byte",
+        "[32]byte"
       ],
       "Size": 2,
       "ArgEnum": [
@@ -247,21 +238,21 @@
       ],
       "IntroducedVersion": 5,
       "Groups": [
-        "Arithmetic"
+        "Cryptography"
       ]
     },
     {
       "Opcode": 7,
       "Name": "ecdsa_pk_recover",
       "Args": [
-        "[]byte",
+        "[32]byte",
         "uint64",
-        "[]byte",
-        "[]byte"
+        "[32]byte",
+        "[32]byte"
       ],
       "Returns": [
-        "[]byte",
-        "[]byte"
+        "[32]byte",
+        "[32]byte"
       ],
       "Size": 2,
       "ArgEnum": [
@@ -281,7 +272,7 @@
       ],
       "IntroducedVersion": 5,
       "Groups": [
-        "Arithmetic"
+        "Cryptography"
       ]
     },
     {
@@ -534,7 +525,7 @@
       "Doc": "yields length of byte value A",
       "IntroducedVersion": 1,
       "Groups": [
-        "Arithmetic"
+        "Byte Array Manipulation"
       ]
     },
     {
@@ -544,7 +535,7 @@
         "uint64"
       ],
       "Returns": [
-        "[]byte"
+        "[8]byte"
       ],
       "Size": 1,
       "DocCost": "1",
@@ -2184,7 +2175,7 @@
       "DocExtra": "`concat` fails if the result would be greater than 4096 bytes.",
       "IntroducedVersion": 2,
       "Groups": [
-        "Arithmetic"
+        "Byte Array Manipulation"
       ]
     },
     {
@@ -2251,7 +2242,7 @@
       "DocExtra": "see explanation of bit ordering in setbit",
       "IntroducedVersion": 3,
       "Groups": [
-        "Arithmetic"
+        "Byte Array Manipulation"
       ]
     },
     {
@@ -2271,7 +2262,7 @@
       "DocExtra": "When A is a uint64, index 0 is the least significant bit. Setting bit 3 to 1 on the integer 0 yields 8, or 2^3. When A is a byte array, index 0 is the leftmost bit of the leftmost byte. Setting bits 0 through 11 to 1 in a 4-byte-array of 0s yields the byte array 0xfff00000. Setting bit 3 to 1 on the 1-byte-array 0x00 yields the byte array 0x10.",
       "IntroducedVersion": 3,
       "Groups": [
-        "Arithmetic"
+        "Byte Array Manipulation"
       ]
     },
     {
@@ -2289,7 +2280,7 @@
       "Doc": "Bth byte of A, as an integer. If B is greater than or equal to the array length, the program fails",
       "IntroducedVersion": 3,
       "Groups": [
-        "Arithmetic"
+        "Byte Array Manipulation"
       ]
     },
     {
@@ -2308,7 +2299,7 @@
       "Doc": "Copy of A with the Bth byte set to small integer (between 0..255) C. If B is greater than or equal to the array length, the program fails",
       "IntroducedVersion": 3,
       "Groups": [
-        "Arithmetic"
+        "Byte Array Manipulation"
       ]
     },
     {
@@ -2570,7 +2561,7 @@
       "Name": "app_local_get",
       "Args": [
         "any",
-        "[]byte"
+        "stateKey"
       ],
       "Returns": [
         "any"
@@ -2590,7 +2581,7 @@
       "Args": [
         "any",
         "uint64",
-        "[]byte"
+        "stateKey"
       ],
       "Returns": [
         "any",
@@ -2609,7 +2600,7 @@
       "Opcode": 100,
       "Name": "app_global_get",
       "Args": [
-        "[]byte"
+        "stateKey"
       ],
       "Returns": [
         "any"
@@ -2628,7 +2619,7 @@
       "Name": "app_global_get_ex",
       "Args": [
         "uint64",
-        "[]byte"
+        "stateKey"
       ],
       "Returns": [
         "any",
@@ -2648,7 +2639,7 @@
       "Name": "app_local_put",
       "Args": [
         "any",
-        "[]byte",
+        "stateKey",
         "any"
       ],
       "Size": 1,
@@ -2664,7 +2655,7 @@
       "Opcode": 103,
       "Name": "app_global_put",
       "Args": [
-        "[]byte",
+        "stateKey",
         "any"
       ],
       "Size": 1,
@@ -2680,7 +2671,7 @@
       "Name": "app_local_del",
       "Args": [
         "any",
-        "[]byte"
+        "stateKey"
       ],
       "Size": 1,
       "DocCost": "1",
@@ -2695,7 +2686,7 @@
       "Opcode": 105,
       "Name": "app_global_del",
       "Args": [
-        "[]byte"
+        "stateKey"
       ],
       "Size": 1,
       "DocCost": "1",
@@ -3005,8 +2996,8 @@
       "Name": "ed25519verify_bare",
       "Args": [
         "[]byte",
-        "[]byte",
-        "[]byte"
+        "[64]byte",
+        "[32]byte"
       ],
       "Returns": [
         "bool"
@@ -3016,7 +3007,7 @@
       "Doc": "for (data A, signature B, pubkey C) verify the signature of the data against the pubkey =\u003e {0 or 1}",
       "IntroducedVersion": 7,
       "Groups": [
-        "Arithmetic"
+        "Cryptography"
       ]
     },
     {
@@ -3268,10 +3259,10 @@
       "Opcode": 150,
       "Name": "bsqrt",
       "Args": [
-        "[]byte"
+        "bigint"
       ],
       "Returns": [
-        "[]byte"
+        "bigint"
       ],
       "Size": 1,
       "DocCost": "40",
@@ -3308,14 +3299,14 @@
         "[]byte"
       ],
       "Returns": [
-        "[]byte"
+        "[32]byte"
       ],
       "Size": 1,
       "DocCost": "130",
       "Doc": "SHA3_256 hash of value A, yields [32]byte",
       "IntroducedVersion": 7,
       "Groups": [
-        "Arithmetic"
+        "Cryptography"
       ]
     },
     {
@@ -3502,11 +3493,11 @@
       "Opcode": 170,
       "Name": "b%",
       "Args": [
-        "[]byte",
-        "[]byte"
+        "bigint",
+        "bigint"
       ],
       "Returns": [
-        "[]byte"
+        "bigint"
       ],
       "Size": 1,
       "DocCost": "20",
@@ -4220,7 +4211,7 @@
       ],
       "Size": 1,
       "DocCost": "1",
-      "Doc": "create a box named A, of length B. Fail if A is empty or B exceeds 32,768. Returns 0 if A already existed, else 1",
+      "Doc": "create a box named A, of length B. Fail if the name A is empty or B exceeds 32,768. Returns 0 if A already existed, else 1",
       "DocExtra": "Newly created boxes are filled with 0 bytes. `box_create` will fail if the referenced box already exists with a different size. Otherwise, existing boxes are unchanged by `box_create`.",
       "IntroducedVersion": 8,
       "Groups": [
@@ -4562,11 +4553,11 @@
       "Name": "vrf_verify",
       "Args": [
         "[]byte",
-        "[]byte",
-        "[]byte"
+        "[80]byte",
+        "[32]byte"
       ],
       "Returns": [
-        "[]byte",
+        "[64]byte",
         "bool"
       ],
       "Size": 2,
@@ -4586,7 +4577,7 @@
       ],
       "IntroducedVersion": 7,
       "Groups": [
-        "Arithmetic"
+        "Cryptography"
       ]
     },
     {

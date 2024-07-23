@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,9 +23,12 @@ import (
 	"net"
 	"time"
 
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/websocket"
 
 	"github.com/libp2p/go-libp2p/core/network"
+	yamux "github.com/libp2p/go-yamux/v4"
+	mnet "github.com/multiformats/go-multiaddr/net"
 )
 
 type wsPeerConnP2PImpl struct {
@@ -65,14 +68,27 @@ func (c *wsPeerConnP2PImpl) WriteMessage(_ int, buf []byte) error {
 	return err
 }
 
+// Do nothing for now since this doesn't actually close the connection just sends the close message
 func (c *wsPeerConnP2PImpl) CloseWithMessage([]byte, time.Time) error {
-	return c.stream.Close()
+	return nil
 }
 
 func (c *wsPeerConnP2PImpl) SetReadLimit(int64) {}
 
 func (c *wsPeerConnP2PImpl) CloseWithoutFlush() error {
-	return c.stream.Close()
+	err := c.stream.Close()
+	if err != nil && err != yamux.ErrStreamClosed && err != yamux.ErrSessionShutdown && err != yamux.ErrStreamReset {
+		return err
+	}
+	return nil
 }
 
 func (c *wsPeerConnP2PImpl) UnderlyingConn() net.Conn { return nil }
+
+func (c *wsPeerConnP2PImpl) RemoteAddr() net.Addr {
+	netaddr, err := mnet.ToNetAddr(c.stream.Conn().RemoteMultiaddr())
+	if err != nil {
+		logging.Base().Errorf("Error converting multiaddr to netaddr: %v", err)
+	}
+	return netaddr
+}

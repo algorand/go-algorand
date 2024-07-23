@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -69,9 +69,8 @@ func TestGenerateGenesis(t *testing.T) {
 
 	targetFolder := t.TempDir()
 	networkName := "testGenGen"
-	binDir := os.ExpandEnv("${GOPATH}/bin")
 
-	err := template.generateGenesisAndWallets(targetFolder, networkName, binDir)
+	err := template.generateGenesisAndWallets(targetFolder, networkName)
 	a.NoError(err)
 	_, err = os.Stat(filepath.Join(targetFolder, config.GenesisJSONFile))
 	fileExists := err == nil

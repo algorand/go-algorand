@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -31,6 +31,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"golang.org/x/sync/semaphore"
 
 	"github.com/algorand/go-algorand/daemon/algod/api/server"
 	"github.com/algorand/go-algorand/ledger/eval"
@@ -271,8 +273,7 @@ func addBlockHelper(t *testing.T) (v2.Handlers, echo.Context, *httptest.Response
 
 	// make an app call txn with eval delta
 	lsig := transactions.LogicSig{Logic: retOneProgram} // int 1
-	program := logic.Program(lsig.Logic)
-	lhash := crypto.HashObj(&program)
+	lhash := logic.HashProgram(lsig.Logic)
 	var sender basics.Address
 	copy(sender[:], lhash[:])
 	stx := transactions.SignedTxn{
@@ -852,12 +853,29 @@ func prepareTransactionTest(t *testing.T, txnToUse int, txnPrep func(transaction
 	return
 }
 
-func postTransactionTest(t *testing.T, txnToUse int, expectedCode int, method string, enableExperimental bool) {
+type postTransactionOpt func(cfg *config.Local)
+
+func enableExperimentalAPI() postTransactionOpt {
+	return func(cfg *config.Local) {
+		cfg.EnableExperimentalAPI = true
+	}
+}
+
+func enableDeveloperAPI() postTransactionOpt {
+	return func(cfg *config.Local) {
+		cfg.EnableDeveloperAPI = true
+	}
+}
+
+func postTransactionTest(t *testing.T, txnToUse int, expectedCode int, method string, opts ...postTransactionOpt) {
+	cfg := config.GetDefaultLocal()
+	for _, opt := range opts {
+		opt(&cfg)
+	}
+
 	txnPrep := func(stxn transactions.SignedTxn) []byte {
 		return protocol.Encode(&stxn)
 	}
-	cfg := config.GetDefaultLocal()
-	cfg.EnableExperimentalAPI = enableExperimental
 	handler, c, rec, releasefunc := prepareTransactionTest(t, txnToUse, txnPrep, cfg)
 	defer releasefunc()
 	results := reflect.ValueOf(&handler).MethodByName(method).Call([]reflect.Value{reflect.ValueOf(c)})
@@ -872,18 +890,20 @@ func TestPostTransaction(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	postTransactionTest(t, -1, 400, "RawTransaction", false)
-	postTransactionTest(t, 0, 200, "RawTransaction", false)
+	postTransactionTest(t, -1, 400, "RawTransaction")
+	postTransactionTest(t, 0, 200, "RawTransaction")
 }
 
 func TestPostTransactionAsync(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	postTransactionTest(t, -1, 404, "RawTransactionAsync", false)
-	postTransactionTest(t, 0, 404, "RawTransactionAsync", false)
-	postTransactionTest(t, -1, 400, "RawTransactionAsync", true)
-	postTransactionTest(t, 0, 200, "RawTransactionAsync", true)
+	postTransactionTest(t, -1, 404, "RawTransactionAsync")
+	postTransactionTest(t, 0, 404, "RawTransactionAsync")
+	postTransactionTest(t, -1, 404, "RawTransactionAsync", enableDeveloperAPI())
+	postTransactionTest(t, -1, 404, "RawTransactionAsync", enableExperimentalAPI())
+	postTransactionTest(t, -1, 400, "RawTransactionAsync", enableExperimentalAPI(), enableDeveloperAPI())
+	postTransactionTest(t, 0, 200, "RawTransactionAsync", enableExperimentalAPI(), enableDeveloperAPI())
 }
 
 func simulateTransactionTest(t *testing.T, txnToUse int, format string, expectedCode int) {
@@ -1308,6 +1328,10 @@ func TestSimulateTransactionMultipleGroups(t *testing.T) {
 }
 
 func startCatchupTest(t *testing.T, catchpoint string, nodeError error, expectedCode int) {
+	startCatchupTestFull(t, catchpoint, nodeError, expectedCode, 0, "")
+}
+
+func startCatchupTestFull(t *testing.T, catchpoint string, nodeError error, expectedCode int, minRounds uint64, response string) {
 	numAccounts := 1
 	numTransactions := 1
 	offlineAccounts := true
@@ -1320,9 +1344,30 @@ func startCatchupTest(t *testing.T, catchpoint string, nodeError error, expected
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	err := handler.StartCatchup(c, catchpoint)
+	var err error
+	if minRounds != 0 {
+		err = handler.StartCatchup(c, catchpoint, model.StartCatchupParams{Min: &minRounds})
+	} else {
+		err = handler.StartCatchup(c, catchpoint, model.StartCatchupParams{})
+	}
 	require.NoError(t, err)
 	require.Equal(t, expectedCode, rec.Code)
+	if response != "" {
+		require.Contains(t, rec.Body.String(), response)
+	}
+}
+
+func TestStartCatchupInit(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	minRoundsToInitialize := uint64(1_000_000)
+
+	tooSmallCatchpoint := fmt.Sprintf("%d#DVFRZUYHEFKRLK5N6DNJRR4IABEVN2D6H76F3ZSEPIE6MKXMQWQA", minRoundsToInitialize-1)
+	startCatchupTestFull(t, tooSmallCatchpoint, nil, 200, minRoundsToInitialize, "the node has already been initialized")
+
+	catchpointOK := fmt.Sprintf("%d#DVFRZUYHEFKRLK5N6DNJRR4IABEVN2D6H76F3ZSEPIE6MKXMQWQA", minRoundsToInitialize)
+	startCatchupTestFull(t, catchpointOK, nil, 201, minRoundsToInitialize, catchpointOK)
 }
 
 func TestStartCatchup(t *testing.T) {
@@ -1427,7 +1472,7 @@ int 1
 assert
 int 1`, logic.AssemblerMaxVersion)
 	ops, _ := logic.AssembleString(goodProgram)
-	expectedSourcemap := logic.GetSourceMap([]string{}, ops.OffsetToLine)
+	expectedSourcemap := logic.GetSourceMap([]string{"<body>"}, ops.OffsetToSource)
 	goodProgramBytes := []byte(goodProgram)
 
 	// Test good program with params
@@ -1810,8 +1855,10 @@ func TestGetProofDefault(t *testing.T) {
 	blkHdr, err := l.BlockHdr(1)
 	a.NoError(err)
 
-	singleLeafProof, err := merklearray.ProofDataToSingleLeafProof(string(resp.Hashtype), resp.Treedepth, resp.Proof)
+	singleLeafProof, err := merklearray.ProofDataToSingleLeafProof(string(resp.Hashtype), resp.Proof)
 	a.NoError(err)
+
+	a.Equal(uint64(singleLeafProof.TreeDepth), resp.Treedepth)
 
 	element := TxnMerkleElemRaw{Txn: crypto.Digest(txid)}
 	copy(element.Stib[:], resp.Stibhash[:])
@@ -2350,4 +2397,143 @@ func TestRouterRequestBody(t *testing.T) {
 	rec = httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 	assert.Equal(t, http.StatusRequestEntityTooLarge, rec.Code)
+}
+
+func TestGeneratePartkeys(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	numAccounts := 1
+	numTransactions := 1
+	offlineAccounts := true
+	mockLedger, _, _, _, releasefunc := testingenv(t, numAccounts, numTransactions, offlineAccounts)
+	defer releasefunc()
+	dummyShutdownChan := make(chan struct{})
+	mockNode := makeMockNode(mockLedger, t.Name(), nil, cannedStatusReportGolden, false)
+	handler := v2.Handlers{
+		Node:          mockNode,
+		Log:           logging.Base(),
+		Shutdown:      dummyShutdownChan,
+		KeygenLimiter: semaphore.NewWeighted(1),
+	}
+	e := echo.New()
+
+	var addr basics.Address
+	addr[0] = 1
+
+	{
+		require.Len(t, mockNode.PartKeyBinary, 0)
+		req := httptest.NewRequest(http.MethodPost, "/", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+
+		err := handler.GenerateParticipationKeys(c, addr.String(), model.GenerateParticipationKeysParams{
+			First: 1000,
+			Last:  2000,
+		})
+
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusOK, rec.Code)
+
+		// Wait for keygen to complete
+		err = handler.KeygenLimiter.Acquire(context.Background(), 1)
+		require.NoError(t, err)
+		require.Greater(t, len(mockNode.PartKeyBinary), 0)
+		handler.KeygenLimiter.Release(1)
+	}
+
+	{
+		req := httptest.NewRequest(http.MethodPost, "/", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		// Simulate a blocked keygen process (and block until the previous keygen is complete)
+		err := handler.KeygenLimiter.Acquire(context.Background(), 1)
+		require.NoError(t, err)
+		err = handler.GenerateParticipationKeys(c, addr.String(), model.GenerateParticipationKeysParams{
+			First: 1000,
+			Last:  2000,
+		})
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+	}
+
+}
+
+func TestDebugExtraPprofEndpoint(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	submit := func(t *testing.T, method string, body []byte, expectedCode int) []byte {
+		handler := v2.Handlers{
+			Node: nil,
+			Log:  logging.Base(),
+		}
+		e := echo.New()
+
+		var bodyReader io.Reader
+		if body != nil {
+			bodyReader = bytes.NewReader(body)
+		}
+
+		req := httptest.NewRequest(method, "/debug/extra/pprof", bodyReader)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+
+		if method == http.MethodPut {
+			handler.PutDebugSettingsProf(c)
+		} else {
+			handler.GetDebugSettingsProf(c)
+		}
+		require.Equal(t, expectedCode, rec.Code)
+
+		return rec.Body.Bytes()
+	}
+
+	// check original values
+	body := submit(t, http.MethodGet, nil, http.StatusOK)
+	require.Contains(t, string(body), `"mutex-rate":0`)
+	require.Contains(t, string(body), `"block-rate":0`)
+
+	// enable mutex and blocking profiling, should return the original zero values
+	body = submit(t, http.MethodPut, []byte(`{"mutex-rate":1000, "block-rate":2000}`), http.StatusOK)
+	require.Contains(t, string(body), `"mutex-rate":0`)
+	require.Contains(t, string(body), `"block-rate":0`)
+
+	// check the new values
+	body = submit(t, http.MethodGet, nil, http.StatusOK)
+	require.Contains(t, string(body), `"mutex-rate":1000`)
+	require.Contains(t, string(body), `"block-rate":2000`)
+
+	// set invalid values
+	body = submit(t, http.MethodPut, []byte(`{"mutex-rate":-1, "block-rate":2000}`), http.StatusBadRequest)
+	require.Contains(t, string(body), "failed to decode object")
+
+	body = submit(t, http.MethodPut, []byte(`{"mutex-rate":1000, "block-rate":-2}`), http.StatusBadRequest)
+	require.Contains(t, string(body), "failed to decode object")
+
+	// disable mutex and blocking profiling
+	body = submit(t, http.MethodPut, []byte(`{"mutex-rate":0, "block-rate":0}`), http.StatusOK)
+	require.Contains(t, string(body), `"mutex-rate":1000`)
+	require.Contains(t, string(body), `"block-rate":2000`)
+
+	// check it is disabled
+	body = submit(t, http.MethodGet, nil, http.StatusOK)
+	require.Contains(t, string(body), `"mutex-rate":0`)
+	require.Contains(t, string(body), `"block-rate":0`)
+
+}
+
+func TestGetConfigEndpoint(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
+	defer releasefunc()
+
+	err := handler.GetConfig(c)
+	require.NoError(t, err)
+	require.Equal(t, 200, rec.Code)
+	var responseConfig config.Local
+
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &responseConfig))
+
+	require.Equal(t, handler.Node.Config(), responseConfig)
 }

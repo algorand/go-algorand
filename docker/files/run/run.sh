@@ -17,7 +17,7 @@ fi
 # as the algorand user.
 if [ "$(id -u)" = '0' ]; then
   chown -R algorand:algorand $ALGORAND_DATA
-  exec gosu algorand "$0" "$@"
+  exec su -p -c "$(readlink -f $0) $@" algorand
 fi
 
 # Script to configure or resume a network. Based on environment settings the
@@ -27,15 +27,8 @@ fi
 ####################
 
 function catchup() {
-  local FAST_CATCHUP_URL="https://algorand-catchpoints.s3.us-east-2.amazonaws.com/channel/CHANNEL/latest.catchpoint"
-  local CATCHPOINT=$(curl -s ${FAST_CATCHUP_URL/CHANNEL/$NETWORK})
-  if [[ "$(echo $CATCHPOINT | wc -l | tr -d ' ')" != "1" ]]; then
-    echo "Problem starting fast catchup."
-    exit 1
-  fi
-
   sleep 5
-  goal node catchup "$CATCHPOINT"
+  goal node catchup --force --min 1000000
 }
 
 function start_public_network() {
@@ -87,6 +80,7 @@ function configure_data_dir() {
   fi
 
   algocfg -d . set -p EndpointAddress -v "0.0.0.0:${ALGOD_PORT}"
+  algocfg -d . set -p NodeExporterPath -v "$(which node_exporter)"
 
   # set token overrides
   for dir in ${ALGORAND_DATA}/../*/; do
@@ -102,7 +96,7 @@ function configure_data_dir() {
   if [ "$TELEMETRY_NAME" != "" ]; then
     diagcfg telemetry name -n "$TELEMETRY_NAME" -d "$ALGORAND_DATA"
     diagcfg telemetry enable -d "$ALGORAND_DATA"
-  else
+  elif ! [ -f "/etc/algorand/logging.config" ]; then
     diagcfg telemetry disable
   fi
 
@@ -190,7 +184,16 @@ function start_new_private_network() {
       fi
   fi
   sed -i "s/NUM_ROUNDS/${NUM_ROUNDS:-30000}/" "/node/run/$TEMPLATE"
-  goal network create --noclean -n dockernet -r "${ALGORAND_DATA}/.." -t "/node/run/$TEMPLATE"
+
+  # Check if keys are mounted, and if so, copy them over
+  # Use pregen keys in network create command
+  if [ -d "/etc/algorand/keys" ]; then
+      cp -r /etc/algorand/keys /node/run/keys
+      goal network create --noclean -n dockernet -r "${ALGORAND_DATA}/.." -t "/node/run/$TEMPLATE" -p "/node/run/keys"
+  else
+      goal network create --noclean -n dockernet -r "${ALGORAND_DATA}/.." -t "/node/run/$TEMPLATE"
+  fi
+
   configure_data_dir
   start_private_network
 }

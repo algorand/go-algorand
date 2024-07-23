@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -72,6 +72,7 @@ type HTTPError struct {
 	StatusCode  int
 	Status      string
 	ErrorString string
+	Data        map[string]any
 }
 
 // Error formats an error string.
@@ -120,24 +121,11 @@ func extractError(resp *http.Response) error {
 	decodeErr := json.Unmarshal(errorBuf, &errorJSON)
 
 	var errorString string
+	var data map[string]any
 	if decodeErr == nil {
-		if errorJSON.Data == nil {
-			// There's no additional data, so let's just use the message
-			errorString = errorJSON.Message
-		} else {
-			// There's additional data, so let's re-encode the JSON response to show everything.
-			// We do this because the original response is likely encoded with escapeHTML=true, but
-			// since this isn't a webpage that extra encoding is not preferred.
-			var buffer strings.Builder
-			enc := json.NewEncoder(&buffer)
-			enc.SetEscapeHTML(false)
-			encErr := enc.Encode(errorJSON)
-			if encErr != nil {
-				// This really shouldn't happen, but if it does let's default to errorBuff
-				errorString = string(errorBuf)
-			} else {
-				errorString = buffer.String()
-			}
+		errorString = errorJSON.Message
+		if errorJSON.Data != nil {
+			data = *errorJSON.Data
 		}
 	} else {
 		errorString = string(errorBuf)
@@ -149,7 +137,7 @@ func extractError(resp *http.Response) error {
 		return unauthorizedRequestError{errorString, apiToken, resp.Request.URL.String()}
 	}
 
-	return HTTPError{StatusCode: resp.StatusCode, Status: resp.Status, ErrorString: errorString}
+	return HTTPError{StatusCode: resp.StatusCode, Status: resp.Status, ErrorString: errorString, Data: data}
 }
 
 // stripTransaction gets a transaction of the form "tx-XXXXXXXX" and truncates the "tx-" part, if it starts with "tx-"
@@ -389,6 +377,15 @@ type accountInformationParams struct {
 	Exclude string `url:"exclude"`
 }
 
+type pageParams struct {
+	Next  *string `url:"next,omitempty"`
+	Limit *uint64 `url:"limit,omitempty"`
+}
+
+type catchupParams struct {
+	Min uint64 `url:"min"`
+}
+
 // PendingTransactionsByAddr returns all the pending transactions for an addr.
 func (client RestClient) PendingTransactionsByAddr(addr string, max uint64) (response model.PendingTransactionsResponse, err error) {
 	err = client.get(&response, fmt.Sprintf("/v2/accounts/%s/transactions/pending", addr), pendingTransactionsByAddrParams{max})
@@ -516,6 +513,20 @@ func (client RestClient) RawAccountAssetInformation(accountAddress string, asset
 	return
 }
 
+// AccountAssetsInformation gets account information about a particular account's assets, subject to pagination.
+func (client RestClient) AccountAssetsInformation(accountAddress string, next *string, limit *uint64) (response model.AccountAssetsInformationResponse, err error) {
+	err = client.get(&response, fmt.Sprintf("/v2/accounts/%s/assets", accountAddress), pageParams{next, limit})
+	return
+}
+
+// RawAccountAssetsInformation gets account information about a particular account's assets, subject to pagination.
+func (client RestClient) RawAccountAssetsInformation(accountAddress string, next *string, limit *uint64) (response []byte, err error) {
+	var blob Blob
+	err = client.getRaw(&blob, fmt.Sprintf("/v2/accounts/%s/assets", accountAddress), pageParams{next, limit})
+	response = blob
+	return
+}
+
 // SuggestedParams gets the suggested transaction parameters
 func (client RestClient) SuggestedParams() (response model.TransactionParametersResponse, err error) {
 	err = client.get(&response, "/v2/transactions/params", nil)
@@ -575,8 +586,8 @@ func (client RestClient) AbortCatchup(catchpointLabel string) (response model.Ca
 }
 
 // Catchup start catching up to the give catchpoint label
-func (client RestClient) Catchup(catchpointLabel string) (response model.CatchpointStartResponse, err error) {
-	err = client.submitForm(&response, fmt.Sprintf("/v2/catchup/%s", catchpointLabel), nil, nil, "POST", false, true, false)
+func (client RestClient) Catchup(catchpointLabel string, minRounds uint64) (response model.CatchpointStartResponse, err error) {
+	err = client.submitForm(&response, fmt.Sprintf("/v2/catchup/%s", catchpointLabel), catchupParams{Min: minRounds}, nil, "POST", false, true, false)
 	return
 }
 
@@ -782,5 +793,11 @@ func (client RestClient) SetBlockTimestampOffset(offset uint64) (err error) {
 // GetBlockTimestampOffset gets the offset in seconds which is being added to devmode blocks
 func (client RestClient) GetBlockTimestampOffset() (response model.GetBlockTimeStampOffsetResponse, err error) {
 	err = client.get(&response, "/v2/devmode/blocks/offset", nil)
+	return
+}
+
+// BlockLogs returns all the logs in a block for a given round
+func (client RestClient) BlockLogs(round uint64) (response model.BlockLogsResponse, err error) {
+	err = client.get(&response, fmt.Sprintf("/v2/blocks/%d/logs", round), nil)
 	return
 }

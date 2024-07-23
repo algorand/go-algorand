@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -51,9 +51,9 @@ func TestOpGroupCoverage(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	opsSeen := make(map[string]bool, len(OpSpecs))
+	opsSeen := make(map[string]int, len(OpSpecs))
 	for _, op := range OpSpecs {
-		opsSeen[op.Name] = false
+		opsSeen[op.Name] = 0
 	}
 	for _, names := range OpGroups {
 		for _, name := range names {
@@ -62,12 +62,15 @@ func TestOpGroupCoverage(t *testing.T) {
 				t.Errorf("op %#v in group list but not in OpSpecs\n", name)
 				continue
 			}
-			opsSeen[name] = true
+			opsSeen[name]++
 		}
 	}
 	for name, seen := range opsSeen {
-		if !seen {
+		if seen == 0 {
 			t.Errorf("op %#v not in any group of OpGroups\n", name)
+		}
+		if seen > 1 {
+			t.Errorf("op %#v in %d groups of OpGroups\n", name, seen)
 		}
 	}
 }

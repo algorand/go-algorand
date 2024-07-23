@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -458,10 +458,9 @@ func coalesceAccountRefs(primary, secondary trackerdb.AccountRef) (trackerdb.Acc
 	} else if primary == nil && secondary == nil {
 		// all good, ref is nil
 		return nil, nil
-	} else {
-		// ref mismatch
-		return nil, ErrInconsistentResult
 	}
+	// ref mismatch
+	return nil, ErrInconsistentResult
 }
 
 type onlineAccountRef struct {
@@ -478,10 +477,9 @@ func coalesceOnlineAccountRefs(primary, secondary trackerdb.OnlineAccountRef) (t
 	} else if primary == nil && secondary == nil {
 		// all good, ref is nil
 		return nil, nil
-	} else {
-		// ref mismatch
-		return nil, ErrInconsistentResult
 	}
+	// ref mismatch
+	return nil, ErrInconsistentResult
 }
 
 type resourceRef struct {

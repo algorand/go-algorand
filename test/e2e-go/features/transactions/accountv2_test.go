@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -114,7 +114,7 @@ func TestAccountInformationV2(t *testing.T) {
 
 	round, err := client.CurrentRound()
 	a.NoError(err)
-	fixture.WaitForConfirmedTxn(round+4, creator, txn.ID().String())
+	fixture.WaitForConfirmedTxn(round+4, txn.ID().String())
 
 	// There should be no apps to start with
 	ad, err := client.AccountData(creator)
@@ -419,7 +419,7 @@ func accountInformationCheckWithOffendingFields(t *testing.T,
 
 	round, err := client.CurrentRound()
 	a.NoError(err)
-	fixture.WaitForConfirmedTxn(round+4, creator, txn.ID().String())
+	fixture.WaitForConfirmedTxn(round+4, txn.ID().String())
 
 	// There should be no apps to start with
 	ad, err := client.AccountData(creator)

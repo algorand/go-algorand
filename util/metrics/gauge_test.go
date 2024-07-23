@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -52,8 +52,7 @@ func TestMetricGauge(t *testing.T) {
 		gauges[i] = MakeGauge(MetricName{Name: fmt.Sprintf("gauge_%d", i), Description: "this is the metric test for gauge object"})
 	}
 	for i := 0; i < 9; i++ {
-		gauges[i%3].Set(uint64(i * 100))
-		gauges[i%3].Add(uint64(i))
+		gauges[i%3].Set(uint64(i*100 + i))
 		// wait half-a cycle
 		time.Sleep(test.sampleRate / 2)
 	}
@@ -85,4 +84,43 @@ func TestMetricGauge(t *testing.T) {
 			require.Equal(t, "808", v, fmt.Sprintf("The metric '%s' reached value '%s'", k, v))
 		}
 	}
+}
+
+func TestGaugeLabels(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	m := MakeGauge(MetricName{Name: "testname", Description: "testhelp"})
+	m.Deregister(nil)
+
+	m.SetLabels(1, map[string]string{"a": "b"})
+	m.SetLabels(10, map[string]string{"c": "d"})
+	m.SetLabels(2, map[string]string{"a": "b"})
+	m.SetLabels(5, nil)
+
+	require.Equal(t, uint64(2), m.GetUint64ValueForLabels(map[string]string{"a": "b"}))
+	require.Equal(t, uint64(10), m.GetUint64ValueForLabels(map[string]string{"c": "d"}))
+
+	buf := strings.Builder{}
+	m.WriteMetric(&buf, "")
+	res := buf.String()
+	require.Contains(t, res, `testname{a="b"} 2`)
+	require.Contains(t, res, `testname{c="d"} 10`)
+	require.Contains(t, res, `testname 5`)
+	require.Equal(t, 1, strings.Count(res, "# HELP testname testhelp"))
+	require.Equal(t, 1, strings.Count(res, "# TYPE testname gauge"))
+
+	buf = strings.Builder{}
+	m.WriteMetric(&buf, `p1=v1,p2="v2"`)
+	res = buf.String()
+	require.Contains(t, res, `testname{p1=v1,p2="v2",a="b"} 2`)
+	require.Contains(t, res, `testname{p1=v1,p2="v2",c="d"} 10`)
+
+	m = MakeGauge(MetricName{Name: "testname2", Description: "testhelp2"})
+	m.Deregister(nil)
+
+	m.Set(101)
+	buf = strings.Builder{}
+	m.WriteMetric(&buf, "")
+	res = buf.String()
+	require.Contains(t, res, `testname2 101`)
 }

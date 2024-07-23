@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -171,7 +171,7 @@ func BenchmarkBatchVerifierBigWithInvalid(b *testing.B) {
 				failed, err := bv.VerifyWithFeedback()
 				if err != nil {
 					for i, f := range failed {
-						if bv.signatures[i] == badSig {
+						if bv.(*cgoBatchVerifier).signatures[i] == badSig {
 							require.True(b, f)
 						} else {
 							require.False(b, f)

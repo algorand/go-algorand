@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -664,6 +664,15 @@ func (c *Client) AccountInformation(account string, includeCreatables bool) (res
 	return
 }
 
+// AccountAssetsInformation returns the assets held by an account, including asset params for non-deleted assets.
+func (c *Client) AccountAssetsInformation(account string, next *string, limit *uint64) (resp model.AccountAssetsInformationResponse, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		resp, err = algod.AccountAssetsInformation(account, next, limit)
+	}
+	return
+}
+
 // AccountApplicationInformation gets account information about a given app.
 func (c *Client) AccountApplicationInformation(accountAddress string, applicationID uint64) (resp model.AccountApplicationResponse, err error) {
 	algod, err := c.ensureAlgodClient()
@@ -1131,16 +1140,12 @@ func (c *Client) AbortCatchup() error {
 }
 
 // Catchup start catching up to the give catchpoint label.
-func (c *Client) Catchup(catchpointLabel string) error {
+func (c *Client) Catchup(catchpointLabel string, min uint64) (model.CatchpointStartResponse, error) {
 	algod, err := c.ensureAlgodClient()
 	if err != nil {
-		return err
+		return model.CatchpointStartResponse{}, err
 	}
-	_, err = algod.Catchup(catchpointLabel)
-	if err != nil {
-		return err
-	}
-	return nil
+	return algod.Catchup(catchpointLabel, min)
 }
 
 const defaultAppIdx = 1380011588
@@ -1340,6 +1345,15 @@ func (c *Client) GetLedgerStateDelta(round uint64) (rep model.LedgerStateDeltaRe
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		return algod.GetLedgerStateDelta(round)
+	}
+	return
+}
+
+// BlockLogs returns all the logs in a block for a given round
+func (c *Client) BlockLogs(round uint64) (resp model.BlockLogsResponse, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		return algod.BlockLogs(round)
 	}
 	return
 }

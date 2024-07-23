@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -279,7 +279,7 @@ func (ad *AccountDeltas) Hydrate() {
 	}
 }
 
-// Dehydrate normalized the fields of this AccountDeltas, and clears any redundant internal caching.
+// Dehydrate normalizes the fields of this AccountDeltas, and clears any redundant internal caching.
 // This is useful for comparing AccountDeltas objects for equality.
 func (ad *AccountDeltas) Dehydrate() {
 	if ad.Accts == nil {

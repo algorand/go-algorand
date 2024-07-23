@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -55,6 +55,21 @@ func persistent(as []action) bool {
 // encode serializes the current state into a byte array.
 func encode(t timers.Clock[TimeoutType], rr rootRouter, p player, a []action, reflect bool) (raw []byte) {
 	var s diskState
+
+	// Don't persist state for old rounds
+	// rootRouter.update() may preserve roundRouters from credentialRoundLag rounds ago
+	children := make(map[round]*roundRouter)
+	for rnd, rndRouter := range rr.Children {
+		if rnd >= p.Round {
+			children[rnd] = rndRouter
+		}
+	}
+	if len(children) == 0 {
+		rr.Children = nil
+	} else {
+		rr.Children = children
+	}
+
 	if reflect {
 		s.Router = protocol.EncodeReflect(rr)
 		s.Player = protocol.EncodeReflect(p)
@@ -228,7 +243,7 @@ func decode(raw []byte, t0 timers.Clock[TimeoutType], log serviceLogger, reflect
 		if err != nil {
 			return
 		}
-
+		p2.lowestCredentialArrivals = makeCredentialArrivalHistory(dynamicFilterCredentialArrivalHistory)
 		rr2 = makeRootRouter(p2)
 		err = protocol.DecodeReflect(s.Router, &rr2)
 		if err != nil {
@@ -244,6 +259,7 @@ func decode(raw []byte, t0 timers.Clock[TimeoutType], log serviceLogger, reflect
 				return
 			}
 		}
+		p2.lowestCredentialArrivals = makeCredentialArrivalHistory(dynamicFilterCredentialArrivalHistory)
 		if p2.OldDeadline != 0 {
 			p2.Deadline = Deadline{Duration: p2.OldDeadline, Type: TimeoutDeadline}
 			p2.OldDeadline = 0 // clear old value

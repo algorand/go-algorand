@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -63,6 +63,8 @@ func init() {
 	networkReceivedBytesByTag = metrics.NewTagCounterFiltered("algod_network_received_bytes_{TAG}", "Number of bytes that were received from the network for {TAG} messages", tagStringList, "UNK")
 	networkMessageReceivedByTag = metrics.NewTagCounterFiltered("algod_network_message_received_{TAG}", "Number of complete messages that were received from the network for {TAG} messages", tagStringList, "UNK")
 	networkMessageSentByTag = metrics.NewTagCounterFiltered("algod_network_message_sent_{TAG}", "Number of complete messages that were sent to the network for {TAG} messages", tagStringList, "UNK")
+	networkHandleCountByTag = metrics.NewTagCounterFiltered("algod_network_rx_handle_countbytag_{TAG}", "count of handler calls in the receive thread for {TAG} messages", tagStringList, "UNK")
+	networkHandleMicrosByTag = metrics.NewTagCounterFiltered("algod_network_rx_handle_microsbytag_{TAG}", "microseconds spent by protocol handlers in the receive thread for {TAG} messages", tagStringList, "UNK")
 
 	matched := false
 	for _, version := range SupportedProtocolVersions {
@@ -90,6 +92,9 @@ var networkMessageReceivedTotal = metrics.MakeCounter(metrics.NetworkMessageRece
 var networkMessageReceivedByTag *metrics.TagCounter
 var networkMessageSentTotal = metrics.MakeCounter(metrics.NetworkMessageSentTotal)
 var networkMessageSentByTag *metrics.TagCounter
+
+var networkHandleMicrosByTag *metrics.TagCounter
+var networkHandleCountByTag *metrics.TagCounter
 
 var networkConnectionsDroppedTotal = metrics.MakeCounter(metrics.NetworkConnectionsDroppedTotal)
 var networkMessageQueueMicrosTotal = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_message_sent_queue_micros_total", Description: "Total microseconds message spent waiting in queue to be sent"})
@@ -120,6 +125,7 @@ var defaultSendMessageTags = map[protocol.Tag]bool{
 
 // interface allows substituting debug implementation for *websocket.Conn
 type wsPeerWebsocketConn interface {
+	RemoteAddr() net.Addr
 	RemoteAddrString() string
 	NextReader() (int, io.Reader, error)
 	WriteMessage(int, []byte) error
@@ -166,7 +172,7 @@ type wsPeerCore struct {
 	readBuffer    chan<- IncomingMessage
 	rootURL       string
 	originAddress string // incoming connection remote host
-	client        http.Client
+	client        *http.Client
 }
 
 type disconnectReason string
@@ -202,27 +208,24 @@ type wsPeer struct {
 	// lastPacketTime contains the UnixNano at the last time a successful communication was made with the peer.
 	// "successful communication" above refers to either reading from or writing to a connection without receiving any
 	// error.
-	// we want this to be a 64-bit aligned for atomics support on 32bit platforms.
-	lastPacketTime int64
+	lastPacketTime atomic.Int64
 
 	// outstandingTopicRequests is an atomic counter for the number of outstanding block requests we've made out to this peer
 	// if a peer sends more blocks than we've requested, we'll disconnect from it.
-	outstandingTopicRequests int64
+	outstandingTopicRequests atomic.Int64
 
 	// intermittentOutgoingMessageEnqueueTime contains the UnixNano of the message's enqueue time that is currently being written to the
 	// peer, or zero if no message is being written.
-	intermittentOutgoingMessageEnqueueTime int64
+	intermittentOutgoingMessageEnqueueTime atomic.Int64
 
 	// Nonce used to uniquely identify requests
-	requestNonce uint64
+	requestNonce atomic.Uint64
 
 	// duplicateFilterCount counts how many times the remote peer has sent us a message hash
 	// to filter that it had already sent before.
-	// this needs to be 64-bit aligned for use with atomic.AddUint64 on 32-bit platforms.
-	duplicateFilterCount uint64
+	duplicateFilterCount atomic.Uint64
 
-	// These message counters need to be 64-bit aligned as well.
-	txMessageCount, miMessageCount, ppMessageCount, avMessageCount, unkMessageCount uint64
+	txMessageCount, miMessageCount, ppMessageCount, avMessageCount, unkMessageCount atomic.Uint64
 
 	wsPeerCore
 
@@ -239,8 +242,8 @@ type wsPeer struct {
 
 	wg sync.WaitGroup
 
-	didSignalClose int32
-	didInnerClose  int32
+	didSignalClose atomic.Int32
+	didInnerClose  atomic.Int32
 
 	TelemetryGUID string
 	InstanceName  string
@@ -262,7 +265,7 @@ type wsPeer struct {
 
 	// the peer's identity key which it uses for identityChallenge exchanges
 	identity         crypto.PublicKey
-	identityVerified uint32
+	identityVerified atomic.Uint32
 	// the identityChallenge is recorded to the peer so it may verify its identity at a later time
 	identityChallenge identityChallengeValue
 
@@ -292,7 +295,7 @@ type wsPeer struct {
 	sendMessageTag map[protocol.Tag]bool
 
 	// messagesOfInterestGeneration is this node's messagesOfInterest version that we have seen to this peer.
-	messagesOfInterestGeneration uint32
+	messagesOfInterestGeneration atomic.Uint32
 
 	// connMonitor used to measure the relative performance of the connection
 	// compared to the other outgoing connections. Incoming connections would have this
@@ -324,6 +327,11 @@ type HTTPPeer interface {
 	GetHTTPClient() *http.Client
 }
 
+// IPAddressable is addressable with either IPv4 or IPv6 address
+type IPAddressable interface {
+	RoutingAddr() []byte
+}
+
 // UnicastPeer is another possible interface for the opaque Peer.
 // It is possible that we can only initiate a connection to a peer over websockets.
 type UnicastPeer interface {
@@ -343,20 +351,20 @@ type TCPInfoUnicastPeer interface {
 }
 
 // Create a wsPeerCore object
-func makePeerCore(ctx context.Context, net GossipNode, log logging.Logger, readBuffer chan<- IncomingMessage, rootURL string, roundTripper http.RoundTripper, originAddress string) wsPeerCore {
+func makePeerCore(ctx context.Context, net GossipNode, log logging.Logger, readBuffer chan<- IncomingMessage, addr string, client *http.Client, originAddress string) wsPeerCore {
 	return wsPeerCore{
 		net:           net,
 		netCtx:        ctx,
 		log:           log,
 		readBuffer:    readBuffer,
-		rootURL:       rootURL,
+		rootURL:       addr,
 		originAddress: originAddress,
-		client:        http.Client{Transport: roundTripper},
+		client:        client,
 	}
 }
 
-// GetAddress returns the root url to use to connect to this peer.
-// TODO: should GetAddress be added to Peer interface?
+// GetAddress returns the root url to use to identify or connect to this peer.
+// This implements HTTPPeer interface and used to distinguish between peers.
 func (wp *wsPeerCore) GetAddress() string {
 	return wp.rootURL
 }
@@ -364,12 +372,64 @@ func (wp *wsPeerCore) GetAddress() string {
 // GetHTTPClient returns a client for this peer.
 // http.Client will maintain a cache of connections with some keepalive.
 func (wp *wsPeerCore) GetHTTPClient() *http.Client {
-	return &wp.client
+	return wp.client
+}
+
+func (wp *wsPeerCore) GetNetwork() GossipNode {
+	return wp.net
 }
 
 // Version returns the matching version from network.SupportedProtocolVersions
 func (wp *wsPeer) Version() string {
 	return wp.version
+}
+
+func (wp *wsPeer) ipAddr() []byte {
+	remote := wp.conn.RemoteAddr()
+	if remote == nil {
+		return nil
+	}
+	ip := remote.(*net.TCPAddr).IP
+	result := ip.To4()
+	if result == nil {
+		result = ip.To16()
+	}
+	return result
+}
+
+// RoutingAddr returns meaningful routing part of the address:
+// ipv4 for ipv4 addresses
+// top 8 bytes of ipv6 for ipv6 addresses
+// low 4 bytes for ipv4 embedded into ipv6
+// see http://www.tcpipguide.com/free/t_IPv6IPv4AddressEmbedding.htm for details.
+func (wp *wsPeer) RoutingAddr() []byte {
+	isZeros := func(ip []byte) bool {
+		for i := 0; i < len(ip); i++ {
+			if ip[i] != 0 {
+				return false
+			}
+		}
+		return true
+	}
+
+	var ip []byte
+	// originAddress is set for incoming connections
+	// and optionally includes reverse proxy support.
+	// see RequestTracker.getForwardedConnectionAddress for details.
+	if wp.wsPeerCore.originAddress != "" {
+		ip = net.ParseIP(wp.wsPeerCore.originAddress)
+	} else {
+		ip = wp.ipAddr()
+	}
+
+	if len(ip) != net.IPv6len {
+		return ip
+	}
+	// ipv6, check if it's ipv4 embedded
+	if isZeros(ip[0:10]) {
+		return ip[12:16]
+	}
+	return ip[0:8]
 }
 
 // Unicast sends the given bytes to this specific peer. Does not wait for message to be sent.
@@ -453,11 +513,11 @@ func (wp *wsPeer) Respond(ctx context.Context, reqMsg IncomingMessage, outMsg Ou
 
 // setup values not trivially assigned
 func (wp *wsPeer) init(config config.Local, sendBufferLength int) {
-	wp.log.Debugf("wsPeer init outgoing=%v %#v", wp.outgoing, wp.rootURL)
+	wp.log.Debugf("wsPeer init outgoing=%v %#v", wp.outgoing, wp.GetAddress())
 	wp.closing = make(chan struct{})
 	wp.sendBufferHighPrio = make(chan sendMessages, sendBufferLength)
 	wp.sendBufferBulk = make(chan sendMessages, sendBufferLength)
-	atomic.StoreInt64(&wp.lastPacketTime, time.Now().UnixNano())
+	wp.lastPacketTime.Store(time.Now().UnixNano())
 	wp.responseChannels = make(map[uint64]chan *Response)
 	wp.sendMessageTag = defaultSendMessageTags
 	wp.clientDataStore = make(map[string]interface{})
@@ -487,7 +547,7 @@ func (wp *wsPeer) OriginAddress() string {
 
 func (wp *wsPeer) reportReadErr(err error) {
 	// only report error if we haven't already closed the peer
-	if atomic.LoadInt32(&wp.didInnerClose) == 0 {
+	if wp.didInnerClose.Load() == 0 {
 		_, _, line, _ := runtime.Caller(1)
 		wp.log.Warnf("peer[%s] line=%d read err: %s", wp.conn.RemoteAddrString(), line, err)
 		networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "reader err"})
@@ -541,10 +601,10 @@ func (wp *wsPeer) readLoop() {
 
 		// Skip the message if it's a response to a request we didn't make or has timed out
 		if msg.Tag == protocol.TopicMsgRespTag && wp.lenResponseChannels() == 0 {
-			atomic.AddInt64(&wp.outstandingTopicRequests, -1)
+			wp.outstandingTopicRequests.Add(-1)
 
 			// This peers has sent us more responses than we have requested.  This is a protocol violation and we should disconnect.
-			if atomic.LoadInt64(&wp.outstandingTopicRequests) < 0 {
+			if wp.outstandingTopicRequests.Load() < 0 {
 				wp.log.Errorf("wsPeer readloop: peer %s sent TS response without a request", wp.conn.RemoteAddrString())
 				networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "unrequestedTS"})
 				cleanupCloseError = disconnectUnexpectedTopicResp
@@ -578,7 +638,7 @@ func (wp *wsPeer) readLoop() {
 			return
 		}
 		msg.Net = wp.net
-		atomic.StoreInt64(&wp.lastPacketTime, msg.Received)
+		wp.lastPacketTime.Store(msg.Received)
 		networkReceivedBytesTotal.AddUint64(uint64(len(msg.Data)+2), nil)
 		networkMessageReceivedTotal.AddUint64(1, nil)
 		networkReceivedBytesByTag.Add(string(tag[:]), uint64(len(msg.Data)+2))
@@ -594,7 +654,7 @@ func (wp *wsPeer) readLoop() {
 		switch msg.Tag {
 		case protocol.MsgOfInterestTag:
 			// try to decode the message-of-interest
-			atomic.AddUint64(&wp.miMessageCount, 1)
+			wp.miMessageCount.Add(1)
 			if close, reason := wp.handleMessageOfInterest(msg); close {
 				cleanupCloseError = reason
 				if reason == disconnectBadData {
@@ -604,7 +664,7 @@ func (wp *wsPeer) readLoop() {
 			}
 			continue
 		case protocol.TopicMsgRespTag: // Handle Topic message
-			atomic.AddInt64(&wp.outstandingTopicRequests, -1)
+			wp.outstandingTopicRequests.Add(-1)
 			topics, err := UnmarshallTopics(msg.Data)
 			if err != nil {
 				wp.log.Warnf("wsPeer readLoop: could not read the message from: %s %s", wp.conn.RemoteAddrString(), err)
@@ -634,17 +694,17 @@ func (wp *wsPeer) readLoop() {
 			wp.handleFilterMessage(msg)
 			continue
 		case protocol.TxnTag:
-			atomic.AddUint64(&wp.txMessageCount, 1)
+			wp.txMessageCount.Add(1)
 		case protocol.AgreementVoteTag:
-			atomic.AddUint64(&wp.avMessageCount, 1)
+			wp.avMessageCount.Add(1)
 		case protocol.ProposalPayloadTag:
-			atomic.AddUint64(&wp.ppMessageCount, 1)
+			wp.ppMessageCount.Add(1)
 		// the remaining valid tags: no special handling here
 		case protocol.NetPrioResponseTag, protocol.PingTag, protocol.PingReplyTag,
 			protocol.StateProofSigTag, protocol.UniEnsBlockReqTag, protocol.VoteBundleTag, protocol.NetIDVerificationTag:
 		default: // unrecognized tag
 			unknownProtocolTagMessagesTotal.Inc(nil)
-			atomic.AddUint64(&wp.unkMessageCount, 1)
+			wp.unkMessageCount.Add(1)
 			continue // drop message, skip adding it to queue
 			// TODO: should disconnect here?
 		}
@@ -740,7 +800,7 @@ func (wp *wsPeer) handleFilterMessage(msg IncomingMessage) {
 		// large message concurrently from several peers, and then sent the filter message to us after
 		// each large message finished transferring.
 		duplicateNetworkFilterReceivedTotal.Inc(nil)
-		atomic.AddUint64(&wp.duplicateFilterCount, 1)
+		wp.duplicateFilterCount.Add(1)
 	}
 }
 
@@ -792,17 +852,17 @@ func (wp *wsPeer) writeLoopSendMsg(msg sendMessage) disconnectReason {
 		return disconnectStaleWrite
 	}
 
-	atomic.StoreInt64(&wp.intermittentOutgoingMessageEnqueueTime, msg.enqueued.UnixNano())
-	defer atomic.StoreInt64(&wp.intermittentOutgoingMessageEnqueueTime, 0)
+	wp.intermittentOutgoingMessageEnqueueTime.Store(msg.enqueued.UnixNano())
+	defer wp.intermittentOutgoingMessageEnqueueTime.Store(0)
 	err := wp.conn.WriteMessage(websocket.BinaryMessage, msg.data)
 	if err != nil {
-		if atomic.LoadInt32(&wp.didInnerClose) == 0 {
+		if wp.didInnerClose.Load() == 0 {
 			wp.log.Warn("peer write error ", err)
 			networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "write err"})
 		}
 		return disconnectWriteError
 	}
-	atomic.StoreInt64(&wp.lastPacketTime, time.Now().UnixNano())
+	wp.lastPacketTime.Store(time.Now().UnixNano())
 	networkSentBytesTotal.AddUint64(uint64(len(msg.data)), nil)
 	networkSentBytesByTag.Add(string(tag), uint64(len(msg.data)))
 	networkMessageSentTotal.AddUint64(1, nil)
@@ -936,7 +996,7 @@ func (wp *wsPeer) pingTimes() (lastPingSent time.Time, lastPingRoundTripTime tim
 
 // called when the connection had an error or closed remotely
 func (wp *wsPeer) internalClose(reason disconnectReason) {
-	if atomic.CompareAndSwapInt32(&wp.didSignalClose, 0, 1) {
+	if wp.didSignalClose.CompareAndSwap(0, 1) {
 		wp.net.peerRemoteClose(wp, reason)
 	}
 	wp.Close(time.Now().Add(peerDisconnectionAckDuration))
@@ -944,16 +1004,16 @@ func (wp *wsPeer) internalClose(reason disconnectReason) {
 
 // called either here or from above enclosing node logic
 func (wp *wsPeer) Close(deadline time.Time) {
-	atomic.StoreInt32(&wp.didSignalClose, 1)
-	if atomic.CompareAndSwapInt32(&wp.didInnerClose, 0, 1) {
+	wp.didSignalClose.Store(1)
+	if wp.didInnerClose.CompareAndSwap(0, 1) {
 		close(wp.closing)
 		err := wp.conn.CloseWithMessage(websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""), deadline)
 		if err != nil {
-			wp.log.Infof("failed to write CloseMessage to connection for %s", wp.conn.RemoteAddrString())
+			wp.log.Infof("failed to write CloseMessage to connection for %s, err: %s", wp.conn.RemoteAddrString(), err)
 		}
 		err = wp.conn.CloseWithoutFlush()
 		if err != nil {
-			wp.log.Infof("failed to CloseWithoutFlush to connection for %s", wp.conn.RemoteAddrString())
+			wp.log.Infof("failed to CloseWithoutFlush to connection for %s, err: %s", wp.conn.RemoteAddrString(), err)
 		}
 	}
 
@@ -984,11 +1044,11 @@ func (wp *wsPeer) CloseAndWait(deadline time.Time) {
 }
 
 func (wp *wsPeer) GetLastPacketTime() int64 {
-	return atomic.LoadInt64(&wp.lastPacketTime)
+	return wp.lastPacketTime.Load()
 }
 
 func (wp *wsPeer) CheckSlowWritingPeer(now time.Time) bool {
-	ongoingMessageTime := atomic.LoadInt64(&wp.intermittentOutgoingMessageEnqueueTime)
+	ongoingMessageTime := wp.intermittentOutgoingMessageEnqueueTime.Load()
 	if ongoingMessageTime == 0 {
 		return false
 	}
@@ -1000,7 +1060,7 @@ func (wp *wsPeer) CheckSlowWritingPeer(now time.Time) bool {
 // The value is stored on wsPeer
 func (wp *wsPeer) getRequestNonce() []byte {
 	buf := make([]byte, binary.MaxVarintLen64)
-	binary.PutUvarint(buf, atomic.AddUint64(&wp.requestNonce, 1))
+	binary.PutUvarint(buf, wp.requestNonce.Add(1))
 	return buf
 }
 
@@ -1016,7 +1076,7 @@ func MakeNonceTopic(nonce uint64) Topic {
 func (wp *wsPeer) Request(ctx context.Context, tag Tag, topics Topics) (resp *Response, e error) {
 
 	// Add nonce, stored on the wsPeer as the topic
-	nonceTopic := MakeNonceTopic(atomic.AddUint64(&wp.requestNonce, 1))
+	nonceTopic := MakeNonceTopic(wp.requestNonce.Add(1))
 	topics = append(topics, nonceTopic)
 
 	// serialize the topics
@@ -1038,7 +1098,7 @@ func (wp *wsPeer) Request(ctx context.Context, tag Tag, topics Topics) (resp *Re
 		ctx:          context.Background()}
 	select {
 	case wp.sendBufferBulk <- sendMessages{msgs: msg}:
-		atomic.AddInt64(&wp.outstandingTopicRequests, 1)
+		wp.outstandingTopicRequests.Add(1)
 	case <-wp.closing:
 		e = fmt.Errorf("peer closing %s", wp.conn.RemoteAddrString())
 		return
@@ -1102,7 +1162,7 @@ func (wp *wsPeer) sendMessagesOfInterest(messagesOfInterestGeneration uint32, me
 	if err != nil {
 		wp.log.Errorf("ws send msgOfInterest: %v", err)
 	} else {
-		atomic.StoreUint32(&wp.messagesOfInterestGeneration, messagesOfInterestGeneration)
+		wp.messagesOfInterestGeneration.Store(messagesOfInterestGeneration)
 	}
 }
 

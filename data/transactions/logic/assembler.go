@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -107,7 +107,7 @@ func (ref intReference) length(ops *OpStream, assembled []byte) (int, error) {
 	case opIntc:
 		return 2, nil
 	default:
-		return 0, errorLinef(ops.OffsetToLine[ref.position], "unexpected op at intReference: %d", assembled[ref.position])
+		return 0, sourceErrorf(ops.OffsetToSource[ref.position], "unexpected op at intReference: %d", assembled[ref.position])
 	}
 }
 
@@ -176,7 +176,7 @@ func (ref byteReference) length(ops *OpStream, assembled []byte) (int, error) {
 	case opBytec:
 		return 2, nil
 	default:
-		return 0, errorLinef(ops.OffsetToLine[ref.position], "unexpected op at byteReference: %d", assembled[ref.position])
+		return 0, sourceErrorf(ops.OffsetToSource[ref.position], "unexpected op at byteReference: %d", assembled[ref.position])
 	}
 }
 
@@ -214,11 +214,19 @@ func (ref byteReference) makeNewReference(ops *OpStream, singleton bool, newInde
 	}
 }
 
-// OpStream is destination for program and scratch space
+// SourceLocation points to a specific location in a source file.
+type SourceLocation struct {
+	// Line is the line number, starting at 0.
+	Line int
+	// Column is the column number, starting at 0.
+	Column int
+}
+
+// OpStream accumulates state, including the final program, during assembly.
 type OpStream struct {
 	Version  uint64
 	Trace    *strings.Builder
-	Warnings []error       // informational warnings, shouldn't stop assembly
+	Warnings []sourceError // informational warnings, shouldn't stop assembly
 	Errors   []sourceError // errors that should prevent final assembly
 	Program  []byte        // Final program bytes. Will stay nil if any errors
 
@@ -249,8 +257,8 @@ type OpStream struct {
 	// track references in order to patch in jump offsets
 	labelReferences []labelReference
 
-	// map opcode offsets to source line
-	OffsetToLine map[int]int
+	// map opcode offsets to source location
+	OffsetToSource map[int]SourceLocation
 
 	HasStatefulOps bool
 
@@ -264,12 +272,12 @@ type OpStream struct {
 // OpStream must be used for each call to assemble().
 func newOpStream(version uint64) OpStream {
 	o := OpStream{
-		labels:       make(map[string]int),
-		OffsetToLine: make(map[int]int),
-		typeTracking: true,
-		Version:      version,
-		macros:       make(map[string][]token),
-		known:        ProgramKnowledge{fp: -1},
+		labels:         make(map[string]int),
+		OffsetToSource: make(map[int]SourceLocation),
+		typeTracking:   true,
+		Version:        version,
+		macros:         make(map[string][]token),
+		known:          ProgramKnowledge{fp: -1},
 	}
 
 	for i := range o.known.scratchSpace {
@@ -292,7 +300,7 @@ type ProgramKnowledge struct {
 	// fails. But when a label or callsub is encountered, `stack` is truncated
 	// and `bottom` becomes StackAny, because we don't track program state
 	// coming in from elsewhere. A `+` after a label succeeds, because the stack
-	// "vitually" contains an infinite list of StackAny.
+	// "virtually" contains an infinite list of StackAny.
 	bottom StackType
 
 	// deadcode indicates that the program is in deadcode, so no type checking
@@ -365,9 +373,9 @@ func (ops *OpStream) createLabel(withColon token) {
 	ops.known.label()
 }
 
-// recordSourceLine adds an entry to pc to line mapping
-func (ops *OpStream) recordSourceLine() {
-	ops.OffsetToLine[ops.pending.Len()] = ops.sourceLine - 1
+// recordSourceLocation adds an entry to pc to source location mapping
+func (ops *OpStream) recordSourceLocation(line, column int) {
+	ops.OffsetToSource[ops.pending.Len()] = SourceLocation{line - 1, column}
 }
 
 // referToLabel records an opcode label reference to resolve later
@@ -990,6 +998,7 @@ func asmBranch(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *sourc
 	return nil
 }
 
+// asmSwitch assembles switch and match opcodes
 func asmSwitch(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *sourceError {
 	numOffsets := len(args)
 	if numOffsets > math.MaxUint8 {
@@ -1104,7 +1113,7 @@ func (ops *OpStream) checkArgCount(name string, mnemonic token, args []token, ex
 	return nil
 }
 
-// Basic assembly. Any extra bytes of opcode are encoded as byte immediates.
+// Basic assembly, used for most opcodes. It assembles based on the information in OpSpec.
 func asmDefault(ops *OpStream, spec *OpSpec, mnemonic token, args []token) *sourceError {
 	if err := ops.checkArgCount(spec.Name, mnemonic, args, len(spec.OpDetails.Immediates)); err != nil {
 		return err
@@ -1472,7 +1481,7 @@ func typeStores(pgm *ProgramKnowledge, args []token) (StackTypes, StackTypes, er
 	// If the index of the scratch slot is a const
 	// we can modify only that scratch slots type
 	if top >= 1 {
-		if idx, isConst := pgm.stack[top-1].constant(); isConst {
+		if idx, isConst := pgm.stack[top-1].constInt(); isConst {
 			pgm.scratchSpace[idx] = pgm.stack[top]
 			return nil, nil, nil
 		}
@@ -1515,7 +1524,7 @@ func typeLoads(pgm *ProgramKnowledge, args []token) (StackTypes, StackTypes, err
 		return nil, nil, nil
 	}
 
-	if val, isConst := pgm.stack[top].constant(); isConst {
+	if val, isConst := pgm.stack[top].constInt(); isConst {
 		return nil, StackTypes{pgm.scratchSpace[val]}, nil
 	}
 
@@ -1778,14 +1787,14 @@ func mergeProtos(specs map[int]OpSpec) (Proto, uint64, bool) {
 			}
 		}
 		if debugExplainFuncPtr == nil {
-			debugExplainFuncPtr = spec.Explain
+			debugExplainFuncPtr = spec.StackExplain
 		}
 		i++
 	}
 	return Proto{
-		Arg:     typedList{args, ""},
-		Return:  typedList{returns, ""},
-		Explain: debugExplainFuncPtr,
+		Arg:          typedList{args, ""},
+		Return:       typedList{returns, ""},
+		StackExplain: debugExplainFuncPtr,
 	}, minVersion, true
 }
 
@@ -1826,8 +1835,8 @@ func (se sourceError) Unwrap() error {
 	return se.Err
 }
 
-func errorLinef(line int, format string, a ...interface{}) *sourceError {
-	return &sourceError{line, 0, fmt.Errorf(format, a...)}
+func sourceErrorf(location SourceLocation, format string, a ...interface{}) *sourceError {
+	return &sourceError{location.Line, location.Column, fmt.Errorf(format, a...)}
 }
 
 type token struct {
@@ -2087,8 +2096,9 @@ func (ops *OpStream) assemble(text string) error {
 			}
 			spec, expandedName, ok := getSpec(ops, current[0], len(current)-1)
 			if ok {
-				ops.trace("%3d: %s\t", ops.sourceLine, opstring)
-				ops.recordSourceLine()
+				line, column := current[0].line, current[0].col
+				ops.trace("%3d:%d %s\t", line, column, opstring)
+				ops.recordSourceLocation(line, column)
 				if spec.Modes == ModeApp {
 					ops.HasStatefulOps = true
 				}
@@ -2516,14 +2526,14 @@ func (ops *OpStream) optimizeConstants(refs []constReference, constBlock []inter
 			}
 		}
 		if !found {
-			err = errorLinef(ops.OffsetToLine[ref.getPosition()], "value not found in constant block: %v", ref.getValue())
+			err = sourceErrorf(ops.OffsetToSource[ref.getPosition()], "value not found in constant block: %v", ref.getValue())
 			return
 		}
 	}
 
 	for _, f := range freqs {
 		if f.freq == 0 {
-			err = errorLinef(ops.sourceLine, "member of constant block is not used: %v", f.value)
+			err = sourceErrorf(SourceLocation{ops.sourceLine, 0}, "member of constant block is not used: %v", f.value)
 			return
 		}
 	}
@@ -2554,7 +2564,7 @@ func (ops *OpStream) optimizeConstants(refs []constReference, constBlock []inter
 			}
 		}
 		if newIndex == -1 {
-			return nil, errorLinef(ops.OffsetToLine[ref.getPosition()], "value not found in constant block: %v", ref.getValue())
+			return nil, sourceErrorf(ops.OffsetToSource[ref.getPosition()], "value not found in constant block: %v", ref.getValue())
 		}
 
 		newBytes := ref.makeNewReference(ops, singleton, newIndex)
@@ -2601,15 +2611,15 @@ func (ops *OpStream) optimizeConstants(refs []constReference, constBlock []inter
 			}
 		}
 
-		fixedOffsetsToLine := make(map[int]int, len(ops.OffsetToLine))
-		for pos, sourceLine := range ops.OffsetToLine {
+		fixedOffsetsToSource := make(map[int]SourceLocation, len(ops.OffsetToSource))
+		for pos, sourceLocation := range ops.OffsetToSource {
 			if pos > position {
-				fixedOffsetsToLine[pos+positionDelta] = sourceLine
+				fixedOffsetsToSource[pos+positionDelta] = sourceLocation
 			} else {
-				fixedOffsetsToLine[pos] = sourceLine
+				fixedOffsetsToSource[pos] = sourceLocation
 			}
 		}
-		ops.OffsetToLine = fixedOffsetsToLine
+		ops.OffsetToSource = fixedOffsetsToSource
 	}
 
 	ops.pending = *bytes.NewBuffer(raw)
@@ -2666,11 +2676,11 @@ func (ops *OpStream) prependCBlocks() []byte {
 	}
 
 	// fixup offset to line mapping
-	newOffsetToLine := make(map[int]int, len(ops.OffsetToLine))
-	for o, l := range ops.OffsetToLine {
-		newOffsetToLine[o+pbl] = l
+	newOffsetToSource := make(map[int]SourceLocation, len(ops.OffsetToSource))
+	for o, l := range ops.OffsetToSource {
+		newOffsetToSource[o+pbl] = l
 	}
-	ops.OffsetToLine = newOffsetToLine
+	ops.OffsetToSource = newOffsetToSource
 
 	return out
 }
@@ -2684,7 +2694,7 @@ func (ops *OpStream) record(se *sourceError) {
 }
 
 func (ops *OpStream) warn(t token, format string, a ...interface{}) {
-	warning := &sourceError{Line: t.line, Column: t.col, Err: fmt.Errorf(format, a...)}
+	warning := sourceError{t.line, t.col, fmt.Errorf(format, a...)}
 	ops.Warnings = append(ops.Warnings, warning)
 }
 

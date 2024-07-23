@@ -11,6 +11,7 @@ import (
 //    |-----> (*) MarshalMsg
 //    |-----> (*) CanMarshalMsg
 //    |-----> (*) UnmarshalMsg
+//    |-----> (*) UnmarshalMsgWithState
 //    |-----> (*) CanUnmarshalMsg
 //    |-----> (*) Msgsize
 //    |-----> (*) MsgIsZero
@@ -45,7 +46,12 @@ func (_ *Message) CanMarshalMsg(z interface{}) bool {
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *Message) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *Message) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
 	var field []byte
 	_ = field
 	var zb0001 int
@@ -107,6 +113,9 @@ func (z *Message) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return
 }
 
+func (z *Message) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
 func (_ *Message) CanUnmarshalMsg(z interface{}) bool {
 	_, ok := (z).(*Message)
 	return ok

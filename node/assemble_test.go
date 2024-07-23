@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -83,7 +83,7 @@ func BenchmarkAssembleBlock(b *testing.B) {
 	const inMem = true
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
-	ledger, err := data.LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, nil, cfg)
+	ledger, err := data.LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, cfg)
 	require.NoError(b, err)
 
 	l := ledger
@@ -99,7 +99,7 @@ func BenchmarkAssembleBlock(b *testing.B) {
 		cfg := config.GetDefaultLocal()
 		cfg.TxPoolSize = txPoolSize
 		cfg.EnableAssembleStats = false
-		tp := pools.MakeTransactionPool(l.Ledger, cfg, logging.Base())
+		tp := pools.MakeTransactionPool(l.Ledger, cfg, logging.Base(), nil)
 		errcount := 0
 		okcount := 0
 		var worstTxID transactions.Txid
@@ -212,7 +212,7 @@ func TestAssembleBlockTransactionPoolBehind(t *testing.T) {
 	const inMem = true
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
-	ledger, err := data.LoadLedger(log, "ledgerName", inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, nil, cfg)
+	ledger, err := data.LoadLedger(log, "ledgerName", inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, cfg)
 	require.NoError(t, err)
 
 	l := ledger
@@ -220,13 +220,13 @@ func TestAssembleBlockTransactionPoolBehind(t *testing.T) {
 	cfg = config.GetDefaultLocal()
 	cfg.TxPoolSize = txPoolSize
 	cfg.EnableAssembleStats = false
-	tp := pools.MakeTransactionPool(l.Ledger, cfg, log)
+	tp := pools.MakeTransactionPool(l.Ledger, cfg, log, nil)
 
 	next := l.NextRound()
 	deadline := time.Now().Add(time.Second)
 	block, err := tp.AssembleBlock(next, deadline)
 	require.NoError(t, err)
-	require.NoError(t, ledger.AddBlock(block.Block(), agreement.Certificate{Round: next}))
+	require.NoError(t, ledger.AddBlock(block.UnfinishedBlock(), agreement.Certificate{Round: next}))
 
 	expectingLog = true
 
@@ -234,7 +234,7 @@ func TestAssembleBlockTransactionPoolBehind(t *testing.T) {
 	deadline = time.Now().Add(time.Second)
 	block, err = tp.AssembleBlock(next, deadline)
 	require.NoError(t, err)
-	require.NoError(t, ledger.AddBlock(block.Block(), agreement.Certificate{Round: next}))
+	require.NoError(t, ledger.AddBlock(block.UnfinishedBlock(), agreement.Certificate{Round: next}))
 
 	require.False(t, expectingLog)
 }

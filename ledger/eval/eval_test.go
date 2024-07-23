@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -30,10 +30,10 @@ import (
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
 	basics_testing "github.com/algorand/go-algorand/data/basics/testing"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/logic/mocktracer"
@@ -180,16 +180,17 @@ ok:
 // and the usage counts correctly propagated from parent cow to child cow and back
 func TestEvalAppStateCountsWithTxnGroup(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	_, _, err := testEvalAppGroup(t, basics.StateSchema{NumByteSlice: 1})
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "store bytes count 2 exceeds schema bytes count 1")
+	require.ErrorContains(t, err, "store bytes count 2 exceeds schema bytes count 1")
 }
 
 // TestEvalAppAllocStateWithTxnGroup ensures roundCowState.deltas and applyStorageDelta
 // produce correct results when a txn group has storage allocate and storage update actions
 func TestEvalAppAllocStateWithTxnGroup(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	eval, addr, err := testEvalAppGroup(t, basics.StateSchema{NumByteSlice: 2})
 	require.NoError(t, err)
@@ -204,6 +205,7 @@ func TestEvalAppAllocStateWithTxnGroup(t *testing.T) {
 // see TestBlockEvaluator for more
 func TestTestTransactionGroup(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	var txgroup []transactions.SignedTxn
 	eval := BlockEvaluator{}
@@ -213,13 +215,14 @@ func TestTestTransactionGroup(t *testing.T) {
 	eval.proto = config.Consensus[protocol.ConsensusCurrentVersion]
 	txgroup = make([]transactions.SignedTxn, eval.proto.MaxTxGroupSize+1)
 	err = eval.TestTransactionGroup(txgroup)
-	require.Error(t, err) // too many
+	require.ErrorContains(t, err, "group size")
 }
 
 // test BlockEvaluator.transactionGroup()
 // some trivial checks that require no setup
 func TestPrivateTransactionGroup(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	var txgroup []transactions.SignedTxnWithAD
 	eval := BlockEvaluator{}
@@ -229,7 +232,7 @@ func TestPrivateTransactionGroup(t *testing.T) {
 	eval.proto = config.Consensus[protocol.ConsensusCurrentVersion]
 	txgroup = make([]transactions.SignedTxnWithAD, eval.proto.MaxTxGroupSize+1)
 	err = eval.TransactionGroup(txgroup)
-	require.Error(t, err) // too many
+	require.ErrorContains(t, err, "group size")
 }
 
 func TestTransactionGroupWithTracer(t *testing.T) {
@@ -543,7 +546,7 @@ int 1`,
 					},
 					mocktracer.OpcodeEvents(3, false),
 					{
-						mocktracer.AfterProgram(logic.ModeApp, false),
+						mocktracer.AfterProgram(logic.ModeApp, mocktracer.ProgramResultPass),
 						mocktracer.AfterTxn(protocol.ApplicationCallTx, expectedBasicAppCallAD, false), // end basicAppCallTxn
 						mocktracer.BeforeTxn(protocol.PaymentTx),                                       // start payTxn
 						mocktracer.AfterTxn(protocol.PaymentTx, expectedPayTxnAD, false),               // end payTxn
@@ -559,6 +562,11 @@ int 1`,
 				delete(expectedBasicAppCallDelta.Txids, txgroup[0].Txn.ID())
 
 				hasError := testCase.firstTxnBehavior == "error"
+				expectedProgramResult := mocktracer.ProgramResultReject
+				if hasError {
+					expectedProgramResult = mocktracer.ProgramResultError
+				}
+
 				// EvalDeltas are removed from failed app call transactions
 				expectedBasicAppCallAD.EvalDelta = transactions.EvalDelta{}
 				expectedEvents = append(expectedEvents, mocktracer.FlattenEvents([][]mocktracer.Event{
@@ -569,7 +577,7 @@ int 1`,
 					},
 					mocktracer.OpcodeEvents(3, hasError),
 					{
-						mocktracer.AfterProgram(logic.ModeApp, hasError),
+						mocktracer.AfterProgram(logic.ModeApp, expectedProgramResult),
 						mocktracer.AfterTxn(protocol.ApplicationCallTx, expectedBasicAppCallAD, true), // end basicAppCallTxn
 						mocktracer.AfterTxnGroup(3, &expectedBasicAppCallDelta, true),
 					},
@@ -642,7 +650,7 @@ func testnetFixupExecution(t *testing.T, headerRound basics.Round, poolBonus uin
 	// won't work before funding bank
 	if poolBonus > 0 {
 		_, err = eval.workaroundOverspentRewards(rewardPoolBalance, headerRound)
-		require.Error(t, err)
+		require.ErrorContains(t, err, "unable to move funds from testnet bank")
 	}
 
 	bankAddr, _ := basics.UnmarshalChecksumAddress("GD64YIY3TWGDMCNPP553DZPPR6LDUSFQOIJVFDPPXWEG3FVOJCCDBBHU5A")
@@ -669,56 +677,6 @@ func testnetFixupExecution(t *testing.T, headerRound basics.Round, poolBonus uin
 	poolOld, err := eval.workaroundOverspentRewards(rewardPoolBalance, headerRound)
 	require.Equal(t, nextPoolBalance, poolOld.MicroAlgos.Raw)
 	require.NoError(t, err)
-}
-
-// newTestGenesis creates a bunch of accounts, splits up 10B algos
-// between them and the rewardspool and feesink, and gives out the
-// addresses and secrets it creates to enable tests.  For special
-// scenarios, manipulate these return values before using newTestLedger.
-func newTestGenesis() (bookkeeping.GenesisBalances, []basics.Address, []*crypto.SignatureSecrets) {
-	// irrelevant, but deterministic
-	sink, err := basics.UnmarshalChecksumAddress("YTPRLJ2KK2JRFSZZNAF57F3K5Y2KCG36FZ5OSYLW776JJGAUW5JXJBBD7Q")
-	if err != nil {
-		panic(err)
-	}
-	rewards, err := basics.UnmarshalChecksumAddress("242H5OXHUEBYCGGWB3CQ6AZAMQB5TMCWJGHCGQOZPEIVQJKOO7NZXUXDQA")
-	if err != nil {
-		panic(err)
-	}
-
-	const count = 10
-	addrs := make([]basics.Address, count)
-	secrets := make([]*crypto.SignatureSecrets, count)
-	accts := make(map[basics.Address]basics.AccountData)
-
-	// 10 billion microalgos, across N accounts and pool and sink
-	amount := 10 * 1000000000 * 1000000 / uint64(count+2)
-
-	for i := 0; i < count; i++ {
-		// Create deterministic addresses, so that output stays the same, run to run.
-		var seed crypto.Seed
-		seed[0] = byte(i)
-		secrets[i] = crypto.GenerateSignatureSecrets(seed)
-		addrs[i] = basics.Address(secrets[i].SignatureVerifier)
-
-		adata := basics.AccountData{
-			MicroAlgos: basics.MicroAlgos{Raw: amount},
-		}
-		accts[addrs[i]] = adata
-	}
-
-	accts[sink] = basics.AccountData{
-		MicroAlgos: basics.MicroAlgos{Raw: amount},
-		Status:     basics.NotParticipating,
-	}
-
-	accts[rewards] = basics.AccountData{
-		MicroAlgos: basics.MicroAlgos{Raw: amount},
-	}
-
-	genBalances := bookkeeping.MakeGenesisBalances(accts, sink, rewards)
-
-	return genBalances, addrs, secrets
 }
 
 type evalTestLedger struct {
@@ -823,11 +781,21 @@ func (ledger *evalTestLedger) LatestTotals() (basics.Round, ledgercore.AccountTo
 	return basics.Round(len(ledger.blocks)).SubSaturate(1), ledger.latestTotals, nil
 }
 
-// LookupWithoutRewards is like Lookup but does not apply pending rewards up
-// to the requested round rnd.
+// LookupWithoutRewards is like Lookup but is not supposed to apply pending
+// rewards up to the requested round rnd.  Here Lookup doesn't do that anyway.
 func (ledger *evalTestLedger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (ledgercore.AccountData, basics.Round, error) {
-	ad := ledger.roundBalances[rnd][addr]
-	return ledgercore.ToAccountData(ad), rnd, nil
+	ad, err := ledger.Lookup(rnd, addr)
+	return ledgercore.ToAccountData(ad), rnd, err
+}
+
+func (ledger *evalTestLedger) LookupAgreement(rnd basics.Round, addr basics.Address) (basics.OnlineAccountData, error) {
+	ad, _, err := ledger.LookupWithoutRewards(rnd, addr)
+	return convertToOnline(ad), err
+}
+
+// OnlineCirculation just returns a deterministic value for a given round.
+func (ledger *evalTestLedger) OnlineCirculation(rnd, voteRound basics.Round) (basics.MicroAlgos, error) {
+	return basics.MicroAlgos{Raw: uint64(rnd) * 1_000_000}, nil
 }
 
 func (ledger *evalTestLedger) LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error) {
@@ -941,7 +909,7 @@ func (ledger *evalTestLedger) BlockHdr(rnd basics.Round) (bookkeeping.BlockHeade
 }
 
 func (ledger *evalTestLedger) VotersForStateProof(rnd basics.Round) (*ledgercore.VotersForRound, error) {
-	return nil, errors.New("untested code path")
+	return nil, nil
 }
 
 // GetCreator is like GetCreatorForRound, but for the latest round and race-free
@@ -981,11 +949,15 @@ func (ledger *evalTestLedger) nextBlock(t testing.TB) *BlockEvaluator {
 
 // endBlock completes the block being created, returns the ValidatedBlock for inspection
 func (ledger *evalTestLedger) endBlock(t testing.TB, eval *BlockEvaluator) *ledgercore.ValidatedBlock {
-	validatedBlock, err := eval.GenerateBlock()
+	unfinishedBlock, err := eval.GenerateBlock(nil)
 	require.NoError(t, err)
-	err = ledger.AddValidatedBlock(*validatedBlock, agreement.Certificate{})
+	// fake agreement's setting of header fields so later validates work.
+	seed := committee.Seed{}
+	crypto.RandBytes(seed[:])
+	validatedBlock := ledgercore.MakeValidatedBlock(unfinishedBlock.UnfinishedBlock().WithProposer(seed, testPoolAddr, true), unfinishedBlock.UnfinishedDeltas())
+	err = ledger.AddValidatedBlock(validatedBlock, agreement.Certificate{})
 	require.NoError(t, err)
-	return validatedBlock
+	return &validatedBlock
 }
 
 // lookup gets the current accountdata for an address
@@ -1037,12 +1009,24 @@ func (l *testCowBaseLedger) BlockHdr(basics.Round) (bookkeeping.BlockHeader, err
 	return bookkeeping.BlockHeader{}, errors.New("not implemented")
 }
 
+func (l *testCowBaseLedger) GenesisHash() crypto.Digest {
+	panic("not implemented")
+}
+
 func (l *testCowBaseLedger) CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, ledgercore.Txlease) error {
 	return errors.New("not implemented")
 }
 
 func (l *testCowBaseLedger) LookupWithoutRewards(basics.Round, basics.Address) (ledgercore.AccountData, basics.Round, error) {
 	return ledgercore.AccountData{}, basics.Round(0), errors.New("not implemented")
+}
+
+func (l *testCowBaseLedger) LookupAgreement(rnd basics.Round, addr basics.Address) (basics.OnlineAccountData, error) {
+	return basics.OnlineAccountData{}, errors.New("not implemented")
+}
+
+func (l *testCowBaseLedger) OnlineCirculation(rnd, voteRnd basics.Round) (basics.MicroAlgos, error) {
+	return basics.MicroAlgos{}, errors.New("not implemented")
 }
 
 func (l *testCowBaseLedger) LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error) {
@@ -1069,6 +1053,7 @@ func (l *testCowBaseLedger) GetCreatorForRound(_ basics.Round, cindex basics.Cre
 
 func TestCowBaseCreatorsCache(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	addresses := make([]basics.Address, 3)
 	for i := 0; i < len(addresses); i++ {
@@ -1112,6 +1097,7 @@ func TestCowBaseCreatorsCache(t *testing.T) {
 // TestEvalFunctionForExpiredAccounts tests that the eval function will correctly mark accounts as offline
 func TestEvalFunctionForExpiredAccounts(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	genesisInitState, addrs, keys := ledgertesting.GenesisWithProto(10, protocol.ConsensusFuture)
 
@@ -1133,6 +1119,7 @@ func TestEvalFunctionForExpiredAccounts(t *testing.T) {
 		tmp.Status = basics.Online
 		crypto.RandBytes(tmp.StateProofID[:])
 		crypto.RandBytes(tmp.SelectionID[:])
+		crypto.RandBytes(tmp.VoteID[:])
 		genesisInitState.Accounts[addr] = tmp
 	}
 
@@ -1156,10 +1143,16 @@ func TestEvalFunctionForExpiredAccounts(t *testing.T) {
 	blkEval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0, nil)
 	require.NoError(t, err)
 
-	// Advance the evaluator a couple rounds...
+	// Advance the evaluator a couple rounds, watching for lack of expiration
 	for i := uint64(0); i < uint64(targetRound); i++ {
-		l.endBlock(t, blkEval)
+		vb := l.endBlock(t, blkEval)
 		blkEval = l.nextBlock(t)
+		for _, acct := range vb.Block().ExpiredParticipationAccounts {
+			if acct == recvAddr {
+				// won't happen, because recvAddr didn't appear in block
+				require.Fail(t, "premature expiration")
+			}
+		}
 	}
 
 	require.Greater(t, uint64(blkEval.Round()), uint64(recvAddrLastValidRound))
@@ -1187,62 +1180,62 @@ func TestEvalFunctionForExpiredAccounts(t *testing.T) {
 	// Make sure we validate our block as well
 	blkEval.validate = true
 
-	validatedBlock, err := blkEval.GenerateBlock()
+	unfinishedBlock, err := blkEval.GenerateBlock(nil)
 	require.NoError(t, err)
+
+	// fake agreement's setting of header fields so later validates work
+	validatedBlock := ledgercore.MakeValidatedBlock(unfinishedBlock.UnfinishedBlock().WithProposer(committee.Seed{}, testPoolAddr, true), unfinishedBlock.UnfinishedDeltas())
+
+	expired := false
+	for _, acct := range validatedBlock.Block().ExpiredParticipationAccounts {
+		if acct == recvAddr {
+			expired = true
+		}
+	}
+	require.True(t, expired)
 
 	_, err = Eval(context.Background(), l, validatedBlock.Block(), false, nil, nil, l.tracer)
 	require.NoError(t, err)
 
 	acctData, _ := blkEval.state.lookup(recvAddr)
 
-	require.Equal(t, merklesignature.Verifier{}.Commitment, acctData.StateProofID)
-	require.Equal(t, crypto.VRFVerifier{}, acctData.SelectionID)
+	require.Zero(t, acctData.StateProofID)
+	require.Zero(t, acctData.SelectionID)
+	require.Zero(t, acctData.VoteID)
+	goodBlock := validatedBlock.Block()
 
-	badBlock := *validatedBlock
-
-	// First validate that bad block is fine if we dont touch it...
-	_, err = Eval(context.Background(), l, badBlock.Block(), true, verify.GetMockedCache(true), nil, l.tracer)
+	// First validate that it's fine if we dont touch it.
+	_, err = Eval(context.Background(), l, goodBlock, true, verify.GetMockedCache(true), nil, l.tracer)
 	require.NoError(t, err)
-
-	badBlock = *validatedBlock
 
 	// Introduce an unknown address to introduce an error
-	badBlockObj := badBlock.Block()
-	badBlockObj.ExpiredParticipationAccounts = append(badBlockObj.ExpiredParticipationAccounts, basics.Address{1})
-	badBlock = ledgercore.MakeValidatedBlock(badBlockObj, badBlock.Delta())
+	badBlock := goodBlock
+	badBlock.ExpiredParticipationAccounts = append(badBlock.ExpiredParticipationAccounts, basics.Address{1})
 
-	_, err = Eval(context.Background(), l, badBlock.Block(), true, verify.GetMockedCache(true), nil, l.tracer)
-	require.Error(t, err)
-
-	badBlock = *validatedBlock
-
-	addressToCopy := badBlock.Block().ExpiredParticipationAccounts[0]
+	_, err = Eval(context.Background(), l, badBlock, true, verify.GetMockedCache(true), nil, l.tracer)
+	require.ErrorContains(t, err, "expiration candidate")
 
 	// Add more than the expected number of accounts
-	badBlockObj = badBlock.Block()
+	badBlock = goodBlock
+	addressToCopy := badBlock.ExpiredParticipationAccounts[0]
 	for i := 0; i < blkEval.proto.MaxProposedExpiredOnlineAccounts+1; i++ {
-		badBlockObj.ExpiredParticipationAccounts = append(badBlockObj.ExpiredParticipationAccounts, addressToCopy)
+		badBlock.ExpiredParticipationAccounts = append(badBlock.ExpiredParticipationAccounts, addressToCopy)
 	}
-	badBlock = ledgercore.MakeValidatedBlock(badBlockObj, badBlock.Delta())
 
-	_, err = Eval(context.Background(), l, badBlock.Block(), true, verify.GetMockedCache(true), nil, l.tracer)
-	require.Error(t, err)
-
-	badBlock = *validatedBlock
+	_, err = Eval(context.Background(), l, badBlock, true, verify.GetMockedCache(true), nil, l.tracer)
+	require.ErrorContains(t, err, "length of expired accounts")
 
 	// Duplicate an address
-	badBlockObj = badBlock.Block()
-	badBlockObj.ExpiredParticipationAccounts = append(badBlockObj.ExpiredParticipationAccounts, badBlockObj.ExpiredParticipationAccounts[0])
-	badBlock = ledgercore.MakeValidatedBlock(badBlockObj, badBlock.Delta())
+	badBlock = goodBlock
+	badBlock.ExpiredParticipationAccounts = append(badBlock.ExpiredParticipationAccounts, addressToCopy)
 
-	_, err = Eval(context.Background(), l, badBlock.Block(), true, verify.GetMockedCache(true), nil, l.tracer)
-	require.Error(t, err)
+	_, err = Eval(context.Background(), l, badBlock, true, verify.GetMockedCache(true), nil, l.tracer)
+	require.ErrorContains(t, err, "duplicate address found")
 
-	badBlock = *validatedBlock
+	badBlock = goodBlock
 	// sanity check that bad block is being actually copied and not just the pointer
-	_, err = Eval(context.Background(), l, badBlock.Block(), true, verify.GetMockedCache(true), nil, l.tracer)
+	_, err = Eval(context.Background(), l, badBlock, true, verify.GetMockedCache(true), nil, l.tracer)
 	require.NoError(t, err)
-
 }
 
 type failRoundCowParent struct {
@@ -1256,6 +1249,7 @@ func (p *failRoundCowParent) lookup(basics.Address) (ledgercore.AccountData, err
 // TestExpiredAccountGenerationWithDiskFailure tests edge cases where disk failures can lead to ledger look up failures
 func TestExpiredAccountGenerationWithDiskFailure(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	genesisInitState, addrs, keys := ledgertesting.GenesisWithProto(10, protocol.ConsensusFuture)
 
@@ -1329,22 +1323,179 @@ func TestExpiredAccountGenerationWithDiskFailure(t *testing.T) {
 	eval.block.ExpiredParticipationAccounts = append(eval.block.ExpiredParticipationAccounts, recvAddr)
 
 	err = eval.endOfBlock()
-	require.Error(t, err)
+	require.ErrorContains(t, err, "found expiration candidate")
 
 	eval.block.ExpiredParticipationAccounts = []basics.Address{{}}
 	eval.state.mods.Accts = ledgercore.AccountDeltas{}
 	eval.state.lookupParent = &failRoundCowParent{}
 	err = eval.endOfBlock()
-	require.Error(t, err)
+	require.ErrorContains(t, err, "disk I/O fail (on purpose)")
 
 	err = eval.resetExpiredOnlineAccountsParticipationKeys()
-	require.Error(t, err)
+	require.ErrorContains(t, err, "disk I/O fail (on purpose)")
+}
 
+// TestAbsenteeChecks tests that the eval function will correctly mark accounts as absent
+func TestAbsenteeChecks(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	genesisInitState, addrs, keys := ledgertesting.GenesisWithProto(10, protocol.ConsensusFuture)
+
+	// add 32 more addresses, we can get a suspension by challenge
+	for i := 0; i < 32; i++ {
+		addrs = append(addrs, basics.Address{byte(i << 3), 0xaa})
+	}
+
+	// Set all addrs to online
+	for i, addr := range addrs {
+		tmp := genesisInitState.Accounts[addr]
+		tmp.Status = basics.Online
+		crypto.RandBytes(tmp.StateProofID[:])
+		crypto.RandBytes(tmp.SelectionID[:])
+		crypto.RandBytes(tmp.VoteID[:])
+		tmp.VoteFirstValid = 1
+		tmp.VoteLastValid = 1500 // large enough to avoid EXPIRATION, so we can see SUSPENSION
+		tmp.LastHeartbeat = 1    // non-zero allows suspensions
+		switch i {
+		case 1:
+			tmp.LastHeartbeat = 1150 // lie here so that addr[1] won't be suspended
+		case 2:
+			tmp.LastProposed = 1150 // lie here so that addr[2] won't be suspended
+		}
+
+		genesisInitState.Accounts[addr] = tmp
+	}
+
+	l := newTestLedger(t, bookkeeping.GenesisBalances{
+		Balances:    genesisInitState.Accounts,
+		FeeSink:     testSinkAddr,
+		RewardsPool: testPoolAddr,
+	})
+
+	newBlock := bookkeeping.MakeBlock(l.blocks[0].BlockHeader)
+
+	blkEval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0, nil)
+	require.NoError(t, err)
+
+	// Advance the evaluator, watching for lack of suspensions since we don't
+	// suspend until a txn with a suspendable account appears
+	challenge := byte(0)
+	for i := uint64(0); i < uint64(1210); i++ { // A bit past one grace period (200) past challenge at 1000.
+		vb := l.endBlock(t, blkEval)
+		blkEval = l.nextBlock(t)
+		require.Zero(t, vb.Block().AbsentParticipationAccounts)
+		if vb.Block().Round() == 1000 {
+			challenge = vb.Block().BlockHeader.Seed[0]
+		}
+	}
+	challenged := basics.Address{(challenge >> 3) << 3, 0xaa}
+
+	pay := func(i int, a basics.Address) transactions.Transaction {
+		return transactions.Transaction{
+			Type: protocol.PaymentTx,
+			Header: transactions.Header{
+				Sender:      addrs[i],
+				Fee:         minFee,
+				LastValid:   blkEval.Round(),
+				GenesisHash: l.GenesisHash(),
+			},
+			PaymentTxnFields: transactions.PaymentTxnFields{
+				Receiver: a,
+				Amount:   basics.MicroAlgos{Raw: 100_000},
+			},
+		}
+	}
+
+	selfpay := func(i int) transactions.SignedTxn {
+		return pay(i, addrs[i]).Sign(keys[i])
+	}
+
+	require.NoError(t, blkEval.Transaction(selfpay(0), transactions.ApplyData{}))
+	require.NoError(t, blkEval.Transaction(selfpay(1), transactions.ApplyData{}))
+	require.NoError(t, blkEval.Transaction(selfpay(2), transactions.ApplyData{}))
+	for i := 0; i < 32; i++ {
+		require.NoError(t, blkEval.Transaction(pay(0, basics.Address{byte(i << 3), 0xaa}).Sign(keys[0]),
+			transactions.ApplyData{}))
+	}
+
+	// Make sure we validate our block as well
+	blkEval.validate = true
+
+	unfinishedBlock, err := blkEval.GenerateBlock(nil)
+	require.NoError(t, err)
+
+	// fake agreement's setting of header fields so later validates work
+	validatedBlock := ledgercore.MakeValidatedBlock(unfinishedBlock.UnfinishedBlock().WithProposer(committee.Seed{}, testPoolAddr, true), unfinishedBlock.UnfinishedDeltas())
+
+	require.Zero(t, validatedBlock.Block().ExpiredParticipationAccounts)
+	require.Contains(t, validatedBlock.Block().AbsentParticipationAccounts, addrs[0], addrs[0].String())
+	require.NotContains(t, validatedBlock.Block().AbsentParticipationAccounts, addrs[1], addrs[1].String())
+	require.NotContains(t, validatedBlock.Block().AbsentParticipationAccounts, addrs[2], addrs[2].String())
+
+	// Of the 32 extra accounts, make sure only the one matching the challenge is suspended
+	require.Contains(t, validatedBlock.Block().AbsentParticipationAccounts, challenged, challenged.String())
+	for i := byte(0); i < 32; i++ {
+		if i == challenge>>3 {
+			require.Equal(t, basics.Address{i << 3, 0xaa}, challenged)
+			continue
+		}
+		require.NotContains(t, validatedBlock.Block().AbsentParticipationAccounts, basics.Address{i << 3, 0xaa})
+	}
+
+	_, err = Eval(context.Background(), l, validatedBlock.Block(), false, nil, nil, l.tracer)
+	require.NoError(t, err)
+
+	acctData, _ := blkEval.state.lookup(addrs[0])
+
+	require.NotZero(t, acctData.StateProofID)
+	require.NotZero(t, acctData.SelectionID)
+	require.NotZero(t, acctData.VoteID)
+	goodBlock := validatedBlock.Block()
+
+	// First validate that it's fine if we dont touch it.
+	_, err = Eval(context.Background(), l, goodBlock, true, verify.GetMockedCache(true), nil, l.tracer)
+	require.NoError(t, err)
+
+	// Introduce an address that shouldn't be suspended
+	badBlock := goodBlock
+	badBlock.AbsentParticipationAccounts = append(badBlock.AbsentParticipationAccounts, addrs[1])
+	_, err = Eval(context.Background(), l, badBlock, true, verify.GetMockedCache(true), nil, l.tracer)
+	require.ErrorContains(t, err, "not absent")
+
+	// An account that isn't even online
+	badBlock = goodBlock
+	badBlock.AbsentParticipationAccounts = append(badBlock.AbsentParticipationAccounts, basics.Address{0x01})
+	_, err = Eval(context.Background(), l, badBlock, true, verify.GetMockedCache(true), nil, l.tracer)
+	require.ErrorContains(t, err, "not Online")
+
+	// Add more than the expected number of accounts
+	badBlock = goodBlock
+	addressToCopy := badBlock.AbsentParticipationAccounts[0]
+	for i := 0; i < blkEval.proto.MaxProposedExpiredOnlineAccounts+1; i++ {
+		badBlock.AbsentParticipationAccounts = append(badBlock.AbsentParticipationAccounts, addressToCopy)
+	}
+
+	_, err = Eval(context.Background(), l, badBlock, true, verify.GetMockedCache(true), nil, l.tracer)
+	require.ErrorContains(t, err, "length of absent accounts")
+
+	// Duplicate an address
+	badBlock = goodBlock
+	badBlock.AbsentParticipationAccounts = append(badBlock.AbsentParticipationAccounts, addressToCopy)
+
+	_, err = Eval(context.Background(), l, badBlock, true, verify.GetMockedCache(true), nil, l.tracer)
+	require.ErrorContains(t, err, "duplicate address found")
+
+	badBlock = goodBlock
+	// sanity check that bad block is being actually copied and not just the pointer
+	_, err = Eval(context.Background(), l, badBlock, true, verify.GetMockedCache(true), nil, l.tracer)
+	require.NoError(t, err)
 }
 
 // TestExpiredAccountGeneration test that expired accounts are added to a block header and validated
 func TestExpiredAccountGeneration(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	genesisInitState, addrs, keys := ledgertesting.GenesisWithProto(10, protocol.ConsensusFuture)
 
@@ -1426,22 +1577,132 @@ func TestExpiredAccountGeneration(t *testing.T) {
 	// Make sure we validate our block as well
 	eval.validate = true
 
-	validatedBlock, err := eval.GenerateBlock()
+	unfinishedBlock, err := eval.GenerateBlock(nil)
 	require.NoError(t, err)
 
-	listOfExpiredAccounts := validatedBlock.Block().ParticipationUpdates.ExpiredParticipationAccounts
+	listOfExpiredAccounts := unfinishedBlock.UnfinishedBlock().ParticipationUpdates.ExpiredParticipationAccounts
 
-	require.Equal(t, 1, len(listOfExpiredAccounts))
-	expiredAccount := listOfExpiredAccounts[0]
-	require.Equal(t, expiredAccount, recvAddr)
+	require.Len(t, listOfExpiredAccounts, 1)
+	require.Equal(t, listOfExpiredAccounts[0], recvAddr)
 
 	recvAcct, err := eval.state.lookup(recvAddr)
 	require.NoError(t, err)
 	require.Equal(t, basics.Offline, recvAcct.Status)
-	require.Equal(t, basics.Round(0), recvAcct.VoteFirstValid)
-	require.Equal(t, basics.Round(0), recvAcct.VoteLastValid)
-	require.Equal(t, uint64(0), recvAcct.VoteKeyDilution)
-	require.Equal(t, crypto.OneTimeSignatureVerifier{}, recvAcct.VoteID)
-	require.Equal(t, crypto.VRFVerifier{}, recvAcct.SelectionID)
-	require.Equal(t, merklesignature.Verifier{}.Commitment, recvAcct.StateProofID)
+	require.Zero(t, recvAcct.VoteFirstValid)
+	require.Zero(t, recvAcct.VoteLastValid)
+	require.Zero(t, recvAcct.VoteKeyDilution)
+	require.Zero(t, recvAcct.VoteID)
+	require.Zero(t, recvAcct.SelectionID)
+	require.Zero(t, recvAcct.StateProofID)
+}
+
+func TestBitsMatch(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	for b := 0; b <= 6; b++ {
+		require.True(t, bitsMatch([]byte{0x1}, []byte{0x2}, b), "%d", b)
+	}
+	require.False(t, bitsMatch([]byte{0x1}, []byte{0x2}, 7))
+	require.False(t, bitsMatch([]byte{0x1}, []byte{0x2}, 8))
+	require.False(t, bitsMatch([]byte{0x1}, []byte{0x2}, 9))
+
+	for b := 0; b <= 12; b++ {
+		require.True(t, bitsMatch([]byte{0x1, 0xff, 0xaa}, []byte{0x1, 0xf0}, b), "%d", b)
+	}
+	require.False(t, bitsMatch([]byte{0x1, 0xff, 0xaa}, []byte{0x1, 0xf0}, 13))
+
+	// on a byte boundary
+	require.True(t, bitsMatch([]byte{0x1}, []byte{0x1}, 8))
+	require.False(t, bitsMatch([]byte{0x1}, []byte{0x1}, 9))
+	require.True(t, bitsMatch([]byte{0x1, 0xff}, []byte{0x1, 0x00}, 8))
+	require.False(t, bitsMatch([]byte{0x1, 0xff}, []byte{0x1, 00}, 9))
+}
+
+func TestIsAbsent(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	a := assert.New(t)
+
+	var absent = func(total uint64, acct uint64, last uint64, current uint64) bool {
+		return isAbsent(basics.Algos(total), basics.Algos(acct), basics.Round(last), basics.Round(current))
+	}
+	// 1% of stake, absent for 1000 rounds
+	a.False(absent(1000, 10, 5000, 6000))
+	a.True(absent(1000, 10, 5000, 6001))  // longer
+	a.True(absent(1000, 11, 5000, 6001))  // more acct stake
+	a.False(absent(1000, 9, 5000, 6001))  // less acct stake
+	a.False(absent(1001, 10, 5000, 6001)) // more online stake
+	// not absent if never seen
+	a.False(absent(1000, 10, 0, 6000))
+	a.False(absent(1000, 10, 0, 6001))
+}
+
+func TestFailsChallenge(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	a := assert.New(t)
+
+	// a valid challenge, with 4 matching bits, and an old last seen
+	a.True(failsChallenge(challenge{round: 11, seed: [32]byte{0xb0, 0xb4}, bits: 4}, basics.Address{0xbf, 0x34}, 10))
+
+	// challenge isn't "on"
+	a.False(failsChallenge(challenge{round: 0, seed: [32]byte{0xb0, 0xb4}, bits: 4}, basics.Address{0xbf, 0x34}, 10))
+	// node has appeared more recently
+	a.False(failsChallenge(challenge{round: 11, seed: [32]byte{0xb0, 0xb4}, bits: 4}, basics.Address{0xbf, 0x34}, 12))
+	// bits don't match
+	a.False(failsChallenge(challenge{round: 11, seed: [32]byte{0xb0, 0xb4}, bits: 4}, basics.Address{0xcf, 0x34}, 10))
+	// no enough bits match
+	a.False(failsChallenge(challenge{round: 11, seed: [32]byte{0xb0, 0xb4}, bits: 5}, basics.Address{0xbf, 0x34}, 10))
+}
+
+type singleSource bookkeeping.BlockHeader
+
+func (ss singleSource) BlockHdr(r basics.Round) (bookkeeping.BlockHeader, error) {
+	return bookkeeping.BlockHeader(ss), nil
+}
+
+func TestActiveChallenge(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	a := assert.New(t)
+
+	nowHeader := bookkeeping.BlockHeader{
+		UpgradeState: bookkeeping.UpgradeState{
+			// Here the rules are on, so they certainly differ from rules in oldHeader's params
+			CurrentProtocol: protocol.ConsensusFuture,
+		},
+	}
+	now := config.Consensus[nowHeader.CurrentProtocol]
+
+	// simplest test. when interval=X and grace=G, X+G+1 is a challenge
+	inChallenge := now.Payouts.ChallengeInterval + now.Payouts.ChallengeGracePeriod + 1
+	ch := activeChallenge(&now, inChallenge, singleSource(nowHeader))
+	a.NotZero(ch.round)
+
+	// all rounds before that have no challenge
+	for r := uint64(1); r < inChallenge; r++ {
+		ch := activeChallenge(&now, r, singleSource(nowHeader))
+		a.Zero(ch.round, r)
+	}
+
+	// ChallengeGracePeriod rounds allow challenges starting with inChallenge
+	for r := inChallenge; r < inChallenge+now.Payouts.ChallengeGracePeriod; r++ {
+		ch := activeChallenge(&now, r, singleSource(nowHeader))
+		a.EqualValues(ch.round, now.Payouts.ChallengeInterval)
+	}
+
+	// And the next round is again challenge-less
+	ch = activeChallenge(&now, inChallenge+now.Payouts.ChallengeGracePeriod, singleSource(nowHeader))
+	a.Zero(ch.round)
+
+	// ignore challenge if upgrade happened
+	oldHeader := bookkeeping.BlockHeader{
+		UpgradeState: bookkeeping.UpgradeState{
+			// We need a version from before payouts got turned on
+			CurrentProtocol: protocol.ConsensusV39,
+		},
+	}
+	ch = activeChallenge(&now, inChallenge, singleSource(oldHeader))
+	a.Zero(ch.round)
 }

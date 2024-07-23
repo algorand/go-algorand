@@ -300,7 +300,7 @@ of (varuint, bytes) length prefixed byte strings.
 
 Most operations work with only one type of argument, uint64 or bytes, and fail if the wrong type value is on the stack.
 
-Many instructions accept values to designate Accounts, Assets, or Applications. Beginning with v4, these values may be given as an _offset_ in the corresponding Txn fields (Txn.Accounts, Txn.ForeignAssets, Txn.ForeignApps) _or_ as the value itself (a byte-array address for Accounts, or a uint64 ID). The values, however, must still be present in the Txn fields. Before v4, most opcodes required the use of an offset, except for reading account local values of assets or applications, which accepted the IDs directly and did not require the ID to be present in they corresponding _Foreign_ array. (Note that beginning with v4, those IDs _are_ required to be present in their corresponding _Foreign_ array.) See individual opcodes for details. In the case of account offsets or application offsets, 0 is specially defined to Txn.Sender or the ID of the current application, respectively.
+Many instructions accept values to designate Accounts, Assets, or Applications. Beginning with v4, these values may be given as an _offset_ in the corresponding Txn fields (Txn.Accounts, Txn.ForeignAssets, Txn.ForeignApps) _or_ as the value itself (a byte-array address for Accounts, or a uint64 ID). The values, however, must still be present in the Txn fields. Before v4, most opcodes required the use of an offset, except for reading account local values of assets or applications, which accepted the IDs directly and did not require the ID to be present in the corresponding _Foreign_ array. (Note that beginning with v4, those IDs _are_ required to be present in their corresponding _Foreign_ array.) See individual opcodes for details. In the case of account offsets or application offsets, 0 is specially defined to Txn.Sender or the ID of the current application, respectively.
 
 This summary is supplemented by more detail in the [opcodes document](TEAL_opcodes.md).
 
@@ -320,7 +320,7 @@ an opcode manipulates the stack in such a way that a value changes
 position but is otherwise unchanged, the name of the output on the
 return stack matches the name of the input value.
 
-### Arithmetic, Logic, and Cryptographic Operations
+### Arithmetic and Logic Operations
 
 @@ Arithmetic.md @@
 
@@ -349,6 +349,10 @@ length as the longer input.  Therefore, unlike array arithmetic,
 these results may contain leading zero bytes.
 
 @@ Byte_Array_Logic.md @@
+
+### Cryptographic Operations
+
+@@ Cryptography.md @@
 
 ### Loading Values
 
@@ -402,6 +406,12 @@ Account fields used in the `acct_params_get` opcode.
 
 ### Box Access
 
+Box opcodes that create, delete, or resize boxes affect the minimum
+balance requirement of the calling application's account.  The change
+is immediate, and can be observed after exection by using
+`min_balance`.  If the account does not possess the new minimum
+balance, the opcode fails.
+
 All box related opcodes fail immediately if used in a
 ClearStateProgram. This behavior is meant to discourage Smart Contract
 authors from depending upon the availability of boxes in a ClearState
@@ -418,7 +428,7 @@ are sure to be _available_.
 
 The following opcodes allow for "inner transactions". Inner
 transactions allow stateful applications to have many of the effects
-of a true top-level transaction, programatically.  However, they are
+of a true top-level transaction, programmatically.  However, they are
 different in significant ways.  The most important differences are
 that they are not signed, duplicates are not rejected, and they do not
 appear in the block in the usual away. Instead, their effects are
@@ -429,7 +439,7 @@ account that has been rekeyed to that hash.
 
 In v5, inner transactions may perform `pay`, `axfer`, `acfg`, and
 `afrz` effects.  After executing an inner transaction with
-`itxn_submit`, the effects of the transaction are visible begining
+`itxn_submit`, the effects of the transaction are visible beginning
 with the next instruction with, for example, `balance` and
 `min_balance` checks. In v6, inner transactions may also perform
 `keyreg` and `appl` effects. Inner `appl` calls fail if they attempt
@@ -449,7 +459,7 @@ setting is used when `itxn_submit` executes. For this purpose `Type`
 and `TypeEnum` are considered to be the same field. When using
 `itxn_field` to set an array field (`ApplicationArgs` `Accounts`,
 `Assets`, or `Applications`) each use adds an element to the end of
-the the array, rather than setting the entire array at once.
+the array, rather than setting the entire array at once.
 
 `itxn_field` fails immediately for unsupported fields, unsupported
 transaction types, or improperly typed values for a particular

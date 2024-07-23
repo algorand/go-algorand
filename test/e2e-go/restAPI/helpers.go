@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -117,7 +117,7 @@ func WaitForRoundOne(t *testing.T, testClient libgoal.Client) {
 var errWaitForTransactionTimeout = errors.New("wait for transaction timed out")
 
 // WaitForTransaction waits for a transaction to be confirmed
-func WaitForTransaction(t *testing.T, testClient libgoal.Client, fromAddress, txID string, timeout time.Duration) (tx v2.PreEncodedTxInfo, err error) {
+func WaitForTransaction(t *testing.T, testClient libgoal.Client, txID string, timeout time.Duration) (tx v2.PreEncodedTxInfo, err error) {
 	a := require.New(fixtures.SynchronizedTest(t))
 	rnd, err := testClient.Status()
 	a.NoError(err)

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -98,7 +98,7 @@ func (a *debuggerEvalTracerAdaptor) BeforeOpcode(cx *EvalContext) {
 }
 
 // AfterProgram invokes the debugger's Complete hook
-func (a *debuggerEvalTracerAdaptor) AfterProgram(cx *EvalContext, evalError error) {
+func (a *debuggerEvalTracerAdaptor) AfterProgram(cx *EvalContext, pass bool, evalError error) {
 	if a.txnDepth > 0 {
 		// only report updates for top-level transactions, for backwards compatibility
 		return

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"reflect"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/algorand/go-algorand/config"
@@ -175,6 +176,8 @@ type trackerRegistry struct {
 
 	// accountsWriting provides synchronization around the background writing of account balances.
 	accountsWriting sync.WaitGroup
+	// accountsCommitting is set when trackers registry writing accounts into DB.
+	accountsCommitting atomic.Bool
 
 	// dbRound is always exactly accountsRound(),
 	// cached to avoid SQL queries.
@@ -196,7 +199,15 @@ type trackerRegistry struct {
 	lastFlushTime time.Time
 
 	cfg config.Local
+
+	// maxAccountDeltas is a maximum number of in-memory deltas stored by trackers.
+	// When exceeded trackerRegistry will attempt to flush, and its Available() method will return false.
+	// Too many in-memory deltas could cause the node to run out of memory.
+	maxAccountDeltas uint64
 }
+
+// defaultMaxAccountDeltas is a default value for maxAccountDeltas.
+const defaultMaxAccountDeltas = 256
 
 // deferredCommitRange is used during the calls to produceCommittingTask, and used as a data structure
 // to syncronize the various trackers and create a uniformity around which rounds need to be persisted
@@ -258,6 +269,9 @@ type deferredCommitContext struct {
 	// Block hashes for the committed rounds range.
 	committedRoundDigests []crypto.Digest
 
+	// Consensus versions for the committed rounds range.
+	committedProtocolVersion []protocol.ConsensusVersion
+
 	// on catchpoint rounds, the transaction tail would fill up this field with the hash of the recent 1001 rounds
 	// of the txtail data. The catchpointTracker would be able to use that for calculating the catchpoint label.
 	txTailHash crypto.Digest
@@ -285,7 +299,7 @@ func (dcc deferredCommitContext) newBase() basics.Round {
 	return dcc.oldBase + basics.Round(dcc.offset)
 }
 
-var errMissingAccountUpdateTracker = errors.New("initializeTrackerCaches : called without a valid accounts update tracker")
+var errMissingAccountUpdateTracker = errors.New("trackers replay : called without a valid accounts update tracker")
 
 func (tr *trackerRegistry) initialize(l ledgerForTracker, trackers []ledgerTracker, cfg config.Local) (err error) {
 	tr.mu.Lock()
@@ -293,18 +307,10 @@ func (tr *trackerRegistry) initialize(l ledgerForTracker, trackers []ledgerTrack
 	tr.dbs = l.trackerDB()
 	tr.log = l.trackerLog()
 
-	err = tr.dbs.Snapshot(func(ctx context.Context, tx trackerdb.SnapshotScope) (err error) {
-		ar, err := tx.MakeAccountsReader()
-		if err != nil {
-			return err
-		}
-
-		tr.dbRound, err = ar.AccountsRound()
-		return err
-	})
-
-	if err != nil {
-		return err
+	tr.maxAccountDeltas = defaultMaxAccountDeltas
+	if cfg.MaxAcctLookback > tr.maxAccountDeltas {
+		tr.maxAccountDeltas = cfg.MaxAcctLookback + 1
+		tr.log.Infof("maxAccountDeltas was overridden to %d because of MaxAcctLookback=%d: this combination might use lots of RAM. To preserve some blocks in blockdb consider using MaxBlockHistoryLookback config option instead of MaxAcctLookback", tr.maxAccountDeltas, cfg.MaxAcctLookback)
 	}
 
 	tr.ctx, tr.ctxCancel = context.WithCancel(context.Background())
@@ -333,24 +339,38 @@ func (tr *trackerRegistry) initialize(l ledgerForTracker, trackers []ledgerTrack
 }
 
 func (tr *trackerRegistry) loadFromDisk(l ledgerForTracker) error {
+	var dbRound basics.Round
+	err := tr.dbs.Snapshot(func(ctx context.Context, tx trackerdb.SnapshotScope) (err error) {
+		ar, err0 := tx.MakeAccountsReader()
+		if err0 != nil {
+			return err0
+		}
+
+		dbRound, err0 = ar.AccountsRound()
+		return err0
+	})
+	if err != nil {
+		return err
+	}
+
 	tr.mu.RLock()
-	dbRound := tr.dbRound
+	tr.dbRound = dbRound
 	tr.mu.RUnlock()
 
 	for _, lt := range tr.trackers {
-		err := lt.loadFromDisk(l, dbRound)
-		if err != nil {
+		err0 := lt.loadFromDisk(l, dbRound)
+		if err0 != nil {
 			// find the tracker name.
 			trackerName := reflect.TypeOf(lt).String()
-			return fmt.Errorf("tracker %s failed to loadFromDisk : %w", trackerName, err)
+			return fmt.Errorf("tracker %s failed to loadFromDisk : %w", trackerName, err0)
 		}
 	}
 
-	err := tr.replay(l)
-	if err != nil {
-		err = fmt.Errorf("initializeTrackerCaches failed : %w", err)
+	if err0 := tr.replay(l); err0 != nil {
+		return fmt.Errorf("trackers replay failed : %w", err0)
 	}
-	return err
+
+	return nil
 }
 
 func (tr *trackerRegistry) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
@@ -456,6 +476,20 @@ func (tr *trackerRegistry) waitAccountsWriting() {
 	tr.accountsWriting.Wait()
 }
 
+func (tr *trackerRegistry) isBehindCommittingDeltas(latest basics.Round) bool {
+	tr.mu.RLock()
+	dbRound := tr.dbRound
+	tr.mu.RUnlock()
+
+	numDeltas := uint64(latest.SubSaturate(dbRound))
+	if numDeltas < tr.maxAccountDeltas {
+		return false
+	}
+
+	// there is a large number of deltas check if commitSyncer is not writing accounts
+	return tr.accountsCommitting.Load()
+}
+
 func (tr *trackerRegistry) close() {
 	if tr.ctxCancel != nil {
 		tr.ctxCancel()
@@ -513,6 +547,8 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) error {
 	offset := dcc.offset
 	dbRound := dcc.oldBase
 
+	tr.log.Debugf("commitRound called for (%d-%d)", dbRound, dbRound+basics.Round(offset))
+
 	// we can exit right away, as this is the result of mis-ordered call to committedUpTo.
 	if tr.dbRound < dbRound || offset < uint64(tr.dbRound-dbRound) {
 		tr.log.Warnf("out of order deferred commit: offset %d, dbRound %d but current tracker DB round is %d", offset, dbRound, tr.dbRound)
@@ -540,6 +576,7 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) error {
 	dcc.offset = offset
 	dcc.oldBase = dbRound
 	dcc.flushTime = time.Now()
+	tr.log.Debugf("commitRound advancing tracker db snapshot (%d-%d)", dbRound, dbRound+basics.Round(offset))
 
 	var err error
 	for _, lt := range tr.trackers {
@@ -562,6 +599,11 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) error {
 	start := time.Now()
 	ledgerCommitroundCount.Inc(nil)
 	err = tr.dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
+		tr.accountsCommitting.Store(true)
+		defer func() {
+			tr.accountsCommitting.Store(false)
+		}()
+
 		aw, err := tx.MakeAccountsWriter()
 		if err != nil {
 			return err
@@ -867,6 +909,14 @@ func (aul *accountUpdatesLedgerEvaluator) LookupWithoutRewards(rnd basics.Round,
 	}
 
 	return data, validThrough, err
+}
+
+func (aul *accountUpdatesLedgerEvaluator) LookupAgreement(rnd basics.Round, addr basics.Address) (basics.OnlineAccountData, error) {
+	return aul.ao.LookupOnlineAccountData(rnd, addr)
+}
+
+func (aul *accountUpdatesLedgerEvaluator) OnlineCirculation(rnd basics.Round, voteRnd basics.Round) (basics.MicroAlgos, error) {
+	return aul.ao.onlineCirculation(rnd, voteRnd)
 }
 
 func (aul *accountUpdatesLedgerEvaluator) LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error) {

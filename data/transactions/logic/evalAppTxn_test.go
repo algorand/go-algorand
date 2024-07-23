@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -375,6 +375,34 @@ func TestRekeyBack(t *testing.T) {
 	})
 }
 
+// TestRekeyInnerGroup ensures that in an inner group, if an account is
+// rekeyed, it can not be used (by the previously owning app) later in the
+// group.
+func TestRekeyInnerGroup(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	rekeyAndUse := `
+  itxn_begin
+   // pay 0 to the zero address, and rekey a junk addr
+   int pay;  itxn_field TypeEnum
+   global ZeroAddress; byte 0x01; b|; itxn_field RekeyTo
+  itxn_next
+   // try to perform the same 0 pay, but fail because tx0 gave away control
+   int pay;  itxn_field TypeEnum
+  itxn_submit
+  int 1
+`
+
+	// v6 added inner rekey
+	TestLogicRange(t, 6, 0, func(t *testing.T, ep *EvalParams, tx *transactions.Transaction, ledger *Ledger) {
+		ledger.NewApp(tx.Receiver, 888, basics.AppParams{})
+		// fund the app account
+		ledger.NewAccount(basics.AppIndex(888).Address(), 1_000_000)
+		TestApp(t, rekeyAndUse, ep, "unauthorized AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAVIOOBQA")
+	})
+}
+
 func TestDefaultSender(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -573,6 +601,37 @@ func TestBadField(t *testing.T) {
 	ops := TestProg(t, "global CurrentApplicationAddress; txn Accounts 1; int 100"+pay, AssemblerMaxVersion)
 	ops.Program[len(ops.Program)-2] = byte(FirstValid)
 	TestAppBytes(t, ops.Program, ep, "invalid itxn_field FirstValid")
+}
+
+// TestInnerValidity logs fv and lv fields that are handled oddly (valid
+// rounds are copied) so we can check if they are correct.
+func TestInnerValidity(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	ep, tx, ledger := MakeSampleEnv()
+	tx.GenesisHash = crypto.Digest{0x01, 0x02, 0x03}
+	logger := TestProg(t, `
+txn FirstValid; itob; log;
+txn LastValid; itob; log;
+int 1`, AssemblerMaxVersion)
+	ledger.NewApp(tx.Receiver, 222, basics.AppParams{
+		ApprovalProgram: logger.Program,
+	})
+
+	ledger.NewAccount(appAddr(888), 50_000)
+	tx.ForeignApps = []basics.AppIndex{basics.AppIndex(222)}
+	TestApp(t, `
+itxn_begin
+int appl;    itxn_field TypeEnum
+int 222;     itxn_field ApplicationID
+itxn_submit
+itxn Logs 0; btoi; txn FirstValid; ==; assert
+itxn Logs 1; btoi; txn LastValid; ==; assert
+itxn FirstValid; txn FirstValid; ==; assert
+itxn LastValid; txn LastValid; ==; assert
+int 1
+`, ep)
+
 }
 
 func TestNumInnerShallow(t *testing.T) {
@@ -1975,7 +2034,7 @@ int 1
 			ledger.NewApp(parentTx.Receiver, parentAppID, basics.AppParams{})
 			ledger.NewAccount(parentAppID.Address(), 50_000)
 
-			parentEd := TestApp(t, parentSource, ep)
+			parentEd, _ := TestApp(t, parentSource, ep)
 
 			require.Len(t, parentEd.Logs, 2)
 			require.Len(t, parentEd.InnerTxns, 2)
@@ -2303,7 +2362,7 @@ int 1
 			ledger.NewApp(parentTx.Receiver, parentAppID, basics.AppParams{})
 			ledger.NewAccount(parentAppID.Address(), 50_000)
 
-			parentEd := TestApp(t, parentSource, ep)
+			parentEd, _ := TestApp(t, parentSource, ep)
 
 			require.Len(t, parentEd.Logs, 2)
 			require.Len(t, parentEd.InnerTxns, 2)

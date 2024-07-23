@@ -48,6 +48,7 @@ check_go_binary_version() {
 
   if [ "$expected_version" != "$actual_version" ]; then
       echo "$YELLOW_FG[WARNING]$END_FG_COLOR $binary_name version mismatch, expected $expected_version, but got $actual_version"
+      echo "Use 'install_buildtools.sh' to fix."
   fi
 }
 

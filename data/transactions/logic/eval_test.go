@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -125,6 +125,14 @@ func makeTestProto(opts ...protoOpt) *config.ConsensusParams {
 
 		MaxBoxSize:           1000,
 		BytesPerBoxReference: 100,
+
+		Payouts: config.ProposerPayoutRules{
+			Enabled:     true,
+			GoOnlineFee: 3,
+			Percent:     4,
+			MinBalance:  5,
+			MaxBalance:  6,
+		},
 	}
 	for _, opt := range opts {
 		if opt != nil { // so some callsites can take one arg and pass it in
@@ -217,7 +225,7 @@ func (ep *EvalParams) reset() {
 			inners := ep.Proto.MaxTxGroupSize * ep.Proto.MaxInnerTransactions
 			ep.pooledAllowedInners = &inners
 		}
-		ep.pastScratch = make([]*scratchSpace, len(ep.TxnGroup))
+		ep.pastScratch = [maxTxGroupSize]*scratchSpace{}
 		for i := range ep.TxnGroup {
 			ep.TxnGroup[i].ApplyData = transactions.ApplyData{}
 		}
@@ -395,6 +403,8 @@ func TestWrongProtoVersion(t *testing.T) {
 	}
 }
 
+// TestBlankStackSufficient will fail if an opcode is added with more than the
+// current max number of stack arguments. Update `blankStack` to be longer.
 func TestBlankStackSufficient(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -1158,8 +1168,6 @@ int 1
 &&
 `
 
-const testAddr = "47YPQTIGQEO7T4Y4RWDYWEKV6RTR2UNBQXBABEEGM72ESWDQNCQ52OPASU"
-
 const globalV2TestProgram = globalV1TestProgram + `
 global LogicSigVersion
 int 1
@@ -1180,7 +1188,7 @@ int 888
 `
 const globalV3TestProgram = globalV2TestProgram + `
 global CreatorAddress
-addr ` + testAddr + `
+addr ` + testAppCreator + `
 ==
 &&
 `
@@ -1230,12 +1238,21 @@ const globalV9TestProgram = globalV8TestProgram + `
 const globalV10TestProgram = globalV9TestProgram + `
 global AssetCreateMinBalance; int 1001; ==; &&
 global AssetOptInMinBalance; int 1001; ==; &&
+global GenesisHash; len; int 32; ==; &&
 `
 
-func TestGlobal(t *testing.T) {
-	partitiontest.PartitionTest(t)
+const globalV11TestProgram = globalV10TestProgram + `
+global PayoutsEnabled; assert
+global PayoutsGoOnlineFee; int 3; ==; assert
+global PayoutsPercent; int 4; ==; assert
+global PayoutsMinBalance; int 5; ==; assert
+global PayoutsMaxBalance; int 6; ==; assert
+`
 
+func TestAllGlobals(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	t.Parallel()
+
 	type desc struct {
 		lastField GlobalField
 		program   string
@@ -1252,16 +1269,17 @@ func TestGlobal(t *testing.T) {
 		7:  {CallerApplicationAddress, globalV7TestProgram},
 		8:  {CallerApplicationAddress, globalV8TestProgram},
 		9:  {CallerApplicationAddress, globalV9TestProgram},
-		10: {AssetOptInMinBalance, globalV10TestProgram},
+		10: {GenesisHash, globalV10TestProgram},
+		11: {PayoutsMaxBalance, globalV11TestProgram},
 	}
 	// tests keys are versions so they must be in a range 1..AssemblerMaxVersion plus zero version
 	require.LessOrEqual(t, len(tests), AssemblerMaxVersion+1)
 	require.Len(t, globalFieldSpecs, int(invalidGlobalField))
 
-	ledger := NewLedger(nil)
-	addr, err := basics.UnmarshalChecksumAddress(testAddr)
-	require.NoError(t, err)
-	ledger.NewApp(addr, 888, basics.AppParams{})
+	// ensure we are testing everything
+	require.Equal(t, tests[AssemblerMaxVersion].lastField, invalidGlobalField-1,
+		"did you add a new global field?")
+
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		_, ok := tests[v]
 		require.True(t, ok)
@@ -1282,7 +1300,6 @@ func TestGlobal(t *testing.T) {
 			appcall.Txn.Group = crypto.Digest{0x07, 0x06}
 
 			ep := defaultAppParams(appcall)
-			ep.Ledger = ledger
 			testApp(t, tests[v].program, ep)
 		})
 	}
@@ -1760,6 +1777,11 @@ assert
 int 1
 `
 
+const testTxnProgramTextV11 = testTxnProgramTextV10 + `
+assert
+int 1
+`
+
 func makeSampleTxn() transactions.SignedTxn {
 	var txn transactions.SignedTxn
 	copy(txn.Txn.Sender[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"))
@@ -1863,17 +1885,17 @@ func TestTxn(t *testing.T) {
 
 	t.Parallel()
 	tests := map[uint64]string{
-		1: testTxnProgramTextV1,
-		2: testTxnProgramTextV2,
-		3: testTxnProgramTextV3,
-		4: testTxnProgramTextV4,
-		5: testTxnProgramTextV5,
-		6: testTxnProgramTextV6,
-		7: testTxnProgramTextV7,
-		8: testTxnProgramTextV8,
-		9: testTxnProgramTextV9,
-
+		1:  testTxnProgramTextV1,
+		2:  testTxnProgramTextV2,
+		3:  testTxnProgramTextV3,
+		4:  testTxnProgramTextV4,
+		5:  testTxnProgramTextV5,
+		6:  testTxnProgramTextV6,
+		7:  testTxnProgramTextV7,
+		8:  testTxnProgramTextV8,
+		9:  testTxnProgramTextV9,
 		10: testTxnProgramTextV10,
+		11: testTxnProgramTextV11,
 	}
 
 	for i, txnField := range TxnFieldNames {
@@ -2165,7 +2187,7 @@ func testLogicBytes(t *testing.T, program []byte, ep *EvalParams, problems ...st
 }
 
 // testLogicFull is the lowest-level so it does not create an ep or reset it.
-func testLogicFull(t *testing.T, program []byte, gi int, ep *EvalParams, problems ...string) {
+func testLogicFull(t *testing.T, program []byte, gi int, ep *EvalParams, problems ...string) error {
 	t.Helper()
 
 	var checkProblem string
@@ -2200,7 +2222,7 @@ func testLogicFull(t *testing.T, program []byte, gi int, ep *EvalParams, problem
 	if evalProblem == "" {
 		require.NoError(t, err, "Eval\n%sExpected: PASS", ep.Trace)
 		assert.True(t, pass, "Eval\n%sExpected: PASS", ep.Trace)
-		return
+		return nil
 	}
 
 	// There is an evalProblem to check. REJECT is special and only means that
@@ -2210,9 +2232,10 @@ func testLogicFull(t *testing.T, program []byte, gi int, ep *EvalParams, problem
 	} else {
 		require.ErrorContains(t, err, evalProblem, "Wrong error in EvalSignature %v", ep.Trace)
 	}
+	return err
 }
 
-func testLogics(t *testing.T, programs []string, txgroup []transactions.SignedTxn, opt protoOpt, expected ...expect) *EvalParams {
+func testLogics(t *testing.T, programs []string, txgroup []transactions.SignedTxn, opt protoOpt, expected ...expect) error {
 	t.Helper()
 	proto := makeTestProto(opt)
 
@@ -2231,10 +2254,14 @@ func testLogics(t *testing.T, programs []string, txgroup []transactions.SignedTx
 	ep := NewSigEvalParams(txgroup, proto, &NoHeaderLedger{})
 	for i, program := range programs {
 		if program != "" {
+			if len(expected) > 0 && expected[0].l == i {
+				// Stop after first failure
+				return testLogicFull(t, txgroup[i].Lsig.Logic, i, ep, expected[0].s)
+			}
 			testLogicFull(t, txgroup[i].Lsig.Logic, i, ep)
 		}
 	}
-	return ep
+	return nil
 }
 
 func TestTxna(t *testing.T) {
@@ -2554,12 +2581,11 @@ substring3
 len`, 2)
 
 	// fails at runtime
-	err := testPanics(t, `byte 0xf000000000000000
+	testPanics(t, `byte 0xf000000000000000
 int 4
 int 0xFFFFFFFFFFFFFFFE
 substring3
-len`, 2)
-	require.Contains(t, err.Error(), "substring range beyond length of string")
+len`, 2, "substring range beyond length of string")
 }
 
 func TestSubstringRange(t *testing.T) {
@@ -2612,44 +2638,37 @@ func TestExtractFlop(t *testing.T) {
 	len`, 5, exp(4, "extract3 expects 0 immediate arguments"))
 
 	// fails at runtime
-	err := testPanics(t, `byte 0xf000000000000000
+	testPanics(t, `byte 0xf000000000000000
 	extract 1 8
-	len`, 5)
-	require.Contains(t, err.Error(), "extraction end 9")
+	len`, 5, "extraction end 9")
 
-	err = testPanics(t, `byte 0xf000000000000000
+	testPanics(t, `byte 0xf000000000000000
 	extract 9 0
-	len`, 5)
-	require.Contains(t, err.Error(), "extraction start 9")
+	len`, 5, "extraction start 9")
 
-	err = testPanics(t, `byte 0xf000000000000000
+	testPanics(t, `byte 0xf000000000000000
 	int 4
 	int 0xFFFFFFFFFFFFFFFE
 	extract3
-	len`, 5)
-	require.Contains(t, err.Error(), "extraction end exceeds uint64")
+	len`, 5, "extraction end exceeds uint64")
 
-	err = testPanics(t, `byte 0xf000000000000000
+	testPanics(t, `byte 0xf000000000000000
 	int 100
 	int 2
 	extract3
-	len`, 5)
-	require.Contains(t, err.Error(), "extraction start 100")
+	len`, 5, "extraction start 100")
 
-	err = testPanics(t, `byte 0xf000000000000000
+	testPanics(t, `byte 0xf000000000000000
 	int 55
-	extract_uint16`, 5)
-	require.Contains(t, err.Error(), "extraction start 55")
+	extract_uint16`, 5, "extraction start 55")
 
-	err = testPanics(t, `byte 0xf000000000000000
+	testPanics(t, `byte 0xf000000000000000
 	int 9
-	extract_uint32`, 5)
-	require.Contains(t, err.Error(), "extraction start 9")
+	extract_uint32`, 5, "extraction start 9")
 
-	err = testPanics(t, `byte 0xf000000000000000
+	testPanics(t, `byte 0xf000000000000000
 	int 1
-	extract_uint64`, 5)
-	require.Contains(t, err.Error(), "extraction end 9")
+	extract_uint64`, 5, "extraction end 9")
 }
 
 func TestReplace(t *testing.T) {
@@ -2735,8 +2754,8 @@ loads
 
 func TestLoadStore2(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
 	t.Parallel()
+
 	progText := `int 2
 int 3
 byte 0xaa
@@ -2749,6 +2768,61 @@ load 42
 int 5
 ==`
 	testAccepts(t, progText, 1)
+}
+
+// TestLogicErrorDetails confirms that the error returned from logicsig failures
+// has the right structured information.
+func TestLogicErrorDetails(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	badsource := notrack(`
+int 5; store 10					// store an int
+byte 0x01020300; store 15		// store a bytes
+
+int 100; byte 0x0201; == // types mismatch so this will fail
+`)
+	err := testPanics(t, badsource, 1, "cannot compare")
+	attrs := basics.Attributes(err)
+	zeros := [256]int{}
+	scratch := convertSlice(zeros[:], func(i int) any { return uint64(i) })
+	scratch[10] = uint64(5)
+	scratch[15] = []byte{0x01, 0x02, 0x03, 0x00}
+	require.Equal(t, map[string]any{
+		"pc":          19,
+		"group-index": 0,
+		"eval-states": []evalState{
+			{
+				Stack:   []any{uint64(100), []byte{02, 01}},
+				Scratch: scratch[:16],
+			},
+		},
+	}, attrs)
+
+	goodsource := `
+int 4; store 2			// store an int
+byte "jj"; store 3		// store a bytes
+int 1
+`
+	gscratch := convertSlice(zeros[:], func(i int) any { return uint64(i) })
+	gscratch[2] = uint64(4)
+	gscratch[3] = []byte("jj")
+
+	err = testLogics(t, []string{goodsource, badsource}, nil, nil, exp(1, "cannot compare"))
+	attrs = basics.Attributes(err)
+	require.Equal(t, map[string]any{
+		"pc":          19,
+		"group-index": 1,
+		"eval-states": []evalState{
+			{
+				Scratch: gscratch[:4],
+			},
+			{
+				Stack:   []any{uint64(100), []byte{02, 01}},
+				Scratch: scratch[:16],
+			},
+		},
+	}, attrs)
 }
 
 func TestGload(t *testing.T) {
@@ -3156,8 +3230,7 @@ done:
 int 1
 `, v)
 			// cut two last bytes - intc_1 and last byte of bnz
-			ops.Program = ops.Program[:len(ops.Program)-2]
-			testLogicBytes(t, ops.Program, nil,
+			testLogicBytes(t, ops.Program[:len(ops.Program)-2], nil,
 				"bnz program ends short", "bnz program ends short")
 		})
 	}
@@ -4547,7 +4620,11 @@ func testEvaluation(t *testing.T, program string, introduced uint64, tester eval
 					require.True(t, ok)
 					isNotPanic(t, err) // Never want a Go level panic.
 					if err != nil {
-						// Use wisely. This could probably return any of the concurrent runs' errors.
+						// Use `outer` wisely. It could return any of the concurrent runs' errors.
+						var se *basics.SError
+						require.ErrorAs(t, err, &se)
+						var ee EvalError
+						require.ErrorAs(t, err, &ee)
 						outer = err
 					}
 				})
@@ -5026,8 +5103,8 @@ func TestBytesMath(t *testing.T) {
 	testAccepts(t, "byte 0xffffff; bsqrt; len; int 2; ==; return", 6)
 	// 64 byte long inputs are accepted, even if they produce longer outputs
 	testAccepts(t, fmt.Sprintf("byte 0x%s; bsqrt; len; int 32; ==", effs), 6)
-	// 65 byte inputs are not ok.
-	testPanics(t, fmt.Sprintf("byte 0x%s00; bsqrt; pop; int 1", effs), 6)
+	// 65 byte inputs are not ok (no track allows assembly)
+	testPanics(t, notrack(fmt.Sprintf("byte 0x%s00; bsqrt; pop; int 1", effs)), 6)
 }
 
 func TestBytesCompare(t *testing.T) {
@@ -5262,9 +5339,7 @@ By Herman Melville`, "",
 			if LogicVersion < fidoVersion {
 				testProg(t, source, AssemblerMaxVersion, exp(0, "unknown opcode..."))
 			} else {
-				err := testPanics(t, source, fidoVersion)
-				require.Error(t, err)
-				require.Contains(t, err.Error(), tc.error)
+				testPanics(t, source, fidoVersion, tc.error)
 			}
 		}
 	}
@@ -5835,6 +5910,40 @@ switch done1 done2; done1: ; done2: ;
 `, 8)
 }
 
+// TestShortSwitch ensures a clean error, in Check and Eval, when a switch ends early
+func TestShortSwitch(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	source := `
+	int 1
+	int 1
+	switch label1 label2
+	label1:
+	label2:
+	`
+	ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
+	require.NoError(t, err)
+
+	// fine as is
+	testLogicBytes(t, ops.Program, nil)
+
+	beyond := "switch opcode claims to extend beyond program"
+
+	// bad if a label is gone
+	testLogicBytes(t, ops.Program[:len(ops.Program)-2], nil, beyond, beyond)
+
+	// chop off all the labels, but keep the label count
+	testLogicBytes(t, ops.Program[:len(ops.Program)-4], nil, beyond, beyond)
+
+	// chop off before the label count
+	testLogicBytes(t, ops.Program[:len(ops.Program)-5], nil,
+		"bare switch opcode at end of program", "bare switch opcode at end of program")
+
+	// chop off half of a label
+	testLogicBytes(t, ops.Program[:len(ops.Program)-1], nil, beyond, beyond)
+}
+
 func TestMatch(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -5987,6 +6096,41 @@ one:  int 0;
 `, 8)
 }
 
+// TestShortMatch ensures a clean error when a match ends early
+func TestShortMatch(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	source := `int 1
+    int 40
+    int 45
+    int 40
+	match label1 label2
+	label1:
+    label2:
+	`
+	ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
+	require.NoError(t, err)
+
+	// fine as is
+	testLogicBytes(t, ops.Program, nil)
+
+	beyond := "match opcode claims to extend beyond program"
+
+	// bad if a label is gone
+	testLogicBytes(t, ops.Program[:len(ops.Program)-2], nil, beyond, beyond)
+
+	// chop off all the labels, but keep the label count
+	testLogicBytes(t, ops.Program[:len(ops.Program)-4], nil, beyond, beyond)
+
+	// chop off before the label count
+	testLogicBytes(t, ops.Program[:len(ops.Program)-5], nil,
+		"bare match opcode at end of program", "bare match opcode at end of program")
+
+	// chop off half of a label
+	testLogicBytes(t, ops.Program[:len(ops.Program)-1], nil, beyond, beyond)
+}
+
 func TestPushConsts(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -6037,9 +6181,17 @@ int 1
 
 func TestNoHeaderLedger(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	nhl := NoHeaderLedger{}
 	_, err := nhl.BlockHdr(1)
 	require.Error(t, err)
 	require.Equal(t, err, fmt.Errorf("no block header access"))
+}
+
+func TestMaxTxGroup(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	require.Equal(t, config.MaxTxGroupSize, maxTxGroupSize)
 }

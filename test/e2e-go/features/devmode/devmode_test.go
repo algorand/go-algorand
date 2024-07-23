@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -26,20 +26,21 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/netdeploy"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func TestDevMode(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	fixtures.MultiProtocolTest(t, testDevMode, protocol.ConsensusFuture, protocol.ConsensusCurrentVersion)
+}
 
-	if testing.Short() {
-		t.Skip()
-	}
-
+func testDevMode(t *testing.T, version protocol.ConsensusVersion) {
 	// Start devmode network, and make sure everything is primed by sending a transaction.
 	var fixture fixtures.RestClientFixture
-	fixture.SetupNoStart(t, filepath.Join("nettemplates", "DevModeNetwork.json"))
+	fixture.SetupNoStart(t, filepath.Join("nettemplates", "DevModeNetwork.json"), netdeploy.OverrideConsensusVersion(version))
 	fixture.Start()
 	defer fixture.Shutdown()
 	sender, err := fixture.GetRichestAccount()
@@ -76,17 +77,16 @@ func TestDevMode(t *testing.T) {
 	}
 }
 
-// Starts up a devmode network, sends a txn, and fetches the txn group delta for that txn
 func TestTxnGroupDeltasDevMode(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	fixtures.MultiProtocolTest(t, testTxnGroupDeltasDevMode, protocol.ConsensusFuture, protocol.ConsensusCurrentVersion)
+}
 
-	if testing.Short() {
-		t.Skip()
-	}
-
+// Starts up a devmode network, sends a txn, and fetches the txn group delta for that txn
+func testTxnGroupDeltasDevMode(t *testing.T, version protocol.ConsensusVersion) {
 	// Start devmode network, and send a transaction.
 	var fixture fixtures.RestClientFixture
-	fixture.SetupNoStart(t, filepath.Join("nettemplates", "DevModeTxnTracerNetwork.json"))
+	fixture.SetupNoStart(t, filepath.Join("nettemplates", "DevModeTxnTracerNetwork.json"), netdeploy.OverrideConsensusVersion(version))
 	fixture.Start()
 	defer fixture.Shutdown()
 	sender, err := fixture.GetRichestAccount()

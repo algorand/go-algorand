@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,6 +17,7 @@
 package network
 
 import (
+	"context"
 	"net/url"
 	"strings"
 	"time"
@@ -132,5 +133,5 @@ func (t *telemetryURIUpdater) lookupTelemetryURL() (url *url.URL) {
 }
 
 func (t *telemetryURIUpdater) readFromSRV(protocol string, bootstrapID string) (addrs []string, err error) {
-	return ReadFromSRV("telemetry", protocol, bootstrapID, t.cfg.FallbackDNSResolverAddress, t.cfg.DNSSecuritySRVEnforced())
+	return ReadFromSRV(context.Background(), "telemetry", protocol, bootstrapID, t.cfg.FallbackDNSResolverAddress, t.cfg.DNSSecuritySRVEnforced())
 }

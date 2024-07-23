@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -32,6 +32,8 @@ import (
 )
 
 // TxnGroupDeltaWithIds associates all the Ids (group and Txn) with a single state delta object
+//
+//revive:disable:var-naming
 type TxnGroupDeltaWithIds struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 	Ids     []string

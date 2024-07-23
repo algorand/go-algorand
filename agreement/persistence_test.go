@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -38,7 +38,7 @@ func TestAgreementSerialization(t *testing.T) {
 
 	// todo : we need to deserialize some more meaningful state.
 	clock := timers.MakeMonotonicClock[TimeoutType](time.Date(2015, 1, 2, 5, 6, 7, 8, time.UTC))
-	status := player{Round: 350, Step: soft, Deadline: Deadline{Duration: time.Duration(23) * time.Second, Type: TimeoutDeadline}}
+	status := player{Round: 350, Step: soft, Deadline: Deadline{Duration: time.Duration(23) * time.Second, Type: TimeoutDeadline}, lowestCredentialArrivals: makeCredentialArrivalHistory(dynamicFilterCredentialArrivalHistory)}
 	router := makeRootRouter(status)
 	a := []action{checkpointAction{}, disconnectAction(messageEvent{}, nil)}
 
@@ -216,6 +216,27 @@ func TestRandomizedEncodingFullDiskState(t *testing.T) {
 		require.Equalf(t, p1, p2, "players decoded differently")
 	}
 
+}
+
+func TestCredentialHistoryAllocated(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	router, player := randomizeDiskState()
+	a := []action{}
+	clock := timers.MakeMonotonicClock[TimeoutType](time.Date(2015, 1, 2, 5, 6, 7, 8, time.UTC))
+	log := makeServiceLogger(logging.Base())
+	e1 := encode(clock, router, player, a, true)
+	e2 := encode(clock, router, player, a, false)
+	require.Equalf(t, e1, e2, "msgp and go-codec encodings differ: len(msgp)=%v, len(reflect)=%v", len(e1), len(e2))
+	_, _, p1, _, err1 := decode(e1, clock, log, true)
+	_, _, p2, _, err2 := decode(e1, clock, log, false)
+	require.NoErrorf(t, err1, "reflect decoding failed")
+	require.NoErrorf(t, err2, "msgp decoding failed")
+
+	require.Len(t, p1.lowestCredentialArrivals.history, dynamicFilterCredentialArrivalHistory)
+	require.Len(t, p2.lowestCredentialArrivals.history, dynamicFilterCredentialArrivalHistory)
+	emptyHistory := makeCredentialArrivalHistory(dynamicFilterCredentialArrivalHistory)
+	require.Equalf(t, p1.lowestCredentialArrivals, emptyHistory, "credential arrival history isn't empty")
+	require.Equalf(t, p2.lowestCredentialArrivals, emptyHistory, "credential arrival history isn't empty")
 }
 
 func BenchmarkRandomizedEncode(b *testing.B) {

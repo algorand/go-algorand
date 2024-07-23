@@ -33,7 +33,7 @@ Ops have a 'cost' of 1 unless otherwise specified.
 ## ed25519verify
 
 - Bytecode: 0x04
-- Stack: ..., A: []byte, B: []byte, C: []byte &rarr; ..., bool
+- Stack: ..., A: []byte, B: [64]byte, C: [32]byte &rarr; ..., bool
 - for (data A, signature B, pubkey C) verify the signature of ("ProgData" || program_hash || data) against the pubkey => {0 or 1}
 - **Cost**: 1900
 
@@ -41,9 +41,9 @@ The 32 byte public key is the last element on the stack, preceded by the 64 byte
 
 ## ecdsa_verify
 
-- Syntax: `ecdsa_verify V` ∋ V: [ECDSA](#field-group-ecdsa)
+- Syntax: `ecdsa_verify V` where V: [ECDSA](#field-group-ecdsa)
 - Bytecode: 0x05 {uint8}
-- Stack: ..., A: []byte, B: []byte, C: []byte, D: []byte, E: []byte &rarr; ..., bool
+- Stack: ..., A: [32]byte, B: [32]byte, C: [32]byte, D: [32]byte, E: [32]byte &rarr; ..., bool
 - for (data A, signature B, C and pubkey D, E) verify the signature of the data against the pubkey => {0 or 1}
 - **Cost**: Secp256k1=1700; Secp256r1=2500
 - Availability: v5
@@ -62,9 +62,9 @@ The 32 byte Y-component of a public key is the last element on the stack, preced
 
 ## ecdsa_pk_decompress
 
-- Syntax: `ecdsa_pk_decompress V` ∋ V: [ECDSA](#field-group-ecdsa)
+- Syntax: `ecdsa_pk_decompress V` where V: [ECDSA](#field-group-ecdsa)
 - Bytecode: 0x06 {uint8}
-- Stack: ..., A: []byte &rarr; ..., X: []byte, Y: []byte
+- Stack: ..., A: [33]byte &rarr; ..., X: [32]byte, Y: [32]byte
 - decompress pubkey A into components X, Y
 - **Cost**: Secp256k1=650; Secp256r1=2400
 - Availability: v5
@@ -73,9 +73,9 @@ The 33 byte public key in a compressed form to be decompressed into X and Y (top
 
 ## ecdsa_pk_recover
 
-- Syntax: `ecdsa_pk_recover V` ∋ V: [ECDSA](#field-group-ecdsa)
+- Syntax: `ecdsa_pk_recover V` where V: [ECDSA](#field-group-ecdsa)
 - Bytecode: 0x07 {uint8}
-- Stack: ..., A: []byte, B: uint64, C: []byte, D: []byte &rarr; ..., X: []byte, Y: []byte
+- Stack: ..., A: [32]byte, B: uint64, C: [32]byte, D: [32]byte &rarr; ..., X: [32]byte, Y: [32]byte
 - for (data A, recovery id B, signature C, D) recover a public key
 - **Cost**: 2000
 - Availability: v5
@@ -175,7 +175,7 @@ Overflow is an error condition which halts execution and fails the transaction. 
 ## itob
 
 - Bytecode: 0x16
-- Stack: ..., A: uint64 &rarr; ..., []byte
+- Stack: ..., A: uint64 &rarr; ..., [8]byte
 - converts uint64 A to big-endian byte array, always of length 8
 
 ## btoi
@@ -241,7 +241,7 @@ The notation J,K indicates that two uint64 values J and K are interpreted as a u
 
 ## intcblock
 
-- Syntax: `intcblock UINT ...` ∋ UINT ...: a block of int constant values
+- Syntax: `intcblock UINT ...` where UINT ...: a block of int constant values
 - Bytecode: 0x20 {varuint count, [varuint ...]}
 - Stack: ... &rarr; ...
 - prepare block of uint64 constants for use by intc
@@ -250,7 +250,7 @@ The notation J,K indicates that two uint64 values J and K are interpreted as a u
 
 ## intc
 
-- Syntax: `intc I` ∋ I: an index in the intcblock
+- Syntax: `intc I` where I: an index in the intcblock
 - Bytecode: 0x21 {uint8}
 - Stack: ... &rarr; ..., uint64
 - Ith constant from intcblock
@@ -281,7 +281,7 @@ The notation J,K indicates that two uint64 values J and K are interpreted as a u
 
 ## bytecblock
 
-- Syntax: `bytecblock BYTES ...` ∋ BYTES ...: a block of byte constant values
+- Syntax: `bytecblock BYTES ...` where BYTES ...: a block of byte constant values
 - Bytecode: 0x26 {varuint count, [varuint length, bytes ...]}
 - Stack: ... &rarr; ...
 - prepare block of byte-array constants for use by bytec
@@ -290,7 +290,7 @@ The notation J,K indicates that two uint64 values J and K are interpreted as a u
 
 ## bytec
 
-- Syntax: `bytec I` ∋ I: an index in the bytecblock
+- Syntax: `bytec I` where I: an index in the bytecblock
 - Bytecode: 0x27 {uint8}
 - Stack: ... &rarr; ..., []byte
 - Ith constant from bytecblock
@@ -321,7 +321,7 @@ The notation J,K indicates that two uint64 values J and K are interpreted as a u
 
 ## arg
 
-- Syntax: `arg N` ∋ N: an arg index
+- Syntax: `arg N` where N: an arg index
 - Bytecode: 0x2c {uint8}
 - Stack: ... &rarr; ..., []byte
 - Nth LogicSig argument
@@ -357,7 +357,7 @@ The notation J,K indicates that two uint64 values J and K are interpreted as a u
 
 ## txn
 
-- Syntax: `txn F` ∋ F: [txn](#field-group-txn)
+- Syntax: `txn F` where F: [txn](#field-group-txn)
 - Bytecode: 0x31 {uint8}
 - Stack: ... &rarr; ..., any
 - field F of current transaction
@@ -433,7 +433,7 @@ Fields (see [transaction reference](https://developer.algorand.org/docs/referenc
 
 ## global
 
-- Syntax: `global F` ∋ F: [global](#field-group-global)
+- Syntax: `global F` where F: [global](#field-group-global)
 - Bytecode: 0x32 {uint8}
 - Stack: ... &rarr; ..., any
 - global field F
@@ -463,7 +463,7 @@ Fields
 
 ## gtxn
 
-- Syntax: `gtxn T F` ∋ T: transaction group index, F: [txn](#field-group-txn)
+- Syntax: `gtxn T F` where T: transaction group index, F: [txn](#field-group-txn)
 - Bytecode: 0x33 {uint8}, {uint8}
 - Stack: ... &rarr; ..., any
 - field F of the Tth transaction in the current group
@@ -472,21 +472,21 @@ for notes on transaction fields available, see `txn`. If this transaction is _i_
 
 ## load
 
-- Syntax: `load I` ∋ I: position in scratch space to load from
+- Syntax: `load I` where I: position in scratch space to load from
 - Bytecode: 0x34 {uint8}
 - Stack: ... &rarr; ..., any
 - Ith scratch space value. All scratch spaces are 0 at program start.
 
 ## store
 
-- Syntax: `store I` ∋ I: position in scratch space to store to
+- Syntax: `store I` where I: position in scratch space to store to
 - Bytecode: 0x35 {uint8}
 - Stack: ..., A &rarr; ...
 - store A to the Ith scratch space
 
 ## txna
 
-- Syntax: `txna F I` ∋ F: [txna](#field-group-txna), I: transaction field array index
+- Syntax: `txna F I` where F: [txna](#field-group-txna), I: transaction field array index
 - Bytecode: 0x36 {uint8}, {uint8}
 - Stack: ... &rarr; ..., any
 - Ith value of the array field F of the current transaction<br />`txna` can be called using `txn` with 2 immediates.
@@ -509,7 +509,7 @@ Fields (see [transaction reference](https://developer.algorand.org/docs/referenc
 
 ## gtxna
 
-- Syntax: `gtxna T F I` ∋ T: transaction group index, F: [txna](#field-group-txna), I: transaction field array index
+- Syntax: `gtxna T F I` where T: transaction group index, F: [txna](#field-group-txna), I: transaction field array index
 - Bytecode: 0x37 {uint8}, {uint8}, {uint8}
 - Stack: ... &rarr; ..., any
 - Ith value of the array field F from the Tth transaction in the current group<br />`gtxna` can be called using `gtxn` with 3 immediates.
@@ -517,7 +517,7 @@ Fields (see [transaction reference](https://developer.algorand.org/docs/referenc
 
 ## gtxns
 
-- Syntax: `gtxns F` ∋ F: [txn](#field-group-txn)
+- Syntax: `gtxns F` where F: [txn](#field-group-txn)
 - Bytecode: 0x38 {uint8}
 - Stack: ..., A: uint64 &rarr; ..., any
 - field F of the Ath transaction in the current group
@@ -527,7 +527,7 @@ for notes on transaction fields available, see `txn`. If top of stack is _i_, `g
 
 ## gtxnsa
 
-- Syntax: `gtxnsa F I` ∋ F: [txna](#field-group-txna), I: transaction field array index
+- Syntax: `gtxnsa F I` where F: [txna](#field-group-txna), I: transaction field array index
 - Bytecode: 0x39 {uint8}, {uint8}
 - Stack: ..., A: uint64 &rarr; ..., any
 - Ith value of the array field F from the Ath transaction in the current group<br />`gtxnsa` can be called using `gtxns` with 2 immediates.
@@ -535,7 +535,7 @@ for notes on transaction fields available, see `txn`. If top of stack is _i_, `g
 
 ## gload
 
-- Syntax: `gload T I` ∋ T: transaction group index, I: position in scratch space to load from
+- Syntax: `gload T I` where T: transaction group index, I: position in scratch space to load from
 - Bytecode: 0x3a {uint8}, {uint8}
 - Stack: ... &rarr; ..., any
 - Ith scratch space value of the Tth transaction in the current group
@@ -546,7 +546,7 @@ for notes on transaction fields available, see `txn`. If top of stack is _i_, `g
 
 ## gloads
 
-- Syntax: `gloads I` ∋ I: position in scratch space to load from
+- Syntax: `gloads I` where I: position in scratch space to load from
 - Bytecode: 0x3b {uint8}
 - Stack: ..., A: uint64 &rarr; ..., any
 - Ith scratch space value of the Ath transaction in the current group
@@ -557,7 +557,7 @@ for notes on transaction fields available, see `txn`. If top of stack is _i_, `g
 
 ## gaid
 
-- Syntax: `gaid T` ∋ T: transaction group index
+- Syntax: `gaid T` where T: transaction group index
 - Bytecode: 0x3c {uint8}
 - Stack: ... &rarr; ..., uint64
 - ID of the asset or application created in the Tth transaction of the current group
@@ -592,7 +592,7 @@ for notes on transaction fields available, see `txn`. If top of stack is _i_, `g
 
 ## bnz
 
-- Syntax: `bnz TARGET` ∋ TARGET: branch offset
+- Syntax: `bnz TARGET` where TARGET: branch offset
 - Bytecode: 0x40 {int16 (big-endian)}
 - Stack: ..., A: uint64 &rarr; ...
 - branch to TARGET if value A is not zero
@@ -603,7 +603,7 @@ At v2 it became allowed to branch to the end of the program exactly after the la
 
 ## bz
 
-- Syntax: `bz TARGET` ∋ TARGET: branch offset
+- Syntax: `bz TARGET` where TARGET: branch offset
 - Bytecode: 0x41 {int16 (big-endian)}
 - Stack: ..., A: uint64 &rarr; ...
 - branch to TARGET if value A is zero
@@ -613,7 +613,7 @@ See `bnz` for details on how branches work. `bz` inverts the behavior of `bnz`.
 
 ## b
 
-- Syntax: `b TARGET` ∋ TARGET: branch offset
+- Syntax: `b TARGET` where TARGET: branch offset
 - Bytecode: 0x42 {int16 (big-endian)}
 - Stack: ... &rarr; ...
 - branch unconditionally to TARGET
@@ -656,7 +656,7 @@ See `bnz` for details on how branches work. `b` always jumps to the offset.
 
 ## dig
 
-- Syntax: `dig N` ∋ N: depth
+- Syntax: `dig N` where N: depth
 - Bytecode: 0x4b {uint8}
 - Stack: ..., A, [N items] &rarr; ..., A, [N items], A
 - Nth value from the top of the stack. dig 0 is equivalent to dup
@@ -678,7 +678,7 @@ See `bnz` for details on how branches work. `b` always jumps to the offset.
 
 ## cover
 
-- Syntax: `cover N` ∋ N: depth
+- Syntax: `cover N` where N: depth
 - Bytecode: 0x4e {uint8}
 - Stack: ..., [N items], A &rarr; ..., A, [N items]
 - remove top of stack, and place it deeper in the stack such that N elements are above it. Fails if stack depth <= N.
@@ -686,7 +686,7 @@ See `bnz` for details on how branches work. `b` always jumps to the offset.
 
 ## uncover
 
-- Syntax: `uncover N` ∋ N: depth
+- Syntax: `uncover N` where N: depth
 - Bytecode: 0x4f {uint8}
 - Stack: ..., A, [N items] &rarr; ..., [N items], A
 - remove the value at depth N in the stack and shift above items down so the Nth deep value is on top of the stack. Fails if stack depth <= N.
@@ -703,7 +703,7 @@ See `bnz` for details on how branches work. `b` always jumps to the offset.
 
 ## substring
 
-- Syntax: `substring S E` ∋ S: start position, E: end position
+- Syntax: `substring S E` where S: start position, E: end position
 - Bytecode: 0x51 {uint8}, {uint8}
 - Stack: ..., A: []byte &rarr; ..., []byte
 - A range of bytes from A starting at S up to but not including E. If E < S, or either is larger than the array length, the program fails
@@ -750,7 +750,7 @@ When A is a uint64, index 0 is the least significant bit. Setting bit 3 to 1 on 
 
 ## extract
 
-- Syntax: `extract S L` ∋ S: start position, L: length
+- Syntax: `extract S L` where S: start position, L: length
 - Bytecode: 0x57 {uint8}, {uint8}
 - Stack: ..., A: []byte &rarr; ..., []byte
 - A range of bytes from A starting at S up to but not including S+L. If L is 0, then extract to the end of the string. If S or S+L is larger than the array length, the program fails
@@ -786,7 +786,7 @@ When A is a uint64, index 0 is the least significant bit. Setting bit 3 to 1 on 
 
 ## replace2
 
-- Syntax: `replace2 S` ∋ S: start position
+- Syntax: `replace2 S` where S: start position
 - Bytecode: 0x5c {uint8}
 - Stack: ..., A: []byte, B: []byte &rarr; ..., []byte
 - Copy of A with the bytes starting at S replaced by the bytes of B. Fails if S+len(B) exceeds len(A)<br />`replace2` can be called using `replace` with 1 immediate.
@@ -801,7 +801,7 @@ When A is a uint64, index 0 is the least significant bit. Setting bit 3 to 1 on 
 
 ## base64_decode
 
-- Syntax: `base64_decode E` ∋ E: [base64](#field-group-base64)
+- Syntax: `base64_decode E` where E: [base64](#field-group-base64)
 - Bytecode: 0x5e {uint8}
 - Stack: ..., A: []byte &rarr; ..., []byte
 - decode A which was base64-encoded using _encoding_ E. Fail if A is not base64 encoded with encoding E
@@ -824,7 +824,7 @@ Encodings
 
 ## json_ref
 
-- Syntax: `json_ref R` ∋ R: [json_ref](#field-group-json_ref)
+- Syntax: `json_ref R` where R: [json_ref](#field-group-json_ref)
 - Bytecode: 0x5f {uint8}
 - Stack: ..., A: []byte, B: []byte &rarr; ..., any
 - key B's value, of type R, from a [valid](jsonspec.md) utf-8 encoded json object A
@@ -869,7 +869,7 @@ params: Txn.Accounts offset (or, since v4, an _available_ account address), _ava
 ## app_local_get
 
 - Bytecode: 0x62
-- Stack: ..., A, B: []byte &rarr; ..., any
+- Stack: ..., A, B: stateKey &rarr; ..., any
 - local state of the key B in the current application in account A
 - Availability: v2
 - Mode: Application
@@ -879,7 +879,7 @@ params: Txn.Accounts offset (or, since v4, an _available_ account address), stat
 ## app_local_get_ex
 
 - Bytecode: 0x63
-- Stack: ..., A, B: uint64, C: []byte &rarr; ..., X: any, Y: bool
+- Stack: ..., A, B: uint64, C: stateKey &rarr; ..., X: any, Y: bool
 - X is the local state of application B, key C in account A. Y is 1 if key existed, else 0
 - Availability: v2
 - Mode: Application
@@ -889,7 +889,7 @@ params: Txn.Accounts offset (or, since v4, an _available_ account address), _ava
 ## app_global_get
 
 - Bytecode: 0x64
-- Stack: ..., A: []byte &rarr; ..., any
+- Stack: ..., A: stateKey &rarr; ..., any
 - global state of the key A in the current application
 - Availability: v2
 - Mode: Application
@@ -899,7 +899,7 @@ params: state key. Return: value. The value is zero (of type uint64) if the key 
 ## app_global_get_ex
 
 - Bytecode: 0x65
-- Stack: ..., A: uint64, B: []byte &rarr; ..., X: any, Y: bool
+- Stack: ..., A: uint64, B: stateKey &rarr; ..., X: any, Y: bool
 - X is the global state of application A, key B. Y is 1 if key existed, else 0
 - Availability: v2
 - Mode: Application
@@ -909,7 +909,7 @@ params: Txn.ForeignApps offset (or, since v4, an _available_ application id), st
 ## app_local_put
 
 - Bytecode: 0x66
-- Stack: ..., A, B: []byte, C &rarr; ...
+- Stack: ..., A, B: stateKey, C &rarr; ...
 - write C to key B in account A's local state of the current application
 - Availability: v2
 - Mode: Application
@@ -919,7 +919,7 @@ params: Txn.Accounts offset (or, since v4, an _available_ account address), stat
 ## app_global_put
 
 - Bytecode: 0x67
-- Stack: ..., A: []byte, B &rarr; ...
+- Stack: ..., A: stateKey, B &rarr; ...
 - write B to key A in the global state of the current application
 - Availability: v2
 - Mode: Application
@@ -927,7 +927,7 @@ params: Txn.Accounts offset (or, since v4, an _available_ account address), stat
 ## app_local_del
 
 - Bytecode: 0x68
-- Stack: ..., A, B: []byte &rarr; ...
+- Stack: ..., A, B: stateKey &rarr; ...
 - delete key B from account A's local state of the current application
 - Availability: v2
 - Mode: Application
@@ -939,7 +939,7 @@ Deleting a key which is already absent has no effect on the application local st
 ## app_global_del
 
 - Bytecode: 0x69
-- Stack: ..., A: []byte &rarr; ...
+- Stack: ..., A: stateKey &rarr; ...
 - delete key A from the global state of the current application
 - Availability: v2
 - Mode: Application
@@ -950,7 +950,7 @@ Deleting a key which is already absent has no effect on the application global s
 
 ## asset_holding_get
 
-- Syntax: `asset_holding_get F` ∋ F: [asset_holding](#field-group-asset_holding)
+- Syntax: `asset_holding_get F` where F: [asset_holding](#field-group-asset_holding)
 - Bytecode: 0x70 {uint8}
 - Stack: ..., A, B: uint64 &rarr; ..., X: any, Y: bool
 - X is field F from account A's holding of asset B. Y is 1 if A is opted into B, else 0
@@ -971,7 +971,7 @@ params: Txn.Accounts offset (or, since v4, an _available_ address), asset id (or
 
 ## asset_params_get
 
-- Syntax: `asset_params_get F` ∋ F: [asset_params](#field-group-asset_params)
+- Syntax: `asset_params_get F` where F: [asset_params](#field-group-asset_params)
 - Bytecode: 0x71 {uint8}
 - Stack: ..., A: uint64 &rarr; ..., X: any, Y: bool
 - X is field F from asset A. Y is 1 if A exists, else 0
@@ -1002,7 +1002,7 @@ params: Txn.ForeignAssets offset (or, since v4, an _available_ asset id. Return:
 
 ## app_params_get
 
-- Syntax: `app_params_get F` ∋ F: [app_params](#field-group-app_params)
+- Syntax: `app_params_get F` where F: [app_params](#field-group-app_params)
 - Bytecode: 0x72 {uint8}
 - Stack: ..., A: uint64 &rarr; ..., X: any, Y: bool
 - X is field F from app A. Y is 1 if A exists, else 0
@@ -1030,7 +1030,7 @@ params: Txn.ForeignApps offset or an _available_ app id. Return: did_exist flag 
 
 ## acct_params_get
 
-- Syntax: `acct_params_get F` ∋ F: [acct_params](#field-group-acct_params)
+- Syntax: `acct_params_get F` where F: [acct_params](#field-group-acct_params)
 - Bytecode: 0x73 {uint8}
 - Stack: ..., A &rarr; ..., X: any, Y: bool
 - X is field F from account A. Y is 1 if A owns positive algos, else 0
@@ -1060,7 +1060,7 @@ params: Txn.Accounts offset (or, since v4, an _available_ account address), _ava
 
 ## pushbytes
 
-- Syntax: `pushbytes BYTES` ∋ BYTES: a byte constant
+- Syntax: `pushbytes BYTES` where BYTES: a byte constant
 - Bytecode: 0x80 {varuint length, bytes}
 - Stack: ... &rarr; ..., []byte
 - immediate BYTES
@@ -1070,7 +1070,7 @@ pushbytes args are not added to the bytecblock during assembly processes
 
 ## pushint
 
-- Syntax: `pushint UINT` ∋ UINT: an int constant
+- Syntax: `pushint UINT` where UINT: an int constant
 - Bytecode: 0x81 {varuint}
 - Stack: ... &rarr; ..., uint64
 - immediate UINT
@@ -1081,14 +1081,14 @@ pushint args are not added to the intcblock during assembly processes
 ## ed25519verify_bare
 
 - Bytecode: 0x84
-- Stack: ..., A: []byte, B: []byte, C: []byte &rarr; ..., bool
+- Stack: ..., A: []byte, B: [64]byte, C: [32]byte &rarr; ..., bool
 - for (data A, signature B, pubkey C) verify the signature of the data against the pubkey => {0 or 1}
 - **Cost**: 1900
 - Availability: v7
 
 ## callsub
 
-- Syntax: `callsub TARGET` ∋ TARGET: branch offset
+- Syntax: `callsub TARGET` where TARGET: branch offset
 - Bytecode: 0x88 {int16 (big-endian)}
 - Stack: ... &rarr; ...
 - branch unconditionally to TARGET, saving the next instruction on the call stack
@@ -1154,7 +1154,7 @@ bitlen interprets arrays as big-endian integers, unlike setbit/getbit
 ## bsqrt
 
 - Bytecode: 0x96
-- Stack: ..., A: []byte &rarr; ..., []byte
+- Stack: ..., A: bigint &rarr; ..., bigint
 - The largest integer I such that I^2 <= A. A and I are interpreted as big-endian unsigned integers
 - **Cost**: 40
 - Availability: v6
@@ -1171,7 +1171,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 ## sha3_256
 
 - Bytecode: 0x98
-- Stack: ..., A: []byte &rarr; ..., []byte
+- Stack: ..., A: []byte &rarr; ..., [32]byte
 - SHA3_256 hash of value A, yields [32]byte
 - **Cost**: 130
 - Availability: v7
@@ -1253,7 +1253,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 ## b%
 
 - Bytecode: 0xaa
-- Stack: ..., A: []byte, B: []byte &rarr; ..., []byte
+- Stack: ..., A: bigint, B: bigint &rarr; ..., bigint
 - A modulo B. A and B are interpreted as big-endian unsigned integers. Fail if B is zero.
 - **Cost**: 20
 - Availability: v4
@@ -1319,7 +1319,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 
 ## itxn_field
 
-- Syntax: `itxn_field F` ∋ F: [txn](#field-group-txn)
+- Syntax: `itxn_field F` where F: [txn](#field-group-txn)
 - Bytecode: 0xb2 {uint8}
 - Stack: ..., A &rarr; ...
 - set field F of the current inner transaction to A
@@ -1340,7 +1340,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 
 ## itxn
 
-- Syntax: `itxn F` ∋ F: [txn](#field-group-txn)
+- Syntax: `itxn F` where F: [txn](#field-group-txn)
 - Bytecode: 0xb4 {uint8}
 - Stack: ... &rarr; ..., any
 - field F of the last inner transaction
@@ -1349,7 +1349,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 
 ## itxna
 
-- Syntax: `itxna F I` ∋ F: [txna](#field-group-txna), I: a transaction field array index
+- Syntax: `itxna F I` where F: [txna](#field-group-txna), I: a transaction field array index
 - Bytecode: 0xb5 {uint8}, {uint8}
 - Stack: ... &rarr; ..., any
 - Ith value of the array field F of the last inner transaction
@@ -1368,7 +1368,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 
 ## gitxn
 
-- Syntax: `gitxn T F` ∋ T: transaction group index, F: [txn](#field-group-txn)
+- Syntax: `gitxn T F` where T: transaction group index, F: [txn](#field-group-txn)
 - Bytecode: 0xb7 {uint8}, {uint8}
 - Stack: ... &rarr; ..., any
 - field F of the Tth transaction in the last inner group submitted
@@ -1377,7 +1377,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 
 ## gitxna
 
-- Syntax: `gitxna T F I` ∋ T: transaction group index, F: [txna](#field-group-txna), I: transaction field array index
+- Syntax: `gitxna T F I` where T: transaction group index, F: [txna](#field-group-txna), I: transaction field array index
 - Bytecode: 0xb8 {uint8}, {uint8}, {uint8}
 - Stack: ... &rarr; ..., any
 - Ith value of the array field F from the Tth transaction in the last inner group submitted
@@ -1386,7 +1386,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 
 ## txnas
 
-- Syntax: `txnas F` ∋ F: [txna](#field-group-txna)
+- Syntax: `txnas F` where F: [txna](#field-group-txna)
 - Bytecode: 0xc0 {uint8}
 - Stack: ..., A: uint64 &rarr; ..., any
 - Ath value of the array field F of the current transaction
@@ -1394,7 +1394,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 
 ## gtxnas
 
-- Syntax: `gtxnas T F` ∋ T: transaction group index, F: [txna](#field-group-txna)
+- Syntax: `gtxnas T F` where T: transaction group index, F: [txna](#field-group-txna)
 - Bytecode: 0xc1 {uint8}, {uint8}
 - Stack: ..., A: uint64 &rarr; ..., any
 - Ath value of the array field F from the Tth transaction in the current group
@@ -1402,7 +1402,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 
 ## gtxnsas
 
-- Syntax: `gtxnsas F` ∋ F: [txna](#field-group-txna)
+- Syntax: `gtxnsas F` where F: [txna](#field-group-txna)
 - Bytecode: 0xc2 {uint8}
 - Stack: ..., A: uint64, B: uint64 &rarr; ..., any
 - Bth value of the array field F from the Ath transaction in the current group
@@ -1426,7 +1426,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 
 ## itxnas
 
-- Syntax: `itxnas F` ∋ F: [txna](#field-group-txna)
+- Syntax: `itxnas F` where F: [txna](#field-group-txna)
 - Bytecode: 0xc5 {uint8}
 - Stack: ..., A: uint64 &rarr; ..., any
 - Ath value of the array field F of the last inner transaction
@@ -1435,7 +1435,7 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 
 ## gitxnas
 
-- Syntax: `gitxnas T F` ∋ T: transaction group index, F: [txna](#field-group-txna)
+- Syntax: `gitxnas T F` where T: transaction group index, F: [txna](#field-group-txna)
 - Bytecode: 0xc6 {uint8}, {uint8}
 - Stack: ..., A: uint64 &rarr; ..., any
 - Ath value of the array field F from the Tth transaction in the last inner group submitted
@@ -1444,9 +1444,9 @@ The notation A,B indicates that A and B are interpreted as a uint128 value, with
 
 ## vrf_verify
 
-- Syntax: `vrf_verify S` ∋ S: [vrf_verify](#field-group-vrf_verify)
+- Syntax: `vrf_verify S` where S: [vrf_verify](#field-group-vrf_verify)
 - Bytecode: 0xd0 {uint8}
-- Stack: ..., A: []byte, B: []byte, C: []byte &rarr; ..., X: []byte, Y: bool
+- Stack: ..., A: []byte, B: [80]byte, C: [32]byte &rarr; ..., X: [64]byte, Y: bool
 - Verify the proof B of message A against pubkey C. Returns vrf output and verification flag.
 - **Cost**: 5700
 - Availability: v7
@@ -1464,7 +1464,7 @@ Standards
 
 ## block
 
-- Syntax: `block F` ∋ F: [block](#field-group-block)
+- Syntax: `block F` where F: [block](#field-group-block)
 - Bytecode: 0xd1 {uint8}
 - Stack: ..., A: uint64 &rarr; ..., any
 - field F of block A. Fail unless A falls between txn.LastValid-1002 and txn.FirstValid (exclusive)

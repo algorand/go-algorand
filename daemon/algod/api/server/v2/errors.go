@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -44,6 +44,7 @@ var (
 	errFailedToParseCatchpoint                 = "failed to parse catchpoint"
 	errFailedToAbortCatchup                    = "failed to abort catchup : %v"
 	errFailedToStartCatchup                    = "failed to start catchup : %v"
+	errCatchpointWouldNotInitialize            = "the node has already been initialized"
 	errOperationNotAvailableDuringCatchup      = "operation not available during catchup"
 	errRESTPayloadZeroLength                   = "payload was of zero length"
 	errRoundGreaterThanTheLatest               = "given round is greater than the latest round"

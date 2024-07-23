@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -427,10 +427,30 @@ match_label1:
 pushbytess "1" "2" "1"
 `
 
+const incentiveNonsense = `
+online_stake
+voter_params_get VoterIncentiveEligible
+`
+
+const stateProofNonsense = `
+pushbytes 0x0123456789abcd
+sumhash512
+dup; dup
+falcon_verify
+`
+
 const v8Nonsense = v7Nonsense + switchNonsense + frameNonsense + matchNonsense + boxNonsense
 
 const v9Nonsense = v8Nonsense
-const v10Nonsense = v9Nonsense + pairingNonsense
+
+const spliceNonsence = `
+  box_splice
+  box_resize
+`
+
+const v10Nonsense = v9Nonsense + pairingNonsense + spliceNonsence
+
+const v11Nonsense = v10Nonsense + incentiveNonsense + stateProofNonsense
 
 const v6Compiled = "2004010002b7a60c26050242420c68656c6c6f20776f726c6421070123456789abcd208dae2087fbba51304eb02b91f656948397a7946390e8cb70fc9ea4d95f92251d047465737400320032013202320380021234292929292b0431003101310231043105310731083109310a310b310c310d310e310f3111311231133114311533000033000133000233000433000533000733000833000933000a33000b33000c33000d33000e33000f3300113300123300133300143300152d2e01022581f8acd19181cf959a1281f8acd19181cf951a81f8acd19181cf1581f8acd191810f082209240a220b230c240d250e230f2310231123122313231418191a1b1c28171615400003290349483403350222231d4a484848482b50512a632223524100034200004322602261222704634848222862482864286548482228246628226723286828692322700048482371004848361c0037001a0031183119311b311d311e311f312023221e312131223123312431253126312731283129312a312b312c312d312e312f447825225314225427042455220824564c4d4b0222382124391c0081e80780046a6f686e2281d00f23241f880003420001892224902291922494249593a0a1a2a3a4a5a6a7a8a9aaabacadae24af3a00003b003c003d816472064e014f012a57000823810858235b235a2359b03139330039b1b200b322c01a23c1001a2323c21a23c3233e233f8120af06002a494905002a49490700b400b53a03b6b7043cb8033a0c2349c42a9631007300810881088120978101c53a8101c6003a"
 
@@ -447,7 +467,16 @@ const matchCompiled = "83030102018e02fff500008203013101320131"
 const v8Compiled = v7Compiled + switchCompiled + frameCompiled + matchCompiled + boxCompiled
 
 const v9Compiled = v8Compiled
-const v10Compiled = v9Compiled + pairingCompiled
+
+const spliceCompiled = "d2d3"
+
+const v10Compiled = v9Compiled + pairingCompiled + spliceCompiled
+
+const incentiveCompiled = "757401"
+
+const stateProofCompiled = "80070123456789abcd86494985"
+
+const V11Compiled = v10Compiled + incentiveCompiled + stateProofCompiled
 
 var nonsense = map[uint64]string{
 	1:  v1Nonsense,
@@ -460,20 +489,21 @@ var nonsense = map[uint64]string{
 	8:  v8Nonsense,
 	9:  v9Nonsense,
 	10: v10Nonsense,
+	11: v11Nonsense,
 }
 
 var compiled = map[uint64]string{
-	1: "012008b7a60cf8acd19181cf959a12f8acd19181cf951af8acd19181cf15f8acd191810f01020026050212340c68656c6c6f20776f726c6421208dae2087fbba51304eb02b91f656948397a7946390e8cb70fc9ea4d95f92251d024242047465737400320032013202320328292929292a0431003101310231043105310731083109310a310b310c310d310e310f3111311231133114311533000033000133000233000433000533000733000833000933000a33000b33000c33000d33000e33000f3300113300123300133300143300152d2e0102222324252104082209240a220b230c240d250e230f2310231123122313231418191a1b1c2b1716154000032903494",
-	2: "022008b7a60cf8acd19181cf959a12f8acd19181cf951af8acd19181cf15f8acd191810f01020026050212340c68656c6c6f20776f726c6421208dae2087fbba51304eb02b91f656948397a7946390e8cb70fc9ea4d95f92251d024242047465737400320032013202320328292929292a0431003101310231043105310731083109310a310b310c310d310e310f3111311231133114311533000033000133000233000433000533000733000833000933000a33000b33000c33000d33000e33000f3300113300123300133300143300152d2e0102222324252104082209240a220b230c240d250e230f2310231123122313231418191a1b1c2b171615400003290349483403350222231d4a484848482a50512a63222352410003420000432105602105612105270463484821052b62482b642b65484821052b2106662b21056721072b682b692107210570004848210771004848361c0037001a0031183119311b311d311e311f3120210721051e312131223123312431253126312731283129312a312b312c312d312e312f",
-	3: "032008b7a60cf8acd19181cf959a12f8acd19181cf951af8acd19181cf15f8acd191810f01020026050212340c68656c6c6f20776f726c6421208dae2087fbba51304eb02b91f656948397a7946390e8cb70fc9ea4d95f92251d024242047465737400320032013202320328292929292a0431003101310231043105310731083109310a310b310c310d310e310f3111311231133114311533000033000133000233000433000533000733000833000933000a33000b33000c33000d33000e33000f3300113300123300133300143300152d2e0102222324252104082209240a220b230c240d250e230f2310231123122313231418191a1b1c2b171615400003290349483403350222231d4a484848482a50512a63222352410003420000432105602105612105270463484821052b62482b642b65484821052b2106662b21056721072b682b692107210570004848210771004848361c0037001a0031183119311b311d311e311f3120210721051e312131223123312431253126312731283129312a312b312c312d312e312f4478222105531421055427042106552105082106564c4d4b02210538212106391c0081e80780046a6f686e",
-	4: "042004010200b7a60c26040242420c68656c6c6f20776f726c6421208dae2087fbba51304eb02b91f656948397a7946390e8cb70fc9ea4d95f92251d047465737400320032013202320380021234292929292a0431003101310231043105310731083109310a310b310c310d310e310f3111311231133114311533000033000133000233000433000533000733000833000933000a33000b33000c33000d33000e33000f3300113300123300133300143300152d2e01022581f8acd19181cf959a1281f8acd19181cf951a81f8acd19181cf1581f8acd191810f082209240a220b230c240d250e230f2310231123122313231418191a1b1c28171615400003290349483403350222231d4a484848482a50512a632223524100034200004322602261222b634848222862482864286548482228236628226724286828692422700048482471004848361c0037001a0031183119311b311d311e311f312024221e312131223123312431253126312731283129312a312b312c312d312e312f44782522531422542b2355220823564c4d4b0222382123391c0081e80780046a6f686e2281d00f24231f880003420001892223902291922394239593a0a1a2a3a4a5a6a7a8a9aaabacadae23af3a00003b003c003d8164",
-	5: "052004010002b7a60c26050242420c68656c6c6f20776f726c6421070123456789abcd208dae2087fbba51304eb02b91f656948397a7946390e8cb70fc9ea4d95f92251d047465737400320032013202320380021234292929292b0431003101310231043105310731083109310a310b310c310d310e310f3111311231133114311533000033000133000233000433000533000733000833000933000a33000b33000c33000d33000e33000f3300113300123300133300143300152d2e01022581f8acd19181cf959a1281f8acd19181cf951a81f8acd19181cf1581f8acd191810f082209240a220b230c240d250e230f2310231123122313231418191a1b1c28171615400003290349483403350222231d4a484848482b50512a632223524100034200004322602261222704634848222862482864286548482228246628226723286828692322700048482371004848361c0037001a0031183119311b311d311e311f312023221e312131223123312431253126312731283129312a312b312c312d312e312f447825225314225427042455220824564c4d4b0222382124391c0081e80780046a6f686e2281d00f23241f880003420001892224902291922494249593a0a1a2a3a4a5a6a7a8a9aaabacadae24af3a00003b003c003d816472064e014f012a57000823810858235b235a2359b03139330039b1b200b322c01a23c1001a2323c21a23c3233e233f8120af06002a494905002a49490700b400b53a03",
-	6: "06" + v6Compiled,
-	7: "07" + v7Compiled,
-	8: "08" + v8Compiled,
-	9: "09" + v9Compiled,
-
+	1:  "012008b7a60cf8acd19181cf959a12f8acd19181cf951af8acd19181cf15f8acd191810f01020026050212340c68656c6c6f20776f726c6421208dae2087fbba51304eb02b91f656948397a7946390e8cb70fc9ea4d95f92251d024242047465737400320032013202320328292929292a0431003101310231043105310731083109310a310b310c310d310e310f3111311231133114311533000033000133000233000433000533000733000833000933000a33000b33000c33000d33000e33000f3300113300123300133300143300152d2e0102222324252104082209240a220b230c240d250e230f2310231123122313231418191a1b1c2b1716154000032903494",
+	2:  "022008b7a60cf8acd19181cf959a12f8acd19181cf951af8acd19181cf15f8acd191810f01020026050212340c68656c6c6f20776f726c6421208dae2087fbba51304eb02b91f656948397a7946390e8cb70fc9ea4d95f92251d024242047465737400320032013202320328292929292a0431003101310231043105310731083109310a310b310c310d310e310f3111311231133114311533000033000133000233000433000533000733000833000933000a33000b33000c33000d33000e33000f3300113300123300133300143300152d2e0102222324252104082209240a220b230c240d250e230f2310231123122313231418191a1b1c2b171615400003290349483403350222231d4a484848482a50512a63222352410003420000432105602105612105270463484821052b62482b642b65484821052b2106662b21056721072b682b692107210570004848210771004848361c0037001a0031183119311b311d311e311f3120210721051e312131223123312431253126312731283129312a312b312c312d312e312f",
+	3:  "032008b7a60cf8acd19181cf959a12f8acd19181cf951af8acd19181cf15f8acd191810f01020026050212340c68656c6c6f20776f726c6421208dae2087fbba51304eb02b91f656948397a7946390e8cb70fc9ea4d95f92251d024242047465737400320032013202320328292929292a0431003101310231043105310731083109310a310b310c310d310e310f3111311231133114311533000033000133000233000433000533000733000833000933000a33000b33000c33000d33000e33000f3300113300123300133300143300152d2e0102222324252104082209240a220b230c240d250e230f2310231123122313231418191a1b1c2b171615400003290349483403350222231d4a484848482a50512a63222352410003420000432105602105612105270463484821052b62482b642b65484821052b2106662b21056721072b682b692107210570004848210771004848361c0037001a0031183119311b311d311e311f3120210721051e312131223123312431253126312731283129312a312b312c312d312e312f4478222105531421055427042106552105082106564c4d4b02210538212106391c0081e80780046a6f686e",
+	4:  "042004010200b7a60c26040242420c68656c6c6f20776f726c6421208dae2087fbba51304eb02b91f656948397a7946390e8cb70fc9ea4d95f92251d047465737400320032013202320380021234292929292a0431003101310231043105310731083109310a310b310c310d310e310f3111311231133114311533000033000133000233000433000533000733000833000933000a33000b33000c33000d33000e33000f3300113300123300133300143300152d2e01022581f8acd19181cf959a1281f8acd19181cf951a81f8acd19181cf1581f8acd191810f082209240a220b230c240d250e230f2310231123122313231418191a1b1c28171615400003290349483403350222231d4a484848482a50512a632223524100034200004322602261222b634848222862482864286548482228236628226724286828692422700048482471004848361c0037001a0031183119311b311d311e311f312024221e312131223123312431253126312731283129312a312b312c312d312e312f44782522531422542b2355220823564c4d4b0222382123391c0081e80780046a6f686e2281d00f24231f880003420001892223902291922394239593a0a1a2a3a4a5a6a7a8a9aaabacadae23af3a00003b003c003d8164",
+	5:  "052004010002b7a60c26050242420c68656c6c6f20776f726c6421070123456789abcd208dae2087fbba51304eb02b91f656948397a7946390e8cb70fc9ea4d95f92251d047465737400320032013202320380021234292929292b0431003101310231043105310731083109310a310b310c310d310e310f3111311231133114311533000033000133000233000433000533000733000833000933000a33000b33000c33000d33000e33000f3300113300123300133300143300152d2e01022581f8acd19181cf959a1281f8acd19181cf951a81f8acd19181cf1581f8acd191810f082209240a220b230c240d250e230f2310231123122313231418191a1b1c28171615400003290349483403350222231d4a484848482b50512a632223524100034200004322602261222704634848222862482864286548482228246628226723286828692322700048482371004848361c0037001a0031183119311b311d311e311f312023221e312131223123312431253126312731283129312a312b312c312d312e312f447825225314225427042455220824564c4d4b0222382124391c0081e80780046a6f686e2281d00f23241f880003420001892224902291922494249593a0a1a2a3a4a5a6a7a8a9aaabacadae24af3a00003b003c003d816472064e014f012a57000823810858235b235a2359b03139330039b1b200b322c01a23c1001a2323c21a23c3233e233f8120af06002a494905002a49490700b400b53a03",
+	6:  "06" + v6Compiled,
+	7:  "07" + v7Compiled,
+	8:  "08" + v8Compiled,
+	9:  "09" + v9Compiled,
 	10: "0a" + v10Compiled,
+	11: "0b" + V11Compiled,
 }
 
 func pseudoOp(opcode string) bool {
@@ -518,7 +548,7 @@ func TestAssemble(t *testing.T) {
 			// this month that we did last month.
 			bytecode, ok := compiled[v]
 			require.True(t, ok, "Need v%d bytecode", v)
-			expectedBytes, _ := hex.DecodeString(bytecode)
+			expectedBytes, _ := hex.DecodeString(strings.ReplaceAll(bytecode, " ", ""))
 			require.NotEmpty(t, expectedBytes)
 			// the hex is for convenience if the program has been changed. the
 			// hex string can be copy pasted back in as a new expected result.
@@ -527,7 +557,7 @@ func TestAssemble(t *testing.T) {
 	}
 }
 
-var experiments = []uint64{pairingVersion}
+var experiments = []uint64{spOpcodesVersion}
 
 // TestExperimental forces a conscious choice to promote "experimental" opcode
 // groups. This will fail when we increment vFuture's LogicSigVersion. If we had
@@ -603,28 +633,13 @@ func assembleWithTrace(text string, ver uint64) (*OpStream, error) {
 	return &ops, err
 }
 
-func lines(s string, num int) (bool, string) {
-	if num < 1 {
-		return true, ""
-	}
-	found := 0
-	for i := 0; i < len(s); i++ {
-		if s[i] == '\n' {
-			found++
-			if found == num {
-				return true, s[0 : i+1]
-			}
-		}
-	}
-	return false, s
-}
-
 func summarize(trace *strings.Builder) string {
-	truncated, msg := lines(trace.String(), 50)
-	if !truncated {
-		return msg
+	all := trace.String()
+	if strings.Count(all, "\n") < 50 {
+		return all
 	}
-	return msg + "(trace truncated)\n"
+	lines := strings.Split(all, "\n")
+	return strings.Join(lines[:20], "\n") + "\n(some trace elided)\n" + strings.Join(lines[len(lines)-20:], "\n")
 }
 
 func testProg(t testing.TB, source string, ver uint64, expected ...expect) *OpStream {
@@ -1677,17 +1692,30 @@ txn NumApprovalProgramPages
 txna ApprovalProgramPages 0
 txn NumClearStateProgramPages
 txna ClearStateProgramPages 0
+pushint 1
+block BlkTimestamp
+pushint 1
+block BlkSeed
 global AssetCreateMinBalance
 global AssetOptInMinBalance
+global GenesisHash
+pushint 1
+block BlkProposer
+pushint 1
+block BlkFeesCollected
+pushint 1
+block BlkBonus
+global PayoutsEnabled
+global PayoutsGoOnlineFee
+global PayoutsPercent
+global PayoutsMinBalance
+global PayoutsMaxBalance
 `, AssemblerMaxVersion)
-	for _, globalField := range GlobalFieldNames {
-		if !strings.Contains(text, globalField) {
-			t.Errorf("TestAssembleDisassemble missing field global %v", globalField)
-		}
-	}
-	for _, txnField := range TxnFieldNames {
-		if !strings.Contains(text, txnField) {
-			t.Errorf("TestAssembleDisassemble missing field txn %v", txnField)
+	for _, names := range [][]string{GlobalFieldNames[:], TxnFieldNames[:], blockFieldNames[:]} {
+		for _, f := range names {
+			if !strings.Contains(text, f) {
+				t.Errorf("TestAssembleDisassemble missing field %v", f)
+			}
 		}
 	}
 	ops := testProg(t, text, AssemblerMaxVersion)
@@ -2151,73 +2179,77 @@ func TestAssembleOffsets(t *testing.T) {
 	source := "err"
 	ops := testProg(t, source, AssemblerMaxVersion)
 	require.Equal(t, 2, len(ops.Program))
-	require.Equal(t, 1, len(ops.OffsetToLine))
+	require.Equal(t, 1, len(ops.OffsetToSource))
 	// vlen
-	line, ok := ops.OffsetToLine[0]
+	location, ok := ops.OffsetToSource[0]
 	require.False(t, ok)
-	require.Equal(t, 0, line)
+	require.Equal(t, SourceLocation{}, location)
 	// err
-	line, ok = ops.OffsetToLine[1]
+	location, ok = ops.OffsetToSource[1]
 	require.True(t, ok)
-	require.Equal(t, 0, line)
+	require.Equal(t, SourceLocation{}, location)
 
 	source = `err
 // comment
-err
+err; err
 `
 	ops = testProg(t, source, AssemblerMaxVersion)
-	require.Equal(t, 3, len(ops.Program))
-	require.Equal(t, 2, len(ops.OffsetToLine))
+	require.Equal(t, 4, len(ops.Program))
+	require.Equal(t, 3, len(ops.OffsetToSource))
 	// vlen
-	line, ok = ops.OffsetToLine[0]
+	location, ok = ops.OffsetToSource[0]
 	require.False(t, ok)
-	require.Equal(t, 0, line)
+	require.Equal(t, SourceLocation{}, location)
 	// err 1
-	line, ok = ops.OffsetToLine[1]
+	location, ok = ops.OffsetToSource[1]
 	require.True(t, ok)
-	require.Equal(t, 0, line)
+	require.Equal(t, SourceLocation{}, location)
 	// err 2
-	line, ok = ops.OffsetToLine[2]
+	location, ok = ops.OffsetToSource[2]
 	require.True(t, ok)
-	require.Equal(t, 2, line)
+	require.Equal(t, SourceLocation{Line: 2}, location)
+	// err 3
+	location, ok = ops.OffsetToSource[3]
+	require.True(t, ok)
+	require.Equal(t, SourceLocation{Line: 2, Column: 5}, location)
 
 	source = `err
 b label1
 err
 label1:
-err
+  err
 `
 	ops = testProg(t, source, AssemblerMaxVersion)
 	require.Equal(t, 7, len(ops.Program))
-	require.Equal(t, 4, len(ops.OffsetToLine))
+	require.Equal(t, 4, len(ops.OffsetToSource))
 	// vlen
-	line, ok = ops.OffsetToLine[0]
+	location, ok = ops.OffsetToSource[0]
 	require.False(t, ok)
-	require.Equal(t, 0, line)
+	require.Equal(t, SourceLocation{}, location)
 	// err 1
-	line, ok = ops.OffsetToLine[1]
+	location, ok = ops.OffsetToSource[1]
 	require.True(t, ok)
-	require.Equal(t, 0, line)
+	require.Equal(t, SourceLocation{}, location)
 	// b
-	line, ok = ops.OffsetToLine[2]
+	location, ok = ops.OffsetToSource[2]
 	require.True(t, ok)
-	require.Equal(t, 1, line)
+	require.Equal(t, SourceLocation{Line: 1}, location)
 	// b byte 1
-	line, ok = ops.OffsetToLine[3]
+	location, ok = ops.OffsetToSource[3]
 	require.False(t, ok)
-	require.Equal(t, 0, line)
+	require.Equal(t, SourceLocation{}, location)
 	// b byte 2
-	line, ok = ops.OffsetToLine[4]
+	location, ok = ops.OffsetToSource[4]
 	require.False(t, ok)
-	require.Equal(t, 0, line)
+	require.Equal(t, SourceLocation{}, location)
 	// err 2
-	line, ok = ops.OffsetToLine[5]
+	location, ok = ops.OffsetToSource[5]
 	require.True(t, ok)
-	require.Equal(t, 2, line)
+	require.Equal(t, SourceLocation{Line: 2}, location)
 	// err 3
-	line, ok = ops.OffsetToLine[6]
+	location, ok = ops.OffsetToSource[6]
 	require.True(t, ok)
-	require.Equal(t, 4, line)
+	require.Equal(t, SourceLocation{Line: 4, Column: 2}, location)
 
 	source = `pushint 0
 // comment
@@ -2225,23 +2257,23 @@ err
 `
 	ops = testProg(t, source, AssemblerMaxVersion)
 	require.Equal(t, 4, len(ops.Program))
-	require.Equal(t, 2, len(ops.OffsetToLine))
+	require.Equal(t, 2, len(ops.OffsetToSource))
 	// vlen
-	line, ok = ops.OffsetToLine[0]
+	location, ok = ops.OffsetToSource[0]
 	require.False(t, ok)
-	require.Equal(t, 0, line)
+	require.Equal(t, SourceLocation{}, location)
 	// pushint
-	line, ok = ops.OffsetToLine[1]
+	location, ok = ops.OffsetToSource[1]
 	require.True(t, ok)
-	require.Equal(t, 0, line)
+	require.Equal(t, SourceLocation{}, location)
 	// pushint byte 1
-	line, ok = ops.OffsetToLine[2]
+	location, ok = ops.OffsetToSource[2]
 	require.False(t, ok)
-	require.Equal(t, 0, line)
+	require.Equal(t, SourceLocation{}, location)
 	// !
-	line, ok = ops.OffsetToLine[3]
+	location, ok = ops.OffsetToSource[3]
 	require.True(t, ok)
-	require.Equal(t, 2, line)
+	require.Equal(t, SourceLocation{Line: 2}, location)
 }
 
 func TestHasStatefulOps(t *testing.T) {
@@ -2935,6 +2967,22 @@ done:
 `, LogicVersion, exp(5, "concat arg 1 wanted type []byte..."))
 }
 
+func TestTypeTrackingRegression(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	testProg(t, `
+callsub end	// wipes out initial program knowledge, makes scratch "any"
+label1:
+ load 1
+ byte 0x01
+ stores		// we had a bug in which the "any" seemed constant
+ load 0
+ load 0
+ +
+end:
+`, LogicVersion)
+}
+
 func TestMergeProtos(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -3600,10 +3648,13 @@ func TestReportMultipleErrors(t *testing.T) {
 			{Line: 1, Err: errors.New("error 1")},
 			{Err: errors.New("error 2")},
 			{Line: 3, Err: errors.New("error 3")},
+			{Line: 4, Column: 1, Err: errors.New("error 4")},
 		},
-		Warnings: []error{
-			errors.New("warning 1"),
-			errors.New("warning 2"),
+		Warnings: []sourceError{
+			{Line: 5, Err: errors.New("warning 1")},
+			{Err: errors.New("warning 2")},
+			{Line: 7, Err: errors.New("warning 3")},
+			{Line: 8, Column: 1, Err: errors.New("warning 4")},
 		},
 	}
 
@@ -3613,8 +3664,11 @@ func TestReportMultipleErrors(t *testing.T) {
 	expected := `test.txt: 1: error 1
 test.txt: 0: error 2
 test.txt: 3: error 3
-test.txt: warning 1
-test.txt: warning 2
+test.txt: 4:1: error 4
+test.txt: 5: warning 1
+test.txt: 0: warning 2
+test.txt: 7: warning 3
+test.txt: 8:1: warning 4
 `
 	require.Equal(t, expected, b.String())
 
@@ -3624,8 +3678,11 @@ test.txt: warning 2
 	expected = `1: error 1
 0: error 2
 3: error 3
-warning 1
-warning 2
+4:1: error 4
+5: warning 1
+0: warning 2
+7: warning 3
+8:1: warning 4
 `
 	require.Equal(t, expected, b.String())
 

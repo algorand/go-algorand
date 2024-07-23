@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (C) 2019-2023 Algorand, Inc.
+# Copyright (C) 2019-2024 Algorand, Inc.
 # This file is part of go-algorand
 #
 # go-algorand is free software: you can redistribute it and/or modify
@@ -22,7 +22,6 @@
 # Generate text report on bandwidth in and out of relays/PN/NPN
 
 import argparse
-import configparser
 import contextlib
 import csv
 import glob
@@ -36,42 +35,10 @@ import statistics
 import sys
 import time
 
+from metrics_lib import num, hunum, terraform_inventory_ip_not_names, \
+    metric_line_re, test_metric_line_re
+
 logger = logging.getLogger(__name__)
-
-def num(x):
-    if '.' in x:
-        return float(x)
-    return int(x)
-
-def hunum(x):
-    if x >= 10000000000:
-        return '{:.1f}G'.format(x / 1000000000.0)
-    if x >= 1000000000:
-        return '{:.2f}G'.format(x / 1000000000.0)
-    if x >= 10000000:
-        return '{:.1f}M'.format(x / 1000000.0)
-    if x >= 1000000:
-        return '{:.2f}M'.format(x / 1000000.0)
-    if x >= 10000:
-        return '{:.1f}k'.format(x / 1000.0)
-    if x >= 1000:
-        return '{:.2f}k'.format(x / 1000.0)
-    return '{:.2f}x'.format(x)
-
-metric_line_re = re.compile(r'(\S+\{[^}]*\})\s+(.*)')
-
-def test_metric_line_re():
-    testlines = (
-        ('algod_network_connections_dropped_total{reason="write err"} 1', 1),
-        #('algod_network_sent_bytes_MS 274992', 274992), # handled by split
-    )
-    for line, n in testlines:
-        try:
-            m = metric_line_re.match(line)
-            assert int(m.group(2)) == n
-        except:
-            logger.error('failed on line %r', line, exc_info=True)
-            raise
 
 def parse_metrics(fin):
     out = dict()
@@ -86,10 +53,15 @@ def parse_metrics(fin):
                 continue
             m = metric_line_re.match(line)
             if m:
-                out[m.group(1)] = num(m.group(2))
+                key = m.group(1)
+                val = m.group(2)
             else:
                 ab = line.split()
-                out[ab[0]] = num(ab[1])
+                key = ab[0]
+                val = ab[1]
+            if key.endswith('{}'):
+                key = key[:-2]
+            out[key] = num(val)
     except:
         print(f'An exception occurred in parse_metrics: {sys.exc_info()}')
         pass
@@ -371,21 +343,6 @@ label_colors = {
     'npn': (.7,.7,0),
 }
 
-def terraform_inventory_ip_not_names(tf_inventory_path):
-    """return ip to nickname mapping"""
-    tf_inventory = configparser.ConfigParser(allow_no_value=True)
-    tf_inventory.read(tf_inventory_path)
-    ip_to_name = {}
-    for k, sub in tf_inventory.items():
-        if k.startswith('name_'):
-            for ip in sub:
-                if ip in ip_to_name:
-                    logger.warning('ip %r already named %r, also got %r', ip, ip_to_name[ip], k)
-                ip_to_name[ip] = k
-    #logger.debug('names: %r', sorted(ip_to_name.values()))
-    #logger.debug('ip to name %r', ip_to_name)
-    return ip_to_name
-
 def main():
     os.environ['TZ'] = 'UTC'
     time.tzset()
@@ -541,7 +498,7 @@ class nodestats:
         self.txPLists = {}
         self.txPSums = {}
         self.times = []
-        # algod_tx_pool_count{}
+        # algod_tx_pool_count
         self.txPool = []
         # objectBytes = [(curtime, algod_go_memory_classes_heap_objects_bytes), ...]
         self.objectBytes = []
@@ -601,13 +558,13 @@ class nodestats:
                 bi = bisource.get(curtime)
             if bi is None:
                 logger.warning('%s no blockinfo', path)
-            self.txPool.append(cur.get('algod_tx_pool_count{}'))
+            self.txPool.append(cur.get('algod_tx_pool_count'))
             objectBytes = cur.get('algod_go_memory_classes_heap_objects_bytes')
             if objectBytes:
                 self.objectBytes.append((curtime, objectBytes))
             #logger.debug('%s: %r', path, cur)
-            verifyGood = cur.get('algod_agreement_proposal_verify_good{}')
-            verifyMs = cur.get('algod_agreement_proposal_verify_ms{}')
+            verifyGood = cur.get('algod_agreement_proposal_verify_good')
+            verifyMs = cur.get('algod_agreement_proposal_verify_ms')
             if verifyGood and verifyMs:
                 # last writer wins
                 self.verifyMillis = verifyMs / verifyGood
@@ -626,8 +583,8 @@ class nodestats:
                     rounds = (bi.get('block',{}).get('rnd', 0) - prevbi.get('block',{}).get('rnd', 0))
                     if rounds != 0:
                         blocktime = dt/rounds
-                txBytes = d.get('algod_network_sent_bytes_total{}',0)
-                rxBytes = d.get('algod_network_received_bytes_total{}',0)
+                txBytes = d.get('algod_network_sent_bytes_total',0)
+                rxBytes = d.get('algod_network_received_bytes_total',0)
                 txBytesPerSec = txBytes / dt
                 rxBytesPerSec = rxBytes / dt
                 # TODO: gather algod_network_sent_bytes_* and algod_network_received_bytes_*
