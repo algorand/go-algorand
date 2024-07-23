@@ -2626,7 +2626,6 @@ func TestTxHandlerAppRateLimiterERLEnabled(t *testing.T) {
 // to ensure it is propely integrated with the txHandler
 func TestTxHandlerAppRateLimiter(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	const numUsers = 10
 	log := logging.TestingLog(t)
@@ -2679,7 +2678,7 @@ func TestTxHandlerAppRateLimiter(t *testing.T) {
 	for i := 0; i < numTxnToTriggerARL; i++ {
 		tx2 := tx
 		tx2.Header.Sender = addresses[i+1]
-		signedTx2 := tx2.Sign(secrets[i])
+		signedTx2 := tx2.Sign(secrets[i+1])
 		blob2 := protocol.Encode(&signedTx2)
 
 		action = handler.processIncomingTxn(network.IncomingMessage{Data: blob2, Sender: mockSender{}})
