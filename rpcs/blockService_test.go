@@ -272,8 +272,6 @@ func TestRedirectOnFullCapacity(t *testing.T) {
 
 	nodeA := &basicRPCNode{}
 	nodeB := &basicRPCNode{}
-
-	bs1.RegisterHandlers(nodeA)
 	nodeA.start()
 	defer nodeA.stop()
 	nodeB.start()
@@ -372,11 +370,11 @@ forloop:
 
 	// First node redirects, does not return retry
 	require.True(t, strings.Contains(logBuffer1.String(), "redirectRequest: redirected block request to"))
-	require.False(t, strings.Contains(logBuffer1.String(), "ServeHTTP: returned retry-after: block service memory over capacity"))
+	require.False(t, strings.Contains(logBuffer1.String(), "ServeBlockPath: returned retry-after: block service memory over capacity"))
 
 	// Second node cannot redirect, it returns retry-after when over capacity
 	require.False(t, strings.Contains(logBuffer2.String(), "redirectRequest: redirected block request to"))
-	require.True(t, strings.Contains(logBuffer2.String(), "ServeHTTP: returned retry-after: block service memory over capacity"))
+	require.True(t, strings.Contains(logBuffer2.String(), "ServeBlockPath: returned retry-after: block service memory over capacity"))
 }
 
 // TestWsBlockLimiting ensures that limits are applied correctly on the websocket side of the service

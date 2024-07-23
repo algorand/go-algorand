@@ -57,6 +57,13 @@ func (s *HTTPServer) RegisterHTTPHandler(path string, handler http.Handler) {
 	})
 }
 
+func (s *HTTPServer) RegisterHTTPHandlerFunc(path string, handler func(http.ResponseWriter, *http.Request)) {
+	s.p2phttpMux.HandleFunc(path, handler)
+	s.p2phttpMuxRegistrarOnce.Do(func() {
+		s.Host.SetHTTPHandlerAtPath(algorandP2pHTTPProtocol, "/", s.p2phttpMux)
+	})
+}
+
 // MakeHTTPClient creates a http.Client that uses libp2p transport for a given protocol and peer address.
 func MakeHTTPClient(addrInfo *peer.AddrInfo) (*http.Client, error) {
 	clientStreamHost, err := libp2p.New(libp2p.NoListenAddrs)
