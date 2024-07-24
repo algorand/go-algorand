@@ -716,10 +716,10 @@ func (r *txnResources) addAddressFromField(addr basics.Address) {
 
 // PopulatedResourceArrays is a struct that contains all the populated arrays for a txn
 type PopulatedResourceArrays struct {
-	Accounts []basics.Address
-	Assets   []basics.AssetIndex
-	Apps     []basics.AppIndex
-	Boxes    []logic.BoxRef
+	Accounts []basics.Address    `codec:"accounts"`
+	Assets   []basics.AssetIndex `codec:"assets"`
+	Apps     []basics.AppIndex   `codec:"apps"`
+	Boxes    []logic.BoxRef      `codec:"boxes"`
 }
 
 func (r *txnResources) getPopulatedArrays() PopulatedResourceArrays {

@@ -2694,6 +2694,52 @@ int 1
 		},
 	}
 	a.Equal(expectedResult, resp)
+
+	// PopulateResourceArrays=true should also work
+	resp, err = testClient.SimulateTransactions(v2.PreEncodedSimulateRequest{
+		TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
+			{
+				Txns: []transactions.SignedTxn{stxn},
+			},
+		},
+		AllowUnnamedResources:  true,
+		PopulateResourceArrays: true,
+	})
+	a.NoError(err)
+
+	otherAddressAddress := basics.Address{}
+	err = otherAddressAddress.UnmarshalText([]byte(otherAddress))
+	a.NoError(err)
+
+	expectedResult = v2.PreEncodedSimulateResponse{
+		Version:   2,
+		LastRound: resp.LastRound,
+		EvalOverrides: &model.SimulationEvalOverrides{
+			AllowUnnamedResources: &allowUnnamedResources,
+		},
+		TxnGroups: []v2.PreEncodedSimulateTxnGroupResult{
+			{
+				Txns: []v2.PreEncodedSimulateTxnResult{
+					{
+						Txn:               v2.PreEncodedTxInfo{Txn: stxn},
+						AppBudgetConsumed: &budgetUsed,
+					},
+				},
+				AppBudgetAdded:           &budgetAdded,
+				AppBudgetConsumed:        &budgetUsed,
+				UnnamedResourcesAccessed: &expectedUnnamedGroupResources,
+				PopulatedResourceArrays: map[int]simulation.PopulatedResourceArrays{
+					0: {
+						Accounts: []basics.Address{otherAddressAddress},
+						Assets:   []basics.AssetIndex{basics.AssetIndex(assetID)},
+						Apps:     []basics.AppIndex{basics.AppIndex(otherAppID)},
+						Boxes:    []logic.BoxRef{{App: basics.AppIndex(testAppID), Name: "A"}, {App: basics.AppIndex(0), Name: ""}},
+					},
+				},
+			},
+		},
+	}
+	a.Equal(expectedResult, resp)
 }
 
 func TestSimulateWithFixSigners(t *testing.T) {

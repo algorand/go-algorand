@@ -576,6 +576,7 @@ func convertTxnGroupResult(txnGroupResult simulation.TxnGroupResult) PreEncodedS
 		AppBudgetAdded:           omitEmpty(txnGroupResult.AppBudgetAdded),
 		AppBudgetConsumed:        omitEmpty(txnGroupResult.AppBudgetConsumed),
 		UnnamedResourcesAccessed: convertUnnamedResourcesAccessed(txnGroupResult.UnnamedResourcesAccessed),
+		PopulatedResourceArrays:  txnGroupResult.PopulatedResourceArrays,
 	}
 
 	if len(txnGroupResult.FailedAt) > 0 {
@@ -615,14 +616,15 @@ func convertSimulationRequest(request PreEncodedSimulateRequest) simulation.Requ
 		txnGroups[i] = txnGroup.Txns
 	}
 	return simulation.Request{
-		TxnGroups:             txnGroups,
-		Round:                 request.Round,
-		AllowEmptySignatures:  request.AllowEmptySignatures,
-		AllowMoreLogging:      request.AllowMoreLogging,
-		AllowUnnamedResources: request.AllowUnnamedResources,
-		ExtraOpcodeBudget:     request.ExtraOpcodeBudget,
-		TraceConfig:           request.ExecTraceConfig,
-		FixSigners:            request.FixSigners,
+		TxnGroups:              txnGroups,
+		Round:                  request.Round,
+		AllowEmptySignatures:   request.AllowEmptySignatures,
+		AllowMoreLogging:       request.AllowMoreLogging,
+		AllowUnnamedResources:  request.AllowUnnamedResources,
+		ExtraOpcodeBudget:      request.ExtraOpcodeBudget,
+		TraceConfig:            request.ExecTraceConfig,
+		FixSigners:             request.FixSigners,
+		PopulateResourceArrays: request.PopulateResourceArrays,
 	}
 }
 

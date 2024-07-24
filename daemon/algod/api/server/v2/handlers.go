@@ -1215,12 +1215,13 @@ type PreEncodedSimulateTxnResult struct {
 
 // PreEncodedSimulateTxnGroupResult mirrors model.SimulateTransactionGroupResult
 type PreEncodedSimulateTxnGroupResult struct {
-	AppBudgetAdded           *uint64                                 `codec:"app-budget-added,omitempty"`
-	AppBudgetConsumed        *uint64                                 `codec:"app-budget-consumed,omitempty"`
-	FailedAt                 *[]uint64                               `codec:"failed-at,omitempty"`
-	FailureMessage           *string                                 `codec:"failure-message,omitempty"`
-	UnnamedResourcesAccessed *model.SimulateUnnamedResourcesAccessed `codec:"unnamed-resources-accessed,omitempty"`
-	Txns                     []PreEncodedSimulateTxnResult           `codec:"txn-results"`
+	AppBudgetAdded           *uint64                                    `codec:"app-budget-added,omitempty"`
+	AppBudgetConsumed        *uint64                                    `codec:"app-budget-consumed,omitempty"`
+	FailedAt                 *[]uint64                                  `codec:"failed-at,omitempty"`
+	FailureMessage           *string                                    `codec:"failure-message,omitempty"`
+	UnnamedResourcesAccessed *model.SimulateUnnamedResourcesAccessed    `codec:"unnamed-resources-accessed,omitempty"`
+	Txns                     []PreEncodedSimulateTxnResult              `codec:"txn-results"`
+	PopulatedResourceArrays  map[int]simulation.PopulatedResourceArrays `code:"populated-resource-arrays,omitempty"`
 }
 
 // PreEncodedSimulateResponse mirrors model.SimulateResponse
@@ -1240,14 +1241,15 @@ type PreEncodedSimulateRequestTransactionGroup struct {
 
 // PreEncodedSimulateRequest mirrors model.SimulateRequest
 type PreEncodedSimulateRequest struct {
-	TxnGroups             []PreEncodedSimulateRequestTransactionGroup `codec:"txn-groups"`
-	Round                 basics.Round                                `codec:"round,omitempty"`
-	AllowEmptySignatures  bool                                        `codec:"allow-empty-signatures,omitempty"`
-	AllowMoreLogging      bool                                        `codec:"allow-more-logging,omitempty"`
-	AllowUnnamedResources bool                                        `codec:"allow-unnamed-resources,omitempty"`
-	ExtraOpcodeBudget     uint64                                      `codec:"extra-opcode-budget,omitempty"`
-	ExecTraceConfig       simulation.ExecTraceConfig                  `codec:"exec-trace-config,omitempty"`
-	FixSigners            bool                                        `codec:"fix-signers,omitempty"`
+	TxnGroups              []PreEncodedSimulateRequestTransactionGroup `codec:"txn-groups"`
+	Round                  basics.Round                                `codec:"round,omitempty"`
+	AllowEmptySignatures   bool                                        `codec:"allow-empty-signatures,omitempty"`
+	AllowMoreLogging       bool                                        `codec:"allow-more-logging,omitempty"`
+	AllowUnnamedResources  bool                                        `codec:"allow-unnamed-resources,omitempty"`
+	ExtraOpcodeBudget      uint64                                      `codec:"extra-opcode-budget,omitempty"`
+	ExecTraceConfig        simulation.ExecTraceConfig                  `codec:"exec-trace-config,omitempty"`
+	FixSigners             bool                                        `codec:"fix-signers,omitempty"`
+	PopulateResourceArrays bool                                        `codec:"populate-resource-arrays,omitempty"`
 }
 
 // SimulateTransaction simulates broadcasting a raw transaction to the network, returning relevant simulation results.
