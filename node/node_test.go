@@ -918,9 +918,18 @@ func TestNodeHybridTopology(t *testing.T) {
 
 	startAndConnectNodes(nodes, 10*time.Second)
 
+	// ensure the initial connectivity topology
+	require.Eventually(t, func() bool {
+		node0Conn := len(nodes[0].net.GetPeers(network.PeersConnectedIn)) > 0                             // has connection from 1
+		node1Conn := len(nodes[1].net.GetPeers(network.PeersConnectedOut, network.PeersConnectedIn)) == 2 // connected to 0 and 2
+		node2Conn := len(nodes[2].net.GetPeers(network.PeersConnectedOut, network.PeersConnectedIn)) >= 1 // connected to 1
+		return node0Conn && node1Conn && node2Conn
+	}, 60*time.Second, 500*time.Millisecond)
+
 	initialRound := nodes[0].ledger.NextRound()
 	targetRound := initialRound + 10
 
+	// ensure discovery of archival node by tracking its ledger
 	select {
 	case <-nodes[0].ledger.Wait(targetRound):
 		e0, err := nodes[0].ledger.Block(targetRound)
@@ -928,7 +937,7 @@ func TestNodeHybridTopology(t *testing.T) {
 		e1, err := nodes[1].ledger.Block(targetRound)
 		require.NoError(t, err)
 		require.Equal(t, e1.Hash(), e0.Hash())
-	case <-time.After(120 * time.Second):
+	case <-time.After(4 * time.Minute): // set it to 2x of the dht.periodicBootstrapInterval
 		require.Fail(t, fmt.Sprintf("no block notification for wallet: %v.", wallets[0]))
 	}
 }
