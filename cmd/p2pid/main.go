@@ -30,7 +30,11 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 )
 
-var dataDirectory = flag.String("d", "", "Root Algorand daemon data path or a path to a directory where the private key will be stored. If not provided, the current directory will be used.")
+var dataDirectory = flag.String(
+	"d", "",
+	"Optional root Algorand data path or a path to a directory where the private key will be stored.\n"+
+		"Default directory is the current directory. Private key name is '"+p2p.DefaultPrivKeyPath+"'",
+)
 
 func main() {
 	flag.Parse()
@@ -60,6 +64,6 @@ func main() {
 	if !exist {
 		fmt.Printf("Private key saved to %s\n", privKeyPath)
 	} else {
-		fmt.Printf("Used existing key from path %s\n", privKeyPath)
+		fmt.Printf("Used existing key %s\n", privKeyPath)
 	}
 }
