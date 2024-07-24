@@ -1227,7 +1227,7 @@ func TestP2PEnableGossipService_NodeDisable(t *testing.T) {
 			netA.RegisterHandlers(passThroughHandlerA)
 			netB.RegisterHandlers(passThroughHandlerB)
 
-			// send messages from B and confirm that they get received by C (via A)
+			// send messages from both nodes to each other and confirm they are received.
 			for i := 0; i < 10; i++ {
 				err = netA.Broadcast(context.Background(), testTag, []byte(fmt.Sprintf("hello from A %d", i)), false, nil)
 				require.NoError(t, err)
@@ -1248,7 +1248,10 @@ func TestP2PEnableGossipService_NodeDisable(t *testing.T) {
 }
 
 // TestP2PEnableGossipService_BothDisable checks if both relay and node have EnableGossipService=false
-// they do not connect to each other.
+// they do not gossip to each other.
+//
+// Note, this test checks a configuration where node A (relay) does not know about node B,
+// and node B is configured to connect to A, and this scenario rejecting logic is guaranteed to work.
 func TestP2PEnableGossipService_BothDisable(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -1262,7 +1265,7 @@ func TestP2PEnableGossipService_BothDisable(t *testing.T) {
 	relayCfg := cfg
 	relayCfg.NetAddress = "127.0.0.1:0"
 
-	netA, err := NewP2PNetwork(log, relayCfg, "", nil, genesisID, config.Devtestnet, &nopeNodeInfo{}, nil)
+	netA, err := NewP2PNetwork(log.With("net", "netA"), relayCfg, "", nil, genesisID, config.Devtestnet, &nopeNodeInfo{}, nil)
 	require.NoError(t, err)
 	netA.Start()
 	defer netA.Stop()
@@ -1277,12 +1280,15 @@ func TestP2PEnableGossipService_BothDisable(t *testing.T) {
 	nodeCfg := cfg
 	nodeCfg.NetAddress = ""
 
-	netB, err := NewP2PNetwork(log, nodeCfg, "", phoneBookAddresses, genesisID, config.Devtestnet, &nopeNodeInfo{}, nil)
+	netB, err := NewP2PNetwork(log.With("net", "netB"), nodeCfg, "", phoneBookAddresses, genesisID, config.Devtestnet, &nopeNodeInfo{}, nil)
 	require.NoError(t, err)
 	netB.Start()
 	defer netB.Stop()
 
 	require.Eventually(t, func() bool {
-		return !netA.hasPeers() && !netB.hasPeers()
+		return len(netA.service.Conns()) > 0 && len(netB.service.Conns()) > 0
 	}, 1*time.Second, 50*time.Millisecond)
+
+	require.False(t, netA.hasPeers())
+	require.False(t, netB.hasPeers())
 }
