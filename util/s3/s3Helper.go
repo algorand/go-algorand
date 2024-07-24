@@ -199,7 +199,7 @@ func (helper *Helper) GetPackageVersion(channel string, pkg string, specificVers
 			return universalMaxVersion, universalMaxVersionName, universalErr
 		}
 	}
-	return
+	return maxVersion, maxVersionName, err
 }
 
 // GetPackageFilesVersion return the package version
