@@ -1,14 +1,12 @@
 # This file is imported into go-algorand/Makefile.
 
 PKG_DIR = $(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)
+PKG_DIR_UNIVERSAL = $(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/universal
 
-.PHONY: ci-clean ci-setup ci-build
+.PHONY: ci-clean ci-build
 
 ci-clean: clean
 	rm -rf tmp
-
-ci-setup:
-	mkdir -p $(PKG_DIR)
 
 ci-test:
 ifeq ($(ARCH), amd64)
@@ -28,7 +26,16 @@ ci-integration:
 	SRCROOT=$(SRCPATH) \
 	test/scripts/e2e.sh -c $(CHANNEL) -n
 
-ci-build: ci-clean build ci-setup
+ci-build-universal: ci-clean universal
+	echo $(PKG_DIR_UNIVERSAL)
+	mkdir -p $(PKG_DIR_UNIVERSAL)
+	CHANNEL=$(CHANNEL) PKG_ROOT=$(PKG_DIR_UNIVERSAL) NO_BUILD=True VARIATIONS=$(OS_TYPE)-universal \
+	scripts/build_packages.sh $(OS_TYPE)/universal && \
+	mkdir -p $(PKG_DIR_UNIVERSAL)/data && \
+	cp installer/genesis/devnet/genesis.json $(PKG_DIR_UNIVERSAL)/data
+
+ci-build: ci-clean
+	mkdir -p $(PKG_DIR)
 	CHANNEL=$(CHANNEL) PKG_ROOT=$(PKG_DIR) NO_BUILD=True VARIATIONS=$(OS_TYPE)-$(ARCH) \
 	scripts/build_packages.sh $(OS_TYPE)/$(ARCH) && \
 	mkdir -p $(PKG_DIR)/data && \

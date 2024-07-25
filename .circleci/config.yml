@@ -715,7 +715,7 @@ commands:
             command: |
               if [ "${CIRCLE_BRANCH}" = "rel/nightly" ]
               then
-                export NO_BUILD="true"
+                export NIGHTLY_BUILD="true"
               fi
               export PATH=$(echo "$PATH" | sed -e "s|:${HOME}/\.go_workspace/bin||g" | sed -e 's|:/usr/local/go/bin||g')
               export GOPATH="<< parameters.build_dir >>/go"

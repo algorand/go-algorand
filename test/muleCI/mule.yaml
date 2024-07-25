@@ -93,11 +93,8 @@ agents:
 
 tasks:
   - task: shell.Make
-    name: build.darwin-arm64
-    target: ci-build
-  - task: shell.Make
-    name: build.darwin-amd64
-    target: ci-build
+    name: build.darwin-universal
+    target: ci-build-universal
   - task: docker.Make
     name: build.amd64
     agent: cicd.ubuntu.amd64
@@ -124,21 +121,15 @@ tasks:
 
   # Stash tasks
   - task: stash.Stash
-    name: darwin-arm64
+    name: darwin-universal
     bucketName: go-algorand-ci-cache
-    stashId: ${JENKINS_JOB_CACHE_ID}/darwin-arm64
+    stashId: ${JENKINS_JOB_CACHE_ID}/darwin-universal
     globSpecs:
       - tmp/node_pkgs/**/*
   - task: stash.Stash
     name: linux-amd64
     bucketName: go-algorand-ci-cache
     stashId: ${JENKINS_JOB_CACHE_ID}/linux-amd64
-    globSpecs:
-      - tmp/node_pkgs/**/*
-  - task: stash.Stash
-    name: darwin-amd64
-    bucketName: go-algorand-ci-cache
-    stashId: ${JENKINS_JOB_CACHE_ID}/darwin-amd64
     globSpecs:
       - tmp/node_pkgs/**/*
   - task: stash.Stash
@@ -164,13 +155,9 @@ tasks:
     bucketName: go-algorand-ci-cache
     stashId: ${JENKINS_JOB_CACHE_ID}/linux-amd64
   - task: stash.Unstash
-    name: darwin-amd64
+    name: darwin-universal
     bucketName: go-algorand-ci-cache
-    stashId: ${JENKINS_JOB_CACHE_ID}/darwin-amd64
-  - task: stash.Unstash
-    name: darwin-arm64
-    bucketName: go-algorand-ci-cache
-    stashId: ${JENKINS_JOB_CACHE_ID}/darwin-arm64
+    stashId: ${JENKINS_JOB_CACHE_ID}/darwin-universal
   - task: stash.Unstash
     name: packages
     bucketName: go-algorand-ci-cache
@@ -187,14 +174,10 @@ tasks:
     target: mule-sign
 
 jobs:
-  build-darwin-arm64:
+  build-darwin-universal:
     tasks:
-      - shell.Make.build.darwin-arm64
-      - stash.Stash.darwin-arm64
-  build-darwin-amd64:
-    tasks:
-      - shell.Make.build.darwin-amd64
-      - stash.Stash.darwin-amd64
+      - shell.Make.build.darwin-universal
+      - stash.Stash.darwin-universal
   build-linux-amd64:
     tasks:
       - docker.Make.build.amd64
@@ -207,8 +190,7 @@ jobs:
     tasks:
       - stash.Unstash.linux-amd64
       - stash.Unstash.linux-arm64
-      - stash.Unstash.darwin-arm64
-      - stash.Unstash.darwin-amd64
+      - stash.Unstash.darwin-universal
       - docker.Make.deb.amd64
       - docker.Make.rpm.amd64
       - stash.Stash.packages
