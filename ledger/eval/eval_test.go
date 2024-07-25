@@ -793,6 +793,10 @@ func (ledger *evalTestLedger) LookupAgreement(rnd basics.Round, addr basics.Addr
 	return convertToOnline(ad), err
 }
 
+func (ledger *evalTestLedger) GetIncentiveKickoffCandidates(basics.Round, config.ConsensusParams, uint64) (data map[basics.Address]basics.OnlineAccountData, err error) {
+	return nil, nil
+}
+
 // OnlineCirculation just returns a deterministic value for a given round.
 func (ledger *evalTestLedger) OnlineCirculation(rnd, voteRound basics.Round) (basics.MicroAlgos, error) {
 	return basics.MicroAlgos{Raw: uint64(rnd) * 1_000_000}, nil
@@ -1023,6 +1027,10 @@ func (l *testCowBaseLedger) LookupWithoutRewards(basics.Round, basics.Address) (
 
 func (l *testCowBaseLedger) LookupAgreement(rnd basics.Round, addr basics.Address) (basics.OnlineAccountData, error) {
 	return basics.OnlineAccountData{}, errors.New("not implemented")
+}
+
+func (l *testCowBaseLedger) GetIncentiveKickoffCandidates(basics.Round, config.ConsensusParams, uint64) (map[basics.Address]basics.OnlineAccountData, error) {
+	return nil, errors.New("not implemented")
 }
 
 func (l *testCowBaseLedger) OnlineCirculation(rnd, voteRnd basics.Round) (basics.MicroAlgos, error) {

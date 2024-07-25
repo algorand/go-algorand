@@ -285,6 +285,9 @@ $(GOPATH1)/bin/%:
 test: build
 	$(GOTESTCOMMAND) $(GOTAGS) -race $(UNIT_TEST_SOURCES) -timeout 1h -coverprofile=coverage.txt -covermode=atomic
 
+testc:
+	echo $(UNIT_TEST_SOURCES) | xargs -P8 -n1 go test -c
+
 benchcheck: build
 	$(GOTESTCOMMAND) $(GOTAGS) -race $(UNIT_TEST_SOURCES) -run ^NOTHING -bench Benchmark -benchtime 1x -timeout 1h
 

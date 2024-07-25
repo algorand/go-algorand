@@ -690,7 +690,11 @@ func accountDataToOnline(address basics.Address, ad *ledgercore.AccountData, pro
 		NormalizedOnlineBalance: ad.NormalizedOnlineBalance(proto),
 		VoteFirstValid:          ad.VoteFirstValid,
 		VoteLastValid:           ad.VoteLastValid,
+		VoteID:                  ad.VoteID,
 		StateProofID:            ad.StateProofID,
+		LastProposed:            ad.LastProposed,
+		LastHeartbeat:           ad.LastHeartbeat,
+		IncentiveEligible:       ad.IncentiveEligible,
 	}
 }
 

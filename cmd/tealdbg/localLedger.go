@@ -359,6 +359,10 @@ func (l *localLedger) LookupAgreement(rnd basics.Round, addr basics.Address) (ba
 	}, nil
 }
 
+func (l *localLedger) GetIncentiveKickoffCandidates(basics.Round, config.ConsensusParams, uint64) (data map[basics.Address]basics.OnlineAccountData, err error) {
+	return nil, nil
+}
+
 func (l *localLedger) OnlineCirculation(rnd basics.Round, voteRound basics.Round) (basics.MicroAlgos, error) {
 	// A constant is fine for tealdbg
 	return basics.Algos(1_000_000_000), nil // 1B

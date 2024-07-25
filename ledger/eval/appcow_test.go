@@ -56,6 +56,10 @@ func (ml *emptyLedger) onlineStake() (basics.MicroAlgos, error) {
 	return basics.MicroAlgos{}, nil
 }
 
+func (ml *emptyLedger) incentiveCandidates(uint64) (data map[basics.Address]basics.OnlineAccountData, err error) {
+	return nil, nil
+}
+
 func (ml *emptyLedger) lookupAppParams(addr basics.Address, aidx basics.AppIndex, cacheOnly bool) (ledgercore.AppParamsDelta, bool, error) {
 	return ledgercore.AppParamsDelta{}, true, nil
 }

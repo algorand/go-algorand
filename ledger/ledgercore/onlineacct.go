@@ -17,14 +17,15 @@
 package ledgercore
 
 import (
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
 )
 
 // An OnlineAccount corresponds to an account whose AccountData.Status
-// is Online.  This is used for a Merkle tree commitment of online
+// is Online. This is used for a Merkle tree commitment of online
 // accounts, which is subsequently used to validate participants for
-// a state proof.
+// a state proof. It is also used to track incentives participants.
 type OnlineAccount struct {
 	// These are a subset of the fields from the corresponding AccountData.
 	Address                 basics.Address
@@ -33,5 +34,9 @@ type OnlineAccount struct {
 	NormalizedOnlineBalance uint64
 	VoteFirstValid          basics.Round
 	VoteLastValid           basics.Round
+	VoteID                  crypto.OneTimeSignatureVerifier
 	StateProofID            merklesignature.Commitment
+	LastProposed            basics.Round
+	LastHeartbeat           basics.Round
+	IncentiveEligible       bool
 }

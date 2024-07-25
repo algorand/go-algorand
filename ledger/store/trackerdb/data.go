@@ -152,6 +152,8 @@ type BaseOnlineAccountData struct {
 
 	BaseVotingData
 
+	LastProposed      basics.Round      `codec:"V"`
+	LastHeartbeat     basics.Round      `codec:"W"`
 	IncentiveEligible bool              `codec:"X"`
 	MicroAlgos        basics.MicroAlgos `codec:"Y"`
 	RewardsBase       uint64            `codec:"Z"`
@@ -469,7 +471,11 @@ func (bo *BaseOnlineAccountData) GetOnlineAccount(addr basics.Address, normBalan
 		NormalizedOnlineBalance: normBalance,
 		VoteFirstValid:          bo.VoteFirstValid,
 		VoteLastValid:           bo.VoteLastValid,
+		VoteID:                  bo.VoteID,
 		StateProofID:            bo.StateProofID,
+		LastHeartbeat:           bo.LastHeartbeat,
+		LastProposed:            bo.LastProposed,
+		IncentiveEligible:       bo.IncentiveEligible,
 	}
 }
 

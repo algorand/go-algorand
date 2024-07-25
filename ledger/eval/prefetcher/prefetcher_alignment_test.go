@@ -119,6 +119,7 @@ func (l *prefetcherAlignmentTestLedger) LookupWithoutRewards(_ basics.Round, add
 	}
 	return ledgercore.AccountData{}, 0, nil
 }
+
 func (l *prefetcherAlignmentTestLedger) LookupAgreement(_ basics.Round, addr basics.Address) (basics.OnlineAccountData, error) {
 	// prefetch alignment tests do not check for prefetching of online account data
 	// because it's quite different and can only occur in AVM opcodes, which
@@ -126,9 +127,15 @@ func (l *prefetcherAlignmentTestLedger) LookupAgreement(_ basics.Round, addr bas
 	// will be accessed in AVM.)
 	return basics.OnlineAccountData{}, errors.New("not implemented")
 }
+
 func (l *prefetcherAlignmentTestLedger) OnlineCirculation(rnd, voteRnd basics.Round) (basics.MicroAlgos, error) {
-	return basics.MicroAlgos{}, errors.New("not implemented")
+	panic("not implemented")
 }
+
+func (l *prefetcherAlignmentTestLedger) GetIncentiveKickoffCandidates(basics.Round, config.ConsensusParams, uint64) (map[basics.Address]basics.OnlineAccountData, error) {
+	return nil, errors.New("not implemented")
+}
+
 func (l *prefetcherAlignmentTestLedger) LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error) {
 	l.mu.Lock()
 	if l.requestedApps == nil {
@@ -144,6 +151,7 @@ func (l *prefetcherAlignmentTestLedger) LookupApplication(rnd basics.Round, addr
 
 	return l.apps[addr][aidx], nil
 }
+
 func (l *prefetcherAlignmentTestLedger) LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error) {
 	l.mu.Lock()
 	if l.requestedAssets == nil {
@@ -159,9 +167,11 @@ func (l *prefetcherAlignmentTestLedger) LookupAsset(rnd basics.Round, addr basic
 
 	return l.assets[addr][aidx], nil
 }
+
 func (l *prefetcherAlignmentTestLedger) LookupKv(rnd basics.Round, key string) ([]byte, error) {
 	panic("not implemented")
 }
+
 func (l *prefetcherAlignmentTestLedger) GetCreatorForRound(_ basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
 	l.mu.Lock()
 	if l.requestedCreators == nil {
@@ -175,6 +185,7 @@ func (l *prefetcherAlignmentTestLedger) GetCreatorForRound(_ basics.Round, cidx 
 	}
 	return basics.Address{}, false, nil
 }
+
 func (l *prefetcherAlignmentTestLedger) GenesisHash() crypto.Digest {
 	return crypto.Digest{}
 }
