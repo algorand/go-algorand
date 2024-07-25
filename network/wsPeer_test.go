@@ -159,14 +159,10 @@ func TestVersionToFeature(t *testing.T) {
 		{"1.2.3", "", peerFeatureFlag(0)},
 		{"a.b", "", peerFeatureFlag(0)},
 		{"2.1", "", peerFeatureFlag(0)},
-		{"2.1", PeerFeatureProposalCompression, peerFeatureFlag(0)},
+		{"2.1", "", peerFeatureFlag(0)},
 		{"2.2", "", peerFeatureFlag(0)},
 		{"2.2", "test", peerFeatureFlag(0)},
 		{"2.2", strings.Join([]string{"a", "b"}, ","), peerFeatureFlag(0)},
-		{"2.2", PeerFeatureProposalCompression, pfCompressedProposal},
-		{"2.2", strings.Join([]string{PeerFeatureProposalCompression, "test"}, ","), pfCompressedProposal},
-		{"2.2", strings.Join([]string{PeerFeatureProposalCompression, "test"}, ", "), pfCompressedProposal},
-		{"2.3", PeerFeatureProposalCompression, pfCompressedProposal},
 	}
 	for i, test := range tests {
 		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {

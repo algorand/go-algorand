@@ -146,11 +146,6 @@ var peers = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_peers", De
 var incomingPeers = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_incoming_peers", Description: "Number of active incoming peers."})
 var outgoingPeers = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_outgoing_peers", Description: "Number of active outgoing peers."})
 
-var networkPrioBatchesPPWithCompression = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_prio_batches_wpp_comp_sent_total", Description: "number of prio compressed batches with PP"})
-var networkPrioBatchesPPWithoutCompression = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_pp_prio_batches_wpp_non_comp_sent_total", Description: "number of prio non-compressed batches with PP"})
-var networkPrioPPCompressedSize = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_prio_pp_compressed_size_total", Description: "cumulative size of all compressed PP"})
-var networkPrioPPNonCompressedSize = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_prio_pp_non_compressed_size_total", Description: "cumulative size of all non-compressed PP"})
-
 // peerDisconnectionAckDuration defines the time we would wait for the peer disconnection to complete.
 const peerDisconnectionAckDuration = 5 * time.Second
 
@@ -1062,7 +1057,8 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 	wn.setHeaders(responseHeader)
 	responseHeader.Set(ProtocolVersionHeader, matchingVersion)
 	responseHeader.Set(GenesisHeader, wn.GenesisID)
-	responseHeader.Set(PeerFeaturesHeader, PeerFeatureProposalCompression)
+	// set the features we support, for example
+	// responseHeader.Set(PeerFeaturesHeader, "ppzstd")
 	var challenge string
 	if wn.prioScheme != nil {
 		challenge = wn.prioScheme.NewPrioChallenge()
@@ -1392,20 +1388,15 @@ func (wn *WebsocketNetwork) getPeersChangeCounter() int32 {
 
 // preparePeerData prepares batches of data for sending.
 // It performs optional zstd compression for proposal massages
-func (wn *msgBroadcaster) preparePeerData(request broadcastRequest, prio bool, peers []*wsPeer) ([][]byte, [][]byte, []crypto.Digest, bool) {
+func (wn *msgBroadcaster) preparePeerData(request broadcastRequest, prio bool) ([][]byte, []crypto.Digest) {
 	// determine if there is a payload proposal and peers supporting compressed payloads
-	wantCompression := false
-	containsPrioPPTag := false
+	shouldCompress := false
 	if prio {
-		wantCompression = checkCanCompress(request, peers)
+		shouldCompress = checkCompressible(request)
 	}
 
 	digests := make([]crypto.Digest, len(request.data))
 	data := make([][]byte, len(request.data))
-	var dataCompressed [][]byte
-	if wantCompression {
-		dataCompressed = make([][]byte, len(request.data))
-	}
 	for i, d := range request.data {
 		tbytes := []byte(request.tags[i])
 		mbytes := make([]byte, len(tbytes)+len(d))
@@ -1416,29 +1407,17 @@ func (wn *msgBroadcaster) preparePeerData(request broadcastRequest, prio bool, p
 			digests[i] = crypto.Hash(mbytes)
 		}
 
-		if prio {
-			if request.tags[i] == protocol.ProposalPayloadTag {
-				networkPrioPPNonCompressedSize.AddUint64(uint64(len(d)), nil)
-				containsPrioPPTag = true
-			}
-		}
-
-		if wantCompression {
+		if shouldCompress {
 			if request.tags[i] == protocol.ProposalPayloadTag {
 				compressed, logMsg := zstdCompressMsg(tbytes, d)
 				if len(logMsg) > 0 {
 					wn.log.Warn(logMsg)
-				} else {
-					networkPrioPPCompressedSize.AddUint64(uint64(len(compressed)), nil)
 				}
-				dataCompressed[i] = compressed
-			} else {
-				// otherwise reuse non-compressed from above
-				dataCompressed[i] = mbytes
+				data[i] = compressed
 			}
 		}
 	}
-	return data, dataCompressed, digests, containsPrioPPTag
+	return data, digests
 }
 
 // prio is set if the broadcast is a high-priority broadcast.
@@ -1455,7 +1434,7 @@ func (wn *msgBroadcaster) innerBroadcast(request broadcastRequest, prio bool, pe
 	}
 
 	start := time.Now()
-	data, dataWithCompression, digests, containsPrioPPTag := wn.preparePeerData(request, prio, peers)
+	data, digests := wn.preparePeerData(request, prio)
 
 	// first send to all the easy outbound peers who don't block, get them started.
 	sentMessageCount := 0
@@ -1466,23 +1445,7 @@ func (wn *msgBroadcaster) innerBroadcast(request broadcastRequest, prio bool, pe
 		if peer == request.except {
 			continue
 		}
-		var ok bool
-		if peer.pfProposalCompressionSupported() && len(dataWithCompression) > 0 {
-			// if this peer supports compressed proposals and compressed data batch is filled out, use it
-			ok = peer.writeNonBlockMsgs(request.ctx, dataWithCompression, prio, digests, request.enqueueTime)
-			if prio {
-				if containsPrioPPTag {
-					networkPrioBatchesPPWithCompression.Inc(nil)
-				}
-			}
-		} else {
-			ok = peer.writeNonBlockMsgs(request.ctx, data, prio, digests, request.enqueueTime)
-			if prio {
-				if containsPrioPPTag {
-					networkPrioBatchesPPWithoutCompression.Inc(nil)
-				}
-			}
-		}
+		ok := peer.writeNonBlockMsgs(request.ctx, data, prio, digests, request.enqueueTime)
 		if ok {
 			sentMessageCount++
 			continue
@@ -1951,7 +1914,7 @@ const ProtocolVersionHeader = "X-Algorand-Version"
 const ProtocolAcceptVersionHeader = "X-Algorand-Accept-Version"
 
 // SupportedProtocolVersions contains the list of supported protocol versions by this node ( in order of preference ).
-var SupportedProtocolVersions = []string{"2.2", "2.1"}
+var SupportedProtocolVersions = []string{"2.2"}
 
 // ProtocolVersion is the current version attached to the ProtocolVersionHeader header
 /* Version history:
@@ -1990,10 +1953,6 @@ const UserAgentHeader = "User-Agent"
 
 // PeerFeaturesHeader is the HTTP header listing features
 const PeerFeaturesHeader = "X-Algorand-Peer-Features"
-
-// PeerFeatureProposalCompression is a value for PeerFeaturesHeader indicating peer
-// supports proposal payload compression with zstd
-const PeerFeatureProposalCompression = "ppzstd"
 
 var websocketsScheme = map[string]string{"http": "ws", "https": "wss"}
 
@@ -2116,8 +2075,8 @@ func (wn *WebsocketNetwork) tryConnect(netAddr, gossipAddr string) {
 
 	// for backward compatibility, include the ProtocolVersion header as well.
 	requestHeader.Set(ProtocolVersionHeader, wn.protocolVersion)
-	// set the features header (comma-separated list)
-	requestHeader.Set(PeerFeaturesHeader, PeerFeatureProposalCompression)
+	// set the features header (comma-separated list), for example
+	requestHeader.Set(PeerFeaturesHeader, "ppzstd")
 	SetUserAgentHeader(requestHeader)
 	myInstanceName := wn.log.GetInstanceName()
 	requestHeader.Set(InstanceNameHeader, myInstanceName)

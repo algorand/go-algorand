@@ -52,30 +52,15 @@ func TestCheckCanCompress(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	req := broadcastRequest{}
-	peers := []*wsPeer{}
-	r := checkCanCompress(req, peers)
+	r := checkCompressible(req)
 	require.False(t, r)
 
 	req.tags = []protocol.Tag{protocol.AgreementVoteTag}
-	r = checkCanCompress(req, peers)
+	r = checkCompressible(req)
 	require.False(t, r)
 
 	req.tags = []protocol.Tag{protocol.AgreementVoteTag, protocol.ProposalPayloadTag}
-	r = checkCanCompress(req, peers)
-	require.False(t, r)
-
-	peer1 := wsPeer{
-		features: 0,
-	}
-	peers = []*wsPeer{&peer1}
-	r = checkCanCompress(req, peers)
-	require.False(t, r)
-
-	peer2 := wsPeer{
-		features: pfCompressedProposal,
-	}
-	peers = []*wsPeer{&peer1, &peer2}
-	r = checkCanCompress(req, peers)
+	r = checkCompressible(req)
 	require.True(t, r)
 }
 
@@ -108,7 +93,7 @@ func TestWsPeerMsgDataConverterConvert(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	c := wsPeerMsgDataConverter{}
-	c.ppdec = zstdProposalDecompressor{active: false}
+	c.ppdec = zstdProposalDecompressor{}
 	tag := protocol.AgreementVoteTag
 	data := []byte("data")
 
@@ -117,13 +102,9 @@ func TestWsPeerMsgDataConverterConvert(t *testing.T) {
 	require.Equal(t, data, r)
 
 	tag = protocol.ProposalPayloadTag
-	r, err = c.convert(tag, data)
-	require.NoError(t, err)
-	require.Equal(t, data, r)
-
 	l := converterTestLogger{}
 	c.log = &l
-	c.ppdec = zstdProposalDecompressor{active: true}
+	c.ppdec = zstdProposalDecompressor{}
 	r, err = c.convert(tag, data)
 	require.NoError(t, err)
 	require.Equal(t, data, r)
