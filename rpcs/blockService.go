@@ -152,14 +152,8 @@ func MakeBlockService(log logging.Logger, config config.Local, ledger LedgerForB
 	return service
 }
 
-// HTTPRegistrar represents an HTTP request router that can be used by BlockService
-// to register its request handlers.
-type HTTPRegistrar interface {
-	RegisterHTTPHandlerFunc(path string, handler func(response http.ResponseWriter, request *http.Request))
-}
-
 // RegisterHandlers registers the request handlers for BlockService's paths with the registrar.
-func (bs *BlockService) RegisterHandlers(registrar HTTPRegistrar) {
+func (bs *BlockService) RegisterHandlers(registrar Registrar) {
 	registrar.RegisterHTTPHandlerFunc(BlockServiceBlockPath, bs.ServeBlockPath)
 }
 
