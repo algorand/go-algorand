@@ -25,7 +25,6 @@ In addition, make sure that the following AWS credentials are set in environment
 # Build Stages
 
 - [package](#package)
-- [upload](#upload)
 - [test](#test)
 - [sign](#sign)
 - [deploy](#deploy)
@@ -48,20 +47,6 @@ In addition, make sure that the following AWS credentials are set in environment
 
     - package-docker
         + packages docker image
-
-## upload
-
-- see `./go-algorand/package-upload.yaml`
-
-- customizable environment variables:
-
-    + `CHANNEL`
-    + `STAGING`
-    + `VERSION`
-
-#### `mule` jobs
-
-    - package-upload
 
 ## test
 
@@ -179,10 +164,6 @@ Let's look at some examples.
 ### Packaging
 
     mule -f package.yaml package
-
-### Uploading
-
-    STAGING=the-staging-area CHANNEL=beta VERSION=latest mule -f package-upload.yaml package-upload
 
 ### Testing
 
