@@ -841,16 +841,13 @@ func TestNodeHybridTopology(t *testing.T) {
 	testParams0.AgreementFilterTimeoutPeriod0 = 500 * time.Millisecond
 	configurableConsensus[consensusTest0] = testParams0
 
-	minMoneyAtStart := 1_000_000
-	maxMoneyAtStart := 100_000_000_000
-	gen := rand.New(rand.NewSource(2))
-
+	// configure the stake to have R and A producing and confirming blocks
+	const totalStake = 100_000_000_000
 	const numAccounts = 3
 	acctStake := make([]basics.MicroAlgos, numAccounts)
-	for i := range acctStake {
-		acctStake[i] = basics.MicroAlgos{Raw: uint64(minMoneyAtStart + (gen.Int() % (maxMoneyAtStart - minMoneyAtStart)))}
-	}
 	acctStake[0] = basics.MicroAlgos{} // no stake at node 0
+	acctStake[1] = basics.MicroAlgos{Raw: uint64(totalStake / 2)}
+	acctStake[2] = basics.MicroAlgos{Raw: uint64(totalStake / 2)}
 
 	configHook := func(ni nodeInfo, cfg config.Local) (nodeInfo, config.Local) {
 		cfg = config.GetDefaultLocal()
@@ -937,7 +934,7 @@ func TestNodeHybridTopology(t *testing.T) {
 		e1, err := nodes[1].ledger.Block(targetRound)
 		require.NoError(t, err)
 		require.Equal(t, e1.Hash(), e0.Hash())
-	case <-time.After(4 * time.Minute): // set it to 2x of the dht.periodicBootstrapInterval
+	case <-time.After(3 * time.Minute): // set it to 1.5x of the dht.periodicBootstrapInterval to give DHT code to rebuild routing table one more time
 		require.Fail(t, fmt.Sprintf("no block notification for wallet: %v.", wallets[0]))
 	}
 }
