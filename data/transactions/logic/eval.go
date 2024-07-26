@@ -41,6 +41,8 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+
+	"github.com/holiman/uint256"
 )
 
 // The constants below control opcode evaluation and MAY NOT be changed without
@@ -1761,6 +1763,129 @@ func opPlus(cx *EvalContext) error {
 	}
 	cx.Stack[prev].Uint = sum
 	cx.Stack = cx.Stack[:last]
+	return nil
+}
+
+func opAdd256(cx *EvalContext) error {
+	last := len(cx.Stack) - 1
+	prev := last - 1
+
+	if len(cx.Stack[prev].Bytes) > 32 || len(cx.Stack[last].Bytes) > 32 {
+		return errors.New("add256 requires inputs <= 32 byte")
+	}
+
+	a := new(uint256.Int).SetBytes(cx.Stack[prev].Bytes)
+	b := new(uint256.Int).SetBytes(cx.Stack[last].Bytes)
+	result, carry := new(uint256.Int).AddOverflow(a, b)
+
+	if carry {
+		return errors.New("add256 overflowed")
+	}
+
+	resultBytes := result.Bytes32()
+	cx.Stack[prev].Bytes = resultBytes[:]
+	cx.Stack = cx.Stack[:last]
+
+	return nil
+}
+
+func opSub256(cx *EvalContext) error {
+	last := len(cx.Stack) - 1
+	prev := last - 1
+
+	if len(cx.Stack[prev].Bytes) > 32 || len(cx.Stack[last].Bytes) > 32 {
+		return errors.New("sub256 requires inputs <= 32 byte")
+	}
+
+	a := new(uint256.Int).SetBytes(cx.Stack[prev].Bytes)
+	b := new(uint256.Int).SetBytes(cx.Stack[last].Bytes)
+	result, underflow := new(uint256.Int).SubOverflow(a, b)
+
+	if underflow {
+		return errors.New("sub256 underflowed")
+	}
+
+	resultBytes := result.Bytes32()
+	cx.Stack[prev].Bytes = resultBytes[:]
+	cx.Stack = cx.Stack[:last]
+
+	return nil
+}
+
+func opMul256(cx *EvalContext) error {
+	last := len(cx.Stack) - 1
+	prev := last - 1
+
+	if len(cx.Stack[prev].Bytes) > 32 || len(cx.Stack[last].Bytes) > 32 {
+		return errors.New("sub256 requires inputs <= 32 byte")
+	}
+
+	a := new(uint256.Int).SetBytes(cx.Stack[prev].Bytes)
+	b := new(uint256.Int).SetBytes(cx.Stack[last].Bytes)
+	result, overflow := new(uint256.Int).MulOverflow(a, b)
+
+	if overflow {
+		return errors.New("mul256 overflowed")
+	}
+
+	resultBytes := result.Bytes32()
+	cx.Stack[prev].Bytes = resultBytes[:]
+	cx.Stack = cx.Stack[:last]
+
+	return nil
+}
+
+func opDiv256(cx *EvalContext) error {
+	last := len(cx.Stack) - 1
+	prev := last - 1
+
+	if len(cx.Stack[prev].Bytes) > 32 || len(cx.Stack[last].Bytes) > 32 {
+		return errors.New("sub256 requires inputs <= 32 byte")
+	}
+
+	a := new(uint256.Int).SetBytes(cx.Stack[prev].Bytes)
+	b := new(uint256.Int).SetBytes(cx.Stack[last].Bytes)
+	result := new(uint256.Int).Div(a, b)
+
+	resultBytes := result.Bytes32()
+	cx.Stack[prev].Bytes = resultBytes[:]
+	cx.Stack = cx.Stack[:last]
+
+	return nil
+}
+
+func opMod256(cx *EvalContext) error {
+	last := len(cx.Stack) - 1
+	prev := last - 1
+
+	if len(cx.Stack[prev].Bytes) > 32 || len(cx.Stack[last].Bytes) > 32 {
+		return errors.New("sub256 requires inputs <= 32 byte")
+	}
+
+	a := new(uint256.Int).SetBytes(cx.Stack[prev].Bytes)
+	b := new(uint256.Int).SetBytes(cx.Stack[last].Bytes)
+
+	result := new(uint256.Int).Mod(a, b)
+
+	resultBytes := result.Bytes32()
+	cx.Stack[prev].Bytes = resultBytes[:]
+	cx.Stack = cx.Stack[:last]
+
+	return nil
+}
+
+func opSqrt256(cx *EvalContext) error {
+	last := len(cx.Stack) - 1
+
+	if len(cx.Stack[last].Bytes) > 32 {
+		return errors.New("sqrt256 requires input <= 32 byte")
+	}
+
+	a := new(uint256.Int).SetBytes(cx.Stack[last].Bytes)
+	result := new(uint256.Int).Sqrt(a)
+
+	resultBytes := result.Bytes32()
+	cx.Stack[last].Bytes = resultBytes[:]
 	return nil
 }
 
