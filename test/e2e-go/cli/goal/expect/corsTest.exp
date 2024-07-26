@@ -31,6 +31,10 @@ if { [catch {
     set ALGOD_NET_ADDRESS [::AlgorandGoal::GetAlgodNetworkAddress $TEST_PRIMARY_NODE_DIR]
     ::AlgorandGoal::CheckNetworkAddressForCors $ALGOD_NET_ADDRESS
 
+    # Hit algod with a private network access preflight request and look for 200 OK
+    set ALGOD_NET_ADDRESS [::AlgorandGoal::GetAlgodNetworkAddress $TEST_PRIMARY_NODE_DIR]
+    ::AlgorandGoal::CheckNetworkAddressForPNA $ALGOD_NET_ADDRESS
+
     # Start kmd, then do the same CORS check as algod
     exec goal kmd start -t 180 -d $TEST_PRIMARY_NODE_DIR
     set KMD_NET_ADDRESS [::AlgorandGoal::GetKMDNetworkAddress $TEST_PRIMARY_NODE_DIR]
