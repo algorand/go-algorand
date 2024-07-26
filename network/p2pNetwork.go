@@ -797,6 +797,7 @@ func (n *P2PNetwork) wsStreamHandler(ctx context.Context, p2pPeer peer.ID, strea
 		networkPeerIdentityDisconnect.Inc(nil)
 		n.log.With("remote", addr).With("local", localAddr).Warn("peer deduplicated before adding because the identity is already known")
 		stream.Close()
+		return
 	}
 
 	wsp.init(n.config, outgoingMessagesBufferSize)
