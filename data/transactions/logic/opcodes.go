@@ -800,12 +800,12 @@ var OpSpecs = []OpSpec{
 			BLS12_381g1: 1_950, BLS12_381g2: 8_150})},
 
 	// uint256 math
-	{0xf0, "add256", opAdd256, proto("bb:b{32}"), 11, detDefault()},
-	{0xf1, "sub256", opSub256, proto("bb:b{32}"), 11, detDefault()},
-	{0xf2, "mul256", opMul256, proto("bb:b{32}"), 11, detDefault()},
-	{0xf3, "div256", opDiv256, proto("bb:b{32}"), 11, detDefault()},
-	{0xf4, "mod256", opMod256, proto("bb:b{32}"), 11, detDefault()},
-	{0xf5, "sqrt256", opSqrt256, proto("b:b{32}"), 11, detDefault()},
+	{0xf0, "add256", opAdd256, proto("bb:b{32}"), 11, costly(2)},
+	{0xf1, "sub256", opSub256, proto("bb:b{32}"), 11, costly(2)},
+	{0xf2, "mul256", opMul256, proto("bb:b{32}"), 11, costly(2)},
+	{0xf3, "div256", opDiv256, proto("bb:b{32}"), 11, costly(2)},
+	{0xf4, "mod256", opMod256, proto("bb:b{32}"), 11, costly(2)},
+	{0xf5, "sqrt256", opSqrt256, proto("b:b{32}"), 11, costly(2)},
 }
 
 // OpcodesByVersion returns list of opcodes available in a specific version of TEAL
