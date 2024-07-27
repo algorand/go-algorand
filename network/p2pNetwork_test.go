@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"github.com/algorand/go-algorand/config"
+	algocrypto "github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network/limitcaller"
 	"github.com/algorand/go-algorand/network/p2p"
@@ -1081,7 +1082,7 @@ func TestP2PWantTXGossip(t *testing.T) {
 	require.True(t, net.wantTXGossip.Load())
 }
 
-func TestMergeP2PAddrInfoResolvedAddresses(t *testing.T) {
+func TestP2PMergeAddrInfoResolvedAddresses(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -1153,4 +1154,56 @@ func TestMergeP2PAddrInfoResolvedAddresses(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestP2PwsStreamHandlerDedup checks that the wsStreamHandler detects duplicate connections
+// and does not add a new wePeer for it.
+func TestP2PwsStreamHandlerDedup(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	cfg := config.GetDefaultLocal()
+	cfg.DNSBootstrapID = "" // disable DNS lookups since the test uses phonebook addresses
+	cfg.NetAddress = "127.0.0.1:0"
+	log := logging.TestingLog(t)
+	netA, err := NewP2PNetwork(log, cfg, "", nil, genesisID, config.Devtestnet, &nopeNodeInfo{}, &identityOpts{tracker: NewIdentityTracker()})
+	require.NoError(t, err)
+	err = netA.Start()
+	require.NoError(t, err)
+	defer netA.Stop()
+
+	peerInfoA := netA.service.AddrInfo()
+	addrsA, err := peer.AddrInfoToP2pAddrs(&peerInfoA)
+	require.NoError(t, err)
+	require.NotZero(t, addrsA[0])
+
+	multiAddrStr := addrsA[0].String()
+	phoneBookAddresses := []string{multiAddrStr}
+	netB, err := NewP2PNetwork(log, cfg, "", phoneBookAddresses, genesisID, config.Devtestnet, &nopeNodeInfo{}, &identityOpts{tracker: NewIdentityTracker()})
+	require.NoError(t, err)
+
+	// now say netA's identity tracker knows about netB's peerID
+	var netIdentPeerID algocrypto.PublicKey
+	p2pPeerPubKey, err := netB.service.ID().ExtractPublicKey()
+	require.NoError(t, err)
+
+	b, err := p2pPeerPubKey.Raw()
+	require.NoError(t, err)
+	netIdentPeerID = algocrypto.PublicKey(b)
+	wsp := &wsPeer{
+		identity: netIdentPeerID,
+	}
+	netA.identityTracker.setIdentity(wsp)
+	networkPeerIdentityDisconnectInitial := networkPeerIdentityDisconnect.GetUint64Value()
+
+	// start network and ensure dedup happens
+	err = netB.Start()
+	require.NoError(t, err)
+	defer netB.Stop()
+
+	require.Eventually(t, func() bool {
+		return networkPeerIdentityDisconnect.GetUint64Value() == networkPeerIdentityDisconnectInitial+1
+	}, 2*time.Second, 50*time.Millisecond)
+
+	require.False(t, netA.hasPeers())
+	require.False(t, netB.hasPeers())
 }

@@ -523,6 +523,11 @@ func (wn *WebsocketNetwork) RegisterHTTPHandler(path string, handler http.Handle
 	wn.router.Handle(path, handler)
 }
 
+// RegisterHTTPHandlerFunc path accepts gorilla/mux path annotations
+func (wn *WebsocketNetwork) RegisterHTTPHandlerFunc(path string, handler func(http.ResponseWriter, *http.Request)) {
+	wn.router.HandleFunc(path, handler)
+}
+
 // RequestConnectOutgoing tries to actually do the connect to new peers.
 // `replace` drop all connections first and find new peers.
 func (wn *WebsocketNetwork) RequestConnectOutgoing(replace bool, quit <-chan struct{}) {

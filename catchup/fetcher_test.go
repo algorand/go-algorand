@@ -141,6 +141,13 @@ func (b *basicRPCNode) RegisterHTTPHandler(path string, handler http.Handler) {
 	b.rmux.Handle(path, handler)
 }
 
+func (b *basicRPCNode) RegisterHTTPHandlerFunc(path string, handler func(http.ResponseWriter, *http.Request)) {
+	if b.rmux == nil {
+		b.rmux = mux.NewRouter()
+	}
+	b.rmux.HandleFunc(path, handler)
+}
+
 func (b *basicRPCNode) RegisterHandlers(dispatch []network.TaggedMessageHandler) {
 }
 

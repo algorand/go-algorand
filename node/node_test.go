@@ -841,16 +841,13 @@ func TestNodeHybridTopology(t *testing.T) {
 	testParams0.AgreementFilterTimeoutPeriod0 = 500 * time.Millisecond
 	configurableConsensus[consensusTest0] = testParams0
 
-	minMoneyAtStart := 1_000_000
-	maxMoneyAtStart := 100_000_000_000
-	gen := rand.New(rand.NewSource(2))
-
+	// configure the stake to have R and A producing and confirming blocks
+	const totalStake = 100_000_000_000
 	const numAccounts = 3
 	acctStake := make([]basics.MicroAlgos, numAccounts)
-	for i := range acctStake {
-		acctStake[i] = basics.MicroAlgos{Raw: uint64(minMoneyAtStart + (gen.Int() % (maxMoneyAtStart - minMoneyAtStart)))}
-	}
 	acctStake[0] = basics.MicroAlgos{} // no stake at node 0
+	acctStake[1] = basics.MicroAlgos{Raw: uint64(totalStake / 2)}
+	acctStake[2] = basics.MicroAlgos{Raw: uint64(totalStake / 2)}
 
 	configHook := func(ni nodeInfo, cfg config.Local) (nodeInfo, config.Local) {
 		cfg = config.GetDefaultLocal()
@@ -918,9 +915,18 @@ func TestNodeHybridTopology(t *testing.T) {
 
 	startAndConnectNodes(nodes, 10*time.Second)
 
+	// ensure the initial connectivity topology
+	require.Eventually(t, func() bool {
+		node0Conn := len(nodes[0].net.GetPeers(network.PeersConnectedIn)) > 0                             // has connection from 1
+		node1Conn := len(nodes[1].net.GetPeers(network.PeersConnectedOut, network.PeersConnectedIn)) == 2 // connected to 0 and 2
+		node2Conn := len(nodes[2].net.GetPeers(network.PeersConnectedOut, network.PeersConnectedIn)) >= 1 // connected to 1
+		return node0Conn && node1Conn && node2Conn
+	}, 60*time.Second, 500*time.Millisecond)
+
 	initialRound := nodes[0].ledger.NextRound()
 	targetRound := initialRound + 10
 
+	// ensure discovery of archival node by tracking its ledger
 	select {
 	case <-nodes[0].ledger.Wait(targetRound):
 		e0, err := nodes[0].ledger.Block(targetRound)
@@ -928,7 +934,7 @@ func TestNodeHybridTopology(t *testing.T) {
 		e1, err := nodes[1].ledger.Block(targetRound)
 		require.NoError(t, err)
 		require.Equal(t, e1.Hash(), e0.Hash())
-	case <-time.After(120 * time.Second):
+	case <-time.After(3 * time.Minute): // set it to 1.5x of the dht.periodicBootstrapInterval to give DHT code to rebuild routing table one more time
 		require.Fail(t, fmt.Sprintf("no block notification for wallet: %v.", wallets[0]))
 	}
 }
