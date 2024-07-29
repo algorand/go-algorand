@@ -1176,6 +1176,10 @@ func (wp *wsPeer) OnClose(f func()) {
 //msgp:ignore peerFeatureFlag
 type peerFeatureFlag int
 
+const (
+	pfCompressedProposal peerFeatureFlag = 1 << iota
+)
+
 // versionPeerFeatures defines protocol version when peer features were introduced
 const versionPeerFeatures = "2.2"
 
@@ -1214,11 +1218,10 @@ func decodePeerFeatures(version string, announcedFeatures string) peerFeatureFla
 	var features peerFeatureFlag
 	parts := strings.Split(announcedFeatures, ",")
 	for _, part := range parts {
-		// check features here, for example
-		_ = strings.TrimSpace(part)
-		// if part == "ppzstd" {
-		// 	features |= pfCompressedProposal
-		// }
+		part = strings.TrimSpace(part)
+		if part == PeerFeatureProposalCompression {
+			features |= pfCompressedProposal
+		}
 	}
 	return features
 }

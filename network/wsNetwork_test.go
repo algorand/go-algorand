@@ -434,6 +434,7 @@ func TestWebsocketProposalPayloadCompression(t *testing.T) {
 
 		// old node + new node
 		{[]string{"2.1"}, "2.1", []string{"2.2", "2.1"}, "2.2"},
+		{[]string{"2.2", "2.1"}, "2.1", []string{"2.2"}, "2.2"},
 
 		// combinations
 		{[]string{"2.2", "2.1"}, "2.1", []string{"2.2", "2.1"}, "2.1"},

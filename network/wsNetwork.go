@@ -1058,7 +1058,7 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 	responseHeader.Set(ProtocolVersionHeader, matchingVersion)
 	responseHeader.Set(GenesisHeader, wn.GenesisID)
 	// set the features we support, for example
-	// responseHeader.Set(PeerFeaturesHeader, "ppzstd")
+	responseHeader.Set(PeerFeaturesHeader, PeerFeatureProposalCompression)
 	var challenge string
 	if wn.prioScheme != nil {
 		challenge = wn.prioScheme.NewPrioChallenge()
@@ -1387,7 +1387,7 @@ func (wn *WebsocketNetwork) getPeersChangeCounter() int32 {
 }
 
 // preparePeerData prepares batches of data for sending.
-// It performs optional zstd compression for proposal massages
+// It performs zstd compression for proposal massages if they this is a prio request and has proposal.
 func (wn *msgBroadcaster) preparePeerData(request broadcastRequest, prio bool) ([][]byte, []crypto.Digest) {
 	// determine if there is a payload proposal and peers supporting compressed payloads
 	shouldCompress := false
@@ -1954,6 +1954,10 @@ const UserAgentHeader = "User-Agent"
 // PeerFeaturesHeader is the HTTP header listing features
 const PeerFeaturesHeader = "X-Algorand-Peer-Features"
 
+// PeerFeatureProposalCompression is a value for PeerFeaturesHeader indicating peer
+// supports proposal payload compression with zstd
+const PeerFeatureProposalCompression = "ppzstd"
+
 var websocketsScheme = map[string]string{"http": "ws", "https": "wss"}
 
 var errBadAddr = errors.New("bad address")
@@ -2075,8 +2079,8 @@ func (wn *WebsocketNetwork) tryConnect(netAddr, gossipAddr string) {
 
 	// for backward compatibility, include the ProtocolVersion header as well.
 	requestHeader.Set(ProtocolVersionHeader, wn.protocolVersion)
-	// set the features header (comma-separated list), for example
-	requestHeader.Set(PeerFeaturesHeader, "ppzstd")
+	// set the features header (comma-separated list)
+	requestHeader.Set(PeerFeaturesHeader, PeerFeatureProposalCompression)
 	SetUserAgentHeader(requestHeader)
 	myInstanceName := wn.log.GetInstanceName()
 	requestHeader.Set(InstanceNameHeader, myInstanceName)
