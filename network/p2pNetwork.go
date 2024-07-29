@@ -577,6 +577,12 @@ func (n *P2PNetwork) RegisterHTTPHandler(path string, handler http.Handler) {
 	n.httpServer.RegisterHTTPHandler(path, handler)
 }
 
+// RegisterHTTPHandlerFunc is like RegisterHTTPHandler but accepts
+// a callback handler function instead of a method receiver.
+func (n *P2PNetwork) RegisterHTTPHandlerFunc(path string, handler func(http.ResponseWriter, *http.Request)) {
+	n.httpServer.RegisterHTTPHandlerFunc(path, handler)
+}
+
 // RequestConnectOutgoing asks the system to actually connect to peers.
 // `replace` optionally drops existing connections before making new ones.
 // `quit` chan allows cancellation.
@@ -797,6 +803,7 @@ func (n *P2PNetwork) wsStreamHandler(ctx context.Context, p2pPeer peer.ID, strea
 		networkPeerIdentityDisconnect.Inc(nil)
 		n.log.With("remote", addr).With("local", localAddr).Warn("peer deduplicated before adding because the identity is already known")
 		stream.Close()
+		return
 	}
 
 	wsp.init(n.config, outgoingMessagesBufferSize)

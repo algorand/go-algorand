@@ -9,11 +9,17 @@
 # Examples: scripts/travis/build.sh
 
 MAKE_DEBUG_OPTION=""
+MAKE_UNIVERSAL_OPTION=""
+
 while [ "$1" != "" ]; do
     case "$1" in
         --make_debug)
             shift
             MAKE_DEBUG_OPTION="1"
+            ;;
+        --make_universal)
+            shift
+            MAKE_UNIVERSAL_OPTION="1"
             ;;
         *)
             echo "Unknown option" "$1"
@@ -75,13 +81,15 @@ set -e
 scripts/travis/before_build.sh
 duration "before_build.sh"
 
-if [ "${OS}-${ARCH}" = "linux-arm" ] || [ "${OS}-${ARCH}" = "windows-amd64" ]; then
-    # for arm, build just the basic distro
+if [ "${OS}-${ARCH}" = "windows-amd64" ]; then
     # for windows, we still have some issues with the enlistment checking, so we'll make it simple for now.
     MAKE_DEBUG_OPTION=""
 fi
 
-if [ "${MAKE_DEBUG_OPTION}" != "" ]; then
+if [ "${MAKE_UNIVERSAL_OPTION}" != "" ]; then
+    make universal
+    duration "make universal"
+elif [ "${MAKE_DEBUG_OPTION}" != "" ]; then
     make build build-race
     duration "make build build-race"
 else

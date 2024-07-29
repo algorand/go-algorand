@@ -49,10 +49,14 @@ else
 export GOTESTCOMMAND=gotestsum --format pkgname --jsonfile testresults.json --
 endif
 
-# M1 Mac--homebrew install location in /opt/homebrew
 ifeq ($(OS_TYPE), darwin)
-ifeq ($(ARCH), arm64)
+# For Xcode >= 15, set -no_warn_duplicate_libraries linker option
+CLANG_MAJOR_VERSION := $(shell clang --version | grep '^Apple clang version ' | awk '{print $$4}' | cut -d. -f1)
+ifeq ($(shell [ $(CLANG_MAJOR_VERSION) -ge 15 ] && echo true), true)
 EXTLDFLAGS := -Wl,-no_warn_duplicate_libraries
+endif
+# M1 Mac--homebrew install location in /opt/homebrew
+ifeq ($(ARCH), arm64)
 export CPATH=/opt/homebrew/include
 export LIBRARY_PATH=/opt/homebrew/lib
 endif
@@ -175,11 +179,16 @@ ifeq ($(OS_TYPE),darwin)
 	mkdir -p $(GOPATH1)/bin-darwin-arm64
 	CROSS_COMPILE_ARCH=arm64 GOBIN=$(GOPATH1)/bin-darwin-arm64 MACOSX_DEPLOYMENT_TARGET=12.0 EXTRA_CONFIGURE_FLAGS='CFLAGS="-arch arm64 -mmacos-version-min=12.0" --host=aarch64-apple-darwin' $(MAKE)
 
+	# same for buildsrc-special
+	cd tools/block-generator && \
+	CROSS_COMPILE_ARCH=amd64 GOBIN=$(GOPATH1)/bin-darwin-amd64 MACOSX_DEPLOYMENT_TARGET=12.0 EXTRA_CONFIGURE_FLAGS='CFLAGS="-arch x86_64 -mmacos-version-min=12.0" --host=x86_64-apple-darwin' $(MAKE)
+	CROSS_COMPILE_ARCH=arm64 GOBIN=$(GOPATH1)/bin-darwin-arm64 MACOSX_DEPLOYMENT_TARGET=12.0 EXTRA_CONFIGURE_FLAGS='CFLAGS="-arch arm64 -mmacos-version-min=12.0" --host=aarch64-apple-darwin' $(MAKE)
+
 	# lipo together
-	mkdir -p $(GOPATH1)/bin-darwin-universal
+	mkdir -p $(GOPATH1)/bin
 	for binary in $$(ls $(GOPATH1)/bin-darwin-arm64); do \
 		if [ -f $(GOPATH1)/bin-darwin-amd64/$$binary ]; then \
-			lipo -create -output $(GOPATH1)/bin-darwin-universal/$$binary \
+			lipo -create -output $(GOPATH1)/bin/$$binary \
 			$(GOPATH1)/bin-darwin-arm64/$$binary \
 			$(GOPATH1)/bin-darwin-amd64/$$binary; \
 		else \
@@ -187,7 +196,7 @@ ifeq ($(OS_TYPE),darwin)
 		fi \
 	done
 else
-	$(error OS_TYPE must be darwin for universal builds)
+	echo "OS_TYPE must be darwin for universal builds, skipping"
 endif
 
 deps:
