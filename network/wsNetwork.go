@@ -1057,7 +1057,7 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 	wn.setHeaders(responseHeader)
 	responseHeader.Set(ProtocolVersionHeader, matchingVersion)
 	responseHeader.Set(GenesisHeader, wn.GenesisID)
-	// set the features we support, for example
+	// set the features we support
 	responseHeader.Set(PeerFeaturesHeader, PeerFeatureProposalCompression)
 	var challenge string
 	if wn.prioScheme != nil {

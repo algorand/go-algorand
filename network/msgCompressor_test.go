@@ -48,7 +48,7 @@ func TestZstdDecompress(t *testing.T) {
 	require.Nil(t, decompressed)
 }
 
-func TestCheckCanCompress(t *testing.T) {
+func TestCheckCompressible(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	req := broadcastRequest{}
