@@ -159,7 +159,7 @@ func configureResourceManager(cfg config.Local) (network.ResourceManager, error)
 // MakeService creates a P2P service instance
 func MakeService(ctx context.Context, log logging.Logger, cfg config.Local, h host.Host, listenAddr string, wsStreamHandler StreamHandler, bootstrapPeers []*peer.AddrInfo) (*serviceImpl, error) {
 
-	sm := makeStreamManager(ctx, log, h, wsStreamHandler)
+	sm := makeStreamManager(ctx, log, h, wsStreamHandler, cfg.EnableGossipService)
 	h.Network().Notify(sm)
 	h.SetStreamHandler(AlgorandWsProtocol, sm.streamHandler)
 
