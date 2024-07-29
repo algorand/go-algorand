@@ -166,8 +166,8 @@ func TestRedirectFallbackEndpoints(t *testing.T) {
 	bs1 := MakeBlockService(log, config, ledger1, net1, "test-genesis-ID")
 	bs2 := MakeBlockService(log, config, ledger2, net2, "test-genesis-ID")
 
-	nodeA.RegisterHTTPHandler(BlockServiceBlockPath, bs1)
-	nodeB.RegisterHTTPHandler(BlockServiceBlockPath, bs2)
+	bs1.RegisterHandlers(nodeA)
+	bs2.RegisterHandlers(nodeB)
 
 	parsedURL, err := addr.ParseHostOrURL(nodeA.rootURL())
 	require.NoError(t, err)
@@ -210,7 +210,7 @@ func TestBlockServiceShutdown(t *testing.T) {
 
 	nodeA := &basicRPCNode{}
 
-	nodeA.RegisterHTTPHandler(BlockServiceBlockPath, bs1)
+	bs1.RegisterHandlers(nodeA)
 	nodeA.start()
 	defer nodeA.stop()
 
@@ -292,9 +292,8 @@ func TestRedirectOnFullCapacity(t *testing.T) {
 	bs1.memoryCap = 250
 	bs2.memoryCap = 250
 
-	nodeA.RegisterHTTPHandler(BlockServiceBlockPath, bs1)
-
-	nodeB.RegisterHTTPHandler(BlockServiceBlockPath, bs2)
+	bs1.RegisterHandlers(nodeA)
+	bs2.RegisterHandlers(nodeB)
 
 	parsedURL, err := addr.ParseHostOrURL(nodeA.rootURL())
 	require.NoError(t, err)
@@ -371,11 +370,11 @@ forloop:
 
 	// First node redirects, does not return retry
 	require.True(t, strings.Contains(logBuffer1.String(), "redirectRequest: redirected block request to"))
-	require.False(t, strings.Contains(logBuffer1.String(), "ServeHTTP: returned retry-after: block service memory over capacity"))
+	require.False(t, strings.Contains(logBuffer1.String(), "ServeBlockPath: returned retry-after: block service memory over capacity"))
 
 	// Second node cannot redirect, it returns retry-after when over capacity
 	require.False(t, strings.Contains(logBuffer2.String(), "redirectRequest: redirected block request to"))
-	require.True(t, strings.Contains(logBuffer2.String(), "ServeHTTP: returned retry-after: block service memory over capacity"))
+	require.True(t, strings.Contains(logBuffer2.String(), "ServeBlockPath: returned retry-after: block service memory over capacity"))
 }
 
 // TestWsBlockLimiting ensures that limits are applied correctly on the websocket side of the service
@@ -474,8 +473,8 @@ func TestRedirectExceptions(t *testing.T) {
 	bs1 := MakeBlockService(log1, configInvalidRedirects, ledger1, net1, "{genesisID}")
 	bs2 := MakeBlockService(log2, configWithRedirectToSelf, ledger2, net2, "{genesisID}")
 
-	nodeA.RegisterHTTPHandler(BlockServiceBlockPath, bs1)
-	nodeB.RegisterHTTPHandler(BlockServiceBlockPath, bs2)
+	bs1.RegisterHandlers(nodeA)
+	bs2.RegisterHandlers(nodeB)
 
 	parsedURL, err := addr.ParseHostOrURL(nodeA.rootURL())
 	require.NoError(t, err)

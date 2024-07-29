@@ -81,8 +81,8 @@ func makeAppRateLimiter(maxCacheSize int, maxAppPeerRate uint64, serviceRateWind
 	serviceRatePerWindow := maxAppPeerRate * uint64(serviceRateWindow/time.Second)
 	maxBucketSize := maxCacheSize / numBuckets
 	if maxBucketSize == 0 {
-		// got the max size less then buckets, use maps of 1
-		maxBucketSize = 1
+		// got the max size less then buckets, use maps of 2 to avoid eviction on each insert
+		maxBucketSize = 2
 	}
 	r := &appRateLimiter{
 		maxBucketSize:        maxBucketSize,
