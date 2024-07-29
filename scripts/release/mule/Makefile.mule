@@ -34,7 +34,7 @@ ci-build-universal: ci-clean universal
 	mkdir -p $(PKG_DIR_UNIVERSAL)/data && \
 	cp installer/genesis/devnet/genesis.json $(PKG_DIR_UNIVERSAL)/data
 
-ci-build: ci-clean
+ci-build: ci-clean build
 	mkdir -p $(PKG_DIR)
 	CHANNEL=$(CHANNEL) PKG_ROOT=$(PKG_DIR) NO_BUILD=True VARIATIONS=$(OS_TYPE)-$(ARCH) \
 	scripts/build_packages.sh $(OS_TYPE)/$(ARCH) && \
