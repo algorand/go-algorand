@@ -808,6 +808,11 @@ func (n *P2PNetwork) wsStreamHandler(ctx context.Context, p2pPeer peer.ID, strea
 
 	wsp.init(n.config, outgoingMessagesBufferSize)
 	n.wsPeersLock.Lock()
+	if wsp.didSignalClose.Load() == 1 {
+		networkPeerAlreadyClosed.Inc(nil)
+		n.log.Debugf("peer closing %s", addr)
+		return
+	}
 	n.wsPeers[p2pPeer] = wsp
 	n.wsPeersToIDs[wsp] = p2pPeer
 	n.wsPeersLock.Unlock()
