@@ -3444,7 +3444,7 @@ func (z *LogicSig) MsgIsZero() bool {
 func LogicSigMaxSize() (s int) {
 	s = 1 + 2 + msgp.BytesPrefixSize + config.MaxLogicSigMaxSize + 4 + crypto.SignatureMaxSize() + 5 + crypto.MultisigSigMaxSize() + 4
 	// Calculating size of slice: z.Args
-	s += msgp.ArrayHeaderSize + ((EvalMaxArgs) * (msgp.BytesPrefixSize + config.MaxLogicSigMaxSize))
+	s += msgp.ArrayHeaderSize + config.MaxLogicSigMaxSize
 	return
 }
 

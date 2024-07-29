@@ -87,7 +87,7 @@ const TopicMsgRespTagMaxSize = 6 * 1024 * 1024
 // TxnTagMaxSize is the maximum size of a TxnTag message. This is equal to SignedTxnMaxSize()
 // which is size of just a single message containing maximum Stateproof. Since Stateproof
 // transactions can't be batched we don't need to multiply by MaxTxnBatchSize.
-const TxnTagMaxSize = 8460031
+const TxnTagMaxSize = 4394756
 
 // UniEnsBlockReqTagMaxSize is the maximum size of a UniEnsBlockReqTag message
 const UniEnsBlockReqTagMaxSize = 67

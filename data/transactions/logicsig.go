@@ -39,7 +39,7 @@ type LogicSig struct {
 	Msig crypto.MultisigSig `codec:"msig"`
 
 	// Args are not signed, but checked by Logic
-	Args [][]byte `codec:"arg,allocbound=EvalMaxArgs,allocbound=config.MaxLogicSigMaxSize"`
+	Args [][]byte `codec:"arg,allocbound=EvalMaxArgs,allocbound=config.MaxLogicSigMaxSize,maxtotalbytes=config.MaxLogicSigMaxSize"`
 }
 
 // Blank returns true if there is no content in this LogicSig
