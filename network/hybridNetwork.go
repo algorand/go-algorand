@@ -146,6 +146,12 @@ func (n *HybridP2PNetwork) RegisterHTTPHandler(path string, handler http.Handler
 	n.wsNetwork.RegisterHTTPHandler(path, handler)
 }
 
+// RegisterHTTPHandlerFunc implements GossipNode
+func (n *HybridP2PNetwork) RegisterHTTPHandlerFunc(path string, handlerFunc func(http.ResponseWriter, *http.Request)) {
+	n.p2pNetwork.RegisterHTTPHandlerFunc(path, handlerFunc)
+	n.wsNetwork.RegisterHTTPHandlerFunc(path, handlerFunc)
+}
+
 // RequestConnectOutgoing implements GossipNode
 func (n *HybridP2PNetwork) RequestConnectOutgoing(replace bool, quit <-chan struct{}) {}
 

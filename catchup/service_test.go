@@ -151,7 +151,7 @@ func TestServiceFetchBlocksSameRange(t *testing.T) {
 	ls := rpcs.MakeBlockService(logging.Base(), blockServiceConfig, remote, net, "test genesisID")
 
 	nodeA := basicRPCNode{}
-	nodeA.RegisterHTTPHandler(rpcs.BlockServiceBlockPath, ls)
+	ls.RegisterHandlers(&nodeA)
 	nodeA.start()
 	defer nodeA.stop()
 	rootURL := nodeA.rootURL()
@@ -223,7 +223,7 @@ func TestSyncRound(t *testing.T) {
 	ls := rpcs.MakeBlockService(logging.Base(), blockServiceConfig, remote, net, "test genesisID")
 
 	nodeA := basicRPCNode{}
-	nodeA.RegisterHTTPHandler(rpcs.BlockServiceBlockPath, ls)
+	ls.RegisterHandlers(&nodeA)
 	nodeA.start()
 	defer nodeA.stop()
 	rootURL := nodeA.rootURL()
@@ -313,7 +313,7 @@ func TestPeriodicSync(t *testing.T) {
 	ls := rpcs.MakeBlockService(logging.Base(), blockServiceConfig, remote, net, "test genesisID")
 
 	nodeA := basicRPCNode{}
-	nodeA.RegisterHTTPHandler(rpcs.BlockServiceBlockPath, ls)
+	ls.RegisterHandlers(&nodeA)
 	nodeA.start()
 	defer nodeA.stop()
 	rootURL := nodeA.rootURL()
@@ -379,7 +379,7 @@ func TestServiceFetchBlocksOneBlock(t *testing.T) {
 	ls := rpcs.MakeBlockService(logging.Base(), blockServiceConfig, remote, net, "test genesisID")
 
 	nodeA := basicRPCNode{}
-	nodeA.RegisterHTTPHandler(rpcs.BlockServiceBlockPath, ls)
+	ls.RegisterHandlers(&nodeA)
 	nodeA.start()
 	defer nodeA.stop()
 	rootURL := nodeA.rootURL()
@@ -443,7 +443,7 @@ func TestAbruptWrites(t *testing.T) {
 	ls := rpcs.MakeBlockService(logging.Base(), blockServiceConfig, remote, net, "test genesisID")
 
 	nodeA := basicRPCNode{}
-	nodeA.RegisterHTTPHandler(rpcs.BlockServiceBlockPath, ls)
+	ls.RegisterHandlers(&nodeA)
 	nodeA.start()
 	defer nodeA.stop()
 	rootURL := nodeA.rootURL()
@@ -501,7 +501,7 @@ func TestServiceFetchBlocksMultiBlocks(t *testing.T) {
 	ls := rpcs.MakeBlockService(logging.Base(), blockServiceConfig, remote, net, "test genesisID")
 
 	nodeA := basicRPCNode{}
-	nodeA.RegisterHTTPHandler(rpcs.BlockServiceBlockPath, ls)
+	ls.RegisterHandlers(&nodeA)
 	nodeA.start()
 	defer nodeA.stop()
 	rootURL := nodeA.rootURL()
@@ -555,7 +555,7 @@ func TestServiceFetchBlocksMalformed(t *testing.T) {
 	ls := rpcs.MakeBlockService(logging.Base(), blockServiceConfig, remote, net, "test genesisID")
 
 	nodeA := basicRPCNode{}
-	nodeA.RegisterHTTPHandler(rpcs.BlockServiceBlockPath, ls)
+	ls.RegisterHandlers(&nodeA)
 	nodeA.start()
 	defer nodeA.stop()
 	rootURL := nodeA.rootURL()
@@ -709,7 +709,7 @@ func helperTestOnSwitchToUnSupportedProtocol(
 	ls := rpcs.MakeBlockService(logging.Base(), config, remote, net, "test genesisID")
 
 	nodeA := basicRPCNode{}
-	nodeA.RegisterHTTPHandler(rpcs.BlockServiceBlockPath, ls)
+	ls.RegisterHandlers(&nodeA)
 	nodeA.start()
 	defer nodeA.stop()
 	rootURL := nodeA.rootURL()
@@ -932,7 +932,7 @@ func TestCatchupUnmatchedCertificate(t *testing.T) {
 	ls := rpcs.MakeBlockService(logging.Base(), blockServiceConfig, remote, net, "test genesisID")
 
 	nodeA := basicRPCNode{}
-	nodeA.RegisterHTTPHandler(rpcs.BlockServiceBlockPath, ls)
+	ls.RegisterHandlers(&nodeA)
 	nodeA.start()
 	defer nodeA.stop()
 	rootURL := nodeA.rootURL()
@@ -1064,7 +1064,7 @@ func TestServiceLedgerUnavailable(t *testing.T) {
 	ls := rpcs.MakeBlockService(logging.Base(), blockServiceConfig, remote, net, "test genesisID")
 
 	nodeA := basicRPCNode{}
-	nodeA.RegisterHTTPHandler(rpcs.BlockServiceBlockPath, ls)
+	ls.RegisterHandlers(&nodeA)
 	nodeA.start()
 	defer nodeA.stop()
 	rootURL := nodeA.rootURL()
@@ -1110,7 +1110,7 @@ func TestServiceNoBlockForRound(t *testing.T) {
 	ls := rpcs.MakeBlockService(logging.Base(), blockServiceConfig, remote, net, "test genesisID")
 
 	nodeA := basicRPCNode{}
-	nodeA.RegisterHTTPHandler(rpcs.BlockServiceBlockPath, ls)
+	ls.RegisterHandlers(&nodeA)
 	nodeA.start()
 	defer nodeA.stop()
 	rootURL := nodeA.rootURL()

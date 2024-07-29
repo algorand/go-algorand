@@ -26,11 +26,11 @@ fi
 
 if [ "${NIGHTLY_BUILD}" == "true" ]; then
     # we want to rebuild universal binaries for nightly builds
-    NO_BUILD=true
     if [ "${OSARCH}" == "darwin/arm64" ]; then
-        make universal
+        ./scripts/travis/build.sh --make_universal
         OSARCH="darwin/universal"
     fi
+    NO_BUILD=true
 fi
 
 if [ -z "${NO_BUILD}" ] || [ "${NO_BUILD}" != "true" ]; then
