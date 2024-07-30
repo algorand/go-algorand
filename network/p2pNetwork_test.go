@@ -1207,3 +1207,141 @@ func TestP2PwsStreamHandlerDedup(t *testing.T) {
 	require.False(t, netA.hasPeers())
 	require.False(t, netB.hasPeers())
 }
+
+// TestP2PEnableGossipService_NodeDisable ensures that a node with EnableGossipService=false
+// still can participate in the network by sending and receiving messages.
+func TestP2PEnableGossipService_NodeDisable(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	log := logging.TestingLog(t)
+
+	// prepare configs
+	cfg := config.GetDefaultLocal()
+	cfg.DNSBootstrapID = "" // disable DNS lookups since the test uses phonebook addresses
+
+	relayCfg := cfg
+	relayCfg.NetAddress = "127.0.0.1:0"
+
+	nodeCfg := cfg
+	nodeCfg.EnableGossipService = false
+	nodeCfg2 := nodeCfg
+	nodeCfg2.NetAddress = "127.0.0.1:0"
+
+	tests := []struct {
+		name     string
+		relayCfg config.Local
+		nodeCfg  config.Local
+	}{
+		{"non-listening-node", relayCfg, nodeCfg},
+		{"listening-node", relayCfg, nodeCfg2},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			relayCfg := test.relayCfg
+			netA, err := NewP2PNetwork(log, relayCfg, "", nil, genesisID, config.Devtestnet, &nopeNodeInfo{}, nil)
+			require.NoError(t, err)
+			netA.Start()
+			defer netA.Stop()
+
+			peerInfoA := netA.service.AddrInfo()
+			addrsA, err := peer.AddrInfoToP2pAddrs(&peerInfoA)
+			require.NoError(t, err)
+			require.NotZero(t, addrsA[0])
+			multiAddrStr := addrsA[0].String()
+			phoneBookAddresses := []string{multiAddrStr}
+
+			// start netB with gossip service disabled
+			nodeCfg := test.nodeCfg
+			netB, err := NewP2PNetwork(log, nodeCfg, "", phoneBookAddresses, genesisID, config.Devtestnet, &nopeNodeInfo{}, nil)
+			require.NoError(t, err)
+			netB.Start()
+			defer netB.Stop()
+
+			require.Eventually(t, func() bool {
+				return netA.hasPeers() && netB.hasPeers()
+			}, 1*time.Second, 50*time.Millisecond)
+
+			testTag := protocol.AgreementVoteTag
+
+			var handlerCountA atomic.Uint32
+			passThroughHandlerA := []TaggedMessageHandler{
+				{Tag: testTag, MessageHandler: HandlerFunc(func(msg IncomingMessage) OutgoingMessage {
+					handlerCountA.Add(1)
+					return OutgoingMessage{Action: Broadcast}
+				})},
+			}
+			var handlerCountB atomic.Uint32
+			passThroughHandlerB := []TaggedMessageHandler{
+				{Tag: testTag, MessageHandler: HandlerFunc(func(msg IncomingMessage) OutgoingMessage {
+					handlerCountB.Add(1)
+					return OutgoingMessage{Action: Broadcast}
+				})},
+			}
+			netA.RegisterHandlers(passThroughHandlerA)
+			netB.RegisterHandlers(passThroughHandlerB)
+
+			// send messages from both nodes to each other and confirm they are received.
+			for i := 0; i < 10; i++ {
+				err = netA.Broadcast(context.Background(), testTag, []byte(fmt.Sprintf("hello from A %d", i)), false, nil)
+				require.NoError(t, err)
+				err = netB.Broadcast(context.Background(), testTag, []byte(fmt.Sprintf("hello from B %d", i)), false, nil)
+				require.NoError(t, err)
+			}
+
+			require.Eventually(
+				t,
+				func() bool {
+					return handlerCountA.Load() == 10 && handlerCountB.Load() == 10
+				},
+				2*time.Second,
+				50*time.Millisecond,
+			)
+		})
+	}
+}
+
+// TestP2PEnableGossipService_BothDisable checks if both relay and node have EnableGossipService=false
+// they do not gossip to each other.
+//
+// Note, this test checks a configuration where node A (relay) does not know about node B,
+// and node B is configured to connect to A, and this scenario rejecting logic is guaranteed to work.
+func TestP2PEnableGossipService_BothDisable(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	log := logging.TestingLog(t)
+
+	// prepare configs
+	cfg := config.GetDefaultLocal()
+	cfg.DNSBootstrapID = ""         // disable DNS lookups since the test uses phonebook addresses
+	cfg.EnableGossipService = false // disable gossip service by default
+
+	relayCfg := cfg
+	relayCfg.NetAddress = "127.0.0.1:0"
+
+	netA, err := NewP2PNetwork(log.With("net", "netA"), relayCfg, "", nil, genesisID, config.Devtestnet, &nopeNodeInfo{}, nil)
+	require.NoError(t, err)
+	netA.Start()
+	defer netA.Stop()
+
+	peerInfoA := netA.service.AddrInfo()
+	addrsA, err := peer.AddrInfoToP2pAddrs(&peerInfoA)
+	require.NoError(t, err)
+	require.NotZero(t, addrsA[0])
+	multiAddrStr := addrsA[0].String()
+	phoneBookAddresses := []string{multiAddrStr}
+
+	nodeCfg := cfg
+	nodeCfg.NetAddress = ""
+
+	netB, err := NewP2PNetwork(log.With("net", "netB"), nodeCfg, "", phoneBookAddresses, genesisID, config.Devtestnet, &nopeNodeInfo{}, nil)
+	require.NoError(t, err)
+	netB.Start()
+	defer netB.Stop()
+
+	require.Eventually(t, func() bool {
+		return len(netA.service.Conns()) > 0 && len(netB.service.Conns()) > 0
+	}, 1*time.Second, 50*time.Millisecond)
+
+	require.False(t, netA.hasPeers())
+	require.False(t, netB.hasPeers())
+}
