@@ -492,7 +492,6 @@ func (tr *trackerRegistry) isBehindCommittingDeltas(latest basics.Round) bool {
 }
 
 func (tr *trackerRegistry) close() {
-	fmt.Printf("trackerRegistry: %v\n", tr.log)
 	tr.log.Debugf("trackerRegistry is closing")
 	if tr.ctxCancel != nil {
 		tr.ctxCancel()
@@ -500,13 +499,14 @@ func (tr *trackerRegistry) close() {
 
 	// close() is called from reloadLedger() when and trackerRegistry is not initialized yet
 	if tr.commitSyncerClosed != nil {
-		tr.log.Debugf("waiting for accounts writing to complete")
+		tr.log.Debugf("trackerRegistry is waiting for accounts writing to complete")
 		tr.waitAccountsWriting()
 		// this would block until the commitSyncerClosed channel get closed.
 		<-tr.commitSyncerClosed
-		tr.log.Debugf("accounts writing completed")
+		tr.log.Debugf("trackerRegistry done waiting for accounts writing")
 	}
 
+	tr.log.Debugf("trackerRegistry is closing trackers")
 	for _, lt := range tr.trackers {
 		lt.close()
 	}
