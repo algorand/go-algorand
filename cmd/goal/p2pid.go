@@ -37,8 +37,8 @@ var p2pID = &cobra.Command{
 	Long:  "Generate a new p2p private key (saved to " + p2p.DefaultPrivKeyPath + ") and print out peerID to stdout",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
-		exist := false
 		datadir.OnDataDirs(func(dataDir string) {
+			exist := false
 			privKeyPath := path.Join(dataDir, p2p.DefaultPrivKeyPath)
 			if util.FileExists(privKeyPath) {
 				exist = true
@@ -47,12 +47,12 @@ var p2pID = &cobra.Command{
 			peerKey, err := p2p.GetPrivKey(config.Local{P2PPersistPeerID: true}, dataDir)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error obtaining private key: %v\n", err)
-				os.Exit(1)
+				return
 			}
 			peerID, err := peer.IDFromPublicKey(peerKey.GetPublic())
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error obtaining peerID from a key: %v\n", err)
-				os.Exit(1)
+				return
 			}
 
 			fmt.Printf("PeerID: %s\n", peerID.String())
