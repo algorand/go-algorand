@@ -35,11 +35,12 @@ const (
 
 // KMDConfig contains global configuration information for kmd
 type KMDConfig struct {
-	DataDir             string       `json:"-"`
-	DriverConfig        DriverConfig `json:"drivers"`
-	SessionLifetimeSecs uint64       `json:"session_lifetime_secs"`
-	Address             string       `json:"address"`
-	AllowedOrigins      []string     `json:"allowed_origins"`
+	DataDir                          string       `json:"-"`
+	DriverConfig                     DriverConfig `json:"drivers"`
+	SessionLifetimeSecs              uint64       `json:"session_lifetime_secs"`
+	Address                          string       `json:"address"`
+	AllowedOrigins                   []string     `json:"allowed_origins"`
+	EnablePrivateNetworkAccessHeader bool         `json:"enable_private_network_access_header"`
 }
 
 // DriverConfig contains config info specific to each wallet driver
