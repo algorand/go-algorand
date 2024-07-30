@@ -214,9 +214,11 @@ func (l *Ledger) reloadLedger() error {
 	blockListeners := make([]ledgercore.BlockListener, 0, len(l.notifier.listeners))
 	blockListeners = append(blockListeners, l.notifier.listeners...)
 
-	// close the trackers.
-	l.trackers.log = l.trackerLog()
-	l.trackers.close()
+	// close the trackers if the registry was already initialized: opening a new ledger calls reloadLedger
+	// and there is nothing to close. Registry's logger is not initialized yet so close cannot log.
+	if l.trackers.trackers != nil {
+		l.trackers.close()
+	}
 
 	// init block queue
 	var err error
