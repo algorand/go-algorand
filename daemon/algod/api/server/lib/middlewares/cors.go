@@ -32,6 +32,7 @@ func MakeCORS(tokenHeader string) echo.MiddlewareFunc {
 	})
 }
 
+// MakePNA constructs the Private Network Access middleware function
 func MakePNA() echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(ctx echo.Context) error {
