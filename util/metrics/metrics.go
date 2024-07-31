@@ -93,8 +93,6 @@ var (
 	TransactionMessagesHandled = MetricName{Name: "algod_transaction_messages_handled", Description: "Number of transaction messages handled"}
 	// TransactionMessagesDroppedFromBacklog "Number of transaction messages dropped from backlog"
 	TransactionMessagesDroppedFromBacklog = MetricName{Name: "algod_transaction_messages_dropped_backlog", Description: "Number of transaction messages dropped from backlog"}
-	// TransactionMessagesDroppedFromBacklogP2P "Number of transaction messages throttled with p2p pubsub"
-	TransactionMessagesDroppedFromBacklogP2P = MetricName{Name: "algod_transaction_messages_dropped_backlog_p2p", Description: "Number of transaction messages throttled with p2p pubsub"}
 	// TransactionMessagesDroppedFromPool "Number of transaction messages dropped from pool"
 	TransactionMessagesDroppedFromPool = MetricName{Name: "algod_transaction_messages_dropped_pool", Description: "Number of transaction messages dropped from pool"}
 	// TransactionMessagesAlreadyCommitted "Number of duplicate or error transaction messages before placing into a backlog"
@@ -129,6 +127,17 @@ var (
 	TransactionMessagesAppLimiterDrop = MetricName{Name: "algod_transaction_messages_dropped_app_limiter", Description: "Number of transaction messages dropped after app limits check"}
 	// TransactionMessagesBacklogSize "Number of transaction messages in the TX handler backlog queue"
 	TransactionMessagesBacklogSize = MetricName{Name: "algod_transaction_messages_backlog_size", Description: "Number of transaction messages in the TX handler backlog queue"}
+
+	// TransactionMessagesP2PRejectMessage "Number of rejected p2p pubsub transaction messages"
+	TransactionMessagesP2PRejectMessage = MetricName{Name: "algod_transaction_messages_p2p_reject", Description: "Number of rejected p2p pubsub transaction messages"}
+	// TransactionMessagesP2PDuplicateMessage "Number of duplicate p2p pubsub transaction messages"}
+	TransactionMessagesP2PDuplicateMessage = MetricName{Name: "algod_transaction_messages_p2p_duplicate", Description: "Number of duplicate p2p pubsub transaction messages"}
+	// TransactionMessagesP2PDeliverMessage "Number of delivered p2p pubsub transaction messages"
+	TransactionMessagesP2PDeliverMessage = MetricName{Name: "algod_transaction_messages_p2p_delivered", Description: "Number of delivered p2p pubsub transaction messages"}
+	// TransactionMessagesP2PUndeliverableMessage "Number of undeliverable p2p pubsub transaction messages"
+	TransactionMessagesP2PUndeliverableMessage = MetricName{Name: "algod_transaction_messages_p2p_undeliverable", Description: "Number of undeliverable p2p pubsub transaction messages"}
+	// TransactionMessagesP2PValidateMessage "Number of p2p pubsub transaction messages received for validation"
+	TransactionMessagesP2PValidateMessage = MetricName{Name: "algod_transaction_messages_p2p_validate", Description: "Number of p2p pubsub transaction messages received for validation"}
 
 	// TransactionGroupTxSyncHandled "Number of transaction groups handled via txsync"
 	TransactionGroupTxSyncHandled = MetricName{Name: "algod_transaction_group_txsync_handled", Description: "Number of transaction groups handled via txsync"}

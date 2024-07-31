@@ -26,8 +26,11 @@ import (
 
 var _ = pubsub.RawTracer(pubsubTracer{})
 
-var transactionMessagesDroppedFromBacklogP2P = metrics.MakeCounter(metrics.TransactionMessagesDroppedFromBacklogP2P)
-var transactionMessagesDupRawMsg = metrics.MakeCounter(metrics.TransactionMessagesDupRawMsg)
+var transactionMessagesP2PRejectMessage = metrics.NewTagCounter(metrics.TransactionMessagesP2PRejectMessage.Name, metrics.TransactionMessagesP2PRejectMessage.Description)
+var transactionMessagesP2PDuplicateMessage = metrics.MakeCounter(metrics.TransactionMessagesP2PDuplicateMessage)
+var transactionMessagesP2PDeliverMessage = metrics.MakeCounter(metrics.TransactionMessagesP2PDeliverMessage)
+var transactionMessagesP2PUnderdeliverableMessage = metrics.MakeCounter(metrics.TransactionMessagesP2PUndeliverableMessage)
+var transactionMessagesP2PValidateMessage = metrics.MakeCounter(metrics.TransactionMessagesP2PValidateMessage)
 
 // pubsubTracer is a tracer for pubsub events used to track metrics.
 type pubsubTracer struct{}
@@ -51,22 +54,29 @@ func (t pubsubTracer) Graft(p peer.ID, topic string) {}
 func (t pubsubTracer) Prune(p peer.ID, topic string) {}
 
 // ValidateMessage is invoked when a message first enters the validation pipeline.
-func (t pubsubTracer) ValidateMessage(msg *pubsub.Message) {}
+func (t pubsubTracer) ValidateMessage(msg *pubsub.Message) {
+	transactionMessagesP2PValidateMessage.Inc(nil)
+}
 
 // DeliverMessage is invoked when a message is delivered
-func (t pubsubTracer) DeliverMessage(msg *pubsub.Message) {}
+func (t pubsubTracer) DeliverMessage(msg *pubsub.Message) {
+	transactionMessagesP2PDeliverMessage.Inc(nil)
+}
 
 // RejectMessage is invoked when a message is Rejected or Ignored.
 // The reason argument can be one of the named strings Reject*.
 func (t pubsubTracer) RejectMessage(msg *pubsub.Message, reason string) {
-	if reason == pubsub.RejectValidationThrottled || reason == pubsub.RejectValidationQueueFull {
-		transactionMessagesDroppedFromBacklogP2P.Inc(nil)
+	switch reason {
+	case pubsub.RejectValidationThrottled, pubsub.RejectValidationQueueFull, pubsub.RejectValidationFailed, pubsub.RejectValidationIgnored:
+		transactionMessagesP2PRejectMessage.Add(reason, 1)
+	default:
+		transactionMessagesP2PRejectMessage.Add("other", 1)
 	}
 }
 
 // DuplicateMessage is invoked when a duplicate message is dropped.
 func (t pubsubTracer) DuplicateMessage(msg *pubsub.Message) {
-	transactionMessagesDupRawMsg.Inc(nil)
+	transactionMessagesP2PDuplicateMessage.Inc(nil)
 }
 
 // ThrottlePeer is invoked when a peer is throttled by the peer gater.
@@ -83,4 +93,6 @@ func (t pubsubTracer) DropRPC(rpc *pubsub.RPC, p peer.ID) {}
 
 // UndeliverableMessage is invoked when the consumer of Subscribe is not reading messages fast enough and
 // the pressure release mechanism trigger, dropping messages.
-func (t pubsubTracer) UndeliverableMessage(msg *pubsub.Message) {}
+func (t pubsubTracer) UndeliverableMessage(msg *pubsub.Message) {
+	transactionMessagesP2PUnderdeliverableMessage.Inc(nil)
+}
