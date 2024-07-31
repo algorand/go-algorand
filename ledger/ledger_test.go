@@ -3415,6 +3415,7 @@ func TestLedgerRetainMinOffCatchpointInterval(t *testing.T) {
 			l := &Ledger{}
 			l.cfg = cfg
 			l.archival = cfg.Archival
+			l.trackers.log = logging.TestingLog(t)
 
 			for i := 1; i <= blocksToMake; i++ {
 				minBlockToKeep := l.notifyCommit(basics.Round(i))

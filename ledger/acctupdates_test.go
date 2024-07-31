@@ -130,7 +130,18 @@ func makeMockLedgerForTrackerWithLogger(t testing.TB, inMemory bool, initialBloc
 			Totals: totals,
 		}
 	}
-	return &mockLedgerForTracker{dbs: dbs, log: l, filename: fileName, inMemory: inMemory, blocks: blocks, deltas: deltas, consensusParams: config.Consensus[consensusVersion], consensusVersion: consensusVersion, accts: accts[0]}
+	ml := &mockLedgerForTracker{
+		dbs:      dbs,
+		log:      l,
+		filename: fileName,
+		inMemory: inMemory,
+		blocks:   blocks,
+		deltas:   deltas, consensusParams: config.Consensus[consensusVersion],
+		consensusVersion: consensusVersion,
+		accts:            accts[0],
+		trackers:         trackerRegistry{log: l},
+	}
+	return ml
 
 }
 
@@ -160,6 +171,7 @@ func (ml *mockLedgerForTracker) fork(t testing.TB) *mockLedgerForTracker {
 		filename:         fn,
 		consensusParams:  ml.consensusParams,
 		consensusVersion: ml.consensusVersion,
+		trackers:         trackerRegistry{log: dblogger},
 	}
 	for k, v := range ml.accts {
 		newLedgerTracker.accts[k] = v
