@@ -2952,6 +2952,19 @@ func testVotersReloadFromDiskAfterOneStateProofCommitted(t *testing.T, cfg confi
 	<-l.trackers.commitSyncerClosed
 	l.trackers.commitSyncerClosed = nil
 
+	// it is possible a commmit was scheduled while commitSyncer was closing so that there is one pending task
+	// that required to be done before before the ledger can be closed, so drain the queue
+outer:
+	for {
+		select {
+		case <-l.trackers.deferredCommits:
+			log.Info("drained deferred commit")
+			l.trackers.accountsWriting.Done()
+		default:
+			break outer
+		}
+	}
+
 	// flush one final time
 	triggerTrackerFlush(t, l)
 
