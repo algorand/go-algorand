@@ -25,6 +25,8 @@ import (
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
+	"github.com/multiformats/go-multiaddr"
+	manet "github.com/multiformats/go-multiaddr/net"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -168,4 +170,58 @@ func TestP2PProtocolAsMeta(t *testing.T) {
 	tid, inst := GetPeerTelemetryInfo(protos)
 	require.Equal(t, h1TID, tid)
 	require.Equal(t, h1Inst, inst)
+}
+
+func TestP2PPrivateAddresses(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	privAddrList := []string{
+		"/ip4/10.0.0.0/ipcidr/8",
+		"/ip4/100.64.0.0/ipcidr/10",
+		"/ip4/169.254.0.0/ipcidr/16",
+		"/ip4/172.16.0.0/ipcidr/12",
+		"/ip4/192.0.0.0/ipcidr/24",
+		"/ip4/192.0.2.0/ipcidr/24",
+		"/ip4/192.88.99.0/ipcidr/24",
+		"/ip4/192.168.0.0/ipcidr/16",
+		"/ip4/198.18.0.0/ipcidr/15",
+		"/ip4/198.51.100.0/ipcidr/24",
+		"/ip4/203.0.113.0/ipcidr/24",
+		"/ip4/224.0.0.0/ipcidr/4",
+		"/ip4/224.0.0.0/ipcidr/4",
+		"/ip4/233.252.0.0/ipcidr/4",
+		"/ip4/255.255.255.255/ipcidr/32",
+		"/ip6/fc00::/ipcidr/7",
+		"/ip6/fe80::/ipcidr/10",
+	}
+
+	// these are handled by addrFilter explicitly as a custom filter
+	extra := []string{
+		"/ip6/100::/ipcidr/64",
+		"/ip6/2001:2::/ipcidr/48",
+		"/ip6/2001:db8::/ipcidr/32", // multiaddr v0.13 has it
+	}
+
+	for _, addr := range privAddrList {
+		ma := multiaddr.StringCast(addr)
+		require.True(t, !manet.IsPublicAddr(ma) || manet.IsPrivateAddr(ma), "public/private check failed on %s", addr)
+		require.Empty(t, addrFilter([]multiaddr.Multiaddr{ma}), "addrFilter failed on %s", addr)
+	}
+
+	for _, addr := range extra {
+		ma := multiaddr.StringCast(addr)
+		require.Empty(t, addrFilter([]multiaddr.Multiaddr{ma}), "addrFilter failed on %s", addr)
+	}
+
+	// ensure addrFilter allows normal addresses
+	valid := []string{
+		"/ip4/3.4.5.6/tcp/1234",
+		"/ip6/200:11::/tcp/1234",
+	}
+
+	for _, addr := range valid {
+		ma := multiaddr.StringCast(addr)
+		require.Equal(t, []multiaddr.Multiaddr{ma}, addrFilter([]multiaddr.Multiaddr{ma}), "addrFilter failed on %s", addr)
+	}
 }

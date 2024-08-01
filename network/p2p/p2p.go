@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/base32"
 	"fmt"
+	"net"
 	"runtime"
 	"strings"
 	"time"
@@ -43,6 +44,7 @@ import (
 	"github.com/libp2p/go-libp2p/p2p/security/noise"
 	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
 	"github.com/multiformats/go-multiaddr"
+	manet "github.com/multiformats/go-multiaddr/net"
 )
 
 // SubNextCancellable is an abstraction for pubsub.Subscription
@@ -320,4 +322,53 @@ func formatPeerTelemetryInfoProtocolName(telemetryID string, telemetryInstance s
 		base32.StdEncoding.EncodeToString([]byte(telemetryID)),
 		base32.StdEncoding.EncodeToString([]byte(telemetryInstance)),
 	)
+}
+
+var private6CIDR = []string{
+	"100::/64",
+	"2001:2::/48",
+	"2001:db8::/32", // multiaddr v0.13 has it
+}
+var private6 = parseCIDR(private6CIDR)
+
+func parseCIDR(cidrs []string) []*net.IPNet {
+	ipnets := make([]*net.IPNet, len(cidrs))
+	for i, cidr := range cidrs {
+		_, ipnet, err := net.ParseCIDR(cidr)
+		if err != nil {
+			panic(err)
+		}
+		ipnets[i] = ipnet
+	}
+	return ipnets
+}
+
+func addrFilter(addrs []multiaddr.Multiaddr) []multiaddr.Multiaddr {
+	res := make([]multiaddr.Multiaddr, 0, len(addrs))
+	for _, addr := range addrs {
+		if manet.IsPublicAddr(addr) && !manet.IsPrivateAddr(addr) {
+			if _, err := addr.ValueForProtocol(multiaddr.P_IP4); err == nil {
+				// no rules for IPv4 at the moment, accept
+				res = append(res, addr)
+				continue
+			}
+
+			isPrivate := false
+			a, err := addr.ValueForProtocol(multiaddr.P_IP6)
+			if err != nil {
+				logging.Base().Warn("failed to get IP6 from %s: %v", addr, err)
+				continue
+			}
+			addrIP := net.ParseIP(a)
+			for _, ipnet := range private6 {
+				if ipnet.Contains(addrIP) {
+					isPrivate = true
+				}
+			}
+			if !isPrivate {
+				res = append(res, addr)
+			}
+		}
+	}
+	return res
 }
