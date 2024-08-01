@@ -698,7 +698,7 @@ func decodeMsg(data []byte) (unverifiedTxGroup []transactions.SignedTxn, consume
 	return unverifiedTxGroup, consumed, false
 }
 
-// incomingTxGroupDupRateLimit checks if the incoming transaction group has been seen before after reencoding to canonical representation.
+// incomingTxGroupCanonicalDedup checks if the incoming transaction group has been seen before after reencoding to canonical representation.
 // It also return canonical representation of the transaction group allowing the caller to compare it with the input.
 func (handler *TxHandler) incomingTxGroupCanonicalDedup(unverifiedTxGroup []transactions.SignedTxn, encodedExpectedSize int) (*crypto.Digest, []byte, bool) {
 	var canonicalKey *crypto.Digest
