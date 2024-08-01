@@ -133,7 +133,7 @@ type TxHandler struct {
 	appLimiter                 *appRateLimiter
 	appLimiterBacklogThreshold int
 
-	// batchVerifier provides synchronous verification of transaction groups
+	// batchVerifier provides synchronous verification of transaction groups, used only by pubsub validation in validateIncomingTxMessage.
 	batchVerifier verify.TxnGroupBatchSigVerifier
 }
 
