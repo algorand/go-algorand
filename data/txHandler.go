@@ -256,7 +256,6 @@ func (handler *TxHandler) Start() {
 	})
 
 	// libp2p pubsub validator and handler abstracted as TaggedMessageProcessor
-	// TODO: rename to validators
 	handler.net.RegisterValidatorHandlers([]network.TaggedMessageValidatorHandler{
 		{
 			Tag: protocol.TxnTag,
@@ -559,7 +558,7 @@ func (handler *TxHandler) deleteFromCaches(msgKey *crypto.Digest, canonicalKey *
 
 // dedupCanonical checks if the transaction group has been seen before after reencoding to canonical representation.
 // returns a key used for insertion if the group was not found.
-func (handler *TxHandler) dedupCanonical(unverifiedTxGroup []transactions.SignedTxn, consumed int) (key *crypto.Digest, isDup bool) {
+func (handler *TxHandler) dedupCanonical(unverifiedTxGroup []transactions.SignedTxn, consumed int) (key *crypto.Digest, reencoded []byte, isDup bool) {
 	// consider situations where someone want to censor transactions A
 	// 1. Txn A is not part of a group => txn A with a valid signature is OK
 	// Censorship attempts are:
@@ -576,14 +575,16 @@ func (handler *TxHandler) dedupCanonical(unverifiedTxGroup []transactions.Signed
 	// - using individual txn from a group: {A, Z} could be poisoned by {A, B}, where B is invalid
 
 	var d crypto.Digest
+	var reencodedBuf []byte
 	ntx := len(unverifiedTxGroup)
 	if ntx == 1 {
 		// a single transaction => cache/dedup canonical txn with its signature
 		enc := unverifiedTxGroup[0].MarshalMsg(nil)
 		d = crypto.Hash(enc)
 		if handler.txCanonicalCache.CheckAndPut(&d) {
-			return nil, true
+			return nil, nil, true
 		}
+		reencodedBuf = enc
 	} else {
 		// a transaction group => cache/dedup the entire group canonical group
 		encodeBuf := make([]byte, 0, unverifiedTxGroup[0].Msgsize()*ntx)
@@ -594,14 +595,15 @@ func (handler *TxHandler) dedupCanonical(unverifiedTxGroup []transactions.Signed
 			// reallocated, some assumption on size was wrong
 			// log and skip
 			logging.Base().Warnf("Decoded size %d does not match to encoded %d", consumed, len(encodeBuf))
-			return nil, false
+			return nil, nil, false
 		}
 		d = crypto.Hash(encodeBuf)
 		if handler.txCanonicalCache.CheckAndPut(&d) {
-			return nil, true
+			return nil, nil, true
 		}
+		reencodedBuf = encodeBuf
 	}
-	return &d, false
+	return &d, reencodedBuf, false
 }
 
 // incomingMsgDupCheck runs the duplicate check on a raw incoming message.
@@ -696,28 +698,32 @@ func decodeMsg(data []byte) (unverifiedTxGroup []transactions.SignedTxn, consume
 	return unverifiedTxGroup, consumed, false
 }
 
-// incomingTxGroupDupRateLimit checks
-// - if the incoming transaction group has been seen before after reencoding to canonical representation, and
-// - if the sender is rate limited by the per-application rate limiter.
-func (handler *TxHandler) incomingTxGroupDupRateLimit(unverifiedTxGroup []transactions.SignedTxn, encodedExpectedSize int, sender network.DisconnectablePeer) (*crypto.Digest, bool) {
+// incomingTxGroupDupRateLimit checks if the incoming transaction group has been seen before after reencoding to canonical representation.
+// It also return canonical representation of the transaction group allowing the caller to compare it with the input.
+func (handler *TxHandler) incomingTxGroupCanonicalDedup(unverifiedTxGroup []transactions.SignedTxn, encodedExpectedSize int) (*crypto.Digest, []byte, bool) {
 	var canonicalKey *crypto.Digest
+	var reencoded []byte
 	if handler.txCanonicalCache != nil {
 		var isDup bool
-		if canonicalKey, isDup = handler.dedupCanonical(unverifiedTxGroup, encodedExpectedSize); isDup {
+		if canonicalKey, reencoded, isDup = handler.dedupCanonical(unverifiedTxGroup, encodedExpectedSize); isDup {
 			transactionMessagesDupCanonical.Inc(nil)
-			return canonicalKey, true
+			return nil, nil, true
 		}
 	}
+	return canonicalKey, reencoded, false
+}
 
+// incomingTxGroupAppRateLimit checks if the sender is rate limited by the per-application rate limiter.
+func (handler *TxHandler) incomingTxGroupAppRateLimit(unverifiedTxGroup []transactions.SignedTxn, sender network.DisconnectablePeer) bool {
 	// rate limit per application in a group. Limiting any app in a group drops the entire message.
 	if handler.appLimiter != nil {
 		congestedARL := len(handler.backlogQueue) > handler.appLimiterBacklogThreshold
 		if congestedARL && handler.appLimiter.shouldDrop(unverifiedTxGroup, sender.(network.IPAddressable).RoutingAddr()) {
 			transactionMessagesAppLimiterDrop.Inc(nil)
-			return canonicalKey, true
+			return true
 		}
 	}
-	return canonicalKey, false
+	return false
 }
 
 // processIncomingTxn decodes a transaction group from incoming message and enqueues into the back log for processing.
@@ -753,10 +759,14 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 		return network.OutgoingMessage{Action: network.Disconnect}
 	}
 
-	canonicalKey, drop := handler.incomingTxGroupDupRateLimit(unverifiedTxGroup, consumed, rawmsg.Sender)
+	canonicalKey, _, drop := handler.incomingTxGroupCanonicalDedup(unverifiedTxGroup, consumed)
 	if drop {
 		// this re-serialized txgroup was detected as a duplicate by the canonical message cache,
 		// or it was rate-limited by the per-app rate limiter
+		return network.OutgoingMessage{Action: network.Ignore}
+	}
+
+	if handler.incomingTxGroupAppRateLimit(unverifiedTxGroup, rawmsg.Sender) {
 		return network.OutgoingMessage{Action: network.Ignore}
 	}
 
@@ -794,10 +804,20 @@ func (handler *TxHandler) validateIncomingTxMessage(rawmsg network.IncomingMessa
 		return network.OutgoingMessage{Action: network.Disconnect}
 	}
 
-	canonicalKey, drop := handler.incomingTxGroupDupRateLimit(unverifiedTxGroup, consumed, rawmsg.Sender)
+	canonicalKey, reencoded, drop := handler.incomingTxGroupCanonicalDedup(unverifiedTxGroup, consumed)
 	if drop {
-		// this re-serialized txgroup was detected as a duplicate by the canonical message cache,
-		// or it was rate-limited by the per-app rate limiter
+		return network.OutgoingMessage{Action: network.Ignore}
+	}
+	if reencoded == nil {
+		reencoded = reencode(unverifiedTxGroup)
+	}
+
+	if !bytes.Equal(rawmsg.Data, reencoded) {
+		// ignore non-canonically encoded messages
+		return network.OutgoingMessage{Action: network.Ignore}
+	}
+
+	if handler.incomingTxGroupAppRateLimit(unverifiedTxGroup, rawmsg.Sender) {
 		return network.OutgoingMessage{Action: network.Ignore}
 	}
 

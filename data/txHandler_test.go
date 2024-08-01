@@ -646,41 +646,41 @@ func TestTxHandlerProcessIncomingGroup(t *testing.T) {
 	}
 }
 
+func craftNonCanonical(t *testing.T, stxn *transactions.SignedTxn, blobStxn []byte) []byte {
+	// make non-canonical encoding and ensure it is not accepted
+	stxnNonCanTxn := transactions.SignedTxn{Txn: stxn.Txn}
+	blobTxn := protocol.Encode(&stxnNonCanTxn)
+	stxnNonCanAuthAddr := transactions.SignedTxn{AuthAddr: stxn.AuthAddr}
+	blobAuthAddr := protocol.Encode(&stxnNonCanAuthAddr)
+	stxnNonCanAuthSig := transactions.SignedTxn{Sig: stxn.Sig}
+	blobSig := protocol.Encode(&stxnNonCanAuthSig)
+
+	if blobStxn == nil {
+		blobStxn = protocol.Encode(stxn)
+	}
+
+	// double check our skills for transactions.SignedTxn creation by creating a new canonical encoding and comparing to the original
+	blobValidation := make([]byte, 0, len(blobTxn)+len(blobAuthAddr)+len(blobSig))
+	blobValidation = append(blobValidation[:], blobAuthAddr...)
+	blobValidation = append(blobValidation[:], blobSig[1:]...) // cut transactions.SignedTxn's field count
+	blobValidation = append(blobValidation[:], blobTxn[1:]...) // cut transactions.SignedTxn's field count
+	blobValidation[0] += 2                                     // increase field count
+	require.Equal(t, blobStxn, blobValidation)
+
+	// craft non-canonical
+	blobNonCan := make([]byte, 0, len(blobTxn)+len(blobAuthAddr)+len(blobSig))
+	blobNonCan = append(blobNonCan[:], blobTxn...)
+	blobNonCan = append(blobNonCan[:], blobAuthAddr[1:]...) // cut transactions.SignedTxn's field count
+	blobNonCan = append(blobNonCan[:], blobSig[1:]...)      // cut transactions.SignedTxn's field count
+	blobNonCan[0] += 2                                      // increase field count
+	require.Len(t, blobNonCan, len(blobStxn))
+	require.NotEqual(t, blobStxn, blobNonCan)
+	return blobNonCan
+}
+
 func TestTxHandlerProcessIncomingCensoring(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
-
-	craftNonCanonical := func(t *testing.T, stxn *transactions.SignedTxn, blobStxn []byte) []byte {
-		// make non-canonical encoding and ensure it is not accepted
-		stxnNonCanTxn := transactions.SignedTxn{Txn: stxn.Txn}
-		blobTxn := protocol.Encode(&stxnNonCanTxn)
-		stxnNonCanAuthAddr := transactions.SignedTxn{AuthAddr: stxn.AuthAddr}
-		blobAuthAddr := protocol.Encode(&stxnNonCanAuthAddr)
-		stxnNonCanAuthSig := transactions.SignedTxn{Sig: stxn.Sig}
-		blobSig := protocol.Encode(&stxnNonCanAuthSig)
-
-		if blobStxn == nil {
-			blobStxn = protocol.Encode(stxn)
-		}
-
-		// double check our skills for transactions.SignedTxn creation by creating a new canonical encoding and comparing to the original
-		blobValidation := make([]byte, 0, len(blobTxn)+len(blobAuthAddr)+len(blobSig))
-		blobValidation = append(blobValidation[:], blobAuthAddr...)
-		blobValidation = append(blobValidation[:], blobSig[1:]...) // cut transactions.SignedTxn's field count
-		blobValidation = append(blobValidation[:], blobTxn[1:]...) // cut transactions.SignedTxn's field count
-		blobValidation[0] += 2                                     // increase field count
-		require.Equal(t, blobStxn, blobValidation)
-
-		// craft non-canonical
-		blobNonCan := make([]byte, 0, len(blobTxn)+len(blobAuthAddr)+len(blobSig))
-		blobNonCan = append(blobNonCan[:], blobTxn...)
-		blobNonCan = append(blobNonCan[:], blobAuthAddr[1:]...) // cut transactions.SignedTxn's field count
-		blobNonCan = append(blobNonCan[:], blobSig[1:]...)      // cut transactions.SignedTxn's field count
-		blobNonCan[0] += 2                                      // increase field count
-		require.Len(t, blobNonCan, len(blobStxn))
-		require.NotEqual(t, blobStxn, blobNonCan)
-		return blobNonCan
-	}
 
 	forgeSig := func(t *testing.T, stxn *transactions.SignedTxn, blobStxn []byte) (transactions.SignedTxn, []byte) {
 		stxnForged := *stxn
@@ -2751,8 +2751,6 @@ func TestTxHandlerCapGuard(t *testing.T) {
 
 func TestTxHandlerValidateIncomingTxMessage(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
-	partitiontest.PartitionTest(t)
 	t.Parallel()
 
 	const numUsers = 10
@@ -2777,8 +2775,16 @@ func TestTxHandlerValidateIncomingTxMessage(t *testing.T) {
 	outmsg := handler.validateIncomingTxMessage(network.IncomingMessage{Data: blob})
 	require.Equal(t, outmsg.Action, network.Accept)
 
+	// non-canonical message
+	// for some reason craftNonCanonical cannot handle makeTxns output so make a simpler random txn
+	stxns, blob := makeRandomTransactions(1)
+	stxn := stxns[0]
+	blobNonCan := craftNonCanonical(t, &stxn, blob)
+	outmsg = handler.validateIncomingTxMessage(network.IncomingMessage{Data: blobNonCan})
+	require.Equal(t, outmsg.Action, network.Ignore)
+
 	// invalid signature
-	stxns, _ := makeTxns(addresses, secrets, 1, 2, genesisHash)
+	stxns, _ = makeTxns(addresses, secrets, 1, 2, genesisHash)
 	stxns[0].Sig[0] = stxns[0].Sig[0] + 1
 	blob2 := protocol.Encode(&stxns[0])
 	outmsg = handler.validateIncomingTxMessage(network.IncomingMessage{Data: blob2})
@@ -2789,4 +2795,25 @@ func TestTxHandlerValidateIncomingTxMessage(t *testing.T) {
 	blob[0] = blob[0] + 1
 	outmsg = handler.validateIncomingTxMessage(network.IncomingMessage{Data: blob})
 	require.Equal(t, outmsg.Action, network.Disconnect)
+
+	t.Run("with-canonical", func(t *testing.T) {
+		// make sure the reencoding from the canonical dedup checker's reencoding buf is correctly reused
+		cfg.TxIncomingFilteringFlags = 2
+		require.True(t, cfg.TxFilterCanonicalEnabled())
+		handler, err := makeTestTxHandler(ledger, cfg)
+		require.NoError(t, err)
+
+		// valid message
+		_, blob := makeTxns(addresses, secrets, 1, 2, genesisHash)
+		outmsg := handler.validateIncomingTxMessage(network.IncomingMessage{Data: blob})
+		require.Equal(t, outmsg.Action, network.Accept)
+
+		// non-canonical message
+		// for some reason craftNonCanonical cannot handle makeTxns output so make a simpler random txn
+		stxns, blob := makeRandomTransactions(1)
+		stxn := stxns[0]
+		blobNonCan := craftNonCanonical(t, &stxn, blob)
+		outmsg = handler.validateIncomingTxMessage(network.IncomingMessage{Data: blobNonCan})
+		require.Equal(t, outmsg.Action, network.Ignore)
+	})
 }
