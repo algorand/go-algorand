@@ -870,9 +870,6 @@ func TestNodeHybridTopology(t *testing.T) {
 			cfg.GossipFanout = 0
 		}
 
-		// TODO: REMOVE
-		cfg.BaseLoggerDebugLevel = 5
-
 		cfg.NetAddress = ni.wsNetAddr()
 		cfg.EnableP2PHybridMode = true
 		cfg.PublicAddress = ni.wsNetAddr()
