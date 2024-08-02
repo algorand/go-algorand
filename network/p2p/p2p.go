@@ -110,10 +110,12 @@ func MakeHost(cfg config.Local, datadir string, pstore *pstore.PeerStore) (host.
 	ua := fmt.Sprintf("algod/%d.%d (%s; commit=%s; %d) %s(%s)", version.Major, version.Minor, version.Channel, version.CommitHash, version.BuildNumber, runtime.GOOS, runtime.GOARCH)
 
 	var listenAddr string
+	var isLoopback bool
 	if cfg.NetAddress != "" {
 		if parsedListenAddr, perr := netAddressToListenAddress(cfg.NetAddress); perr == nil {
 			listenAddr = parsedListenAddr
 		}
+		isLoopback = manet.IsIPLoopback(multiaddr.StringCast(listenAddr))
 	} else {
 		// don't listen if NetAddress is not set.
 		listenAddr = ""
@@ -121,6 +123,13 @@ func MakeHost(cfg config.Local, datadir string, pstore *pstore.PeerStore) (host.
 
 	var enableMetrics = func(cfg *libp2p.Config) error { cfg.DisableMetrics = false; return nil }
 	metrics.DefaultRegistry().Register(&metrics.PrometheusDefaultMetrics)
+
+	// if we are listening on a loopback address, most likely we are running tests or a goal network,
+	// so don't filter out any addresses
+	var addrFactory func(addrs []multiaddr.Multiaddr) []multiaddr.Multiaddr
+	if !isLoopback {
+		addrFactory = addrFilter
+	}
 
 	rm, err := configureResourceManager(cfg)
 	if err != nil {
@@ -137,6 +146,7 @@ func MakeHost(cfg config.Local, datadir string, pstore *pstore.PeerStore) (host.
 		libp2p.Security(noise.ID, noise.New),
 		enableMetrics,
 		libp2p.ResourceManager(rm),
+		libp2p.AddrsFactory(addrFactory),
 	)
 	return host, listenAddr, err
 }
@@ -324,23 +334,25 @@ func formatPeerTelemetryInfoProtocolName(telemetryID string, telemetryInstance s
 	)
 }
 
-var private6CIDR = []string{
+var private6 = parseCIDR([]string{
 	"100::/64",
 	"2001:2::/48",
 	"2001:db8::/32", // multiaddr v0.13 has it
-}
-var private6 = parseCIDR(private6CIDR)
+})
 
+// parseCIDR converts string CIDRs to net.IPNet.
+// function panics on errors so that it is only called during initialization.
 func parseCIDR(cidrs []string) []*net.IPNet {
-	ipnets := make([]*net.IPNet, len(cidrs))
-	for i, cidr := range cidrs {
-		_, ipnet, err := net.ParseCIDR(cidr)
-		if err != nil {
+	result := make([]*net.IPNet, 0, len(cidrs))
+	var ipnet *net.IPNet
+	var err error
+	for _, cidr := range cidrs {
+		if _, ipnet, err = net.ParseCIDR(cidr); err != nil {
 			panic(err)
 		}
-		ipnets[i] = ipnet
+		result = append(result, ipnet)
 	}
-	return ipnets
+	return result
 }
 
 func addrFilter(addrs []multiaddr.Multiaddr) []multiaddr.Multiaddr {
@@ -356,7 +368,7 @@ func addrFilter(addrs []multiaddr.Multiaddr) []multiaddr.Multiaddr {
 			isPrivate := false
 			a, err := addr.ValueForProtocol(multiaddr.P_IP6)
 			if err != nil {
-				logging.Base().Warn("failed to get IP6 from %s: %v", addr, err)
+				logging.Base().Warnf("failed to get IPv6 addr from %s: %v", addr, err)
 				continue
 			}
 			addrIP := net.ParseIP(a)
