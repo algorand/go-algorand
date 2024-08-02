@@ -365,6 +365,16 @@ func parseCIDR(cidrs []string) []*net.IPNet {
 
 // addressFilter filters out private and unroutable addresses
 func addressFilter(addrs []multiaddr.Multiaddr) []multiaddr.Multiaddr {
+	if logging.Base().IsLevelEnabled(logging.Debug) {
+		var b strings.Builder
+		for _, addr := range addrs {
+			b.WriteRune(' ')
+			b.WriteString(addr.String())
+			b.WriteRune(' ')
+		}
+		logging.Base().Debugf("addressFilter input: %s", b.String())
+	}
+
 	res := make([]multiaddr.Multiaddr, 0, len(addrs))
 	for _, addr := range addrs {
 		if manet.IsPublicAddr(addr) {
@@ -390,6 +400,15 @@ func addressFilter(addrs []multiaddr.Multiaddr) []multiaddr.Multiaddr {
 				res = append(res, addr)
 			}
 		}
+	}
+	if logging.Base().IsLevelEnabled(logging.Debug) {
+		var b strings.Builder
+		for _, addr := range res {
+			b.WriteRune(' ')
+			b.WriteString(addr.String())
+			b.WriteRune(' ')
+		}
+		logging.Base().Debugf("addressFilter output: %s", b.String())
 	}
 	return res
 }
