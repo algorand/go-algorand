@@ -110,14 +110,23 @@ func MakeHost(cfg config.Local, datadir string, pstore *pstore.PeerStore) (host.
 	ua := fmt.Sprintf("algod/%d.%d (%s; commit=%s; %d) %s(%s)", version.Major, version.Minor, version.Channel, version.CommitHash, version.BuildNumber, runtime.GOOS, runtime.GOARCH)
 
 	var listenAddr string
-	var isLoopback bool
+	var needAddressFilter bool
 	if cfg.NetAddress != "" {
 		if parsedListenAddr, perr := netAddressToListenAddress(cfg.NetAddress); perr == nil {
 			listenAddr = parsedListenAddr
+
+			// check if the listen address is a specific address or a "all interfaces" address (0.0.0.0 or ::)
+			// in this case enable the address filter.
+			// this also means the address filter is not enabled for NetAddress set to
+			// a specific address including loopback and private addresses.
+			if manet.IsIPUnspecified(multiaddr.StringCast(listenAddr)) {
+				needAddressFilter = true
+			}
+		} else {
+			logging.Base().Warnf("failed to parse NetAddress %s: %v", cfg.NetAddress, perr)
 		}
-		isLoopback = manet.IsIPLoopback(multiaddr.StringCast(listenAddr))
 	} else {
-		// don't listen if NetAddress is not set.
+		logging.Base().Debug("p2p NetAddress is not set, not listening")
 		listenAddr = ""
 	}
 
@@ -127,9 +136,9 @@ func MakeHost(cfg config.Local, datadir string, pstore *pstore.PeerStore) (host.
 	// if we are listening on a loopback address, most likely we are running tests or a goal network,
 	// so don't filter out any addresses
 	var addrFactory func(addrs []multiaddr.Multiaddr) []multiaddr.Multiaddr
-	if !isLoopback {
-		logging.Base().Debug("Private addresses filter is set")
-		addrFactory = addrFilter
+	if needAddressFilter {
+		logging.Base().Debug("private addresses filter is enabled")
+		addrFactory = addressFilter
 	}
 
 	rm, err := configureResourceManager(cfg)
@@ -356,7 +365,8 @@ func parseCIDR(cidrs []string) []*net.IPNet {
 	return result
 }
 
-func addrFilter(addrs []multiaddr.Multiaddr) []multiaddr.Multiaddr {
+// addressFilter filters out private and unroutable addresses
+func addressFilter(addrs []multiaddr.Multiaddr) []multiaddr.Multiaddr {
 	res := make([]multiaddr.Multiaddr, 0, len(addrs))
 	for _, addr := range addrs {
 		if manet.IsPublicAddr(addr) && !manet.IsPrivateAddr(addr) {
