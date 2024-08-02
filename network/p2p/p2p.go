@@ -128,6 +128,7 @@ func MakeHost(cfg config.Local, datadir string, pstore *pstore.PeerStore) (host.
 	// so don't filter out any addresses
 	var addrFactory func(addrs []multiaddr.Multiaddr) []multiaddr.Multiaddr
 	if !isLoopback {
+		logging.Base().Debug("Private addresses filter is set")
 		addrFactory = addrFilter
 	}
 
