@@ -208,7 +208,7 @@ func TestP2PPrivateAddresses(t *testing.T) {
 
 	for _, addr := range privAddrList {
 		ma := multiaddr.StringCast(addr)
-		require.True(t, !manet.IsPublicAddr(ma) || manet.IsPrivateAddr(ma), "public/private check failed on %s", addr)
+		require.False(t, manet.IsPublicAddr(ma), "public check failed on %s", addr)
 		require.Empty(t, addressFilter([]multiaddr.Multiaddr{ma}), "addrFilter failed on %s", addr)
 	}
 

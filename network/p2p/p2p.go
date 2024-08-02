@@ -133,8 +133,6 @@ func MakeHost(cfg config.Local, datadir string, pstore *pstore.PeerStore) (host.
 	var enableMetrics = func(cfg *libp2p.Config) error { cfg.DisableMetrics = false; return nil }
 	metrics.DefaultRegistry().Register(&metrics.PrometheusDefaultMetrics)
 
-	// if we are listening on a loopback address, most likely we are running tests or a goal network,
-	// so don't filter out any addresses
 	var addrFactory func(addrs []multiaddr.Multiaddr) []multiaddr.Multiaddr
 	if needAddressFilter {
 		logging.Base().Debug("private addresses filter is enabled")
@@ -369,7 +367,7 @@ func parseCIDR(cidrs []string) []*net.IPNet {
 func addressFilter(addrs []multiaddr.Multiaddr) []multiaddr.Multiaddr {
 	res := make([]multiaddr.Multiaddr, 0, len(addrs))
 	for _, addr := range addrs {
-		if manet.IsPublicAddr(addr) && !manet.IsPrivateAddr(addr) {
+		if manet.IsPublicAddr(addr) {
 			if _, err := addr.ValueForProtocol(multiaddr.P_IP4); err == nil {
 				// no rules for IPv4 at the moment, accept
 				res = append(res, addr)
