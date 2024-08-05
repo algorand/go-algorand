@@ -94,7 +94,11 @@ def main():
                                 remote_name = resolved
                             source = remote_name
                             target = node_name
-                            edges.append((source, target))
+                            if args.timestamp:
+                                # datetime is not serializable, so we store it as string for now
+                                edge = (source, target, {'dt': data["time"]})
+                            else:
+                                edge = (source, target)
 
                         # Check for outgoing connections
                         elif "Made outgoing connection to peer" in data.get('msg', ""):
