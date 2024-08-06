@@ -394,6 +394,7 @@ func addressFilter(addrs []multiaddr.Multiaddr) []multiaddr.Multiaddr {
 			for _, ipnet := range private6 {
 				if ipnet.Contains(addrIP) {
 					isPrivate = true
+					break
 				}
 			}
 			if !isPrivate {
