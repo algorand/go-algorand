@@ -391,6 +391,22 @@ func (t *tracer) logProposalManagerResult(p player, input messageEvent, output e
 			logEvent.Type = logspec.BlockCommittable
 			t.log.with(logEvent).Infof("block committable for %v at (%v, %v)", logEvent.Hash, p.Round, p.Period)
 		}
+	case payloadVerified:
+		if !t.log.IsLevelEnabled(logging.Info) {
+			return
+		}
+		up := input.Input.UnauthenticatedProposal
+		logEvent := logspec.AgreementEvent{
+			Type:         logspec.ProposalVerified,
+			Round:        uint64(p.Round),
+			Period:       uint64(p.Period),
+			Step:         uint64(p.Step),
+			Sender:       up.OriginalProposer.String(),
+			Hash:         up.Digest().String(),
+			ObjectRound:  uint64(pipelinedRound),
+			ObjectPeriod: uint64(pipelinedPeriod),
+		}
+		t.log.with(logEvent).Infof("payload verified (%v, %v): %v", pipelinedRound, pipelinedPeriod, output.(payloadProcessedEvent).Err)
 	}
 }
 

@@ -22,24 +22,25 @@ func _() {
 	_ = x[ProposalFrozen-11]
 	_ = x[ProposalAccepted-12]
 	_ = x[ProposalRejected-13]
-	_ = x[BlockRejected-14]
-	_ = x[BlockResent-15]
-	_ = x[BlockPipelined-16]
-	_ = x[VoteAttest-17]
-	_ = x[VoteBroadcast-18]
-	_ = x[VoteAccepted-19]
-	_ = x[VoteRejected-20]
-	_ = x[BundleBroadcast-21]
-	_ = x[BundleAccepted-22]
-	_ = x[BundleRejected-23]
-	_ = x[Restored-24]
-	_ = x[Persisted-25]
-	_ = x[numAgreementTypes-26]
+	_ = x[ProposalVerified-14]
+	_ = x[BlockRejected-15]
+	_ = x[BlockResent-16]
+	_ = x[BlockPipelined-17]
+	_ = x[VoteAttest-18]
+	_ = x[VoteBroadcast-19]
+	_ = x[VoteAccepted-20]
+	_ = x[VoteRejected-21]
+	_ = x[BundleBroadcast-22]
+	_ = x[BundleAccepted-23]
+	_ = x[BundleRejected-24]
+	_ = x[Restored-25]
+	_ = x[Persisted-26]
+	_ = x[numAgreementTypes-27]
 }
 
-const _AgreementType_name = "RoundConcludedPeriodConcludedStepTimeoutRoundStartRoundInterruptedRoundWaitingThresholdReachedBlockAssembledBlockCommittableProposalAssembledProposalBroadcastProposalFrozenProposalAcceptedProposalRejectedBlockRejectedBlockResentBlockPipelinedVoteAttestVoteBroadcastVoteAcceptedVoteRejectedBundleBroadcastBundleAcceptedBundleRejectedRestoredPersistednumAgreementTypes"
+const _AgreementType_name = "RoundConcludedPeriodConcludedStepTimeoutRoundStartRoundInterruptedRoundWaitingThresholdReachedBlockAssembledBlockCommittableProposalAssembledProposalBroadcastProposalFrozenProposalAcceptedProposalRejectedProposalVerifiedBlockRejectedBlockResentBlockPipelinedVoteAttestVoteBroadcastVoteAcceptedVoteRejectedBundleBroadcastBundleAcceptedBundleRejectedRestoredPersistednumAgreementTypes"
 
-var _AgreementType_index = [...]uint16{0, 14, 29, 40, 50, 66, 78, 94, 108, 124, 141, 158, 172, 188, 204, 217, 228, 242, 252, 265, 277, 289, 304, 318, 332, 340, 349, 366}
+var _AgreementType_index = [...]uint16{0, 14, 29, 40, 50, 66, 78, 94, 108, 124, 141, 158, 172, 188, 204, 220, 233, 244, 258, 268, 281, 293, 305, 320, 334, 348, 356, 365, 382}
 
 func (i AgreementType) String() string {
 	if i < 0 || i >= AgreementType(len(_AgreementType_index)-1) {

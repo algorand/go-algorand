@@ -79,6 +79,8 @@ const (
 	ProposalAccepted
 	// ProposalRejected is emitted when the source rejects a leader proposal.
 	ProposalRejected
+	// ProposalVerified is emitted when the source verifies a proposal.
+	ProposalVerified
 
 	// BlockRejected is emitted when a block is rejected.
 	// (Since fragmentation is not implemented currently,
