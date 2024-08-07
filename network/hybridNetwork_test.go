@@ -64,7 +64,7 @@ func TestHybridNetwork_DuplicateConn(t *testing.T) {
 	// make it net address and restart the node
 	relayCfg.NetAddress = addr
 	relayCfg.PublicAddress = addr
-	relayCfg.P2PNetAddress = ":0"
+	relayCfg.P2PNetAddress = "127.0.0.1:0"
 	netA, err = NewHybridP2PNetwork(log.With("node", "netA"), relayCfg, p2pKeyDir, nil, genesisID, "net", &nopeNodeInfo{})
 	require.NoError(t, err)
 
