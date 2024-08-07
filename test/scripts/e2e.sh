@@ -181,7 +181,16 @@ if [ -z "$E2E_TEST_FILTER" ] || [ "$E2E_TEST_FILTER" == "SCRIPTS" ]; then
 
     clientrunner="${TEMPDIR}/ve/bin/python3 e2e_client_runner.py ${RUN_KMD_WITH_UNSAFE_SCRYPT}"
 
-    $clientrunner ${KEEP_TEMPS_CMD_STR} "$SRCROOT"/test/scripts/e2e_subs/*.{sh,py}
+    if [ -n "$TESTFILTER" ]; then
+        echo "Running test: $TESTFILTER"
+        $clientrunner ${KEEP_TEMPS_CMD_STR} "$SRCROOT"/test/scripts/e2e_subs/${TESTFILTER}
+        echo -n "deactivating..."
+        deactivate
+        echo "done"
+        exit
+    else
+        $clientrunner ${KEEP_TEMPS_CMD_STR} "$SRCROOT"/test/scripts/e2e_subs/*.{sh,py}
+    fi
 
     # If the temporary artifact directory exists, then the test artifact needs to be created
     if [ -d "${TEMPDIR}/net" ]; then
