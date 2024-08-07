@@ -62,7 +62,7 @@ func TestCapabilities_Discovery(t *testing.T) {
 	for _, capD := range caps {
 		peersAdded := 0
 		for _, addr := range addrs {
-			added, err := capD.AddPeer(addr)
+			added, err := capD.addPeer(addr)
 			require.NoError(t, err)
 			require.True(t, added)
 			peersAdded++
