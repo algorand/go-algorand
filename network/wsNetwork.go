@@ -1389,12 +1389,6 @@ func (wn *WebsocketNetwork) getPeersChangeCounter() int32 {
 // preparePeerData prepares batches of data for sending.
 // It performs zstd compression for proposal massages if they this is a prio request and has proposal.
 func (wn *msgBroadcaster) preparePeerData(request broadcastRequest, prio bool) ([][]byte, []crypto.Digest) {
-	// determine if there is a payload proposal and if so compress proposal portion of the request
-	shouldCompress := false
-	if prio {
-		shouldCompress = checkCompressible(request)
-	}
-
 	digests := make([]crypto.Digest, len(request.data))
 	data := make([][]byte, len(request.data))
 	for i, d := range request.data {
@@ -1407,14 +1401,12 @@ func (wn *msgBroadcaster) preparePeerData(request broadcastRequest, prio bool) (
 			digests[i] = crypto.Hash(mbytes)
 		}
 
-		if shouldCompress {
-			if request.tags[i] == protocol.ProposalPayloadTag {
-				compressed, logMsg := zstdCompressMsg(tbytes, d)
-				if len(logMsg) > 0 {
-					wn.log.Warn(logMsg)
-				}
-				data[i] = compressed
+		if prio && request.tags[i] == protocol.ProposalPayloadTag {
+			compressed, logMsg := zstdCompressMsg(tbytes, d)
+			if len(logMsg) > 0 {
+				wn.log.Warn(logMsg)
 			}
+			data[i] = compressed
 		}
 	}
 	return data, digests

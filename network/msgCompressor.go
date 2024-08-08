@@ -31,18 +31,6 @@ var zstdCompressionMagic = [4]byte{0x28, 0xb5, 0x2f, 0xfd}
 
 const zstdCompressionLevel = zstd.BestSpeed
 
-// checkCompressible checks if there is an proposal payload message
-func checkCompressible(request broadcastRequest) bool {
-	hasPP := false
-	for _, tag := range request.tags {
-		if tag == protocol.ProposalPayloadTag {
-			hasPP = true
-			break
-		}
-	}
-	return hasPP
-}
-
 // zstdCompressMsg returns a concatenation of a tag and compressed data
 func zstdCompressMsg(tbytes []byte, d []byte) ([]byte, string) {
 	bound := zstd.CompressBound(len(d))

@@ -48,22 +48,6 @@ func TestZstdDecompress(t *testing.T) {
 	require.Nil(t, decompressed)
 }
 
-func TestCheckCompressible(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	req := broadcastRequest{}
-	r := checkCompressible(req)
-	require.False(t, r)
-
-	req.tags = []protocol.Tag{protocol.AgreementVoteTag}
-	r = checkCompressible(req)
-	require.False(t, r)
-
-	req.tags = []protocol.Tag{protocol.AgreementVoteTag, protocol.ProposalPayloadTag}
-	r = checkCompressible(req)
-	require.True(t, r)
-}
-
 func TestZstdCompressMsg(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
