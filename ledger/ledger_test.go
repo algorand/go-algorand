@@ -2915,6 +2915,12 @@ func testVotersReloadFromDiskAfterOneStateProofCommitted(t *testing.T, cfg confi
 	require.NoError(t, err)
 	defer l.Close()
 
+	// quit the commitSyncer goroutine: this test flushes manually with triggerTrackerFlush
+	l.trackers.ctxCancel()
+	l.trackers.ctxCancel = nil
+	<-l.trackers.commitSyncerClosed
+	l.trackers.commitSyncerClosed = nil
+
 	blk := genesisInitState.Block
 
 	sp := bookkeeping.StateProofTrackingData{
@@ -2929,6 +2935,9 @@ func testVotersReloadFromDiskAfterOneStateProofCommitted(t *testing.T, cfg confi
 		blk.BlockHeader.Round++
 		err = l.AddBlock(blk, agreement.Certificate{})
 		require.NoError(t, err)
+		if i > 0 && i%100 == 0 {
+			triggerTrackerFlush(t, l)
+		}
 	}
 
 	// we simulate that the stateproof for round 512 is confirmed on chain, and we can move to the next one.
@@ -2941,31 +2950,12 @@ func testVotersReloadFromDiskAfterOneStateProofCommitted(t *testing.T, cfg confi
 		blk.BlockHeader.Round++
 		err = l.AddBlock(blk, agreement.Certificate{})
 		require.NoError(t, err)
-	}
-
-	// wait all pending commits to finish
-	l.trackers.accountsWriting.Wait()
-
-	// quit the commitSyncer goroutine: this test flushes manually with triggerTrackerFlush
-	l.trackers.ctxCancel()
-	l.trackers.ctxCancel = nil
-	<-l.trackers.commitSyncerClosed
-	l.trackers.commitSyncerClosed = nil
-
-	// it is possible a commmit was scheduled while commitSyncer was closing so that there is one pending task
-	// that required to be done before before the ledger can be closed, so drain the queue
-outer:
-	for {
-		select {
-		case <-l.trackers.deferredCommits:
-			log.Info("drained deferred commit")
-			l.trackers.accountsWriting.Done()
-		default:
-			break outer
+		if i%100 == 0 {
+			triggerTrackerFlush(t, l)
 		}
 	}
 
-	// flush one final time
+	// flush remaining blocks
 	triggerTrackerFlush(t, l)
 
 	var vtSnapshot map[basics.Round]*ledgercore.VotersForRound
@@ -2981,6 +2971,18 @@ outer:
 		require.Contains(t, vtSnapshot, basics.Round(496))
 		require.NotContains(t, vtSnapshot, basics.Round(240))
 	}()
+
+	t.Log("reloading ledger")
+	// drain any deferred commits since AddBlock above triggered scheduleCommit
+outer:
+	for {
+		select {
+		case <-l.trackers.deferredCommits:
+			l.trackers.accountsWriting.Done()
+		default:
+			break outer
+		}
+	}
 
 	err = l.reloadLedger()
 	require.NoError(t, err)
