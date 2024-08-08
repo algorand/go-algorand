@@ -113,8 +113,12 @@ type ConsensusParams struct {
 	EnableAppCostPooling bool
 
 	// EnableLogicSigCostPooling specifies LogicSig budgets are pooled across a
-	// group. The total available is len(group) * LogicSigMaxCost)
+	// group. The total available is len(group) * LogicSigMaxCost
 	EnableLogicSigCostPooling bool
+
+	// EnableLogicSigSizePooling specifies LogicSig sizes are pooled across a
+	// group. The total available is len(group) * LogicSigMaxSize
+	EnableLogicSigSizePooling bool
 
 	// RewardUnit specifies the number of MicroAlgos corresponding to one reward
 	// unit.
@@ -228,7 +232,7 @@ type ConsensusParams struct {
 	// 0 for no support, otherwise highest version supported
 	LogicSigVersion uint64
 
-	// len(LogicSig.Logic) + len(LogicSig.Args[*]) must be less than this
+	// len(LogicSig.Logic) + len(LogicSig.Args[*]) must be less than this (unless pooling is enabled)
 	LogicSigMaxSize uint64
 
 	// sum of estimated op cost must be less than this
@@ -765,7 +769,7 @@ func checkSetAllocBounds(p ConsensusParams) {
 	checkSetMax(p.MaxAppProgramLen, &MaxStateDeltaKeys)
 	checkSetMax(p.MaxAppProgramLen, &MaxEvalDeltaAccounts)
 	checkSetMax(p.MaxAppProgramLen, &MaxAppProgramLen)
-	checkSetMax(int(p.LogicSigMaxSize), &MaxLogicSigMaxSize)
+	checkSetMax((int(p.LogicSigMaxSize) * p.MaxTxGroupSize), &MaxLogicSigMaxSize)
 	checkSetMax(p.MaxTxnNoteBytes, &MaxTxnNoteBytes)
 	checkSetMax(p.MaxTxGroupSize, &MaxTxGroupSize)
 	// MaxBytesKeyValueLen is max of MaxAppKeyLen and MaxAppBytesValueLen
@@ -1511,6 +1515,8 @@ func initConsensusProtocols() {
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
 	vFuture.LogicSigVersion = 11 // When moving this to a release, put a new higher LogicSigVersion here
+
+	vFuture.EnableLogicSigSizePooling = true
 
 	vFuture.Payouts.Enabled = true
 	vFuture.Payouts.Percent = 75
