@@ -2781,7 +2781,7 @@ func TestTxHandlerValidateIncomingTxMessage(t *testing.T) {
 	stxn := stxns[0]
 	blobNonCan := craftNonCanonical(t, &stxn, blob)
 	outmsg = handler.validateIncomingTxMessage(network.IncomingMessage{Data: blobNonCan})
-	require.Equal(t, outmsg.Action, network.Ignore)
+	require.Equal(t, outmsg.Action, network.Disconnect)
 
 	// invalid signature
 	stxns, _ = makeTxns(addresses, secrets, 1, 2, genesisHash)
@@ -2814,6 +2814,6 @@ func TestTxHandlerValidateIncomingTxMessage(t *testing.T) {
 		stxn := stxns[0]
 		blobNonCan := craftNonCanonical(t, &stxn, blob)
 		outmsg = handler.validateIncomingTxMessage(network.IncomingMessage{Data: blobNonCan})
-		require.Equal(t, outmsg.Action, network.Ignore)
+		require.Equal(t, outmsg.Action, network.Disconnect)
 	})
 }
