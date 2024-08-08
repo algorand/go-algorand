@@ -290,7 +290,13 @@ func TestP2PMakeHostAddressFilter(t *testing.T) {
 		mala, err := multiaddr.NewMultiaddr(la)
 		require.NoError(t, err)
 		host.Network().Listen(mala)
-		require.Empty(t, host.Addrs())
+		addrs := host.Addrs()
+		if len(addrs) > 0 {
+			// CI servers might have a single public IP interface, validate if this is a case
+			for _, a := range addrs {
+				require.True(t, manet.IsPublicAddr(a))
+			}
+		}
 		host.Close()
 	}
 
