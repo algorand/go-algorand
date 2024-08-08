@@ -81,8 +81,10 @@ type GossipNode interface {
 	// ClearHandlers deregisters all the existing message handlers.
 	ClearHandlers()
 
-	// RegisterProcessors adds to the set of given message processors.
-	RegisterProcessors(dispatch []TaggedMessageProcessor)
+	// RegisterValidatorHandlers adds to the set of given message validation handlers.
+	// A difference with regular handlers is validation ones perform synchronous validation.
+	// Currently used as p2p pubsub topic validators.
+	RegisterValidatorHandlers(dispatch []TaggedMessageValidatorHandler)
 
 	// ClearProcessors deregisters all the existing message processors.
 	ClearProcessors()
@@ -157,14 +159,6 @@ type OutgoingMessage struct {
 	OnRelease func()
 }
 
-// ValidatedMessage is a message that has been validated and is ready to be processed.
-// Think as an intermediate one between IncomingMessage and OutgoingMessage
-type ValidatedMessage struct {
-	Action           ForwardingPolicy
-	Tag              Tag
-	ValidatedMessage interface{}
-}
-
 // ForwardingPolicy is an enum indicating to whom we should send a message
 //
 //msgp:ignore ForwardingPolicy
@@ -203,28 +197,19 @@ func (f HandlerFunc) Handle(message IncomingMessage) OutgoingMessage {
 	return f(message)
 }
 
-// MessageProcessor takes a IncomingMessage (e.g., vote, transaction), processes it, and returns what (if anything)
+// MessageValidatorHandler takes a IncomingMessage (e.g., vote, transaction), processes it, and returns what (if anything)
 // to send to the network in response.
-// This is an extension of the MessageHandler that works in two stages: validate ->[result]-> handle.
-type MessageProcessor interface {
-	Validate(message IncomingMessage) ValidatedMessage
-	Handle(message ValidatedMessage) OutgoingMessage
+// it supposed to perform synchronous validation and return the result of the validation
+// so that network knows immediately if the message should be be broadcasted or not.
+type MessageValidatorHandler interface {
+	ValidateHandle(message IncomingMessage) OutgoingMessage
 }
 
-// ProcessorValidateFunc represents an implementation of the MessageProcessor interface
-type ProcessorValidateFunc func(message IncomingMessage) ValidatedMessage
+// ValidateHandleFunc represents an implementation of the MessageProcessor interface
+type ValidateHandleFunc func(message IncomingMessage) OutgoingMessage
 
-// ProcessorHandleFunc represents an implementation of the MessageProcessor interface
-type ProcessorHandleFunc func(message ValidatedMessage) OutgoingMessage
-
-// Validate implements MessageProcessor.Validate, calling the validator with the IncomingMessage and returning the action
-// and validation extra data that can be use as the handler input.
-func (f ProcessorValidateFunc) Validate(message IncomingMessage) ValidatedMessage {
-	return f(message)
-}
-
-// Handle implements MessageProcessor.Handle calling the handler with the ValidatedMessage and returning the OutgoingMessage
-func (f ProcessorHandleFunc) Handle(message ValidatedMessage) OutgoingMessage {
+// ValidateHandle implements MessageValidatorHandler.ValidateHandle, calling the validator with the IncomingMessage and returning the action.
+func (f ValidateHandleFunc) ValidateHandle(message IncomingMessage) OutgoingMessage {
 	return f(message)
 }
 
@@ -236,9 +221,9 @@ type taggedMessageDispatcher[T any] struct {
 // TaggedMessageHandler receives one type of broadcast messages
 type TaggedMessageHandler = taggedMessageDispatcher[MessageHandler]
 
-// TaggedMessageProcessor receives one type of broadcast messages
+// TaggedMessageValidatorHandler receives one type of broadcast messages
 // and performs two stage processing: validating and handling
-type TaggedMessageProcessor = taggedMessageDispatcher[MessageProcessor]
+type TaggedMessageValidatorHandler = taggedMessageDispatcher[MessageValidatorHandler]
 
 // Propagate is a convenience function to save typing in the common case of a message handler telling us to propagate an incoming message
 // "return network.Propagate(msg)" instead of "return network.OutgoingMsg{network.Broadcast, msg.Tag, msg.Data}"

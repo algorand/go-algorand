@@ -98,6 +98,7 @@ func makePubSub(ctx context.Context, cfg config.Local, host host.Host) (*pubsub.
 		pubsub.WithMessageSignaturePolicy(pubsub.StrictNoSign),
 		// pubsub.WithValidateThrottle(cfg.TxBacklogSize),
 		pubsub.WithValidateWorkers(incomingThreads),
+		pubsub.WithRawTracer(pubsubTracer{}),
 	}
 
 	return pubsub.NewGossipSub(ctx, host, options...)
