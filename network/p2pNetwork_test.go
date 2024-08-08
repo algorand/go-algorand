@@ -345,11 +345,6 @@ func (s *mockService) AddrInfo() peer.AddrInfo {
 	}
 }
 
-func (s *mockService) DialNode(ctx context.Context, peer *peer.AddrInfo) error {
-	s.peers[peer.ID] = *peer
-	return nil
-}
-
 func (s *mockService) DialPeersUntilTargetCount(targetConnCount int) {
 }
 

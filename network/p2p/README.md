@@ -64,9 +64,17 @@ graph LR
     S --> T
 ```
 
-### Sub-components
+The underlying libp2p implementation abstracted as `p2p.Service` and initialized in two steps:
+1. Creating a p2p `Host`
+2. Creating a service `serviceImpl` object
 
-#### DHT and capabilities
+`Host` is also used for p2p HTTP server and DHT Discovery service creation. It is also useful for unit testing. Note, `Host` is created with `NoListenAddrs` options that prevents automatic listening and networking until the `Service.Start()` is called. This follows others services design (including WsNetwork service).
+
+### Connection limiting
+
+libp2p's `ResourceManager` is used to limit number of connections up tp `cfg.P2PIncomingConnectionsLimit`.
+
+### DHT and capabilities
 
 Provides helper methods to construct DHT discovery service using `go-libp2p-kad-dht` library.
 High level [CapabilitiesDiscovery](./capabilities.go) class supports retrieving (`PeersForCapability`)
@@ -112,27 +120,27 @@ graph LR
     Pro --> KAD
 ```
 
-#### HTTP over libp2p connection
+### HTTP over libp2p connection
 
 libp2p@0.33 added ability to multiplex HTTP traffic in p2p connection.
 A custom `/algorand-http/1.0.0` stream is utilized to expose HTTP server and allow
 network service clients (catchup, catchpoint, txsync) to register its own handlers
 similarly to the legacy ws-net implementation.
 
-#### Peerstore
+### Peerstore
 
 In-memory peerstore implements `libp2p.Peerstore` and go-algorand `Phonebook` interfaces.
 Peer classes (relays, archival, etc) and persistent peers (i.e. peers from command line or phonebook.json)
 are supported. Possible enhancement is to save/load peerstore to/from disk to tolerate bootstrap nodes failures.
 
-#### Logging
+### Logging
 
 lip2p uses zap logger as a separate `ipfs/go-log/v2` module. `EnableP2PLogging` helper adds
 go-algorand's `logrus` as a custom zap core so that all libp2p logs go through go-algorand logging facility.
 Unfortunately `ipfs/go-log/v2` has a primary logging core as module variable that makes impossible
 to have custom `logrus` sub-loggers in unit tests.
 
-#### Metrics
+### Metrics
 
 `go-libp2p` uses Prometheus as a metrics library, `go-libp2p-kad-dht` relies on OpenCensus library.
 go-algorand has two collectors (see `util/metrics) for both Prometheus and OpenCensus for

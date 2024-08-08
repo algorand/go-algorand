@@ -50,19 +50,16 @@ var ErrConnectionQueueingTimeout = errors.New("rateLimitingTransport: queueing t
 // according to the entries in the phonebook.
 func MakeRateLimitingTransport(phonebook ConnectionTimeStore, queueingTimeout time.Duration, dialer *Dialer, maxIdleConnsPerHost int) RateLimitingTransport {
 	defaultTransport := http.DefaultTransport.(*http.Transport)
-	return RateLimitingTransport{
-		phonebook: phonebook,
-		innerTransport: &http.Transport{
-			Proxy:                 defaultTransport.Proxy,
-			DialContext:           dialer.innerDialContext,
-			MaxIdleConns:          defaultTransport.MaxIdleConns,
-			IdleConnTimeout:       defaultTransport.IdleConnTimeout,
-			TLSHandshakeTimeout:   defaultTransport.TLSHandshakeTimeout,
-			ExpectContinueTimeout: defaultTransport.ExpectContinueTimeout,
-			MaxIdleConnsPerHost:   maxIdleConnsPerHost,
-		},
-		queueingTimeout: queueingTimeout,
+	innerTransport := &http.Transport{
+		Proxy:                 defaultTransport.Proxy,
+		DialContext:           dialer.innerDialContext,
+		MaxIdleConns:          defaultTransport.MaxIdleConns,
+		IdleConnTimeout:       defaultTransport.IdleConnTimeout,
+		TLSHandshakeTimeout:   defaultTransport.TLSHandshakeTimeout,
+		ExpectContinueTimeout: defaultTransport.ExpectContinueTimeout,
+		MaxIdleConnsPerHost:   maxIdleConnsPerHost,
 	}
+	return MakeRateLimitingTransportWithRoundTripper(phonebook, queueingTimeout, innerTransport, nil, maxIdleConnsPerHost)
 }
 
 // MakeRateLimitingTransportWithRoundTripper creates a rate limiting http transport that would limit the requests rate
