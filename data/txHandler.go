@@ -808,17 +808,18 @@ func (handler *TxHandler) validateIncomingTxMessage(rawmsg network.IncomingMessa
 	if drop {
 		return network.OutgoingMessage{Action: network.Ignore}
 	}
+
+	if handler.incomingTxGroupAppRateLimit(unverifiedTxGroup, rawmsg.Sender) {
+		return network.OutgoingMessage{Action: network.Ignore}
+	}
+
 	if reencoded == nil {
 		reencoded = reencode(unverifiedTxGroup)
 	}
 
 	if !bytes.Equal(rawmsg.Data, reencoded) {
-		// ignore non-canonically encoded messages
-		return network.OutgoingMessage{Action: network.Ignore}
-	}
-
-	if handler.incomingTxGroupAppRateLimit(unverifiedTxGroup, rawmsg.Sender) {
-		return network.OutgoingMessage{Action: network.Ignore}
+		// reject non-canonically encoded messages
+		return network.OutgoingMessage{Action: network.Disconnect}
 	}
 
 	// apply backlog worker logic
