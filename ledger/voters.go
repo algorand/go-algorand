@@ -291,7 +291,30 @@ func (vt *votersTracker) lowestRound(base basics.Round) basics.Round {
 	return minRound
 }
 
-// VotersForStateProof returns the top online participants from round r.
+// LatestCompletedVotersUpTo returns the highest round <= r for which information about the top online
+// participants has already been collected,  and the completed VotersForRound for that round.
+// If none is found, it returns 0, nil. Unlike VotersForStateProof, this function does not wait.
+func (vt *votersTracker) LatestCompletedVotersUpTo(r basics.Round) (basics.Round, *ledgercore.VotersForRound) {
+	vt.votersMu.RLock()
+	defer vt.votersMu.RUnlock()
+
+	var latestRound basics.Round
+	var latestVoters *ledgercore.VotersForRound
+
+	for round, voters := range vt.votersForRoundCache {
+		if round <= r && round > latestRound {
+			if completed, err := voters.Completed(); completed && err != nil {
+				latestRound = round
+				latestVoters = voters
+			}
+		}
+	}
+
+	return latestRound, latestVoters
+}
+
+// VotersForStateProof returns the top online participants from round r. If this data is still being
+// constructed in another goroutine, this function will wait until it is ready.
 func (vt *votersTracker) VotersForStateProof(r basics.Round) (*ledgercore.VotersForRound, error) {
 	tr, exists := vt.getVoters(r)
 	if !exists {

@@ -48,6 +48,7 @@ type LedgerForCowBase interface {
 	CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, ledgercore.Txlease) error
 	LookupWithoutRewards(basics.Round, basics.Address) (ledgercore.AccountData, basics.Round, error)
 	LookupAgreement(basics.Round, basics.Address) (basics.OnlineAccountData, error)
+	GetKnockOfflineCandidates(basics.Round, config.ConsensusParams) (map[basics.Address]basics.OnlineAccountData, error)
 	LookupAsset(basics.Round, basics.Address, basics.AssetIndex) (ledgercore.AssetResource, error)
 	LookupApplication(basics.Round, basics.Address, basics.AppIndex) (ledgercore.AppResource, error)
 	LookupKv(basics.Round, string) ([]byte, error)
@@ -235,6 +236,10 @@ func (x *roundCowBase) lookupAgreement(addr basics.Address) (basics.OnlineAccoun
 
 	x.onlineAccounts[addr] = ad
 	return ad, err
+}
+
+func (x *roundCowBase) knockOfflineCandidates() (map[basics.Address]basics.OnlineAccountData, error) {
+	return x.l.GetKnockOfflineCandidates(x.rnd, x.proto)
 }
 
 // onlineStake returns the total online stake as of the start of the round. It
@@ -1611,21 +1616,72 @@ func (eval *BlockEvaluator) generateKnockOfflineAccountsList() {
 	if !eval.generate {
 		return
 	}
-	current := eval.Round()
 
+	current := eval.Round()
 	maxExpirations := eval.proto.MaxProposedExpiredOnlineAccounts
 	maxSuspensions := eval.proto.Payouts.MaxMarkAbsent
 
 	updates := &eval.block.ParticipationUpdates
 
-	ch := activeChallenge(&eval.proto, uint64(eval.Round()), eval.state)
+	ch := activeChallenge(&eval.proto, uint64(current), eval.state)
 
+	// Make a set of candidate addresses to check for expired or absentee status.
+	type candidateData struct {
+		VoteLastValid         basics.Round
+		VoteID                crypto.OneTimeSignatureVerifier
+		Status                basics.Status
+		LastProposed          basics.Round
+		LastHeartbeat         basics.Round
+		MicroAlgosWithRewards basics.MicroAlgos
+		IncentiveEligible     bool // currently unused below, but may be needed in the future
+	}
+	candidates := make(map[basics.Address]candidateData)
+
+	// First, ask the ledger for the top N online accounts, with their latest
+	// online account data, current up to the previous round.
+	if maxSuspensions > 0 {
+		knockOfflineCandidates, err := eval.state.knockOfflineCandidates()
+		if err != nil {
+			// Log an error and keep going; generating lists of absent and expired
+			// accounts is not required by block validation rules.
+			logging.Base().Warnf("error fetching knockOfflineCandidates: %v", err)
+			knockOfflineCandidates = nil
+		}
+		for accountAddr, acctData := range knockOfflineCandidates {
+			// acctData is from previous block: doesn't include any updates in mods
+			candidates[accountAddr] = candidateData{
+				VoteLastValid:         acctData.VoteLastValid,
+				VoteID:                acctData.VoteID,
+				Status:                basics.Online, // from lookupOnlineAccountData, which only returns online accounts
+				LastProposed:          acctData.LastProposed,
+				LastHeartbeat:         acctData.LastHeartbeat,
+				MicroAlgosWithRewards: acctData.MicroAlgosWithRewards,
+				IncentiveEligible:     acctData.IncentiveEligible,
+			}
+		}
+	}
+
+	// Then add any accounts modified in this block, with their state at the
+	// end of the round.
 	for _, accountAddr := range eval.state.modifiedAccounts() {
 		acctData, found := eval.state.mods.Accts.GetData(accountAddr)
 		if !found {
 			continue
 		}
+		// This will overwrite data from the knockOfflineCandidates() list, if they were modified in the current block.
+		candidates[accountAddr] = candidateData{
+			VoteLastValid:         acctData.VoteLastValid,
+			VoteID:                acctData.VoteID,
+			Status:                acctData.Status,
+			LastProposed:          acctData.LastProposed,
+			LastHeartbeat:         acctData.LastHeartbeat,
+			MicroAlgosWithRewards: acctData.WithUpdatedRewards(eval.proto, eval.state.rewardsLevel()).MicroAlgos,
+			IncentiveEligible:     acctData.IncentiveEligible,
+		}
+	}
 
+	// Now, check these candidate accounts to see if they are expired or absent.
+	for accountAddr, acctData := range candidates {
 		// Regardless of being online or suspended, if voting data exists, the
 		// account can be expired to remove it.  This means an offline account
 		// can be expired (because it was already suspended).
@@ -1647,7 +1703,7 @@ func (eval *BlockEvaluator) generateKnockOfflineAccountsList() {
 
 		if acctData.Status == basics.Online {
 			lastSeen := max(acctData.LastProposed, acctData.LastHeartbeat)
-			if isAbsent(eval.state.prevTotals.Online.Money, acctData.MicroAlgos, lastSeen, current) ||
+			if isAbsent(eval.state.prevTotals.Online.Money, acctData.MicroAlgosWithRewards, lastSeen, current) ||
 				failsChallenge(ch, accountAddr, lastSeen) {
 				updates.AbsentParticipationAccounts = append(
 					updates.AbsentParticipationAccounts,
@@ -1656,14 +1712,6 @@ func (eval *BlockEvaluator) generateKnockOfflineAccountsList() {
 			}
 		}
 	}
-}
-
-// delete me in Go 1.21
-func max(a, b basics.Round) basics.Round {
-	if a > b {
-		return a
-	}
-	return b
 }
 
 // bitsMatch checks if the first n bits of two byte slices match. Written to
