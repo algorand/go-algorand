@@ -646,16 +646,20 @@ func (l *Ledger) GetIncentiveKickoffCandidates(rnd basics.Round, proto config.Co
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
 
-	// get cached list of top N addresses
-	addrs, err := l.topOnlineCache.topN(&l.acctsOnline, rnd, proto, rewardsLevel)
-	if err != nil {
-		return nil, err
+	// get state proof worker's most recent list for top N addresses
+	if proto.StateProofInterval == 0 {
+		return nil, nil
+	}
+	// get latest state proof voters information, up to rnd, without calling cond.Wait()
+	rnd, voters := l.acctsOnline.voters.LatestCompletedVotersUpTo(rnd)
+	if voters == nil { // no cached voters found < rnd
+		return nil, nil
 	}
 
-	// fetch data for this round from online account cache. These accounts should all
+	// fetch fresh data up to this round from online account cache. These accounts should all
 	// be in cache, as long as topOnlineCacheSize < onlineAccountsCacheMaxSize.
 	ret := make(map[basics.Address]basics.OnlineAccountData)
-	for _, addr := range addrs {
+	for addr := range voters.AddrToPos {
 		data, err := l.acctsOnline.lookupOnlineAccountData(rnd, addr)
 		if err != nil {
 			continue // skip missing / not online accounts
