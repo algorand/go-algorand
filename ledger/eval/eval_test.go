@@ -793,8 +793,15 @@ func (ledger *evalTestLedger) LookupAgreement(rnd basics.Round, addr basics.Addr
 	return convertToOnline(ad), err
 }
 
-func (ledger *evalTestLedger) GetKnockOfflineCandidates(basics.Round, config.ConsensusParams) (map[basics.Address]basics.OnlineAccountData, error) {
-	return nil, nil
+func (ledger *evalTestLedger) GetKnockOfflineCandidates(rnd basics.Round, _ config.ConsensusParams) (map[basics.Address]basics.OnlineAccountData, error) {
+	// simulate by returning all online accounts known by the test ledger
+	ret := make(map[basics.Address]basics.OnlineAccountData)
+	for addr, data := range ledger.roundBalances[rnd] {
+		if data.Status == basics.Online && !data.MicroAlgos.IsZero() {
+			ret[addr] = data.OnlineAccountData()
+		}
+	}
+	return ret, nil
 }
 
 // OnlineCirculation just returns a deterministic value for a given round.

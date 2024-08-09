@@ -564,6 +564,8 @@ func (u AccountData) OnlineAccountData() OnlineAccountData {
 			VoteKeyDilution: u.VoteKeyDilution,
 		},
 		IncentiveEligible: u.IncentiveEligible,
+		LastProposed:      u.LastProposed,
+		LastHeartbeat:     u.LastHeartbeat,
 	}
 }
 
