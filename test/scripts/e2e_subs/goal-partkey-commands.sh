@@ -63,7 +63,8 @@ fail_test () {
 
 create_and_fund_account () {
   set +x  # disable command echoing to hide the account funding output
-  local TEMP_ACCT=$(${gcmd} account new|awk '{ print $6 }')
+  local TEMP_ACCT
+  TEMP_ACCT=$(${gcmd} account new|awk '{ print $6 }')
   SEND_OUTOUT=$(${gcmd} clerk send -f "$INITIAL_ACCOUNT" -t "$TEMP_ACCT" -a 1000000 2>&1)
   if [[ $SEND_OUTOUT == *"Couldn't broadcast tx"* ]]; then
     fail_test "Failed to fund account: $SEND_OUTOUT"
@@ -77,17 +78,21 @@ create_and_fund_account () {
 # $2 - a participation id
 # $3 - error message
 verify_registered_state () {
+  SEARCH_STATE=$(echo "$1" | xargs)
+  SEARCH_KEY=$(echo "$2" | xargs)
+  SEARCH_INVOKE_CONTEXT=$(echo "$3" | xargs)
+
   # look for participation ID anywhere in the partkeyinfo output
   PARTKEY_OUTPUT=$(${gcmd} account partkeyinfo)
-  if ! echo "$PARTKEY_OUTPUT" | grep -q "$2"; then
-    fail_test "Key $2 was not installed properly for cmd '$3':\n$PARTKEY_OUTPUT"
+  if ! echo "$PARTKEY_OUTPUT" | grep -q -F "$SEARCH_KEY"; then
+    fail_test "Key $SEARCH_KEY was not installed properly for cmd '$SEARCH_INVOKE_CONTEXT':\n$PARTKEY_OUTPUT"
   fi
 
   # looking for yes/no, and the 8 character head of participation id in this line:
   # yes         LFMT...RHJQ  4UPT6AQC...               4            0     3000
   LISTKEY_OUTPUT=$(${gcmd} account listpartkeys)
-  if ! echo "$LISTKEY_OUTPUT" | grep -q "$1.*$(echo "$2" | cut -c1-8)"; then
-    fail_test "Unexpected key $2 state ($1) for cmd '$3':\n$LISTKEY_OUTPUT"
+  if ! echo "$LISTKEY_OUTPUT" | grep -q "$SEARCH_STATE.*$(echo "$SEARCH_KEY" | cut -c1-8)"; then
+    fail_test "Unexpected key $SEARCH_KEY state (looked for $SEARCH_STATE ) for cmd '$SEARCH_INVOKE_CONTEXT':\n$LISTKEY_OUTPUT"
   fi
 }
 

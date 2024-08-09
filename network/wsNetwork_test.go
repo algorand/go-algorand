@@ -429,15 +429,12 @@ func TestWebsocketProposalPayloadCompression(t *testing.T) {
 	}
 
 	var tests []testDef = []testDef{
-		// two old nodes
-		{[]string{"2.1"}, "2.1", []string{"2.1"}, "2.1"},
-
 		// two new nodes with overwritten config
 		{[]string{"2.2"}, "2.2", []string{"2.2"}, "2.2"},
 
 		// old node + new node
 		{[]string{"2.1"}, "2.1", []string{"2.2", "2.1"}, "2.2"},
-		{[]string{"2.2", "2.1"}, "2.2", []string{"2.1"}, "2.1"},
+		{[]string{"2.2", "2.1"}, "2.1", []string{"2.2"}, "2.2"},
 
 		// combinations
 		{[]string{"2.2", "2.1"}, "2.1", []string{"2.2", "2.1"}, "2.1"},
@@ -1101,7 +1098,7 @@ func TestDupFilter(t *testing.T) {
 	defer netC.Stop()
 
 	makeMsg := func(n int) []byte {
-		// We cannot harcode the msgSize to messageFilterSize + 1 because max allowed AV message is smaller  than that.
+		// We cannot hardcode the msgSize to messageFilterSize + 1 because max allowed AV message is smaller  than that.
 		// We also cannot use maxSize for PP since it's a compressible tag but trying to compress random data will expand it.
 		if messageFilterSize+1 < n {
 			n = messageFilterSize + 1
@@ -1387,7 +1384,7 @@ func TestPeeringWithIdentityChallenge(t *testing.T) {
 	assert.Equal(t, 0, len(netB.GetPeers(PeersConnectedOut)))
 	// netA never attempts to set identity as it never sees a verified identity
 	assert.Equal(t, 1, netA.identityTracker.(*mockIdentityTracker).getSetCount())
-	// no connecton => netB does attepmt to add the identity to the tracker
+	// no connection => netB does attempt to add the identity to the tracker
 	// and it would not end up being added
 	assert.Equal(t, 1, netB.identityTracker.(*mockIdentityTracker).getSetCount())
 	assert.Equal(t, 1, netB.identityTracker.(*mockIdentityTracker).getInsertCount())
@@ -1608,7 +1605,7 @@ func TestPeeringReceiverIdentityChallengeOnly(t *testing.T) {
 	assert.Equal(t, 0, netB.identityTracker.(*mockIdentityTracker).getSetCount())
 }
 
-// TestPeeringIncorrectDeduplicationName confirm that if the reciever can't match
+// TestPeeringIncorrectDeduplicationName confirm that if the receiver can't match
 // the Address in the challenge to its PublicAddress, identities aren't exchanged, but peering continues
 func TestPeeringIncorrectDeduplicationName(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -1665,7 +1662,7 @@ func TestPeeringIncorrectDeduplicationName(t *testing.T) {
 
 	// bi-directional connection would now work since netB detects to be connected to netA in tryConnectReserveAddr,
 	// so force it.
-	// this second connection should set identities, because the reciever address matches now
+	// this second connection should set identities, because the receiver address matches now
 	_, ok = netB.tryConnectReserveAddr(addrA)
 	assert.False(t, ok)
 	netB.wg.Add(1)
@@ -2504,9 +2501,9 @@ func TestWebsocketNetwork_checkServerResponseVariables(t *testing.T) {
 }
 
 func (wn *WebsocketNetwork) broadcastWithTimestamp(tag protocol.Tag, data []byte, when time.Time) error {
-	msgArr := make([][]byte, 1, 1)
+	msgArr := make([][]byte, 1)
 	msgArr[0] = data
-	tagArr := make([]protocol.Tag, 1, 1)
+	tagArr := make([]protocol.Tag, 1)
 	tagArr[0] = tag
 	request := broadcastRequest{tags: tagArr, data: msgArr, enqueueTime: when, ctx: context.Background()}
 
@@ -3711,48 +3708,29 @@ func TestPreparePeerData(t *testing.T) {
 		data: [][]byte{[]byte("test"), []byte("data")},
 	}
 
-	peers := []*wsPeer{}
 	wn := WebsocketNetwork{}
-	data, comp, digests, seenPrioPPTag := wn.broadcaster.preparePeerData(req, false, peers)
+	data, digests := wn.broadcaster.preparePeerData(req, false)
 	require.NotEmpty(t, data)
-	require.Empty(t, comp)
 	require.NotEmpty(t, digests)
 	require.Equal(t, len(req.data), len(digests))
 	require.Equal(t, len(data), len(digests))
-	require.False(t, seenPrioPPTag)
 
 	for i := range data {
 		require.Equal(t, append([]byte(req.tags[i]), req.data[i]...), data[i])
 	}
 
-	// compression
-	peer1 := wsPeer{
-		features: 0,
-	}
-	peer2 := wsPeer{
-		features: pfCompressedProposal,
-	}
-	peers = []*wsPeer{&peer1, &peer2}
-	data, comp, digests, seenPrioPPTag = wn.broadcaster.preparePeerData(req, true, peers)
+	data, digests = wn.broadcaster.preparePeerData(req, true)
 	require.NotEmpty(t, data)
-	require.NotEmpty(t, comp)
 	require.NotEmpty(t, digests)
 	require.Equal(t, len(req.data), len(digests))
 	require.Equal(t, len(data), len(digests))
-	require.Equal(t, len(comp), len(digests))
-	require.True(t, seenPrioPPTag)
 
 	for i := range data {
-		require.Equal(t, append([]byte(req.tags[i]), req.data[i]...), data[i])
-	}
-
-	for i := range comp {
 		if req.tags[i] != protocol.ProposalPayloadTag {
-			require.Equal(t, append([]byte(req.tags[i]), req.data[i]...), comp[i])
-			require.Equal(t, data[i], comp[i])
+			require.Equal(t, append([]byte(req.tags[i]), req.data[i]...), data[i])
+			require.Equal(t, data[i], data[i])
 		} else {
-			require.NotEqual(t, data[i], comp[i])
-			require.Equal(t, append([]byte(req.tags[i]), zstdCompressionMagic[:]...), comp[i][:len(req.tags[i])+len(zstdCompressionMagic)])
+			require.Equal(t, append([]byte(req.tags[i]), zstdCompressionMagic[:]...), data[i][:len(req.tags[i])+len(zstdCompressionMagic)])
 		}
 	}
 }
