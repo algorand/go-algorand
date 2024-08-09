@@ -492,6 +492,8 @@ func (bo *BaseOnlineAccountData) GetOnlineAccountData(proto config.ConsensusPara
 			VoteLastValid:   bo.VoteLastValid,
 			VoteKeyDilution: bo.VoteKeyDilution,
 		},
+		LastProposed:      bo.LastProposed,
+		LastHeartbeat:     bo.LastHeartbeat,
 		IncentiveEligible: bo.IncentiveEligible,
 	}
 }
@@ -508,6 +510,8 @@ func (bo *BaseOnlineAccountData) SetCoreAccountData(ad *ledgercore.AccountData) 
 	// These are updated by the evaluator when accounts are touched
 	bo.MicroAlgos = ad.MicroAlgos
 	bo.RewardsBase = ad.RewardsBase
+	bo.LastHeartbeat = ad.LastHeartbeat
+	bo.LastProposed = ad.LastProposed
 	bo.IncentiveEligible = ad.IncentiveEligible
 }
 
