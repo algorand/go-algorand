@@ -81,6 +81,10 @@ func (lf *ledgerFetcher) requestLedger(ctx context.Context, peer network.HTTPPee
 	}
 
 	network.SetUserAgentHeader(request.Header)
+	httpClient := peer.GetHTTPClient()
+	if httpClient == nil {
+		return nil, fmt.Errorf("requestLedger: HTTPPeer %s has no http client", peer.GetAddress())
+	}
 	return peer.GetHTTPClient().Do(request)
 }
 
