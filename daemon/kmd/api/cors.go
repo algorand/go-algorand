@@ -56,3 +56,16 @@ func corsMiddleware(allowedOrigins []string) func(http.Handler) http.Handler {
 		})
 	}
 }
+
+// AllowPNA constructs the Private Network Access middleware function
+func AllowPNA() func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method == http.MethodOptions && r.Header.Get("Access-Control-Request-Private-Network") == "true" {
+				w.Header().Set("Access-Control-Allow-Private-Network", "true")
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
+}

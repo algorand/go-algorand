@@ -50,13 +50,14 @@ const (
 
 // WalletServerConfig is the configuration passed to MakeWalletServer
 type WalletServerConfig struct {
-	APIToken       string
-	DataDir        string
-	Address        string
-	AllowedOrigins []string
-	SessionManager *session.Manager
-	Log            logging.Logger
-	Timeout        *time.Duration
+	APIToken                         string
+	DataDir                          string
+	Address                          string
+	AllowedOrigins                   []string
+	EnablePrivateNetworkAccessHeader bool
+	SessionManager                   *session.Manager
+	Log                              logging.Logger
+	Timeout                          *time.Duration
 }
 
 // WalletServer deals with serving API requests
@@ -211,7 +212,7 @@ func (ws *WalletServer) start(kill chan os.Signal) (died chan error, sock string
 	// Initialize HTTP server
 	watchdogCB := ws.makeWatchdogCallback(kill)
 	srv := http.Server{
-		Handler: api.Handler(ws.SessionManager, ws.Log, ws.AllowedOrigins, ws.APIToken, watchdogCB),
+		Handler: api.Handler(ws.SessionManager, ws.Log, ws.AllowedOrigins, ws.APIToken, ws.EnablePrivateNetworkAccessHeader, watchdogCB),
 	}
 
 	// Read the kill channel and shut down the server gracefully
