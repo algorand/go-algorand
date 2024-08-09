@@ -47,7 +47,7 @@ type roundCowParent interface {
 	// lookup retrieves agreement data about an address, querying the ledger if necessary.
 	lookupAgreement(basics.Address) (basics.OnlineAccountData, error)
 	onlineStake() (basics.MicroAlgos, error)
-	incentiveCandidates(rewardsLevel uint64) (map[basics.Address]basics.OnlineAccountData, error)
+	knockOfflineCandidates() (map[basics.Address]basics.OnlineAccountData, error)
 
 	// lookupAppParams, lookupAssetParams, lookupAppLocalState, and lookupAssetHolding retrieve data for a given address and ID.
 	// If cacheOnly is set, the ledger DB will not be queried, and only the cache will be consulted.
@@ -193,8 +193,8 @@ func (cb *roundCowState) lookupAgreement(addr basics.Address) (data basics.Onlin
 	return cb.lookupParent.lookupAgreement(addr)
 }
 
-func (cb *roundCowState) incentiveCandidates(rewardsLevel uint64) (map[basics.Address]basics.OnlineAccountData, error) {
-	return cb.lookupParent.incentiveCandidates(rewardsLevel)
+func (cb *roundCowState) knockOfflineCandidates() (map[basics.Address]basics.OnlineAccountData, error) {
+	return cb.lookupParent.knockOfflineCandidates()
 }
 
 func (cb *roundCowState) lookupAppParams(addr basics.Address, aidx basics.AppIndex, cacheOnly bool) (ledgercore.AppParamsDelta, bool, error) {

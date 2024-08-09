@@ -359,7 +359,7 @@ func (l *localLedger) LookupAgreement(rnd basics.Round, addr basics.Address) (ba
 	}, nil
 }
 
-func (l *localLedger) GetIncentiveKickoffCandidates(basics.Round, config.ConsensusParams, uint64) (map[basics.Address]basics.OnlineAccountData, error) {
+func (l *localLedger) GetKnockOfflineCandidates(basics.Round, config.ConsensusParams) (map[basics.Address]basics.OnlineAccountData, error) {
 	return nil, nil
 }
 

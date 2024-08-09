@@ -48,7 +48,7 @@ type LedgerForCowBase interface {
 	CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, ledgercore.Txlease) error
 	LookupWithoutRewards(basics.Round, basics.Address) (ledgercore.AccountData, basics.Round, error)
 	LookupAgreement(basics.Round, basics.Address) (basics.OnlineAccountData, error)
-	GetIncentiveKickoffCandidates(basics.Round, config.ConsensusParams, uint64) (map[basics.Address]basics.OnlineAccountData, error)
+	GetKnockOfflineCandidates(basics.Round, config.ConsensusParams) (map[basics.Address]basics.OnlineAccountData, error)
 	LookupAsset(basics.Round, basics.Address, basics.AssetIndex) (ledgercore.AssetResource, error)
 	LookupApplication(basics.Round, basics.Address, basics.AppIndex) (ledgercore.AppResource, error)
 	LookupKv(basics.Round, string) ([]byte, error)
@@ -238,8 +238,8 @@ func (x *roundCowBase) lookupAgreement(addr basics.Address) (basics.OnlineAccoun
 	return ad, err
 }
 
-func (x *roundCowBase) incentiveCandidates(rewardsLevel uint64) (map[basics.Address]basics.OnlineAccountData, error) {
-	return x.l.GetIncentiveKickoffCandidates(x.rnd, x.proto, rewardsLevel)
+func (x *roundCowBase) knockOfflineCandidates() (map[basics.Address]basics.OnlineAccountData, error) {
+	return x.l.GetKnockOfflineCandidates(x.rnd, x.proto)
 }
 
 // onlineStake returns the total online stake as of the start of the round. It
@@ -1616,14 +1616,14 @@ func (eval *BlockEvaluator) generateKnockOfflineAccountsList() {
 	if !eval.generate {
 		return
 	}
-	current := eval.Round()
 
+	current := eval.Round()
 	maxExpirations := eval.proto.MaxProposedExpiredOnlineAccounts
 	maxSuspensions := eval.proto.Payouts.MaxMarkAbsent
 
 	updates := &eval.block.ParticipationUpdates
 
-	ch := activeChallenge(&eval.proto, uint64(eval.Round()), eval.state)
+	ch := activeChallenge(&eval.proto, uint64(current), eval.state)
 
 	// Make a set of candidate addresses to check for expired or absentee status.
 	type candidateData struct {
@@ -1639,23 +1639,25 @@ func (eval *BlockEvaluator) generateKnockOfflineAccountsList() {
 
 	// First, ask the ledger for the top N online accounts, with their latest
 	// online account data, current up to the previous round.
-	incentiveCandidates, err := eval.state.incentiveCandidates(eval.state.rewardsLevel())
-	if err != nil {
-		// Log an error and keep going; generating lists of absent and expired
-		// accounts is not required by block validation rules.
-		logging.Base().Warnf("error fetching incentiveCandidates: %v", err)
-		incentiveCandidates = nil
-	}
-	for accountAddr, acctData := range incentiveCandidates {
-		// acctData is from previous block: doesn't include any updates in mods
-		candidates[accountAddr] = candidateData{
-			VoteLastValid:         acctData.VoteLastValid,
-			VoteID:                acctData.VoteID,
-			Status:                basics.Online, // from lookupOnlineAccountData, which only returns online accounts
-			LastProposed:          acctData.LastProposed,
-			LastHeartbeat:         acctData.LastHeartbeat,
-			MicroAlgosWithRewards: acctData.MicroAlgosWithRewards,
-			IncentiveEligible:     acctData.IncentiveEligible,
+	if maxSuspensions > 0 {
+		knockOfflineCandidates, err := eval.state.knockOfflineCandidates()
+		if err != nil {
+			// Log an error and keep going; generating lists of absent and expired
+			// accounts is not required by block validation rules.
+			logging.Base().Warnf("error fetching knockOfflineCandidates: %v", err)
+			knockOfflineCandidates = nil
+		}
+		for accountAddr, acctData := range knockOfflineCandidates {
+			// acctData is from previous block: doesn't include any updates in mods
+			candidates[accountAddr] = candidateData{
+				VoteLastValid:         acctData.VoteLastValid,
+				VoteID:                acctData.VoteID,
+				Status:                basics.Online, // from lookupOnlineAccountData, which only returns online accounts
+				LastProposed:          acctData.LastProposed,
+				LastHeartbeat:         acctData.LastHeartbeat,
+				MicroAlgosWithRewards: acctData.MicroAlgosWithRewards,
+				IncentiveEligible:     acctData.IncentiveEligible,
+			}
 		}
 	}
 
@@ -1666,14 +1668,14 @@ func (eval *BlockEvaluator) generateKnockOfflineAccountsList() {
 		if !found {
 			continue
 		}
-		// This will overwrite data from the incentiveCandidates() list, if they were modified in the current block.
+		// This will overwrite data from the knockOfflineCandidates() list, if they were modified in the current block.
 		candidates[accountAddr] = candidateData{
 			VoteLastValid:         acctData.VoteLastValid,
 			VoteID:                acctData.VoteID,
 			Status:                acctData.Status,
 			LastProposed:          acctData.LastProposed,
 			LastHeartbeat:         acctData.LastHeartbeat,
-			MicroAlgosWithRewards: acctData.RewardedMicroAlgos,
+			MicroAlgosWithRewards: acctData.WithUpdatedRewards(eval.proto, eval.state.rewardsLevel()).MicroAlgos,
 			IncentiveEligible:     acctData.IncentiveEligible,
 		}
 	}

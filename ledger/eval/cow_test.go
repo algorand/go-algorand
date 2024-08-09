@@ -73,7 +73,7 @@ func (ml *mockLedger) onlineStake() (basics.MicroAlgos, error) {
 	return basics.Algos(55_555), nil
 }
 
-func (ml *mockLedger) incentiveCandidates(uint64) (map[basics.Address]basics.OnlineAccountData, error) {
+func (ml *mockLedger) knockOfflineCandidates() (map[basics.Address]basics.OnlineAccountData, error) {
 	return nil, nil
 }
 

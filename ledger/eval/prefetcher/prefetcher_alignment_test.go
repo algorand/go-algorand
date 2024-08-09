@@ -132,7 +132,7 @@ func (l *prefetcherAlignmentTestLedger) OnlineCirculation(rnd, voteRnd basics.Ro
 	return basics.MicroAlgos{}, errors.New("not implemented")
 }
 
-func (l *prefetcherAlignmentTestLedger) GetIncentiveKickoffCandidates(basics.Round, config.ConsensusParams, uint64) (map[basics.Address]basics.OnlineAccountData, error) {
+func (l *prefetcherAlignmentTestLedger) GetKnockOfflineCandidates(basics.Round, config.ConsensusParams) (map[basics.Address]basics.OnlineAccountData, error) {
 	return nil, errors.New("not implemented")
 }
 

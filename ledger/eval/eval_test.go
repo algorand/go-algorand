@@ -793,7 +793,7 @@ func (ledger *evalTestLedger) LookupAgreement(rnd basics.Round, addr basics.Addr
 	return convertToOnline(ad), err
 }
 
-func (ledger *evalTestLedger) GetIncentiveKickoffCandidates(basics.Round, config.ConsensusParams, uint64) (map[basics.Address]basics.OnlineAccountData, error) {
+func (ledger *evalTestLedger) GetKnockOfflineCandidates(basics.Round, config.ConsensusParams) (map[basics.Address]basics.OnlineAccountData, error) {
 	return nil, nil
 }
 
@@ -1029,7 +1029,7 @@ func (l *testCowBaseLedger) LookupAgreement(rnd basics.Round, addr basics.Addres
 	return basics.OnlineAccountData{}, errors.New("not implemented")
 }
 
-func (l *testCowBaseLedger) GetIncentiveKickoffCandidates(basics.Round, config.ConsensusParams, uint64) (map[basics.Address]basics.OnlineAccountData, error) {
+func (l *testCowBaseLedger) GetKnockOfflineCandidates(basics.Round, config.ConsensusParams) (map[basics.Address]basics.OnlineAccountData, error) {
 	return nil, errors.New("not implemented")
 }
 

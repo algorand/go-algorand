@@ -89,7 +89,6 @@ type Ledger struct {
 	notifier       blockNotifier
 	metrics        metricsTracker
 	spVerification spVerificationTracker
-	topOnlineCache topOnlineCache
 
 	trackers  trackerRegistry
 	trackerMu deadlock.RWMutex
@@ -640,9 +639,9 @@ func (l *Ledger) LookupAgreement(rnd basics.Round, addr basics.Address) (basics.
 	return data, err
 }
 
-// GetIncentiveKickoffCandidates retrieves a list of online accounts who may not have
+// GetKnockOfflineCandidates retrieves a list of online accounts who may not have
 // proposed or sent a heartbeat recently.
-func (l *Ledger) GetIncentiveKickoffCandidates(rnd basics.Round, proto config.ConsensusParams, rewardsLevel uint64) (map[basics.Address]basics.OnlineAccountData, error) {
+func (l *Ledger) GetKnockOfflineCandidates(rnd basics.Round, proto config.ConsensusParams) (map[basics.Address]basics.OnlineAccountData, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
 
@@ -657,7 +656,7 @@ func (l *Ledger) GetIncentiveKickoffCandidates(rnd basics.Round, proto config.Co
 	}
 
 	// fetch fresh data up to this round from online account cache. These accounts should all
-	// be in cache, as long as topOnlineCacheSize < onlineAccountsCacheMaxSize.
+	// be in cache, as long as proto.StateProofTopVoters < onlineAccountsCacheMaxSize.
 	ret := make(map[basics.Address]basics.OnlineAccountData)
 	for addr := range voters.AddrToPos {
 		data, err := l.acctsOnline.lookupOnlineAccountData(rnd, addr)
