@@ -48,7 +48,7 @@ type LedgerForCowBase interface {
 	CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, ledgercore.Txlease) error
 	LookupWithoutRewards(basics.Round, basics.Address) (ledgercore.AccountData, basics.Round, error)
 	LookupAgreement(basics.Round, basics.Address) (basics.OnlineAccountData, error)
-	GetIncentiveKickoffCandidates(basics.Round, config.ConsensusParams, uint64) (data map[basics.Address]basics.OnlineAccountData, err error)
+	GetIncentiveKickoffCandidates(basics.Round, config.ConsensusParams, uint64) (map[basics.Address]basics.OnlineAccountData, error)
 	LookupAsset(basics.Round, basics.Address, basics.AssetIndex) (ledgercore.AssetResource, error)
 	LookupApplication(basics.Round, basics.Address, basics.AppIndex) (ledgercore.AppResource, error)
 	LookupKv(basics.Round, string) ([]byte, error)
@@ -238,7 +238,7 @@ func (x *roundCowBase) lookupAgreement(addr basics.Address) (basics.OnlineAccoun
 	return ad, err
 }
 
-func (x *roundCowBase) incentiveCandidates(rewardsLevel uint64) (data map[basics.Address]basics.OnlineAccountData, err error) {
+func (x *roundCowBase) incentiveCandidates(rewardsLevel uint64) (map[basics.Address]basics.OnlineAccountData, error) {
 	return x.l.GetIncentiveKickoffCandidates(x.rnd, x.proto, rewardsLevel)
 }
 

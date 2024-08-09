@@ -329,7 +329,7 @@ func (dl *dryrunLedger) LookupAgreement(rnd basics.Round, addr basics.Address) (
 	}, nil
 }
 
-func (dl *dryrunLedger) GetIncentiveKickoffCandidates(basics.Round, config.ConsensusParams, uint64) (data map[basics.Address]basics.OnlineAccountData, err error) {
+func (dl *dryrunLedger) GetIncentiveKickoffCandidates(basics.Round, config.ConsensusParams, uint64) (map[basics.Address]basics.OnlineAccountData, error) {
 	return nil, nil
 }
 

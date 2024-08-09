@@ -129,7 +129,7 @@ func (l *prefetcherAlignmentTestLedger) LookupAgreement(_ basics.Round, addr bas
 }
 
 func (l *prefetcherAlignmentTestLedger) OnlineCirculation(rnd, voteRnd basics.Round) (basics.MicroAlgos, error) {
-	panic("not implemented")
+	return basics.MicroAlgos{}, errors.New("not implemented")
 }
 
 func (l *prefetcherAlignmentTestLedger) GetIncentiveKickoffCandidates(basics.Round, config.ConsensusParams, uint64) (map[basics.Address]basics.OnlineAccountData, error) {

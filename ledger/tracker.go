@@ -915,7 +915,7 @@ func (aul *accountUpdatesLedgerEvaluator) LookupAgreement(rnd basics.Round, addr
 	return aul.ao.lookupOnlineAccountData(rnd, addr)
 }
 
-func (aul *accountUpdatesLedgerEvaluator) GetIncentiveKickoffCandidates(basics.Round, config.ConsensusParams, uint64) (data map[basics.Address]basics.OnlineAccountData, err error) {
+func (aul *accountUpdatesLedgerEvaluator) GetIncentiveKickoffCandidates(basics.Round, config.ConsensusParams, uint64) (map[basics.Address]basics.OnlineAccountData, error) {
 	return nil, nil
 }
 

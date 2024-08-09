@@ -793,7 +793,7 @@ func (ledger *evalTestLedger) LookupAgreement(rnd basics.Round, addr basics.Addr
 	return convertToOnline(ad), err
 }
 
-func (ledger *evalTestLedger) GetIncentiveKickoffCandidates(basics.Round, config.ConsensusParams, uint64) (data map[basics.Address]basics.OnlineAccountData, err error) {
+func (ledger *evalTestLedger) GetIncentiveKickoffCandidates(basics.Round, config.ConsensusParams, uint64) (map[basics.Address]basics.OnlineAccountData, error) {
 	return nil, nil
 }
 

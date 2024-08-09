@@ -56,7 +56,7 @@ func (ml *emptyLedger) onlineStake() (basics.MicroAlgos, error) {
 	return basics.MicroAlgos{}, nil
 }
 
-func (ml *emptyLedger) incentiveCandidates(uint64) (data map[basics.Address]basics.OnlineAccountData, err error) {
+func (ml *emptyLedger) incentiveCandidates(uint64) (map[basics.Address]basics.OnlineAccountData, error) {
 	return nil, nil
 }
 
