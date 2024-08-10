@@ -18,6 +18,7 @@ package ledgercore
 
 import (
 	"fmt"
+  "encoding/json"
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -125,6 +126,48 @@ type StateDelta struct {
 	// The account totals reflecting the changes in this StateDelta object.
 	Totals AccountTotals
 }
+
+
+// StateDeltaSerializable is nearly identical to StateDelta,
+// but is able to be serialized/deserialized to/from JSON without custom
+// MarshalJSON() and UnmarshalJSON() methods.
+type StateDeltaSerializable struct {
+	// modified new accounts
+	Accts AccountDeltas
+
+	// modified kv pairs (nil == delete)
+	// not preallocated use .AddKvMod to insert instead of direct assignment
+	KvMods map[string]KvValueDelta
+
+	// new Txids for the txtail and TxnCounter, mapped to txn.LastValid
+	Txids map[transactions.Txid]IncludedTransactions
+
+	// new txleases for the txtail mapped to expiration
+	// not pre-allocated so use .AddTxLease to insert instead of direct assignment
+	Txleases map[string]basics.Round
+
+	// new creatables creator lookup table
+	// not pre-allocated so use .AddCreatable to insert instead of direct assignment
+	Creatables map[basics.CreatableIndex]ModifiedCreatable
+
+	// new block header; read-only
+	Hdr *bookkeeping.BlockHeader
+
+	// StateProofNext represents modification on StateProofNextRound field in the block header. If the block contains
+	// a valid state proof transaction, this field will contain the next round for state proof.
+	// otherwise it will be set to 0.
+	StateProofNext basics.Round
+
+	// previous block timestamp
+	PrevTimestamp int64
+
+	// initial hint for allocating data structures for StateDelta
+	initialHint int
+
+	// The account totals reflecting the changes in this StateDelta object.
+	Totals AccountTotals
+}
+
 
 // BalanceRecord is similar to basics.BalanceRecord but with decoupled base and voting data
 type BalanceRecord struct {
@@ -244,6 +287,79 @@ func (sd *StateDelta) Dehydrate() {
 	if sd.Creatables == nil {
 		sd.Creatables = make(map[basics.CreatableIndex]ModifiedCreatable)
 	}
+}
+
+// ToSerializable() converts a StateDeltaSerializable to a StateDelta
+func (sd StateDelta) ToSerializable() (StateDeltaSerializable, error) {
+  serializableTxleases := map[string]basics.Round{}
+  for k, v := range sd.Txleases {
+    json, err := json.Marshal(k);
+    if err != nil {
+      return StateDeltaSerializable{}, err
+    }
+    serializableTxleases[string(json)] = v;
+  }
+	return StateDeltaSerializable {
+    Accts: sd.Accts,
+    KvMods: sd.KvMods,
+    Txids: sd.Txids,
+    Txleases: serializableTxleases,
+    Creatables: sd.Creatables,
+    Hdr: sd.Hdr,
+    StateProofNext: sd.StateProofNext,
+    PrevTimestamp: sd.PrevTimestamp,
+    initialHint: sd.initialHint,
+    Totals: sd.Totals,
+  }, nil;
+}
+
+// MarshalJSON() encodes a StateDelta into JSON
+func (sd StateDelta) MarshalJSON() ([]byte, error) {
+  serializable, err := sd.ToSerializable();
+  if err != nil {
+    return nil, err
+  }
+  return json.Marshal(serializable);
+}
+
+// UnmarshalJSON() converts JSON into a StateDelta
+func (sd *StateDelta) UnmarshalJson(data []byte) error {
+  var serializable StateDeltaSerializable
+  err := json.Unmarshal(data, serializable)
+  if err != nil {
+    return err
+  }
+  nonSerializable, err := serializable.ToNonSerializable()
+  if err != nil {
+    return err
+  }
+  *sd = nonSerializable
+  return nil
+}
+
+// ToNonSerializable() converts a StateDeltaSerializable to a StateDelta
+func (sd StateDeltaSerializable) ToNonSerializable() (StateDelta, error) {
+  nonSerializableTxleases := map[Txlease]basics.Round{}
+  for k, v := range sd.Txleases {
+    var txlease Txlease
+    err := json.Unmarshal([]byte(k), txlease)
+    if err != nil {
+      return StateDelta{}, err
+    }
+    nonSerializableTxleases[txlease] = v
+  }
+	return StateDelta {
+    Accts: sd.Accts,
+    KvMods: sd.KvMods,
+    Txids: sd.Txids,
+    Txleases: nonSerializableTxleases,
+    Creatables: sd.Creatables,
+    Hdr: sd.Hdr,
+    StateProofNext: sd.StateProofNext,
+    PrevTimestamp: sd.PrevTimestamp,
+    initialHint: sd.initialHint,
+    Totals: sd.Totals,
+  }, nil;
 }
 
 // MakeAccountDeltas creates account delta
