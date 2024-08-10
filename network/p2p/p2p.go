@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/base32"
 	"fmt"
+	"net"
 	"runtime"
 	"strings"
 	"time"
@@ -43,6 +44,7 @@ import (
 	"github.com/libp2p/go-libp2p/p2p/security/noise"
 	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
 	"github.com/multiformats/go-multiaddr"
+	manet "github.com/multiformats/go-multiaddr/net"
 )
 
 // SubNextCancellable is an abstraction for pubsub.Subscription
@@ -108,17 +110,34 @@ func MakeHost(cfg config.Local, datadir string, pstore *pstore.PeerStore) (host.
 	ua := fmt.Sprintf("algod/%d.%d (%s; commit=%s; %d) %s(%s)", version.Major, version.Minor, version.Channel, version.CommitHash, version.BuildNumber, runtime.GOOS, runtime.GOARCH)
 
 	var listenAddr string
+	var needAddressFilter bool
 	if cfg.NetAddress != "" {
 		if parsedListenAddr, perr := netAddressToListenAddress(cfg.NetAddress); perr == nil {
 			listenAddr = parsedListenAddr
+
+			// check if the listen address is a specific address or a "all interfaces" address (0.0.0.0 or ::)
+			// in this case enable the address filter.
+			// this also means the address filter is not enabled for NetAddress set to
+			// a specific address including loopback and private addresses.
+			if manet.IsIPUnspecified(multiaddr.StringCast(listenAddr)) {
+				needAddressFilter = true
+			}
+		} else {
+			logging.Base().Warnf("failed to parse NetAddress %s: %v", cfg.NetAddress, perr)
 		}
 	} else {
-		// don't listen if NetAddress is not set.
+		logging.Base().Debug("p2p NetAddress is not set, not listening")
 		listenAddr = ""
 	}
 
 	var enableMetrics = func(cfg *libp2p.Config) error { cfg.DisableMetrics = false; return nil }
 	metrics.DefaultRegistry().Register(&metrics.PrometheusDefaultMetrics)
+
+	var addrFactory func(addrs []multiaddr.Multiaddr) []multiaddr.Multiaddr
+	if needAddressFilter {
+		logging.Base().Debug("private addresses filter is enabled")
+		addrFactory = addressFilter
+	}
 
 	rm, err := configureResourceManager(cfg)
 	if err != nil {
@@ -135,6 +154,7 @@ func MakeHost(cfg config.Local, datadir string, pstore *pstore.PeerStore) (host.
 		libp2p.Security(noise.ID, noise.New),
 		enableMetrics,
 		libp2p.ResourceManager(rm),
+		libp2p.AddrsFactory(addrFactory),
 	)
 	return host, listenAddr, err
 }
@@ -159,7 +179,7 @@ func configureResourceManager(cfg config.Local) (network.ResourceManager, error)
 // MakeService creates a P2P service instance
 func MakeService(ctx context.Context, log logging.Logger, cfg config.Local, h host.Host, listenAddr string, wsStreamHandler StreamHandler, bootstrapPeers []*peer.AddrInfo) (*serviceImpl, error) {
 
-	sm := makeStreamManager(ctx, log, h, wsStreamHandler)
+	sm := makeStreamManager(ctx, log, h, wsStreamHandler, cfg.EnableGossipService)
 	h.Network().Notify(sm)
 	h.SetStreamHandler(AlgorandWsProtocol, sm.streamHandler)
 
@@ -320,4 +340,76 @@ func formatPeerTelemetryInfoProtocolName(telemetryID string, telemetryInstance s
 		base32.StdEncoding.EncodeToString([]byte(telemetryID)),
 		base32.StdEncoding.EncodeToString([]byte(telemetryInstance)),
 	)
+}
+
+var private6 = parseCIDR([]string{
+	"100::/64",
+	"2001:2::/48",
+	"2001:db8::/32", // multiaddr v0.13 has it
+})
+
+// parseCIDR converts string CIDRs to net.IPNet.
+// function panics on errors so that it is only called during initialization.
+func parseCIDR(cidrs []string) []*net.IPNet {
+	result := make([]*net.IPNet, 0, len(cidrs))
+	var ipnet *net.IPNet
+	var err error
+	for _, cidr := range cidrs {
+		if _, ipnet, err = net.ParseCIDR(cidr); err != nil {
+			panic(err)
+		}
+		result = append(result, ipnet)
+	}
+	return result
+}
+
+// addressFilter filters out private and unroutable addresses
+func addressFilter(addrs []multiaddr.Multiaddr) []multiaddr.Multiaddr {
+	if logging.Base().IsLevelEnabled(logging.Debug) {
+		var b strings.Builder
+		for _, addr := range addrs {
+			b.WriteRune(' ')
+			b.WriteString(addr.String())
+			b.WriteRune(' ')
+		}
+		logging.Base().Debugf("addressFilter input: %s", b.String())
+	}
+
+	res := make([]multiaddr.Multiaddr, 0, len(addrs))
+	for _, addr := range addrs {
+		if manet.IsPublicAddr(addr) {
+			if _, err := addr.ValueForProtocol(multiaddr.P_IP4); err == nil {
+				// no rules for IPv4 at the moment, accept
+				res = append(res, addr)
+				continue
+			}
+
+			isPrivate := false
+			a, err := addr.ValueForProtocol(multiaddr.P_IP6)
+			if err != nil {
+				logging.Base().Warnf("failed to get IPv6 addr from %s: %v", addr, err)
+				continue
+			}
+			addrIP := net.ParseIP(a)
+			for _, ipnet := range private6 {
+				if ipnet.Contains(addrIP) {
+					isPrivate = true
+					break
+				}
+			}
+			if !isPrivate {
+				res = append(res, addr)
+			}
+		}
+	}
+	if logging.Base().IsLevelEnabled(logging.Debug) {
+		var b strings.Builder
+		for _, addr := range res {
+			b.WriteRune(' ')
+			b.WriteString(addr.String())
+			b.WriteRune(' ')
+		}
+		logging.Base().Debugf("addressFilter output: %s", b.String())
+	}
+	return res
 }

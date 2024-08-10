@@ -146,6 +146,12 @@ func (n *HybridP2PNetwork) RegisterHTTPHandler(path string, handler http.Handler
 	n.wsNetwork.RegisterHTTPHandler(path, handler)
 }
 
+// RegisterHTTPHandlerFunc implements GossipNode
+func (n *HybridP2PNetwork) RegisterHTTPHandlerFunc(path string, handlerFunc func(http.ResponseWriter, *http.Request)) {
+	n.p2pNetwork.RegisterHTTPHandlerFunc(path, handlerFunc)
+	n.wsNetwork.RegisterHTTPHandlerFunc(path, handlerFunc)
+}
+
 // RequestConnectOutgoing implements GossipNode
 func (n *HybridP2PNetwork) RequestConnectOutgoing(replace bool, quit <-chan struct{}) {}
 
@@ -186,10 +192,10 @@ func (n *HybridP2PNetwork) ClearHandlers() {
 	n.wsNetwork.ClearHandlers()
 }
 
-// RegisterProcessors adds to the set of given message processors.
-func (n *HybridP2PNetwork) RegisterProcessors(dispatch []TaggedMessageProcessor) {
-	n.p2pNetwork.RegisterProcessors(dispatch)
-	n.wsNetwork.RegisterProcessors(dispatch)
+// RegisterValidatorHandlers adds to the set of given message processors.
+func (n *HybridP2PNetwork) RegisterValidatorHandlers(dispatch []TaggedMessageValidatorHandler) {
+	n.p2pNetwork.RegisterValidatorHandlers(dispatch)
+	n.wsNetwork.RegisterValidatorHandlers(dispatch)
 }
 
 // ClearProcessors deregisters all the existing message processors.
