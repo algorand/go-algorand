@@ -19,6 +19,7 @@ package ledgercore
 import (
 	"reflect"
 	"testing"
+  "encoding/json"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -537,6 +538,38 @@ func TestStateDeltaReflect(t *testing.T) {
 		reflectedStateDeltaName := st.Field(i).Name
 		assert.Containsf(t, stateDeltaFieldNames, reflectedStateDeltaName, "new field:\"%v\" added to StateDelta, please update StateDelta.Reset() to handle it before fixing the test", reflectedStateDeltaName)
 	}
+}
+
+func TestStateDeltaJSON(t *testing.T) {
+  partitiontest.PartitionTest(t)
+  sd := StateDelta{
+    Accts: AccountDeltas{}, // TODO
+    KvMods: map[string]KvValueDelta{
+      "123": KvValueDelta{}, // TODO
+    },
+    Txids: map[transactions.Txid]IncludedTransactions{},
+    Txleases: map[Txlease]basics.Round{
+      Txlease{}: basics.Round(123), // TODO
+    },
+    Creatables: map[basics.CreatableIndex]ModifiedCreatable{
+      basics.CreatableIndex(123): ModifiedCreatable{}, // TODO
+    },
+    Hdr: &bookkeeping.BlockHeader{}, // TODO
+    StateProofNext: basics.Round(123), // TODO
+    PrevTimestamp: 123,
+    initialHint: 0, // Ignore initialHint as it's not exported
+    Totals: AccountTotals{}, // TODO
+  }
+  encoded, err := json.Marshal(sd)
+  if err != nil {
+    panic(err)
+  }
+  var decoded StateDelta
+  err = json.Unmarshal(encoded, &decoded)
+  if err != nil {
+    panic(err)
+  }
+  assert.Equal(t, sd, decoded)
 }
 
 func TestAccountDeltaReflect(t *testing.T) {

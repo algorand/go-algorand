@@ -140,7 +140,7 @@ type StateDeltaSerializable struct {
 	KvMods map[string]KvValueDelta
 
 	// new Txids for the txtail and TxnCounter, mapped to txn.LastValid
-	Txids map[transactions.Txid]IncludedTransactions
+	Txids map[string]IncludedTransactions
 
 	// new txleases for the txtail mapped to expiration
 	// not pre-allocated so use .AddTxLease to insert instead of direct assignment
@@ -151,7 +151,7 @@ type StateDeltaSerializable struct {
 	Creatables map[basics.CreatableIndex]ModifiedCreatable
 
 	// new block header; read-only
-	Hdr *bookkeeping.BlockHeader
+	Hdr bookkeeping.BlockHeader
 
 	// StateProofNext represents modification on StateProofNextRound field in the block header. If the block contains
 	// a valid state proof transaction, this field will contain the next round for state proof.
@@ -162,7 +162,7 @@ type StateDeltaSerializable struct {
 	PrevTimestamp int64
 
 	// initial hint for allocating data structures for StateDelta
-	initialHint int
+  initialHint int
 
 	// The account totals reflecting the changes in this StateDelta object.
 	Totals AccountTotals
@@ -299,13 +299,21 @@ func (sd StateDelta) ToSerializable() (StateDeltaSerializable, error) {
     }
     serializableTxleases[string(json)] = v;
   }
+  serializableTxids := map[string]IncludedTransactions{}
+  for k, v := range sd.Txids {
+    json, err := json.Marshal(k);
+    if err != nil {
+      return StateDeltaSerializable{}, err
+    }
+    serializableTxids[string(json)] = v;
+  }
 	return StateDeltaSerializable {
     Accts: sd.Accts,
     KvMods: sd.KvMods,
-    Txids: sd.Txids,
+    Txids: serializableTxids,
     Txleases: serializableTxleases,
     Creatables: sd.Creatables,
-    Hdr: sd.Hdr,
+    Hdr: *sd.Hdr,
     StateProofNext: sd.StateProofNext,
     PrevTimestamp: sd.PrevTimestamp,
     initialHint: sd.initialHint,
@@ -319,13 +327,14 @@ func (sd StateDelta) MarshalJSON() ([]byte, error) {
   if err != nil {
     return nil, err
   }
-  return json.Marshal(serializable);
+  serialized, err := json.Marshal(serializable)
+  return serialized, err
 }
 
 // UnmarshalJSON() converts JSON into a StateDelta
-func (sd *StateDelta) UnmarshalJson(data []byte) error {
+func (sd *StateDelta) UnmarshalJSON(data []byte) error {
   var serializable StateDeltaSerializable
-  err := json.Unmarshal(data, serializable)
+  err := json.Unmarshal(data, &serializable)
   if err != nil {
     return err
   }
@@ -342,19 +351,28 @@ func (sd StateDeltaSerializable) ToNonSerializable() (StateDelta, error) {
   nonSerializableTxleases := map[Txlease]basics.Round{}
   for k, v := range sd.Txleases {
     var txlease Txlease
-    err := json.Unmarshal([]byte(k), txlease)
+    err := json.Unmarshal([]byte(k), &txlease)
     if err != nil {
       return StateDelta{}, err
     }
     nonSerializableTxleases[txlease] = v
   }
+  nonSerializableTxids := map[transactions.Txid]IncludedTransactions{}
+  for k, v := range sd.Txids {
+    var txid transactions.Txid
+    err := json.Unmarshal([]byte(k), &txid)
+    if err != nil {
+      return StateDelta{}, err
+    }
+    nonSerializableTxids[txid] = v
+  }
 	return StateDelta {
     Accts: sd.Accts,
     KvMods: sd.KvMods,
-    Txids: sd.Txids,
+    Txids: nonSerializableTxids,
     Txleases: nonSerializableTxleases,
     Creatables: sd.Creatables,
-    Hdr: sd.Hdr,
+    Hdr: &sd.Hdr,
     StateProofNext: sd.StateProofNext,
     PrevTimestamp: sd.PrevTimestamp,
     initialHint: sd.initialHint,
