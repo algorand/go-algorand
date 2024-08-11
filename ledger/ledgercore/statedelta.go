@@ -299,10 +299,7 @@ func (sd StateDelta) ToSerializable() (StateDeltaSerializable, error) {
 	}
 	serializableTxids := map[string]IncludedTransactions{}
 	for k, v := range sd.Txids {
-		json, err := json.Marshal(k)
-		if err != nil {
-			return StateDeltaSerializable{}, err
-		}
+		json := k.String()
 		serializableTxids[string(json)] = v
 	}
 	return StateDeltaSerializable{
@@ -358,10 +355,10 @@ func (sd StateDeltaSerializable) ToNonSerializable() (StateDelta, error) {
 	nonSerializableTxids := map[transactions.Txid]IncludedTransactions{}
 	for k, v := range sd.Txids {
 		var txid transactions.Txid
-		err := json.Unmarshal([]byte(k), &txid)
-		if err != nil {
-			return StateDelta{}, err
-		}
+		err := txid.UnmarshalText([]byte(k))
+    if err != nil {
+      return StateDelta{}, err
+    }
 		nonSerializableTxids[txid] = v
 	}
 	return StateDelta{
