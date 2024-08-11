@@ -543,13 +543,23 @@ func TestStateDeltaReflect(t *testing.T) {
 func TestStateDeltaJSON(t *testing.T) {
   partitiontest.PartitionTest(t)
   sd := StateDelta{
-    Accts: AccountDeltas{}, // TODO
+    Accts: AccountDeltas{
+      Accts: []BalanceRecord{},
+      AppResources: []AppResourceRecord{},
+      AssetResources: []AssetResourceRecord{},
+    },
     KvMods: map[string]KvValueDelta{
-      "123": KvValueDelta{}, // TODO
+      "123": KvValueDelta{
+        Data: []byte("abc"),
+        OldData: []byte("xyz"),
+      },
     },
     Txids: map[transactions.Txid]IncludedTransactions{},
     Txleases: map[Txlease]basics.Round{
-      Txlease{}: basics.Round(123), // TODO
+      Txlease{
+        Sender: basics.Address{},
+        Lease: [32]byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31},
+      }: basics.Round(123), // TODO
     },
     Creatables: map[basics.CreatableIndex]ModifiedCreatable{
       basics.CreatableIndex(123): ModifiedCreatable{}, // TODO
