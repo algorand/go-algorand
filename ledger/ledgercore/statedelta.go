@@ -17,8 +17,8 @@
 package ledgercore
 
 import (
+	"encoding/json"
 	"fmt"
-  "encoding/json"
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -127,7 +127,6 @@ type StateDelta struct {
 	Totals AccountTotals
 }
 
-
 // StateDeltaSerializable is nearly identical to StateDelta,
 // but is able to be serialized/deserialized to/from JSON without custom
 // MarshalJSON() and UnmarshalJSON() methods.
@@ -162,12 +161,11 @@ type StateDeltaSerializable struct {
 	PrevTimestamp int64
 
 	// initial hint for allocating data structures for StateDelta
-  initialHint int
+	initialHint int
 
 	// The account totals reflecting the changes in this StateDelta object.
 	Totals AccountTotals
 }
-
 
 // BalanceRecord is similar to basics.BalanceRecord but with decoupled base and voting data
 type BalanceRecord struct {
@@ -291,93 +289,93 @@ func (sd *StateDelta) Dehydrate() {
 
 // ToSerializable() converts a StateDeltaSerializable to a StateDelta
 func (sd StateDelta) ToSerializable() (StateDeltaSerializable, error) {
-  serializableTxleases := map[string]basics.Round{}
-  for k, v := range sd.Txleases {
-    json, err := json.Marshal(k);
-    if err != nil {
-      return StateDeltaSerializable{}, err
-    }
-    serializableTxleases[string(json)] = v;
-  }
-  serializableTxids := map[string]IncludedTransactions{}
-  for k, v := range sd.Txids {
-    json, err := json.Marshal(k);
-    if err != nil {
-      return StateDeltaSerializable{}, err
-    }
-    serializableTxids[string(json)] = v;
-  }
-	return StateDeltaSerializable {
-    Accts: sd.Accts,
-    KvMods: sd.KvMods,
-    Txids: serializableTxids,
-    Txleases: serializableTxleases,
-    Creatables: sd.Creatables,
-    Hdr: *sd.Hdr,
-    StateProofNext: sd.StateProofNext,
-    PrevTimestamp: sd.PrevTimestamp,
-    initialHint: sd.initialHint,
-    Totals: sd.Totals,
-  }, nil;
+	serializableTxleases := map[string]basics.Round{}
+	for k, v := range sd.Txleases {
+		json, err := json.Marshal(k)
+		if err != nil {
+			return StateDeltaSerializable{}, err
+		}
+		serializableTxleases[string(json)] = v
+	}
+	serializableTxids := map[string]IncludedTransactions{}
+	for k, v := range sd.Txids {
+		json, err := json.Marshal(k)
+		if err != nil {
+			return StateDeltaSerializable{}, err
+		}
+		serializableTxids[string(json)] = v
+	}
+	return StateDeltaSerializable{
+		Accts:          sd.Accts,
+		KvMods:         sd.KvMods,
+		Txids:          serializableTxids,
+		Txleases:       serializableTxleases,
+		Creatables:     sd.Creatables,
+		Hdr:            *sd.Hdr,
+		StateProofNext: sd.StateProofNext,
+		PrevTimestamp:  sd.PrevTimestamp,
+		initialHint:    sd.initialHint,
+		Totals:         sd.Totals,
+	}, nil
 }
 
 // MarshalJSON() encodes a StateDelta into JSON
 func (sd StateDelta) MarshalJSON() ([]byte, error) {
-  serializable, err := sd.ToSerializable();
-  if err != nil {
-    return nil, err
-  }
-  serialized, err := json.Marshal(serializable)
-  return serialized, err
+	serializable, err := sd.ToSerializable()
+	if err != nil {
+		return nil, err
+	}
+	serialized, err := json.Marshal(serializable)
+	return serialized, err
 }
 
 // UnmarshalJSON() converts JSON into a StateDelta
 func (sd *StateDelta) UnmarshalJSON(data []byte) error {
-  var serializable StateDeltaSerializable
-  err := json.Unmarshal(data, &serializable)
-  if err != nil {
-    return err
-  }
-  nonSerializable, err := serializable.ToNonSerializable()
-  if err != nil {
-    return err
-  }
-  *sd = nonSerializable
-  return nil
+	var serializable StateDeltaSerializable
+	err := json.Unmarshal(data, &serializable)
+	if err != nil {
+		return err
+	}
+	nonSerializable, err := serializable.ToNonSerializable()
+	if err != nil {
+		return err
+	}
+	*sd = nonSerializable
+	return nil
 }
 
 // ToNonSerializable() converts a StateDeltaSerializable to a StateDelta
 func (sd StateDeltaSerializable) ToNonSerializable() (StateDelta, error) {
-  nonSerializableTxleases := map[Txlease]basics.Round{}
-  for k, v := range sd.Txleases {
-    var txlease Txlease
-    err := json.Unmarshal([]byte(k), &txlease)
-    if err != nil {
-      return StateDelta{}, err
-    }
-    nonSerializableTxleases[txlease] = v
-  }
-  nonSerializableTxids := map[transactions.Txid]IncludedTransactions{}
-  for k, v := range sd.Txids {
-    var txid transactions.Txid
-    err := json.Unmarshal([]byte(k), &txid)
-    if err != nil {
-      return StateDelta{}, err
-    }
-    nonSerializableTxids[txid] = v
-  }
-	return StateDelta {
-    Accts: sd.Accts,
-    KvMods: sd.KvMods,
-    Txids: nonSerializableTxids,
-    Txleases: nonSerializableTxleases,
-    Creatables: sd.Creatables,
-    Hdr: &sd.Hdr,
-    StateProofNext: sd.StateProofNext,
-    PrevTimestamp: sd.PrevTimestamp,
-    initialHint: sd.initialHint,
-    Totals: sd.Totals,
-  }, nil;
+	nonSerializableTxleases := map[Txlease]basics.Round{}
+	for k, v := range sd.Txleases {
+		var txlease Txlease
+		err := json.Unmarshal([]byte(k), &txlease)
+		if err != nil {
+			return StateDelta{}, err
+		}
+		nonSerializableTxleases[txlease] = v
+	}
+	nonSerializableTxids := map[transactions.Txid]IncludedTransactions{}
+	for k, v := range sd.Txids {
+		var txid transactions.Txid
+		err := json.Unmarshal([]byte(k), &txid)
+		if err != nil {
+			return StateDelta{}, err
+		}
+		nonSerializableTxids[txid] = v
+	}
+	return StateDelta{
+		Accts:          sd.Accts,
+		KvMods:         sd.KvMods,
+		Txids:          nonSerializableTxids,
+		Txleases:       nonSerializableTxleases,
+		Creatables:     sd.Creatables,
+		Hdr:            &sd.Hdr,
+		StateProofNext: sd.StateProofNext,
+		PrevTimestamp:  sd.PrevTimestamp,
+		initialHint:    sd.initialHint,
+		Totals:         sd.Totals,
+	}, nil
 }
 
 // MakeAccountDeltas creates account delta
