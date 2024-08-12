@@ -70,10 +70,6 @@ The underlying libp2p implementation abstracted as `p2p.Service` and initialized
 
 `Host` is also used for p2p HTTP server and DHT Discovery service creation. It is also useful for unit testing. Note, `Host` is created with `NoListenAddrs` options that prevents automatic listening and networking until the `Service.Start()` is called. This follows others services design (including WsNetwork service).
 
-### Connection and Stream direction
-
-TBD
-
 ### Connection limiting
 
 libp2p's `ResourceManager` is used to limit number of connections up tp `cfg.P2PIncomingConnectionsLimit`.
