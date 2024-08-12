@@ -261,15 +261,21 @@ func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebo
 	}
 	log.Infof("P2P host created: peer ID %s addrs %s", h.ID(), h.Addrs())
 
-	net.service, err = p2p.MakeService(net.ctx, log, cfg, h, la, net.wsStreamHandler, addrInfo)
+	net.service, err = p2p.MakeService(net.ctx, log, cfg, h, la, net.wsStreamHandler)
 	if err != nil {
 		return nil, err
 	}
 
+	peerIDs := pstore.Peers()
+	addrInfos := make([]*peer.AddrInfo, 0, len(peerIDs))
+	for _, peerID := range peerIDs {
+		addrInfo := pstore.PeerInfo(peerID)
+		addrInfos = append(addrInfos, &addrInfo)
+	}
 	bootstrapper := &bootstrapper{
 		cfg:               cfg,
 		networkID:         networkID,
-		phonebookPeers:    addrInfo,
+		phonebookPeers:    addrInfos,
 		resolveController: dnsaddr.NewMultiaddrDNSResolveController(cfg.DNSSecurityTXTEnforced(), ""),
 		log:               net.log,
 	}
@@ -426,7 +432,7 @@ func (n *P2PNetwork) meshThreadInner() int {
 	}
 
 	peers := mergeP2PAddrInfoResolvedAddresses(dnsPeers, dhtPeers)
-	replace := make([]interface{}, 0, len(peers))
+	replace := make([]*peer.AddrInfo, 0, len(peers))
 	for i := range peers {
 		replace = append(replace, &peers[i])
 	}
@@ -631,9 +637,8 @@ func (n *P2PNetwork) GetPeers(options ...PeerOption) []Peer {
 			n.wsPeersLock.RUnlock()
 		case PeersPhonebookRelays:
 			const maxNodes = 100
-			peerIDs := n.pstore.GetAddresses(maxNodes, phonebook.PhoneBookEntryRelayRole)
-			for _, peerInfo := range peerIDs {
-				peerInfo := peerInfo.(*peer.AddrInfo)
+			addrInfos := n.pstore.GetAddresses(maxNodes, phonebook.PhoneBookEntryRelayRole)
+			for _, peerInfo := range addrInfos {
 				if peerCore, ok := addrInfoToWsPeerCore(n, peerInfo); ok {
 					peers = append(peers, &peerCore)
 				}

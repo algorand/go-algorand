@@ -177,7 +177,7 @@ func configureResourceManager(cfg config.Local) (network.ResourceManager, error)
 }
 
 // MakeService creates a P2P service instance
-func MakeService(ctx context.Context, log logging.Logger, cfg config.Local, h host.Host, listenAddr string, wsStreamHandler StreamHandler, bootstrapPeers []*peer.AddrInfo) (*serviceImpl, error) {
+func MakeService(ctx context.Context, log logging.Logger, cfg config.Local, h host.Host, listenAddr string, wsStreamHandler StreamHandler) (*serviceImpl, error) {
 
 	sm := makeStreamManager(ctx, log, h, wsStreamHandler, cfg.EnableGossipService)
 	h.Network().Notify(sm)
@@ -239,7 +239,7 @@ func (s *serviceImpl) IDSigner() *PeerIDChallengeSigner {
 // DialPeersUntilTargetCount attempts to establish connections to the provided phonebook addresses
 func (s *serviceImpl) DialPeersUntilTargetCount(targetConnCount int) {
 	ps := s.host.Peerstore().(*pstore.PeerStore)
-	peerIDs := ps.GetAddresses(targetConnCount, phonebook.PhoneBookEntryRelayRole)
+	addrInfos := ps.GetAddresses(targetConnCount, phonebook.PhoneBookEntryRelayRole)
 	conns := s.host.Network().Conns()
 	var numOutgoingConns int
 	for _, conn := range conns {
@@ -247,8 +247,7 @@ func (s *serviceImpl) DialPeersUntilTargetCount(targetConnCount int) {
 			numOutgoingConns++
 		}
 	}
-	for _, peerInfo := range peerIDs {
-		peerInfo := peerInfo.(*peer.AddrInfo)
+	for _, peerInfo := range addrInfos {
 		// if we are at our target count stop trying to connect
 		if numOutgoingConns >= targetConnCount {
 			return
