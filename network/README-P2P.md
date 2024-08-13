@@ -39,7 +39,7 @@ It is `http.Handler`-compatible so that service handlers are registered the same
 
 ### Phonebook and Peerstore and peer classes
 
-Originally phonebook designed as an address registry holding permanent (`-p` cli option
+Originally phonebook was designed as an address registry holding permanent (`-p` cli option
 or `phonebook.json` extra configuration file) and dynamic (SRV DNS records) entries.
 These entries later can be later retrieved by a peer role
 (`PhoneBookEntryRelayRole` or `PhoneBookEntryArchivalRole`).
