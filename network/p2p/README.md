@@ -37,7 +37,7 @@ and [peer IDs](https://docs.libp2p.io/concepts/fundamentals/peers/#peer-ids-in-m
 to establish connections and identify peers.
 
 Currently transactions (protocol tag `TX`) are distributed using the GossipSub protocol (see [pubsub.go](./pubsub.go)),
-while all other messages are forwarded over a custom message protocol `/algorand-ws/1.0.0` (see [streams.go](./streams.go))
+while all other messages are forwarded over the pre-existing custom message protocol `/algorand-ws/1.0.0` (see [streams.go](./streams.go))
 that uses the same message serialization as the existing  `WebsocketNetwork` implementation.
 These two protocols are multiplexed over a single connection using libp2p streams.
 
@@ -64,15 +64,15 @@ graph LR
     S --> T
 ```
 
-The underlying libp2p implementation abstracted as `p2p.Service` and initialized in two steps:
+The underlying libp2p implementation is abstracted as `p2p.Service` and is initialized in two steps:
 1. Creating a p2p `Host`
 2. Creating a service `serviceImpl` object
 
-`Host` is also used for p2p HTTP server and DHT Discovery service creation. It is also useful for unit testing. Note, `Host` is created with `NoListenAddrs` options that prevents automatic listening and networking until the `Service.Start()` is called. This follows others services design (including WsNetwork service).
+`Host` is also used for p2p HTTP server and DHT Discovery service creation. It is also useful for unit testing. Note, `Host` is created with `NoListenAddrs` options that prevents automatic listening and networking until the `Service.Start()` is called. This follows the designs of Algod services (including the WsNetwork service).
 
 ### Connection limiting
 
-libp2p's `ResourceManager` is used to limit number of connections up tp `cfg.P2PIncomingConnectionsLimit`.
+libp2p's `ResourceManager` is used to limit the number of connections up to `cfg.P2PIncomingConnectionsLimit`.
 
 ### DHT and capabilities
 
@@ -81,8 +81,8 @@ High level [CapabilitiesDiscovery](./capabilities.go) class supports retrieving 
 peers by a given capability(-ies) or advertising own capabilities (`AdvertiseCapabilities`).
 
 Note, by default private and non-routable addresses are filtered (see `AddrsFactory`),
-libp2p's `ObservedAddrManager` can track own public address and makes it available
-(and so that discoverable with DHT) if it was observed at least 4 times in 30 minutes (as libp2p@v0.33.2).
+libp2p's `ObservedAddrManager` can track its own public address and makes it available
+(and so that discoverable with DHT) if it was observed at least 4 times in 30 minutes (as of libp2p@v0.33.2).
 
 ```mermaid
 graph LR

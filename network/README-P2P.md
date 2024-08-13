@@ -46,7 +46,7 @@ These entries later can be later retrieved by a peer role
 A new `PeerStore` (built on top of `libp2p.Peerstore`) resembles the original `Phonebook`
 by strictly implementing some of its methods and has the remaining `Phonebook`'s methods
 with a slightly different signature - `string` vs `peer.AddrInfo` for address representation.
-The main issue with that entries in `PeerStore` are identified by `PeerID`
+The main issue is that entries in `PeerStore` are identified by `PeerID`
 and each peer might have multiple addresses (versus the original WS peers with the only one
 `host:port` connectivity option.)
 
@@ -70,9 +70,9 @@ to appropriate handler.
 Connected peers are maintained as a `wsPeers` map similarly to the `WsNetwork`.
 The main difference between `P2PNetwork` and `WsNetwork` is `http.Client`. Because wsPeers operate
 over the multiplexed streams in libp2p-managed connection, a plain `http.Client` would not be able
-to connect to p2p HTTP server. This requires `wsPeer` constructed in `P2PNetwork` to have a special
+to connect to a p2p HTTP server. This requires the `wsPeer` constructed in `P2PNetwork` to have a special
 libp2p-streams compatible `http.Client` produced by `MakeHTTPClientWithRateLimit` helper method.
-It implement rate-limiting approach similar to the regular http clients from `WsNetwork`.
+It implements a rate-limiting approach similar to the regular http clients from `WsNetwork`.
 
 ### Broadcaster
 
@@ -131,7 +131,7 @@ exposed by a node. These capabilities include:
   - `gossip`: a listening node with `EnableGossipService` config flag set
 
 When the `P2PNetwork` starts, the node begins advertising its capabilities by running
-a background goroutine. By default, the DHT implementation pulls bootstrap nodes from
+a background goroutine. By default, the underlying DHT implementation pulls bootstrap nodes from
 a peer store and attempts to connect immediately, which is not how go-algorand services operate.
 To address this, a new `bootstrapper` abstraction has been added to control bootstrap peer
 access using the DHT's `BootstrapFunc` mechanism. The callback function returns empty bootstrap
