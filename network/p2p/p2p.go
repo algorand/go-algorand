@@ -61,7 +61,6 @@ type Service interface {
 	IDSigner() *PeerIDChallengeSigner
 	AddrInfo() peer.AddrInfo // return addrInfo for self
 
-	DialNode(context.Context, *peer.AddrInfo) error
 	DialPeersUntilTargetCount(targetConnCount int)
 	ClosePeer(peer.ID) error
 
@@ -257,15 +256,15 @@ func (s *serviceImpl) DialPeersUntilTargetCount(targetConnCount int) {
 		if len(s.host.Network().ConnsToPeer(peerInfo.ID)) > 0 {
 			continue
 		}
-		err := s.DialNode(context.Background(), peerInfo) // leaving the calls as blocking for now, to not over-connect beyond fanout
+		err := s.dialNode(context.Background(), peerInfo) // leaving the calls as blocking for now, to not over-connect beyond fanout
 		if err != nil {
 			s.log.Warnf("failed to connect to peer %s: %v", peerInfo.ID, err)
 		}
 	}
 }
 
-// DialNode attempts to establish a connection to the provided peer
-func (s *serviceImpl) DialNode(ctx context.Context, peer *peer.AddrInfo) error {
+// dialNode attempts to establish a connection to the provided peer
+func (s *serviceImpl) dialNode(ctx context.Context, peer *peer.AddrInfo) error {
 	// don't try connecting to ourselves
 	if peer.ID == s.host.ID() {
 		return nil

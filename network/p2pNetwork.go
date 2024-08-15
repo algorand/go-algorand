@@ -767,6 +767,7 @@ func (n *P2PNetwork) wsStreamHandler(ctx context.Context, p2pPeer peer.ID, strea
 	maxIdleConnsPerHost := int(n.config.ConnectionsRateLimitingCount)
 	client, err := p2p.MakeHTTPClientWithRateLimit(addrInfo, n.pstore, limitcaller.DefaultQueueingTimeout, maxIdleConnsPerHost)
 	if err != nil {
+		n.log.Warnf("Cannot construct HTTP Client for %s: %v", p2pPeer, err)
 		client = nil
 	}
 	var netIdentPeerID algocrypto.PublicKey
@@ -782,7 +783,7 @@ func (n *P2PNetwork) wsStreamHandler(ctx context.Context, p2pPeer peer.ID, strea
 	peerCore := makePeerCore(ctx, n, n.log, n.handler.readBuffer, addr, client, addr)
 	wsp := &wsPeer{
 		wsPeerCore: peerCore,
-		conn:       &wsPeerConnP2PImpl{stream: stream},
+		conn:       &wsPeerConnP2P{stream: stream},
 		outgoing:   !incoming,
 		identity:   netIdentPeerID,
 	}
@@ -844,7 +845,7 @@ func (n *P2PNetwork) wsStreamHandler(ctx context.Context, p2pPeer peer.ID, strea
 
 // peerRemoteClose called from wsPeer to report that it has closed
 func (n *P2PNetwork) peerRemoteClose(peer *wsPeer, reason disconnectReason) {
-	remotePeerID := peer.conn.(*wsPeerConnP2PImpl).stream.Conn().RemotePeer()
+	remotePeerID := peer.conn.(*wsPeerConnP2P).stream.Conn().RemotePeer()
 	n.wsPeersLock.Lock()
 	n.identityTracker.removeIdentity(peer)
 	delete(n.wsPeers, remotePeerID)
