@@ -153,13 +153,13 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 		if ot.Overflowed {
 			return errors.New("Initialize() overflowed when adding up ReservedHealthServiceConnections to the existing RLIMIT_NOFILE value; decrease RestConnectionsHardLimit")
 		}
-		if cfg.IsWsGossipServer() {
+		if cfg.IsGossipServer() {
 			fdRequired = ot.Add(fdRequired, uint64(cfg.IncomingConnectionsLimit))
 			if ot.Overflowed {
 				return errors.New("Initialize() overflowed when adding up IncomingConnectionsLimit to the existing RLIMIT_NOFILE value; decrease IncomingConnectionsLimit")
 			}
 		}
-		if cfg.IsP2PGossipServer() {
+		if cfg.IsHybridServer() {
 			fdRequired = ot.Add(fdRequired, uint64(cfg.P2PIncomingConnectionsLimit))
 			if ot.Overflowed {
 				return errors.New("Initialize() overflowed when adding up P2PIncomingConnectionsLimit to the existing RLIMIT_NOFILE value; decrease P2PIncomingConnectionsLimit")
@@ -182,11 +182,11 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 						cfg.IncomingConnectionsLimit,
 						cfg.P2PIncomingConnectionsLimit,
 					)
-					if cfg.IsWsGossipServer() && cfg.IncomingConnectionsLimit == 0 {
-						return errors.New("Initialize() failed to adjust connection limits")
+					if cfg.IsHybridServer() && cfg.P2PIncomingConnectionsLimit == 0 {
+						return errors.New("Initialize() failed to adjust p2p hybrid connection limits")
 					}
-					if cfg.IsP2PGossipServer() && cfg.P2PIncomingConnectionsLimit == 0 {
-						return errors.New("Initialize() failed to adjust p2p connection limits")
+					if cfg.IsGossipServer() && cfg.IncomingConnectionsLimit == 0 {
+						return errors.New("Initialize() failed to adjust connection limits")
 					}
 				}
 			}

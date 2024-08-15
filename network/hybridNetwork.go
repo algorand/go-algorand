@@ -42,6 +42,7 @@ func NewHybridP2PNetwork(log logging.Logger, cfg config.Local, datadir string, p
 	// supply alternate NetAddress for P2P network
 	p2pcfg := cfg
 	p2pcfg.NetAddress = cfg.P2PNetAddress
+	p2pcfg.IncomingConnectionsLimit = cfg.P2PIncomingConnectionsLimit
 	identityTracker := NewIdentityTracker()
 	p2pnet, err := NewP2PNetwork(log, p2pcfg, datadir, phonebookAddresses, genesisID, networkID, nodeInfo, &identityOpts{tracker: identityTracker})
 	if err != nil {

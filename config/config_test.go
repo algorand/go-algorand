@@ -617,23 +617,27 @@ func TestLocal_IsGossipServer(t *testing.T) {
 	require.False(t, cfg.IsGossipServer())
 	require.False(t, cfg.IsWsGossipServer())
 	require.False(t, cfg.IsP2PGossipServer())
+	require.False(t, cfg.IsHybridServer())
 
 	cfg.NetAddress = ":4160"
 	require.True(t, cfg.IsGossipServer())
 	require.True(t, cfg.IsWsGossipServer())
 	require.False(t, cfg.IsP2PGossipServer())
+	require.False(t, cfg.IsHybridServer())
 
 	cfg.EnableGossipService = false
 	// EnableGossipService does not matter
 	require.True(t, cfg.IsGossipServer())
 	require.True(t, cfg.IsWsGossipServer())
 	require.False(t, cfg.IsP2PGossipServer())
+	require.False(t, cfg.IsHybridServer())
 
 	cfg.EnableP2P = true
 	cfg.NetAddress = ":4160"
 	require.True(t, cfg.IsGossipServer())
 	require.False(t, cfg.IsWsGossipServer())
 	require.True(t, cfg.IsP2PGossipServer())
+	require.False(t, cfg.IsHybridServer())
 
 	cfg.EnableP2P = false
 
@@ -642,18 +646,21 @@ func TestLocal_IsGossipServer(t *testing.T) {
 	require.True(t, cfg.IsGossipServer())
 	require.True(t, cfg.IsWsGossipServer())
 	require.False(t, cfg.IsP2PGossipServer())
+	require.False(t, cfg.IsHybridServer())
 
 	cfg.EnableP2PHybridMode = true
 	cfg.NetAddress = ""
 	require.False(t, cfg.IsGossipServer())
 	require.False(t, cfg.IsWsGossipServer())
 	require.False(t, cfg.IsP2PGossipServer())
+	require.False(t, cfg.IsHybridServer())
 
 	cfg.EnableP2PHybridMode = true
 	cfg.P2PNetAddress = ":4190"
 	require.True(t, cfg.IsGossipServer())
 	require.False(t, cfg.IsWsGossipServer())
 	require.True(t, cfg.IsP2PGossipServer())
+	require.False(t, cfg.IsHybridServer())
 
 	cfg.EnableP2PHybridMode = true
 	cfg.NetAddress = ":4160"
@@ -661,6 +668,7 @@ func TestLocal_IsGossipServer(t *testing.T) {
 	require.True(t, cfg.IsGossipServer())
 	require.True(t, cfg.IsWsGossipServer())
 	require.True(t, cfg.IsP2PGossipServer())
+	require.True(t, cfg.IsHybridServer())
 
 	cfg.EnableP2PHybridMode = true
 	cfg.EnableP2P = true
@@ -669,6 +677,7 @@ func TestLocal_IsGossipServer(t *testing.T) {
 	require.True(t, cfg.IsGossipServer())
 	require.True(t, cfg.IsWsGossipServer())
 	require.True(t, cfg.IsP2PGossipServer())
+	require.True(t, cfg.IsHybridServer())
 
 	cfg.EnableP2PHybridMode = true
 	cfg.EnableP2P = true
@@ -677,6 +686,7 @@ func TestLocal_IsGossipServer(t *testing.T) {
 	require.True(t, cfg.IsGossipServer())
 	require.True(t, cfg.IsWsGossipServer())
 	require.False(t, cfg.IsP2PGossipServer())
+	require.False(t, cfg.IsHybridServer())
 }
 
 func TestLocal_RecalculateConnectionLimits(t *testing.T) {
