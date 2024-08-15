@@ -782,7 +782,7 @@ func TestP2PHTTPHandler(t *testing.T) {
 	// zero clients allowed, rate limiting window (10s) is greater than queue deadline (1s)
 	pstore, err := peerstore.MakePhonebook(0, 10*time.Second)
 	require.NoError(t, err)
-	pstore.AddPersistentPeers([]interface{}{&peerInfoA}, "net", phonebook.PhoneBookEntryRelayRole)
+	pstore.AddPersistentPeers([]*peer.AddrInfo{&peerInfoA}, "net", phonebook.PhoneBookEntryRelayRole)
 	httpClient, err = p2p.MakeHTTPClientWithRateLimit(&peerInfoA, pstore, 1*time.Second, 1)
 	require.NoError(t, err)
 	_, err = httpClient.Get("/test")
