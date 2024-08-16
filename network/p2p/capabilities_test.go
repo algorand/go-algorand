@@ -62,7 +62,7 @@ func TestCapabilities_Discovery(t *testing.T) {
 	for _, capD := range caps {
 		peersAdded := 0
 		for _, addr := range addrs {
-			added, err := capD.AddPeer(addr)
+			added, err := capD.addPeer(addr)
 			require.NoError(t, err)
 			require.True(t, added)
 			peersAdded++
@@ -83,7 +83,7 @@ func setupDHTHosts(t *testing.T, numHosts int) []*dht.IpfsDHT {
 		tmpdir := t.TempDir()
 		pk, err := GetPrivKey(cfg, tmpdir)
 		require.NoError(t, err)
-		ps, err := peerstore.NewPeerStore([]*peer.AddrInfo{}, "")
+		ps, err := peerstore.NewPeerStore(nil, "")
 		require.NoError(t, err)
 		h, err := libp2p.New(
 			libp2p.ListenAddrStrings("/dns4/localhost/tcp/0"),
@@ -134,7 +134,7 @@ func setupCapDiscovery(t *testing.T, numHosts int, numBootstrapPeers int) []*Cap
 		tmpdir := t.TempDir()
 		pk, err := GetPrivKey(cfg, tmpdir)
 		require.NoError(t, err)
-		ps, err := peerstore.NewPeerStore([]*peer.AddrInfo{}, "")
+		ps, err := peerstore.NewPeerStore(nil, "")
 		require.NoError(t, err)
 		h, err := libp2p.New(
 			libp2p.ListenAddrStrings("/dns4/localhost/tcp/0"),
