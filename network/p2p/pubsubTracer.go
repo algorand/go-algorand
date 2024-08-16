@@ -31,6 +31,8 @@ var transactionMessagesP2PDuplicateMessage = metrics.MakeCounter(metrics.Transac
 var transactionMessagesP2PDeliverMessage = metrics.MakeCounter(metrics.TransactionMessagesP2PDeliverMessage)
 var transactionMessagesP2PUnderdeliverableMessage = metrics.MakeCounter(metrics.TransactionMessagesP2PUndeliverableMessage)
 var transactionMessagesP2PValidateMessage = metrics.MakeCounter(metrics.TransactionMessagesP2PValidateMessage)
+var transactionMessagesP2PSentMessages = metrics.MakeCounter(metrics.TransactionMessagesP2PSentMessage)
+var transactionMessagesP2PSentBytes = metrics.MakeCounter(metrics.TransactionMessagesP2PSentBytes)
 
 // pubsubTracer is a tracer for pubsub events used to track metrics.
 type pubsubTracer struct{}
@@ -86,7 +88,16 @@ func (t pubsubTracer) ThrottlePeer(p peer.ID) {}
 func (t pubsubTracer) RecvRPC(rpc *pubsub.RPC) {}
 
 // SendRPC is invoked when a RPC is sent.
-func (t pubsubTracer) SendRPC(rpc *pubsub.RPC, p peer.ID) {}
+func (t pubsubTracer) SendRPC(rpc *pubsub.RPC, p peer.ID) {
+	if rpc != nil && len(rpc.Publish) > 0 {
+		for i := range rpc.Publish {
+			if rpc.Publish[i] != nil && rpc.Publish[i].Topic != nil && *rpc.Publish[i].Topic == TXTopicName {
+				transactionMessagesP2PSentMessages.Inc(nil)
+				transactionMessagesP2PSentBytes.AddUint64(uint64(len(rpc.Publish[0].Data)), nil)
+			}
+		}
+	}
+}
 
 // DropRPC is invoked when an outbound RPC is dropped, typically because of a queue full.
 func (t pubsubTracer) DropRPC(rpc *pubsub.RPC, p peer.ID) {}
