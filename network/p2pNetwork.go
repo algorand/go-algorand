@@ -194,6 +194,11 @@ type p2pPeerStats struct {
 	txReceived atomic.Uint64
 }
 
+// gossipSubTags defines protocol messages that are relayed using GossipSub
+var gossipSubTags = map[protocol.Tag]string{
+	protocol.TxnTag: p2p.TXTopicName,
+}
+
 // NewP2PNetwork returns an instance of GossipNode that uses the p2p.Service
 func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebookAddresses []string, genesisID string, networkID protocol.NetworkID, node NodeInfo, identityOpts *identityOpts) (*P2PNetwork, error) {
 	const readBufferLen = 2048
@@ -214,7 +219,7 @@ func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebo
 		config:        cfg,
 		genesisID:     genesisID,
 		networkID:     networkID,
-		topicTags:     map[protocol.Tag]string{protocol.TxnTag: p2p.TXTopicName},
+		topicTags:     gossipSubTags,
 		wsPeers:       make(map[peer.ID]*wsPeer),
 		wsPeersToIDs:  make(map[*wsPeer]peer.ID),
 		peerStats:     make(map[peer.ID]*p2pPeerStats),
@@ -791,6 +796,7 @@ func (n *P2PNetwork) wsStreamHandler(ctx context.Context, p2pPeer peer.ID, strea
 		conn:       &wsPeerConnP2P{stream: stream},
 		outgoing:   !incoming,
 		identity:   netIdentPeerID,
+		peerType:   peerTypeP2P,
 	}
 	protos, err := n.pstore.GetProtocols(p2pPeer)
 	if err != nil {

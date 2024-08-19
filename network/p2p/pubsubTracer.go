@@ -21,6 +21,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
 
+	ap "github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/metrics"
 )
 
@@ -30,9 +31,15 @@ var transactionMessagesP2PRejectMessage = metrics.NewTagCounter(metrics.Transact
 var transactionMessagesP2PDuplicateMessage = metrics.MakeCounter(metrics.TransactionMessagesP2PDuplicateMessage)
 var transactionMessagesP2PDeliverMessage = metrics.MakeCounter(metrics.TransactionMessagesP2PDeliverMessage)
 var transactionMessagesP2PUnderdeliverableMessage = metrics.MakeCounter(metrics.TransactionMessagesP2PUndeliverableMessage)
-var transactionMessagesP2PValidateMessage = metrics.MakeCounter(metrics.TransactionMessagesP2PValidateMessage)
-var transactionMessagesP2PSentMessages = metrics.MakeCounter(metrics.TransactionMessagesP2PSentMessage)
-var transactionMessagesP2PSentBytes = metrics.MakeCounter(metrics.TransactionMessagesP2PSentBytes)
+
+// This list must be exclusive of the gossipSubTags list in ../metrics.go
+// TODO: as adding more messages into gossipSub need to maintain a mapping of topic to tag.
+// There is a benefic of using const string in a comparison `*rpc.Publish[i].Topic == TXTopicName` below since it most likely optimized to a single instruction.
+var tagTXList = []string{string(ap.Transaction)}
+var networkP2PSentBytesByTag = metrics.NewTagCounterFiltered("algod_network_p2p_sent_bytes_{TAG}", "Number of bytes that were sent over the network for {TAG} messages", tagTXList, "")
+var networkP2PReceivedBytesByTag = metrics.NewTagCounterFiltered("algod_network_p2p_received_bytes_{TAG}", "Number of bytes that were received from the network for {TAG} messages", tagTXList, "")
+var networkP2PMessageReceivedByTag = metrics.NewTagCounterFiltered("algod_network_p2p_message_received_{TAG}", "Number of complete messages that were received from the network for {TAG} messages", tagTXList, "")
+var networkP2PMessageSentByTag = metrics.NewTagCounterFiltered("algod_network_p2p_message_sent_{TAG}", "Number of complete messages that were sent to the network for {TAG} messages", tagTXList, "")
 
 // pubsubTracer is a tracer for pubsub events used to track metrics.
 type pubsubTracer struct{}
@@ -57,7 +64,10 @@ func (t pubsubTracer) Prune(p peer.ID, topic string) {}
 
 // ValidateMessage is invoked when a message first enters the validation pipeline.
 func (t pubsubTracer) ValidateMessage(msg *pubsub.Message) {
-	transactionMessagesP2PValidateMessage.Inc(nil)
+	if msg != nil && msg.Topic != nil && *msg.Topic == TXTopicName {
+		networkP2PReceivedBytesByTag.Add(string(ap.Transaction), uint64(len(msg.Data)))
+		networkP2PMessageReceivedByTag.Add(string(ap.Transaction), 1)
+	}
 }
 
 // DeliverMessage is invoked when a message is delivered
@@ -92,8 +102,8 @@ func (t pubsubTracer) SendRPC(rpc *pubsub.RPC, p peer.ID) {
 	if rpc != nil && len(rpc.Publish) > 0 {
 		for i := range rpc.Publish {
 			if rpc.Publish[i] != nil && rpc.Publish[i].Topic != nil && *rpc.Publish[i].Topic == TXTopicName {
-				transactionMessagesP2PSentMessages.Inc(nil)
-				transactionMessagesP2PSentBytes.AddUint64(uint64(len(rpc.Publish[0].Data)), nil)
+				networkP2PSentBytesByTag.Add(string(ap.Transaction), uint64(len(rpc.Publish[0].Data)))
+				networkP2PMessageSentByTag.Add(string(ap.Transaction), 1)
 			}
 		}
 	}
