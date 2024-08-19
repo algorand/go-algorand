@@ -35,6 +35,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/ledger/eval"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/simulation"
 	"github.com/algorand/go-algorand/logging"
@@ -624,6 +625,49 @@ func convertSimulationRequest(request PreEncodedSimulateRequest) simulation.Requ
 		TraceConfig:           request.ExecTraceConfig,
 		FixSigners:            request.FixSigners,
 	}
+}
+
+func convertLedgerStateDelta(sd ledgercore.StateDelta) LedgerStateDeltaJSONSerializable {
+	serializableTxleases := make([]TxleasJSONSerializable, 0, len(sd.Txleases))
+	for k, v := range sd.Txleases {
+		serializableTxleases = append(serializableTxleases, TxleasJSONSerializable{
+			Sender:     k.Sender,
+			Lease:      k.Lease,
+			Expiration: v,
+		})
+	}
+	// TODO: sort for deterministic response
+	return LedgerStateDeltaJSONSerializable{
+		StateDelta: sd,
+		Txleases:   serializableTxleases,
+	}
+}
+
+func convertLedgerStateDeltaSubset(sd eval.StateDeltaSubset) LedgerStateDeltaSubsetJSONSerializable {
+	serializableTxleases := make([]TxleasJSONSerializable, 0, len(sd.Txleases))
+	for k, v := range sd.Txleases {
+		serializableTxleases = append(serializableTxleases, TxleasJSONSerializable{
+			Sender:     k.Sender,
+			Lease:      k.Lease,
+			Expiration: v,
+		})
+	}
+	// TODO: sort for deterministic response
+	return LedgerStateDeltaSubsetJSONSerializable{
+		StateDeltaSubset: sd,
+		Txleases:         serializableTxleases,
+	}
+}
+
+func convertTxnGroupDeltasWithIds(txnGroupDeltas []eval.TxnGroupDeltaWithIds) []TxnGroupDeltaWithIdsJSONSerializable {
+	converted := make([]TxnGroupDeltaWithIdsJSONSerializable, len(txnGroupDeltas))
+	for i, txnGroupDelta := range txnGroupDeltas {
+		converted[i] = TxnGroupDeltaWithIdsJSONSerializable{
+			Ids:   txnGroupDelta.Ids,
+			Delta: convertLedgerStateDeltaSubset(txnGroupDelta.Delta),
+		}
+	}
+	return converted
 }
 
 // printableUTF8OrEmpty checks to see if the entire string is a UTF8 printable string.

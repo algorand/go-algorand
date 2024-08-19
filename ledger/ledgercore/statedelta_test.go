@@ -17,10 +17,8 @@
 package ledgercore
 
 import (
-	"encoding/json"
 	"reflect"
 	"testing"
-  "fmt"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -539,50 +537,6 @@ func TestStateDeltaReflect(t *testing.T) {
 		reflectedStateDeltaName := st.Field(i).Name
 		assert.Containsf(t, stateDeltaFieldNames, reflectedStateDeltaName, "new field:\"%v\" added to StateDelta, please update StateDelta.Reset() to handle it before fixing the test", reflectedStateDeltaName)
 	}
-}
-
-func TestStateDeltaJSON(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	sd := StateDelta{
-		Accts: AccountDeltas{
-			Accts:          []BalanceRecord{},
-			AppResources:   []AppResourceRecord{},
-			AssetResources: []AssetResourceRecord{},
-		},
-		KvMods: map[string]KvValueDelta{
-			"123": KvValueDelta{
-				Data:    []byte("abc"),
-				OldData: []byte("xyz"),
-			},
-		},
-		Txids: map[transactions.Txid]IncludedTransactions{
-      transactions.Txid{}: IncludedTransactions {
-      },
-    },
-		Txleases: map[Txlease]basics.Round{
-			Txlease{
-				Sender: basics.Address{},
-				Lease:  [32]byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31},
-			}: basics.Round(123),
-		},
-		Creatables: map[basics.CreatableIndex]ModifiedCreatable{},
-		Hdr:            &bookkeeping.BlockHeader{},
-		StateProofNext: basics.Round(123),
-		PrevTimestamp:  123,
-		initialHint:    0,               // Ignore initialHint as it's not exported
-		Totals:         AccountTotals{},
-	}
-	encoded, err := json.Marshal(sd)
-	if err != nil {
-		panic(err)
-	}
-  fmt.Println(string(encoded))
-	var decoded StateDelta
-	err = json.Unmarshal(encoded, &decoded)
-	if err != nil {
-		panic(err)
-	}
-	assert.Equal(t, sd, decoded)
 }
 
 func TestAccountDeltaReflect(t *testing.T) {

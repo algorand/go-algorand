@@ -1420,6 +1420,25 @@ func (v2 *Handlers) GetSyncRound(ctx echo.Context) error {
 	return ctx.JSON(http.StatusOK, model.GetSyncRoundResponse{Round: rnd})
 }
 
+// TxleaseSerializable is used by LedgerStateDeltaJSONSerializable to represent the Txleases map
+type TxleasJSONSerializable struct {
+	Sender     basics.Address
+	Lease      [32]byte
+	Expiration basics.Round
+}
+
+// LedgerStateDeltaJSONSerializable is a version of ledgercore.StateDelta
+// that able to be serialized to valid JSON.
+//
+// It changes the Txleases field to no longer be a map with object keys, but
+// instead an array.
+type LedgerStateDeltaJSONSerializable struct {
+	ledgercore.StateDelta
+
+	// A serialized version of the ledgercore.StateDelta.Txleases map
+	Txleases []TxleasJSONSerializable
+}
+
 // GetLedgerStateDelta returns the deltas for a given round.
 // This should be a representation of the ledgercore.StateDelta object.
 // (GET /v2/deltas/{round})
@@ -1432,7 +1451,13 @@ func (v2 *Handlers) GetLedgerStateDelta(ctx echo.Context, round uint64, params m
 	if err != nil {
 		return notFound(ctx, err, fmt.Sprintf(errFailedRetrievingStateDelta, err), v2.Log)
 	}
-	data, err := encode(handle, sDelta)
+	var response interface{}
+	if handle == protocol.JSONStrictHandle {
+		response = convertLedgerStateDelta(sDelta)
+	} else {
+		response = sDelta
+	}
+	data, err := encode(handle, response)
 	if err != nil {
 		return internalError(ctx, err, errFailedToEncodeResponse, v2.Log)
 	}
@@ -2003,6 +2028,29 @@ func (v2 *Handlers) TealDisassemble(ctx echo.Context) error {
 	return ctx.JSON(http.StatusOK, response)
 }
 
+// LedgerStateDeltaSubsetJSONSerializable is a version of eval.StateDeltaSubset
+// that able to be serialized to valid JSON.
+//
+// It changes the Txleases field to no longer be a map with object keys, but
+// instead an array.
+type LedgerStateDeltaSubsetJSONSerializable struct {
+	eval.StateDeltaSubset
+
+	// A serialized version of the ledgercore.StateDelta.Txleases map
+	Txleases []TxleasJSONSerializable
+}
+
+// TxnGroupDeltaWithIdsJSONSerializable is a version of eval.TxnGroupDeltaWithIds
+// that able to be serialized to valid JSON.
+//
+// It uses the LedgerStateDeltaSubsetJSONSerializable type for the Delta field instead
+// of the eval.StateDeltaSubset type.
+type TxnGroupDeltaWithIdsJSONSerializable struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+	Ids     []string
+	Delta   LedgerStateDeltaSubsetJSONSerializable
+}
+
 // GetLedgerStateDeltaForTransactionGroup retrieves the delta for a specified transaction group.
 // (GET /v2/deltas/txn/group/{id})
 func (v2 *Handlers) GetLedgerStateDeltaForTransactionGroup(ctx echo.Context, id string, params model.GetLedgerStateDeltaForTransactionGroupParams) error {
@@ -2044,10 +2092,19 @@ func (v2 *Handlers) GetTransactionGroupLedgerStateDeltasForRound(ctx echo.Contex
 	if err != nil {
 		return notFound(ctx, err, fmt.Sprintf(errFailedRetrievingStateDelta, err), v2.Log)
 	}
-	response := struct {
-		Deltas []eval.TxnGroupDeltaWithIds
-	}{
-		Deltas: deltas,
+	var response interface{}
+	if handle == protocol.JSONStrictHandle {
+		response = struct {
+			Deltas []TxnGroupDeltaWithIdsJSONSerializable
+		}{
+			Deltas: convertTxnGroupDeltasWithIds(deltas),
+		}
+	} else {
+		response = struct {
+			Deltas []eval.TxnGroupDeltaWithIds
+		}{
+			Deltas: deltas,
+		}
 	}
 	data, err := encode(handle, response)
 	if err != nil {

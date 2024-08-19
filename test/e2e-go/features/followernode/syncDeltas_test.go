@@ -71,6 +71,7 @@ func TestBasicSyncMode(t *testing.T) {
 		err = fixture.ClientWaitForRoundWithTimeout(followClient, round)
 		a.NoError(err)
 		// retrieve state delta
+		// TODO: expand this test to check the state delta JSON response
 		gResp, err := followClient.GetLedgerStateDelta(round)
 		a.NoError(err)
 		a.NotNil(gResp)
