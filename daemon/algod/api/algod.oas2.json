@@ -3403,6 +3403,10 @@
           "description": "Base64 encoded URL where more information about the asset can be retrieved.",
           "type": "string",
           "format": "byte"
+        },
+        "global-frozen": {
+          "description": "\\[gf\\] Whether transfers of this asset are frozen for everyone.",
+          "type": "boolean"
         }
       }
     },

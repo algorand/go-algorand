@@ -1744,8 +1744,8 @@ func ResourceFlagsMaxSize() (s int) {
 func (z *ResourcesData) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0002Len := uint32(26)
-	var zb0002Mask uint32 /* 27 bits */
+	zb0002Len := uint32(27)
+	var zb0002Mask uint32 /* 28 bits */
 	if (*z).Total == 0 {
 		zb0002Len--
 		zb0002Mask |= 0x2
@@ -1774,81 +1774,85 @@ func (z *ResourcesData) MarshalMsg(b []byte) (o []byte) {
 		zb0002Len--
 		zb0002Mask |= 0x80
 	}
-	if (*z).Manager.MsgIsZero() {
+	if (*z).GlobalFrozen == false {
 		zb0002Len--
 		zb0002Mask |= 0x100
 	}
-	if (*z).Reserve.MsgIsZero() {
+	if (*z).Manager.MsgIsZero() {
 		zb0002Len--
 		zb0002Mask |= 0x200
 	}
-	if (*z).Freeze.MsgIsZero() {
+	if (*z).Reserve.MsgIsZero() {
 		zb0002Len--
 		zb0002Mask |= 0x400
 	}
-	if (*z).Clawback.MsgIsZero() {
+	if (*z).Freeze.MsgIsZero() {
 		zb0002Len--
 		zb0002Mask |= 0x800
 	}
-	if (*z).Amount == 0 {
+	if (*z).Clawback.MsgIsZero() {
 		zb0002Len--
 		zb0002Mask |= 0x1000
 	}
-	if (*z).Frozen == false {
+	if (*z).Amount == 0 {
 		zb0002Len--
 		zb0002Mask |= 0x2000
 	}
-	if (*z).SchemaNumUint == 0 {
+	if (*z).Frozen == false {
 		zb0002Len--
 		zb0002Mask |= 0x4000
 	}
-	if (*z).SchemaNumByteSlice == 0 {
+	if (*z).SchemaNumUint == 0 {
 		zb0002Len--
 		zb0002Mask |= 0x8000
 	}
-	if (*z).KeyValue.MsgIsZero() {
+	if (*z).SchemaNumByteSlice == 0 {
 		zb0002Len--
 		zb0002Mask |= 0x10000
 	}
-	if len((*z).ApprovalProgram) == 0 {
+	if (*z).KeyValue.MsgIsZero() {
 		zb0002Len--
 		zb0002Mask |= 0x20000
 	}
-	if len((*z).ClearStateProgram) == 0 {
+	if len((*z).ApprovalProgram) == 0 {
 		zb0002Len--
 		zb0002Mask |= 0x40000
 	}
-	if (*z).GlobalState.MsgIsZero() {
+	if len((*z).ClearStateProgram) == 0 {
 		zb0002Len--
 		zb0002Mask |= 0x80000
 	}
-	if (*z).LocalStateSchemaNumUint == 0 {
+	if (*z).GlobalState.MsgIsZero() {
 		zb0002Len--
 		zb0002Mask |= 0x100000
 	}
-	if (*z).LocalStateSchemaNumByteSlice == 0 {
+	if (*z).LocalStateSchemaNumUint == 0 {
 		zb0002Len--
 		zb0002Mask |= 0x200000
 	}
-	if (*z).GlobalStateSchemaNumUint == 0 {
+	if (*z).LocalStateSchemaNumByteSlice == 0 {
 		zb0002Len--
 		zb0002Mask |= 0x400000
 	}
-	if (*z).GlobalStateSchemaNumByteSlice == 0 {
+	if (*z).GlobalStateSchemaNumUint == 0 {
 		zb0002Len--
 		zb0002Mask |= 0x800000
 	}
-	if (*z).ExtraProgramPages == 0 {
+	if (*z).GlobalStateSchemaNumByteSlice == 0 {
 		zb0002Len--
 		zb0002Mask |= 0x1000000
 	}
-	if (*z).ResourceFlags == 0 {
+	if (*z).ExtraProgramPages == 0 {
 		zb0002Len--
 		zb0002Mask |= 0x2000000
 	}
-	if (*z).UpdateRound == 0 {
+	if (*z).ResourceFlags == 0 {
 		zb0002Len--
 		zb0002Mask |= 0x4000000
+	}
+	if (*z).UpdateRound == 0 {
+		zb0002Len--
+		zb0002Mask |= 0x8000000
 	}
 	// variable map header, size zb0002Len
 	o = msgp.AppendMapHeader(o, zb0002Len)
@@ -1889,96 +1893,101 @@ func (z *ResourcesData) MarshalMsg(b []byte) (o []byte) {
 			o = msgp.AppendBytes(o, ((*z).MetadataHash)[:])
 		}
 		if (zb0002Mask & 0x100) == 0 { // if not empty
+			// string "gf"
+			o = append(o, 0xa2, 0x67, 0x66)
+			o = msgp.AppendBool(o, (*z).GlobalFrozen)
+		}
+		if (zb0002Mask & 0x200) == 0 { // if not empty
 			// string "h"
 			o = append(o, 0xa1, 0x68)
 			o = (*z).Manager.MarshalMsg(o)
 		}
-		if (zb0002Mask & 0x200) == 0 { // if not empty
+		if (zb0002Mask & 0x400) == 0 { // if not empty
 			// string "i"
 			o = append(o, 0xa1, 0x69)
 			o = (*z).Reserve.MarshalMsg(o)
 		}
-		if (zb0002Mask & 0x400) == 0 { // if not empty
+		if (zb0002Mask & 0x800) == 0 { // if not empty
 			// string "j"
 			o = append(o, 0xa1, 0x6a)
 			o = (*z).Freeze.MarshalMsg(o)
 		}
-		if (zb0002Mask & 0x800) == 0 { // if not empty
+		if (zb0002Mask & 0x1000) == 0 { // if not empty
 			// string "k"
 			o = append(o, 0xa1, 0x6b)
 			o = (*z).Clawback.MarshalMsg(o)
 		}
-		if (zb0002Mask & 0x1000) == 0 { // if not empty
+		if (zb0002Mask & 0x2000) == 0 { // if not empty
 			// string "l"
 			o = append(o, 0xa1, 0x6c)
 			o = msgp.AppendUint64(o, (*z).Amount)
 		}
-		if (zb0002Mask & 0x2000) == 0 { // if not empty
+		if (zb0002Mask & 0x4000) == 0 { // if not empty
 			// string "m"
 			o = append(o, 0xa1, 0x6d)
 			o = msgp.AppendBool(o, (*z).Frozen)
 		}
-		if (zb0002Mask & 0x4000) == 0 { // if not empty
+		if (zb0002Mask & 0x8000) == 0 { // if not empty
 			// string "n"
 			o = append(o, 0xa1, 0x6e)
 			o = msgp.AppendUint64(o, (*z).SchemaNumUint)
 		}
-		if (zb0002Mask & 0x8000) == 0 { // if not empty
+		if (zb0002Mask & 0x10000) == 0 { // if not empty
 			// string "o"
 			o = append(o, 0xa1, 0x6f)
 			o = msgp.AppendUint64(o, (*z).SchemaNumByteSlice)
 		}
-		if (zb0002Mask & 0x10000) == 0 { // if not empty
+		if (zb0002Mask & 0x20000) == 0 { // if not empty
 			// string "p"
 			o = append(o, 0xa1, 0x70)
 			o = (*z).KeyValue.MarshalMsg(o)
 		}
-		if (zb0002Mask & 0x20000) == 0 { // if not empty
+		if (zb0002Mask & 0x40000) == 0 { // if not empty
 			// string "q"
 			o = append(o, 0xa1, 0x71)
 			o = msgp.AppendBytes(o, (*z).ApprovalProgram)
 		}
-		if (zb0002Mask & 0x40000) == 0 { // if not empty
+		if (zb0002Mask & 0x80000) == 0 { // if not empty
 			// string "r"
 			o = append(o, 0xa1, 0x72)
 			o = msgp.AppendBytes(o, (*z).ClearStateProgram)
 		}
-		if (zb0002Mask & 0x80000) == 0 { // if not empty
+		if (zb0002Mask & 0x100000) == 0 { // if not empty
 			// string "s"
 			o = append(o, 0xa1, 0x73)
 			o = (*z).GlobalState.MarshalMsg(o)
 		}
-		if (zb0002Mask & 0x100000) == 0 { // if not empty
+		if (zb0002Mask & 0x200000) == 0 { // if not empty
 			// string "t"
 			o = append(o, 0xa1, 0x74)
 			o = msgp.AppendUint64(o, (*z).LocalStateSchemaNumUint)
 		}
-		if (zb0002Mask & 0x200000) == 0 { // if not empty
+		if (zb0002Mask & 0x400000) == 0 { // if not empty
 			// string "u"
 			o = append(o, 0xa1, 0x75)
 			o = msgp.AppendUint64(o, (*z).LocalStateSchemaNumByteSlice)
 		}
-		if (zb0002Mask & 0x400000) == 0 { // if not empty
+		if (zb0002Mask & 0x800000) == 0 { // if not empty
 			// string "v"
 			o = append(o, 0xa1, 0x76)
 			o = msgp.AppendUint64(o, (*z).GlobalStateSchemaNumUint)
 		}
-		if (zb0002Mask & 0x800000) == 0 { // if not empty
+		if (zb0002Mask & 0x1000000) == 0 { // if not empty
 			// string "w"
 			o = append(o, 0xa1, 0x77)
 			o = msgp.AppendUint64(o, (*z).GlobalStateSchemaNumByteSlice)
 		}
-		if (zb0002Mask & 0x1000000) == 0 { // if not empty
+		if (zb0002Mask & 0x2000000) == 0 { // if not empty
 			// string "x"
 			o = append(o, 0xa1, 0x78)
 			o = msgp.AppendUint32(o, (*z).ExtraProgramPages)
 		}
-		if (zb0002Mask & 0x2000000) == 0 { // if not empty
+		if (zb0002Mask & 0x4000000) == 0 { // if not empty
 			// string "y"
 			o = append(o, 0xa1, 0x79)
 			o = msgp.AppendUint8(o, uint8((*z).ResourceFlags))
 		}
-		if (zb0002Mask & 0x4000000) == 0 { // if not empty
+		if (zb0002Mask & 0x8000000) == 0 { // if not empty
 			// string "z"
 			o = append(o, 0xa1, 0x7a)
 			o = msgp.AppendUint64(o, (*z).UpdateRound)
@@ -2095,6 +2104,14 @@ func (z *ResourcesData) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState
 			bts, err = (*z).Clawback.UnmarshalMsgWithState(bts, st)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Clawback")
+				return
+			}
+		}
+		if zb0002 > 0 {
+			zb0002--
+			(*z).GlobalFrozen, bts, err = msgp.ReadBoolBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "GlobalFrozen")
 				return
 			}
 		}
@@ -2331,6 +2348,12 @@ func (z *ResourcesData) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState
 					err = msgp.WrapError(err, "Clawback")
 					return
 				}
+			case "gf":
+				(*z).GlobalFrozen, bts, err = msgp.ReadBoolBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "GlobalFrozen")
+					return
+				}
 			case "l":
 				(*z).Amount, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
@@ -2468,13 +2491,13 @@ func (_ *ResourcesData) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *ResourcesData) Msgsize() (s int) {
-	s = 3 + 2 + msgp.Uint64Size + 2 + msgp.Uint32Size + 2 + msgp.BoolSize + 2 + msgp.StringPrefixSize + len((*z).UnitName) + 2 + msgp.StringPrefixSize + len((*z).AssetName) + 2 + msgp.StringPrefixSize + len((*z).URL) + 2 + msgp.ArrayHeaderSize + (32 * (msgp.ByteSize)) + 2 + (*z).Manager.Msgsize() + 2 + (*z).Reserve.Msgsize() + 2 + (*z).Freeze.Msgsize() + 2 + (*z).Clawback.Msgsize() + 2 + msgp.Uint64Size + 2 + msgp.BoolSize + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + (*z).KeyValue.Msgsize() + 2 + msgp.BytesPrefixSize + len((*z).ApprovalProgram) + 2 + msgp.BytesPrefixSize + len((*z).ClearStateProgram) + 2 + (*z).GlobalState.Msgsize() + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Uint32Size + 2 + msgp.Uint8Size + 2 + msgp.Uint64Size
+	s = 3 + 2 + msgp.Uint64Size + 2 + msgp.Uint32Size + 2 + msgp.BoolSize + 2 + msgp.StringPrefixSize + len((*z).UnitName) + 2 + msgp.StringPrefixSize + len((*z).AssetName) + 2 + msgp.StringPrefixSize + len((*z).URL) + 2 + msgp.ArrayHeaderSize + (32 * (msgp.ByteSize)) + 2 + (*z).Manager.Msgsize() + 2 + (*z).Reserve.Msgsize() + 2 + (*z).Freeze.Msgsize() + 2 + (*z).Clawback.Msgsize() + 3 + msgp.BoolSize + 2 + msgp.Uint64Size + 2 + msgp.BoolSize + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + (*z).KeyValue.Msgsize() + 2 + msgp.BytesPrefixSize + len((*z).ApprovalProgram) + 2 + msgp.BytesPrefixSize + len((*z).ClearStateProgram) + 2 + (*z).GlobalState.Msgsize() + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Uint32Size + 2 + msgp.Uint8Size + 2 + msgp.Uint64Size
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *ResourcesData) MsgIsZero() bool {
-	return ((*z).Total == 0) && ((*z).Decimals == 0) && ((*z).DefaultFrozen == false) && ((*z).UnitName == "") && ((*z).AssetName == "") && ((*z).URL == "") && ((*z).MetadataHash == ([32]byte{})) && ((*z).Manager.MsgIsZero()) && ((*z).Reserve.MsgIsZero()) && ((*z).Freeze.MsgIsZero()) && ((*z).Clawback.MsgIsZero()) && ((*z).Amount == 0) && ((*z).Frozen == false) && ((*z).SchemaNumUint == 0) && ((*z).SchemaNumByteSlice == 0) && ((*z).KeyValue.MsgIsZero()) && (len((*z).ApprovalProgram) == 0) && (len((*z).ClearStateProgram) == 0) && ((*z).GlobalState.MsgIsZero()) && ((*z).LocalStateSchemaNumUint == 0) && ((*z).LocalStateSchemaNumByteSlice == 0) && ((*z).GlobalStateSchemaNumUint == 0) && ((*z).GlobalStateSchemaNumByteSlice == 0) && ((*z).ExtraProgramPages == 0) && ((*z).ResourceFlags == 0) && ((*z).UpdateRound == 0)
+	return ((*z).Total == 0) && ((*z).Decimals == 0) && ((*z).DefaultFrozen == false) && ((*z).UnitName == "") && ((*z).AssetName == "") && ((*z).URL == "") && ((*z).MetadataHash == ([32]byte{})) && ((*z).Manager.MsgIsZero()) && ((*z).Reserve.MsgIsZero()) && ((*z).Freeze.MsgIsZero()) && ((*z).Clawback.MsgIsZero()) && ((*z).GlobalFrozen == false) && ((*z).Amount == 0) && ((*z).Frozen == false) && ((*z).SchemaNumUint == 0) && ((*z).SchemaNumByteSlice == 0) && ((*z).KeyValue.MsgIsZero()) && (len((*z).ApprovalProgram) == 0) && (len((*z).ClearStateProgram) == 0) && ((*z).GlobalState.MsgIsZero()) && ((*z).LocalStateSchemaNumUint == 0) && ((*z).LocalStateSchemaNumByteSlice == 0) && ((*z).GlobalStateSchemaNumUint == 0) && ((*z).GlobalStateSchemaNumByteSlice == 0) && ((*z).ExtraProgramPages == 0) && ((*z).ResourceFlags == 0) && ((*z).UpdateRound == 0)
 }
 
 // MaxSize returns a maximum valid message size for this message type
@@ -2488,7 +2511,7 @@ func ResourcesDataMaxSize() (s int) {
 	s += 2
 	// Calculating size of array: z.MetadataHash
 	s += msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
-	s += 2 + basics.AddressMaxSize() + 2 + basics.AddressMaxSize() + 2 + basics.AddressMaxSize() + 2 + basics.AddressMaxSize() + 2 + msgp.Uint64Size + 2 + msgp.BoolSize + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + basics.TealKeyValueMaxSize() + 2 + msgp.BytesPrefixSize + config.MaxAvailableAppProgramLen + 2 + msgp.BytesPrefixSize + config.MaxAvailableAppProgramLen + 2 + basics.TealKeyValueMaxSize() + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Uint32Size + 2 + msgp.Uint8Size + 2 + msgp.Uint64Size
+	s += 2 + basics.AddressMaxSize() + 2 + basics.AddressMaxSize() + 2 + basics.AddressMaxSize() + 2 + basics.AddressMaxSize() + 3 + msgp.BoolSize + 2 + msgp.Uint64Size + 2 + msgp.BoolSize + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + basics.TealKeyValueMaxSize() + 2 + msgp.BytesPrefixSize + config.MaxAvailableAppProgramLen + 2 + msgp.BytesPrefixSize + config.MaxAvailableAppProgramLen + 2 + basics.TealKeyValueMaxSize() + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Uint64Size + 2 + msgp.Uint32Size + 2 + msgp.Uint8Size + 2 + msgp.Uint64Size
 	return
 }
 

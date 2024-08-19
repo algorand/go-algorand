@@ -420,6 +420,10 @@ type AssetParams struct {
 	// Clawback specifies an account that is allowed to take units
 	// of this asset from any account.
 	Clawback Address `codec:"c"`
+
+	// GlobalFrozen specifies whether the asset is frozen across
+	// all accounts.
+	GlobalFrozen bool `codec:"gf"`
 }
 
 // ToBeHashed implements crypto.Hashable

@@ -186,6 +186,13 @@ func AssetConfig(cc transactions.AssetConfigTxnFields, header transactions.Heade
 			params.Clawback = cc.AssetParams.Clawback
 		}
 
+		// Update global frozen state.
+		if cc.AssetParams.GlobalFrozen {
+			params.GlobalFrozen = true
+		} else {
+			params.GlobalFrozen = false
+		}
+
 		paramsErr = balances.PutAssetParams(creator, cc.ConfigAsset, params)
 		if paramsErr != nil {
 			return paramsErr
@@ -206,6 +213,15 @@ func takeOut(balances Balances, addr basics.Address, asset basics.AssetIndex, am
 	}
 	if !ok {
 		return fmt.Errorf("asset %v missing from %v", asset, addr)
+	}
+
+	params, _, err := getParams(balances, asset)
+	if err != nil {
+		return err
+	}
+
+	if params.GlobalFrozen && !bypassFreeze {
+		return fmt.Errorf("asset globally frozen")
 	}
 
 	if sndHolding.Frozen && !bypassFreeze {
@@ -232,6 +248,15 @@ func putIn(balances Balances, addr basics.Address, asset basics.AssetIndex, amou
 	}
 	if !ok {
 		return fmt.Errorf("receiver error: must optin, asset %v missing from %v", asset, addr)
+	}
+
+	params, _, err := getParams(balances, asset)
+	if err != nil {
+		return err
+	}
+
+	if params.GlobalFrozen && !bypassFreeze {
+		return fmt.Errorf("asset globally frozen")
 	}
 
 	if rcvHolding.Frozen && !bypassFreeze {

@@ -101,6 +101,7 @@ type ResourcesData struct {
 	Reserve       basics.Address `codec:"i"`
 	Freeze        basics.Address `codec:"j"`
 	Clawback      basics.Address `codec:"k"`
+	GlobalFrozen  bool           `codec:"gf"`
 
 	// asset holding ( basics.AssetHolding )
 	Amount uint64 `codec:"l"`
@@ -577,7 +578,8 @@ func (rd *ResourcesData) IsEmptyAssetFields() bool {
 		rd.Manager.IsZero() &&
 		rd.Reserve.IsZero() &&
 		rd.Freeze.IsZero() &&
-		rd.Clawback.IsZero()
+		rd.Clawback.IsZero() &&
+		!rd.GlobalFrozen
 }
 
 // IsAsset returns true if the flag is ResourceFlagsEmptyAsset and the fields are not empty.
@@ -601,6 +603,7 @@ func (rd *ResourcesData) ClearAssetParams() {
 	rd.Reserve = basics.Address{}
 	rd.Freeze = basics.Address{}
 	rd.Clawback = basics.Address{}
+	rd.GlobalFrozen = false
 	hadHolding := (rd.ResourceFlags & ResourceFlagsNotHolding) == ResourceFlagsHolding
 	rd.ResourceFlags -= rd.ResourceFlags & ResourceFlagsOwnership
 	rd.ResourceFlags &= ^ResourceFlagsEmptyAsset
@@ -622,6 +625,7 @@ func (rd *ResourcesData) SetAssetParams(ap basics.AssetParams, haveHoldings bool
 	rd.Reserve = ap.Reserve
 	rd.Freeze = ap.Freeze
 	rd.Clawback = ap.Clawback
+	rd.GlobalFrozen = ap.GlobalFrozen
 	rd.ResourceFlags |= ResourceFlagsOwnership
 	if !haveHoldings {
 		rd.ResourceFlags |= ResourceFlagsNotHolding
@@ -646,6 +650,7 @@ func (rd *ResourcesData) GetAssetParams() basics.AssetParams {
 		Reserve:       rd.Reserve,
 		Freeze:        rd.Freeze,
 		Clawback:      rd.Clawback,
+		GlobalFrozen:  rd.GlobalFrozen,
 	}
 	return ap
 }
