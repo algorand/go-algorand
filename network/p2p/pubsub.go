@@ -51,7 +51,9 @@ const (
 )
 
 // TXTopicName defines a pubsub topic for TX messages
-const TXTopicName = "/algo/tx/0.1.0"
+// There is a micro optimization for const string comparison:
+// 8 bytes const string require a single x86-64 CMPQ instruction
+const TXTopicName = "algo-0.1"
 
 const incomingThreads = 20 // matches to number wsNetwork workers
 
