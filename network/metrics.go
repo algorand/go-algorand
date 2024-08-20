@@ -21,11 +21,13 @@ import (
 	"github.com/algorand/go-algorand/util/metrics"
 )
 
+var tagStringListP2P []string
+
 func init() {
 	// all tags are tracked by ws net
-	tagStringListWs := make([]string, len(protocol.TagList))
-	for i, t := range protocol.TagList {
-		tagStringListWs[i] = string(t)
+	tagStringListWs := make([]string, 0, len(protocol.TagList))
+	for _, t := range protocol.TagList {
+		tagStringListWs = append(tagStringListWs, string(t))
 	}
 	networkSentBytesByTag = metrics.NewTagCounterFiltered("algod_network_sent_bytes_{TAG}", "Number of bytes that were sent over the network for {TAG} messages", tagStringListWs, "UNK")
 	networkReceivedBytesByTag = metrics.NewTagCounterFiltered("algod_network_received_bytes_{TAG}", "Number of bytes that were received from the network for {TAG} messages", tagStringListWs, "UNK")
@@ -36,10 +38,10 @@ func init() {
 
 	// all but gossipSub tags are tracked by p2p net
 	// the remaining tags are tracked by gossipSub tracer p2p sub-package
-	tagStringListP2P := make([]string, len(protocol.TagList))
-	for i, t := range protocol.TagList {
+	tagStringListP2P = make([]string, 0, len(protocol.TagList)-len(gossipSubTags))
+	for _, t := range protocol.TagList {
 		if _, ok := gossipSubTags[t]; !ok {
-			tagStringListWs[i] = string(t)
+			tagStringListP2P = append(tagStringListP2P, string(t))
 		}
 	}
 	networkP2PSentBytesByTag = metrics.NewTagCounterFiltered("algod_network_p2p_sent_bytes_{TAG}", "Number of bytes that were sent over the network for {TAG} messages", tagStringListP2P, "UNK")

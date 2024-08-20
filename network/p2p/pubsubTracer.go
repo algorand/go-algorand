@@ -32,15 +32,15 @@ var transactionMessagesP2PDuplicateMessage = metrics.MakeCounter(metrics.Transac
 var transactionMessagesP2PDeliverMessage = metrics.MakeCounter(metrics.TransactionMessagesP2PDeliverMessage)
 var transactionMessagesP2PUnderdeliverableMessage = metrics.MakeCounter(metrics.TransactionMessagesP2PUndeliverableMessage)
 
-// This list must be exclusive of the gossipSubTags list in ../metrics.go
-// TODO: add a unit test checking that the two lists are disjoint
+// TracedNetworkMessageTags is a list of tags for network messages that handled by pubsubTracer.
+// This list must be exclusive of the tagStringListP2P list in ../metrics.go. It is exported to ensure these lists are disjoint.
 // There is a benefic of using const string in a comparison `*rpc.Publish[i].Topic == TXTopicName` below
 // since it most to a single comparison (or two switch/case constructs) on x86-64.
-var tracedNetworkMessageTags = []string{string(ap.TxnTag)}
-var networkP2PSentBytesByTag = metrics.NewTagCounterFiltered("algod_network_p2p_sent_bytes_{TAG}", "Number of bytes that were sent over the network for {TAG} messages", tracedNetworkMessageTags, "")
-var networkP2PReceivedBytesByTag = metrics.NewTagCounterFiltered("algod_network_p2p_received_bytes_{TAG}", "Number of bytes that were received from the network for {TAG} messages", tracedNetworkMessageTags, "")
-var networkP2PMessageReceivedByTag = metrics.NewTagCounterFiltered("algod_network_p2p_message_received_{TAG}", "Number of complete messages that were received from the network for {TAG} messages", tracedNetworkMessageTags, "")
-var networkP2PMessageSentByTag = metrics.NewTagCounterFiltered("algod_network_p2p_message_sent_{TAG}", "Number of complete messages that were sent to the network for {TAG} messages", tracedNetworkMessageTags, "")
+var TracedNetworkMessageTags = []string{string(ap.TxnTag)}
+var networkP2PSentBytesByTag = metrics.NewTagCounterFiltered("algod_network_p2p_sent_bytes_{TAG}", "Number of bytes that were sent over the network for {TAG} messages", TracedNetworkMessageTags, "")
+var networkP2PReceivedBytesByTag = metrics.NewTagCounterFiltered("algod_network_p2p_received_bytes_{TAG}", "Number of bytes that were received from the network for {TAG} messages", TracedNetworkMessageTags, "")
+var networkP2PMessageReceivedByTag = metrics.NewTagCounterFiltered("algod_network_p2p_message_received_{TAG}", "Number of complete messages that were received from the network for {TAG} messages", TracedNetworkMessageTags, "")
+var networkP2PMessageSentByTag = metrics.NewTagCounterFiltered("algod_network_p2p_message_sent_{TAG}", "Number of complete messages that were sent to the network for {TAG} messages", TracedNetworkMessageTags, "")
 
 // pubsubTracer is a tracer for pubsub events used to track metrics.
 type pubsubTracer struct{}
