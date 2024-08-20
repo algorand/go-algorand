@@ -186,13 +186,6 @@ func AssetConfig(cc transactions.AssetConfigTxnFields, header transactions.Heade
 			params.Clawback = cc.AssetParams.Clawback
 		}
 
-		// Update global frozen state.
-		if cc.AssetParams.GlobalFrozen {
-			params.GlobalFrozen = true
-		} else {
-			params.GlobalFrozen = false
-		}
-
 		paramsErr = balances.PutAssetParams(creator, cc.ConfigAsset, params)
 		if paramsErr != nil {
 			return paramsErr
@@ -221,7 +214,7 @@ func takeOut(balances Balances, addr basics.Address, asset basics.AssetIndex, am
 	}
 
 	if params.GlobalFrozen && !bypassFreeze {
-		return fmt.Errorf("asset globally frozen")
+		return fmt.Errorf("asset %v globally frozen", asset)
 	}
 
 	if sndHolding.Frozen && !bypassFreeze {
@@ -256,7 +249,7 @@ func putIn(balances Balances, addr basics.Address, asset basics.AssetIndex, amou
 	}
 
 	if params.GlobalFrozen && !bypassFreeze {
-		return fmt.Errorf("asset globally frozen")
+		return fmt.Errorf("asset %v globally frozen", asset)
 	}
 
 	if rcvHolding.Frozen && !bypassFreeze {
@@ -460,13 +453,29 @@ func AssetTransfer(ct transactions.AssetTransferTxnFields, header transactions.H
 // AssetFreeze applies an AssetFreeze transaction using the Balances interface.
 func AssetFreeze(cf transactions.AssetFreezeTxnFields, header transactions.Header, balances Balances, spec transactions.SpecialAddresses, ad *transactions.ApplyData) error {
 	// Only the Freeze address can change the freeze value.
-	params, _, err := getParams(balances, cf.FreezeAsset)
+	params, creator, err := getParams(balances, cf.FreezeAsset)
 	if err != nil {
 		return err
 	}
 
 	if params.Freeze.IsZero() || (header.Sender != params.Freeze) {
 		return fmt.Errorf("freeze not allowed: sender %v, freeze %v", header.Sender, params.Freeze)
+	}
+
+	// If FreezeAccount is zero, then this is a global freeze/unfreeze operation.
+	if cf.FreezeAccount == (basics.Address{}) {
+		// Update global frozen state.
+		if cf.GlobalFrozen {
+			params.GlobalFrozen = true
+		} else {
+			params.GlobalFrozen = false
+		}
+
+		return balances.PutAssetParams(creator, cf.FreezeAsset, params)
+	}
+
+	if cf.GlobalFrozen {
+		return fmt.Errorf("cannot freeze account and global at the same time")
 	}
 
 	// Get the account to be frozen/unfrozen.

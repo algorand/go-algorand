@@ -74,4 +74,7 @@ type AssetFreezeTxnFields struct {
 
 	// AssetFrozen is the new frozen value.
 	AssetFrozen bool `codec:"afrz"`
+
+	// GlobalFrozen specifies whether the asset is frozen for all.
+	GlobalFrozen bool `codec:"gfrz"`
 }
