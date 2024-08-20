@@ -45,5 +45,6 @@ func TestMetrics_TagList(t *testing.T) {
 	require.Equal(t, len(protocol.TagMap), len(p2pTags)+len(metricTags))
 	for tag := range protocol.TagMap {
 		require.True(t, p2pTags[string(tag)] || metricTags[string(tag)])
+		require.False(t, p2pTags[string(tag)] && metricTags[string(tag)])
 	}
 }
