@@ -33,13 +33,14 @@ var transactionMessagesP2PDeliverMessage = metrics.MakeCounter(metrics.Transacti
 var transactionMessagesP2PUnderdeliverableMessage = metrics.MakeCounter(metrics.TransactionMessagesP2PUndeliverableMessage)
 
 // This list must be exclusive of the gossipSubTags list in ../metrics.go
-// TODO: as adding more messages into gossipSub need to maintain a mapping of topic to tag.
-// There is a benefic of using const string in a comparison `*rpc.Publish[i].Topic == TXTopicName` below since it most likely optimized to a single instruction.
-var tagTXList = []string{string(ap.Transaction)}
-var networkP2PSentBytesByTag = metrics.NewTagCounterFiltered("algod_network_p2p_sent_bytes_{TAG}", "Number of bytes that were sent over the network for {TAG} messages", tagTXList, "")
-var networkP2PReceivedBytesByTag = metrics.NewTagCounterFiltered("algod_network_p2p_received_bytes_{TAG}", "Number of bytes that were received from the network for {TAG} messages", tagTXList, "")
-var networkP2PMessageReceivedByTag = metrics.NewTagCounterFiltered("algod_network_p2p_message_received_{TAG}", "Number of complete messages that were received from the network for {TAG} messages", tagTXList, "")
-var networkP2PMessageSentByTag = metrics.NewTagCounterFiltered("algod_network_p2p_message_sent_{TAG}", "Number of complete messages that were sent to the network for {TAG} messages", tagTXList, "")
+// TODO: add a unit test checking that the two lists are disjoint
+// There is a benefic of using const string in a comparison `*rpc.Publish[i].Topic == TXTopicName` below
+// since it most to a single comparison (or two switch/case constructs) on x86-64.
+var tracedNetworkMessageTags = []string{string(ap.TxnTag)}
+var networkP2PSentBytesByTag = metrics.NewTagCounterFiltered("algod_network_p2p_sent_bytes_{TAG}", "Number of bytes that were sent over the network for {TAG} messages", tracedNetworkMessageTags, "")
+var networkP2PReceivedBytesByTag = metrics.NewTagCounterFiltered("algod_network_p2p_received_bytes_{TAG}", "Number of bytes that were received from the network for {TAG} messages", tracedNetworkMessageTags, "")
+var networkP2PMessageReceivedByTag = metrics.NewTagCounterFiltered("algod_network_p2p_message_received_{TAG}", "Number of complete messages that were received from the network for {TAG} messages", tracedNetworkMessageTags, "")
+var networkP2PMessageSentByTag = metrics.NewTagCounterFiltered("algod_network_p2p_message_sent_{TAG}", "Number of complete messages that were sent to the network for {TAG} messages", tracedNetworkMessageTags, "")
 
 // pubsubTracer is a tracer for pubsub events used to track metrics.
 type pubsubTracer struct{}
@@ -64,9 +65,12 @@ func (t pubsubTracer) Prune(p peer.ID, topic string) {}
 
 // ValidateMessage is invoked when a message first enters the validation pipeline.
 func (t pubsubTracer) ValidateMessage(msg *pubsub.Message) {
-	if msg != nil && msg.Topic != nil && *msg.Topic == TXTopicName {
-		networkP2PReceivedBytesByTag.Add(string(ap.Transaction), uint64(len(msg.Data)))
-		networkP2PMessageReceivedByTag.Add(string(ap.Transaction), 1)
+	if msg != nil && msg.Topic != nil {
+		switch *msg.Topic {
+		case TXTopicName:
+			networkP2PReceivedBytesByTag.Add(string(ap.TxnTag), uint64(len(msg.Data)))
+			networkP2PMessageReceivedByTag.Add(string(ap.TxnTag), 1)
+		}
 	}
 }
 
@@ -101,9 +105,12 @@ func (t pubsubTracer) RecvRPC(rpc *pubsub.RPC) {}
 func (t pubsubTracer) SendRPC(rpc *pubsub.RPC, p peer.ID) {
 	if rpc != nil && len(rpc.Publish) > 0 {
 		for i := range rpc.Publish {
-			if rpc.Publish[i] != nil && rpc.Publish[i].Topic != nil && *rpc.Publish[i].Topic == TXTopicName {
-				networkP2PSentBytesByTag.Add(string(ap.Transaction), uint64(len(rpc.Publish[0].Data)))
-				networkP2PMessageSentByTag.Add(string(ap.Transaction), 1)
+			if rpc.Publish[i] != nil && rpc.Publish[i].Topic != nil {
+				switch *rpc.Publish[i].Topic {
+				case TXTopicName:
+					networkP2PSentBytesByTag.Add(string(ap.TxnTag), uint64(len(rpc.Publish[i].Data)))
+					networkP2PMessageSentByTag.Add(string(ap.TxnTag), 1)
+				}
 			}
 		}
 	}
