@@ -82,9 +82,17 @@ func (t pubsubTracer) DeliverMessage(msg *pubsub.Message) {
 // RejectMessage is invoked when a message is Rejected or Ignored.
 // The reason argument can be one of the named strings Reject*.
 func (t pubsubTracer) RejectMessage(msg *pubsub.Message, reason string) {
+	// TagCounter cannot handle tags with spaces so pubsub.Reject* cannot be used directly.
+	// Since Go's strings are immutable, char replacement is a new allocation so that stick to string literals.
 	switch reason {
-	case pubsub.RejectValidationThrottled, pubsub.RejectValidationQueueFull, pubsub.RejectValidationFailed, pubsub.RejectValidationIgnored:
-		transactionMessagesP2PRejectMessage.Add(reason, 1)
+	case pubsub.RejectValidationThrottled:
+		transactionMessagesP2PRejectMessage.Add("throttled", 1)
+	case pubsub.RejectValidationQueueFull:
+		transactionMessagesP2PRejectMessage.Add("full", 1)
+	case pubsub.RejectValidationFailed:
+		transactionMessagesP2PRejectMessage.Add("failed", 1)
+	case pubsub.RejectValidationIgnored:
+		transactionMessagesP2PRejectMessage.Add("ignored", 1)
 	default:
 		transactionMessagesP2PRejectMessage.Add("other", 1)
 	}
