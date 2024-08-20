@@ -642,8 +642,8 @@ func (l *Ledger) LookupAgreement(rnd basics.Round, addr basics.Address) (basics.
 	return data, err
 }
 
-// GetKnockOfflineCandidates retrieves a list of online accounts who may not have
-// proposed or sent a heartbeat recently.
+// GetKnockOfflineCandidates retrieves a list of online accounts who will be
+// checked to a recent proposal or heartbeat. Large accounts are the ones worth checking.
 func (l *Ledger) GetKnockOfflineCandidates(rnd basics.Round, proto config.ConsensusParams) (map[basics.Address]basics.OnlineAccountData, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
