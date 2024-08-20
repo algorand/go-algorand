@@ -1420,8 +1420,8 @@ func (v2 *Handlers) GetSyncRound(ctx echo.Context) error {
 	return ctx.JSON(http.StatusOK, model.GetSyncRoundResponse{Round: rnd})
 }
 
-// TxleaseSerializable is used by LedgerStateDeltaJSONSerializable to represent the Txleases map
-type TxleasJSONSerializable struct {
+// TxleaseJSONSerializable is used by LedgerStateDeltaJSONSerializable to represent the Txleases map
+type TxleaseJSONSerializable struct {
 	Sender     basics.Address
 	Lease      [32]byte
 	Expiration basics.Round
@@ -1436,7 +1436,7 @@ type LedgerStateDeltaJSONSerializable struct {
 	ledgercore.StateDelta
 
 	// A serialized version of the ledgercore.StateDelta.Txleases map
-	Txleases []TxleasJSONSerializable
+	Txleases []TxleaseJSONSerializable
 }
 
 // GetLedgerStateDelta returns the deltas for a given round.
@@ -2036,8 +2036,8 @@ func (v2 *Handlers) TealDisassemble(ctx echo.Context) error {
 type LedgerStateDeltaSubsetJSONSerializable struct {
 	eval.StateDeltaSubset
 
-	// A serialized version of the ledgercore.StateDelta.Txleases map
-	Txleases []TxleasJSONSerializable
+	// A serialized version of the eval.StateDeltaSubset.Txleases map
+	Txleases []TxleaseJSONSerializable
 }
 
 // TxnGroupDeltaWithIdsJSONSerializable is a version of eval.TxnGroupDeltaWithIds

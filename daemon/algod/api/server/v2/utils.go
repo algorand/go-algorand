@@ -628,9 +628,9 @@ func convertSimulationRequest(request PreEncodedSimulateRequest) simulation.Requ
 }
 
 func convertLedgerStateDelta(sd ledgercore.StateDelta) LedgerStateDeltaJSONSerializable {
-	serializableTxleases := make([]TxleasJSONSerializable, 0, len(sd.Txleases))
+	serializableTxleases := make([]TxleaseJSONSerializable, 0, len(sd.Txleases))
 	for k, v := range sd.Txleases {
-		serializableTxleases = append(serializableTxleases, TxleasJSONSerializable{
+		serializableTxleases = append(serializableTxleases, TxleaseJSONSerializable{
 			Sender:     k.Sender,
 			Lease:      k.Lease,
 			Expiration: v,
@@ -644,9 +644,9 @@ func convertLedgerStateDelta(sd ledgercore.StateDelta) LedgerStateDeltaJSONSeria
 }
 
 func convertLedgerStateDeltaSubset(sd eval.StateDeltaSubset) LedgerStateDeltaSubsetJSONSerializable {
-	serializableTxleases := make([]TxleasJSONSerializable, 0, len(sd.Txleases))
+	serializableTxleases := make([]TxleaseJSONSerializable, 0, len(sd.Txleases))
 	for k, v := range sd.Txleases {
-		serializableTxleases = append(serializableTxleases, TxleasJSONSerializable{
+		serializableTxleases = append(serializableTxleases, TxleaseJSONSerializable{
 			Sender:     k.Sender,
 			Lease:      k.Lease,
 			Expiration: v,
