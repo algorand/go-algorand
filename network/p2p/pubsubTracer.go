@@ -93,7 +93,7 @@ func (t pubsubTracer) SendRPC(rpc *pubsub.RPC, p peer.ID) {
 		for i := range rpc.Publish {
 			if rpc.Publish[i] != nil && rpc.Publish[i].Topic != nil && *rpc.Publish[i].Topic == TXTopicName {
 				transactionMessagesP2PSentMessages.Inc(nil)
-				transactionMessagesP2PSentBytes.AddUint64(uint64(len(rpc.Publish[0].Data)), nil)
+				transactionMessagesP2PSentBytes.AddUint64(uint64(len(rpc.Publish[i].Data)), nil)
 			}
 		}
 	}
