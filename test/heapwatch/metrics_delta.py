@@ -486,17 +486,27 @@ class nodestats:
         self.deltas = []
         self.txBpsList = []
         self.rxBpsList = []
+        self.txP2PBpsList = []
+        self.rxP2PBpsList = []
         self.tpsList = []
         self.txBSum = 0
         self.rxBSum = 0
+        self.txP2PBSum = 0
+        self.rxP2PBSum = 0
         self.txnSum = 0
         self.secondsSum = 0
         # algod_network_received_bytes_*
         self.rxPLists = {}
         self.rxPSums = {}
+        # algod_network_p2p_received_bytes_*
+        self.rxP2PPLists = {}
+        self.rxP2PPSums = {}
         # algod_network_sent_bytes_*
         self.txPLists = {}
         self.txPSums = {}
+        # algod_network_p2p_sent_bytes_*
+        self.txP2PPLists = {}
+        self.txP2PPSums = {}
         self.times = []
         # algod_tx_pool_count
         self.txPool = []
@@ -533,7 +543,7 @@ class nodestats:
                     reportpath = args.report[:-4] + nick + '.csv'
                 reportf = open(reportpath, 'wt')
                 writer = csv.writer(reportf)
-            writer.writerow(('when', 'tx bytes/s', 'rx bytes/s','TPS', 's/block'))
+            writer.writerow(('when', 'tx bytes/s', 'rx bytes/s', 'tx p2p bytes/s', 'rx p2p bytes/s', 'TPS', 's/block'))
         prev = None
         prevtime = None
         prevPath = None
@@ -587,6 +597,11 @@ class nodestats:
                 rxBytes = d.get('algod_network_received_bytes_total',0)
                 txBytesPerSec = txBytes / dt
                 rxBytesPerSec = rxBytes / dt
+                txP2PBytes = d.get('algod_network_p2p_sent_bytes_total',0)
+                rxP2PBytes = d.get('algod_network_p2p_received_bytes_total',0)
+                txP2PBytesPerSec = txBytes / dt
+                rxP2PBytesPerSec = rxBytes / dt
+
                 # TODO: gather algod_network_sent_bytes_* and algod_network_received_bytes_*
                 if (tps is None) or ((args.mintps is not None) and (tps < args.mintps)):
                     # do not sum up this row
@@ -594,18 +609,26 @@ class nodestats:
                 else:
                     self.txBpsList.append(txBytesPerSec)
                     self.rxBpsList.append(rxBytesPerSec)
+                    self.txP2PBpsList.append(txP2PBytesPerSec)
+                    self.rxP2PBpsList.append(rxP2PBytesPerSec)
                     self.tpsList.append(tps)
                     self.txBSum += txBytes
                     self.rxBSum += rxBytes
+                    self.txP2PBSum += txP2PBytes
+                    self.rxP2PBSum += rxP2PBytes
                     self.txnSum += txnCount
                     self.secondsSum += dt
                     perProtocol('algod_network_sent_bytes_', self.txPLists, self.txPSums, d, dt)
                     perProtocol('algod_network_received_bytes_', self.rxPLists, self.rxPSums, d, dt)
+                    perProtocol('algod_network_p2p_sent_bytes_', self.txP2PPLists, self.txP2PPSums, d, dt)
+                    perProtocol('algod_network_p2p_received_bytes_', self.rxP2PPLists, self.rxP2PPSums, d, dt)
                 if writer:
                     writer.writerow((
                         time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime(curtime)),
                         txBytesPerSec,
                         rxBytesPerSec,
+                        txP2PBytesPerSec,
+                        rxP2PBytesPerSec,
                         tps,
                         blocktime,
                     ))
@@ -634,10 +657,10 @@ class nodestats:
             for bsum, msg in sorted([(bsum,msg) for msg,bsum in self.txPSums.items()]):
                 pass
             writer.writerow([])
-            writer.writerow(['min', min(self.txBpsList), min(self.rxBpsList), min(self.tpsList)])
-            writer.writerow(['avg', self.txBSum/self.secondsSum, self.rxBSum/self.secondsSum, self.txnSum/self.secondsSum])
-            writer.writerow(['max', max(self.txBpsList), max(self.rxBpsList), max(self.tpsList)])
-            writer.writerow(['std', statistics.pstdev(self.txBpsList), statistics.pstdev(self.rxBpsList), statistics.pstdev(self.tpsList)])
+            writer.writerow(['min', min(self.txBpsList), min(self.rxBpsList), min(self.txP2PBpsList), min(self.rxP2PBpsList), min(self.tpsList)])
+            writer.writerow(['avg', self.txBSum/self.secondsSum, self.rxBSum/self.secondsSum, self.txP2PBSum/self.secondsSum, self.rxP2PBSum/self.secondsSum, self.txnSum/self.secondsSum])
+            writer.writerow(['max', max(self.txBpsList), max(self.rxBpsList), max(self.txP2PBpsList), max(self.rxP2PBpsList), max(self.tpsList)])
+            writer.writerow(['std', statistics.pstdev(self.txBpsList), statistics.pstdev(self.rxBpsList), statistics.pstdev(self.txP2PBpsList), statistics.pstdev(self.rxP2PBpsList), statistics.pstdev(self.tpsList)])
         if reportf:
             reportf.close()
         if self.deltas and args.deltas:
