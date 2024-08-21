@@ -653,7 +653,7 @@ func (l *Ledger) GetKnockOfflineCandidates(rnd basics.Round, proto config.Consen
 		return nil, nil
 	}
 	// get latest state proof voters information, up to rnd, without calling cond.Wait()
-	rnd, voters := l.acctsOnline.voters.LatestCompletedVotersUpTo(rnd)
+	_, voters := l.acctsOnline.voters.LatestCompletedVotersUpTo(rnd)
 	if voters == nil { // no cached voters found < rnd
 		return nil, nil
 	}
