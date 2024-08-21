@@ -17,34 +17,60 @@
 package network
 
 import (
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/algorand/go-algorand/network/p2p"
-	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-// TestMetrics_TagList ensures p2p.TracedNetworkMessageTags and tagStringListP2P are disjoint
-func TestMetrics_TagList(t *testing.T) {
+// TestPubsubTracer_TagList makes sure pubsubMetricsTracer traces pubsub messages
+// by counting switch cases in SendRPC and ValidateMessage
+func TestMetrics_PubsubTracer_TagList(t *testing.T) {
 	t.Parallel()
 	partitiontest.PartitionTest(t)
 
-	p2pTags := make(map[string]bool, len(p2p.TracedNetworkMessageTags))
-	metricTags := make(map[string]bool, len(tagStringListP2P))
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, "metrics.go", nil, 0)
+	require.NoError(t, err)
 
-	for _, tag := range p2p.TracedNetworkMessageTags {
-		p2pTags[string(tag)] = true
-	}
+	// Find the SendRPC/ValidateMessage functions and count the switch cases
+	var sendCaseCount int
+	var recvCaseCount int
+	ast.Inspect(f, func(n ast.Node) bool {
+		switch stmt := n.(type) {
+		case *ast.FuncDecl:
+			if stmt.Name.Name == "SendRPC" {
+				ast.Inspect(stmt.Body, func(n ast.Node) bool {
+					if switchStmt, ok := n.(*ast.SwitchStmt); ok {
+						for _, stmt := range switchStmt.Body.List {
+							if _, ok := stmt.(*ast.CaseClause); ok {
+								sendCaseCount++
+							}
+						}
+					}
+					return true
+				})
+			}
+			if stmt.Name.Name == "ValidateMessage" {
+				ast.Inspect(stmt.Body, func(n ast.Node) bool {
+					if switchStmt, ok := n.(*ast.SwitchStmt); ok {
+						for _, stmt := range switchStmt.Body.List {
+							if _, ok := stmt.(*ast.CaseClause); ok {
+								recvCaseCount++
+							}
+						}
+					}
+					return true
+				})
+			}
+		}
+		return true
+	})
 
-	for _, tag := range tagStringListP2P {
-		metricTags[string(tag)] = true
-	}
-
-	require.Equal(t, len(protocol.TagMap), len(p2pTags)+len(metricTags))
-	for tag := range protocol.TagMap {
-		require.True(t, p2pTags[string(tag)] || metricTags[string(tag)])
-		require.False(t, p2pTags[string(tag)] && metricTags[string(tag)])
-	}
+	require.Equal(t, len(gossipSubTags), sendCaseCount)
+	require.Equal(t, len(gossipSubTags), recvCaseCount)
 }

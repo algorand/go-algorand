@@ -57,7 +57,7 @@ const TXTopicName = "algo-0.1"
 
 const incomingThreads = 20 // matches to number wsNetwork workers
 
-func makePubSub(ctx context.Context, cfg config.Local, host host.Host) (*pubsub.PubSub, error) {
+func makePubSub(ctx context.Context, cfg config.Local, host host.Host, metricsTracer pubsub.RawTracer) (*pubsub.PubSub, error) {
 	//defaultParams := pubsub.DefaultGossipSubParams()
 
 	options := []pubsub.Option{
@@ -100,7 +100,10 @@ func makePubSub(ctx context.Context, cfg config.Local, host host.Host) (*pubsub.
 		pubsub.WithMessageSignaturePolicy(pubsub.StrictNoSign),
 		// pubsub.WithValidateThrottle(cfg.TxBacklogSize),
 		pubsub.WithValidateWorkers(incomingThreads),
-		pubsub.WithRawTracer(pubsubTracer{}),
+	}
+
+	if metricsTracer != nil {
+		options = append(options, pubsub.WithRawTracer(metricsTracer))
 	}
 
 	return pubsub.NewGossipSub(ctx, host, options...)

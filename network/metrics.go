@@ -17,37 +17,32 @@
 package network
 
 import (
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/libp2p/go-libp2p/core/peer"
+	p2proto "github.com/libp2p/go-libp2p/core/protocol"
+
+	"github.com/algorand/go-algorand/network/p2p"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/metrics"
 )
 
-var tagStringListP2P []string
-
 func init() {
 	// all tags are tracked by ws net
-	tagStringListWs := make([]string, 0, len(protocol.TagList))
+	tagStringList := make([]string, 0, len(protocol.TagList))
 	for _, t := range protocol.TagList {
-		tagStringListWs = append(tagStringListWs, string(t))
+		tagStringList = append(tagStringList, string(t))
 	}
-	networkSentBytesByTag = metrics.NewTagCounterFiltered("algod_network_sent_bytes_{TAG}", "Number of bytes that were sent over the network for {TAG} messages", tagStringListWs, "UNK")
-	networkReceivedBytesByTag = metrics.NewTagCounterFiltered("algod_network_received_bytes_{TAG}", "Number of bytes that were received from the network for {TAG} messages", tagStringListWs, "UNK")
-	networkMessageReceivedByTag = metrics.NewTagCounterFiltered("algod_network_message_received_{TAG}", "Number of complete messages that were received from the network for {TAG} messages", tagStringListWs, "UNK")
-	networkMessageSentByTag = metrics.NewTagCounterFiltered("algod_network_message_sent_{TAG}", "Number of complete messages that were sent to the network for {TAG} messages", tagStringListWs, "UNK")
-	networkHandleCountByTag = metrics.NewTagCounterFiltered("algod_network_rx_handle_countbytag_{TAG}", "count of handler calls in the receive thread for {TAG} messages", tagStringListWs, "UNK")
-	networkHandleMicrosByTag = metrics.NewTagCounterFiltered("algod_network_rx_handle_microsbytag_{TAG}", "microseconds spent by protocol handlers in the receive thread for {TAG} messages", tagStringListWs, "UNK")
+	networkSentBytesByTag = metrics.NewTagCounterFiltered("algod_network_sent_bytes_{TAG}", "Number of bytes that were sent over the network for {TAG} messages", tagStringList, "UNK")
+	networkReceivedBytesByTag = metrics.NewTagCounterFiltered("algod_network_received_bytes_{TAG}", "Number of bytes that were received from the network for {TAG} messages", tagStringList, "UNK")
+	networkMessageReceivedByTag = metrics.NewTagCounterFiltered("algod_network_message_received_{TAG}", "Number of complete messages that were received from the network for {TAG} messages", tagStringList, "UNK")
+	networkMessageSentByTag = metrics.NewTagCounterFiltered("algod_network_message_sent_{TAG}", "Number of complete messages that were sent to the network for {TAG} messages", tagStringList, "UNK")
+	networkHandleCountByTag = metrics.NewTagCounterFiltered("algod_network_rx_handle_countbytag_{TAG}", "count of handler calls in the receive thread for {TAG} messages", tagStringList, "UNK")
+	networkHandleMicrosByTag = metrics.NewTagCounterFiltered("algod_network_rx_handle_microsbytag_{TAG}", "microseconds spent by protocol handlers in the receive thread for {TAG} messages", tagStringList, "UNK")
 
-	// all but gossipSub tags are tracked by p2p net
-	// the remaining tags are tracked by gossipSub tracer p2p sub-package
-	tagStringListP2P = make([]string, 0, len(protocol.TagList)-len(gossipSubTags))
-	for _, t := range protocol.TagList {
-		if _, ok := gossipSubTags[t]; !ok {
-			tagStringListP2P = append(tagStringListP2P, string(t))
-		}
-	}
-	networkP2PSentBytesByTag = metrics.NewTagCounterFiltered("algod_network_p2p_sent_bytes_{TAG}", "Number of bytes that were sent over the network for {TAG} messages", tagStringListP2P, "UNK")
-	networkP2PReceivedBytesByTag = metrics.NewTagCounterFiltered("algod_network_p2p_received_bytes_{TAG}", "Number of bytes that were received from the network for {TAG} messages", tagStringListP2P, "UNK")
-	networkP2PMessageReceivedByTag = metrics.NewTagCounterFiltered("algod_network_p2p_message_received_{TAG}", "Number of complete messages that were received from the network for {TAG} messages", tagStringListP2P, "UNK")
-	networkP2PMessageSentByTag = metrics.NewTagCounterFiltered("algod_network_p2p_message_sent_{TAG}", "Number of complete messages that were sent to the network for {TAG} messages", tagStringListP2P, "UNK")
+	networkP2PSentBytesByTag = metrics.NewTagCounterFiltered("algod_network_p2p_sent_bytes_{TAG}", "Number of bytes that were sent over the network for {TAG} messages", tagStringList, "UNK")
+	networkP2PReceivedBytesByTag = metrics.NewTagCounterFiltered("algod_network_p2p_received_bytes_{TAG}", "Number of bytes that were received from the network for {TAG} messages", tagStringList, "UNK")
+	networkP2PMessageReceivedByTag = metrics.NewTagCounterFiltered("algod_network_p2p_message_received_{TAG}", "Number of complete messages that were received from the network for {TAG} messages", tagStringList, "UNK")
+	networkP2PMessageSentByTag = metrics.NewTagCounterFiltered("algod_network_p2p_message_sent_{TAG}", "Number of complete messages that were sent to the network for {TAG} messages", tagStringList, "UNK")
 }
 
 var networkSentBytesTotal = metrics.MakeCounter(metrics.NetworkSentBytesTotal)
@@ -101,11 +96,106 @@ var networkPeerAlreadyClosed = metrics.MakeCounter(metrics.MetricName{Name: "alg
 var networkSlowPeerDrops = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_slow_drops_total", Description: "number of peers dropped for being slow to send to"})
 var networkIdlePeerDrops = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_idle_drops_total", Description: "number of peers dropped due to idle connection"})
 
-var minPing = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_peer_min_ping_seconds", Description: "Network round trip time to fastest peer in seconds."})
-var meanPing = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_peer_mean_ping_seconds", Description: "Network round trip time to average peer in seconds."})
-var medianPing = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_peer_median_ping_seconds", Description: "Network round trip time to median peer in seconds."})
-var maxPing = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_peer_max_ping_seconds", Description: "Network round trip time to slowest peer in seconds."})
-
 var peers = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_peers", Description: "Number of active peers."})
 var incomingPeers = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_incoming_peers", Description: "Number of active incoming peers."})
 var outgoingPeers = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_outgoing_peers", Description: "Number of active outgoing peers."})
+
+var transactionMessagesP2PRejectMessage = metrics.NewTagCounter(metrics.TransactionMessagesP2PRejectMessage.Name, metrics.TransactionMessagesP2PRejectMessage.Description)
+var transactionMessagesP2PDuplicateMessage = metrics.MakeCounter(metrics.TransactionMessagesP2PDuplicateMessage)
+var transactionMessagesP2PDeliverMessage = metrics.MakeCounter(metrics.TransactionMessagesP2PDeliverMessage)
+var transactionMessagesP2PUnderdeliverableMessage = metrics.MakeCounter(metrics.TransactionMessagesP2PUndeliverableMessage)
+
+var _ = pubsub.RawTracer(pubsubMetricsTracer{})
+
+// pubsubMetricsTracer is a tracer for pubsub events used to track metrics.
+type pubsubMetricsTracer struct{}
+
+// AddPeer is invoked when a new peer is added.
+func (t pubsubMetricsTracer) AddPeer(p peer.ID, proto p2proto.ID) {}
+
+// RemovePeer is invoked when a peer is removed.
+func (t pubsubMetricsTracer) RemovePeer(p peer.ID) {}
+
+// Join is invoked when a new topic is joined
+func (t pubsubMetricsTracer) Join(topic string) {}
+
+// Leave is invoked when a topic is abandoned
+func (t pubsubMetricsTracer) Leave(topic string) {}
+
+// Graft is invoked when a new peer is grafted on the mesh (gossipsub)
+func (t pubsubMetricsTracer) Graft(p peer.ID, topic string) {}
+
+// Prune is invoked when a peer is pruned from the message (gossipsub)
+func (t pubsubMetricsTracer) Prune(p peer.ID, topic string) {}
+
+// ValidateMessage is invoked when a message first enters the validation pipeline.
+func (t pubsubMetricsTracer) ValidateMessage(msg *pubsub.Message) {
+	if msg != nil && msg.Topic != nil {
+		switch *msg.Topic {
+		case p2p.TXTopicName:
+			networkP2PReceivedBytesTotal.AddUint64(uint64(len(msg.Data)), nil)
+			networkP2PReceivedBytesByTag.Add(string(protocol.TxnTag), uint64(len(msg.Data)))
+			networkP2PMessageReceivedByTag.Add(string(protocol.TxnTag), 1)
+		}
+	}
+}
+
+// DeliverMessage is invoked when a message is delivered
+func (t pubsubMetricsTracer) DeliverMessage(msg *pubsub.Message) {
+	transactionMessagesP2PDeliverMessage.Inc(nil)
+}
+
+// RejectMessage is invoked when a message is Rejected or Ignored.
+// The reason argument can be one of the named strings Reject*.
+func (t pubsubMetricsTracer) RejectMessage(msg *pubsub.Message, reason string) {
+	// TagCounter cannot handle tags with spaces so pubsub.Reject* cannot be used directly.
+	// Since Go's strings are immutable, char replacement is a new allocation so that stick to string literals.
+	switch reason {
+	case pubsub.RejectValidationThrottled:
+		transactionMessagesP2PRejectMessage.Add("throttled", 1)
+	case pubsub.RejectValidationQueueFull:
+		transactionMessagesP2PRejectMessage.Add("full", 1)
+	case pubsub.RejectValidationFailed:
+		transactionMessagesP2PRejectMessage.Add("failed", 1)
+	case pubsub.RejectValidationIgnored:
+		transactionMessagesP2PRejectMessage.Add("ignored", 1)
+	default:
+		transactionMessagesP2PRejectMessage.Add("other", 1)
+	}
+}
+
+// DuplicateMessage is invoked when a duplicate message is dropped.
+func (t pubsubMetricsTracer) DuplicateMessage(msg *pubsub.Message) {
+	transactionMessagesP2PDuplicateMessage.Inc(nil)
+}
+
+// ThrottlePeer is invoked when a peer is throttled by the peer gater.
+func (t pubsubMetricsTracer) ThrottlePeer(p peer.ID) {}
+
+// RecvRPC is invoked when an incoming RPC is received.
+func (t pubsubMetricsTracer) RecvRPC(rpc *pubsub.RPC) {}
+
+// SendRPC is invoked when a RPC is sent.
+func (t pubsubMetricsTracer) SendRPC(rpc *pubsub.RPC, p peer.ID) {
+	if rpc != nil && len(rpc.Publish) > 0 {
+		for i := range rpc.Publish {
+			if rpc.Publish[i] != nil && rpc.Publish[i].Topic != nil {
+				switch *rpc.Publish[i].Topic {
+				case p2p.TXTopicName:
+					networkP2PSentBytesByTag.Add(string(protocol.TxnTag), uint64(len(rpc.Publish[i].Data)))
+					networkP2PSentBytesTotal.AddUint64(uint64(len(rpc.Publish[i].Data)), nil)
+					networkP2PMessageSentByTag.Add(string(protocol.TxnTag), 1)
+				}
+			}
+		}
+	}
+}
+
+// DropRPC is invoked when an outbound RPC is dropped, typically because of a queue full.
+func (t pubsubMetricsTracer) DropRPC(rpc *pubsub.RPC, p peer.ID) {}
+
+// UndeliverableMessage is invoked when the consumer of Subscribe is not reading messages fast enough and
+// the pressure release mechanism trigger, dropping messages.
+func (t pubsubMetricsTracer) UndeliverableMessage(msg *pubsub.Message) {
+	transactionMessagesP2PUnderdeliverableMessage.Inc(nil)
+}

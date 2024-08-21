@@ -266,7 +266,7 @@ func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebo
 	}
 	log.Infof("P2P host created: peer ID %s addrs %s", h.ID(), h.Addrs())
 
-	net.service, err = p2p.MakeService(net.ctx, log, cfg, h, la, net.wsStreamHandler)
+	net.service, err = p2p.MakeService(net.ctx, log, cfg, h, la, net.wsStreamHandler, pubsubMetricsTracer{})
 	if err != nil {
 		return nil, err
 	}
