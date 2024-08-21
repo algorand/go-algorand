@@ -859,7 +859,7 @@ func (v2 *Handlers) GetBlockHeader(ctx echo.Context, round uint64, params model.
 
 	// Encoding wasn't working well without embedding "real" objects.
 	response := struct {
-		BlockHeader bookkeeping.BlockHeader `codec:"blockHeader"`
+		BlockHeader bookkeeping.BlockHeader `codec:"block-header"`
 	}{
 		BlockHeader: block,
 	}
