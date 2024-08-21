@@ -147,11 +147,6 @@ var (
 	// TransactionMessagesP2PValidateMessage "Number of p2p pubsub transaction messages received for validation"
 	TransactionMessagesP2PValidateMessage = MetricName{Name: "algod_transaction_messages_p2p_validate", Description: "Number of p2p pubsub transaction messages received for validation"}
 
-	// TransactionMessagesP2PSentMessage "Number of p2p pubsub transaction messages received for validation"
-	TransactionMessagesP2PSentMessage = MetricName{Name: "algod_transaction_messages_p2p_sent", Description: "Number of p2p pubsub transaction messages sent"}
-	// TransactionMessagesP2PSentBytes "Number p2p pubsub transaction bytes sent"
-	TransactionMessagesP2PSentBytes = MetricName{Name: "algod_transaction_messages_p2p_bytes", Description: "Number p2p pubsub transaction bytes sent"}
-
 	// TransactionGroupTxSyncHandled "Number of transaction groups handled via txsync"
 	TransactionGroupTxSyncHandled = MetricName{Name: "algod_transaction_group_txsync_handled", Description: "Number of transaction groups handled via txsync"}
 	// TransactionGroupTxSyncRemember "Number of transaction groups remembered via txsync"
