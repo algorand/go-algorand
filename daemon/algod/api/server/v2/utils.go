@@ -17,6 +17,7 @@
 package v2
 
 import (
+	"bytes"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -627,6 +628,25 @@ func convertSimulationRequest(request PreEncodedSimulateRequest) simulation.Requ
 	}
 }
 
+// sortTxleaseJSONSerializableSlice lexicographically sorts a slice of TxleaseJSONSerializable
+func sortTxleaseJSONSerializableSlice(s []TxleaseJSONSerializable) {
+	slices.SortFunc(s, func(a, b TxleaseJSONSerializable) int {
+		if a.Sender != b.Sender {
+			return bytes.Compare(a.Sender[:], b.Sender[:])
+		}
+		if a.Lease != b.Lease {
+			return bytes.Compare(a.Lease[:], b.Lease[:])
+		}
+		if a.Expiration == b.Expiration {
+			return 0
+		}
+		if a.Expiration < b.Expiration {
+			return -1
+		}
+		return 1
+	})
+}
+
 func convertLedgerStateDelta(sd ledgercore.StateDelta) LedgerStateDeltaJSONSerializable {
 	serializableTxleases := make([]TxleaseJSONSerializable, 0, len(sd.Txleases))
 	for k, v := range sd.Txleases {
@@ -636,7 +656,7 @@ func convertLedgerStateDelta(sd ledgercore.StateDelta) LedgerStateDeltaJSONSeria
 			Expiration: v,
 		})
 	}
-	// TODO: sort for deterministic response
+	sortTxleaseJSONSerializableSlice(serializableTxleases)
 	return LedgerStateDeltaJSONSerializable{
 		StateDelta: sd,
 		Txleases:   serializableTxleases,
@@ -652,7 +672,7 @@ func convertLedgerStateDeltaSubset(sd eval.StateDeltaSubset) LedgerStateDeltaSub
 			Expiration: v,
 		})
 	}
-	// TODO: sort for deterministic response
+	sortTxleaseJSONSerializableSlice(serializableTxleases)
 	return LedgerStateDeltaSubsetJSONSerializable{
 		StateDeltaSubset: sd,
 		Txleases:         serializableTxleases,
