@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/crypto"
+	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/netdeploy"
 	"github.com/algorand/go-algorand/protocol"
@@ -93,7 +94,18 @@ func testTxnGroupDeltasDevMode(t *testing.T, version protocol.ConsensusVersion) 
 	require.NoError(t, err)
 	key := crypto.GenerateSignatureSecrets(crypto.Seed{})
 	receiver := basics.Address(key.SignatureVerifier)
-	txn := fixture.SendMoneyAndWait(0, 100000, 1000, sender.Address, receiver.String(), "")
+
+	status, err := fixture.AlgodClient.Status()
+	require.NoError(t, err)
+	curRound := status.LastRound
+
+	wh, err := fixture.LibGoalClient.GetUnencryptedWalletHandle()
+	require.NoError(t, err)
+
+	fundingTx, err := fixture.LibGoalClient.SendPaymentFromWalletWithLease(wh, nil, sender.Address, receiver.String(), 1000, 100000, nil, "", [32]byte{1, 2, 3}, basics.Round(curRound).SubSaturate(1), 0)
+	require.NoError(t, err)
+	txn, err := fixture.WaitForConfirmedTxn(curRound+uint64(5), fundingTx.ID().String())
+	require.NoError(t, err)
 	require.NotNil(t, txn.ConfirmedRound)
 	_, err = fixture.AlgodClient.Block(*txn.ConfirmedRound)
 	require.NoError(t, err)
@@ -101,16 +113,28 @@ func testTxnGroupDeltasDevMode(t *testing.T, version protocol.ConsensusVersion) 
 	// Test GetLedgerStateDeltaForTransactionGroup and verify the response contains a delta
 	txngroupResponse, err := fixture.AlgodClient.GetLedgerStateDeltaForTransactionGroup(txn.Txn.ID().String())
 	require.NoError(t, err)
-	require.True(t, len(txngroupResponse) > 0)
+	require.NotZero(t, txngroupResponse)
 
 	// Test GetTransactionGroupLedgerStateDeltasForRound and verify the response contains the delta for our txn
 	roundResponse, err := fixture.AlgodClient.GetTransactionGroupLedgerStateDeltasForRound(1)
 	require.NoError(t, err)
 	require.Equal(t, len(roundResponse.Deltas), 1)
 	groupDelta := roundResponse.Deltas[0]
-	require.Equal(t, 1, len(groupDelta.Ids))
+	require.Len(t, groupDelta.Ids, 1)
 	require.Equal(t, groupDelta.Ids[0], txn.Txn.ID().String())
 
 	// Assert that the TxIDs field across both endpoint responses is the same
-	require.Equal(t, txngroupResponse["Txids"], groupDelta.Delta["Txids"])
+	require.Equal(t, txngroupResponse.Txids, groupDelta.Delta.Txids)
+
+	// Verify Txleases field as well
+	require.Len(t, txngroupResponse.Txleases, 1)
+	senderAddress, err := basics.UnmarshalChecksumAddress(sender.Address)
+	require.NoError(t, err)
+	expectedLease := v2.TxleaseJSONSerializable{
+		Sender:     senderAddress,
+		Lease:      [32]byte{1, 2, 3},
+		Expiration: txn.Txn.Txn.LastValid,
+	}
+	require.Equal(t, expectedLease, txngroupResponse.Txleases[0])
+	require.Equal(t, txngroupResponse.Txleases, groupDelta.Delta.Txleases)
 }

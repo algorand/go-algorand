@@ -30,6 +30,7 @@ import (
 	"github.com/google/go-querystring/query"
 
 	"github.com/algorand/go-algorand/crypto"
+	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/common"
 	"github.com/algorand/go-algorand/data/basics"
@@ -229,7 +230,7 @@ func (client RestClient) submitForm(
 	}
 
 	if decodeJSON {
-		dec := json.NewDecoder(resp.Body)
+		dec := protocol.NewJSONDecoder(resp.Body)
 		return dec.Decode(&response)
 	}
 
@@ -767,19 +768,27 @@ func (client RestClient) GetSyncRound() (response model.GetSyncRoundResponse, er
 }
 
 // GetLedgerStateDelta retrieves the ledger state delta for the round
-func (client RestClient) GetLedgerStateDelta(round uint64) (response model.LedgerStateDeltaResponse, err error) {
+func (client RestClient) GetLedgerStateDelta(round uint64) (response v2.LedgerStateDeltaJSONSerializable, err error) {
+	// Note: this endpoint gets the StateDelta as JSON, meaning some string fields with non-UTF-8 data will lose
+	// information. Msgpack should be used instead if this becomes a problem.
 	err = client.get(&response, fmt.Sprintf("/v2/deltas/%d", round), nil)
 	return
 }
 
 // GetLedgerStateDeltaForTransactionGroup retrieves the ledger state delta for the txn group specified by the id
-func (client RestClient) GetLedgerStateDeltaForTransactionGroup(id string) (response model.LedgerStateDeltaForTransactionGroupResponse, err error) {
+func (client RestClient) GetLedgerStateDeltaForTransactionGroup(id string) (response v2.LedgerStateDeltaSubsetJSONSerializable, err error) {
+	// Note: this endpoint gets the StateDelta as JSON, meaning some string fields with non-UTF-8 data will lose
+	// information. Msgpack should be used instead if this becomes a problem.
 	err = client.get(&response, fmt.Sprintf("/v2/deltas/txn/group/%s", id), nil)
 	return
 }
 
 // GetTransactionGroupLedgerStateDeltasForRound retrieves the ledger state deltas for the txn groups in the specified round
-func (client RestClient) GetTransactionGroupLedgerStateDeltasForRound(round uint64) (response model.TransactionGroupLedgerStateDeltasForRoundResponse, err error) {
+func (client RestClient) GetTransactionGroupLedgerStateDeltasForRound(round uint64) (response struct {
+	Deltas []v2.TxnGroupDeltaWithIdsJSONSerializable
+}, err error) {
+	// Note: this endpoint gets the StateDelta as JSON, meaning some string fields with non-UTF-8 data will lose
+	// information. Msgpack should be used instead if this becomes a problem.
 	err = client.get(&response, fmt.Sprintf("/v2/deltas/%d/txn/group", round), nil)
 	return
 }

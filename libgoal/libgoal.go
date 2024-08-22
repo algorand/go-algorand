@@ -1341,7 +1341,7 @@ func (c *Client) GetSyncRound() (rep model.GetSyncRoundResponse, err error) {
 }
 
 // GetLedgerStateDelta gets the LedgerStateDelta on a node w/ EnableFollowMode
-func (c *Client) GetLedgerStateDelta(round uint64) (rep model.LedgerStateDeltaResponse, err error) {
+func (c *Client) GetLedgerStateDelta(round uint64) (rep v2.LedgerStateDeltaJSONSerializable, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		return algod.GetLedgerStateDelta(round)

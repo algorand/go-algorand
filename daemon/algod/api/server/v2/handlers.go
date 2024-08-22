@@ -839,7 +839,7 @@ func (v2 *Handlers) GetBlockHash(ctx echo.Context, round uint64) error {
 // (GET /v2/blocks/{round}/transactions/{txid}/proof)
 func (v2 *Handlers) GetTransactionProof(ctx echo.Context, round uint64, txid string, params model.GetTransactionProofParams) error {
 	var txID transactions.Txid
-	err := txID.UnmarshalText([]byte(txid))
+	err := txID.FromString(txid)
 	if err != nil {
 		return badRequest(ctx, err, errNoValidTxnSpecified, v2.Log)
 	}
@@ -1526,7 +1526,7 @@ func (v2 *Handlers) PendingTransactionInformation(ctx echo.Context, txid string,
 	}
 
 	txID := transactions.Txid{}
-	if err := txID.UnmarshalText([]byte(txid)); err != nil {
+	if err := txID.FromString(txid); err != nil {
 		return badRequest(ctx, err, errNoValidTxnSpecified, v2.Log)
 	}
 
@@ -2070,7 +2070,13 @@ func (v2 *Handlers) GetLedgerStateDeltaForTransactionGroup(ctx echo.Context, id 
 	if err != nil {
 		return notFound(ctx, err, fmt.Sprintf(errFailedRetrievingStateDelta, err), v2.Log)
 	}
-	data, err := encode(handle, delta)
+	var response interface{}
+	if handle == protocol.JSONStrictHandle {
+		response = convertLedgerStateDeltaSubset(delta)
+	} else {
+		response = delta
+	}
+	data, err := encode(handle, response)
 	if err != nil {
 		return internalError(ctx, err, errFailedToEncodeResponse, v2.Log)
 	}
