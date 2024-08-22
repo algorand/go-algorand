@@ -105,6 +105,9 @@ var transactionMessagesP2PDuplicateMessage = metrics.MakeCounter(metrics.Transac
 var transactionMessagesP2PDeliverMessage = metrics.MakeCounter(metrics.TransactionMessagesP2PDeliverMessage)
 var transactionMessagesP2PUnderdeliverableMessage = metrics.MakeCounter(metrics.TransactionMessagesP2PUndeliverableMessage)
 
+var networkP2PGossipSubSentBytesTotal = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_p2p_gs_sent_bytes_total", Description: "Total number of bytes sent through gossipsub"})
+var networkP2PGossipSubReceivedBytesTotal = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_p2p_gs_received_bytes_total", Description: "Total number of bytes received through gossipsub"})
+
 var _ = pubsub.RawTracer(pubsubMetricsTracer{})
 
 // pubsubMetricsTracer is a tracer for pubsub events used to track metrics.
@@ -173,19 +176,20 @@ func (t pubsubMetricsTracer) DuplicateMessage(msg *pubsub.Message) {
 func (t pubsubMetricsTracer) ThrottlePeer(p peer.ID) {}
 
 // RecvRPC is invoked when an incoming RPC is received.
-func (t pubsubMetricsTracer) RecvRPC(rpc *pubsub.RPC) {}
+func (t pubsubMetricsTracer) RecvRPC(rpc *pubsub.RPC) {
+	networkP2PGossipSubReceivedBytesTotal.AddUint64(uint64(rpc.Size()), nil)
+}
 
 // SendRPC is invoked when a RPC is sent.
 func (t pubsubMetricsTracer) SendRPC(rpc *pubsub.RPC, p peer.ID) {
-	if rpc != nil && len(rpc.Publish) > 0 {
-		for i := range rpc.Publish {
-			if rpc.Publish[i] != nil && rpc.Publish[i].Topic != nil {
-				switch *rpc.Publish[i].Topic {
-				case p2p.TXTopicName:
-					networkP2PSentBytesByTag.Add(string(protocol.TxnTag), uint64(len(rpc.Publish[i].Data)))
-					networkP2PSentBytesTotal.AddUint64(uint64(len(rpc.Publish[i].Data)), nil)
-					networkP2PMessageSentByTag.Add(string(protocol.TxnTag), 1)
-				}
+	networkP2PGossipSubSentBytesTotal.AddUint64(uint64(rpc.Size()), nil)
+	for i := range rpc.GetPublish() {
+		if rpc.Publish[i] != nil && rpc.Publish[i].Topic != nil {
+			switch *rpc.Publish[i].Topic {
+			case p2p.TXTopicName:
+				networkP2PSentBytesByTag.Add(string(protocol.TxnTag), uint64(len(rpc.Publish[i].Data)))
+				networkP2PSentBytesTotal.AddUint64(uint64(len(rpc.Publish[i].Data)), nil)
+				networkP2PMessageSentByTag.Add(string(protocol.TxnTag), 1)
 			}
 		}
 	}
