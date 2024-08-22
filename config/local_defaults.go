@@ -73,6 +73,7 @@ var defaultLocal = Local{
 	EnableIncomingMessageFilter:                false,
 	EnableLedgerService:                        false,
 	EnableMetricReporting:                      false,
+	EnableNetDevMetrics:                        false,
 	EnableOutgoingNetworkMessageFiltering:      true,
 	EnableP2P:                                  false,
 	EnableP2PHybridMode:                        false,

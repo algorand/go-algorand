@@ -330,6 +330,10 @@ func (s *Server) Start() {
 		metrics.DefaultRegistry().Register(metrics.NewRuntimeMetrics())
 	}
 
+	if cfg.EnableNetDevMetrics {
+		metrics.DefaultRegistry().Register(metrics.NetDevMetrics)
+	}
+
 	if cfg.EnableMetricReporting {
 		if err := s.metricCollector.Start(context.Background()); err != nil {
 			// log this error
