@@ -819,7 +819,7 @@ func (c *Client) ParsedPendingTransaction(txid string) (txn v2.PreEncodedTxInfo,
 }
 
 // Block takes a round and returns its block
-func (c *Client) Block(round uint64) (resp model.BlockResponse, err error) {
+func (c *Client) Block(round uint64) (resp v2.BlockResponseJSON, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.Block(round)

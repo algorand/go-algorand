@@ -560,7 +560,9 @@ func (client RestClient) SendRawTransactionGroup(txgroup []transactions.SignedTx
 }
 
 // Block gets the block info for the given round
-func (client RestClient) Block(round uint64) (response model.BlockResponse, err error) {
+func (client RestClient) Block(round uint64) (response v2.BlockResponseJSON, err error) {
+	// Note: this endpoint gets the Block as JSON, meaning some string fields with non-UTF-8 data will lose
+	// information. Msgpack should be used instead if this becomes a problem.
 	err = client.get(&response, fmt.Sprintf("/v2/blocks/%d", round), nil)
 	return
 }

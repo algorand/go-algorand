@@ -673,6 +673,11 @@ func (v2 *Handlers) AccountApplicationInformation(ctx echo.Context, address stri
 	return ctx.JSON(http.StatusOK, response)
 }
 
+// BlockResponseJSON is used to embed the block in JSON responses.
+type BlockResponseJSON struct {
+	Block bookkeeping.Block `codec:"block"`
+}
+
 // GetBlock gets the block for the given round.
 // (GET /v2/blocks/{round})
 func (v2 *Handlers) GetBlock(ctx echo.Context, round uint64, params model.GetBlockParams) error {
@@ -709,9 +714,7 @@ func (v2 *Handlers) GetBlock(ctx echo.Context, round uint64, params model.GetBlo
 	}
 
 	// Encoding wasn't working well without embedding "real" objects.
-	response := struct {
-		Block bookkeeping.Block `codec:"block"`
-	}{
+	response := BlockResponseJSON{
 		Block: block,
 	}
 
