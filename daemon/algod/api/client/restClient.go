@@ -785,7 +785,7 @@ func (client RestClient) GetLedgerStateDeltaForTransactionGroup(id string) (resp
 
 // GetTransactionGroupLedgerStateDeltasForRound retrieves the ledger state deltas for the txn groups in the specified round
 func (client RestClient) GetTransactionGroupLedgerStateDeltasForRound(round uint64) (response struct {
-	Deltas []v2.TxnGroupDeltaWithIdsJSONSerializable
+	Deltas []v2.TxnGroupDeltaWithIDsJSONSerializable
 }, err error) {
 	// Note: this endpoint gets the StateDelta as JSON, meaning some string fields with non-UTF-8 data will lose
 	// information. Msgpack should be used instead if this becomes a problem.

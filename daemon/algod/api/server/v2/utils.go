@@ -679,10 +679,10 @@ func convertLedgerStateDeltaSubset(sd eval.StateDeltaSubset) LedgerStateDeltaSub
 	}
 }
 
-func convertTxnGroupDeltasWithIds(txnGroupDeltas []eval.TxnGroupDeltaWithIds) []TxnGroupDeltaWithIdsJSONSerializable {
-	converted := make([]TxnGroupDeltaWithIdsJSONSerializable, len(txnGroupDeltas))
+func convertTxnGroupDeltasWithIDs(txnGroupDeltas []eval.TxnGroupDeltaWithIds) []TxnGroupDeltaWithIDsJSONSerializable {
+	converted := make([]TxnGroupDeltaWithIDsJSONSerializable, len(txnGroupDeltas))
 	for i, txnGroupDelta := range txnGroupDeltas {
-		converted[i] = TxnGroupDeltaWithIdsJSONSerializable{
+		converted[i] = TxnGroupDeltaWithIDsJSONSerializable{
 			Ids:   txnGroupDelta.Ids,
 			Delta: convertLedgerStateDeltaSubset(txnGroupDelta.Delta),
 		}

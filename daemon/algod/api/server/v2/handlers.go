@@ -1526,8 +1526,8 @@ func (v2 *Handlers) PendingTransactionInformation(ctx echo.Context, txid string,
 	}
 
 	txID := transactions.Txid{}
-	if err := txID.FromString(txid); err != nil {
-		return badRequest(ctx, err, errNoValidTxnSpecified, v2.Log)
+	if err0 := txID.FromString(txid); err0 != nil {
+		return badRequest(ctx, err0, errNoValidTxnSpecified, v2.Log)
 	}
 
 	txn, ok := v2.Node.GetPendingTransaction(txID)
@@ -2040,12 +2040,12 @@ type LedgerStateDeltaSubsetJSONSerializable struct {
 	Txleases []TxleaseJSONSerializable
 }
 
-// TxnGroupDeltaWithIdsJSONSerializable is a version of eval.TxnGroupDeltaWithIds
+// TxnGroupDeltaWithIDsJSONSerializable is a version of eval.TxnGroupDeltaWithIds
 // that able to be serialized to valid JSON.
 //
 // It uses the LedgerStateDeltaSubsetJSONSerializable type for the Delta field instead
 // of the eval.StateDeltaSubset type.
-type TxnGroupDeltaWithIdsJSONSerializable struct {
+type TxnGroupDeltaWithIDsJSONSerializable struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 	Ids     []string
 	Delta   LedgerStateDeltaSubsetJSONSerializable
@@ -2101,9 +2101,9 @@ func (v2 *Handlers) GetTransactionGroupLedgerStateDeltasForRound(ctx echo.Contex
 	var response interface{}
 	if handle == protocol.JSONStrictHandle {
 		response = struct {
-			Deltas []TxnGroupDeltaWithIdsJSONSerializable
+			Deltas []TxnGroupDeltaWithIDsJSONSerializable
 		}{
-			Deltas: convertTxnGroupDeltasWithIds(deltas),
+			Deltas: convertTxnGroupDeltasWithIDs(deltas),
 		}
 	} else {
 		response = struct {
