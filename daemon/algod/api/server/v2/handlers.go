@@ -2045,6 +2045,8 @@ type LedgerStateDeltaSubsetJSONSerializable struct {
 //
 // It uses the LedgerStateDeltaSubsetJSONSerializable type for the Delta field instead
 // of the eval.StateDeltaSubset type.
+//
+//revive:disable:var-naming
 type TxnGroupDeltaWithIDsJSONSerializable struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 	Ids     []string
