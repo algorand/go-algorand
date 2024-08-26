@@ -134,9 +134,9 @@ type Local struct {
 	// Estimating 1.5MB per incoming connection, 1.5MB*2400 = 3.6GB
 	IncomingConnectionsLimit int `version[0]:"-1" version[1]:"10000" version[17]:"800" version[27]:"2400"`
 
-	// P2PIncomingConnectionsLimit is used as IncomingConnectionsLimit for P2P connections in hybrid mode.
+	// P2PHybridIncomingConnectionsLimit is used as IncomingConnectionsLimit for P2P connections in hybrid mode.
 	// For pure P2P nodes IncomingConnectionsLimit is used.
-	P2PIncomingConnectionsLimit int `version[34]:"1200"`
+	P2PHybridIncomingConnectionsLimit int `version[34]:"1200"`
 
 	// BroadcastConnectionsLimit specifies the number of connections that
 	// will receive broadcast (gossip) messages from this node. If the
@@ -609,8 +609,8 @@ type Local struct {
 	// Enabling this setting also requires PublicAddress to be set.
 	EnableP2PHybridMode bool `version[34]:"false"`
 
-	// P2PNetAddress sets the listen address used for P2P networking, if hybrid mode is set.
-	P2PNetAddress string `version[34]:""`
+	// P2PHybridNetAddress sets the listen address used for P2P networking, if hybrid mode is set.
+	P2PHybridNetAddress string `version[34]:""`
 
 	// EnableDHT will turn on the hash table for use with capabilities advertisement
 	EnableDHTProviders bool `version[34]:"false"`
@@ -753,12 +753,12 @@ func (cfg Local) IsWsGossipServer() bool {
 
 // IsP2PGossipServer returns true if a node is configured to run a listening p2p net
 func (cfg Local) IsP2PGossipServer() bool {
-	return (cfg.EnableP2P && !cfg.EnableP2PHybridMode && cfg.NetAddress != "") || (cfg.EnableP2PHybridMode && cfg.P2PNetAddress != "")
+	return (cfg.EnableP2P && !cfg.EnableP2PHybridMode && cfg.NetAddress != "") || (cfg.EnableP2PHybridMode && cfg.P2PHybridNetAddress != "")
 }
 
 // IsHybridServer returns true if a node configured to run a listening both ws and p2p networks
 func (cfg Local) IsHybridServer() bool {
-	return cfg.NetAddress != "" && cfg.P2PNetAddress != "" && cfg.EnableP2PHybridMode
+	return cfg.NetAddress != "" && cfg.P2PHybridNetAddress != "" && cfg.EnableP2PHybridMode
 }
 
 // ensureAbsGenesisDir will convert a path to absolute, and will attempt to make a genesis directory there
@@ -969,10 +969,10 @@ func (cfg *Local) AdjustConnectionLimits(requiredFDs, maxFDs uint64) bool {
 			}
 		}
 		if cfg.IsHybridServer() {
-			if cfg.P2PIncomingConnectionsLimit > int(restDelta) {
-				cfg.P2PIncomingConnectionsLimit -= int(restDelta) / splitRatio
+			if cfg.P2PHybridIncomingConnectionsLimit > int(restDelta) {
+				cfg.P2PHybridIncomingConnectionsLimit -= int(restDelta) / splitRatio
 			} else {
-				cfg.P2PIncomingConnectionsLimit = 0
+				cfg.P2PHybridIncomingConnectionsLimit = 0
 			}
 		}
 	} else {

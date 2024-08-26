@@ -72,7 +72,7 @@ The underlying libp2p implementation is abstracted as `p2p.Service` and is initi
 
 ### Connection limiting
 
-libp2p's `ResourceManager` is used to limit the number of connections up to `cfg.P2PIncomingConnectionsLimit`.
+libp2p's `ResourceManager` is used to limit the number of connections up to `cfg.IncomingConnectionsLimit`.
 
 ### DHT and capabilities
 

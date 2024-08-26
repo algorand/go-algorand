@@ -153,7 +153,7 @@ func TestLocal_EnrichNetworkingConfig(t *testing.T) {
 	require.ErrorContains(t, err, "PublicAddress must be specified when EnableP2PHybridMode is set")
 
 	c1 = Local{
-		P2PNetAddress:       "test1",
+		P2PHybridNetAddress: "test1",
 		EnableP2PHybridMode: true,
 	}
 	c2, err = enrichNetworkingConfig(c1)
@@ -656,7 +656,7 @@ func TestLocal_IsGossipServer(t *testing.T) {
 	require.False(t, cfg.IsHybridServer())
 
 	cfg.EnableP2PHybridMode = true
-	cfg.P2PNetAddress = ":4190"
+	cfg.P2PHybridNetAddress = ":4190"
 	require.True(t, cfg.IsGossipServer())
 	require.False(t, cfg.IsWsGossipServer())
 	require.True(t, cfg.IsP2PGossipServer())
@@ -664,7 +664,7 @@ func TestLocal_IsGossipServer(t *testing.T) {
 
 	cfg.EnableP2PHybridMode = true
 	cfg.NetAddress = ":4160"
-	cfg.P2PNetAddress = ":4190"
+	cfg.P2PHybridNetAddress = ":4190"
 	require.True(t, cfg.IsGossipServer())
 	require.True(t, cfg.IsWsGossipServer())
 	require.True(t, cfg.IsP2PGossipServer())
@@ -673,7 +673,7 @@ func TestLocal_IsGossipServer(t *testing.T) {
 	cfg.EnableP2PHybridMode = true
 	cfg.EnableP2P = true
 	cfg.NetAddress = ":4160"
-	cfg.P2PNetAddress = ":4190"
+	cfg.P2PHybridNetAddress = ":4190"
 	require.True(t, cfg.IsGossipServer())
 	require.True(t, cfg.IsWsGossipServer())
 	require.True(t, cfg.IsP2PGossipServer())
@@ -682,7 +682,7 @@ func TestLocal_IsGossipServer(t *testing.T) {
 	cfg.EnableP2PHybridMode = true
 	cfg.EnableP2P = true
 	cfg.NetAddress = ":4160"
-	cfg.P2PNetAddress = ""
+	cfg.P2PHybridNetAddress = ""
 	require.True(t, cfg.IsGossipServer())
 	require.True(t, cfg.IsWsGossipServer())
 	require.False(t, cfg.IsP2PGossipServer())
@@ -730,15 +730,15 @@ func TestLocal_RecalculateConnectionLimits(t *testing.T) {
 			t.Parallel()
 
 			c := Local{
-				NetAddress:                  ":4160",
-				RestConnectionsSoftLimit:    test.restSoftIn,
-				RestConnectionsHardLimit:    test.restHardIn,
-				IncomingConnectionsLimit:    test.incomingIn,
-				P2PIncomingConnectionsLimit: test.p2pIncomingIn,
+				NetAddress:                        ":4160",
+				RestConnectionsSoftLimit:          test.restSoftIn,
+				RestConnectionsHardLimit:          test.restHardIn,
+				IncomingConnectionsLimit:          test.incomingIn,
+				P2PHybridIncomingConnectionsLimit: test.p2pIncomingIn,
 			}
 			if test.p2pIncomingIn > 0 {
 				c.EnableP2PHybridMode = true
-				c.P2PNetAddress = ":4190"
+				c.P2PHybridNetAddress = ":4190"
 			}
 			requireFDs := test.reservedIn + test.restHardIn + uint64(test.incomingIn) + uint64(test.p2pIncomingIn)
 			res := c.AdjustConnectionLimits(requireFDs, test.maxFDs)
@@ -746,7 +746,7 @@ func TestLocal_RecalculateConnectionLimits(t *testing.T) {
 			require.Equal(t, int(test.restSoftExp), int(c.RestConnectionsSoftLimit))
 			require.Equal(t, int(test.restHardExp), int(c.RestConnectionsHardLimit))
 			require.Equal(t, int(test.incomingExp), int(c.IncomingConnectionsLimit))
-			require.Equal(t, int(test.p2pIncomingExp), int(c.P2PIncomingConnectionsLimit))
+			require.Equal(t, int(test.p2pIncomingExp), int(c.P2PHybridIncomingConnectionsLimit))
 		})
 	}
 }
