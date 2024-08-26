@@ -1431,7 +1431,7 @@ type TxleaseJSONSerializable struct {
 }
 
 // LedgerStateDeltaJSONSerializable is a version of ledgercore.StateDelta
-// that able to be serialized to valid JSON.
+// that is able to be serialized to valid JSON.
 //
 // It changes the Txleases field to no longer be a map with object keys, but
 // instead an array.
@@ -2032,7 +2032,7 @@ func (v2 *Handlers) TealDisassemble(ctx echo.Context) error {
 }
 
 // LedgerStateDeltaSubsetJSONSerializable is a version of eval.StateDeltaSubset
-// that able to be serialized to valid JSON.
+// that is able to be serialized to valid JSON.
 //
 // It changes the Txleases field to no longer be a map with object keys, but
 // instead an array.
@@ -2044,7 +2044,7 @@ type LedgerStateDeltaSubsetJSONSerializable struct {
 }
 
 // TxnGroupDeltaWithIDsJSONSerializable is a version of eval.TxnGroupDeltaWithIds
-// that able to be serialized to valid JSON.
+// that is able to be serialized to valid JSON.
 //
 // It uses the LedgerStateDeltaSubsetJSONSerializable type for the Delta field instead
 // of the eval.StateDeltaSubset type.
