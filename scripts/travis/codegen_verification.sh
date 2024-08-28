@@ -72,5 +72,10 @@ else
    echo All tidy
 fi
 
+echo "Run shellcheck in e2e_subs"
+pushd test/scripts/e2e_subs
+shellcheck -e SC2154,SC2034,SC2046,SC2053,SC2207,SC2145 -S warning *.sh
+popd
+
 # test binary compatibility
 "${SCRIPTPATH}/../../test/platform/test_linux_amd64_compatibility.sh"
