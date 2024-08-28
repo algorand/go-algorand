@@ -852,14 +852,14 @@ func (wp *wsPeer) writeLoopSendMsg(msg sendMessage) disconnectReason {
 		networkSentBytesByTag.Add(string(tag), uint64(len(msg.data)))
 		networkMessageSentTotal.AddUint64(1, nil)
 		networkMessageSentByTag.Add(string(tag), 1)
+		networkMessageQueueMicrosTotal.AddUint64(uint64(time.Since(msg.peerEnqueued).Nanoseconds()/1000), nil)
 	} else {
 		networkP2PSentBytesTotal.AddUint64(uint64(len(msg.data)), nil)
 		networkP2PSentBytesByTag.Add(string(tag), uint64(len(msg.data)))
 		networkP2PMessageSentTotal.AddUint64(1, nil)
 		networkP2PMessageSentByTag.Add(string(tag), 1)
-
+		networkP2PMessageQueueMicrosTotal.AddUint64(uint64(time.Since(msg.peerEnqueued).Nanoseconds()/1000), nil)
 	}
-	networkMessageQueueMicrosTotal.AddUint64(uint64(time.Since(msg.peerEnqueued).Nanoseconds()/1000), nil)
 	return disconnectReasonNone
 }
 
