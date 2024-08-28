@@ -41,7 +41,8 @@ type HybridP2PNetwork struct {
 func NewHybridP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebookAddresses []string, genesisID string, networkID protocol.NetworkID, nodeInfo NodeInfo) (*HybridP2PNetwork, error) {
 	// supply alternate NetAddress for P2P network
 	p2pcfg := cfg
-	p2pcfg.NetAddress = cfg.P2PNetAddress
+	p2pcfg.NetAddress = cfg.P2PHybridNetAddress
+	p2pcfg.IncomingConnectionsLimit = cfg.P2PHybridIncomingConnectionsLimit
 	identityTracker := NewIdentityTracker()
 	p2pnet, err := NewP2PNetwork(log, p2pcfg, datadir, phonebookAddresses, genesisID, networkID, nodeInfo, &identityOpts{tracker: identityTracker})
 	if err != nil {
@@ -192,10 +193,10 @@ func (n *HybridP2PNetwork) ClearHandlers() {
 	n.wsNetwork.ClearHandlers()
 }
 
-// RegisterProcessors adds to the set of given message processors.
-func (n *HybridP2PNetwork) RegisterProcessors(dispatch []TaggedMessageProcessor) {
-	n.p2pNetwork.RegisterProcessors(dispatch)
-	n.wsNetwork.RegisterProcessors(dispatch)
+// RegisterValidatorHandlers adds to the set of given message processors.
+func (n *HybridP2PNetwork) RegisterValidatorHandlers(dispatch []TaggedMessageValidatorHandler) {
+	n.p2pNetwork.RegisterValidatorHandlers(dispatch)
+	n.wsNetwork.RegisterValidatorHandlers(dispatch)
 }
 
 // ClearProcessors deregisters all the existing message processors.

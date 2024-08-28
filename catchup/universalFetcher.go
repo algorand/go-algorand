@@ -69,11 +69,15 @@ func (uf *universalBlockFetcher) fetchBlock(ctx context.Context, round basics.Ro
 		}
 		address = fetcherClient.address()
 	} else if httpPeer, validHTTPPeer := peer.(network.HTTPPeer); validHTTPPeer {
+		httpClient := httpPeer.GetHTTPClient()
+		if httpClient == nil {
+			return nil, nil, time.Duration(0), fmt.Errorf("fetchBlock: HTTPPeer %s has no http client", httpPeer.GetAddress())
+		}
 		fetcherClient := &HTTPFetcher{
 			peer:    httpPeer,
 			rootURL: httpPeer.GetAddress(),
 			net:     uf.net,
-			client:  httpPeer.GetHTTPClient(),
+			client:  httpClient,
 			log:     uf.log,
 			config:  &uf.config}
 		fetchedBuf, err = fetcherClient.getBlockBytes(ctx, round)

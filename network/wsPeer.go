@@ -746,7 +746,7 @@ func (wp *wsPeer) handleMessageOfInterest(msg IncomingMessage) (close bool, reas
 		wp.log.Warnf("wsPeer handleMessageOfInterest: could not unmarshall message from: %s %v", wp.conn.RemoteAddrString(), err)
 		return true, disconnectBadData
 	}
-	msgs := make([]sendMessage, 1, 1)
+	msgs := make([]sendMessage, 1)
 	msgs[0] = sendMessage{
 		data:         nil,
 		enqueued:     time.Now(),
@@ -911,8 +911,8 @@ func (wp *wsPeer) writeLoopCleanup(reason disconnectReason) {
 }
 
 func (wp *wsPeer) writeNonBlock(ctx context.Context, data []byte, highPrio bool, digest crypto.Digest, msgEnqueueTime time.Time) bool {
-	msgs := make([][]byte, 1, 1)
-	digests := make([]crypto.Digest, 1, 1)
+	msgs := make([][]byte, 1)
+	digests := make([]crypto.Digest, 1)
 	msgs[0] = data
 	digests[0] = digest
 	return wp.writeNonBlockMsgs(ctx, msgs, highPrio, digests, msgEnqueueTime)
@@ -1090,7 +1090,7 @@ func (wp *wsPeer) Request(ctx context.Context, tag Tag, topics Topics) (resp *Re
 	defer wp.getAndRemoveResponseChannel(hash)
 
 	// Send serializedMsg
-	msg := make([]sendMessage, 1, 1)
+	msg := make([]sendMessage, 1)
 	msg[0] = sendMessage{
 		data:         append([]byte(tag), serializedMsg...),
 		enqueued:     time.Now(),
@@ -1166,10 +1166,6 @@ func (wp *wsPeer) sendMessagesOfInterest(messagesOfInterestGeneration uint32, me
 	}
 }
 
-func (wp *wsPeer) pfProposalCompressionSupported() bool {
-	return wp.features&pfCompressedProposal != 0
-}
-
 func (wp *wsPeer) OnClose(f func()) {
 	if wp.closers == nil {
 		wp.closers = []func(){}
@@ -1180,7 +1176,9 @@ func (wp *wsPeer) OnClose(f func()) {
 //msgp:ignore peerFeatureFlag
 type peerFeatureFlag int
 
-const pfCompressedProposal peerFeatureFlag = 1
+const (
+	pfCompressedProposal peerFeatureFlag = 1 << iota
+)
 
 // versionPeerFeatures defines protocol version when peer features were introduced
 const versionPeerFeatures = "2.2"

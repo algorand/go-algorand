@@ -261,15 +261,21 @@ func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebo
 	}
 	log.Infof("P2P host created: peer ID %s addrs %s", h.ID(), h.Addrs())
 
-	net.service, err = p2p.MakeService(net.ctx, log, cfg, h, la, net.wsStreamHandler, addrInfo)
+	net.service, err = p2p.MakeService(net.ctx, log, cfg, h, la, net.wsStreamHandler)
 	if err != nil {
 		return nil, err
 	}
 
+	peerIDs := pstore.Peers()
+	addrInfos := make([]*peer.AddrInfo, 0, len(peerIDs))
+	for _, peerID := range peerIDs {
+		addrInfo := pstore.PeerInfo(peerID)
+		addrInfos = append(addrInfos, &addrInfo)
+	}
 	bootstrapper := &bootstrapper{
 		cfg:               cfg,
 		networkID:         networkID,
-		phonebookPeers:    addrInfo,
+		phonebookPeers:    addrInfos,
 		resolveController: dnsaddr.NewMultiaddrDNSResolveController(cfg.DNSSecurityTXTEnforced(), ""),
 		log:               net.log,
 	}
@@ -426,7 +432,7 @@ func (n *P2PNetwork) meshThreadInner() int {
 	}
 
 	peers := mergeP2PAddrInfoResolvedAddresses(dnsPeers, dhtPeers)
-	replace := make([]interface{}, 0, len(peers))
+	replace := make([]*peer.AddrInfo, 0, len(peers))
 	for i := range peers {
 		replace = append(replace, &peers[i])
 	}
@@ -631,9 +637,8 @@ func (n *P2PNetwork) GetPeers(options ...PeerOption) []Peer {
 			n.wsPeersLock.RUnlock()
 		case PeersPhonebookRelays:
 			const maxNodes = 100
-			peerIDs := n.pstore.GetAddresses(maxNodes, phonebook.PhoneBookEntryRelayRole)
-			for _, peerInfo := range peerIDs {
-				peerInfo := peerInfo.(*peer.AddrInfo)
+			addrInfos := n.pstore.GetAddresses(maxNodes, phonebook.PhoneBookEntryRelayRole)
+			for _, peerInfo := range addrInfos {
 				if peerCore, ok := addrInfoToWsPeerCore(n, peerInfo); ok {
 					peers = append(peers, &peerCore)
 				}
@@ -693,14 +698,14 @@ func (n *P2PNetwork) ClearHandlers() {
 	n.handler.ClearHandlers([]Tag{})
 }
 
-// RegisterProcessors adds to the set of given message handlers.
-func (n *P2PNetwork) RegisterProcessors(dispatch []TaggedMessageProcessor) {
-	n.handler.RegisterProcessors(dispatch)
+// RegisterValidatorHandlers adds to the set of given message handlers.
+func (n *P2PNetwork) RegisterValidatorHandlers(dispatch []TaggedMessageValidatorHandler) {
+	n.handler.RegisterValidatorHandlers(dispatch)
 }
 
 // ClearProcessors deregisters all the existing message handlers.
 func (n *P2PNetwork) ClearProcessors() {
-	n.handler.ClearProcessors([]Tag{})
+	n.handler.ClearValidatorHandlers([]Tag{})
 }
 
 // GetHTTPClient returns a http.Client with a suitable for the network Transport
@@ -767,6 +772,7 @@ func (n *P2PNetwork) wsStreamHandler(ctx context.Context, p2pPeer peer.ID, strea
 	maxIdleConnsPerHost := int(n.config.ConnectionsRateLimitingCount)
 	client, err := p2p.MakeHTTPClientWithRateLimit(addrInfo, n.pstore, limitcaller.DefaultQueueingTimeout, maxIdleConnsPerHost)
 	if err != nil {
+		n.log.Warnf("Cannot construct HTTP Client for %s: %v", p2pPeer, err)
 		client = nil
 	}
 	var netIdentPeerID algocrypto.PublicKey
@@ -782,7 +788,7 @@ func (n *P2PNetwork) wsStreamHandler(ctx context.Context, p2pPeer peer.ID, strea
 	peerCore := makePeerCore(ctx, n, n.log, n.handler.readBuffer, addr, client, addr)
 	wsp := &wsPeer{
 		wsPeerCore: peerCore,
-		conn:       &wsPeerConnP2PImpl{stream: stream},
+		conn:       &wsPeerConnP2P{stream: stream},
 		outgoing:   !incoming,
 		identity:   netIdentPeerID,
 	}
@@ -808,6 +814,12 @@ func (n *P2PNetwork) wsStreamHandler(ctx context.Context, p2pPeer peer.ID, strea
 
 	wsp.init(n.config, outgoingMessagesBufferSize)
 	n.wsPeersLock.Lock()
+	if wsp.didSignalClose.Load() == 1 {
+		networkPeerAlreadyClosed.Inc(nil)
+		n.log.Debugf("peer closing %s", addr)
+		n.wsPeersLock.Unlock()
+		return
+	}
 	n.wsPeers[p2pPeer] = wsp
 	n.wsPeersToIDs[wsp] = p2pPeer
 	n.wsPeersLock.Unlock()
@@ -838,7 +850,7 @@ func (n *P2PNetwork) wsStreamHandler(ctx context.Context, p2pPeer peer.ID, strea
 
 // peerRemoteClose called from wsPeer to report that it has closed
 func (n *P2PNetwork) peerRemoteClose(peer *wsPeer, reason disconnectReason) {
-	remotePeerID := peer.conn.(*wsPeerConnP2PImpl).stream.Conn().RemotePeer()
+	remotePeerID := peer.conn.(*wsPeerConnP2P).stream.Conn().RemotePeer()
 	n.wsPeersLock.Lock()
 	n.identityTracker.removeIdentity(peer)
 	delete(n.wsPeers, remotePeerID)
@@ -910,7 +922,8 @@ func (n *P2PNetwork) txTopicHandleLoop() {
 	n.log.Debugf("Subscribed to topic %s", p2p.TXTopicName)
 
 	for {
-		msg, err := sub.Next(n.ctx)
+		// msg from sub.Next not used since all work done by txTopicValidator
+		_, err := sub.Next(n.ctx)
 		if err != nil {
 			if err != pubsub.ErrSubscriptionCancelled && err != context.Canceled {
 				n.log.Errorf("Error reading from subscription %v, peerId %s", err, n.service.ID())
@@ -919,13 +932,6 @@ func (n *P2PNetwork) txTopicHandleLoop() {
 			sub.Cancel()
 			return
 		}
-		// if there is a self-sent the message no need to process it.
-		if msg.ReceivedFrom == n.service.ID() {
-			continue
-		}
-
-		_ = n.handler.Process(msg.ValidatorData.(ValidatedMessage))
-
 		// participation or configuration change, cancel subscription and quit
 		if !n.wantTXGossip.Load() {
 			n.log.Debugf("Cancelling subscription to topic %s due participation change", p2p.TXTopicName)
@@ -972,7 +978,7 @@ func (n *P2PNetwork) txTopicValidator(ctx context.Context, peerID peer.ID, msg *
 	peerStats.txReceived.Add(1)
 	n.peerStatsMu.Unlock()
 
-	outmsg := n.handler.Validate(inmsg)
+	outmsg := n.handler.ValidateHandle(inmsg)
 	// there was a decision made in the handler about this message
 	switch outmsg.Action {
 	case Ignore:

@@ -2915,6 +2915,12 @@ func testVotersReloadFromDiskAfterOneStateProofCommitted(t *testing.T, cfg confi
 	require.NoError(t, err)
 	defer l.Close()
 
+	// quit the commitSyncer goroutine: this test flushes manually with triggerTrackerFlush
+	l.trackers.ctxCancel()
+	l.trackers.ctxCancel = nil
+	<-l.trackers.commitSyncerClosed
+	l.trackers.commitSyncerClosed = nil
+
 	blk := genesisInitState.Block
 
 	sp := bookkeeping.StateProofTrackingData{
@@ -2929,6 +2935,9 @@ func testVotersReloadFromDiskAfterOneStateProofCommitted(t *testing.T, cfg confi
 		blk.BlockHeader.Round++
 		err = l.AddBlock(blk, agreement.Certificate{})
 		require.NoError(t, err)
+		if i > 0 && i%100 == 0 {
+			triggerTrackerFlush(t, l)
+		}
 	}
 
 	// we simulate that the stateproof for round 512 is confirmed on chain, and we can move to the next one.
@@ -2941,18 +2950,12 @@ func testVotersReloadFromDiskAfterOneStateProofCommitted(t *testing.T, cfg confi
 		blk.BlockHeader.Round++
 		err = l.AddBlock(blk, agreement.Certificate{})
 		require.NoError(t, err)
+		if i%100 == 0 {
+			triggerTrackerFlush(t, l)
+		}
 	}
 
-	// wait all pending commits to finish
-	l.trackers.accountsWriting.Wait()
-
-	// quit the commitSyncer goroutine: this test flushes manually with triggerTrackerFlush
-	l.trackers.ctxCancel()
-	l.trackers.ctxCancel = nil
-	<-l.trackers.commitSyncerClosed
-	l.trackers.commitSyncerClosed = nil
-
-	// flush one final time
+	// flush remaining blocks
 	triggerTrackerFlush(t, l)
 
 	var vtSnapshot map[basics.Round]*ledgercore.VotersForRound
@@ -2968,6 +2971,18 @@ func testVotersReloadFromDiskAfterOneStateProofCommitted(t *testing.T, cfg confi
 		require.Contains(t, vtSnapshot, basics.Round(496))
 		require.NotContains(t, vtSnapshot, basics.Round(240))
 	}()
+
+	t.Log("reloading ledger")
+	// drain any deferred commits since AddBlock above triggered scheduleCommit
+outer:
+	for {
+		select {
+		case <-l.trackers.deferredCommits:
+			l.trackers.accountsWriting.Done()
+		default:
+			break outer
+		}
+	}
 
 	err = l.reloadLedger()
 	require.NoError(t, err)
@@ -3415,6 +3430,7 @@ func TestLedgerRetainMinOffCatchpointInterval(t *testing.T) {
 			l := &Ledger{}
 			l.cfg = cfg
 			l.archival = cfg.Archival
+			l.trackers.log = logging.TestingLog(t)
 
 			for i := 1; i <= blocksToMake; i++ {
 				minBlockToKeep := l.notifyCommit(basics.Round(i))
