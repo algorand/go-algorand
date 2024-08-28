@@ -204,7 +204,7 @@ func (e *phonebookImpl) AddPersistentPeers(dnsAddresses []string, networkName st
 			// we already have this.
 			// Make sure the persistence field is set to true
 			pbData.persistent = true
-
+			e.data[addr] = pbData
 		} else {
 			// we don't have this item. add it.
 			e.data[addr] = makePhonebookEntryData(networkName, role, true)
