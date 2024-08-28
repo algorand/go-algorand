@@ -357,6 +357,9 @@ type Local struct {
 	// EnableRuntimeMetrics exposes Go runtime metrics in /metrics and via node_exporter.
 	EnableRuntimeMetrics bool `version[22]:"false"`
 
+	// EnableNetDevMetrics exposes network interface total bytes sent/received metrics in /metrics
+	EnableNetDevMetrics bool `version[34]:"false"`
+
 	// TelemetryToLog configures whether to record messages to node.log that are normally only sent to remote event monitoring.
 	TelemetryToLog bool `version[5]:"true"`
 
