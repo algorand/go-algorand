@@ -980,16 +980,6 @@ func assembleFileImpl(fname string, printWarnings bool) *logic.OpStream {
 		ops.ReportMultipleErrors(fname, os.Stderr)
 		reportErrorf("%s: %s", fname, err)
 	}
-	_, params := getProto(protoVersion)
-	if ops.HasStatefulOps {
-		if len(ops.Program) > config.MaxAvailableAppProgramLen {
-			reportErrorf(tealAppSize, fname, len(ops.Program), config.MaxAvailableAppProgramLen)
-		}
-	} else {
-		if len(ops.Program) > config.MaxLogicSigMaxSize {
-			reportErrorf(tealLogicSigSize, fname, len(ops.Program), params.LogicSigMaxSize)
-		}
-	}
 
 	if printWarnings && len(ops.Warnings) != 0 {
 		for _, warning := range ops.Warnings {
