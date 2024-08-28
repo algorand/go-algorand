@@ -166,7 +166,7 @@ func configureResourceManager(cfg config.Local) (network.ResourceManager, error)
 
 	limitConfig := rcmgr.PartialLimitConfig{
 		System: rcmgr.ResourceLimits{
-			Conns: rcmgr.LimitVal(cfg.P2PIncomingConnectionsLimit),
+			Conns: rcmgr.LimitVal(cfg.IncomingConnectionsLimit),
 		},
 		// Everything else is default. The exact values will come from `scaledDefaultLimits` above.
 	}
