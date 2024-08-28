@@ -991,7 +991,12 @@ const (
 	BlkSeed BlockField = iota
 	// BlkTimestamp is the Block's timestamp, seconds from epoch
 	BlkTimestamp
-
+	// BlkProposer is the Block's proposer, or ZeroAddress, pre Payouts.Enabled
+	BlkProposer
+	// BlkFeesCollected is the sum of fees for the block, or 0, pre Payouts.Enabled
+	BlkFeesCollected
+	// BlkBonus is the extra amount to be paid for the given block (from FeeSink)
+	BlkBonus
 	// BlkBranch is the hash of the previous block
 	BlkBranch
 	// BlkFeeSink is the fee sink for the given round
@@ -1000,13 +1005,6 @@ const (
 	BlkProtocol
 	// BlkTxnCounter is the number of the next transaction after the block
 	BlkTxnCounter
-
-	// BlkProposer is the Block's proposer, or ZeroAddress, pre Payouts.Enabled
-	BlkProposer
-	// BlkFeesCollected is the sum of fees for the block, or 0, pre Payouts.Enabled
-	BlkFeesCollected
-	// BlkBonus is the extra amount to be paid for the given block (from FeeSink)
-	BlkBonus
 	// BlkProposerPayout is the actual amount moved from feesink to proposer
 	BlkProposerPayout
 
@@ -1024,15 +1022,13 @@ type blockFieldSpec struct {
 var blockFieldSpecs = [...]blockFieldSpec{
 	{BlkSeed, StackBytes32, randomnessVersion},
 	{BlkTimestamp, StackUint64, randomnessVersion},
-
-	{BlkBranch, StackBytes32, 11},
-	{BlkFeeSink, StackAddress, 11},
-	{BlkProtocol, StackBytes, 11},
-	{BlkTxnCounter, StackUint64, 11},
-
 	{BlkProposer, StackAddress, incentiveVersion},
 	{BlkFeesCollected, StackUint64, incentiveVersion},
 	{BlkBonus, StackUint64, incentiveVersion},
+	{BlkBranch, StackBytes32, incentiveVersion},
+	{BlkFeeSink, StackAddress, incentiveVersion},
+	{BlkProtocol, StackBytes, incentiveVersion},
+	{BlkTxnCounter, StackUint64, incentiveVersion},
 	{BlkProposerPayout, StackUint64, incentiveVersion},
 }
 
