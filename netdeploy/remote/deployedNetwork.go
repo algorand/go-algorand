@@ -1009,8 +1009,8 @@ func createHostSpec(host HostConfig, template cloudHost) (hostSpec cloudHostSpec
 				portList = append(portList, strconv.Itoa(port))
 			}
 		}
-		if node.P2PNetAddress != "" {
-			port, err = extractPublicPort(node.P2PNetAddress)
+		if node.P2PHybridNetAddress != "" {
+			port, err = extractPublicPort(node.P2PHybridNetAddress)
 			if err != nil {
 				return
 			}
