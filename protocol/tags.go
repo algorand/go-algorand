@@ -89,7 +89,7 @@ const TopicMsgRespTagMaxSize = 6 * 1024 * 1024
 // group size times the maximum transaction size (plus a little bit for msgpack
 // encoding).  But there are several reasons not to do that.  First, the
 // function we have for estimating max transaction size
-// (transactions.SignedTxnMaxSize())) wildly overesimates the maximum
+// (transactions.SignedTxnMaxSize())) wildly overestimates the maximum
 // transaction size because it is generated code that assumes _every_
 // transaction field can be set, but each transaction type has mutually
 // exclusive fields. Second, the stateproof transaction is the biggest
