@@ -843,7 +843,7 @@ func TestMaxSizesCorrect(t *testing.T) {
 	require.Greater(t, txTagMax, 16*maxMinusSP)
 	// when we do logisig pooling, 16*maxMinusSP may be a large overshoot, since
 	// it will assume we can have a big logicsig in _each_ of the 16.  It
-	// probbaly won't matter, since stateproof will still swamp it.  But if so,
+	// probably won't matter, since stateproof will still swamp it.  But if so,
 	// remove 15 * MaxLogicSigMaxSize.
 
 	// but we're not crazy. whichever of those is bigger - we don't need to be twice as big as that
