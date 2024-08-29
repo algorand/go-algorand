@@ -39,6 +39,14 @@ var (
 	NetworkMessageReceivedTotal = MetricName{Name: "algod_network_message_received_total", Description: "Total number of complete messages that were received from the network"}
 	// NetworkMessageSentTotal Total number of complete messages that were sent to the network
 	NetworkMessageSentTotal = MetricName{Name: "algod_network_message_sent_total", Description: "Total number of complete messages that were sent to the network"}
+	// NetworkP2PSentBytesTotal Total number of bytes that were sent over the p2p network
+	NetworkP2PSentBytesTotal = MetricName{Name: "algod_network_p2p_sent_bytes_total", Description: "Total number of bytes that were sent over the p2p network"}
+	// NetworkP2PReceivedBytesTotal Total number of bytes that were received from the p2p network
+	NetworkP2PReceivedBytesTotal = MetricName{Name: "algod_network_p2p_received_bytes_total", Description: "Total number of bytes that were received from the p2p network"}
+	// NetworkP2PMessageReceivedTotal Total number of complete messages that were received from the p2p network
+	NetworkP2PMessageReceivedTotal = MetricName{Name: "algod_network_p2p_message_received_total", Description: "Total number of complete messages that were received from the p2p network"}
+	// NetworkP2PMessageSentTotal Total number of complete messages that were sent to the p2p network
+	NetworkP2PMessageSentTotal = MetricName{Name: "algod_network_p2p_message_sent_total", Description: "Total number of complete messages that were sent to the p2p network"}
 	// NetworkConnectionsDroppedTotal Total number of connections that were dropped before a message
 	NetworkConnectionsDroppedTotal = MetricName{Name: "algod_network_connections_dropped_total", Description: "Total number of connections that were dropped before a message"}
 	// NetworkSentDecompressedBytesTotal Total number of bytes that were sent over the network prior of being compressed
