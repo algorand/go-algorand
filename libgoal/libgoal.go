@@ -27,6 +27,7 @@ import (
 	algodclient "github.com/algorand/go-algorand/daemon/algod/api/client"
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
 	kmdclient "github.com/algorand/go-algorand/daemon/kmd/client"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/rpcs"
 
 	"github.com/algorand/go-algorand/config"
@@ -1341,7 +1342,7 @@ func (c *Client) GetSyncRound() (rep model.GetSyncRoundResponse, err error) {
 }
 
 // GetLedgerStateDelta gets the LedgerStateDelta on a node w/ EnableFollowMode
-func (c *Client) GetLedgerStateDelta(round uint64) (rep v2.LedgerStateDeltaJSONSerializable, err error) {
+func (c *Client) GetLedgerStateDelta(round uint64) (rep ledgercore.StateDelta, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		return algod.GetLedgerStateDelta(round)

@@ -17,7 +17,6 @@
 package v2
 
 import (
-	"bytes"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -36,7 +35,6 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
-	"github.com/algorand/go-algorand/ledger/eval"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/simulation"
 	"github.com/algorand/go-algorand/logging"
@@ -626,68 +624,6 @@ func convertSimulationRequest(request PreEncodedSimulateRequest) simulation.Requ
 		TraceConfig:           request.ExecTraceConfig,
 		FixSigners:            request.FixSigners,
 	}
-}
-
-// sortTxleaseJSONSerializableSlice lexicographically sorts a slice of TxleaseJSONSerializable
-func sortTxleaseJSONSerializableSlice(s []TxleaseJSONSerializable) {
-	slices.SortFunc(s, func(a, b TxleaseJSONSerializable) int {
-		if a.Sender != b.Sender {
-			return bytes.Compare(a.Sender[:], b.Sender[:])
-		}
-		if a.Lease != b.Lease {
-			return bytes.Compare(a.Lease[:], b.Lease[:])
-		}
-		if a.Expiration == b.Expiration {
-			return 0
-		}
-		if a.Expiration < b.Expiration {
-			return -1
-		}
-		return 1
-	})
-}
-
-func convertLedgerStateDelta(sd ledgercore.StateDelta) LedgerStateDeltaJSONSerializable {
-	serializableTxleases := make([]TxleaseJSONSerializable, 0, len(sd.Txleases))
-	for k, v := range sd.Txleases {
-		serializableTxleases = append(serializableTxleases, TxleaseJSONSerializable{
-			Sender:     k.Sender,
-			Lease:      k.Lease,
-			Expiration: v,
-		})
-	}
-	sortTxleaseJSONSerializableSlice(serializableTxleases)
-	return LedgerStateDeltaJSONSerializable{
-		StateDelta: sd,
-		Txleases:   serializableTxleases,
-	}
-}
-
-func convertLedgerStateDeltaSubset(sd eval.StateDeltaSubset) LedgerStateDeltaSubsetJSONSerializable {
-	serializableTxleases := make([]TxleaseJSONSerializable, 0, len(sd.Txleases))
-	for k, v := range sd.Txleases {
-		serializableTxleases = append(serializableTxleases, TxleaseJSONSerializable{
-			Sender:     k.Sender,
-			Lease:      k.Lease,
-			Expiration: v,
-		})
-	}
-	sortTxleaseJSONSerializableSlice(serializableTxleases)
-	return LedgerStateDeltaSubsetJSONSerializable{
-		StateDeltaSubset: sd,
-		Txleases:         serializableTxleases,
-	}
-}
-
-func convertTxnGroupDeltasWithIDs(txnGroupDeltas []eval.TxnGroupDeltaWithIds) []TxnGroupDeltaWithIDsJSONSerializable {
-	converted := make([]TxnGroupDeltaWithIDsJSONSerializable, len(txnGroupDeltas))
-	for i, txnGroupDelta := range txnGroupDeltas {
-		converted[i] = TxnGroupDeltaWithIDsJSONSerializable{
-			Ids:   txnGroupDelta.Ids,
-			Delta: convertLedgerStateDeltaSubset(txnGroupDelta.Delta),
-		}
-	}
-	return converted
 }
 
 // printableUTF8OrEmpty checks to see if the entire string is a UTF8 printable string.

@@ -1423,25 +1423,6 @@ func (v2 *Handlers) GetSyncRound(ctx echo.Context) error {
 	return ctx.JSON(http.StatusOK, model.GetSyncRoundResponse{Round: rnd})
 }
 
-// TxleaseJSONSerializable is used by LedgerStateDeltaJSONSerializable to represent the Txleases map
-type TxleaseJSONSerializable struct {
-	Sender     basics.Address
-	Lease      [32]byte
-	Expiration basics.Round
-}
-
-// LedgerStateDeltaJSONSerializable is a version of ledgercore.StateDelta
-// that is able to be serialized to valid JSON.
-//
-// It changes the Txleases field to no longer be a map with object keys, but
-// instead an array.
-type LedgerStateDeltaJSONSerializable struct {
-	ledgercore.StateDelta
-
-	// A serialized version of the ledgercore.StateDelta.Txleases map
-	Txleases []TxleaseJSONSerializable
-}
-
 // GetLedgerStateDelta returns the deltas for a given round.
 // This should be a representation of the ledgercore.StateDelta object.
 // (GET /v2/deltas/{round})
@@ -1454,13 +1435,12 @@ func (v2 *Handlers) GetLedgerStateDelta(ctx echo.Context, round uint64, params m
 	if err != nil {
 		return notFound(ctx, err, fmt.Sprintf(errFailedRetrievingStateDelta, err), v2.Log)
 	}
-	var response interface{}
 	if handle == protocol.JSONStrictHandle {
-		response = convertLedgerStateDelta(sDelta)
-	} else {
-		response = sDelta
+		// Zero out the Txleases map since it cannot be represented in JSON, as it is a map with an
+		// object key.
+		sDelta.Txleases = nil
 	}
-	data, err := encode(handle, response)
+	data, err := encode(handle, sDelta)
 	if err != nil {
 		return internalError(ctx, err, errFailedToEncodeResponse, v2.Log)
 	}
@@ -2031,31 +2011,6 @@ func (v2 *Handlers) TealDisassemble(ctx echo.Context) error {
 	return ctx.JSON(http.StatusOK, response)
 }
 
-// LedgerStateDeltaSubsetJSONSerializable is a version of eval.StateDeltaSubset
-// that is able to be serialized to valid JSON.
-//
-// It changes the Txleases field to no longer be a map with object keys, but
-// instead an array.
-type LedgerStateDeltaSubsetJSONSerializable struct {
-	eval.StateDeltaSubset
-
-	// A serialized version of the eval.StateDeltaSubset.Txleases map
-	Txleases []TxleaseJSONSerializable
-}
-
-// TxnGroupDeltaWithIDsJSONSerializable is a version of eval.TxnGroupDeltaWithIds
-// that is able to be serialized to valid JSON.
-//
-// It uses the LedgerStateDeltaSubsetJSONSerializable type for the Delta field instead
-// of the eval.StateDeltaSubset type.
-//
-//revive:disable:var-naming
-type TxnGroupDeltaWithIDsJSONSerializable struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
-	Ids     []string
-	Delta   LedgerStateDeltaSubsetJSONSerializable
-}
-
 // GetLedgerStateDeltaForTransactionGroup retrieves the delta for a specified transaction group.
 // (GET /v2/deltas/txn/group/{id})
 func (v2 *Handlers) GetLedgerStateDeltaForTransactionGroup(ctx echo.Context, id string, params model.GetLedgerStateDeltaForTransactionGroupParams) error {
@@ -2075,13 +2030,12 @@ func (v2 *Handlers) GetLedgerStateDeltaForTransactionGroup(ctx echo.Context, id 
 	if err != nil {
 		return notFound(ctx, err, fmt.Sprintf(errFailedRetrievingStateDelta, err), v2.Log)
 	}
-	var response interface{}
 	if handle == protocol.JSONStrictHandle {
-		response = convertLedgerStateDeltaSubset(delta)
-	} else {
-		response = delta
+		// Zero out the Txleases map since it cannot be represented in JSON, as it is a map with an
+		// object key.
+		delta.Txleases = nil
 	}
-	data, err := encode(handle, response)
+	data, err := encode(handle, delta)
 	if err != nil {
 		return internalError(ctx, err, errFailedToEncodeResponse, v2.Log)
 	}
@@ -2103,19 +2057,17 @@ func (v2 *Handlers) GetTransactionGroupLedgerStateDeltasForRound(ctx echo.Contex
 	if err != nil {
 		return notFound(ctx, err, fmt.Sprintf(errFailedRetrievingStateDelta, err), v2.Log)
 	}
-	var response interface{}
 	if handle == protocol.JSONStrictHandle {
-		response = struct {
-			Deltas []TxnGroupDeltaWithIDsJSONSerializable
-		}{
-			Deltas: convertTxnGroupDeltasWithIDs(deltas),
+		// Zero out the Txleases map since it cannot be represented in JSON, as it is a map with an
+		// object key.
+		for i := range deltas {
+			deltas[i].Delta.Txleases = nil
 		}
-	} else {
-		response = struct {
-			Deltas []eval.TxnGroupDeltaWithIds
-		}{
-			Deltas: deltas,
-		}
+	}
+	response := struct {
+		Deltas []eval.TxnGroupDeltaWithIds
+	}{
+		Deltas: deltas,
 	}
 	data, err := encode(handle, response)
 	if err != nil {

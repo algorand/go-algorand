@@ -25,7 +25,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/crypto"
-	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/netdeploy"
 	"github.com/algorand/go-algorand/protocol"
@@ -126,15 +125,7 @@ func testTxnGroupDeltasDevMode(t *testing.T, version protocol.ConsensusVersion) 
 	// Assert that the TxIDs field across both endpoint responses is the same
 	require.Equal(t, txngroupResponse.Txids, groupDelta.Delta.Txids)
 
-	// Verify Txleases field as well
-	require.Len(t, txngroupResponse.Txleases, 1)
-	senderAddress, err := basics.UnmarshalChecksumAddress(sender.Address)
-	require.NoError(t, err)
-	expectedLease := v2.TxleaseJSONSerializable{
-		Sender:     senderAddress,
-		Lease:      [32]byte{1, 2, 3},
-		Expiration: txn.Txn.Txn.LastValid,
-	}
-	require.Equal(t, expectedLease, txngroupResponse.Txleases[0])
-	require.Equal(t, txngroupResponse.Txleases, groupDelta.Delta.Txleases)
+	// Txleases should always be nil for JSON responses
+	require.Nil(t, txngroupResponse.Txleases)
+	require.Nil(t, groupDelta.Delta.Txleases)
 }

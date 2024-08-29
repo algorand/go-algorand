@@ -22,7 +22,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
@@ -57,8 +56,6 @@ func TestBasicSyncMode(t *testing.T) {
 	a.NoError(err)
 
 	sender, err := fixture.GetRichestAccount()
-	require.NoError(t, err)
-	senderAddress, err := basics.UnmarshalChecksumAddress(sender.Address)
 	require.NoError(t, err)
 
 	status, err := fixture.AlgodClient.Status()
@@ -99,17 +96,10 @@ func TestBasicSyncMode(t *testing.T) {
 		a.NotZero(gResp)
 
 		if round == *txn.ConfirmedRound {
+			// Txleases should always be nil for JSON responses
+			require.Nil(t, gResp.Txleases)
+
 			// Verify that the transaction is in the state delta
-
-			expectedTxLeases := []v2.TxleaseJSONSerializable{
-				{
-					Sender:     senderAddress,
-					Lease:      [32]byte{1, 2, 3},
-					Expiration: txn.Txn.Txn.LastValid,
-				},
-			}
-			require.Equal(t, expectedTxLeases, gResp.Txleases)
-
 			expectedTxids := map[transactions.Txid]ledgercore.IncludedTransactions{
 				txn.Txn.ID(): {
 					LastValid: txn.Txn.Txn.LastValid,

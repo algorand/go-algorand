@@ -36,6 +36,8 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/ledger/eval"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -770,7 +772,7 @@ func (client RestClient) GetSyncRound() (response model.GetSyncRoundResponse, er
 }
 
 // GetLedgerStateDelta retrieves the ledger state delta for the round
-func (client RestClient) GetLedgerStateDelta(round uint64) (response v2.LedgerStateDeltaJSONSerializable, err error) {
+func (client RestClient) GetLedgerStateDelta(round uint64) (response ledgercore.StateDelta, err error) {
 	// Note: this endpoint gets the StateDelta as JSON, meaning some string fields with non-UTF-8 data will lose
 	// information. Msgpack should be used instead if this becomes a problem.
 	err = client.get(&response, fmt.Sprintf("/v2/deltas/%d", round), nil)
@@ -778,7 +780,7 @@ func (client RestClient) GetLedgerStateDelta(round uint64) (response v2.LedgerSt
 }
 
 // GetLedgerStateDeltaForTransactionGroup retrieves the ledger state delta for the txn group specified by the id
-func (client RestClient) GetLedgerStateDeltaForTransactionGroup(id string) (response v2.LedgerStateDeltaSubsetJSONSerializable, err error) {
+func (client RestClient) GetLedgerStateDeltaForTransactionGroup(id string) (response eval.StateDeltaSubset, err error) {
 	// Note: this endpoint gets the StateDelta as JSON, meaning some string fields with non-UTF-8 data will lose
 	// information. Msgpack should be used instead if this becomes a problem.
 	err = client.get(&response, fmt.Sprintf("/v2/deltas/txn/group/%s", id), nil)
@@ -787,7 +789,7 @@ func (client RestClient) GetLedgerStateDeltaForTransactionGroup(id string) (resp
 
 // GetTransactionGroupLedgerStateDeltasForRound retrieves the ledger state deltas for the txn groups in the specified round
 func (client RestClient) GetTransactionGroupLedgerStateDeltasForRound(round uint64) (response struct {
-	Deltas []v2.TxnGroupDeltaWithIDsJSONSerializable
+	Deltas []eval.TxnGroupDeltaWithIds
 }, err error) {
 	// Note: this endpoint gets the StateDelta as JSON, meaning some string fields with non-UTF-8 data will lose
 	// information. Msgpack should be used instead if this becomes a problem.
