@@ -100,7 +100,6 @@ const TopicMsgRespTagMaxSize = 6 * 1024 * 1024
 // logicsig.  So we will use a bound that is a bit bigger that a txn group can
 // be, but avoid trying to be precise.  See TestMaxSizesCorrect for the detailed
 // reasoning.
-
 const TxnTagMaxSize = 5_000_000
 
 // UniEnsBlockReqTagMaxSize is the maximum size of a UniEnsBlockReqTag message
