@@ -830,7 +830,7 @@ func TestMaxSizesCorrect(t *testing.T) {
 	maxCombinedTxnSize -= uint64(transactions.EvalMaxArgs * config.MaxLogicSigMaxSize)
 
 	// maxCombinedTxnSize is still an overestimate because it assumes all txn
-	// type fiels can be in the same txn.  That's not true, but it provides an
+	// type fields can be in the same txn.  That's not true, but it provides an
 	// upper bound on the size of ONE transaction, even if the txn is a
 	// stateproof, which is big.  Ensure our constant is big enough to hold one.
 	require.Greater(t, txTagMax, maxCombinedTxnSize)
