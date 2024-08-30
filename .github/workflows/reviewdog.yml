@@ -112,5 +112,6 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           reporter: "github-pr-check"
           shellcheck_flags: "-e SC2034,SC2046,SC2053,SC2207,SC2145 -S warning"
+          fail_on_error: true
           path: |
             test/scripts/e2e_subs
