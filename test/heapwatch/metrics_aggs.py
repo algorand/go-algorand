@@ -33,7 +33,7 @@ import plotly.graph_objs as go
 from plotly.subplots import make_subplots
 
 
-from metrics_lib import MetricType, parse_metrics, gather_metrics_files_by_nick
+from metrics_lib import Metric, MetricType, parse_metrics, gather_metrics_files_by_nick
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +53,8 @@ def main():
     ap.add_argument('--nick-lre', action='append', default=[], help='label:regexp to filter node names, may be repeated')
     ap.add_argument('-s', '--save', type=str, choices=['png', 'html'], help=f'save plot to \'{default_img_filename}\' or \'{default_html_filename}\' file instead of showing it')
     ap.add_argument('--verbose', default=False, action='store_true')
+    ap.add_argument('--avg-max', default=False, action='store_true', help='print avg of max values across nodes for each metric')
+    ap.add_argument('--avg-max-min', default=False, action='store_true', help='print avg of max-min values across nodes for each metric')
 
     args = ap.parse_args()
     if args.verbose:
@@ -99,6 +101,7 @@ def main():
     }
     fig['layout']['height'] = 500 * nrows
 
+    nick_series = {}
 
     for nick, files_by_date in filesByNick.items():
         active_metrics = {}
@@ -146,7 +149,10 @@ def main():
                     active_metric_names.sort()
                     active_metrics[full_name] = active_metric_names
             idx += 1
-        
+
+        if args.avg_max or args.avg_max_min:
+            nick_series[nick] = raw_series
+
         for i, metric_pair in enumerate(sorted(active_metrics.items())):
             metric_name, metric_fullnames = metric_pair
             for metric_fullname in metric_fullnames:
@@ -157,6 +163,23 @@ def main():
                     mode='lines+markers',
                     line=dict(width=1),
                 ), i+1, 1)
+
+    if args.avg_max or args.avg_max_min:
+        metric_names_nick_max_avg = {}
+        for nick, raw_series in nick_series.items():
+            for metric_name, rw in raw_series.items():
+                mmax = max(rw)
+                mmin = min(rw)
+                print(f'{nick}: {metric_name}: count {len(rw)}, max {mmax}, min {mmin}, min-max {mmax - mmin}')
+                metric = Metric(metric_name, 0, MetricType.COUNTER)
+                if metric.short_name() not in metric_names_nick_max_avg:
+                    metric_names_nick_max_avg[metric.short_name()] = []
+                if args.avg_max_min:
+                    metric_names_nick_max_avg[metric.short_name()].append(mmax - mmin)
+                if args.avg_max:
+                    metric_names_nick_max_avg[metric.short_name()].append(mmax)
+        for metric_name, val in metric_names_nick_max_avg.items():
+            print(f'{metric_name}: avg {sum(val)/len(val)}')
 
     if args.save:
         if args.save == 'html':

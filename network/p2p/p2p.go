@@ -176,7 +176,7 @@ func configureResourceManager(cfg config.Local) (network.ResourceManager, error)
 }
 
 // MakeService creates a P2P service instance
-func MakeService(ctx context.Context, log logging.Logger, cfg config.Local, h host.Host, listenAddr string, wsStreamHandler StreamHandler) (*serviceImpl, error) {
+func MakeService(ctx context.Context, log logging.Logger, cfg config.Local, h host.Host, listenAddr string, wsStreamHandler StreamHandler, metricsTracer pubsub.RawTracer) (*serviceImpl, error) {
 
 	sm := makeStreamManager(ctx, log, h, wsStreamHandler, cfg.EnableGossipService)
 	h.Network().Notify(sm)
@@ -188,7 +188,7 @@ func MakeService(ctx context.Context, log logging.Logger, cfg config.Local, h ho
 	telemetryProtoInfo := formatPeerTelemetryInfoProtocolName(telemetryID, telemetryInstance)
 	h.SetStreamHandler(protocol.ID(telemetryProtoInfo), func(s network.Stream) { s.Close() })
 
-	ps, err := makePubSub(ctx, cfg, h)
+	ps, err := makePubSub(ctx, cfg, h, metricsTracer)
 	if err != nil {
 		return nil, err
 	}
