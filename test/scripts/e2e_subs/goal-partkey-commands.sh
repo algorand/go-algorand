@@ -8,6 +8,7 @@ date "+$0 start %Y%m%d_%H%M%S"
 
 WALLET=$1
 
+gcmd="goal -w ${WALLET}"
 INITIAL_ACCOUNT=$(${gcmd} account list|awk '{ print $3 }')
 
 # Registered  Account      ParticipationID   Last Used  First round  Last round
