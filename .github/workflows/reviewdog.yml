@@ -102,3 +102,15 @@ jobs:
         run: |
           curl -X POST --data-urlencode "payload={\"text\": \"Reviewdog failed. ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }} \"}" $SLACK_WEBHOOK
         if: ${{ failure() && (contains(github.ref_name, 'rel/nightly') || contains(github.ref_name, 'rel/beta') || contains(github.ref_name, 'rel/stable') || contains(github.ref_name, 'master')) }}
+  reviewdog-shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: shellcheck
+        uses: reviewdog/action-shellcheck@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          reporter: "github-pr-check"
+          shellcheck_flags: "-e SC2154,SC2034,SC2046,SC2053,SC2207,SC2145 -S warning"
+          path: |
+            test/scripts/e2e_subs
