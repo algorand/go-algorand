@@ -824,6 +824,9 @@ proc ::AlgorandGoal::CheckNetworkAddressForPNA { NET_ADDRESS } {
         expect {
             timeout { close; ::AlgorandGoal::Abort "Timeout failure in CheckNetworkAddressForPNA" }
             "Access-Control-Allow-Private-Network" { puts "success" ; close  }
+            eof {
+                return -code error "EOF without Access-Control-Allow-Private-Network"
+            }
             close
         }
     } EXCEPTION ] } {

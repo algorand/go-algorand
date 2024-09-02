@@ -15,7 +15,7 @@ if { [catch {
     set TEST_ROOT_DIR $TEST_ALGO_DIR/root
     set TEST_PRIMARY_NODE_DIR $TEST_ROOT_DIR/Primary/
     set NETWORK_NAME test_net_expect_$TIME_STAMP
-    set NETWORK_TEMPLATE "$TEST_DATA_DIR/nettemplates/TwoNodes50Each.json"
+    set NETWORK_TEMPLATE "$TEST_DATA_DIR/nettemplates/TwoNodes50EachPNA.json"
 
     # Create network
     ::AlgorandGoal::CreateNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ALGO_DIR $TEST_ROOT_DIR
