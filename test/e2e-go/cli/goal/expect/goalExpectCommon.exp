@@ -810,6 +810,9 @@ proc ::AlgorandGoal::CheckNetworkAddressForCors { NET_ADDRESS } {
         expect {
             timeout { close; ::AlgorandGoal::Abort "Timeout failure in CheckNetworkAddressForCors" }
             "Access-Control-Allow-Origin" { puts "success" ; close  }
+            eof {
+                return -code error "EOF without Access-Control-Allow-Origin in output"
+            }
             close
         }
     } EXCEPTION ] } {
@@ -1348,4 +1351,3 @@ proc ::AlgorandGoal::RunPingpong {DURATION PINGPONG_OPTIONS TEST_PRIMARY_NODE_DI
        ::AlgorandGoal::Abort "ERROR in RunPingpong: $EXCEPTION"
     }
 }
-
