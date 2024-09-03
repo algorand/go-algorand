@@ -238,8 +238,6 @@ func TestLockdownTagList(t *testing.T) {
 		MsgDigestSkipTag,
 		NetIDVerificationTag,
 		NetPrioResponseTag,
-		PingTag,
-		PingReplyTag,
 		ProposalPayloadTag,
 		StateProofSigTag,
 		TopicMsgRespTag,

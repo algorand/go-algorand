@@ -821,7 +821,7 @@ func (wn *WebsocketNetwork) RegisterHandlers(dispatch []TaggedMessageHandler) {
 // ClearHandlers deregisters all the existing message handlers.
 func (wn *WebsocketNetwork) ClearHandlers() {
 	// exclude the internal handlers. These would get cleared out when Stop is called.
-	wn.handler.ClearHandlers([]Tag{protocol.PingTag, protocol.PingReplyTag, protocol.NetPrioResponseTag})
+	wn.handler.ClearHandlers([]Tag{protocol.NetPrioResponseTag})
 }
 
 // RegisterValidatorHandlers registers the set of given message handlers.

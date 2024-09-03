@@ -33,12 +33,12 @@ const (
 	MsgDigestSkipTag     Tag = "MS"
 	NetPrioResponseTag   Tag = "NP"
 	NetIDVerificationTag Tag = "NI"
-	PingTag              Tag = "pi"
-	PingReplyTag         Tag = "pj"
-	ProposalPayloadTag   Tag = "PP"
-	StateProofSigTag     Tag = "SP"
-	TopicMsgRespTag      Tag = "TS"
-	TxnTag               Tag = "TX"
+	//PingTag              Tag = "pi" was removed in 3.2.1
+	//PingReplyTag         Tag = "pj" was removed in 3.2.1
+	ProposalPayloadTag Tag = "PP"
+	StateProofSigTag   Tag = "SP"
+	TopicMsgRespTag    Tag = "TS"
+	TxnTag             Tag = "TX"
 	//UniCatchupReqTag   Tag = "UC" was replaced by UniEnsBlockReqTag
 	UniEnsBlockReqTag Tag = "UE"
 	//UniEnsBlockResTag  Tag = "US" was used for wsfetcherservice
@@ -64,12 +64,6 @@ const NetPrioResponseTagMaxSize = 850
 
 // NetIDVerificationTagMaxSize is the maximum size of a NetIDVerificationTag message
 const NetIDVerificationTagMaxSize = 215
-
-// PingTagMaxSize is the maximum size of a PingTag message
-const PingTagMaxSize = 8
-
-// PingReplyTagMaxSize is the maximum size of a PingReplyTag message
-const PingReplyTagMaxSize = 8
 
 // ProposalPayloadTagMaxSize is the maximum size of a ProposalPayloadTag message
 // This value is dominated by the MaxTxnBytesPerBlock
@@ -109,10 +103,6 @@ func (tag Tag) MaxMessageSize() uint64 {
 		return NetPrioResponseTagMaxSize
 	case NetIDVerificationTag:
 		return NetIDVerificationTagMaxSize
-	case PingTag:
-		return PingTagMaxSize
-	case PingReplyTag:
-		return PingReplyTagMaxSize
 	case ProposalPayloadTag:
 		return ProposalPayloadTagMaxSize
 	case StateProofSigTag:
@@ -137,8 +127,6 @@ var TagList = []Tag{
 	MsgDigestSkipTag,
 	NetIDVerificationTag,
 	NetPrioResponseTag,
-	PingTag,
-	PingReplyTag,
 	ProposalPayloadTag,
 	StateProofSigTag,
 	TopicMsgRespTag,

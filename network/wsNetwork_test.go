@@ -2924,9 +2924,8 @@ func TestWebsocketNetworkMessageOfInterest(t *testing.T) {
 	t.Logf("netA %s", addrA)
 	netB.phonebook.ReplacePeerList([]string{addrA}, "default", phonebook.PhoneBookEntryRelayRole)
 
-	// have netB asking netA to send it ft2, deregister ping handler to make sure that we aren't exceeding the maximum MOI messagesize
+	// have netB asking netA to send it ft2.
 	// Max MOI size is calculated by encoding all of the valid tags, since we are using a custom tag here we must deregister one in the default set.
-	netB.DeregisterMessageInterest(protocol.PingTag)
 	netB.registerMessageInterest(ft2)
 
 	netB.Start()
