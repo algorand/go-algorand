@@ -783,7 +783,7 @@ func TestP2PHTTPHandler(t *testing.T) {
 	pstore, err := peerstore.MakePhonebook(0, 10*time.Second)
 	require.NoError(t, err)
 	pstore.AddPersistentPeers([]*peer.AddrInfo{&peerInfoA}, "net", phonebook.PhoneBookEntryRelayRole)
-	httpClient, err = p2p.MakeHTTPClientWithRateLimit(&peerInfoA, pstore, 1*time.Second, 1)
+	httpClient, err = p2p.MakeHTTPClientWithRateLimit(&peerInfoA, pstore, 1*time.Second)
 	require.NoError(t, err)
 	_, err = httpClient.Get("/test")
 	require.ErrorIs(t, err, limitcaller.ErrConnectionQueueingTimeout)

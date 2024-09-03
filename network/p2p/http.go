@@ -88,13 +88,13 @@ func MakeHTTPClient(addrInfo *peer.AddrInfo) (*http.Client, error) {
 }
 
 // MakeHTTPClientWithRateLimit creates a http.Client that uses libp2p transport for a given protocol and peer address.
-func MakeHTTPClientWithRateLimit(addrInfo *peer.AddrInfo, pstore limitcaller.ConnectionTimeStore, queueingTimeout time.Duration, maxIdleConnsPerHost int) (*http.Client, error) {
+func MakeHTTPClientWithRateLimit(addrInfo *peer.AddrInfo, pstore limitcaller.ConnectionTimeStore, queueingTimeout time.Duration) (*http.Client, error) {
 	cl, err := MakeHTTPClient(addrInfo)
 	if err != nil {
 		return nil, err
 	}
-	rlrt := limitcaller.MakeRateLimitingTransportWithRoundTripper(pstore, queueingTimeout, cl.Transport, addrInfo, maxIdleConnsPerHost)
-	cl.Transport = &rlrt
+	rltr := limitcaller.MakeRateLimitingBoundTransportWithRoundTripper(pstore, queueingTimeout, cl.Transport, string(addrInfo.ID))
+	cl.Transport = &rltr
 	return cl, nil
 
 }
