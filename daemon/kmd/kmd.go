@@ -65,14 +65,14 @@ func Start(startConfig StartConfig) (died chan error, sock string, err error) {
 
 	// Configure the wallet API server
 	serverCfg := server.WalletServerConfig{
-		APIToken:                         apiToken,
-		DataDir:                          startConfig.DataDir,
-		Address:                          kmdCfg.Address,
-		AllowedOrigins:                   kmdCfg.AllowedOrigins,
-		EnablePrivateNetworkAccessHeader: kmdCfg.EnablePrivateNetworkAccessHeader,
-		SessionManager:                   session.MakeManager(kmdCfg),
-		Log:                              startConfig.Log,
-		Timeout:                          startConfig.Timeout,
+		APIToken:       apiToken,
+		DataDir:        startConfig.DataDir,
+		Address:        kmdCfg.Address,
+		AllowedOrigins: kmdCfg.AllowedOrigins,
+		AllowHeaderPNA: kmdCfg.AllowHeaderPNA,
+		SessionManager: session.MakeManager(kmdCfg),
+		Log:            startConfig.Log,
+		Timeout:        startConfig.Timeout,
 	}
 
 	// Instantiate the wallet API server
