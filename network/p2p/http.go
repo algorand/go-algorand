@@ -28,6 +28,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	libp2phttp "github.com/libp2p/go-libp2p/p2p/http"
+	"github.com/multiformats/go-multiaddr"
 )
 
 // algorandP2pHTTPProtocol defines a libp2p protocol name for algorand's http over p2p messages
@@ -45,6 +46,15 @@ func MakeHTTPServer(streamHost host.Host) *HTTPServer {
 	httpServer := HTTPServer{
 		Host:       libp2phttp.Host{StreamHost: streamHost},
 		p2phttpMux: mux.NewRouter(),
+	}
+	// libp2phttp server requires either explicit ListenAddrs or streamHost.Addrs() to be non-empty.
+	// If streamHost.Addrs() is empty, we will listen on all interfaces
+	if len(streamHost.Addrs()) == 0 {
+		logging.Base().Debugf("MakeHTTPServer: no addresses for %s, asking to listen all interfaces", streamHost.ID())
+		httpServer.ListenAddrs = []multiaddr.Multiaddr{
+			multiaddr.StringCast("/ip4/0.0.0.0/tcp/0/http"),
+		}
+		httpServer.InsecureAllowHTTP = true
 	}
 	return &httpServer
 }

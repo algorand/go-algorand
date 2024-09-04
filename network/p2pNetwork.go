@@ -513,7 +513,6 @@ func (n *P2PNetwork) Address() (string, bool) {
 	for _, addr := range addrs {
 		if !manet.IsIPLoopback(addr) && !manet.IsIPUnspecified(addr) {
 			return addr.String(), true
-
 		}
 	}
 	// We don't have a non loopback address, so just return the first one if it contains an ip4 address or port
