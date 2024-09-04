@@ -2,6 +2,9 @@
 import sys
 import argparse
 
+found_issues = False
+
+
 def check_expect_blocks(filename, verbose=False):
     with open(filename, 'r') as f:
         lines = f.readlines()
@@ -39,7 +42,7 @@ def check_expect_blocks(filename, verbose=False):
                 print(f"{filename}:{block_start_line}: SKIP: 'nolint:eof' comment found, skipping")
             continue
 
-        if 'eof' not in block:
+        if 'eof ' not in block:
             # Check for only timeout condition
             actions = block.count('}')
             if block.count('timeout') == actions:
@@ -48,6 +51,8 @@ def check_expect_blocks(filename, verbose=False):
                 continue
 
             print(f"{filename}:{block_start_line}: Warning: missing 'eof' in expect block")
+            global found_issues
+            found_issues = True
         elif verbose:
             print(f"{filename}:{block_start_line}: OK: expect block contains 'eof'")
 
@@ -59,6 +64,9 @@ def main():
 
     for fname in args.files:
         check_expect_blocks(fname, args.verbose)
+
+    if found_issues:
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
