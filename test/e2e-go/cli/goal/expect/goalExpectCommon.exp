@@ -383,20 +383,18 @@ proc ::AlgorandGoal::RecoverWallet { NEW_WALLET_NAME WALLET_PASSPHRASE NEW_WALLE
     set timeout 60
     if { [catch {
         spawn goal wallet new -r $NEW_WALLET_NAME -d $TEST_PRIMARY_NODE_DIR
-           expect {
-               timeout { ::AlgorandGoal::Abort "TIMEOUT"    }
-               eof { ::AlgorandGoal::Abort "EOF"    }
-               {Please type your recovery mnemonic below, and hit return when you are done:*} { send "$WALLET_PASSPHRASE\r" }
-            }
-        for { set index 1}  {$index <= 5} {incr index} {
-            expect {
-               timeout { ::AlgorandGoal::Abort "TIMEOUT"    }
-               eof { ::AlgorandGoal::Abort "EOF"    }
-               {Please choose a password for wallet* } { send "$NEW_WALLET_PASSWORD\r"}
-               {Please confirm the password:*} { send "$NEW_WALLET_PASSWORD\r"}
-               {Creating wallet...*} {puts $expect_out(buffer) }
-               -re {Created wallet '([-a-zA-Z0-9_]+)'} {set RECOVERED_WALLET_NAME $expect_out(1,string) }
-            }
+        expect {
+            timeout { ::AlgorandGoal::Abort "TIMEOUT"    }
+            eof { ::AlgorandGoal::Abort "EOF"    }
+            {Please type your recovery mnemonic below, and hit return when you are done:*} { send "$WALLET_PASSPHRASE\r" }
+        }
+        expect {
+            timeout { ::AlgorandGoal::Abort "TIMEOUT"    }
+            eof { ::AlgorandGoal::Abort "EOF"    }
+            {Please choose a password for wallet* } { send "$NEW_WALLET_PASSWORD\r"; exp_continue;}
+            {Please confirm the password:*} { send "$NEW_WALLET_PASSWORD\r"; exp_continue;}
+            {Creating wallet...*} {puts $expect_out(buffer); exp_continue; }
+            -re {Created wallet '([-a-zA-Z0-9_]+)'} {set RECOVERED_WALLET_NAME $expect_out(1,string) }
         }
         puts "Recovered wallet: $RECOVERED_WALLET_NAME"
     } EXCEPTION ] } {
