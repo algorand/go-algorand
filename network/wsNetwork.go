@@ -230,10 +230,9 @@ type WebsocketNetwork struct {
 	// number of throttled outgoing connections "slots" needed to be populated.
 	throttledOutgoingConnections atomic.Int32
 
-	// transport and dialer are customized to limit the number of
+	// dialer is customized to limit the number of
 	// connection in compliance with connectionsRateLimitingCount.
-	transport limitcaller.RateLimitingTransport
-	dialer    limitcaller.Dialer
+	dialer limitcaller.Dialer
 
 	// messagesOfInterest specifies the message types that this node
 	// wants to receive.  nil means default.  non-nil causes this
@@ -565,9 +564,7 @@ func (wn *WebsocketNetwork) setup() {
 	if wn.nodeInfo == nil {
 		wn.nodeInfo = &nopeNodeInfo{}
 	}
-	maxIdleConnsPerHost := int(wn.config.ConnectionsRateLimitingCount)
 	wn.dialer = limitcaller.MakeRateLimitingDialer(wn.phonebook, preferredResolver)
-	wn.transport = limitcaller.MakeRateLimitingTransport(wn.phonebook, limitcaller.DefaultQueueingTimeout, &wn.dialer, maxIdleConnsPerHost)
 
 	wn.upgrader.ReadBufferSize = 4096
 	wn.upgrader.WriteBufferSize = 4096
@@ -1975,8 +1972,18 @@ func (wn *WebsocketNetwork) numOutgoingPending() int {
 // GetHTTPClient returns a http.Client with a suitable for the network Transport
 // that would also limit the number of outgoing connections.
 func (wn *WebsocketNetwork) GetHTTPClient(address string) (*http.Client, error) {
+	url, err := addr.ParseHostOrURL(address)
+	if err != nil {
+		return nil, err
+	}
+
+	maxIdleConnsPerHost := int(wn.config.ConnectionsRateLimitingCount)
+	rltr := limitcaller.MakeRateLimitingBoundTransport(wn.phonebook, limitcaller.DefaultQueueingTimeout, &wn.dialer, maxIdleConnsPerHost, url.Host)
 	return &http.Client{
-		Transport: &HTTPPAddressBoundTransport{address, &wn.transport},
+		Transport: &HTTPPAddressBoundTransport{
+			address,
+			&rltr,
+		},
 	}, nil
 }
 
