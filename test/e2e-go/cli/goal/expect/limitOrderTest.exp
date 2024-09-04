@@ -123,7 +123,7 @@ if { [catch {
 
     puts "Generated Teal Source:"
     spawn cat $TEAL_SOURCE
-    expect {
+    expect { #nolint:eof not asserting expected output
 	    -re {^.+$} { close }
     }
 
