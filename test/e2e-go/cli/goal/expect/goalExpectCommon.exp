@@ -824,7 +824,6 @@ proc ::AlgorandGoal::CheckNetworkAddressForCors { NET_ADDRESS } {
         spawn curl -X OPTIONS -H "Origin: http://algorand.com" --head $NET_ADDRESS
         expect {
             timeout { close; ::AlgorandGoal::Abort "Timeout failure in CheckNetworkAddressForCors" }
-            eof { close; ::AlgorandGoal::Abort "EOF in CheckNetworkAddressForCors" }
             "Access-Control-Allow-Origin" { puts "success" ; close  }
             eof {
                 return -code error "EOF without Access-Control-Allow-Origin in output"
