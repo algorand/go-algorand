@@ -670,8 +670,13 @@ proc ::AlgorandGoal::SplitGroup { INPUT_GROUP OUTPUT_GROUP } {
             timeout { ::AlgorandGoal::Abort "Timed out splitting group transaction"  }
 	        eof
         }
-        set status [wait]
-        if {$status != 0} { ::AlgorandGoal::Abort "Split group failed with exit code $status" }
+        lassign [wait] PID SPAWNID OS_CODE ERR_CODE
+        if {$OS_CODE == -1} {
+            ::AlgorandGoal::Abort "Split group failed: OS error code: $ERR_CODE"
+        }
+        if {$ERR_CODE != 0} {
+            ::AlgorandGoal::Abort "Split group failed with: exit code: $ERR_CODE"
+        }
     } EXCEPTION ] } {
        ::AlgorandGoal::Abort "ERROR in Split Group: $EXCEPTION"
     }
@@ -742,9 +747,16 @@ proc ::AlgorandGoal::SignTransaction { WALLET_NAME WALLET_PASSWORD INPUT_TXN OUT
     if { [ catch {
         spawn goal clerk sign -d $TEST_PRIMARY_NODE_DIR -w $WALLET_NAME -i $INPUT_TXN -o $OUTPUT_TXN
         expect {
-            #nolint:eof just signing with outputting to file
+            #nolint:eof just signing with outputting to file and checking status
             timeout { ::AlgorandGoal::Abort "Timed out signing transaction"  }
-	        "Please enter the password for wallet '$WALLET_NAME':" { send "$WALLET_PASSWORD\r" ;}
+	        "Please enter the password for wallet '$WALLET_NAME':" { send "$WALLET_PASSWORD\r" ; exp_continue;}
+        }
+        lassign [wait] PID SPAWNID OS_CODE ERR_CODE
+        if {$OS_CODE == -1} {
+            ::AlgorandGoal::Abort "SignTransaction failed: OS error code: $ERR_CODE"
+        }
+        if {$ERR_CODE != 0} {
+            ::AlgorandGoal::Abort "SignTransaction failed with: exit code: $ERR_CODE"
         }
     } EXCEPTION ] } {
        ::AlgorandGoal::Abort "ERROR in SignTransaction: $EXCEPTION"
@@ -905,9 +917,12 @@ proc ::AlgorandGoal::DeleteMultisigAccount { MULTISIG_ADDRESS TEST_PRIMARY_NODE_
     if { [ catch {
         spawn goal account multisig delete --address $MULTISIG_ADDRESS -d $TEST_PRIMARY_NODE_DIR
         expect eof
-        set status [wait]
-        if {$status != 0} {
-            ::AlgorandGoal::Abort "DeleteMultisigAccount failed with exit code $status"
+        lassign [wait] PID SPAWNID OS_CODE ERR_CODE
+        if {$OS_CODE == -1} {
+            ::AlgorandGoal::Abort "DeleteMultisigAccount failed: OS error code: $ERR_CODE"
+        }
+        if {$ERR_CODE != 0} {
+            ::AlgorandGoal::Abort "DeleteMultisigAccount failed with: exit code: $ERR_CODE"
         }
     } EXCEPTION ] } {
        ::AlgorandGoal::Abort "ERROR in DeleteMultisigAccount: $EXCEPTION"
@@ -1349,9 +1364,12 @@ proc ::AlgorandGoal::InspectTransactionFile { TRX_FILE } {
     puts "\n Inspect $TRX_FILE"
     spawn goal clerk inspect $TRX_FILE
     expect eof
-    set status [wait]
-    if {$status != 0} {
-        ::AlgorandGoal::Abort "InspectTransactionFile failed with exit code $status"
+    lassign [wait] PID SPAWNID OS_CODE ERR_CODE
+    if {$OS_CODE == -1} {
+        ::AlgorandGoal::Abort "InspectTransactionFile failed: OS error code: $ERR_CODE"
+    }
+    if {$ERR_CODE != 0} {
+        ::AlgorandGoal::Abort "InspectTransactionFile failed with: exit code: $ERR_CODE"
     }
 }
 
