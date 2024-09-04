@@ -578,6 +578,7 @@ proc ::AlgorandGoal::AssetCreate { CREATOR WALLET_NAME WALLET_PASSWORD TOTAL_SUP
         expect {
             timeout { ::AlgorandGoal::Abort "Timed out create asset"  }
 	        "Please enter the password for wallet '$WALLET_NAME':" { send "$WALLET_PASSWORD\r"; exp_continue }
+            -re {Created asset with asset index (\d+)} { puts "Asset created"; close }
 	        eof { ::AlgorandGoal::Abort "EOF create asset"  }
         }
     } EXCEPTION ] } {
@@ -664,10 +665,11 @@ proc ::AlgorandGoal::AssembleGroup { INPUT_GROUP OUTPUT_GROUP } {
 proc ::AlgorandGoal::SplitGroup { INPUT_GROUP OUTPUT_GROUP } {
     if { [ catch {
         spawn goal clerk split -i $INPUT_GROUP -o $OUTPUT_GROUP
-	    expect { #nolint:eof just checking status
+	    expect {
+            #nolint:eof just checking status
             timeout { ::AlgorandGoal::Abort "Timed out splitting group transaction"  }
 	        eof
-            }
+        }
         set status [wait]
         if {$status != 0} { ::AlgorandGoal::Abort "Split group failed with exit code $status" }
     } EXCEPTION ] } {
@@ -740,9 +742,9 @@ proc ::AlgorandGoal::SignTransaction { WALLET_NAME WALLET_PASSWORD INPUT_TXN OUT
     if { [ catch {
         spawn goal clerk sign -d $TEST_PRIMARY_NODE_DIR -w $WALLET_NAME -i $INPUT_TXN -o $OUTPUT_TXN
         expect {
+            #nolint:eof just signing with outputting to file
             timeout { ::AlgorandGoal::Abort "Timed out signing transaction"  }
-	        "Please enter the password for wallet '$WALLET_NAME':" { send "$WALLET_PASSWORD\r" ; exp_continue}
-	        eof { ::AlgorandGoal::Abort "EOF signing transaction"  }
+	        "Please enter the password for wallet '$WALLET_NAME':" { send "$WALLET_PASSWORD\r" ;}
         }
     } EXCEPTION ] } {
        ::AlgorandGoal::Abort "ERROR in SignTransaction: $EXCEPTION"
