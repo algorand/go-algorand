@@ -2904,7 +2904,7 @@ func TestWebsocketNetworkMessageOfInterest(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	var (
 		ft1 = protocol.Tag("AV")
-		ft2 = protocol.Tag("pj")
+		ft2 = protocol.Tag("UE")
 		ft3 = protocol.Tag("NI")
 		ft4 = protocol.Tag("TX")
 
