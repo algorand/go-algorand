@@ -91,20 +91,16 @@ if { [catch {
         eof { ::AlgorandGoal::Abort $expect_out(buffer) }
     }
 
-    # TODO: FIXME: This test is failing with the following error:
-    # program failed Check: pc=164 static cost budget of 20000 exceeded
-    # Aborting with Error: program failed Check: pc=164 static cost budget of 20000 exceeded
-
-    # teal "$TEST_ROOT_DIR/slow-sig.teal" 2 1 20001
-    # exec goal clerk compile "$TEST_ROOT_DIR/slow-sig.teal"
-    # exec goal clerk send -F "$TEST_ROOT_DIR/slow-sig.teal" -t GXBNLU4AXQABPLHXJDMTG2YXSDT4EWUZACT7KTPFXDQW52XPTIUS5OZ5HQ -a 100 -d $TEST_PRIMARY_NODE_DIR -o $TEST_ROOT_DIR/slow-sig.tx
-    # spawn goal clerk dryrun -P future -t $TEST_ROOT_DIR/slow-sig.tx  # Should succeed Check, fail Eval
-    # expect {
-    #     "dynamic cost budget" { puts "slow-sig dryrun pass" }
-    #     " - pass -" { ::AlgorandGoal::Abort $expect_out(buffer) }
-    #     "REJECT" { ::AlgorandGoal::Abort $expect_out(buffer) }
-    #     eof { ::AlgorandGoal::Abort $expect_out(buffer) }
-    # }
+    teal "$TEST_ROOT_DIR/slow-sig.teal" 4 1 20001
+    exec goal clerk compile "$TEST_ROOT_DIR/slow-sig.teal"
+    exec goal clerk send -F "$TEST_ROOT_DIR/slow-sig.teal" -t GXBNLU4AXQABPLHXJDMTG2YXSDT4EWUZACT7KTPFXDQW52XPTIUS5OZ5HQ -a 100 -d $TEST_PRIMARY_NODE_DIR -o $TEST_ROOT_DIR/slow-sig.tx
+    spawn goal clerk dryrun -P future -t $TEST_ROOT_DIR/slow-sig.tx  # Should succeed Check, fail Eval
+    expect {
+        "dynamic cost budget" { puts "slow-sig dryrun pass" }
+        " - pass -" { ::AlgorandGoal::Abort $expect_out(buffer) }
+        "REJECT" { ::AlgorandGoal::Abort $expect_out(buffer) }
+        eof { ::AlgorandGoal::Abort $expect_out(buffer) }
+    }
 
     # Shutdown the network
     ::AlgorandGoal::StopNetwork $NETWORK_NAME $TEST_ROOT_DIR
