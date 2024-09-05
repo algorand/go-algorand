@@ -1,13 +1,11 @@
 
-![Algorand Logo](https://static.vecteezy.com/system/resources/previews/006/153/239/original/algorand-logo-design-with-hi-tech-blue-background-design-vector.jpg)
-
+# go-algorand
 | **Branch**      | **Build Status** |
 | --------------- | ---------------- |
 | **rel/stable**  | [![CircleCI](https://circleci.com/gh/algorand/go-algorand/tree/rel%2Fstable.svg?style=svg)](https://circleci.com/gh/algorand/go-algorand/tree/rel%2Fstable) |
 | **rel/beta**    | [![CircleCI](https://circleci.com/gh/algorand/go-algorand/tree/rel%2Fbeta.svg?style=svg)](https://circleci.com/gh/algorand/go-algorand/tree/rel%2Fbeta) |
 | **rel/nightly** | [![CircleCI](https://circleci.com/gh/algorand/go-algorand/tree/rel%2Fnightly.svg?style=svg)](https://circleci.com/gh/algorand/go-algorand/tree/rel%2Fnightly) |
 
-# go-algorand
 
 **Algorand's** official implementation in Go.
 
