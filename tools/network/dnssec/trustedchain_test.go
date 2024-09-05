@@ -394,10 +394,10 @@ func TestQueryWrapper(t *testing.T) {
 
 	dss, err := qr.GetRootAnchorDS()
 	a.NoError(err)
-	a.Equal(2, len(dss))
-	currentDS := dss[1]
-	a.Equal("E06D44B80B8F1D39A95C0B0D7C65D08458E880409BBC683457104237C7F8EC8D", currentDS.Digest)
-	a.Equal(uint16(20326), currentDS.KeyTag)
+	a.Equal(3, len(dss))
+	currentDS := dss[2]
+	a.Equal("683D2D0ACB8C9B712A1948B27F741219298D0A450D612C483AF444A4C0FB2B16", currentDS.Digest)
+	a.Equal(uint16(38696), currentDS.KeyTag)
 	a.Equal(uint8(8), currentDS.Algorithm)
 	a.Equal(uint8(2), currentDS.DigestType)
 
