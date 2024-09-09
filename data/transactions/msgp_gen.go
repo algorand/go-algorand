@@ -3306,8 +3306,8 @@ func (z *LogicSig) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o 
 					err = msgp.WrapError(err, "struct-from-array", "Args", zb0001)
 					return
 				}
-				if zb0007 > MaxLogicSigArgSize {
-					err = msgp.ErrOverflow(uint64(zb0007), uint64(MaxLogicSigArgSize))
+				if zb0007 > config.MaxLogicSigMaxSize {
+					err = msgp.ErrOverflow(uint64(zb0007), uint64(config.MaxLogicSigMaxSize))
 					return
 				}
 				(*z).Args[zb0001], bts, err = msgp.ReadBytesBytes(bts, (*z).Args[zb0001])
@@ -3395,8 +3395,8 @@ func (z *LogicSig) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o 
 						err = msgp.WrapError(err, "Args", zb0001)
 						return
 					}
-					if zb0011 > MaxLogicSigArgSize {
-						err = msgp.ErrOverflow(uint64(zb0011), uint64(MaxLogicSigArgSize))
+					if zb0011 > config.MaxLogicSigMaxSize {
+						err = msgp.ErrOverflow(uint64(zb0011), uint64(config.MaxLogicSigMaxSize))
 						return
 					}
 					(*z).Args[zb0001], bts, err = msgp.ReadBytesBytes(bts, (*z).Args[zb0001])

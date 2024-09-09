@@ -36,6 +36,7 @@ import (
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/network/p2p"
@@ -804,7 +805,7 @@ func TestMaxSizesCorrect(t *testing.T) {
 	require.Equal(t, ppSize, protocol.ProposalPayloadTag.MaxMessageSize())
 	spSize := uint64(stateproof.SigFromAddrMaxSize())
 	require.Equal(t, spSize, protocol.StateProofSigTag.MaxMessageSize())
-	txSize := uint64(config.MaxTxnBytesPerBlock)
+	txSize := uint64(transactions.SignedTxnMaxSize())
 	require.Equal(t, txSize, protocol.TxnTag.MaxMessageSize())
 	msSize := uint64(crypto.DigestMaxSize())
 	require.Equal(t, msSize, protocol.MsgDigestSkipTag.MaxMessageSize())
