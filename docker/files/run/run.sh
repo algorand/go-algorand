@@ -153,6 +153,7 @@ function start_new_public_network() {
     betanet) ID="<network>.algodev.network" ;;
     alphanet) ID="<network>.algodev.network" ;;
     devnet) ID="<network>.algodev.network" ;;
+    fnet) ID="<network>.algorand.green" ;;
     *)
       echo "Unknown network."
       exit 1
