@@ -783,7 +783,7 @@ func TestP2PHTTPHandler(t *testing.T) {
 	pstore, err := peerstore.MakePhonebook(0, 10*time.Second)
 	require.NoError(t, err)
 	pstore.AddPersistentPeers([]*peer.AddrInfo{&peerInfoA}, "net", phonebook.PhoneBookEntryRelayRole)
-	httpClient, err = p2p.MakeHTTPClientWithRateLimit(&peerInfoA, pstore, 1*time.Second, 1)
+	httpClient, err = p2p.MakeHTTPClientWithRateLimit(&peerInfoA, pstore, 1*time.Second)
 	require.NoError(t, err)
 	_, err = httpClient.Get("/test")
 	require.ErrorIs(t, err, limitcaller.ErrConnectionQueueingTimeout)
@@ -1187,8 +1187,10 @@ func TestP2PwsStreamHandlerDedup(t *testing.T) {
 		return networkPeerIdentityDisconnect.GetUint64Value() == networkPeerIdentityDisconnectInitial+1
 	}, 2*time.Second, 50*time.Millisecond)
 
-	require.False(t, netA.hasPeers())
-	require.False(t, netB.hasPeers())
+	// now allow the peer made outgoing connection to handle conn closing initiated by the other side
+	require.Eventually(t, func() bool {
+		return !netA.hasPeers() && !netB.hasPeers()
+	}, 2*time.Second, 50*time.Millisecond)
 }
 
 // TestP2PEnableGossipService_NodeDisable ensures that a node with EnableGossipService=false

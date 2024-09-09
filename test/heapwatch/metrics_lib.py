@@ -54,7 +54,7 @@ def hunum(x):
         return '{:.1f}k'.format(x / 1000.0)
     if x >= 1000:
         return '{:.2f}k'.format(x / 1000.0)
-    return '{:.2f}x'.format(x)
+    return '{:.2f}'.format(x)
 
 
 def test_metric_line_re():
