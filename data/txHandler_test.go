@@ -2774,6 +2774,8 @@ func TestTxHandlerValidateIncomingTxMessage(t *testing.T) {
 
 	handler, err := makeTestTxHandler(ledger, cfg)
 	require.NoError(t, err)
+	handler.Start()
+	defer handler.Stop()
 
 	// valid message
 	_, blob := makeTxns(addresses, secrets, 1, 2, genesisHash)
@@ -2807,6 +2809,8 @@ func TestTxHandlerValidateIncomingTxMessage(t *testing.T) {
 		require.True(t, cfg.TxFilterCanonicalEnabled())
 		handler, err := makeTestTxHandler(ledger, cfg)
 		require.NoError(t, err)
+		handler.Start()
+		defer handler.Stop()
 
 		// valid message
 		_, blob := makeTxns(addresses, secrets, 1, 2, genesisHash)
