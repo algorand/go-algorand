@@ -48,11 +48,14 @@ func MakeHTTPServer(streamHost host.Host) *HTTPServer {
 		p2phttpMux: mux.NewRouter(),
 	}
 	// libp2phttp server requires either explicit ListenAddrs or streamHost.Addrs() to be non-empty.
-	// If streamHost.Addrs() is empty, we will listen on all interfaces
+	// If streamHost.Addrs() is empty (that happens when NetAddress is set to ":0" and private address filtering is automatically enabled),
+	// we will listen on localhost to satisfy libp2phttp.Host.Serve() requirements.
+	// A side effect is it actually starts listening on interfaces listed in ListenAddrs and as go-libp2p v0.33.2
+	// there is no other way to have libp2phttp server running AND to have streamHost.Addrs() filtered.
 	if len(streamHost.Addrs()) == 0 {
-		logging.Base().Debugf("MakeHTTPServer: no addresses for %s, asking to listen all interfaces", streamHost.ID())
+		logging.Base().Debugf("MakeHTTPServer: no addresses for %s, asking to listen localhost interface to satisfy libp2phttp.Host.Serve ", streamHost.ID())
 		httpServer.ListenAddrs = []multiaddr.Multiaddr{
-			multiaddr.StringCast("/ip4/0.0.0.0/tcp/0/http"),
+			multiaddr.StringCast("/ip4/127.0.0.1/tcp/0/http"),
 		}
 		httpServer.InsecureAllowHTTP = true
 	}
