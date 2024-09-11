@@ -98,8 +98,8 @@ type TransactionPool struct {
 	// exceed the txPoolMaxSize. This flag is reset to false OnNewBlock
 	stateproofOverflowed bool
 
-	testEvalCtx   *testEvalContext
-	testEvalCtxMu deadlock.RWMutex
+	testBlockEvaluator   *eval.TestBlockEvaluator
+	testBlockEvaluatorMu deadlock.RWMutex
 
 	// shutdown is set to true when the pool is being shut down. It is checked in exported methods
 	// to prevent pool operations like remember and recomputing the block evaluator
@@ -109,7 +109,6 @@ type TransactionPool struct {
 
 // BlockEvaluator defines the block evaluator interface exposed by the ledger package.
 type BlockEvaluator interface {
-	TestTransactionGroup(txgroup []transactions.SignedTxn) error
 	Round() basics.Round
 	PaySetSize() int
 	TransactionGroup(txads []transactions.SignedTxnWithAD) error
@@ -118,7 +117,8 @@ type BlockEvaluator interface {
 	ResetTxnBytes()
 }
 
-// testEvalContext implements the eval.TestEvalContext interface.
+// testEvalContext implements the eval.TestEvalContext interface. It allows for concurrent
+// calls to TestTransactionGroup for candidate transactions calling transactionPool.Test.
 type testEvalContext struct {
 	ledger   *ledger.Ledger
 	block    bookkeeping.Block
@@ -126,22 +126,24 @@ type testEvalContext struct {
 	specials transactions.SpecialAddresses
 }
 
-func newTestEvalCtx(ledger *ledger.Ledger, block bookkeeping.Block) *testEvalContext {
-	return &testEvalContext{
-		ledger: ledger,
-		block:  block,
-		proto:  config.Consensus[block.CurrentProtocol],
-		specials: transactions.SpecialAddresses{
-			FeeSink:     block.FeeSink,
-			RewardsPool: block.RewardsPool,
-		},
-	}
+func newTestBlockEvaluator(ledger *ledger.Ledger, block bookkeeping.Block) *eval.TestBlockEvaluator {
+	return &eval.TestBlockEvaluator{
+		TestEvalContext: &testEvalContext{
+			ledger: ledger,
+			block:  block,
+			proto:  config.Consensus[block.CurrentProtocol],
+			specials: transactions.SpecialAddresses{
+				FeeSink:     block.FeeSink,
+				RewardsPool: block.RewardsPool,
+			},
+		}}
 }
 
 func (c *testEvalContext) Proto() config.ConsensusParams           { return c.proto }
 func (c *testEvalContext) Specials() transactions.SpecialAddresses { return c.specials }
 func (c *testEvalContext) TxnContext() transactions.TxnContext     { return c.block }
 func (c *testEvalContext) CheckDup(firstValid, lastValid basics.Round, txid transactions.Txid, txl ledgercore.Txlease) error {
+	// will call txTail.checkDup, which uses an RLock for concurrent access.
 	return c.ledger.CheckDup(c.proto, c.block.BlockHeader.Round, firstValid, lastValid, txid, txl)
 }
 
@@ -421,19 +423,20 @@ func (pool *TransactionPool) checkSufficientFee(txgroup []transactions.SignedTxn
 
 // Test performs basic duplicate detection and well-formedness checks
 // on a transaction group without storing the group.
+// It may be called concurrently.
 func (pool *TransactionPool) Test(txgroup []transactions.SignedTxn) error {
 	if err := pool.checkPendingQueueSize(txgroup); err != nil {
 		return err
 	}
 
-	pool.testEvalCtxMu.RLock()
-	defer pool.testEvalCtxMu.RUnlock()
+	pool.testBlockEvaluatorMu.RLock()
+	defer pool.testBlockEvaluatorMu.RUnlock()
 
-	if pool.testEvalCtx == nil {
+	if pool.testBlockEvaluator == nil {
 		return fmt.Errorf("Test: testEvalCtx is nil")
 	}
 
-	return eval.TestTransactionGroup(pool.testEvalCtx, txgroup)
+	return pool.testBlockEvaluator.TestTransactionGroup(txgroup)
 }
 
 type poolIngestParams struct {
@@ -780,9 +783,9 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIDs map[transact
 		return
 	}
 
-	pool.testEvalCtxMu.Lock()
-	pool.testEvalCtx = newTestEvalCtx(pool.ledger, next)
-	pool.testEvalCtxMu.Unlock()
+	pool.testBlockEvaluatorMu.Lock()
+	pool.testBlockEvaluator = newTestBlockEvaluator(pool.ledger, next)
+	pool.testBlockEvaluatorMu.Unlock()
 
 	var asmStats telemetryspec.AssembleBlockMetrics
 	asmStats.StartCount = len(txgroups)
