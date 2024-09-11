@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -142,7 +142,7 @@ int 1`,
 
 	mockTracer := &mocktracer.Tracer{}
 	s.ledger.start = s.ledger.Ledger.Latest() // Set starting round for simulation
-	block, err := s.simulateWithTracer(txgroup, mockTracer, ResultEvalOverrides{})
+	block, err := s.simulateWithTracer(transactions.WrapSignedTxnsWithAD(txgroup), mockTracer, ResultEvalOverrides{})
 	require.NoError(t, err)
 
 	evalBlock := block.Block()
@@ -222,7 +222,7 @@ int 1`,
 		mocktracer.BeforeProgram(logic.ModeSig),
 		mocktracer.BeforeOpcode(),
 		mocktracer.AfterOpcode(false),
-		mocktracer.AfterProgram(logic.ModeSig, false),
+		mocktracer.AfterProgram(logic.ModeSig, mocktracer.ProgramResultPass),
 		// Txn evaluation
 		mocktracer.BeforeBlock(block.Block().Round()),
 		mocktracer.BeforeTxnGroup(2),
@@ -232,7 +232,7 @@ int 1`,
 		mocktracer.BeforeProgram(logic.ModeApp),
 		mocktracer.BeforeOpcode(),
 		mocktracer.AfterOpcode(false),
-		mocktracer.AfterProgram(logic.ModeApp, false),
+		mocktracer.AfterProgram(logic.ModeApp, mocktracer.ProgramResultPass),
 		mocktracer.AfterTxn(protocol.ApplicationCallTx, evalBlock.Payset[1].ApplyData, false),
 		mocktracer.AfterTxnGroup(2, &expectedDelta, false),
 		//Block evaluation

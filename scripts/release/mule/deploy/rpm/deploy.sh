@@ -7,28 +7,25 @@ echo
 date "+build_release begin DEPLOY rpm stage %Y%m%d_%H%M%S"
 echo
 
-if [ -z "$NETWORK" ]; then
-    echo "[$0] NETWORK is missing."
-    exit 1
-fi
-
-CHANNEL=$(./scripts/release/mule/common/get_channel.sh "$NETWORK")
+CHANNEL=${CHANNEL:-$(./scripts/release/mule/common/get_channel.sh "$NETWORK")}
 VERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
 NO_DEPLOY=${NO_DEPLOY:-false}
-OS_TYPE=$(./scripts/release/mule/common/ostype.sh)
-PACKAGES_DIR=${PACKAGES_DIR:-"./tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE"}
-STAGING=${STAGING:-"algorand-staging/releases"}
+PACKAGES_DIR=${PACKAGES_DIR:-"tmp"}
 
 if [ -n "$S3_SOURCE" ]
 then
     PREFIX="$S3_SOURCE/$CHANNEL/$VERSION"
     if [ "$CHANNEL" == "beta" ]
     then
-        aws s3 cp "s3://$PREFIX/algorand-beta-$VERSION-1.x86_64.rpm" /root
-        aws s3 cp "s3://$PREFIX/algorand-devtools-beta-$VERSION-1.x86_64.rpm" /root
+        aws s3 cp "s3://$PREFIX/algorand-beta-$VERSION-1.x86_64.rpm" $PACKAGES_DIR
+        aws s3 cp "s3://$PREFIX/algorand-devtools-beta-$VERSION-1.x86_64.rpm" $PACKAGES_DIR
+        aws s3 cp "s3://$PREFIX/algorand-beta-$VERSION-1.aarch64.rpm" $PACKAGES_DIR
+        aws s3 cp "s3://$PREFIX/algorand-devtools-beta-$VERSION-1.aarch64.rpm" $PACKAGES_DIR
     else
-        aws s3 cp "s3://$PREFIX/algorand-$VERSION-1.x86_64.rpm" /root
-        aws s3 cp "s3://$PREFIX/algorand-devtools-$VERSION-1.x86_64.rpm" /root
+        aws s3 cp "s3://$PREFIX/algorand-$VERSION-1.x86_64.rpm" $PACKAGES_DIR
+        aws s3 cp "s3://$PREFIX/algorand-devtools-$VERSION-1.x86_64.rpm" $PACKAGES_DIR
+        aws s3 cp "s3://$PREFIX/algorand-$VERSION-1.aarch64.rpm" $PACKAGES_DIR
+        aws s3 cp "s3://$PREFIX/algorand-devtools-$VERSION-1.aarch64.rpm" $PACKAGES_DIR
     fi
 else
     cp "$PACKAGES_DIR"/*"$VERSION"*.rpm /root
@@ -56,11 +53,7 @@ cat << EOF > .rpmmacros
 EOF
 
 mkdir rpmrepo
-for rpm in $(ls *"$VERSION"*.rpm)
-do
-    rpmsign --addsign "$rpm"
-    cp -p "$rpm" rpmrepo
-done
+mv -f *"$VERSION"*.rpm rpmrepo
 
 createrepo --database rpmrepo
 rm -f rpmrepo/repodata/repomd.xml.asc
@@ -72,8 +65,19 @@ then
     cp -r /root/rpmrepo .
 else
     aws s3 sync rpmrepo "s3://algorand-releases/rpm/$CHANNEL/"
+
     # sync signatures to releases so that the .sig files load from there
-    aws s3 sync s3://$STAGING/releases/$CHANNEL/ s3://algorand-releases/rpm/sigs/$CHANNEL/ --exclude='*' --include='*.rpm.sig'
+    if [ -n "$S3_SOURCE" ]; then
+        # if S3_SOURCE exists, we copied files from s3
+        echo "Copy signatures from s3 staging to s3 releases"
+        aws s3 sync s3://algorand-staging/releases/$CHANNEL/ s3://algorand-releases/rpm/sigs/$CHANNEL/ --exclude='*' --include='*.rpm.sig'
+
+    else
+        # We are working with files locally
+        popd
+        echo "Copy local signatures to s3 releases"
+        aws s3 sync "$PACKAGES_DIR" "s3://algorand-releases/rpm/sigs/$CHANNEL/" --exclude='*' --include='*.rpm.sig'
+    fi
 fi
 
 echo

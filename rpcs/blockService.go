@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -36,12 +36,12 @@ import (
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
+	"github.com/algorand/go-algorand/network/addr"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/metrics"
 )
@@ -54,8 +54,11 @@ const blockResponseRetryAfter = "3"                                             
 const blockServerMaxBodyLength = 512                                               // we don't really pass meaningful content here, so 512 bytes should be a safe limit
 const blockServerCatchupRequestBufferSize = 10
 
+// BlockResponseLatestRoundHeader is returned in the response header when the requested block is not available
+const BlockResponseLatestRoundHeader = "X-Latest-Round"
+
 // BlockServiceBlockPath is the path to register BlockService as a handler for when using gorilla/mux
-// e.g. .Handle(BlockServiceBlockPath, &ls)
+// e.g. .HandleFunc(BlockServiceBlockPath, ls.ServeBlockPath)
 const BlockServiceBlockPath = "/v{version:[0-9.]+}/{genesisID}/block/{round:[0-9a-z]+}"
 
 // Constant strings used as keys for topics
@@ -65,6 +68,7 @@ const (
 	BlockDataKey       = "blockData"       // Block-data topic-key in the response
 	CertDataKey        = "certData"        // Cert-data topic-key in the response
 	BlockAndCertValue  = "blockAndCert"    // block+cert request data (as the value of requestDataTypeKey)
+	LatestRoundKey     = "latest"
 )
 
 var errBlockServiceClosed = errors.New("block service is shutting down")
@@ -99,7 +103,6 @@ type BlockService struct {
 	enableService           bool
 	enableServiceOverGossip bool
 	fallbackEndpoints       fallbackEndpoints
-	enableArchiverFallback  bool
 	log                     logging.Logger
 	closeWaitGroup          sync.WaitGroup
 	mu                      deadlock.Mutex
@@ -140,14 +143,18 @@ func MakeBlockService(log logging.Logger, config config.Local, ledger LedgerForB
 		enableService:           config.EnableBlockService,
 		enableServiceOverGossip: config.EnableGossipBlockService,
 		fallbackEndpoints:       makeFallbackEndpoints(log, config.BlockServiceCustomFallbackEndpoints),
-		enableArchiverFallback:  config.EnableBlockServiceFallbackToArchiver,
 		log:                     log,
 		memoryCap:               config.BlockServiceMemCap,
 	}
 	if service.enableService {
-		net.RegisterHTTPHandler(BlockServiceBlockPath, service)
+		service.RegisterHandlers(net)
 	}
 	return service
+}
+
+// RegisterHandlers registers the request handlers for BlockService's paths with the registrar.
+func (bs *BlockService) RegisterHandlers(registrar Registrar) {
+	registrar.RegisterHTTPHandlerFunc(BlockServiceBlockPath, bs.ServeBlockPath)
 }
 
 // Start listening to catchup requests over ws
@@ -168,16 +175,19 @@ func (bs *BlockService) Start() {
 
 // Stop servicing catchup requests over ws
 func (bs *BlockService) Stop() {
+	bs.log.Debug("block service is stopping")
+	defer bs.log.Debug("block service has stopped")
+
 	bs.mu.Lock()
 	close(bs.stop)
 	bs.mu.Unlock()
 	bs.closeWaitGroup.Wait()
 }
 
-// ServerHTTP returns blocks
+// ServeBlockPath returns blocks
 // Either /v{version}/{genesisID}/block/{round} or ?b={round}&v={version}
 // Uses gorilla/mux for path argument parsing.
-func (bs *BlockService) ServeHTTP(response http.ResponseWriter, request *http.Request) {
+func (bs *BlockService) ServeBlockPath(response http.ResponseWriter, request *http.Request) {
 	pathVars := mux.Vars(request)
 	versionStr, hasVersionStr := pathVars["version"]
 	roundStr, hasRoundStr := pathVars["round"]
@@ -239,12 +249,13 @@ func (bs *BlockService) ServeHTTP(response http.ResponseWriter, request *http.Re
 	}
 	encodedBlockCert, err := bs.rawBlockBytes(basics.Round(round))
 	if err != nil {
-		switch err.(type) {
+		switch lerr := err.(type) {
 		case ledgercore.ErrNoEntry:
 			// entry cound not be found.
 			ok := bs.redirectRequest(round, response, request)
 			if !ok {
 				response.Header().Set("Cache-Control", blockResponseMissingBlockCacheControl)
+				response.Header().Set(BlockResponseLatestRoundHeader, fmt.Sprintf("%d", lerr.Latest))
 				response.WriteHeader(http.StatusNotFound)
 			}
 			return
@@ -254,13 +265,13 @@ func (bs *BlockService) ServeHTTP(response http.ResponseWriter, request *http.Re
 			if !ok {
 				response.Header().Set("Retry-After", blockResponseRetryAfter)
 				response.WriteHeader(http.StatusServiceUnavailable)
-				bs.log.Debugf("ServeHTTP: returned retry-after: %v", err)
+				bs.log.Debugf("ServeBlockPath: returned retry-after: %v", err)
 			}
 			httpBlockMessagesDroppedCounter.Inc(nil)
 			return
 		default:
 			// unexpected error.
-			bs.log.Warnf("ServeHTTP : failed to retrieve block %d %v", round, err)
+			bs.log.Warnf("ServeBlockPath: failed to retrieve block %d %v", round, err)
 			response.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -376,57 +387,43 @@ func (bs *BlockService) handleCatchupReq(ctx context.Context, reqMsg network.Inc
 		return
 	}
 	respTopics, n = topicBlockBytes(bs.log, bs.ledger, basics.Round(round), string(requestType))
-	return
 }
 
-// redirectRequest redirects the request to the next round robin fallback endpoing if available, otherwise,
-// if EnableBlockServiceFallbackToArchiver is enabled, redirects to a random archiver.
+// redirectRequest redirects the request to the next round robin fallback endpoint if available
 func (bs *BlockService) redirectRequest(round uint64, response http.ResponseWriter, request *http.Request) (ok bool) {
 	peerAddress := bs.getNextCustomFallbackEndpoint()
-	if peerAddress == "" && bs.enableArchiverFallback {
-		peerAddress = bs.getRandomArchiver()
-	}
+
 	if peerAddress == "" {
 		return false
 	}
 
-	parsedURL, err := network.ParseHostOrURL(peerAddress)
-	if err != nil {
-		bs.log.Debugf("redirectRequest: %s", err.Error())
-		return false
+	var redirectURL string
+	if addr.IsMultiaddr(peerAddress) {
+		redirectURL = strings.Replace(FormatBlockQuery(round, "", bs.net), "{genesisID}", bs.genesisID, 1)
+	} else {
+		parsedURL, err := addr.ParseHostOrURL(peerAddress)
+		if err != nil {
+			bs.log.Debugf("redirectRequest: %s", err.Error())
+			return false
+		}
+		parsedURL.Path = strings.Replace(FormatBlockQuery(round, parsedURL.Path, bs.net), "{genesisID}", bs.genesisID, 1)
+		redirectURL = parsedURL.String()
 	}
-	parsedURL.Path = strings.Replace(FormatBlockQuery(round, parsedURL.Path, bs.net), "{genesisID}", bs.genesisID, 1)
-	http.Redirect(response, request, parsedURL.String(), http.StatusTemporaryRedirect)
-	bs.log.Debugf("redirectRequest: redirected block request to %s", parsedURL.String())
+	http.Redirect(response, request, redirectURL, http.StatusTemporaryRedirect)
+	bs.log.Debugf("redirectRequest: redirected block request to %s", redirectURL)
 	return true
 }
 
-// getNextCustomFallbackEndpoint returns the next custorm fallback endpoint in RR ordering
+// getNextCustomFallbackEndpoint returns the next custom fallback endpoint in RR ordering
 func (bs *BlockService) getNextCustomFallbackEndpoint() (endpointAddress string) {
 	if len(bs.fallbackEndpoints.endpoints) == 0 {
 		return
 	}
+
+	bs.mu.Lock()
+	defer bs.mu.Unlock()
 	endpointAddress = bs.fallbackEndpoints.endpoints[bs.fallbackEndpoints.lastUsed]
 	bs.fallbackEndpoints.lastUsed = (bs.fallbackEndpoints.lastUsed + 1) % len(bs.fallbackEndpoints.endpoints)
-	return
-}
-
-// getRandomArchiver returns a random archiver address
-func (bs *BlockService) getRandomArchiver() (endpointAddress string) {
-	peers := bs.net.GetPeers(network.PeersPhonebookArchivers)
-	httpPeers := make([]network.HTTPPeer, 0, len(peers))
-
-	for _, peer := range peers {
-		httpPeer, validHTTPPeer := peer.(network.HTTPPeer)
-		if validHTTPPeer {
-			httpPeers = append(httpPeers, httpPeer)
-		}
-	}
-	if len(httpPeers) == 0 {
-		return
-	}
-	randIndex := crypto.RandUint64() % uint64(len(httpPeers))
-	endpointAddress = httpPeers[randIndex].GetAddress()
 	return
 }
 
@@ -456,8 +453,12 @@ func (bs *BlockService) rawBlockBytes(round basics.Round) ([]byte, error) {
 func topicBlockBytes(log logging.Logger, dataLedger LedgerForBlockService, round basics.Round, requestType string) (network.Topics, uint64) {
 	blk, cert, err := dataLedger.EncodedBlockCert(round)
 	if err != nil {
-		switch err.(type) {
+		switch lerr := err.(type) {
 		case ledgercore.ErrNoEntry:
+			return network.Topics{
+				network.MakeTopic(network.ErrorKey, []byte(blockNotAvailableErrMsg)),
+				network.MakeTopic(LatestRoundKey, binary.BigEndian.AppendUint64([]byte{}, uint64(lerr.Latest))),
+			}, 0
 		default:
 			log.Infof("BlockService topicBlockBytes: %s", err)
 		}
@@ -497,7 +498,7 @@ func RawBlockBytes(l LedgerForBlockService, round basics.Round) ([]byte, error) 
 
 // FormatBlockQuery formats a block request query for the given network and round number
 func FormatBlockQuery(round uint64, parsedURL string, net network.GossipNode) string {
-	return net.SubstituteGenesisID(path.Join(parsedURL, "/v1/{genesisID}/block/"+strconv.FormatUint(uint64(round), 36)))
+	return network.SubstituteGenesisID(net, path.Join(parsedURL, "/v1/{genesisID}/block/"+strconv.FormatUint(uint64(round), 36)))
 }
 
 func makeFallbackEndpoints(log logging.Logger, customFallbackEndpoints string) (fe fallbackEndpoints) {
@@ -506,12 +507,16 @@ func makeFallbackEndpoints(log logging.Logger, customFallbackEndpoints string) (
 	}
 	endpoints := strings.Split(customFallbackEndpoints, ",")
 	for _, ep := range endpoints {
-		parsed, err := network.ParseHostOrURL(ep)
-		if err != nil {
-			log.Warnf("makeFallbackEndpoints: error parsing %s %s", ep, err.Error())
-			continue
+		if addr.IsMultiaddr(ep) {
+			fe.endpoints = append(fe.endpoints, ep)
+		} else {
+			parsed, err := addr.ParseHostOrURL(ep)
+			if err != nil {
+				log.Warnf("makeFallbackEndpoints: error parsing %s %s", ep, err.Error())
+				continue
+			}
+			fe.endpoints = append(fe.endpoints, parsed.String())
 		}
-		fe.endpoints = append(fe.endpoints, parsed.String())
 	}
 	return
 }

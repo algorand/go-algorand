@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -36,6 +36,7 @@ import (
 	"math"
 	"math/rand"
 
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/committee"
@@ -215,6 +216,12 @@ func (l *Ledger) PrevTimestamp() int64 {
 	return int64(rand.Uint32() + 1)
 }
 
+// OnlineStake returns the online stake that applies to the latest round (so
+// it's actually the online stake from 320 rounds ago)
+func (l *Ledger) OnlineStake() (basics.MicroAlgos, error) {
+	return basics.Algos(3333), nil
+}
+
 // BlockHdr returns the block header for the given round, if it is available
 func (l *Ledger) BlockHdr(round basics.Round) (bookkeeping.BlockHeader, error) {
 	hdr := bookkeeping.BlockHeader{}
@@ -306,6 +313,31 @@ func (l *Ledger) AccountData(addr basics.Address) (ledgercore.AccountData, error
 			TotalBoxes:    uint64(boxesTotal),
 			TotalBoxBytes: uint64(boxBytesTotal),
 		},
+	}, nil
+}
+
+// AgreementData is not a very high-fidelity fake. There's no time delay, it
+// just returns the data that's in AccountData, reshaped into an
+// OnlineAccountData.
+func (l *Ledger) AgreementData(addr basics.Address) (basics.OnlineAccountData, error) {
+	ad, err := l.AccountData(addr)
+	if err != nil {
+		return basics.OnlineAccountData{}, err
+	}
+	// You might imagine this conversion function exists. It does, but requires
+	// rewards handling because OnlineAccountData should have rewards
+	// paid. Here, we ignore that for simple tests.
+	return basics.OnlineAccountData{
+		MicroAlgosWithRewards: ad.MicroAlgos,
+		VotingData: basics.VotingData{
+			VoteID:          ad.VoteID,
+			SelectionID:     ad.SelectionID,
+			StateProofID:    ad.StateProofID,
+			VoteFirstValid:  ad.VoteFirstValid,
+			VoteLastValid:   ad.VoteLastValid,
+			VoteKeyDilution: ad.VoteKeyDilution,
+		},
+		IncentiveEligible: ad.IncentiveEligible,
 	}, nil
 }
 
@@ -607,6 +639,13 @@ func (l *Ledger) AppParams(appID basics.AppIndex) (basics.AppParams, basics.Addr
 	return basics.AppParams{}, basics.Address{}, fmt.Errorf("no app %d", appID)
 }
 
+var testGenHash = crypto.Digest{0x03, 0x02, 0x03}
+
+// GenesisHash returns a phony genesis hash that can be tested against
+func (l *Ledger) GenesisHash() crypto.Digest {
+	return testGenHash
+}
+
 func (l *Ledger) move(from basics.Address, to basics.Address, amount uint64) error {
 	fbr, ok := l.balances[from]
 	if !ok {
@@ -617,7 +656,7 @@ func (l *Ledger) move(from basics.Address, to basics.Address, amount uint64) err
 		tbr = newBalanceRecord(to, 0)
 	}
 	if fbr.balance < amount {
-		return fmt.Errorf("insufficient balance")
+		return fmt.Errorf("insufficient balance in %v. %d < %d", from, fbr.balance, amount)
 	}
 	fbr.balance -= amount
 	tbr.balance += amount

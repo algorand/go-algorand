@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,6 +23,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"strings"
 
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/codecs"
@@ -104,6 +105,9 @@ const CatchpointTrackingModeTracked = 1
 // as long as CatchpointInterval > 0
 const CatchpointTrackingModeStored = 2
 
+// PlaceholderPublicAddress is a placeholder for the public address generated in certain profiles
+const PlaceholderPublicAddress = "PLEASE_SET_ME"
+
 // LoadConfigFromDisk returns a Local config structure based on merging the defaults
 // with settings loaded from the config file from the custom dir.  If the custom file
 // cannot be loaded, the default config is returned (with the error from loading the
@@ -144,11 +148,23 @@ func mergeConfigFromFile(configpath string, source Local) (Local, error) {
 	defer f.Close()
 
 	err = loadConfig(f, &source)
+	if err != nil {
+		return source, err
+	}
+	source, err = enrichNetworkingConfig(source)
+	return source, err
+}
 
-	// For now, all relays (listening for incoming connections) are also Archival
-	// We can change this logic in the future, but it's currently the sanest default.
+// enrichNetworkingConfig makes the following tweaks to the config:
+// - If NetAddress is set, enable the ledger and block services
+// - If EnableP2PHybridMode is set, require PublicAddress to be set
+func enrichNetworkingConfig(source Local) (Local, error) {
+	// If the PublicAddress in config file has the PlaceholderPublicAddress, treat it as if it were empty
+	if source.PublicAddress == PlaceholderPublicAddress {
+		source.PublicAddress = ""
+	}
+
 	if source.NetAddress != "" {
-		source.Archival = true
 		source.EnableLedgerService = true
 		source.EnableBlockService = true
 
@@ -158,8 +174,13 @@ func mergeConfigFromFile(configpath string, source Local) (Local, error) {
 			source.GossipFanout = defaultRelayGossipFanout
 		}
 	}
-
-	return source, err
+	// In hybrid mode we want to prevent connections from the same node over both P2P and WS.
+	// The only way it is supported at the moment is to use net identity challenge that is based on PublicAddress.
+	if (source.NetAddress != "" || source.P2PHybridNetAddress != "") && source.EnableP2PHybridMode && source.PublicAddress == "" {
+		return source, errors.New("PublicAddress must be specified when EnableP2PHybridMode is set")
+	}
+	source.PublicAddress = strings.ToLower(source.PublicAddress)
+	return source, nil
 }
 
 func loadConfig(reader io.Reader, config *Local) error {
@@ -271,6 +292,7 @@ const (
 	dnssecSRV = 1 << iota
 	dnssecRelayAddr
 	dnssecTelemetryAddr
+	dnssecTXT
 )
 
 const (

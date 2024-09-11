@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -625,9 +625,9 @@ var appExecuteCmd = &cobra.Command{
 			}
 
 			if appIdx == 0 {
-				reportInfof("Attempting to create app (global ints %d, global blobs %d, local ints %d, local blobs %d, approval size %d, hash %v; clear size %d, hash %v)", globalSchema.NumUint, globalSchema.NumByteSlice, localSchema.NumUint, localSchema.NumByteSlice, len(approvalProg), crypto.HashObj(logic.Program(approvalProg)), len(clearProg), crypto.HashObj(logic.Program(clearProg)))
+				reportInfof("Attempting to create app (global ints %d, global blobs %d, local ints %d, local blobs %d, approval size %d, hash %v; clear size %d, hash %v)", globalSchema.NumUint, globalSchema.NumByteSlice, localSchema.NumUint, localSchema.NumByteSlice, len(approvalProg), logic.HashProgram(approvalProg), len(clearProg), crypto.HashObj(logic.Program(clearProg)))
 			} else if onCompletion == transactions.UpdateApplicationOC {
-				reportInfof("Attempting to update app (approval size %d, hash %v; clear size %d, hash %v)", len(approvalProg), crypto.HashObj(logic.Program(approvalProg)), len(clearProg), crypto.HashObj(logic.Program(clearProg)))
+				reportInfof("Attempting to update app (approval size %d, hash %v; clear size %d, hash %v)", len(approvalProg), crypto.HashObj(logic.Program(approvalProg)), len(clearProg), logic.HashProgram(clearProg))
 			}
 			reportInfof("Issued transaction from account %s, txid %s (fee %d)", tx.Sender, txid, tx.Fee.Raw)
 

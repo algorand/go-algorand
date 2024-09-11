@@ -34,7 +34,7 @@ Behavior is controlled with the `config.json` file:
 
 On startup, a follower node will be paused (synchronized) with its ledger's
 current round. For a new deployment configured as a follower node, the
-initial sync round is 0. When a sync round is set, the node advance
+initial sync round is 0. When a sync round is set, the node advances
 `MaxAcctLookback-1` rounds. The node is synchronized for the availability
 of `Ledger State Delta` data. This means the minimum sync round is provided
 and the node advances to cache future rounds.
@@ -56,7 +56,7 @@ The follower node was stripped of all functionality not directly related to
 assisting with data-gathering capabilities. Since it is designed to run
 alongside another application, it was made as lightweight as possible.
 Other restrictions relate to the fact that this node is designed to be
-paused. So there are no guarantees that it's internal state matches the
+paused. So there are no guarantees that its internal state matches the
 current round of consensus.
 
 In particular, the follower node cannot participate in consensus or send

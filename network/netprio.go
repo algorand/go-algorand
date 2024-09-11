@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -46,7 +46,7 @@ func prioResponseHandler(message IncomingMessage) OutgoingMessage {
 
 	addr, err := wn.prioScheme.VerifyPrioResponse(challenge, message.Data)
 	if err != nil {
-		wn.log.Warnf("prioScheme.VerifyPrioResponse from %s: %v", peer.rootURL, err)
+		wn.log.Warnf("prioScheme.VerifyPrioResponse from %s: %v", peer.GetAddress(), err)
 	} else {
 		weight := wn.prioScheme.GetPrioWeight(addr)
 

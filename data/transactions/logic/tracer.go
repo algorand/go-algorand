@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -151,7 +151,7 @@ type EvalTracer interface {
 	BeforeProgram(cx *EvalContext)
 
 	// AfterProgram is called after an app or LogicSig program is evaluated.
-	AfterProgram(cx *EvalContext, evalError error)
+	AfterProgram(cx *EvalContext, pass bool, evalError error)
 
 	// BeforeOpcode is called before the op is evaluated
 	BeforeOpcode(cx *EvalContext)
@@ -188,7 +188,7 @@ func (n NullEvalTracer) AfterTxn(ep *EvalParams, groupIndex int, ad transactions
 func (n NullEvalTracer) BeforeProgram(cx *EvalContext) {}
 
 // AfterProgram does nothing
-func (n NullEvalTracer) AfterProgram(cx *EvalContext, evalError error) {}
+func (n NullEvalTracer) AfterProgram(cx *EvalContext, pass bool, evalError error) {}
 
 // BeforeOpcode does nothing
 func (n NullEvalTracer) BeforeOpcode(cx *EvalContext) {}

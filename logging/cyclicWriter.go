@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -26,6 +26,7 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/algorand/go-algorand/util"
 	"github.com/algorand/go-deadlock"
 )
 
@@ -173,7 +174,7 @@ func (cyclic *CyclicFileWriter) Write(p []byte) (n int, err error) {
 			shouldBz2 = true
 			archivePath = archivePath[:len(archivePath)-4]
 		}
-		if err = os.Rename(cyclic.liveLog, archivePath); err != nil {
+		if err = util.MoveFile(cyclic.liveLog, archivePath); err != nil {
 			panic(fmt.Sprintf("CyclicFileWriter: cannot archive full log %v", err))
 		}
 		if shouldGz {

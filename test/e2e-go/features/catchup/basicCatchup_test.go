@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -73,24 +73,6 @@ func TestBasicCatchup(t *testing.T) {
 	// Now, catch up
 	err = fixture.LibGoalFixture.ClientWaitForRoundWithTimeout(cloneClient, waitForRound)
 	a.NoError(err)
-
-	cloneNC := fixture.GetNodeControllerForDataDir(cloneDataDir)
-	cloneRestClient := fixture.GetAlgodClientForController(cloneNC)
-
-	// an immediate call for ready will error, for sync time != 0
-	a.Error(cloneRestClient.ReadyCheck())
-
-	for {
-		status, err := cloneRestClient.Status()
-		a.NoError(err)
-
-		if status.LastRound < 10 {
-			time.Sleep(250 * time.Millisecond)
-			continue
-		}
-		a.NoError(cloneRestClient.ReadyCheck())
-		break
-	}
 }
 
 // TestCatchupOverGossip tests catchup across network versions

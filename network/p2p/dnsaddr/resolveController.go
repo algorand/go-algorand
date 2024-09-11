@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,15 +17,29 @@
 package dnsaddr
 
 import (
+	"context"
+
+	"github.com/multiformats/go-multiaddr"
 	madns "github.com/multiformats/go-multiaddr-dns"
 
 	log "github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/tools/network"
 )
 
+// Resolver is an interface for resolving dnsaddrs
+type Resolver interface {
+	Resolve(ctx context.Context, maddr multiaddr.Multiaddr) ([]multiaddr.Multiaddr, error)
+}
+
+// ResolveController is an interface for cycling through resolvers
+type ResolveController interface {
+	Resolver() Resolver
+	NextResolver() Resolver
+}
+
 // MultiaddrDNSResolveController returns a madns.Resolver, cycling through underlying net.Resolvers
 type MultiaddrDNSResolveController struct {
-	resolver      *madns.Resolver
+	resolver      Resolver
 	nextResolvers []func() *madns.Resolver
 	controller    network.ResolveController
 }
@@ -45,7 +59,7 @@ func NewMultiaddrDNSResolveController(secure bool, fallbackDNSResolverAddress st
 }
 
 // NextResolver applies the nextResolvers functions in order and returns the most recent result
-func (c *MultiaddrDNSResolveController) NextResolver() *madns.Resolver {
+func (c *MultiaddrDNSResolveController) NextResolver() Resolver {
 	if len(c.nextResolvers) == 0 {
 		c.resolver = nil
 	} else {
@@ -56,7 +70,7 @@ func (c *MultiaddrDNSResolveController) NextResolver() *madns.Resolver {
 }
 
 // Resolver returns the current resolver, invokes NextResolver if the resolver is nil
-func (c *MultiaddrDNSResolveController) Resolver() *madns.Resolver {
+func (c *MultiaddrDNSResolveController) Resolver() Resolver {
 	if c.resolver == nil {
 		c.resolver = c.NextResolver()
 	}

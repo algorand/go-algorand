@@ -4,7 +4,7 @@ import os
 import sys
 from goal import Goal
 
-import algosdk.future.transaction as txn
+import algosdk.transaction as txn
 from datetime import datetime
 
 stamp = datetime.now().strftime("%Y%m%d_%H%M%S")

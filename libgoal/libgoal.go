@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -27,6 +27,7 @@ import (
 	algodclient "github.com/algorand/go-algorand/daemon/algod/api/client"
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
 	kmdclient "github.com/algorand/go-algorand/daemon/kmd/client"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/rpcs"
 
 	"github.com/algorand/go-algorand/config"
@@ -664,6 +665,15 @@ func (c *Client) AccountInformation(account string, includeCreatables bool) (res
 	return
 }
 
+// AccountAssetsInformation returns the assets held by an account, including asset params for non-deleted assets.
+func (c *Client) AccountAssetsInformation(account string, next *string, limit *uint64) (resp model.AccountAssetsInformationResponse, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		resp, err = algod.AccountAssetsInformation(account, next, limit)
+	}
+	return
+}
+
 // AccountApplicationInformation gets account information about a given app.
 func (c *Client) AccountApplicationInformation(accountAddress string, applicationID uint64) (resp model.AccountApplicationResponse, err error) {
 	algod, err := c.ensureAlgodClient()
@@ -810,7 +820,7 @@ func (c *Client) ParsedPendingTransaction(txid string) (txn v2.PreEncodedTxInfo,
 }
 
 // Block takes a round and returns its block
-func (c *Client) Block(round uint64) (resp model.BlockResponse, err error) {
+func (c *Client) Block(round uint64) (resp v2.BlockResponseJSON, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.Block(round)
@@ -1332,10 +1342,19 @@ func (c *Client) GetSyncRound() (rep model.GetSyncRoundResponse, err error) {
 }
 
 // GetLedgerStateDelta gets the LedgerStateDelta on a node w/ EnableFollowMode
-func (c *Client) GetLedgerStateDelta(round uint64) (rep model.LedgerStateDeltaResponse, err error) {
+func (c *Client) GetLedgerStateDelta(round uint64) (rep ledgercore.StateDelta, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		return algod.GetLedgerStateDelta(round)
+	}
+	return
+}
+
+// BlockLogs returns all the logs in a block for a given round
+func (c *Client) BlockLogs(round uint64) (resp model.BlockLogsResponse, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		return algod.BlockLogs(round)
 	}
 	return
 }

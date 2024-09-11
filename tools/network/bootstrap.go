@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -24,7 +24,7 @@ import (
 	"github.com/algorand/go-algorand/logging"
 )
 
-func readFromSRV(service string, protocol string, name string, fallbackDNSResolverAddress string, secure bool) (records []*net.SRV, err error) {
+func readFromSRV(ctx context.Context, service string, protocol string, name string, fallbackDNSResolverAddress string, secure bool) (records []*net.SRV, err error) {
 	log := logging.Base()
 	if name == "" {
 		log.Debug("no dns lookup due to empty name")
@@ -38,14 +38,14 @@ func readFromSRV(service string, protocol string, name string, fallbackDNSResolv
 	controller := NewResolveController(secure, fallbackDNSResolverAddress, log)
 
 	systemResolver := controller.SystemResolver()
-	_, records, sysLookupErr := systemResolver.LookupSRV(context.Background(), service, protocol, name)
+	_, records, sysLookupErr := systemResolver.LookupSRV(ctx, service, protocol, name)
 	if sysLookupErr != nil {
 		log.Infof("ReadFromBootstrap: DNS LookupSRV failed when using system resolver: %v", sysLookupErr)
 
 		var fallbackLookupErr error
 		if fallbackDNSResolverAddress != "" {
 			fallbackResolver := controller.FallbackResolver()
-			_, records, fallbackLookupErr = fallbackResolver.LookupSRV(context.Background(), service, protocol, name)
+			_, records, fallbackLookupErr = fallbackResolver.LookupSRV(ctx, service, protocol, name)
 		}
 		if fallbackLookupErr != nil {
 			log.Infof("ReadFromBootstrap: DNS LookupSRV failed when using fallback '%s' resolver: %v", fallbackDNSResolverAddress, fallbackLookupErr)
@@ -54,7 +54,7 @@ func readFromSRV(service string, protocol string, name string, fallbackDNSResolv
 		if fallbackLookupErr != nil || fallbackDNSResolverAddress == "" {
 			fallbackResolver := controller.DefaultResolver()
 			var defaultLookupErr error
-			_, records, defaultLookupErr = fallbackResolver.LookupSRV(context.Background(), service, protocol, name)
+			_, records, defaultLookupErr = fallbackResolver.LookupSRV(ctx, service, protocol, name)
 			if defaultLookupErr != nil {
 				err = fmt.Errorf("ReadFromBootstrap: DNS LookupSRV failed when using system resolver(%v), fallback resolver(%v), as well as using default resolver due to %v", sysLookupErr, fallbackLookupErr, defaultLookupErr)
 				return
@@ -65,8 +65,8 @@ func readFromSRV(service string, protocol string, name string, fallbackDNSResolv
 }
 
 // ReadFromSRV is a helper to collect SRV addresses for a given name
-func ReadFromSRV(service string, protocol string, name string, fallbackDNSResolverAddress string, secure bool) (addrs []string, err error) {
-	records, err := readFromSRV(service, protocol, name, fallbackDNSResolverAddress, secure)
+func ReadFromSRV(ctx context.Context, service string, protocol string, name string, fallbackDNSResolverAddress string, secure bool) (addrs []string, err error) {
+	records, err := readFromSRV(ctx, service, protocol, name, fallbackDNSResolverAddress, secure)
 	if err != nil {
 		return addrs, err
 	}
@@ -88,7 +88,7 @@ func ReadFromSRV(service string, protocol string, name string, fallbackDNSResolv
 
 // ReadFromSRVPriority is a helper to collect SRV addresses with priorities for a given name
 func ReadFromSRVPriority(service string, protocol string, name string, fallbackDNSResolverAddress string, secure bool) (prioAddrs map[uint16][]string, err error) {
-	records, err := readFromSRV(service, protocol, name, fallbackDNSResolverAddress, secure)
+	records, err := readFromSRV(context.Background(), service, protocol, name, fallbackDNSResolverAddress, secure)
 	if err != nil {
 		return prioAddrs, err
 	}

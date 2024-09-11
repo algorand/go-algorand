@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -36,6 +36,15 @@ func MakeRegistry() *Registry {
 func DefaultRegistry() *Registry {
 	return defaultRegistry
 }
+
+// PrometheusDefaultMetrics is the default prometheus gatherer implementing the Metric interface
+var PrometheusDefaultMetrics = defaultPrometheusGatherer{}
+
+// OpencensusDefaultMetrics is the default prometheus gatherer implementing the Metric interface
+var OpencensusDefaultMetrics = defaultOpencensusGatherer{}
+
+// NetDevMetrics is a netdev gatherer implementing the Metric interface
+var NetDevMetrics = netDevGatherer{}
 
 func init() {
 	defaultRegistry = MakeRegistry()

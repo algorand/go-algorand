@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -60,7 +60,7 @@ var WithPanicOpcode = withPanicOpcode
 // TryApps exports "testApps" while accepting a simple uint64. Annoying, we
 // can't export call this "TestApps" because it looks like a Test function with
 // the wrong signature. But we can get that effect with the alias below.
-func TryApps(t *testing.T, programs []string, txgroup []transactions.SignedTxn, ver uint64, ledger *Ledger, expected ...expect) *EvalParams {
+func TryApps(t *testing.T, programs []string, txgroup []transactions.SignedTxn, ver uint64, ledger *Ledger, expected ...expect) (*EvalParams, error) {
 	return testApps(t, programs, txgroup, protoVer(ver), ledger, expected...)
 }
 

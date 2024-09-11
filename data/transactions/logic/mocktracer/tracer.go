@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -74,6 +74,9 @@ type Event struct {
 	// only for BeforeTxnGroup and AfterTxnGroup
 	GroupSize int
 
+	// only for AfterProgram
+	Pass bool
+
 	// only for AfterOpcode, AfterProgram, AfterTxn, and AfterTxnGroup
 	HasError bool
 
@@ -111,9 +114,21 @@ func AfterTxn(txnType protocol.TxType, ad transactions.ApplyData, hasError bool)
 	return Event{Type: AfterTxnEvent, TxnType: txnType, TxnApplyData: ad, HasError: hasError}
 }
 
+// ProgramResult represents the result of a program execution
+type ProgramResult int
+
+const (
+	// ProgramResultPass represents a program that passed
+	ProgramResultPass ProgramResult = iota
+	// ProgramResultReject represents a program that rejected
+	ProgramResultReject
+	// ProgramResultError represents a program that errored
+	ProgramResultError
+)
+
 // AfterProgram creates a new Event with the type AfterProgramEvent
-func AfterProgram(mode logic.RunMode, hasError bool) Event {
-	return Event{Type: AfterProgramEvent, LogicEvalMode: mode, HasError: hasError}
+func AfterProgram(mode logic.RunMode, result ProgramResult) Event {
+	return Event{Type: AfterProgramEvent, LogicEvalMode: mode, Pass: result == ProgramResultPass, HasError: result == ProgramResultError}
 }
 
 // BeforeOpcode creates a new Event with the type BeforeOpcodeEvent
@@ -189,8 +204,17 @@ func (d *Tracer) BeforeProgram(cx *logic.EvalContext) {
 }
 
 // AfterProgram mocks the logic.EvalTracer.AfterProgram method
-func (d *Tracer) AfterProgram(cx *logic.EvalContext, evalError error) {
-	d.Events = append(d.Events, AfterProgram(cx.RunMode(), evalError != nil))
+func (d *Tracer) AfterProgram(cx *logic.EvalContext, pass bool, evalError error) {
+	var result ProgramResult
+	if pass {
+		result = ProgramResultPass
+	} else if evalError != nil {
+		result = ProgramResultError
+	} else {
+		result = ProgramResultReject
+
+	}
+	d.Events = append(d.Events, AfterProgram(cx.RunMode(), result))
 }
 
 // BeforeOpcode mocks the logic.EvalTracer.BeforeOpcode method

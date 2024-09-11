@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -22,7 +22,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"golang.org/x/sync/semaphore"
 	"io"
 	"math"
 	"net"
@@ -32,6 +31,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"golang.org/x/sync/semaphore"
 
 	"github.com/algorand/go-algorand/daemon/algod/api/server"
 	"github.com/algorand/go-algorand/ledger/eval"
@@ -272,8 +273,7 @@ func addBlockHelper(t *testing.T) (v2.Handlers, echo.Context, *httptest.Response
 
 	// make an app call txn with eval delta
 	lsig := transactions.LogicSig{Logic: retOneProgram} // int 1
-	program := logic.Program(lsig.Logic)
-	lhash := crypto.HashObj(&program)
+	lhash := logic.HashProgram(lsig.Logic)
 	var sender basics.Address
 	copy(sender[:], lhash[:])
 	stx := transactions.SignedTxn{
@@ -853,12 +853,29 @@ func prepareTransactionTest(t *testing.T, txnToUse int, txnPrep func(transaction
 	return
 }
 
-func postTransactionTest(t *testing.T, txnToUse int, expectedCode int, method string, enableExperimental bool) {
+type postTransactionOpt func(cfg *config.Local)
+
+func enableExperimentalAPI() postTransactionOpt {
+	return func(cfg *config.Local) {
+		cfg.EnableExperimentalAPI = true
+	}
+}
+
+func enableDeveloperAPI() postTransactionOpt {
+	return func(cfg *config.Local) {
+		cfg.EnableDeveloperAPI = true
+	}
+}
+
+func postTransactionTest(t *testing.T, txnToUse int, expectedCode int, method string, opts ...postTransactionOpt) {
+	cfg := config.GetDefaultLocal()
+	for _, opt := range opts {
+		opt(&cfg)
+	}
+
 	txnPrep := func(stxn transactions.SignedTxn) []byte {
 		return protocol.Encode(&stxn)
 	}
-	cfg := config.GetDefaultLocal()
-	cfg.EnableExperimentalAPI = enableExperimental
 	handler, c, rec, releasefunc := prepareTransactionTest(t, txnToUse, txnPrep, cfg)
 	defer releasefunc()
 	results := reflect.ValueOf(&handler).MethodByName(method).Call([]reflect.Value{reflect.ValueOf(c)})
@@ -873,18 +890,20 @@ func TestPostTransaction(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	postTransactionTest(t, -1, 400, "RawTransaction", false)
-	postTransactionTest(t, 0, 200, "RawTransaction", false)
+	postTransactionTest(t, -1, 400, "RawTransaction")
+	postTransactionTest(t, 0, 200, "RawTransaction")
 }
 
 func TestPostTransactionAsync(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	postTransactionTest(t, -1, 404, "RawTransactionAsync", false)
-	postTransactionTest(t, 0, 404, "RawTransactionAsync", false)
-	postTransactionTest(t, -1, 400, "RawTransactionAsync", true)
-	postTransactionTest(t, 0, 200, "RawTransactionAsync", true)
+	postTransactionTest(t, -1, 404, "RawTransactionAsync")
+	postTransactionTest(t, 0, 404, "RawTransactionAsync")
+	postTransactionTest(t, -1, 404, "RawTransactionAsync", enableDeveloperAPI())
+	postTransactionTest(t, -1, 404, "RawTransactionAsync", enableExperimentalAPI())
+	postTransactionTest(t, -1, 400, "RawTransactionAsync", enableExperimentalAPI(), enableDeveloperAPI())
+	postTransactionTest(t, 0, 200, "RawTransactionAsync", enableExperimentalAPI(), enableDeveloperAPI())
 }
 
 func simulateTransactionTest(t *testing.T, txnToUse int, format string, expectedCode int) {
@@ -2438,4 +2457,83 @@ func TestGeneratePartkeys(t *testing.T) {
 		assert.Equal(t, http.StatusBadRequest, rec.Code)
 	}
 
+}
+
+func TestDebugExtraPprofEndpoint(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	submit := func(t *testing.T, method string, body []byte, expectedCode int) []byte {
+		handler := v2.Handlers{
+			Node: nil,
+			Log:  logging.Base(),
+		}
+		e := echo.New()
+
+		var bodyReader io.Reader
+		if body != nil {
+			bodyReader = bytes.NewReader(body)
+		}
+
+		req := httptest.NewRequest(method, "/debug/extra/pprof", bodyReader)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+
+		if method == http.MethodPut {
+			handler.PutDebugSettingsProf(c)
+		} else {
+			handler.GetDebugSettingsProf(c)
+		}
+		require.Equal(t, expectedCode, rec.Code)
+
+		return rec.Body.Bytes()
+	}
+
+	// check original values
+	body := submit(t, http.MethodGet, nil, http.StatusOK)
+	require.Contains(t, string(body), `"mutex-rate":0`)
+	require.Contains(t, string(body), `"block-rate":0`)
+
+	// enable mutex and blocking profiling, should return the original zero values
+	body = submit(t, http.MethodPut, []byte(`{"mutex-rate":1000, "block-rate":2000}`), http.StatusOK)
+	require.Contains(t, string(body), `"mutex-rate":0`)
+	require.Contains(t, string(body), `"block-rate":0`)
+
+	// check the new values
+	body = submit(t, http.MethodGet, nil, http.StatusOK)
+	require.Contains(t, string(body), `"mutex-rate":1000`)
+	require.Contains(t, string(body), `"block-rate":2000`)
+
+	// set invalid values
+	body = submit(t, http.MethodPut, []byte(`{"mutex-rate":-1, "block-rate":2000}`), http.StatusBadRequest)
+	require.Contains(t, string(body), "failed to decode object")
+
+	body = submit(t, http.MethodPut, []byte(`{"mutex-rate":1000, "block-rate":-2}`), http.StatusBadRequest)
+	require.Contains(t, string(body), "failed to decode object")
+
+	// disable mutex and blocking profiling
+	body = submit(t, http.MethodPut, []byte(`{"mutex-rate":0, "block-rate":0}`), http.StatusOK)
+	require.Contains(t, string(body), `"mutex-rate":1000`)
+	require.Contains(t, string(body), `"block-rate":2000`)
+
+	// check it is disabled
+	body = submit(t, http.MethodGet, nil, http.StatusOK)
+	require.Contains(t, string(body), `"mutex-rate":0`)
+	require.Contains(t, string(body), `"block-rate":0`)
+
+}
+
+func TestGetConfigEndpoint(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
+	defer releasefunc()
+
+	err := handler.GetConfig(c)
+	require.NoError(t, err)
+	require.Equal(t, 200, rec.Code)
+	var responseConfig config.Local
+
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &responseConfig))
+
+	require.Equal(t, handler.Node.Config(), responseConfig)
 }

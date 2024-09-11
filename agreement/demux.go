@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,11 +19,13 @@ package agreement
 import (
 	"context"
 	"fmt"
+	"io"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/logspec"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util"
 )
 
 const (
@@ -112,6 +114,7 @@ func (d *demux) tokenizeMessages(ctx context.Context, net Network, tag protocol.
 		defer func() {
 			close(decoded)
 		}()
+		util.SetGoroutineLabels("tokenizeTag", string(tag))
 		for {
 			select {
 			case raw, ok := <-networkMessages:
@@ -359,6 +362,17 @@ func (d *demux) next(s *Service, deadline Deadline, fastDeadline Deadline, curre
 	}
 
 	return
+}
+
+// dumpQueues dumps the current state of the demux queues to the given writer.
+func (d *demux) dumpQueues(w io.Writer) {
+	fmt.Fprintf(w, "rawVotes: %d\n", len(d.rawVotes))
+	fmt.Fprintf(w, "rawProposals: %d\n", len(d.rawProposals))
+	fmt.Fprintf(w, "rawBundles: %d\n", len(d.rawBundles))
+
+	fmt.Fprintf(w, "cryptoVerifiedVotes: %d\n", len(d.crypto.VerifiedVotes()))
+	fmt.Fprintf(w, "cryptoVerified ProposalPayloadTag: %d\n", len(d.crypto.Verified(protocol.ProposalPayloadTag)))
+	fmt.Fprintf(w, "cryptoVerified VoteBundleTag: %d\n", len(d.crypto.Verified(protocol.VoteBundleTag)))
 }
 
 // setupCompoundMessage processes compound messages: distinct messages which are delivered together

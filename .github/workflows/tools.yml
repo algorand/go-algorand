@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out code into the Go module directory
-        uses: actions/checkout@v3.5.3
+        uses: actions/checkout@v4
       # move go out of the way temporarily to avoid "go list ./..." from installing modules
       - name: Make libsodium.a
         run: sudo mv /usr/bin/go /usr/bin/go.bak && make crypto/libs/linux/amd64/lib/libsodium.a && sudo mv /usr/bin/go.bak /usr/bin/go

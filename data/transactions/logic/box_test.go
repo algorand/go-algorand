@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -41,11 +41,15 @@ func TestBoxNewDel(t *testing.T) {
 			ep, txn, ledger := MakeSampleEnv()
 
 			createSelf := fmt.Sprintf(`byte "self"; int %d; box_create;`, size)
+			growSelf := fmt.Sprintf(`byte "self"; int %d; box_resize; int 1`, size+5)
 			createOther := fmt.Sprintf(`byte "other"; int %d; box_create;`, size)
 
 			ledger.NewApp(txn.Sender, 888, basics.AppParams{})
 
+			TestApp(t, growSelf, ep, "no such box")
+
 			TestApp(t, createSelf, ep)
+			TestApp(t, growSelf, ep)
 			ledger.DelBoxes(888, "self")
 
 			TestApp(t, createSelf+`assert;`+createSelf+`!`, ep)
@@ -77,10 +81,13 @@ func TestBoxNewBad(t *testing.T) {
 	ledger.NewApp(txn.Sender, 888, basics.AppParams{})
 	TestApp(t, `byte "self"; int 999; box_create`, ep, "write budget")
 
-	// In test proto, you get 100 I/O budget per boxref
+	// In test proto, you get 100 I/O budget per boxref, and 1000 is the
+	// absolute biggest box.
 	ten := [10]transactions.BoxRef{}
 	txn.Boxes = append(txn.Boxes, ten[:]...) // write budget is now 11*100 = 1100
 	TestApp(t, `byte "self"; int 999; box_create`, ep)
+	TestApp(t, `byte "self"; int 1000; box_resize; int 1`, ep)
+	TestApp(t, `byte "self"; int 1001; box_resize; int 1`, ep, "box size too large")
 	ledger.DelBoxes(888, "self")
 	TestApp(t, `byte "self"; int 1000; box_create`, ep)
 	ledger.DelBoxes(888, "self")
@@ -139,6 +146,73 @@ func TestBoxReadWrite(t *testing.T) {
 		"no such box")
 	TestApp(t, `byte "junk"; int 1; byte 0x3031; box_replace`, ep,
 		"invalid Box reference")
+
+	TestApp(t, `byte "self"; int 1; int 2; byte 0x3031; box_splice`, ep,
+		"no such box")
+	TestApp(t, `byte "junk"; int 1; int 2; byte 0x3031; box_splice`, ep,
+		"invalid Box reference")
+}
+
+func TestBoxSplice(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	ep, txn, ledger := MakeSampleEnv()
+
+	ledger.NewApp(txn.Sender, 888, basics.AppParams{})
+	// extract some bytes until past the end, confirm the begin as zeros, and
+	// when it fails.
+	TestApp(t, `byte "self"; int 4; box_create;`, ep)
+
+	// replace two bytes with two bytes. would usually use box_replace
+	TestApp(t, `byte "self"; int 1; int 2; byte 0x5555; box_splice;
+                byte "self"; box_get; assert; byte 0x00555500; ==`, ep)
+
+	// replace first 55 with two 44s.
+	TestApp(t, `byte "self"; int 1; int 1; byte 0x4444; box_splice;
+                byte "self"; box_get; assert; byte 0x00444455; ==`, ep)
+
+	// replace second 44 with two 33s. (loses the 55)
+	TestApp(t, `byte "self"; int 2; int 1; byte 0x3333; box_splice;
+                byte "self"; box_get; assert; byte 0x00443333; ==`, ep)
+
+	// replace 0044 with 22. (shifts in a 0x00)
+	TestApp(t, `byte "self"; int 0; int 2; byte 0x22; box_splice;
+                byte "self"; box_get; assert; byte 0x22333300; ==`, ep)
+
+	// dumb: try to replace 00 with 1111, but growing is illegal
+	TestApp(t, `byte "self"; int 3; int 1; byte 0x1111; box_splice;
+                byte "self"; box_get; assert; byte 0x2233331111; ==`, ep,
+		"inserted bytes too long")
+
+	// dumber: try to replace 00__ with 1111, but placing outside bounds is illegal
+	TestApp(t, `byte "self"; int 3; int 2; byte 0x1111; box_splice;
+                byte "self"; box_get; assert; byte 0x2233331111; ==`, ep,
+		"splice end 5 beyond original length")
+
+	// try to replace AT end (fails because it would extend)
+	TestApp(t, `byte "self"; int 4; int 0; byte 0x1111; box_splice;
+                byte "self"; box_get; assert; byte 0x223333001111; ==`, ep,
+		"splice inserted bytes too long")
+
+	// so it's ok if you splice in nothing
+	TestApp(t, `byte "self"; int 4; int 0; byte 0x; box_splice;
+                byte "self"; box_get; assert; byte 0x22333300; ==`, ep)
+
+	// try to replace BEYOND end (fails no matter what)
+	TestApp(t, `byte "self"; int 5; int 0; byte 0x1111; box_splice;
+                byte "self"; box_get; assert; byte 0x22333300001111; ==`, ep,
+		"replacement start 5 beyond length")
+
+	// even doing nothing is illegal beyond the end
+	TestApp(t, `byte "self"; int 5; int 0; byte 0x; box_splice;
+                byte "self"; box_get; assert; byte 0x22333300; ==`, ep,
+		"replacement start 5 beyond length")
+
+	// overflow doesn't work
+	TestApp(t, `byte "self"; int 2; int 18446744073709551615; byte 0x; box_splice;
+                byte "self"; box_get; assert; byte 0x22333300; ==`, ep,
+		"splice end exceeds uint64")
 }
 
 func TestBoxAcrossTxns(t *testing.T) {
@@ -167,22 +241,37 @@ func TestDirtyTracking(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	ep, txn, ledger := MakeSampleEnv()
+	ep, txn, ledger := MakeSampleEnv() // has two box refs, "self", "other" = 200 budget
 
 	ledger.NewApp(txn.Sender, 888, basics.AppParams{})
 	TestApp(t, `byte "self"; int 200; box_create`, ep)
+	TestApp(t, `byte "self"; int 201; box_resize; int 1`, ep, "write budget")
 	TestApp(t, `byte "other"; int 201; box_create`, ep, "write budget")
 	// deleting "self" doesn't give extra write budget to create big "other"
-	TestApp(t, `byte "self"; box_del; !; byte "other"; int 201; box_create`, ep,
+	TestApp(t, `byte "self"; box_del; assert; byte "other"; int 201; box_create`, ep,
 		"write budget")
 
 	// though it cancels out a creation that happened here
 	TestApp(t, `byte "self"; int 200; box_create; assert
                       byte "self"; box_del; assert
-                      byte "self"; int 200; box_create;
+                      byte "other"; int 200; box_create;
                      `, ep)
-
 	ledger.DelBoxes(888, "self", "other")
+
+	// create 200, but shrink it, then the write budget frees up
+	TestApp(t, `byte "self"; int 200; box_create; assert
+                      byte "self"; int 150; box_resize;
+                      byte "other"; int 50; box_create;
+                     `, ep)
+	ledger.DelBoxes(888, "self", "other")
+
+	// confirm that the exactly right amount freed up
+	TestApp(t, `byte "self"; int 200; box_create; assert
+                      byte "self"; int 150; box_resize;
+                      byte "other"; int 51; box_create;
+                     `, ep, "write budget")
+	ledger.DelBoxes(888, "self", "other")
+
 	// same, but create a different box than deleted
 	TestApp(t, `byte "self"; int 200; box_create; assert
                       byte "self"; box_del; assert
@@ -217,6 +306,7 @@ func TestBoxUnavailableWithClearState(t *testing.T) {
 		"box_len":     `byte "self"; box_len`,
 		"box_put":     `byte "put"; byte "self"; box_put`,
 		"box_replace": `byte "self"; int 0; byte "new"; box_replace`,
+		"box_resize":  `byte "self"; int 10; box_resize`,
 	}
 
 	for name, program := range tests {
@@ -523,6 +613,8 @@ func TestEarlyPanics(t *testing.T) {
 		"box_len":     `byte "%s"; box_len`,
 		"box_put":     `byte "%s"; byte "hello"; box_put`,
 		"box_replace": `byte "%s"; int 0; byte "new"; box_replace`,
+		"box_splice":  `byte "%s"; int 0; int 2; byte "new"; box_splice`,
+		"box_resize":  `byte "%s"; int 2; box_resize`,
 	}
 
 	for name, program := range tests {

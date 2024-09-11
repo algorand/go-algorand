@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -130,7 +130,18 @@ func makeMockLedgerForTrackerWithLogger(t testing.TB, inMemory bool, initialBloc
 			Totals: totals,
 		}
 	}
-	return &mockLedgerForTracker{dbs: dbs, log: l, filename: fileName, inMemory: inMemory, blocks: blocks, deltas: deltas, consensusParams: config.Consensus[consensusVersion], consensusVersion: consensusVersion, accts: accts[0]}
+	ml := &mockLedgerForTracker{
+		dbs:      dbs,
+		log:      l,
+		filename: fileName,
+		inMemory: inMemory,
+		blocks:   blocks,
+		deltas:   deltas, consensusParams: config.Consensus[consensusVersion],
+		consensusVersion: consensusVersion,
+		accts:            accts[0],
+		trackers:         trackerRegistry{log: l},
+	}
+	return ml
 
 }
 
@@ -160,6 +171,7 @@ func (ml *mockLedgerForTracker) fork(t testing.TB) *mockLedgerForTracker {
 		filename:         fn,
 		consensusParams:  ml.consensusParams,
 		consensusVersion: ml.consensusVersion,
+		trackers:         trackerRegistry{log: dblogger},
 	}
 	for k, v := range ml.accts {
 		newLedgerTracker.accts[k] = v
@@ -385,11 +397,15 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, ao *onlineAccounts, base
 				// TODO: make lookupOnlineAccountData returning extended version of ledgercore.VotingData ?
 				od, err := ao.lookupOnlineAccountData(rnd, addr)
 				require.NoError(t, err)
-				require.Equal(t, od.VoteID, data.VoteID)
-				require.Equal(t, od.SelectionID, data.SelectionID)
-				require.Equal(t, od.VoteFirstValid, data.VoteFirstValid)
-				require.Equal(t, od.VoteLastValid, data.VoteLastValid)
-				require.Equal(t, od.VoteKeyDilution, data.VoteKeyDilution)
+
+				// If lookupOnlineAccountData returned something, it should agree with `data`.
+				if !od.VoteID.IsEmpty() {
+					require.Equal(t, od.VoteID, data.VoteID)
+					require.Equal(t, od.SelectionID, data.SelectionID)
+					require.Equal(t, od.VoteFirstValid, data.VoteFirstValid)
+					require.Equal(t, od.VoteLastValid, data.VoteLastValid)
+					require.Equal(t, od.VoteKeyDilution, data.VoteKeyDilution)
+				}
 
 				rewardsDelta := rewards[rnd] - d.RewardsBase
 				switch d.Status {
@@ -425,7 +441,7 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, ao *onlineAccounts, base
 			require.Equal(t, d, ledgercore.AccountData{})
 			od, err := ao.lookupOnlineAccountData(rnd, ledgertesting.RandomAddress())
 			require.NoError(t, err)
-			require.Equal(t, od, ledgercore.OnlineAccountData{})
+			require.Equal(t, od, basics.OnlineAccountData{})
 		}
 	}
 	checkAcctUpdatesConsistency(t, au, latestRnd)
@@ -504,6 +520,11 @@ func checkOnlineAcctUpdatesConsistency(t *testing.T, ao *onlineAccounts, rnd bas
 	for i := 0; i < latest.Len(); i++ {
 		addr, acct := latest.GetByIdx(i)
 		od, err := ao.lookupOnlineAccountData(rnd, addr)
+		if od.VoteID.IsEmpty() {
+			// suspended accounts will be in `latest` (from ao.deltas), but
+			// `lookupOnlineAccountData` will return {}.
+			continue
+		}
 		require.NoError(t, err)
 		require.Equal(t, acct.VoteID, od.VoteID)
 		require.Equal(t, acct.SelectionID, od.SelectionID)

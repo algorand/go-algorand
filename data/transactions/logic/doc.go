@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -37,6 +37,9 @@ var opDescByName = map[string]OpDesc{
 	"keccak256":  {"Keccak256 hash of value A, yields [32]byte", "", nil},
 	"sha512_256": {"SHA512_256 hash of value A, yields [32]byte", "", nil},
 	"sha3_256":   {"SHA3_256 hash of value A, yields [32]byte", "", nil},
+
+	"sumhash512":    {"sumhash512 of value A, yields [64]byte", "", nil},
+	"falcon_verify": {"for (data A, compressed-format signature B, pubkey C) verify the signature of data against the pubkey", "", nil},
 
 	"ed25519verify":       {"for (data A, signature B, pubkey C) verify the signature of (\"ProgData\" || program_hash || data) against the pubkey => {0 or 1}", "The 32 byte public key is the last element on the stack, preceded by the 64 byte signature at the second-to-last element on the stack, preceded by the data which was signed at the third-to-last element on the stack.", nil},
 	"ed25519verify_bare":  {"for (data A, signature B, pubkey C) verify the signature of the data against the pubkey => {0 or 1}", "", nil},
@@ -247,6 +250,8 @@ var opDescByName = map[string]OpDesc{
 	"asset_params_get":  {"X is field F from asset A. Y is 1 if A exists, else 0", "params: Txn.ForeignAssets offset (or, since v4, an _available_ asset id. Return: did_exist flag (1 if the asset existed and 0 otherwise), value.", []string{"asset params field index"}},
 	"app_params_get":    {"X is field F from app A. Y is 1 if A exists, else 0", "params: Txn.ForeignApps offset or an _available_ app id. Return: did_exist flag (1 if the application existed and 0 otherwise), value.", []string{"app params field index"}},
 	"acct_params_get":   {"X is field F from account A. Y is 1 if A owns positive algos, else 0", "", []string{"account params field index"}},
+	"voter_params_get":  {"X is field F from online account A as of the balance round: 320 rounds before the current round. Y is 1 if A had positive algos online in the agreement round, else Y is 0 and X is a type specific zero-value", "", []string{"voter params field index"}},
+	"online_stake":      {"the total online stake in the agreement round", "", nil},
 	"assert":            {"immediately fail unless A is a non-zero number", "", nil},
 	"callsub":           {"branch unconditionally to TARGET, saving the next instruction on the call stack", "The call stack is separate from the data stack. Only `callsub`, `retsub`, and `proto` manipulate it.", []string{"branch offset"}},
 	"proto":             {"Prepare top call frame for a retsub that will assume A args and R return values.", "Fails unless the last instruction executed was a `callsub`.", []string{"number of arguments", "number of return values"}},
@@ -286,13 +291,15 @@ var opDescByName = map[string]OpDesc{
 	"frame_bury": {"replace the Nth (signed) value from the frame pointer in the stack with A", "", []string{"frame slot"}},
 	"popn":       {"remove N values from the top of the stack", "", []string{"stack depth"}},
 
-	"box_create":  {"create a box named A, of length B. Fail if A is empty or B exceeds 32,768. Returns 0 if A already existed, else 1", "Newly created boxes are filled with 0 bytes. `box_create` will fail if the referenced box already exists with a different size. Otherwise, existing boxes are unchanged by `box_create`.", nil},
+	"box_create":  {"create a box named A, of length B. Fail if the name A is empty or B exceeds 32,768. Returns 0 if A already existed, else 1", "Newly created boxes are filled with 0 bytes. `box_create` will fail if the referenced box already exists with a different size. Otherwise, existing boxes are unchanged by `box_create`.", nil},
 	"box_extract": {"read C bytes from box A, starting at offset B. Fail if A does not exist, or the byte range is outside A's size.", "", nil},
 	"box_replace": {"write byte-array C into box A, starting at offset B. Fail if A does not exist, or the byte range is outside A's size.", "", nil},
+	"box_splice":  {"set box A to contain its previous bytes up to index B, followed by D, followed by the original bytes of A that began at index B+C.", "Boxes are of constant length. If C < len(D), then len(D)-C bytes will be removed from the end. If C > len(D), zero bytes will be appended to the end to reach the box length.", nil},
 	"box_del":     {"delete box named A if it exists. Return 1 if A existed, 0 otherwise", "", nil},
 	"box_len":     {"X is the length of box A if A exists, else 0. Y is 1 if A exists, else 0.", "", nil},
 	"box_get":     {"X is the contents of box A if A exists, else ''. Y is 1 if A exists, else 0.", "For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `box_replace`", nil},
 	"box_put":     {"replaces the contents of box A with byte-array B. Fails if A exists and len(B) != len(box A). Creates A if it does not exist", "For boxes that exceed 4,096 bytes, consider `box_create`, `box_extract`, and `box_replace`", nil},
+	"box_resize":  {"change the size of box named A to be of length B, adding zero bytes to end or removing bytes from the end, as needed. Fail if the name A is empty, A is not an existing box, or B exceeds 32,768.", "", nil},
 }
 
 // OpDoc returns a description of the op
@@ -347,11 +354,11 @@ var OpGroups = map[string][]string{
 	"Byte Array Manipulation": {"getbit", "setbit", "getbyte", "setbyte", "concat", "len", "substring", "substring3", "extract", "extract3", "extract_uint16", "extract_uint32", "extract_uint64", "replace2", "replace3", "base64_decode", "json_ref"},
 	"Byte Array Arithmetic":   {"b+", "b-", "b/", "b*", "b<", "b>", "b<=", "b>=", "b==", "b!=", "b%", "bsqrt"},
 	"Byte Array Logic":        {"b|", "b&", "b^", "b~"},
-	"Cryptography":            {"sha256", "keccak256", "sha512_256", "sha3_256", "ed25519verify", "ed25519verify_bare", "ecdsa_verify", "ecdsa_pk_recover", "ecdsa_pk_decompress", "vrf_verify", "ec_add", "ec_scalar_mul", "ec_pairing_check", "ec_multi_scalar_mul", "ec_subgroup_check", "ec_map_to"},
+	"Cryptography":            {"sha256", "keccak256", "sha512_256", "sha3_256", "sumhash512", "falcon_verify", "ed25519verify", "ed25519verify_bare", "ecdsa_verify", "ecdsa_pk_recover", "ecdsa_pk_decompress", "vrf_verify", "ec_add", "ec_scalar_mul", "ec_pairing_check", "ec_multi_scalar_mul", "ec_subgroup_check", "ec_map_to"},
 	"Loading Values":          {"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "pushint", "pushints", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "pushbytes", "pushbytess", "bzero", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "args", "txn", "gtxn", "txna", "txnas", "gtxna", "gtxnas", "gtxns", "gtxnsa", "gtxnsas", "global", "load", "loads", "store", "stores", "gload", "gloads", "gloadss", "gaid", "gaids"},
 	"Flow Control":            {"err", "bnz", "bz", "b", "return", "pop", "popn", "dup", "dup2", "dupn", "dig", "bury", "cover", "uncover", "frame_dig", "frame_bury", "swap", "select", "assert", "callsub", "proto", "retsub", "switch", "match"},
-	"State Access":            {"balance", "min_balance", "app_opted_in", "app_local_get", "app_local_get_ex", "app_global_get", "app_global_get_ex", "app_local_put", "app_global_put", "app_local_del", "app_global_del", "asset_holding_get", "asset_params_get", "app_params_get", "acct_params_get", "log", "block"},
-	"Box Access":              {"box_create", "box_extract", "box_replace", "box_del", "box_len", "box_get", "box_put"},
+	"State Access":            {"balance", "min_balance", "app_opted_in", "app_local_get", "app_local_get_ex", "app_global_get", "app_global_get_ex", "app_local_put", "app_global_put", "app_local_del", "app_global_del", "asset_holding_get", "asset_params_get", "app_params_get", "acct_params_get", "voter_params_get", "online_stake", "log", "block"},
+	"Box Access":              {"box_create", "box_extract", "box_replace", "box_splice", "box_del", "box_len", "box_get", "box_put", "box_resize"},
 	"Inner Transactions":      {"itxn_begin", "itxn_next", "itxn_field", "itxn_submit", "itxn", "itxna", "itxnas", "gitxn", "gitxna", "gitxnas"},
 }
 

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -221,6 +221,12 @@ func TestSendSigsAfterCatchpointCatchup(t *testing.T) {
 	var fixture fixtures.RestClientFixture
 	fixture.SetConsensus(configurableConsensus)
 	fixture.SetupNoStart(t, filepath.Join("nettemplates", "ThreeNodesWithRichAcct.json"))
+	for _, nodeDir := range fixture.NodeDataDirs() {
+		cfg, err := config.LoadConfigFromDisk(nodeDir)
+		a.NoError(err)
+		cfg.GoMemLimit = 4 * 1024 * 1024 * 1024 // 4GB
+		cfg.SaveToDisk(nodeDir)
+	}
 
 	primaryNode, primaryNodeRestClient, primaryEC := startCatchpointGeneratingNode(a, &fixture, "Primary")
 	defer primaryEC.Print()

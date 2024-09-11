@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -27,7 +27,6 @@ import (
 	"runtime"
 	"sort"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 	"golang.org/x/exp/slices"
@@ -54,6 +53,8 @@ import (
 	"github.com/algorand/go-deadlock"
 )
 
+const preReleaseDBVersion = 6
+
 func sign(secrets map[basics.Address]*crypto.SignatureSecrets, t transactions.Transaction) transactions.SignedTxn {
 	var sig crypto.Signature
 	_, ok := secrets[t.Sender]
@@ -72,7 +73,7 @@ func (l *Ledger) appendUnvalidated(blk bookkeeping.Block) error {
 	l.verifiedTxnCache = verify.GetMockedCache(false)
 	vb, err := l.Validate(context.Background(), blk, backlogPool)
 	if err != nil {
-		return fmt.Errorf("appendUnvalidated error in Validate: %s", err.Error())
+		return fmt.Errorf("appendUnvalidated error in Validate: %w", err)
 	}
 
 	return l.AddValidatedBlock(*vb, agreement.Certificate{})
@@ -101,6 +102,22 @@ func initNextBlockHeader(correctHeader *bookkeeping.BlockHeader, lastBlock bookk
 	}
 }
 
+// endOfBlock is simplified implementation of BlockEvaluator.endOfBlock so that
+// our test blocks can pass validation.
+func endOfBlock(blk *bookkeeping.Block) error {
+	if blk.ConsensusProtocol().Payouts.Enabled {
+		// This won't work for inner fees, and it's not bothering with overflow
+		for _, txn := range blk.Payset {
+			blk.FeesCollected.Raw += txn.Txn.Fee.Raw
+		}
+		// blk.ProposerPayout is allowed to be zero, so don't reproduce the calc here.
+		blk.BlockHeader.Proposer = basics.Address{0x01} // Must be set to _something_.
+	}
+	var err error
+	blk.TxnCommitments, err = blk.PaysetCommit()
+	return err
+}
+
 func makeNewEmptyBlock(t *testing.T, l *Ledger, GenesisID string, initAccounts map[basics.Address]basics.AccountData) (blk bookkeeping.Block) {
 	a := require.New(t)
 
@@ -127,13 +144,14 @@ func makeNewEmptyBlock(t *testing.T, l *Ledger, GenesisID string, initAccounts m
 	a.NoError(err, "could not get incentive pool balance")
 
 	blk.BlockHeader = bookkeeping.BlockHeader{
-		GenesisID:    GenesisID,
-		Round:        l.Latest() + 1,
-		Branch:       lastBlock.Hash(),
+		Round:  l.Latest() + 1,
+		Branch: lastBlock.Hash(),
+		// Seed:       does not matter,
 		TimeStamp:    0,
+		GenesisID:    GenesisID,
+		Bonus:        bookkeeping.NextBonus(lastBlock.BlockHeader, &proto),
 		RewardsState: lastBlock.NextRewardsState(l.Latest()+1, proto, poolBal.MicroAlgos, totalRewardUnits, logging.Base()),
 		UpgradeState: lastBlock.UpgradeState,
-		// Seed:       does not matter,
 		// UpgradeVote: empty,
 	}
 
@@ -171,12 +189,11 @@ func (l *Ledger) appendUnvalidatedSignedTx(t *testing.T, initAccounts map[basics
 	if err != nil {
 		return fmt.Errorf("could not sign txn: %s", err.Error())
 	}
+	blk.Payset = append(blk.Payset, txib)
 	if proto.TxnCounter {
 		blk.TxnCounter = blk.TxnCounter + 1
 	}
-	blk.Payset = append(blk.Payset, txib)
-	blk.TxnCommitments, err = blk.PaysetCommit()
-	require.NoError(t, err)
+	require.NoError(t, endOfBlock(&blk))
 	return l.appendUnvalidated(blk)
 }
 
@@ -242,13 +259,13 @@ func TestLedgerBlockHeaders(t *testing.T) {
 	a.NoError(err, "could not get incentive pool balance")
 
 	correctHeader := bookkeeping.BlockHeader{
-		GenesisID:    t.Name(),
-		Round:        l.Latest() + 1,
-		Branch:       lastBlock.Hash(),
+		Round:  l.Latest() + 1,
+		Branch: lastBlock.Hash(),
+		// Seed:       does not matter,
 		TimeStamp:    0,
+		GenesisID:    t.Name(),
 		RewardsState: lastBlock.NextRewardsState(l.Latest()+1, proto, poolBal.MicroAlgos, totalRewardUnits, logging.Base()),
 		UpgradeState: lastBlock.UpgradeState,
-		// Seed:       does not matter,
 		// UpgradeVote: empty,
 	}
 
@@ -271,55 +288,72 @@ func TestLedgerBlockHeaders(t *testing.T) {
 
 	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
 	badBlock.BlockHeader.Round++
-	a.Error(l.appendUnvalidated(badBlock), "added block header with round that was too high")
+	a.ErrorContains(l.appendUnvalidated(badBlock), "ledger does not have entry")
 
 	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
 	badBlock.BlockHeader.Round--
-	a.Error(l.appendUnvalidated(badBlock), "added block header with round that was too low")
+	a.ErrorIs(l.appendUnvalidated(badBlock), eval.ErrRoundZero)
 
 	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
 	badBlock.BlockHeader.Round = 0
-	a.Error(l.appendUnvalidated(badBlock), "added block header with round 0")
+	a.ErrorIs(l.appendUnvalidated(badBlock), eval.ErrRoundZero)
 
 	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
 	badBlock.BlockHeader.GenesisID = ""
-	a.Error(l.appendUnvalidated(badBlock), "added block header with empty genesis ID")
+	a.ErrorContains(l.appendUnvalidated(badBlock), "genesis ID missing")
 
 	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
 	badBlock.BlockHeader.GenesisID = "incorrect"
-	a.Error(l.appendUnvalidated(badBlock), "added block header with incorrect genesis ID")
+	a.ErrorContains(l.appendUnvalidated(badBlock), "genesis ID mismatch")
 
 	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
 	badBlock.BlockHeader.UpgradePropose = "invalid"
-	a.Error(l.appendUnvalidated(badBlock), "added block header with invalid upgrade proposal")
+	a.ErrorContains(l.appendUnvalidated(badBlock), "proposed upgrade wait rounds 0")
+
+	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
+	badBlock.BlockHeader.UpgradePropose = "invalid"
+	badBlock.BlockHeader.UpgradeDelay = 20000
+	a.ErrorContains(l.appendUnvalidated(badBlock), "UpgradeState mismatch")
 
 	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
 	badBlock.BlockHeader.UpgradeApprove = true
-	a.Error(l.appendUnvalidated(badBlock), "added block header with upgrade approve set but no open upgrade")
+	a.ErrorContains(l.appendUnvalidated(badBlock), "approval without an active proposal")
 
 	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
 	badBlock.BlockHeader.CurrentProtocol = "incorrect"
-	a.Error(l.appendUnvalidated(badBlock), "added block header with incorrect current protocol")
+	a.ErrorContains(l.appendUnvalidated(badBlock), "protocol not supported")
 
 	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
 	badBlock.BlockHeader.CurrentProtocol = ""
-	a.Error(l.appendUnvalidated(badBlock), "added block header with empty current protocol")
+	a.ErrorContains(l.appendUnvalidated(badBlock), "protocol not supported", "header with empty current protocol")
+
+	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
+	var wrongVersion protocol.ConsensusVersion
+	for ver := range config.Consensus {
+		if ver != correctHeader.CurrentProtocol {
+			wrongVersion = ver
+			break
+		}
+	}
+	a.NotEmpty(wrongVersion)
+	badBlock.BlockHeader.CurrentProtocol = wrongVersion
+	a.ErrorContains(l.appendUnvalidated(badBlock), "UpgradeState mismatch")
 
 	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
 	badBlock.BlockHeader.NextProtocol = "incorrect"
-	a.Error(l.appendUnvalidated(badBlock), "added block header with incorrect next protocol")
+	a.ErrorContains(l.appendUnvalidated(badBlock), "UpgradeState mismatch", "added block header with incorrect next protocol")
 
 	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
 	badBlock.BlockHeader.NextProtocolApprovals++
-	a.Error(l.appendUnvalidated(badBlock), "added block header with incorrect number of upgrade approvals")
+	a.ErrorContains(l.appendUnvalidated(badBlock), "UpgradeState mismatch", "added block header with incorrect number of upgrade approvals")
 
 	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
 	badBlock.BlockHeader.NextProtocolVoteBefore++
-	a.Error(l.appendUnvalidated(badBlock), "added block header with incorrect next protocol vote deadline")
+	a.ErrorContains(l.appendUnvalidated(badBlock), "UpgradeState mismatch", "added block header with incorrect next protocol vote deadline")
 
 	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
 	badBlock.BlockHeader.NextProtocolSwitchOn++
-	a.Error(l.appendUnvalidated(badBlock), "added block header with incorrect next protocol switch round")
+	a.ErrorContains(l.appendUnvalidated(badBlock), "UpgradeState mismatch", "added block header with incorrect next protocol switch round")
 
 	// TODO test upgrade cases with a valid upgrade in progress
 
@@ -327,33 +361,33 @@ func TestLedgerBlockHeaders(t *testing.T) {
 
 	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
 	badBlock.BlockHeader.Branch = bookkeeping.BlockHash{}
-	a.Error(l.appendUnvalidated(badBlock), "added block header with empty previous-block hash")
+	a.ErrorContains(l.appendUnvalidated(badBlock), "block branch incorrect")
 
 	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
 	badBlock.BlockHeader.Branch[0]++
-	a.Error(l.appendUnvalidated(badBlock), "added block header with incorrect previous-block hash")
+	a.ErrorContains(l.appendUnvalidated(badBlock), "block branch incorrect")
 
 	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
 	badBlock.BlockHeader.RewardsLevel++
-	a.Error(l.appendUnvalidated(badBlock), "added block header with incorrect rewards level")
+	a.ErrorContains(l.appendUnvalidated(badBlock), "bad rewards state")
 
 	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
 	badBlock.BlockHeader.RewardsRate++
-	a.Error(l.appendUnvalidated(badBlock), "added block header with incorrect rewards rate")
+	a.ErrorContains(l.appendUnvalidated(badBlock), "bad rewards state")
 
 	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
 	badBlock.BlockHeader.RewardsResidue++
-	a.Error(l.appendUnvalidated(badBlock), "added block header with incorrect rewards residue")
+	a.ErrorContains(l.appendUnvalidated(badBlock), "bad rewards state")
 
 	// TODO test rewards cases with changing poolAddr money, with changing round, and with changing total reward units
 
 	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
 	badBlock.BlockHeader.TxnCommitments.NativeSha512_256Commitment = crypto.Hash([]byte{0})
-	a.Error(l.appendUnvalidated(badBlock), "added block header with empty transaction root")
+	a.ErrorContains(l.appendUnvalidated(badBlock), "txn root wrong")
 
 	badBlock = bookkeeping.Block{BlockHeader: correctHeader}
 	badBlock.BlockHeader.TxnCommitments.NativeSha512_256Commitment[0]++
-	a.Error(l.appendUnvalidated(badBlock), "added block header with invalid transaction root")
+	a.ErrorContains(l.appendUnvalidated(badBlock), "txn root wrong")
 
 	correctBlock := bookkeeping.Block{BlockHeader: correctHeader}
 	a.NoError(l.appendUnvalidated(correctBlock), "could not add block with correct header")
@@ -656,42 +690,36 @@ func TestLedgerSingleTxV24(t *testing.T) {
 	badTx = correctAssetConfig
 	badTx.ConfigAsset = 2
 	err = l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad)
-	a.Error(err)
-	a.Contains(err.Error(), "asset 2 does not exist or has been deleted")
+	a.ErrorContains(err, "asset 2 does not exist or has been deleted")
 
 	badTx = correctAssetConfig
 	badTx.ConfigAsset = assetIdx
 	badTx.AssetFrozen = true
 	err = l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad)
-	a.Error(err)
-	a.Contains(err.Error(), "type acfg has non-zero fields for type afrz")
+	a.ErrorContains(err, "type acfg has non-zero fields for type afrz")
 
 	badTx = correctAssetConfig
 	badTx.ConfigAsset = assetIdx
 	badTx.Sender = addrList[1]
 	badTx.AssetParams.Freeze = addrList[0]
 	err = l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad)
-	a.Error(err)
-	a.Contains(err.Error(), "this transaction should be issued by the manager")
+	a.ErrorContains(err, "this transaction should be issued by the manager")
 
 	badTx = correctAssetConfig
 	badTx.AssetParams.UnitName = "very long unit name that exceeds the limit"
 	err = l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad)
-	a.Error(err)
-	a.Contains(err.Error(), "transaction asset unit name too big: 42 > 8")
+	a.ErrorContains(err, "transaction asset unit name too big: 42 > 8")
 
 	badTx = correctAssetTransfer
 	badTx.XferAsset = assetIdx
 	badTx.AssetAmount = 101
 	err = l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad)
-	a.Error(err)
-	a.Contains(err.Error(), "underflow on subtracting 101 from sender amount 100")
+	a.ErrorContains(err, "underflow on subtracting 101 from sender amount 100")
 
 	badTx = correctAssetTransfer
 	badTx.XferAsset = assetIdx
 	err = l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad)
-	a.Error(err)
-	a.Contains(err.Error(), fmt.Sprintf("asset %d missing from", assetIdx))
+	a.ErrorContains(err, fmt.Sprintf("asset %d missing from", assetIdx))
 
 	a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctAppCreate, ad))
 	appIdx = 2 // the second successful txn
@@ -701,24 +729,20 @@ func TestLedgerSingleTxV24(t *testing.T) {
 	program[0] = '\x01'
 	badTx.ApprovalProgram = program
 	err = l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad)
-	a.Error(err)
-	a.Contains(err.Error(), "program version must be >= 2")
+	a.ErrorContains(err, "program version must be >= 2")
 
 	badTx = correctAppCreate
 	badTx.ApplicationID = appIdx
 	err = l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad)
-	a.Error(err)
-	a.Contains(err.Error(), "programs may only be specified during application creation or update")
+	a.ErrorContains(err, "programs may only be specified during application creation or update")
 
 	badTx = correctAppCall
 	badTx.ApplicationID = 0
 	err = l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad)
-	a.Error(err)
-	a.Contains(err.Error(), "ApprovalProgram: invalid program (empty)")
+	a.ErrorContains(err, "ApprovalProgram: invalid program (empty)")
 	badTx.ApprovalProgram = []byte{242}
 	err = l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad)
-	a.Error(err)
-	a.Contains(err.Error(), "ApprovalProgram: invalid version")
+	a.ErrorContains(err, "ApprovalProgram: invalid version")
 
 	correctAppCall.ApplicationID = appIdx
 	a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctAppCall, ad))
@@ -1249,13 +1273,14 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 			a.NoError(err, "could not get last block")
 
 			correctHeader := bookkeeping.BlockHeader{
-				GenesisID:    t.Name(),
-				Round:        l.Latest() + 1,
-				Branch:       lastBlock.Hash(),
+				Round:  l.Latest() + 1,
+				Branch: lastBlock.Hash(),
+				// Seed:       does not matter,
 				TimeStamp:    0,
+				GenesisID:    t.Name(),
+				Bonus:        bookkeeping.NextBonus(lastBlock.BlockHeader, &proto),
 				RewardsState: lastBlock.NextRewardsState(l.Latest()+1, proto, poolBal.MicroAlgos, totalRewardUnits, logging.Base()),
 				UpgradeState: lastBlock.UpgradeState,
-				// Seed:       does not matter,
 				// UpgradeVote: empty,
 			}
 			correctHeader.RewardsPool = testPoolAddr
@@ -1268,8 +1293,7 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 			initNextBlockHeader(&correctHeader, lastBlock, proto)
 
 			correctBlock := bookkeeping.Block{BlockHeader: correctHeader}
-			correctBlock.TxnCommitments, err = correctBlock.PaysetCommit()
-			a.NoError(err)
+			a.NoError(endOfBlock(&correctBlock))
 
 			a.NoError(l.appendUnvalidated(correctBlock), "could not add block with correct header")
 		}
@@ -1443,30 +1467,43 @@ func benchLedgerCache(b *testing.B, startRound basics.Round) {
 	}
 }
 
-func triggerTrackerFlush(t *testing.T, l *Ledger, genesisInitState ledgercore.InitState) {
+// triggerTrackerFlush is based in the commit flow but executed it in a single (this) goroutine.
+func triggerTrackerFlush(t *testing.T, l *Ledger) {
 	l.trackers.mu.Lock()
-	initialDbRound := l.trackers.dbRound
-	currentDbRound := initialDbRound
-	l.trackers.lastFlushTime = time.Time{}
+	dbRound := l.trackers.dbRound
 	l.trackers.mu.Unlock()
 
-	const timeout = 3 * time.Second
-	started := time.Now()
-
-	// We can't truly wait for scheduleCommit to take place, which means without waiting using sleeps
-	// we might beat scheduleCommit's addition to accountsWriting, making our wait on it continue immediately.
-	// The solution is to continue to add blocks and  wait for the advancement of l.trackers.dbRound,
-	// which is a side effect of postCommit's success.
-	for currentDbRound == initialDbRound {
-		time.Sleep(50 * time.Microsecond)
-		require.True(t, time.Since(started) < timeout)
-		addEmptyValidatedBlock(t, l, genesisInitState.Accounts)
-		l.WaitForCommit(l.Latest())
-		l.trackers.mu.RLock()
-		currentDbRound = l.trackers.dbRound
-		l.trackers.mu.RUnlock()
+	rnd := l.Latest()
+	minBlock := rnd
+	maxLookback := basics.Round(0)
+	for _, lt := range l.trackers.trackers {
+		retainRound, lookback := lt.committedUpTo(rnd)
+		if retainRound < minBlock {
+			minBlock = retainRound
+		}
+		if lookback > maxLookback {
+			maxLookback = lookback
+		}
 	}
-	l.trackers.waitAccountsWriting()
+
+	dcc := &deferredCommitContext{
+		deferredCommitRange: deferredCommitRange{
+			lookback: maxLookback,
+		},
+	}
+
+	l.trackers.mu.RLock()
+	cdr := l.trackers.produceCommittingTask(rnd, dbRound, &dcc.deferredCommitRange)
+	if cdr != nil {
+		dcc.deferredCommitRange = *cdr
+	} else {
+		dcc = nil
+	}
+	l.trackers.mu.RUnlock()
+	if dcc != nil {
+		l.trackers.accountsWriting.Add(1)
+		l.trackers.commitRound(dcc)
+	}
 }
 
 func testLedgerReload(t *testing.T, cfg config.Local) {
@@ -1646,7 +1683,16 @@ func TestLedgerVerifiesOldStateProofs(t *testing.T) {
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	defer backlogPool.Shutdown()
 
-	triggerTrackerFlush(t, l, genesisInitState)
+	// wait all pending commits to finish
+	l.trackers.accountsWriting.Wait()
+
+	// quit the commitSyncer goroutine: this test flushes manually with triggerTrackerFlush
+	l.trackers.ctxCancel()
+	l.trackers.ctxCancel = nil
+	<-l.trackers.commitSyncerClosed
+	l.trackers.commitSyncerClosed = nil
+
+	triggerTrackerFlush(t, l)
 	l.WaitForCommit(l.Latest())
 	blk := createBlkWithStateproof(t, maxBlocks, proto, genesisInitState, l, accounts)
 	_, err = l.Validate(context.Background(), blk, backlogPool)
@@ -1656,7 +1702,7 @@ func TestLedgerVerifiesOldStateProofs(t *testing.T) {
 		addDummyBlock(t, addresses, proto, l, initKeys, genesisInitState)
 	}
 
-	triggerTrackerFlush(t, l, genesisInitState)
+	triggerTrackerFlush(t, l)
 	addDummyBlock(t, addresses, proto, l, initKeys, genesisInitState)
 	l.WaitForCommit(l.Latest())
 	// At this point the block queue go-routine will start removing block . However, it might not complete the task
@@ -1677,7 +1723,7 @@ func TestLedgerVerifiesOldStateProofs(t *testing.T) {
 	}
 	l.acctsOnline.voters.votersMu.Unlock()
 
-	// However, we are still able to very a state proof sicne we use the tracker
+	// However, we are still able to very a state proof since we use the tracker
 	blk = createBlkWithStateproof(t, maxBlocks, proto, genesisInitState, l, accounts)
 	_, err = l.Validate(context.Background(), blk, backlogPool)
 	require.ErrorContains(t, err, "state proof crypto error")
@@ -1755,6 +1801,9 @@ func TestLedgerMemoryLeak(t *testing.T) {
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Info)   // prevent spamming with ledger.AddValidatedBlock debug message
 	deadlock.Opts.Disable = true // catchpoint writing might take long
+	defer func() {
+		deadlock.Opts.Disable = false
+	}()
 	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	defer l.Close()
@@ -2143,6 +2192,42 @@ func TestLedgerReloadShrinkDeltas(t *testing.T) {
 	}
 }
 
+func resetAccountDBToV6(t *testing.T, l *Ledger) {
+	// reset tables and re-init again, similary to the catchpount apply code
+	// since the ledger has only genesis accounts, this recreates them
+	err := l.trackerDBs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) error {
+		arw, err := tx.MakeAccountsWriter()
+		if err != nil {
+			return err
+		}
+
+		err0 := arw.AccountsReset(ctx)
+		if err0 != nil {
+			return err0
+		}
+		tp := trackerdb.Params{
+			InitAccounts:      l.GenesisAccounts(),
+			InitProto:         l.GenesisProtoVersion(),
+			GenesisHash:       l.GenesisHash(),
+			FromCatchpoint:    true,
+			CatchpointEnabled: l.catchpoint.catchpointEnabled(),
+			DbPathPrefix:      l.catchpoint.dbDirectory,
+			BlockDb:           l.blockDBs,
+		}
+		_, err0 = tx.RunMigrations(ctx, tp, l.log, preReleaseDBVersion /*target database version*/)
+		if err0 != nil {
+			return err0
+		}
+
+		if err0 := tx.Testing().AccountsUpdateSchemaTest(ctx); err != nil {
+			return err0
+		}
+
+		return nil
+	})
+	require.NoError(t, err)
+}
+
 // TestLedgerReloadTxTailHistoryAccess checks txtail has MaxTxnLife + DeeperBlockHeaderHistory block headers
 // for TEAL after applying catchpoint.
 // Simulate catchpoints by the following:
@@ -2153,8 +2238,6 @@ func TestLedgerReloadShrinkDeltas(t *testing.T) {
 // 5. Expect the txn to be accepted
 func TestLedgerReloadTxTailHistoryAccess(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
-	const preReleaseDBVersion = 6
 
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	genesisInitState, initKeys := ledgertesting.GenerateInitState(t, protocol.ConsensusCurrentVersion, 10_000_000_000)
@@ -2196,11 +2279,7 @@ func TestLedgerReloadTxTailHistoryAccess(t *testing.T) {
 			return err0
 		}
 
-		if err0 := tx.Testing().AccountsUpdateSchemaTest(ctx); err != nil {
-			return err0
-		}
-
-		return nil
+		return tx.Testing().AccountsUpdateSchemaTest(ctx)
 	})
 	require.NoError(t, err)
 
@@ -2767,11 +2846,11 @@ func verifyVotersContent(t *testing.T, expected map[basics.Round]*ledgercore.Vot
 
 func triggerDeleteVoters(t *testing.T, l *Ledger, genesisInitState ledgercore.InitState) {
 	// We make the ledger flush tracker data to allow votersTracker to advance lowestRound
-	triggerTrackerFlush(t, l, genesisInitState)
+	triggerTrackerFlush(t, l)
 
 	// We add another block to make the block queue query the voter's tracker lowest round again, which allows it to forget
 	// rounds based on the new lowest round.
-	triggerTrackerFlush(t, l, genesisInitState)
+	triggerTrackerFlush(t, l)
 }
 
 func testVotersReloadFromDisk(t *testing.T, cfg config.Local) {
@@ -2796,7 +2875,7 @@ func testVotersReloadFromDisk(t *testing.T, cfg config.Local) {
 
 	// at this point the database should contain the voter for round 256 but the voters for round 512 should be in deltas
 	l.WaitForCommit(l.Latest())
-	triggerTrackerFlush(t, l, genesisInitState)
+	triggerTrackerFlush(t, l)
 	vtSnapshot := l.acctsOnline.voters.votersForRoundCache
 
 	// ensuring no tree was evicted.
@@ -2831,10 +2910,16 @@ func testVotersReloadFromDiskAfterOneStateProofCommitted(t *testing.T, cfg confi
 	const inMem = true
 
 	log := logging.TestingLog(t)
-	log.SetLevel(logging.Info)
+	log.SetLevel(logging.Debug)
 	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	defer l.Close()
+
+	// quit the commitSyncer goroutine: this test flushes manually with triggerTrackerFlush
+	l.trackers.ctxCancel()
+	l.trackers.ctxCancel = nil
+	<-l.trackers.commitSyncerClosed
+	l.trackers.commitSyncerClosed = nil
 
 	blk := genesisInitState.Block
 
@@ -2850,6 +2935,9 @@ func testVotersReloadFromDiskAfterOneStateProofCommitted(t *testing.T, cfg confi
 		blk.BlockHeader.Round++
 		err = l.AddBlock(blk, agreement.Certificate{})
 		require.NoError(t, err)
+		if i > 0 && i%100 == 0 {
+			triggerTrackerFlush(t, l)
+		}
 	}
 
 	// we simulate that the stateproof for round 512 is confirmed on chain, and we can move to the next one.
@@ -2862,14 +2950,39 @@ func testVotersReloadFromDiskAfterOneStateProofCommitted(t *testing.T, cfg confi
 		blk.BlockHeader.Round++
 		err = l.AddBlock(blk, agreement.Certificate{})
 		require.NoError(t, err)
+		if i%100 == 0 {
+			triggerTrackerFlush(t, l)
+		}
 	}
 
-	triggerDeleteVoters(t, l, genesisInitState)
-	vtSnapshot := l.acctsOnline.voters.votersForRoundCache
+	// flush remaining blocks
+	triggerTrackerFlush(t, l)
 
-	// verifying that the tree for round 512 is still in the cache, but the tree for round 256 is evicted.
-	require.Contains(t, vtSnapshot, basics.Round(496))
-	require.NotContains(t, vtSnapshot, basics.Round(240))
+	var vtSnapshot map[basics.Round]*ledgercore.VotersForRound
+	func() {
+		// grab internal lock in order to access the voters tracker
+		// since the assert below might fail, use a nested scope to ensure the lock is released
+		l.acctsOnline.voters.votersMu.Lock()
+		defer l.acctsOnline.voters.votersMu.Unlock()
+
+		vtSnapshot = l.acctsOnline.voters.votersForRoundCache
+
+		// verifying that the tree for round 512 is still in the cache, but the tree for round 256 is evicted.
+		require.Contains(t, vtSnapshot, basics.Round(496))
+		require.NotContains(t, vtSnapshot, basics.Round(240))
+	}()
+
+	t.Log("reloading ledger")
+	// drain any deferred commits since AddBlock above triggered scheduleCommit
+outer:
+	for {
+		select {
+		case <-l.trackers.deferredCommits:
+			l.trackers.accountsWriting.Done()
+		default:
+			break outer
+		}
+	}
 
 	err = l.reloadLedger()
 	require.NoError(t, err)
@@ -2884,6 +2997,7 @@ func TestVotersReloadFromDiskAfterOneStateProofCommitted(t *testing.T) {
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = false
 	cfg.MaxAcctLookback = proto.StateProofInterval - proto.StateProofVotersLookback - 10
+	cfg.CatchpointInterval = 0 // no need catchpoint for this test
 
 	ledgertesting.WithAndWithoutLRUCache(t, cfg, testVotersReloadFromDiskAfterOneStateProofCommitted)
 }
@@ -3028,7 +3142,7 @@ func TestLedgerSPVerificationTracker(t *testing.T) {
 	}
 
 	l.WaitForCommit(l.Latest())
-	triggerTrackerFlush(t, l, genesisInitState)
+	triggerTrackerFlush(t, l)
 
 	verifyStateProofVerificationTracking(t, &l.spVerification, basics.Round(firstStateProofContextTargetRound),
 		numOfStateProofs-1, proto.StateProofInterval, true, trackerDB)
@@ -3037,7 +3151,7 @@ func TestLedgerSPVerificationTracker(t *testing.T) {
 		1, proto.StateProofInterval, true, trackerMemory)
 
 	l.WaitForCommit(l.Latest())
-	triggerTrackerFlush(t, l, genesisInitState)
+	triggerTrackerFlush(t, l)
 
 	verifyStateProofVerificationTracking(t, &l.spVerification, basics.Round(firstStateProofContextTargetRound),
 		numOfStateProofs, proto.StateProofInterval, true, spverDBLoc)
@@ -3063,7 +3177,7 @@ func TestLedgerSPVerificationTracker(t *testing.T) {
 	}
 
 	l.WaitForCommit(blk.BlockHeader.Round)
-	triggerTrackerFlush(t, l, genesisInitState)
+	triggerTrackerFlush(t, l)
 
 	verifyStateProofVerificationTracking(t, &l.spVerification, basics.Round(firstStateProofContextTargetRound),
 		1, proto.StateProofInterval, false, spverDBLoc)
@@ -3101,16 +3215,7 @@ func TestLedgerReloadStateProofVerificationTracker(t *testing.T) {
 	// trigger trackers flush
 	// first ensure the block is committed into blockdb
 	l.WaitForCommit(l.Latest())
-	// wait for any pending tracker flushes
-	l.trackers.waitAccountsWriting()
-	// force flush as needed
-	if l.LatestTrackerCommitted() < l.Latest()+basics.Round(cfg.MaxAcctLookback) {
-		l.trackers.mu.Lock()
-		l.trackers.lastFlushTime = time.Time{}
-		l.trackers.mu.Unlock()
-		l.notifyCommit(l.Latest())
-		l.trackers.waitAccountsWriting()
-	}
+	triggerTrackerFlush(t, l)
 
 	verifyStateProofVerificationTracking(t, &l.spVerification, basics.Round(firstStateProofContextTargetRound),
 		numOfStateProofs-1, proto.StateProofInterval, true, trackerDB)
@@ -3167,7 +3272,7 @@ func TestLedgerCatchpointSPVerificationTracker(t *testing.T) {
 	// Feeding blocks until we can know for sure we have at least one catchpoint written.
 	blk = feedBlocksUntilRound(t, l, blk, basics.Round(cfg.CatchpointInterval*2))
 	l.WaitForCommit(basics.Round(cfg.CatchpointInterval * 2))
-	triggerTrackerFlush(t, l, genesisInitState)
+	triggerTrackerFlush(t, l)
 
 	numTrackedDataFirstCatchpoint := (cfg.CatchpointInterval - proto.MaxBalLookback) / proto.StateProofInterval
 
@@ -3244,16 +3349,7 @@ func TestLedgerSPTrackerAfterReplay(t *testing.T) {
 
 	// first ensure the block is committed into blockdb
 	l.WaitForCommit(l.Latest())
-	// wait for any pending tracker flushes
-	l.trackers.waitAccountsWriting()
-	// force flush as needed
-	if l.LatestTrackerCommitted() < l.Latest()+basics.Round(cfg.MaxAcctLookback) {
-		l.trackers.mu.Lock()
-		l.trackers.lastFlushTime = time.Time{}
-		l.trackers.mu.Unlock()
-		l.notifyCommit(spblk.BlockHeader.Round)
-		l.trackers.waitAccountsWriting()
-	}
+	triggerTrackerFlush(t, l)
 
 	err = l.reloadLedger()
 	a.NoError(err)
@@ -3290,4 +3386,104 @@ func TestLedgerMaxBlockHistoryLookback(t *testing.T) {
 	blk, err = l.Block(90)
 	require.Error(t, err)
 	require.Empty(t, blk)
+}
+
+func TestLedgerRetainMinOffCatchpointInterval(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	// This test is to ensure that the ledger retains the minimum number of blocks off the catchpoint interval.
+	blocksToMake := 2000
+
+	// Cases:
+	// 1. Base Case: Archival = false, Stores catchpoints returns true, CatchpointFileHistoryLength = >= 1 - implies catchpoint interval > 0 - min formula
+	// 2. Archival = true, stores catchpoints returns false - we keep all blocks anyway
+	// 3. Archival = false, stores catchpoints returns false - we don't modify minToSave
+	// 4. Condition: Archival = false, storesCatchpoints returns true, CatchpointFileHistoryLength is -1 - keep all catchpoint files
+	// 5. Condition: Archival = false, storesCatchpoints returns true, CatchpointFileHistoryLength is 365 - the config default setting
+
+	catchpointIntervalBlockRetentionTestCases := []struct {
+		storeCatchpoints            bool
+		archival                    bool
+		catchpointFileHistoryLength int
+	}{
+		{true, false, 1},   // should use min catchpoint formula
+		{false, true, 1},   // all blocks get retained, archival mode dictates
+		{false, false, 1},  // should not modify min blocks retained based on catchpoint interval
+		{true, false, -1},  // should use min formula, this is the keep all catchpoints setting
+		{true, false, 365}, // should use min formula, this is the default setting for catchpoint file history length
+	}
+	for _, tc := range catchpointIntervalBlockRetentionTestCases {
+		func() {
+			var genHash crypto.Digest
+			crypto.RandBytes(genHash[:])
+			cfg := config.GetDefaultLocal()
+			// set config properties based on test case
+			cfg.MaxBlockHistoryLookback = 0 // max block history lookback is not used in this test
+			if tc.storeCatchpoints {
+				cfg.CatchpointTracking = config.CatchpointTrackingModeStored
+				cfg.CatchpointInterval = 100
+			} else {
+				cfg.CatchpointInterval = 0 // sufficient for cfg.StoresCatchpoints() to return false
+			}
+			cfg.CatchpointFileHistoryLength = tc.catchpointFileHistoryLength
+			cfg.Archival = tc.archival
+
+			l := &Ledger{}
+			l.cfg = cfg
+			l.archival = cfg.Archival
+			l.trackers.log = logging.TestingLog(t)
+
+			for i := 1; i <= blocksToMake; i++ {
+				minBlockToKeep := l.notifyCommit(basics.Round(i))
+
+				// In archival mode, all blocks should always be kept
+				if cfg.Archival {
+					require.Equal(t, basics.Round(0), minBlockToKeep)
+				} else {
+					// This happens to work for the test case where we don't store catchpoints since mintosave is always
+					// 0 in that case.
+					expectedCatchpointLookback := 2 * cfg.CatchpointInterval
+
+					expectedMinBlockToKeep := basics.Round(uint64(i)).SubSaturate(
+						basics.Round(expectedCatchpointLookback))
+					require.Equal(t, expectedMinBlockToKeep, minBlockToKeep)
+				}
+			}
+		}()
+	}
+}
+
+type testBlockListener struct {
+	id int
+}
+
+func (t *testBlockListener) OnNewBlock(bookkeeping.Block, ledgercore.StateDelta) {}
+
+// TestLedgerRegisterBlockListeners ensures that the block listeners survive reloadLedger
+func TestLedgerRegisterBlockListeners(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genBalances, _, _ := ledgertesting.NewTestGenesis()
+	var genHash crypto.Digest
+	crypto.RandBytes(genHash[:])
+	cfg := config.GetDefaultLocal()
+	l := newSimpleLedgerFull(t, genBalances, protocol.ConsensusCurrentVersion, genHash, cfg)
+	defer l.Close()
+
+	l.RegisterBlockListeners([]ledgercore.BlockListener{&testBlockListener{1}, &testBlockListener{2}})
+	l.RegisterBlockListeners([]ledgercore.BlockListener{&testBlockListener{3}})
+
+	require.Equal(t, 3, len(l.notifier.listeners))
+	var ids []int
+	for _, bl := range l.notifier.listeners {
+		ids = append(ids, bl.(*testBlockListener).id)
+	}
+	require.Equal(t, []int{1, 2, 3}, ids)
+
+	l.reloadLedger()
+
+	ids = nil
+	for _, bl := range l.notifier.listeners {
+		ids = append(ids, bl.(*testBlockListener).id)
+	}
+	require.Equal(t, []int{1, 2, 3}, ids)
 }

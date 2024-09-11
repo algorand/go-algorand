@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -197,6 +197,12 @@ func opBoxReplaceStateChange(cx *EvalContext) (AppStateEnum, AppStateOpEnum, bas
 	return BoxState, AppStateWrite, cx.appID, basics.Address{}, string(cx.Stack[pprev].Bytes)
 }
 
+func opBoxSpliceStateChange(cx *EvalContext) (AppStateEnum, AppStateOpEnum, basics.AppIndex, basics.Address, string) {
+	name := len(cx.Stack) - 4 // name, start, length, replacement
+
+	return BoxState, AppStateWrite, cx.appID, basics.Address{}, string(cx.Stack[name].Bytes)
+}
+
 func opBoxDelStateChange(cx *EvalContext) (AppStateEnum, AppStateOpEnum, basics.AppIndex, basics.Address, string) {
 	last := len(cx.Stack) - 1 // name
 
@@ -208,6 +214,12 @@ func opBoxPutStateChange(cx *EvalContext) (AppStateEnum, AppStateOpEnum, basics.
 	prev := last - 1          // name
 
 	return BoxState, AppStateWrite, cx.appID, basics.Address{}, string(cx.Stack[prev].Bytes)
+}
+
+func opBoxResizeStateChange(cx *EvalContext) (AppStateEnum, AppStateOpEnum, basics.AppIndex, basics.Address, string) {
+	name := len(cx.Stack) - 2 // name, size
+
+	return BoxState, AppStateWrite, cx.appID, basics.Address{}, string(cx.Stack[name].Bytes)
 }
 
 func opAppLocalGetStateChange(cx *EvalContext) (AppStateEnum, AppStateOpEnum, basics.AppIndex, basics.Address, string) {

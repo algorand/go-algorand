@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -173,7 +173,7 @@ func OpenLedger[T string | DirsAndPrefix](
 	start := time.Now()
 	ledgerInitblocksdbCount.Inc(nil)
 	err = l.blockDBs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		return initBlocksDB(tx, l, []bookkeeping.Block{genesisInitState.Block}, cfg.Archival)
+		return initBlocksDB(tx, l.log, []bookkeeping.Block{genesisInitState.Block}, cfg.Archival)
 	})
 	ledgerInitblocksdbMicros.AddMicrosecondsSince(start, nil)
 	if err != nil {
@@ -210,8 +210,15 @@ func (l *Ledger) reloadLedger() error {
 	l.trackerMu.Lock()
 	defer l.trackerMu.Unlock()
 
-	// close the trackers.
-	l.trackers.close()
+	// save block listeners to recover them later
+	blockListeners := make([]ledgercore.BlockListener, 0, len(l.notifier.listeners))
+	blockListeners = append(blockListeners, l.notifier.listeners...)
+
+	// close the trackers if the registry was already initialized: opening a new ledger calls reloadLedger
+	// and there is nothing to close. Registry's logger is not initialized yet so close cannot log.
+	if l.trackers.trackers != nil {
+		l.trackers.close()
+	}
 
 	// init block queue
 	var err error
@@ -255,6 +262,9 @@ func (l *Ledger) reloadLedger() error {
 		err = fmt.Errorf("reloadLedger.loadFromDisk %w", err)
 		return err
 	}
+
+	// restore block listeners since l.notifier might not survive a reload
+	l.notifier.register(blockListeners)
 
 	// post-init actions
 	if trackerDBInitParams.VacuumOnStartup || l.cfg.OptimizeAccountsDatabaseOnStartup {
@@ -364,7 +374,7 @@ func (l *Ledger) setSynchronousMode(ctx context.Context, synchronousMode db.Sync
 // initBlocksDB performs DB initialization:
 // - creates and populates it with genesis blocks
 // - ensures DB is in good shape for archival mode and resets it if not
-func initBlocksDB(tx *sql.Tx, l *Ledger, initBlocks []bookkeeping.Block, isArchival bool) (err error) {
+func initBlocksDB(tx *sql.Tx, log logging.Logger, initBlocks []bookkeeping.Block, isArchival bool) (err error) {
 	err = blockdb.BlockInit(tx, initBlocks)
 	if err != nil {
 		err = fmt.Errorf("initBlocksDB.blockInit %v", err)
@@ -382,7 +392,7 @@ func initBlocksDB(tx *sql.Tx, l *Ledger, initBlocks []bookkeeping.Block, isArchi
 		// Detect possible problem - archival node needs all block but have only subsequence of them
 		// So reset the DB and init it again
 		if earliest != basics.Round(0) {
-			l.log.Warnf("resetting blocks DB (earliest block is %v)", earliest)
+			log.Warnf("resetting blocks DB (earliest block is %v)", earliest)
 			err := blockdb.BlockResetDB(tx)
 			if err != nil {
 				err = fmt.Errorf("initBlocksDB.blockResetDB %v", err)
@@ -423,6 +433,8 @@ func (l *Ledger) Close() {
 // RegisterBlockListeners registers listeners that will be called when a
 // new block is added to the ledger.
 func (l *Ledger) RegisterBlockListeners(listeners []ledgercore.BlockListener) {
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
 	l.notifier.register(listeners)
 }
 
@@ -462,9 +474,23 @@ func (l *Ledger) notifyCommit(r basics.Round) basics.Round {
 	if l.archival {
 		// Do not forget any blocks.
 		minToSave = 0
+	} else {
+		catchpointsMinToSave := r.SubSaturate(l.calcMinCatchpointRoundsLookback())
+		if catchpointsMinToSave < minToSave {
+			minToSave = catchpointsMinToSave
+		}
 	}
 
 	return minToSave
+}
+
+func (l *Ledger) calcMinCatchpointRoundsLookback() basics.Round {
+	// cfg.StoresCatchpoints checks that CatchpointInterval is positive
+	if !l.cfg.StoresCatchpoints() || l.cfg.CatchpointFileHistoryLength == 0 {
+		return 0
+	}
+
+	return basics.Round(2 * l.cfg.CatchpointInterval)
 }
 
 // GetLastCatchpointLabel returns the latest catchpoint label that was written to the
@@ -569,6 +595,12 @@ func (l *Ledger) LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.
 	return ledgercore.AssetResource{AssetParams: r.AssetParams, AssetHolding: r.AssetHolding}, err
 }
 
+// LookupAssets loads asset resources that match the request parameters from the ledger.
+func (l *Ledger) LookupAssets(addr basics.Address, assetIDGT basics.AssetIndex, limit uint64) ([]ledgercore.AssetResourceWithIDs, basics.Round, error) {
+	resources, lookupRound, err := l.accts.LookupAssetResources(addr, assetIDGT, limit)
+	return resources, lookupRound, err
+}
+
 // lookupResource loads a resource that matches the request parameters from the accounts update
 func (l *Ledger) lookupResource(rnd basics.Round, addr basics.Address, aidx basics.CreatableIndex, ctype basics.CreatableType) (ledgercore.AccountResource, error) {
 	l.trackerMu.RLock()
@@ -607,11 +639,7 @@ func (l *Ledger) LookupAgreement(rnd basics.Round, addr basics.Address) (basics.
 
 	// Intentionally apply (pending) rewards up to rnd.
 	data, err := l.acctsOnline.LookupOnlineAccountData(rnd, addr)
-	if err != nil {
-		return basics.OnlineAccountData{}, err
-	}
-
-	return data, nil
+	return data, err
 }
 
 // LookupWithoutRewards is like Lookup but does not apply pending rewards up
@@ -655,6 +683,15 @@ func (l *Ledger) OnlineCirculation(rnd basics.Round, voteRnd basics.Round) (basi
 // CheckDup return whether a transaction is a duplicate one.
 func (l *Ledger) CheckDup(currentProto config.ConsensusParams, current basics.Round, firstValid basics.Round, lastValid basics.Round, txid transactions.Txid, txl ledgercore.Txlease) error {
 	return l.txTail.checkDup(currentProto, current, firstValid, lastValid, txid, txl)
+}
+
+// CheckConfirmedTail checks if a transaction txid happens to have LastValid greater than the current round at the time of calling and has been already committed to the ledger.
+// If both conditions are met it returns true.
+// This function could be used as filter to check if a transaction is committed to the ledger, and no extra checks needed if it says true.
+//
+// Note, this cannot be used to check if transaction happened or not in past MaxTxnLife rounds.
+func (l *Ledger) CheckConfirmedTail(txid transactions.Txid) (basics.Round, bool) {
+	return l.txTail.checkConfirmed(txid)
 }
 
 // Latest returns the latest known block round added to the ledger.
@@ -767,6 +804,16 @@ func (l *Ledger) Wait(r basics.Round) chan struct{} {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
 	return l.bulletinDisk.Wait(r)
+}
+
+// WaitWithCancel returns a channel that closes once a given round is
+// stored durably in the ledger. The returned function can be used to
+// cancel the wait, which cleans up resources if no other Wait call is
+// active for the same round.
+func (l *Ledger) WaitWithCancel(r basics.Round) (chan struct{}, func()) {
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
+	return l.bulletinDisk.Wait(r), func() { l.bulletinDisk.CancelWait(r) }
 }
 
 // WaitMem returns a channel that closes once a given round is
@@ -882,7 +929,7 @@ func (l *Ledger) FlushCaches() {
 // Validate uses the ledger to validate block blk as a candidate next block.
 // It returns an error if blk is not the expected next block, or if blk is
 // not a valid block (e.g., it has duplicate transactions, overspends some
-// account, etc).
+// account, etc.).
 func (l *Ledger) Validate(ctx context.Context, blk bookkeeping.Block, executionPool execpool.BacklogPool) (*ledgercore.ValidatedBlock, error) {
 	delta, err := eval.Eval(ctx, l, blk, true, l.verifiedTxnCache, executionPool, l.tracer)
 	if err != nil {

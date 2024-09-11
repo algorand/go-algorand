@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -46,7 +46,7 @@ func TestRekeyUpgrade(t *testing.T) {
 	defer fixture.Shutdown()
 
 	client := fixture.GetLibGoalClientForNamedNode("Node")
-	accountList, err := fixture.GetNodeWalletsSortedByBalance(client.DataDir())
+	accountList, err := fixture.GetNodeWalletsSortedByBalance(client)
 	a.NoError(err)
 
 	accountA := accountList[0].Address

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -148,7 +148,7 @@ func (uv unauthenticatedVote) verify(l LedgerReader) (vote, error) {
 
 // makeVote creates a new unauthenticated vote from its constituent components.
 //
-// makeVote returns an error it it fails.
+// makeVote returns an error if it fails.
 func makeVote(rv rawVote, voting crypto.OneTimeSigner, selection *crypto.VRFSecrets, l Ledger) (unauthenticatedVote, error) {
 	m, err := membership(l, rv.Sender, rv.Round, rv.Period, rv.Step)
 	if err != nil {

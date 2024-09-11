@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -66,7 +66,7 @@ var setCmd = &cobra.Command{
 			}
 
 			file := filepath.Join(dataDir, config.ConfigFilename)
-			err = codecs.SaveNonDefaultValuesToFile(file, cfg, config.GetDefaultLocal(), nil, true)
+			err = codecs.SaveNonDefaultValuesToFile(file, cfg, config.GetDefaultLocal(), nil)
 			if err != nil {
 				reportWarnf("Error saving updated config file '%s' - %s", file, err)
 				anyError = true

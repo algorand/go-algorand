@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -37,6 +37,9 @@ func TestSqliteDB(t *testing.T) {
 
 		return db
 	}
+
+	// Run CustomTestResourcesQueryAllLimited, which is not supported by the k-v store implementation
+	registerTest("resources-query-all-limited", CustomTestResourcesQueryAllLimited)
 
 	// run the suite
 	runGenericTestsWithDB(t, dbFactory)

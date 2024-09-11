@@ -6,6 +6,7 @@ proc TestGoalCommandLineFlags { CMD EXPECTED_RE } {
     set PASSED 0
     eval spawn $CMD
     expect {
+        #nolint:eof checking PASSED catches no match
         timeout { puts "goal asset create timed out"; exit 1 }
         -re $EXPECTED_RE {set PASSED 1; close }
     }

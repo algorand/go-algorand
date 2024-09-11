@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -238,7 +238,7 @@ const (
 
 // CatchupAccessorClientLedger represents ledger interface needed for catchpoint accessor clients
 type CatchupAccessorClientLedger interface {
-	Block(rnd basics.Round) (blk bookkeeping.Block, err error)
+	BlockCert(rnd basics.Round) (blk bookkeeping.Block, cert agreement.Certificate, err error)
 	GenesisHash() crypto.Digest
 	BlockHdr(rnd basics.Round) (blk bookkeeping.BlockHeader, err error)
 	Latest() (rnd basics.Round)

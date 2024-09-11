@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -284,7 +284,7 @@ func (ar *accountsReaderExt) OnlineAccountsAll(maxAccounts uint64) (accounts []t
 }
 
 // ExpiredOnlineAccountsForRound implements trackerdb.AccountsReaderExt
-func (ar *accountsReaderExt) ExpiredOnlineAccountsForRound(rnd basics.Round, voteRnd basics.Round, proto config.ConsensusParams, rewardsLevel uint64) (expAccounts map[basics.Address]*ledgercore.OnlineAccountData, err error) {
+func (ar *accountsReaderExt) ExpiredOnlineAccountsForRound(rnd basics.Round, voteRnd basics.Round, proto config.ConsensusParams, rewardsLevel uint64) (expAccounts map[basics.Address]*basics.OnlineAccountData, err error) {
 	expAccountsP, errP := ar.primary.ExpiredOnlineAccountsForRound(rnd, voteRnd, proto, rewardsLevel)
 	expAccountsS, errS := ar.secondary.ExpiredOnlineAccountsForRound(rnd, voteRnd, proto, rewardsLevel)
 	// coalesce errors

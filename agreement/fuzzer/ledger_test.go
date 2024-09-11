@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -93,9 +93,17 @@ func (b testValidatedBlock) Block() bookkeeping.Block {
 	return b.Inside
 }
 
-func (b testValidatedBlock) WithSeed(s committee.Seed) agreement.ValidatedBlock {
+func (b testValidatedBlock) Round() basics.Round {
+	return b.Inside.Round()
+}
+
+func (b testValidatedBlock) FinishBlock(s committee.Seed, proposer basics.Address, eligible bool) agreement.Block {
 	b.Inside.BlockHeader.Seed = s
-	return b
+	b.Inside.BlockHeader.Proposer = proposer
+	if !eligible {
+		b.Inside.BlockHeader.ProposerPayout = basics.MicroAlgos{}
+	}
+	return agreement.Block(b.Inside)
 }
 
 type testBlockValidator struct{}
@@ -108,7 +116,7 @@ type testBlockFactory struct {
 	Owner int
 }
 
-func (f testBlockFactory) AssembleBlock(r basics.Round) (agreement.ValidatedBlock, error) {
+func (f testBlockFactory) AssembleBlock(r basics.Round, _ []basics.Address) (agreement.UnfinishedBlock, error) {
 	return testValidatedBlock{Inside: bookkeeping.Block{BlockHeader: bookkeeping.BlockHeader{Round: r}}}, nil
 }
 

@@ -19,7 +19,7 @@ fields_string.go:	fields.go
 	go generate
 
 README.md:	TEAL_opcodes.md README_in.md
-	python merge.py > README.md
+	python3 merge.py > README.md
 	@if [ -e $(SPECS)/dev/TEAL.md ]; then \
 		sed '/^$$/q' $(SPECS)/dev/TEAL.md | cat - README.md > teal.spec; \
 		mv teal.spec $(SPECS)/dev/TEAL.md; \

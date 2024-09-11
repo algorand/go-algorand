@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -98,14 +98,16 @@ type evalTracer struct {
 	// scratchSlots are the scratch slots changed on current opcode (currently either `store` or `stores`).
 	// NOTE: this field scratchSlots is used only for scratch change exposure.
 	scratchSlots []uint64
+
+	groups [][]transactions.SignedTxnWithAD
 }
 
-func makeEvalTracer(lastRound basics.Round, request Request, developerAPI bool) (*evalTracer, error) {
+func makeEvalTracer(lastRound basics.Round, group []transactions.SignedTxnWithAD, request Request, developerAPI bool) (*evalTracer, error) {
 	result, err := makeSimulationResult(lastRound, request, developerAPI)
 	if err != nil {
 		return nil, err
 	}
-	return &evalTracer{result: &result}, nil
+	return &evalTracer{result: &result, groups: [][]transactions.SignedTxnWithAD{group}}, nil
 }
 
 // handleError is responsible for setting the failedAt field properly.
@@ -185,12 +187,14 @@ func (tracer *evalTracer) AfterTxnGroup(ep *logic.EvalParams, deltas *ledgercore
 	}
 }
 
-func (tracer *evalTracer) saveApplyData(applyData transactions.ApplyData) {
+func (tracer *evalTracer) saveApplyData(applyData transactions.ApplyData, omitEvalDelta bool) {
 	applyDataOfCurrentTxn := tracer.mustGetApplyDataAtPath(tracer.absolutePath())
-	// Copy everything except the EvalDelta, since that has been kept up-to-date after every op
 	evalDelta := applyDataOfCurrentTxn.EvalDelta
 	*applyDataOfCurrentTxn = applyData
-	applyDataOfCurrentTxn.EvalDelta = evalDelta
+	if omitEvalDelta {
+		// If omitEvalDelta is true, restore the EvalDelta from applyDataOfCurrentTxn
+		applyDataOfCurrentTxn.EvalDelta = evalDelta
+	}
 }
 
 func (tracer *evalTracer) BeforeTxn(ep *logic.EvalParams, groupIndex int) {
@@ -245,7 +249,7 @@ func (tracer *evalTracer) BeforeTxn(ep *logic.EvalParams, groupIndex int) {
 
 func (tracer *evalTracer) AfterTxn(ep *logic.EvalParams, groupIndex int, ad transactions.ApplyData, evalError error) {
 	tracer.handleError(evalError)
-	tracer.saveApplyData(ad)
+	tracer.saveApplyData(ad, evalError != nil)
 	// if the current transaction + simulation condition would lead to exec trace making
 	// we should clean them up from tracer.execTraceStack.
 	if tracer.result.ReturnTrace() {
@@ -412,7 +416,9 @@ func (tracer *evalTracer) AfterOpcode(cx *logic.EvalContext, evalError error) {
 	}
 
 	if cx.RunMode() == logic.ModeApp {
-		tracer.handleError(evalError)
+		if cx.TxnGroup[groupIndex].Txn.ApplicationCallTxnFields.OnCompletion != transactions.ClearStateOC {
+			tracer.handleError(evalError)
+		}
 		if evalError == nil && tracer.unnamedResourcePolicy != nil {
 			if err := tracer.unnamedResourcePolicy.tracker.reconcileBoxWriteBudget(cx.BoxDirtyBytes(), cx.Proto.BytesPerBoxReference); err != nil {
 				// This should never happen, since we limit the IO budget to tracer.unnamedResourcePolicy.assignment.maxPossibleBoxIOBudget
@@ -481,7 +487,7 @@ func (tracer *evalTracer) BeforeProgram(cx *logic.EvalContext) {
 	}
 }
 
-func (tracer *evalTracer) AfterProgram(cx *logic.EvalContext, evalError error) {
+func (tracer *evalTracer) AfterProgram(cx *logic.EvalContext, pass bool, evalError error) {
 	groupIndex := cx.GroupIndex()
 
 	if cx.RunMode() == logic.ModeSig {
@@ -497,5 +503,55 @@ func (tracer *evalTracer) AfterProgram(cx *logic.EvalContext, evalError error) {
 	// If it is an inner app call, roll up its cost to the top level transaction.
 	tracer.result.TxnGroups[0].Txns[tracer.relativeCursor[0]].AppBudgetConsumed += uint64(cx.Cost())
 
-	tracer.handleError(evalError)
+	if cx.TxnGroup[groupIndex].Txn.ApplicationCallTxnFields.OnCompletion == transactions.ClearStateOC {
+		if tracer.result.ReturnTrace() && (!pass || evalError != nil) {
+			txnTrace := tracer.execTraceStack[len(tracer.execTraceStack)-1]
+			txnTrace.ClearStateRollback = true
+			if evalError != nil {
+				txnTrace.ClearStateRollbackError = evalError.Error()
+			}
+		}
+	} else {
+		tracer.handleError(evalError)
+	}
+
+	// Since an app could rekey multiple accounts, we need to go over the
+	// rest of the txngroup and make sure all the auth addrs are correct
+	if tracer.result.EvalOverrides.FixSigners && len(tracer.relativeCursor) == 1 {
+		knownAuthAddrs := make(map[basics.Address]basics.Address)
+		// iterate over all txns in the group after this one
+		for i := groupIndex + 1; i < len(cx.TxnGroup); i++ {
+			stxn := &tracer.groups[0][i]
+			sender := stxn.Txn.Sender
+
+			// If we don't already know the auth addr, get it from the ledger
+			if _, authAddrKnown := knownAuthAddrs[sender]; !authAddrKnown {
+				// Get the auth addr from the ledger
+				data, err := cx.Ledger.AccountData(sender)
+				if err != nil {
+					panic(err)
+				}
+
+				knownAuthAddrs[sender] = data.AuthAddr
+			}
+
+			// Fix the current auth addr if this txn doesn't have a signature
+			if txnHasNoSignature(stxn.SignedTxn) {
+				stxn.AuthAddr = knownAuthAddrs[sender]
+				if stxn.AuthAddr == sender {
+					stxn.AuthAddr = basics.Address{}
+				}
+			}
+
+			// If this is an appl, we can break since we know AfterProgram will be called afterwards
+			if stxn.Txn.Type == protocol.ApplicationCallTx {
+				break
+			}
+
+			// If this is a rekey, save the auth addr for the sender
+			if stxn.Txn.RekeyTo != (basics.Address{}) {
+				knownAuthAddrs[sender] = stxn.Txn.RekeyTo
+			}
+		}
+	}
 }

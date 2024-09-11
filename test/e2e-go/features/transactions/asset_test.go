@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -774,7 +774,7 @@ func TestAssetSend(t *testing.T) {
 	tx, err = client.SendPaymentFromUnencryptedWallet(account0, extra, 0, 10000000000, nil)
 	a.NoError(err)
 	_, curRound = fixture.GetBalanceAndRound(account0)
-	fixture.WaitForConfirmedTxn(curRound+20, account0, tx.ID().String())
+	fixture.WaitForConfirmedTxn(curRound+20, tx.ID().String())
 
 	// Sending assets to account that hasn't opted in should fail, but
 	// after opting in, should succeed for non-frozen asset.

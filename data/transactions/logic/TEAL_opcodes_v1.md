@@ -133,7 +133,7 @@ Overflow is an error condition which halts execution and fails the transaction. 
 ## itob
 
 - Bytecode: 0x16
-- Stack: ..., A: uint64 &rarr; ..., []byte
+- Stack: ..., A: uint64 &rarr; ..., [8]byte
 - converts uint64 A to big-endian byte array, always of length 8
 
 ## btoi
@@ -182,7 +182,7 @@ Overflow is an error condition which halts execution and fails the transaction. 
 
 ## intcblock
 
-- Syntax: `intcblock UINT ...` ∋ UINT ...: a block of int constant values
+- Syntax: `intcblock UINT ...` where UINT ...: a block of int constant values
 - Bytecode: 0x20 {varuint count, [varuint ...]}
 - Stack: ... &rarr; ...
 - prepare block of uint64 constants for use by intc
@@ -191,7 +191,7 @@ Overflow is an error condition which halts execution and fails the transaction. 
 
 ## intc
 
-- Syntax: `intc I` ∋ I: an index in the intcblock
+- Syntax: `intc I` where I: an index in the intcblock
 - Bytecode: 0x21 {uint8}
 - Stack: ... &rarr; ..., uint64
 - Ith constant from intcblock
@@ -222,7 +222,7 @@ Overflow is an error condition which halts execution and fails the transaction. 
 
 ## bytecblock
 
-- Syntax: `bytecblock BYTES ...` ∋ BYTES ...: a block of byte constant values
+- Syntax: `bytecblock BYTES ...` where BYTES ...: a block of byte constant values
 - Bytecode: 0x26 {varuint count, [varuint length, bytes ...]}
 - Stack: ... &rarr; ...
 - prepare block of byte-array constants for use by bytec
@@ -231,7 +231,7 @@ Overflow is an error condition which halts execution and fails the transaction. 
 
 ## bytec
 
-- Syntax: `bytec I` ∋ I: an index in the bytecblock
+- Syntax: `bytec I` where I: an index in the bytecblock
 - Bytecode: 0x27 {uint8}
 - Stack: ... &rarr; ..., []byte
 - Ith constant from bytecblock
@@ -262,7 +262,7 @@ Overflow is an error condition which halts execution and fails the transaction. 
 
 ## arg
 
-- Syntax: `arg N` ∋ N: an arg index
+- Syntax: `arg N` where N: an arg index
 - Bytecode: 0x2c {uint8}
 - Stack: ... &rarr; ..., []byte
 - Nth LogicSig argument
@@ -298,7 +298,7 @@ Overflow is an error condition which halts execution and fails the transaction. 
 
 ## txn
 
-- Syntax: `txn F` ∋ F: [txn](#field-group-txn)
+- Syntax: `txn F` where F: [txn](#field-group-txn)
 - Bytecode: 0x31 {uint8}
 - Stack: ... &rarr; ..., any
 - field F of current transaction
@@ -336,7 +336,7 @@ Fields (see [transaction reference](https://developer.algorand.org/docs/referenc
 
 ## global
 
-- Syntax: `global F` ∋ F: [global](#field-group-global)
+- Syntax: `global F` where F: [global](#field-group-global)
 - Bytecode: 0x32 {uint8}
 - Stack: ... &rarr; ..., any
 - global field F
@@ -356,7 +356,7 @@ Fields
 
 ## gtxn
 
-- Syntax: `gtxn T F` ∋ T: transaction group index, F: [txn](#field-group-txn)
+- Syntax: `gtxn T F` where T: transaction group index, F: [txn](#field-group-txn)
 - Bytecode: 0x33 {uint8}, {uint8}
 - Stack: ... &rarr; ..., any
 - field F of the Tth transaction in the current group
@@ -365,21 +365,21 @@ for notes on transaction fields available, see `txn`. If this transaction is _i_
 
 ## load
 
-- Syntax: `load I` ∋ I: position in scratch space to load from
+- Syntax: `load I` where I: position in scratch space to load from
 - Bytecode: 0x34 {uint8}
 - Stack: ... &rarr; ..., any
 - Ith scratch space value. All scratch spaces are 0 at program start.
 
 ## store
 
-- Syntax: `store I` ∋ I: position in scratch space to store to
+- Syntax: `store I` where I: position in scratch space to store to
 - Bytecode: 0x35 {uint8}
 - Stack: ..., A &rarr; ...
 - store A to the Ith scratch space
 
 ## bnz
 
-- Syntax: `bnz TARGET` ∋ TARGET: branch offset
+- Syntax: `bnz TARGET` where TARGET: branch offset
 - Bytecode: 0x40 {int16 (big-endian)}
 - Stack: ..., A: uint64 &rarr; ...
 - branch to TARGET if value A is not zero

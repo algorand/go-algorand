@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"path"
 	"strconv"
 	"time"
 
@@ -74,13 +73,7 @@ func makeLedgerFetcher(net network.GossipNode, accessor ledger.CatchpointCatchup
 }
 
 func (lf *ledgerFetcher) requestLedger(ctx context.Context, peer network.HTTPPeer, round basics.Round, method string) (*http.Response, error) {
-	parsedURL, err := network.ParseHostOrURL(peer.GetAddress())
-	if err != nil {
-		return nil, err
-	}
-
-	parsedURL.Path = lf.net.SubstituteGenesisID(path.Join(parsedURL.Path, "/v1/{genesisID}/ledger/"+strconv.FormatUint(uint64(round), 36)))
-	ledgerURL := parsedURL.String()
+	ledgerURL := network.SubstituteGenesisID(lf.net, "/v1/{genesisID}/ledger/"+strconv.FormatUint(uint64(round), 36))
 	lf.log.Debugf("ledger %s %#v peer %#v %T", method, ledgerURL, peer, peer)
 	request, err := http.NewRequestWithContext(ctx, method, ledgerURL, nil)
 	if err != nil {
@@ -88,7 +81,11 @@ func (lf *ledgerFetcher) requestLedger(ctx context.Context, peer network.HTTPPee
 	}
 
 	network.SetUserAgentHeader(request.Header)
-	return peer.GetHTTPClient().Do(request)
+	httpClient := peer.GetHTTPClient()
+	if httpClient == nil {
+		return nil, fmt.Errorf("requestLedger: HTTPPeer %s has no http client", peer.GetAddress())
+	}
+	return httpClient.Do(request)
 }
 
 func (lf *ledgerFetcher) headLedger(ctx context.Context, peer network.Peer, round basics.Round) error {

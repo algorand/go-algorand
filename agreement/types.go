@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -50,7 +50,7 @@ type Deadline struct {
 	Type TimeoutType
 }
 
-var deadlineTimeout = config.Protocol.BigLambda + config.Protocol.SmallLambda
+var defaultDeadlineTimeout = config.Protocol.BigLambda + config.Protocol.SmallLambda
 var partitionStep = next + 3
 var recoveryExtraTimeout = config.Protocol.SmallLambda
 
@@ -63,9 +63,17 @@ func FilterTimeout(p period, v protocol.ConsensusVersion) time.Duration {
 	return config.Consensus[v].AgreementFilterTimeout
 }
 
-// DeadlineTimeout is the duration of the second agreement step.
-func DeadlineTimeout() time.Duration {
-	return deadlineTimeout
+// DeadlineTimeout is the duration of the second agreement step, varying based on period and consensus version.
+func DeadlineTimeout(p period, v protocol.ConsensusVersion) time.Duration {
+	if p == 0 {
+		return config.Consensus[v].AgreementDeadlineTimeoutPeriod0
+	}
+	return defaultDeadlineTimeout
+}
+
+// DefaultDeadlineTimeout is the default duration of the second agreement step.
+func DefaultDeadlineTimeout() time.Duration {
+	return defaultDeadlineTimeout
 }
 
 type (
@@ -92,10 +100,10 @@ const (
 	down
 )
 
-func (s step) nextVoteRanges() (lower, upper time.Duration) {
+func (s step) nextVoteRanges(deadlineTimeout time.Duration) (lower, upper time.Duration) {
 	extra := recoveryExtraTimeout // eg  2000 ms
-	lower = deadlineTimeout       // eg 17000 ms (15000 + 2000)
-	upper = lower + extra         // eg 19000 ms
+	lower = deadlineTimeout       // based on types.DeadlineTimeout()
+	upper = lower + extra
 
 	for i := next; i < s; i++ {
 		extra *= 2

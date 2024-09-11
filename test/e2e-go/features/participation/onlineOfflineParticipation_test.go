@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -196,7 +196,7 @@ func TestNewAccountCanGoOnlineAndParticipate(t *testing.T) {
 
 	fixture.AssertValidTxid(onlineTxID)
 	maxRoundsToWaitForTxnConfirm := uint64(5)
-	fixture.WaitForTxnConfirmation(seededRound+maxRoundsToWaitForTxnConfirm, newAccount, onlineTxID)
+	fixture.WaitForTxnConfirmation(seededRound+maxRoundsToWaitForTxnConfirm, onlineTxID)
 	nodeStatus, _ = client.Status()
 	onlineRound := nodeStatus.LastRound
 	newAccountStatus, err := client.AccountInformation(newAccount, false)
@@ -247,11 +247,7 @@ func TestAccountGoesOnlineForShortPeriod(t *testing.T) {
 	t.Parallel()
 	a := require.New(fixtures.SynchronizedTest(t))
 
-	// Make the seed lookback shorter, otherwise will wait for 320 rounds
-	consensus := make(config.ConsensusProtocols)
-
 	var fixture fixtures.RestClientFixture
-	fixture.SetConsensus(consensus)
 	fixture.SetupNoStart(t, filepath.Join("nettemplates", "TwoNodes50EachFuture.json"))
 
 	// update the config file by setting the ParticipationKeysRefreshInterval to 5 second.
@@ -311,7 +307,7 @@ func TestAccountGoesOnlineForShortPeriod(t *testing.T) {
 	nodeStatus, err := client.Status()
 	a.NoError(err)
 	seededRound := nodeStatus.LastRound
-	fixture.WaitForTxnConfirmation(seededRound+maxRoundsToWaitForTxnConfirm, newAccount, onlineTxID)
+	fixture.WaitForTxnConfirmation(seededRound+maxRoundsToWaitForTxnConfirm, onlineTxID)
 	nodeStatus, _ = client.Status()
 
 	accountStatus, err := client.AccountInformation(newAccount, false)

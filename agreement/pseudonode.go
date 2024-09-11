@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -220,7 +220,7 @@ func (n *asyncPseudonode) loadRoundParticipationKeys(voteRound basics.Round) []a
 		n.participationKeys = nil
 		return nil
 	}
-	balanceRound := balanceRound(voteRound, cparams)
+	balanceRound := BalanceRound(voteRound, cparams)
 
 	// measure the time it takes to acquire the voting keys.
 	beforeVotingKeysTime := time.Now()
@@ -284,7 +284,11 @@ func (n asyncPseudonode) makePseudonodeVerifier(voteVerifier *AsyncVoteVerifier)
 
 // makeProposals creates a slice of block proposals for the given round and period.
 func (n asyncPseudonode) makeProposals(round basics.Round, period period, accounts []account.ParticipationRecordForRound) ([]proposal, []unauthenticatedVote) {
-	ve, err := n.factory.AssembleBlock(round)
+	addresses := make([]basics.Address, len(accounts))
+	for i := range accounts {
+		addresses[i] = accounts[i].Account
+	}
+	ve, err := n.factory.AssembleBlock(round, addresses)
 	if err != nil {
 		if err != ErrAssembleBlockRoundStale {
 			n.log.Errorf("pseudonode.makeProposals: could not generate a proposal for round %d: %v", round, err)
@@ -418,6 +422,9 @@ func (t pseudonodeVotesTask) execute(verifier *AsyncVoteVerifier, quit chan stru
 				Type:         logspec.VoteBroadcast,
 				Sender:       vote.R.Sender.String(),
 				Hash:         vote.R.Proposal.BlockDigest.String(),
+				Round:        uint64(t.round),
+				Period:       uint64(t.period),
+				Step:         uint64(t.step),
 				ObjectRound:  uint64(vote.R.Round),
 				ObjectPeriod: uint64(vote.R.Period),
 				ObjectStep:   uint64(vote.R.Step),
@@ -545,6 +552,8 @@ func (t pseudonodeProposalsTask) execute(verifier *AsyncVoteVerifier, quit chan 
 		logEvent := logspec.AgreementEvent{
 			Type:         logspec.ProposalBroadcast,
 			Hash:         vote.R.Proposal.BlockDigest.String(),
+			Round:        uint64(t.round),
+			Period:       uint64(t.period),
 			ObjectRound:  uint64(vote.R.Round),
 			ObjectPeriod: uint64(vote.R.Period),
 		}

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -45,6 +46,14 @@ type emptyLedger struct {
 
 func (ml *emptyLedger) lookup(addr basics.Address) (ledgercore.AccountData, error) {
 	return ledgercore.AccountData{}, nil
+}
+
+func (ml *emptyLedger) lookupAgreement(addr basics.Address) (basics.OnlineAccountData, error) {
+	return basics.OnlineAccountData{}, nil
+}
+
+func (ml *emptyLedger) onlineStake() (basics.MicroAlgos, error) {
+	return basics.MicroAlgos{}, nil
 }
 
 func (ml *emptyLedger) lookupAppParams(addr basics.Address, aidx basics.AppIndex, cacheOnly bool) (ledgercore.AppParamsDelta, bool, error) {
@@ -99,8 +108,8 @@ func (ml *emptyLedger) BlockHdr(rnd basics.Round) (bookkeeping.BlockHeader, erro
 	return bookkeeping.BlockHeader{}, nil
 }
 
-func (ml *emptyLedger) blockHdrCached(rnd basics.Round) (bookkeeping.BlockHeader, error) {
-	return bookkeeping.BlockHeader{}, nil
+func (ml *emptyLedger) GenesisHash() crypto.Digest {
+	return crypto.Digest{}
 }
 
 func (ml *emptyLedger) GetStateProofNextRound() basics.Round {

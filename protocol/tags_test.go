@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -169,6 +169,10 @@ func TestMaxSizesTested(t *testing.T) {
 	}
 
 	for _, tag := range constTags {
+		if tag == "TxnTag" {
+			// TxnTag is tested in a looser way in TestMaxSizesCorrect
+			continue
+		}
 		require.Truef(t, tagsFound[tag], "Tag %s does not have a corresponding test in TestMaxSizesCorrect", tag)
 	}
 }

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -37,7 +37,7 @@ func init() {
 }
 
 func makeTimeoutEvent() timeoutEvent {
-	return timeoutEvent{T: timeout, RandomEntropy: crypto.RandUint64()}
+	return timeoutEvent{T: timeout, RandomEntropy: crypto.RandUint64(), Proto: ConsensusVersionView{Version: protocol.ConsensusCurrentVersion}}
 }
 
 func generateProposalEvents(t *testing.T, player player, accs testAccountData, f testBlockFactory, ledger Ledger) (voteBatch []event, payloadBatch []event, lowestProposal proposalValue) {
@@ -3240,7 +3240,7 @@ func TestPlayerAlwaysResynchsPinnedValue(t *testing.T) {
 func TestPlayerRetainsReceivedValidatedAtOneSample(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	version := protocol.ConsensusFuture
+	version := protocol.ConsensusCurrentVersion
 	const r = round(20239)
 	const p = period(131)
 	pWhite, pM, helper := setupP(t, r-1, p, soft)
@@ -3262,7 +3262,7 @@ func TestPlayerRetainsReceivedValidatedAtOneSample(t *testing.T) {
 func TestPlayerRetainsReceivedValidatedAtCredentialHistory(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	version := protocol.ConsensusFuture
+	version := protocol.ConsensusCurrentVersion
 	const r = round(20239)
 	const p = period(0)
 	pWhite, pM, helper := setupP(t, r-credentialRoundLag-1, p, soft)
@@ -3301,7 +3301,7 @@ func TestPlayerRetainsReceivedValidatedAtCredentialHistory(t *testing.T) {
 func TestPlayerRetainsEarlyReceivedValidatedAtOneSample(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	version := protocol.ConsensusFuture
+	version := protocol.ConsensusCurrentVersion
 	const r = round(20239)
 	const p = period(0)
 	pWhite, pM, helper := setupP(t, r-1, p, soft)
@@ -3339,7 +3339,7 @@ func testClockForRound(t *testing.T, pWhite *player, fixedDur time.Duration, cur
 func TestPlayerRetainsLateReceivedValidatedAtOneSample(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	version := protocol.ConsensusFuture
+	version := protocol.ConsensusCurrentVersion
 	const r = round(20239)
 	const p = period(0)
 	pWhite, pM, helper := setupP(t, r-1, p, soft)
@@ -3382,7 +3382,7 @@ func TestPlayerRetainsReceivedValidatedAtForHistoryWindowLateBetter(t *testing.T
 }
 
 func testPlayerRetainsReceivedValidatedAtForHistoryWindow(t *testing.T, addBetterLate bool) {
-	version := protocol.ConsensusFuture
+	version := protocol.ConsensusCurrentVersion
 	const r = round(20239)
 	const p = period(0)
 	pWhite, pM, helper := setupP(t, r-1, p, soft)
@@ -3449,7 +3449,7 @@ func testPlayerRetainsReceivedValidatedAtForHistoryWindow(t *testing.T, addBette
 func TestPlayerRetainsReceivedValidatedAtPPOneSample(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	version, _, configCleanup := createDynamicFilterConfig()
+	version, _, configCleanup := overrideConfigWithDynamicFilterParam(true)
 	defer configCleanup()
 	const r = round(20239)
 	const p = period(0)
@@ -3505,7 +3505,7 @@ func TestPlayerRetainsReceivedValidatedAtPPOneSample(t *testing.T) {
 func TestPlayerRetainsEarlyReceivedValidatedAtPPOneSample(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	version, _, configCleanup := createDynamicFilterConfig()
+	version, _, configCleanup := overrideConfigWithDynamicFilterParam(true)
 	defer configCleanup()
 
 	const r = round(20239)
@@ -3559,7 +3559,7 @@ func TestPlayerRetainsEarlyReceivedValidatedAtPPOneSample(t *testing.T) {
 func TestPlayerRetainsLateReceivedValidatedAtPPOneSample(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	version, _, configCleanup := createDynamicFilterConfig()
+	version, _, configCleanup := overrideConfigWithDynamicFilterParam(true)
 	defer configCleanup()
 	const r = round(20239)
 	const p = period(0)
@@ -3613,7 +3613,7 @@ func TestPlayerRetainsLateReceivedValidatedAtPPOneSample(t *testing.T) {
 func TestPlayerRetainsReceivedValidatedAtPPForHistoryWindow(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	version := protocol.ConsensusFuture
+	version := protocol.ConsensusCurrentVersion
 	const r = round(20239)
 	const p = period(0)
 	pWhite, pM, helper := setupP(t, r-1, p, soft)
@@ -3655,7 +3655,7 @@ func TestPlayerRetainsReceivedValidatedAtAVPPOneSample(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	// create a protocol version where dynamic lambda is enabled
-	version, _, configCleanup := createDynamicFilterConfig()
+	version, _, configCleanup := overrideConfigWithDynamicFilterParam(true)
 	defer configCleanup()
 	const r = round(20239)
 	const p = period(0)
@@ -3710,7 +3710,7 @@ func TestPlayerRetainsReceivedValidatedAtAVPPOneSample(t *testing.T) {
 func TestPlayerRetainsEarlyReceivedValidatedAtAVPPOneSample(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	version := protocol.ConsensusFuture
+	version := protocol.ConsensusCurrentVersion
 	const r = round(20239)
 	const p = period(0)
 	pWhite, pM, helper := setupP(t, r-1, p, soft)
@@ -3729,7 +3729,7 @@ func TestPlayerRetainsEarlyReceivedValidatedAtAVPPOneSample(t *testing.T) {
 	require.Equal(t, pWhite.lowestCredentialArrivals.writePtr, 0)
 
 	// create a protocol version where dynamic filter is enabled
-	version, _, configCleanup := createDynamicFilterConfig()
+	version, _, configCleanup := overrideConfigWithDynamicFilterParam(true)
 	defer configCleanup()
 
 	// send votePresent message (mimicking the first AV message validating)
@@ -3767,7 +3767,7 @@ func TestPlayerRetainsEarlyReceivedValidatedAtAVPPOneSample(t *testing.T) {
 func TestPlayerRetainsLateReceivedValidatedAtAVPPOneSample(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	version := protocol.ConsensusFuture
+	version := protocol.ConsensusCurrentVersion
 	const r = round(20239)
 	const p = period(0)
 	pWhite, pM, helper := setupP(t, r-1, p, soft)
@@ -3786,7 +3786,7 @@ func TestPlayerRetainsLateReceivedValidatedAtAVPPOneSample(t *testing.T) {
 	require.Equal(t, pWhite.lowestCredentialArrivals.writePtr, 0)
 
 	// create a protocol version where dynamic filter is enabled
-	version, _, configCleanup := createDynamicFilterConfig()
+	version, _, configCleanup := overrideConfigWithDynamicFilterParam(true)
 	defer configCleanup()
 
 	// send votePresent message (mimicking the first AV message validating)
@@ -3821,7 +3821,7 @@ func TestPlayerRetainsLateReceivedValidatedAtAVPPOneSample(t *testing.T) {
 func TestPlayerRetainsReceivedValidatedAtAVPPHistoryWindow(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	version := protocol.ConsensusFuture
+	version := protocol.ConsensusCurrentVersion
 	const r = round(20239)
 	const p = period(0)
 	pWhite, pM, helper := setupP(t, r-1, p, soft)

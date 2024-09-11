@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -605,4 +605,14 @@ func BenchmarkParticipationSign(b *testing.B) {
 		ephID := basics.OneTimeIDForRound(basics.Round(rnd), keyDilution)
 		_ = part.Voting.Sign(ephID, msg)
 	}
+}
+
+func BenchmarkID(b *testing.B) {
+	pki := ParticipationKeyIdentity{}
+	b.Run("existing", func(b *testing.B) {
+		b.ReportAllocs() // demonstrate this is a single alloc
+		for i := 0; i < b.N; i++ {
+			pki.ID()
+		}
+	})
 }

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -321,6 +321,9 @@ func createConfigFile(node remote.NodeConfigGoal, configFile string, numNodes in
 	if node.IsRelay {
 		// Have relays listen on any localhost port
 		cfg.NetAddress = "127.0.0.1:0"
+
+		cfg.Archival = false                // make it explicit non-archival
+		cfg.MaxBlockHistoryLookback = 20000 // to save blocks beyond MaxTxnLife=13
 	} else {
 		// Non-relays should not open incoming connections
 		cfg.IncomingConnectionsLimit = 0

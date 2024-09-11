@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -157,7 +157,11 @@ var networkCreateCmd = &cobra.Command{
 			consensus, _ = config.PreloadConfigurableConsensusProtocols(dataDir)
 		}
 
-		network, err := netdeploy.CreateNetworkFromTemplate(networkName, networkRootDir, templateReader, binDir, !noImportKeys, nil, consensus, devModeOverride)
+		var overrides []netdeploy.TemplateOverride
+		if devModeOverride {
+			overrides = append(overrides, netdeploy.OverrideDevMode)
+		}
+		network, err := netdeploy.CreateNetworkFromTemplate(networkName, networkRootDir, templateReader, binDir, !noImportKeys, nil, consensus, overrides...)
 		if err != nil {
 			if noClean {
 				reportInfof(" ** failed ** - Preserving network rootdir '%s'", networkRootDir)

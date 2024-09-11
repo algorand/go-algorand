@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -80,8 +80,8 @@ func (id *ParticipationKeyIdentity) ToBeHashed() (protocol.HashID, []byte) {
 }
 
 // ID creates a ParticipationID hash from the identity file.
-func (id ParticipationKeyIdentity) ID() ParticipationID {
-	return ParticipationID(crypto.HashObj(&id))
+func (id *ParticipationKeyIdentity) ID() ParticipationID {
+	return ParticipationID(crypto.HashObj(id))
 }
 
 // ID computes a ParticipationID.

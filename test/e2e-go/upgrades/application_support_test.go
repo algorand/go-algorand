@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -85,7 +85,7 @@ func TestApplicationsUpgradeOverREST(t *testing.T) {
 	a := require.New(fixtures.SynchronizedTest(t))
 
 	client := fixture.GetLibGoalClientForNamedNode("Node")
-	accountList, err := fixture.GetNodeWalletsSortedByBalance(client.DataDir())
+	accountList, err := fixture.GetNodeWalletsSortedByBalance(client)
 	a.NoError(err)
 
 	creator := accountList[0].Address
@@ -328,7 +328,7 @@ func TestApplicationsUpgradeOverGossip(t *testing.T) {
 
 	defer fixture.Shutdown()
 
-	accountList, err := fixture.GetNodeWalletsSortedByBalance(client.DataDir())
+	accountList, err := fixture.GetNodeWalletsSortedByBalance(client)
 	a.NoError(err)
 
 	creator := accountList[0].Address
@@ -454,7 +454,7 @@ int 1
 	// Try polling 10 rounds to ensure txn is committed.
 	round, err = client.CurrentRound()
 	a.NoError(err)
-	isCommitted := fixture.WaitForTxnConfirmation(round+10, creator, txid)
+	isCommitted := fixture.WaitForTxnConfirmation(round+10, txid)
 	a.True(isCommitted)
 
 	// check creator's balance record for the app entry and the state changes

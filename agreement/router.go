@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -59,7 +59,16 @@ var credentialRoundLag round
 
 func init() {
 	// credential arrival time should be at most 2*config.Protocol.SmallLambda after it was sent
+	// Note that the credentialRoundLag is inversely proportional to the dynamicFilterTimeoutLowerBound
+	// in the default formula. Since we are adjusting this lower bound over time,
+	// for consistency in analytics we are setting the minimum to be 8 rounds
+	// (equivalent to a dynamicFilterTimeoutLowerBound of 500 ms).
+	minCredentialRoundLag := round(8) // round 2*2000ms / 500ms
 	credentialRoundLag = round(2 * config.Protocol.SmallLambda / dynamicFilterTimeoutLowerBound)
+
+	if credentialRoundLag < minCredentialRoundLag {
+		credentialRoundLag = minCredentialRoundLag
+	}
 	if credentialRoundLag*round(dynamicFilterTimeoutLowerBound) < round(2*config.Protocol.SmallLambda) {
 		credentialRoundLag++
 	}

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -139,9 +139,7 @@ func verifyResults(txnGroups [][]transactions.SignedTxn, badTxnGroups map[uint64
 	require.GreaterOrEqual(t, len(unverifiedGroups), badSigResultCounter)
 	for _, txn := range unverifiedGroups {
 		u, _ := binary.Uvarint(txn[0].Txn.Note)
-		if _, has := badTxnGroups[u]; has {
-			delete(badTxnGroups, u)
-		}
+		delete(badTxnGroups, u)
 	}
 	require.Empty(t, badTxnGroups, "unverifiedGroups should have all the transactions with invalid sigs")
 }
@@ -301,6 +299,7 @@ func TestGetNumberOfBatchableSigsInGroup(t *testing.T) {
 	txnGroups[mod][0].Sig = crypto.Signature{}
 	batchSigs, err := UnverifiedTxnSigJob{TxnGroup: txnGroups[mod]}.GetNumberOfBatchableItems()
 	require.ErrorIs(t, err, errTxnSigHasNoSig)
+	require.Equal(t, uint64(0), batchSigs)
 	mod++
 
 	_, signedTxns, secrets, addrs := generateTestObjects(numOfTxns, 20, 0, 50)
@@ -353,6 +352,7 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	txnGroups[mod][0].Msig = mSigTxn[0].Msig
 	batchSigs, err = UnverifiedTxnSigJob{TxnGroup: txnGroups[mod]}.GetNumberOfBatchableItems()
 	require.ErrorIs(t, err, errTxnSigNotWellFormed)
+	require.Equal(t, uint64(0), batchSigs)
 }
 
 // TestStreamToBatchPoolShutdown tests what happens when the exec pool shuts down
@@ -437,10 +437,11 @@ func TestStreamToBatchPoolShutdown(t *testing.T) { //nolint:paralleltest // Not 
 	// send txn groups to be verified
 	go func() {
 		defer wg.Done()
+	outer:
 		for _, tg := range txnGroups {
 			select {
 			case <-ctx.Done():
-				break
+				break outer
 			case inputChan <- &UnverifiedTxnSigJob{TxnGroup: tg, BacklogMessage: nil}:
 			}
 		}
@@ -493,6 +494,7 @@ func TestStreamToBatchRestart(t *testing.T) {
 	// send txn groups to be verified
 	go func() {
 		defer wg.Done()
+	outer:
 		for i, tg := range txnGroups {
 			if (i+1)%10 == 0 {
 				cancel()
@@ -502,7 +504,7 @@ func TestStreamToBatchRestart(t *testing.T) {
 			}
 			select {
 			case <-ctx2.Done():
-				break
+				break outer
 			case inputChan <- &UnverifiedTxnSigJob{TxnGroup: tg, BacklogMessage: nil}:
 			}
 		}
@@ -798,7 +800,10 @@ func TestStreamToBatchPostVBlocked(t *testing.T) {
 
 func TestStreamToBatchMakeStreamToBatchErr(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	_, err := MakeSigVerifyJobProcessor(&DummyLedgerForSignature{badHdr: true}, nil, nil, nil)
+	_, err := MakeSigVerifier(&DummyLedgerForSignature{badHdr: true}, nil)
+	require.Error(t, err)
+
+	_, err = MakeSigVerifyJobProcessor(&DummyLedgerForSignature{badHdr: true}, nil, nil, nil)
 	require.Error(t, err)
 }
 
@@ -863,11 +868,40 @@ func TestGetErredUnprocessed(t *testing.T) {
 
 	droppedChan := make(chan *UnverifiedTxnSigJob, 1)
 	svh := txnSigBatchProcessor{
-		resultChan:  make(chan<- *VerificationResult, 0),
+		resultChan:  make(chan<- *VerificationResult),
 		droppedChan: droppedChan,
 	}
 
 	svh.GetErredUnprocessed(&UnverifiedTxnSigJob{}, nil)
 	dropped := <-droppedChan
 	require.Equal(t, *dropped, UnverifiedTxnSigJob{})
+}
+
+func TestSigVerifier(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	numOfTxns := 16
+	txnGroups, badTxnGroups := getSignedTransactions(numOfTxns, numOfTxns, 0, 0)
+	require.GreaterOrEqual(t, len(txnGroups), 1)
+	require.Equal(t, len(badTxnGroups), 0)
+	txnGroup := txnGroups[0]
+
+	verificationPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, t)
+	defer verificationPool.Shutdown()
+
+	cache := MakeVerifiedTransactionCache(50000)
+
+	verifier, err := MakeSigVerifier(&DummyLedgerForSignature{}, cache)
+	require.NoError(t, err)
+
+	err = verifier.Verify(txnGroup)
+	require.NoError(t, err)
+
+	txnGroups, badTxnGroups = getSignedTransactions(numOfTxns, numOfTxns, 0, 1)
+	require.GreaterOrEqual(t, len(txnGroups), 1)
+	require.Greater(t, len(badTxnGroups), 0)
+	txnGroup = txnGroups[0]
+
+	err = verifier.Verify(txnGroup)
+	require.Error(t, err)
 }

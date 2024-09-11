@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -22,6 +22,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -52,6 +55,23 @@ func TestBasicSyncMode(t *testing.T) {
 	nc, err := fixture.GetNodeController("Primary")
 	a.NoError(err)
 
+	sender, err := fixture.GetRichestAccount()
+	require.NoError(t, err)
+
+	status, err := fixture.AlgodClient.Status()
+	require.NoError(t, err)
+	curRound := status.LastRound
+
+	wh, err := fixture.LibGoalClient.GetUnencryptedWalletHandle()
+	require.NoError(t, err)
+
+	fundingTx, err := fixture.LibGoalClient.SendPaymentFromWalletWithLease(wh, nil, sender.Address, sender.Address, 0, 0, nil, "", [32]byte{1, 2, 3}, basics.Round(curRound).SubSaturate(1), 0)
+	require.NoError(t, err)
+	txn, err := fixture.WaitForConfirmedTxn(5, fundingTx.ID().String())
+	require.NoError(t, err)
+
+	require.LessOrEqual(t, *txn.ConfirmedRound, uint64(5), "Transaction should be confirmed in the first 5 rounds")
+
 	// Let the network make some progress
 	waitForRound := uint64(5)
 	err = fixture.ClientWaitForRoundWithTimeout(fixture.GetAlgodClientForController(nc), waitForRound)
@@ -73,7 +93,22 @@ func TestBasicSyncMode(t *testing.T) {
 		// retrieve state delta
 		gResp, err := followClient.GetLedgerStateDelta(round)
 		a.NoError(err)
-		a.NotNil(gResp)
+		a.NotZero(gResp)
+
+		if round == *txn.ConfirmedRound {
+			// Txleases should always be nil for JSON responses
+			require.Nil(t, gResp.Txleases)
+
+			// Verify that the transaction is in the state delta
+			expectedTxids := map[transactions.Txid]ledgercore.IncludedTransactions{
+				txn.Txn.ID(): {
+					LastValid: txn.Txn.Txn.LastValid,
+					Intra:     0,
+				},
+			}
+			require.Equal(t, expectedTxids, gResp.Txids)
+		}
+
 		// set sync round next
 		err = followClient.SetSyncRound(round + 1)
 		a.NoError(err)

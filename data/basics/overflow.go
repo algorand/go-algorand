@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -140,6 +140,14 @@ func (t *OverflowTracker) SubA(a, b MicroAlgos) MicroAlgos {
 // ScalarMulA multiplies an Algo amount by a scalar
 func (t *OverflowTracker) ScalarMulA(a MicroAlgos, b uint64) MicroAlgos {
 	return MicroAlgos{Raw: t.Mul(a.Raw, b)}
+}
+
+// MinA returns the smaller of 2 MicroAlgos values
+func MinA(a, b MicroAlgos) MicroAlgos {
+	if a.Raw < b.Raw {
+		return a
+	}
+	return b
 }
 
 // Muldiv computes a*b/c.  The overflow flag indicates that

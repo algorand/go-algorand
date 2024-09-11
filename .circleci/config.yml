@@ -45,30 +45,18 @@ executors:
     machine:
       image: << pipeline.parameters.ubuntu_image >>
     resource_class: arm.large
-  mac_amd64_medium:
-    macos:
-      xcode: 14.2.0
-    resource_class: macos.x86.medium.gen2
-    environment:
-      HOMEBREW_NO_AUTO_UPDATE: "true"
-  mac_amd64_large:
-    macos:
-      xcode: 14.2.0
-    # Since they removed the large class for amd64, we will use medium here too.
-    resource_class: macos.x86.medium.gen2
-    environment:
-      HOMEBREW_NO_AUTO_UPDATE: "true"
-  mac_arm64: &executor-mac-arm64
-    machine: true
-    resource_class: algorand/macstadium-m1
-    environment:
-      HOMEBREW_NO_AUTO_UPDATE: "true"
-  # these are required b/c jobs explicitly assign sizes to the executors
-  # for `mac_arm64` there is only one size
   mac_arm64_medium:
-    <<: *executor-mac-arm64
+    macos:
+      xcode: 14.2.0
+    resource_class: macos.m1.medium.gen1
+    environment:
+      HOMEBREW_NO_AUTO_UPDATE: "true"
   mac_arm64_large:
-    <<: *executor-mac-arm64
+    macos:
+      xcode: 14.2.0
+    resource_class: macos.m1.large.gen1
+    environment:
+      HOMEBREW_NO_AUTO_UPDATE: "true"
 
 slack-fail-stop-step: &slack-fail-post-step
   post-steps:
@@ -86,7 +74,7 @@ workflows:
           name: << matrix.platform >>_build_nightly
           matrix: &matrix-nightly
             parameters:
-              platform: ["amd64", "arm64", "mac_amd64", "mac_arm64"]
+              platform: ["amd64", "arm64", "mac_arm64"]
           filters: &filters-nightly
             branches:
               only:
@@ -137,7 +125,7 @@ workflows:
           name: << matrix.platform >>_<< matrix.job_type >>_verification
           matrix:
             parameters:
-              platform: ["amd64", "arm64", "mac_amd64", "mac_arm64"]
+              platform: ["amd64", "arm64", "mac_arm64"]
               job_type: ["test_nightly", "integration_nightly", "e2e_expect_nightly"]
           requires:
             - << matrix.platform >>_<< matrix.job_type >>
@@ -303,7 +291,7 @@ jobs:
     parameters:
       platform:
         type: string
-    executor: << parameters.platform >>_medium
+    executor: << parameters.platform >>_large
     working_directory: << pipeline.parameters.build_dir >>/project
     parallelism: 10
     environment:
@@ -319,7 +307,7 @@ jobs:
     parameters:
       platform:
         type: string
-    executor: << parameters.platform >>_medium
+    executor: << parameters.platform >>_large
     working_directory: << pipeline.parameters.build_dir >>/project
     parallelism: 2
     environment:
@@ -727,12 +715,13 @@ commands:
             command: |
               if [ "${CIRCLE_BRANCH}" = "rel/nightly" ]
               then
-                export NO_BUILD="true"
+                export NIGHTLY_BUILD="true"
               fi
               export PATH=$(echo "$PATH" | sed -e "s|:${HOME}/\.go_workspace/bin||g" | sed -e 's|:/usr/local/go/bin||g')
               export GOPATH="<< parameters.build_dir >>/go"
               export TRAVIS_BRANCH=${CIRCLE_BRANCH}
               scripts/travis/deploy_packages.sh
+            no_output_timeout: 20m
         - when:
             condition:
               equal: [ "amd64", << parameters.platform >> ]

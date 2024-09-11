@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -314,12 +314,12 @@ func addTransaction(bc *benchConfig, stxn transactions.SignedTxn) uint64 {
 }
 
 func addBlock(bc *benchConfig) {
-	vblk, err := bc.eval.GenerateBlock()
+	vblk, err := bc.eval.GenerateBlock(nil)
 	cert := agreement.Certificate{}
 	require.NoError(bc.b, err)
-	bc.blocks = append(bc.blocks, vblk.Block())
+	bc.blocks = append(bc.blocks, vblk.UnfinishedBlock())
 
-	err = bc.l0.AddBlock(vblk.Block(), cert)
+	err = bc.l0.AddBlock(vblk.UnfinishedBlock(), cert)
 	require.NoError(bc.b, err)
 
 	_, last := bc.l0.LatestCommitted()

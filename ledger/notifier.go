@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -74,6 +74,8 @@ func (bn *blockNotifier) worker() {
 
 func (bn *blockNotifier) close() {
 	bn.mu.Lock()
+	bn.pendingBlocks = nil
+	bn.listeners = nil
 	if bn.running {
 		bn.running = false
 		bn.cond.Broadcast()

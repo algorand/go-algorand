@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -25,19 +25,22 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
 func makeRandomProposalPayload(r round) *proposal {
 	f := testBlockFactory{Owner: 1}
-	ve, _ := f.AssembleBlock(r)
+	ub, _ := f.AssembleBlock(r, nil)
+	pb := ub.FinishBlock(committee.Seed{}, basics.Address{}, false)
 
 	var payload unauthenticatedProposal
-	payload.Block = ve.Block()
+	payload.Block = bookkeeping.Block(pb)
 	payload.SeedProof = crypto.VRFProof{}
 
-	return &proposal{unauthenticatedProposal: payload, ve: ve}
+	return &proposal{unauthenticatedProposal: payload}
 }
 
 var errTestVerifyFailed = makeSerErrStr("test error")
@@ -811,17 +814,16 @@ func TestPlayerPermutation(t *testing.T) {
 }
 
 func playerPermutationCheck(t *testing.T, enableDynamicFilterTimeout bool) {
-	// create a protocol version where dynamic filter is enabled
-	version, _, configCleanup := createDynamicFilterConfig()
+	// create a protocol where dynamic filter is set based on the enableDynamicFilterTimeout flag
+	dynamicFilterOverriddenProtocol, _, configCleanup := overrideConfigWithDynamicFilterParam(enableDynamicFilterTimeout)
 	defer configCleanup()
 
 	for i := 0; i < 7; i++ {
 		for j := 0; j < 14; j++ {
 			_, pMachine, helper := getPlayerPermutation(t, i)
 			inMsg := getMessageEventPermutation(t, j, helper)
-			if enableDynamicFilterTimeout {
-				inMsg.Proto = ConsensusVersionView{Version: version}
-			}
+			inMsg.Proto = ConsensusVersionView{Version: dynamicFilterOverriddenProtocol}
+
 			err, panicErr := pMachine.transition(inMsg)
 			fmt.Println(pMachine.getTrace().events)
 			fmt.Println("")

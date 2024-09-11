@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -118,7 +118,7 @@ func (z *HashFactory) Validate() error {
 }
 
 // GenericHashObj Makes it easier to sum using hash interface and Hashable interface
-func GenericHashObj(hsh hash.Hash, h Hashable) []byte {
+func GenericHashObj[H Hashable](hsh hash.Hash, h H) []byte {
 	rep := HashRep(h)
 	return hashBytes(hsh, rep)
 }

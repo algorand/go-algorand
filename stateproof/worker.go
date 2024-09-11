@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -142,6 +142,9 @@ func (spw *Worker) initDb(inMemory bool) error {
 // Stop stops any goroutines associated with this worker. It is the caller responsibility to remove the register
 // network handlers
 func (spw *Worker) Stop() {
+	spw.log.Debug("stateproof worker is stopping")
+	defer spw.log.Debug("stateproof worker has stopped")
+
 	spw.shutdown()
 	spw.wg.Wait()
 

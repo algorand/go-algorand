@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/stateproofmsg"
@@ -41,6 +42,35 @@ type mockLedger struct {
 
 func (ml *mockLedger) lookup(addr basics.Address) (ledgercore.AccountData, error) {
 	return ledgercore.ToAccountData(ml.balanceMap[addr]), nil
+}
+
+// convertToOnline is only suitable for test code because OnlineAccountData
+// should have rewards paid. Here, we ignore that for simple tests.
+func convertToOnline(ad ledgercore.AccountData) basics.OnlineAccountData {
+	return basics.OnlineAccountData{
+		MicroAlgosWithRewards: ad.MicroAlgos,
+		VotingData: basics.VotingData{
+			VoteID:          ad.VoteID,
+			SelectionID:     ad.SelectionID,
+			StateProofID:    ad.StateProofID,
+			VoteFirstValid:  ad.VoteFirstValid,
+			VoteLastValid:   ad.VoteLastValid,
+			VoteKeyDilution: ad.VoteKeyDilution,
+		},
+		IncentiveEligible: ad.IncentiveEligible,
+	}
+}
+
+func (ml *mockLedger) lookupAgreement(addr basics.Address) (basics.OnlineAccountData, error) {
+	ad, err := ml.lookup(addr)
+	if err != nil { //  impossible, see lookup()
+		return basics.OnlineAccountData{}, err
+	}
+	return convertToOnline(ad), nil
+}
+
+func (ml *mockLedger) onlineStake() (basics.MicroAlgos, error) {
+	return basics.Algos(55_555), nil
 }
 
 func (ml *mockLedger) lookupAppParams(addr basics.Address, aidx basics.AppIndex, cacheOnly bool) (ledgercore.AppParamsDelta, bool, error) {
@@ -103,8 +133,8 @@ func (ml *mockLedger) BlockHdr(rnd basics.Round) (bookkeeping.BlockHeader, error
 	return bookkeeping.BlockHeader{}, errors.New("requested blockheader not found")
 }
 
-func (ml *mockLedger) blockHdrCached(rnd basics.Round) (bookkeeping.BlockHeader, error) {
-	return ml.BlockHdr(rnd)
+func (ml *mockLedger) GenesisHash() crypto.Digest {
+	panic("GenesisHash unused by tests")
 }
 
 func (ml *mockLedger) GetStateProofVerificationContext(rnd basics.Round) (*ledgercore.StateProofVerificationContext, error) {
@@ -281,6 +311,7 @@ func TestCowChildReflect(t *testing.T) {
 		"compatibilityMode":        {},
 		"compatibilityGetKeyCache": {},
 		"prevTotals":               {},
+		"feesCollected":            {},
 	}
 
 	cow := roundCowState{}
@@ -288,7 +319,7 @@ func TestCowChildReflect(t *testing.T) {
 	st := v.Type()
 	for i := 0; i < v.NumField(); i++ {
 		reflectedCowName := st.Field(i).Name
-		require.Containsf(t, cowFieldNames, reflectedCowName, "new field:\"%v\" added to roundCowState, please update roundCowState.reset() to handle it before fixing the test", reflectedCowName)
+		require.Containsf(t, cowFieldNames, reflectedCowName, "new field:\"%v\" added to roundCowState, please update roundCowState.reset() to handle it before fixing this test", reflectedCowName)
 	}
 }
 

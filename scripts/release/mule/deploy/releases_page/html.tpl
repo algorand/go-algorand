@@ -13,6 +13,15 @@
 <p>The public key for verifying RPMs is <a href="https://releases.algorand.com/rpm/rpm_algorand.pub">https://releases.algorand.com/rpm/rpm_algorand.pub</a></p>
 <p>The public key for verifying binaries out of our CI builds is <a href="https://releases.algorand.com/dev_ci_build.pub">https://releases.algorand.com/dev_ci_build.pub</a></p>
 
+<h2>Indexer/Conduit</h2>
+
+Use the CI Build key above to verify these binaries.
+
+<ul>
+<li><a href="https://github.com/algorand/conduit/releases/latest">Latest Conduit Release</a></li>
+<li><a href="https://github.com/algorand/indexer/releases/latest">Latest Indexer Release</a></li>
+</ul>
+
 <hr>
 
 <section id="algod">
@@ -29,13 +38,6 @@
 </section>
 
 <hr>
-
-<section id="indexer">
-<h1>Indexer releases</h1>
-<table><tr><th>File</th><th>Bytes</th><th>GPG Signature</th></tr>
-{indexer}
-</table>
-</section>
 
 </body>
 </html>

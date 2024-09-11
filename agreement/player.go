@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -100,10 +100,19 @@ func (p *player) handle(r routerHandle, e event) []action {
 			r.t.logTimeout(*p)
 		}
 
+		var deadlineTimeout time.Duration
+		if e.Proto.Version == "" || e.Proto.Err != nil {
+			r.t.log.Errorf("failed to read valid protocol version for timeout event (proto %v): %v. "+
+				"Falling Back to default deadline timeout.", e.Proto.Version, e.Proto.Err)
+			deadlineTimeout = DefaultDeadlineTimeout()
+		} else {
+			deadlineTimeout = DeadlineTimeout(p.Period, e.Proto.Version)
+		}
+
 		switch p.Step {
 		case soft:
 			// precondition: nap = false
-			actions = p.issueSoftVote(r)
+			actions = p.issueSoftVote(r, deadlineTimeout)
 			p.Step = cert
 			// update tracer state to match player
 			r.t.setMetadata(tracerMetadata{p.Round, p.Period, p.Step})
@@ -113,16 +122,16 @@ func (p *player) handle(r routerHandle, e event) []action {
 			p.Step = next
 			// update tracer state to match player
 			r.t.setMetadata(tracerMetadata{p.Round, p.Period, p.Step})
-			return p.issueNextVote(r)
+			return p.issueNextVote(r, deadlineTimeout)
 		default:
 			if p.Napping {
-				return p.issueNextVote(r) // sets p.Napping to false
+				return p.issueNextVote(r, deadlineTimeout) // sets p.Napping to false
 			}
 			// not napping, so we should enter a new step
 			p.Step++ // note: this must happen before next timeout setting.
 			// TODO add unit test to ensure that deadlines increase monotonically here
 
-			lower, upper := p.Step.nextVoteRanges()
+			lower, upper := p.Step.nextVoteRanges(deadlineTimeout)
 			delta := time.Duration(e.RandomEntropy % uint64(upper-lower))
 
 			p.Napping = true
@@ -158,7 +167,7 @@ func (p *player) handleFastTimeout(r routerHandle, e timeoutEvent) []action {
 	return p.issueFastVote(r)
 }
 
-func (p *player) issueSoftVote(r routerHandle) (actions []action) {
+func (p *player) issueSoftVote(r routerHandle, deadlineTimeout time.Duration) (actions []action) {
 	defer func() {
 		p.Deadline = Deadline{Duration: deadlineTimeout, Type: TimeoutDeadline}
 	}()
@@ -202,7 +211,7 @@ func (p *player) issueCertVote(r routerHandle, e committableEvent) action {
 	return pseudonodeAction{T: attest, Round: p.Round, Period: p.Period, Step: cert, Proposal: e.Proposal}
 }
 
-func (p *player) issueNextVote(r routerHandle) []action {
+func (p *player) issueNextVote(r routerHandle, deadlineTimeout time.Duration) []action {
 	actions := p.partitionPolicy(r)
 
 	a := pseudonodeAction{T: attest, Round: p.Round, Period: p.Period, Step: p.Step, Proposal: bottom}
@@ -226,7 +235,7 @@ func (p *player) issueNextVote(r routerHandle) []action {
 
 	r.t.timeR().RecStep(p.Period, p.Step, a.Proposal)
 
-	_, upper := p.Step.nextVoteRanges()
+	_, upper := p.Step.nextVoteRanges(deadlineTimeout)
 	p.Napping = false
 	p.Deadline = Deadline{Duration: upper, Type: TimeoutDeadline}
 	return actions

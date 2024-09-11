@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -2694,4 +2694,87 @@ int 1
 		},
 	}
 	a.Equal(expectedResult, resp)
+}
+
+func TestSimulateWithFixSigners(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	a := require.New(fixtures.SynchronizedTest(t))
+	var localFixture fixtures.RestClientFixture
+	localFixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50EachFuture.json"))
+	defer localFixture.Shutdown()
+
+	testClient := localFixture.LibGoalClient
+
+	_, err := testClient.WaitForRound(1)
+	a.NoError(err)
+
+	wh, err := testClient.GetUnencryptedWalletHandle()
+	a.NoError(err)
+	addresses, err := testClient.ListAddresses(wh)
+	a.NoError(err)
+	_, senderAddress := helper.GetMaxBalAddr(t, testClient, addresses)
+	if senderAddress == "" {
+		t.Error("no addr with funds")
+	}
+	a.NoError(err)
+
+	rekeyTxn, err := testClient.ConstructPayment(senderAddress, senderAddress, 0, 1, nil, "", [32]byte{}, 0, 0)
+	a.NoError(err)
+
+	var authAddr basics.Address
+	crypto.RandBytes(authAddr[:])
+	rekeyTxn.RekeyTo = authAddr
+
+	txn, err := testClient.ConstructPayment(senderAddress, senderAddress, 0, 1, nil, "", [32]byte{}, 0, 0)
+	a.NoError(err)
+
+	gid, err := testClient.GroupID([]transactions.Transaction{rekeyTxn, txn})
+	a.NoError(err)
+
+	rekeyTxn.Group = gid
+	txn.Group = gid
+
+	simulateRequest := v2.PreEncodedSimulateRequest{
+		TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
+			{
+				Txns: []transactions.SignedTxn{{Txn: rekeyTxn}, {Txn: txn}},
+			},
+		},
+		AllowEmptySignatures: true,
+		FixSigners:           true,
+	}
+	result, err := testClient.SimulateTransactions(simulateRequest)
+	a.NoError(err)
+
+	allowEmptySignatures := true
+	fixSigners := true
+	authAddrStr := authAddr.String()
+	expectedResult := v2.PreEncodedSimulateResponse{
+		Version:   2,
+		LastRound: result.LastRound,
+		TxnGroups: []v2.PreEncodedSimulateTxnGroupResult{
+			{
+				Txns: []v2.PreEncodedSimulateTxnResult{
+					{
+						Txn: v2.PreEncodedTxInfo{
+							Txn: transactions.SignedTxn{Txn: rekeyTxn},
+						},
+					},
+					{
+						Txn: v2.PreEncodedTxInfo{
+							Txn: transactions.SignedTxn{Txn: txn},
+						},
+						FixedSigner: &authAddrStr,
+					},
+				},
+			},
+		},
+		EvalOverrides: &model.SimulationEvalOverrides{
+			AllowEmptySignatures: &allowEmptySignatures,
+			FixSigners:           &fixSigners,
+		},
+	}
+	a.Equal(expectedResult, result)
 }

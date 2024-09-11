@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -31,7 +31,7 @@ const dynamicFilterCredentialArrivalHistory int = 40
 
 // DynamicFilterTimeoutLowerBound specifies a minimal duration that the
 // filter timeout must meet.
-const dynamicFilterTimeoutLowerBound time.Duration = 500 * time.Millisecond
+const dynamicFilterTimeoutLowerBound time.Duration = 2500 * time.Millisecond
 
 // DynamicFilterTimeoutCredentialArrivalHistoryIdx specified which sample to use
 // out of a sorted DynamicFilterCredentialArrivalHistory-sized array of time

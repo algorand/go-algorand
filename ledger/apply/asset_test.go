@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -90,7 +90,7 @@ func TestAssetTransfer(t *testing.T) {
 	}
 
 	var ad transactions.ApplyData
-	err := AssetTransfer(tx.AssetTransferTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, &ad)
+	err := AssetTransfer(tx.AssetTransferTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{}, &ad)
 	require.NoError(t, err)
 
 	if config.Consensus[protocol.ConsensusCurrentVersion].EnableAssetCloseAmount {

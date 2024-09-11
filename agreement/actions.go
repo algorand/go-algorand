@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -232,8 +232,7 @@ type ensureAction struct {
 	Payload proposal
 	// the certificate proving commitment
 	Certificate Certificate
-
-	// The time that the winning proposal-vote was validated, relative to the beginning of the round
+	// The time that the lowest proposal-vote was validated for `credentialRoundLag` rounds ago (R-credentialRoundLag). This may not have been the winning proposal, since we wait `credentialRoundLag` rounds to see if there was a better one.
 	voteValidatedAt time.Duration
 	// The dynamic filter timeout calculated for this round, even if not enabled, for reporting to telemetry.
 	dynamicFilterTimeout time.Duration
