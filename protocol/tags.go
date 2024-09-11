@@ -33,12 +33,12 @@ const (
 	MsgDigestSkipTag     Tag = "MS"
 	NetPrioResponseTag   Tag = "NP"
 	NetIDVerificationTag Tag = "NI"
-	//PingTag              Tag = "pi" was removed in 3.2.1
-	//PingReplyTag         Tag = "pj" was removed in 3.2.1
-	ProposalPayloadTag Tag = "PP"
-	StateProofSigTag   Tag = "SP"
-	TopicMsgRespTag    Tag = "TS"
-	TxnTag             Tag = "TX"
+	PingTag              Tag = "pi" // was removed in 3.2.1
+	PingReplyTag         Tag = "pj" // was removed in 3.2.1
+	ProposalPayloadTag   Tag = "PP"
+	StateProofSigTag     Tag = "SP"
+	TopicMsgRespTag      Tag = "TS"
+	TxnTag               Tag = "TX"
 	//UniCatchupReqTag   Tag = "UC" was replaced by UniEnsBlockReqTag
 	UniEnsBlockReqTag Tag = "UE"
 	//UniEnsBlockResTag  Tag = "US" was used for wsfetcherservice
@@ -146,6 +146,12 @@ var TagList = []Tag{
 	TxnTag,
 	UniEnsBlockReqTag,
 	VoteBundleTag,
+}
+
+// DeprecatedTagMap contains tags that are no longer used, but may still show up in MsgOfInterest messages.
+var DeprecatedTagMap = map[Tag]struct{}{
+	PingTag:      {},
+	PingReplyTag: {},
 }
 
 // TagMap is a map of all currently used protocol tags.

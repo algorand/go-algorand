@@ -658,7 +658,7 @@ func (wn *WebsocketNetwork) Start() error {
 	defer wn.messagesOfInterestMu.Unlock()
 	wn.messagesOfInterestEncoded = true
 	if wn.messagesOfInterest != nil {
-		wn.messagesOfInterestEnc = MarshallMessageOfInterestMap(wn.messagesOfInterest)
+		wn.messagesOfInterestEnc = marshallMessageOfInterestMap(wn.messagesOfInterest)
 	}
 
 	if wn.config.IsGossipServer() || wn.config.ForceRelayMessages {
@@ -2468,7 +2468,7 @@ func (wn *WebsocketNetwork) DeregisterMessageInterest(t protocol.Tag) {
 
 func (wn *WebsocketNetwork) updateMessagesOfInterestEnc() {
 	// must run inside wn.messagesOfInterestMu.Lock
-	wn.messagesOfInterestEnc = MarshallMessageOfInterestMap(wn.messagesOfInterest)
+	wn.messagesOfInterestEnc = marshallMessageOfInterestMap(wn.messagesOfInterest)
 	wn.messagesOfInterestEncoded = true
 	wn.messagesOfInterestGeneration.Add(1)
 	var peers []*wsPeer

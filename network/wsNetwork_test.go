@@ -3844,7 +3844,7 @@ func (t mockHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	bytes := MarshallMessageOfInterest([]protocol.Tag{protocol.AgreementVoteTag})
+	bytes := marshallMessageOfInterest([]protocol.Tag{protocol.AgreementVoteTag})
 	msgBytes := append([]byte(protocol.MsgOfInterestTag), bytes...)
 	_, err = wr.Write(msgBytes)
 	if err != nil {
