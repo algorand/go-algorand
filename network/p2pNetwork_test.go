@@ -783,10 +783,48 @@ func TestP2PHTTPHandler(t *testing.T) {
 	pstore, err := peerstore.MakePhonebook(0, 10*time.Second)
 	require.NoError(t, err)
 	pstore.AddPersistentPeers([]*peer.AddrInfo{&peerInfoA}, "net", phonebook.PhoneBookEntryRelayRole)
-	httpClient, err = p2p.MakeHTTPClientWithRateLimit(&peerInfoA, pstore, 1*time.Second, 1)
+	httpClient, err = p2p.MakeHTTPClientWithRateLimit(&peerInfoA, pstore, 1*time.Second)
 	require.NoError(t, err)
 	_, err = httpClient.Get("/test")
 	require.ErrorIs(t, err, limitcaller.ErrConnectionQueueingTimeout)
+}
+
+// TestP2PHTTPHandlerAllInterfaces makes sure HTTP server runs even if NetAddress is set to a non-routable address
+func TestP2PHTTPHandlerAllInterfaces(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	cfg := config.GetDefaultLocal()
+	cfg.EnableDHTProviders = false
+	cfg.GossipFanout = 1
+	cfg.NetAddress = ":0"
+	log := logging.TestingLog(t)
+
+	netA, err := NewP2PNetwork(log, cfg, "", nil, genesisID, config.Devtestnet, &nopeNodeInfo{}, nil)
+	require.NoError(t, err)
+
+	h := &p2phttpHandler{t, "hello", nil}
+	netA.RegisterHTTPHandler("/test", h)
+
+	netA.Start()
+	defer netA.Stop()
+
+	peerInfoA := netA.service.AddrInfo()
+	addrsB, err := peer.AddrInfoToP2pAddrs(&peerInfoA)
+	require.NoError(t, err)
+	require.NotZero(t, addrsB[0])
+
+	t.Logf("peerInfoB: %s", peerInfoA)
+	httpClient, err := p2p.MakeHTTPClient(&peerInfoA)
+	require.NoError(t, err)
+	resp, err := httpClient.Get("/test")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.Equal(t, "hello", string(body))
+
 }
 
 // TestP2PRelay checks p2p nodes can properly relay messages:

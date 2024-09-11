@@ -513,7 +513,6 @@ func (n *P2PNetwork) Address() (string, bool) {
 	for _, addr := range addrs {
 		if !manet.IsIPLoopback(addr) && !manet.IsIPUnspecified(addr) {
 			return addr.String(), true
-
 		}
 	}
 	// We don't have a non loopback address, so just return the first one if it contains an ip4 address or port
@@ -613,8 +612,7 @@ func addrInfoToWsPeerCore(n *P2PNetwork, addrInfo *peer.AddrInfo) (wsPeerCore, b
 	}
 	addr := mas[0].String()
 
-	maxIdleConnsPerHost := int(n.config.ConnectionsRateLimitingCount)
-	client, err := p2p.MakeHTTPClientWithRateLimit(addrInfo, n.pstore, limitcaller.DefaultQueueingTimeout, maxIdleConnsPerHost)
+	client, err := p2p.MakeHTTPClientWithRateLimit(addrInfo, n.pstore, limitcaller.DefaultQueueingTimeout)
 	if err != nil {
 		n.log.Warnf("MakeHTTPClient failed: %v", err)
 		return wsPeerCore{}, false
@@ -720,8 +718,7 @@ func (n *P2PNetwork) GetHTTPClient(address string) (*http.Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	maxIdleConnsPerHost := int(n.config.ConnectionsRateLimitingCount)
-	return p2p.MakeHTTPClientWithRateLimit(addrInfo, n.pstore, limitcaller.DefaultQueueingTimeout, maxIdleConnsPerHost)
+	return p2p.MakeHTTPClientWithRateLimit(addrInfo, n.pstore, limitcaller.DefaultQueueingTimeout)
 }
 
 // OnNetworkAdvance notifies the network library that the agreement protocol was able to make a notable progress.
@@ -774,8 +771,7 @@ func (n *P2PNetwork) wsStreamHandler(ctx context.Context, p2pPeer peer.ID, strea
 
 	// create a wsPeer for this stream and added it to the peers map.
 	addrInfo := &peer.AddrInfo{ID: p2pPeer, Addrs: []multiaddr.Multiaddr{ma}}
-	maxIdleConnsPerHost := int(n.config.ConnectionsRateLimitingCount)
-	client, err := p2p.MakeHTTPClientWithRateLimit(addrInfo, n.pstore, limitcaller.DefaultQueueingTimeout, maxIdleConnsPerHost)
+	client, err := p2p.MakeHTTPClientWithRateLimit(addrInfo, n.pstore, limitcaller.DefaultQueueingTimeout)
 	if err != nil {
 		n.log.Warnf("Cannot construct HTTP Client for %s: %v", p2pPeer, err)
 		client = nil

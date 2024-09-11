@@ -4600,3 +4600,42 @@ func TestHTTPPAddressBoundTransport(t *testing.T) {
 		}
 	}
 }
+
+// TestWebsocketNetworkHTTPClient checks ws net HTTP client can connect to another node
+// with out unexpected errors
+func TestWebsocketNetworkHTTPClient(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	netA := makeTestWebsocketNode(t)
+	err := netA.Start()
+	require.NoError(t, err)
+	defer netStop(t, netA, "A")
+
+	netB := makeTestWebsocketNodeWithConfig(t, defaultConfig)
+
+	addr, ok := netA.Address()
+	require.True(t, ok)
+
+	c, err := netB.GetHTTPClient(addr)
+	require.NoError(t, err)
+
+	netA.RegisterHTTPHandlerFunc("/handled", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	resp, err := c.Do(&http.Request{URL: &url.URL{Path: "/handled"}})
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	resp, err = c.Do(&http.Request{URL: &url.URL{Path: "/test"}})
+	require.NoError(t, err)
+	require.Equal(t, http.StatusNotFound, resp.StatusCode) // no such handler
+
+	resp, err = c.Do(&http.Request{URL: &url.URL{Path: "/v1/" + genesisID + "/gossip"}})
+	require.NoError(t, err)
+	require.Equal(t, http.StatusPreconditionFailed, resp.StatusCode) // not enough ws peer headers
+
+	_, err = netB.GetHTTPClient("invalid")
+	require.Error(t, err)
+}
