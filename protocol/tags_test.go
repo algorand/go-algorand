@@ -88,9 +88,14 @@ func TestTagList(t *testing.T) {
 
 	// Verify that TagList is not empty and has the same length as constTags
 	require.NotEmpty(t, TagList)
-	require.Len(t, TagList, len(constTags), "TagList is not complete")
+	require.Len(t, TagList, len(constTags)-len(DeprecatedTagMap), "TagList is not complete")
 	tagListMap := make(map[Tag]bool)
 	for _, tag := range TagList {
+		tagListMap[tag] = true
+	}
+	for tag := range DeprecatedTagMap {
+		// ensure deprecated tags are not in TagList
+		require.False(t, tagListMap[tag])
 		tagListMap[tag] = true
 	}
 	// Iterate through constTags and check that each element exists in tagListMap
