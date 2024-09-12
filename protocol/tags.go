@@ -148,18 +148,25 @@ var TagList = []Tag{
 	VoteBundleTag,
 }
 
-// DeprecatedTagMap contains tags that are no longer used, but may still show up in MsgOfInterest messages.
-var DeprecatedTagMap = map[Tag]struct{}{
-	PingTag:      {},
-	PingReplyTag: {},
+// DeprecatedTagList contains tags that are no longer used, but may still show up in MsgOfInterest messages.
+var DeprecatedTagList = []Tag{
+	PingTag,
+	PingReplyTag,
 }
 
 // TagMap is a map of all currently used protocol tags.
 var TagMap map[Tag]struct{}
 
+// DeprecatedTagMap is a map of all deprecated protocol tags.
+var DeprecatedTagMap map[Tag]struct{}
+
 func init() {
 	TagMap = make(map[Tag]struct{})
 	for _, tag := range TagList {
 		TagMap[tag] = struct{}{}
+	}
+	DeprecatedTagMap = make(map[Tag]struct{})
+	for _, tag := range DeprecatedTagList {
+		DeprecatedTagMap[tag] = struct{}{}
 	}
 }
