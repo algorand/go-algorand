@@ -780,10 +780,12 @@ func TestP2PHTTPHandler(t *testing.T) {
 
 	// check rate limiting client:
 	// zero clients allowed, rate limiting window (10s) is greater than queue deadline (1s)
+	netB, err := NewP2PNetwork(log, cfg, "", nil, genesisID, config.Devtestnet, &nopeNodeInfo{}, nil)
+	require.NoError(t, err)
 	pstore, err := peerstore.MakePhonebook(0, 10*time.Second)
 	require.NoError(t, err)
 	pstore.AddPersistentPeers([]*peer.AddrInfo{&peerInfoA}, "net", phonebook.PhoneBookEntryRelayRole)
-	httpClient, err = p2p.MakeHTTPClientWithRateLimit(&peerInfoA, pstore, 1*time.Second)
+	httpClient, err = p2p.MakeHTTPClientWithRateLimit(&peerInfoA, netB.service, pstore, 1*time.Second)
 	require.NoError(t, err)
 	_, err = httpClient.Get("/test")
 	require.ErrorIs(t, err, limitcaller.ErrConnectionQueueingTimeout)

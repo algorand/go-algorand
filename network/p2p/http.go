@@ -75,13 +75,38 @@ func (s *HTTPServer) RegisterHTTPHandlerFunc(path string, handler func(http.Resp
 	})
 }
 
-// MakeHTTPClient creates a http.Client that uses libp2p transport for a given protocol and peer address.
-func MakeHTTPClient(addrInfo *peer.AddrInfo) (*http.Client, error) {
-	clientStreamHost, err := libp2p.New(libp2p.NoListenAddrs)
-	if err != nil {
-		return nil, err
+type httpClientConfig struct {
+	host host.Host
+}
+
+type httpClientOption func(*httpClientConfig)
+
+// WithHost sets the libp2p host for the http client.
+func WithHost(h host.Host) httpClientOption {
+	return func(o *httpClientConfig) {
+		o.host = h
 	}
-	logging.Base().Debugf("MakeHTTPClient made a new P2P host %s for %s", clientStreamHost.ID(), addrInfo.String())
+}
+
+// MakeHTTPClient creates a http.Client that uses libp2p transport for a given protocol and peer address.
+// If service is nil, a new libp2p host is created.
+func MakeHTTPClient(addrInfo *peer.AddrInfo, opts ...httpClientOption) (*http.Client, error) {
+	var config httpClientConfig
+	for _, opt := range opts {
+		opt(&config)
+	}
+
+	var clientStreamHost host.Host
+	if config.host != nil {
+		clientStreamHost = config.host
+	} else {
+		var err error
+		clientStreamHost, err = libp2p.New(libp2p.NoListenAddrs)
+		if err != nil {
+			return nil, err
+		}
+		logging.Base().Debugf("MakeHTTPClient made a new P2P host %s for %s", clientStreamHost.ID(), addrInfo.String())
+	}
 
 	client := libp2phttp.Host{StreamHost: clientStreamHost}
 
@@ -98,8 +123,8 @@ func MakeHTTPClient(addrInfo *peer.AddrInfo) (*http.Client, error) {
 }
 
 // MakeHTTPClientWithRateLimit creates a http.Client that uses libp2p transport for a given protocol and peer address.
-func MakeHTTPClientWithRateLimit(addrInfo *peer.AddrInfo, pstore limitcaller.ConnectionTimeStore, queueingTimeout time.Duration) (*http.Client, error) {
-	cl, err := MakeHTTPClient(addrInfo)
+func MakeHTTPClientWithRateLimit(addrInfo *peer.AddrInfo, service Service, pstore limitcaller.ConnectionTimeStore, queueingTimeout time.Duration) (*http.Client, error) {
+	cl, err := MakeHTTPClient(addrInfo, WithHost(service.(*serviceImpl).host))
 	if err != nil {
 		return nil, err
 	}
