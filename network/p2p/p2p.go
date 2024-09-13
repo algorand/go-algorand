@@ -21,12 +21,14 @@ import (
 	"encoding/base32"
 	"fmt"
 	"net"
+	"net/http"
 	"runtime"
 	"strings"
 	"time"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/network/limitcaller"
 	pstore "github.com/algorand/go-algorand/network/p2p/peerstore"
 	"github.com/algorand/go-algorand/network/phonebook"
 	"github.com/algorand/go-algorand/util/metrics"
@@ -69,6 +71,9 @@ type Service interface {
 	ListPeersForTopic(topic string) []peer.ID
 	Subscribe(topic string, val pubsub.ValidatorEx) (SubNextCancellable, error)
 	Publish(ctx context.Context, topic string, data []byte) error
+
+	// GetHTTPClient returns a rate-limiting libp2p-streaming http client that can be used to make requests to the given peer
+	GetHTTPClient(addrInfo *peer.AddrInfo, connTimeStore limitcaller.ConnectionTimeStore, queueingTimeout time.Duration) (*http.Client, error)
 }
 
 // serviceImpl manages integration with libp2p and implements the Service interface
@@ -411,4 +416,9 @@ func addressFilter(addrs []multiaddr.Multiaddr) []multiaddr.Multiaddr {
 		logging.Base().Debugf("addressFilter output: %s", b.String())
 	}
 	return res
+}
+
+// GetHTTPClient returns a libp2p-streaming http client that can be used to make requests to the given peer
+func (s *serviceImpl) GetHTTPClient(addrInfo *peer.AddrInfo, connTimeStore limitcaller.ConnectionTimeStore, queueingTimeout time.Duration) (*http.Client, error) {
+	return makeHTTPClientWithRateLimit(addrInfo, s, connTimeStore, queueingTimeout)
 }

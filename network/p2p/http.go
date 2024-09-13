@@ -88,9 +88,15 @@ func WithHost(h host.Host) httpClientOption {
 	}
 }
 
-// MakeHTTPClient creates a http.Client that uses libp2p transport for a given protocol and peer address.
+// MakeTestHTTPClient creates a http.Client that uses libp2p transport for a given protocol and peer address.
+// This exported method is only used in tests.
+func MakeTestHTTPClient(addrInfo *peer.AddrInfo, opts ...httpClientOption) (*http.Client, error) {
+	return makeHTTPClient(addrInfo, opts...)
+}
+
+// makeHTTPClient creates a http.Client that uses libp2p transport for a given protocol and peer address.
 // If service is nil, a new libp2p host is created.
-func MakeHTTPClient(addrInfo *peer.AddrInfo, opts ...httpClientOption) (*http.Client, error) {
+func makeHTTPClient(addrInfo *peer.AddrInfo, opts ...httpClientOption) (*http.Client, error) {
 	var config httpClientConfig
 	for _, opt := range opts {
 		opt(&config)
@@ -122,13 +128,13 @@ func MakeHTTPClient(addrInfo *peer.AddrInfo, opts ...httpClientOption) (*http.Cl
 	return &http.Client{Transport: rt}, nil
 }
 
-// MakeHTTPClientWithRateLimit creates a http.Client that uses libp2p transport for a given protocol and peer address.
-func MakeHTTPClientWithRateLimit(addrInfo *peer.AddrInfo, service Service, pstore limitcaller.ConnectionTimeStore, queueingTimeout time.Duration) (*http.Client, error) {
-	cl, err := MakeHTTPClient(addrInfo, WithHost(service.(*serviceImpl).host))
+// makeHTTPClientWithRateLimit creates a http.Client that uses libp2p transport for a given protocol and peer address.
+func makeHTTPClientWithRateLimit(addrInfo *peer.AddrInfo, p2pService *serviceImpl, connTimeStore limitcaller.ConnectionTimeStore, queueingTimeout time.Duration) (*http.Client, error) {
+	cl, err := makeHTTPClient(addrInfo, WithHost(p2pService.host))
 	if err != nil {
 		return nil, err
 	}
-	rltr := limitcaller.MakeRateLimitingBoundTransportWithRoundTripper(pstore, queueingTimeout, cl.Transport, string(addrInfo.ID))
+	rltr := limitcaller.MakeRateLimitingBoundTransportWithRoundTripper(connTimeStore, queueingTimeout, cl.Transport, string(addrInfo.ID))
 	cl.Transport = &rltr
 	return cl, nil
 
