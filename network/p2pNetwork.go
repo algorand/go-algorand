@@ -706,8 +706,8 @@ func (n *P2PNetwork) RegisterValidatorHandlers(dispatch []TaggedMessageValidator
 	n.handler.RegisterValidatorHandlers(dispatch)
 }
 
-// ClearProcessors deregisters all the existing message handlers.
-func (n *P2PNetwork) ClearProcessors() {
+// ClearValidatorHandlers deregisters all the existing message handlers.
+func (n *P2PNetwork) ClearValidatorHandlers() {
 	n.handler.ClearValidatorHandlers([]Tag{})
 }
 

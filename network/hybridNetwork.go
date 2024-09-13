@@ -203,10 +203,10 @@ func (n *HybridP2PNetwork) RegisterValidatorHandlers(dispatch []TaggedMessageVal
 	n.wsNetwork.RegisterValidatorHandlers(dispatch)
 }
 
-// ClearProcessors deregisters all the existing message processors.
-func (n *HybridP2PNetwork) ClearProcessors() {
-	n.p2pNetwork.ClearProcessors()
-	n.wsNetwork.ClearProcessors()
+// ClearValidatorHandlers deregisters all the existing message processors.
+func (n *HybridP2PNetwork) ClearValidatorHandlers() {
+	n.p2pNetwork.ClearValidatorHandlers()
+	n.wsNetwork.ClearValidatorHandlers()
 }
 
 // GetHTTPClient returns a http.Client with a suitable for the network Transport

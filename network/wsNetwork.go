@@ -825,8 +825,8 @@ func (wn *WebsocketNetwork) ClearHandlers() {
 func (wn *WebsocketNetwork) RegisterValidatorHandlers(dispatch []TaggedMessageValidatorHandler) {
 }
 
-// ClearProcessors deregisters all the existing message handlers.
-func (wn *WebsocketNetwork) ClearProcessors() {
+// ClearValidatorHandlers deregisters all the existing message handlers.
+func (wn *WebsocketNetwork) ClearValidatorHandlers() {
 }
 
 func (wn *WebsocketNetwork) setHeaders(header http.Header) {
