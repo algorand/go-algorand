@@ -592,7 +592,7 @@ func TestP2PNetworkDHTCapabilities(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			netA, err := NewP2PNetwork(log, cfg, "", nil, genesisID, config.Devtestnet, test.nis[0], nil)
+			netA, err := NewP2PNetwork(log.With("name", "netA"), cfg, "", nil, genesisID, config.Devtestnet, test.nis[0], nil)
 			require.NoError(t, err)
 
 			err = netA.Start()
@@ -606,13 +606,13 @@ func TestP2PNetworkDHTCapabilities(t *testing.T) {
 
 			multiAddrStr := addrsA[0].String()
 			phoneBookAddresses := []string{multiAddrStr}
-			netB, err := NewP2PNetwork(log, cfg, "", phoneBookAddresses, genesisID, config.Devtestnet, test.nis[1], nil)
+			netB, err := NewP2PNetwork(log.With("name", "netB"), cfg, "", phoneBookAddresses, genesisID, config.Devtestnet, test.nis[1], nil)
 			require.NoError(t, err)
 			err = netB.Start()
 			require.NoError(t, err)
 			defer netB.Stop()
 
-			netC, err := NewP2PNetwork(log, cfg, "", phoneBookAddresses, genesisID, config.Devtestnet, test.nis[2], nil)
+			netC, err := NewP2PNetwork(log.With("name", "netC"), cfg, "", phoneBookAddresses, genesisID, config.Devtestnet, test.nis[2], nil)
 			require.NoError(t, err)
 			err = netC.Start()
 			require.NoError(t, err)
@@ -665,6 +665,7 @@ func TestP2PNetworkDHTCapabilities(t *testing.T) {
 						func() bool {
 							peers, err := disc.PeersForCapability(cap, test.numCapPeers)
 							if err == nil && len(peers) == test.numCapPeers {
+								fmt.Printf("%s peers for cap %s: %s\n", disc.Host().ID().String(), cap, peers)
 								return true
 							}
 							return false
@@ -674,14 +675,16 @@ func TestP2PNetworkDHTCapabilities(t *testing.T) {
 						fmt.Sprintf("Not all expected %s cap peers were found", cap),
 					)
 					// ensure GetPeers gets PeersPhonebookArchivalNodes peers
-					// it appears there are artifical peers because of listening on localhost and on a real network interface
+					// it appears there are artificial peers because of listening on localhost and on a real network interface
 					// so filter out and save only unique peers by their IDs
 					net := nets[idx]
+					net.meshThreadInner() // update peerstore with DHT peers
 					peers := net.GetPeers(PeersPhonebookArchivalNodes)
 					uniquePeerIDs := make(map[peer.ID]struct{})
 					for _, p := range peers {
 						wsPeer := p.(*wsPeerCore)
 						pi, err := peer.AddrInfoFromString(wsPeer.GetAddress())
+						fmt.Println("pi.ID", pi.ID)
 						require.NoError(t, err)
 						uniquePeerIDs[pi.ID] = struct{}{}
 					}

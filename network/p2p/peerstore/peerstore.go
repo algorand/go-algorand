@@ -213,11 +213,21 @@ func (ps *PeerStore) ReplacePeerList(addressesThey []*peer.AddrInfo, networkName
 		data, _ := ps.Get(pid, addressDataKey)
 		if data != nil {
 			ad := data.(addressData)
+			updated := false
 			ad.mu.RLock()
-			if ad.networkNames[networkName] && ad.role == role && !ad.persistent {
-				removeItems[pid] = true
+			if ad.networkNames[networkName] && !ad.persistent {
+				if ad.role.Is(role) {
+					removeItems[pid] = true
+				} else if ad.role.Has(role) {
+					ad.role.Remove(role)
+					updated = true
+				}
 			}
 			ad.mu.RUnlock()
+
+			if updated {
+				_ = ps.Put(pid, addressDataKey, ad)
+			}
 		}
 
 	}
@@ -229,7 +239,9 @@ func (ps *PeerStore) ReplacePeerList(addressesThey []*peer.AddrInfo, networkName
 			ad := data.(addressData)
 			ad.mu.Lock()
 			ad.networkNames[networkName] = true
+			ad.role.Assign(role)
 			ad.mu.Unlock()
+			_ = ps.Put(info.ID, addressDataKey, ad)
 
 			// do not remove this entry
 			delete(removeItems, info.ID)
@@ -326,7 +338,7 @@ func (ps *PeerStore) filterRetryTime(t time.Time, role phonebook.PhoneBookEntryR
 		data, _ := ps.Get(peerID, addressDataKey)
 		if data != nil {
 			ad := data.(addressData)
-			if t.After(ad.retryAfter) && role == ad.role {
+			if t.After(ad.retryAfter) && ad.role.Has(role) {
 				mas := ps.Addrs(peerID)
 				info := peer.AddrInfo{ID: peerID, Addrs: mas}
 				o = append(o, &info)

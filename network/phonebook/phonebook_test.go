@@ -354,11 +354,11 @@ func TestPhonebookRoles(t *testing.T) {
 		for k := 0; k < 100; k++ {
 			for l := 0; l < 3; l++ {
 				entries := ph.GetAddresses(l, role)
-				if role == PhoneBookEntryRelayRole {
+				if role.Has(PhoneBookEntryRelayRole) {
 					for _, entry := range entries {
 						require.Contains(t, entry, "relay")
 					}
-				} else if role == PhoneBookEntryArchivalRole {
+				} else if role.Has(PhoneBookEntryArchivalRole) {
 					for _, entry := range entries {
 						require.Contains(t, entry, "archiver")
 					}

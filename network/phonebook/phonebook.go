@@ -33,14 +33,45 @@ const getAllAddresses = math.MaxInt32
 // currently, we have two roles : relay role and archival role, which are mutually exclusive.
 //
 //msgp:ignore PhoneBookEntryRoles
-type PhoneBookEntryRoles int
+type PhoneBookEntryRoles struct {
+	role phonebookRole
+	_    func() // func is not comparable so that PhoneBookEntryRoles. This is to prevent roles misuse and direct comparison.
+}
 
-// PhoneBookEntryRelayRole used for all the relays that are provided either via the algobootstrap SRV record
-// or via a configuration file.
-const PhoneBookEntryRelayRole = 1
+var (
+	// PhoneBookEntryRelayRole used for all the relays that are provided either via the algobootstrap SRV record
+	// or via a configuration file.
+	PhoneBookEntryRelayRole = PhoneBookEntryRoles{role: relayRole}
+	// PhoneBookEntryArchivalRole used for all the archival nodes that are provided via the archive SRV record.
+	PhoneBookEntryArchivalRole = PhoneBookEntryRoles{role: archivalRole}
+)
 
-// PhoneBookEntryArchivalRole used for all the archival nodes that are provided via the archive SRV record.
-const PhoneBookEntryArchivalRole = 2
+type phonebookRole uint8
+
+const (
+	relayRole phonebookRole = 1 << iota
+	archivalRole
+)
+
+// Has checks if the role also has the other role
+func (r PhoneBookEntryRoles) Has(other PhoneBookEntryRoles) bool {
+	return r.role&other.role != 0
+}
+
+// Is checks if the role is exactly the other role
+func (r PhoneBookEntryRoles) Is(other PhoneBookEntryRoles) bool {
+	return r.role == other.role
+}
+
+// Assign adds the other role to the role
+func (r *PhoneBookEntryRoles) Assign(other PhoneBookEntryRoles) {
+	r.role |= other.role
+}
+
+// Remove removes the other role from the role
+func (r *PhoneBookEntryRoles) Remove(other PhoneBookEntryRoles) {
+	r.role &= ^other.role
+}
 
 // Phonebook stores or looks up addresses of nodes we might contact
 type Phonebook interface {
@@ -127,7 +158,7 @@ func MakePhonebook(connectionsRateLimitingCount uint,
 func (e *phonebookImpl) deletePhonebookEntry(entryName, networkName string) {
 	pbEntry := e.data[entryName]
 	delete(pbEntry.networkNames, networkName)
-	if 0 == len(pbEntry.networkNames) {
+	if len(pbEntry.networkNames) == 0 {
 		delete(e.data, entryName)
 	}
 }
@@ -152,7 +183,7 @@ func (e *phonebookImpl) appendTime(addr string, t time.Time) {
 func (e *phonebookImpl) filterRetryTime(t time.Time, role PhoneBookEntryRoles) []string {
 	o := make([]string, 0, len(e.data))
 	for addr, entry := range e.data {
-		if t.After(entry.retryAfter) && role == entry.role {
+		if t.After(entry.retryAfter) && entry.role.Has(role) {
 			o = append(o, addr)
 		}
 	}
@@ -170,8 +201,13 @@ func (e *phonebookImpl) ReplacePeerList(addressesThey []string, networkName stri
 	// prepare a map of items we'd like to remove.
 	removeItems := make(map[string]bool, 0)
 	for k, pbd := range e.data {
-		if pbd.networkNames[networkName] && pbd.role == role && !pbd.persistent {
-			removeItems[k] = true
+		if pbd.networkNames[networkName] && !pbd.persistent {
+			if pbd.role.Is(role) {
+				removeItems[k] = true
+			} else if pbd.role.Has(role) {
+				pbd.role.Remove(role)
+				e.data[k] = pbd
+			}
 		}
 	}
 
@@ -180,6 +216,7 @@ func (e *phonebookImpl) ReplacePeerList(addressesThey []string, networkName stri
 			// we already have this.
 			// Update the networkName
 			pbData.networkNames[networkName] = true
+			pbData.role.Assign(role)
 
 			// do not remove this entry
 			delete(removeItems, addr)

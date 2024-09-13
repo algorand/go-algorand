@@ -32,13 +32,6 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-// PhoneBookEntryRelayRole used for all the relays that are provided either via the algobootstrap SRV record
-// or via a configuration file.
-const PhoneBookEntryRelayRole = 1
-
-// PhoneBookEntryArchiverRole used for all the archivers that are provided via the archive SRV record.
-const PhoneBookEntryArchiverRole = 2
-
 func TestPeerstore(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -90,7 +83,7 @@ func TestPeerstore(t *testing.T) {
 }
 
 func testPhonebookAll(t *testing.T, set []*peer.AddrInfo, ph *PeerStore) {
-	actual := ph.GetAddresses(len(set), PhoneBookEntryRelayRole)
+	actual := ph.GetAddresses(len(set), phonebook.PhoneBookEntryRelayRole)
 	for _, info := range actual {
 		ok := false
 		for _, known := range set {
@@ -125,7 +118,7 @@ func testPhonebookUniform(t *testing.T, set []*peer.AddrInfo, ph *PeerStore, get
 		counts[set[i].ID.String()] = 0
 	}
 	for i := 0; i < uniformityTestLength; i++ {
-		actual := ph.GetAddresses(getsize, PhoneBookEntryRelayRole)
+		actual := ph.GetAddresses(getsize, phonebook.PhoneBookEntryRelayRole)
 		for _, info := range actual {
 			if _, ok := counts[info.ID.String()]; ok {
 				counts[info.ID.String()]++
@@ -161,7 +154,7 @@ func TestArrayPhonebookAll(t *testing.T) {
 	ph, err := MakePhonebook(1, 1*time.Millisecond)
 	require.NoError(t, err)
 	for _, addr := range set {
-		entry := makePhonebookEntryData("", PhoneBookEntryRelayRole, false)
+		entry := makePhonebookEntryData("", phonebook.PhoneBookEntryRelayRole, false)
 		info, _ := peerInfoFromDomainPort(addr)
 		ph.AddAddrs(info.ID, info.Addrs, libp2p.AddressTTL)
 		ph.Put(info.ID, addressDataKey, entry)
@@ -183,7 +176,7 @@ func TestArrayPhonebookUniform1(t *testing.T) {
 	ph, err := MakePhonebook(1, 1*time.Millisecond)
 	require.NoError(t, err)
 	for _, addr := range set {
-		entry := makePhonebookEntryData("", PhoneBookEntryRelayRole, false)
+		entry := makePhonebookEntryData("", phonebook.PhoneBookEntryRelayRole, false)
 		info, _ := peerInfoFromDomainPort(addr)
 		ph.AddAddrs(info.ID, info.Addrs, libp2p.AddressTTL)
 		ph.Put(info.ID, addressDataKey, entry)
@@ -205,7 +198,7 @@ func TestArrayPhonebookUniform3(t *testing.T) {
 	ph, err := MakePhonebook(1, 1*time.Millisecond)
 	require.NoError(t, err)
 	for _, addr := range set {
-		entry := makePhonebookEntryData("", PhoneBookEntryRelayRole, false)
+		entry := makePhonebookEntryData("", phonebook.PhoneBookEntryRelayRole, false)
 		info, _ := peerInfoFromDomainPort(addr)
 		ph.AddAddrs(info.ID, info.Addrs, libp2p.AddressTTL)
 		ph.Put(info.ID, addressDataKey, entry)
@@ -234,8 +227,8 @@ func TestMultiPhonebook(t *testing.T) {
 
 	ph, err := MakePhonebook(1, 1*time.Millisecond)
 	require.NoError(t, err)
-	ph.ReplacePeerList(pha, "pha", PhoneBookEntryRelayRole)
-	ph.ReplacePeerList(phb, "phb", PhoneBookEntryRelayRole)
+	ph.ReplacePeerList(pha, "pha", phonebook.PhoneBookEntryRelayRole)
+	ph.ReplacePeerList(phb, "phb", phonebook.PhoneBookEntryRelayRole)
 
 	testPhonebookAll(t, infoSet, ph)
 	testPhonebookUniform(t, infoSet, ph, 1)
@@ -268,13 +261,13 @@ func TestMultiPhonebookPersistentPeers(t *testing.T) {
 	}
 	ph, err := MakePhonebook(1, 1*time.Millisecond)
 	require.NoError(t, err)
-	ph.AddPersistentPeers(persistentPeers, "pha", PhoneBookEntryRelayRole)
-	ph.AddPersistentPeers(persistentPeers, "phb", PhoneBookEntryRelayRole)
-	ph.ReplacePeerList(pha, "pha", PhoneBookEntryRelayRole)
-	ph.ReplacePeerList(phb, "phb", PhoneBookEntryRelayRole)
+	ph.AddPersistentPeers(persistentPeers, "pha", phonebook.PhoneBookEntryRelayRole)
+	ph.AddPersistentPeers(persistentPeers, "phb", phonebook.PhoneBookEntryRelayRole)
+	ph.ReplacePeerList(pha, "pha", phonebook.PhoneBookEntryRelayRole)
+	ph.ReplacePeerList(phb, "phb", phonebook.PhoneBookEntryRelayRole)
 
 	testPhonebookAll(t, append(infoSet, info), ph)
-	allAddresses := ph.GetAddresses(len(set)+len(persistentPeers), PhoneBookEntryRelayRole)
+	allAddresses := ph.GetAddresses(len(set)+len(persistentPeers), phonebook.PhoneBookEntryRelayRole)
 	for _, pp := range persistentPeers {
 		found := false
 		for _, addr := range allAddresses {
@@ -308,8 +301,8 @@ func TestMultiPhonebookDuplicateFiltering(t *testing.T) {
 	}
 	ph, err := MakePhonebook(1, 1*time.Millisecond)
 	require.NoError(t, err)
-	ph.ReplacePeerList(pha, "pha", PhoneBookEntryRelayRole)
-	ph.ReplacePeerList(phb, "phb", PhoneBookEntryRelayRole)
+	ph.ReplacePeerList(pha, "pha", phonebook.PhoneBookEntryRelayRole)
+	ph.ReplacePeerList(phb, "phb", phonebook.PhoneBookEntryRelayRole)
 
 	testPhonebookAll(t, infoSet, ph)
 	testPhonebookUniform(t, infoSet, ph, 1)
@@ -338,7 +331,7 @@ func TestWaitAndAddConnectionTimeLongtWindow(t *testing.T) {
 
 	// Test the addresses are populated in the phonebook and a
 	// time can be added to one of them
-	entries.ReplacePeerList([]*peer.AddrInfo{info1, info2}, "default", PhoneBookEntryRelayRole)
+	entries.ReplacePeerList([]*peer.AddrInfo{info1, info2}, "default", phonebook.PhoneBookEntryRelayRole)
 	addrInPhonebook, waitTime, provisionalTime := entries.GetConnectionWaitTime(string(info1.ID))
 	require.Equal(t, true, addrInPhonebook)
 	require.Equal(t, time.Duration(0), waitTime)
@@ -469,20 +462,20 @@ func TestPhonebookRoles(t *testing.T) {
 
 	ph, err := MakePhonebook(1, 1)
 	require.NoError(t, err)
-	ph.ReplacePeerList(infoRelaySet, "default", PhoneBookEntryRelayRole)
-	ph.ReplacePeerList(infoArchiverSet, "default", PhoneBookEntryArchiverRole)
+	ph.ReplacePeerList(infoRelaySet, "default", phonebook.PhoneBookEntryRelayRole)
+	ph.ReplacePeerList(infoArchiverSet, "default", phonebook.PhoneBookEntryArchivalRole)
 	require.Equal(t, len(relaysSet)+len(archiverSet), len(ph.Peers()))
 	require.Equal(t, len(relaysSet)+len(archiverSet), ph.Length())
 
-	for _, role := range []phonebook.PhoneBookEntryRoles{PhoneBookEntryRelayRole, PhoneBookEntryArchiverRole} {
+	for _, role := range []phonebook.PhoneBookEntryRoles{phonebook.PhoneBookEntryRelayRole, phonebook.PhoneBookEntryArchivalRole} {
 		for k := 0; k < 100; k++ {
 			for l := 0; l < 3; l++ {
 				entries := ph.GetAddresses(l, role)
-				if role == PhoneBookEntryRelayRole {
+				if role.Has(phonebook.PhoneBookEntryRelayRole) {
 					for _, entry := range entries {
 						require.Contains(t, string(entry.ID), "relay")
 					}
-				} else if role == PhoneBookEntryArchiverRole {
+				} else if role.Has(phonebook.PhoneBookEntryArchivalRole) {
 					for _, entry := range entries {
 						require.Contains(t, string(entry.ID), "archiver")
 					}
@@ -490,4 +483,40 @@ func TestPhonebookRoles(t *testing.T) {
 			}
 		}
 	}
+}
+
+// TestPhonebookRolesMulti makes sure the same host might have multiple roles
+func TestPhonebookRolesMulti(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	relaysSet := []string{"relay1:4040", "relay2:4041"}
+	archiverSet := []string{"relay1:4040", "archiver1:1111"}
+	const numUnique = 3
+
+	infoRelaySet := make([]*peer.AddrInfo, 0)
+	for _, addr := range relaysSet {
+		info, err := peerInfoFromDomainPort(addr)
+		require.NoError(t, err)
+		infoRelaySet = append(infoRelaySet, info)
+	}
+
+	infoArchiverSet := make([]*peer.AddrInfo, 0)
+	for _, addr := range archiverSet {
+		info, err := peerInfoFromDomainPort(addr)
+		require.NoError(t, err)
+		infoArchiverSet = append(infoArchiverSet, info)
+	}
+
+	ph, err := MakePhonebook(1, 1)
+	require.NoError(t, err)
+	ph.ReplacePeerList(infoRelaySet, "default", phonebook.PhoneBookEntryRelayRole)
+	ph.ReplacePeerList(infoArchiverSet, "default", phonebook.PhoneBookEntryArchivalRole)
+	require.Equal(t, numUnique, len(ph.Peers()))
+	require.Equal(t, numUnique, ph.Length())
+
+	const maxPeers = 5
+	entries := ph.GetAddresses(maxPeers, phonebook.PhoneBookEntryRelayRole)
+	require.Equal(t, len(relaysSet), len(entries))
+	entries = ph.GetAddresses(maxPeers, phonebook.PhoneBookEntryArchivalRole)
+	require.Equal(t, len(archiverSet), len(entries))
 }
