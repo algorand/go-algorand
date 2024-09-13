@@ -181,3 +181,21 @@ func TestHybridNetwork_DuplicateConn(t *testing.T) {
 		return len(netA.GetPeers(PeersConnectedIn)) == 2
 	}, 3*time.Second, 50*time.Millisecond)
 }
+
+func TestHybridNetwork_ValidateConfig(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	cfg := config.GetDefaultLocal()
+	cfg.EnableP2PHybridMode = true
+	cfg.NetAddress = ":0"
+	cfg.P2PHybridNetAddress = ""
+
+	_, err := NewHybridP2PNetwork(logging.TestingLog(t), cfg, "", nil, genesisID, "net", &nopeNodeInfo{})
+	require.ErrorContains(t, err, "both NetAddress and P2PHybridNetAddress")
+
+	cfg.NetAddress = ""
+	cfg.P2PHybridNetAddress = ":0"
+	_, err = NewHybridP2PNetwork(logging.TestingLog(t), cfg, "", nil, genesisID, "net", &nopeNodeInfo{})
+	require.ErrorContains(t, err, "both NetAddress and P2PHybridNetAddress")
+}

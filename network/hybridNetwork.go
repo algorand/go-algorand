@@ -38,7 +38,11 @@ type HybridP2PNetwork struct {
 }
 
 // NewHybridP2PNetwork constructs a GossipNode that combines P2PNetwork and WebsocketNetwork
+// Hybrid mode requires both P2P and WS to be running in server (NetAddress set) or client (NetAddress empty) mode.
 func NewHybridP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebookAddresses []string, genesisID string, networkID protocol.NetworkID, nodeInfo NodeInfo) (*HybridP2PNetwork, error) {
+	if err := cfg.ValidateP2PHybridConfig(); err != nil {
+		return nil, err
+	}
 	// supply alternate NetAddress for P2P network
 	p2pcfg := cfg
 	p2pcfg.NetAddress = cfg.P2PHybridNetAddress
