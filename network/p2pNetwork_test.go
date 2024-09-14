@@ -963,7 +963,7 @@ func TestP2PRelay(t *testing.T) {
 	counter.Store(0)
 	var loggedMsgs [][]byte
 	counterHandler, counterDone = makeCounterHandler(expectedMsgs, &counter, &loggedMsgs)
-	netA.ClearProcessors()
+	netA.ClearValidatorHandlers()
 	netA.RegisterValidatorHandlers(counterHandler)
 
 	for i := 0; i < expectedMsgs/2; i++ {

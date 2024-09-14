@@ -606,11 +606,10 @@ func TestDefaultResourcePaths(t *testing.T) {
 	log := logging.Base()
 
 	n, err := MakeFull(log, testDirectory, cfg, []string{}, genesis)
+	require.NoError(t, err)
 
 	n.Start()
 	defer n.Stop()
-
-	require.NoError(t, err)
 
 	// confirm genesis dir exists in the data dir, and that resources exist in the expected locations
 	require.DirExists(t, filepath.Join(testDirectory, genesis.ID()))
@@ -1072,4 +1071,48 @@ func TestNodeP2PRelays(t *testing.T) {
 		nodes[2].net.RequestConnectOutgoing(false, nil)
 		return len(nodes[2].net.GetPeers(network.PeersPhonebookRelays)) == 2
 	}, 80*time.Second, 1*time.Second)
+}
+
+// TestNodeSetCatchpointCatchupMode checks node can handle services restart for fast catchup correctly
+func TestNodeSetCatchpointCatchupMode(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	testDirectory := t.TempDir()
+
+	genesis := bookkeeping.Genesis{
+		SchemaID:    "gen",
+		Proto:       protocol.ConsensusCurrentVersion,
+		Network:     config.Devtestnet,
+		FeeSink:     sinkAddr.String(),
+		RewardsPool: poolAddr.String(),
+	}
+	log := logging.TestingLog(t)
+	cfg := config.GetDefaultLocal()
+
+	tests := []struct {
+		name      string
+		enableP2P bool
+	}{
+		{"WS node", false},
+		{"P2P node", true},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			cfg.EnableP2P = test.enableP2P
+
+			n, err := MakeFull(log, testDirectory, cfg, []string{}, genesis)
+			require.NoError(t, err)
+			err = n.Start()
+			require.NoError(t, err)
+			defer n.Stop()
+
+			// "start" catchpoint catchup => close services
+			outCh := n.SetCatchpointCatchupMode(true)
+			<-outCh
+			// "stop" catchpoint catchup => resume services
+			outCh = n.SetCatchpointCatchupMode(false)
+			<-outCh
+		})
+	}
 }
