@@ -231,12 +231,11 @@ func txnGroupBatchPrep(stxs []transactions.SignedTxn, contextHdr *bookkeeping.Bl
 	if groupCtx.consensusParams.EnableLogicSigSizePooling {
 		lSigMaxPooledSize := len(stxs) * int(groupCtx.consensusParams.LogicSigMaxSize)
 		if lSigPooledSize > lSigMaxPooledSize {
-			errorMsg := fmt.Sprintf(
+			errorMsg := fmt.Errorf(
 				"txgroup had %d bytes of LogicSigs, more than the available pool of %d bytes",
 				lSigPooledSize, lSigMaxPooledSize,
 			)
-			err = &TxGroupError{err: errors.New(errorMsg), GroupIndex: -1, Reason: TxGroupErrorReasonNotWellFormed}
-			return nil, err
+			return nil, &TxGroupError{err: errorMsg, GroupIndex: -1, Reason: TxGroupErrorReasonNotWellFormed}
 		}
 	}
 	feeNeeded, overflow := basics.OMul(groupCtx.consensusParams.MinTxnFee, minFeeCount)
