@@ -170,4 +170,4 @@ Provides utilities for the various components:
 Please see the [COPYING_FAQ](COPYING_FAQ) for details on how to apply our license.
 
 Copyright (C) 2019-2024, Algorand Inc.
-```
+
