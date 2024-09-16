@@ -78,13 +78,44 @@ func (s *HTTPServer) RegisterHTTPHandlerFunc(path string, handler func(http.Resp
 	})
 }
 
-// MakeHTTPClient creates a http.Client that uses libp2p transport for a given protocol and peer address.
-func MakeHTTPClient(addrInfo *peer.AddrInfo) (*http.Client, error) {
-	clientStreamHost, err := libp2p.New(libp2p.NoListenAddrs)
-	if err != nil {
-		return nil, err
+type httpClientConfig struct {
+	host host.Host
+}
+
+type httpClientOption func(*httpClientConfig)
+
+// WithHost sets the libp2p host for the http client.
+func WithHost(h host.Host) httpClientOption {
+	return func(o *httpClientConfig) {
+		o.host = h
 	}
-	logging.Base().Debugf("MakeHTTPClient made a new P2P host %s for %s", clientStreamHost.ID(), addrInfo.String())
+}
+
+// MakeTestHTTPClient creates a http.Client that uses libp2p transport for a given protocol and peer address.
+// This exported method is only used in tests.
+func MakeTestHTTPClient(addrInfo *peer.AddrInfo, opts ...httpClientOption) (*http.Client, error) {
+	return makeHTTPClient(addrInfo, opts...)
+}
+
+// makeHTTPClient creates a http.Client that uses libp2p transport for a given protocol and peer address.
+// If service is nil, a new libp2p host is created.
+func makeHTTPClient(addrInfo *peer.AddrInfo, opts ...httpClientOption) (*http.Client, error) {
+	var config httpClientConfig
+	for _, opt := range opts {
+		opt(&config)
+	}
+
+	var clientStreamHost host.Host
+	if config.host != nil {
+		clientStreamHost = config.host
+	} else {
+		var err error
+		clientStreamHost, err = libp2p.New(libp2p.NoListenAddrs)
+		if err != nil {
+			return nil, err
+		}
+		logging.Base().Debugf("MakeHTTPClient made a new P2P host %s for %s", clientStreamHost.ID(), addrInfo.String())
+	}
 
 	client := libp2phttp.Host{StreamHost: clientStreamHost}
 
@@ -100,13 +131,13 @@ func MakeHTTPClient(addrInfo *peer.AddrInfo) (*http.Client, error) {
 	return &http.Client{Transport: rt}, nil
 }
 
-// MakeHTTPClientWithRateLimit creates a http.Client that uses libp2p transport for a given protocol and peer address.
-func MakeHTTPClientWithRateLimit(addrInfo *peer.AddrInfo, pstore limitcaller.ConnectionTimeStore, queueingTimeout time.Duration) (*http.Client, error) {
-	cl, err := MakeHTTPClient(addrInfo)
+// makeHTTPClientWithRateLimit creates a http.Client that uses libp2p transport for a given protocol and peer address.
+func makeHTTPClientWithRateLimit(addrInfo *peer.AddrInfo, p2pService *serviceImpl, connTimeStore limitcaller.ConnectionTimeStore, queueingTimeout time.Duration) (*http.Client, error) {
+	cl, err := makeHTTPClient(addrInfo, WithHost(p2pService.host))
 	if err != nil {
 		return nil, err
 	}
-	rltr := limitcaller.MakeRateLimitingBoundTransportWithRoundTripper(pstore, queueingTimeout, cl.Transport, string(addrInfo.ID))
+	rltr := limitcaller.MakeRateLimitingBoundTransportWithRoundTripper(connTimeStore, queueingTimeout, cl.Transport, string(addrInfo.ID))
 	cl.Transport = &rltr
 	return cl, nil
 
