@@ -467,7 +467,7 @@ func TestPhonebookRoles(t *testing.T) {
 	require.Equal(t, len(relaysSet)+len(archiverSet), len(ph.Peers()))
 	require.Equal(t, len(relaysSet)+len(archiverSet), ph.Length())
 
-	for _, role := range []phonebook.PhoneBookEntryRoles{phonebook.PhoneBookEntryRelayRole, phonebook.PhoneBookEntryArchivalRole} {
+	for _, role := range []phonebook.Roles{phonebook.PhoneBookEntryRelayRole, phonebook.PhoneBookEntryArchivalRole} {
 		for k := 0; k < 100; k++ {
 			for l := 0; l < 3; l++ {
 				entries := ph.GetAddresses(l, role)
