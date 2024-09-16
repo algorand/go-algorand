@@ -367,3 +367,37 @@ func TestPhonebookRoles(t *testing.T) {
 		}
 	}
 }
+
+func TestRolesOperations(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	var tests = []struct {
+		role       Roles
+		otherRoles Roles
+	}{
+		{PhoneBookEntryRelayRole, PhoneBookEntryArchivalRole},
+		{PhoneBookEntryArchivalRole, PhoneBookEntryRelayRole},
+	}
+
+	for _, test := range tests {
+		require.True(t, test.role.Has(test.role))
+		require.True(t, test.role.Is(test.role))
+		require.False(t, test.role.Has(test.otherRoles))
+		require.False(t, test.role.Is(test.otherRoles))
+
+		combo := Roles{roles: test.role.roles}
+		combo.Assign(test.otherRoles)
+		require.Equal(t, test.role.roles|test.otherRoles.roles, combo.roles)
+		require.True(t, combo.Has(test.role))
+		require.False(t, combo.Is(test.role))
+		require.True(t, combo.Has(test.otherRoles))
+		require.False(t, combo.Is(test.otherRoles))
+
+		combo.Remove(test.otherRoles)
+		require.Equal(t, test.role.roles, combo.roles)
+		require.True(t, combo.Has(test.role))
+		require.True(t, combo.Is(test.role))
+		require.False(t, combo.Has(test.otherRoles))
+		require.False(t, combo.Is(test.otherRoles))
+	}
+}
