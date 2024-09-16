@@ -217,6 +217,7 @@ func (e *phonebookImpl) ReplacePeerList(addressesThey []string, networkName stri
 			// Update the networkName
 			pbData.networkNames[networkName] = true
 			pbData.role.Assign(role)
+			e.data[addr] = pbData
 
 			// do not remove this entry
 			delete(removeItems, addr)

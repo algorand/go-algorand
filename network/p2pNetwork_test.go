@@ -665,7 +665,6 @@ func TestP2PNetworkDHTCapabilities(t *testing.T) {
 						func() bool {
 							peers, err := disc.PeersForCapability(cap, test.numCapPeers)
 							if err == nil && len(peers) == test.numCapPeers {
-								fmt.Printf("%s peers for cap %s: %s\n", disc.Host().ID().String(), cap, peers)
 								return true
 							}
 							return false
@@ -684,7 +683,6 @@ func TestP2PNetworkDHTCapabilities(t *testing.T) {
 					for _, p := range peers {
 						wsPeer := p.(*wsPeerCore)
 						pi, err := peer.AddrInfoFromString(wsPeer.GetAddress())
-						fmt.Println("pi.ID", pi.ID)
 						require.NoError(t, err)
 						uniquePeerIDs[pi.ID] = struct{}{}
 					}

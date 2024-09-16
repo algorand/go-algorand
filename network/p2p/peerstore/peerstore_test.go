@@ -520,3 +520,89 @@ func TestPhonebookRolesMulti(t *testing.T) {
 	entries = ph.GetAddresses(maxPeers, phonebook.PhoneBookEntryArchivalRole)
 	require.Equal(t, len(archiverSet), len(entries))
 }
+
+func TestReplacePeerList(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	relaysSet := []string{"a:1", "b:2"}
+	archiverSet := []string{"c:3"}
+	comboSet := []string{"b:2", "c:3"} // b is in both sets
+
+	infoRelaySet := make([]*peer.AddrInfo, 0)
+	for _, addr := range relaysSet {
+		info, err := peerInfoFromDomainPort(addr)
+		require.NoError(t, err)
+		infoRelaySet = append(infoRelaySet, info)
+	}
+
+	infoArchiverSet := make([]*peer.AddrInfo, 0)
+	for _, addr := range archiverSet {
+		info, err := peerInfoFromDomainPort(addr)
+		require.NoError(t, err)
+		infoArchiverSet = append(infoArchiverSet, info)
+	}
+
+	infoComboArchiverSet := make([]*peer.AddrInfo, 0)
+	for _, addr := range comboSet {
+		info, err := peerInfoFromDomainPort(addr)
+		require.NoError(t, err)
+		infoComboArchiverSet = append(infoComboArchiverSet, info)
+	}
+
+	ph, err := MakePhonebook(1, 1)
+	require.NoError(t, err)
+
+	ph.ReplacePeerList(infoRelaySet, "default", phonebook.PhoneBookEntryRelayRole)
+	res := ph.GetAddresses(4, phonebook.PhoneBookEntryRelayRole)
+	require.Equal(t, 2, len(res))
+	for _, info := range infoRelaySet {
+		require.Contains(t, res, info)
+	}
+
+	ph.ReplacePeerList(infoArchiverSet, "default", phonebook.PhoneBookEntryArchivalRole)
+	res = ph.GetAddresses(4, phonebook.PhoneBookEntryArchivalRole)
+	require.Equal(t, 1, len(res))
+	for _, info := range infoArchiverSet {
+		require.Contains(t, res, info)
+	}
+
+	// make b archival in addition to relay
+	ph.ReplacePeerList(infoComboArchiverSet, "default", phonebook.PhoneBookEntryArchivalRole)
+	res = ph.GetAddresses(4, phonebook.PhoneBookEntryRelayRole)
+	require.Equal(t, 2, len(res))
+	for _, info := range infoRelaySet {
+		require.Contains(t, res, info)
+	}
+	res = ph.GetAddresses(4, phonebook.PhoneBookEntryArchivalRole)
+	require.Equal(t, 2, len(res))
+	for _, info := range infoComboArchiverSet {
+		require.Contains(t, res, info)
+	}
+
+	// update relays
+	ph.ReplacePeerList(infoRelaySet, "default", phonebook.PhoneBookEntryRelayRole)
+	res = ph.GetAddresses(4, phonebook.PhoneBookEntryRelayRole)
+	require.Equal(t, 2, len(res))
+	for _, info := range infoRelaySet {
+		require.Contains(t, res, info)
+	}
+	res = ph.GetAddresses(4, phonebook.PhoneBookEntryArchivalRole)
+	require.Equal(t, 2, len(res))
+	for _, info := range infoComboArchiverSet {
+		require.Contains(t, res, info)
+	}
+
+	// exclude b from archival
+	ph.ReplacePeerList(infoArchiverSet, "default", phonebook.PhoneBookEntryArchivalRole)
+	res = ph.GetAddresses(4, phonebook.PhoneBookEntryRelayRole)
+	require.Equal(t, 2, len(res))
+	for _, info := range infoRelaySet {
+		require.Contains(t, res, info)
+	}
+	res = ph.GetAddresses(4, phonebook.PhoneBookEntryArchivalRole)
+	require.Equal(t, 1, len(res))
+	for _, info := range infoArchiverSet {
+		require.Contains(t, res, info)
+	}
+}

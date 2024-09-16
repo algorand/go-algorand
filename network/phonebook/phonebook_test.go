@@ -370,6 +370,7 @@ func TestPhonebookRoles(t *testing.T) {
 
 func TestRolesOperations(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	var tests = []struct {
 		role       Roles
@@ -400,4 +401,39 @@ func TestRolesOperations(t *testing.T) {
 		require.False(t, combo.Has(test.otherRoles))
 		require.False(t, combo.Is(test.otherRoles))
 	}
+}
+
+func TestReplacePeerList(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	pb := MakePhonebook(1, 1)
+	pb.ReplacePeerList([]string{"a", "b"}, "default", PhoneBookEntryRelayRole)
+	res := pb.GetAddresses(4, PhoneBookEntryRelayRole)
+	require.ElementsMatch(t, []string{"a", "b"}, res)
+
+	pb.ReplacePeerList([]string{"c"}, "default", PhoneBookEntryArchivalRole)
+	res = pb.GetAddresses(4, PhoneBookEntryArchivalRole)
+	require.ElementsMatch(t, []string{"c"}, res)
+
+	// make b archival in addition to relay
+	pb.ReplacePeerList([]string{"b", "c"}, "default", PhoneBookEntryArchivalRole)
+	res = pb.GetAddresses(4, PhoneBookEntryRelayRole)
+	require.ElementsMatch(t, []string{"a", "b"}, res)
+	res = pb.GetAddresses(4, PhoneBookEntryArchivalRole)
+	require.ElementsMatch(t, []string{"b", "c"}, res)
+
+	// update relays
+	pb.ReplacePeerList([]string{"a", "b"}, "default", PhoneBookEntryRelayRole)
+	res = pb.GetAddresses(4, PhoneBookEntryRelayRole)
+	require.ElementsMatch(t, []string{"a", "b"}, res)
+	res = pb.GetAddresses(4, PhoneBookEntryArchivalRole)
+	require.ElementsMatch(t, []string{"b", "c"}, res)
+
+	// exclude b from archival
+	pb.ReplacePeerList([]string{"c"}, "default", PhoneBookEntryArchivalRole)
+	res = pb.GetAddresses(4, PhoneBookEntryRelayRole)
+	require.ElementsMatch(t, []string{"a", "b"}, res)
+	res = pb.GetAddresses(4, PhoneBookEntryArchivalRole)
+	require.ElementsMatch(t, []string{"c"}, res)
 }
