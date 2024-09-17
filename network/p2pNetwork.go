@@ -954,20 +954,11 @@ func (n *P2PNetwork) txTopicHandleLoop() {
 
 // txTopicValidator calls txHandler to validate and process incoming transactions.
 func (n *P2PNetwork) txTopicValidator(ctx context.Context, peerID peer.ID, msg *pubsub.Message) pubsub.ValidationResult {
-	var routingAddr [8]byte
 	n.wsPeersLock.Lock()
-	var wsp *wsPeer
-	var ok bool
-	if wsp, ok = n.wsPeers[peerID]; ok {
-		copy(routingAddr[:], wsp.RoutingAddr())
-	} else {
-		// well, otherwise use last 8 bytes of peerID
-		copy(routingAddr[:], peerID[len(peerID)-8:])
-	}
+	var wsp *wsPeer = n.wsPeers[peerID]
 	n.wsPeersLock.Unlock()
 
 	inmsg := IncomingMessage{
-		// Sender:   gossipSubPeer{peerID: msg.ReceivedFrom, net: n, routingAddr: routingAddr},
 		Sender:   wsp,
 		Tag:      protocol.TxnTag,
 		Data:     msg.Data,
