@@ -207,6 +207,7 @@ func TestBlockQueueSyncerDeletion(t *testing.T) {
 			l := &Ledger{
 				log:      log,
 				blockDBs: blockDBs,
+				trackers: trackerRegistry{log: log},
 			}
 			if test.tracker != nil {
 				l.trackers.trackers = append(l.trackers.trackers, test.tracker)

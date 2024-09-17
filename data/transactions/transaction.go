@@ -38,9 +38,9 @@ func (txid Txid) String() string {
 	return fmt.Sprintf("%v", crypto.Digest(txid))
 }
 
-// UnmarshalText initializes the Address from an array of bytes.
-func (txid *Txid) UnmarshalText(text []byte) error {
-	d, err := crypto.DigestFromString(string(text))
+// FromString initializes the Txid from a string
+func (txid *Txid) FromString(text string) error {
+	d, err := crypto.DigestFromString(text)
 	*txid = Txid(d)
 	return err
 }

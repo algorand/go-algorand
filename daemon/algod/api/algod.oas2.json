@@ -216,6 +216,33 @@
         }
       }
     },
+    "/debug/settings/config": {
+      "get": {
+        "description": "Returns the merged (defaults + overrides) config file in json.",
+        "tags": [
+          "private"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Gets the merged config file.",
+        "operationId": "GetConfig",
+        "responses": {
+          "200": {
+            "description": "The merged config file in json.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
     "/v2/accounts/{address}": {
       "get": {
         "description": "Given a specific account public key, this call returns the accounts status, balance and spendable amounts",
@@ -1538,6 +1565,7 @@
     "/v2/transactions/async": {
       "post": {
         "tags": [
+          "public",
           "experimental"
         ],
         "consumes": [
@@ -1575,6 +1603,9 @@
             "schema": {
               "$ref": "#/definitions/ErrorResponse"
             }
+          },
+          "404": {
+            "description": "Developer or Experimental API not enabled"
           },
           "500": {
             "description": "Internal Error",
@@ -3944,6 +3975,10 @@
         },
         "exec-trace-config": {
           "$ref": "#/definitions/SimulateTraceConfig"
+        },
+        "fix-signers": {
+          "description": "If true, signers for transactions that are missing signatures will be fixed during evaluation.",
+          "type": "boolean"
         }
       }
     },
@@ -4287,6 +4322,11 @@
         },
         "unnamed-resources-accessed": {
           "$ref": "#/definitions/SimulateUnnamedResourcesAccessed"
+        },
+        "fixed-signer":{
+          "description": "The account that needed to sign this transaction when no signature was provided and the provided signer was incorrect.",
+          "type": "string",
+          "x-algorand-format": "Address"
         }
       }
     },
@@ -4393,6 +4433,10 @@
         "extra-opcode-budget": {
           "description": "The extra opcode budget added to each transaction group during simulation",
           "type": "integer"
+        },
+        "fix-signers": {
+          "description": "If true, signers for transactions that are missing signatures will be fixed during evaluation.",
+          "type": "boolean"
         }
       }
     },

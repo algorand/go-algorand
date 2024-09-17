@@ -144,20 +144,23 @@ func (f *LibGoalFixture) nodeExitWithError(nc *nodecontrol.NodeController, err e
 		return
 	}
 
-	defer func() {
-		f.t.Logf("Node at %s has terminated with an error: %v. Dumping logs...", nc.GetDataDir(), err)
+	debugLog := func() {
+		fmt.Fprintf(os.Stderr, "Node at %s has terminated with an error: %v. Dumping logs...\n", nc.GetDataDir(), err)
 		f.dumpLogs(filepath.Join(nc.GetDataDir(), "node.log"))
-	}()
+	}
 
 	exitError, ok := err.(*exec.ExitError)
 	if !ok {
-		require.NoError(f.t, err, "Node at %s has terminated with an error", nc.GetDataDir())
+		debugLog()
+		require.NoError(f.t, err)
 		return
 	}
 	ws := exitError.Sys().(syscall.WaitStatus)
 	exitCode := ws.ExitStatus()
 
-	require.NoError(f.t, err, "Node at %s has terminated with error code %d", nc.GetDataDir(), exitCode)
+	fmt.Fprintf(os.Stderr, "Node at %s has terminated with error code %d (%v)\n", nc.GetDataDir(), exitCode, *exitError)
+	debugLog()
+	require.NoError(f.t, err)
 }
 
 func (f *LibGoalFixture) importRootKeys(lg *libgoal.Client, dataDir string) {
@@ -342,7 +345,10 @@ func (f *LibGoalFixture) Shutdown() {
 func (f *LibGoalFixture) ShutdownImpl(preserveData bool) {
 	f.NC.StopKMD()
 	if preserveData {
-		f.network.Stop(f.binDir)
+		err := f.network.Stop(f.binDir)
+		if err != nil {
+			f.t.Logf("Fixture %s shutdown caught a network stop error: %v", f.Name, err)
+		}
 		for _, relayDir := range f.RelayDataDirs() {
 			f.dumpLogs(filepath.Join(relayDir, "node.log"))
 		}
@@ -350,14 +356,22 @@ func (f *LibGoalFixture) ShutdownImpl(preserveData bool) {
 			f.dumpLogs(filepath.Join(nodeDir, "node.log"))
 		}
 	} else {
-		f.network.Delete(f.binDir)
-
-		// Remove the test dir, if it was created by us as a temporary
-		// directory and it is empty.  If there's anything still in the
-		// test dir, os.Remove()'s rmdir will fail and have no effect;
-		// we ignore this error.
-		if f.testDirTmp {
-			os.Remove(f.testDir)
+		err := f.network.Stop(f.binDir)
+		if err == nil {
+			// no error, proceed with cleanup
+			delErr := f.network.Delete(f.binDir)
+			if delErr != nil {
+				f.t.Logf("Fixture %s shutdown caught a network delete error: %v", f.Name, delErr)
+			}
+			// Remove the test dir, if it was created by us as a temporary
+			// directory and it is empty.  If there's anything still in the
+			// test dir, os.Remove()'s rmdir will fail and have no effect;
+			// we ignore this error.
+			if f.testDirTmp {
+				os.Remove(f.testDir)
+			}
+		} else {
+			f.t.Logf("Fixture %s shutdown caught a network stop error: %v", f.Name, err)
 		}
 	}
 }
@@ -366,18 +380,19 @@ func (f *LibGoalFixture) ShutdownImpl(preserveData bool) {
 func (f *LibGoalFixture) dumpLogs(filePath string) {
 	file, err := os.Open(filePath)
 	if err != nil {
-		f.t.Logf("could not open %s", filePath)
+		fmt.Fprintf(os.Stderr, "could not open %s\n", filePath)
 		return
 	}
 	defer file.Close()
 
-	f.t.Log("=================================\n")
+	fmt.Fprintf(os.Stderr, "=================================\n")
 	parts := strings.Split(filePath, "/")
-	f.t.Logf("%s/%s:", parts[len(parts)-2], parts[len(parts)-1]) // Primary/node.log
+	fmt.Fprintf(os.Stderr, "%s/%s:\n", parts[len(parts)-2], parts[len(parts)-1]) // Primary/node.log
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
-		f.t.Logf(scanner.Text())
+		fmt.Fprintln(os.Stderr, scanner.Text())
 	}
+	fmt.Fprintln(os.Stderr)
 }
 
 // intercept baseFixture.failOnError so we can clean up any algods that are still alive

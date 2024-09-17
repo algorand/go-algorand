@@ -467,6 +467,7 @@ func (tr *trackerRegistry) scheduleCommit(blockqRound, maxLookback basics.Round)
 			// Dropping this dcc allows the blockqueue syncer to continue persisting other blocks
 			// and ledger reads to proceed without being blocked by trackerMu lock.
 			tr.accountsWriting.Done()
+			tr.log.Debugf("trackerRegistry.scheduleCommit: deferredCommits channel is full, skipping commit for (%d-%d)", dcc.oldBase, dcc.oldBase+basics.Round(dcc.offset))
 		}
 	}
 }
@@ -491,22 +492,27 @@ func (tr *trackerRegistry) isBehindCommittingDeltas(latest basics.Round) bool {
 }
 
 func (tr *trackerRegistry) close() {
+	tr.log.Debugf("trackerRegistry is closing")
 	if tr.ctxCancel != nil {
 		tr.ctxCancel()
 	}
 
 	// close() is called from reloadLedger() when and trackerRegistry is not initialized yet
 	if tr.commitSyncerClosed != nil {
+		tr.log.Debugf("trackerRegistry is waiting for accounts writing to complete")
 		tr.waitAccountsWriting()
 		// this would block until the commitSyncerClosed channel get closed.
 		<-tr.commitSyncerClosed
+		tr.log.Debugf("trackerRegistry done waiting for accounts writing")
 	}
 
+	tr.log.Debugf("trackerRegistry is closing trackers")
 	for _, lt := range tr.trackers {
 		lt.close()
 	}
 	tr.trackers = nil
 	tr.accts = nil
+	tr.log.Debugf("trackerRegistry has closed")
 }
 
 // commitSyncer is the syncer go-routine function which perform the database updates. Internally, it dequeues deferredCommits and
@@ -525,11 +531,13 @@ func (tr *trackerRegistry) commitSyncer(deferredCommits chan *deferredCommitCont
 			}
 		case <-tr.ctx.Done():
 			// drain the pending commits queue:
+			tr.log.Debugf("commitSyncer is closing, draining the pending commits queue")
 			drained := false
 			for !drained {
 				select {
 				case <-deferredCommits:
 					tr.accountsWriting.Done()
+					tr.log.Debugf("commitSyncer drained a pending commit")
 				default:
 					drained = true
 				}
@@ -546,6 +554,8 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) error {
 
 	offset := dcc.offset
 	dbRound := dcc.oldBase
+
+	tr.log.Debugf("commitRound called for (%d-%d)", dbRound, dbRound+basics.Round(offset))
 
 	// we can exit right away, as this is the result of mis-ordered call to committedUpTo.
 	if tr.dbRound < dbRound || offset < uint64(tr.dbRound-dbRound) {
@@ -574,6 +584,7 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) error {
 	dcc.offset = offset
 	dcc.oldBase = dbRound
 	dcc.flushTime = time.Now()
+	tr.log.Debugf("commitRound advancing tracker db snapshot (%d-%d)", dbRound, dbRound+basics.Round(offset))
 
 	var err error
 	for _, lt := range tr.trackers {
@@ -645,6 +656,7 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) error {
 		lt.postCommitUnlocked(tr.ctx, dcc)
 	}
 
+	tr.log.Debugf("commitRound completed for (%d-%d)", dbRound, dbRound+basics.Round(offset))
 	return nil
 }
 

@@ -25,6 +25,7 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/logspec"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util"
 )
 
 const (
@@ -113,6 +114,7 @@ func (d *demux) tokenizeMessages(ctx context.Context, net Network, tag protocol.
 		defer func() {
 			close(decoded)
 		}()
+		util.SetGoroutineLabels("tokenizeTag", string(tag))
 		for {
 			select {
 			case raw, ok := <-networkMessages:
