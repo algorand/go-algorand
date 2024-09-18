@@ -8,7 +8,7 @@ Requires:      @REQUIRED_ALGORAND_PKG@ >= @VER@
 
 %define SRCDIR go-algorand-rpmbuild
 %define _buildshell /bin/bash
-%define __os_install_post %{nil}
+%define __os_install_post %{?__brp-compress}
 
 %description
 This package provides development tools for the Algorand blockchain.
