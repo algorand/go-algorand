@@ -531,6 +531,11 @@ func (handler *TxHandler) postProcessCheckedTxn(wi *txBacklogMsg) {
 	// at this point, we've verified the transaction, so we can safely treat the transaction as a verified transaction.
 	verifiedTxGroup := wi.unverifiedTxGroup
 
+	// precompute transaction IDs
+	for i := range verifiedTxGroup {
+		verifiedTxGroup[i].CacheID()
+	}
+
 	// save the transaction, if it has high enough fee and not already in the cache
 	err := handler.txPool.Remember(verifiedTxGroup)
 	if err != nil {
