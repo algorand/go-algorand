@@ -78,6 +78,37 @@ func getConstValues(t *testing.T, fileName string, typeName string, namesOnly bo
 	return ret
 }
 
+func getDeprecatedTags(t *testing.T) map[string]bool {
+	fset := token.NewFileSet()
+	f, _ := parser.ParseFile(fset, "tags.go", nil, 0)
+
+	deprecatedTags := make(map[string]bool)
+	for _, d := range f.Decls {
+		genDecl, ok := d.(*ast.GenDecl)
+		if !ok || genDecl.Tok != token.VAR {
+			continue
+		}
+		for _, spec := range genDecl.Specs {
+			if valueSpec, ok := spec.(*ast.ValueSpec); ok && len(valueSpec.Names) > 0 &&
+				valueSpec.Names[0].Name == "DeprecatedTagList" {
+				for _, v := range valueSpec.Values {
+					cl, ok := v.(*ast.CompositeLit)
+					if !ok {
+						continue
+					}
+					for _, elt := range cl.Elts {
+						if ce, ok := elt.(*ast.Ident); ok {
+							deprecatedTags[ce.Name] = true
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return deprecatedTags
+}
+
 // TestTagList checks that the TagList global variable contains
 // all the constant Tag variables declared in tags.go.
 func TestTagList(t *testing.T) {
@@ -173,11 +204,16 @@ func TestMaxSizesTested(t *testing.T) {
 		}
 	}
 
+	deprecatedTags := getDeprecatedTags(t)
 	for _, tag := range constTags {
 		if tag == "TxnTag" {
 			// TxnTag is tested in a looser way in TestMaxSizesCorrect
 			continue
 		}
+		if deprecatedTags[tag] {
+			continue
+		}
+
 		require.Truef(t, tagsFound[tag], "Tag %s does not have a corresponding test in TestMaxSizesCorrect", tag)
 	}
 }
