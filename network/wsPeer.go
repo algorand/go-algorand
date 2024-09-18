@@ -39,7 +39,6 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util"
-	"github.com/algorand/go-algorand/util/metrics"
 )
 
 // MaxMessageLength is the maximum length of a message that can be sent or received, exported to be used in the node.TestMaxSizesCorrect test
@@ -52,20 +51,7 @@ const averageMessageLength = 2 * 1024    // Most of the messages are smaller tha
 // buffer and starve messages from other peers.
 const msgsInReadBufferPerPeer = 10
 
-var tagStringList []string
-
 func init() {
-	tagStringList = make([]string, len(protocol.TagList))
-	for i, t := range protocol.TagList {
-		tagStringList[i] = string(t)
-	}
-	networkSentBytesByTag = metrics.NewTagCounterFiltered("algod_network_sent_bytes_{TAG}", "Number of bytes that were sent over the network for {TAG} messages", tagStringList, "UNK")
-	networkReceivedBytesByTag = metrics.NewTagCounterFiltered("algod_network_received_bytes_{TAG}", "Number of bytes that were received from the network for {TAG} messages", tagStringList, "UNK")
-	networkMessageReceivedByTag = metrics.NewTagCounterFiltered("algod_network_message_received_{TAG}", "Number of complete messages that were received from the network for {TAG} messages", tagStringList, "UNK")
-	networkMessageSentByTag = metrics.NewTagCounterFiltered("algod_network_message_sent_{TAG}", "Number of complete messages that were sent to the network for {TAG} messages", tagStringList, "UNK")
-	networkHandleCountByTag = metrics.NewTagCounterFiltered("algod_network_rx_handle_countbytag_{TAG}", "count of handler calls in the receive thread for {TAG} messages", tagStringList, "UNK")
-	networkHandleMicrosByTag = metrics.NewTagCounterFiltered("algod_network_rx_handle_microsbytag_{TAG}", "microseconds spent by protocol handlers in the receive thread for {TAG} messages", tagStringList, "UNK")
-
 	matched := false
 	for _, version := range SupportedProtocolVersions {
 		if version == versionPeerFeatures {
@@ -82,29 +68,6 @@ func init() {
 		panic(fmt.Sprintf("failed to parse version %v: %s", versionPeerFeatures, err.Error()))
 	}
 }
-
-var networkSentBytesTotal = metrics.MakeCounter(metrics.NetworkSentBytesTotal)
-var networkSentBytesByTag *metrics.TagCounter
-var networkReceivedBytesTotal = metrics.MakeCounter(metrics.NetworkReceivedBytesTotal)
-var networkReceivedBytesByTag *metrics.TagCounter
-
-var networkMessageReceivedTotal = metrics.MakeCounter(metrics.NetworkMessageReceivedTotal)
-var networkMessageReceivedByTag *metrics.TagCounter
-var networkMessageSentTotal = metrics.MakeCounter(metrics.NetworkMessageSentTotal)
-var networkMessageSentByTag *metrics.TagCounter
-
-var networkHandleMicrosByTag *metrics.TagCounter
-var networkHandleCountByTag *metrics.TagCounter
-
-var networkConnectionsDroppedTotal = metrics.MakeCounter(metrics.NetworkConnectionsDroppedTotal)
-var networkMessageQueueMicrosTotal = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_message_sent_queue_micros_total", Description: "Total microseconds message spent waiting in queue to be sent"})
-
-var duplicateNetworkMessageReceivedTotal = metrics.MakeCounter(metrics.DuplicateNetworkMessageReceivedTotal)
-var duplicateNetworkMessageReceivedBytesTotal = metrics.MakeCounter(metrics.DuplicateNetworkMessageReceivedBytesTotal)
-var duplicateNetworkFilterReceivedTotal = metrics.MakeCounter(metrics.DuplicateNetworkFilterReceivedTotal)
-var outgoingNetworkMessageFilteredOutTotal = metrics.MakeCounter(metrics.OutgoingNetworkMessageFilteredOutTotal)
-var outgoingNetworkMessageFilteredOutBytesTotal = metrics.MakeCounter(metrics.OutgoingNetworkMessageFilteredOutBytesTotal)
-var unknownProtocolTagMessagesTotal = metrics.MakeCounter(metrics.UnknownProtocolTagMessagesTotal)
 
 // defaultSendMessageTags is the default list of messages which a peer would
 // allow to be sent without receiving any explicit request.
@@ -203,6 +166,16 @@ type sendMessages struct {
 	// onRelease function is called when the message is released either by being sent or discarded.
 	onRelease func()
 }
+
+//msgp:ignore peerType
+type peerType int
+
+const (
+	// peerTypeWs is a peer that is connected over a websocket connection
+	peerTypeWs peerType = iota
+	// peerTypeP2P is a peer that is connected over an P2P connection
+	peerTypeP2P
+)
 
 type wsPeer struct {
 	// lastPacketTime contains the UnixNano at the last time a successful communication was made with the peer.
@@ -318,6 +291,10 @@ type wsPeer struct {
 
 	// closers is a slice of functions to run when the peer is closed
 	closers []func()
+
+	// peerType defines the peer's underlying connection type
+	// used for separate p2p vs ws metrics
+	peerType peerType
 }
 
 // HTTPPeer is what the opaque Peer might be.
@@ -639,10 +616,17 @@ func (wp *wsPeer) readLoop() {
 		}
 		msg.Net = wp.net
 		wp.lastPacketTime.Store(msg.Received)
-		networkReceivedBytesTotal.AddUint64(uint64(len(msg.Data)+2), nil)
-		networkMessageReceivedTotal.AddUint64(1, nil)
-		networkReceivedBytesByTag.Add(string(tag[:]), uint64(len(msg.Data)+2))
-		networkMessageReceivedByTag.Add(string(tag[:]), 1)
+		if wp.peerType == peerTypeWs {
+			networkReceivedBytesTotal.AddUint64(uint64(len(msg.Data)+2), nil)
+			networkMessageReceivedTotal.AddUint64(1, nil)
+			networkReceivedBytesByTag.Add(string(tag[:]), uint64(len(msg.Data)+2))
+			networkMessageReceivedByTag.Add(string(tag[:]), 1)
+		} else {
+			networkP2PReceivedBytesTotal.AddUint64(uint64(len(msg.Data)+2), nil)
+			networkP2PMessageReceivedTotal.AddUint64(1, nil)
+			networkP2PReceivedBytesByTag.Add(string(tag[:]), uint64(len(msg.Data)+2))
+			networkP2PMessageReceivedByTag.Add(string(tag[:]), 1)
+		}
 		msg.Sender = wp
 
 		// for outgoing connections, we want to notify the connection monitor that we've received
@@ -863,11 +847,19 @@ func (wp *wsPeer) writeLoopSendMsg(msg sendMessage) disconnectReason {
 		return disconnectWriteError
 	}
 	wp.lastPacketTime.Store(time.Now().UnixNano())
-	networkSentBytesTotal.AddUint64(uint64(len(msg.data)), nil)
-	networkSentBytesByTag.Add(string(tag), uint64(len(msg.data)))
-	networkMessageSentTotal.AddUint64(1, nil)
-	networkMessageSentByTag.Add(string(tag), 1)
-	networkMessageQueueMicrosTotal.AddUint64(uint64(time.Now().Sub(msg.peerEnqueued).Nanoseconds()/1000), nil)
+	if wp.peerType == peerTypeWs {
+		networkSentBytesTotal.AddUint64(uint64(len(msg.data)), nil)
+		networkSentBytesByTag.Add(string(tag), uint64(len(msg.data)))
+		networkMessageSentTotal.AddUint64(1, nil)
+		networkMessageSentByTag.Add(string(tag), 1)
+		networkMessageQueueMicrosTotal.AddUint64(uint64(time.Since(msg.peerEnqueued).Nanoseconds()/1000), nil)
+	} else {
+		networkP2PSentBytesTotal.AddUint64(uint64(len(msg.data)), nil)
+		networkP2PSentBytesByTag.Add(string(tag), uint64(len(msg.data)))
+		networkP2PMessageSentTotal.AddUint64(1, nil)
+		networkP2PMessageSentByTag.Add(string(tag), 1)
+		networkP2PMessageQueueMicrosTotal.AddUint64(uint64(time.Since(msg.peerEnqueued).Nanoseconds()/1000), nil)
+	}
 	return disconnectReasonNone
 }
 
