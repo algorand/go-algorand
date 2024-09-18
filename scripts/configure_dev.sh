@@ -40,9 +40,9 @@ function install_or_upgrade {
         BREW_FORCE="-f"
     fi
     if brew ls --versions "$1" >/dev/null; then
-        brew upgrade ${BREW_FORCE} "$1" || true
+        HOMEBREW_NO_AUTO_UPDATE=1 brew upgrade ${BREW_FORCE} "$1" || true
     else
-        brew install ${BREW_FORCE} "$1"
+        HOMEBREW_NO_AUTO_UPDATE=1 brew install ${BREW_FORCE} "$1"
     fi
 }
 
