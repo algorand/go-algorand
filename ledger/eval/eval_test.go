@@ -1266,7 +1266,7 @@ func TestExpiredAccountGenerationWithDiskFailure(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	genesisInitState, addrs, keys := ledgertesting.GenesisWithProto(10, protocol.ConsensusFuture)
+	genesisInitState, addrs, _ := ledgertesting.GenesisWithProto(10, protocol.ConsensusFuture)
 
 	sendAddr := addrs[0]
 	recvAddr := addrs[1]
@@ -1311,26 +1311,6 @@ func TestExpiredAccountGenerationWithDiskFailure(t *testing.T) {
 		l.endBlock(t, eval)
 		eval = l.nextBlock(t)
 	}
-
-	genHash := l.GenesisHash()
-	txn := transactions.Transaction{
-		Type: protocol.PaymentTx,
-		Header: transactions.Header{
-			Sender:      sendAddr,
-			Fee:         minFee,
-			FirstValid:  newBlock.Round(),
-			LastValid:   eval.Round(),
-			GenesisHash: genHash,
-		},
-		PaymentTxnFields: transactions.PaymentTxnFields{
-			Receiver: recvAddr,
-			Amount:   basics.MicroAlgos{Raw: 100},
-		},
-	}
-
-	st := txn.Sign(keys[0])
-	err = eval.Transaction(st, transactions.ApplyData{})
-	require.NoError(t, err)
 
 	eval.validate = true
 	eval.generate = false
@@ -1541,7 +1521,7 @@ func TestExpiredAccountGeneration(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	genesisInitState, addrs, keys := ledgertesting.GenesisWithProto(10, protocol.ConsensusFuture)
+	genesisInitState, addrs, _ := ledgertesting.GenesisWithProto(10, protocol.ConsensusFuture)
 
 	sendAddr := addrs[0]
 	recvAddr := addrs[1]
@@ -1550,7 +1530,7 @@ func TestExpiredAccountGeneration(t *testing.T) {
 	recvAddrLastValidRound := basics.Round(2)
 
 	// the target round we want to advance the evaluator to
-	targetRound := basics.Round(4)
+	targetRound := basics.Round(2)
 
 	// Set all to online except the sending address
 	for _, addr := range addrs {
@@ -1592,31 +1572,22 @@ func TestExpiredAccountGeneration(t *testing.T) {
 
 	// Advance the evaluator a couple rounds...
 	for i := uint64(0); i < uint64(targetRound); i++ {
-		l.endBlock(t, eval)
+		vb := l.endBlock(t, eval)
 		eval = l.nextBlock(t)
+
+		expiredAddrs := make(map[basics.Address]struct{})
+		for _, addr := range vb.Block().ExpiredParticipationAccounts {
+			expiredAddrs[addr] = struct{}{}
+		}
+		// get indexes of addrs in ExpiredParticipationAccounts
+		for j, addr := range addrs {
+			if _, isExpired := expiredAddrs[addr]; isExpired {
+				t.Logf("round %d: addr %d %s is expired", vb.Block().Round(), j, addr)
+			}
+		}
 	}
 
 	require.Greater(t, uint64(eval.Round()), uint64(recvAddrLastValidRound))
-
-	genHash := l.GenesisHash()
-	txn := transactions.Transaction{
-		Type: protocol.PaymentTx,
-		Header: transactions.Header{
-			Sender:      sendAddr,
-			Fee:         minFee,
-			FirstValid:  newBlock.Round(),
-			LastValid:   eval.Round(),
-			GenesisHash: genHash,
-		},
-		PaymentTxnFields: transactions.PaymentTxnFields{
-			Receiver: recvAddr,
-			Amount:   basics.MicroAlgos{Raw: 100},
-		},
-	}
-
-	st := txn.Sign(keys[0])
-	err = eval.Transaction(st, transactions.ApplyData{})
-	require.NoError(t, err)
 
 	// Make sure we validate our block as well
 	eval.validate = true
