@@ -1371,12 +1371,24 @@ func TestAbsenteeChecks(t *testing.T) {
 		crypto.RandBytes(tmp.VoteID[:])
 		tmp.VoteFirstValid = 1
 		tmp.VoteLastValid = 1500 // large enough to avoid EXPIRATION, so we can see SUSPENSION
-		tmp.LastHeartbeat = 1    // non-zero allows suspensions
 		switch i {
 		case 1:
-			tmp.LastHeartbeat = 1150 // lie here so that addr[1] won't be suspended
+			tmp.LastHeartbeat = 1 // we want addr[1] to be suspended earlier than others
 		case 2:
-			tmp.LastProposed = 1150 // lie here so that addr[2] won't be suspended
+			tmp.LastProposed = 1 // we want addr[1] to be suspended earlier than others
+		default:
+			if i < 10 { // make the other 8 genesis wallets unsuspendable
+				if i%2 == 0 {
+					tmp.LastProposed = 1200
+				} else {
+					tmp.LastHeartbeat = 1200
+				}
+			} else {
+				// ensure non-zero balance for new accounts, but a small balance
+				// so they will not be absent, just challenged.
+				tmp.MicroAlgos = basics.MicroAlgos{Raw: 1_000_000}
+				tmp.LastHeartbeat = 1 // non-zero allows suspensions
+			}
 		}
 
 		genesisInitState.Accounts[addr] = tmp
@@ -1393,13 +1405,28 @@ func TestAbsenteeChecks(t *testing.T) {
 	blkEval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0, nil)
 	require.NoError(t, err)
 
-	// Advance the evaluator, watching for lack of suspensions since we don't
-	// suspend until a txn with a suspendable account appears
+	// Advance the evaluator, watching for suspensions as they appear
 	challenge := byte(0)
-	for i := uint64(0); i < uint64(1210); i++ { // A bit past one grace period (200) past challenge at 1000.
+	for i := uint64(0); i < uint64(1200); i++ { // Just before first suspension at 1171
 		vb := l.endBlock(t, blkEval)
 		blkEval = l.nextBlock(t)
-		require.Zero(t, vb.Block().AbsentParticipationAccounts)
+		// make map of addrs in AbsentParticipationAccounts
+		absentAddrs := make(map[basics.Address]struct{})
+		for _, addr := range vb.Block().AbsentParticipationAccounts {
+			absentAddrs[addr] = struct{}{}
+		}
+		// get indexes of addrs in AbsentParticipationAccounts
+		for j, addr := range addrs {
+			if _, isAbsent := absentAddrs[addr]; isAbsent {
+				t.Logf("round %d: addr %d %s is absent", vb.Block().Round(), j, addr)
+			}
+		}
+		if vb.Block().Round() == 102 { // 2 out of 10 genesis accounts are absent
+			require.Contains(t, vb.Block().AbsentParticipationAccounts, addrs[1])
+			require.Contains(t, vb.Block().AbsentParticipationAccounts, addrs[2])
+		} else {
+			require.Zero(t, vb.Block().AbsentParticipationAccounts, "round %v", vb.Block().Round())
+		}
 		if vb.Block().Round() == 1000 {
 			challenge = vb.Block().BlockHeader.Seed[0]
 		}
@@ -1443,15 +1470,17 @@ func TestAbsenteeChecks(t *testing.T) {
 	// fake agreement's setting of header fields so later validates work
 	validatedBlock := ledgercore.MakeValidatedBlock(unfinishedBlock.UnfinishedBlock().WithProposer(committee.Seed{}, testPoolAddr, true), unfinishedBlock.UnfinishedDeltas())
 
+	t.Logf("round %d: absent %v", validatedBlock.Block().Round(), validatedBlock.Block().AbsentParticipationAccounts)
 	require.Zero(t, validatedBlock.Block().ExpiredParticipationAccounts)
-	require.Contains(t, validatedBlock.Block().AbsentParticipationAccounts, addrs[0], addrs[0].String())
-	require.NotContains(t, validatedBlock.Block().AbsentParticipationAccounts, addrs[1], addrs[1].String())
-	require.NotContains(t, validatedBlock.Block().AbsentParticipationAccounts, addrs[2], addrs[2].String())
 
 	// Of the 32 extra accounts, make sure only the one matching the challenge is suspended
 	require.Contains(t, validatedBlock.Block().AbsentParticipationAccounts, challenged, challenged.String())
 	for i := byte(0); i < 32; i++ {
 		if i == challenge>>3 {
+			rnd := validatedBlock.Block().Round()
+			ad := basics.Address{i << 3, 0xaa}
+			t.Logf("extra account %d %s is challenged, balance rnd %d %d", i, ad,
+				rnd, l.roundBalances[rnd][ad].MicroAlgos.Raw)
 			require.Equal(t, basics.Address{i << 3, 0xaa}, challenged)
 			continue
 		}
@@ -1474,7 +1503,7 @@ func TestAbsenteeChecks(t *testing.T) {
 
 	// Introduce an address that shouldn't be suspended
 	badBlock := goodBlock
-	badBlock.AbsentParticipationAccounts = append(badBlock.AbsentParticipationAccounts, addrs[1])
+	badBlock.AbsentParticipationAccounts = append(badBlock.AbsentParticipationAccounts, addrs[3])
 	_, err = Eval(context.Background(), l, badBlock, true, verify.GetMockedCache(true), nil, l.tracer)
 	require.ErrorContains(t, err, "not absent")
 

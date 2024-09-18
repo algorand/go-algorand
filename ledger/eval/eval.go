@@ -1698,7 +1698,7 @@ func (eval *BlockEvaluator) generateKnockOfflineAccountsList() {
 	// Now, check these candidate accounts to see if they are expired or absent.
 	for accountAddr, acctData := range absentCandidates {
 		if acctData.MicroAlgosWithRewards.IsZero() {
-			continue // should only happen in tests; prevents panic in isAbsent
+			continue // don't check accounts that are being closed
 		}
 
 		if len(updates.AbsentParticipationAccounts) >= maxSuspensions {
