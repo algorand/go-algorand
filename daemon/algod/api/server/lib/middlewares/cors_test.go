@@ -21,11 +21,13 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestMakeCORS(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	e := echo.New()
 	tokenHeader := "X-Algo-API-Token"
 	corsMiddleware := MakeCORS(tokenHeader)
@@ -89,6 +91,7 @@ func TestMakeCORS(t *testing.T) {
 }
 
 func TestMakePNA(t *testing.T) {
+	partitiontest.PartitionTest(t)
 	e := echo.New()
 	pnaMiddleware := MakePNA()
 
