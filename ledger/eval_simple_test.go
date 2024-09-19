@@ -412,10 +412,51 @@ func TestAbsentTracking(t *testing.T) {
 		int 0; voter_params_get VoterIncentiveEligible; itob; log; itob; log;
 		int 1`
 
+	addrIndexes := make(map[basics.Address]int)
+	for i, addr := range addrs {
+		addrIndexes[addr] = i
+	}
+	prettyAddrs := func(inAddrs []basics.Address) []string {
+		ret := make([]string, len(inAddrs))
+		for i, addr := range inAddrs {
+			if idx, ok := addrIndexes[addr]; ok {
+				ret[i] = fmt.Sprintf("addrs[%d]", idx)
+			} else {
+				ret[i] = addr.String()
+			}
+		}
+		return ret
+	}
+
+	printAbsent := func(vb *ledgercore.ValidatedBlock) {
+		t.Helper()
+		absent := vb.Block().AbsentParticipationAccounts
+		expired := vb.Block().ExpiredParticipationAccounts
+		if len(expired) > 0 || len(absent) > 0 {
+			t.Logf("rnd %d: expired %d, absent %d (exp %v abs %v)", vb.Block().Round(),
+				len(expired), len(absent), prettyAddrs(expired), prettyAddrs(absent))
+		}
+	}
+
 	checkingBegins := 40
-	ledgertesting.TestConsensusRange(t, checkingBegins, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+	runTest := func(t *testing.T, cv protocol.ConsensusVersion, cfg config.Local, beforeSPInterval bool) {
 		dl := NewDoubleLedger(t, genBalances, cv, cfg)
 		defer dl.Close()
+
+		const spIntervalRounds = 240
+
+		baseRound := basics.Round(0)
+		if !beforeSPInterval {
+			var vb *ledgercore.ValidatedBlock
+			for i := 0; i < spIntervalRounds; i++ { // run up to block 240 (state proof interval)
+				vb = dl.fullBlock()
+				printAbsent(vb)
+				require.Empty(t, vb.Block().AbsentParticipationAccounts)
+				require.Empty(t, vb.Block().ExpiredParticipationAccounts)
+			}
+			require.Equal(t, basics.Round(spIntervalRounds), vb.Block().Round())
+			baseRound += spIntervalRounds
+		}
 
 		// we use stakeChecker for testing `voter_params_get` on suspended accounts
 		stib := dl.txn(&txntest.Txn{ // #1
@@ -456,13 +497,14 @@ func TestAbsentTracking(t *testing.T) {
 
 		// have addrs[1] go online explicitly, which makes it eligible for suspension.
 		// use a large fee, so we can see IncentiveEligible change
-		dl.txn(&txntest.Txn{ // #2
+		vb := dl.fullBlock(&txntest.Txn{ // #2
 			Type:        "keyreg",
 			Fee:         10_000_000,
 			Sender:      addrs[1],
 			VotePK:      [32]byte{1},
 			SelectionPK: [32]byte{1},
 		})
+		require.Equal(t, baseRound+basics.Round(2), vb.Block().Round())
 
 		// as configured above, only the first two accounts should be online
 		require.True(t, lookup(t, dl.generator, addrs[0]).Status == basics.Online)
@@ -480,7 +522,8 @@ func TestAbsentTracking(t *testing.T) {
 		require.True(t, lookup(t, dl.generator, addrs[1]).IncentiveEligible)
 		require.False(t, lookup(t, dl.generator, addrs[2]).IncentiveEligible)
 
-		vb := dl.fullBlock() // #6
+		vb = dl.fullBlock() // #6
+		printAbsent(vb)
 		totals, err := dl.generator.Totals(vb.Block().Round())
 		require.NoError(t, err)
 		require.NotZero(t, totals.Online.Money.Raw)
@@ -494,7 +537,7 @@ func TestAbsentTracking(t *testing.T) {
 			Receiver: addrs[2],
 			Amount:   100_000,
 		})
-		dl.endBlock(proposer) // #7
+		printAbsent(dl.endBlock(proposer)) // #7
 
 		prp := lookup(t, dl.validator, proposer)
 		require.Equal(t, prp.LastProposed, dl.validator.Latest())
@@ -508,7 +551,7 @@ func TestAbsentTracking(t *testing.T) {
 		require.Equal(t, totals.Online.Money.Raw-100_000-1000, newtotals.Online.Money.Raw)
 		totals = newtotals
 
-		dl.fullBlock()
+		printAbsent(dl.fullBlock())
 
 		// addrs[2] was already offline
 		dl.txns(&txntest.Txn{Type: "keyreg", Sender: addrs[2]}) // OFFLINE keyreg #9
@@ -524,12 +567,13 @@ func TestAbsentTracking(t *testing.T) {
 		require.Zero(t, regger.LastHeartbeat)
 
 		// ONLINE keyreg without extra fee
-		dl.txns(&txntest.Txn{
+		vb = dl.fullBlock(&txntest.Txn{
 			Type:        "keyreg",
 			Sender:      addrs[2],
 			VotePK:      [32]byte{1},
 			SelectionPK: [32]byte{1},
 		}) // #10
+		printAbsent(vb)
 		// online totals have grown, addr[2] was added
 		newtotals, err = dl.generator.Totals(dl.generator.Latest())
 		require.NoError(t, err)
@@ -555,14 +599,15 @@ func TestAbsentTracking(t *testing.T) {
 			VotePK:      [32]byte{1},
 			SelectionPK: [32]byte{1},
 		}) // #14
+		printAbsent(vb)
 		twoEligible := vb.Block().Round()
-		require.EqualValues(t, 14, twoEligible) // sanity check
+		require.EqualValues(t, baseRound+14, twoEligible) // sanity check
 
 		regger = lookup(t, dl.validator, addrs[2])
 		require.True(t, regger.IncentiveEligible)
 
 		for i := 0; i < 5; i++ {
-			dl.fullBlock() // #15-19
+			printAbsent(dl.fullBlock()) // #15-19
 			require.True(t, lookup(t, dl.generator, addrs[0]).Status == basics.Online)
 			require.True(t, lookup(t, dl.generator, addrs[1]).Status == basics.Online)
 			require.True(t, lookup(t, dl.generator, addrs[2]).Status == basics.Online)
@@ -574,7 +619,7 @@ func TestAbsentTracking(t *testing.T) {
 		require.True(t, lookup(t, dl.generator, addrs[2]).Status == basics.Online)
 
 		for i := 0; i < 30; i++ {
-			dl.fullBlock() // #20-49
+			printAbsent(dl.fullBlock()) // #20-49
 		}
 
 		// addrs 0-2 all have about 1/3 of stake, so seemingly (see next block
@@ -582,7 +627,11 @@ func TestAbsentTracking(t *testing.T) {
 		// about 35. But, since blocks are empty, nobody's suspendible account
 		// is noticed.
 		require.Equal(t, basics.Online, lookup(t, dl.generator, addrs[0]).Status)
-		require.Equal(t, basics.Online, lookup(t, dl.generator, addrs[1]).Status)
+		if beforeSPInterval {
+			require.Equal(t, basics.Online, lookup(t, dl.generator, addrs[1]).Status)
+		} else {
+			require.Equal(t, basics.Offline, lookup(t, dl.generator, addrs[1]).Status)
+		}
 		require.Equal(t, basics.Online, lookup(t, dl.generator, addrs[2]).Status)
 		require.True(t, lookup(t, dl.generator, addrs[2]).IncentiveEligible)
 
@@ -594,21 +643,26 @@ func TestAbsentTracking(t *testing.T) {
 			Receiver: addrs[0],
 			Amount:   0,
 		}) // #50
+		printAbsent(vb)
 		require.Equal(t, vb.Block().AbsentParticipationAccounts, []basics.Address{addrs[2]})
 
 		twoPaysZero := vb.Block().Round()
-		require.EqualValues(t, 50, twoPaysZero)
+		require.EqualValues(t, baseRound+50, twoPaysZero)
 		// addr[0] has never proposed or heartbeat so it is not considered absent
 		require.Equal(t, basics.Online, lookup(t, dl.generator, addrs[0]).Status)
 		// addr[1] still hasn't been "noticed"
-		require.Equal(t, basics.Online, lookup(t, dl.generator, addrs[1]).Status)
+		if beforeSPInterval {
+			require.Equal(t, basics.Online, lookup(t, dl.generator, addrs[1]).Status)
+		} else {
+			require.Equal(t, basics.Offline, lookup(t, dl.generator, addrs[1]).Status)
+		}
 		require.Equal(t, basics.Offline, lookup(t, dl.generator, addrs[2]).Status)
 		require.False(t, lookup(t, dl.generator, addrs[2]).IncentiveEligible)
 
 		// separate the payments by a few blocks so it will be easier to test
 		// when the changes go into effect
 		for i := 0; i < 4; i++ {
-			dl.fullBlock() // #51-54
+			printAbsent(dl.fullBlock()) // #51-54
 		}
 		// now, when 2 pays 1, 1 gets suspended (unlike 0, we had 1 keyreg early on, so LastHeartbeat>0)
 		vb = dl.fullBlock(&txntest.Txn{
@@ -617,9 +671,14 @@ func TestAbsentTracking(t *testing.T) {
 			Receiver: addrs[1],
 			Amount:   0,
 		}) // #55
+		printAbsent(vb)
 		twoPaysOne := vb.Block().Round()
-		require.EqualValues(t, 55, twoPaysOne)
-		require.Equal(t, vb.Block().AbsentParticipationAccounts, []basics.Address{addrs[1]})
+		require.EqualValues(t, baseRound+55, twoPaysOne)
+		if beforeSPInterval {
+			require.Equal(t, vb.Block().AbsentParticipationAccounts, []basics.Address{addrs[1]})
+		} else {
+			require.Empty(t, vb.Block().AbsentParticipationAccounts)
+		}
 		require.Equal(t, basics.Online, lookup(t, dl.generator, addrs[0]).Status)
 		require.Equal(t, basics.Offline, lookup(t, dl.generator, addrs[1]).Status)
 		require.False(t, lookup(t, dl.generator, addrs[1]).IncentiveEligible)
@@ -628,7 +687,7 @@ func TestAbsentTracking(t *testing.T) {
 
 		// now, addrs[2] proposes, so it gets back online, but stays ineligible
 		dl.proposer = addrs[2]
-		dl.fullBlock()
+		printAbsent(dl.fullBlock())
 		require.Equal(t, basics.Online, lookup(t, dl.generator, addrs[2]).Status)
 		require.False(t, lookup(t, dl.generator, addrs[2]).IncentiveEligible)
 
@@ -651,7 +710,11 @@ func TestAbsentTracking(t *testing.T) {
 		// in second block, the checkstate app was created
 		checkState(addrs[1], true, false, 833_333_333_333_333) // 322
 		// addr[1] spent 10A on a fee in rnd 3, so online stake and eligibility adjusted in 323
-		checkState(addrs[1], true, true, 833_333_323_333_333) // 323
+		if beforeSPInterval {
+			checkState(addrs[1], true, true, 833_333_323_333_333) // 323
+		} else {
+			checkState(addrs[1], true, false, 833_333_333_333_333) // 323
+		}
 
 		for rnd := dl.fullBlock().Block().Round(); rnd < 320+twoEligible-1; rnd = dl.fullBlock().Block().Round() {
 		}
@@ -671,10 +734,23 @@ func TestAbsentTracking(t *testing.T) {
 		// after doing a keyreg, became susceptible to suspension
 		for rnd := dl.fullBlock().Block().Round(); rnd < 320+twoPaysOne-1; rnd = dl.fullBlock().Block().Round() {
 		}
-		checkState(addrs[1], true, true, 833_333_323_230_333) // still online, balance irrelevant
+		if beforeSPInterval {
+			checkState(addrs[1], true, true, 833_333_323_230_333) // still online, balance irrelevant
+		} else {
+			checkState(addrs[1], false, false, 0) // suspended already
+		}
 		// 1 was noticed & suspended after being paid by 2, so eligible and amount go to 0
 		checkState(addrs[1], false, false, 0)
-	})
+	}
+
+	testBeforeAndAfterSPInterval := func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		// before the first state proof interval (240 rounds), no cached voters data is available, so only accounts
+		// noticed in blocks will be suspended.
+		t.Run("beforeSPInterval", func(t *testing.T) { runTest(t, cv, cfg, false) })
+		t.Run("afterSPInterval", func(t *testing.T) { runTest(t, cv, cfg, true) })
+	}
+
+	ledgertesting.TestConsensusRange(t, checkingBegins, 0, testBeforeAndAfterSPInterval)
 }
 
 // TestAbsenteeChallenges ensures that online accounts that don't (do) respond

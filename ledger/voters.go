@@ -303,7 +303,7 @@ func (vt *votersTracker) LatestCompletedVotersUpTo(r basics.Round) (basics.Round
 
 	for round, voters := range vt.votersForRoundCache {
 		if round <= r && round > latestRound {
-			if completed, err := voters.Completed(); completed && err != nil {
+			if completed, err := voters.Completed(); completed && err == nil {
 				latestRound = round
 				latestVoters = voters
 			}
