@@ -14,7 +14,7 @@ CHANNEL=${CHANNEL:-$(./scripts/release/mule/common/get_channel.sh "$NETWORK")}
 VERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
 PKG_DIR="./tmp/node_pkgs"
 SIGNING_KEY_ADDR=dev@algorand.com
-OS_TYPE=$(./scripts/release/mule/common/ostype.sh)
+OS_TYPES=(linux darwin)
 ARCHS=(amd64 arm64 universal)
 ARCH_BITS=(x86_64 aarch64)
 # Note that we don't want to use $GNUPGHOME here because that is a documented env var for the gnupg
@@ -47,17 +47,19 @@ popd
 if [ -n "$S3_SOURCE" ]
 then
     i=0
-    for arch in "${ARCHS[@]}"; do
-        arch_bit="${ARCH_BITS[$i]}"
-        (
+    for os in "${OS_TYPES[@]}"; do
+        for arch in "${ARCHS[@]}"; do
             mkdir -p "$PKG_DIR/$OS_TYPE/$arch"
-            cd "$PKG_DIR"
-            # Note the underscore after ${arch}!
-            # Recall that rpm packages have the arch bit in the filenames (i.e., "x86_64" rather than "amd64").
-            # Also, the order of the includes/excludes is important!
-            aws s3 cp --recursive --exclude "*" --include "*${arch}_*" --include "*$arch_bit.rpm" --exclude "*.sig" --exclude "*.asc" --exclude "*.asc.gz" "s3://$S3_SOURCE/$CHANNEL/$VERSION" .
-        )
-        i=$((i + 1))
+            arch_bit="${ARCH_BITS[$i]}"
+            (
+                cd "$PKG_DIR"
+                # Note the underscore after ${arch}!
+                # Recall that rpm packages have the arch bit in the filenames (i.e., "x86_64" rather than "amd64").
+                # Also, the order of the includes/excludes is important!
+                aws s3 cp --recursive --exclude "*" --include "*${arch}_*" --include "*$arch_bit.rpm" --exclude "*.sig" --exclude "*.asc" --exclude "*.asc.gz" "s3://$S3_SOURCE/$CHANNEL/$VERSION" .
+            )
+            i=$((i + 1))
+        done
     done
 fi
 
