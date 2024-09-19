@@ -15,7 +15,7 @@ if { [catch {
     set TEST_ROOT_DIR $TEST_ALGO_DIR/root
     set TEST_PRIMARY_NODE_DIR $TEST_ROOT_DIR/Primary/
     set NETWORK_NAME test_net_expect_$TIME_STAMP
-    set NETWORK_TEMPLATE "$TEST_DATA_DIR/nettemplates/TwoNodes50Each.json"
+    set NETWORK_TEMPLATE "$TEST_DATA_DIR/nettemplates/TwoNodes50EachPNA.json"
 
     # Create network
     ::AlgorandGoal::CreateNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ALGO_DIR $TEST_ROOT_DIR
@@ -30,6 +30,10 @@ if { [catch {
     # Hit algod with an OPTIONS preflight and look for 200 OK
     set ALGOD_NET_ADDRESS [::AlgorandGoal::GetAlgodNetworkAddress $TEST_PRIMARY_NODE_DIR]
     ::AlgorandGoal::CheckNetworkAddressForCors $ALGOD_NET_ADDRESS
+
+    # Hit algod with a private network access preflight request and look for 200 OK
+    set ALGOD_NET_ADDRESS [::AlgorandGoal::GetAlgodNetworkAddress $TEST_PRIMARY_NODE_DIR]
+    ::AlgorandGoal::CheckNetworkAddressForPNA $ALGOD_NET_ADDRESS
 
     # Start kmd, then do the same CORS check as algod
     exec -- cat "$TEST_PRIMARY_NODE_DIR/kmd-v0.5/kmd_config.json.example" | jq {. |= . + {"allowed_origins": ["http://algorand.com"]}} > "$TEST_PRIMARY_NODE_DIR/kmd-v0.5/kmd_config.json"
