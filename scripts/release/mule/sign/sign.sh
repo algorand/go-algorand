@@ -15,7 +15,7 @@ VERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
 PKG_DIR="./tmp/node_pkgs"
 SIGNING_KEY_ADDR=dev@algorand.com
 OS_TYPE=$(./scripts/release/mule/common/ostype.sh)
-ARCHS=(amd64 arm64)
+ARCHS=(amd64 arm64 universal)
 ARCH_BITS=(x86_64 aarch64)
 # Note that we don't want to use $GNUPGHOME here because that is a documented env var for the gnupg
 # project and if it's set in the environment mule will automatically pick it up, which could have
