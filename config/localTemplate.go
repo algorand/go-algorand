@@ -170,6 +170,9 @@ type Local struct {
 	// EndpointAddress configures the address the node listens to for REST API calls. Specify an IP and port or just port. For example, 127.0.0.1:0 will listen on a random port on the localhost (preferring 8080).
 	EndpointAddress string `version[0]:"127.0.0.1:0"`
 
+	// Respond to Private Network Access preflight requests sent to the node. Useful when a public website is trying to access a node that's hosted on a local network.
+	EnablePrivateNetworkAccessHeader bool `version[34]:"false"`
+
 	// RestReadTimeoutSeconds is passed to the API servers rest http.Server implementation.
 	RestReadTimeoutSeconds int `version[4]:"15"`
 

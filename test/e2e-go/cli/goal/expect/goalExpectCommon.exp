@@ -849,6 +849,23 @@ proc ::AlgorandGoal::CheckNetworkAddressForCors { NET_ADDRESS } {
     }
 }
 
+# Use curl to check if a network address supports private network access
+proc ::AlgorandGoal::CheckNetworkAddressForPNA { NET_ADDRESS } {
+    if { [ catch {
+        spawn curl -X OPTIONS -H "Access-Control-Request-Private-Network: true" --head $NET_ADDRESS
+        expect {
+            timeout { close; ::AlgorandGoal::Abort "Timeout failure in CheckNetworkAddressForPNA" }
+            "Access-Control-Allow-Private-Network" { puts "success" ; close  }
+            eof {
+                return -code error "EOF without Access-Control-Allow-Private-Network"
+            }
+            close
+        }
+    } EXCEPTION ] } {
+       ::AlgorandGoal::Abort "ERROR in CheckNetworkAddressForPNA: $EXCEPTION"
+    }
+}
+
 # Show the Ledger Supply
 proc ::AlgorandGoal::GetLedgerSupply { TEST_PRIMARY_NODE_DIR } {
     if { [ catch {

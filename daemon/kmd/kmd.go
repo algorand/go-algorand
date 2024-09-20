@@ -69,6 +69,7 @@ func Start(startConfig StartConfig) (died chan error, sock string, err error) {
 		DataDir:        startConfig.DataDir,
 		Address:        kmdCfg.Address,
 		AllowedOrigins: kmdCfg.AllowedOrigins,
+		AllowHeaderPNA: kmdCfg.AllowHeaderPNA,
 		SessionManager: session.MakeManager(kmdCfg),
 		Log:            startConfig.Log,
 		Timeout:        startConfig.Timeout,

@@ -19,6 +19,7 @@ linters:
     - staticcheck
     - typecheck
     - paralleltest
+    - unused
 
 severity:
   default-severity: error
@@ -115,6 +116,14 @@ issues:
     - "^superfluous-else: if block ends with"
 
   exclude-rules:
+    - path: cmd/algofix/
+      linters: unused
+    - path: cmd/algocfg/
+      linters: unused
+    - path: cmd/catchpointdump/
+      linters: unused
+    - path: tools/
+      linters: unused
     - path: _test\.go
       linters:
         - errcheck
@@ -129,6 +138,7 @@ issues:
         # - revive
         # - staticcheck
         - typecheck
+        - unused
     - path: _test\.go
       linters:
         - staticcheck
@@ -206,3 +216,4 @@ issues:
         - govet
         - ineffassign
         - misspell
+        - unused
