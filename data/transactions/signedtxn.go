@@ -38,7 +38,7 @@ type SignedTxn struct {
 	Txn      Transaction        `codec:"txn"`
 	AuthAddr basics.Address     `codec:"sgnr"`
 
-	cachedID *Txid
+	cachedID *Txid `codec:"-"`
 }
 
 // SignedTxnInBlock is how a signed transaction is encoded in a block.
