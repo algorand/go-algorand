@@ -67,6 +67,7 @@ func (s SignedTxn) ID() Txid {
 	return s.Txn.ID()
 }
 
+// CacheID caches the ID of the underlying transaction.
 func (s *SignedTxn) CacheID() {
 	txid := s.Txn.ID()
 	s.cachedID = &txid
