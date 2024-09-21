@@ -773,6 +773,7 @@ func TestLocal_ValidateP2PHybridConfig(t *testing.T) {
 
 	for i, test := range tests {
 		test := test
+		i := i
 		t.Run(fmt.Sprintf("test=%d", i), func(t *testing.T) {
 			t.Parallel()
 
