@@ -197,13 +197,13 @@ func TestP2PPrivateAddresses(t *testing.T) {
 		"/ip4/255.255.255.255/ipcidr/32",
 		"/ip6/fc00::/ipcidr/7",
 		"/ip6/fe80::/ipcidr/10",
+		"/ip6/2001:db8::/ipcidr/32",
 	}
 
 	// these are handled by addrFilter explicitly as a custom filter
 	extra := []string{
 		"/ip6/100::/ipcidr/64",
 		"/ip6/2001:2::/ipcidr/48",
-		"/ip6/2001:db8::/ipcidr/32", // multiaddr v0.13 has it
 	}
 
 	for _, addr := range privAddrList {
@@ -220,7 +220,7 @@ func TestP2PPrivateAddresses(t *testing.T) {
 	// ensure addrFilter allows normal addresses
 	valid := []string{
 		"/ip4/3.4.5.6/tcp/1234",
-		"/ip6/200:11::/tcp/1234",
+		"/ip6/2606:4700::/tcp/1234",
 	}
 
 	for _, addr := range valid {

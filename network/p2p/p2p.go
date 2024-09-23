@@ -349,7 +349,6 @@ func formatPeerTelemetryInfoProtocolName(telemetryID string, telemetryInstance s
 var private6 = parseCIDR([]string{
 	"100::/64",
 	"2001:2::/48",
-	"2001:db8::/32", // multiaddr v0.13 has it
 })
 
 // parseCIDR converts string CIDRs to net.IPNet.
