@@ -41,7 +41,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
-	basichost "github.com/libp2p/go-libp2p/p2p/host/basic"
 	rcmgr "github.com/libp2p/go-libp2p/p2p/host/resource-manager"
 	"github.com/libp2p/go-libp2p/p2p/muxer/yamux"
 	"github.com/libp2p/go-libp2p/p2p/security/noise"
@@ -283,7 +282,7 @@ func (s *serviceImpl) dialNode(ctx context.Context, peer *peer.AddrInfo) error {
 func (s *serviceImpl) AddrInfo() peer.AddrInfo {
 	return peer.AddrInfo{
 		ID:    s.host.ID(),
-		Addrs: s.host.(*basichost.BasicHost).AllAddrs(), // fetch all addresses, including private ones
+		Addrs: s.host.Addrs(),
 	}
 }
 

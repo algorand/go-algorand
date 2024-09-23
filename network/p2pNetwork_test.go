@@ -815,6 +815,8 @@ func TestP2PHTTPHandlerAllInterfaces(t *testing.T) {
 	netA.Start()
 	defer netA.Stop()
 
+	// TODO: AddrInfo does not return all addresses anymore
+	// Figure out how to proceed
 	peerInfoA := netA.service.AddrInfo()
 	addrsB, err := peer.AddrInfoToP2pAddrs(&peerInfoA)
 	require.NoError(t, err)
