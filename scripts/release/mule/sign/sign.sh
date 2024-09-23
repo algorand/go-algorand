@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 # shellcheck disable=2035,2129
 
-# TODO: This needs to be reworked a bit to support Darwin.
-
 set -exo pipefail
 shopt -s nullglob
 
@@ -71,7 +69,6 @@ cd "$PKG_DIR"
 # Grab the directories directly underneath (max-depth 1) ./tmp/node_pkgs/ into a space-delimited string.
 # This will help us target `linux`, `darwin` and (possibly) `windows` build assets.
 # Note the surrounding parens turns the string created by `find` into an array.
-OS_TYPES=($(find . -mindepth 1 -maxdepth 1 -type d -printf '%f\n'))
 for os in "${OS_TYPES[@]}"; do
     for arch in "${ARCHS[@]}"; do
         if [ -d "$os/$arch" ]
