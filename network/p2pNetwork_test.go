@@ -815,14 +815,12 @@ func TestP2PHTTPHandlerAllInterfaces(t *testing.T) {
 	netA.Start()
 	defer netA.Stop()
 
-	// TODO: AddrInfo does not return all addresses anymore
-	// Figure out how to proceed
 	peerInfoA := netA.service.AddrInfo()
-	addrsB, err := peer.AddrInfoToP2pAddrs(&peerInfoA)
+	addrsA, err := peer.AddrInfoToP2pAddrs(&peerInfoA)
 	require.NoError(t, err)
-	require.NotZero(t, addrsB[0])
+	require.NotZero(t, addrsA[0])
 
-	t.Logf("peerInfoB: %s", peerInfoA)
+	t.Logf("peerInfoA: %s", peerInfoA)
 	httpClient, err := p2p.MakeTestHTTPClient(&peerInfoA)
 	require.NoError(t, err)
 	resp, err := httpClient.Get("/test")

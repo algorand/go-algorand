@@ -280,9 +280,13 @@ func (s *serviceImpl) dialNode(ctx context.Context, peer *peer.AddrInfo) error {
 
 // AddrInfo returns the peer.AddrInfo for self
 func (s *serviceImpl) AddrInfo() peer.AddrInfo {
+	addrs, err := s.host.Network().InterfaceListenAddresses()
+	if err != nil {
+		s.log.Errorf("failed to get listen addresses: %v", err)
+	}
 	return peer.AddrInfo{
 		ID:    s.host.ID(),
-		Addrs: s.host.Addrs(),
+		Addrs: addrs,
 	}
 }
 
