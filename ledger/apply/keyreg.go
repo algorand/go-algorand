@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 )
@@ -79,7 +80,8 @@ func Keyreg(keyreg transactions.KeyregTxnFields, header transactions.Header, bal
 		}
 		record.Status = basics.Online
 		if params.Payouts.Enabled {
-			record.LastHeartbeat = header.FirstValid
+			lookback := agreement.BalanceRound(round, balances.ConsensusParams())
+			record.LastHeartbeat = round + lookback
 		}
 		record.VoteFirstValid = keyreg.VoteFirst
 		record.VoteLastValid = keyreg.VoteLast
