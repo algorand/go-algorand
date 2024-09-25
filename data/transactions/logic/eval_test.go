@@ -6195,3 +6195,72 @@ func TestMaxTxGroup(t *testing.T) {
 
 	require.Equal(t, config.MaxTxGroupSize, maxTxGroupSize)
 }
+
+func TestAdd256(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	t.Parallel()
+	testAccepts(t, "byte 0x01; byte 0x01; add256; byte 0x0000000000000000000000000000000000000000000000000000000000000002 ; ==", 11)
+	testPanics(t, "byte 0xF000000000000000000000000000000000000000000000000000000000000000; byte 0xF000000000000000000000000000000000000000000000000000000000000000; add256", 11, "overflowed")
+}
+
+func TestSub256(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	t.Parallel()
+	testAccepts(t, "byte 0x02; byte 0x01; sub256; byte 0x0000000000000000000000000000000000000000000000000000000000000001 ; ==", 11)
+	testPanics(t, "byte 0x01; byte 0x02; sub256", 11, "underflowed")
+}
+
+func TestMul256(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	t.Parallel()
+	testAccepts(t, "byte 0x02; byte 0x03; mul256; byte 0x0000000000000000000000000000000000000000000000000000000000000006 ; ==", 11)
+	testPanics(t, "byte 0xF000000000000000000000000000000000000000000000000000000000000000; byte 0x02; mul256", 11, "overflowed")
+}
+
+func TestDiv256(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	t.Parallel()
+	testAccepts(t, "byte 0x06; byte 0x03; div256; byte 0x0000000000000000000000000000000000000000000000000000000000000002 ; ==", 11)
+}
+
+func TestMod256(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	t.Parallel()
+	testAccepts(t, "byte 0x03; byte 0x02; mod256; byte 0x0000000000000000000000000000000000000000000000000000000000000001 ; ==", 11)
+}
+
+func TestSqrt256(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	t.Parallel()
+	testAccepts(t, "byte 0x09; sqrt256; byte 0x0000000000000000000000000000000000000000000000000000000000000003 ; ==", 11)
+}
+
+func BenchmarkUint256Math(b *testing.B) {
+	u256 := "byte 0x1337;"
+
+	ops := []string{
+		"add256",
+		"sub256",
+		"mul256",
+		"div256",
+		"mod256",
+	}
+
+	for _, op := range ops {
+		b.Run(op, func(b *testing.B) {
+			b.ReportAllocs()
+			benchmarkOperation(b, "", u256+u256+op+"; pop", "int 1")
+		})
+	}
+
+	b.Run("sqrt256", func(b *testing.B) {
+		b.ReportAllocs()
+		benchmarkOperation(b, "", u256+"sqrt256; pop", "int 1")
+	})
+}

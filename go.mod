@@ -28,6 +28,7 @@ require (
 	github.com/google/go-cmp v0.6.0
 	github.com/google/go-querystring v1.0.0
 	github.com/gorilla/mux v1.8.0
+	github.com/holiman/uint256 v1.3.0
 	github.com/ipfs/go-log v1.0.5
 	github.com/ipfs/go-log/v2 v2.5.1
 	github.com/jmoiron/sqlx v1.2.0
