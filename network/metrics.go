@@ -111,6 +111,8 @@ var transactionMessagesP2PUnderdeliverableMessage = metrics.MakeCounter(metrics.
 var networkP2PGossipSubSentBytesTotal = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_p2p_gs_sent_bytes_total", Description: "Total number of bytes sent through gossipsub"})
 var networkP2PGossipSubReceivedBytesTotal = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_p2p_gs_received_bytes_total", Description: "Total number of bytes received through gossipsub"})
 
+// var networkP2PGossipSubSentMsgs = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_p2p_gs_message_sent", Description: "Number of complete messages that were sent to the network through gossipsub"})
+
 var _ = pubsub.RawTracer(pubsubMetricsTracer{})
 
 // pubsubMetricsTracer is a tracer for pubsub events used to track metrics.
@@ -136,14 +138,6 @@ func (t pubsubMetricsTracer) Prune(p peer.ID, topic string) {}
 
 // ValidateMessage is invoked when a message first enters the validation pipeline.
 func (t pubsubMetricsTracer) ValidateMessage(msg *pubsub.Message) {
-	if msg != nil && msg.Topic != nil {
-		switch *msg.Topic {
-		case p2p.TXTopicName:
-			networkP2PReceivedBytesTotal.AddUint64(uint64(len(msg.Data)), nil)
-			networkP2PReceivedBytesByTag.Add(string(protocol.TxnTag), uint64(len(msg.Data)))
-			networkP2PMessageReceivedByTag.Add(string(protocol.TxnTag), 1)
-		}
-	}
 }
 
 // DeliverMessage is invoked when a message is delivered
@@ -180,6 +174,17 @@ func (t pubsubMetricsTracer) ThrottlePeer(p peer.ID) {}
 
 // RecvRPC is invoked when an incoming RPC is received.
 func (t pubsubMetricsTracer) RecvRPC(rpc *pubsub.RPC) {
+	for i := range rpc.GetPublish() {
+		if rpc.Publish[i] != nil && rpc.Publish[i].Topic != nil {
+			switch *rpc.Publish[i].Topic {
+			case p2p.TXTopicName:
+				networkP2PReceivedBytesTotal.AddUint64(uint64(len(rpc.Publish[i].Data)), nil)
+				networkP2PReceivedBytesByTag.Add(string(protocol.TxnTag), uint64(len(rpc.Publish[i].Data)))
+				networkP2PMessageReceivedByTag.Add(string(protocol.TxnTag), 1)
+			}
+		}
+	}
+	// service gossipsub traffic = networkP2PGossipSubReceivedBytesTotal - networkP2PReceivedBytesByTag_TX
 	networkP2PGossipSubReceivedBytesTotal.AddUint64(uint64(rpc.Size()), nil)
 }
 
