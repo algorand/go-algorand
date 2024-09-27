@@ -22,7 +22,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -34,6 +33,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
+	p2ptesting "github.com/algorand/go-algorand/network/p2p/testing"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/bloom"
 )
@@ -64,7 +64,11 @@ func (p testHTTPPeer) GetAddress() string {
 	return string(p)
 }
 func (p *testHTTPPeer) GetHTTPClient() *http.Client {
-	return &http.Client{}
+	return &http.Client{
+		Transport: &network.HTTPPAddressBoundTransport{
+			Addr:           p.GetAddress(),
+			InnerTransport: http.DefaultTransport},
+	}
 }
 func (p *testHTTPPeer) GetHTTPPeer() network.HTTPPeer {
 	return p
@@ -83,6 +87,13 @@ func (b *basicRPCNode) RegisterHTTPHandler(path string, handler http.Handler) {
 		b.rmux = mux.NewRouter()
 	}
 	b.rmux.Handle(path, handler)
+}
+
+func (b *basicRPCNode) RegisterHTTPHandlerFunc(path string, handler func(http.ResponseWriter, *http.Request)) {
+	if b.rmux == nil {
+		b.rmux = mux.NewRouter()
+	}
+	b.rmux.HandleFunc(path, handler)
 }
 
 func (b *basicRPCNode) RegisterHandlers(dispatch []network.TaggedMessageHandler) {
@@ -116,9 +127,7 @@ func (b *basicRPCNode) GetPeers(options ...network.PeerOption) []network.Peer {
 	return b.peers
 }
 
-func (b *basicRPCNode) SubstituteGenesisID(rawURL string) string {
-	return strings.Replace(rawURL, "{genesisID}", "test genesisID", -1)
-}
+func (b *basicRPCNode) GetGenesisID() string { return "test genesisID" }
 
 func nodePair() (*basicRPCNode, *basicRPCNode) {
 	nodeA := &basicRPCNode{}
@@ -132,27 +141,84 @@ func nodePair() (*basicRPCNode, *basicRPCNode) {
 	return nodeA, nodeB
 }
 
+func nodePairP2p(tb testing.TB) (*p2ptesting.HTTPNode, *p2ptesting.HTTPNode) {
+	nodeA := p2ptesting.MakeHTTPNode(tb)
+	addrsA := nodeA.Addrs()
+	require.Greater(tb, len(addrsA), 0)
+
+	nodeB := p2ptesting.MakeHTTPNode(tb)
+	addrsB := nodeA.Addrs()
+	require.Greater(tb, len(addrsB), 0)
+
+	nodeA.SetPeers(nodeB)
+	nodeB.SetPeers(nodeA)
+	nodeA.SetGenesisID("test genesisID")
+	nodeB.SetGenesisID("test genesisID")
+
+	nodeA.Start()
+	nodeB.Start()
+
+	return nodeA, nodeB
+}
+
+// TestTxSync checks txsync on a network with two nodes, A and B
 func TestTxSync(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	// A network with two nodes, A and B
-	nodeA, nodeB := nodePair()
-	defer nodeA.stop()
-	defer nodeB.stop()
+	type txSyncNode interface {
+		Registrar
+		network.GossipNode
+	}
 
-	pool := makeMockPendingTxAggregate(3)
-	RegisterTxService(pool, nodeA, "test genesisID", config.GetDefaultLocal().TxPoolSize, config.GetDefaultLocal().TxSyncServeResponseSize)
+	tests := []struct {
+		name  string
+		setup func(t *testing.T) (txSyncNode, txSyncNode, func())
+	}{
+		{
+			name: "tcp",
+			setup: func(t *testing.T) (txSyncNode, txSyncNode, func()) {
+				nodeA, nodeB := nodePair()
+				cleanup := func() {
+					nodeA.stop()
+					nodeB.stop()
+				}
+				return nodeA, nodeB, cleanup
+			},
+		},
+		{
+			name: "p2p",
+			setup: func(t *testing.T) (txSyncNode, txSyncNode, func()) {
+				nodeA, nodeB := nodePairP2p(t)
+				cleanup := func() {
+					nodeA.Stop()
+					nodeB.Stop()
+				}
+				return nodeA, nodeB, cleanup
+			},
+		},
+	}
 
-	// B tries to fetch block
-	handler := mockHandler{}
-	syncInterval := time.Second
-	syncTimeout := time.Second
-	syncerPool := makeMockPendingTxAggregate(0)
-	syncer := MakeTxSyncer(syncerPool, nodeB, &handler, syncInterval, syncTimeout, config.GetDefaultLocal().TxSyncServeResponseSize)
-	// Since syncer is not Started, set the context here
-	syncer.ctx, syncer.cancel = context.WithCancel(context.Background())
-	require.NoError(t, syncer.sync())
-	require.Equal(t, int32(3), handler.messageCounter.Load())
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			// A network with two nodes, A and B
+			nodeA, nodeB, cleanupFn := test.setup(t)
+			defer cleanupFn()
+
+			pool := makeMockPendingTxAggregate(3)
+			RegisterTxService(pool, nodeA, "test genesisID", config.GetDefaultLocal().TxPoolSize, config.GetDefaultLocal().TxSyncServeResponseSize)
+
+			// B tries to fetch block
+			handler := mockHandler{}
+			syncInterval := time.Second
+			syncTimeout := time.Second
+			syncerPool := makeMockPendingTxAggregate(0)
+			syncer := MakeTxSyncer(syncerPool, nodeB, &handler, syncInterval, syncTimeout, config.GetDefaultLocal().TxSyncServeResponseSize)
+			// Since syncer is not Started, set the context here
+			syncer.ctx, syncer.cancel = context.WithCancel(context.Background())
+			require.NoError(t, syncer.sync())
+			require.Equal(t, int32(3), handler.messageCounter.Load())
+		})
+	}
 }
 
 func BenchmarkTxSync(b *testing.B) {

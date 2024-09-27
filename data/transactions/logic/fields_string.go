@@ -111,12 +111,17 @@ func _() {
 	_ = x[AssetCreateMinBalance-15]
 	_ = x[AssetOptInMinBalance-16]
 	_ = x[GenesisHash-17]
-	_ = x[invalidGlobalField-18]
+	_ = x[PayoutsEnabled-18]
+	_ = x[PayoutsGoOnlineFee-19]
+	_ = x[PayoutsPercent-20]
+	_ = x[PayoutsMinBalance-21]
+	_ = x[PayoutsMaxBalance-22]
+	_ = x[invalidGlobalField-23]
 }
 
-const _GlobalField_name = "MinTxnFeeMinBalanceMaxTxnLifeZeroAddressGroupSizeLogicSigVersionRoundLatestTimestampCurrentApplicationIDCreatorAddressCurrentApplicationAddressGroupIDOpcodeBudgetCallerApplicationIDCallerApplicationAddressAssetCreateMinBalanceAssetOptInMinBalanceGenesisHashinvalidGlobalField"
+const _GlobalField_name = "MinTxnFeeMinBalanceMaxTxnLifeZeroAddressGroupSizeLogicSigVersionRoundLatestTimestampCurrentApplicationIDCreatorAddressCurrentApplicationAddressGroupIDOpcodeBudgetCallerApplicationIDCallerApplicationAddressAssetCreateMinBalanceAssetOptInMinBalanceGenesisHashPayoutsEnabledPayoutsGoOnlineFeePayoutsPercentPayoutsMinBalancePayoutsMaxBalanceinvalidGlobalField"
 
-var _GlobalField_index = [...]uint16{0, 9, 19, 29, 40, 49, 64, 69, 84, 104, 118, 143, 150, 162, 181, 205, 226, 246, 257, 275}
+var _GlobalField_index = [...]uint16{0, 9, 19, 29, 40, 49, 64, 69, 84, 104, 118, 143, 150, 162, 181, 205, 226, 246, 257, 271, 289, 303, 320, 337, 355}
 
 func (i GlobalField) String() string {
 	if i >= GlobalField(len(_GlobalField_index)-1) {
@@ -377,12 +382,17 @@ func _() {
 	_ = x[BlkProposer-2]
 	_ = x[BlkFeesCollected-3]
 	_ = x[BlkBonus-4]
-	_ = x[invalidBlockField-5]
+	_ = x[BlkBranch-5]
+	_ = x[BlkFeeSink-6]
+	_ = x[BlkProtocol-7]
+	_ = x[BlkTxnCounter-8]
+	_ = x[BlkProposerPayout-9]
+	_ = x[invalidBlockField-10]
 }
 
-const _BlockField_name = "BlkSeedBlkTimestampBlkProposerBlkFeesCollectedBlkBonusinvalidBlockField"
+const _BlockField_name = "BlkSeedBlkTimestampBlkProposerBlkFeesCollectedBlkBonusBlkBranchBlkFeeSinkBlkProtocolBlkTxnCounterBlkProposerPayoutinvalidBlockField"
 
-var _BlockField_index = [...]uint8{0, 7, 19, 30, 46, 54, 71}
+var _BlockField_index = [...]uint8{0, 7, 19, 30, 46, 54, 63, 73, 84, 97, 114, 131}
 
 func (i BlockField) String() string {
 	if i < 0 || i >= BlockField(len(_BlockField_index)-1) {

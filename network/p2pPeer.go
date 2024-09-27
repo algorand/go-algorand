@@ -31,15 +31,15 @@ import (
 	mnet "github.com/multiformats/go-multiaddr/net"
 )
 
-type wsPeerConnP2PImpl struct {
+type wsPeerConnP2P struct {
 	stream network.Stream
 }
 
-func (c *wsPeerConnP2PImpl) RemoteAddrString() string {
+func (c *wsPeerConnP2P) RemoteAddrString() string {
 	return c.stream.Conn().RemoteMultiaddr().String()
 }
 
-func (c *wsPeerConnP2PImpl) NextReader() (int, io.Reader, error) {
+func (c *wsPeerConnP2P) NextReader() (int, io.Reader, error) {
 	// read length
 	var lenbuf [4]byte
 	_, err := io.ReadFull(c.stream, lenbuf[:])
@@ -54,7 +54,7 @@ func (c *wsPeerConnP2PImpl) NextReader() (int, io.Reader, error) {
 	return websocket.BinaryMessage, io.LimitReader(c.stream, int64(msglen)), nil
 }
 
-func (c *wsPeerConnP2PImpl) WriteMessage(_ int, buf []byte) error {
+func (c *wsPeerConnP2P) WriteMessage(_ int, buf []byte) error {
 	// simple message framing:
 	// 1. write encoding of the length
 	var lenbuf [4]byte
@@ -69,13 +69,13 @@ func (c *wsPeerConnP2PImpl) WriteMessage(_ int, buf []byte) error {
 }
 
 // Do nothing for now since this doesn't actually close the connection just sends the close message
-func (c *wsPeerConnP2PImpl) CloseWithMessage([]byte, time.Time) error {
+func (c *wsPeerConnP2P) CloseWithMessage([]byte, time.Time) error {
 	return nil
 }
 
-func (c *wsPeerConnP2PImpl) SetReadLimit(int64) {}
+func (c *wsPeerConnP2P) SetReadLimit(int64) {}
 
-func (c *wsPeerConnP2PImpl) CloseWithoutFlush() error {
+func (c *wsPeerConnP2P) CloseWithoutFlush() error {
 	err := c.stream.Close()
 	if err != nil && err != yamux.ErrStreamClosed && err != yamux.ErrSessionShutdown && err != yamux.ErrStreamReset {
 		return err
@@ -83,9 +83,9 @@ func (c *wsPeerConnP2PImpl) CloseWithoutFlush() error {
 	return nil
 }
 
-func (c *wsPeerConnP2PImpl) UnderlyingConn() net.Conn { return nil }
+func (c *wsPeerConnP2P) UnderlyingConn() net.Conn { return nil }
 
-func (c *wsPeerConnP2PImpl) RemoteAddr() net.Addr {
+func (c *wsPeerConnP2P) RemoteAddr() net.Addr {
 	netaddr, err := mnet.ToNetAddr(c.stream.Conn().RemoteMultiaddr())
 	if err != nil {
 		logging.Base().Errorf("Error converting multiaddr to netaddr: %v", err)

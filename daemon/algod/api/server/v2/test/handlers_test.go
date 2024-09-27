@@ -853,12 +853,29 @@ func prepareTransactionTest(t *testing.T, txnToUse int, txnPrep func(transaction
 	return
 }
 
-func postTransactionTest(t *testing.T, txnToUse int, expectedCode int, method string, enableExperimental bool) {
+type postTransactionOpt func(cfg *config.Local)
+
+func enableExperimentalAPI() postTransactionOpt {
+	return func(cfg *config.Local) {
+		cfg.EnableExperimentalAPI = true
+	}
+}
+
+func enableDeveloperAPI() postTransactionOpt {
+	return func(cfg *config.Local) {
+		cfg.EnableDeveloperAPI = true
+	}
+}
+
+func postTransactionTest(t *testing.T, txnToUse int, expectedCode int, method string, opts ...postTransactionOpt) {
+	cfg := config.GetDefaultLocal()
+	for _, opt := range opts {
+		opt(&cfg)
+	}
+
 	txnPrep := func(stxn transactions.SignedTxn) []byte {
 		return protocol.Encode(&stxn)
 	}
-	cfg := config.GetDefaultLocal()
-	cfg.EnableExperimentalAPI = enableExperimental
 	handler, c, rec, releasefunc := prepareTransactionTest(t, txnToUse, txnPrep, cfg)
 	defer releasefunc()
 	results := reflect.ValueOf(&handler).MethodByName(method).Call([]reflect.Value{reflect.ValueOf(c)})
@@ -873,18 +890,20 @@ func TestPostTransaction(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	postTransactionTest(t, -1, 400, "RawTransaction", false)
-	postTransactionTest(t, 0, 200, "RawTransaction", false)
+	postTransactionTest(t, -1, 400, "RawTransaction")
+	postTransactionTest(t, 0, 200, "RawTransaction")
 }
 
 func TestPostTransactionAsync(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	postTransactionTest(t, -1, 404, "RawTransactionAsync", false)
-	postTransactionTest(t, 0, 404, "RawTransactionAsync", false)
-	postTransactionTest(t, -1, 400, "RawTransactionAsync", true)
-	postTransactionTest(t, 0, 200, "RawTransactionAsync", true)
+	postTransactionTest(t, -1, 404, "RawTransactionAsync")
+	postTransactionTest(t, 0, 404, "RawTransactionAsync")
+	postTransactionTest(t, -1, 404, "RawTransactionAsync", enableDeveloperAPI())
+	postTransactionTest(t, -1, 404, "RawTransactionAsync", enableExperimentalAPI())
+	postTransactionTest(t, -1, 400, "RawTransactionAsync", enableExperimentalAPI(), enableDeveloperAPI())
+	postTransactionTest(t, 0, 200, "RawTransactionAsync", enableExperimentalAPI(), enableDeveloperAPI())
 }
 
 func simulateTransactionTest(t *testing.T, txnToUse int, format string, expectedCode int) {
@@ -2501,4 +2520,20 @@ func TestDebugExtraPprofEndpoint(t *testing.T) {
 	require.Contains(t, string(body), `"mutex-rate":0`)
 	require.Contains(t, string(body), `"block-rate":0`)
 
+}
+
+func TestGetConfigEndpoint(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
+	defer releasefunc()
+
+	err := handler.GetConfig(c)
+	require.NoError(t, err)
+	require.Equal(t, 200, rec.Code)
+	var responseConfig config.Local
+
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &responseConfig))
+
+	require.Equal(t, handler.Node.Config(), responseConfig)
 }

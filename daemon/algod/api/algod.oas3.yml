@@ -2302,6 +2302,10 @@
             "description": "Applies extra opcode budget during simulation for each transaction group.",
             "type": "integer"
           },
+          "fix-signers": {
+            "description": "If true, signers for transactions that are missing signatures will be fixed during evaluation.",
+            "type": "boolean"
+          },
           "round": {
             "description": "If provided, specifies the round preceding the simulation. State changes through this round will be used to run this simulation. Usually only the 4 most recent rounds will be available (controlled by the node config value MaxAcctLookback). If not specified, defaults to the latest available round.",
             "type": "integer"
@@ -2408,6 +2412,11 @@
           "exec-trace": {
             "$ref": "#/components/schemas/SimulationTransactionExecTrace"
           },
+          "fixed-signer": {
+            "description": "The account that needed to sign this transaction when no signature was provided and the provided signer was incorrect.",
+            "type": "string",
+            "x-algorand-format": "Address"
+          },
           "logic-sig-budget-consumed": {
             "description": "Budget used during execution of a logic sig transaction.",
             "type": "integer"
@@ -2493,6 +2502,10 @@
           "extra-opcode-budget": {
             "description": "The extra opcode budget added to each transaction group during simulation",
             "type": "integer"
+          },
+          "fix-signers": {
+            "description": "If true, signers for transactions that are missing signatures will be fixed during evaluation.",
+            "type": "boolean"
           },
           "max-log-calls": {
             "description": "The maximum log calls one can make during simulation",
@@ -2775,6 +2788,32 @@
   },
   "openapi": "3.0.1",
   "paths": {
+    "/debug/settings/config": {
+      "get": {
+        "description": "Returns the merged (defaults + overrides) config file in json.",
+        "operationId": "GetConfig",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The merged config file in json."
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Gets the merged config file.",
+        "tags": [
+          "private"
+        ]
+      }
+    },
     "/debug/settings/pprof": {
       "get": {
         "description": "Retrieves the current settings for blocking and mutex profiles",
@@ -6973,6 +7012,10 @@
             },
             "description": "Invalid API Token"
           },
+          "404": {
+            "content": {},
+            "description": "Developer or Experimental API not enabled"
+          },
           "500": {
             "content": {
               "application/json": {
@@ -7000,6 +7043,7 @@
         },
         "summary": "Fast track for broadcasting a raw transaction or transaction group to the network through the tx handler without performing most of the checks and reporting detailed errors. Should be only used for development and performance testing.",
         "tags": [
+          "public",
           "experimental"
         ],
         "x-codegen-request-body-name": "rawtxn"

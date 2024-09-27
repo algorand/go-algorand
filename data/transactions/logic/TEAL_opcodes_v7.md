@@ -1476,6 +1476,6 @@ Fields
 
 | Index | Name | Type | Notes |
 | - | ------ | -- | --------- |
-| 0 | BlkSeed | []byte |  |
+| 0 | BlkSeed | [32]byte |  |
 | 1 | BlkTimestamp | uint64 |  |
 

@@ -538,6 +538,21 @@ const (
 	// GenesisHash is the genesis hash for the network
 	GenesisHash
 
+	// PayoutsEnabled is whether block proposal payouts are enabled
+	PayoutsEnabled
+
+	// PayoutsGoOnlineFee is the fee required in a keyreg transaction to make an account incentive eligible
+	PayoutsGoOnlineFee
+
+	// PayoutsPercent is the percentage of transaction fees in a block that can be paid to the block proposer.
+	PayoutsPercent
+
+	// PayoutsMinBalance is the minimum algo balance an account must have to receive block payouts (in the agreement round).
+	PayoutsMinBalance
+
+	// PayoutsMaxBalance is the maximum algo balance an account can have to receive block payouts (in the agreement round).
+	PayoutsMaxBalance
+
 	invalidGlobalField // compile-time constant for number of fields
 )
 
@@ -603,6 +618,17 @@ var globalFieldSpecs = [...]globalFieldSpec{
 	{AssetOptInMinBalance, StackUint64, modeAny, 10,
 		"The additional minimum balance required to opt-in to an asset."},
 	{GenesisHash, StackBytes32, modeAny, 10, "The Genesis Hash for the network."},
+
+	{PayoutsEnabled, StackBoolean, modeAny, incentiveVersion,
+		"Whether block proposal payouts are enabled."},
+	{PayoutsGoOnlineFee, StackUint64, modeAny, incentiveVersion,
+		"The fee required in a keyreg transaction to make an account incentive eligible."},
+	{PayoutsPercent, StackUint64, modeAny, incentiveVersion,
+		"The percentage of transaction fees in a block that can be paid to the block proposer."},
+	{PayoutsMinBalance, StackUint64, modeAny, incentiveVersion,
+		"The minimum algo balance an account must have in the agreement round to receive block payouts in the proposal round."},
+	{PayoutsMaxBalance, StackUint64, modeAny, incentiveVersion,
+		"The maximum algo balance an account can have in the agreement round to receive block payouts in the proposal round."},
 }
 
 func globalFieldSpecByField(f GlobalField) (globalFieldSpec, bool) {
@@ -971,6 +997,16 @@ const (
 	BlkFeesCollected
 	// BlkBonus is the extra amount to be paid for the given block (from FeeSink)
 	BlkBonus
+	// BlkBranch is the hash of the previous block
+	BlkBranch
+	// BlkFeeSink is the fee sink for the given round
+	BlkFeeSink
+	// BlkProtocol is the ConsensusVersion of the block.
+	BlkProtocol
+	// BlkTxnCounter is the number of the next transaction after the block
+	BlkTxnCounter
+	// BlkProposerPayout is the actual amount moved from feesink to proposer
+	BlkProposerPayout
 
 	invalidBlockField // compile-time constant for number of fields
 )
@@ -984,11 +1020,16 @@ type blockFieldSpec struct {
 }
 
 var blockFieldSpecs = [...]blockFieldSpec{
-	{BlkSeed, StackBytes, randomnessVersion},
+	{BlkSeed, StackBytes32, randomnessVersion},
 	{BlkTimestamp, StackUint64, randomnessVersion},
 	{BlkProposer, StackAddress, incentiveVersion},
 	{BlkFeesCollected, StackUint64, incentiveVersion},
 	{BlkBonus, StackUint64, incentiveVersion},
+	{BlkBranch, StackBytes32, incentiveVersion},
+	{BlkFeeSink, StackAddress, incentiveVersion},
+	{BlkProtocol, StackBytes, incentiveVersion},
+	{BlkTxnCounter, StackUint64, incentiveVersion},
+	{BlkProposerPayout, StackUint64, incentiveVersion},
 }
 
 func blockFieldSpecByField(r BlockField) (blockFieldSpec, bool) {

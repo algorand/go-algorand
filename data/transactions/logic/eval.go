@@ -3737,6 +3737,16 @@ func (cx *EvalContext) globalFieldToValue(fs globalFieldSpec) (sv stackValue, er
 	case GenesisHash:
 		gh := cx.SigLedger.GenesisHash()
 		sv.Bytes = gh[:]
+	case PayoutsEnabled:
+		sv.Uint = boolToUint(cx.Proto.Payouts.Enabled)
+	case PayoutsGoOnlineFee:
+		sv.Uint = cx.Proto.Payouts.GoOnlineFee
+	case PayoutsPercent:
+		sv.Uint = cx.Proto.Payouts.Percent
+	case PayoutsMinBalance:
+		sv.Uint = cx.Proto.Payouts.MinBalance
+	case PayoutsMaxBalance:
+		sv.Uint = cx.Proto.Payouts.MaxBalance
 	default:
 		return sv, fmt.Errorf("invalid global field %s", fs.field)
 	}
@@ -5761,12 +5771,24 @@ func opBlock(cx *EvalContext) error {
 			return fmt.Errorf("block(%d) timestamp %d < 0", round, hdr.TimeStamp)
 		}
 		cx.Stack[last] = stackValue{Uint: uint64(hdr.TimeStamp)}
+
+	case BlkBranch:
+		cx.Stack[last].Bytes = hdr.Branch[:]
+	case BlkFeeSink:
+		cx.Stack[last].Bytes = hdr.FeeSink[:]
+	case BlkProtocol:
+		cx.Stack[last].Bytes = []byte(hdr.CurrentProtocol)
+	case BlkTxnCounter:
+		cx.Stack[last] = stackValue{Uint: hdr.TxnCounter}
+
 	case BlkProposer:
 		cx.Stack[last].Bytes = hdr.Proposer[:]
 	case BlkFeesCollected:
 		cx.Stack[last] = stackValue{Uint: hdr.FeesCollected.Raw}
 	case BlkBonus:
 		cx.Stack[last] = stackValue{Uint: hdr.Bonus.Raw}
+	case BlkProposerPayout:
+		cx.Stack[last] = stackValue{Uint: hdr.ProposerPayout.Raw}
 	default:
 		return fmt.Errorf("invalid block field %s", fs.field)
 	}

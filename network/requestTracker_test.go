@@ -27,6 +27,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/network/phonebook"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -50,7 +51,7 @@ func TestHostIncomingRequestsOrdering(t *testing.T) {
 	now := time.Now()
 	perm := rand.Perm(100)
 	for i := 0; i < 100; i++ {
-		trackedRequest := makeTrackerRequest("remoteaddr", "host", "port", now.Add(time.Duration(perm[i])*time.Minute), nil)
+		trackedRequest := makeTrackerRequest("remoteaddr", "host", "port", now.Add(time.Duration(perm[i])*time.Minute))
 		hir.add(trackedRequest)
 	}
 	require.Equal(t, 100, len(hir.requests))
@@ -86,11 +87,13 @@ func TestRateLimiting(t *testing.T) {
 	// This test is conducted locally, so we want to treat all hosts the same for counting incoming requests.
 	testConfig.DisableLocalhostConnectionRateLimit = false
 	wn := &WebsocketNetwork{
-		log:       log,
-		config:    testConfig,
-		phonebook: MakePhonebook(1, 1),
-		GenesisID: "go-test-network-genesis",
-		NetworkID: config.Devtestnet,
+		log:             log,
+		config:          testConfig,
+		phonebook:       phonebook.MakePhonebook(1, 1),
+		GenesisID:       "go-test-network-genesis",
+		NetworkID:       config.Devtestnet,
+		peerStater:      peerConnectionStater{log: log},
+		identityTracker: noopIdentityTracker{},
 	}
 
 	// increase the IncomingConnectionsLimit/MaxConnectionsPerIP limits, since we don't want to test these.
@@ -115,15 +118,15 @@ func TestRateLimiting(t *testing.T) {
 	clientsCount := int(testConfig.ConnectionsRateLimitingCount + 5)
 
 	networks := make([]*WebsocketNetwork, clientsCount)
-	phonebooks := make([]Phonebook, clientsCount)
+	phonebooks := make([]phonebook.Phonebook, clientsCount)
 	for i := 0; i < clientsCount; i++ {
 		networks[i] = makeTestWebsocketNodeWithConfig(t, noAddressConfig)
 		networks[i].config.GossipFanout = 1
-		phonebooks[i] = MakePhonebook(networks[i].config.ConnectionsRateLimitingCount,
+		phonebooks[i] = phonebook.MakePhonebook(networks[i].config.ConnectionsRateLimitingCount,
 			time.Duration(networks[i].config.ConnectionsRateLimitingWindowSeconds)*time.Second)
-		phonebooks[i].ReplacePeerList([]string{addrA}, "default", PhoneBookEntryRelayRole)
-		networks[i].phonebook = MakePhonebook(1, 1*time.Millisecond)
-		networks[i].phonebook.ReplacePeerList([]string{addrA}, "default", PhoneBookEntryRelayRole)
+		phonebooks[i].ReplacePeerList([]string{addrA}, "default", phonebook.PhoneBookEntryRelayRole)
+		networks[i].phonebook = phonebook.MakePhonebook(1, 1*time.Millisecond)
+		networks[i].phonebook.ReplacePeerList([]string{addrA}, "default", phonebook.PhoneBookEntryRelayRole)
 		defer func(net *WebsocketNetwork, i int) {
 			t.Logf("stopping network %d", i)
 			net.Stop()
@@ -153,7 +156,7 @@ func TestRateLimiting(t *testing.T) {
 			case <-readyCh:
 				// it's closed, so this client got connected.
 				connectedClients++
-				phonebookLen := len(phonebooks[i].GetAddresses(1, PhoneBookEntryRelayRole))
+				phonebookLen := len(phonebooks[i].GetAddresses(1, phonebook.PhoneBookEntryRelayRole))
 				// if this channel is ready, than we should have an address, since it didn't get blocked.
 				require.Equal(t, 1, phonebookLen)
 			default:
@@ -176,7 +179,7 @@ func TestRemoteAddress(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	tr := makeTrackerRequest("127.0.0.1:444", "", "", time.Now(), nil)
+	tr := makeTrackerRequest("127.0.0.1:444", "", "", time.Now())
 	require.Equal(t, "127.0.0.1:444", tr.remoteAddr)
 	require.Equal(t, "127.0.0.1", tr.remoteHost)
 	require.Equal(t, "444", tr.remotePort)

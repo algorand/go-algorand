@@ -173,6 +173,9 @@ func (s *Service) Start() {
 //
 // This method returns after all resources have been cleaned up.
 func (s *Service) Shutdown() {
+	s.log.Debug("agreement service is stopping")
+	defer s.log.Debug("agreement service has stopped")
+
 	close(s.quit)
 	s.quitFn()
 	<-s.done
