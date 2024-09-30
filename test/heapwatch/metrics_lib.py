@@ -187,6 +187,8 @@ class Metric:
             tags = raw_tags.split(',')
             for tag in tags:
                 key, value = tag.split('=')
+                if not value:
+                    continue
                 if value[0] == '"' and value[-1] == '"':
                     value = value[1:-1]
                 self.tags[key] = value
@@ -204,6 +206,25 @@ class Metric:
             if not tags:
                 tags = self.tags
             result += '{' + ','.join([f'{k}={v}' for k, v in sorted(self.tags.items()) if k in tags]) + '}'
+        return result
+
+    def graphite_string(self, with_role=False):
+        restricted_chars = ('"', '$', '(', ')', '*', '+', ',', '?', '[', ']', '\\', '^', '`', '{', '}', '|', ' ')
+        translate_table = str.maketrans({c: '_' for c in restricted_chars})
+        result = self.name
+        if with_role:
+            node = self.tags.get('n')
+            if node:
+                role = 'relay' if node.startswith('r') else 'npn' if node.startswith('npn') else 'node'
+                self.add_tag('role', role)
+
+        if self.tags:
+            tags = []
+            for k, v in sorted(self.tags.items()):
+                v = v.translate(translate_table)
+                tags.append(f'{k}={v}')
+            result += ';' + ';'.join(tags)
+            # result += ';' + ';'.join([f'{k}={v}' for k, v in sorted(self.tags.items())])
         return result
 
     def add_tag(self, key: str, value: str):
