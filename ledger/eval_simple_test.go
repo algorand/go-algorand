@@ -560,6 +560,7 @@ func TestAbsentTracking(t *testing.T) {
 
 		regger = lookup(t, dl.validator, addrs[2])
 		require.True(t, regger.IncentiveEligible)
+		require.EqualValues(t, 14+320, regger.LastHeartbeat)
 
 		for i := 0; i < 5; i++ {
 			dl.fullBlock() // #15-19
@@ -573,14 +574,16 @@ func TestAbsentTracking(t *testing.T) {
 		require.True(t, lookup(t, dl.generator, addrs[1]).Status == basics.Online)
 		require.True(t, lookup(t, dl.generator, addrs[2]).Status == basics.Online)
 
-		for i := 0; i < 30; i++ {
-			dl.fullBlock() // #20-49
+		const lookback = 320 // keyreg puts LastHeartbeat 320 rounds into the future
+
+		for i := 0; i < lookback+30; i++ {
+			dl.fullBlock() // #340-369
 		}
 
 		// addrs 0-2 all have about 1/3 of stake, so seemingly (see next block
-		// of checks) become eligible for suspension after 30 rounds. We're at
-		// about 35. But, since blocks are empty, nobody's suspendible account
-		// is noticed.
+		// of checks) become eligible for suspension after lookback+30
+		// rounds. We're at about 35. But, since blocks are empty, nobody's
+		// suspendible account is noticed.
 		require.Equal(t, basics.Online, lookup(t, dl.generator, addrs[0]).Status)
 		require.Equal(t, basics.Online, lookup(t, dl.generator, addrs[1]).Status)
 		require.Equal(t, basics.Online, lookup(t, dl.generator, addrs[2]).Status)
@@ -593,11 +596,11 @@ func TestAbsentTracking(t *testing.T) {
 			Sender:   addrs[2],
 			Receiver: addrs[0],
 			Amount:   0,
-		}) // #50
-		require.Equal(t, vb.Block().AbsentParticipationAccounts, []basics.Address{addrs[2]})
+		}) // #370
+		require.Equal(t, []basics.Address{addrs[2]}, vb.Block().AbsentParticipationAccounts)
 
 		twoPaysZero := vb.Block().Round()
-		require.EqualValues(t, 50, twoPaysZero)
+		require.EqualValues(t, 370, twoPaysZero)
 		// addr[0] has never proposed or heartbeat so it is not considered absent
 		require.Equal(t, basics.Online, lookup(t, dl.generator, addrs[0]).Status)
 		// addr[1] still hasn't been "noticed"
@@ -608,7 +611,7 @@ func TestAbsentTracking(t *testing.T) {
 		// separate the payments by a few blocks so it will be easier to test
 		// when the changes go into effect
 		for i := 0; i < 4; i++ {
-			dl.fullBlock() // #51-54
+			dl.fullBlock() // #371-374
 		}
 		// now, when 2 pays 1, 1 gets suspended (unlike 0, we had 1 keyreg early on, so LastHeartbeat>0)
 		vb = dl.fullBlock(&txntest.Txn{
@@ -616,9 +619,9 @@ func TestAbsentTracking(t *testing.T) {
 			Sender:   addrs[2],
 			Receiver: addrs[1],
 			Amount:   0,
-		}) // #55
+		}) // #375
 		twoPaysOne := vb.Block().Round()
-		require.EqualValues(t, 55, twoPaysOne)
+		require.EqualValues(t, 375, twoPaysOne)
 		require.Equal(t, vb.Block().AbsentParticipationAccounts, []basics.Address{addrs[1]})
 		require.Equal(t, basics.Online, lookup(t, dl.generator, addrs[0]).Status)
 		require.Equal(t, basics.Offline, lookup(t, dl.generator, addrs[1]).Status)
