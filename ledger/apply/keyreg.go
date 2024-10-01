@@ -80,7 +80,7 @@ func Keyreg(keyreg transactions.KeyregTxnFields, header transactions.Header, bal
 		}
 		record.Status = basics.Online
 		if params.Payouts.Enabled {
-			lookback := agreement.BalanceRound(round, balances.ConsensusParams())
+			lookback := agreement.BalanceLookback(balances.ConsensusParams())
 			record.LastHeartbeat = round + lookback
 		}
 		record.VoteFirstValid = keyreg.VoteFirst
