@@ -5084,10 +5084,10 @@ func BenchmarkBytesModExp(b *testing.B) {
 	// Define the accepted test vectors using nested loops
 	modexpTestVectors := []ModexpTestVector{}
 	incr := 128
-	max_dim := 1024
-	for baseLen := incr; baseLen <= max_dim; baseLen += incr {
-		for expLen := incr; expLen <= max_dim; expLen += incr {
-			for modLen := incr; modLen <= max_dim; modLen += incr {
+	maxDim := 1024
+	for baseLen := incr; baseLen <= maxDim; baseLen += incr {
+		for expLen := incr; expLen <= maxDim; expLen += incr {
+			for modLen := incr; modLen <= maxDim; modLen += incr {
 				modexpTestVectors = append(modexpTestVectors, ModexpTestVector{
 					Name:     fmt.Sprintf(`TestVector_Dim(%d,%d,%d)`, baseLen, expLen, modLen),
 					Base:     generateRandomHexString(baseLen),
