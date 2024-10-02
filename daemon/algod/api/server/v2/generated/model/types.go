@@ -801,8 +801,8 @@ type SimulateRequest struct {
 	// FixSigners If true, signers for transactions that are missing signatures will be fixed during evaluation.
 	FixSigners *bool `json:"fix-signers,omitempty"`
 
-	// PopulateResourceArrays If true, return populated resource arrays for each transaction based on unnamed resources
-	PopulateResourceArrays *bool `json:"populate-resource-arrays,omitempty"`
+	// PopulateResources If true, return populated resource arrays for each transaction based on unnamed resources
+	PopulateResources *bool `json:"populate-resources,omitempty"`
 
 	// Round If provided, specifies the round preceding the simulation. State changes through this round will be used to run this simulation. Usually only the 4 most recent rounds will be available (controlled by the node config value MaxAcctLookback). If not specified, defaults to the latest available round.
 	Round *uint64 `json:"round,omitempty"`
@@ -846,7 +846,7 @@ type SimulateTransactionGroupResult struct {
 	// FailureMessage If present, indicates that the transaction group failed and specifies why that happened
 	FailureMessage *string `json:"failure-message,omitempty"`
 
-	// PopulatedResourceArrays Present if populate-resource-arrays is true in the request. In that case, it will be a map of transaction index in the group to populated resource arrays. There may be moure resource arrays given than transaction in the group, which means more app call transactions would be needed for extra resources.
+	// PopulatedResourceArrays Present if populate-resource-arrays is true in the request. In that case, it will be a map of transaction index in the group to populated resource arrays. There may be more resource arrays given than transaction in the group, which means more app call transactions would be needed for extra resources.
 	PopulatedResourceArrays *map[string]interface{} `json:"populated-resource-arrays,omitempty"`
 
 	// TxnResults Simulation result for individual transactions

@@ -616,15 +616,15 @@ func convertSimulationRequest(request PreEncodedSimulateRequest) simulation.Requ
 		txnGroups[i] = txnGroup.Txns
 	}
 	return simulation.Request{
-		TxnGroups:              txnGroups,
-		Round:                  request.Round,
-		AllowEmptySignatures:   request.AllowEmptySignatures,
-		AllowMoreLogging:       request.AllowMoreLogging,
-		AllowUnnamedResources:  request.AllowUnnamedResources,
-		ExtraOpcodeBudget:      request.ExtraOpcodeBudget,
-		TraceConfig:            request.ExecTraceConfig,
-		FixSigners:             request.FixSigners,
-		PopulateResourceArrays: request.PopulateResourceArrays,
+		TxnGroups:             txnGroups,
+		Round:                 request.Round,
+		AllowEmptySignatures:  request.AllowEmptySignatures,
+		AllowMoreLogging:      request.AllowMoreLogging,
+		AllowUnnamedResources: request.AllowUnnamedResources,
+		ExtraOpcodeBudget:     request.ExtraOpcodeBudget,
+		TraceConfig:           request.ExecTraceConfig,
+		FixSigners:            request.FixSigners,
+		PopulateResources:     request.PopulateResources,
 	}
 }
 

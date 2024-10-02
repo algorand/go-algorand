@@ -2695,15 +2695,15 @@ int 1
 	}
 	a.Equal(expectedResult, resp)
 
-	// PopulateResourceArrays=true should also work
+	// PopulateResources=true should also work
 	resp, err = testClient.SimulateTransactions(v2.PreEncodedSimulateRequest{
 		TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
 			{
 				Txns: []transactions.SignedTxn{stxn},
 			},
 		},
-		AllowUnnamedResources:  true,
-		PopulateResourceArrays: true,
+		AllowUnnamedResources: true,
+		PopulateResources:     true,
 	})
 	a.NoError(err)
 

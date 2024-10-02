@@ -2306,7 +2306,7 @@
             "description": "If true, signers for transactions that are missing signatures will be fixed during evaluation.",
             "type": "boolean"
           },
-          "populate-resource-arrays": {
+          "populate-resources": {
             "description": "If true, return populated resource arrays for each transaction based on unnamed resources",
             "type": "boolean"
           },
@@ -2391,7 +2391,7 @@
             "type": "string"
           },
           "populated-resource-arrays": {
-            "description": "Present if populate-resource-arrays is true in the request. In that case, it will be a map of transaction index in the group to populated resource arrays. There may be moure resource arrays given than transaction in the group, which means more app call transactions would be needed for extra resources.",
+            "description": "Present if populate-resource-arrays is true in the request. In that case, it will be a map of transaction index in the group to populated resource arrays. There may be more resource arrays given than transaction in the group, which means more app call transactions would be needed for extra resources.",
             "properties": {},
             "type": "object"
           },

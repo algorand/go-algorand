@@ -73,7 +73,7 @@ type TxnGroupResult struct {
 	// TxnResult struct.
 	UnnamedResourcesAccessed *ResourceTracker
 
-	// PopulatedResourceArrays will be present if PopulateResourceArrays is true in the Request.
+	// PopulatedResourceArrays will be present if PopulateResources is true in the Request.
 	// In that case, it will be a map of resource arrays for each app call in the group.
 	// There may be more resource arrays given than transactions in the group, which means more
 	// app call transactions would be needed for the extra resources.

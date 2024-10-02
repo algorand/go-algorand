@@ -9432,10 +9432,10 @@ func populateResourceTest(t *testing.T, groupSharing bool) {
 
 	runSimulationTestCase(t, env, simulationTestCase{
 		input: simulation.Request{
-			TxnGroups:              [][]transactions.SignedTxn{txgroup},
-			AllowEmptySignatures:   true,
-			AllowUnnamedResources:  true,
-			PopulateResourceArrays: true,
+			TxnGroups:             [][]transactions.SignedTxn{txgroup},
+			AllowEmptySignatures:  true,
+			AllowUnnamedResources: true,
+			PopulateResources:     true,
 		},
 		expected: simulation.Result{
 			Version:   simulation.ResultLatestVersion,

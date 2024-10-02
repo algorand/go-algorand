@@ -3949,7 +3949,7 @@
           "description": "If true, signers for transactions that are missing signatures will be fixed during evaluation.",
           "type": "boolean"
         },
-        "populate-resource-arrays": {
+        "populate-resources": {
           "description": "If true, return populated resource arrays for each transaction based on unnamed resources",
           "type": "boolean"
         }
