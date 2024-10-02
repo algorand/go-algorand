@@ -791,7 +791,8 @@ func (p *resourcePopulator) addTransaction(txn transactions.Transaction, groupIn
 	// The Sender will always be implicitly available for every transaction type
 	p.txnResources[groupIndex].addAddressFromField(txn.Sender)
 
-	if txn.Type == protocol.ApplicationCallTx {
+	switch txn.Type {
+	case protocol.ApplicationCallTx:
 		for _, asset := range txn.ForeignAssets {
 			p.txnResources[groupIndex].prefilledAssets[asset] = struct{}{}
 		}
@@ -811,36 +812,22 @@ func (p *resourcePopulator) addTransaction(txn transactions.Transaction, groupIn
 
 		p.txnResources[groupIndex].appFromField = txn.ApplicationID
 
-		return
-	}
-
-	if txn.Type == protocol.AssetTransferTx {
+	case protocol.AssetTransferTx:
 		p.txnResources[groupIndex].assetFromField = txn.XferAsset
 		p.txnResources[groupIndex].addAddressFromField(txn.AssetReceiver)
 		p.txnResources[groupIndex].addAddressFromField(txn.AssetCloseTo)
 		p.txnResources[groupIndex].addAddressFromField(txn.AssetSender)
 
-		return
-	}
-
-	if txn.Type == protocol.PaymentTx {
+	case protocol.PaymentTx:
 		p.txnResources[groupIndex].addAddressFromField(txn.Receiver)
 		p.txnResources[groupIndex].addAddressFromField(txn.CloseRemainderTo)
 
-		return
-	}
-
-	if txn.Type == protocol.AssetConfigTx {
+	case protocol.AssetConfigTx:
 		p.txnResources[groupIndex].assetFromField = txn.ConfigAsset
 
-		return
-	}
-
-	if txn.Type == protocol.AssetFreezeTx {
+	case protocol.AssetFreezeTx:
 		p.txnResources[groupIndex].assetFromField = txn.FreezeAsset
 		p.txnResources[groupIndex].addAddressFromField(txn.FreezeAccount)
-
-		return
 	}
 }
 
