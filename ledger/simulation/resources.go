@@ -608,14 +608,14 @@ func (p *resourcePolicy) AvailableBox(app basics.AppIndex, name string, operatio
 
 // txnResources tracks the resources being added to a transaction during resource population
 type txnResources struct {
-	// The static fields are resource that were given in the txn group and thus cannot be removed
+	// The prefilled resources are resources that were given in the txn group and thus cannot be removed
 	// The assumption is that these are prefilled because of one of the following reasons:
 	//   - This transaction has already been signed
 	//   - One of the foreign resources is accessed on-chain
-	staticAssets   map[basics.AssetIndex]struct{}
-	staticApps     map[basics.AppIndex]struct{}
-	staticAccounts map[basics.Address]struct{}
-	staticBoxes    []logic.BoxRef
+	prefilledAssets   map[basics.AssetIndex]struct{}
+	prefilledApps     map[basics.AppIndex]struct{}
+	prefilledAccounts map[basics.Address]struct{}
+	prefilledBoxes    []logic.BoxRef
 
 	// The following fields are resources that are available to the transaction group because they were used in a transaction field (like `Sender`) rather than a foreign array.
 	assetFromField     basics.AssetIndex
@@ -633,7 +633,7 @@ type txnResources struct {
 }
 
 func (r *txnResources) getTotalRefs() int {
-	return len(r.accounts) + len(r.assets) + len(r.apps) + len(r.boxes) + len(r.staticAccounts) + len(r.staticAssets) + len(r.staticApps) + len(r.staticBoxes)
+	return len(r.accounts) + len(r.assets) + len(r.apps) + len(r.boxes) + len(r.prefilledAccounts) + len(r.prefilledAssets) + len(r.prefilledApps) + len(r.prefilledBoxes)
 }
 
 // Methods for determining room for specific references
@@ -643,7 +643,7 @@ func (r *txnResources) hasRoom() bool {
 }
 
 func (r *txnResources) hasRoomForAccount() bool {
-	return r.hasRoom() && (len(r.accounts)+len(r.staticAccounts)) < r.maxAccounts
+	return r.hasRoom() && (len(r.accounts)+len(r.prefilledAccounts)) < r.maxAccounts
 }
 
 func (r *txnResources) hasRoomForCrossRef() bool {
@@ -660,7 +660,7 @@ func (r *txnResources) hasApp(app basics.AppIndex) bool {
 	if r.appFromField == app {
 		return true
 	}
-	if _, hasStatic := r.staticApps[app]; hasStatic {
+	if _, hasStatic := r.prefilledApps[app]; hasStatic {
 		return true
 	}
 	if _, hasRef := r.apps[app]; hasRef {
@@ -670,13 +670,13 @@ func (r *txnResources) hasApp(app basics.AppIndex) bool {
 }
 
 func (r *txnResources) hasAsset(aid basics.AssetIndex) bool {
-	_, hasStatic := r.staticAssets[aid]
+	_, hasStatic := r.prefilledAssets[aid]
 	_, hasRef := r.assets[aid]
 	return r.assetFromField == aid || hasStatic || hasRef
 }
 
 func (r *txnResources) hasAccount(addr basics.Address) bool {
-	_, hasStatic := r.staticAccounts[addr]
+	_, hasStatic := r.prefilledAccounts[addr]
 	_, hasRef := r.accounts[addr]
 	_, hasField := r.accountsFromFields[addr]
 
@@ -690,7 +690,7 @@ func (r *txnResources) hasAccount(addr basics.Address) bool {
 		}
 	}
 
-	for app := range r.staticApps {
+	for app := range r.prefilledApps {
 		if app.Address() == addr {
 			return true
 		}
@@ -730,33 +730,33 @@ type PopulatedResourceArrays struct {
 }
 
 func (r *txnResources) getPopulatedArrays() PopulatedResourceArrays {
-	accounts := make([]basics.Address, 0, len(r.accounts)+len(r.staticAccounts))
+	accounts := make([]basics.Address, 0, len(r.accounts)+len(r.prefilledAccounts))
 	for account := range r.accounts {
 		accounts = append(accounts, account)
 	}
-	for account := range r.staticAccounts {
+	for account := range r.prefilledAccounts {
 		accounts = append(accounts, account)
 	}
 
-	assets := make([]basics.AssetIndex, 0, len(r.assets)+len(r.staticAssets))
+	assets := make([]basics.AssetIndex, 0, len(r.assets)+len(r.prefilledAssets))
 	for asset := range r.assets {
 		assets = append(assets, asset)
 	}
-	for asset := range r.staticAssets {
+	for asset := range r.prefilledAssets {
 		assets = append(assets, asset)
 	}
 
-	apps := make([]basics.AppIndex, 0, len(r.apps)+len(r.staticApps))
+	apps := make([]basics.AppIndex, 0, len(r.apps)+len(r.prefilledApps))
 	for app := range r.apps {
 		apps = append(apps, app)
 	}
-	for app := range r.staticApps {
+	for app := range r.prefilledApps {
 		apps = append(apps, app)
 	}
 
-	boxes := make([]logic.BoxRef, 0, len(r.boxes)+len(r.staticBoxes))
+	boxes := make([]logic.BoxRef, 0, len(r.boxes)+len(r.prefilledBoxes))
 	boxes = append(boxes, r.boxes...)
-	boxes = append(boxes, r.staticBoxes...)
+	boxes = append(boxes, r.prefilledBoxes...)
 
 	return PopulatedResourceArrays{
 		Accounts: accounts,
@@ -775,10 +775,10 @@ type resourcePopulator struct {
 
 func (p *resourcePopulator) addTransaction(txn transactions.Transaction, groupIndex int, consensusParams config.ConsensusParams) {
 	p.txnResources[groupIndex] = &txnResources{
-		staticAssets:       make(map[basics.AssetIndex]struct{}),
-		staticApps:         make(map[basics.AppIndex]struct{}),
-		staticAccounts:     make(map[basics.Address]struct{}),
-		staticBoxes:        []logic.BoxRef{},
+		prefilledAssets:    make(map[basics.AssetIndex]struct{}),
+		prefilledApps:      make(map[basics.AppIndex]struct{}),
+		prefilledAccounts:  make(map[basics.Address]struct{}),
+		prefilledBoxes:     []logic.BoxRef{},
 		accountsFromFields: make(map[basics.Address]struct{}),
 		assets:             make(map[basics.AssetIndex]struct{}),
 		apps:               make(map[basics.AppIndex]struct{}),
@@ -793,20 +793,20 @@ func (p *resourcePopulator) addTransaction(txn transactions.Transaction, groupIn
 
 	if txn.Type == protocol.ApplicationCallTx {
 		for _, asset := range txn.ForeignAssets {
-			p.txnResources[groupIndex].staticAssets[asset] = struct{}{}
+			p.txnResources[groupIndex].prefilledAssets[asset] = struct{}{}
 		}
 
 		for _, app := range txn.ForeignApps {
-			p.txnResources[groupIndex].staticApps[app] = struct{}{}
+			p.txnResources[groupIndex].prefilledApps[app] = struct{}{}
 		}
 
 		for _, account := range txn.Accounts {
-			p.txnResources[groupIndex].staticAccounts[account] = struct{}{}
+			p.txnResources[groupIndex].prefilledAccounts[account] = struct{}{}
 		}
 
 		for _, box := range txn.Boxes {
 			ref := logic.BoxRef{App: txn.ForeignApps[box.Index], Name: string(box.Name)}
-			p.txnResources[groupIndex].staticBoxes = append(p.txnResources[groupIndex].staticBoxes, ref)
+			p.txnResources[groupIndex].prefilledBoxes = append(p.txnResources[groupIndex].prefilledBoxes, ref)
 		}
 
 		p.txnResources[groupIndex].appFromField = txn.ApplicationID
@@ -1081,10 +1081,10 @@ func makeResourcePopulator(txnGroup []transactions.SignedTxn, consensusParams co
 	for i := len(txnGroup); i < consensusParams.MaxTxGroupSize; i++ {
 		populator.appCallIndexes = append(populator.appCallIndexes, i)
 		populator.txnResources[i] = &txnResources{
-			staticAssets:       make(map[basics.AssetIndex]struct{}),
-			staticApps:         make(map[basics.AppIndex]struct{}),
-			staticAccounts:     make(map[basics.Address]struct{}),
-			staticBoxes:        []logic.BoxRef{},
+			prefilledAssets:    make(map[basics.AssetIndex]struct{}),
+			prefilledApps:      make(map[basics.AppIndex]struct{}),
+			prefilledAccounts:  make(map[basics.Address]struct{}),
+			prefilledBoxes:     []logic.BoxRef{},
 			accountsFromFields: make(map[basics.Address]struct{}),
 			assets:             make(map[basics.AssetIndex]struct{}),
 			apps:               make(map[basics.AppIndex]struct{}),
