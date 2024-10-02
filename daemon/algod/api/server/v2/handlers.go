@@ -1221,7 +1221,7 @@ type PreEncodedSimulateTxnGroupResult struct {
 	FailureMessage           *string                                    `codec:"failure-message,omitempty"`
 	UnnamedResourcesAccessed *model.SimulateUnnamedResourcesAccessed    `codec:"unnamed-resources-accessed,omitempty"`
 	Txns                     []PreEncodedSimulateTxnResult              `codec:"txn-results"`
-	PopulatedResourceArrays  map[int]simulation.PopulatedResourceArrays `code:"populated-resource-arrays,omitempty"`
+	PopulatedResourceArrays  map[int]simulation.PopulatedResourceArrays `codec:"populated-resource-arrays,omitempty"`
 }
 
 // PreEncodedSimulateResponse mirrors model.SimulateResponse
