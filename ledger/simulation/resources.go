@@ -606,18 +606,18 @@ func (p *resourcePolicy) AvailableBox(app basics.AppIndex, name string, operatio
 	return p.tracker.addBox(app, name, readSize, *p.initialBoxSurplusReadBudget, p.ep.Proto.BytesPerBoxReference)
 }
 
-// txnResources tracks the resources being added to a tranasction during resource population
+// txnResources tracks the resources being added to a transaction during resource population
 type txnResources struct {
-	// The static fields are resource arrays that were given in the txn group and thus cannot be removed
-	// The assumption is that these are prefilled because of one of the following reaons:
+	// The static fields are resource that were given in the txn group and thus cannot be removed
+	// The assumption is that these are prefilled because of one of the following reasons:
 	//   - This transaction has already been signed
-	//   - One of the foreign arrays is accessed on-chain
+	//   - One of the foreign resources is accessed on-chain
 	staticAssets   map[basics.AssetIndex]struct{}
 	staticApps     map[basics.AppIndex]struct{}
 	staticAccounts map[basics.Address]struct{}
 	staticBoxes    []logic.BoxRef
 
-	// The following fields are fields that are implicitly available to the transaction group from transaction fields
+	// The following fields are resources that are available to the transaction group because they were used in a transaction field (like `Sender`) rather than a foreign array.
 	assetFromField     basics.AssetIndex
 	appFromField       basics.AppIndex
 	accountsFromFields map[basics.Address]struct{}
@@ -657,9 +657,16 @@ func (r *txnResources) hasRoomForBoxWithApp() bool {
 // Methods for determining if a resource is available
 
 func (r *txnResources) hasApp(app basics.AppIndex) bool {
-	_, hasStatic := r.staticApps[app]
-	_, hasRef := r.apps[app]
-	return r.appFromField == app || hasStatic || hasRef
+	if r.appFromField == app {
+		return true
+	}
+	if _, hasStatic := r.staticApps[app]; hasStatic {
+		return true
+	}
+	if _, hasRef := r.apps[app]; hasRef {
+		return true
+	}
+	return false
 }
 
 func (r *txnResources) hasAsset(aid basics.AssetIndex) bool {
