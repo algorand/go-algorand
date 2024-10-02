@@ -676,10 +676,6 @@ func (r *txnResources) hasAsset(aid basics.AssetIndex) bool {
 }
 
 func (r *txnResources) hasAccount(addr basics.Address) bool {
-	_, hasStatic := r.prefilledAccounts[addr]
-	_, hasRef := r.accounts[addr]
-	_, hasField := r.accountsFromFields[addr]
-
 	if r.appFromField.Address() == addr {
 		return true
 	}
@@ -696,7 +692,17 @@ func (r *txnResources) hasAccount(addr basics.Address) bool {
 		}
 	}
 
-	return hasField || hasStatic || hasRef
+	if _, hasField := r.accountsFromFields[addr]; hasField {
+		return true
+	}
+	if _, hasStatic := r.prefilledAccounts[addr]; hasStatic {
+		return true
+	}
+	if _, hasRef := r.accounts[addr]; hasRef {
+		return true
+	}
+
+	return false
 }
 
 func (r *txnResources) addAccount(addr basics.Address) {
