@@ -705,20 +705,65 @@ func (r *txnResources) hasAccount(addr basics.Address) bool {
 	return false
 }
 
-func (r *txnResources) addAccount(addr basics.Address) {
+func (r *txnResources) addAccount(addr basics.Address) error {
+	if !r.hasRoomForAccount() {
+		return fmt.Errorf("no room for account: %s", addr.String())
+	}
 	r.accounts[addr] = struct{}{}
+	return nil
 }
 
-func (r *txnResources) addAsset(aid basics.AssetIndex) {
+func (r *txnResources) addAsset(aid basics.AssetIndex) error {
+	if !r.hasRoom() {
+		return fmt.Errorf("no room for asset: %d", aid)
+	}
 	r.assets[aid] = struct{}{}
+	return nil
 }
 
-func (r *txnResources) addApp(aid basics.AppIndex) {
+func (r *txnResources) addApp(aid basics.AppIndex) error {
+	if !r.hasRoom() {
+		return fmt.Errorf("no room for app: %d", aid)
+	}
 	r.apps[aid] = struct{}{}
+	return nil
 }
 
-func (r *txnResources) addBox(app basics.AppIndex, name string) {
+// addBox adds a box to the box array. It does NOT add the app to the app array.
+func (r *txnResources) addBox(app basics.AppIndex, name string) error {
+	if !r.hasRoom() {
+		return fmt.Errorf("no room for box %d : %s", app, name)
+	}
 	r.boxes = append(r.boxes, logic.BoxRef{App: app, Name: name})
+	return nil
+}
+
+// addBoxWithApp adds a box to the box array. It also adds the app to the app array.
+func (r *txnResources) addBoxWithApp(app basics.AppIndex, name string) error {
+	if !r.hasRoomForBoxWithApp() {
+		return fmt.Errorf("no room for box %d : %s", app, name)
+	}
+	r.boxes = append(r.boxes, logic.BoxRef{App: app, Name: name})
+	r.apps[app] = struct{}{}
+	return nil
+}
+
+func (r *txnResources) addAppLocal(app basics.AppIndex, addr basics.Address) error {
+	if !r.hasRoomForCrossRef() {
+		return fmt.Errorf("no room for app local %d : %s", app, addr.String())
+	}
+	r.apps[app] = struct{}{}
+	r.accounts[addr] = struct{}{}
+	return nil
+}
+
+func (r *txnResources) addAssetHolding(addr basics.Address, aid basics.AssetIndex) error {
+	if !r.hasRoomForCrossRef() {
+		return fmt.Errorf("no room for asset holding %d : %s", aid, addr.String())
+	}
+	r.accounts[addr] = struct{}{}
+	r.assets[aid] = struct{}{}
+	return nil
 }
 
 func (r *txnResources) addAddressFromField(addr basics.Address) {
@@ -838,41 +883,51 @@ func (p *resourcePopulator) addTransaction(txn transactions.Transaction, groupIn
 }
 
 func (p *resourcePopulator) addAccount(addr basics.Address) error {
+	var err error
+
 	for _, i := range p.appCallIndexes {
-		if p.txnResources[i].hasRoomForAccount() {
-			p.txnResources[i].addAccount(addr)
+		err = p.txnResources[i].addAccount(addr)
+		if err == nil {
 			return nil
 		}
 	}
-	return fmt.Errorf("no room for account")
+
+	return err
 }
 
 func (p *resourcePopulator) addAsset(asset basics.AssetIndex) error {
+	var err error
+
 	for _, i := range p.appCallIndexes {
-		if p.txnResources[i].hasRoom() {
-			p.txnResources[i].addAsset(asset)
+		err = p.txnResources[i].addAsset(asset)
+		if err == nil {
 			return nil
 		}
 	}
-	return fmt.Errorf("no room for asset")
+
+	return err
 }
 
 func (p *resourcePopulator) addApp(app basics.AppIndex) error {
+	var err error
+
 	for _, i := range p.appCallIndexes {
-		if p.txnResources[i].hasRoom() {
-			p.txnResources[i].addApp(app)
+		err = p.txnResources[i].addApp(app)
+		if err == nil {
 			return nil
 		}
 	}
-	return fmt.Errorf("no room for app")
+	return err
 }
 
 func (p *resourcePopulator) addBox(app basics.AppIndex, name string) error {
+	var err error
+
 	// First try to find txn with app already available
 	for _, i := range p.appCallIndexes {
 		if app == basics.AppIndex(0) || p.txnResources[i].hasApp(app) {
-			if p.txnResources[i].hasRoom() {
-				p.txnResources[i].addBox(app, name)
+			err = p.txnResources[i].addBox(app, name)
+			if err == nil {
 				return nil
 			}
 		}
@@ -880,22 +935,23 @@ func (p *resourcePopulator) addBox(app basics.AppIndex, name string) error {
 
 	// Then try to find txn with room for both app and box
 	for _, i := range p.appCallIndexes {
-		if p.txnResources[i].hasRoomForBoxWithApp() {
-			p.txnResources[i].addApp(app)
-			p.txnResources[i].addBox(app, name)
+		err = p.txnResources[i].addBoxWithApp(app, name)
+		if err == nil {
 			return nil
 		}
 	}
 
-	return fmt.Errorf("no room for box")
+	return err
 }
 
 func (p *resourcePopulator) addHolding(addr basics.Address, aid basics.AssetIndex) error {
+	var err error
+
 	// First try to find txn with account already available
 	for _, i := range p.appCallIndexes {
 		if p.txnResources[i].hasAccount(addr) {
-			if p.txnResources[i].hasRoom() {
-				p.txnResources[i].addAsset(aid)
+			err = p.txnResources[i].addAsset(aid)
+			if err == nil {
 				return nil
 			}
 		}
@@ -904,8 +960,8 @@ func (p *resourcePopulator) addHolding(addr basics.Address, aid basics.AssetInde
 	// Then try to find txn with asset already available
 	for _, i := range p.appCallIndexes {
 		if p.txnResources[i].hasAsset(aid) {
-			if p.txnResources[i].hasRoomForAccount() {
-				p.txnResources[i].addAccount(addr)
+			err = p.txnResources[i].addAccount(addr)
+			if err == nil {
 				return nil
 			}
 		}
@@ -913,21 +969,23 @@ func (p *resourcePopulator) addHolding(addr basics.Address, aid basics.AssetInde
 
 	// Finally try to find txn with room for both account and holding
 	for _, i := range p.appCallIndexes {
-		if p.txnResources[i].hasRoomForCrossRef() {
-			p.txnResources[i].addAccount(addr)
-			p.txnResources[i].addAsset(aid)
+		err = p.txnResources[i].addAssetHolding(addr, aid)
+		if err == nil {
 			return nil
 		}
 	}
-	return fmt.Errorf("no room for holding")
+
+	return err
 }
 
 func (p *resourcePopulator) addLocal(addr basics.Address, aid basics.AppIndex) error {
+	var err error
+
 	// First try to find txn with account already available
 	for _, i := range p.appCallIndexes {
 		if p.txnResources[i].hasAccount(addr) {
-			if p.txnResources[i].hasRoom() {
-				p.txnResources[i].addApp(aid)
+			err = p.txnResources[i].addApp(aid)
+			if err == nil {
 				return nil
 			}
 		}
@@ -936,8 +994,8 @@ func (p *resourcePopulator) addLocal(addr basics.Address, aid basics.AppIndex) e
 	// Then try to find txn with app already available
 	for _, i := range p.appCallIndexes {
 		if p.txnResources[i].hasApp(aid) {
-			if p.txnResources[i].hasRoomForAccount() {
-				p.txnResources[i].addAccount(addr)
+			err = p.txnResources[i].addAccount(addr)
+			if err == nil {
 				return nil
 			}
 		}
@@ -945,28 +1003,37 @@ func (p *resourcePopulator) addLocal(addr basics.Address, aid basics.AppIndex) e
 
 	// Finally try to find txn with room for both account and app
 	for _, i := range p.appCallIndexes {
-		if p.txnResources[i].hasRoomForCrossRef() {
-			p.txnResources[i].addApp(aid)
-			p.txnResources[i].addAccount(addr)
+		err = p.txnResources[i].addAppLocal(aid, addr)
+		if err == nil {
 			return nil
 		}
 	}
-	return fmt.Errorf("no room for local")
+
+	return err
 }
 
 func (p *resourcePopulator) populateResources(groupResources ResourceTracker, txnResources []ResourceTracker) error {
 	// First populate resources that HAVE to be assigned to a specific transaction
 	for i, tracker := range txnResources {
 		for asset := range tracker.Assets {
-			p.txnResources[i].addAsset(asset)
+			err := p.txnResources[i].addAsset(asset)
+			if err != nil {
+				return err
+			}
 		}
 
 		for app := range tracker.Apps {
-			p.txnResources[i].addApp(app)
+			err := p.txnResources[i].addApp(app)
+			if err != nil {
+				return err
+			}
 		}
 
 		for account := range tracker.Accounts {
-			p.txnResources[i].addAccount(account)
+			err := p.txnResources[i].addAccount(account)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
