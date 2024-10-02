@@ -9460,6 +9460,170 @@ func populateResourceTest(t *testing.T, groupSharing bool) {
 	})
 }
 
+func mixedResourcePopulationTest(t *testing.T) {
+	env := simulationtesting.PrepareSimulatorTest(t)
+
+	sender := env.Accounts[0].Addr
+	otherAddress := env.Accounts[1].Addr
+	assetID := env.CreateAsset(sender, basics.AssetParams{Total: 100})
+
+	// Create app and asset for test and opt in
+	otherProg := "#pragma version 9\nint 1; return"
+	otherAppID := env.CreateApp(otherAddress, simulationtesting.AppParams{
+		ApprovalProgram:   otherProg,
+		ClearStateProgram: otherProg,
+	})
+	env.OptIntoApp(otherAddress, otherAppID)
+
+	env.OptIntoAsset(otherAddress, assetID)
+	env.TransferAsset(sender, otherAddress, assetID, 1)
+
+	prog := fmt.Sprintf(`#pragma version 9
+	txn ApplicationID
+	bz end
+	
+	addr %s // otherAddress
+	store 0
+	
+	int %d // assetID
+	store 1
+	
+	int %d // otherAppID
+	store 2
+	
+	// Account access
+	load 0 // otherAddress
+	balance
+	assert
+	
+	// Asset params access
+	load 1 // assetID
+	asset_params_get AssetTotal
+	assert
+	int 100
+	==
+	assert
+	
+	// Asset holding access
+	load 0 // otherAddress
+	load 1 // assetID
+	asset_holding_get AssetBalance
+	assert
+	int 1
+	==
+	assert
+	
+	// App params access
+	load 2 // otherAppID
+	app_params_get AppCreator
+	assert
+	load 0 // otherAddress
+	==
+	assert
+	
+	// App local access
+	load 0 // otherAddress
+	load 2 // otherAppID
+	app_opted_in
+	assert
+	
+	// Box access
+	byte "A"
+	int 1025
+	box_create
+	assert
+	
+	end:
+	int 1
+	`, otherAddress.String(), assetID, otherAppID)
+
+	testAppID := env.CreateApp(sender, simulationtesting.AppParams{
+		ApprovalProgram:   prog,
+		ClearStateProgram: prog,
+	})
+
+	env.TransferAlgos(sender, testAppID.Address(), 512900)
+
+	appCall := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:          protocol.ApplicationCallTx,
+		Sender:        sender,
+		ApplicationID: testAppID,
+	})
+
+	stxn := appCall.SignedTxn()
+	proto := env.TxnInfo.CurrentProtocolParams()
+	maxAppls := proto.MaxTxGroupSize
+
+	emptyBoxref := logic.BoxRef{App: basics.AppIndex(0), Name: ""}
+	box := logic.BoxRef{App: testAppID, Name: "A"}
+
+	boxes := map[logic.BoxRef]uint64{}
+	boxes[box] = 0
+	accounts := map[basics.Address]struct{}{}
+	accounts[otherAddress] = struct{}{}
+	assets := map[basics.AssetIndex]struct{}{}
+	assets[assetID] = struct{}{}
+	apps := map[basics.AppIndex]struct{}{}
+	apps[otherAppID] = struct{}{}
+	assetHoldings := map[ledgercore.AccountAsset]struct{}{}
+	assetHoldings[ledgercore.AccountAsset{Address: otherAddress, Asset: assetID}] = struct{}{}
+	appLocals := map[ledgercore.AccountApp]struct{}{}
+	appLocals[ledgercore.AccountApp{Address: otherAddress, App: otherAppID}] = struct{}{}
+
+	expectedGroupResources := &simulation.ResourceTracker{
+		MaxAccounts:               (proto.MaxAppTxnAccounts + proto.MaxAppTxnForeignApps) * maxAppls,
+		MaxAssets:                 proto.MaxAppTxnForeignAssets * maxAppls,
+		MaxApps:                   proto.MaxAppTxnForeignApps * maxAppls,
+		MaxBoxes:                  proto.MaxAppBoxReferences * maxAppls,
+		MaxTotalRefs:              proto.MaxAppTotalTxnReferences * maxAppls,
+		MaxCrossProductReferences: 80 * maxAppls,
+		Accounts:                  accounts,
+		Boxes:                     boxes,
+		Assets:                    assets,
+		Apps:                      apps,
+		AssetHoldings:             assetHoldings,
+		AppLocals:                 appLocals,
+		NumEmptyBoxRefs:           1,
+	}
+
+	expectedPopulatedArrays := map[int]simulation.PopulatedResourceArrays{
+		0: {
+			Accounts: []basics.Address{otherAddress},
+			Assets:   []basics.AssetIndex{assetID},
+			Apps:     []basics.AppIndex{otherAppID},
+			Boxes:    []logic.BoxRef{box, emptyBoxref},
+		},
+	}
+
+	runSimulationTestCase(t, env, simulationTestCase{
+		input: simulation.Request{
+			TxnGroups:             [][]transactions.SignedTxn{{stxn}},
+			AllowEmptySignatures:  true,
+			AllowUnnamedResources: true,
+			PopulateResources:     true,
+		},
+		expected: simulation.Result{
+			Version:   simulation.ResultLatestVersion,
+			LastRound: env.TxnInfo.LatestRound(),
+			EvalOverrides: simulation.ResultEvalOverrides{
+				AllowEmptySignatures:  true,
+				AllowUnnamedResources: true,
+			},
+			TxnGroups: []simulation.TxnGroupResult{{
+				Txns: []simulation.TxnResult{
+					{
+						AppBudgetConsumed:        ignoreAppBudgetConsumed,
+						UnnamedResourcesAccessed: nil,
+					}},
+				PopulatedResourceArrays:  expectedPopulatedArrays,
+				AppBudgetConsumed:        ignoreAppBudgetConsumed,
+				AppBudgetAdded:           700,
+				UnnamedResourcesAccessed: expectedGroupResources,
+			}},
+		},
+	})
+}
+
 func TestPopulateResources(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -9472,5 +9636,10 @@ func TestPopulateResources(t *testing.T) {
 	t.Run("no group sharing", func(t *testing.T) {
 		t.Parallel()
 		populateResourceTest(t, false)
+	})
+
+	t.Run("mixed resources", func(t *testing.T) {
+		t.Parallel()
+		mixedResourcePopulationTest(t)
 	})
 }

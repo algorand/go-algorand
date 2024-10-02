@@ -1012,7 +1012,48 @@ func (p *resourcePopulator) addLocal(addr basics.Address, aid basics.AppIndex) e
 	return err
 }
 
-func (p *resourcePopulator) populateResources(groupResources ResourceTracker, txnResources []ResourceTracker) error {
+func (p *resourcePopulator) populateResources(groupResourceTracker ResourceTracker, txnResources []ResourceTracker) error {
+	// We don't want to mutate the groupResourceTracker because it is used later in simulate for UnnamedResourcesAccessed
+	groupResources := struct {
+		Assets        map[basics.AssetIndex]struct{}
+		Apps          map[basics.AppIndex]struct{}
+		Accounts      map[basics.Address]struct{}
+		Boxes         map[logic.BoxRef]struct{}
+		AssetHoldings map[ledgercore.AccountAsset]struct{}
+		AppLocals     map[ledgercore.AccountApp]struct{}
+	}{
+		Assets:        make(map[basics.AssetIndex]struct{}, len(groupResourceTracker.Assets)),
+		Apps:          make(map[basics.AppIndex]struct{}, len(groupResourceTracker.Apps)),
+		Accounts:      make(map[basics.Address]struct{}, len(groupResourceTracker.Accounts)),
+		Boxes:         make(map[logic.BoxRef]struct{}, len(groupResourceTracker.Boxes)),
+		AssetHoldings: make(map[ledgercore.AccountAsset]struct{}, len(groupResourceTracker.AssetHoldings)),
+		AppLocals:     make(map[ledgercore.AccountApp]struct{}, len(groupResourceTracker.AppLocals)),
+	}
+
+	for asset := range groupResourceTracker.Assets {
+		groupResources.Assets[asset] = struct{}{}
+	}
+
+	for app := range groupResourceTracker.Apps {
+		groupResources.Apps[app] = struct{}{}
+	}
+
+	for account := range groupResourceTracker.Accounts {
+		groupResources.Accounts[account] = struct{}{}
+	}
+
+	for box := range groupResourceTracker.Boxes {
+		groupResources.Boxes[box] = struct{}{}
+	}
+
+	for holding := range groupResourceTracker.AssetHoldings {
+		groupResources.AssetHoldings[holding] = struct{}{}
+	}
+
+	for local := range groupResourceTracker.AppLocals {
+		groupResources.AppLocals[local] = struct{}{}
+	}
+
 	// First populate resources that HAVE to be assigned to a specific transaction
 	for i, tracker := range txnResources {
 		for asset := range tracker.Assets {
@@ -1094,7 +1135,7 @@ func (p *resourcePopulator) populateResources(groupResources ResourceTracker, tx
 		}
 	}
 
-	for i := 0; i < groupResources.NumEmptyBoxRefs; i++ {
+	for i := 0; i < groupResourceTracker.NumEmptyBoxRefs; i++ {
 		err := p.addBox(0, "")
 		if err != nil {
 			return err
