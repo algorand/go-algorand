@@ -434,12 +434,29 @@ func (n *P2PNetwork) meshThreadInner() int {
 			n.log.Warnf("Error getting relay nodes from capabilities discovery: %v", err)
 		}
 		n.log.Debugf("Discovered %d gossip peers from DHT", len(dhtPeers))
+
+		// also discover archival nodes
+		var dhtArchivalPeers []peer.AddrInfo
+		const numPeersToDiscover = 5 // some arbitrary number TODO: figure out a better value based on peerSelector/fetcher algorithm
+		dhtArchivalPeers, err = n.capabilitiesDiscovery.PeersForCapability(p2p.Archival, numPeersToDiscover)
+		if err != nil {
+			n.log.Warnf("Error getting archival nodes from capabilities discovery: %v", err)
+		}
+		n.log.Debugf("Discovered %d archival peers from DHT", len(dhtArchivalPeers))
+
+		if len(dhtArchivalPeers) > 0 {
+			replace := make([]*peer.AddrInfo, len(dhtArchivalPeers))
+			for i := range dhtArchivalPeers {
+				replace[i] = &dhtArchivalPeers[i]
+			}
+			n.pstore.ReplacePeerList(replace, string(n.networkID), phonebook.PhoneBookEntryArchivalRole)
+		}
 	}
 
 	peers := mergeP2PAddrInfoResolvedAddresses(dnsPeers, dhtPeers)
-	replace := make([]*peer.AddrInfo, 0, len(peers))
+	replace := make([]*peer.AddrInfo, len(peers))
 	for i := range peers {
-		replace = append(replace, &peers[i])
+		replace[i] = &peers[i]
 	}
 	if len(peers) > 0 {
 		n.pstore.ReplacePeerList(replace, string(n.networkID), phonebook.PhoneBookEntryRelayRole)
@@ -655,28 +672,19 @@ func (n *P2PNetwork) GetPeers(options ...PeerOption) []Peer {
 			}
 		case PeersPhonebookArchivalNodes:
 			// query known archival nodes from DHT if enabled
-			if n.config.EnableDHTProviders {
-				const nodesToFind = 5
-				infos, err := n.capabilitiesDiscovery.PeersForCapability(p2p.Archival, nodesToFind)
-				if err != nil {
-					n.log.Warnf("Error getting archival nodes from capabilities discovery: %v", err)
-					return peers
+			const maxNodes = 5 // some arbitrary number
+			addrInfos := n.pstore.GetAddresses(maxNodes, phonebook.PhoneBookEntryArchivalRole)
+			for _, peerInfo := range addrInfos {
+				if peerCore, ok := addrInfoToWsPeerCore(n, peerInfo); ok {
+					peers = append(peers, &peerCore)
 				}
-				n.log.Debugf("Got %d archival node(s) from DHT", len(infos))
-				for _, addrInfo := range infos {
-					// TODO: remove after go1.22
-					info := addrInfo
-					if peerCore, ok := addrInfoToWsPeerCore(n, &info); ok {
-						peers = append(peers, &peerCore)
-					}
+			}
+			if n.log.GetLevel() >= logging.Debug && len(peers) > 0 {
+				addrs := make([]string, 0, len(peers))
+				for _, peer := range peers {
+					addrs = append(addrs, peer.(*wsPeerCore).GetAddress())
 				}
-				if n.log.GetLevel() >= logging.Debug && len(peers) > 0 {
-					addrs := make([]string, 0, len(peers))
-					for _, peer := range peers {
-						addrs = append(addrs, peer.(*wsPeerCore).GetAddress())
-					}
-					n.log.Debugf("Archival node(s) from DHT: %v", addrs)
-				}
+				n.log.Debugf("Archival node(s) from peerstore: %v", addrs)
 			}
 		case PeersConnectedIn:
 			n.wsPeersLock.RLock()
