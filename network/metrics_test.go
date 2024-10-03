@@ -55,7 +55,7 @@ func TestMetrics_PubsubTracer_TagList(t *testing.T) {
 					return true
 				})
 			}
-			if stmt.Name.Name == "ValidateMessage" {
+			if stmt.Name.Name == "RecvRPC" {
 				ast.Inspect(stmt.Body, func(n ast.Node) bool {
 					if switchStmt, ok := n.(*ast.SwitchStmt); ok {
 						for _, stmt := range switchStmt.Body.List {
