@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 # shellcheck disable=2035,2129
 
-# TODO: This needs to be reworked a bit to support Darwin.
-
 set -exo pipefail
 shopt -s nullglob
 
@@ -14,8 +12,8 @@ CHANNEL=${CHANNEL:-$(./scripts/release/mule/common/get_channel.sh "$NETWORK")}
 VERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
 PKG_DIR="./tmp/node_pkgs"
 SIGNING_KEY_ADDR=dev@algorand.com
-OS_TYPE=$(./scripts/release/mule/common/ostype.sh)
-ARCHS=(amd64 arm64)
+OS_TYPES=(linux darwin)
+ARCHS=(amd64 arm64 universal)
 ARCH_BITS=(x86_64 aarch64)
 # Note that we don't want to use $GNUPGHOME here because that is a documented env var for the gnupg
 # project and if it's set in the environment mule will automatically pick it up, which could have
@@ -47,17 +45,19 @@ popd
 if [ -n "$S3_SOURCE" ]
 then
     i=0
-    for arch in "${ARCHS[@]}"; do
-        arch_bit="${ARCH_BITS[$i]}"
-        (
+    for os in "${OS_TYPES[@]}"; do
+        for arch in "${ARCHS[@]}"; do
             mkdir -p "$PKG_DIR/$OS_TYPE/$arch"
-            cd "$PKG_DIR"
-            # Note the underscore after ${arch}!
-            # Recall that rpm packages have the arch bit in the filenames (i.e., "x86_64" rather than "amd64").
-            # Also, the order of the includes/excludes is important!
-            aws s3 cp --recursive --exclude "*" --include "*${arch}_*" --include "*$arch_bit.rpm" --exclude "*.sig" --exclude "*.asc" --exclude "*.asc.gz" "s3://$S3_SOURCE/$CHANNEL/$VERSION" .
-        )
-        i=$((i + 1))
+            arch_bit="${ARCH_BITS[$i]}"
+            (
+                cd "$PKG_DIR"
+                # Note the underscore after ${arch}!
+                # Recall that rpm packages have the arch bit in the filenames (i.e., "x86_64" rather than "amd64").
+                # Also, the order of the includes/excludes is important!
+                aws s3 cp --recursive --exclude "*" --include "*${arch}_*" --include "*$arch_bit.rpm" --exclude "*.sig" --exclude "*.asc" --exclude "*.asc.gz" "s3://$S3_SOURCE/$CHANNEL/$VERSION" .
+            )
+            i=$((i + 1))
+        done
     done
 fi
 
@@ -69,7 +69,6 @@ cd "$PKG_DIR"
 # Grab the directories directly underneath (max-depth 1) ./tmp/node_pkgs/ into a space-delimited string.
 # This will help us target `linux`, `darwin` and (possibly) `windows` build assets.
 # Note the surrounding parens turns the string created by `find` into an array.
-OS_TYPES=($(find . -mindepth 1 -maxdepth 1 -type d -printf '%f\n'))
 for os in "${OS_TYPES[@]}"; do
     for arch in "${ARCHS[@]}"; do
         if [ -d "$os/$arch" ]
