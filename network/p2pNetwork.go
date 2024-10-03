@@ -923,42 +923,42 @@ func (n *P2PNetwork) txTopicHandleLoop() {
 	}
 	n.log.Debugf("Subscribed to topic %s", p2p.TXTopicName)
 
-	for {
-		// msg from sub.Next not used since all work done by txTopicValidator
-		_, err := sub.Next(n.ctx)
-		if err != nil {
-			if err != pubsub.ErrSubscriptionCancelled && err != context.Canceled {
-				n.log.Errorf("Error reading from subscription %v, peerId %s", err, n.service.ID())
+	const threads = incomingThreads / 2 // perf tests showed that 10 (half of incomingThreads) was optimal in terms of TPS (attempted 1, 5, 10, 20)
+	var wg sync.WaitGroup
+	wg.Add(threads)
+	for i := 0; i < threads; i++ {
+		go func(ctx context.Context, sub p2p.SubNextCancellable, wantTXGossip *atomic.Bool, peerID peer.ID, log logging.Logger) {
+			defer wg.Done()
+			for {
+				// msg from sub.Next not used since all work done by txTopicValidator
+				_, err := sub.Next(ctx)
+				if err != nil {
+					if err != pubsub.ErrSubscriptionCancelled && err != context.Canceled {
+						log.Errorf("Error reading from subscription %v, peerId %s", err, peerID)
+					}
+					log.Debugf("Cancelling subscription to topic %s due Subscription.Next error: %v", p2p.TXTopicName, err)
+					sub.Cancel()
+					return
+				}
+				// participation or configuration change, cancel subscription and quit
+				if !wantTXGossip.Load() {
+					log.Debugf("Cancelling subscription to topic %s due participation change", p2p.TXTopicName)
+					sub.Cancel()
+					return
+				}
 			}
-			n.log.Debugf("Cancelling subscription to topic %s due Subscription.Next error: %v", p2p.TXTopicName, err)
-			sub.Cancel()
-			return
-		}
-		// participation or configuration change, cancel subscription and quit
-		if !n.wantTXGossip.Load() {
-			n.log.Debugf("Cancelling subscription to topic %s due participation change", p2p.TXTopicName)
-			sub.Cancel()
-			return
-		}
+		}(n.ctx, sub, &n.wantTXGossip, n.service.ID(), n.log)
 	}
+	wg.Wait()
 }
 
 // txTopicValidator calls txHandler to validate and process incoming transactions.
 func (n *P2PNetwork) txTopicValidator(ctx context.Context, peerID peer.ID, msg *pubsub.Message) pubsub.ValidationResult {
-	var routingAddr [8]byte
 	n.wsPeersLock.Lock()
-	var wsp *wsPeer
-	var ok bool
-	if wsp, ok = n.wsPeers[peerID]; ok {
-		copy(routingAddr[:], wsp.RoutingAddr())
-	} else {
-		// well, otherwise use last 8 bytes of peerID
-		copy(routingAddr[:], peerID[len(peerID)-8:])
-	}
+	var wsp *wsPeer = n.wsPeers[peerID]
 	n.wsPeersLock.Unlock()
 
 	inmsg := IncomingMessage{
-		// Sender:   gossipSubPeer{peerID: msg.ReceivedFrom, net: n, routingAddr: routingAddr},
 		Sender:   wsp,
 		Tag:      protocol.TxnTag,
 		Data:     msg.Data,
