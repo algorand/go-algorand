@@ -798,6 +798,7 @@ var OpSpecs = []OpSpec{
 		costByField("g", &EcGroups, []int{
 			BN254g1: 630, BN254g2: 3_300,
 			BLS12_381g1: 1_950, BLS12_381g2: 8_150})},
+	{0xe6, "bmodexp", opBytesModExp, proto("bbb:b"), 11, costly(2000)}, // TODO: refine cost model for bmodexp
 }
 
 // OpcodesByVersion returns list of opcodes available in a specific version of TEAL
