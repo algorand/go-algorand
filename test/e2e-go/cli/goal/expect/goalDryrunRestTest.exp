@@ -8,6 +8,7 @@ proc TestGoalDryrun { DRREQ_FILE TEST_PRIMARY_NODE_DIR } {
     set PROGRAM_TYPE ""
     spawn goal clerk dryrun-remote -d $TEST_PRIMARY_NODE_DIR -D $DRREQ_FILE -v
     expect {
+        #nolint:eof checking PASSED catches no match
         timeout { ::AlgorandGoal::Abort "goal clerk dryrun-remote timeout" }
         "budget consumed:" {set COST 1; exp_continue}
         -re {(ApprovalProgram)} {set PROGRAM_TYPE $expect_out(1,string); exp_continue}

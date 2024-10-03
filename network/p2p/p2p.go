@@ -21,12 +21,14 @@ import (
 	"encoding/base32"
 	"fmt"
 	"net"
+	"net/http"
 	"runtime"
 	"strings"
 	"time"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/network/limitcaller"
 	pstore "github.com/algorand/go-algorand/network/p2p/peerstore"
 	"github.com/algorand/go-algorand/network/phonebook"
 	"github.com/algorand/go-algorand/util/metrics"
@@ -39,6 +41,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
+	basichost "github.com/libp2p/go-libp2p/p2p/host/basic"
 	rcmgr "github.com/libp2p/go-libp2p/p2p/host/resource-manager"
 	"github.com/libp2p/go-libp2p/p2p/muxer/yamux"
 	"github.com/libp2p/go-libp2p/p2p/security/noise"
@@ -68,6 +71,9 @@ type Service interface {
 	ListPeersForTopic(topic string) []peer.ID
 	Subscribe(topic string, val pubsub.ValidatorEx) (SubNextCancellable, error)
 	Publish(ctx context.Context, topic string, data []byte) error
+
+	// GetHTTPClient returns a rate-limiting libp2p-streaming http client that can be used to make requests to the given peer
+	GetHTTPClient(addrInfo *peer.AddrInfo, connTimeStore limitcaller.ConnectionTimeStore, queueingTimeout time.Duration) (*http.Client, error)
 }
 
 // serviceImpl manages integration with libp2p and implements the Service interface
@@ -166,7 +172,7 @@ func configureResourceManager(cfg config.Local) (network.ResourceManager, error)
 
 	limitConfig := rcmgr.PartialLimitConfig{
 		System: rcmgr.ResourceLimits{
-			Conns: rcmgr.LimitVal(cfg.P2PIncomingConnectionsLimit),
+			Conns: rcmgr.LimitVal(cfg.IncomingConnectionsLimit),
 		},
 		// Everything else is default. The exact values will come from `scaledDefaultLimits` above.
 	}
@@ -176,7 +182,7 @@ func configureResourceManager(cfg config.Local) (network.ResourceManager, error)
 }
 
 // MakeService creates a P2P service instance
-func MakeService(ctx context.Context, log logging.Logger, cfg config.Local, h host.Host, listenAddr string, wsStreamHandler StreamHandler) (*serviceImpl, error) {
+func MakeService(ctx context.Context, log logging.Logger, cfg config.Local, h host.Host, listenAddr string, wsStreamHandler StreamHandler, metricsTracer pubsub.RawTracer) (*serviceImpl, error) {
 
 	sm := makeStreamManager(ctx, log, h, wsStreamHandler, cfg.EnableGossipService)
 	h.Network().Notify(sm)
@@ -188,7 +194,7 @@ func MakeService(ctx context.Context, log logging.Logger, cfg config.Local, h ho
 	telemetryProtoInfo := formatPeerTelemetryInfoProtocolName(telemetryID, telemetryInstance)
 	h.SetStreamHandler(protocol.ID(telemetryProtoInfo), func(s network.Stream) { s.Close() })
 
-	ps, err := makePubSub(ctx, cfg, h)
+	ps, err := makePubSub(ctx, cfg, h, metricsTracer)
 	if err != nil {
 		return nil, err
 	}
@@ -277,7 +283,7 @@ func (s *serviceImpl) dialNode(ctx context.Context, peer *peer.AddrInfo) error {
 func (s *serviceImpl) AddrInfo() peer.AddrInfo {
 	return peer.AddrInfo{
 		ID:    s.host.ID(),
-		Addrs: s.host.Addrs(),
+		Addrs: s.host.(*basichost.BasicHost).AllAddrs(), // fetch all addresses, including private ones
 	}
 }
 
@@ -410,4 +416,9 @@ func addressFilter(addrs []multiaddr.Multiaddr) []multiaddr.Multiaddr {
 		logging.Base().Debugf("addressFilter output: %s", b.String())
 	}
 	return res
+}
+
+// GetHTTPClient returns a libp2p-streaming http client that can be used to make requests to the given peer
+func (s *serviceImpl) GetHTTPClient(addrInfo *peer.AddrInfo, connTimeStore limitcaller.ConnectionTimeStore, queueingTimeout time.Duration) (*http.Client, error) {
+	return makeHTTPClientWithRateLimit(addrInfo, s, connTimeStore, queueingTimeout)
 }
