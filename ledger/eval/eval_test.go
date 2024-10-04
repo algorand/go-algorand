@@ -1114,7 +1114,7 @@ func TestEvalFunctionForExpiredAccounts(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	genesisInitState, addrs, keys := ledgertesting.GenesisWithProto(10, protocol.ConsensusFuture)
+	genesisInitState, addrs, _ := ledgertesting.GenesisWithProto(10, protocol.ConsensusFuture)
 
 	sendAddr := addrs[0]
 	recvAddr := addrs[1]
@@ -1160,37 +1160,18 @@ func TestEvalFunctionForExpiredAccounts(t *testing.T) {
 
 	// Advance the evaluator a couple rounds, watching for lack of expiration
 	for i := uint64(0); i < uint64(targetRound); i++ {
-		vb := l.endBlock(t, blkEval)
+		vb := l.endBlock(t, blkEval, recvAddr)
 		blkEval = l.nextBlock(t)
+		//require.Empty(t, vb.Block().ExpiredParticipationAccounts)
 		for _, acct := range vb.Block().ExpiredParticipationAccounts {
 			if acct == recvAddr {
-				// won't happen, because recvAddr didn't appear in block
+				// won't happen, because recvAddr was proposer
 				require.Fail(t, "premature expiration")
 			}
 		}
 	}
 
 	require.Greater(t, uint64(blkEval.Round()), uint64(recvAddrLastValidRound))
-
-	genHash := l.GenesisHash()
-	txn := transactions.Transaction{
-		Type: protocol.PaymentTx,
-		Header: transactions.Header{
-			Sender:      sendAddr,
-			Fee:         minFee,
-			FirstValid:  newBlock.Round(),
-			LastValid:   blkEval.Round(),
-			GenesisHash: genHash,
-		},
-		PaymentTxnFields: transactions.PaymentTxnFields{
-			Receiver: recvAddr,
-			Amount:   basics.MicroAlgos{Raw: 100},
-		},
-	}
-
-	st := txn.Sign(keys[0])
-	err = blkEval.Transaction(st, transactions.ApplyData{})
-	require.NoError(t, err)
 
 	// Make sure we validate our block as well
 	blkEval.validate = true
