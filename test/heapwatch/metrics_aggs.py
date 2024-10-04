@@ -164,7 +164,7 @@ def main():
                 mmax = max(rw)
                 mmin = min(rw)
                 print(f'{nick}: {metric_name}: count {len(rw)}, max {mmax}, min {mmin}, min-max {mmax - mmin}')
-                metric = Metric(metric_name, 0, MetricType.COUNTER)
+                metric = Metric(metric_name, 0, '', MetricType.COUNTER)
                 if metric.short_name() not in metric_names_nick_max_avg:
                     metric_names_nick_max_avg[metric.short_name()] = []
                 if args.avg_max_min:
