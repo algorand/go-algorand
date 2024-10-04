@@ -959,8 +959,8 @@ func (ledger *evalTestLedger) nextBlock(t testing.TB) *BlockEvaluator {
 }
 
 // endBlock completes the block being created, returns the ValidatedBlock for inspection
-func (ledger *evalTestLedger) endBlock(t testing.TB, eval *BlockEvaluator) *ledgercore.ValidatedBlock {
-	unfinishedBlock, err := eval.GenerateBlock(nil)
+func (ledger *evalTestLedger) endBlock(t testing.TB, eval *BlockEvaluator, proposers ...basics.Address) *ledgercore.ValidatedBlock {
+	unfinishedBlock, err := eval.GenerateBlock(proposers)
 	require.NoError(t, err)
 	// fake agreement's setting of header fields so later validates work.
 	seed := committee.Seed{}
@@ -1525,9 +1525,11 @@ func TestExpiredAccountGeneration(t *testing.T) {
 
 	sendAddr := addrs[0]
 	recvAddr := addrs[1]
+	propAddr := addrs[2]
+	otherPropAddr := addrs[3] // not expiring, but part of proposer addresses passed to GenerateBlock
 
-	// the last round that the recvAddr is valid for
-	recvAddrLastValidRound := basics.Round(2)
+	// the last round that the recvAddr and propAddr are valid for
+	testAddrLastValidRound := basics.Round(2)
 
 	// the target round we want to advance the evaluator to
 	targetRound := basics.Round(2)
@@ -1552,10 +1554,10 @@ func TestExpiredAccountGeneration(t *testing.T) {
 	}
 
 	// Choose recvAddr to have a last valid round less than genesis block round
-	{
-		tmp := genesisInitState.Accounts[recvAddr]
-		tmp.VoteLastValid = recvAddrLastValidRound
-		genesisInitState.Accounts[recvAddr] = tmp
+	for _, addr := range []basics.Address{recvAddr, propAddr} {
+		tmp := genesisInitState.Accounts[addr]
+		tmp.VoteLastValid = testAddrLastValidRound
+		genesisInitState.Accounts[addr] = tmp
 	}
 
 	l := newTestLedger(t, bookkeeping.GenesisBalances{
@@ -1587,12 +1589,14 @@ func TestExpiredAccountGeneration(t *testing.T) {
 		}
 	}
 
-	require.Greater(t, uint64(eval.Round()), uint64(recvAddrLastValidRound))
+	require.Greater(t, uint64(eval.Round()), uint64(testAddrLastValidRound))
 
 	// Make sure we validate our block as well
 	eval.validate = true
 
-	unfinishedBlock, err := eval.GenerateBlock(nil)
+	// Pretend this node is participating on behalf of two addresses
+	// GenerateBlock will not mark its own proposer addresses as expired
+	unfinishedBlock, err := eval.GenerateBlock([]basics.Address{propAddr, otherPropAddr})
 	require.NoError(t, err)
 
 	listOfExpiredAccounts := unfinishedBlock.UnfinishedBlock().ParticipationUpdates.ExpiredParticipationAccounts
@@ -1609,6 +1613,17 @@ func TestExpiredAccountGeneration(t *testing.T) {
 	require.Zero(t, recvAcct.VoteID)
 	require.Zero(t, recvAcct.SelectionID)
 	require.Zero(t, recvAcct.StateProofID)
+
+	// propAddr not marked expired
+	propAcct, err := eval.state.lookup(propAddr)
+	require.NoError(t, err)
+	require.Equal(t, basics.Online, propAcct.Status)
+	require.NotZero(t, propAcct.VoteFirstValid)
+	require.NotZero(t, propAcct.VoteLastValid)
+	require.NotZero(t, propAcct.VoteKeyDilution)
+	require.NotZero(t, propAcct.VoteID)
+	require.NotZero(t, propAcct.SelectionID)
+	require.NotZero(t, propAcct.StateProofID)
 }
 
 func TestBitsMatch(t *testing.T) {
