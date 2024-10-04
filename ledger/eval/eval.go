@@ -1619,6 +1619,14 @@ type challenge struct {
 // deltas and testing if any of them needs to be reset/suspended. Expiration
 // takes precedence - if an account is expired, it should be knocked offline and
 // key material deleted. If it is only suspended, the key material will remain.
+//
+// Different ndoes may propose different list of addresses based on node state.
+// Block validators only check whether ExpiredParticipationAccounts or
+// AbsentParticipationAccounts meet the criteria for expiration or suspension,
+// not whether the lists are complete.
+//
+// This function is passed a list of participating addresses so a node will not
+// propose a block that suspends or expires itself.
 func (eval *BlockEvaluator) generateKnockOfflineAccountsList(participating []basics.Address) {
 	if !eval.generate {
 		return
