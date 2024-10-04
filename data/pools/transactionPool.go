@@ -31,6 +31,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger"
+	"github.com/algorand/go-algorand/ledger/eval"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
@@ -97,6 +98,9 @@ type TransactionPool struct {
 	// exceed the txPoolMaxSize. This flag is reset to false OnNewBlock
 	stateproofOverflowed bool
 
+	testBlockEvaluator   *eval.TestBlockEvaluator
+	testBlockEvaluatorMu deadlock.RWMutex
+
 	// shutdown is set to true when the pool is being shut down. It is checked in exported methods
 	// to prevent pool operations like remember and recomputing the block evaluator
 	// from using down stream resources like ledger that may be shutting down.
@@ -105,13 +109,42 @@ type TransactionPool struct {
 
 // BlockEvaluator defines the block evaluator interface exposed by the ledger package.
 type BlockEvaluator interface {
-	TestTransactionGroup(txgroup []transactions.SignedTxn) error
 	Round() basics.Round
 	PaySetSize() int
 	TransactionGroup(txads []transactions.SignedTxnWithAD) error
 	Transaction(txn transactions.SignedTxn, ad transactions.ApplyData) error
 	GenerateBlock(addrs []basics.Address) (*ledgercore.UnfinishedBlock, error)
 	ResetTxnBytes()
+}
+
+// testEvalContext implements the eval.TestEvalContext interface. It allows for concurrent
+// calls to TestTransactionGroup for candidate transactions calling transactionPool.Test.
+type testEvalContext struct {
+	ledger   *ledger.Ledger
+	block    bookkeeping.Block
+	proto    config.ConsensusParams
+	specials transactions.SpecialAddresses
+}
+
+func newTestBlockEvaluator(ledger *ledger.Ledger, block bookkeeping.Block) *eval.TestBlockEvaluator {
+	return &eval.TestBlockEvaluator{
+		TestEvalContext: &testEvalContext{
+			ledger: ledger,
+			block:  block,
+			proto:  config.Consensus[block.CurrentProtocol],
+			specials: transactions.SpecialAddresses{
+				FeeSink:     block.FeeSink,
+				RewardsPool: block.RewardsPool,
+			},
+		}}
+}
+
+func (c *testEvalContext) Proto() config.ConsensusParams           { return c.proto }
+func (c *testEvalContext) Specials() transactions.SpecialAddresses { return c.specials }
+func (c *testEvalContext) TxnContext() transactions.TxnContext     { return c.block }
+func (c *testEvalContext) CheckDup(firstValid, lastValid basics.Round, txid transactions.Txid, txl ledgercore.Txlease) error {
+	// will call txTail.checkDup, which uses an RLock for concurrent access.
+	return c.ledger.CheckDup(c.proto, c.block.BlockHeader.Round, firstValid, lastValid, txid, txl)
 }
 
 // VotingAccountSupplier provides a list of possible participating account addresses valid for a given round.
@@ -390,19 +423,20 @@ func (pool *TransactionPool) checkSufficientFee(txgroup []transactions.SignedTxn
 
 // Test performs basic duplicate detection and well-formedness checks
 // on a transaction group without storing the group.
+// It may be called concurrently.
 func (pool *TransactionPool) Test(txgroup []transactions.SignedTxn) error {
 	if err := pool.checkPendingQueueSize(txgroup); err != nil {
 		return err
 	}
 
-	pool.mu.Lock()
-	defer pool.mu.Unlock()
+	pool.testBlockEvaluatorMu.RLock()
+	defer pool.testBlockEvaluatorMu.RUnlock()
 
-	if pool.pendingBlockEvaluator == nil {
-		return fmt.Errorf("Test: pendingBlockEvaluator is nil")
+	if pool.testBlockEvaluator == nil {
+		return fmt.Errorf("Test: testEvalCtx is nil")
 	}
 
-	return pool.pendingBlockEvaluator.TestTransactionGroup(txgroup)
+	return pool.testBlockEvaluator.TestTransactionGroup(txgroup)
 }
 
 type poolIngestParams struct {
@@ -748,6 +782,10 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIDs map[transact
 		pool.log.Warnf("TransactionPool.recomputeBlockEvaluator: cannot start evaluator: %v", err)
 		return
 	}
+
+	pool.testBlockEvaluatorMu.Lock()
+	pool.testBlockEvaluator = newTestBlockEvaluator(pool.ledger, next)
+	pool.testBlockEvaluatorMu.Unlock()
 
 	var asmStats telemetryspec.AssembleBlockMetrics
 	asmStats.StartCount = len(txgroups)
