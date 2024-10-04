@@ -38,6 +38,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util"
 	"github.com/algorand/go-algorand/util/execpool"
 )
 
@@ -1344,7 +1345,13 @@ func (eval *BlockEvaluator) TestingTxnCounter() uint64 {
 }
 
 // Call "endOfBlock" after all the block's rewards and transactions are processed.
-func (eval *BlockEvaluator) endOfBlock() error {
+// When generating a block, participating addresses are passed to prevent a
+// proposer from suspending itself.
+func (eval *BlockEvaluator) endOfBlock(participating ...basics.Address) error {
+	if participating != nil && !eval.generate {
+		panic("logic error: only pass partAddresses to endOfBlock when generating")
+	}
+
 	if eval.generate {
 		var err error
 		eval.block.TxnCommitments, err = eval.block.PaysetCommit()
@@ -1369,7 +1376,7 @@ func (eval *BlockEvaluator) endOfBlock() error {
 			}
 		}
 
-		eval.generateKnockOfflineAccountsList()
+		eval.generateKnockOfflineAccountsList(participating)
 
 		if eval.proto.StateProofInterval > 0 {
 			var basicStateProof bookkeeping.StateProofTrackingData
@@ -1612,7 +1619,7 @@ type challenge struct {
 // deltas and testing if any of them needs to be reset/suspended. Expiration
 // takes precedence - if an account is expired, it should be knocked offline and
 // key material deleted. If it is only suspended, the key material will remain.
-func (eval *BlockEvaluator) generateKnockOfflineAccountsList() {
+func (eval *BlockEvaluator) generateKnockOfflineAccountsList(participating []basics.Address) {
 	if !eval.generate {
 		return
 	}
@@ -1636,6 +1643,7 @@ func (eval *BlockEvaluator) generateKnockOfflineAccountsList() {
 		IncentiveEligible     bool // currently unused below, but may be needed in the future
 	}
 	candidates := make(map[basics.Address]candidateData)
+	partAddrs := util.MakeSet(participating...)
 
 	// First, ask the ledger for the top N online accounts, with their latest
 	// online account data, current up to the previous round.
@@ -1684,6 +1692,10 @@ func (eval *BlockEvaluator) generateKnockOfflineAccountsList() {
 	for accountAddr, acctData := range candidates {
 		if acctData.MicroAlgosWithRewards.IsZero() {
 			continue // don't check accounts that are being closed
+		}
+
+		if _, ok := partAddrs[accountAddr]; ok {
+			continue // don't check our own participation accounts
 		}
 
 		// Expired check: are this account's voting keys no longer valid?
@@ -1948,7 +1960,16 @@ func (eval *BlockEvaluator) suspendAbsentAccounts() error {
 // After a call to GenerateBlock, the BlockEvaluator can still be used to
 // accept transactions.  However, to guard against reuse, subsequent calls
 // to GenerateBlock on the same BlockEvaluator will fail.
-func (eval *BlockEvaluator) GenerateBlock(addrs []basics.Address) (*ledgercore.UnfinishedBlock, error) {
+//
+// A list of participating addresses is passed to GenerateBlock. This lets
+// the BlockEvaluator know which of this node's participating addresses might
+// be proposing this block. This information is used when:
+//   - generating lists of absent accounts (don't suspend yourself)
+//   - preparing a ledgercore.UnfinishedBlock, which contains the end-of-block
+//     state of each potential proposer. This allows for a final check in
+//     UnfinishedBlock.FinishBlock to ensure the proposer hasn't closed its
+//     account before setting the ProposerPayout header.
+func (eval *BlockEvaluator) GenerateBlock(participating []basics.Address) (*ledgercore.UnfinishedBlock, error) {
 	if !eval.generate {
 		logging.Base().Panicf("GenerateBlock() called but generate is false")
 	}
@@ -1957,19 +1978,19 @@ func (eval *BlockEvaluator) GenerateBlock(addrs []basics.Address) (*ledgercore.U
 		return nil, fmt.Errorf("GenerateBlock already called on this BlockEvaluator")
 	}
 
-	err := eval.endOfBlock()
+	err := eval.endOfBlock(participating...)
 	if err != nil {
 		return nil, err
 	}
 
-	// look up set of participation accounts passed to GenerateBlock (possible proposers)
-	finalAccounts := make(map[basics.Address]ledgercore.AccountData, len(addrs))
-	for i := range addrs {
-		acct, err := eval.state.lookup(addrs[i])
+	// look up end-of-block state of possible proposers passed to GenerateBlock
+	finalAccounts := make(map[basics.Address]ledgercore.AccountData, len(participating))
+	for i := range participating {
+		acct, err := eval.state.lookup(participating[i])
 		if err != nil {
 			return nil, err
 		}
-		finalAccounts[addrs[i]] = acct
+		finalAccounts[participating[i]] = acct
 	}
 
 	vb := ledgercore.MakeUnfinishedBlock(eval.block, eval.state.deltas(), finalAccounts)

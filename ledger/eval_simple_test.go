@@ -812,71 +812,65 @@ func TestAbsenteeChallenges(t *testing.T) {
 		dl.beginBlock()
 		dl.endBlock(seedAndProp) // This becomes the seed, which is used for the challenge
 
-		for vb := dl.fullBlock(); vb.Block().Round() < 1200; vb = dl.fullBlock() {
-			// advance through first grace period
+		for vb := dl.fullBlock(); vb.Block().Round() < 1199; vb = dl.fullBlock() {
+			// advance through first grace period: no one marked absent
+			require.Empty(t, vb.Block().AbsentParticipationAccounts)
 		}
-		dl.beginBlock()
-		dl.endBlock(propguy) // propose, which is a fine (though less likely) way to respond
-
-		// All still online, unchanged eligibility
-		for _, guy := range []basics.Address{propguy, regguy, badguy} {
-			acct := lookup(t, dl.generator, guy)
-			require.Equal(t, basics.Online, acct.Status)
-			require.Equal(t, ver >= checkingBegins, acct.IncentiveEligible, guy)
-		}
-
-		for vb := dl.fullBlock(); vb.Block().Round() < 1220; vb = dl.fullBlock() {
-			// advance into knockoff period. but no transactions means
-			// unresponsive accounts go unnoticed.
-		}
-		// All still online, same eligibility
-		for _, guy := range []basics.Address{propguy, regguy, badguy} {
-			acct := lookup(t, dl.generator, guy)
-			require.Equal(t, basics.Online, acct.Status)
-			require.Equal(t, ver >= checkingBegins, acct.IncentiveEligible, guy)
-		}
-
-		// badguy never responded, he gets knocked off when paid
-		vb := dl.fullBlock(&txntest.Txn{
-			Type:     "pay",
-			Sender:   addrs[0],
-			Receiver: badguy,
-		})
-		if ver >= checkingBegins {
-			require.Equal(t, vb.Block().AbsentParticipationAccounts, []basics.Address{badguy})
-		}
-		acct := lookup(t, dl.generator, badguy)
-		require.Equal(t, ver >= checkingBegins, basics.Offline == acct.Status) // if checking, badguy fails
-		require.False(t, acct.IncentiveEligible)
-
-		// propguy proposed during the grace period, he stays on even when paid
-		dl.txns(&txntest.Txn{
-			Type:     "pay",
-			Sender:   addrs[0],
-			Receiver: propguy,
-		})
-		acct = lookup(t, dl.generator, propguy)
-		require.Equal(t, basics.Online, acct.Status)
-		require.Equal(t, ver >= checkingBegins, acct.IncentiveEligible)
 
 		// regguy keyregs before he's caught, which is a heartbeat, he stays on as well
-		dl.txns(&txntest.Txn{
+		vb := dl.fullBlock(&txntest.Txn{
 			Type:        "keyreg", // Does not pay extra fee, since he's still eligible
 			Sender:      regguy,
 			VotePK:      [32]byte{1},
 			SelectionPK: [32]byte{1},
 		})
-		acct = lookup(t, dl.generator, regguy)
+		require.Equal(t, basics.Round(1200), vb.Block().Round())
+		require.Empty(t, vb.Block().AbsentParticipationAccounts)
+		acct := lookup(t, dl.generator, regguy)
 		require.Equal(t, basics.Online, acct.Status)
 		require.Equal(t, ver >= checkingBegins, acct.IncentiveEligible)
-		dl.txns(&txntest.Txn{
-			Type:     "pay",
-			Sender:   addrs[0],
-			Receiver: regguy,
-		})
-		acct = lookup(t, dl.generator, regguy)
-		require.Equal(t, basics.Online, acct.Status)
-		require.Equal(t, ver >= checkingBegins, acct.IncentiveEligible)
+
+		dl.beginBlock()
+		vb = dl.endBlock(propguy) // propose, which is a fine (though less likely) way to respond
+
+		// propguy could be suspended in 1201 here, but won't, because they are proposer
+		require.Equal(t, basics.Round(1201), vb.Block().Round())
+
+		require.NotContains(t, vb.Block().AbsentParticipationAccounts, []basics.Address{propguy})
+		require.NotContains(t, vb.Block().AbsentParticipationAccounts, regguy)
+		if ver >= checkingBegins {
+			// badguy and regguy will both be suspended in 1201
+			require.Contains(t, vb.Block().AbsentParticipationAccounts, badguy)
+		}
+
+		// propguy & regguy still online, badguy suspended (depending on consensus version)
+		for _, guy := range []basics.Address{propguy, regguy, badguy} {
+			acct := lookup(t, dl.generator, guy)
+			switch guy {
+			case propguy, regguy:
+				require.Equal(t, basics.Online, acct.Status)
+				require.Equal(t, ver >= checkingBegins, acct.IncentiveEligible)
+				require.False(t, acct.VoteID.IsEmpty())
+			case badguy:
+				// if checking, badguy fails
+				require.Equal(t, ver >= checkingBegins, basics.Offline == acct.Status)
+				require.False(t, acct.IncentiveEligible)
+			}
+			// whether suspended or online, all still have VoteID
+			require.False(t, acct.VoteID.IsEmpty())
+		}
+
+		if ver < checkingBegins {
+			for vb := dl.fullBlock(); vb.Block().Round() < 1220; vb = dl.fullBlock() {
+				// advance into knockoff period.
+			}
+			// All still online, same eligibility
+			for _, guy := range []basics.Address{propguy, regguy, badguy} {
+				acct := lookup(t, dl.generator, guy)
+				require.Equal(t, basics.Online, acct.Status)
+				require.False(t, acct.IncentiveEligible)
+			}
+		}
 	})
 }
 
