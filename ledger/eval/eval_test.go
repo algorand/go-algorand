@@ -1353,9 +1353,11 @@ func TestAbsenteeChecks(t *testing.T) {
 		tmp.VoteLastValid = 1500 // large enough to avoid EXPIRATION, so we can see SUSPENSION
 		switch i {
 		case 1:
-			tmp.LastHeartbeat = 1 // we want addr[1] to be suspended earlier than others
+			tmp.LastHeartbeat = 1 // we want addrs[1] to be suspended earlier than others
 		case 2:
-			tmp.LastProposed = 1 // we want addr[1] to be suspended earlier than others
+			tmp.LastProposed = 1 // we want addrs[2] to be suspended earlier than others
+		case 3:
+			tmp.LastProposed = 1 // we want addrs[3] to be a proposer, and never suspend itself
 		default:
 			if i < 10 { // make the other 8 genesis wallets unsuspendable
 				if i%2 == 0 {
@@ -1374,6 +1376,9 @@ func TestAbsenteeChecks(t *testing.T) {
 		genesisInitState.Accounts[addr] = tmp
 	}
 
+	// pretend this node is participating on behalf of addrs[3] and addrs[4]
+	proposers := []basics.Address{addrs[3], addrs[4]}
+
 	l := newTestLedger(t, bookkeeping.GenesisBalances{
 		Balances:    genesisInitState.Accounts,
 		FeeSink:     testSinkAddr,
@@ -1388,27 +1393,17 @@ func TestAbsenteeChecks(t *testing.T) {
 	// Advance the evaluator, watching for suspensions as they appear
 	challenge := byte(0)
 	for i := uint64(0); i < uint64(1200); i++ { // Just before first suspension at 1171
-		vb := l.endBlock(t, blkEval)
+		vb := l.endBlock(t, blkEval, proposers...)
 		blkEval = l.nextBlock(t)
-		// make map of addrs in AbsentParticipationAccounts
-		absentAddrs := make(map[basics.Address]struct{})
-		for _, addr := range vb.Block().AbsentParticipationAccounts {
-			absentAddrs[addr] = struct{}{}
-		}
-		// get indexes of addrs in AbsentParticipationAccounts
-		for j, addr := range addrs {
-			if _, isAbsent := absentAddrs[addr]; isAbsent {
-				t.Logf("round %d: addr %d %s is absent", vb.Block().Round(), j, addr)
-			}
-		}
-		if vb.Block().Round() == 102 { // 2 out of 10 genesis accounts are absent
+
+		switch vb.Block().Round() {
+		case 102: // 2 out of 10 genesis accounts are now absent
 			require.Contains(t, vb.Block().AbsentParticipationAccounts, addrs[1])
 			require.Contains(t, vb.Block().AbsentParticipationAccounts, addrs[2])
-		} else {
-			require.Zero(t, vb.Block().AbsentParticipationAccounts, "round %v", vb.Block().Round())
-		}
-		if vb.Block().Round() == 1000 {
+		case 1000:
 			challenge = vb.Block().BlockHeader.Seed[0]
+		default:
+			require.Zero(t, vb.Block().AbsentParticipationAccounts, "round %v", vb.Block().Round())
 		}
 	}
 	challenged := basics.Address{(challenge >> 3) << 3, 0xaa}
@@ -1444,17 +1439,19 @@ func TestAbsenteeChecks(t *testing.T) {
 	// Make sure we validate our block as well
 	blkEval.validate = true
 
-	unfinishedBlock, err := blkEval.GenerateBlock(nil)
+	unfinishedBlock, err := blkEval.GenerateBlock(proposers)
 	require.NoError(t, err)
 
 	// fake agreement's setting of header fields so later validates work
 	validatedBlock := ledgercore.MakeValidatedBlock(unfinishedBlock.UnfinishedBlock().WithProposer(committee.Seed{}, testPoolAddr, true), unfinishedBlock.UnfinishedDeltas())
 
-	t.Logf("round %d: absent %v", validatedBlock.Block().Round(), validatedBlock.Block().AbsentParticipationAccounts)
-	require.Zero(t, validatedBlock.Block().ExpiredParticipationAccounts)
+	require.Equal(t, basics.Round(1201), validatedBlock.Block().Round())
+	require.Empty(t, validatedBlock.Block().ExpiredParticipationAccounts)
 
 	// Of the 32 extra accounts, make sure only the one matching the challenge is suspended
+	require.Len(t, validatedBlock.Block().AbsentParticipationAccounts, 1)
 	require.Contains(t, validatedBlock.Block().AbsentParticipationAccounts, challenged, challenged.String())
+	foundChallenged := false
 	for i := byte(0); i < 32; i++ {
 		if i == challenge>>3 {
 			rnd := validatedBlock.Block().Round()
@@ -1462,10 +1459,12 @@ func TestAbsenteeChecks(t *testing.T) {
 			t.Logf("extra account %d %s is challenged, balance rnd %d %d", i, ad,
 				rnd, l.roundBalances[rnd][ad].MicroAlgos.Raw)
 			require.Equal(t, basics.Address{i << 3, 0xaa}, challenged)
+			foundChallenged = true
 			continue
 		}
 		require.NotContains(t, validatedBlock.Block().AbsentParticipationAccounts, basics.Address{i << 3, 0xaa})
 	}
+	require.True(t, foundChallenged)
 
 	_, err = Eval(context.Background(), l, validatedBlock.Block(), false, nil, nil, l.tracer)
 	require.NoError(t, err)
@@ -1483,7 +1482,7 @@ func TestAbsenteeChecks(t *testing.T) {
 
 	// Introduce an address that shouldn't be suspended
 	badBlock := goodBlock
-	badBlock.AbsentParticipationAccounts = append(badBlock.AbsentParticipationAccounts, addrs[3])
+	badBlock.AbsentParticipationAccounts = append(badBlock.AbsentParticipationAccounts, addrs[9])
 	_, err = Eval(context.Background(), l, badBlock, true, verify.GetMockedCache(true), nil, l.tracer)
 	require.ErrorContains(t, err, "not absent")
 
@@ -1528,6 +1527,9 @@ func TestExpiredAccountGeneration(t *testing.T) {
 	propAddr := addrs[2]
 	otherPropAddr := addrs[3] // not expiring, but part of proposer addresses passed to GenerateBlock
 
+	// pretend this node is participating on behalf of addrs[2] and addrs[3]
+	proposers := []basics.Address{propAddr, otherPropAddr}
+
 	// the last round that the recvAddr and propAddr are valid for
 	testAddrLastValidRound := basics.Round(2)
 
@@ -1553,7 +1555,7 @@ func TestExpiredAccountGeneration(t *testing.T) {
 		genesisInitState.Accounts[addr] = tmp
 	}
 
-	// Choose recvAddr to have a last valid round less than genesis block round
+	// Choose recvAddr and propAddr to have a last valid round less than genesis block round
 	for _, addr := range []basics.Address{recvAddr, propAddr} {
 		tmp := genesisInitState.Accounts[addr]
 		tmp.VoteLastValid = testAddrLastValidRound
@@ -1576,17 +1578,7 @@ func TestExpiredAccountGeneration(t *testing.T) {
 	for i := uint64(0); i < uint64(targetRound); i++ {
 		vb := l.endBlock(t, eval)
 		eval = l.nextBlock(t)
-
-		expiredAddrs := make(map[basics.Address]struct{})
-		for _, addr := range vb.Block().ExpiredParticipationAccounts {
-			expiredAddrs[addr] = struct{}{}
-		}
-		// get indexes of addrs in ExpiredParticipationAccounts
-		for j, addr := range addrs {
-			if _, isExpired := expiredAddrs[addr]; isExpired {
-				t.Logf("round %d: addr %d %s is expired", vb.Block().Round(), j, addr)
-			}
-		}
+		require.Empty(t, vb.Block().ExpiredParticipationAccounts)
 	}
 
 	require.Greater(t, uint64(eval.Round()), uint64(testAddrLastValidRound))
@@ -1594,9 +1586,8 @@ func TestExpiredAccountGeneration(t *testing.T) {
 	// Make sure we validate our block as well
 	eval.validate = true
 
-	// Pretend this node is participating on behalf of two addresses
 	// GenerateBlock will not mark its own proposer addresses as expired
-	unfinishedBlock, err := eval.GenerateBlock([]basics.Address{propAddr, otherPropAddr})
+	unfinishedBlock, err := eval.GenerateBlock(proposers)
 	require.NoError(t, err)
 
 	listOfExpiredAccounts := unfinishedBlock.UnfinishedBlock().ParticipationUpdates.ExpiredParticipationAccounts
