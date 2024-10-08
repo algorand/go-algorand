@@ -1562,10 +1562,12 @@ func initConsensusProtocols() {
 	// vFNetX are like vAlphaX but for AF's FNet
 	// vFnet1
 	vFnet1 := vFuture
+	vFnet1.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 	Consensus[protocol.ConsensusVFnet1] = vFnet1
 
 	// vFnet2 guards against a future change in block opcodes that the fnet1 client did not support. No change in parameters
 	vFnet2 := vFuture
+	vFnet2.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 	Consensus[protocol.ConsensusVFnet2] = vFnet2
 	vFnet1.ApprovedUpgrades[protocol.ConsensusVFnet2] = 10000
 }
