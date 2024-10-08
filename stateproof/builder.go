@@ -669,7 +669,7 @@ func (spw *Worker) tryBroadcast() {
 
 		latestHeader, err := spw.ledger.BlockHdr(firstValid)
 		if err != nil {
-			spw.log.Warnf("spw.tryBroadcast: could not fetch block header for round %d failed: %v", firstValid, err)
+			spw.log.Warnf("spw.tryBroadcast: could not fetch block header for round %d: %v", firstValid, err)
 			break
 		}
 

@@ -1285,6 +1285,9 @@ func (eval *BlockEvaluator) applyTransaction(tx transactions.Transaction, cow *r
 		// Validation of the StateProof transaction before applying will only occur in validate mode.
 		err = apply.StateProof(tx.StateProofTxnFields, tx.Header.FirstValid, cow, eval.validate)
 
+	case protocol.HeartbeatTx:
+		err = apply.Heartbeat(tx.HeartbeatTxnFields, tx.Header, cow, cow, cow.Round())
+
 	default:
 		err = fmt.Errorf("unknown transaction type %v", tx.Type)
 	}
@@ -1618,7 +1621,7 @@ func (eval *BlockEvaluator) generateKnockOfflineAccountsList() {
 
 	updates := &eval.block.ParticipationUpdates
 
-	ch := activeChallenge(&eval.proto, uint64(eval.Round()), eval.state)
+	ch := ActiveChallenge(eval.proto.Payouts, eval.Round(), eval.state)
 
 	for _, accountAddr := range eval.state.modifiedAccounts() {
 		acctData, found := eval.state.mods.Accts.GetData(accountAddr)
@@ -1648,7 +1651,7 @@ func (eval *BlockEvaluator) generateKnockOfflineAccountsList() {
 		if acctData.Status == basics.Online {
 			lastSeen := max(acctData.LastProposed, acctData.LastHeartbeat)
 			if isAbsent(eval.state.prevTotals.Online.Money, acctData.MicroAlgos, lastSeen, current) ||
-				failsChallenge(ch, accountAddr, lastSeen) {
+				FailsChallenge(ch, accountAddr, lastSeen) {
 				updates.AbsentParticipationAccounts = append(
 					updates.AbsentParticipationAccounts,
 					accountAddr,
@@ -1709,20 +1712,19 @@ type headerSource interface {
 	BlockHdr(round basics.Round) (bookkeeping.BlockHeader, error)
 }
 
-func activeChallenge(proto *config.ConsensusParams, current uint64, headers headerSource) challenge {
-	rules := proto.Payouts
+func ActiveChallenge(rules config.ProposerPayoutRules, current basics.Round, headers headerSource) challenge {
 	// are challenges active?
-	if rules.ChallengeInterval == 0 || current < rules.ChallengeInterval {
+	interval := basics.Round(rules.ChallengeInterval)
+	if rules.ChallengeInterval == 0 || current < interval {
 		return challenge{}
 	}
-	lastChallenge := current - (current % rules.ChallengeInterval)
+	lastChallenge := current - (current % interval)
+	grace := basics.Round(rules.ChallengeGracePeriod)
 	// challenge is in effect if we're after one grace period, but before the 2nd ends.
-	if current <= lastChallenge+rules.ChallengeGracePeriod ||
-		current > lastChallenge+2*rules.ChallengeGracePeriod {
+	if current <= lastChallenge+grace || current > lastChallenge+2*grace {
 		return challenge{}
 	}
-	round := basics.Round(lastChallenge)
-	challengeHdr, err := headers.BlockHdr(round)
+	challengeHdr, err := headers.BlockHdr(lastChallenge)
 	if err != nil {
 		panic(err)
 	}
@@ -1731,10 +1733,10 @@ func activeChallenge(proto *config.ConsensusParams, current uint64, headers head
 	if challengeProto.Payouts != rules {
 		return challenge{}
 	}
-	return challenge{round, challengeHdr.Seed, rules.ChallengeBits}
+	return challenge{lastChallenge, challengeHdr.Seed, rules.ChallengeBits}
 }
 
-func failsChallenge(ch challenge, address basics.Address, lastSeen basics.Round) bool {
+func FailsChallenge(ch challenge, address basics.Address, lastSeen basics.Round) bool {
 	return ch.round != 0 && bitsMatch(ch.seed[:], address[:], ch.bits) && lastSeen < ch.round
 }
 
@@ -1805,7 +1807,7 @@ func (eval *BlockEvaluator) validateAbsentOnlineAccounts() error {
 	// For consistency with expired account handling, we preclude duplicates
 	addressSet := make(map[basics.Address]bool, suspensionCount)
 
-	ch := activeChallenge(&eval.proto, uint64(eval.Round()), eval.state)
+	ch := ActiveChallenge(eval.proto.Payouts, eval.Round(), eval.state)
 
 	for _, accountAddr := range eval.block.ParticipationUpdates.AbsentParticipationAccounts {
 		if _, exists := addressSet[accountAddr]; exists {
@@ -1826,7 +1828,7 @@ func (eval *BlockEvaluator) validateAbsentOnlineAccounts() error {
 		if isAbsent(eval.state.prevTotals.Online.Money, acctData.MicroAlgos, lastSeen, eval.Round()) {
 			continue // ok. it's "normal absent"
 		}
-		if failsChallenge(ch, accountAddr, lastSeen) {
+		if FailsChallenge(ch, accountAddr, lastSeen) {
 			continue // ok. it's "challenge absent"
 		}
 		return fmt.Errorf("proposed absent account %v is not absent in %d, %d",

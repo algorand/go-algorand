@@ -415,7 +415,7 @@ func TestBlankStackSufficient(t *testing.T) {
 				spec := opsByOpcode[v][i]
 				argLen := len(spec.Arg.Types)
 				blankStackLen := len(blankStack)
-				require.GreaterOrEqual(t, blankStackLen, argLen)
+				require.GreaterOrEqual(t, blankStackLen, argLen, spec.Name)
 			}
 		})
 	}

@@ -1644,16 +1644,16 @@ func TestFailsChallenge(t *testing.T) {
 	a := assert.New(t)
 
 	// a valid challenge, with 4 matching bits, and an old last seen
-	a.True(failsChallenge(challenge{round: 11, seed: [32]byte{0xb0, 0xb4}, bits: 4}, basics.Address{0xbf, 0x34}, 10))
+	a.True(FailsChallenge(challenge{round: 11, seed: [32]byte{0xb0, 0xb4}, bits: 4}, basics.Address{0xbf, 0x34}, 10))
 
 	// challenge isn't "on"
-	a.False(failsChallenge(challenge{round: 0, seed: [32]byte{0xb0, 0xb4}, bits: 4}, basics.Address{0xbf, 0x34}, 10))
+	a.False(FailsChallenge(challenge{round: 0, seed: [32]byte{0xb0, 0xb4}, bits: 4}, basics.Address{0xbf, 0x34}, 10))
 	// node has appeared more recently
-	a.False(failsChallenge(challenge{round: 11, seed: [32]byte{0xb0, 0xb4}, bits: 4}, basics.Address{0xbf, 0x34}, 12))
+	a.False(FailsChallenge(challenge{round: 11, seed: [32]byte{0xb0, 0xb4}, bits: 4}, basics.Address{0xbf, 0x34}, 12))
 	// bits don't match
-	a.False(failsChallenge(challenge{round: 11, seed: [32]byte{0xb0, 0xb4}, bits: 4}, basics.Address{0xcf, 0x34}, 10))
+	a.False(FailsChallenge(challenge{round: 11, seed: [32]byte{0xb0, 0xb4}, bits: 4}, basics.Address{0xcf, 0x34}, 10))
 	// no enough bits match
-	a.False(failsChallenge(challenge{round: 11, seed: [32]byte{0xb0, 0xb4}, bits: 5}, basics.Address{0xbf, 0x34}, 10))
+	a.False(FailsChallenge(challenge{round: 11, seed: [32]byte{0xb0, 0xb4}, bits: 5}, basics.Address{0xbf, 0x34}, 10))
 }
 
 type singleSource bookkeeping.BlockHeader
@@ -1673,27 +1673,27 @@ func TestActiveChallenge(t *testing.T) {
 			CurrentProtocol: protocol.ConsensusFuture,
 		},
 	}
-	now := config.Consensus[nowHeader.CurrentProtocol]
+	rules := config.Consensus[nowHeader.CurrentProtocol].Payouts
 
 	// simplest test. when interval=X and grace=G, X+G+1 is a challenge
-	inChallenge := now.Payouts.ChallengeInterval + now.Payouts.ChallengeGracePeriod + 1
-	ch := activeChallenge(&now, inChallenge, singleSource(nowHeader))
+	inChallenge := rules.ChallengeInterval + rules.ChallengeGracePeriod + 1
+	ch := ActiveChallenge(rules, inChallenge, singleSource(nowHeader))
 	a.NotZero(ch.round)
 
 	// all rounds before that have no challenge
 	for r := uint64(1); r < inChallenge; r++ {
-		ch := activeChallenge(&now, r, singleSource(nowHeader))
+		ch := ActiveChallenge(rules, r, singleSource(nowHeader))
 		a.Zero(ch.round, r)
 	}
 
 	// ChallengeGracePeriod rounds allow challenges starting with inChallenge
-	for r := inChallenge; r < inChallenge+now.Payouts.ChallengeGracePeriod; r++ {
-		ch := activeChallenge(&now, r, singleSource(nowHeader))
-		a.EqualValues(ch.round, now.Payouts.ChallengeInterval)
+	for r := inChallenge; r < inChallenge+rules.ChallengeGracePeriod; r++ {
+		ch := ActiveChallenge(rules, r, singleSource(nowHeader))
+		a.EqualValues(ch.round, rules.ChallengeInterval)
 	}
 
 	// And the next round is again challenge-less
-	ch = activeChallenge(&now, inChallenge+now.Payouts.ChallengeGracePeriod, singleSource(nowHeader))
+	ch = ActiveChallenge(rules, inChallenge+rules.ChallengeGracePeriod, singleSource(nowHeader))
 	a.Zero(ch.round)
 
 	// ignore challenge if upgrade happened
@@ -1703,6 +1703,6 @@ func TestActiveChallenge(t *testing.T) {
 			CurrentProtocol: protocol.ConsensusV39,
 		},
 	}
-	ch = activeChallenge(&now, inChallenge, singleSource(oldHeader))
+	ch = ActiveChallenge(rules, inChallenge, singleSource(oldHeader))
 	a.Zero(ch.round)
 }

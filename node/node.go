@@ -43,6 +43,7 @@ import (
 	"github.com/algorand/go-algorand/data/pools"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/verify"
+	"github.com/algorand/go-algorand/heartbeat"
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/simulation"
@@ -155,6 +156,8 @@ type AlgorandFullNode struct {
 
 	stateProofWorker *stateproof.Worker
 	partHandles      []db.Accessor
+
+	heartbeatService *heartbeat.Service
 }
 
 // TxnWithStatus represents information about a single transaction,
@@ -337,6 +340,8 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	gossip.SetTrace(agreementParameters.Network, node.tracer)
 
 	node.stateProofWorker = stateproof.NewWorker(node.genesisDirs.StateproofGenesisDir, node.log, node.accountManager, node.ledger.Ledger, node.net, node)
+
+	node.heartbeatService = heartbeat.NewService(node.accountManager, node.ledger, node, node.log)
 
 	return node, err
 }

@@ -100,6 +100,7 @@ type Transaction struct {
 	AssetFreezeTxnFields
 	ApplicationCallTxnFields
 	StateProofTxnFields
+	HeartbeatTxnFields
 }
 
 // ApplyData contains information about the transaction's execution.
@@ -596,6 +597,10 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 
 	if !tx.StateProofTxnFields.Empty() {
 		nonZeroFields[protocol.StateProofTx] = true
+	}
+
+	if tx.HeartbeatTxnFields != (HeartbeatTxnFields{}) {
+		nonZeroFields[protocol.HeartbeatTx] = true
 	}
 
 	for t, nonZero := range nonZeroFields {

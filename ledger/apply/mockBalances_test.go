@@ -17,8 +17,11 @@
 package apply
 
 import (
+	"fmt"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
@@ -269,4 +272,24 @@ func (b *mockCreatableBalances) HasAssetParams(addr basics.Address, aidx basics.
 	}
 	_, ok = acct.AssetParams[aidx]
 	return
+}
+
+type mockHeaders struct {
+	b map[basics.Round]bookkeeping.BlockHeader
+}
+
+// makeMockHeaders takes a bunch of BlockHeaders and returns a HdrProivder for them.
+func makeMockHeaders(hdrs ...bookkeeping.BlockHeader) mockHeaders {
+	b := make(map[basics.Round]bookkeeping.BlockHeader)
+	for _, hdr := range hdrs {
+		b[hdr.Round] = hdr
+	}
+	return mockHeaders{b: b}
+}
+
+func (m mockHeaders) BlockHdr(r basics.Round) (bookkeeping.BlockHeader, error) {
+	if hdr, ok := m.b[r]; ok {
+		return hdr, nil
+	}
+	return bookkeeping.BlockHeader{}, fmt.Errorf("Round %v is not present\n", r)
 }
