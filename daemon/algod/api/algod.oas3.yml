@@ -2788,6 +2788,32 @@
   },
   "openapi": "3.0.1",
   "paths": {
+    "/debug/settings/config": {
+      "get": {
+        "description": "Returns the merged (defaults + overrides) config file in json.",
+        "operationId": "GetConfig",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The merged config file in json."
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Gets the merged config file.",
+        "tags": [
+          "private"
+        ]
+      }
+    },
     "/debug/settings/pprof": {
       "get": {
         "description": "Retrieves the current settings for blocking and mutex profiles",
@@ -6986,6 +7012,10 @@
             },
             "description": "Invalid API Token"
           },
+          "404": {
+            "content": {},
+            "description": "Developer or Experimental API not enabled"
+          },
           "500": {
             "content": {
               "application/json": {
@@ -7013,6 +7043,7 @@
         },
         "summary": "Fast track for broadcasting a raw transaction or transaction group to the network through the tx handler without performing most of the checks and reporting detailed errors. Should be only used for development and performance testing.",
         "tags": [
+          "public",
           "experimental"
         ],
         "x-codegen-request-body-name": "rawtxn"

@@ -53,7 +53,6 @@ import (
 	tools_network "github.com/algorand/go-algorand/tools/network"
 	"github.com/algorand/go-algorand/tools/network/dnssec"
 	"github.com/algorand/go-algorand/util"
-	"github.com/algorand/go-algorand/util/metrics"
 )
 
 const incomingThreads = 20
@@ -116,40 +115,6 @@ const wsMaxHeaderBytes = 4096
 // capacity to query the health check service when a node is serving maximum peers. The file descriptors will be
 // used from the ReservedFDs pool, as this pool is meant for short-lived usage (dns queries, disk i/o, etc.)
 const ReservedHealthServiceConnections = 10
-
-var networkIncomingConnections = metrics.MakeGauge(metrics.NetworkIncomingConnections)
-var networkOutgoingConnections = metrics.MakeGauge(metrics.NetworkOutgoingConnections)
-
-var networkIncomingBufferMicros = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_rx_buffer_micros_total", Description: "microseconds spent by incoming messages on the receive buffer"})
-var networkHandleMicros = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_rx_handle_micros_total", Description: "microseconds spent by protocol handlers in the receive thread"})
-
-var networkBroadcasts = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_broadcasts_total", Description: "number of broadcast operations"})
-var networkBroadcastQueueMicros = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_broadcast_queue_micros_total", Description: "microseconds broadcast requests sit on queue"})
-var networkBroadcastSendMicros = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_broadcast_send_micros_total", Description: "microseconds spent broadcasting"})
-var networkBroadcastsDropped = metrics.MakeCounter(metrics.MetricName{Name: "algod_broadcasts_dropped_total", Description: "number of broadcast messages not sent to any peer"})
-var networkPeerBroadcastDropped = metrics.MakeCounter(metrics.MetricName{Name: "algod_peer_broadcast_dropped_total", Description: "number of broadcast messages not sent to some peer"})
-
-var networkPeerIdentityDisconnect = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_identity_duplicate", Description: "number of times identity challenge cause us to disconnect a peer"})
-var networkPeerIdentityError = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_identity_error", Description: "number of times an error occurs (besides expected) when processing identity challenges"})
-var networkPeerAlreadyClosed = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_peer_already_closed", Description: "number of times a peer would be added but the peer connection is already closed"})
-
-var networkSlowPeerDrops = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_slow_drops_total", Description: "number of peers dropped for being slow to send to"})
-var networkIdlePeerDrops = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_idle_drops_total", Description: "number of peers dropped due to idle connection"})
-var networkBroadcastQueueFull = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_broadcast_queue_full_total", Description: "number of messages that were drops due to full broadcast queue"})
-
-var minPing = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_peer_min_ping_seconds", Description: "Network round trip time to fastest peer in seconds."})
-var meanPing = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_peer_mean_ping_seconds", Description: "Network round trip time to average peer in seconds."})
-var medianPing = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_peer_median_ping_seconds", Description: "Network round trip time to median peer in seconds."})
-var maxPing = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_peer_max_ping_seconds", Description: "Network round trip time to slowest peer in seconds."})
-
-var peers = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_peers", Description: "Number of active peers."})
-var incomingPeers = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_incoming_peers", Description: "Number of active incoming peers."})
-var outgoingPeers = metrics.MakeGauge(metrics.MetricName{Name: "algod_network_outgoing_peers", Description: "Number of active outgoing peers."})
-
-var networkPrioBatchesPPWithCompression = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_prio_batches_wpp_comp_sent_total", Description: "number of prio compressed batches with PP"})
-var networkPrioBatchesPPWithoutCompression = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_pp_prio_batches_wpp_non_comp_sent_total", Description: "number of prio non-compressed batches with PP"})
-var networkPrioPPCompressedSize = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_prio_pp_compressed_size_total", Description: "cumulative size of all compressed PP"})
-var networkPrioPPNonCompressedSize = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_prio_pp_non_compressed_size_total", Description: "cumulative size of all non-compressed PP"})
 
 // peerDisconnectionAckDuration defines the time we would wait for the peer disconnection to complete.
 const peerDisconnectionAckDuration = 5 * time.Second
@@ -214,9 +179,6 @@ type WebsocketNetwork struct {
 	NetworkID protocol.NetworkID
 	RandomID  string
 
-	peerID       p2p.PeerID
-	peerIDSigner identityChallengeSigner
-
 	ready     atomic.Int32
 	readyChan chan struct{}
 
@@ -268,10 +230,9 @@ type WebsocketNetwork struct {
 	// number of throttled outgoing connections "slots" needed to be populated.
 	throttledOutgoingConnections atomic.Int32
 
-	// transport and dialer are customized to limit the number of
+	// dialer is customized to limit the number of
 	// connection in compliance with connectionsRateLimitingCount.
-	transport limitcaller.RateLimitingTransport
-	dialer    limitcaller.Dialer
+	dialer limitcaller.Dialer
 
 	// messagesOfInterest specifies the message types that this node
 	// wants to receive.  nil means default.  non-nil causes this
@@ -526,6 +487,11 @@ func (wn *WebsocketNetwork) RegisterHTTPHandler(path string, handler http.Handle
 	wn.router.Handle(path, handler)
 }
 
+// RegisterHTTPHandlerFunc path accepts gorilla/mux path annotations
+func (wn *WebsocketNetwork) RegisterHTTPHandlerFunc(path string, handler func(http.ResponseWriter, *http.Request)) {
+	wn.router.HandleFunc(path, handler)
+}
+
 // RequestConnectOutgoing tries to actually do the connect to new peers.
 // `replace` drop all connections first and find new peers.
 func (wn *WebsocketNetwork) RequestConnectOutgoing(replace bool, quit <-chan struct{}) {
@@ -598,9 +564,7 @@ func (wn *WebsocketNetwork) setup() {
 	if wn.nodeInfo == nil {
 		wn.nodeInfo = &nopeNodeInfo{}
 	}
-	maxIdleConnsPerHost := int(wn.config.ConnectionsRateLimitingCount)
 	wn.dialer = limitcaller.MakeRateLimitingDialer(wn.phonebook, preferredResolver)
-	wn.transport = limitcaller.MakeRateLimitingTransport(wn.phonebook, limitcaller.DefaultQueueingTimeout, &wn.dialer, maxIdleConnsPerHost)
 
 	wn.upgrader.ReadBufferSize = 4096
 	wn.upgrader.WriteBufferSize = 4096
@@ -630,8 +594,6 @@ func (wn *WebsocketNetwork) setup() {
 	// extra space there.
 	wn.outgoingMessagesBufferSize = outgoingMessagesBufferSize
 	wn.wsMaxHeaderBytes = wsMaxHeaderBytes
-
-	wn.identityTracker = NewIdentityTracker()
 
 	wn.broadcaster = msgBroadcaster{
 		ctx:                    wn.ctx,
@@ -696,10 +658,10 @@ func (wn *WebsocketNetwork) Start() error {
 	defer wn.messagesOfInterestMu.Unlock()
 	wn.messagesOfInterestEncoded = true
 	if wn.messagesOfInterest != nil {
-		wn.messagesOfInterestEnc = MarshallMessageOfInterestMap(wn.messagesOfInterest)
+		wn.messagesOfInterestEnc = marshallMessageOfInterestMap(wn.messagesOfInterest)
 	}
 
-	if wn.config.IsGossipServer() {
+	if wn.config.IsGossipServer() || wn.config.ForceRelayMessages {
 		listener, err := net.Listen("tcp", wn.config.NetAddress)
 		if err != nil {
 			wn.log.Errorf("network could not listen %v: %s", wn.config.NetAddress, err)
@@ -736,16 +698,11 @@ func (wn *WebsocketNetwork) Start() error {
 		}
 	}
 	// if the network has a public address or a libp2p peer ID, use that as the name for connection deduplication
-	if wn.config.PublicAddress != "" || (wn.peerID != "" && wn.peerIDSigner != nil) {
+	if wn.config.PublicAddress != "" || wn.identityScheme != nil {
 		wn.RegisterHandlers(identityHandlers)
 	}
 	if wn.identityScheme == nil {
-		if wn.peerID != "" && wn.peerIDSigner != nil {
-			wn.identityScheme = NewIdentityChallengeSchemeWithSigner(string(wn.peerID), wn.peerIDSigner)
-		}
-		if wn.config.PublicAddress != "" {
-			wn.identityScheme = NewIdentityChallengeScheme(wn.config.PublicAddress)
-		}
+		wn.identityScheme = NewIdentityChallengeScheme(NetIdentityDedupNames(wn.config.PublicAddress))
 	}
 
 	wn.meshUpdateRequests <- meshRequest{false, nil}
@@ -861,15 +818,15 @@ func (wn *WebsocketNetwork) RegisterHandlers(dispatch []TaggedMessageHandler) {
 // ClearHandlers deregisters all the existing message handlers.
 func (wn *WebsocketNetwork) ClearHandlers() {
 	// exclude the internal handlers. These would get cleared out when Stop is called.
-	wn.handler.ClearHandlers([]Tag{protocol.PingTag, protocol.PingReplyTag, protocol.NetPrioResponseTag})
+	wn.handler.ClearHandlers([]Tag{protocol.NetPrioResponseTag})
 }
 
-// RegisterProcessors registers the set of given message handlers.
-func (wn *WebsocketNetwork) RegisterProcessors(dispatch []TaggedMessageProcessor) {
+// RegisterValidatorHandlers registers the set of given message handlers.
+func (wn *WebsocketNetwork) RegisterValidatorHandlers(dispatch []TaggedMessageValidatorHandler) {
 }
 
-// ClearProcessors deregisters all the existing message handlers.
-func (wn *WebsocketNetwork) ClearProcessors() {
+// ClearValidatorHandlers deregisters all the existing message handlers.
+func (wn *WebsocketNetwork) ClearValidatorHandlers() {
 }
 
 func (wn *WebsocketNetwork) setHeaders(header http.Header) {
@@ -1067,6 +1024,7 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 	wn.setHeaders(responseHeader)
 	responseHeader.Set(ProtocolVersionHeader, matchingVersion)
 	responseHeader.Set(GenesisHeader, wn.GenesisID)
+	// set the features we support
 	responseHeader.Set(PeerFeaturesHeader, PeerFeatureProposalCompression)
 	var challenge string
 	if wn.prioScheme != nil {
@@ -1396,21 +1354,10 @@ func (wn *WebsocketNetwork) getPeersChangeCounter() int32 {
 }
 
 // preparePeerData prepares batches of data for sending.
-// It performs optional zstd compression for proposal massages
-func (wn *msgBroadcaster) preparePeerData(request broadcastRequest, prio bool, peers []*wsPeer) ([][]byte, [][]byte, []crypto.Digest, bool) {
-	// determine if there is a payload proposal and peers supporting compressed payloads
-	wantCompression := false
-	containsPrioPPTag := false
-	if prio {
-		wantCompression = checkCanCompress(request, peers)
-	}
-
+// It performs zstd compression for proposal massages if they this is a prio request and has proposal.
+func (wn *msgBroadcaster) preparePeerData(request broadcastRequest, prio bool) ([][]byte, []crypto.Digest) {
 	digests := make([]crypto.Digest, len(request.data))
 	data := make([][]byte, len(request.data))
-	var dataCompressed [][]byte
-	if wantCompression {
-		dataCompressed = make([][]byte, len(request.data))
-	}
 	for i, d := range request.data {
 		tbytes := []byte(request.tags[i])
 		mbytes := make([]byte, len(tbytes)+len(d))
@@ -1421,29 +1368,15 @@ func (wn *msgBroadcaster) preparePeerData(request broadcastRequest, prio bool, p
 			digests[i] = crypto.Hash(mbytes)
 		}
 
-		if prio {
-			if request.tags[i] == protocol.ProposalPayloadTag {
-				networkPrioPPNonCompressedSize.AddUint64(uint64(len(d)), nil)
-				containsPrioPPTag = true
+		if prio && request.tags[i] == protocol.ProposalPayloadTag {
+			compressed, logMsg := zstdCompressMsg(tbytes, d)
+			if len(logMsg) > 0 {
+				wn.log.Warn(logMsg)
 			}
-		}
-
-		if wantCompression {
-			if request.tags[i] == protocol.ProposalPayloadTag {
-				compressed, logMsg := zstdCompressMsg(tbytes, d)
-				if len(logMsg) > 0 {
-					wn.log.Warn(logMsg)
-				} else {
-					networkPrioPPCompressedSize.AddUint64(uint64(len(compressed)), nil)
-				}
-				dataCompressed[i] = compressed
-			} else {
-				// otherwise reuse non-compressed from above
-				dataCompressed[i] = mbytes
-			}
+			data[i] = compressed
 		}
 	}
-	return data, dataCompressed, digests, containsPrioPPTag
+	return data, digests
 }
 
 // prio is set if the broadcast is a high-priority broadcast.
@@ -1460,7 +1393,7 @@ func (wn *msgBroadcaster) innerBroadcast(request broadcastRequest, prio bool, pe
 	}
 
 	start := time.Now()
-	data, dataWithCompression, digests, containsPrioPPTag := wn.preparePeerData(request, prio, peers)
+	data, digests := wn.preparePeerData(request, prio)
 
 	// first send to all the easy outbound peers who don't block, get them started.
 	sentMessageCount := 0
@@ -1471,23 +1404,7 @@ func (wn *msgBroadcaster) innerBroadcast(request broadcastRequest, prio bool, pe
 		if peer == request.except {
 			continue
 		}
-		var ok bool
-		if peer.pfProposalCompressionSupported() && len(dataWithCompression) > 0 {
-			// if this peer supports compressed proposals and compressed data batch is filled out, use it
-			ok = peer.writeNonBlockMsgs(request.ctx, dataWithCompression, prio, digests, request.enqueueTime)
-			if prio {
-				if containsPrioPPTag {
-					networkPrioBatchesPPWithCompression.Inc(nil)
-				}
-			}
-		} else {
-			ok = peer.writeNonBlockMsgs(request.ctx, data, prio, digests, request.enqueueTime)
-			if prio {
-				if containsPrioPPTag {
-					networkPrioBatchesPPWithoutCompression.Inc(nil)
-				}
-			}
-		}
+		ok := peer.writeNonBlockMsgs(request.ctx, data, prio, digests, request.enqueueTime)
 		if ok {
 			sentMessageCount++
 			continue
@@ -1956,7 +1873,7 @@ const ProtocolVersionHeader = "X-Algorand-Version"
 const ProtocolAcceptVersionHeader = "X-Algorand-Accept-Version"
 
 // SupportedProtocolVersions contains the list of supported protocol versions by this node ( in order of preference ).
-var SupportedProtocolVersions = []string{"2.2", "2.1"}
+var SupportedProtocolVersions = []string{"2.2"}
 
 // ProtocolVersion is the current version attached to the ProtocolVersionHeader header
 /* Version history:
@@ -2055,8 +1972,18 @@ func (wn *WebsocketNetwork) numOutgoingPending() int {
 // GetHTTPClient returns a http.Client with a suitable for the network Transport
 // that would also limit the number of outgoing connections.
 func (wn *WebsocketNetwork) GetHTTPClient(address string) (*http.Client, error) {
+	url, err := addr.ParseHostOrURL(address)
+	if err != nil {
+		return nil, err
+	}
+
+	maxIdleConnsPerHost := int(wn.config.ConnectionsRateLimitingCount)
+	rltr := limitcaller.MakeRateLimitingBoundTransport(wn.phonebook, limitcaller.DefaultQueueingTimeout, &wn.dialer, maxIdleConnsPerHost, url.Host)
 	return &http.Client{
-		Transport: &HTTPPAddressBoundTransport{address, &wn.transport},
+		Transport: &HTTPPAddressBoundTransport{
+			address,
+			&rltr,
+		},
 	}, nil
 }
 
@@ -2115,7 +2042,8 @@ func (wn *WebsocketNetwork) tryConnect(netAddr, gossipAddr string) {
 
 	var idChallenge identityChallengeValue
 	if wn.identityScheme != nil {
-		idChallenge = wn.identityScheme.AttachChallenge(requestHeader, netAddr)
+		theirAddr := strings.ToLower(netAddr)
+		idChallenge = wn.identityScheme.AttachChallenge(requestHeader, theirAddr)
 	}
 
 	// for backward compatibility, include the ProtocolVersion header as well.
@@ -2305,7 +2233,7 @@ func (wn *WebsocketNetwork) SetPeerData(peer Peer, key string, value interface{}
 }
 
 // NewWebsocketNetwork constructor for websockets based gossip network
-func NewWebsocketNetwork(log logging.Logger, config config.Local, phonebookAddresses []string, genesisID string, networkID protocol.NetworkID, nodeInfo NodeInfo, peerID p2p.PeerID, idSigner identityChallengeSigner) (wn *WebsocketNetwork, err error) {
+func NewWebsocketNetwork(log logging.Logger, config config.Local, phonebookAddresses []string, genesisID string, networkID protocol.NetworkID, nodeInfo NodeInfo, identityOpts *identityOpts) (wn *WebsocketNetwork, err error) {
 	pb := phonebook.MakePhonebook(config.ConnectionsRateLimitingCount,
 		time.Duration(config.ConnectionsRateLimitingWindowSeconds)*time.Second)
 
@@ -2324,8 +2252,6 @@ func NewWebsocketNetwork(log logging.Logger, config config.Local, phonebookAddre
 		GenesisID:         genesisID,
 		NetworkID:         networkID,
 		nodeInfo:          nodeInfo,
-		peerID:            peerID,
-		peerIDSigner:      idSigner,
 		resolveSRVRecords: tools_network.ReadFromSRV,
 		peerStater: peerConnectionStater{
 			log:                           log,
@@ -2334,13 +2260,22 @@ func NewWebsocketNetwork(log logging.Logger, config config.Local, phonebookAddre
 		},
 	}
 
+	// initialize net identity tracker either from the provided options or with a new one
+	if identityOpts != nil {
+		wn.identityScheme = identityOpts.scheme
+		wn.identityTracker = identityOpts.tracker
+	}
+	if wn.identityTracker == nil {
+		wn.identityTracker = NewIdentityTracker()
+	}
+
 	wn.setup()
 	return wn, nil
 }
 
 // NewWebsocketGossipNode constructs a websocket network node and returns it as a GossipNode interface implementation
 func NewWebsocketGossipNode(log logging.Logger, config config.Local, phonebookAddresses []string, genesisID string, networkID protocol.NetworkID) (gn GossipNode, err error) {
-	return NewWebsocketNetwork(log, config, phonebookAddresses, genesisID, networkID, nil, "", nil)
+	return NewWebsocketNetwork(log, config, phonebookAddresses, genesisID, networkID, nil, nil)
 }
 
 // SetPrioScheme specifies the network priority scheme for a network node
@@ -2533,7 +2468,7 @@ func (wn *WebsocketNetwork) DeregisterMessageInterest(t protocol.Tag) {
 
 func (wn *WebsocketNetwork) updateMessagesOfInterestEnc() {
 	// must run inside wn.messagesOfInterestMu.Lock
-	wn.messagesOfInterestEnc = MarshallMessageOfInterestMap(wn.messagesOfInterest)
+	wn.messagesOfInterestEnc = marshallMessageOfInterestMap(wn.messagesOfInterest)
 	wn.messagesOfInterestEncoded = true
 	wn.messagesOfInterestGeneration.Add(1)
 	var peers []*wsPeer

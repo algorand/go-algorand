@@ -50,12 +50,13 @@ func TestRequestLogger(t *testing.T) {
 	dl := eventsDetailsLogger{Logger: log, eventReceived: make(chan interface{}, 1), eventIdentifier: telemetryspec.HTTPRequestEvent}
 	log.SetLevel(logging.Level(defaultConfig.BaseLoggerDebugLevel))
 	netA := &WebsocketNetwork{
-		log:        dl,
-		config:     defaultConfig,
-		phonebook:  phonebook.MakePhonebook(1, 1*time.Millisecond),
-		GenesisID:  "go-test-network-genesis",
-		NetworkID:  config.Devtestnet,
-		peerStater: peerConnectionStater{log: log},
+		log:             dl,
+		config:          defaultConfig,
+		phonebook:       phonebook.MakePhonebook(1, 1*time.Millisecond),
+		GenesisID:       "go-test-network-genesis",
+		NetworkID:       config.Devtestnet,
+		peerStater:      peerConnectionStater{log: log},
+		identityTracker: noopIdentityTracker{},
 	}
 	netA.config.EnableRequestLogger = true
 	netA.setup()

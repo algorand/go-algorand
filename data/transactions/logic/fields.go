@@ -1059,6 +1059,16 @@ const (
 	BlkFeesCollected
 	// BlkBonus is the extra amount to be paid for the given block (from FeeSink)
 	BlkBonus
+	// BlkBranch is the hash of the previous block
+	BlkBranch
+	// BlkFeeSink is the fee sink for the given round
+	BlkFeeSink
+	// BlkProtocol is the ConsensusVersion of the block.
+	BlkProtocol
+	// BlkTxnCounter is the number of the next transaction after the block
+	BlkTxnCounter
+	// BlkProposerPayout is the actual amount moved from feesink to proposer
+	BlkProposerPayout
 
 	invalidBlockField // compile-time constant for number of fields
 )
@@ -1072,11 +1082,16 @@ type blockFieldSpec struct {
 }
 
 var blockFieldSpecs = [...]blockFieldSpec{
-	{BlkSeed, StackBytes, randomnessVersion},
+	{BlkSeed, StackBytes32, randomnessVersion},
 	{BlkTimestamp, StackUint64, randomnessVersion},
 	{BlkProposer, StackAddress, incentiveVersion},
 	{BlkFeesCollected, StackUint64, incentiveVersion},
 	{BlkBonus, StackUint64, incentiveVersion},
+	{BlkBranch, StackBytes32, incentiveVersion},
+	{BlkFeeSink, StackAddress, incentiveVersion},
+	{BlkProtocol, StackBytes, incentiveVersion},
+	{BlkTxnCounter, StackUint64, incentiveVersion},
+	{BlkProposerPayout, StackUint64, incentiveVersion},
 }
 
 func blockFieldSpecByField(r BlockField) (blockFieldSpec, bool) {

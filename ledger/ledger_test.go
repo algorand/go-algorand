@@ -1683,6 +1683,15 @@ func TestLedgerVerifiesOldStateProofs(t *testing.T) {
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	defer backlogPool.Shutdown()
 
+	// wait all pending commits to finish
+	l.trackers.accountsWriting.Wait()
+
+	// quit the commitSyncer goroutine: this test flushes manually with triggerTrackerFlush
+	l.trackers.ctxCancel()
+	l.trackers.ctxCancel = nil
+	<-l.trackers.commitSyncerClosed
+	l.trackers.commitSyncerClosed = nil
+
 	triggerTrackerFlush(t, l)
 	l.WaitForCommit(l.Latest())
 	blk := createBlkWithStateproof(t, maxBlocks, proto, genesisInitState, l, accounts)
@@ -1714,7 +1723,7 @@ func TestLedgerVerifiesOldStateProofs(t *testing.T) {
 	}
 	l.acctsOnline.voters.votersMu.Unlock()
 
-	// However, we are still able to very a state proof sicne we use the tracker
+	// However, we are still able to very a state proof since we use the tracker
 	blk = createBlkWithStateproof(t, maxBlocks, proto, genesisInitState, l, accounts)
 	_, err = l.Validate(context.Background(), blk, backlogPool)
 	require.ErrorContains(t, err, "state proof crypto error")
@@ -1792,6 +1801,9 @@ func TestLedgerMemoryLeak(t *testing.T) {
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Info)   // prevent spamming with ledger.AddValidatedBlock debug message
 	deadlock.Opts.Disable = true // catchpoint writing might take long
+	defer func() {
+		deadlock.Opts.Disable = false
+	}()
 	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	defer l.Close()
@@ -2898,10 +2910,16 @@ func testVotersReloadFromDiskAfterOneStateProofCommitted(t *testing.T, cfg confi
 	const inMem = true
 
 	log := logging.TestingLog(t)
-	log.SetLevel(logging.Info)
+	log.SetLevel(logging.Debug)
 	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	defer l.Close()
+
+	// quit the commitSyncer goroutine: this test flushes manually with triggerTrackerFlush
+	l.trackers.ctxCancel()
+	l.trackers.ctxCancel = nil
+	<-l.trackers.commitSyncerClosed
+	l.trackers.commitSyncerClosed = nil
 
 	blk := genesisInitState.Block
 
@@ -2917,6 +2935,9 @@ func testVotersReloadFromDiskAfterOneStateProofCommitted(t *testing.T, cfg confi
 		blk.BlockHeader.Round++
 		err = l.AddBlock(blk, agreement.Certificate{})
 		require.NoError(t, err)
+		if i > 0 && i%100 == 0 {
+			triggerTrackerFlush(t, l)
+		}
 	}
 
 	// we simulate that the stateproof for round 512 is confirmed on chain, and we can move to the next one.
@@ -2929,18 +2950,12 @@ func testVotersReloadFromDiskAfterOneStateProofCommitted(t *testing.T, cfg confi
 		blk.BlockHeader.Round++
 		err = l.AddBlock(blk, agreement.Certificate{})
 		require.NoError(t, err)
+		if i%100 == 0 {
+			triggerTrackerFlush(t, l)
+		}
 	}
 
-	// wait all pending commits to finish
-	l.trackers.accountsWriting.Wait()
-
-	// quit the commitSyncer goroutine
-	l.trackers.ctxCancel()
-	l.trackers.ctxCancel = nil
-	<-l.trackers.commitSyncerClosed
-	l.trackers.commitSyncerClosed = nil
-
-	// flush one final time
+	// flush remaining blocks
 	triggerTrackerFlush(t, l)
 
 	var vtSnapshot map[basics.Round]*ledgercore.VotersForRound
@@ -2956,6 +2971,18 @@ func testVotersReloadFromDiskAfterOneStateProofCommitted(t *testing.T, cfg confi
 		require.Contains(t, vtSnapshot, basics.Round(496))
 		require.NotContains(t, vtSnapshot, basics.Round(240))
 	}()
+
+	t.Log("reloading ledger")
+	// drain any deferred commits since AddBlock above triggered scheduleCommit
+outer:
+	for {
+		select {
+		case <-l.trackers.deferredCommits:
+			l.trackers.accountsWriting.Done()
+		default:
+			break outer
+		}
+	}
 
 	err = l.reloadLedger()
 	require.NoError(t, err)
@@ -3403,6 +3430,7 @@ func TestLedgerRetainMinOffCatchpointInterval(t *testing.T) {
 			l := &Ledger{}
 			l.cfg = cfg
 			l.archival = cfg.Archival
+			l.trackers.log = logging.TestingLog(t)
 
 			for i := 1; i <= blocksToMake; i++ {
 				minBlockToKeep := l.notifyCommit(basics.Round(i))

@@ -19,9 +19,10 @@ package server
 
 import (
 	"fmt"
-	"golang.org/x/sync/semaphore"
 	"net"
 	"net/http"
+
+	"golang.org/x/sync/semaphore"
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
@@ -74,18 +75,26 @@ func registerHandlers(router *echo.Echo, prefix string, routes lib.Routes, ctx l
 
 // NewRouter builds and returns a new router with our REST handlers registered.
 func NewRouter(logger logging.Logger, node APINodeInterface, shutdown <-chan struct{}, apiToken string, adminAPIToken string, listener net.Listener, numConnectionsLimit uint64) *echo.Echo {
-	if err := tokens.ValidateAPIToken(apiToken); err != nil {
-		logger.Errorf("Invalid apiToken was passed to NewRouter ('%s'): %v", apiToken, err)
-	}
+	// check admin token and init admin middleware
 	if err := tokens.ValidateAPIToken(adminAPIToken); err != nil {
 		logger.Errorf("Invalid adminAPIToken was passed to NewRouter ('%s'): %v", adminAPIToken, err)
 	}
 	adminMiddleware := []echo.MiddlewareFunc{
 		middlewares.MakeAuth(TokenHeader, []string{adminAPIToken}),
 	}
+
+	// check public api tokens and init public middleware
 	publicMiddleware := []echo.MiddlewareFunc{
 		middleware.BodyLimit(MaxRequestBodyBytes),
-		middlewares.MakeAuth(TokenHeader, []string{adminAPIToken, apiToken}),
+	}
+	if apiToken == "" {
+		logger.Warn("Running with public API authentication disabled")
+	} else {
+		if err := tokens.ValidateAPIToken(apiToken); err != nil {
+			logger.Errorf("Invalid apiToken was passed to NewRouter ('%s'): %v", apiToken, err)
+		}
+		publicMiddleware = append(publicMiddleware, middlewares.MakeAuth(TokenHeader, []string{adminAPIToken, apiToken}))
+
 	}
 
 	e := echo.New()
@@ -98,6 +107,12 @@ func NewRouter(logger logging.Logger, node APINodeInterface, shutdown <-chan str
 		middleware.RemoveTrailingSlash())
 	e.Use(
 		middlewares.MakeLogger(logger),
+	)
+	// Optional middleware for Private Network Access Header (PNA). Must come before CORS middleware.
+	if node.Config().EnablePrivateNetworkAccessHeader {
+		e.Use(middlewares.MakePNA())
+	}
+	e.Use(
 		middlewares.MakeCORS(TokenHeader),
 	)
 

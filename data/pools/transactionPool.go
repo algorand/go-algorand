@@ -29,6 +29,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
@@ -784,15 +785,19 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIDs map[transact
 			case *ledgercore.LeaseInLedgerError:
 				asmStats.LeaseErrorCount++
 				stats.RemovedInvalidCount++
-				pool.log.Infof("Cannot re-add pending transaction to pool: %v", err)
+				pool.log.Infof("Pending transaction in pool no longer valid: %v", err)
 			case *transactions.MinFeeError:
 				asmStats.MinFeeErrorCount++
 				stats.RemovedInvalidCount++
-				pool.log.Infof("Cannot re-add pending transaction to pool: %v", err)
+				pool.log.Infof("Pending transaction in pool no longer valid: %v", err)
+			case logic.EvalError:
+				asmStats.LogicErrorCount++
+				stats.RemovedInvalidCount++
+				pool.log.Infof("Pending transaction in pool no longer valid: %v", err)
 			default:
 				asmStats.InvalidCount++
 				stats.RemovedInvalidCount++
-				pool.log.Warnf("Cannot re-add pending transaction to pool: %v", err)
+				pool.log.Infof("Pending transaction in pool no longer valid: %v", err)
 			}
 		}
 	}

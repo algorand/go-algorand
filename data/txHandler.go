@@ -132,6 +132,9 @@ type TxHandler struct {
 	erl                        *util.ElasticRateLimiter
 	appLimiter                 *appRateLimiter
 	appLimiterBacklogThreshold int
+
+	// batchVerifier provides synchronous verification of transaction groups, used only by pubsub validation in validateIncomingTxMessage.
+	batchVerifier verify.TxnGroupBatchSigVerifier
 }
 
 // TxHandlerOpts is TxHandler configuration options
@@ -209,6 +212,13 @@ func MakeTxHandler(opts TxHandlerOpts) (*TxHandler, error) {
 		}
 	}
 
+	// prepare the batch processor for pubsub synchronous verification
+	var err0 error
+	handler.batchVerifier, err0 = verify.MakeSigVerifier(handler.ledger, handler.ledger.VerifiedTransactionCache())
+	if err0 != nil {
+		return nil, err0
+	}
+
 	// prepare the transaction stream verifier
 	var err error
 	txnElementProcessor, err := verify.MakeSigVerifyJobProcessor(handler.ledger, handler.ledger.VerifiedTransactionCache(),
@@ -246,18 +256,8 @@ func (handler *TxHandler) Start() {
 	})
 
 	// libp2p pubsub validator and handler abstracted as TaggedMessageProcessor
-	handler.net.RegisterProcessors([]network.TaggedMessageProcessor{
-		{
-			Tag: protocol.TxnTag,
-			// create anonymous struct to hold the two functions and satisfy the network.MessageProcessor interface
-			MessageHandler: struct {
-				network.ProcessorValidateFunc
-				network.ProcessorHandleFunc
-			}{
-				network.ProcessorValidateFunc(handler.validateIncomingTxMessage),
-				network.ProcessorHandleFunc(handler.processIncomingTxMessage),
-			},
-		},
+	handler.net.RegisterValidatorHandlers([]network.TaggedMessageValidatorHandler{
+		{Tag: protocol.TxnTag, MessageHandler: network.ValidateHandleFunc(handler.validateIncomingTxMessage)},
 	})
 
 	handler.backlogWg.Add(2)
@@ -348,7 +348,7 @@ func (handler *TxHandler) backlogWorker() {
 				}
 				continue
 			}
-			// handler.streamVerifierChan does not receive if ctx is cancled
+			// handler.streamVerifierChan does not receive if ctx is cancelled
 			select {
 			case handler.streamVerifierChan <- &verify.UnverifiedTxnSigJob{TxnGroup: wi.unverifiedTxGroup, BacklogMessage: wi}:
 			case <-handler.ctx.Done():
@@ -550,7 +550,7 @@ func (handler *TxHandler) deleteFromCaches(msgKey *crypto.Digest, canonicalKey *
 
 // dedupCanonical checks if the transaction group has been seen before after reencoding to canonical representation.
 // returns a key used for insertion if the group was not found.
-func (handler *TxHandler) dedupCanonical(unverifiedTxGroup []transactions.SignedTxn, consumed int) (key *crypto.Digest, isDup bool) {
+func (handler *TxHandler) dedupCanonical(unverifiedTxGroup []transactions.SignedTxn, consumed int) (key *crypto.Digest, reencoded []byte, isDup bool) {
 	// consider situations where someone want to censor transactions A
 	// 1. Txn A is not part of a group => txn A with a valid signature is OK
 	// Censorship attempts are:
@@ -567,14 +567,16 @@ func (handler *TxHandler) dedupCanonical(unverifiedTxGroup []transactions.Signed
 	// - using individual txn from a group: {A, Z} could be poisoned by {A, B}, where B is invalid
 
 	var d crypto.Digest
+	var reencodedBuf []byte
 	ntx := len(unverifiedTxGroup)
 	if ntx == 1 {
 		// a single transaction => cache/dedup canonical txn with its signature
 		enc := unverifiedTxGroup[0].MarshalMsg(nil)
 		d = crypto.Hash(enc)
 		if handler.txCanonicalCache.CheckAndPut(&d) {
-			return nil, true
+			return nil, nil, true
 		}
+		reencodedBuf = enc
 	} else {
 		// a transaction group => cache/dedup the entire group canonical group
 		encodeBuf := make([]byte, 0, unverifiedTxGroup[0].Msgsize()*ntx)
@@ -585,14 +587,15 @@ func (handler *TxHandler) dedupCanonical(unverifiedTxGroup []transactions.Signed
 			// reallocated, some assumption on size was wrong
 			// log and skip
 			logging.Base().Warnf("Decoded size %d does not match to encoded %d", consumed, len(encodeBuf))
-			return nil, false
+			return nil, nil, false
 		}
 		d = crypto.Hash(encodeBuf)
 		if handler.txCanonicalCache.CheckAndPut(&d) {
-			return nil, true
+			return nil, nil, true
 		}
+		reencodedBuf = encodeBuf
 	}
-	return &d, false
+	return &d, reencodedBuf, false
 }
 
 // incomingMsgDupCheck runs the duplicate check on a raw incoming message.
@@ -687,28 +690,32 @@ func decodeMsg(data []byte) (unverifiedTxGroup []transactions.SignedTxn, consume
 	return unverifiedTxGroup, consumed, false
 }
 
-// incomingTxGroupDupRateLimit checks
-// - if the incoming transaction group has been seen before after reencoding to canonical representation, and
-// - if the sender is rate limited by the per-application rate limiter.
-func (handler *TxHandler) incomingTxGroupDupRateLimit(unverifiedTxGroup []transactions.SignedTxn, encodedExpectedSize int, sender network.DisconnectablePeer) (*crypto.Digest, bool) {
+// incomingTxGroupCanonicalDedup checks if the incoming transaction group has been seen before after reencoding to canonical representation.
+// It also return canonical representation of the transaction group allowing the caller to compare it with the input.
+func (handler *TxHandler) incomingTxGroupCanonicalDedup(unverifiedTxGroup []transactions.SignedTxn, encodedExpectedSize int) (*crypto.Digest, []byte, bool) {
 	var canonicalKey *crypto.Digest
+	var reencoded []byte
 	if handler.txCanonicalCache != nil {
 		var isDup bool
-		if canonicalKey, isDup = handler.dedupCanonical(unverifiedTxGroup, encodedExpectedSize); isDup {
+		if canonicalKey, reencoded, isDup = handler.dedupCanonical(unverifiedTxGroup, encodedExpectedSize); isDup {
 			transactionMessagesDupCanonical.Inc(nil)
-			return canonicalKey, true
+			return nil, nil, true
 		}
 	}
+	return canonicalKey, reencoded, false
+}
 
+// incomingTxGroupAppRateLimit checks if the sender is rate limited by the per-application rate limiter.
+func (handler *TxHandler) incomingTxGroupAppRateLimit(unverifiedTxGroup []transactions.SignedTxn, sender network.DisconnectablePeer) bool {
 	// rate limit per application in a group. Limiting any app in a group drops the entire message.
 	if handler.appLimiter != nil {
 		congestedARL := len(handler.backlogQueue) > handler.appLimiterBacklogThreshold
 		if congestedARL && handler.appLimiter.shouldDrop(unverifiedTxGroup, sender.(network.IPAddressable).RoutingAddr()) {
 			transactionMessagesAppLimiterDrop.Inc(nil)
-			return canonicalKey, true
+			return true
 		}
 	}
-	return canonicalKey, false
+	return false
 }
 
 // processIncomingTxn decodes a transaction group from incoming message and enqueues into the back log for processing.
@@ -744,10 +751,14 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 		return network.OutgoingMessage{Action: network.Disconnect}
 	}
 
-	canonicalKey, drop := handler.incomingTxGroupDupRateLimit(unverifiedTxGroup, consumed, rawmsg.Sender)
+	canonicalKey, _, drop := handler.incomingTxGroupCanonicalDedup(unverifiedTxGroup, consumed)
 	if drop {
 		// this re-serialized txgroup was detected as a duplicate by the canonical message cache,
 		// or it was rate-limited by the per-app rate limiter
+		return network.OutgoingMessage{Action: network.Ignore}
+	}
+
+	if handler.incomingTxGroupAppRateLimit(unverifiedTxGroup, rawmsg.Sender) {
 		return network.OutgoingMessage{Action: network.Ignore}
 	}
 
@@ -772,65 +783,84 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 	return network.OutgoingMessage{Action: network.Ignore}
 }
 
-type validatedIncomingTxMessage struct {
-	rawmsg            network.IncomingMessage
-	unverifiedTxGroup []transactions.SignedTxn
-	msgKey            *crypto.Digest
-	canonicalKey      *crypto.Digest
-}
-
 // validateIncomingTxMessage is the validator for the MessageProcessor implementation used by P2PNetwork.
-func (handler *TxHandler) validateIncomingTxMessage(rawmsg network.IncomingMessage) network.ValidatedMessage {
+func (handler *TxHandler) validateIncomingTxMessage(rawmsg network.IncomingMessage) network.OutgoingMessage {
 	msgKey, isDup := handler.incomingMsgDupCheck(rawmsg.Data)
 	if isDup {
-		return network.ValidatedMessage{Action: network.Ignore, ValidatedMessage: nil}
+		return network.OutgoingMessage{Action: network.Ignore}
 	}
 
 	unverifiedTxGroup, consumed, invalid := decodeMsg(rawmsg.Data)
 	if invalid {
 		// invalid encoding or exceeding txgroup, disconnect from this peer
-		return network.ValidatedMessage{Action: network.Disconnect, ValidatedMessage: nil}
+		return network.OutgoingMessage{Action: network.Disconnect}
 	}
 
-	canonicalKey, drop := handler.incomingTxGroupDupRateLimit(unverifiedTxGroup, consumed, rawmsg.Sender)
+	canonicalKey, reencoded, drop := handler.incomingTxGroupCanonicalDedup(unverifiedTxGroup, consumed)
 	if drop {
-		// this re-serialized txgroup was detected as a duplicate by the canonical message cache,
-		// or it was rate-limited by the per-app rate limiter
-		return network.ValidatedMessage{Action: network.Ignore, ValidatedMessage: nil}
+		return network.OutgoingMessage{Action: network.Ignore}
 	}
 
-	return network.ValidatedMessage{
-		Action: network.Accept,
-		Tag:    rawmsg.Tag,
-		ValidatedMessage: &validatedIncomingTxMessage{
-			rawmsg:            rawmsg,
-			unverifiedTxGroup: unverifiedTxGroup,
-			msgKey:            msgKey,
-			canonicalKey:      canonicalKey,
-		},
+	if handler.incomingTxGroupAppRateLimit(unverifiedTxGroup, rawmsg.Sender) {
+		return network.OutgoingMessage{Action: network.Ignore}
 	}
-}
 
-// processIncomingTxMessage is the handler for the MessageProcessor implementation used by P2PNetwork.
-func (handler *TxHandler) processIncomingTxMessage(validatedMessage network.ValidatedMessage) network.OutgoingMessage {
-	msg := validatedMessage.ValidatedMessage.(*validatedIncomingTxMessage)
-	select {
-	case handler.backlogQueue <- &txBacklogMsg{
-		rawmsg:                &msg.rawmsg,
-		unverifiedTxGroup:     msg.unverifiedTxGroup,
-		rawmsgDataHash:        msg.msgKey,
-		unverifiedTxGroupHash: msg.canonicalKey,
+	if reencoded == nil {
+		reencoded = reencode(unverifiedTxGroup)
+	}
+
+	if !bytes.Equal(rawmsg.Data, reencoded) {
+		// reject non-canonically encoded messages
+		return network.OutgoingMessage{Action: network.Disconnect}
+	}
+
+	// apply backlog worker logic
+
+	wi := &txBacklogMsg{
+		rawmsg:                &rawmsg,
+		unverifiedTxGroup:     unverifiedTxGroup,
+		rawmsgDataHash:        msgKey,
+		unverifiedTxGroupHash: canonicalKey,
 		capguard:              nil,
-	}:
-	default:
-		// if we failed here we want to increase the corresponding metric. It might suggest that we
-		// want to increase the queue size.
-		transactionMessagesDroppedFromBacklog.Inc(nil)
-
-		// additionally, remove the txn from duplicate caches to ensure it can be re-submitted
-		handler.deleteFromCaches(msg.msgKey, msg.canonicalKey)
 	}
-	return network.OutgoingMessage{Action: network.Ignore}
+
+	if handler.checkAlreadyCommitted(wi) {
+		transactionMessagesAlreadyCommitted.Inc(nil)
+		return network.OutgoingMessage{
+			Action: network.Ignore,
+		}
+	}
+
+	err := handler.batchVerifier.Verify(wi.unverifiedTxGroup)
+	if err != nil {
+		handler.postProcessReportErrors(err)
+		logging.Base().Warnf("Received a malformed tx group %v: %v", wi.unverifiedTxGroup, err)
+		return network.OutgoingMessage{
+			Action: network.Disconnect,
+		}
+	}
+	verifiedTxGroup := wi.unverifiedTxGroup
+
+	// save the transaction, if it has high enough fee and not already in the cache
+	err = handler.txPool.Remember(verifiedTxGroup)
+	if err != nil {
+		handler.rememberReportErrors(err)
+		logging.Base().Debugf("could not remember tx: %v", err)
+		return network.OutgoingMessage{
+			Action: network.Ignore,
+		}
+	}
+
+	transactionMessagesRemember.Inc(nil)
+
+	// if we remembered without any error ( i.e. txpool wasn't full ), then we should pin these transactions.
+	err = handler.ledger.VerifiedTransactionCache().Pin(verifiedTxGroup)
+	if err != nil {
+		logging.Base().Infof("unable to pin transaction: %v", err)
+	}
+	return network.OutgoingMessage{
+		Action: network.Accept,
+	}
 }
 
 var errBackLogFullLocal = errors.New("backlog full")

@@ -206,14 +206,14 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 			return nil, err
 		}
 	} else if cfg.EnableP2P {
-		p2pNode, err = network.NewP2PNetwork(node.log, node.config, rootDir, phonebookAddresses, genesis.ID(), genesis.Network, node)
+		p2pNode, err = network.NewP2PNetwork(node.log, node.config, rootDir, phonebookAddresses, genesis.ID(), genesis.Network, node, nil)
 		if err != nil {
 			log.Errorf("could not create p2p node: %v", err)
 			return nil, err
 		}
 	} else {
 		var wsNode *network.WebsocketNetwork
-		wsNode, err = network.NewWebsocketNetwork(node.log, node.config, phonebookAddresses, genesis.ID(), genesis.Network, node, "", nil)
+		wsNode, err = network.NewWebsocketNetwork(node.log, node.config, phonebookAddresses, genesis.ID(), genesis.Network, node, nil)
 		if err != nil {
 			log.Errorf("could not create websocket node: %v", err)
 			return nil, err
@@ -393,10 +393,10 @@ func (node *AlgorandFullNode) Start() error {
 // Capabilities returns the node's capabilities for advertising to other nodes.
 func (node *AlgorandFullNode) Capabilities() []p2p.Capability {
 	var caps []p2p.Capability
-	if node.config.Archival {
+	if node.config.Archival && node.config.IsGossipServer() {
 		caps = append(caps, p2p.Archival)
 	}
-	if node.config.StoresCatchpoints() {
+	if node.config.StoresCatchpoints() && node.config.IsGossipServer() {
 		caps = append(caps, p2p.Catchpoints)
 	}
 	if node.config.EnableGossipService && node.config.IsGossipServer() {
@@ -452,6 +452,7 @@ func (node *AlgorandFullNode) Stop() {
 	}()
 
 	node.net.ClearHandlers()
+	node.net.ClearValidatorHandlers()
 	if !node.config.DisableNetworking {
 		node.net.Stop()
 	}
@@ -1218,6 +1219,7 @@ func (node *AlgorandFullNode) SetCatchpointCatchupMode(catchpointCatchupMode boo
 				node.waitMonitoringRoutines()
 			}()
 			node.net.ClearHandlers()
+			node.net.ClearValidatorHandlers()
 			node.stateProofWorker.Stop()
 			node.txHandler.Stop()
 			node.agreementService.Shutdown()

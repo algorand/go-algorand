@@ -1,7 +1,8 @@
-FROM quay.io/centos/centos:stream8
+FROM quay.io/centos/centos:stream9
 
 WORKDIR /root
-RUN dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm && \
+RUN dnf install -y epel-release epel-next-release && dnf config-manager --set-enabled crb && \
+    dnf update -y && \
     dnf install -y autoconf awscli curl git gnupg2 nfs-utils python36 expect jq libtool gcc-c++ libstdc++-devel rpmdevtools createrepo rpm-sign bzip2 which && \
     dnf -y --enablerepo=powertools install libstdc++-static
 

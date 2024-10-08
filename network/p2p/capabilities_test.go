@@ -23,7 +23,6 @@ import (
 	"testing"
 	"time"
 
-	golog "github.com/ipfs/go-log"
 	"github.com/libp2p/go-libp2p"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/libp2p/go-libp2p/core/discovery"
@@ -38,42 +37,6 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-func TestCapabilities_Discovery(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	golog.SetDebugLogging()
-	var caps []*CapabilitiesDiscovery
-	var addrs []peer.AddrInfo
-	testSize := 3
-	for i := 0; i < testSize; i++ {
-		tempdir := t.TempDir()
-		ps, err := peerstore.NewPeerStore(nil, "")
-		require.NoError(t, err)
-		h, _, err := MakeHost(config.GetDefaultLocal(), tempdir, ps)
-		require.NoError(t, err)
-		capD, err := MakeCapabilitiesDiscovery(context.Background(), config.GetDefaultLocal(), h, "devtestnet", logging.Base(), func() []peer.AddrInfo { return nil })
-		require.NoError(t, err)
-		caps = append(caps, capD)
-		addrs = append(addrs, peer.AddrInfo{
-			ID:    capD.Host().ID(),
-			Addrs: capD.Host().Addrs(),
-		})
-	}
-	for _, capD := range caps {
-		peersAdded := 0
-		for _, addr := range addrs {
-			added, err := capD.AddPeer(addr)
-			require.NoError(t, err)
-			require.True(t, added)
-			peersAdded++
-		}
-		err := capD.dht.Bootstrap(context.Background())
-		require.NoError(t, err)
-		capD.dht.ForceRefresh()
-		require.Equal(t, peersAdded, capD.dht.RoutingTable().Size())
-	}
-}
-
 func setupDHTHosts(t *testing.T, numHosts int) []*dht.IpfsDHT {
 	var hosts []host.Host
 	var bootstrapPeers []peer.AddrInfo
@@ -83,7 +46,7 @@ func setupDHTHosts(t *testing.T, numHosts int) []*dht.IpfsDHT {
 		tmpdir := t.TempDir()
 		pk, err := GetPrivKey(cfg, tmpdir)
 		require.NoError(t, err)
-		ps, err := peerstore.NewPeerStore([]*peer.AddrInfo{}, "")
+		ps, err := peerstore.NewPeerStore(nil, "")
 		require.NoError(t, err)
 		h, err := libp2p.New(
 			libp2p.ListenAddrStrings("/dns4/localhost/tcp/0"),
@@ -134,7 +97,7 @@ func setupCapDiscovery(t *testing.T, numHosts int, numBootstrapPeers int) []*Cap
 		tmpdir := t.TempDir()
 		pk, err := GetPrivKey(cfg, tmpdir)
 		require.NoError(t, err)
-		ps, err := peerstore.NewPeerStore([]*peer.AddrInfo{}, "")
+		ps, err := peerstore.NewPeerStore(nil, "")
 		require.NoError(t, err)
 		h, err := libp2p.New(
 			libp2p.ListenAddrStrings("/dns4/localhost/tcp/0"),

@@ -51,11 +51,14 @@ const (
 )
 
 // TXTopicName defines a pubsub topic for TX messages
-const TXTopicName = "/algo/tx/0.1.0"
+// There is a micro optimization for const string comparison:
+// 8 bytes const string require a single x86-64 CMPQ instruction.
+// Naming convention: "algo" + 2 bytes protocol tag + 2 bytes version
+const TXTopicName = "algotx01"
 
 const incomingThreads = 20 // matches to number wsNetwork workers
 
-func makePubSub(ctx context.Context, cfg config.Local, host host.Host) (*pubsub.PubSub, error) {
+func makePubSub(ctx context.Context, cfg config.Local, host host.Host, metricsTracer pubsub.RawTracer) (*pubsub.PubSub, error) {
 	//defaultParams := pubsub.DefaultGossipSubParams()
 
 	options := []pubsub.Option{
@@ -98,6 +101,10 @@ func makePubSub(ctx context.Context, cfg config.Local, host host.Host) (*pubsub.
 		pubsub.WithMessageSignaturePolicy(pubsub.StrictNoSign),
 		// pubsub.WithValidateThrottle(cfg.TxBacklogSize),
 		pubsub.WithValidateWorkers(incomingThreads),
+	}
+
+	if metricsTracer != nil {
+		options = append(options, pubsub.WithRawTracer(metricsTracer))
 	}
 
 	return pubsub.NewGossipSub(ctx, host, options...)

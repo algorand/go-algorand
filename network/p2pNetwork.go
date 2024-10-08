@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/algorand/go-algorand/config"
+	algocrypto "github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/network/limitcaller"
@@ -81,6 +82,8 @@ type P2PNetwork struct {
 	nodeInfo          NodeInfo
 	pstore            *peerstore.PeerStore
 	httpServer        *p2p.HTTPServer
+
+	identityTracker identityTracker
 }
 
 type bootstrapper struct {
@@ -191,30 +194,13 @@ type p2pPeerStats struct {
 	txReceived atomic.Uint64
 }
 
-// gossipSubPeer implements the DeadlineSettableConn, IPAddressable, and ErlClient interfaces.
-type gossipSubPeer struct {
-	peerID      peer.ID
-	net         GossipNode
-	routingAddr [8]byte
-}
-
-func (p gossipSubPeer) GetNetwork() GossipNode { return p.net }
-
-func (p gossipSubPeer) OnClose(f func()) {
-	net := p.GetNetwork().(*P2PNetwork)
-	net.wsPeersLock.Lock()
-	defer net.wsPeersLock.Unlock()
-	if wsp, ok := net.wsPeers[p.peerID]; ok {
-		wsp.OnClose(f)
-	}
-}
-
-func (p gossipSubPeer) RoutingAddr() []byte {
-	return p.routingAddr[:]
+// gossipSubTags defines protocol messages that are relayed using GossipSub
+var gossipSubTags = map[protocol.Tag]string{
+	protocol.TxnTag: p2p.TXTopicName,
 }
 
 // NewP2PNetwork returns an instance of GossipNode that uses the p2p.Service
-func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebookAddresses []string, genesisID string, networkID protocol.NetworkID, node NodeInfo) (*P2PNetwork, error) {
+func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebookAddresses []string, genesisID string, networkID protocol.NetworkID, node NodeInfo, identityOpts *identityOpts) (*P2PNetwork, error) {
 	const readBufferLen = 2048
 
 	// create Peerstore and add phonebook addresses
@@ -233,7 +219,7 @@ func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebo
 		config:        cfg,
 		genesisID:     genesisID,
 		networkID:     networkID,
-		topicTags:     map[protocol.Tag]string{protocol.TxnTag: p2p.TXTopicName},
+		topicTags:     gossipSubTags,
 		wsPeers:       make(map[peer.ID]*wsPeer),
 		wsPeersToIDs:  make(map[*wsPeer]peer.ID),
 		peerStats:     make(map[peer.ID]*p2pPeerStats),
@@ -262,7 +248,17 @@ func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebo
 		broadcastQueueBulk:     make(chan broadcastRequest, 100),
 	}
 
-	p2p.EnableP2PLogging(log, logging.Level(cfg.BaseLoggerDebugLevel))
+	if identityOpts != nil {
+		net.identityTracker = identityOpts.tracker
+	}
+	if net.identityTracker == nil {
+		net.identityTracker = noopIdentityTracker{}
+	}
+
+	err = p2p.EnableP2PLogging(log, logging.Level(cfg.BaseLoggerDebugLevel))
+	if err != nil {
+		return nil, err
+	}
 
 	h, la, err := p2p.MakeHost(cfg, datadir, pstore)
 	if err != nil {
@@ -270,15 +266,21 @@ func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebo
 	}
 	log.Infof("P2P host created: peer ID %s addrs %s", h.ID(), h.Addrs())
 
-	net.service, err = p2p.MakeService(net.ctx, log, cfg, h, la, net.wsStreamHandler, addrInfo)
+	net.service, err = p2p.MakeService(net.ctx, log, cfg, h, la, net.wsStreamHandler, pubsubMetricsTracer{})
 	if err != nil {
 		return nil, err
 	}
 
+	peerIDs := pstore.Peers()
+	addrInfos := make([]*peer.AddrInfo, 0, len(peerIDs))
+	for _, peerID := range peerIDs {
+		addrInfo := pstore.PeerInfo(peerID)
+		addrInfos = append(addrInfos, &addrInfo)
+	}
 	bootstrapper := &bootstrapper{
 		cfg:               cfg,
 		networkID:         networkID,
-		phonebookPeers:    addrInfo,
+		phonebookPeers:    addrInfos,
 		resolveController: dnsaddr.NewMultiaddrDNSResolveController(cfg.DNSSecurityTXTEnforced(), ""),
 		log:               net.log,
 	}
@@ -346,8 +348,11 @@ func (n *P2PNetwork) Start() error {
 		go n.handler.messageHandlerThread(&n.wg, n.wsPeersConnectivityCheckTicker.C, n, "network", "P2PNetwork")
 	}
 
-	n.wg.Add(1)
-	go n.httpdThread()
+	// start the HTTP server if configured to listen
+	if n.config.NetAddress != "" {
+		n.wg.Add(1)
+		go n.httpdThread()
+	}
 
 	n.wg.Add(1)
 	go n.broadcaster.broadcastThread(&n.wg, n, "network", "P2PNetwork")
@@ -377,7 +382,16 @@ func (n *P2PNetwork) Stop() {
 		n.wsPeersConnectivityCheckTicker = nil
 	}
 	n.innerStop()
+
+	// This is a workaround for a race between PubSub.processLoop (triggered by context cancellation below) termination
+	// and this function returning that causes main goroutine to exit before
+	// PubSub.processLoop goroutine finishes logging its termination message
+	// to already closed logger. Not seen in wild, only in tests.
+	if n.log.GetLevel() >= logging.Warn {
+		_ = p2p.SetP2PLogLevel(logging.Warn)
+	}
 	n.ctxCancel()
+
 	n.service.Close()
 	n.bootstrapperStop()
 	n.httpServer.Close()
@@ -423,7 +437,7 @@ func (n *P2PNetwork) meshThreadInner() int {
 	}
 
 	peers := mergeP2PAddrInfoResolvedAddresses(dnsPeers, dhtPeers)
-	replace := make([]interface{}, 0, len(peers))
+	replace := make([]*peer.AddrInfo, 0, len(peers))
 	for i := range peers {
 		replace = append(replace, &peers[i])
 	}
@@ -471,6 +485,7 @@ func (n *P2PNetwork) meshThread() {
 
 func (n *P2PNetwork) httpdThread() {
 	defer n.wg.Done()
+
 	err := n.httpServer.Serve()
 	if err != nil {
 		n.log.Errorf("Error serving libp2phttp: %v", err)
@@ -498,7 +513,6 @@ func (n *P2PNetwork) Address() (string, bool) {
 	for _, addr := range addrs {
 		if !manet.IsIPLoopback(addr) && !manet.IsIPUnspecified(addr) {
 			return addr.String(), true
-
 		}
 	}
 	// We don't have a non loopback address, so just return the first one if it contains an ip4 address or port
@@ -537,8 +551,6 @@ func (n *P2PNetwork) Disconnect(badpeer DisconnectablePeer) {
 	n.wsPeersLock.Lock()
 	defer n.wsPeersLock.Unlock()
 	switch p := badpeer.(type) {
-	case gossipSubPeer: // Disconnect came from a message received via GossipSub
-		peerID, wsp = p.peerID, n.wsPeers[p.peerID]
 	case *wsPeer: // Disconnect came from a message received via wsPeer
 		peerID, wsp = n.wsPeersToIDs[p], p
 	default:
@@ -575,6 +587,12 @@ func (n *P2PNetwork) RegisterHTTPHandler(path string, handler http.Handler) {
 	n.httpServer.RegisterHTTPHandler(path, handler)
 }
 
+// RegisterHTTPHandlerFunc is like RegisterHTTPHandler but accepts
+// a callback handler function instead of a method receiver.
+func (n *P2PNetwork) RegisterHTTPHandlerFunc(path string, handler func(http.ResponseWriter, *http.Request)) {
+	n.httpServer.RegisterHTTPHandlerFunc(path, handler)
+}
+
 // RequestConnectOutgoing asks the system to actually connect to peers.
 // `replace` optionally drops existing connections before making new ones.
 // `quit` chan allows cancellation.
@@ -594,8 +612,7 @@ func addrInfoToWsPeerCore(n *P2PNetwork, addrInfo *peer.AddrInfo) (wsPeerCore, b
 	}
 	addr := mas[0].String()
 
-	maxIdleConnsPerHost := int(n.config.ConnectionsRateLimitingCount)
-	client, err := p2p.MakeHTTPClientWithRateLimit(addrInfo, n.pstore, limitcaller.DefaultQueueingTimeout, maxIdleConnsPerHost)
+	client, err := n.service.GetHTTPClient(addrInfo, n.pstore, limitcaller.DefaultQueueingTimeout)
 	if err != nil {
 		n.log.Warnf("MakeHTTPClient failed: %v", err)
 		return wsPeerCore{}, false
@@ -623,9 +640,8 @@ func (n *P2PNetwork) GetPeers(options ...PeerOption) []Peer {
 			n.wsPeersLock.RUnlock()
 		case PeersPhonebookRelays:
 			const maxNodes = 100
-			peerIDs := n.pstore.GetAddresses(maxNodes, phonebook.PhoneBookEntryRelayRole)
-			for _, peerInfo := range peerIDs {
-				peerInfo := peerInfo.(*peer.AddrInfo)
+			addrInfos := n.pstore.GetAddresses(maxNodes, phonebook.PhoneBookEntryRelayRole)
+			for _, peerInfo := range addrInfos {
 				if peerCore, ok := addrInfoToWsPeerCore(n, peerInfo); ok {
 					peers = append(peers, &peerCore)
 				}
@@ -685,14 +701,14 @@ func (n *P2PNetwork) ClearHandlers() {
 	n.handler.ClearHandlers([]Tag{})
 }
 
-// RegisterProcessors adds to the set of given message handlers.
-func (n *P2PNetwork) RegisterProcessors(dispatch []TaggedMessageProcessor) {
-	n.handler.RegisterProcessors(dispatch)
+// RegisterValidatorHandlers adds to the set of given message handlers.
+func (n *P2PNetwork) RegisterValidatorHandlers(dispatch []TaggedMessageValidatorHandler) {
+	n.handler.RegisterValidatorHandlers(dispatch)
 }
 
-// ClearProcessors deregisters all the existing message handlers.
-func (n *P2PNetwork) ClearProcessors() {
-	n.handler.ClearProcessors([]Tag{})
+// ClearValidatorHandlers deregisters all the existing message handlers.
+func (n *P2PNetwork) ClearValidatorHandlers() {
+	n.handler.ClearValidatorHandlers([]Tag{})
 }
 
 // GetHTTPClient returns a http.Client with a suitable for the network Transport
@@ -702,8 +718,7 @@ func (n *P2PNetwork) GetHTTPClient(address string) (*http.Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	maxIdleConnsPerHost := int(n.config.ConnectionsRateLimitingCount)
-	return p2p.MakeHTTPClientWithRateLimit(addrInfo, n.pstore, limitcaller.DefaultQueueingTimeout, maxIdleConnsPerHost)
+	return n.service.GetHTTPClient(addrInfo, n.pstore, limitcaller.DefaultQueueingTimeout)
 }
 
 // OnNetworkAdvance notifies the network library that the agreement protocol was able to make a notable progress.
@@ -751,21 +766,33 @@ func (n *P2PNetwork) wsStreamHandler(ctx context.Context, p2pPeer peer.ID, strea
 	ma := stream.Conn().RemoteMultiaddr()
 	addr := ma.String()
 	if addr == "" {
-		n.log.Warnf("Could not get address for peer %s", p2pPeer)
+		n.log.Warnf("Cannot get address for peer %s", p2pPeer)
 	}
-	// create a wsPeer for this stream and added it to the peers map.
 
+	// create a wsPeer for this stream and added it to the peers map.
 	addrInfo := &peer.AddrInfo{ID: p2pPeer, Addrs: []multiaddr.Multiaddr{ma}}
-	maxIdleConnsPerHost := int(n.config.ConnectionsRateLimitingCount)
-	client, err := p2p.MakeHTTPClientWithRateLimit(addrInfo, n.pstore, limitcaller.DefaultQueueingTimeout, maxIdleConnsPerHost)
+	client, err := n.service.GetHTTPClient(addrInfo, n.pstore, limitcaller.DefaultQueueingTimeout)
 	if err != nil {
+		n.log.Warnf("Cannot construct HTTP Client for %s: %v", p2pPeer, err)
 		client = nil
+	}
+	var netIdentPeerID algocrypto.PublicKey
+	if p2pPeerPubKey, err0 := p2pPeer.ExtractPublicKey(); err0 == nil {
+		if b, err0 := p2pPeerPubKey.Raw(); err0 == nil {
+			netIdentPeerID = algocrypto.PublicKey(b)
+		} else {
+			n.log.Warnf("Cannot get raw pubkey for peer %s", p2pPeer)
+		}
+	} else {
+		n.log.Warnf("Cannot get pubkey for peer %s", p2pPeer)
 	}
 	peerCore := makePeerCore(ctx, n, n.log, n.handler.readBuffer, addr, client, addr)
 	wsp := &wsPeer{
 		wsPeerCore: peerCore,
-		conn:       &wsPeerConnP2PImpl{stream: stream},
+		conn:       &wsPeerConnP2P{stream: stream},
 		outgoing:   !incoming,
+		identity:   netIdentPeerID,
+		peerType:   peerTypeP2P,
 	}
 	protos, err := n.pstore.GetProtocols(p2pPeer)
 	if err != nil {
@@ -773,8 +800,28 @@ func (n *P2PNetwork) wsStreamHandler(ctx context.Context, p2pPeer peer.ID, strea
 	}
 	wsp.TelemetryGUID, wsp.InstanceName = p2p.GetPeerTelemetryInfo(protos)
 
+	localAddr, has := n.Address()
+	if !has {
+		n.log.Warn("Could not get local address")
+	}
+	n.wsPeersLock.Lock()
+	ok := n.identityTracker.setIdentity(wsp)
+	n.wsPeersLock.Unlock()
+	if !ok {
+		networkPeerIdentityDisconnect.Inc(nil)
+		n.log.With("remote", addr).With("local", localAddr).Warn("peer deduplicated before adding because the identity is already known")
+		stream.Close()
+		return
+	}
+
 	wsp.init(n.config, outgoingMessagesBufferSize)
 	n.wsPeersLock.Lock()
+	if wsp.didSignalClose.Load() == 1 {
+		networkPeerAlreadyClosed.Inc(nil)
+		n.log.Debugf("peer closing %s", addr)
+		n.wsPeersLock.Unlock()
+		return
+	}
 	n.wsPeers[p2pPeer] = wsp
 	n.wsPeersToIDs[wsp] = p2pPeer
 	n.wsPeersLock.Unlock()
@@ -785,10 +832,6 @@ func (n *P2PNetwork) wsStreamHandler(ctx context.Context, p2pPeer peer.ID, strea
 	if incoming {
 		event = "ConnectedIn"
 		msg = "Accepted incoming connection from peer %s"
-	}
-	localAddr, has := n.Address()
-	if !has {
-		n.log.Warn("Could not get local address")
 	}
 	n.log.With("event", event).With("remote", addr).With("local", localAddr).Infof(msg, p2pPeer.String())
 
@@ -809,8 +852,9 @@ func (n *P2PNetwork) wsStreamHandler(ctx context.Context, p2pPeer peer.ID, strea
 
 // peerRemoteClose called from wsPeer to report that it has closed
 func (n *P2PNetwork) peerRemoteClose(peer *wsPeer, reason disconnectReason) {
-	remotePeerID := peer.conn.(*wsPeerConnP2PImpl).stream.Conn().RemotePeer()
+	remotePeerID := peer.conn.(*wsPeerConnP2P).stream.Conn().RemotePeer()
 	n.wsPeersLock.Lock()
+	n.identityTracker.removeIdentity(peer)
 	delete(n.wsPeers, remotePeerID)
 	delete(n.wsPeersToIDs, peer)
 	n.wsPeersLock.Unlock()
@@ -880,7 +924,8 @@ func (n *P2PNetwork) txTopicHandleLoop() {
 	n.log.Debugf("Subscribed to topic %s", p2p.TXTopicName)
 
 	for {
-		msg, err := sub.Next(n.ctx)
+		// msg from sub.Next not used since all work done by txTopicValidator
+		_, err := sub.Next(n.ctx)
 		if err != nil {
 			if err != pubsub.ErrSubscriptionCancelled && err != context.Canceled {
 				n.log.Errorf("Error reading from subscription %v, peerId %s", err, n.service.ID())
@@ -889,13 +934,6 @@ func (n *P2PNetwork) txTopicHandleLoop() {
 			sub.Cancel()
 			return
 		}
-		// if there is a self-sent the message no need to process it.
-		if msg.ReceivedFrom == n.service.ID() {
-			continue
-		}
-
-		_ = n.handler.Process(msg.ValidatorData.(ValidatedMessage))
-
 		// participation or configuration change, cancel subscription and quit
 		if !n.wantTXGossip.Load() {
 			n.log.Debugf("Cancelling subscription to topic %s due participation change", p2p.TXTopicName)
@@ -909,7 +947,9 @@ func (n *P2PNetwork) txTopicHandleLoop() {
 func (n *P2PNetwork) txTopicValidator(ctx context.Context, peerID peer.ID, msg *pubsub.Message) pubsub.ValidationResult {
 	var routingAddr [8]byte
 	n.wsPeersLock.Lock()
-	if wsp, ok := n.wsPeers[peerID]; ok {
+	var wsp *wsPeer
+	var ok bool
+	if wsp, ok = n.wsPeers[peerID]; ok {
 		copy(routingAddr[:], wsp.RoutingAddr())
 	} else {
 		// well, otherwise use last 8 bytes of peerID
@@ -918,7 +958,8 @@ func (n *P2PNetwork) txTopicValidator(ctx context.Context, peerID peer.ID, msg *
 	n.wsPeersLock.Unlock()
 
 	inmsg := IncomingMessage{
-		Sender:   gossipSubPeer{peerID: msg.ReceivedFrom, net: n, routingAddr: routingAddr},
+		// Sender:   gossipSubPeer{peerID: msg.ReceivedFrom, net: n, routingAddr: routingAddr},
+		Sender:   wsp,
 		Tag:      protocol.TxnTag,
 		Data:     msg.Data,
 		Net:      n,
@@ -939,7 +980,7 @@ func (n *P2PNetwork) txTopicValidator(ctx context.Context, peerID peer.ID, msg *
 	peerStats.txReceived.Add(1)
 	n.peerStatsMu.Unlock()
 
-	outmsg := n.handler.Validate(inmsg)
+	outmsg := n.handler.ValidateHandle(inmsg)
 	// there was a decision made in the handler about this message
 	switch outmsg.Action {
 	case Ignore:

@@ -128,12 +128,13 @@ func makeTestWebsocketNodeWithConfig(t testing.TB, conf config.Local, opts ...te
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Warn)
 	wn := &WebsocketNetwork{
-		log:        log,
-		config:     conf,
-		phonebook:  phonebook.MakePhonebook(1, 1*time.Millisecond),
-		GenesisID:  genesisID,
-		NetworkID:  config.Devtestnet,
-		peerStater: peerConnectionStater{log: log},
+		log:             log,
+		config:          conf,
+		phonebook:       phonebook.MakePhonebook(1, 1*time.Millisecond),
+		GenesisID:       genesisID,
+		NetworkID:       config.Devtestnet,
+		peerStater:      peerConnectionStater{log: log},
+		identityTracker: NewIdentityTracker(),
 	}
 	// apply options to newly-created WebsocketNetwork, if provided
 	for _, opt := range opts {
@@ -428,15 +429,12 @@ func TestWebsocketProposalPayloadCompression(t *testing.T) {
 	}
 
 	var tests []testDef = []testDef{
-		// two old nodes
-		{[]string{"2.1"}, "2.1", []string{"2.1"}, "2.1"},
-
 		// two new nodes with overwritten config
 		{[]string{"2.2"}, "2.2", []string{"2.2"}, "2.2"},
 
 		// old node + new node
 		{[]string{"2.1"}, "2.1", []string{"2.2", "2.1"}, "2.2"},
-		{[]string{"2.2", "2.1"}, "2.2", []string{"2.1"}, "2.1"},
+		{[]string{"2.2", "2.1"}, "2.1", []string{"2.2"}, "2.2"},
 
 		// combinations
 		{[]string{"2.2", "2.1"}, "2.1", []string{"2.2", "2.1"}, "2.1"},
@@ -1055,12 +1053,13 @@ func makeTestFilterWebsocketNode(t *testing.T, nodename string) *WebsocketNetwor
 	dc.OutgoingMessageFilterBucketCount = 3
 	dc.OutgoingMessageFilterBucketSize = 128
 	wn := &WebsocketNetwork{
-		log:        logging.TestingLog(t).With("node", nodename),
-		config:     dc,
-		phonebook:  phonebook.MakePhonebook(1, 1*time.Millisecond),
-		GenesisID:  genesisID,
-		NetworkID:  config.Devtestnet,
-		peerStater: peerConnectionStater{log: logging.TestingLog(t).With("node", nodename)},
+		log:             logging.TestingLog(t).With("node", nodename),
+		config:          dc,
+		phonebook:       phonebook.MakePhonebook(1, 1*time.Millisecond),
+		GenesisID:       genesisID,
+		NetworkID:       config.Devtestnet,
+		peerStater:      peerConnectionStater{log: logging.TestingLog(t).With("node", nodename)},
+		identityTracker: noopIdentityTracker{},
 	}
 	require.True(t, wn.config.EnableIncomingMessageFilter)
 	wn.setup()
@@ -1099,7 +1098,7 @@ func TestDupFilter(t *testing.T) {
 	defer netC.Stop()
 
 	makeMsg := func(n int) []byte {
-		// We cannot harcode the msgSize to messageFilterSize + 1 because max allowed AV message is smaller  than that.
+		// We cannot hardcode the msgSize to messageFilterSize + 1 because max allowed AV message is smaller  than that.
 		// We also cannot use maxSize for PP since it's a compressible tag but trying to compress random data will expand it.
 		if messageFilterSize+1 < n {
 			n = messageFilterSize + 1
@@ -1385,7 +1384,7 @@ func TestPeeringWithIdentityChallenge(t *testing.T) {
 	assert.Equal(t, 0, len(netB.GetPeers(PeersConnectedOut)))
 	// netA never attempts to set identity as it never sees a verified identity
 	assert.Equal(t, 1, netA.identityTracker.(*mockIdentityTracker).getSetCount())
-	// no connecton => netB does attepmt to add the identity to the tracker
+	// no connection => netB does attempt to add the identity to the tracker
 	// and it would not end up being added
 	assert.Equal(t, 1, netB.identityTracker.(*mockIdentityTracker).getSetCount())
 	assert.Equal(t, 1, netB.identityTracker.(*mockIdentityTracker).getInsertCount())
@@ -1606,7 +1605,7 @@ func TestPeeringReceiverIdentityChallengeOnly(t *testing.T) {
 	assert.Equal(t, 0, netB.identityTracker.(*mockIdentityTracker).getSetCount())
 }
 
-// TestPeeringIncorrectDeduplicationName confirm that if the reciever can't match
+// TestPeeringIncorrectDeduplicationName confirm that if the receiver can't match
 // the Address in the challenge to its PublicAddress, identities aren't exchanged, but peering continues
 func TestPeeringIncorrectDeduplicationName(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -1663,7 +1662,7 @@ func TestPeeringIncorrectDeduplicationName(t *testing.T) {
 
 	// bi-directional connection would now work since netB detects to be connected to netA in tryConnectReserveAddr,
 	// so force it.
-	// this second connection should set identities, because the reciever address matches now
+	// this second connection should set identities, because the receiver address matches now
 	_, ok = netB.tryConnectReserveAddr(addrA)
 	assert.False(t, ok)
 	netB.wg.Add(1)
@@ -1696,7 +1695,7 @@ type mockIdentityScheme struct {
 }
 
 func newMockIdentityScheme(t *testing.T) *mockIdentityScheme {
-	return &mockIdentityScheme{t: t, realScheme: NewIdentityChallengeScheme("any")}
+	return &mockIdentityScheme{t: t, realScheme: NewIdentityChallengeScheme(NetIdentityDedupNames("any"))}
 }
 func (i mockIdentityScheme) AttachChallenge(attach http.Header, addr string) identityChallengeValue {
 	if i.attachChallenge != nil {
@@ -1768,7 +1767,7 @@ func TestPeeringWithBadIdentityChallenge(t *testing.T) {
 		{
 			name: "incorrect address",
 			attachChallenge: func(attach http.Header, addr string) identityChallengeValue {
-				s := NewIdentityChallengeScheme("does not matter") // make a scheme to use its keys
+				s := NewIdentityChallengeScheme(NetIdentityDedupNames("does not matter")) // make a scheme to use its keys
 				c := identityChallenge{
 					Key:           s.identityKeys.PublicKey(),
 					Challenge:     newIdentityChallengeValue(),
@@ -1786,7 +1785,7 @@ func TestPeeringWithBadIdentityChallenge(t *testing.T) {
 		{
 			name: "bad signature",
 			attachChallenge: func(attach http.Header, addr string) identityChallengeValue {
-				s := NewIdentityChallengeScheme("does not matter") // make a scheme to use its keys
+				s := NewIdentityChallengeScheme(NetIdentityDedupNames("does not matter")) // make a scheme to use its keys
 				c := identityChallenge{
 					Key:           s.identityKeys.PublicKey(),
 					Challenge:     newIdentityChallengeValue(),
@@ -1901,7 +1900,7 @@ func TestPeeringWithBadIdentityChallengeResponse(t *testing.T) {
 		{
 			name: "incorrect original challenge",
 			verifyAndAttachResponse: func(attach http.Header, h http.Header) (identityChallengeValue, crypto.PublicKey, error) {
-				s := NewIdentityChallengeScheme("does not matter") // make a scheme to use its keys
+				s := NewIdentityChallengeScheme(NetIdentityDedupNames("does not matter")) // make a scheme to use its keys
 				// decode the header to an identityChallenge
 				msg, _ := base64.StdEncoding.DecodeString(h.Get(IdentityChallengeHeader))
 				idChal := identityChallenge{}
@@ -1924,7 +1923,7 @@ func TestPeeringWithBadIdentityChallengeResponse(t *testing.T) {
 		{
 			name: "bad signature",
 			verifyAndAttachResponse: func(attach http.Header, h http.Header) (identityChallengeValue, crypto.PublicKey, error) {
-				s := NewIdentityChallengeScheme("does not matter") // make a scheme to use its keys
+				s := NewIdentityChallengeScheme(NetIdentityDedupNames("does not matter")) // make a scheme to use its keys
 				// decode the header to an identityChallenge
 				msg, _ := base64.StdEncoding.DecodeString(h.Get(IdentityChallengeHeader))
 				idChal := identityChallenge{}
@@ -2056,7 +2055,7 @@ func TestPeeringWithBadIdentityVerification(t *testing.T) {
 				resp := identityChallengeResponseSigned{}
 				err = protocol.Decode(msg, &resp)
 				require.NoError(t, err)
-				s := NewIdentityChallengeScheme("does not matter") // make a throwaway key
+				s := NewIdentityChallengeScheme(NetIdentityDedupNames("does not matter")) // make a throwaway key
 				ver := identityVerificationMessageSigned{
 					// fill in correct ResponseChallenge field
 					Msg:       identityVerificationMessage{ResponseChallenge: resp.Msg.ResponseChallenge},
@@ -2074,7 +2073,7 @@ func TestPeeringWithBadIdentityVerification(t *testing.T) {
 			// when the verification signature doesn't match the peer's expectation (the previously exchanged identity), peer is disconnected
 			name: "bad signature",
 			verifyResponse: func(t *testing.T, h http.Header, c identityChallengeValue) (crypto.PublicKey, []byte, error) {
-				s := NewIdentityChallengeScheme("does not matter") // make a throwaway key
+				s := NewIdentityChallengeScheme(NetIdentityDedupNames("does not matter")) // make a throwaway key
 				ver := identityVerificationMessageSigned{
 					// fill in wrong ResponseChallenge field
 					Msg:       identityVerificationMessage{ResponseChallenge: newIdentityChallengeValue()},
@@ -2502,9 +2501,9 @@ func TestWebsocketNetwork_checkServerResponseVariables(t *testing.T) {
 }
 
 func (wn *WebsocketNetwork) broadcastWithTimestamp(tag protocol.Tag, data []byte, when time.Time) error {
-	msgArr := make([][]byte, 1, 1)
+	msgArr := make([][]byte, 1)
 	msgArr[0] = data
-	tagArr := make([]protocol.Tag, 1, 1)
+	tagArr := make([]protocol.Tag, 1)
 	tagArr[0] = tag
 	request := broadcastRequest{tags: tagArr, data: msgArr, enqueueTime: when, ctx: context.Background()}
 
@@ -2566,12 +2565,13 @@ func TestSlowPeerDisconnection(t *testing.T) {
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Info)
 	wn := &WebsocketNetwork{
-		log:        log,
-		config:     defaultConfig,
-		phonebook:  phonebook.MakePhonebook(1, 1*time.Millisecond),
-		GenesisID:  genesisID,
-		NetworkID:  config.Devtestnet,
-		peerStater: peerConnectionStater{log: log},
+		log:             log,
+		config:          defaultConfig,
+		phonebook:       phonebook.MakePhonebook(1, 1*time.Millisecond),
+		GenesisID:       genesisID,
+		NetworkID:       config.Devtestnet,
+		peerStater:      peerConnectionStater{log: log},
+		identityTracker: noopIdentityTracker{},
 	}
 	wn.setup()
 	wn.broadcaster.slowWritingPeerMonitorInterval = time.Millisecond * 50
@@ -2642,12 +2642,13 @@ func TestForceMessageRelaying(t *testing.T) {
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Level(defaultConfig.BaseLoggerDebugLevel))
 	wn := &WebsocketNetwork{
-		log:        log,
-		config:     defaultConfig,
-		phonebook:  phonebook.MakePhonebook(1, 1*time.Millisecond),
-		GenesisID:  genesisID,
-		NetworkID:  config.Devtestnet,
-		peerStater: peerConnectionStater{log: log},
+		log:             log,
+		config:          defaultConfig,
+		phonebook:       phonebook.MakePhonebook(1, 1*time.Millisecond),
+		GenesisID:       genesisID,
+		NetworkID:       config.Devtestnet,
+		peerStater:      peerConnectionStater{log: log},
+		identityTracker: noopIdentityTracker{},
 	}
 	wn.setup()
 	wn.eventualReadyDelay = time.Second
@@ -2737,12 +2738,13 @@ func TestCheckProtocolVersionMatch(t *testing.T) {
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Level(defaultConfig.BaseLoggerDebugLevel))
 	wn := &WebsocketNetwork{
-		log:        log,
-		config:     defaultConfig,
-		phonebook:  phonebook.MakePhonebook(1, 1*time.Millisecond),
-		GenesisID:  genesisID,
-		NetworkID:  config.Devtestnet,
-		peerStater: peerConnectionStater{log: log},
+		log:             log,
+		config:          defaultConfig,
+		phonebook:       phonebook.MakePhonebook(1, 1*time.Millisecond),
+		GenesisID:       genesisID,
+		NetworkID:       config.Devtestnet,
+		peerStater:      peerConnectionStater{log: log},
+		identityTracker: noopIdentityTracker{},
 	}
 	wn.setup()
 	wn.supportedProtocolVersions = []string{"2", "1"}
@@ -2902,7 +2904,7 @@ func TestWebsocketNetworkMessageOfInterest(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	var (
 		ft1 = protocol.Tag("AV")
-		ft2 = protocol.Tag("pj")
+		ft2 = protocol.Tag("UE")
 		ft3 = protocol.Tag("NI")
 		ft4 = protocol.Tag("TX")
 
@@ -2922,9 +2924,8 @@ func TestWebsocketNetworkMessageOfInterest(t *testing.T) {
 	t.Logf("netA %s", addrA)
 	netB.phonebook.ReplacePeerList([]string{addrA}, "default", phonebook.PhoneBookEntryRelayRole)
 
-	// have netB asking netA to send it ft2, deregister ping handler to make sure that we aren't exceeding the maximum MOI messagesize
+	// have netB asking netA to send it ft2.
 	// Max MOI size is calculated by encoding all of the valid tags, since we are using a custom tag here we must deregister one in the default set.
-	netB.DeregisterMessageInterest(protocol.PingTag)
 	netB.registerMessageInterest(ft2)
 
 	netB.Start()
@@ -3706,48 +3707,29 @@ func TestPreparePeerData(t *testing.T) {
 		data: [][]byte{[]byte("test"), []byte("data")},
 	}
 
-	peers := []*wsPeer{}
 	wn := WebsocketNetwork{}
-	data, comp, digests, seenPrioPPTag := wn.broadcaster.preparePeerData(req, false, peers)
+	data, digests := wn.broadcaster.preparePeerData(req, false)
 	require.NotEmpty(t, data)
-	require.Empty(t, comp)
 	require.NotEmpty(t, digests)
 	require.Equal(t, len(req.data), len(digests))
 	require.Equal(t, len(data), len(digests))
-	require.False(t, seenPrioPPTag)
 
 	for i := range data {
 		require.Equal(t, append([]byte(req.tags[i]), req.data[i]...), data[i])
 	}
 
-	// compression
-	peer1 := wsPeer{
-		features: 0,
-	}
-	peer2 := wsPeer{
-		features: pfCompressedProposal,
-	}
-	peers = []*wsPeer{&peer1, &peer2}
-	data, comp, digests, seenPrioPPTag = wn.broadcaster.preparePeerData(req, true, peers)
+	data, digests = wn.broadcaster.preparePeerData(req, true)
 	require.NotEmpty(t, data)
-	require.NotEmpty(t, comp)
 	require.NotEmpty(t, digests)
 	require.Equal(t, len(req.data), len(digests))
 	require.Equal(t, len(data), len(digests))
-	require.Equal(t, len(comp), len(digests))
-	require.True(t, seenPrioPPTag)
 
 	for i := range data {
-		require.Equal(t, append([]byte(req.tags[i]), req.data[i]...), data[i])
-	}
-
-	for i := range comp {
 		if req.tags[i] != protocol.ProposalPayloadTag {
-			require.Equal(t, append([]byte(req.tags[i]), req.data[i]...), comp[i])
-			require.Equal(t, data[i], comp[i])
+			require.Equal(t, append([]byte(req.tags[i]), req.data[i]...), data[i])
+			require.Equal(t, data[i], data[i])
 		} else {
-			require.NotEqual(t, data[i], comp[i])
-			require.Equal(t, append([]byte(req.tags[i]), zstdCompressionMagic[:]...), comp[i][:len(req.tags[i])+len(zstdCompressionMagic)])
+			require.Equal(t, append([]byte(req.tags[i]), zstdCompressionMagic[:]...), data[i][:len(req.tags[i])+len(zstdCompressionMagic)])
 		}
 	}
 }
@@ -3862,7 +3844,7 @@ func (t mockHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	bytes := MarshallMessageOfInterest([]protocol.Tag{protocol.AgreementVoteTag})
+	bytes := marshallMessageOfInterest([]protocol.Tag{protocol.AgreementVoteTag})
 	msgBytes := append([]byte(protocol.MsgOfInterestTag), bytes...)
 	_, err = wr.Write(msgBytes)
 	if err != nil {
@@ -4560,7 +4542,6 @@ func TestWsNetworkPhonebookMix(t *testing.T) {
 		"test",
 		"net",
 		nil,
-		"",
 		nil,
 	)
 	require.NoError(t, err)
@@ -4618,4 +4599,43 @@ func TestHTTPPAddressBoundTransport(t *testing.T) {
 			require.Equal(t, test.expected, recorder.resultURL)
 		}
 	}
+}
+
+// TestWebsocketNetworkHTTPClient checks ws net HTTP client can connect to another node
+// with out unexpected errors
+func TestWebsocketNetworkHTTPClient(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	netA := makeTestWebsocketNode(t)
+	err := netA.Start()
+	require.NoError(t, err)
+	defer netStop(t, netA, "A")
+
+	netB := makeTestWebsocketNodeWithConfig(t, defaultConfig)
+
+	addr, ok := netA.Address()
+	require.True(t, ok)
+
+	c, err := netB.GetHTTPClient(addr)
+	require.NoError(t, err)
+
+	netA.RegisterHTTPHandlerFunc("/handled", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	resp, err := c.Do(&http.Request{URL: &url.URL{Path: "/handled"}})
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	resp, err = c.Do(&http.Request{URL: &url.URL{Path: "/test"}})
+	require.NoError(t, err)
+	require.Equal(t, http.StatusNotFound, resp.StatusCode) // no such handler
+
+	resp, err = c.Do(&http.Request{URL: &url.URL{Path: "/v1/" + genesisID + "/gossip"}})
+	require.NoError(t, err)
+	require.Equal(t, http.StatusPreconditionFailed, resp.StatusCode) // not enough ws peer headers
+
+	_, err = netB.GetHTTPClient("invalid")
+	require.Error(t, err)
 }

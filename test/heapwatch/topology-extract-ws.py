@@ -68,7 +68,11 @@ def main():
                             remote_name = ip_to_name[remote_ip]
                             source = remote_name
                             target = mapped
-                            edges.append((source, target))
+                            if args.timestamp:
+                                # datetime is not serializable, so we store it as string for now
+                                edge = (source, target, {'dt': data["time"]})
+                            else:
+                                edge = (source, target)
 
                         # Check for outgoing connections
                         elif "Made outgoing connection to peer" in data.get('msg', ""):

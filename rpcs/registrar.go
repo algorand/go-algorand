@@ -26,6 +26,8 @@ import (
 type Registrar interface {
 	// RegisterHTTPHandler path accepts gorilla/mux path annotations
 	RegisterHTTPHandler(path string, handler http.Handler)
+	// RegisterHTTPHandlerFunc path accepts gorilla/mux path annotations and a HandlerFunc
+	RegisterHTTPHandlerFunc(path string, handler func(response http.ResponseWriter, request *http.Request))
 	// RegisterHandlers exposes global websocket handler registration
 	RegisterHandlers(dispatch []network.TaggedMessageHandler)
 }

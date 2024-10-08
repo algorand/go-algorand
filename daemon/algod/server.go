@@ -149,9 +149,21 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 
 	if cfg.IsGossipServer() {
 		var ot basics.OverflowTracker
-		fdRequired = ot.Add(fdRequired, uint64(cfg.IncomingConnectionsLimit)+network.ReservedHealthServiceConnections)
+		fdRequired = ot.Add(fdRequired, network.ReservedHealthServiceConnections)
 		if ot.Overflowed {
-			return errors.New("Initialize() overflowed when adding up IncomingConnectionsLimit to the existing RLIMIT_NOFILE value; decrease RestConnectionsHardLimit or IncomingConnectionsLimit")
+			return errors.New("Initialize() overflowed when adding up ReservedHealthServiceConnections to the existing RLIMIT_NOFILE value; decrease RestConnectionsHardLimit")
+		}
+		if cfg.IsGossipServer() {
+			fdRequired = ot.Add(fdRequired, uint64(cfg.IncomingConnectionsLimit))
+			if ot.Overflowed {
+				return errors.New("Initialize() overflowed when adding up IncomingConnectionsLimit to the existing RLIMIT_NOFILE value; decrease IncomingConnectionsLimit")
+			}
+		}
+		if cfg.IsHybridServer() {
+			fdRequired = ot.Add(fdRequired, uint64(cfg.P2PHybridIncomingConnectionsLimit))
+			if ot.Overflowed {
+				return errors.New("Initialize() overflowed when adding up P2PHybridIncomingConnectionsLimit to the existing RLIMIT_NOFILE value; decrease P2PHybridIncomingConnectionsLimit")
+			}
 		}
 		_, hard, fdErr := util.GetFdLimits()
 		if fdErr != nil {
@@ -164,12 +176,16 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 				// but try to keep cfg.ReservedFDs untouched by decreasing other limits
 				if cfg.AdjustConnectionLimits(fdRequired, hard) {
 					s.log.Warnf(
-						"Updated connection limits: RestConnectionsSoftLimit=%d, RestConnectionsHardLimit=%d, IncomingConnectionsLimit=%d",
+						"Updated connection limits: RestConnectionsSoftLimit=%d, RestConnectionsHardLimit=%d, IncomingConnectionsLimit=%d, P2PHybridIncomingConnectionsLimit=%d",
 						cfg.RestConnectionsSoftLimit,
 						cfg.RestConnectionsHardLimit,
 						cfg.IncomingConnectionsLimit,
+						cfg.P2PHybridIncomingConnectionsLimit,
 					)
-					if cfg.IncomingConnectionsLimit == 0 {
+					if cfg.IsHybridServer() && cfg.P2PHybridIncomingConnectionsLimit == 0 {
+						return errors.New("Initialize() failed to adjust p2p hybrid connection limits")
+					}
+					if cfg.IsGossipServer() && cfg.IncomingConnectionsLimit == 0 {
 						return errors.New("Initialize() failed to adjust connection limits")
 					}
 				}
@@ -312,6 +328,10 @@ func (s *Server) Start() {
 
 	if cfg.EnableRuntimeMetrics {
 		metrics.DefaultRegistry().Register(metrics.NewRuntimeMetrics())
+	}
+
+	if cfg.EnableNetDevMetrics {
+		metrics.DefaultRegistry().Register(metrics.NetDevMetrics)
 	}
 
 	if cfg.EnableMetricReporting {

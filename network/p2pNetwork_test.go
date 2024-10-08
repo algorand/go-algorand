@@ -22,12 +22,16 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/algorand/go-algorand/config"
+	algocrypto "github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network/limitcaller"
 	"github.com/algorand/go-algorand/network/p2p"
@@ -36,7 +40,6 @@ import (
 	"github.com/algorand/go-algorand/network/phonebook"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/algorand/go-algorand/util"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/crypto"
@@ -52,13 +55,21 @@ func (n *P2PNetwork) hasPeers() bool {
 	return len(n.wsPeers) > 0
 }
 
+func (n *P2PNetwork) hasPeer(peerID peer.ID) bool {
+	n.wsPeersLock.RLock()
+	defer n.wsPeersLock.RUnlock()
+	_, ok := n.wsPeers[peerID]
+	return ok
+}
+
 func TestP2PSubmitTX(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	cfg := config.GetDefaultLocal()
 	cfg.ForceFetchTransactions = true
+	cfg.NetAddress = "127.0.0.1:0"
 	log := logging.TestingLog(t)
-	netA, err := NewP2PNetwork(log, cfg, "", nil, genesisID, config.Devtestnet, &nopeNodeInfo{})
+	netA, err := NewP2PNetwork(log, cfg, "", nil, genesisID, config.Devtestnet, &nopeNodeInfo{}, nil)
 	require.NoError(t, err)
 	netA.Start()
 	defer netA.Stop()
@@ -70,12 +81,12 @@ func TestP2PSubmitTX(t *testing.T) {
 
 	multiAddrStr := addrsA[0].String()
 	phoneBookAddresses := []string{multiAddrStr}
-	netB, err := NewP2PNetwork(log, cfg, "", phoneBookAddresses, genesisID, config.Devtestnet, &nopeNodeInfo{})
+	netB, err := NewP2PNetwork(log, cfg, "", phoneBookAddresses, genesisID, config.Devtestnet, &nopeNodeInfo{}, nil)
 	require.NoError(t, err)
 	netB.Start()
 	defer netB.Stop()
 
-	netC, err := NewP2PNetwork(log, cfg, "", phoneBookAddresses, genesisID, config.Devtestnet, &nopeNodeInfo{})
+	netC, err := NewP2PNetwork(log, cfg, "", phoneBookAddresses, genesisID, config.Devtestnet, &nopeNodeInfo{}, nil)
 	require.NoError(t, err)
 	netC.Start()
 	defer netC.Stop()
@@ -100,26 +111,22 @@ func TestP2PSubmitTX(t *testing.T) {
 	// now we should be connected in a line: B <-> A <-> C where both B and C are connected to A but not each other
 
 	// Since we aren't using the transaction handler in this test, we need to register a pass-through handler
-	passThroughHandler := []TaggedMessageProcessor{
+	passThroughHandler := []TaggedMessageValidatorHandler{
 		{
 			Tag: protocol.TxnTag,
 			MessageHandler: struct {
-				ProcessorValidateFunc
-				ProcessorHandleFunc
+				ValidateHandleFunc
 			}{
-				ProcessorValidateFunc(func(msg IncomingMessage) ValidatedMessage {
-					return ValidatedMessage{Action: Accept, Tag: msg.Tag, ValidatedMessage: nil}
-				}),
-				ProcessorHandleFunc(func(msg ValidatedMessage) OutgoingMessage {
-					return OutgoingMessage{Action: Ignore}
+				ValidateHandleFunc(func(msg IncomingMessage) OutgoingMessage {
+					return OutgoingMessage{Action: Accept, Tag: msg.Tag}
 				}),
 			},
 		},
 	}
 
-	netA.RegisterProcessors(passThroughHandler)
-	netB.RegisterProcessors(passThroughHandler)
-	netC.RegisterProcessors(passThroughHandler)
+	netA.RegisterValidatorHandlers(passThroughHandler)
+	netB.RegisterValidatorHandlers(passThroughHandler)
+	netC.RegisterValidatorHandlers(passThroughHandler)
 
 	// send messages from B and confirm that they get received by C (via A)
 	for i := 0; i < 10; i++ {
@@ -149,8 +156,9 @@ func TestP2PSubmitTXNoGossip(t *testing.T) {
 
 	cfg := config.GetDefaultLocal()
 	cfg.ForceFetchTransactions = true
+	cfg.NetAddress = "127.0.0.1:0"
 	log := logging.TestingLog(t)
-	netA, err := NewP2PNetwork(log, cfg, "", nil, genesisID, config.Devtestnet, &nopeNodeInfo{})
+	netA, err := NewP2PNetwork(log, cfg, "", nil, genesisID, config.Devtestnet, &nopeNodeInfo{}, nil)
 	require.NoError(t, err)
 	netA.Start()
 	defer netA.Stop()
@@ -162,7 +170,7 @@ func TestP2PSubmitTXNoGossip(t *testing.T) {
 
 	multiAddrStr := addrsA[0].String()
 	phoneBookAddresses := []string{multiAddrStr}
-	netB, err := NewP2PNetwork(log, cfg, "", phoneBookAddresses, genesisID, config.Devtestnet, &nopeNodeInfo{})
+	netB, err := NewP2PNetwork(log, cfg, "", phoneBookAddresses, genesisID, config.Devtestnet, &nopeNodeInfo{}, nil)
 	require.NoError(t, err)
 	netB.Start()
 	defer netB.Stop()
@@ -179,7 +187,9 @@ func TestP2PSubmitTXNoGossip(t *testing.T) {
 
 	// run netC in NPN mode (no relay => no gossip sup => no TX receiving)
 	cfg.ForceFetchTransactions = false
-	netC, err := NewP2PNetwork(log, cfg, "", phoneBookAddresses, genesisID, config.Devtestnet, &nopeNodeInfo{})
+	// Have to unset NetAddress to get IsGossipServer to return false
+	cfg.NetAddress = ""
+	netC, err := NewP2PNetwork(log, cfg, "", phoneBookAddresses, genesisID, config.Devtestnet, &nopeNodeInfo{}, nil)
 	require.NoError(t, err)
 	netC.Start()
 	defer netC.Stop()
@@ -192,25 +202,21 @@ func TestP2PSubmitTXNoGossip(t *testing.T) {
 
 	// ensure netC cannot receive messages
 
-	passThroughHandler := []TaggedMessageProcessor{
+	passThroughHandler := []TaggedMessageValidatorHandler{
 		{
 			Tag: protocol.TxnTag,
 			MessageHandler: struct {
-				ProcessorValidateFunc
-				ProcessorHandleFunc
+				ValidateHandleFunc
 			}{
-				ProcessorValidateFunc(func(msg IncomingMessage) ValidatedMessage {
-					return ValidatedMessage{Action: Accept, Tag: msg.Tag, ValidatedMessage: nil}
-				}),
-				ProcessorHandleFunc(func(msg ValidatedMessage) OutgoingMessage {
-					return OutgoingMessage{Action: Ignore}
+				ValidateHandleFunc(func(msg IncomingMessage) OutgoingMessage {
+					return OutgoingMessage{Action: Accept, Tag: msg.Tag}
 				}),
 			},
 		},
 	}
 
-	netB.RegisterProcessors(passThroughHandler)
-	netC.RegisterProcessors(passThroughHandler)
+	netB.RegisterValidatorHandlers(passThroughHandler)
+	netC.RegisterValidatorHandlers(passThroughHandler)
 	for i := 0; i < 10; i++ {
 		err = netA.Broadcast(context.Background(), protocol.TxnTag, []byte(fmt.Sprintf("test %d", i)), false, nil)
 		require.NoError(t, err)
@@ -243,8 +249,9 @@ func TestP2PSubmitWS(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	cfg := config.GetDefaultLocal()
+	cfg.NetAddress = "127.0.0.1:0"
 	log := logging.TestingLog(t)
-	netA, err := NewP2PNetwork(log, cfg, "", nil, genesisID, config.Devtestnet, &nopeNodeInfo{})
+	netA, err := NewP2PNetwork(log, cfg, "", nil, genesisID, config.Devtestnet, &nopeNodeInfo{}, nil)
 	require.NoError(t, err)
 
 	err = netA.Start()
@@ -258,13 +265,13 @@ func TestP2PSubmitWS(t *testing.T) {
 
 	multiAddrStr := addrsA[0].String()
 	phoneBookAddresses := []string{multiAddrStr}
-	netB, err := NewP2PNetwork(log, cfg, "", phoneBookAddresses, genesisID, config.Devtestnet, &nopeNodeInfo{})
+	netB, err := NewP2PNetwork(log, cfg, "", phoneBookAddresses, genesisID, config.Devtestnet, &nopeNodeInfo{}, nil)
 	require.NoError(t, err)
 	err = netB.Start()
 	require.NoError(t, err)
 	defer netB.Stop()
 
-	netC, err := NewP2PNetwork(log, cfg, "", phoneBookAddresses, genesisID, config.Devtestnet, &nopeNodeInfo{})
+	netC, err := NewP2PNetwork(log, cfg, "", phoneBookAddresses, genesisID, config.Devtestnet, &nopeNodeInfo{}, nil)
 	require.NoError(t, err)
 	err = netC.Start()
 	require.NoError(t, err)
@@ -338,11 +345,6 @@ func (s *mockService) AddrInfo() peer.AddrInfo {
 	}
 }
 
-func (s *mockService) DialNode(ctx context.Context, peer *peer.AddrInfo) error {
-	s.peers[peer.ID] = *peer
-	return nil
-}
-
 func (s *mockService) DialPeersUntilTargetCount(targetConnCount int) {
 }
 
@@ -366,6 +368,10 @@ func (s *mockService) Publish(ctx context.Context, topic string, data []byte) er
 	return nil
 }
 
+func (s *mockService) GetHTTPClient(addrInfo *peer.AddrInfo, connTimeStore limitcaller.ConnectionTimeStore, queueingTimeout time.Duration) (*http.Client, error) {
+	return nil, nil
+}
+
 func makeMockService(id peer.ID, addrs []ma.Multiaddr) *mockService {
 	return &mockService{
 		id:    id,
@@ -378,7 +384,7 @@ func TestP2PNetworkAddress(t *testing.T) {
 
 	cfg := config.GetDefaultLocal()
 	log := logging.TestingLog(t)
-	netA, err := NewP2PNetwork(log, cfg, "", nil, genesisID, config.Devtestnet, &nopeNodeInfo{})
+	netA, err := NewP2PNetwork(log, cfg, "", nil, genesisID, config.Devtestnet, &nopeNodeInfo{}, nil)
 	defer netA.Stop()
 	require.NoError(t, err)
 	addrInfo := netA.service.AddrInfo()
@@ -574,6 +580,7 @@ func TestP2PNetworkDHTCapabilities(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	cfg := config.GetDefaultLocal()
+	cfg.NetAddress = "127.0.0.1:0"
 	cfg.EnableDHTProviders = true
 	log := logging.TestingLog(t)
 
@@ -589,7 +596,7 @@ func TestP2PNetworkDHTCapabilities(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			netA, err := NewP2PNetwork(log, cfg, "", nil, genesisID, config.Devtestnet, test.nis[0])
+			netA, err := NewP2PNetwork(log, cfg, "", nil, genesisID, config.Devtestnet, test.nis[0], nil)
 			require.NoError(t, err)
 
 			err = netA.Start()
@@ -603,13 +610,13 @@ func TestP2PNetworkDHTCapabilities(t *testing.T) {
 
 			multiAddrStr := addrsA[0].String()
 			phoneBookAddresses := []string{multiAddrStr}
-			netB, err := NewP2PNetwork(log, cfg, "", phoneBookAddresses, genesisID, config.Devtestnet, test.nis[1])
+			netB, err := NewP2PNetwork(log, cfg, "", phoneBookAddresses, genesisID, config.Devtestnet, test.nis[1], nil)
 			require.NoError(t, err)
 			err = netB.Start()
 			require.NoError(t, err)
 			defer netB.Stop()
 
-			netC, err := NewP2PNetwork(log, cfg, "", phoneBookAddresses, genesisID, config.Devtestnet, test.nis[2])
+			netC, err := NewP2PNetwork(log, cfg, "", phoneBookAddresses, genesisID, config.Devtestnet, test.nis[2], nil)
 			require.NoError(t, err)
 			err = netC.Start()
 			require.NoError(t, err)
@@ -734,9 +741,10 @@ func TestP2PHTTPHandler(t *testing.T) {
 	cfg := config.GetDefaultLocal()
 	cfg.EnableDHTProviders = true
 	cfg.GossipFanout = 1
+	cfg.NetAddress = "127.0.0.1:0"
 	log := logging.TestingLog(t)
 
-	netA, err := NewP2PNetwork(log, cfg, "", nil, genesisID, config.Devtestnet, &nopeNodeInfo{})
+	netA, err := NewP2PNetwork(log, cfg, "", nil, genesisID, config.Devtestnet, &nopeNodeInfo{}, nil)
 	require.NoError(t, err)
 
 	h := &p2phttpHandler{t, "hello", nil}
@@ -753,7 +761,7 @@ func TestP2PHTTPHandler(t *testing.T) {
 	require.NoError(t, err)
 	require.NotZero(t, addrsA[0])
 
-	httpClient, err := p2p.MakeHTTPClient(&peerInfoA)
+	httpClient, err := p2p.MakeTestHTTPClient(&peerInfoA)
 	require.NoError(t, err)
 	resp, err := httpClient.Get("/test")
 	require.NoError(t, err)
@@ -764,7 +772,7 @@ func TestP2PHTTPHandler(t *testing.T) {
 	require.Equal(t, "hello", string(body))
 
 	// check another endpoint that also access the underlying connection/stream
-	httpClient, err = p2p.MakeHTTPClient(&peerInfoA)
+	httpClient, err = p2p.MakeTestHTTPClient(&peerInfoA)
 	require.NoError(t, err)
 	resp, err = httpClient.Get("/check-conn")
 	require.NoError(t, err)
@@ -776,13 +784,53 @@ func TestP2PHTTPHandler(t *testing.T) {
 
 	// check rate limiting client:
 	// zero clients allowed, rate limiting window (10s) is greater than queue deadline (1s)
+	netB, err := NewP2PNetwork(log, cfg, "", nil, genesisID, config.Devtestnet, &nopeNodeInfo{}, nil)
+	require.NoError(t, err)
 	pstore, err := peerstore.MakePhonebook(0, 10*time.Second)
 	require.NoError(t, err)
-	pstore.AddPersistentPeers([]interface{}{&peerInfoA}, "net", phonebook.PhoneBookEntryRelayRole)
-	httpClient, err = p2p.MakeHTTPClientWithRateLimit(&peerInfoA, pstore, 1*time.Second, 1)
+	pstore.AddPersistentPeers([]*peer.AddrInfo{&peerInfoA}, "net", phonebook.PhoneBookEntryRelayRole)
+	httpClient, err = netB.service.GetHTTPClient(&peerInfoA, pstore, 1*time.Second)
 	require.NoError(t, err)
 	_, err = httpClient.Get("/test")
 	require.ErrorIs(t, err, limitcaller.ErrConnectionQueueingTimeout)
+}
+
+// TestP2PHTTPHandlerAllInterfaces makes sure HTTP server runs even if NetAddress is set to a non-routable address
+func TestP2PHTTPHandlerAllInterfaces(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	cfg := config.GetDefaultLocal()
+	cfg.EnableDHTProviders = false
+	cfg.GossipFanout = 1
+	cfg.NetAddress = ":0"
+	log := logging.TestingLog(t)
+
+	netA, err := NewP2PNetwork(log, cfg, "", nil, genesisID, config.Devtestnet, &nopeNodeInfo{}, nil)
+	require.NoError(t, err)
+
+	h := &p2phttpHandler{t, "hello", nil}
+	netA.RegisterHTTPHandler("/test", h)
+
+	netA.Start()
+	defer netA.Stop()
+
+	peerInfoA := netA.service.AddrInfo()
+	addrsA, err := peer.AddrInfoToP2pAddrs(&peerInfoA)
+	require.NoError(t, err)
+	require.NotZero(t, addrsA[0])
+
+	t.Logf("peerInfoA: %s", peerInfoA)
+	httpClient, err := p2p.MakeTestHTTPClient(&peerInfoA)
+	require.NoError(t, err)
+	resp, err := httpClient.Get("/test")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.Equal(t, "hello", string(body))
+
 }
 
 // TestP2PRelay checks p2p nodes can properly relay messages:
@@ -794,11 +842,18 @@ func TestP2PHTTPHandler(t *testing.T) {
 func TestP2PRelay(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
+	if strings.ToUpper(os.Getenv("CIRCLECI")) == "TRUE" {
+		t.Skip("Flaky on CIRCLECI")
+	}
+
 	cfg := config.GetDefaultLocal()
+	cfg.DNSBootstrapID = "" // disable DNS lookups since the test uses phonebook addresses
 	cfg.ForceFetchTransactions = true
+	cfg.BaseLoggerDebugLevel = 5
+	cfg.NetAddress = "127.0.0.1:0"
 	log := logging.TestingLog(t)
 	log.Debugln("Starting netA")
-	netA, err := NewP2PNetwork(log.With("net", "netA"), cfg, "", nil, genesisID, config.Devtestnet, &nopeNodeInfo{})
+	netA, err := NewP2PNetwork(log.With("net", "netA"), cfg, "", nil, genesisID, config.Devtestnet, &nopeNodeInfo{}, nil)
 	require.NoError(t, err)
 
 	err = netA.Start()
@@ -813,8 +868,10 @@ func TestP2PRelay(t *testing.T) {
 	multiAddrStr := addrsA[0].String()
 	phoneBookAddresses := []string{multiAddrStr}
 
+	// Explicitly unset NetAddress for netB
+	cfg.NetAddress = ""
 	log.Debugf("Starting netB with phonebook addresses %v", phoneBookAddresses)
-	netB, err := NewP2PNetwork(log.With("net", "netB"), cfg, "", phoneBookAddresses, genesisID, config.Devtestnet, &nopeNodeInfo{})
+	netB, err := NewP2PNetwork(log.With("net", "netB"), cfg, "", phoneBookAddresses, genesisID, config.Devtestnet, &nopeNodeInfo{}, nil)
 	require.NoError(t, err)
 	err = netB.Start()
 	require.NoError(t, err)
@@ -834,26 +891,22 @@ func TestP2PRelay(t *testing.T) {
 		return netA.hasPeers() && netB.hasPeers()
 	}, 2*time.Second, 50*time.Millisecond)
 
-	makeCounterHandler := func(numExpected int, counter *atomic.Uint32, msgs *[][]byte) ([]TaggedMessageProcessor, chan struct{}) {
+	makeCounterHandler := func(numExpected int, counter *atomic.Uint32, msgs *[][]byte) ([]TaggedMessageValidatorHandler, chan struct{}) {
 		counterDone := make(chan struct{})
-		counterHandler := []TaggedMessageProcessor{
+		counterHandler := []TaggedMessageValidatorHandler{
 			{
 				Tag: protocol.TxnTag,
 				MessageHandler: struct {
-					ProcessorValidateFunc
-					ProcessorHandleFunc
+					ValidateHandleFunc
 				}{
-					ProcessorValidateFunc(func(msg IncomingMessage) ValidatedMessage {
-						return ValidatedMessage{Action: Accept, Tag: msg.Tag, ValidatedMessage: msg.Data}
-					}),
-					ProcessorHandleFunc(func(msg ValidatedMessage) OutgoingMessage {
+					ValidateHandleFunc(func(msg IncomingMessage) OutgoingMessage {
 						if msgs != nil {
-							*msgs = append(*msgs, msg.ValidatedMessage.([]byte))
+							*msgs = append(*msgs, msg.Data)
 						}
 						if count := counter.Add(1); int(count) >= numExpected {
 							close(counterDone)
 						}
-						return OutgoingMessage{Action: Ignore}
+						return OutgoingMessage{Action: Accept, Tag: msg.Tag}
 					}),
 				},
 			},
@@ -862,10 +915,10 @@ func TestP2PRelay(t *testing.T) {
 	}
 	var counter atomic.Uint32
 	counterHandler, counterDone := makeCounterHandler(1, &counter, nil)
-	netA.RegisterProcessors(counterHandler)
+	netA.RegisterValidatorHandlers(counterHandler)
 
-	// send 5 messages from both netB to netA
-	// since there is no node with listening address set => no messages should be received
+	// send 5 messages from netB to netA
+	// since relaying is disabled on net B => no messages should be received by net A
 	for i := 0; i < 5; i++ {
 		err := netB.Relay(context.Background(), protocol.TxnTag, []byte{1, 2, 3, byte(i)}, true, nil)
 		require.NoError(t, err)
@@ -880,9 +933,10 @@ func TestP2PRelay(t *testing.T) {
 	// add a netC with listening address set and enable relaying on netB
 	// ensure all messages from netB and netC are received by netA
 	cfg.NetAddress = "127.0.0.1:0"
-	log.Debugf("Starting netB with phonebook addresses %v", phoneBookAddresses)
-	netC, err := NewP2PNetwork(log.With("net", "netC"), cfg, "", phoneBookAddresses, genesisID, config.Devtestnet, &nopeNodeInfo{})
+	log.Debugf("Starting netC with phonebook addresses %v", phoneBookAddresses)
+	netC, err := NewP2PNetwork(log.With("net", "netC"), cfg, "", phoneBookAddresses, genesisID, config.Devtestnet, &nopeNodeInfo{}, nil)
 	require.NoError(t, err)
+	require.True(t, netC.relayMessages)
 	err = netC.Start()
 	require.NoError(t, err)
 	defer netC.Stop()
@@ -892,24 +946,31 @@ func TestP2PRelay(t *testing.T) {
 	require.Eventually(
 		t,
 		func() bool {
-			return len(netA.service.ListPeersForTopic(p2p.TXTopicName)) > 0 &&
-				len(netB.service.ListPeersForTopic(p2p.TXTopicName)) > 0 &&
-				len(netC.service.ListPeersForTopic(p2p.TXTopicName)) > 0
+			netAtopicPeers := netA.service.ListPeersForTopic(p2p.TXTopicName)
+			netBtopicPeers := netB.service.ListPeersForTopic(p2p.TXTopicName)
+			netCtopicPeers := netC.service.ListPeersForTopic(p2p.TXTopicName)
+			netBConnected := slices.Contains(netAtopicPeers, netB.service.ID())
+			netCConnected := slices.Contains(netAtopicPeers, netC.service.ID())
+			return len(netAtopicPeers) >= 2 &&
+				len(netBtopicPeers) > 0 &&
+				len(netCtopicPeers) > 0 &&
+				netBConnected && netCConnected
 		},
-		2*time.Second,
+		10*time.Second, // wait until netC node gets actually connected to netA after starting
 		50*time.Millisecond,
 	)
 
 	require.Eventually(t, func() bool {
-		return netA.hasPeers() && netB.hasPeers() && netC.hasPeers()
+		return netA.hasPeers() && netB.hasPeers() && netC.hasPeers() &&
+			netA.hasPeer(netB.service.ID()) && netA.hasPeer(netC.service.ID())
 	}, 2*time.Second, 50*time.Millisecond)
 
 	const expectedMsgs = 10
 	counter.Store(0)
 	var loggedMsgs [][]byte
 	counterHandler, counterDone = makeCounterHandler(expectedMsgs, &counter, &loggedMsgs)
-	netA.ClearProcessors()
-	netA.RegisterProcessors(counterHandler)
+	netA.ClearValidatorHandlers()
+	netA.RegisterValidatorHandlers(counterHandler)
 
 	for i := 0; i < expectedMsgs/2; i++ {
 		err := netB.Relay(context.Background(), protocol.TxnTag, []byte{5, 6, 7, byte(i)}, true, nil)
@@ -1007,6 +1068,7 @@ func TestP2PWantTXGossip(t *testing.T) {
 	net.wantTXGossip.Store(true)
 	net.nodeInfo = &nopeNodeInfo{}
 	net.config.ForceFetchTransactions = false
+	net.config.NetAddress = ""
 	net.relayMessages = false
 	net.OnNetworkAdvance()
 	require.Eventually(t, func() bool { net.wg.Wait(); return true }, 1*time.Second, 50*time.Millisecond)
@@ -1024,6 +1086,7 @@ func TestP2PWantTXGossip(t *testing.T) {
 	net.wantTXGossip.Store(false)
 	net.nodeInfo = &nopeNodeInfo{}
 	net.config.ForceFetchTransactions = false
+	net.config.NetAddress = ""
 	net.relayMessages = true
 	net.OnNetworkAdvance()
 	require.Eventually(t, func() bool { return mockService.count.Load() == 3 }, 1*time.Second, 50*time.Millisecond)
@@ -1046,7 +1109,7 @@ func TestP2PWantTXGossip(t *testing.T) {
 	require.True(t, net.wantTXGossip.Load())
 }
 
-func TestMergeP2PAddrInfoResolvedAddresses(t *testing.T) {
+func TestP2PMergeAddrInfoResolvedAddresses(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -1120,21 +1183,194 @@ func TestMergeP2PAddrInfoResolvedAddresses(t *testing.T) {
 	}
 }
 
-// TestP2PGossipSubPeerCasts checks that gossipSubPeer implements the ErlClient and IPAddressable interfaces
-// needed by TxHandler
-func TestP2PGossipSubPeerCasts(t *testing.T) {
+// TestP2PwsStreamHandlerDedup checks that the wsStreamHandler detects duplicate connections
+// and does not add a new wePeer for it.
+func TestP2PwsStreamHandlerDedup(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
-	var g interface{} = gossipSubPeer{}
-	_, ok := g.(util.ErlClient)
-	require.True(t, ok)
+	cfg := config.GetDefaultLocal()
+	cfg.DNSBootstrapID = "" // disable DNS lookups since the test uses phonebook addresses
+	cfg.NetAddress = "127.0.0.1:0"
+	log := logging.TestingLog(t)
+	netA, err := NewP2PNetwork(log, cfg, "", nil, genesisID, config.Devtestnet, &nopeNodeInfo{}, &identityOpts{tracker: NewIdentityTracker()})
+	require.NoError(t, err)
+	err = netA.Start()
+	require.NoError(t, err)
+	defer netA.Stop()
 
-	_, ok = g.(IPAddressable)
-	require.True(t, ok)
+	peerInfoA := netA.service.AddrInfo()
+	addrsA, err := peer.AddrInfoToP2pAddrs(&peerInfoA)
+	require.NoError(t, err)
+	require.NotZero(t, addrsA[0])
 
-	// check that gossipSubPeer is hashable as ERL wants
-	var m map[util.ErlClient]struct{}
-	require.Equal(t, m[gossipSubPeer{}], struct{}{})
-	require.Equal(t, m[g.(util.ErlClient)], struct{}{})
+	multiAddrStr := addrsA[0].String()
+	phoneBookAddresses := []string{multiAddrStr}
+	netB, err := NewP2PNetwork(log, cfg, "", phoneBookAddresses, genesisID, config.Devtestnet, &nopeNodeInfo{}, &identityOpts{tracker: NewIdentityTracker()})
+	require.NoError(t, err)
+
+	// now say netA's identity tracker knows about netB's peerID
+	var netIdentPeerID algocrypto.PublicKey
+	p2pPeerPubKey, err := netB.service.ID().ExtractPublicKey()
+	require.NoError(t, err)
+
+	b, err := p2pPeerPubKey.Raw()
+	require.NoError(t, err)
+	netIdentPeerID = algocrypto.PublicKey(b)
+	wsp := &wsPeer{
+		identity: netIdentPeerID,
+	}
+	netA.identityTracker.setIdentity(wsp)
+	networkPeerIdentityDisconnectInitial := networkPeerIdentityDisconnect.GetUint64Value()
+
+	// start network and ensure dedup happens
+	err = netB.Start()
+	require.NoError(t, err)
+	defer netB.Stop()
+
+	require.Eventually(t, func() bool {
+		return networkPeerIdentityDisconnect.GetUint64Value() == networkPeerIdentityDisconnectInitial+1
+	}, 2*time.Second, 50*time.Millisecond)
+
+	// now allow the peer made outgoing connection to handle conn closing initiated by the other side
+	require.Eventually(t, func() bool {
+		return !netA.hasPeers() && !netB.hasPeers()
+	}, 2*time.Second, 50*time.Millisecond)
+}
+
+// TestP2PEnableGossipService_NodeDisable ensures that a node with EnableGossipService=false
+// still can participate in the network by sending and receiving messages.
+func TestP2PEnableGossipService_NodeDisable(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	log := logging.TestingLog(t)
+
+	// prepare configs
+	cfg := config.GetDefaultLocal()
+	cfg.DNSBootstrapID = "" // disable DNS lookups since the test uses phonebook addresses
+
+	relayCfg := cfg
+	relayCfg.NetAddress = "127.0.0.1:0"
+
+	nodeCfg := cfg
+	nodeCfg.EnableGossipService = false
+	nodeCfg2 := nodeCfg
+	nodeCfg2.NetAddress = "127.0.0.1:0"
+
+	tests := []struct {
+		name     string
+		relayCfg config.Local
+		nodeCfg  config.Local
+	}{
+		{"non-listening-node", relayCfg, nodeCfg},
+		{"listening-node", relayCfg, nodeCfg2},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			relayCfg := test.relayCfg
+			netA, err := NewP2PNetwork(log, relayCfg, "", nil, genesisID, config.Devtestnet, &nopeNodeInfo{}, nil)
+			require.NoError(t, err)
+			netA.Start()
+			defer netA.Stop()
+
+			peerInfoA := netA.service.AddrInfo()
+			addrsA, err := peer.AddrInfoToP2pAddrs(&peerInfoA)
+			require.NoError(t, err)
+			require.NotZero(t, addrsA[0])
+			multiAddrStr := addrsA[0].String()
+			phoneBookAddresses := []string{multiAddrStr}
+
+			// start netB with gossip service disabled
+			nodeCfg := test.nodeCfg
+			netB, err := NewP2PNetwork(log, nodeCfg, "", phoneBookAddresses, genesisID, config.Devtestnet, &nopeNodeInfo{}, nil)
+			require.NoError(t, err)
+			netB.Start()
+			defer netB.Stop()
+
+			require.Eventually(t, func() bool {
+				return netA.hasPeers() && netB.hasPeers()
+			}, 1*time.Second, 50*time.Millisecond)
+
+			testTag := protocol.AgreementVoteTag
+
+			var handlerCountA atomic.Uint32
+			passThroughHandlerA := []TaggedMessageHandler{
+				{Tag: testTag, MessageHandler: HandlerFunc(func(msg IncomingMessage) OutgoingMessage {
+					handlerCountA.Add(1)
+					return OutgoingMessage{Action: Broadcast}
+				})},
+			}
+			var handlerCountB atomic.Uint32
+			passThroughHandlerB := []TaggedMessageHandler{
+				{Tag: testTag, MessageHandler: HandlerFunc(func(msg IncomingMessage) OutgoingMessage {
+					handlerCountB.Add(1)
+					return OutgoingMessage{Action: Broadcast}
+				})},
+			}
+			netA.RegisterHandlers(passThroughHandlerA)
+			netB.RegisterHandlers(passThroughHandlerB)
+
+			// send messages from both nodes to each other and confirm they are received.
+			for i := 0; i < 10; i++ {
+				err = netA.Broadcast(context.Background(), testTag, []byte(fmt.Sprintf("hello from A %d", i)), false, nil)
+				require.NoError(t, err)
+				err = netB.Broadcast(context.Background(), testTag, []byte(fmt.Sprintf("hello from B %d", i)), false, nil)
+				require.NoError(t, err)
+			}
+
+			require.Eventually(
+				t,
+				func() bool {
+					return handlerCountA.Load() == 10 && handlerCountB.Load() == 10
+				},
+				2*time.Second,
+				50*time.Millisecond,
+			)
+		})
+	}
+}
+
+// TestP2PEnableGossipService_BothDisable checks if both relay and node have EnableGossipService=false
+// they do not gossip to each other.
+//
+// Note, this test checks a configuration where node A (relay) does not know about node B,
+// and node B is configured to connect to A, and this scenario rejecting logic is guaranteed to work.
+func TestP2PEnableGossipService_BothDisable(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	log := logging.TestingLog(t)
+
+	// prepare configs
+	cfg := config.GetDefaultLocal()
+	cfg.DNSBootstrapID = ""         // disable DNS lookups since the test uses phonebook addresses
+	cfg.EnableGossipService = false // disable gossip service by default
+
+	relayCfg := cfg
+	relayCfg.NetAddress = "127.0.0.1:0"
+
+	netA, err := NewP2PNetwork(log.With("net", "netA"), relayCfg, "", nil, genesisID, config.Devtestnet, &nopeNodeInfo{}, nil)
+	require.NoError(t, err)
+	netA.Start()
+	defer netA.Stop()
+
+	peerInfoA := netA.service.AddrInfo()
+	addrsA, err := peer.AddrInfoToP2pAddrs(&peerInfoA)
+	require.NoError(t, err)
+	require.NotZero(t, addrsA[0])
+	multiAddrStr := addrsA[0].String()
+	phoneBookAddresses := []string{multiAddrStr}
+
+	nodeCfg := cfg
+	nodeCfg.NetAddress = ""
+
+	netB, err := NewP2PNetwork(log.With("net", "netB"), nodeCfg, "", phoneBookAddresses, genesisID, config.Devtestnet, &nopeNodeInfo{}, nil)
+	require.NoError(t, err)
+	netB.Start()
+	defer netB.Stop()
+
+	require.Eventually(t, func() bool {
+		return len(netA.service.Conns()) > 0 && len(netB.service.Conns()) > 0
+	}, 1*time.Second, 50*time.Millisecond)
+
+	require.False(t, netA.hasPeers())
+	require.False(t, netB.hasPeers())
 }

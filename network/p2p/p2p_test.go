@@ -19,14 +19,19 @@ package p2p
 import (
 	"context"
 	"fmt"
+	"net"
 	"testing"
 
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
+	"github.com/multiformats/go-multiaddr"
+	manet "github.com/multiformats/go-multiaddr/net"
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/network/p2p/peerstore"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -168,4 +173,165 @@ func TestP2PProtocolAsMeta(t *testing.T) {
 	tid, inst := GetPeerTelemetryInfo(protos)
 	require.Equal(t, h1TID, tid)
 	require.Equal(t, h1Inst, inst)
+}
+
+func TestP2PPrivateAddresses(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	privAddrList := []string{
+		"/ip4/10.0.0.0/ipcidr/8",
+		"/ip4/100.64.0.0/ipcidr/10",
+		"/ip4/169.254.0.0/ipcidr/16",
+		"/ip4/172.16.0.0/ipcidr/12",
+		"/ip4/192.0.0.0/ipcidr/24",
+		"/ip4/192.0.2.0/ipcidr/24",
+		"/ip4/192.88.99.0/ipcidr/24",
+		"/ip4/192.168.0.0/ipcidr/16",
+		"/ip4/198.18.0.0/ipcidr/15",
+		"/ip4/198.51.100.0/ipcidr/24",
+		"/ip4/203.0.113.0/ipcidr/24",
+		"/ip4/224.0.0.0/ipcidr/4",
+		"/ip4/224.0.0.0/ipcidr/4",
+		"/ip4/233.252.0.0/ipcidr/4",
+		"/ip4/255.255.255.255/ipcidr/32",
+		"/ip6/fc00::/ipcidr/7",
+		"/ip6/fe80::/ipcidr/10",
+		"/ip6/2001:db8::/ipcidr/32",
+	}
+
+	// these are handled by addrFilter explicitly as a custom filter
+	extra := []string{
+		"/ip6/100::/ipcidr/64",
+		"/ip6/2001:2::/ipcidr/48",
+	}
+
+	for _, addr := range privAddrList {
+		ma := multiaddr.StringCast(addr)
+		require.False(t, manet.IsPublicAddr(ma), "public check failed on %s", addr)
+		require.Empty(t, addressFilter([]multiaddr.Multiaddr{ma}), "addrFilter failed on %s", addr)
+	}
+
+	for _, addr := range extra {
+		ma := multiaddr.StringCast(addr)
+		require.Empty(t, addressFilter([]multiaddr.Multiaddr{ma}), "addrFilter failed on %s", addr)
+	}
+
+	// ensure addrFilter allows normal addresses
+	valid := []string{
+		"/ip4/3.4.5.6/tcp/1234",
+		"/ip6/2606:4700::/tcp/1234",
+	}
+
+	for _, addr := range valid {
+		ma := multiaddr.StringCast(addr)
+		require.Equal(t, []multiaddr.Multiaddr{ma}, addressFilter([]multiaddr.Multiaddr{ma}), "addrFilter failed on %s", addr)
+	}
+}
+
+func TestP2PMaNetIsIPUnspecified(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	unspecified := []string{
+		":0",
+		":1234",
+		"0.0.0.0:2345",
+		"0.0.0.0:0",
+	}
+	for _, addr := range unspecified {
+		parsed, err := netAddressToListenAddress(addr)
+		require.NoError(t, err)
+		require.True(t, manet.IsIPUnspecified(multiaddr.StringCast(parsed)), "expected %s to be unspecified", addr)
+	}
+
+	specified := []string{
+		"127.0.0.1:0",
+		"127.0.0.1:1234",
+		"1.2.3.4:5678",
+		"1.2.3.4:0",
+		"192.168.0.111:0",
+		"10.0.0.1:101",
+	}
+	for _, addr := range specified {
+		parsed, err := netAddressToListenAddress(addr)
+		require.NoError(t, err)
+		require.False(t, manet.IsIPUnspecified(multiaddr.StringCast(parsed)), "expected %s to be specified", addr)
+	}
+
+	// also make sure IsIPUnspecified supports IPv6
+	unspecified6 := []string{
+		"/ip6/::/tcp/1234",
+	}
+	for _, addr := range unspecified6 {
+		require.True(t, manet.IsIPUnspecified(multiaddr.StringCast(addr)), "expected %s to be unspecified", addr)
+	}
+}
+
+// TestP2PMakeHostAddressFilter ensures that the host address filter is enabled only when the
+// NetAddress is set to "all interfaces" value (0.0.0.0:P or :P)
+func TestP2PMakeHostAddressFilter(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	td := t.TempDir()
+	pstore, err := peerstore.NewPeerStore(nil, "test")
+	require.NoError(t, err)
+
+	// check "all interfaces" addr
+	for _, addr := range []string{":0", "0.0.0.0:0"} {
+		cfg := config.GetDefaultLocal()
+		cfg.NetAddress = addr
+		host, la, err := MakeHost(cfg, td, pstore)
+		require.NoError(t, err)
+		require.Equal(t, "/ip4/0.0.0.0/tcp/0", la)
+		require.Empty(t, host.Addrs())
+
+		mala, err := multiaddr.NewMultiaddr(la)
+		require.NoError(t, err)
+		host.Network().Listen(mala)
+		addrs := host.Addrs()
+		if len(addrs) > 0 {
+			// CI servers might have a single public IP interface, validate if this is a case
+			for _, a := range addrs {
+				require.True(t, manet.IsPublicAddr(a))
+			}
+		}
+		host.Close()
+	}
+
+	// check specific addresses IPv4 retrieved from the system
+	addresses := []string{}
+	ifaces, err := net.Interfaces()
+	require.NoError(t, err)
+	for _, i := range ifaces {
+		addrs, err := i.Addrs()
+		require.NoError(t, err)
+		for _, a := range addrs {
+			switch v := a.(type) {
+			case *net.IPAddr:
+				if v.IP.To4() != nil {
+					addresses = append(addresses, v.IP.String())
+				}
+			case *net.IPNet:
+				if v.IP.To4() != nil {
+					addresses = append(addresses, v.IP.String())
+				}
+			}
+		}
+	}
+	for _, addr := range addresses {
+		cfg := config.GetDefaultLocal()
+		cfg.NetAddress = addr + ":0"
+		host, la, err := MakeHost(cfg, td, pstore)
+		require.NoError(t, err)
+		require.Equal(t, "/ip4/"+addr+"/tcp/0", la)
+		require.Empty(t, host.Addrs())
+		mala, err := multiaddr.NewMultiaddr(la)
+		require.NoError(t, err)
+		err = host.Network().Listen(mala)
+		require.NoError(t, err)
+		require.NotEmpty(t, host.Addrs())
+		host.Close()
+	}
 }

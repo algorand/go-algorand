@@ -56,13 +56,13 @@ type CapabilitiesDiscovery struct {
 	wg   sync.WaitGroup
 }
 
-// Advertise implements the discovery.Discovery/discovery.Advertiser interface
-func (c *CapabilitiesDiscovery) Advertise(ctx context.Context, ns string, opts ...discovery.Option) (time.Duration, error) {
+// advertise implements the discovery.Discovery/discovery.Advertiser interface
+func (c *CapabilitiesDiscovery) advertise(ctx context.Context, ns string, opts ...discovery.Option) (time.Duration, error) {
 	return c.disc.Advertise(ctx, ns, opts...)
 }
 
-// FindPeers implements the discovery.Discovery/discovery.Discoverer interface
-func (c *CapabilitiesDiscovery) FindPeers(ctx context.Context, ns string, opts ...discovery.Option) (<-chan peer.AddrInfo, error) {
+// findPeers implements the discovery.Discovery/discovery.Discoverer interface
+func (c *CapabilitiesDiscovery) findPeers(ctx context.Context, ns string, opts ...discovery.Option) (<-chan peer.AddrInfo, error) {
 	return c.disc.FindPeers(ctx, ns, opts...)
 }
 
@@ -78,8 +78,8 @@ func (c *CapabilitiesDiscovery) Host() host.Host {
 	return c.dht.Host()
 }
 
-// AddPeer adds a given peer.AddrInfo to the Host's Peerstore, and the DHT's routing table
-func (c *CapabilitiesDiscovery) AddPeer(p peer.AddrInfo) (bool, error) {
+// addPeer adds a given peer.AddrInfo to the Host's Peerstore, and the DHT's routing table
+func (c *CapabilitiesDiscovery) addPeer(p peer.AddrInfo) (bool, error) { //nolint:unused // TODO
 	c.Host().Peerstore().AddAddrs(p.ID, p.Addrs, libpeerstore.AddressTTL)
 	return c.dht.RoutingTable().TryAddPeer(p.ID, true, true)
 }
@@ -93,7 +93,7 @@ func (c *CapabilitiesDiscovery) PeersForCapability(capability Capability, n int)
 	var peers []peer.AddrInfo
 	// +1 because it can include self but we exclude self from the returned list
 	// that might confuse the caller (and tests assertions)
-	peersChan, err := c.FindPeers(ctx, string(capability), discovery.Limit(n+1))
+	peersChan, err := c.findPeers(ctx, string(capability), discovery.Limit(n+1))
 	if err != nil {
 		return nil, err
 	}
@@ -128,7 +128,7 @@ func (c *CapabilitiesDiscovery) AdvertiseCapabilities(capabilities ...Capability
 				var err error
 				advertisementInterval := maxAdvertisementInterval
 				for _, capa := range capabilities {
-					ttl, err0 := c.Advertise(c.dht.Context(), string(capa))
+					ttl, err0 := c.advertise(c.dht.Context(), string(capa))
 					if err0 != nil {
 						err = err0
 						c.log.Errorf("failed to advertise for capability %s: %v", capa, err0)

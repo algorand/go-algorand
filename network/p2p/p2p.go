@@ -20,12 +20,15 @@ import (
 	"context"
 	"encoding/base32"
 	"fmt"
+	"net"
+	"net/http"
 	"runtime"
 	"strings"
 	"time"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/network/limitcaller"
 	pstore "github.com/algorand/go-algorand/network/p2p/peerstore"
 	"github.com/algorand/go-algorand/network/phonebook"
 	"github.com/algorand/go-algorand/util/metrics"
@@ -38,10 +41,12 @@ import (
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
+	rcmgr "github.com/libp2p/go-libp2p/p2p/host/resource-manager"
 	"github.com/libp2p/go-libp2p/p2p/muxer/yamux"
 	"github.com/libp2p/go-libp2p/p2p/security/noise"
 	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
 	"github.com/multiformats/go-multiaddr"
+	manet "github.com/multiformats/go-multiaddr/net"
 )
 
 // SubNextCancellable is an abstraction for pubsub.Subscription
@@ -58,7 +63,6 @@ type Service interface {
 	IDSigner() *PeerIDChallengeSigner
 	AddrInfo() peer.AddrInfo // return addrInfo for self
 
-	DialNode(context.Context, *peer.AddrInfo) error
 	DialPeersUntilTargetCount(targetConnCount int)
 	ClosePeer(peer.ID) error
 
@@ -66,6 +70,9 @@ type Service interface {
 	ListPeersForTopic(topic string) []peer.ID
 	Subscribe(topic string, val pubsub.ValidatorEx) (SubNextCancellable, error)
 	Publish(ctx context.Context, topic string, data []byte) error
+
+	// GetHTTPClient returns a rate-limiting libp2p-streaming http client that can be used to make requests to the given peer
+	GetHTTPClient(addrInfo *peer.AddrInfo, connTimeStore limitcaller.ConnectionTimeStore, queueingTimeout time.Duration) (*http.Client, error)
 }
 
 // serviceImpl manages integration with libp2p and implements the Service interface
@@ -107,22 +114,39 @@ func MakeHost(cfg config.Local, datadir string, pstore *pstore.PeerStore) (host.
 	ua := fmt.Sprintf("algod/%d.%d (%s; commit=%s; %d) %s(%s)", version.Major, version.Minor, version.Channel, version.CommitHash, version.BuildNumber, runtime.GOOS, runtime.GOARCH)
 
 	var listenAddr string
+	var needAddressFilter bool
 	if cfg.NetAddress != "" {
 		if parsedListenAddr, perr := netAddressToListenAddress(cfg.NetAddress); perr == nil {
 			listenAddr = parsedListenAddr
+
+			// check if the listen address is a specific address or a "all interfaces" address (0.0.0.0 or ::)
+			// in this case enable the address filter.
+			// this also means the address filter is not enabled for NetAddress set to
+			// a specific address including loopback and private addresses.
+			if manet.IsIPUnspecified(multiaddr.StringCast(listenAddr)) {
+				needAddressFilter = true
+			}
+		} else {
+			logging.Base().Warnf("failed to parse NetAddress %s: %v", cfg.NetAddress, perr)
 		}
 	} else {
-		listenAddr = "/ip4/0.0.0.0/tcp/0"
+		logging.Base().Debug("p2p NetAddress is not set, not listening")
+		listenAddr = ""
 	}
 
-	// the libp2p.NoListenAddrs builtin disables relays but this one does not
-	var noListenAddrs = func(cfg *libp2p.Config) error {
-		cfg.ListenAddrs = []multiaddr.Multiaddr{}
-		return nil
-	}
-
-	var disableMetrics = func(cfg *libp2p.Config) error { return nil }
+	var enableMetrics = func(cfg *libp2p.Config) error { cfg.DisableMetrics = false; return nil }
 	metrics.DefaultRegistry().Register(&metrics.PrometheusDefaultMetrics)
+
+	var addrFactory func(addrs []multiaddr.Multiaddr) []multiaddr.Multiaddr
+	if needAddressFilter {
+		logging.Base().Debug("private addresses filter is enabled")
+		addrFactory = addressFilter
+	}
+
+	rm, err := configureResourceManager(cfg)
+	if err != nil {
+		return nil, "", err
+	}
 
 	host, err := libp2p.New(
 		libp2p.Identity(privKey),
@@ -130,17 +154,36 @@ func MakeHost(cfg config.Local, datadir string, pstore *pstore.PeerStore) (host.
 		libp2p.Transport(tcp.NewTCPTransport),
 		libp2p.Muxer("/yamux/1.0.0", &ymx),
 		libp2p.Peerstore(pstore),
-		noListenAddrs,
+		libp2p.NoListenAddrs,
 		libp2p.Security(noise.ID, noise.New),
-		disableMetrics,
+		enableMetrics,
+		libp2p.ResourceManager(rm),
+		libp2p.AddrsFactory(addrFactory),
 	)
 	return host, listenAddr, err
 }
 
-// MakeService creates a P2P service instance
-func MakeService(ctx context.Context, log logging.Logger, cfg config.Local, h host.Host, listenAddr string, wsStreamHandler StreamHandler, bootstrapPeers []*peer.AddrInfo) (*serviceImpl, error) {
+func configureResourceManager(cfg config.Local) (network.ResourceManager, error) {
+	// see https://github.com/libp2p/go-libp2p/tree/master/p2p/host/resource-manager for more details
+	scalingLimits := rcmgr.DefaultLimits
+	libp2p.SetDefaultServiceLimits(&scalingLimits)
+	scaledDefaultLimits := scalingLimits.AutoScale()
 
-	sm := makeStreamManager(ctx, log, h, wsStreamHandler)
+	limitConfig := rcmgr.PartialLimitConfig{
+		System: rcmgr.ResourceLimits{
+			Conns: rcmgr.LimitVal(cfg.IncomingConnectionsLimit),
+		},
+		// Everything else is default. The exact values will come from `scaledDefaultLimits` above.
+	}
+	limiter := rcmgr.NewFixedLimiter(limitConfig.Build(scaledDefaultLimits))
+	rm, err := rcmgr.NewResourceManager(limiter)
+	return rm, err
+}
+
+// MakeService creates a P2P service instance
+func MakeService(ctx context.Context, log logging.Logger, cfg config.Local, h host.Host, listenAddr string, wsStreamHandler StreamHandler, metricsTracer pubsub.RawTracer) (*serviceImpl, error) {
+
+	sm := makeStreamManager(ctx, log, h, wsStreamHandler, cfg.EnableGossipService)
 	h.Network().Notify(sm)
 	h.SetStreamHandler(AlgorandWsProtocol, sm.streamHandler)
 
@@ -150,12 +193,11 @@ func MakeService(ctx context.Context, log logging.Logger, cfg config.Local, h ho
 	telemetryProtoInfo := formatPeerTelemetryInfoProtocolName(telemetryID, telemetryInstance)
 	h.SetStreamHandler(protocol.ID(telemetryProtoInfo), func(s network.Stream) { s.Close() })
 
-	ps, err := makePubSub(ctx, cfg, h)
+	ps, err := makePubSub(ctx, cfg, h, metricsTracer)
 	if err != nil {
 		return nil, err
 	}
 	return &serviceImpl{
-
 		log:        log,
 		listenAddr: listenAddr,
 		host:       h,
@@ -169,6 +211,11 @@ func MakeService(ctx context.Context, log logging.Logger, cfg config.Local, h ho
 
 // Start starts the P2P service
 func (s *serviceImpl) Start() error {
+	if s.listenAddr == "" {
+		// don't listen if no listen address configured
+		return nil
+	}
+
 	listenAddr, err := multiaddr.NewMultiaddr(s.listenAddr)
 	if err != nil {
 		s.log.Errorf("failed to create multiaddress: %s", err)
@@ -196,7 +243,7 @@ func (s *serviceImpl) IDSigner() *PeerIDChallengeSigner {
 // DialPeersUntilTargetCount attempts to establish connections to the provided phonebook addresses
 func (s *serviceImpl) DialPeersUntilTargetCount(targetConnCount int) {
 	ps := s.host.Peerstore().(*pstore.PeerStore)
-	peerIDs := ps.GetAddresses(targetConnCount, phonebook.PhoneBookEntryRelayRole)
+	addrInfos := ps.GetAddresses(targetConnCount, phonebook.PhoneBookEntryRelayRole)
 	conns := s.host.Network().Conns()
 	var numOutgoingConns int
 	for _, conn := range conns {
@@ -204,8 +251,7 @@ func (s *serviceImpl) DialPeersUntilTargetCount(targetConnCount int) {
 			numOutgoingConns++
 		}
 	}
-	for _, peerInfo := range peerIDs {
-		peerInfo := peerInfo.(*peer.AddrInfo)
+	for _, peerInfo := range addrInfos {
 		// if we are at our target count stop trying to connect
 		if numOutgoingConns >= targetConnCount {
 			return
@@ -214,15 +260,15 @@ func (s *serviceImpl) DialPeersUntilTargetCount(targetConnCount int) {
 		if len(s.host.Network().ConnsToPeer(peerInfo.ID)) > 0 {
 			continue
 		}
-		err := s.DialNode(context.Background(), peerInfo) // leaving the calls as blocking for now, to not over-connect beyond fanout
+		err := s.dialNode(context.Background(), peerInfo) // leaving the calls as blocking for now, to not over-connect beyond fanout
 		if err != nil {
 			s.log.Warnf("failed to connect to peer %s: %v", peerInfo.ID, err)
 		}
 	}
 }
 
-// DialNode attempts to establish a connection to the provided peer
-func (s *serviceImpl) DialNode(ctx context.Context, peer *peer.AddrInfo) error {
+// dialNode attempts to establish a connection to the provided peer
+func (s *serviceImpl) dialNode(ctx context.Context, peer *peer.AddrInfo) error {
 	// don't try connecting to ourselves
 	if peer.ID == s.host.ID() {
 		return nil
@@ -234,9 +280,13 @@ func (s *serviceImpl) DialNode(ctx context.Context, peer *peer.AddrInfo) error {
 
 // AddrInfo returns the peer.AddrInfo for self
 func (s *serviceImpl) AddrInfo() peer.AddrInfo {
+	addrs, err := s.host.Network().InterfaceListenAddresses()
+	if err != nil {
+		s.log.Errorf("failed to get listen addresses: %v", err)
+	}
 	return peer.AddrInfo{
 		ID:    s.host.ID(),
-		Addrs: s.host.Addrs(),
+		Addrs: addrs,
 	}
 }
 
@@ -297,4 +347,80 @@ func formatPeerTelemetryInfoProtocolName(telemetryID string, telemetryInstance s
 		base32.StdEncoding.EncodeToString([]byte(telemetryID)),
 		base32.StdEncoding.EncodeToString([]byte(telemetryInstance)),
 	)
+}
+
+var private6 = parseCIDR([]string{
+	"100::/64",
+	"2001:2::/48",
+})
+
+// parseCIDR converts string CIDRs to net.IPNet.
+// function panics on errors so that it is only called during initialization.
+func parseCIDR(cidrs []string) []*net.IPNet {
+	result := make([]*net.IPNet, 0, len(cidrs))
+	var ipnet *net.IPNet
+	var err error
+	for _, cidr := range cidrs {
+		if _, ipnet, err = net.ParseCIDR(cidr); err != nil {
+			panic(err)
+		}
+		result = append(result, ipnet)
+	}
+	return result
+}
+
+// addressFilter filters out private and unroutable addresses
+func addressFilter(addrs []multiaddr.Multiaddr) []multiaddr.Multiaddr {
+	if logging.Base().IsLevelEnabled(logging.Debug) {
+		var b strings.Builder
+		for _, addr := range addrs {
+			b.WriteRune(' ')
+			b.WriteString(addr.String())
+			b.WriteRune(' ')
+		}
+		logging.Base().Debugf("addressFilter input: %s", b.String())
+	}
+
+	res := make([]multiaddr.Multiaddr, 0, len(addrs))
+	for _, addr := range addrs {
+		if manet.IsPublicAddr(addr) {
+			if _, err := addr.ValueForProtocol(multiaddr.P_IP4); err == nil {
+				// no rules for IPv4 at the moment, accept
+				res = append(res, addr)
+				continue
+			}
+
+			isPrivate := false
+			a, err := addr.ValueForProtocol(multiaddr.P_IP6)
+			if err != nil {
+				logging.Base().Warnf("failed to get IPv6 addr from %s: %v", addr, err)
+				continue
+			}
+			addrIP := net.ParseIP(a)
+			for _, ipnet := range private6 {
+				if ipnet.Contains(addrIP) {
+					isPrivate = true
+					break
+				}
+			}
+			if !isPrivate {
+				res = append(res, addr)
+			}
+		}
+	}
+	if logging.Base().IsLevelEnabled(logging.Debug) {
+		var b strings.Builder
+		for _, addr := range res {
+			b.WriteRune(' ')
+			b.WriteString(addr.String())
+			b.WriteRune(' ')
+		}
+		logging.Base().Debugf("addressFilter output: %s", b.String())
+	}
+	return res
+}
+
+// GetHTTPClient returns a libp2p-streaming http client that can be used to make requests to the given peer
+func (s *serviceImpl) GetHTTPClient(addrInfo *peer.AddrInfo, connTimeStore limitcaller.ConnectionTimeStore, queueingTimeout time.Duration) (*http.Client, error) {
+	return makeHTTPClientWithRateLimit(addrInfo, s, connTimeStore, queueingTimeout)
 }

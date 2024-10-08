@@ -12,6 +12,7 @@ import glob
 import json
 import logging
 import os
+import re
 import time
 
 from termcolor import COLORS, colored
@@ -80,6 +81,14 @@ def process_json_line(line: str, node_name: str, by_node: dict, events: list):
         return result
     return None
 
+def node_name_from_line(line: str):
+    """Extracts node name from the line like "libgoalFixture.go:376: Relay0/node.log:"""
+    pattern = r'([^:]+?)/node\.log'
+    match = re.search(pattern, line)
+    if match:
+        return match.group(1).strip()
+    return None
+
 def main():
     os.environ['TZ'] = 'UTC'
     time.tzset()
@@ -134,16 +143,21 @@ def main():
                     libgoalFixture.go:374: ===================...
                     libgoalFixture.go:376: Relay0/node.log:
                     libgoalFixture.go:379: {"file":"server.go"...
+
+                    OR without libgoalFixture prefix (depends on the test)
+                    =================================
+                    Relay0/node.log:
+                    {"file":"server.go","function":"gi...
                 """
                 node_name = None
                 if line0.endswith('node.log:'):
-                    node_name = line0.split(' ')[1].split('/')[0]
-                    logger.info('found node name: %s', node_name)
+                    node_name = node_name_from_line(line0)
+                    logger.info('found node name: \'%s\'', node_name)
                 for line in file:
                     line = line.strip()
                     if line.endswith('node.log:'):
-                        node_name = line.split(' ')[1].split('/')[0]
-                        logger.info('found node name: %s', node_name)
+                        node_name = node_name_from_line(line)
+                        logger.info('found node name: \'%s\'', node_name)
                     if node_name:
                         for line in file:
                             json_start = line.find('{')
