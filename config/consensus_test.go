@@ -59,6 +59,80 @@ func TestConsensusUpgradeWindow(t *testing.T) {
 	}
 }
 
+func TestConsensusUpgradeWindow_NetworkOverrides(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	OverrideConsensusSettingsForNetwork(Devnet)
+	for _, params := range Consensus {
+		for toVersion, delay := range params.ApprovedUpgrades {
+			if params.MinUpgradeWaitRounds != 0 || params.MaxUpgradeWaitRounds != 0 {
+				require.NotZerof(t, delay, "From :%v\nTo :%v", params, toVersion)
+				require.Equalf(t, delay, params.MinUpgradeWaitRounds, "From :%v\nTo :%v", params, toVersion)
+				// This check is not really needed, but leaving for sanity
+				require.LessOrEqualf(t, delay, params.MaxUpgradeWaitRounds, "From :%v\nTo :%v", params, toVersion)
+			} else {
+				// If no MinUpgradeWaitRounds is set, leaving everything as zero value is expected
+				require.Zerof(t, delay, "From :%v\nTo :%v", params, toVersion)
+			}
+		}
+	}
+
+	// Should be no-ops for Mainnet
+	Consensus = make(ConsensusProtocols)
+	initConsensusProtocols()
+
+	OverrideConsensusSettingsForNetwork(Mainnet)
+	for _, params := range Consensus {
+		for toVersion, delay := range params.ApprovedUpgrades {
+			if params.MinUpgradeWaitRounds != 0 || params.MaxUpgradeWaitRounds != 0 {
+				require.NotZerof(t, delay, "From :%v\nTo :%v", params, toVersion)
+				require.GreaterOrEqualf(t, delay, params.MinUpgradeWaitRounds, "From :%v\nTo :%v", params, toVersion)
+				require.LessOrEqualf(t, delay, params.MaxUpgradeWaitRounds, "From :%v\nTo :%v", params, toVersion)
+			} else {
+				require.Zerof(t, delay, "From :%v\nTo :%v", params, toVersion)
+
+			}
+		}
+	}
+
+	// reset consensus settings
+	Consensus = make(ConsensusProtocols)
+	initConsensusProtocols()
+
+	OverrideConsensusSettingsForNetwork(Betanet)
+	for _, params := range Consensus {
+		for toVersion, delay := range params.ApprovedUpgrades {
+			if params.MinUpgradeWaitRounds != 0 || params.MaxUpgradeWaitRounds != 0 {
+				require.NotZerof(t, delay, "From :%v\nTo :%v", params, toVersion)
+				require.Equalf(t, delay, params.MinUpgradeWaitRounds, "From :%v\nTo :%v", params, toVersion)
+				// This check is not really needed, but leaving for sanity
+				require.LessOrEqualf(t, delay, params.MaxUpgradeWaitRounds, "From :%v\nTo :%v", params, toVersion)
+			} else {
+				// If no MinUpgradeWaitRounds is set, leaving everything as zero value is expected
+				require.Zerof(t, delay, "From :%v\nTo :%v", params, toVersion)
+			}
+		}
+	}
+
+	// should be no-ops for Testnet
+	Consensus = make(ConsensusProtocols)
+	initConsensusProtocols()
+
+	OverrideConsensusSettingsForNetwork(Testnet)
+	for _, params := range Consensus {
+		for toVersion, delay := range params.ApprovedUpgrades {
+			if params.MinUpgradeWaitRounds != 0 || params.MaxUpgradeWaitRounds != 0 {
+				require.NotZerof(t, delay, "From :%v\nTo :%v", params, toVersion)
+				require.GreaterOrEqualf(t, delay, params.MinUpgradeWaitRounds, "From :%v\nTo :%v", params, toVersion)
+				require.LessOrEqualf(t, delay, params.MaxUpgradeWaitRounds, "From :%v\nTo :%v", params, toVersion)
+			} else {
+				require.Zerof(t, delay, "From :%v\nTo :%v", params, toVersion)
+
+			}
+		}
+	}
+}
+
 func TestConsensusStateProofParams(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
