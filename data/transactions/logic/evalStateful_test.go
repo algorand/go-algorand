@@ -3256,7 +3256,7 @@ func TestReturnTypes(t *testing.T) {
 		"box_put":    "byte 0x010203040506; concat; box_put", // make the 4 byte arg into a 10
 
 		// mimc requires an input size multiple of 32 bytes.
-		"mimc": ": byte 0x0000000000000000000000000000000000000000000000000000000000000001; mimc BN254g1",
+		"mimc": ": byte 0x0000000000000000000000000000000000000000000000000000000000000001; mimc BN254_MP_110",
 	}
 
 	/* Make sure the specialCmd tests the opcode in question */

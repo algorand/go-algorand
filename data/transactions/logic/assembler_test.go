@@ -441,7 +441,7 @@ falcon_verify
 
 const mimcNonsense = `
 pushbytes 0x11223344556677889900aabbccddeeff11223344556677889900aabbccddeeff
-mimc BLS12_381g1
+mimc BLS12_381_MP_111
 `
 
 const v8Nonsense = v7Nonsense + switchNonsense + frameNonsense + matchNonsense + boxNonsense
@@ -480,7 +480,7 @@ const v10Compiled = v9Compiled + pairingCompiled + spliceCompiled
 const incentiveCompiled = "757401"
 
 const stateProofCompiled = "80070123456789abcd86494985"
-const mimcCompiled = "802011223344556677889900aabbccddeeff11223344556677889900aabbccddeeffe602"
+const mimcCompiled = "802011223344556677889900aabbccddeeff11223344556677889900aabbccddeeffe601"
 
 const V11Compiled = v10Compiled + incentiveCompiled + stateProofCompiled + mimcCompiled
 
