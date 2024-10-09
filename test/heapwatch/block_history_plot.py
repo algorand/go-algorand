@@ -23,6 +23,7 @@
 # Graph over time of TPS or 10-round-moving-average-TPS
 
 import base64
+import json
 import os
 import statistics
 import sys
@@ -106,12 +107,25 @@ def process(path, args):
             prevtc = tc
             prevts = ts
             prevtime = _time
-    print('{} blocks, block txns [{}-{}], block seconds [{}-{}], tps [{}-{}]'.format(
+    print('{} blocks, block txns [{}-{}], block seconds [{}-{}], tps [{}-{}], total txns {}'.format(
         count,
         mintxn,maxtxn,
         mindt,maxdt,
         mintps,maxtps,
+        tc,
     ))
+    if tc > 0:
+        with open(path + '.stats', 'w') as fout:
+            fout.write(json.dumps({
+                'blocks': count,
+                'tc': tc,
+                'mintxn': mintxn,
+                'maxtxn': maxtxn,
+                'mindt': mindt,
+                'maxdt': maxdt,
+                'mintps': mintps,
+                'maxtps': maxtps,
+            }))
 
     start = 0
     end = len(txnv)-1

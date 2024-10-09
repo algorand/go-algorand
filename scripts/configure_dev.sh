@@ -78,15 +78,13 @@ if [ "${OS}" = "linux" ]; then
         sudo "$SCRIPTPATH/install_linux_deps.sh"
     fi
 elif [ "${OS}" = "darwin" ]; then
-    if [ "${CIRCLECI}" != "true" ]; then
-        brew update
-        brew_version=$(brew --version | head -1 | cut -d' ' -f2)
-        major_version=$(echo $brew_version | cut -d. -f1)
-        minor_version=$(echo $brew_version | cut -d. -f2)
-        version_decimal="$major_version.$minor_version"
-        if (($(echo "$version_decimal < 2.5" | bc -l))); then
-            brew tap homebrew/cask
-        fi
+    brew update
+    brew_version=$(brew --version | head -1 | cut -d' ' -f2)
+    major_version=$(echo $brew_version | cut -d. -f1)
+    minor_version=$(echo $brew_version | cut -d. -f2)
+    version_decimal="$major_version.$minor_version"
+    if (($(echo "$version_decimal < 2.5" | bc -l))); then
+        brew tap homebrew/cask
     fi
     install_or_upgrade pkg-config
     install_or_upgrade libtool

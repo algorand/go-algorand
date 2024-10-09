@@ -153,13 +153,17 @@ function start_new_public_network() {
     betanet) ID="<network>.algodev.network" ;;
     alphanet) ID="<network>.algodev.network" ;;
     devnet) ID="<network>.algodev.network" ;;
+    fnet) ID="<network>.algorand.green" ;;
     *)
       echo "Unknown network."
       exit 1
       ;;
     esac
-
-    set -p DNSBootstrapID -v "$ID"
+    echo Setting DNS Bootstrap ID to "$ID"
+    algocfg -d "$ALGORAND_DATA" set -p DNSBootstrapID -v "$ID"
+  elif [ "$NETWORK" = "fnet" ]; then
+    echo Setting FNet DNS Bootstrap ID
+    algocfg -d "$ALGORAND_DATA" set -p DNSBootstrapID -v "<network>.algorand.green"
   fi
 
   start_public_network

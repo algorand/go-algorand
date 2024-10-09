@@ -43,6 +43,9 @@ var PrometheusDefaultMetrics = defaultPrometheusGatherer{}
 // OpencensusDefaultMetrics is the default prometheus gatherer implementing the Metric interface
 var OpencensusDefaultMetrics = defaultOpencensusGatherer{}
 
+// NetDevMetrics is a netdev gatherer implementing the Metric interface
+var NetDevMetrics = netDevGatherer{}
+
 func init() {
 	defaultRegistry = MakeRegistry()
 }

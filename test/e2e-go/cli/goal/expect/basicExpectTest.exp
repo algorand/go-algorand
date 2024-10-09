@@ -16,12 +16,14 @@ if { [catch {
     spawn echo "hello"
     expect {
         timeout { abort "\n Failed to see expected input hello" }
+        eof { abort "Ended without hello" }
         "^hello*" {close}
     }
 
     spawn echo "goodbye"
     expect {
         timeout { abort "Failed to see expected input goodbye" }
+        eof { abort "Ended without goodbye" }
         "^goodbye*" {close}
     }
 

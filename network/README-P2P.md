@@ -8,7 +8,7 @@ transport: lip2p-managed connections and HTTP + WebSocket, respectively.
 `P2PNetwork` and `WsNetwork` require `config.NetAddress` to be set in order to start a server.
 
 In addition, `HybridNetwork` is an aggregate of `P2PNetwork` and `WsNetwork` allowing a node
-to interact over both networks. In the case of hybrid operation, both `config.P2PNetAddress` and
+to interact over both networks. In the case of hybrid operation, both `config.P2PHybridNetAddress` and
 `config.NetAddress` are used.
 
 ## General design

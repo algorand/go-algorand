@@ -452,6 +452,7 @@ func (node *AlgorandFullNode) Stop() {
 	}()
 
 	node.net.ClearHandlers()
+	node.net.ClearValidatorHandlers()
 	if !node.config.DisableNetworking {
 		node.net.Stop()
 	}
@@ -1218,6 +1219,7 @@ func (node *AlgorandFullNode) SetCatchpointCatchupMode(catchpointCatchupMode boo
 				node.waitMonitoringRoutines()
 			}()
 			node.net.ClearHandlers()
+			node.net.ClearValidatorHandlers()
 			node.stateProofWorker.Stop()
 			node.txHandler.Stop()
 			node.agreementService.Shutdown()

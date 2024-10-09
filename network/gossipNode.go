@@ -86,8 +86,8 @@ type GossipNode interface {
 	// Currently used as p2p pubsub topic validators.
 	RegisterValidatorHandlers(dispatch []TaggedMessageValidatorHandler)
 
-	// ClearProcessors deregisters all the existing message processors.
-	ClearProcessors()
+	// ClearValidatorHandlers deregisters all the existing message processors.
+	ClearValidatorHandlers()
 
 	// GetHTTPClient returns a http.Client with a suitable for the network Transport
 	// that would also limit the number of outgoing connections.

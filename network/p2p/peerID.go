@@ -19,7 +19,10 @@
 package p2p
 
 import (
+	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/x509"
+	"encoding/pem"
 	"fmt"
 	"os"
 	"path"
@@ -34,7 +37,7 @@ import (
 
 // DefaultPrivKeyPath is the default path inside the node's root directory at which the private key
 // for p2p identity is found and persisted to when a new one is generated.
-const DefaultPrivKeyPath = "peerIDPrivKey.pem"
+const DefaultPrivKeyPath = "peerIDPrivKey.key"
 
 // PeerID is a string representation of a peer's public key, primarily used to avoid importing libp2p into packages that shouldn't need it
 type PeerID string
@@ -84,6 +87,9 @@ func PeerIDFromPublicKey(pubKey crypto.PubKey) (PeerID, error) {
 	return PeerID(peerID), nil
 }
 
+// pemBlockType is the type of PEM block used for private keys
+const pemBlockType = "PRIVATE KEY"
+
 // loadPrivateKeyFromFile attempts to read raw privKey bytes from path
 // It only supports Ed25519 keys.
 func loadPrivateKeyFromFile(path string) (crypto.PrivKey, error) {
@@ -91,8 +97,21 @@ func loadPrivateKeyFromFile(path string) (crypto.PrivKey, error) {
 	if err != nil {
 		return nil, err
 	}
+	p, _ := pem.Decode(bytes)
+	if p == nil || p.Type != pemBlockType {
+		return nil, fmt.Errorf("failed to PEM decode private key at %s", path)
+	}
+
+	ak, err := x509.ParsePKCS8PrivateKey(p.Bytes)
+	if err != nil {
+		return nil, err
+	}
+	sk, ok := ak.(ed25519.PrivateKey)
+	if !ok {
+		return nil, fmt.Errorf("unsupported private key type: %T, expecting ed25519", ak)
+	}
 	// We only support Ed25519 keys
-	return crypto.UnmarshalEd25519PrivateKey(bytes)
+	return crypto.UnmarshalEd25519PrivateKey(sk)
 }
 
 // writePrivateKeyToFile attempts to write raw privKey bytes to path
@@ -101,7 +120,27 @@ func writePrivateKeyToFile(path string, privKey crypto.PrivKey) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, bytes, 0600)
+	if len(bytes) != ed25519.PrivateKeySize {
+		return fmt.Errorf("incompatible ed25519 private key length: %d", len(bytes))
+	}
+	key := ed25519.PrivateKey(bytes)
+	derBytes, err := x509.MarshalPKCS8PrivateKey(key)
+	if err != nil {
+		return err
+	}
+
+	p := pem.Block{
+		Type:  pemBlockType,
+		Bytes: derBytes,
+	}
+
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	return pem.Encode(f, &p)
 }
 
 // generatePrivKey creates a new Ed25519 key

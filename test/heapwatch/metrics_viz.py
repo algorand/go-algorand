@@ -23,7 +23,7 @@ from dash import dcc, html
 import plotly.graph_objs as go
 from plotly.subplots import make_subplots
 
-from metrics_lib import MetricType, parse_metrics, gather_metrics_files_by_nick
+from metrics_lib import MetricType, parse_metrics, gather_metrics_files_by_nick, parse_tags
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +42,7 @@ def main():
     ap.add_argument('--nick-lre', action='append', default=[], help='label:regexp to filter node names, may be repeated')
     ap.add_argument('-s', '--save', type=str, choices=['png', 'html'], help=f'save plot to \'{default_img_filename}\' or \'{default_html_filename}\' file instead of showing it')
     ap.add_argument('--diff', action='store_true', default=None, help='diff two gauge metrics instead of plotting their values. Requires two metrics names to be set')
+    ap.add_argument('-t', '--tags', action='append', default=[], help='tag/label pairs in a=b format to aggregate by, may be repeated. Empty means aggregation by metric name')
     ap.add_argument('--verbose', default=False, action='store_true')
 
     args = ap.parse_args()
@@ -53,6 +54,8 @@ def main():
     if not args.dir:
         logging.error('need at least one dir set with -d/--dir')
         return 1
+
+    tags, tag_keys = parse_tags(args.tags)
 
     metrics_files = sorted(glob.glob(os.path.join(args.dir, '*.metrics')))
     metrics_files.extend(glob.glob(os.path.join(args.dir, 'terraform-inventory.host')))
@@ -100,6 +103,9 @@ def main():
                     for metric in metrics_seq:
                         raw_value = metric.value
 
+                        if tags and not metric.has_tags(tags, tag_keys):
+                            continue
+
                         full_name = metric.string()
                         if full_name not in data:
                             # handle gaps in data, sometimes metric file might miss a value
@@ -122,8 +128,9 @@ def main():
 
                         active_metric_names.append(full_name)
 
-                    active_metric_names.sort()
-                    active_metrics[metric_name] = active_metric_names
+                    if active_metric_names:
+                        active_metric_names.sort()
+                        active_metrics[metric_name] = active_metric_names
             idx += 1
 
         for i, metric_pair in enumerate(sorted(active_metrics.items())):

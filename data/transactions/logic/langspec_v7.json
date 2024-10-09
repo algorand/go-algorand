@@ -4249,7 +4249,7 @@
         "BlkTimestamp"
       ],
       "ArgEnumTypes": [
-        "[]byte",
+        "[32]byte",
         "uint64"
       ],
       "DocCost": "1",

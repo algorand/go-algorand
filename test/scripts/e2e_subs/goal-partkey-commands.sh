@@ -83,16 +83,22 @@ verify_registered_state () {
   SEARCH_INVOKE_CONTEXT=$(echo "$3" | xargs)
 
   # look for participation ID anywhere in the partkeyinfo output
-  PARTKEY_OUTPUT=$(${gcmd} account partkeyinfo)
-  if ! echo "$PARTKEY_OUTPUT" | grep -q -F "$SEARCH_KEY"; then
-    fail_test "Key $SEARCH_KEY was not installed properly for cmd '$SEARCH_INVOKE_CONTEXT':\n$PARTKEY_OUTPUT"
+  info_temp_file=$(mktemp)
+  ${gcmd} account partkeyinfo > "${info_temp_file}"
+  if ! grep -q -F "$SEARCH_KEY" "${info_temp_file}"; then
+      echo "info_temp_file contents:"
+      cat "${info_temp_file}"
+      fail_test "Key $SEARCH_KEY was not installed properly for cmd '$SEARCH_INVOKE_CONTEXT'"
   fi
 
   # looking for yes/no, and the 8 character head of participation id in this line:
   # yes         LFMT...RHJQ  4UPT6AQC...               4            0     3000
-  LISTKEY_OUTPUT=$(${gcmd} account listpartkeys)
-  if ! echo "$LISTKEY_OUTPUT" | grep -q "$SEARCH_STATE.*$(echo "$SEARCH_KEY" | cut -c1-8)"; then
-    fail_test "Unexpected key $SEARCH_KEY state (looked for $SEARCH_STATE ) for cmd '$SEARCH_INVOKE_CONTEXT':\n$LISTKEY_OUTPUT"
+  list_temp_file=$(mktemp)
+  ${gcmd} account listpartkeys > "${list_temp_file}"
+  if ! grep -q "$SEARCH_STATE.*$(echo "$SEARCH_KEY" | cut -c1-8)" "${list_temp_file}"; then
+      echo "list_temp_file contents:"
+      cat "${list_temp_file}"
+      fail_test "Unexpected key $SEARCH_KEY state (looked for $SEARCH_STATE ) for cmd '$SEARCH_INVOKE_CONTEXT'"
   fi
 }
 

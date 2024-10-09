@@ -32,6 +32,7 @@ if { [catch {
     ::AlgorandGoal::CheckNetworkAddressForCors $ALGOD_NET_ADDRESS
 
     # Start kmd, then do the same CORS check as algod
+    exec -- cat "$TEST_PRIMARY_NODE_DIR/kmd-v0.5/kmd_config.json.example" | jq {. |= . + {"allowed_origins": ["http://algorand.com"]}} > "$TEST_PRIMARY_NODE_DIR/kmd-v0.5/kmd_config.json"
     exec goal kmd start -t 180 -d $TEST_PRIMARY_NODE_DIR
     set KMD_NET_ADDRESS [::AlgorandGoal::GetKMDNetworkAddress $TEST_PRIMARY_NODE_DIR]
     ::AlgorandGoal::CheckNetworkAddressForCors $KMD_NET_ADDRESS

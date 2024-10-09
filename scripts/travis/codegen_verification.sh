@@ -40,6 +40,9 @@ echo "Running fixcheck"
 GOPATH=$(go env GOPATH)
 "$GOPATH"/bin/algofix -error */
 
+echo "Running expect linter"
+make expectlint
+
 echo "Updating TEAL Specs"
 touch data/transactions/logic/fields_string.go # ensure rebuild
 make -C data/transactions/logic

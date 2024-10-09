@@ -65,7 +65,7 @@ def make_hybrid_p2p_net(*args):
         altconfig["ConfigJSONOverride"] = json.dumps(override_json)
         if net_address:  # relay, set public address
             altconfig["P2PBootstrap"] = True
-            altconfig["P2PNetAddress"] = "{{NetworkPort2}}"
+            altconfig["P2PHybridNetAddress"] = "{{NetworkPort2}}"
             altconfig["PublicAddress"] = True
         altconfig['FractionApply'] = 0.5
 
@@ -99,7 +99,7 @@ def make_hybrid_ws_net(*args):
         altconfig["ConfigJSONOverride"] = json.dumps(override_json)
         if net_address:  # relay, set public address
             altconfig["P2PBootstrap"] = True
-            altconfig["P2PNetAddress"] = "{{NetworkPort2}}"
+            altconfig["P2PHybridNetAddress"] = "{{NetworkPort2}}"
             altconfig["PublicAddress"] = True
         altconfig['FractionApply'] = 0.5
 

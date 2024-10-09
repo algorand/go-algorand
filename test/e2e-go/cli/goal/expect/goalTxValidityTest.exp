@@ -32,6 +32,7 @@ proc TestLastValidInTx { CMD TX_FILE EXPECTED_LAST_VALID } {
     spawn goal clerk inspect $TX_FILE
     expect {
         timeout { ::AlgorandGoal::Abort "'goal clerk inspect' timed out" }
+        eof { ::AlgorandGoal::Abort "'goal clerk inspect' eof" }
         -re {"lv": (\d+)} {set PASSED 1; set LAST_VALID $expect_out(1,string); close }
     }
 

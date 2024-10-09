@@ -257,15 +257,7 @@ func (handler *TxHandler) Start() {
 
 	// libp2p pubsub validator and handler abstracted as TaggedMessageProcessor
 	handler.net.RegisterValidatorHandlers([]network.TaggedMessageValidatorHandler{
-		{
-			Tag: protocol.TxnTag,
-			// create anonymous struct to hold the two functions and satisfy the network.MessageProcessor interface
-			MessageHandler: struct {
-				network.ValidateHandleFunc
-			}{
-				network.ValidateHandleFunc(handler.validateIncomingTxMessage),
-			},
-		},
+		{Tag: protocol.TxnTag, MessageHandler: network.ValidateHandleFunc(handler.validateIncomingTxMessage)},
 	})
 
 	handler.backlogWg.Add(2)

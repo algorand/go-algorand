@@ -17,6 +17,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -134,7 +135,9 @@ type Local struct {
 	// Estimating 1.5MB per incoming connection, 1.5MB*2400 = 3.6GB
 	IncomingConnectionsLimit int `version[0]:"-1" version[1]:"10000" version[17]:"800" version[27]:"2400"`
 
-	P2PIncomingConnectionsLimit int `version[34]:"1200"`
+	// P2PHybridIncomingConnectionsLimit is used as IncomingConnectionsLimit for P2P connections in hybrid mode.
+	// For pure P2P nodes IncomingConnectionsLimit is used.
+	P2PHybridIncomingConnectionsLimit int `version[34]:"1200"`
 
 	// BroadcastConnectionsLimit specifies the number of connections that
 	// will receive broadcast (gossip) messages from this node. If the
@@ -354,6 +357,9 @@ type Local struct {
 
 	// EnableRuntimeMetrics exposes Go runtime metrics in /metrics and via node_exporter.
 	EnableRuntimeMetrics bool `version[22]:"false"`
+
+	// EnableNetDevMetrics exposes network interface total bytes sent/received metrics in /metrics
+	EnableNetDevMetrics bool `version[34]:"false"`
 
 	// TelemetryToLog configures whether to record messages to node.log that are normally only sent to remote event monitoring.
 	TelemetryToLog bool `version[5]:"true"`
@@ -607,8 +613,8 @@ type Local struct {
 	// Enabling this setting also requires PublicAddress to be set.
 	EnableP2PHybridMode bool `version[34]:"false"`
 
-	// P2PNetAddress sets the listen address used for P2P networking, if hybrid mode is set.
-	P2PNetAddress string `version[34]:""`
+	// P2PHybridNetAddress sets the listen address used for P2P networking, if hybrid mode is set.
+	P2PHybridNetAddress string `version[34]:""`
 
 	// EnableDHT will turn on the hash table for use with capabilities advertisement
 	EnableDHTProviders bool `version[34]:"false"`
@@ -742,16 +748,31 @@ func (cfg Local) IsGossipServer() bool {
 	return cfg.IsWsGossipServer() || cfg.IsP2PGossipServer()
 }
 
-// IsWsGossipServer returns true if a node configured to run a listening ws net
+// IsWsGossipServer returns true if a node is configured to run a listening ws net
 func (cfg Local) IsWsGossipServer() bool {
 	// 1. NetAddress is set and EnableP2P is not set
 	// 2. NetAddress is set and EnableP2PHybridMode is set then EnableP2P is overridden  by EnableP2PHybridMode
 	return cfg.NetAddress != "" && (!cfg.EnableP2P || cfg.EnableP2PHybridMode)
 }
 
-// IsP2PGossipServer returns true if a node configured to run a listening p2p net
+// IsP2PGossipServer returns true if a node is configured to run a listening p2p net
 func (cfg Local) IsP2PGossipServer() bool {
-	return (cfg.EnableP2P && !cfg.EnableP2PHybridMode && cfg.NetAddress != "") || (cfg.EnableP2PHybridMode && cfg.P2PNetAddress != "")
+	return (cfg.EnableP2P && !cfg.EnableP2PHybridMode && cfg.NetAddress != "") || (cfg.EnableP2PHybridMode && cfg.P2PHybridNetAddress != "")
+}
+
+// IsHybridServer returns true if a node configured to run a listening both ws and p2p networks
+func (cfg Local) IsHybridServer() bool {
+	return cfg.NetAddress != "" && cfg.P2PHybridNetAddress != "" && cfg.EnableP2PHybridMode
+}
+
+// ValidateP2PHybridConfig checks if both NetAddress and P2PHybridNetAddress are set or unset in hybrid mode.
+func (cfg Local) ValidateP2PHybridConfig() error {
+	if cfg.EnableP2PHybridMode {
+		if cfg.NetAddress == "" && cfg.P2PHybridNetAddress != "" || cfg.NetAddress != "" && cfg.P2PHybridNetAddress == "" {
+			return errors.New("both NetAddress and P2PHybridNetAddress must be set or unset")
+		}
+	}
+	return nil
 }
 
 // ensureAbsGenesisDir will convert a path to absolute, and will attempt to make a genesis directory there
@@ -950,22 +971,22 @@ func (cfg *Local) AdjustConnectionLimits(requiredFDs, maxFDs uint64) bool {
 		restDelta := diff + reservedRESTConns - cfg.RestConnectionsHardLimit
 		cfg.RestConnectionsHardLimit = reservedRESTConns
 		splitRatio := 1
-		if cfg.IsWsGossipServer() && cfg.IsP2PGossipServer() {
+		if cfg.IsHybridServer() {
 			// split the rest of the delta between ws and p2p evenly
 			splitRatio = 2
 		}
-		if cfg.IsWsGossipServer() {
+		if cfg.IsWsGossipServer() || cfg.IsP2PGossipServer() {
 			if cfg.IncomingConnectionsLimit > int(restDelta) {
 				cfg.IncomingConnectionsLimit -= int(restDelta) / splitRatio
 			} else {
 				cfg.IncomingConnectionsLimit = 0
 			}
 		}
-		if cfg.IsP2PGossipServer() {
-			if cfg.P2PIncomingConnectionsLimit > int(restDelta) {
-				cfg.P2PIncomingConnectionsLimit -= int(restDelta) / splitRatio
+		if cfg.IsHybridServer() {
+			if cfg.P2PHybridIncomingConnectionsLimit > int(restDelta) {
+				cfg.P2PHybridIncomingConnectionsLimit -= int(restDelta) / splitRatio
 			} else {
-				cfg.P2PIncomingConnectionsLimit = 0
+				cfg.P2PHybridIncomingConnectionsLimit = 0
 			}
 		}
 	} else {

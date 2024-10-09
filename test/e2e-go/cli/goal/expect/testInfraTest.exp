@@ -58,6 +58,7 @@ proc checkProcessReturnedCodeTest {} {
 	44 {
 	    close
 	}
+        eof { puts "expected output not 44"; exit 1 }
     }
     lassign [::AlgorandGoal::CheckProcessReturnedCode 0] response OS_CODE ERR_CODE KILLED KILL_SIGNAL EXP
     if {$response != 0} {
@@ -72,6 +73,7 @@ proc checkProcessReturnedCodeTest {} {
 	44 {
 	    puts "not closing"
 	}
+        eof { puts "expected output not 44"; exit 1 }
     }
     lassign [::AlgorandGoal::CheckProcessReturnedCode 0] response OS_CODE ERR_CODE KILLED KILL_SIGNAL EXP
     if {$KILLED != "CHILDKILLED" || $KILL_SIGNAL != "SIGSEGV" || $EXP != "segmentation violation"} {

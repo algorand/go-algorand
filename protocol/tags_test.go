@@ -169,6 +169,10 @@ func TestMaxSizesTested(t *testing.T) {
 	}
 
 	for _, tag := range constTags {
+		if tag == "TxnTag" {
+			// TxnTag is tested in a looser way in TestMaxSizesCorrect
+			continue
+		}
 		require.Truef(t, tagsFound[tag], "Tag %s does not have a corresponding test in TestMaxSizesCorrect", tag)
 	}
 }

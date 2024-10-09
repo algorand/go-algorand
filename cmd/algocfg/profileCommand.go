@@ -106,7 +106,7 @@ var (
 
 			// P2P config defaults
 			cfg.EnableP2PHybridMode = true
-			cfg.P2PNetAddress = ":4190"
+			cfg.P2PHybridNetAddress = ":4190"
 			cfg.EnableDHTProviders = true
 			return cfg
 		},
@@ -125,7 +125,7 @@ var (
 
 			// P2P config defaults
 			cfg.EnableP2PHybridMode = true
-			cfg.P2PNetAddress = ":4190"
+			cfg.P2PHybridNetAddress = ":4190"
 			cfg.EnableDHTProviders = true
 			return cfg
 		},
