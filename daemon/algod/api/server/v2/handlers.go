@@ -1211,17 +1211,18 @@ type PreEncodedSimulateTxnResult struct {
 	TransactionTrace         *model.SimulationTransactionExecTrace   `codec:"exec-trace,omitempty"`
 	UnnamedResourcesAccessed *model.SimulateUnnamedResourcesAccessed `codec:"unnamed-resources-accessed,omitempty"`
 	FixedSigner              *string                                 `codec:"fixed-signer,omitempty"`
+	PopulatedResourceArrays  *model.ResourceArrays                   `codec:"populated-resource-arrays,omitempty"`
 }
 
 // PreEncodedSimulateTxnGroupResult mirrors model.SimulateTransactionGroupResult
 type PreEncodedSimulateTxnGroupResult struct {
-	AppBudgetAdded           *uint64                                    `codec:"app-budget-added,omitempty"`
-	AppBudgetConsumed        *uint64                                    `codec:"app-budget-consumed,omitempty"`
-	FailedAt                 *[]uint64                                  `codec:"failed-at,omitempty"`
-	FailureMessage           *string                                    `codec:"failure-message,omitempty"`
-	UnnamedResourcesAccessed *model.SimulateUnnamedResourcesAccessed    `codec:"unnamed-resources-accessed,omitempty"`
-	Txns                     []PreEncodedSimulateTxnResult              `codec:"txn-results"`
-	PopulatedResourceArrays  map[int]simulation.PopulatedResourceArrays `codec:"populated-resource-arrays,omitempty"`
+	AppBudgetAdded           *uint64                                 `codec:"app-budget-added,omitempty"`
+	AppBudgetConsumed        *uint64                                 `codec:"app-budget-consumed,omitempty"`
+	FailedAt                 *[]uint64                               `codec:"failed-at,omitempty"`
+	FailureMessage           *string                                 `codec:"failure-message,omitempty"`
+	UnnamedResourcesAccessed *model.SimulateUnnamedResourcesAccessed `codec:"unnamed-resources-accessed,omitempty"`
+	Txns                     []PreEncodedSimulateTxnResult           `codec:"txn-results"`
+	ExtraResourceArrays      *[]model.ResourceArrays                 `codec:"extra-resource-arrays,omitempty"`
 }
 
 // PreEncodedSimulateResponse mirrors model.SimulateResponse

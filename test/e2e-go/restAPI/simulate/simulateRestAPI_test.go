@@ -2723,19 +2723,17 @@ int 1
 					{
 						Txn:               v2.PreEncodedTxInfo{Txn: stxn},
 						AppBudgetConsumed: &budgetUsed,
+						PopulatedResourceArrays: &model.ResourceArrays{
+							Accounts: &[]string{otherAddressAddress.String()},
+							Assets:   &[]uint64{uint64(assetID)},
+							Apps:     &[]uint64{uint64(otherAppID)},
+							Boxes:    &[]model.BoxReference{{App: uint64(testAppID), Name: []byte("A")}},
+						},
 					},
 				},
 				AppBudgetAdded:           &budgetAdded,
 				AppBudgetConsumed:        &budgetUsed,
 				UnnamedResourcesAccessed: &expectedUnnamedGroupResources,
-				PopulatedResourceArrays: map[int]simulation.PopulatedResourceArrays{
-					0: {
-						Accounts: []basics.Address{otherAddressAddress},
-						Assets:   []basics.AssetIndex{basics.AssetIndex(assetID)},
-						Apps:     []basics.AppIndex{basics.AppIndex(otherAppID)},
-						Boxes:    []logic.BoxRef{{App: basics.AppIndex(testAppID), Name: "A"}, {App: basics.AppIndex(0), Name: ""}},
-					},
-				},
 			},
 		},
 	}

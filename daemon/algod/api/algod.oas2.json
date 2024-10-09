@@ -4234,7 +4234,40 @@
         }
       }
     },
-    "SimulateTransactionGroupResult": {
+    "ResourceArrays": {
+      "description": "Resource arrays that are required for a transaction",
+      "type": "object",
+      "properties": {
+        "accounts": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "x-algorand-format": "Address"
+          }
+        },
+        "assets": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "x-algorand-format": "uint64"
+          }
+        },
+        "apps": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "x-algorand-format": "uint64"
+          }
+        },
+        "boxes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/BoxReference"
+          }
+        }
+      }
+    },
+  "SimulateTransactionGroupResult": {
       "description": "Simulation result for an atomic transaction group",
       "type": "object",
       "required": [
@@ -4270,9 +4303,12 @@
         "unnamed-resources-accessed": {
           "$ref": "#/definitions/SimulateUnnamedResourcesAccessed"
         },
-        "populated-resource-arrays": {
-          "description": "Present if populate-resource-arrays is true in the request. In that case, it will be a map of transaction index in the group to populated resource arrays. There may be more resource arrays given than transaction in the group, which means more app call transactions would be needed for extra resources.",
-          "type": "object"
+        "extra-resource-arrays": {
+          "description": "Present if populate-resource-arrays is true in the request and additional tranactions are needed to name all the accessed resources.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ResourceArrays"
+          }
         }
       }
     },
@@ -4304,6 +4340,10 @@
           "description": "The account that needed to sign this transaction when no signature was provided and the provided signer was incorrect.",
           "type": "string",
           "x-algorand-format": "Address"
+        },
+        "populated-resource-arrays": {
+          "description": "Present if populate-resource-arrays is true in the request. In this case, it will be all of the resources this transaction needs to be evaluated.",
+          "$ref": "#/definitions/ResourceArrays"
         }
       }
     },

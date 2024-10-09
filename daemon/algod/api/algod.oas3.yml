@@ -2250,6 +2250,39 @@
         ],
         "type": "object"
       },
+      "ResourceArrays": {
+        "description": "Resource arrays that are required for a transaction",
+        "properties": {
+          "accounts": {
+            "items": {
+              "type": "string",
+              "x-algorand-format": "Address"
+            },
+            "type": "array"
+          },
+          "apps": {
+            "items": {
+              "type": "integer",
+              "x-algorand-format": "uint64"
+            },
+            "type": "array"
+          },
+          "assets": {
+            "items": {
+              "type": "integer",
+              "x-algorand-format": "uint64"
+            },
+            "type": "array"
+          },
+          "boxes": {
+            "items": {
+              "$ref": "#/components/schemas/BoxReference"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
       "ScratchChange": {
         "description": "A write operation into a scratch slot.",
         "properties": {
@@ -2379,6 +2412,13 @@
             "description": "Total budget consumed during execution of app calls in the transaction group.",
             "type": "integer"
           },
+          "extra-resource-arrays": {
+            "description": "Present if populate-resource-arrays is true in the request and additional transactions with the following resources need to be added to the transaction group.",
+            "items": {
+              "$ref": "#/components/schemas/ResourceArrays"
+            },
+            "type": "array"
+          },
           "failed-at": {
             "description": "If present, indicates which transaction in this group caused the failure. This array represents the path to the failing transaction. Indexes are zero based, the first element indicates the top-level transaction, and successive elements indicate deeper inner transactions.",
             "items": {
@@ -2389,11 +2429,6 @@
           "failure-message": {
             "description": "If present, indicates that the transaction group failed and specifies why that happened",
             "type": "string"
-          },
-          "populated-resource-arrays": {
-            "description": "Present if populate-resource-arrays is true in the request. In that case, it will be a map of transaction index in the group to populated resource arrays. There may be more resource arrays given than transaction in the group, which means more app call transactions would be needed for extra resources.",
-            "properties": {},
-            "type": "object"
           },
           "txn-results": {
             "description": "Simulation result for individual transactions",
@@ -2429,6 +2464,9 @@
           "logic-sig-budget-consumed": {
             "description": "Budget used during execution of a logic sig transaction.",
             "type": "integer"
+          },
+          "populated-resource-arrays": {
+            "$ref": "#/components/schemas/ResourceArrays"
           },
           "txn-result": {
             "$ref": "#/components/schemas/PendingTransactionResponse"
