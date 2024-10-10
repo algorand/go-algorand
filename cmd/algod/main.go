@@ -196,7 +196,7 @@ func run() int {
 
 	// Apply network-specific consensus overrides, noting the configurable consensus protocols file
 	// takes precedence over network-specific overrides.
-	config.OverrideConsensusSettingsForNetwork(genesis.Network)
+	config.ApplyShorterUpgradeRoundsForDevNetworks(genesis.Network)
 
 	err = config.LoadConfigurableConsensusProtocols(absolutePath)
 	if err != nil {

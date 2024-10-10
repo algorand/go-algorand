@@ -1560,9 +1560,9 @@ func initConsensusProtocols() {
 	vAlpha4.ApprovedUpgrades[protocol.ConsensusVAlpha5] = 10000
 }
 
-// OverrideConsensusSettingsForNetwork is a function that allows for network-specific overrides to the consensus parameters.
+// ApplyShorterUpgradeRoundsForDevNetworks applies a shorter upgrade round time for the Devnet and Betanet networks.
 // This function should not take precedence over settings loaded via `PreloadConfigurableConsensusProtocols`.
-func OverrideConsensusSettingsForNetwork(id protocol.NetworkID) {
+func ApplyShorterUpgradeRoundsForDevNetworks(id protocol.NetworkID) {
 	if id == Betanet || id == Devnet {
 		// Go through all approved upgrades and set to the MinUpgradeWaitRounds valid where MinUpgradeWaitRounds is set
 		for _, p := range Consensus {

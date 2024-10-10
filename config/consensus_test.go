@@ -62,7 +62,7 @@ func TestConsensusUpgradeWindow(t *testing.T) {
 func TestConsensusUpgradeWindow_NetworkOverrides(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	OverrideConsensusSettingsForNetwork(Devnet)
+	ApplyShorterUpgradeRoundsForDevNetworks(Devnet)
 	for _, params := range Consensus {
 		for toVersion, delay := range params.ApprovedUpgrades {
 			if params.MinUpgradeWaitRounds != 0 || params.MaxUpgradeWaitRounds != 0 {
@@ -81,7 +81,9 @@ func TestConsensusUpgradeWindow_NetworkOverrides(t *testing.T) {
 	Consensus = make(ConsensusProtocols)
 	initConsensusProtocols()
 
-	OverrideConsensusSettingsForNetwork(Mainnet)
+	origConsensus := Consensus.DeepCopy()
+	ApplyShorterUpgradeRoundsForDevNetworks(Mainnet)
+	require.EqualValues(t, origConsensus, Consensus)
 	for _, params := range Consensus {
 		for toVersion, delay := range params.ApprovedUpgrades {
 			if params.MinUpgradeWaitRounds != 0 || params.MaxUpgradeWaitRounds != 0 {
@@ -99,7 +101,7 @@ func TestConsensusUpgradeWindow_NetworkOverrides(t *testing.T) {
 	Consensus = make(ConsensusProtocols)
 	initConsensusProtocols()
 
-	OverrideConsensusSettingsForNetwork(Betanet)
+	ApplyShorterUpgradeRoundsForDevNetworks(Betanet)
 	for _, params := range Consensus {
 		for toVersion, delay := range params.ApprovedUpgrades {
 			if params.MinUpgradeWaitRounds != 0 || params.MaxUpgradeWaitRounds != 0 {
@@ -118,7 +120,8 @@ func TestConsensusUpgradeWindow_NetworkOverrides(t *testing.T) {
 	Consensus = make(ConsensusProtocols)
 	initConsensusProtocols()
 
-	OverrideConsensusSettingsForNetwork(Testnet)
+	ApplyShorterUpgradeRoundsForDevNetworks(Testnet)
+	require.EqualValues(t, origConsensus, Consensus)
 	for _, params := range Consensus {
 		for toVersion, delay := range params.ApprovedUpgrades {
 			if params.MinUpgradeWaitRounds != 0 || params.MaxUpgradeWaitRounds != 0 {
