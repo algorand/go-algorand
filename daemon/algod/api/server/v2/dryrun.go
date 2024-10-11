@@ -329,6 +329,10 @@ func (dl *dryrunLedger) LookupAgreement(rnd basics.Round, addr basics.Address) (
 	}, nil
 }
 
+func (dl *dryrunLedger) GetKnockOfflineCandidates(basics.Round, config.ConsensusParams) (map[basics.Address]basics.OnlineAccountData, error) {
+	return nil, nil
+}
+
 func (dl *dryrunLedger) OnlineCirculation(rnd basics.Round, voteRnd basics.Round) (basics.MicroAlgos, error) {
 	// dryrun doesn't support setting the global online stake, so we'll just return a constant
 	return basics.Algos(1_000_000_000), nil // 1B

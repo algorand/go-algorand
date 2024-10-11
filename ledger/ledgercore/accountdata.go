@@ -187,6 +187,8 @@ func (u AccountData) OnlineAccountData(proto config.ConsensusParams, rewardsLeve
 		MicroAlgosWithRewards: microAlgos,
 		VotingData:            u.VotingData,
 		IncentiveEligible:     u.IncentiveEligible,
+		LastProposed:          u.LastProposed,
+		LastHeartbeat:         u.LastHeartbeat,
 	}
 }
 

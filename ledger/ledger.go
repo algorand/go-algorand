@@ -638,8 +638,37 @@ func (l *Ledger) LookupAgreement(rnd basics.Round, addr basics.Address) (basics.
 	defer l.trackerMu.RUnlock()
 
 	// Intentionally apply (pending) rewards up to rnd.
-	data, err := l.acctsOnline.LookupOnlineAccountData(rnd, addr)
+	data, err := l.acctsOnline.lookupOnlineAccountData(rnd, addr)
 	return data, err
+}
+
+// GetKnockOfflineCandidates retrieves a list of online accounts who will be
+// checked to a recent proposal or heartbeat. Large accounts are the ones worth checking.
+func (l *Ledger) GetKnockOfflineCandidates(rnd basics.Round, proto config.ConsensusParams) (map[basics.Address]basics.OnlineAccountData, error) {
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
+
+	// get state proof worker's most recent list for top N addresses
+	if proto.StateProofInterval == 0 {
+		return nil, nil
+	}
+	// get latest state proof voters information, up to rnd, without calling cond.Wait()
+	_, voters := l.acctsOnline.voters.LatestCompletedVotersUpTo(rnd)
+	if voters == nil { // no cached voters found < rnd
+		return nil, nil
+	}
+
+	// fetch fresh data up to this round from online account cache. These accounts should all
+	// be in cache, as long as proto.StateProofTopVoters < onlineAccountsCacheMaxSize.
+	ret := make(map[basics.Address]basics.OnlineAccountData)
+	for addr := range voters.AddrToPos {
+		data, err := l.acctsOnline.lookupOnlineAccountData(rnd, addr)
+		if err != nil {
+			continue // skip missing / not online accounts
+		}
+		ret[addr] = data
+	}
+	return ret, nil
 }
 
 // LookupWithoutRewards is like Lookup but does not apply pending rewards up
