@@ -267,8 +267,8 @@ def parse_metrics(
     if diff and metrics_names and len(metrics_names) == 2 and len(out) == 2:
         m = list(out.keys())
         name = f'{m[0]}_-_{m[1]}'
-        metric = Metric(name, MetricType.GAUGE, out[m[0]].value - out[m[1]].value)
-        out = [{name: metric}]
+        metric = Metric(name, MetricType.GAUGE, out[m[0]][0].value - out[m[1]][0].value)
+        out = {name: [metric]}
 
     return out
 
