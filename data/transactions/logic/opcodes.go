@@ -19,6 +19,7 @@ package logic
 import (
 	"cmp"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 
@@ -85,15 +86,41 @@ const spOpcodesVersion = 11 // falcon_verify, sumhash512
 // Unlimited Global Storage opcodes
 const boxVersion = 8 // box_*
 
+// CustomCost encapsulates a custom cost function and its documentation, applicable to opcodes like bmodexp where linearCost is inadequate by itself
+type CustomCost struct {
+	compute func(stack []stackValue, depth int) int
+	docCost string
+}
+
+// Custom cost definition for bmodexp
+func bmodExpCostFunction(stack []stackValue, depth int) int {
+	last := len(stack) - depth - 1 // mod
+	prev := last - depth - 1       // exp
+	pprev := last - depth - 2      // base
+
+	expLength := float64(len(stack[prev].Bytes))
+	modLength := float64(len(stack[last].Bytes))
+	baseLength := float64(len(stack[pprev].Bytes))
+	cost := (math.Pow(math.Max(baseLength, modLength), 1.63) * expLength / 15) + 200
+
+	return int(cost)
+}
+
+var bmodexpCustomCost = &CustomCost{
+	compute: bmodExpCostFunction,
+	docCost: "((len(B) * max(len(A), len(C)) ^ 1.63) / 15) + 200",
+}
+
 type linearCost struct {
-	baseCost  int
-	chunkCost int
-	chunkSize int
-	depth     int
+	baseCost   int
+	chunkCost  int
+	chunkSize  int
+	depth      int
+	customCost *CustomCost
 }
 
 func (lc linearCost) check() linearCost {
-	if lc.baseCost < 1 || lc.chunkCost < 0 || lc.chunkSize < 0 || lc.chunkSize > maxStringSize || lc.depth < 0 {
+	if (lc.customCost == nil && lc.baseCost < 1) || lc.chunkCost < 0 || lc.chunkSize < 0 || lc.chunkSize > maxStringSize || lc.depth < 0 {
 		panic(fmt.Sprintf("bad cost configuration %+v", lc))
 	}
 	if lc.chunkCost > 0 && lc.chunkSize == 0 {
@@ -102,10 +129,19 @@ func (lc linearCost) check() linearCost {
 	if lc.chunkCost == 0 && lc.chunkSize > 0 {
 		panic(fmt.Sprintf("no chunk cost with positive chunk size %+v", lc))
 	}
+	if lc.customCost != nil && lc.customCost.compute == nil {
+		panic(fmt.Sprintf("CustomCost exists without a non-nil compute function pointer value %+v", lc))
+	}
+	if lc.customCost != nil && lc.customCost.docCost == "" {
+		panic(fmt.Sprintf("CustomCost exists without a value for docCost %+v", lc))
+	}
 	return lc
 }
 
 func (lc *linearCost) compute(stack []stackValue) int {
+	if lc.customCost != nil {
+		return lc.customCost.compute(stack, lc.depth)
+	}
 	cost := lc.baseCost
 	if lc.chunkCost != 0 && lc.chunkSize != 0 {
 		// Uses basics.DivCeil rather than (count/chunkSize) to match how Ethereum discretizes hashing costs.
@@ -116,6 +152,9 @@ func (lc *linearCost) compute(stack []stackValue) int {
 }
 
 func (lc *linearCost) docCost(argLen int) string {
+	if lc.customCost != nil {
+		return lc.customCost.docCost
+	}
 	if *lc == (linearCost{}) {
 		return ""
 	}
@@ -240,6 +279,15 @@ func (d OpDetails) costs(cost int) OpDetails {
 	return d
 }
 
+func defaultCustomCost(customCost *CustomCost) OpDetails {
+	return detDefault().customCost(customCost)
+}
+
+func (d OpDetails) customCost(customCost *CustomCost) OpDetails {
+	d.FullCost = linearCost{customCost: customCost}.check()
+	return d
+}
+
 func only(m RunMode) OpDetails {
 	d := detDefault()
 	d.Modes = m
@@ -334,7 +382,7 @@ func costByFieldAndLength(immediate string, group *FieldGroup, costs []linearCos
 
 func costByLength(initial, perChunk, chunkSize, depth int) OpDetails {
 	d := detDefault()
-	d.FullCost = linearCost{initial, perChunk, chunkSize, depth}.check()
+	d.FullCost = linearCost{baseCost: initial, chunkCost: perChunk, chunkSize: chunkSize, depth: depth}.check()
 	return d
 }
 
@@ -798,7 +846,7 @@ var OpSpecs = []OpSpec{
 		costByField("g", &EcGroups, []int{
 			BN254g1: 630, BN254g2: 3_300,
 			BLS12_381g1: 1_950, BLS12_381g2: 8_150})},
-	{0xe6, "bmodexp", opBytesModExp, proto("bbb:b"), 11, costly(2000)}, // TODO: refine cost model for bmodexp
+	{0xe6, "bmodexp", opBytesModExp, proto("bbb:b"), 11, defaultCustomCost(bmodexpCustomCost)},
 }
 
 // OpcodesByVersion returns list of opcodes available in a specific version of TEAL
