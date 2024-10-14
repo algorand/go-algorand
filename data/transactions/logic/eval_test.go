@@ -17,6 +17,7 @@
 package logic
 
 import (
+	"crypto/rand"
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
@@ -5063,6 +5064,57 @@ func TestBitLen(t *testing.T) {
 	testAccepts(t, "byte 0x0100; bitlen; int 9; ==", 4)
 	testAccepts(t, "byte 0x010001000100010001000100010001000100; bitlen; int 137; ==", 4)
 
+}
+
+func BenchmarkBytesModExp(b *testing.B) {
+	type ModexpTestVector struct {
+		Base     string
+		Exponent string
+		Modulus  string
+		Name     string
+	}
+
+	// Function to generate a random hex string of a specified length in bytes
+	generateRandomHexString := func(length int) string {
+		bytes := make([]byte, length)
+		rand.Read(bytes)
+		return fmt.Sprintf("0x%x", bytes)
+	}
+
+	// Define the accepted test vectors using nested loops
+	modexpTestVectors := []ModexpTestVector{}
+	incr := 128
+	maxDim := 1024
+	for baseLen := incr; baseLen <= maxDim; baseLen += incr {
+		for expLen := incr; expLen <= maxDim; expLen += incr {
+			for modLen := incr; modLen <= maxDim; modLen += incr {
+				modexpTestVectors = append(modexpTestVectors, ModexpTestVector{
+					Name:     fmt.Sprintf(`TestVector_Dim(%d,%d,%d)`, baseLen, expLen, modLen),
+					Base:     generateRandomHexString(baseLen),
+					Exponent: generateRandomHexString(expLen),
+					Modulus:  generateRandomHexString(modLen),
+				})
+			}
+		}
+	}
+	b.Run("bmod_cost", func(b *testing.B) {
+		b.ReportAllocs()
+		progText := fmt.Sprintf(`byte %s; byte %s;`, generateRandomHexString(64), generateRandomHexString(64)) + " b%; pop"
+		benchmarkOperation(b, "", progText, "int 1")
+	})
+	b.Run("max_bmodexp_cost", func(b *testing.B) {
+		b.ReportAllocs()
+		progText := fmt.Sprintf(`byte %s; byte %s; byte %s; bmodexp; pop`, generateRandomHexString(4096), generateRandomHexString(4096), generateRandomHexString(4096))
+		benchmarkOperation(b, "", progText, "int 1")
+	})
+	// Iterate through the test vectors and benchmark the bmodexp computation
+	for _, tv := range modexpTestVectors {
+		b.Run(tv.Name, func(b *testing.B) {
+			b.ReportAllocs()
+			progText := fmt.Sprintf(`byte %s; byte %s; byte %s; bmodexp; pop`, tv.Base, tv.Exponent, tv.Modulus)
+			benchmarkOperation(b, "", progText, "int 1")
+		})
+	}
 }
 
 func TestBytesModExp(t *testing.T) {
