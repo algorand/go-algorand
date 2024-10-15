@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -69,6 +70,7 @@ type mockedLedger struct {
 	waiters map[basics.Round]chan struct{}
 	history []table
 	version protocol.ConsensusVersion
+	hdrs    map[basics.Round]bookkeeping.BlockHeader
 }
 
 func newMockedLedger() mockedLedger {
@@ -110,10 +112,23 @@ func (l *mockedLedger) WaitMem(r basics.Round) chan struct{} {
 
 // BlockHdr allows the service access to consensus values
 func (l *mockedLedger) BlockHdr(r basics.Round) (bookkeeping.BlockHeader, error) {
+	if r > l.LastRound() {
+		return bookkeeping.BlockHeader{}, fmt.Errorf("%d is beyond current block (%d)", r, l.LastRound())
+	}
+	if hdr, ok := l.hdrs[r]; ok {
+		return hdr, nil
+	}
+	// just return a simple hdr
 	var hdr bookkeeping.BlockHeader
 	hdr.Round = r
 	hdr.CurrentProtocol = l.version
 	return hdr, nil
+}
+
+// addHeader places a block header into the ledger's history. It is used to make
+// challenges occur as we'd like.
+func (l *mockedLedger) addHeader(hdr bookkeeping.BlockHeader) {
+	l.hdrs[hdr.Round] = hdr
 }
 
 func (l *mockedLedger) addBlock(delta table) error {
@@ -197,7 +212,7 @@ func makeBlock(r basics.Round) bookkeeping.Block {
 	}
 }
 
-func TestHeartBeatOnlyWhenSuspended(t *testing.T) {
+func TestHeartBeatOnlyWhenChallenged(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -208,15 +223,8 @@ func TestHeartBeatOnlyWhenSuspended(t *testing.T) {
 	s := NewService(accts, &ledger, &sink, logging.TestingLog(t))
 	s.Start()
 
-	// ensure Donor can pay
-	a.NoError(ledger.addBlock(table{Donor: ledgercore.AccountData{
-		AccountBaseData: ledgercore.AccountBaseData{
-			MicroAlgos: basics.MicroAlgos{Raw: 1_000_000},
-		},
-	}}))
-	a.Empty(sink)
-
-	joe := basics.Address{1, 1}
+	// joe is a simple, non-online account, service will not heartbeat
+	joe := basics.Address{0xcc} // 0xcc will matter when we set the challenge
 	accts.add(joe)
 
 	acct := ledgercore.AccountData{}
@@ -225,123 +233,30 @@ func TestHeartBeatOnlyWhenSuspended(t *testing.T) {
 	ledger.waitFor(s, a)
 	a.Empty(sink)
 
+	// now joe is online, but not challenged, so no heartbeat
 	acct.Status = basics.Online
 
 	a.NoError(ledger.addBlock(table{joe: acct}))
 	a.Empty(sink)
 
-	acct.Status = basics.Suspended
+	// now we have to make it seem like joe has been challenged. We obtain the
+	// payout rules to find the first challenge round, skip forward to it, then
+	// go forward half a grace period. Only then should the service heartbeat
+	hdr, err := ledger.BlockHdr(ledger.LastRound())
+	a.NoError(err)
+	rules := config.Consensus[hdr.CurrentProtocol].Payouts
+	for ledger.LastRound() < basics.Round(rules.ChallengeInterval) {
+		a.NoError(ledger.addBlock(table{}))
+		ledger.waitFor(s, a)
+		a.Empty(sink)
+	}
 
 	a.NoError(ledger.addBlock(table{joe: acct}))
 	ledger.waitFor(s, a)
-	a.Len(sink, 1)    // only one heartbeat so far
-	a.Len(sink[0], 1) // will probably end up being 3 to pay for `heartbeat` opcode
+	a.Len(sink, 1) // only one heartbeat so far
+	a.Len(sink[0], 1)
+	a.Equal(sink[0][0].Txn.Type, protocol.HeartbeatTx)
+	a.Equal(sink[0][0].Txn.HeartbeatAddress, joe)
 
 	s.Stop()
-}
-
-func TestHeartBeatOnlyWhenDonorFunded(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-
-	a := require.New(t)
-	sink := txnSink{}
-	accts := &mockParticipants{}
-	ledger := newMockedLedger()
-	s := NewService(accts, &ledger, &sink, logging.TestingLog(t))
-	s.Start()
-
-	joe := basics.Address{1, 1}
-	accts.add(joe)
-
-	acct := ledgercore.AccountData{}
-
-	a.NoError(ledger.addBlock(table{joe: acct}))
-	a.Empty(sink)
-
-	acct.Status = basics.Suspended
-
-	a.NoError(ledger.addBlock(table{joe: acct}))
-	ledger.waitFor(s, a)
-	a.Empty(sink) // no funded donor, no heartbeat
-
-	// Donor exists, has enough for fee, but not enough when MBR is considered
-	a.NoError(ledger.addBlock(table{Donor: ledgercore.AccountData{
-		AccountBaseData: ledgercore.AccountBaseData{
-			MicroAlgos: basics.MicroAlgos{Raw: 100_000},
-		},
-	}}))
-	a.NoError(ledger.addBlock(table{joe: acct}))
-	ledger.waitFor(s, a)
-	a.Empty(sink)
-
-	a.NoError(ledger.addBlock(table{Donor: ledgercore.AccountData{
-		AccountBaseData: ledgercore.AccountBaseData{
-			MicroAlgos: basics.MicroAlgos{Raw: 200_000},
-		},
-	}}))
-	ledger.waitFor(s, a)
-	a.Len(sink, 1)    // only one heartbeat so far
-	a.Len(sink[0], 1) // will probably end up being 3 to pay for `heartbeat` opcode
-	s.Stop()
-}
-
-func TestHeartBeatForm(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-
-	a := require.New(t)
-	sink := txnSink{}
-	accts := &mockParticipants{}
-	ledger := newMockedLedger()
-	s := NewService(accts, &ledger, &sink, logging.TestingLog(t))
-	s.Start()
-
-	joe := basics.Address{1, 1}
-	accts.add(joe)
-
-	// Fund the donor, suspend joe
-	a.NoError(ledger.addBlock(table{
-		Donor: ledgercore.AccountData{
-			AccountBaseData: ledgercore.AccountBaseData{
-				MicroAlgos: basics.MicroAlgos{Raw: 200_000},
-			},
-		},
-		joe: ledgercore.AccountData{
-			AccountBaseData: ledgercore.AccountBaseData{
-				Status:     basics.Suspended,
-				MicroAlgos: basics.MicroAlgos{Raw: 2_000_000},
-			},
-		},
-	}))
-	ledger.waitFor(s, a)
-	a.Len(sink, 1)    // only one heartbeat so far
-	a.Len(sink[0], 1) // will probably end up being 3 to pay for `heartbeat` opcode
-
-	grp := sink[0]
-	require.Equal(t, grp[0].Txn.Sender, Donor)
-	require.Equal(t, grp[0].Lsig, transactions.LogicSig{Logic: DonorByteCode})
-
-	a.NoError(ledger.addBlock(nil))
-	ledger.waitFor(s, a)
-	a.Len(sink, 2) // still suspended, another heartbeat
-	inc := sink[0]
-	inc[0].Txn.FirstValid++
-	inc[0].Txn.LastValid++
-	a.Equal(inc, sink[1])
-
-	// mark joe online again
-	a.NoError(ledger.addBlock(table{
-		joe: ledgercore.AccountData{
-			AccountBaseData: ledgercore.AccountBaseData{
-				Status:     basics.Online,
-				MicroAlgos: basics.MicroAlgos{Raw: 2_000_000},
-			},
-		},
-	}))
-	ledger.waitFor(s, a)
-	a.Len(sink, 2) // no further heartbeat
-
-	s.Stop()
-
 }

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2023 Algorand, Inc.
+// Copyright (C) 2019-2024 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -30,8 +30,8 @@ type txnBroadcaster interface {
 	BroadcastInternalSignedTxGroup([]transactions.SignedTxn) error
 }
 
-// ledger represents the aspects of the "real" Ledger that heartbeat needs.
-// to interact with.
+// ledger represents the aspects of the "real" Ledger that the heartbeat service
+// needs to interact with
 type ledger interface {
 	// LastRound tells the round is ready for checking
 	LastRound() basics.Round
