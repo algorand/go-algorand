@@ -28,10 +28,13 @@ import (
 func Heartbeat(hb transactions.HeartbeatTxnFields, header transactions.Header, balances Balances, provider HdrProvider, round basics.Round) error {
 	// Get the account's balance entry
 	account, err := balances.Get(hb.HeartbeatAddress, false)
+	if err != nil {
+		return err
+	}
 
 	sv := account.VoteID
 	if sv.IsEmpty() {
-		return fmt.Errorf("HeartbeatAddress %s has has no voting keys\n", hb.HeartbeatAddress)
+		return fmt.Errorf("heartbeat address %s has no voting keys\n", hb.HeartbeatAddress)
 	}
 	id := basics.OneTimeIDForRound(header.LastValid, account.VoteKeyDilution)
 

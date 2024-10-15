@@ -291,5 +291,5 @@ func (m mockHeaders) BlockHdr(r basics.Round) (bookkeeping.BlockHeader, error) {
 	if hdr, ok := m.b[r]; ok {
 		return hdr, nil
 	}
-	return bookkeeping.BlockHeader{}, fmt.Errorf("Round %v is not present\n", r)
+	return bookkeeping.BlockHeader{}, fmt.Errorf("round %v is not present\n", r)
 }

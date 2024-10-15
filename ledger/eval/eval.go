@@ -1712,6 +1712,9 @@ type headerSource interface {
 	BlockHdr(round basics.Round) (bookkeeping.BlockHeader, error)
 }
 
+// ActiveChallenge returns details about the Challenge that was last issued if
+// it is still in effect (that is, between one and two grace periods from
+// issue). Otherwise it returns the zero value.
 func ActiveChallenge(rules config.ProposerPayoutRules, current basics.Round, headers headerSource) challenge {
 	// are challenges active?
 	interval := basics.Round(rules.ChallengeInterval)
@@ -1736,6 +1739,8 @@ func ActiveChallenge(rules config.ProposerPayoutRules, current basics.Round, hea
 	return challenge{lastChallenge, challengeHdr.Seed, rules.ChallengeBits}
 }
 
+// FailsChallenge returns true iff ch is in effect, matches address, and
+// lastSeen is before the challenge issue.
 func FailsChallenge(ch challenge, address basics.Address, lastSeen basics.Round) bool {
 	return ch.round != 0 && bitsMatch(ch.seed[:], address[:], ch.bits) && lastSeen < ch.round
 }
