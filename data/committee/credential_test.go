@@ -35,7 +35,7 @@ func TestAccountSelected(t *testing.T) {
 	seedGen := rand.New(rand.NewSource(1))
 	N := 1
 	for i := 0; i < N; i++ {
-		selParams, _, round, addresses, _, vrfSecrets, _, _ := testingenv(t, 100, 2000, seedGen)
+		selParams, _, round, addresses, _, vrfSecrets := testingenv(t, 100, 2000, seedGen)
 		period := Period(0)
 
 		leaders := uint64(0)
@@ -98,7 +98,7 @@ func TestAccountSelected(t *testing.T) {
 func TestRichAccountSelected(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	selParams, _, round, addresses, _, vrfSecrets, _, _ := testingenv(t, 10, 2000, nil)
+	selParams, _, round, addresses, _, vrfSecrets := testingenv(t, 10, 2000, nil)
 
 	period := Period(0)
 	ok, record, selectionSeed, _ := selParams(addresses[0])
@@ -159,7 +159,7 @@ func TestPoorAccountSelectedLeaders(t *testing.T) {
 	failsLeaders := 0
 	leaders := make([]uint64, N)
 	for i := 0; i < N; i++ {
-		selParams, _, round, addresses, _, vrfSecrets, _, _ := testingenv(t, 100, 2000, seedGen)
+		selParams, _, round, addresses, _, vrfSecrets := testingenv(t, 100, 2000, seedGen)
 		period := Period(0)
 		for j := range addresses {
 			ok, record, selectionSeed, _ := selParams(addresses[j])
@@ -207,7 +207,7 @@ func TestPoorAccountSelectedCommittee(t *testing.T) {
 	N := 1
 	committee := uint64(0)
 	for i := 0; i < N; i++ {
-		selParams, _, round, addresses, _, vrfSecrets, _, _ := testingenv(t, 100, 2000, seedGen)
+		selParams, _, round, addresses, _, vrfSecrets := testingenv(t, 100, 2000, seedGen)
 		period := Period(0)
 
 		step := Cert
@@ -250,10 +250,10 @@ func TestNoMoneyAccountNotSelected(t *testing.T) {
 	seedGen := rand.New(rand.NewSource(1))
 	N := 1
 	for i := 0; i < N; i++ {
-		selParams, _, round, addresses, _, _, _, _ := testingenv(t, 10, 2000, seedGen)
+		selParams, _, round, addresses, _, _ := testingenv(t, 10, 2000, seedGen)
 		lookback := basics.Round(2*proto.SeedRefreshInterval + proto.SeedLookback + 1)
 		gen := rand.New(rand.NewSource(2))
-		_, _, zeroVRFSecret, _ := newAccount(t, gen, lookback, 5)
+		_, _, zeroVRFSecret := newAccount(t, gen, lookback, 5)
 		period := Period(0)
 		ok, record, selectionSeed, _ := selParams(addresses[i])
 		if !ok {
@@ -281,7 +281,7 @@ func TestNoMoneyAccountNotSelected(t *testing.T) {
 func TestLeadersSelected(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	selParams, _, round, addresses, _, vrfSecrets, _, _ := testingenv(t, 100, 2000, nil)
+	selParams, _, round, addresses, _, vrfSecrets := testingenv(t, 100, 2000, nil)
 
 	period := Period(0)
 	step := Propose
@@ -313,7 +313,7 @@ func TestLeadersSelected(t *testing.T) {
 func TestCommitteeSelected(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	selParams, _, round, addresses, _, vrfSecrets, _, _ := testingenv(t, 100, 2000, nil)
+	selParams, _, round, addresses, _, vrfSecrets := testingenv(t, 100, 2000, nil)
 
 	period := Period(0)
 	step := Soft
@@ -345,7 +345,7 @@ func TestCommitteeSelected(t *testing.T) {
 func TestAccountNotSelected(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	selParams, _, round, addresses, _, vrfSecrets, _, _ := testingenv(t, 100, 2000, nil)
+	selParams, _, round, addresses, _, vrfSecrets := testingenv(t, 100, 2000, nil)
 	period := Period(0)
 	leaders := uint64(0)
 	for i := range addresses {
@@ -375,7 +375,7 @@ func TestAccountNotSelected(t *testing.T) {
 
 // TODO update to remove VRF verification overhead
 func BenchmarkSortition(b *testing.B) {
-	selParams, _, round, addresses, _, vrfSecrets, _, _ := testingenv(b, 100, 2000, nil)
+	selParams, _, round, addresses, _, vrfSecrets := testingenv(b, 100, 2000, nil)
 
 	period := Period(0)
 	step := Soft

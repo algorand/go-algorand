@@ -1676,24 +1676,24 @@ func TestActiveChallenge(t *testing.T) {
 	rules := config.Consensus[nowHeader.CurrentProtocol].Payouts
 
 	// simplest test. when interval=X and grace=G, X+G+1 is a challenge
-	inChallenge := rules.ChallengeInterval + rules.ChallengeGracePeriod + 1
+	inChallenge := basics.Round(rules.ChallengeInterval + rules.ChallengeGracePeriod + 1)
 	ch := ActiveChallenge(rules, inChallenge, singleSource(nowHeader))
 	a.NotZero(ch.round)
 
 	// all rounds before that have no challenge
-	for r := uint64(1); r < inChallenge; r++ {
+	for r := basics.Round(1); r < inChallenge; r++ {
 		ch := ActiveChallenge(rules, r, singleSource(nowHeader))
 		a.Zero(ch.round, r)
 	}
 
 	// ChallengeGracePeriod rounds allow challenges starting with inChallenge
-	for r := inChallenge; r < inChallenge+rules.ChallengeGracePeriod; r++ {
+	for r := inChallenge; r < inChallenge+basics.Round(rules.ChallengeGracePeriod); r++ {
 		ch := ActiveChallenge(rules, r, singleSource(nowHeader))
 		a.EqualValues(ch.round, rules.ChallengeInterval)
 	}
 
 	// And the next round is again challenge-less
-	ch = ActiveChallenge(rules, inChallenge+rules.ChallengeGracePeriod, singleSource(nowHeader))
+	ch = ActiveChallenge(rules, inChallenge+basics.Round(rules.ChallengeGracePeriod), singleSource(nowHeader))
 	a.Zero(ch.round)
 
 	// ignore challenge if upgrade happened
