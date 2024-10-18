@@ -2887,7 +2887,9 @@ func disassemble(dis *disassembleState, spec *OpSpec) (string, error) {
 			if err != nil {
 				return "", err
 			}
-			dis.bytec = bytec
+			if spec.Name == "bytecblock" {
+				dis.bytec = bytec
+			}
 			for i, bv := range bytec {
 				if i != 0 {
 					out += " "
