@@ -7,7 +7,7 @@ DISTRIB=$ID
 ARCH_DEPS="expect jq autoconf shellcheck sqlite python-virtualenv"
 UBUNTU_DEPS="libtool expect jq autoconf automake shellcheck sqlite3 python3-venv build-essential"
 FEDORA_DEPS="expect jq autoconf ShellCheck sqlite python-virtualenv"
-OPENSUSE_TUMBLEWEED_DEPS="go libtool expect jq autoconf ShellCheck sqlite3 python312-virtualenv"
+OPENSUSE_TUMBLEWEED_DEPS="libtool expect jq autoconf ShellCheck sqlite3 python312-virtualenv"
 
 case $DISTRIB in
     "arch" | "manjaro")
