@@ -33,6 +33,7 @@ import (
 
 var (
 	recoverWallet     bool
+	noPassword        bool
 	defaultWalletName string
 )
 
@@ -45,6 +46,7 @@ func init() {
 
 	// Should we recover the wallet?
 	newWalletCmd.Flags().BoolVarP(&recoverWallet, "recover", "r", false, "Recover the wallet from the backup mnemonic provided at wallet creation (NOT the mnemonic provided by goal account export or by algokey). Regenerate accounts in the wallet with `goal account new`")
+	newWalletCmd.Flags().BoolVarP(&noPassword, "non-interactive", "n", false, "Create the new wallet without prompting for password or displaying the seed phrase")
 }
 
 var walletCmd = &cobra.Command{
@@ -113,17 +115,23 @@ var newWalletCmd = &cobra.Command{
 			}
 		}
 
-		// Fetch a password for the wallet
-		fmt.Printf(infoChoosePasswordPrompt, walletName)
-		walletPassword := ensurePassword()
+		walletPassword := []byte{}
 
-		// Confirm the password
-		fmt.Printf(infoPasswordConfirmation)
-		passwordConfirmation := ensurePassword()
+		if noPassword {
+			reportInfof(infoSkipPassword)
+		} else {
+			// Fetch a password for the wallet
+			fmt.Printf(infoChoosePasswordPrompt, walletName)
+			walletPassword = ensurePassword()
 
-		// Check the password confirmation
-		if !bytes.Equal(walletPassword, passwordConfirmation) {
-			reportErrorln(errorPasswordConfirmation)
+			// Confirm the password
+			fmt.Printf(infoPasswordConfirmation)
+			passwordConfirmation := ensurePassword()
+
+			// Check the password confirmation
+			if !bytes.Equal(walletPassword, passwordConfirmation) {
+				reportErrorln(errorPasswordConfirmation)
+			}
 		}
 
 		// Create the wallet
@@ -134,7 +142,7 @@ var newWalletCmd = &cobra.Command{
 		}
 		reportInfof(infoCreatedWallet, walletName)
 
-		if !recoverWallet {
+		if !recoverWallet && !noPassword {
 			// Offer to print backup seed
 			fmt.Printf(infoBackupExplanation)
 			resp, err := reader.ReadString('\n')
