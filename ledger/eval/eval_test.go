@@ -1644,16 +1644,16 @@ func TestFailsChallenge(t *testing.T) {
 	a := assert.New(t)
 
 	// a valid challenge, with 4 matching bits, and an old last seen
-	a.True(FailsChallenge(challenge{round: 11, seed: [32]byte{0xb0, 0xb4}, bits: 4}, basics.Address{0xbf, 0x34}, 10))
+	a.True(challenge{round: 11, seed: [32]byte{0xb0, 0xb4}, bits: 4}.Failed(basics.Address{0xbf, 0x34}, 10))
 
 	// challenge isn't "on"
-	a.False(FailsChallenge(challenge{round: 0, seed: [32]byte{0xb0, 0xb4}, bits: 4}, basics.Address{0xbf, 0x34}, 10))
+	a.False(challenge{round: 0, seed: [32]byte{0xb0, 0xb4}, bits: 4}.Failed(basics.Address{0xbf, 0x34}, 10))
 	// node has appeared more recently
-	a.False(FailsChallenge(challenge{round: 11, seed: [32]byte{0xb0, 0xb4}, bits: 4}, basics.Address{0xbf, 0x34}, 12))
+	a.False(challenge{round: 11, seed: [32]byte{0xb0, 0xb4}, bits: 4}.Failed(basics.Address{0xbf, 0x34}, 12))
 	// bits don't match
-	a.False(FailsChallenge(challenge{round: 11, seed: [32]byte{0xb0, 0xb4}, bits: 4}, basics.Address{0xcf, 0x34}, 10))
+	a.False(challenge{round: 11, seed: [32]byte{0xb0, 0xb4}, bits: 4}.Failed(basics.Address{0xcf, 0x34}, 10))
 	// no enough bits match
-	a.False(FailsChallenge(challenge{round: 11, seed: [32]byte{0xb0, 0xb4}, bits: 5}, basics.Address{0xbf, 0x34}, 10))
+	a.False(challenge{round: 11, seed: [32]byte{0xb0, 0xb4}, bits: 5}.Failed(basics.Address{0xbf, 0x34}, 10))
 }
 
 type singleSource bookkeeping.BlockHeader
@@ -1677,23 +1677,23 @@ func TestActiveChallenge(t *testing.T) {
 
 	// simplest test. when interval=X and grace=G, X+G+1 is a challenge
 	inChallenge := basics.Round(rules.ChallengeInterval + rules.ChallengeGracePeriod + 1)
-	ch := ActiveChallenge(rules, inChallenge, singleSource(nowHeader))
+	ch := FindChallenge(rules, inChallenge, singleSource(nowHeader), ChActive)
 	a.NotZero(ch.round)
 
 	// all rounds before that have no challenge
 	for r := basics.Round(1); r < inChallenge; r++ {
-		ch := ActiveChallenge(rules, r, singleSource(nowHeader))
+		ch := FindChallenge(rules, r, singleSource(nowHeader), ChActive)
 		a.Zero(ch.round, r)
 	}
 
 	// ChallengeGracePeriod rounds allow challenges starting with inChallenge
 	for r := inChallenge; r < inChallenge+basics.Round(rules.ChallengeGracePeriod); r++ {
-		ch := ActiveChallenge(rules, r, singleSource(nowHeader))
+		ch := FindChallenge(rules, r, singleSource(nowHeader), ChActive)
 		a.EqualValues(ch.round, rules.ChallengeInterval)
 	}
 
 	// And the next round is again challenge-less
-	ch = ActiveChallenge(rules, inChallenge+basics.Round(rules.ChallengeGracePeriod), singleSource(nowHeader))
+	ch = FindChallenge(rules, inChallenge+basics.Round(rules.ChallengeGracePeriod), singleSource(nowHeader), ChActive)
 	a.Zero(ch.round)
 
 	// ignore challenge if upgrade happened
@@ -1703,6 +1703,6 @@ func TestActiveChallenge(t *testing.T) {
 			CurrentProtocol: protocol.ConsensusV39,
 		},
 	}
-	ch = ActiveChallenge(rules, inChallenge, singleSource(oldHeader))
+	ch = FindChallenge(rules, inChallenge, singleSource(oldHeader), ChActive)
 	a.Zero(ch.round)
 }

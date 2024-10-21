@@ -22,9 +22,11 @@ import (
 	"time"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
@@ -34,52 +36,27 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type mockParticipants struct {
-	accts map[basics.Address]struct{}
-}
-
-func (p *mockParticipants) Keys(rnd basics.Round) []account.ParticipationRecordForRound {
-	var ret []account.ParticipationRecordForRound
-	for addr, _ := range p.accts {
-		ret = append(ret, account.ParticipationRecordForRound{
-			ParticipationRecord: account.ParticipationRecord{
-				ParticipationID:   [32]byte{},
-				Account:           addr,
-				FirstValid:        0,
-				LastValid:         0,
-				KeyDilution:       0,
-				LastVote:          0,
-				LastBlockProposal: 0,
-			},
-		})
-	}
-	return ret
-}
-
-func (p *mockParticipants) add(addr basics.Address) {
-	if p.accts == nil {
-		p.accts = make(map[basics.Address]struct{})
-	}
-	p.accts[addr] = struct{}{}
-}
-
 type table map[basics.Address]ledgercore.AccountData
 
 type mockedLedger struct {
 	mu      deadlock.Mutex
 	waiters map[basics.Round]chan struct{}
 	history []table
-	version protocol.ConsensusVersion
-	hdrs    map[basics.Round]bookkeeping.BlockHeader
+	hdr     bookkeeping.BlockHeader
+
+	participants map[basics.Address]*crypto.OneTimeSignatureSecrets
 }
 
 func newMockedLedger() mockedLedger {
 	return mockedLedger{
 		waiters: make(map[basics.Round]chan struct{}),
 		history: []table{nil}, // some genesis accounts could go here
-		version: protocol.ConsensusFuture,
+		hdr: bookkeeping.BlockHeader{
+			UpgradeState: bookkeeping.UpgradeState{
+				CurrentProtocol: protocol.ConsensusFuture,
+			},
+		},
 	}
-
 }
 
 func (l *mockedLedger) LastRound() basics.Round {
@@ -115,20 +92,10 @@ func (l *mockedLedger) BlockHdr(r basics.Round) (bookkeeping.BlockHeader, error)
 	if r > l.LastRound() {
 		return bookkeeping.BlockHeader{}, fmt.Errorf("%d is beyond current block (%d)", r, l.LastRound())
 	}
-	if hdr, ok := l.hdrs[r]; ok {
-		return hdr, nil
-	}
-	// just return a simple hdr
-	var hdr bookkeeping.BlockHeader
+	// return the template hdr, with round
+	hdr := l.hdr
 	hdr.Round = r
-	hdr.CurrentProtocol = l.version
 	return hdr, nil
-}
-
-// addHeader places a block header into the ledger's history. It is used to make
-// challenges occur as we'd like.
-func (l *mockedLedger) addHeader(hdr bookkeeping.BlockHeader) {
-	l.hdrs[hdr.Round] = hdr
 }
 
 func (l *mockedLedger) addBlock(delta table) error {
@@ -181,6 +148,38 @@ func (l *mockedLedger) waitFor(s *Service, a *require.Assertions) {
 	}, time.Second, 10*time.Millisecond)
 }
 
+func (l *mockedLedger) Keys(rnd basics.Round) []account.ParticipationRecordForRound {
+	var ret []account.ParticipationRecordForRound
+	for addr, secrets := range l.participants {
+		if rnd > l.LastRound() { // Usually we're looking for key material for a future round
+			rnd = l.LastRound()
+		}
+		acct, _, _, err := l.LookupAccount(rnd, addr)
+		if err != nil {
+			panic(err.Error())
+		}
+
+		ret = append(ret, account.ParticipationRecordForRound{
+			ParticipationRecord: account.ParticipationRecord{
+				ParticipationID: [32]byte{},
+				Account:         addr,
+				Voting:          secrets,
+				FirstValid:      acct.VoteFirstValid,
+				LastValid:       acct.VoteLastValid,
+				KeyDilution:     acct.VoteKeyDilution,
+			},
+		})
+	}
+	return ret
+}
+
+func (l *mockedLedger) addParticipant(addr basics.Address, otss *crypto.OneTimeSignatureSecrets) {
+	if l.participants == nil {
+		l.participants = make(map[basics.Address]*crypto.OneTimeSignatureSecrets)
+	}
+	l.participants[addr] = otss
+}
+
 type txnSink [][]transactions.SignedTxn
 
 func (ts *txnSink) BroadcastInternalSignedTxGroup(group []transactions.SignedTxn) error {
@@ -195,9 +194,8 @@ func TestStartStop(t *testing.T) {
 
 	a := require.New(t)
 	sink := txnSink{}
-	accts := &mockParticipants{}
 	ledger := newMockedLedger()
-	s := NewService(accts, &ledger, &sink, logging.TestingLog(t))
+	s := NewService(&ledger, &ledger, &sink, logging.TestingLog(t))
 	a.NotNil(s)
 	a.NoError(ledger.addBlock(nil))
 	s.Start()
@@ -218,14 +216,14 @@ func TestHeartBeatOnlyWhenChallenged(t *testing.T) {
 
 	a := require.New(t)
 	sink := txnSink{}
-	accts := &mockParticipants{}
 	ledger := newMockedLedger()
-	s := NewService(accts, &ledger, &sink, logging.TestingLog(t))
+	s := NewService(&ledger, &ledger, &sink, logging.TestingLog(t))
 	s.Start()
 
-	// joe is a simple, non-online account, service will not heartbeat
-	joe := basics.Address{0xcc} // 0xcc will matter when we set the challenge
-	accts.add(joe)
+	joe := basics.Address{0xcc}  // 0xcc will matter when we set the challenge
+	mary := basics.Address{0xaa} // 0xaa will matter when we set the challenge
+	ledger.addParticipant(joe, nil)
+	ledger.addParticipant(mary, nil)
 
 	acct := ledgercore.AccountData{}
 
@@ -233,19 +231,27 @@ func TestHeartBeatOnlyWhenChallenged(t *testing.T) {
 	ledger.waitFor(s, a)
 	a.Empty(sink)
 
-	// now joe is online, but not challenged, so no heartbeat
+	// now they are online, but not challenged, so no heartbeat
 	acct.Status = basics.Online
+	acct.VoteKeyDilution = 100
+	otss := crypto.GenerateOneTimeSignatureSecrets(
+		basics.OneTimeIDForRound(ledger.LastRound(), acct.VoteKeyDilution).Batch,
+		5)
+	acct.VoteID = otss.OneTimeSignatureVerifier
+	ledger.addParticipant(joe, otss)
+	ledger.addParticipant(mary, otss)
 
-	a.NoError(ledger.addBlock(table{joe: acct}))
+	a.NoError(ledger.addBlock(table{joe: acct, mary: acct}))
 	a.Empty(sink)
 
 	// now we have to make it seem like joe has been challenged. We obtain the
 	// payout rules to find the first challenge round, skip forward to it, then
 	// go forward half a grace period. Only then should the service heartbeat
 	hdr, err := ledger.BlockHdr(ledger.LastRound())
+	ledger.hdr.Seed = committee.Seed{0xc8} // share 5 bits with 0xcc
 	a.NoError(err)
 	rules := config.Consensus[hdr.CurrentProtocol].Payouts
-	for ledger.LastRound() < basics.Round(rules.ChallengeInterval) {
+	for ledger.LastRound() < basics.Round(rules.ChallengeInterval+rules.ChallengeGracePeriod/2) {
 		a.NoError(ledger.addBlock(table{}))
 		ledger.waitFor(s, a)
 		a.Empty(sink)
@@ -253,10 +259,10 @@ func TestHeartBeatOnlyWhenChallenged(t *testing.T) {
 
 	a.NoError(ledger.addBlock(table{joe: acct}))
 	ledger.waitFor(s, a)
-	a.Len(sink, 1) // only one heartbeat so far
+	a.Len(sink, 1) // only one heartbeat (for joe)
 	a.Len(sink[0], 1)
 	a.Equal(sink[0][0].Txn.Type, protocol.HeartbeatTx)
-	a.Equal(sink[0][0].Txn.HeartbeatAddress, joe)
+	a.Equal(sink[0][0].Txn.HbAddress, joe)
 
 	s.Stop()
 }

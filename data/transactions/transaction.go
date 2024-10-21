@@ -566,6 +566,11 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 			return errLeaseMustBeZeroInStateproofTxn
 		}
 
+	case protocol.HeartbeatTx:
+		if !proto.Heartbeat {
+			return fmt.Errorf("heartbeat transaction not supported")
+		}
+
 	default:
 		return fmt.Errorf("unknown tx type %v", tx.Type)
 	}

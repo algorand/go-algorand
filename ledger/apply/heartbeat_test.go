@@ -73,9 +73,9 @@ func TestHeartbeat(t *testing.T) {
 			LastValid:  lv,
 		},
 		HeartbeatTxnFields: transactions.HeartbeatTxnFields{
-			HeartbeatAddress: voter,
-			Proof:            otss.Sign(id, seed),
-			Seed:             seed,
+			HbAddress: voter,
+			HbProof:   otss.Sign(id, seed),
+			HbSeed:    seed,
 		},
 	}
 

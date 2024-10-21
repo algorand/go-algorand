@@ -27,14 +27,14 @@ import (
 // Heartbeat applies a Heartbeat transaction using the Balances interface.
 func Heartbeat(hb transactions.HeartbeatTxnFields, header transactions.Header, balances Balances, provider HdrProvider, round basics.Round) error {
 	// Get the account's balance entry
-	account, err := balances.Get(hb.HeartbeatAddress, false)
+	account, err := balances.Get(hb.HbAddress, false)
 	if err != nil {
 		return err
 	}
 
 	sv := account.VoteID
 	if sv.IsEmpty() {
-		return fmt.Errorf("heartbeat address %s has no voting keys\n", hb.HeartbeatAddress)
+		return fmt.Errorf("heartbeat address %s has no voting keys", hb.HbAddress)
 	}
 	id := basics.OneTimeIDForRound(header.LastValid, account.VoteKeyDilution)
 
@@ -42,15 +42,18 @@ func Heartbeat(hb transactions.HeartbeatTxnFields, header transactions.Header, b
 	if err != nil {
 		return err
 	}
+	if hdr.Seed != hb.HbSeed {
+		return fmt.Errorf("provided seed %v does not match round %d's seed %v", hb.HbSeed, header.FirstValid-1, hdr.Seed)
+	}
 
-	if !sv.Verify(id, hdr.Seed, hb.Proof) {
+	if !sv.Verify(id, hdr.Seed, hb.HbProof) {
 		return errors.New("Improper heartbeat")
 	}
 
 	account.LastHeartbeat = round
 
 	// Write the updated entry
-	err = balances.Put(hb.HeartbeatAddress, account)
+	err = balances.Put(hb.HbAddress, account)
 	if err != nil {
 		return err
 	}

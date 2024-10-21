@@ -32,7 +32,7 @@ type selectionParameterListFn func(addr []basics.Address) (bool, []BalanceRecord
 
 var proto = config.Consensus[protocol.ConsensusCurrentVersion]
 
-func newAccount(t testing.TB, gen io.Reader, latest basics.Round, keyBatchesForward uint) (basics.Address, *crypto.SignatureSecrets, *crypto.VrfPrivkey) {
+func newAccount(t testing.TB, gen io.Reader) (basics.Address, *crypto.SignatureSecrets, *crypto.VrfPrivkey) {
 	var seed crypto.Seed
 	gen.Read(seed[:])
 	s := crypto.GenerateSignatureSecrets(seed)
@@ -49,10 +49,10 @@ func newAccount(t testing.TB, gen io.Reader, latest basics.Round, keyBatchesForw
 // formerly, testingenv, generated transactions and one-time secrets as well,
 // but they were not used by the tests.
 func testingenv(t testing.TB, numAccounts, numTxs int, seedGen io.Reader) (selectionParameterFn, selectionParameterListFn, basics.Round, []basics.Address, []*crypto.SignatureSecrets, []*crypto.VrfPrivkey) {
-	return testingenvMoreKeys(t, numAccounts, numTxs, uint(5), seedGen)
+	return testingenvMoreKeys(t, numAccounts, numTxs, seedGen)
 }
 
-func testingenvMoreKeys(t testing.TB, numAccounts, numTxs int, keyBatchesForward uint, seedGen io.Reader) (selectionParameterFn, selectionParameterListFn, basics.Round, []basics.Address, []*crypto.SignatureSecrets, []*crypto.VrfPrivkey) {
+func testingenvMoreKeys(t testing.TB, numAccounts, numTxs int, seedGen io.Reader) (selectionParameterFn, selectionParameterListFn, basics.Round, []basics.Address, []*crypto.SignatureSecrets, []*crypto.VrfPrivkey) {
 	if seedGen == nil {
 		seedGen = rand.New(rand.NewSource(1)) // same source as setting GODEBUG=randautoseed=0, same as pre-Go 1.20 default seed
 	}
@@ -70,7 +70,7 @@ func testingenvMoreKeys(t testing.TB, numAccounts, numTxs int, keyBatchesForward
 	lookback := basics.Round(2*proto.SeedRefreshInterval + proto.SeedLookback + 1)
 	var total basics.MicroAlgos
 	for i := 0; i < P; i++ {
-		addr, sigSec, vrfSec := newAccount(t, gen, lookback, keyBatchesForward)
+		addr, sigSec, vrfSec := newAccount(t, gen)
 		addrs[i] = addr
 		secrets[i] = sigSec
 		vrfSecrets[i] = vrfSec

@@ -251,9 +251,8 @@ func TestNoMoneyAccountNotSelected(t *testing.T) {
 	N := 1
 	for i := 0; i < N; i++ {
 		selParams, _, round, addresses, _, _ := testingenv(t, 10, 2000, seedGen)
-		lookback := basics.Round(2*proto.SeedRefreshInterval + proto.SeedLookback + 1)
 		gen := rand.New(rand.NewSource(2))
-		_, _, zeroVRFSecret := newAccount(t, gen, lookback, 5)
+		_, _, zeroVRFSecret := newAccount(t, gen)
 		period := Period(0)
 		ok, record, selectionSeed, _ := selParams(addresses[i])
 		if !ok {

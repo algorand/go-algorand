@@ -1621,7 +1621,7 @@ func (eval *BlockEvaluator) generateKnockOfflineAccountsList() {
 
 	updates := &eval.block.ParticipationUpdates
 
-	ch := ActiveChallenge(eval.proto.Payouts, eval.Round(), eval.state)
+	ch := FindChallenge(eval.proto.Payouts, eval.Round(), eval.state, ChActive)
 
 	for _, accountAddr := range eval.state.modifiedAccounts() {
 		acctData, found := eval.state.mods.Accts.GetData(accountAddr)
@@ -1651,7 +1651,7 @@ func (eval *BlockEvaluator) generateKnockOfflineAccountsList() {
 		if acctData.Status == basics.Online {
 			lastSeen := max(acctData.LastProposed, acctData.LastHeartbeat)
 			if isAbsent(eval.state.prevTotals.Online.Money, acctData.MicroAlgos, lastSeen, current) ||
-				FailsChallenge(ch, accountAddr, lastSeen) {
+				ch.Failed(accountAddr, lastSeen) {
 				updates.AbsentParticipationAccounts = append(
 					updates.AbsentParticipationAccounts,
 					accountAddr,
@@ -1712,10 +1712,19 @@ type headerSource interface {
 	BlockHdr(round basics.Round) (bookkeeping.BlockHeader, error)
 }
 
-// ActiveChallenge returns details about the Challenge that was last issued if
-// it is still in effect (that is, between one and two grace periods from
-// issue). Otherwise it returns the zero value.
-func ActiveChallenge(rules config.ProposerPayoutRules, current basics.Round, headers headerSource) challenge {
+// ChallengePeriod indicates which part of the challenge period is under discussion.
+type ChallengePeriod int
+
+const (
+	// ChRisky indicates that a challenge is in effect, and the initial grace period is running out.
+	ChRisky ChallengePeriod = iota
+	// ChActive indicates that a challenege is in effect, and the grace period
+	// has run out, so accounts can be suspended
+	ChActive
+)
+
+// FindChallenge returns the Challenge that was last issued if it's in the period requested.
+func FindChallenge(rules config.ProposerPayoutRules, current basics.Round, headers headerSource, period ChallengePeriod) challenge {
 	// are challenges active?
 	interval := basics.Round(rules.ChallengeInterval)
 	if rules.ChallengeInterval == 0 || current < interval {
@@ -1723,9 +1732,18 @@ func ActiveChallenge(rules config.ProposerPayoutRules, current basics.Round, hea
 	}
 	lastChallenge := current - (current % interval)
 	grace := basics.Round(rules.ChallengeGracePeriod)
-	// challenge is in effect if we're after one grace period, but before the 2nd ends.
-	if current <= lastChallenge+grace || current > lastChallenge+2*grace {
-		return challenge{}
+	// FindChallenge is structured this way, instead of returning the challenge
+	// and letting the caller determine the period it cares about, to avoid
+	// using BlockHdr unnecessarily.
+	switch period {
+	case ChRisky:
+		if current <= lastChallenge+grace/2 || current > lastChallenge+grace {
+			return challenge{}
+		}
+	case ChActive:
+		if current <= lastChallenge+grace || current > lastChallenge+2*grace {
+			return challenge{}
+		}
 	}
 	challengeHdr, err := headers.BlockHdr(lastChallenge)
 	if err != nil {
@@ -1739,9 +1757,14 @@ func ActiveChallenge(rules config.ProposerPayoutRules, current basics.Round, hea
 	return challenge{lastChallenge, challengeHdr.Seed, rules.ChallengeBits}
 }
 
-// FailsChallenge returns true iff ch is in effect, matches address, and
-// lastSeen is before the challenge issue.
-func FailsChallenge(ch challenge, address basics.Address, lastSeen basics.Round) bool {
+// IsZero returns true if the challenge is empty (used to indicate no challenege)
+func (ch challenge) IsZero() bool {
+	return ch == challenge{}
+}
+
+// Failed returns true iff ch is in effect, matches address, and lastSeen is
+// before the challenge issue.
+func (ch challenge) Failed(address basics.Address, lastSeen basics.Round) bool {
 	return ch.round != 0 && bitsMatch(ch.seed[:], address[:], ch.bits) && lastSeen < ch.round
 }
 
@@ -1812,7 +1835,7 @@ func (eval *BlockEvaluator) validateAbsentOnlineAccounts() error {
 	// For consistency with expired account handling, we preclude duplicates
 	addressSet := make(map[basics.Address]bool, suspensionCount)
 
-	ch := ActiveChallenge(eval.proto.Payouts, eval.Round(), eval.state)
+	ch := FindChallenge(eval.proto.Payouts, eval.Round(), eval.state, ChActive)
 
 	for _, accountAddr := range eval.block.ParticipationUpdates.AbsentParticipationAccounts {
 		if _, exists := addressSet[accountAddr]; exists {
@@ -1833,7 +1856,7 @@ func (eval *BlockEvaluator) validateAbsentOnlineAccounts() error {
 		if isAbsent(eval.state.prevTotals.Online.Money, acctData.MicroAlgos, lastSeen, eval.Round()) {
 			continue // ok. it's "normal absent"
 		}
-		if FailsChallenge(ch, accountAddr, lastSeen) {
+		if ch.Failed(accountAddr, lastSeen) {
 			continue // ok. it's "challenge absent"
 		}
 		return fmt.Errorf("proposed absent account %v is not absent in %d, %d",

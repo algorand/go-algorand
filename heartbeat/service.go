@@ -24,6 +24,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/eval"
@@ -77,9 +78,13 @@ func (s *Service) Stop() {
 // they have been challenged.
 func (s *Service) findChallenged(rules config.ProposerPayoutRules) []account.ParticipationRecordForRound {
 	current := s.ledger.LastRound()
-	var found []account.ParticipationRecordForRound
 
-	ch := eval.ActiveChallenge(rules, current, s.ledger)
+	ch := eval.FindChallenge(rules, current, s.ledger, eval.ChRisky)
+	if ch.IsZero() {
+		return nil
+	}
+
+	var found []account.ParticipationRecordForRound
 	for _, pr := range s.accts.Keys(current + 1) { // only look at accounts we have part keys for
 		acct, _, _, err := s.ledger.LookupAccount(current, pr.Account)
 		fmt.Printf(" %v is %s at %d\n", pr.Account, acct.Status, current)
@@ -89,7 +94,8 @@ func (s *Service) findChallenged(rules config.ProposerPayoutRules) []account.Par
 		}
 		if acct.Status == basics.Online {
 			lastSeen := max(acct.LastProposed, acct.LastHeartbeat)
-			if eval.FailsChallenge(ch, pr.Account, lastSeen) {
+			fmt.Printf(" %v was last seen at %d\n", pr.Account, lastSeen)
+			if ch.Failed(pr.Account, lastSeen) {
 				found = append(found, pr)
 			}
 		}
@@ -120,15 +126,15 @@ func (s *Service) loop() {
 
 		latest = s.ledger.LastRound()
 
-		hdr, err := s.ledger.BlockHdr(latest)
+		lastHdr, err := s.ledger.BlockHdr(latest)
 		if err != nil {
 			s.log.Errorf("heartbeat service could not fetch block header for round %d: %v", latest, err)
 			continue // Try again next round, I guess?
 		}
-		proto := config.Consensus[hdr.CurrentProtocol]
+		proto := config.Consensus[lastHdr.CurrentProtocol]
 
 		for _, pr := range s.findChallenged(proto.Payouts) {
-			stxn := s.prepareHeartbeat(pr.Account, latest, hdr.GenesisHash)
+			stxn := s.prepareHeartbeat(pr, lastHdr)
 			err = s.bcast.BroadcastInternalSignedTxGroup([]transactions.SignedTxn{stxn})
 			if err != nil {
 				s.log.Errorf("error broadcasting heartbeat %v for %v: %v", stxn, pr.Account, err)
@@ -137,22 +143,29 @@ func (s *Service) loop() {
 	}
 }
 
-// AcceptingByteCode is the source to a logic signature that will accept anything (except rekeying).
+// acceptingByteCode is the byte code to a logic signature that will accept anything (except rekeying).
 var acceptingByteCode = logic.MustAssemble(`
 #pragma version 11
 txn RekeyTo; global ZeroAddress; ==
 `)
 var acceptingSender = basics.Address(logic.HashProgram(acceptingByteCode))
 
-func (s *Service) prepareHeartbeat(address basics.Address, latest basics.Round, genHash [32]byte) transactions.SignedTxn {
+func (s *Service) prepareHeartbeat(pr account.ParticipationRecordForRound, latest bookkeeping.BlockHeader) transactions.SignedTxn {
 	var stxn transactions.SignedTxn
 	stxn.Lsig = transactions.LogicSig{Logic: acceptingByteCode}
 	stxn.Txn.Type = protocol.HeartbeatTx
 	stxn.Txn.Header = transactions.Header{
 		Sender:      acceptingSender,
-		FirstValid:  latest + 1,
-		LastValid:   latest + 1 + 100, // maybe use the grace period?
-		GenesisHash: genHash,
+		FirstValid:  latest.Round + 1,
+		LastValid:   latest.Round + 1 + 100, // maybe use the grace period?
+		GenesisHash: latest.GenesisHash,
+	}
+
+	id := basics.OneTimeIDForRound(latest.Round+1, pr.KeyDilution)
+	stxn.Txn.HeartbeatTxnFields = transactions.HeartbeatTxnFields{
+		HbAddress: pr.Account,
+		HbProof:   pr.Voting.Sign(id, latest.Seed),
+		HbSeed:    latest.Seed,
 	}
 
 	return stxn
