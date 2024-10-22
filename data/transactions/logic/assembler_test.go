@@ -2182,7 +2182,7 @@ label1:
 	}
 }
 
-// TestDisassembleBytecblock asserts correctly disassembly for
+// TestDisassembleBytecblock asserts correct disassembly for
 // uses of bytecblock and intcblock, from examples in #6154
 func TestDisassembleBytecblock(t *testing.T) {
 	partitiontest.PartitionTest(t)
