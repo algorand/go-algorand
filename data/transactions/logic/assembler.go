@@ -2873,8 +2873,9 @@ func disassemble(dis *disassembleState, spec *OpSpec) (string, error) {
 			if err != nil {
 				return "", err
 			}
-
-			dis.intc = intc
+			if spec.Name == "intcblock" {
+				dis.intc = intc
+			}
 			for i, iv := range intc {
 				if i != 0 {
 					out += " "
