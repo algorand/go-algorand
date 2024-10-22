@@ -118,14 +118,14 @@ var newWalletCmd = &cobra.Command{
 		walletPassword := []byte{}
 
 		if noPassword {
-			reportInfof(infoSkipPassword)
+			reportInfoln(infoSkipPassword)
 		} else {
 			// Fetch a password for the wallet
 			fmt.Printf(infoChoosePasswordPrompt, walletName)
 			walletPassword = ensurePassword()
 
 			// Confirm the password
-			fmt.Printf(infoPasswordConfirmation)
+			fmt.Print(infoPasswordConfirmation)
 			passwordConfirmation := ensurePassword()
 
 			// Check the password confirmation
