@@ -146,10 +146,11 @@ func txgroup(t testing.TB, ledger *Ledger, eval *eval.BlockEvaluator, txns ...*t
 // inspection. Proposer is optional - if unset, blocks will be finished with
 // ZeroAddress proposer.
 func endBlock(t testing.TB, ledger *Ledger, eval *eval.BlockEvaluator, proposer ...basics.Address) *ledgercore.ValidatedBlock {
-	ub, err := eval.GenerateBlock(nil)
+	// pass proposers to GenerateBlock, if provided
+	ub, err := eval.GenerateBlock(proposer)
 	require.NoError(t, err)
 
-	// We fake some thigns that agreement would do, like setting proposer
+	// We fake some things that agreement would do, like setting proposer
 	validatedBlock := ledgercore.MakeValidatedBlock(ub.UnfinishedBlock(), ub.UnfinishedDeltas())
 	gvb := &validatedBlock
 
