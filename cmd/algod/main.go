@@ -445,6 +445,8 @@ var startupConfigCheckFields = []string{
 	"TxPoolExponentialIncreaseFactor",
 	"TxPoolSize",
 	"VerifiedTranscationsCacheSize",
+	"EnableP2P",
+	"EnableP2PHybridMode",
 }
 
 func resolveDataDir() string {
