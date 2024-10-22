@@ -111,6 +111,8 @@ var transactionMessagesP2PUnderdeliverableMessage = metrics.MakeCounter(metrics.
 var networkP2PGossipSubSentBytesTotal = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_p2p_gs_sent_bytes_total", Description: "Total number of bytes sent through gossipsub"})
 var networkP2PGossipSubReceivedBytesTotal = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_p2p_gs_received_bytes_total", Description: "Total number of bytes received through gossipsub"})
 
+// var networkP2PGossipSubSentMsgs = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_p2p_gs_message_sent", Description: "Number of complete messages that were sent to the network through gossipsub"})
+
 var _ = pubsub.RawTracer(pubsubMetricsTracer{})
 
 // pubsubMetricsTracer is a tracer for pubsub events used to track metrics.
