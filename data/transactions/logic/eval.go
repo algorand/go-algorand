@@ -2325,6 +2325,26 @@ func opBytesNeq(cx *EvalContext) error {
 	return opNot(cx)
 }
 
+func opBytesModExp(cx *EvalContext) error {
+	result := new(big.Int)
+	last := len(cx.Stack) - 1 // z
+	prev := last - 1          // y
+	pprev := last - 2         // x
+
+	z := new(big.Int).SetBytes(cx.Stack[last].Bytes)
+	y := new(big.Int).SetBytes(cx.Stack[prev].Bytes)
+	x := new(big.Int).SetBytes(cx.Stack[pprev].Bytes)
+	if z.BitLen() == 0 {
+		return errors.New("modulo by zero")
+	}
+
+	result.Exp(x, y, z)
+
+	cx.Stack[pprev].Bytes = result.Bytes()
+	cx.Stack = cx.Stack[:prev]
+	return nil
+}
+
 func opBytesModulo(cx *EvalContext) error {
 	result := new(big.Int)
 	var inner error
