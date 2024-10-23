@@ -17,7 +17,6 @@
 package apply
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/algorand/go-algorand/data/basics"
@@ -32,12 +31,36 @@ func Heartbeat(hb transactions.HeartbeatTxnFields, header transactions.Header, b
 		return err
 	}
 
-	sv := account.VoteID
+	// Note the contrast with agreement. We are using the account's _current_
+	// partkey to verify the heartbeat. This is required because we can only
+	// look 320 rounds back for voting information. If a heartbeat was delayed a
+	// few rounds (even 1), we could not ask "what partkey was in effect at
+	// firstValid-320?"  Using the current keys means that an account that
+	// changes keys would invalidate any heartbeats it has already sent out
+	// (that haven't been evaluated yet). Maybe more importantly, after going
+	// offline, an account can no longer heartbeat, since it has no _current_
+	// keys. Yet it is still expected to vote for 320 rounds.  Therefore,
+	// challenges do not apply to accounts that are offline (even if they should
+	// still be voting).
+
+	// Conjure up an OnlineAccountData from current state, for convenience of
+	// oad.KeyDilution().
+	oad := basics.OnlineAccountData{
+		VotingData: account.VotingData,
+	}
+
+	sv := oad.VoteID
 	if sv.IsEmpty() {
 		return fmt.Errorf("heartbeat address %s has no voting keys", hb.HbAddress)
 	}
-	id := basics.OneTimeIDForRound(header.LastValid, account.VoteKeyDilution)
+	kd := oad.KeyDilution(balances.ConsensusParams())
 
+	// heartbeats are expected to sign with the partkey for their last-valid round
+	id := basics.OneTimeIDForRound(header.LastValid, kd)
+
+	// heartbeats sign a message consisting of the BlockSeed of the round before
+	// first-valid, to discourage unsavory behaviour like presigning a bunch of
+	// heartbeats for later use keeping an unavailable account online.
 	hdr, err := provider.BlockHdr(header.FirstValid - 1)
 	if err != nil {
 		return err
@@ -47,7 +70,7 @@ func Heartbeat(hb transactions.HeartbeatTxnFields, header transactions.Header, b
 	}
 
 	if !sv.Verify(id, hdr.Seed, hb.HbProof) {
-		return errors.New("Improper heartbeat")
+		return fmt.Errorf("heartbeat failed verification with VoteID %v", sv)
 	}
 
 	account.LastHeartbeat = round
