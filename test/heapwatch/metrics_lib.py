@@ -26,7 +26,7 @@ import logging
 import os
 import re
 import sys
-from typing import Dict, Iterable, List, Optional, Tuple, Union
+from typing import Dict, Iterable, List, Optional, Set, Tuple, Union
 from urllib.parse import urlparse
 
 
@@ -166,13 +166,17 @@ class MetricType(Enum):
     GAUGE = 0
     COUNTER = 1
 
+    def __str__(self):
+        return self.name.lower()
+
 class Metric:
     """Metric with tags"""
-    def __init__(self, metric_name: str, type: MetricType, value: Union[int, float]):
+    def __init__(self, metric_name: str, type: MetricType, desc: str, value: Union[int, float]):
         full_name = metric_name.strip()
         self.name = full_name
         self.value = value
         self.type = type
+        self.desc = desc
         self.tags: Dict[str, str] = {}
         self.tag_keys: set = set()
 
@@ -187,6 +191,8 @@ class Metric:
             tags = raw_tags.split(',')
             for tag in tags:
                 key, value = tag.split('=')
+                if not value:
+                    continue
                 if value[0] == '"' and value[-1] == '"':
                     value = value[1:-1]
                 self.tags[key] = value
@@ -198,26 +204,35 @@ class Metric:
     def __str__(self):
         return self.string()
 
-    def string(self, tags: Optional[set[str]]=None):
+    def string(self, tags: Optional[set[str]]=None, with_role=False, quote=False) -> str:
         result = self.name
-        if self.tags:
+
+        if with_role:
+            node = self.tags.get('n')
+            if node:
+                role = 'relay' if node.startswith('r') else 'npn' if node.startswith('npn') else 'node'
+                self.add_tag('role', role)
+
+        if self.tags or tags:
             if not tags:
                 tags = self.tags
-            result += '{' + ','.join([f'{k}={v}' for k, v in sorted(self.tags.items()) if k in tags]) + '}'
+            esc = '"' if quote else ''
+            result += '{' + ','.join([f'{k}={esc}{v}{esc}' for k, v in sorted(self.tags.items()) if k in tags]) + '}'
         return result
 
     def add_tag(self, key: str, value: str):
         self.tags[key] = value
         self.tag_keys.add(key)
 
-    def has_tags(self, tag_keys: set, tags: Dict[str, str]):
+    def has_tags(self, tags: Dict[str, Tuple[str, ...]], tag_keys: Set[str] | None) -> bool:
         """return True if all tags are present in the metric tags
         tag_keys are not strictly needed but used as an optimization
         """
-        if self.tag_keys.intersection(tag_keys) != tag_keys:
+        if tag_keys is not None and self.tag_keys.intersection(tag_keys) != tag_keys:
             return False
-        for k, v in tags.items():
-            if self.tags.get(k) != v:
+        for k, vals in tags.items():
+            v = self.tags.get(k)
+            if v not in vals:
                 return False
         return True
 
@@ -230,6 +245,7 @@ def parse_metrics(
     out = {}
     try:
         last_type = None
+        last_desc = None
         for line in fin:
             if not line:
                 continue
@@ -243,6 +259,8 @@ def parse_metrics(
                         last_type = MetricType.GAUGE
                     elif tpe == 'counter':
                         last_type = MetricType.COUNTER
+                elif line.startswith('# HELP'):
+                    last_desc = line.split(None, 3)[-1]  # skip first 3 words (#, HELP, metric name)
                 continue
             m = metric_line_re.match(line)
             if m:
@@ -253,7 +271,7 @@ def parse_metrics(
                 name = ab[0]
                 value = num(ab[1])
 
-            metric = Metric(name, last_type, value)
+            metric = Metric(name, last_type, last_desc, value)
             metric.add_tag('n', nick)
             if not metrics_names or metric.name in metrics_names:
                 if metric.name not in out:
@@ -266,7 +284,26 @@ def parse_metrics(
     if diff and metrics_names and len(metrics_names) == 2 and len(out) == 2:
         m = list(out.keys())
         name = f'{m[0]}_-_{m[1]}'
-        metric = Metric(name, MetricType.GAUGE, out[m[0]].value - out[m[1]].value)
-        out = [{name: metric}]
+        metric = Metric(name, MetricType.GAUGE, f'Diff of {m[0]} and {m[1]}', out[m[0]][0].value - out[m[1]][0].value)
+        out = {name: [metric]}
 
     return out
+
+def parse_tags(tag_pairs: List[str]) -> Tuple[Dict[str, Tuple[str, ...]], Set[str]]:
+    tags = {}
+    keys = set()
+    if not tag_pairs:
+        return tags, keys
+
+    for tag in tag_pairs:
+        if '=' not in tag:
+            raise ValueError(f'Invalid tag: {tag}')
+        k, v = tag.split('=', 1)
+        val = tags.get(k)
+        if val is None:
+            tags[k] = (v,)
+        else:
+            tags[k] = val + (v,)
+        keys.add(k)
+
+    return tags, keys

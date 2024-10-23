@@ -1566,6 +1566,23 @@ func initConsensusProtocols() {
 	vAlpha4.ApprovedUpgrades[protocol.ConsensusVAlpha5] = 10000
 }
 
+// ApplyShorterUpgradeRoundsForDevNetworks applies a shorter upgrade round time for the Devnet and Betanet networks.
+// This function should not take precedence over settings loaded via `PreloadConfigurableConsensusProtocols`.
+func ApplyShorterUpgradeRoundsForDevNetworks(id protocol.NetworkID) {
+	if id == Betanet || id == Devnet {
+		// Go through all approved upgrades and set to the MinUpgradeWaitRounds valid where MinUpgradeWaitRounds is set
+		for _, p := range Consensus {
+			if p.ApprovedUpgrades != nil {
+				for v := range p.ApprovedUpgrades {
+					if p.MinUpgradeWaitRounds > 0 {
+						p.ApprovedUpgrades[v] = p.MinUpgradeWaitRounds
+					}
+				}
+			}
+		}
+	}
+}
+
 // Global defines global Algorand protocol parameters which should not be overridden.
 type Global struct {
 	SmallLambda time.Duration // min amount of time to wait for leader's credential (i.e., time to propagate one credential)

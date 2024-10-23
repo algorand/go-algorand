@@ -76,8 +76,6 @@ var defaultSendMessageTags = map[protocol.Tag]bool{
 	protocol.MsgDigestSkipTag:     true,
 	protocol.NetPrioResponseTag:   true,
 	protocol.NetIDVerificationTag: true,
-	protocol.PingTag:              true,
-	protocol.PingReplyTag:         true,
 	protocol.ProposalPayloadTag:   true,
 	protocol.TopicMsgRespTag:      true,
 	protocol.MsgOfInterestTag:     true,
@@ -142,7 +140,6 @@ type disconnectReason string
 
 const disconnectReasonNone disconnectReason = ""
 const disconnectBadData disconnectReason = "BadData"
-const disconnectTooSlow disconnectReason = "TooSlow"
 const disconnectReadError disconnectReason = "ReadError"
 const disconnectWriteError disconnectReason = "WriteError"
 const disconnectIdleConn disconnectReason = "IdleConnection"
@@ -225,12 +222,6 @@ type wsPeer struct {
 	outgoingMsgFilter *messageFilter
 
 	processed chan struct{}
-
-	pingLock              deadlock.Mutex
-	pingSent              time.Time
-	pingData              []byte
-	pingInFlight          bool
-	lastPingRoundTripTime time.Duration
 
 	// Hint about position in wn.peers.  Definitely valid if the peer
 	// is present in wn.peers.
@@ -684,8 +675,7 @@ func (wp *wsPeer) readLoop() {
 		case protocol.ProposalPayloadTag:
 			wp.ppMessageCount.Add(1)
 		// the remaining valid tags: no special handling here
-		case protocol.NetPrioResponseTag, protocol.PingTag, protocol.PingReplyTag,
-			protocol.StateProofSigTag, protocol.UniEnsBlockReqTag, protocol.VoteBundleTag, protocol.NetIDVerificationTag:
+		case protocol.NetPrioResponseTag, protocol.StateProofSigTag, protocol.UniEnsBlockReqTag, protocol.VoteBundleTag, protocol.NetIDVerificationTag:
 		default: // unrecognized tag
 			unknownProtocolTagMessagesTotal.Inc(nil)
 			wp.unkMessageCount.Add(1)
@@ -951,40 +941,6 @@ func (wp *wsPeer) writeNonBlockMsgs(ctx context.Context, data [][]byte, highPrio
 
 // PingLength is the fixed length of ping message, exported to be used in the node.TestMaxSizesCorrect test
 const PingLength = 8
-const maxPingWait = 60 * time.Second
-
-// sendPing sends a ping block to the peer.
-// return true if either a ping request was enqueued or there is already ping request in flight in the past maxPingWait time.
-func (wp *wsPeer) sendPing() bool {
-	wp.pingLock.Lock()
-	defer wp.pingLock.Unlock()
-	now := time.Now()
-	if wp.pingInFlight && (now.Sub(wp.pingSent) < maxPingWait) {
-		return true
-	}
-
-	tagBytes := []byte(protocol.PingTag)
-	mbytes := make([]byte, len(tagBytes)+PingLength)
-	copy(mbytes, tagBytes)
-	crypto.RandBytes(mbytes[len(tagBytes):])
-	wp.pingData = mbytes[len(tagBytes):]
-	sent := wp.writeNonBlock(context.Background(), mbytes, false, crypto.Digest{}, time.Now())
-
-	if sent {
-		wp.pingInFlight = true
-		wp.pingSent = now
-	}
-	return sent
-}
-
-// get some times out of the peer while observing the ping data lock
-func (wp *wsPeer) pingTimes() (lastPingSent time.Time, lastPingRoundTripTime time.Duration) {
-	wp.pingLock.Lock()
-	defer wp.pingLock.Unlock()
-	lastPingSent = wp.pingSent
-	lastPingRoundTripTime = wp.lastPingRoundTripTime
-	return
-}
 
 // called when the connection had an error or closed remotely
 func (wp *wsPeer) internalClose(reason disconnectReason) {

@@ -2182,6 +2182,52 @@ label1:
 	}
 }
 
+// TestDisassembleBytecblock asserts correct disassembly for
+// uses of bytecblock and intcblock, from examples in #6154
+func TestDisassembleBytecblock(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	ver := uint64(AssemblerMaxVersion)
+	for _, prog := range []string{
+		`#pragma version %d
+intcblock 0 1 2 3 4 5
+intc_0 // 0
+intc_1 // 1
+intc_2 // 2
+intc_3 // 3
+intc 4 // 4
+pushints 6
+intc_0 // 0
+intc_1 // 1
+intc_2 // 2
+intc_3 // 3
+intc 4 // 4
+`,
+		`#pragma version %d
+bytecblock 0x6869 0x414243 0x74657374 0x666f7572 0x6c617374
+bytec_0 // "hi"
+bytec_1 // "ABC"
+bytec_2 // "test"
+bytec_3 // "four"
+bytec 4 // "last"
+pushbytess 0x6576696c
+bytec_0 // "hi"
+bytec_1 // "ABC"
+bytec_2 // "test"
+bytec_3 // "four"
+bytec 4 // "last"
+`,
+	} {
+		source := fmt.Sprintf(prog, ver)
+		ops, err := AssembleStringWithVersion(source, ver)
+		require.NoError(t, err)
+		dis, err := Disassemble(ops.Program)
+		require.NoError(t, err, dis)
+		require.Equal(t, source, dis)
+	}
+}
+
 func TestAssembleOffsets(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()

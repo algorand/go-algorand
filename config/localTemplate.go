@@ -17,6 +17,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -168,6 +169,9 @@ type Local struct {
 
 	// EndpointAddress configures the address the node listens to for REST API calls. Specify an IP and port or just port. For example, 127.0.0.1:0 will listen on a random port on the localhost (preferring 8080).
 	EndpointAddress string `version[0]:"127.0.0.1:0"`
+
+	// Respond to Private Network Access preflight requests sent to the node. Useful when a public website is trying to access a node that's hosted on a local network.
+	EnablePrivateNetworkAccessHeader bool `version[34]:"false"`
 
 	// RestReadTimeoutSeconds is passed to the API servers rest http.Server implementation.
 	RestReadTimeoutSeconds int `version[4]:"15"`
@@ -762,6 +766,16 @@ func (cfg Local) IsP2PGossipServer() bool {
 // IsHybridServer returns true if a node configured to run a listening both ws and p2p networks
 func (cfg Local) IsHybridServer() bool {
 	return cfg.NetAddress != "" && cfg.P2PHybridNetAddress != "" && cfg.EnableP2PHybridMode
+}
+
+// ValidateP2PHybridConfig checks if both NetAddress and P2PHybridNetAddress are set or unset in hybrid mode.
+func (cfg Local) ValidateP2PHybridConfig() error {
+	if cfg.EnableP2PHybridMode {
+		if cfg.NetAddress == "" && cfg.P2PHybridNetAddress != "" || cfg.NetAddress != "" && cfg.P2PHybridNetAddress == "" {
+			return errors.New("both NetAddress and P2PHybridNetAddress must be set or unset")
+		}
+	}
+	return nil
 }
 
 // ensureAbsGenesisDir will convert a path to absolute, and will attempt to make a genesis directory there

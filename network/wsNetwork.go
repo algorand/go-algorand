@@ -658,7 +658,7 @@ func (wn *WebsocketNetwork) Start() error {
 	defer wn.messagesOfInterestMu.Unlock()
 	wn.messagesOfInterestEncoded = true
 	if wn.messagesOfInterest != nil {
-		wn.messagesOfInterestEnc = MarshallMessageOfInterestMap(wn.messagesOfInterest)
+		wn.messagesOfInterestEnc = marshallMessageOfInterestMap(wn.messagesOfInterest)
 	}
 
 	if wn.config.IsGossipServer() || wn.config.ForceRelayMessages {
@@ -818,15 +818,15 @@ func (wn *WebsocketNetwork) RegisterHandlers(dispatch []TaggedMessageHandler) {
 // ClearHandlers deregisters all the existing message handlers.
 func (wn *WebsocketNetwork) ClearHandlers() {
 	// exclude the internal handlers. These would get cleared out when Stop is called.
-	wn.handler.ClearHandlers([]Tag{protocol.PingTag, protocol.PingReplyTag, protocol.NetPrioResponseTag})
+	wn.handler.ClearHandlers([]Tag{protocol.NetPrioResponseTag})
 }
 
 // RegisterValidatorHandlers registers the set of given message handlers.
 func (wn *WebsocketNetwork) RegisterValidatorHandlers(dispatch []TaggedMessageValidatorHandler) {
 }
 
-// ClearProcessors deregisters all the existing message handlers.
-func (wn *WebsocketNetwork) ClearProcessors() {
+// ClearValidatorHandlers deregisters all the existing message handlers.
+func (wn *WebsocketNetwork) ClearValidatorHandlers() {
 }
 
 func (wn *WebsocketNetwork) setHeaders(header http.Header) {
@@ -2468,7 +2468,7 @@ func (wn *WebsocketNetwork) DeregisterMessageInterest(t protocol.Tag) {
 
 func (wn *WebsocketNetwork) updateMessagesOfInterestEnc() {
 	// must run inside wn.messagesOfInterestMu.Lock
-	wn.messagesOfInterestEnc = MarshallMessageOfInterestMap(wn.messagesOfInterest)
+	wn.messagesOfInterestEnc = marshallMessageOfInterestMap(wn.messagesOfInterest)
 	wn.messagesOfInterestEncoded = true
 	wn.messagesOfInterestGeneration.Add(1)
 	var peers []*wsPeer

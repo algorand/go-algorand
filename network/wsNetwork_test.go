@@ -2904,7 +2904,7 @@ func TestWebsocketNetworkMessageOfInterest(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	var (
 		ft1 = protocol.Tag("AV")
-		ft2 = protocol.Tag("pj")
+		ft2 = protocol.Tag("UE")
 		ft3 = protocol.Tag("NI")
 		ft4 = protocol.Tag("TX")
 
@@ -2924,9 +2924,8 @@ func TestWebsocketNetworkMessageOfInterest(t *testing.T) {
 	t.Logf("netA %s", addrA)
 	netB.phonebook.ReplacePeerList([]string{addrA}, "default", phonebook.PhoneBookEntryRelayRole)
 
-	// have netB asking netA to send it ft2, deregister ping handler to make sure that we aren't exceeding the maximum MOI messagesize
+	// have netB asking netA to send it ft2.
 	// Max MOI size is calculated by encoding all of the valid tags, since we are using a custom tag here we must deregister one in the default set.
-	netB.DeregisterMessageInterest(protocol.PingTag)
 	netB.registerMessageInterest(ft2)
 
 	netB.Start()
@@ -3845,7 +3844,7 @@ func (t mockHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	bytes := MarshallMessageOfInterest([]protocol.Tag{protocol.AgreementVoteTag})
+	bytes := marshallMessageOfInterest([]protocol.Tag{protocol.AgreementVoteTag})
 	msgBytes := append([]byte(protocol.MsgOfInterestTag), bytes...)
 	_, err = wr.Write(msgBytes)
 	if err != nil {

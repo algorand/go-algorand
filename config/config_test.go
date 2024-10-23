@@ -751,6 +751,42 @@ func TestLocal_RecalculateConnectionLimits(t *testing.T) {
 	}
 }
 
+func TestLocal_ValidateP2PHybridConfig(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	var tests = []struct {
+		enableP2PHybridMode bool
+		p2pHybridNetAddress string
+		netAddress          string
+		err                 bool
+	}{
+		{false, "", "", false},
+		{false, ":0", "", false},
+		{false, "", ":0", false},
+		{false, ":0", ":0", false},
+		{true, "", "", false},
+		{true, ":0", "", true},
+		{true, "", ":0", true},
+		{true, ":0", ":0", false},
+	}
+
+	for i, test := range tests {
+		test := test
+		t.Run(fmt.Sprintf("test=%d", i), func(t *testing.T) {
+			t.Parallel()
+
+			c := Local{
+				EnableP2PHybridMode: test.enableP2PHybridMode,
+				P2PHybridNetAddress: test.p2pHybridNetAddress,
+				NetAddress:          test.netAddress,
+			}
+			err := c.ValidateP2PHybridConfig()
+			require.Equal(t, test.err, err != nil, "test=%d", i)
+		})
+	}
+}
+
 // Tests that ensureAbsGenesisDir resolves a path to an absolute path, appends the genesis directory, and creates any needed directories
 func TestEnsureAbsDir(t *testing.T) {
 	partitiontest.PartitionTest(t)

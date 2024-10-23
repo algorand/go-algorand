@@ -33,7 +33,7 @@ import plotly.graph_objs as go
 from plotly.subplots import make_subplots
 
 
-from metrics_lib import Metric, MetricType, parse_metrics, gather_metrics_files_by_nick
+from metrics_lib import Metric, MetricType, parse_metrics, gather_metrics_files_by_nick, parse_tags
 
 logger = logging.getLogger(__name__)
 
@@ -62,14 +62,7 @@ def main():
     else:
         logging.basicConfig(level=logging.INFO)
 
-    tags = {}
-    if args.tags:
-        for tag in args.tags:
-            if '=' not in tag:
-                raise (f'Invalid tag: {tag}')
-            k, v = tag.split('=', 1)
-            tags[k] = v
-    tag_keys = set(tags.keys())
+    tags, tag_keys = parse_tags(args.tags)
 
     metrics_files = sorted(glob.glob(os.path.join(args.dir, '*.metrics')))
     metrics_files.extend(glob.glob(os.path.join(args.dir, 'terraform-inventory.host')))
@@ -119,7 +112,7 @@ def main():
                     for metric in metrics_seq:
                         if metric.type != MetricType.COUNTER:
                             raise RuntimeError('Only COUNT metrics are supported')
-                        if tags is None or tags is not None and metric.has_tags(tag_keys, tags):
+                        if tags is None or tags is not None and metric.has_tags(tags, tag_keys):
                             raw_value += metric.value
                             full_name = metric.string(set(tag_keys).union({'n'}))
 
@@ -171,7 +164,7 @@ def main():
                 mmax = max(rw)
                 mmin = min(rw)
                 print(f'{nick}: {metric_name}: count {len(rw)}, max {mmax}, min {mmin}, min-max {mmax - mmin}')
-                metric = Metric(metric_name, 0, MetricType.COUNTER)
+                metric = Metric(metric_name, 0, '', MetricType.COUNTER)
                 if metric.short_name() not in metric_names_nick_max_avg:
                     metric_names_nick_max_avg[metric.short_name()] = []
                 if args.avg_max_min:

@@ -347,26 +347,6 @@ type pendingTransactionsByAddrParams struct {
 	Max uint64 `url:"max"`
 }
 
-type transactionsByAddrParams struct {
-	FirstRound uint64 `url:"firstRound"`
-	LastRound  uint64 `url:"lastRound"`
-	Max        uint64 `url:"max"`
-}
-
-type assetsParams struct {
-	AssetIdx uint64 `url:"assetIdx"`
-	Max      uint64 `url:"max"`
-}
-
-type appsParams struct {
-	AppIdx uint64 `url:"appIdx"`
-	Max    uint64 `url:"max"`
-}
-
-type rawblockParams struct {
-	Raw uint64 `url:"raw"`
-}
-
 type rawFormat struct {
 	Format string `url:"format"`
 }
