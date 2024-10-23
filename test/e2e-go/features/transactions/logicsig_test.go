@@ -17,44 +17,15 @@
 package transactions
 
 import (
-	"fmt"
 	"path/filepath"
 	"testing"
 
 	"github.com/algorand/go-algorand/data/transactions"
-	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
-
-// GenerateProgramOfSize return a TEAL bytecode of `size` bytes which always succeeds.
-// `size` must be at least 9 bytes
-func GenerateProgramOfSize(size uint, pragma uint) ([]byte, error) {
-	if size < 9 {
-		return nil, fmt.Errorf("size must be at least 9 bytes; got %d", size)
-	}
-	ls := fmt.Sprintf("#pragma version %d\n", pragma)
-	if size%2 == 0 {
-		ls += "int 10\npop\nint 1\npop\n"
-	} else {
-		ls += "int 1\npop\nint 1\npop\n"
-	}
-	for i := uint(11); i <= size; i += 2 {
-		ls = ls + "int 1\npop\n"
-	}
-	ls = ls + "int 1"
-	code, err := logic.AssembleString(ls)
-	if err != nil {
-		return nil, err
-	}
-	// panic if the function is not working as expected and needs to be updated
-	if len(code.Program) != int(size) {
-		panic(fmt.Sprintf("wanted to create a program of size %d but got a program of size %d",
-			size, len(code.Program)))
-	}
-	return code.Program, nil
-}
 
 func TestLogicSigSizeBeforePooling(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -64,9 +35,9 @@ func TestLogicSigSizeBeforePooling(t *testing.T) {
 	// From consensus version 18, we have lsigs with a maximum size of 1000 bytes.
 	// We need to use pragma 1 for teal in v18
 	pragma := uint(1)
-	tealOK, err := GenerateProgramOfSize(1000, pragma)
+	tealOK, err := txntest.GenerateProgramOfSize(1000, pragma)
 	a.NoError(err)
-	tealTooLong, err := GenerateProgramOfSize(1001, pragma)
+	tealTooLong, err := txntest.GenerateProgramOfSize(1001, pragma)
 	a.NoError(err)
 
 	testLogicSize(t, tealOK, tealTooLong, filepath.Join("nettemplates", "TwoNodes50EachV18.json"))
@@ -78,9 +49,9 @@ func TestLogicSigSizeAfterPooling(t *testing.T) {
 	a := require.New(fixtures.SynchronizedTest(t))
 
 	pragma := uint(1)
-	tealOK, err := GenerateProgramOfSize(2000, pragma)
+	tealOK, err := txntest.GenerateProgramOfSize(2000, pragma)
 	a.NoError(err)
-	tealTooLong, err := GenerateProgramOfSize(2001, pragma)
+	tealTooLong, err := txntest.GenerateProgramOfSize(2001, pragma)
 	a.NoError(err)
 
 	// TODO: Update this when lsig pooling graduates from vFuture
