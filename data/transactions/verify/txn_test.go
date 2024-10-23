@@ -664,8 +664,8 @@ func TestLsigSize(t *testing.T) {
 	consensusVersionPreSizePooling := protocol.ConsensusV18
 	consensusVersionPostSizePooling := protocol.ConsensusFuture
 
-	// We will do tests based on a transaction group of 2 paymentransactions, the first
-	// signed by a lsig and the second a vanilla payment transaction.
+	// We will do tests based on a transaction group of 2 payment transactions,
+	// the first signed by a lsig and the second a vanilla payment transaction.
 	testCases := []struct {
 		consensusVersion protocol.ConsensusVersion
 		lsigSize         uint
