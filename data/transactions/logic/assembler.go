@@ -2738,6 +2738,16 @@ func AssembleString(text string) (*OpStream, error) {
 	return AssembleStringWithVersion(text, assemblerNoVersion)
 }
 
+// MustAssemble assembles a program an panics on error.  It is useful for
+// defining globals.
+func MustAssemble(text string) []byte {
+	ops, err := AssembleString(text)
+	if err != nil {
+		panic(err)
+	}
+	return ops.Program
+}
+
 // AssembleStringWithVersion takes an entire program in a string and
 // assembles it to bytecode using the assembler version specified.  If
 // version is assemblerNoVersion it uses #pragma version or fallsback

@@ -26,6 +26,7 @@ import (
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/data/stateproofmsg"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
@@ -91,6 +92,10 @@ type Txn struct {
 	StateProofType protocol.StateProofType
 	StateProof     stateproof.StateProof
 	StateProofMsg  stateproofmsg.Message
+
+	HbAddress basics.Address
+	HbProof   crypto.OneTimeSignature
+	HbSeed    committee.Seed
 }
 
 // internalCopy "finishes" a shallow copy done by a simple Go assignment by
@@ -280,6 +285,11 @@ func (tx Txn) Txn() transactions.Transaction {
 			StateProofType: tx.StateProofType,
 			StateProof:     tx.StateProof,
 			Message:        tx.StateProofMsg,
+		},
+		HeartbeatTxnFields: transactions.HeartbeatTxnFields{
+			HbAddress: tx.HbAddress,
+			HbProof:   tx.HbProof,
+			HbSeed:    tx.HbSeed,
 		},
 	}
 }
