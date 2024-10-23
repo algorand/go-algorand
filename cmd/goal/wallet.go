@@ -206,45 +206,45 @@ var renameWalletCmd = &cobra.Command{
 	Short: "Rename wallet",
 	Args:  cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
-		datadir.OnDataDirs(func(dataDir string) {
-			client := ensureKmdClient(dataDir)
+		dataDir := datadir.EnsureSingleDataDir()
 
-			walletName := []byte(args[0])
-			newWalletName := []byte(args[1])
+		client := ensureKmdClient(dataDir)
 
-			wid, duplicate, err := client.FindWalletIDByName(walletName)
+		walletName := []byte(args[0])
+		newWalletName := []byte(args[1])
 
-			if wid == nil {
-				reportErrorf(errorCouldntFindWallet, string(walletName))
-			}
+		wid, duplicate, err := client.FindWalletIDByName(walletName)
 
-			if err != nil {
-				reportErrorf(errorCouldntRenameWallet, err)
-			}
+		if wid == nil {
+			reportErrorf(errorCouldntFindWallet, string(walletName))
+		}
 
-			if duplicate {
-				reportErrorf(errorCouldntRenameWallet, "Multiple wallets by the same name are not supported")
-			}
+		if err != nil {
+			reportErrorf(errorCouldntRenameWallet, err)
+		}
 
-			if bytes.Equal(walletName, newWalletName) {
-				reportErrorf(errorCouldntRenameWallet, "new name is identical to current name")
-			}
+		if duplicate {
+			reportErrorf(errorCouldntRenameWallet, "Multiple wallets by the same name are not supported")
+		}
 
-			walletPassword := []byte{}
+		if bytes.Equal(walletName, newWalletName) {
+			reportErrorf(errorCouldntRenameWallet, "new name is identical to current name")
+		}
 
-			// if wallet is encrypted, fetch the password
-			if !client.WalletIsUnencrypted(wid) {
-				fmt.Printf(infoPasswordPrompt, walletName)
-				walletPassword = ensurePassword()
-			}
+		walletPassword := []byte{}
 
-			err = client.RenameWallet(wid, newWalletName, walletPassword)
-			if err != nil {
-				reportErrorf(errorCouldntRenameWallet, err)
-			}
+		// if wallet is encrypted, fetch the password
+		if !client.WalletIsUnencrypted(wid) {
+			fmt.Printf(infoPasswordPrompt, walletName)
+			walletPassword = ensurePassword()
+		}
 
-			reportInfof(infoRenamedWallet, walletName, newWalletName)
-		})
+		err = client.RenameWallet(wid, newWalletName, walletPassword)
+		if err != nil {
+			reportErrorf(errorCouldntRenameWallet, err)
+		}
+
+		reportInfof(infoRenamedWallet, walletName, newWalletName)
 	},
 }
 
