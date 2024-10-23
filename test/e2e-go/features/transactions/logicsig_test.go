@@ -28,9 +28,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// CreateProgramOfSize return a TEAL bytecode of `size` bytes which always succeeds.
+// GenerateProgramOfSize return a TEAL bytecode of `size` bytes which always succeeds.
 // `size` must be at least 9 bytes
-func CreateProgramOfSize(size uint, pragma uint) ([]byte, error) {
+func GenerateProgramOfSize(size uint, pragma uint) ([]byte, error) {
 	if size < 9 {
 		return nil, fmt.Errorf("size must be at least 9 bytes; got %d", size)
 	}
@@ -64,9 +64,9 @@ func TestLogicSigSizeBeforePooling(t *testing.T) {
 	// From consensus version 18, we have lsigs with a maximum size of 1000 bytes.
 	// We need to use pragma 1 for teal in v18
 	pragma := uint(1)
-	tealOK, err := CreateProgramOfSize(1000, pragma)
+	tealOK, err := GenerateProgramOfSize(1000, pragma)
 	a.NoError(err)
-	tealTooLong, err := CreateProgramOfSize(1001, pragma)
+	tealTooLong, err := GenerateProgramOfSize(1001, pragma)
 	a.NoError(err)
 
 	testLogicSize(t, tealOK, tealTooLong, filepath.Join("nettemplates", "TwoNodes50EachV18.json"))
@@ -78,9 +78,9 @@ func TestLogicSigSizeAfterPooling(t *testing.T) {
 	a := require.New(fixtures.SynchronizedTest(t))
 
 	pragma := uint(1)
-	tealOK, err := CreateProgramOfSize(2000, pragma)
+	tealOK, err := GenerateProgramOfSize(2000, pragma)
 	a.NoError(err)
-	tealTooLong, err := CreateProgramOfSize(2001, pragma)
+	tealTooLong, err := GenerateProgramOfSize(2001, pragma)
 	a.NoError(err)
 
 	// TODO: Update this when lsig pooling graduates from vFuture
@@ -160,8 +160,8 @@ func testLogicSize(t *testing.T, tealOK, tealTooLong []byte,
 	}
 
 	// wait for the second transaction in the successful group to confirm
-	txn2SuccessId := txn2Success.ID().String()
+	txn2SuccessID := txn2Success.ID().String()
 	_, curRound := fixture.GetBalanceAndRound(baseAcct)
-	confirmed := fixture.WaitForTxnConfirmation(curRound+5, txn2SuccessId)
+	confirmed := fixture.WaitForTxnConfirmation(curRound+5, txn2SuccessID)
 	a.True(confirmed)
 }

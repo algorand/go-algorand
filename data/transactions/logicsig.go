@@ -25,7 +25,7 @@ import (
 // EvalMaxArgs is the maximum number of arguments to an LSig
 const EvalMaxArgs = 255
 
-// MaxLsigArgSize is the maximum size of an argument to an LSig
+// MaxLogicSigArgSize is the maximum size of an argument to an LSig
 // We use 4096 to match the maximum size of a TEAL value
 // (as defined in `const maxStringSize` in package logic)
 const MaxLogicSigArgSize = 4096
