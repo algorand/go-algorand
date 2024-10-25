@@ -859,7 +859,7 @@ func (handler *TxHandler) validateIncomingTxMessage(rawmsg network.IncomingMessa
 		logging.Base().Infof("unable to pin transaction: %v", err)
 	}
 
-	handler.net.Relay(handler.ctx, protocol.TxnTag, reencoded, false, wi.rawmsg.Sender)
+	_ = handler.net.Relay(handler.ctx, protocol.TxnTag, reencoded, false, wi.rawmsg.Sender)
 
 	return network.OutgoingMessage{
 		Action: network.Accept,
