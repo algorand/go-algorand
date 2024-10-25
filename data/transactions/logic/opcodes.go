@@ -86,7 +86,8 @@ const spOpcodesVersion = 11 // falcon_verify, sumhash512
 // Unlimited Global Storage opcodes
 const boxVersion = 8 // box_*
 
-// CustomCost encapsulates a custom cost function and its documentation, applicable to opcodes like bmodexp where linearCost is inadequate by itself
+// CustomCost encapsulates a custom cost function and its documentation,
+// applicable to opcodes like bmodexp where linearCost is inadequate by itself
 type CustomCost struct {
 	compute func(stack []stackValue, depth int) int
 	docCost string
@@ -98,10 +99,19 @@ func bmodExpCostFunction(stack []stackValue, depth int) int {
 	prev := last - depth - 1       // exp
 	pprev := last - depth - 2      // base
 
+	// Empirically estimated cost function constants
+	const (
+		exponentFactor = 1.63 // Adjusts cost of base & mod multiplication in the modexp by squaring algorithm
+		scalingFactor  = 15   // Normalization factor
+		baseCost       = 200  // Minimum cost of bmodexp
+	)
+
 	expLength := float64(len(stack[prev].Bytes))
 	modLength := float64(len(stack[last].Bytes))
 	baseLength := float64(len(stack[pprev].Bytes))
-	cost := (math.Pow(math.Max(baseLength, modLength), 1.63) * expLength / 15) + 200
+
+	// Derived from the asymptotic time complexity of the exponentiation by squaring algorithm
+	cost := (math.Pow(math.Max(baseLength, modLength), exponentFactor) * expLength / scalingFactor) + baseCost
 
 	return int(cost)
 }
