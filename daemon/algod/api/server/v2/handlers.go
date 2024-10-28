@@ -264,7 +264,7 @@ func (v2 *Handlers) GetParticipationKeys(ctx echo.Context) error {
 	return ctx.JSON(http.StatusOK, response)
 }
 
-func (v2 *Handlers) generateKeyHandler(address string, params model.GenerateParticipationKeysParams) error {
+func (v2 *Handlers) generateKeyHandler(address string, params model.GenerateParticipationKeysParams) (model.ParticipationKey, error) {
 	installFunc := func(path string) error {
 		bytes, err := os.ReadFile(path)
 		if err != nil {
@@ -280,8 +280,18 @@ func (v2 *Handlers) generateKeyHandler(address string, params model.GeneratePart
 		v2.Log.Infof("Installed participation key %s", partID)
 		return err
 	}
-	_, _, err := participation.GenParticipationKeysTo(address, params.First, params.Last, nilToZero(params.Dilution), "", installFunc)
-	return err
+	var partKey model.ParticipationKey
+	partKeys, _, err := participation.GenParticipationKeysTo(address, params.First, params.Last, nilToZero(params.Dilution), "", installFunc)
+	if err != nil {
+		return partKey, err
+	}
+	nodePartKey, err := v2.Node.GetParticipationKey(partKeys.ID())
+	if err != nil {
+		return partKey, err
+	}
+
+	partKey = convertParticipationRecord(nodePartKey)
+	return partKey, nil
 }
 
 // GenerateParticipationKeys generates and installs participation keys to the node.
@@ -291,18 +301,21 @@ func (v2 *Handlers) GenerateParticipationKeys(ctx echo.Context, address string, 
 		err := fmt.Errorf("participation key generation already in progress")
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
+	// Generate the keys on the main thread to block response
+	// KeysBuilder already handles coroutines, this response feedback
+	// is necessary for end users
+	part, err := v2.generateKeyHandler(address, params)
+	if err != nil {
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
 
 	// Semaphore was acquired, generate the key.
 	go func() {
 		defer v2.KeygenLimiter.Release(1)
-		err := v2.generateKeyHandler(address, params)
-		if err != nil {
-			v2.Log.Warnf("Error generating participation keys: %v", err)
-		}
 	}()
 
-	// Empty object. In the future we may want to add a field for the participation ID.
-	return ctx.String(http.StatusOK, "{}")
+	// ParticipationKey. Returns the stored participation key.
+	return ctx.JSON(http.StatusOK, part)
 }
 
 // AddParticipationKey Add a participation key to the node
