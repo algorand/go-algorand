@@ -773,7 +773,8 @@ func TestLocal_ValidateP2PHybridConfig(t *testing.T) {
 
 	for i, test := range tests {
 		test := test
-		t.Run(fmt.Sprintf("test=%d", i), func(t *testing.T) {
+		name := fmt.Sprintf("test=%d", i)
+		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
 			c := Local{
@@ -782,7 +783,7 @@ func TestLocal_ValidateP2PHybridConfig(t *testing.T) {
 				NetAddress:          test.netAddress,
 			}
 			err := c.ValidateP2PHybridConfig()
-			require.Equal(t, test.err, err != nil)
+			require.Equal(t, test.err, err != nil, name)
 		})
 	}
 }

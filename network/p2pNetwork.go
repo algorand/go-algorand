@@ -629,7 +629,7 @@ func addrInfoToWsPeerCore(n *P2PNetwork, addrInfo *peer.AddrInfo) (wsPeerCore, b
 	}
 	addr := mas[0].String()
 
-	client, err := p2p.MakeHTTPClientWithRateLimit(addrInfo, n.pstore, limitcaller.DefaultQueueingTimeout)
+	client, err := n.service.GetHTTPClient(addrInfo, n.pstore, limitcaller.DefaultQueueingTimeout)
 	if err != nil {
 		n.log.Warnf("MakeHTTPClient failed: %v", err)
 		return wsPeerCore{}, false
@@ -714,8 +714,8 @@ func (n *P2PNetwork) RegisterValidatorHandlers(dispatch []TaggedMessageValidator
 	n.handler.RegisterValidatorHandlers(dispatch)
 }
 
-// ClearProcessors deregisters all the existing message handlers.
-func (n *P2PNetwork) ClearProcessors() {
+// ClearValidatorHandlers deregisters all the existing message handlers.
+func (n *P2PNetwork) ClearValidatorHandlers() {
 	n.handler.ClearValidatorHandlers([]Tag{})
 }
 
@@ -726,7 +726,7 @@ func (n *P2PNetwork) GetHTTPClient(address string) (*http.Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	return p2p.MakeHTTPClientWithRateLimit(addrInfo, n.pstore, limitcaller.DefaultQueueingTimeout)
+	return n.service.GetHTTPClient(addrInfo, n.pstore, limitcaller.DefaultQueueingTimeout)
 }
 
 // OnNetworkAdvance notifies the network library that the agreement protocol was able to make a notable progress.
@@ -779,7 +779,7 @@ func (n *P2PNetwork) wsStreamHandler(ctx context.Context, p2pPeer peer.ID, strea
 
 	// create a wsPeer for this stream and added it to the peers map.
 	addrInfo := &peer.AddrInfo{ID: p2pPeer, Addrs: []multiaddr.Multiaddr{ma}}
-	client, err := p2p.MakeHTTPClientWithRateLimit(addrInfo, n.pstore, limitcaller.DefaultQueueingTimeout)
+	client, err := n.service.GetHTTPClient(addrInfo, n.pstore, limitcaller.DefaultQueueingTimeout)
 	if err != nil {
 		n.log.Warnf("Cannot construct HTTP Client for %s: %v", p2pPeer, err)
 		client = nil

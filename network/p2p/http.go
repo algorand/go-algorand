@@ -48,11 +48,14 @@ func MakeHTTPServer(streamHost host.Host) *HTTPServer {
 		p2phttpMux: mux.NewRouter(),
 	}
 	// libp2phttp server requires either explicit ListenAddrs or streamHost.Addrs() to be non-empty.
-	// If streamHost.Addrs() is empty, we will listen on all interfaces
+	// If streamHost.Addrs() is empty (that happens when NetAddress is set to ":0" and private address filtering is automatically enabled),
+	// we will listen on localhost to satisfy libp2phttp.Host.Serve() requirements.
+	// A side effect is it actually starts listening on interfaces listed in ListenAddrs and as go-libp2p v0.33.2
+	// there is no other way to have libp2phttp server running AND to have streamHost.Addrs() filtered.
 	if len(streamHost.Addrs()) == 0 {
-		logging.Base().Debugf("MakeHTTPServer: no addresses for %s, asking to listen all interfaces", streamHost.ID())
+		logging.Base().Debugf("MakeHTTPServer: no addresses for %s, asking to listen localhost interface to satisfy libp2phttp.Host.Serve ", streamHost.ID())
 		httpServer.ListenAddrs = []multiaddr.Multiaddr{
-			multiaddr.StringCast("/ip4/0.0.0.0/tcp/0/http"),
+			multiaddr.StringCast("/ip4/127.0.0.1/tcp/0/http"),
 		}
 		httpServer.InsecureAllowHTTP = true
 	}
@@ -75,13 +78,44 @@ func (s *HTTPServer) RegisterHTTPHandlerFunc(path string, handler func(http.Resp
 	})
 }
 
-// MakeHTTPClient creates a http.Client that uses libp2p transport for a given protocol and peer address.
-func MakeHTTPClient(addrInfo *peer.AddrInfo) (*http.Client, error) {
-	clientStreamHost, err := libp2p.New(libp2p.NoListenAddrs)
-	if err != nil {
-		return nil, err
+type httpClientConfig struct {
+	host host.Host
+}
+
+type httpClientOption func(*httpClientConfig)
+
+// WithHost sets the libp2p host for the http client.
+func WithHost(h host.Host) httpClientOption {
+	return func(o *httpClientConfig) {
+		o.host = h
 	}
-	logging.Base().Debugf("MakeHTTPClient made a new P2P host %s for %s", clientStreamHost.ID(), addrInfo.String())
+}
+
+// MakeTestHTTPClient creates a http.Client that uses libp2p transport for a given protocol and peer address.
+// This exported method is only used in tests.
+func MakeTestHTTPClient(addrInfo *peer.AddrInfo, opts ...httpClientOption) (*http.Client, error) {
+	return makeHTTPClient(addrInfo, opts...)
+}
+
+// makeHTTPClient creates a http.Client that uses libp2p transport for a given protocol and peer address.
+// If service is nil, a new libp2p host is created.
+func makeHTTPClient(addrInfo *peer.AddrInfo, opts ...httpClientOption) (*http.Client, error) {
+	var config httpClientConfig
+	for _, opt := range opts {
+		opt(&config)
+	}
+
+	var clientStreamHost host.Host
+	if config.host != nil {
+		clientStreamHost = config.host
+	} else {
+		var err error
+		clientStreamHost, err = libp2p.New(libp2p.NoListenAddrs)
+		if err != nil {
+			return nil, err
+		}
+		logging.Base().Debugf("MakeHTTPClient made a new P2P host %s for %s", clientStreamHost.ID(), addrInfo.String())
+	}
 
 	client := libp2phttp.Host{StreamHost: clientStreamHost}
 
@@ -97,13 +131,13 @@ func MakeHTTPClient(addrInfo *peer.AddrInfo) (*http.Client, error) {
 	return &http.Client{Transport: rt}, nil
 }
 
-// MakeHTTPClientWithRateLimit creates a http.Client that uses libp2p transport for a given protocol and peer address.
-func MakeHTTPClientWithRateLimit(addrInfo *peer.AddrInfo, pstore limitcaller.ConnectionTimeStore, queueingTimeout time.Duration) (*http.Client, error) {
-	cl, err := MakeHTTPClient(addrInfo)
+// makeHTTPClientWithRateLimit creates a http.Client that uses libp2p transport for a given protocol and peer address.
+func makeHTTPClientWithRateLimit(addrInfo *peer.AddrInfo, p2pService *serviceImpl, connTimeStore limitcaller.ConnectionTimeStore, queueingTimeout time.Duration) (*http.Client, error) {
+	cl, err := makeHTTPClient(addrInfo, WithHost(p2pService.host))
 	if err != nil {
 		return nil, err
 	}
-	rltr := limitcaller.MakeRateLimitingBoundTransportWithRoundTripper(pstore, queueingTimeout, cl.Transport, string(addrInfo.ID))
+	rltr := limitcaller.MakeRateLimitingBoundTransportWithRoundTripper(connTimeStore, queueingTimeout, cl.Transport, string(addrInfo.ID))
 	cl.Transport = &rltr
 	return cl, nil
 
