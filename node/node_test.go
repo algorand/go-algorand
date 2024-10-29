@@ -207,7 +207,7 @@ func setupFullNodesEx(
 		genesis[short] = data
 	}
 	genesis[poolAddr] = basics.AccountData{
-		Status:     basics.Online,
+		Status:     basics.Offline,
 		MicroAlgos: basics.MicroAlgos{Raw: uint64(100000)},
 	}
 
@@ -241,7 +241,7 @@ func setupFullNodesEx(
 		cfg, err := config.LoadConfigFromDisk(rootDirectory)
 		phonebook := phonebookHook(nodeInfos, i)
 		require.NoError(t, err)
-		node, err := MakeFull(logging.Base(), rootDirectory, cfg, phonebook, g)
+		node, err := MakeFull(logging.Base().With("net", fmt.Sprintf("node%d", i)), rootDirectory, cfg, phonebook, g)
 		nodes[i] = node
 		require.NoError(t, err)
 	}
@@ -1141,15 +1141,16 @@ func TestNodeHybridP2PGossipSend(t *testing.T) {
 
 	configHook := func(ni nodeInfo, cfg config.Local) (nodeInfo, config.Local) {
 		cfg = config.GetDefaultLocal()
-		if ni.idx != 1 {
-			cfg.EnableBlockService = false
-			cfg.EnableGossipBlockService = false
-			cfg.EnableLedgerService = false
-			cfg.CatchpointInterval = 0
-			cfg.Archival = false
-			cfg.NetAddress = ""
-		} else {
-			// node 1 is archival
+		cfg.CatchpointInterval = 0
+		cfg.BaseLoggerDebugLevel = uint32(logging.Debug)
+		if ni.idx == 0 {
+			// node 0 is ws node only
+			cfg.EnableP2PHybridMode = false
+			cfg.EnableP2P = false
+		}
+
+		if ni.idx == 1 {
+			// node 1 is a hybrid relay
 			cfg.EnableBlockService = true
 			cfg.EnableGossipBlockService = true
 			cfg.NetAddress = ni.wsNetAddr()
@@ -1210,6 +1211,9 @@ func TestNodeHybridP2PGossipSend(t *testing.T) {
 		return node0Conn && node1Conn && node2Conn
 	}, 60*time.Second, 500*time.Millisecond)
 
+	// now wait 2x heartbeat interval (GossipSubHeartbeatInterval) to ensure the meshsub is built
+	time.Sleep(2 * time.Second)
+
 	filename := filepath.Join(nodes[2].genesisDirs.RootGenesisDir, wallets[2])
 	access, err := db.MakeAccessor(filename, false, false)
 	require.NoError(t, err)
@@ -1246,14 +1250,15 @@ func TestNodeHybridP2PGossipSend(t *testing.T) {
 
 	initialRound := nodes[0].ledger.NextRound()
 	targetRound := initialRound + 10
+	t.Logf("Waiting for round %d (initial %d)", targetRound, initialRound)
 
-	// ensure discovery of archival node by tracking its ledger
+	// ensure tx properly propagated to node 0
 	select {
-	case <-nodes[2].ledger.Wait(targetRound):
+	case <-nodes[0].ledger.Wait(targetRound):
 		b, err := nodes[0].ledger.Block(targetRound)
 		require.NoError(t, err)
 		require.Greater(t, b.TxnCounter, uint64(1000)) // new initial value after AppForbidLowResources
-	case <-time.After(3 * time.Minute): // set it to 1.5x of the dht.periodicBootstrapInterval to give DHT code to rebuild routing table one more time
+	case <-time.After(1 * time.Minute):
 		require.Fail(t, fmt.Sprintf("no block notification for wallet: %v.", wallets[0]))
 	}
 }
