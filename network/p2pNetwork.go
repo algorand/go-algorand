@@ -45,6 +45,9 @@ import (
 	manet "github.com/multiformats/go-multiaddr/net"
 )
 
+// some arbitrary number TODO: figure out a better value based on peerSelector/fetcher algorithm
+const numArchivalPeersToFind = 4
+
 // P2PNetwork implements the GossipNode interface
 type P2PNetwork struct {
 	service     p2p.Service
@@ -437,8 +440,7 @@ func (n *P2PNetwork) meshThreadInner() int {
 
 		// also discover archival nodes
 		var dhtArchivalPeers []peer.AddrInfo
-		const numPeersToDiscover = 5 // some arbitrary number TODO: figure out a better value based on peerSelector/fetcher algorithm
-		dhtArchivalPeers, err = n.capabilitiesDiscovery.PeersForCapability(p2p.Archival, numPeersToDiscover)
+		dhtArchivalPeers, err = n.capabilitiesDiscovery.PeersForCapability(p2p.Archival, numArchivalPeersToFind)
 		if err != nil {
 			n.log.Warnf("Error getting archival nodes from capabilities discovery: %v", err)
 		}
@@ -671,9 +673,8 @@ func (n *P2PNetwork) GetPeers(options ...PeerOption) []Peer {
 				n.log.Debugf("Relay node(s) from peerstore: %v", addrs)
 			}
 		case PeersPhonebookArchivalNodes:
-			// query known archival nodes from DHT if enabled
-			const maxNodes = 5 // some arbitrary number
-			addrInfos := n.pstore.GetAddresses(maxNodes, phonebook.PhoneBookEntryArchivalRole)
+			// query known archival nodes that came from from DHT if enabled (or DNS if configured)
+			addrInfos := n.pstore.GetAddresses(numArchivalPeersToFind, phonebook.PhoneBookEntryArchivalRole)
 			for _, peerInfo := range addrInfos {
 				if peerCore, ok := addrInfoToWsPeerCore(n, peerInfo); ok {
 					peers = append(peers, &peerCore)
