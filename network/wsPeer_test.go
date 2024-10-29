@@ -241,21 +241,49 @@ func getProtocolTags(t *testing.T) []string {
 	fset := token.NewFileSet()
 	f, _ := parser.ParseFile(fset, file, nil, parser.ParseComments)
 
+	// get deprecated tags
+	deprecatedTags := make(map[string]bool)
+	for _, d := range f.Decls {
+		genDecl, ok := d.(*ast.GenDecl)
+		if !ok || genDecl.Tok != token.VAR {
+			continue
+		}
+		for _, spec := range genDecl.Specs {
+			if valueSpec, ok := spec.(*ast.ValueSpec); ok && len(valueSpec.Names) > 0 &&
+				valueSpec.Names[0].Name == "DeprecatedTagList" {
+				for _, v := range valueSpec.Values {
+					cl, ok := v.(*ast.CompositeLit)
+					if !ok {
+						continue
+					}
+					for _, elt := range cl.Elts {
+						if ce, ok := elt.(*ast.Ident); ok {
+							deprecatedTags[ce.Name] = true
+						}
+					}
+				}
+			}
+		}
+	}
+
 	// look for const declarations in protocol/tags.go
 	var declaredTags []string
 	// Iterate through the declarations in the file
 	for _, d := range f.Decls {
 		genDecl, ok := d.(*ast.GenDecl)
-		// Check if the declaration is a constant and if not, continue
+		// Check if the declaration is a constant
 		if !ok || genDecl.Tok != token.CONST {
 			continue
 		}
 		// Iterate through the specs (specifications) in the declaration
 		for _, spec := range genDecl.Specs {
 			if valueSpec, ok := spec.(*ast.ValueSpec); ok {
+				if ident, isIdent := valueSpec.Type.(*ast.Ident); !isIdent || ident.Name != "Tag" {
+					continue // skip all but Tag constants
+				}
 				for _, n := range valueSpec.Names {
-					if strings.HasSuffix(n.Name, "MaxSize") || n.Name == "TagLength" {
-						continue
+					if deprecatedTags[n.Name] {
+						continue // skip deprecated tags
 					}
 					declaredTags = append(declaredTags, n.Name)
 				}
@@ -263,7 +291,8 @@ func getProtocolTags(t *testing.T) []string {
 		}
 	}
 	// assert these AST-discovered tags are complete (match the size of protocol.TagList)
-	require.Len(t, declaredTags, len(protocol.TagList))
+	require.Len(t, protocol.TagList, len(declaredTags))
+	require.Len(t, protocol.DeprecatedTagList, len(deprecatedTags))
 	return declaredTags
 }
 

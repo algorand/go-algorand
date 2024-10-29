@@ -7,7 +7,6 @@ linters:
   enable:
     - gosec
     - partitiontest
-    - unused
 
 linters-settings:
   gosec: # we are mostly only interested in G601

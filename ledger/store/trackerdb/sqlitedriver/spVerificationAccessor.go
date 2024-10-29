@@ -35,7 +35,7 @@ type stateProofVerificationWriter struct {
 	e db.Executable
 }
 
-type stateProofVerificationReaderWriter struct {
+type stateProofVerificationReaderWriter struct { //nolint:unused // TODO
 	stateProofVerificationReader
 	stateProofVerificationWriter
 }
@@ -48,7 +48,7 @@ func makeStateProofVerificationWriter(e db.Executable) *stateProofVerificationWr
 	return &stateProofVerificationWriter{e: e}
 }
 
-func makeStateProofVerificationReaderWriter(q db.Queryable, e db.Executable) *stateProofVerificationReaderWriter {
+func makeStateProofVerificationReaderWriter(q db.Queryable, e db.Executable) *stateProofVerificationReaderWriter { //nolint:unused // TODO
 	return &stateProofVerificationReaderWriter{
 		stateProofVerificationReader{q: q},
 		stateProofVerificationWriter{e: e},
