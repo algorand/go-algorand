@@ -43,34 +43,36 @@ type Service struct {
 	bcast txnBroadcaster
 
 	// infrastructure
-	ctx  context.Context
-	stop context.CancelFunc
-	wg   sync.WaitGroup
-	log  logging.Logger
+	ctx      context.Context
+	shutdown context.CancelFunc
+	wg       sync.WaitGroup
+	log      logging.Logger
 }
 
 // NewService creates a heartbeat service. It will need to know which accounts
 // to emit heartbeats for, and how to create the heartbeats.
-func NewService(accts participants, ledger ledger, bcast txnBroadcaster, log logging.Logger) (s *Service) {
-	s = &Service{
+func NewService(accts participants, ledger ledger, bcast txnBroadcaster, log logging.Logger) *Service {
+	return &Service{
 		accts:  accts,
 		ledger: ledger,
 		bcast:  bcast,
 		log:    log.With("Context", "heartbeat"),
 	}
-	return s
 }
 
 // Start starts the goroutines for the Service.
 func (s *Service) Start() {
-	s.ctx, s.stop = context.WithCancel(context.Background())
+	s.ctx, s.shutdown = context.WithCancel(context.Background())
 	s.wg.Add(1)
+	s.log.Info("starting heartbeat service")
 	go s.loop()
 }
 
 // Stop any goroutines associated with this worker.
 func (s *Service) Stop() {
-	s.stop()
+	s.log.Debug("heartbeat service is stopping")
+	defer s.log.Debug("heartbeat service has stopped")
+	s.shutdown()
 	s.wg.Wait()
 }
 
@@ -96,6 +98,7 @@ func (s *Service) findChallenged(rules config.ProposerPayoutRules) []account.Par
 			lastSeen := max(acct.LastProposed, acct.LastHeartbeat)
 			fmt.Printf(" %v was last seen at %d\n", pr.Account, lastSeen)
 			if ch.Failed(pr.Account, lastSeen) {
+				fmt.Printf(" %v needs a heartbeat\n", pr.Account)
 				found = append(found, pr)
 			}
 		}
@@ -161,7 +164,7 @@ func (s *Service) prepareHeartbeat(pr account.ParticipationRecordForRound, lates
 		GenesisHash: latest.GenesisHash,
 	}
 
-	id := basics.OneTimeIDForRound(latest.Round+1, pr.KeyDilution)
+	id := basics.OneTimeIDForRound(stxn.Txn.LastValid, pr.KeyDilution)
 	stxn.Txn.HeartbeatTxnFields = transactions.HeartbeatTxnFields{
 		HbAddress: pr.Account,
 		HbProof:   pr.Voting.Sign(id, latest.Seed),

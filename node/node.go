@@ -385,6 +385,7 @@ func (node *AlgorandFullNode) Start() error {
 		node.ledgerService.Start()
 		node.txHandler.Start()
 		node.stateProofWorker.Start()
+		node.heartbeatService.Start()
 		err := startNetwork()
 		if err != nil {
 			return err
@@ -1226,6 +1227,7 @@ func (node *AlgorandFullNode) SetCatchpointCatchupMode(catchpointCatchupMode boo
 			node.net.ClearHandlers()
 			node.net.ClearValidatorHandlers()
 			node.stateProofWorker.Stop()
+			node.heartbeatService.Stop()
 			node.txHandler.Stop()
 			node.agreementService.Shutdown()
 			node.catchupService.Stop()
@@ -1253,6 +1255,7 @@ func (node *AlgorandFullNode) SetCatchpointCatchupMode(catchpointCatchupMode boo
 		node.ledgerService.Start()
 		node.txHandler.Start()
 		node.stateProofWorker.Start()
+		node.heartbeatService.Start()
 
 		// Set up a context we can use to cancel goroutines on Stop()
 		node.ctx, node.cancelCtx = context.WithCancel(context.Background())

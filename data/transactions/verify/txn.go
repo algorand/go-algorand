@@ -220,10 +220,15 @@ func txnGroupBatchPrep(stxs []transactions.SignedTxn, contextHdr *bookkeeping.Bl
 			prepErr.err = fmt.Errorf("transaction %+v invalid : %w", stxn, prepErr.err)
 			return nil, prepErr
 		}
-		if stxn.Txn.Type != protocol.StateProofTx {
-			minFeeCount++
-		}
 		feesPaid = basics.AddSaturate(feesPaid, stxn.Txn.Fee.Raw)
+		if stxn.Txn.Type == protocol.StateProofTx {
+			continue
+		}
+		if stxn.Txn.Type == protocol.HeartbeatTx && len(stxs) == 1 {
+			// TODO: Only allow free HB if the HbAddress is challenged
+			continue
+		}
+		minFeeCount++
 	}
 	feeNeeded, overflow := basics.OMul(groupCtx.consensusParams.MinTxnFee, minFeeCount)
 	if overflow {

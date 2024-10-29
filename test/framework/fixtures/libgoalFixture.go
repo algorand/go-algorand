@@ -67,6 +67,14 @@ func (f *RestClientFixture) SetConsensus(consensus config.ConsensusProtocols) {
 	f.consensus = consensus
 }
 
+func (f *RestClientFixture) AlterConsensus(ver protocol.ConsensusVersion, alter func(config.ConsensusParams) config.ConsensusParams) {
+	if f.consensus == nil {
+		f.consensus = make(config.ConsensusProtocols)
+	}
+	consensus := config.Consensus[ver]
+	f.consensus[ver] = alter(consensus)
+}
+
 // FasterConsensus speeds up the given consensus version in two ways. The seed
 // refresh lookback is set to 8 (instead of 80), so the 320 round balance
 // lookback becomes 32.  And, if the architecture implies it can be handled,
