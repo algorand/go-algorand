@@ -333,7 +333,8 @@ func (s Simulator) Simulate(simulateRequest Request) (Result, error) {
 	}
 
 	if simulatorTracer.result.TxnGroups[0].UnnamedResourcesAccessed != nil {
-		if simulateRequest.PopulateResources {
+		// Only populate resources if there wasn't an error. Otherwise we might have incomplete information.
+		if err != nil && simulateRequest.PopulateResources {
 			consensusParams, err := s.ledger.ConsensusParams(s.ledger.start)
 			if err != nil {
 				return Result{}, err
