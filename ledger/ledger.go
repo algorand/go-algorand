@@ -652,6 +652,18 @@ func (l *Ledger) GetKnockOfflineCandidates(rnd basics.Round, proto config.Consen
 	if proto.StateProofInterval == 0 {
 		return nil, nil
 	}
+
+	// special handling for round 0: return participating genesis accounts
+	if rnd == 0 {
+		ret := make(map[basics.Address]basics.OnlineAccountData)
+		for addr, data := range l.genesisAccounts {
+			if data.Status == basics.Online {
+				ret[addr] = data.OnlineAccountData()
+			}
+		}
+		return ret, nil
+	}
+
 	// get latest state proof voters information, up to rnd, without calling cond.Wait()
 	_, voters := l.acctsOnline.voters.LatestCompletedVotersUpTo(rnd)
 	if voters == nil { // no cached voters found < rnd
