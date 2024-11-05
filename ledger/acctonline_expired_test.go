@@ -458,7 +458,7 @@ func TestOnlineAcctModelSimple(t *testing.T) {
 	})
 	// test same scenario on double ledger
 	t.Run("DoubleLedger", func(t *testing.T) {
-		m := newDoubleLedgerAcctModel(t, protocol.ConsensusFuture, true)
+		m := newDoubleLedgerAcctModel(t, protocol.ConsensusV39, true) // TODO simulate heartbeats
 		defer m.teardown()
 		testOnlineAcctModelSimple(t, m)
 	})
@@ -626,7 +626,7 @@ func TestOnlineAcctModelScenario(t *testing.T) {
 			})
 			// test same scenario on double ledger
 			t.Run("DoubleLedger", func(t *testing.T) {
-				m := newDoubleLedgerAcctModel(t, protocol.ConsensusFuture, true)
+				m := newDoubleLedgerAcctModel(t, protocol.ConsensusV39, true) // TODO simulate heartbeats
 				defer m.teardown()
 				runScenario(t, m, tc.scenario)
 			})

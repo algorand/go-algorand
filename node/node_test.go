@@ -33,9 +33,11 @@ import (
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	csp "github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/stateproofmsg"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
@@ -604,11 +606,10 @@ func TestDefaultResourcePaths(t *testing.T) {
 	log := logging.Base()
 
 	n, err := MakeFull(log, testDirectory, cfg, []string{}, genesis)
+	require.NoError(t, err)
 
 	n.Start()
 	defer n.Stop()
-
-	require.NoError(t, err)
 
 	// confirm genesis dir exists in the data dir, and that resources exist in the expected locations
 	require.DirExists(t, filepath.Join(testDirectory, genesis.ID()))
@@ -797,18 +798,51 @@ func TestMaxSizesCorrect(t *testing.T) {
 	require.Equal(t, npSize, protocol.NetPrioResponseTag.MaxMessageSize())
 	nsSize := uint64(network.IdentityVerificationMessageSignedMaxSize())
 	require.Equal(t, nsSize, protocol.NetIDVerificationTag.MaxMessageSize())
-	piSize := uint64(network.PingLength)
-	require.Equal(t, piSize, protocol.PingTag.MaxMessageSize())
-	pjSize := uint64(network.PingLength)
-	require.Equal(t, pjSize, protocol.PingReplyTag.MaxMessageSize())
 	ppSize := uint64(agreement.TransmittedPayloadMaxSize())
 	require.Equal(t, ppSize, protocol.ProposalPayloadTag.MaxMessageSize())
 	spSize := uint64(stateproof.SigFromAddrMaxSize())
 	require.Equal(t, spSize, protocol.StateProofSigTag.MaxMessageSize())
-	txSize := uint64(transactions.SignedTxnMaxSize())
-	require.Equal(t, txSize, protocol.TxnTag.MaxMessageSize())
 	msSize := uint64(crypto.DigestMaxSize())
 	require.Equal(t, msSize, protocol.MsgDigestSkipTag.MaxMessageSize())
+
+	// We want to check that the TxnTag's max size is big enough, but it is
+	// foolish to try to be exact here.  We will confirm that it is bigger that
+	// a stateproof txn (the biggest kind, which can only appear by itself), and
+	// that it is bigger than 16 times the largest transaction other than
+	// stateproof txn.
+	txTagMax := protocol.TxnTag.MaxMessageSize()
+
+	// SignedTxnMaxSize() is an overestimate of a single transaction because it
+	// includes fields from all the different types of signatures, and types of
+	// transactions. First, we remove the aspects of the overestimate that come
+	// from the multiple signature types.
+	maxCombinedTxnSize := uint64(transactions.SignedTxnMaxSize())
+	// subtract out the two smaller signature sizes (logicsig is biggest, it can *contain* the others)
+	maxCombinedTxnSize -= uint64(crypto.SignatureMaxSize() + crypto.MultisigSigMaxSize())
+	// the logicsig size is *also* an overestimate, because it thinks each
+	// logicsig arg can be big, but really the sum of the args and the program
+	// has a max size.
+	maxCombinedTxnSize -= uint64(transactions.EvalMaxArgs * config.MaxLogicSigMaxSize)
+
+	// maxCombinedTxnSize is still an overestimate because it assumes all txn
+	// type fields can be in the same txn.  That's not true, but it provides an
+	// upper bound on the size of ONE transaction, even if the txn is a
+	// stateproof, which is big.  Ensure our constant is big enough to hold one.
+	require.Greater(t, txTagMax, maxCombinedTxnSize)
+
+	// we actually have to hold 16 txns, but in the case of multiple txns in a
+	// group, none can be stateproofs. So derive maxMinusSP, which is a per txn
+	// size estimate that excludes stateproof fields.
+	spTxnSize := uint64(csp.StateProofMaxSize() + stateproofmsg.MessageMaxSize())
+	maxMinusSP := maxCombinedTxnSize - spTxnSize
+	require.Greater(t, txTagMax, 16*maxMinusSP)
+	// when we do logisig pooling, 16*maxMinusSP may be a large overshoot, since
+	// it will assume we can have a big logicsig in _each_ of the 16.  It
+	// probably won't matter, since stateproof will still swamp it.  But if so,
+	// remove 15 * MaxLogicSigMaxSize.
+
+	// but we're not crazy. whichever of those is bigger - we don't need to be twice as big as that
+	require.Less(t, txTagMax, 2*max(maxCombinedTxnSize, 16*maxMinusSP))
 
 	// UE is a handrolled message not using msgp
 	// including here for completeness ensured by protocol.TestMaxSizesTested
@@ -1033,4 +1067,48 @@ func TestNodeP2PRelays(t *testing.T) {
 		nodes[2].net.RequestConnectOutgoing(false, nil)
 		return len(nodes[2].net.GetPeers(network.PeersPhonebookRelays)) == 2
 	}, 80*time.Second, 1*time.Second)
+}
+
+// TestNodeSetCatchpointCatchupMode checks node can handle services restart for fast catchup correctly
+func TestNodeSetCatchpointCatchupMode(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	testDirectory := t.TempDir()
+
+	genesis := bookkeeping.Genesis{
+		SchemaID:    "gen",
+		Proto:       protocol.ConsensusCurrentVersion,
+		Network:     config.Devtestnet,
+		FeeSink:     sinkAddr.String(),
+		RewardsPool: poolAddr.String(),
+	}
+	log := logging.TestingLog(t)
+	cfg := config.GetDefaultLocal()
+
+	tests := []struct {
+		name      string
+		enableP2P bool
+	}{
+		{"WS node", false},
+		{"P2P node", true},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			cfg.EnableP2P = test.enableP2P
+
+			n, err := MakeFull(log, testDirectory, cfg, []string{}, genesis)
+			require.NoError(t, err)
+			err = n.Start()
+			require.NoError(t, err)
+			defer n.Stop()
+
+			// "start" catchpoint catchup => close services
+			outCh := n.SetCatchpointCatchupMode(true)
+			<-outCh
+			// "stop" catchpoint catchup => resume services
+			outCh = n.SetCatchpointCatchupMode(false)
+			<-outCh
+		})
+	}
 }

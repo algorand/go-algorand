@@ -40,6 +40,7 @@ type KMDConfig struct {
 	SessionLifetimeSecs uint64       `json:"session_lifetime_secs"`
 	Address             string       `json:"address"`
 	AllowedOrigins      []string     `json:"allowed_origins"`
+	AllowHeaderPNA      bool         `json:"allow_header_pna"`
 }
 
 // DriverConfig contains config info specific to each wallet driver

@@ -26,7 +26,7 @@ import logging
 import os
 import re
 import sys
-from typing import Dict, Iterable, List, Optional, Tuple, Union
+from typing import Dict, Iterable, List, Optional, Set, Tuple, Union
 from urllib.parse import urlparse
 
 
@@ -210,14 +210,15 @@ class Metric:
         self.tags[key] = value
         self.tag_keys.add(key)
 
-    def has_tags(self, tag_keys: set, tags: Dict[str, str]):
+    def has_tags(self, tags: Dict[str, Tuple[str, ...]], tag_keys: Set[str] | None) -> bool:
         """return True if all tags are present in the metric tags
         tag_keys are not strictly needed but used as an optimization
         """
-        if self.tag_keys.intersection(tag_keys) != tag_keys:
+        if tag_keys is not None and self.tag_keys.intersection(tag_keys) != tag_keys:
             return False
-        for k, v in tags.items():
-            if self.tags.get(k) != v:
+        for k, vals in tags.items():
+            v = self.tags.get(k)
+            if v not in vals:
                 return False
         return True
 
@@ -270,3 +271,22 @@ def parse_metrics(
         out = [{name: metric}]
 
     return out
+
+def parse_tags(tag_pairs: List[str]) -> Tuple[Dict[str, Tuple[str, ...]], Set[str]]:
+    tags = {}
+    keys = set()
+    if not tag_pairs:
+        return tags, keys
+
+    for tag in tag_pairs:
+        if '=' not in tag:
+            raise ValueError(f'Invalid tag: {tag}')
+        k, v = tag.split('=', 1)
+        val = tags.get(k)
+        if val is None:
+            tags[k] = (v,)
+        else:
+            tags[k] = val + (v,)
+        keys.add(k)
+
+    return tags, keys

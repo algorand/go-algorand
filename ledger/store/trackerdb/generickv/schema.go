@@ -133,7 +133,7 @@ func creatableKey(cidx basics.CreatableIndex) [11]byte {
 	return key
 }
 
-func creatableMaxRangePrefix(maxIdx basics.CreatableIndex) ([3]byte, [11]byte) {
+func creatableMaxRangePrefix(maxIdx basics.CreatableIndex) ([3]byte, [11]byte) { //nolint:unused // TODO
 	var low [prefixLength + separatorLength]byte
 
 	copy(low[0:], kvPrefixCreatorIndex)

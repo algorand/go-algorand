@@ -111,7 +111,10 @@ type VotingData struct {
 type OnlineAccountData struct {
 	MicroAlgosWithRewards MicroAlgos
 	VotingData
+
 	IncentiveEligible bool
+	LastProposed      Round
+	LastHeartbeat     Round
 }
 
 // AccountData contains the data associated with a given address.
@@ -561,6 +564,8 @@ func (u AccountData) OnlineAccountData() OnlineAccountData {
 			VoteKeyDilution: u.VoteKeyDilution,
 		},
 		IncentiveEligible: u.IncentiveEligible,
+		LastProposed:      u.LastProposed,
+		LastHeartbeat:     u.LastHeartbeat,
 	}
 }
 

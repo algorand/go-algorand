@@ -921,7 +921,11 @@ func (aul *accountUpdatesLedgerEvaluator) LookupWithoutRewards(rnd basics.Round,
 }
 
 func (aul *accountUpdatesLedgerEvaluator) LookupAgreement(rnd basics.Round, addr basics.Address) (basics.OnlineAccountData, error) {
-	return aul.ao.LookupOnlineAccountData(rnd, addr)
+	return aul.ao.lookupOnlineAccountData(rnd, addr)
+}
+
+func (aul *accountUpdatesLedgerEvaluator) GetKnockOfflineCandidates(basics.Round, config.ConsensusParams) (map[basics.Address]basics.OnlineAccountData, error) {
+	return nil, nil
 }
 
 func (aul *accountUpdatesLedgerEvaluator) OnlineCirculation(rnd basics.Round, voteRnd basics.Round) (basics.MicroAlgos, error) {

@@ -22,7 +22,6 @@ import (
 	"errors"
 	"os"
 	"strconv"
-	"time"
 )
 
 var (
@@ -32,13 +31,6 @@ var (
 	ErrMetricServiceNotRunning = errors.New("MetricService not running")
 	// ErrMetricUnableToRegister unable to register
 	ErrMetricUnableToRegister = errors.New("Unable to register metric")
-)
-
-var (
-	// the duration of which we'll keep a metric in-memory and keep reporting it.
-	// when a metric time expires, it would get removed.
-	// TODO: implement or remove
-	maxMetricRetensionDuration = time.Duration(5) * time.Minute
 )
 
 // MakeMetricService creates a new metrics server at the given endpoint.

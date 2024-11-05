@@ -33,8 +33,8 @@ const (
 	MsgDigestSkipTag     Tag = "MS"
 	NetPrioResponseTag   Tag = "NP"
 	NetIDVerificationTag Tag = "NI"
-	PingTag              Tag = "pi"
-	PingReplyTag         Tag = "pj"
+	PingTag              Tag = "pi" // was removed in 3.2.1
+	PingReplyTag         Tag = "pj" // was removed in 3.2.1
 	ProposalPayloadTag   Tag = "PP"
 	StateProofSigTag     Tag = "SP"
 	TopicMsgRespTag      Tag = "TS"
@@ -65,12 +65,6 @@ const NetPrioResponseTagMaxSize = 850
 // NetIDVerificationTagMaxSize is the maximum size of a NetIDVerificationTag message
 const NetIDVerificationTagMaxSize = 215
 
-// PingTagMaxSize is the maximum size of a PingTag message
-const PingTagMaxSize = 8
-
-// PingReplyTagMaxSize is the maximum size of a PingReplyTag message
-const PingReplyTagMaxSize = 8
-
 // ProposalPayloadTagMaxSize is the maximum size of a ProposalPayloadTag message
 // This value is dominated by the MaxTxnBytesPerBlock
 const ProposalPayloadTagMaxSize = 5250313
@@ -84,10 +78,23 @@ const StateProofSigTagMaxSize = 6378
 // Matches  current network.MaxMessageLength
 const TopicMsgRespTagMaxSize = 6 * 1024 * 1024
 
-// TxnTagMaxSize is the maximum size of a TxnTag message. This is equal to SignedTxnMaxSize()
-// which is size of just a single message containing maximum Stateproof. Since Stateproof
-// transactions can't be batched we don't need to multiply by MaxTxnBatchSize.
-const TxnTagMaxSize = 4620031
+// TxnTagMaxSize is the maximum size of a TxnTag message. The TxnTag is used to
+// send entire transaction groups. So, naively, we might set it to the maximum
+// group size times the maximum transaction size (plus a little bit for msgpack
+// encoding).  But there are several reasons not to do that.  First, the
+// function we have for estimating max transaction size
+// (transactions.SignedTxnMaxSize())) wildly overestimates the maximum
+// transaction size because it is generated code that assumes _every_
+// transaction field can be set, but each transaction type has mutually
+// exclusive fields. Second, the stateproof transaction is the biggest
+// transaction by far, but it can only appear as a singleton, so it would not
+// make sense to multiply it by 16.  Finally, we're going to pool logicsig code
+// size, so while it's true that one transaction in a group could have a 16k
+// logicsig, that would only be true if the other transactions had 0 bytes of
+// logicsig.  So we will use a bound that is a bit bigger that a txn group can
+// be, but avoid trying to be precise.  See TestMaxSizesCorrect for the detailed
+// reasoning.
+const TxnTagMaxSize = 5_000_000
 
 // UniEnsBlockReqTagMaxSize is the maximum size of a UniEnsBlockReqTag message
 const UniEnsBlockReqTagMaxSize = 67
@@ -109,10 +116,6 @@ func (tag Tag) MaxMessageSize() uint64 {
 		return NetPrioResponseTagMaxSize
 	case NetIDVerificationTag:
 		return NetIDVerificationTagMaxSize
-	case PingTag:
-		return PingTagMaxSize
-	case PingReplyTag:
-		return PingReplyTagMaxSize
 	case ProposalPayloadTag:
 		return ProposalPayloadTagMaxSize
 	case StateProofSigTag:
@@ -137,8 +140,6 @@ var TagList = []Tag{
 	MsgDigestSkipTag,
 	NetIDVerificationTag,
 	NetPrioResponseTag,
-	PingTag,
-	PingReplyTag,
 	ProposalPayloadTag,
 	StateProofSigTag,
 	TopicMsgRespTag,
@@ -147,12 +148,25 @@ var TagList = []Tag{
 	VoteBundleTag,
 }
 
+// DeprecatedTagList contains tags that are no longer used, but may still show up in MsgOfInterest messages.
+var DeprecatedTagList = []Tag{
+	PingTag,
+	PingReplyTag,
+}
+
 // TagMap is a map of all currently used protocol tags.
 var TagMap map[Tag]struct{}
+
+// DeprecatedTagMap is a map of all deprecated protocol tags.
+var DeprecatedTagMap map[Tag]struct{}
 
 func init() {
 	TagMap = make(map[Tag]struct{})
 	for _, tag := range TagList {
 		TagMap[tag] = struct{}{}
+	}
+	DeprecatedTagMap = make(map[Tag]struct{})
+	for _, tag := range DeprecatedTagList {
+		DeprecatedTagMap[tag] = struct{}{}
 	}
 }

@@ -114,6 +114,9 @@ fix: build
 lint: deps
 	$(GOPATH1)/bin/golangci-lint run -c .golangci.yml
 
+expectlint:
+	cd test/e2e-go/cli/goal/expect && python3 expect_linter.py *.exp
+
 check_go_version:
 	@if [ $(CURRENT_GO_VERSION_MAJOR) != $(GOLANG_VERSION_BUILD_MAJOR) ]; then \
 		echo "Wrong major version of Go installed ($(CURRENT_GO_VERSION_MAJOR)). Please use $(GOLANG_VERSION_BUILD_MAJOR)"; \
@@ -289,6 +292,9 @@ $(GOPATH1)/bin/%:
 
 test: build
 	$(GOTESTCOMMAND) $(GOTAGS) -race $(UNIT_TEST_SOURCES) -timeout 1h -coverprofile=coverage.txt -covermode=atomic
+
+testc:
+	echo $(UNIT_TEST_SOURCES) | xargs -P8 -n1 go test -c
 
 benchcheck: build
 	$(GOTESTCOMMAND) $(GOTAGS) -race $(UNIT_TEST_SOURCES) -run ^NOTHING -bench Benchmark -benchtime 1x -timeout 1h
