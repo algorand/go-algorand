@@ -874,6 +874,53 @@ func TestAbsenteeChallenges(t *testing.T) {
 	})
 }
 
+func TestDoubleLedgerGetKnockoffCandidates(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	const onlineCount = 5
+	genBalances, _, _ := ledgertesting.NewTestGenesis(func(cfg *ledgertesting.GenesisCfg) {
+		cfg.OnlineCount = onlineCount
+	})
+	payoutsBegin := 40
+
+	checkAccts := func(l *Ledger, rnd basics.Round, cv protocol.ConsensusVersion) {
+		accts, err := l.GetKnockOfflineCandidates(rnd, config.Consensus[cv])
+		require.NoError(t, err)
+		require.NotEmpty(t, accts)
+		// get online genesis accounts
+		onlineCnt := 0
+		onlineAddrs := make(map[basics.Address]basics.OnlineAccountData)
+		for addr, ad := range genBalances.Balances {
+			if ad.Status == basics.Online {
+				onlineCnt++
+				onlineAddrs[addr] = ad.OnlineAccountData()
+			}
+		}
+		require.Equal(t, onlineCount, onlineCnt)
+		require.Len(t, accts, onlineCnt)
+		require.Equal(t, onlineAddrs, accts)
+
+	}
+
+	ledgertesting.TestConsensusRange(t, payoutsBegin-1, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
+		defer dl.Close()
+
+		checkAccts(dl.generator, basics.Round(0), cv)
+		checkAccts(dl.validator, basics.Round(0), cv)
+
+		// run up to round 240
+		proto := config.Consensus[cv]
+		upToRound := basics.Round(proto.StateProofInterval - proto.StateProofVotersLookback)
+		require.Equal(t, basics.Round(240), upToRound)
+		for rnd := dl.fullBlock().Block().Round(); rnd < upToRound; rnd = dl.fullBlock().Block().Round() {
+			checkAccts(dl.generator, rnd, cv)
+			checkAccts(dl.validator, rnd, cv)
+		}
+	})
+}
+
 // TestVoterAccess ensures that the `voter` opcode works properly when hooked up
 // to a real ledger.
 func TestVoterAccess(t *testing.T) {
