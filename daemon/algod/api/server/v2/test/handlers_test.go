@@ -170,11 +170,11 @@ func TestGetBlockHeader(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	getBlockTest(t, 0, "json", 200)
-	getBlockTest(t, 0, "msgpack", 200)
-	getBlockTest(t, 1, "json", 404)
-	getBlockTest(t, 1, "msgpack", 404)
-	getBlockTest(t, 0, "bad format", 400)
+	getBlockHeaderTest(t, 0, "json", 200)
+	getBlockHeaderTest(t, 0, "msgpack", 200)
+	getBlockHeaderTest(t, 1, "json", 404)
+	getBlockHeaderTest(t, 1, "msgpack", 404)
+	getBlockHeaderTest(t, 0, "bad format", 400)
 }
 
 func testGetLedgerStateDelta(t *testing.T, round uint64, format string, expectedCode int) {
