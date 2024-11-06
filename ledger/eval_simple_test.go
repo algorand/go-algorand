@@ -825,27 +825,49 @@ func TestDoubleLedgerGetKnockoffCandidates(t *testing.T) {
 	t.Parallel()
 
 	const onlineCount = 5
-	genBalances, _, _ := ledgertesting.NewTestGenesis(func(cfg *ledgertesting.GenesisCfg) {
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis(func(cfg *ledgertesting.GenesisCfg) {
 		cfg.OnlineCount = onlineCount
+		ledgertesting.TurnOffRewards(cfg)
 	})
 	payoutsBegin := 40
+
+	// txn to send in round 1, to change the balances to be different from genesis
+	payTxn := &txntest.Txn{Type: "pay", Sender: addrs[1], Receiver: addrs[2], Amount: 1_000_000}
 
 	checkAccts := func(l *Ledger, rnd basics.Round, cv protocol.ConsensusVersion) {
 		accts, err := l.GetKnockOfflineCandidates(rnd, config.Consensus[cv])
 		require.NoError(t, err)
 		require.NotEmpty(t, accts)
+
 		// get online genesis accounts
 		onlineCnt := 0
-		onlineAddrs := make(map[basics.Address]basics.OnlineAccountData)
+		genesisOnlineAccts := make(map[basics.Address]basics.OnlineAccountData)
+		afterPayTxnOnlineAccts := make(map[basics.Address]basics.OnlineAccountData)
 		for addr, ad := range genBalances.Balances {
 			if ad.Status == basics.Online {
 				onlineCnt++
-				onlineAddrs[addr] = ad.OnlineAccountData()
+				genesisOnlineAccts[addr] = ad.OnlineAccountData()
+				afterPayTxnOnlineAccts[addr] = ad.OnlineAccountData()
 			}
 		}
+
+		// calculate expected balances after applying payTxn
+		payTxnReceiver := afterPayTxnOnlineAccts[payTxn.Receiver]
+		payTxnReceiver.MicroAlgosWithRewards.Raw += payTxn.Amount
+		payTxnSender := afterPayTxnOnlineAccts[payTxn.Sender]
+		payTxnSender.MicroAlgosWithRewards.Raw -= (payTxn.Amount + config.Consensus[cv].MinTxnFee)
+		afterPayTxnOnlineAccts[payTxn.Receiver] = payTxnReceiver
+		afterPayTxnOnlineAccts[payTxn.Sender] = payTxnSender
+
 		require.Equal(t, onlineCount, onlineCnt)
 		require.Len(t, accts, onlineCnt)
-		require.Equal(t, onlineAddrs, accts)
+		if rnd == 0 {
+			// balances should be same as genesis
+			require.Equal(t, genesisOnlineAccts, accts)
+		} else {
+			// balances > rnd 1 should reflect payTxn change
+			require.Equal(t, afterPayTxnOnlineAccts, accts, "rnd %d", rnd)
+		}
 
 	}
 
@@ -855,6 +877,10 @@ func TestDoubleLedgerGetKnockoffCandidates(t *testing.T) {
 
 		checkAccts(dl.generator, basics.Round(0), cv)
 		checkAccts(dl.validator, basics.Round(0), cv)
+
+		// change two accounts' balances to be different from genesis
+		payTxn.GenesisHash = crypto.Digest{} // clear if set from previous run
+		dl.fullBlock(payTxn)
 
 		// run up to round 240
 		proto := config.Consensus[cv]
