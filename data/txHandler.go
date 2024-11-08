@@ -622,6 +622,7 @@ func (handler *TxHandler) incomingMsgDupCheck(data []byte) (*crypto.Digest, bool
 // - a boolean indicating if the sender is rate limited
 func (handler *TxHandler) incomingMsgErlCheck(sender network.DisconnectablePeer) (*util.ErlCapacityGuard, bool) {
 	var capguard *util.ErlCapacityGuard
+	var isCMEnabled bool
 	var err error
 	if handler.erl != nil {
 		congestedERL := float64(cap(handler.backlogQueue))*handler.backlogCongestionThreshold < float64(len(handler.backlogQueue))
@@ -629,8 +630,9 @@ func (handler *TxHandler) incomingMsgErlCheck(sender network.DisconnectablePeer)
 		// if the elastic rate limiter cannot vend a capacity, the error it returns
 		// is sufficient to indicate that we should enable Congestion Control, because
 		// an issue in vending capacity indicates the underlying resource (TXBacklog) is full
-		capguard, err = handler.erl.ConsumeCapacity(sender.(util.ErlClient))
-		if err != nil {
+		capguard, isCMEnabled, err = handler.erl.ConsumeCapacity(sender.(util.ErlClient))
+		if err != nil || // did ERL ask to enable congestion control?
+			(!isCMEnabled && congestedERL) { // is CM not currently enabled, but queue is congested?
 			handler.erl.EnableCongestionControl()
 			// if there is no capacity, it is the same as if we failed to put the item onto the backlog, so report such
 			transactionMessagesDroppedFromBacklog.Inc(nil)
