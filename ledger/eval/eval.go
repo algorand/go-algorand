@@ -904,50 +904,37 @@ func (eval *BlockEvaluator) ResetTxnBytes() {
 	eval.blockTxBytes = 0
 }
 
-// TestEvalContext defines the evaluation context required by TestBlockEvaluator
-// to check for well-formedness and duplicate detection.
-type TestEvalContext interface {
-	Proto() config.ConsensusParams
-	Specials() transactions.SpecialAddresses
-	TxnContext() transactions.TxnContext
-	CheckDup(firstValid, lastValid basics.Round, txid transactions.Txid, txl ledgercore.Txlease) error
-}
-
-// Proto implements the TestEvalContext interface.
-func (eval *BlockEvaluator) Proto() config.ConsensusParams { return eval.proto }
-
-// Specials implements the TestEvalContext interface.
-func (eval *BlockEvaluator) Specials() transactions.SpecialAddresses { return eval.specials }
-
-// TxnContext implements the TestEvalContext interface.
-func (eval *BlockEvaluator) TxnContext() transactions.TxnContext { return eval.block }
-
-// CheckDup implements the TestEvalContext interface.
-func (eval *BlockEvaluator) CheckDup(firstValid, lastValid basics.Round, txid transactions.Txid, txl ledgercore.Txlease) error {
-	return eval.state.checkDup(firstValid, lastValid, txid, txl)
-}
-
 // TestTransactionGroup is only called by tests.
 func (eval *BlockEvaluator) TestTransactionGroup(txgroup []transactions.SignedTxn) error {
-	return TestBlockEvaluator{eval}.TestTransactionGroup(txgroup)
+	return TransactionGroupTester{
+		Proto:      eval.proto,
+		Specials:   eval.specials,
+		TxnContext: eval.block,
+		CheckDup:   eval.state.checkDup,
+	}.TestTransactionGroup(txgroup)
 }
 
-// TestBlockEvaluator uses a TestEvalContext to perform basic transaction checks.
-type TestBlockEvaluator struct{ TestEvalContext }
+// TransactionGroupTester performs basic transaction checks for well-formedness and duplicate detection.
+type TransactionGroupTester struct {
+	CheckDup   func(firstValid, lastValid basics.Round, txid transactions.Txid, txl ledgercore.Txlease) error
+	TxnContext transactions.TxnContext
+	Proto      config.ConsensusParams
+	Specials   transactions.SpecialAddresses
+}
 
 // TestTransactionGroup performs basic duplicate detection and well-formedness checks
 // on a transaction group, but does not actually add the transactions to the block
 // evaluator, or modify the block evaluator state in any other visible way.
 // It uses a TestEvalContext to access needed recent ledger state.
-func (eval TestBlockEvaluator) TestTransactionGroup(txgroup []transactions.SignedTxn) error {
+func (eval TransactionGroupTester) TestTransactionGroup(txgroup []transactions.SignedTxn) error {
 	// Nothing to do if there are no transactions.
 	if len(txgroup) == 0 {
 		return nil
 	}
 
-	if len(txgroup) > eval.Proto().MaxTxGroupSize {
+	if len(txgroup) > eval.Proto.MaxTxGroupSize {
 		return &ledgercore.TxGroupMalformedError{
-			Msg:    fmt.Sprintf("group size %d exceeds maximum %d", len(txgroup), eval.Proto().MaxTxGroupSize),
+			Msg:    fmt.Sprintf("group size %d exceeds maximum %d", len(txgroup), eval.Proto.MaxTxGroupSize),
 			Reason: ledgercore.TxGroupMalformedErrorReasonExceedMaxSize,
 		}
 	}
@@ -998,14 +985,14 @@ func (eval TestBlockEvaluator) TestTransactionGroup(txgroup []transactions.Signe
 // TestTransaction performs basic duplicate detection and well-formedness checks
 // on a single transaction, but does not actually add the transaction to the block
 // evaluator, or modify the block evaluator state in any other visible way.
-func (eval TestBlockEvaluator) TestTransaction(txn transactions.SignedTxn) error {
+func (eval TransactionGroupTester) TestTransaction(txn transactions.SignedTxn) error {
 	// Transaction valid (not expired)?
-	err := txn.Txn.Alive(eval.TxnContext())
+	err := txn.Txn.Alive(eval.TxnContext)
 	if err != nil {
 		return err
 	}
 
-	err = txn.Txn.WellFormed(eval.Specials(), eval.Proto())
+	err = txn.Txn.WellFormed(eval.Specials, eval.Proto)
 	if err != nil {
 		txnErr := ledgercore.TxnNotWellFormedError(fmt.Sprintf("transaction %v: malformed: %v", txn.ID(), err))
 		return &txnErr
