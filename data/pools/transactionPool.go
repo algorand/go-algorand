@@ -403,7 +403,7 @@ func (pool *TransactionPool) Test(txgroup []transactions.SignedTxn) error {
 	defer pool.txnGroupTesterMu.RUnlock()
 
 	if pool.txnGroupTester == nil {
-		return fmt.Errorf("Test: testEvalCtx is nil")
+		return fmt.Errorf("Test: txnGroupTester is nil")
 	}
 
 	return pool.txnGroupTester.TestTransactionGroup(txgroup)
@@ -753,18 +753,18 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIDs map[transact
 		return
 	}
 
+	nextProto := config.Consensus[next.CurrentProtocol]
 	pool.txnGroupTesterMu.Lock()
-	pool.txnGroupTester = &eval.TransactionGroupTester{
-		CheckDup: func(firstValid, lastValid basics.Round, txid transactions.Txid, txl ledgercore.Txlease) error {
-			return pool.ledger.CheckDup(config.Consensus[next.CurrentProtocol], next.BlockHeader.Round, firstValid, lastValid, txid, txl)
-		},
-		TxnContext: next,
-		Proto:      config.Consensus[next.CurrentProtocol],
-		Specials: transactions.SpecialAddresses{
+	pool.txnGroupTester = eval.NewTransactionGroupTester(
+		nextProto,
+		transactions.SpecialAddresses{
 			FeeSink:     next.FeeSink,
 			RewardsPool: next.RewardsPool,
 		},
-	}
+		next,
+		func(firstValid, lastValid basics.Round, txid transactions.Txid, txl ledgercore.Txlease) error {
+			return pool.ledger.CheckDup(nextProto, next.BlockHeader.Round, firstValid, lastValid, txid, txl)
+		})
 	pool.txnGroupTesterMu.Unlock()
 
 	var asmStats telemetryspec.AssembleBlockMetrics

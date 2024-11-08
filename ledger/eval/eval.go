@@ -906,20 +906,25 @@ func (eval *BlockEvaluator) ResetTxnBytes() {
 
 // TestTransactionGroup is only called by tests.
 func (eval *BlockEvaluator) TestTransactionGroup(txgroup []transactions.SignedTxn) error {
-	return TransactionGroupTester{
-		Proto:      eval.proto,
-		Specials:   eval.specials,
-		TxnContext: eval.block,
-		CheckDup:   eval.state.checkDup,
-	}.TestTransactionGroup(txgroup)
+	return NewTransactionGroupTester(eval.proto, eval.specials, eval.block, eval.state.checkDup).TestTransactionGroup(txgroup)
 }
 
 // TransactionGroupTester performs basic transaction checks for well-formedness and duplicate detection.
 type TransactionGroupTester struct {
-	CheckDup   func(firstValid, lastValid basics.Round, txid transactions.Txid, txl ledgercore.Txlease) error
-	TxnContext transactions.TxnContext
-	Proto      config.ConsensusParams
-	Specials   transactions.SpecialAddresses
+	proto      config.ConsensusParams
+	specials   transactions.SpecialAddresses
+	txnContext transactions.TxnContext
+	checkDup   func(firstValid, lastValid basics.Round, txid transactions.Txid, txl ledgercore.Txlease) error
+}
+
+// NewTransactionGroupTester creates a new TransactionGroupTester for use in calling TestTransactionGroup.
+func NewTransactionGroupTester(proto config.ConsensusParams, specials transactions.SpecialAddresses, txnContext transactions.TxnContext, checkDup func(firstValid, lastValid basics.Round, txid transactions.Txid, txl ledgercore.Txlease) error) *TransactionGroupTester {
+	return &TransactionGroupTester{
+		proto:      proto,
+		specials:   specials,
+		txnContext: txnContext,
+		checkDup:   checkDup,
+	}
 }
 
 // TestTransactionGroup performs basic duplicate detection and well-formedness checks
@@ -932,9 +937,9 @@ func (eval TransactionGroupTester) TestTransactionGroup(txgroup []transactions.S
 		return nil
 	}
 
-	if len(txgroup) > eval.Proto.MaxTxGroupSize {
+	if len(txgroup) > eval.proto.MaxTxGroupSize {
 		return &ledgercore.TxGroupMalformedError{
-			Msg:    fmt.Sprintf("group size %d exceeds maximum %d", len(txgroup), eval.Proto.MaxTxGroupSize),
+			Msg:    fmt.Sprintf("group size %d exceeds maximum %d", len(txgroup), eval.proto.MaxTxGroupSize),
 			Reason: ledgercore.TxGroupMalformedErrorReasonExceedMaxSize,
 		}
 	}
@@ -987,12 +992,12 @@ func (eval TransactionGroupTester) TestTransactionGroup(txgroup []transactions.S
 // evaluator, or modify the block evaluator state in any other visible way.
 func (eval TransactionGroupTester) TestTransaction(txn transactions.SignedTxn) error {
 	// Transaction valid (not expired)?
-	err := txn.Txn.Alive(eval.TxnContext)
+	err := txn.Txn.Alive(eval.txnContext)
 	if err != nil {
 		return err
 	}
 
-	err = txn.Txn.WellFormed(eval.Specials, eval.Proto)
+	err = txn.Txn.WellFormed(eval.specials, eval.proto)
 	if err != nil {
 		txnErr := ledgercore.TxnNotWellFormedError(fmt.Sprintf("transaction %v: malformed: %v", txn.ID(), err))
 		return &txnErr
@@ -1001,7 +1006,7 @@ func (eval TransactionGroupTester) TestTransaction(txn transactions.SignedTxn) e
 	// Transaction already in the ledger?
 	txid := txn.ID()
 	// BlockEvaluator.transaction will check again using cow.checkDup later, if the pool tries to add this transaction to the block.
-	err = eval.CheckDup(txn.Txn.First(), txn.Txn.Last(), txid, ledgercore.Txlease{Sender: txn.Txn.Sender, Lease: txn.Txn.Lease})
+	err = eval.checkDup(txn.Txn.First(), txn.Txn.Last(), txid, ledgercore.Txlease{Sender: txn.Txn.Sender, Lease: txn.Txn.Lease})
 	if err != nil {
 		return err
 	}
