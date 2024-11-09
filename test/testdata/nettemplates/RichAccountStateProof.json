@@ -14,18 +14,20 @@
     "Nodes": [
         {
             "Name": "Relay0",
+            "ConfigJSONOverride": "{\"MaxConnectionsPerIP\":8}",
             "IsRelay": true,
             "Wallets": []
         },
         {
             "Name": "Relay1",
+            "ConfigJSONOverride": "{\"MaxConnectionsPerIP\":8}",
             "IsRelay": true,
             "Wallets": []
         },
-        { "Name": "richNode", "Wallets": [ { "Name": "richWallet", "ParticipationOnly": false } ] },
-        { "Name": "Node1", "Wallets": [ { "Name": "Wallet1", "ParticipationOnly": false } ] },
-        { "Name": "Node2", "Wallets": [ { "Name": "Wallet2", "ParticipationOnly": false } ] },
-        { "Name": "Node3", "Wallets": [ { "Name": "Wallet3", "ParticipationOnly": false } ] },
-        { "Name": "poorNode", "Wallets": [ { "Name": "poorWallet", "ParticipationOnly": false } ] }
+        { "Name": "richNode", "Wallets": [ { "Name": "richWallet", "ConfigJSONOverride": "{\"MaxConnectionsPerIP\":8}","ParticipationOnly": false } ] },
+        { "Name": "Node1", "Wallets": [ { "Name": "Wallet1", "ConfigJSONOverride": "{\"MaxConnectionsPerIP\":8}","ParticipationOnly": false } ] },
+        { "Name": "Node2", "Wallets": [ { "Name": "Wallet2", "ConfigJSONOverride": "{\"MaxConnectionsPerIP\":8}","ParticipationOnly": false } ] },
+        { "Name": "Node3", "Wallets": [ { "Name": "Wallet3", "ConfigJSONOverride": "{\"MaxConnectionsPerIP\":8}","ParticipationOnly": false } ] },
+        { "Name": "poorNode", "Wallets": [ { "Name": "poorWallet", "ConfigJSONOverride": "{\"MaxConnectionsPerIP\":8}","ParticipationOnly": false } ] }
     ]
 }
