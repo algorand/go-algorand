@@ -441,7 +441,7 @@ falcon_verify
 
 const mimcNonsense = `
 pushbytes 0x11223344556677889900aabbccddeeff11223344556677889900aabbccddeeff
-mimc BLS12_381_MP_111
+mimc BLS12_381Mp111
 `
 
 const v8Nonsense = v7Nonsense + switchNonsense + frameNonsense + matchNonsense + boxNonsense

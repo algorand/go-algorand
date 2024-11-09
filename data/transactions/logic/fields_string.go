@@ -301,14 +301,14 @@ func _() {
 	// An "invalid array index" compiler error signifies that the constant values have changed.
 	// Re-run the stringer command to generate them again.
 	var x [1]struct{}
-	_ = x[BN254_MP_110-0]
-	_ = x[BLS12_381_MP_111-1]
+	_ = x[BN254Mp110-0]
+	_ = x[BLS12_381Mp111-1]
 	_ = x[invalidMimcConfig-2]
 }
 
-const _MimcConfig_name = "BN254_MP_110BLS12_381_MP_111invalidMimcConfig"
+const _MimcConfig_name = "BN254Mp110BLS12_381Mp111invalidMimcConfig"
 
-var _MimcConfig_index = [...]uint8{0, 12, 28, 45}
+var _MimcConfig_index = [...]uint8{0, 10, 24, 41}
 
 func (i MimcConfig) String() string {
 	if i < 0 || i >= MimcConfig(len(_MimcConfig_index)-1) {

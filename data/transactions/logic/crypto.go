@@ -57,9 +57,9 @@ func opMimc(cx *EvalContext) error {
 	var mimc hash.Hash
 
 	switch fs.field {
-	case BN254_MP_110:
+	case BN254Mp110:
 		mimc = bn254mimc.NewMiMC()
-	case BLS12_381_MP_111:
+	case BLS12_381Mp111:
 		mimc = bls12_381mimc.NewMiMC()
 	default:
 		return fmt.Errorf("invalid mimc group %s", config)

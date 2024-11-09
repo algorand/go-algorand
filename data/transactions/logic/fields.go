@@ -785,14 +785,14 @@ var EcGroups = FieldGroup{
 	ecGroupSpecByName,
 }
 
-// MimcConf is an enum for the `mimc` opcode
+// MimcConfig is an enum for the `mimc` opcode
 type MimcConfig int
 
 const (
-	// BN254_MP_110 is the default MiMC configuration for the BN254 curve with Miyaguchi-Preneel mode, 110 rounds, exponent 5, seed "seed"
-	BN254_MP_110 MimcConfig = iota
-	// BLS12_381_MP_111 is the default MiMC configuration for the BLS12-381 curve with Miyaguchi-Preneel mode, 111 rounds, exponent 5, seed "seed"
-	BLS12_381_MP_111
+	// BN254Mp110 is the default MiMC configuration for the BN254 curve with Miyaguchi-Preneel mode, 110 rounds, exponent 5, seed "seed"
+	BN254Mp110 MimcConfig = iota
+	// BLS12_381Mp111 is the default MiMC configuration for the BLS12-381 curve with Miyaguchi-Preneel mode, 111 rounds, exponent 5, seed "seed"
+	BLS12_381Mp111
 	invalidMimcConfig // compile-time constant for number of fields
 )
 
@@ -820,8 +820,8 @@ func (fs mimcConfigSpec) Note() string {
 }
 
 var mimcConfigSpecs = [...]mimcConfigSpec{
-	{BN254_MP_110, "MiMC configuration for the BN254 curve with Miyaguchi-Preneel mode, 110 rounds, exponent 5, seed \"seed\""},
-	{BLS12_381_MP_111, "MiMC configuration for the BLS12-381 curve with Miyaguchi-Preneel mode, 111 rounds, exponent 5, seed \"seed\""},
+	{BN254Mp110, "MiMC configuration for the BN254 curve with Miyaguchi-Preneel mode, 110 rounds, exponent 5, seed \"seed\""},
+	{BLS12_381Mp111, "MiMC configuration for the BLS12-381 curve with Miyaguchi-Preneel mode, 111 rounds, exponent 5, seed \"seed\""},
 }
 
 func mimcConfigSpecByField(c MimcConfig) (mimcConfigSpec, bool) {

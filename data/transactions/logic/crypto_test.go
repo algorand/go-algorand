@@ -148,7 +148,7 @@ func TestMimc(t *testing.T) {
 	}
 
 	circuitHashTestVectors := map[string][]string{
-		"BN254_MP_110": {
+		"BN254Mp110": {
 			"20104241803663641422577121134203490505137011783614913652735802145961801733870",
 			"12886436712380113721405259596386800092738845035233065858332878701083870690753",
 			"19565877911319815535452130675266047290072088868113536892077808700068649624391",
@@ -157,7 +157,7 @@ func TestMimc(t *testing.T) {
 			"21691351735381703396517600859480938764038501053226864452091917666642352837076",
 			"10501393540371963307040960561318023073151272109639330842515119353134949995409",
 		},
-		"BLS12_381_MP_111": {
+		"BLS12_381Mp111": {
 			"17991912493598890696181760734961918471863781118188078948205844982816313445306",
 			"8791766422525455185980675814845076441443662947059416063736889106252015893524",
 			"35137972692771717943992759113612269767581262500164574105059686144346651628747",
@@ -168,7 +168,7 @@ func TestMimc(t *testing.T) {
 		},
 	}
 
-	for _, config := range []string{"BN254_MP_110", "BLS12_381_MP_111"} {
+	for _, config := range []string{"BN254Mp110", "BLS12_381Mp111"} {
 		for i, preImageTestVector := range preImageTestVectors {
 			var n big.Int
 			n.SetString(circuitHashTestVectors[config][i], 10)
@@ -783,9 +783,9 @@ int ` + fmt.Sprintf("%d", testLogicBudget-2500-8) + `
 }
 
 func BenchmarkHashes(b *testing.B) {
-	for _, hash := range []string{"sha256", "keccak256" /* skip, same as keccak "sha3_256", */, "sha512_256", "sumhash512", "mimc BN254_MP_110", "mimc BLS12_381_MP_111"} {
+	for _, hash := range []string{"sha256", "keccak256" /* skip, same as keccak "sha3_256", */, "sha512_256", "sumhash512", "mimc BN254Mp110", "mimc BLS12_381Mp111"} {
 		for _, size := range []int{0, 32, 128, 512, 1024, 4096} {
-			if size == 0 && (hash == "mimc BN254_MP_110" || hash == "mimc BLS12_381_MP_111") {
+			if size == 0 && (hash == "mimc BN254Mp110" || hash == "mimc BLS12_381Mp111") {
 				continue
 			}
 			b.Run(hash+"-"+strconv.Itoa(size), func(b *testing.B) {
