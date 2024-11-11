@@ -20,7 +20,7 @@
 package config
 
 var defaultLocal = Local{
-	Version:                                    34,
+	Version:                                    35,
 	AccountUpdatesStatsInterval:                5000000000,
 	AccountsRebuildSynchronousMode:             1,
 	AgreementIncomingBundlesQueueLength:        15,
@@ -111,7 +111,7 @@ var defaultLocal = Local{
 	MaxAcctLookback:                            4,
 	MaxBlockHistoryLookback:                    0,
 	MaxCatchpointDownloadDuration:              43200000000000,
-	MaxConnectionsPerIP:                        15,
+	MaxConnectionsPerIP:                        4,
 	MinCatchpointFileDownloadBytesPerSecond:    20480,
 	NetAddress:                                 "",
 	NetworkMessageTraceServer:                  "",
