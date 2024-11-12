@@ -255,7 +255,11 @@ type Local struct {
 	// EnableTxBacklogAppRateLimiting controls if an app rate limiter should be attached to the tx backlog enqueue process
 	EnableTxBacklogAppRateLimiting bool `version[32]:"true"`
 
-	TxBacklogAppRateLimitingCountERLDrops bool `version[34]:"false"`
+	// TxBacklogAppRateLimitingCountERLDrops feeds messages dropped by the ERL congestion manager & rate limiter (enabled by
+	// EnableTxBacklogRateLimiting) to the app rate limiter (enabled by EnableTxBacklogAppRateLimiting), so that all TX messages
+	// are counted. This provides more accurate rate limiting for the app rate limiter, at the potential expense of additional
+	// deserialization overhead.
+	TxBacklogAppRateLimitingCountERLDrops bool `version[35]:"false"`
 
 	// EnableTxBacklogRateLimiting controls if a rate limiter and congestion manager should be attached to the tx backlog enqueue process
 	// if enabled, the over-all TXBacklog Size will be larger by MAX_PEERS*TxBacklogReservedCapacityPerPeer
