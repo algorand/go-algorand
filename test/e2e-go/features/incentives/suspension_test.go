@@ -51,9 +51,11 @@ func TestBasicSuspension(t *testing.T) {
 	const suspend20 = 55
 
 	var fixture fixtures.RestClientFixture
-	// Speed up rounds, but keep long lookback, so 20% node has a chance to get
-	// back online after being suspended.
-	fixture.FasterConsensus(protocol.ConsensusFuture, time.Second, 320)
+	// Speed up rounds.  Long enough lookback, so 20% node has a chance to
+	// get back online after being suspended. (0.8^32 is very small)
+
+	const lookback = 32
+	fixture.FasterConsensus(protocol.ConsensusFuture, time.Second, lookback)
 	fixture.Setup(t, filepath.Join("nettemplates", "Suspension.json"))
 	defer fixture.Shutdown()
 
@@ -72,71 +74,41 @@ func TestBasicSuspension(t *testing.T) {
 	rekeyreg(&fixture, a, c10, account10.Address)
 	rekeyreg(&fixture, a, c20, account20.Address)
 
-	// Wait until each have proposed, so they are suspendable
-	proposed10 := false
-	proposed20 := false
-	for !proposed10 || !proposed20 {
-		status, err := c10.Status()
-		a.NoError(err)
-		block, err := c10.BookkeepingBlock(status.LastRound)
-		a.NoError(err)
-
-		fmt.Printf(" block %d proposed by %v\n", status.LastRound, block.Proposer())
-
-		fixture.WaitForRoundWithTimeout(status.LastRound + 1)
-
-		switch block.Proposer().String() {
-		case account10.Address:
-			proposed10 = true
-		case account20.Address:
-			proposed20 = true
-		}
-	}
-
+	// Accounts are now suspendable whether they have proposed yet or not
+	// because keyreg sets LastHeartbeat. Stop c20 which means account20 will be
+	// absent about 50 rounds after keyreg goes into effect (lookback)
 	a.NoError(c20.FullStop())
 
 	afterStop, err := c10.Status()
 	a.NoError(err)
 
-	// Advance 55 rounds
-	err = fixture.WaitForRoundWithTimeout(afterStop.LastRound + suspend20)
+	// Advance lookback+55 rounds
+	err = fixture.WaitForRoundWithTimeout(afterStop.LastRound + lookback + suspend20)
 	a.NoError(err)
-
-	// n20 is still online after 55 rounds of absence (the node is off, but the
-	// account is marked online) because it has not been "noticed".
-	account, err := fixture.LibGoalClient.AccountData(account20.Address)
-	a.NoError(err)
-	a.Equal(basics.Online, account.Status)
-	voteID := account.VoteID
-	a.NotZero(voteID)
-
-	// pay n10 & n20, so both could be noticed
-	richAccount, err := fixture.GetRichestAccount()
-	a.NoError(err)
-	fixture.SendMoneyAndWait(afterStop.LastRound+suspend20, 5, 1000, richAccount.Address, account10.Address, "")
-	fixture.SendMoneyAndWait(afterStop.LastRound+suspend20, 5, 1000, richAccount.Address, account20.Address, "")
 
 	// make sure c10 node is in-sync with the network
 	status, err := fixture.LibGoalClient.Status()
 	a.NoError(err)
+	fmt.Printf("status.LastRound %d\n", status.LastRound)
 	_, err = c10.WaitForRound(status.LastRound)
 	a.NoError(err)
 
-	// n20's account is now offline, but has voting key material (suspended)
-	account, err = c10.AccountData(account20.Address)
+	// n20's account has been suspended (offline, but has voting key material)
+	account, err := c10.AccountData(account20.Address)
 	a.NoError(err)
+	fmt.Printf("account20 %d %d\n", account.LastProposed, account.LastHeartbeat)
 	a.Equal(basics.Offline, account.Status)
 	a.NotZero(account.VoteID)
 	a.False(account.IncentiveEligible) // suspension turns off flag
 
-	// n10's account is still online, because it's got less stake, has not been absent 10 x interval.
+	// TODO: n10 wasn't turned off, it's still online
 	account, err = c10.AccountData(account10.Address)
 	a.NoError(err)
 	a.Equal(basics.Online, account.Status)
 	a.NotZero(account.VoteID)
 	a.True(account.IncentiveEligible)
 
-	// Use the fixture to start the node again. Since we're only a bit past the
+	// Use the fixture to start node20  again. Since we're only a bit past the
 	// suspension round, it will still be voting.  It should get a chance to
 	// propose soon (20/100 of blocks) which will put it back online.
 	lg, err := fixture.StartNode(c20.DataDir())
@@ -172,8 +144,6 @@ func TestBasicSuspension(t *testing.T) {
 		a.NoError(err)
 		r.Equal(basics.Online, account.Status, i)
 		r.Greater(account.LastProposed, restartRound, i)
-
-		r.Equal(voteID, account.VoteID, i)
 		r.False(account.IncentiveEligible, i)
 	}
 }

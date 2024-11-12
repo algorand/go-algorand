@@ -259,7 +259,7 @@ func (x *roundCowBase) onlineStake() (basics.MicroAlgos, error) {
 		return basics.MicroAlgos{}, err
 	}
 	x.totalOnline = total
-	return x.totalOnline, err
+	return x.totalOnline, nil
 }
 
 func (x *roundCowBase) updateAssetResourceCache(aa ledgercore.AccountAsset, r ledgercore.AssetResource) {
@@ -1642,6 +1642,11 @@ func (eval *BlockEvaluator) generateKnockOfflineAccountsList(participating []bas
 	updates := &eval.block.ParticipationUpdates
 
 	ch := FindChallenge(eval.proto.Payouts, current, eval.state, ChActive)
+	onlineStake, err := eval.state.onlineStake()
+	if err != nil {
+		logging.Base().Errorf("unable to fetch online stake, no knockoffs: %v", err)
+		return
+	}
 
 	// Make a set of candidate addresses to check for expired or absentee status.
 	type candidateData struct {
@@ -1733,7 +1738,12 @@ func (eval *BlockEvaluator) generateKnockOfflineAccountsList(participating []bas
 
 		if acctData.Status == basics.Online {
 			lastSeen := max(acctData.LastProposed, acctData.LastHeartbeat)
-			if isAbsent(eval.state.prevTotals.Online.Money, acctData.MicroAlgosWithRewards, lastSeen, current) ||
+			oad, lErr := eval.state.lookupAgreement(accountAddr)
+			if lErr != nil {
+				logging.Base().Errorf("unable to check account for absenteeism: %v", accountAddr)
+				continue
+			}
+			if isAbsent(onlineStake, oad.VotingStake(), lastSeen, current) ||
 				ch.Failed(accountAddr, lastSeen) {
 				updates.AbsentParticipationAccounts = append(
 					updates.AbsentParticipationAccounts,
@@ -1770,7 +1780,7 @@ func isAbsent(totalOnlineStake basics.MicroAlgos, acctStake basics.MicroAlgos, l
 	// Don't consider accounts that were online when payouts went into effect as
 	// absent.  They get noticed the next time they propose or keyreg, which
 	// ought to be soon, if they are high stake or want to earn incentives.
-	if lastSeen == 0 {
+	if lastSeen == 0 || acctStake.Raw == 0 {
 		return false
 	}
 	// See if the account has exceeded 10x their expected observation interval.
@@ -1911,6 +1921,14 @@ func (eval *BlockEvaluator) validateAbsentOnlineAccounts() error {
 	addressSet := make(map[basics.Address]bool, suspensionCount)
 
 	ch := FindChallenge(eval.proto.Payouts, eval.Round(), eval.state, ChActive)
+	totalOnlineStake, err := eval.state.onlineStake()
+	if err != nil {
+		logging.Base().Errorf("unable to fetch online stake, can't check knockoffs: %v", err)
+		// I suppose we can still return successfully if the absent list is empty.
+		if len(eval.block.ParticipationUpdates.AbsentParticipationAccounts) > 0 {
+			return err
+		}
+	}
 
 	for _, accountAddr := range eval.block.ParticipationUpdates.AbsentParticipationAccounts {
 		if _, exists := addressSet[accountAddr]; exists {
@@ -1931,7 +1949,11 @@ func (eval *BlockEvaluator) validateAbsentOnlineAccounts() error {
 		}
 
 		lastSeen := max(acctData.LastProposed, acctData.LastHeartbeat)
-		if isAbsent(eval.state.prevTotals.Online.Money, acctData.MicroAlgos, lastSeen, eval.Round()) {
+		oad, lErr := eval.state.lookupAgreement(accountAddr)
+		if lErr != nil {
+			return fmt.Errorf("unable to check absent account: %v", accountAddr)
+		}
+		if isAbsent(totalOnlineStake, oad.VotingStake(), lastSeen, eval.Round()) {
 			continue // ok. it's "normal absent"
 		}
 		if ch.Failed(accountAddr, lastSeen) {

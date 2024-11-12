@@ -652,16 +652,32 @@ func (l *Ledger) GetKnockOfflineCandidates(rnd basics.Round, proto config.Consen
 	if proto.StateProofInterval == 0 {
 		return nil, nil
 	}
-	// get latest state proof voters information, up to rnd, without calling cond.Wait()
-	_, voters := l.acctsOnline.voters.LatestCompletedVotersUpTo(rnd)
-	if voters == nil { // no cached voters found < rnd
-		return nil, nil
+
+	var addrs []basics.Address
+
+	// special handling for rounds 0-240: return participating genesis accounts
+	if rnd < basics.Round(proto.StateProofInterval).SubSaturate(basics.Round(proto.StateProofVotersLookback)) {
+		for addr, data := range l.genesisAccounts {
+			if data.Status == basics.Online {
+				addrs = append(addrs, addr)
+			}
+		}
+	} else {
+		// get latest state proof voters information, up to rnd, without calling cond.Wait()
+		_, voters := l.acctsOnline.voters.LatestCompletedVotersUpTo(rnd)
+		if voters == nil { // no cached voters found < rnd
+			return nil, nil
+		}
+		addrs = make([]basics.Address, 0, len(voters.AddrToPos))
+		for addr := range voters.AddrToPos {
+			addrs = append(addrs, addr)
+		}
 	}
 
 	// fetch fresh data up to this round from online account cache. These accounts should all
 	// be in cache, as long as proto.StateProofTopVoters < onlineAccountsCacheMaxSize.
 	ret := make(map[basics.Address]basics.OnlineAccountData)
-	for addr := range voters.AddrToPos {
+	for _, addr := range addrs {
 		data, err := l.acctsOnline.lookupOnlineAccountData(rnd, addr)
 		if err != nil {
 			continue // skip missing / not online accounts

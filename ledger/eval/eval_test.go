@@ -804,9 +804,16 @@ func (ledger *evalTestLedger) GetKnockOfflineCandidates(rnd basics.Round, _ conf
 	return ret, nil
 }
 
-// OnlineCirculation just returns a deterministic value for a given round.
+// OnlineCirculation add up the balances of all online accounts in rnd. It
+// doesn't remove expired accounts.
 func (ledger *evalTestLedger) OnlineCirculation(rnd, voteRound basics.Round) (basics.MicroAlgos, error) {
-	return basics.MicroAlgos{Raw: uint64(rnd) * 1_000_000}, nil
+	circulation := basics.MicroAlgos{}
+	for _, data := range ledger.roundBalances[rnd] {
+		if data.Status == basics.Online {
+			circulation.Raw += data.MicroAlgos.Raw
+		}
+	}
+	return circulation, nil
 }
 
 func (ledger *evalTestLedger) LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error) {
