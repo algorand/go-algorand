@@ -280,18 +280,16 @@ func (v2 *Handlers) generateKeyHandler(address string, params model.GeneratePart
 		v2.Log.Infof("Installed participation key %s", partID)
 		return err
 	}
-	var partKey model.ParticipationKey
 	partKeys, _, err := participation.GenParticipationKeysTo(address, params.First, params.Last, nilToZero(params.Dilution), "", installFunc)
 	if err != nil {
-		return partKey, err
+		return model.ParticipationKey{}, err
 	}
 	nodePartKey, err := v2.Node.GetParticipationKey(partKeys.ID())
 	if err != nil {
-		return partKey, err
+		return model.ParticipationKey{}, err
 	}
 
-	partKey = convertParticipationRecord(nodePartKey)
-	return partKey, nil
+	return convertParticipationRecord(nodePartKey), nil
 }
 
 // GenerateParticipationKeys generates and installs participation keys to the node.
