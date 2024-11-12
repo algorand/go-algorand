@@ -132,6 +132,7 @@ type TxHandler struct {
 	erl                        *util.ElasticRateLimiter
 	appLimiter                 *appRateLimiter
 	appLimiterBacklogThreshold int
+	appLimiterCountERLDrops    bool
 
 	// batchVerifier provides synchronous verification of transaction groups, used only by pubsub validation in validateIncomingTxMessage.
 	batchVerifier verify.TxnGroupBatchSigVerifier
@@ -209,6 +210,7 @@ func MakeTxHandler(opts TxHandlerOpts) (*TxHandler, error) {
 			)
 			// set appLimiter triggering threshold at 50% of the base backlog size
 			handler.appLimiterBacklogThreshold = int(float64(opts.Config.TxBacklogSize) * float64(opts.Config.TxBacklogRateLimitingCongestionPct) / 100)
+			handler.appLimiterCountERLDrops = opts.Config.TxBacklogAppRateLimitingCountERLDrops
 		}
 	}
 
@@ -743,6 +745,12 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 	}()
 
 	if shouldDrop {
+		if handler.appLimiterCountERLDrops {
+			// decode and let ARL count this txgroup, even though ERL is dropping it
+			if unverifiedTxGroup, _, invalid := decodeMsg(rawmsg.Data); !invalid {
+				handler.incomingTxGroupAppRateLimit(unverifiedTxGroup, rawmsg.Sender)
+			}
+		}
 		// this TX message was rate-limited by ERL
 		return network.OutgoingMessage{Action: network.Ignore}
 	}
