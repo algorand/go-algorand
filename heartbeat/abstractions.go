@@ -46,7 +46,7 @@ type ledger interface {
 	LookupAccount(round basics.Round, addr basics.Address) (data ledgercore.AccountData, validThrough basics.Round, withoutRewards basics.MicroAlgos, err error)
 }
 
-// partipants captures the aspects of the AccountManager that are used by this
+// participants captures the aspects of the AccountManager that are used by this
 // package. Service must be able to find out which accounts to monitor and have
 // access to their part keys to construct heartbeats.
 type participants interface {

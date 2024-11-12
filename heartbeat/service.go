@@ -18,7 +18,6 @@ package heartbeat
 
 import (
 	"context"
-	"fmt"
 	"sync"
 
 	"github.com/algorand/go-algorand/config"
@@ -89,16 +88,14 @@ func (s *Service) findChallenged(rules config.ProposerPayoutRules) []account.Par
 	var found []account.ParticipationRecordForRound
 	for _, pr := range s.accts.Keys(current + 1) { // only look at accounts we have part keys for
 		acct, _, _, err := s.ledger.LookupAccount(current, pr.Account)
-		fmt.Printf(" %v is %s at %d\n", pr.Account, acct.Status, current)
 		if err != nil {
 			s.log.Errorf("error looking up %v: %v", pr.Account, err)
 			continue
 		}
 		if acct.Status == basics.Online {
 			lastSeen := max(acct.LastProposed, acct.LastHeartbeat)
-			fmt.Printf(" %v was last seen at %d\n", pr.Account, lastSeen)
 			if ch.Failed(pr.Account, lastSeen) {
-				fmt.Printf(" %v needs a heartbeat\n", pr.Account)
+				s.log.Infof(" %v needs a heartbeat\n", pr.Account)
 				found = append(found, pr)
 			}
 		}
