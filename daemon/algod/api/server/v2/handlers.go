@@ -303,14 +303,12 @@ func (v2 *Handlers) GenerateParticipationKeys(ctx echo.Context, address string, 
 	// KeysBuilder already handles coroutines, this response feedback
 	// is necessary for end users
 	part, err := v2.generateKeyHandler(address, params)
+
+	defer v2.KeygenLimiter.Release(1)
+
 	if err != nil {
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
-
-	// Semaphore was acquired, generate the key.
-	go func() {
-		defer v2.KeygenLimiter.Release(1)
-	}()
 
 	// ParticipationKey. Returns the stored participation key.
 	return ctx.JSON(http.StatusOK, part)
