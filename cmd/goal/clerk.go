@@ -556,7 +556,7 @@ var sendCmd = &cobra.Command{
 				err = writeFile(outFilename, protocol.Encode(&stx), 0600)
 			}
 			if err != nil {
-				reportErrorf(err.Error())
+				reportErrorln(err.Error())
 			}
 		}
 	},
@@ -1156,7 +1156,7 @@ var dryrunCmd = &cobra.Command{
 			client := ensureFullClient(dataDir)
 			accts, err := unmarshalSlice(dumpForDryrunAccts)
 			if err != nil {
-				reportErrorf(err.Error())
+				reportErrorln(err.Error())
 			}
 			data, err := libgoal.MakeDryrunStateBytes(client, nil, stxns, accts, string(proto), dumpForDryrunFormat.String())
 			if err != nil {

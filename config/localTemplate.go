@@ -683,10 +683,9 @@ func (cfg Local) SaveToDisk(root string) error {
 
 // SaveAllToDisk writes the all Local settings into a root/ConfigFilename file
 func (cfg Local) SaveAllToDisk(root string) error {
-	configpath := filepath.Join(root, ConfigFilename)
-	filename := os.ExpandEnv(configpath)
-	prettyPrint := true
-	return codecs.SaveObjectToFile(filename, cfg, prettyPrint)
+	configPath := filepath.Join(root, ConfigFilename)
+	filename := os.ExpandEnv(configPath)
+	return codecs.SaveObjectToFile(filename, cfg, true)
 }
 
 // SaveToFile saves the config to a specific filename, allowing overriding the default name

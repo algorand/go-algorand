@@ -414,7 +414,6 @@ func GetTestScenarios() map[string]TestScenarioGenerator {
 	}
 
 	for _, shouldError := range []bool{true, false} {
-		shouldError := shouldError
 		failureOps := "pushint 0\nreturn"
 		singleFailureOp := "pushint 0"
 		failureInnerProgramBytes := []byte{0x06, 0x80, 0x01, 0x78, 0xb0, 0x81, 0x00} // #pragma version 6; pushbytes "x"; log; pushint 0
