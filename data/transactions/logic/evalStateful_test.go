@@ -929,7 +929,7 @@ itxn_submit
 				Stack: []any{uint64(777)},
 			},
 		},
-		"inner-msg": "logic eval error: cannot compare (uint64 to []byte). Details: app=5000, pc=26, opcodes=pushint 100; pushbytes 0x0201 // 0x0201; ==",
+		"inner-msg": "logic eval error: cannot compare (uint64 to []byte). Details: app=5000, pc=26",
 		"inner-attrs": map[string]any{
 			"pc":          26,
 			"group-index": 0,
