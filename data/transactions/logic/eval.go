@@ -1027,8 +1027,8 @@ func (err EvalError) Unwrap() error {
 }
 
 func (cx *EvalContext) evalError(err error) error {
-	pc, det := cx.pcDetails()
-	details := fmt.Sprintf("pc=%d, opcodes=%s", pc, det)
+	pc := cx.pc
+	details := fmt.Sprintf("pc=%d", pc)
 
 	err = basics.Annotate(err,
 		"pc", pc,
