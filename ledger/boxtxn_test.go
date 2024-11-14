@@ -169,28 +169,28 @@ func TestBoxCreate(t *testing.T) {
 		}
 
 		dl.txn(adam.Args("check", "adam", "\x00\x00"))
-		dl.txgroup("box_create; assert", adam.Noted("one"), adam.Noted("two"))
+		dl.txgroup("logic eval error: assert failed", adam.Noted("one"), adam.Noted("two"))
 
 		bobo := call.Args("create", "bobo")
 		dl.txn(bobo, fmt.Sprintf("invalid Box reference %#x", "bobo"))
 		bobo.Boxes = []transactions.BoxRef{{Index: 0, Name: []byte("bobo")}}
 		dl.txn(bobo)
-		dl.txgroup("box_create; assert", bobo.Noted("one"), bobo.Noted("two"))
+		dl.txgroup("logic eval error: assert failed", bobo.Noted("one"), bobo.Noted("two"))
 
 		dl.beginBlock()
 		chaz := call.Args("create", "chaz")
 		chaz.Boxes = []transactions.BoxRef{{Index: 0, Name: []byte("chaz")}}
 		dl.txn(chaz)
-		dl.txn(chaz.Noted("again"), "box_create; assert")
+		dl.txn(chaz.Noted("again"), "logic eval error: assert failed")
 		dl.endBlock()
 
 		// new block
-		dl.txn(chaz.Noted("again"), "box_create; assert")
+		dl.txn(chaz.Noted("again"), "logic eval error: assert failed")
 		dogg := call.Args("create", "dogg")
 		dogg.Boxes = []transactions.BoxRef{{Index: 0, Name: []byte("dogg")}}
 		dl.txn(dogg, "below min")
 		dl.txn(chaz.Args("delete", "chaz"))
-		dl.txn(chaz.Args("delete", "chaz").Noted("again"), "box_del; assert")
+		dl.txn(chaz.Args("delete", "chaz").Noted("again"), "logic eval error: assert failed")
 		dl.txn(dogg)
 		dl.txn(bobo.Args("delete", "bobo"))
 
@@ -229,7 +229,7 @@ func TestBoxRecreate(t *testing.T) {
 		create := call.Args("create", "adam", "\x04") // box value size is 4 bytes
 		recreate := call.Args("recreate", "adam", "\x04")
 
-		dl.txn(recreate, "box_create; !; assert")
+		dl.txn(recreate, "logic eval error: assert failed")
 		dl.txn(create)
 		dl.txn(recreate)
 		dl.txn(call.Args("set", "adam", "\x01\x02\x03\x04"))
