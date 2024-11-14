@@ -1167,9 +1167,9 @@
         ],
         "responses": {
           "200": {
-            "description": "An empty JSON object is returned if the generation process was started. Currently no status is available.",
+            "description": "The participation ID. Currently no status is available.",
             "schema": {
-              "$ref": "#/definitions/ParticipationKey"
+              "type": "string"
             }
           },
           "400": {

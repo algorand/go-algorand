@@ -66,12 +66,10 @@ type Participation struct {
 type ParticipationKeyIdentity struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Parent      basics.Address                  `codec:"addr"`
-	VRFSK       crypto.VrfPrivkey               `codec:"vrfsk"`
-	VoteID      crypto.OneTimeSignatureVerifier `codec:"vote-id"`
-	FirstValid  basics.Round                    `codec:"fv"`
-	LastValid   basics.Round                    `codec:"lv"`
-	KeyDilution uint64                          `codec:"kd"`
+	Parent      basics.Address `codec:"addr"`
+	FirstValid  basics.Round   `codec:"fv"`
+	LastValid   basics.Round   `codec:"lv"`
+	KeyDilution uint64         `codec:"kd"`
 }
 
 // ToBeHashed implements the Hashable interface.
@@ -91,12 +89,6 @@ func (part Participation) ID() ParticipationID {
 		FirstValid:  part.FirstValid,
 		LastValid:   part.LastValid,
 		KeyDilution: part.KeyDilution,
-	}
-	if part.VRF != nil {
-		copy(idData.VRFSK[:], part.VRF.SK[:])
-	}
-	if part.Voting != nil {
-		copy(idData.VoteID[:], part.Voting.OneTimeSignatureVerifier[:])
 	}
 
 	return idData.ID()
