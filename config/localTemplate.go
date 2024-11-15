@@ -66,7 +66,7 @@ type Local struct {
 	PublicAddress string `version[0]:""`
 
 	// MaxConnectionsPerIP is the maximum number of connections allowed per IP address.
-	MaxConnectionsPerIP int `version[3]:"30" version[27]:"15" version[35]:"4"`
+	MaxConnectionsPerIP int `version[3]:"30" version[27]:"15" version[35]:"8"`
 
 	// PeerPingPeriodSeconds is deprecated and unused.
 	PeerPingPeriodSeconds int `version[0]:"0"`

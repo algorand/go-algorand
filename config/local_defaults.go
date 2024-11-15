@@ -111,7 +111,7 @@ var defaultLocal = Local{
 	MaxAcctLookback:                            4,
 	MaxBlockHistoryLookback:                    0,
 	MaxCatchpointDownloadDuration:              43200000000000,
-	MaxConnectionsPerIP:                        4,
+	MaxConnectionsPerIP:                        8,
 	MinCatchpointFileDownloadBytesPerSecond:    20480,
 	NetAddress:                                 "",
 	NetworkMessageTraceServer:                  "",
