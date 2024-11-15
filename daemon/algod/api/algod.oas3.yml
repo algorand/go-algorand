@@ -2060,6 +2060,88 @@
         ],
         "type": "object"
       },
+      "Genesis": {
+        "properties": {
+          "alloc": {
+            "items": {
+              "$ref": "#/components/schemas/GenesisAllocation"
+            },
+            "type": "array"
+          },
+          "fees": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "network": {
+            "type": "string"
+          },
+          "proto": {
+            "type": "string"
+          },
+          "rwd": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "alloc",
+          "fees",
+          "id",
+          "network",
+          "proto",
+          "rwd",
+          "timestamp"
+        ],
+        "title": "Genesis File in JSON",
+        "type": "object"
+      },
+      "GenesisAllocation": {
+        "properties": {
+          "addr": {
+            "type": "string"
+          },
+          "comment": {
+            "type": "string"
+          },
+          "state": {
+            "properties": {
+              "algo": {
+                "type": "number"
+              },
+              "onl": {
+                "type": "number"
+              },
+              "sel": {
+                "type": "string"
+              },
+              "vote": {
+                "type": "string"
+              },
+              "voteKD": {
+                "type": "number"
+              },
+              "voteLst": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "algo"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "addr",
+          "comment",
+          "state"
+        ],
+        "title": "Allocations for Genesis File",
+        "type": "object"
+      },
       "KvDelta": {
         "description": "A single Delta containing the key, the previous value and the current value for a single round.",
         "properties": {
@@ -2863,7 +2945,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "string"
+                  "$ref": "#/components/schemas/Genesis"
                 }
               }
             },
