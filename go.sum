@@ -24,8 +24,8 @@ github.com/algorand/falcon v0.1.0 h1:xl832kfZ7hHG6B4p90DQynjfKFGbIUgUOnsRiMZXfAo
 github.com/algorand/falcon v0.1.0/go.mod h1:OkQyHlGvS0kLNcIWbC21/uQcnbfwSOQm+wiqWwBG9pQ=
 github.com/algorand/go-codec/codec v1.1.10 h1:zmWYU1cp64jQVTOG8Tw8wa+k0VfwgXIPbnDfiVa+5QA=
 github.com/algorand/go-codec/codec v1.1.10/go.mod h1:YkEx5nmr/zuCeaDYOIhlDg92Lxju8tj2d2NrYqP7g7k=
-github.com/algorand/go-deadlock v0.2.3 h1:ek9rjUyUF1HhUm0I2DyaCN8+3S850ONJNl5jQr9kZOA=
-github.com/algorand/go-deadlock v0.2.3/go.mod h1:Gli2d0Cb7kgXzSpJLC4Vn0DCLgjNVi6fNldY/mOtO/U=
+github.com/algorand/go-deadlock v0.2.4 h1:UMs6GwE2wHC6BUZo5z32/+SrBey1LQjbkZQ3V7DoGVA=
+github.com/algorand/go-deadlock v0.2.4/go.mod h1:tewhAviZpVq2cnGHmfT50l6RwWLnuygnfNntCN2fz0M=
 github.com/algorand/go-sumhash v0.1.0 h1:b/QRhyLuF//vOcicBIxBXYW8bERNoeLxieht/dUYpVg=
 github.com/algorand/go-sumhash v0.1.0/go.mod h1:OOe7jdDWUhLkuP1XytkK5gnLu9entAviN5DfDZh6XAc=
 github.com/algorand/graphtrace v0.1.0 h1:QemP1iT0W56SExD0NfiU6rsG34/v0Je6bg5UZnptEUM=
@@ -501,8 +501,8 @@ github.com/openzipkin/zipkin-go v0.1.1/go.mod h1:NtoC/o8u3JlF1lSlyPNswIbeQH9bJTm
 github.com/pbnjay/memory v0.0.0-20210728143218-7b4eea64cf58 h1:onHthvaw9LFnH4t2DcNVpwGmV9E1BkGknEliJkfwQj0=
 github.com/pbnjay/memory v0.0.0-20210728143218-7b4eea64cf58/go.mod h1:DXv8WO4yhMYhSNPKjeNKa5WY9YCIEBRbNzFFPJbWO6Y=
 github.com/pelletier/go-toml v1.2.0/go.mod h1:5z9KED0ma1S8pY6P1sdut58dfprrGBbd/94hg7ilaic=
-github.com/petermattis/goid v0.0.0-20180202154549-b0b1615b78e5 h1:q2e307iGHPdTGp0hoxKjt1H5pDo6utceo3dQVK3I5XQ=
-github.com/petermattis/goid v0.0.0-20180202154549-b0b1615b78e5/go.mod h1:jvVRKCrJTQWu0XVbaOlby/2lO20uSCHEMzzplHXte1o=
+github.com/petermattis/goid v0.0.0-20241025130422-66cb2e6d7274 h1:qli3BGQK0tYDkSEvZ/FzZTi9ZrOX86Q6CIhKLGc489A=
+github.com/petermattis/goid v0.0.0-20241025130422-66cb2e6d7274/go.mod h1:pxMtw7cyUw6B2bRH0ZBANSPg+AoSud1I1iyJHI69jH4=
 github.com/pingcap/errors v0.11.4 h1:lFuQV/oaUMGcD2tqt+01ROSmJs75VG1ToEOkZIZ4nE4=
 github.com/pingcap/errors v0.11.4/go.mod h1:Oi8TUi2kEtXXLMJk9l1cGmz20kV3TaQ0usTwv5KuLY8=
 github.com/pion/datachannel v1.5.9 h1:LpIWAOYPyDrXtU+BW7X0Yt/vGtYxtXQ8ql7dFfYUVZA=
