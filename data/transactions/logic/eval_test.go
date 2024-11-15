@@ -258,6 +258,24 @@ func TestTooManyArgs(t *testing.T) {
 	}
 }
 
+func TestArgTooLarge(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	t.Parallel()
+	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
+		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
+			ops := testProg(t, "int 1", v)
+			var txn transactions.SignedTxn
+			txn.Lsig.Logic = ops.Program
+			txn.Lsig.Args = [][]byte{make([]byte, transactions.MaxLogicSigArgSize+1)}
+			pass, err := EvalSignature(0, defaultSigParams(txn))
+			require.Error(t, err)
+			require.False(t, pass)
+		})
+	}
+
+}
+
 func TestEmptyProgram(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
