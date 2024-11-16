@@ -1027,8 +1027,16 @@ func (err EvalError) Unwrap() error {
 }
 
 func (cx *EvalContext) evalError(err error) error {
-	pc := cx.pc
-	details := fmt.Sprintf("pc=%d", pc)
+	var pc int
+	var details string
+	if cx.Tracer != nil && cx.Tracer.DetailedEvalErrors() {
+		var det string
+		pc, det = cx.pcDetails()
+		details = fmt.Sprintf("pc=%d, opcodes=%s", pc, det)
+	} else {
+		pc = cx.pc
+		details = fmt.Sprintf("pc=%d", pc)
+	}
 
 	err = basics.Annotate(err,
 		"pc", pc,

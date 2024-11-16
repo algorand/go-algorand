@@ -566,7 +566,7 @@ func TestRekeyActionCloseAccount(t *testing.T) {
 		// do it again, to ensure the lack of authorization is in the right
 		// place, by matching on the opcode that comes before the itxn_submit we
 		// want to know failed (it'll be in the error).
-		dl.txn(&useacct, "logic eval error")
+		dl.txn(&useacct, "itxn_field Receiver")
 	})
 }
 

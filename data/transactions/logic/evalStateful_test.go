@@ -443,6 +443,7 @@ func testApps(t *testing.T, programs []string, txgroup []transactions.SignedTxn,
 		}
 	}
 	ep := NewAppEvalParams(transactions.WrapSignedTxnsWithAD(txgroup), proto, &transactions.SpecialAddresses{})
+	ep.Tracer = EvalErrorDetailsTracer{}
 	if ledger == nil {
 		ledger = NewLedger(nil)
 	}
@@ -929,7 +930,7 @@ itxn_submit
 				Stack: []any{uint64(777)},
 			},
 		},
-		"inner-msg": "logic eval error: cannot compare (uint64 to []byte). Details: app=5000, pc=26",
+		"inner-msg": "logic eval error: cannot compare (uint64 to []byte). Details: app=5000, pc=26, opcodes=pushint 100; pushbytes 0x0201 // 0x0201; ==",
 		"inner-attrs": map[string]any{
 			"pc":          26,
 			"group-index": 0,
