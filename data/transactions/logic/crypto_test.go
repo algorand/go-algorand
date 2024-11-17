@@ -423,10 +423,11 @@ byte 0x%s
 		{pkTampered2, false},
 	}
 	for i, test := range decompressTests {
+		innerSource := source
 		t.Run(fmt.Sprintf("decompress/pass=%v", test.pass), func(t *testing.T) {
 			t.Parallel()
 			t.Log("decompressTests i", i)
-			src := fmt.Sprintf(source, hex.EncodeToString(test.key), hex.EncodeToString(x), hex.EncodeToString(y))
+			src := fmt.Sprintf(innerSource, hex.EncodeToString(test.key), hex.EncodeToString(x), hex.EncodeToString(y))
 			if test.pass {
 				testAccepts(t, src, 5)
 			} else {
@@ -459,9 +460,10 @@ byte 0x%s
 		{"testdata1", r, false},
 	}
 	for _, test := range verifyTests {
+		innerSource := source
 		t.Run(fmt.Sprintf("verify/pass=%v", test.pass), func(t *testing.T) {
 			t.Parallel()
-			src := fmt.Sprintf(source, test.data, hex.EncodeToString(test.r), hex.EncodeToString(s), hex.EncodeToString(x), hex.EncodeToString(y))
+			src := fmt.Sprintf(innerSource, test.data, hex.EncodeToString(test.r), hex.EncodeToString(s), hex.EncodeToString(x), hex.EncodeToString(y))
 			if test.pass {
 				testAccepts(t, src, 5)
 			} else {
@@ -516,9 +518,10 @@ load 1
 	pkExpanded := secp256k1.S256().Marshal(key.PublicKey.X, key.PublicKey.Y)
 
 	for i, test := range recoverTests {
+		innerSource := source
 		t.Run(fmt.Sprintf("recover/%d", i), func(t *testing.T) {
 			t.Parallel()
-			src := fmt.Sprintf(source, hex.EncodeToString(msg[:]), test.v, hex.EncodeToString(r), hex.EncodeToString(s), hex.EncodeToString(x), hex.EncodeToString(y), hex.EncodeToString(pkExpanded))
+			src := fmt.Sprintf(innerSource, hex.EncodeToString(msg[:]), test.v, hex.EncodeToString(r), hex.EncodeToString(s), hex.EncodeToString(x), hex.EncodeToString(y), hex.EncodeToString(pkExpanded))
 			test.checker(t, src, 5)
 		})
 	}
@@ -575,10 +578,11 @@ byte 0x%s
 		{pkTampered2, false},
 	}
 	for i, test := range decompressTests {
+		innerSource := source
 		t.Run(fmt.Sprintf("decompress/pass=%v", test.pass), func(t *testing.T) {
 			t.Parallel()
 			t.Log("decompressTests i", i)
-			src := fmt.Sprintf(source, hex.EncodeToString(test.key), hex.EncodeToString(x), hex.EncodeToString(y))
+			src := fmt.Sprintf(innerSource, hex.EncodeToString(test.key), hex.EncodeToString(x), hex.EncodeToString(y))
 			if test.pass {
 				testAccepts(t, src, fidoVersion)
 			} else {
@@ -618,9 +622,10 @@ ecdsa_verify Secp256r1
 		{"testdata1", r, false},
 	}
 	for _, test := range verifyTests {
+		innerSource := source
 		t.Run(fmt.Sprintf("verify/pass=%v", test.pass), func(t *testing.T) {
 			t.Parallel()
-			src := fmt.Sprintf(source, test.data, hex.EncodeToString(test.r), hex.EncodeToString(s), hex.EncodeToString(x), hex.EncodeToString(y))
+			src := fmt.Sprintf(innerSource, test.data, hex.EncodeToString(test.r), hex.EncodeToString(s), hex.EncodeToString(x), hex.EncodeToString(y))
 			if test.pass {
 				testAccepts(t, src, fidoVersion)
 			} else {
