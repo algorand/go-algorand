@@ -649,6 +649,70 @@ func BenchmarkPaysetGroups(b *testing.B) {
 	b.StopTimer()
 }
 
+func TestLsigSize(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	secrets, addresses, _ := generateAccounts(2)
+
+	execPool := execpool.MakePool(t)
+	verificationPool := execpool.MakeBacklog(execPool, 64, execpool.LowPriority, t)
+	defer verificationPool.Shutdown()
+
+	// From consensus version 18, we have lsigs with a maximum size of 1000 bytes.
+	// We need to use pragma 1 for teal in v18
+	pragma := uint(1)
+	consensusVersionPreSizePooling := protocol.ConsensusV18
+	consensusVersionPostSizePooling := protocol.ConsensusFuture
+
+	// We will do tests based on a transaction group of 2 payment transactions,
+	// the first signed by a lsig and the second a vanilla payment transaction.
+	testCases := []struct {
+		consensusVersion protocol.ConsensusVersion
+		lsigSize         uint
+		success          bool
+	}{
+		{consensusVersionPreSizePooling, 1000, true},
+		{consensusVersionPreSizePooling, 1001, false},
+		{consensusVersionPostSizePooling, 2000, true},
+		{consensusVersionPostSizePooling, 2001, false},
+	}
+
+	blkHdr := createDummyBlockHeader()
+	for _, test := range testCases {
+		blkHdr.UpgradeState.CurrentProtocol = test.consensusVersion
+
+		lsig, err := txntest.GenerateProgramOfSize(test.lsigSize, pragma)
+		require.NoError(t, err)
+
+		lsigPay := txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   basics.Address(logic.HashProgram(lsig)),
+			Receiver: addresses[0],
+			Fee:      config.Consensus[test.consensusVersion].MinTxnFee,
+		}
+
+		vanillaPay := txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   addresses[0],
+			Receiver: addresses[1],
+			Fee:      config.Consensus[test.consensusVersion].MinTxnFee,
+		}
+
+		group := txntest.Group(&lsigPay, &vanillaPay)
+		group[0].Lsig = transactions.LogicSig{
+			Logic: lsig,
+		}
+		group[1].Sig = secrets[0].Sign(group[1].Txn)
+
+		err = PaysetGroups(context.Background(), [][]transactions.SignedTxn{group}, blkHdr, verificationPool, MakeVerifiedTransactionCache(50000), &DummyLedgerForSignature{})
+		if test.success {
+			require.NoError(t, err)
+		} else {
+			require.Error(t, err)
+		}
+	}
+}
+
 func TestTxnGroupMixedSignatures(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
