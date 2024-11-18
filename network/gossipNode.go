@@ -231,17 +231,6 @@ func Propagate(msg IncomingMessage) OutgoingMessage {
 	return OutgoingMessage{Action: Broadcast, Tag: msg.Tag, Payload: msg.Data, Topics: nil}
 }
 
-// find the max value across the given uint64 numbers.
-func max(numbers ...uint64) (maxNum uint64) {
-	maxNum = 0 // this is the lowest uint64 value.
-	for _, num := range numbers {
-		if num > maxNum {
-			maxNum = num
-		}
-	}
-	return
-}
-
 // SubstituteGenesisID substitutes the "{genesisID}" with their network-specific genesisID.
 func SubstituteGenesisID(net GossipNode, rawURL string) string {
 	return strings.Replace(rawURL, "{genesisID}", net.GetGenesisID(), -1)

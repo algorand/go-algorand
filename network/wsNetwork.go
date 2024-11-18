@@ -1493,13 +1493,6 @@ type meshRequest struct {
 	done       chan struct{}
 }
 
-func imin(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
 // meshThread maintains the network, e.g. that we have sufficient connectivity to peers
 func (wn *WebsocketNetwork) meshThread() {
 	defer wn.wg.Done()
@@ -1568,7 +1561,7 @@ func (wn *WebsocketNetwork) refreshRelayArchivePhonebookAddresses() {
 
 func (wn *WebsocketNetwork) updatePhonebookAddresses(relayAddrs []string, archiveAddrs []string) {
 	if len(relayAddrs) > 0 {
-		wn.log.Debugf("got %d relay dns addrs, %#v", len(relayAddrs), relayAddrs[:imin(5, len(relayAddrs))])
+		wn.log.Debugf("got %d relay dns addrs, %#v", len(relayAddrs), relayAddrs[:min(5, len(relayAddrs))])
 		wn.phonebook.ReplacePeerList(relayAddrs, string(wn.NetworkID), phonebook.PhoneBookEntryRelayRole)
 	} else {
 		wn.log.Infof("got no relay DNS addrs for network %s", wn.NetworkID)

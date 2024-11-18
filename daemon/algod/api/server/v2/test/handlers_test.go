@@ -956,7 +956,6 @@ func TestPostSimulateTransaction(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		testCase := testCase
 		t.Run(fmt.Sprintf("i=%d", i), func(t *testing.T) {
 			t.Parallel()
 			simulateTransactionTest(t, testCase.txnIndex, testCase.format, testCase.expectedStatus)

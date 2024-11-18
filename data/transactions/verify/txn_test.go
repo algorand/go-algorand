@@ -479,7 +479,6 @@ pushint 1`,
 	}
 
 	for _, testCase := range testCases {
-		testCase := testCase
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
 			proto := config.Consensus[protocol.ConsensusCurrentVersion]
