@@ -233,7 +233,7 @@ func (d *Tracer) AfterBlock(hdr *bookkeeping.BlockHeader) {
 }
 
 // DetailedEvalErrors returns true, enabling detailed errors in tests.
-func (d *Tracer) DetailedEvalErrors() bool { return false }
+func (d *Tracer) DetailedEvalErrors() bool { return true }
 
 // copyDeltas makes a deep copy of the given ledgercore.StateDelta pointer, if it's not nil.
 // This is inefficient, but it should only be used for testing.
