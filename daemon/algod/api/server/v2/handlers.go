@@ -316,7 +316,7 @@ func (v2 *Handlers) AddParticipationKey(ctx echo.Context) error {
 	partKeyBinary := buf.Bytes()
 
 	if len(partKeyBinary) == 0 {
-		lenErr := fmt.Errorf(errRESTPayloadZeroLength)
+		lenErr := errors.New(errRESTPayloadZeroLength)
 		return badRequest(ctx, lenErr, lenErr.Error(), v2.Log)
 	}
 

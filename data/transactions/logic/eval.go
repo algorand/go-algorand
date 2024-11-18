@@ -1000,6 +1000,7 @@ func (pe panicError) Error() string {
 
 var errLogicSigNotSupported = errors.New("LogicSig not supported")
 var errTooManyArgs = errors.New("LogicSig has too many arguments")
+var errLogicSigArgTooLarge = errors.New("LogicSig argument too large")
 
 // EvalError indicates AVM evaluation failure
 type EvalError struct {
@@ -1313,8 +1314,15 @@ func eval(program []byte, cx *EvalContext) (pass bool, err error) {
 	if (cx.EvalParams.Proto == nil) || (cx.EvalParams.Proto.LogicSigVersion == 0) {
 		return false, errLogicSigNotSupported
 	}
-	if cx.txn.Lsig.Args != nil && len(cx.txn.Lsig.Args) > transactions.EvalMaxArgs {
-		return false, errTooManyArgs
+	if cx.txn.Lsig.Args != nil {
+		if len(cx.txn.Lsig.Args) > transactions.EvalMaxArgs {
+			return false, errTooManyArgs
+		}
+		for _, arg := range cx.txn.Lsig.Args {
+			if len(arg) > transactions.MaxLogicSigArgSize {
+				return false, errLogicSigArgTooLarge
+			}
+		}
 	}
 	if verr != nil {
 		return false, verr
