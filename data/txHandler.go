@@ -132,6 +132,7 @@ type TxHandler struct {
 	erl                        *util.ElasticRateLimiter
 	appLimiter                 *appRateLimiter
 	appLimiterBacklogThreshold int
+	appLimiterCountERLDrops    bool
 
 	// batchVerifier provides synchronous verification of transaction groups, used only by pubsub validation in validateIncomingTxMessage.
 	batchVerifier verify.TxnGroupBatchSigVerifier
@@ -209,6 +210,7 @@ func MakeTxHandler(opts TxHandlerOpts) (*TxHandler, error) {
 			)
 			// set appLimiter triggering threshold at 50% of the base backlog size
 			handler.appLimiterBacklogThreshold = int(float64(opts.Config.TxBacklogSize) * float64(opts.Config.TxBacklogRateLimitingCongestionPct) / 100)
+			handler.appLimiterCountERLDrops = opts.Config.TxBacklogAppRateLimitingCountERLDrops
 		}
 	}
 
@@ -622,6 +624,7 @@ func (handler *TxHandler) incomingMsgDupCheck(data []byte) (*crypto.Digest, bool
 // - a boolean indicating if the sender is rate limited
 func (handler *TxHandler) incomingMsgErlCheck(sender network.DisconnectablePeer) (*util.ErlCapacityGuard, bool) {
 	var capguard *util.ErlCapacityGuard
+	var isCMEnabled bool
 	var err error
 	if handler.erl != nil {
 		congestedERL := float64(cap(handler.backlogQueue))*handler.backlogCongestionThreshold < float64(len(handler.backlogQueue))
@@ -629,8 +632,9 @@ func (handler *TxHandler) incomingMsgErlCheck(sender network.DisconnectablePeer)
 		// if the elastic rate limiter cannot vend a capacity, the error it returns
 		// is sufficient to indicate that we should enable Congestion Control, because
 		// an issue in vending capacity indicates the underlying resource (TXBacklog) is full
-		capguard, err = handler.erl.ConsumeCapacity(sender.(util.ErlClient))
-		if err != nil {
+		capguard, isCMEnabled, err = handler.erl.ConsumeCapacity(sender.(util.ErlClient))
+		if err != nil || // did ERL ask to enable congestion control?
+			(!isCMEnabled && congestedERL) { // is CM not currently enabled, but queue is congested?
 			handler.erl.EnableCongestionControl()
 			// if there is no capacity, it is the same as if we failed to put the item onto the backlog, so report such
 			transactionMessagesDroppedFromBacklog.Inc(nil)
@@ -741,6 +745,12 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 	}()
 
 	if shouldDrop {
+		if handler.appLimiterCountERLDrops {
+			// decode and let ARL count this txgroup, even though ERL is dropping it
+			if unverifiedTxGroup, _, invalid := decodeMsg(rawmsg.Data); !invalid {
+				handler.incomingTxGroupAppRateLimit(unverifiedTxGroup, rawmsg.Sender)
+			}
+		}
 		// this TX message was rate-limited by ERL
 		return network.OutgoingMessage{Action: network.Ignore}
 	}

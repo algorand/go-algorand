@@ -555,3 +555,5 @@ func (tracer *evalTracer) AfterProgram(cx *logic.EvalContext, pass bool, evalErr
 		}
 	}
 }
+
+func (tracer *evalTracer) DetailedEvalErrors() bool { return true }

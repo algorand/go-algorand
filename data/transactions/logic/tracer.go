@@ -162,6 +162,10 @@ type EvalTracer interface {
 	// AfterBlock is called after the block has finished evaluation. It will not be called in the event that an evalError
 	// stops evaluation of the block.
 	AfterBlock(hdr *bookkeeping.BlockHeader)
+
+	// DetailedEvalErrors permits the tracer to enable detailed EvalError messages (including PC with disassembled
+	// opcodes) by returning true.
+	DetailedEvalErrors() bool
 }
 
 // NullEvalTracer implements EvalTracer, but all of its hook methods do nothing
@@ -198,3 +202,12 @@ func (n NullEvalTracer) AfterOpcode(cx *EvalContext, evalError error) {}
 
 // AfterBlock does nothing
 func (n NullEvalTracer) AfterBlock(hdr *bookkeeping.BlockHeader) {}
+
+// DetailedEvalErrors does nothing
+func (n NullEvalTracer) DetailedEvalErrors() bool { return false }
+
+// EvalErrorDetailsTracer enables disassembled details in EvalError messages, and nothing else.
+type EvalErrorDetailsTracer struct{ NullEvalTracer }
+
+// DetailedEvalErrors returns true.
+func (EvalErrorDetailsTracer) DetailedEvalErrors() bool { return true }

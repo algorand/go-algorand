@@ -442,6 +442,7 @@ func testApps(t *testing.T, programs []string, txgroup []transactions.SignedTxn,
 		}
 	}
 	ep := NewAppEvalParams(transactions.WrapSignedTxnsWithAD(txgroup), proto, &transactions.SpecialAddresses{})
+	ep.Tracer = EvalErrorDetailsTracer{}
 	if ledger == nil {
 		ledger = NewLedger(nil)
 	}
