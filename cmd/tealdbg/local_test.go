@@ -1265,7 +1265,6 @@ int 1`
 	}
 
 	for _, test := range tests {
-		test := test
 		t.Run(fmt.Sprintf("fee=%d", test.fee), func(t *testing.T) {
 			t.Parallel()
 			stxn := transactions.SignedTxn{
@@ -1395,7 +1394,6 @@ byte 0x5ce9454909639d2d17a3f753ce7d93fa0b9ab12e // addr
 		}},
 	}
 	for _, test := range tests {
-		test := test
 		t.Run(fmt.Sprintf("txn-count=%d", test.additionalApps+1), func(t *testing.T) {
 			t.Parallel()
 			txnBlob := protocol.EncodeMsgp(&stxn)

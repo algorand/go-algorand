@@ -1746,7 +1746,6 @@ func TestAssembleDisassembleCycle(t *testing.T) {
 	// assembler pick it up.
 	require.LessOrEqual(t, LogicVersion, len(nonsense)) // Allow nonsense for future versions
 	for v, source := range nonsense {
-		v, source := v, source
 		if v > LogicVersion {
 			continue // We allow them to be set, but can't test assembly beyond LogicVersion
 		}

@@ -556,7 +556,7 @@ var sendCmd = &cobra.Command{
 				err = writeFile(outFilename, protocol.Encode(&stx), 0600)
 			}
 			if err != nil {
-				reportErrorf(err.Error())
+				reportErrorln(err.Error())
 			}
 		}
 	},
@@ -980,16 +980,6 @@ func assembleFileImpl(fname string, printWarnings bool) *logic.OpStream {
 		ops.ReportMultipleErrors(fname, os.Stderr)
 		reportErrorf("%s: %s", fname, err)
 	}
-	_, params := getProto(protoVersion)
-	if ops.HasStatefulOps {
-		if len(ops.Program) > config.MaxAvailableAppProgramLen {
-			reportErrorf(tealAppSize, fname, len(ops.Program), config.MaxAvailableAppProgramLen)
-		}
-	} else {
-		if uint64(len(ops.Program)) > params.LogicSigMaxSize {
-			reportErrorf(tealLogicSigSize, fname, len(ops.Program), params.LogicSigMaxSize)
-		}
-	}
 
 	if printWarnings && len(ops.Warnings) != 0 {
 		for _, warning := range ops.Warnings {
@@ -1166,7 +1156,7 @@ var dryrunCmd = &cobra.Command{
 			client := ensureFullClient(dataDir)
 			accts, err := unmarshalSlice(dumpForDryrunAccts)
 			if err != nil {
-				reportErrorf(err.Error())
+				reportErrorln(err.Error())
 			}
 			data, err := libgoal.MakeDryrunStateBytes(client, nil, stxns, accts, string(proto), dumpForDryrunFormat.String())
 			if err != nil {
@@ -1179,14 +1169,19 @@ var dryrunCmd = &cobra.Command{
 		if timeStamp <= 0 {
 			timeStamp = time.Now().Unix()
 		}
+
+		lSigPooledSize := 0
 		for i, txn := range stxns {
 			if txn.Lsig.Blank() {
 				continue
 			}
-			if uint64(txn.Lsig.Len()) > params.LogicSigMaxSize {
+			lsigLen := txn.Lsig.Len()
+			lSigPooledSize += lsigLen
+			if !params.EnableLogicSigSizePooling && uint64(lsigLen) > params.LogicSigMaxSize {
 				reportErrorf("program size too large: %d > %d", len(txn.Lsig.Logic), params.LogicSigMaxSize)
 			}
 			ep := logic.NewSigEvalParams(stxns, &params, logic.NoHeaderLedger{})
+
 			err := logic.CheckSignature(i, ep)
 			if err != nil {
 				reportErrorf("program failed Check: %s", err)
@@ -1203,6 +1198,10 @@ var dryrunCmd = &cobra.Command{
 			if err != nil {
 				fmt.Fprintf(os.Stdout, "ERROR: %s\n", err.Error())
 			}
+		}
+		lSigMaxPooledSize := len(stxns) * int(params.LogicSigMaxSize)
+		if params.EnableLogicSigSizePooling && lSigPooledSize > lSigMaxPooledSize {
+			reportErrorf("total lsigs size too large: %d > %d", lSigPooledSize, lSigMaxPooledSize)
 		}
 
 	},

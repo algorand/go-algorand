@@ -725,7 +725,6 @@ func TestLocal_RecalculateConnectionLimits(t *testing.T) {
 	}
 
 	for i, test := range tests {
-		test := test
 		t.Run(fmt.Sprintf("test=%d", i), func(t *testing.T) {
 			t.Parallel()
 
@@ -772,7 +771,6 @@ func TestLocal_ValidateP2PHybridConfig(t *testing.T) {
 	}
 
 	for i, test := range tests {
-		test := test
 		name := fmt.Sprintf("test=%d", i)
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()

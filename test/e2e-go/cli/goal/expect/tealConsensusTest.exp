@@ -54,29 +54,10 @@ if { [catch {
         "\n" { ::AlgorandGoal::Abort $expect_out(buffer) }
     }
 
-    teal "$TEST_ROOT_DIR/big-sig.teal" 2 1001 1
-    spawn goal clerk compile "$TEST_ROOT_DIR/big-sig.teal"
-    expect {
-        -re {[A-Z2-9]{58}} { ::AlgorandGoal::Abort "hash" }
-        -re {.*logicsig program size too large} { puts "bigsigcheck: pass" }
-        eof { ::AlgorandGoal::Abort $expect_out(buffer) }
-        "\n" { ::AlgorandGoal::Abort $expect_out(buffer) }
-    }
-
     teal "$TEST_ROOT_DIR/barely-fits-app.teal" 2 4090 1 "int 0\nbalance\npop\n"
     spawn goal clerk compile "$TEST_ROOT_DIR/barely-fits-app.teal"
     expect {
         -re {[A-Z2-9]{58}} { puts "hash $expect_out(0,string)" }
-        eof { ::AlgorandGoal::Abort $expect_out(buffer) }
-        "\n" { ::AlgorandGoal::Abort $expect_out(buffer) }
-    }
-
-    # MaxAppProgramLen = 2K * (1 + 3 pages max)
-    teal "$TEST_ROOT_DIR/big-app.teal" 2 8192 1 "int 0\nbalance\npop\n"
-    spawn goal clerk compile "$TEST_ROOT_DIR/big-app.teal"
-    expect {
-        -re {[A-Z2-9]{58}} { ::AlgorandGoal::Abort "hash" }
-        -re {.*app program size too large} { puts "bigappcheck: pass" }
         eof { ::AlgorandGoal::Abort $expect_out(buffer) }
         "\n" { ::AlgorandGoal::Abort $expect_out(buffer) }
     }
