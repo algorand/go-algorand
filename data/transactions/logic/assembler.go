@@ -2269,7 +2269,7 @@ func define(ops *OpStream, tokens []token) *sourceError {
 		} else {
 			delete(ops.macros, name) // remove new macro that caused cycle
 		}
-		return tokens[1].errorf("macro expansion cycle discovered: %s", strings.Join(found, " -> "))
+		return tokens[1].errorf("macro expansion cycle discovered: %s", strings.Join(found, " -> ")) //nolint:gosec // false positive, len(tokens) >= 3
 	}
 	return nil
 }
