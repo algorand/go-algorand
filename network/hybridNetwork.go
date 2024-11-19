@@ -125,6 +125,11 @@ func (n *HybridP2PNetwork) Relay(ctx context.Context, tag protocol.Tag, data []b
 	})
 }
 
+// BridgeP2PToWS skips Relay/Broadcast to both networks and only sends to WS
+func (n *HybridP2PNetwork) BridgeP2PToWS(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except Peer) error {
+	return n.wsNetwork.Relay(ctx, tag, data, wait, except)
+}
+
 // Disconnect implements GossipNode
 func (n *HybridP2PNetwork) Disconnect(badnode DisconnectablePeer) {
 	net := badnode.GetNetwork()

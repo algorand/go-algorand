@@ -149,6 +149,11 @@ type TxHandlerOpts struct {
 	Config        config.Local
 }
 
+// HybridRelayer is an interface for relaying p2p transactions to WS network
+type HybridRelayer interface {
+	BridgeP2PToWS(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except network.Peer) error
+}
+
 // MakeTxHandler makes a new handler for transaction messages
 func MakeTxHandler(opts TxHandlerOpts) (*TxHandler, error) {
 
@@ -868,6 +873,11 @@ func (handler *TxHandler) validateIncomingTxMessage(rawmsg network.IncomingMessa
 	if err != nil {
 		logging.Base().Infof("unable to pin transaction: %v", err)
 	}
+
+	if hybridNet, ok := handler.net.(HybridRelayer); ok {
+		_ = hybridNet.BridgeP2PToWS(handler.ctx, protocol.TxnTag, reencoded, false, wi.rawmsg.Sender)
+	}
+
 	return network.OutgoingMessage{
 		Action: network.Accept,
 	}
