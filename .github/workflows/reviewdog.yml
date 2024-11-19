@@ -1,4 +1,6 @@
 name: "ReviewDog workflow"
+env:
+  GOLANGCI_LINT_VERSION: "v1.62.0"
 on:
   push:
     branches:
@@ -20,7 +22,7 @@ jobs:
         uses: reviewdog/action-golangci-lint@v2.6.2
         with:
           go_version_file: go.mod
-          golangci_lint_version: "v1.62.0"
+          golangci_lint_version: ${{ env.GOLANGCI_LINT_VERSION }}
           golangci_lint_flags: "-c .golangci.yml --allow-parallel-runners"
           reporter: "github-pr-check"
           tool_name: "Lint Errors"
@@ -56,14 +58,14 @@ jobs:
         uses: actions/cache@v3.3.1
         with:
           path: cicdtmp/golangci-lint/golangci-lint-cgo
-          key: cicd-golangci-lint-cgo-v0.0.2-${{ env.GO_VERSION }}
+          key: cicd-golangci-lint-cgo-v0.0.3-${{ env.GO_VERSION }}-${{ env.GOLANGCI_LINT_VERSION }}
 
       - name: Build custom golangci-lint with CGO_ENABLED
         if: steps.cache-golangci-lint.outputs.cache-hit != 'true'
         run: |
           cd cicdtmp/golangci-lint
           git clone https://github.com/golangci/golangci-lint.git .
-          git checkout tags/v1.62.0
+          git checkout tags/${GOLANGCI_LINT_VERSION}
           CGO_ENABLED=true go build -trimpath -o golangci-lint-cgo ./cmd/golangci-lint
           ./golangci-lint-cgo --version
           cd ../../
@@ -71,12 +73,12 @@ jobs:
         run: |
           curl -sfL https://raw.githubusercontent.com/reviewdog/reviewdog/v0.20.2/install.sh | sh -s -- v0.20.2
           reviewdog --version
-      # - name: Build custom linters
-      #   run: |
-      #     cd cmd/partitiontest_linter/
-      #     CGO_ENABLED=true go build -buildmode=plugin -trimpath plugin/plugin.go
-      #     cd ../../
-      #     ls -la cmd/partitiontest_linter/
+      - name: Build custom linters
+        run: |
+          cd cmd/partitiontest_linter/
+          CGO_ENABLED=true go build -buildmode=plugin -trimpath plugin/plugin.go
+          cd ../../
+          ls -la cmd/partitiontest_linter/
       - name: Run golangci-lint with reviewdog
         env:
           REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
