@@ -26,7 +26,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
-	"github.com/algorand/go-algorand/ledger/eval"
+	"github.com/algorand/go-algorand/ledger/apply"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -80,7 +80,7 @@ func (s *Service) Stop() {
 func (s *Service) findChallenged(rules config.ProposerPayoutRules) []account.ParticipationRecordForRound {
 	current := s.ledger.LastRound()
 
-	ch := eval.FindChallenge(rules, current, s.ledger, eval.ChRisky)
+	ch := apply.FindChallenge(rules, current, s.ledger, apply.ChRisky)
 	if ch.IsZero() {
 		return nil
 	}
@@ -93,8 +93,7 @@ func (s *Service) findChallenged(rules config.ProposerPayoutRules) []account.Par
 			continue
 		}
 		if acct.Status == basics.Online {
-			lastSeen := max(acct.LastProposed, acct.LastHeartbeat)
-			if ch.Failed(pr.Account, lastSeen) {
+			if ch.Failed(pr.Account, acct.LastSeen()) {
 				s.log.Infof(" %v needs a heartbeat\n", pr.Account)
 				found = append(found, pr)
 			}
@@ -135,6 +134,7 @@ func (s *Service) loop() {
 
 		for _, pr := range s.findChallenged(proto.Payouts) {
 			stxn := s.prepareHeartbeat(pr, lastHdr)
+			s.log.Infof("sending heartbeat %v for %v\n", stxn.Txn.HeartbeatTxnFields, pr.Account)
 			err = s.bcast.BroadcastInternalSignedTxGroup([]transactions.SignedTxn{stxn})
 			if err != nil {
 				s.log.Errorf("error broadcasting heartbeat %v for %v: %v", stxn, pr.Account, err)

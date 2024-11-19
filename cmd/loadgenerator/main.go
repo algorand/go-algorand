@@ -200,22 +200,23 @@ func waitForRound(restClient client.RestClient, cfg config, spendingRound bool) 
 			time.Sleep(1 * time.Second)
 			continue
 		}
-		if isSpendRound(cfg, nodeStatus.LastRound) == spendingRound {
+		lastRound := nodeStatus.LastRound
+		if isSpendRound(cfg, lastRound) == spendingRound {
 			// time to send transactions.
 			return
 		}
 		if spendingRound {
-			fmt.Printf("Last round %d, waiting for spending round %d\n", nodeStatus.LastRound, nextSpendRound(cfg, nodeStatus.LastRound))
+			fmt.Printf("Last round %d, waiting for spending round %d\n", lastRound, nextSpendRound(cfg, nodeStatus.LastRound))
 		}
 		for {
 			// wait for the next round.
-			nodeStatus, err = restClient.WaitForBlock(basics.Round(nodeStatus.LastRound))
+			err = restClient.WaitForRoundWithTimeout(lastRound + 1)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "unable to wait for next round node status : %v", err)
-				time.Sleep(1 * time.Second)
 				break
 			}
-			if isSpendRound(cfg, nodeStatus.LastRound) == spendingRound {
+			lastRound++
+			if isSpendRound(cfg, lastRound) == spendingRound {
 				// time to send transactions.
 				return
 			}

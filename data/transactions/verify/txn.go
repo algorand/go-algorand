@@ -224,8 +224,8 @@ func txnGroupBatchPrep(stxs []transactions.SignedTxn, contextHdr *bookkeeping.Bl
 		if stxn.Txn.Type == protocol.StateProofTx {
 			continue
 		}
-		if stxn.Txn.Type == protocol.HeartbeatTx && len(stxs) == 1 {
-			// TODO: Only allow free HB if the HbAddress is challenged
+		if stxn.Txn.Type == protocol.HeartbeatTx && stxn.Txn.Group.IsZero() {
+			// in apply.Heartbeat, we further confirm that the heartbeat is for a challenged node
 			continue
 		}
 		minFeeCount++

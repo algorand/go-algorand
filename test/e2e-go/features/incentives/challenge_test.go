@@ -27,6 +27,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
@@ -48,17 +49,19 @@ func TestChallenges(t *testing.T) {
 	// Start a three-node network. One relay, two nodes with 4 accounts each
 	// At round 50, ~2 nodes will be challenged.
 
+	const lookback = 32
 	const interval = 50
 	const grace = 10
+	const mask = 0x80
 
 	var fixture fixtures.RestClientFixture
 	// Speed up rounds, keep lookback > 2 * grace period
-	fixture.FasterConsensus(protocol.ConsensusFuture, time.Second, 32)
+	fixture.FasterConsensus(protocol.ConsensusFuture, time.Second, lookback)
 	fixture.AlterConsensus(protocol.ConsensusFuture,
 		func(cp config.ConsensusParams) config.ConsensusParams {
 			cp.Payouts.ChallengeInterval = 50
 			cp.Payouts.ChallengeGracePeriod = 10
-			cp.Payouts.ChallengeBits = 2
+			cp.Payouts.ChallengeBits = 1 // half of nodes should get challenged
 			return cp
 		})
 	fixture.Setup(t, filepath.Join("nettemplates", "Challenges.json"))
@@ -78,6 +81,10 @@ func TestChallenges(t *testing.T) {
 
 	// By re-regging, we become eligible for suspension (normal + challenges)
 	// TODO: Confirm that rereg is required for challenge suspensions
+
+	err := fixture.WaitForRoundWithTimeout(interval - lookback) // Make all LastHeartbeats > interval, < 2*interval
+	a.NoError(err)
+
 	for _, account := range accounts1 {
 		rekeyreg(&fixture, a, c1, account.Address)
 	}
@@ -88,86 +95,94 @@ func TestChallenges(t *testing.T) {
 	// turn off node 1, so it can't heartbeat
 	a.NoError(c1.FullStop())
 
-	// Advance to first challenge round, check the blockseed
-	err := fixture.WaitForRoundWithTimeout(interval)
+	current, err := c2.CurrentRound()
 	a.NoError(err)
+	// Get them all done so that their inflated LastHeartbeat comes before the
+	// next challenge.
+	a.Less(current+lookback, 2*uint64(interval))
 
-	blk, err := c2.BookkeepingBlock(interval)
+	// We need to wait for the first challenge that happens after the keyreg
+	// LastHeartbeat has passed.  Example: current is 40, so the lastPossible
+	// LastHeartbeat is 72. Interval is 50, so challengeRound is 100.
+
+	// 100 = 40 + 32 + (50-22) = 72 + 28
+	lastPossible := current + lookback
+	challengeRound := lastPossible + (interval - lastPossible%interval)
+
+	// Advance to challenge round, check the blockseed
+	err = fixture.WaitForRoundWithTimeout(challengeRound)
 	a.NoError(err)
-	challenge := blk.BlockHeader.Seed[0] & 0xA0 // high two bits
+	blk, err := c2.BookkeepingBlock(challengeRound)
+	a.NoError(err)
+	challenge := blk.BlockHeader.Seed[0] & mask // high bit
 
-	challenged1 := util.MakeSet[model.Account]()
+	challenged1 := util.MakeSet[basics.Address]()
 	for _, account := range accounts1 {
-		abytes, err := basics.UnmarshalChecksumAddress(account.Address)
+		address, err := basics.UnmarshalChecksumAddress(account.Address)
 		a.NoError(err)
-		if abytes[0]&0xA0 == challenge {
-			fmt.Printf("%v of node 1 was challenged %v by %v\n", account.Address, abytes[0], challenge)
-			challenged1.Add(account)
+		if address[0]&mask == challenge {
+			fmt.Printf("%v of node 1 was challenged %v by %v\n", address, address[0], challenge)
+			challenged1.Add(address)
 		}
 	}
+	require.NotEmpty(t, challenged1, "rerun the test") // TODO: remove.
 
-	challenged2 := util.MakeSet[model.Account]()
+	challenged2 := util.MakeSet[basics.Address]()
 	for _, account := range accounts2 {
-		abytes, err := basics.UnmarshalChecksumAddress(account.Address)
+		address, err := basics.UnmarshalChecksumAddress(account.Address)
 		a.NoError(err)
-		if abytes[0]&0xA0 == challenge {
-			fmt.Printf("%v of node 2 was challenged %v by %v\n", account.Address, abytes[0], challenge)
-			challenged2.Add(account)
+		if address[0]&mask == challenge {
+			fmt.Printf("%v of node 2 was challenged %v by %v\n", address, address[0], challenge)
+			challenged2.Add(address)
 		}
 	}
+	require.NotEmpty(t, challenged2, "rerun the test") // TODO: remove.
 
 	allChallenged := util.Union(challenged1, challenged2)
 
-	// TODO: unroll this loop and notice the heartbeat transactions from node 2
-	err = fixture.WaitForRoundWithTimeout(interval + grace)
-	a.NoError(err)
-
-	// challenged accounts are still online
-	for account := range allChallenged {
-		data, err := c2.AccountData(account.Address)
+	// All challenged nodes are still online
+	for address := range allChallenged {
+		data, err := c2.AccountData(address.String())
 		a.NoError(err)
-		a.Equal(basics.Online, data.Status)
+		a.Equal(basics.Online, data.Status, "%v %d", address.String(), data.LastHeartbeat)
 		a.NotZero(data.VoteID)
 		a.True(data.IncentiveEligible)
 	}
 
-	err = fixture.WaitForRoundWithTimeout(interval + grace + 1)
+	// In the second half of the grace period, Node 2 should heartbeat for its accounts
+	beated := util.MakeSet[basics.Address]()
+	fixture.WithEveryBlock(challengeRound+grace/2, challengeRound+grace, func(block bookkeeping.Block) {
+		for _, txn := range block.Payset {
+			hb := txn.Txn.HeartbeatTxnFields
+			fmt.Printf("Heartbeat txn %v\n", hb)
+			a.True(challenged2.Contains(hb.HbAddress)) // only Node 2 is alive
+			a.False(beated.Contains(hb.HbAddress))     // beat only once
+			beated.Add(hb.HbAddress)
+		}
+		a.Empty(block.AbsentParticipationAccounts) // nobody suspended during grace
+	})
+	a.Equal(challenged2, beated)
+
+	blk, err = fixture.WaitForBlockWithTimeout(challengeRound + grace + 1)
 	a.NoError(err)
-
-	// The challenged nodes need be "noticed" to be suspended. TODO: Remove this
-	// section when we have prompt suspensions.
-	source := accounts2[0] // always pay from operational account on node 2
-	for account := range allChallenged {
-		fmt.Printf("pay %v\n", account.Address)
-		txn, err := c2.SendPaymentFromUnencryptedWallet(source.Address, account.Address, 1000, 0, nil)
-		a.NoError(err)
-		info, err := fixture.WaitForConfirmedTxn(uint64(txn.LastValid), txn.ID().String())
-		a.NoError(err)
-
-		blk, err := c2.BookkeepingBlock(*info.ConfirmedRound)
-		a.NoError(err)
-		a.Len(blk.AbsentParticipationAccounts, 1)
-		a.Equal(blk.AbsentParticipationAccounts[0].String(), account.Address)
-	}
+	a.Equal(challenged1, util.MakeSet(blk.AbsentParticipationAccounts...))
 
 	// node 1 challenged accounts are suspended because node 1 is off
-	for account := range challenged1 {
-		fmt.Printf("check1 %v\n", account.Address)
-		data, err := c2.AccountData(account.Address)
+	for address := range challenged1 {
+		data, err := c2.AccountData(address.String())
 		a.NoError(err)
-		a.Equal(basics.Offline, data.Status, account.Address)
-		a.NotZero(data.VoteID, account.Address)
-		a.False(data.IncentiveEligible, account.Address) // suspension turns off flag
+		a.Equal(basics.Offline, data.Status, address)
+		a.NotZero(data.VoteID, address)
+		a.False(data.IncentiveEligible, address) // suspension turns off flag
 	}
 
 	// node 2 challenged accounts are not suspended (saved by heartbeat)
-	for account := range challenged2 {
-		fmt.Printf("check2 %v\n", account.Address)
-		data, err := c2.AccountData(account.Address)
+	for address := range challenged2 {
+		data, err := c2.AccountData(address.String())
 		a.NoError(err)
-		a.Equal(basics.Online, data.Status, account.Address)
-		a.NotZero(data.VoteID, account.Address)
-		a.True(data.IncentiveEligible, account.Address)
+		a.Equal(basics.Online, data.Status, address)
+		a.NotZero(data.VoteID, address)
+		a.True(data.IncentiveEligible, address)
 	}
 
 }

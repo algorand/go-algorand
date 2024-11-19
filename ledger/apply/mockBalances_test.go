@@ -275,7 +275,8 @@ func (b *mockCreatableBalances) HasAssetParams(addr basics.Address, aidx basics.
 }
 
 type mockHeaders struct {
-	b map[basics.Round]bookkeeping.BlockHeader
+	perRound map[basics.Round]bookkeeping.BlockHeader
+	fallback *bookkeeping.BlockHeader
 }
 
 // makeMockHeaders takes a bunch of BlockHeaders and returns a HdrProivder for them.
@@ -284,12 +285,21 @@ func makeMockHeaders(hdrs ...bookkeeping.BlockHeader) mockHeaders {
 	for _, hdr := range hdrs {
 		b[hdr.Round] = hdr
 	}
-	return mockHeaders{b: b}
+	return mockHeaders{perRound: b}
 }
 
 func (m mockHeaders) BlockHdr(r basics.Round) (bookkeeping.BlockHeader, error) {
-	if hdr, ok := m.b[r]; ok {
+	if hdr, ok := m.perRound[r]; ok {
 		return hdr, nil
 	}
+	if m.fallback != nil {
+		copy := *m.fallback
+		copy.Round = r
+		return copy, nil
+	}
 	return bookkeeping.BlockHeader{}, fmt.Errorf("round %v is not present", r)
+}
+
+func (m *mockHeaders) setFallback(hdr bookkeeping.BlockHeader) {
+	m.fallback = &hdr
 }

@@ -31,6 +31,32 @@ func Heartbeat(hb transactions.HeartbeatTxnFields, header transactions.Header, b
 		return err
 	}
 
+	// In txnGroupBatchPrep, we do not charge for singleton (Group.IsZero)
+	// heartbeats. But we only _want_ to allow free heartbeats if the account is
+	// under challenge. If this is an underpaid singleton heartbeat, reject it
+	// unless the account is under challenge.
+
+	proto := balances.ConsensusParams()
+	if header.Fee.Raw < proto.MinTxnFee && header.Group.IsZero() {
+		kind := "free"
+		if header.Fee.Raw > 0 {
+			kind = "cheap"
+		}
+		if account.Status != basics.Online {
+			return fmt.Errorf("%s heartbeat is not allowed for %s %+v", kind, account.Status, hb.HbAddress)
+		}
+		if !account.IncentiveEligible {
+			return fmt.Errorf("%s heartbeat is not allowed for ineligible %+v", kind, hb.HbAddress)
+		}
+		ch := FindChallenge(proto.Payouts, round, provider, ChRisky)
+		if ch.round == 0 {
+			return fmt.Errorf("%s heartbeat for %s is not allowed with no challenge", kind, hb.HbAddress)
+		}
+		if !ch.Failed(hb.HbAddress, account.LastSeen()) {
+			return fmt.Errorf("%s heartbeat for %s is not challenged by %+v", kind, hb.HbAddress, ch)
+		}
+	}
+
 	// Note the contrast with agreement. We are using the account's _current_
 	// partkey to verify the heartbeat. This is required because we can only
 	// look 320 rounds back for voting information. If a heartbeat was delayed a
@@ -53,7 +79,7 @@ func Heartbeat(hb transactions.HeartbeatTxnFields, header transactions.Header, b
 	if sv.IsEmpty() {
 		return fmt.Errorf("heartbeat address %s has no voting keys", hb.HbAddress)
 	}
-	kd := oad.KeyDilution(balances.ConsensusParams())
+	kd := oad.KeyDilution(proto)
 
 	// heartbeats are expected to sign with the partkey for their last-valid round
 	id := basics.OneTimeIDForRound(header.LastValid, kd)

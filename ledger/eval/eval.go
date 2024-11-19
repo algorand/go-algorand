@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"math/bits"
 	"sync"
 
 	"github.com/algorand/go-algorand/agreement"
@@ -29,7 +28,6 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/verify"
@@ -1609,14 +1607,6 @@ func (eval *BlockEvaluator) proposerPayout() (basics.MicroAlgos, error) {
 	return basics.MinA(total, available), nil
 }
 
-type challenge struct {
-	// round is when the challenge occurred. 0 means this is not a challenge.
-	round basics.Round
-	// accounts that match the first `bits` of `seed` must propose or heartbeat to stay online
-	seed committee.Seed
-	bits int
-}
-
 // generateKnockOfflineAccountsList creates the lists of expired or absent
 // participation accounts by traversing over the modified accounts in the state
 // deltas and testing if any of them needs to be reset/suspended. Expiration
@@ -1641,7 +1631,7 @@ func (eval *BlockEvaluator) generateKnockOfflineAccountsList(participating []bas
 
 	updates := &eval.block.ParticipationUpdates
 
-	ch := FindChallenge(eval.proto.Payouts, current, eval.state, ChActive)
+	ch := apply.FindChallenge(eval.proto.Payouts, current, eval.state, apply.ChActive)
 	onlineStake, err := eval.state.onlineStake()
 	if err != nil {
 		logging.Base().Errorf("unable to fetch online stake, no knockoffs: %v", err)
@@ -1754,28 +1744,6 @@ func (eval *BlockEvaluator) generateKnockOfflineAccountsList(participating []bas
 	}
 }
 
-// bitsMatch checks if the first n bits of two byte slices match. Written to
-// work on arbitrary slices, but we expect that n is small. Only user today
-// calls with n=5.
-func bitsMatch(a, b []byte, n int) bool {
-	// Ensure n is a valid number of bits to compare
-	if n < 0 || n > len(a)*8 || n > len(b)*8 {
-		return false
-	}
-
-	// Compare entire bytes when n is bigger than 8
-	for i := 0; i < n/8; i++ {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	remaining := n % 8
-	if remaining == 0 {
-		return true
-	}
-	return bits.LeadingZeros8(a[n/8]^b[n/8]) >= remaining
-}
-
 func isAbsent(totalOnlineStake basics.MicroAlgos, acctStake basics.MicroAlgos, lastSeen basics.Round, current basics.Round) bool {
 	// Don't consider accounts that were online when payouts went into effect as
 	// absent.  They get noticed the next time they propose or keyreg, which
@@ -1791,66 +1759,6 @@ func isAbsent(totalOnlineStake basics.MicroAlgos, acctStake basics.MicroAlgos, l
 		allowableLag = math.MaxInt64 / acctStake.Raw
 	}
 	return lastSeen+basics.Round(allowableLag) < current
-}
-
-type headerSource interface {
-	BlockHdr(round basics.Round) (bookkeeping.BlockHeader, error)
-}
-
-// ChallengePeriod indicates which part of the challenge period is under discussion.
-type ChallengePeriod int
-
-const (
-	// ChRisky indicates that a challenge is in effect, and the initial grace period is running out.
-	ChRisky ChallengePeriod = iota
-	// ChActive indicates that a challenege is in effect, and the grace period
-	// has run out, so accounts can be suspended
-	ChActive
-)
-
-// FindChallenge returns the Challenge that was last issued if it's in the period requested.
-func FindChallenge(rules config.ProposerPayoutRules, current basics.Round, headers headerSource, period ChallengePeriod) challenge {
-	// are challenges active?
-	interval := basics.Round(rules.ChallengeInterval)
-	if rules.ChallengeInterval == 0 || current < interval {
-		return challenge{}
-	}
-	lastChallenge := current - (current % interval)
-	grace := basics.Round(rules.ChallengeGracePeriod)
-	// FindChallenge is structured this way, instead of returning the challenge
-	// and letting the caller determine the period it cares about, to avoid
-	// using BlockHdr unnecessarily.
-	switch period {
-	case ChRisky:
-		if current <= lastChallenge+grace/2 || current > lastChallenge+grace {
-			return challenge{}
-		}
-	case ChActive:
-		if current <= lastChallenge+grace || current > lastChallenge+2*grace {
-			return challenge{}
-		}
-	}
-	challengeHdr, err := headers.BlockHdr(lastChallenge)
-	if err != nil {
-		panic(err)
-	}
-	challengeProto := config.Consensus[challengeHdr.CurrentProtocol]
-	// challenge is not considered if rules have changed since that round
-	if challengeProto.Payouts != rules {
-		return challenge{}
-	}
-	return challenge{lastChallenge, challengeHdr.Seed, rules.ChallengeBits}
-}
-
-// IsZero returns true if the challenge is empty (used to indicate no challenege)
-func (ch challenge) IsZero() bool {
-	return ch == challenge{}
-}
-
-// Failed returns true iff ch is in effect, matches address, and lastSeen is
-// before the challenge issue.
-func (ch challenge) Failed(address basics.Address, lastSeen basics.Round) bool {
-	return ch.round != 0 && bitsMatch(ch.seed[:], address[:], ch.bits) && lastSeen < ch.round
 }
 
 // validateExpiredOnlineAccounts tests the expired online accounts specified in ExpiredParticipationAccounts, and verify
@@ -1920,7 +1828,7 @@ func (eval *BlockEvaluator) validateAbsentOnlineAccounts() error {
 	// For consistency with expired account handling, we preclude duplicates
 	addressSet := make(map[basics.Address]bool, suspensionCount)
 
-	ch := FindChallenge(eval.proto.Payouts, eval.Round(), eval.state, ChActive)
+	ch := apply.FindChallenge(eval.proto.Payouts, eval.Round(), eval.state, apply.ChActive)
 	totalOnlineStake, err := eval.state.onlineStake()
 	if err != nil {
 		logging.Base().Errorf("unable to fetch online stake, can't check knockoffs: %v", err)
@@ -1948,15 +1856,14 @@ func (eval *BlockEvaluator) validateAbsentOnlineAccounts() error {
 			return fmt.Errorf("proposed absent account %v with zero algos", accountAddr)
 		}
 
-		lastSeen := max(acctData.LastProposed, acctData.LastHeartbeat)
 		oad, lErr := eval.state.lookupAgreement(accountAddr)
 		if lErr != nil {
 			return fmt.Errorf("unable to check absent account: %v", accountAddr)
 		}
-		if isAbsent(totalOnlineStake, oad.VotingStake(), lastSeen, eval.Round()) {
+		if isAbsent(totalOnlineStake, oad.VotingStake(), acctData.LastSeen(), eval.Round()) {
 			continue // ok. it's "normal absent"
 		}
-		if ch.Failed(accountAddr, lastSeen) {
+		if ch.Failed(accountAddr, acctData.LastSeen()) {
 			continue // ok. it's "challenge absent"
 		}
 		return fmt.Errorf("proposed absent account %v is not absent in %d, %d",

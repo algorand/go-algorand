@@ -210,7 +210,7 @@ func makeBlock(r basics.Round) bookkeeping.Block {
 	}
 }
 
-func TestHeartBeatOnlyWhenChallenged(t *testing.T) {
+func TestHeartbeatOnlyWhenChallenged(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -234,9 +234,9 @@ func TestHeartBeatOnlyWhenChallenged(t *testing.T) {
 	// now they are online, but not challenged, so no heartbeat
 	acct.Status = basics.Online
 	acct.VoteKeyDilution = 100
-	otss := crypto.GenerateOneTimeSignatureSecrets(
-		basics.OneTimeIDForRound(ledger.LastRound(), acct.VoteKeyDilution).Batch,
-		5)
+	startBatch := basics.OneTimeIDForRound(ledger.LastRound(), acct.VoteKeyDilution).Batch
+	const batches = 50 // gives 50 * kd rounds = 5000
+	otss := crypto.GenerateOneTimeSignatureSecrets(startBatch, batches)
 	acct.VoteID = otss.OneTimeSignatureVerifier
 	ledger.addParticipant(joe, otss)
 	ledger.addParticipant(mary, otss)

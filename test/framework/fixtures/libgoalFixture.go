@@ -42,7 +42,6 @@ import (
 	"github.com/algorand/go-algorand/netdeploy"
 	"github.com/algorand/go-algorand/nodecontrol"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/test/e2e-go/globals"
 	"github.com/algorand/go-algorand/util/db"
 )
 
@@ -67,12 +66,12 @@ func (f *RestClientFixture) SetConsensus(consensus config.ConsensusProtocols) {
 	f.consensus = consensus
 }
 
+// AlterConsensus allows the caller to modify the consensus settings for a given version.
 func (f *RestClientFixture) AlterConsensus(ver protocol.ConsensusVersion, alter func(config.ConsensusParams) config.ConsensusParams) {
 	if f.consensus == nil {
 		f.consensus = make(config.ConsensusProtocols)
 	}
-	consensus := config.Consensus[ver]
-	f.consensus[ver] = alter(consensus)
+	f.consensus[ver] = alter(f.ConsensusParamsFromVer(ver))
 }
 
 // FasterConsensus speeds up the given consensus version in two ways. The seed
@@ -80,21 +79,19 @@ func (f *RestClientFixture) AlterConsensus(ver protocol.ConsensusVersion, alter 
 // lookback becomes 32.  And, if the architecture implies it can be handled,
 // round times are shortened by lowering vote timeouts.
 func (f *RestClientFixture) FasterConsensus(ver protocol.ConsensusVersion, timeout time.Duration, lookback basics.Round) {
-	if f.consensus == nil {
-		f.consensus = make(config.ConsensusProtocols)
-	}
-	fast := config.Consensus[ver]
-	// balanceRound is 4 * SeedRefreshInterval
-	if lookback%4 != 0 {
-		panic(fmt.Sprintf("lookback must be a multiple of 4, got %d", lookback))
-	}
-	fast.SeedRefreshInterval = uint64(lookback) / 4
-	// and speed up the rounds while we're at it
-	if runtime.GOARCH == "amd64" || runtime.GOARCH == "arm64" {
-		fast.AgreementFilterTimeoutPeriod0 = timeout
-		fast.AgreementFilterTimeout = timeout
-	}
-	f.consensus[ver] = fast
+	f.AlterConsensus(ver, func(fast config.ConsensusParams) config.ConsensusParams {
+		// balanceRound is 4 * SeedRefreshInterval
+		if lookback%4 != 0 {
+			panic(fmt.Sprintf("lookback must be a multiple of 4, got %d", lookback))
+		}
+		fast.SeedRefreshInterval = uint64(lookback) / 4
+		// and speed up the rounds while we're at it
+		if runtime.GOARCH == "amd64" || runtime.GOARCH == "arm64" {
+			fast.AgreementFilterTimeoutPeriod0 = timeout
+			fast.AgreementFilterTimeout = timeout
+		}
+		return fast
+	})
 }
 
 // Setup is called to initialize the test fixture for the test(s)
@@ -460,75 +457,6 @@ func (f *LibGoalFixture) GetParticipationOnlyAccounts(lg libgoal.Client) []accou
 	return f.clientPartKeys[lg.DataDir()]
 }
 
-// WaitForRoundWithTimeout waits for a given round to reach. The implementation also ensures to limit the wait time for each round to the
-// globals.MaxTimePerRound so we can alert when we're getting "hung" before waiting for all the expected rounds to reach.
-func (f *LibGoalFixture) WaitForRoundWithTimeout(roundToWaitFor uint64) error {
-	return f.ClientWaitForRoundWithTimeout(f.LibGoalClient, roundToWaitFor)
-}
-
-// ClientWaitForRoundWithTimeout waits for a given round to be reached by the specific client/node. The implementation
-// also ensures to limit the wait time for each round to the globals.MaxTimePerRound so we can alert when we're
-// getting "hung" before waiting for all the expected rounds to reach.
-func (f *LibGoalFixture) ClientWaitForRoundWithTimeout(client libgoal.Client, roundToWaitFor uint64) error {
-	status, err := client.Status()
-	require.NoError(f.t, err)
-	lastRound := status.LastRound
-
-	// If node is already at or past target round, we're done
-	if lastRound >= roundToWaitFor {
-		return nil
-	}
-
-	roundTime := globals.MaxTimePerRound * 10 // For first block, we wait much longer
-	roundComplete := make(chan error, 2)
-
-	for nextRound := lastRound + 1; lastRound < roundToWaitFor; {
-		roundStarted := time.Now()
-
-		go func(done chan error) {
-			err := f.ClientWaitForRound(client, nextRound, roundTime)
-			done <- err
-		}(roundComplete)
-
-		select {
-		case lastError := <-roundComplete:
-			if lastError != nil {
-				close(roundComplete)
-				return lastError
-			}
-		case <-time.After(roundTime):
-			// we've timed out.
-			time := time.Now().Sub(roundStarted)
-			return fmt.Errorf("fixture.WaitForRound took %3.2f seconds between round %d and %d", time.Seconds(), lastRound, nextRound)
-		}
-
-		roundTime = singleRoundMaxTime
-		lastRound++
-		nextRound++
-	}
-	return nil
-}
-
-// ClientWaitForRound waits up to the specified amount of time for
-// the network to reach or pass the specified round, on the specific client/node
-func (f *LibGoalFixture) ClientWaitForRound(client libgoal.Client, round uint64, waitTime time.Duration) error {
-	timeout := time.NewTimer(waitTime)
-	for {
-		status, err := client.Status()
-		if err != nil {
-			return err
-		}
-		if status.LastRound >= round {
-			return nil
-		}
-		select {
-		case <-timeout.C:
-			return fmt.Errorf("timeout waiting for round %v", round)
-		case <-time.After(200 * time.Millisecond):
-		}
-	}
-}
-
 // CurrentConsensusParams returns the consensus parameters for the currently active protocol
 func (f *LibGoalFixture) CurrentConsensusParams() (consensus config.ConsensusParams, err error) {
 	status, err := f.LibGoalClient.Status()
@@ -540,20 +468,20 @@ func (f *LibGoalFixture) CurrentConsensusParams() (consensus config.ConsensusPar
 }
 
 // ConsensusParams returns the consensus parameters for the protocol from the specified round
-func (f *LibGoalFixture) ConsensusParams(round uint64) (consensus config.ConsensusParams, err error) {
+func (f *LibGoalFixture) ConsensusParams(round uint64) (config.ConsensusParams, error) {
 	block, err := f.LibGoalClient.BookkeepingBlock(round)
 	if err != nil {
-		return
+		return config.ConsensusParams{}, err
 	}
-	version := protocol.ConsensusVersion(block.CurrentProtocol)
-	if f.consensus != nil {
-		consensus, has := f.consensus[version]
-		if has {
-			return consensus, nil
-		}
+	return f.ConsensusParamsFromVer(block.CurrentProtocol), nil
+}
+
+// ConsensusParamsFromVer looks up a consensus version, allowing for override
+func (f *LibGoalFixture) ConsensusParamsFromVer(cv protocol.ConsensusVersion) config.ConsensusParams {
+	if consensus, has := f.consensus[cv]; has {
+		return consensus
 	}
-	consensus = config.Consensus[version]
-	return
+	return config.Consensus[cv]
 }
 
 // CurrentMinFeeAndBalance returns the MinTxnFee and MinBalance for the currently active protocol

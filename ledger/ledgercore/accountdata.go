@@ -135,8 +135,13 @@ func (u *AccountData) Suspend() {
 }
 
 // Suspended returns true if the account is suspended (offline with keys)
-func (u *AccountData) Suspended() bool {
+func (u AccountData) Suspended() bool {
 	return u.Status == basics.Offline && !u.VoteID.IsEmpty()
+}
+
+// LastSeen returns the last round that the account was seen online
+func (u AccountData) LastSeen() basics.Round {
+	return max(u.LastProposed, u.LastHeartbeat)
 }
 
 // MinBalance computes the minimum balance requirements for an account based on
