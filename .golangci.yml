@@ -7,7 +7,7 @@ linters:
   disable-all: true
   enable:
     - errcheck
-    - exportloopref
+    - copyloopvar
     - gofmt
     - gosimple
     - govet
@@ -127,7 +127,6 @@ issues:
     - path: _test\.go
       linters:
         - errcheck
-        # - exportloopref
         # - gofmt
         - gosimple
         # - govet

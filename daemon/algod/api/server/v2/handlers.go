@@ -316,7 +316,7 @@ func (v2 *Handlers) AddParticipationKey(ctx echo.Context) error {
 	partKeyBinary := buf.Bytes()
 
 	if len(partKeyBinary) == 0 {
-		lenErr := fmt.Errorf(errRESTPayloadZeroLength)
+		lenErr := errors.New(errRESTPayloadZeroLength)
 		return badRequest(ctx, lenErr, lenErr.Error(), v2.Log)
 	}
 
@@ -836,6 +836,40 @@ func (v2 *Handlers) GetBlockHash(ctx echo.Context, round uint64) error {
 	response := model.BlockHashResponse{BlockHash: crypto.Digest(block.Hash()).String()}
 
 	return ctx.JSON(http.StatusOK, response)
+}
+
+// GetBlockHeader gets the block header for the given round.
+// (GET /v2/blocks/{round}/header)
+func (v2 *Handlers) GetBlockHeader(ctx echo.Context, round uint64, params model.GetBlockHeaderParams) error {
+	handle, contentType, err := getCodecHandle((*string)(params.Format))
+	if err != nil {
+		return badRequest(ctx, err, errFailedParsingFormatOption, v2.Log)
+	}
+
+	ledger := v2.Node.LedgerForAPI()
+	block, err := ledger.BlockHdr(basics.Round(round))
+	if err != nil {
+		switch err.(type) {
+		case ledgercore.ErrNoEntry:
+			return notFound(ctx, err, errFailedLookingUpLedger, v2.Log)
+		default:
+			return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+		}
+	}
+
+	// Encoding wasn't working well without embedding "real" objects.
+	response := struct {
+		BlockHeader bookkeeping.BlockHeader `codec:"block-header"`
+	}{
+		BlockHeader: block,
+	}
+
+	data, err := encode(handle, response)
+	if err != nil {
+		return internalError(ctx, err, errFailedToEncodeResponse, v2.Log)
+	}
+
+	return ctx.Blob(http.StatusOK, contentType, data)
 }
 
 // GetTransactionProof generates a Merkle proof for a transaction in a block.

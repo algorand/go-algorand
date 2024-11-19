@@ -56,7 +56,6 @@ func TestPrint(t *testing.T) {
 		},
 	}
 	for i, tc := range testcases {
-		tc := tc
 		t.Run(fmt.Sprintf("test %d", i), func(t *testing.T) {
 			t.Parallel()
 			ret, err := serializeObjectProperty(tc, "Input")

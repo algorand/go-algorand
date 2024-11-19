@@ -20,7 +20,7 @@
 package config
 
 var defaultLocal = Local{
-	Version:                                    34,
+	Version:                                    35,
 	AccountUpdatesStatsInterval:                5000000000,
 	AccountsRebuildSynchronousMode:             1,
 	AgreementIncomingBundlesQueueLength:        15,
@@ -111,7 +111,7 @@ var defaultLocal = Local{
 	MaxAcctLookback:                            4,
 	MaxBlockHistoryLookback:                    0,
 	MaxCatchpointDownloadDuration:              43200000000000,
-	MaxConnectionsPerIP:                        15,
+	MaxConnectionsPerIP:                        8,
 	MinCatchpointFileDownloadBytesPerSecond:    20480,
 	NetAddress:                                 "",
 	NetworkMessageTraceServer:                  "",
@@ -148,6 +148,7 @@ var defaultLocal = Local{
 	TrackerDBDir:                               "",
 	TransactionSyncDataExchangeRate:            0,
 	TransactionSyncSignificantMessageThreshold: 0,
+	TxBacklogAppRateLimitingCountERLDrops:      false,
 	TxBacklogAppTxPerSecondRate:                100,
 	TxBacklogAppTxRateLimiterMaxSize:           1048576,
 	TxBacklogRateLimitingCongestionPct:         50,
