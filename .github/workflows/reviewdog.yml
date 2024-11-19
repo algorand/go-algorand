@@ -92,8 +92,8 @@ jobs:
           cat temp_golangci-lint-cgo.txt | reviewdog \
           -f=golangci-lint \
           -name="Lint Warnings" \
-          -reporter=github-check \
-          -filter-mode=added \
+          -reporter=github-pr-check \
+          -filter-mode=nofilter \
           -fail-on-error=true \
           -level=warning
       - name: Slack Notification
