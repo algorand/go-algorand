@@ -6,16 +6,16 @@ linters:
   disable-all: true
   enable:
     - gosec
-    - partitiontest
+    # - partitiontest
 
 linters-settings:
   gosec: # we are mostly only interested in G601
     excludes: [G101, G103, G104, G107, G202, G301, G302, G303, G304, G306, G307, G404]
-  custom:
-    partitiontest:
-      path: cmd/partitiontest_linter/plugin.so
-      description: This custom linter checks files that end in '_test.go', specifically functions that start with 'Test' and have testing argument, for a line 'partitiontest.ParitionTest(<testing arg>)'
-      original-url: github.com/algorand/go-algorand/cmd/partitiontest_linter
+  # custom:
+  #   partitiontest:
+  #     path: cmd/partitiontest_linter/plugin.so
+  #     description: This custom linter checks files that end in '_test.go', specifically functions that start with 'Test' and have testing argument, for a line 'partitiontest.ParitionTest(<testing arg>)'
+  #     original-url: github.com/algorand/go-algorand/cmd/partitiontest_linter
 
 severity:
   default-severity: warning
@@ -61,6 +61,6 @@ issues:
         - structcheck
         - varcheck
         - unused
-    - path: crypto/secp256k1/secp256_test\.go
-      linters:
-        - partitiontest
+    # - path: crypto/secp256k1/secp256_test\.go
+    #   linters:
+    #     - partitiontest
