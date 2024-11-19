@@ -158,6 +158,25 @@ func TestGetBlock(t *testing.T) {
 	getBlockTest(t, 0, "bad format", 400)
 }
 
+func getBlockHeaderTest(t *testing.T, blockNum uint64, format string, expectedCode int) {
+	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
+	defer releasefunc()
+	err := handler.GetBlockHeader(c, blockNum, model.GetBlockHeaderParams{Format: (*model.GetBlockHeaderParamsFormat)(&format)})
+	require.NoError(t, err)
+	require.Equal(t, expectedCode, rec.Code)
+}
+
+func TestGetBlockHeader(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	getBlockHeaderTest(t, 0, "json", 200)
+	getBlockHeaderTest(t, 0, "msgpack", 200)
+	getBlockHeaderTest(t, 1, "json", 404)
+	getBlockHeaderTest(t, 1, "msgpack", 404)
+	getBlockHeaderTest(t, 0, "bad format", 400)
+}
+
 func testGetLedgerStateDelta(t *testing.T, round uint64, format string, expectedCode int) {
 	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
 	defer releasefunc()
@@ -956,7 +975,6 @@ func TestPostSimulateTransaction(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		testCase := testCase
 		t.Run(fmt.Sprintf("i=%d", i), func(t *testing.T) {
 			t.Parallel()
 			simulateTransactionTest(t, testCase.txnIndex, testCase.format, testCase.expectedStatus)

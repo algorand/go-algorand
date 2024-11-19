@@ -1,15 +1,15 @@
 module github.com/algorand/go-algorand/tools/x-repo-types
 
-go 1.21
+go 1.23
 
-toolchain go1.21.10
+toolchain go1.23.3
 
 replace github.com/algorand/go-algorand => ../..
 
 require (
 	github.com/algorand/go-algorand v0.0.0
 	github.com/spf13/cobra v1.7.0
-	github.com/stretchr/testify v1.8.4
+	github.com/stretchr/testify v1.9.0
 )
 
 require (

@@ -78,6 +78,37 @@ func getConstValues(t *testing.T, fileName string, typeName string, namesOnly bo
 	return ret
 }
 
+func getDeprecatedTags(t *testing.T) map[string]bool {
+	fset := token.NewFileSet()
+	f, _ := parser.ParseFile(fset, "tags.go", nil, 0)
+
+	deprecatedTags := make(map[string]bool)
+	for _, d := range f.Decls {
+		genDecl, ok := d.(*ast.GenDecl)
+		if !ok || genDecl.Tok != token.VAR {
+			continue
+		}
+		for _, spec := range genDecl.Specs {
+			if valueSpec, ok := spec.(*ast.ValueSpec); ok && len(valueSpec.Names) > 0 &&
+				valueSpec.Names[0].Name == "DeprecatedTagList" {
+				for _, v := range valueSpec.Values {
+					cl, ok := v.(*ast.CompositeLit)
+					if !ok {
+						continue
+					}
+					for _, elt := range cl.Elts {
+						if ce, ok := elt.(*ast.Ident); ok {
+							deprecatedTags[ce.Name] = true
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return deprecatedTags
+}
+
 // TestTagList checks that the TagList global variable contains
 // all the constant Tag variables declared in tags.go.
 func TestTagList(t *testing.T) {
@@ -88,9 +119,14 @@ func TestTagList(t *testing.T) {
 
 	// Verify that TagList is not empty and has the same length as constTags
 	require.NotEmpty(t, TagList)
-	require.Len(t, TagList, len(constTags), "TagList is not complete")
+	require.Len(t, TagList, len(constTags)-len(DeprecatedTagMap), "TagList is not complete")
 	tagListMap := make(map[Tag]bool)
 	for _, tag := range TagList {
+		tagListMap[tag] = true
+	}
+	for tag := range DeprecatedTagMap {
+		// ensure deprecated tags are not in TagList
+		require.False(t, tagListMap[tag])
 		tagListMap[tag] = true
 	}
 	// Iterate through constTags and check that each element exists in tagListMap
@@ -168,11 +204,16 @@ func TestMaxSizesTested(t *testing.T) {
 		}
 	}
 
+	deprecatedTags := getDeprecatedTags(t)
 	for _, tag := range constTags {
 		if tag == "TxnTag" {
 			// TxnTag is tested in a looser way in TestMaxSizesCorrect
 			continue
 		}
+		if deprecatedTags[tag] {
+			continue
+		}
+
 		require.Truef(t, tagsFound[tag], "Tag %s does not have a corresponding test in TestMaxSizesCorrect", tag)
 	}
 }
@@ -242,8 +283,6 @@ func TestLockdownTagList(t *testing.T) {
 		MsgDigestSkipTag,
 		NetIDVerificationTag,
 		NetPrioResponseTag,
-		PingTag,
-		PingReplyTag,
 		ProposalPayloadTag,
 		StateProofSigTag,
 		TopicMsgRespTag,
