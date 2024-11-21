@@ -94,7 +94,7 @@ type Txn struct {
 	StateProofMsg  stateproofmsg.Message
 
 	HbAddress basics.Address
-	HbProof   crypto.OneTimeSignature
+	HbProof   crypto.HeartbeatProof
 	HbSeed    committee.Seed
 }
 

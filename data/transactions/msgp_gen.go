@@ -3080,7 +3080,7 @@ func (z *HeartbeatTxnFields) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func HeartbeatTxnFieldsMaxSize() (s int) {
-	s = 1 + 5 + basics.AddressMaxSize() + 6 + crypto.OneTimeSignatureMaxSize() + 5 + committee.SeedMaxSize()
+	s = 1 + 5 + basics.AddressMaxSize() + 6 + crypto.HeartbeatProofMaxSize() + 5 + committee.SeedMaxSize()
 	return
 }
 
@@ -6935,7 +6935,7 @@ func TransactionMaxSize() (s int) {
 	s += 5
 	// Calculating size of slice: z.ApplicationCallTxnFields.ForeignAssets
 	s += msgp.ArrayHeaderSize + ((encodedMaxForeignAssets) * (basics.AssetIndexMaxSize()))
-	s += 5 + basics.StateSchemaMaxSize() + 5 + basics.StateSchemaMaxSize() + 5 + msgp.BytesPrefixSize + config.MaxAvailableAppProgramLen + 5 + msgp.BytesPrefixSize + config.MaxAvailableAppProgramLen + 5 + msgp.Uint32Size + 7 + protocol.StateProofTypeMaxSize() + 3 + stateproof.StateProofMaxSize() + 6 + stateproofmsg.MessageMaxSize() + 5 + basics.AddressMaxSize() + 6 + crypto.OneTimeSignatureMaxSize() + 5 + committee.SeedMaxSize()
+	s += 5 + basics.StateSchemaMaxSize() + 5 + basics.StateSchemaMaxSize() + 5 + msgp.BytesPrefixSize + config.MaxAvailableAppProgramLen + 5 + msgp.BytesPrefixSize + config.MaxAvailableAppProgramLen + 5 + msgp.Uint32Size + 7 + protocol.StateProofTypeMaxSize() + 3 + stateproof.StateProofMaxSize() + 6 + stateproofmsg.MessageMaxSize() + 5 + basics.AddressMaxSize() + 6 + crypto.HeartbeatProofMaxSize() + 5 + committee.SeedMaxSize()
 	return
 }
 

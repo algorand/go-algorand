@@ -32,7 +32,7 @@ type HeartbeatTxnFields struct {
 	HbAddress basics.Address `codec:"hbad"`
 
 	// HbProof is a signature using HeartbeatAddress's partkey, thereby showing it is online.
-	HbProof crypto.OneTimeSignature `codec:"hbprf"`
+	HbProof crypto.HeartbeatProof `codec:"hbprf"`
 
 	// HbSeed must be the block seed for the block before this transaction's
 	// firstValid. It is supplied in the transaction so that Proof can be

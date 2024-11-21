@@ -108,7 +108,7 @@ func Heartbeat(hb transactions.HeartbeatTxnFields, header transactions.Header, b
 		return fmt.Errorf("provided seed %v does not match round %d's seed %v", hb.HbSeed, header.FirstValid-1, hdr.Seed)
 	}
 
-	if !sv.Verify(id, hdr.Seed, hb.HbProof) {
+	if !sv.Verify(id, hdr.Seed, hb.HbProof.ToOneTimeSignature()) {
 		return fmt.Errorf("heartbeat failed verification with VoteID %v", sv)
 	}
 

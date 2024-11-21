@@ -73,7 +73,7 @@ func TestHeartbeat(t *testing.T) {
 		FirstValid: fv,
 		LastValid:  lv,
 		HbAddress:  voter,
-		HbProof:    otss.Sign(id, seed),
+		HbProof:    otss.Sign(id, seed).ToHeartbeatProof(),
 		HbSeed:     seed,
 	}
 
@@ -174,7 +174,7 @@ func TestCheapRules(t *testing.T) {
 			Note:       tc.note,
 			RekeyTo:    tc.rekey,
 			HbAddress:  voter,
-			HbProof:    otss.Sign(id, seed),
+			HbProof:    otss.Sign(id, seed).ToHeartbeatProof(),
 			HbSeed:     seed,
 		}
 
