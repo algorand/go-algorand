@@ -110,22 +110,28 @@ func TestCheapRules(t *testing.T) {
 		addrStart        byte
 		status           basics.Status
 		incentiveEligble bool
+		note             []byte
+		lease            [32]byte
+		rekey            [32]byte
 		err              string
 	}
-
+	empty := [32]byte{}
 	// Grace period is 200. For the second half of the grace period (1101-1200),
 	// the heartbeat is free for online, incentive eligible, challenged accounts.
 	cases := []tcase{
 		// test of range
-		{1100, 0x01, basics.Online, true, "no challenge"},
-		{1101, 0x01, basics.Online, true, ""},
-		{1200, 0x01, basics.Online, true, ""},
-		{1201, 0x01, basics.Online, true, "no challenge"},
+		{1100, 0x01, basics.Online, true, nil, empty, empty, "no challenge"},
+		{1101, 0x01, basics.Online, true, nil, empty, empty, ""},
+		{1200, 0x01, basics.Online, true, nil, empty, empty, ""},
+		{1201, 0x01, basics.Online, true, nil, empty, empty, "no challenge"},
 
 		// test of the other requirements
-		{1101, 0xf1, basics.Online, true, "not challenged by"},
-		{1101, 0x01, basics.Offline, true, "not allowed for Offline"},
-		{1101, 0x01, basics.Online, false, "not allowed for ineligible"},
+		{1101, 0x01, basics.Online, true, []byte("note"), empty, empty, "not allowed to have a note"},
+		{1101, 0x01, basics.Online, true, nil, [32]byte{'l', 'e', 'a', 's', 'e'}, empty, "not allowed to have a lease"},
+		{1101, 0x01, basics.Online, true, nil, empty, [32]byte{'r', 'e', 'k', 'e', 'y'}, "not allowed to rekey"},
+		{1101, 0xf1, basics.Online, true, nil, empty, empty, "not challenged by"},
+		{1101, 0x01, basics.Offline, true, nil, empty, empty, "not allowed for Offline"},
+		{1101, 0x01, basics.Online, false, nil, empty, empty, "not allowed when not IncentiveEligible"},
 	}
 	for _, tc := range cases {
 		const keyDilution = 777
@@ -164,6 +170,9 @@ func TestCheapRules(t *testing.T) {
 			Fee:        basics.MicroAlgos{Raw: 1},
 			FirstValid: tc.rnd - 10,
 			LastValid:  tc.rnd + 10,
+			Lease:      tc.lease,
+			Note:       tc.note,
+			RekeyTo:    tc.rekey,
 			HbAddress:  voter,
 			HbProof:    otss.Sign(id, seed),
 			HbSeed:     seed,
