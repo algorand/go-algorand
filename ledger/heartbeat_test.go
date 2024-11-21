@@ -89,7 +89,7 @@ func TestHeartBeat(t *testing.T) {
 				Sender:    addrs[1],
 				HbAddress: addrs[1],
 				HbSeed:    b0.Seed,
-				HbProof:   otss.Sign(firstID, b0.Seed),
+				HbProof:   otss.Sign(firstID, b0.Seed).ToHeartbeatProof(),
 			},
 				"does not match round 1's seed")
 
@@ -105,7 +105,7 @@ func TestHeartBeat(t *testing.T) {
 				Sender:    addrs[1],
 				HbAddress: addrs[1],
 				HbSeed:    b1.Seed,
-				HbProof:   otss.Sign(basics.OneTimeIDForRound(30, kd), b0.Seed),
+				HbProof:   otss.Sign(basics.OneTimeIDForRound(30, kd), b0.Seed).ToHeartbeatProof(),
 			},
 				"failed verification")
 
@@ -116,7 +116,7 @@ func TestHeartBeat(t *testing.T) {
 				Sender:    addrs[1],
 				HbAddress: addrs[1],
 				HbSeed:    b0.Seed,
-				HbProof:   otss.Sign(basics.OneTimeIDForRound(30, kd), b1.Seed),
+				HbProof:   otss.Sign(basics.OneTimeIDForRound(30, kd), b1.Seed).ToHeartbeatProof(),
 			},
 				"does not match round 1's")
 
@@ -127,7 +127,7 @@ func TestHeartBeat(t *testing.T) {
 				Sender:    addrs[1],
 				HbAddress: addrs[1],
 				HbSeed:    b1.Seed,
-				HbProof:   otss.Sign(basics.OneTimeIDForRound(30, kd), b1.Seed),
+				HbProof:   otss.Sign(basics.OneTimeIDForRound(30, kd), b1.Seed).ToHeartbeatProof(),
 			},
 				"failed verification")
 
@@ -138,7 +138,7 @@ func TestHeartBeat(t *testing.T) {
 				Sender:    addrs[1],
 				HbAddress: addrs[1],
 				HbSeed:    b1.Seed,
-				HbProof:   otss.Sign(basics.OneTimeIDForRound(30, kd), b1.Seed),
+				HbProof:   otss.Sign(basics.OneTimeIDForRound(30, kd), b1.Seed).ToHeartbeatProof(),
 			})
 
 		})
