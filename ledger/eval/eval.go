@@ -608,6 +608,7 @@ func (cs *roundCowState) Move(from basics.Address, to basics.Address, amt basics
 		if overflowed {
 			return fmt.Errorf("overspend (account %v, data %+v, tried to spend %v)", from, fromBal, amt)
 		}
+		fromBalNew = cs.autoHeartbeat(fromBal, fromBalNew)
 		err = cs.putAccount(from, fromBalNew)
 		if err != nil {
 			return err
@@ -636,6 +637,7 @@ func (cs *roundCowState) Move(from basics.Address, to basics.Address, amt basics
 		if overflowed {
 			return fmt.Errorf("balance overflow (account %v, data %+v, was going to receive %v)", to, toBal, amt)
 		}
+		toBalNew = cs.autoHeartbeat(toBal, toBalNew)
 		err = cs.putAccount(to, toBalNew)
 		if err != nil {
 			return err
@@ -643,6 +645,24 @@ func (cs *roundCowState) Move(from basics.Address, to basics.Address, amt basics
 	}
 
 	return nil
+}
+
+// autoHeartbeat compares `before` and `after`, returning a new AccountData
+// based on `after` but with an updated `LastHeartbeat` if `after` shows enough
+// balance increase to risk a false positive suspension for absenteeism.
+func (cs *roundCowState) autoHeartbeat(before, after ledgercore.AccountData) ledgercore.AccountData {
+	// No need to adjust unless account is suspendable
+	if after.Status != basics.Online || !after.IncentiveEligible {
+		return after
+	}
+
+	// Adjust only if balance has doubled
+	twice, o := basics.OMul(before.MicroAlgos.Raw, 2)
+	if !o && twice < after.MicroAlgos.Raw {
+		lookback := agreement.BalanceLookback(cs.ConsensusParams())
+		after.LastHeartbeat = cs.Round() + lookback
+	}
+	return after
 }
 
 func (cs *roundCowState) ConsensusParams() config.ConsensusParams {
