@@ -214,12 +214,13 @@ func loadCatchpointIntoDatabase(ctx context.Context, catchupAccessor ledger.Catc
 					if err != nil {
 						return fileHeader, err
 					}
-					var balanceHash, spverHash crypto.Digest
-					balanceHash, spverHash, _, err = catchupAccessor.GetVerifyData(ctx)
+					var balanceHash, spverHash, onlineAccountsHash, onlineRoundParamsHash crypto.Digest
+					balanceHash, spverHash, onlineAccountsHash, onlineRoundParamsHash, _, err = catchupAccessor.GetVerifyData(ctx)
 					if err != nil {
 						return fileHeader, err
 					}
-					fmt.Printf("accounts digest=%s, spver digest=%s\n\n", balanceHash, spverHash)
+					fmt.Printf("accounts digest=%s, spver digest=%s, onlineaccounts digest=%s onlineroundparams digest=%s\n\n",
+						balanceHash, spverHash, onlineAccountsHash, onlineRoundParamsHash)
 				}
 				return fileHeader, nil
 			}

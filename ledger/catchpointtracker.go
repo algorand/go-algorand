@@ -64,6 +64,10 @@ const (
 	// CatchpointFileVersionV7 is the catchpoint file version that is matching database schema V10.
 	// This version introduced state proof verification data and versioning for CatchpointLabel.
 	CatchpointFileVersionV7 = uint64(0202)
+	// CatchpointFileVersionV8 is the catchpoint file version that includes V6 and V7 data, as well
+	// as historical onlineaccounts and onlineroundparamstail table data (added in DB version V7,
+	// but until this version initialized with current round data, not 320 rounds of historical info).
+	CatchpointFileVersionV8 = uint64(0203)
 
 	// CatchpointContentFileName is a name of a file with catchpoint header info inside tar archive
 	CatchpointContentFileName = "content.msgpack"
@@ -212,13 +216,13 @@ func (ct *catchpointTracker) getSPVerificationData() (encodedData []byte, spVeri
 func (ct *catchpointTracker) finishFirstStage(ctx context.Context, dbRound basics.Round, blockProto protocol.ConsensusVersion, updatingBalancesDuration time.Duration) error {
 	ct.log.Infof("finishing catchpoint's first stage dbRound: %d", dbRound)
 
-	var totalKVs uint64
-	var totalAccounts uint64
+	var totalAccounts, totalKVs, totalOnlineAccounts, totalOnlineRoundParams uint64
 	var totalChunks uint64
 	var biggestChunkLen uint64
 	var spVerificationHash crypto.Digest
 	var spVerificationEncodedData []byte
 	var catchpointGenerationStats telemetryspec.CatchpointGenerationEventDetails
+	var onlineAccountsHash, onlineRoundParamsHash crypto.Digest
 
 	params := config.Consensus[blockProto]
 	if params.EnableCatchpointsWithSPContexts {
@@ -226,6 +230,26 @@ func (ct *catchpointTracker) finishFirstStage(ctx context.Context, dbRound basic
 		// and the encoded data for that hash will be added to the catchpoint file if catchpoint generation is enabled.
 		var err error
 		spVerificationEncodedData, spVerificationHash, err = ct.getSPVerificationData()
+		if err != nil {
+			return err
+		}
+	}
+	if params.EnableCatchpointsWithOnlineAccounts {
+		// Generate hashes of the onlineaccounts and onlineroundparams tables.
+		err := ct.dbs.Snapshot(func(ctx context.Context, tx trackerdb.SnapshotScope) error {
+			var dbErr error
+			onlineAccountsHash, dbErr = calculateVerificationHash(ctx, tx.MakeOnlineAccountsIter)
+			if dbErr != nil {
+				return dbErr
+
+			}
+
+			onlineRoundParamsHash, dbErr = calculateVerificationHash(ctx, tx.MakeOnlineRoundParamsIter)
+			if dbErr != nil {
+				return dbErr
+			}
+			return nil
+		})
 		if err != nil {
 			return err
 		}
@@ -239,7 +263,7 @@ func (ct *catchpointTracker) finishFirstStage(ctx context.Context, dbRound basic
 		var err error
 
 		catchpointGenerationStats.BalancesWriteTime = uint64(updatingBalancesDuration.Nanoseconds())
-		totalKVs, totalAccounts, totalChunks, biggestChunkLen, err = ct.generateCatchpointData(
+		totalAccounts, totalKVs, totalOnlineAccounts, totalOnlineRoundParams, totalChunks, biggestChunkLen, err = ct.generateCatchpointData(
 			ctx, dbRound, &catchpointGenerationStats, spVerificationEncodedData)
 		ct.catchpointDataWriting.Store(0)
 		if err != nil {
@@ -253,7 +277,9 @@ func (ct *catchpointTracker) finishFirstStage(ctx context.Context, dbRound basic
 			return err
 		}
 
-		err = ct.recordFirstStageInfo(ctx, tx, &catchpointGenerationStats, dbRound, totalKVs, totalAccounts, totalChunks, biggestChunkLen, spVerificationHash)
+		err = ct.recordFirstStageInfo(ctx, tx, &catchpointGenerationStats, dbRound,
+			totalAccounts, totalKVs, totalOnlineAccounts, totalOnlineRoundParams, totalChunks, biggestChunkLen,
+			spVerificationHash, onlineAccountsHash, onlineRoundParamsHash)
 		if err != nil {
 			return err
 		}
@@ -764,8 +790,14 @@ func (ct *catchpointTracker) createCatchpoint(ctx context.Context, accountsRound
 	var labelMaker ledgercore.CatchpointLabelMaker
 	var version uint64
 	params := config.Consensus[blockProto]
-	if params.EnableCatchpointsWithSPContexts {
-		labelMaker = ledgercore.MakeCatchpointLabelMakerCurrent(round, &blockHash, &dataInfo.TrieBalancesHash, dataInfo.Totals, &dataInfo.StateProofVerificationHash)
+	if params.EnableCatchpointsWithOnlineAccounts {
+		if !params.EnableCatchpointsWithSPContexts {
+			return fmt.Errorf("invalid params for catchpoint file version v8: SP contexts not enabled")
+		}
+		labelMaker = ledgercore.MakeCatchpointLabelMakerCurrent(round, &blockHash, &dataInfo.TrieBalancesHash, dataInfo.Totals, &dataInfo.StateProofVerificationHash, &dataInfo.OnlineAccountsHash, &dataInfo.OnlineRoundParamsHash)
+		version = CatchpointFileVersionV8
+	} else if params.EnableCatchpointsWithSPContexts {
+		labelMaker = ledgercore.MakeCatchpointLabelMakerV7(round, &blockHash, &dataInfo.TrieBalancesHash, dataInfo.Totals, &dataInfo.StateProofVerificationHash)
 		version = CatchpointFileVersionV7
 	} else {
 		labelMaker = ledgercore.MakeCatchpointLabelMakerV6(round, &blockHash, &dataInfo.TrieBalancesHash, dataInfo.Totals)
@@ -806,15 +838,17 @@ func (ct *catchpointTracker) createCatchpoint(ctx context.Context, accountsRound
 
 	// Make a catchpoint file.
 	header := CatchpointFileHeader{
-		Version:           version,
-		BalancesRound:     accountsRound,
-		BlocksRound:       round,
-		Totals:            dataInfo.Totals,
-		TotalAccounts:     dataInfo.TotalAccounts,
-		TotalKVs:          dataInfo.TotalKVs,
-		TotalChunks:       dataInfo.TotalChunks,
-		Catchpoint:        label,
-		BlockHeaderDigest: blockHash,
+		Version:                version,
+		BalancesRound:          accountsRound,
+		BlocksRound:            round,
+		Totals:                 dataInfo.Totals,
+		TotalAccounts:          dataInfo.TotalAccounts,
+		TotalKVs:               dataInfo.TotalKVs,
+		TotalOnlineAccounts:    dataInfo.TotalOnlineAccounts,
+		TotalOnlineRoundParams: dataInfo.TotalOnlineRoundParams,
+		TotalChunks:            dataInfo.TotalChunks,
+		Catchpoint:             label,
+		BlockHeaderDigest:      blockHash,
 	}
 
 	relCatchpointFilePath := filepath.Join(trackerdb.CatchpointDirName, trackerdb.MakeCatchpointFilePath(round))
@@ -855,6 +889,8 @@ func (ct *catchpointTracker) createCatchpoint(ctx context.Context, accountsRound
 		With("writingDuration", uint64(time.Since(startTime).Nanoseconds())).
 		With("accountsCount", dataInfo.TotalAccounts).
 		With("kvsCount", dataInfo.TotalKVs).
+		With("onlineAccountsCount", dataInfo.TotalOnlineAccounts).
+		With("onlineRoundParamsCount", dataInfo.TotalOnlineRoundParams).
 		With("fileSize", fileInfo.Size()).
 		With("filepath", relCatchpointFilePath).
 		With("catchpointLabel", label).
@@ -1165,7 +1201,7 @@ func (ct *catchpointTracker) isWritingCatchpointDataFile() bool {
 //   - Balance and KV chunk (named balances.x.msgpack).
 //     ...
 //   - Balance and KV chunk (named balances.x.msgpack).
-func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, accountsRound basics.Round, catchpointGenerationStats *telemetryspec.CatchpointGenerationEventDetails, encodedSPData []byte) (totalKVs, totalAccounts, totalChunks, biggestChunkLen uint64, err error) {
+func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, accountsRound basics.Round, catchpointGenerationStats *telemetryspec.CatchpointGenerationEventDetails, encodedSPData []byte) (totalAccounts, totalKVs, totalOnlineAccounts, totalOnlineRoundParams, totalChunks, biggestChunkLen uint64, err error) {
 	ct.log.Debugf("catchpointTracker.generateCatchpointData() writing catchpoint accounts for round %d", accountsRound)
 
 	startTime := time.Now()
@@ -1253,19 +1289,25 @@ func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, account
 	ledgerGeneratecatchpointMicros.AddMicrosecondsSince(start, nil)
 	if err != nil {
 		ct.log.Warnf("catchpointTracker.generateCatchpointData() %v", err)
-		return 0, 0, 0, 0, err
+		return 0, 0, 0, 0, 0, 0, err
 	}
 
 	catchpointGenerationStats.FileSize = uint64(catchpointWriter.writtenBytes)
 	catchpointGenerationStats.WritingDuration = uint64(time.Since(startTime).Nanoseconds())
 	catchpointGenerationStats.AccountsCount = catchpointWriter.totalAccounts
 	catchpointGenerationStats.KVsCount = catchpointWriter.totalKVs
+	catchpointGenerationStats.OnlineAccountsCount = catchpointWriter.totalOnlineAccounts
+	catchpointGenerationStats.OnlineRoundParamsCount = catchpointWriter.totalOnlineRoundParams
 	catchpointGenerationStats.AccountsRound = uint64(accountsRound)
 
-	return catchpointWriter.totalKVs, catchpointWriter.totalAccounts, catchpointWriter.chunkNum, catchpointWriter.biggestChunkLen, nil
+	return catchpointWriter.totalAccounts, catchpointWriter.totalKVs, catchpointWriter.totalOnlineAccounts, catchpointWriter.totalOnlineRoundParams, catchpointWriter.chunkNum, catchpointWriter.biggestChunkLen, nil
 }
 
-func (ct *catchpointTracker) recordFirstStageInfo(ctx context.Context, tx trackerdb.TransactionScope, catchpointGenerationStats *telemetryspec.CatchpointGenerationEventDetails, accountsRound basics.Round, totalKVs uint64, totalAccounts uint64, totalChunks uint64, biggestChunkLen uint64, stateProofVerificationHash crypto.Digest) error {
+func (ct *catchpointTracker) recordFirstStageInfo(ctx context.Context, tx trackerdb.TransactionScope,
+	catchpointGenerationStats *telemetryspec.CatchpointGenerationEventDetails,
+	accountsRound basics.Round,
+	totalAccounts, totalKVs, totalOnlineAccounts, totalOnlineRoundParams, totalChunks, biggestChunkLen uint64,
+	stateProofVerificationHash, onlineAccountsVerificationHash, onlineRoundParamsVerificationHash crypto.Digest) error {
 	ar, err := tx.MakeAccountsReader()
 	if err != nil {
 		return err
@@ -1308,10 +1350,14 @@ func (ct *catchpointTracker) recordFirstStageInfo(ctx context.Context, tx tracke
 		Totals:                     accountTotals,
 		TotalAccounts:              totalAccounts,
 		TotalKVs:                   totalKVs,
+		TotalOnlineAccounts:        totalOnlineAccounts,
+		TotalOnlineRoundParams:     totalOnlineRoundParams,
 		TotalChunks:                totalChunks,
 		BiggestChunkLen:            biggestChunkLen,
 		TrieBalancesHash:           trieBalancesHash,
 		StateProofVerificationHash: stateProofVerificationHash,
+		OnlineAccountsHash:         onlineAccountsVerificationHash,
+		OnlineRoundParamsHash:      onlineRoundParamsVerificationHash,
 	}
 
 	err = cw.InsertOrReplaceCatchpointFirstStageInfo(ctx, accountsRound, &info)

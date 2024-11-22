@@ -20,6 +20,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/algorand/go-algorand/ledger/encoded"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/util/db"
 )
@@ -61,8 +62,10 @@ type Reader interface {
 	MakeCatchpointPendingHashesIterator(hashCount int) CatchpointPendingHashesIter
 	// Note: Catchpoint tracker needs this on the reader handle in sqlite to not get locked by write txns
 	MakeCatchpointReader() (CatchpointReader, error)
-	MakeEncodedAccoutsBatchIter() EncodedAccountsBatchIter
+	MakeEncodedAccountsBatchIter() EncodedAccountsBatchIter
 	MakeKVsIter(ctx context.Context) (KVsIter, error)
+	MakeOnlineAccountsIter(ctx context.Context) (TableIterator[*encoded.OnlineAccountRecordV6], error)
+	MakeOnlineRoundParamsIter(ctx context.Context) (TableIterator[*encoded.OnlineRoundParamsRecordV6], error)
 }
 
 // Writer is the interface for the trackerdb write operations.

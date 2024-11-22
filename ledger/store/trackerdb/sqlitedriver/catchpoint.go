@@ -25,6 +25,7 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/ledger/encoded"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
@@ -464,6 +465,42 @@ func (cw *catchpointWriter) WriteCatchpointStagingKVs(ctx context.Context, keys 
 	return nil
 }
 
+// WriteCatchpointStagingOnlineAccounts inserts all the onlineaccounts in the provided array
+// into the catchpoint staging table catchpointonlineaccounts, and their hashes to the pending
+func (cw *catchpointWriter) WriteCatchpointStagingOnlineAccounts(ctx context.Context, oas []encoded.OnlineAccountRecordV6) error {
+	insertStmt, err := cw.e.PrepareContext(ctx, "INSERT INTO catchpointonlineaccounts(address, updround, normalizedonlinebalance, votelastvalid, data) VALUES(?, ?, ?, ?, ?)")
+	if err != nil {
+		return err
+	}
+	defer insertStmt.Close()
+
+	for i := 0; i < len(oas); i++ {
+		_, err := insertStmt.ExecContext(ctx, oas[i].Address[:], oas[i].UpdateRound, oas[i].NormalizedOnlineBalance, oas[i].VoteLastValid, oas[i].Data)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// WriteCatchpointStagingOnlineRoundParams inserts all the online round params in the provided array
+// into the catchpoint staging table catchpointonlineroundparamstail, and their hashes to the pending
+func (cw *catchpointWriter) WriteCatchpointStagingOnlineRoundParams(ctx context.Context, orps []encoded.OnlineRoundParamsRecordV6) error {
+	insertStmt, err := cw.e.PrepareContext(ctx, "INSERT INTO catchpointonlineroundparamstail(rnd, data) VALUES(?, ?)")
+	if err != nil {
+		return err
+	}
+	defer insertStmt.Close()
+
+	for i := 0; i < len(orps); i++ {
+		_, err := insertStmt.ExecContext(ctx, orps[i].Round, orps[i].Data)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (cw *catchpointWriter) ResetCatchpointStagingBalances(ctx context.Context, newCatchup bool) (err error) {
 	s := []string{
 		"DROP TABLE IF EXISTS catchpointbalances",
@@ -472,6 +509,8 @@ func (cw *catchpointWriter) ResetCatchpointStagingBalances(ctx context.Context, 
 		"DROP TABLE IF EXISTS catchpointpendinghashes",
 		"DROP TABLE IF EXISTS catchpointresources",
 		"DROP TABLE IF EXISTS catchpointkvstore",
+		"DROP TABLE IF EXISTS catchpointonlineaccounts",
+		"DROP TABLE IF EXISTS catchpointonlineroundparamstail",
 		"DROP TABLE IF EXISTS catchpointstateproofverification",
 		"DELETE FROM accounttotals where id='catchpointStaging'",
 	}
@@ -486,6 +525,7 @@ func (cw *catchpointWriter) ResetCatchpointStagingBalances(ctx context.Context, 
 		now := time.Now().UnixNano()
 		idxnameBalances := fmt.Sprintf("onlineaccountbals_idx_%d", now)
 		idxnameAddress := fmt.Sprintf("accountbase_address_idx_%d", now)
+		idxnameOnlineAccounts := fmt.Sprintf("onlineaccountnorm_idx_%d", now)
 
 		s = append(s,
 			"CREATE TABLE IF NOT EXISTS catchpointassetcreators (asset integer primary key, creator blob, ctype integer)",
@@ -494,10 +534,13 @@ func (cw *catchpointWriter) ResetCatchpointStagingBalances(ctx context.Context, 
 			"CREATE TABLE IF NOT EXISTS catchpointaccounthashes (id integer primary key, data blob)",
 			"CREATE TABLE IF NOT EXISTS catchpointresources (addrid INTEGER NOT NULL, aidx INTEGER NOT NULL, data BLOB NOT NULL, PRIMARY KEY (addrid, aidx) ) WITHOUT ROWID",
 			"CREATE TABLE IF NOT EXISTS catchpointkvstore (key blob primary key, value blob)",
+			"CREATE TABLE IF NOT EXISTS catchpointonlineaccounts (address BLOB NOT NULL, updround INTEGER NOT NULL, normalizedonlinebalance INTEGER NOT NULL, votelastvalid INTEGER NOT NULL, data BLOB NOT NULL, PRIMARY KEY (address, updround) )",
+			"CREATE TABLE IF NOT EXISTS catchpointonlineroundparamstail(rnd INTEGER NOT NULL PRIMARY KEY, data BLOB NOT NULL)",
 			"CREATE TABLE IF NOT EXISTS catchpointstateproofverification (lastattestedround INTEGER PRIMARY KEY NOT NULL, verificationContext BLOB NOT NULL)",
 
 			createNormalizedOnlineBalanceIndex(idxnameBalances, "catchpointbalances"), // should this be removed ?
 			createUniqueAddressBalanceIndex(idxnameAddress, "catchpointbalances"),
+			createNormalizedOnlineBalanceIndexOnline(idxnameOnlineAccounts, "catchpointonlineaccounts"),
 		)
 	}
 
@@ -547,6 +590,40 @@ func (cw *catchpointWriter) ApplyCatchpointStagingBalances(ctx context.Context, 
 		return err
 	}
 
+	return
+}
+
+func (cw *catchpointWriter) ApplyCatchpointStagingTablesV7(ctx context.Context) (err error) {
+	// Check if catchpoint tables have data
+	var accountCount int
+	err = cw.e.QueryRow("SELECT COUNT(1) FROM catchpointonlineaccounts").Scan(&accountCount)
+	if err != nil {
+		return err
+	}
+
+	var paramsCount int
+	err = cw.e.QueryRow("SELECT COUNT(1) FROM catchpointonlineroundparamstail").Scan(&paramsCount)
+	if err != nil {
+		return err
+	}
+
+	// If there is no data in the catchpoint staging tables, don't overwrite the existing v6 tables
+	if accountCount == 0 && paramsCount == 0 {
+		return nil
+	}
+
+	stmts := []string{
+		"DROP TABLE IF EXISTS onlineaccounts",
+		"DROP TABLE IF EXISTS onlineroundparamstail",
+		"ALTER TABLE catchpointonlineaccounts RENAME TO onlineaccounts",
+		"ALTER TABLE catchpointonlineroundparamstail RENAME TO onlineroundparamstail",
+	}
+	for _, stmt := range stmts {
+		_, err = cw.e.Exec(stmt)
+		if err != nil {
+			return err
+		}
+	}
 	return
 }
 

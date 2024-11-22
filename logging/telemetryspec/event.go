@@ -322,8 +322,8 @@ type CatchpointGenerationEventDetails struct {
 	BalancesWriteTime uint64
 	// AccountsCount is the number of accounts that were written into the generated catchpoint file
 	AccountsCount uint64
-	// KVsCount is the number of accounts that were written into the generated catchpoint file
-	KVsCount uint64
+	// KVsCount, OnlineAccountsCount, OnlineRoundParamsCount are sizes written into the generated catchpoint file
+	KVsCount, OnlineAccountsCount, OnlineRoundParamsCount uint64
 	// FileSize is the size of the catchpoint file, in bytes.
 	FileSize uint64
 	// MerkleTrieRootHash is the merkle trie root hash represents all accounts and kvs

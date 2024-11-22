@@ -125,6 +125,16 @@ func (r *accountsReader) TotalKVs(ctx context.Context) (total uint64, err error)
 	return
 }
 
+func (r *accountsReader) TotalOnlineAccountRows(ctx context.Context) (total uint64, err error) {
+	// TODO: catchpoint
+	return
+}
+
+func (r *accountsReader) TotalOnlineRoundParams(ctx context.Context) (total uint64, err error) {
+	// TODO: catchpoint
+	return
+}
+
 // TODO: this replicates some functionality from LookupOnlineHistory, implemented for onlineAccountsReader
 func (r *accountsReader) LookupOnlineAccountDataByAddress(addr basics.Address) (ref trackerdb.OnlineAccountRef, data []byte, err error) {
 	low, high := onlineAccountAddressRangePrefix(addr)

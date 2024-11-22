@@ -854,7 +854,7 @@ func TestExactAccountChunk(t *testing.T) {
 	catchpointFilePath := filepath.Join(tempDir, t.Name()+".catchpoint.tar.gz")
 
 	cph := testWriteCatchpoint(t, dl.validator.trackerDB(), catchpointDataFilePath, catchpointFilePath, 0)
-	require.EqualValues(t, cph.TotalChunks, 1)
+	require.EqualValues(t, cph.TotalChunks, 2)
 
 	l := testNewLedgerFromCatchpoint(t, dl.generator.trackerDB(), catchpointFilePath)
 	defer l.Close()
@@ -906,7 +906,7 @@ func TestCatchpointAfterTxns(t *testing.T) {
 	catchpointFilePath := filepath.Join(tempDir, t.Name()+".catchpoint.tar.gz")
 
 	cph := testWriteCatchpoint(t, dl.validator.trackerDB(), catchpointDataFilePath, catchpointFilePath, 0)
-	require.EqualValues(t, 2, cph.TotalChunks)
+	require.EqualValues(t, 3, cph.TotalChunks)
 
 	l := testNewLedgerFromCatchpoint(t, dl.validator.trackerDB(), catchpointFilePath)
 	defer l.Close()
@@ -922,7 +922,7 @@ func TestCatchpointAfterTxns(t *testing.T) {
 
 	// Write and read back in, and ensure even the last effect exists.
 	cph = testWriteCatchpoint(t, dl.validator.trackerDB(), catchpointDataFilePath, catchpointFilePath, 0)
-	require.EqualValues(t, cph.TotalChunks, 2) // Still only 2 chunks, as last was in a recent block
+	require.EqualValues(t, cph.TotalChunks, 3) // Still only 3 chunks, as last was in a recent block
 
 	// Drive home the point that `last` is _not_ included in the catchpoint by inspecting balance read from catchpoint.
 	{
@@ -938,7 +938,7 @@ func TestCatchpointAfterTxns(t *testing.T) {
 	}
 
 	cph = testWriteCatchpoint(t, dl.validator.trackerDB(), catchpointDataFilePath, catchpointFilePath, 0)
-	require.EqualValues(t, cph.TotalChunks, 3)
+	require.EqualValues(t, cph.TotalChunks, 4)
 
 	l = testNewLedgerFromCatchpoint(t, dl.validator.trackerDB(), catchpointFilePath)
 	defer l.Close()
@@ -1028,7 +1028,7 @@ func TestCatchpointAfterBoxTxns(t *testing.T) {
 	catchpointFilePath := filepath.Join(tempDir, t.Name()+".catchpoint.tar.gz")
 
 	cph := testWriteCatchpoint(t, dl.generator.trackerDB(), catchpointDataFilePath, catchpointFilePath, 0)
-	require.EqualValues(t, 2, cph.TotalChunks)
+	require.EqualValues(t, 3, cph.TotalChunks)
 
 	l := testNewLedgerFromCatchpoint(t, dl.generator.trackerDB(), catchpointFilePath)
 	defer l.Close()
