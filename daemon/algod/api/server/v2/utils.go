@@ -613,14 +613,16 @@ func convertTxnGroupResult(txnGroupResult simulation.TxnGroupResult) PreEncodedS
 		UnnamedResourcesAccessed: convertUnnamedResourcesAccessed(txnGroupResult.UnnamedResourcesAccessed),
 	}
 
-	extraResourceArrays := make([]model.ResourceArrays, len(txnGroupResult.PopulatedResourceArrays)-len(txnResults))
+	if len(txnGroupResult.PopulatedResourceArrays)-len(txnResults) > 0 {
+		extraResourceArrays := make([]model.ResourceArrays, len(txnGroupResult.PopulatedResourceArrays)-len(txnResults))
 
-	// Check the rest of txnGroupResult.PopulatedResourceArrays to see if there are any non-empty ones, staring at the len(txnResults)
-	for i := len(txnResults); i < len(txnGroupResult.PopulatedResourceArrays); i++ {
-		extraResourceArrays[i] = *convertPopulatedResourceArrays(txnGroupResult.PopulatedResourceArrays[i])
+		// Check the rest of txnGroupResult.PopulatedResourceArrays to see if there are any non-empty ones, staring at the len(txnResults)
+		for i := len(txnResults); i < len(txnGroupResult.PopulatedResourceArrays); i++ {
+			extraResourceArrays[i] = *convertPopulatedResourceArrays(txnGroupResult.PopulatedResourceArrays[i])
+		}
+
+		encoded.ExtraResourceArrays = &extraResourceArrays
 	}
-
-	encoded.ExtraResourceArrays = &extraResourceArrays
 
 	if len(txnGroupResult.FailedAt) > 0 {
 		failedAt := slices.Clone[[]uint64, uint64](txnGroupResult.FailedAt)
