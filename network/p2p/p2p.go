@@ -41,7 +41,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
-	basichost "github.com/libp2p/go-libp2p/p2p/host/basic"
 	rcmgr "github.com/libp2p/go-libp2p/p2p/host/resource-manager"
 	"github.com/libp2p/go-libp2p/p2p/muxer/yamux"
 	"github.com/libp2p/go-libp2p/p2p/security/noise"
@@ -281,9 +280,13 @@ func (s *serviceImpl) dialNode(ctx context.Context, peer *peer.AddrInfo) error {
 
 // AddrInfo returns the peer.AddrInfo for self
 func (s *serviceImpl) AddrInfo() peer.AddrInfo {
+	addrs, err := s.host.Network().InterfaceListenAddresses()
+	if err != nil {
+		s.log.Errorf("failed to get listen addresses: %v", err)
+	}
 	return peer.AddrInfo{
 		ID:    s.host.ID(),
-		Addrs: s.host.(*basichost.BasicHost).AllAddrs(), // fetch all addresses, including private ones
+		Addrs: addrs,
 	}
 }
 
@@ -349,7 +352,6 @@ func formatPeerTelemetryInfoProtocolName(telemetryID string, telemetryInstance s
 var private6 = parseCIDR([]string{
 	"100::/64",
 	"2001:2::/48",
-	"2001:db8::/32", // multiaddr v0.13 has it
 })
 
 // parseCIDR converts string CIDRs to net.IPNet.
