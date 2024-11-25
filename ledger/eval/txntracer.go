@@ -18,10 +18,10 @@ package eval
 
 import (
 	"fmt"
+	"maps"
+	"slices"
 
 	"github.com/algorand/go-deadlock"
-	"golang.org/x/exp/maps"
-	"golang.org/x/exp/slices"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"

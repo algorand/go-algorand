@@ -21,10 +21,9 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math"
+	"slices"
 	"strings"
 	"testing"
-
-	"golang.org/x/exp/slices"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"

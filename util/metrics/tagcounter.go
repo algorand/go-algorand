@@ -17,12 +17,12 @@
 package metrics
 
 import (
+	"maps"
 	"strconv"
 	"strings"
 	"sync/atomic"
 
 	"github.com/algorand/go-deadlock"
-	"golang.org/x/exp/maps"
 )
 
 // NewTagCounterFiltered makes a set of metrics under rootName for tagged counting.

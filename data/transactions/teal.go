@@ -18,11 +18,11 @@ package transactions
 
 import (
 	"bytes"
+	"maps"
+	"slices"
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
-	"golang.org/x/exp/maps"
-	"golang.org/x/exp/slices"
 )
 
 // EvalDelta stores StateDeltas for an application's global key/value store, as

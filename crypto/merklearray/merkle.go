@@ -21,10 +21,10 @@ import (
 	"errors"
 	"fmt"
 	"hash"
+	"slices"
 	"sort"
 
 	"github.com/algorand/go-algorand/crypto"
-	"golang.org/x/exp/slices"
 )
 
 const (
