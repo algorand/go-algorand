@@ -383,7 +383,11 @@ var sendCmd = &cobra.Command{
 		if program != nil {
 			ph := logic.HashProgram(program)
 			pha := basics.Address(ph)
-			fromAddressResolved = pha.String()
+			if account == "" {
+				fromAddressResolved = pha.String()
+			} else {
+				fromAddressResolved = accountList.getAddressByName(account)
+			}
 			programArgs = getProgramArgs()
 		} else {
 			// Check if from was specified, else use default
