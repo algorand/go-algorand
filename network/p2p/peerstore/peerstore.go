@@ -20,12 +20,12 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"slices"
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/peer"
 	libp2p "github.com/libp2p/go-libp2p/core/peerstore"
 	mempstore "github.com/libp2p/go-libp2p/p2p/host/peerstore/pstoremem"
-	"golang.org/x/exp/slices"
 
 	"github.com/algorand/go-algorand/network/phonebook"
 	"github.com/algorand/go-deadlock"

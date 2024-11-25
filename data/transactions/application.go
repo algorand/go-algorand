@@ -18,9 +18,9 @@ package transactions
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/algorand/go-algorand/data/basics"
-	"golang.org/x/exp/slices"
 )
 
 const (

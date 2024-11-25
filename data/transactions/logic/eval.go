@@ -28,10 +28,9 @@ import (
 	"math/big"
 	"math/bits"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
-
-	"golang.org/x/exp/slices"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"

@@ -18,11 +18,11 @@ package apply
 
 import (
 	"fmt"
+	"maps"
 	"math/rand"
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"golang.org/x/exp/maps"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"

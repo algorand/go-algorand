@@ -21,11 +21,11 @@ package metrics
 
 import (
 	"context"
+	"slices"
 	"strings"
 
 	"go.opencensus.io/metric/metricdata"
 	"go.opencensus.io/metric/metricexport"
-	"golang.org/x/exp/slices"
 )
 
 type defaultOpencensusGatherer struct {

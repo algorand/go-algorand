@@ -20,15 +20,15 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
+	"slices"
 	"strings"
 	"unicode"
 	"unicode/utf8"
 
 	"github.com/algorand/go-codec/codec"
 	"github.com/labstack/echo/v4"
-	"golang.org/x/exp/maps"
-	"golang.org/x/exp/slices"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
@@ -494,23 +494,23 @@ func convertUnnamedResourcesAccessed(resources *simulation.ResourceTracker) *mod
 		return nil
 	}
 	return &model.SimulateUnnamedResourcesAccessed{
-		Accounts: sliceOrNil(stringSlice(maps.Keys(resources.Accounts))),
-		Assets:   sliceOrNil(uint64Slice(maps.Keys(resources.Assets))),
-		Apps:     sliceOrNil(uint64Slice(maps.Keys(resources.Apps))),
-		Boxes: sliceOrNil(convertSlice(maps.Keys(resources.Boxes), func(box logic.BoxRef) model.BoxReference {
+		Accounts: sliceOrNil(stringSlice(slices.Collect(maps.Keys(resources.Accounts)))),
+		Assets:   sliceOrNil(uint64Slice(slices.Collect(maps.Keys(resources.Assets)))),
+		Apps:     sliceOrNil(uint64Slice(slices.Collect(maps.Keys(resources.Apps)))),
+		Boxes: sliceOrNil(convertSlice(slices.Collect(maps.Keys(resources.Boxes)), func(box logic.BoxRef) model.BoxReference {
 			return model.BoxReference{
 				App:  uint64(box.App),
 				Name: []byte(box.Name),
 			}
 		})),
 		ExtraBoxRefs: omitEmpty(uint64(resources.NumEmptyBoxRefs)),
-		AssetHoldings: sliceOrNil(convertSlice(maps.Keys(resources.AssetHoldings), func(holding ledgercore.AccountAsset) model.AssetHoldingReference {
+		AssetHoldings: sliceOrNil(convertSlice(slices.Collect(maps.Keys(resources.AssetHoldings)), func(holding ledgercore.AccountAsset) model.AssetHoldingReference {
 			return model.AssetHoldingReference{
 				Account: holding.Address.String(),
 				Asset:   uint64(holding.Asset),
 			}
 		})),
-		AppLocals: sliceOrNil(convertSlice(maps.Keys(resources.AppLocals), func(local ledgercore.AccountApp) model.ApplicationLocalReference {
+		AppLocals: sliceOrNil(convertSlice(slices.Collect(maps.Keys(resources.AppLocals)), func(local ledgercore.AccountApp) model.ApplicationLocalReference {
 			return model.ApplicationLocalReference{
 				Account: local.Address.String(),
 				App:     uint64(local.App),
