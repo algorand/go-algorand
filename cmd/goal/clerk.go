@@ -477,6 +477,13 @@ var sendCmd = &cobra.Command{
 					Args:  programArgs,
 				},
 			}
+			if signerAddress != "" {
+				var authAddr, err = basics.UnmarshalChecksumAddress(signerAddress)
+				if err != nil {
+					reportErrorf("Signer invalid (%s): %v", signerAddress, err)
+				}
+				stx.AuthAddr = basics.Address(authAddr)
+			}
 		} else {
 			signTx := sign || (outFilename == "")
 			var authAddr basics.Address
