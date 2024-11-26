@@ -105,6 +105,9 @@ func TestHeartbeat(t *testing.T) {
 // being heartbeat for is online, under risk of suspension by challenge, and
 // incentive eligible.
 func TestCheapRules(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	type tcase struct {
 		rnd              basics.Round
 		addrStart        byte

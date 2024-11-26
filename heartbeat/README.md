@@ -16,7 +16,7 @@ Algo holders are incentivized to run participation nodes in order to earn more A
 security for the entire Algorand network.
 
 With the financial incentive to run participation nodes comes the risk that some nodes may be
-operated without sufficient care.  Therefore, a mechanism to _suspend_ nodes that appear to
+operated without sufficient care.  Therefore, a mechanism to _suspend_ nodes that appear to be
 performing poorly (or not at all). Appearances can be deceiving, however. Since Algorand is a
 probabilistic consensus protocol, pure chance might lead to a node appearing to be delinquent. A new
 transaction type, the _heartbeat_, allows a node to explicitly indicate that it is online even if it
@@ -105,7 +105,7 @@ of operational errors.
 
 However, the absenteeism mechanism is very slow to notice small accounts.  An account with 30,000
 Algos might represent 1/100,000 or less of total stake. It would only be considered absent after a
-million or more rounds without a proposal.  At current network speeds, this about a month. With such
+million or more rounds without a proposal.  At current network speeds, this is about a month. With such
 slow detection, a financially motived entity might make the decision to run a node even if they lack
 the wherewithal to run the node with excellent uptime. A worst case scenario might be a node that is
 turned off daily, overnight.  Such a node would generate profit for the runner, would probably never
@@ -132,7 +132,7 @@ for is _not_ the `Sender` of the transaction, which can be any address.
 It is relatively easy for a bad actor to emit Heartbeats for its accounts without actually
 participating. However, there is no financial incentive to do so.  Pretending to be operational when
 offline does not earn block payouts.  Furthermore, running a server to monitor the block chain to
-notice challenges and gather the recent blockseed is not significantly cheap that simply running a
+notice challenges and gather the recent blockseed is not significantly cheaper that simply running a
 functional node. It is _already_ possible for malicious, well-resourced accounts to cause consensus
 difficulties by going online without actually participating.  Heartbeats do not mitigate that
 risk. But these mechanisms have been designed to avoid _motivating_ such behavior, so that they can
@@ -159,13 +159,13 @@ The conditions for a free Heartbeat are:
 ## Heartbeat Service
 
 The Heartbeat Service (`heartbeat/service.go`) watches the state of all acounts for which `algod`
-has participation keys.  If any of those acounts meets the requirements above, a heartbeat
+has participation keys.  If any of those accounts meets the requirements above, a heartbeat
 transaction is sent, starting with the round following half a grace period from the challenge. It
 uses the (presumably unfunded) logicsig that does nothing except preclude rekey operations.
 
 The heartbeat service does _not_ heartbeat if an account is unlucky and threatened to be considered
 absent.  We presume such false postives to be so unlikely that, if they occur, the node must be
-brought back online manually. It would be reasonable to consider:
+brought back online manually. It would be reasonable to consider in the future:
 
 1. Making heartbeats free for accounts that are "nearly absent".
 
@@ -173,4 +173,3 @@ or
 
 2. Allowing for paid heartbeats by the heartbeat service when configured with access to a funded
    account's spending key.
-
