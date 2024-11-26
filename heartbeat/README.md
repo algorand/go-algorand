@@ -125,9 +125,10 @@ these low-stake nodes to operate with poor uptimes.
 The absenteeism mechanism is subject to rare false positives.  The challenge mechanism explicitly
 requires an affirmative response from nodes to indicate they are operating properly on behalf of a
 challenged account.  Both of these needs are addressed by a new transaction type --- _Heartbeat_. A
-Heartbeat transaction contains a signature (`HbProof`) of a recent block seed (`HbSeed`) under the
-participation key of the account (`HbAddress`) in question. Note that the account being heartbeat
-for is _not_ the `Sender` of the transaction, which can be any address.
+Heartbeat transaction contains a signature (`HbProof`) of the blockseed (`HbSeed`) of the
+transaction's firstValid block under the participation key of the account (`HbAddress`) in
+question. Note that the account being heartbeat for is _not_ the `Sender` of the transaction, which
+can be any address.
 
 It is relatively easy for a bad actor to emit Heartbeats for its accounts without actually
 participating. However, there is no financial incentive to do so.  Pretending to be operational when

@@ -97,15 +97,15 @@ func Heartbeat(hb transactions.HeartbeatTxnFields, header transactions.Header, b
 	// heartbeats are expected to sign with the partkey for their last-valid round
 	id := basics.OneTimeIDForRound(header.LastValid, kd)
 
-	// heartbeats sign a message consisting of the BlockSeed of the round before
-	// first-valid, to discourage unsavory behaviour like presigning a bunch of
+	// heartbeats sign a message consisting of the BlockSeed of the first-valid
+	// round, to discourage unsavory behaviour like presigning a bunch of
 	// heartbeats for later use keeping an unavailable account online.
-	hdr, err := provider.BlockHdr(header.FirstValid - 1)
+	hdr, err := provider.BlockHdr(header.FirstValid)
 	if err != nil {
 		return err
 	}
 	if hdr.Seed != hb.HbSeed {
-		return fmt.Errorf("provided seed %v does not match round %d's seed %v", hb.HbSeed, header.FirstValid-1, hdr.Seed)
+		return fmt.Errorf("provided seed %v does not match round %d's seed %v", hb.HbSeed, header.FirstValid, hdr.Seed)
 	}
 
 	if !sv.Verify(id, hdr.Seed, hb.HbProof.ToOneTimeSignature()) {

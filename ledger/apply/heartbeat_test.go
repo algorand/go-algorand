@@ -62,7 +62,7 @@ func TestHeartbeat(t *testing.T) {
 
 	seed := committee.Seed{0x01, 0x02, 0x03}
 	mockHdr := makeMockHeaders(bookkeeping.BlockHeader{
-		Round: fv - 1,
+		Round: fv,
 		Seed:  seed,
 	})
 

@@ -77,9 +77,7 @@ func (s *Service) Stop() {
 
 // findChallenged() returns a list of accounts that need a heartbeat because
 // they have been challenged.
-func (s *Service) findChallenged(rules config.ProposerPayoutRules) []account.ParticipationRecordForRound {
-	current := s.ledger.LastRound()
-
+func (s *Service) findChallenged(rules config.ProposerPayoutRules, current basics.Round) []account.ParticipationRecordForRound {
 	ch := apply.FindChallenge(rules, current, s.ledger, apply.ChRisky)
 	if ch.IsZero() {
 		return nil
@@ -114,6 +112,7 @@ func (s *Service) findChallenged(rules config.ProposerPayoutRules) []account.Par
 // designed to be extremely unlikely anyway.)
 func (s *Service) loop() {
 	defer s.wg.Done()
+	suppress := make(map[basics.Address]basics.Round)
 	latest := s.ledger.LastRound()
 	for {
 		// exit if Done, else wait for next round
@@ -132,12 +131,20 @@ func (s *Service) loop() {
 		}
 		proto := config.Consensus[lastHdr.CurrentProtocol]
 
-		for _, pr := range s.findChallenged(proto.Payouts) {
+		for _, pr := range s.findChallenged(proto.Payouts, latest) {
+			if suppress[pr.Account] > latest {
+				continue
+			}
 			stxn := s.prepareHeartbeat(pr, lastHdr)
 			s.log.Infof("sending heartbeat %v for %v\n", stxn.Txn.HeartbeatTxnFields, pr.Account)
 			err = s.bcast.BroadcastInternalSignedTxGroup([]transactions.SignedTxn{stxn})
 			if err != nil {
 				s.log.Errorf("error broadcasting heartbeat %v for %v: %v", stxn, pr.Account, err)
+			} else {
+				// Don't bother heartbeating again until the last one expires.
+				// If it is accepted, we won't need to (because we won't be
+				// under challenge any more).
+				suppress[pr.Account] = stxn.Txn.LastValid
 			}
 		}
 	}
@@ -150,14 +157,18 @@ txn RekeyTo; global ZeroAddress; ==
 `)
 var acceptingSender = basics.Address(logic.HashProgram(acceptingByteCode))
 
+// hbLifetime is somewhat short. It seems better to try several times during the
+// grace period than to try a single time with a longer lifetime.
+const hbLifetime = 10
+
 func (s *Service) prepareHeartbeat(pr account.ParticipationRecordForRound, latest bookkeeping.BlockHeader) transactions.SignedTxn {
 	var stxn transactions.SignedTxn
 	stxn.Lsig = transactions.LogicSig{Logic: acceptingByteCode}
 	stxn.Txn.Type = protocol.HeartbeatTx
 	stxn.Txn.Header = transactions.Header{
 		Sender:      acceptingSender,
-		FirstValid:  latest.Round + 1,
-		LastValid:   latest.Round + 1 + 100, // maybe use the grace period?
+		FirstValid:  latest.Round,
+		LastValid:   latest.Round + hbLifetime,
 		GenesisHash: latest.GenesisHash,
 	}
 
