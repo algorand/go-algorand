@@ -30,6 +30,7 @@ import (
 	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/data/stateproofmsg"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/eval"
@@ -1414,6 +1415,57 @@ func TestEvaluatorPrefetcherAlignmentStateProof(t *testing.T) {
 				FirstAttestedRound:     257,
 				LastAttestedRound:      512,
 			},
+		},
+	}
+
+	requested, prefetched := run(t, l, txn)
+
+	prefetched.pretend(rewardsPool())
+	require.Equal(t, requested, prefetched)
+}
+
+func TestEvaluatorPrefetcherAlignmentHeartbeat(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	// We need valid part keys to evaluate the Heartbeat.
+	const kd = 10
+	firstID := basics.OneTimeIDForRound(0, kd)
+	otss := crypto.GenerateOneTimeSignatureSecrets(firstID.Batch, 5)
+
+	l := &prefetcherAlignmentTestLedger{
+		balances: map[basics.Address]ledgercore.AccountData{
+			rewardsPool(): {
+				AccountBaseData: ledgercore.AccountBaseData{
+					MicroAlgos: basics.MicroAlgos{Raw: 1234567890},
+				},
+			},
+			makeAddress(1): {
+				AccountBaseData: ledgercore.AccountBaseData{
+					MicroAlgos: basics.MicroAlgos{Raw: 1000001},
+				},
+			},
+			makeAddress(2): {
+				AccountBaseData: ledgercore.AccountBaseData{
+					MicroAlgos: basics.MicroAlgos{Raw: 100_000},
+				},
+				VotingData: basics.VotingData{
+					VoteID: otss.OneTimeSignatureVerifier,
+				},
+			},
+		},
+	}
+
+	txn := transactions.Transaction{
+		Type: protocol.HeartbeatTx,
+		Header: transactions.Header{
+			Sender:      makeAddress(1),
+			GenesisHash: genesisHash(),
+			Fee:         basics.Algos(1), // Heartbeat txn is unusual in that it checks fees a bit.
+		},
+		HeartbeatTxnFields: transactions.HeartbeatTxnFields{
+			HbAddress: makeAddress(2),
+			HbProof:   otss.Sign(firstID, committee.Seed(genesisHash())).ToHeartbeatProof(),
+			HbSeed:    committee.Seed(genesisHash()),
 		},
 	}
 
