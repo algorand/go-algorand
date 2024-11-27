@@ -34,7 +34,7 @@ import (
    a more realistic ledger. */
 
 // TestHearbeat exercises heartbeat transactions
-func TestHeartBeat(t *testing.T) {
+func TestHeartbeat(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
@@ -48,6 +48,8 @@ func TestHeartBeat(t *testing.T) {
 			dl := NewDoubleLedger(t, genBalances, cv, cfg)
 			defer dl.Close()
 
+			dl.txns() // tests involving seed are easier if we have the first block in ledger
+
 			// empty HbAddress means ZeroAddress, and it's not online
 			dl.txn(&txntest.Txn{Type: "hb", Sender: addrs[1]},
 				"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ has no voting keys")
@@ -57,17 +59,18 @@ func TestHeartBeat(t *testing.T) {
 				addrs[2].String()+" has no voting keys")
 
 			// addrs[1] is online, it has voting keys, but seed is missing
-			dl.txn(&txntest.Txn{Type: "hb", Sender: addrs[1], HbAddress: addrs[1]},
-				"does not match round 0's seed")
+			dl.txn(&txntest.Txn{Type: "hb", Sender: addrs[1], HbAddress: addrs[1], FirstValid: 1},
+				"does not match round 1's seed")
 
 			// NewTestGenesis creates random VoterID. Verification will fail.
-			b0, err := dl.generator.BlockHdr(0)
+			b1, err := dl.generator.BlockHdr(1)
 			require.NoError(t, err)
 			dl.txn(&txntest.Txn{
-				Type:      "hb",
-				Sender:    addrs[1],
-				HbAddress: addrs[1],
-				HbSeed:    b0.Seed,
+				Type:       "hb",
+				Sender:     addrs[1],
+				HbAddress:  addrs[1],
+				HbSeed:     b1.Seed,
+				FirstValid: 1,
 			},
 				"heartbeat failed verification with")
 
@@ -84,61 +87,68 @@ func TestHeartBeat(t *testing.T) {
 			})
 
 			// Supply and sign the wrong HbSeed
+			wrong := b1.Seed
+			wrong[0]++
 			dl.txn(&txntest.Txn{
-				Type:      "hb",
-				Sender:    addrs[1],
-				HbAddress: addrs[1],
-				HbSeed:    b0.Seed,
-				HbProof:   otss.Sign(firstID, b0.Seed).ToHeartbeatProof(),
+				Type:       "hb",
+				Sender:     addrs[1],
+				HbAddress:  addrs[1],
+				HbSeed:     wrong,
+				HbProof:    otss.Sign(firstID, wrong).ToHeartbeatProof(),
+				FirstValid: 1,
 			},
 				"does not match round 1's seed")
 
-			b1, err := dl.generator.BlockHdr(1)
+			b2, err := dl.generator.BlockHdr(2)
 			require.NoError(t, err)
 
 			// Supply the right seed, but sign something else. We're also now
 			// setting LastValid and the proper OneTimeIDForRound, so that these
 			// tests are failing for the reasons described, not that.
 			dl.txn(&txntest.Txn{
-				Type:      "hb",
-				LastValid: 30,
-				Sender:    addrs[1],
-				HbAddress: addrs[1],
-				HbSeed:    b1.Seed,
-				HbProof:   otss.Sign(basics.OneTimeIDForRound(30, kd), b0.Seed).ToHeartbeatProof(),
+				Type:       "hb",
+				LastValid:  30,
+				Sender:     addrs[1],
+				HbAddress:  addrs[1],
+				HbSeed:     b2.Seed,
+				HbProof:    otss.Sign(basics.OneTimeIDForRound(30, kd), wrong).ToHeartbeatProof(),
+				FirstValid: 2,
 			},
 				"failed verification")
 
 			// Sign the right seed, but supply something else
 			dl.txn(&txntest.Txn{
-				Type:      "hb",
-				LastValid: 30,
-				Sender:    addrs[1],
-				HbAddress: addrs[1],
-				HbSeed:    b0.Seed,
-				HbProof:   otss.Sign(basics.OneTimeIDForRound(30, kd), b1.Seed).ToHeartbeatProof(),
+				Type:       "hb",
+				LastValid:  30,
+				Sender:     addrs[1],
+				HbAddress:  addrs[1],
+				HbSeed:     wrong,
+				HbProof:    otss.Sign(basics.OneTimeIDForRound(30, kd), b2.Seed).ToHeartbeatProof(),
+				FirstValid: 2,
 			},
-				"does not match round 1's")
+				"does not match round 2's")
 
 			// Mismatch the last valid and OneTimeIDForRound
 			dl.txn(&txntest.Txn{
-				Type:      "hb",
-				LastValid: 29,
-				Sender:    addrs[1],
-				HbAddress: addrs[1],
-				HbSeed:    b1.Seed,
-				HbProof:   otss.Sign(basics.OneTimeIDForRound(30, kd), b1.Seed).ToHeartbeatProof(),
+				Type:       "hb",
+				LastValid:  29,
+				Sender:     addrs[1],
+				HbAddress:  addrs[1],
+				HbSeed:     b2.Seed,
+				HbProof:    otss.Sign(basics.OneTimeIDForRound(30, kd), b2.Seed).ToHeartbeatProof(),
+				FirstValid: 2,
 			},
 				"failed verification")
 
 			// now we can make a real heartbeat, with a properly signed blockseed
 			dl.txn(&txntest.Txn{
-				Type:      "hb",
-				LastValid: 30,
-				Sender:    addrs[1],
-				HbAddress: addrs[1],
-				HbSeed:    b1.Seed,
-				HbProof:   otss.Sign(basics.OneTimeIDForRound(30, kd), b1.Seed).ToHeartbeatProof(),
+				Type:       "hb",
+				LastValid:  30,
+				Sender:     addrs[1],
+				HbAddress:  addrs[1],
+				HbSeed:     b2.Seed,
+				HbProof:    otss.Sign(basics.OneTimeIDForRound(30, kd), b2.Seed).ToHeartbeatProof(),
+				FirstValid: 2,
 			})
 
 		})

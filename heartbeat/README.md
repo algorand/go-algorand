@@ -126,19 +126,23 @@ The absenteeism mechanism is subject to rare false positives.  The challenge mec
 requires an affirmative response from nodes to indicate they are operating properly on behalf of a
 challenged account.  Both of these needs are addressed by a new transaction type --- _Heartbeat_. A
 Heartbeat transaction contains a signature (`HbProof`) of the blockseed (`HbSeed`) of the
-transaction's firstValid block under the participation key of the account (`HbAddress`) in
+transaction's FirstValid block under the participation key of the account (`HbAddress`) in
 question. Note that the account being heartbeat for is _not_ the `Sender` of the transaction, which
-can be any address.
+can be any address. Signing a recent block seed makes it more difficult to pre-sign heartbeats that
+another machine might send on your behalf. Signing the FirstValid's blockseed (rather than
+FirstValid-1) simply enforces a best practice: emit a transaction with FirstValid set to a committed
+round, not a future round, avoiding a race. The node you send transactions to might not have
+committed your latest round yet.
 
 It is relatively easy for a bad actor to emit Heartbeats for its accounts without actually
 participating. However, there is no financial incentive to do so.  Pretending to be operational when
 offline does not earn block payouts.  Furthermore, running a server to monitor the block chain to
 notice challenges and gather the recent blockseed is not significantly cheaper that simply running a
 functional node. It is _already_ possible for malicious, well-resourced accounts to cause consensus
-difficulties by going online without actually participating.  Heartbeats do not mitigate that
-risk. But these mechanisms have been designed to avoid _motivating_ such behavior, so that they can
-accomplish their actual goal of noticing poor behavior stemming from _inadvertent_ operational
-problems.
+difficulties by putting significant stake online without actually participating.  Heartbeats do not
+mitigate that risk. But these mechanisms have been designed to avoid _motivating_ such behavior, so
+that they can accomplish their actual goal of noticing poor behavior stemming from _inadvertent_
+operational problems.
 
 ## Free Heartbeats
 
