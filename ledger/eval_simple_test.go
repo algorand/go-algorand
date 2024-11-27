@@ -281,15 +281,15 @@ func TestPayoutFees(t *testing.T) {
 			// new fields are in the header
 			require.EqualValues(t, 2000, vb.Block().FeesCollected.Raw)
 			require.EqualValues(t, bonus1, vb.Block().Bonus.Raw)
-			require.EqualValues(t, bonus1+1_500, vb.Block().ProposerPayout().Raw)
+			require.EqualValues(t, bonus1+1_000, vb.Block().ProposerPayout().Raw)
 			// This last one is really only testing the "fake" agreement that
 			// happens in dl.endBlock().
 			require.EqualValues(t, proposer, vb.Block().Proposer())
 
 			// At the end of the block, part of the fees + bonus have been moved to
 			// the proposer.
-			require.EqualValues(t, bonus1+1500, postprop-preprop) // based on 75% in config/consensus.go
-			require.EqualValues(t, bonus1-500, presink-postsink)
+			require.EqualValues(t, bonus1+1_000, postprop-preprop) // based on 75% in config/consensus.go
+			require.EqualValues(t, bonus1-1_000, presink-postsink)
 			require.Equal(t, prp.LastProposed, dl.generator.Latest())
 		} else {
 			require.False(t, dl.generator.GenesisProto().Payouts.Enabled)

@@ -575,7 +575,7 @@ func TestPaysetGroups(t *testing.T) {
 	startPaysetGroupsTime := time.Now()
 	err := PaysetGroups(context.Background(), txnGroups, blkHdr, verificationPool, MakeVerifiedTransactionCache(50000), nil)
 	require.NoError(t, err)
-	paysetGroupDuration := time.Now().Sub(startPaysetGroupsTime)
+	paysetGroupDuration := time.Since(startPaysetGroupsTime)
 
 	// break the signature and see if it fails.
 	txnGroups[0][0].Sig[0] = txnGroups[0][0].Sig[0] + 1
@@ -609,7 +609,7 @@ func TestPaysetGroups(t *testing.T) {
 			// channel is closed without a return
 			require.Failf(t, "Channel got closed ?!", "")
 		} else {
-			actualDuration := time.Now().Sub(startPaysetGroupsTime)
+			actualDuration := time.Since(startPaysetGroupsTime)
 			if err == nil {
 				if actualDuration > 4*time.Second {
 					// it took at least 2.5 seconds more than it should have had!

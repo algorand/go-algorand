@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"math/bits"
 	"sync"
 
 	"github.com/algorand/go-algorand/agreement"
@@ -29,7 +28,6 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/verify"
@@ -610,6 +608,7 @@ func (cs *roundCowState) Move(from basics.Address, to basics.Address, amt basics
 		if overflowed {
 			return fmt.Errorf("overspend (account %v, data %+v, tried to spend %v)", from, fromBal, amt)
 		}
+		fromBalNew = cs.autoHeartbeat(fromBal, fromBalNew)
 		err = cs.putAccount(from, fromBalNew)
 		if err != nil {
 			return err
@@ -638,6 +637,7 @@ func (cs *roundCowState) Move(from basics.Address, to basics.Address, amt basics
 		if overflowed {
 			return fmt.Errorf("balance overflow (account %v, data %+v, was going to receive %v)", to, toBal, amt)
 		}
+		toBalNew = cs.autoHeartbeat(toBal, toBalNew)
 		err = cs.putAccount(to, toBalNew)
 		if err != nil {
 			return err
@@ -645,6 +645,24 @@ func (cs *roundCowState) Move(from basics.Address, to basics.Address, amt basics
 	}
 
 	return nil
+}
+
+// autoHeartbeat compares `before` and `after`, returning a new AccountData
+// based on `after` but with an updated `LastHeartbeat` if `after` shows enough
+// balance increase to risk a false positive suspension for absenteeism.
+func (cs *roundCowState) autoHeartbeat(before, after ledgercore.AccountData) ledgercore.AccountData {
+	// No need to adjust unless account is suspendable
+	if after.Status != basics.Online || !after.IncentiveEligible {
+		return after
+	}
+
+	// Adjust only if balance has doubled
+	twice, o := basics.OMul(before.MicroAlgos.Raw, 2)
+	if !o && twice < after.MicroAlgos.Raw {
+		lookback := agreement.BalanceLookback(cs.ConsensusParams())
+		after.LastHeartbeat = cs.Round() + lookback
+	}
+	return after
 }
 
 func (cs *roundCowState) ConsensusParams() config.ConsensusParams {
@@ -1291,6 +1309,9 @@ func (eval *BlockEvaluator) applyTransaction(tx transactions.Transaction, cow *r
 		// Validation of the StateProof transaction before applying will only occur in validate mode.
 		err = apply.StateProof(tx.StateProofTxnFields, tx.Header.FirstValid, cow, eval.validate)
 
+	case protocol.HeartbeatTx:
+		err = apply.Heartbeat(tx.HeartbeatTxnFields, tx.Header, cow, cow, cow.Round())
+
 	default:
 		err = fmt.Errorf("unknown transaction type %v", tx.Type)
 	}
@@ -1606,14 +1627,6 @@ func (eval *BlockEvaluator) proposerPayout() (basics.MicroAlgos, error) {
 	return basics.MinA(total, available), nil
 }
 
-type challenge struct {
-	// round is when the challenge occurred. 0 means this is not a challenge.
-	round basics.Round
-	// accounts that match the first `bits` of `seed` must propose or heartbeat to stay online
-	seed committee.Seed
-	bits int
-}
-
 // generateKnockOfflineAccountsList creates the lists of expired or absent
 // participation accounts by traversing over the modified accounts in the state
 // deltas and testing if any of them needs to be reset/suspended. Expiration
@@ -1638,7 +1651,7 @@ func (eval *BlockEvaluator) generateKnockOfflineAccountsList(participating []bas
 
 	updates := &eval.block.ParticipationUpdates
 
-	ch := activeChallenge(&eval.proto, uint64(current), eval.state)
+	ch := apply.FindChallenge(eval.proto.Payouts, current, eval.state, apply.ChActive)
 	onlineStake, err := eval.state.onlineStake()
 	if err != nil {
 		logging.Base().Errorf("unable to fetch online stake, no knockoffs: %v", err)
@@ -1741,7 +1754,7 @@ func (eval *BlockEvaluator) generateKnockOfflineAccountsList(participating []bas
 				continue
 			}
 			if isAbsent(onlineStake, oad.VotingStake(), lastSeen, current) ||
-				failsChallenge(ch, accountAddr, lastSeen) {
+				ch.Failed(accountAddr, lastSeen) {
 				updates.AbsentParticipationAccounts = append(
 					updates.AbsentParticipationAccounts,
 					accountAddr,
@@ -1749,28 +1762,6 @@ func (eval *BlockEvaluator) generateKnockOfflineAccountsList(participating []bas
 			}
 		}
 	}
-}
-
-// bitsMatch checks if the first n bits of two byte slices match. Written to
-// work on arbitrary slices, but we expect that n is small. Only user today
-// calls with n=5.
-func bitsMatch(a, b []byte, n int) bool {
-	// Ensure n is a valid number of bits to compare
-	if n < 0 || n > len(a)*8 || n > len(b)*8 {
-		return false
-	}
-
-	// Compare entire bytes when n is bigger than 8
-	for i := 0; i < n/8; i++ {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	remaining := n % 8
-	if remaining == 0 {
-		return true
-	}
-	return bits.LeadingZeros8(a[n/8]^b[n/8]) >= remaining
 }
 
 func isAbsent(totalOnlineStake basics.MicroAlgos, acctStake basics.MicroAlgos, lastSeen basics.Round, current basics.Round) bool {
@@ -1788,39 +1779,6 @@ func isAbsent(totalOnlineStake basics.MicroAlgos, acctStake basics.MicroAlgos, l
 		allowableLag = math.MaxInt64 / acctStake.Raw
 	}
 	return lastSeen+basics.Round(allowableLag) < current
-}
-
-type headerSource interface {
-	BlockHdr(round basics.Round) (bookkeeping.BlockHeader, error)
-}
-
-func activeChallenge(proto *config.ConsensusParams, current uint64, headers headerSource) challenge {
-	rules := proto.Payouts
-	// are challenges active?
-	if rules.ChallengeInterval == 0 || current < rules.ChallengeInterval {
-		return challenge{}
-	}
-	lastChallenge := current - (current % rules.ChallengeInterval)
-	// challenge is in effect if we're after one grace period, but before the 2nd ends.
-	if current <= lastChallenge+rules.ChallengeGracePeriod ||
-		current > lastChallenge+2*rules.ChallengeGracePeriod {
-		return challenge{}
-	}
-	round := basics.Round(lastChallenge)
-	challengeHdr, err := headers.BlockHdr(round)
-	if err != nil {
-		panic(err)
-	}
-	challengeProto := config.Consensus[challengeHdr.CurrentProtocol]
-	// challenge is not considered if rules have changed since that round
-	if challengeProto.Payouts != rules {
-		return challenge{}
-	}
-	return challenge{round, challengeHdr.Seed, rules.ChallengeBits}
-}
-
-func failsChallenge(ch challenge, address basics.Address, lastSeen basics.Round) bool {
-	return ch.round != 0 && bitsMatch(ch.seed[:], address[:], ch.bits) && lastSeen < ch.round
 }
 
 // validateExpiredOnlineAccounts tests the expired online accounts specified in ExpiredParticipationAccounts, and verify
@@ -1890,7 +1848,7 @@ func (eval *BlockEvaluator) validateAbsentOnlineAccounts() error {
 	// For consistency with expired account handling, we preclude duplicates
 	addressSet := make(map[basics.Address]bool, suspensionCount)
 
-	ch := activeChallenge(&eval.proto, uint64(eval.Round()), eval.state)
+	ch := apply.FindChallenge(eval.proto.Payouts, eval.Round(), eval.state, apply.ChActive)
 	totalOnlineStake, err := eval.state.onlineStake()
 	if err != nil {
 		logging.Base().Errorf("unable to fetch online stake, can't check knockoffs: %v", err)
@@ -1918,15 +1876,14 @@ func (eval *BlockEvaluator) validateAbsentOnlineAccounts() error {
 			return fmt.Errorf("proposed absent account %v with zero algos", accountAddr)
 		}
 
-		lastSeen := max(acctData.LastProposed, acctData.LastHeartbeat)
 		oad, lErr := eval.state.lookupAgreement(accountAddr)
 		if lErr != nil {
 			return fmt.Errorf("unable to check absent account: %v", accountAddr)
 		}
-		if isAbsent(totalOnlineStake, oad.VotingStake(), lastSeen, eval.Round()) {
+		if isAbsent(totalOnlineStake, oad.VotingStake(), acctData.LastSeen(), eval.Round()) {
 			continue // ok. it's "normal absent"
 		}
-		if failsChallenge(ch, accountAddr, lastSeen) {
+		if ch.Failed(accountAddr, acctData.LastSeen()) {
 			continue // ok. it's "challenge absent"
 		}
 		return fmt.Errorf("proposed absent account %v is not absent in %d, %d",

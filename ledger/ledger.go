@@ -762,7 +762,7 @@ func (l *Ledger) Block(rnd basics.Round) (blk bookkeeping.Block, err error) {
 func (l *Ledger) BlockHdr(rnd basics.Round) (blk bookkeeping.BlockHeader, err error) {
 
 	// Expected availability range in txTail.blockHeader is [Latest - MaxTxnLife, Latest]
-	// allowing (MaxTxnLife + 1) = 1001 rounds back loopback.
+	// allowing (MaxTxnLife + 1) = 1001 rounds lookback.
 	// The depth besides the MaxTxnLife is controlled by DeeperBlockHeaderHistory parameter
 	// and currently set to 1.
 	// Explanation:

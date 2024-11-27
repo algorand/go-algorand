@@ -1605,29 +1605,6 @@ func TestExpiredAccountGeneration(t *testing.T) {
 	require.NotZero(t, propAcct.StateProofID)
 }
 
-func TestBitsMatch(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-
-	for b := 0; b <= 6; b++ {
-		require.True(t, bitsMatch([]byte{0x1}, []byte{0x2}, b), "%d", b)
-	}
-	require.False(t, bitsMatch([]byte{0x1}, []byte{0x2}, 7))
-	require.False(t, bitsMatch([]byte{0x1}, []byte{0x2}, 8))
-	require.False(t, bitsMatch([]byte{0x1}, []byte{0x2}, 9))
-
-	for b := 0; b <= 12; b++ {
-		require.True(t, bitsMatch([]byte{0x1, 0xff, 0xaa}, []byte{0x1, 0xf0}, b), "%d", b)
-	}
-	require.False(t, bitsMatch([]byte{0x1, 0xff, 0xaa}, []byte{0x1, 0xf0}, 13))
-
-	// on a byte boundary
-	require.True(t, bitsMatch([]byte{0x1}, []byte{0x1}, 8))
-	require.False(t, bitsMatch([]byte{0x1}, []byte{0x1}, 9))
-	require.True(t, bitsMatch([]byte{0x1, 0xff}, []byte{0x1, 0x00}, 8))
-	require.False(t, bitsMatch([]byte{0x1, 0xff}, []byte{0x1, 00}, 9))
-}
-
 func TestIsAbsent(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -1645,73 +1622,4 @@ func TestIsAbsent(t *testing.T) {
 	// not absent if never seen
 	a.False(absent(1000, 10, 0, 6000))
 	a.False(absent(1000, 10, 0, 6001))
-}
-
-func TestFailsChallenge(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-	a := assert.New(t)
-
-	// a valid challenge, with 4 matching bits, and an old last seen
-	a.True(failsChallenge(challenge{round: 11, seed: [32]byte{0xb0, 0xb4}, bits: 4}, basics.Address{0xbf, 0x34}, 10))
-
-	// challenge isn't "on"
-	a.False(failsChallenge(challenge{round: 0, seed: [32]byte{0xb0, 0xb4}, bits: 4}, basics.Address{0xbf, 0x34}, 10))
-	// node has appeared more recently
-	a.False(failsChallenge(challenge{round: 11, seed: [32]byte{0xb0, 0xb4}, bits: 4}, basics.Address{0xbf, 0x34}, 12))
-	// bits don't match
-	a.False(failsChallenge(challenge{round: 11, seed: [32]byte{0xb0, 0xb4}, bits: 4}, basics.Address{0xcf, 0x34}, 10))
-	// no enough bits match
-	a.False(failsChallenge(challenge{round: 11, seed: [32]byte{0xb0, 0xb4}, bits: 5}, basics.Address{0xbf, 0x34}, 10))
-}
-
-type singleSource bookkeeping.BlockHeader
-
-func (ss singleSource) BlockHdr(r basics.Round) (bookkeeping.BlockHeader, error) {
-	return bookkeeping.BlockHeader(ss), nil
-}
-
-func TestActiveChallenge(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-	a := assert.New(t)
-
-	nowHeader := bookkeeping.BlockHeader{
-		UpgradeState: bookkeeping.UpgradeState{
-			// Here the rules are on, so they certainly differ from rules in oldHeader's params
-			CurrentProtocol: protocol.ConsensusFuture,
-		},
-	}
-	now := config.Consensus[nowHeader.CurrentProtocol]
-
-	// simplest test. when interval=X and grace=G, X+G+1 is a challenge
-	inChallenge := now.Payouts.ChallengeInterval + now.Payouts.ChallengeGracePeriod + 1
-	ch := activeChallenge(&now, inChallenge, singleSource(nowHeader))
-	a.NotZero(ch.round)
-
-	// all rounds before that have no challenge
-	for r := uint64(1); r < inChallenge; r++ {
-		ch := activeChallenge(&now, r, singleSource(nowHeader))
-		a.Zero(ch.round, r)
-	}
-
-	// ChallengeGracePeriod rounds allow challenges starting with inChallenge
-	for r := inChallenge; r < inChallenge+now.Payouts.ChallengeGracePeriod; r++ {
-		ch := activeChallenge(&now, r, singleSource(nowHeader))
-		a.EqualValues(ch.round, now.Payouts.ChallengeInterval)
-	}
-
-	// And the next round is again challenge-less
-	ch = activeChallenge(&now, inChallenge+now.Payouts.ChallengeGracePeriod, singleSource(nowHeader))
-	a.Zero(ch.round)
-
-	// ignore challenge if upgrade happened
-	oldHeader := bookkeeping.BlockHeader{
-		UpgradeState: bookkeeping.UpgradeState{
-			// We need a version from before payouts got turned on
-			CurrentProtocol: protocol.ConsensusV39,
-		},
-	}
-	ch = activeChallenge(&now, inChallenge, singleSource(oldHeader))
-	a.Zero(ch.round)
 }

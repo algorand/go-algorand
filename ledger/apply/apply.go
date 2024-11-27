@@ -25,9 +25,14 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 )
 
+// HdrProvider allows fetching old block headers
+type HdrProvider interface {
+	BlockHdr(r basics.Round) (bookkeeping.BlockHeader, error)
+}
+
 // StateProofsApplier allows fetching and updating state-proofs state on the ledger
 type StateProofsApplier interface {
-	BlockHdr(r basics.Round) (bookkeeping.BlockHeader, error)
+	HdrProvider
 	GetStateProofNextRound() basics.Round
 	SetStateProofNextRound(rnd basics.Round)
 	GetStateProofVerificationContext(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error)

@@ -24,6 +24,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -36,8 +37,8 @@ import (
 // TestWhaleJoin shows a "whale" with more stake than is currently online can go
 // online without immediate suspension.  This tests for a bug we had where we
 // calcululated expected proposal interval using the _old_ totals, rather than
-// the totals following the keyreg. So big joiner could be expected to propose
-// in the same block they joined.
+// the totals following the keyreg. So big joiner was being expected to propose
+// in the same block it joined.
 func TestWhaleJoin(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
@@ -185,6 +186,65 @@ func TestBigJoin(t *testing.T) {
 	// is looking for.
 }
 
+// TestBigIncrease shows when an incentive eligible account receives a lot of
+// algos, they are not immediately suspended. We also check the details of the
+// mechanism - that LastHeartbeat is incremented when such an account doubles
+// its balance in a single pay.
+func TestBigIncrease(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	defer fixtures.ShutdownSynchronizedTest(t)
+
+	t.Parallel()
+	a := require.New(fixtures.SynchronizedTest(t))
+
+	var fixture fixtures.RestClientFixture
+	const lookback = 32
+	fixture.FasterConsensus(protocol.ConsensusFuture, time.Second/2, lookback)
+	fixture.Setup(t, filepath.Join("nettemplates", "Payouts.json"))
+	defer fixture.Shutdown()
+
+	// Overview of this test:
+	// 0. spend wallet01 down so it has a very small percent of stake
+	// 1. rereg wallet01 so it is suspendable
+	// 2. move almost all of wallet15's money to wallet01
+	// 3. check that c1.LastHeart is set to 32 rounds later
+	// 4. wait 40 rounds ensure c1 stays online
+
+	clientAndAccount := func(name string) (libgoal.Client, model.Account) {
+		c := fixture.GetLibGoalClientForNamedNode(name)
+		accounts, err := fixture.GetNodeWalletsSortedByBalance(c)
+		a.NoError(err)
+		a.Len(accounts, 1)
+		fmt.Printf("Client %s is %v\n", name, accounts[0].Address)
+		return c, accounts[0]
+	}
+
+	c1, account01 := clientAndAccount("Node01")
+	c15, account15 := clientAndAccount("Node15")
+
+	// We need to spend 01 down so that it has nearly no stake. That way, it
+	// certainly will not have proposed by pure luck just before the critical
+	// round. If we don't do that, 1/16 of stake is enough that it will probably
+	// have a fairly recent proposal, and not get knocked off.
+	pay(&fixture, a, c1, account01.Address, account15.Address, 99*account01.Amount/100)
+
+	rekeyreg(&fixture, a, c1, account01.Address)
+
+	// 2. Wait lookback rounds
+	wait(&fixture, a, lookback)
+
+	tx := pay(&fixture, a, c15, account15.Address, account01.Address, 50*account15.Amount/100)
+	data, err := c15.AccountData(account01.Address)
+	a.NoError(err)
+	a.EqualValues(*tx.ConfirmedRound+lookback, data.LastHeartbeat)
+
+	wait(&fixture, a, lookback+5)
+	data, err = c15.AccountData(account01.Address)
+	a.NoError(err)
+	a.Equal(basics.Online, data.Status)
+	a.True(data.IncentiveEligible)
+}
+
 func wait(f *fixtures.RestClientFixture, a *require.Assertions, count uint64) {
 	res, err := f.AlgodClient.Status()
 	a.NoError(err)
@@ -192,12 +252,18 @@ func wait(f *fixtures.RestClientFixture, a *require.Assertions, count uint64) {
 	a.NoError(f.WaitForRoundWithTimeout(round))
 }
 
+func pay(f *fixtures.RestClientFixture, a *require.Assertions,
+	c libgoal.Client, from string, to string, amount uint64) v2.PreEncodedTxInfo {
+	pay, err := c.SendPaymentFromUnencryptedWallet(from, to, 1000, amount, nil)
+	a.NoError(err)
+	tx, err := f.WaitForConfirmedTxn(uint64(pay.LastValid), pay.ID().String())
+	a.NoError(err)
+	return tx
+}
+
 func zeroPay(f *fixtures.RestClientFixture, a *require.Assertions,
 	c libgoal.Client, address string) {
-	pay, err := c.SendPaymentFromUnencryptedWallet(address, address, 1000, 0, nil)
-	a.NoError(err)
-	_, err = f.WaitForConfirmedTxn(uint64(pay.LastValid), pay.ID().String())
-	a.NoError(err)
+	pay(f, a, c, address, address, 0)
 }
 
 // Go offline, but return the key material so it's easy to go back online

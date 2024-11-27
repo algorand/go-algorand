@@ -129,7 +129,7 @@ func txn(t testing.TB, ledger *Ledger, eval *eval.BlockEvaluator, txn *txntest.T
 		}
 		return
 	}
-	require.True(t, len(problem) == 0 || problem[0] == "")
+	require.True(t, len(problem) == 0 || problem[0] == "", "Transaction did not fail. Expected: %v", problem)
 }
 
 func txgroup(t testing.TB, ledger *Ledger, eval *eval.BlockEvaluator, txns ...*txntest.Txn) error {

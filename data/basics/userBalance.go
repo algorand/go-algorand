@@ -19,7 +19,6 @@ package basics
 import (
 	"encoding/binary"
 	"fmt"
-	"reflect"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -584,15 +583,6 @@ func (u OnlineAccountData) KeyDilution(proto config.ConsensusParams) uint64 {
 	}
 
 	return proto.DefaultKeyDilution
-}
-
-// IsZero checks if an AccountData value is the same as its zero value.
-func (u AccountData) IsZero() bool {
-	if u.Assets != nil && len(u.Assets) == 0 {
-		u.Assets = nil
-	}
-
-	return reflect.DeepEqual(u, AccountData{})
 }
 
 // NormalizedOnlineBalance returns a “normalized” balance for this account.

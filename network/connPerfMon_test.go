@@ -103,14 +103,14 @@ func TestConnMonitorStageTiming(t *testing.T) {
 	startTestTime := time.Now().UnixNano()
 	perfMonitor := makeConnectionPerformanceMonitor([]Tag{protocol.AgreementVoteTag})
 	// measure measuring overhead.
-	measuringOverhead := time.Now().Sub(time.Now())
+	measuringOverhead := time.Since(time.Now())
 	perfMonitor.Reset(peers)
 	for msgIdx, msg := range msgPool {
 		msg.Received += startTestTime
 		beforeNotify := time.Now()
 		beforeNotifyStage := perfMonitor.stage
 		perfMonitor.Notify(&msg)
-		notifyTime := time.Now().Sub(beforeNotify)
+		notifyTime := time.Since(beforeNotify)
 		stageTimings[beforeNotifyStage] += notifyTime
 		stageNotifyCalls[beforeNotifyStage]++
 		if perfMonitor.GetPeersStatistics() != nil {
