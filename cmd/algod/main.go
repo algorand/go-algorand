@@ -232,24 +232,22 @@ func run() int {
 					telemetryConfig.SessionGUID = *sessionGUID
 				}
 			}
-			// Try to enable remote telemetry now when URI is defined. Skip for DNS based telemetry.
-			err = log.EnableTelemetry(telemetryConfig)
-			if err != nil {
-				fmt.Fprintln(os.Stdout, "error creating telemetry hook", err)
-				// Error occurs only if URI is defined and we need to retry later
-				go func() {
-					for {
-						// Try to reenable every minute
-						time.Sleep(time.Minute)
-						err := log.EnableTelemetry(telemetryConfig)
-						if err == nil {
-							// Remote telemetry enabled, stop retrying
-							return
-						}
-						fmt.Fprintln(os.Stdout, "error creating telemetry hook", err)
+
+			// Remote telemetry init loop
+			go func() {
+				for {
+					// Try to enable remote telemetry now when URI is defined. Skip for DNS based telemetry.
+					err := log.EnableTelemetry(telemetryConfig)
+					// Error occurs only if URI is defined and we need to retry later
+					if err == nil {
+						// Remote telemetry enabled or empty static URI, stop retrying
+						return
 					}
-				}()
-			}
+					fmt.Fprintln(os.Stdout, "error creating telemetry hook", err)
+					// Try to reenable every minute
+					time.Sleep(time.Minute)
+				}
+			}()
 		}
 	}
 
