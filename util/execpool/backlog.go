@@ -102,7 +102,7 @@ func (b *backlog) BufferSize() (length, capacity int) {
 	return len(b.buffer), cap(b.buffer)
 }
 
-// Enqueue enqueues a single task into the backlog
+// EnqueueBacklog enqueues a single task into the backlog
 func (b *backlog) EnqueueBacklog(enqueueCtx context.Context, t ExecFunc, arg interface{}, out chan interface{}) error {
 	select {
 	case b.buffer <- backlogItemTask{
