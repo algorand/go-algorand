@@ -1612,6 +1612,10 @@ func (eval *BlockEvaluator) recordProposal() error {
 	return nil
 }
 
+// proposerPayout determines how much the proposer should be paid, assuming it
+// gets paid at all.  It may not examine the actual proposer because it is
+// called before the proposer is known.  Agreement might zero out this value
+// when the actual proposer is decided, if that proposer is ineligible.
 func (eval *BlockEvaluator) proposerPayout() (basics.MicroAlgos, error) {
 	incentive, _ := basics.NewPercent(eval.proto.Payouts.Percent).DivvyAlgos(eval.block.FeesCollected)
 	total, o := basics.OAddA(incentive, eval.block.Bonus)

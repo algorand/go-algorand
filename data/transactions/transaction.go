@@ -325,7 +325,7 @@ func (tx Header) Alive(tc TxnContext) error {
 
 // MatchAddress checks if the transaction touches a given address.
 func (tx Transaction) MatchAddress(addr basics.Address, spec SpecialAddresses) bool {
-	return slices.Contains(tx.RelevantAddrs(spec), addr)
+	return slices.Contains(tx.relevantAddrs(spec), addr)
 }
 
 var errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound = errors.New("transaction first voting round need to be less than its last voting round")
@@ -714,9 +714,8 @@ func (tx Header) Last() basics.Round {
 	return tx.LastValid
 }
 
-// RelevantAddrs returns the addresses whose balance records this transaction will need to access.
-// The header's default is to return just the sender and the fee sink.
-func (tx Transaction) RelevantAddrs(spec SpecialAddresses) []basics.Address {
+// relevantAddrs returns the addresses whose balance records this transaction will need to access.
+func (tx Transaction) relevantAddrs(spec SpecialAddresses) []basics.Address {
 	addrs := []basics.Address{tx.Sender, spec.FeeSink}
 
 	switch tx.Type {
@@ -733,6 +732,8 @@ func (tx Transaction) RelevantAddrs(spec SpecialAddresses) []basics.Address {
 		if !tx.AssetTransferTxnFields.AssetSender.IsZero() {
 			addrs = append(addrs, tx.AssetTransferTxnFields.AssetSender)
 		}
+	case protocol.HeartbeatTx:
+		addrs = append(addrs, tx.HeartbeatTxnFields.HbAddress)
 	}
 
 	return addrs
