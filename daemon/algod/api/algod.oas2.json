@@ -1229,7 +1229,7 @@
         ],
         "responses": {
           "200": {
-            "description": "An empty JSON object is returned if the generation process was started. Currently no status is available.",
+            "description": "The participation ID. Currently no status is available.",
             "schema": {
               "type": "string"
             }
@@ -1920,8 +1920,8 @@
       "get": {
         "description": "Get ledger deltas for a round.",
         "tags": [
-            "public",
-            "nonparticipating"
+          "public",
+          "nonparticipating"
         ],
         "produces": [
           "application/json",
