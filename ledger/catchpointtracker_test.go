@@ -17,6 +17,7 @@
 package ledger
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"errors"
@@ -39,6 +40,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
@@ -46,6 +48,7 @@ import (
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
+	"github.com/algorand/go-deadlock"
 )
 
 func TestCatchpointIsWritingCatchpointFile(t *testing.T) {
@@ -2093,4 +2096,48 @@ func TestMakeCatchpointFilePath(t *testing.T) {
 		require.Equal(t, tc.expectedDataFilePath, makeCatchpointDataFilePath(basics.Round(tc.round)))
 	}
 
+}
+
+// test a case where in-memory SQLite, combined with fast locking (no deadlock detection)
+func TestCatchpointTrackerFastRoundsDBRetry(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	var bufNewLogger bytes.Buffer
+	log := logging.NewLogger()
+	log.SetOutput(&bufNewLogger)
+
+	deadlock.Opts.Disable = true // disable deadlock detection during this test
+	defer func() { deadlock.Opts.Disable = false }()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis(func(cfg *ledgertesting.GenesisCfg) {
+		cfg.OnlineCount = 1
+		ledgertesting.TurnOffRewards(cfg)
+	})
+	cfg := config.GetDefaultLocal()
+	dl := NewDoubleLedger(t, genBalances, protocol.ConsensusFuture, cfg, simpleLedgerLogger(log)) // in-memory SQLite
+	defer dl.Close()
+
+	appSrc := main(`int 1; int 1; ==; assert`)
+	app := dl.fundedApp(addrs[1], 1_000_000, appSrc)
+
+	makeTxn := func() *txntest.Txn {
+		return &txntest.Txn{
+			Type:          "appl",
+			Sender:        addrs[2],
+			ApplicationID: app,
+			Note:          ledgertesting.RandomNote(),
+		}
+	}
+
+	for vb := dl.fullBlock(makeTxn()); vb.Block().Round() <= 1500; vb = dl.fullBlock(makeTxn()) {
+		nextRnd := vb.Block().Round() + 1
+		_, err := dl.generator.OnlineCirculation(nextRnd.SubSaturate(320), nextRnd)
+		require.NoError(t, err)
+		require.Empty(t, vb.Block().ExpiredParticipationAccounts)
+		require.Empty(t, vb.Block().AbsentParticipationAccounts)
+	}
+
+	// assert that no corruption of merkle trie happened due to DB retries leaving
+	// incorrect state in the merkle trie cache.
+	require.NotContains(t, bufNewLogger.String(), "to merkle trie for account", "Merkle trie was corrupted!")
 }
