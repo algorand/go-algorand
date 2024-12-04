@@ -535,8 +535,8 @@ func (ao *onlineAccounts) postCommit(ctx context.Context, dcc *deferredCommitCon
 	ao.voters.postCommit(dcc)
 }
 
-func (ao *onlineAccounts) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
-}
+func (ao *onlineAccounts) commitRoundRollback(ctx context.Context, dcc *deferredCommitContext) {}
+func (ao *onlineAccounts) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext)  {}
 
 // onlineCirculation return the total online balance for the given round, for use by agreement.
 func (ao *onlineAccounts) onlineCirculation(rnd basics.Round, voteRnd basics.Round) (basics.MicroAlgos, error) {

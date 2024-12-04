@@ -103,10 +103,20 @@ func (s *trackerSQLStore) Transaction(fn trackerdb.TransactionFn) (err error) {
 	return wrapIOError(s.TransactionContext(context.Background(), fn))
 }
 
+func (s *trackerSQLStore) TransactionWithRollback(fn trackerdb.TransactionFn, rollbackFn trackerdb.RollbackFn) (err error) {
+	return wrapIOError(s.TransactionContextWithRollback(context.Background(), fn, rollbackFn))
+}
+
 func (s *trackerSQLStore) TransactionContext(ctx context.Context, fn trackerdb.TransactionFn) (err error) {
 	return wrapIOError(s.pair.Wdb.AtomicContext(ctx, func(ctx context.Context, tx *sql.Tx) error {
 		return fn(ctx, &sqlTransactionScope{tx, false, &sqlReader{tx}, &sqlWriter{tx}, &sqlCatchpoint{tx}})
 	}))
+}
+
+func (s *trackerSQLStore) TransactionContextWithRollback(ctx context.Context, fn trackerdb.TransactionFn, rollbackFn trackerdb.RollbackFn) (err error) {
+	return wrapIOError(s.pair.Wdb.AtomicContextWithRollback(ctx, func(ctx context.Context, tx *sql.Tx) error {
+		return fn(ctx, &sqlTransactionScope{tx, false, &sqlReader{tx}, &sqlWriter{tx}, &sqlCatchpoint{tx}})
+	}, rollbackFn))
 }
 
 func (s *trackerSQLStore) BeginTransaction(ctx context.Context) (trackerdb.Transaction, error) {

@@ -219,6 +219,14 @@ func (db *Accessor) Atomic(fn idemFn, extras ...interface{}) (err error) {
 // For transactions where readOnly is false, sync determines whether or not to wait for the result.
 // Like for Atomic, the return error of fn should be a native sqlite3.Error type or an error wrapping it.
 func (db *Accessor) AtomicContext(ctx context.Context, fn idemFn, extras ...interface{}) (err error) {
+
+	return db.AtomicContextWithRollback(ctx, fn, nil, extras...)
+}
+
+// AtomicContextWithRollback is like AtomicContext, but calls rollbackFn if the database
+// txn was rolled back, due to error or in between retries. This helps a caller that
+// might change in-memory state inside fn.
+func (db *Accessor) AtomicContextWithRollback(ctx context.Context, fn idemFn, rollbackFn func(context.Context), extras ...interface{}) (err error) {
 	atomicDeadline := time.Now().Add(time.Second)
 
 	// note that the sql library will drop panics inside an active transaction
@@ -294,9 +302,12 @@ func (db *Accessor) AtomicContext(ctx context.Context, fn idemFn, extras ...inte
 		if err != nil {
 			tx.Rollback()
 			if dbretry(err) {
-				continue
+				if rollbackFn != nil {
+					rollbackFn(ctx)
+				}
+				continue // retry
 			} else {
-				break
+				break // exit, returns error
 			}
 		}
 
@@ -305,8 +316,13 @@ func (db *Accessor) AtomicContext(ctx context.Context, fn idemFn, extras ...inte
 			// update the deadline, as it might have been updated.
 			atomicDeadline = txContextData.deadline
 			break
-		} else if !dbretry(err) {
-			break
+		} else if dbretry(err) {
+			if rollbackFn != nil {
+				rollbackFn(ctx)
+			}
+			continue // retry
+		} else {
+			break // exit, returns error
 		}
 	}
 

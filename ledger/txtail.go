@@ -333,15 +333,11 @@ func (t *txTail) postCommit(ctx context.Context, dcc *deferredCommitContext) {
 	}
 }
 
-func (t *txTail) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
-}
-
-func (t *txTail) handleUnorderedCommit(dcc *deferredCommitContext) {
-}
-func (t *txTail) handlePrepareCommitError(dcc *deferredCommitContext) {
-}
-func (t *txTail) handleCommitError(dcc *deferredCommitContext) {
-}
+func (t *txTail) commitRoundRollback(ctx context.Context, dcc *deferredCommitContext) {}
+func (t *txTail) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext)  {}
+func (t *txTail) handleUnorderedCommit(dcc *deferredCommitContext)                    {}
+func (t *txTail) handlePrepareCommitError(dcc *deferredCommitContext)                 {}
+func (t *txTail) handleCommitError(dcc *deferredCommitContext)                        {}
 
 func (t *txTail) produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcr *deferredCommitRange) *deferredCommitRange {
 	return dcr
