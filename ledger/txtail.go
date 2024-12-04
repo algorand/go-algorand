@@ -333,7 +333,7 @@ func (t *txTail) postCommit(ctx context.Context, dcc *deferredCommitContext) {
 	}
 }
 
-func (t *txTail) commitRoundRollback(ctx context.Context, dcc *deferredCommitContext) {}
+func (t *txTail) clearCommitRoundRetry(ctx context.Context, dcc *deferredCommitContext) {}
 func (t *txTail) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext)  {}
 func (t *txTail) handleUnorderedCommit(dcc *deferredCommitContext)                    {}
 func (t *txTail) handlePrepareCommitError(dcc *deferredCommitContext)                 {}

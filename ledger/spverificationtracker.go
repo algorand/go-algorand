@@ -157,7 +157,7 @@ func (spt *spVerificationTracker) postCommit(_ context.Context, dcc *deferredCom
 	spt.pendingDeleteContexts = spt.pendingDeleteContexts[dcc.spVerification.lastDeleteIndex+1:]
 }
 
-func (spt *spVerificationTracker) commitRoundRollback(context.Context, *deferredCommitContext) {}
+func (spt *spVerificationTracker) clearCommitRoundRetry(context.Context, *deferredCommitContext) {}
 func (spt *spVerificationTracker) postCommitUnlocked(context.Context, *deferredCommitContext)  {}
 func (spt *spVerificationTracker) handleUnorderedCommit(dcc *deferredCommitContext)            {}
 func (spt *spVerificationTracker) handlePrepareCommitError(dcc *deferredCommitContext)         {}

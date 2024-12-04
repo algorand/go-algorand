@@ -103,8 +103,8 @@ func (s *trackerSQLStore) Transaction(fn trackerdb.TransactionFn) (err error) {
 	return wrapIOError(s.TransactionContext(context.Background(), fn))
 }
 
-func (s *trackerSQLStore) TransactionWithRollback(fn trackerdb.TransactionFn, rollbackFn trackerdb.RollbackFn) (err error) {
-	return wrapIOError(s.TransactionContextWithRollback(context.Background(), fn, rollbackFn))
+func (s *trackerSQLStore) TransactionWithRetryClearFn(fn trackerdb.TransactionFn, rollbackFn trackerdb.RetryClearFn) (err error) {
+	return wrapIOError(s.TransactionContextWithRetryClearFn(context.Background(), fn, rollbackFn))
 }
 
 func (s *trackerSQLStore) TransactionContext(ctx context.Context, fn trackerdb.TransactionFn) (err error) {
@@ -113,8 +113,8 @@ func (s *trackerSQLStore) TransactionContext(ctx context.Context, fn trackerdb.T
 	}))
 }
 
-func (s *trackerSQLStore) TransactionContextWithRollback(ctx context.Context, fn trackerdb.TransactionFn, rollbackFn trackerdb.RollbackFn) (err error) {
-	return wrapIOError(s.pair.Wdb.AtomicContextWithRollback(ctx, func(ctx context.Context, tx *sql.Tx) error {
+func (s *trackerSQLStore) TransactionContextWithRetryClearFn(ctx context.Context, fn trackerdb.TransactionFn, rollbackFn trackerdb.RetryClearFn) (err error) {
+	return wrapIOError(s.pair.Wdb.AtomicContextWithRetryClearFn(ctx, func(ctx context.Context, tx *sql.Tx) error {
 		return fn(ctx, &sqlTransactionScope{tx, false, &sqlReader{tx}, &sqlWriter{tx}, &sqlCatchpoint{tx}})
 	}, rollbackFn))
 }

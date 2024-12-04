@@ -120,7 +120,7 @@ func (bn *blockNotifier) commitRound(context.Context, trackerdb.TransactionScope
 }
 
 func (bn *blockNotifier) postCommit(ctx context.Context, dcc *deferredCommitContext)          {}
-func (bn *blockNotifier) commitRoundRollback(ctx context.Context, dcc *deferredCommitContext) {}
+func (bn *blockNotifier) clearCommitRoundRetry(ctx context.Context, dcc *deferredCommitContext) {}
 func (bn *blockNotifier) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext)  {}
 func (bn *blockNotifier) handleUnorderedCommit(dcc *deferredCommitContext)                    {}
 func (bn *blockNotifier) handlePrepareCommitError(dcc *deferredCommitContext)                 {}

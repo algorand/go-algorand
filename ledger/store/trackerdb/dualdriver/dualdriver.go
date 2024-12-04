@@ -123,8 +123,8 @@ func (s *trackerStore) Transaction(fn trackerdb.TransactionFn) (err error) {
 	return s.TransactionContext(context.Background(), fn)
 }
 
-func (s *trackerStore) TransactionWithRollback(fn trackerdb.TransactionFn, rollbackFn trackerdb.RollbackFn) error {
-	return s.TransactionContextWithRollback(context.Background(), fn, rollbackFn)
+func (s *trackerStore) TransactionWithRetryClearFn(fn trackerdb.TransactionFn, rollbackFn trackerdb.RetryClearFn) error {
+	return s.TransactionContextWithRetryClearFn(context.Background(), fn, rollbackFn)
 }
 
 func (s *trackerStore) TransactionContext(ctx context.Context, fn trackerdb.TransactionFn) error {
@@ -142,8 +142,8 @@ func (s *trackerStore) TransactionContext(ctx context.Context, fn trackerdb.Tran
 	return handle.Commit()
 }
 
-// TransactionContextWithRollback currently ignores rollbackFn.
-func (s *trackerStore) TransactionContextWithRollback(ctx context.Context, fn trackerdb.TransactionFn, rollbackFn trackerdb.RollbackFn) error {
+// TransactionContextWithRetryClearFn currently ignores rollbackFn.
+func (s *trackerStore) TransactionContextWithRetryClearFn(ctx context.Context, fn trackerdb.TransactionFn, rollbackFn trackerdb.RetryClearFn) error {
 	return s.TransactionContext(ctx, fn)
 }
 

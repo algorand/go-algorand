@@ -322,9 +322,9 @@ func (s *trackerStore) Transaction(fn trackerdb.TransactionFn) (err error) {
 	return s.TransactionContext(context.Background(), fn)
 }
 
-// TransactionWithRollback implements trackerdb.Store
-func (s *trackerStore) TransactionWithRollback(fn trackerdb.TransactionFn, rollbackFn trackerdb.RollbackFn) (err error) {
-	return s.TransactionContextWithRollback(context.Background(), fn, rollbackFn)
+// TransactionWithRetryClearFn implements trackerdb.Store
+func (s *trackerStore) TransactionWithRetryClearFn(fn trackerdb.TransactionFn, rollbackFn trackerdb.RetryClearFn) (err error) {
+	return s.TransactionContextWithRetryClearFn(context.Background(), fn, rollbackFn)
 }
 
 // TransactionContext implements trackerdb.Store
@@ -350,9 +350,9 @@ func (s *trackerStore) TransactionContext(ctx context.Context, fn trackerdb.Tran
 	return err
 }
 
-// TransactionContextWithRollback implements trackerdb.Store.
+// TransactionContextWithRetryClearFn implements trackerdb.Store.
 // It currently ignores rollbackFn.
-func (s *trackerStore) TransactionContextWithRollback(ctx context.Context, fn trackerdb.TransactionFn, rollbackFn trackerdb.RollbackFn) error {
+func (s *trackerStore) TransactionContextWithRetryClearFn(ctx context.Context, fn trackerdb.TransactionFn, rollbackFn trackerdb.RetryClearFn) error {
 	return s.TransactionContext(ctx, fn)
 }
 

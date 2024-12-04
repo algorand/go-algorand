@@ -983,7 +983,7 @@ func (ct *catchpointTracker) handlePrepareCommitError(dcc *deferredCommitContext
 }
 
 // if an error is encountered between retries, clear the balancesTrie to clear in-memory changes made in commitRound().
-func (ct *catchpointTracker) commitRoundRollback(ctx context.Context, dcc *deferredCommitContext) {
+func (ct *catchpointTracker) clearCommitRoundRetry(ctx context.Context, dcc *deferredCommitContext) {
 	ct.log.Infof("rolling back failed commitRound for oldBase %d offset %d, clearing balancesTrie", dcc.oldBase, dcc.offset)
 	ct.catchpointsMu.Lock()
 	ct.balancesTrie = nil // balancesTrie will be re-created in the next call to commitRound
