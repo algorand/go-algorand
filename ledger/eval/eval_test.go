@@ -1385,7 +1385,7 @@ func TestAbsenteeChecks(t *testing.T) {
 		blkEval = l.nextBlock(t)
 
 		switch vb.Block().Round() {
-		case 102: // 2 out of 10 genesis accounts are now absent
+		case 202: // 2 out of 10 genesis accounts are now absent
 			require.Contains(t, vb.Block().AbsentParticipationAccounts, addrs[1])
 			require.Contains(t, vb.Block().AbsentParticipationAccounts, addrs[2])
 		case 1000:
@@ -1613,13 +1613,13 @@ func TestIsAbsent(t *testing.T) {
 	var absent = func(total uint64, acct uint64, last uint64, current uint64) bool {
 		return isAbsent(basics.Algos(total), basics.Algos(acct), basics.Round(last), basics.Round(current))
 	}
-	// 1% of stake, absent for 1000 rounds
-	a.False(absent(1000, 10, 5000, 6000))
-	a.True(absent(1000, 10, 5000, 6001))  // longer
-	a.True(absent(1000, 11, 5000, 6001))  // more acct stake
-	a.False(absent(1000, 9, 5000, 6001))  // less acct stake
-	a.False(absent(1001, 10, 5000, 6001)) // more online stake
+	a.False(absent(1000, 10, 5000, 6000)) // 1% of stake, absent for 1000 rounds
+	a.False(absent(1000, 10, 5000, 7000)) // 1% of stake, absent for 2000 rounds
+	a.True(absent(1000, 10, 5000, 7001))  // 2001
+	a.True(absent(1000, 11, 5000, 7000))  // more acct stake drives percent down, makes it absent
+	a.False(absent(1000, 9, 5000, 7001))  // less acct stake
+	a.False(absent(1001, 10, 5000, 7001)) // more online stake
 	// not absent if never seen
-	a.False(absent(1000, 10, 0, 6000))
-	a.False(absent(1000, 10, 0, 6001))
+	a.False(absent(1000, 10, 0, 2001))
+	a.True(absent(1000, 10, 1, 2002))
 }

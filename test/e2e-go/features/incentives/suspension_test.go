@@ -45,10 +45,10 @@ func TestBasicSuspension(t *testing.T) {
 	// Start a three-node network (70,20,10), all online
 	// Wait for 10 and 20% nodes to propose (we never suspend accounts with lastProposed=lastHeartbeat=0)
 	// Stop them both
-	// Run for 55 rounds, which is enough for 20% node to be suspended, but not 10%
+	// Run for 105 rounds, which is enough for 20% node to be suspended, but not 10%
 	// check neither suspended, send a tx from 20% to 10%, only 20% gets suspended
-	// TODO once we have heartbeats: bring them back up, make sure 20% gets back online
-	const suspend20 = 55
+	// bring n20 back up, make sure it gets back online by proposing during the lookback
+	const suspend20 = 105 // 1.00/0.20 * absentFactor
 
 	var fixture fixtures.RestClientFixture
 	// Speed up rounds.  Long enough lookback, so 20% node has a chance to
@@ -101,7 +101,6 @@ func TestBasicSuspension(t *testing.T) {
 	a.NotZero(account.VoteID)
 	a.False(account.IncentiveEligible) // suspension turns off flag
 
-	// TODO: n10 wasn't turned off, it's still online
 	account, err = c10.AccountData(account10.Address)
 	a.NoError(err)
 	a.Equal(basics.Online, account.Status)

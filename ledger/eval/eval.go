@@ -1768,6 +1768,8 @@ func (eval *BlockEvaluator) generateKnockOfflineAccountsList(participating []bas
 	}
 }
 
+const absentFactor = 20
+
 func isAbsent(totalOnlineStake basics.MicroAlgos, acctStake basics.MicroAlgos, lastSeen basics.Round, current basics.Round) bool {
 	// Don't consider accounts that were online when payouts went into effect as
 	// absent.  They get noticed the next time they propose or keyreg, which
@@ -1775,11 +1777,12 @@ func isAbsent(totalOnlineStake basics.MicroAlgos, acctStake basics.MicroAlgos, l
 	if lastSeen == 0 || acctStake.Raw == 0 {
 		return false
 	}
-	// See if the account has exceeded 10x their expected observation interval.
-	allowableLag, o := basics.Muldiv(10, totalOnlineStake.Raw, acctStake.Raw)
+	// See if the account has exceeded their expected observation interval.
+	allowableLag, o := basics.Muldiv(absentFactor, totalOnlineStake.Raw, acctStake.Raw)
 	if o {
-		// This can't happen with 10B total possible stake, but if we imagine
-		// another algorand network with huge possible stake, this seems reasonable.
+		// This can't happen with 10B total possible stake and a reasonable
+		// absentFactor, but if we imagine another algorand network with huge
+		// possible stake, this seems reasonable.
 		allowableLag = math.MaxInt64 / acctStake.Raw
 	}
 	return lastSeen+basics.Round(allowableLag) < current
