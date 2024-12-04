@@ -84,10 +84,17 @@ func (s *Service) findChallenged(rules config.ProposerPayoutRules, current basic
 	}
 
 	var found []account.ParticipationRecordForRound
-	for _, pr := range s.accts.Keys(current + 1) { // only look at accounts we have part keys for
+	for _, pr := range s.accts.Keys(current) { // only look at accounts we have part keys for
 		acct, _, _, err := s.ledger.LookupAccount(current, pr.Account)
 		if err != nil {
 			s.log.Errorf("error looking up %v: %v", pr.Account, err)
+			continue
+		}
+		// There can be more than one `pr` for a single Account in the case of
+		// overlapping partkey validity windows. Heartbeats are validated with
+		// the _current_ VoterID (see apply/heartbeat.go), so we only care about
+		// a ParticipationRecordForRound if it is for the VoterID in `acct`.
+		if acct.VoteID != pr.Voting.OneTimeSignatureVerifier {
 			continue
 		}
 		if acct.Status == basics.Online {
