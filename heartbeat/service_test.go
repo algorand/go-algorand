@@ -43,8 +43,6 @@ type mockedLedger struct {
 	waiters map[basics.Round]chan struct{}
 	history []table
 	hdr     bookkeeping.BlockHeader
-
-	participants map[basics.Address]*crypto.OneTimeSignatureSecrets
 }
 
 func newMockedLedger() mockedLedger {
@@ -102,7 +100,6 @@ func (l *mockedLedger) addBlock(delta table) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	fmt.Printf("addBlock %d\n", l.lastRound()+1)
 	l.history = append(l.history, delta)
 
 	for r, ch := range l.waiters {
@@ -148,36 +145,23 @@ func (l *mockedLedger) waitFor(s *Service, a *require.Assertions) {
 	}, time.Second, 10*time.Millisecond)
 }
 
-func (l *mockedLedger) Keys(rnd basics.Round) []account.ParticipationRecordForRound {
-	var ret []account.ParticipationRecordForRound
-	for addr, secrets := range l.participants {
-		if rnd > l.LastRound() { // Usually we're looking for key material for a future round
-			rnd = l.LastRound()
-		}
-		acct, _, _, err := l.LookupAccount(rnd, addr)
-		if err != nil {
-			panic(err.Error())
-		}
+type mockedAcctManager []account.ParticipationRecordForRound
 
-		ret = append(ret, account.ParticipationRecordForRound{
-			ParticipationRecord: account.ParticipationRecord{
-				ParticipationID: [32]byte{},
-				Account:         addr,
-				Voting:          secrets,
-				FirstValid:      acct.VoteFirstValid,
-				LastValid:       acct.VoteLastValid,
-				KeyDilution:     acct.VoteKeyDilution,
-			},
-		})
-	}
-	return ret
+func (am *mockedAcctManager) Keys(rnd basics.Round) []account.ParticipationRecordForRound {
+	return *am
 }
 
-func (l *mockedLedger) addParticipant(addr basics.Address, otss *crypto.OneTimeSignatureSecrets) {
-	if l.participants == nil {
-		l.participants = make(map[basics.Address]*crypto.OneTimeSignatureSecrets)
-	}
-	l.participants[addr] = otss
+func (am *mockedAcctManager) addParticipant(addr basics.Address, otss *crypto.OneTimeSignatureSecrets) {
+	*am = append(*am, account.ParticipationRecordForRound{
+		ParticipationRecord: account.ParticipationRecord{
+			ParticipationID: [32]byte{},
+			Account:         addr,
+			Voting:          otss,
+			FirstValid:      0,
+			LastValid:       1_000_000,
+			KeyDilution:     7,
+		},
+	})
 }
 
 type txnSink [][]transactions.SignedTxn
@@ -195,7 +179,7 @@ func TestStartStop(t *testing.T) {
 	a := require.New(t)
 	sink := txnSink{}
 	ledger := newMockedLedger()
-	s := NewService(&ledger, &ledger, &sink, logging.TestingLog(t))
+	s := NewService(&mockedAcctManager{}, &ledger, &sink, logging.TestingLog(t))
 	a.NotNil(s)
 	a.NoError(ledger.addBlock(nil))
 	s.Start()
@@ -217,13 +201,12 @@ func TestHeartbeatOnlyWhenChallenged(t *testing.T) {
 	a := require.New(t)
 	sink := txnSink{}
 	ledger := newMockedLedger()
-	s := NewService(&ledger, &ledger, &sink, logging.TestingLog(t))
+	participants := &mockedAcctManager{}
+	s := NewService(participants, &ledger, &sink, logging.TestingLog(t))
 	s.Start()
 
 	joe := basics.Address{0xcc}  // 0xcc will matter when we set the challenge
 	mary := basics.Address{0xaa} // 0xaa will matter when we set the challenge
-	ledger.addParticipant(joe, nil)
-	ledger.addParticipant(mary, nil)
 
 	acct := ledgercore.AccountData{}
 
@@ -236,12 +219,14 @@ func TestHeartbeatOnlyWhenChallenged(t *testing.T) {
 	acct.VoteKeyDilution = 100
 	startBatch := basics.OneTimeIDForRound(ledger.LastRound(), acct.VoteKeyDilution).Batch
 	const batches = 50 // gives 50 * kd rounds = 5000
-	otss := crypto.GenerateOneTimeSignatureSecrets(startBatch, batches)
-	acct.VoteID = otss.OneTimeSignatureVerifier
-	ledger.addParticipant(joe, otss)
-	ledger.addParticipant(mary, otss)
+	otss1 := crypto.GenerateOneTimeSignatureSecrets(startBatch, batches)
+	otss2 := crypto.GenerateOneTimeSignatureSecrets(startBatch, batches)
+	participants.addParticipant(joe, otss1)
+	participants.addParticipant(joe, otss2) // Simulate overlapping part keys, so Keys() returns both
+	participants.addParticipant(mary, otss1)
 
-	a.NoError(ledger.addBlock(table{joe: acct, mary: acct}))
+	acct.VoteID = otss1.OneTimeSignatureVerifier
+	a.NoError(ledger.addBlock(table{joe: acct, mary: acct})) // in effect, "keyreg" with otss1
 	a.Empty(sink)
 
 	// now we have to make it seem like joe has been challenged. We obtain the
@@ -259,7 +244,7 @@ func TestHeartbeatOnlyWhenChallenged(t *testing.T) {
 
 	a.NoError(ledger.addBlock(table{joe: acct}))
 	ledger.waitFor(s, a)
-	a.Len(sink, 1) // only one heartbeat (for joe)
+	a.Len(sink, 1) // only one heartbeat (for joe) despite having two part records
 	a.Len(sink[0], 1)
 	a.Equal(sink[0][0].Txn.Type, protocol.HeartbeatTx)
 	a.Equal(sink[0][0].Txn.HbAddress, joe)
