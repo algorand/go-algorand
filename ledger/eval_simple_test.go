@@ -610,7 +610,9 @@ func TestAbsentTracking(t *testing.T) {
 
 		var addr1off basics.Round
 		var addr2off basics.Round
-		// We're at 20, skip ahead by lookback + 30 to see the knockoffs
+		// We're at 20, skip ahead by lookback + 60 to see the knockoffs
+		const absentFactor = 20
+		skip := basics.Round(3) * absentFactor
 		for {
 			vb := dl.fullBlock()
 			printAbsent(vb)
@@ -643,12 +645,12 @@ func TestAbsentTracking(t *testing.T) {
 				checkState(addrs[2], true, true, 833_333_331_429_333) // after keyreg w/ 2A is effective
 			}
 
-			if rnd > 20+lookback+30 {
+			if rnd > 20+lookback+skip {
 				break
 			}
 		}
-		require.Equal(t, addr2Eligible+lookback+30, addr2off)
-		require.Equal(t, addr1Keyreg+lookback+31, addr1off) // addr1 paid out a little bit, extending its lag by 1
+		require.Equal(t, addr2Eligible+lookback+skip, addr2off)
+		require.Equal(t, addr1Keyreg+lookback+skip+1, addr1off) // addr1 paid out a little bit, extending its lag by 1
 
 		require.Equal(t, basics.Online, lookup(t, dl.generator, addrs[0]).Status) // genesis account
 		require.Equal(t, basics.Offline, lookup(t, dl.generator, addrs[1]).Status)
@@ -683,11 +685,11 @@ func TestAbsentTracking(t *testing.T) {
 				addr2check = true
 			}
 
-			if rnd > 20+2*lookback+30 {
+			if rnd > 20+2*lookback+skip {
 				break
 			}
 		}
-		// sanity check that we didn't skip one because of checkstate advanacing a round
+		// sanity check that we didn't skip one because of checkstate advancing a round
 		require.True(t, addr1check)
 		require.True(t, addr2check)
 

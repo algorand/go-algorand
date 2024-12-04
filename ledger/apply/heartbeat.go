@@ -43,8 +43,8 @@ func Heartbeat(hb transactions.HeartbeatTxnFields, header transactions.Header, b
 			kind = "cheap"
 		}
 
-		// These first checks are a little draconian. The idea is not let these
-		// free transactions do anything except their exact intended purpose.
+		// These first checks are a little draconian. Don't let these free
+		// transactions do anything except their exact intended purpose.
 		if len(header.Note) > 0 {
 			return fmt.Errorf("%s heartbeat is not allowed to have a note", kind)
 		}
