@@ -72,7 +72,7 @@ func FindChallenge(rules config.ProposerPayoutRules, current basics.Round, heade
 	}
 	challengeHdr, err := headers.BlockHdr(lastChallenge)
 	if err != nil {
-		panic(err)
+		return challenge{}
 	}
 	challengeProto := config.Consensus[challengeHdr.CurrentProtocol]
 	// challenge is not considered if rules have changed since that round

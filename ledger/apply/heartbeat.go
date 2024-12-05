@@ -62,7 +62,7 @@ func Heartbeat(hb transactions.HeartbeatTxnFields, header transactions.Header, b
 			return fmt.Errorf("%s heartbeat is not allowed when not IncentiveEligible %+v", kind, hb.HbAddress)
 		}
 		ch := FindChallenge(proto.Payouts, round, provider, ChRisky)
-		if ch.round == 0 {
+		if ch.IsZero() {
 			return fmt.Errorf("%s heartbeat for %s is not allowed with no challenge", kind, hb.HbAddress)
 		}
 		if !ch.Failed(hb.HbAddress, account.LastSeen()) {
