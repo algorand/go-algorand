@@ -1745,8 +1745,8 @@ func (au *accountUpdates) postCommit(ctx context.Context, dcc *deferredCommitCon
 	}
 }
 
-func (au *accountUpdates) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
-}
+func (au *accountUpdates) clearCommitRoundRetry(ctx context.Context, dcc *deferredCommitContext) {}
+func (au *accountUpdates) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext)    {}
 
 // compactKvDeltas takes an array of StateDeltas containing kv deltas (one array entry per round), and
 // compacts the array into a single map that contains all the

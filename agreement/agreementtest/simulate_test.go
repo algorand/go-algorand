@@ -19,6 +19,7 @@ package agreementtest
 import (
 	"context"
 	"fmt"
+	"maps"
 	"math/rand"
 	"os"
 	"strconv"
@@ -27,7 +28,6 @@ import (
 
 	"github.com/algorand/go-deadlock"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/exp/maps"
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"

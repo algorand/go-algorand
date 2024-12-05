@@ -19,9 +19,9 @@ package basics
 import (
 	"encoding/hex"
 	"fmt"
+	"maps"
 
 	"github.com/algorand/go-algorand/config"
-	"golang.org/x/exp/maps"
 )
 
 // DeltaAction is an enum of actions that may be performed when applying a

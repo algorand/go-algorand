@@ -110,6 +110,14 @@ type ledgerTracker interface {
 	// by all the prepareCommit calls. The commitRound is being executed within a single transactional
 	// context, and so, if any of the tracker's commitRound calls fails, the transaction is rolled back.
 	commitRound(context.Context, trackerdb.TransactionScope, *deferredCommitContext) error
+
+	// clearCommitRoundRetry is called after a failure is encountered in the transaction that commitRound
+	// uses. It allows trackers to clear any in-memory state associated with the commitRound work they
+	// did, since even if the tracker returns no error in commitRound, another tracker might be responsible
+	// for the rollback. The call to commitRound for the same round range may be retried after
+	// clearCommitRoundRetry is called.
+	clearCommitRoundRetry(context.Context, *deferredCommitContext)
+
 	// postCommit is called only on a successful commitRound. In that case, each of the trackers have
 	// the chance to update it's internal data structures, knowing that the given deferredCommitContext
 	// has completed. An optional context is provided for long-running operations.
@@ -606,7 +614,7 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) error {
 
 	start := time.Now()
 	ledgerCommitroundCount.Inc(nil)
-	err = tr.dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
+	err = tr.dbs.TransactionWithRetryClearFn(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) { // TransactionFn
 		tr.accountsCommitting.Store(true)
 		defer func() {
 			tr.accountsCommitting.Store(false)
@@ -625,6 +633,10 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) error {
 		}
 
 		return aw.UpdateAccountsRound(dbRound + basics.Round(offset))
+	}, func(ctx context.Context) { // RetryClearFn
+		for _, lt := range tr.trackers {
+			lt.clearCommitRoundRetry(ctx, dcc)
+		}
 	})
 	ledgerCommitroundMicros.AddMicrosecondsSince(start, nil)
 

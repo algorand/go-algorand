@@ -20,13 +20,13 @@ import (
 	"encoding/binary"
 	"fmt"
 	"reflect"
+	"slices"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
-	"golang.org/x/exp/slices"
 )
 
 // Status is the delegation status of an account's MicroAlgos

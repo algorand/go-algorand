@@ -157,18 +157,12 @@ func (spt *spVerificationTracker) postCommit(_ context.Context, dcc *deferredCom
 	spt.pendingDeleteContexts = spt.pendingDeleteContexts[dcc.spVerification.lastDeleteIndex+1:]
 }
 
-func (spt *spVerificationTracker) postCommitUnlocked(context.Context, *deferredCommitContext) {
-}
-
-func (spt *spVerificationTracker) handleUnorderedCommit(dcc *deferredCommitContext) {
-}
-func (spt *spVerificationTracker) handlePrepareCommitError(dcc *deferredCommitContext) {
-}
-func (spt *spVerificationTracker) handleCommitError(dcc *deferredCommitContext) {
-}
-
-func (spt *spVerificationTracker) close() {
-}
+func (spt *spVerificationTracker) clearCommitRoundRetry(context.Context, *deferredCommitContext) {}
+func (spt *spVerificationTracker) postCommitUnlocked(context.Context, *deferredCommitContext)    {}
+func (spt *spVerificationTracker) handleUnorderedCommit(dcc *deferredCommitContext)              {}
+func (spt *spVerificationTracker) handlePrepareCommitError(dcc *deferredCommitContext)           {}
+func (spt *spVerificationTracker) handleCommitError(dcc *deferredCommitContext)                  {}
+func (spt *spVerificationTracker) close()                                                        {}
 
 func (spt *spVerificationTracker) LookupVerificationContext(stateProofLastAttestedRound basics.Round) (*ledgercore.StateProofVerificationContext, error) {
 	if lstlookup := spt.retrieveFromCache(stateProofLastAttestedRound); lstlookup != nil {

@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"sync"
 	"time"
 
 	"github.com/algorand/go-algorand/ledger/encoded"
@@ -124,6 +125,10 @@ func (s *trackerStore) Transaction(fn trackerdb.TransactionFn) (err error) {
 	return s.TransactionContext(context.Background(), fn)
 }
 
+func (s *trackerStore) TransactionWithRetryClearFn(fn trackerdb.TransactionFn, rollbackFn trackerdb.RetryClearFn) error {
+	return s.TransactionContextWithRetryClearFn(context.Background(), fn, rollbackFn)
+}
+
 func (s *trackerStore) TransactionContext(ctx context.Context, fn trackerdb.TransactionFn) error {
 	handle, err := s.BeginTransaction(ctx)
 	if err != nil {
@@ -137,6 +142,22 @@ func (s *trackerStore) TransactionContext(ctx context.Context, fn trackerdb.Tran
 	}
 
 	return handle.Commit()
+}
+
+func (s *trackerStore) TransactionContextWithRetryClearFn(ctx context.Context, fn trackerdb.TransactionFn, rollbackFn trackerdb.RetryClearFn) error {
+	var wg sync.WaitGroup
+	wg.Add(2)
+	var pErr, sErr error
+	go func() {
+		pErr = s.primary.TransactionContextWithRetryClearFn(ctx, fn, rollbackFn)
+		wg.Done()
+	}()
+	go func() {
+		sErr = s.secondary.TransactionContextWithRetryClearFn(ctx, fn, rollbackFn)
+		wg.Done()
+	}()
+	wg.Wait()
+	return coalesceErrors(pErr, sErr)
 }
 
 func (s *trackerStore) BeginTransaction(ctx context.Context) (trackerdb.Transaction, error) {

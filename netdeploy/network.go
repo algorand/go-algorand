@@ -20,8 +20,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -34,7 +36,6 @@ import (
 	"github.com/algorand/go-algorand/nodecontrol"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util"
-	"golang.org/x/exp/maps"
 )
 
 const configFileName = "network.json"
@@ -365,7 +366,7 @@ func (n Network) GetPeerAddresses(binDir string) []string {
 }
 
 func (n Network) startNodes(binDir string, relayNameToAddress map[string]string, redirectOutput bool) error {
-	allRelaysAddresses := strings.Join(maps.Values(relayNameToAddress), ";")
+	allRelaysAddresses := strings.Join(slices.Collect(maps.Values(relayNameToAddress)), ";")
 
 	nodeConfigToEntry := make(map[string]remote.NodeConfigGoal, len(n.cfg.Template.Nodes))
 	for _, n := range n.cfg.Template.Nodes {

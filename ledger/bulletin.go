@@ -139,18 +139,12 @@ func (b *bulletin) commitRound(context.Context, trackerdb.TransactionScope, *def
 	return nil
 }
 
-func (b *bulletin) postCommit(ctx context.Context, dcc *deferredCommitContext) {
-}
-
-func (b *bulletin) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
-}
-
-func (b *bulletin) handleUnorderedCommit(dcc *deferredCommitContext) {
-}
-func (b *bulletin) handlePrepareCommitError(dcc *deferredCommitContext) {
-}
-func (b *bulletin) handleCommitError(dcc *deferredCommitContext) {
-}
+func (b *bulletin) clearCommitRoundRetry(ctx context.Context, dcc *deferredCommitContext) {}
+func (b *bulletin) postCommit(ctx context.Context, dcc *deferredCommitContext)            {}
+func (b *bulletin) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext)    {}
+func (b *bulletin) handleUnorderedCommit(dcc *deferredCommitContext)                      {}
+func (b *bulletin) handlePrepareCommitError(dcc *deferredCommitContext)                   {}
+func (b *bulletin) handleCommitError(dcc *deferredCommitContext)                          {}
 
 func (b *bulletin) produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcr *deferredCommitRange) *deferredCommitRange {
 	return dcr
