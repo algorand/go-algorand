@@ -351,8 +351,9 @@ func (s *trackerStore) TransactionContext(ctx context.Context, fn trackerdb.Tran
 }
 
 // TransactionContextWithRetryClearFn implements trackerdb.Store.
-// It currently ignores rollbackFn.
-func (s *trackerStore) TransactionContextWithRetryClearFn(ctx context.Context, fn trackerdb.TransactionFn, rollbackFn trackerdb.RetryClearFn) error {
+// It ignores the RetryClearFn, since it does not need to retry
+// transactions to work around SQLite issues like the sqlitedriver.
+func (s *trackerStore) TransactionContextWithRetryClearFn(ctx context.Context, fn trackerdb.TransactionFn, _ trackerdb.RetryClearFn) error {
 	return s.TransactionContext(ctx, fn)
 }
 
