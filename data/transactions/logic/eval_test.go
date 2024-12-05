@@ -433,7 +433,7 @@ func TestBlankStackSufficient(t *testing.T) {
 				spec := opsByOpcode[v][i]
 				argLen := len(spec.Arg.Types)
 				blankStackLen := len(blankStack)
-				require.GreaterOrEqual(t, blankStackLen, argLen)
+				require.GreaterOrEqual(t, blankStackLen, argLen, spec.Name)
 			}
 		})
 	}
@@ -3232,7 +3232,21 @@ func TestIllegalOp(t *testing.T) {
 	}
 }
 
-func TestShortProgram(t *testing.T) {
+func TestShortSimple(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	t.Parallel()
+	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
+		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
+			ops := testProg(t, `int 8; store 7`, v)
+			testLogicBytes(t, ops.Program[:len(ops.Program)-1], nil,
+				"program ends short of immediate values",
+				"program ends short of immediate values")
+		})
+	}
+}
+
+func TestShortBranch(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	t.Parallel()

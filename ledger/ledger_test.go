@@ -1979,6 +1979,35 @@ func TestLookupAgreement(t *testing.T) {
 	require.Equal(t, oad, ad.OnlineAccountData())
 }
 
+func TestGetKnockOfflineCandidates(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	ver := protocol.ConsensusFuture
+	genesisInitState, _ := ledgertesting.GenerateInitState(t, ver, 1_000_000)
+	const inMem = true
+	log := logging.TestingLog(t)
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	ledger, err := OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)
+	require.NoError(t, err, "could not open ledger")
+	defer ledger.Close()
+
+	accts, err := ledger.GetKnockOfflineCandidates(0, config.Consensus[ver])
+	require.NoError(t, err)
+	require.NotEmpty(t, accts)
+	// get online genesis accounts
+	onlineCnt := 0
+	onlineAddrs := make(map[basics.Address]basics.OnlineAccountData)
+	for addr, ad := range genesisInitState.Accounts {
+		if ad.Status == basics.Online {
+			onlineCnt++
+			onlineAddrs[addr] = ad.OnlineAccountData()
+		}
+	}
+	require.Len(t, accts, onlineCnt)
+	require.Equal(t, onlineAddrs, accts)
+}
+
 func BenchmarkLedgerStartup(b *testing.B) {
 	log := logging.TestingLog(b)
 	tmpDir := b.TempDir()

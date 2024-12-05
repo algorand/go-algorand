@@ -62,7 +62,7 @@ func TestSyncRestart(t *testing.T) {
 	waitTill := func(node string, round uint64) {
 		controller, err := fixture.GetNodeController(node)
 		a.NoError(err)
-		err = fixture.ClientWaitForRoundWithTimeout(fixture.GetAlgodClientForController(controller), round)
+		err = fixture.GetAlgodClientForController(controller).WaitForRoundWithTimeout(round)
 		a.NoError(err)
 	}
 

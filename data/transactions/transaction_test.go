@@ -591,6 +591,21 @@ func TestWellFormedErrors(t *testing.T) {
 			proto:         protoV36,
 			expectedError: nil,
 		},
+		{
+			tx: Transaction{
+				Type:   protocol.HeartbeatTx,
+				Header: okHeader,
+			},
+			proto:         protoV36,
+			expectedError: fmt.Errorf("heartbeat transaction not supported"),
+		},
+		{
+			tx: Transaction{
+				Type:   protocol.HeartbeatTx,
+				Header: okHeader,
+			},
+			proto: futureProto,
+		},
 	}
 	for _, usecase := range usecases {
 		err := usecase.tx.WellFormed(SpecialAddresses{}, usecase.proto)

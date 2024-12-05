@@ -72,8 +72,8 @@ type (
 		// begins as a consensus parameter value, and decays periodically.
 		Bonus basics.MicroAlgos `codec:"bi"`
 
-		// ProposerPayout is the amount that should be moved from the FeeSink to
-		// the Proposer at the start of the next block.  It is basically the
+		// ProposerPayout is the amount that is moved from the FeeSink to
+		// the Proposer in this block.  It is basically the
 		// bonus + the payouts percent of FeesCollected, but may be zero'd by
 		// proposer ineligibility.
 		ProposerPayout basics.MicroAlgos `codec:"pp"`

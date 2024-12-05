@@ -46,7 +46,7 @@ import (
 const basicTestCatchpointInterval = 4
 
 func waitForCatchpointGeneration(t *testing.T, fixture *fixtures.RestClientFixture, client client.RestClient, catchpointRound basics.Round) string {
-	err := fixture.ClientWaitForRoundWithTimeout(client, uint64(catchpointRound+1))
+	err := client.WaitForRoundWithTimeout(uint64(catchpointRound + 1))
 	if err != nil {
 		return ""
 	}
@@ -212,7 +212,7 @@ func startCatchpointGeneratingNode(a *require.Assertions, fixture *fixtures.Rest
 
 	restClient := fixture.GetAlgodClientForController(nodeController)
 	// We don't want to start using the node without it being properly initialized.
-	err = fixture.ClientWaitForRoundWithTimeout(restClient, 1)
+	err = restClient.WaitForRoundWithTimeout(1)
 	a.NoError(err)
 
 	return nodeController, restClient, &errorsCollector
@@ -239,7 +239,7 @@ func startCatchpointUsingNode(a *require.Assertions, fixture *fixtures.RestClien
 
 	restClient := fixture.GetAlgodClientForController(nodeController)
 	// We don't want to start using the node without it being properly initialized.
-	err = fixture.ClientWaitForRoundWithTimeout(restClient, 1)
+	err = restClient.WaitForRoundWithTimeout(1)
 	a.NoError(err)
 
 	return nodeController, restClient, wp, &errorsCollector
@@ -263,7 +263,7 @@ func startCatchpointNormalNode(a *require.Assertions, fixture *fixtures.RestClie
 
 	restClient := fixture.GetAlgodClientForController(nodeController)
 	// We don't want to start using the node without it being properly initialized.
-	err = fixture.ClientWaitForRoundWithTimeout(restClient, 1)
+	err = restClient.WaitForRoundWithTimeout(1)
 	a.NoError(err)
 
 	return nodeController, restClient, &errorsCollector
@@ -365,7 +365,7 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 	_, err = usingNodeRestClient.Catchup(catchpointLabel, 0)
 	a.NoError(err)
 
-	err = fixture.ClientWaitForRoundWithTimeout(usingNodeRestClient, uint64(targetCatchpointRound+1))
+	err = usingNodeRestClient.WaitForRoundWithTimeout(uint64(targetCatchpointRound + 1))
 	a.NoError(err)
 
 	// ensure the raw block can be downloaded (including cert)
@@ -438,7 +438,7 @@ func TestCatchpointLabelGeneration(t *testing.T) {
 			primaryNodeRestClient := fixture.GetAlgodClientForController(primaryNode)
 			log.Infof("Building ledger history..")
 			for {
-				err = fixture.ClientWaitForRound(primaryNodeRestClient, currentRound, 45*time.Second)
+				_, err = primaryNodeRestClient.WaitForRound(currentRound+1, 45*time.Second)
 				a.NoError(err)
 				if targetRound <= currentRound {
 					break
@@ -553,8 +553,7 @@ func TestNodeTxHandlerRestart(t *testing.T) {
 
 	// Wait for the network to start making progress again
 	primaryNodeRestClient := fixture.GetAlgodClientForController(primaryNode)
-	err = fixture.ClientWaitForRound(primaryNodeRestClient, targetRound,
-		10*catchpointCatchupProtocol.AgreementFilterTimeout)
+	_, err = primaryNodeRestClient.WaitForRound(targetRound, 10*catchpointCatchupProtocol.AgreementFilterTimeout)
 	a.NoError(err)
 
 	// let the 2nd client send a transaction
@@ -674,8 +673,7 @@ func TestReadyEndpoint(t *testing.T) {
 
 	// Wait for the network to start making progress again
 	primaryNodeRestClient := fixture.GetAlgodClientForController(primaryNode)
-	err = fixture.ClientWaitForRound(primaryNodeRestClient, targetRound,
-		10*catchpointCatchupProtocol.AgreementFilterTimeout)
+	_, err = primaryNodeRestClient.WaitForRound(targetRound, 10*catchpointCatchupProtocol.AgreementFilterTimeout)
 	a.NoError(err)
 
 	// The primary node has reached the target round,

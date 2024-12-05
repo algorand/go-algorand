@@ -127,7 +127,7 @@ func BenchmarkGetUnverifiedTransactionGroups50(b *testing.B) {
 	for i := 0; i < measuringMultipler; i++ {
 		impl.GetUnverifiedTransactionGroups(queryTxnGroups, spec, protocol.ConsensusCurrentVersion)
 	}
-	duration := time.Now().Sub(startTime)
+	duration := time.Since(startTime)
 	// calculate time per 10K verified entries:
 	t := int(duration*10000) / (measuringMultipler * b.N)
 	b.ReportMetric(float64(t)/float64(time.Millisecond), "ms/10K_cache_compares")
