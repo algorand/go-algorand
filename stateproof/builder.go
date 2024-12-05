@@ -22,6 +22,8 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"maps"
+	"slices"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto/stateproof"
@@ -34,8 +36,6 @@ import (
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/stateproof/verify"
-	"golang.org/x/exp/maps"
-	"golang.org/x/exp/slices"
 )
 
 var errVotersNotTracked = errors.New("voters not tracked for the given lookback round")
@@ -642,8 +642,7 @@ func (spw *Worker) tryBroadcast() {
 	spw.mu.Lock()
 	defer spw.mu.Unlock()
 
-	sortedRounds := maps.Keys(spw.provers)
-	slices.Sort(sortedRounds)
+	sortedRounds := slices.Sorted(maps.Keys(spw.provers))
 
 	for _, rnd := range sortedRounds {
 		// Iterate over the provers in a sequential manner. If the earlist state proof is not ready/rejected

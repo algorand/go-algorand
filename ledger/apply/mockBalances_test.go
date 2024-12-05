@@ -18,6 +18,7 @@ package apply
 
 import (
 	"fmt"
+	"maps"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
@@ -26,7 +27,6 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
-	"golang.org/x/exp/maps"
 )
 
 type mockBalances struct {

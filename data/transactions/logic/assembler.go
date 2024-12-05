@@ -2269,7 +2269,7 @@ func define(ops *OpStream, tokens []token) *sourceError {
 		} else {
 			delete(ops.macros, name) // remove new macro that caused cycle
 		}
-		return tokens[1].errorf("macro expansion cycle discovered: %s", strings.Join(found, " -> "))
+		return tokens[1].errorf("macro expansion cycle discovered: %s", strings.Join(found, " -> ")) //nolint:gosec // false positive, len(tokens) >= 3
 	}
 	return nil
 }
@@ -2883,8 +2883,9 @@ func disassemble(dis *disassembleState, spec *OpSpec) (string, error) {
 			if err != nil {
 				return "", err
 			}
-
-			dis.intc = intc
+			if spec.Name == "intcblock" {
+				dis.intc = intc
+			}
 			for i, iv := range intc {
 				if i != 0 {
 					out += " "
@@ -2897,7 +2898,9 @@ func disassemble(dis *disassembleState, spec *OpSpec) (string, error) {
 			if err != nil {
 				return "", err
 			}
-			dis.bytec = bytec
+			if spec.Name == "bytecblock" {
+				dis.bytec = bytec
+			}
 			for i, bv := range bytec {
 				if i != 0 {
 					out += " "

@@ -29,6 +29,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/verify"
 	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/ledger/eval"
@@ -91,6 +92,7 @@ func nextBlock(t testing.TB, ledger *Ledger) *eval.BlockEvaluator {
 	eval, err := eval.StartEvaluator(ledger, nextHdr, eval.EvaluatorOptions{
 		Generate: true,
 		Validate: true, // Do the complete checks that a new txn would be subject to
+		Tracer:   logic.EvalErrorDetailsTracer{},
 	})
 	require.NoError(t, err)
 	return eval

@@ -258,6 +258,24 @@ func TestTooManyArgs(t *testing.T) {
 	}
 }
 
+func TestArgTooLarge(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	t.Parallel()
+	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
+		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
+			ops := testProg(t, "int 1", v)
+			var txn transactions.SignedTxn
+			txn.Lsig.Logic = ops.Program
+			txn.Lsig.Args = [][]byte{make([]byte, transactions.MaxLogicSigArgSize+1)}
+			pass, err := EvalSignature(0, defaultSigParams(txn))
+			require.Error(t, err)
+			require.False(t, pass)
+		})
+	}
+
+}
+
 func TestEmptyProgram(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -1918,7 +1936,6 @@ func TestTxn(t *testing.T) {
 	clearOps := testProg(t, "int 1", 1)
 
 	for v, source := range tests {
-		v, source := v, source
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			t.Parallel()
 			ops := testProg(t, source, v)
@@ -2139,7 +2156,6 @@ gtxn 0 Sender
 	}
 
 	for v, source := range tests {
-		v, source := v, source
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			t.Parallel()
 			txn := makeSampleTxn()
@@ -2873,7 +2889,6 @@ func TestGload(t *testing.T) {
 	}
 
 	for i, testCase := range cases {
-		i, testCase := i, testCase
 		t.Run(fmt.Sprintf("i=%d", i), func(t *testing.T) {
 			t.Parallel()
 			sources := testCase.tealSources
@@ -2921,7 +2936,6 @@ func TestGload(t *testing.T) {
 
 	failCases := []failureCase{nonAppCall, logicSigCall}
 	for j, failCase := range failCases {
-		j, failCase := j, failCase
 		t.Run(fmt.Sprintf("j=%d", j), func(t *testing.T) {
 			t.Parallel()
 
@@ -3292,7 +3306,6 @@ func TestShortBytecblock2(t *testing.T) {
 		"0026efbfbdefbfbd30",
 	}
 	for _, src := range sources {
-		src := src
 		t.Run(src, func(t *testing.T) {
 			t.Parallel()
 			program, err := hex.DecodeString(src)
@@ -3369,7 +3382,6 @@ func TestPanic(t *testing.T) { //nolint:paralleltest // Uses withPanicOpcode
 	logSink := logging.NewLogger()
 	logSink.SetOutput(io.Discard)
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
-		v := v
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) { //nolint:paralleltest // Uses withPanicOpcode
 			withPanicOpcode(t, v, true, func(opcode byte) {
 				ops := testProg(t, `int 1`, v)
@@ -3533,7 +3545,6 @@ done:
 intc_1
 `
 	for _, line := range branches {
-		line := line
 		t.Run(fmt.Sprintf("branch=%s", line), func(t *testing.T) {
 			t.Parallel()
 			source := fmt.Sprintf(template, line)
@@ -4406,7 +4417,6 @@ func TestAnyRekeyToOrApplicationRaisesMinAvmVersion(t *testing.T) {
 	}
 
 	for ci, cse := range cases {
-		ci, cse := ci, cse
 		t.Run(fmt.Sprintf("ci=%d", ci), func(t *testing.T) {
 			t.Parallel()
 			sep, aep := defaultEvalParams(cse.group...)
@@ -5220,7 +5230,6 @@ func TestPcDetails(t *testing.T) {
 		{"b end; end:", 4, ""},
 	}
 	for i, test := range tests {
-		i, test := i, test
 		t.Run(fmt.Sprintf("i=%d", i), func(t *testing.T) {
 			t.Parallel()
 			ops := testProg(t, test.source, LogicVersion)

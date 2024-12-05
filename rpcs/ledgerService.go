@@ -108,7 +108,7 @@ func (ls *LedgerService) Stop() {
 	}
 }
 
-// ServerHTTP returns ledgers for a particular round
+// ServeHTTP returns ledgers for a particular round
 // Either /v{version}/{genesisID}/ledger/{round} or ?r={round}&v={version}
 // Uses gorilla/mux for path argument parsing.
 func (ls *LedgerService) ServeHTTP(response http.ResponseWriter, request *http.Request) {

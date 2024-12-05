@@ -19,12 +19,12 @@ package logic
 import (
 	"cmp"
 	"fmt"
+	"maps"
+	"slices"
 	"strconv"
 	"strings"
 
 	"github.com/algorand/go-algorand/data/basics"
-	"golang.org/x/exp/maps"
-	"golang.org/x/exp/slices"
 )
 
 // LogicVersion defines default assembler and max eval versions
@@ -838,11 +838,10 @@ func OpcodesByVersion(version uint64) []OpSpec {
 			}
 		}
 	}
-	result := maps.Values(subv)
-	slices.SortFunc(result, func(a, b OpSpec) int {
+	values := maps.Values(subv)
+	return slices.SortedFunc(values, func(a, b OpSpec) int {
 		return cmp.Compare(a.Opcode, b.Opcode)
 	})
-	return result
 }
 
 // direct opcode bytes

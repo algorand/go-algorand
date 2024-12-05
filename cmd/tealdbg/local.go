@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"slices"
 	"time"
 
 	"github.com/algorand/go-algorand/config"
@@ -28,7 +29,6 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/apply"
 	"github.com/algorand/go-algorand/protocol"
-	"golang.org/x/exp/slices"
 )
 
 func protoFromString(protoString string) (name string, proto config.ConsensusParams, err error) {

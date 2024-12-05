@@ -362,6 +362,7 @@ func testNetworkImplFull(t *testing.T, nodesCount int) {
 	// which is a different test of logic that agremeent needs to
 	// deal with.
 	cfg := config.GetDefaultLocal()
+	cfg.MaxConnectionsPerIP = nodesCount
 	cfg.AgreementIncomingVotesQueueLength = 100
 	cfg.AgreementIncomingProposalsQueueLength = 100
 	cfg.AgreementIncomingBundlesQueueLength = 100

@@ -463,7 +463,6 @@ func TestBackwardCompatAssemble(t *testing.T) {
 	testProg(t, source, 1, exp(3, "label \"done\" is too far away", 5))
 
 	for v := uint64(2); v <= AssemblerMaxVersion; v++ {
-		v := v
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			t.Parallel()
 			testLogic(t, source, v, nil)

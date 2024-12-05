@@ -590,7 +590,7 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) error {
 	for _, lt := range tr.trackers {
 		err = lt.prepareCommit(dcc)
 		if err != nil {
-			tr.log.Errorf(err.Error())
+			tr.log.Error(err.Error())
 			break
 		}
 	}
