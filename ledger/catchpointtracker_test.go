@@ -48,7 +48,6 @@ import (
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/algorand/go-deadlock"
 )
 
 func TestCatchpointIsWritingCatchpointFile(t *testing.T) {
@@ -2098,7 +2097,19 @@ func TestMakeCatchpointFilePath(t *testing.T) {
 
 }
 
-// test a case where in-memory SQLite, combined with fast locking (no deadlock detection)
+// Test a case where in-memory SQLite, combined with fast locking (improved performance, or no
+// deadlock detection) and concurrent reads (from transaction evaluation, stake lookups, etc) can
+// cause the SQLite implementation in util/db/dbutil.go to retry the function looping over all
+// tracker commitRound implementations. Since catchpointtracker' commitRound updates a merkle trie's
+// DB storage and its in-memory cache, the retry can cause the the balancesTrie's cache to become
+// corrupted and out of sync with the DB (which uses transaction rollback between retries). The
+// merkle trie corruption manifests as error log messages like:
+//   - "attempted to add duplicate hash 'X' to merkle trie for account Y"
+//   - "failed to delete hash 'X' from merkle trie for account Y"
+//
+// So we assert that those errors do not occur after the fix in #6190.
+//
+//nolint:paralleltest // deadlock detection is globally disabled, so this test is not parallel-safe
 func TestCatchpointTrackerFastRoundsDBRetry(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -2106,8 +2117,10 @@ func TestCatchpointTrackerFastRoundsDBRetry(t *testing.T) {
 	log := logging.NewLogger()
 	log.SetOutput(&bufNewLogger)
 
-	deadlock.Opts.Disable = true // disable deadlock detection during this test
-	defer func() { deadlock.Opts.Disable = false }()
+	// disabling deadlock detection globally causes the race detector to go off, but this
+	// bug can still happen even when deadlock detection is not disabled
+	//deadlock.Opts.Disable = true // disable deadlock detection during this test
+	//defer func() { deadlock.Opts.Disable = false }()
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis(func(cfg *ledgertesting.GenesisCfg) {
 		cfg.OnlineCount = 1
