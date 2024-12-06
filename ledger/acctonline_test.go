@@ -110,7 +110,9 @@ func commitSyncPartialComplete(t *testing.T, oa *onlineAccounts, ml *mockLedgerF
 	ml.trackers.lastFlushTime = dcc.flushTime
 
 	for _, lt := range ml.trackers.trackers {
-		lt.postCommitUnlocked(ml.trackers.ctx, dcc)
+		if lt, ok := lt.(ledgerTrackerExtraHandlers); ok {
+			lt.postCommitUnlocked(ml.trackers.ctx, dcc)
+		}
 	}
 }
 
