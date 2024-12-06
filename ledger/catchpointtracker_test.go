@@ -50,6 +50,9 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
+// assert catchpointTracker implements the trackerCommitLifetimeHandlers interface
+var _ trackerCommitLifetimeHandlers = &catchpointTracker{}
+
 func TestCatchpointIsWritingCatchpointFile(t *testing.T) {
 	partitiontest.PartitionTest(t)
 

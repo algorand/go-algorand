@@ -123,10 +123,10 @@ type ledgerTracker interface {
 	close()
 }
 
-// ledgerTrackerExtraHandlers defines additional methods some ledgerTrackers
+// trackerCommitLifetimeHandlers defines additional methods some ledgerTrackers
 // might implement to manage and clear state on error or success. In practice,
 // it is only used by the catchpointtracker.
-type ledgerTrackerExtraHandlers interface {
+type trackerCommitLifetimeHandlers interface {
 	// postCommitUnlocked is called only on a successful commitRound. In that case, each of the trackers have
 	// the chance to make changes that aren't state-dependent.
 	// An optional context is provided for long-running operations.
@@ -574,7 +574,7 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) error {
 	if tr.dbRound < dbRound || offset < uint64(tr.dbRound-dbRound) {
 		tr.log.Warnf("out of order deferred commit: offset %d, dbRound %d but current tracker DB round is %d", offset, dbRound, tr.dbRound)
 		for _, lt := range tr.trackers {
-			if lt, ok := lt.(ledgerTrackerExtraHandlers); ok {
+			if lt, ok := lt.(trackerCommitLifetimeHandlers); ok {
 				lt.handleUnorderedCommit(dcc)
 			}
 		}
@@ -611,7 +611,7 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) error {
 	}
 	if err != nil {
 		for _, lt := range tr.trackers {
-			if lt, ok := lt.(ledgerTrackerExtraHandlers); ok {
+			if lt, ok := lt.(trackerCommitLifetimeHandlers); ok {
 				lt.handlePrepareCommitError(dcc)
 			}
 		}
@@ -644,7 +644,7 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) error {
 		return aw.UpdateAccountsRound(dbRound + basics.Round(offset))
 	}, func(ctx context.Context) { // RetryClearFn
 		for _, lt := range tr.trackers {
-			if lt, ok := lt.(ledgerTrackerExtraHandlers); ok {
+			if lt, ok := lt.(trackerCommitLifetimeHandlers); ok {
 				lt.clearCommitRoundRetry(ctx, dcc)
 			}
 		}
@@ -654,7 +654,7 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) error {
 	if err != nil {
 
 		for _, lt := range tr.trackers {
-			if lt, ok := lt.(ledgerTrackerExtraHandlers); ok {
+			if lt, ok := lt.(trackerCommitLifetimeHandlers); ok {
 				lt.handleCommitError(dcc)
 			}
 		}
@@ -678,7 +678,7 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) error {
 	tr.mu.Unlock()
 
 	for _, lt := range tr.trackers {
-		if lt, ok := lt.(ledgerTrackerExtraHandlers); ok {
+		if lt, ok := lt.(trackerCommitLifetimeHandlers); ok {
 			lt.postCommitUnlocked(tr.ctx, dcc)
 		}
 	}
