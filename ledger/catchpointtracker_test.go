@@ -17,6 +17,7 @@
 package ledger
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"errors"
@@ -39,6 +40,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
@@ -47,6 +49,9 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
+
+// assert catchpointTracker implements the trackerCommitLifetimeHandlers interface
+var _ trackerCommitLifetimeHandlers = &catchpointTracker{}
 
 func TestCatchpointIsWritingCatchpointFile(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -2093,4 +2098,62 @@ func TestMakeCatchpointFilePath(t *testing.T) {
 		require.Equal(t, tc.expectedDataFilePath, makeCatchpointDataFilePath(basics.Round(tc.round)))
 	}
 
+}
+
+// Test a case where in-memory SQLite, combined with fast locking (improved performance, or no
+// deadlock detection) and concurrent reads (from transaction evaluation, stake lookups, etc) can
+// cause the SQLite implementation in util/db/dbutil.go to retry the function looping over all
+// tracker commitRound implementations. Since catchpointtracker' commitRound updates a merkle trie's
+// DB storage and its in-memory cache, the retry can cause the the balancesTrie's cache to become
+// corrupted and out of sync with the DB (which uses transaction rollback between retries). The
+// merkle trie corruption manifests as error log messages like:
+//   - "attempted to add duplicate hash 'X' to merkle trie for account Y"
+//   - "failed to delete hash 'X' from merkle trie for account Y"
+//
+// So we assert that those errors do not occur after the fix in #6190.
+//
+//nolint:paralleltest // deadlock detection is globally disabled, so this test is not parallel-safe
+func TestCatchpointTrackerFastRoundsDBRetry(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	var bufNewLogger bytes.Buffer
+	log := logging.NewLogger()
+	log.SetOutput(&bufNewLogger)
+
+	// disabling deadlock detection globally causes the race detector to go off, but this
+	// bug can still happen even when deadlock detection is not disabled
+	//deadlock.Opts.Disable = true // disable deadlock detection during this test
+	//defer func() { deadlock.Opts.Disable = false }()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis(func(cfg *ledgertesting.GenesisCfg) {
+		cfg.OnlineCount = 1
+		ledgertesting.TurnOffRewards(cfg)
+	})
+	cfg := config.GetDefaultLocal()
+	dl := NewDoubleLedger(t, genBalances, protocol.ConsensusFuture, cfg, simpleLedgerLogger(log)) // in-memory SQLite
+	defer dl.Close()
+
+	appSrc := main(`int 1; int 1; ==; assert`)
+	app := dl.fundedApp(addrs[1], 1_000_000, appSrc)
+
+	makeTxn := func() *txntest.Txn {
+		return &txntest.Txn{
+			Type:          "appl",
+			Sender:        addrs[2],
+			ApplicationID: app,
+			Note:          ledgertesting.RandomNote(),
+		}
+	}
+
+	for vb := dl.fullBlock(makeTxn()); vb.Block().Round() <= 1500; vb = dl.fullBlock(makeTxn()) {
+		nextRnd := vb.Block().Round() + 1
+		_, err := dl.generator.OnlineCirculation(nextRnd.SubSaturate(320), nextRnd)
+		require.NoError(t, err)
+		require.Empty(t, vb.Block().ExpiredParticipationAccounts)
+		require.Empty(t, vb.Block().AbsentParticipationAccounts)
+	}
+
+	// assert that no corruption of merkle trie happened due to DB retries leaving
+	// incorrect state in the merkle trie cache.
+	require.NotContains(t, bufNewLogger.String(), "to merkle trie for account", "Merkle trie was corrupted!")
 }
