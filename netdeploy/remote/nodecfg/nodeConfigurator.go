@@ -202,7 +202,7 @@ func (nc *nodeConfigurator) prepareNodeDirs(configs []remote.NodeConfig, rootCon
 	return
 }
 
-// getHostName creates a DNS name for a host
+// getNetworkHostName creates a DNS name for a host
 func (nc *nodeConfigurator) getNetworkHostName() string {
 	return nc.config.Name + "." + string(nc.genesisData.Network) + ".algodev.network"
 }
