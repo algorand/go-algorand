@@ -195,6 +195,8 @@ func (t *emptyTracker) handlePrepareCommitError(dcc *deferredCommitContext) {
 }
 func (t *emptyTracker) handleCommitError(dcc *deferredCommitContext) {
 }
+func (t *emptyTracker) clearCommitRoundRetry(ctx context.Context, dcc *deferredCommitContext) {
+}
 
 // close is not used by the emptyTracker
 func (t *emptyTracker) close() {

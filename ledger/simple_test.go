@@ -42,6 +42,7 @@ import (
 type simpleLedgerCfg struct {
 	onDisk      bool // default is in-memory
 	notArchival bool // default is archival
+	logger      logging.Logger
 }
 
 type simpleLedgerOption func(*simpleLedgerCfg)
@@ -52,6 +53,10 @@ func simpleLedgerOnDisk() simpleLedgerOption {
 
 func simpleLedgerNotArchival() simpleLedgerOption {
 	return func(cfg *simpleLedgerCfg) { cfg.notArchival = true }
+}
+
+func simpleLedgerLogger(l logging.Logger) simpleLedgerOption {
+	return func(cfg *simpleLedgerCfg) { cfg.logger = l }
 }
 
 func newSimpleLedgerWithConsensusVersion(t testing.TB, balances bookkeeping.GenesisBalances, cv protocol.ConsensusVersion, cfg config.Local, opts ...simpleLedgerOption) *Ledger {
@@ -72,7 +77,11 @@ func newSimpleLedgerFull(t testing.TB, balances bookkeeping.GenesisBalances, cv 
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	dbName = strings.Replace(dbName, "/", "_", -1)
 	cfg.Archival = !slCfg.notArchival
-	l, err := OpenLedger(logging.Base(), dbName, !slCfg.onDisk, ledgercore.InitState{
+	log := slCfg.logger
+	if log == nil {
+		log = logging.Base()
+	}
+	l, err := OpenLedger(log, dbName, !slCfg.onDisk, ledgercore.InitState{
 		Block:       genBlock,
 		Accounts:    balances.Balances,
 		GenesisHash: genHash,

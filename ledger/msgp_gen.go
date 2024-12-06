@@ -127,8 +127,8 @@ func CatchpointCatchupStateMaxSize() (s int) {
 func (z *CatchpointFileHeader) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0001Len := uint32(9)
-	var zb0001Mask uint16 /* 10 bits */
+	zb0001Len := uint32(11)
+	var zb0001Mask uint16 /* 12 bits */
 	if (*z).Totals.MsgIsZero() {
 		zb0001Len--
 		zb0001Mask |= 0x2
@@ -161,9 +161,17 @@ func (z *CatchpointFileHeader) MarshalMsg(b []byte) (o []byte) {
 		zb0001Len--
 		zb0001Mask |= 0x100
 	}
-	if (*z).Version == 0 {
+	if (*z).TotalOnlineAccounts == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x200
+	}
+	if (*z).TotalOnlineRoundParams == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x400
+	}
+	if (*z).Version == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x800
 	}
 	// variable map header, size zb0001Len
 	o = append(o, 0x80|uint8(zb0001Len))
@@ -209,6 +217,16 @@ func (z *CatchpointFileHeader) MarshalMsg(b []byte) (o []byte) {
 			o = msgp.AppendUint64(o, (*z).TotalKVs)
 		}
 		if (zb0001Mask & 0x200) == 0 { // if not empty
+			// string "onlineAccountsCount"
+			o = append(o, 0xb3, 0x6f, 0x6e, 0x6c, 0x69, 0x6e, 0x65, 0x41, 0x63, 0x63, 0x6f, 0x75, 0x6e, 0x74, 0x73, 0x43, 0x6f, 0x75, 0x6e, 0x74)
+			o = msgp.AppendUint64(o, (*z).TotalOnlineAccounts)
+		}
+		if (zb0001Mask & 0x400) == 0 { // if not empty
+			// string "onlineRoundParamsCount"
+			o = append(o, 0xb6, 0x6f, 0x6e, 0x6c, 0x69, 0x6e, 0x65, 0x52, 0x6f, 0x75, 0x6e, 0x64, 0x50, 0x61, 0x72, 0x61, 0x6d, 0x73, 0x43, 0x6f, 0x75, 0x6e, 0x74)
+			o = msgp.AppendUint64(o, (*z).TotalOnlineRoundParams)
+		}
+		if (zb0001Mask & 0x800) == 0 { // if not empty
 			// string "version"
 			o = append(o, 0xa7, 0x76, 0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e)
 			o = msgp.AppendUint64(o, (*z).Version)
@@ -298,6 +316,22 @@ func (z *CatchpointFileHeader) UnmarshalMsgWithState(bts []byte, st msgp.Unmarsh
 		}
 		if zb0001 > 0 {
 			zb0001--
+			(*z).TotalOnlineAccounts, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "TotalOnlineAccounts")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			(*z).TotalOnlineRoundParams, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "TotalOnlineRoundParams")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
 			(*z).Catchpoint, bts, err = msgp.ReadStringBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Catchpoint")
@@ -377,6 +411,18 @@ func (z *CatchpointFileHeader) UnmarshalMsgWithState(bts []byte, st msgp.Unmarsh
 					err = msgp.WrapError(err, "TotalKVs")
 					return
 				}
+			case "onlineAccountsCount":
+				(*z).TotalOnlineAccounts, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "TotalOnlineAccounts")
+					return
+				}
+			case "onlineRoundParamsCount":
+				(*z).TotalOnlineRoundParams, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "TotalOnlineRoundParams")
+					return
+				}
 			case "catchpoint":
 				(*z).Catchpoint, bts, err = msgp.ReadStringBytes(bts)
 				if err != nil {
@@ -412,18 +458,18 @@ func (_ *CatchpointFileHeader) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *CatchpointFileHeader) Msgsize() (s int) {
-	s = 1 + 8 + msgp.Uint64Size + 14 + (*z).BalancesRound.Msgsize() + 12 + (*z).BlocksRound.Msgsize() + 14 + (*z).Totals.Msgsize() + 14 + msgp.Uint64Size + 12 + msgp.Uint64Size + 9 + msgp.Uint64Size + 11 + msgp.StringPrefixSize + len((*z).Catchpoint) + 18 + (*z).BlockHeaderDigest.Msgsize()
+	s = 1 + 8 + msgp.Uint64Size + 14 + (*z).BalancesRound.Msgsize() + 12 + (*z).BlocksRound.Msgsize() + 14 + (*z).Totals.Msgsize() + 14 + msgp.Uint64Size + 12 + msgp.Uint64Size + 9 + msgp.Uint64Size + 20 + msgp.Uint64Size + 23 + msgp.Uint64Size + 11 + msgp.StringPrefixSize + len((*z).Catchpoint) + 18 + (*z).BlockHeaderDigest.Msgsize()
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *CatchpointFileHeader) MsgIsZero() bool {
-	return ((*z).Version == 0) && ((*z).BalancesRound.MsgIsZero()) && ((*z).BlocksRound.MsgIsZero()) && ((*z).Totals.MsgIsZero()) && ((*z).TotalAccounts == 0) && ((*z).TotalChunks == 0) && ((*z).TotalKVs == 0) && ((*z).Catchpoint == "") && ((*z).BlockHeaderDigest.MsgIsZero())
+	return ((*z).Version == 0) && ((*z).BalancesRound.MsgIsZero()) && ((*z).BlocksRound.MsgIsZero()) && ((*z).Totals.MsgIsZero()) && ((*z).TotalAccounts == 0) && ((*z).TotalChunks == 0) && ((*z).TotalKVs == 0) && ((*z).TotalOnlineAccounts == 0) && ((*z).TotalOnlineRoundParams == 0) && ((*z).Catchpoint == "") && ((*z).BlockHeaderDigest.MsgIsZero())
 }
 
 // MaxSize returns a maximum valid message size for this message type
 func CatchpointFileHeaderMaxSize() (s int) {
-	s = 1 + 8 + msgp.Uint64Size + 14 + basics.RoundMaxSize() + 12 + basics.RoundMaxSize() + 14 + ledgercore.AccountTotalsMaxSize() + 14 + msgp.Uint64Size + 12 + msgp.Uint64Size + 9 + msgp.Uint64Size + 11
+	s = 1 + 8 + msgp.Uint64Size + 14 + basics.RoundMaxSize() + 12 + basics.RoundMaxSize() + 14 + ledgercore.AccountTotalsMaxSize() + 14 + msgp.Uint64Size + 12 + msgp.Uint64Size + 9 + msgp.Uint64Size + 20 + msgp.Uint64Size + 23 + msgp.Uint64Size + 11
 	panic("Unable to determine max size: String type z.Catchpoint is unbounded")
 	s += 18 + crypto.DigestMaxSize()
 	return
@@ -607,20 +653,28 @@ func CatchpointFileBalancesChunkV5MaxSize() (s int) {
 func (z *catchpointFileChunkV6) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0003Len := uint32(2)
-	var zb0003Mask uint8 /* 4 bits */
+	zb0005Len := uint32(4)
+	var zb0005Mask uint8 /* 6 bits */
 	if len((*z).Balances) == 0 {
-		zb0003Len--
-		zb0003Mask |= 0x2
+		zb0005Len--
+		zb0005Mask |= 0x2
 	}
 	if len((*z).KVs) == 0 {
-		zb0003Len--
-		zb0003Mask |= 0x4
+		zb0005Len--
+		zb0005Mask |= 0x4
 	}
-	// variable map header, size zb0003Len
-	o = append(o, 0x80|uint8(zb0003Len))
-	if zb0003Len != 0 {
-		if (zb0003Mask & 0x2) == 0 { // if not empty
+	if len((*z).OnlineAccounts) == 0 {
+		zb0005Len--
+		zb0005Mask |= 0x10
+	}
+	if len((*z).OnlineRoundParams) == 0 {
+		zb0005Len--
+		zb0005Mask |= 0x20
+	}
+	// variable map header, size zb0005Len
+	o = append(o, 0x80|uint8(zb0005Len))
+	if zb0005Len != 0 {
+		if (zb0005Mask & 0x2) == 0 { // if not empty
 			// string "bl"
 			o = append(o, 0xa2, 0x62, 0x6c)
 			if (*z).Balances == nil {
@@ -632,7 +686,7 @@ func (z *catchpointFileChunkV6) MarshalMsg(b []byte) (o []byte) {
 				o = (*z).Balances[zb0001].MarshalMsg(o)
 			}
 		}
-		if (zb0003Mask & 0x4) == 0 { // if not empty
+		if (zb0005Mask & 0x4) == 0 { // if not empty
 			// string "kv"
 			o = append(o, 0xa2, 0x6b, 0x76)
 			if (*z).KVs == nil {
@@ -642,6 +696,30 @@ func (z *catchpointFileChunkV6) MarshalMsg(b []byte) (o []byte) {
 			}
 			for zb0002 := range (*z).KVs {
 				o = (*z).KVs[zb0002].MarshalMsg(o)
+			}
+		}
+		if (zb0005Mask & 0x10) == 0 { // if not empty
+			// string "oa"
+			o = append(o, 0xa2, 0x6f, 0x61)
+			if (*z).OnlineAccounts == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = msgp.AppendArrayHeader(o, uint32(len((*z).OnlineAccounts)))
+			}
+			for zb0003 := range (*z).OnlineAccounts {
+				o = (*z).OnlineAccounts[zb0003].MarshalMsg(o)
+			}
+		}
+		if (zb0005Mask & 0x20) == 0 { // if not empty
+			// string "orp"
+			o = append(o, 0xa3, 0x6f, 0x72, 0x70)
+			if (*z).OnlineRoundParams == nil {
+				o = msgp.AppendNil(o)
+			} else {
+				o = msgp.AppendArrayHeader(o, uint32(len((*z).OnlineRoundParams)))
+			}
+			for zb0004 := range (*z).OnlineRoundParams {
+				o = (*z).OnlineRoundParams[zb0004].MarshalMsg(o)
 			}
 		}
 	}
@@ -662,35 +740,35 @@ func (z *catchpointFileChunkV6) UnmarshalMsgWithState(bts []byte, st msgp.Unmars
 	st.AllowableDepth--
 	var field []byte
 	_ = field
-	var zb0003 int
-	var zb0004 bool
-	zb0003, zb0004, bts, err = msgp.ReadMapHeaderBytes(bts)
+	var zb0005 int
+	var zb0006 bool
+	zb0005, zb0006, bts, err = msgp.ReadMapHeaderBytes(bts)
 	if _, ok := err.(msgp.TypeError); ok {
-		zb0003, zb0004, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		zb0005, zb0006, bts, err = msgp.ReadArrayHeaderBytes(bts)
 		if err != nil {
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0003 > 0 {
-			zb0003--
-			var zb0005 int
-			var zb0006 bool
-			zb0005, zb0006, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if zb0005 > 0 {
+			zb0005--
+			var zb0007 int
+			var zb0008 bool
+			zb0007, zb0008, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Balances")
 				return
 			}
-			if zb0005 > BalancesPerCatchpointFileChunk {
-				err = msgp.ErrOverflow(uint64(zb0005), uint64(BalancesPerCatchpointFileChunk))
+			if zb0007 > BalancesPerCatchpointFileChunk {
+				err = msgp.ErrOverflow(uint64(zb0007), uint64(BalancesPerCatchpointFileChunk))
 				err = msgp.WrapError(err, "struct-from-array", "Balances")
 				return
 			}
-			if zb0006 {
+			if zb0008 {
 				(*z).Balances = nil
-			} else if (*z).Balances != nil && cap((*z).Balances) >= zb0005 {
-				(*z).Balances = ((*z).Balances)[:zb0005]
+			} else if (*z).Balances != nil && cap((*z).Balances) >= zb0007 {
+				(*z).Balances = ((*z).Balances)[:zb0007]
 			} else {
-				(*z).Balances = make([]encoded.BalanceRecordV6, zb0005)
+				(*z).Balances = make([]encoded.BalanceRecordV6, zb0007)
 			}
 			for zb0001 := range (*z).Balances {
 				bts, err = (*z).Balances[zb0001].UnmarshalMsgWithState(bts, st)
@@ -700,26 +778,26 @@ func (z *catchpointFileChunkV6) UnmarshalMsgWithState(bts []byte, st msgp.Unmars
 				}
 			}
 		}
-		if zb0003 > 0 {
-			zb0003--
-			var zb0007 int
-			var zb0008 bool
-			zb0007, zb0008, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if zb0005 > 0 {
+			zb0005--
+			var zb0009 int
+			var zb0010 bool
+			zb0009, zb0010, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "KVs")
 				return
 			}
-			if zb0007 > BalancesPerCatchpointFileChunk {
-				err = msgp.ErrOverflow(uint64(zb0007), uint64(BalancesPerCatchpointFileChunk))
+			if zb0009 > BalancesPerCatchpointFileChunk {
+				err = msgp.ErrOverflow(uint64(zb0009), uint64(BalancesPerCatchpointFileChunk))
 				err = msgp.WrapError(err, "struct-from-array", "KVs")
 				return
 			}
-			if zb0008 {
+			if zb0010 {
 				(*z).KVs = nil
-			} else if (*z).KVs != nil && cap((*z).KVs) >= zb0007 {
-				(*z).KVs = ((*z).KVs)[:zb0007]
+			} else if (*z).KVs != nil && cap((*z).KVs) >= zb0009 {
+				(*z).KVs = ((*z).KVs)[:zb0009]
 			} else {
-				(*z).KVs = make([]encoded.KVRecordV6, zb0007)
+				(*z).KVs = make([]encoded.KVRecordV6, zb0009)
 			}
 			for zb0002 := range (*z).KVs {
 				bts, err = (*z).KVs[zb0002].UnmarshalMsgWithState(bts, st)
@@ -729,8 +807,66 @@ func (z *catchpointFileChunkV6) UnmarshalMsgWithState(bts []byte, st msgp.Unmars
 				}
 			}
 		}
-		if zb0003 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0003)
+		if zb0005 > 0 {
+			zb0005--
+			var zb0011 int
+			var zb0012 bool
+			zb0011, zb0012, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "OnlineAccounts")
+				return
+			}
+			if zb0011 > BalancesPerCatchpointFileChunk {
+				err = msgp.ErrOverflow(uint64(zb0011), uint64(BalancesPerCatchpointFileChunk))
+				err = msgp.WrapError(err, "struct-from-array", "OnlineAccounts")
+				return
+			}
+			if zb0012 {
+				(*z).OnlineAccounts = nil
+			} else if (*z).OnlineAccounts != nil && cap((*z).OnlineAccounts) >= zb0011 {
+				(*z).OnlineAccounts = ((*z).OnlineAccounts)[:zb0011]
+			} else {
+				(*z).OnlineAccounts = make([]encoded.OnlineAccountRecordV6, zb0011)
+			}
+			for zb0003 := range (*z).OnlineAccounts {
+				bts, err = (*z).OnlineAccounts[zb0003].UnmarshalMsgWithState(bts, st)
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "OnlineAccounts", zb0003)
+					return
+				}
+			}
+		}
+		if zb0005 > 0 {
+			zb0005--
+			var zb0013 int
+			var zb0014 bool
+			zb0013, zb0014, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "OnlineRoundParams")
+				return
+			}
+			if zb0013 > BalancesPerCatchpointFileChunk {
+				err = msgp.ErrOverflow(uint64(zb0013), uint64(BalancesPerCatchpointFileChunk))
+				err = msgp.WrapError(err, "struct-from-array", "OnlineRoundParams")
+				return
+			}
+			if zb0014 {
+				(*z).OnlineRoundParams = nil
+			} else if (*z).OnlineRoundParams != nil && cap((*z).OnlineRoundParams) >= zb0013 {
+				(*z).OnlineRoundParams = ((*z).OnlineRoundParams)[:zb0013]
+			} else {
+				(*z).OnlineRoundParams = make([]encoded.OnlineRoundParamsRecordV6, zb0013)
+			}
+			for zb0004 := range (*z).OnlineRoundParams {
+				bts, err = (*z).OnlineRoundParams[zb0004].UnmarshalMsgWithState(bts, st)
+				if err != nil {
+					err = msgp.WrapError(err, "struct-from-array", "OnlineRoundParams", zb0004)
+					return
+				}
+			}
+		}
+		if zb0005 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0005)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array")
 				return
@@ -741,11 +877,11 @@ func (z *catchpointFileChunkV6) UnmarshalMsgWithState(bts []byte, st msgp.Unmars
 			err = msgp.WrapError(err)
 			return
 		}
-		if zb0004 {
+		if zb0006 {
 			(*z) = catchpointFileChunkV6{}
 		}
-		for zb0003 > 0 {
-			zb0003--
+		for zb0005 > 0 {
+			zb0005--
 			field, bts, err = msgp.ReadMapKeyZC(bts)
 			if err != nil {
 				err = msgp.WrapError(err)
@@ -753,24 +889,24 @@ func (z *catchpointFileChunkV6) UnmarshalMsgWithState(bts []byte, st msgp.Unmars
 			}
 			switch string(field) {
 			case "bl":
-				var zb0009 int
-				var zb0010 bool
-				zb0009, zb0010, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				var zb0015 int
+				var zb0016 bool
+				zb0015, zb0016, bts, err = msgp.ReadArrayHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Balances")
 					return
 				}
-				if zb0009 > BalancesPerCatchpointFileChunk {
-					err = msgp.ErrOverflow(uint64(zb0009), uint64(BalancesPerCatchpointFileChunk))
+				if zb0015 > BalancesPerCatchpointFileChunk {
+					err = msgp.ErrOverflow(uint64(zb0015), uint64(BalancesPerCatchpointFileChunk))
 					err = msgp.WrapError(err, "Balances")
 					return
 				}
-				if zb0010 {
+				if zb0016 {
 					(*z).Balances = nil
-				} else if (*z).Balances != nil && cap((*z).Balances) >= zb0009 {
-					(*z).Balances = ((*z).Balances)[:zb0009]
+				} else if (*z).Balances != nil && cap((*z).Balances) >= zb0015 {
+					(*z).Balances = ((*z).Balances)[:zb0015]
 				} else {
-					(*z).Balances = make([]encoded.BalanceRecordV6, zb0009)
+					(*z).Balances = make([]encoded.BalanceRecordV6, zb0015)
 				}
 				for zb0001 := range (*z).Balances {
 					bts, err = (*z).Balances[zb0001].UnmarshalMsgWithState(bts, st)
@@ -780,29 +916,83 @@ func (z *catchpointFileChunkV6) UnmarshalMsgWithState(bts []byte, st msgp.Unmars
 					}
 				}
 			case "kv":
-				var zb0011 int
-				var zb0012 bool
-				zb0011, zb0012, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				var zb0017 int
+				var zb0018 bool
+				zb0017, zb0018, bts, err = msgp.ReadArrayHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "KVs")
 					return
 				}
-				if zb0011 > BalancesPerCatchpointFileChunk {
-					err = msgp.ErrOverflow(uint64(zb0011), uint64(BalancesPerCatchpointFileChunk))
+				if zb0017 > BalancesPerCatchpointFileChunk {
+					err = msgp.ErrOverflow(uint64(zb0017), uint64(BalancesPerCatchpointFileChunk))
 					err = msgp.WrapError(err, "KVs")
 					return
 				}
-				if zb0012 {
+				if zb0018 {
 					(*z).KVs = nil
-				} else if (*z).KVs != nil && cap((*z).KVs) >= zb0011 {
-					(*z).KVs = ((*z).KVs)[:zb0011]
+				} else if (*z).KVs != nil && cap((*z).KVs) >= zb0017 {
+					(*z).KVs = ((*z).KVs)[:zb0017]
 				} else {
-					(*z).KVs = make([]encoded.KVRecordV6, zb0011)
+					(*z).KVs = make([]encoded.KVRecordV6, zb0017)
 				}
 				for zb0002 := range (*z).KVs {
 					bts, err = (*z).KVs[zb0002].UnmarshalMsgWithState(bts, st)
 					if err != nil {
 						err = msgp.WrapError(err, "KVs", zb0002)
+						return
+					}
+				}
+			case "oa":
+				var zb0019 int
+				var zb0020 bool
+				zb0019, zb0020, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "OnlineAccounts")
+					return
+				}
+				if zb0019 > BalancesPerCatchpointFileChunk {
+					err = msgp.ErrOverflow(uint64(zb0019), uint64(BalancesPerCatchpointFileChunk))
+					err = msgp.WrapError(err, "OnlineAccounts")
+					return
+				}
+				if zb0020 {
+					(*z).OnlineAccounts = nil
+				} else if (*z).OnlineAccounts != nil && cap((*z).OnlineAccounts) >= zb0019 {
+					(*z).OnlineAccounts = ((*z).OnlineAccounts)[:zb0019]
+				} else {
+					(*z).OnlineAccounts = make([]encoded.OnlineAccountRecordV6, zb0019)
+				}
+				for zb0003 := range (*z).OnlineAccounts {
+					bts, err = (*z).OnlineAccounts[zb0003].UnmarshalMsgWithState(bts, st)
+					if err != nil {
+						err = msgp.WrapError(err, "OnlineAccounts", zb0003)
+						return
+					}
+				}
+			case "orp":
+				var zb0021 int
+				var zb0022 bool
+				zb0021, zb0022, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "OnlineRoundParams")
+					return
+				}
+				if zb0021 > BalancesPerCatchpointFileChunk {
+					err = msgp.ErrOverflow(uint64(zb0021), uint64(BalancesPerCatchpointFileChunk))
+					err = msgp.WrapError(err, "OnlineRoundParams")
+					return
+				}
+				if zb0022 {
+					(*z).OnlineRoundParams = nil
+				} else if (*z).OnlineRoundParams != nil && cap((*z).OnlineRoundParams) >= zb0021 {
+					(*z).OnlineRoundParams = ((*z).OnlineRoundParams)[:zb0021]
+				} else {
+					(*z).OnlineRoundParams = make([]encoded.OnlineRoundParamsRecordV6, zb0021)
+				}
+				for zb0004 := range (*z).OnlineRoundParams {
+					bts, err = (*z).OnlineRoundParams[zb0004].UnmarshalMsgWithState(bts, st)
+					if err != nil {
+						err = msgp.WrapError(err, "OnlineRoundParams", zb0004)
 						return
 					}
 				}
@@ -837,12 +1027,20 @@ func (z *catchpointFileChunkV6) Msgsize() (s int) {
 	for zb0002 := range (*z).KVs {
 		s += (*z).KVs[zb0002].Msgsize()
 	}
+	s += 3 + msgp.ArrayHeaderSize
+	for zb0003 := range (*z).OnlineAccounts {
+		s += (*z).OnlineAccounts[zb0003].Msgsize()
+	}
+	s += 4 + msgp.ArrayHeaderSize
+	for zb0004 := range (*z).OnlineRoundParams {
+		s += (*z).OnlineRoundParams[zb0004].Msgsize()
+	}
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *catchpointFileChunkV6) MsgIsZero() bool {
-	return (len((*z).Balances) == 0) && (len((*z).KVs) == 0)
+	return (len((*z).Balances) == 0) && (len((*z).KVs) == 0) && (len((*z).OnlineAccounts) == 0) && (len((*z).OnlineRoundParams) == 0)
 }
 
 // MaxSize returns a maximum valid message size for this message type
@@ -853,6 +1051,12 @@ func CatchpointFileChunkV6MaxSize() (s int) {
 	s += 3
 	// Calculating size of slice: z.KVs
 	s += msgp.ArrayHeaderSize + ((BalancesPerCatchpointFileChunk) * (encoded.KVRecordV6MaxSize()))
+	s += 3
+	// Calculating size of slice: z.OnlineAccounts
+	s += msgp.ArrayHeaderSize + ((BalancesPerCatchpointFileChunk) * (encoded.OnlineAccountRecordV6MaxSize()))
+	s += 4
+	// Calculating size of slice: z.OnlineRoundParams
+	s += msgp.ArrayHeaderSize + ((BalancesPerCatchpointFileChunk) * (encoded.OnlineRoundParamsRecordV6MaxSize()))
 	return
 }
 
