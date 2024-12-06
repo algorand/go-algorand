@@ -355,13 +355,6 @@ func (ao *onlineAccounts) consecutiveVersion(offset uint64) uint64 {
 	return offset
 }
 
-func (ao *onlineAccounts) handleUnorderedCommit(dcc *deferredCommitContext) {
-}
-func (ao *onlineAccounts) handlePrepareCommitError(dcc *deferredCommitContext) {
-}
-func (ao *onlineAccounts) handleCommitError(dcc *deferredCommitContext) {
-}
-
 func (ao *onlineAccounts) maxBalLookback() uint64 {
 	lastProtoVersion := ao.onlineRoundParamsData[len(ao.onlineRoundParamsData)-1].CurrentProtocol
 	return config.Consensus[lastProtoVersion].MaxBalLookback
@@ -534,9 +527,6 @@ func (ao *onlineAccounts) postCommit(ctx context.Context, dcc *deferredCommitCon
 
 	ao.voters.postCommit(dcc)
 }
-
-func (ao *onlineAccounts) clearCommitRoundRetry(ctx context.Context, dcc *deferredCommitContext) {}
-func (ao *onlineAccounts) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext)    {}
 
 // onlineCirculation return the total online balance for the given round, for use by agreement.
 func (ao *onlineAccounts) onlineCirculation(rnd basics.Round, voteRnd basics.Round) (basics.MicroAlgos, error) {
