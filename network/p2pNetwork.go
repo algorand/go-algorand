@@ -943,23 +943,73 @@ func (n *P2PNetwork) txTopicHandleLoop() {
 	}
 }
 
+type gsPeer struct {
+	peerID      peer.ID
+	net         *P2PNetwork
+	routingAddr [8]byte
+}
+
+func (p *gsPeer) GetNetwork() GossipNode {
+	return p.net
+}
+
+func (p *gsPeer) RoutingAddr() []byte {
+	return p.routingAddr[:]
+}
+
+func (p *gsPeer) OnClose(f func()) {
+	p.net.wsPeersLock.Lock()
+	wsp, ok := p.net.wsPeers[p.peerID]
+	p.net.wsPeersLock.Unlock()
+	if ok {
+		wsp.OnClose(f)
+		return
+	}
+
+	// otherwise spawn a goroutine to remap to wsPeers.
+	// this is important otherwise some resources might not be cleaned up properly.
+	go func() {
+		ticker := time.NewTicker(100 * time.Millisecond)
+		defer ticker.Stop()
+		timer := time.NewTimer(1 * time.Second)
+		defer timer.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				p.net.wsPeersLock.Lock()
+				wsp, ok := p.net.wsPeers[p.peerID]
+				p.net.wsPeersLock.Unlock()
+				if ok {
+					wsp.OnClose(f)
+					return
+				}
+			case <-timer.C:
+				logging.Base().Warnf("gsPeer.OnClose: peer %s not found in wsPeers", p.peerID)
+				return
+			}
+		}
+	}()
+}
+
 // txTopicValidator calls txHandler to validate and process incoming transactions.
 func (n *P2PNetwork) txTopicValidator(ctx context.Context, peerID peer.ID, msg *pubsub.Message) pubsub.ValidationResult {
-	var routingAddr [8]byte
 	n.wsPeersLock.Lock()
-	var wsp *wsPeer
-	var ok bool
-	if wsp, ok = n.wsPeers[peerID]; ok {
-		copy(routingAddr[:], wsp.RoutingAddr())
+	var sender DisconnectablePeer
+	if wsp, ok := n.wsPeers[peerID]; ok {
+		sender = wsp
 	} else {
-		// well, otherwise use last 8 bytes of peerID
+		// handle the case where the peer is not in the wsPeers map yet
+		// this can happen when pubsub receives new peer notifications before the wsStreamHandler is called:
+		// create a fake peer that is good enough for tx handler to work with,
+		// and try to remap to wsp later
+		var routingAddr [8]byte
 		copy(routingAddr[:], peerID[len(peerID)-8:])
+		sender = &gsPeer{peerID: peerID, net: n, routingAddr: routingAddr}
 	}
 	n.wsPeersLock.Unlock()
 
 	inmsg := IncomingMessage{
-		// Sender:   gossipSubPeer{peerID: msg.ReceivedFrom, net: n, routingAddr: routingAddr},
-		Sender:   wsp,
+		Sender:   sender,
 		Tag:      protocol.TxnTag,
 		Data:     msg.Data,
 		Net:      n,
