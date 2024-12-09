@@ -1632,13 +1632,15 @@ func (eval *BlockEvaluator) proposerPayout() (basics.MicroAlgos, error) {
 }
 
 // generateKnockOfflineAccountsList creates the lists of expired or absent
-// participation accounts by traversing over the modified accounts in the state
-// deltas and testing if any of them needs to be reset/suspended. Expiration
-// takes precedence - if an account is expired, it should be knocked offline and
-// key material deleted. If it is only suspended, the key material will remain.
+// participation accounts to be suspended. It examines the accounts that appear
+// in the current block and high-stake accounts being tracked for state
+// proofs. Expiration takes precedence - if an account is expired, it should be
+// knocked offline and key material deleted. If it is only suspended, the key
+// material will remain.
 //
-// Different ndoes may propose different list of addresses based on node state.
-// Block validators only check whether ExpiredParticipationAccounts or
+// Different nodes may propose different list of addresses based on node state,
+// the protocol does not enforce which accounts must appear.  Block validators
+// only check whether ExpiredParticipationAccounts or
 // AbsentParticipationAccounts meet the criteria for expiration or suspension,
 // not whether the lists are complete.
 //
@@ -1740,7 +1742,7 @@ func (eval *BlockEvaluator) generateKnockOfflineAccountsList(participating []bas
 					updates.ExpiredParticipationAccounts,
 					accountAddr,
 				)
-				continue // if marking expired, do not also suspend
+				continue // if marking expired, do not consider suspension
 			}
 		}
 
@@ -1750,7 +1752,7 @@ func (eval *BlockEvaluator) generateKnockOfflineAccountsList(participating []bas
 			continue // no more room (don't break the loop, since we may have more expiries)
 		}
 
-		if acctData.Status == basics.Online {
+		if acctData.Status == basics.Online && acctData.IncentiveEligible {
 			lastSeen := max(acctData.LastProposed, acctData.LastHeartbeat)
 			oad, lErr := eval.state.lookupAgreement(accountAddr)
 			if lErr != nil {
@@ -1881,6 +1883,9 @@ func (eval *BlockEvaluator) validateAbsentOnlineAccounts() error {
 		}
 		if acctData.MicroAlgos.IsZero() {
 			return fmt.Errorf("proposed absent account %v with zero algos", accountAddr)
+		}
+		if !acctData.IncentiveEligible {
+			return fmt.Errorf("proposed absent account %v not IncentiveEligible", accountAddr)
 		}
 
 		oad, lErr := eval.state.lookupAgreement(accountAddr)
