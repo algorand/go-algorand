@@ -21,7 +21,6 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/committee"
 )
 
@@ -44,12 +43,8 @@ type challenge struct {
 	bits int
 }
 
-type headerSource interface {
-	BlockHdr(round basics.Round) (bookkeeping.BlockHeader, error)
-}
-
 // FindChallenge returns the Challenge that was last issued if it's in the period requested.
-func FindChallenge(rules config.ProposerPayoutRules, current basics.Round, headers headerSource, period ChallengePeriod) challenge {
+func FindChallenge(rules config.ProposerPayoutRules, current basics.Round, headers hdrProvider, period ChallengePeriod) challenge {
 	// are challenges active?
 	interval := basics.Round(rules.ChallengeInterval)
 	if rules.ChallengeInterval == 0 || current < interval {

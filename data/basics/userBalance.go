@@ -575,14 +575,19 @@ func (u OnlineAccountData) VotingStake() MicroAlgos {
 	return u.MicroAlgosWithRewards
 }
 
-// KeyDilution returns the key dilution for this account,
-// returning the default key dilution if not explicitly specified.
-func (u OnlineAccountData) KeyDilution(proto config.ConsensusParams) uint64 {
-	if u.VoteKeyDilution != 0 {
-		return u.VoteKeyDilution
+// KeyDilution returns the key dilution to be used, defaulting to the protocol default if 0 is supplied.
+func KeyDilution(proto config.ConsensusParams, offeredKD uint64) uint64 {
+	if offeredKD != 0 {
+		return offeredKD
 	}
 
 	return proto.DefaultKeyDilution
+}
+
+// KeyDilution returns the key dilution for this account, returning the default
+// key dilution if not explicitly specified.
+func (u OnlineAccountData) KeyDilution(proto config.ConsensusParams) uint64 {
+	return KeyDilution(proto, u.VoteKeyDilution)
 }
 
 // NormalizedOnlineBalance returns a “normalized” balance for this account.

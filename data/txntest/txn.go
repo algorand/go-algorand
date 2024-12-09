@@ -93,9 +93,11 @@ type Txn struct {
 	StateProof     stateproof.StateProof
 	StateProofMsg  stateproofmsg.Message
 
-	HbAddress basics.Address
-	HbProof   crypto.HeartbeatProof
-	HbSeed    committee.Seed
+	HbAddress     basics.Address
+	HbProof       crypto.HeartbeatProof
+	HbSeed        committee.Seed
+	HbVoteID      crypto.OneTimeSignatureVerifier
+	HbKeyDilution uint64
 }
 
 // internalCopy "finishes" a shallow copy done by a simple Go assignment by
@@ -287,9 +289,11 @@ func (tx Txn) Txn() transactions.Transaction {
 			Message:        tx.StateProofMsg,
 		},
 		HeartbeatTxnFields: transactions.HeartbeatTxnFields{
-			HbAddress: tx.HbAddress,
-			HbProof:   tx.HbProof,
-			HbSeed:    tx.HbSeed,
+			HbAddress:     tx.HbAddress,
+			HbProof:       tx.HbProof,
+			HbSeed:        tx.HbSeed,
+			HbVoteID:      tx.HbVoteID,
+			HbKeyDilution: tx.HbKeyDilution,
 		},
 	}
 }

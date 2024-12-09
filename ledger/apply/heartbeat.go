@@ -24,7 +24,7 @@ import (
 )
 
 // Heartbeat applies a Heartbeat transaction using the Balances interface.
-func Heartbeat(hb transactions.HeartbeatTxnFields, header transactions.Header, balances Balances, provider HdrProvider, round basics.Round) error {
+func Heartbeat(hb transactions.HeartbeatTxnFields, header transactions.Header, balances Balances, provider hdrProvider, round basics.Round) error {
 	// Get the account's balance entry
 	account, err := balances.Get(hb.HbAddress, false)
 	if err != nil {
@@ -70,32 +70,17 @@ func Heartbeat(hb transactions.HeartbeatTxnFields, header transactions.Header, b
 		}
 	}
 
-	// Note the contrast with agreement. We are using the account's _current_
-	// partkey to verify the heartbeat. This is required because we can only
-	// look 320 rounds back for voting information. If a heartbeat was delayed a
-	// few rounds (even 1), we could not ask "what partkey was in effect at
-	// firstValid-320?"  Using the current keys means that an account that
-	// changes keys would invalidate any heartbeats it has already sent out
+	// Note the contrast with agreement. We require the account's _current_
+	// partkey be used to sign the heartbeat. This is required because we can
+	// only look 320 rounds back for voting information. If a heartbeat was
+	// delayed a few rounds (even 1), we could not ask "what partkey was in
+	// effect at firstValid-320?"  Using the current keys means that an account
+	// that changes keys would invalidate any heartbeats it has already sent out
 	// (that haven't been evaluated yet). Maybe more importantly, after going
 	// offline, an account can no longer heartbeat, since it has no _current_
 	// keys. Yet it is still expected to vote for 320 rounds.  Therefore,
 	// challenges do not apply to accounts that are offline (even if they should
 	// still be voting).
-
-	// Conjure up an OnlineAccountData from current state, for convenience of
-	// oad.KeyDilution().
-	oad := basics.OnlineAccountData{
-		VotingData: account.VotingData,
-	}
-
-	sv := oad.VoteID
-	if sv.IsEmpty() {
-		return fmt.Errorf("heartbeat address %s has no voting keys", hb.HbAddress)
-	}
-	kd := oad.KeyDilution(proto)
-
-	// heartbeats are expected to sign with the partkey for their last-valid round
-	id := basics.OneTimeIDForRound(header.LastValid, kd)
 
 	// heartbeats sign a message consisting of the BlockSeed of the first-valid
 	// round, to discourage unsavory behaviour like presigning a bunch of
@@ -105,11 +90,16 @@ func Heartbeat(hb transactions.HeartbeatTxnFields, header transactions.Header, b
 		return err
 	}
 	if hdr.Seed != hb.HbSeed {
-		return fmt.Errorf("provided seed %v does not match round %d's seed %v", hb.HbSeed, header.FirstValid, hdr.Seed)
+		return fmt.Errorf("provided seed %v does not match round %d's seed %v",
+			hb.HbSeed, header.FirstValid, hdr.Seed)
 	}
-
-	if !sv.Verify(id, hdr.Seed, hb.HbProof.ToOneTimeSignature()) {
-		return fmt.Errorf("heartbeat failed verification with VoteID %v", sv)
+	if account.VotingData.VoteID != hb.HbVoteID {
+		return fmt.Errorf("provided voter ID %v does not match %v's voter ID %v",
+			hb.HbVoteID, hb.HbAddress, account.VotingData.VoteID)
+	}
+	if account.VotingData.VoteKeyDilution != hb.HbKeyDilution {
+		return fmt.Errorf("provided key dilution %d does not match %v's key dilution %d",
+			hb.HbKeyDilution, hb.HbAddress, account.VotingData.VoteKeyDilution)
 	}
 
 	account.LastHeartbeat = round
