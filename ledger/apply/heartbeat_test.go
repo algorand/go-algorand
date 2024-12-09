@@ -69,7 +69,6 @@ func TestHeartbeat(t *testing.T) {
 	test := txntest.Txn{
 		Type:       protocol.HeartbeatTx,
 		Sender:     sender,
-		Fee:        basics.MicroAlgos{Raw: 1},
 		FirstValid: fv,
 		LastValid:  lv,
 		HbAddress:  voter,
@@ -82,19 +81,32 @@ func TestHeartbeat(t *testing.T) {
 	rnd := basics.Round(150)
 	// no fee
 	err := Heartbeat(tx.HeartbeatTxnFields, tx.Header, mockBal, mockHdr, rnd)
-	require.ErrorContains(t, err, "cheap heartbeat")
+	require.ErrorContains(t, err, "free heartbeat")
 
-	test.Fee = basics.MicroAlgos{Raw: 10}
-	tx = test.Txn()
 	// just as bad: cheap
+	tx.Fee = basics.MicroAlgos{Raw: 10}
 	err = Heartbeat(tx.HeartbeatTxnFields, tx.Header, mockBal, mockHdr, rnd)
 	require.ErrorContains(t, err, "cheap heartbeat")
 
-	test.Fee = 1000
-	tx = test.Txn()
+	// address fee
+	tx.Fee = basics.MicroAlgos{Raw: 1000}
+
+	// VoterID is missing
+	err = Heartbeat(tx.HeartbeatTxnFields, tx.Header, mockBal, mockHdr, rnd)
+	require.ErrorContains(t, err, "provided voter ID")
+
+	tx.HbVoteID = otss.OneTimeSignatureVerifier
+	// still no key dilution
+	err = Heartbeat(tx.HeartbeatTxnFields, tx.Header, mockBal, mockHdr, rnd)
+	require.ErrorContains(t, err, "provided key dilution 0")
+
+	tx.HbKeyDilution = keyDilution + 1
+	err = Heartbeat(tx.HeartbeatTxnFields, tx.Header, mockBal, mockHdr, rnd)
+	require.ErrorContains(t, err, "provided key dilution 778")
+
+	tx.HbKeyDilution = keyDilution
 	err = Heartbeat(tx.HeartbeatTxnFields, tx.Header, mockBal, mockHdr, rnd)
 	require.NoError(t, err)
-
 	after, err := mockBal.Get(voter, false)
 	require.NoError(t, err)
 	require.Equal(t, rnd, after.LastHeartbeat)
@@ -168,17 +180,19 @@ func TestCheapRules(t *testing.T) {
 			Seed: seed,
 		})
 		txn := txntest.Txn{
-			Type:       protocol.HeartbeatTx,
-			Sender:     sender,
-			Fee:        basics.MicroAlgos{Raw: 1},
-			FirstValid: tc.rnd - 10,
-			LastValid:  tc.rnd + 10,
-			Lease:      tc.lease,
-			Note:       tc.note,
-			RekeyTo:    tc.rekey,
-			HbAddress:  voter,
-			HbProof:    otss.Sign(id, seed).ToHeartbeatProof(),
-			HbSeed:     seed,
+			Type:          protocol.HeartbeatTx,
+			Sender:        sender,
+			Fee:           basics.MicroAlgos{Raw: 1},
+			FirstValid:    tc.rnd - 10,
+			LastValid:     tc.rnd + 10,
+			Lease:         tc.lease,
+			Note:          tc.note,
+			RekeyTo:       tc.rekey,
+			HbAddress:     voter,
+			HbProof:       otss.Sign(id, seed).ToHeartbeatProof(),
+			HbSeed:        seed,
+			HbVoteID:      otss.OneTimeSignatureVerifier,
+			HbKeyDilution: keyDilution,
 		}
 
 		tx := txn.Txn()
