@@ -40,8 +40,10 @@ import (
 	"github.com/algorand/go-algorand/network/phonebook"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
+	"github.com/algorand/go-algorand/util"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	pb "github.com/libp2p/go-libp2p-pubsub/pb"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -1373,4 +1375,59 @@ func TestP2PEnableGossipService_BothDisable(t *testing.T) {
 
 	require.False(t, netA.hasPeers())
 	require.False(t, netB.hasPeers())
+}
+
+// TestP2PTxTopicValidator_NoWsPeer checks txTopicValidator does not call tx handler with empty Sender
+func TestP2PTxTopicValidator_NoWsPeer(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	log := logging.TestingLog(t)
+
+	// prepare configs
+	cfg := config.GetDefaultLocal()
+	cfg.DNSBootstrapID = "" // disable DNS lookups since the test uses phonebook addresses
+	cfg.EnableGossipService = true
+
+	net, err := NewP2PNetwork(log, cfg, "", nil, genesisID, config.Devtestnet, &nopeNodeInfo{}, nil)
+	require.NoError(t, err)
+
+	// control var to ensure the closer set by validator is called
+	closerCaller := false
+	closer := func() {
+		closerCaller = true
+	}
+
+	ctx := context.Background()
+	peerID := peer.ID("12345678") // must be 8+ in size
+	msg := pubsub.Message{Message: &pb.Message{}, ID: string(peerID)}
+	validateIncomingTxMessage := func(rawmsg IncomingMessage) OutgoingMessage {
+		require.NotEmpty(t, rawmsg.Sender)
+		require.Implements(t, (*DisconnectablePeer)(nil), rawmsg.Sender)
+		require.Implements(t, (*IPAddressable)(nil), rawmsg.Sender)
+		require.Implements(t, (*util.ErlClient)(nil), rawmsg.Sender)
+		rawmsg.Sender.(util.ErlClient).OnClose(closer)
+		return OutgoingMessage{Action: Accept}
+	}
+	net.handler.RegisterValidatorHandlers([]TaggedMessageValidatorHandler{
+		{Tag: protocol.TxnTag, MessageHandler: ValidateHandleFunc(validateIncomingTxMessage)},
+	})
+	require.NotContains(t, net.wsPeers, peerID)
+	res := net.txTopicValidator(ctx, peerID, &msg)
+	require.Equal(t, pubsub.ValidationAccept, res)
+
+	// add a wsPeer and check the closer is called
+	wsp := &wsPeer{}
+	wsp.didInnerClose.Store(1)
+	net.wsPeersLock.Lock()
+	net.wsPeers[peerID] = wsp
+	net.wsPeersLock.Unlock()
+
+	require.Eventually(t, func() bool {
+		wsp.closersMu.RLock()
+		defer wsp.closersMu.RUnlock()
+		return len(wsp.closers) > 0
+	}, 1*time.Second, 50*time.Millisecond)
+
+	wsp.Close(time.Now())
+	require.True(t, closerCaller)
 }

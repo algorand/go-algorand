@@ -282,6 +282,8 @@ type wsPeer struct {
 
 	// closers is a slice of functions to run when the peer is closed
 	closers []func()
+	// closersMu synchronizes access to closers
+	closersMu deadlock.RWMutex
 
 	// peerType defines the peer's underlying connection type
 	// used for separate p2p vs ws metrics
@@ -979,6 +981,8 @@ L:
 		}
 
 	}
+	wp.closersMu.RLock()
+	defer wp.closersMu.RUnlock()
 	// now call all registered closers
 	for _, f := range wp.closers {
 		f()
@@ -1115,6 +1119,8 @@ func (wp *wsPeer) sendMessagesOfInterest(messagesOfInterestGeneration uint32, me
 }
 
 func (wp *wsPeer) OnClose(f func()) {
+	wp.closersMu.Lock()
+	defer wp.closersMu.Unlock()
 	if wp.closers == nil {
 		wp.closers = []func(){}
 	}
