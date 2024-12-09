@@ -216,7 +216,7 @@ func TestNewAccountCanGoOnlineAndParticipate(t *testing.T) {
 
 	// Need to wait for funding to take effect on selection, then we can see if we're participating
 	// Stop before the account should become eligible for selection so we can ensure it wasn't
-	err = fixture.ClientWaitForRound(fixture.AlgodClient, uint64(accountProposesStarting-1),
+	err = fixture.WaitForRound(uint64(accountProposesStarting-1),
 		time.Duration(uint64(globals.MaxTimePerRound)*uint64(accountProposesStarting-1)))
 	a.NoError(err)
 
@@ -226,7 +226,7 @@ func TestNewAccountCanGoOnlineAndParticipate(t *testing.T) {
 	a.False(blockWasProposed, "account should not be selected until BalLookback (round %d) passes", int(accountProposesStarting-1))
 
 	// Now wait until the round where the funded account will be used.
-	err = fixture.ClientWaitForRound(fixture.AlgodClient, uint64(accountProposesStarting), 10*globals.MaxTimePerRound)
+	err = fixture.WaitForRound(uint64(accountProposesStarting), 10*globals.MaxTimePerRound)
 	a.NoError(err)
 
 	blockWasProposedByNewAccountRecently := fixture.VerifyBlockProposedRange(newAccount, int(accountProposesStarting), 1)

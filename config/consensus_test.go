@@ -37,6 +37,11 @@ func TestConsensusParams(t *testing.T) {
 		if params.ApplyData && params.PaysetCommit == PaysetCommitUnsupported {
 			t.Errorf("Protocol %s: ApplyData with PaysetCommitUnsupported", proto)
 		}
+
+		// To figure out challenges, nodes must be able to lookup headers up to two GracePeriods back
+		if 2*params.Payouts.ChallengeGracePeriod > params.MaxTxnLife+params.DeeperBlockHeaderHistory {
+			t.Errorf("Protocol %s: Grace period is too long", proto)
+		}
 	}
 }
 

@@ -100,6 +100,7 @@ type Transaction struct {
 	AssetFreezeTxnFields
 	ApplicationCallTxnFields
 	StateProofTxnFields
+	HeartbeatTxnFields
 }
 
 // ApplyData contains information about the transaction's execution.
@@ -324,7 +325,7 @@ func (tx Header) Alive(tc TxnContext) error {
 
 // MatchAddress checks if the transaction touches a given address.
 func (tx Transaction) MatchAddress(addr basics.Address, spec SpecialAddresses) bool {
-	return slices.Contains(tx.RelevantAddrs(spec), addr)
+	return slices.Contains(tx.relevantAddrs(spec), addr)
 }
 
 var errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound = errors.New("transaction first voting round need to be less than its last voting round")
@@ -565,6 +566,11 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 			return errLeaseMustBeZeroInStateproofTxn
 		}
 
+	case protocol.HeartbeatTx:
+		if !proto.Heartbeat {
+			return fmt.Errorf("heartbeat transaction not supported")
+		}
+
 	default:
 		return fmt.Errorf("unknown tx type %v", tx.Type)
 	}
@@ -596,6 +602,10 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 
 	if !tx.StateProofTxnFields.Empty() {
 		nonZeroFields[protocol.StateProofTx] = true
+	}
+
+	if tx.HeartbeatTxnFields != (HeartbeatTxnFields{}) {
+		nonZeroFields[protocol.HeartbeatTx] = true
 	}
 
 	for t, nonZero := range nonZeroFields {
@@ -704,9 +714,8 @@ func (tx Header) Last() basics.Round {
 	return tx.LastValid
 }
 
-// RelevantAddrs returns the addresses whose balance records this transaction will need to access.
-// The header's default is to return just the sender and the fee sink.
-func (tx Transaction) RelevantAddrs(spec SpecialAddresses) []basics.Address {
+// relevantAddrs returns the addresses whose balance records this transaction will need to access.
+func (tx Transaction) relevantAddrs(spec SpecialAddresses) []basics.Address {
 	addrs := []basics.Address{tx.Sender, spec.FeeSink}
 
 	switch tx.Type {
@@ -723,6 +732,8 @@ func (tx Transaction) RelevantAddrs(spec SpecialAddresses) []basics.Address {
 		if !tx.AssetTransferTxnFields.AssetSender.IsZero() {
 			addrs = append(addrs, tx.AssetTransferTxnFields.AssetSender)
 		}
+	case protocol.HeartbeatTx:
+		addrs = append(addrs, tx.HeartbeatTxnFields.HbAddress)
 	}
 
 	return addrs

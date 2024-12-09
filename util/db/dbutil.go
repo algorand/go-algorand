@@ -311,7 +311,7 @@ func (db *Accessor) AtomicContext(ctx context.Context, fn idemFn, extras ...inte
 	}
 
 	if time.Now().After(atomicDeadline) {
-		db.getDecoratedLogger(fn, extras).Warnf("dbatomic: tx surpassed expected deadline by %v", time.Now().Sub(atomicDeadline))
+		db.getDecoratedLogger(fn, extras).Warnf("dbatomic: tx surpassed expected deadline by %v", time.Since(atomicDeadline))
 	}
 	return
 }

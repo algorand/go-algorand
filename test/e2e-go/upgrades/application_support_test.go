@@ -180,7 +180,7 @@ int 1
 		curStatus, err = client.Status()
 		a.NoError(err)
 
-		a.Less(int64(time.Now().Sub(startLoopTime)), int64(3*time.Minute))
+		a.Less(int64(time.Since(startLoopTime)), int64(3*time.Minute))
 		time.Sleep(time.Duration(smallLambdaMs) * time.Millisecond)
 	}
 
@@ -438,7 +438,7 @@ int 1
 		curStatus, err = client.Status()
 		a.NoError(err)
 
-		a.Less(int64(time.Now().Sub(startLoopTime)), int64(3*time.Minute))
+		a.Less(int64(time.Since(startLoopTime)), int64(3*time.Minute))
 		time.Sleep(time.Duration(smallLambdaMs) * time.Millisecond)
 		round = curStatus.LastRound
 	}

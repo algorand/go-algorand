@@ -221,11 +221,16 @@ func txnGroupBatchPrep(stxs []transactions.SignedTxn, contextHdr *bookkeeping.Bl
 			prepErr.err = fmt.Errorf("transaction %+v invalid : %w", stxn, prepErr.err)
 			return nil, prepErr
 		}
-		if stxn.Txn.Type != protocol.StateProofTx {
-			minFeeCount++
-		}
 		feesPaid = basics.AddSaturate(feesPaid, stxn.Txn.Fee.Raw)
 		lSigPooledSize += stxn.Lsig.Len()
+		if stxn.Txn.Type == protocol.StateProofTx {
+			continue
+		}
+		if stxn.Txn.Type == protocol.HeartbeatTx && stxn.Txn.Group.IsZero() {
+			// in apply.Heartbeat, we further confirm that the heartbeat is for a challenged node
+			continue
+		}
+		minFeeCount++
 	}
 	if groupCtx.consensusParams.EnableLogicSigSizePooling {
 		lSigMaxPooledSize := len(stxs) * int(groupCtx.consensusParams.LogicSigMaxSize)

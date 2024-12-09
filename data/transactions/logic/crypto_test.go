@@ -217,13 +217,17 @@ pop								// output`, "int 1"},
 	}
 }
 
+func randSeed() crypto.Seed {
+	var s crypto.Seed
+	crypto.RandBytes(s[:])
+	return s
+}
+
 func TestEd25519verify(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	var s crypto.Seed
-	crypto.RandBytes(s[:])
-	c := crypto.GenerateSignatureSecrets(s)
+	c := crypto.GenerateSignatureSecrets(randSeed())
 	msg := "62fdfc072182654f163f5f0f9a621d729566c74d0aa413bf009c9800418c19cd"
 	data, err := hex.DecodeString(msg)
 	require.NoError(t, err)
@@ -262,9 +266,7 @@ func TestEd25519VerifyBare(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	var s crypto.Seed
-	crypto.RandBytes(s[:])
-	c := crypto.GenerateSignatureSecrets(s)
+	c := crypto.GenerateSignatureSecrets(randSeed())
 	msg := "62fdfc072182654f163f5f0f9a621d729566c74d0aa413bf009c9800418c19cd"
 	data, err := hex.DecodeString(msg)
 	require.NoError(t, err)
@@ -743,9 +745,7 @@ func BenchmarkEd25519Verifyx1(b *testing.B) {
 		crypto.RandBytes(buffer[:])
 		data = append(data, buffer)
 
-		var s crypto.Seed //generate programs and signatures
-		crypto.RandBytes(s[:])
-		secret := crypto.GenerateSignatureSecrets(s)
+		secret := crypto.GenerateSignatureSecrets(randSeed()) //generate programs and signatures
 		pk := basics.Address(secret.SignatureVerifier)
 		pkStr := pk.String()
 		ops, err := AssembleStringWithVersion(fmt.Sprintf(`arg 0
