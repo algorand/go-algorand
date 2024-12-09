@@ -48,7 +48,7 @@ func makeMsgPool(N int, peers []Peer) (out []IncomingMessage) {
 
 		addMsg := func(msgCount int) {
 			for i := 0; i < msgCount; i++ {
-				msg.Sender = peers[(int(msgIndex)+i)%len(peers)].(DisconnectablePeer)
+				msg.Sender = peers[(int(msgIndex)+i)%len(peers)].(DisconnectableAddressablePeer)
 				timer += int64(7 * time.Nanosecond)
 				msg.Received = timer
 				out = append(out, msg)

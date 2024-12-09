@@ -33,6 +33,11 @@ type DisconnectablePeer interface {
 	GetNetwork() GossipNode
 }
 
+type DisconnectableAddressablePeer interface {
+	DisconnectablePeer
+	IPAddressable
+}
+
 // PeerOption allows users to specify a subset of peers to query
 //
 //msgp:ignore PeerOption
@@ -118,7 +123,7 @@ var outgoingMessagesBufferSize = int(
 
 // IncomingMessage represents a message arriving from some peer in our p2p network
 type IncomingMessage struct {
-	Sender DisconnectablePeer
+	Sender DisconnectableAddressablePeer
 	Tag    Tag
 	Data   []byte
 	Err    error
