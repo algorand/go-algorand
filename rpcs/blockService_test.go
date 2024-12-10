@@ -76,6 +76,10 @@ func (mup *mockUnicastPeer) GetNetwork() network.GossipNode {
 	panic("not implemented")
 }
 
+func (mup *mockUnicastPeer) RoutingAddr() []byte {
+	panic("not implemented")
+}
+
 // TestHandleCatchupReqNegative covers the error reporting in handleCatchupReq
 func TestHandleCatchupReqNegative(t *testing.T) {
 	partitiontest.PartitionTest(t)

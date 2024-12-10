@@ -297,11 +297,6 @@ type HTTPPeer interface {
 	GetHTTPClient() *http.Client
 }
 
-// IPAddressable is addressable with either IPv4 or IPv6 address
-type IPAddressable interface {
-	RoutingAddr() []byte
-}
-
 // UnicastPeer is another possible interface for the opaque Peer.
 // It is possible that we can only initiate a connection to a peer over websockets.
 type UnicastPeer interface {
