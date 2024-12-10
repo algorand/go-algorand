@@ -86,8 +86,8 @@ type GossipNode interface {
 	// Currently used as p2p pubsub topic validators.
 	RegisterValidatorHandlers(dispatch []TaggedMessageValidatorHandler)
 
-	// ClearProcessors deregisters all the existing message processors.
-	ClearProcessors()
+	// ClearValidatorHandlers deregisters all the existing message processors.
+	ClearValidatorHandlers()
 
 	// GetHTTPClient returns a http.Client with a suitable for the network Transport
 	// that would also limit the number of outgoing connections.
@@ -229,17 +229,6 @@ type TaggedMessageValidatorHandler = taggedMessageDispatcher[MessageValidatorHan
 // "return network.Propagate(msg)" instead of "return network.OutgoingMsg{network.Broadcast, msg.Tag, msg.Data}"
 func Propagate(msg IncomingMessage) OutgoingMessage {
 	return OutgoingMessage{Action: Broadcast, Tag: msg.Tag, Payload: msg.Data, Topics: nil}
-}
-
-// find the max value across the given uint64 numbers.
-func max(numbers ...uint64) (maxNum uint64) {
-	maxNum = 0 // this is the lowest uint64 value.
-	for _, num := range numbers {
-		if num > maxNum {
-			maxNum = num
-		}
-	}
-	return
 }
 
 // SubstituteGenesisID substitutes the "{genesisID}" with their network-specific genesisID.

@@ -1684,14 +1684,6 @@ func (eval *BlockEvaluator) generateKnockOfflineAccountsList() {
 	}
 }
 
-// delete me in Go 1.21
-func max(a, b basics.Round) basics.Round {
-	if a > b {
-		return a
-	}
-	return b
-}
-
 // bitsMatch checks if the first n bits of two byte slices match. Written to
 // work on arbitrary slices, but we expect that n is small. Only user today
 // calls with n=5.

@@ -16,7 +16,7 @@
 
 package merkletrie
 
-import "golang.org/x/exp/slices"
+import "slices"
 
 // Committer is the interface supporting serializing tries into persistent storage.
 type Committer interface {

@@ -20,11 +20,11 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
-	"golang.org/x/exp/slices"
 )
 
 // An Autopsy is a trace of the ordered input events and output

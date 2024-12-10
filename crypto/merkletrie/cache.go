@@ -21,9 +21,8 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-
-	"golang.org/x/exp/maps"
-	"golang.org/x/exp/slices"
+	"maps"
+	"slices"
 )
 
 // storedNodeIdentifier is the "equivalent" of a node-ptr, but oriented around persisting the
@@ -448,8 +447,7 @@ func (mtc *merkleTrieCache) reallocatePendingPages(stats *CommitStats) (pagesToC
 	}
 
 	// create a sorted list of created pages
-	sortedCreatedPages := maps.Keys(createdPages)
-	slices.Sort(sortedCreatedPages)
+	sortedCreatedPages := slices.Sorted(maps.Keys(createdPages))
 
 	mtc.reallocatedPages = make(map[uint64]map[storedNodeIdentifier]*node)
 

@@ -38,7 +38,11 @@ type HybridP2PNetwork struct {
 }
 
 // NewHybridP2PNetwork constructs a GossipNode that combines P2PNetwork and WebsocketNetwork
+// Hybrid mode requires both P2P and WS to be running in server (NetAddress set) or client (NetAddress empty) mode.
 func NewHybridP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebookAddresses []string, genesisID string, networkID protocol.NetworkID, nodeInfo NodeInfo) (*HybridP2PNetwork, error) {
+	if err := cfg.ValidateP2PHybridConfig(); err != nil {
+		return nil, err
+	}
 	// supply alternate NetAddress for P2P network
 	p2pcfg := cfg
 	p2pcfg.NetAddress = cfg.P2PHybridNetAddress
@@ -121,6 +125,11 @@ func (n *HybridP2PNetwork) Relay(ctx context.Context, tag protocol.Tag, data []b
 	})
 }
 
+// BridgeP2PToWS skips Relay/Broadcast to both networks and only sends to WS
+func (n *HybridP2PNetwork) BridgeP2PToWS(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except Peer) error {
+	return n.wsNetwork.Relay(ctx, tag, data, wait, except)
+}
+
 // Disconnect implements GossipNode
 func (n *HybridP2PNetwork) Disconnect(badnode DisconnectablePeer) {
 	net := badnode.GetNetwork()
@@ -199,10 +208,10 @@ func (n *HybridP2PNetwork) RegisterValidatorHandlers(dispatch []TaggedMessageVal
 	n.wsNetwork.RegisterValidatorHandlers(dispatch)
 }
 
-// ClearProcessors deregisters all the existing message processors.
-func (n *HybridP2PNetwork) ClearProcessors() {
-	n.p2pNetwork.ClearProcessors()
-	n.wsNetwork.ClearProcessors()
+// ClearValidatorHandlers deregisters all the existing message processors.
+func (n *HybridP2PNetwork) ClearValidatorHandlers() {
+	n.p2pNetwork.ClearValidatorHandlers()
+	n.wsNetwork.ClearValidatorHandlers()
 }
 
 // GetHTTPClient returns a http.Client with a suitable for the network Transport

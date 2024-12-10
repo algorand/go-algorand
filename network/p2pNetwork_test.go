@@ -368,6 +368,10 @@ func (s *mockService) Publish(ctx context.Context, topic string, data []byte) er
 	return nil
 }
 
+func (s *mockService) GetHTTPClient(addrInfo *peer.AddrInfo, connTimeStore limitcaller.ConnectionTimeStore, queueingTimeout time.Duration) (*http.Client, error) {
+	return nil, nil
+}
+
 func makeMockService(id peer.ID, addrs []ma.Multiaddr) *mockService {
 	return &mockService{
 		id:    id,
@@ -757,7 +761,7 @@ func TestP2PHTTPHandler(t *testing.T) {
 	require.NoError(t, err)
 	require.NotZero(t, addrsA[0])
 
-	httpClient, err := p2p.MakeHTTPClient(&peerInfoA)
+	httpClient, err := p2p.MakeTestHTTPClient(&peerInfoA)
 	require.NoError(t, err)
 	resp, err := httpClient.Get("/test")
 	require.NoError(t, err)
@@ -768,7 +772,7 @@ func TestP2PHTTPHandler(t *testing.T) {
 	require.Equal(t, "hello", string(body))
 
 	// check another endpoint that also access the underlying connection/stream
-	httpClient, err = p2p.MakeHTTPClient(&peerInfoA)
+	httpClient, err = p2p.MakeTestHTTPClient(&peerInfoA)
 	require.NoError(t, err)
 	resp, err = httpClient.Get("/check-conn")
 	require.NoError(t, err)
@@ -780,10 +784,12 @@ func TestP2PHTTPHandler(t *testing.T) {
 
 	// check rate limiting client:
 	// zero clients allowed, rate limiting window (10s) is greater than queue deadline (1s)
+	netB, err := NewP2PNetwork(log, cfg, "", nil, genesisID, config.Devtestnet, &nopeNodeInfo{}, nil)
+	require.NoError(t, err)
 	pstore, err := peerstore.MakePhonebook(0, 10*time.Second)
 	require.NoError(t, err)
 	pstore.AddPersistentPeers([]*peer.AddrInfo{&peerInfoA}, "net", phonebook.PhoneBookEntryRelayRole)
-	httpClient, err = p2p.MakeHTTPClientWithRateLimit(&peerInfoA, pstore, 1*time.Second)
+	httpClient, err = netB.service.GetHTTPClient(&peerInfoA, pstore, 1*time.Second)
 	require.NoError(t, err)
 	_, err = httpClient.Get("/test")
 	require.ErrorIs(t, err, limitcaller.ErrConnectionQueueingTimeout)
@@ -810,12 +816,12 @@ func TestP2PHTTPHandlerAllInterfaces(t *testing.T) {
 	defer netA.Stop()
 
 	peerInfoA := netA.service.AddrInfo()
-	addrsB, err := peer.AddrInfoToP2pAddrs(&peerInfoA)
+	addrsA, err := peer.AddrInfoToP2pAddrs(&peerInfoA)
 	require.NoError(t, err)
-	require.NotZero(t, addrsB[0])
+	require.NotZero(t, addrsA[0])
 
-	t.Logf("peerInfoB: %s", peerInfoA)
-	httpClient, err := p2p.MakeHTTPClient(&peerInfoA)
+	t.Logf("peerInfoA: %s", peerInfoA)
+	httpClient, err := p2p.MakeTestHTTPClient(&peerInfoA)
 	require.NoError(t, err)
 	resp, err := httpClient.Get("/test")
 	require.NoError(t, err)
@@ -963,7 +969,7 @@ func TestP2PRelay(t *testing.T) {
 	counter.Store(0)
 	var loggedMsgs [][]byte
 	counterHandler, counterDone = makeCounterHandler(expectedMsgs, &counter, &loggedMsgs)
-	netA.ClearProcessors()
+	netA.ClearValidatorHandlers()
 	netA.RegisterValidatorHandlers(counterHandler)
 
 	for i := 0; i < expectedMsgs/2; i++ {

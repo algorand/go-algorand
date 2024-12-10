@@ -452,6 +452,7 @@ func (node *AlgorandFullNode) Stop() {
 	}()
 
 	node.net.ClearHandlers()
+	node.net.ClearValidatorHandlers()
 	if !node.config.DisableNetworking {
 		node.net.Stop()
 	}
@@ -1169,7 +1170,7 @@ func (node *AlgorandFullNode) StartCatchup(catchpoint string) error {
 	}
 	err = node.catchpointCatchupService.Start(node.ctx)
 	if err != nil {
-		node.log.Warnf(err.Error())
+		node.log.Warn(err.Error())
 		return MakeStartCatchpointError(catchpoint, err)
 	}
 	node.log.Infof("starting catching up toward catchpoint %s", catchpoint)
@@ -1218,6 +1219,7 @@ func (node *AlgorandFullNode) SetCatchpointCatchupMode(catchpointCatchupMode boo
 				node.waitMonitoringRoutines()
 			}()
 			node.net.ClearHandlers()
+			node.net.ClearValidatorHandlers()
 			node.stateProofWorker.Stop()
 			node.txHandler.Stop()
 			node.agreementService.Shutdown()

@@ -81,7 +81,6 @@ type GroupContext struct {
 }
 
 var errTxGroupInvalidFee = errors.New("txgroup fee requirement overflow")
-var errTxGroupInsuffientLsigBudget = errors.New("txgroup lsig expectations exceed available budget")
 var errTxnSigHasNoSig = errors.New("signedtxn has no sig")
 var errTxnSigNotWellFormed = errors.New("signedtxn should only have one of Sig or Msig or LogicSig")
 var errRekeyingNotSupported = errors.New("nonempty AuthAddr but rekeying is not supported")
@@ -93,7 +92,7 @@ type TxGroupErrorReason int
 const (
 	// TxGroupErrorReasonGeneric is a generic (not tracked) reason code
 	TxGroupErrorReasonGeneric TxGroupErrorReason = iota
-	// TxGroupErrorReasonNotWellFormed is txn.WellFormed failure
+	// TxGroupErrorReasonNotWellFormed is txn.WellFormed failure or malformed logic signature
 	TxGroupErrorReasonNotWellFormed
 	// TxGroupErrorReasonInvalidFee is invalid fee pooling in transaction group
 	TxGroupErrorReasonInvalidFee
@@ -214,6 +213,7 @@ func txnGroupBatchPrep(stxs []transactions.SignedTxn, contextHdr *bookkeeping.Bl
 
 	minFeeCount := uint64(0)
 	feesPaid := uint64(0)
+	lSigPooledSize := 0
 	for i, stxn := range stxs {
 		prepErr := txnBatchPrep(i, groupCtx, verifier)
 		if prepErr != nil {
@@ -225,6 +225,17 @@ func txnGroupBatchPrep(stxs []transactions.SignedTxn, contextHdr *bookkeeping.Bl
 			minFeeCount++
 		}
 		feesPaid = basics.AddSaturate(feesPaid, stxn.Txn.Fee.Raw)
+		lSigPooledSize += stxn.Lsig.Len()
+	}
+	if groupCtx.consensusParams.EnableLogicSigSizePooling {
+		lSigMaxPooledSize := len(stxs) * int(groupCtx.consensusParams.LogicSigMaxSize)
+		if lSigPooledSize > lSigMaxPooledSize {
+			errorMsg := fmt.Errorf(
+				"txgroup had %d bytes of LogicSigs, more than the available pool of %d bytes",
+				lSigPooledSize, lSigMaxPooledSize,
+			)
+			return nil, &TxGroupError{err: errorMsg, GroupIndex: -1, Reason: TxGroupErrorReasonNotWellFormed}
+		}
 	}
 	feeNeeded, overflow := basics.OMul(groupCtx.consensusParams.MinTxnFee, minFeeCount)
 	if overflow {
@@ -361,8 +372,8 @@ func logicSigSanityCheckBatchPrep(gi int, groupCtx *GroupContext, batchVerifier 
 	if version > groupCtx.consensusParams.LogicSigVersion {
 		return errors.New("LogicSig.Logic version too new")
 	}
-	if uint64(lsig.Len()) > groupCtx.consensusParams.LogicSigMaxSize {
-		return errors.New("LogicSig.Logic too long")
+	if !groupCtx.consensusParams.EnableLogicSigSizePooling && uint64(lsig.Len()) > groupCtx.consensusParams.LogicSigMaxSize {
+		return errors.New("LogicSig too long")
 	}
 
 	err := logic.CheckSignature(gi, groupCtx.evalParams)

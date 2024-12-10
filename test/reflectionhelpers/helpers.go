@@ -19,9 +19,8 @@ package reflectionhelpers
 import (
 	"fmt"
 	"reflect"
+	"slices"
 	"strings"
-
-	"golang.org/x/exp/slices"
 )
 
 // TypeSegmentKind is a enum for the types of TypeSegment

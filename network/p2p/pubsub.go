@@ -153,7 +153,7 @@ func (s *serviceImpl) Subscribe(topic string, val pubsub.ValidatorEx) (SubNextCa
 		return nil, err
 	}
 	// t.SetScoreParams() // already set in makePubSub
-	return t.Subscribe()
+	return t.Subscribe(pubsub.WithBufferSize(32768))
 }
 
 // Publish publishes data to the given topic

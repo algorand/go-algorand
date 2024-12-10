@@ -194,6 +194,10 @@ func run() int {
 		log.Fatalf("Error validating DNSBootstrap input: %v", err)
 	}
 
+	// Apply network-specific consensus overrides, noting the configurable consensus protocols file
+	// takes precedence over network-specific overrides.
+	config.ApplyShorterUpgradeRoundsForDevNetworks(genesis.Network)
+
 	err = config.LoadConfigurableConsensusProtocols(absolutePath)
 	if err != nil {
 		// log is not setup yet, this will log to stderr
