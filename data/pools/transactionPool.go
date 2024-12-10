@@ -31,6 +31,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger"
+	"github.com/algorand/go-algorand/ledger/eval"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
@@ -98,6 +99,9 @@ type TransactionPool struct {
 	// exceed the txPoolMaxSize. This flag is reset to false OnNewBlock
 	stateproofOverflowed bool
 
+	txnGroupTester   *eval.TransactionGroupTester
+	txnGroupTesterMu deadlock.RWMutex
+
 	// shutdown is set to true when the pool is being shut down. It is checked in exported methods
 	// to prevent pool operations like remember and recomputing the block evaluator
 	// from using down stream resources like ledger that may be shutting down.
@@ -106,7 +110,6 @@ type TransactionPool struct {
 
 // BlockEvaluator defines the block evaluator interface exposed by the ledger package.
 type BlockEvaluator interface {
-	TestTransactionGroup(txgroup []transactions.SignedTxn) error
 	Round() basics.Round
 	PaySetSize() int
 	TransactionGroup(txads []transactions.SignedTxnWithAD) error
@@ -394,19 +397,20 @@ func (pool *TransactionPool) checkSufficientFee(txgroup []transactions.SignedTxn
 
 // Test performs basic duplicate detection and well-formedness checks
 // on a transaction group without storing the group.
+// It may be called concurrently.
 func (pool *TransactionPool) Test(txgroup []transactions.SignedTxn) error {
 	if err := pool.checkPendingQueueSize(txgroup); err != nil {
 		return err
 	}
 
-	pool.mu.Lock()
-	defer pool.mu.Unlock()
+	pool.txnGroupTesterMu.RLock()
+	defer pool.txnGroupTesterMu.RUnlock()
 
-	if pool.pendingBlockEvaluator == nil {
-		return fmt.Errorf("Test: pendingBlockEvaluator is nil")
+	if pool.txnGroupTester == nil {
+		return fmt.Errorf("Test: txnGroupTester is nil")
 	}
 
-	return pool.pendingBlockEvaluator.TestTransactionGroup(txgroup)
+	return pool.txnGroupTester.TestTransactionGroup(txgroup)
 }
 
 type poolIngestParams struct {
@@ -752,6 +756,20 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIDs map[transact
 		pool.log.Warnf("TransactionPool.recomputeBlockEvaluator: cannot start evaluator: %v", err)
 		return
 	}
+
+	nextProto := config.Consensus[next.CurrentProtocol]
+	pool.txnGroupTesterMu.Lock()
+	pool.txnGroupTester = eval.NewTransactionGroupTester(
+		nextProto,
+		transactions.SpecialAddresses{
+			FeeSink:     next.FeeSink,
+			RewardsPool: next.RewardsPool,
+		},
+		next,
+		func(firstValid, lastValid basics.Round, txid transactions.Txid, txl ledgercore.Txlease) error {
+			return pool.ledger.CheckDup(nextProto, next.BlockHeader.Round, firstValid, lastValid, txid, txl)
+		})
+	pool.txnGroupTesterMu.Unlock()
 
 	var asmStats telemetryspec.AssembleBlockMetrics
 	asmStats.StartCount = len(txgroups)
