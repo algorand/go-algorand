@@ -73,7 +73,6 @@ func TestHeartbeat(t *testing.T) {
 		LastValid:  lv,
 		HbAddress:  voter,
 		HbProof:    otss.Sign(id, seed).ToHeartbeatProof(),
-		HbSeed:     seed,
 	}
 
 	tx := test.Txn()
@@ -91,6 +90,11 @@ func TestHeartbeat(t *testing.T) {
 	// address fee
 	tx.Fee = basics.MicroAlgos{Raw: 1000}
 
+	// Seed is missing
+	err = Heartbeat(tx.HeartbeatTxnFields, tx.Header, mockBal, mockHdr, rnd)
+	require.ErrorContains(t, err, "provided seed")
+
+	tx.HbSeed = seed
 	// VoterID is missing
 	err = Heartbeat(tx.HeartbeatTxnFields, tx.Header, mockBal, mockHdr, rnd)
 	require.ErrorContains(t, err, "provided voter ID")
