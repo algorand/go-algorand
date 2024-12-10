@@ -570,6 +570,9 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 		if !proto.Heartbeat {
 			return fmt.Errorf("heartbeat transaction not supported")
 		}
+		if tx.HbKeyDilution == 0 {
+			return errors.New("tx.HbKeyDilution is zero")
+		}
 
 	default:
 		return fmt.Errorf("unknown tx type %v", tx.Type)

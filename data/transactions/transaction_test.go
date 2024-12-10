@@ -604,6 +604,17 @@ func TestWellFormedErrors(t *testing.T) {
 				Type:   protocol.HeartbeatTx,
 				Header: okHeader,
 			},
+			proto:         futureProto,
+			expectedError: fmt.Errorf("tx.HbKeyDilution is zero"),
+		},
+		{
+			tx: Transaction{
+				Type:   protocol.HeartbeatTx,
+				Header: okHeader,
+				HeartbeatTxnFields: HeartbeatTxnFields{
+					HbKeyDilution: 10,
+				},
+			},
 			proto: futureProto,
 		},
 	}
