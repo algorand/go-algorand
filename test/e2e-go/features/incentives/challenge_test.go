@@ -42,6 +42,7 @@ func TestChallenges(t *testing.T) {
 	defer fixtures.ShutdownSynchronizedTest(t)
 
 	t.Parallel()
+
 	a := require.New(fixtures.SynchronizedTest(t))
 
 	// Overview of this test:
@@ -71,7 +72,7 @@ func TestChallenges(t *testing.T) {
 		c := fixture.GetLibGoalClientForNamedNode(name)
 		accounts, err := fixture.GetNodeWalletsSortedByBalance(c)
 		a.NoError(err)
-		a.Len(accounts, 4)
+		a.Len(accounts, 8)
 		fmt.Printf("Client %s has %v\n", name, accounts)
 		return c, accounts
 	}
