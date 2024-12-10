@@ -42,7 +42,6 @@ func TestChallenges(t *testing.T) {
 	defer fixtures.ShutdownSynchronizedTest(t)
 
 	t.Parallel()
-
 	a := require.New(fixtures.SynchronizedTest(t))
 
 	// Overview of this test:

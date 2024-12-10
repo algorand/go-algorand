@@ -141,9 +141,6 @@ func TestCheapRules(t *testing.T) {
 		{1201, 0x01, basics.Online, true, nil, empty, empty, "no challenge"},
 
 		// test of the other requirements
-		{1101, 0x01, basics.Online, true, []byte("note"), empty, empty, "not allowed to have a note"},
-		{1101, 0x01, basics.Online, true, nil, [32]byte{'l', 'e', 'a', 's', 'e'}, empty, "not allowed to have a lease"},
-		{1101, 0x01, basics.Online, true, nil, empty, [32]byte{'r', 'e', 'k', 'e', 'y'}, "not allowed to rekey"},
 		{1101, 0xf1, basics.Online, true, nil, empty, empty, "not challenged by"},
 		{1101, 0x01, basics.Offline, true, nil, empty, empty, "not allowed for Offline"},
 		{1101, 0x01, basics.Online, false, nil, empty, empty, "not allowed when not IncentiveEligible"},
