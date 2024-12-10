@@ -982,6 +982,14 @@ func (ct *catchpointTracker) handlePrepareCommitError(dcc *deferredCommitContext
 	ct.cancelWrite(dcc)
 }
 
+// if an error is encountered between retries, clear the balancesTrie to clear in-memory changes made in commitRound().
+func (ct *catchpointTracker) clearCommitRoundRetry(ctx context.Context, dcc *deferredCommitContext) {
+	ct.log.Infof("rolling back failed commitRound for oldBase %d offset %d, clearing balancesTrie", dcc.oldBase, dcc.offset)
+	ct.catchpointsMu.Lock()
+	ct.balancesTrie = nil // balancesTrie will be re-created in the next call to commitRound
+	ct.catchpointsMu.Unlock()
+}
+
 // if an error is encountered during commit, cancel writing and clear the balances trie
 func (ct *catchpointTracker) handleCommitError(dcc *deferredCommitContext) {
 	// in cases where the commitRound fails, it is not certain that the merkle trie is in a clean state, and should be cleared.

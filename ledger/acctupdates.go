@@ -1483,13 +1483,6 @@ func (au *accountUpdates) roundOffset(rnd basics.Round) (offset uint64, err erro
 	return off, nil
 }
 
-func (au *accountUpdates) handleUnorderedCommit(dcc *deferredCommitContext) {
-}
-func (au *accountUpdates) handlePrepareCommitError(dcc *deferredCommitContext) {
-}
-func (au *accountUpdates) handleCommitError(dcc *deferredCommitContext) {
-}
-
 // prepareCommit prepares data to write to the database a "chunk" of rounds, and update the cached dbRound accordingly.
 func (au *accountUpdates) prepareCommit(dcc *deferredCommitContext) error {
 	if au.logAccountUpdatesMetrics {
@@ -1743,9 +1736,6 @@ func (au *accountUpdates) postCommit(ctx context.Context, dcc *deferredCommitCon
 		var details struct{}
 		au.log.Metrics(telemetryspec.Accounts, dcc.stats, details)
 	}
-}
-
-func (au *accountUpdates) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
 }
 
 // compactKvDeltas takes an array of StateDeltas containing kv deltas (one array entry per round), and
