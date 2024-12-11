@@ -383,7 +383,11 @@ var sendCmd = &cobra.Command{
 		if program != nil {
 			ph := logic.HashProgram(program)
 			pha := basics.Address(ph)
-			fromAddressResolved = pha.String()
+			if account == "" {
+				fromAddressResolved = pha.String()
+			} else {
+				fromAddressResolved = accountList.getAddressByName(account)
+			}
 			programArgs = getProgramArgs()
 		} else {
 			// Check if from was specified, else use default
@@ -472,6 +476,14 @@ var sendCmd = &cobra.Command{
 					Logic: program,
 					Args:  programArgs,
 				},
+			}
+			var authAddr basics.Address
+			if signerAddress != "" {
+				authAddr, err = basics.UnmarshalChecksumAddress(signerAddress)
+				if err != nil {
+					reportErrorf("Signer invalid (%s): %v", signerAddress, err)
+				}
+				stx.AuthAddr = basics.Address(authAddr)
 			}
 		} else {
 			signTx := sign || (outFilename == "")
