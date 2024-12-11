@@ -446,6 +446,8 @@ func (c *catchpointCatchupAccessorImpl) processStagingContent(ctx context.Contex
 	case CatchpointFileVersionV5:
 	case CatchpointFileVersionV6:
 	case CatchpointFileVersionV7:
+	case CatchpointFileVersionV8:
+
 	default:
 		return fmt.Errorf("CatchpointCatchupAccessorImpl::processStagingContent: unable to process catchpoint - version %d is not supported", fileHeader.Version)
 	}
@@ -533,8 +535,13 @@ func (c *catchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 		expectingMoreEntries = make([]bool, len(balances.Balances))
 
 	case CatchpointFileVersionV6:
+		// V6 split accounts from resources; later, KVs were added to the v6 chunk format
 		fallthrough
 	case CatchpointFileVersionV7:
+		// V7 added state proof verification data + hash, but left v6 chunk format unchanged
+		fallthrough
+	case CatchpointFileVersionV8:
+		// V8 added online accounts and online round params data + hashes, and added them to the v6 chunk format
 		var chunk catchpointFileChunkV6
 		err = protocol.Decode(bytes, &chunk)
 		if err != nil {
@@ -852,7 +859,7 @@ func (c *catchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 		var trie *merkletrie.Trie
 		uncommitedHashesCount := 0
 		keepWriting := true
-		var accountHashesWritten, kvHashesWritten uint64
+		accountHashesWritten, kvHashesWritten := uint64(0), uint64(0)
 		var mc trackerdb.MerkleCommitter
 
 		txErr := dbs.Transaction(func(transactionCtx context.Context, tx trackerdb.TransactionScope) (err error) {
@@ -904,8 +911,8 @@ func (c *catchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 				uncommitedHashesCount += len(hashesToWrite)
 
 				accounts, kvs := countHashes(hashesToWrite)
-				accountHashesWritten += accounts
 				kvHashesWritten += kvs
+				accountHashesWritten += accounts
 
 				return nil
 			})
@@ -1047,7 +1054,8 @@ func (c *catchpointCatchupAccessorImpl) GetVerifyData(ctx context.Context) (bala
 }
 
 // calculateVerificationHash iterates over a TableIterator, hashes each item, and returns a hash of
-// all the concatenated item hashes.
+// all the concatenated item hashes. It is used to verify onlineaccounts and onlineroundparams tables,
+// both at restore time (in catchpointCatchupAccessorImpl) and snapshot time (in catchpointTracker).
 func calculateVerificationHash[T crypto.Hashable](
 	ctx context.Context,
 	iterFactory func(context.Context) (trackerdb.TableIterator[T], error),
@@ -1259,7 +1267,7 @@ func (c *catchpointCatchupAccessorImpl) finishBalances(ctx context.Context) (err
 			return err
 		}
 
-		var balancesRound, hashRound uint64
+		var balancesRound, hashRound, catchpointFileVersion uint64
 		var totals ledgercore.AccountTotals
 
 		balancesRound, err = crw.ReadCatchpointStateUint64(ctx, trackerdb.CatchpointStateCatchupBalancesRound)
@@ -1270,6 +1278,11 @@ func (c *catchpointCatchupAccessorImpl) finishBalances(ctx context.Context) (err
 		hashRound, err = crw.ReadCatchpointStateUint64(ctx, trackerdb.CatchpointStateCatchupHashRound)
 		if err != nil {
 			return err
+		}
+
+		catchpointFileVersion, err = c.catchpointStore.ReadCatchpointStateUint64(ctx, trackerdb.CatchpointStateCatchupVersion)
+		if err != nil {
+			return fmt.Errorf("unable to retrieve catchpoint version: %v", err)
 		}
 
 		totals, err = ar.AccountsTotals(ctx, true)
@@ -1309,22 +1322,24 @@ func (c *catchpointCatchupAccessorImpl) finishBalances(ctx context.Context) (err
 		if err != nil {
 			return err
 		}
-		// Rename staged v6 tables from catchpoint file to official table names
+
 		err = crw.ApplyCatchpointStagingBalances(ctx, basics.Round(balancesRound), basics.Round(hashRound))
 		if err != nil {
 			return err
 		}
 
-		// Upgrade to v7
-		_, err = tx.RunMigrations(ctx, tp, c.ledger.log, 7 /*target database version*/)
-		if err != nil {
-			return err
-		}
-		// Now that we have upgraded, rename staged v7 tables from the catchpoint file to official names.
-		// If the catchpoint file didn't have v7 tables, the existing migrated tables will not be overwriten.
-		err = crw.ApplyCatchpointStagingTablesV7(ctx)
-		if err != nil {
-			return err
+		if catchpointFileVersion == CatchpointFileVersionV8 { // This catchpoint contains onlineaccounts and onlineroundparamstail tables.
+			// Upgrade to v7 (which adds the onlineaccounts & onlineroundparamstail tables, among others)
+			_, err = tx.RunMigrations(ctx, tp, c.ledger.log, 7)
+			if err != nil {
+				return err
+			}
+
+			// Now that we have upgraded to v7, replace the onlineaccounts and onlineroundparamstail with the staged catchpoint tables.
+			err = crw.ApplyCatchpointStagingTablesV7(ctx)
+			if err != nil {
+				return err
+			}
 		}
 
 		err = aw.AccountsPutTotals(totals, false)

@@ -593,25 +593,10 @@ func (cw *catchpointWriter) ApplyCatchpointStagingBalances(ctx context.Context, 
 	return
 }
 
+// ApplyCatchpointStagingTablesV7 drops the existing onlineaccounts and onlineroundparamstail tables,
+// replacing them with data from the catchpoint staging tables. It should only be used for CatchpointFileVersionV8,
+// after the ApplyCatchpointStagingBalances function has been run on DB v6, then upgraded to DB v7.
 func (cw *catchpointWriter) ApplyCatchpointStagingTablesV7(ctx context.Context) (err error) {
-	// Check if catchpoint tables have data
-	var accountCount int
-	err = cw.e.QueryRow("SELECT COUNT(1) FROM catchpointonlineaccounts").Scan(&accountCount)
-	if err != nil {
-		return err
-	}
-
-	var paramsCount int
-	err = cw.e.QueryRow("SELECT COUNT(1) FROM catchpointonlineroundparamstail").Scan(&paramsCount)
-	if err != nil {
-		return err
-	}
-
-	// If there is no data in the catchpoint staging tables, don't overwrite the existing v6 tables
-	if accountCount == 0 && paramsCount == 0 {
-		return nil
-	}
-
 	stmts := []string{
 		"DROP TABLE IF EXISTS onlineaccounts",
 		"DROP TABLE IF EXISTS onlineroundparamstail",
