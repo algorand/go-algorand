@@ -1094,7 +1094,7 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 }
 
 func createDummyBlockHeader(optVer ...protocol.ConsensusVersion) bookkeeping.BlockHeader {
-	// Most tests in this file were writtento use current.  Future is probably
+	// Most tests in this file were written to use current.  Future is probably
 	// the better test, but I don't want to make that choice now, so optVer.
 	proto := protocol.ConsensusCurrentVersion
 	if len(optVer) > 0 {
