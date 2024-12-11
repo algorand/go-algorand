@@ -580,13 +580,13 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 			}
 
 			if len(tx.Note) > 0 {
-				return fmt.Errorf("%s heartbeat is not allowed to have a note", kind)
+				return fmt.Errorf("tx.Note is set in %s heartbeat", kind)
 			}
 			if tx.Lease != [32]byte{} {
-				return fmt.Errorf("%s heartbeat is not allowed to have a lease", kind)
+				return fmt.Errorf("tx.Lease is set in %s heartbeat", kind)
 			}
 			if !tx.RekeyTo.IsZero() {
-				return fmt.Errorf("%s heartbeat is not allowed to rekey", kind)
+				return fmt.Errorf("tx.RekeyTo is set in %s heartbeat", kind)
 			}
 		}
 

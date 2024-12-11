@@ -694,7 +694,7 @@ func TestWellFormedErrors(t *testing.T) {
 				},
 			},
 			proto:         futureProto,
-			expectedError: fmt.Errorf("cheap heartbeat is not allowed to have a note"),
+			expectedError: fmt.Errorf("tx.Note is set in cheap heartbeat"),
 		},
 		{
 			tx: Transaction{
@@ -716,7 +716,7 @@ func TestWellFormedErrors(t *testing.T) {
 				},
 			},
 			proto:         futureProto,
-			expectedError: fmt.Errorf("cheap heartbeat is not allowed to have a lease"),
+			expectedError: fmt.Errorf("tx.Lease is set in cheap heartbeat"),
 		},
 		{
 			tx: Transaction{
@@ -737,7 +737,7 @@ func TestWellFormedErrors(t *testing.T) {
 				},
 			},
 			proto:         futureProto,
-			expectedError: fmt.Errorf("free heartbeat is not allowed to rekey"),
+			expectedError: fmt.Errorf("tx.RekeyTo is set in free heartbeat"),
 		},
 	}
 	for _, usecase := range usecases {
