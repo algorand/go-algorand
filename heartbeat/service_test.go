@@ -225,10 +225,9 @@ func TestHeartbeatOnlyWhenChallenged(t *testing.T) {
 	ledger.waitFor(s, a)
 	a.Empty(sink)
 
-	// now they are online, but not challenged, so no heartbeat
-	acct.Status = basics.Online
-	acct.VoteKeyDilution = 100
-	startBatch := basics.OneTimeIDForRound(ledger.LastRound(), acct.VoteKeyDilution).Batch
+	// make "part keys" and install them
+	kd := uint64(100)
+	startBatch := basics.OneTimeIDForRound(ledger.LastRound(), kd).Batch
 	const batches = 50 // gives 50 * kd rounds = 5000
 	otss1 := crypto.GenerateOneTimeSignatureSecrets(startBatch, batches)
 	otss2 := crypto.GenerateOneTimeSignatureSecrets(startBatch, batches)
@@ -236,8 +235,12 @@ func TestHeartbeatOnlyWhenChallenged(t *testing.T) {
 	participants.addParticipant(joe, otss2) // Simulate overlapping part keys, so Keys() returns both
 	participants.addParticipant(mary, otss1)
 
+	// now they are online, but not challenged, so no heartbeat
+	acct.Status = basics.Online
+	acct.VoteKeyDilution = kd
 	acct.VoteID = otss1.OneTimeSignatureVerifier
 	a.NoError(ledger.addBlock(table{joe: acct, mary: acct})) // in effect, "keyreg" with otss1
+	ledger.waitFor(s, a)
 	a.Empty(sink)
 
 	// now we have to make it seem like joe has been challenged. We obtain the
@@ -255,6 +258,12 @@ func TestHeartbeatOnlyWhenChallenged(t *testing.T) {
 
 	a.NoError(ledger.addBlock(table{joe: acct}))
 	ledger.waitFor(s, a)
+	a.Empty(sink) // Just kidding, no heartbeat yet, joe isn't eligible
+
+	acct.IncentiveEligible = true
+	a.NoError(ledger.addBlock(table{joe: acct}))
+	ledger.waitFor(s, a)
+	// challenge is already in place, it counts immediately, so service will heartbeat
 	a.Len(sink, 1) // only one heartbeat (for joe) despite having two part records
 	a.Len(sink[0], 1)
 	a.Equal(sink[0][0].Txn.Type, protocol.HeartbeatTx)

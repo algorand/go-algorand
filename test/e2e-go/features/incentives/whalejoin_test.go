@@ -228,7 +228,7 @@ func TestBigIncrease(t *testing.T) {
 	// have a fairly recent proposal, and not get knocked off.
 	pay(&fixture, a, c1, account01.Address, account15.Address, 99*account01.Amount/100)
 
-	rekeyreg(&fixture, a, c1, account01.Address)
+	rekeyreg(&fixture, a, c1, account01.Address, true)
 
 	// 2. Wait lookback rounds
 	wait(&fixture, a, lookback)

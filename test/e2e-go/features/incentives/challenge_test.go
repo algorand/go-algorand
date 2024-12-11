@@ -35,6 +35,13 @@ import (
 	"github.com/algorand/go-algorand/util"
 )
 
+// eligible is just a dumb 50/50 choice of whether to mark an address
+// incentiveELigible or not, so we get a diversity of testing. Ineligible
+// accounts should not be challenged or try to heartbeat.
+func eligible(address string) bool {
+	return address[0]&0x01 == 0
+}
+
 // TestChallenges ensures that accounts are knocked off if they don't respond to
 // a challenge, and that algod responds for accounts it knows (keepign them online)
 func TestChallenges(t *testing.T) {
@@ -79,17 +86,16 @@ func TestChallenges(t *testing.T) {
 	c1, accounts1 := clientAndAccounts("Node1")
 	c2, accounts2 := clientAndAccounts("Node2")
 
-	// By re-regging, we become eligible for suspension (normal + challenges)
-	// TODO: Confirm that rereg is required for challenge suspensions
-
 	err := fixture.WaitForRoundWithTimeout(interval - lookback) // Make all LastHeartbeats > interval, < 2*interval
 	a.NoError(err)
 
+	// eligible accounts1 will get challenged with node offline, and suspended
 	for _, account := range accounts1 {
-		rekeyreg(&fixture, a, c1, account.Address)
+		rekeyreg(&fixture, a, c1, account.Address, eligible(account.Address))
 	}
+	// eligible accounts2 will get challenged, but node2 will heartbeat for them
 	for _, account := range accounts2 {
-		rekeyreg(&fixture, a, c2, account.Address)
+		rekeyreg(&fixture, a, c2, account.Address, eligible(account.Address))
 	}
 
 	// turn off node 1, so it can't heartbeat
@@ -116,85 +122,101 @@ func TestChallenges(t *testing.T) {
 	a.NoError(err)
 	challenge := blk.BlockHeader.Seed[0] & mask // high bit
 
-	challenged1 := util.MakeSet[basics.Address]()
+	// match1 are the accounts from node1 that match the challenge, but only
+	// eligible ones are truly challenged and could be suspended.
+	match1 := util.MakeSet[basics.Address]()
+	eligible1 := util.MakeSet[basics.Address]() // matched AND eligible
 	for _, account := range accounts1 {
 		address, err := basics.UnmarshalChecksumAddress(account.Address)
 		a.NoError(err)
 		if address[0]&mask == challenge {
 			fmt.Printf("%v of node 1 was challenged %v by %v\n", address, address[0], challenge)
-			challenged1.Add(address)
+			match1.Add(address)
+			if eligible(address.String()) {
+				eligible1.Add(address)
+			}
 		}
 	}
-	require.NotEmpty(t, challenged1, "rerun the test") // TODO: remove.
+	require.NotEmpty(t, match1, "rerun the test") // TODO: remove.
 
-	challenged2 := util.MakeSet[basics.Address]()
+	match2 := util.MakeSet[basics.Address]()
+	eligible2 := util.MakeSet[basics.Address]() // matched AND eligible
 	for _, account := range accounts2 {
 		address, err := basics.UnmarshalChecksumAddress(account.Address)
 		a.NoError(err)
 		if address[0]&mask == challenge {
 			fmt.Printf("%v of node 2 was challenged %v by %v\n", address, address[0], challenge)
-			challenged2.Add(address)
+			match2.Add(address)
+			if eligible(address.String()) {
+				eligible2.Add(address)
+			}
 		}
 	}
-	require.NotEmpty(t, challenged2, "rerun the test") // TODO: remove.
+	require.NotEmpty(t, match2, "rerun the test") // TODO: remove.
 
-	allChallenged := util.Union(challenged1, challenged2)
+	allMatches := util.Union(match1, match2)
 
-	// All challenged nodes are still online
-	for address := range allChallenged {
+	// All nodes are online to start
+	for address := range allMatches {
 		data, err := c2.AccountData(address.String())
 		a.NoError(err)
 		a.Equal(basics.Online, data.Status, "%v %d", address.String(), data.LastHeartbeat)
 		a.NotZero(data.VoteID)
-		a.True(data.IncentiveEligible)
+		a.Equal(eligible(address.String()), data.IncentiveEligible)
 	}
 
 	// Watch the first half grace period for proposals from challenged nodes, since they won't have to heartbeat.
 	lucky := util.MakeSet[basics.Address]()
 	fixture.WithEveryBlock(challengeRound, challengeRound+grace/2, func(block bookkeeping.Block) {
-		if challenged2.Contains(block.Proposer()) {
+		if eligible2.Contains(block.Proposer()) {
 			lucky.Add(block.Proposer())
 		}
+		a.Empty(block.AbsentParticipationAccounts) // nobody suspended during grace
 	})
 
-	// In the second half of the grace period, Node 2 should heartbeat for its accounts
+	// In the second half of the grace period, Node 2 should heartbeat for its eligible accounts
 	beated := util.MakeSet[basics.Address]()
 	fixture.WithEveryBlock(challengeRound+grace/2, challengeRound+grace, func(block bookkeeping.Block) {
-		if challenged2.Contains(block.Proposer()) {
+		if eligible2.Contains(block.Proposer()) {
 			lucky.Add(block.Proposer())
 		}
 		for i, txn := range block.Payset {
 			hb := txn.Txn.HeartbeatTxnFields
 			fmt.Printf("Heartbeat txn %v in position %d round %d\n", hb, i, block.Round())
-			a.True(challenged2.Contains(hb.HbAddress)) // only Node 2 is alive
-			a.False(beated.Contains(hb.HbAddress))     // beat only once
+			a.True(match2.Contains(hb.HbAddress))    // only Node 2 is alive
+			a.True(eligible2.Contains(hb.HbAddress)) // only eligible accounts get heartbeat
+			a.False(beated.Contains(hb.HbAddress))   // beat only once
 			beated.Add(hb.HbAddress)
 			a.False(lucky.Contains(hb.HbAddress)) // we should not see a heartbeat from an account that proposed
 		}
 		a.Empty(block.AbsentParticipationAccounts) // nobody suspended during grace
 	})
-	a.Equal(challenged2, util.Union(beated, lucky))
+	a.Equal(eligible2, util.Union(beated, lucky))
 
 	blk, err = fixture.WaitForBlockWithTimeout(challengeRound + grace + 1)
 	a.NoError(err)
-	a.Equal(challenged1, util.MakeSet(blk.AbsentParticipationAccounts...))
+	a.Equal(eligible1, util.MakeSet(blk.AbsentParticipationAccounts...))
 
-	// node 1 challenged accounts are suspended because node 1 is off
-	for address := range challenged1 {
+	// node 1 challenged (eligible) accounts are suspended because node 1 is off
+	for address := range match1 {
 		data, err := c2.AccountData(address.String())
 		a.NoError(err)
-		a.Equal(basics.Offline, data.Status, address)
+		if eligible1.Contains(address) {
+			a.Equal(basics.Offline, data.Status, address)
+		} else {
+			a.Equal(basics.Online, data.Status, address) // not eligible, so not suspended
+		}
 		a.NotZero(data.VoteID, address)
 		a.False(data.IncentiveEligible, address) // suspension turns off flag
 	}
 
-	// node 2 challenged accounts are not suspended (saved by heartbeat)
-	for address := range challenged2 {
+	// node 2 challenged accounts are not suspended (saved by heartbeat or weren't eligible)
+	for address := range match2 {
 		data, err := c2.AccountData(address.String())
 		a.NoError(err)
 		a.Equal(basics.Online, data.Status, address)
 		a.NotZero(data.VoteID, address)
-		a.True(data.IncentiveEligible, address)
+		a.Equal(data.IncentiveEligible, eligible(address.String()))
 	}
 
 }

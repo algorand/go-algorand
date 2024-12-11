@@ -97,7 +97,7 @@ func (s *Service) findChallenged(rules config.ProposerPayoutRules, current basic
 		if acct.VoteID != pr.Voting.OneTimeSignatureVerifier {
 			continue
 		}
-		if acct.Status == basics.Online {
+		if acct.Status == basics.Online && acct.IncentiveEligible {
 			if ch.Failed(pr.Account, acct.LastSeen()) {
 				s.log.Infof(" %v needs a heartbeat\n", pr.Account)
 				found = append(found, pr)

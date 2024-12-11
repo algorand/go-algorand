@@ -33,7 +33,6 @@ import (
 )
 
 // TestBasicSuspension confirms that accounts that don't propose get suspended
-// (when a tx naming them occurs)
 func TestBasicSuspension(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
@@ -71,8 +70,8 @@ func TestBasicSuspension(t *testing.T) {
 	c10, account10 := clientAndAccount("Node10")
 	c20, account20 := clientAndAccount("Node20")
 
-	rekeyreg(&fixture, a, c10, account10.Address)
-	rekeyreg(&fixture, a, c20, account20.Address)
+	rekeyreg(&fixture, a, c10, account10.Address, true)
+	rekeyreg(&fixture, a, c20, account20.Address, true)
 
 	// Accounts are now suspendable whether they have proposed yet or not
 	// because keyreg sets LastHeartbeat. Stop c20 which means account20 will be
