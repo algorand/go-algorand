@@ -38,6 +38,10 @@ func (c mockClient) OnClose(func()) {
 	return
 }
 
+func (c mockClient) RoutingAddr() []byte {
+	return []byte(c)
+}
+
 func TestNewElasticRateLimiter(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	erl := NewElasticRateLimiter(100, 10, time.Second, nil)
@@ -57,24 +61,24 @@ func TestElasticRateLimiterCongestionControlled(t *testing.T) {
 	// because the ERL gives capacity to a reservation, and then asynchronously drains capacity from the share,
 	// wait a moment before testing the size of the sharedCapacity
 	time.Sleep(100 * time.Millisecond)
-	assert.Equal(t, 1, len(erl.capacityByClient[client]))
+	assert.Equal(t, 1, len(erl.capacityByClient[string(client.RoutingAddr())]))
 	assert.Equal(t, 1, len(erl.sharedCapacity))
 	assert.NoError(t, err)
 
 	erl.EnableCongestionControl()
 	_, _, err = erl.ConsumeCapacity(client)
-	assert.Equal(t, 0, len(erl.capacityByClient[client]))
+	assert.Equal(t, 0, len(erl.capacityByClient[string(client.RoutingAddr())]))
 	assert.Equal(t, 1, len(erl.sharedCapacity))
 	assert.NoError(t, err)
 
 	_, _, err = erl.ConsumeCapacity(client)
-	assert.Equal(t, 0, len(erl.capacityByClient[client]))
+	assert.Equal(t, 0, len(erl.capacityByClient[string(client.RoutingAddr())]))
 	assert.Equal(t, 1, len(erl.sharedCapacity))
 	assert.Error(t, err)
 
 	erl.DisableCongestionControl()
 	_, _, err = erl.ConsumeCapacity(client)
-	assert.Equal(t, 0, len(erl.capacityByClient[client]))
+	assert.Equal(t, 0, len(erl.capacityByClient[string(client.RoutingAddr())]))
 	assert.Equal(t, 0, len(erl.sharedCapacity))
 	assert.NoError(t, err)
 }
@@ -138,40 +142,40 @@ func TestConsumeReleaseCapacity(t *testing.T) {
 	// because the ERL gives capacity to a reservation, and then asynchronously drains capacity from the share,
 	// wait a moment before testing the size of the sharedCapacity
 	time.Sleep(100 * time.Millisecond)
-	assert.Equal(t, 2, len(erl.capacityByClient[client]))
+	assert.Equal(t, 2, len(erl.capacityByClient[string(client.RoutingAddr())]))
 	assert.Equal(t, 1, len(erl.sharedCapacity))
 	assert.NoError(t, err)
 
 	_, _, err = erl.ConsumeCapacity(client)
-	assert.Equal(t, 1, len(erl.capacityByClient[client]))
+	assert.Equal(t, 1, len(erl.capacityByClient[string(client.RoutingAddr())]))
 	assert.Equal(t, 1, len(erl.sharedCapacity))
 	assert.NoError(t, err)
 
 	_, _, err = erl.ConsumeCapacity(client)
-	assert.Equal(t, 0, len(erl.capacityByClient[client]))
+	assert.Equal(t, 0, len(erl.capacityByClient[string(client.RoutingAddr())]))
 	assert.Equal(t, 1, len(erl.sharedCapacity))
 	assert.NoError(t, err)
 
 	// remember this capacity, as it is a shared capacity
 	c4, _, err := erl.ConsumeCapacity(client)
-	assert.Equal(t, 0, len(erl.capacityByClient[client]))
+	assert.Equal(t, 0, len(erl.capacityByClient[string(client.RoutingAddr())]))
 	assert.Equal(t, 0, len(erl.sharedCapacity))
 	assert.NoError(t, err)
 
 	_, _, err = erl.ConsumeCapacity(client)
-	assert.Equal(t, 0, len(erl.capacityByClient[client]))
+	assert.Equal(t, 0, len(erl.capacityByClient[string(client.RoutingAddr())]))
 	assert.Equal(t, 0, len(erl.sharedCapacity))
 	assert.Error(t, err)
 
 	// now release the capacity and observe the items return to the correct places
 	err = c1.Release()
-	assert.Equal(t, 1, len(erl.capacityByClient[client]))
+	assert.Equal(t, 1, len(erl.capacityByClient[string(client.RoutingAddr())]))
 	assert.Equal(t, 0, len(erl.sharedCapacity))
 	assert.NoError(t, err)
 
 	// now release the capacity and observe the items return to the correct places
 	err = c4.Release()
-	assert.Equal(t, 1, len(erl.capacityByClient[client]))
+	assert.Equal(t, 1, len(erl.capacityByClient[string(client.RoutingAddr())]))
 	assert.Equal(t, 1, len(erl.sharedCapacity))
 	assert.NoError(t, err)
 
