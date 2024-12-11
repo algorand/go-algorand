@@ -27,13 +27,15 @@ import (
 type CatchpointFileHeader struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Version           uint64                   `codec:"version"`
-	BalancesRound     basics.Round             `codec:"balancesRound"`
-	BlocksRound       basics.Round             `codec:"blocksRound"`
-	Totals            ledgercore.AccountTotals `codec:"accountTotals"`
-	TotalAccounts     uint64                   `codec:"accountsCount"`
-	TotalChunks       uint64                   `codec:"chunksCount"`
-	TotalKVs          uint64                   `codec:"kvsCount"`
-	Catchpoint        string                   `codec:"catchpoint"`
-	BlockHeaderDigest crypto.Digest            `codec:"blockHeaderDigest"`
+	Version                uint64                   `codec:"version"`
+	BalancesRound          basics.Round             `codec:"balancesRound"`
+	BlocksRound            basics.Round             `codec:"blocksRound"`
+	Totals                 ledgercore.AccountTotals `codec:"accountTotals"`
+	TotalAccounts          uint64                   `codec:"accountsCount"`
+	TotalChunks            uint64                   `codec:"chunksCount"`
+	TotalKVs               uint64                   `codec:"kvsCount"`
+	TotalOnlineAccounts    uint64                   `codec:"onlineAccountsCount"`
+	TotalOnlineRoundParams uint64                   `codec:"onlineRoundParamsCount"`
+	Catchpoint             string                   `codec:"catchpoint"`
+	BlockHeaderDigest      crypto.Digest            `codec:"blockHeaderDigest"`
 }

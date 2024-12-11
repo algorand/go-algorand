@@ -379,6 +379,28 @@ func (r *accountsV2Reader) TotalKVs(ctx context.Context) (total uint64, err erro
 	return
 }
 
+// TotalOnlineAccountRows returns the total number of rows in the onlineaccounts table.
+func (r *accountsV2Reader) TotalOnlineAccountRows(ctx context.Context) (total uint64, err error) {
+	err = r.q.QueryRowContext(ctx, "SELECT count(1) FROM onlineaccounts").Scan(&total)
+	if err == sql.ErrNoRows {
+		total = 0
+		err = nil
+		return
+	}
+	return
+}
+
+// TotalOnlineRoundParams returns the total number of rows in the onlineroundparamstail table.
+func (r *accountsV2Reader) TotalOnlineRoundParams(ctx context.Context) (total uint64, err error) {
+	err = r.q.QueryRowContext(ctx, "SELECT count(1) FROM onlineroundparamstail").Scan(&total)
+	if err == sql.ErrNoRows {
+		total = 0
+		err = nil
+		return
+	}
+	return
+}
+
 // LoadTxTail returns the tx tails
 func (r *accountsV2Reader) LoadTxTail(ctx context.Context, dbRound basics.Round) (roundData []*trackerdb.TxTailRound, roundHash []crypto.Digest, baseRound basics.Round, err error) {
 	rows, err := r.q.QueryContext(ctx, "SELECT rnd, data FROM txtail ORDER BY rnd DESC")
