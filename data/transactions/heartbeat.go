@@ -28,15 +28,22 @@ import (
 type HeartbeatTxnFields struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	// HeartbeatAddress is the account this txn is proving onlineness for.
+	// HbAddress is the account this txn is proving onlineness for.
 	HbAddress basics.Address `codec:"hbad"`
 
 	// HbProof is a signature using HeartbeatAddress's partkey, thereby showing it is online.
 	HbProof crypto.HeartbeatProof `codec:"hbprf"`
 
+	// The final three fields are included to allow early, concurrent check of
+	// the HbProof.
+
 	// HbSeed must be the block seed for the this transaction's firstValid
-	// block. It is supplied in the transaction so that Proof can be checked at
-	// submit time without a ledger lookup, and must be checked at evaluation
-	// time for equality with the actual blockseed.
+	// block. It is the message that must be signed with HbAddress's part key.
 	HbSeed committee.Seed `codec:"hbsd"`
+
+	// HbVoteID must match the HbAddress account's current VoteID.
+	HbVoteID crypto.OneTimeSignatureVerifier `codec:"hbvid"`
+
+	// HbKeyDilution must match HbAddress account's current KeyDilution.
+	HbKeyDilution uint64 `codec:"hbkd"`
 }

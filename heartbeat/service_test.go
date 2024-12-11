@@ -87,13 +87,24 @@ func (l *mockedLedger) WaitMem(r basics.Round) chan struct{} {
 
 // BlockHdr allows the service access to consensus values
 func (l *mockedLedger) BlockHdr(r basics.Round) (bookkeeping.BlockHeader, error) {
-	if r > l.LastRound() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	if r > l.lastRound() {
 		return bookkeeping.BlockHeader{}, fmt.Errorf("%d is beyond current block (%d)", r, l.LastRound())
 	}
 	// return the template hdr, with round
 	hdr := l.hdr
 	hdr.Round = r
 	return hdr, nil
+}
+
+// setSeed allows the mock to return a specific seed
+func (l *mockedLedger) setSeed(seed committee.Seed) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	l.hdr.Seed = seed
 }
 
 func (l *mockedLedger) addBlock(delta table) error {
@@ -232,8 +243,8 @@ func TestHeartbeatOnlyWhenChallenged(t *testing.T) {
 	// now we have to make it seem like joe has been challenged. We obtain the
 	// payout rules to find the first challenge round, skip forward to it, then
 	// go forward half a grace period. Only then should the service heartbeat
+	ledger.setSeed(committee.Seed{0xc8}) // share 5 bits with 0xcc
 	hdr, err := ledger.BlockHdr(ledger.LastRound())
-	ledger.hdr.Seed = committee.Seed{0xc8} // share 5 bits with 0xcc
 	a.NoError(err)
 	rules := config.Consensus[hdr.CurrentProtocol].Payouts
 	for ledger.LastRound() < basics.Round(rules.ChallengeInterval+rules.ChallengeGracePeriod/2) {

@@ -181,9 +181,11 @@ func (s *Service) prepareHeartbeat(pr account.ParticipationRecordForRound, lates
 
 	id := basics.OneTimeIDForRound(stxn.Txn.LastValid, pr.KeyDilution)
 	stxn.Txn.HeartbeatTxnFields = transactions.HeartbeatTxnFields{
-		HbAddress: pr.Account,
-		HbProof:   pr.Voting.Sign(id, latest.Seed).ToHeartbeatProof(),
-		HbSeed:    latest.Seed,
+		HbAddress:     pr.Account,
+		HbProof:       pr.Voting.Sign(id, latest.Seed).ToHeartbeatProof(),
+		HbSeed:        latest.Seed,
+		HbVoteID:      pr.Voting.OneTimeSignatureVerifier,
+		HbKeyDilution: pr.KeyDilution,
 	}
 
 	return stxn

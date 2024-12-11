@@ -27,6 +27,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -569,6 +570,37 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 	case protocol.HeartbeatTx:
 		if !proto.Heartbeat {
 			return fmt.Errorf("heartbeat transaction not supported")
+		}
+
+		// If this is a free/cheap heartbeat, it must be very simple.
+		if tx.Fee.Raw < proto.MinTxnFee && tx.Group.IsZero() {
+			kind := "free"
+			if tx.Fee.Raw > 0 {
+				kind = "cheap"
+			}
+
+			if len(tx.Note) > 0 {
+				return fmt.Errorf("tx.Note is set in %s heartbeat", kind)
+			}
+			if tx.Lease != [32]byte{} {
+				return fmt.Errorf("tx.Lease is set in %s heartbeat", kind)
+			}
+			if !tx.RekeyTo.IsZero() {
+				return fmt.Errorf("tx.RekeyTo is set in %s heartbeat", kind)
+			}
+		}
+
+		if (tx.HbProof == crypto.HeartbeatProof{}) {
+			return errors.New("tx.HbProof is empty")
+		}
+		if (tx.HbSeed == committee.Seed{}) {
+			return errors.New("tx.HbSeed is empty")
+		}
+		if tx.HbVoteID.IsEmpty() {
+			return errors.New("tx.HbVoteID is empty")
+		}
+		if tx.HbKeyDilution == 0 {
+			return errors.New("tx.HbKeyDilution is zero")
 		}
 
 	default:

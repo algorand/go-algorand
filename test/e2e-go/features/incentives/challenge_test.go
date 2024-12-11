@@ -71,7 +71,7 @@ func TestChallenges(t *testing.T) {
 		c := fixture.GetLibGoalClientForNamedNode(name)
 		accounts, err := fixture.GetNodeWalletsSortedByBalance(c)
 		a.NoError(err)
-		a.Len(accounts, 4)
+		a.Len(accounts, 8)
 		fmt.Printf("Client %s has %v\n", name, accounts)
 		return c, accounts
 	}
@@ -149,19 +149,31 @@ func TestChallenges(t *testing.T) {
 		a.True(data.IncentiveEligible)
 	}
 
+	// Watch the first half grace period for proposals from challenged nodes, since they won't have to heartbeat.
+	lucky := util.MakeSet[basics.Address]()
+	fixture.WithEveryBlock(challengeRound, challengeRound+grace/2, func(block bookkeeping.Block) {
+		if challenged2.Contains(block.Proposer()) {
+			lucky.Add(block.Proposer())
+		}
+	})
+
 	// In the second half of the grace period, Node 2 should heartbeat for its accounts
 	beated := util.MakeSet[basics.Address]()
 	fixture.WithEveryBlock(challengeRound+grace/2, challengeRound+grace, func(block bookkeeping.Block) {
-		for _, txn := range block.Payset {
+		if challenged2.Contains(block.Proposer()) {
+			lucky.Add(block.Proposer())
+		}
+		for i, txn := range block.Payset {
 			hb := txn.Txn.HeartbeatTxnFields
-			fmt.Printf("Heartbeat txn %v\n", hb)
+			fmt.Printf("Heartbeat txn %v in position %d round %d\n", hb, i, block.Round())
 			a.True(challenged2.Contains(hb.HbAddress)) // only Node 2 is alive
 			a.False(beated.Contains(hb.HbAddress))     // beat only once
 			beated.Add(hb.HbAddress)
+			a.False(lucky.Contains(hb.HbAddress)) // we should not see a heartbeat from an account that proposed
 		}
 		a.Empty(block.AbsentParticipationAccounts) // nobody suspended during grace
 	})
-	a.Equal(challenged2, beated)
+	a.Equal(challenged2, util.Union(beated, lucky))
 
 	blk, err = fixture.WaitForBlockWithTimeout(challengeRound + grace + 1)
 	a.NoError(err)
