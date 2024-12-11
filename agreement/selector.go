@@ -51,7 +51,13 @@ func (sel selector) CommitteeSize(proto config.ConsensusParams) uint64 {
 // looking at online stake (and status and key material). It is exported so that
 // AVM can provide opcodes that return the same data.
 func BalanceRound(r basics.Round, cparams config.ConsensusParams) basics.Round {
-	return r.SubSaturate(basics.Round(2 * cparams.SeedRefreshInterval * cparams.SeedLookback))
+	return r.SubSaturate(BalanceLookback(cparams))
+}
+
+// BalanceLookback is how far back agreement looks when considering balances for
+// voting stake.
+func BalanceLookback(cparams config.ConsensusParams) basics.Round {
+	return basics.Round(2 * cparams.SeedRefreshInterval * cparams.SeedLookback)
 }
 
 func seedRound(r basics.Round, cparams config.ConsensusParams) basics.Round {

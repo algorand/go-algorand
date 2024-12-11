@@ -74,7 +74,7 @@ func TestBasicSyncMode(t *testing.T) {
 
 	// Let the network make some progress
 	waitForRound := uint64(5)
-	err = fixture.ClientWaitForRoundWithTimeout(fixture.GetAlgodClientForController(nc), waitForRound)
+	err = fixture.GetAlgodClientForController(nc).WaitForRoundWithTimeout(waitForRound)
 	a.NoError(err)
 
 	// Get the follower client, and exercise the sync/ledger functionality
@@ -88,7 +88,7 @@ func TestBasicSyncMode(t *testing.T) {
 		a.NoError(err)
 		a.Equal(round, rResp.Round)
 		// make some progress to round
-		err = fixture.ClientWaitForRoundWithTimeout(followClient, round)
+		err = followClient.WaitForRoundWithTimeout(round)
 		a.NoError(err)
 		// retrieve state delta
 		gResp, err := followClient.GetLedgerStateDelta(round)
@@ -113,6 +113,6 @@ func TestBasicSyncMode(t *testing.T) {
 		err = followClient.SetSyncRound(round + 1)
 		a.NoError(err)
 	}
-	err = fixture.LibGoalFixture.ClientWaitForRoundWithTimeout(fixture.LibGoalClient, waitForRound)
+	err = fixture.WaitForRoundWithTimeout(waitForRound)
 	a.NoError(err)
 }

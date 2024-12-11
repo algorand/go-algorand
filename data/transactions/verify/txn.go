@@ -221,11 +221,16 @@ func txnGroupBatchPrep(stxs []transactions.SignedTxn, contextHdr *bookkeeping.Bl
 			prepErr.err = fmt.Errorf("transaction %+v invalid : %w", stxn, prepErr.err)
 			return nil, prepErr
 		}
-		if stxn.Txn.Type != protocol.StateProofTx {
-			minFeeCount++
-		}
 		feesPaid = basics.AddSaturate(feesPaid, stxn.Txn.Fee.Raw)
 		lSigPooledSize += stxn.Lsig.Len()
+		if stxn.Txn.Type == protocol.StateProofTx {
+			continue
+		}
+		if stxn.Txn.Type == protocol.HeartbeatTx && stxn.Txn.Group.IsZero() {
+			// in apply.Heartbeat, we further confirm that the heartbeat is for a challenged node
+			continue
+		}
+		minFeeCount++
 	}
 	if groupCtx.consensusParams.EnableLogicSigSizePooling {
 		lSigMaxPooledSize := len(stxs) * int(groupCtx.consensusParams.LogicSigMaxSize)
@@ -303,6 +308,15 @@ func stxnCoreChecks(gi int, groupCtx *GroupContext, batchVerifier crypto.BatchVe
 	sigType, err := checkTxnSigTypeCounts(s, gi)
 	if err != nil {
 		return err
+	}
+
+	if s.Txn.Type == protocol.HeartbeatTx {
+		id := basics.OneTimeIDForRound(s.Txn.LastValid, s.Txn.HbKeyDilution)
+		offsetID := crypto.OneTimeSignatureSubkeyOffsetID{SubKeyPK: s.Txn.HbProof.PK, Batch: id.Batch, Offset: id.Offset}
+		batchID := crypto.OneTimeSignatureSubkeyBatchID{SubKeyPK: s.Txn.HbProof.PK2, Batch: id.Batch}
+		batchVerifier.EnqueueSignature(crypto.PublicKey(s.Txn.HbVoteID), batchID, crypto.Signature(s.Txn.HbProof.PK2Sig))
+		batchVerifier.EnqueueSignature(crypto.PublicKey(batchID.SubKeyPK), offsetID, crypto.Signature(s.Txn.HbProof.PK1Sig))
+		batchVerifier.EnqueueSignature(crypto.PublicKey(offsetID.SubKeyPK), s.Txn.HbSeed, crypto.Signature(s.Txn.HbProof.Sig))
 	}
 
 	switch sigType {
