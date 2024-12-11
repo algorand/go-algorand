@@ -188,6 +188,9 @@ func (t *emptyTracker) postCommit(ctx context.Context, dcc *deferredCommitContex
 func (t *emptyTracker) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
 }
 
+func (t *emptyTracker) clearCommitRoundRetry(ctx context.Context, dcc *deferredCommitContext) {
+}
+
 // control functions are not used by the emptyTracker
 func (t *emptyTracker) handleUnorderedCommit(dcc *deferredCommitContext) {
 }

@@ -40,7 +40,9 @@ type Store interface {
 	BeginSnapshot(ctx context.Context) (Snapshot, error)
 	// transaction support
 	Transaction(fn TransactionFn) (err error)
+	TransactionWithRetryClearFn(TransactionFn, RetryClearFn) (err error)
 	TransactionContext(ctx context.Context, fn TransactionFn) (err error)
+	TransactionContextWithRetryClearFn(context.Context, TransactionFn, RetryClearFn) (err error)
 	BeginTransaction(ctx context.Context) (Transaction, error)
 	// maintenance
 	Vacuum(ctx context.Context) (stats db.VacuumStats, err error)
@@ -153,3 +155,6 @@ type SnapshotFn func(ctx context.Context, tx SnapshotScope) error
 
 // TransactionFn is the callback lambda used in `Transaction`.
 type TransactionFn func(ctx context.Context, tx TransactionScope) error
+
+// RetryClearFn is the rollback callback lambda used in `TransactionWithRetryClearFn`.
+type RetryClearFn func(ctx context.Context)

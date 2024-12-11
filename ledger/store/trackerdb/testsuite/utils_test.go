@@ -228,6 +228,16 @@ func (db *mockDB) TransactionContext(ctx context.Context, fn trackerdb.Transacti
 	return err
 }
 
+// TransactionWithRetryClearFn implements trackerdb.Store but ignores the RetryClearFn
+func (db *mockDB) TransactionWithRetryClearFn(fn trackerdb.TransactionFn, _ trackerdb.RetryClearFn) (err error) {
+	return db.TransactionContext(context.Background(), fn)
+}
+
+// TransactionContextWithRetryClearFn implements trackerdb.Store but ignores the RetryClearFn
+func (db *mockDB) TransactionContextWithRetryClearFn(ctx context.Context, fn trackerdb.TransactionFn, _ trackerdb.RetryClearFn) (err error) {
+	return db.TransactionContext(ctx, fn)
+}
+
 // BeginTransaction implements trackerdb.Store
 func (db *mockDB) BeginTransaction(ctx context.Context) (trackerdb.Transaction, error) {
 	scope := mockTransaction{db, db.proto}

@@ -2044,7 +2044,6 @@ func TestAcctUpdatesResources(t *testing.T) {
 				require.NoError(t, err)
 				ml.trackers.dbRound = newBase
 				au.postCommit(ml.trackers.ctx, dcc)
-				au.postCommitUnlocked(ml.trackers.ctx, dcc)
 			}()
 
 		}
@@ -2330,7 +2329,6 @@ func auCommitSync(t *testing.T, rnd basics.Round, au *accountUpdates, ml *mockLe
 			require.NoError(t, err)
 			ml.trackers.dbRound = newBase
 			au.postCommit(ml.trackers.ctx, dcc)
-			au.postCommitUnlocked(ml.trackers.ctx, dcc)
 		}()
 	}
 }
