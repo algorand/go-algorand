@@ -88,7 +88,6 @@ func mockCommit(t *testing.T, spt *spVerificationTracker, ml *mockLedgerForTrack
 	postCommitCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	spt.postCommit(postCommitCtx, &dcc)
-	spt.postCommitUnlocked(postCommitCtx, &dcc)
 }
 
 func genesisBlock() *blockEntry {

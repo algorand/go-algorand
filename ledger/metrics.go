@@ -84,12 +84,6 @@ func (mt *metricsTracker) postCommit(ctx context.Context, dcc *deferredCommitCon
 	mt.ledgerDBRound.Set(uint64(dcc.newBase()))
 }
 
-func (mt *metricsTracker) clearCommitRoundRetry(ctx context.Context, dcc *deferredCommitContext) {}
-func (mt *metricsTracker) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext)    {}
-func (mt *metricsTracker) handleUnorderedCommit(dcc *deferredCommitContext)                      {}
-func (mt *metricsTracker) handlePrepareCommitError(dcc *deferredCommitContext)                   {}
-func (mt *metricsTracker) handleCommitError(dcc *deferredCommitContext)                          {}
-
 func (mt *metricsTracker) produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcr *deferredCommitRange) *deferredCommitRange {
 	return dcr
 }
