@@ -944,9 +944,8 @@ func (n *P2PNetwork) txTopicHandleLoop() {
 }
 
 type gsPeer struct {
-	peerID      peer.ID
-	net         *P2PNetwork
-	routingAddr [8]byte
+	peerID peer.ID
+	net    *P2PNetwork
 }
 
 func (p *gsPeer) GetNetwork() GossipNode {
@@ -954,7 +953,7 @@ func (p *gsPeer) GetNetwork() GossipNode {
 }
 
 func (p *gsPeer) RoutingAddr() []byte {
-	return p.routingAddr[:]
+	return []byte(p.peerID)
 }
 
 // txTopicValidator calls txHandler to validate and process incoming transactions.
@@ -964,13 +963,10 @@ func (n *P2PNetwork) txTopicValidator(ctx context.Context, peerID peer.ID, msg *
 	if wsp, ok := n.wsPeers[peerID]; ok {
 		sender = wsp
 	} else {
-		// otherwise use last 8 bytes of peerID
-		// handle the case where the peer is not in the wsPeers map yet
+		// otherwise use the peerID to handle the case where this peer is not in the wsPeers map yet
 		// this can happen when pubsub receives new peer notifications before the wsStreamHandler is called:
 		// create a fake peer that is good enough for tx handler to work with.
-		var routingAddr [8]byte
-		copy(routingAddr[:], peerID[len(peerID)-8:])
-		sender = &gsPeer{peerID: peerID, net: n, routingAddr: routingAddr}
+		sender = &gsPeer{peerID: peerID, net: n}
 	}
 	n.wsPeersLock.Unlock()
 
