@@ -1068,6 +1068,24 @@ assert
 	t.Log("DB round generator", genDBRound, "validator", valDBRound)
 	t.Log("Latest round generator", genLatestRound, "validator", valLatestRound)
 
+	genOAHash, genOARows, err := calculateVerificationHash(context.Background(), dl.generator.trackerDB().MakeOnlineAccountsIter)
+	require.NoError(t, err)
+	valOAHash, valOARows, err := calculateVerificationHash(context.Background(), dl.validator.trackerDB().MakeOnlineAccountsIter)
+	require.NoError(t, err)
+	require.Equal(t, genOAHash, valOAHash)
+	require.NotZero(t, genOAHash)
+	require.Equal(t, genOARows, valOARows)
+	require.NotZero(t, genOARows)
+
+	genORPHash, genORPRows, err := calculateVerificationHash(context.Background(), dl.generator.trackerDB().MakeOnlineRoundParamsIter)
+	require.NoError(t, err)
+	valORPHash, valORPRows, err := calculateVerificationHash(context.Background(), dl.validator.trackerDB().MakeOnlineRoundParamsIter)
+	require.NoError(t, err)
+	require.Equal(t, genORPHash, valORPHash)
+	require.NotZero(t, genORPHash)
+	require.Equal(t, genORPRows, valORPRows)
+	require.NotZero(t, genORPRows)
+
 	tempDir := t.TempDir()
 	catchpointDataFilePath := filepath.Join(tempDir, t.Name()+".data")
 	catchpointFilePath := filepath.Join(tempDir, t.Name()+".catchpoint.tar.gz")
@@ -1078,13 +1096,24 @@ assert
 	l := testNewLedgerFromCatchpoint(t, dl.generator.trackerDB(), catchpointFilePath)
 	defer l.Close()
 
+	catchpointOAHash, catchpointOARows, err := calculateVerificationHash(context.Background(), l.trackerDBs.MakeOnlineAccountsIter)
+	require.NoError(t, err)
+	require.Equal(t, genOAHash, catchpointOAHash)
+	t.Log("catchpoint onlineaccounts hash", catchpointOAHash, "matches")
+	require.Equal(t, genOARows, catchpointOARows)
+
+	catchpointORPHash, catchpointORPRows, err := calculateVerificationHash(context.Background(), l.trackerDBs.MakeOnlineRoundParamsIter)
+	require.NoError(t, err)
+	require.Equal(t, genORPHash, catchpointORPHash)
+	t.Log("catchpoint onlineroundparams hash", catchpointORPHash, "matches")
+	require.Equal(t, genORPRows, catchpointORPRows)
+
 	oar, err := l.trackerDBs.MakeOnlineAccountsOptimizedReader()
 	require.NoError(t, err)
 
 	for i := genDBRound; i >= (genDBRound - 1000); i-- {
 		oad, err := oar.LookupOnline(addrs[0], basics.Round(i))
 		require.NoError(t, err)
-		t.Log(i, oad.AccountData.MicroAlgos.Raw)
 		// block 3 started paying 1 microalgo to addrs[0] per round
 		expected := initialStake + uint64(i) - 2
 		require.Equal(t, expected, oad.AccountData.MicroAlgos.Raw)

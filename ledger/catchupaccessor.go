@@ -1031,12 +1031,12 @@ func (c *catchpointCatchupAccessorImpl) GetVerifyData(ctx context.Context) (bala
 			return fmt.Errorf("unable to get state proof verification data: %v", err)
 		}
 
-		onlineAccountsHash, err = calculateVerificationHash(ctx, tx.MakeOnlineAccountsIter)
+		onlineAccountsHash, _, err = calculateVerificationHash(ctx, tx.MakeOnlineAccountsIter)
 		if err != nil {
 			return fmt.Errorf("unable to get online accounts verification data: %v", err)
 		}
 
-		onlineRoundParamsHash, err = calculateVerificationHash(ctx, tx.MakeOnlineRoundParamsIter)
+		onlineRoundParamsHash, _, err = calculateVerificationHash(ctx, tx.MakeOnlineRoundParamsIter)
 		if err != nil {
 			return fmt.Errorf("unable to get online round params verification data: %v", err)
 		}
@@ -1059,31 +1059,33 @@ func (c *catchpointCatchupAccessorImpl) GetVerifyData(ctx context.Context) (bala
 func calculateVerificationHash[T crypto.Hashable](
 	ctx context.Context,
 	iterFactory func(context.Context) (trackerdb.TableIterator[T], error),
-) (crypto.Digest, error) {
+) (crypto.Digest, uint64, error) {
 
 	rows, err := iterFactory(ctx)
 	if err != nil {
-		return crypto.Digest{}, err
+		return crypto.Digest{}, 0, err
 	}
 	defer rows.Close()
 	hasher := crypto.HashFactory{HashType: crypto.Sha512_256}.NewHash()
+	cnt := uint64(0)
 	for rows.Next() {
 		item, err := rows.GetItem()
 		if err != nil {
-			return crypto.Digest{}, err
+			return crypto.Digest{}, 0, err
 		}
 
 		h := crypto.HashObj(item)
 		_, err = hasher.Write(h[:])
 		if err != nil {
-			return crypto.Digest{}, err
+			return crypto.Digest{}, 0, err
 		}
+		cnt++
 	}
 	ret := hasher.Sum(nil)
 	if len(ret) != crypto.DigestSize {
-		return crypto.Digest{}, fmt.Errorf("unexpected hash size: %d", len(ret))
+		return crypto.Digest{}, 0, fmt.Errorf("unexpected hash size: %d", len(ret))
 	}
-	return crypto.Digest(ret), nil
+	return crypto.Digest(ret), cnt, nil
 }
 
 // VerifyCatchpoint verifies that the catchpoint is valid by reconstructing the label.
