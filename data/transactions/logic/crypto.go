@@ -65,9 +65,10 @@ func opMimc(cx *EvalContext) error {
 		return fmt.Errorf("invalid mimc group %s", config)
 	}
 
-	// unlike most hash.Hash objects, a mimc hasher has strict requirements. The
-	// input must be a multiple of the curve's encoded element size, and no
-	// element may exceed the corve modulus.
+	// unlike most hash.Hash objects, a mimc hasher has strict requirements,
+	// therefore Write() can return an error. The input must be a multiple of
+	// the curve's encoded element size, and no element may exceed the curve
+	// modulus.
 	if _, err := mimc.Write(cx.Stack[last].Bytes); err != nil {
 		return fmt.Errorf("invalid mimc input %w", err)
 	}
