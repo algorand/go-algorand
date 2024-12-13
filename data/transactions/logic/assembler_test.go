@@ -563,7 +563,7 @@ func TestAssemble(t *testing.T) {
 	}
 }
 
-var experiments = []uint64{spOpcodesVersion, mimcVersion}
+var experiments = []uint64{spOpcodesVersion}
 
 // TestExperimental forces a conscious choice to promote "experimental" opcode
 // groups. This will fail when we increment vFuture's LogicSigVersion. If we had

@@ -802,12 +802,12 @@ var OpSpecs = []OpSpec{
 	{0xe6, "mimc", opMimc, proto("b:b{32}"), mimcVersion, costByFieldAndLength("c", &MimcConfigs, []linearCost{
 		BN254Mp110: {
 			baseCost:  10,
-			chunkCost: 350,
+			chunkCost: 550,
 			chunkSize: 32,
 		},
 		BLS12_381Mp111: {
 			baseCost:  10,
-			chunkCost: 350,
+			chunkCost: 550,
 			chunkSize: 32,
 		}})},
 }
