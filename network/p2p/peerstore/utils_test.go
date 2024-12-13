@@ -44,7 +44,6 @@ func TestPeerInfoFromAddr(t *testing.T) {
 		{"ipv4", "/ip4/147.75.83.83/tcp/4001/p2p/QmbLHAnMoJPWSCR5Zhtx6BHJX9KiKNN6tpvbUcqanj75Na", ""},
 	}
 	for _, tc := range testcases {
-		tc := tc
 		t.Run(fmt.Sprintf("test %s", tc.name), func(t *testing.T) {
 			t.Parallel()
 			_, err := PeerInfoFromAddr(tc.addr)

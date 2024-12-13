@@ -19,11 +19,11 @@ package merkletrie
 import (
 	"bytes"
 	"encoding/binary"
+	"slices"
 	"sort"
 	"unsafe"
 
 	"github.com/algorand/go-algorand/crypto"
-	"golang.org/x/exp/slices"
 )
 
 type childEntry struct {

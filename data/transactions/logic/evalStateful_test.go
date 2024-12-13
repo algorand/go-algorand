@@ -248,7 +248,6 @@ log
 	}
 
 	for mode, test := range tests {
-		mode, test := mode, test
 		t.Run(fmt.Sprintf("opcodes_mode=%d", mode), func(t *testing.T) {
 			t.Parallel()
 
@@ -443,6 +442,7 @@ func testApps(t *testing.T, programs []string, txgroup []transactions.SignedTxn,
 		}
 	}
 	ep := NewAppEvalParams(transactions.WrapSignedTxnsWithAD(txgroup), proto, &transactions.SpecialAddresses{})
+	ep.Tracer = EvalErrorDetailsTracer{}
 	if ledger == nil {
 		ledger = NewLedger(nil)
 	}
@@ -1359,7 +1359,6 @@ func TestAssetDisambiguation(t *testing.T) {
 	// Make sure we don't treat slot indexes as asset IDs when
 	// ep.UnnamedResources is not nil.
 	for _, unnamedResources := range []bool{false, true} {
-		unnamedResources := unnamedResources
 		t.Run(fmt.Sprintf("unnamedResources=%v", unnamedResources), func(t *testing.T) {
 			t.Parallel()
 			// It would be nice to start at 2, when apps were added, but `assert` is
@@ -1446,7 +1445,6 @@ func TestAppDisambiguation(t *testing.T) {
 	// Make sure we don't treat slot indexes as app IDs when
 	// ep.UnnamedResources is true.
 	for _, unnamedResources := range []bool{false, true} {
-		unnamedResources := unnamedResources
 		t.Run(fmt.Sprintf("unnamedResources=%v", unnamedResources), func(t *testing.T) {
 			t.Parallel()
 			// It would be nice to start at 2, when apps were added, but `assert` is
@@ -1735,7 +1733,6 @@ intc_1
 		"delete": sourceDelete,
 	}
 	for name, source := range tests {
-		name, source := name, source
 		t.Run(fmt.Sprintf("test=%s", name), func(t *testing.T) {
 			t.Parallel()
 
@@ -2871,7 +2868,6 @@ func TestUnnamedResourceAccess(t *testing.T) {
 	}
 
 	for _, tc := range testcases {
-		tc := tc
 		t.Run(tc.policy.String(), func(t *testing.T) {
 			t.Parallel()
 			// start at 4 for directRefEnabledVersion
@@ -3296,7 +3292,6 @@ func TestReturnTypes(t *testing.T) {
 			if skipCmd[name] || spec.trusted {
 				continue
 			}
-			m, name, spec := m, name, spec
 			t.Run(fmt.Sprintf("mode=%s,opcode=%s", m, name), func(t *testing.T) {
 				t.Parallel()
 

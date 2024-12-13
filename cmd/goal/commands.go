@@ -529,11 +529,11 @@ func writeDryrunReqToFile(client libgoal.Client, txnOrStxn interface{}, outFilen
 	proto, _ := getProto(protoVersion)
 	accts, err := unmarshalSlice(dumpForDryrunAccts)
 	if err != nil {
-		reportErrorf(err.Error())
+		reportErrorln(err.Error())
 	}
 	data, err := libgoal.MakeDryrunStateBytes(client, txnOrStxn, []transactions.SignedTxn{}, accts, string(proto), dumpForDryrunFormat.String())
 	if err != nil {
-		reportErrorf(err.Error())
+		reportErrorln(err.Error())
 	}
 	err = writeFile(outFilename, data, 0600)
 	return
