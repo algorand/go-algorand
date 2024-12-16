@@ -81,6 +81,7 @@ const spliceVersion = 10  // box splicing/resizing
 const incentiveVersion = 11 // block fields, heartbeat
 
 const spOpcodesVersion = 11 // falcon_verify, sumhash512
+const mimcVersion = 11
 
 // Unlimited Global Storage opcodes
 const boxVersion = 8 // box_*
@@ -798,6 +799,17 @@ var OpSpecs = []OpSpec{
 		costByField("g", &EcGroups, []int{
 			BN254g1: 630, BN254g2: 3_300,
 			BLS12_381g1: 1_950, BLS12_381g2: 8_150})},
+	{0xe6, "mimc", opMimc, proto("b:b{32}"), mimcVersion, costByFieldAndLength("c", &MimcConfigs, []linearCost{
+		BN254Mp110: {
+			baseCost:  10,
+			chunkCost: 550,
+			chunkSize: 32,
+		},
+		BLS12_381Mp111: {
+			baseCost:  10,
+			chunkCost: 550,
+			chunkSize: 32,
+		}})},
 }
 
 // OpcodesByVersion returns list of opcodes available in a specific version of TEAL

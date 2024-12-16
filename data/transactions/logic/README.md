@@ -463,6 +463,8 @@ these results may contain leading zero bytes.
 | `keccak256` | Keccak256 hash of value A, yields [32]byte |
 | `sha512_256` | SHA512_256 hash of value A, yields [32]byte |
 | `sha3_256` | SHA3_256 hash of value A, yields [32]byte |
+| `sumhash512` | sumhash512 of value A, yields [64]byte |
+| `falcon_verify` | for (data A, compressed-format signature B, pubkey C) verify the signature of data against the pubkey |
 | `ed25519verify` | for (data A, signature B, pubkey C) verify the signature of ("ProgData" \|\| program_hash \|\| data) against the pubkey => {0 or 1} |
 | `ed25519verify_bare` | for (data A, signature B, pubkey C) verify the signature of the data against the pubkey => {0 or 1} |
 | `ecdsa_verify v` | for (data A, signature B, C and pubkey D, E) verify the signature of the data against the pubkey => {0 or 1} |
@@ -475,6 +477,7 @@ these results may contain leading zero bytes.
 | `ec_multi_scalar_mul g` | for curve points A and scalars B, return curve point B0A0 + B1A1 + B2A2 + ... + BnAn |
 | `ec_subgroup_check g` | 1 if A is in the main prime-order subgroup of G (including the point at infinity) else 0. Program fails if A is not in G at all. |
 | `ec_map_to g` | maps field element A to group G |
+| `mimc c` | MiMC hash of scalars A, using curve and parameters specified by configuration C |
 
 ### Loading Values
 
@@ -631,6 +634,11 @@ Global fields are fields that are common to all the transactions in the group. I
 | 15 | AssetCreateMinBalance | uint64 | v10  | The additional minimum balance required to create (and opt-in to) an asset. |
 | 16 | AssetOptInMinBalance | uint64 | v10  | The additional minimum balance required to opt-in to an asset. |
 | 17 | GenesisHash | [32]byte | v10  | The Genesis Hash for the network. |
+| 18 | PayoutsEnabled | bool | v11  | Whether block proposal payouts are enabled. |
+| 19 | PayoutsGoOnlineFee | uint64 | v11  | The fee required in a keyreg transaction to make an account incentive eligible. |
+| 20 | PayoutsPercent | uint64 | v11  | The percentage of transaction fees in a block that can be paid to the block proposer. |
+| 21 | PayoutsMinBalance | uint64 | v11  | The minimum algo balance an account must have in the agreement round to receive block payouts in the proposal round. |
+| 22 | PayoutsMaxBalance | uint64 | v11  | The maximum algo balance an account can have in the agreement round to receive block payouts in the proposal round. |
 
 
 **Asset Fields**
@@ -694,6 +702,9 @@ Account fields used in the `acct_params_get` opcode.
 | 9 | AcctTotalAssets | uint64 | v8  | The numbers of ASAs held by this account (including ASAs this account created). |
 | 10 | AcctTotalBoxes | uint64 | v8  | The number of existing boxes created by this account's app. |
 | 11 | AcctTotalBoxBytes | uint64 | v8  | The total number of bytes used by this account's app's box keys and values. |
+| 12 | AcctIncentiveEligible | bool | v11  | Has this account opted into block payouts |
+| 13 | AcctLastProposed | uint64 | v11  | The round number of the last block this account proposed. |
+| 14 | AcctLastHeartbeat | uint64 | v11  | The round number of the last block this account sent a heartbeat. |
 
 
 ### Flow Control
@@ -744,6 +755,8 @@ Account fields used in the `acct_params_get` opcode.
 | `asset_params_get f` | X is field F from asset A. Y is 1 if A exists, else 0 |
 | `app_params_get f` | X is field F from app A. Y is 1 if A exists, else 0 |
 | `acct_params_get f` | X is field F from account A. Y is 1 if A owns positive algos, else 0 |
+| `voter_params_get f` | X is field F from online account A as of the balance round: 320 rounds before the current round. Y is 1 if A had positive algos online in the agreement round, else Y is 0 and X is a type specific zero-value |
+| `online_stake` | the total online stake in the agreement round |
 | `log` | write A to log state of the current application |
 | `block f` | field F of block A. Fail unless A falls between txn.LastValid-1002 and txn.FirstValid (exclusive) |
 
