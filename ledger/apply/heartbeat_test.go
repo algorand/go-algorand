@@ -79,37 +79,37 @@ func TestHeartbeat(t *testing.T) {
 
 	rnd := basics.Round(150)
 	// no fee
-	err := Heartbeat(tx.HeartbeatTxnFields, tx.Header, mockBal, mockHdr, rnd)
+	err := Heartbeat(*tx.HeartbeatTxnFields, tx.Header, mockBal, mockHdr, rnd)
 	require.ErrorContains(t, err, "free heartbeat")
 
 	// just as bad: cheap
 	tx.Fee = basics.MicroAlgos{Raw: 10}
-	err = Heartbeat(tx.HeartbeatTxnFields, tx.Header, mockBal, mockHdr, rnd)
+	err = Heartbeat(*tx.HeartbeatTxnFields, tx.Header, mockBal, mockHdr, rnd)
 	require.ErrorContains(t, err, "cheap heartbeat")
 
 	// address fee
 	tx.Fee = basics.MicroAlgos{Raw: 1000}
 
 	// Seed is missing
-	err = Heartbeat(tx.HeartbeatTxnFields, tx.Header, mockBal, mockHdr, rnd)
+	err = Heartbeat(*tx.HeartbeatTxnFields, tx.Header, mockBal, mockHdr, rnd)
 	require.ErrorContains(t, err, "provided seed")
 
 	tx.HbSeed = seed
 	// VoterID is missing
-	err = Heartbeat(tx.HeartbeatTxnFields, tx.Header, mockBal, mockHdr, rnd)
+	err = Heartbeat(*tx.HeartbeatTxnFields, tx.Header, mockBal, mockHdr, rnd)
 	require.ErrorContains(t, err, "provided voter ID")
 
 	tx.HbVoteID = otss.OneTimeSignatureVerifier
 	// still no key dilution
-	err = Heartbeat(tx.HeartbeatTxnFields, tx.Header, mockBal, mockHdr, rnd)
+	err = Heartbeat(*tx.HeartbeatTxnFields, tx.Header, mockBal, mockHdr, rnd)
 	require.ErrorContains(t, err, "provided key dilution 0")
 
 	tx.HbKeyDilution = keyDilution + 1
-	err = Heartbeat(tx.HeartbeatTxnFields, tx.Header, mockBal, mockHdr, rnd)
+	err = Heartbeat(*tx.HeartbeatTxnFields, tx.Header, mockBal, mockHdr, rnd)
 	require.ErrorContains(t, err, "provided key dilution 778")
 
 	tx.HbKeyDilution = keyDilution
-	err = Heartbeat(tx.HeartbeatTxnFields, tx.Header, mockBal, mockHdr, rnd)
+	err = Heartbeat(*tx.HeartbeatTxnFields, tx.Header, mockBal, mockHdr, rnd)
 	require.NoError(t, err)
 	after, err := mockBal.Get(voter, false)
 	require.NoError(t, err)
@@ -198,7 +198,7 @@ func TestCheapRules(t *testing.T) {
 
 		tx := txn.Txn()
 		fmt.Printf("tc %+v\n", tc)
-		err := Heartbeat(tx.HeartbeatTxnFields, tx.Header, mockBal, mockHdr, tc.rnd)
+		err := Heartbeat(*tx.HeartbeatTxnFields, tx.Header, mockBal, mockHdr, tc.rnd)
 		if tc.err == "" {
 			assert.NoError(t, err)
 		} else {
