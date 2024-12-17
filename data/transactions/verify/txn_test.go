@@ -112,7 +112,7 @@ func createHeartbeatTxn(fv basics.Round, t *testing.T) transactions.SignedTxn {
 			FirstValid: fv,
 			LastValid:  lv,
 		},
-		HeartbeatTxnFields: transactions.HeartbeatTxnFields{
+		HeartbeatTxnFields: &transactions.HeartbeatTxnFields{
 			HbProof:       otss.Sign(id, seed).ToHeartbeatProof(),
 			HbSeed:        seed,
 			HbVoteID:      otss.OneTimeSignatureVerifier,

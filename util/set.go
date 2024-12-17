@@ -54,7 +54,9 @@ func Union[T comparable](sets ...Set[T]) Set[T] {
 }
 
 // Intersection constructs a new set, containing all elements that appear in all
-// given sets. nil is never returned.
+// given sets. nil is never returned. Intersection of no sets is an empty set
+// because that seems more useful, regardless of your very reasonable arguments
+// otherwise.
 func Intersection[T comparable](sets ...Set[T]) Set[T] {
 	var intersection = make(Set[T])
 	if len(sets) == 0 {

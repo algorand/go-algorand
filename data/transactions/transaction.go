@@ -101,7 +101,11 @@ type Transaction struct {
 	AssetFreezeTxnFields
 	ApplicationCallTxnFields
 	StateProofTxnFields
-	HeartbeatTxnFields
+
+	// By making HeartbeatTxnFields a pointer we save a ton of space of the
+	// Transaction object. Unlike other txn types, the fields will be
+	// embedded under a named field in the transaction encoding.
+	*HeartbeatTxnFields `codec:"hb"`
 }
 
 // ApplyData contains information about the transaction's execution.
@@ -632,11 +636,11 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 		nonZeroFields[protocol.ApplicationCallTx] = true
 	}
 
-	if !tx.StateProofTxnFields.Empty() {
+	if !tx.StateProofTxnFields.MsgIsZero() {
 		nonZeroFields[protocol.StateProofTx] = true
 	}
 
-	if tx.HeartbeatTxnFields != (HeartbeatTxnFields{}) {
+	if tx.HeartbeatTxnFields != nil {
 		nonZeroFields[protocol.HeartbeatTx] = true
 	}
 

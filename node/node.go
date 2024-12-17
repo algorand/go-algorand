@@ -465,6 +465,7 @@ func (node *AlgorandFullNode) Stop() {
 	if node.catchpointCatchupService != nil {
 		node.catchpointCatchupService.Stop()
 	} else {
+		node.heartbeatService.Stop()
 		node.stateProofWorker.Stop()
 		node.txHandler.Stop()
 		node.agreementService.Shutdown()
@@ -1226,6 +1227,7 @@ func (node *AlgorandFullNode) SetCatchpointCatchupMode(catchpointCatchupMode boo
 			}()
 			node.net.ClearHandlers()
 			node.net.ClearValidatorHandlers()
+			node.heartbeatService.Stop()
 			node.stateProofWorker.Stop()
 			node.heartbeatService.Stop()
 			node.txHandler.Stop()

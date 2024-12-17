@@ -312,11 +312,7 @@ func stxnCoreChecks(gi int, groupCtx *GroupContext, batchVerifier crypto.BatchVe
 
 	if s.Txn.Type == protocol.HeartbeatTx {
 		id := basics.OneTimeIDForRound(s.Txn.LastValid, s.Txn.HbKeyDilution)
-		offsetID := crypto.OneTimeSignatureSubkeyOffsetID{SubKeyPK: s.Txn.HbProof.PK, Batch: id.Batch, Offset: id.Offset}
-		batchID := crypto.OneTimeSignatureSubkeyBatchID{SubKeyPK: s.Txn.HbProof.PK2, Batch: id.Batch}
-		batchVerifier.EnqueueSignature(crypto.PublicKey(s.Txn.HbVoteID), batchID, crypto.Signature(s.Txn.HbProof.PK2Sig))
-		batchVerifier.EnqueueSignature(crypto.PublicKey(batchID.SubKeyPK), offsetID, crypto.Signature(s.Txn.HbProof.PK1Sig))
-		batchVerifier.EnqueueSignature(crypto.PublicKey(offsetID.SubKeyPK), s.Txn.HbSeed, crypto.Signature(s.Txn.HbProof.Sig))
+		s.Txn.HbProof.BatchPrep(s.Txn.HbVoteID, id, s.Txn.HbSeed, batchVerifier)
 	}
 
 	switch sigType {

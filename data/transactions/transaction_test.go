@@ -605,7 +605,7 @@ func TestWellFormedErrors(t *testing.T) {
 			tx: Transaction{
 				Type:   protocol.HeartbeatTx,
 				Header: okHeader,
-				HeartbeatTxnFields: HeartbeatTxnFields{
+				HeartbeatTxnFields: &HeartbeatTxnFields{
 					HbSeed:        committee.Seed{0x02},
 					HbVoteID:      crypto.OneTimeSignatureVerifier{0x03},
 					HbKeyDilution: 10,
@@ -618,7 +618,7 @@ func TestWellFormedErrors(t *testing.T) {
 			tx: Transaction{
 				Type:   protocol.HeartbeatTx,
 				Header: okHeader,
-				HeartbeatTxnFields: HeartbeatTxnFields{
+				HeartbeatTxnFields: &HeartbeatTxnFields{
 					HbProof: crypto.HeartbeatProof{
 						Sig: [64]byte{0x01},
 					},
@@ -633,7 +633,7 @@ func TestWellFormedErrors(t *testing.T) {
 			tx: Transaction{
 				Type:   protocol.HeartbeatTx,
 				Header: okHeader,
-				HeartbeatTxnFields: HeartbeatTxnFields{
+				HeartbeatTxnFields: &HeartbeatTxnFields{
 					HbProof: crypto.HeartbeatProof{
 						Sig: [64]byte{0x01},
 					},
@@ -648,7 +648,7 @@ func TestWellFormedErrors(t *testing.T) {
 			tx: Transaction{
 				Type:   protocol.HeartbeatTx,
 				Header: okHeader,
-				HeartbeatTxnFields: HeartbeatTxnFields{
+				HeartbeatTxnFields: &HeartbeatTxnFields{
 					HbProof: crypto.HeartbeatProof{
 						Sig: [64]byte{0x01},
 					},
@@ -663,7 +663,7 @@ func TestWellFormedErrors(t *testing.T) {
 			tx: Transaction{
 				Type:   protocol.HeartbeatTx,
 				Header: okHeader,
-				HeartbeatTxnFields: HeartbeatTxnFields{
+				HeartbeatTxnFields: &HeartbeatTxnFields{
 					HbProof: crypto.HeartbeatProof{
 						Sig: [64]byte{0x01},
 					},
@@ -684,7 +684,7 @@ func TestWellFormedErrors(t *testing.T) {
 					FirstValid: 100,
 					Note:       []byte{0x01},
 				},
-				HeartbeatTxnFields: HeartbeatTxnFields{
+				HeartbeatTxnFields: &HeartbeatTxnFields{
 					HbProof: crypto.HeartbeatProof{
 						Sig: [64]byte{0x01},
 					},
@@ -706,7 +706,7 @@ func TestWellFormedErrors(t *testing.T) {
 					FirstValid: 100,
 					Lease:      [32]byte{0x01},
 				},
-				HeartbeatTxnFields: HeartbeatTxnFields{
+				HeartbeatTxnFields: &HeartbeatTxnFields{
 					HbProof: crypto.HeartbeatProof{
 						Sig: [64]byte{0x01},
 					},
@@ -727,7 +727,7 @@ func TestWellFormedErrors(t *testing.T) {
 					FirstValid: 100,
 					RekeyTo:    [32]byte{0x01},
 				},
-				HeartbeatTxnFields: HeartbeatTxnFields{
+				HeartbeatTxnFields: &HeartbeatTxnFields{
 					HbProof: crypto.HeartbeatProof{
 						Sig: [64]byte{0x01},
 					},

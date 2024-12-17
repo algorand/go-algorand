@@ -225,6 +225,17 @@ func (tx Txn) Txn() transactions.Transaction {
 	case nil:
 		tx.Fee = basics.MicroAlgos{}
 	}
+
+	hb := &transactions.HeartbeatTxnFields{
+		HbAddress:     tx.HbAddress,
+		HbProof:       tx.HbProof,
+		HbSeed:        tx.HbSeed,
+		HbVoteID:      tx.HbVoteID,
+		HbKeyDilution: tx.HbKeyDilution,
+	}
+	if hb.MsgIsZero() {
+		hb = nil
+	}
 	return transactions.Transaction{
 		Type: tx.Type,
 		Header: transactions.Header{
@@ -288,13 +299,7 @@ func (tx Txn) Txn() transactions.Transaction {
 			StateProof:     tx.StateProof,
 			Message:        tx.StateProofMsg,
 		},
-		HeartbeatTxnFields: transactions.HeartbeatTxnFields{
-			HbAddress:     tx.HbAddress,
-			HbProof:       tx.HbProof,
-			HbSeed:        tx.HbSeed,
-			HbVoteID:      tx.HbVoteID,
-			HbKeyDilution: tx.HbKeyDilution,
-		},
+		HeartbeatTxnFields: hb,
 	}
 }
 
