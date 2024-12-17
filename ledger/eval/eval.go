@@ -1726,7 +1726,7 @@ func (eval *BlockEvaluator) generateKnockOfflineAccountsList(participating []bas
 			continue // don't check accounts that are being closed
 		}
 
-		if _, ok := partAddrs[accountAddr]; ok {
+		if partAddrs.Contains(accountAddr) {
 			continue // don't check our own participation accounts
 		}
 
