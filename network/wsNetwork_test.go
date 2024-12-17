@@ -4639,3 +4639,40 @@ func TestWebsocketNetworkHTTPClient(t *testing.T) {
 	_, err = netB.GetHTTPClient("invalid")
 	require.Error(t, err)
 }
+
+// TestPeerComparisonInBroadcast tests that the peer comparison in the broadcast function works as expected
+// when casting wsPeer to Peer (interface{}) type.
+func TestPeerComparisonInBroadcast(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	log := logging.TestingLog(t)
+	conf := config.GetDefaultLocal()
+	wn := &WebsocketNetwork{
+		log:    log,
+		config: conf,
+		ctx:    context.Background(),
+	}
+	wn.setup()
+
+	testPeer := &wsPeer{
+		wsPeerCore:     makePeerCore(wn.ctx, wn, log, nil, "test-addr", nil, ""),
+		sendBufferBulk: make(chan sendMessages, sendBufferLength),
+	}
+	exceptPeer := &wsPeer{
+		wsPeerCore:     makePeerCore(wn.ctx, wn, log, nil, "except-addr", nil, ""),
+		sendBufferBulk: make(chan sendMessages, sendBufferLength),
+	}
+
+	request := broadcastRequest{
+		tags:        []protocol.Tag{"test-tag"},
+		data:        [][]byte{[]byte("test-data")},
+		enqueueTime: time.Now(),
+		except:      exceptPeer,
+	}
+
+	wn.broadcaster.innerBroadcast(request, false, []*wsPeer{testPeer, exceptPeer})
+
+	require.Equal(t, 1, len(testPeer.sendBufferBulk))
+	require.Equal(t, 0, len(exceptPeer.sendBufferBulk))
+}
