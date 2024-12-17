@@ -810,8 +810,6 @@ func TestTotalWeightChanges(t *testing.T) {
 	a := require.New(fixtures.SynchronizedTest(t))
 
 	consensusParams := getDefaultStateProofConsensusParams()
-	consensusParams.Payouts = config.ProposerPayoutRules{} // TODO re-enable payouts when nodes aren't suspended
-	consensusParams.Bonus = config.BonusPlan{}
 
 	consensusParams.StateProofWeightThreshold = (1 << 32) * 90 / 100
 	consensusParams.StateProofStrengthTarget = 4
