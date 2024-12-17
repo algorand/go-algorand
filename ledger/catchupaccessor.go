@@ -711,7 +711,7 @@ func (c *catchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 		durOnlineAccounts = time.Since(writeOnlineAccountsStart)
 	}()
 
-	// start the kv store writer
+	// start the rounds params writer
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
