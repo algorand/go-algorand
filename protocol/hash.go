@@ -52,6 +52,8 @@ const (
 	NetIdentityChallengeResponse     HashID = "NIR"
 	NetIdentityVerificationMessage   HashID = "NIV"
 	NetPrioResponse                  HashID = "NPR"
+	OnlineAccount                    HashID = "OA"
+	OnlineRoundParams                HashID = "ORP"
 	OneTimeSigKey1                   HashID = "OT1"
 	OneTimeSigKey2                   HashID = "OT2"
 	PaysetFlat                       HashID = "PF"

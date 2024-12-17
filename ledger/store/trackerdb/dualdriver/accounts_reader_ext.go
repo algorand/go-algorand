@@ -360,3 +360,39 @@ func (ar *accountsReaderExt) TotalResources(ctx context.Context) (total uint64, 
 	// return primary results
 	return totalP, nil
 }
+
+// TotalOnlineAccountRows implements trackerdb.AccountsReaderExt
+func (ar *accountsReaderExt) TotalOnlineAccountRows(ctx context.Context) (total uint64, err error) {
+	totalP, errP := ar.primary.TotalOnlineAccountRows(ctx)
+	totalS, errS := ar.secondary.TotalOnlineAccountRows(ctx)
+	// coalesce errors
+	err = coalesceErrors(errP, errS)
+	if err != nil {
+		return
+	}
+	// check results match
+	if totalP != totalS {
+		err = ErrInconsistentResult
+		return
+	}
+	// return primary results
+	return totalP, nil
+}
+
+// TotalOnlineRoundParams implements trackerdb.AccountsReaderExt
+func (ar *accountsReaderExt) TotalOnlineRoundParams(ctx context.Context) (total uint64, err error) {
+	totalP, errP := ar.primary.TotalOnlineRoundParams(ctx)
+	totalS, errS := ar.secondary.TotalOnlineRoundParams(ctx)
+	// coalesce errors
+	err = coalesceErrors(errP, errS)
+	if err != nil {
+		return
+	}
+	// check results match
+	if totalP != totalS {
+		err = ErrInconsistentResult
+		return
+	}
+	// return primary results
+	return totalP, nil
+}
