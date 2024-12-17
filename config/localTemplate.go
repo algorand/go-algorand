@@ -71,10 +71,10 @@ type Local struct {
 	// PeerPingPeriodSeconds is deprecated and unused.
 	PeerPingPeriodSeconds int `version[0]:"0"`
 
-	// TLSCertFile is the certificate file used for the websocket network if povided.
+	// TLSCertFile is the certificate file used for the websocket network if provided.
 	TLSCertFile string `version[0]:""`
 
-	// TLSKeyFile is the key file used for the websocket network if povided.
+	// TLSKeyFile is the key file used for the websocket network if provided.
 	TLSKeyFile string `version[0]:""`
 
 	// BaseLoggerDebugLevel specifies the logging level for algod (node.log). The levels range from 0 (critical error / silent) to 5 (debug / verbose). The default value is 4 (‘Info’ - fairly verbose).
@@ -448,7 +448,7 @@ type Local struct {
 	// LedgerSynchronousMode defines the synchronous mode used by the ledger database. The supported options are:
 	// 0 - SQLite continues without syncing as soon as it has handed data off to the operating system.
 	// 1 - SQLite database engine will still sync at the most critical moments, but less often than in FULL mode.
-	// 2 - SQLite database engine will use the xSync method of the VFS to ensure that all content is safely written to the disk surface prior to continuing. On Mac OS, the data is additionally syncronized via fullfsync.
+	// 2 - SQLite database engine will use the xSync method of the VFS to ensure that all content is safely written to the disk surface prior to continuing. On Mac OS, the data is additionally synchronized via fullfsync.
 	// 3 - In addition to what being done in 2, it provides additional durability if the commit is followed closely by a power loss.
 	// for further information see the description of SynchronousMode in dbutil.go
 	LedgerSynchronousMode int `version[12]:"2"`
@@ -471,8 +471,8 @@ type Local struct {
 	// NetworkMessageTraceServer is a host:port address to report graph propagation trace info to.
 	NetworkMessageTraceServer string `version[13]:""`
 
-	// VerifiedTranscationsCacheSize defines the number of transactions that the verified transactions cache would hold before cycling the cache storage in a round-robin fashion.
-	VerifiedTranscationsCacheSize int `version[14]:"30000" version[23]:"150000"`
+	// VerifiedTransactionsCacheSize defines the number of transactions that the verified transactions cache would hold before cycling the cache storage in a round-robin fashion.
+	VerifiedTransactionsCacheSize int `version[14]:"30000" version[23]:"150000"`
 
 	// DisableLocalhostConnectionRateLimit controls whether the incoming connection rate limit would apply for
 	// connections that are originating from the local machine. Setting this to "true", allow to create large
@@ -495,7 +495,7 @@ type Local struct {
 	// 0  : default behavior.
 	// 3  : speed up catchup by skipping necessary validations
 	// 12 : perform all validation methods (normal and additional). These extra tests helps to verify the integrity of the compiled executable against
-	//      previously used executabled, and would not provide any additional security guarantees.
+	//      previously used executables, and would not provide any additional security guarantees.
 	CatchupBlockValidateMode int `version[16]:"0"`
 
 	// EnableAccountUpdatesStats specifies whether or not to emit the AccountUpdates telemetry event.
