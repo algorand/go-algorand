@@ -1781,12 +1781,13 @@ func isAbsent(totalOnlineStake basics.MicroAlgos, acctStake basics.MicroAlgos, l
 	}
 	// See if the account has exceeded their expected observation interval.
 	allowableLag, o := basics.Muldiv(absentFactor, totalOnlineStake.Raw, acctStake.Raw)
-	if o {
-		// This can't happen with 10B total possible stake and a reasonable
-		// absentFactor, but if we imagine another algorand network with huge
-		// possible stake, this seems reasonable.
-		allowableLag = math.MaxInt64 / acctStake.Raw
+	// just return false for overflow or a huge allowableLag. It implies the lag
+	// is longer that any network could be around, and computing with wraparound
+	// is annoying.
+	if o || allowableLag > math.MaxUint32 {
+		return false
 	}
+
 	return lastSeen+basics.Round(allowableLag) < current
 }
 

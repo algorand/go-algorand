@@ -124,18 +124,6 @@ func (l *Ledger) NewAccount(addr basics.Address, balance uint64) {
 	l.balances[addr] = newBalanceRecord(addr, balance)
 }
 
-// NewVoting sets VoteID on the account. Could expand to set other voting data
-// if that became useful in tests.
-func (l *Ledger) NewVoting(addr basics.Address, voteID crypto.OneTimeSignatureVerifier) {
-	br, ok := l.balances[addr]
-	if !ok {
-		br = newBalanceRecord(addr, 0)
-	}
-	br.voting.VoteID = voteID
-	br.voting.VoteKeyDilution = 10_000
-	l.balances[addr] = br
-}
-
 // NewApp add a new AVM app to the Ledger.  In most uses, it only sets up the id
 // and schema but no code, as testing will want to try many different code
 // sequences.
@@ -350,6 +338,9 @@ func (l *Ledger) AgreementData(addr basics.Address) (basics.OnlineAccountData, e
 	// paid. Here, we ignore that for simple tests.
 	return basics.OnlineAccountData{
 		MicroAlgosWithRewards: ad.MicroAlgos,
+		// VotingData is not exposed to `voter_params_get`, the thinking is that
+		// we don't want them used as "free" storage. And thus far, we don't
+		// have compelling reasons to examine them in AVM.
 		VotingData: basics.VotingData{
 			VoteID:          ad.VoteID,
 			SelectionID:     ad.SelectionID,
@@ -961,7 +952,7 @@ func (l *Ledger) Perform(gi int, ep *EvalParams) error {
 }
 
 // Get returns the AccountData of an address. This test ledger does
-// not handle rewards, so the pening rewards flag is ignored.
+// not handle rewards, so withPendingRewards is ignored.
 func (l *Ledger) Get(addr basics.Address, withPendingRewards bool) (basics.AccountData, error) {
 	br, ok := l.balances[addr]
 	if !ok {
@@ -975,6 +966,15 @@ func (l *Ledger) Get(addr basics.Address, withPendingRewards bool) (basics.Accou
 		AppParams:      map[basics.AppIndex]basics.AppParams{},
 		LastProposed:   br.proposed,
 		LastHeartbeat:  br.heartbeat,
+		// The fields below are not exposed to `acct_params_get`, the thinking
+		// is that we don't want them used as "free" storage.  And thus far, we
+		// don't have compelling reasons to examine them in AVM.
+		VoteID:          br.voting.VoteID,
+		SelectionID:     br.voting.SelectionID,
+		StateProofID:    br.voting.StateProofID,
+		VoteFirstValid:  br.voting.VoteFirstValid,
+		VoteLastValid:   br.voting.VoteLastValid,
+		VoteKeyDilution: br.voting.VoteKeyDilution,
 	}, nil
 }
 
