@@ -925,7 +925,8 @@ func (aul *accountUpdatesLedgerEvaluator) LookupAgreement(rnd basics.Round, addr
 }
 
 func (aul *accountUpdatesLedgerEvaluator) GetKnockOfflineCandidates(basics.Round, config.ConsensusParams) (map[basics.Address]basics.OnlineAccountData, error) {
-	return nil, nil
+	// This method is only used when generating blocks, so we don't need to implement it here.
+	return nil, fmt.Errorf("accountUpdatesLedgerEvaluator: GetKnockOfflineCandidates is not implemented and should not be called during replay")
 }
 
 func (aul *accountUpdatesLedgerEvaluator) OnlineCirculation(rnd basics.Round, voteRnd basics.Round) (basics.MicroAlgos, error) {
