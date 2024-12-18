@@ -70,7 +70,7 @@ network at random.
 An account can be expected to propose once every `n = TotalOnlineStake/AccountOnlineStake` rounds.
 For example, a node with 2% of online stake ought to propose once every 50 rounds.  Of course the
 actual proposer is chosen by random sortition.  To make false positive suspensions unlikely, a node
-is considered absent if it fails to produce a block over the course of `10n` rounds.
+is considered absent if it fails to produce a block over the course of `20n` rounds.
 
 The suspension mechanism is implemented in `generateKnockOfflineAccountsList` in `eval/eval.go`.  It
 is closely modeled on the mechanism that knocks accounts offline if their voting keys have expired.
@@ -81,7 +81,7 @@ evaluating a block, accounts in `AbsentParticipationAccounts` are suspended by c
 ### Keyreg and `LastHeartbeat`
 
 As described so far, 320 rounds after a `keyreg` to go online, an account suddenly is expected to
-have proposed more recently than 10 times its new expected interval. That would be impossible, since
+have proposed more recently than 20 times its new expected interval. That would be impossible, since
 it was not online until that round.  Therefore, when a `keyreg` is used to go online and become
 `IncentiveEligible`, the account's `LastHeartbeat` field is set 320 rounds into the future. In
 effect, the account is treated as though it proposed in the first round it is online.
@@ -137,7 +137,7 @@ committed your latest round yet.
 It is relatively easy for a bad actor to emit Heartbeats for its accounts without actually
 participating. However, there is no financial incentive to do so.  Pretending to be operational when
 offline does not earn block payouts.  Furthermore, running a server to monitor the block chain to
-notice challenges and gather the recent blockseed is not significantly cheaper that simply running a
+notice challenges and gather the recent blockseed is not significantly cheaper than simply running a
 functional node. It is _already_ possible for malicious, well-resourced accounts to cause consensus
 difficulties by putting significant stake online without actually participating.  Heartbeats do not
 mitigate that risk. But these mechanisms have been designed to avoid _motivating_ such behavior, so
@@ -151,7 +151,7 @@ required. How should these transactions be paid for? Many accounts, especially h
 would not want to keep their spending keys available for automatic use by `algod`. Further, creating
 (and keeping funded) a low-value side account to pay for Heartbeats would be an annoying operational
 overhead.  Therefore, when required by challenges, heartbeat transactions do not require a fee.
-Therefore, any account, even an unfunded logigsig, can send heartbeats for an account under
+Therefore, any account, even an unfunded logicsig, can send heartbeats for an account under
 challenge.
 
 The conditions for a free Heartbeat are:

@@ -100,10 +100,13 @@ func createHeartbeatTxn(fv basics.Round, t *testing.T) transactions.SignedTxn {
 
 	kd := uint64(111)
 	lv := fv + 15
+	firstID := basics.OneTimeIDForRound(fv, kd)
+	lastID := basics.OneTimeIDForRound(lv, kd)
+	numBatches := lastID.Batch - firstID.Batch + 1
 	id := basics.OneTimeIDForRound(lv, kd)
 
 	seed := committee.Seed{0x33}
-	otss := crypto.GenerateOneTimeSignatureSecrets(0, kd)
+	otss := crypto.GenerateOneTimeSignatureSecrets(firstID.Batch, numBatches)
 
 	txn := transactions.Transaction{
 		Type: "hb",

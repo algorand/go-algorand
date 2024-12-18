@@ -658,7 +658,7 @@ func (cs *roundCowState) autoHeartbeat(before, after ledgercore.AccountData) led
 
 	// Adjust only if balance has doubled
 	twice, o := basics.OMul(before.MicroAlgos.Raw, 2)
-	if !o && twice < after.MicroAlgos.Raw {
+	if !o && after.MicroAlgos.Raw >= twice {
 		lookback := agreement.BalanceLookback(cs.ConsensusParams())
 		after.LastHeartbeat = cs.Round() + lookback
 	}
@@ -1863,7 +1863,7 @@ func (eval *BlockEvaluator) validateAbsentOnlineAccounts() error {
 	if err != nil {
 		logging.Base().Errorf("unable to fetch online stake, can't check knockoffs: %v", err)
 		// I suppose we can still return successfully if the absent list is empty.
-		if len(eval.block.ParticipationUpdates.AbsentParticipationAccounts) > 0 {
+		if suspensionCount > 0 {
 			return err
 		}
 	}

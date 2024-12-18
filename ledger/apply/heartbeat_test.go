@@ -17,7 +17,6 @@
 package apply
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -137,17 +136,19 @@ func TestCheapRules(t *testing.T) {
 	empty := [32]byte{}
 	// Grace period is 200. For the second half of the grace period (1101-1200),
 	// the heartbeat is free for online, incentive eligible, challenged accounts.
+	const grace = 200
+	const half = grace / 2
 	cases := []tcase{
 		// test of range
-		{1100, 0x01, basics.Online, true, nil, empty, empty, "no challenge"},
-		{1101, 0x01, basics.Online, true, nil, empty, empty, ""},
-		{1200, 0x01, basics.Online, true, nil, empty, empty, ""},
-		{1201, 0x01, basics.Online, true, nil, empty, empty, "no challenge"},
+		{1000 + half, 0x01, basics.Online, true, nil, empty, empty, "no challenge"},
+		{1000 + half + 1, 0x01, basics.Online, true, nil, empty, empty, ""},
+		{1000 + grace, 0x01, basics.Online, true, nil, empty, empty, ""},
+		{1000 + grace + 1, 0x01, basics.Online, true, nil, empty, empty, "no challenge"},
 
 		// test of the other requirements
-		{1101, 0xf1, basics.Online, true, nil, empty, empty, "not challenged by"},
-		{1101, 0x01, basics.Offline, true, nil, empty, empty, "not allowed for Offline"},
-		{1101, 0x01, basics.Online, false, nil, empty, empty, "not allowed when not IncentiveEligible"},
+		{1000 + half + 1, 0xf1, basics.Online, true, nil, empty, empty, "not challenged by"},
+		{1000 + half + 1, 0x01, basics.Offline, true, nil, empty, empty, "not allowed for Offline"},
+		{1000 + half + 1, 0x01, basics.Online, false, nil, empty, empty, "not allowed when not IncentiveEligible"},
 	}
 	for _, tc := range cases {
 		const keyDilution = 777
@@ -197,7 +198,6 @@ func TestCheapRules(t *testing.T) {
 		}
 
 		tx := txn.Txn()
-		fmt.Printf("tc %+v\n", tc)
 		err := Heartbeat(*tx.HeartbeatTxnFields, tx.Header, mockBal, mockHdr, tc.rnd)
 		if tc.err == "" {
 			assert.NoError(t, err)
