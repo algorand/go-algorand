@@ -17,6 +17,7 @@
 package apply
 
 import (
+	"bytes"
 	"math/bits"
 
 	"github.com/algorand/go-algorand/config"
@@ -97,12 +98,11 @@ func bitsMatch(a, b []byte, n int) bool {
 		return false
 	}
 
-	// Compare entire bytes when n is bigger than 8
-	for i := 0; i < n/8; i++ {
-		if a[i] != b[i] {
-			return false
-		}
+	// Compare entire bytes when we care about enough bits
+	if !bytes.Equal(a[:n/8], b[:n/8]) {
+		return false
 	}
+
 	remaining := n % 8
 	if remaining == 0 {
 		return true
