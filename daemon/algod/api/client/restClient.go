@@ -294,9 +294,11 @@ func (client RestClient) WaitForBlockAfter(round basics.Round) (response model.N
 	return
 }
 
-// WaitForRound returns the node status after waiting for the given round.
+// WaitForRound returns the node status after waiting for the given round. It
+// waits no more than waitTime in TOTAL, and returns an error if the round has
+// not been reached.
 func (client RestClient) WaitForRound(round uint64, waitTime time.Duration) (status model.NodeStatusResponse, err error) {
-	timeout := time.NewTimer(waitTime)
+	timeout := time.After(waitTime)
 	for {
 		status, err = client.Status()
 		if err != nil {
@@ -307,7 +309,7 @@ func (client RestClient) WaitForRound(round uint64, waitTime time.Duration) (sta
 			return
 		}
 		select {
-		case <-timeout.C:
+		case <-timeout:
 			return model.NodeStatusResponse{}, fmt.Errorf("timeout waiting for round %v with last round = %v", round, status.LastRound)
 		case <-time.After(200 * time.Millisecond):
 		}
@@ -318,41 +320,19 @@ const singleRoundMaxTime = globals.MaxTimePerRound * 40
 
 // WaitForRoundWithTimeout waits for a given round to be reached. As it
 // waits, it returns early with an error if the wait time for any round exceeds
-// globals.MaxTimePerRound so we can alert when we're getting "hung" waiting.
+// singleRoundMaxTime so we can alert when we're getting "hung" waiting.
 func (client RestClient) WaitForRoundWithTimeout(roundToWaitFor uint64) error {
 	status, err := client.Status()
 	if err != nil {
 		return err
 	}
-	lastRound := status.LastRound
 
-	// If node is already at or past target round, we're done
-	if lastRound >= roundToWaitFor {
-		return nil
-	}
-
-	roundComplete := make(chan error, 2)
-
-	for nextRound := lastRound + 1; lastRound < roundToWaitFor; nextRound++ {
-		roundStarted := time.Now()
-
-		go func(done chan error) {
-			stat, err := client.WaitForRound(nextRound, singleRoundMaxTime)
-			lastRound = stat.LastRound
-			done <- err
-		}(roundComplete)
-
-		select {
-		case lastError := <-roundComplete:
-			if lastError != nil {
-				close(roundComplete)
-				return lastError
-			}
-		case <-time.After(singleRoundMaxTime):
-			// we've timed out.
-			time := time.Since(roundStarted)
-			return fmt.Errorf("fixture.WaitForRound took %3.2f seconds between round %d and %d", time.Seconds(), lastRound, nextRound)
+	for lastRound := status.LastRound; lastRound < roundToWaitFor; {
+		stat, err := client.WaitForRound(lastRound+1, singleRoundMaxTime)
+		if err != nil {
+			return fmt.Errorf("client.WaitForRound took too long between round %d and %d", lastRound, lastRound+1)
 		}
+		lastRound = stat.LastRound
 	}
 	return nil
 }
