@@ -1059,18 +1059,18 @@ assert
 	require.Equal(t, vb.Block().Round(), basics.Round(322))
 
 	for vb.Block().Round() <= 1500 {
-		// the online_stake opcode in block 323 will look up OnlineCirculation(2, 322).
-		xRnd := vb.Block().Round()
-		stake, err := dl.generator.OnlineCirculation(xRnd.SubSaturate(320), xRnd)
+		expectedStake++ // add 1 microalgo to the expected stake for the next block
+
+		// the online_stake opcode in block 323 will look up OnlineCirculation(3, 323).
+		nextRnd := vb.Block().Round() + 1
+		stake, err := dl.generator.OnlineCirculation(nextRnd.SubSaturate(320), nextRnd)
 		require.NoError(t, err)
 		require.Equal(t, expectedStake, stake.Raw)
 
-		// build a new block for xRnd+1, asserting online stake for xRnd-320
+		// build a new block for nextRnd, asserting online stake for nextRnd-320
 		vb = dl.fullBlock(callStakeApp(expectedStake)...)
 		require.Empty(t, vb.Block().ExpiredParticipationAccounts)
 		require.Empty(t, vb.Block().AbsentParticipationAccounts)
-
-		expectedStake++ // add 1 microalgo to the expected stake for the next block
 	}
 
 	// wait for tracker to flush
