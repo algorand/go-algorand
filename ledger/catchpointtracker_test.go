@@ -1961,7 +1961,7 @@ func TestCatchpointFastUpdates(t *testing.T) {
 	wg.Wait()
 	ml.trackers.waitAccountsWriting()
 
-	if ml.trackers.getDbRound() <= basics.Round(proto.CatchpointLookback) {
+	for ml.trackers.getDbRound() <= basics.Round(proto.CatchpointLookback) {
 		// db round stuck <= 320? likely committedUpTo dropped some commit tasks, due to deferredCommits channel full
 		// so give it another try
 		ml.trackers.committedUpTo(lastRound)
