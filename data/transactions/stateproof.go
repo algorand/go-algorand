@@ -33,14 +33,6 @@ type StateProofTxnFields struct {
 	Message        stateproofmsg.Message   `codec:"spmsg"`
 }
 
-// Empty returns whether the StateProofTxnFields are all zero,
-// in the sense of being omitted in a msgpack encoding.
-func (sp StateProofTxnFields) Empty() bool {
-	return sp.StateProofType == protocol.StateProofBasic &&
-		sp.StateProof.MsgIsZero() &&
-		sp.Message.MsgIsZero()
-}
-
 // specialAddr is used to form a unique address that will send out state proofs.
 //
 //msgp:ignore specialAddr

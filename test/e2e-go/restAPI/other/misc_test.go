@@ -62,7 +62,7 @@ func TestDisabledAPIConfig(t *testing.T) {
 	a.NoError(err)
 	testClient := client.MakeRestClient(url, "") // empty token
 
-	_, err = testClient.WaitForBlock(1)
+	err = testClient.WaitForRoundWithTimeout(1)
 	assert.NoError(t, err)
 	_, err = testClient.Block(1)
 	assert.NoError(t, err)

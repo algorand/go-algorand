@@ -237,12 +237,17 @@ func (t *TypeNode) buildStructChildren(path TypePath) TypePath {
 
 		if typeField.Anonymous {
 			// embedded struct case
-			actualKind := typeField.Type.Kind()
+			fieldType := typeField.Type
+			if fieldType.Kind() == reflect.Ptr {
+				// get underlying type for embedded pointer to struct
+				fieldType = fieldType.Elem()
+			}
+			actualKind := fieldType.Kind()
 			if actualKind != reflect.Struct {
 				panic(fmt.Sprintf("expected [%s] but got unexpected embedded type: %s", reflect.Struct, typeField.Type))
 			}
 
-			embedded := TypeNode{t.Depth, typeField.Type, reflect.Struct, nil, nil}
+			embedded := TypeNode{t.Depth, fieldType, reflect.Struct, nil, nil}
 			embeddedCyclePath := embedded.build(path)
 			if len(embeddedCyclePath) > 0 {
 				cyclePath = embeddedCyclePath

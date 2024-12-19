@@ -22,6 +22,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
@@ -29,6 +30,7 @@ import (
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/data/stateproofmsg"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -591,10 +593,156 @@ func TestWellFormedErrors(t *testing.T) {
 			proto:         protoV36,
 			expectedError: nil,
 		},
+		{
+			tx: Transaction{
+				Type:   protocol.HeartbeatTx,
+				Header: okHeader,
+			},
+			proto:         protoV36,
+			expectedError: fmt.Errorf("heartbeat transaction not supported"),
+		},
+		{
+			tx: Transaction{
+				Type:   protocol.HeartbeatTx,
+				Header: okHeader,
+				HeartbeatTxnFields: &HeartbeatTxnFields{
+					HbSeed:        committee.Seed{0x02},
+					HbVoteID:      crypto.OneTimeSignatureVerifier{0x03},
+					HbKeyDilution: 10,
+				},
+			},
+			proto:         futureProto,
+			expectedError: fmt.Errorf("tx.HbProof is empty"),
+		},
+		{
+			tx: Transaction{
+				Type:   protocol.HeartbeatTx,
+				Header: okHeader,
+				HeartbeatTxnFields: &HeartbeatTxnFields{
+					HbProof: crypto.HeartbeatProof{
+						Sig: [64]byte{0x01},
+					},
+					HbVoteID:      crypto.OneTimeSignatureVerifier{0x03},
+					HbKeyDilution: 10,
+				},
+			},
+			proto:         futureProto,
+			expectedError: fmt.Errorf("tx.HbSeed is empty"),
+		},
+		{
+			tx: Transaction{
+				Type:   protocol.HeartbeatTx,
+				Header: okHeader,
+				HeartbeatTxnFields: &HeartbeatTxnFields{
+					HbProof: crypto.HeartbeatProof{
+						Sig: [64]byte{0x01},
+					},
+					HbSeed:        committee.Seed{0x02},
+					HbKeyDilution: 10,
+				},
+			},
+			proto:         futureProto,
+			expectedError: fmt.Errorf("tx.HbVoteID is empty"),
+		},
+		{
+			tx: Transaction{
+				Type:   protocol.HeartbeatTx,
+				Header: okHeader,
+				HeartbeatTxnFields: &HeartbeatTxnFields{
+					HbProof: crypto.HeartbeatProof{
+						Sig: [64]byte{0x01},
+					},
+					HbSeed:   committee.Seed{0x02},
+					HbVoteID: crypto.OneTimeSignatureVerifier{0x03},
+				},
+			},
+			proto:         futureProto,
+			expectedError: fmt.Errorf("tx.HbKeyDilution is zero"),
+		},
+		{
+			tx: Transaction{
+				Type:   protocol.HeartbeatTx,
+				Header: okHeader,
+				HeartbeatTxnFields: &HeartbeatTxnFields{
+					HbProof: crypto.HeartbeatProof{
+						Sig: [64]byte{0x01},
+					},
+					HbSeed:        committee.Seed{0x02},
+					HbVoteID:      crypto.OneTimeSignatureVerifier{0x03},
+					HbKeyDilution: 10,
+				},
+			},
+			proto: futureProto,
+		},
+		{
+			tx: Transaction{
+				Type: protocol.HeartbeatTx,
+				Header: Header{
+					Sender:     addr1,
+					Fee:        basics.MicroAlgos{Raw: 100},
+					LastValid:  105,
+					FirstValid: 100,
+					Note:       []byte{0x01},
+				},
+				HeartbeatTxnFields: &HeartbeatTxnFields{
+					HbProof: crypto.HeartbeatProof{
+						Sig: [64]byte{0x01},
+					},
+					HbSeed:        committee.Seed{0x02},
+					HbVoteID:      crypto.OneTimeSignatureVerifier{0x03},
+					HbKeyDilution: 10,
+				},
+			},
+			proto:         futureProto,
+			expectedError: fmt.Errorf("tx.Note is set in cheap heartbeat"),
+		},
+		{
+			tx: Transaction{
+				Type: protocol.HeartbeatTx,
+				Header: Header{
+					Sender:     addr1,
+					Fee:        basics.MicroAlgos{Raw: 100},
+					LastValid:  105,
+					FirstValid: 100,
+					Lease:      [32]byte{0x01},
+				},
+				HeartbeatTxnFields: &HeartbeatTxnFields{
+					HbProof: crypto.HeartbeatProof{
+						Sig: [64]byte{0x01},
+					},
+					HbSeed:        committee.Seed{0x02},
+					HbVoteID:      crypto.OneTimeSignatureVerifier{0x03},
+					HbKeyDilution: 10,
+				},
+			},
+			proto:         futureProto,
+			expectedError: fmt.Errorf("tx.Lease is set in cheap heartbeat"),
+		},
+		{
+			tx: Transaction{
+				Type: protocol.HeartbeatTx,
+				Header: Header{
+					Sender:     addr1,
+					LastValid:  105,
+					FirstValid: 100,
+					RekeyTo:    [32]byte{0x01},
+				},
+				HeartbeatTxnFields: &HeartbeatTxnFields{
+					HbProof: crypto.HeartbeatProof{
+						Sig: [64]byte{0x01},
+					},
+					HbSeed:        committee.Seed{0x02},
+					HbVoteID:      crypto.OneTimeSignatureVerifier{0x03},
+					HbKeyDilution: 10,
+				},
+			},
+			proto:         futureProto,
+			expectedError: fmt.Errorf("tx.RekeyTo is set in free heartbeat"),
+		},
 	}
 	for _, usecase := range usecases {
 		err := usecase.tx.WellFormed(SpecialAddresses{}, usecase.proto)
-		require.Equal(t, usecase.expectedError, err)
+		assert.Equal(t, usecase.expectedError, err)
 	}
 }
 

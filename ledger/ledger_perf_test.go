@@ -33,6 +33,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	basics_testing "github.com/algorand/go-algorand/data/basics/testing"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/verify"
@@ -296,21 +297,23 @@ func benchmarkFullBlocks(params testParams, b *testing.B) {
 		lvb, err := eval.GenerateBlock(nil)
 		require.NoError(b, err)
 
+		fb := lvb.FinishBlock(committee.Seed{0x01}, basics.Address{0x01}, false)
+
 		// If this is the app creation block, add to both ledgers
 		if i == 1 {
-			err = l0.AddBlock(lvb.UnfinishedBlock(), cert)
+			err = l0.AddBlock(fb, cert)
 			require.NoError(b, err)
-			err = l1.AddBlock(lvb.UnfinishedBlock(), cert)
+			err = l1.AddBlock(fb, cert)
 			require.NoError(b, err)
 			continue
 		}
 
 		// For all other blocks, add just to the first ledger, and stash
 		// away to be replayed in the second ledger while running timer
-		err = l0.AddBlock(lvb.UnfinishedBlock(), cert)
+		err = l0.AddBlock(fb, cert)
 		require.NoError(b, err)
 
-		blocks = append(blocks, lvb.UnfinishedBlock())
+		blocks = append(blocks, fb)
 	}
 
 	b.Logf("built %d blocks, each with %d txns", numBlocks, txPerBlock)

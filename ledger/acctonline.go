@@ -612,11 +612,6 @@ func (ao *onlineAccounts) onlineTotals(rnd basics.Round) (basics.MicroAlgos, pro
 	return basics.MicroAlgos{Raw: onlineRoundParams.OnlineSupply}, onlineRoundParams.CurrentProtocol, nil
 }
 
-// LookupOnlineAccountData returns the online account data for a given address at a given round.
-func (ao *onlineAccounts) LookupOnlineAccountData(rnd basics.Round, addr basics.Address) (data basics.OnlineAccountData, err error) {
-	return ao.lookupOnlineAccountData(rnd, addr)
-}
-
 // roundOffset calculates the offset of the given round compared to the current dbRound. Requires that the lock would be taken.
 func (ao *onlineAccounts) roundOffset(rnd basics.Round) (offset uint64, err error) {
 	if rnd < ao.cachedDBRoundOnline {

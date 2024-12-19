@@ -810,6 +810,7 @@ func TestTotalWeightChanges(t *testing.T) {
 	a := require.New(fixtures.SynchronizedTest(t))
 
 	consensusParams := getDefaultStateProofConsensusParams()
+
 	consensusParams.StateProofWeightThreshold = (1 << 32) * 90 / 100
 	consensusParams.StateProofStrengthTarget = 4
 	consensusParams.StateProofTopVoters = 4

@@ -103,7 +103,7 @@ func spinNetwork(t *testing.T, nodesCount int, cfg config.Local) ([]*networkImpl
 			break
 		}
 	}
-	log.Infof("network established, %d nodes connected in %s", nodesCount, time.Now().Sub(start).String())
+	log.Infof("network established, %d nodes connected in %s", nodesCount, time.Since(start).String())
 	return networkImpls, msgCounters
 }
 

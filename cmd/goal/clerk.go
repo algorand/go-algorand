@@ -221,8 +221,7 @@ func waitForCommit(client libgoal.Client, txid string, transactionLastValidRound
 		}
 
 		reportInfof(infoTxPending, txid, stat.LastRound)
-		// WaitForRound waits until round "stat.LastRound+1" is committed
-		stat, err = client.WaitForRound(stat.LastRound)
+		stat, err = client.WaitForRound(stat.LastRound + 1)
 		if err != nil {
 			return model.PendingTransactionResponse{}, fmt.Errorf(errorRequestFail, err)
 		}

@@ -189,6 +189,15 @@ func TestOnlineAccountsCacheMaxEntries(t *testing.T) {
 	require.Equal(t, 2, oac.accounts[addr].Len())
 }
 
+// TestOnlineAccountsCacheSizeBiggerThanStateProofTopVoters asserts that the online accounts cache
+// is bigger than the number of top online accounts tracked by the state proof system.
+func TestOnlineAccountsCacheSizeBiggerThanStateProofTopVoters(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	require.Greater(t, uint64(onlineAccountsCacheMaxSize), config.Consensus[protocol.ConsensusFuture].StateProofTopVoters)
+}
+
 var benchmarkOnlineAccountsCacheReadResult cachedOnlineAccount
 
 func benchmarkOnlineAccountsCacheRead(b *testing.B, historyLength int) {
