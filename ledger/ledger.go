@@ -679,7 +679,7 @@ func (l *Ledger) GetKnockOfflineCandidates(rnd basics.Round, proto config.Consen
 	ret := make(map[basics.Address]basics.OnlineAccountData)
 	for _, addr := range addrs {
 		data, err := l.acctsOnline.lookupOnlineAccountData(rnd, addr)
-		if err != nil {
+		if err != nil || data.MicroAlgosWithRewards.IsZero() {
 			continue // skip missing / not online accounts
 		}
 		ret[addr] = data

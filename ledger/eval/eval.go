@@ -1690,7 +1690,7 @@ func (eval *BlockEvaluator) generateKnockOfflineAccountsList(participating []bas
 			candidates[accountAddr] = candidateData{
 				VoteLastValid:         acctData.VoteLastValid,
 				VoteID:                acctData.VoteID,
-				Status:                basics.Online, // from lookupOnlineAccountData, which only returns online accounts
+				Status:                basics.Online, // GetKnockOfflineCandidates only returns online accounts
 				LastProposed:          acctData.LastProposed,
 				LastHeartbeat:         acctData.LastHeartbeat,
 				MicroAlgosWithRewards: acctData.MicroAlgosWithRewards,
