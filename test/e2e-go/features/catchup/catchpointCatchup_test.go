@@ -294,7 +294,7 @@ func TestCatchpointCatchupFailure(t *testing.T) {
 		t.Skip()
 	}
 
-	consensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	consensusParams := config.Consensus[protocol.ConsensusFuture]
 	applyCatchpointConsensusChanges(&consensusParams)
 	a := require.New(fixtures.SynchronizedTest(t))
 
@@ -339,7 +339,7 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 		t.Skip()
 	}
 
-	consensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	consensusParams := config.Consensus[protocol.ConsensusFuture]
 	applyCatchpointConsensusChanges(&consensusParams)
 	a := require.New(fixtures.SynchronizedTest(t))
 
@@ -397,7 +397,7 @@ func TestCatchpointLabelGeneration(t *testing.T) {
 
 			consensus := make(config.ConsensusProtocols)
 			const consensusCatchpointCatchupTestProtocol = protocol.ConsensusVersion("catchpointtestingprotocol")
-			catchpointCatchupProtocol := config.Consensus[protocol.ConsensusCurrentVersion]
+			catchpointCatchupProtocol := config.Consensus[protocol.ConsensusFuture]
 			applyCatchpointConsensusChanges(&catchpointCatchupProtocol)
 			consensus[consensusCatchpointCatchupTestProtocol] = catchpointCatchupProtocol
 
@@ -474,7 +474,7 @@ func TestNodeTxHandlerRestart(t *testing.T) {
 	a := require.New(fixtures.SynchronizedTest(t))
 
 	consensus := make(config.ConsensusProtocols)
-	protoVersion := protocol.ConsensusCurrentVersion
+	protoVersion := protocol.ConsensusFuture
 	catchpointCatchupProtocol := config.Consensus[protoVersion]
 	applyCatchpointConsensusChanges(&catchpointCatchupProtocol)
 	catchpointCatchupProtocol.StateProofInterval = 0
@@ -581,7 +581,7 @@ func TestReadyEndpoint(t *testing.T) {
 	a := require.New(fixtures.SynchronizedTest(t))
 
 	consensus := make(config.ConsensusProtocols)
-	protoVersion := protocol.ConsensusCurrentVersion
+	protoVersion := protocol.ConsensusFuture
 	catchpointCatchupProtocol := config.Consensus[protoVersion]
 	applyCatchpointConsensusChanges(&catchpointCatchupProtocol)
 	catchpointCatchupProtocol.StateProofInterval = 0
@@ -720,7 +720,7 @@ func TestNodeTxSyncRestart(t *testing.T) {
 	a := require.New(fixtures.SynchronizedTest(t))
 
 	consensus := make(config.ConsensusProtocols)
-	protoVersion := protocol.ConsensusCurrentVersion
+	protoVersion := protocol.ConsensusFuture
 	catchpointCatchupProtocol := config.Consensus[protoVersion]
 	prevMaxTxnLife := catchpointCatchupProtocol.MaxTxnLife
 	applyCatchpointConsensusChanges(&catchpointCatchupProtocol)

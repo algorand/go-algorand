@@ -45,8 +45,8 @@ type catchpointAccountResourceCounter struct {
 	totalAssets         uint64
 }
 
-// MakeEncodedAccoutsBatchIter creates an empty accounts batch iterator.
-func MakeEncodedAccoutsBatchIter(q db.Queryable) *encodedAccountsBatchIter {
+// MakeEncodedAccountsBatchIter creates an empty accounts batch iterator.
+func MakeEncodedAccountsBatchIter(q db.Queryable) *encodedAccountsBatchIter {
 	return &encodedAccountsBatchIter{q: q}
 }
 
