@@ -1486,7 +1486,7 @@ func (fs voterParamsFieldSpec) Note() string {
 }
 
 var voterParamsFieldSpecs = [...]voterParamsFieldSpec{
-	{VoterBalance, StackUint64, 6, "Online stake in microalgos"},
+	{VoterBalance, StackUint64, incentiveVersion, "Online stake in microalgos"},
 	{VoterIncentiveEligible, StackBoolean, incentiveVersion, "Had this account opted into block payouts"},
 }
 
