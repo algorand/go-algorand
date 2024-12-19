@@ -327,12 +327,11 @@ func (client RestClient) WaitForRoundWithTimeout(roundToWaitFor uint64) error {
 		return err
 	}
 
-	for lastRound := status.LastRound; lastRound < roundToWaitFor; {
-		stat, err := client.WaitForRound(lastRound+1, singleRoundMaxTime)
+	for lastRound := status.LastRound; lastRound < roundToWaitFor; lastRound = status.LastRound {
+		status, err = client.WaitForRound(lastRound+1, singleRoundMaxTime)
 		if err != nil {
 			return fmt.Errorf("client.WaitForRound took too long between round %d and %d", lastRound, lastRound+1)
 		}
-		lastRound = stat.LastRound
 	}
 	return nil
 }

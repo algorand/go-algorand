@@ -146,6 +146,29 @@ func (l *mockedLedger) LookupAccount(round basics.Round, addr basics.Address) (l
 	return ledgercore.AccountData{}, round, basics.MicroAlgos{}, nil
 }
 
+func (l *mockedLedger) LookupAgreement(round basics.Round, addr basics.Address) (basics.OnlineAccountData, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	if round > l.lastRound() {
+		panic("mockedLedger.LookupAgreement: future round")
+	}
+
+	for r := round; r <= round; r-- {
+		if acct, ok := l.history[r][addr]; ok {
+			oad := basics.OnlineAccountData{
+				MicroAlgosWithRewards: acct.MicroAlgos,
+				VotingData:            acct.VotingData,
+				IncentiveEligible:     acct.IncentiveEligible,
+				LastProposed:          acct.LastProposed,
+				LastHeartbeat:         acct.LastHeartbeat,
+			}
+			return oad, nil
+		}
+	}
+	return basics.OnlineAccountData{}, nil
+}
+
 // waitFor confirms that the Service made it through the last block in the
 // ledger and is waiting for the next. The Service is written such that it
 // operates properly without this sort of wait, but for testing, we often want

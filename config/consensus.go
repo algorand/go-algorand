@@ -606,7 +606,7 @@ type ProposerPayoutRules struct {
 //
 //	BaseAmount: 0, DecayInterval: XXX
 //
-// by using a zero baseAmount, the amount not affected.
+// by using a zero baseAmount, the amount is not affected.
 // For a bigger change, we'd use a plan like:
 //
 //	BaseRound:  <FUTURE round>, BaseAmount: <new amount>, DecayInterval: <new>
