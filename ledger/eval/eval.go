@@ -237,10 +237,6 @@ func (x *roundCowBase) lookupAgreement(addr basics.Address) (basics.OnlineAccoun
 	return ad, err
 }
 
-func (x *roundCowBase) knockOfflineCandidates() (map[basics.Address]basics.OnlineAccountData, error) {
-	return x.l.GetKnockOfflineCandidates(x.rnd, x.proto)
-}
-
 // onlineStake returns the total online stake as of the start of the round. It
 // caches the result to prevent repeated calls to the ledger.
 func (x *roundCowBase) onlineStake() (basics.MicroAlgos, error) {
@@ -1680,7 +1676,7 @@ func (eval *BlockEvaluator) generateKnockOfflineAccountsList(participating []bas
 	// First, ask the ledger for the top N online accounts, with their latest
 	// online account data, current up to the previous round.
 	if maxSuspensions > 0 {
-		knockOfflineCandidates, err := eval.state.knockOfflineCandidates()
+		knockOfflineCandidates, err := eval.l.GetKnockOfflineCandidates(eval.prevHeader.Round, eval.proto)
 		if err != nil {
 			// Log an error and keep going; generating lists of absent and expired
 			// accounts is not required by block validation rules.
@@ -1708,7 +1704,7 @@ func (eval *BlockEvaluator) generateKnockOfflineAccountsList(participating []bas
 		if !found {
 			continue
 		}
-		// This will overwrite data from the knockOfflineCandidates() list, if they were modified in the current block.
+		// This will overwrite data from the knockOfflineCandidates list, if they were modified in the current block.
 		candidates[accountAddr] = candidateData{
 			VoteLastValid:         acctData.VoteLastValid,
 			VoteID:                acctData.VoteID,
