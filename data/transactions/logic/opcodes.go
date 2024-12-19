@@ -28,7 +28,7 @@ import (
 )
 
 // LogicVersion defines default assembler and max eval versions
-const LogicVersion = 11
+const LogicVersion = 12
 
 // rekeyingEnabledVersion is the version of TEAL where RekeyTo functionality
 // was enabled. This is important to remember so that old TEAL accounts cannot
@@ -75,13 +75,13 @@ const sharedResourcesVersion = 9 // apps can access resources from other transac
 const pairingVersion = 10 // bn256 opcodes. will add bls12-381, and unify the available opcodes.
 const spliceVersion = 10  // box splicing/resizing
 
+const incentiveVersion = 11 // block fields, heartbeat
+const mimcVersion = 11
+
 // EXPERIMENTAL. These should be revisited whenever a new LogicSigVersion is
 // moved from vFuture to a new consensus version. If they remain unready, bump
 // their version, and fixup TestAssemble() in assembler_test.go.
-const incentiveVersion = 11 // block fields, heartbeat
-
-const spOpcodesVersion = 11 // falcon_verify, sumhash512
-const mimcVersion = 11
+const spOpcodesVersion = 12 // falcon_verify, sumhash512
 
 // Unlimited Global Storage opcodes
 const boxVersion = 8 // box_*
