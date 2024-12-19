@@ -207,14 +207,16 @@ func (x *roundCowBase) lookup(addr basics.Address) (ledgercore.AccountData, erro
 }
 
 // balanceRound reproduces the way that the agreement package finds the round to
-// consider for online accounts.
+// consider for online accounts. It returns the round that would be considered
+// while voting on the current round (which is x.rnd+1).
 func (x *roundCowBase) balanceRound() (basics.Round, error) {
-	phdr, err := x.BlockHdr(agreement.ParamsRound(x.rnd))
+	current := x.rnd + 1
+	phdr, err := x.BlockHdr(agreement.ParamsRound(current))
 	if err != nil {
 		return 0, err
 	}
 	agreementParams := config.Consensus[phdr.CurrentProtocol]
-	return agreement.BalanceRound(x.rnd, agreementParams), nil
+	return agreement.BalanceRound(current, agreementParams), nil
 }
 
 // lookupAgreement returns the online accountdata for the provided account address. It uses an internal cache
@@ -248,7 +250,7 @@ func (x *roundCowBase) onlineStake() (basics.MicroAlgos, error) {
 	if err != nil {
 		return basics.MicroAlgos{}, err
 	}
-	total, err := x.l.OnlineCirculation(brnd, x.rnd)
+	total, err := x.l.OnlineCirculation(brnd, x.rnd+1) // x.rnd+1 is round being built
 	if err != nil {
 		return basics.MicroAlgos{}, err
 	}
