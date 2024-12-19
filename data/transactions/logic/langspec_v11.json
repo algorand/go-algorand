@@ -3073,42 +3073,6 @@
       ]
     },
     {
-      "Opcode": 133,
-      "Name": "falcon_verify",
-      "Args": [
-        "[]byte",
-        "[1232]byte",
-        "[1793]byte"
-      ],
-      "Returns": [
-        "bool"
-      ],
-      "Size": 1,
-      "DocCost": "1700",
-      "Doc": "for (data A, compressed-format signature B, pubkey C) verify the signature of data against the pubkey",
-      "IntroducedVersion": 11,
-      "Groups": [
-        "Cryptography"
-      ]
-    },
-    {
-      "Opcode": 134,
-      "Name": "sumhash512",
-      "Args": [
-        "[]byte"
-      ],
-      "Returns": [
-        "[64]byte"
-      ],
-      "Size": 1,
-      "DocCost": "150 + 7 per 4 bytes of A",
-      "Doc": "sumhash512 of value A, yields [64]byte",
-      "IntroducedVersion": 11,
-      "Groups": [
-        "Cryptography"
-      ]
-    },
-    {
       "Opcode": 136,
       "Name": "callsub",
       "Size": 3,

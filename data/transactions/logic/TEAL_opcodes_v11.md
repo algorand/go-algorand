@@ -1177,22 +1177,6 @@ pushints args are not added to the intcblock during assembly processes
 - **Cost**: 1900
 - Availability: v7
 
-## falcon_verify
-
-- Bytecode: 0x85
-- Stack: ..., A: []byte, B: [1232]byte, C: [1793]byte &rarr; ..., bool
-- for (data A, compressed-format signature B, pubkey C) verify the signature of data against the pubkey
-- **Cost**: 1700
-- Availability: v11
-
-## sumhash512
-
-- Bytecode: 0x86
-- Stack: ..., A: []byte &rarr; ..., [64]byte
-- sumhash512 of value A, yields [64]byte
-- **Cost**: 150 + 7 per 4 bytes of A
-- Availability: v11
-
 ## callsub
 
 - Syntax: `callsub TARGET` where TARGET: branch offset

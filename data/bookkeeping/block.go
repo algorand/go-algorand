@@ -68,8 +68,9 @@ type (
 		// block. Populated if proto.Payouts.Enabled
 		FeesCollected basics.MicroAlgos `codec:"fc"`
 
-		// Bonus is the bonus incentive to be paid for proposing this block.  It
-		// begins as a consensus parameter value, and decays periodically.
+		// Bonus is the bonus incentive that may be paid for proposing this
+		// block.  It begins as a consensus parameter value, and decays
+		// according to consensus parameter rules.
 		Bonus basics.MicroAlgos `codec:"bi"`
 
 		// ProposerPayout is the amount that is moved from the FeeSink to

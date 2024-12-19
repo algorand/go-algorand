@@ -76,7 +76,7 @@ func TestSumhash(t *testing.T) {
 	}
 
 	for _, v := range testVectors {
-		testAccepts(t, fmt.Sprintf(`byte "%s"; sumhash512; byte 0x%s; ==`, v.in, v.out), 11)
+		testAccepts(t, fmt.Sprintf(`byte "%s"; sumhash512; byte 0x%s; ==`, v.in, v.out), 12)
 	}
 }
 
