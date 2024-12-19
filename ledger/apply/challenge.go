@@ -84,7 +84,10 @@ func (ch challenge) IsZero() bool {
 }
 
 // Failed returns true iff ch is in effect, matches address, and lastSeen is
-// before the challenge issue.
+// before the challenge issue.  When an address "Fails" in this way, the
+// _meaning_ depends on how the challenged was obtained. If it was "risky" then
+// it means the address is at risk, not that it should be suspended.  It it's an
+// "active" challenge, then the account should be suspended.
 func (ch challenge) Failed(address basics.Address, lastSeen basics.Round) bool {
 	return ch.round != 0 && bitsMatch(ch.seed[:], address[:], ch.bits) && lastSeen < ch.round
 }
