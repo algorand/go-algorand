@@ -1229,7 +1229,6 @@ func (node *AlgorandFullNode) SetCatchpointCatchupMode(catchpointCatchupMode boo
 			node.net.ClearValidatorHandlers()
 			node.heartbeatService.Stop()
 			node.stateProofWorker.Stop()
-			node.heartbeatService.Stop()
 			node.txHandler.Stop()
 			node.agreementService.Shutdown()
 			node.catchupService.Stop()
