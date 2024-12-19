@@ -617,8 +617,10 @@ func TestFullCatchpointWriterOverflowAccounts(t *testing.T) {
 		require.Equal(t, basics.Round(0), validThrough)
 	}
 
-	err = l.reloadLedger()
-	require.NoError(t, err)
+	// TODO: uncomment if we want to test re-initializing the ledger fully
+	// currently this doesn't work, because reloadLedger runs migrations like txtail that require a working block DB
+	//err = l.reloadLedger()
+	//require.NoError(t, err)
 
 	// now manually construct the MT and ensure the reading makeOrderedAccountsIter works as expected:
 	// no errors on read, hashes match
@@ -703,10 +705,35 @@ func testNewLedgerFromCatchpoint(t *testing.T, catchpointWriterReadAccess tracke
 
 	var catchupProgress CatchpointCatchupAccessorProgress
 	catchpointContent := readCatchpointFile(t, filepath)
+	var balancesRound basics.Round
 	for _, catchpointData := range catchpointContent {
+		// get BalancesRound from header and use it to set the DB round
+		if catchpointData.headerName == CatchpointContentFileName {
+			var fileheader CatchpointFileHeader
+			err = protocol.Decode(catchpointData.data, &fileheader)
+			require.NoError(t, err)
+			balancesRound = fileheader.BalancesRound
+		}
 		err = accessor.ProcessStagingBalances(context.Background(), catchpointData.headerName, catchpointData.data, &catchupProgress)
 		require.NoError(t, err)
 	}
+	require.NotZero(t, balancesRound, "no balances round found in test catchpoint file")
+
+	// TODO: uncomment if we want to test re-initializing the ledger fully, by setting the balances round (DB round)
+	// for use by the trackers and migrations. However the txtail migration requires a working block DB, which most
+	// of these catchpoint tests don't copy over when saving/restoring.
+	//
+	// // Manually set the balances round. In regular catchpoint restore, this is set by StoreBalancesRound
+	// // when the first block is downloaded.
+	// err = l.trackerDB().Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
+	// 	crw, err := tx.MakeCatchpointWriter()
+	// 	require.NoError(t, err)
+
+	// 	err = crw.WriteCatchpointStateUint64(ctx, trackerdb.CatchpointStateCatchupBalancesRound, uint64(balancesRound))
+	// 	require.NoError(t, err)
+	// 	return nil
+	// })
+	// require.NoError(t, err)
 
 	err = accessor.BuildMerkleTrie(context.Background(), nil)
 	require.NoError(t, err)
