@@ -111,6 +111,16 @@ import (
 //     |-----> MsgIsZero
 //     |-----> HashTypeMaxSize()
 //
+// HeartbeatProof
+//        |-----> (*) MarshalMsg
+//        |-----> (*) CanMarshalMsg
+//        |-----> (*) UnmarshalMsg
+//        |-----> (*) UnmarshalMsgWithState
+//        |-----> (*) CanUnmarshalMsg
+//        |-----> (*) Msgsize
+//        |-----> (*) MsgIsZero
+//        |-----> HeartbeatProofMaxSize()
+//
 // MasterDerivationKey
 //          |-----> (*) MarshalMsg
 //          |-----> (*) CanMarshalMsg
@@ -1166,6 +1176,232 @@ func (z HashType) MsgIsZero() bool {
 // MaxSize returns a maximum valid message size for this message type
 func HashTypeMaxSize() (s int) {
 	s = msgp.Uint16Size
+	return
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z *HeartbeatProof) MarshalMsg(b []byte) (o []byte) {
+	o = msgp.Require(b, z.Msgsize())
+	// omitempty: check for empty values
+	zb0006Len := uint32(5)
+	var zb0006Mask uint8 /* 6 bits */
+	if (*z).PK == (ed25519PublicKey{}) {
+		zb0006Len--
+		zb0006Mask |= 0x2
+	}
+	if (*z).PK1Sig == (ed25519Signature{}) {
+		zb0006Len--
+		zb0006Mask |= 0x4
+	}
+	if (*z).PK2 == (ed25519PublicKey{}) {
+		zb0006Len--
+		zb0006Mask |= 0x8
+	}
+	if (*z).PK2Sig == (ed25519Signature{}) {
+		zb0006Len--
+		zb0006Mask |= 0x10
+	}
+	if (*z).Sig == (ed25519Signature{}) {
+		zb0006Len--
+		zb0006Mask |= 0x20
+	}
+	// variable map header, size zb0006Len
+	o = append(o, 0x80|uint8(zb0006Len))
+	if zb0006Len != 0 {
+		if (zb0006Mask & 0x2) == 0 { // if not empty
+			// string "p"
+			o = append(o, 0xa1, 0x70)
+			o = msgp.AppendBytes(o, ((*z).PK)[:])
+		}
+		if (zb0006Mask & 0x4) == 0 { // if not empty
+			// string "p1s"
+			o = append(o, 0xa3, 0x70, 0x31, 0x73)
+			o = msgp.AppendBytes(o, ((*z).PK1Sig)[:])
+		}
+		if (zb0006Mask & 0x8) == 0 { // if not empty
+			// string "p2"
+			o = append(o, 0xa2, 0x70, 0x32)
+			o = msgp.AppendBytes(o, ((*z).PK2)[:])
+		}
+		if (zb0006Mask & 0x10) == 0 { // if not empty
+			// string "p2s"
+			o = append(o, 0xa3, 0x70, 0x32, 0x73)
+			o = msgp.AppendBytes(o, ((*z).PK2Sig)[:])
+		}
+		if (zb0006Mask & 0x20) == 0 { // if not empty
+			// string "s"
+			o = append(o, 0xa1, 0x73)
+			o = msgp.AppendBytes(o, ((*z).Sig)[:])
+		}
+	}
+	return
+}
+
+func (_ *HeartbeatProof) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*HeartbeatProof)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *HeartbeatProof) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+	if st.AllowableDepth == 0 {
+		err = msgp.ErrMaxDepthExceeded{}
+		return
+	}
+	st.AllowableDepth--
+	var field []byte
+	_ = field
+	var zb0006 int
+	var zb0007 bool
+	zb0006, zb0007, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if _, ok := err.(msgp.TypeError); ok {
+		zb0006, zb0007, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0006 > 0 {
+			zb0006--
+			bts, err = msgp.ReadExactBytes(bts, ((*z).Sig)[:])
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Sig")
+				return
+			}
+		}
+		if zb0006 > 0 {
+			zb0006--
+			bts, err = msgp.ReadExactBytes(bts, ((*z).PK)[:])
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "PK")
+				return
+			}
+		}
+		if zb0006 > 0 {
+			zb0006--
+			bts, err = msgp.ReadExactBytes(bts, ((*z).PK2)[:])
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "PK2")
+				return
+			}
+		}
+		if zb0006 > 0 {
+			zb0006--
+			bts, err = msgp.ReadExactBytes(bts, ((*z).PK1Sig)[:])
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "PK1Sig")
+				return
+			}
+		}
+		if zb0006 > 0 {
+			zb0006--
+			bts, err = msgp.ReadExactBytes(bts, ((*z).PK2Sig)[:])
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "PK2Sig")
+				return
+			}
+		}
+		if zb0006 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0006)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array")
+				return
+			}
+		}
+	} else {
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0007 {
+			(*z) = HeartbeatProof{}
+		}
+		for zb0006 > 0 {
+			zb0006--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+			switch string(field) {
+			case "s":
+				bts, err = msgp.ReadExactBytes(bts, ((*z).Sig)[:])
+				if err != nil {
+					err = msgp.WrapError(err, "Sig")
+					return
+				}
+			case "p":
+				bts, err = msgp.ReadExactBytes(bts, ((*z).PK)[:])
+				if err != nil {
+					err = msgp.WrapError(err, "PK")
+					return
+				}
+			case "p2":
+				bts, err = msgp.ReadExactBytes(bts, ((*z).PK2)[:])
+				if err != nil {
+					err = msgp.WrapError(err, "PK2")
+					return
+				}
+			case "p1s":
+				bts, err = msgp.ReadExactBytes(bts, ((*z).PK1Sig)[:])
+				if err != nil {
+					err = msgp.WrapError(err, "PK1Sig")
+					return
+				}
+			case "p2s":
+				bts, err = msgp.ReadExactBytes(bts, ((*z).PK2Sig)[:])
+				if err != nil {
+					err = msgp.WrapError(err, "PK2Sig")
+					return
+				}
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+func (z *HeartbeatProof) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
+}
+func (_ *HeartbeatProof) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*HeartbeatProof)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *HeartbeatProof) Msgsize() (s int) {
+	s = 1 + 2 + msgp.ArrayHeaderSize + (64 * (msgp.ByteSize)) + 2 + msgp.ArrayHeaderSize + (32 * (msgp.ByteSize)) + 3 + msgp.ArrayHeaderSize + (32 * (msgp.ByteSize)) + 4 + msgp.ArrayHeaderSize + (64 * (msgp.ByteSize)) + 4 + msgp.ArrayHeaderSize + (64 * (msgp.ByteSize))
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *HeartbeatProof) MsgIsZero() bool {
+	return ((*z).Sig == (ed25519Signature{})) && ((*z).PK == (ed25519PublicKey{})) && ((*z).PK2 == (ed25519PublicKey{})) && ((*z).PK1Sig == (ed25519Signature{})) && ((*z).PK2Sig == (ed25519Signature{}))
+}
+
+// MaxSize returns a maximum valid message size for this message type
+func HeartbeatProofMaxSize() (s int) {
+	s = 1 + 2
+	// Calculating size of array: z.Sig
+	s += msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
+	s += 2
+	// Calculating size of array: z.PK
+	s += msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	s += 3
+	// Calculating size of array: z.PK2
+	s += msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
+	s += 4
+	// Calculating size of array: z.PK1Sig
+	s += msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
+	s += 4
+	// Calculating size of array: z.PK2Sig
+	s += msgp.ArrayHeaderSize + ((64) * (msgp.ByteSize))
 	return
 }
 

@@ -477,20 +477,18 @@ func bls12381G1MultiMulLarge(points []bls12381.G1Affine, scalarBytes []byte) ([]
 func bls12381G1MultiMulSmall(points []bls12381.G1Affine, scalarBytes []byte) ([]byte, error) {
 	// There must be at least one point. Start with it, rather than the identity.
 	k := new(big.Int).SetBytes(scalarBytes[:scalarSize])
-	var sum bls12381.G1Jac
-	sum.ScalarMultiplicationAffine(&points[0], k)
+	var sum bls12381.G1Affine
+	sum.ScalarMultiplication(&points[0], k)
 	for i := range points {
 		if i == 0 {
 			continue
 		}
 		k.SetBytes(scalarBytes[i*scalarSize : (i+1)*scalarSize])
-		var prod bls12381.G1Jac
-		prod.ScalarMultiplicationAffine(&points[i], k)
-		sum.AddAssign(&prod)
+		var prod bls12381.G1Affine
+		prod.ScalarMultiplication(&points[i], k)
+		sum.Add(&sum, &prod)
 	}
-	var res bls12381.G1Affine
-	res.FromJacobian(&sum)
-	return bls12381G1ToBytes(&res), nil
+	return bls12381G1ToBytes(&sum), nil
 }
 
 const bls12381G2MultiMulThreshold = 2 // determined by BenchmarkFindMultiMulCutoff
@@ -794,20 +792,18 @@ func bn254G1MultiMulLarge(points []bn254.G1Affine, scalarBytes []byte) ([]byte, 
 func bn254G1MultiMulSmall(points []bn254.G1Affine, scalarBytes []byte) ([]byte, error) {
 	// There must be at least one point. Start with it, rather than the identity.
 	k := new(big.Int).SetBytes(scalarBytes[:scalarSize])
-	var sum bn254.G1Jac
-	sum.ScalarMultiplicationAffine(&points[0], k)
+	var sum bn254.G1Affine
+	sum.ScalarMultiplication(&points[0], k)
 	for i := range points {
 		if i == 0 {
 			continue
 		}
 		k.SetBytes(scalarBytes[i*scalarSize : (i+1)*scalarSize])
-		var prod bn254.G1Jac
-		prod.ScalarMultiplicationAffine(&points[i], k)
-		sum.AddAssign(&prod)
+		var prod bn254.G1Affine
+		prod.ScalarMultiplication(&points[i], k)
+		sum.Add(&sum, &prod)
 	}
-	var res bn254.G1Affine
-	res.FromJacobian(&sum)
-	return bn254G1ToBytes(&res), nil
+	return bn254G1ToBytes(&sum), nil
 }
 
 const bn254G2MultiMulThreshold = 2 // determined by BenchmarkFindMultiMulCutoff

@@ -548,6 +548,9 @@ type ConsensusParams struct {
 	// occur, extra funds need to be put into the FeeSink.  The bonus amount
 	// decays exponentially.
 	Bonus BonusPlan
+
+	// Heartbeat support
+	Heartbeat bool
 }
 
 // ProposerPayoutRules puts several related consensus parameters in one place. The same
@@ -607,7 +610,7 @@ type ProposerPayoutRules struct {
 //
 //	BaseAmount: 0, DecayInterval: XXX
 //
-// by using a zero baseAmount, the amount not affected.
+// by using a zero baseAmount, the amount is not affected.
 // For a bigger change, we'd use a plan like:
 //
 //	BaseRound:  <FUTURE round>, BaseAmount: <new amount>, DecayInterval: <new>
@@ -1523,7 +1526,7 @@ func initConsensusProtocols() {
 	vFuture.EnableLogicSigSizePooling = true
 
 	vFuture.Payouts.Enabled = true
-	vFuture.Payouts.Percent = 75
+	vFuture.Payouts.Percent = 50
 	vFuture.Payouts.GoOnlineFee = 2_000_000         // 2 algos
 	vFuture.Payouts.MinBalance = 30_000_000_000     // 30,000 algos
 	vFuture.Payouts.MaxBalance = 70_000_000_000_000 // 70M algos
@@ -1534,7 +1537,9 @@ func initConsensusProtocols() {
 
 	vFuture.Bonus.BaseAmount = 10_000_000 // 10 Algos
 	// 2.9 sec rounds gives about 10.8M rounds per year.
-	vFuture.Bonus.DecayInterval = 250_000 // .99^(10.8/0.25) ~ .648. So 35% decay per year
+	vFuture.Bonus.DecayInterval = 1_000_000 // .99^(10.8M/1M) ~ .897. So ~10% decay per year
+
+	vFuture.Heartbeat = true
 
 	vFuture.EnableCatchpointsWithOnlineAccounts = true
 

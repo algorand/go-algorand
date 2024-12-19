@@ -19,7 +19,7 @@ jobs:
       - name: Make libsodium.a
         run: sudo mv /usr/bin/go /usr/bin/go.bak && make crypto/libs/linux/amd64/lib/libsodium.a && sudo mv /usr/bin/go.bak /usr/bin/go
       - name: reviewdog-golangci-lint
-        uses: reviewdog/action-golangci-lint@v2.6.2
+        uses: reviewdog/action-golangci-lint@v2.7.0
         with:
           go_version_file: go.mod
           golangci_lint_version: ${{ env.GOLANGCI_LINT_VERSION }}
@@ -27,7 +27,7 @@ jobs:
           reporter: "github-pr-check"
           tool_name: "Lint Errors"
           level: "error"
-          fail_on_error: true
+          fail_level: any
           filter_mode: "nofilter"
   # Non-Blocking Warnings Section
   reviewdog-warnings:
@@ -71,7 +71,7 @@ jobs:
           cd ../../
       - name: Install reviewdog
         run: |
-          curl -sfL https://raw.githubusercontent.com/reviewdog/reviewdog/v0.20.2/install.sh | sh -s -- v0.20.2
+          curl -sfL https://raw.githubusercontent.com/reviewdog/reviewdog/v0.20.3/install.sh | sh -s -- v0.20.3
           reviewdog --version
       - name: Build custom linters
         run: |
@@ -96,7 +96,7 @@ jobs:
           -name="Lint Warnings" \
           -reporter=github-pr-check \
           -filter-mode=added \
-          -fail-on-error=true \
+          -fail-level=any \
           -level=warning
       - name: Slack Notification
         env:
@@ -109,11 +109,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: shellcheck
-        uses: reviewdog/action-shellcheck@v1
+        uses: reviewdog/action-shellcheck@v1.28.0
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           reporter: "github-pr-check"
           shellcheck_flags: "-e SC2034,SC2046,SC2053,SC2207,SC2145 -S warning"
-          fail_on_error: true
+          fail_level: any
           path: |
             test/scripts/e2e_subs
