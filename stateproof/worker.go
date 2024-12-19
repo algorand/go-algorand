@@ -95,9 +95,7 @@ func NewWorker(genesisDir string, log logging.Logger, accts Accounts, ledger Led
 
 // Start starts the goroutines for the worker.
 func (spw *Worker) Start() {
-	ctx, cancel := context.WithCancel(context.Background())
-	spw.ctx = ctx
-	spw.shutdown = cancel
+	spw.ctx, spw.shutdown = context.WithCancel(context.Background())
 	spw.signedCh = make(chan struct{}, 1)
 
 	err := spw.initDb(spw.inMemory)

@@ -1013,11 +1013,11 @@ func TestFirstYearsBonus(t *testing.T) {
 	fmt.Printf("paid %d algos\n", suma)
 	fmt.Printf("bonus start: %d end: %d\n", plan.BaseAmount, bonus)
 
-	// pays about 88M algos
-	a.InDelta(88_500_000, suma, 100_000)
+	// pays about 103.5M algos
+	a.InDelta(103_500_000, suma, 100_000)
 
-	// decline about 35%
-	a.InDelta(0.65, float64(bonus)/float64(plan.BaseAmount), 0.01)
+	// decline about 10%
+	a.InDelta(0.90, float64(bonus)/float64(plan.BaseAmount), 0.01)
 
 	// year 2
 	for i := 0; i < yearRounds; i++ {
@@ -1033,11 +1033,11 @@ func TestFirstYearsBonus(t *testing.T) {
 	fmt.Printf("paid %d algos after 2 years\n", sum2)
 	fmt.Printf("bonus end: %d\n", bonus)
 
-	// pays about 146M algos (total for 2 years)
-	a.InDelta(145_700_000, sum2, 100_000)
+	// pays about 196M algos (total for 2 years)
+	a.InDelta(196_300_000, sum2, 100_000)
 
-	// decline about 58%
-	a.InDelta(0.42, float64(bonus)/float64(plan.BaseAmount), 0.01)
+	// decline to about 81%
+	a.InDelta(0.81, float64(bonus)/float64(plan.BaseAmount), 0.01)
 
 	// year 3
 	for i := 0; i < yearRounds; i++ {
@@ -1053,9 +1053,9 @@ func TestFirstYearsBonus(t *testing.T) {
 	fmt.Printf("paid %d algos after 3 years\n", sum3)
 	fmt.Printf("bonus end: %d\n", bonus)
 
-	// pays about 182M algos (total for 3 years)
-	a.InDelta(182_600_000, sum3, 100_000)
+	// pays about 279M algos (total for 3 years)
+	a.InDelta(279_500_000, sum3, 100_000)
 
-	// declined to about 27% (but foundation funding probably gone anyway)
-	a.InDelta(0.27, float64(bonus)/float64(plan.BaseAmount), 0.01)
+	// declined to about 72% (but foundation funding probably gone anyway)
+	a.InDelta(0.72, float64(bonus)/float64(plan.BaseAmount), 0.01)
 }
