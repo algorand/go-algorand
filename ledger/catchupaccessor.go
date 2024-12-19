@@ -179,11 +179,11 @@ func (w *stagingWriterImpl) writeOnlineAccounts(ctx context.Context, accts []enc
 
 func (w *stagingWriterImpl) writeOnlineRoundParams(ctx context.Context, params []encoded.OnlineRoundParamsRecordV6) error {
 	return w.wdb.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
-		cr, err := tx.MakeCatchpointReaderWriter()
+		crw, err := tx.MakeCatchpointReaderWriter()
 		if err != nil {
 			return err
 		}
-		return cr.WriteCatchpointStagingOnlineRoundParams(ctx, params)
+		return crw.WriteCatchpointStagingOnlineRoundParams(ctx, params)
 	})
 }
 
