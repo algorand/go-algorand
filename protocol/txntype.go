@@ -47,6 +47,9 @@ const (
 	// StateProofTx records a state proof
 	StateProofTx TxType = "stpf"
 
+	// HeartbeatTx demonstrates the account is alive
+	HeartbeatTx TxType = "hb"
+
 	// UnknownTx signals an error
 	UnknownTx TxType = "unknown"
 )

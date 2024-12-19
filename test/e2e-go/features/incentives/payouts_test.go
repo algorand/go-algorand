@@ -48,7 +48,7 @@ func TestBasicPayouts(t *testing.T) {
 	var fixture fixtures.RestClientFixture
 	// Make the seed lookback shorter, otherwise we need to wait 320 rounds to become IncentiveEligible.
 	const lookback = 32
-	fixture.FasterConsensus(protocol.ConsensusFuture, time.Second, 32)
+	fixture.FasterConsensus(protocol.ConsensusFuture, time.Second, lookback)
 	fmt.Printf("lookback is %d\n", lookback)
 	fixture.Setup(t, filepath.Join("nettemplates", "Payouts.json"))
 	defer fixture.Shutdown()
@@ -71,8 +71,8 @@ func TestBasicPayouts(t *testing.T) {
 	c01, account01 := clientAndAccount("Node01")
 	relay, _ := clientAndAccount("Relay")
 
-	data01 := rekeyreg(&fixture, a, c01, account01.Address)
-	data15 := rekeyreg(&fixture, a, c15, account15.Address)
+	data01 := rekeyreg(&fixture, a, c01, account01.Address, true)
+	data15 := rekeyreg(&fixture, a, c15, account15.Address, true)
 
 	// have account01 burn some money to get below the eligibility cap
 	// Starts with 100M, so burn 60M and get under 70M cap.
@@ -317,14 +317,19 @@ func getblock(client libgoal.Client, round uint64) (bookkeeping.Block, error) {
 	return client.BookkeepingBlock(round)
 }
 
-func rekeyreg(f *fixtures.RestClientFixture, a *require.Assertions, client libgoal.Client, address string) basics.AccountData {
+func rekeyreg(f *fixtures.RestClientFixture, a *require.Assertions, client libgoal.Client, address string, becomeEligible bool) basics.AccountData {
 	// we start by making an _offline_ tx here, because we want to populate the
 	// key material ourself with a copy of the account's existing material. That
 	// makes it an _online_ keyreg. That allows the running node to chug along
 	// without new part keys. We overpay the fee, which makes us
 	// IncentiveEligible, and to get some funds into FeeSink because we will
 	// watch it drain toward bottom of test.
-	reReg, err := client.MakeUnsignedGoOfflineTx(address, 0, 0, 12_000_000, [32]byte{})
+
+	fee := uint64(1000)
+	if becomeEligible {
+		fee = 12_000_000
+	}
+	reReg, err := client.MakeUnsignedGoOfflineTx(address, 0, 0, fee, [32]byte{})
 	a.NoError(err)
 
 	data, err := client.AccountData(address)
@@ -354,7 +359,7 @@ func rekeyreg(f *fixtures.RestClientFixture, a *require.Assertions, client libgo
 	a.NoError(err)
 	a.Equal(basics.Online, data.Status)
 	a.True(data.LastHeartbeat > 0)
-	a.True(data.IncentiveEligible)
+	a.Equal(becomeEligible, data.IncentiveEligible)
 	fmt.Printf(" %v has %v in round %d\n", address, data.MicroAlgos.Raw, *txn.ConfirmedRound)
 	return data
 }

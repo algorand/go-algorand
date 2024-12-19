@@ -183,3 +183,11 @@ func (tr *VotersForRound) Wait() error {
 	}
 	return nil
 }
+
+// Completed returns true if the tree has finished being constructed.
+// If there was an error constructing the tree, the error is also returned.
+func (tr *VotersForRound) Completed() (bool, error) {
+	tr.mu.Lock()
+	defer tr.mu.Unlock()
+	return tr.Tree != nil || tr.loadTreeError != nil, tr.loadTreeError
+}

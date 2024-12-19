@@ -22,7 +22,7 @@ import (
 )
 
 // An OnlineAccount corresponds to an account whose AccountData.Status
-// is Online.  This is used for a Merkle tree commitment of online
+// is Online. This is used for a Merkle tree commitment of online
 // accounts, which is subsequently used to validate participants for
 // a state proof.
 type OnlineAccount struct {

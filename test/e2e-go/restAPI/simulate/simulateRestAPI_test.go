@@ -53,7 +53,7 @@ func TestSimulateTxnTracerDevMode(t *testing.T) {
 
 	testClient := localFixture.LibGoalClient
 
-	_, err := testClient.WaitForRound(1)
+	_, err := testClient.Status()
 	a.NoError(err)
 
 	wh, err := testClient.GetUnencryptedWalletHandle()
@@ -288,11 +288,11 @@ int 1`
 
 	// Let the primary node make some progress
 	primaryClient := fixture.GetAlgodClientForController(nc)
-	err = fixture.ClientWaitForRoundWithTimeout(primaryClient, followerSyncRound+uint64(cfg.MaxAcctLookback))
+	err = primaryClient.WaitForRoundWithTimeout(followerSyncRound + uint64(cfg.MaxAcctLookback))
 	a.NoError(err)
 
 	// Let follower node progress as far as it can
-	err = fixture.ClientWaitForRoundWithTimeout(followClient, followerSyncRound+uint64(cfg.MaxAcctLookback)-1)
+	err = followClient.WaitForRoundWithTimeout(followerSyncRound + uint64(cfg.MaxAcctLookback) - 1)
 	a.NoError(err)
 
 	simulateRequest := v2.PreEncodedSimulateRequest{
