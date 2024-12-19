@@ -70,7 +70,7 @@ func TestStateProofInReplayCatchpoint(t *testing.T) {
 
 	a := require.New(fixtures.SynchronizedTest(t))
 
-	consensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	consensusParams := config.Consensus[protocol.ConsensusFuture]
 	applyCatchpointConsensusChanges(&consensusParams)
 	applyCatchpointStateProofConsensusChanges(&consensusParams)
 
@@ -146,7 +146,7 @@ func TestStateProofAfterCatchpoint(t *testing.T) {
 	}
 	a := require.New(fixtures.SynchronizedTest(t))
 
-	consensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	consensusParams := config.Consensus[protocol.ConsensusFuture]
 	applyCatchpointConsensusChanges(&consensusParams)
 	applyCatchpointStateProofConsensusChanges(&consensusParams)
 	consensusParams.StateProofInterval = 16
@@ -211,7 +211,7 @@ func TestSendSigsAfterCatchpointCatchup(t *testing.T) {
 
 	configurableConsensus := make(config.ConsensusProtocols)
 	consensusVersion := protocol.ConsensusVersion("catchpointtestingprotocol")
-	consensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	consensusParams := config.Consensus[protocol.ConsensusFuture]
 	applyCatchpointStateProofConsensusChanges(&consensusParams)
 	applyCatchpointConsensusChanges(&consensusParams)
 	// Weight threshold allows creation of state proofs using the primary node and at least one other node.
