@@ -1882,10 +1882,6 @@ func TestHashContract(t *testing.T) {
 func TestCatchpointFastUpdates(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
-		t.Skip("This test is too slow on ARM and causes CI builds to time out")
-	}
-
 	proto := config.Consensus[protocol.ConsensusFuture]
 
 	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(20, true)}
@@ -1925,6 +1921,7 @@ func TestCatchpointFastUpdates(t *testing.T) {
 
 	wg := sync.WaitGroup{}
 
+	lastRound := basics.Round(0)
 	for i := basics.Round(initialBlocksCount); i < basics.Round(proto.CatchpointLookback+15); i++ {
 		rewardLevelDelta := crypto.RandUint64() % 5
 		rewardLevel += rewardLevelDelta
@@ -1959,9 +1956,20 @@ func TestCatchpointFastUpdates(t *testing.T) {
 			defer wg.Done()
 			ml.trackers.committedUpTo(round)
 		}(i)
+		lastRound = i
 	}
 	wg.Wait()
 	ml.trackers.waitAccountsWriting()
+
+	if ml.trackers.getDbRound() <= basics.Round(proto.CatchpointLookback) {
+		// db round stuck <= 320? likely committedUpTo dropped some commit tasks, due to deferredCommits channel full
+		// so give it another try
+		ml.trackers.committedUpTo(lastRound)
+		require.Eventually(t, func() bool {
+			//ml.trackers.waitAccountsWriting()
+			return ml.trackers.getDbRound() > basics.Round(proto.CatchpointLookback)
+		}, 5*time.Second, 100*time.Millisecond)
+	}
 
 	require.NotEmpty(t, ct.GetLastCatchpointLabel())
 }
