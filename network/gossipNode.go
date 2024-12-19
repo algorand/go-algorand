@@ -33,6 +33,17 @@ type DisconnectablePeer interface {
 	GetNetwork() GossipNode
 }
 
+// DisconnectableAddressablePeer is a Peer with a long-living connection to a network that can be disconnected and has an IP address
+type DisconnectableAddressablePeer interface {
+	DisconnectablePeer
+	IPAddressable
+}
+
+// IPAddressable is addressable with either IPv4 or IPv6 address
+type IPAddressable interface {
+	RoutingAddr() []byte
+}
+
 // PeerOption allows users to specify a subset of peers to query
 //
 //msgp:ignore PeerOption
@@ -118,7 +129,7 @@ var outgoingMessagesBufferSize = int(
 
 // IncomingMessage represents a message arriving from some peer in our p2p network
 type IncomingMessage struct {
-	Sender DisconnectablePeer
+	Sender DisconnectableAddressablePeer
 	Tag    Tag
 	Data   []byte
 	Err    error
