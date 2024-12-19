@@ -85,7 +85,7 @@ func (s *Service) findChallenged(rules config.ProposerPayoutRules, current basic
 
 	var found []account.ParticipationRecordForRound
 	for _, pr := range s.accts.Keys(current) { // only look at accounts we have part keys for
-		acct, _, _, err := s.ledger.LookupAccount(current, pr.Account)
+		acct, err := s.ledger.LookupAgreement(current, pr.Account)
 		if err != nil {
 			s.log.Errorf("error looking up %v: %v", pr.Account, err)
 			continue
@@ -97,14 +97,18 @@ func (s *Service) findChallenged(rules config.ProposerPayoutRules, current basic
 		if acct.VoteID != pr.Voting.OneTimeSignatureVerifier {
 			continue
 		}
-		if acct.Status == basics.Online && acct.IncentiveEligible {
-			if ch.Failed(pr.Account, acct.LastSeen()) {
+		// We want to match the logic in generateKnockOfflineAccountsList, but
+		// don't need to check Online status because we obtained records from
+		// LookupAgreement, which only returns Online accounts (or empty, which
+		// will not be IncentiveEligible) If we ever decide to knockoff accounts
+		// that are not IncentiveEligoible, this code should remember to check
+		// acct.MicroAlgosWithRewards > 0 to ensure we need a heartbeat.
+		if acct.IncentiveEligible {
+			if ch.Failed(pr.Account, max(acct.LastHeartbeat, acct.LastProposed)) {
 				s.log.Infof(" %v needs a heartbeat\n", pr.Account)
 				found = append(found, pr)
 			}
 		}
-		/* If we add a grace period to suspension for absenteeism, then we could
-		   also make it free to heartbeat during that period. */
 	}
 	return found
 }

@@ -44,6 +44,8 @@ type ledger interface {
 
 	// LookupAccount allows the Service to observe accounts for suspension
 	LookupAccount(round basics.Round, addr basics.Address) (data ledgercore.AccountData, validThrough basics.Round, withoutRewards basics.MicroAlgos, err error)
+
+	LookupAgreement(rnd basics.Round, addr basics.Address) (basics.OnlineAccountData, error)
 }
 
 // participants captures the aspects of the AccountManager that are used by this
