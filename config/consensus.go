@@ -1512,30 +1512,42 @@ func initConsensusProtocols() {
 	// but our current max is 150000 so using that :
 	v38.ApprovedUpgrades[protocol.ConsensusV39] = 150000
 
+	v40 := v39
+	v40.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+
+	v40.LogicSigVersion = 11
+
+	v40.EnableLogicSigSizePooling = true
+
+	v40.Payouts.Enabled = true
+	v40.Payouts.Percent = 50
+	v40.Payouts.GoOnlineFee = 2_000_000         // 2 algos
+	v40.Payouts.MinBalance = 30_000_000_000     // 30,000 algos
+	v40.Payouts.MaxBalance = 70_000_000_000_000 // 70M algos
+	v40.Payouts.MaxMarkAbsent = 32
+	v40.Payouts.ChallengeInterval = 1000
+	v40.Payouts.ChallengeGracePeriod = 200
+	v40.Payouts.ChallengeBits = 5
+
+	v40.Bonus.BaseAmount = 10_000_000 // 10 Algos
+	// 2.9 sec rounds gives about 10.8M rounds per year.
+	v40.Bonus.DecayInterval = 1_000_000 // .99^(10.8M/1M) ~ .897. So ~10% decay per year
+
+	v40.Heartbeat = true
+
+	Consensus[protocol.ConsensusV40] = v40
+
+	// v39 can be upgraded to v40, with an update delay of 7d:
+	// 208000 = (7 * 24 * 60 * 60 / 2.9 ballpark round times)
+	// our current max is 250000
+	v39.ApprovedUpgrades[protocol.ConsensusV40] = 208000
+
 	// ConsensusFuture is used to test features that are implemented
 	// but not yet released in a production protocol version.
-	vFuture := v39
+	vFuture := v40
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
-	vFuture.LogicSigVersion = 11 // When moving this to a release, put a new higher LogicSigVersion here
-
-	vFuture.EnableLogicSigSizePooling = true
-
-	vFuture.Payouts.Enabled = true
-	vFuture.Payouts.Percent = 50
-	vFuture.Payouts.GoOnlineFee = 2_000_000         // 2 algos
-	vFuture.Payouts.MinBalance = 30_000_000_000     // 30,000 algos
-	vFuture.Payouts.MaxBalance = 70_000_000_000_000 // 70M algos
-	vFuture.Payouts.MaxMarkAbsent = 32
-	vFuture.Payouts.ChallengeInterval = 1000
-	vFuture.Payouts.ChallengeGracePeriod = 200
-	vFuture.Payouts.ChallengeBits = 5
-
-	vFuture.Bonus.BaseAmount = 10_000_000 // 10 Algos
-	// 2.9 sec rounds gives about 10.8M rounds per year.
-	vFuture.Bonus.DecayInterval = 1_000_000 // .99^(10.8M/1M) ~ .897. So ~10% decay per year
-
-	vFuture.Heartbeat = true
+	vFuture.LogicSigVersion = 12 // When moving this to a release, put a new higher LogicSigVersion here
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 
