@@ -137,14 +137,18 @@ of a contract account.
   transaction against the contract account is for the program to
   approve it.
 
-The bytecode plus the length of all Args must add up to no more than
-1000 bytes (consensus parameter LogicSigMaxSize). Each opcode has an
-associated cost, usually 1, but a few slow operations have higher
-costs. Prior to v4, the program's cost was estimated as the static sum
-of all the opcode costs in the program (whether they were actually
-executed or not). Beginning with v4, the program's cost is tracked
-dynamically, while being evaluated. If the program exceeds its budget,
-it fails.
+The size of a Smart Signature is defined as the length of its bytecode
+plus the length of all its Args. The sum of the sizes of all Smart
+Signatures in a group must not exceed 1000 bytes times the number of
+transactions in the group (1000 bytes is defined in consensus parameter
+`LogicSigMaxSize`).
+
+Each opcode has an associated cost, usually 1, but a few slow operations
+have higher costs. Prior to v4, the program's cost was estimated as the
+static sum of all the opcode costs in the program (whether they were
+actually executed or not). Beginning with v4, the program's cost is
+tracked dynamically while being evaluated. If the program exceeds its
+budget, it fails.
 
 The total program cost of all Smart Signatures in a group must not
 exceed 20,000 (consensus parameter LogicSigMaxCost) times the number
@@ -463,8 +467,6 @@ these results may contain leading zero bytes.
 | `keccak256` | Keccak256 hash of value A, yields [32]byte |
 | `sha512_256` | SHA512_256 hash of value A, yields [32]byte |
 | `sha3_256` | SHA3_256 hash of value A, yields [32]byte |
-| `sumhash512` | sumhash512 of value A, yields [64]byte |
-| `falcon_verify` | for (data A, compressed-format signature B, pubkey C) verify the signature of data against the pubkey |
 | `ed25519verify` | for (data A, signature B, pubkey C) verify the signature of ("ProgData" \|\| program_hash \|\| data) against the pubkey => {0 or 1} |
 | `ed25519verify_bare` | for (data A, signature B, pubkey C) verify the signature of the data against the pubkey => {0 or 1} |
 | `ecdsa_verify v` | for (data A, signature B, C and pubkey D, E) verify the signature of the data against the pubkey => {0 or 1} |
