@@ -633,14 +633,14 @@ func TestAbsentTracking(t *testing.T) {
 				// to avoid complications from advancing an extra round, we only do this check for 100 rounds
 			}
 
-			// addr[1] spent 10A on a fee in rnd 3, so online stake and eligibility adjusted in 323
-			if rnd == addr1Keyreg-1+lookback {
-				checkState(addrs[1], true, false, 833_333_333_333_333)
-				checkState(addrs[1], true, true, 833_333_323_333_333)
+			// addr[1] spent 10A on a fee in rnd 1, so online stake and eligibility adjusted in 323
+			if rnd == addr1Keyreg-2+lookback {
+				checkState(addrs[1], true, false, 833_333_333_333_333) // check occurs during reg+lookback-1
+				checkState(addrs[1], true, true, 833_333_323_333_333)  // check occurs during reg+lookback
 			}
 
 			// watch the change across the round that addr2 becomes eligible (by spending 2A in keyreg)
-			if rnd == addr2Eligible-1+lookback {
+			if rnd == addr2Eligible-2+lookback {
 				checkState(addrs[2], true, false, 833_333_333_429_333)
 				checkState(addrs[2], true, true, 833_333_331_429_333) // after keyreg w/ 2A is effective
 			}
@@ -672,14 +672,14 @@ func TestAbsentTracking(t *testing.T) {
 			rnd := vb.Block().Round()
 
 			// observe addr1 stake going to zero 320 rounds after knockoff
-			if rnd == addr1off+lookback-1 {
+			if rnd == addr1off+lookback-2 {
 				checkState(addrs[1], true, true, 833_333_323_188_333)
 				checkState(addrs[1], false, false, 0)
 				addr1check = true
 			}
 
 			// observe addr2 stake going to zero 320 rounds after knockoff
-			if rnd == addr2off+lookback-1 {
+			if rnd == addr2off+lookback-2 {
 				checkState(addrs[2], true, true, 833_333_331_427_333) // still "online"
 				checkState(addrs[2], false, false, 0)
 				addr2check = true
