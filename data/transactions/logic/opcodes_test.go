@@ -19,11 +19,11 @@ package logic
 import (
 	"fmt"
 	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/exp/slices"
 )
 
 func TestOpSpecs(t *testing.T) {

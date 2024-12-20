@@ -19,10 +19,10 @@ package phonebook
 import (
 	"math"
 	"math/rand"
+	"slices"
 	"time"
 
 	"github.com/algorand/go-deadlock"
-	"golang.org/x/exp/slices"
 )
 
 // getAllAddresses when using GetAddresses with getAllAddresses, all the addresses will be retrieved, regardless

@@ -102,7 +102,7 @@ func (p httpPeer) GetAddress() string {
 	return mas[0].String()
 }
 
-// GetAddress implements HTTPPeer interface and returns the http client for a peer
+// GetHTTPClient implements HTTPPeer interface and returns the http client for a peer
 func (p httpPeer) GetHTTPClient() *http.Client {
 	c, err := p2p.MakeTestHTTPClient(&p.addrInfo)
 	require.NoError(p.tb, err)

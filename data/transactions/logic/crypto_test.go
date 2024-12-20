@@ -25,11 +25,11 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/big"
+	"slices"
 	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"golang.org/x/exp/slices"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/secp256k1"
@@ -76,7 +76,7 @@ func TestSumhash(t *testing.T) {
 	}
 
 	for _, v := range testVectors {
-		testAccepts(t, fmt.Sprintf(`byte "%s"; sumhash512; byte 0x%s; ==`, v.in, v.out), 11)
+		testAccepts(t, fmt.Sprintf(`byte "%s"; sumhash512; byte 0x%s; ==`, v.in, v.out), 12)
 	}
 }
 
@@ -115,6 +115,84 @@ sha512_256
 byte 0x98D2C31612EA500279B6753E5F6E780CA63EBA8274049664DAD66A2565ED1D2A
 ==`
 	testAccepts(t, progText, 1)
+}
+
+func TestMimc(t *testing.T) {
+	// We created test vectors for the MiMC hash function by defining a set of preimages for different
+	// input sizes and calling gnark-crypto's MiMC implementation to compute the expected hash values.
+	// E.g.:
+	//		import "github.com/consensys/gnark-crypto/ecc/bn254/fr/mimc"
+	//		hasher := mimc.NewMiMC()
+	//		hasher.Write(inputBytes)
+	//		hashBytes := hasher.Sum(nil)
+	// Since we are hardcoding the expected hash values, we are also testing that gnark-crypto's MiMC
+	// output does not change under the hood with new versions.
+	//
+	// We test that malformed inputs panic, in particular we test malfornmed inputs of:
+	// 0 length, lenghts not multiple of 32 bytes, chunks representing values greater than the modulus.
+	// We test that well formed inputs hash correctly, testing both single chunk inputs (32-byte) and
+	// multiple chunk inputs (96 bytes).
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	type PreImageTestVector struct {
+		PreImage      string
+		ShouldSucceed bool
+	}
+	preImageTestVectors := []PreImageTestVector{
+		{"0x",
+			false}, // zero-length input
+		{"0x23a950068dd3d1e21cee48e7919be7ae32cdef70311fc486336ea9d4b5042535",
+			true}, // 32 bytes, less than modulus
+		{"0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000002",
+			false}, // 32 bytes, more than modulus
+		{"0xdeadf00d",
+			false}, // less than 32 byte
+		{"0x183de351a72141d79c51a27d10405549c98302cb2536c5968deeb3cba635121723a950068dd3d1e21cee48e7919be7ae32cdef70311fc486336ea9d4b504253530644e72e131a029b85045b68181585d2833e84879b9709143e1f593ef676981",
+			true}, // 32 bytes, less than modulus | 32 bytes, less than modulus | 32 bytes, less than modulus
+		{"0x183de351a72141d79c51a27d10405549c98302cb2536c5968deeb3cba635121723a950068dd3d1e21cee48e7919be7ae32cdef70311fc486336ea9d4b504253573eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000002",
+			false}, //  32 bytes, less than modulus | 32 bytes, less than modulus | 32 bytes, more than modulus
+		{"0x183de351a72141d79c51a27d10405549c98302cb2536c5968deeb3cba635121723a950068dd3d1e21cee48e7919be7ae32cdef70311fc486336ea9d4b5042535abba",
+			false}, // 32 bytes, less than modulus | 32 bytes, less than modulus | less than 32 bytes
+	}
+
+	circuitHashTestVectors := map[string][]string{
+		"BN254Mp110": {
+			"20104241803663641422577121134203490505137011783614913652735802145961801733870",
+			"12886436712380113721405259596386800092738845035233065858332878701083870690753",
+			"19565877911319815535452130675266047290072088868113536892077808700068649624391",
+			"1037254799353855871006189384309576393135431139055333626960622147300727796413",
+			"6040222623731283351958201178122781676432899642144860863024149088913741383362",
+			"21691351735381703396517600859480938764038501053226864452091917666642352837076",
+			"10501393540371963307040960561318023073151272109639330842515119353134949995409",
+		},
+		"BLS12_381Mp111": {
+			"17991912493598890696181760734961918471863781118188078948205844982816313445306",
+			"8791766422525455185980675814845076441443662947059416063736889106252015893524",
+			"35137972692771717943992759113612269767581262500164574105059686144346651628747",
+			"15039173432183897369859775531867817848264266283034981501223857291379142522368",
+			"12964111614552580241101202600014316932811348627866250816177200046290462797607",
+			"21773894974440411325489312534417904228129169539217646609523079291104496302656",
+			"9873666029497961930790892458408217321483390383568592297687427911011295910871",
+		},
+	}
+
+	for _, config := range []string{"BN254Mp110", "BLS12_381Mp111"} {
+		for i, preImageTestVector := range preImageTestVectors {
+			var n big.Int
+			n.SetString(circuitHashTestVectors[config][i], 10)
+			circuitHash := n.Bytes()
+			progText := fmt.Sprintf(`byte %s
+mimc %s
+byte 0x%x
+==`, preImageTestVector.PreImage, config, circuitHash)
+			if preImageTestVector.ShouldSucceed {
+				testAccepts(t, progText, 11)
+			} else {
+				testPanics(t, progText, 11)
+			}
+		}
+	}
 }
 
 // This is patterned off vrf_test.go, but we don't create proofs here, we only
@@ -217,13 +295,17 @@ pop								// output`, "int 1"},
 	}
 }
 
+func randSeed() crypto.Seed {
+	var s crypto.Seed
+	crypto.RandBytes(s[:])
+	return s
+}
+
 func TestEd25519verify(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	var s crypto.Seed
-	crypto.RandBytes(s[:])
-	c := crypto.GenerateSignatureSecrets(s)
+	c := crypto.GenerateSignatureSecrets(randSeed())
 	msg := "62fdfc072182654f163f5f0f9a621d729566c74d0aa413bf009c9800418c19cd"
 	data, err := hex.DecodeString(msg)
 	require.NoError(t, err)
@@ -262,9 +344,7 @@ func TestEd25519VerifyBare(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	var s crypto.Seed
-	crypto.RandBytes(s[:])
-	c := crypto.GenerateSignatureSecrets(s)
+	c := crypto.GenerateSignatureSecrets(randSeed())
 	msg := "62fdfc072182654f163f5f0f9a621d729566c74d0aa413bf009c9800418c19cd"
 	data, err := hex.DecodeString(msg)
 	require.NoError(t, err)
@@ -310,13 +390,13 @@ func TestFalconVerify(t *testing.T) {
 	require.NoError(t, err)
 
 	yes := testProg(t, fmt.Sprintf(`arg 0; arg 1; byte 0x%s; falcon_verify`,
-		hex.EncodeToString(fs.PublicKey[:])), 11)
+		hex.EncodeToString(fs.PublicKey[:])), 12)
 	require.NoError(t, err)
 	no := testProg(t, fmt.Sprintf(`arg 0; arg 1; byte 0x%s; falcon_verify; !`,
-		hex.EncodeToString(fs.PublicKey[:])), 11)
+		hex.EncodeToString(fs.PublicKey[:])), 12)
 	require.NoError(t, err)
 
-	for v := uint64(11); v <= AssemblerMaxVersion; v++ {
+	for v := uint64(12); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			yes.Program[0] = byte(v)
 			sig, err := fs.SignBytes(data)
@@ -713,8 +793,11 @@ int ` + fmt.Sprintf("%d", testLogicBudget-2500-8) + `
 }
 
 func BenchmarkHashes(b *testing.B) {
-	for _, hash := range []string{"sha256", "keccak256" /* skip, same as keccak "sha3_256", */, "sha512_256", "sumhash512"} {
+	for _, hash := range []string{"sha256", "keccak256" /* skip, same as keccak "sha3_256", */, "sha512_256", "sumhash512", "mimc BN254Mp110", "mimc BLS12_381Mp111"} {
 		for _, size := range []int{0, 32, 128, 512, 1024, 4096} {
+			if size == 0 && (hash == "mimc BN254Mp110" || hash == "mimc BLS12_381Mp111") {
+				continue
+			}
 			b.Run(hash+"-"+strconv.Itoa(size), func(b *testing.B) {
 				benchmarkOperation(b, "", fmt.Sprintf("int %d; bzero; %s; pop", size, hash), "int 1")
 			})
@@ -743,9 +826,7 @@ func BenchmarkEd25519Verifyx1(b *testing.B) {
 		crypto.RandBytes(buffer[:])
 		data = append(data, buffer)
 
-		var s crypto.Seed //generate programs and signatures
-		crypto.RandBytes(s[:])
-		secret := crypto.GenerateSignatureSecrets(s)
+		secret := crypto.GenerateSignatureSecrets(randSeed()) //generate programs and signatures
 		pk := basics.Address(secret.SignatureVerifier)
 		pkStr := pk.String()
 		ops, err := AssembleStringWithVersion(fmt.Sprintf(`arg 0

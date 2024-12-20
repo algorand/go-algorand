@@ -110,11 +110,23 @@ type ledgerTracker interface {
 	// by all the prepareCommit calls. The commitRound is being executed within a single transactional
 	// context, and so, if any of the tracker's commitRound calls fails, the transaction is rolled back.
 	commitRound(context.Context, trackerdb.TransactionScope, *deferredCommitContext) error
+
 	// postCommit is called only on a successful commitRound. In that case, each of the trackers have
 	// the chance to update it's internal data structures, knowing that the given deferredCommitContext
 	// has completed. An optional context is provided for long-running operations.
 	postCommit(context.Context, *deferredCommitContext)
 
+	// close terminates the tracker, reclaiming any resources
+	// like open database connections or goroutines.  close may
+	// be called even if loadFromDisk() is not called or does
+	// not succeed.
+	close()
+}
+
+// trackerCommitLifetimeHandlers defines additional methods some ledgerTrackers
+// might implement to manage and clear state on error or success. In practice,
+// it is only used by the catchpointtracker.
+type trackerCommitLifetimeHandlers interface {
 	// postCommitUnlocked is called only on a successful commitRound. In that case, each of the trackers have
 	// the chance to make changes that aren't state-dependent.
 	// An optional context is provided for long-running operations.
@@ -131,11 +143,12 @@ type ledgerTracker interface {
 	// error during the commit phase of commitRound
 	handleCommitError(*deferredCommitContext)
 
-	// close terminates the tracker, reclaiming any resources
-	// like open database connections or goroutines.  close may
-	// be called even if loadFromDisk() is not called or does
-	// not succeed.
-	close()
+	// clearCommitRoundRetry is called after a failure is encountered in the transaction that commitRound
+	// uses. It allows trackers to clear any in-memory state associated with the commitRound work they
+	// did, since even if the tracker returns no error in commitRound, another tracker might be responsible
+	// for the rollback. The call to commitRound for the same round range may be retried after
+	// clearCommitRoundRetry is called.
+	clearCommitRoundRetry(context.Context, *deferredCommitContext)
 }
 
 // ledgerForTracker defines the part of the ledger that a tracker can
@@ -561,7 +574,9 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) error {
 	if tr.dbRound < dbRound || offset < uint64(tr.dbRound-dbRound) {
 		tr.log.Warnf("out of order deferred commit: offset %d, dbRound %d but current tracker DB round is %d", offset, dbRound, tr.dbRound)
 		for _, lt := range tr.trackers {
-			lt.handleUnorderedCommit(dcc)
+			if lt, ok := lt.(trackerCommitLifetimeHandlers); ok {
+				lt.handleUnorderedCommit(dcc)
+			}
 		}
 		tr.mu.RUnlock()
 		return nil
@@ -596,7 +611,9 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) error {
 	}
 	if err != nil {
 		for _, lt := range tr.trackers {
-			lt.handlePrepareCommitError(dcc)
+			if lt, ok := lt.(trackerCommitLifetimeHandlers); ok {
+				lt.handlePrepareCommitError(dcc)
+			}
 		}
 		tr.mu.RUnlock()
 		return err
@@ -606,7 +623,7 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) error {
 
 	start := time.Now()
 	ledgerCommitroundCount.Inc(nil)
-	err = tr.dbs.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
+	err = tr.dbs.TransactionWithRetryClearFn(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) { // TransactionFn
 		tr.accountsCommitting.Store(true)
 		defer func() {
 			tr.accountsCommitting.Store(false)
@@ -625,13 +642,21 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) error {
 		}
 
 		return aw.UpdateAccountsRound(dbRound + basics.Round(offset))
+	}, func(ctx context.Context) { // RetryClearFn
+		for _, lt := range tr.trackers {
+			if lt, ok := lt.(trackerCommitLifetimeHandlers); ok {
+				lt.clearCommitRoundRetry(ctx, dcc)
+			}
+		}
 	})
 	ledgerCommitroundMicros.AddMicrosecondsSince(start, nil)
 
 	if err != nil {
 
 		for _, lt := range tr.trackers {
-			lt.handleCommitError(dcc)
+			if lt, ok := lt.(trackerCommitLifetimeHandlers); ok {
+				lt.handleCommitError(dcc)
+			}
 		}
 		tr.log.Warnf("unable to advance tracker db snapshot (%d-%d): %v", dbRound, dbRound+basics.Round(offset), err)
 
@@ -653,7 +678,9 @@ func (tr *trackerRegistry) commitRound(dcc *deferredCommitContext) error {
 	tr.mu.Unlock()
 
 	for _, lt := range tr.trackers {
-		lt.postCommitUnlocked(tr.ctx, dcc)
+		if lt, ok := lt.(trackerCommitLifetimeHandlers); ok {
+			lt.postCommitUnlocked(tr.ctx, dcc)
+		}
 	}
 
 	tr.log.Debugf("commitRound completed for (%d-%d)", dbRound, dbRound+basics.Round(offset))
@@ -921,7 +948,12 @@ func (aul *accountUpdatesLedgerEvaluator) LookupWithoutRewards(rnd basics.Round,
 }
 
 func (aul *accountUpdatesLedgerEvaluator) LookupAgreement(rnd basics.Round, addr basics.Address) (basics.OnlineAccountData, error) {
-	return aul.ao.LookupOnlineAccountData(rnd, addr)
+	return aul.ao.lookupOnlineAccountData(rnd, addr)
+}
+
+func (aul *accountUpdatesLedgerEvaluator) GetKnockOfflineCandidates(basics.Round, config.ConsensusParams) (map[basics.Address]basics.OnlineAccountData, error) {
+	// This method is only used when generating blocks, so we don't need to implement it here.
+	return nil, fmt.Errorf("accountUpdatesLedgerEvaluator: GetKnockOfflineCandidates is not implemented and should not be called during replay")
 }
 
 func (aul *accountUpdatesLedgerEvaluator) OnlineCirculation(rnd basics.Round, voteRnd basics.Round) (basics.MicroAlgos, error) {

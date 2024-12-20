@@ -69,7 +69,7 @@ type CatchpointCatchupAccessor interface {
 	GetCatchupBlockRound(ctx context.Context) (round basics.Round, err error)
 
 	// GetVerifyData returns the balances hash, spver hash and totals used by VerifyCatchpoint
-	GetVerifyData(ctx context.Context) (balancesHash crypto.Digest, spverHash crypto.Digest, totals ledgercore.AccountTotals, err error)
+	GetVerifyData(ctx context.Context) (balancesHash, spverHash, onlineAccountsHash, onlineRoundParamsHash crypto.Digest, totals ledgercore.AccountTotals, err error)
 
 	// VerifyCatchpoint verifies that the catchpoint is valid by reconstructing the label.
 	VerifyCatchpoint(ctx context.Context, blk *bookkeeping.Block) (err error)
@@ -103,6 +103,8 @@ type stagingWriter interface {
 	writeCreatables(context.Context, []trackerdb.NormalizedAccountBalance) error
 	writeHashes(context.Context, []trackerdb.NormalizedAccountBalance) error
 	writeKVs(context.Context, []encoded.KVRecordV6) error
+	writeOnlineAccounts(context.Context, []encoded.OnlineAccountRecordV6) error
+	writeOnlineRoundParams(context.Context, []encoded.OnlineRoundParamsRecordV6) error
 	isShared() bool
 }
 
@@ -162,6 +164,26 @@ func (w *stagingWriterImpl) writeKVs(ctx context.Context, kvrs []encoded.KVRecor
 		}
 
 		return crw.WriteCatchpointStagingKVs(ctx, keys, values, hashes)
+	})
+}
+
+func (w *stagingWriterImpl) writeOnlineAccounts(ctx context.Context, accts []encoded.OnlineAccountRecordV6) error {
+	return w.wdb.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
+		crw, err := tx.MakeCatchpointReaderWriter()
+		if err != nil {
+			return err
+		}
+		return crw.WriteCatchpointStagingOnlineAccounts(ctx, accts)
+	})
+}
+
+func (w *stagingWriterImpl) writeOnlineRoundParams(ctx context.Context, params []encoded.OnlineRoundParamsRecordV6) error {
+	return w.wdb.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
+		crw, err := tx.MakeCatchpointReaderWriter()
+		if err != nil {
+			return err
+		}
+		return crw.WriteCatchpointStagingOnlineRoundParams(ctx, params)
 	})
 }
 
@@ -346,24 +368,30 @@ func (c *catchpointCatchupAccessorImpl) ResetStagingBalances(ctx context.Context
 
 // CatchpointCatchupAccessorProgress is used by the caller of ProcessStagingBalances to obtain progress information
 type CatchpointCatchupAccessorProgress struct {
-	TotalAccounts      uint64
-	ProcessedAccounts  uint64
-	ProcessedBytes     uint64
-	TotalKVs           uint64
-	ProcessedKVs       uint64
-	TotalChunks        uint64
-	SeenHeader         bool
-	Version            uint64
-	TotalAccountHashes uint64
+	TotalAccounts              uint64
+	ProcessedAccounts          uint64
+	ProcessedBytes             uint64
+	TotalKVs                   uint64
+	ProcessedKVs               uint64
+	TotalOnlineAccounts        uint64
+	ProcessedOnlineAccounts    uint64
+	TotalOnlineRoundParams     uint64
+	ProcessedOnlineRoundParams uint64
+	TotalChunks                uint64
+	SeenHeader                 bool
+	Version                    uint64
+	TotalAccountHashes         uint64
 
 	// Having the cachedTrie here would help to accelerate the catchup process since the trie maintain an internal cache of nodes.
 	// While rebuilding the trie, we don't want to force and reload (some) of these nodes into the cache for each catchpoint file chunk.
 	cachedTrie *merkletrie.Trie
 
-	BalancesWriteDuration   time.Duration
-	CreatablesWriteDuration time.Duration
-	HashesWriteDuration     time.Duration
-	KVWriteDuration         time.Duration
+	BalancesWriteDuration          time.Duration
+	CreatablesWriteDuration        time.Duration
+	HashesWriteDuration            time.Duration
+	KVWriteDuration                time.Duration
+	OnlineAccountsWriteDuration    time.Duration
+	OnlineRoundParamsWriteDuration time.Duration
 }
 
 // ProcessStagingBalances deserialize the given bytes as a temporary staging balances
@@ -418,6 +446,8 @@ func (c *catchpointCatchupAccessorImpl) processStagingContent(ctx context.Contex
 	case CatchpointFileVersionV5:
 	case CatchpointFileVersionV6:
 	case CatchpointFileVersionV7:
+	case CatchpointFileVersionV8:
+
 	default:
 		return fmt.Errorf("CatchpointCatchupAccessorImpl::processStagingContent: unable to process catchpoint - version %d is not supported", fileHeader.Version)
 	}
@@ -459,6 +489,8 @@ func (c *catchpointCatchupAccessorImpl) processStagingContent(ctx context.Contex
 		progress.SeenHeader = true
 		progress.TotalAccounts = fileHeader.TotalAccounts
 		progress.TotalKVs = fileHeader.TotalKVs
+		progress.TotalOnlineAccounts = fileHeader.TotalOnlineAccounts
+		progress.TotalOnlineRoundParams = fileHeader.TotalOnlineRoundParams
 
 		progress.TotalChunks = fileHeader.TotalChunks
 		progress.Version = fileHeader.Version
@@ -480,6 +512,8 @@ func (c *catchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 	var normalizedAccountBalances []trackerdb.NormalizedAccountBalance
 	var expectingMoreEntries []bool
 	var chunkKVs []encoded.KVRecordV6
+	var chunkOnlineAccounts []encoded.OnlineAccountRecordV6
+	var chunkOnlineRoundParams []encoded.OnlineRoundParamsRecordV6
 
 	switch progress.Version {
 	default:
@@ -501,16 +535,21 @@ func (c *catchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 		expectingMoreEntries = make([]bool, len(balances.Balances))
 
 	case CatchpointFileVersionV6:
+		// V6 split accounts from resources; later, KVs were added to the v6 chunk format
 		fallthrough
 	case CatchpointFileVersionV7:
+		// V7 added state proof verification data + hash, but left v6 chunk format unchanged
+		fallthrough
+	case CatchpointFileVersionV8:
+		// V8 added online accounts and online round params data + hashes, and added them to the v6 chunk format
 		var chunk catchpointFileChunkV6
 		err = protocol.Decode(bytes, &chunk)
 		if err != nil {
 			return err
 		}
 
-		if len(chunk.Balances) == 0 && len(chunk.KVs) == 0 {
-			return fmt.Errorf("processStagingBalances received a chunk with no accounts or KVs")
+		if chunk.empty() {
+			return fmt.Errorf("processStagingBalances received an empty chunk")
 		}
 
 		normalizedAccountBalances, err = prepareNormalizedBalancesV6(chunk.Balances, c.ledger.GenesisProto())
@@ -519,6 +558,8 @@ func (c *catchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 			expectingMoreEntries[i] = balance.ExpectingMoreEntries
 		}
 		chunkKVs = chunk.KVs
+		chunkOnlineAccounts = chunk.OnlineAccounts
+		chunkOnlineRoundParams = chunk.OnlineRoundParams
 	}
 
 	if err != nil {
@@ -594,14 +635,8 @@ func (c *catchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 
 	wg := sync.WaitGroup{}
 
-	var errBalances error
-	var errCreatables error
-	var errHashes error
-	var errKVs error
-	var durBalances time.Duration
-	var durCreatables time.Duration
-	var durHashes time.Duration
-	var durKVs time.Duration
+	var errBalances, errCreatables, errHashes, errKVs, errOnlineAccounts, errOnlineRoundParams error
+	var durBalances, durCreatables, durHashes, durKVs, durOnlineAccounts, durOnlineRoundParams time.Duration
 
 	// start the balances writer
 	wg.Add(1)
@@ -666,6 +701,26 @@ func (c *catchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 		durKVs = time.Since(writeKVsStart)
 	}()
 
+	// start the online accounts writer
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		writeOnlineAccountsStart := time.Now()
+		errOnlineAccounts = c.stagingWriter.writeOnlineAccounts(ctx, chunkOnlineAccounts)
+		durOnlineAccounts = time.Since(writeOnlineAccountsStart)
+	}()
+
+	// start the rounds params writer
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		writeOnlineRoundParamsStart := time.Now()
+		errOnlineRoundParams = c.stagingWriter.writeOnlineRoundParams(ctx, chunkOnlineRoundParams)
+		durOnlineRoundParams = time.Since(writeOnlineRoundParamsStart)
+	}()
+
 	wg.Wait()
 
 	if errBalances != nil {
@@ -680,15 +735,25 @@ func (c *catchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 	if errKVs != nil {
 		return errKVs
 	}
+	if errOnlineAccounts != nil {
+		return errOnlineAccounts
+	}
+	if errOnlineRoundParams != nil {
+		return errOnlineRoundParams
+	}
 
 	progress.BalancesWriteDuration += durBalances
 	progress.CreatablesWriteDuration += durCreatables
 	progress.HashesWriteDuration += durHashes
 	progress.KVWriteDuration += durKVs
+	progress.OnlineAccountsWriteDuration += durOnlineAccounts
+	progress.OnlineRoundParamsWriteDuration += durOnlineRoundParams
 
 	ledgerProcessstagingbalancesMicros.AddMicrosecondsSince(start, nil)
 	progress.ProcessedBytes += uint64(len(bytes))
 	progress.ProcessedKVs += uint64(len(chunkKVs))
+	progress.ProcessedOnlineAccounts += uint64(len(chunkOnlineAccounts))
+	progress.ProcessedOnlineRoundParams += uint64(len(chunkOnlineRoundParams))
 	for _, acctBal := range normalizedAccountBalances {
 		progress.TotalAccountHashes += uint64(len(acctBal.AccountHashes))
 		if !acctBal.PartialBalance {
@@ -721,7 +786,7 @@ func countHashes(hashes [][]byte) (accountCount, kvCount uint64) {
 			accountCount++
 		}
 	}
-	return accountCount, kvCount
+	return
 }
 
 // BuildMerkleTrie would process the catchpointpendinghashes and insert all the items in it into the merkle trie
@@ -931,7 +996,7 @@ func (c *catchpointCatchupAccessorImpl) GetCatchupBlockRound(ctx context.Context
 	return basics.Round(iRound), nil
 }
 
-func (c *catchpointCatchupAccessorImpl) GetVerifyData(ctx context.Context) (balancesHash crypto.Digest, spverHash crypto.Digest, totals ledgercore.AccountTotals, err error) {
+func (c *catchpointCatchupAccessorImpl) GetVerifyData(ctx context.Context) (balancesHash, spverHash, onlineAccountsHash, onlineRoundParamsHash crypto.Digest, totals ledgercore.AccountTotals, err error) {
 	var rawStateProofVerificationContext []ledgercore.StateProofVerificationContext
 
 	err = c.ledger.trackerDB().Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
@@ -966,16 +1031,62 @@ func (c *catchpointCatchupAccessorImpl) GetVerifyData(ctx context.Context) (bala
 			return fmt.Errorf("unable to get state proof verification data: %v", err)
 		}
 
+		onlineAccountsHash, _, err = calculateVerificationHash(ctx, tx.MakeOnlineAccountsIter, true)
+		if err != nil {
+			return fmt.Errorf("unable to get online accounts verification data: %v", err)
+		}
+
+		onlineRoundParamsHash, _, err = calculateVerificationHash(ctx, tx.MakeOnlineRoundParamsIter, true)
+		if err != nil {
+			return fmt.Errorf("unable to get online round params verification data: %v", err)
+		}
+
 		return
 	})
 	if err != nil {
-		return crypto.Digest{}, crypto.Digest{}, ledgercore.AccountTotals{}, err
+		return crypto.Digest{}, crypto.Digest{}, crypto.Digest{}, crypto.Digest{}, ledgercore.AccountTotals{}, err
 	}
 
 	wrappedContext := catchpointStateProofVerificationContext{Data: rawStateProofVerificationContext}
 	spverHash = crypto.HashObj(wrappedContext)
 
-	return balancesHash, spverHash, totals, err
+	return balancesHash, spverHash, onlineAccountsHash, onlineRoundParamsHash, totals, nil
+}
+
+// calculateVerificationHash iterates over a TableIterator, hashes each item, and returns a hash of
+// all the concatenated item hashes. It is used to verify onlineaccounts and onlineroundparams tables,
+// both at restore time (in catchpointCatchupAccessorImpl) and snapshot time (in catchpointTracker).
+func calculateVerificationHash[T crypto.Hashable](
+	ctx context.Context,
+	iterFactory func(context.Context, bool) (trackerdb.TableIterator[T], error),
+	useStaging bool,
+) (crypto.Digest, uint64, error) {
+
+	rows, err := iterFactory(ctx, useStaging)
+	if err != nil {
+		return crypto.Digest{}, 0, err
+	}
+	defer rows.Close()
+	hasher := crypto.HashFactory{HashType: crypto.Sha512_256}.NewHash()
+	cnt := uint64(0)
+	for rows.Next() {
+		item, err := rows.GetItem()
+		if err != nil {
+			return crypto.Digest{}, 0, err
+		}
+
+		h := crypto.HashObj(item)
+		_, err = hasher.Write(h[:])
+		if err != nil {
+			return crypto.Digest{}, 0, err
+		}
+		cnt++
+	}
+	ret := hasher.Sum(nil)
+	if len(ret) != crypto.DigestSize {
+		return crypto.Digest{}, 0, fmt.Errorf("unexpected hash size: %d", len(ret))
+	}
+	return crypto.Digest(ret), cnt, nil
 }
 
 // VerifyCatchpoint verifies that the catchpoint is valid by reconstructing the label.
@@ -1003,7 +1114,7 @@ func (c *catchpointCatchupAccessorImpl) VerifyCatchpoint(ctx context.Context, bl
 
 	start := time.Now()
 	ledgerVerifycatchpointCount.Inc(nil)
-	balancesHash, spVerificationHash, totals, err := c.GetVerifyData(ctx)
+	balancesHash, spVerificationHash, onlineAccountsHash, onlineRoundParamsHash, totals, err := c.GetVerifyData(ctx)
 	ledgerVerifycatchpointMicros.AddMicrosecondsSince(start, nil)
 	if err != nil {
 		return err
@@ -1016,8 +1127,12 @@ func (c *catchpointCatchupAccessorImpl) VerifyCatchpoint(ctx context.Context, bl
 	blockDigest := blk.Digest()
 	if version <= CatchpointFileVersionV6 {
 		catchpointLabelMaker = ledgercore.MakeCatchpointLabelMakerV6(blockRound, &blockDigest, &balancesHash, totals)
+	} else if version == CatchpointFileVersionV7 {
+		catchpointLabelMaker = ledgercore.MakeCatchpointLabelMakerV7(blockRound, &blockDigest, &balancesHash, totals, &spVerificationHash)
+	} else if version == CatchpointFileVersionV8 {
+		catchpointLabelMaker = ledgercore.MakeCatchpointLabelMakerCurrent(blockRound, &blockDigest, &balancesHash, totals, &spVerificationHash, &onlineAccountsHash, &onlineRoundParamsHash)
 	} else {
-		catchpointLabelMaker = ledgercore.MakeCatchpointLabelMakerCurrent(blockRound, &blockDigest, &balancesHash, totals, &spVerificationHash)
+		return fmt.Errorf("unable to verify catchpoint - version %d not supported", version)
 	}
 	generatedLabel := ledgercore.MakeLabel(catchpointLabelMaker)
 
@@ -1155,7 +1270,7 @@ func (c *catchpointCatchupAccessorImpl) finishBalances(ctx context.Context) (err
 			return err
 		}
 
-		var balancesRound, hashRound uint64
+		var balancesRound, hashRound, catchpointFileVersion uint64
 		var totals ledgercore.AccountTotals
 
 		balancesRound, err = crw.ReadCatchpointStateUint64(ctx, trackerdb.CatchpointStateCatchupBalancesRound)
@@ -1166,6 +1281,11 @@ func (c *catchpointCatchupAccessorImpl) finishBalances(ctx context.Context) (err
 		hashRound, err = crw.ReadCatchpointStateUint64(ctx, trackerdb.CatchpointStateCatchupHashRound)
 		if err != nil {
 			return err
+		}
+
+		catchpointFileVersion, err = c.catchpointStore.ReadCatchpointStateUint64(ctx, trackerdb.CatchpointStateCatchupVersion)
+		if err != nil {
+			return fmt.Errorf("unable to retrieve catchpoint version: %v", err)
 		}
 
 		totals, err = ar.AccountsTotals(ctx, true)
@@ -1190,25 +1310,39 @@ func (c *catchpointCatchupAccessorImpl) finishBalances(ctx context.Context) (err
 		if err != nil {
 			return err
 		}
-		{
-			tp := trackerdb.Params{
-				InitAccounts:      c.ledger.GenesisAccounts(),
-				InitProto:         c.ledger.GenesisProtoVersion(),
-				GenesisHash:       c.ledger.GenesisHash(),
-				FromCatchpoint:    true,
-				CatchpointEnabled: c.ledger.catchpoint.catchpointEnabled(),
-				DbPathPrefix:      c.ledger.catchpoint.dbDirectory,
-				BlockDb:           c.ledger.blockDBs,
-			}
-			_, err = tx.RunMigrations(ctx, tp, c.ledger.log, 6 /*target database version*/)
-			if err != nil {
-				return err
-			}
+
+		tp := trackerdb.Params{
+			InitAccounts:      c.ledger.GenesisAccounts(),
+			InitProto:         c.ledger.GenesisProtoVersion(),
+			GenesisHash:       c.ledger.GenesisHash(),
+			FromCatchpoint:    true,
+			CatchpointEnabled: c.ledger.catchpoint.catchpointEnabled(),
+			DbPathPrefix:      c.ledger.catchpoint.dbDirectory,
+			BlockDb:           c.ledger.blockDBs,
+		}
+		// Upgrade to v6
+		_, err = tx.RunMigrations(ctx, tp, c.ledger.log, 6 /*target database version*/)
+		if err != nil {
+			return err
 		}
 
 		err = crw.ApplyCatchpointStagingBalances(ctx, basics.Round(balancesRound), basics.Round(hashRound))
 		if err != nil {
 			return err
+		}
+
+		if catchpointFileVersion == CatchpointFileVersionV8 { // This catchpoint contains onlineaccounts and onlineroundparamstail tables.
+			// Upgrade to v7 (which adds the onlineaccounts & onlineroundparamstail tables, among others)
+			_, err = tx.RunMigrations(ctx, tp, c.ledger.log, 7)
+			if err != nil {
+				return err
+			}
+
+			// Now that we have upgraded to v7, replace the onlineaccounts and onlineroundparamstail with the staged catchpoint tables.
+			err = crw.ApplyCatchpointStagingTablesV7(ctx)
+			if err != nil {
+				return err
+			}
 		}
 
 		err = aw.AccountsPutTotals(totals, false)

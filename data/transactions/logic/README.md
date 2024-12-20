@@ -137,14 +137,18 @@ of a contract account.
   transaction against the contract account is for the program to
   approve it.
 
-The bytecode plus the length of all Args must add up to no more than
-1000 bytes (consensus parameter LogicSigMaxSize). Each opcode has an
-associated cost, usually 1, but a few slow operations have higher
-costs. Prior to v4, the program's cost was estimated as the static sum
-of all the opcode costs in the program (whether they were actually
-executed or not). Beginning with v4, the program's cost is tracked
-dynamically, while being evaluated. If the program exceeds its budget,
-it fails.
+The size of a Smart Signature is defined as the length of its bytecode
+plus the length of all its Args. The sum of the sizes of all Smart
+Signatures in a group must not exceed 1000 bytes times the number of
+transactions in the group (1000 bytes is defined in consensus parameter
+`LogicSigMaxSize`).
+
+Each opcode has an associated cost, usually 1, but a few slow operations
+have higher costs. Prior to v4, the program's cost was estimated as the
+static sum of all the opcode costs in the program (whether they were
+actually executed or not). Beginning with v4, the program's cost is
+tracked dynamically while being evaluated. If the program exceeds its
+budget, it fails.
 
 The total program cost of all Smart Signatures in a group must not
 exceed 20,000 (consensus parameter LogicSigMaxCost) times the number
@@ -475,6 +479,7 @@ these results may contain leading zero bytes.
 | `ec_multi_scalar_mul g` | for curve points A and scalars B, return curve point B0A0 + B1A1 + B2A2 + ... + BnAn |
 | `ec_subgroup_check g` | 1 if A is in the main prime-order subgroup of G (including the point at infinity) else 0. Program fails if A is not in G at all. |
 | `ec_map_to g` | maps field element A to group G |
+| `mimc c` | MiMC hash of scalars A, using curve and parameters specified by configuration C |
 
 ### Loading Values
 
@@ -631,6 +636,11 @@ Global fields are fields that are common to all the transactions in the group. I
 | 15 | AssetCreateMinBalance | uint64 | v10  | The additional minimum balance required to create (and opt-in to) an asset. |
 | 16 | AssetOptInMinBalance | uint64 | v10  | The additional minimum balance required to opt-in to an asset. |
 | 17 | GenesisHash | [32]byte | v10  | The Genesis Hash for the network. |
+| 18 | PayoutsEnabled | bool | v11  | Whether block proposal payouts are enabled. |
+| 19 | PayoutsGoOnlineFee | uint64 | v11  | The fee required in a keyreg transaction to make an account incentive eligible. |
+| 20 | PayoutsPercent | uint64 | v11  | The percentage of transaction fees in a block that can be paid to the block proposer. |
+| 21 | PayoutsMinBalance | uint64 | v11  | The minimum algo balance an account must have in the agreement round to receive block payouts in the proposal round. |
+| 22 | PayoutsMaxBalance | uint64 | v11  | The maximum algo balance an account can have in the agreement round to receive block payouts in the proposal round. |
 
 
 **Asset Fields**
@@ -694,6 +704,9 @@ Account fields used in the `acct_params_get` opcode.
 | 9 | AcctTotalAssets | uint64 | v8  | The numbers of ASAs held by this account (including ASAs this account created). |
 | 10 | AcctTotalBoxes | uint64 | v8  | The number of existing boxes created by this account's app. |
 | 11 | AcctTotalBoxBytes | uint64 | v8  | The total number of bytes used by this account's app's box keys and values. |
+| 12 | AcctIncentiveEligible | bool | v11  | Has this account opted into block payouts |
+| 13 | AcctLastProposed | uint64 | v11  | The round number of the last block this account proposed. |
+| 14 | AcctLastHeartbeat | uint64 | v11  | The round number of the last block this account sent a heartbeat. |
 
 
 ### Flow Control
@@ -744,6 +757,8 @@ Account fields used in the `acct_params_get` opcode.
 | `asset_params_get f` | X is field F from asset A. Y is 1 if A exists, else 0 |
 | `app_params_get f` | X is field F from app A. Y is 1 if A exists, else 0 |
 | `acct_params_get f` | X is field F from account A. Y is 1 if A owns positive algos, else 0 |
+| `voter_params_get f` | X is field F from online account A as of the balance round: 320 rounds before the current round. Y is 1 if A had positive algos online in the agreement round, else Y is 0 and X is a type specific zero-value |
+| `online_stake` | the total online stake in the agreement round |
 | `log` | write A to log state of the current application |
 | `block f` | field F of block A. Fail unless A falls between txn.LastValid-1002 and txn.FirstValid (exclusive) |
 

@@ -2269,7 +2269,7 @@ func define(ops *OpStream, tokens []token) *sourceError {
 		} else {
 			delete(ops.macros, name) // remove new macro that caused cycle
 		}
-		return tokens[1].errorf("macro expansion cycle discovered: %s", strings.Join(found, " -> "))
+		return tokens[1].errorf("macro expansion cycle discovered: %s", strings.Join(found, " -> ")) //nolint:gosec // false positive, len(tokens) >= 3
 	}
 	return nil
 }
@@ -2736,6 +2736,16 @@ func (ops *OpStream) ReportMultipleErrors(fname string, writer io.Writer) {
 // AssembleString takes an entire program in a string and assembles it to bytecode using AssemblerDefaultVersion
 func AssembleString(text string) (*OpStream, error) {
 	return AssembleStringWithVersion(text, assemblerNoVersion)
+}
+
+// MustAssemble assembles a program and panics on error.  It is useful for
+// defining globals.
+func MustAssemble(text string) []byte {
+	ops, err := AssembleString(text)
+	if err != nil {
+		panic(err)
+	}
+	return ops.Program
 }
 
 // AssembleStringWithVersion takes an entire program in a string and

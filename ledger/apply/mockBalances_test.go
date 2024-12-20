@@ -17,13 +17,16 @@
 package apply
 
 import (
+	"fmt"
+	"maps"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
-	"golang.org/x/exp/maps"
 )
 
 type mockBalances struct {
@@ -269,4 +272,34 @@ func (b *mockCreatableBalances) HasAssetParams(addr basics.Address, aidx basics.
 	}
 	_, ok = acct.AssetParams[aidx]
 	return
+}
+
+type mockHeaders struct {
+	perRound map[basics.Round]bookkeeping.BlockHeader
+	fallback *bookkeeping.BlockHeader
+}
+
+// makeMockHeaders takes a bunch of BlockHeaders and returns a HdrProivder for them.
+func makeMockHeaders(hdrs ...bookkeeping.BlockHeader) mockHeaders {
+	b := make(map[basics.Round]bookkeeping.BlockHeader)
+	for _, hdr := range hdrs {
+		b[hdr.Round] = hdr
+	}
+	return mockHeaders{perRound: b}
+}
+
+func (m mockHeaders) BlockHdr(r basics.Round) (bookkeeping.BlockHeader, error) {
+	if hdr, ok := m.perRound[r]; ok {
+		return hdr, nil
+	}
+	if m.fallback != nil {
+		copy := *m.fallback
+		copy.Round = r
+		return copy, nil
+	}
+	return bookkeeping.BlockHeader{}, fmt.Errorf("round %v is not present", r)
+}
+
+func (m *mockHeaders) setFallback(hdr bookkeeping.BlockHeader) {
+	m.fallback = &hdr
 }

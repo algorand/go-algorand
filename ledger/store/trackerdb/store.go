@@ -20,6 +20,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/algorand/go-algorand/ledger/encoded"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/util/db"
 )
@@ -40,7 +41,9 @@ type Store interface {
 	BeginSnapshot(ctx context.Context) (Snapshot, error)
 	// transaction support
 	Transaction(fn TransactionFn) (err error)
+	TransactionWithRetryClearFn(TransactionFn, RetryClearFn) (err error)
 	TransactionContext(ctx context.Context, fn TransactionFn) (err error)
+	TransactionContextWithRetryClearFn(context.Context, TransactionFn, RetryClearFn) (err error)
 	BeginTransaction(ctx context.Context) (Transaction, error)
 	// maintenance
 	Vacuum(ctx context.Context) (stats db.VacuumStats, err error)
@@ -61,8 +64,10 @@ type Reader interface {
 	MakeCatchpointPendingHashesIterator(hashCount int) CatchpointPendingHashesIter
 	// Note: Catchpoint tracker needs this on the reader handle in sqlite to not get locked by write txns
 	MakeCatchpointReader() (CatchpointReader, error)
-	MakeEncodedAccoutsBatchIter() EncodedAccountsBatchIter
+	MakeEncodedAccountsBatchIter() EncodedAccountsBatchIter
 	MakeKVsIter(ctx context.Context) (KVsIter, error)
+	MakeOnlineAccountsIter(ctx context.Context, useStaging bool) (TableIterator[*encoded.OnlineAccountRecordV6], error)
+	MakeOnlineRoundParamsIter(ctx context.Context, useStaging bool) (TableIterator[*encoded.OnlineRoundParamsRecordV6], error)
 }
 
 // Writer is the interface for the trackerdb write operations.
@@ -153,3 +158,6 @@ type SnapshotFn func(ctx context.Context, tx SnapshotScope) error
 
 // TransactionFn is the callback lambda used in `Transaction`.
 type TransactionFn func(ctx context.Context, tx TransactionScope) error
+
+// RetryClearFn is the rollback callback lambda used in `TransactionWithRetryClearFn`.
+type RetryClearFn func(ctx context.Context)

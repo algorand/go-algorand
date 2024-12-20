@@ -21,10 +21,9 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math"
+	"slices"
 	"strings"
 	"testing"
-
-	"golang.org/x/exp/slices"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
@@ -6962,6 +6961,9 @@ func TestUnnamedResources(t *testing.T) {
 				env.OptIntoApp(otherAppUser, otherAppID)
 
 				proto := env.TxnInfo.CurrentProtocolParams()
+				if v > int(proto.LogicSigVersion) {
+					t.Skip("not testing in unsupported proto")
+				}
 				expectedUnnamedResourceGroupAssignment := &simulation.ResourceTracker{
 					MaxAccounts:               proto.MaxTxGroupSize * (proto.MaxAppTxnAccounts + proto.MaxAppTxnForeignApps),
 					MaxAssets:                 proto.MaxTxGroupSize * proto.MaxAppTxnForeignAssets,
@@ -7197,6 +7199,11 @@ func TestUnnamedResourcesAccountLocalWrite(t *testing.T) {
 				sender := env.Accounts[0]
 				testAppUser := env.Accounts[1].Addr
 
+				proto := env.TxnInfo.CurrentProtocolParams()
+				if v > int(proto.LogicSigVersion) {
+					t.Skip("not testing in unsupported proto")
+				}
+
 				program := fmt.Sprintf(`#pragma version %d
 txn ApplicationID
 !
@@ -7233,7 +7240,6 @@ int 1
 				})
 				stxn := txn.Txn().Sign(sender.Sk)
 
-				proto := env.TxnInfo.CurrentProtocolParams()
 				expectedUnnamedResourceAssignment := &simulation.ResourceTracker{
 					MaxAccounts:               proto.MaxTxGroupSize * (proto.MaxAppTxnAccounts + proto.MaxAppTxnForeignApps),
 					MaxAssets:                 proto.MaxTxGroupSize * proto.MaxAppTxnForeignAssets,
@@ -7339,6 +7345,11 @@ func TestUnnamedResourcesCreatedAppsAndAssets(t *testing.T) {
 		t.Run(fmt.Sprintf("v%d", v), func(t *testing.T) {
 			t.Parallel()
 			simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+				proto := env.TxnInfo.CurrentProtocolParams()
+				if v > int(proto.LogicSigVersion) {
+					t.Skip("not testing in unsupported proto")
+				}
+
 				sender := env.Accounts[0]
 				otherResourceCreator := env.Accounts[1]
 				otherAccount := env.Accounts[2].Addr
@@ -7436,7 +7447,6 @@ int 1
 				appCreateStxn := appCreateTxn.Txn().Sign(otherResourceCreator.Sk)
 				appCallStxn := appCallTxn.Txn().Sign(sender.Sk)
 
-				proto := env.TxnInfo.CurrentProtocolParams()
 				expectedUnnamedResourceAssignment := simulation.ResourceTracker{
 					MaxAccounts:  (proto.MaxTxGroupSize - 1) * (proto.MaxAppTxnAccounts + proto.MaxAppTxnForeignApps),
 					MaxAssets:    (proto.MaxTxGroupSize - 1) * proto.MaxAppTxnForeignAssets,
@@ -7703,14 +7713,17 @@ func TestUnnamedResourcesBoxIOBudget(t *testing.T) {
 			env := simulationtesting.PrepareSimulatorTest(t)
 			defer env.Close()
 
+			proto := env.TxnInfo.CurrentProtocolParams()
+			if v > int(proto.LogicSigVersion) {
+				t.Skip("not testing in unsupported proto")
+			}
+
 			sender := env.Accounts[0]
 
 			appID := env.CreateApp(sender.Addr, simulationtesting.AppParams{
 				ApprovalProgram:   fmt.Sprintf(boxTestProgram, v),
 				ClearStateProgram: fmt.Sprintf("#pragma version %d\n int 1", v),
 			})
-
-			proto := env.TxnInfo.CurrentProtocolParams()
 
 			// MBR is needed for boxes.
 			transferable := env.Accounts[1].AcctData.MicroAlgos.Raw - proto.MinBalance - proto.MinTxnFee
@@ -8588,6 +8601,10 @@ func TestUnnamedResourcesLimits(t *testing.T) {
 			defer env.Close()
 
 			proto := env.TxnInfo.CurrentProtocolParams()
+			if v > int(proto.LogicSigVersion) {
+				t.Skip("not testing in unsupported proto")
+				return
+			}
 
 			sender := env.Accounts[0]
 			otherAccounts := make([]basics.Address, len(env.Accounts)-1)
@@ -8754,6 +8771,10 @@ func TestUnnamedResourcesCrossProductLimits(t *testing.T) {
 			defer env.Close()
 
 			proto := env.TxnInfo.CurrentProtocolParams()
+			if v > int(proto.LogicSigVersion) {
+				t.Skip("not testing in unsupported proto")
+				return
+			}
 
 			sender := env.Accounts[0]
 			otherAccounts := make([]basics.Address, proto.MaxTxGroupSize)

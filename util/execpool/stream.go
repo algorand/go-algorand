@@ -87,7 +87,7 @@ func (sv *StreamToBatch) Start(ctx context.Context) {
 	go sv.batchingLoop()
 }
 
-// WaitForStop waits until the batching loop terminates afer the ctx is canceled
+// WaitForStop waits until the batching loop terminates after the ctx is canceled
 func (sv *StreamToBatch) WaitForStop() {
 	sv.activeLoopWg.Wait()
 }
