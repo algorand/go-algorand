@@ -73,8 +73,13 @@ func (iter *tableIterator[T]) GetItem() (T, error) {
 }
 
 // MakeOnlineAccountsIter creates an onlineAccounts iterator.
-func MakeOnlineAccountsIter(ctx context.Context, q db.Queryable) (trackerdb.TableIterator[*encoded.OnlineAccountRecordV6], error) {
-	rows, err := q.QueryContext(ctx, "SELECT address, updround, normalizedonlinebalance, votelastvalid, data FROM onlineaccounts ORDER BY address, updround")
+func MakeOnlineAccountsIter(ctx context.Context, q db.Queryable, useStaging bool) (trackerdb.TableIterator[*encoded.OnlineAccountRecordV6], error) {
+	table := "onlineaccounts"
+	if useStaging {
+		table = "catchpointonlineaccounts"
+	}
+
+	rows, err := q.QueryContext(ctx, fmt.Sprintf("SELECT address, updround, normalizedonlinebalance, votelastvalid, data FROM %s ORDER BY address, updround", table))
 	if err != nil {
 		return nil, err
 	}
@@ -131,8 +136,12 @@ func scanOnlineAccount(rows *sql.Rows) (*encoded.OnlineAccountRecordV6, error) {
 }
 
 // MakeOnlineRoundParamsIter creates an onlineRoundParams iterator.
-func MakeOnlineRoundParamsIter(ctx context.Context, q db.Queryable) (trackerdb.TableIterator[*encoded.OnlineRoundParamsRecordV6], error) {
-	rows, err := q.QueryContext(ctx, "SELECT rnd, data FROM onlineroundparamstail ORDER BY rnd")
+func MakeOnlineRoundParamsIter(ctx context.Context, q db.Queryable, useStaging bool) (trackerdb.TableIterator[*encoded.OnlineRoundParamsRecordV6], error) {
+	table := "onlineroundparamstail"
+	if useStaging {
+		table = "catchpointonlineroundparamstail"
+	}
+	rows, err := q.QueryContext(ctx, fmt.Sprintf("SELECT rnd, data FROM %s ORDER BY rnd", table))
 	if err != nil {
 		return nil, err
 	}
