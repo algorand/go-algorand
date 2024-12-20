@@ -146,7 +146,7 @@ func TestStateProofAfterCatchpoint(t *testing.T) {
 	}
 	a := require.New(fixtures.SynchronizedTest(t))
 
-	consensusParams := config.Consensus[protocol.ConsensusFuture]
+	consensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
 	applyCatchpointConsensusChanges(&consensusParams)
 	applyCatchpointStateProofConsensusChanges(&consensusParams)
 	consensusParams.StateProofInterval = 16

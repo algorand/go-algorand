@@ -56,6 +56,6 @@ func TestReleasedVersion(t *testing.T) {
 	}
 
 	require.Equal(t, versionStringFromIndex(len(consensusByNumber)-1), "vFuture")
-	require.Equal(t, versionStringFromIndex(39), "v39")
+	require.Equal(t, versionStringFromIndex(40), "v40")
 
 }
