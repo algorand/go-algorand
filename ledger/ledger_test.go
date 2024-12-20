@@ -147,13 +147,16 @@ func makeNewEmptyBlock(t *testing.T, l *Ledger, GenesisID string, initAccounts m
 		Round:  l.Latest() + 1,
 		Branch: lastBlock.Hash(),
 		// Seed:       does not matter,
-		Proposer:     basics.Address{0x01}, // Must be set to _something_.
 		TimeStamp:    0,
 		GenesisID:    GenesisID,
 		Bonus:        bookkeeping.NextBonus(lastBlock.BlockHeader, &proto),
 		RewardsState: lastBlock.NextRewardsState(l.Latest()+1, proto, poolBal.MicroAlgos, totalRewardUnits, logging.Base()),
 		UpgradeState: lastBlock.UpgradeState,
 		// UpgradeVote: empty,
+	}
+
+	if proto.Payouts.Enabled {
+		blk.BlockHeader.Proposer = basics.Address{0x01} // Must be set to _something_.
 	}
 
 	blk.TxnCommitments, err = blk.PaysetCommit()
@@ -263,6 +266,8 @@ func TestLedgerBlockHeaders(t *testing.T) {
 		Round:  l.Latest() + 1,
 		Branch: lastBlock.Hash(),
 		// Seed:       does not matter,
+		Bonus:        bookkeeping.NextBonus(lastBlock.BlockHeader, &proto),
+		Proposer:     basics.Address{0x01}, // Must be set to _something_.
 		TimeStamp:    0,
 		GenesisID:    t.Name(),
 		RewardsState: lastBlock.NextRewardsState(l.Latest()+1, proto, poolBal.MicroAlgos, totalRewardUnits, logging.Base()),
