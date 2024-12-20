@@ -1453,6 +1453,7 @@ func TestStateProofLogging(t *testing.T) {
 	b.BlockHeader.GenesisHash = mockLedger.GenesisHash()
 	b.CurrentProtocol = protocol.ConsensusCurrentVersion
 	b.BlockHeader.Round = 1
+	b.BlockHeader.Bonus = basics.MicroAlgos{Raw: 10000000}
 
 	phdr, err := mockLedger.BlockHdr(0)
 	require.NoError(t, err)
