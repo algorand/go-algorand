@@ -39,12 +39,22 @@ import (
 var delegatesMoney = basics.MicroAlgos{Raw: 1000 * 1000 * 1000}
 
 var proto1 = protocol.ConsensusVersion("Test1")
+var proto1NoBonus = protocol.ConsensusVersion("Test1NoBonus")
 var proto2 = protocol.ConsensusVersion("Test2")
 var proto3 = protocol.ConsensusVersion("Test3")
 var protoUnsupported = protocol.ConsensusVersion("TestUnsupported")
 var protoDelay = protocol.ConsensusVersion("TestDelay")
 
 func init() {
+	verBeforeBonus := protocol.ConsensusV39
+	params1NB := config.Consensus[verBeforeBonus]
+	params1NB.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{
+		proto2: 0,
+	}
+	params1NB.MinUpgradeWaitRounds = 0
+	params1NB.MaxUpgradeWaitRounds = 0
+	config.Consensus[proto1NoBonus] = params1NB
+
 	params1 := config.Consensus[protocol.ConsensusCurrentVersion]
 	params1.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{
 		proto2: 0,
@@ -263,7 +273,7 @@ func TestBonus(t *testing.T) {
 	t.Parallel()
 
 	var prev Block
-	prev.CurrentProtocol = proto1
+	prev.CurrentProtocol = proto1NoBonus
 	prev.BlockHeader.GenesisID = t.Name()
 	crypto.RandBytes(prev.BlockHeader.GenesisHash[:])
 
