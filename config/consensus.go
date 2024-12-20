@@ -514,6 +514,10 @@ type ConsensusParams struct {
 	// Version 7 includes state proof verification contexts
 	EnableCatchpointsWithSPContexts bool
 
+	// EnableCatchpointsWithOnlineAccounts specifies when to enable version 8 catchpoints.
+	// Version 8 includes onlineaccounts and onlineroundparams amounts, for historical stake lookups.
+	EnableCatchpointsWithOnlineAccounts bool
+
 	// AppForbidLowResources enforces a rule that prevents apps from accessing
 	// asas and apps below 256, in an effort to decrease the ambiguity of
 	// opcodes that accept IDs or slot indexes. Simultaneously, the first ID
@@ -1536,6 +1540,8 @@ func initConsensusProtocols() {
 	vFuture.Bonus.DecayInterval = 1_000_000 // .99^(10.8M/1M) ~ .897. So ~10% decay per year
 
 	vFuture.Heartbeat = true
+
+	vFuture.EnableCatchpointsWithOnlineAccounts = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 

@@ -541,6 +541,14 @@ func (w *testStagingWriter) writeKVs(ctx context.Context, kvrs []encoded.KVRecor
 	return nil
 }
 
+func (w *testStagingWriter) writeOnlineAccounts(ctx context.Context, accounts []encoded.OnlineAccountRecordV6) error {
+	return nil
+}
+
+func (w *testStagingWriter) writeOnlineRoundParams(ctx context.Context, params []encoded.OnlineRoundParamsRecordV6) error {
+	return nil
+}
+
 func (w *testStagingWriter) writeHashes(ctx context.Context, balances []trackerdb.NormalizedAccountBalance) error {
 	for _, bal := range balances {
 		for _, hash := range bal.AccountHashes {
