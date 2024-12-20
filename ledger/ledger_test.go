@@ -147,6 +147,7 @@ func makeNewEmptyBlock(t *testing.T, l *Ledger, GenesisID string, initAccounts m
 		Round:  l.Latest() + 1,
 		Branch: lastBlock.Hash(),
 		// Seed:       does not matter,
+		Proposer:     basics.Address{0x01}, // Must be set to _something_.
 		TimeStamp:    0,
 		GenesisID:    GenesisID,
 		Bonus:        bookkeeping.NextBonus(lastBlock.BlockHeader, &proto),
