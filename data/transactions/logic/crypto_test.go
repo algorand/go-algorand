@@ -76,7 +76,7 @@ func TestSumhash(t *testing.T) {
 	}
 
 	for _, v := range testVectors {
-		testAccepts(t, fmt.Sprintf(`byte "%s"; sumhash512; byte 0x%s; ==`, v.in, v.out), 11)
+		testAccepts(t, fmt.Sprintf(`byte "%s"; sumhash512; byte 0x%s; ==`, v.in, v.out), 12)
 	}
 }
 
@@ -295,13 +295,17 @@ pop								// output`, "int 1"},
 	}
 }
 
+func randSeed() crypto.Seed {
+	var s crypto.Seed
+	crypto.RandBytes(s[:])
+	return s
+}
+
 func TestEd25519verify(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	var s crypto.Seed
-	crypto.RandBytes(s[:])
-	c := crypto.GenerateSignatureSecrets(s)
+	c := crypto.GenerateSignatureSecrets(randSeed())
 	msg := "62fdfc072182654f163f5f0f9a621d729566c74d0aa413bf009c9800418c19cd"
 	data, err := hex.DecodeString(msg)
 	require.NoError(t, err)
@@ -340,9 +344,7 @@ func TestEd25519VerifyBare(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	var s crypto.Seed
-	crypto.RandBytes(s[:])
-	c := crypto.GenerateSignatureSecrets(s)
+	c := crypto.GenerateSignatureSecrets(randSeed())
 	msg := "62fdfc072182654f163f5f0f9a621d729566c74d0aa413bf009c9800418c19cd"
 	data, err := hex.DecodeString(msg)
 	require.NoError(t, err)
@@ -388,13 +390,13 @@ func TestFalconVerify(t *testing.T) {
 	require.NoError(t, err)
 
 	yes := testProg(t, fmt.Sprintf(`arg 0; arg 1; byte 0x%s; falcon_verify`,
-		hex.EncodeToString(fs.PublicKey[:])), 11)
+		hex.EncodeToString(fs.PublicKey[:])), 12)
 	require.NoError(t, err)
 	no := testProg(t, fmt.Sprintf(`arg 0; arg 1; byte 0x%s; falcon_verify; !`,
-		hex.EncodeToString(fs.PublicKey[:])), 11)
+		hex.EncodeToString(fs.PublicKey[:])), 12)
 	require.NoError(t, err)
 
-	for v := uint64(11); v <= AssemblerMaxVersion; v++ {
+	for v := uint64(12); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			yes.Program[0] = byte(v)
 			sig, err := fs.SignBytes(data)
@@ -824,9 +826,7 @@ func BenchmarkEd25519Verifyx1(b *testing.B) {
 		crypto.RandBytes(buffer[:])
 		data = append(data, buffer)
 
-		var s crypto.Seed //generate programs and signatures
-		crypto.RandBytes(s[:])
-		secret := crypto.GenerateSignatureSecrets(s)
+		secret := crypto.GenerateSignatureSecrets(randSeed()) //generate programs and signatures
 		pk := basics.Address(secret.SignatureVerifier)
 		pkStr := pk.String()
 		ops, err := AssembleStringWithVersion(fmt.Sprintf(`arg 0
