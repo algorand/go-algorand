@@ -373,7 +373,7 @@ func (cw *catchpointFileWriter) readDatabaseStep(ctx context.Context) error {
 	if !cw.onlineAccountsDone {
 		// Create the OnlineAccounts iterator JIT
 		if cw.onlineAccountRows == nil {
-			rows, err := cw.tx.MakeOnlineAccountsIter(ctx)
+			rows, err := cw.tx.MakeOnlineAccountsIter(ctx, false)
 			if err != nil {
 				return err
 			}
@@ -402,7 +402,7 @@ func (cw *catchpointFileWriter) readDatabaseStep(ctx context.Context) error {
 	if !cw.onlineRoundParamsDone {
 		// Create the OnlineRoundParams iterator JIT
 		if cw.onlineRoundParamsRows == nil {
-			rows, err := cw.tx.MakeOnlineRoundParamsIter(ctx)
+			rows, err := cw.tx.MakeOnlineRoundParamsIter(ctx, false)
 			if err != nil {
 				return err
 			}

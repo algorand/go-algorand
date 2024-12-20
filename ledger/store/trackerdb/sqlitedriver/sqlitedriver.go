@@ -212,13 +212,13 @@ func (r *sqlReader) MakeKVsIter(ctx context.Context) (trackerdb.KVsIter, error) 
 }
 
 // MakeOnlineAccountsIter implements trackerdb.Reader
-func (r *sqlReader) MakeOnlineAccountsIter(ctx context.Context) (trackerdb.TableIterator[*encoded.OnlineAccountRecordV6], error) {
-	return MakeOnlineAccountsIter(ctx, r.q)
+func (r *sqlReader) MakeOnlineAccountsIter(ctx context.Context, useStaging bool) (trackerdb.TableIterator[*encoded.OnlineAccountRecordV6], error) {
+	return MakeOnlineAccountsIter(ctx, r.q, useStaging)
 }
 
 // MakeOnlineRoundParamsIter implements trackerdb.Reader
-func (r *sqlReader) MakeOnlineRoundParamsIter(ctx context.Context) (trackerdb.TableIterator[*encoded.OnlineRoundParamsRecordV6], error) {
-	return MakeOnlineRoundParamsIter(ctx, r.q)
+func (r *sqlReader) MakeOnlineRoundParamsIter(ctx context.Context, useStaging bool) (trackerdb.TableIterator[*encoded.OnlineRoundParamsRecordV6], error) {
+	return MakeOnlineRoundParamsIter(ctx, r.q, useStaging)
 }
 
 type sqlWriter struct {
