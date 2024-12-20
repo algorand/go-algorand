@@ -1539,6 +1539,8 @@ func initConsensusProtocols() {
 
 	v40.Heartbeat = true
 
+	v40.EnableCatchpointsWithOnlineAccounts = true
+
 	Consensus[protocol.ConsensusV40] = v40
 
 	// v39 can be upgraded to v40, with an update delay of 7d:
@@ -1552,8 +1554,6 @@ func initConsensusProtocols() {
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
 	vFuture.LogicSigVersion = 12 // When moving this to a release, put a new higher LogicSigVersion here
-
-	vFuture.EnableCatchpointsWithOnlineAccounts = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 
