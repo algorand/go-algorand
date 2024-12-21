@@ -943,23 +943,35 @@ func (n *P2PNetwork) txTopicHandleLoop() {
 	}
 }
 
+type gsPeer struct {
+	peerID peer.ID
+	net    *P2PNetwork
+}
+
+func (p *gsPeer) GetNetwork() GossipNode {
+	return p.net
+}
+
+func (p *gsPeer) RoutingAddr() []byte {
+	return []byte(p.peerID)
+}
+
 // txTopicValidator calls txHandler to validate and process incoming transactions.
 func (n *P2PNetwork) txTopicValidator(ctx context.Context, peerID peer.ID, msg *pubsub.Message) pubsub.ValidationResult {
-	var routingAddr [8]byte
 	n.wsPeersLock.Lock()
-	var wsp *wsPeer
-	var ok bool
-	if wsp, ok = n.wsPeers[peerID]; ok {
-		copy(routingAddr[:], wsp.RoutingAddr())
+	var sender DisconnectableAddressablePeer
+	if wsp, ok := n.wsPeers[peerID]; ok {
+		sender = wsp
 	} else {
-		// well, otherwise use last 8 bytes of peerID
-		copy(routingAddr[:], peerID[len(peerID)-8:])
+		// otherwise use the peerID to handle the case where this peer is not in the wsPeers map yet
+		// this can happen when pubsub receives new peer notifications before the wsStreamHandler is called:
+		// create a fake peer that is good enough for tx handler to work with.
+		sender = &gsPeer{peerID: peerID, net: n}
 	}
 	n.wsPeersLock.Unlock()
 
 	inmsg := IncomingMessage{
-		// Sender:   gossipSubPeer{peerID: msg.ReceivedFrom, net: n, routingAddr: routingAddr},
-		Sender:   wsp,
+		Sender:   sender,
 		Tag:      protocol.TxnTag,
 		Data:     msg.Data,
 		Net:      n,

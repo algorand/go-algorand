@@ -284,7 +284,7 @@ const (
 type broadcastRequest struct {
 	tags        []Tag
 	data        [][]byte
-	except      *wsPeer
+	except      Peer
 	done        chan struct{}
 	enqueueTime time.Time
 	ctx         context.Context
@@ -381,7 +381,7 @@ func (wn *msgBroadcaster) BroadcastArray(ctx context.Context, tags []protocol.Ta
 
 	request := broadcastRequest{tags: tags, data: data, enqueueTime: time.Now(), ctx: ctx}
 	if except != nil {
-		request.except = except.(*wsPeer)
+		request.except = except
 	}
 
 	broadcastQueue := wn.broadcastQueueBulk
@@ -1401,7 +1401,7 @@ func (wn *msgBroadcaster) innerBroadcast(request broadcastRequest, prio bool, pe
 		if wn.config.BroadcastConnectionsLimit >= 0 && sentMessageCount >= wn.config.BroadcastConnectionsLimit {
 			break
 		}
-		if peer == request.except {
+		if Peer(peer) == request.except {
 			continue
 		}
 		ok := peer.writeNonBlockMsgs(request.ctx, data, prio, digests, request.enqueueTime)
