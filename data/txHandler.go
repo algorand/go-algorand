@@ -267,7 +267,8 @@ func (handler *TxHandler) Start() {
 		{Tag: protocol.TxnTag, MessageHandler: network.ValidateHandleFunc(handler.validateIncomingTxMessage)},
 	})
 
-	handler.backlogWg.Add(2)
+	handler.backlogWg.Add(3)
+	go handler.backlogWorker()
 	go handler.backlogWorker()
 	go handler.backlogGaugeThread()
 	handler.streamVerifier.Start(handler.ctx)

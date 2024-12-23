@@ -926,10 +926,34 @@ func (eval *BlockEvaluator) ResetTxnBytes() {
 	eval.blockTxBytes = 0
 }
 
+// TestTransactionGroup is only called by tests.
+func (eval *BlockEvaluator) TestTransactionGroup(txgroup []transactions.SignedTxn) error {
+	return NewTransactionGroupTester(eval.proto, eval.specials, eval.block, eval.state.checkDup).TestTransactionGroup(txgroup)
+}
+
+// TransactionGroupTester performs basic transaction checks for well-formedness and duplicate detection.
+type TransactionGroupTester struct {
+	proto      config.ConsensusParams
+	specials   transactions.SpecialAddresses
+	txnContext transactions.TxnContext
+	checkDup   func(firstValid, lastValid basics.Round, txid transactions.Txid, txl ledgercore.Txlease) error
+}
+
+// NewTransactionGroupTester creates a new TransactionGroupTester for use in calling TestTransactionGroup.
+func NewTransactionGroupTester(proto config.ConsensusParams, specials transactions.SpecialAddresses, txnContext transactions.TxnContext, checkDup func(firstValid, lastValid basics.Round, txid transactions.Txid, txl ledgercore.Txlease) error) *TransactionGroupTester {
+	return &TransactionGroupTester{
+		proto:      proto,
+		specials:   specials,
+		txnContext: txnContext,
+		checkDup:   checkDup,
+	}
+}
+
 // TestTransactionGroup performs basic duplicate detection and well-formedness checks
 // on a transaction group, but does not actually add the transactions to the block
 // evaluator, or modify the block evaluator state in any other visible way.
-func (eval *BlockEvaluator) TestTransactionGroup(txgroup []transactions.SignedTxn) error {
+// It uses a TestEvalContext to access needed recent ledger state.
+func (eval TransactionGroupTester) TestTransactionGroup(txgroup []transactions.SignedTxn) error {
 	// Nothing to do if there are no transactions.
 	if len(txgroup) == 0 {
 		return nil
@@ -988,9 +1012,9 @@ func (eval *BlockEvaluator) TestTransactionGroup(txgroup []transactions.SignedTx
 // TestTransaction performs basic duplicate detection and well-formedness checks
 // on a single transaction, but does not actually add the transaction to the block
 // evaluator, or modify the block evaluator state in any other visible way.
-func (eval *BlockEvaluator) TestTransaction(txn transactions.SignedTxn) error {
+func (eval TransactionGroupTester) TestTransaction(txn transactions.SignedTxn) error {
 	// Transaction valid (not expired)?
-	err := txn.Txn.Alive(eval.block)
+	err := txn.Txn.Alive(eval.txnContext)
 	if err != nil {
 		return err
 	}
@@ -1003,7 +1027,8 @@ func (eval *BlockEvaluator) TestTransaction(txn transactions.SignedTxn) error {
 
 	// Transaction already in the ledger?
 	txid := txn.ID()
-	err = eval.state.checkDup(txn.Txn.First(), txn.Txn.Last(), txid, ledgercore.Txlease{Sender: txn.Txn.Sender, Lease: txn.Txn.Lease})
+	// BlockEvaluator.transaction will check again using cow.checkDup later, if the pool tries to add this transaction to the block.
+	err = eval.checkDup(txn.Txn.First(), txn.Txn.Last(), txid, ledgercore.Txlease{Sender: txn.Txn.Sender, Lease: txn.Txn.Lease})
 	if err != nil {
 		return err
 	}
@@ -1185,6 +1210,7 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 		}
 
 		// Transaction already in the ledger?
+		// this checks against the txns added to this evaluator; testTransaction currently only checks against committed txns.
 		err = cow.checkDup(txn.Txn.First(), txn.Txn.Last(), txid, ledgercore.Txlease{Sender: txn.Txn.Sender, Lease: txn.Txn.Lease})
 		if err != nil {
 			return err
