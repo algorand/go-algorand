@@ -1,7 +1,7 @@
 # Block Payouts, Suspensions, and Heartbeats
 
 Running a validator node on Algorand is a relatively lightweight operation. Therefore, participation
-in consensus was not compensated. There was an expectation that financial motivated holders of Algos
+in consensus was not compensated. There was an expectation that financially motivated holders of Algos
 would run nodes in order to help secure their holdings.
 
 Although simple participation is not terribly resource intensive, running _any_ service with high
@@ -11,13 +11,13 @@ face of hardware failure (or the accounts should leave consensus properly).
 
 With those burdens in mind, fewer Algo holders chose to run participation nodes than would be
 preferred to provide security against well-financed bad actors.  To alleviate this problem, a
-mechanism to reward block proposers has been created.  With these _block payouts_ in place, large
+mechanism to reward block proposers has been created.  With these _block payouts_ in place,
 Algo holders are incentivized to run participation nodes in order to earn more Algos, increasing
 security for the entire Algorand network.
 
 With the financial incentive to run participation nodes comes the risk that some nodes may be
 operated without sufficient care.  Therefore, a mechanism to _suspend_ nodes that appear to be
-performing poorly (or not at all). Appearances can be deceiving, however. Since Algorand is a
+performing poorly (or not at all) is required. Appearances can be deceiving, however. Since Algorand is a
 probabilistic consensus protocol, pure chance might lead to a node appearing to be delinquent. A new
 transaction type, the _heartbeat_, allows a node to explicitly indicate that it is online even if it
 does not propose blocks due to "bad luck".
@@ -26,17 +26,17 @@ does not propose blocks due to "bad luck".
 
 Payouts are made in every block, if the proposer has opted into receiving them, has an Algo balance
 in an appropriate range, and has not been suspended for poor behavior since opting-in.  The size of
-the payout is indicated in the block header, and comes from the `FeeSink`. The block payout consist
+the payout is indicated in the block header, and comes from the `FeeSink`. The block payout consists
 of two components. First, a portion of the block fees (currently 50%) are paid to the proposer.
-This component incentives fuller blocks which lead to larger payouts. Second, a _bonus_ payout is
-made according to a exponentially decaying formula.  This bonus is (intentionally) unsustainable
+This component incentivizes fuller blocks which lead to larger payouts. Second, a _bonus_ payout is
+made according to an exponentially decaying formula.  This bonus is (intentionally) unsustainable
 from protocol fees.  It is expected that the Algorand Foundation will seed the `FeeSink` with
 sufficient funds to allow the bonuses to be paid out according to the formula for several years.  If
 the `FeeSink` has insufficient funds for the sum of these components, the payout will be as high as
 possible while maintaining the `FeeSink`'s minimum balance.  These calculations are performed in
 `endOfBlock` in `eval/eval.go`.
 
-To opt-in to receiving block payouts, an account includes an extra fee in the `keyreg`
+To opt-in to receive block payouts, an account includes an extra fee in the `keyreg`
 transaction. The amount is controlled by the consensus parameter `Payouts.GoOnlineFee`. When such a
 fee is included, a new account state bit, `IncentiveEligible` is set to true.
 
@@ -47,7 +47,7 @@ stake.  If the account has too much or too little, no payout is performed (thoug
 rounds earlier, so a clever proposer can not move Algos in the round it proposes in order to receive
 the payout. Finally, in an interesting corner case, a proposing account could be closed at proposal
 time, since voting is based on the earlier balance. Such an account receives no payout, even if its
-balances was in the proper range 320 rounds ago.
+balance was in the proper range 320 rounds ago.
 
 A surprising complication in the implementation of these payouts is that when a block is prepared by
 a node, it does not know which account is the proposer. Until now, `algod` could prepare a single
@@ -98,7 +98,7 @@ to 320 rounds past the current round.
 ## Challenges
 
 The absenteeism checks quickly suspend a high-value account if it becomes inoperative.  For example,
-and account with 2% of stake can be marked absent after 500 rounds (about 24 minutes). After
+an account with 2% of stake can be marked absent after 500 rounds (about 24 minutes). After
 suspension, the effect on consensus is mitigated after 320 more rounds (about 15
 minutes). Therefore, the suspension mechanism makes Algorand significantly more robust in the face
 of operational errors.
@@ -106,7 +106,7 @@ of operational errors.
 However, the absenteeism mechanism is very slow to notice small accounts.  An account with 30,000
 Algos might represent 1/100,000 or less of total stake. It would only be considered absent after a
 million or more rounds without a proposal.  At current network speeds, this is about a month. With such
-slow detection, a financially motived entity might make the decision to run a node even if they lack
+slow detection, a financially motivated entity might make the decision to run a node even if they lack
 the wherewithal to run the node with excellent uptime. A worst case scenario might be a node that is
 turned off daily, overnight.  Such a node would generate profit for the runner, would probably never
 be marked offline by the absenteeism mechanism, yet would impact consensus negatively. Algorand
@@ -136,11 +136,11 @@ committed your latest round yet.
 
 It is relatively easy for a bad actor to emit Heartbeats for its accounts without actually
 participating. However, there is no financial incentive to do so.  Pretending to be operational when
-offline does not earn block payouts.  Furthermore, running a server to monitor the block chain to
+offline does not earn block payouts.  Furthermore, running a server to monitor the blockchain to
 notice challenges and gather the recent blockseed is not significantly cheaper than simply running a
 functional node. It is _already_ possible for malicious, well-resourced accounts to cause consensus
 difficulties by putting significant stake online without actually participating.  Heartbeats do not
-mitigate that risk. But these mechanisms have been designed to avoid _motivating_ such behavior, so
+mitigate that risk. Heartbeats have rather been designed to avoid _motivating_ such behavior, so
 that they can accomplish their actual goal of noticing poor behavior stemming from _inadvertent_
 operational problems.
 
@@ -163,13 +163,13 @@ The conditions for a free Heartbeat are:
 
 ## Heartbeat Service
 
-The Heartbeat Service (`heartbeat/service.go`) watches the state of all acounts for which `algod`
+The Heartbeat Service (`heartbeat/service.go`) watches the state of all accounts for which `algod`
 has participation keys.  If any of those accounts meets the requirements above, a heartbeat
 transaction is sent, starting with the round following half a grace period from the challenge. It
 uses the (presumably unfunded) logicsig that does nothing except preclude rekey operations.
 
 The heartbeat service does _not_ heartbeat if an account is unlucky and threatened to be considered
-absent.  We presume such false postives to be so unlikely that, if they occur, the node must be
+absent.  We presume such false positives to be so unlikely that, if they occur, the node must be
 brought back online manually. It would be reasonable to consider in the future:
 
 1. Making heartbeats free for accounts that are "nearly absent".
