@@ -58,7 +58,7 @@ type addressData struct {
 	mu           *deadlock.RWMutex
 
 	// role is the role that this address serves.
-	role phonebook.PhoneBookEntryRoles
+	role phonebook.Roles
 
 	// persistent is set true for peers whose record should not be removed for the peer list
 	persistent bool
@@ -97,7 +97,7 @@ func MakePhonebook(connectionsRateLimitingCount uint,
 }
 
 // GetAddresses returns up to N addresses, but may return fewer
-func (ps *PeerStore) GetAddresses(n int, role phonebook.PhoneBookEntryRoles) []*peer.AddrInfo {
+func (ps *PeerStore) GetAddresses(n int, role phonebook.Roles) []*peer.AddrInfo {
 	return shuffleSelect(ps.filterRetryTime(time.Now(), role), n)
 }
 
@@ -205,7 +205,7 @@ func (ps *PeerStore) UpdateConnectionTime(addrOrPeerID string, provisionalTime t
 }
 
 // ReplacePeerList replaces the peer list for the given networkName and role.
-func (ps *PeerStore) ReplacePeerList(addressesThey []*peer.AddrInfo, networkName string, role phonebook.PhoneBookEntryRoles) {
+func (ps *PeerStore) ReplacePeerList(addressesThey []*peer.AddrInfo, networkName string, role phonebook.Roles) {
 	// prepare a map of items we'd like to remove.
 	removeItems := make(map[peer.ID]bool, 0)
 	peerIDs := ps.Peers()
@@ -213,11 +213,21 @@ func (ps *PeerStore) ReplacePeerList(addressesThey []*peer.AddrInfo, networkName
 		data, _ := ps.Get(pid, addressDataKey)
 		if data != nil {
 			ad := data.(addressData)
+			updated := false
 			ad.mu.RLock()
-			if ad.networkNames[networkName] && ad.role == role && !ad.persistent {
-				removeItems[pid] = true
+			if ad.networkNames[networkName] && !ad.persistent {
+				if ad.role.Is(role) {
+					removeItems[pid] = true
+				} else if ad.role.Has(role) {
+					ad.role.Remove(role)
+					updated = true
+				}
 			}
 			ad.mu.RUnlock()
+
+			if updated {
+				_ = ps.Put(pid, addressDataKey, ad)
+			}
 		}
 
 	}
@@ -229,7 +239,9 @@ func (ps *PeerStore) ReplacePeerList(addressesThey []*peer.AddrInfo, networkName
 			ad := data.(addressData)
 			ad.mu.Lock()
 			ad.networkNames[networkName] = true
+			ad.role.Assign(role)
 			ad.mu.Unlock()
+			_ = ps.Put(info.ID, addressDataKey, ad)
 
 			// do not remove this entry
 			delete(removeItems, info.ID)
@@ -249,7 +261,7 @@ func (ps *PeerStore) ReplacePeerList(addressesThey []*peer.AddrInfo, networkName
 
 // AddPersistentPeers stores addresses of peers which are persistent.
 // i.e. they won't be replaced by ReplacePeerList calls
-func (ps *PeerStore) AddPersistentPeers(addrInfo []*peer.AddrInfo, networkName string, role phonebook.PhoneBookEntryRoles) {
+func (ps *PeerStore) AddPersistentPeers(addrInfo []*peer.AddrInfo, networkName string, role phonebook.Roles) {
 	for _, info := range addrInfo {
 		data, _ := ps.Get(info.ID, addressDataKey)
 		if data != nil {
@@ -273,7 +285,7 @@ func (ps *PeerStore) Length() int {
 }
 
 // makePhonebookEntryData creates a new address entry for provided network name and role.
-func makePhonebookEntryData(networkName string, role phonebook.PhoneBookEntryRoles, persistent bool) addressData {
+func makePhonebookEntryData(networkName string, role phonebook.Roles, persistent bool) addressData {
 	pbData := addressData{
 		networkNames:          make(map[string]bool),
 		mu:                    &deadlock.RWMutex{},
@@ -320,13 +332,13 @@ func (ps *PeerStore) popNElements(n int, peerID peer.ID) {
 	_ = ps.Put(peerID, addressDataKey, ad)
 }
 
-func (ps *PeerStore) filterRetryTime(t time.Time, role phonebook.PhoneBookEntryRoles) []*peer.AddrInfo {
+func (ps *PeerStore) filterRetryTime(t time.Time, role phonebook.Roles) []*peer.AddrInfo {
 	o := make([]*peer.AddrInfo, 0, len(ps.Peers()))
 	for _, peerID := range ps.Peers() {
 		data, _ := ps.Get(peerID, addressDataKey)
 		if data != nil {
 			ad := data.(addressData)
-			if t.After(ad.retryAfter) && role == ad.role {
+			if t.After(ad.retryAfter) && ad.role.Has(role) {
 				mas := ps.Addrs(peerID)
 				info := peer.AddrInfo{ID: peerID, Addrs: mas}
 				o = append(o, &info)
