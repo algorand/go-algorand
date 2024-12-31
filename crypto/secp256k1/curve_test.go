@@ -7,7 +7,6 @@ import (
 	"github.com/algorand/go-algorand/crypto/secp256k1"
 )
 
-// Helper function to create a new big.Int from a hex string
 func newBigInt(hex string) *big.Int {
 	i, success := new(big.Int).SetString(hex, 0)
 	if !success {
@@ -40,12 +39,10 @@ func TestIsOnCurve(t *testing.T) {
 func TestAdd(t *testing.T) {
 	curve := secp256k1.S256()
 
-	// Adding G to G should result in 2G
 	x1, y1 := curve.Gx, curve.Gy
 	x2, y2 := curve.Gx, curve.Gy
 	x3, y3 := curve.Add(x1, y1, x2, y2)
 
-	// Check if the result is on the curve
 	if !curve.IsOnCurve(x3, y3) {
 		t.Errorf("Add failed: point (x=%s, y=%s) is not on the curve", x3, y3)
 	}
@@ -54,11 +51,9 @@ func TestAdd(t *testing.T) {
 func TestDouble(t *testing.T) {
 	curve := secp256k1.S256()
 
-	// Doubling G should result in 2G
 	x1, y1 := curve.Gx, curve.Gy
 	x2, y2 := curve.Double(x1, y1)
 
-	// Check if the result is on the curve
 	if !curve.IsOnCurve(x2, y2) {
 		t.Errorf("Double failed: point (x=%s, y=%s) is not on the curve", x2, y2)
 	}
@@ -67,18 +62,15 @@ func TestDouble(t *testing.T) {
 func TestScalarBaseMult(t *testing.T) {
 	curve := secp256k1.S256()
 
-	// Ensure curve is initialized
 	if curve == nil {
 		t.Fatal("curve initialization failed: secp256k1.S256() returned nil")
 	}
 
-	// Multiply the base point by 1, should return the base point itself
 	x, y := curve.ScalarBaseMult([]byte{1})
 	if x == nil || y == nil || x.Cmp(curve.Gx) != 0 || y.Cmp(curve.Gy) != 0 {
 		t.Errorf("ScalarBaseMult failed for k=1: got (x=%v, y=%v), expected (x=%v, y=%v)", x, y, curve.Gx, curve.Gy)
 	}
 
-	// Multiply the base point by 0
 	k := []byte{0}
 	x, y = curve.ScalarBaseMult(k)
 	if x == nil && y == nil {
@@ -91,7 +83,6 @@ func TestScalarBaseMult(t *testing.T) {
 func TestMarshalUnmarshal(t *testing.T) {
 	curve := secp256k1.S256()
 
-	// Marshal and unmarshal the base point
 	x, y := curve.Gx, curve.Gy
 	data := curve.Marshal(x, y)
 	x2, y2 := curve.Unmarshal(data)
@@ -104,7 +95,6 @@ func TestMarshalUnmarshal(t *testing.T) {
 func TestAddInfinity(t *testing.T) {
 	curve := secp256k1.S256()
 
-	// Adding a point to the point at infinity should return the original point
 	x, y := curve.Gx, curve.Gy
 	xInf := new(big.Int).SetInt64(0)
 	yInf := new(big.Int).SetInt64(0)
@@ -118,7 +108,6 @@ func TestAddInfinity(t *testing.T) {
 func TestDoubleInfinity(t *testing.T) {
 	curve := secp256k1.S256()
 
-	// Doubling the point at infinity should return the point at infinity
 	xInf := new(big.Int).SetInt64(0)
 	yInf := new(big.Int).SetInt64(0)
 
@@ -130,8 +119,6 @@ func TestDoubleInfinity(t *testing.T) {
 
 func TestInvalidInputs(t *testing.T) {
 	curve := secp256k1.S256()
-
-	// Test with negative inputs
 	negX := new(big.Int).Neg(curve.Gx)
 	negY := new(big.Int).Neg(curve.Gy)
 	if curve.IsOnCurve(negX, negY) {
