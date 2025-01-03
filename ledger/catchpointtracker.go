@@ -213,7 +213,7 @@ func (ct *catchpointTracker) getSPVerificationData() (encodedData []byte, spVeri
 	return encodedData, spVerificationHash, nil
 }
 
-func (ct *catchpointTracker) finishFirstStage(ctx context.Context, dbRound basics.Round, blockProto protocol.ConsensusVersion, updatingBalancesDuration time.Duration) error {
+func (ct *catchpointTracker) finishFirstStage(ctx context.Context, dbRound basics.Round, onlineAccountsForgetBefore basics.Round, blockProto protocol.ConsensusVersion, updatingBalancesDuration time.Duration) error {
 	ct.log.Infof("finishing catchpoint's first stage dbRound: %d", dbRound)
 
 	var totalAccounts, totalKVs, totalOnlineAccounts, totalOnlineRoundParams uint64
@@ -223,8 +223,26 @@ func (ct *catchpointTracker) finishFirstStage(ctx context.Context, dbRound basic
 	var spVerificationEncodedData []byte
 	var catchpointGenerationStats telemetryspec.CatchpointGenerationEventDetails
 	var onlineAccountsHash, onlineRoundParamsHash crypto.Digest
-
 	params := config.Consensus[blockProto]
+
+	// Usually onlineAccountsForgetBefore is dbRound - params.MaxBalLookback (320 roudns of history),
+	// but if votersTracker needs more state, it can set lowestRound to be earlier than that.
+	// We want to only write MaxBalLookback rounds of history to the catchpoint file.
+	var onlineExcludeBefore basics.Round
+	if (dbRound + 1).SubSaturate(basics.Round(params.MaxBalLookback)) == onlineAccountsForgetBefore {
+		// this is the common case, so we pass 0 so the DB dumps the full table, as is
+		onlineExcludeBefore = 0
+	} else if (dbRound + 1).SubSaturate(basics.Round(params.MaxBalLookback)) > onlineAccountsForgetBefore {
+		// the previous flush left more online-related rows than we want in the DB. we need to tell
+		// the catchpoint writer to exclude the rows that are older than the ones we want to keep.
+		onlineExcludeBefore = (dbRound + 1).SubSaturate(basics.Round(params.MaxBalLookback))
+	} else {
+		// The previous flush left less online-related rows than we want in the DB. This should not happen; return error
+		ct.log.Errorf("catchpointTracker.finishFirstStage: dbRound %d and onlineAccountsForgetBefore %d has less history than MaxBalLookback %d",
+			dbRound, onlineAccountsForgetBefore, params.MaxBalLookback)
+		return errors.New("catchpointTracker.finishFirstStage: onlineAccountsForgetBefore doesn't provide enough history")
+	}
+
 	if params.EnableCatchpointsWithSPContexts {
 		// Generate the SP Verification hash and encoded data. The hash is used in the label when tracking catchpoints,
 		// and the encoded data for that hash will be added to the catchpoint file if catchpoint generation is enabled.
@@ -238,13 +256,13 @@ func (ct *catchpointTracker) finishFirstStage(ctx context.Context, dbRound basic
 		// Generate hashes of the onlineaccounts and onlineroundparams tables.
 		err := ct.dbs.Snapshot(func(ctx context.Context, tx trackerdb.SnapshotScope) error {
 			var dbErr error
-			onlineAccountsHash, _, dbErr = calculateVerificationHash(ctx, tx.MakeOnlineAccountsIter, false)
+			onlineAccountsHash, _, dbErr = calculateVerificationHash(ctx, tx.MakeOnlineAccountsIter, onlineExcludeBefore, false)
 			if dbErr != nil {
 				return dbErr
 
 			}
 
-			onlineRoundParamsHash, _, dbErr = calculateVerificationHash(ctx, tx.MakeOnlineRoundParamsIter, false)
+			onlineRoundParamsHash, _, dbErr = calculateVerificationHash(ctx, tx.MakeOnlineRoundParamsIter, onlineExcludeBefore, false)
 			if dbErr != nil {
 				return dbErr
 			}
@@ -264,7 +282,7 @@ func (ct *catchpointTracker) finishFirstStage(ctx context.Context, dbRound basic
 
 		catchpointGenerationStats.BalancesWriteTime = uint64(updatingBalancesDuration.Nanoseconds())
 		totalAccounts, totalKVs, totalOnlineAccounts, totalOnlineRoundParams, totalChunks, biggestChunkLen, err = ct.generateCatchpointData(
-			ctx, params, dbRound, &catchpointGenerationStats, spVerificationEncodedData)
+			ctx, params, dbRound, onlineExcludeBefore, &catchpointGenerationStats, spVerificationEncodedData)
 		ct.catchpointDataWriting.Store(0)
 		if err != nil {
 			return err
@@ -308,7 +326,11 @@ func (ct *catchpointTracker) finishFirstStageAfterCrash(dbRound basics.Round, bl
 		return err
 	}
 
-	return ct.finishFirstStage(context.Background(), dbRound, blockProto, 0)
+	// pass dbRound+1-maxBalLookback as the onlineExcludeBefore parameter: since we can't be sure whether
+	// there are more than 320 rounds of history in the online accounts tables, this ensures the catchpoint
+	// will only contain the most recent 320 rounds.
+	onlineExcludeBefore := (dbRound + 1).SubSaturate(basics.Round(config.Consensus[blockProto].MaxBalLookback))
+	return ct.finishFirstStage(context.Background(), dbRound, onlineExcludeBefore, blockProto, 0)
 }
 
 func (ct *catchpointTracker) finishCatchpointsAfterCrash(blockProto protocol.ConsensusVersion, catchpointLookback uint64) error {
@@ -977,7 +999,7 @@ func (ct *catchpointTracker) postCommitUnlocked(ctx context.Context, dcc *deferr
 	if dcc.catchpointFirstStage {
 		round := dcc.newBase()
 		blockProto := dcc.committedProtocolVersion[round-dcc.oldBase-1]
-		err := ct.finishFirstStage(ctx, round, blockProto, dcc.updatingBalancesDuration)
+		err := ct.finishFirstStage(ctx, round, dcc.onlineAccountsForgetBefore, blockProto, dcc.updatingBalancesDuration)
 		if err != nil {
 			ct.log.Warnf(
 				"error finishing catchpoint's first stage dcc.newBase: %d err: %v",
@@ -1209,7 +1231,7 @@ func (ct *catchpointTracker) isWritingCatchpointDataFile() bool {
 //   - Balance and KV chunk (named balances.x.msgpack).
 //     ...
 //   - Balance and KV chunk (named balances.x.msgpack).
-func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, params config.ConsensusParams, accountsRound basics.Round, catchpointGenerationStats *telemetryspec.CatchpointGenerationEventDetails, encodedSPData []byte) (totalAccounts, totalKVs, totalOnlineAccounts, totalOnlineRoundParams, totalChunks, biggestChunkLen uint64, err error) {
+func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, params config.ConsensusParams, accountsRound basics.Round, onlineExcludeBefore basics.Round, catchpointGenerationStats *telemetryspec.CatchpointGenerationEventDetails, encodedSPData []byte) (totalAccounts, totalKVs, totalOnlineAccounts, totalOnlineRoundParams, totalChunks, biggestChunkLen uint64, err error) {
 	ct.log.Debugf("catchpointTracker.generateCatchpointData() writing catchpoint accounts for round %d", accountsRound)
 
 	startTime := time.Now()
@@ -1233,7 +1255,7 @@ func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, params 
 	start := time.Now()
 	ledgerGeneratecatchpointCount.Inc(nil)
 	err = ct.dbs.SnapshotContext(ctx, func(dbCtx context.Context, tx trackerdb.SnapshotScope) (err error) {
-		catchpointWriter, err = makeCatchpointFileWriter(dbCtx, params, catchpointDataFilePath, tx, ResourcesPerCatchpointFileChunk)
+		catchpointWriter, err = makeCatchpointFileWriter(dbCtx, params, catchpointDataFilePath, tx, ResourcesPerCatchpointFileChunk, onlineExcludeBefore)
 		if err != nil {
 			return
 		}

@@ -723,7 +723,11 @@ func (w *accountsV2Writer) TxtailNewRound(ctx context.Context, baseRound basics.
 // After this cleanup runs, accounts in this table will have either one entry (if all entries besides the latest are expired),
 // or will have more than one entry (if multiple entries are not yet expired).
 func (w *accountsV2Writer) OnlineAccountsDelete(forgetBefore basics.Round) (err error) {
-	rows, err := w.e.Query("SELECT rowid, address, updRound, data FROM onlineaccounts WHERE updRound < ? ORDER BY address, updRound DESC", forgetBefore)
+	return w.onlineAccountsDelete(forgetBefore, "onlineaccounts")
+}
+
+func (w *accountsV2Writer) onlineAccountsDelete(forgetBefore basics.Round, table string) (err error) {
+	rows, err := w.e.Query("SELECT rowid, address, updRound, data FROM %s WHERE updRound < ? ORDER BY address, updRound DESC", table, forgetBefore)
 	if err != nil {
 		return err
 	}

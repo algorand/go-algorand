@@ -25,6 +25,7 @@ import (
 	"path/filepath"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/encoded"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
@@ -69,6 +70,7 @@ type catchpointFileWriter struct {
 	biggestChunkLen        uint64
 	accountsIterator       trackerdb.EncodedAccountsBatchIter
 	maxResourcesPerChunk   int
+	onlineExcludeBefore    basics.Round
 	accountsDone           bool
 	kvRows                 trackerdb.KVsIter
 	kvDone                 bool
@@ -106,7 +108,7 @@ func (data catchpointStateProofVerificationContext) ToBeHashed() (protocol.HashI
 	return protocol.StateProofVerCtx, protocol.Encode(&data)
 }
 
-func makeCatchpointFileWriter(ctx context.Context, params config.ConsensusParams, filePath string, tx trackerdb.SnapshotScope, maxResourcesPerChunk int) (*catchpointFileWriter, error) {
+func makeCatchpointFileWriter(ctx context.Context, params config.ConsensusParams, filePath string, tx trackerdb.SnapshotScope, maxResourcesPerChunk int, onlineExcludeBefore basics.Round) (*catchpointFileWriter, error) {
 	aw, err := tx.MakeAccountsReader()
 	if err != nil {
 		return nil, err
@@ -163,6 +165,7 @@ func makeCatchpointFileWriter(ctx context.Context, params config.ConsensusParams
 		tar:                    tar,
 		accountsIterator:       tx.MakeEncodedAccountsBatchIter(),
 		maxResourcesPerChunk:   maxResourcesPerChunk,
+		onlineExcludeBefore:    onlineExcludeBefore,
 	}
 	return res, nil
 }
@@ -379,7 +382,7 @@ func (cw *catchpointFileWriter) readDatabaseStep(ctx context.Context) error {
 	if cw.params.EnableOnlineAccountCatchpoints && !cw.onlineAccountsDone {
 		// Create the OnlineAccounts iterator JIT
 		if cw.onlineAccountRows == nil {
-			rows, err := cw.tx.MakeOnlineAccountsIter(ctx, false)
+			rows, err := cw.tx.MakeOnlineAccountsIter(ctx, false, cw.onlineExcludeBefore)
 			if err != nil {
 				return err
 			}
@@ -408,7 +411,7 @@ func (cw *catchpointFileWriter) readDatabaseStep(ctx context.Context) error {
 	if cw.params.EnableOnlineAccountCatchpoints && !cw.onlineRoundParamsDone {
 		// Create the OnlineRoundParams iterator JIT
 		if cw.onlineRoundParamsRows == nil {
-			rows, err := cw.tx.MakeOnlineRoundParamsIter(ctx, false)
+			rows, err := cw.tx.MakeOnlineRoundParamsIter(ctx, false, cw.onlineExcludeBefore)
 			if err != nil {
 				return err
 			}
