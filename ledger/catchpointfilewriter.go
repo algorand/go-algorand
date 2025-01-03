@@ -24,6 +24,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/ledger/encoded"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
@@ -53,6 +54,7 @@ const (
 type catchpointFileWriter struct {
 	ctx                    context.Context
 	tx                     trackerdb.SnapshotScope
+	params                 config.ConsensusParams
 	filePath               string
 	totalAccounts          uint64
 	totalKVs               uint64
@@ -104,7 +106,7 @@ func (data catchpointStateProofVerificationContext) ToBeHashed() (protocol.HashI
 	return protocol.StateProofVerCtx, protocol.Encode(&data)
 }
 
-func makeCatchpointFileWriter(ctx context.Context, filePath string, tx trackerdb.SnapshotScope, maxResourcesPerChunk int) (*catchpointFileWriter, error) {
+func makeCatchpointFileWriter(ctx context.Context, params config.ConsensusParams, filePath string, tx trackerdb.SnapshotScope, maxResourcesPerChunk int) (*catchpointFileWriter, error) {
 	aw, err := tx.MakeAccountsReader()
 	if err != nil {
 		return nil, err
@@ -120,14 +122,17 @@ func makeCatchpointFileWriter(ctx context.Context, filePath string, tx trackerdb
 		return nil, err
 	}
 
-	totalOnlineAccounts, err := aw.TotalOnlineAccountRows(ctx)
-	if err != nil {
-		return nil, err
-	}
+	var totalOnlineAccounts, totalOnlineRoundParams uint64
+	if params.EnableCatchpointsWithOnlineAccounts {
+		totalOnlineAccounts, err = aw.TotalOnlineAccountRows(ctx)
+		if err != nil {
+			return nil, err
+		}
 
-	totalOnlineRoundParams, err := aw.TotalOnlineRoundParams(ctx)
-	if err != nil {
-		return nil, err
+		totalOnlineRoundParams, err = aw.TotalOnlineRoundParams(ctx)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	err = os.MkdirAll(filepath.Dir(filePath), 0700)
@@ -147,6 +152,7 @@ func makeCatchpointFileWriter(ctx context.Context, filePath string, tx trackerdb
 	res := &catchpointFileWriter{
 		ctx:                    ctx,
 		tx:                     tx,
+		params:                 params,
 		filePath:               filePath,
 		totalAccounts:          totalAccounts,
 		totalKVs:               totalKVs,
@@ -370,7 +376,7 @@ func (cw *catchpointFileWriter) readDatabaseStep(ctx context.Context) error {
 		cw.kvDone = true
 	}
 
-	if !cw.onlineAccountsDone {
+	if cw.params.EnableOnlineAccountCatchpoints && !cw.onlineAccountsDone {
 		// Create the OnlineAccounts iterator JIT
 		if cw.onlineAccountRows == nil {
 			rows, err := cw.tx.MakeOnlineAccountsIter(ctx, false)
@@ -399,7 +405,7 @@ func (cw *catchpointFileWriter) readDatabaseStep(ctx context.Context) error {
 		cw.onlineAccountsDone = true
 	}
 
-	if !cw.onlineRoundParamsDone {
+	if cw.params.EnableOnlineAccountCatchpoints && !cw.onlineRoundParamsDone {
 		// Create the OnlineRoundParams iterator JIT
 		if cw.onlineRoundParamsRows == nil {
 			rows, err := cw.tx.MakeOnlineRoundParamsIter(ctx, false)

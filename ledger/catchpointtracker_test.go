@@ -362,9 +362,10 @@ func createCatchpoint(t *testing.T, ct *catchpointTracker, accountsRound basics.
 	spVerificationEncodedData, stateProofVerificationHash, err := ct.getSPVerificationData()
 	require.NoError(t, err)
 
+	proto := protocol.ConsensusCurrentVersion
 	var catchpointGenerationStats telemetryspec.CatchpointGenerationEventDetails
 	_, _, _, _, _, biggestChunkLen, err := ct.generateCatchpointData(
-		context.Background(), accountsRound, &catchpointGenerationStats, spVerificationEncodedData)
+		context.Background(), config.Consensus[proto], accountsRound, &catchpointGenerationStats, spVerificationEncodedData)
 	require.NoError(t, err)
 
 	require.Equal(t, calculateStateProofVerificationHash(t, ml), stateProofVerificationHash)
@@ -372,7 +373,7 @@ func createCatchpoint(t *testing.T, ct *catchpointTracker, accountsRound basics.
 	err = ct.createCatchpoint(
 		context.Background(), accountsRound, round,
 		trackerdb.CatchpointFirstStageInfo{BiggestChunkLen: biggestChunkLen},
-		crypto.Digest{}, protocol.ConsensusCurrentVersion)
+		crypto.Digest{}, proto)
 	require.NoError(t, err)
 }
 
@@ -605,7 +606,7 @@ func BenchmarkLargeCatchpointDataWriting(b *testing.B) {
 	encodedSPData, _, err := ct.getSPVerificationData()
 	require.NoError(b, err)
 	b.ResetTimer()
-	ct.generateCatchpointData(context.Background(), basics.Round(0), &catchpointGenerationStats, encodedSPData)
+	ct.generateCatchpointData(context.Background(), proto, basics.Round(0), &catchpointGenerationStats, encodedSPData)
 	b.StopTimer()
 	b.ReportMetric(float64(accountsNumber), "accounts")
 }
