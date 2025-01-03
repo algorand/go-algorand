@@ -149,7 +149,7 @@ func verifyStateProofVerificationContextWrite(t *testing.T, data []ledgercore.St
 	require.NoError(t, err)
 
 	err = ml.trackerDB().Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
-		writer, err := makeCatchpointFileWriter(context.Background(), protoParams, fileName, tx, ResourcesPerCatchpointFileChunk)
+		writer, err := makeCatchpointFileWriter(context.Background(), protoParams, fileName, tx, ResourcesPerCatchpointFileChunk, 0)
 		if err != nil {
 			return err
 		}
@@ -264,7 +264,7 @@ func TestBasicCatchpointWriter(t *testing.T) {
 	fileName := filepath.Join(temporaryDirectory, "15.data")
 
 	err = ml.trackerDB().Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
-		writer, err := makeCatchpointFileWriter(context.Background(), protoParams, fileName, tx, ResourcesPerCatchpointFileChunk)
+		writer, err := makeCatchpointFileWriter(context.Background(), protoParams, fileName, tx, ResourcesPerCatchpointFileChunk, 0)
 		if err != nil {
 			return err
 		}
@@ -307,7 +307,7 @@ func testWriteCatchpoint(t *testing.T, params config.ConsensusParams, rdb tracke
 	}
 
 	err := rdb.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
-		writer, err := makeCatchpointFileWriter(context.Background(), params, datapath, tx, maxResourcesPerChunk)
+		writer, err := makeCatchpointFileWriter(context.Background(), params, datapath, tx, maxResourcesPerChunk, 0)
 		if err != nil {
 			return err
 		}
@@ -440,7 +440,7 @@ func TestCatchpointReadDatabaseOverflowSingleAccount(t *testing.T) {
 		totalAccountsWritten := uint64(0)
 		totalResources := 0
 		totalChunks := 0
-		cw, err := makeCatchpointFileWriter(context.Background(), protoParams, catchpointDataFilePath, tx, maxResourcesPerChunk)
+		cw, err := makeCatchpointFileWriter(context.Background(), protoParams, catchpointDataFilePath, tx, maxResourcesPerChunk, 0)
 		require.NoError(t, err)
 
 		ar, err := tx.MakeAccountsReader()
@@ -546,7 +546,7 @@ func TestCatchpointReadDatabaseOverflowAccounts(t *testing.T) {
 
 		totalAccountsWritten := uint64(0)
 		totalResources := 0
-		cw, err := makeCatchpointFileWriter(context.Background(), protoParams, catchpointDataFilePath, tx, maxResourcesPerChunk)
+		cw, err := makeCatchpointFileWriter(context.Background(), protoParams, catchpointDataFilePath, tx, maxResourcesPerChunk, 0)
 		require.NoError(t, err)
 
 		// repeat this until read all accts
@@ -1113,18 +1113,18 @@ assert
 	t.Log("DB round generator", genDBRound, "validator", valDBRound)
 	t.Log("Latest round generator", genLatestRound, "validator", valLatestRound)
 
-	genOAHash, genOARows, err := calculateVerificationHash(context.Background(), dl.generator.trackerDB().MakeOnlineAccountsIter, false)
+	genOAHash, genOARows, err := calculateVerificationHash(context.Background(), dl.generator.trackerDB().MakeOnlineAccountsIter, 0, false)
 	require.NoError(t, err)
-	valOAHash, valOARows, err := calculateVerificationHash(context.Background(), dl.validator.trackerDB().MakeOnlineAccountsIter, false)
+	valOAHash, valOARows, err := calculateVerificationHash(context.Background(), dl.validator.trackerDB().MakeOnlineAccountsIter, 0, false)
 	require.NoError(t, err)
 	require.Equal(t, genOAHash, valOAHash)
 	require.NotZero(t, genOAHash)
 	require.Equal(t, genOARows, valOARows)
 	require.NotZero(t, genOARows)
 
-	genORPHash, genORPRows, err := calculateVerificationHash(context.Background(), dl.generator.trackerDB().MakeOnlineRoundParamsIter, false)
+	genORPHash, genORPRows, err := calculateVerificationHash(context.Background(), dl.generator.trackerDB().MakeOnlineRoundParamsIter, 0, false)
 	require.NoError(t, err)
-	valORPHash, valORPRows, err := calculateVerificationHash(context.Background(), dl.validator.trackerDB().MakeOnlineRoundParamsIter, false)
+	valORPHash, valORPRows, err := calculateVerificationHash(context.Background(), dl.validator.trackerDB().MakeOnlineRoundParamsIter, 0, false)
 	require.NoError(t, err)
 	require.Equal(t, genORPHash, valORPHash)
 	require.NotZero(t, genORPHash)
@@ -1141,13 +1141,13 @@ assert
 	l := testNewLedgerFromCatchpoint(t, dl.generator.trackerDB(), catchpointFilePath)
 	defer l.Close()
 
-	catchpointOAHash, catchpointOARows, err := calculateVerificationHash(context.Background(), l.trackerDBs.MakeOnlineAccountsIter, false)
+	catchpointOAHash, catchpointOARows, err := calculateVerificationHash(context.Background(), l.trackerDBs.MakeOnlineAccountsIter, 0, false)
 	require.NoError(t, err)
 	require.Equal(t, genOAHash, catchpointOAHash)
 	t.Log("catchpoint onlineaccounts hash", catchpointOAHash, "matches")
 	require.Equal(t, genOARows, catchpointOARows)
 
-	catchpointORPHash, catchpointORPRows, err := calculateVerificationHash(context.Background(), l.trackerDBs.MakeOnlineRoundParamsIter, false)
+	catchpointORPHash, catchpointORPRows, err := calculateVerificationHash(context.Background(), l.trackerDBs.MakeOnlineRoundParamsIter, 0, false)
 	require.NoError(t, err)
 	require.Equal(t, genORPHash, catchpointORPHash)
 	t.Log("catchpoint onlineroundparams hash", catchpointORPHash, "matches")

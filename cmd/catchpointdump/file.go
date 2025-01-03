@@ -594,7 +594,7 @@ func printOnlineAccounts(databaseName string, stagingTables bool, outFile *os.Fi
 	}
 
 	return dbAccessor.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		rows, err := sqlitedriver.MakeOnlineAccountsIter(ctx, tx, stagingTables)
+		rows, err := sqlitedriver.MakeOnlineAccountsIter(ctx, tx, stagingTables, 0)
 		if err != nil {
 			return err
 		}
@@ -627,7 +627,7 @@ func printOnlineRoundParams(databaseName string, stagingTables bool, outFile *os
 	}
 
 	return dbAccessor.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		rows, err := sqlitedriver.MakeOnlineRoundParamsIter(ctx, tx, stagingTables)
+		rows, err := sqlitedriver.MakeOnlineRoundParamsIter(ctx, tx, stagingTables, 0)
 		if err != nil {
 			return err
 		}
