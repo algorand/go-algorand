@@ -727,7 +727,7 @@ func (w *accountsV2Writer) OnlineAccountsDelete(forgetBefore basics.Round) (err 
 }
 
 func (w *accountsV2Writer) onlineAccountsDelete(forgetBefore basics.Round, table string) (err error) {
-	rows, err := w.e.Query("SELECT rowid, address, updRound, data FROM %s WHERE updRound < ? ORDER BY address, updRound DESC", table, forgetBefore)
+	rows, err := w.e.Query(fmt.Sprintf("SELECT rowid, address, updRound, data FROM %s WHERE updRound < ? ORDER BY address, updRound DESC", table), forgetBefore)
 	if err != nil {
 		return err
 	}
