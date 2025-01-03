@@ -149,7 +149,7 @@ func verifyStateProofVerificationContextWrite(t *testing.T, data []ledgercore.St
 	require.NoError(t, err)
 
 	err = ml.trackerDB().Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
-		writer, err := makeCatchpointFileWriter(context.Background(), fileName, tx, ResourcesPerCatchpointFileChunk)
+		writer, err := makeCatchpointFileWriter(context.Background(), protoParams, fileName, tx, ResourcesPerCatchpointFileChunk, 0)
 		if err != nil {
 			return err
 		}
@@ -264,7 +264,7 @@ func TestBasicCatchpointWriter(t *testing.T) {
 	fileName := filepath.Join(temporaryDirectory, "15.data")
 
 	err = ml.trackerDB().Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
-		writer, err := makeCatchpointFileWriter(context.Background(), fileName, tx, ResourcesPerCatchpointFileChunk)
+		writer, err := makeCatchpointFileWriter(context.Background(), protoParams, fileName, tx, ResourcesPerCatchpointFileChunk, 0)
 		if err != nil {
 			return err
 		}
@@ -297,7 +297,7 @@ func TestBasicCatchpointWriter(t *testing.T) {
 	require.Equal(t, uint64(len(accts)), uint64(len(chunk.Balances)))
 }
 
-func testWriteCatchpoint(t *testing.T, rdb trackerdb.Store, datapath string, filepath string, maxResourcesPerChunk int) CatchpointFileHeader {
+func testWriteCatchpoint(t *testing.T, params config.ConsensusParams, rdb trackerdb.Store, datapath string, filepath string, maxResourcesPerChunk int) CatchpointFileHeader {
 	var totalAccounts, totalKVs, totalOnlineAccounts, totalOnlineRoundParams, totalChunks uint64
 	var biggestChunkLen uint64
 	var accountsRnd basics.Round
@@ -307,7 +307,7 @@ func testWriteCatchpoint(t *testing.T, rdb trackerdb.Store, datapath string, fil
 	}
 
 	err := rdb.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
-		writer, err := makeCatchpointFileWriter(context.Background(), datapath, tx, maxResourcesPerChunk)
+		writer, err := makeCatchpointFileWriter(context.Background(), params, datapath, tx, maxResourcesPerChunk, 0)
 		if err != nil {
 			return err
 		}
@@ -440,7 +440,7 @@ func TestCatchpointReadDatabaseOverflowSingleAccount(t *testing.T) {
 		totalAccountsWritten := uint64(0)
 		totalResources := 0
 		totalChunks := 0
-		cw, err := makeCatchpointFileWriter(context.Background(), catchpointDataFilePath, tx, maxResourcesPerChunk)
+		cw, err := makeCatchpointFileWriter(context.Background(), protoParams, catchpointDataFilePath, tx, maxResourcesPerChunk, 0)
 		require.NoError(t, err)
 
 		ar, err := tx.MakeAccountsReader()
@@ -546,7 +546,7 @@ func TestCatchpointReadDatabaseOverflowAccounts(t *testing.T) {
 
 		totalAccountsWritten := uint64(0)
 		totalResources := 0
-		cw, err := makeCatchpointFileWriter(context.Background(), catchpointDataFilePath, tx, maxResourcesPerChunk)
+		cw, err := makeCatchpointFileWriter(context.Background(), protoParams, catchpointDataFilePath, tx, maxResourcesPerChunk, 0)
 		require.NoError(t, err)
 
 		// repeat this until read all accts
@@ -604,7 +604,7 @@ func TestFullCatchpointWriterOverflowAccounts(t *testing.T) {
 	catchpointDataFilePath := filepath.Join(temporaryDirectory, "15.data")
 	catchpointFilePath := filepath.Join(temporaryDirectory, "15.catchpoint")
 	const maxResourcesPerChunk = 5
-	testWriteCatchpoint(t, ml.trackerDB(), catchpointDataFilePath, catchpointFilePath, maxResourcesPerChunk)
+	testWriteCatchpoint(t, protoParams, ml.trackerDB(), catchpointDataFilePath, catchpointFilePath, maxResourcesPerChunk)
 
 	l := testNewLedgerFromCatchpoint(t, ml.trackerDB(), catchpointFilePath)
 	defer l.Close()
@@ -802,7 +802,7 @@ func TestFullCatchpointWriter(t *testing.T) {
 
 	catchpointDataFilePath := filepath.Join(temporaryDirectory, "15.data")
 	catchpointFilePath := filepath.Join(temporaryDirectory, "15.catchpoint")
-	testWriteCatchpoint(t, ml.trackerDB(), catchpointDataFilePath, catchpointFilePath, 0)
+	testWriteCatchpoint(t, protoParams, ml.trackerDB(), catchpointDataFilePath, catchpointFilePath, 0)
 
 	l := testNewLedgerFromCatchpoint(t, ml.trackerDB(), catchpointFilePath)
 	defer l.Close()
@@ -833,9 +833,25 @@ func TestExactAccountChunk(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
+	t.Run("v33", func(t *testing.T) {
+		proto := protocol.ConsensusV33
+		testExactAccountChunk(t, proto, 1)
+	})
+	t.Run("v34", func(t *testing.T) {
+		proto := protocol.ConsensusV34
+		testExactAccountChunk(t, proto, 2)
+	})
+	t.Run("future", func(t *testing.T) {
+		proto := protocol.ConsensusFuture
+		testExactAccountChunk(t, proto, 2)
+	})
+}
+
+func testExactAccountChunk(t *testing.T, proto protocol.ConsensusVersion, totalChunks int) {
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	cfg := config.GetDefaultLocal()
-	dl := NewDoubleLedger(t, genBalances, protocol.ConsensusFuture, cfg)
+
+	dl := NewDoubleLedger(t, genBalances, proto, cfg)
 	defer dl.Close()
 
 	pay := txntest.Txn{
@@ -879,8 +895,8 @@ func TestExactAccountChunk(t *testing.T) {
 	catchpointDataFilePath := filepath.Join(tempDir, t.Name()+".data")
 	catchpointFilePath := filepath.Join(tempDir, t.Name()+".catchpoint.tar.gz")
 
-	cph := testWriteCatchpoint(t, dl.validator.trackerDB(), catchpointDataFilePath, catchpointFilePath, 0)
-	require.EqualValues(t, cph.TotalChunks, 2)
+	cph := testWriteCatchpoint(t, config.Consensus[proto], dl.validator.trackerDB(), catchpointDataFilePath, catchpointFilePath, 0)
+	require.EqualValues(t, cph.TotalChunks, totalChunks)
 
 	l := testNewLedgerFromCatchpoint(t, dl.generator.trackerDB(), catchpointFilePath)
 	defer l.Close()
@@ -894,7 +910,8 @@ func TestCatchpointAfterTxns(t *testing.T) {
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	cfg := config.GetDefaultLocal()
-	dl := NewDoubleLedger(t, genBalances, protocol.ConsensusFuture, cfg)
+	proto := protocol.ConsensusFuture
+	dl := NewDoubleLedger(t, genBalances, proto, cfg)
 	defer dl.Close()
 
 	boxApp := dl.fundedApp(addrs[1], 1_000_000, boxAppSource)
@@ -931,7 +948,7 @@ func TestCatchpointAfterTxns(t *testing.T) {
 	catchpointDataFilePath := filepath.Join(tempDir, t.Name()+".data")
 	catchpointFilePath := filepath.Join(tempDir, t.Name()+".catchpoint.tar.gz")
 
-	cph := testWriteCatchpoint(t, dl.validator.trackerDB(), catchpointDataFilePath, catchpointFilePath, 0)
+	cph := testWriteCatchpoint(t, config.Consensus[proto], dl.validator.trackerDB(), catchpointDataFilePath, catchpointFilePath, 0)
 	require.EqualValues(t, 3, cph.TotalChunks)
 
 	l := testNewLedgerFromCatchpoint(t, dl.validator.trackerDB(), catchpointFilePath)
@@ -947,7 +964,7 @@ func TestCatchpointAfterTxns(t *testing.T) {
 	dl.fullBlock(&newacctpay)
 
 	// Write and read back in, and ensure even the last effect exists.
-	cph = testWriteCatchpoint(t, dl.validator.trackerDB(), catchpointDataFilePath, catchpointFilePath, 0)
+	cph = testWriteCatchpoint(t, config.Consensus[proto], dl.validator.trackerDB(), catchpointDataFilePath, catchpointFilePath, 0)
 	require.EqualValues(t, cph.TotalChunks, 3) // Still only 3 chunks, as last was in a recent block
 
 	// Drive home the point that `last` is _not_ included in the catchpoint by inspecting balance read from catchpoint.
@@ -963,7 +980,7 @@ func TestCatchpointAfterTxns(t *testing.T) {
 		dl.fullBlock(pay.Noted(strconv.Itoa(i)))
 	}
 
-	cph = testWriteCatchpoint(t, dl.validator.trackerDB(), catchpointDataFilePath, catchpointFilePath, 0)
+	cph = testWriteCatchpoint(t, config.Consensus[proto], dl.validator.trackerDB(), catchpointDataFilePath, catchpointFilePath, 0)
 	require.EqualValues(t, cph.TotalChunks, 4)
 
 	l = testNewLedgerFromCatchpoint(t, dl.validator.trackerDB(), catchpointFilePath)
@@ -994,7 +1011,8 @@ func TestCatchpointAfterStakeLookupTxns(t *testing.T) {
 		ledgertesting.TurnOffRewards(cfg)
 	})
 	cfg := config.GetDefaultLocal()
-	dl := NewDoubleLedger(t, genBalances, protocol.ConsensusFuture, cfg, simpleLedgerOnDisk())
+	proto := protocol.ConsensusFuture
+	dl := NewDoubleLedger(t, genBalances, proto, cfg, simpleLedgerOnDisk())
 	defer dl.Close()
 
 	initialStake := uint64(833333333333333)
@@ -1095,18 +1113,18 @@ assert
 	t.Log("DB round generator", genDBRound, "validator", valDBRound)
 	t.Log("Latest round generator", genLatestRound, "validator", valLatestRound)
 
-	genOAHash, genOARows, err := calculateVerificationHash(context.Background(), dl.generator.trackerDB().MakeOnlineAccountsIter, false)
+	genOAHash, genOARows, err := calculateVerificationHash(context.Background(), dl.generator.trackerDB().MakeOnlineAccountsIter, 0, false)
 	require.NoError(t, err)
-	valOAHash, valOARows, err := calculateVerificationHash(context.Background(), dl.validator.trackerDB().MakeOnlineAccountsIter, false)
+	valOAHash, valOARows, err := calculateVerificationHash(context.Background(), dl.validator.trackerDB().MakeOnlineAccountsIter, 0, false)
 	require.NoError(t, err)
 	require.Equal(t, genOAHash, valOAHash)
 	require.NotZero(t, genOAHash)
 	require.Equal(t, genOARows, valOARows)
 	require.NotZero(t, genOARows)
 
-	genORPHash, genORPRows, err := calculateVerificationHash(context.Background(), dl.generator.trackerDB().MakeOnlineRoundParamsIter, false)
+	genORPHash, genORPRows, err := calculateVerificationHash(context.Background(), dl.generator.trackerDB().MakeOnlineRoundParamsIter, 0, false)
 	require.NoError(t, err)
-	valORPHash, valORPRows, err := calculateVerificationHash(context.Background(), dl.validator.trackerDB().MakeOnlineRoundParamsIter, false)
+	valORPHash, valORPRows, err := calculateVerificationHash(context.Background(), dl.validator.trackerDB().MakeOnlineRoundParamsIter, 0, false)
 	require.NoError(t, err)
 	require.Equal(t, genORPHash, valORPHash)
 	require.NotZero(t, genORPHash)
@@ -1117,19 +1135,19 @@ assert
 	catchpointDataFilePath := filepath.Join(tempDir, t.Name()+".data")
 	catchpointFilePath := filepath.Join(tempDir, t.Name()+".catchpoint.tar.gz")
 
-	cph := testWriteCatchpoint(t, dl.generator.trackerDB(), catchpointDataFilePath, catchpointFilePath, 0)
+	cph := testWriteCatchpoint(t, config.Consensus[proto], dl.generator.trackerDB(), catchpointDataFilePath, catchpointFilePath, 0)
 	require.EqualValues(t, 7, cph.TotalChunks)
 
 	l := testNewLedgerFromCatchpoint(t, dl.generator.trackerDB(), catchpointFilePath)
 	defer l.Close()
 
-	catchpointOAHash, catchpointOARows, err := calculateVerificationHash(context.Background(), l.trackerDBs.MakeOnlineAccountsIter, false)
+	catchpointOAHash, catchpointOARows, err := calculateVerificationHash(context.Background(), l.trackerDBs.MakeOnlineAccountsIter, 0, false)
 	require.NoError(t, err)
 	require.Equal(t, genOAHash, catchpointOAHash)
 	t.Log("catchpoint onlineaccounts hash", catchpointOAHash, "matches")
 	require.Equal(t, genOARows, catchpointOARows)
 
-	catchpointORPHash, catchpointORPRows, err := calculateVerificationHash(context.Background(), l.trackerDBs.MakeOnlineRoundParamsIter, false)
+	catchpointORPHash, catchpointORPRows, err := calculateVerificationHash(context.Background(), l.trackerDBs.MakeOnlineRoundParamsIter, 0, false)
 	require.NoError(t, err)
 	require.Equal(t, genORPHash, catchpointORPHash)
 	t.Log("catchpoint onlineroundparams hash", catchpointORPHash, "matches")
@@ -1161,7 +1179,8 @@ func TestCatchpointAfterBoxTxns(t *testing.T) {
 
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
 	cfg := config.GetDefaultLocal()
-	dl := NewDoubleLedger(t, genBalances, protocol.ConsensusFuture, cfg)
+	proto := protocol.ConsensusFuture
+	dl := NewDoubleLedger(t, genBalances, proto, cfg)
 	defer dl.Close()
 
 	boxApp := dl.fundedApp(addrs[1], 1_000_000, boxAppSource)
@@ -1216,7 +1235,7 @@ func TestCatchpointAfterBoxTxns(t *testing.T) {
 	catchpointDataFilePath := filepath.Join(tempDir, t.Name()+".data")
 	catchpointFilePath := filepath.Join(tempDir, t.Name()+".catchpoint.tar.gz")
 
-	cph := testWriteCatchpoint(t, dl.generator.trackerDB(), catchpointDataFilePath, catchpointFilePath, 0)
+	cph := testWriteCatchpoint(t, config.Consensus[proto], dl.generator.trackerDB(), catchpointDataFilePath, catchpointFilePath, 0)
 	require.EqualValues(t, 3, cph.TotalChunks)
 
 	l := testNewLedgerFromCatchpoint(t, dl.generator.trackerDB(), catchpointFilePath)

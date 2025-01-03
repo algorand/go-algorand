@@ -20,6 +20,7 @@ import (
 	"context"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/encoded"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 )
@@ -79,13 +80,13 @@ func (r *reader) MakeKVsIter(ctx context.Context) (trackerdb.KVsIter, error) {
 }
 
 // MakeOnlineAccountsIter implements trackerdb.Reader
-func (r *reader) MakeOnlineAccountsIter(context.Context, bool) (trackerdb.TableIterator[*encoded.OnlineAccountRecordV6], error) {
+func (r *reader) MakeOnlineAccountsIter(context.Context, bool, basics.Round) (trackerdb.TableIterator[*encoded.OnlineAccountRecordV6], error) {
 	// TODO: catchpoint
 	panic("unimplemented")
 }
 
 // MakeOnlineRoundParamsIter implements trackerdb.Reader
-func (r *reader) MakeOnlineRoundParamsIter(context.Context, bool) (trackerdb.TableIterator[*encoded.OnlineRoundParamsRecordV6], error) {
+func (r *reader) MakeOnlineRoundParamsIter(context.Context, bool, basics.Round) (trackerdb.TableIterator[*encoded.OnlineRoundParamsRecordV6], error) {
 	// TODO: catchpoint
 	panic("unimplemented")
 }

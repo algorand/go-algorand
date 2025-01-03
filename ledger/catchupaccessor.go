@@ -1031,12 +1031,12 @@ func (c *catchpointCatchupAccessorImpl) GetVerifyData(ctx context.Context) (bala
 			return fmt.Errorf("unable to get state proof verification data: %v", err)
 		}
 
-		onlineAccountsHash, _, err = calculateVerificationHash(ctx, tx.MakeOnlineAccountsIter, true)
+		onlineAccountsHash, _, err = calculateVerificationHash(ctx, tx.MakeOnlineAccountsIter, 0, true)
 		if err != nil {
 			return fmt.Errorf("unable to get online accounts verification data: %v", err)
 		}
 
-		onlineRoundParamsHash, _, err = calculateVerificationHash(ctx, tx.MakeOnlineRoundParamsIter, true)
+		onlineRoundParamsHash, _, err = calculateVerificationHash(ctx, tx.MakeOnlineRoundParamsIter, 0, true)
 		if err != nil {
 			return fmt.Errorf("unable to get online round params verification data: %v", err)
 		}
@@ -1058,11 +1058,12 @@ func (c *catchpointCatchupAccessorImpl) GetVerifyData(ctx context.Context) (bala
 // both at restore time (in catchpointCatchupAccessorImpl) and snapshot time (in catchpointTracker).
 func calculateVerificationHash[T crypto.Hashable](
 	ctx context.Context,
-	iterFactory func(context.Context, bool) (trackerdb.TableIterator[T], error),
+	iterFactory func(context.Context, bool, basics.Round) (trackerdb.TableIterator[T], error),
+	excludeBefore basics.Round,
 	useStaging bool,
 ) (crypto.Digest, uint64, error) {
 
-	rows, err := iterFactory(ctx, useStaging)
+	rows, err := iterFactory(ctx, useStaging, excludeBefore)
 	if err != nil {
 		return crypto.Digest{}, 0, err
 	}
