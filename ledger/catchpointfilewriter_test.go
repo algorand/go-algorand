@@ -831,14 +831,14 @@ func testCatchpointFlushRound(l *Ledger) {
 
 func TestExactAccountChunk(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
+	// t.Parallel() // probably not good to parallelize catchpoint file save/load
 
-	t.Run("v33", func(t *testing.T) {
-		proto := protocol.ConsensusV33
+	t.Run("v39", func(t *testing.T) {
+		proto := protocol.ConsensusV39
 		testExactAccountChunk(t, proto, 1)
 	})
-	t.Run("v34", func(t *testing.T) {
-		proto := protocol.ConsensusV34
+	t.Run("v40", func(t *testing.T) {
+		proto := protocol.ConsensusV40
 		testExactAccountChunk(t, proto, 2)
 	})
 	t.Run("future", func(t *testing.T) {
