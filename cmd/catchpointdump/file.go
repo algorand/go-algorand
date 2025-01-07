@@ -532,7 +532,6 @@ func printKeyValue(writer *bufio.Writer, key, value []byte) {
 }
 
 func printKeyValueStore(databaseName string, stagingTables bool, outFile *os.File) error {
-	fmt.Printf("\n")
 	printDumpingCatchpointProgressLine(0, 50, 0)
 	lastProgressUpdate := time.Now()
 	progress := uint64(0)
@@ -583,8 +582,6 @@ func printKeyValueStore(databaseName string, stagingTables bool, outFile *os.Fil
 }
 
 func printOnlineAccounts(databaseName string, stagingTables bool, outFile *os.File) error {
-	fmt.Printf("\n")
-
 	fileWriter := bufio.NewWriterSize(outFile, 1024*1024)
 	defer fileWriter.Flush()
 
@@ -616,8 +613,6 @@ func printOnlineAccounts(databaseName string, stagingTables bool, outFile *os.Fi
 }
 
 func printOnlineRoundParams(databaseName string, stagingTables bool, outFile *os.File) error {
-	fmt.Printf("\n")
-
 	fileWriter := bufio.NewWriterSize(outFile, 1024*1024)
 	defer fileWriter.Flush()
 
