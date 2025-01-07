@@ -326,11 +326,11 @@ func (ct *catchpointTracker) finishFirstStageAfterCrash(dbRound basics.Round, bl
 		return err
 	}
 
-	// pass dbRound+1-maxBalLookback as the onlineExcludeBefore parameter: since we can't be sure whether
+	// pass dbRound+1-maxBalLookback as the onlineAccountsForgetBefore parameter: since we can't be sure whether
 	// there are more than 320 rounds of history in the online accounts tables, this ensures the catchpoint
 	// will only contain the most recent 320 rounds.
-	onlineExcludeBefore := (dbRound + 1).SubSaturate(basics.Round(config.Consensus[blockProto].MaxBalLookback))
-	return ct.finishFirstStage(context.Background(), dbRound, onlineExcludeBefore, blockProto, 0)
+	onlineAccountsForgetBefore := (dbRound + 1).SubSaturate(basics.Round(config.Consensus[blockProto].MaxBalLookback))
+	return ct.finishFirstStage(context.Background(), dbRound, onlineAccountsForgetBefore, blockProto, 0)
 }
 
 func (ct *catchpointTracker) finishCatchpointsAfterCrash(blockProto protocol.ConsensusVersion, catchpointLookback uint64) error {

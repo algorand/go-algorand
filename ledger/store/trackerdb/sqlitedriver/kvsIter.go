@@ -79,7 +79,11 @@ func (iter *tableIterator[T]) GetItem() (T, error) {
 	return iter.scan(iter.rows)
 }
 
-// MakeOnlineAccountsIter creates an onlineAccounts iterator.
+// MakeOnlineAccountsIter creates an onlineAccounts iterator, used by the catchpoint system to dump the
+// onlineaccounts table to a catchpoint snapshot file.
+//
+// If excludeBefore is non-zero, the iterator will exclude all data that would have been deleted if
+// OnlineAccountsDelete(excludeBefore) were called on this DB before calling MakeOnlineAccountsIter.
 func MakeOnlineAccountsIter(ctx context.Context, q db.Queryable, useStaging bool, excludeBefore basics.Round) (trackerdb.TableIterator[*encoded.OnlineAccountRecordV6], error) {
 	table := "onlineaccounts"
 	if useStaging {
@@ -88,7 +92,17 @@ func MakeOnlineAccountsIter(ctx context.Context, q db.Queryable, useStaging bool
 
 	var onClose func()
 	if excludeBefore != 0 {
-		// cheat: use Rdb to make a temporary table that we will delete later
+		// This is a special case to resolve the issue found in #6214. When the state proof votersTracker has not
+		// yet validated the recent state proof, the onlineaccounts table will hold more than 320 rows,
+		// to support state proof recovery (votersTracker.lowestRound() sets deferredCommitRange.lowestRound).
+		//
+		// While rare, this may happen e.g. during catchup, where blocks may be flying by so quickly that the
+		// catchpoint snapshot is started before the latest state proof was validated. In this case, excludeBefore
+		// will be set to R-320 (MaxBalLookback) where R is the DB snapshot round (specified by CatchpointLookback).
+		//
+		// Unfortunately catchpoint snapshots occur within a SnapshotScope, and so a db.Queryable cannot
+		// execute DDL statements. To work around this, we create a temporary table that we will delete
+		// when the iterator is closed.
 		e, ok := q.(*sql.Tx)
 		if !ok {
 			return nil, fmt.Errorf("MakeOnlineAccountsIter: cannot convert Queryable to sql.Tx, q is %T", q)
