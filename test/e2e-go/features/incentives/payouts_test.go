@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -49,7 +49,7 @@ func TestBasicPayouts(t *testing.T) {
 	// Make the seed lookback shorter, otherwise we need to wait 320 rounds to become IncentiveEligible.
 	const lookback = 32
 	fixture.FasterConsensus(protocol.ConsensusFuture, time.Second, lookback)
-	fmt.Printf("lookback is %d\n", lookback)
+	t.Logf("lookback is %d\n", lookback)
 	fixture.Setup(t, filepath.Join("nettemplates", "Payouts.json"))
 	defer fixture.Shutdown()
 
@@ -57,13 +57,14 @@ func TestBasicPayouts(t *testing.T) {
 	// rereg to become eligible (must pay extra fee)
 	// show payouts are paid (from fees and bonuses)
 	// deplete feesink to ensure it's graceful
-
+	addressToNode := make(map[string]string)
 	clientAndAccount := func(name string) (libgoal.Client, model.Account) {
 		c := fixture.GetLibGoalClientForNamedNode(name)
 		accounts, err := fixture.GetNodeWalletsSortedByBalance(c)
 		a.NoError(err)
 		a.Len(accounts, 1)
-		fmt.Printf("Client %s is %v\n", name, accounts[0].Address)
+		t.Logf("Client %s is %v\n", name, accounts[0].Address)
+		addressToNode[accounts[0].Address] = name
 		return c, accounts[0]
 	}
 
@@ -74,6 +75,15 @@ func TestBasicPayouts(t *testing.T) {
 	data01 := rekeyreg(&fixture, a, c01, account01.Address, true)
 	data15 := rekeyreg(&fixture, a, c15, account15.Address, true)
 
+	// Wait a few rounds after rekeyreg, this means that `lookback` rounds after
+	// those rekeyregs, the nodes will be IncentiveEligible, but both will have
+	// too much stake to earn rewards.  Then we'll burn from account01, so
+	// lookback rounds after _that_ account01 will start earning.
+	client := fixture.LibGoalClient
+	status, err := client.Status()
+	a.NoError(err)
+	fixture.WaitForRoundWithTimeout(status.LastRound + 10)
+
 	// have account01 burn some money to get below the eligibility cap
 	// Starts with 100M, so burn 60M and get under 70M cap.
 	txn, err := c01.SendPaymentFromUnencryptedWallet(account01.Address, basics.Address{}.String(),
@@ -81,24 +91,26 @@ func TestBasicPayouts(t *testing.T) {
 	a.NoError(err)
 	burn, err := fixture.WaitForConfirmedTxn(uint64(txn.LastValid), txn.ID().String())
 	a.NoError(err)
+	burnRound := *burn.ConfirmedRound
+	t.Logf("burn round is %d", burnRound)
 	// sync up with the network
-	_, err = c01.WaitForRound(*burn.ConfirmedRound)
+	_, err = c01.WaitForRound(burnRound)
 	a.NoError(err)
 	data01, err = c01.AccountData(account01.Address)
 	a.NoError(err)
 
-	// Go 31 rounds after the burn happened. During this time, incentive
-	// eligibility is not in effect yet, so regardless of who proposes, they
-	// won't earn anything.
-	client := fixture.LibGoalClient
-	status, err := client.Status()
+	// Start advancing. IncentiveEligibile will come into effect 32 rounds after
+	// the rekeregs but earning will only happen 32 rounds after burnRound, and
+	// only for account01 (the one that burned to get under the cap).
+	status, err = client.Status()
 	a.NoError(err)
-	for status.LastRound < *burn.ConfirmedRound+lookback-1 {
+	account1earned := false
+	for !account1earned {
 		block, err := client.BookkeepingBlock(status.LastRound)
 		a.NoError(err)
 
-		fmt.Printf("block %d proposed by %v\n", status.LastRound, block.Proposer())
-		a.Zero(block.ProposerPayout()) // nobody is eligible yet (hasn't worked back to balance round)
+		t.Logf("block %d proposed by %s %v\n",
+			status.LastRound, addressToNode[block.Proposer().String()], block.Proposer())
 		a.EqualValues(bonus1, block.Bonus.Raw)
 
 		// all nodes agree the proposer proposed. The paranoia here is
@@ -109,7 +121,7 @@ func TestBasicPayouts(t *testing.T) {
 		// optimization, and it would cause failures here.  Interface changes
 		// made since they should make such a problem impossible, but...
 		for i, c := range []libgoal.Client{c15, c01, relay} {
-			fmt.Printf("checking block %v\n", block.Round())
+			t.Logf("checking block %v\n", block.Round())
 			bb, err := getblock(c, status.LastRound)
 			a.NoError(err)
 			a.Equal(block.Proposer(), bb.Proposer())
@@ -125,12 +137,26 @@ func TestBasicPayouts(t *testing.T) {
 		next, err := client.AccountData(block.Proposer().String())
 		a.NoError(err)
 		a.LessOrEqual(int(status.LastRound), int(next.LastProposed))
-		// regardless of proposer, nobody gets paid
 		switch block.Proposer().String() {
 		case account01.Address:
-			a.Equal(data01.MicroAlgos, next.MicroAlgos)
+			if uint64(block.Round()) < burnRound+lookback {
+				// until the burn is lookback rounds old, account01 can't earn
+				a.Zero(block.ProposerPayout())
+				a.Equal(data01.MicroAlgos, next.MicroAlgos)
+			} else {
+				a.EqualValues(bonus1, block.ProposerPayout().Raw)
+				// We'd like to do test if account one got paid the bonus:
+				// a.EqualValues(data01.MicroAlgos.Raw+bonus1, next.MicroAlgos.Raw)
+
+				// But we can't because it might have already proposed again. So
+				// let's check if it has received one OR two bonuses.
+				earned := int(next.MicroAlgos.Raw - data01.MicroAlgos.Raw)
+				a.True(earned == bonus1 || earned == 2*bonus1, "earned %d", earned)
+				account1earned = true
+			}
 			data01 = next
 		case account15.Address:
+			a.Zero(block.ProposerPayout())
 			a.Equal(data15.MicroAlgos, next.MicroAlgos)
 			data15 = next
 		default:
@@ -139,54 +165,6 @@ func TestBasicPayouts(t *testing.T) {
 		fixture.WaitForRoundWithTimeout(status.LastRound + 1)
 		status, err = client.Status()
 		a.NoError(err)
-	}
-
-	// all nodes are in sync
-	for _, c := range []libgoal.Client{c15, c01, relay} {
-		_, err := c.WaitForRound(status.LastRound)
-		a.NoError(err)
-	}
-
-	// Wait until each have proposed, so we can see that 01 gets paid and 15 does not (too much balance)
-	proposed01 := false
-	proposed15 := false
-	for i := 0; !proposed01 || !proposed15; i++ {
-		status, err := client.Status()
-		a.NoError(err)
-		block, err := client.BookkeepingBlock(status.LastRound)
-		a.NoError(err)
-		a.EqualValues(bonus1, block.Bonus.Raw)
-
-		next, err := client.AccountData(block.Proposer().String())
-		a.NoError(err)
-		fmt.Printf(" proposer %v has %d after proposing round %d\n", block.Proposer(), next.MicroAlgos.Raw, status.LastRound)
-
-		// all nodes agree the proposer proposed
-		for i, c := range []libgoal.Client{c15, c01, relay} {
-			_, err := c.WaitForRound(status.LastRound)
-			a.NoError(err)
-			data, err := c.AccountData(block.Proposer().String())
-			a.NoError(err)
-			// <= in case one node is behind, and the others have already advanced
-			a.LessOrEqual(block.Round(), data.LastProposed, i)
-		}
-
-		// 01 would get paid (because under balance cap) 15 would not
-		switch block.Proposer().String() {
-		case account01.Address:
-			a.EqualValues(bonus1, block.ProposerPayout().Raw)
-			a.EqualValues(data01.MicroAlgos.Raw+bonus1, next.MicroAlgos.Raw) // 01 earns
-			proposed01 = true
-			data01 = next
-		case account15.Address:
-			a.Zero(block.ProposerPayout())
-			a.Equal(data15.MicroAlgos, next.MicroAlgos) // didn't earn
-			data15 = next
-			proposed15 = true
-		default:
-			a.Fail("bad proposer", "%v proposed", block.Proposer)
-		}
-		fixture.WaitForRoundWithTimeout(status.LastRound + 1)
 	}
 
 	// Now that we've proven incentives get paid, let's drain the FeeSink and
@@ -203,7 +181,8 @@ func TestBasicPayouts(t *testing.T) {
 	offTxn, err := fixture.WaitForConfirmedTxn(uint64(offline.LastValid), offlineTxID)
 	a.NoError(err)
 
-	fmt.Printf(" c15 (%s) will be truly offline (not proposing) after round %d\n", account15.Address, *offTxn.ConfirmedRound+lookback)
+	t.Logf(" c15 (%s) will be truly offline (not proposing) after round %d\n",
+		account15.Address, *offTxn.ConfirmedRound+lookback)
 
 	var feesink basics.Address
 	for i := 0; i < 100; i++ {
