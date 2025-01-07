@@ -17,7 +17,6 @@
 package suspension
 
 import (
-	"fmt"
 	"path/filepath"
 	"testing"
 	"time"
@@ -47,10 +46,17 @@ func eligible(address string) bool {
 func TestChallenges(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
-
-	t.Parallel()
 	a := require.New(fixtures.SynchronizedTest(t))
 
+	retry := true
+	for retry {
+		retry = testChallengesOnce(t, a)
+	}
+}
+
+// testChallengesOnce is the core of TestChallenges, but is allowed to bail out
+// if the random accounts aren't suitable. TestChallenges will try again.
+func testChallengesOnce(t *testing.T, a *require.Assertions) (retry bool) {
 	// Overview of this test:
 	// Use a consensus protocol with challenge interval=50, grace period=10, bits=2.
 	// Start a three-node network. One relay, two nodes with 4 accounts each
@@ -79,7 +85,7 @@ func TestChallenges(t *testing.T) {
 		accounts, err := fixture.GetNodeWalletsSortedByBalance(c)
 		a.NoError(err)
 		a.Len(accounts, 8)
-		fmt.Printf("Client %s has %v\n", name, accounts)
+		t.Logf("Client %s has %v\n", name, accounts)
 		return c, accounts
 	}
 
@@ -114,6 +120,7 @@ func TestChallenges(t *testing.T) {
 	// 100 = 40 + 32 + (50-22) = 72 + 28
 	lastPossible := current + lookback
 	challengeRound := lastPossible + (interval - lastPossible%interval)
+	t.Logf("current %d lastPossible %d challengeRound %d", current, lastPossible, challengeRound)
 
 	// Advance to challenge round, check the blockseed
 	err = fixture.WaitForRoundWithTimeout(challengeRound)
@@ -130,14 +137,16 @@ func TestChallenges(t *testing.T) {
 		address, err := basics.UnmarshalChecksumAddress(account.Address)
 		a.NoError(err)
 		if address[0]&mask == challenge {
-			fmt.Printf("%v of node 1 was challenged %v by %v\n", address, address[0], challenge)
+			t.Logf("%v of node 1 was challenged %v by %v\n", address, address[0], challenge)
 			match1.Add(address)
 			if eligible(address.String()) {
 				eligible1.Add(address)
 			}
 		}
 	}
-	require.NotEmpty(t, match1, "rerun the test") // TODO: remove.
+	if match1.Empty() {
+		return true
+	}
 
 	match2 := util.MakeSet[basics.Address]()
 	eligible2 := util.MakeSet[basics.Address]() // matched AND eligible
@@ -145,14 +154,16 @@ func TestChallenges(t *testing.T) {
 		address, err := basics.UnmarshalChecksumAddress(account.Address)
 		a.NoError(err)
 		if address[0]&mask == challenge {
-			fmt.Printf("%v of node 2 was challenged %v by %v\n", address, address[0], challenge)
+			t.Logf("%v of node 2 was challenged %v by %v\n", address, address[0], challenge)
 			match2.Add(address)
 			if eligible(address.String()) {
 				eligible2.Add(address)
 			}
 		}
 	}
-	require.NotEmpty(t, match2, "rerun the test") // TODO: remove.
+	if match2.Empty() {
+		return true
+	}
 
 	allMatches := util.Union(match1, match2)
 
@@ -176,18 +187,19 @@ func TestChallenges(t *testing.T) {
 
 	// In the second half of the grace period, Node 2 should heartbeat for its eligible accounts
 	beated := util.MakeSet[basics.Address]()
-	fixture.WithEveryBlock(challengeRound+grace/2, challengeRound+grace, func(block bookkeeping.Block) {
+	fixture.WithEveryBlock(challengeRound+grace/2+1, challengeRound+grace, func(block bookkeeping.Block) {
+		t.Logf("2nd half Block %d\n", block.Round())
 		if eligible2.Contains(block.Proposer()) {
 			lucky.Add(block.Proposer())
 		}
 		for i, txn := range block.Payset {
 			hb := txn.Txn.HeartbeatTxnFields
-			fmt.Printf("Heartbeat txn %v in position %d round %d\n", hb, i, block.Round())
-			a.True(match2.Contains(hb.HbAddress))    // only Node 2 is alive
-			a.True(eligible2.Contains(hb.HbAddress)) // only eligible accounts get heartbeat
-			a.False(beated.Contains(hb.HbAddress))   // beat only once
+			t.Logf("Heartbeat txn %v in position %d round %d\n", hb, i, block.Round())
+			a.Contains(match2, hb.HbAddress, hb.HbAddress)                 // only Node 2 is alive
+			a.Contains(eligible2, hb.HbAddress, hb.HbAddress)              // only eligible accounts get heartbeat
+			a.NotContains(beated, hb.HbAddress, "rebeat %s", hb.HbAddress) // beat only once
 			beated.Add(hb.HbAddress)
-			a.False(lucky.Contains(hb.HbAddress)) // we should not see a heartbeat from an account that proposed
+			a.NotContains(lucky, hb.HbAddress, "unneeded %s", hb.HbAddress) // we should not see a heartbeat from an account that proposed
 		}
 		a.Empty(block.AbsentParticipationAccounts) // nobody suspended during grace
 	})
@@ -202,7 +214,8 @@ func TestChallenges(t *testing.T) {
 		data, err := c2.AccountData(address.String())
 		a.NoError(err)
 		if eligible1.Contains(address) {
-			a.Equal(basics.Offline, data.Status, address)
+			a.Equal(basics.Offline, data.Status, "%v was not offline in round %d. (%d and %d)",
+				address, challengeRound+grace+1, data.LastHeartbeat, data.LastProposed)
 		} else {
 			a.Equal(basics.Online, data.Status, address) // not eligible, so not suspended
 		}
@@ -219,4 +232,5 @@ func TestChallenges(t *testing.T) {
 		a.Equal(data.IncentiveEligible, eligible(address.String()))
 	}
 
+	return false // no need to retry
 }

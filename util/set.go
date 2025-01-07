@@ -35,6 +35,11 @@ func MakeSet[T comparable](elems ...T) Set[T] {
 	return make(Set[T]).Add(elems...)
 }
 
+// Empty returns true if the set is empty.
+func (s Set[T]) Empty() bool {
+	return len(s) == 0
+}
+
 // Contains checks the membership of an element in the set.
 func (s Set[T]) Contains(elem T) (exists bool) {
 	_, exists = s[elem]
