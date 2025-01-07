@@ -782,10 +782,10 @@ func (w *accountsV2Writer) onlineAccountsDelete(forgetBefore basics.Round, table
 		rowids = append(rowids, rowid.Int64)
 	}
 
-	return onlineAccountsDeleteByRowIDs(w.e, rowids)
+	return onlineAccountsDeleteByRowIDs(w.e, rowids, table)
 }
 
-func onlineAccountsDeleteByRowIDs(e db.Executable, rowids []int64) (err error) {
+func onlineAccountsDeleteByRowIDs(e db.Executable, rowids []int64, table string) (err error) {
 	if len(rowids) == 0 {
 		return
 	}
@@ -795,7 +795,7 @@ func onlineAccountsDeleteByRowIDs(e db.Executable, rowids []int64) (err error) {
 	// rowids might be larger => split to chunks are remove
 	chunks := rowidsToChunkedArgs(rowids)
 	for _, chunk := range chunks {
-		_, err = e.Exec("DELETE FROM onlineaccounts WHERE rowid IN (?"+strings.Repeat(",?", len(chunk)-1)+")", chunk...)
+		_, err = e.Exec("DELETE FROM "+table+" WHERE rowid IN (?"+strings.Repeat(",?", len(chunk)-1)+")", chunk...)
 		if err != nil {
 			return
 		}

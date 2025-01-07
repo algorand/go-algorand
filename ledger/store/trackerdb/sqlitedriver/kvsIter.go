@@ -91,7 +91,7 @@ func MakeOnlineAccountsIter(ctx context.Context, q db.Queryable, useStaging bool
 		// cheat: use Rdb to make a temporary table that we will delete later
 		e, ok := q.(*sql.Tx)
 		if !ok {
-			return nil, fmt.Errorf("MakeOnlineAccountsIter: cannot convert Queryable to sql.Tx")
+			return nil, fmt.Errorf("MakeOnlineAccountsIter: cannot convert Queryable to sql.Tx, q is %T", q)
 		}
 		// create a new table by selecting from the original table
 		destTable := table + "_iterator"
