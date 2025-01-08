@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -626,9 +626,9 @@ var globalFieldSpecs = [...]globalFieldSpec{
 	{PayoutsPercent, StackUint64, modeAny, incentiveVersion,
 		"The percentage of transaction fees in a block that can be paid to the block proposer."},
 	{PayoutsMinBalance, StackUint64, modeAny, incentiveVersion,
-		"The minimum algo balance an account must have in the agreement round to receive block payouts in the proposal round."},
+		"The minimum balance an account must have in the agreement round to receive block payouts in the proposal round."},
 	{PayoutsMaxBalance, StackUint64, modeAny, incentiveVersion,
-		"The maximum algo balance an account can have in the agreement round to receive block payouts in the proposal round."},
+		"The maximum balance an account can have in the agreement round to receive block payouts in the proposal round."},
 }
 
 func globalFieldSpecByField(f GlobalField) (globalFieldSpec, bool) {

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,7 +17,6 @@
 package suspension
 
 import (
-	"fmt"
 	"path/filepath"
 	"testing"
 	"time"
@@ -65,7 +64,7 @@ func TestWhaleJoin(t *testing.T) {
 		accounts, err := fixture.GetNodeWalletsSortedByBalance(c)
 		a.NoError(err)
 		a.Len(accounts, 1)
-		fmt.Printf("Client %s is %v\n", name, accounts[0].Address)
+		t.Logf("Client %s is %v\n", name, accounts[0].Address)
 		return c, accounts[0]
 	}
 
@@ -73,7 +72,7 @@ func TestWhaleJoin(t *testing.T) {
 	c01, account01 := clientAndAccount("Node01")
 
 	// 1. take wallet15 offline
-	keys := offline(&fixture, a, c15, account15.Address)
+	keys := offline(a, c15, account15.Address)
 
 	// 2. c01 starts with 100M, so burn 99.9M to get total online stake down
 	burn, err := c01.SendPaymentFromUnencryptedWallet(account01.Address, basics.Address{}.String(),
@@ -87,7 +86,7 @@ func TestWhaleJoin(t *testing.T) {
 	a.NoError(err)
 
 	// 4. rejoin, with 1.5B against the paltry 100k that's currently online
-	online(&fixture, a, c15, account15.Address, keys)
+	online(a, c15, account15.Address, keys)
 
 	// 5. wait for agreement balances to kick in (another lookback's worth, plus some slack)
 	_, err = c01.WaitForRound(*receipt.ConfirmedRound + 2*lookback + 5)
@@ -139,20 +138,20 @@ func TestBigJoin(t *testing.T) {
 		accounts, err := fixture.GetNodeWalletsSortedByBalance(c)
 		a.NoError(err)
 		a.Len(accounts, 1)
-		fmt.Printf("Client %s is %v\n", name, accounts[0].Address)
+		t.Logf("Client %s is %v\n", name, accounts[0].Address)
 		return c, accounts[0]
 	}
 
 	c01, account01 := clientAndAccount("Node01")
 
 	// 1. take wallet01 offline
-	keys := offline(&fixture, a, c01, account01.Address)
+	keys := offline(a, c01, account01.Address)
 
 	// 2. Wait lookback rounds
 	wait(&fixture, a, lookback)
 
 	// 4. rejoin, with 1/16 of total stake
-	onRound := online(&fixture, a, c01, account01.Address, keys)
+	onRound := online(a, c01, account01.Address, keys)
 
 	// 5. wait for enough rounds to pass, during which c01 can't vote, that is
 	// could get knocked off.
@@ -162,7 +161,7 @@ func TestBigJoin(t *testing.T) {
 	a.Equal(basics.Online, data.Status)
 
 	// 5a. just to be sure, do a zero pay to get it "noticed"
-	zeroPay(&fixture, a, c01, account01.Address)
+	zeroPay(a, c01, account01.Address)
 	data, err = c01.AccountData(account01.Address)
 	a.NoError(err)
 	a.Equal(basics.Online, data.Status)
@@ -175,7 +174,7 @@ func TestBigJoin(t *testing.T) {
 	a.NoError(err)
 	a.Equal(basics.Online, data.Status)
 
-	zeroPay(&fixture, a, c01, account01.Address)
+	zeroPay(a, c01, account01.Address)
 	data, err = c01.AccountData(account01.Address)
 	a.NoError(err)
 	a.Equal(basics.Online, data.Status)
@@ -215,7 +214,7 @@ func TestBigIncrease(t *testing.T) {
 		accounts, err := fixture.GetNodeWalletsSortedByBalance(c)
 		a.NoError(err)
 		a.Len(accounts, 1)
-		fmt.Printf("Client %s is %v\n", name, accounts[0].Address)
+		t.Logf("Client %s is %v\n", name, accounts[0].Address)
 		return c, accounts[0]
 	}
 
@@ -226,14 +225,14 @@ func TestBigIncrease(t *testing.T) {
 	// certainly will not have proposed by pure luck just before the critical
 	// round. If we don't do that, 1/16 of stake is enough that it will probably
 	// have a fairly recent proposal, and not get knocked off.
-	pay(&fixture, a, c1, account01.Address, account15.Address, 99*account01.Amount/100)
+	pay(a, c1, account01.Address, account15.Address, 99*account01.Amount/100)
 
-	rekeyreg(&fixture, a, c1, account01.Address, true)
+	rekeyreg(a, c1, account01.Address, true)
 
 	// 2. Wait lookback rounds
 	wait(&fixture, a, lookback)
 
-	tx := pay(&fixture, a, c15, account15.Address, account01.Address, 50*account15.Amount/100)
+	tx := pay(a, c15, account15.Address, account01.Address, 50*account15.Amount/100)
 	data, err := c15.AccountData(account01.Address)
 	a.NoError(err)
 	a.EqualValues(*tx.ConfirmedRound+lookback, data.LastHeartbeat)
@@ -252,22 +251,21 @@ func wait(f *fixtures.RestClientFixture, a *require.Assertions, count uint64) {
 	a.NoError(f.WaitForRoundWithTimeout(round))
 }
 
-func pay(f *fixtures.RestClientFixture, a *require.Assertions,
-	c libgoal.Client, from string, to string, amount uint64) v2.PreEncodedTxInfo {
+func pay(a *require.Assertions, c libgoal.Client,
+	from string, to string, amount uint64) v2.PreEncodedTxInfo {
 	pay, err := c.SendPaymentFromUnencryptedWallet(from, to, 1000, amount, nil)
 	a.NoError(err)
-	tx, err := f.WaitForConfirmedTxn(uint64(pay.LastValid), pay.ID().String())
+	tx, err := c.WaitForConfirmedTxn(uint64(pay.LastValid), pay.ID().String())
 	a.NoError(err)
 	return tx
 }
 
-func zeroPay(f *fixtures.RestClientFixture, a *require.Assertions,
-	c libgoal.Client, address string) {
-	pay(f, a, c, address, address, 0)
+func zeroPay(a *require.Assertions, c libgoal.Client, address string) {
+	pay(a, c, address, address, 0)
 }
 
 // Go offline, but return the key material so it's easy to go back online
-func offline(f *fixtures.RestClientFixture, a *require.Assertions, client libgoal.Client, address string) transactions.KeyregTxnFields {
+func offline(a *require.Assertions, client libgoal.Client, address string) transactions.KeyregTxnFields {
 	offTx, err := client.MakeUnsignedGoOfflineTx(address, 0, 0, 100_000, [32]byte{})
 	a.NoError(err)
 
@@ -286,7 +284,7 @@ func offline(f *fixtures.RestClientFixture, a *require.Assertions, client libgoa
 	a.NoError(err)
 	onlineTxID, err := client.SignAndBroadcastTransaction(wh, nil, offTx)
 	a.NoError(err)
-	txn, err := f.WaitForConfirmedTxn(uint64(offTx.LastValid), onlineTxID)
+	txn, err := client.WaitForConfirmedTxn(uint64(offTx.LastValid), onlineTxID)
 	a.NoError(err)
 	// sync up with the network
 	_, err = client.WaitForRound(*txn.ConfirmedRound)
@@ -298,7 +296,7 @@ func offline(f *fixtures.RestClientFixture, a *require.Assertions, client libgoa
 }
 
 // Go online with the supplied key material
-func online(f *fixtures.RestClientFixture, a *require.Assertions, client libgoal.Client, address string, keys transactions.KeyregTxnFields) uint64 {
+func online(a *require.Assertions, client libgoal.Client, address string, keys transactions.KeyregTxnFields) uint64 {
 	// sanity check that we start offline
 	data, err := client.AccountData(address)
 	a.NoError(err)
@@ -313,7 +311,7 @@ func online(f *fixtures.RestClientFixture, a *require.Assertions, client libgoal
 	a.NoError(err)
 	onlineTxID, err := client.SignAndBroadcastTransaction(wh, nil, onTx)
 	a.NoError(err)
-	receipt, err := f.WaitForConfirmedTxn(uint64(onTx.LastValid), onlineTxID)
+	receipt, err := client.WaitForConfirmedTxn(uint64(onTx.LastValid), onlineTxID)
 	a.NoError(err)
 	data, err = client.AccountData(address)
 	a.NoError(err)

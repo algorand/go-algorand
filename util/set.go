@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -33,6 +33,11 @@ func (s Set[T]) Add(elems ...T) Set[T] {
 // MakeSet constructs a set instance directly from elements.
 func MakeSet[T comparable](elems ...T) Set[T] {
 	return make(Set[T]).Add(elems...)
+}
+
+// Empty returns true if the set is empty.
+func (s Set[T]) Empty() bool {
+	return len(s) == 0
 }
 
 // Contains checks the membership of an element in the set.

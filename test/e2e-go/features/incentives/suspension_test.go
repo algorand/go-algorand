@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -70,8 +70,8 @@ func TestBasicSuspension(t *testing.T) {
 	c10, account10 := clientAndAccount("Node10")
 	c20, account20 := clientAndAccount("Node20")
 
-	rekeyreg(&fixture, a, c10, account10.Address, true)
-	rekeyreg(&fixture, a, c20, account20.Address, true)
+	rekeyreg(a, c10, account10.Address, true)
+	rekeyreg(a, c20, account20.Address, true)
 
 	// Accounts are now suspendable whether they have proposed yet or not
 	// because keyreg sets LastHeartbeat. Stop c20 which means account20 will be

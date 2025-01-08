@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -42,6 +42,7 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	pb "github.com/libp2p/go-libp2p-pubsub/pb"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -1373,4 +1374,34 @@ func TestP2PEnableGossipService_BothDisable(t *testing.T) {
 
 	require.False(t, netA.hasPeers())
 	require.False(t, netB.hasPeers())
+}
+
+// TestP2PTxTopicValidator_NoWsPeer checks txTopicValidator does not call tx handler with empty Sender
+func TestP2PTxTopicValidator_NoWsPeer(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	log := logging.TestingLog(t)
+
+	// prepare configs
+	cfg := config.GetDefaultLocal()
+	cfg.DNSBootstrapID = "" // disable DNS lookups since the test uses phonebook addresses
+
+	net, err := NewP2PNetwork(log, cfg, "", nil, genesisID, config.Devtestnet, &nopeNodeInfo{}, nil)
+	require.NoError(t, err)
+
+	peerID := peer.ID("12345678") // must be 8+ in size
+	msg := pubsub.Message{Message: &pb.Message{}, ID: string(peerID)}
+	validateIncomingTxMessage := func(rawmsg IncomingMessage) OutgoingMessage {
+		require.NotEmpty(t, rawmsg.Sender)
+		require.Implements(t, (*DisconnectableAddressablePeer)(nil), rawmsg.Sender)
+		return OutgoingMessage{Action: Accept}
+	}
+	net.handler.RegisterValidatorHandlers([]TaggedMessageValidatorHandler{
+		{Tag: protocol.TxnTag, MessageHandler: ValidateHandleFunc(validateIncomingTxMessage)},
+	})
+
+	ctx := context.Background()
+	require.NotContains(t, net.wsPeers, peerID)
+	res := net.txTopicValidator(ctx, peerID, &msg)
+	require.Equal(t, pubsub.ValidationAccept, res)
 }

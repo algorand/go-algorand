@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -212,13 +212,13 @@ func (r *sqlReader) MakeKVsIter(ctx context.Context) (trackerdb.KVsIter, error) 
 }
 
 // MakeOnlineAccountsIter implements trackerdb.Reader
-func (r *sqlReader) MakeOnlineAccountsIter(ctx context.Context, useStaging bool) (trackerdb.TableIterator[*encoded.OnlineAccountRecordV6], error) {
-	return MakeOnlineAccountsIter(ctx, r.q, useStaging)
+func (r *sqlReader) MakeOnlineAccountsIter(ctx context.Context, useStaging bool, excludeBefore basics.Round) (trackerdb.TableIterator[*encoded.OnlineAccountRecordV6], error) {
+	return MakeOnlineAccountsIter(ctx, r.q, useStaging, excludeBefore)
 }
 
 // MakeOnlineRoundParamsIter implements trackerdb.Reader
-func (r *sqlReader) MakeOnlineRoundParamsIter(ctx context.Context, useStaging bool) (trackerdb.TableIterator[*encoded.OnlineRoundParamsRecordV6], error) {
-	return MakeOnlineRoundParamsIter(ctx, r.q, useStaging)
+func (r *sqlReader) MakeOnlineRoundParamsIter(ctx context.Context, useStaging bool, excludeBefore basics.Round) (trackerdb.TableIterator[*encoded.OnlineRoundParamsRecordV6], error) {
+	return MakeOnlineRoundParamsIter(ctx, r.q, useStaging, excludeBefore)
 }
 
 type sqlWriter struct {
