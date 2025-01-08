@@ -27,7 +27,6 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/netdeploy"
-	"github.com/algorand/go-algorand/protocol"
 
 	"github.com/algorand/go-algorand/daemon/algod/api/client"
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
@@ -192,34 +191,7 @@ func (f *RestClientFixture) WaitForTxnConfirmation(roundTimeout uint64, txid str
 // or until the passed roundTimeout passes
 // or until waiting for a round to pass times out
 func (f *RestClientFixture) WaitForConfirmedTxn(roundTimeout uint64, txid string) (txn v2.PreEncodedTxInfo, err error) {
-	client := f.AlgodClient
-	for {
-		// Get current round information
-		curStatus, statusErr := client.Status()
-		require.NoError(f.t, statusErr, "fixture should be able to get node status")
-		curRound := curStatus.LastRound
-
-		// Check if we know about the transaction yet
-		var resp []byte
-		resp, err = client.RawPendingTransactionInformation(txid)
-		if err == nil {
-			err = protocol.DecodeReflect(resp, &txn)
-			require.NoError(f.t, err)
-		}
-
-		// Check if transaction was confirmed
-		if txn.ConfirmedRound != nil && *txn.ConfirmedRound > 0 {
-			return
-		}
-		// Check if we should wait a round
-		if curRound > roundTimeout {
-			err = fmt.Errorf("failed to see confirmed transaction by round %v", roundTimeout)
-			return
-		}
-		// Wait a round
-		err = f.WaitForRoundWithTimeout(curRound + 1)
-		require.NoError(f.t, err, "fixture should be able to wait for one round to pass")
-	}
+	return f.AlgodClient.WaitForConfirmedTxn(roundTimeout, txid)
 }
 
 // WaitForAllTxnsToConfirm is as WaitForTxnConfirmation,
@@ -295,7 +267,7 @@ func (f *RestClientFixture) WaitForAccountFunded(roundTimeout uint64, accountAdd
 			return fmt.Errorf("failed to see confirmed transaction by round %v", roundTimeout)
 		}
 		// Wait a round
-		err = f.WaitForRoundWithTimeout(curRound + 1)
+		err = client.WaitForRoundWithTimeout(curRound + 1)
 		require.NoError(f.t, err, "fixture should be able to wait for one round to pass")
 	}
 }
@@ -318,7 +290,7 @@ func (f *RestClientFixture) SendMoneyAndWaitFromWallet(walletHandle, walletPassw
 	require.NoError(f.t, err, "client should be able to send money from rich to poor account")
 	require.NotEmpty(f.t, fundingTx.ID().String(), "transaction ID should not be empty")
 	waitingDeadline := curRound + uint64(5)
-	txn, err = f.WaitForConfirmedTxn(waitingDeadline, fundingTx.ID().String())
+	txn, err = client.WaitForConfirmedTxn(waitingDeadline, fundingTx.ID().String())
 	require.NoError(f.t, err)
 	return
 }
