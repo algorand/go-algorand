@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -334,6 +334,45 @@ func (client RestClient) WaitForRoundWithTimeout(roundToWaitFor uint64) error {
 		}
 	}
 	return nil
+}
+
+// WaitForConfirmedTxn waits until either the passed txid is confirmed
+// or until the passed roundTimeout passes
+// or until waiting for a round to pass times out
+func (client RestClient) WaitForConfirmedTxn(roundTimeout uint64, txid string) (txn v2.PreEncodedTxInfo, err error) {
+	for {
+		// Get current round information
+		curStatus, statusErr := client.Status()
+		if err != nil {
+			return txn, statusErr
+		}
+		curRound := curStatus.LastRound
+
+		// Check if we know about the transaction yet
+		var resp []byte
+		resp, err = client.RawPendingTransactionInformation(txid)
+		if err == nil {
+			err = protocol.DecodeReflect(resp, &txn)
+			if err != nil {
+				return txn, err
+			}
+		}
+
+		// Check if transaction was confirmed
+		if txn.ConfirmedRound != nil && *txn.ConfirmedRound > 0 {
+			return
+		}
+		// Check if we should wait a round
+		if curRound > roundTimeout {
+			err = fmt.Errorf("failed to see confirmed transaction by round %v", roundTimeout)
+			return txn, err
+		}
+		// Wait a round
+		err = client.WaitForRoundWithTimeout(curRound + 1)
+		if err != nil {
+			return txn, err
+		}
+	}
 }
 
 // HealthCheck does a health check on the potentially running node,
