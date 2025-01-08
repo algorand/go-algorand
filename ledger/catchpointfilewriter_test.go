@@ -818,7 +818,7 @@ func TestFullCatchpointWriter(t *testing.T) {
 // ensure both committed all pending changes before taking a catchpoint
 // another approach is to modify the test and craft round numbers,
 // and make the ledger to generate catchpoint itself when it is time
-func testCatchpointFlushRound(l *Ledger) {
+func testCatchpointFlushRound(l *Ledger) basics.Round {
 	// Clear the timer to ensure a flush
 	l.trackers.mu.Lock()
 	l.trackers.lastFlushTime = time.Time{}
@@ -827,36 +827,31 @@ func testCatchpointFlushRound(l *Ledger) {
 	r, _ := l.LatestCommitted()
 	l.trackers.committedUpTo(r)
 	l.trackers.waitAccountsWriting()
+	return r
 }
 
 func TestExactAccountChunk(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	// t.Parallel() // probably not good to parallelize catchpoint file save/load
 
-	t.Run("v39", func(t *testing.T) {
-		proto := protocol.ConsensusV39
-		testExactAccountChunk(t, proto, 1)
-	})
-	t.Run("v40", func(t *testing.T) {
-		proto := protocol.ConsensusV40
-		testExactAccountChunk(t, proto, 2)
-	})
-	t.Run("future", func(t *testing.T) {
-		proto := protocol.ConsensusFuture
-		testExactAccountChunk(t, proto, 2)
-	})
+	t.Run("v39", func(t *testing.T) { testExactAccountChunk(t, protocol.ConsensusV39) })
+	t.Run("v40", func(t *testing.T) { testExactAccountChunk(t, protocol.ConsensusV40) })
+	t.Run("future", func(t *testing.T) { testExactAccountChunk(t, protocol.ConsensusFuture) })
 }
 
-func testExactAccountChunk(t *testing.T, proto protocol.ConsensusVersion, totalChunks int) {
-	genBalances, addrs, _ := ledgertesting.NewTestGenesis()
+func testExactAccountChunk(t *testing.T, proto protocol.ConsensusVersion) {
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis(func(c *ledgertesting.GenesisCfg) {
+		c.OnlineCount = 1 // addrs[0] is online
+	}, ledgertesting.TurnOffRewards)
 	cfg := config.GetDefaultLocal()
 
 	dl := NewDoubleLedger(t, genBalances, proto, cfg)
 	defer dl.Close()
 
+	payFrom := addrs[1] // offline account sends pays
 	pay := txntest.Txn{
 		Type:   "pay",
-		Sender: addrs[0],
+		Sender: payFrom,
 		Amount: 1_000_000,
 	}
 	// There are 12 accounts in the NewTestGenesis, so we create more so that we
@@ -871,13 +866,15 @@ func testExactAccountChunk(t *testing.T, proto protocol.ConsensusVersion, totalC
 	// At least 32 more blocks so that we catchpoint after the accounts exist
 	for i := 0; i < 40; i++ {
 		selfpay := pay
-		selfpay.Receiver = addrs[0]
+		selfpay.Receiver = payFrom
 		selfpay.Note = ledgertesting.RandomNote()
 		dl.fullBlock(&selfpay)
 	}
 
-	testCatchpointFlushRound(dl.generator)
-	testCatchpointFlushRound(dl.validator)
+	genR := testCatchpointFlushRound(dl.generator)
+	valR := testCatchpointFlushRound(dl.validator)
+	require.Equal(t, genR, valR)
+	require.EqualValues(t, BalancesPerCatchpointFileChunk-12+40, genR) // 540 (512-12+40)
 
 	require.Eventually(t, func() bool {
 		dl.generator.accts.accountsMu.RLock()
@@ -896,7 +893,36 @@ func testExactAccountChunk(t *testing.T, proto protocol.ConsensusVersion, totalC
 	catchpointFilePath := filepath.Join(tempDir, t.Name()+".catchpoint.tar.gz")
 
 	cph := testWriteCatchpoint(t, config.Consensus[proto], dl.validator.trackerDB(), catchpointDataFilePath, catchpointFilePath, 0)
-	require.EqualValues(t, cph.TotalChunks, totalChunks)
+
+	decodedData := readCatchpointFile(t, catchpointFilePath)
+
+	// decode and verify some stats about balances chunk contents
+	var chunks []catchpointFileChunkV6
+	for i, d := range decodedData {
+		t.Logf("section %d: %s", i, d.headerName)
+		if strings.HasPrefix(d.headerName, "balances.") {
+			var chunk catchpointFileChunkV6
+			err := protocol.Decode(d.data, &chunk)
+			require.NoError(t, err)
+			t.Logf("chunk %d balances: %d, kvs: %d, onlineaccounts: %d, onlineroundparams: %d", i, len(chunk.Balances), len(chunk.KVs), len(chunk.OnlineAccounts), len(chunk.OnlineRoundParams))
+			chunks = append(chunks, chunk)
+		}
+	}
+	if config.Consensus[proto].EnableCatchpointsWithOnlineAccounts {
+		require.Len(t, chunks, 3)
+	} else {
+		require.Len(t, chunks, 1)
+	}
+	require.Len(t, chunks, int(cph.TotalChunks))
+
+	// first chunk is maxed out (512 accounts)
+	require.Len(t, chunks[0].Balances, BalancesPerCatchpointFileChunk)
+
+	if config.Consensus[proto].EnableCatchpointsWithOnlineAccounts {
+		// second and third chunks are onlinaccounts and onlineroundparams
+		require.Len(t, chunks[1].OnlineAccounts, 1)
+		require.Len(t, chunks[2].OnlineRoundParams, 320)
+	}
 
 	l := testNewLedgerFromCatchpoint(t, dl.generator.trackerDB(), catchpointFilePath)
 	defer l.Close()
