@@ -225,17 +225,17 @@ func (ct *catchpointTracker) finishFirstStage(ctx context.Context, dbRound basic
 	var onlineAccountsHash, onlineRoundParamsHash crypto.Digest
 	params := config.Consensus[blockProto]
 
-	// Usually onlineAccountsForgetBefore is dbRound - params.MaxBalLookback (320 roudns of history),
+	// Usually onlineAccountsForgetBefore is dbRound - params.MaxBalLookback (320 rounds of history),
 	// but if votersTracker needs more state, it can set lowestRound to be earlier than that.
 	// We want to only write MaxBalLookback rounds of history to the catchpoint file.
 	var onlineExcludeBefore basics.Round
-	if (dbRound + 1).SubSaturate(basics.Round(params.MaxBalLookback)) == onlineAccountsForgetBefore {
+	if normalOnlineHorizon := (dbRound + 1).SubSaturate(basics.Round(params.MaxBalLookback)); normalOnlineHorizon == onlineAccountsForgetBefore {
 		// this is the common case, so we pass 0 so the DB dumps the full table, as is
 		onlineExcludeBefore = 0
-	} else if (dbRound + 1).SubSaturate(basics.Round(params.MaxBalLookback)) > onlineAccountsForgetBefore {
+	} else if normalOnlineHorizon > onlineAccountsForgetBefore {
 		// the previous flush left more online-related rows than we want in the DB. we need to tell
 		// the catchpoint writer to exclude the rows that are older than the ones we want to keep.
-		onlineExcludeBefore = (dbRound + 1).SubSaturate(basics.Round(params.MaxBalLookback))
+		onlineExcludeBefore = normalOnlineHorizon
 	} else {
 		// The previous flush left less online-related rows than we want in the DB. This should not happen; return error
 		ct.log.Errorf("catchpointTracker.finishFirstStage: dbRound %d and onlineAccountsForgetBefore %d has less history than MaxBalLookback %d",
