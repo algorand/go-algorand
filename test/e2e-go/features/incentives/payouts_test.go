@@ -72,8 +72,8 @@ func TestBasicPayouts(t *testing.T) {
 	c01, account01 := clientAndAccount("Node01")
 	relay, _ := clientAndAccount("Relay")
 
-	data01 := rekeyreg(&fixture, a, c01, account01.Address, true)
-	data15 := rekeyreg(&fixture, a, c15, account15.Address, true)
+	data01 := rekeyreg(a, c01, account01.Address, true)
+	data15 := rekeyreg(a, c15, account15.Address, true)
 
 	// Wait a few rounds after rekeyreg, this means that `lookback` rounds after
 	// those rekeyregs, the nodes will be IncentiveEligible, but both will have
@@ -296,7 +296,7 @@ func getblock(client libgoal.Client, round uint64) (bookkeeping.Block, error) {
 	return client.BookkeepingBlock(round)
 }
 
-func rekeyreg(f *fixtures.RestClientFixture, a *require.Assertions, client libgoal.Client, address string, becomeEligible bool) basics.AccountData {
+func rekeyreg(a *require.Assertions, client libgoal.Client, address string, becomeEligible bool) basics.AccountData {
 	// we start by making an _offline_ tx here, because we want to populate the
 	// key material ourself with a copy of the account's existing material. That
 	// makes it an _online_ keyreg. That allows the running node to chug along
@@ -329,7 +329,7 @@ func rekeyreg(f *fixtures.RestClientFixture, a *require.Assertions, client libgo
 	a.NoError(err)
 	onlineTxID, err := client.SignAndBroadcastTransaction(wh, nil, reReg)
 	a.NoError(err)
-	txn, err := f.WaitForConfirmedTxn(uint64(reReg.LastValid), onlineTxID)
+	txn, err := client.WaitForConfirmedTxn(uint64(reReg.LastValid), onlineTxID)
 	a.NoError(err)
 	// sync up with the network
 	_, err = client.WaitForRound(*txn.ConfirmedRound)

@@ -97,11 +97,11 @@ func testChallengesOnce(t *testing.T, a *require.Assertions) (retry bool) {
 
 	// eligible accounts1 will get challenged with node offline, and suspended
 	for _, account := range accounts1 {
-		rekeyreg(&fixture, a, c1, account.Address, eligible(account.Address))
+		rekeyreg(a, c1, account.Address, eligible(account.Address))
 	}
 	// eligible accounts2 will get challenged, but node2 will heartbeat for them
 	for _, account := range accounts2 {
-		rekeyreg(&fixture, a, c2, account.Address, eligible(account.Address))
+		rekeyreg(a, c2, account.Address, eligible(account.Address))
 	}
 
 	// turn off node 1, so it can't heartbeat
