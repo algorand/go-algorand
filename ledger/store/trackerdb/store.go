@@ -20,6 +20,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/encoded"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/util/db"
@@ -66,8 +67,8 @@ type Reader interface {
 	MakeCatchpointReader() (CatchpointReader, error)
 	MakeEncodedAccountsBatchIter() EncodedAccountsBatchIter
 	MakeKVsIter(ctx context.Context) (KVsIter, error)
-	MakeOnlineAccountsIter(ctx context.Context, useStaging bool) (TableIterator[*encoded.OnlineAccountRecordV6], error)
-	MakeOnlineRoundParamsIter(ctx context.Context, useStaging bool) (TableIterator[*encoded.OnlineRoundParamsRecordV6], error)
+	MakeOnlineAccountsIter(ctx context.Context, useStaging bool, excludeBefore basics.Round) (TableIterator[*encoded.OnlineAccountRecordV6], error)
+	MakeOnlineRoundParamsIter(ctx context.Context, useStaging bool, excludeBefore basics.Round) (TableIterator[*encoded.OnlineRoundParamsRecordV6], error)
 }
 
 // Writer is the interface for the trackerdb write operations.
