@@ -93,7 +93,6 @@ elif [ "${OS}" = "darwin" ]; then
     install_or_upgrade autoconf
     install_or_upgrade automake
     install_or_upgrade python3
-    install_or_upgrade lnav
     install_or_upgrade diffutils
     lnav -i "$SCRIPTPATH/algorand_node_log.json"
 elif [ "${OS}" = "windows" ]; then
