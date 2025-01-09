@@ -93,6 +93,10 @@ func TestStateProofInReplayCatchpoint(t *testing.T) {
 
 	catchpointLabel := waitForCatchpointGeneration(t, fixture, primaryNodeRestClient, targetCatchpointRound)
 
+	chunks := downloadCatchpointFile(t, a, primaryNodeAddr, targetCatchpointRound)
+	a.NotEmpty(chunks)
+	validateCatchpointChunks(t, a, chunks, consensusParams)
+
 	_, err = usingNodeRestClient.Catchup(catchpointLabel, 0)
 	a.NoError(err)
 
@@ -168,6 +172,10 @@ func TestStateProofAfterCatchpoint(t *testing.T) {
 	targetCatchpointRound := getFirstCatchpointRound(&consensusParams)
 
 	catchpointLabel := waitForCatchpointGeneration(t, fixture, primaryNodeRestClient, targetCatchpointRound)
+
+	chunks := downloadCatchpointFile(t, a, primaryNodeAddr, targetCatchpointRound)
+	a.NotEmpty(chunks)
+	validateCatchpointChunks(t, a, chunks, consensusParams)
 
 	_, err = usingNodeRestClient.Catchup(catchpointLabel, 0)
 	a.NoError(err)
@@ -262,6 +270,10 @@ func TestSendSigsAfterCatchpointCatchup(t *testing.T) {
 	defer usingNode.StopAlgod()
 
 	targetCatchpointRound := getFirstCatchpointRound(&consensusParams)
+
+	chunks := downloadCatchpointFile(t, a, primaryNodeAddr, targetCatchpointRound)
+	a.NotEmpty(chunks)
+	validateCatchpointChunks(t, a, chunks, consensusParams)
 
 	catchpointLabel := waitForCatchpointGeneration(t, &fixture, primaryNodeRestClient, targetCatchpointRound)
 	_, err = usingNodeRestClient.Catchup(catchpointLabel, 0)
