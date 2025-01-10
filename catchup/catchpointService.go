@@ -315,9 +315,13 @@ func (cs *CatchpointCatchupService) processStageLedgerDownload() error {
 		}
 		peer := psp.Peer
 		start := time.Now()
+		var peerAddr string // HTTPPeer, UnicastPeer, wsPeerCore all implement this
+		if p, ok := peer.(interface{ GetAddress() string }); ok {
+			peerAddr = p.GetAddress()
+		}
 		err0 = lf.downloadLedger(cs.ctx, peer, round)
 		if err0 == nil {
-			cs.log.Infof("ledger downloaded in %d seconds", time.Since(start)/time.Second)
+			cs.log.Infof("ledger downloaded from %s in %d seconds", peerAddr, time.Since(start)/time.Second)
 			start = time.Now()
 			err0 = cs.ledgerAccessor.BuildMerkleTrie(cs.ctx, cs.updateVerifiedCounts)
 			if err0 == nil {
@@ -325,8 +329,10 @@ func (cs *CatchpointCatchupService) processStageLedgerDownload() error {
 				break
 			}
 			// failed to build the merkle trie for the above catchpoint file.
+			cs.log.Infof("failed to build merkle trie for catchpoint file from %s: %v", peerAddr, err0)
 			cs.blocksDownloadPeerSelector.rankPeer(psp, peerRankInvalidDownload)
 		} else {
+			cs.log.Infof("failed to download catchpoint ledger from peer %s: %v", peerAddr, err0)
 			cs.blocksDownloadPeerSelector.rankPeer(psp, peerRankDownloadFailed)
 		}
 
