@@ -5199,11 +5199,11 @@ int %d
 ==`, modexpTestVector.Base, modexpTestVector.Exponent, modexpTestVector.Modulus, modexpTestVector.Result, testLogicBudget-7-modexpTestVector.LogicCost)
 		switch modexpTestVector.TestOutcome {
 		case Accept:
-			testAccepts(t, progText, 11)
+			testAccepts(t, progText, 12)
 		case Reject:
-			testRejects(t, progText, 11)
+			testRejects(t, progText, 12)
 		case Panic:
-			testPanics(t, progText, 11)
+			testPanics(t, progText, 12)
 		}
 	}
 

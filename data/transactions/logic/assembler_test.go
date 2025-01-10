@@ -492,7 +492,7 @@ const mimcCompiled = "802011223344556677889900aabbccddeeff11223344556677889900aa
 const v11Compiled = v10Compiled + incentiveCompiled + mimcCompiled
 
 const stateProofCompiled = "80070123456789abcd86494985"
-const bmodexpCompiled = "80070123456789abcd80070123456789abcd80070123456789abcde6"
+const bmodexpCompiled = "80070123456789abcd80070123456789abcd80070123456789abcd99"
 
 const v12Compiled = v11Compiled + stateProofCompiled + bmodexpCompiled
 

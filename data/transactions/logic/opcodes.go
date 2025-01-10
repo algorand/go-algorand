@@ -19,13 +19,13 @@ package logic
 import (
 	"cmp"
 	"fmt"
+	"maps"
 	"math"
+	"slices"
 	"strconv"
 	"strings"
 
 	"github.com/algorand/go-algorand/data/basics"
-	"golang.org/toolchain/src/slices"
-	"golang.org/x/exp/maps"
 )
 
 // LogicVersion defines default assembler and max eval versions
@@ -739,6 +739,7 @@ var OpSpecs = []OpSpec{
 	/* Will end up following keccak256 -
 	{0x98, "sha3_256", opSHA3_256, proto("b:b{32}"), ?, costByLength(...)},},
 	*/
+	{0x99, "bmodexp", opBytesModExp, proto("bbb:b"), 12, defaultCustomCost(bmodexpCustomCost)},
 
 	// Byteslice math.
 	{0xa0, "b+", opBytesPlus, proto("II:b"), 4, costly(10).typed(typeByteMath(maxByteMathSize + 1))},
@@ -868,7 +869,6 @@ var OpSpecs = []OpSpec{
 			chunkCost: 550,
 			chunkSize: 32,
 		}})},
-	{0xe7, "bmodexp", opBytesModExp, proto("bbb:b"), 11, defaultCustomCost(bmodexpCustomCost)},
 }
 
 // OpcodesByVersion returns list of opcodes available in a specific version of TEAL
