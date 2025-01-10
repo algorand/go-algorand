@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -187,6 +187,15 @@ func TestOnlineAccountsCacheMaxEntries(t *testing.T) {
 	acct.updRound++
 	oac.writeFrontIfExist(addr, acct)
 	require.Equal(t, 2, oac.accounts[addr].Len())
+}
+
+// TestOnlineAccountsCacheSizeBiggerThanStateProofTopVoters asserts that the online accounts cache
+// is bigger than the number of top online accounts tracked by the state proof system.
+func TestOnlineAccountsCacheSizeBiggerThanStateProofTopVoters(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	require.Greater(t, uint64(onlineAccountsCacheMaxSize), config.Consensus[protocol.ConsensusFuture].StateProofTopVoters)
 }
 
 var benchmarkOnlineAccountsCacheReadResult cachedOnlineAccount

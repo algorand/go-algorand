@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,10 +19,10 @@ package phonebook
 import (
 	"math"
 	"math/rand"
+	"slices"
 	"time"
 
 	"github.com/algorand/go-deadlock"
-	"golang.org/x/exp/slices"
 )
 
 // getAllAddresses when using GetAddresses with getAllAddresses, all the addresses will be retrieved, regardless

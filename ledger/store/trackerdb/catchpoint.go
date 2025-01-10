@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -125,6 +125,9 @@ type CatchpointFirstStageInfo struct {
 	// data files are generated.
 	TotalKVs uint64 `codec:"kvsCount"`
 
+	TotalOnlineAccounts    uint64 `codec:"onlineAccountsCount"`
+	TotalOnlineRoundParams uint64 `codec:"onlineRoundParamsCount"`
+
 	// Total number of chunks in the catchpoint data file. Only set when catchpoint
 	// data files are generated.
 	TotalChunks uint64 `codec:"chunksCount"`
@@ -133,6 +136,10 @@ type CatchpointFirstStageInfo struct {
 
 	// StateProofVerificationHash is the hash of the state proof verification data contained in the catchpoint data file.
 	StateProofVerificationHash crypto.Digest `codec:"spVerificationHash"`
+
+	// OnlineAccountsHash and OnlineRoundParamsHash provide verification for these tables in the catchpoint data file.
+	OnlineAccountsHash    crypto.Digest `codec:"onlineAccountsHash"`
+	OnlineRoundParamsHash crypto.Digest `codec:"onlineRoundParamsHash"`
 }
 
 // MakeCatchpointFilePath builds the path of a catchpoint file.

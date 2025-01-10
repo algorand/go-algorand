@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -102,7 +102,7 @@ func (p httpPeer) GetAddress() string {
 	return mas[0].String()
 }
 
-// GetAddress implements HTTPPeer interface and returns the http client for a peer
+// GetHTTPClient implements HTTPPeer interface and returns the http client for a peer
 func (p httpPeer) GetHTTPClient() *http.Client {
 	c, err := p2p.MakeTestHTTPClient(&p.addrInfo)
 	require.NoError(p.tb, err)

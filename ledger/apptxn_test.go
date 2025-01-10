@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -104,9 +104,9 @@ func TestPayAction(t *testing.T) {
 
 		dl.t.Log("postsink", postsink, "postprop", postprop)
 		if ver >= payoutsVer {
-			bonus := 10_000_000                                // config/consensus.go
-			assert.EqualValues(t, bonus-500, presink-postsink) // based on 75% in config/consensus.go
-			require.EqualValues(t, bonus+1500, postprop-preprop)
+			bonus := 10_000_000                                 // config/consensus.go
+			assert.EqualValues(t, bonus-1000, presink-postsink) // based on 50% in config/consensus.go
+			require.EqualValues(t, bonus+1000, postprop-preprop)
 		} else {
 			require.EqualValues(t, 2000, postsink-presink) // no payouts yet
 		}

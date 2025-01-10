@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -24,6 +24,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/encoded"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
@@ -51,33 +53,31 @@ const (
 // the writing is complete. It might take multiple steps until the operation is over, and the caller
 // has the option of throttling the CPU utilization in between the calls.
 type catchpointFileWriter struct {
-	ctx                  context.Context
-	tx                   trackerdb.SnapshotScope
-	filePath             string
-	totalAccounts        uint64
-	totalKVs             uint64
-	file                 *os.File
-	tar                  *tar.Writer
-	compressor           io.WriteCloser
-	chunk                catchpointFileChunkV6
-	chunkNum             uint64
-	writtenBytes         int64
-	biggestChunkLen      uint64
-	accountsIterator     accountsBatchIter
-	maxResourcesPerChunk int
-	accountsDone         bool
-	kvRows               kvIter
-}
-
-type kvIter interface {
-	Next() bool
-	KeyValue() ([]byte, []byte, error)
-	Close()
-}
-
-type accountsBatchIter interface {
-	Next(ctx context.Context, accountCount int, resourceCount int) ([]encoded.BalanceRecordV6, uint64, error)
-	Close()
+	ctx                    context.Context
+	tx                     trackerdb.SnapshotScope
+	params                 config.ConsensusParams
+	filePath               string
+	totalAccounts          uint64
+	totalKVs               uint64
+	totalOnlineAccounts    uint64
+	totalOnlineRoundParams uint64
+	file                   *os.File
+	tar                    *tar.Writer
+	compressor             io.WriteCloser
+	chunk                  catchpointFileChunkV6
+	chunkNum               uint64
+	writtenBytes           int64
+	biggestChunkLen        uint64
+	accountsIterator       trackerdb.EncodedAccountsBatchIter
+	maxResourcesPerChunk   int
+	onlineExcludeBefore    basics.Round
+	accountsDone           bool
+	kvRows                 trackerdb.KVsIter
+	kvDone                 bool
+	onlineAccountRows      trackerdb.TableIterator[*encoded.OnlineAccountRecordV6]
+	onlineAccountsDone     bool
+	onlineRoundParamsRows  trackerdb.TableIterator[*encoded.OnlineRoundParamsRecordV6]
+	onlineRoundParamsDone  bool
 }
 
 type catchpointFileBalancesChunkV5 struct {
@@ -88,13 +88,15 @@ type catchpointFileBalancesChunkV5 struct {
 type catchpointFileChunkV6 struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Balances    []encoded.BalanceRecordV6 `codec:"bl,allocbound=BalancesPerCatchpointFileChunk"`
-	numAccounts uint64
-	KVs         []encoded.KVRecordV6 `codec:"kv,allocbound=BalancesPerCatchpointFileChunk"`
+	Balances          []encoded.BalanceRecordV6 `codec:"bl,allocbound=BalancesPerCatchpointFileChunk"`
+	numAccounts       uint64
+	KVs               []encoded.KVRecordV6                `codec:"kv,allocbound=BalancesPerCatchpointFileChunk"`
+	OnlineAccounts    []encoded.OnlineAccountRecordV6     `codec:"oa,allocbound=BalancesPerCatchpointFileChunk"`
+	OnlineRoundParams []encoded.OnlineRoundParamsRecordV6 `codec:"orp,allocbound=BalancesPerCatchpointFileChunk"`
 }
 
 func (chunk catchpointFileChunkV6) empty() bool {
-	return len(chunk.Balances) == 0 && len(chunk.KVs) == 0
+	return len(chunk.Balances) == 0 && len(chunk.KVs) == 0 && len(chunk.OnlineAccounts) == 0 && len(chunk.OnlineRoundParams) == 0
 }
 
 type catchpointStateProofVerificationContext struct {
@@ -106,7 +108,7 @@ func (data catchpointStateProofVerificationContext) ToBeHashed() (protocol.HashI
 	return protocol.StateProofVerCtx, protocol.Encode(&data)
 }
 
-func makeCatchpointFileWriter(ctx context.Context, filePath string, tx trackerdb.SnapshotScope, maxResourcesPerChunk int) (*catchpointFileWriter, error) {
+func makeCatchpointFileWriter(ctx context.Context, params config.ConsensusParams, filePath string, tx trackerdb.SnapshotScope, maxResourcesPerChunk int, onlineExcludeBefore basics.Round) (*catchpointFileWriter, error) {
 	aw, err := tx.MakeAccountsReader()
 	if err != nil {
 		return nil, err
@@ -120,6 +122,19 @@ func makeCatchpointFileWriter(ctx context.Context, filePath string, tx trackerdb
 	totalKVs, err := aw.TotalKVs(ctx)
 	if err != nil {
 		return nil, err
+	}
+
+	var totalOnlineAccounts, totalOnlineRoundParams uint64
+	if params.EnableCatchpointsWithOnlineAccounts {
+		totalOnlineAccounts, err = aw.TotalOnlineAccountRows(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		totalOnlineRoundParams, err = aw.TotalOnlineRoundParams(ctx)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	err = os.MkdirAll(filepath.Dir(filePath), 0700)
@@ -137,16 +152,20 @@ func makeCatchpointFileWriter(ctx context.Context, filePath string, tx trackerdb
 	tar := tar.NewWriter(compressor)
 
 	res := &catchpointFileWriter{
-		ctx:                  ctx,
-		tx:                   tx,
-		filePath:             filePath,
-		totalAccounts:        totalAccounts,
-		totalKVs:             totalKVs,
-		file:                 file,
-		compressor:           compressor,
-		tar:                  tar,
-		accountsIterator:     tx.MakeEncodedAccoutsBatchIter(),
-		maxResourcesPerChunk: maxResourcesPerChunk,
+		ctx:                    ctx,
+		tx:                     tx,
+		params:                 params,
+		filePath:               filePath,
+		totalAccounts:          totalAccounts,
+		totalKVs:               totalKVs,
+		totalOnlineAccounts:    totalOnlineAccounts,
+		totalOnlineRoundParams: totalOnlineRoundParams,
+		file:                   file,
+		compressor:             compressor,
+		tar:                    tar,
+		accountsIterator:       tx.MakeEncodedAccountsBatchIter(),
+		maxResourcesPerChunk:   maxResourcesPerChunk,
+		onlineExcludeBefore:    onlineExcludeBefore,
 	}
 	return res, nil
 }
@@ -232,6 +251,14 @@ func (cw *catchpointFileWriter) FileWriteStep(stepCtx context.Context) (more boo
 			if cw.kvRows != nil {
 				cw.kvRows.Close()
 				cw.kvRows = nil
+			}
+			if cw.onlineAccountRows != nil {
+				cw.onlineAccountRows.Close()
+				cw.onlineAccountRows = nil
+			}
+			if cw.onlineRoundParamsRows != nil {
+				cw.onlineRoundParamsRows.Close()
+				cw.onlineRoundParamsRows = nil
 			}
 		}
 	}()
@@ -323,27 +350,94 @@ func (cw *catchpointFileWriter) readDatabaseStep(ctx context.Context) error {
 		cw.accountsDone = true
 	}
 
-	// Create the *Rows iterator JIT
-	if cw.kvRows == nil {
-		rows, err := cw.tx.MakeKVsIter(ctx)
-		if err != nil {
-			return err
+	// Create the kvRows iterator JIT
+	if !cw.kvDone {
+		if cw.kvRows == nil {
+			rows, err := cw.tx.MakeKVsIter(ctx)
+			if err != nil {
+				return err
+			}
+			cw.kvRows = rows
 		}
-		cw.kvRows = rows
+
+		kvrs := make([]encoded.KVRecordV6, 0, BalancesPerCatchpointFileChunk)
+		for cw.kvRows.Next() {
+			k, v, err := cw.kvRows.KeyValue()
+			if err != nil {
+				return err
+			}
+			kvrs = append(kvrs, encoded.KVRecordV6{Key: k, Value: v})
+			if len(kvrs) == BalancesPerCatchpointFileChunk {
+				break
+			}
+		}
+		if len(kvrs) > 0 {
+			cw.chunk = catchpointFileChunkV6{KVs: kvrs}
+			return nil
+		}
+		// Do not close kvRows here, or it will start over on the next iteration
+		cw.kvDone = true
 	}
 
-	kvrs := make([]encoded.KVRecordV6, 0, BalancesPerCatchpointFileChunk)
-	for cw.kvRows.Next() {
-		k, v, err := cw.kvRows.KeyValue()
-		if err != nil {
-			return err
+	if cw.params.EnableCatchpointsWithOnlineAccounts && !cw.onlineAccountsDone {
+		// Create the OnlineAccounts iterator JIT
+		if cw.onlineAccountRows == nil {
+			rows, err := cw.tx.MakeOnlineAccountsIter(ctx, false, cw.onlineExcludeBefore)
+			if err != nil {
+				return err
+			}
+			cw.onlineAccountRows = rows
 		}
-		kvrs = append(kvrs, encoded.KVRecordV6{Key: k, Value: v})
-		if len(kvrs) == BalancesPerCatchpointFileChunk {
-			break
+
+		onlineAccts := make([]encoded.OnlineAccountRecordV6, 0, BalancesPerCatchpointFileChunk)
+		for cw.onlineAccountRows.Next() {
+			oa, err := cw.onlineAccountRows.GetItem()
+			if err != nil {
+				return err
+			}
+			onlineAccts = append(onlineAccts, *oa)
+			if len(onlineAccts) == BalancesPerCatchpointFileChunk {
+				break
+			}
 		}
+		if len(onlineAccts) > 0 {
+			cw.chunk = catchpointFileChunkV6{OnlineAccounts: onlineAccts}
+			return nil
+		}
+		// Do not close onlineAccountRows here, or it will start over on the next iteration
+		cw.onlineAccountsDone = true
 	}
-	cw.chunk = catchpointFileChunkV6{KVs: kvrs}
+
+	if cw.params.EnableCatchpointsWithOnlineAccounts && !cw.onlineRoundParamsDone {
+		// Create the OnlineRoundParams iterator JIT
+		if cw.onlineRoundParamsRows == nil {
+			rows, err := cw.tx.MakeOnlineRoundParamsIter(ctx, false, cw.onlineExcludeBefore)
+			if err != nil {
+				return err
+			}
+			cw.onlineRoundParamsRows = rows
+		}
+
+		onlineRndParams := make([]encoded.OnlineRoundParamsRecordV6, 0, BalancesPerCatchpointFileChunk)
+		for cw.onlineRoundParamsRows.Next() {
+			or, err := cw.onlineRoundParamsRows.GetItem()
+			if err != nil {
+				return err
+			}
+			onlineRndParams = append(onlineRndParams, *or)
+			if len(onlineRndParams) == BalancesPerCatchpointFileChunk {
+				break
+			}
+		}
+		if len(onlineRndParams) > 0 {
+			cw.chunk = catchpointFileChunkV6{OnlineRoundParams: onlineRndParams}
+			return nil
+		}
+		// Do not close onlineRndParamsRows here, or it will start over on the next iteration
+		cw.onlineRoundParamsDone = true
+	}
+
+	// Finished the last chunk
 	return nil
 }
 

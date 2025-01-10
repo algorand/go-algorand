@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -355,13 +355,6 @@ func (ao *onlineAccounts) consecutiveVersion(offset uint64) uint64 {
 	return offset
 }
 
-func (ao *onlineAccounts) handleUnorderedCommit(dcc *deferredCommitContext) {
-}
-func (ao *onlineAccounts) handlePrepareCommitError(dcc *deferredCommitContext) {
-}
-func (ao *onlineAccounts) handleCommitError(dcc *deferredCommitContext) {
-}
-
 func (ao *onlineAccounts) maxBalLookback() uint64 {
 	lastProtoVersion := ao.onlineRoundParamsData[len(ao.onlineRoundParamsData)-1].CurrentProtocol
 	return config.Consensus[lastProtoVersion].MaxBalLookback
@@ -535,9 +528,6 @@ func (ao *onlineAccounts) postCommit(ctx context.Context, dcc *deferredCommitCon
 	ao.voters.postCommit(dcc)
 }
 
-func (ao *onlineAccounts) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
-}
-
 // onlineCirculation return the total online balance for the given round, for use by agreement.
 func (ao *onlineAccounts) onlineCirculation(rnd basics.Round, voteRnd basics.Round) (basics.MicroAlgos, error) {
 	// Get cached total stake for rnd
@@ -620,11 +610,6 @@ func (ao *onlineAccounts) onlineTotals(rnd basics.Round) (basics.MicroAlgos, pro
 
 	onlineRoundParams := ao.onlineRoundParamsData[offset]
 	return basics.MicroAlgos{Raw: onlineRoundParams.OnlineSupply}, onlineRoundParams.CurrentProtocol, nil
-}
-
-// LookupOnlineAccountData returns the online account data for a given address at a given round.
-func (ao *onlineAccounts) LookupOnlineAccountData(rnd basics.Round, addr basics.Address) (data basics.OnlineAccountData, err error) {
-	return ao.lookupOnlineAccountData(rnd, addr)
 }
 
 // roundOffset calculates the offset of the given round compared to the current dbRound. Requires that the lock would be taken.

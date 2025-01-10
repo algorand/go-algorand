@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -538,6 +538,14 @@ func (w *testStagingWriter) writeCreatables(ctx context.Context, balances []trac
 }
 
 func (w *testStagingWriter) writeKVs(ctx context.Context, kvrs []encoded.KVRecordV6) error {
+	return nil
+}
+
+func (w *testStagingWriter) writeOnlineAccounts(ctx context.Context, accounts []encoded.OnlineAccountRecordV6) error {
+	return nil
+}
+
+func (w *testStagingWriter) writeOnlineRoundParams(ctx context.Context, params []encoded.OnlineRoundParamsRecordV6) error {
 	return nil
 }
 

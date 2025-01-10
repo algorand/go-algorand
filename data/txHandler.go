@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -627,7 +627,7 @@ func (handler *TxHandler) incomingMsgDupCheck(data []byte) (*crypto.Digest, bool
 // Returns:
 // - the capacity guard returned by the elastic rate limiter
 // - a boolean indicating if the sender is rate limited
-func (handler *TxHandler) incomingMsgErlCheck(sender network.DisconnectablePeer) (*util.ErlCapacityGuard, bool) {
+func (handler *TxHandler) incomingMsgErlCheck(sender network.DisconnectableAddressablePeer) (*util.ErlCapacityGuard, bool) {
 	var capguard *util.ErlCapacityGuard
 	var isCMEnabled bool
 	var err error
@@ -715,11 +715,11 @@ func (handler *TxHandler) incomingTxGroupCanonicalDedup(unverifiedTxGroup []tran
 }
 
 // incomingTxGroupAppRateLimit checks if the sender is rate limited by the per-application rate limiter.
-func (handler *TxHandler) incomingTxGroupAppRateLimit(unverifiedTxGroup []transactions.SignedTxn, sender network.DisconnectablePeer) bool {
+func (handler *TxHandler) incomingTxGroupAppRateLimit(unverifiedTxGroup []transactions.SignedTxn, sender network.DisconnectableAddressablePeer) bool {
 	// rate limit per application in a group. Limiting any app in a group drops the entire message.
 	if handler.appLimiter != nil {
 		congestedARL := len(handler.backlogQueue) > handler.appLimiterBacklogThreshold
-		if congestedARL && handler.appLimiter.shouldDrop(unverifiedTxGroup, sender.(network.IPAddressable).RoutingAddr()) {
+		if congestedARL && handler.appLimiter.shouldDrop(unverifiedTxGroup, sender.RoutingAddr()) {
 			transactionMessagesAppLimiterDrop.Inc(nil)
 			return true
 		}

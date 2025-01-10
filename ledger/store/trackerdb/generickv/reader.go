@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,6 +20,8 @@ import (
 	"context"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/ledger/encoded"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 )
 
@@ -65,14 +67,26 @@ func (r *reader) MakeCatchpointReader() (trackerdb.CatchpointReader, error) {
 	panic("unimplemented")
 }
 
-// MakeEncodedAccoutsBatchIter implements trackerdb.Reader
-func (r *reader) MakeEncodedAccoutsBatchIter() trackerdb.EncodedAccountsBatchIter {
+// MakeEncodedAccountsBatchIter implements trackerdb.Reader
+func (r *reader) MakeEncodedAccountsBatchIter() trackerdb.EncodedAccountsBatchIter {
 	// TODO: catchpoint
 	panic("unimplemented")
 }
 
 // MakeKVsIter implements trackerdb.Reader
 func (r *reader) MakeKVsIter(ctx context.Context) (trackerdb.KVsIter, error) {
+	// TODO: catchpoint
+	panic("unimplemented")
+}
+
+// MakeOnlineAccountsIter implements trackerdb.Reader
+func (r *reader) MakeOnlineAccountsIter(context.Context, bool, basics.Round) (trackerdb.TableIterator[*encoded.OnlineAccountRecordV6], error) {
+	// TODO: catchpoint
+	panic("unimplemented")
+}
+
+// MakeOnlineRoundParamsIter implements trackerdb.Reader
+func (r *reader) MakeOnlineRoundParamsIter(context.Context, bool, basics.Round) (trackerdb.TableIterator[*encoded.OnlineRoundParamsRecordV6], error) {
 	// TODO: catchpoint
 	panic("unimplemented")
 }

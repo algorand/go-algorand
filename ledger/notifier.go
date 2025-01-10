@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -120,16 +120,6 @@ func (bn *blockNotifier) commitRound(context.Context, trackerdb.TransactionScope
 }
 
 func (bn *blockNotifier) postCommit(ctx context.Context, dcc *deferredCommitContext) {
-}
-
-func (bn *blockNotifier) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
-}
-
-func (bn *blockNotifier) handleUnorderedCommit(dcc *deferredCommitContext) {
-}
-func (bn *blockNotifier) handlePrepareCommitError(dcc *deferredCommitContext) {
-}
-func (bn *blockNotifier) handleCommitError(dcc *deferredCommitContext) {
 }
 
 func (bn *blockNotifier) produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcr *deferredCommitRange) *deferredCommitRange {
