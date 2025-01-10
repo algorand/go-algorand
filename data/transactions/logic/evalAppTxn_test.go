@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -1196,7 +1196,6 @@ func TestBigApplCreation(t *testing.T) {
 
 	// First, test normal accummulation
 	for _, pgm := range []string{"Approval", "ClearState"} {
-		pgm := pgm
 		t.Run(pgm, func(t *testing.T) {
 			t.Parallel()
 
@@ -2001,7 +2000,6 @@ int 1
 `
 
 	for _, unified := range []bool{true, false} {
-		unified := unified
 		t.Run(fmt.Sprintf("unified=%t", unified), func(t *testing.T) {
 			t.Parallel()
 			ep, parentTx, ledger := MakeSampleEnv()
@@ -2329,7 +2327,6 @@ int 1
 `
 
 	for _, unified := range []bool{true, false} {
-		unified := unified
 		t.Run(fmt.Sprintf("unified=%t", unified), func(t *testing.T) {
 			t.Parallel()
 			ep, parentTx, ledger := MakeSampleEnv()
@@ -2467,7 +2464,6 @@ func TestInnerTxIDCaching(t *testing.T) {
 	childAppID := basics.AppIndex(222)
 
 	for _, unified := range []bool{true, false} {
-		unified := unified
 		t.Run(fmt.Sprintf("unified=%t", unified), func(t *testing.T) {
 			t.Parallel()
 			ep, parentTx, ledger := MakeSampleEnv()

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -135,8 +135,13 @@ func (u *AccountData) Suspend() {
 }
 
 // Suspended returns true if the account is suspended (offline with keys)
-func (u *AccountData) Suspended() bool {
+func (u AccountData) Suspended() bool {
 	return u.Status == basics.Offline && !u.VoteID.IsEmpty()
+}
+
+// LastSeen returns the last round that the account was seen online
+func (u AccountData) LastSeen() basics.Round {
+	return max(u.LastProposed, u.LastHeartbeat)
 }
 
 // MinBalance computes the minimum balance requirements for an account based on
@@ -187,6 +192,8 @@ func (u AccountData) OnlineAccountData(proto config.ConsensusParams, rewardsLeve
 		MicroAlgosWithRewards: microAlgos,
 		VotingData:            u.VotingData,
 		IncentiveEligible:     u.IncentiveEligible,
+		LastProposed:          u.LastProposed,
+		LastHeartbeat:         u.LastHeartbeat,
 	}
 }
 

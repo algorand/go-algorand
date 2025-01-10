@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -51,7 +51,7 @@ func TestUniqueCatchpointLabel(t *testing.T) {
 			for _, balancesMerkleRoot := range balancesMerkleRoots {
 				for _, stateProofVerificationContextHash := range stateProofVerificationContextHashes {
 					for _, total := range totals {
-						labelMaker := MakeCatchpointLabelMakerCurrent(r, &ledgerRoundHash, &balancesMerkleRoot, total, &stateProofVerificationContextHash)
+						labelMaker := MakeCatchpointLabelMakerV7(r, &ledgerRoundHash, &balancesMerkleRoot, total, &stateProofVerificationContextHash)
 						labelString := MakeLabel(labelMaker)
 						require.False(t, uniqueSet[labelString])
 						uniqueSet[labelString] = true
@@ -85,7 +85,7 @@ func TestCatchpointLabelParsing(t *testing.T) {
 			for _, balancesMerkleRoot := range balancesMerkleRoots {
 				for _, stateProofVerificationContextHash := range stateProofVerificationContextHashes {
 					for _, total := range totals {
-						labelMaker := MakeCatchpointLabelMakerCurrent(r, &ledgerRoundHash, &balancesMerkleRoot, total, &stateProofVerificationContextHash)
+						labelMaker := MakeCatchpointLabelMakerV7(r, &ledgerRoundHash, &balancesMerkleRoot, total, &stateProofVerificationContextHash)
 						labelString := MakeLabel(labelMaker)
 						parsedRound, parsedHash, err := ParseCatchpointLabel(labelString)
 						require.Equal(t, r, parsedRound)

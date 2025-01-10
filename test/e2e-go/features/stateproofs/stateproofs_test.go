@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -810,6 +810,7 @@ func TestTotalWeightChanges(t *testing.T) {
 	a := require.New(fixtures.SynchronizedTest(t))
 
 	consensusParams := getDefaultStateProofConsensusParams()
+
 	consensusParams.StateProofWeightThreshold = (1 << 32) * 90 / 100
 	consensusParams.StateProofStrengthTarget = 4
 	consensusParams.StateProofTopVoters = 4

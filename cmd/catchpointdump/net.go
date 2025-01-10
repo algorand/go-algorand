@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -365,7 +365,14 @@ func loadAndDump(addr string, tarFile string, genesisInitState ledgercore.InitSt
 		if err != nil {
 			return err
 		}
-
+		err = printOnlineAccounts("./ledger.tracker.sqlite", true, outFile)
+		if err != nil {
+			return err
+		}
+		err = printOnlineRoundParams("./ledger.tracker.sqlite", true, outFile)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }

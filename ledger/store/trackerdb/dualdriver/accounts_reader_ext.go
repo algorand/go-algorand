@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -347,6 +347,42 @@ func (ar *accountsReaderExt) TotalKVs(ctx context.Context) (total uint64, err er
 func (ar *accountsReaderExt) TotalResources(ctx context.Context) (total uint64, err error) {
 	totalP, errP := ar.primary.TotalResources(ctx)
 	totalS, errS := ar.secondary.TotalResources(ctx)
+	// coalesce errors
+	err = coalesceErrors(errP, errS)
+	if err != nil {
+		return
+	}
+	// check results match
+	if totalP != totalS {
+		err = ErrInconsistentResult
+		return
+	}
+	// return primary results
+	return totalP, nil
+}
+
+// TotalOnlineAccountRows implements trackerdb.AccountsReaderExt
+func (ar *accountsReaderExt) TotalOnlineAccountRows(ctx context.Context) (total uint64, err error) {
+	totalP, errP := ar.primary.TotalOnlineAccountRows(ctx)
+	totalS, errS := ar.secondary.TotalOnlineAccountRows(ctx)
+	// coalesce errors
+	err = coalesceErrors(errP, errS)
+	if err != nil {
+		return
+	}
+	// check results match
+	if totalP != totalS {
+		err = ErrInconsistentResult
+		return
+	}
+	// return primary results
+	return totalP, nil
+}
+
+// TotalOnlineRoundParams implements trackerdb.AccountsReaderExt
+func (ar *accountsReaderExt) TotalOnlineRoundParams(ctx context.Context) (total uint64, err error) {
+	totalP, errP := ar.primary.TotalOnlineRoundParams(ctx)
+	totalS, errS := ar.secondary.TotalOnlineRoundParams(ctx)
 	// coalesce errors
 	err = coalesceErrors(errP, errS)
 	if err != nil {

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,12 +17,12 @@
 package metrics
 
 import (
+	"maps"
 	"strconv"
 	"strings"
 	"sync/atomic"
 
 	"github.com/algorand/go-deadlock"
-	"golang.org/x/exp/maps"
 )
 
 // NewTagCounterFiltered makes a set of metrics under rootName for tagged counting.

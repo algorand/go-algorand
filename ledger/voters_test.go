@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,6 +17,7 @@
 package ledger
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/algorand/go-algorand/config"
@@ -272,4 +273,85 @@ func TestTopNAccountsThatHaveNoMssKeys(t *testing.T) {
 	for j := 0; j < len(top.Participants); j++ {
 		a.Equal(merklesignature.NoKeysCommitment, top.Participants[j].PK.Commitment)
 	}
+}
+
+// implements ledgercore.OnlineAccountsFetcher
+type testOnlineAccountsFetcher struct {
+	topAccts   []*ledgercore.OnlineAccount
+	totalStake basics.MicroAlgos
+	err        error
+}
+
+func (o testOnlineAccountsFetcher) TopOnlineAccounts(rnd basics.Round, voteRnd basics.Round, n uint64, params *config.ConsensusParams, rewardsLevel uint64) (topOnlineAccounts []*ledgercore.OnlineAccount, totalOnlineStake basics.MicroAlgos, err error) {
+	return o.topAccts, o.totalStake, o.err
+}
+
+func TestLatestCompletedVotersUpToWithError(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	a := require.New(t)
+
+	// Set up mock ledger with initial data
+	accts := []map[basics.Address]basics.AccountData{makeRandomOnlineAccounts(20)}
+	ml := makeMockLedgerForTracker(t, true, 1, protocol.ConsensusCurrentVersion, accts)
+	defer ml.Close()
+
+	conf := config.GetDefaultLocal()
+	_, ao := newAcctUpdates(t, ml, conf)
+
+	// Add several blocks
+	for i := uint64(1); i < 10; i++ {
+		addRandomBlock(t, ml)
+	}
+	commitAll(t, ml)
+
+	// Populate votersForRoundCache with test data
+	for r := basics.Round(1); r <= 9; r += 2 { // simulate every odd round
+		vr := ledgercore.MakeVotersForRound()
+		if r%4 == 1 { // Simulate an error for rounds 1, 5, and 9
+			vr.BroadcastError(fmt.Errorf("error loading data for round %d", r))
+		} else {
+			// Simulate a successful load of voter data
+			hdr := bookkeeping.BlockHeader{Round: r}
+			oaf := testOnlineAccountsFetcher{nil, basics.MicroAlgos{Raw: 1_000_000}, nil}
+			require.NoError(t, vr.LoadTree(oaf, hdr))
+		}
+
+		ao.voters.setVoters(r, vr)
+	}
+
+	// LastCompletedVotersUpTo retrieves the highest round less than or equal to
+	// the requested round where data is complete, ignoring rounds with errors.
+	for _, tc := range []struct {
+		reqRound, retRound uint64
+		completed          bool
+	}{
+		{0, 0, false},
+		{1, 0, false},
+		{2, 0, false}, // requested 2, no completed rounds <= 2
+		{3, 3, true},
+		{4, 3, true},
+		{5, 3, true}, // requested 5, got 3 (round 5 had error)
+		{6, 3, true},
+		{7, 7, true}, // requested 7, got 7 (last completed <= 8)
+		{8, 7, true}, // requested 8, got 7 (last completed <= 8)
+		{9, 7, true}, // requested 9, got 7 (err at 9)
+		{10, 7, true},
+		{11, 7, true},
+	} {
+		completedRound, voters := ao.voters.LatestCompletedVotersUpTo(basics.Round(tc.reqRound))
+		a.Equal(completedRound, basics.Round(tc.retRound)) // No completed rounds before 2
+		a.Equal(voters != nil, tc.completed)
+	}
+
+	// Test with errors in all rounds
+	ao.voters.votersForRoundCache = make(map[basics.Round]*ledgercore.VotersForRound) // reset map
+	for r := basics.Round(1); r <= 9; r += 2 {
+		vr := ledgercore.MakeVotersForRound()
+		vr.BroadcastError(fmt.Errorf("error loading data for round %d", r))
+		ao.voters.setVoters(r, vr)
+	}
+
+	completedRound, voters := ao.voters.LatestCompletedVotersUpTo(basics.Round(9))
+	a.Equal(basics.Round(0), completedRound) // No completed rounds due to errors
+	a.Nil(voters)
 }

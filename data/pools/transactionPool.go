@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -62,6 +62,7 @@ type TransactionPool struct {
 	cond                   sync.Cond
 	expiredTxCount         map[basics.Round]int
 	pendingBlockEvaluator  BlockEvaluator
+	evalTracer             logic.EvalTracer
 	numPendingWholeBlocks  basics.Round
 	feePerByte             atomic.Uint64
 	feeThresholdMultiplier uint64
@@ -139,6 +140,9 @@ func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local, log logging.Lo
 		proposalAssemblyTime: cfg.ProposalAssemblyTime,
 		log:                  log,
 		vac:                  vac,
+	}
+	if cfg.EnableDeveloperAPI {
+		pool.evalTracer = logic.EvalErrorDetailsTracer{}
 	}
 	pool.cond.L = &pool.mu
 	pool.assemblyCond.L = &pool.assemblyMu
@@ -732,7 +736,7 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIDs map[transact
 	if hint < 0 || int(knownCommitted) < 0 {
 		hint = 0
 	}
-	pool.pendingBlockEvaluator, err = pool.ledger.StartEvaluator(next.BlockHeader, hint, 0, nil)
+	pool.pendingBlockEvaluator, err = pool.ledger.StartEvaluator(next.BlockHeader, hint, 0, pool.evalTracer)
 	if err != nil {
 		// The pendingBlockEvaluator is an interface, and in case of an evaluator error
 		// we want to remove the interface itself rather then keeping an interface

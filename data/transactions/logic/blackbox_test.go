@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -78,9 +78,7 @@ func TestNewAppEvalParams(t *testing.T) {
 		config.Consensus[protocol.ConsensusFuture],
 	}
 	for i, param := range params {
-		param := param
 		for j, testCase := range cases {
-			i, j, param, testCase := i, j, param, testCase
 			t.Run(fmt.Sprintf("i=%d,j=%d", i, j), func(t *testing.T) {
 				t.Parallel()
 				ep := logic.NewAppEvalParams(testCase.group, &param, nil)

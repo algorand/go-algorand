@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -725,7 +725,6 @@ func TestLocal_RecalculateConnectionLimits(t *testing.T) {
 	}
 
 	for i, test := range tests {
-		test := test
 		t.Run(fmt.Sprintf("test=%d", i), func(t *testing.T) {
 			t.Parallel()
 
@@ -772,9 +771,8 @@ func TestLocal_ValidateP2PHybridConfig(t *testing.T) {
 	}
 
 	for i, test := range tests {
-		test := test
-		i := i
-		t.Run(fmt.Sprintf("test=%d", i), func(t *testing.T) {
+		name := fmt.Sprintf("test=%d", i)
+		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
 			c := Local{
@@ -783,7 +781,7 @@ func TestLocal_ValidateP2PHybridConfig(t *testing.T) {
 				NetAddress:          test.netAddress,
 			}
 			err := c.ValidateP2PHybridConfig()
-			require.Equal(t, test.err, err != nil, "test=%d", i)
+			require.Equal(t, test.err, err != nil, name)
 		})
 	}
 }

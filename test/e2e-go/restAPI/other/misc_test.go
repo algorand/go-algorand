@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -62,7 +62,7 @@ func TestDisabledAPIConfig(t *testing.T) {
 	a.NoError(err)
 	testClient := client.MakeRestClient(url, "") // empty token
 
-	_, err = testClient.WaitForBlock(1)
+	err = testClient.WaitForRoundWithTimeout(1)
 	assert.NoError(t, err)
 	_, err = testClient.Block(1)
 	assert.NoError(t, err)
