@@ -51,6 +51,10 @@ const maxStringSize = 4096
 // maxByteMathSize is the limit of byte strings supplied as input to byte math opcodes
 const maxByteMathSize = 64
 
+// bigByteCmpVersion is the first version for which operators like `b==` and
+// `b<` are unconstrained by maxByteMathSize
+const bigByteCmpVersion = 12
+
 // maxLogSize is the limit of total log size from n log calls in a program
 const maxLogSize = config.MaxEvalDeltaTotalLogSize
 
@@ -2275,8 +2279,10 @@ func opBytesLt(cx *EvalContext) error {
 	last := len(cx.Stack) - 1
 	prev := last - 1
 
-	if len(cx.Stack[last].Bytes) > maxByteMathSize || len(cx.Stack[prev].Bytes) > maxByteMathSize {
-		return errors.New("math attempted on large byte-array")
+	if cx.version < bigByteCmpVersion {
+		if len(cx.Stack[last].Bytes) > maxByteMathSize || len(cx.Stack[prev].Bytes) > maxByteMathSize {
+			return errors.New("math attempted on large byte-array")
+		}
 	}
 
 	rhs := nonzero(cx.Stack[last].Bytes)
@@ -2320,8 +2326,10 @@ func opBytesEq(cx *EvalContext) error {
 	last := len(cx.Stack) - 1
 	prev := last - 1
 
-	if len(cx.Stack[last].Bytes) > maxByteMathSize || len(cx.Stack[prev].Bytes) > maxByteMathSize {
-		return errors.New("math attempted on large byte-array")
+	if cx.version < bigByteCmpVersion {
+		if len(cx.Stack[last].Bytes) > maxByteMathSize || len(cx.Stack[prev].Bytes) > maxByteMathSize {
+			return errors.New("math attempted on large byte-array")
+		}
 	}
 
 	rhs := nonzero(cx.Stack[last].Bytes)
@@ -2358,6 +2366,28 @@ func opBytesModExp(cx *EvalContext) error {
 	cx.Stack[pprev].Bytes = result.Bytes()
 	cx.Stack = cx.Stack[:prev]
 	return nil
+}
+
+func bmodExpCost(stack []stackValue, depth int) int {
+	last := len(stack) - depth - 1 // mod
+	prev := last - depth - 1       // exp
+	pprev := last - depth - 2      // base
+
+	// Empirically estimated cost function constants
+	const (
+		exponentFactor = 1.63 // Adjusts cost of base & mod multiplication in the modexp by squaring algorithm
+		scalingFactor  = 15   // Normalization factor
+		baseCost       = 200  // Minimum cost of bmodexp
+	)
+
+	expLength := float64(len(stack[prev].Bytes))
+	modLength := len(stack[last].Bytes)
+	baseLength := len(stack[pprev].Bytes)
+
+	// Derived from the asymptotic time complexity of the exponentiation by squaring algorithm
+	cost := (math.Pow(float64(max(baseLength, modLength)), exponentFactor) * expLength / scalingFactor) + baseCost
+
+	return int(cost)
 }
 
 func opBytesModulo(cx *EvalContext) error {

@@ -20,7 +20,6 @@ import (
 	"cmp"
 	"fmt"
 	"maps"
-	"math"
 	"slices"
 	"strconv"
 	"strings"
@@ -87,97 +86,73 @@ const spOpcodesVersion = 12 // falcon_verify, sumhash512
 // Unlimited Global Storage opcodes
 const boxVersion = 8 // box_*
 
-// CustomCost encapsulates a custom cost function and its documentation,
-// applicable to opcodes like bmodexp where linearCost is inadequate by itself
-type CustomCost struct {
-	compute func(stack []stackValue, depth int) int
-	docCost string
+type costFn func(stack []stackValue, depth int) int
+type costDescriptor struct {
+	baseCost  int
+	chunkCost int
+	chunkSize int
+	depth     int
+	// fn allows arbitrary cost functions. It _adds_ to costs from other fields
+	fn costFn
+	// doc replaces the generated documentation of the cost, for use with `compute`
+	doc string
 }
 
-// Custom cost definition for bmodexp
-func bmodExpCostFunction(stack []stackValue, depth int) int {
-	last := len(stack) - depth - 1 // mod
-	prev := last - depth - 1       // exp
-	pprev := last - depth - 2      // base
-
-	// Empirically estimated cost function constants
-	const (
-		exponentFactor = 1.63 // Adjusts cost of base & mod multiplication in the modexp by squaring algorithm
-		scalingFactor  = 15   // Normalization factor
-		baseCost       = 200  // Minimum cost of bmodexp
-	)
-
-	expLength := float64(len(stack[prev].Bytes))
-	modLength := float64(len(stack[last].Bytes))
-	baseLength := float64(len(stack[pprev].Bytes))
-
-	// Derived from the asymptotic time complexity of the exponentiation by squaring algorithm
-	cost := (math.Pow(math.Max(baseLength, modLength), exponentFactor) * expLength / scalingFactor) + baseCost
-
-	return int(cost)
+// Empty returns true if nothing is set in the costDescriptor.
+func (cd costDescriptor) Empty() bool {
+	return cd.baseCost == 0 &&
+		cd.chunkCost == 0 &&
+		cd.chunkSize == 0 &&
+		cd.depth == 0 &&
+		cd.fn == nil &&
+		cd.doc == ""
 }
 
-var bmodexpCustomCost = &CustomCost{
-	compute: bmodExpCostFunction,
-	docCost: "((len(B) * max(len(A), len(C)) ^ 1.63) / 15) + 200",
+func (cd costDescriptor) check() costDescriptor {
+	if (cd.fn == nil && cd.baseCost < 1) || cd.chunkCost < 0 || cd.chunkSize < 0 || cd.chunkSize > maxStringSize || cd.depth < 0 {
+		panic(fmt.Sprintf("bad cost configuration %+v", cd))
+	}
+	if cd.chunkCost > 0 && cd.chunkSize == 0 {
+		panic(fmt.Sprintf("chunk cost when chunk size is zero %+v", cd))
+	}
+	if cd.chunkCost == 0 && cd.chunkSize > 0 {
+		panic(fmt.Sprintf("no chunk cost with positive chunk size %+v", cd))
+	}
+	if cd.fn != nil && cd.doc == "" {
+		panic(fmt.Sprintf("Cost fn is used without adding doc %+v", cd))
+	}
+	return cd
 }
 
-type linearCost struct {
-	baseCost   int
-	chunkCost  int
-	chunkSize  int
-	depth      int
-	customCost *CustomCost
-}
-
-func (lc linearCost) check() linearCost {
-	if (lc.customCost == nil && lc.baseCost < 1) || lc.chunkCost < 0 || lc.chunkSize < 0 || lc.chunkSize > maxStringSize || lc.depth < 0 {
-		panic(fmt.Sprintf("bad cost configuration %+v", lc))
-	}
-	if lc.chunkCost > 0 && lc.chunkSize == 0 {
-		panic(fmt.Sprintf("chunk cost when chunk size is zero %+v", lc))
-	}
-	if lc.chunkCost == 0 && lc.chunkSize > 0 {
-		panic(fmt.Sprintf("no chunk cost with positive chunk size %+v", lc))
-	}
-	if lc.customCost != nil && lc.customCost.compute == nil {
-		panic(fmt.Sprintf("CustomCost exists without a non-nil compute function pointer value %+v", lc))
-	}
-	if lc.customCost != nil && lc.customCost.docCost == "" {
-		panic(fmt.Sprintf("CustomCost exists without a value for docCost %+v", lc))
-	}
-	return lc
-}
-
-func (lc *linearCost) compute(stack []stackValue) int {
-	if lc.customCost != nil {
-		return lc.customCost.compute(stack, lc.depth)
-	}
-	cost := lc.baseCost
-	if lc.chunkCost != 0 && lc.chunkSize != 0 {
+func (cd *costDescriptor) compute(stack []stackValue) int {
+	cost := cd.baseCost
+	if cd.chunkCost != 0 && cd.chunkSize != 0 {
 		// Uses basics.DivCeil rather than (count/chunkSize) to match how Ethereum discretizes hashing costs.
-		count := len(stack[len(stack)-1-lc.depth].Bytes)
-		cost += lc.chunkCost * basics.DivCeil(count, lc.chunkSize)
+		count := len(stack[len(stack)-1-cd.depth].Bytes)
+		cost += cd.chunkCost * basics.DivCeil(count, cd.chunkSize)
+	}
+	if cd.fn != nil {
+		cost += cd.fn(stack, cd.depth)
 	}
 	return cost
 }
 
-func (lc *linearCost) docCost(argLen int) string {
-	if lc.customCost != nil {
-		return lc.customCost.docCost
+func (cd *costDescriptor) docCost(argLen int) string {
+	if cd.doc != "" {
+		return cd.doc
 	}
-	if *lc == (linearCost{}) {
+	if cd.Empty() {
 		return ""
 	}
-	if lc.chunkCost == 0 {
-		return strconv.Itoa(lc.baseCost)
+	if cd.chunkCost == 0 {
+		return strconv.Itoa(cd.baseCost)
 	}
-	idxFromStart := argLen - lc.depth - 1
+	idxFromStart := argLen - cd.depth - 1
 	stackArg := rune(int('A') + idxFromStart)
-	if lc.chunkSize == 1 {
-		return fmt.Sprintf("%d + %d per byte of %c", lc.baseCost, lc.chunkCost, stackArg)
+	if cd.chunkSize == 1 {
+		return fmt.Sprintf("%d + %d per byte of %c", cd.baseCost, cd.chunkCost, stackArg)
 	}
-	return fmt.Sprintf("%d + %d per %d bytes of %c", lc.baseCost, lc.chunkCost, lc.chunkSize, stackArg)
+	return fmt.Sprintf("%d + %d per %d bytes of %c", cd.baseCost, cd.chunkCost, cd.chunkSize, stackArg)
 }
 
 // OpDetails records details such as non-standard costs, immediate arguments, or
@@ -191,16 +166,16 @@ type OpDetails struct {
 
 	Modes RunMode // all modes that opcode can run in. i.e (cx.mode & Modes) != 0 allows
 
-	FullCost   linearCost  // if non-zero, the cost of the opcode, no immediates matter
-	Size       int         // if non-zero, the known size of opcode. if 0, check() determines.
-	Immediates []immediate // details of each immediate arg to opcode
+	FullCost   costDescriptor // if non-zero, the cost of the opcode, no immediates matter
+	Size       int            // if non-zero, the known size of opcode. if 0, check() determines.
+	Immediates []immediate    // details of each immediate arg to opcode
 
 	trusted bool // if `trusted`, don't check stack effects. they are more complicated than simply checking the opcode prototype.
 }
 
 func (d *OpDetails) docCost(argLen int, version uint64) string {
 	cost := d.FullCost.docCost(argLen)
-	if cost != "" {
+	if cost != "" { // costs must be based on the immediates
 		return cost
 	}
 	found := false
@@ -221,6 +196,9 @@ func (d *OpDetails) docCost(argLen int, version uint64) string {
 			}
 			cost = strings.Join(fieldCostStrings, "; ")
 		}
+	}
+	if !found {
+		panic("top-level opcode had no cost, but found no field dependent costs")
 	}
 	return cost
 }
@@ -245,11 +223,11 @@ func (d *OpDetails) Cost(program []byte, pc int, stack []stackValue) int {
 }
 
 func detDefault() OpDetails {
-	return OpDetails{asmDefault, nil, nil, modeAny, linearCost{baseCost: 1}, 1, nil, false}
+	return OpDetails{asmDefault, nil, nil, modeAny, costDescriptor{baseCost: 1}, 1, nil, false}
 }
 
 func constants(asm asmFunc, checker checkFunc, name string, kind immKind) OpDetails {
-	return OpDetails{asm, checker, nil, modeAny, linearCost{baseCost: 1}, 0, []immediate{imm(name, kind)}, false}
+	return OpDetails{asm, checker, nil, modeAny, costDescriptor{baseCost: 1}, 0, []immediate{imm(name, kind)}, false}
 }
 
 func detBranch() OpDetails {
@@ -286,16 +264,18 @@ func costly(cost int) OpDetails {
 }
 
 func (d OpDetails) costs(cost int) OpDetails {
-	d.FullCost = linearCost{baseCost: cost}.check()
+	d.FullCost = costDescriptor{baseCost: cost}.check()
 	return d
 }
 
-func defaultCustomCost(customCost *CustomCost) OpDetails {
-	return detDefault().customCost(customCost)
+func costByFn(cost costFn, doc string) OpDetails {
+	d := detDefault()
+	d.FullCost = costDescriptor{fn: cost, doc: doc}.check()
+	return d
 }
 
-func (d OpDetails) customCost(customCost *CustomCost) OpDetails {
-	d.FullCost = linearCost{customCost: customCost}.check()
+func (d OpDetails) fnCost(cost costFn, doc string) OpDetails {
+	d.FullCost = costDescriptor{fn: cost, doc: doc}.check()
 	return d
 }
 
@@ -368,22 +348,22 @@ func costByField(immediate string, group *FieldGroup, costs []int) OpDetails {
 		panic(fmt.Sprintf("While defining costs for %s in group %s: %d costs != %d names",
 			immediate, group.Name, len(costs), len(group.Names)))
 	}
-	fieldCosts := make([]linearCost, len(costs))
+	fieldCosts := make([]costDescriptor, len(costs))
 	for i, cost := range costs {
-		fieldCosts[i] = linearCost{baseCost: cost}
+		fieldCosts[i] = costDescriptor{baseCost: cost}
 	}
 	return costByFieldAndLength(immediate, group, fieldCosts)
 }
 
-func costByFieldAndLength(immediate string, group *FieldGroup, costs []linearCost) OpDetails {
+func costByFieldAndLength(immediate string, group *FieldGroup, costs []costDescriptor) OpDetails {
 	if len(costs) != len(group.Names) {
 		panic(fmt.Sprintf("While defining costs for %s in group %s: %d costs != %d names",
 			immediate, group.Name, len(costs), len(group.Names)))
 	}
 	opd := immediates(immediate)
-	opd.FullCost = linearCost{} // zero FullCost is what causes eval to look deeper
+	opd.FullCost = costDescriptor{} // zero FullCost is what causes eval to look deeper
 	opd.Immediates[0].Group = group
-	full := make([]linearCost, 256) // ensure we have 256 entries for easy lookup
+	full := make([]costDescriptor, 256) // ensure we have 256 entries for easy lookup
 	for i := range costs {
 		full[i] = costs[i].check()
 	}
@@ -393,7 +373,7 @@ func costByFieldAndLength(immediate string, group *FieldGroup, costs []linearCos
 
 func costByLength(initial, perChunk, chunkSize, depth int) OpDetails {
 	d := detDefault()
-	d.FullCost = linearCost{baseCost: initial, chunkCost: perChunk, chunkSize: chunkSize, depth: depth}.check()
+	d.FullCost = costDescriptor{baseCost: initial, chunkCost: perChunk, chunkSize: chunkSize, depth: depth}.check()
 	return d
 }
 
@@ -439,7 +419,7 @@ type immediate struct {
 	Group *FieldGroup
 
 	// If non-nil, always 256 long, so cost can be checked before eval
-	fieldCosts []linearCost
+	fieldCosts []costDescriptor
 }
 
 func imm(name string, kind immKind) immediate {
@@ -739,7 +719,7 @@ var OpSpecs = []OpSpec{
 	/* Will end up following keccak256 -
 	{0x98, "sha3_256", opSHA3_256, proto("b:b{32}"), ?, costByLength(...)},},
 	*/
-	{0x99, "bmodexp", opBytesModExp, proto("bbb:b"), 12, defaultCustomCost(bmodexpCustomCost)},
+	{0x99, "bmodexp", opBytesModExp, proto("bbb:b"), 12, costByFn(bmodExpCost, "((len(B) * max(len(A), len(C)) ^ 1.63) / 15) + 200")},
 
 	// Byteslice math.
 	{0xa0, "b+", opBytesPlus, proto("II:b"), 4, costly(10).typed(typeByteMath(maxByteMathSize + 1))},
@@ -805,7 +785,7 @@ var OpSpecs = []OpSpec{
 			BLS12_381g1: 2950, BLS12_381g2: 6530})},
 
 	{0xe2, "ec_pairing_check", opEcPairingCheck, proto("bb:T"), pairingVersion,
-		costByFieldAndLength("g", &EcGroups, []linearCost{
+		costByFieldAndLength("g", &EcGroups, []costDescriptor{
 			BN254g1: {
 				baseCost:  8000,
 				chunkCost: 7_400,
@@ -828,7 +808,7 @@ var OpSpecs = []OpSpec{
 			}})},
 
 	{0xe3, "ec_multi_scalar_mul", opEcMultiScalarMul, proto("bb:b"), pairingVersion,
-		costByFieldAndLength("g", &EcGroups, []linearCost{
+		costByFieldAndLength("g", &EcGroups, []costDescriptor{
 			BN254g1: {
 				baseCost:  3_600,
 				chunkCost: 90,
@@ -858,7 +838,7 @@ var OpSpecs = []OpSpec{
 		costByField("g", &EcGroups, []int{
 			BN254g1: 630, BN254g2: 3_300,
 			BLS12_381g1: 1_950, BLS12_381g2: 8_150})},
-	{0xe6, "mimc", opMimc, proto("b:b{32}"), mimcVersion, costByFieldAndLength("c", &MimcConfigs, []linearCost{
+	{0xe6, "mimc", opMimc, proto("b:b{32}"), mimcVersion, costByFieldAndLength("c", &MimcConfigs, []costDescriptor{
 		BN254Mp110: {
 			baseCost:  10,
 			chunkCost: 550,

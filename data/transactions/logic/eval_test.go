@@ -4618,22 +4618,18 @@ func notrack(program string) string {
 
 type evalTester func(t *testing.T, pass bool, err error) bool
 
-func testEvaluation(t *testing.T, program string, introduced uint64, tester evalTester) error {
+func testEvaluation(t *testing.T, program string, start uint64, stop uint64, tester evalTester) error {
 	t.Helper()
 
 	var outer error
-	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
+	for v := start; v <= stop; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			t.Helper()
-			if v < introduced {
-				testProg(t, notrack(program), v, exp(0, "...was introduced..."))
-				return
-			}
 			ops := testProg(t, program, v)
 			// Programs created with a previous assembler
 			// should still operate properly with future
 			// EvalParams, so try all forward versions.
-			for lv := v; lv <= AssemblerMaxVersion; lv++ {
+			for lv := v; lv <= stop; lv++ {
 				t.Run(fmt.Sprintf("lv=%d", lv), func(t *testing.T) {
 					t.Helper()
 					var txn transactions.SignedTxn
@@ -4670,20 +4666,49 @@ func testEvaluation(t *testing.T, program string, introduced uint64, tester eval
 
 func testAccepts(t *testing.T, program string, introduced uint64) {
 	t.Helper()
-	testEvaluation(t, program, introduced, func(t *testing.T, pass bool, err error) bool {
+	testPreexist(t, program, introduced)
+	testAcceptRange(t, program, introduced, AssemblerMaxVersion)
+}
+
+func testAcceptRange(t *testing.T, program string, start uint64, stop uint64) {
+	t.Helper()
+	testEvaluation(t, program, start, stop, func(t *testing.T, pass bool, err error) bool {
 		return pass && err == nil
 	})
 }
+
 func testRejects(t *testing.T, program string, introduced uint64) {
 	t.Helper()
-	testEvaluation(t, program, introduced, func(t *testing.T, pass bool, err error) bool {
+	testPreexist(t, program, introduced)
+	testRejectRange(t, program, introduced, AssemblerMaxVersion)
+}
+
+func testRejectRange(t *testing.T, program string, start uint64, stop uint64) {
+	t.Helper()
+	testEvaluation(t, program, start, stop, func(t *testing.T, pass bool, err error) bool {
 		// Returned False, but didn't panic
 		return !pass && err == nil
 	})
 }
+
 func testPanics(t *testing.T, program string, introduced uint64, pattern ...string) error {
 	t.Helper()
-	return testEvaluation(t, program, introduced, func(t *testing.T, pass bool, err error) bool {
+	testPreexist(t, program, introduced)
+	return testPanicRange(t, program, introduced, AssemblerMaxVersion)
+}
+
+func testPreexist(t *testing.T, program string, introduced uint64) {
+	for v := uint64(1); v < introduced; v++ {
+		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
+			t.Helper()
+			testProg(t, notrack(program), v, exp(0, "...was introduced..."))
+		})
+	}
+}
+
+func testPanicRange(t *testing.T, program string, start uint64, stop uint64, pattern ...string) error {
+	t.Helper()
+	return testEvaluation(t, program, start, stop, func(t *testing.T, pass bool, err error) bool {
 		t.Helper()
 		// TEAL panic! not just reject at exit
 		if pass {
@@ -5153,9 +5178,9 @@ func BenchmarkBytesModExp(b *testing.B) {
 func TestBytesModExp(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
-	type TestOutcome int
+	type testOutcome int
 	const (
-		Accept TestOutcome = iota
+		Accept testOutcome = iota
 		Reject
 		Panic
 	)
@@ -5165,11 +5190,13 @@ func TestBytesModExp(t *testing.T) {
 		Modulus     string
 		Result      string
 		LogicCost   int
-		TestOutcome TestOutcome
+		TestOutcome testOutcome
 	}
-	modexpTestVectors := []ModexpTestVector{
-		{"0x01", "0x01", "0x", "0x00", 200, Panic},     // Modulo of 0 should panic
-		{"0x01", "0x01", "0x0000", "0x00", 200, Panic}, // Modulo of 0 should panic
+	cases := []ModexpTestVector{
+		{"0x01", "0x01", "0x", "0x00", 0, Panic},     // Modulo of 0 should panic
+		{"0x01", "0x01", "0x0000", "0x00", 0, Panic}, // Modulo of 0 should panic
+		{"0x01", "0x01", "0x", "0x01", 0, Panic},     // Modulo of 0 should panic
+		{"0x01", "0x01", "0x0000", "0x01", 0, Panic}, // Modulo of 0 should panic
 		{"0x54b7", "0x00", "0x01", "0x", 200, Accept},
 		{"0x286e0b2a3fea08c786634bdf0a608fb22009c512e6f1f174", "0x9cebf0aae57f76408a", "0xcf5d2d1fdc2e3233adcc13c8b3fc2fb0a3d3c1032ee14288c9026968c59d6fd7f8c9ef82e63bea29304ebb91b150", "0x9e26c7578c46f09e26e67224526193f5af3512662276e54cb91944d9f80514b31fba2d4c6231c97309a79cfc09b0", 507, Accept},
 		{"0xb04336dca137d1284edf958923d01c83f6a09e50bcfb1b509c2afe63bca4f64bf28a482f202cdf08e4fad627acde33c4a5206086641acf2ceab1669bf99b5d672dc71a5d2fc7ff99152f2ecb71e95543cb72be06151e3b75c12961773a0b20e59ceb18713ee7313cb3c146b10188a23de2dab3b733d2dbc4b30258e6e8cde85d1c394a76784a2038a0499feaf4851f22c48b30a7eedf02de934f8a31930d90426fd93241862614943e7a6e2e7f3ef9b08ce14030dcb8ca51d53743ac", "0x3bc794defa8e", "0xf418c1ba14622a93b40859b6fa5c8869ceeab204991a18bba8b414a03bab048c016a98c190ca7f4edb82745e8d91ce930b28c3e8c6f783ff6ea7cf4e092fe845d81189c8d77e4d6b2a3c967ed3d64a7310be13260589531e6485ddf9b065bed8142d7189fe22e213847bc0e10c5ff21e5f12c513f91357db5de6dc879f1e622dc386be6521f48cd476adb021050c09b913147ccb0c7e9ea2712f63b1c2273c4eb70267d366c8eb9548d3bcc19972dce8538767cd53d010e35a3bbab920afd498184d587f3f081fcc7018fd9ad448076a4a8ff231fc", "0x7d01fce371b80532a8ba65fc442e3adb4a5cae46d734258d342fbabaad7e83b14474fd21a5cee7e4a53f3de7e6f3c497b893f0cf23d9a743c4dfa736fb8080d54083a03b20f598ec1eed1d83714465914aa9171cdb1c3a56fb9c021e0c80f44a4d2b4b5c4e078fdc818474af5e0a334b25ac3f069d2dcc72dca335d05ac24fdbfabf07b17ce6e9fb996100509545bd9a0e5df48215112e04a68b2cc700b1a379e3a5df9d2913498cb8e15c92bec53a3c5775dd7fdfa9a5b515f738c88dc404b09cc2a4c389ee6334da58364d5c22482b905a1ec3fc", 2696, Accept},
@@ -5183,11 +5210,13 @@ func TestBytesModExp(t *testing.T) {
 		{"0x2ea1312db704ff29e0", "0x038302a78381a38adcb7581cbeb7a0797289d82d14a85cf4c36df72c5b5c3d464c4a280f930a85ef4aefb54ce935d01a18afd42d9a679140a360f2b185ac37fde9890d2808a6675e3d73bc696921babefa9cb1985b948e65734fae0515f0e6b7ef782bef9f1a4921c5df3e340e764bf6c347614c5649e645f3bdaaa2c7dbcc16b5107056", "0x71166d7a0b32f8cbd2f682474b61c5535e2867562bcf5dd5e43d2a4e036b78e871b18145e6da2ef327da994965ade4bb985f4f2402da936a6f90d0913512add104dc10741c06b948e911b8fbe9", "0x4540d8df3bc9cd82ff6e431440f65fd58165a43783dccabc315f5a33fa3a581068ca5ae3ede591e302fc863eff657b962d0e671235fc97456439921ec9023eff5b8256b056eb47eae5911f2e6b", 10658, Accept},
 		{"0x1f206df741a36c542fb5e609c9299e62a96ee677ca7266d85d086d4ebd6ab9b52c56539c41b0a1a69a0a5dfc794cd6076360643660147c053f821992bf5c787a1fed53eab8f61e0d538aa3a352616774d419c7be55415e60a86f296d1baa199284ebd2ff12eb2b84a7dfedbe1d34efd3219265f302b91963416e42145bfbdf7d0132b1d32c98129521a61d92e2318f94b87f96f68eefe5263717999ab1780f9c15e895a5c188e47518b209f61c3a501e315c4ea0504de653d9b3f9d25658c1c30b99fa6b2a02ff99838d04b86bbeb13ca94d90fd96aca7eae17bc76cf13e33cf37769ad7bf98c6f151c3961d2157aa63ebd577f2f5dbb67805df9a649942843c", "0x37c463", "0x8eb38552534a9ca188412677f154eeba8f011cf6ae00472dcca54c068d57825ff7f703b1a8380d2fc9a7e1e142f8770a7da52e2d47638853aacbe450a80f2c35a9ce0e5feca7bfff871252ec2c5754cafdcde3cd20ce4767c23042570d3d9641e8517ea4c3f10d7f4ea927824d948aed87de2b856347faba08be786ad3d9f30cd1bc4b036dd4a0053c59d11fc2840aefde47222a0273323f45b08539313de7393d24ade84f8f57c719986db04a0f3f483375e5779c8b8ce913991a80ea6cb368bb3f1f2c3dc3d424d7c0ae607c6d052dc7b0ae170250e1ad10e6b327857cb8610904c526d51430c31931d4ba3d5ebab8d6321c48d6d482f5b129f69871f4405f", "0x1d6e8af1caa1098ce2429e32eb831598f6b28a65376e54fe863283b545949586e2f3b41285d6047fcd52d164be131325f80412d2ca8bb84dd945ae69b3e1bc4fa861905b1f3032ea7279d2ed3c03f78ece1c0d0f159e0a4776d1ee47516e4379105491c37d6bc86bc26420966076d114f5a4091e800259f59073fd5f7c0100fbcbc10a9f7cef6fcd03c04ae97b54994ea479e168bc00ae9ea84ad07497aa470d3d438ccfa669de5d99ccf36a2ab1773378101123f5bcdd9a6f5a1df889b8a0bbc071d692d68b69801cfa467bdcb8d00dc5f32be5ca907433667691527534c229701ec929ef836c7caef7a088205082f98a08860ed72d383e6ac256aa3680f3c6", 1884, Accept},
 		{"0x7c391cf4e56c7c104d90177402b2e1a0f9179a06304f4357e4b146e116cd12e0f1c12bfc66171b8c8be104d09c304c340e125c4b6fda63b94315d74ad0e8b8178edac81b475da5dc7e825c309a4c0b5fb3c3e0bd7f94dc661cd8ac546940779e54edf58c6ace5589914541935bc66fff64442d8bc2e6dc8420257c8ab0a877729fe8", "0x74d69cdea330c38633c7bca9fb46d2e1e2050e5220c5fa3194584c62b4ebd3e85a70fd2f994d04681fc8aa32e580f87484b78ff8d3bab0412874e55772411288f4a6196f9da6db7aaebbf0d62e4e42275dfa475ac35802d912aacfb4f77e945f4e5e3c28610ddbd479280df848cd57829746fcc6452a5d4127b4f8b27a3149bc", "0x9000b0b587f64e78f51645a75d98b64d7fa1001d1636bcae53ea41f9f955f67f79c442adbca55d59c61642ed91364feef5e5147ed229cd5ff1d31b6c333a65f95e80c576f11ce4790c3162c351bd7df796c6e2184a387edea127c6ddf46a6eae6ade4066de609d655832b98b", "0x810f16edd6ffee0cad631b2f59ad6b3847f80974ce4376353ad1f8f487dae65e93ddb9552cc93b0725acb1ba3551132c138ef730568c3fde71918608edf3f78130170124d0a4d3d28fcd2cefb256465eb18e80ea0576fd1df44e76786a450285a0eef852b7df639925795293", 24014, Accept},
-		{"0x9b7e403f0d0134635f90d344dbce30ac511e8e5e274a3436ccb75503d0ee72a3ba59c2a9b774ee74abe082e09702c65151186706c62200241d306d8cb18b40278c885222db5d001aecceff20e4be25ed83d4ff7d40c4c6e513a63238a5c07e45da3a24868caa67fae36047d955a648dd1c741284cdb8bc282c01b9d66d2c5b651268ff1d50356f1dc6be6d59814d7787e6", "0x30c54b", "0x093fd6b228d5d2268a36b0a1b8fb7dbcb4669c22e0cc2a5deaa3c3da890c5fa23dc0", "0x2a3d94206458cce1a0cee7ef45b3812de4f2ae4ee9b347acf55385eca217159f6b76b7c14774aa54e9667bb172d66b25d907682576a2ec7f2038c07e4f", 866, Panic},
+		{"0x9b7e403f0d0134635f90d344dbce30ac511e8e5e274a3436ccb75503d0ee72a3ba59c2a9b774ee74abe082e09702c65151186706c62200241d306d8cb18b40278c885222db5d001aecceff20e4be25ed83d4ff7d40c4c6e513a63238a5c07e45da3a24868caa67fae36047d955a648dd1c741284cdb8bc282c01b9d66d2c5b651268ff1d50356f1dc6be6d59814d7787e6", "0x30c54b", "0x093fd6b228d5d2268a36b0a1b8fb7dbcb4669c22e0cc2a5deaa3c3da890c5fa23dc0", "0x2a3d94206458cce1a0cee7ef45b3812de4f2ae4ee9b347acf55385eca217159f6b76b7c14774aa54e9667bb172d66b25d907682576a2ec7f2038c07e4f", 0, Panic},
 	}
 
-	for _, modexpTestVector := range modexpTestVectors {
-		progText := fmt.Sprintf(`byte %s
+	for i, tc := range cases {
+		// use subtests so that we can run all tests despite failures
+		t.Run(fmt.Sprintf("case %d", i), func(t *testing.T) {
+			progText := fmt.Sprintf(`byte %s
 byte %s
 byte %s
 bmodexp
@@ -5196,15 +5225,20 @@ byte %s
 assert
 global OpcodeBudget
 int %d
-==`, modexpTestVector.Base, modexpTestVector.Exponent, modexpTestVector.Modulus, modexpTestVector.Result, testLogicBudget-7-modexpTestVector.LogicCost)
-		switch modexpTestVector.TestOutcome {
-		case Accept:
-			testAccepts(t, progText, 12)
-		case Reject:
-			testRejects(t, progText, 12)
-		case Panic:
-			testPanics(t, progText, 12)
-		}
+==`, tc.Base, tc.Exponent, tc.Modulus, tc.Result, testLogicBudget-7-tc.LogicCost)
+			switch tc.TestOutcome {
+			case Accept:
+				testAccepts(t, progText, 12)
+			case Reject:
+				testRejects(t, progText, 12)
+				// ensure nobody thinks they are testing a cost here
+				require.Zero(t, tc.LogicCost)
+			case Panic:
+				testPanics(t, progText, 12)
+				// ensure nobody thinks they are testing a cost here
+				require.Zero(t, tc.LogicCost)
+			}
+		})
 	}
 
 }
@@ -5260,9 +5294,17 @@ func TestBytesCompare(t *testing.T) {
 
 	testAccepts(t, "byte 0x10; byte 0x10; b<; !", 4)
 	testAccepts(t, "byte 0x10; byte 0x10; b<=", 4)
-	testPanics(t, "byte 0x10; int 65; bzero; b<=", 4)
+
+	p := "byte 0x10; int 65; bzero; b<="
+	testPreexist(t, p, 4)
+	testPanicRange(t, p, 4, 11)
+	testRejectRange(t, p, 12, AssemblerMaxVersion)
+
 	testAccepts(t, "byte 0x10; int 64; bzero; b>", 4)
-	testPanics(t, "byte 0x10; int 65; bzero; b>", 4)
+	p = "byte 0x10; int 65; bzero; b>"
+	testPreexist(t, p, 4)
+	testPanicRange(t, p, 4, 11)
+	testAcceptRange(t, p, 12, AssemblerMaxVersion)
 	testAccepts(t, "byte 0x1010; byte 0x10; b<; !", 4)
 
 	testAccepts(t, "byte 0x2000; byte 0x70; b<; !", 4)
@@ -5283,18 +5325,27 @@ func TestBytesCompare(t *testing.T) {
 
 	testAccepts(t, "byte 0x11; byte 0x10; b>=", 4)
 	testAccepts(t, "byte 0x11; byte 0x0011; b>=", 4)
-	testPanics(t, "byte 0x10; int 65; bzero; b>=", 4)
+	p = "byte 0x10; int 65; bzero; b>="
+	testPreexist(t, p, 4)
+	testPanicRange(t, p, 4, 11)
+	testAcceptRange(t, p, 12, AssemblerMaxVersion)
 
 	testAccepts(t, "byte 0x11; byte 0x11; b==", 4)
 	testAccepts(t, "byte 0x0011; byte 0x11; b==", 4)
 	testAccepts(t, "byte 0x11; byte 0x00000000000011; b==", 4)
 	testAccepts(t, "byte 0x00; int 64; bzero; b==", 4)
-	testPanics(t, "byte 0x00; int 65; bzero; b==", 4)
+	p = "byte 0x00; int 65; bzero; b=="
+	testPreexist(t, p, 4)
+	testPanicRange(t, p, 4, 11)
+	testAcceptRange(t, p, 12, AssemblerMaxVersion)
 
 	testAccepts(t, "byte 0x11; byte 0x00; b!=", 4)
 	testAccepts(t, "byte 0x0011; byte 0x1100; b!=", 4)
 	testPanics(t, notrack("byte 0x11; int 17; b!="), 4)
-	testPanics(t, "byte 0x10; int 65; bzero; b!=", 4)
+	p = "byte 0x10; int 65; bzero; b!="
+	testPreexist(t, p, 4)
+	testPanicRange(t, p, 4, 11)
+	testAcceptRange(t, p, 12, AssemblerMaxVersion)
 }
 
 func TestBytesBits(t *testing.T) {

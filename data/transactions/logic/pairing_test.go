@@ -855,7 +855,7 @@ func TestLinearFieldCost(t *testing.T) { //nolint:paralleltest // manipulates op
 		Name:   "xxx",
 		op:     opPop,
 		Proto:  proto("a:"),
-		OpDetails: costByFieldAndLength("f", &EcGroups, []linearCost{{
+		OpDetails: costByFieldAndLength("f", &EcGroups, []costDescriptor{{
 			baseCost:  1,
 			chunkCost: 2,
 			chunkSize: 2,
