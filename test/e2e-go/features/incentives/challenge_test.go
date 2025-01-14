@@ -123,9 +123,7 @@ func testChallengesOnce(t *testing.T, a *require.Assertions) (retry bool) {
 	t.Logf("current %d lastPossible %d challengeRound %d", current, lastPossible, challengeRound)
 
 	// Advance to challenge round, check the blockseed
-	err = fixture.WaitForRoundWithTimeout(challengeRound)
-	a.NoError(err)
-	blk, err := c2.BookkeepingBlock(challengeRound)
+	blk, err := fixture.WaitForBlockWithTimeout(challengeRound)
 	a.NoError(err)
 	challenge := blk.BlockHeader.Seed[0] & mask // high bit
 
@@ -208,6 +206,7 @@ func testChallengesOnce(t *testing.T, a *require.Assertions) (retry bool) {
 	blk, err = fixture.WaitForBlockWithTimeout(challengeRound + grace + 1)
 	a.NoError(err)
 	a.Equal(eligible1, util.MakeSet(blk.AbsentParticipationAccounts...))
+	c2.WaitForRound(challengeRound + grace + 1) // synch with c2 so next loop is trustworthy
 
 	// node 1 challenged (eligible) accounts are suspended because node 1 is off
 	for address := range match1 {
@@ -217,7 +216,8 @@ func testChallengesOnce(t *testing.T, a *require.Assertions) (retry bool) {
 			a.Equal(basics.Offline, data.Status, "%v was not offline in round %d. (%d and %d)",
 				address, challengeRound+grace+1, data.LastHeartbeat, data.LastProposed)
 		} else {
-			a.Equal(basics.Online, data.Status, address) // not eligible, so not suspended
+			a.Equal(basics.Online, data.Status, "%v was not online in round %d. (%d and %d)",
+				address, challengeRound+grace+1, data.LastHeartbeat, data.LastProposed) // not eligible, so not suspended
 		}
 		a.NotZero(data.VoteID, address)
 		a.False(data.IncentiveEligible, address) // suspension turns off flag
