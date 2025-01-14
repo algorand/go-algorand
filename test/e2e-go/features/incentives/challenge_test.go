@@ -177,6 +177,7 @@ func testChallengesOnce(t *testing.T, a *require.Assertions) (retry bool) {
 	// Watch the first half grace period for proposals from challenged nodes, since they won't have to heartbeat.
 	lucky := util.MakeSet[basics.Address]()
 	fixture.WithEveryBlock(challengeRound, challengeRound+grace/2, func(block bookkeeping.Block) {
+		t.Logf("1st half Block %d, proposed by %s\n", block.Round(), block.Proposer())
 		if eligible2.Contains(block.Proposer()) {
 			lucky.Add(block.Proposer())
 		}
@@ -186,10 +187,7 @@ func testChallengesOnce(t *testing.T, a *require.Assertions) (retry bool) {
 	// In the second half of the grace period, Node 2 should heartbeat for its eligible accounts
 	beated := util.MakeSet[basics.Address]()
 	fixture.WithEveryBlock(challengeRound+grace/2+1, challengeRound+grace, func(block bookkeeping.Block) {
-		t.Logf("2nd half Block %d\n", block.Round())
-		if eligible2.Contains(block.Proposer()) {
-			lucky.Add(block.Proposer())
-		}
+		t.Logf("2nd half Block %d, proposed by %s\n", block.Round(), block.Proposer())
 		for i, txn := range block.Payset {
 			hb := txn.Txn.HeartbeatTxnFields
 			t.Logf("Heartbeat txn %v in position %d round %d\n", hb, i, block.Round())
@@ -198,6 +196,9 @@ func testChallengesOnce(t *testing.T, a *require.Assertions) (retry bool) {
 			a.NotContains(beated, hb.HbAddress, "rebeat %s", hb.HbAddress) // beat only once
 			beated.Add(hb.HbAddress)
 			a.NotContains(lucky, hb.HbAddress, "unneeded %s", hb.HbAddress) // we should not see a heartbeat from an account that proposed
+		}
+		if eligible2.Contains(block.Proposer()) {
+			lucky.Add(block.Proposer())
 		}
 		a.Empty(block.AbsentParticipationAccounts) // nobody suspended during grace
 	})
