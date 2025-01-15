@@ -642,6 +642,9 @@ func (n *P2PNetwork) GetPeers(options ...PeerOption) []Peer {
 			const maxNodes = 100
 			addrInfos := n.pstore.GetAddresses(maxNodes, phonebook.PhoneBookEntryRelayRole)
 			for _, peerInfo := range addrInfos {
+				if peerInfo.ID == n.service.ID() {
+					continue
+				}
 				if peerCore, ok := addrInfoToWsPeerCore(n, peerInfo); ok {
 					peers = append(peers, &peerCore)
 				}
@@ -666,6 +669,9 @@ func (n *P2PNetwork) GetPeers(options ...PeerOption) []Peer {
 				for _, addrInfo := range infos {
 					// TODO: remove after go1.22
 					info := addrInfo
+					if info.ID == n.service.ID() {
+						continue
+					}
 					if peerCore, ok := addrInfoToWsPeerCore(n, &info); ok {
 						peers = append(peers, &peerCore)
 					}
