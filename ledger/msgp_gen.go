@@ -32,25 +32,25 @@ import (
 //           |-----> (*) MsgIsZero
 //           |-----> CatchpointFileHeaderMaxSize()
 //
-// catchpointFileBalancesChunkV5
-//               |-----> (*) MarshalMsg
-//               |-----> (*) CanMarshalMsg
-//               |-----> (*) UnmarshalMsg
-//               |-----> (*) UnmarshalMsgWithState
-//               |-----> (*) CanUnmarshalMsg
-//               |-----> (*) Msgsize
-//               |-----> (*) MsgIsZero
-//               |-----> CatchpointFileBalancesChunkV5MaxSize()
+// CatchpointSnapshotChunkV5
+//             |-----> (*) MarshalMsg
+//             |-----> (*) CanMarshalMsg
+//             |-----> (*) UnmarshalMsg
+//             |-----> (*) UnmarshalMsgWithState
+//             |-----> (*) CanUnmarshalMsg
+//             |-----> (*) Msgsize
+//             |-----> (*) MsgIsZero
+//             |-----> CatchpointSnapshotChunkV5MaxSize()
 //
-// catchpointFileChunkV6
-//           |-----> (*) MarshalMsg
-//           |-----> (*) CanMarshalMsg
-//           |-----> (*) UnmarshalMsg
-//           |-----> (*) UnmarshalMsgWithState
-//           |-----> (*) CanUnmarshalMsg
-//           |-----> (*) Msgsize
-//           |-----> (*) MsgIsZero
-//           |-----> CatchpointFileChunkV6MaxSize()
+// CatchpointSnapshotChunkV6
+//             |-----> (*) MarshalMsg
+//             |-----> (*) CanMarshalMsg
+//             |-----> (*) UnmarshalMsg
+//             |-----> (*) UnmarshalMsgWithState
+//             |-----> (*) CanUnmarshalMsg
+//             |-----> (*) Msgsize
+//             |-----> (*) MsgIsZero
+//             |-----> CatchpointSnapshotChunkV6MaxSize()
 //
 // catchpointStateProofVerificationContext
 //                    |-----> (*) MarshalMsg
@@ -476,7 +476,7 @@ func CatchpointFileHeaderMaxSize() (s int) {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *catchpointFileBalancesChunkV5) MarshalMsg(b []byte) (o []byte) {
+func (z *CatchpointSnapshotChunkV5) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0002Len := uint32(1)
@@ -504,13 +504,13 @@ func (z *catchpointFileBalancesChunkV5) MarshalMsg(b []byte) (o []byte) {
 	return
 }
 
-func (_ *catchpointFileBalancesChunkV5) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(*catchpointFileBalancesChunkV5)
+func (_ *CatchpointSnapshotChunkV5) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*CatchpointSnapshotChunkV5)
 	return ok
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *catchpointFileBalancesChunkV5) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+func (z *CatchpointSnapshotChunkV5) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
 	if st.AllowableDepth == 0 {
 		err = msgp.ErrMaxDepthExceeded{}
 		return
@@ -569,7 +569,7 @@ func (z *catchpointFileBalancesChunkV5) UnmarshalMsgWithState(bts []byte, st msg
 			return
 		}
 		if zb0003 {
-			(*z) = catchpointFileBalancesChunkV5{}
+			(*z) = CatchpointSnapshotChunkV5{}
 		}
 		for zb0002 > 0 {
 			zb0002--
@@ -619,16 +619,16 @@ func (z *catchpointFileBalancesChunkV5) UnmarshalMsgWithState(bts []byte, st msg
 	return
 }
 
-func (z *catchpointFileBalancesChunkV5) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *CatchpointSnapshotChunkV5) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
 }
-func (_ *catchpointFileBalancesChunkV5) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*catchpointFileBalancesChunkV5)
+func (_ *CatchpointSnapshotChunkV5) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*CatchpointSnapshotChunkV5)
 	return ok
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *catchpointFileBalancesChunkV5) Msgsize() (s int) {
+func (z *CatchpointSnapshotChunkV5) Msgsize() (s int) {
 	s = 1 + 3 + msgp.ArrayHeaderSize
 	for zb0001 := range (*z).Balances {
 		s += (*z).Balances[zb0001].Msgsize()
@@ -637,12 +637,12 @@ func (z *catchpointFileBalancesChunkV5) Msgsize() (s int) {
 }
 
 // MsgIsZero returns whether this is a zero value
-func (z *catchpointFileBalancesChunkV5) MsgIsZero() bool {
+func (z *CatchpointSnapshotChunkV5) MsgIsZero() bool {
 	return (len((*z).Balances) == 0)
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func CatchpointFileBalancesChunkV5MaxSize() (s int) {
+func CatchpointSnapshotChunkV5MaxSize() (s int) {
 	s = 1 + 3
 	// Calculating size of slice: z.Balances
 	s += msgp.ArrayHeaderSize + ((BalancesPerCatchpointFileChunk) * (encoded.BalanceRecordV5MaxSize()))
@@ -650,7 +650,7 @@ func CatchpointFileBalancesChunkV5MaxSize() (s int) {
 }
 
 // MarshalMsg implements msgp.Marshaler
-func (z *catchpointFileChunkV6) MarshalMsg(b []byte) (o []byte) {
+func (z *CatchpointSnapshotChunkV6) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
 	zb0005Len := uint32(4)
@@ -726,13 +726,13 @@ func (z *catchpointFileChunkV6) MarshalMsg(b []byte) (o []byte) {
 	return
 }
 
-func (_ *catchpointFileChunkV6) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(*catchpointFileChunkV6)
+func (_ *CatchpointSnapshotChunkV6) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*CatchpointSnapshotChunkV6)
 	return ok
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
-func (z *catchpointFileChunkV6) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
+func (z *CatchpointSnapshotChunkV6) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) (o []byte, err error) {
 	if st.AllowableDepth == 0 {
 		err = msgp.ErrMaxDepthExceeded{}
 		return
@@ -878,7 +878,7 @@ func (z *catchpointFileChunkV6) UnmarshalMsgWithState(bts []byte, st msgp.Unmars
 			return
 		}
 		if zb0006 {
-			(*z) = catchpointFileChunkV6{}
+			(*z) = CatchpointSnapshotChunkV6{}
 		}
 		for zb0005 > 0 {
 			zb0005--
@@ -1009,16 +1009,16 @@ func (z *catchpointFileChunkV6) UnmarshalMsgWithState(bts []byte, st msgp.Unmars
 	return
 }
 
-func (z *catchpointFileChunkV6) UnmarshalMsg(bts []byte) (o []byte, err error) {
+func (z *CatchpointSnapshotChunkV6) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	return z.UnmarshalMsgWithState(bts, msgp.DefaultUnmarshalState)
 }
-func (_ *catchpointFileChunkV6) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*catchpointFileChunkV6)
+func (_ *CatchpointSnapshotChunkV6) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*CatchpointSnapshotChunkV6)
 	return ok
 }
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *catchpointFileChunkV6) Msgsize() (s int) {
+func (z *CatchpointSnapshotChunkV6) Msgsize() (s int) {
 	s = 1 + 3 + msgp.ArrayHeaderSize
 	for zb0001 := range (*z).Balances {
 		s += (*z).Balances[zb0001].Msgsize()
@@ -1039,12 +1039,12 @@ func (z *catchpointFileChunkV6) Msgsize() (s int) {
 }
 
 // MsgIsZero returns whether this is a zero value
-func (z *catchpointFileChunkV6) MsgIsZero() bool {
+func (z *CatchpointSnapshotChunkV6) MsgIsZero() bool {
 	return (len((*z).Balances) == 0) && (len((*z).KVs) == 0) && (len((*z).OnlineAccounts) == 0) && (len((*z).OnlineRoundParams) == 0)
 }
 
 // MaxSize returns a maximum valid message size for this message type
-func CatchpointFileChunkV6MaxSize() (s int) {
+func CatchpointSnapshotChunkV6MaxSize() (s int) {
 	s = 1 + 3
 	// Calculating size of slice: z.Balances
 	s += msgp.ArrayHeaderSize + ((BalancesPerCatchpointFileChunk) * (encoded.BalanceRecordV6MaxSize()))

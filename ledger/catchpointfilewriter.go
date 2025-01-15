@@ -64,7 +64,7 @@ type catchpointFileWriter struct {
 	file                   *os.File
 	tar                    *tar.Writer
 	compressor             io.WriteCloser
-	chunk                  catchpointFileChunkV6
+	chunk                  CatchpointSnapshotChunkV6
 	chunkNum               uint64
 	writtenBytes           int64
 	biggestChunkLen        uint64
@@ -80,12 +80,15 @@ type catchpointFileWriter struct {
 	onlineRoundParamsDone  bool
 }
 
-type catchpointFileBalancesChunkV5 struct {
+// CatchpointSnapshotChunkV5 defines the encoding of "balances.X.msgpack" files in the catchpoint snapshot
+// used before database schema v6, which split accounts from asset/app resource data.
+type CatchpointSnapshotChunkV5 struct {
 	_struct  struct{}                  `codec:",omitempty,omitemptyarray"`
 	Balances []encoded.BalanceRecordV5 `codec:"bl,allocbound=BalancesPerCatchpointFileChunk"`
 }
 
-type catchpointFileChunkV6 struct {
+// CatchpointSnapshotChunkV6 defines the current encoding of "balances.X.msgpack" files in the catchpoint snapshot.
+type CatchpointSnapshotChunkV6 struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	Balances          []encoded.BalanceRecordV6 `codec:"bl,allocbound=BalancesPerCatchpointFileChunk"`
@@ -95,7 +98,7 @@ type catchpointFileChunkV6 struct {
 	OnlineRoundParams []encoded.OnlineRoundParamsRecordV6 `codec:"orp,allocbound=BalancesPerCatchpointFileChunk"`
 }
 
-func (chunk catchpointFileChunkV6) empty() bool {
+func (chunk CatchpointSnapshotChunkV6) empty() bool {
 	return len(chunk.Balances) == 0 && len(chunk.KVs) == 0 && len(chunk.OnlineAccounts) == 0 && len(chunk.OnlineRoundParams) == 0
 }
 
@@ -216,7 +219,7 @@ func (cw *catchpointFileWriter) FileWriteStep(stepCtx context.Context) (more boo
 		return
 	}
 
-	writerRequest := make(chan catchpointFileChunkV6, 1)
+	writerRequest := make(chan CatchpointSnapshotChunkV6, 1)
 	writerResponse := make(chan error, 2)
 	go cw.asyncWriter(writerRequest, writerResponse, cw.chunkNum)
 	defer func() {
@@ -298,11 +301,11 @@ func (cw *catchpointFileWriter) FileWriteStep(stepCtx context.Context) (more boo
 		cw.chunkNum++
 		writerRequest <- cw.chunk
 		// indicate that we need a readDatabaseStep
-		cw.chunk = catchpointFileChunkV6{}
+		cw.chunk = CatchpointSnapshotChunkV6{}
 	}
 }
 
-func (cw *catchpointFileWriter) asyncWriter(chunks chan catchpointFileChunkV6, response chan error, chunkNum uint64) {
+func (cw *catchpointFileWriter) asyncWriter(chunks chan CatchpointSnapshotChunkV6, response chan error, chunkNum uint64) {
 	defer close(response)
 	for chk := range chunks {
 		chunkNum++
@@ -341,7 +344,7 @@ func (cw *catchpointFileWriter) readDatabaseStep(ctx context.Context) error {
 			return err
 		}
 		if len(balances) > 0 {
-			cw.chunk = catchpointFileChunkV6{Balances: balances, numAccounts: numAccounts}
+			cw.chunk = CatchpointSnapshotChunkV6{Balances: balances, numAccounts: numAccounts}
 			return nil
 		}
 		// It might seem reasonable, but do not close accountsIterator here,
@@ -372,7 +375,7 @@ func (cw *catchpointFileWriter) readDatabaseStep(ctx context.Context) error {
 			}
 		}
 		if len(kvrs) > 0 {
-			cw.chunk = catchpointFileChunkV6{KVs: kvrs}
+			cw.chunk = CatchpointSnapshotChunkV6{KVs: kvrs}
 			return nil
 		}
 		// Do not close kvRows here, or it will start over on the next iteration
@@ -401,7 +404,7 @@ func (cw *catchpointFileWriter) readDatabaseStep(ctx context.Context) error {
 			}
 		}
 		if len(onlineAccts) > 0 {
-			cw.chunk = catchpointFileChunkV6{OnlineAccounts: onlineAccts}
+			cw.chunk = CatchpointSnapshotChunkV6{OnlineAccounts: onlineAccts}
 			return nil
 		}
 		// Do not close onlineAccountRows here, or it will start over on the next iteration
@@ -430,7 +433,7 @@ func (cw *catchpointFileWriter) readDatabaseStep(ctx context.Context) error {
 			}
 		}
 		if len(onlineRndParams) > 0 {
-			cw.chunk = catchpointFileChunkV6{OnlineRoundParams: onlineRndParams}
+			cw.chunk = CatchpointSnapshotChunkV6{OnlineRoundParams: onlineRndParams}
 			return nil
 		}
 		// Do not close onlineRndParamsRows here, or it will start over on the next iteration

@@ -224,12 +224,12 @@ func TestCatchpointFileBalancesChunkEncoding(t *testing.T) {
 		kvs[i] = kv
 	}
 
-	chunk1 := catchpointFileChunkV6{}
+	chunk1 := CatchpointSnapshotChunkV6{}
 	chunk1.Balances = balances
 	chunk1.KVs = kvs
 	encodedChunk := chunk1.MarshalMsg(nil)
 
-	var chunk2 catchpointFileChunkV6
+	var chunk2 CatchpointSnapshotChunkV6
 	_, err := chunk2.UnmarshalMsg(encodedChunk)
 	require.NoError(t, err)
 
@@ -291,7 +291,7 @@ func TestBasicCatchpointWriter(t *testing.T) {
 	balanceFileName := fmt.Sprintf(catchpointBalancesFileNameTemplate, 1)
 	require.Equal(t, balanceFileName, catchpointContent[1].headerName)
 
-	var chunk catchpointFileChunkV6
+	var chunk CatchpointSnapshotChunkV6
 	err = protocol.Decode(catchpointContent[1].data, &chunk)
 	require.NoError(t, err)
 	require.Equal(t, uint64(len(accts)), uint64(len(chunk.Balances)))
@@ -834,14 +834,16 @@ func TestExactAccountChunk(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	// t.Parallel() // probably not good to parallelize catchpoint file save/load
 
-	t.Run("v39", func(t *testing.T) { testExactAccountChunk(t, protocol.ConsensusV39, 40) })
-	t.Run("v40", func(t *testing.T) { testExactAccountChunk(t, protocol.ConsensusV40, 40) })
-	t.Run("v40_SPstall", func(t *testing.T) { testExactAccountChunk(t, protocol.ConsensusV40, 100) })
-	t.Run("future", func(t *testing.T) { testExactAccountChunk(t, protocol.ConsensusFuture, 40) })
-	t.Run("future_SPstall", func(t *testing.T) { testExactAccountChunk(t, protocol.ConsensusFuture, 100) })
+	t.Run("v39", func(t *testing.T) { testExactAccountChunk(t, protocol.ConsensusV39, 40, false) })
+	t.Run("v40", func(t *testing.T) { testExactAccountChunk(t, protocol.ConsensusV40, 40, false) })
+	t.Run("v40_noSPstall", func(t *testing.T) { testExactAccountChunk(t, protocol.ConsensusV40, 63, false) })
+	t.Run("v40_SPstall", func(t *testing.T) { testExactAccountChunk(t, protocol.ConsensusV40, 64, true) })
+	t.Run("future", func(t *testing.T) { testExactAccountChunk(t, protocol.ConsensusFuture, 40, false) })
+	t.Run("future_SPstall", func(t *testing.T) { testExactAccountChunk(t, protocol.ConsensusFuture, 64, true) })
+	t.Run("future_SPstall300", func(t *testing.T) { testExactAccountChunk(t, protocol.ConsensusFuture, 300, true) })
 }
 
-func testExactAccountChunk(t *testing.T, proto protocol.ConsensusVersion, extraBlocks int) {
+func testExactAccountChunk(t *testing.T, proto protocol.ConsensusVersion, extraBlocks int, longHistory bool) {
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis(func(c *ledgertesting.GenesisCfg) {
 		c.OnlineCount = 1 // addrs[0] is online
 	}, ledgertesting.TurnOffRewards)
@@ -901,15 +903,21 @@ func testExactAccountChunk(t *testing.T, proto protocol.ConsensusVersion, extraB
 	valLowestRound := dl.validator.trackers.acctsOnline.voters.lowestRound(valDBRound)
 	require.Equal(t, genLowestRound, valLowestRound)
 	require.Equal(t, genDBRound, valDBRound)
+	// genDBRound is MaxAcctLookback (4) rounds behind genR
+	require.Equal(t, genR, genDBRound+basics.Round(dl.generator.cfg.MaxAcctLookback))
+	// This assert, plus previous assert on genR guarantees that genDBRound is:
+	// BalancesPerCatchpointFileChunk-12+extraBlocks-MaxAcctLookback (560 for 64 extraBlocks, 536 for 40 extraBlocks)
 
 	var onlineExcludeBefore basics.Round
 	// we added so many blocks that lowestRound is stuck at first state proof, round 240?
-	if normalHorizon := (genDBRound + 1).SubSaturate(basics.Round(params.MaxBalLookback)); normalHorizon == genLowestRound {
-		t.Logf("subtest is exercising case where 320 rounds of history are already in DB")
+	if normalHorizon := (genDBRound + 1).SubSaturate(basics.Round(params.MaxBalLookback)); normalHorizon <= genLowestRound {
+		t.Logf("subtest is exercising case where lowestRound from votersTracker is satsified by the existing history")
 		require.EqualValues(t, genLowestRound, params.StateProofInterval-params.StateProofVotersLookback)
+		require.False(t, longHistory)
 	} else if normalHorizon > genLowestRound {
 		t.Logf("subtest is exercising case where votersTracker causes onlineaccounts & onlineroundparams to extend history to round %d (DBRound %d)", genLowestRound, genDBRound)
 		onlineExcludeBefore = normalHorizon // fails without this adjustment
+		require.True(t, longHistory)
 	}
 
 	cph := testWriteCatchpoint(t, config.Consensus[proto], dl.validator.trackerDB(), catchpointDataFilePath, catchpointFilePath, 0, onlineExcludeBefore)
@@ -917,11 +925,11 @@ func testExactAccountChunk(t *testing.T, proto protocol.ConsensusVersion, extraB
 	decodedData := readCatchpointFile(t, catchpointFilePath)
 
 	// decode and verify some stats about balances chunk contents
-	var chunks []catchpointFileChunkV6
+	var chunks []CatchpointSnapshotChunkV6
 	for i, d := range decodedData {
 		t.Logf("section %d: %s", i, d.headerName)
 		if strings.HasPrefix(d.headerName, "balances.") {
-			var chunk catchpointFileChunkV6
+			var chunk CatchpointSnapshotChunkV6
 			err := protocol.Decode(d.data, &chunk)
 			require.NoError(t, err)
 			t.Logf("chunk %d balances: %d, kvs: %d, onlineaccounts: %d, onlineroundparams: %d", i, len(chunk.Balances), len(chunk.KVs), len(chunk.OnlineAccounts), len(chunk.OnlineRoundParams))

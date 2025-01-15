@@ -716,7 +716,7 @@ func benchmarkWriteCatchpointStagingBalancesSub(b *testing.B, ascendingOrder boo
 			last64KSize = chunkSize
 			last64KAccountCreationTime = time.Duration(0)
 		}
-		var chunk catchpointFileChunkV6
+		var chunk CatchpointSnapshotChunkV6
 		chunk.Balances = make([]encoded.BalanceRecordV6, chunkSize)
 		for i := uint64(0); i < chunkSize; i++ {
 			var randomAccount encoded.BalanceRecordV6
