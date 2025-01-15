@@ -42,7 +42,7 @@ type ElasticRateLimiter struct {
 	MaxCapacity            int
 	CapacityPerReservation int
 	sharedCapacity         capacityQueue
-	capacityByClient       map[ErlClient]capacityQueue
+	capacityByClient       map[string]capacityQueue
 	clientLock             deadlock.RWMutex
 	// CongestionManager and enable flag
 	cm                       CongestionManager
@@ -53,6 +53,7 @@ type ElasticRateLimiter struct {
 // ErlClient clients must support OnClose for reservation closing
 type ErlClient interface {
 	OnClose(func())
+	RoutingAddr() []byte
 }
 
 // capacity is an empty structure used for loading and draining queues
@@ -122,7 +123,7 @@ func NewElasticRateLimiter(
 	ret := ElasticRateLimiter{
 		MaxCapacity:              maxCapacity,
 		CapacityPerReservation:   reservedCapacity,
-		capacityByClient:         map[ErlClient]capacityQueue{},
+		capacityByClient:         map[string]capacityQueue{},
 		sharedCapacity:           capacityQueue(make(chan capacity, maxCapacity)),
 		congestionControlCounter: conmanCount,
 	}
@@ -178,7 +179,7 @@ func (erl *ElasticRateLimiter) ConsumeCapacity(c ErlClient) (*ErlCapacityGuard, 
 	var isCMEnabled bool
 	// get the client's queue
 	erl.clientLock.RLock()
-	q, exists = erl.capacityByClient[c]
+	q, exists = erl.capacityByClient[string(c.RoutingAddr())]
 	isCMEnabled = erl.enableCM
 	erl.clientLock.RUnlock()
 
@@ -234,7 +235,8 @@ func (erl *ElasticRateLimiter) ConsumeCapacity(c ErlClient) (*ErlCapacityGuard, 
 func (erl *ElasticRateLimiter) openReservation(c ErlClient) (capacityQueue, error) {
 	erl.clientLock.Lock()
 	defer erl.clientLock.Unlock()
-	if _, exists := erl.capacityByClient[c]; exists {
+	addr := string(c.RoutingAddr())
+	if _, exists := erl.capacityByClient[addr]; exists {
 		return capacityQueue(nil), errERLReservationExists
 	}
 	// guard against overprovisioning, if there is less than a reservedCapacity amount left
@@ -244,7 +246,7 @@ func (erl *ElasticRateLimiter) openReservation(c ErlClient) (capacityQueue, erro
 	}
 	// make capacity for the provided client
 	q := capacityQueue(make(chan capacity, erl.CapacityPerReservation))
-	erl.capacityByClient[c] = q
+	erl.capacityByClient[addr] = q
 	// create a thread to drain the capacity from sharedCapacity in a blocking way
 	// and move it to the reservation, also in a blocking way
 	go func() {
@@ -261,12 +263,13 @@ func (erl *ElasticRateLimiter) openReservation(c ErlClient) (capacityQueue, erro
 func (erl *ElasticRateLimiter) closeReservation(c ErlClient) {
 	erl.clientLock.Lock()
 	defer erl.clientLock.Unlock()
-	q, exists := erl.capacityByClient[c]
+	addr := string(c.RoutingAddr())
+	q, exists := erl.capacityByClient[addr]
 	// guard clauses, and preventing the ElasticRateLimiter from draining its own sharedCapacity
 	if !exists || q == erl.sharedCapacity {
 		return
 	}
-	delete(erl.capacityByClient, c)
+	delete(erl.capacityByClient, addr)
 	// start a routine to consume capacity from the closed reservation, and return it to the sharedCapacity
 	go func() {
 		for i := 0; i < erl.CapacityPerReservation; i++ {
