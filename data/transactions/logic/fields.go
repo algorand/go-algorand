@@ -1641,6 +1641,9 @@ func (fs voterParamsFieldSpec) Version() uint64 {
 func (fs voterParamsFieldSpec) Note() string {
 	return fs.doc
 }
+func (fs voterParamsFieldSpec) Modes() RunMode {
+	return ModeApp
+}
 
 var voterParamsFieldSpecs = [...]voterParamsFieldSpec{
 	{VoterBalance, StackUint64, incentiveVersion, "Online stake in microalgos"},
