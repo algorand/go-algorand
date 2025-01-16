@@ -865,6 +865,9 @@ func (fs mimcConfigSpec) Version() uint64 {
 func (fs mimcConfigSpec) Note() string {
 	return fs.doc
 }
+func (fs mimcConfigSpec) Modes() RunMode {
+	return ModeDunno
+}
 
 var mimcConfigSpecs = [...]mimcConfigSpec{
 	{BN254Mp110, "MiMC configuration for the BN254 curve with Miyaguchi-Preneel mode, 110 rounds, exponent 5, seed \"seed\""},
