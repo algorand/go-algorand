@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -2044,7 +2044,6 @@ func TestAcctUpdatesResources(t *testing.T) {
 				require.NoError(t, err)
 				ml.trackers.dbRound = newBase
 				au.postCommit(ml.trackers.ctx, dcc)
-				au.postCommitUnlocked(ml.trackers.ctx, dcc)
 			}()
 
 		}
@@ -2330,7 +2329,6 @@ func auCommitSync(t *testing.T, rnd basics.Round, au *accountUpdates, ml *mockLe
 			require.NoError(t, err)
 			ml.trackers.dbRound = newBase
 			au.postCommit(ml.trackers.ctx, dcc)
-			au.postCommitUnlocked(ml.trackers.ctx, dcc)
 		}()
 	}
 }

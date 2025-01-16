@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -36,6 +36,11 @@ func TestConsensusParams(t *testing.T) {
 		// ApplyData requires not PaysetCommitUnsupported.
 		if params.ApplyData && params.PaysetCommit == PaysetCommitUnsupported {
 			t.Errorf("Protocol %s: ApplyData with PaysetCommitUnsupported", proto)
+		}
+
+		// To figure out challenges, nodes must be able to lookup headers up to two GracePeriods back
+		if 2*params.Payouts.ChallengeGracePeriod > params.MaxTxnLife+params.DeeperBlockHeaderHistory {
+			t.Errorf("Protocol %s: Grace period is too long", proto)
 		}
 	}
 }

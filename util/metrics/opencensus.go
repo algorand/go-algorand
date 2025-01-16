@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,11 +21,11 @@ package metrics
 
 import (
 	"context"
+	"slices"
 	"strings"
 
 	"go.opencensus.io/metric/metricdata"
 	"go.opencensus.io/metric/metricexport"
-	"golang.org/x/exp/slices"
 )
 
 type defaultOpencensusGatherer struct {

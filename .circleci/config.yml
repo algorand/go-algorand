@@ -47,11 +47,11 @@ executors:
     resource_class: arm.large
   mac_arm64_medium:
     macos:
-      xcode: 14.2.0
+      xcode: 14.3.1
     resource_class: macos.m1.medium.gen1
   mac_arm64_large:
     macos:
-      xcode: 14.2.0
+      xcode: 14.3.1
     resource_class: macos.m1.large.gen1
 
 slack-fail-stop-step: &slack-fail-post-step

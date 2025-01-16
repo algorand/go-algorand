@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -26,6 +26,7 @@ import (
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/data/stateproofmsg"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
@@ -91,6 +92,12 @@ type Txn struct {
 	StateProofType protocol.StateProofType
 	StateProof     stateproof.StateProof
 	StateProofMsg  stateproofmsg.Message
+
+	HbAddress     basics.Address
+	HbProof       crypto.HeartbeatProof
+	HbSeed        committee.Seed
+	HbVoteID      crypto.OneTimeSignatureVerifier
+	HbKeyDilution uint64
 }
 
 // internalCopy "finishes" a shallow copy done by a simple Go assignment by
@@ -218,6 +225,17 @@ func (tx Txn) Txn() transactions.Transaction {
 	case nil:
 		tx.Fee = basics.MicroAlgos{}
 	}
+
+	hb := &transactions.HeartbeatTxnFields{
+		HbAddress:     tx.HbAddress,
+		HbProof:       tx.HbProof,
+		HbSeed:        tx.HbSeed,
+		HbVoteID:      tx.HbVoteID,
+		HbKeyDilution: tx.HbKeyDilution,
+	}
+	if hb.MsgIsZero() {
+		hb = nil
+	}
 	return transactions.Transaction{
 		Type: tx.Type,
 		Header: transactions.Header{
@@ -281,6 +299,7 @@ func (tx Txn) Txn() transactions.Transaction {
 			StateProof:     tx.StateProof,
 			Message:        tx.StateProofMsg,
 		},
+		HeartbeatTxnFields: hb,
 	}
 }
 
