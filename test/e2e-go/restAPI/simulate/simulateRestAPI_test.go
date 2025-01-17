@@ -2727,7 +2727,7 @@ int 1
 							Accounts: &[]string{otherAddressAddress.String()},
 							Assets:   &[]uint64{uint64(assetID)},
 							Apps:     &[]uint64{uint64(otherAppID)},
-							Boxes:    &[]model.BoxReference{{App: uint64(testAppID), Name: []byte("A")}},
+							Boxes:    &[]model.BoxReference{{App: uint64(testAppID), Name: []byte("A")}, {App: uint64(0), Name: []byte{}}},
 						},
 					},
 				},
