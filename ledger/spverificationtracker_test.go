@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -88,7 +88,6 @@ func mockCommit(t *testing.T, spt *spVerificationTracker, ml *mockLedgerForTrack
 	postCommitCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	spt.postCommit(postCommitCtx, &dcc)
-	spt.postCommitUnlocked(postCommitCtx, &dcc)
 }
 
 func genesisBlock() *blockEntry {

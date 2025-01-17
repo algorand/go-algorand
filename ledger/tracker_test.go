@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -194,6 +194,8 @@ func (t *emptyTracker) handleUnorderedCommit(dcc *deferredCommitContext) {
 func (t *emptyTracker) handlePrepareCommitError(dcc *deferredCommitContext) {
 }
 func (t *emptyTracker) handleCommitError(dcc *deferredCommitContext) {
+}
+func (t *emptyTracker) clearCommitRoundRetry(ctx context.Context, dcc *deferredCommitContext) {
 }
 
 // close is not used by the emptyTracker

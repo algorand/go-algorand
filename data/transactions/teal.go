@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,11 +18,11 @@ package transactions
 
 import (
 	"bytes"
+	"maps"
+	"slices"
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
-	"golang.org/x/exp/maps"
-	"golang.org/x/exp/slices"
 )
 
 // EvalDelta stores StateDeltas for an application's global key/value store, as

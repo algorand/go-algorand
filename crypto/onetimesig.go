@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -55,6 +55,56 @@ type OneTimeSignature struct {
 	PK2    ed25519PublicKey `codec:"p2"`
 	PK1Sig ed25519Signature `codec:"p1s"`
 	PK2Sig ed25519Signature `codec:"p2s"`
+}
+
+// A HeartbeatProof is functionally equivalent to a OneTimeSignature, but it has
+// been cleaned up for use as a transaction field in heartbeat transactions.
+type HeartbeatProof struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	// Sig is a signature of msg under the key PK.
+	Sig ed25519Signature `codec:"s"`
+	PK  ed25519PublicKey `codec:"p"`
+
+	// PK2 is used to verify a two-level ephemeral signature.
+	PK2 ed25519PublicKey `codec:"p2"`
+	// PK1Sig is a signature of OneTimeSignatureSubkeyOffsetID(PK, Batch, Offset) under the key PK2.
+	PK1Sig ed25519Signature `codec:"p1s"`
+	// PK2Sig is a signature of OneTimeSignatureSubkeyBatchID(PK2, Batch) under the master key (OneTimeSignatureVerifier).
+	PK2Sig ed25519Signature `codec:"p2s"`
+}
+
+// ToOneTimeSignature converts a HeartbeatProof to a OneTimeSignature.
+func (hbp HeartbeatProof) ToOneTimeSignature() OneTimeSignature {
+	return OneTimeSignature{
+		Sig:    hbp.Sig,
+		PK:     hbp.PK,
+		PK2:    hbp.PK2,
+		PK1Sig: hbp.PK1Sig,
+		PK2Sig: hbp.PK2Sig,
+	}
+}
+
+// ToHeartbeatProof converts a OneTimeSignature to a HeartbeatProof.
+func (ots OneTimeSignature) ToHeartbeatProof() HeartbeatProof {
+	return HeartbeatProof{
+		Sig:    ots.Sig,
+		PK:     ots.PK,
+		PK2:    ots.PK2,
+		PK1Sig: ots.PK1Sig,
+		PK2Sig: ots.PK2Sig,
+	}
+}
+
+// BatchPrep enqueues the necessary checks into the batch.  The caller must call
+// batchVerifier.verify() to verify it.
+func (hbp HeartbeatProof) BatchPrep(voteID OneTimeSignatureVerifier, id OneTimeSignatureIdentifier, msg Hashable, batchVerifier BatchVerifier) {
+	offsetID := OneTimeSignatureSubkeyOffsetID{SubKeyPK: hbp.PK, Batch: id.Batch, Offset: id.Offset}
+	batchID := OneTimeSignatureSubkeyBatchID{SubKeyPK: hbp.PK2, Batch: id.Batch}
+	batchVerifier.EnqueueSignature(PublicKey(voteID), batchID, Signature(hbp.PK2Sig))
+	batchVerifier.EnqueueSignature(PublicKey(batchID.SubKeyPK), offsetID, Signature(hbp.PK1Sig))
+	batchVerifier.EnqueueSignature(PublicKey(offsetID.SubKeyPK), msg, Signature(hbp.Sig))
+
 }
 
 // A OneTimeSignatureSubkeyBatchID identifies an ephemeralSubkey of a batch

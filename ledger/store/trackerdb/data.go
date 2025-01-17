@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -152,6 +152,8 @@ type BaseOnlineAccountData struct {
 
 	BaseVotingData
 
+	LastProposed      basics.Round      `codec:"V"`
+	LastHeartbeat     basics.Round      `codec:"W"`
 	IncentiveEligible bool              `codec:"X"`
 	MicroAlgos        basics.MicroAlgos `codec:"Y"`
 	RewardsBase       uint64            `codec:"Z"`
@@ -456,7 +458,10 @@ func (bo *BaseOnlineAccountData) IsVotingEmpty() bool {
 func (bo *BaseOnlineAccountData) IsEmpty() bool {
 	return bo.IsVotingEmpty() &&
 		bo.MicroAlgos.Raw == 0 &&
-		bo.RewardsBase == 0 && !bo.IncentiveEligible
+		bo.RewardsBase == 0 &&
+		bo.LastHeartbeat == 0 &&
+		bo.LastProposed == 0 &&
+		!bo.IncentiveEligible
 }
 
 // GetOnlineAccount returns ledgercore.OnlineAccount for top online accounts / voters
@@ -491,6 +496,8 @@ func (bo *BaseOnlineAccountData) GetOnlineAccountData(proto config.ConsensusPara
 			VoteKeyDilution: bo.VoteKeyDilution,
 		},
 		IncentiveEligible: bo.IncentiveEligible,
+		LastProposed:      bo.LastProposed,
+		LastHeartbeat:     bo.LastHeartbeat,
 	}
 }
 
@@ -507,6 +514,8 @@ func (bo *BaseOnlineAccountData) SetCoreAccountData(ad *ledgercore.AccountData) 
 	bo.MicroAlgos = ad.MicroAlgos
 	bo.RewardsBase = ad.RewardsBase
 	bo.IncentiveEligible = ad.IncentiveEligible
+	bo.LastProposed = ad.LastProposed
+	bo.LastHeartbeat = ad.LastHeartbeat
 }
 
 // MakeResourcesData returns a new empty instance of resourcesData.

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -25,6 +25,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/ledger/encoded"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -103,10 +104,20 @@ func (s *trackerSQLStore) Transaction(fn trackerdb.TransactionFn) (err error) {
 	return wrapIOError(s.TransactionContext(context.Background(), fn))
 }
 
+func (s *trackerSQLStore) TransactionWithRetryClearFn(fn trackerdb.TransactionFn, rollbackFn trackerdb.RetryClearFn) (err error) {
+	return wrapIOError(s.TransactionContextWithRetryClearFn(context.Background(), fn, rollbackFn))
+}
+
 func (s *trackerSQLStore) TransactionContext(ctx context.Context, fn trackerdb.TransactionFn) (err error) {
 	return wrapIOError(s.pair.Wdb.AtomicContext(ctx, func(ctx context.Context, tx *sql.Tx) error {
 		return fn(ctx, &sqlTransactionScope{tx, false, &sqlReader{tx}, &sqlWriter{tx}, &sqlCatchpoint{tx}})
 	}))
+}
+
+func (s *trackerSQLStore) TransactionContextWithRetryClearFn(ctx context.Context, fn trackerdb.TransactionFn, rollbackFn trackerdb.RetryClearFn) (err error) {
+	return wrapIOError(s.pair.Wdb.AtomicContextWithRetryClearFn(ctx, func(ctx context.Context, tx *sql.Tx) error {
+		return fn(ctx, &sqlTransactionScope{tx, false, &sqlReader{tx}, &sqlWriter{tx}, &sqlCatchpoint{tx}})
+	}, rollbackFn))
 }
 
 func (s *trackerSQLStore) BeginTransaction(ctx context.Context) (trackerdb.Transaction, error) {
@@ -190,14 +201,24 @@ func (r *sqlReader) MakeCatchpointReader() (trackerdb.CatchpointReader, error) {
 	return makeCatchpointReader(r.q), nil
 }
 
-// MakeEncodedAccoutsBatchIter implements trackerdb.Reader
-func (r *sqlReader) MakeEncodedAccoutsBatchIter() trackerdb.EncodedAccountsBatchIter {
-	return MakeEncodedAccoutsBatchIter(r.q)
+// MakeEncodedAccountsBatchIter implements trackerdb.Reader
+func (r *sqlReader) MakeEncodedAccountsBatchIter() trackerdb.EncodedAccountsBatchIter {
+	return MakeEncodedAccountsBatchIter(r.q)
 }
 
 // MakeKVsIter implements trackerdb.Reader
 func (r *sqlReader) MakeKVsIter(ctx context.Context) (trackerdb.KVsIter, error) {
 	return MakeKVsIter(ctx, r.q)
+}
+
+// MakeOnlineAccountsIter implements trackerdb.Reader
+func (r *sqlReader) MakeOnlineAccountsIter(ctx context.Context, useStaging bool, excludeBefore basics.Round) (trackerdb.TableIterator[*encoded.OnlineAccountRecordV6], error) {
+	return MakeOnlineAccountsIter(ctx, r.q, useStaging, excludeBefore)
+}
+
+// MakeOnlineRoundParamsIter implements trackerdb.Reader
+func (r *sqlReader) MakeOnlineRoundParamsIter(ctx context.Context, useStaging bool, excludeBefore basics.Round) (trackerdb.TableIterator[*encoded.OnlineRoundParamsRecordV6], error) {
+	return MakeOnlineRoundParamsIter(ctx, r.q, useStaging, excludeBefore)
 }
 
 type sqlWriter struct {

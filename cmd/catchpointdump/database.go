@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -87,6 +87,14 @@ var databaseCmd = &cobra.Command{
 		err = printStateProofVerificationContext(ledgerTrackerFilename, ledgerTrackerStaging, outFile)
 		if err != nil {
 			reportErrorf("Unable to print state proof verification database : %v", err)
+		}
+		err = printOnlineAccounts(ledgerTrackerFilename, ledgerTrackerStaging, outFile)
+		if err != nil {
+			reportErrorf("Unable to print online accounts : %v", err)
+		}
+		err = printOnlineRoundParams(ledgerTrackerFilename, ledgerTrackerStaging, outFile)
+		if err != nil {
+			reportErrorf("Unable to print online round params : %v", err)
 		}
 	},
 }

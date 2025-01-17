@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -1024,12 +1024,9 @@ func checkPoint(counter, firstValid, tLife uint64, force bool, fixture *fixtures
 		if verbose {
 			fmt.Printf("Waiting for round %d...", int(lastRound))
 		}
-		nodeStat, err := fixture.AlgodClient.WaitForBlock(basics.Round(lastRound - 1))
+		nodeStat, err := fixture.AlgodClient.WaitForRound(lastRound, time.Minute)
 		if err != nil {
 			return 0, 0, fmt.Errorf("failed to wait for block %d : %w", lastRound, err)
-		}
-		if nodeStat.LastRound < lastRound {
-			return 0, 0, fmt.Errorf("failed to wait for block %d : node is at round %d", lastRound, nodeStat.LastRound)
 		}
 		return 0, nodeStat.LastRound + 1, nil
 	}

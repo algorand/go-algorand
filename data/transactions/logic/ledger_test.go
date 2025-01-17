@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -46,9 +46,14 @@ import (
 )
 
 type balanceRecord struct {
-	addr     basics.Address
-	auth     basics.Address
-	balance  uint64
+	addr    basics.Address
+	auth    basics.Address
+	balance uint64
+	voting  basics.VotingData
+
+	proposed  basics.Round // The last round that this account proposed the accepted block
+	heartbeat basics.Round // The last round that this account sent a heartbeat to show it was online.
+
 	locals   map[basics.AppIndex]basics.TealKeyValue
 	holdings map[basics.AssetIndex]basics.AssetHolding
 	mods     map[basics.AppIndex]map[string]basics.ValueDelta
@@ -312,7 +317,11 @@ func (l *Ledger) AccountData(addr basics.Address) (ledgercore.AccountData, error
 
 			TotalBoxes:    uint64(boxesTotal),
 			TotalBoxBytes: uint64(boxBytesTotal),
+
+			LastProposed:  br.proposed,
+			LastHeartbeat: br.heartbeat,
 		},
+		VotingData: br.voting,
 	}, nil
 }
 
@@ -329,6 +338,9 @@ func (l *Ledger) AgreementData(addr basics.Address) (basics.OnlineAccountData, e
 	// paid. Here, we ignore that for simple tests.
 	return basics.OnlineAccountData{
 		MicroAlgosWithRewards: ad.MicroAlgos,
+		// VotingData is not exposed to `voter_params_get`, the thinking is that
+		// we don't want them used as "free" storage. And thus far, we don't
+		// have compelling reasons to examine them in AVM.
 		VotingData: basics.VotingData{
 			VoteID:          ad.VoteID,
 			SelectionID:     ad.SelectionID,
@@ -940,7 +952,7 @@ func (l *Ledger) Perform(gi int, ep *EvalParams) error {
 }
 
 // Get returns the AccountData of an address. This test ledger does
-// not handle rewards, so the pening rewards flag is ignored.
+// not handle rewards, so withPendingRewards is ignored.
 func (l *Ledger) Get(addr basics.Address, withPendingRewards bool) (basics.AccountData, error) {
 	br, ok := l.balances[addr]
 	if !ok {
@@ -952,6 +964,17 @@ func (l *Ledger) Get(addr basics.Address, withPendingRewards bool) (basics.Accou
 		Assets:         map[basics.AssetIndex]basics.AssetHolding{},
 		AppLocalStates: map[basics.AppIndex]basics.AppLocalState{},
 		AppParams:      map[basics.AppIndex]basics.AppParams{},
+		LastProposed:   br.proposed,
+		LastHeartbeat:  br.heartbeat,
+		// The fields below are not exposed to `acct_params_get`, the thinking
+		// is that we don't want them used as "free" storage.  And thus far, we
+		// don't have compelling reasons to examine them in AVM.
+		VoteID:          br.voting.VoteID,
+		SelectionID:     br.voting.SelectionID,
+		StateProofID:    br.voting.StateProofID,
+		VoteFirstValid:  br.voting.VoteFirstValid,
+		VoteLastValid:   br.voting.VoteLastValid,
+		VoteKeyDilution: br.voting.VoteKeyDilution,
 	}, nil
 }
 

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -155,16 +155,6 @@ func (spt *spVerificationTracker) postCommit(_ context.Context, dcc *deferredCom
 
 	spt.pendingCommitContexts = spt.pendingCommitContexts[len(dcc.spVerification.commitContext):]
 	spt.pendingDeleteContexts = spt.pendingDeleteContexts[dcc.spVerification.lastDeleteIndex+1:]
-}
-
-func (spt *spVerificationTracker) postCommitUnlocked(context.Context, *deferredCommitContext) {
-}
-
-func (spt *spVerificationTracker) handleUnorderedCommit(dcc *deferredCommitContext) {
-}
-func (spt *spVerificationTracker) handlePrepareCommitError(dcc *deferredCommitContext) {
-}
-func (spt *spVerificationTracker) handleCommitError(dcc *deferredCommitContext) {
 }
 
 func (spt *spVerificationTracker) close() {

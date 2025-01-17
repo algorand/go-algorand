@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -284,7 +284,7 @@ const (
 type broadcastRequest struct {
 	tags        []Tag
 	data        [][]byte
-	except      *wsPeer
+	except      Peer
 	done        chan struct{}
 	enqueueTime time.Time
 	ctx         context.Context
@@ -381,7 +381,7 @@ func (wn *msgBroadcaster) BroadcastArray(ctx context.Context, tags []protocol.Ta
 
 	request := broadcastRequest{tags: tags, data: data, enqueueTime: time.Now(), ctx: ctx}
 	if except != nil {
-		request.except = except.(*wsPeer)
+		request.except = except
 	}
 
 	broadcastQueue := wn.broadcastQueueBulk
@@ -1401,7 +1401,7 @@ func (wn *msgBroadcaster) innerBroadcast(request broadcastRequest, prio bool, pe
 		if wn.config.BroadcastConnectionsLimit >= 0 && sentMessageCount >= wn.config.BroadcastConnectionsLimit {
 			break
 		}
-		if peer == request.except {
+		if Peer(peer) == request.except {
 			continue
 		}
 		ok := peer.writeNonBlockMsgs(request.ctx, data, prio, digests, request.enqueueTime)
@@ -1493,13 +1493,6 @@ type meshRequest struct {
 	done       chan struct{}
 }
 
-func imin(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
 // meshThread maintains the network, e.g. that we have sufficient connectivity to peers
 func (wn *WebsocketNetwork) meshThread() {
 	defer wn.wg.Done()
@@ -1568,7 +1561,7 @@ func (wn *WebsocketNetwork) refreshRelayArchivePhonebookAddresses() {
 
 func (wn *WebsocketNetwork) updatePhonebookAddresses(relayAddrs []string, archiveAddrs []string) {
 	if len(relayAddrs) > 0 {
-		wn.log.Debugf("got %d relay dns addrs, %#v", len(relayAddrs), relayAddrs[:imin(5, len(relayAddrs))])
+		wn.log.Debugf("got %d relay dns addrs, %#v", len(relayAddrs), relayAddrs[:min(5, len(relayAddrs))])
 		wn.phonebook.ReplacePeerList(relayAddrs, string(wn.NetworkID), phonebook.PhoneBookEntryRelayRole)
 	} else {
 		wn.log.Infof("got no relay DNS addrs for network %s", wn.NetworkID)
