@@ -3138,10 +3138,16 @@
             "sel": {
               "type": "string"
             },
+            "stprf": {
+              "type": "string"
+            },
             "vote": {
               "type": "string"
             },
             "voteKD": {
+              "type": "number"
+            },
+            "voteFst": {
               "type": "number"
             },
             "voteLst": {
@@ -3168,6 +3174,12 @@
           "items": {
             "$ref": "#/definitions/GenesisAllocation"
           }
+        },
+        "comment": {
+          "type": "string"
+        },
+        "devmode": {
+          "type": "boolean"
         },
         "fees": {
           "type": "string"

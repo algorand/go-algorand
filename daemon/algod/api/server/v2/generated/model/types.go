@@ -672,6 +672,8 @@ type EvalDeltaKeyValue struct {
 // Genesis defines model for Genesis.
 type Genesis struct {
 	Alloc     []GenesisAllocation `json:"alloc"`
+	Comment   *string             `json:"comment,omitempty"`
+	Devmode   *bool               `json:"devmode,omitempty"`
 	Fees      string              `json:"fees"`
 	Id        string              `json:"id"`
 	Network   string              `json:"network"`
@@ -688,7 +690,9 @@ type GenesisAllocation struct {
 		Algo    float32  `json:"algo"`
 		Onl     *float32 `json:"onl,omitempty"`
 		Sel     *string  `json:"sel,omitempty"`
+		Stprf   *string  `json:"stprf,omitempty"`
 		Vote    *string  `json:"vote,omitempty"`
+		VoteFst *float32 `json:"voteFst,omitempty"`
 		VoteKD  *float32 `json:"voteKD,omitempty"`
 		VoteLst *float32 `json:"voteLst,omitempty"`
 	} `json:"state"`

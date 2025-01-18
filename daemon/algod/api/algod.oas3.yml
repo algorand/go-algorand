@@ -2089,6 +2089,12 @@
             },
             "type": "array"
           },
+          "comment": {
+            "type": "string"
+          },
+          "devmode": {
+            "type": "boolean"
+          },
           "fees": {
             "type": "string"
           },
@@ -2139,8 +2145,14 @@
               "sel": {
                 "type": "string"
               },
+              "stprf": {
+                "type": "string"
+              },
               "vote": {
                 "type": "string"
+              },
+              "voteFst": {
+                "type": "number"
               },
               "voteKD": {
                 "type": "number"
