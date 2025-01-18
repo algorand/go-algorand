@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -64,8 +64,8 @@ import (
 // MaxTealSourceBytes sets a size limit for TEAL source programs for requests
 // Max TEAL program size is currently 8k
 // but we allow for comments, spacing, and repeated consts
-// in the source TEAL, so we allow up to 200KB
-const MaxTealSourceBytes = 200_000
+// in the source TEAL. We have some indication that real TEAL programs with comments are about 20 times bigger than the bytecode they produce, and we may soon allow 16,000 byte logicsigs, implying a maximum of 320kb. Let's call it half a meg for a little room to spare.
+const MaxTealSourceBytes = 512 * 1024
 
 // MaxTealDryrunBytes sets a size limit for dryrun requests
 // With the ability to hold unlimited assets DryrunRequests can
@@ -316,7 +316,7 @@ func (v2 *Handlers) AddParticipationKey(ctx echo.Context) error {
 	partKeyBinary := buf.Bytes()
 
 	if len(partKeyBinary) == 0 {
-		lenErr := fmt.Errorf(errRESTPayloadZeroLength)
+		lenErr := errors.New(errRESTPayloadZeroLength)
 		return badRequest(ctx, lenErr, lenErr.Error(), v2.Log)
 	}
 
@@ -673,6 +673,11 @@ func (v2 *Handlers) AccountApplicationInformation(ctx echo.Context, address stri
 	return ctx.JSON(http.StatusOK, response)
 }
 
+// BlockResponseJSON is used to embed the block in JSON responses.
+type BlockResponseJSON struct {
+	Block bookkeeping.Block `codec:"block"`
+}
+
 // GetBlock gets the block for the given round.
 // (GET /v2/blocks/{round})
 func (v2 *Handlers) GetBlock(ctx echo.Context, round uint64, params model.GetBlockParams) error {
@@ -709,9 +714,7 @@ func (v2 *Handlers) GetBlock(ctx echo.Context, round uint64, params model.GetBlo
 	}
 
 	// Encoding wasn't working well without embedding "real" objects.
-	response := struct {
-		Block bookkeeping.Block `codec:"block"`
-	}{
+	response := BlockResponseJSON{
 		Block: block,
 	}
 
@@ -835,11 +838,45 @@ func (v2 *Handlers) GetBlockHash(ctx echo.Context, round uint64) error {
 	return ctx.JSON(http.StatusOK, response)
 }
 
+// GetBlockHeader gets the block header for the given round.
+// (GET /v2/blocks/{round}/header)
+func (v2 *Handlers) GetBlockHeader(ctx echo.Context, round uint64, params model.GetBlockHeaderParams) error {
+	handle, contentType, err := getCodecHandle((*string)(params.Format))
+	if err != nil {
+		return badRequest(ctx, err, errFailedParsingFormatOption, v2.Log)
+	}
+
+	ledger := v2.Node.LedgerForAPI()
+	block, err := ledger.BlockHdr(basics.Round(round))
+	if err != nil {
+		switch err.(type) {
+		case ledgercore.ErrNoEntry:
+			return notFound(ctx, err, errFailedLookingUpLedger, v2.Log)
+		default:
+			return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+		}
+	}
+
+	// Encoding wasn't working well without embedding "real" objects.
+	response := struct {
+		BlockHeader bookkeeping.BlockHeader `codec:"block-header"`
+	}{
+		BlockHeader: block,
+	}
+
+	data, err := encode(handle, response)
+	if err != nil {
+		return internalError(ctx, err, errFailedToEncodeResponse, v2.Log)
+	}
+
+	return ctx.Blob(http.StatusOK, contentType, data)
+}
+
 // GetTransactionProof generates a Merkle proof for a transaction in a block.
 // (GET /v2/blocks/{round}/transactions/{txid}/proof)
 func (v2 *Handlers) GetTransactionProof(ctx echo.Context, round uint64, txid string, params model.GetTransactionProofParams) error {
 	var txID transactions.Txid
-	err := txID.UnmarshalText([]byte(txid))
+	err := txID.FromString(txid)
 	if err != nil {
 		return badRequest(ctx, err, errNoValidTxnSpecified, v2.Log)
 	}
@@ -1101,6 +1138,9 @@ func (v2 *Handlers) RawTransaction(ctx echo.Context) error {
 func (v2 *Handlers) RawTransactionAsync(ctx echo.Context) error {
 	if !v2.Node.Config().EnableExperimentalAPI {
 		return ctx.String(http.StatusNotFound, "/transactions/async was not enabled in the configuration file by setting the EnableExperimentalAPI to true")
+	}
+	if !v2.Node.Config().EnableDeveloperAPI {
+		return ctx.String(http.StatusNotFound, "/transactions/async was not enabled in the configuration file by setting the EnableDeveloperAPI to true")
 	}
 	txgroup, err := decodeTxGroup(ctx.Request().Body, config.MaxTxGroupSize)
 	if err != nil {
@@ -1432,6 +1472,11 @@ func (v2 *Handlers) GetLedgerStateDelta(ctx echo.Context, round uint64, params m
 	if err != nil {
 		return notFound(ctx, err, fmt.Sprintf(errFailedRetrievingStateDelta, err), v2.Log)
 	}
+	if handle == protocol.JSONStrictHandle {
+		// Zero out the Txleases map since it cannot be represented in JSON, as it is a map with an
+		// object key.
+		sDelta.Txleases = nil
+	}
 	data, err := encode(handle, sDelta)
 	if err != nil {
 		return internalError(ctx, err, errFailedToEncodeResponse, v2.Log)
@@ -1501,8 +1546,8 @@ func (v2 *Handlers) PendingTransactionInformation(ctx echo.Context, txid string,
 	}
 
 	txID := transactions.Txid{}
-	if err := txID.UnmarshalText([]byte(txid)); err != nil {
-		return badRequest(ctx, err, errNoValidTxnSpecified, v2.Log)
+	if err0 := txID.FromString(txid); err0 != nil {
+		return badRequest(ctx, err0, errNoValidTxnSpecified, v2.Log)
 	}
 
 	txn, ok := v2.Node.GetPendingTransaction(txID)
@@ -2022,6 +2067,11 @@ func (v2 *Handlers) GetLedgerStateDeltaForTransactionGroup(ctx echo.Context, id 
 	if err != nil {
 		return notFound(ctx, err, fmt.Sprintf(errFailedRetrievingStateDelta, err), v2.Log)
 	}
+	if handle == protocol.JSONStrictHandle {
+		// Zero out the Txleases map since it cannot be represented in JSON, as it is a map with an
+		// object key.
+		delta.Txleases = nil
+	}
 	data, err := encode(handle, delta)
 	if err != nil {
 		return internalError(ctx, err, errFailedToEncodeResponse, v2.Log)
@@ -2043,6 +2093,13 @@ func (v2 *Handlers) GetTransactionGroupLedgerStateDeltasForRound(ctx echo.Contex
 	deltas, err := tracer.GetDeltasForRound(basics.Round(round))
 	if err != nil {
 		return notFound(ctx, err, fmt.Sprintf(errFailedRetrievingStateDelta, err), v2.Log)
+	}
+	if handle == protocol.JSONStrictHandle {
+		// Zero out the Txleases map since it cannot be represented in JSON, as it is a map with an
+		// object key.
+		for i := range deltas {
+			deltas[i].Delta.Txleases = nil
+		}
 	}
 	response := struct {
 		Deltas []eval.TxnGroupDeltaWithIds
@@ -2105,6 +2162,11 @@ func (v2 *Handlers) GetDebugSettingsProf(ctx echo.Context) error {
 	}
 
 	return ctx.JSON(http.StatusOK, response)
+}
+
+// GetConfig returns the merged (defaults + overrides) config file in json.
+func (v2 *Handlers) GetConfig(ctx echo.Context) error {
+	return ctx.JSON(http.StatusOK, v2.Node.Config())
 }
 
 // PutDebugSettingsProf sets the mutex and blocking rates and returns the old values.

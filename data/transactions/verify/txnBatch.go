@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,7 +17,7 @@
 package verify
 
 import (
-	"errors"
+	"fmt"
 	"sync/atomic"
 
 	"github.com/algorand/go-algorand/crypto"
@@ -98,10 +98,16 @@ func (bl *batchLoad) addLoad(txngrp []transactions.SignedTxn, gctx *GroupContext
 
 }
 
+// TxnGroupBatchSigVerifier provides Verify method to synchronously verify a group of transactions
+// It starts a new block listener to receive latests block headers for the sig verification
+type TxnGroupBatchSigVerifier struct {
+	cache  VerifiedTransactionCache
+	nbw    *NewBlockWatcher
+	ledger logic.LedgerForSignature
+}
+
 type txnSigBatchProcessor struct {
-	cache       VerifiedTransactionCache
-	nbw         *NewBlockWatcher
-	ledger      logic.LedgerForSignature
+	TxnGroupBatchSigVerifier
 	resultChan  chan<- *VerificationResult
 	droppedChan chan<- *UnverifiedTxnSigJob
 }
@@ -142,25 +148,47 @@ func (tbp txnSigBatchProcessor) sendResult(veTxnGroup []transactions.SignedTxn, 
 	}
 }
 
-// MakeSigVerifyJobProcessor returns the object implementing the stream verifier Helper interface
-func MakeSigVerifyJobProcessor(ledger LedgerForStreamVerifier, cache VerifiedTransactionCache,
-	resultChan chan<- *VerificationResult, droppedChan chan<- *UnverifiedTxnSigJob) (svp execpool.BatchProcessor, err error) {
+// MakeSigVerifier creats a new TxnGroupBatchSigVerifier for synchronous verification of transactions
+func MakeSigVerifier(ledger LedgerForStreamVerifier, cache VerifiedTransactionCache) (TxnGroupBatchSigVerifier, error) {
 	latest := ledger.Latest()
 	latestHdr, err := ledger.BlockHdr(latest)
 	if err != nil {
-		return nil, errors.New("MakeStreamVerifier: Could not get header for previous block")
+		return TxnGroupBatchSigVerifier{}, fmt.Errorf("MakeSigVerifier: Could not get header for previous block: %w", err)
 	}
 
 	nbw := MakeNewBlockWatcher(latestHdr)
 	ledger.RegisterBlockListeners([]ledgercore.BlockListener{nbw})
 
+	verifier := TxnGroupBatchSigVerifier{
+		cache:  cache,
+		nbw:    nbw,
+		ledger: ledger,
+	}
+
+	return verifier, nil
+}
+
+// MakeSigVerifyJobProcessor returns the object implementing the stream verifier Helper interface
+func MakeSigVerifyJobProcessor(
+	ledger LedgerForStreamVerifier, cache VerifiedTransactionCache,
+	resultChan chan<- *VerificationResult, droppedChan chan<- *UnverifiedTxnSigJob,
+) (svp execpool.BatchProcessor, err error) {
+	sigVerifier, err := MakeSigVerifier(ledger, cache)
+	if err != nil {
+		return nil, err
+	}
 	return &txnSigBatchProcessor{
-		cache:       cache,
-		nbw:         nbw,
-		ledger:      ledger,
-		droppedChan: droppedChan,
-		resultChan:  resultChan,
+		TxnGroupBatchSigVerifier: sigVerifier,
+		droppedChan:              droppedChan,
+		resultChan:               resultChan,
 	}, nil
+}
+
+// Verify synchronously verifies the signatures of the transactions in the group
+func (sv *TxnGroupBatchSigVerifier) Verify(stxs []transactions.SignedTxn) error {
+	blockHeader := sv.nbw.getBlockHeader()
+	_, err := txnGroup(stxs, blockHeader, sv.cache, sv.ledger, nil)
+	return err
 }
 
 func (tbp *txnSigBatchProcessor) ProcessBatch(txns []execpool.InputJob) {

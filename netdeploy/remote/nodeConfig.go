@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,22 +18,25 @@ package remote
 
 // NodeConfig represents the configuration settings to apply to a single node running on a host
 type NodeConfig struct {
-	Name               string `json:",omitempty"`
-	Wallets            []NodeWalletData
-	NetAddress         string `json:",omitempty"`
-	APIEndpoint        string `json:",omitempty"`
-	APIToken           string `json:",omitempty"`
-	AdminAPIToken      string `json:",omitempty"`
-	EnableTelemetry    bool   // Needs to also be configured host-wide (assign logging host name)
-	TelemetryURI       string `json:",omitempty"` // Needs to be HostConfig
-	EnableMetrics      bool   // Needs to also be configured host-wide (register DNS entry)
-	MetricsURI         string `json:",omitempty"`
-	EnableService      bool
-	CronTabSchedule    string `json:",omitempty"`
-	EnableBlockStats   bool
-	DashboardEndpoint  string `json:",omitempty"`
-	DeadlockOverride   int    `json:",omitempty"` // -1 = Disable deadlock detection, 0 = Use Default for build, 1 = Enable
-	ConfigJSONOverride string `json:",omitempty"` // Raw json to merge into config.json after other modifications are complete
+	Name                string `json:",omitempty"`
+	Wallets             []NodeWalletData
+	NetAddress          string `json:",omitempty"`
+	APIEndpoint         string `json:",omitempty"`
+	APIToken            string `json:",omitempty"`
+	AdminAPIToken       string `json:",omitempty"`
+	EnableTelemetry     bool   // Needs to also be configured host-wide (assign logging host name)
+	TelemetryURI        string `json:",omitempty"` // Needs to be HostConfig
+	EnableMetrics       bool   // Needs to also be configured host-wide (register DNS entry)
+	MetricsURI          string `json:",omitempty"`
+	EnableService       bool
+	CronTabSchedule     string `json:",omitempty"`
+	EnableBlockStats    bool
+	DashboardEndpoint   string `json:",omitempty"`
+	DeadlockOverride    int    `json:",omitempty"` // -1 = Disable deadlock detection, 0 = Use Default for build, 1 = Enable
+	ConfigJSONOverride  string `json:",omitempty"` // Raw json to merge into config.json after other modifications are complete
+	P2PBootstrap        bool   // True if this node should be a p2p bootstrap node and registered in DNS
+	P2PHybridNetAddress string `json:",omitempty"`
+	PublicAddress       bool
 
 	// NodeNameMatchRegex is tested against Name in generated configs and if matched the rest of the configs in this record are applied as a template
 	NodeNameMatchRegex string `json:",omitempty"`

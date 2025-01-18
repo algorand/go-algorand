@@ -234,12 +234,14 @@ proc ::AlgorandGoal::RestartNode { TEST_ALGO_DIR {SYSTEMD_MANAGED ""} } {
             expect {
                 timeout { close; ::AlgorandGoal::Abort "Did not receive appropriate message during node restart" }
                 "^The node was successfully stopped.*Algorand node successfully started!*" {puts "Node restarted successfully"; close}
+                eof { close; ::AlgorandGoal::Abort "Did not receive appropriate message before node restart eof" }
             }
         } else {
             spawn goal node restart -d $TEST_ALGO_DIR
             expect {
                 timeout { close; ::AlgorandGoal::Abort "Did not receive appropriate message during node restart" }
                 "^This node is using systemd and should be managed with systemctl*" { puts "Goal showed correct error message for systemd" ; close}
+                eof { close; ::AlgorandGoal::Abort "Did not receive appropriate message before node restart eof" }
             }
         }
     } EXCEPTION] } {
@@ -333,22 +335,27 @@ proc ::AlgorandGoal::CreateWallet { WALLET_NAME WALLET_PASSWORD TEST_PRIMARY_NOD
 
         expect {
             timeout {::AlgorandGoal::Abort "Timed out CreateWallet password"  }
+            eof {::AlgorandGoal::Abort "EOF CreateWallet password"  }
             "Please choose a password for wallet*" { send "$WALLET_PASSWORD\r" }
         }
         expect {
             timeout {::AlgorandGoal::Abort "Timed out CreateWallet confirmation"  }
+            eof {::AlgorandGoal::Abort "EOF CreateWallet confirmation"  }
             "Please confirm*" { send "$WALLET_PASSWORD\r"}
         }
         expect {
              timeout {::AlgorandGoal::Abort "Timed out CreateWallet see it now"  }
+             eof {::AlgorandGoal::Abort "EOF CreateWallet see it now"  }
              "Would you like to see it now? (Y/n):" { send "y\r" }
         }
         expect {
               timeout {::AlgorandGoal::Abort "Timed out CreateWallet keep info safe"  }
+              eof {::AlgorandGoal::Abort "EOF CreateWallet keep info safe"  }
               "Keep this information safe -- never share it with anyone!" {}
         }
         expect {
              timeout {::AlgorandGoal::Abort "Timed out CreateWallet pass phrase"  }
+             eof {::AlgorandGoal::Abort "EOF CreateWallet pass phrase"  }
              -re {([a-z ]+)} {set WALLET_PASS_PHRASE $expect_out(1,string); close;}
         }
     } EXCEPTION ] } {
@@ -364,6 +371,7 @@ proc ::AlgorandGoal::VerifyWallet { WALLET_NAME TEST_PRIMARY_NODE_DIR } {
         spawn goal wallet list -d $TEST_PRIMARY_NODE_DIR
         expect {
              timeout { ::AlgorandGoal::Abort "Timed out seeing expected input for spawn goal wallet list" }
+             eof { ::AlgorandGoal::Abort "EOF seeing expected input for spawn goal wallet list" }
              "*$WALLET_NAME*" {close}
         }
     } EXCEPTION ] } {
@@ -375,18 +383,18 @@ proc ::AlgorandGoal::RecoverWallet { NEW_WALLET_NAME WALLET_PASSPHRASE NEW_WALLE
     set timeout 60
     if { [catch {
         spawn goal wallet new -r $NEW_WALLET_NAME -d $TEST_PRIMARY_NODE_DIR
-           expect {
-               timeout { puts "TIMEOUT"    }
-               {Please type your recovery mnemonic below, and hit return when you are done:*} { send "$WALLET_PASSPHRASE\r" }
-            }
-        for { set index 1}  {$index <= 5} {incr index} {
-            expect {
-               timeout { puts "TIMEOUT"  }
-               {Please choose a password for wallet* } { send "$NEW_WALLET_PASSWORD\r"}
-               {Please confirm the password:*} { send "$NEW_WALLET_PASSWORD\r"}
-               {Creating wallet...*} {puts $expect_out(buffer) }
-               -re {Created wallet '([-a-zA-Z0-9_]+)'} {set RECOVERED_WALLET_NAME $expect_out(1,string) }
-            }
+        expect {
+            timeout { ::AlgorandGoal::Abort "TIMEOUT"    }
+            eof { ::AlgorandGoal::Abort "EOF"    }
+            {Please type your recovery mnemonic below, and hit return when you are done:*} { send "$WALLET_PASSPHRASE\r" }
+        }
+        expect {
+            timeout { ::AlgorandGoal::Abort "TIMEOUT"    }
+            eof { ::AlgorandGoal::Abort "EOF"    }
+            {Please choose a password for wallet* } { send "$NEW_WALLET_PASSWORD\r"; exp_continue;}
+            {Please confirm the password:*} { send "$NEW_WALLET_PASSWORD\r"; exp_continue;}
+            {Creating wallet...*} {puts $expect_out(buffer); exp_continue; }
+            -re {Created wallet '([-a-zA-Z0-9_]+)'} {set RECOVERED_WALLET_NAME $expect_out(1,string) }
         }
         puts "Recovered wallet: $RECOVERED_WALLET_NAME"
     } EXCEPTION ] } {
@@ -403,6 +411,7 @@ proc ::AlgorandGoal::CreateAccountForWallet { WALLET_NAME WALLET_PASSWORD TEST_P
         while 1 {
             expect {
                 timeout { break; ::AlgorandGoal::Abort "Timed out seeing new account created for wallet $WALLET_NAME" }
+                eof { break; ::AlgorandGoal::Abort "EOF seeing new account created for wallet $WALLET_NAME" }
                 "Please enter the password for wallet*" { send "$WALLET_PASSWORD\r" }
                  -re {Created new account with address ([a-zA-Z0-9]+)} {set ACCOUNT_ADDRESS $expect_out(1,string) ;close; break }
             }
@@ -422,6 +431,7 @@ proc ::AlgorandGoal::VerifyAccount { WALLET_NAME WALLET_PASSWORD ACCOUNT_ADDRESS
         while 1 {
             expect {
                 timeout {break; ::AlgorandGoal::Abort "Timed out seeing expected account: $ACCOUNT_ADDRESS"}
+                eof {break; ::AlgorandGoal::Abort "EOF seeing expected account: $ACCOUNT_ADDRESS"}
                 "Please enter the password for wallet*" { send "$WALLET_PASSWORD\r" }
                 -re {\t([A-Z0-9]+)\t([A-Z0-9]+)} {set RETURN_ACCOUNT_ADDRESS $expect_out(1,string); break  }
             }
@@ -487,6 +497,7 @@ proc ::AlgorandGoal::GetAccountRewards { WALLET_NAME ACCOUNT_ADDRESS TEST_PRIMAR
     spawn goal account rewards -w $WALLET_NAME -a $ACCOUNT_ADDRESS -d $TEST_PRIMARY_NODE_DIR
     expect {
         timeout { ::AlgorandGoal::Abort "Timed out retrieving account rewards for wallet $WALLET_NAME and account $ACCOUNT_ADDRESS"  }
+        eof { ::AlgorandGoal::Abort "EOF retrieving account rewards for wallet $WALLET_NAME and account $ACCOUNT_ADDRESS"  }
         -re {\d+} {set ACCOUNT_EARNINGS  $expect_out(0,string)}
     }
     puts "Wallet: $WALLET_NAME, Account: $ACCOUNT_ADDRESS, Rewards: $ACCOUNT_EARNINGS"
@@ -565,7 +576,8 @@ proc ::AlgorandGoal::AssetCreate { CREATOR WALLET_NAME WALLET_PASSWORD TOTAL_SUP
         expect {
             timeout { ::AlgorandGoal::Abort "Timed out create asset"  }
 	        "Please enter the password for wallet '$WALLET_NAME':" { send "$WALLET_PASSWORD\r"; exp_continue }
-	        eof
+            -re {Created asset with asset index (\d+)} { puts "Asset created"; close }
+	        eof { ::AlgorandGoal::Abort "EOF create asset"  }
         }
     } EXCEPTION ] } {
        ::AlgorandGoal::Abort "ERROR in AssetCreate: $EXCEPTION"
@@ -652,8 +664,16 @@ proc ::AlgorandGoal::SplitGroup { INPUT_GROUP OUTPUT_GROUP } {
     if { [ catch {
         spawn goal clerk split -i $INPUT_GROUP -o $OUTPUT_GROUP
 	    expect {
+            #nolint:eof just checking status
             timeout { ::AlgorandGoal::Abort "Timed out splitting group transaction"  }
 	        eof
+        }
+        lassign [wait] PID SPAWNID OS_CODE ERR_CODE
+        if {$OS_CODE == -1} {
+            ::AlgorandGoal::Abort "Split group failed: OS error code: $ERR_CODE"
+        }
+        if {$ERR_CODE != 0} {
+            ::AlgorandGoal::Abort "Split group failed with: exit code: $ERR_CODE"
         }
     } EXCEPTION ] } {
        ::AlgorandGoal::Abort "ERROR in Split Group: $EXCEPTION"
@@ -667,6 +687,7 @@ proc ::AlgorandGoal::LimitOrder {TEAL_DRIVER SWAP_N SWAP_D MIN_TRD OWNER FEE TIM
         spawn python $TEAL_DRIVER "limit-order" --swapn $SWAP_N --swapd $SWAP_D --mintrd $MIN_TRD --own $OWNER  --fee $FEE --timeout $TIME_OUT --asset $ASSET_ID
         expect {
             timeout { ::AlgorandGoal::Abort "Timed out limit order"  }
+            eof { ::AlgorandGoal::Abort "EOF limit order"  }
             -re {^.+$} { puts $limitf $expect_out(buffer); close $limitf; close }
         }
     } EXCEPTION ] } {
@@ -724,9 +745,16 @@ proc ::AlgorandGoal::SignTransaction { WALLET_NAME WALLET_PASSWORD INPUT_TXN OUT
     if { [ catch {
         spawn goal clerk sign -d $TEST_PRIMARY_NODE_DIR -w $WALLET_NAME -i $INPUT_TXN -o $OUTPUT_TXN
         expect {
+            #nolint:eof just signing with outputting to file and checking status
             timeout { ::AlgorandGoal::Abort "Timed out signing transaction"  }
-	        "Please enter the password for wallet '$WALLET_NAME':" { send "$WALLET_PASSWORD\r" ; exp_continue}
-	        eof
+	        "Please enter the password for wallet '$WALLET_NAME':" { send "$WALLET_PASSWORD\r" ; exp_continue;}
+        }
+        lassign [wait] PID SPAWNID OS_CODE ERR_CODE
+        if {$OS_CODE == -1} {
+            ::AlgorandGoal::Abort "SignTransaction failed: OS error code: $ERR_CODE"
+        }
+        if {$ERR_CODE != 0} {
+            ::AlgorandGoal::Abort "SignTransaction failed with: exit code: $ERR_CODE"
         }
     } EXCEPTION ] } {
        ::AlgorandGoal::Abort "ERROR in SignTransaction: $EXCEPTION"
@@ -741,6 +769,7 @@ proc ::AlgorandGoal::RawSend { TXN_FILE TEST_PRIMARY_NODE_DIR } {
         spawn goal clerk rawsend -f $TXN_FILE -d $TEST_PRIMARY_NODE_DIR
         expect {
             timeout { close; ::AlgorandGoal::Abort "Timed out rawsend $TXN_FILE"  }
+            eof { close; ::AlgorandGoal::Abort "EOF rawsend $TXN_FILE"  }
             -re {Transaction ([A-Z0-9]{52}) committed} {set TRANSACTION_ID $expect_out(1,string); close }
 	        -re {Rejected transactions written to (.+rej)} {::AlgorandGoal::Abort "RawSend rejected."}
         }
@@ -810,10 +839,30 @@ proc ::AlgorandGoal::CheckNetworkAddressForCors { NET_ADDRESS } {
         expect {
             timeout { close; ::AlgorandGoal::Abort "Timeout failure in CheckNetworkAddressForCors" }
             "Access-Control-Allow-Origin" { puts "success" ; close  }
+            eof {
+                return -code error "EOF without Access-Control-Allow-Origin in output"
+            }
             close
         }
     } EXCEPTION ] } {
        ::AlgorandGoal::Abort "ERROR in CheckNetworkAddressForCors: $EXCEPTION"
+    }
+}
+
+# Use curl to check if a network address supports private network access
+proc ::AlgorandGoal::CheckNetworkAddressForPNA { NET_ADDRESS } {
+    if { [ catch {
+        spawn curl -X OPTIONS -H "Access-Control-Request-Private-Network: true" --head $NET_ADDRESS
+        expect {
+            timeout { close; ::AlgorandGoal::Abort "Timeout failure in CheckNetworkAddressForPNA" }
+            "Access-Control-Allow-Private-Network" { puts "success" ; close  }
+            eof {
+                return -code error "EOF without Access-Control-Allow-Private-Network"
+            }
+            close
+        }
+    } EXCEPTION ] } {
+       ::AlgorandGoal::Abort "ERROR in CheckNetworkAddressForPNA: $EXCEPTION"
     }
 }
 
@@ -823,6 +872,7 @@ proc ::AlgorandGoal::GetLedgerSupply { TEST_PRIMARY_NODE_DIR } {
         spawn goal ledger supply -d $TEST_PRIMARY_NODE_DIR
         expect {
             timeout { ::AlgorandGoal::Abort "Get Ledger Supply timed out"  }
+            eof { ::AlgorandGoal::Abort "Get Ledger Supply EOF"  }
             -re {Round: (\d+)} {set ROUND $expect_out(1,string); exp_continue }
             -re {Total Money: (\d+)} {set TOTAL_MONEY $expect_out(1,string); exp_continue }
             -re {Online Money: (\d+)} {set ONLINE_MONEY $expect_out(1,string) }
@@ -841,6 +891,7 @@ proc ::AlgorandGoal::CreateOneOfTwoMultisigForWallet { ADDRESS_1 ADDRESS_2 WALLE
         spawn goal account multisig new $ADDRESS_1 $ADDRESS_2 -T 1 -d $TEST_PRIMARY_NODE_DIR -w $WALLET_NAME
         expect {
             timeout { ::AlgorandGoal::Abort "Timed out creating a multisig account from $ADDRESS_1 and $ADDRESS_2"  }
+            eof { ::AlgorandGoal::Abort "EOF creating a multisig account from $ADDRESS_1 and $ADDRESS_2"  }
             "Please enter the password for wallet*" { send "$WALLET_PASSWORD\r" }
             -re {Created new account with address ([a-zA-Z0-9]+)} {
                     set MULTISIG_ADDRESS $expect_out(1,string);
@@ -859,6 +910,7 @@ proc ::AlgorandGoal::VerifyMultisigInfoForOneOfTwoMultisig { MULTISIG_ADDRESS AD
         spawn goal account multisig info --address $MULTISIG_ADDRESS -d $TEST_PRIMARY_NODE_DIR -w $WALLET_NAME
         expect {
             timeout { ::AlgorandGoal::Abort "Timed out querying info about multisig account $MULTISIG_ADDRESS"  }
+            eof { ::AlgorandGoal::Abort "EOF querying info about multisig account $MULTISIG_ADDRESS"  }
             -re {Version: (\d+)\s+Threshold: (\d+)\s+Public keys:\s+([a-zA-Z0-9]+)\s+([a-zA-Z0-9]+)\s+} {
                 set VERSION $expect_out(1,string);
                 set THRESHOLD $expect_out(2,string);
@@ -879,7 +931,14 @@ proc ::AlgorandGoal::VerifyMultisigInfoForOneOfTwoMultisig { MULTISIG_ADDRESS AD
 proc ::AlgorandGoal::DeleteMultisigAccount { MULTISIG_ADDRESS TEST_PRIMARY_NODE_DIR } {
     if { [ catch {
         spawn goal account multisig delete --address $MULTISIG_ADDRESS -d $TEST_PRIMARY_NODE_DIR
-        expect {*}
+        expect eof
+        lassign [wait] PID SPAWNID OS_CODE ERR_CODE
+        if {$OS_CODE == -1} {
+            ::AlgorandGoal::Abort "DeleteMultisigAccount failed: OS error code: $ERR_CODE"
+        }
+        if {$ERR_CODE != 0} {
+            ::AlgorandGoal::Abort "DeleteMultisigAccount failed with: exit code: $ERR_CODE"
+        }
     } EXCEPTION ] } {
        ::AlgorandGoal::Abort "ERROR in DeleteMultisigAccount: $EXCEPTION"
     }
@@ -1046,6 +1105,7 @@ proc ::AlgorandGoal::Report { TEST_PRIMARY_NODE_DIR } {
         spawn goal report -d $TEST_PRIMARY_NODE_DIR
         expect {
             timeout { ::AlgorandGoal::Abort "goal report timed out"  }
+            eof { ::AlgorandGoal::Abort "goal report EOF"  }
             "source code available at https://github.com/algorand/go-algorand" {puts "goal -v ok"}
             -re {Genesis ID from genesis.json: *} {puts "genesis ID from genesis.json ok"}
             -re {Last committed block: (\d+)} {puts "status check ok"}
@@ -1318,8 +1378,13 @@ proc ::AlgorandGoal::CheckEOF { { ERROR_STRING "" } } {
 proc ::AlgorandGoal::InspectTransactionFile { TRX_FILE } {
     puts "\n Inspect $TRX_FILE"
     spawn goal clerk inspect $TRX_FILE
-    expect {
-        eof
+    expect eof
+    lassign [wait] PID SPAWNID OS_CODE ERR_CODE
+    if {$OS_CODE == -1} {
+        ::AlgorandGoal::Abort "InspectTransactionFile failed: OS error code: $ERR_CODE"
+    }
+    if {$ERR_CODE != 0} {
+        ::AlgorandGoal::Abort "InspectTransactionFile failed with: exit code: $ERR_CODE"
     }
 }
 
@@ -1348,4 +1413,3 @@ proc ::AlgorandGoal::RunPingpong {DURATION PINGPONG_OPTIONS TEST_PRIMARY_NODE_DI
        ::AlgorandGoal::Abort "ERROR in RunPingpong: $EXCEPTION"
     }
 }
-

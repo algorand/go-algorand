@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -54,6 +54,7 @@ type WalletServerConfig struct {
 	DataDir        string
 	Address        string
 	AllowedOrigins []string
+	AllowHeaderPNA bool
 	SessionManager *session.Manager
 	Log            logging.Logger
 	Timeout        *time.Duration
@@ -211,7 +212,7 @@ func (ws *WalletServer) start(kill chan os.Signal) (died chan error, sock string
 	// Initialize HTTP server
 	watchdogCB := ws.makeWatchdogCallback(kill)
 	srv := http.Server{
-		Handler: api.Handler(ws.SessionManager, ws.Log, ws.AllowedOrigins, ws.APIToken, watchdogCB),
+		Handler: api.Handler(ws.SessionManager, ws.Log, ws.AllowedOrigins, ws.APIToken, ws.AllowHeaderPNA, watchdogCB),
 	}
 
 	// Read the kill channel and shut down the server gracefully

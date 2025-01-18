@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -81,7 +81,7 @@ type roundSeed struct {
 func LoadLedger[T string | ledger.DirsAndPrefix](
 	log logging.Logger, dir T, memory bool,
 	genesisProto protocol.ConsensusVersion, genesisBal bookkeeping.GenesisBalances, genesisID string, genesisHash crypto.Digest,
-	blockListeners []ledgercore.BlockListener, cfg config.Local,
+	cfg config.Local,
 ) (*Ledger, error) {
 	if genesisBal.Balances == nil {
 		genesisBal.Balances = make(map[basics.Address]basics.AccountData)
@@ -115,7 +115,6 @@ func LoadLedger[T string | ledger.DirsAndPrefix](
 	}
 
 	l.Ledger = ll
-	l.RegisterBlockListeners(blockListeners)
 	return l, nil
 }
 

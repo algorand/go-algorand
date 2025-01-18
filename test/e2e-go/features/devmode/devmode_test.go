@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -52,7 +52,7 @@ func testDevMode(t *testing.T, version protocol.ConsensusVersion) {
 	firstRound := *txn.ConfirmedRound + 1
 	blk, err := fixture.AlgodClient.Block(*txn.ConfirmedRound)
 	require.NoError(t, err)
-	seconds := int64(blk.Block["ts"].(float64))
+	seconds := blk.Block.TimeStamp
 	prevTime := time.Unix(seconds, 0)
 	// Set Block timestamp offset to test that consecutive txns properly get their block time set
 	const blkOffset = uint64(1_000_000)
@@ -70,7 +70,7 @@ func testDevMode(t *testing.T, version protocol.ConsensusVersion) {
 		require.Equal(t, round-1, uint64(txn.Txn.Txn.FirstValid))
 		newBlk, err := fixture.AlgodClient.Block(round)
 		require.NoError(t, err)
-		newBlkSeconds := int64(newBlk.Block["ts"].(float64))
+		newBlkSeconds := newBlk.Block.TimeStamp
 		currTime := time.Unix(newBlkSeconds, 0)
 		require.Equal(t, currTime, prevTime.Add(1_000_000*time.Second))
 		prevTime = currTime
@@ -93,7 +93,18 @@ func testTxnGroupDeltasDevMode(t *testing.T, version protocol.ConsensusVersion) 
 	require.NoError(t, err)
 	key := crypto.GenerateSignatureSecrets(crypto.Seed{})
 	receiver := basics.Address(key.SignatureVerifier)
-	txn := fixture.SendMoneyAndWait(0, 100000, 1000, sender.Address, receiver.String(), "")
+
+	status, err := fixture.AlgodClient.Status()
+	require.NoError(t, err)
+	curRound := status.LastRound
+
+	wh, err := fixture.LibGoalClient.GetUnencryptedWalletHandle()
+	require.NoError(t, err)
+
+	fundingTx, err := fixture.LibGoalClient.SendPaymentFromWalletWithLease(wh, nil, sender.Address, receiver.String(), 1000, 100000, nil, "", [32]byte{1, 2, 3}, basics.Round(curRound).SubSaturate(1), 0)
+	require.NoError(t, err)
+	txn, err := fixture.WaitForConfirmedTxn(curRound+uint64(5), fundingTx.ID().String())
+	require.NoError(t, err)
 	require.NotNil(t, txn.ConfirmedRound)
 	_, err = fixture.AlgodClient.Block(*txn.ConfirmedRound)
 	require.NoError(t, err)
@@ -101,16 +112,20 @@ func testTxnGroupDeltasDevMode(t *testing.T, version protocol.ConsensusVersion) 
 	// Test GetLedgerStateDeltaForTransactionGroup and verify the response contains a delta
 	txngroupResponse, err := fixture.AlgodClient.GetLedgerStateDeltaForTransactionGroup(txn.Txn.ID().String())
 	require.NoError(t, err)
-	require.True(t, len(txngroupResponse) > 0)
+	require.NotZero(t, txngroupResponse)
 
 	// Test GetTransactionGroupLedgerStateDeltasForRound and verify the response contains the delta for our txn
 	roundResponse, err := fixture.AlgodClient.GetTransactionGroupLedgerStateDeltasForRound(1)
 	require.NoError(t, err)
 	require.Equal(t, len(roundResponse.Deltas), 1)
 	groupDelta := roundResponse.Deltas[0]
-	require.Equal(t, 1, len(groupDelta.Ids))
+	require.Len(t, groupDelta.Ids, 1)
 	require.Equal(t, groupDelta.Ids[0], txn.Txn.ID().String())
 
 	// Assert that the TxIDs field across both endpoint responses is the same
-	require.Equal(t, txngroupResponse["Txids"], groupDelta.Delta["Txids"])
+	require.Equal(t, txngroupResponse.Txids, groupDelta.Delta.Txids)
+
+	// Txleases should always be nil for JSON responses
+	require.Nil(t, txngroupResponse.Txleases)
+	require.Nil(t, groupDelta.Delta.Txleases)
 }

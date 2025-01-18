@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -28,6 +28,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/algorand/go-deadlock"
+
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/agreement/gossip"
 	"github.com/algorand/go-algorand/catchup"
@@ -41,12 +43,14 @@ import (
 	"github.com/algorand/go-algorand/data/pools"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/verify"
+	"github.com/algorand/go-algorand/heartbeat"
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/simulation"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/network/messagetracer"
+	"github.com/algorand/go-algorand/network/p2p"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/rpcs"
 	"github.com/algorand/go-algorand/stateproof"
@@ -54,7 +58,6 @@ import (
 	"github.com/algorand/go-algorand/util/execpool"
 	"github.com/algorand/go-algorand/util/metrics"
 	"github.com/algorand/go-algorand/util/timers"
-	"github.com/algorand/go-deadlock"
 )
 
 const (
@@ -152,6 +155,9 @@ type AlgorandFullNode struct {
 	tracer messagetracer.MessageTracer
 
 	stateProofWorker *stateproof.Worker
+	partHandles      []db.Accessor
+
+	heartbeatService *heartbeat.Service
 }
 
 // TxnWithStatus represents information about a single transaction,
@@ -196,16 +202,21 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 
 	// tie network, block fetcher, and agreement services together
 	var p2pNode network.GossipNode
-	if cfg.EnableP2P {
-		// TODO: pass more appropriate genesisDir (hot/cold). Presently this is just used to store a peerID key.
-		p2pNode, err = network.NewP2PNetwork(node.log, node.config, node.genesisDirs.RootGenesisDir, phonebookAddresses, genesis.ID(), genesis.Network)
+	if cfg.EnableP2PHybridMode {
+		p2pNode, err = network.NewHybridP2PNetwork(node.log, node.config, rootDir, phonebookAddresses, genesis.ID(), genesis.Network, node)
+		if err != nil {
+			log.Errorf("could not create hybrid p2p node: %v", err)
+			return nil, err
+		}
+	} else if cfg.EnableP2P {
+		p2pNode, err = network.NewP2PNetwork(node.log, node.config, rootDir, phonebookAddresses, genesis.ID(), genesis.Network, node, nil)
 		if err != nil {
 			log.Errorf("could not create p2p node: %v", err)
 			return nil, err
 		}
 	} else {
 		var wsNode *network.WebsocketNetwork
-		wsNode, err = network.NewWebsocketNetwork(node.log, node.config, phonebookAddresses, genesis.ID(), genesis.Network, node)
+		wsNode, err = network.NewWebsocketNetwork(node.log, node.config, phonebookAddresses, genesis.ID(), genesis.Network, node, nil)
 		if err != nil {
 			log.Errorf("could not create websocket node: %v", err)
 			return nil, err
@@ -215,14 +226,14 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	}
 	node.net = p2pNode
 
-	node.cryptoPool = execpool.MakePool(node)
-	node.lowPriorityCryptoVerificationPool = execpool.MakeBacklog(node.cryptoPool, 2*node.cryptoPool.GetParallelism(), execpool.LowPriority, node)
-	node.highPriorityCryptoVerificationPool = execpool.MakeBacklog(node.cryptoPool, 2*node.cryptoPool.GetParallelism(), execpool.HighPriority, node)
+	node.cryptoPool = execpool.MakePool(node, "worker", "cryptoPool")
+	node.lowPriorityCryptoVerificationPool = execpool.MakeBacklog(node.cryptoPool, 2*node.cryptoPool.GetParallelism(), execpool.LowPriority, node, "worker", "lowPriorityCryptoVerificationPool")
+	node.highPriorityCryptoVerificationPool = execpool.MakeBacklog(node.cryptoPool, 2*node.cryptoPool.GetParallelism(), execpool.HighPriority, node, "worker", "highPriorityCryptoVerificationPool")
 	ledgerPaths := ledger.DirsAndPrefix{
 		DBFilePrefix:        config.LedgerFilenamePrefix,
 		ResolvedGenesisDirs: node.genesisDirs,
 	}
-	node.ledger, err = data.LoadLedger(node.log, ledgerPaths, false, genesis.Proto, genalloc, node.genesisID, node.genesisHash, []ledgercore.BlockListener{}, cfg)
+	node.ledger, err = data.LoadLedger(node.log, ledgerPaths, false, genesis.Proto, genalloc, node.genesisID, node.genesisHash, cfg)
 	if err != nil {
 		log.Errorf("Cannot initialize ledger (%v): %v", ledgerPaths, err)
 		return nil, err
@@ -245,12 +256,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 
 	node.transactionPool = pools.MakeTransactionPool(node.ledger.Ledger, cfg, node.log, node)
 
-	blockListeners := []ledgercore.BlockListener{
-		node.transactionPool,
-		node,
-	}
-
-	node.ledger.RegisterBlockListeners(blockListeners)
+	node.ledger.RegisterBlockListeners([]ledgercore.BlockListener{node.transactionPool, node})
 	txHandlerOpts := data.TxHandlerOpts{
 		TxPool:        node.transactionPool,
 		ExecutionPool: node.lowPriorityCryptoVerificationPool,
@@ -335,6 +341,8 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 
 	node.stateProofWorker = stateproof.NewWorker(node.genesisDirs.StateproofGenesisDir, node.log, node.accountManager, node.ledger.Ledger, node.net, node)
 
+	node.heartbeatService = heartbeat.NewService(node.accountManager, node.ledger, node, node.log)
+
 	return node, err
 }
 
@@ -344,7 +352,7 @@ func (node *AlgorandFullNode) Config() config.Local {
 }
 
 // Start the node: connect to peers and run the agreement service while obtaining a lock. Doesn't wait for initial sync.
-func (node *AlgorandFullNode) Start() {
+func (node *AlgorandFullNode) Start() error {
 	node.mu.Lock()
 	defer node.mu.Unlock()
 
@@ -354,12 +362,16 @@ func (node *AlgorandFullNode) Start() {
 	// The start network is being called only after the various services start up.
 	// We want to do so in order to let the services register their callbacks with the
 	// network package before any connections are being made.
-	startNetwork := func() {
+	startNetwork := func() error {
 		if !node.config.DisableNetworking {
 			// start accepting connections
-			node.net.Start()
+			err := node.net.Start()
+			if err != nil {
+				return err
+			}
 			node.config.NetAddress, _ = node.net.Address()
 		}
+		return nil
 	}
 
 	if node.catchpointCatchupService != nil {
@@ -373,11 +385,30 @@ func (node *AlgorandFullNode) Start() {
 		node.ledgerService.Start()
 		node.txHandler.Start()
 		node.stateProofWorker.Start()
-		startNetwork()
+		node.heartbeatService.Start()
+		err := startNetwork()
+		if err != nil {
+			return err
+		}
 
 		node.startMonitoringRoutines()
 	}
+	return nil
+}
 
+// Capabilities returns the node's capabilities for advertising to other nodes.
+func (node *AlgorandFullNode) Capabilities() []p2p.Capability {
+	var caps []p2p.Capability
+	if node.config.Archival && node.config.IsGossipServer() {
+		caps = append(caps, p2p.Archival)
+	}
+	if node.config.StoresCatchpoints() && node.config.IsGossipServer() {
+		caps = append(caps, p2p.Catchpoints)
+	}
+	if node.config.EnableGossipService && node.config.IsGossipServer() {
+		caps = append(caps, p2p.Gossip)
+	}
+	return caps
 }
 
 // startMonitoringRoutines starts the internal monitoring routines used by the node.
@@ -418,18 +449,27 @@ func (node *AlgorandFullNode) Stop() {
 	defer func() {
 		node.mu.Unlock()
 		node.waitMonitoringRoutines()
+
+		// oldKeyDeletionThread uses accountManager registry so must be stopped before accountManager is closed
+		node.accountManager.Registry().Close()
+		for h := range node.partHandles {
+			node.partHandles[h].Close()
+		}
 	}()
 
 	node.net.ClearHandlers()
+	node.net.ClearValidatorHandlers()
 	if !node.config.DisableNetworking {
 		node.net.Stop()
 	}
 	if node.catchpointCatchupService != nil {
 		node.catchpointCatchupService.Stop()
 	} else {
+		node.heartbeatService.Stop()
 		node.stateProofWorker.Stop()
 		node.txHandler.Stop()
 		node.agreementService.Shutdown()
+		node.agreementService.Accessor.Close()
 		node.catchupService.Stop()
 		node.txPoolSyncerService.Stop()
 		node.blockService.Stop()
@@ -441,7 +481,9 @@ func (node *AlgorandFullNode) Stop() {
 	node.lowPriorityCryptoVerificationPool.Shutdown()
 	node.cryptoPool.Shutdown()
 	node.log.Debug("crypto worker pools have stopped")
+	node.transactionPool.Shutdown()
 	node.cancelCtx()
+	node.ledger.Close()
 }
 
 // note: unlike the other two functions, this accepts a whole filename
@@ -987,12 +1029,12 @@ func (node *AlgorandFullNode) loadParticipationKeys() error {
 			// These files are not ephemeral and must be deleted eventually since
 			// this function is called to load files located in the node on startup
 			added := node.accountManager.AddParticipation(part, false)
-			if added {
-				node.log.Infof("Loaded participation keys from storage: %s %s", part.Address(), info.Name())
-			} else {
+			if !added {
 				part.Close()
 				continue
 			}
+			node.log.Infof("Loaded participation keys from storage: %s %s", part.Address(), info.Name())
+			node.partHandles = append(node.partHandles, handle)
 			err = insertStateProofToRegistry(part, node)
 			if err != nil {
 				return err
@@ -1024,7 +1066,7 @@ func (node *AlgorandFullNode) txPoolGaugeThread(done <-chan struct{}) {
 	defer node.monitoringRoutinesWaitGroup.Done()
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
-	for true {
+	for {
 		select {
 		case <-ticker.C:
 			txPoolGauge.Set(uint64(node.transactionPool.PendingCount()))
@@ -1056,6 +1098,7 @@ func (node *AlgorandFullNode) OnNewBlock(block bookkeeping.Block, delta ledgerco
 // don't have to delete key for each block we received.
 func (node *AlgorandFullNode) oldKeyDeletionThread(done <-chan struct{}) {
 	defer node.monitoringRoutinesWaitGroup.Done()
+
 	for {
 		select {
 		case <-done:
@@ -1134,7 +1177,7 @@ func (node *AlgorandFullNode) StartCatchup(catchpoint string) error {
 	}
 	err = node.catchpointCatchupService.Start(node.ctx)
 	if err != nil {
-		node.log.Warnf(err.Error())
+		node.log.Warn(err.Error())
 		return MakeStartCatchpointError(catchpoint, err)
 	}
 	node.log.Infof("starting catching up toward catchpoint %s", catchpoint)
@@ -1183,6 +1226,8 @@ func (node *AlgorandFullNode) SetCatchpointCatchupMode(catchpointCatchupMode boo
 				node.waitMonitoringRoutines()
 			}()
 			node.net.ClearHandlers()
+			node.net.ClearValidatorHandlers()
+			node.heartbeatService.Stop()
 			node.stateProofWorker.Stop()
 			node.txHandler.Stop()
 			node.agreementService.Shutdown()
@@ -1201,6 +1246,7 @@ func (node *AlgorandFullNode) SetCatchpointCatchupMode(catchpointCatchupMode boo
 			return
 		}
 		defer node.mu.Unlock()
+
 		// start
 		node.transactionPool.Reset()
 		node.catchupService.Start()
@@ -1210,6 +1256,7 @@ func (node *AlgorandFullNode) SetCatchpointCatchupMode(catchpointCatchupMode boo
 		node.ledgerService.Start()
 		node.txHandler.Start()
 		node.stateProofWorker.Start()
+		node.heartbeatService.Start()
 
 		// Set up a context we can use to cancel goroutines on Stop()
 		node.ctx, node.cancelCtx = context.WithCancel(context.Background())

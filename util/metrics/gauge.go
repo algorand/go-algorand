@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -27,6 +27,14 @@ type Gauge struct {
 
 // MakeGauge create a new gauge with the provided name and description.
 func MakeGauge(metric MetricName) *Gauge {
+	c := makeGauge(metric)
+	c.Register(nil)
+	return c
+}
+
+// makeGauge create a new gauge with the provided name and description
+// but does not register it with the default registry.
+func makeGauge(metric MetricName) *Gauge {
 	c := &Gauge{g: couge{
 		values:        make([]*cougeValues, 0),
 		description:   metric.Description,
@@ -34,7 +42,6 @@ func MakeGauge(metric MetricName) *Gauge {
 		labels:        make(map[string]int),
 		valuesIndices: make(map[int]int),
 	}}
-	c.Register(nil)
 	return c
 }
 

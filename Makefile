@@ -11,6 +11,13 @@ endif
 SRCPATH     := $(shell pwd)
 ARCH        := $(shell ./scripts/archtype.sh)
 OS_TYPE     := $(shell ./scripts/ostype.sh)
+# overrides for cross-compiling platform-specific binaries
+ifdef CROSS_COMPILE_ARCH
+  ARCH := $(CROSS_COMPILE_ARCH)
+  GO_INSTALL := CGO_ENABLED=1 GOOS=$(OS_TYPE) GOARCH=$(ARCH) go build -o $(GOPATH1)/bin-$(OS_TYPE)-$(ARCH)
+else
+  GO_INSTALL := go install
+endif
 S3_RELEASE_BUCKET = $$S3_RELEASE_BUCKET
 
 GOLANG_VERSIONS				:= $(shell ./scripts/get_golang_version.sh all)
@@ -42,8 +49,13 @@ else
 export GOTESTCOMMAND=gotestsum --format pkgname --jsonfile testresults.json --
 endif
 
-# M1 Mac--homebrew install location in /opt/homebrew
 ifeq ($(OS_TYPE), darwin)
+# For Xcode >= 15, set -no_warn_duplicate_libraries linker option
+CLANG_MAJOR_VERSION := $(shell clang --version | grep '^Apple clang version ' | awk '{print $$4}' | cut -d. -f1)
+ifeq ($(shell [ $(CLANG_MAJOR_VERSION) -ge 15 ] && echo true), true)
+EXTLDFLAGS := -Wl,-no_warn_duplicate_libraries
+endif
+# M1 Mac--homebrew install location in /opt/homebrew
 ifeq ($(ARCH), arm64)
 export CPATH=/opt/homebrew/include
 export LIBRARY_PATH=/opt/homebrew/lib
@@ -102,6 +114,9 @@ fix: build
 lint: deps
 	$(GOPATH1)/bin/golangci-lint run -c .golangci.yml
 
+expectlint:
+	cd test/e2e-go/cli/goal/expect && python3 expect_linter.py *.exp
+
 check_go_version:
 	@if [ $(CURRENT_GO_VERSION_MAJOR) != $(GOLANG_VERSION_BUILD_MAJOR) ]; then \
 		echo "Wrong major version of Go installed ($(CURRENT_GO_VERSION_MAJOR)). Please use $(GOLANG_VERSION_BUILD_MAJOR)"; \
@@ -153,9 +168,39 @@ crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a:
 	cp -R crypto/libsodium-fork/. crypto/copies/$(OS_TYPE)/$(ARCH)/libsodium-fork
 	cd crypto/copies/$(OS_TYPE)/$(ARCH)/libsodium-fork && \
 		./autogen.sh --prefix $(SRCPATH)/crypto/libs/$(OS_TYPE)/$(ARCH) && \
-		./configure --disable-shared --prefix="$(SRCPATH)/crypto/libs/$(OS_TYPE)/$(ARCH)" && \
+		./configure --disable-shared --prefix="$(SRCPATH)/crypto/libs/$(OS_TYPE)/$(ARCH)" $(EXTRA_CONFIGURE_FLAGS) && \
 		$(MAKE) && \
 		$(MAKE) install
+
+universal:
+ifeq ($(OS_TYPE),darwin)
+	# build amd64 Mac binaries
+	mkdir -p $(GOPATH1)/bin-darwin-amd64
+	CROSS_COMPILE_ARCH=amd64 GOBIN=$(GOPATH1)/bin-darwin-amd64 MACOSX_DEPLOYMENT_TARGET=13.0 EXTRA_CONFIGURE_FLAGS='CFLAGS="-arch x86_64 -mmacos-version-min=13.0" --host=x86_64-apple-darwin' $(MAKE)
+
+	# build arm64 Mac binaries
+	mkdir -p $(GOPATH1)/bin-darwin-arm64
+	CROSS_COMPILE_ARCH=arm64 GOBIN=$(GOPATH1)/bin-darwin-arm64 MACOSX_DEPLOYMENT_TARGET=13.0 EXTRA_CONFIGURE_FLAGS='CFLAGS="-arch arm64 -mmacos-version-min=13.0" --host=aarch64-apple-darwin' $(MAKE)
+
+	# same for buildsrc-special
+	cd tools/block-generator && \
+	CROSS_COMPILE_ARCH=amd64 GOBIN=$(GOPATH1)/bin-darwin-amd64 MACOSX_DEPLOYMENT_TARGET=13.0 EXTRA_CONFIGURE_FLAGS='CFLAGS="-arch x86_64 -mmacos-version-min=13.0" --host=x86_64-apple-darwin' $(MAKE)
+	CROSS_COMPILE_ARCH=arm64 GOBIN=$(GOPATH1)/bin-darwin-arm64 MACOSX_DEPLOYMENT_TARGET=13.0 EXTRA_CONFIGURE_FLAGS='CFLAGS="-arch arm64 -mmacos-version-min=13.0" --host=aarch64-apple-darwin' $(MAKE)
+
+	# lipo together
+	mkdir -p $(GOPATH1)/bin
+	for binary in $$(ls $(GOPATH1)/bin-darwin-arm64); do \
+		if [ -f $(GOPATH1)/bin-darwin-amd64/$$binary ]; then \
+			lipo -create -output $(GOPATH1)/bin/$$binary \
+			$(GOPATH1)/bin-darwin-arm64/$$binary \
+			$(GOPATH1)/bin-darwin-amd64/$$binary; \
+		else \
+			echo "Warning: Binary $$binary exists in arm64 but not in amd64"; \
+		fi \
+	done
+else
+	echo "OS_TYPE must be darwin for universal builds, skipping"
+endif
 
 deps:
 	./scripts/check_deps.sh
@@ -212,11 +257,11 @@ ${GOCACHE}/file.txt:
 	touch "${GOCACHE}"/file.txt
 
 buildsrc: check-go-version crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a node_exporter NONGO_BIN ${GOCACHE}/file.txt
-	go install $(GOTRIMPATH) $(GOTAGS) $(GOBUILDMODE) -ldflags="$(GOLDFLAGS)" ./...
+	$(GO_INSTALL) $(GOTRIMPATH) $(GOTAGS) $(GOBUILDMODE) -ldflags="$(GOLDFLAGS)" ./...
 
 buildsrc-special:
 	cd tools/block-generator && \
-	go install $(GOTRIMPATH) $(GOTAGS) $(GOBUILDMODE) -ldflags="$(GOLDFLAGS)" ./...
+	$(GO_INSTALL) $(GOTRIMPATH) $(GOTAGS) $(GOBUILDMODE) -ldflags="$(GOLDFLAGS)" ./...
 
 check-go-version:
 	./scripts/check_golang_version.sh build
@@ -247,6 +292,9 @@ $(GOPATH1)/bin/%:
 
 test: build
 	$(GOTESTCOMMAND) $(GOTAGS) -race $(UNIT_TEST_SOURCES) -timeout 1h -coverprofile=coverage.txt -covermode=atomic
+
+testc:
+	echo $(UNIT_TEST_SOURCES) | xargs -P8 -n1 go test -c
 
 benchcheck: build
 	$(GOTESTCOMMAND) $(GOTAGS) -race $(UNIT_TEST_SOURCES) -run ^NOTHING -bench Benchmark -benchtime 1x -timeout 1h
@@ -331,7 +379,7 @@ dump: $(addprefix gen/,$(addsuffix /genesis.dump, $(NETWORKS)))
 install: build
 	scripts/dev_install.sh -p $(GOPATH1)/bin
 
-.PHONY: default fmt lint check_shell sanity cover prof deps build test fulltest shorttest clean cleango deploy node_exporter install %gen gen NONGO_BIN check-go-version rebuild_kmd_swagger
+.PHONY: default fmt lint check_shell sanity cover prof deps build test fulltest shorttest clean cleango deploy node_exporter install %gen gen NONGO_BIN check-go-version rebuild_kmd_swagger universal
 
 ###### TARGETS FOR CICD PROCESS ######
 include ./scripts/release/mule/Makefile.mule

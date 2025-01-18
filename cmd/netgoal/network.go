@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -35,6 +35,7 @@ var networkRecipeFile string
 var networkName string
 var networkGenesisVersionModifier string
 var miscStringStringTokens []string
+var ignoreUnknownTokens bool
 
 var cpuprofilePath string
 
@@ -56,7 +57,8 @@ func init() {
 	networkBuildCmd.Flags().BoolVarP(&networkUseGenesisFiles, "use-existing-files", "e", false, "Use existing genesis files.")
 	networkBuildCmd.Flags().BoolVarP(&bootstrapLoadingFile, "gen-db-files", "b", false, "Generate database files.")
 	networkBuildCmd.Flags().BoolVarP(&networkIgnoreExistingDir, "force", "f", false, "Force generation into existing directory.")
-	networkBuildCmd.Flags().StringSliceVarP(&miscStringStringTokens, "val", "v", nil, "name=value, may be reapeated")
+	networkBuildCmd.Flags().StringSliceVarP(&miscStringStringTokens, "val", "v", nil, "name=value, may be repeated")
+	networkBuildCmd.Flags().BoolVarP(&ignoreUnknownTokens, "ignore", "i", false, "Ignore unknown tokens in network template file")
 	networkBuildCmd.Flags().StringVar(&cpuprofilePath, "cpuprofile", "", "write cpu profile to path")
 
 	rootCmd.PersistentFlags().StringVarP(&networkGenesisVersionModifier, "modifier", "m", "", "Override Genesis Version Modifier (eg 'v1')")
@@ -136,7 +138,7 @@ func runBuildNetwork() error {
 		return fmt.Errorf("error resolving network template file '%s' to full path: %v", networkTemplateFile, err)
 	}
 
-	netCfg, err := remote.InitDeployedNetworkConfig(networkTemplateFile, buildConfig)
+	netCfg, err := remote.InitDeployedNetworkConfig(networkTemplateFile, buildConfig, ignoreUnknownTokens)
 	if err != nil {
 		return fmt.Errorf("error loading Network Config file '%s': %v", networkTemplateFile, err)
 	}

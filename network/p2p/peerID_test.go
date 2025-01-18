@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -102,4 +103,19 @@ func TestGetPrivKeyUserGeneratedEphemeral(t *testing.T) {
 	// make sure it was not persisted
 	_, err = loadPrivateKeyFromFile(path.Join(tempdir, DefaultPrivKeyPath))
 	assert.True(t, os.IsNotExist(err))
+}
+
+func TestPeerIDChallengeSigner(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	privKey, err := generatePrivKey()
+	require.NoError(t, err)
+
+	data := make([]byte, 111)
+	crypto.RandBytes(data)
+	signer := PeerIDChallengeSigner{key: privKey}
+	pubKey := privKey.GetPublic()
+	pubKeyRaw, err := pubKey.Raw()
+	require.NoError(t, err)
+	require.Equal(t, crypto.PublicKey(pubKeyRaw), signer.PublicKey())
 }

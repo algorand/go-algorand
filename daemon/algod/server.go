@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -28,6 +28,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 	"time"
@@ -58,7 +59,7 @@ const maxHeaderBytes = 4096
 type ServerNode interface {
 	apiServer.APINodeInterface
 	ListeningAddress() (string, bool)
-	Start()
+	Start() error
 	Stop()
 }
 
@@ -148,9 +149,21 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 
 	if cfg.IsGossipServer() {
 		var ot basics.OverflowTracker
-		fdRequired = ot.Add(fdRequired, uint64(cfg.IncomingConnectionsLimit)+network.ReservedHealthServiceConnections)
+		fdRequired = ot.Add(fdRequired, network.ReservedHealthServiceConnections)
 		if ot.Overflowed {
-			return errors.New("Initialize() overflowed when adding up IncomingConnectionsLimit to the existing RLIMIT_NOFILE value; decrease RestConnectionsHardLimit or IncomingConnectionsLimit")
+			return errors.New("Initialize() overflowed when adding up ReservedHealthServiceConnections to the existing RLIMIT_NOFILE value; decrease RestConnectionsHardLimit")
+		}
+		if cfg.IsGossipServer() {
+			fdRequired = ot.Add(fdRequired, uint64(cfg.IncomingConnectionsLimit))
+			if ot.Overflowed {
+				return errors.New("Initialize() overflowed when adding up IncomingConnectionsLimit to the existing RLIMIT_NOFILE value; decrease IncomingConnectionsLimit")
+			}
+		}
+		if cfg.IsHybridServer() {
+			fdRequired = ot.Add(fdRequired, uint64(cfg.P2PHybridIncomingConnectionsLimit))
+			if ot.Overflowed {
+				return errors.New("Initialize() overflowed when adding up P2PHybridIncomingConnectionsLimit to the existing RLIMIT_NOFILE value; decrease P2PHybridIncomingConnectionsLimit")
+			}
 		}
 		_, hard, fdErr := util.GetFdLimits()
 		if fdErr != nil {
@@ -163,12 +176,16 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 				// but try to keep cfg.ReservedFDs untouched by decreasing other limits
 				if cfg.AdjustConnectionLimits(fdRequired, hard) {
 					s.log.Warnf(
-						"Updated connection limits: RestConnectionsSoftLimit=%d, RestConnectionsHardLimit=%d, IncomingConnectionsLimit=%d",
+						"Updated connection limits: RestConnectionsSoftLimit=%d, RestConnectionsHardLimit=%d, IncomingConnectionsLimit=%d, P2PHybridIncomingConnectionsLimit=%d",
 						cfg.RestConnectionsSoftLimit,
 						cfg.RestConnectionsHardLimit,
 						cfg.IncomingConnectionsLimit,
+						cfg.P2PHybridIncomingConnectionsLimit,
 					)
-					if cfg.IncomingConnectionsLimit == 0 {
+					if cfg.IsHybridServer() && cfg.P2PHybridIncomingConnectionsLimit == 0 {
+						return errors.New("Initialize() failed to adjust p2p hybrid connection limits")
+					}
+					if cfg.IsGossipServer() && cfg.IncomingConnectionsLimit == 0 {
 						return errors.New("Initialize() failed to adjust connection limits")
 					}
 				}
@@ -230,6 +247,16 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 			NodeExporterPath:          cfg.NodeExporterPath,
 		})
 
+	var currentVersion = config.GetCurrentVersion()
+	var algodBuildInfoGauge = metrics.MakeGauge(metrics.MetricName{Name: "algod_build_info", Description: "Algod build info"})
+	algodBuildInfoGauge.SetLabels(1, map[string]string{
+		"version": currentVersion.String(),
+		"goarch":  runtime.GOARCH,
+		"goos":    runtime.GOOS,
+		"commit":  currentVersion.CommitHash,
+		"channel": currentVersion.Channel,
+	})
+
 	var serverNode ServerNode
 	if cfg.EnableFollowMode {
 		var followerNode *node.AlgorandFollowerNode
@@ -287,7 +314,13 @@ func getPortFromAddress(addr string) (string, error) {
 func (s *Server) Start() {
 	s.log.Info("Trying to start an Algorand node")
 	fmt.Print("Initializing the Algorand node... ")
-	s.node.Start()
+	err := s.node.Start()
+	if err != nil {
+		msg := fmt.Sprintf("Failed to start an Algorand node: %v", err)
+		s.log.Error(msg)
+		fmt.Println(msg)
+		os.Exit(1)
+	}
 	s.log.Info("Successfully started an Algorand node.")
 	fmt.Println("Success!")
 
@@ -295,6 +328,10 @@ func (s *Server) Start() {
 
 	if cfg.EnableRuntimeMetrics {
 		metrics.DefaultRegistry().Register(metrics.NewRuntimeMetrics())
+	}
+
+	if cfg.EnableNetDevMetrics {
+		metrics.DefaultRegistry().Register(metrics.NetDevMetrics)
 	}
 
 	if cfg.EnableMetricReporting {
@@ -306,7 +343,6 @@ func (s *Server) Start() {
 	}
 
 	var apiToken string
-	var err error
 	fmt.Printf("API authentication disabled: %v\n", cfg.DisableAPIAuth)
 	if !cfg.DisableAPIAuth {
 		apiToken, err = tokens.GetAndValidateAPIToken(s.RootPath, tokens.AlgodTokenFilename)

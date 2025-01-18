@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -56,9 +56,8 @@ func TestBasicCatchup(t *testing.T) {
 	a.NoError(err)
 
 	// Let the network make some progress
-	a.NoError(err)
 	waitForRound := uint64(3)
-	err = fixture.ClientWaitForRoundWithTimeout(fixture.GetAlgodClientForController(nc), waitForRound)
+	err = fixture.GetAlgodClientForController(nc).WaitForRoundWithTimeout(3)
 	a.NoError(err)
 
 	// Now spin up third node
@@ -71,7 +70,7 @@ func TestBasicCatchup(t *testing.T) {
 	defer shutdownClonedNode(cloneDataDir, &fixture, t)
 
 	// Now, catch up
-	err = fixture.LibGoalFixture.ClientWaitForRoundWithTimeout(cloneClient, waitForRound)
+	_, err = cloneClient.WaitForRound(waitForRound)
 	a.NoError(err)
 }
 
@@ -128,15 +127,6 @@ func runCatchupOverGossip(t fixtures.TestingTB,
 		a.NoError(err)
 		a.Empty(cfg.NetworkProtocolVersion)
 		cfg.NetworkProtocolVersion = ledgerNodeDowngradeTo
-		cfg.BaseLoggerDebugLevel = 5 // debug logging while debugging this test
-		cfg.SaveToDisk(dir)
-	} else {
-		// TODO: remove when TestCatchupOverGossip is fixed
-		dir, err := fixture.GetNodeDir("Node")
-		a.NoError(err)
-		cfg, err := config.LoadConfigFromDisk(dir)
-		a.NoError(err)
-		cfg.BaseLoggerDebugLevel = 5 // debug logging while debugging this test
 		cfg.SaveToDisk(dir)
 	}
 
@@ -147,14 +137,6 @@ func runCatchupOverGossip(t fixtures.TestingTB,
 		a.NoError(err)
 		a.Empty(cfg.NetworkProtocolVersion)
 		cfg.NetworkProtocolVersion = fetcherNodeDowngradeTo
-		cfg.BaseLoggerDebugLevel = 5 // debug logging while debugging this test
-		cfg.SaveToDisk(dir)
-	} else {
-		// TODO: remove when TestCatchupOverGossip is fixed
-		dir := fixture.PrimaryDataDir()
-		cfg, err := config.LoadConfigFromDisk(dir)
-		a.NoError(err)
-		cfg.BaseLoggerDebugLevel = 5 // debug logging while debugging this test
 		cfg.SaveToDisk(dir)
 	}
 
@@ -172,7 +154,7 @@ func runCatchupOverGossip(t fixtures.TestingTB,
 
 	// Let the secondary make progress up to round 3, while the primary was never startred ( hence, it's on round = 0)
 	waitForRound := uint64(3)
-	err = fixture.ClientWaitForRoundWithTimeout(fixture.GetAlgodClientForController(nc), waitForRound)
+	err = fixture.GetAlgodClientForController(nc).WaitForRoundWithTimeout(waitForRound)
 	a.NoError(err)
 
 	// stop the secondary, which is on round 3 or more.
@@ -184,7 +166,7 @@ func runCatchupOverGossip(t fixtures.TestingTB,
 	a.NoError(err)
 
 	// Now, catch up
-	err = fixture.LibGoalFixture.ClientWaitForRoundWithTimeout(lg, waitForRound)
+	_, err = lg.WaitForRound(waitForRound)
 	a.NoError(err)
 
 	waitStart := time.Now()
@@ -201,7 +183,7 @@ func runCatchupOverGossip(t fixtures.TestingTB,
 			break
 		}
 
-		if time.Now().Sub(waitStart) > time.Minute {
+		if time.Since(waitStart) > time.Minute {
 			// it's taking too long.
 			a.FailNow("Waiting too long for catchup to complete")
 		}
@@ -275,7 +257,7 @@ func TestStoppedCatchupOnUnsupported(t *testing.T) {
 	// Let the network make some progress
 	a.NoError(err)
 	waitForRound := uint64(3) // UpgradeVoteRounds + DefaultUpgradeWaitRounds
-	err = fixture.ClientWaitForRoundWithTimeout(fixture.GetAlgodClientForController(nc), waitForRound)
+	err = fixture.GetAlgodClientForController(nc).WaitForRoundWithTimeout(waitForRound)
 	a.NoError(err)
 
 	// Now spin up third node
@@ -291,7 +273,7 @@ func TestStoppedCatchupOnUnsupported(t *testing.T) {
 	defer shutdownClonedNode(cloneDataDir, &fixture, t)
 
 	// Now, catch up
-	err = fixture.LibGoalFixture.ClientWaitForRoundWithTimeout(cloneClient, waitForRound)
+	_, err = cloneClient.WaitForRound(waitForRound)
 	a.NoError(err)
 
 	timeout := time.NewTimer(20 * time.Second)
@@ -391,7 +373,7 @@ func TestBasicCatchupCompletes(t *testing.T) {
 	a.NoError(err)
 
 	// Wait for the network to make some progess.
-	err = fixture.ClientWaitForRoundWithTimeout(fixture.GetAlgodClientForController(nc), waitForRound)
+	err = fixture.GetAlgodClientForController(nc).WaitForRoundWithTimeout(waitForRound)
 	a.NoError(err)
 
 	// Start the third node to catchup.
@@ -401,7 +383,7 @@ func TestBasicCatchupCompletes(t *testing.T) {
 	defer shutdownClonedNode(cloneDataDir, &fixture, t)
 
 	// Wait for it to catchup
-	err = fixture.LibGoalFixture.ClientWaitForRoundWithTimeout(cloneClient, waitForRound)
+	_, err = cloneClient.WaitForRound(waitForRound)
 	a.NoError(err)
 
 	// Calculate the catchup time

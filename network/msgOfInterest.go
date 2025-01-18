@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -50,6 +50,9 @@ func unmarshallMessageOfInterest(data []byte) (map[protocol.Tag]bool, error) {
 		if len(tag) != protocol.TagLength {
 			return nil, errInvalidMessageOfInterestInvalidTag
 		}
+		if _, ok := protocol.DeprecatedTagMap[protocol.Tag(tag)]; ok {
+			continue
+		}
 		if _, ok := protocol.TagMap[protocol.Tag(tag)]; !ok {
 			return nil, errInvalidMessageOfInterestInvalidTag
 		}
@@ -58,23 +61,18 @@ func unmarshallMessageOfInterest(data []byte) (map[protocol.Tag]bool, error) {
 	return msgTagsMap, nil
 }
 
-// MarshallMessageOfInterest generate a message of interest message body for a given set of message tags.
-func MarshallMessageOfInterest(messageTags []protocol.Tag) []byte {
-	// create a long string with all these messages.
-	tags := ""
+// marshallMessageOfInterest generates a message of interest message body for a given set of message tags.
+func marshallMessageOfInterest(messageTags []protocol.Tag) []byte {
+	m := make(map[protocol.Tag]bool)
 	for _, tag := range messageTags {
-		tags += topicsEncodingSeparator + string(tag)
+		m[tag] = true
 	}
-	if len(tags) > 0 {
-		tags = tags[len(topicsEncodingSeparator):]
-	}
-	topics := Topics{Topic{key: "tags", data: []byte(tags)}}
-	return topics.MarshallTopics()
+	return marshallMessageOfInterestMap(m)
 }
 
-// MarshallMessageOfInterestMap generates a message of interest message body
+// marshallMessageOfInterestMap generates a message of interest message body
 // for the message tags that map to "true" in the map argument.
-func MarshallMessageOfInterestMap(tagmap map[protocol.Tag]bool) []byte {
+func marshallMessageOfInterestMap(tagmap map[protocol.Tag]bool) []byte {
 	tags := ""
 	for tag, flag := range tagmap {
 		if flag {
@@ -95,5 +93,8 @@ func MessageOfInterestMaxSize() int {
 	for _, tag := range protocol.TagList {
 		allTags[tag] = true
 	}
-	return len(MarshallMessageOfInterest(protocol.TagList))
+	for tag := range protocol.DeprecatedTagMap {
+		allTags[tag] = true
+	}
+	return len(marshallMessageOfInterestMap(allTags))
 }

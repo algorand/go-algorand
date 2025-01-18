@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -82,16 +82,6 @@ func (mt *metricsTracker) commitRound(context.Context, trackerdb.TransactionScop
 
 func (mt *metricsTracker) postCommit(ctx context.Context, dcc *deferredCommitContext) {
 	mt.ledgerDBRound.Set(uint64(dcc.newBase()))
-}
-
-func (mt *metricsTracker) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
-}
-
-func (mt *metricsTracker) handleUnorderedCommit(dcc *deferredCommitContext) {
-}
-func (mt *metricsTracker) handlePrepareCommitError(dcc *deferredCommitContext) {
-}
-func (mt *metricsTracker) handleCommitError(dcc *deferredCommitContext) {
 }
 
 func (mt *metricsTracker) produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcr *deferredCommitRange) *deferredCommitRange {

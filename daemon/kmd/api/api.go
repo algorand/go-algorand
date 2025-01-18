@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -137,10 +137,13 @@ func SwaggerHandler(w http.ResponseWriter, r *http.Request) {
 
 // Handler returns the root mux router for the kmd API. It sets up handlers on
 // subrouters specific to each API version.
-func Handler(sm *session.Manager, log logging.Logger, allowedOrigins []string, apiToken string, reqCB func()) *mux.Router {
+func Handler(sm *session.Manager, log logging.Logger, allowedOrigins []string, apiToken string, pnaHeader bool, reqCB func()) *mux.Router {
 	rootRouter := mux.NewRouter()
 
 	// Send the appropriate CORS headers
+	if pnaHeader {
+		rootRouter.Use(AllowPNA())
+	}
 	rootRouter.Use(corsMiddleware(allowedOrigins))
 
 	// Handle OPTIONS requests

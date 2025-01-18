@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -207,6 +207,7 @@ func TestBlockQueueSyncerDeletion(t *testing.T) {
 			l := &Ledger{
 				log:      log,
 				blockDBs: blockDBs,
+				trackers: trackerRegistry{log: log},
 			}
 			if test.tracker != nil {
 				l.trackers.trackers = append(l.trackers.trackers, test.tracker)

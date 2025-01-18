@@ -352,6 +352,27 @@
         },
         "description": "Hash of a block header."
       },
+      "BlockHeaderResponse": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "blockHeader": {
+                  "description": "Block header data.",
+                  "properties": {},
+                  "type": "object",
+                  "x-algorand-format": "BlockHeader"
+                }
+              },
+              "required": [
+                "blockHeader"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "description": "Block header."
+      },
       "BlockLogsResponse": {
         "content": {
           "application/json": {
@@ -2835,6 +2856,32 @@
   },
   "openapi": "3.0.1",
   "paths": {
+    "/debug/settings/config": {
+      "get": {
+        "description": "Returns the merged (defaults + overrides) config file in json.",
+        "operationId": "GetConfig",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The merged config file in json."
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Gets the merged config file.",
+        "tags": [
+          "private"
+        ]
+      }
+    },
     "/debug/settings/pprof": {
       "get": {
         "description": "Retrieves the current settings for blocking and mutex profiles",
@@ -2999,7 +3046,7 @@
     },
     "/v2/accounts/{address}": {
       "get": {
-        "description": "Given a specific account public key, this call returns the accounts status, balance and spendable amounts",
+        "description": "Given a specific account public key, this call returns the account's status, balance and spendable amounts",
         "operationId": "AccountInformation",
         "parameters": [
           {
@@ -4218,6 +4265,143 @@
           }
         },
         "summary": "Get the block hash for the block on the given round.",
+        "tags": [
+          "public",
+          "nonparticipating"
+        ]
+      }
+    },
+    "/v2/blocks/{round}/header": {
+      "get": {
+        "operationId": "GetBlockHeader",
+        "parameters": [
+          {
+            "description": "The round from which to fetch block header information.",
+            "in": "path",
+            "name": "round",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.",
+            "in": "query",
+            "name": "format",
+            "schema": {
+              "enum": [
+                "json",
+                "msgpack"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "blockHeader": {
+                      "description": "Block header data.",
+                      "properties": {},
+                      "type": "object",
+                      "x-algorand-format": "BlockHeader"
+                    }
+                  },
+                  "required": [
+                    "blockHeader"
+                  ],
+                  "type": "object"
+                }
+              },
+              "application/msgpack": {
+                "schema": {
+                  "properties": {
+                    "blockHeader": {
+                      "description": "Block header data.",
+                      "properties": {},
+                      "type": "object",
+                      "x-algorand-format": "BlockHeader"
+                    }
+                  },
+                  "required": [
+                    "blockHeader"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Block header."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "application/msgpack": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request - Non integer number"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "application/msgpack": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid API Token"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "application/msgpack": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "None existing block "
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "application/msgpack": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Error"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Get the block header for the block on the given round.",
         "tags": [
           "public",
           "nonparticipating"
@@ -7033,6 +7217,10 @@
             },
             "description": "Invalid API Token"
           },
+          "404": {
+            "content": {},
+            "description": "Developer or Experimental API not enabled"
+          },
           "500": {
             "content": {
               "application/json": {
@@ -7060,6 +7248,7 @@
         },
         "summary": "Fast track for broadcasting a raw transaction or transaction group to the network through the tx handler without performing most of the checks and reporting detailed errors. Should be only used for development and performance testing.",
         "tags": [
+          "public",
           "experimental"
         ],
         "x-codegen-request-body-name": "rawtxn"

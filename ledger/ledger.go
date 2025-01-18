@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -210,8 +210,15 @@ func (l *Ledger) reloadLedger() error {
 	l.trackerMu.Lock()
 	defer l.trackerMu.Unlock()
 
-	// close the trackers.
-	l.trackers.close()
+	// save block listeners to recover them later
+	blockListeners := make([]ledgercore.BlockListener, 0, len(l.notifier.listeners))
+	blockListeners = append(blockListeners, l.notifier.listeners...)
+
+	// close the trackers if the registry was already initialized: opening a new ledger calls reloadLedger
+	// and there is nothing to close. Registry's logger is not initialized yet so close cannot log.
+	if l.trackers.trackers != nil {
+		l.trackers.close()
+	}
 
 	// init block queue
 	var err error
@@ -255,6 +262,9 @@ func (l *Ledger) reloadLedger() error {
 		err = fmt.Errorf("reloadLedger.loadFromDisk %w", err)
 		return err
 	}
+
+	// restore block listeners since l.notifier might not survive a reload
+	l.notifier.register(blockListeners)
 
 	// post-init actions
 	if trackerDBInitParams.VacuumOnStartup || l.cfg.OptimizeAccountsDatabaseOnStartup {
@@ -423,6 +433,8 @@ func (l *Ledger) Close() {
 // RegisterBlockListeners registers listeners that will be called when a
 // new block is added to the ledger.
 func (l *Ledger) RegisterBlockListeners(listeners []ledgercore.BlockListener) {
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
 	l.notifier.register(listeners)
 }
 
@@ -626,8 +638,53 @@ func (l *Ledger) LookupAgreement(rnd basics.Round, addr basics.Address) (basics.
 	defer l.trackerMu.RUnlock()
 
 	// Intentionally apply (pending) rewards up to rnd.
-	data, err := l.acctsOnline.LookupOnlineAccountData(rnd, addr)
+	data, err := l.acctsOnline.lookupOnlineAccountData(rnd, addr)
 	return data, err
+}
+
+// GetKnockOfflineCandidates retrieves a list of online accounts who will be
+// checked to a recent proposal or heartbeat. Large accounts are the ones worth checking.
+func (l *Ledger) GetKnockOfflineCandidates(rnd basics.Round, proto config.ConsensusParams) (map[basics.Address]basics.OnlineAccountData, error) {
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
+
+	// get state proof worker's most recent list for top N addresses
+	if proto.StateProofInterval == 0 {
+		return nil, nil
+	}
+
+	var addrs []basics.Address
+
+	// special handling for rounds 0-240: return participating genesis accounts
+	if rnd < basics.Round(proto.StateProofInterval).SubSaturate(basics.Round(proto.StateProofVotersLookback)) {
+		for addr, data := range l.genesisAccounts {
+			if data.Status == basics.Online {
+				addrs = append(addrs, addr)
+			}
+		}
+	} else {
+		// get latest state proof voters information, up to rnd, without calling cond.Wait()
+		_, voters := l.acctsOnline.voters.LatestCompletedVotersUpTo(rnd)
+		if voters == nil { // no cached voters found < rnd
+			return nil, nil
+		}
+		addrs = make([]basics.Address, 0, len(voters.AddrToPos))
+		for addr := range voters.AddrToPos {
+			addrs = append(addrs, addr)
+		}
+	}
+
+	// fetch fresh data up to this round from online account cache. These accounts should all
+	// be in cache, as long as proto.StateProofTopVoters < onlineAccountsCacheMaxSize.
+	ret := make(map[basics.Address]basics.OnlineAccountData)
+	for _, addr := range addrs {
+		data, err := l.acctsOnline.lookupOnlineAccountData(rnd, addr)
+		if err != nil || data.MicroAlgosWithRewards.IsZero() {
+			continue // skip missing / not online accounts
+		}
+		ret[addr] = data
+	}
+	return ret, nil
 }
 
 // LookupWithoutRewards is like Lookup but does not apply pending rewards up
@@ -705,7 +762,7 @@ func (l *Ledger) Block(rnd basics.Round) (blk bookkeeping.Block, err error) {
 func (l *Ledger) BlockHdr(rnd basics.Round) (blk bookkeeping.BlockHeader, err error) {
 
 	// Expected availability range in txTail.blockHeader is [Latest - MaxTxnLife, Latest]
-	// allowing (MaxTxnLife + 1) = 1001 rounds back loopback.
+	// allowing (MaxTxnLife + 1) = 1001 rounds lookback.
 	// The depth besides the MaxTxnLife is controlled by DeeperBlockHeaderHistory parameter
 	// and currently set to 1.
 	// Explanation:

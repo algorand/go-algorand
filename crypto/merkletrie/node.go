@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,11 +19,11 @@ package merkletrie
 import (
 	"bytes"
 	"encoding/binary"
+	"slices"
 	"sort"
 	"unsafe"
 
 	"github.com/algorand/go-algorand/crypto"
-	"golang.org/x/exp/slices"
 )
 
 type childEntry struct {

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,6 +17,7 @@
 package ledger
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"errors"
@@ -39,6 +40,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
@@ -47,6 +49,9 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
+
+// assert catchpointTracker implements the trackerCommitLifetimeHandlers interface
+var _ trackerCommitLifetimeHandlers = &catchpointTracker{}
 
 func TestCatchpointIsWritingCatchpointFile(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -357,9 +362,10 @@ func createCatchpoint(t *testing.T, ct *catchpointTracker, accountsRound basics.
 	spVerificationEncodedData, stateProofVerificationHash, err := ct.getSPVerificationData()
 	require.NoError(t, err)
 
+	proto := protocol.ConsensusCurrentVersion
 	var catchpointGenerationStats telemetryspec.CatchpointGenerationEventDetails
-	_, _, _, biggestChunkLen, err := ct.generateCatchpointData(
-		context.Background(), accountsRound, &catchpointGenerationStats, spVerificationEncodedData)
+	_, _, _, _, _, biggestChunkLen, err := ct.generateCatchpointData(
+		context.Background(), config.Consensus[proto], accountsRound, 0, &catchpointGenerationStats, spVerificationEncodedData)
 	require.NoError(t, err)
 
 	require.Equal(t, calculateStateProofVerificationHash(t, ml), stateProofVerificationHash)
@@ -367,7 +373,7 @@ func createCatchpoint(t *testing.T, ct *catchpointTracker, accountsRound basics.
 	err = ct.createCatchpoint(
 		context.Background(), accountsRound, round,
 		trackerdb.CatchpointFirstStageInfo{BiggestChunkLen: biggestChunkLen},
-		crypto.Digest{}, protocol.ConsensusCurrentVersion)
+		crypto.Digest{}, proto)
 	require.NoError(t, err)
 }
 
@@ -600,7 +606,7 @@ func BenchmarkLargeCatchpointDataWriting(b *testing.B) {
 	encodedSPData, _, err := ct.getSPVerificationData()
 	require.NoError(b, err)
 	b.ResetTimer()
-	ct.generateCatchpointData(context.Background(), basics.Round(0), &catchpointGenerationStats, encodedSPData)
+	ct.generateCatchpointData(context.Background(), proto, 0, 0, &catchpointGenerationStats, encodedSPData)
 	b.StopTimer()
 	b.ReportMetric(float64(accountsNumber), "accounts")
 }
@@ -1877,10 +1883,6 @@ func TestHashContract(t *testing.T) {
 func TestCatchpointFastUpdates(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
-		t.Skip("This test is too slow on ARM and causes CI builds to time out")
-	}
-
 	proto := config.Consensus[protocol.ConsensusFuture]
 
 	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(20, true)}
@@ -1920,6 +1922,7 @@ func TestCatchpointFastUpdates(t *testing.T) {
 
 	wg := sync.WaitGroup{}
 
+	lastRound := basics.Round(0)
 	for i := basics.Round(initialBlocksCount); i < basics.Round(proto.CatchpointLookback+15); i++ {
 		rewardLevelDelta := crypto.RandUint64() % 5
 		rewardLevel += rewardLevelDelta
@@ -1954,9 +1957,20 @@ func TestCatchpointFastUpdates(t *testing.T) {
 			defer wg.Done()
 			ml.trackers.committedUpTo(round)
 		}(i)
+		lastRound = i
 	}
 	wg.Wait()
 	ml.trackers.waitAccountsWriting()
+
+	for ml.trackers.getDbRound() <= basics.Round(proto.CatchpointLookback) {
+		// db round stuck <= 320? likely committedUpTo dropped some commit tasks, due to deferredCommits channel full
+		// so give it another try
+		ml.trackers.committedUpTo(lastRound)
+		require.Eventually(t, func() bool {
+			//ml.trackers.waitAccountsWriting()
+			return ml.trackers.getDbRound() > basics.Round(proto.CatchpointLookback)
+		}, 5*time.Second, 100*time.Millisecond)
+	}
 
 	require.NotEmpty(t, ct.GetLastCatchpointLabel())
 }
@@ -2093,4 +2107,62 @@ func TestMakeCatchpointFilePath(t *testing.T) {
 		require.Equal(t, tc.expectedDataFilePath, makeCatchpointDataFilePath(basics.Round(tc.round)))
 	}
 
+}
+
+// Test a case where in-memory SQLite, combined with fast locking (improved performance, or no
+// deadlock detection) and concurrent reads (from transaction evaluation, stake lookups, etc) can
+// cause the SQLite implementation in util/db/dbutil.go to retry the function looping over all
+// tracker commitRound implementations. Since catchpointtracker' commitRound updates a merkle trie's
+// DB storage and its in-memory cache, the retry can cause the the balancesTrie's cache to become
+// corrupted and out of sync with the DB (which uses transaction rollback between retries). The
+// merkle trie corruption manifests as error log messages like:
+//   - "attempted to add duplicate hash 'X' to merkle trie for account Y"
+//   - "failed to delete hash 'X' from merkle trie for account Y"
+//
+// So we assert that those errors do not occur after the fix in #6190.
+//
+//nolint:paralleltest // deadlock detection is globally disabled, so this test is not parallel-safe
+func TestCatchpointTrackerFastRoundsDBRetry(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	var bufNewLogger bytes.Buffer
+	log := logging.NewLogger()
+	log.SetOutput(&bufNewLogger)
+
+	// disabling deadlock detection globally causes the race detector to go off, but this
+	// bug can still happen even when deadlock detection is not disabled
+	//deadlock.Opts.Disable = true // disable deadlock detection during this test
+	//defer func() { deadlock.Opts.Disable = false }()
+
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis(func(cfg *ledgertesting.GenesisCfg) {
+		cfg.OnlineCount = 1
+		ledgertesting.TurnOffRewards(cfg)
+	})
+	cfg := config.GetDefaultLocal()
+	dl := NewDoubleLedger(t, genBalances, protocol.ConsensusFuture, cfg, simpleLedgerLogger(log)) // in-memory SQLite
+	defer dl.Close()
+
+	appSrc := main(`int 1; int 1; ==; assert`)
+	app := dl.fundedApp(addrs[1], 1_000_000, appSrc)
+
+	makeTxn := func() *txntest.Txn {
+		return &txntest.Txn{
+			Type:          "appl",
+			Sender:        addrs[2],
+			ApplicationID: app,
+			Note:          ledgertesting.RandomNote(),
+		}
+	}
+
+	for vb := dl.fullBlock(makeTxn()); vb.Block().Round() <= 1500; vb = dl.fullBlock(makeTxn()) {
+		nextRnd := vb.Block().Round() + 1
+		_, err := dl.generator.OnlineCirculation(nextRnd.SubSaturate(320), nextRnd)
+		require.NoError(t, err)
+		require.Empty(t, vb.Block().ExpiredParticipationAccounts)
+		require.Empty(t, vb.Block().AbsentParticipationAccounts)
+	}
+
+	// assert that no corruption of merkle trie happened due to DB retries leaving
+	// incorrect state in the merkle trie cache.
+	require.NotContains(t, bufNewLogger.String(), "to merkle trie for account", "Merkle trie was corrupted!")
 }

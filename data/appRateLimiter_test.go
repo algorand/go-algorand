@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -40,7 +40,7 @@ func TestAppRateLimiter_Make(t *testing.T) {
 	window := 1 * time.Second
 	rm := makeAppRateLimiter(10, rate, window)
 
-	require.Equal(t, 1, rm.maxBucketSize)
+	require.Equal(t, 2, rm.maxBucketSize)
 	require.NotEmpty(t, rm.seed)
 	require.NotEmpty(t, rm.salt)
 	for i := 0; i < len(rm.buckets); i++ {

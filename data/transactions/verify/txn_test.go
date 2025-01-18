@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -30,6 +30,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/logic/mocktracer"
@@ -92,6 +93,41 @@ func keypair() *crypto.SignatureSecrets {
 	crypto.RandBytes(seed[:])
 	s := crypto.GenerateSignatureSecrets(seed)
 	return s
+}
+
+func createHeartbeatTxn(fv basics.Round, t *testing.T) transactions.SignedTxn {
+	secrets, addrs, _ := generateAccounts(1)
+
+	kd := uint64(111)
+	lv := fv + 15
+	firstID := basics.OneTimeIDForRound(fv, kd)
+	lastID := basics.OneTimeIDForRound(lv, kd)
+	numBatches := lastID.Batch - firstID.Batch + 1
+	id := basics.OneTimeIDForRound(lv, kd)
+
+	seed := committee.Seed{0x33}
+	otss := crypto.GenerateOneTimeSignatureSecrets(firstID.Batch, numBatches)
+
+	txn := transactions.Transaction{
+		Type: "hb",
+		Header: transactions.Header{
+			Sender:     addrs[0],
+			FirstValid: fv,
+			LastValid:  lv,
+		},
+		HeartbeatTxnFields: &transactions.HeartbeatTxnFields{
+			HbProof:       otss.Sign(id, seed).ToHeartbeatProof(),
+			HbSeed:        seed,
+			HbVoteID:      otss.OneTimeSignatureVerifier,
+			HbKeyDilution: kd,
+		},
+	}
+
+	hb := transactions.SignedTxn{
+		Sig: secrets[0].Sign(txn),
+		Txn: txn,
+	}
+	return hb
 }
 
 func generateMultiSigTxn(numTxs, numAccs int, blockRound basics.Round, t *testing.T) ([]transactions.Transaction, []transactions.SignedTxn, []*crypto.SignatureSecrets, []basics.Address) {
@@ -479,7 +515,6 @@ pushint 1`,
 	}
 
 	for _, testCase := range testCases {
-		testCase := testCase
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
 			proto := config.Consensus[protocol.ConsensusCurrentVersion]
@@ -575,7 +610,7 @@ func TestPaysetGroups(t *testing.T) {
 	startPaysetGroupsTime := time.Now()
 	err := PaysetGroups(context.Background(), txnGroups, blkHdr, verificationPool, MakeVerifiedTransactionCache(50000), nil)
 	require.NoError(t, err)
-	paysetGroupDuration := time.Now().Sub(startPaysetGroupsTime)
+	paysetGroupDuration := time.Since(startPaysetGroupsTime)
 
 	// break the signature and see if it fails.
 	txnGroups[0][0].Sig[0] = txnGroups[0][0].Sig[0] + 1
@@ -609,7 +644,7 @@ func TestPaysetGroups(t *testing.T) {
 			// channel is closed without a return
 			require.Failf(t, "Channel got closed ?!", "")
 		} else {
-			actualDuration := time.Now().Sub(startPaysetGroupsTime)
+			actualDuration := time.Since(startPaysetGroupsTime)
 			if err == nil {
 				if actualDuration > 4*time.Second {
 					// it took at least 2.5 seconds more than it should have had!
@@ -647,6 +682,70 @@ func BenchmarkPaysetGroups(b *testing.B) {
 	err := PaysetGroups(context.Background(), txnGroups, blkHdr, verificationPool, cache, nil)
 	require.NoError(b, err)
 	b.StopTimer()
+}
+
+func TestLsigSize(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	secrets, addresses, _ := generateAccounts(2)
+
+	execPool := execpool.MakePool(t)
+	verificationPool := execpool.MakeBacklog(execPool, 64, execpool.LowPriority, t)
+	defer verificationPool.Shutdown()
+
+	// From consensus version 18, we have lsigs with a maximum size of 1000 bytes.
+	// We need to use pragma 1 for teal in v18
+	pragma := uint(1)
+	consensusVersionPreSizePooling := protocol.ConsensusV18
+	consensusVersionPostSizePooling := protocol.ConsensusFuture
+
+	// We will do tests based on a transaction group of 2 payment transactions,
+	// the first signed by a lsig and the second a vanilla payment transaction.
+	testCases := []struct {
+		consensusVersion protocol.ConsensusVersion
+		lsigSize         uint
+		success          bool
+	}{
+		{consensusVersionPreSizePooling, 1000, true},
+		{consensusVersionPreSizePooling, 1001, false},
+		{consensusVersionPostSizePooling, 2000, true},
+		{consensusVersionPostSizePooling, 2001, false},
+	}
+
+	blkHdr := createDummyBlockHeader()
+	for _, test := range testCases {
+		blkHdr.UpgradeState.CurrentProtocol = test.consensusVersion
+
+		lsig, err := txntest.GenerateProgramOfSize(test.lsigSize, pragma)
+		require.NoError(t, err)
+
+		lsigPay := txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   basics.Address(logic.HashProgram(lsig)),
+			Receiver: addresses[0],
+			Fee:      config.Consensus[test.consensusVersion].MinTxnFee,
+		}
+
+		vanillaPay := txntest.Txn{
+			Type:     protocol.PaymentTx,
+			Sender:   addresses[0],
+			Receiver: addresses[1],
+			Fee:      config.Consensus[test.consensusVersion].MinTxnFee,
+		}
+
+		group := txntest.Group(&lsigPay, &vanillaPay)
+		group[0].Lsig = transactions.LogicSig{
+			Logic: lsig,
+		}
+		group[1].Sig = secrets[0].Sign(group[1].Txn)
+
+		err = PaysetGroups(context.Background(), [][]transactions.SignedTxn{group}, blkHdr, verificationPool, MakeVerifiedTransactionCache(50000), &DummyLedgerForSignature{})
+		if test.success {
+			require.NoError(t, err)
+		} else {
+			require.Error(t, err)
+		}
+	}
 }
 
 func TestTxnGroupMixedSignatures(t *testing.T) {
@@ -799,6 +898,38 @@ func TestTxnGroupCacheUpdateMultiSig(t *testing.T) {
 		txn.Msig.Subsigs[0].Sig[0]--
 	}
 	verifyGroup(t, txnGroups, &blkHdr, breakSignatureFunc, restoreSignatureFunc, crypto.ErrBatchHasFailedSigs.Error())
+}
+
+// TestTxnHeartbeat makes sure that a heartbeat transaction is valid (and added
+// to the cache) only if the normal outer signature is valid AND the inner
+// HbProof is valid.
+func TestTxnHeartbeat(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	blkHdr := createDummyBlockHeader(protocol.ConsensusFuture)
+
+	txnGroups := make([][]transactions.SignedTxn, 2) // verifyGroup requires at least 2
+	for i := 0; i < len(txnGroups); i++ {
+		txnGroups[i] = make([]transactions.SignedTxn, 1)
+		txnGroups[i][0] = createHeartbeatTxn(blkHdr.Round-1, t)
+	}
+	breakSignatureFunc := func(txn *transactions.SignedTxn) {
+		txn.Sig[0]++
+	}
+	restoreSignatureFunc := func(txn *transactions.SignedTxn) {
+		txn.Sig[0]--
+	}
+	// This shows the outer signature must be correct
+	verifyGroup(t, txnGroups, &blkHdr, breakSignatureFunc, restoreSignatureFunc, crypto.ErrBatchHasFailedSigs.Error())
+
+	breakHbProofFunc := func(txn *transactions.SignedTxn) {
+		txn.Txn.HeartbeatTxnFields.HbProof.Sig[0]++
+	}
+	restoreHbProofFunc := func(txn *transactions.SignedTxn) {
+		txn.Txn.HeartbeatTxnFields.HbProof.Sig[0]--
+	}
+	// This shows the inner signature must be correct
+	verifyGroup(t, txnGroups, &blkHdr, breakHbProofFunc, restoreHbProofFunc, crypto.ErrBatchHasFailedSigs.Error())
 }
 
 // TestTxnGroupCacheUpdateFailLogic test makes sure that a payment transaction contains a logic (and no signature)
@@ -965,12 +1096,18 @@ byte base64 5rZMNsevs5sULO+54aN+OvU6lQ503z2X+SSYUABIx7E=
 	verifyGroup(t, txnGroups, &blkHdr, breakSignatureFunc, restoreSignatureFunc, "rejected by logic")
 }
 
-func createDummyBlockHeader() bookkeeping.BlockHeader {
+func createDummyBlockHeader(optVer ...protocol.ConsensusVersion) bookkeeping.BlockHeader {
+	// Most tests in this file were written to use current.  Future is probably
+	// the better test, but I don't want to make that choice now, so optVer.
+	proto := protocol.ConsensusCurrentVersion
+	if len(optVer) > 0 {
+		proto = optVer[0]
+	}
 	return bookkeeping.BlockHeader{
 		Round:       50,
 		GenesisHash: crypto.Hash([]byte{1, 2, 3, 4, 5}),
 		UpgradeState: bookkeeping.UpgradeState{
-			CurrentProtocol: protocol.ConsensusCurrentVersion,
+			CurrentProtocol: proto,
 		},
 		RewardsState: bookkeeping.RewardsState{
 			FeeSink:     feeSink,
@@ -1004,32 +1141,32 @@ func verifyGroup(t *testing.T, txnGroups [][]transactions.SignedTxn, blkHdr *boo
 
 	breakSig(&txnGroups[0][0])
 
-	dummeyLedger := DummyLedgerForSignature{}
-	_, err := TxnGroup(txnGroups[0], blkHdr, cache, &dummeyLedger)
+	dummyLedger := DummyLedgerForSignature{}
+	_, err := TxnGroup(txnGroups[0], blkHdr, cache, &dummyLedger)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), errorString)
 
 	// The txns should not be in the cache
-	unverifiedGroups := cache.GetUnverifiedTransactionGroups(txnGroups[:1], spec, protocol.ConsensusCurrentVersion)
+	unverifiedGroups := cache.GetUnverifiedTransactionGroups(txnGroups[:1], spec, blkHdr.CurrentProtocol)
 	require.Len(t, unverifiedGroups, 1)
 
-	unverifiedGroups = cache.GetUnverifiedTransactionGroups(txnGroups[:2], spec, protocol.ConsensusCurrentVersion)
+	unverifiedGroups = cache.GetUnverifiedTransactionGroups(txnGroups[:2], spec, blkHdr.CurrentProtocol)
 	require.Len(t, unverifiedGroups, 2)
 
-	_, err = TxnGroup(txnGroups[1], blkHdr, cache, &dummeyLedger)
+	_, err = TxnGroup(txnGroups[1], blkHdr, cache, &dummyLedger)
 	require.NoError(t, err)
 
 	// Only the second txn should be in the cache
-	unverifiedGroups = cache.GetUnverifiedTransactionGroups(txnGroups[:2], spec, protocol.ConsensusCurrentVersion)
+	unverifiedGroups = cache.GetUnverifiedTransactionGroups(txnGroups[:2], spec, blkHdr.CurrentProtocol)
 	require.Len(t, unverifiedGroups, 1)
 
 	restoreSig(&txnGroups[0][0])
 
-	_, err = TxnGroup(txnGroups[0], blkHdr, cache, &dummeyLedger)
+	_, err = TxnGroup(txnGroups[0], blkHdr, cache, &dummyLedger)
 	require.NoError(t, err)
 
 	// Both transactions should be in the cache
-	unverifiedGroups = cache.GetUnverifiedTransactionGroups(txnGroups[:2], spec, protocol.ConsensusCurrentVersion)
+	unverifiedGroups = cache.GetUnverifiedTransactionGroups(txnGroups[:2], spec, blkHdr.CurrentProtocol)
 	require.Len(t, unverifiedGroups, 0)
 
 	cache = MakeVerifiedTransactionCache(1000)
@@ -1042,7 +1179,7 @@ func verifyGroup(t *testing.T, txnGroups [][]transactions.SignedTxn, blkHdr *boo
 
 	// Add them to the cache by verifying them
 	for _, txng := range txnGroups {
-		_, err = TxnGroup(txng, blkHdr, cache, &dummeyLedger)
+		_, err = TxnGroup(txng, blkHdr, cache, &dummyLedger)
 		if err != nil {
 			require.Error(t, err)
 			require.Contains(t, err.Error(), errorString)
@@ -1052,7 +1189,7 @@ func verifyGroup(t *testing.T, txnGroups [][]transactions.SignedTxn, blkHdr *boo
 	require.Equal(t, 1, numFailed)
 
 	// Only one transaction should not be in cache
-	unverifiedGroups = cache.GetUnverifiedTransactionGroups(txnGroups, spec, protocol.ConsensusCurrentVersion)
+	unverifiedGroups = cache.GetUnverifiedTransactionGroups(txnGroups, spec, blkHdr.CurrentProtocol)
 	require.Len(t, unverifiedGroups, 1)
 
 	require.Equal(t, unverifiedGroups[0], txnGroups[txgIdx])

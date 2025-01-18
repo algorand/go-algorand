@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -241,21 +241,49 @@ func getProtocolTags(t *testing.T) []string {
 	fset := token.NewFileSet()
 	f, _ := parser.ParseFile(fset, file, nil, parser.ParseComments)
 
+	// get deprecated tags
+	deprecatedTags := make(map[string]bool)
+	for _, d := range f.Decls {
+		genDecl, ok := d.(*ast.GenDecl)
+		if !ok || genDecl.Tok != token.VAR {
+			continue
+		}
+		for _, spec := range genDecl.Specs {
+			if valueSpec, ok := spec.(*ast.ValueSpec); ok && len(valueSpec.Names) > 0 &&
+				valueSpec.Names[0].Name == "DeprecatedTagList" {
+				for _, v := range valueSpec.Values {
+					cl, ok := v.(*ast.CompositeLit)
+					if !ok {
+						continue
+					}
+					for _, elt := range cl.Elts {
+						if ce, ok := elt.(*ast.Ident); ok {
+							deprecatedTags[ce.Name] = true
+						}
+					}
+				}
+			}
+		}
+	}
+
 	// look for const declarations in protocol/tags.go
 	var declaredTags []string
 	// Iterate through the declarations in the file
 	for _, d := range f.Decls {
 		genDecl, ok := d.(*ast.GenDecl)
-		// Check if the declaration is a constant and if not, continue
+		// Check if the declaration is a constant
 		if !ok || genDecl.Tok != token.CONST {
 			continue
 		}
 		// Iterate through the specs (specifications) in the declaration
 		for _, spec := range genDecl.Specs {
 			if valueSpec, ok := spec.(*ast.ValueSpec); ok {
+				if ident, isIdent := valueSpec.Type.(*ast.Ident); !isIdent || ident.Name != "Tag" {
+					continue // skip all but Tag constants
+				}
 				for _, n := range valueSpec.Names {
-					if strings.HasSuffix(n.Name, "MaxSize") || n.Name == "TagLength" {
-						continue
+					if deprecatedTags[n.Name] {
+						continue // skip deprecated tags
 					}
 					declaredTags = append(declaredTags, n.Name)
 				}
@@ -263,7 +291,8 @@ func getProtocolTags(t *testing.T) []string {
 		}
 	}
 	// assert these AST-discovered tags are complete (match the size of protocol.TagList)
-	require.Len(t, declaredTags, len(protocol.TagList))
+	require.Len(t, protocol.TagList, len(declaredTags))
+	require.Len(t, protocol.DeprecatedTagList, len(deprecatedTags))
 	return declaredTags
 }
 
@@ -288,32 +317,32 @@ func TestWsPeerIPAddr(t *testing.T) {
 	}
 	// some raw IPv4 address
 	conn.addr.IP = []byte{127, 0, 0, 1}
-	require.Equal(t, []byte{127, 0, 0, 1}, peer.IPAddr())
+	require.Equal(t, []byte{127, 0, 0, 1}, peer.ipAddr())
 	require.Equal(t, []byte{127, 0, 0, 1}, peer.RoutingAddr())
 
 	// IPv4 constructed from net.IPv4
 	conn.addr.IP = net.IPv4(127, 0, 0, 2)
-	require.Equal(t, []byte{127, 0, 0, 2}, peer.IPAddr())
+	require.Equal(t, []byte{127, 0, 0, 2}, peer.ipAddr())
 	require.Equal(t, []byte{127, 0, 0, 2}, peer.RoutingAddr())
 
 	// some IPv6 address
 	conn.addr.IP = net.IPv6linklocalallrouters
-	require.Equal(t, []byte(net.IPv6linklocalallrouters), peer.IPAddr())
+	require.Equal(t, []byte(net.IPv6linklocalallrouters), peer.ipAddr())
 	require.Equal(t, []byte(net.IPv6linklocalallrouters[0:8]), peer.RoutingAddr())
 
 	// embedded IPv4 into IPv6
 	conn.addr.IP = []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 127, 0, 0, 3}
 	require.Equal(t, 16, len(conn.addr.IP))
-	require.Equal(t, []byte{127, 0, 0, 3}, peer.IPAddr())
+	require.Equal(t, []byte{127, 0, 0, 3}, peer.ipAddr())
 	require.Equal(t, []byte{127, 0, 0, 3}, peer.RoutingAddr())
 	conn.addr.IP = []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 127, 0, 0, 4}
 	require.Equal(t, 16, len(conn.addr.IP))
-	require.Equal(t, []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 127, 0, 0, 4}, peer.IPAddr())
+	require.Equal(t, []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 127, 0, 0, 4}, peer.ipAddr())
 	require.Equal(t, []byte{127, 0, 0, 4}, peer.RoutingAddr())
 
 	// check incoming peer with originAddress set
 	conn.addr.IP = []byte{127, 0, 0, 1}
 	peer.wsPeerCore.originAddress = "127.0.0.2"
-	require.Equal(t, []byte{127, 0, 0, 1}, peer.IPAddr())
+	require.Equal(t, []byte{127, 0, 0, 1}, peer.ipAddr())
 	require.Equal(t, []byte{127, 0, 0, 2}, peer.RoutingAddr())
 }

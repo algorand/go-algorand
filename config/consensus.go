@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -113,8 +113,12 @@ type ConsensusParams struct {
 	EnableAppCostPooling bool
 
 	// EnableLogicSigCostPooling specifies LogicSig budgets are pooled across a
-	// group. The total available is len(group) * LogicSigMaxCost)
+	// group. The total available is len(group) * LogicSigMaxCost
 	EnableLogicSigCostPooling bool
+
+	// EnableLogicSigSizePooling specifies LogicSig sizes are pooled across a
+	// group. The total available is len(group) * LogicSigMaxSize
+	EnableLogicSigSizePooling bool
 
 	// RewardUnit specifies the number of MicroAlgos corresponding to one reward
 	// unit.
@@ -228,7 +232,7 @@ type ConsensusParams struct {
 	// 0 for no support, otherwise highest version supported
 	LogicSigVersion uint64
 
-	// len(LogicSig.Logic) + len(LogicSig.Args[*]) must be less than this
+	// len(LogicSig.Logic) + len(LogicSig.Args[*]) must be less than this (unless pooling is enabled)
 	LogicSigMaxSize uint64
 
 	// sum of estimated op cost must be less than this
@@ -510,6 +514,10 @@ type ConsensusParams struct {
 	// Version 7 includes state proof verification contexts
 	EnableCatchpointsWithSPContexts bool
 
+	// EnableCatchpointsWithOnlineAccounts specifies when to enable version 8 catchpoints.
+	// Version 8 includes onlineaccounts and onlineroundparams amounts, for historical stake lookups.
+	EnableCatchpointsWithOnlineAccounts bool
+
 	// AppForbidLowResources enforces a rule that prevents apps from accessing
 	// asas and apps below 256, in an effort to decrease the ambiguity of
 	// opcodes that accept IDs or slot indexes. Simultaneously, the first ID
@@ -540,6 +548,9 @@ type ConsensusParams struct {
 	// occur, extra funds need to be put into the FeeSink.  The bonus amount
 	// decays exponentially.
 	Bonus BonusPlan
+
+	// Heartbeat support
+	Heartbeat bool
 }
 
 // ProposerPayoutRules puts several related consensus parameters in one place. The same
@@ -599,7 +610,7 @@ type ProposerPayoutRules struct {
 //
 //	BaseAmount: 0, DecayInterval: XXX
 //
-// by using a zero baseAmount, the amount not affected.
+// by using a zero baseAmount, the amount is not affected.
 // For a bigger change, we'd use a plan like:
 //
 //	BaseRound:  <FUTURE round>, BaseAmount: <new amount>, DecayInterval: <new>
@@ -765,7 +776,7 @@ func checkSetAllocBounds(p ConsensusParams) {
 	checkSetMax(p.MaxAppProgramLen, &MaxStateDeltaKeys)
 	checkSetMax(p.MaxAppProgramLen, &MaxEvalDeltaAccounts)
 	checkSetMax(p.MaxAppProgramLen, &MaxAppProgramLen)
-	checkSetMax(int(p.LogicSigMaxSize), &MaxLogicSigMaxSize)
+	checkSetMax((int(p.LogicSigMaxSize) * p.MaxTxGroupSize), &MaxLogicSigMaxSize)
 	checkSetMax(p.MaxTxnNoteBytes, &MaxTxnNoteBytes)
 	checkSetMax(p.MaxTxGroupSize, &MaxTxGroupSize)
 	// MaxBytesKeyValueLen is max of MaxAppKeyLen and MaxAppBytesValueLen
@@ -1505,26 +1516,44 @@ func initConsensusProtocols() {
 	// but our current max is 150000 so using that :
 	v38.ApprovedUpgrades[protocol.ConsensusV39] = 150000
 
+	v40 := v39
+	v40.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+
+	v40.LogicSigVersion = 11
+
+	v40.EnableLogicSigSizePooling = true
+
+	v40.Payouts.Enabled = true
+	v40.Payouts.Percent = 50
+	v40.Payouts.GoOnlineFee = 2_000_000         // 2 algos
+	v40.Payouts.MinBalance = 30_000_000_000     // 30,000 algos
+	v40.Payouts.MaxBalance = 70_000_000_000_000 // 70M algos
+	v40.Payouts.MaxMarkAbsent = 32
+	v40.Payouts.ChallengeInterval = 1000
+	v40.Payouts.ChallengeGracePeriod = 200
+	v40.Payouts.ChallengeBits = 5
+
+	v40.Bonus.BaseAmount = 10_000_000 // 10 Algos
+	// 2.9 sec rounds gives about 10.8M rounds per year.
+	v40.Bonus.DecayInterval = 1_000_000 // .99^(10.8M/1M) ~ .897. So ~10% decay per year
+
+	v40.Heartbeat = true
+
+	v40.EnableCatchpointsWithOnlineAccounts = true
+
+	Consensus[protocol.ConsensusV40] = v40
+
+	// v39 can be upgraded to v40, with an update delay of 7d:
+	// 208000 = (7 * 24 * 60 * 60 / 2.9 ballpark round times)
+	// our current max is 250000
+	v39.ApprovedUpgrades[protocol.ConsensusV40] = 208000
+
 	// ConsensusFuture is used to test features that are implemented
 	// but not yet released in a production protocol version.
-	vFuture := v39
+	vFuture := v40
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
-	vFuture.LogicSigVersion = 11 // When moving this to a release, put a new higher LogicSigVersion here
-
-	vFuture.Payouts.Enabled = true
-	vFuture.Payouts.Percent = 75
-	vFuture.Payouts.GoOnlineFee = 2_000_000         // 2 algos
-	vFuture.Payouts.MinBalance = 30_000_000_000     // 30,000 algos
-	vFuture.Payouts.MaxBalance = 70_000_000_000_000 // 70M algos
-	vFuture.Payouts.MaxMarkAbsent = 32
-	vFuture.Payouts.ChallengeInterval = 1000
-	vFuture.Payouts.ChallengeGracePeriod = 200
-	vFuture.Payouts.ChallengeBits = 5
-
-	vFuture.Bonus.BaseAmount = 10_000_000 // 10 Algos
-	// 2.9 sec rounds gives about 10.8M rounds per year.
-	vFuture.Bonus.DecayInterval = 250_000 // .99^(10.8/0.25) ~ .648. So 35% decay per year
+	vFuture.LogicSigVersion = 12 // When moving this to a release, put a new higher LogicSigVersion here
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 
@@ -1558,6 +1587,23 @@ func initConsensusProtocols() {
 	vAlpha5.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 	Consensus[protocol.ConsensusVAlpha5] = vAlpha5
 	vAlpha4.ApprovedUpgrades[protocol.ConsensusVAlpha5] = 10000
+}
+
+// ApplyShorterUpgradeRoundsForDevNetworks applies a shorter upgrade round time for the Devnet and Betanet networks.
+// This function should not take precedence over settings loaded via `PreloadConfigurableConsensusProtocols`.
+func ApplyShorterUpgradeRoundsForDevNetworks(id protocol.NetworkID) {
+	if id == Betanet || id == Devnet {
+		// Go through all approved upgrades and set to the MinUpgradeWaitRounds valid where MinUpgradeWaitRounds is set
+		for _, p := range Consensus {
+			if p.ApprovedUpgrades != nil {
+				for v := range p.ApprovedUpgrades {
+					if p.MinUpgradeWaitRounds > 0 {
+						p.ApprovedUpgrades[v] = p.MinUpgradeWaitRounds
+					}
+				}
+			}
+		}
+	}
 }
 
 // Global defines global Algorand protocol parameters which should not be overridden.

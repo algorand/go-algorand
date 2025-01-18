@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -51,9 +51,14 @@ const (
 )
 
 // TXTopicName defines a pubsub topic for TX messages
-const TXTopicName = "/algo/tx/0.1.0"
+// There is a micro optimization for const string comparison:
+// 8 bytes const string require a single x86-64 CMPQ instruction.
+// Naming convention: "algo" + 2 bytes protocol tag + 2 bytes version
+const TXTopicName = "algotx01"
 
-func makePubSub(ctx context.Context, cfg config.Local, host host.Host) (*pubsub.PubSub, error) {
+const incomingThreads = 20 // matches to number wsNetwork workers
+
+func makePubSub(ctx context.Context, cfg config.Local, host host.Host, metricsTracer pubsub.RawTracer) (*pubsub.PubSub, error) {
 	//defaultParams := pubsub.DefaultGossipSubParams()
 
 	options := []pubsub.Option{
@@ -93,7 +98,13 @@ func makePubSub(ctx context.Context, cfg config.Local, host host.Host) (*pubsub.
 		pubsub.WithSubscriptionFilter(pubsub.WrapLimitSubscriptionFilter(pubsub.NewAllowlistSubscriptionFilter(TXTopicName), 100)),
 		// pubsub.WithEventTracer(jsonTracer),
 		pubsub.WithValidateQueueSize(256),
+		pubsub.WithMessageSignaturePolicy(pubsub.StrictNoSign),
 		// pubsub.WithValidateThrottle(cfg.TxBacklogSize),
+		pubsub.WithValidateWorkers(incomingThreads),
+	}
+
+	if metricsTracer != nil {
+		options = append(options, pubsub.WithRawTracer(metricsTracer))
 	}
 
 	return pubsub.NewGossipSub(ctx, host, options...)
@@ -133,7 +144,7 @@ func (s *serviceImpl) getOrCreateTopic(topicName string) (*pubsub.Topic, error) 
 }
 
 // Subscribe returns a subscription to the given topic
-func (s *serviceImpl) Subscribe(topic string, val pubsub.ValidatorEx) (*pubsub.Subscription, error) {
+func (s *serviceImpl) Subscribe(topic string, val pubsub.ValidatorEx) (SubNextCancellable, error) {
 	if err := s.pubsub.RegisterTopicValidator(topic, val); err != nil {
 		return nil, err
 	}
@@ -142,7 +153,7 @@ func (s *serviceImpl) Subscribe(topic string, val pubsub.ValidatorEx) (*pubsub.S
 		return nil, err
 	}
 	// t.SetScoreParams() // already set in makePubSub
-	return t.Subscribe()
+	return t.Subscribe(pubsub.WithBufferSize(32768))
 }
 
 // Publish publishes data to the given topic

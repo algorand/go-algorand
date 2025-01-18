@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -48,37 +48,6 @@ func TestZstdDecompress(t *testing.T) {
 	require.Nil(t, decompressed)
 }
 
-func TestCheckCanCompress(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	req := broadcastRequest{}
-	peers := []*wsPeer{}
-	r := checkCanCompress(req, peers)
-	require.False(t, r)
-
-	req.tags = []protocol.Tag{protocol.AgreementVoteTag}
-	r = checkCanCompress(req, peers)
-	require.False(t, r)
-
-	req.tags = []protocol.Tag{protocol.AgreementVoteTag, protocol.ProposalPayloadTag}
-	r = checkCanCompress(req, peers)
-	require.False(t, r)
-
-	peer1 := wsPeer{
-		features: 0,
-	}
-	peers = []*wsPeer{&peer1}
-	r = checkCanCompress(req, peers)
-	require.False(t, r)
-
-	peer2 := wsPeer{
-		features: pfCompressedProposal,
-	}
-	peers = []*wsPeer{&peer1, &peer2}
-	r = checkCanCompress(req, peers)
-	require.True(t, r)
-}
-
 func TestZstdCompressMsg(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
@@ -108,7 +77,7 @@ func TestWsPeerMsgDataConverterConvert(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	c := wsPeerMsgDataConverter{}
-	c.ppdec = zstdProposalDecompressor{active: false}
+	c.ppdec = zstdProposalDecompressor{}
 	tag := protocol.AgreementVoteTag
 	data := []byte("data")
 
@@ -117,13 +86,9 @@ func TestWsPeerMsgDataConverterConvert(t *testing.T) {
 	require.Equal(t, data, r)
 
 	tag = protocol.ProposalPayloadTag
-	r, err = c.convert(tag, data)
-	require.NoError(t, err)
-	require.Equal(t, data, r)
-
 	l := converterTestLogger{}
 	c.log = &l
-	c.ppdec = zstdProposalDecompressor{active: true}
+	c.ppdec = zstdProposalDecompressor{}
 	r, err = c.convert(tag, data)
 	require.NoError(t, err)
 	require.Equal(t, data, r)

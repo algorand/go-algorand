@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -393,7 +393,11 @@ func main() {
 			os.Exit(1)
 		}
 
-		followerNode.Start()
+		err = followerNode.Start()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Cannot start follower node: %v", err)
+			os.Exit(1)
+		}
 
 		for followerNode.Ledger().Latest() < basics.Round(*roundStart) {
 			fmt.Printf("At round %d, waiting for %d\n", followerNode.Ledger().Latest(), *roundStart)

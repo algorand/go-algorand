@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -402,7 +402,7 @@ var destroyAssetCmd = &cobra.Command{
 			if !noWaitAfterSend {
 				_, err2 = waitForCommit(client, txid, lastValid)
 				if err2 != nil {
-					reportErrorf(err2.Error())
+					reportErrorln(err2.Error())
 				}
 			}
 		} else {
@@ -495,7 +495,7 @@ var configAssetCmd = &cobra.Command{
 			if !noWaitAfterSend {
 				_, err2 = waitForCommit(client, txid, lastValid)
 				if err2 != nil {
-					reportErrorf(err2.Error())
+					reportErrorln(err2.Error())
 				}
 			}
 		} else {
@@ -582,7 +582,7 @@ var sendAssetCmd = &cobra.Command{
 			if !noWaitAfterSend {
 				_, err2 = waitForCommit(client, txid, lastValid)
 				if err2 != nil {
-					reportErrorf(err2.Error())
+					reportErrorln(err2.Error())
 				}
 			}
 		} else {
@@ -651,7 +651,7 @@ var freezeAssetCmd = &cobra.Command{
 			if !noWaitAfterSend {
 				_, err2 = waitForCommit(client, txid, lastValid)
 				if err2 != nil {
-					reportErrorf(err2.Error())
+					reportErrorln(err2.Error())
 				}
 			}
 		} else {
@@ -740,13 +740,13 @@ var optinAssetCmd = &cobra.Command{
 			if !noWaitAfterSend {
 				_, err2 = waitForCommit(client, txid, lastValid)
 				if err2 != nil {
-					reportErrorf(err2.Error())
+					reportErrorln(err2.Error())
 				}
 			}
 		} else {
 			err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
 			if err != nil {
-				reportErrorf(err.Error())
+				reportErrorln(err.Error())
 			}
 		}
 	},

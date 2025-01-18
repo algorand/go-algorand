@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,6 +17,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"math/rand"
@@ -33,7 +34,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
-	"github.com/algorand/go-algorand/network"
+	"github.com/algorand/go-algorand/network/addr"
 	"github.com/algorand/go-algorand/protocol"
 	toolsnet "github.com/algorand/go-algorand/tools/network"
 	"github.com/algorand/go-algorand/util"
@@ -174,6 +175,14 @@ func run() int {
 		log.Fatalf("Cannot load config: %v", err)
 	}
 
+	// log is not setup yet
+	fmt.Printf("Config loaded from %s\n", absolutePath)
+	fmt.Println("Configuration after loading/defaults merge: ")
+	err = json.NewEncoder(os.Stdout).Encode(cfg)
+	if err != nil {
+		fmt.Println("Error encoding config: ", err)
+	}
+
 	// set soft memory limit, if configured
 	if cfg.GoMemLimit > 0 {
 		debug.SetMemoryLimit(int64(cfg.GoMemLimit))
@@ -184,6 +193,10 @@ func run() int {
 		// log is not setup yet, this will log to stderr
 		log.Fatalf("Error validating DNSBootstrap input: %v", err)
 	}
+
+	// Apply network-specific consensus overrides, noting the configurable consensus protocols file
+	// takes precedence over network-specific overrides.
+	config.ApplyShorterUpgradeRoundsForDevNetworks(genesis.Network)
 
 	err = config.LoadConfigurableConsensusProtocols(absolutePath)
 	if err != nil {
@@ -282,7 +295,7 @@ func run() int {
 
 		// make sure that the format of each entry is valid:
 		for idx, peer := range peerOverrideArray {
-			addr, addrErr := network.ParseHostOrURLOrMultiaddr(peer)
+			addr, addrErr := addr.ParseHostOrURLOrMultiaddr(peer)
 			if addrErr != nil {
 				fmt.Fprintf(os.Stderr, "Provided command line parameter '%s' is not a valid host:port pair\n", peer)
 				return 1
@@ -353,7 +366,7 @@ func run() int {
 
 		// If the telemetry URI is not set, periodically check SRV records for new telemetry URI
 		if remoteTelemetryEnabled && log.GetTelemetryURI() == "" {
-			toolsnet.StartTelemetryURIUpdateService(time.Minute, cfg, s.Genesis.Network, log, done)
+			toolsnet.StartTelemetryURIUpdateService(time.Minute, cfgCopy, s.Genesis.Network, log, done)
 		}
 
 		currentVersion := config.GetCurrentVersion()
@@ -436,6 +449,8 @@ var startupConfigCheckFields = []string{
 	"TxPoolExponentialIncreaseFactor",
 	"TxPoolSize",
 	"VerifiedTranscationsCacheSize",
+	"EnableP2P",
+	"EnableP2PHybridMode",
 }
 
 func resolveDataDir() string {

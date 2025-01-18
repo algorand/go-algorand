@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -29,6 +29,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
@@ -61,6 +62,7 @@ type TransactionPool struct {
 	cond                   sync.Cond
 	expiredTxCount         map[basics.Round]int
 	pendingBlockEvaluator  BlockEvaluator
+	evalTracer             logic.EvalTracer
 	numPendingWholeBlocks  basics.Round
 	feePerByte             atomic.Uint64
 	feeThresholdMultiplier uint64
@@ -95,6 +97,11 @@ type TransactionPool struct {
 	// stateproofOverflowed indicates that a stateproof transaction was allowed to
 	// exceed the txPoolMaxSize. This flag is reset to false OnNewBlock
 	stateproofOverflowed bool
+
+	// shutdown is set to true when the pool is being shut down. It is checked in exported methods
+	// to prevent pool operations like remember and recomputing the block evaluator
+	// from using down stream resources like ledger that may be shutting down.
+	shutdown bool
 }
 
 // BlockEvaluator defines the block evaluator interface exposed by the ledger package.
@@ -112,6 +119,8 @@ type BlockEvaluator interface {
 type VotingAccountSupplier interface {
 	VotingAccountsForRound(basics.Round) []basics.Address
 }
+
+var errPoolShutdown = errors.New("transaction pool is shutting down")
 
 // MakeTransactionPool makes a transaction pool.
 func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local, log logging.Logger, vac VotingAccountSupplier) *TransactionPool {
@@ -131,6 +140,9 @@ func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local, log logging.Lo
 		proposalAssemblyTime: cfg.ProposalAssemblyTime,
 		log:                  log,
 		vac:                  vac,
+	}
+	if cfg.EnableDeveloperAPI {
+		pool.evalTracer = logic.EvalErrorDetailsTracer{}
 	}
 	pool.cond.L = &pool.mu
 	pool.assemblyCond.L = &pool.assemblyMu
@@ -430,6 +442,10 @@ func (pool *TransactionPool) ingest(txgroup []transactions.SignedTxn, params poo
 		return ErrNoPendingBlockEvaluator
 	}
 
+	if pool.shutdown {
+		return errPoolShutdown
+	}
+
 	if !params.recomputing {
 		// Make sure that the latest block has been processed by OnNewBlock().
 		// If not, we might be in a race, so wait a little bit for OnNewBlock()
@@ -440,6 +456,10 @@ func (pool *TransactionPool) ingest(txgroup []transactions.SignedTxn, params poo
 			condvar.TimedWait(&pool.cond, timeoutOnNewBlock)
 			if pool.pendingBlockEvaluator == nil {
 				return ErrNoPendingBlockEvaluator
+			}
+			// recheck if the pool is shutting down since TimedWait above releases the lock
+			if pool.shutdown {
+				return errPoolShutdown
 			}
 		}
 
@@ -529,6 +549,10 @@ func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block, delta ledgercor
 
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
+	if pool.shutdown {
+		return
+	}
+
 	defer pool.cond.Broadcast()
 	if pool.pendingBlockEvaluator == nil || block.Round() >= pool.pendingBlockEvaluator.Round() {
 		// Adjust the pool fee threshold.  The rules are:
@@ -712,7 +736,7 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIDs map[transact
 	if hint < 0 || int(knownCommitted) < 0 {
 		hint = 0
 	}
-	pool.pendingBlockEvaluator, err = pool.ledger.StartEvaluator(next.BlockHeader, hint, 0, nil)
+	pool.pendingBlockEvaluator, err = pool.ledger.StartEvaluator(next.BlockHeader, hint, 0, pool.evalTracer)
 	if err != nil {
 		// The pendingBlockEvaluator is an interface, and in case of an evaluator error
 		// we want to remove the interface itself rather then keeping an interface
@@ -765,15 +789,19 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIDs map[transact
 			case *ledgercore.LeaseInLedgerError:
 				asmStats.LeaseErrorCount++
 				stats.RemovedInvalidCount++
-				pool.log.Infof("Cannot re-add pending transaction to pool: %v", err)
+				pool.log.Infof("Pending transaction in pool no longer valid: %v", err)
 			case *transactions.MinFeeError:
 				asmStats.MinFeeErrorCount++
 				stats.RemovedInvalidCount++
-				pool.log.Infof("Cannot re-add pending transaction to pool: %v", err)
+				pool.log.Infof("Pending transaction in pool no longer valid: %v", err)
+			case logic.EvalError:
+				asmStats.LogicErrorCount++
+				stats.RemovedInvalidCount++
+				pool.log.Infof("Pending transaction in pool no longer valid: %v", err)
 			default:
 				asmStats.InvalidCount++
 				stats.RemovedInvalidCount++
-				pool.log.Warnf("Cannot re-add pending transaction to pool: %v", err)
+				pool.log.Infof("Pending transaction in pool no longer valid: %v", err)
 			}
 		}
 	}
@@ -1009,4 +1037,14 @@ func (pool *TransactionPool) AssembleDevModeBlock() (assembled *ledgercore.Unfin
 	// so there won't be any waiting on this call.
 	assembled, err = pool.AssembleBlock(pool.pendingBlockEvaluator.Round(), time.Now().Add(pool.proposalAssemblyTime))
 	return
+}
+
+// Shutdown stops the transaction pool from accepting new transactions and blocks.
+// It takes the pool.mu lock in order to ensure there is no pending remember or block operations in flight
+// and sets the shutdown flag to true.
+func (pool *TransactionPool) Shutdown() {
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
+
+	pool.shutdown = true
 }

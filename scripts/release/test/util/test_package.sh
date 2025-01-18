@@ -8,9 +8,9 @@ set -ex
 . "${HOME}"/build_env
 
 OS_LIST=(
-    centos:7
-    quay.io/centos/centos:stream8
-    fedora:38
+    quay.io/centos/centos:stream9
+    fedora:39
+    fedora:40
     ubuntu:20.04
     ubuntu:22.04
 )

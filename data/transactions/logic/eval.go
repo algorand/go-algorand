@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -28,10 +28,9 @@ import (
 	"math/big"
 	"math/bits"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
-
-	"golang.org/x/exp/slices"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -1000,6 +999,7 @@ func (pe panicError) Error() string {
 
 var errLogicSigNotSupported = errors.New("LogicSig not supported")
 var errTooManyArgs = errors.New("LogicSig has too many arguments")
+var errLogicSigArgTooLarge = errors.New("LogicSig argument too large")
 
 // EvalError indicates AVM evaluation failure
 type EvalError struct {
@@ -1027,8 +1027,16 @@ func (err EvalError) Unwrap() error {
 }
 
 func (cx *EvalContext) evalError(err error) error {
-	pc, det := cx.pcDetails()
-	details := fmt.Sprintf("pc=%d, opcodes=%s", pc, det)
+	var pc int
+	var details string
+	if cx.Tracer != nil && cx.Tracer.DetailedEvalErrors() {
+		var det string
+		pc, det = cx.pcDetails()
+		details = fmt.Sprintf("pc=%d, opcodes=%s", pc, det)
+	} else {
+		pc = cx.pc
+		details = fmt.Sprintf("pc=%d", pc)
+	}
 
 	err = basics.Annotate(err,
 		"pc", pc,
@@ -1305,8 +1313,15 @@ func eval(program []byte, cx *EvalContext) (pass bool, err error) {
 	if (cx.EvalParams.Proto == nil) || (cx.EvalParams.Proto.LogicSigVersion == 0) {
 		return false, errLogicSigNotSupported
 	}
-	if cx.txn.Lsig.Args != nil && len(cx.txn.Lsig.Args) > transactions.EvalMaxArgs {
-		return false, errTooManyArgs
+	if cx.txn.Lsig.Args != nil {
+		if len(cx.txn.Lsig.Args) > transactions.EvalMaxArgs {
+			return false, errTooManyArgs
+		}
+		for _, arg := range cx.txn.Lsig.Args {
+			if len(arg) > transactions.MaxLogicSigArgSize {
+				return false, errLogicSigArgTooLarge
+			}
+		}
 	}
 	if verr != nil {
 		return false, verr
@@ -5771,12 +5786,24 @@ func opBlock(cx *EvalContext) error {
 			return fmt.Errorf("block(%d) timestamp %d < 0", round, hdr.TimeStamp)
 		}
 		cx.Stack[last] = stackValue{Uint: uint64(hdr.TimeStamp)}
+
+	case BlkBranch:
+		cx.Stack[last].Bytes = hdr.Branch[:]
+	case BlkFeeSink:
+		cx.Stack[last].Bytes = hdr.FeeSink[:]
+	case BlkProtocol:
+		cx.Stack[last].Bytes = []byte(hdr.CurrentProtocol)
+	case BlkTxnCounter:
+		cx.Stack[last] = stackValue{Uint: hdr.TxnCounter}
+
 	case BlkProposer:
 		cx.Stack[last].Bytes = hdr.Proposer[:]
 	case BlkFeesCollected:
 		cx.Stack[last] = stackValue{Uint: hdr.FeesCollected.Raw}
 	case BlkBonus:
 		cx.Stack[last] = stackValue{Uint: hdr.Bonus.Raw}
+	case BlkProposerPayout:
+		cx.Stack[last] = stackValue{Uint: hdr.ProposerPayout.Raw}
 	default:
 		return fmt.Errorf("invalid block field %s", fs.field)
 	}

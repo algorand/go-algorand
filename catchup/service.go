@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -351,7 +351,7 @@ func (s *Service) fetchAndWrite(ctx context.Context, r basics.Round, prevFetchCo
 			// for no reason.
 			select {
 			case <-ctx.Done():
-				s.log.Infof("fetchAndWrite(%d): Aborted while waiting for lookback block to ledger after failing once : %v", r, err)
+				s.log.Infof("fetchAndWrite(%v): Aborted while waiting for lookback block to ledger", r)
 				return false
 			case <-lookbackComplete:
 			}
@@ -760,6 +760,13 @@ func (s *Service) fetchRound(cert agreement.Certificate, verifier *agreement.Asy
 		psp, getPeerErr := ps.getNextPeer()
 		if getPeerErr != nil {
 			s.log.Debugf("fetchRound: was unable to obtain a peer to retrieve the block from")
+			select {
+			case <-s.ctx.Done():
+				logging.Base().Debugf("fetchRound was asked to quit while collecting peers")
+				return
+			default:
+			}
+
 			s.net.RequestConnectOutgoing(true, s.ctx.Done())
 			continue
 		}

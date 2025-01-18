@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,7 +23,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-//go:generate stringer -type=TxnField,GlobalField,AssetParamsField,AppParamsField,AcctParamsField,AssetHoldingField,OnCompletionConstType,EcdsaCurve,EcGroup,Base64Encoding,JSONRefType,VoterParamsField,VrfStandard,BlockField -output=fields_string.go
+//go:generate stringer -type=TxnField,GlobalField,AssetParamsField,AppParamsField,AcctParamsField,AssetHoldingField,OnCompletionConstType,EcdsaCurve,EcGroup,MimcConfig,Base64Encoding,JSONRefType,VoterParamsField,VrfStandard,BlockField -output=fields_string.go
 
 // FieldSpec unifies the various specs for assembly, disassembly, and doc generation.
 type FieldSpec interface {
@@ -626,9 +626,9 @@ var globalFieldSpecs = [...]globalFieldSpec{
 	{PayoutsPercent, StackUint64, modeAny, incentiveVersion,
 		"The percentage of transaction fees in a block that can be paid to the block proposer."},
 	{PayoutsMinBalance, StackUint64, modeAny, incentiveVersion,
-		"The minimum algo balance an account must have in the agreement round to receive block payouts in the proposal round."},
+		"The minimum balance an account must have in the agreement round to receive block payouts in the proposal round."},
 	{PayoutsMaxBalance, StackUint64, modeAny, incentiveVersion,
-		"The maximum algo balance an account can have in the agreement round to receive block payouts in the proposal round."},
+		"The maximum balance an account can have in the agreement round to receive block payouts in the proposal round."},
 }
 
 func globalFieldSpecByField(f GlobalField) (globalFieldSpec, bool) {
@@ -783,6 +783,68 @@ var EcGroups = FieldGroup{
 	"EC", "Groups",
 	ecGroupNames[:],
 	ecGroupSpecByName,
+}
+
+// MimcConfig is an enum for the `mimc` opcode
+type MimcConfig int
+
+const (
+	// BN254Mp110 is the default MiMC configuration for the BN254 curve with Miyaguchi-Preneel mode, 110 rounds, exponent 5, seed "seed"
+	BN254Mp110 MimcConfig = iota
+	// BLS12_381Mp111 is the default MiMC configuration for the BLS12-381 curve with Miyaguchi-Preneel mode, 111 rounds, exponent 5, seed "seed"
+	BLS12_381Mp111
+	invalidMimcConfig // compile-time constant for number of fields
+)
+
+var mimcConfigNames [invalidMimcConfig]string
+
+type mimcConfigSpec struct {
+	field MimcConfig
+	doc   string
+}
+
+func (fs mimcConfigSpec) Field() byte {
+	return byte(fs.field)
+}
+func (fs mimcConfigSpec) Type() StackType {
+	return StackNone // Will not show, since all are untyped
+}
+func (fs mimcConfigSpec) OpVersion() uint64 {
+	return mimcVersion
+}
+func (fs mimcConfigSpec) Version() uint64 {
+	return mimcVersion
+}
+func (fs mimcConfigSpec) Note() string {
+	return fs.doc
+}
+
+var mimcConfigSpecs = [...]mimcConfigSpec{
+	{BN254Mp110, "MiMC configuration for the BN254 curve with Miyaguchi-Preneel mode, 110 rounds, exponent 5, seed \"seed\""},
+	{BLS12_381Mp111, "MiMC configuration for the BLS12-381 curve with Miyaguchi-Preneel mode, 111 rounds, exponent 5, seed \"seed\""},
+}
+
+func mimcConfigSpecByField(c MimcConfig) (mimcConfigSpec, bool) {
+	if int(c) >= len(mimcConfigSpecs) {
+		return mimcConfigSpec{}, false
+	}
+	return mimcConfigSpecs[c], true
+}
+
+var mimcConfigSpecByName = make(mimcConfigNameSpecMap, len(mimcConfigNames))
+
+type mimcConfigNameSpecMap map[string]mimcConfigSpec
+
+func (s mimcConfigNameSpecMap) get(name string) (FieldSpec, bool) {
+	fs, ok := s[name]
+	return fs, ok
+}
+
+// MimcConfigs collects details about the constants used to describe MimcConfigs
+var MimcConfigs = FieldGroup{
+	"Mimc Configurations", "Parameters",
+	mimcConfigNames[:],
+	mimcConfigSpecByName,
 }
 
 // Base64Encoding is an enum for the `base64decode` opcode
@@ -997,6 +1059,16 @@ const (
 	BlkFeesCollected
 	// BlkBonus is the extra amount to be paid for the given block (from FeeSink)
 	BlkBonus
+	// BlkBranch is the hash of the previous block
+	BlkBranch
+	// BlkFeeSink is the fee sink for the given round
+	BlkFeeSink
+	// BlkProtocol is the ConsensusVersion of the block.
+	BlkProtocol
+	// BlkTxnCounter is the number of the next transaction after the block
+	BlkTxnCounter
+	// BlkProposerPayout is the actual amount moved from feesink to proposer
+	BlkProposerPayout
 
 	invalidBlockField // compile-time constant for number of fields
 )
@@ -1010,11 +1082,16 @@ type blockFieldSpec struct {
 }
 
 var blockFieldSpecs = [...]blockFieldSpec{
-	{BlkSeed, StackBytes, randomnessVersion},
+	{BlkSeed, StackBytes32, randomnessVersion},
 	{BlkTimestamp, StackUint64, randomnessVersion},
 	{BlkProposer, StackAddress, incentiveVersion},
 	{BlkFeesCollected, StackUint64, incentiveVersion},
 	{BlkBonus, StackUint64, incentiveVersion},
+	{BlkBranch, StackBytes32, incentiveVersion},
+	{BlkFeeSink, StackAddress, incentiveVersion},
+	{BlkProtocol, StackBytes, incentiveVersion},
+	{BlkTxnCounter, StackUint64, incentiveVersion},
+	{BlkProposerPayout, StackUint64, incentiveVersion},
 }
 
 func blockFieldSpecByField(r BlockField) (blockFieldSpec, bool) {
@@ -1471,7 +1548,7 @@ func (fs voterParamsFieldSpec) Note() string {
 }
 
 var voterParamsFieldSpecs = [...]voterParamsFieldSpec{
-	{VoterBalance, StackUint64, 6, "Online stake in microalgos"},
+	{VoterBalance, StackUint64, incentiveVersion, "Online stake in microalgos"},
 	{VoterIncentiveEligible, StackBoolean, incentiveVersion, "Had this account opted into block payouts"},
 }
 
@@ -1531,6 +1608,13 @@ func init() {
 		equal(int(s.field), i)
 		ecGroupNames[s.field] = s.field.String()
 		ecGroupSpecByName[s.field.String()] = s
+	}
+
+	equal(len(mimcConfigSpecs), len(mimcConfigNames))
+	for i, s := range mimcConfigSpecs {
+		equal(int(s.field), i)
+		mimcConfigNames[s.field] = s.field.String()
+		mimcConfigSpecByName[s.field.String()] = s
 	}
 
 	equal(len(base64EncodingSpecs), len(base64EncodingNames))

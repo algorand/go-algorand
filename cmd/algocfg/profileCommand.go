@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -66,8 +66,8 @@ var (
 		},
 	}
 
-	relay = configUpdater{
-		description: "Relay consensus messages across the network and support catchup.",
+	wsRelay = configUpdater{
+		description: "Relay consensus messages across the ws network and support recent catchup.",
 		updateFunc: func(cfg config.Local) config.Local {
 			cfg.MaxBlockHistoryLookback = 22000 // Enough to support 2 catchpoints with some wiggle room for nodes to catch up from the older one
 			cfg.CatchpointFileHistoryLength = 3
@@ -80,7 +80,7 @@ var (
 	}
 
 	archival = configUpdater{
-		description: "Store the full chain history and support catchup.",
+		description: "Store the full chain history and support full catchup.",
 		updateFunc: func(cfg config.Local) config.Local {
 			cfg.Archival = true
 			cfg.EnableLedgerService = true
@@ -91,13 +91,67 @@ var (
 		},
 	}
 
+	hybridRelay = configUpdater{
+		description: "Relay consensus messages across both ws and p2p networks, also support recent catchup.",
+		updateFunc: func(cfg config.Local) config.Local {
+			// WS relay config defaults
+			cfg.MaxBlockHistoryLookback = 22000 // Enough to support 2 catchpoints with some wiggle room for nodes to catch up from the older one
+			cfg.CatchpointFileHistoryLength = 3
+			cfg.CatchpointTracking = 2
+			cfg.EnableLedgerService = true
+			cfg.EnableBlockService = true
+			cfg.NetAddress = ":4160"
+			// This should be set to the public address of the node if public access is desired
+			cfg.PublicAddress = config.PlaceholderPublicAddress
+
+			// P2P config defaults
+			cfg.EnableP2PHybridMode = true
+			cfg.P2PHybridNetAddress = ":4190"
+			cfg.EnableDHTProviders = true
+			return cfg
+		},
+	}
+
+	hybridArchival = configUpdater{
+		description: "Store the full chain history, support full catchup, P2P enabled, discoverable via DHT.",
+		updateFunc: func(cfg config.Local) config.Local {
+			cfg.Archival = true
+			cfg.EnableLedgerService = true
+			cfg.EnableBlockService = true
+			cfg.NetAddress = ":4160"
+			cfg.EnableGossipService = false
+			// This should be set to the public address of the node
+			cfg.PublicAddress = config.PlaceholderPublicAddress
+
+			// P2P config defaults
+			cfg.EnableP2PHybridMode = true
+			cfg.P2PHybridNetAddress = ":4190"
+			cfg.EnableDHTProviders = true
+			return cfg
+		},
+	}
+
+	hybridClient = configUpdater{
+		description: "Participate in consensus or simply ensure chain health by validating blocks and supporting P2P traffic propagation.",
+		updateFunc: func(cfg config.Local) config.Local {
+
+			// P2P config defaults
+			cfg.EnableP2PHybridMode = true
+			cfg.EnableDHTProviders = true
+			return cfg
+		},
+	}
+
 	// profileNames are the supported pre-configurations of config values
 	profileNames = map[string]configUpdater{
-		"participation": participation,
-		"conduit":       conduit,
-		"relay":         relay,
-		"archival":      archival,
-		"development":   development,
+		"participation":  participation,
+		"conduit":        conduit,
+		"wsRelay":        wsRelay,
+		"archival":       archival,
+		"development":    development,
+		"hybridRelay":    hybridRelay,
+		"hybridArchival": hybridArchival,
+		"hybridClient":   hybridClient,
 	}
 
 	forceUpdate bool

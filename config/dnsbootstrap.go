@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,6 +17,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 	"regexp"
@@ -109,7 +110,7 @@ func parseDNSBootstrap(dnsBootstrapID string, network protocol.NetworkID, defaul
 	dnsBootstrapID = strings.Replace(strings.TrimSpace(strings.ToLower(dnsBootstrapID)), "<network>", string(network), -1)
 
 	if dnsBootstrapID == "" {
-		return nil, fmt.Errorf(bootstrapErrorEmpty)
+		return nil, errors.New(bootstrapErrorEmpty)
 	}
 
 	parsedTemplate, err := url.Parse(dnsBootstrapID)

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -25,11 +25,11 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"golang.org/x/exp/slices"
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
@@ -155,6 +155,10 @@ func makeNewEmptyBlock(t *testing.T, l *Ledger, GenesisID string, initAccounts m
 		// UpgradeVote: empty,
 	}
 
+	if proto.Payouts.Enabled {
+		blk.BlockHeader.Proposer = basics.Address{0x01} // Must be set to _something_.
+	}
+
 	blk.TxnCommitments, err = blk.PaysetCommit()
 	require.NoError(t, err)
 
@@ -262,6 +266,8 @@ func TestLedgerBlockHeaders(t *testing.T) {
 		Round:  l.Latest() + 1,
 		Branch: lastBlock.Hash(),
 		// Seed:       does not matter,
+		Bonus:        bookkeeping.NextBonus(lastBlock.BlockHeader, &proto),
+		Proposer:     basics.Address{0x01}, // Must be set to _something_.
 		TimeStamp:    0,
 		GenesisID:    t.Name(),
 		RewardsState: lastBlock.NextRewardsState(l.Latest()+1, proto, poolBal.MicroAlgos, totalRewardUnits, logging.Base()),
@@ -1683,6 +1689,15 @@ func TestLedgerVerifiesOldStateProofs(t *testing.T) {
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	defer backlogPool.Shutdown()
 
+	// wait all pending commits to finish
+	l.trackers.accountsWriting.Wait()
+
+	// quit the commitSyncer goroutine: this test flushes manually with triggerTrackerFlush
+	l.trackers.ctxCancel()
+	l.trackers.ctxCancel = nil
+	<-l.trackers.commitSyncerClosed
+	l.trackers.commitSyncerClosed = nil
+
 	triggerTrackerFlush(t, l)
 	l.WaitForCommit(l.Latest())
 	blk := createBlkWithStateproof(t, maxBlocks, proto, genesisInitState, l, accounts)
@@ -1714,7 +1729,7 @@ func TestLedgerVerifiesOldStateProofs(t *testing.T) {
 	}
 	l.acctsOnline.voters.votersMu.Unlock()
 
-	// However, we are still able to very a state proof sicne we use the tracker
+	// However, we are still able to very a state proof since we use the tracker
 	blk = createBlkWithStateproof(t, maxBlocks, proto, genesisInitState, l, accounts)
 	_, err = l.Validate(context.Background(), blk, backlogPool)
 	require.ErrorContains(t, err, "state proof crypto error")
@@ -1792,6 +1807,9 @@ func TestLedgerMemoryLeak(t *testing.T) {
 	log := logging.TestingLog(t)
 	log.SetLevel(logging.Info)   // prevent spamming with ledger.AddValidatedBlock debug message
 	deadlock.Opts.Disable = true // catchpoint writing might take long
+	defer func() {
+		deadlock.Opts.Disable = false
+	}()
 	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	defer l.Close()
@@ -1965,6 +1983,35 @@ func TestLookupAgreement(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, ad)
 	require.Equal(t, oad, ad.OnlineAccountData())
+}
+
+func TestGetKnockOfflineCandidates(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	ver := protocol.ConsensusFuture
+	genesisInitState, _ := ledgertesting.GenerateInitState(t, ver, 1_000_000)
+	const inMem = true
+	log := logging.TestingLog(t)
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	ledger, err := OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)
+	require.NoError(t, err, "could not open ledger")
+	defer ledger.Close()
+
+	accts, err := ledger.GetKnockOfflineCandidates(0, config.Consensus[ver])
+	require.NoError(t, err)
+	require.NotEmpty(t, accts)
+	// get online genesis accounts
+	onlineCnt := 0
+	onlineAddrs := make(map[basics.Address]basics.OnlineAccountData)
+	for addr, ad := range genesisInitState.Accounts {
+		if ad.Status == basics.Online {
+			onlineCnt++
+			onlineAddrs[addr] = ad.OnlineAccountData()
+		}
+	}
+	require.Len(t, accts, onlineCnt)
+	require.Equal(t, onlineAddrs, accts)
 }
 
 func BenchmarkLedgerStartup(b *testing.B) {
@@ -2898,10 +2945,16 @@ func testVotersReloadFromDiskAfterOneStateProofCommitted(t *testing.T, cfg confi
 	const inMem = true
 
 	log := logging.TestingLog(t)
-	log.SetLevel(logging.Info)
+	log.SetLevel(logging.Debug)
 	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	defer l.Close()
+
+	// quit the commitSyncer goroutine: this test flushes manually with triggerTrackerFlush
+	l.trackers.ctxCancel()
+	l.trackers.ctxCancel = nil
+	<-l.trackers.commitSyncerClosed
+	l.trackers.commitSyncerClosed = nil
 
 	blk := genesisInitState.Block
 
@@ -2917,6 +2970,9 @@ func testVotersReloadFromDiskAfterOneStateProofCommitted(t *testing.T, cfg confi
 		blk.BlockHeader.Round++
 		err = l.AddBlock(blk, agreement.Certificate{})
 		require.NoError(t, err)
+		if i > 0 && i%100 == 0 {
+			triggerTrackerFlush(t, l)
+		}
 	}
 
 	// we simulate that the stateproof for round 512 is confirmed on chain, and we can move to the next one.
@@ -2929,18 +2985,12 @@ func testVotersReloadFromDiskAfterOneStateProofCommitted(t *testing.T, cfg confi
 		blk.BlockHeader.Round++
 		err = l.AddBlock(blk, agreement.Certificate{})
 		require.NoError(t, err)
+		if i%100 == 0 {
+			triggerTrackerFlush(t, l)
+		}
 	}
 
-	// wait all pending commits to finish
-	l.trackers.accountsWriting.Wait()
-
-	// quit the commitSyncer goroutine
-	l.trackers.ctxCancel()
-	l.trackers.ctxCancel = nil
-	<-l.trackers.commitSyncerClosed
-	l.trackers.commitSyncerClosed = nil
-
-	// flush one final time
+	// flush remaining blocks
 	triggerTrackerFlush(t, l)
 
 	var vtSnapshot map[basics.Round]*ledgercore.VotersForRound
@@ -2956,6 +3006,18 @@ func testVotersReloadFromDiskAfterOneStateProofCommitted(t *testing.T, cfg confi
 		require.Contains(t, vtSnapshot, basics.Round(496))
 		require.NotContains(t, vtSnapshot, basics.Round(240))
 	}()
+
+	t.Log("reloading ledger")
+	// drain any deferred commits since AddBlock above triggered scheduleCommit
+outer:
+	for {
+		select {
+		case <-l.trackers.deferredCommits:
+			l.trackers.accountsWriting.Done()
+		default:
+			break outer
+		}
+	}
 
 	err = l.reloadLedger()
 	require.NoError(t, err)
@@ -3403,6 +3465,7 @@ func TestLedgerRetainMinOffCatchpointInterval(t *testing.T) {
 			l := &Ledger{}
 			l.cfg = cfg
 			l.archival = cfg.Archival
+			l.trackers.log = logging.TestingLog(t)
 
 			for i := 1; i <= blocksToMake; i++ {
 				minBlockToKeep := l.notifyCommit(basics.Round(i))
@@ -3422,5 +3485,40 @@ func TestLedgerRetainMinOffCatchpointInterval(t *testing.T) {
 			}
 		}()
 	}
+}
 
+type testBlockListener struct {
+	id int
+}
+
+func (t *testBlockListener) OnNewBlock(bookkeeping.Block, ledgercore.StateDelta) {}
+
+// TestLedgerRegisterBlockListeners ensures that the block listeners survive reloadLedger
+func TestLedgerRegisterBlockListeners(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	genBalances, _, _ := ledgertesting.NewTestGenesis()
+	var genHash crypto.Digest
+	crypto.RandBytes(genHash[:])
+	cfg := config.GetDefaultLocal()
+	l := newSimpleLedgerFull(t, genBalances, protocol.ConsensusCurrentVersion, genHash, cfg)
+	defer l.Close()
+
+	l.RegisterBlockListeners([]ledgercore.BlockListener{&testBlockListener{1}, &testBlockListener{2}})
+	l.RegisterBlockListeners([]ledgercore.BlockListener{&testBlockListener{3}})
+
+	require.Equal(t, 3, len(l.notifier.listeners))
+	var ids []int
+	for _, bl := range l.notifier.listeners {
+		ids = append(ids, bl.(*testBlockListener).id)
+	}
+	require.Equal(t, []int{1, 2, 3}, ids)
+
+	l.reloadLedger()
+
+	ids = nil
+	for _, bl := range l.notifier.listeners {
+		ids = append(ids, bl.(*testBlockListener).id)
+	}
+	require.Equal(t, []int{1, 2, 3}, ids)
 }

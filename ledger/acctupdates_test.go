@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -130,7 +130,18 @@ func makeMockLedgerForTrackerWithLogger(t testing.TB, inMemory bool, initialBloc
 			Totals: totals,
 		}
 	}
-	return &mockLedgerForTracker{dbs: dbs, log: l, filename: fileName, inMemory: inMemory, blocks: blocks, deltas: deltas, consensusParams: config.Consensus[consensusVersion], consensusVersion: consensusVersion, accts: accts[0]}
+	ml := &mockLedgerForTracker{
+		dbs:      dbs,
+		log:      l,
+		filename: fileName,
+		inMemory: inMemory,
+		blocks:   blocks,
+		deltas:   deltas, consensusParams: config.Consensus[consensusVersion],
+		consensusVersion: consensusVersion,
+		accts:            accts[0],
+		trackers:         trackerRegistry{log: l},
+	}
+	return ml
 
 }
 
@@ -160,6 +171,7 @@ func (ml *mockLedgerForTracker) fork(t testing.TB) *mockLedgerForTracker {
 		filename:         fn,
 		consensusParams:  ml.consensusParams,
 		consensusVersion: ml.consensusVersion,
+		trackers:         trackerRegistry{log: dblogger},
 	}
 	for k, v := range ml.accts {
 		newLedgerTracker.accts[k] = v
@@ -2032,7 +2044,6 @@ func TestAcctUpdatesResources(t *testing.T) {
 				require.NoError(t, err)
 				ml.trackers.dbRound = newBase
 				au.postCommit(ml.trackers.ctx, dcc)
-				au.postCommitUnlocked(ml.trackers.ctx, dcc)
 			}()
 
 		}
@@ -2318,7 +2329,6 @@ func auCommitSync(t *testing.T, rnd basics.Round, au *accountUpdates, ml *mockLe
 			require.NoError(t, err)
 			ml.trackers.dbRound = newBase
 			au.postCommit(ml.trackers.ctx, dcc)
-			au.postCommitUnlocked(ml.trackers.ctx, dcc)
 		}()
 	}
 }

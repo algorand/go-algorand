@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -27,7 +27,7 @@ import (
 	algodclient "github.com/algorand/go-algorand/daemon/algod/api/client"
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
 	kmdclient "github.com/algorand/go-algorand/daemon/kmd/client"
-	"github.com/algorand/go-algorand/rpcs"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -819,7 +819,7 @@ func (c *Client) ParsedPendingTransaction(txid string) (txn v2.PreEncodedTxInfo,
 }
 
 // Block takes a round and returns its block
-func (c *Client) Block(round uint64) (resp model.BlockResponse, err error) {
+func (c *Client) Block(round uint64) (resp v2.BlockResponseJSON, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.Block(round)
@@ -830,53 +830,43 @@ func (c *Client) Block(round uint64) (resp model.BlockResponse, err error) {
 // RawBlock takes a round and returns its block
 func (c *Client) RawBlock(round uint64) (resp []byte, err error) {
 	algod, err := c.ensureAlgodClient()
-	if err == nil {
-		resp, err = algod.RawBlock(round)
+	if err != nil {
+		return
 	}
-	return
-}
-
-// EncodedBlockCert takes a round and returns its parsed block and certificate
-func (c *Client) EncodedBlockCert(round uint64) (blockCert rpcs.EncodedBlockCert, err error) {
-	algod, err := c.ensureAlgodClient()
-	if err == nil {
-		var resp []byte
-		resp, err = algod.RawBlock(round)
-		if err == nil {
-			err = protocol.Decode(resp, &blockCert)
-			if err != nil {
-				return
-			}
-		}
-	}
-	return
+	return algod.RawBlock(round)
 }
 
 // BookkeepingBlock takes a round and returns its block
 func (c *Client) BookkeepingBlock(round uint64) (block bookkeeping.Block, err error) {
-	blockCert, err := c.EncodedBlockCert(round)
-	if err == nil {
-		return blockCert.Block, nil
+	algod, err := c.ensureAlgodClient()
+	if err != nil {
+		return
 	}
-	return
+	blockCert, err := algod.EncodedBlockCert(round)
+	if err != nil {
+		return
+	}
+	return blockCert.Block, nil
 }
 
 // HealthCheck returns an error if something is wrong
 func (c *Client) HealthCheck() error {
 	algod, err := c.ensureAlgodClient()
-	if err == nil {
-		err = algod.HealthCheck()
+	if err != nil {
+		return err
 	}
-	return err
+	return algod.HealthCheck()
 }
 
-// WaitForRound takes a round, waits until it appears and returns its status. This function blocks.
+// WaitForRound takes a round, waits up to one minute, for it to appear and
+// returns the node status. This function blocks and fails if the block does not
+// appear in one minute.
 func (c *Client) WaitForRound(round uint64) (resp model.NodeStatusResponse, err error) {
 	algod, err := c.ensureAlgodClient()
-	if err == nil {
-		resp, err = algod.StatusAfterBlock(round)
+	if err != nil {
+		return
 	}
-	return
+	return algod.WaitForRound(round, time.Minute)
 }
 
 // GetBalance takes an address and returns its total balance; if the address doesn't exist, it returns 0.
@@ -1341,7 +1331,7 @@ func (c *Client) GetSyncRound() (rep model.GetSyncRoundResponse, err error) {
 }
 
 // GetLedgerStateDelta gets the LedgerStateDelta on a node w/ EnableFollowMode
-func (c *Client) GetLedgerStateDelta(round uint64) (rep model.LedgerStateDeltaResponse, err error) {
+func (c *Client) GetLedgerStateDelta(round uint64) (rep ledgercore.StateDelta, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		return algod.GetLedgerStateDelta(round)

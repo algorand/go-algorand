@@ -1,6 +1,6 @@
 {
   "Version": 9,
-  "LogicSigVersion": 10,
+  "LogicSigVersion": 11,
   "NamedTypes": [
     {
       "Name": "[]byte",
@@ -4595,7 +4595,7 @@
         "BlkTimestamp"
       ],
       "ArgEnumTypes": [
-        "[]byte",
+        "[32]byte",
         "uint64"
       ],
       "DocCost": "1",

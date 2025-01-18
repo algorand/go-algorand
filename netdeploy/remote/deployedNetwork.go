@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,6 +19,7 @@ package remote
 import (
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"math/rand"
@@ -58,14 +59,14 @@ var ErrDeployedNetworkInsufficientHosts = fmt.Errorf("target network requires mo
 // ErrDeployedNetworkNameCantIncludeWildcard is returned by Validate if network name contains '*'
 var ErrDeployedNetworkNameCantIncludeWildcard = fmt.Errorf("network name cannont include wild-cards")
 
-// ErrDeployedNetworkTemplate A template file contained {{Field}} sections that were not handled by a corresponding Field value in configuration.
-type ErrDeployedNetworkTemplate struct {
-	UnhandledTemplate string
+// deployedNetworkTemplateError A template file contained {{Field}} sections that were not handled by a corresponding Field value in configuration.
+type deployedNetworkTemplateError struct {
+	unhandledTemplate string
 }
 
 // Error satisfies error interface
-func (ednt ErrDeployedNetworkTemplate) Error() string {
-	return fmt.Sprintf("config file contains unrecognized token: %s", ednt.UnhandledTemplate)
+func (dnte deployedNetworkTemplateError) Error() string {
+	return fmt.Sprintf("config file contains unrecognized token: %s", dnte.unhandledTemplate)
 }
 
 // DeployedNetworkConfig represents the complete configuration specification for a deployed network
@@ -123,10 +124,13 @@ int 1
 `
 
 // InitDeployedNetworkConfig loads the DeployedNetworkConfig from a file
-func InitDeployedNetworkConfig(file string, buildConfig BuildConfig) (cfg DeployedNetworkConfig, err error) {
+func InitDeployedNetworkConfig(file string, buildConfig BuildConfig, ignoreUnkTokens bool) (cfg DeployedNetworkConfig, err error) {
 	processedFile, err := loadAndProcessConfig(file, buildConfig)
 	if err != nil {
-		return
+		var dnte deployedNetworkTemplateError
+		if !errors.As(err, &dnte) || !ignoreUnkTokens {
+			return
+		}
 	}
 
 	err = json.Unmarshal([]byte(processedFile), &cfg)
@@ -178,7 +182,7 @@ func replaceTokens(original string, buildConfig BuildConfig) (expanded string, e
 		if closeIndex < 0 {
 			closeIndex = len(expanded) - 2
 		}
-		return "", ErrDeployedNetworkTemplate{expanded[openIndex : closeIndex+2]}
+		return expanded, deployedNetworkTemplateError{expanded[openIndex : closeIndex+2]}
 	}
 
 	return
@@ -997,6 +1001,16 @@ func createHostSpec(host HostConfig, template cloudHost) (hostSpec cloudHostSpec
 		if node.IsRelay() {
 			relayCount++
 			port, err = extractPublicPort(node.NetAddress)
+			if err != nil {
+				return
+			}
+			if !ports[port] {
+				ports[port] = true
+				portList = append(portList, strconv.Itoa(port))
+			}
+		}
+		if node.P2PHybridNetAddress != "" {
+			port, err = extractPublicPort(node.P2PHybridNetAddress)
 			if err != nil {
 				return
 			}

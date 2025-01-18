@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -189,7 +189,17 @@ func (helper *Helper) GetPackageVersion(channel string, pkg string, specificVers
 	osName := runtime.GOOS
 	arch := runtime.GOARCH
 	prefix := fmt.Sprintf("%s_%s_%s-%s_", pkg, channel, osName, arch)
-	return helper.GetPackageFilesVersion(channel, prefix, specificVersion)
+
+	maxVersion, maxVersionName, err = helper.GetPackageFilesVersion(channel, prefix, specificVersion)
+	// For darwin, we want to also look at universal binaries
+	if osName == "darwin" {
+		universalPrefix := fmt.Sprintf("%s_%s_%s-%s_", pkg, channel, osName, "universal")
+		universalMaxVersion, universalMaxVersionName, universalErr := helper.GetPackageFilesVersion(channel, universalPrefix, specificVersion)
+		if universalMaxVersion > maxVersion {
+			return universalMaxVersion, universalMaxVersionName, universalErr
+		}
+	}
+	return maxVersion, maxVersionName, err
 }
 
 // GetPackageFilesVersion return the package version

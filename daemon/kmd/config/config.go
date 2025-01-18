@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -40,6 +40,7 @@ type KMDConfig struct {
 	SessionLifetimeSecs uint64       `json:"session_lifetime_secs"`
 	Address             string       `json:"address"`
 	AllowedOrigins      []string     `json:"allowed_origins"`
+	AllowHeaderPNA      bool         `json:"allow_header_pna"`
 }
 
 // DriverConfig contains config info specific to each wallet driver

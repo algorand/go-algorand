@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,7 +20,7 @@
 package config
 
 var defaultLocal = Local{
-	Version:                                    34,
+	Version:                                    35,
 	AccountUpdatesStatsInterval:                5000000000,
 	AccountsRebuildSynchronousMode:             1,
 	AgreementIncomingBundlesQueueLength:        15,
@@ -51,7 +51,7 @@ var defaultLocal = Local{
 	ConnectionsRateLimitingWindowSeconds:       1,
 	CrashDBDir:                                 "",
 	DNSBootstrapID:                             "<network>.algorand.network?backup=<network>.algorand.net&dedup=<name>.algorand-<network>.(network|net)",
-	DNSSecurityFlags:                           1,
+	DNSSecurityFlags:                           9,
 	DeadlockDetection:                          0,
 	DeadlockDetectionThreshold:                 30,
 	DisableAPIAuth:                             false,
@@ -64,6 +64,7 @@ var defaultLocal = Local{
 	EnableAgreementTimeMetrics:                 false,
 	EnableAssembleStats:                        false,
 	EnableBlockService:                         false,
+	EnableDHTProviders:                         false,
 	EnableDeveloperAPI:                         false,
 	EnableExperimentalAPI:                      false,
 	EnableFollowMode:                           false,
@@ -72,9 +73,12 @@ var defaultLocal = Local{
 	EnableIncomingMessageFilter:                false,
 	EnableLedgerService:                        false,
 	EnableMetricReporting:                      false,
+	EnableNetDevMetrics:                        false,
 	EnableOutgoingNetworkMessageFiltering:      true,
 	EnableP2P:                                  false,
+	EnableP2PHybridMode:                        false,
 	EnablePingHandler:                          true,
+	EnablePrivateNetworkAccessHeader:           false,
 	EnableProcessBlockStats:                    false,
 	EnableProfiler:                             false,
 	EnableRequestLogger:                        false,
@@ -107,7 +111,7 @@ var defaultLocal = Local{
 	MaxAcctLookback:                            4,
 	MaxBlockHistoryLookback:                    0,
 	MaxCatchpointDownloadDuration:              43200000000000,
-	MaxConnectionsPerIP:                        15,
+	MaxConnectionsPerIP:                        8,
 	MinCatchpointFileDownloadBytesPerSecond:    20480,
 	NetAddress:                                 "",
 	NetworkMessageTraceServer:                  "",
@@ -117,6 +121,8 @@ var defaultLocal = Local{
 	OptimizeAccountsDatabaseOnStartup:          false,
 	OutgoingMessageFilterBucketCount:           3,
 	OutgoingMessageFilterBucketSize:            128,
+	P2PHybridIncomingConnectionsLimit:          1200,
+	P2PHybridNetAddress:                        "",
 	P2PPersistPeerID:                           false,
 	P2PPrivateKeyLocation:                      "",
 	ParticipationKeysRefreshInterval:           60000000000,
@@ -142,6 +148,7 @@ var defaultLocal = Local{
 	TrackerDBDir:                               "",
 	TransactionSyncDataExchangeRate:            0,
 	TransactionSyncSignificantMessageThreshold: 0,
+	TxBacklogAppRateLimitingCountERLDrops:      false,
 	TxBacklogAppTxPerSecondRate:                100,
 	TxBacklogAppTxRateLimiterMaxSize:           1048576,
 	TxBacklogRateLimitingCongestionPct:         50,

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -170,16 +170,16 @@ func (erl *ElasticRateLimiter) DisableCongestionControl() {
 // Returns an error if the capacity could not be vended, which could be:
 // - there is not sufficient free capacity to assign a reserved capacity block
 // - there is no reserved or shared capacity available for the client
-func (erl *ElasticRateLimiter) ConsumeCapacity(c ErlClient) (*ErlCapacityGuard, error) {
+func (erl *ElasticRateLimiter) ConsumeCapacity(c ErlClient) (*ErlCapacityGuard, bool, error) {
 	var cg ErlCapacityGuard
 	var q capacityQueue
 	var err error
 	var exists bool
-	var enableCM bool
+	var isCMEnabled bool
 	// get the client's queue
 	erl.clientLock.RLock()
 	q, exists = erl.capacityByClient[c]
-	enableCM = erl.enableCM
+	isCMEnabled = erl.enableCM
 	erl.clientLock.RUnlock()
 
 	// Step 0: Check for, and create a capacity reservation if needed
@@ -187,14 +187,14 @@ func (erl *ElasticRateLimiter) ConsumeCapacity(c ErlClient) (*ErlCapacityGuard, 
 	if !exists && erl.CapacityPerReservation > 0 {
 		q, err = erl.openReservation(c)
 		if err != nil {
-			return nil, err
+			return nil, isCMEnabled, err
 		}
 		// if the client has been given a new reservation, make sure it cleans up OnClose
 		c.OnClose(func() { erl.closeReservation(c) })
 
 		// if this reservation is newly created, directly (blocking) take a capacity
 		q.blockingConsume()
-		return &ErlCapacityGuard{cq: q, cm: erl.cm}, nil
+		return &ErlCapacityGuard{cq: q, cm: erl.cm}, isCMEnabled, nil
 	}
 
 	// Step 1: Attempt consumption from the reserved queue if one exists
@@ -204,29 +204,29 @@ func (erl *ElasticRateLimiter) ConsumeCapacity(c ErlClient) (*ErlCapacityGuard, 
 			if erl.cm != nil {
 				erl.cm.Consumed(c, time.Now()) // notify the congestion manager that this client consumed from this queue
 			}
-			return &cg, nil
+			return &cg, isCMEnabled, nil
 		}
 	}
 
 	// Step 2: Potentially gate shared queue access if the congestion manager disallows it
 	if erl.cm != nil &&
-		enableCM &&
+		isCMEnabled &&
 		erl.cm.ShouldDrop(c) {
 		if erl.congestionControlCounter != nil {
 			erl.congestionControlCounter.Inc(nil)
 		}
-		return nil, errConManDropped
+		return nil, isCMEnabled, errConManDropped
 	}
 
 	// Step 3: Attempt consumption from the shared queue
 	cg, err = erl.sharedCapacity.consume(erl.cm)
 	if err != nil {
-		return nil, err
+		return nil, isCMEnabled, err
 	}
 	if erl.cm != nil {
 		erl.cm.Consumed(c, time.Now()) // notify the congestion manager that this client consumed from this queue
 	}
-	return &cg, nil
+	return &cg, isCMEnabled, nil
 }
 
 // openReservation creates an entry in the ElasticRateLimiter's reservedCapacity map,

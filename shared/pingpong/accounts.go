@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -958,7 +958,7 @@ func (pps *WorkerState) appFundFromSourceAccount(appID uint64, client *libgoal.C
 	return nil
 }
 
-func takeTopAccounts(allAccounts map[string]*pingPongAccount, numAccounts uint32, srcAccount string) (accounts map[string]*pingPongAccount) {
+func takeTopAccounts(allAccounts map[string]*pingPongAccount, numAccounts uint32, srcAccount string) (accounts map[string]*pingPongAccount) { //nolint:unused // TODO
 	allAddrs := make([]string, len(allAccounts))
 	var i int
 	for addr := range allAccounts {

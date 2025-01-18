@@ -21,9 +21,27 @@ setup_user() {
     sed -e s,@@BINDIR@@,"$bindir", "${SCRIPTPATH}/algorand@.service.template-user" \
         > "$homedir/.config/systemd/user/algorand@.service"
 
+    if [[ ${HOSTMODE} == true ]]; then
+	    echo "[INFO] Hosted mode - replacing algod with algoh"
+	    sed -i 's/algod/algoh/g' "$homedir/.config/systemd/user/algorand@.service"
+    fi
+
     systemctl --user daemon-reload
 }
 
+HOSTMODE=false
+while getopts H opt; do
+    case $opt in
+	H)
+	    HOSTMODE=true
+	    ;;
+	?)
+	    echo "Invalid option: -${OPTARG}"
+	    exit 1
+	    ;;
+    esac
+done
+shift $((OPTIND-1))
 
 if [ "$#" != 1 ]; then
     echo "Usage: $0 username"

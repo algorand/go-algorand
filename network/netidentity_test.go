@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -32,12 +32,15 @@ func TestIdentityChallengeSchemeAttachIfEnabled(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	h := http.Header{}
-	i := NewIdentityChallengeScheme("")
+	i0 := NewIdentityChallengeScheme()
+	i := NewIdentityChallengeScheme(NetIdentityDedupNames(""))
+	require.Equal(t, i0, i)
+	require.Zero(t, *i)
 	chal := i.AttachChallenge(h, "other")
-	require.Empty(t, h.Get(IdentityChallengeHeader))
-	require.Empty(t, chal)
+	require.Zero(t, h.Get(IdentityChallengeHeader))
+	require.Zero(t, chal)
 
-	j := NewIdentityChallengeScheme("yes")
+	j := NewIdentityChallengeScheme(NetIdentityDedupNames("yes"))
 	chal = j.AttachChallenge(h, "other")
 	require.NotEmpty(t, h.Get(IdentityChallengeHeader))
 	require.NotEmpty(t, chal)
@@ -48,7 +51,7 @@ func TestIdentityChallengeSchemeAttachIfEnabled(t *testing.T) {
 func TestIdentityChallengeSchemeVerifyRequestAndAttachResponse(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	i := NewIdentityChallengeScheme("i1")
+	i := NewIdentityChallengeScheme(NetIdentityDedupNames("i1"))
 	// author a challenge to the other scheme
 	h := http.Header{}
 	i.AttachChallenge(h, "i2")
@@ -58,7 +61,7 @@ func TestIdentityChallengeSchemeVerifyRequestAndAttachResponse(t *testing.T) {
 	h = http.Header{}
 	i.AttachChallenge(h, "i2")
 	r := http.Header{}
-	i2 := NewIdentityChallengeScheme("")
+	i2 := NewIdentityChallengeScheme()
 	chal, key, err := i2.VerifyRequestAndAttachResponse(r, h)
 	require.Empty(t, r.Get(IdentityChallengeHeader))
 	require.Empty(t, chal)
@@ -69,7 +72,7 @@ func TestIdentityChallengeSchemeVerifyRequestAndAttachResponse(t *testing.T) {
 	h = http.Header{}
 	i.AttachChallenge(h, "i2")
 	r = http.Header{}
-	i2 = NewIdentityChallengeScheme("not i2")
+	i2 = NewIdentityChallengeScheme(NetIdentityDedupNames("not i2"))
 	chal, key, err = i2.VerifyRequestAndAttachResponse(r, h)
 	require.Empty(t, r.Get(IdentityChallengeHeader))
 	require.Empty(t, chal)
@@ -80,7 +83,7 @@ func TestIdentityChallengeSchemeVerifyRequestAndAttachResponse(t *testing.T) {
 	h = http.Header{}
 	h.Add(IdentityChallengeHeader, "garbage")
 	r = http.Header{}
-	i2 = NewIdentityChallengeScheme("i2")
+	i2 = NewIdentityChallengeScheme(NetIdentityDedupNames("i2"))
 	chal, key, err = i2.VerifyRequestAndAttachResponse(r, h)
 	require.Empty(t, r.Get(IdentityChallengeHeader))
 	require.Empty(t, chal)
@@ -91,7 +94,7 @@ func TestIdentityChallengeSchemeVerifyRequestAndAttachResponse(t *testing.T) {
 	h = http.Header{}
 	i.AttachChallenge(h, "i2")
 	r = http.Header{}
-	i2 = NewIdentityChallengeScheme("i2")
+	i2 = NewIdentityChallengeScheme(NetIdentityDedupNames("i2"))
 	chal, key, err = i2.VerifyRequestAndAttachResponse(r, h)
 	require.NotEmpty(t, r.Get(IdentityChallengeHeader))
 	require.NotEmpty(t, chal)
@@ -103,11 +106,11 @@ func TestIdentityChallengeNoErrorWhenNotParticipating(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	// blank deduplication name will make the scheme a no-op
-	iNotParticipate := NewIdentityChallengeScheme("")
+	iNotParticipate := NewIdentityChallengeScheme()
 
 	// create a request header first
 	h := http.Header{}
-	i := NewIdentityChallengeScheme("i1")
+	i := NewIdentityChallengeScheme(NetIdentityDedupNames("i1"))
 	origChal := i.AttachChallenge(h, "i1")
 	require.NotEmpty(t, h.Get(IdentityChallengeHeader))
 	require.NotEmpty(t, origChal)
@@ -120,7 +123,7 @@ func TestIdentityChallengeNoErrorWhenNotParticipating(t *testing.T) {
 
 	// create a response
 	h2 := http.Header{}
-	i2 := NewIdentityChallengeScheme("i2")
+	i2 := NewIdentityChallengeScheme(NetIdentityDedupNames("i2"))
 	i2.VerifyRequestAndAttachResponse(h2, h)
 
 	// confirm a nil scheme will not return values or error
@@ -148,7 +151,7 @@ func TestIdentityChallengeSchemeVerifyResponse(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	h := http.Header{}
-	i := NewIdentityChallengeScheme("i1")
+	i := NewIdentityChallengeScheme(NetIdentityDedupNames("i1"))
 	// author a challenge to ourselves
 	origChal := i.AttachChallenge(h, "i1")
 	require.NotEmpty(t, h.Get(IdentityChallengeHeader))
@@ -176,11 +179,11 @@ func TestIdentityChallengeSchemeBadSignature(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	h := http.Header{}
-	i := NewIdentityChallengeScheme("i1")
+	i := NewIdentityChallengeScheme(NetIdentityDedupNames("i1"))
 	// Copy the logic of attaching the header and signing so we can sign it wrong
 	c := identityChallengeSigned{
 		Msg: identityChallenge{
-			Key:           i.identityKeys.SignatureVerifier,
+			Key:           i.identityKeys.PublicKey(),
 			Challenge:     newIdentityChallengeValue(),
 			PublicAddress: []byte("i1"),
 		}}
@@ -204,7 +207,7 @@ func TestIdentityChallengeSchemeBadPayload(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	h := http.Header{}
-	i := NewIdentityChallengeScheme("i1")
+	i := NewIdentityChallengeScheme(NetIdentityDedupNames("i1"))
 	h.Add(IdentityChallengeHeader, "NOT VALID BASE 64! :)")
 
 	// observe that VerifyRequestAndAttachResponse won't do anything on bad signature
@@ -222,7 +225,7 @@ func TestIdentityChallengeSchemeBadResponseSignature(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	h := http.Header{}
-	i := NewIdentityChallengeScheme("i1")
+	i := NewIdentityChallengeScheme(NetIdentityDedupNames("i1"))
 	// author a challenge to ourselves
 	origChal := i.AttachChallenge(h, "i1")
 	require.NotEmpty(t, h.Get(IdentityChallengeHeader))
@@ -232,7 +235,7 @@ func TestIdentityChallengeSchemeBadResponseSignature(t *testing.T) {
 	r := http.Header{}
 	resp := identityChallengeResponseSigned{
 		Msg: identityChallengeResponse{
-			Key:               i.identityKeys.SignatureVerifier,
+			Key:               i.identityKeys.PublicKey(),
 			Challenge:         origChal,
 			ResponseChallenge: newIdentityChallengeValue(),
 		}}
@@ -253,7 +256,7 @@ func TestIdentityChallengeSchemeBadResponsePayload(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	h := http.Header{}
-	i := NewIdentityChallengeScheme("i1")
+	i := NewIdentityChallengeScheme(NetIdentityDedupNames("i1"))
 	// author a challenge to ourselves
 	origChal := i.AttachChallenge(h, "i1")
 	require.NotEmpty(t, h.Get(IdentityChallengeHeader))
@@ -275,7 +278,7 @@ func TestIdentityChallengeSchemeWrongChallenge(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	h := http.Header{}
-	i := NewIdentityChallengeScheme("i1")
+	i := NewIdentityChallengeScheme(NetIdentityDedupNames("i1"))
 	// author a challenge to ourselves
 	origChal := i.AttachChallenge(h, "i1")
 	require.NotEmpty(t, h.Get(IdentityChallengeHeader))
@@ -365,4 +368,68 @@ func TestIdentityTrackerHandlerGuard(t *testing.T) {
 		Net:    &WebsocketNetwork{},
 	}
 	require.Equal(t, OutgoingMessage{}, identityVerificationHandler(msg))
+}
+
+// TestNewIdentityChallengeScheme ensures NewIdentityChallengeScheme returns
+// a correct identityChallengePublicKeyScheme for the following inputs:
+// DedupNames(a, b) vs DedupNames(a), DedupNames(b)
+// Empty vs non-empty PeerID, PublicAddress
+// Empty vs non-empty Signer
+func TestNewIdentityChallengeScheme(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	s1 := NewIdentityChallengeScheme()
+	s2 := NewIdentityChallengeScheme(NetIdentityDedupNames(""))
+	s3 := NewIdentityChallengeScheme(NetIdentityDedupNames("", ""))
+	s4 := NewIdentityChallengeScheme(NetIdentityDedupNames(""), NetIdentityDedupNames(""))
+	require.Equal(t, s1, s2)
+	require.Equal(t, s2, s3)
+	require.Equal(t, s3, s4)
+	require.Zero(t, *s1)
+
+	s1 = NewIdentityChallengeScheme(NetIdentityDedupNames("a", "a"))
+	s2 = NewIdentityChallengeScheme(NetIdentityDedupNames("a"), NetIdentityDedupNames("a"))
+	require.Equal(t, s1.dedupNames, s2.dedupNames)
+	require.Len(t, s1.dedupNames, 1)
+	require.IsType(t, &identityChallengeLegacySigner{}, s1.identityKeys)
+	require.IsType(t, &identityChallengeLegacySigner{}, s2.identityKeys)
+	require.NotEqual(t, s1.identityKeys, s2.identityKeys)
+
+	s1 = NewIdentityChallengeScheme(NetIdentityDedupNames("a", "b"))
+	s2 = NewIdentityChallengeScheme(NetIdentityDedupNames("a"), NetIdentityDedupNames("b"))
+	require.Equal(t, s1.dedupNames, s2.dedupNames)
+	require.Len(t, s1.dedupNames, 2)
+	require.IsType(t, &identityChallengeLegacySigner{}, s1.identityKeys)
+	require.IsType(t, &identityChallengeLegacySigner{}, s2.identityKeys)
+	require.NotEqual(t, s1.identityKeys, s2.identityKeys)
+
+	s1 = NewIdentityChallengeScheme(NetIdentityDedupNames("", "a"))
+	s2 = NewIdentityChallengeScheme(NetIdentityDedupNames("a"), NetIdentityDedupNames(""))
+	s3 = NewIdentityChallengeScheme(NetIdentityDedupNames("a", ""))
+	s4 = NewIdentityChallengeScheme(NetIdentityDedupNames(""), NetIdentityDedupNames("a"))
+	require.Equal(t, s1.dedupNames, s2.dedupNames)
+	require.Equal(t, s2.dedupNames, s3.dedupNames)
+	require.Equal(t, s3.dedupNames, s4.dedupNames)
+	require.Len(t, s1.dedupNames, 1)
+	require.IsType(t, &identityChallengeLegacySigner{}, s1.identityKeys)
+	require.IsType(t, &identityChallengeLegacySigner{}, s2.identityKeys)
+	require.NotEqual(t, s1.identityKeys, s2.identityKeys)
+
+	s1 = NewIdentityChallengeScheme(NetIdentityDedupNames("a"), NetIdentitySigner(&identityChallengeLegacySigner{}))
+	require.Len(t, s1.dedupNames, 1)
+	require.IsType(t, &identityChallengeLegacySigner{}, s1.identityKeys)
+
+	var seed crypto.Seed
+	crypto.RandBytes(seed[:])
+	signer := &identityChallengeLegacySigner{keys: crypto.GenerateSignatureSecrets(seed)}
+	s1 = NewIdentityChallengeScheme(NetIdentityDedupNames("a"), NetIdentitySigner(signer))
+	require.Len(t, s1.dedupNames, 1)
+	require.IsType(t, &identityChallengeLegacySigner{}, s1.identityKeys)
+	require.Equal(t, signer, s1.identityKeys)
+
+	s1 = NewIdentityChallengeScheme(NetIdentityDedupNames(""), NetIdentitySigner(signer))
+	require.Empty(t, s1)
+	s1 = NewIdentityChallengeScheme(NetIdentitySigner(signer))
+	require.Empty(t, s1)
 }

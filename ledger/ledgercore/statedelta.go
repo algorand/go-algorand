@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,11 +18,11 @@ package ledgercore
 
 import (
 	"fmt"
+	"maps"
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
-	"golang.org/x/exp/maps"
 )
 
 const (
@@ -294,24 +294,24 @@ func (ad *AccountDeltas) Dehydrate() {
 	if ad.acctsCache == nil {
 		ad.acctsCache = make(map[basics.Address]int)
 	}
-	maps.Clear(ad.acctsCache)
+	clear(ad.acctsCache)
 	if ad.appResourcesCache == nil {
 		ad.appResourcesCache = make(map[AccountApp]int)
 	}
-	maps.Clear(ad.appResourcesCache)
+	clear(ad.appResourcesCache)
 	if ad.assetResourcesCache == nil {
 		ad.assetResourcesCache = make(map[AccountAsset]int)
 	}
-	maps.Clear(ad.assetResourcesCache)
+	clear(ad.assetResourcesCache)
 }
 
 // Reset resets the StateDelta for re-use with sync.Pool
 func (sd *StateDelta) Reset() {
 	sd.Accts.reset()
-	maps.Clear(sd.Txids)
-	maps.Clear(sd.Txleases)
-	maps.Clear(sd.Creatables)
-	maps.Clear(sd.KvMods)
+	clear(sd.Txids)
+	clear(sd.Txleases)
+	clear(sd.Creatables)
+	clear(sd.KvMods)
 	sd.Totals = AccountTotals{}
 
 	// these fields are going to be populated on next use but resetting them anyway for safety.
@@ -329,9 +329,9 @@ func (ad *AccountDeltas) reset() {
 	ad.AssetResources = ad.AssetResources[:0]
 
 	// reset the maps
-	maps.Clear(ad.acctsCache)
-	maps.Clear(ad.appResourcesCache)
-	maps.Clear(ad.assetResourcesCache)
+	clear(ad.acctsCache)
+	clear(ad.appResourcesCache)
+	clear(ad.assetResourcesCache)
 }
 
 // notAllocated returns true if any of the fields allocated by MakeAccountDeltas is nil

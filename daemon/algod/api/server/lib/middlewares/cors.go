@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -30,4 +30,17 @@ func MakeCORS(tokenHeader string) echo.MiddlewareFunc {
 		AllowHeaders: []string{tokenHeader, "Content-Type"},
 		AllowMethods: []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodOptions},
 	})
+}
+
+// MakePNA constructs the Private Network Access middleware function
+func MakePNA() echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(ctx echo.Context) error {
+			req := ctx.Request()
+			if req.Method == http.MethodOptions && req.Header.Get("Access-Control-Request-Private-Network") == "true" {
+				ctx.Response().Header().Set("Access-Control-Allow-Private-Network", "true")
+			}
+			return next(ctx)
+		}
+	}
 }

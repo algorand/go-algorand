@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,7 +21,6 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"strings"
 	"testing"
 
 	"github.com/gorilla/mux"
@@ -66,8 +65,7 @@ func buildTestLedger(t *testing.T, blk bookkeeping.Block) (ledger *data.Ledger, 
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
 	ledger, err = data.LoadLedger(
-		log, t.Name(), inMem, protocol.ConsensusCurrentVersion, genBal, "", genHash,
-		nil, cfg,
+		log, t.Name(), inMem, protocol.ConsensusCurrentVersion, genBal, "", genHash, cfg,
 	)
 	if err != nil {
 		t.Fatal("couldn't build ledger", err)
@@ -143,6 +141,13 @@ func (b *basicRPCNode) RegisterHTTPHandler(path string, handler http.Handler) {
 	b.rmux.Handle(path, handler)
 }
 
+func (b *basicRPCNode) RegisterHTTPHandlerFunc(path string, handler func(http.ResponseWriter, *http.Request)) {
+	if b.rmux == nil {
+		b.rmux = mux.NewRouter()
+	}
+	b.rmux.HandleFunc(path, handler)
+}
+
 func (b *basicRPCNode) RegisterHandlers(dispatch []network.TaggedMessageHandler) {
 }
 
@@ -174,8 +179,8 @@ func (b *basicRPCNode) GetPeers(options ...network.PeerOption) []network.Peer {
 	return b.peers
 }
 
-func (b *basicRPCNode) SubstituteGenesisID(rawURL string) string {
-	return strings.Replace(rawURL, "{genesisID}", "test genesisID", -1)
+func (b *basicRPCNode) GetGenesisID() string {
+	return "test genesisID"
 }
 
 type httpTestPeerSource struct {
@@ -192,8 +197,8 @@ func (s *httpTestPeerSource) RegisterHandlers(dispatch []network.TaggedMessageHa
 	s.dispatchHandlers = append(s.dispatchHandlers, dispatch...)
 }
 
-func (s *httpTestPeerSource) SubstituteGenesisID(rawURL string) string {
-	return strings.Replace(rawURL, "{genesisID}", "test genesisID", -1)
+func (s *httpTestPeerSource) GetGenesisID() string {
+	return "test genesisID"
 }
 
 // implement network.HTTPPeer
@@ -202,8 +207,13 @@ type testHTTPPeer string
 func (p *testHTTPPeer) GetAddress() string {
 	return string(*p)
 }
+
 func (p *testHTTPPeer) GetHTTPClient() *http.Client {
-	return &http.Client{}
+	return &http.Client{
+		Transport: &network.HTTPPAddressBoundTransport{
+			Addr:           p.GetAddress(),
+			InnerTransport: http.DefaultTransport},
+	}
 }
 func (p *testHTTPPeer) GetHTTPPeer() network.HTTPPeer {
 	return p
@@ -237,6 +247,12 @@ type testUnicastPeer struct {
 
 func (p *testUnicastPeer) GetAddress() string {
 	return "test"
+}
+
+func (p *testUnicastPeer) GetNetwork() network.GossipNode { return p.gn }
+
+func (p *testUnicastPeer) RoutingAddr() []byte {
+	panic("not implemented")
 }
 
 func (p *testUnicastPeer) Request(ctx context.Context, tag protocol.Tag, topics network.Topics) (resp *network.Response, e error) {
