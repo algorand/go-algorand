@@ -561,3 +561,85 @@ func TestPopulatorWithAlreadyAvailableResources(t *testing.T) {
 	require.ElementsMatch(t, expectedAccounts, populatedAccounts)
 	require.ElementsMatch(t, expectedBoxes, populatedBoxes)
 }
+
+func makeFullGroupWithPopulator() (groupResources ResourceTracker, txnResources []ResourceTracker, populator resourcePopulator) {
+
+	txns := make([]transactions.SignedTxn, 16)
+	txns[0].Txn.Type = protocol.ApplicationCallTx
+	txns[0].Txn.ForeignApps = make([]basics.AppIndex, 8)
+	for i := 0; i < 8; i++ {
+		txns[0].Txn.ForeignApps[i] = basics.AppIndex(i)
+	}
+
+	consensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	populator = makeResourcePopulator(txns, consensusParams)
+	txnResources = make([]ResourceTracker, 1)
+	groupResources = ResourceTracker{}
+
+	txnResources[0].Apps = make(map[basics.AppIndex]struct{})
+	txnResources[0].Accounts = make(map[basics.Address]struct{})
+	txnResources[0].Assets = make(map[basics.AssetIndex]struct{})
+	groupResources.Assets = make(map[basics.AssetIndex]struct{})
+	groupResources.Apps = make(map[basics.AppIndex]struct{})
+	groupResources.Accounts = make(map[basics.Address]struct{})
+	groupResources.Boxes = make(map[logic.BoxRef]uint64)
+	groupResources.AssetHoldings = make(map[ledgercore.AccountAsset]struct{})
+	groupResources.AppLocals = make(map[ledgercore.AccountApp]struct{})
+
+	return
+}
+
+func TestPopulatorWithNoRoom(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	app := basics.AppIndex(1337)
+	addr := basics.Address{137}
+	asset := basics.AssetIndex(1337)
+	box := logic.BoxRef{App: app, Name: "box"}
+	assetHolding := ledgercore.AccountAsset{Address: addr, Asset: asset}
+	appLocal := ledgercore.AccountApp{Address: addr, App: app}
+
+	// Txn resources
+
+	groupResources, txnResources, populator := makeFullGroupWithPopulator()
+	txnResources[0].Apps[app] = struct{}{}
+	require.ErrorContains(t, populator.populateResources(groupResources, txnResources), "no room for app: 1337")
+
+	groupResources, txnResources, populator = makeFullGroupWithPopulator()
+	txnResources[0].Accounts[addr] = struct{}{}
+	require.ErrorContains(t, populator.populateResources(groupResources, txnResources), "no room for account: REAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFN3OBE4")
+
+	groupResources, txnResources, populator = makeFullGroupWithPopulator()
+	txnResources[0].Assets[asset] = struct{}{}
+	require.ErrorContains(t, populator.populateResources(groupResources, txnResources), "no room for asset: 1337")
+
+	// Group resources
+
+	groupResources, txnResources, populator = makeFullGroupWithPopulator()
+	groupResources.Apps[app] = struct{}{}
+	require.ErrorContains(t, populator.populateResources(groupResources, txnResources), "no room for app: 1337")
+
+	groupResources, txnResources, populator = makeFullGroupWithPopulator()
+	groupResources.Accounts[addr] = struct{}{}
+	require.ErrorContains(t, populator.populateResources(groupResources, txnResources), "no room for account: REAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFN3OBE4")
+
+	groupResources, txnResources, populator = makeFullGroupWithPopulator()
+	groupResources.Assets[asset] = struct{}{}
+	require.ErrorContains(t, populator.populateResources(groupResources, txnResources), "no room for asset: 1337")
+
+	// Cross ref resources
+
+	groupResources, txnResources, populator = makeFullGroupWithPopulator()
+	groupResources.Boxes[box] = 1
+	require.ErrorContains(t, populator.populateResources(groupResources, txnResources), "no room for box 1337 : box")
+
+	groupResources, txnResources, populator = makeFullGroupWithPopulator()
+	groupResources.AssetHoldings[assetHolding] = struct{}{}
+	require.ErrorContains(t, populator.populateResources(groupResources, txnResources), "no room for asset holding 1337 : REAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFN3OBE4")
+
+	groupResources, txnResources, populator = makeFullGroupWithPopulator()
+	groupResources.AppLocals[appLocal] = struct{}{}
+	require.ErrorContains(t, populator.populateResources(groupResources, txnResources), "no room for app local 1337 : REAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFN3OBE4")
+
+}
