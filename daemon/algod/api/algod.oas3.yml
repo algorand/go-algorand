@@ -2434,7 +2434,7 @@
             "type": "integer"
           },
           "extra-resource-arrays": {
-            "description": "Present if populate-resource-arrays is true in the request and additional transactions with the following resources need to be added to the transaction group.",
+            "description": "Present if populate-resource-arrays is true in the request and additional tranactions are needed to name all the accessed resources.",
             "items": {
               "$ref": "#/components/schemas/ResourceArrays"
             },

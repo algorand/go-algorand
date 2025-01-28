@@ -854,7 +854,7 @@ type SimulateTransactionGroupResult struct {
 	// AppBudgetConsumed Total budget consumed during execution of app calls in the transaction group.
 	AppBudgetConsumed *uint64 `json:"app-budget-consumed,omitempty"`
 
-	// ExtraResourceArrays Present if populate-resource-arrays is true in the request and additional transactions with the following resources need to be added to the transaction group.
+	// ExtraResourceArrays Present if populate-resource-arrays is true in the request and additional tranactions are needed to name all the accessed resources.
 	ExtraResourceArrays *[]ResourceArrays `json:"extra-resource-arrays,omitempty"`
 
 	// FailedAt If present, indicates which transaction in this group caused the failure. This array represents the path to the failing transaction. Indexes are zero based, the first element indicates the top-level transaction, and successive elements indicate deeper inner transactions.
