@@ -706,6 +706,11 @@ func (r *txnResources) hasAccount(addr basics.Address) bool {
 }
 
 func (r *txnResources) addAccount(addr basics.Address) error {
+	// The resource tracker *should* not have duplicates like this, but we check here just to be safe
+	if r.hasAccount(addr) {
+		return nil
+	}
+
 	if !r.hasRoomForAccount() {
 		return fmt.Errorf("no room for account: %s", addr.String())
 	}
@@ -714,6 +719,11 @@ func (r *txnResources) addAccount(addr basics.Address) error {
 }
 
 func (r *txnResources) addAsset(aid basics.AssetIndex) error {
+	// The resource tracker *should* not have duplicates like this, but we check here just to be safe
+	if r.hasAsset(aid) {
+		return nil
+	}
+
 	if !r.hasRoom() {
 		return fmt.Errorf("no room for asset: %d", aid)
 	}
@@ -722,6 +732,11 @@ func (r *txnResources) addAsset(aid basics.AssetIndex) error {
 }
 
 func (r *txnResources) addApp(aid basics.AppIndex) error {
+	// The resource tracker *should* not have duplicates like this, but we check here just to be safe
+	if r.hasApp(aid) {
+		return nil
+	}
+
 	if !r.hasRoom() {
 		return fmt.Errorf("no room for app: %d", aid)
 	}

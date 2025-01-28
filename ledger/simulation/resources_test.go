@@ -461,3 +461,103 @@ func TestPopulatorWithGlobalResources(t *testing.T) {
 		require.Empty(t, populator.txnResources[i].getPopulatedArrays().Boxes)
 	}
 }
+
+// TestPopulatorWithAlreadyAvailableResources ensures that resources that are already available
+// aren't added again. Most of these scenarios are impossible to even occur due to the checks in
+// EvalContext before resources are added to the resource tracker.
+//
+// It should also be noted that there are some scenarios that are simply not possible to test, such as
+// ensuring a resource from another txn isn't added because the resource populator does not see txns,
+// only the ResourceTrackers, thus the repsonibility of checking other txns lies entirely on EvalContext
+func TestPopulatorWithAlreadyAvailableResources(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	app1 := basics.AppIndex(1)
+	app2 := basics.AppIndex(2)
+	addr3 := basics.Address{3}
+	app4 := basics.AppIndex(4)
+	box4 := logic.BoxRef{App: app4, Name: "box"}
+	app5 := basics.AppIndex(5)
+	addr6 := basics.Address{6}
+	asa7 := basics.AssetIndex(7)
+
+	txns := make([]transactions.SignedTxn, 2)
+	txns[0].Txn.Type = protocol.ApplicationCallTx
+	txns[0].Txn.ApplicationID = app1
+	txns[0].Txn.Sender = addr3
+	txns[0].Txn.ForeignApps = []basics.AppIndex{app2}
+
+	consensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	populator := makeResourcePopulator(txns, consensusParams)
+
+	txnResources := make([]ResourceTracker, 1)
+	groupResources := ResourceTracker{}
+
+	txnResources[0].Apps = make(map[basics.AppIndex]struct{})
+	txnResources[0].Accounts = make(map[basics.Address]struct{})
+	txnResources[0].Assets = make(map[basics.AssetIndex]struct{})
+	groupResources.Assets = make(map[basics.AssetIndex]struct{})
+	groupResources.Apps = make(map[basics.AppIndex]struct{})
+	groupResources.Accounts = make(map[basics.Address]struct{})
+	groupResources.Boxes = make(map[logic.BoxRef]uint64)
+
+	// App tests
+
+	// Ensure the apps own appID isn't added
+	txnResources[0].Apps[app1] = struct{}{}
+
+	// Ensure an app in the app array isn't added
+	txnResources[0].Apps[app2] = struct{}{}
+
+	// Ensure an app from a box ref isn't added twice
+	groupResources.Boxes[box4] = 1
+	groupResources.Apps[app4] = struct{}{}
+
+	// Ensure an app from group and txn isn't added twice
+	txnResources[0].Apps[app5] = struct{}{}
+	groupResources.Apps[app5] = struct{}{}
+
+	// Account tests
+
+	// Ensure a txn's sender isn't added
+	txnResources[0].Accounts[addr3] = struct{}{}
+
+	// Ensure an appl's own app address isn't added
+	txnResources[0].Accounts[app1.Address()] = struct{}{}
+
+	// Ensure an available app's account isn't added
+	txnResources[0].Accounts[app2.Address()] = struct{}{}
+
+	// Ensure an account from group and txn isn't added twice
+	txnResources[0].Accounts[addr6] = struct{}{}
+	groupResources.Accounts[addr6] = struct{}{}
+
+	// Asset TestPopulatorWithAlreadyAvailableResources
+
+	// Ensure an asset from group and txn isn't added twice
+	txnResources[0].Assets[asa7] = struct{}{}
+	groupResources.Assets[asa7] = struct{}{}
+
+	err := populator.populateResources(groupResources, txnResources)
+	require.NoError(t, err)
+
+	require.Len(t, populator.getPopulatedArrays(), 1)
+
+	expectedAssets := []basics.AssetIndex{asa7}
+	expectedApps := []basics.AppIndex{app5, app4, app2}
+	expectedAccounts := []basics.Address{addr6}
+	expectedBoxes := []logic.BoxRef{box4}
+
+	populatedArrays := populator.getPopulatedArrays()[0]
+
+	populatedAssets := populatedArrays.Assets
+	populatedApps := populatedArrays.Apps
+	populatedAccounts := populatedArrays.Accounts
+	populatedBoxes := populatedArrays.Boxes
+
+	require.ElementsMatch(t, expectedAssets, populatedAssets)
+	require.ElementsMatch(t, expectedApps, populatedApps)
+	require.ElementsMatch(t, expectedAccounts, populatedAccounts)
+	require.ElementsMatch(t, expectedBoxes, populatedBoxes)
+}
