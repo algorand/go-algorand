@@ -465,10 +465,7 @@ func TestPopulatorWithGlobalResources(t *testing.T) {
 // TestPopulatorWithAlreadyAvailableResources ensures that resources that are already available
 // aren't added again. Most of these scenarios are impossible to even occur due to the checks in
 // EvalContext before resources are added to the resource tracker.
-//
-// It should also be noted that there are some scenarios that are simply not possible to test, such as
-// ensuring a resource from another txn isn't added because the resource populator does not see txns,
-// only the ResourceTrackers, thus the repsonibility of checking other txns lies entirely on EvalContext
+// TODO: Add tests for ensuring resources from other txn fields aren't added
 func TestPopulatorWithAlreadyAvailableResources(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
