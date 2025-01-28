@@ -3113,6 +3113,89 @@
           }
         }
       }
+    },
+    "/v2/devmode/blocks/proposer": {
+      "get": {
+        "description": "Gets the current proposer address.",
+        "tags": [
+          "public",
+          "nonparticipating"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Returns the proposer address. Proposer address can only be set in dev mode.",
+        "operationId": "GetBlockProposerAddress",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "$ref": "#/responses/GetBlockProposerAddressResponse"
+          },
+          "400": {
+            "description": "Proposer address not set.",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
+    "/v2/devmode/blocks/proposer/{address}": {
+      "post": {
+        "description": "Sets the proposer address for blocks in dev mode. Providing the global zero address will unset this value.",
+        "tags": [
+          "public",
+          "nonparticipating"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Given a proposer address, adds the proposer to every subsequent block header's prp field.",
+        "operationId": "SetBlockProposerAddress",
+        "parameters": [
+          {
+            "pattern": "[A-Z0-9]{58}",
+            "type": "string",
+            "description": "The proposer address for blocks in dev mode.",
+            "name": "address",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "type": "object"
+          },
+          "400": {
+            "description": "Cannot set proposer address.",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
     }
   },
   "definitions": {
@@ -4977,6 +5060,21 @@
           "offset": {
             "description": "Timestamp offset in seconds.",
             "type": "integer"
+          }
+        }
+      }
+    },
+    "GetBlockProposerAddressResponse": {
+      "description": "Response containing the proposer address",
+      "schema": {
+        "type": "object",
+        "required": [
+          "address"
+        ],
+        "properties": {
+          "address": {
+            "description": "Proposer address.",
+            "type": "string"
           }
         }
       }

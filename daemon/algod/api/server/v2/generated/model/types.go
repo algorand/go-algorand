@@ -1237,6 +1237,12 @@ type DryrunResponse struct {
 	Txns            []DryrunTxnResult `json:"txns"`
 }
 
+// GetBlockProposerAddressResponse defines model for GetBlockProposerAddressResponse.
+type GetBlockProposerAddressResponse struct {
+	// Address Proposer address.
+	Address string `json:"address"`
+}
+
 // GetBlockTimeStampOffsetResponse defines model for GetBlockTimeStampOffsetResponse.
 type GetBlockTimeStampOffsetResponse struct {
 	// Offset Timestamp offset in seconds.

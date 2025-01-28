@@ -135,6 +135,7 @@ type AlgorandFullNode struct {
 	genesisHash     crypto.Digest
 	devMode         bool // is this node operating in a developer mode ? ( benign agreement, broadcasting transaction generates a new block )
 	timestampOffset *int64
+	proposerAddress *basics.Address
 
 	log logging.Logger
 
@@ -523,6 +524,12 @@ func (node *AlgorandFullNode) writeDevmodeBlock() (err error) {
 	// Make sure block timestamp is not greater than MaxInt64.
 	if node.timestampOffset != nil && *node.timestampOffset < math.MaxInt64-prev.TimeStamp {
 		blk.TimeStamp = prev.TimeStamp + *node.timestampOffset
+	}
+	// Set proposer address, if set.
+	if (*node.proposerAddress != basics.Address{}) {
+		blk.BlockHeader.Proposer = *node.proposerAddress
+	} else {
+		blk.BlockHeader.ProposerPayout = basics.MicroAlgos{}
 	}
 	blk.BlockHeader.Seed = committee.Seed(prev.Hash())
 	vb2 := ledgercore.MakeValidatedBlock(blk, vb.UnfinishedDeltas())
@@ -1476,4 +1483,23 @@ func (node *AlgorandFullNode) GetBlockTimeStampOffset() (*int64, error) {
 		return node.timestampOffset, nil
 	}
 	return nil, fmt.Errorf("cannot get block timestamp offset when not in dev mode")
+}
+
+// SetBlockProposerAddress sets the block proposer address.
+// This is only available in dev mode.
+func (node *AlgorandFullNode) SetBlockProposerAddress(proposer basics.Address) error {
+	if node.devMode {
+		node.proposerAddress = &proposer
+		return nil
+	}
+	return fmt.Errorf("cannot set block proposer address when not in dev mode")
+}
+
+// GetBlockProposerAddress gets the block proposer address.
+// This is only available in dev mode.
+func (node *AlgorandFullNode) GetBlockProposerAddress() (*basics.Address, error) {
+	if node.devMode {
+		return node.proposerAddress, nil
+	}
+	return nil, fmt.Errorf("cannot get block proposer address when not in dev mode")
 }

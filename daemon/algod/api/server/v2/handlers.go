@@ -147,6 +147,8 @@ type NodeInterface interface {
 	UnsetSyncRound()
 	GetBlockTimeStampOffset() (*int64, error)
 	SetBlockTimeStampOffset(int64) error
+	GetBlockProposerAddress() (*basics.Address, error)
+	SetBlockProposerAddress(basics.Address) error
 }
 
 func roundToPtrOrNil(value basics.Round) *uint64 {
@@ -2139,6 +2141,36 @@ func (v2 *Handlers) SetBlockTimeStampOffset(ctx echo.Context, offset uint64) err
 		return badRequest(ctx, err, fmt.Sprintf(errFailedSettingTimeStampOffset, err), v2.Log)
 	}
 	err := v2.Node.SetBlockTimeStampOffset(int64(offset))
+	if err != nil {
+		return badRequest(ctx, err, fmt.Sprintf(errFailedSettingTimeStampOffset, err), v2.Log)
+	}
+	return ctx.NoContent(http.StatusOK)
+}
+
+// GetBlockProposerAddress gets the proposer address.
+// This is only available in dev mode.
+// (GET /v2/devmode/blocks/proposer)
+func (v2 *Handlers) GetBlockProposerAddress(ctx echo.Context) error {
+	proposer, err := v2.Node.GetBlockProposerAddress()
+	if err != nil {
+		err = fmt.Errorf("cannot get block proposer address because we are not in dev mode")
+		return badRequest(ctx, err, fmt.Sprintf(errFailedRetrievingTimeStampOffset, err), v2.Log)
+	} else if proposer == nil {
+		err = fmt.Errorf("block propser address is not set")
+		return notFound(ctx, err, fmt.Sprintf(errFailedRetrievingTimeStampOffset, err), v2.Log)
+	}
+	return ctx.JSON(http.StatusOK, model.GetBlockProposerAddressResponse{Address: proposer.String()})
+}
+
+// SetBlockProposerAddress sets the proposer address.
+// This is only available in dev mode.
+// (POST /v2/devmode/blocks/proposer/{address})
+func (v2 *Handlers) SetBlockProposerAddress(ctx echo.Context, address string) error {
+	proposer, err := basics.UnmarshalChecksumAddress(address)
+	if err != nil {
+		return badRequest(ctx, err, fmt.Sprintf(errFailedSettingTimeStampOffset, err), v2.Log)
+	}
+	err = v2.Node.SetBlockProposerAddress(proposer)
 	if err != nil {
 		return badRequest(ctx, err, fmt.Sprintf(errFailedSettingTimeStampOffset, err), v2.Log)
 	}

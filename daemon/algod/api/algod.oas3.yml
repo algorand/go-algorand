@@ -600,6 +600,25 @@
         },
         "description": "DryrunResponse contains per-txn debug information from a dryrun."
       },
+      "GetBlockProposerAddressResponse": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "address": {
+                  "description": "Proposer address.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "address"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "description": "Response containing the proposer address"
+      },
       "GetBlockTimeStampOffsetResponse": {
         "content": {
           "application/json": {
@@ -5488,6 +5507,115 @@
           }
         },
         "summary": "Given a timestamp offset in seconds, adds the offset to every subsequent block header's timestamp.",
+        "tags": [
+          "public",
+          "nonparticipating"
+        ]
+      }
+    },
+    "/v2/devmode/blocks/proposer": {
+      "get": {
+        "description": "Gets the current proposer address.",
+        "operationId": "GetBlockProposerAddress",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "address": {
+                      "description": "Proposer address.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "address"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Response containing the proposer address"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Proposer address not set."
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Returns the proposer address. Proposer address can only be set in dev mode.",
+        "tags": [
+          "public",
+          "nonparticipating"
+        ]
+      }
+    },
+    "/v2/devmode/blocks/proposer/{address}": {
+      "post": {
+        "description": "Sets the proposer address for blocks in dev mode. Providing the global zero address will unset this value.",
+        "operationId": "SetBlockProposerAddress",
+        "parameters": [
+          {
+            "description": "The proposer address for blocks in dev mode.",
+            "in": "path",
+            "name": "address",
+            "required": true,
+            "schema": {
+              "pattern": "[A-Z0-9]{58}",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {},
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Cannot set proposer address."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid API Token"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Error"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Given a proposer address, adds the proposer to every subsequent block header's prp field.",
         "tags": [
           "public",
           "nonparticipating"

@@ -474,3 +474,15 @@ func (node *AlgorandFollowerNode) SetBlockTimeStampOffset(offset int64) error {
 func (node *AlgorandFollowerNode) GetBlockTimeStampOffset() (*int64, error) {
 	return nil, fmt.Errorf("cannot get block timestamp offset in follower mode")
 }
+
+// SetBlockProposerAddress sets the block proposer address.
+// This is only available in dev mode.
+func (node *AlgorandFollowerNode) SetBlockProposerAddress(proposer basics.Address) error {
+	return fmt.Errorf("cannot set block proposer address in follower mode")
+}
+
+// GetBlockProposerAddress gets the block proposer address.
+// This is only available in dev mode.
+func (node *AlgorandFollowerNode) GetBlockProposerAddress() (*basics.Address, error) {
+	return nil, fmt.Errorf("cannot get block timestamp offset in follower mode")
+}
