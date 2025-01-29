@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -1453,6 +1453,7 @@ func TestStateProofLogging(t *testing.T) {
 	b.BlockHeader.GenesisHash = mockLedger.GenesisHash()
 	b.CurrentProtocol = protocol.ConsensusCurrentVersion
 	b.BlockHeader.Round = 1
+	b.BlockHeader.Bonus = basics.MicroAlgos{Raw: 10000000}
 
 	phdr, err := mockLedger.BlockHdr(0)
 	require.NoError(t, err)

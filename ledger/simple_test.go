@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -140,7 +140,7 @@ func txn(t testing.TB, ledger *Ledger, eval *eval.BlockEvaluator, txn *txntest.T
 		}
 		return
 	}
-	require.True(t, len(problem) == 0 || problem[0] == "")
+	require.True(t, len(problem) == 0 || problem[0] == "", "Transaction did not fail. Expected: %v", problem)
 }
 
 func txgroup(t testing.TB, ledger *Ledger, eval *eval.BlockEvaluator, txns ...*txntest.Txn) error {
@@ -157,10 +157,11 @@ func txgroup(t testing.TB, ledger *Ledger, eval *eval.BlockEvaluator, txns ...*t
 // inspection. Proposer is optional - if unset, blocks will be finished with
 // ZeroAddress proposer.
 func endBlock(t testing.TB, ledger *Ledger, eval *eval.BlockEvaluator, proposer ...basics.Address) *ledgercore.ValidatedBlock {
-	ub, err := eval.GenerateBlock(nil)
+	// pass proposers to GenerateBlock, if provided
+	ub, err := eval.GenerateBlock(proposer)
 	require.NoError(t, err)
 
-	// We fake some thigns that agreement would do, like setting proposer
+	// We fake some things that agreement would do, like setting proposer
 	validatedBlock := ledgercore.MakeValidatedBlock(ub.UnfinishedBlock(), ub.UnfinishedDeltas())
 	gvb := &validatedBlock
 

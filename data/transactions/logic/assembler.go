@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -2736,6 +2736,16 @@ func (ops *OpStream) ReportMultipleErrors(fname string, writer io.Writer) {
 // AssembleString takes an entire program in a string and assembles it to bytecode using AssemblerDefaultVersion
 func AssembleString(text string) (*OpStream, error) {
 	return AssembleStringWithVersion(text, assemblerNoVersion)
+}
+
+// MustAssemble assembles a program and panics on error.  It is useful for
+// defining globals.
+func MustAssemble(text string) []byte {
+	ops, err := AssembleString(text)
+	if err != nil {
+		panic(err)
+	}
+	return ops.Program
 }
 
 // AssembleStringWithVersion takes an entire program in a string and

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -150,7 +150,7 @@ func TestRekeyUpgrade(t *testing.T) {
 		curStatus, err = client.Status()
 		a.NoError(err)
 
-		a.Less(int64(time.Now().Sub(startLoopTime)), int64(3*time.Minute))
+		a.Less(int64(time.Since(startLoopTime)), int64(3*time.Minute))
 		time.Sleep(time.Duration(smallLambdaMs) * time.Millisecond)
 		round = curStatus.LastRound
 	}

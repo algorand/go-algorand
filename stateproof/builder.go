@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -668,7 +668,7 @@ func (spw *Worker) tryBroadcast() {
 
 		latestHeader, err := spw.ledger.BlockHdr(firstValid)
 		if err != nil {
-			spw.log.Warnf("spw.tryBroadcast: could not fetch block header for round %d failed: %v", firstValid, err)
+			spw.log.Warnf("spw.tryBroadcast: could not fetch block header for round %d: %v", firstValid, err)
 			break
 		}
 

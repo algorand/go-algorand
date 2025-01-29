@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -357,6 +357,10 @@ func (l *localLedger) LookupAgreement(rnd basics.Round, addr basics.Address) (ba
 		},
 		IncentiveEligible: ad.IncentiveEligible,
 	}, nil
+}
+
+func (l *localLedger) GetKnockOfflineCandidates(basics.Round, config.ConsensusParams) (map[basics.Address]basics.OnlineAccountData, error) {
+	return nil, nil
 }
 
 func (l *localLedger) OnlineCirculation(rnd basics.Round, voteRound basics.Round) (basics.MicroAlgos, error) {

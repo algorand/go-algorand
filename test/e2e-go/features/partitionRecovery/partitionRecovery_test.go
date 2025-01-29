@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -57,7 +57,7 @@ func TestBasicPartitionRecovery(t *testing.T) {
 
 	// Let the network make some progress
 	waitForRound := uint64(3)
-	err = fixture.ClientWaitForRoundWithTimeout(fixture.GetAlgodClientForController(nc), waitForRound)
+	err = fixture.GetAlgodClientForController(nc).WaitForRoundWithTimeout(waitForRound)
 	a.NoError(err)
 
 	// Now stop 2nd node
@@ -133,7 +133,7 @@ func runTestWithStaggeredStopStart(t *testing.T, fixture *fixtures.RestClientFix
 
 	// Let the network make some progress
 	waitForRound := uint64(3)
-	err = fixture.ClientWaitForRoundWithTimeout(fixture.GetAlgodClientForController(nc1), waitForRound)
+	err = fixture.GetAlgodClientForController(nc1).WaitForRoundWithTimeout(waitForRound)
 	a.NoError(err)
 
 	// Stop Node1
@@ -196,7 +196,7 @@ func TestBasicPartitionRecoveryPartOffline(t *testing.T) {
 
 	// Let the network make some progress
 	waitForRound := uint64(3)
-	err = fixture.ClientWaitForRoundWithTimeout(fixture.GetAlgodClientForController(nc1), waitForRound)
+	err = fixture.GetAlgodClientForController(nc1).WaitForRoundWithTimeout(waitForRound)
 	a.NoError(err)
 
 	// Stop Node1
@@ -264,8 +264,7 @@ func TestPartitionHalfOffline(t *testing.T) {
 
 	// Let the network make some progress
 	client := fixture.LibGoalClient
-	waitForRound := uint64(3)
-	err = fixture.ClientWaitForRoundWithTimeout(fixture.GetAlgodClientForController(nc1), waitForRound)
+	err = fixture.GetAlgodClientForController(nc1).WaitForRoundWithTimeout(3)
 	a.NoError(err)
 
 	// Stop nodes with 50% of stake

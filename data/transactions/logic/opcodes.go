@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -28,7 +28,7 @@ import (
 )
 
 // LogicVersion defines default assembler and max eval versions
-const LogicVersion = 11
+const LogicVersion = 12
 
 // rekeyingEnabledVersion is the version of TEAL where RekeyTo functionality
 // was enabled. This is important to remember so that old TEAL accounts cannot
@@ -75,12 +75,13 @@ const sharedResourcesVersion = 9 // apps can access resources from other transac
 const pairingVersion = 10 // bn256 opcodes. will add bls12-381, and unify the available opcodes.
 const spliceVersion = 10  // box splicing/resizing
 
+const incentiveVersion = 11 // block fields, heartbeat
+const mimcVersion = 11
+
 // EXPERIMENTAL. These should be revisited whenever a new LogicSigVersion is
 // moved from vFuture to a new consensus version. If they remain unready, bump
 // their version, and fixup TestAssemble() in assembler_test.go.
-const incentiveVersion = 11 // block fields, heartbeat
-
-const spOpcodesVersion = 11 // falcon_verify, sumhash512
+const spOpcodesVersion = 12 // falcon_verify, sumhash512
 
 // Unlimited Global Storage opcodes
 const boxVersion = 8 // box_*
@@ -798,6 +799,17 @@ var OpSpecs = []OpSpec{
 		costByField("g", &EcGroups, []int{
 			BN254g1: 630, BN254g2: 3_300,
 			BLS12_381g1: 1_950, BLS12_381g2: 8_150})},
+	{0xe6, "mimc", opMimc, proto("b:b{32}"), mimcVersion, costByFieldAndLength("c", &MimcConfigs, []linearCost{
+		BN254Mp110: {
+			baseCost:  10,
+			chunkCost: 550,
+			chunkSize: 32,
+		},
+		BLS12_381Mp111: {
+			baseCost:  10,
+			chunkCost: 550,
+			chunkSize: 32,
+		}})},
 }
 
 // OpcodesByVersion returns list of opcodes available in a specific version of TEAL

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -62,7 +62,7 @@ func TestSyncRestart(t *testing.T) {
 	waitTill := func(node string, round uint64) {
 		controller, err := fixture.GetNodeController(node)
 		a.NoError(err)
-		err = fixture.ClientWaitForRoundWithTimeout(fixture.GetAlgodClientForController(controller), round)
+		err = fixture.GetAlgodClientForController(controller).WaitForRoundWithTimeout(round)
 		a.NoError(err)
 	}
 

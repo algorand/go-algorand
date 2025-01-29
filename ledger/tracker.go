@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -948,7 +948,12 @@ func (aul *accountUpdatesLedgerEvaluator) LookupWithoutRewards(rnd basics.Round,
 }
 
 func (aul *accountUpdatesLedgerEvaluator) LookupAgreement(rnd basics.Round, addr basics.Address) (basics.OnlineAccountData, error) {
-	return aul.ao.LookupOnlineAccountData(rnd, addr)
+	return aul.ao.lookupOnlineAccountData(rnd, addr)
+}
+
+func (aul *accountUpdatesLedgerEvaluator) GetKnockOfflineCandidates(basics.Round, config.ConsensusParams) (map[basics.Address]basics.OnlineAccountData, error) {
+	// This method is only used when generating blocks, so we don't need to implement it here.
+	return nil, fmt.Errorf("accountUpdatesLedgerEvaluator: GetKnockOfflineCandidates is not implemented and should not be called during replay")
 }
 
 func (aul *accountUpdatesLedgerEvaluator) OnlineCirculation(rnd basics.Round, voteRnd basics.Round) (basics.MicroAlgos, error) {

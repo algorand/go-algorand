@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -48,7 +48,7 @@ func makeMsgPool(N int, peers []Peer) (out []IncomingMessage) {
 
 		addMsg := func(msgCount int) {
 			for i := 0; i < msgCount; i++ {
-				msg.Sender = peers[(int(msgIndex)+i)%len(peers)].(DisconnectablePeer)
+				msg.Sender = peers[(int(msgIndex)+i)%len(peers)].(DisconnectableAddressablePeer)
 				timer += int64(7 * time.Nanosecond)
 				msg.Received = timer
 				out = append(out, msg)
@@ -103,14 +103,14 @@ func TestConnMonitorStageTiming(t *testing.T) {
 	startTestTime := time.Now().UnixNano()
 	perfMonitor := makeConnectionPerformanceMonitor([]Tag{protocol.AgreementVoteTag})
 	// measure measuring overhead.
-	measuringOverhead := time.Now().Sub(time.Now())
+	measuringOverhead := time.Since(time.Now())
 	perfMonitor.Reset(peers)
 	for msgIdx, msg := range msgPool {
 		msg.Received += startTestTime
 		beforeNotify := time.Now()
 		beforeNotifyStage := perfMonitor.stage
 		perfMonitor.Notify(&msg)
-		notifyTime := time.Now().Sub(beforeNotify)
+		notifyTime := time.Since(beforeNotify)
 		stageTimings[beforeNotifyStage] += notifyTime
 		stageNotifyCalls[beforeNotifyStage]++
 		if perfMonitor.GetPeersStatistics() != nil {

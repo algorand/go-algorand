@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -126,6 +126,8 @@ type AccountsReaderExt interface {
 	TotalResources(ctx context.Context) (total uint64, err error)
 	TotalAccounts(ctx context.Context) (total uint64, err error)
 	TotalKVs(ctx context.Context) (total uint64, err error)
+	TotalOnlineAccountRows(ctx context.Context) (total uint64, err error)
+	TotalOnlineRoundParams(ctx context.Context) (total uint64, err error)
 	AccountsRound() (rnd basics.Round, err error)
 	LookupOnlineAccountDataByAddress(addr basics.Address) (ref OnlineAccountRef, data []byte, err error)
 	AccountsOnlineTop(rnd basics.Round, offset uint64, n uint64, proto config.ConsensusParams) (map[basics.Address]*ledgercore.OnlineAccount, error)
@@ -176,10 +178,13 @@ type CatchpointWriter interface {
 
 	WriteCatchpointStagingBalances(ctx context.Context, bals []NormalizedAccountBalance) error
 	WriteCatchpointStagingKVs(ctx context.Context, keys [][]byte, values [][]byte, hashes [][]byte) error
+	WriteCatchpointStagingOnlineAccounts(context.Context, []encoded.OnlineAccountRecordV6) error
+	WriteCatchpointStagingOnlineRoundParams(context.Context, []encoded.OnlineRoundParamsRecordV6) error
 	WriteCatchpointStagingCreatable(ctx context.Context, bals []NormalizedAccountBalance) error
 	WriteCatchpointStagingHashes(ctx context.Context, bals []NormalizedAccountBalance) error
 
 	ApplyCatchpointStagingBalances(ctx context.Context, balancesRound basics.Round, merkleRootRound basics.Round) (err error)
+	ApplyCatchpointStagingTablesV7(ctx context.Context) error
 	ResetCatchpointStagingBalances(ctx context.Context, newCatchup bool) (err error)
 
 	InsertUnfinishedCatchpoint(ctx context.Context, round basics.Round, blockHash crypto.Digest) error
@@ -232,6 +237,13 @@ type AccountAddressHash struct {
 type KVsIter interface {
 	Next() bool
 	KeyValue() (k []byte, v []byte, err error)
+	Close()
+}
+
+// TableIterator is used to add online accounts and online round params to catchpoint files.
+type TableIterator[T any] interface {
+	Next() bool
+	GetItem() (T, error)
 	Close()
 }
 
