@@ -388,6 +388,7 @@ func (cw *catchpointFileWriter) readDatabaseStep(ctx context.Context) error {
 	if cw.params.EnableCatchpointsWithOnlineAccounts && !cw.onlineAccountsDone {
 		// Create the OnlineAccounts iterator JIT
 		if cw.onlineAccountRows == nil {
+			// MakeOrderedOnlineAccountsIter orders by (address, updateRound).
 			rows, err := cw.tx.MakeOrderedOnlineAccountsIter(ctx, false, cw.onlineExcludeBefore)
 			if err != nil {
 				return err
@@ -404,7 +405,7 @@ func (cw *catchpointFileWriter) readDatabaseStep(ctx context.Context) error {
 			// Is this the first (and thus oldest) row for this address?
 			if cw.onlineAccountCurrent.IsZero() || cw.onlineAccountCurrent != oa.Address {
 				cw.onlineAccountCurrent = oa.Address
-				// If so, is the updateRound for this row beyond the lookback horizon? Then set it to 0.
+				// If so, is the updateRound for this row beyond the lookback horizon (R-320)? Then set it to 0.
 				if oa.UpdateRound < (cw.accountsRound + 1).SubSaturate(basics.Round(cw.params.MaxBalLookback)) {
 					// We set UpdateRound to 0 here, because not all nodes may agree on the onlineaccounts table
 					// updateRound column value for the oldest "horizon" row for certain addresses, depending on
@@ -417,23 +418,25 @@ func (cw *catchpointFileWriter) readDatabaseStep(ctx context.Context) error {
 					//   inactive since before consensus v32 will still have zero values for UpdateRound. This behavior
 					//   is consistent for all nodes and validated by the merkle trie generated each catchpoint round.
 					//
-					//   2. The onlineaccounts table, introduced later in v3.9.2 (PR #4003), uses a migration to populate
+					//   2. The onlineaccounts table, introduced later in v3.9.2 (#4003), uses a migration to populate
 					//   the onlineaccounts table by selecting all online accounts from the accounts table. This migration
 					//   copies the BaseAccountData.UpdateRound field, along with voting data, to set the initial values
 					//   of the onlineaccounts table for each address. After that, the onlineaccounts table's updateRound
-					//   column would only be updated if voting data changed -- so a zero pay or app call would not change
-					//   onlineaccounts updateRound.
+					//   column would only be updated if voting data changed -- so a zero pay or app call would usually
+					//   not result in a new onlineaccounts row with a new updateRound (unless it triggered a balance or
+					//   voting data change).
 					//
 					//   3. Node operators using fast catchup (before v4.0.1) initialize the onlineaccounts table by
 					//   running the same migration introduced in v3.9.2, where updateRound (and account data) comes from
-					//   BaseAccountData. This means fast catchup users would see some addresses either be zero (case 1),
-					//   or the round of the last account data change (case 2).
+					//   BaseAccountData. This means fast catchup users could see some addresses have a horizon row with
+					//   an updateRound that was set to zero (case 1), or the round of the last account data change (case 2).
 					//
 					//   4. However, a node catching up from scratch without using fast catchup, running v3.9.2 or later,
-					//   must track the online account history, and so only sets non-zero updateRound values while processing
-					//   blocks, whether or not EnableAccountDataResourceSeparation was set. These nodes will have updateRound
-					//   set only by the round of the last voting data change, not zero (case 1) or the round of the last
-					//   account data change (case 2).
+					//   must track the online account history to validate block certificates, and so sets updateRound based
+					//   on observing all account voting data updates starting from round 0 while processing blocks, whether
+					//   or not EnableAccountDataResourceSeparation is set. These nodes will have horizon rows for addresses
+					//   with updateRound set to the round of the last voting data change, not zero (case 1) or the round
+					//   of the last account data change (case 2).
 					oa.UpdateRound = 0
 				}
 			}
