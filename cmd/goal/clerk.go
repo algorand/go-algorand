@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -221,8 +221,7 @@ func waitForCommit(client libgoal.Client, txid string, transactionLastValidRound
 		}
 
 		reportInfof(infoTxPending, txid, stat.LastRound)
-		// WaitForRound waits until round "stat.LastRound+1" is committed
-		stat, err = client.WaitForRound(stat.LastRound)
+		stat, err = client.WaitForRound(stat.LastRound + 1)
 		if err != nil {
 			return model.PendingTransactionResponse{}, fmt.Errorf(errorRequestFail, err)
 		}
@@ -556,7 +555,7 @@ var sendCmd = &cobra.Command{
 				err = writeFile(outFilename, protocol.Encode(&stx), 0600)
 			}
 			if err != nil {
-				reportErrorf(err.Error())
+				reportErrorln(err.Error())
 			}
 		}
 	},
@@ -1156,7 +1155,7 @@ var dryrunCmd = &cobra.Command{
 			client := ensureFullClient(dataDir)
 			accts, err := unmarshalSlice(dumpForDryrunAccts)
 			if err != nil {
-				reportErrorf(err.Error())
+				reportErrorln(err.Error())
 			}
 			data, err := libgoal.MakeDryrunStateBytes(client, nil, stxns, accts, string(proto), dumpForDryrunFormat.String())
 			if err != nil {

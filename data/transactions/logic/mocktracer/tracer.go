@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -231,6 +231,9 @@ func (d *Tracer) AfterOpcode(cx *logic.EvalContext, evalError error) {
 func (d *Tracer) AfterBlock(hdr *bookkeeping.BlockHeader) {
 	d.Events = append(d.Events, AfterBlock(hdr.Round))
 }
+
+// DetailedEvalErrors returns true, enabling detailed errors in tests.
+func (d *Tracer) DetailedEvalErrors() bool { return true }
 
 // copyDeltas makes a deep copy of the given ledgercore.StateDelta pointer, if it's not nil.
 // This is inefficient, but it should only be used for testing.

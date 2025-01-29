@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -82,32 +82,64 @@ func (l *CatchpointLabelMakerV6) message() string {
 	return fmt.Sprintf("round=%d, block digest=%s, accounts digest=%s", l.ledgerRound, l.ledgerRoundBlockHash, l.balancesMerkleRoot)
 }
 
-// CatchpointLabelMakerCurrent represent a single catchpoint maker, matching catchpoints of version V7 and above.
+// CatchpointLabelMakerCurrent represents a single catchpoint maker, matching catchpoints of version V7 and above.
 type CatchpointLabelMakerCurrent struct {
-	v6Label            CatchpointLabelMakerV6
-	spVerificationHash crypto.Digest
+	v7Label               CatchpointLabelMakerV7
+	onlineAccountsHash    crypto.Digest
+	onlineRoundParamsHash crypto.Digest
 }
 
 // MakeCatchpointLabelMakerCurrent creates a catchpoint label given the catchpoint label parameters.
 func MakeCatchpointLabelMakerCurrent(ledgerRound basics.Round, ledgerRoundBlockHash *crypto.Digest,
-	balancesMerkleRoot *crypto.Digest, totals AccountTotals, spVerificationContextHash *crypto.Digest) *CatchpointLabelMakerCurrent {
+	balancesMerkleRoot *crypto.Digest, totals AccountTotals, spVerificationContextHash, onlineAccountsHash, onlineRoundParamsHash *crypto.Digest) *CatchpointLabelMakerCurrent {
 	return &CatchpointLabelMakerCurrent{
+		v7Label:               *MakeCatchpointLabelMakerV7(ledgerRound, ledgerRoundBlockHash, balancesMerkleRoot, totals, spVerificationContextHash),
+		onlineAccountsHash:    *onlineAccountsHash,
+		onlineRoundParamsHash: *onlineRoundParamsHash,
+	}
+}
+
+func (l *CatchpointLabelMakerCurrent) buffer() []byte {
+	v6Buffer := l.v7Label.buffer()
+	v6Buffer = append(v6Buffer, l.onlineAccountsHash[:]...)
+	v6Buffer = append(v6Buffer, l.onlineRoundParamsHash[:]...)
+	return v6Buffer
+}
+
+func (l *CatchpointLabelMakerCurrent) round() basics.Round {
+	return l.v7Label.round()
+}
+
+func (l *CatchpointLabelMakerCurrent) message() string {
+	return fmt.Sprintf("%s onlineaccts digest=%s onlineroundparams digest=%s", l.v7Label.message(), l.onlineAccountsHash, l.onlineRoundParamsHash)
+}
+
+// CatchpointLabelMakerV7 represents a single catchpoint maker, matching catchpoints of version V7 and above.
+type CatchpointLabelMakerV7 struct {
+	v6Label            CatchpointLabelMakerV6
+	spVerificationHash crypto.Digest
+}
+
+// MakeCatchpointLabelMakerV7 creates a catchpoint label given the catchpoint label parameters.
+func MakeCatchpointLabelMakerV7(ledgerRound basics.Round, ledgerRoundBlockHash *crypto.Digest,
+	balancesMerkleRoot *crypto.Digest, totals AccountTotals, spVerificationContextHash *crypto.Digest) *CatchpointLabelMakerV7 {
+	return &CatchpointLabelMakerV7{
 		v6Label:            *MakeCatchpointLabelMakerV6(ledgerRound, ledgerRoundBlockHash, balancesMerkleRoot, totals),
 		spVerificationHash: *spVerificationContextHash,
 	}
 }
 
-func (l *CatchpointLabelMakerCurrent) buffer() []byte {
+func (l *CatchpointLabelMakerV7) buffer() []byte {
 	v6Buffer := l.v6Label.buffer()
 
 	return append(v6Buffer, l.spVerificationHash[:]...)
 }
 
-func (l *CatchpointLabelMakerCurrent) round() basics.Round {
+func (l *CatchpointLabelMakerV7) round() basics.Round {
 	return l.v6Label.round()
 }
 
-func (l *CatchpointLabelMakerCurrent) message() string {
+func (l *CatchpointLabelMakerV7) message() string {
 	return fmt.Sprintf("%s spver digest=%s", l.v6Label.message(), l.spVerificationHash)
 }
 

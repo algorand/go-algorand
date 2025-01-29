@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -439,6 +439,11 @@ dup; dup
 falcon_verify
 `
 
+const mimcNonsense = `
+pushbytes 0x11223344556677889900aabbccddeeff11223344556677889900aabbccddeeff
+mimc BLS12_381Mp111
+`
+
 const v8Nonsense = v7Nonsense + switchNonsense + frameNonsense + matchNonsense + boxNonsense
 
 const v9Nonsense = v8Nonsense
@@ -450,7 +455,9 @@ const spliceNonsence = `
 
 const v10Nonsense = v9Nonsense + pairingNonsense + spliceNonsence
 
-const v11Nonsense = v10Nonsense + incentiveNonsense + stateProofNonsense
+const v11Nonsense = v10Nonsense + incentiveNonsense + mimcNonsense
+
+const v12Nonsense = v11Nonsense + stateProofNonsense
 
 const v6Compiled = "2004010002b7a60c26050242420c68656c6c6f20776f726c6421070123456789abcd208dae2087fbba51304eb02b91f656948397a7946390e8cb70fc9ea4d95f92251d047465737400320032013202320380021234292929292b0431003101310231043105310731083109310a310b310c310d310e310f3111311231133114311533000033000133000233000433000533000733000833000933000a33000b33000c33000d33000e33000f3300113300123300133300143300152d2e01022581f8acd19181cf959a1281f8acd19181cf951a81f8acd19181cf1581f8acd191810f082209240a220b230c240d250e230f2310231123122313231418191a1b1c28171615400003290349483403350222231d4a484848482b50512a632223524100034200004322602261222704634848222862482864286548482228246628226723286828692322700048482371004848361c0037001a0031183119311b311d311e311f312023221e312131223123312431253126312731283129312a312b312c312d312e312f447825225314225427042455220824564c4d4b0222382124391c0081e80780046a6f686e2281d00f23241f880003420001892224902291922494249593a0a1a2a3a4a5a6a7a8a9aaabacadae24af3a00003b003c003d816472064e014f012a57000823810858235b235a2359b03139330039b1b200b322c01a23c1001a2323c21a23c3233e233f8120af06002a494905002a49490700b400b53a03b6b7043cb8033a0c2349c42a9631007300810881088120978101c53a8101c6003a"
 
@@ -475,8 +482,10 @@ const v10Compiled = v9Compiled + pairingCompiled + spliceCompiled
 const incentiveCompiled = "757401"
 
 const stateProofCompiled = "80070123456789abcd86494985"
+const mimcCompiled = "802011223344556677889900aabbccddeeff11223344556677889900aabbccddeeffe601"
 
-const V11Compiled = v10Compiled + incentiveCompiled + stateProofCompiled
+const v11Compiled = v10Compiled + incentiveCompiled + mimcCompiled
+const v12Compiled = v11Compiled + stateProofCompiled
 
 var nonsense = map[uint64]string{
 	1:  v1Nonsense,
@@ -490,6 +499,7 @@ var nonsense = map[uint64]string{
 	9:  v9Nonsense,
 	10: v10Nonsense,
 	11: v11Nonsense,
+	12: v12Nonsense,
 }
 
 var compiled = map[uint64]string{
@@ -503,7 +513,8 @@ var compiled = map[uint64]string{
 	8:  "08" + v8Compiled,
 	9:  "09" + v9Compiled,
 	10: "0a" + v10Compiled,
-	11: "0b" + V11Compiled,
+	11: "0b" + v11Compiled,
+	12: "0c" + v12Compiled,
 }
 
 func pseudoOp(opcode string) bool {
@@ -1746,7 +1757,6 @@ func TestAssembleDisassembleCycle(t *testing.T) {
 	// assembler pick it up.
 	require.LessOrEqual(t, LogicVersion, len(nonsense)) // Allow nonsense for future versions
 	for v, source := range nonsense {
-		v, source := v, source
 		if v > LogicVersion {
 			continue // We allow them to be set, but can't test assembly beyond LogicVersion
 		}
@@ -3227,7 +3237,7 @@ func TestMacros(t *testing.T) {
 		#define ==? ==; bnz
 		pushint 1; pushint 2; ==? label1
 		err
-		label1: 
+		label1:
 		pushint 1`,
 	)
 
@@ -3265,19 +3275,19 @@ func TestMacros(t *testing.T) {
 	pushbytes 0xddf2554d
 	txna ApplicationArgs 0
 	==
-	bnz kickstart 
-	pushbytes 0x903f4535 
+	bnz kickstart
+	pushbytes 0x903f4535
 	txna ApplicationArgs 0
 	==
-	bnz portal_transfer 
+	bnz portal_transfer
 	kickstart:
 		pushint 1
 	portal_transfer:
 		pushint 1
 	`, `
-	#define abi-route txna ApplicationArgs 0; ==; bnz 
-	method "kickstart(account)void"; abi-route kickstart 
-	method "portal_transfer(byte[])byte[]"; abi-route portal_transfer 
+	#define abi-route txna ApplicationArgs 0; ==; bnz
+	method "kickstart(account)void"; abi-route kickstart
+	method "portal_transfer(byte[])byte[]"; abi-route portal_transfer
 	kickstart:
 		pushint 1
 	portal_transfer:
@@ -3333,7 +3343,7 @@ add:
 	extract_uint32
 	stores
 
-	load 1; load 2; + 
+	load 1; load 2; +
 	store 255
 
 	int 255
@@ -3357,11 +3367,11 @@ add:
 #define abi-decode-uint32 ;int 0; extract_uint32;
 #define abi-encode-uint32 ;itob;extract 4 0;
 
-#define abi-encode-bytes  ;dup; len; abi-encode-uint16; swap; concat; 
+#define abi-encode-bytes  ;dup; len; abi-encode-uint16; swap; concat;
 #define abi-decode-bytes  ;extract 2 0;
 
-// abi method handling 
-#define abi-route 	;txna ApplicationArgs 0; ==; bnz 
+// abi method handling
+#define abi-route 	;txna ApplicationArgs 0; ==; bnz
 #define abi-return  ;pushbytes 0x151f7c75; swap; concat; log; int 1; return;
 
 // stanza: "set $var from-{type}"
@@ -3390,15 +3400,15 @@ echo:
 
 
 // add handler
-method "add(uint32,uint32)uint32"; abi-route add 
+method "add(uint32,uint32)uint32"; abi-route add
 add:
 	#define x 1
-	parse x from-uint32 
+	parse x from-uint32
 
 	#define y 2
 	parse y from-uint32
 
-	#define sum 255 
+	#define sum 255
 	load x; load y; +; store sum
 
 	returns sum as-uint32

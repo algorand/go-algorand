@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -58,7 +58,7 @@ func createTestingEncodedChunks(accountsCount uint64) (encodedAccountChunks [][]
 		if accounts >= accountsCount-64*1024 && last64KIndex == -1 {
 			last64KIndex = len(encodedAccountChunks)
 		}
-		var chunk catchpointFileChunkV6
+		var chunk CatchpointSnapshotChunkV6
 		chunk.Balances = make([]encoded.BalanceRecordV6, chunkSize)
 		for i := uint64(0); i < chunkSize; i++ {
 			var randomAccount encoded.BalanceRecordV6
@@ -506,7 +506,7 @@ func TestCatchupAccessorResourceCountMismatch(t *testing.T) {
 	err = catchpointAccessor.ProcessStagingBalances(ctx, CatchpointContentFileName, encodedFileHeader, &progress)
 	require.NoError(t, err)
 
-	var balances catchpointFileChunkV6
+	var balances CatchpointSnapshotChunkV6
 	balances.Balances = make([]encoded.BalanceRecordV6, 1)
 	var randomAccount encoded.BalanceRecordV6
 	accountData := trackerdb.BaseAccountData{}
@@ -538,6 +538,14 @@ func (w *testStagingWriter) writeCreatables(ctx context.Context, balances []trac
 }
 
 func (w *testStagingWriter) writeKVs(ctx context.Context, kvrs []encoded.KVRecordV6) error {
+	return nil
+}
+
+func (w *testStagingWriter) writeOnlineAccounts(ctx context.Context, accounts []encoded.OnlineAccountRecordV6) error {
+	return nil
+}
+
+func (w *testStagingWriter) writeOnlineRoundParams(ctx context.Context, params []encoded.OnlineRoundParamsRecordV6) error {
 	return nil
 }
 
@@ -630,7 +638,7 @@ func TestCatchupAccessorProcessStagingBalances(t *testing.T) {
 	}
 
 	// make chunks
-	chunks := []catchpointFileChunkV6{
+	chunks := []CatchpointSnapshotChunkV6{
 		{
 			Balances: []encoded.BalanceRecordV6{
 				encodedBalanceRecordFromBase(ledgertesting.RandomAddress(), acctA, nil, false),

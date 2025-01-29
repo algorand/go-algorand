@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -361,7 +361,7 @@ func (node *AlgorandFollowerNode) StartCatchup(catchpoint string) error {
 	}
 	err = node.catchpointCatchupService.Start(node.ctx)
 	if err != nil {
-		node.log.Warnf(err.Error())
+		node.log.Warn(err.Error())
 		return MakeStartCatchpointError(catchpoint, err)
 	}
 	node.log.Infof("starting catching up toward catchpoint %s", catchpoint)

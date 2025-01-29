@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -34,7 +34,6 @@ func TestBoxNewDel(t *testing.T) {
 	t.Parallel()
 
 	for _, size := range []int{24, 0} {
-		size := size
 		t.Run(fmt.Sprintf("box size=%d", size), func(t *testing.T) {
 			t.Parallel()
 
@@ -310,7 +309,6 @@ func TestBoxUnavailableWithClearState(t *testing.T) {
 	}
 
 	for name, program := range tests {
-		name, program := name, program
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			ep, _, l := MakeSampleEnv()
@@ -618,7 +616,6 @@ func TestEarlyPanics(t *testing.T) {
 	}
 
 	for name, program := range tests {
-		name, program := name, program
 		t.Run(name+"/zero", func(t *testing.T) {
 			t.Parallel()
 			ep, _, l := MakeSampleEnv()
@@ -629,7 +626,6 @@ func TestEarlyPanics(t *testing.T) {
 
 	big := strings.Repeat("x", 65)
 	for name, program := range tests {
-		name, program := name, program
 		t.Run(name+"/long", func(t *testing.T) {
 			t.Parallel()
 			ep, _, l := MakeSampleEnv()

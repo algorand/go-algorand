@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -52,6 +52,8 @@ const (
 	NetIdentityChallengeResponse     HashID = "NIR"
 	NetIdentityVerificationMessage   HashID = "NIV"
 	NetPrioResponse                  HashID = "NPR"
+	OnlineAccount                    HashID = "OA"
+	OnlineRoundParams                HashID = "ORP"
 	OneTimeSigKey1                   HashID = "OT1"
 	OneTimeSigKey2                   HashID = "OT2"
 	PaysetFlat                       HashID = "PF"

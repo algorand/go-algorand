@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -108,7 +108,7 @@ func (ls *LedgerService) Stop() {
 	}
 }
 
-// ServerHTTP returns ledgers for a particular round
+// ServeHTTP returns ledgers for a particular round
 // Either /v{version}/{genesisID}/ledger/{round} or ?r={round}&v={version}
 // Uses gorilla/mux for path argument parsing.
 func (ls *LedgerService) ServeHTTP(response http.ResponseWriter, request *http.Request) {

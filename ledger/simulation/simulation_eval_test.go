@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,10 +21,9 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math"
+	"slices"
 	"strings"
 	"testing"
-
-	"golang.org/x/exp/slices"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
@@ -365,7 +364,6 @@ func TestWrongAuthorizerTxn(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 	for _, optionalSigs := range []bool{false, true} {
-		optionalSigs := optionalSigs
 		t.Run(fmt.Sprintf("optionalSigs=%t", optionalSigs), func(t *testing.T) {
 			t.Parallel()
 			simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
@@ -591,7 +589,6 @@ btoi`)
 	}
 
 	for _, testCase := range testCases {
-		testCase := testCase
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
 			simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
@@ -4244,7 +4241,6 @@ func TestAppLocalGlobalStateChangeClearStateRollback(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 	for _, shouldError := range []bool{false, true} {
-		shouldError := shouldError
 		t.Run(fmt.Sprintf("shouldError=%v", shouldError), func(t *testing.T) {
 			t.Parallel()
 			simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
@@ -6323,7 +6319,6 @@ func TestOptionalSignatures(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 	for _, signed := range []bool{true, false} {
-		signed := signed
 		t.Run(fmt.Sprintf("signed=%t", signed), func(t *testing.T) {
 			simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
 				sender := env.Accounts[0]
@@ -6858,7 +6853,6 @@ func TestMockTracerScenarios(t *testing.T) {
 	scenarios := mocktracer.GetTestScenarios()
 
 	for name, scenarioFn := range scenarios {
-		scenarioFn := scenarioFn
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
@@ -6939,7 +6933,6 @@ func TestUnnamedResources(t *testing.T) {
 	// Start with directRefEnabledVersion (4), since prior to that all restricted references had to
 	// be indexes into the foreign arrays, meaning we can't test the unnamed case.
 	for v := 4; v <= logic.LogicVersion; v++ {
-		v := v
 		t.Run(fmt.Sprintf("v%d", v), func(t *testing.T) {
 			t.Parallel()
 			simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
@@ -6968,6 +6961,9 @@ func TestUnnamedResources(t *testing.T) {
 				env.OptIntoApp(otherAppUser, otherAppID)
 
 				proto := env.TxnInfo.CurrentProtocolParams()
+				if v > int(proto.LogicSigVersion) {
+					t.Skip("not testing in unsupported proto")
+				}
 				expectedUnnamedResourceGroupAssignment := &simulation.ResourceTracker{
 					MaxAccounts:               proto.MaxTxGroupSize * (proto.MaxAppTxnAccounts + proto.MaxAppTxnForeignApps),
 					MaxAssets:                 proto.MaxTxGroupSize * proto.MaxAppTxnForeignAssets,
@@ -7197,12 +7193,16 @@ func TestUnnamedResourcesAccountLocalWrite(t *testing.T) {
 	// Start with directRefEnabledVersion (4), since prior to that all restricted references had to
 	// be indexes into the foreign arrays, meaning we can't test the unnamed case.
 	for v := 4; v <= logic.LogicVersion; v++ {
-		v := v
 		t.Run(fmt.Sprintf("v%d", v), func(t *testing.T) {
 			t.Parallel()
 			simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
 				sender := env.Accounts[0]
 				testAppUser := env.Accounts[1].Addr
+
+				proto := env.TxnInfo.CurrentProtocolParams()
+				if v > int(proto.LogicSigVersion) {
+					t.Skip("not testing in unsupported proto")
+				}
 
 				program := fmt.Sprintf(`#pragma version %d
 txn ApplicationID
@@ -7240,7 +7240,6 @@ int 1
 				})
 				stxn := txn.Txn().Sign(sender.Sk)
 
-				proto := env.TxnInfo.CurrentProtocolParams()
 				expectedUnnamedResourceAssignment := &simulation.ResourceTracker{
 					MaxAccounts:               proto.MaxTxGroupSize * (proto.MaxAppTxnAccounts + proto.MaxAppTxnForeignApps),
 					MaxAssets:                 proto.MaxTxGroupSize * proto.MaxAppTxnForeignAssets,
@@ -7343,10 +7342,14 @@ func TestUnnamedResourcesCreatedAppsAndAssets(t *testing.T) {
 	t.Parallel()
 	// Start with v9, since that's when we first track cross-product references indepdently.
 	for v := 9; v <= logic.LogicVersion; v++ {
-		v := v
 		t.Run(fmt.Sprintf("v%d", v), func(t *testing.T) {
 			t.Parallel()
 			simulationTest(t, func(env simulationtesting.Environment) simulationTestCase {
+				proto := env.TxnInfo.CurrentProtocolParams()
+				if v > int(proto.LogicSigVersion) {
+					t.Skip("not testing in unsupported proto")
+				}
+
 				sender := env.Accounts[0]
 				otherResourceCreator := env.Accounts[1]
 				otherAccount := env.Accounts[2].Addr
@@ -7444,7 +7447,6 @@ int 1
 				appCreateStxn := appCreateTxn.Txn().Sign(otherResourceCreator.Sk)
 				appCallStxn := appCallTxn.Txn().Sign(sender.Sk)
 
-				proto := env.TxnInfo.CurrentProtocolParams()
 				expectedUnnamedResourceAssignment := simulation.ResourceTracker{
 					MaxAccounts:  (proto.MaxTxGroupSize - 1) * (proto.MaxAppTxnAccounts + proto.MaxAppTxnForeignApps),
 					MaxAssets:    (proto.MaxTxGroupSize - 1) * proto.MaxAppTxnForeignAssets,
@@ -7706,11 +7708,15 @@ func TestUnnamedResourcesBoxIOBudget(t *testing.T) {
 	t.Parallel()
 	// Boxes introduced in v8
 	for v := 8; v <= logic.LogicVersion; v++ {
-		v := v
 		t.Run(fmt.Sprintf("v%d", v), func(t *testing.T) {
 			t.Parallel()
 			env := simulationtesting.PrepareSimulatorTest(t)
 			defer env.Close()
+
+			proto := env.TxnInfo.CurrentProtocolParams()
+			if v > int(proto.LogicSigVersion) {
+				t.Skip("not testing in unsupported proto")
+			}
 
 			sender := env.Accounts[0]
 
@@ -7718,8 +7724,6 @@ func TestUnnamedResourcesBoxIOBudget(t *testing.T) {
 				ApprovalProgram:   fmt.Sprintf(boxTestProgram, v),
 				ClearStateProgram: fmt.Sprintf("#pragma version %d\n int 1", v),
 			})
-
-			proto := env.TxnInfo.CurrentProtocolParams()
 
 			// MBR is needed for boxes.
 			transferable := env.Accounts[1].AcctData.MicroAlgos.Raw - proto.MinBalance - proto.MinTxnFee
@@ -8591,13 +8595,16 @@ func TestUnnamedResourcesLimits(t *testing.T) {
 	// Start with v5, since that introduces the `txnas` opcode, needed for dynamic indexing into app
 	// args array.
 	for v := 5; v <= logic.LogicVersion; v++ {
-		v := v
 		t.Run(fmt.Sprintf("v%d", v), func(t *testing.T) {
 			t.Parallel()
 			env := simulationtesting.PrepareSimulatorTest(t)
 			defer env.Close()
 
 			proto := env.TxnInfo.CurrentProtocolParams()
+			if v > int(proto.LogicSigVersion) {
+				t.Skip("not testing in unsupported proto")
+				return
+			}
 
 			sender := env.Accounts[0]
 			otherAccounts := make([]basics.Address, len(env.Accounts)-1)
@@ -8758,13 +8765,16 @@ func TestUnnamedResourcesCrossProductLimits(t *testing.T) {
 	t.Parallel()
 	// Start with v9, since that's when we first track cross-product references indepdently.
 	for v := 9; v <= logic.LogicVersion; v++ {
-		v := v
 		t.Run(fmt.Sprintf("v%d", v), func(t *testing.T) {
 			t.Parallel()
 			env := simulationtesting.PrepareSimulatorTest(t)
 			defer env.Close()
 
 			proto := env.TxnInfo.CurrentProtocolParams()
+			if v > int(proto.LogicSigVersion) {
+				t.Skip("not testing in unsupported proto")
+				return
+			}
 
 			sender := env.Accounts[0]
 			otherAccounts := make([]basics.Address, proto.MaxTxGroupSize)
