@@ -1213,12 +1213,10 @@ func makeResourcePopulator(txnGroup []transactions.SignedTxn, consensusParams co
 	}
 
 	for i, txn := range txnGroup {
-		if txn.Txn.Type != protocol.ApplicationCallTx {
-			continue
-		}
-
-		populator.appCallIndexes = append(populator.appCallIndexes, i)
 		populator.addTransaction(txn.Txn, i, consensusParams)
+		if txn.Txn.Type == protocol.ApplicationCallTx {
+			populator.appCallIndexes = append(populator.appCallIndexes, i)
+		}
 	}
 
 	for i := len(txnGroup); i < consensusParams.MaxTxGroupSize; i++ {

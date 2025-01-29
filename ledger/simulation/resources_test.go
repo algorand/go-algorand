@@ -417,9 +417,7 @@ func TestPopulatorWithGlobalResources(t *testing.T) {
 
 	err := populator.populateResources(groupResources, txnResources)
 	require.NoError(t, err)
-	require.Equal(t, consensusParams.MaxTxGroupSize-1, len(populator.txnResources))
-
-	require.Nil(t, populator.txnResources[0])
+	require.Equal(t, consensusParams.MaxTxGroupSize, len(populator.txnResources))
 
 	pop1 := populator.txnResources[1].getPopulatedArrays()
 	pop2 := populator.txnResources[2].getPopulatedArrays()
@@ -465,7 +463,6 @@ func TestPopulatorWithGlobalResources(t *testing.T) {
 // TestPopulatorWithAlreadyAvailableResources ensures that resources that are already available
 // aren't added again. Most of these scenarios are impossible to even occur due to the checks in
 // EvalContext before resources are added to the resource tracker.
-// TODO: Add tests for ensuring resources from other txn fields aren't added
 func TestPopulatorWithAlreadyAvailableResources(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -478,12 +475,52 @@ func TestPopulatorWithAlreadyAvailableResources(t *testing.T) {
 	app5 := basics.AppIndex(5)
 	addr6 := basics.Address{6}
 	asa7 := basics.AssetIndex(7)
+	app8 := basics.AppIndex(8)
+	app9 := basics.AppIndex(9)
+	addr10 := basics.Address{10}
+	asa11 := basics.AssetIndex(11)
 
-	txns := make([]transactions.SignedTxn, 2)
+	payRecv := basics.Address{12}
+	payClose := basics.Address{13}
+
+	axferSender := basics.Address{14}
+	axferReceiver := basics.Address{15}
+	axferClose := basics.Address{16}
+	axferAsa := basics.AssetIndex(17)
+
+	acfgAsa := basics.AssetIndex(18)
+
+	afrzAsa := basics.AssetIndex(19)
+	afrzAddr := basics.Address{20}
+
+	txns := make([]transactions.SignedTxn, 6)
 	txns[0].Txn.Type = protocol.ApplicationCallTx
 	txns[0].Txn.ApplicationID = app1
 	txns[0].Txn.Sender = addr3
 	txns[0].Txn.ForeignApps = []basics.AppIndex{app2}
+
+	txns[1].Txn.Type = protocol.ApplicationCallTx
+	txns[1].Txn.ApplicationID = app8
+	txns[1].Txn.ForeignApps = []basics.AppIndex{app9}
+	txns[1].Txn.Accounts = []basics.Address{addr10}
+	txns[1].Txn.ForeignAssets = []basics.AssetIndex{asa11}
+
+	txns[2].Txn.Type = protocol.PaymentTx
+	txns[2].Txn.Receiver = payRecv
+	txns[2].Txn.CloseRemainderTo = payClose
+
+	txns[3].Txn.Type = protocol.AssetTransferTx
+	txns[3].Txn.AssetSender = axferSender
+	txns[3].Txn.AssetReceiver = axferReceiver
+	txns[3].Txn.AssetCloseTo = axferClose
+	txns[3].Txn.XferAsset = axferAsa
+
+	txns[4].Txn.Type = protocol.AssetConfigTx
+	txns[4].Txn.ConfigAsset = acfgAsa
+
+	txns[5].Txn.Type = protocol.AssetFreezeTx
+	txns[5].Txn.FreezeAsset = afrzAsa
+	txns[5].Txn.FreezeAccount = afrzAddr
 
 	consensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
 	populator := makeResourcePopulator(txns, consensusParams)
@@ -499,7 +536,9 @@ func TestPopulatorWithAlreadyAvailableResources(t *testing.T) {
 	groupResources.Accounts = make(map[basics.Address]struct{})
 	groupResources.Boxes = make(map[logic.BoxRef]uint64)
 
+	/////////////
 	// App tests
+	/////////////
 
 	// Ensure the apps own appID isn't added
 	txnResources[0].Apps[app1] = struct{}{}
@@ -515,7 +554,15 @@ func TestPopulatorWithAlreadyAvailableResources(t *testing.T) {
 	txnResources[0].Apps[app5] = struct{}{}
 	groupResources.Apps[app5] = struct{}{}
 
+	// Ensure an app from another txn field isn't added
+	groupResources.Apps[app8] = struct{}{}
+
+	// Ensure an app from anothers txn foreign apps isn't added
+	groupResources.Apps[app9] = struct{}{}
+
+	////////////////
 	// Account tests
+	////////////////
 
 	// Ensure a txn's sender isn't added
 	txnResources[0].Accounts[addr3] = struct{}{}
@@ -530,28 +577,74 @@ func TestPopulatorWithAlreadyAvailableResources(t *testing.T) {
 	txnResources[0].Accounts[addr6] = struct{}{}
 	groupResources.Accounts[addr6] = struct{}{}
 
-	// Asset TestPopulatorWithAlreadyAvailableResources
+	// Ensure an app address from another field isn't added
+	groupResources.Accounts[app8.Address()] = struct{}{}
+
+	// Ensure an app address from another txns foreign apps isn't added
+	groupResources.Accounts[app9.Address()] = struct{}{}
+
+	// Ensure an address from an appl accounts array isn't added
+	groupResources.Accounts[addr10] = struct{}{}
+
+	// Ensure addresses from a pay txns fields aren't added
+	groupResources.Accounts[payRecv] = struct{}{}
+	groupResources.Accounts[payClose] = struct{}{}
+
+	// // Ensure addresses from a axfer fields aren't added
+	groupResources.Accounts[axferSender] = struct{}{}
+	groupResources.Accounts[axferReceiver] = struct{}{}
+	groupResources.Accounts[axferClose] = struct{}{}
+
+	// Ensure a afrz account isn't added
+	groupResources.Accounts[afrzAddr] = struct{}{}
+
+	//////////////
+	// Asset Tests
+	//////////////
 
 	// Ensure an asset from group and txn isn't added twice
 	txnResources[0].Assets[asa7] = struct{}{}
 	groupResources.Assets[asa7] = struct{}{}
 
+	// Ensure an sset from an appls assets array isn't added
+	groupResources.Assets[asa11] = struct{}{}
+
+	// Ensure an asset from an axfer isn't added
+	groupResources.Assets[axferAsa] = struct{}{}
+
+	// Ensure an asset from an axfg isn't added
+	groupResources.Assets[acfgAsa] = struct{}{}
+
+	// Ensure an afrz asset isn't added
+	groupResources.Assets[afrzAsa] = struct{}{}
+
 	err := populator.populateResources(groupResources, txnResources)
 	require.NoError(t, err)
 
-	require.Len(t, populator.getPopulatedArrays(), 1)
+	populatedArrays := populator.getPopulatedArrays()
+	require.Len(t, populatedArrays, 2)
+
+	require.ElementsMatch(t, txns[1].Txn.ForeignApps, populatedArrays[1].Apps)
+	require.ElementsMatch(t, txns[1].Txn.Accounts, populatedArrays[1].Accounts)
+	require.ElementsMatch(t, txns[1].Txn.ForeignAssets, populatedArrays[1].Assets)
+	require.ElementsMatch(t, txns[1].Txn.Boxes, populatedArrays[1].Boxes)
+
+	for i := 2; i < len(populatedArrays); i++ {
+		require.Empty(t, populatedArrays[i].Accounts)
+		require.Empty(t, populatedArrays[i].Assets)
+		require.Empty(t, populatedArrays[i].Apps)
+		require.Empty(t, populatedArrays[i].Boxes)
+	}
 
 	expectedAssets := []basics.AssetIndex{asa7}
 	expectedApps := []basics.AppIndex{app5, app4, app2}
 	expectedAccounts := []basics.Address{addr6}
 	expectedBoxes := []logic.BoxRef{box4}
 
-	populatedArrays := populator.getPopulatedArrays()[0]
-
-	populatedAssets := populatedArrays.Assets
-	populatedApps := populatedArrays.Apps
-	populatedAccounts := populatedArrays.Accounts
-	populatedBoxes := populatedArrays.Boxes
+	populatedAssets := populatedArrays[0].Assets
+	populatedApps := populatedArrays[0].Apps
+	populatedAccounts := populatedArrays[0].Accounts
+	populatedBoxes := populatedArrays[0].Boxes
 
 	require.ElementsMatch(t, expectedAssets, populatedAssets)
 	require.ElementsMatch(t, expectedApps, populatedApps)
