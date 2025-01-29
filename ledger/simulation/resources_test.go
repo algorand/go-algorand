@@ -732,4 +732,7 @@ func TestPopulatorWithNoRoom(t *testing.T) {
 	groupResources.AppLocals[appLocal] = struct{}{}
 	require.ErrorContains(t, populator.populateResources(groupResources, txnResources), "no room for app local 1337 : REAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFN3OBE4")
 
+	groupResources, txnResources, populator = makeFullGroupWithPopulator()
+	groupResources.NumEmptyBoxRefs = 1
+	require.ErrorContains(t, populator.populateResources(groupResources, txnResources), "no room for box 0 : ")
 }
