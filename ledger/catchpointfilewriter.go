@@ -388,7 +388,7 @@ func (cw *catchpointFileWriter) readDatabaseStep(ctx context.Context) error {
 	if cw.params.EnableCatchpointsWithOnlineAccounts && !cw.onlineAccountsDone {
 		// Create the OnlineAccounts iterator JIT
 		if cw.onlineAccountRows == nil {
-			rows, err := cw.tx.MakeOnlineAccountsIter(ctx, false, cw.onlineExcludeBefore)
+			rows, err := cw.tx.MakeOrderedOnlineAccountsIter(ctx, false, cw.onlineExcludeBefore)
 			if err != nil {
 				return err
 			}

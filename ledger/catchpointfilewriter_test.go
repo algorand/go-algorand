@@ -1194,9 +1194,9 @@ assert
 	t.Log("DB round generator", genDBRound, "validator", valDBRound)
 	t.Log("Latest round generator", genLatestRound, "validator", valLatestRound)
 
-	genOAHash, genOARows, err := calculateVerificationHash(context.Background(), dl.generator.trackerDB().MakeOnlineAccountsIter, 0, false)
+	genOAHash, genOARows, err := calculateVerificationHash(context.Background(), dl.generator.trackerDB().MakeOrderedOnlineAccountsIter, 0, false)
 	require.NoError(t, err)
-	valOAHash, valOARows, err := calculateVerificationHash(context.Background(), dl.validator.trackerDB().MakeOnlineAccountsIter, 0, false)
+	valOAHash, valOARows, err := calculateVerificationHash(context.Background(), dl.validator.trackerDB().MakeOrderedOnlineAccountsIter, 0, false)
 	require.NoError(t, err)
 	require.Equal(t, genOAHash, valOAHash)
 	require.NotZero(t, genOAHash)
@@ -1222,7 +1222,7 @@ assert
 	l := testNewLedgerFromCatchpoint(t, dl.generator.trackerDB(), catchpointFilePath)
 	defer l.Close()
 
-	catchpointOAHash, catchpointOARows, err := calculateVerificationHash(context.Background(), l.trackerDBs.MakeOnlineAccountsIter, 0, false)
+	catchpointOAHash, catchpointOARows, err := calculateVerificationHash(context.Background(), l.trackerDBs.MakeOrderedOnlineAccountsIter, 0, false)
 	require.NoError(t, err)
 	require.Equal(t, genOAHash, catchpointOAHash)
 	t.Log("catchpoint onlineaccounts hash", catchpointOAHash, "matches")

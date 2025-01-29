@@ -67,7 +67,7 @@ type Reader interface {
 	MakeCatchpointReader() (CatchpointReader, error)
 	MakeEncodedAccountsBatchIter() EncodedAccountsBatchIter
 	MakeKVsIter(ctx context.Context) (KVsIter, error)
-	MakeOnlineAccountsIter(ctx context.Context, useStaging bool, excludeBefore basics.Round) (TableIterator[*encoded.OnlineAccountRecordV6], error)
+	MakeOrderedOnlineAccountsIter(ctx context.Context, useStaging bool, excludeBefore basics.Round) (TableIterator[*encoded.OnlineAccountRecordV6], error)
 	MakeOnlineRoundParamsIter(ctx context.Context, useStaging bool, excludeBefore basics.Round) (TableIterator[*encoded.OnlineRoundParamsRecordV6], error)
 }
 
