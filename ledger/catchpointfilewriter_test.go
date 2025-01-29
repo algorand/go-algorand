@@ -149,7 +149,15 @@ func verifyStateProofVerificationContextWrite(t *testing.T, data []ledgercore.St
 	require.NoError(t, err)
 
 	err = ml.trackerDB().Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
-		writer, err := makeCatchpointFileWriter(context.Background(), protoParams, fileName, tx, ResourcesPerCatchpointFileChunk, 0)
+		ar, err := tx.MakeAccountsReader()
+		if err != nil {
+			return err
+		}
+		accountsRnd, err := ar.AccountsRound()
+		if err != nil {
+			return err
+		}
+		writer, err := makeCatchpointFileWriter(context.Background(), protoParams, fileName, tx, ResourcesPerCatchpointFileChunk, accountsRnd, 0)
 		if err != nil {
 			return err
 		}
@@ -172,6 +180,7 @@ func verifyStateProofVerificationContextWrite(t *testing.T, data []ledgercore.St
 		}
 		return
 	})
+	require.NoError(t, err)
 
 	catchpointData := readCatchpointDataFile(t, fileName)
 	require.Equal(t, catchpointSPVerificationFileName, catchpointData[0].headerName)
@@ -264,7 +273,15 @@ func TestBasicCatchpointWriter(t *testing.T) {
 	fileName := filepath.Join(temporaryDirectory, "15.data")
 
 	err = ml.trackerDB().Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
-		writer, err := makeCatchpointFileWriter(context.Background(), protoParams, fileName, tx, ResourcesPerCatchpointFileChunk, 0)
+		ar, err := tx.MakeAccountsReader()
+		if err != nil {
+			return err
+		}
+		accountsRnd, err := ar.AccountsRound()
+		if err != nil {
+			return err
+		}
+		writer, err := makeCatchpointFileWriter(context.Background(), protoParams, fileName, tx, ResourcesPerCatchpointFileChunk, accountsRnd, 0)
 		if err != nil {
 			return err
 		}
@@ -286,6 +303,7 @@ func TestBasicCatchpointWriter(t *testing.T) {
 		}
 		return
 	})
+	require.NoError(t, err)
 
 	catchpointContent := readCatchpointDataFile(t, fileName)
 	balanceFileName := fmt.Sprintf(catchpointBalancesFileNameTemplate, 1)
@@ -307,15 +325,19 @@ func testWriteCatchpoint(t *testing.T, params config.ConsensusParams, rdb tracke
 	}
 
 	err := rdb.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
-		writer, err := makeCatchpointFileWriter(context.Background(), params, datapath, tx, maxResourcesPerChunk, onlineExcludeBefore)
-		if err != nil {
-			return err
-		}
-
 		ar, err := tx.MakeAccountsReader()
 		if err != nil {
 			return err
 		}
+		accountsRnd, err = ar.AccountsRound()
+		if err != nil {
+			return
+		}
+		writer, err := makeCatchpointFileWriter(context.Background(), params, datapath, tx, maxResourcesPerChunk, accountsRnd, onlineExcludeBefore)
+		if err != nil {
+			return err
+		}
+
 		rawData, err := tx.MakeSpVerificationCtxReader().GetAllSPContexts(ctx)
 		if err != nil {
 			return err
@@ -338,10 +360,6 @@ func testWriteCatchpoint(t *testing.T, params config.ConsensusParams, rdb tracke
 		totalOnlineRoundParams = writer.totalOnlineRoundParams
 		totalChunks = writer.chunkNum
 		biggestChunkLen = writer.biggestChunkLen
-		accountsRnd, err = ar.AccountsRound()
-		if err != nil {
-			return
-		}
 		totals, err = ar.AccountsTotals(ctx, false)
 		return
 	})
@@ -440,13 +458,16 @@ func TestCatchpointReadDatabaseOverflowSingleAccount(t *testing.T) {
 		totalAccountsWritten := uint64(0)
 		totalResources := 0
 		totalChunks := 0
-		cw, err := makeCatchpointFileWriter(context.Background(), protoParams, catchpointDataFilePath, tx, maxResourcesPerChunk, 0)
-		require.NoError(t, err)
-
 		ar, err := tx.MakeAccountsReader()
 		if err != nil {
 			return err
 		}
+		accountsRnd, err := ar.AccountsRound()
+		if err != nil {
+			return
+		}
+		cw, err := makeCatchpointFileWriter(context.Background(), protoParams, catchpointDataFilePath, tx, maxResourcesPerChunk, accountsRnd, 0)
+		require.NoError(t, err)
 
 		expectedTotalResources, err := ar.TotalResources(ctx)
 		if err != nil {
@@ -546,7 +567,13 @@ func TestCatchpointReadDatabaseOverflowAccounts(t *testing.T) {
 
 		totalAccountsWritten := uint64(0)
 		totalResources := 0
-		cw, err := makeCatchpointFileWriter(context.Background(), protoParams, catchpointDataFilePath, tx, maxResourcesPerChunk, 0)
+
+		accountsRnd, err := ar.AccountsRound()
+		if err != nil {
+			return err
+		}
+
+		cw, err := makeCatchpointFileWriter(context.Background(), protoParams, catchpointDataFilePath, tx, maxResourcesPerChunk, accountsRnd, 0)
 		require.NoError(t, err)
 
 		// repeat this until read all accts

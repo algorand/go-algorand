@@ -77,7 +77,7 @@ type catchpointFileWriter struct {
 	kvDone                 bool
 	onlineAccountRows      trackerdb.TableIterator[*encoded.OnlineAccountRecordV6]
 	onlineAccountsDone     bool
-	onlineAccountCurrent   *basics.Address
+	onlineAccountCurrent   basics.Address
 	onlineRoundParamsRows  trackerdb.TableIterator[*encoded.OnlineRoundParamsRecordV6]
 	onlineRoundParamsDone  bool
 }
@@ -401,10 +401,10 @@ func (cw *catchpointFileWriter) readDatabaseStep(ctx context.Context) error {
 			if err != nil {
 				return err
 			}
-			// Is this the first (and oldest) row for this address?
-			if cw.onlineAccountCurrent == nil || *cw.onlineAccountCurrent != oa.Address {
-				cw.onlineAccountCurrent = &oa.Address
-				// If so, is the updateRound for this row < R-320? Then set it to 0.
+			// Is this the first (and thus oldest) row for this address?
+			if cw.onlineAccountCurrent.IsZero() || cw.onlineAccountCurrent != oa.Address {
+				cw.onlineAccountCurrent = oa.Address
+				// If so, is the updateRound for this row beyond the lookback horizon? Then set it to 0.
 				if oa.UpdateRound < (cw.accountsRound + 1).SubSaturate(basics.Round(cw.params.MaxBalLookback)) {
 					// We set UpdateRound to 0 here, because not all nodes may agree on the onlineaccounts table
 					// updateRound column value for the oldest "horizon" row for certain addresses, depending on
