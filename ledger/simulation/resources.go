@@ -774,7 +774,6 @@ func (r *txnResources) addBox(app basics.AppIndex, name string) error {
 
 // addBoxWithApp adds a box to the box array. It also adds the app to the app array.
 func (r *txnResources) addBoxWithApp(app basics.AppIndex, name string) error {
-	fmt.Println(app)
 	if !r.hasRoomForBoxWithApp() {
 		return fmt.Errorf("no room for box %d : %s", app, name)
 	}
@@ -987,8 +986,6 @@ func (p *resourcePopulator) addApp(app basics.AppIndex) error {
 
 func (p *resourcePopulator) addBox(app basics.AppIndex, name string) error {
 	var err error
-
-	fmt.Println("In addBox:", app)
 
 	// First try to find txn with app already available
 	for _, i := range p.appCallIndexes {
