@@ -70,12 +70,14 @@ type catchpointFileWriter struct {
 	biggestChunkLen        uint64
 	accountsIterator       trackerdb.EncodedAccountsBatchIter
 	maxResourcesPerChunk   int
+	accountsRound          basics.Round
 	onlineExcludeBefore    basics.Round
 	accountsDone           bool
 	kvRows                 trackerdb.KVsIter
 	kvDone                 bool
 	onlineAccountRows      trackerdb.TableIterator[*encoded.OnlineAccountRecordV6]
 	onlineAccountsDone     bool
+	onlineAccountCurrent   *basics.Address
 	onlineRoundParamsRows  trackerdb.TableIterator[*encoded.OnlineRoundParamsRecordV6]
 	onlineRoundParamsDone  bool
 }
@@ -111,7 +113,7 @@ func (data catchpointStateProofVerificationContext) ToBeHashed() (protocol.HashI
 	return protocol.StateProofVerCtx, protocol.Encode(&data)
 }
 
-func makeCatchpointFileWriter(ctx context.Context, params config.ConsensusParams, filePath string, tx trackerdb.SnapshotScope, maxResourcesPerChunk int, onlineExcludeBefore basics.Round) (*catchpointFileWriter, error) {
+func makeCatchpointFileWriter(ctx context.Context, params config.ConsensusParams, filePath string, tx trackerdb.SnapshotScope, maxResourcesPerChunk int, accountsRound, onlineExcludeBefore basics.Round) (*catchpointFileWriter, error) {
 	aw, err := tx.MakeAccountsReader()
 	if err != nil {
 		return nil, err
@@ -167,6 +169,7 @@ func makeCatchpointFileWriter(ctx context.Context, params config.ConsensusParams
 		compressor:             compressor,
 		tar:                    tar,
 		accountsIterator:       tx.MakeEncodedAccountsBatchIter(),
+		accountsRound:          accountsRound,
 		maxResourcesPerChunk:   maxResourcesPerChunk,
 		onlineExcludeBefore:    onlineExcludeBefore,
 	}
@@ -397,6 +400,42 @@ func (cw *catchpointFileWriter) readDatabaseStep(ctx context.Context) error {
 			oa, err := cw.onlineAccountRows.GetItem()
 			if err != nil {
 				return err
+			}
+			// Is this the first (and oldest) row for this address?
+			if cw.onlineAccountCurrent == nil || *cw.onlineAccountCurrent != oa.Address {
+				cw.onlineAccountCurrent = &oa.Address
+				// If so, is the updateRound for this row < R-320? Then set it to 0.
+				if oa.UpdateRound < (cw.accountsRound + 1).SubSaturate(basics.Round(cw.params.MaxBalLookback)) {
+					// We set UpdateRound to 0 here, because not all nodes may agree on the onlineaccounts table
+					// updateRound column value for the oldest "horizon" row for certain addresses, depending on
+					// a node's operating history. This does not have any impact on the correctness of online account
+					// lookups, but is due to changes in the database schema over time:
+					//
+					//   1. For nodes that have been online for a long time, the unlimited assets release (v3.5.1, #3652)
+					//   introduced a BaseAccountData type with an UpdateRound field, consensus-flagged to be zero until
+					//   EnableAccountDataResourceSeparation was enabled in consensus v32. So accounts that have been
+					//   inactive since before consensus v32 will still have zero values for UpdateRound. This behavior
+					//   is consistent for all nodes and validated by the merkle trie generated each catchpoint round.
+					//
+					//   2. The onlineaccounts table, introduced later in v3.9.2 (PR #4003), uses a migration to populate
+					//   the onlineaccounts table by selecting all online accounts from the accounts table. This migration
+					//   copies the BaseAccountData.UpdateRound field, along with voting data, to set the initial values
+					//   of the onlineaccounts table for each address. After that, the onlineaccounts table's updateRound
+					//   column would only be updated if voting data changed -- so a zero pay or app call would not change
+					//   onlineaccounts updateRound.
+					//
+					//   3. Node operators using fast catchup (before v4.0.1) initialize the onlineaccounts table by
+					//   running the same migration introduced in v3.9.2, where updateRound (and account data) comes from
+					//   BaseAccountData. This means fast catchup users would see some addresses either be zero (case 1),
+					//   or the round of the last account data change (case 2).
+					//
+					//   4. However, a node catching up from scratch without using fast catchup, running v3.9.2 or later,
+					//   must track the online account history, and so only sets non-zero updateRound values while processing
+					//   blocks, whether or not EnableAccountDataResourceSeparation was set. These nodes will have updateRound
+					//   set only by the round of the last voting data change, not zero (case 1) or the round of the last
+					//   account data change (case 2).
+					oa.UpdateRound = 0
+				}
 			}
 			onlineAccts = append(onlineAccts, *oa)
 			if len(onlineAccts) == BalancesPerCatchpointFileChunk {
