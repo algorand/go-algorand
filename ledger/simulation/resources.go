@@ -630,6 +630,9 @@ type txnResources struct {
 
 	maxTotalRefs int
 	maxAccounts  int
+	maxBoxes     int
+	maxApps      int
+	maxAssets    int
 }
 
 func (r *txnResources) getTotalRefs() int {
@@ -638,20 +641,36 @@ func (r *txnResources) getTotalRefs() int {
 
 // Methods for determining room for specific references
 
-func (r *txnResources) hasRoom() bool {
-	return r.getTotalRefs() < r.maxTotalRefs
+func (r *txnResources) hasRoom(numRefs int) bool {
+	return r.getTotalRefs() < r.maxTotalRefs-numRefs+1
+}
+
+func (r *txnResources) hasRoomForApp() bool {
+	return r.hasRoom(1) && (len(r.apps)+len(r.prefilledApps)) < r.maxApps
+}
+
+func (r *txnResources) hasRoomForAsset() bool {
+	return r.hasRoom(1) && (len(r.assets)+len(r.prefilledAssets)) < r.maxAssets
+}
+
+func (r *txnResources) hasRoomForBox() bool {
+	return r.hasRoom(1) && (len(r.boxes)+len(r.prefilledBoxes)) < r.maxBoxes
 }
 
 func (r *txnResources) hasRoomForAccount() bool {
-	return r.hasRoom() && (len(r.accounts)+len(r.prefilledAccounts)) < r.maxAccounts
+	return r.hasRoom(1) && (len(r.accounts)+len(r.prefilledAccounts)) < r.maxAccounts
 }
 
-func (r *txnResources) hasRoomForCrossRef() bool {
-	return r.hasRoomForAccount() && r.getTotalRefs() < r.maxTotalRefs-1
+func (r *txnResources) hasRoomForHolding() bool {
+	return r.hasRoom(2) && r.hasRoomForAccount() && r.hasRoomForAsset()
+}
+
+func (r *txnResources) hasRoomForAppLocal() bool {
+	return r.hasRoom(2) && r.hasRoomForAccount() && r.hasRoomForApp()
 }
 
 func (r *txnResources) hasRoomForBoxWithApp() bool {
-	return r.getTotalRefs() < r.maxTotalRefs-1
+	return r.hasRoom(2) && r.hasRoomForBox() && r.hasRoomForApp()
 }
 
 // Methods for determining if a resource is available
@@ -724,7 +743,7 @@ func (r *txnResources) addAsset(aid basics.AssetIndex) error {
 		return nil
 	}
 
-	if !r.hasRoom() {
+	if !r.hasRoomForAsset() {
 		return fmt.Errorf("no room for asset: %d", aid)
 	}
 	r.assets[aid] = struct{}{}
@@ -737,7 +756,7 @@ func (r *txnResources) addApp(aid basics.AppIndex) error {
 		return nil
 	}
 
-	if !r.hasRoom() {
+	if !r.hasRoomForApp() {
 		return fmt.Errorf("no room for app: %d", aid)
 	}
 	r.apps[aid] = struct{}{}
@@ -746,7 +765,7 @@ func (r *txnResources) addApp(aid basics.AppIndex) error {
 
 // addBox adds a box to the box array. It does NOT add the app to the app array.
 func (r *txnResources) addBox(app basics.AppIndex, name string) error {
-	if !r.hasRoom() {
+	if !r.hasRoomForBox() {
 		return fmt.Errorf("no room for box %d : %s", app, name)
 	}
 	r.boxes = append(r.boxes, logic.BoxRef{App: app, Name: name})
@@ -755,6 +774,7 @@ func (r *txnResources) addBox(app basics.AppIndex, name string) error {
 
 // addBoxWithApp adds a box to the box array. It also adds the app to the app array.
 func (r *txnResources) addBoxWithApp(app basics.AppIndex, name string) error {
+	fmt.Println(app)
 	if !r.hasRoomForBoxWithApp() {
 		return fmt.Errorf("no room for box %d : %s", app, name)
 	}
@@ -764,7 +784,7 @@ func (r *txnResources) addBoxWithApp(app basics.AppIndex, name string) error {
 }
 
 func (r *txnResources) addAppLocal(app basics.AppIndex, addr basics.Address) error {
-	if !r.hasRoomForCrossRef() {
+	if !r.hasRoomForAppLocal() {
 		return fmt.Errorf("no room for app local %d : %s", app, addr.String())
 	}
 	r.apps[app] = struct{}{}
@@ -773,7 +793,7 @@ func (r *txnResources) addAppLocal(app basics.AppIndex, addr basics.Address) err
 }
 
 func (r *txnResources) addAssetHolding(addr basics.Address, aid basics.AssetIndex) error {
-	if !r.hasRoomForCrossRef() {
+	if !r.hasRoomForHolding() {
 		return fmt.Errorf("no room for asset holding %d : %s", aid, addr.String())
 	}
 	r.accounts[addr] = struct{}{}
@@ -852,6 +872,9 @@ func (p *resourcePopulator) addTransaction(txn transactions.Transaction, groupIn
 		boxes:              []logic.BoxRef{},
 		maxTotalRefs:       consensusParams.MaxAppTotalTxnReferences,
 		maxAccounts:        consensusParams.MaxAppTxnAccounts,
+		maxBoxes:           consensusParams.MaxAppBoxReferences,
+		maxApps:            consensusParams.MaxAppTxnForeignApps,
+		maxAssets:          consensusParams.MaxAppTxnForeignAssets,
 	}
 
 	// The Sender will always be implicitly available for every transaction type
@@ -964,6 +987,8 @@ func (p *resourcePopulator) addApp(app basics.AppIndex) error {
 
 func (p *resourcePopulator) addBox(app basics.AppIndex, name string) error {
 	var err error
+
+	fmt.Println("In addBox:", app)
 
 	// First try to find txn with app already available
 	for _, i := range p.appCallIndexes {
@@ -1233,6 +1258,9 @@ func makeResourcePopulator(txnGroup []transactions.SignedTxn, consensusParams co
 			boxes:              []logic.BoxRef{},
 			maxTotalRefs:       consensusParams.MaxAppTotalTxnReferences,
 			maxAccounts:        consensusParams.MaxAppTxnAccounts,
+			maxBoxes:           consensusParams.MaxAppBoxReferences,
+			maxAssets:          consensusParams.MaxAppTxnForeignAssets,
+			maxApps:            consensusParams.MaxAppTxnForeignApps,
 		}
 	}
 
