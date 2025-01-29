@@ -40,6 +40,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb/sqlitedriver"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -57,7 +58,10 @@ func init() {
 	fileCmd.Flags().BoolVarP(&loadOnly, "load", "l", false, "Load only, do not dump")
 	fileCmd.Flags().BoolVarP(&printDigests, "digest", "d", false, "Print balances and spver digests")
 	fileCmd.Flags().VarP(excludedFields, "exclude-fields", "e", "List of fields to exclude from the dump: ["+excludedFields.AllowedString()+"]")
+	fileCmd.Flags().BoolVarP(&rawDump, "raw", "R", false, "Dump raw catchpoint data, ignoring ledger database operations")
 }
+
+var rawDump bool
 
 var fileCmd = &cobra.Command{
 	Use:   "file",
@@ -67,6 +71,13 @@ var fileCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		if catchpointFile == "" {
 			cmd.HelpFunc()(cmd, args)
+			return
+		}
+		if rawDump {
+			err := rawDumpCatchpointFile(catchpointFile, outFileName)
+			if err != nil {
+				reportErrorf("Error dumping raw catchpoint file: %v", err)
+			}
 			return
 		}
 		stats, err := os.Stat(catchpointFile)
@@ -179,6 +190,165 @@ func isGzipCompressed(catchpointReader *bufio.Reader, catchpointFileSize int64) 
 	}
 
 	return prefixBytes[0] == gzipPrefix[0] && prefixBytes[1] == gzipPrefix[1]
+}
+
+func rawDumpCatchpointFile(catchpointFile string, outFileName string) error {
+	stat, err := os.Stat(catchpointFile)
+	if err != nil {
+		return fmt.Errorf("unable to stat '%s': %v", catchpointFile, err)
+	}
+	if stat.Size() == 0 {
+		return fmt.Errorf("file '%s' is empty", catchpointFile)
+	}
+
+	f, err := os.Open(catchpointFile)
+	if err != nil {
+		return fmt.Errorf("unable to open file '%s': %v", catchpointFile, err)
+	}
+	defer f.Close()
+
+	outFile := os.Stdout
+	if outFileName != "" {
+		outFile, err = os.OpenFile(outFileName, os.O_RDWR|os.O_TRUNC|os.O_CREATE, 0755)
+		if err != nil {
+			return fmt.Errorf("unable to create file '%s': %v", outFileName, err)
+		}
+		defer outFile.Close()
+	}
+
+	return rawDumpCatchpointStream(f, stat.Size(), outFile)
+}
+
+func rawDumpCatchpointStream(r io.Reader, fileSize int64, outFile *os.File) error {
+	bufRd := bufio.NewReader(r)
+	tarReader, _, err := getCatchpointTarReader(bufRd, fileSize)
+	if err != nil {
+		return err
+	}
+	var fileHeader ledger.CatchpointFileHeader
+	var fileHeaderFound bool
+	var version uint64
+
+	for {
+		hdr, err := tarReader.Next()
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return err
+		}
+		fname := hdr.Name
+
+		chunkData := make([]byte, hdr.Size)
+		_, readErr := io.ReadFull(tarReader, chunkData)
+		if readErr != nil && readErr != io.EOF {
+			return readErr
+		}
+
+		switch fname {
+		case ledger.CatchpointContentFileName:
+			err = protocol.Decode(chunkData, &fileHeader)
+			if err != nil {
+				return err
+			}
+			fileHeaderFound = true
+			version = fileHeader.Version
+			printHeaderFields(fileHeader)
+
+		case "stateProofVerificationContext.msgpack":
+			// skip decoding state proof verification context
+
+		default:
+			// it might be balances.*.msgpack or something else
+			if strings.HasPrefix(fname, "balances.") && strings.HasSuffix(fname, ".msgpack") {
+				if !fileHeaderFound {
+					fmt.Fprintf(outFile, "Warning: found a balances chunk %s before content.json\n", fname)
+				}
+				if version == ledger.CatchpointFileVersionV5 {
+					var chunk ledger.CatchpointSnapshotChunkV5
+					err = protocol.Decode(chunkData, &chunk)
+					if err != nil {
+						fmt.Fprintf(outFile, "Error decoding chunk %s: %v\n", fname, err)
+						return err
+					}
+					for _, brec := range chunk.Balances {
+						// decode accountData
+						var ad basics.AccountData
+						err = protocol.Decode(brec.AccountData, &ad)
+						if err != nil {
+							fmt.Fprintf(outFile, "Error decoding account data %s: %v\n", brec.Address.String(), err)
+							return err
+						}
+						adJSON, _ := json.Marshal(ad)
+						fmt.Fprintf(outFile, "%s : %s\n", brec.Address.String(), string(adJSON))
+						// v5 has no resources map
+					}
+				} else {
+					var chunk ledger.CatchpointSnapshotChunkV6
+					err = protocol.Decode(chunkData, &chunk)
+					if err != nil {
+						fmt.Fprintf(outFile, "Error decoding chunk %s: %v\n", fname, err)
+						break
+					}
+					// Balances
+					for _, brec := range chunk.Balances {
+						var ad trackerdb.BaseAccountData
+						err = protocol.Decode(brec.AccountData, &ad)
+						if err != nil {
+							fmt.Fprintf(outFile, "Error decoding account data %s: %v\n", brec.Address.String(), err)
+							return err
+						}
+						adJSON, _ := json.Marshal(ad)
+						fmt.Fprintf(outFile, "%s : %s\n", brec.Address.String(), string(adJSON))
+
+						// Now print each resource
+						for k, rawRes := range brec.Resources {
+							// decode as a generic object
+							var resDecoded trackerdb.ResourcesData
+							err = protocol.Decode(rawRes, &resDecoded)
+							if err != nil {
+								fmt.Fprintf(outFile, "Error decoding resource %s: %v\n", brec.Address.String(), err)
+								return err
+							}
+							resJSON, _ := json.Marshal(resDecoded)
+							fmt.Fprintf(outFile, "%s resource %d : %s\n", brec.Address.String(), k, string(resJSON))
+						}
+					}
+					// KVs
+					for _, kv := range chunk.KVs {
+						printKeyValue(bufio.NewWriterSize(outFile, 1024), kv.Key, kv.Value)
+					}
+					// OnlineAccounts
+					for _, oa := range chunk.OnlineAccounts {
+						var dataDecoded trackerdb.BaseOnlineAccountData
+						err = protocol.Decode(oa.Data, &dataDecoded)
+						if err != nil {
+							fmt.Fprintf(outFile, "Error decoding online account %s: %v\n", oa.Address.String(), err)
+							return err
+						}
+						dataJSON, _ := json.Marshal(dataDecoded)
+						fmt.Fprintf(outFile, "onlineaccount: %s %d %d %d %s\n",
+							oa.Address.String(), oa.UpdateRound, oa.NormalizedOnlineBalance, oa.VoteLastValid, string(dataJSON))
+					}
+					// OnlineRoundParams
+					for _, rp := range chunk.OnlineRoundParams {
+						var dataDecoded ledgercore.OnlineRoundParamsData
+						err = protocol.Decode(rp.Data, &dataDecoded)
+						if err != nil {
+							fmt.Fprintf(outFile, "Error decoding online round params %d: %v\n", rp.Round, err)
+							return err
+						}
+						dataJSON, _ := json.Marshal(dataDecoded)
+						fmt.Fprintf(outFile, "onlineroundparams: %d %s\n", rp.Round, string(dataJSON))
+					}
+				}
+			} else {
+				// unknown chunk name => ignore or just mention
+				fmt.Fprintf(outFile, "Unknown tar filename %s\n", fname)
+			}
+		}
+	}
+	return nil
 }
 
 func getCatchpointTarReader(catchpointReader *bufio.Reader, catchpointFileSize int64) (*tar.Reader, bool, error) {
