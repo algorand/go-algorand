@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -44,7 +44,7 @@ type Local struct {
 	// Version tracks the current version of the defaults so we can migrate old -> new
 	// This is specifically important whenever we decide to change the default value
 	// for an existing parameter. This field tag must be updated any time we add a new version.
-	Version uint32 `version[0]:"0" version[1]:"1" version[2]:"2" version[3]:"3" version[4]:"4" version[5]:"5" version[6]:"6" version[7]:"7" version[8]:"8" version[9]:"9" version[10]:"10" version[11]:"11" version[12]:"12" version[13]:"13" version[14]:"14" version[15]:"15" version[16]:"16" version[17]:"17" version[18]:"18" version[19]:"19" version[20]:"20" version[21]:"21" version[22]:"22" version[23]:"23" version[24]:"24" version[25]:"25" version[26]:"26" version[27]:"27" version[28]:"28" version[29]:"29" version[30]:"30" version[31]:"31" version[32]:"32" version[33]:"33" version[34]:"34"`
+	Version uint32 `version[0]:"0" version[1]:"1" version[2]:"2" version[3]:"3" version[4]:"4" version[5]:"5" version[6]:"6" version[7]:"7" version[8]:"8" version[9]:"9" version[10]:"10" version[11]:"11" version[12]:"12" version[13]:"13" version[14]:"14" version[15]:"15" version[16]:"16" version[17]:"17" version[18]:"18" version[19]:"19" version[20]:"20" version[21]:"21" version[22]:"22" version[23]:"23" version[24]:"24" version[25]:"25" version[26]:"26" version[27]:"27" version[28]:"28" version[29]:"29" version[30]:"30" version[31]:"31" version[32]:"32" version[33]:"33" version[34]:"34" version[35]:"35"`
 
 	// Archival nodes retain a full copy of the block history. Non-Archival nodes will delete old blocks and only retain what's need to properly validate blockchain messages (the precise number of recent blocks depends on the consensus parameters. Currently the last 1321 blocks are required). This means that non-Archival nodes require significantly less storage than Archival nodes.  If setting this to true for the first time, the existing ledger may need to be deleted to get the historical values stored as the setting only affects current blocks forward. To do this, shutdown the node and delete all .sqlite files within the data/testnet-version directory, except the crash.sqlite file. Restart the node and wait for the node to sync.
 	Archival bool `version[0]:"false"`
@@ -66,7 +66,7 @@ type Local struct {
 	PublicAddress string `version[0]:""`
 
 	// MaxConnectionsPerIP is the maximum number of connections allowed per IP address.
-	MaxConnectionsPerIP int `version[3]:"30" version[27]:"15"`
+	MaxConnectionsPerIP int `version[3]:"30" version[27]:"15" version[35]:"8"`
 
 	// PeerPingPeriodSeconds is deprecated and unused.
 	PeerPingPeriodSeconds int `version[0]:"0"`
@@ -171,7 +171,7 @@ type Local struct {
 	EndpointAddress string `version[0]:"127.0.0.1:0"`
 
 	// Respond to Private Network Access preflight requests sent to the node. Useful when a public website is trying to access a node that's hosted on a local network.
-	EnablePrivateNetworkAccessHeader bool `version[34]:"false"`
+	EnablePrivateNetworkAccessHeader bool `version[35]:"false"`
 
 	// RestReadTimeoutSeconds is passed to the API servers rest http.Server implementation.
 	RestReadTimeoutSeconds int `version[4]:"15"`
@@ -254,6 +254,12 @@ type Local struct {
 
 	// EnableTxBacklogAppRateLimiting controls if an app rate limiter should be attached to the tx backlog enqueue process
 	EnableTxBacklogAppRateLimiting bool `version[32]:"true"`
+
+	// TxBacklogAppRateLimitingCountERLDrops feeds messages dropped by the ERL congestion manager & rate limiter (enabled by
+	// EnableTxBacklogRateLimiting) to the app rate limiter (enabled by EnableTxBacklogAppRateLimiting), so that all TX messages
+	// are counted. This provides more accurate rate limiting for the app rate limiter, at the potential expense of additional
+	// deserialization overhead.
+	TxBacklogAppRateLimitingCountERLDrops bool `version[35]:"false"`
 
 	// EnableTxBacklogRateLimiting controls if a rate limiter and congestion manager should be attached to the tx backlog enqueue process
 	// if enabled, the over-all TXBacklog Size will be larger by MAX_PEERS*TxBacklogReservedCapacityPerPeer
@@ -683,10 +689,9 @@ func (cfg Local) SaveToDisk(root string) error {
 
 // SaveAllToDisk writes the all Local settings into a root/ConfigFilename file
 func (cfg Local) SaveAllToDisk(root string) error {
-	configpath := filepath.Join(root, ConfigFilename)
-	filename := os.ExpandEnv(configpath)
-	prettyPrint := true
-	return codecs.SaveObjectToFile(filename, cfg, prettyPrint)
+	configPath := filepath.Join(root, ConfigFilename)
+	filename := os.ExpandEnv(configPath)
+	return codecs.SaveObjectToFile(filename, cfg, true)
 }
 
 // SaveToFile saves the config to a specific filename, allowing overriding the default name

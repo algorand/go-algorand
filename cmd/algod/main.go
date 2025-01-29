@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -193,6 +193,10 @@ func run() int {
 		// log is not setup yet, this will log to stderr
 		log.Fatalf("Error validating DNSBootstrap input: %v", err)
 	}
+
+	// Apply network-specific consensus overrides, noting the configurable consensus protocols file
+	// takes precedence over network-specific overrides.
+	config.ApplyShorterUpgradeRoundsForDevNetworks(genesis.Network)
 
 	err = config.LoadConfigurableConsensusProtocols(absolutePath)
 	if err != nil {

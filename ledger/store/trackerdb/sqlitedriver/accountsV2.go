@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -379,6 +379,28 @@ func (r *accountsV2Reader) TotalKVs(ctx context.Context) (total uint64, err erro
 	return
 }
 
+// TotalOnlineAccountRows returns the total number of rows in the onlineaccounts table.
+func (r *accountsV2Reader) TotalOnlineAccountRows(ctx context.Context) (total uint64, err error) {
+	err = r.q.QueryRowContext(ctx, "SELECT count(1) FROM onlineaccounts").Scan(&total)
+	if err == sql.ErrNoRows {
+		total = 0
+		err = nil
+		return
+	}
+	return
+}
+
+// TotalOnlineRoundParams returns the total number of rows in the onlineroundparamstail table.
+func (r *accountsV2Reader) TotalOnlineRoundParams(ctx context.Context) (total uint64, err error) {
+	err = r.q.QueryRowContext(ctx, "SELECT count(1) FROM onlineroundparamstail").Scan(&total)
+	if err == sql.ErrNoRows {
+		total = 0
+		err = nil
+		return
+	}
+	return
+}
+
 // LoadTxTail returns the tx tails
 func (r *accountsV2Reader) LoadTxTail(ctx context.Context, dbRound basics.Round) (roundData []*trackerdb.TxTailRound, roundHash []crypto.Digest, baseRound basics.Round, err error) {
 	rows, err := r.q.QueryContext(ctx, "SELECT rnd, data FROM txtail ORDER BY rnd DESC")
@@ -701,7 +723,11 @@ func (w *accountsV2Writer) TxtailNewRound(ctx context.Context, baseRound basics.
 // After this cleanup runs, accounts in this table will have either one entry (if all entries besides the latest are expired),
 // or will have more than one entry (if multiple entries are not yet expired).
 func (w *accountsV2Writer) OnlineAccountsDelete(forgetBefore basics.Round) (err error) {
-	rows, err := w.e.Query("SELECT rowid, address, updRound, data FROM onlineaccounts WHERE updRound < ? ORDER BY address, updRound DESC", forgetBefore)
+	return w.onlineAccountsDelete(forgetBefore, "onlineaccounts")
+}
+
+func (w *accountsV2Writer) onlineAccountsDelete(forgetBefore basics.Round, table string) (err error) {
+	rows, err := w.e.Query(fmt.Sprintf("SELECT rowid, address, updRound, data FROM %s WHERE updRound < ? ORDER BY address, updRound DESC", table), forgetBefore)
 	if err != nil {
 		return err
 	}
@@ -756,10 +782,10 @@ func (w *accountsV2Writer) OnlineAccountsDelete(forgetBefore basics.Round) (err 
 		rowids = append(rowids, rowid.Int64)
 	}
 
-	return onlineAccountsDeleteByRowIDs(w.e, rowids)
+	return onlineAccountsDeleteByRowIDs(w.e, rowids, table)
 }
 
-func onlineAccountsDeleteByRowIDs(e db.Executable, rowids []int64) (err error) {
+func onlineAccountsDeleteByRowIDs(e db.Executable, rowids []int64, table string) (err error) {
 	if len(rowids) == 0 {
 		return
 	}
@@ -769,7 +795,7 @@ func onlineAccountsDeleteByRowIDs(e db.Executable, rowids []int64) (err error) {
 	// rowids might be larger => split to chunks are remove
 	chunks := rowidsToChunkedArgs(rowids)
 	for _, chunk := range chunks {
-		_, err = e.Exec("DELETE FROM onlineaccounts WHERE rowid IN (?"+strings.Repeat(",?", len(chunk)-1)+")", chunk...)
+		_, err = e.Exec("DELETE FROM "+table+" WHERE rowid IN (?"+strings.Repeat(",?", len(chunk)-1)+")", chunk...)
 		if err != nil {
 			return
 		}

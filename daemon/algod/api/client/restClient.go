@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -26,6 +26,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/google/go-querystring/query"
 
@@ -39,6 +40,8 @@ import (
 	"github.com/algorand/go-algorand/ledger/eval"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/rpcs"
+	"github.com/algorand/go-algorand/test/e2e-go/globals"
 )
 
 const (
@@ -283,10 +286,93 @@ func (client RestClient) Status() (response model.NodeStatusResponse, err error)
 	return
 }
 
-// WaitForBlock returns the node status after waiting for the given round.
-func (client RestClient) WaitForBlock(round basics.Round) (response model.NodeStatusResponse, err error) {
+// WaitForBlockAfter returns the node status after trying to wait for the given
+// round+1. This REST API has the documented misfeatures of returning after 1
+// minute, regardless of whether the given block has been reached.
+func (client RestClient) WaitForBlockAfter(round basics.Round) (response model.NodeStatusResponse, err error) {
 	err = client.get(&response, fmt.Sprintf("/v2/status/wait-for-block-after/%d/", round), nil)
 	return
+}
+
+// WaitForRound returns the node status after waiting for the given round. It
+// waits no more than waitTime in TOTAL, and returns an error if the round has
+// not been reached.
+func (client RestClient) WaitForRound(round uint64, waitTime time.Duration) (status model.NodeStatusResponse, err error) {
+	timeout := time.After(waitTime)
+	for {
+		status, err = client.Status()
+		if err != nil {
+			return
+		}
+
+		if status.LastRound >= round {
+			return
+		}
+		select {
+		case <-timeout:
+			return model.NodeStatusResponse{}, fmt.Errorf("timeout waiting for round %v with last round = %v", round, status.LastRound)
+		case <-time.After(200 * time.Millisecond):
+		}
+	}
+}
+
+const singleRoundMaxTime = globals.MaxTimePerRound * 40
+
+// WaitForRoundWithTimeout waits for a given round to be reached. As it
+// waits, it returns early with an error if the wait time for any round exceeds
+// singleRoundMaxTime so we can alert when we're getting "hung" waiting.
+func (client RestClient) WaitForRoundWithTimeout(roundToWaitFor uint64) error {
+	status, err := client.Status()
+	if err != nil {
+		return err
+	}
+
+	for lastRound := status.LastRound; lastRound < roundToWaitFor; lastRound = status.LastRound {
+		status, err = client.WaitForRound(lastRound+1, singleRoundMaxTime)
+		if err != nil {
+			return fmt.Errorf("client.WaitForRound took too long between round %d and %d", lastRound, lastRound+1)
+		}
+	}
+	return nil
+}
+
+// WaitForConfirmedTxn waits until either the passed txid is confirmed
+// or until the passed roundTimeout passes
+// or until waiting for a round to pass times out
+func (client RestClient) WaitForConfirmedTxn(roundTimeout uint64, txid string) (txn v2.PreEncodedTxInfo, err error) {
+	for {
+		// Get current round information
+		curStatus, statusErr := client.Status()
+		if err != nil {
+			return txn, statusErr
+		}
+		curRound := curStatus.LastRound
+
+		// Check if we know about the transaction yet
+		var resp []byte
+		resp, err = client.RawPendingTransactionInformation(txid)
+		if err == nil {
+			err = protocol.DecodeReflect(resp, &txn)
+			if err != nil {
+				return txn, err
+			}
+		}
+
+		// Check if transaction was confirmed
+		if txn.ConfirmedRound != nil && *txn.ConfirmedRound > 0 {
+			return
+		}
+		// Check if we should wait a round
+		if curRound > roundTimeout {
+			err = fmt.Errorf("failed to see confirmed transaction by round %v", roundTimeout)
+			return txn, err
+		}
+		// Wait a round
+		err = client.WaitForRoundWithTimeout(curRound + 1)
+		if err != nil {
+			return txn, err
+		}
+	}
 }
 
 // HealthCheck does a health check on the potentially running node,
@@ -299,14 +385,6 @@ func (client RestClient) HealthCheck() error {
 // returning an error if the node is not ready (caught up and healthy)
 func (client RestClient) ReadyCheck() error {
 	return client.get(nil, "/ready", nil)
-}
-
-// StatusAfterBlock waits for a block to occur then returns the StatusResponse after that block
-// blocks on the node end
-// Not supported
-func (client RestClient) StatusAfterBlock(blockNum uint64) (response model.NodeStatusResponse, err error) {
-	err = client.get(&response, fmt.Sprintf("/v2/status/wait-for-block-after/%d", blockNum), nil)
-	return
 }
 
 type pendingTransactionsParams struct {
@@ -554,6 +632,16 @@ func (client RestClient) RawBlock(round uint64) (response []byte, err error) {
 	var blob Blob
 	err = client.getRaw(&blob, fmt.Sprintf("/v2/blocks/%d", round), rawFormat{Format: "msgpack"})
 	response = blob
+	return
+}
+
+// EncodedBlockCert takes a round and returns its parsed block and certificate
+func (client RestClient) EncodedBlockCert(round uint64) (blockCert rpcs.EncodedBlockCert, err error) {
+	resp, err := client.RawBlock(round)
+	if err != nil {
+		return
+	}
+	err = protocol.Decode(resp, &blockCert)
 	return
 }
 

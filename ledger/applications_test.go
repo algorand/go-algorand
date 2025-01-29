@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -587,6 +587,7 @@ return`
 	blk.TxnCounter = blk.TxnCounter + 2
 	blk.Payset = append(blk.Payset, txib1, txib2)
 	blk.TxnCommitments, err = blk.PaysetCommit()
+	blk.FeesCollected = basics.MicroAlgos{Raw: txib1.Txn.Fee.Raw + txib2.Txn.Fee.Raw}
 	a.NoError(err)
 	err = l.appendUnvalidated(blk)
 	a.NoError(err)
@@ -731,6 +732,7 @@ return`
 	blk.TxnCounter = blk.TxnCounter + 2
 	blk.Payset = append(blk.Payset, txib1, txib2)
 	blk.TxnCommitments, err = blk.PaysetCommit()
+	blk.FeesCollected = basics.MicroAlgos{Raw: txib1.Txn.Fee.Raw + txib2.Txn.Fee.Raw}
 	a.NoError(err)
 	err = l.appendUnvalidated(blk)
 	a.NoError(err)
@@ -867,6 +869,7 @@ return`
 	blk.TxnCounter = blk.TxnCounter + 2
 	blk.Payset = append(blk.Payset, txib1, txib2)
 	blk.TxnCommitments, err = blk.PaysetCommit()
+	blk.FeesCollected = basics.MicroAlgos{Raw: txib1.Txn.Fee.Raw + txib2.Txn.Fee.Raw}
 	a.NoError(err)
 	err = l.appendUnvalidated(blk)
 	a.NoError(err)

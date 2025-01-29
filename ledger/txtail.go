@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -331,16 +331,6 @@ func (t *txTail) postCommit(ctx context.Context, dcc *deferredCommitContext) {
 			t.roundTailHashes = t.roundTailHashes[firstTailIdx:]
 		}
 	}
-}
-
-func (t *txTail) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
-}
-
-func (t *txTail) handleUnorderedCommit(dcc *deferredCommitContext) {
-}
-func (t *txTail) handlePrepareCommitError(dcc *deferredCommitContext) {
-}
-func (t *txTail) handleCommitError(dcc *deferredCommitContext) {
 }
 
 func (t *txTail) produceCommittingTask(committedRound basics.Round, dbRound basics.Round, dcr *deferredCommitRange) *deferredCommitRange {

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -182,4 +182,12 @@ func (tr *VotersForRound) Wait() error {
 		tr.cond.Wait()
 	}
 	return nil
+}
+
+// Completed returns true if the tree has finished being constructed.
+// If there was an error constructing the tree, the error is also returned.
+func (tr *VotersForRound) Completed() (bool, error) {
+	tr.mu.Lock()
+	defer tr.mu.Unlock()
+	return tr.Tree != nil || tr.loadTreeError != nil, tr.loadTreeError
 }

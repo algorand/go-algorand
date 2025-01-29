@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,6 +20,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"math"
+	"slices"
 	"sort"
 
 	"github.com/algorand/go-algorand/config"
@@ -27,7 +28,6 @@ import (
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
-	"golang.org/x/exp/slices"
 )
 
 // AssetHolding converts between basics.AssetHolding and model.AssetHolding

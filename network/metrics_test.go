@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -55,7 +55,7 @@ func TestMetrics_PubsubTracer_TagList(t *testing.T) {
 					return true
 				})
 			}
-			if stmt.Name.Name == "ValidateMessage" {
+			if stmt.Name.Name == "RecvRPC" {
 				ast.Inspect(stmt.Body, func(n ast.Node) bool {
 					if switchStmt, ok := n.(*ast.SwitchStmt); ok {
 						for _, stmt := range switchStmt.Body.List {

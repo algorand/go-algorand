@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -952,14 +952,35 @@ func (n *P2PNetwork) txTopicHandleLoop() {
 	wg.Wait()
 }
 
+type gsPeer struct {
+	peerID peer.ID
+	net    *P2PNetwork
+}
+
+func (p *gsPeer) GetNetwork() GossipNode {
+	return p.net
+}
+
+func (p *gsPeer) RoutingAddr() []byte {
+	return []byte(p.peerID)
+}
+
 // txTopicValidator calls txHandler to validate and process incoming transactions.
 func (n *P2PNetwork) txTopicValidator(ctx context.Context, peerID peer.ID, msg *pubsub.Message) pubsub.ValidationResult {
 	n.wsPeersLock.Lock()
-	var wsp *wsPeer = n.wsPeers[peerID]
+	var sender DisconnectableAddressablePeer
+	if wsp, ok := n.wsPeers[peerID]; ok {
+		sender = wsp
+	} else {
+		// otherwise use the peerID to handle the case where this peer is not in the wsPeers map yet
+		// this can happen when pubsub receives new peer notifications before the wsStreamHandler is called:
+		// create a fake peer that is good enough for tx handler to work with.
+		sender = &gsPeer{peerID: peerID, net: n}
+	}
 	n.wsPeersLock.Unlock()
 
 	inmsg := IncomingMessage{
-		Sender:   wsp,
+		Sender:   sender,
 		Tag:      protocol.TxnTag,
 		Data:     msg.Data,
 		Net:      n,

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -87,7 +87,7 @@ func (sv *StreamToBatch) Start(ctx context.Context) {
 	go sv.batchingLoop()
 }
 
-// WaitForStop waits until the batching loop terminates afer the ctx is canceled
+// WaitForStop waits until the batching loop terminates after the ctx is canceled
 func (sv *StreamToBatch) WaitForStop() {
 	sv.activeLoopWg.Wait()
 }

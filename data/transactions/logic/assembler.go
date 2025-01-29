@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -2269,7 +2269,7 @@ func define(ops *OpStream, tokens []token) *sourceError {
 		} else {
 			delete(ops.macros, name) // remove new macro that caused cycle
 		}
-		return tokens[1].errorf("macro expansion cycle discovered: %s", strings.Join(found, " -> "))
+		return tokens[1].errorf("macro expansion cycle discovered: %s", strings.Join(found, " -> ")) //nolint:gosec // false positive, len(tokens) >= 3
 	}
 	return nil
 }
@@ -2738,6 +2738,16 @@ func AssembleString(text string) (*OpStream, error) {
 	return AssembleStringWithVersion(text, assemblerNoVersion)
 }
 
+// MustAssemble assembles a program and panics on error.  It is useful for
+// defining globals.
+func MustAssemble(text string) []byte {
+	ops, err := AssembleString(text)
+	if err != nil {
+		panic(err)
+	}
+	return ops.Program
+}
+
 // AssembleStringWithVersion takes an entire program in a string and
 // assembles it to bytecode using the assembler version specified.  If
 // version is assemblerNoVersion it uses #pragma version or fallsback
@@ -2873,8 +2883,9 @@ func disassemble(dis *disassembleState, spec *OpSpec) (string, error) {
 			if err != nil {
 				return "", err
 			}
-
-			dis.intc = intc
+			if spec.Name == "intcblock" {
+				dis.intc = intc
+			}
 			for i, iv := range intc {
 				if i != 0 {
 					out += " "
@@ -2887,7 +2898,9 @@ func disassemble(dis *disassembleState, spec *OpSpec) (string, error) {
 			if err != nil {
 				return "", err
 			}
-			dis.bytec = bytec
+			if spec.Name == "bytecblock" {
+				dis.bytec = bytec
+			}
 			for i, bv := range bytec {
 				if i != 0 {
 					out += " "

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -90,6 +90,8 @@ var networkBroadcastSendMicros = metrics.MakeCounter(metrics.MetricName{Name: "a
 var networkBroadcastsDropped = metrics.MakeCounter(metrics.MetricName{Name: "algod_broadcasts_dropped_total", Description: "number of broadcast messages not sent to any peer"})
 var networkPeerBroadcastDropped = metrics.MakeCounter(metrics.MetricName{Name: "algod_peer_broadcast_dropped_total", Description: "number of broadcast messages not sent to some peer"})
 
+var networkP2PPeerBroadcastDropped = metrics.MakeCounter(metrics.MetricName{Name: "algod_peer_p2p_broadcast_dropped_total", Description: "number of broadcast messages not sent to some p2p peer"})
+
 var networkPeerIdentityDisconnect = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_identity_duplicate", Description: "number of times identity challenge cause us to disconnect a peer"})
 var networkPeerIdentityError = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_identity_error", Description: "number of times an error occurs (besides expected) when processing identity challenges"})
 var networkPeerAlreadyClosed = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_peer_already_closed", Description: "number of times a peer would be added but the peer connection is already closed"})
@@ -108,6 +110,8 @@ var transactionMessagesP2PUnderdeliverableMessage = metrics.MakeCounter(metrics.
 
 var networkP2PGossipSubSentBytesTotal = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_p2p_gs_sent_bytes_total", Description: "Total number of bytes sent through gossipsub"})
 var networkP2PGossipSubReceivedBytesTotal = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_p2p_gs_received_bytes_total", Description: "Total number of bytes received through gossipsub"})
+
+// var networkP2PGossipSubSentMsgs = metrics.MakeCounter(metrics.MetricName{Name: "algod_network_p2p_gs_message_sent", Description: "Number of complete messages that were sent to the network through gossipsub"})
 
 var _ = pubsub.RawTracer(pubsubMetricsTracer{})
 
@@ -134,14 +138,6 @@ func (t pubsubMetricsTracer) Prune(p peer.ID, topic string) {}
 
 // ValidateMessage is invoked when a message first enters the validation pipeline.
 func (t pubsubMetricsTracer) ValidateMessage(msg *pubsub.Message) {
-	if msg != nil && msg.Topic != nil {
-		switch *msg.Topic {
-		case p2p.TXTopicName:
-			networkP2PReceivedBytesTotal.AddUint64(uint64(len(msg.Data)), nil)
-			networkP2PReceivedBytesByTag.Add(string(protocol.TxnTag), uint64(len(msg.Data)))
-			networkP2PMessageReceivedByTag.Add(string(protocol.TxnTag), 1)
-		}
-	}
 }
 
 // DeliverMessage is invoked when a message is delivered
@@ -178,6 +174,17 @@ func (t pubsubMetricsTracer) ThrottlePeer(p peer.ID) {}
 
 // RecvRPC is invoked when an incoming RPC is received.
 func (t pubsubMetricsTracer) RecvRPC(rpc *pubsub.RPC) {
+	for i := range rpc.GetPublish() {
+		if rpc.Publish[i] != nil && rpc.Publish[i].Topic != nil {
+			switch *rpc.Publish[i].Topic {
+			case p2p.TXTopicName:
+				networkP2PReceivedBytesTotal.AddUint64(uint64(len(rpc.Publish[i].Data)), nil)
+				networkP2PReceivedBytesByTag.Add(string(protocol.TxnTag), uint64(len(rpc.Publish[i].Data)))
+				networkP2PMessageReceivedByTag.Add(string(protocol.TxnTag), 1)
+			}
+		}
+	}
+	// service gossipsub traffic = networkP2PGossipSubReceivedBytesTotal - networkP2PReceivedBytesByTag_TX
 	networkP2PGossipSubReceivedBytesTotal.AddUint64(uint64(rpc.Size()), nil)
 }
 
@@ -197,7 +204,9 @@ func (t pubsubMetricsTracer) SendRPC(rpc *pubsub.RPC, p peer.ID) {
 }
 
 // DropRPC is invoked when an outbound RPC is dropped, typically because of a queue full.
-func (t pubsubMetricsTracer) DropRPC(rpc *pubsub.RPC, p peer.ID) {}
+func (t pubsubMetricsTracer) DropRPC(rpc *pubsub.RPC, p peer.ID) {
+	networkP2PPeerBroadcastDropped.Inc(nil)
+}
 
 // UndeliverableMessage is invoked when the consumer of Subscribe is not reading messages fast enough and
 // the pressure release mechanism trigger, dropping messages.

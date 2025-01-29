@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -37,6 +37,11 @@ func TestConsensusParams(t *testing.T) {
 		if params.ApplyData && params.PaysetCommit == PaysetCommitUnsupported {
 			t.Errorf("Protocol %s: ApplyData with PaysetCommitUnsupported", proto)
 		}
+
+		// To figure out challenges, nodes must be able to lookup headers up to two GracePeriods back
+		if 2*params.Payouts.ChallengeGracePeriod > params.MaxTxnLife+params.DeeperBlockHeaderHistory {
+			t.Errorf("Protocol %s: Grace period is too long", proto)
+		}
 	}
 }
 
@@ -53,6 +58,83 @@ func TestConsensusUpgradeWindow(t *testing.T) {
 				require.LessOrEqualf(t, delay, params.MaxUpgradeWaitRounds, "From :%v\nTo :%v", proto, toVersion)
 			} else {
 				require.Zerof(t, delay, "From :%v\nTo :%v", proto, toVersion)
+
+			}
+		}
+	}
+}
+
+func TestConsensusUpgradeWindow_NetworkOverrides(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	ApplyShorterUpgradeRoundsForDevNetworks(Devnet)
+	for _, params := range Consensus {
+		for toVersion, delay := range params.ApprovedUpgrades {
+			if params.MinUpgradeWaitRounds != 0 || params.MaxUpgradeWaitRounds != 0 {
+				require.NotZerof(t, delay, "From :%v\nTo :%v", params, toVersion)
+				require.Equalf(t, delay, params.MinUpgradeWaitRounds, "From :%v\nTo :%v", params, toVersion)
+				// This check is not really needed, but leaving for sanity
+				require.LessOrEqualf(t, delay, params.MaxUpgradeWaitRounds, "From :%v\nTo :%v", params, toVersion)
+			} else {
+				// If no MinUpgradeWaitRounds is set, leaving everything as zero value is expected
+				require.Zerof(t, delay, "From :%v\nTo :%v", params, toVersion)
+			}
+		}
+	}
+
+	// Should be no-ops for Mainnet
+	Consensus = make(ConsensusProtocols)
+	initConsensusProtocols()
+
+	origConsensus := Consensus.DeepCopy()
+	ApplyShorterUpgradeRoundsForDevNetworks(Mainnet)
+	require.EqualValues(t, origConsensus, Consensus)
+	for _, params := range Consensus {
+		for toVersion, delay := range params.ApprovedUpgrades {
+			if params.MinUpgradeWaitRounds != 0 || params.MaxUpgradeWaitRounds != 0 {
+				require.NotZerof(t, delay, "From :%v\nTo :%v", params, toVersion)
+				require.GreaterOrEqualf(t, delay, params.MinUpgradeWaitRounds, "From :%v\nTo :%v", params, toVersion)
+				require.LessOrEqualf(t, delay, params.MaxUpgradeWaitRounds, "From :%v\nTo :%v", params, toVersion)
+			} else {
+				require.Zerof(t, delay, "From :%v\nTo :%v", params, toVersion)
+
+			}
+		}
+	}
+
+	// reset consensus settings
+	Consensus = make(ConsensusProtocols)
+	initConsensusProtocols()
+
+	ApplyShorterUpgradeRoundsForDevNetworks(Betanet)
+	for _, params := range Consensus {
+		for toVersion, delay := range params.ApprovedUpgrades {
+			if params.MinUpgradeWaitRounds != 0 || params.MaxUpgradeWaitRounds != 0 {
+				require.NotZerof(t, delay, "From :%v\nTo :%v", params, toVersion)
+				require.Equalf(t, delay, params.MinUpgradeWaitRounds, "From :%v\nTo :%v", params, toVersion)
+				// This check is not really needed, but leaving for sanity
+				require.LessOrEqualf(t, delay, params.MaxUpgradeWaitRounds, "From :%v\nTo :%v", params, toVersion)
+			} else {
+				// If no MinUpgradeWaitRounds is set, leaving everything as zero value is expected
+				require.Zerof(t, delay, "From :%v\nTo :%v", params, toVersion)
+			}
+		}
+	}
+
+	// should be no-ops for Testnet
+	Consensus = make(ConsensusProtocols)
+	initConsensusProtocols()
+
+	ApplyShorterUpgradeRoundsForDevNetworks(Testnet)
+	require.EqualValues(t, origConsensus, Consensus)
+	for _, params := range Consensus {
+		for toVersion, delay := range params.ApprovedUpgrades {
+			if params.MinUpgradeWaitRounds != 0 || params.MaxUpgradeWaitRounds != 0 {
+				require.NotZerof(t, delay, "From :%v\nTo :%v", params, toVersion)
+				require.GreaterOrEqualf(t, delay, params.MinUpgradeWaitRounds, "From :%v\nTo :%v", params, toVersion)
+				require.LessOrEqualf(t, delay, params.MaxUpgradeWaitRounds, "From :%v\nTo :%v", params, toVersion)
+			} else {
+				require.Zerof(t, delay, "From :%v\nTo :%v", params, toVersion)
 
 			}
 		}

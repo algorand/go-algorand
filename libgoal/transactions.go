@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,6 +23,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
+	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
@@ -204,6 +205,15 @@ func (c *Client) SignAndBroadcastTransaction(walletHandle, pw []byte, utx transa
 
 	// Broadcast the transaction
 	return c.BroadcastTransaction(stx)
+}
+
+// WaitForConfirmedTxn waits for a transaction to be confirmed, returing information about it.
+func (c *Client) WaitForConfirmedTxn(roundTimeout uint64, txid string) (txn v2.PreEncodedTxInfo, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err != nil {
+		return
+	}
+	return algod.WaitForConfirmedTxn(roundTimeout, txid)
 }
 
 // generateRegistrationTransaction returns a transaction object for registering a Participation with its parent this is

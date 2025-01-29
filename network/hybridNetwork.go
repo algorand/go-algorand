@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -123,6 +123,11 @@ func (n *HybridP2PNetwork) Relay(ctx context.Context, tag protocol.Tag, data []b
 	return n.runParallel(func(net GossipNode) error {
 		return net.Relay(ctx, tag, data, wait, except)
 	})
+}
+
+// BridgeP2PToWS skips Relay/Broadcast to both networks and only sends to WS
+func (n *HybridP2PNetwork) BridgeP2PToWS(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except Peer) error {
+	return n.wsNetwork.Relay(ctx, tag, data, wait, except)
 }
 
 // Disconnect implements GossipNode

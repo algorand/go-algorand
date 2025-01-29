@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -322,8 +322,8 @@ type CatchpointGenerationEventDetails struct {
 	BalancesWriteTime uint64
 	// AccountsCount is the number of accounts that were written into the generated catchpoint file
 	AccountsCount uint64
-	// KVsCount is the number of accounts that were written into the generated catchpoint file
-	KVsCount uint64
+	// KVsCount, OnlineAccountsCount, OnlineRoundParamsCount are sizes written into the generated catchpoint file
+	KVsCount, OnlineAccountsCount, OnlineRoundParamsCount uint64
 	// FileSize is the size of the catchpoint file, in bytes.
 	FileSize uint64
 	// MerkleTrieRootHash is the merkle trie root hash represents all accounts and kvs

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -92,7 +92,7 @@ type TxGroupErrorReason int
 const (
 	// TxGroupErrorReasonGeneric is a generic (not tracked) reason code
 	TxGroupErrorReasonGeneric TxGroupErrorReason = iota
-	// TxGroupErrorReasonNotWellFormed is txn.WellFormed failure
+	// TxGroupErrorReasonNotWellFormed is txn.WellFormed failure or malformed logic signature
 	TxGroupErrorReasonNotWellFormed
 	// TxGroupErrorReasonInvalidFee is invalid fee pooling in transaction group
 	TxGroupErrorReasonInvalidFee
@@ -213,6 +213,7 @@ func txnGroupBatchPrep(stxs []transactions.SignedTxn, contextHdr *bookkeeping.Bl
 
 	minFeeCount := uint64(0)
 	feesPaid := uint64(0)
+	lSigPooledSize := 0
 	for i, stxn := range stxs {
 		prepErr := txnBatchPrep(i, groupCtx, verifier)
 		if prepErr != nil {
@@ -220,10 +221,29 @@ func txnGroupBatchPrep(stxs []transactions.SignedTxn, contextHdr *bookkeeping.Bl
 			prepErr.err = fmt.Errorf("transaction %+v invalid : %w", stxn, prepErr.err)
 			return nil, prepErr
 		}
-		if stxn.Txn.Type != protocol.StateProofTx {
-			minFeeCount++
-		}
 		feesPaid = basics.AddSaturate(feesPaid, stxn.Txn.Fee.Raw)
+		lSigPooledSize += stxn.Lsig.Len()
+		if stxn.Txn.Type == protocol.StateProofTx {
+			// State proofs are free, bail before incrementing
+			continue
+		}
+		if stxn.Txn.Type == protocol.HeartbeatTx && stxn.Txn.Group.IsZero() {
+			// In apply.Heartbeat, we further confirm that the heartbeat is for
+			// a challenged account. Such heartbeats are free, bail before
+			// incrementing
+			continue
+		}
+		minFeeCount++
+	}
+	if groupCtx.consensusParams.EnableLogicSigSizePooling {
+		lSigMaxPooledSize := len(stxs) * int(groupCtx.consensusParams.LogicSigMaxSize)
+		if lSigPooledSize > lSigMaxPooledSize {
+			errorMsg := fmt.Errorf(
+				"txgroup had %d bytes of LogicSigs, more than the available pool of %d bytes",
+				lSigPooledSize, lSigMaxPooledSize,
+			)
+			return nil, &TxGroupError{err: errorMsg, GroupIndex: -1, Reason: TxGroupErrorReasonNotWellFormed}
+		}
 	}
 	feeNeeded, overflow := basics.OMul(groupCtx.consensusParams.MinTxnFee, minFeeCount)
 	if overflow {
@@ -293,6 +313,11 @@ func stxnCoreChecks(gi int, groupCtx *GroupContext, batchVerifier crypto.BatchVe
 		return err
 	}
 
+	if s.Txn.Type == protocol.HeartbeatTx {
+		id := basics.OneTimeIDForRound(s.Txn.LastValid, s.Txn.HbKeyDilution)
+		s.Txn.HbProof.BatchPrep(s.Txn.HbVoteID, id, s.Txn.HbSeed, batchVerifier)
+	}
+
 	switch sigType {
 	case regularSig:
 		batchVerifier.EnqueueSignature(crypto.SignatureVerifier(s.Authorizer()), s.Txn, s.Sig)
@@ -360,8 +385,8 @@ func logicSigSanityCheckBatchPrep(gi int, groupCtx *GroupContext, batchVerifier 
 	if version > groupCtx.consensusParams.LogicSigVersion {
 		return errors.New("LogicSig.Logic version too new")
 	}
-	if uint64(lsig.Len()) > groupCtx.consensusParams.LogicSigMaxSize {
-		return errors.New("LogicSig.Logic too long")
+	if !groupCtx.consensusParams.EnableLogicSigSizePooling && uint64(lsig.Len()) > groupCtx.consensusParams.LogicSigMaxSize {
+		return errors.New("LogicSig too long")
 	}
 
 	err := logic.CheckSignature(gi, groupCtx.evalParams)

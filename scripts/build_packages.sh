@@ -97,10 +97,14 @@ for var in "${VARIATION_ARRAY[@]}"; do
 
         pushd ${PLATFORM_ROOT}
         tar --exclude=tools -zcf ${PKG_ROOT}/node_${CHANNEL}_${PKG_NAME}_${FULLVERSION}.tar.gz * >/dev/null 2>&1
+        if [ $? -ne 0 ]; then
+            echo "Error creating node tar file for package ${PLATFORM}.  Aborting..."
+            exit 1
+        fi
         cd bin
         tar -zcf ${PKG_ROOT}/install_${CHANNEL}_${PKG_NAME}_${FULLVERSION}.tar.gz updater update.sh >/dev/null 2>&1
         if [ $? -ne 0 ]; then
-            echo "Error creating tar file for package ${PLATFORM}.  Aborting..."
+            echo "Error creating install tar file for package ${PLATFORM}.  Aborting..."
             exit 1
         fi
 
