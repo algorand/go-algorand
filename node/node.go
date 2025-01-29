@@ -529,7 +529,6 @@ func (node *AlgorandFullNode) writeDevmodeBlock() (err error) {
 	if (blk.BlockHeader.Proposer == basics.Address{}) {
 		blk.BlockHeader.ProposerPayout = basics.MicroAlgos{}
 	}
-	blk.BlockHeader.ProposerPayout = basics.MicroAlgos{}
 	vb2 := ledgercore.MakeValidatedBlock(blk, vb.UnfinishedDeltas())
 
 	// add the newly generated block to the ledger
