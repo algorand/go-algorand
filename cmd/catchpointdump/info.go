@@ -264,15 +264,9 @@ func loadCatchpointFileHeaderFromRelay(relay string, netName string, round int) 
 			return fileHeader, nil
 		}
 		// If not content.json, skip over this tar chunk
-		skipBytes := hdr.Size
 		_, err = io.Copy(io.Discard, tarReader)
 		if err != nil {
 			return fileHeader, err
-		}
-		// The above copy() should fully consume the chunk, but if partial,
-		// we might do a final io.CopyN. Usually not needed if tarReader is well-behaved.
-		if skipBytes > 0 {
-			// a no-op in principle, but just to illustrate we might handle partial reads
 		}
 	}
 	// If we exit the loop, we never found content.json
