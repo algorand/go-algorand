@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -529,11 +529,11 @@ func writeDryrunReqToFile(client libgoal.Client, txnOrStxn interface{}, outFilen
 	proto, _ := getProto(protoVersion)
 	accts, err := unmarshalSlice(dumpForDryrunAccts)
 	if err != nil {
-		reportErrorf(err.Error())
+		reportErrorln(err.Error())
 	}
 	data, err := libgoal.MakeDryrunStateBytes(client, txnOrStxn, []transactions.SignedTxn{}, accts, string(proto), dumpForDryrunFormat.String())
 	if err != nil {
-		reportErrorf(err.Error())
+		reportErrorln(err.Error())
 	}
 	err = writeFile(outFilename, data, 0600)
 	return

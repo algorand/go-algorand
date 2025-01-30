@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -343,7 +343,9 @@ func (p *accountPrefetcher) prefetch(ctx context.Context) {
 				// since they might be non-used arbitrary values
 
 			case protocol.StateProofTx:
-			case protocol.KeyRegistrationTx:
+			case protocol.KeyRegistrationTx: // No extra accounts besides the sender
+			case protocol.HeartbeatTx:
+				loadAccountsAddAccountTask(&stxn.Txn.HbAddress, task, accountTasks, queue)
 			}
 
 			// If you add new addresses here, also add them in getTxnAddresses().

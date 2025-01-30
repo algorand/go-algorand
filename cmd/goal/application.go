@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -199,7 +199,7 @@ func panicIfErr(err error) {
 func newAppCallBytes(arg string) apps.AppCallBytes {
 	appBytes, err := apps.NewAppCallBytes(arg)
 	if err != nil {
-		reportErrorf(err.Error())
+		reportErrorln(err.Error())
 	}
 	return appBytes
 }
@@ -508,7 +508,7 @@ var createAppCmd = &cobra.Command{
 				err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
 			}
 			if err != nil {
-				reportErrorf(err.Error())
+				reportErrorln(err.Error())
 			}
 		}
 	},
@@ -569,7 +569,7 @@ var updateAppCmd = &cobra.Command{
 			if !noWaitAfterSend {
 				_, err2 = waitForCommit(client, txid, lv)
 				if err2 != nil {
-					reportErrorf(err2.Error())
+					reportErrorln(err2.Error())
 				}
 			}
 		} else {
@@ -579,7 +579,7 @@ var updateAppCmd = &cobra.Command{
 				err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
 			}
 			if err != nil {
-				reportErrorf(err.Error())
+				reportErrorln(err.Error())
 			}
 		}
 	},
@@ -639,7 +639,7 @@ var optInAppCmd = &cobra.Command{
 			if !noWaitAfterSend {
 				_, err2 = waitForCommit(client, txid, lv)
 				if err2 != nil {
-					reportErrorf(err2.Error())
+					reportErrorln(err2.Error())
 				}
 			}
 		} else {
@@ -649,7 +649,7 @@ var optInAppCmd = &cobra.Command{
 				err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
 			}
 			if err != nil {
-				reportErrorf(err.Error())
+				reportErrorln(err.Error())
 			}
 		}
 	},
@@ -709,7 +709,7 @@ var closeOutAppCmd = &cobra.Command{
 			if !noWaitAfterSend {
 				_, err2 = waitForCommit(client, txid, lv)
 				if err2 != nil {
-					reportErrorf(err2.Error())
+					reportErrorln(err2.Error())
 				}
 			}
 		} else {
@@ -719,7 +719,7 @@ var closeOutAppCmd = &cobra.Command{
 				err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
 			}
 			if err != nil {
-				reportErrorf(err.Error())
+				reportErrorln(err.Error())
 			}
 		}
 	},
@@ -779,7 +779,7 @@ var clearAppCmd = &cobra.Command{
 			if !noWaitAfterSend {
 				_, err2 = waitForCommit(client, txid, lv)
 				if err2 != nil {
-					reportErrorf(err2.Error())
+					reportErrorln(err2.Error())
 				}
 			}
 		} else {
@@ -789,7 +789,7 @@ var clearAppCmd = &cobra.Command{
 				err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
 			}
 			if err != nil {
-				reportErrorf(err.Error())
+				reportErrorln(err.Error())
 			}
 		}
 	},
@@ -849,7 +849,7 @@ var callAppCmd = &cobra.Command{
 			if !noWaitAfterSend {
 				_, err2 = waitForCommit(client, txid, lv)
 				if err2 != nil {
-					reportErrorf(err2.Error())
+					reportErrorln(err2.Error())
 				}
 			}
 		} else {
@@ -859,7 +859,7 @@ var callAppCmd = &cobra.Command{
 				err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
 			}
 			if err != nil {
-				reportErrorf(err.Error())
+				reportErrorln(err.Error())
 			}
 		}
 	},
@@ -919,7 +919,7 @@ var deleteAppCmd = &cobra.Command{
 			if !noWaitAfterSend {
 				_, err2 = waitForCommit(client, txid, lv)
 				if err2 != nil {
-					reportErrorf(err2.Error())
+					reportErrorln(err2.Error())
 				}
 			}
 		} else {
@@ -929,7 +929,7 @@ var deleteAppCmd = &cobra.Command{
 				err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
 			}
 			if err != nil {
-				reportErrorf(err.Error())
+				reportErrorln(err.Error())
 			}
 		}
 	},
@@ -1442,7 +1442,7 @@ var methodAppCmd = &cobra.Command{
 				err = writeSignedTxnsToFile(signedTxnGroup, outFilename)
 			}
 			if err != nil {
-				reportErrorf(err.Error())
+				reportErrorln(err.Error())
 			}
 			return
 		}
@@ -1472,12 +1472,12 @@ var methodAppCmd = &cobra.Command{
 		if !noWaitAfterSend {
 			_, err := waitForCommit(client, txid, lv)
 			if err != nil {
-				reportErrorf(err.Error())
+				reportErrorln(err.Error())
 			}
 
 			resp, err := client.PendingTransactionInformation(txid)
 			if err != nil {
-				reportErrorf(err.Error())
+				reportErrorln(err.Error())
 			}
 
 			if methodCreatesApp && resp.ApplicationIndex != nil && *resp.ApplicationIndex != 0 {

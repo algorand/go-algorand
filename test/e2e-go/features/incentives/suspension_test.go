@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -33,7 +33,6 @@ import (
 )
 
 // TestBasicSuspension confirms that accounts that don't propose get suspended
-// (when a tx naming them occurs)
 func TestBasicSuspension(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
@@ -45,15 +44,17 @@ func TestBasicSuspension(t *testing.T) {
 	// Start a three-node network (70,20,10), all online
 	// Wait for 10 and 20% nodes to propose (we never suspend accounts with lastProposed=lastHeartbeat=0)
 	// Stop them both
-	// Run for 55 rounds, which is enough for 20% node to be suspended, but not 10%
+	// Run for 105 rounds, which is enough for 20% node to be suspended, but not 10%
 	// check neither suspended, send a tx from 20% to 10%, only 20% gets suspended
-	// TODO once we have heartbeats: bring them back up, make sure 20% gets back online
-	const suspend20 = 55
+	// bring n20 back up, make sure it gets back online by proposing during the lookback
+	const suspend20 = 105 // 1.00/0.20 * absentFactor
 
 	var fixture fixtures.RestClientFixture
-	// Speed up rounds, but keep long lookback, so 20% node has a chance to get
-	// back online after being suspended.
-	fixture.FasterConsensus(protocol.ConsensusFuture, time.Second, 320)
+	// Speed up rounds.  Long enough lookback, so 20% node has a chance to
+	// get back online after being suspended. (0.8^32 is very small)
+
+	const lookback = 32
+	fixture.FasterConsensus(protocol.ConsensusFuture, time.Second, lookback)
 	fixture.Setup(t, filepath.Join("nettemplates", "Suspension.json"))
 	defer fixture.Shutdown()
 
@@ -69,74 +70,43 @@ func TestBasicSuspension(t *testing.T) {
 	c10, account10 := clientAndAccount("Node10")
 	c20, account20 := clientAndAccount("Node20")
 
-	rekeyreg(&fixture, a, c10, account10.Address)
-	rekeyreg(&fixture, a, c20, account20.Address)
+	rekeyreg(a, c10, account10.Address, true)
+	rekeyreg(a, c20, account20.Address, true)
 
-	// Wait until each have proposed, so they are suspendable
-	proposed10 := false
-	proposed20 := false
-	for !proposed10 || !proposed20 {
-		status, err := c10.Status()
-		a.NoError(err)
-		block, err := c10.BookkeepingBlock(status.LastRound)
-		a.NoError(err)
-
-		fmt.Printf(" block %d proposed by %v\n", status.LastRound, block.Proposer())
-
-		fixture.WaitForRoundWithTimeout(status.LastRound + 1)
-
-		switch block.Proposer().String() {
-		case account10.Address:
-			proposed10 = true
-		case account20.Address:
-			proposed20 = true
-		}
-	}
-
+	// Accounts are now suspendable whether they have proposed yet or not
+	// because keyreg sets LastHeartbeat. Stop c20 which means account20 will be
+	// absent about 50 rounds after keyreg goes into effect (lookback)
 	a.NoError(c20.FullStop())
 
 	afterStop, err := c10.Status()
 	a.NoError(err)
 
-	// Advance 55 rounds
-	err = fixture.WaitForRoundWithTimeout(afterStop.LastRound + suspend20)
+	// Advance lookback+55 rounds
+	err = fixture.WaitForRoundWithTimeout(afterStop.LastRound + lookback + suspend20)
 	a.NoError(err)
-
-	// n20 is still online after 55 rounds of absence (the node is off, but the
-	// account is marked online) because it has not been "noticed".
-	account, err := fixture.LibGoalClient.AccountData(account20.Address)
-	a.NoError(err)
-	a.Equal(basics.Online, account.Status)
-	voteID := account.VoteID
-	a.NotZero(voteID)
-
-	// pay n10 & n20, so both could be noticed
-	richAccount, err := fixture.GetRichestAccount()
-	a.NoError(err)
-	fixture.SendMoneyAndWait(afterStop.LastRound+suspend20, 5, 1000, richAccount.Address, account10.Address, "")
-	fixture.SendMoneyAndWait(afterStop.LastRound+suspend20, 5, 1000, richAccount.Address, account20.Address, "")
 
 	// make sure c10 node is in-sync with the network
 	status, err := fixture.LibGoalClient.Status()
 	a.NoError(err)
+	fmt.Printf("status.LastRound %d\n", status.LastRound)
 	_, err = c10.WaitForRound(status.LastRound)
 	a.NoError(err)
 
-	// n20's account is now offline, but has voting key material (suspended)
-	account, err = c10.AccountData(account20.Address)
+	// n20's account has been suspended (offline, but has voting key material)
+	account, err := c10.AccountData(account20.Address)
 	a.NoError(err)
+	fmt.Printf("account20 %d %d\n", account.LastProposed, account.LastHeartbeat)
 	a.Equal(basics.Offline, account.Status)
 	a.NotZero(account.VoteID)
 	a.False(account.IncentiveEligible) // suspension turns off flag
 
-	// n10's account is still online, because it's got less stake, has not been absent 10 x interval.
 	account, err = c10.AccountData(account10.Address)
 	a.NoError(err)
 	a.Equal(basics.Online, account.Status)
 	a.NotZero(account.VoteID)
 	a.True(account.IncentiveEligible)
 
-	// Use the fixture to start the node again. Since we're only a bit past the
+	// Use the fixture to start node20  again. Since we're only a bit past the
 	// suspension round, it will still be voting.  It should get a chance to
 	// propose soon (20/100 of blocks) which will put it back online.
 	lg, err := fixture.StartNode(c20.DataDir())
@@ -172,8 +142,6 @@ func TestBasicSuspension(t *testing.T) {
 		a.NoError(err)
 		r.Equal(basics.Online, account.Status, i)
 		r.Greater(account.LastProposed, restartRound, i)
-
-		r.Equal(voteID, account.VoteID, i)
 		r.False(account.IncentiveEligible, i)
 	}
 }

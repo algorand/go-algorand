@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -102,7 +102,7 @@ func (b *backlog) BufferSize() (length, capacity int) {
 	return len(b.buffer), cap(b.buffer)
 }
 
-// Enqueue enqueues a single task into the backlog
+// EnqueueBacklog enqueues a single task into the backlog
 func (b *backlog) EnqueueBacklog(enqueueCtx context.Context, t ExecFunc, arg interface{}, out chan interface{}) error {
 	select {
 	case b.buffer <- backlogItemTask{

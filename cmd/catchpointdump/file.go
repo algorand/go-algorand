@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -142,6 +142,14 @@ var fileCmd = &cobra.Command{
 			if err != nil {
 				reportErrorf("Unable to print state proof verification database : %v", err)
 			}
+			err = printOnlineAccounts("./ledger.tracker.sqlite", true, outFile)
+			if err != nil {
+				reportErrorf("Unable to print online accounts : %v", err)
+			}
+			err = printOnlineRoundParams("./ledger.tracker.sqlite", true, outFile)
+			if err != nil {
+				reportErrorf("Unable to print online round params : %v", err)
+			}
 		}
 	},
 }
@@ -214,12 +222,22 @@ func loadCatchpointIntoDatabase(ctx context.Context, catchupAccessor ledger.Catc
 					if err != nil {
 						return fileHeader, err
 					}
-					var balanceHash, spverHash crypto.Digest
-					balanceHash, spverHash, _, err = catchupAccessor.GetVerifyData(ctx)
+					var balanceHash, spverHash, onlineAccountsHash, onlineRoundParamsHash crypto.Digest
+					balanceHash, spverHash, onlineAccountsHash, onlineRoundParamsHash, _, err = catchupAccessor.GetVerifyData(ctx)
 					if err != nil {
 						return fileHeader, err
 					}
-					fmt.Printf("accounts digest=%s, spver digest=%s\n\n", balanceHash, spverHash)
+					fmt.Printf("accounts digest=%s, spver digest=%s, onlineaccounts digest=%s onlineroundparams digest=%s\n",
+						balanceHash, spverHash, onlineAccountsHash, onlineRoundParamsHash)
+
+					fmt.Printf("Catchpoint label: %s\n", fileHeader.Catchpoint)
+					// make v7 label
+					v7Label := ledgercore.MakeCatchpointLabelMakerV7(fileHeader.BlocksRound, &fileHeader.BlockHeaderDigest, &balanceHash, fileHeader.Totals, &spverHash)
+					fmt.Printf("catchpoint v7 label: %s\n", ledgercore.MakeLabel(v7Label))
+
+					// make v8 label (current)
+					v8Label := ledgercore.MakeCatchpointLabelMakerCurrent(fileHeader.BlocksRound, &fileHeader.BlockHeaderDigest, &balanceHash, fileHeader.Totals, &spverHash, &onlineAccountsHash, &onlineRoundParamsHash)
+					fmt.Printf("catchpoint v8 label: %s\n\n", ledgercore.MakeLabel(v8Label))
 				}
 				return fileHeader, nil
 			}
@@ -295,6 +313,8 @@ func printAccountsDatabase(databaseName string, stagingTables bool, fileHeader l
 			"Catchpoint: %s",
 			"Total Accounts: %d",
 			"Total KVs: %d",
+			"Total Online Accounts: %d",
+			"Total Online Round Params: %d",
 			"Total Chunks: %d",
 		}
 		var headerValues = []interface{}{
@@ -305,6 +325,8 @@ func printAccountsDatabase(databaseName string, stagingTables bool, fileHeader l
 			fileHeader.Catchpoint,
 			fileHeader.TotalAccounts,
 			fileHeader.TotalKVs,
+			fileHeader.TotalOnlineAccounts,
+			fileHeader.TotalOnlineRoundParams,
 			fileHeader.TotalChunks,
 		}
 		// safety check
@@ -510,7 +532,6 @@ func printKeyValue(writer *bufio.Writer, key, value []byte) {
 }
 
 func printKeyValueStore(databaseName string, stagingTables bool, outFile *os.File) error {
-	fmt.Printf("\n")
 	printDumpingCatchpointProgressLine(0, 50, 0)
 	lastProgressUpdate := time.Now()
 	progress := uint64(0)
@@ -555,6 +576,68 @@ func printKeyValueStore(databaseName string, stagingTables bool, outFile *os.Fil
 				lastProgressUpdate = time.Now()
 				printDumpingCatchpointProgressLine(int(float64(progress)*50.0/float64(rowsCount)), 50, int64(progress))
 			}
+		}
+		return nil
+	})
+}
+
+func printOnlineAccounts(databaseName string, stagingTables bool, outFile *os.File) error {
+	fileWriter := bufio.NewWriterSize(outFile, 1024*1024)
+	defer fileWriter.Flush()
+
+	dbAccessor, err := db.MakeAccessor(databaseName, true, false)
+	if err != nil || dbAccessor.Handle == nil {
+		return err
+	}
+
+	return dbAccessor.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		rows, err := sqlitedriver.MakeOnlineAccountsIter(ctx, tx, stagingTables, 0)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			row, err := rows.GetItem()
+			if err != nil {
+				return err
+			}
+			jsonData, err := json.Marshal(row)
+			if err != nil {
+				return err
+			}
+
+			fmt.Fprintf(fileWriter, "onlineaccount: %s\n", string(jsonData))
+		}
+		return nil
+	})
+}
+
+func printOnlineRoundParams(databaseName string, stagingTables bool, outFile *os.File) error {
+	fileWriter := bufio.NewWriterSize(outFile, 1024*1024)
+	defer fileWriter.Flush()
+
+	dbAccessor, err := db.MakeAccessor(databaseName, true, false)
+	if err != nil || dbAccessor.Handle == nil {
+		return err
+	}
+
+	return dbAccessor.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		rows, err := sqlitedriver.MakeOnlineRoundParamsIter(ctx, tx, stagingTables, 0)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			row, err := rows.GetItem()
+			if err != nil {
+				return err
+			}
+			jsonData, err := json.Marshal(row)
+			if err != nil {
+				return err
+			}
+
+			fmt.Fprintf(fileWriter, "onlineroundparams: %s\n", string(jsonData))
 		}
 		return nil
 	})

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -167,7 +167,6 @@ func TestDebuggerLogicSigEval(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 	for _, testCase := range debuggerTestCases {
-		testCase := testCase
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
 			testDbg := testDebugger{}
@@ -187,7 +186,6 @@ func TestDebuggerTopLeveLAppEval(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 	for _, testCase := range debuggerTestCases {
-		testCase := testCase
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
 			testDbg := testDebugger{}
@@ -208,8 +206,6 @@ func TestDebuggerInnerAppEval(t *testing.T) {
 	t.Parallel()
 	scenarios := mocktracer.GetTestScenarios()
 	for scenarioName, makeScenario := range scenarios {
-		scenarioName := scenarioName
-		makeScenario := makeScenario
 		t.Run(scenarioName, func(t *testing.T) {
 			t.Parallel()
 			testDbg := testDebugger{}

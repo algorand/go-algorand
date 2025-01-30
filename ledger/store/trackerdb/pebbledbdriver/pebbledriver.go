@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -322,6 +322,11 @@ func (s *trackerStore) Transaction(fn trackerdb.TransactionFn) (err error) {
 	return s.TransactionContext(context.Background(), fn)
 }
 
+// TransactionWithRetryClearFn implements trackerdb.Store
+func (s *trackerStore) TransactionWithRetryClearFn(fn trackerdb.TransactionFn, rollbackFn trackerdb.RetryClearFn) (err error) {
+	return s.TransactionContextWithRetryClearFn(context.Background(), fn, rollbackFn)
+}
+
 // TransactionContext implements trackerdb.Store
 func (s *trackerStore) TransactionContext(ctx context.Context, fn trackerdb.TransactionFn) (err error) {
 	handle, err := s.BeginTransaction(ctx)
@@ -343,6 +348,13 @@ func (s *trackerStore) TransactionContext(ctx context.Context, fn trackerdb.Tran
 	}
 
 	return err
+}
+
+// TransactionContextWithRetryClearFn implements trackerdb.Store.
+// It ignores the RetryClearFn, since it does not need to retry
+// transactions to work around SQLite issues like the sqlitedriver.
+func (s *trackerStore) TransactionContextWithRetryClearFn(ctx context.Context, fn trackerdb.TransactionFn, _ trackerdb.RetryClearFn) error {
+	return s.TransactionContext(ctx, fn)
 }
 
 // BeginTransaction implements trackerdb.Store

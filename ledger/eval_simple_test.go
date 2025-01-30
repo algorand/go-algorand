@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,6 +21,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -32,6 +33,7 @@ import (
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
@@ -280,15 +282,15 @@ func TestPayoutFees(t *testing.T) {
 			// new fields are in the header
 			require.EqualValues(t, 2000, vb.Block().FeesCollected.Raw)
 			require.EqualValues(t, bonus1, vb.Block().Bonus.Raw)
-			require.EqualValues(t, bonus1+1_500, vb.Block().ProposerPayout().Raw)
+			require.EqualValues(t, bonus1+1_000, vb.Block().ProposerPayout().Raw)
 			// This last one is really only testing the "fake" agreement that
 			// happens in dl.endBlock().
 			require.EqualValues(t, proposer, vb.Block().Proposer())
 
 			// At the end of the block, part of the fees + bonus have been moved to
 			// the proposer.
-			require.EqualValues(t, bonus1+1500, postprop-preprop) // based on 75% in config/consensus.go
-			require.EqualValues(t, bonus1-500, presink-postsink)
+			require.EqualValues(t, bonus1+1_000, postprop-preprop) // based on 75% in config/consensus.go
+			require.EqualValues(t, bonus1-1_000, presink-postsink)
 			require.Equal(t, prp.LastProposed, dl.generator.Latest())
 		} else {
 			require.False(t, dl.generator.GenesisProto().Payouts.Enabled)
@@ -412,8 +414,34 @@ func TestAbsentTracking(t *testing.T) {
 		int 0; voter_params_get VoterIncentiveEligible; itob; log; itob; log;
 		int 1`
 
+	addrIndexes := make(map[basics.Address]int)
+	for i, addr := range addrs {
+		addrIndexes[addr] = i
+	}
+	prettyAddrs := func(inAddrs []basics.Address) []string {
+		ret := make([]string, len(inAddrs))
+		for i, addr := range inAddrs {
+			if idx, ok := addrIndexes[addr]; ok {
+				ret[i] = fmt.Sprintf("addrs[%d]", idx)
+			} else {
+				ret[i] = addr.String()
+			}
+		}
+		return ret
+	}
+
+	printAbsent := func(vb *ledgercore.ValidatedBlock) {
+		t.Helper()
+		absent := vb.Block().AbsentParticipationAccounts
+		expired := vb.Block().ExpiredParticipationAccounts
+		if len(expired) > 0 || len(absent) > 0 {
+			t.Logf("rnd %d: expired %d, absent %d (exp %v abs %v)", vb.Block().Round(),
+				len(expired), len(absent), prettyAddrs(expired), prettyAddrs(absent))
+		}
+	}
+
 	checkingBegins := 40
-	ledgertesting.TestConsensusRange(t, checkingBegins, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+	runTest := func(t *testing.T, cv protocol.ConsensusVersion, cfg config.Local) {
 		dl := NewDoubleLedger(t, genBalances, cv, cfg)
 		defer dl.Close()
 
@@ -456,13 +484,17 @@ func TestAbsentTracking(t *testing.T) {
 
 		// have addrs[1] go online explicitly, which makes it eligible for suspension.
 		// use a large fee, so we can see IncentiveEligible change
-		dl.txn(&txntest.Txn{ // #2
+		vb := dl.fullBlock(&txntest.Txn{ // #2
 			Type:        "keyreg",
 			Fee:         10_000_000,
 			Sender:      addrs[1],
 			VotePK:      [32]byte{1},
 			SelectionPK: [32]byte{1},
 		})
+		addr1Keyreg := vb.Block().Round()
+		require.EqualValues(t, 2, addr1Keyreg) // sanity check
+		const lookback = 320                   // keyreg puts LastHeartbeat 320 rounds into the future
+		require.EqualValues(t, addr1Keyreg+lookback, lookup(t, dl.generator, addrs[1]).LastHeartbeat)
 
 		// as configured above, only the first two accounts should be online
 		require.True(t, lookup(t, dl.generator, addrs[0]).Status == basics.Online)
@@ -480,7 +512,8 @@ func TestAbsentTracking(t *testing.T) {
 		require.True(t, lookup(t, dl.generator, addrs[1]).IncentiveEligible)
 		require.False(t, lookup(t, dl.generator, addrs[2]).IncentiveEligible)
 
-		vb := dl.fullBlock() // #6
+		vb = dl.fullBlock() // #6
+		printAbsent(vb)
 		totals, err := dl.generator.Totals(vb.Block().Round())
 		require.NoError(t, err)
 		require.NotZero(t, totals.Online.Money.Raw)
@@ -494,7 +527,7 @@ func TestAbsentTracking(t *testing.T) {
 			Receiver: addrs[2],
 			Amount:   100_000,
 		})
-		dl.endBlock(proposer) // #7
+		printAbsent(dl.endBlock(proposer)) // #7
 
 		prp := lookup(t, dl.validator, proposer)
 		require.Equal(t, prp.LastProposed, dl.validator.Latest())
@@ -508,7 +541,7 @@ func TestAbsentTracking(t *testing.T) {
 		require.Equal(t, totals.Online.Money.Raw-100_000-1000, newtotals.Online.Money.Raw)
 		totals = newtotals
 
-		dl.fullBlock()
+		printAbsent(dl.fullBlock())
 
 		// addrs[2] was already offline
 		dl.txns(&txntest.Txn{Type: "keyreg", Sender: addrs[2]}) // OFFLINE keyreg #9
@@ -524,12 +557,13 @@ func TestAbsentTracking(t *testing.T) {
 		require.Zero(t, regger.LastHeartbeat)
 
 		// ONLINE keyreg without extra fee
-		dl.txns(&txntest.Txn{
+		vb = dl.fullBlock(&txntest.Txn{
 			Type:        "keyreg",
 			Sender:      addrs[2],
 			VotePK:      [32]byte{1},
 			SelectionPK: [32]byte{1},
 		}) // #10
+		printAbsent(vb)
 		// online totals have grown, addr[2] was added
 		newtotals, err = dl.generator.Totals(dl.generator.Latest())
 		require.NoError(t, err)
@@ -539,7 +573,7 @@ func TestAbsentTracking(t *testing.T) {
 		require.Zero(t, regger.LastProposed)
 		require.True(t, regger.Status == basics.Online)
 
-		// But nothing has changed, since we're not past 320
+		// But nothing has changed for voter_params_get, since we're not past 320
 		checkState(addrs[0], true, false, 833_333_333_333_333) // #11
 		checkState(addrs[1], true, false, 833_333_333_333_333) // #12
 		checkState(addrs[2], false, false, 0)                  // #13
@@ -555,14 +589,16 @@ func TestAbsentTracking(t *testing.T) {
 			VotePK:      [32]byte{1},
 			SelectionPK: [32]byte{1},
 		}) // #14
-		twoEligible := vb.Block().Round()
-		require.EqualValues(t, 14, twoEligible) // sanity check
+		printAbsent(vb)
+		addr2Eligible := vb.Block().Round()
+		require.EqualValues(t, 14, addr2Eligible) // sanity check
 
 		regger = lookup(t, dl.validator, addrs[2])
 		require.True(t, regger.IncentiveEligible)
+		require.EqualValues(t, 14+320, regger.LastHeartbeat)
 
 		for i := 0; i < 5; i++ {
-			dl.fullBlock() // #15-19
+			printAbsent(dl.fullBlock()) // #15-19
 			require.True(t, lookup(t, dl.generator, addrs[0]).Status == basics.Online)
 			require.True(t, lookup(t, dl.generator, addrs[1]).Status == basics.Online)
 			require.True(t, lookup(t, dl.generator, addrs[2]).Status == basics.Online)
@@ -573,107 +609,96 @@ func TestAbsentTracking(t *testing.T) {
 		require.True(t, lookup(t, dl.generator, addrs[1]).Status == basics.Online)
 		require.True(t, lookup(t, dl.generator, addrs[2]).Status == basics.Online)
 
-		for i := 0; i < 30; i++ {
-			dl.fullBlock() // #20-49
+		var addr1off basics.Round
+		var addr2off basics.Round
+		// We're at 20, skip ahead by lookback + 60 to see the knockoffs
+		const absentFactor = 20
+		skip := basics.Round(3) * absentFactor
+		for {
+			vb := dl.fullBlock()
+			printAbsent(vb)
+
+			rnd := vb.Block().Round()
+			switch {
+			case slices.Contains(vb.Block().AbsentParticipationAccounts, addrs[1]):
+				addr1off = rnd
+			case slices.Contains(vb.Block().AbsentParticipationAccounts, addrs[2]):
+				addr2off = rnd
+			default:
+				require.Empty(t, vb.Block().AbsentParticipationAccounts)
+			}
+
+			if rnd < 100 {
+				// `vote_params_get` sees no changes in the early going, because it looks back 320
+				checkState(addrs[1], true, false, 833_333_333_333_333) // this also advances a round!
+				// to avoid complications from advancing an extra round, we only do this check for 100 rounds
+			}
+
+			// addr[1] spent 10A on a fee in rnd 1, so online stake and eligibility adjusted in 323
+			if rnd == addr1Keyreg-2+lookback {
+				checkState(addrs[1], true, false, 833_333_333_333_333) // check occurs during reg+lookback-1
+				checkState(addrs[1], true, true, 833_333_323_333_333)  // check occurs during reg+lookback
+			}
+
+			// watch the change across the round that addr2 becomes eligible (by spending 2A in keyreg)
+			if rnd == addr2Eligible-2+lookback {
+				checkState(addrs[2], true, false, 833_333_333_429_333)
+				checkState(addrs[2], true, true, 833_333_331_429_333) // after keyreg w/ 2A is effective
+			}
+
+			if rnd > 20+lookback+skip {
+				break
+			}
 		}
+		require.Equal(t, addr2Eligible+lookback+skip, addr2off)
+		require.Equal(t, addr1Keyreg+lookback+skip+1, addr1off) // addr1 paid out a little bit, extending its lag by 1
 
-		// addrs 0-2 all have about 1/3 of stake, so seemingly (see next block
-		// of checks) become eligible for suspension after 30 rounds. We're at
-		// about 35. But, since blocks are empty, nobody's suspendible account
-		// is noticed.
-		require.Equal(t, basics.Online, lookup(t, dl.generator, addrs[0]).Status)
-		require.Equal(t, basics.Online, lookup(t, dl.generator, addrs[1]).Status)
-		require.Equal(t, basics.Online, lookup(t, dl.generator, addrs[2]).Status)
-		require.True(t, lookup(t, dl.generator, addrs[2]).IncentiveEligible)
-
-		// when 2 pays 0, they both get noticed but addr[0] is not considered
-		// absent because it is a genesis account
-		vb = dl.fullBlock(&txntest.Txn{
-			Type:     "pay",
-			Sender:   addrs[2],
-			Receiver: addrs[0],
-			Amount:   0,
-		}) // #50
-		require.Equal(t, vb.Block().AbsentParticipationAccounts, []basics.Address{addrs[2]})
-
-		twoPaysZero := vb.Block().Round()
-		require.EqualValues(t, 50, twoPaysZero)
-		// addr[0] has never proposed or heartbeat so it is not considered absent
-		require.Equal(t, basics.Online, lookup(t, dl.generator, addrs[0]).Status)
-		// addr[1] still hasn't been "noticed"
-		require.Equal(t, basics.Online, lookup(t, dl.generator, addrs[1]).Status)
-		require.Equal(t, basics.Offline, lookup(t, dl.generator, addrs[2]).Status)
-		require.False(t, lookup(t, dl.generator, addrs[2]).IncentiveEligible)
-
-		// separate the payments by a few blocks so it will be easier to test
-		// when the changes go into effect
-		for i := 0; i < 4; i++ {
-			dl.fullBlock() // #51-54
-		}
-		// now, when 2 pays 1, 1 gets suspended (unlike 0, we had 1 keyreg early on, so LastHeartbeat>0)
-		vb = dl.fullBlock(&txntest.Txn{
-			Type:     "pay",
-			Sender:   addrs[2],
-			Receiver: addrs[1],
-			Amount:   0,
-		}) // #55
-		twoPaysOne := vb.Block().Round()
-		require.EqualValues(t, 55, twoPaysOne)
-		require.Equal(t, vb.Block().AbsentParticipationAccounts, []basics.Address{addrs[1]})
-		require.Equal(t, basics.Online, lookup(t, dl.generator, addrs[0]).Status)
+		require.Equal(t, basics.Online, lookup(t, dl.generator, addrs[0]).Status) // genesis account
 		require.Equal(t, basics.Offline, lookup(t, dl.generator, addrs[1]).Status)
-		require.False(t, lookup(t, dl.generator, addrs[1]).IncentiveEligible)
 		require.Equal(t, basics.Offline, lookup(t, dl.generator, addrs[2]).Status)
 		require.False(t, lookup(t, dl.generator, addrs[2]).IncentiveEligible)
 
 		// now, addrs[2] proposes, so it gets back online, but stays ineligible
 		dl.proposer = addrs[2]
-		dl.fullBlock()
+		printAbsent(dl.fullBlock())
 		require.Equal(t, basics.Online, lookup(t, dl.generator, addrs[2]).Status)
 		require.False(t, lookup(t, dl.generator, addrs[2]).IncentiveEligible)
 
-		// "synchronize" so the loop below ends on 320
-		for dl.fullBlock().Block().Round()%4 != 3 {
-		}
-		// keep in mind that each call to checkState also advances the round, so
-		// each loop advances by 4.
-		for rnd := dl.fullBlock().Block().Round(); rnd < 320; rnd = dl.fullBlock().Block().Round() {
-			// STILL nothing has changed, as we're under 320
-			checkState(addrs[0], true, false, 833_333_333_333_333)
-			checkState(addrs[1], true, false, 833_333_333_333_333)
-			checkState(addrs[2], false, false, 0)
-		}
-		// rnd was 320 in the last fullBlock
+		// The knockoffs have happened, now skip through another lookback rounds
+		// to observe the changes with checkstate
+		addr1check, addr2check := false, false
+		for {
+			vb := dl.fullBlock()
+			printAbsent(vb)
+			rnd := vb.Block().Round()
 
-		// We will soon see effects visible to `vote_params_get`
-		// In first block, addr[3] created an app. No effect on 0-2
-		checkState(addrs[1], true, false, 833_333_333_333_333) // 321
-		// in second block, the checkstate app was created
-		checkState(addrs[1], true, false, 833_333_333_333_333) // 322
-		// addr[1] spent 10A on a fee in rnd 3, so online stake and eligibility adjusted in 323
-		checkState(addrs[1], true, true, 833_333_323_333_333) // 323
+			// observe addr1 stake going to zero 320 rounds after knockoff
+			if rnd == addr1off+lookback-2 {
+				checkState(addrs[1], true, true, 833_333_323_188_333)
+				checkState(addrs[1], false, false, 0)
+				addr1check = true
+			}
 
-		for rnd := dl.fullBlock().Block().Round(); rnd < 320+twoEligible-1; rnd = dl.fullBlock().Block().Round() {
-		}
-		checkState(addrs[2], true, false, 833_333_333_429_333)
-		checkState(addrs[2], true, true, 833_333_331_429_333) // after keyreg w/ 2A is effective
+			// observe addr2 stake going to zero 320 rounds after knockoff
+			if rnd == addr2off+lookback-2 {
+				checkState(addrs[2], true, true, 833_333_331_427_333) // still "online"
+				checkState(addrs[2], false, false, 0)
+				addr2check = true
+			}
 
-		for rnd := dl.fullBlock().Block().Round(); rnd < 320+twoPaysZero-1; rnd = dl.fullBlock().Block().Round() {
+			if rnd > 20+2*lookback+skip {
+				break
+			}
 		}
-		// we're at the round before two's suspension kicks in
-		checkState(addrs[2], true, true, 833_333_331_429_333)  // still "online"
-		checkState(addrs[0], true, false, 833_333_333_331_333) // paid fee in #5 and #11, we're at ~371
-		// 2 was noticed & suspended after paying 0, eligible and amount go to 0
-		checkState(addrs[2], false, false, 0)
+		// sanity check that we didn't skip one because of checkstate advancing a round
+		require.True(t, addr1check)
+		require.True(t, addr2check)
+
 		checkState(addrs[0], true, false, 833_333_333_331_333) // addr 0 didn't get suspended (genesis)
+	}
 
-		// roughly the same check, except for addr 1, which was genesis, but
-		// after doing a keyreg, became susceptible to suspension
-		for rnd := dl.fullBlock().Block().Round(); rnd < 320+twoPaysOne-1; rnd = dl.fullBlock().Block().Round() {
-		}
-		checkState(addrs[1], true, true, 833_333_323_230_333) // still online, balance irrelevant
-		// 1 was noticed & suspended after being paid by 2, so eligible and amount go to 0
-		checkState(addrs[1], false, false, 0)
+	ledgertesting.TestConsensusRange(t, checkingBegins, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		runTest(t, cv, cfg)
 	})
 }
 
@@ -736,71 +761,138 @@ func TestAbsenteeChallenges(t *testing.T) {
 		dl.beginBlock()
 		dl.endBlock(seedAndProp) // This becomes the seed, which is used for the challenge
 
-		for vb := dl.fullBlock(); vb.Block().Round() < 1200; vb = dl.fullBlock() {
-			// advance through first grace period
+		for vb := dl.fullBlock(); vb.Block().Round() < 1199; vb = dl.fullBlock() {
+			// advance through first grace period: no one marked absent
+			require.Empty(t, vb.Block().AbsentParticipationAccounts)
 		}
-		dl.beginBlock()
-		dl.endBlock(propguy) // propose, which is a fine (though less likely) way to respond
-
-		// All still online, unchanged eligibility
-		for _, guy := range []basics.Address{propguy, regguy, badguy} {
-			acct := lookup(t, dl.generator, guy)
-			require.Equal(t, basics.Online, acct.Status)
-			require.Equal(t, ver >= checkingBegins, acct.IncentiveEligible, guy)
-		}
-
-		for vb := dl.fullBlock(); vb.Block().Round() < 1220; vb = dl.fullBlock() {
-			// advance into knockoff period. but no transactions means
-			// unresponsive accounts go unnoticed.
-		}
-		// All still online, same eligibility
-		for _, guy := range []basics.Address{propguy, regguy, badguy} {
-			acct := lookup(t, dl.generator, guy)
-			require.Equal(t, basics.Online, acct.Status)
-			require.Equal(t, ver >= checkingBegins, acct.IncentiveEligible, guy)
-		}
-
-		// badguy never responded, he gets knocked off when paid
-		vb := dl.fullBlock(&txntest.Txn{
-			Type:     "pay",
-			Sender:   addrs[0],
-			Receiver: badguy,
-		})
-		if ver >= checkingBegins {
-			require.Equal(t, vb.Block().AbsentParticipationAccounts, []basics.Address{badguy})
-		}
-		acct := lookup(t, dl.generator, badguy)
-		require.Equal(t, ver >= checkingBegins, basics.Offline == acct.Status) // if checking, badguy fails
-		require.False(t, acct.IncentiveEligible)
-
-		// propguy proposed during the grace period, he stays on even when paid
-		dl.txns(&txntest.Txn{
-			Type:     "pay",
-			Sender:   addrs[0],
-			Receiver: propguy,
-		})
-		acct = lookup(t, dl.generator, propguy)
-		require.Equal(t, basics.Online, acct.Status)
-		require.Equal(t, ver >= checkingBegins, acct.IncentiveEligible)
 
 		// regguy keyregs before he's caught, which is a heartbeat, he stays on as well
-		dl.txns(&txntest.Txn{
+		vb := dl.fullBlock(&txntest.Txn{
 			Type:        "keyreg", // Does not pay extra fee, since he's still eligible
 			Sender:      regguy,
 			VotePK:      [32]byte{1},
 			SelectionPK: [32]byte{1},
 		})
-		acct = lookup(t, dl.generator, regguy)
+		require.Equal(t, basics.Round(1200), vb.Block().Round())
+		require.Empty(t, vb.Block().AbsentParticipationAccounts)
+		acct := lookup(t, dl.generator, regguy)
 		require.Equal(t, basics.Online, acct.Status)
 		require.Equal(t, ver >= checkingBegins, acct.IncentiveEligible)
-		dl.txns(&txntest.Txn{
-			Type:     "pay",
-			Sender:   addrs[0],
-			Receiver: regguy,
-		})
-		acct = lookup(t, dl.generator, regguy)
-		require.Equal(t, basics.Online, acct.Status)
-		require.Equal(t, ver >= checkingBegins, acct.IncentiveEligible)
+
+		dl.beginBlock()
+		vb = dl.endBlock(propguy) // propose, which is a fine (though less likely) way to respond
+
+		// propguy could be suspended in 1201 here, but won't, because they are proposer
+		require.Equal(t, basics.Round(1201), vb.Block().Round())
+
+		require.NotContains(t, vb.Block().AbsentParticipationAccounts, []basics.Address{propguy})
+		require.NotContains(t, vb.Block().AbsentParticipationAccounts, regguy)
+		if ver >= checkingBegins {
+			// badguy and regguy will both be suspended in 1201
+			require.Contains(t, vb.Block().AbsentParticipationAccounts, badguy)
+		}
+
+		// propguy & regguy still online, badguy suspended (depending on consensus version)
+		for _, guy := range []basics.Address{propguy, regguy, badguy} {
+			acct := lookup(t, dl.generator, guy)
+			switch guy {
+			case propguy, regguy:
+				require.Equal(t, basics.Online, acct.Status)
+				require.Equal(t, ver >= checkingBegins, acct.IncentiveEligible)
+				require.False(t, acct.VoteID.IsEmpty())
+			case badguy:
+				// if checking, badguy fails
+				require.Equal(t, ver >= checkingBegins, basics.Offline == acct.Status)
+				require.False(t, acct.IncentiveEligible)
+			}
+			// whether suspended or online, all still have VoteID
+			require.False(t, acct.VoteID.IsEmpty())
+		}
+
+		if ver < checkingBegins {
+			for vb := dl.fullBlock(); vb.Block().Round() < 1220; vb = dl.fullBlock() {
+				// advance into knockoff period.
+			}
+			// All still online, same eligibility
+			for _, guy := range []basics.Address{propguy, regguy, badguy} {
+				acct := lookup(t, dl.generator, guy)
+				require.Equal(t, basics.Online, acct.Status)
+				require.False(t, acct.IncentiveEligible)
+			}
+		}
+	})
+}
+
+func TestDoubleLedgerGetKnockoffCandidates(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	const onlineCount = 5
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis(func(cfg *ledgertesting.GenesisCfg) {
+		cfg.OnlineCount = onlineCount
+		ledgertesting.TurnOffRewards(cfg)
+	})
+	payoutsBegin := 40
+
+	// txn to send in round 1, to change the balances to be different from genesis
+	payTxn := &txntest.Txn{Type: "pay", Sender: addrs[1], Receiver: addrs[2], Amount: 1_000_000}
+
+	checkAccts := func(l *Ledger, rnd basics.Round, cv protocol.ConsensusVersion) {
+		accts, err := l.GetKnockOfflineCandidates(rnd, config.Consensus[cv])
+		require.NoError(t, err)
+		require.NotEmpty(t, accts)
+
+		// get online genesis accounts
+		onlineCnt := 0
+		genesisOnlineAccts := make(map[basics.Address]basics.OnlineAccountData)
+		afterPayTxnOnlineAccts := make(map[basics.Address]basics.OnlineAccountData)
+		for addr, ad := range genBalances.Balances {
+			if ad.Status == basics.Online {
+				onlineCnt++
+				genesisOnlineAccts[addr] = ad.OnlineAccountData()
+				afterPayTxnOnlineAccts[addr] = ad.OnlineAccountData()
+			}
+		}
+
+		// calculate expected balances after applying payTxn
+		payTxnReceiver := afterPayTxnOnlineAccts[payTxn.Receiver]
+		payTxnReceiver.MicroAlgosWithRewards.Raw += payTxn.Amount
+		payTxnSender := afterPayTxnOnlineAccts[payTxn.Sender]
+		payTxnSender.MicroAlgosWithRewards.Raw -= (payTxn.Amount + config.Consensus[cv].MinTxnFee)
+		afterPayTxnOnlineAccts[payTxn.Receiver] = payTxnReceiver
+		afterPayTxnOnlineAccts[payTxn.Sender] = payTxnSender
+
+		require.Equal(t, onlineCount, onlineCnt)
+		require.Len(t, accts, onlineCnt)
+		if rnd == 0 {
+			// balances should be same as genesis
+			require.Equal(t, genesisOnlineAccts, accts)
+		} else {
+			// balances > rnd 1 should reflect payTxn change
+			require.Equal(t, afterPayTxnOnlineAccts, accts, "rnd %d", rnd)
+		}
+
+	}
+
+	ledgertesting.TestConsensusRange(t, payoutsBegin-1, 0, func(t *testing.T, ver int, cv protocol.ConsensusVersion, cfg config.Local) {
+		dl := NewDoubleLedger(t, genBalances, cv, cfg)
+		defer dl.Close()
+
+		checkAccts(dl.generator, basics.Round(0), cv)
+		checkAccts(dl.validator, basics.Round(0), cv)
+
+		// change two accounts' balances to be different from genesis
+		payTxn.GenesisHash = crypto.Digest{} // clear if set from previous run
+		dl.fullBlock(payTxn)
+
+		// run up to round 240
+		proto := config.Consensus[cv]
+		upToRound := basics.Round(proto.StateProofInterval - proto.StateProofVotersLookback)
+		require.Equal(t, basics.Round(240), upToRound)
+		for rnd := dl.fullBlock().Block().Round(); rnd < upToRound; rnd = dl.fullBlock().Block().Round() {
+			checkAccts(dl.generator, rnd, cv)
+			checkAccts(dl.validator, rnd, cv)
+		}
 	})
 }
 
@@ -1147,11 +1239,11 @@ func TestRekeying(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		validatedBlock := ledgercore.MakeValidatedBlock(unfinishedBlock.UnfinishedBlock(), unfinishedBlock.UnfinishedDeltas())
+		fb := unfinishedBlock.FinishBlock(committee.Seed{0x01}, basics.Address{0x01}, false)
 
 		backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 		defer backlogPool.Shutdown()
-		_, err = l.Validate(context.Background(), validatedBlock.Block(), backlogPool)
+		_, err = l.Validate(context.Background(), fb, backlogPool)
 		return err
 	}
 

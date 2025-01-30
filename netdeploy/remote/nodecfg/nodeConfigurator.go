@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -202,7 +202,7 @@ func (nc *nodeConfigurator) prepareNodeDirs(configs []remote.NodeConfig, rootCon
 	return
 }
 
-// getHostName creates a DNS name for a host
+// getNetworkHostName creates a DNS name for a host
 func (nc *nodeConfigurator) getNetworkHostName() string {
 	return nc.config.Name + "." + string(nc.genesisData.Network) + ".algodev.network"
 }
