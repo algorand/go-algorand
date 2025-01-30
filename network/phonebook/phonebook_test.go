@@ -350,15 +350,15 @@ func TestPhonebookRoles(t *testing.T) {
 	require.Equal(t, len(relaysSet)+len(archiverSet), len(ph.data))
 	require.Equal(t, len(relaysSet)+len(archiverSet), ph.Length())
 
-	for _, role := range []PhoneBookEntryRoles{PhoneBookEntryRelayRole, PhoneBookEntryArchivalRole} {
+	for _, role := range []Roles{PhoneBookEntryRelayRole, PhoneBookEntryArchivalRole} {
 		for k := 0; k < 100; k++ {
 			for l := 0; l < 3; l++ {
 				entries := ph.GetAddresses(l, role)
-				if role == PhoneBookEntryRelayRole {
+				if role.Has(PhoneBookEntryRelayRole) {
 					for _, entry := range entries {
 						require.Contains(t, entry, "relay")
 					}
-				} else if role == PhoneBookEntryArchivalRole {
+				} else if role.Has(PhoneBookEntryArchivalRole) {
 					for _, entry := range entries {
 						require.Contains(t, entry, "archiver")
 					}
@@ -366,4 +366,74 @@ func TestPhonebookRoles(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestRolesOperations(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	var tests = []struct {
+		role       Roles
+		otherRoles Roles
+	}{
+		{PhoneBookEntryRelayRole, PhoneBookEntryArchivalRole},
+		{PhoneBookEntryArchivalRole, PhoneBookEntryRelayRole},
+	}
+
+	for _, test := range tests {
+		require.True(t, test.role.Has(test.role))
+		require.True(t, test.role.Is(test.role))
+		require.False(t, test.role.Has(test.otherRoles))
+		require.False(t, test.role.Is(test.otherRoles))
+
+		combo := Roles{roles: test.role.roles}
+		combo.Assign(test.otherRoles)
+		require.Equal(t, test.role.roles|test.otherRoles.roles, combo.roles)
+		require.True(t, combo.Has(test.role))
+		require.False(t, combo.Is(test.role))
+		require.True(t, combo.Has(test.otherRoles))
+		require.False(t, combo.Is(test.otherRoles))
+
+		combo.Remove(test.otherRoles)
+		require.Equal(t, test.role.roles, combo.roles)
+		require.True(t, combo.Has(test.role))
+		require.True(t, combo.Is(test.role))
+		require.False(t, combo.Has(test.otherRoles))
+		require.False(t, combo.Is(test.otherRoles))
+	}
+}
+
+func TestReplacePeerList(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	pb := MakePhonebook(1, 1)
+	pb.ReplacePeerList([]string{"a", "b"}, "default", PhoneBookEntryRelayRole)
+	res := pb.GetAddresses(4, PhoneBookEntryRelayRole)
+	require.ElementsMatch(t, []string{"a", "b"}, res)
+
+	pb.ReplacePeerList([]string{"c"}, "default", PhoneBookEntryArchivalRole)
+	res = pb.GetAddresses(4, PhoneBookEntryArchivalRole)
+	require.ElementsMatch(t, []string{"c"}, res)
+
+	// make b archival in addition to relay
+	pb.ReplacePeerList([]string{"b", "c"}, "default", PhoneBookEntryArchivalRole)
+	res = pb.GetAddresses(4, PhoneBookEntryRelayRole)
+	require.ElementsMatch(t, []string{"a", "b"}, res)
+	res = pb.GetAddresses(4, PhoneBookEntryArchivalRole)
+	require.ElementsMatch(t, []string{"b", "c"}, res)
+
+	// update relays
+	pb.ReplacePeerList([]string{"a", "b"}, "default", PhoneBookEntryRelayRole)
+	res = pb.GetAddresses(4, PhoneBookEntryRelayRole)
+	require.ElementsMatch(t, []string{"a", "b"}, res)
+	res = pb.GetAddresses(4, PhoneBookEntryArchivalRole)
+	require.ElementsMatch(t, []string{"b", "c"}, res)
+
+	// exclude b from archival
+	pb.ReplacePeerList([]string{"c"}, "default", PhoneBookEntryArchivalRole)
+	res = pb.GetAddresses(4, PhoneBookEntryRelayRole)
+	require.ElementsMatch(t, []string{"a", "b"}, res)
+	res = pb.GetAddresses(4, PhoneBookEntryArchivalRole)
+	require.ElementsMatch(t, []string{"c"}, res)
 }
