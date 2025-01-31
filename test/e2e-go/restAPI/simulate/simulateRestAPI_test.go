@@ -2694,6 +2694,50 @@ int 1
 		},
 	}
 	a.Equal(expectedResult, resp)
+
+	// PopulateResources=true should also work
+	resp, err = testClient.SimulateTransactions(v2.PreEncodedSimulateRequest{
+		TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
+			{
+				Txns: []transactions.SignedTxn{stxn},
+			},
+		},
+		AllowUnnamedResources: true,
+		PopulateResources:     true,
+	})
+	a.NoError(err)
+
+	otherAddressAddress := basics.Address{}
+	err = otherAddressAddress.UnmarshalText([]byte(otherAddress))
+	a.NoError(err)
+
+	expectedResult = v2.PreEncodedSimulateResponse{
+		Version:   2,
+		LastRound: resp.LastRound,
+		EvalOverrides: &model.SimulationEvalOverrides{
+			AllowUnnamedResources: &allowUnnamedResources,
+		},
+		TxnGroups: []v2.PreEncodedSimulateTxnGroupResult{
+			{
+				Txns: []v2.PreEncodedSimulateTxnResult{
+					{
+						Txn:               v2.PreEncodedTxInfo{Txn: stxn},
+						AppBudgetConsumed: &budgetUsed,
+						PopulatedResourceArrays: &model.ResourceArrays{
+							Accounts: &[]string{otherAddressAddress.String()},
+							Assets:   &[]uint64{uint64(assetID)},
+							Apps:     &[]uint64{uint64(otherAppID)},
+							Boxes:    &[]model.BoxReference{{App: uint64(testAppID), Name: []byte("A")}, {App: uint64(0), Name: []byte{}}},
+						},
+					},
+				},
+				AppBudgetAdded:           &budgetAdded,
+				AppBudgetConsumed:        &budgetUsed,
+				UnnamedResourcesAccessed: &expectedUnnamedGroupResources,
+			},
+		},
+	}
+	a.Equal(expectedResult, resp)
 }
 
 func TestSimulateWithFixSigners(t *testing.T) {

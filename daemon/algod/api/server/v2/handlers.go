@@ -1251,6 +1251,7 @@ type PreEncodedSimulateTxnResult struct {
 	TransactionTrace         *model.SimulationTransactionExecTrace   `codec:"exec-trace,omitempty"`
 	UnnamedResourcesAccessed *model.SimulateUnnamedResourcesAccessed `codec:"unnamed-resources-accessed,omitempty"`
 	FixedSigner              *string                                 `codec:"fixed-signer,omitempty"`
+	PopulatedResourceArrays  *model.ResourceArrays                   `codec:"populated-resource-arrays,omitempty"`
 }
 
 // PreEncodedSimulateTxnGroupResult mirrors model.SimulateTransactionGroupResult
@@ -1261,6 +1262,7 @@ type PreEncodedSimulateTxnGroupResult struct {
 	FailureMessage           *string                                 `codec:"failure-message,omitempty"`
 	UnnamedResourcesAccessed *model.SimulateUnnamedResourcesAccessed `codec:"unnamed-resources-accessed,omitempty"`
 	Txns                     []PreEncodedSimulateTxnResult           `codec:"txn-results"`
+	ExtraResourceArrays      *[]model.ResourceArrays                 `codec:"extra-resource-arrays,omitempty"`
 }
 
 // PreEncodedSimulateResponse mirrors model.SimulateResponse
@@ -1288,6 +1290,7 @@ type PreEncodedSimulateRequest struct {
 	ExtraOpcodeBudget     uint64                                      `codec:"extra-opcode-budget,omitempty"`
 	ExecTraceConfig       simulation.ExecTraceConfig                  `codec:"exec-trace-config,omitempty"`
 	FixSigners            bool                                        `codec:"fix-signers,omitempty"`
+	PopulateResources     bool                                        `codec:"populate-resources,omitempty"`
 }
 
 // SimulateTransaction simulates broadcasting a raw transaction to the network, returning relevant simulation results.
