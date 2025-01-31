@@ -1083,6 +1083,47 @@ func TestCatchpointAfterTxns(t *testing.T) {
 	}
 }
 
+type catchpointOnlineAccountsIterWrapper struct {
+	ts                   trackerdb.Store
+	iter                 trackerdb.TableIterator[*encoded.OnlineAccountRecordV6]
+	onlineAccountCurrent basics.Address
+	accountsRound        basics.Round
+	params               config.ConsensusParams
+}
+
+// makeCatchpointOrderedOnlineAccountsIter wraps normal MakeOrderedOnlineAccountsIter iterator
+// in order to manipulate the update round number to simulate the catchpoint generation process.
+func (i *catchpointOnlineAccountsIterWrapper) makeCatchpointOrderedOnlineAccountsIter(
+	ctx context.Context, useStaging bool, excludeBefore basics.Round,
+) (trackerdb.TableIterator[*encoded.OnlineAccountRecordV6], error) {
+	var err error
+	i.iter, err = i.ts.MakeOrderedOnlineAccountsIter(ctx, useStaging, excludeBefore)
+	if err != nil {
+		return nil, err
+	}
+
+	return i, nil
+}
+
+func (i *catchpointOnlineAccountsIterWrapper) Next() bool { return i.iter.Next() }
+func (i *catchpointOnlineAccountsIterWrapper) Close()     { i.iter.Close() }
+func (i *catchpointOnlineAccountsIterWrapper) GetItem() (*encoded.OnlineAccountRecordV6, error) {
+	item, err := i.iter.GetItem()
+	if err != nil {
+		return nil, err
+	}
+
+	// this is the same condition as in catchpointFileWriter.readDatabaseStep
+	if i.onlineAccountCurrent.IsZero() || i.onlineAccountCurrent != item.Address {
+		i.onlineAccountCurrent = item.Address
+		// If so, is the updateRound for this row beyond the lookback horizon (R-320)? Then set it to 0.
+		if item.UpdateRound < (i.accountsRound + 1).SubSaturate(basics.Round(i.params.MaxBalLookback)) {
+			item.UpdateRound = 0
+		}
+	}
+	return item, nil
+}
+
 func TestCatchpointAfterStakeLookupTxns(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -1194,9 +1235,21 @@ assert
 	t.Log("DB round generator", genDBRound, "validator", valDBRound)
 	t.Log("Latest round generator", genLatestRound, "validator", valLatestRound)
 
-	genOAHash, genOARows, err := calculateVerificationHash(context.Background(), dl.generator.trackerDB().MakeOrderedOnlineAccountsIter, 0, false)
+	oaGenIterWrapper := catchpointOnlineAccountsIterWrapper{
+		ts:            dl.generator.trackerDB(),
+		accountsRound: genDBRound,
+		params:        config.Consensus[proto],
+	}
+
+	oaValIterWrapper := catchpointOnlineAccountsIterWrapper{
+		ts:            dl.validator.trackerDB(),
+		accountsRound: valDBRound,
+		params:        config.Consensus[proto],
+	}
+
+	genOAHash, genOARows, err := calculateVerificationHash(context.Background(), oaGenIterWrapper.makeCatchpointOrderedOnlineAccountsIter, 0, false)
 	require.NoError(t, err)
-	valOAHash, valOARows, err := calculateVerificationHash(context.Background(), dl.validator.trackerDB().MakeOrderedOnlineAccountsIter, 0, false)
+	valOAHash, valOARows, err := calculateVerificationHash(context.Background(), oaValIterWrapper.makeCatchpointOrderedOnlineAccountsIter, 0, false)
 	require.NoError(t, err)
 	require.Equal(t, genOAHash, valOAHash)
 	require.NotZero(t, genOAHash)
