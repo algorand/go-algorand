@@ -1423,8 +1423,9 @@ func TestCatchpointOnlineAccountUpdateRound(t *testing.T) {
 	testWriteCatchpoint(t, config.Consensus[proto], l.trackerDB(), catchpointDataFilePath, catchpointFilePath, 0, 0)
 	catchpointContent := readCatchpointFile(t, catchpointFilePath)
 
-	var seenZeroUpdateRound bool
-	var seenNonZeroUpdateRound bool
+	var zeroUpdateRounds int
+	var nonZeroUpdateRounds int
+	var lastUpdateRound basics.Round
 	for _, section := range catchpointContent {
 		if strings.HasPrefix(section.headerName, "balances.") {
 			var chunk CatchpointSnapshotChunkV6
@@ -1434,14 +1435,18 @@ func TestCatchpointOnlineAccountUpdateRound(t *testing.T) {
 			for _, oa := range chunk.OnlineAccounts {
 				if oa.Address == addrs[0] {
 					if oa.UpdateRound == 0 {
-						seenZeroUpdateRound = true
+						zeroUpdateRounds++
 					} else {
-						seenNonZeroUpdateRound = true
+						nonZeroUpdateRounds++
+						if oa.UpdateRound > lastUpdateRound {
+							lastUpdateRound = oa.UpdateRound
+						}
 					}
 				}
 			}
 		}
 	}
-	require.True(t, seenZeroUpdateRound, "online account record with zero UpdateRound should be present in catchpoint")
-	require.True(t, seenNonZeroUpdateRound, "online account record with non-zero UpdateRound should be present in catchpoint")
+	require.Equal(t, 1, zeroUpdateRounds, "expected single update round")
+	require.Greater(t, nonZeroUpdateRounds, 1, "expected multiple non-zero update rounds")
+	require.Equal(t, dbRound, lastUpdateRound, "expected last update round to match DB round")
 }
