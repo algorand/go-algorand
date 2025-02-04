@@ -845,7 +845,7 @@ func TestFullCatchpointWriter(t *testing.T) {
 // ensure both committed all pending changes before taking a catchpoint
 // another approach is to modify the test and craft round numbers,
 // and make the ledger to generate catchpoint itself when it is time
-func testCatchpointFlushRound(l *Ledger) basics.Round {
+func testCatchpointFlushRound(l *Ledger) (basics.Round, basics.Round) {
 	// Clear the timer to ensure a flush
 	l.trackers.mu.Lock()
 	l.trackers.lastFlushTime = time.Time{}
@@ -854,7 +854,7 @@ func testCatchpointFlushRound(l *Ledger) basics.Round {
 	r, _ := l.LatestCommitted()
 	l.trackers.committedUpTo(r)
 	l.trackers.waitAccountsWriting()
-	return r
+	return r, l.LatestTrackerCommitted()
 }
 
 func TestExactAccountChunk(t *testing.T) {
@@ -903,8 +903,8 @@ func testExactAccountChunk(t *testing.T, proto protocol.ConsensusVersion, extraB
 		dl.fullBlock(&selfpay)
 	}
 
-	genR := testCatchpointFlushRound(dl.generator)
-	valR := testCatchpointFlushRound(dl.validator)
+	genR, _ := testCatchpointFlushRound(dl.generator)
+	valR, _ := testCatchpointFlushRound(dl.validator)
 	require.Equal(t, genR, valR)
 	require.EqualValues(t, BalancesPerCatchpointFileChunk-12+extraBlocks, genR)
 
@@ -1381,4 +1381,67 @@ func TestCatchpointAfterBoxTxns(t *testing.T) {
 	v, err := l.LookupKv(l.Latest(), apps.MakeBoxKey(uint64(boxApp), "xxx"))
 	require.NoError(t, err)
 	require.Equal(t, strings.Repeat("f", 24), string(v))
+}
+
+func TestCatchpointOnlineAccountUpdateRound(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// Create genesis with one online account
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis(func(cfg *ledgertesting.GenesisCfg) {
+		cfg.OnlineCount = 1
+		ledgertesting.TurnOffRewards(cfg)
+	})
+
+	cfg := config.GetDefaultLocal()
+	proto := protocol.ConsensusFuture
+	l := newSimpleLedgerWithConsensusVersion(t, genBalances, proto, cfg, simpleLedgerOnDisk())
+	defer l.Close()
+
+	pay := txntest.Txn{
+		Type:     "pay",
+		Sender:   addrs[0],
+		Receiver: addrs[1],
+		Amount:   1,
+	}
+
+	// Add blocks until round 400 (well past MaxBalLookback of 320)
+	for i := 0; i < 450; i++ {
+		eval := nextBlock(t, l)
+		pay.Note = []byte(strconv.Itoa(i))
+		txn(t, l, eval, &pay)
+		endBlock(t, l, eval)
+	}
+
+	_, dbRound := testCatchpointFlushRound(l)
+	require.Greater(t, dbRound, basics.Round(320))
+
+	tempDir := t.TempDir()
+	catchpointDataFilePath := filepath.Join(tempDir, t.Name()+".data")
+	catchpointFilePath := filepath.Join(tempDir, t.Name()+".catchpoint.tar.gz")
+
+	testWriteCatchpoint(t, config.Consensus[proto], l.trackerDB(), catchpointDataFilePath, catchpointFilePath, 0, 0)
+	catchpointContent := readCatchpointFile(t, catchpointFilePath)
+
+	var seenZeroUpdateRound bool
+	var seenNonZeroUpdateRound bool
+	for _, section := range catchpointContent {
+		if strings.HasPrefix(section.headerName, "balances.") {
+			var chunk CatchpointSnapshotChunkV6
+			err := protocol.Decode(section.data, &chunk)
+			require.NoError(t, err)
+
+			for _, oa := range chunk.OnlineAccounts {
+				if oa.Address == addrs[0] {
+					if oa.UpdateRound == 0 {
+						seenZeroUpdateRound = true
+					} else {
+						seenNonZeroUpdateRound = true
+					}
+				}
+			}
+		}
+	}
+	require.True(t, seenZeroUpdateRound, "online account record with zero UpdateRound should be present in catchpoint")
+	require.True(t, seenNonZeroUpdateRound, "online account record with non-zero UpdateRound should be present in catchpoint")
 }
