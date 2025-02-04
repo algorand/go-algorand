@@ -455,9 +455,11 @@ type ConsensusParams struct {
 	// that a proposer can take offline for having expired voting keys.
 	MaxProposedExpiredOnlineAccounts int
 
-	// EnableAccountDataResourceSeparation enables the support for extended application and asset storage
-	// in a separate table.
-	EnableAccountDataResourceSeparation bool
+	// EnableLedgerDataUpdateRound enables the support for setting the UpdateRound on account and
+	// resource data in the ledger. The UpdateRound is encoded in account/resource data types used
+	// on disk and in catchpoint snapshots, and also used to construct catchpoint merkle trie keys,
+	// but does not appear in on-chain state.
+	EnableLedgerDataUpdateRound bool
 
 	// When rewards rate changes, use the new value immediately.
 	RewardsCalculationFix bool
@@ -487,9 +489,6 @@ type ConsensusParams struct {
 	// available for lookup for smart contracts and smart signatures.
 	// Setting it to 1 for example allows querying data up to MaxTxnLife + 1 rounds back from the Latest.
 	DeeperBlockHeaderHistory uint64
-
-	// EnableOnlineAccountCatchpoints specifies when to re-enable catchpoints after the online account table migration has occurred.
-	EnableOnlineAccountCatchpoints bool
 
 	// UnfundedSenders ensures that accounts with no balance (so they don't even
 	// "exist") can still be a transaction sender by avoiding updates to rewards
@@ -1371,7 +1370,7 @@ func initConsensusProtocols() {
 	// flag would already be restructuring their internal storage for extended
 	// application storage, and therefore would not produce catchpoints and/or
 	// catchpoint labels prior to this feature being enabled.
-	v32.EnableAccountDataResourceSeparation = true
+	v32.EnableLedgerDataUpdateRound = true
 
 	// Remove limits on MinimumBalance
 	v32.MaximumMinimumBalance = 0
@@ -1424,7 +1423,6 @@ func initConsensusProtocols() {
 	v34.UnifyInnerTxIDs = true
 
 	v34.EnableSHA256TxnCommitmentHeader = true
-	v34.EnableOnlineAccountCatchpoints = true
 
 	v34.UnfundedSenders = true
 

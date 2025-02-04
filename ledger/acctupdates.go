@@ -1508,7 +1508,7 @@ func (au *accountUpdates) prepareCommit(dcc *deferredCommitContext) error {
 
 	// once the consensus upgrade to resource separation is complete, all resources/accounts are also tagged with
 	// their corresponding update round.
-	setUpdateRound := config.Consensus[au.versions[1]].EnableAccountDataResourceSeparation
+	setUpdateRound := config.Consensus[au.versions[1]].EnableLedgerDataUpdateRound
 
 	// compact all the deltas - when we're trying to persist multiple rounds, we might have the same account
 	// being updated multiple times. When that happen, we can safely omit the intermediate updates.
