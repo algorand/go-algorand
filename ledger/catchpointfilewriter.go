@@ -403,40 +403,58 @@ func (cw *catchpointFileWriter) readDatabaseStep(ctx context.Context) error {
 				return err
 			}
 			// Is this the first (and thus oldest) row for this address?
+			// If so, is the updateRound for this row beyond the lookback horizon (R-320)?
+			// Then set it to 0.
+			//
+			// We set UpdateRound to 0 here, so that all nodes generating catchpoints will have the
+			// verification hash for the onlineaccounts table data (which is used to calculate the
+			// catchpoint label). Depending on the history of an online account, nodes may not have
+			// the same updateRound column value for the oldest "horizon" row for that address,
+			// depending on whether the node caught up from genesis, or restored from a
+			// catchpoint. This does not have any impact on the correctness of online account
+			// lookups, but is due to changes in the database schema over time:
+			//
+			//   1. For nodes that have been online for a long time, the unlimited assets release
+			//   (v3.5.1, PR #3652) introduced a BaseAccountData type with an UpdateRound field,
+			//   consensus-flagged to be zero until EnableAccountDataResourceSeparation was enabled
+			//   in consensus v32. So accounts that have been inactive since before consensus v32
+			//   will continue to have a zero UpdateRound, until a transaction updates the
+			//   account. This behavior is consistent for all nodes and validated by the merkle trie
+			//   generated each catchpoint round.
+			//
+			//   2. The onlineaccounts table, introduced later in v3.9.2 (PR #4003), uses a
+			//   migration to populate the onlineaccounts table by selecting all online accounts
+			//   from the accounts table. This migration copies the BaseAccountData.UpdateRound
+			//   field, along with voting data, to set the initial values of the onlineaccounts
+			//   table for each address. After that, the onlineaccounts table's updateRound column
+			//   would only be updated if voting data changed -- so certain transactions like
+			//   receiving a pay txn of 0 algos, or receiving an asset transfer, etc, would not
+			//   result in a new onlineaccounts row with a new updateRound (unless it triggered a
+			//   balance or voting data change). This criteria is implemented in
+			//   onlineAccountsNewRound in acctdeltas.go, separate from accountsNewRound &
+			//   makeCompactAccountDeltas, which set the account table's UpdateRound value.
+			//
+			//   3. Node operators using fast catchup to restore from a catchpoint file version V6
+			//   or V7 (used before v4.0.1 and consensus v40, which added the
+			//   EnableCatchpointsWithOnlineAccounts flag) initialize the onlineaccounts table by
+			//   first restoring the accounts table from the snapshot, then running the same
+			//   migration introduced in (2), where updateRound (and account data) comes from
+			//   BaseAccountData. This means catchpoint file writers and fast catchup users could
+			//   see some addresses have a horizon row with an updateRound that was set to zero
+			//   (case 1), or the round of the last account data change (case 2). Since v4.0.1,
+			//   catchpoint file version V8 includes the onlineaccounts and onlineroundparams tables
+			//   in snapshots, to support the voter_params_get and online_stake opcodes (PR #6177).
+			//
+			//   4. However, a node catching up from scratch without using fast catchup, running
+			//   v3.9.2 or later, must track the online account history to verify block certificates
+			//   as it validates each block in turn.  It sets updateRound based on observing all
+			//   account voting data changes starting from round 0, whether or not
+			//   EnableAccountDataResourceSeparation is set. These nodes will have horizon rows for
+			//   addresses with updateRound set to the round of the last actual voting data change,
+			//   not zero (case 1) or the round of the last account data change (case 2).
 			if cw.onlineAccountCurrent.IsZero() || cw.onlineAccountCurrent != oa.Address {
 				cw.onlineAccountCurrent = oa.Address
-				// If so, is the updateRound for this row beyond the lookback horizon (R-320)? Then set it to 0.
 				if oa.UpdateRound < (cw.accountsRound + 1).SubSaturate(basics.Round(cw.params.MaxBalLookback)) {
-					// We set UpdateRound to 0 here, because not all nodes may agree on the onlineaccounts table
-					// updateRound column value for the oldest "horizon" row for certain addresses, depending on
-					// a node's operating history. This does not have any impact on the correctness of online account
-					// lookups, but is due to changes in the database schema over time:
-					//
-					//   1. For nodes that have been online for a long time, the unlimited assets release (v3.5.1, #3652)
-					//   introduced a BaseAccountData type with an UpdateRound field, consensus-flagged to be zero until
-					//   EnableAccountDataResourceSeparation was enabled in consensus v32. So accounts that have been
-					//   inactive since before consensus v32 will still have zero values for UpdateRound. This behavior
-					//   is consistent for all nodes and validated by the merkle trie generated each catchpoint round.
-					//
-					//   2. The onlineaccounts table, introduced later in v3.9.2 (#4003), uses a migration to populate
-					//   the onlineaccounts table by selecting all online accounts from the accounts table. This migration
-					//   copies the BaseAccountData.UpdateRound field, along with voting data, to set the initial values
-					//   of the onlineaccounts table for each address. After that, the onlineaccounts table's updateRound
-					//   column would only be updated if voting data changed -- so a zero pay or app call would usually
-					//   not result in a new onlineaccounts row with a new updateRound (unless it triggered a balance or
-					//   voting data change).
-					//
-					//   3. Node operators using fast catchup (before v4.0.1) initialize the onlineaccounts table by
-					//   running the same migration introduced in v3.9.2, where updateRound (and account data) comes from
-					//   BaseAccountData. This means fast catchup users could see some addresses have a horizon row with
-					//   an updateRound that was set to zero (case 1), or the round of the last account data change (case 2).
-					//
-					//   4. However, a node catching up from scratch without using fast catchup, running v3.9.2 or later,
-					//   must track the online account history to validate block certificates, and so sets updateRound based
-					//   on observing all account voting data updates starting from round 0 while processing blocks, whether
-					//   or not EnableAccountDataResourceSeparation is set. These nodes will have horizon rows for addresses
-					//   with updateRound set to the round of the last voting data change, not zero (case 1) or the round
-					//   of the last account data change (case 2).
 					oa.UpdateRound = 0
 				}
 			}
