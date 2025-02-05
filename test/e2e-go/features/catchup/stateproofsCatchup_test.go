@@ -271,13 +271,13 @@ func TestSendSigsAfterCatchpointCatchup(t *testing.T) {
 
 	targetCatchpointRound := getFirstCatchpointRound(&consensusParams)
 
-	chunks := downloadCatchpointFile(t, a, primaryNodeAddr, targetCatchpointRound)
-	a.NotEmpty(chunks)
-	validateCatchpointChunks(t, a, chunks, consensusParams)
-
 	catchpointLabel := waitForCatchpointGeneration(t, &fixture, primaryNodeRestClient, targetCatchpointRound)
 	_, err = usingNodeRestClient.Catchup(catchpointLabel, 0)
 	a.NoError(err)
+
+	chunks := downloadCatchpointFile(t, a, primaryNodeAddr, targetCatchpointRound)
+	a.NotEmpty(chunks)
+	validateCatchpointChunks(t, a, chunks, consensusParams)
 
 	err = usingNodeRestClient.WaitForRoundWithTimeout(uint64(targetCatchpointRound) + 1)
 	a.NoError(err)
