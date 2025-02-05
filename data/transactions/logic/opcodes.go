@@ -86,7 +86,7 @@ const spOpcodesVersion = 12 // falcon_verify, sumhash512
 // Unlimited Global Storage opcodes
 const boxVersion = 8 // box_*
 
-type costFn func(stack []stackValue, depth int) int
+type costFn func(stack []stackValue) int
 type costDescriptor struct {
 	baseCost  int
 	chunkCost int
@@ -132,7 +132,7 @@ func (cd *costDescriptor) compute(stack []stackValue) int {
 		cost += cd.chunkCost * basics.DivCeil(count, cd.chunkSize)
 	}
 	if cd.fn != nil {
-		cost += cd.fn(stack, cd.depth)
+		cost += cd.fn(stack)
 	}
 	return cost
 }
@@ -714,29 +714,45 @@ var OpSpecs = []OpSpec{
 	{0x94, "exp", opExp, proto("ii:i"), 4, detDefault()},
 	{0x95, "expw", opExpw, proto("ii:ii"), 4, costly(10)},
 	{0x96, "bsqrt", opBytesSqrt, proto("I:I"), 6, costly(40)},
+	{0x96, "bsqrt", opBytesSqrt, proto("b:b"), fullByteMathVersion, costly(222)},
 	{0x97, "divw", opDivw, proto("iii:i"), 6, detDefault()},
 	{0x98, "sha3_256", opSHA3_256, proto("b:b{32}"), 7, costly(130)},
 	/* Will end up following keccak256 -
 	{0x98, "sha3_256", opSHA3_256, proto("b:b{32}"), ?, costByLength(...)},},
 	*/
-	{0x99, "bmodexp", opBytesModExp, proto("bbb:b"), 12, costByFn(bmodExpCost, "((len(B) * max(len(A), len(C)) ^ 1.63) / 15) + 200")},
+	{0x99, "bmodexp", opBytesModExp, proto("bbb:b"), 12, costByFn(bmodexpCost, "((len(B) * max(len(A), len(C)) ^ 1.63) / 15) + 200")},
 
 	// Byteslice math.
 	{0xa0, "b+", opBytesPlus, proto("II:b"), 4, costly(10).typed(typeByteMath(maxByteMathSize + 1))},
+	{0xa0, "b+", opBytesPlus, proto("bb:b"), fullByteMathVersion, costByFn(bplusCost, "8 + max(len(A), len(B))//16")},
 	{0xa1, "b-", opBytesMinus, proto("II:I"), 4, costly(10)},
+	{0xa1, "b-", opBytesMinus, proto("bb:b"), fullByteMathVersion, costByLength(8, 1, 16, 1)},
 	{0xa2, "b/", opBytesDiv, proto("II:I"), 4, costly(20)},
+	{0xa2, "b/", opBytesDiv, proto("bb:b"), fullByteMathVersion, costly(222)},
 	{0xa3, "b*", opBytesMul, proto("II:b"), 4, costly(20).typed(typeByteMath(maxByteMathSize * 2))},
+	{0xa3, "b*", opBytesMul, proto("bb:b"), fullByteMathVersion, costly(222)},
 	{0xa4, "b<", opBytesLt, proto("II:T"), 4, detDefault()},
+	{0xa4, "b<", opBytesLt, proto("bb:T"), fullByteMathVersion, detDefault()},
 	{0xa5, "b>", opBytesGt, proto("II:T"), 4, detDefault()},
+	{0xa5, "b>", opBytesGt, proto("bb:T"), fullByteMathVersion, detDefault()},
 	{0xa6, "b<=", opBytesLe, proto("II:T"), 4, detDefault()},
+	{0xa6, "b<=", opBytesLe, proto("bb:T"), fullByteMathVersion, detDefault()},
 	{0xa7, "b>=", opBytesGe, proto("II:T"), 4, detDefault()},
+	{0xa7, "b>=", opBytesGe, proto("bb:T"), fullByteMathVersion, detDefault()},
 	{0xa8, "b==", opBytesEq, proto("II:T"), 4, detDefault()},
+	{0xa8, "b==", opBytesEq, proto("bb:T"), fullByteMathVersion, detDefault()},
 	{0xa9, "b!=", opBytesNeq, proto("II:T"), 4, detDefault()},
+	{0xa9, "b!=", opBytesNeq, proto("bb:T"), fullByteMathVersion, detDefault()},
 	{0xaa, "b%", opBytesModulo, proto("II:I"), 4, costly(20)},
+	{0xaa, "b%", opBytesModulo, proto("bb:b"), fullByteMathVersion, costly(222)},
 	{0xab, "b|", opBytesBitOr, proto("bb:b"), 4, costly(6)},
+	{0xab, "b|", opBytesBitOr, proto("bb:b"), fullByteMathVersion, costByLength(1, 1, 32, 0)},
 	{0xac, "b&", opBytesBitAnd, proto("bb:b"), 4, costly(6)},
+	{0xac, "b&", opBytesBitAnd, proto("bb:b"), fullByteMathVersion, costByLength(1, 1, 32, 0)},
 	{0xad, "b^", opBytesBitXor, proto("bb:b"), 4, costly(6)},
+	{0xad, "b^", opBytesBitXor, proto("bb:b"), fullByteMathVersion, costByLength(1, 1, 32, 0)},
 	{0xae, "b~", opBytesBitNot, proto("b:b"), 4, costly(4)},
+	{0xae, "b~", opBytesBitNot, proto("b:b"), fullByteMathVersion, costByLength(1, 1, 32, 0)},
 	{0xaf, "bzero", opBytesZero, proto("i:b"), 4, detDefault().typed(typeBzero)},
 
 	// AVM "effects"

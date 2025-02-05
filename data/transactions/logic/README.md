@@ -445,7 +445,6 @@ bytes on outputs.
 | `b!=` | 0 if A is equal to B, else 1. A and B are interpreted as big-endian unsigned integers |
 | `b%` | A modulo B. A and B are interpreted as big-endian unsigned integers. Fail if B is zero. |
 | `bsqrt` | The largest integer I such that I^2 <= A. A and I are interpreted as big-endian unsigned integers |
-| `bmodexp` | A raised to the Bth power modulo C. A, B and C are interpreted as big-endian unsigned integers limited to 4096 bytes. Fail if C is zero. |
 
 These opcodes operate on the bits of byte-array values.  The shorter
 input array is interpreted as though left padded with zeros until it is the
@@ -468,8 +467,6 @@ these results may contain leading zero bytes.
 | `keccak256` | Keccak256 hash of value A, yields [32]byte |
 | `sha512_256` | SHA512_256 hash of value A, yields [32]byte |
 | `sha3_256` | SHA3_256 hash of value A, yields [32]byte |
-| `sumhash512` | sumhash512 of value A, yields [64]byte |
-| `falcon_verify` | for (data A, compressed-format signature B, pubkey C) verify the signature of data against the pubkey |
 | `ed25519verify` | for (data A, signature B, pubkey C) verify the signature of ("ProgData" \|\| program_hash \|\| data) against the pubkey => {0 or 1} |
 | `ed25519verify_bare` | for (data A, signature B, pubkey C) verify the signature of the data against the pubkey => {0 or 1} |
 | `ecdsa_verify v` | for (data A, signature B, C and pubkey D, E) verify the signature of the data against the pubkey => {0 or 1} |
@@ -642,8 +639,8 @@ Global fields are fields that are common to all the transactions in the group. I
 | 18 | PayoutsEnabled | bool | v11  | Whether block proposal payouts are enabled. |
 | 19 | PayoutsGoOnlineFee | uint64 | v11  | The fee required in a keyreg transaction to make an account incentive eligible. |
 | 20 | PayoutsPercent | uint64 | v11  | The percentage of transaction fees in a block that can be paid to the block proposer. |
-| 21 | PayoutsMinBalance | uint64 | v11  | The minimum algo balance an account must have in the agreement round to receive block payouts in the proposal round. |
-| 22 | PayoutsMaxBalance | uint64 | v11  | The maximum algo balance an account can have in the agreement round to receive block payouts in the proposal round. |
+| 21 | PayoutsMinBalance | uint64 | v11  | The minimum balance an account must have in the agreement round to receive block payouts in the proposal round. |
+| 22 | PayoutsMaxBalance | uint64 | v11  | The maximum balance an account can have in the agreement round to receive block payouts in the proposal round. |
 
 
 **Asset Fields**

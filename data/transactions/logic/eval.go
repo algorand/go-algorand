@@ -51,9 +51,9 @@ const maxStringSize = 4096
 // maxByteMathSize is the limit of byte strings supplied as input to byte math opcodes
 const maxByteMathSize = 64
 
-// bigByteCmpVersion is the first version for which operators like `b==` and
+// fullByteMathVersion is the first version for which operators like `b==` and
 // `b<` are unconstrained by maxByteMathSize
-const bigByteCmpVersion = 12
+const fullByteMathVersion = 12
 
 // maxLogSize is the limit of total log size from n log calls in a program
 const maxLogSize = config.MaxEvalDeltaTotalLogSize
@@ -2221,13 +2221,47 @@ func opBytesBinOp(cx *EvalContext, result *big.Int, op func(x, y *big.Int) *big.
 	return nil
 }
 
+// opBytesFullBinOp is like opBytesBinOp but it allows any size inputs (and
+// therefore must check the size of the output).
+func opBytesFullBinOp(cx *EvalContext, result *big.Int, op func(x, y *big.Int) *big.Int) error {
+	last := len(cx.Stack) - 1
+	prev := last - 1
+
+	rhs := new(big.Int).SetBytes(cx.Stack[last].Bytes)
+	lhs := new(big.Int).SetBytes(cx.Stack[prev].Bytes)
+	op(lhs, rhs) // op's receiver has already been bound to result
+	if result.Sign() < 0 {
+		return errors.New("byte math would have negative result")
+	}
+	cx.Stack[prev].Bytes = result.Bytes()
+	/*
+		if len(cx.Stack[last].Bytes) > maxStringSize {
+			return fmt.Errorf("byte math results would exceed %d bytes", maxStringSize)
+		}
+	*/
+	cx.Stack = cx.Stack[:last]
+	return nil
+}
+
 func opBytesPlus(cx *EvalContext) error {
 	result := new(big.Int)
+	if cx.version >= fullByteMathVersion {
+		return opBytesFullBinOp(cx, result, result.Add)
+	}
 	return opBytesBinOp(cx, result, result.Add)
+}
+
+func bplusCost(stack []stackValue) int {
+	last := len(stack) - 1
+	prev := last - 1
+	return 8 + max(len(stack[last].Bytes), len(stack[prev].Bytes))
 }
 
 func opBytesMinus(cx *EvalContext) error {
 	result := new(big.Int)
+	if cx.version >= fullByteMathVersion {
+		return opBytesFullBinOp(cx, result, result.Sub)
+	}
 	return opBytesBinOp(cx, result, result.Sub)
 }
 
@@ -2241,7 +2275,12 @@ func opBytesDiv(cx *EvalContext) error {
 		}
 		return result.Div(x, y)
 	}
-	err := opBytesBinOp(cx, result, checkDiv)
+	var err error
+	if cx.version >= fullByteMathVersion {
+		err = opBytesFullBinOp(cx, result, checkDiv)
+	} else {
+		err = opBytesBinOp(cx, result, checkDiv)
+	}
 	if err != nil {
 		return err
 	}
@@ -2250,14 +2289,19 @@ func opBytesDiv(cx *EvalContext) error {
 
 func opBytesMul(cx *EvalContext) error {
 	result := new(big.Int)
-	return opBytesBinOp(cx, result, result.Mul)
+	if cx.version < fullByteMathVersion {
+		return opBytesBinOp(cx, result, result.Mul)
+	}
+	return opBytesFullBinOp(cx, result, result.Mul)
 }
 
 func opBytesSqrt(cx *EvalContext) error {
 	last := len(cx.Stack) - 1
 
-	if len(cx.Stack[last].Bytes) > maxByteMathSize {
-		return errors.New("math attempted on large byte-array")
+	if cx.version < fullByteMathVersion {
+		if len(cx.Stack[last].Bytes) > maxByteMathSize {
+			return errors.New("math attempted on large byte-array")
+		}
 	}
 
 	val := new(big.Int).SetBytes(cx.Stack[last].Bytes)
@@ -2279,7 +2323,7 @@ func opBytesLt(cx *EvalContext) error {
 	last := len(cx.Stack) - 1
 	prev := last - 1
 
-	if cx.version < bigByteCmpVersion {
+	if cx.version < fullByteMathVersion {
 		if len(cx.Stack[last].Bytes) > maxByteMathSize || len(cx.Stack[prev].Bytes) > maxByteMathSize {
 			return errors.New("math attempted on large byte-array")
 		}
@@ -2326,7 +2370,7 @@ func opBytesEq(cx *EvalContext) error {
 	last := len(cx.Stack) - 1
 	prev := last - 1
 
-	if cx.version < bigByteCmpVersion {
+	if cx.version < fullByteMathVersion {
 		if len(cx.Stack[last].Bytes) > maxByteMathSize || len(cx.Stack[prev].Bytes) > maxByteMathSize {
 			return errors.New("math attempted on large byte-array")
 		}
@@ -2368,10 +2412,10 @@ func opBytesModExp(cx *EvalContext) error {
 	return nil
 }
 
-func bmodExpCost(stack []stackValue, depth int) int {
-	last := len(stack) - depth - 1 // mod
-	prev := last - depth - 1       // exp
-	pprev := last - depth - 2      // base
+func bmodexpCost(stack []stackValue) int {
+	last := len(stack) - 1 // mod
+	prev := last - 1       // exp
+	pprev := last - 2      // base
 
 	// Empirically estimated cost function constants
 	const (
@@ -2400,7 +2444,12 @@ func opBytesModulo(cx *EvalContext) error {
 		}
 		return result.Mod(x, y)
 	}
-	err := opBytesBinOp(cx, result, checkMod)
+	var err error
+	if cx.version >= fullByteMathVersion {
+		err = opBytesFullBinOp(cx, result, checkMod)
+	} else {
+		err = opBytesBinOp(cx, result, checkMod)
+	}
 	if err != nil {
 		return err
 	}
@@ -5274,6 +5323,9 @@ func (cx *EvalContext) availableAsset(aid basics.AssetIndex) bool {
 		if assetID == aid {
 			return true
 		}
+	}
+	if slices.Contains(cx.txn.Txn.ForeignAssets, aid) {
+		return true
 	}
 	// or was created in group
 	if cx.version >= createdResourcesVersion {

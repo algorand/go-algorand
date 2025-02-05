@@ -3980,80 +3980,136 @@ main:
 	}
 }
 
-func BenchmarkByteLogic(b *testing.B) {
-	e64 := "byte 0x8090a0b0c0d0e0f0;"
-	o64 := "byte 0x1020304050607080;"
-	hex128e := "90a0b0c0d0e0f0001020304050607080"
-	hex128o := "102030405060708090a0b0c0d0e0f000"
-	e128 := "byte 0x" + strings.Repeat(hex128e, 1) + ";"
-	o128 := "byte 0x" + strings.Repeat(hex128o, 1) + ";"
-	e256 := "byte 0x" + strings.Repeat(hex128e, 2) + ";"
-	o256 := "byte 0x" + strings.Repeat(hex128o, 2) + ";"
-	e512 := "byte 0x" + strings.Repeat(hex128e, 4) + ";"
-	o512 := "byte 0x" + strings.Repeat(hex128o, 4) + ";"
-
-	benches := [][]string{
-		{"b& 8", "", e64 + o64 + "b&; pop", "int 1"},
-		{"b| 8", "", e64 + o64 + "b|; pop", "int 1"},
-		{"b^ 8", "", e64 + o64 + "b^; pop", "int 1"},
-		{"b~ 8", e64, "b~", "pop; int 1"},
-
-		{"b& 16", "", e128 + o128 + "b&; pop", "int 1"},
-		{"b| 16", "", e128 + o128 + "b|; pop", "int 1"},
-		{"b^ 16", "", e128 + o128 + "b^; pop", "int 1"},
-		{"b~ 16", e128, "b~", "pop; int 1"},
-
-		{"b& 32", "", e256 + o256 + "b&; pop", "int 1"},
-		{"b| 32", "", e256 + o256 + "b|; pop", "int 1"},
-		{"b^ 32", "", e256 + o256 + "b^; pop", "int 1"},
-		{"b~ 32", e256, "b~", "pop; int 1"},
-
-		{"b& 64", "", e512 + o512 + "b&; pop", "int 1"},
-		{"b| 64", "", e512 + o512 + "b|; pop", "int 1"},
-		{"b^ 64", "", e512 + o512 + "b^; pop", "int 1"},
-		{"b~ 64", e512, "b~", "pop; int 1"},
-	}
-	for _, bench := range benches {
-		b.Run(bench[0], func(b *testing.B) {
+// bigint multiply ought to have a weird cost function because Karatsuba kicks at 40 Words (320 bytes)
+func BenchmarkBytesMul(b *testing.B) {
+	for i := range 32 {
+		size := i * 64
+		b.Run(fmt.Sprintf("b* %d", size), func(b *testing.B) {
 			b.ReportAllocs()
-			benchmarkOperation(b, bench[1], bench[2], bench[3])
+			benchmarkOperation(b, "", "byte "+randBytes(size)+"; byte "+randBytes(size)+";b*;pop", "int 1")
 		})
 	}
 }
 
+func BenchmarkBytesSqrt(b *testing.B) {
+	for i := range 64 {
+		size := i * 64
+		b.Run(fmt.Sprintf("bqsrt %d", size), func(b *testing.B) {
+			b.ReportAllocs()
+			benchmarkOperation(b, "", "byte "+randBytes(size)+";bsqrt;pop", "int 1")
+		})
+	}
+}
+
+func BenchmarkBytesMulDifferingSizes(b *testing.B) {
+	for awords := 1; awords <= 40; awords++ {
+		product := 32 * 32
+		bwords := product / awords
+		if bwords > 40 {
+			continue
+		}
+		b.Run(fmt.Sprintf("b* %d-%d", awords, bwords), func(b *testing.B) {
+			b.ReportAllocs()
+			benchmarkOperation(b, "", "byte "+randBytes(8*awords)+"; byte "+randBytes(8*bwords)+";b*;pop", "int 1")
+		})
+	}
+}
+
+func BenchmarkFindWorstBytesDiv(b *testing.B) {
+	for divisor := 4096; divisor > 0; divisor -= 128 {
+		b.Run(fmt.Sprintf("b/ %d", divisor), func(b *testing.B) {
+			b.ReportAllocs()
+			benchmarkOperation(b, "", "byte "+randBytes(4096)+"; byte "+randBytes(divisor)+";b/;pop", "int 1")
+		})
+	}
+}
+
+func BenchmarkFindWorstBytesMod(b *testing.B) {
+	for _, big := range []int{128, 512, 2096} {
+		for divisor := big; divisor > 0; divisor -= (big / 10) {
+			b.Run(fmt.Sprintf("b%% %d %d", big, divisor), func(b *testing.B) {
+				b.ReportAllocs()
+				benchmarkOperation(b, "", "byte "+randBytes(big)+"; byte "+randBytes(divisor)+";b%;pop", "int 1")
+			})
+		}
+	}
+}
+
+func BenchmarkBinaryByteLogic(b *testing.B) {
+	for i := range 16 {
+		size := i * 64
+		for _, op := range []string{"b&", "b|", "b^"} {
+			b.Run(fmt.Sprintf("%s %d", op, size), func(b *testing.B) {
+				b.ReportAllocs()
+				benchmarkOperation(b, "", "byte "+randBytes(size)+"; byte "+randBytes(size)+";"+op+";pop", "int 1")
+			})
+		}
+	}
+}
+
+func BenchmarkByteNot(b *testing.B) {
+	for i := range 16 {
+		size := i * 64
+		b.Run(fmt.Sprintf("b~ %d", size), func(b *testing.B) {
+			b.ReportAllocs()
+			benchmarkOperation(b, "byte "+randBytes(size), "b~", "pop; int 1")
+		})
+	}
+}
+
+// randBytes generates a random byte constant of length `length`
+func randBytes(length int) string {
+	bytes := make([]byte, length)
+	rand.Read(bytes)
+	return fmt.Sprintf("0x%x", bytes)
+}
+
+// chunk emits one `byte` statement creating a byte string with `count` (64 bit) words
+func chunk(count int) string {
+	buf := make([]byte, 8*count)
+	rand.Read(buf)
+	word := "7090a0b0c0d0e0f0" // enough hex for one 64bit word, small enough to add without overflow
+	return "byte 0x" + strings.Repeat(word, count) + ";"
+}
+
 func BenchmarkByteMath(b *testing.B) {
-	u64 := "byte 0x8090a0b0c0d0e0f0;"
-	hex128 := "102030405060708090a0b0c0d0e0f000"
-	u128 := "byte 0x" + strings.Repeat(hex128, 1) + ";"
-	u256 := "byte 0x" + strings.Repeat(hex128, 2) + ";"
-	u512 := "byte 0x" + strings.Repeat(hex128, 4) + ";"
-
 	benches := [][]string{
-		{"bytec", u128 + "pop"},
+		{"bytec", chunk(2) + "pop"},
 
-		{"b+ 128", u128 + u128 + "b+; pop"},
-		{"b- 128", u128 + u128 + "b-; pop"},
-		{"b* 128", u128 + u128 + "b*; pop"},
+		{"b+ 1w", chunk(1) + chunk(1) + "b+; pop"},
+		{"b- 1w", chunk(1) + chunk(1) + "b-; pop"},
+		{"b* 1w", chunk(1) + chunk(1) + "b*; pop"},
 		// half sized divisor seems pessimal for / and %
-		{"b/ 128", u128 + u64 + "b/; pop"},
-		{"b% 128", u128 + u64 + "b%; pop"},
-		{"bsqrt 128", u128 + "bsqrt; pop"},
+		{"b/ 1w", chunk(1) + "byte 0x8090a0b0;" + "b/; pop"},
+		{"b% 1w", chunk(1) + "byte 0x8090a0b0;" + "b%; pop"},
+		{"bsqrt 1w", chunk(1) + "bsqrt; pop"},
 
-		{"b+ 256", u256 + u256 + "b+; pop"},
-		{"b- 256", u256 + u256 + "b-; pop"},
-		{"b* 256", u256 + u256 + "b*; pop"},
-		{"b/ 256", u256 + u128 + "b/; pop"},
-		{"b% 256", u256 + u128 + "b%; pop"},
-		{"bsqrt 256", u256 + "bsqrt; pop"},
+		// maximum sizes, pre fullByteMathVersion
+		{"b+ 8w", chunk(8) + chunk(8) + "b+; pop"},
+		{"b- 8w", chunk(8) + chunk(8) + "b-; pop"},
+		{"b+ 8w4w", chunk(8) + chunk(4) + "b+; pop"},
+		{"b- 8w4w", chunk(8) + chunk(4) + "b-; pop"},
+		{"b* 8w", chunk(8) + chunk(8) + "b*; pop"},
+		{"b/ 8w", chunk(8) + chunk(4) + "b/; pop"},
+		{"b% 8w", chunk(8) + chunk(4) + "b%; pop"},
+		{"bsqrt 8w", chunk(8) + "bsqrt; pop"},
 
-		{"b+ 512", u512 + u512 + "b+; pop"},
-		{"b- 512", u512 + u512 + "b-; pop"},
-		{"b* 512", u512 + u512 + "b*; pop"},
-		{"b/ 512", u512 + u256 + "b/; pop"},
-		{"b% 512", u512 + u256 + "b%; pop"},
-		{"bsqrt 512", u512 + "bsqrt; pop"},
+		{"b+ 16w", chunk(16) + chunk(16) + "b+; pop"},
+		{"b- 16w", chunk(16) + chunk(16) + "b-; pop"},
+		{"b+ 16w8w", chunk(16) + chunk(8) + "b+; pop"},
+		{"b- 18w8w", chunk(16) + chunk(8) + "b-; pop"},
 
-		{"bytec recheck", u128 + "pop"},
+		{"b+ 64w", chunk(64) + chunk(64) + "b+; pop"},
+		{"b- 64w", chunk(64) + chunk(64) + "b-; pop"},
+		{"b+ 64w32w", chunk(64) + chunk(32) + "b+; pop"},
+		{"b- 64w32w", chunk(64) + chunk(32) + "b-; pop"},
+
+		{"b+ 512w", chunk(512) + chunk(512) + "b+; pop"},
+		{"b- 512w", chunk(512) + chunk(512) + "b-; pop"},
+		{"b+ 512w1w", chunk(512) + chunk(1) + "b+; pop"},
+		{"b+ 1w512w", chunk(1) + chunk(512) + "b+; pop"},
+		{"b- 512w1w", chunk(512) + chunk(1) + "b-; pop"},
+		{"bytec recheck", chunk(2) + "pop"},
 	}
 	for _, bench := range benches {
 		b.Run(bench[0], func(b *testing.B) {
@@ -4069,7 +4125,7 @@ func BenchmarkByteCompare(b *testing.B) {
 	u128 := "byte 0x" + strings.Repeat(hex128, 1) + ";"
 	u256 := "byte 0x" + strings.Repeat(hex128, 2) + ";"
 	u512 := "byte 0x" + strings.Repeat(hex128, 4) + ";"
-	//u4k := "byte 0x" + strings.Repeat(hex128, 256) + ";"
+	u4k := "byte 0x" + strings.Repeat(hex128, 256) + ";"
 
 	benches := [][]string{
 		{"b== 64", u64 + u64 + "b==; pop"},
@@ -4087,9 +4143,9 @@ func BenchmarkByteCompare(b *testing.B) {
 		// These can only be run with the maxByteMathSize check removed. They
 		// show that we can remove that check in a later AVM version, as there
 		// is no appreciable cost to even a 4k compare.
-		// {"b== 4k", u4k + u4k + "b==; pop"},
-		// {"b< 4k", u4k + u4k + "b<; pop"},
-		// {"b<= 4k", u4k + u4k + "b<=; pop"},
+		{"b== 4k", u4k + u4k + "b==; pop"},
+		{"b< 4k", u4k + u4k + "b<; pop"},
+		{"b<= 4k", u4k + u4k + "b<=; pop"},
 	}
 	for _, bench := range benches {
 		b.Run(bench[0], func(b *testing.B) {
@@ -5132,13 +5188,6 @@ func BenchmarkBytesModExp(b *testing.B) {
 		Name     string
 	}
 
-	// Function to generate a random hex string of a specified length in bytes
-	generateRandomHexString := func(length int) string {
-		bytes := make([]byte, length)
-		rand.Read(bytes)
-		return fmt.Sprintf("0x%x", bytes)
-	}
-
 	// Define the accepted test vectors using nested loops
 	modexpTestVectors := []ModexpTestVector{}
 	incr := 128
@@ -5148,21 +5197,21 @@ func BenchmarkBytesModExp(b *testing.B) {
 			for modLen := incr; modLen <= maxDim; modLen += incr {
 				modexpTestVectors = append(modexpTestVectors, ModexpTestVector{
 					Name:     fmt.Sprintf(`TestVector_Dim(%d,%d,%d)`, baseLen, expLen, modLen),
-					Base:     generateRandomHexString(baseLen),
-					Exponent: generateRandomHexString(expLen),
-					Modulus:  generateRandomHexString(modLen),
+					Base:     randBytes(baseLen),
+					Exponent: randBytes(expLen),
+					Modulus:  randBytes(modLen),
 				})
 			}
 		}
 	}
 	b.Run("bmod_cost", func(b *testing.B) {
 		b.ReportAllocs()
-		progText := fmt.Sprintf(`byte %s; byte %s;`, generateRandomHexString(64), generateRandomHexString(64)) + " b%; pop"
+		progText := fmt.Sprintf(`byte %s; byte %s;`, randBytes(64), randBytes(64)) + " b%; pop"
 		benchmarkOperation(b, "", progText, "int 1")
 	})
 	b.Run("max_bmodexp_cost", func(b *testing.B) {
 		b.ReportAllocs()
-		progText := fmt.Sprintf(`byte %s; byte %s; byte %s; bmodexp; pop`, generateRandomHexString(4096), generateRandomHexString(4096), generateRandomHexString(4096))
+		progText := fmt.Sprintf(`byte %s; byte %s; byte %s; bmodexp; pop`, randBytes(4096), randBytes(4096), randBytes(4096))
 		benchmarkOperation(b, "", progText, "int 1")
 	})
 	// Iterate through the test vectors and benchmark the bmodexp computation
@@ -5253,8 +5302,12 @@ func TestBytesMath(t *testing.T) {
 	effs := strings.Repeat("ff", 64)
 	// 64 byte long inputs are accepted, even if they produce longer outputs
 	testAccepts(t, fmt.Sprintf("byte 0x%s; byte 0x10; b+; len; int 65; ==", effs), 4)
-	// 65 byte inputs are not ok.
-	testPanics(t, NoTrack(fmt.Sprintf("byte 0x%s00; byte 0x10; b-; len; int 65; ==", effs)), 4)
+	// 4096 byte inputs that sum to 4097 byte outputs panic, no matter the version.
+	testPanics(t, notrack(fmt.Sprintf("byte 0x%s; byte 0x10; b+; len; int 4097; ==", strings.Repeat("ff", 4096))), 4)
+	// 65 byte inputs are not ok until v12.
+	p := fmt.Sprintf("byte 0x%s00; byte 0x10; b-; len; int 65; ==", effs)
+	testPanicRange(t, notrack(p), 4, 11)
+	testAcceptRange(t, p, 12, AssemblerMaxVersion)
 
 	testAccepts(t, `byte 0x01; byte 0x01; b-; byte ""; ==`, 4)
 	testAccepts(t, "byte 0x0200; byte 0x01; b-; byte 0x01FF; ==", 4)
@@ -5279,7 +5332,7 @@ func TestBytesMath(t *testing.T) {
 	testAccepts(t, "byte 0x10; bsqrt; byte 0x04; ==; return", 6)
 	testAccepts(t, "byte 0x11; bsqrt; byte 0x04; ==; return", 6)
 	testAccepts(t, "byte 0xffffff; bsqrt; len; int 2; ==; return", 6)
-	// 64 byte long inputs are accepted, even if they produce longer outputs
+	// 64 byte long inputs are accepted
 	testAccepts(t, fmt.Sprintf("byte 0x%s; bsqrt; len; int 32; ==", effs), 6)
 	// 65 byte inputs are not ok (no track allows assembly)
 	testPanics(t, notrack(fmt.Sprintf("byte 0x%s00; bsqrt; pop; int 1", effs)), 6)
@@ -5375,7 +5428,7 @@ func TestBytesBits(t *testing.T) {
 	testAccepts(t, "int 33; bzero; byte 0x000000000000000000000000000000000000000000000000000000000000000000; ==", 4)
 
 	testAccepts(t, "int 4096; bzero; len; int 4096; ==", 4)
-	testPanics(t, NoTrack("int 4097; bzero; len; int 4097; =="), 4)
+	testPanics(t, notrack("int 4097; bzero; len; int 4097; =="), 4)
 }
 
 func TestBytesConversions(t *testing.T) {
