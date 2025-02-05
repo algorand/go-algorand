@@ -5179,7 +5179,7 @@
           "blockHeader": {
             "description": "Block header data.",
             "type": "object",
-            "x-algorand-format": "BlockHeader"
+            "x-algorand-format": "BlockHeaderResponse"
           }
         }
       }
