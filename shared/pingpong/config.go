@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"time"
 
 	"github.com/algorand/go-algorand/util/codecs"
@@ -192,14 +193,7 @@ var accountSampleMethods = []string{
 
 // Check returns an error if config is invalid.
 func (cfg *PpConfig) Check() error {
-	sampleOk := false
-	for _, v := range accountSampleMethods {
-		if v == cfg.GeneratedAccountSampleMethod {
-			sampleOk = true
-			break
-		}
-	}
-	if !sampleOk {
+	if !slices.Contains(accountSampleMethods, cfg.GeneratedAccountSampleMethod) {
 		return fmt.Errorf("unknown GeneratedAccountSampleMethod: %s", cfg.GeneratedAccountSampleMethod)
 	}
 	if cfg.DeterministicKeys && (cfg.GeneratedAccountsOffset+uint64(cfg.NumPartAccounts) > cfg.GeneratedAccountsCount) {

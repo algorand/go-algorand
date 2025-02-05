@@ -23,6 +23,7 @@ import (
 	"net"
 	"os"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 
@@ -439,13 +440,7 @@ func checkedDelete(toDelete []cloudflare.DNSRecordResponseEntry, cloudflareDNS *
 
 func getEntries(getNetwork string, recordType string) ([]cloudflare.DNSRecordResponseEntry, error) {
 	recordTypes := []string{"A", "CNAME", "SRV", "TXT"}
-	isKnown := false
-	for _, known := range append(recordTypes, "") {
-		if recordType == known {
-			isKnown = true
-			break
-		}
-	}
+	isKnown := slices.Contains(recordTypes, recordType) || recordType == ""
 	if !isKnown {
 		return nil, fmt.Errorf("invalid recordType specified %s", recordType)
 	}
