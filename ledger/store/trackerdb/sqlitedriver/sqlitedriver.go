@@ -211,9 +211,9 @@ func (r *sqlReader) MakeKVsIter(ctx context.Context) (trackerdb.KVsIter, error) 
 	return MakeKVsIter(ctx, r.q)
 }
 
-// MakeOnlineAccountsIter implements trackerdb.Reader
-func (r *sqlReader) MakeOnlineAccountsIter(ctx context.Context, useStaging bool, excludeBefore basics.Round) (trackerdb.TableIterator[*encoded.OnlineAccountRecordV6], error) {
-	return MakeOnlineAccountsIter(ctx, r.q, useStaging, excludeBefore)
+// MakeOrderedOnlineAccountsIter implements trackerdb.Reader
+func (r *sqlReader) MakeOrderedOnlineAccountsIter(ctx context.Context, useStaging bool, excludeBefore basics.Round) (trackerdb.TableIterator[*encoded.OnlineAccountRecordV6], error) {
+	return MakeOrderedOnlineAccountsIter(ctx, r.q, useStaging, excludeBefore)
 }
 
 // MakeOnlineRoundParamsIter implements trackerdb.Reader

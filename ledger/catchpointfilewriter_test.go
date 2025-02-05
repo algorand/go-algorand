@@ -149,7 +149,15 @@ func verifyStateProofVerificationContextWrite(t *testing.T, data []ledgercore.St
 	require.NoError(t, err)
 
 	err = ml.trackerDB().Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
-		writer, err := makeCatchpointFileWriter(context.Background(), protoParams, fileName, tx, ResourcesPerCatchpointFileChunk, 0)
+		ar, err := tx.MakeAccountsReader()
+		if err != nil {
+			return err
+		}
+		accountsRnd, err := ar.AccountsRound()
+		if err != nil {
+			return err
+		}
+		writer, err := makeCatchpointFileWriter(context.Background(), protoParams, fileName, tx, ResourcesPerCatchpointFileChunk, accountsRnd, 0)
 		if err != nil {
 			return err
 		}
@@ -172,6 +180,7 @@ func verifyStateProofVerificationContextWrite(t *testing.T, data []ledgercore.St
 		}
 		return
 	})
+	require.NoError(t, err)
 
 	catchpointData := readCatchpointDataFile(t, fileName)
 	require.Equal(t, catchpointSPVerificationFileName, catchpointData[0].headerName)
@@ -264,7 +273,15 @@ func TestBasicCatchpointWriter(t *testing.T) {
 	fileName := filepath.Join(temporaryDirectory, "15.data")
 
 	err = ml.trackerDB().Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
-		writer, err := makeCatchpointFileWriter(context.Background(), protoParams, fileName, tx, ResourcesPerCatchpointFileChunk, 0)
+		ar, err := tx.MakeAccountsReader()
+		if err != nil {
+			return err
+		}
+		accountsRnd, err := ar.AccountsRound()
+		if err != nil {
+			return err
+		}
+		writer, err := makeCatchpointFileWriter(context.Background(), protoParams, fileName, tx, ResourcesPerCatchpointFileChunk, accountsRnd, 0)
 		if err != nil {
 			return err
 		}
@@ -286,6 +303,7 @@ func TestBasicCatchpointWriter(t *testing.T) {
 		}
 		return
 	})
+	require.NoError(t, err)
 
 	catchpointContent := readCatchpointDataFile(t, fileName)
 	balanceFileName := fmt.Sprintf(catchpointBalancesFileNameTemplate, 1)
@@ -307,15 +325,19 @@ func testWriteCatchpoint(t *testing.T, params config.ConsensusParams, rdb tracke
 	}
 
 	err := rdb.Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
-		writer, err := makeCatchpointFileWriter(context.Background(), params, datapath, tx, maxResourcesPerChunk, onlineExcludeBefore)
-		if err != nil {
-			return err
-		}
-
 		ar, err := tx.MakeAccountsReader()
 		if err != nil {
 			return err
 		}
+		accountsRnd, err = ar.AccountsRound()
+		if err != nil {
+			return
+		}
+		writer, err := makeCatchpointFileWriter(context.Background(), params, datapath, tx, maxResourcesPerChunk, accountsRnd, onlineExcludeBefore)
+		if err != nil {
+			return err
+		}
+
 		rawData, err := tx.MakeSpVerificationCtxReader().GetAllSPContexts(ctx)
 		if err != nil {
 			return err
@@ -338,10 +360,6 @@ func testWriteCatchpoint(t *testing.T, params config.ConsensusParams, rdb tracke
 		totalOnlineRoundParams = writer.totalOnlineRoundParams
 		totalChunks = writer.chunkNum
 		biggestChunkLen = writer.biggestChunkLen
-		accountsRnd, err = ar.AccountsRound()
-		if err != nil {
-			return
-		}
 		totals, err = ar.AccountsTotals(ctx, false)
 		return
 	})
@@ -440,13 +458,16 @@ func TestCatchpointReadDatabaseOverflowSingleAccount(t *testing.T) {
 		totalAccountsWritten := uint64(0)
 		totalResources := 0
 		totalChunks := 0
-		cw, err := makeCatchpointFileWriter(context.Background(), protoParams, catchpointDataFilePath, tx, maxResourcesPerChunk, 0)
-		require.NoError(t, err)
-
 		ar, err := tx.MakeAccountsReader()
 		if err != nil {
 			return err
 		}
+		accountsRnd, err := ar.AccountsRound()
+		if err != nil {
+			return
+		}
+		cw, err := makeCatchpointFileWriter(context.Background(), protoParams, catchpointDataFilePath, tx, maxResourcesPerChunk, accountsRnd, 0)
+		require.NoError(t, err)
 
 		expectedTotalResources, err := ar.TotalResources(ctx)
 		if err != nil {
@@ -546,7 +567,13 @@ func TestCatchpointReadDatabaseOverflowAccounts(t *testing.T) {
 
 		totalAccountsWritten := uint64(0)
 		totalResources := 0
-		cw, err := makeCatchpointFileWriter(context.Background(), protoParams, catchpointDataFilePath, tx, maxResourcesPerChunk, 0)
+
+		accountsRnd, err := ar.AccountsRound()
+		if err != nil {
+			return err
+		}
+
+		cw, err := makeCatchpointFileWriter(context.Background(), protoParams, catchpointDataFilePath, tx, maxResourcesPerChunk, accountsRnd, 0)
 		require.NoError(t, err)
 
 		// repeat this until read all accts
@@ -818,7 +845,7 @@ func TestFullCatchpointWriter(t *testing.T) {
 // ensure both committed all pending changes before taking a catchpoint
 // another approach is to modify the test and craft round numbers,
 // and make the ledger to generate catchpoint itself when it is time
-func testCatchpointFlushRound(l *Ledger) basics.Round {
+func testCatchpointFlushRound(l *Ledger) (basics.Round, basics.Round) {
 	// Clear the timer to ensure a flush
 	l.trackers.mu.Lock()
 	l.trackers.lastFlushTime = time.Time{}
@@ -827,7 +854,7 @@ func testCatchpointFlushRound(l *Ledger) basics.Round {
 	r, _ := l.LatestCommitted()
 	l.trackers.committedUpTo(r)
 	l.trackers.waitAccountsWriting()
-	return r
+	return r, l.LatestTrackerCommitted()
 }
 
 func TestExactAccountChunk(t *testing.T) {
@@ -876,8 +903,8 @@ func testExactAccountChunk(t *testing.T, proto protocol.ConsensusVersion, extraB
 		dl.fullBlock(&selfpay)
 	}
 
-	genR := testCatchpointFlushRound(dl.generator)
-	valR := testCatchpointFlushRound(dl.validator)
+	genR, _ := testCatchpointFlushRound(dl.generator)
+	valR, _ := testCatchpointFlushRound(dl.validator)
 	require.Equal(t, genR, valR)
 	require.EqualValues(t, BalancesPerCatchpointFileChunk-12+extraBlocks, genR)
 
@@ -1056,6 +1083,47 @@ func TestCatchpointAfterTxns(t *testing.T) {
 	}
 }
 
+type catchpointOnlineAccountsIterWrapper struct {
+	ts                   trackerdb.Store
+	iter                 trackerdb.TableIterator[*encoded.OnlineAccountRecordV6]
+	onlineAccountCurrent basics.Address
+	accountsRound        basics.Round
+	params               config.ConsensusParams
+}
+
+// makeCatchpointOrderedOnlineAccountsIter wraps normal MakeOrderedOnlineAccountsIter iterator
+// in order to manipulate the update round number to simulate the catchpoint generation process.
+func (i *catchpointOnlineAccountsIterWrapper) makeCatchpointOrderedOnlineAccountsIter(
+	ctx context.Context, useStaging bool, excludeBefore basics.Round,
+) (trackerdb.TableIterator[*encoded.OnlineAccountRecordV6], error) {
+	var err error
+	i.iter, err = i.ts.MakeOrderedOnlineAccountsIter(ctx, useStaging, excludeBefore)
+	if err != nil {
+		return nil, err
+	}
+
+	return i, nil
+}
+
+func (i *catchpointOnlineAccountsIterWrapper) Next() bool { return i.iter.Next() }
+func (i *catchpointOnlineAccountsIterWrapper) Close()     { i.iter.Close() }
+func (i *catchpointOnlineAccountsIterWrapper) GetItem() (*encoded.OnlineAccountRecordV6, error) {
+	item, err := i.iter.GetItem()
+	if err != nil {
+		return nil, err
+	}
+
+	// this is the same condition as in catchpointFileWriter.readDatabaseStep
+	if i.onlineAccountCurrent.IsZero() || i.onlineAccountCurrent != item.Address {
+		i.onlineAccountCurrent = item.Address
+		// If so, is the updateRound for this row beyond the lookback horizon (R-320)? Then set it to 0.
+		if item.UpdateRound < (i.accountsRound + 1).SubSaturate(basics.Round(i.params.MaxBalLookback)) {
+			item.UpdateRound = 0
+		}
+	}
+	return item, nil
+}
+
 func TestCatchpointAfterStakeLookupTxns(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -1167,9 +1235,21 @@ assert
 	t.Log("DB round generator", genDBRound, "validator", valDBRound)
 	t.Log("Latest round generator", genLatestRound, "validator", valLatestRound)
 
-	genOAHash, genOARows, err := calculateVerificationHash(context.Background(), dl.generator.trackerDB().MakeOnlineAccountsIter, 0, false)
+	oaGenIterWrapper := catchpointOnlineAccountsIterWrapper{
+		ts:            dl.generator.trackerDB(),
+		accountsRound: genDBRound,
+		params:        config.Consensus[proto],
+	}
+
+	oaValIterWrapper := catchpointOnlineAccountsIterWrapper{
+		ts:            dl.validator.trackerDB(),
+		accountsRound: valDBRound,
+		params:        config.Consensus[proto],
+	}
+
+	genOAHash, genOARows, err := calculateVerificationHash(context.Background(), oaGenIterWrapper.makeCatchpointOrderedOnlineAccountsIter, 0, false)
 	require.NoError(t, err)
-	valOAHash, valOARows, err := calculateVerificationHash(context.Background(), dl.validator.trackerDB().MakeOnlineAccountsIter, 0, false)
+	valOAHash, valOARows, err := calculateVerificationHash(context.Background(), oaValIterWrapper.makeCatchpointOrderedOnlineAccountsIter, 0, false)
 	require.NoError(t, err)
 	require.Equal(t, genOAHash, valOAHash)
 	require.NotZero(t, genOAHash)
@@ -1195,7 +1275,7 @@ assert
 	l := testNewLedgerFromCatchpoint(t, dl.generator.trackerDB(), catchpointFilePath)
 	defer l.Close()
 
-	catchpointOAHash, catchpointOARows, err := calculateVerificationHash(context.Background(), l.trackerDBs.MakeOnlineAccountsIter, 0, false)
+	catchpointOAHash, catchpointOARows, err := calculateVerificationHash(context.Background(), l.trackerDBs.MakeOrderedOnlineAccountsIter, 0, false)
 	require.NoError(t, err)
 	require.Equal(t, genOAHash, catchpointOAHash)
 	t.Log("catchpoint onlineaccounts hash", catchpointOAHash, "matches")
@@ -1301,4 +1381,72 @@ func TestCatchpointAfterBoxTxns(t *testing.T) {
 	v, err := l.LookupKv(l.Latest(), apps.MakeBoxKey(uint64(boxApp), "xxx"))
 	require.NoError(t, err)
 	require.Equal(t, strings.Repeat("f", 24), string(v))
+}
+
+func TestCatchpointOnlineAccountUpdateRound(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// Create genesis with one online account
+	genBalances, addrs, _ := ledgertesting.NewTestGenesis(func(cfg *ledgertesting.GenesisCfg) {
+		cfg.OnlineCount = 1
+		ledgertesting.TurnOffRewards(cfg)
+	})
+
+	cfg := config.GetDefaultLocal()
+	proto := protocol.ConsensusFuture
+	l := newSimpleLedgerWithConsensusVersion(t, genBalances, proto, cfg, simpleLedgerOnDisk())
+	defer l.Close()
+
+	pay := txntest.Txn{
+		Type:     "pay",
+		Sender:   addrs[0],
+		Receiver: addrs[1],
+		Amount:   1,
+	}
+
+	// Add blocks until round 400 (well past MaxBalLookback of 320)
+	for i := 0; i < 450; i++ {
+		eval := nextBlock(t, l)
+		pay.Note = []byte(strconv.Itoa(i))
+		txn(t, l, eval, &pay)
+		endBlock(t, l, eval)
+	}
+
+	_, dbRound := testCatchpointFlushRound(l)
+	require.Greater(t, dbRound, basics.Round(320))
+
+	tempDir := t.TempDir()
+	catchpointDataFilePath := filepath.Join(tempDir, t.Name()+".data")
+	catchpointFilePath := filepath.Join(tempDir, t.Name()+".catchpoint.tar.gz")
+
+	testWriteCatchpoint(t, config.Consensus[proto], l.trackerDB(), catchpointDataFilePath, catchpointFilePath, 0, 0)
+	catchpointContent := readCatchpointFile(t, catchpointFilePath)
+
+	var zeroUpdateRounds int
+	var nonZeroUpdateRounds int
+	var lastUpdateRound basics.Round
+	for _, section := range catchpointContent {
+		if strings.HasPrefix(section.headerName, "balances.") {
+			var chunk CatchpointSnapshotChunkV6
+			err := protocol.Decode(section.data, &chunk)
+			require.NoError(t, err)
+
+			for _, oa := range chunk.OnlineAccounts {
+				if oa.Address == addrs[0] {
+					if oa.UpdateRound == 0 {
+						zeroUpdateRounds++
+					} else {
+						nonZeroUpdateRounds++
+						if oa.UpdateRound > lastUpdateRound {
+							lastUpdateRound = oa.UpdateRound
+						}
+					}
+				}
+			}
+		}
+	}
+	require.Equal(t, 1, zeroUpdateRounds, "expected single update round")
+	require.Greater(t, nonZeroUpdateRounds, 1, "expected multiple non-zero update rounds")
+	require.Equal(t, dbRound, lastUpdateRound, "expected last update round to match DB round")
 }

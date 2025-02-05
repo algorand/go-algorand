@@ -256,7 +256,7 @@ func (ct *catchpointTracker) finishFirstStage(ctx context.Context, dbRound basic
 		// Generate hashes of the onlineaccounts and onlineroundparams tables.
 		err := ct.dbs.Snapshot(func(ctx context.Context, tx trackerdb.SnapshotScope) error {
 			var dbErr error
-			onlineAccountsHash, _, dbErr = calculateVerificationHash(ctx, tx.MakeOnlineAccountsIter, onlineExcludeBefore, false)
+			onlineAccountsHash, _, dbErr = calculateVerificationHash(ctx, tx.MakeOrderedOnlineAccountsIter, onlineExcludeBefore, false)
 			if dbErr != nil {
 				return dbErr
 
@@ -1255,7 +1255,7 @@ func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, params 
 	start := time.Now()
 	ledgerGeneratecatchpointCount.Inc(nil)
 	err = ct.dbs.SnapshotContext(ctx, func(dbCtx context.Context, tx trackerdb.SnapshotScope) (err error) {
-		catchpointWriter, err = makeCatchpointFileWriter(dbCtx, params, catchpointDataFilePath, tx, ResourcesPerCatchpointFileChunk, onlineExcludeBefore)
+		catchpointWriter, err = makeCatchpointFileWriter(dbCtx, params, catchpointDataFilePath, tx, ResourcesPerCatchpointFileChunk, accountsRound, onlineExcludeBefore)
 		if err != nil {
 			return
 		}

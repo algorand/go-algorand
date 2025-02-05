@@ -79,12 +79,12 @@ func (iter *tableIterator[T]) GetItem() (T, error) {
 	return iter.scan(iter.rows)
 }
 
-// MakeOnlineAccountsIter creates an onlineAccounts iterator, used by the catchpoint system to dump the
-// onlineaccounts table to a catchpoint snapshot file.
+// MakeOrderedOnlineAccountsIter creates an onlineAccounts iterator, used by the catchpoint system to dump the
+// onlineaccounts table to a catchpoint snapshot file. It orders by (address, updateRound).
 //
 // If excludeBefore is non-zero, the iterator will exclude all data that would have been deleted if
-// OnlineAccountsDelete(excludeBefore) were called on this DB before calling MakeOnlineAccountsIter.
-func MakeOnlineAccountsIter(ctx context.Context, q db.Queryable, useStaging bool, excludeBefore basics.Round) (trackerdb.TableIterator[*encoded.OnlineAccountRecordV6], error) {
+// OnlineAccountsDelete(excludeBefore) were called on this DB before calling MakeOrderedOnlineAccountsIter.
+func MakeOrderedOnlineAccountsIter(ctx context.Context, q db.Queryable, useStaging bool, excludeBefore basics.Round) (trackerdb.TableIterator[*encoded.OnlineAccountRecordV6], error) {
 	table := "onlineaccounts"
 	if useStaging {
 		table = "catchpointonlineaccounts"

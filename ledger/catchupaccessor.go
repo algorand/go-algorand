@@ -1031,7 +1031,7 @@ func (c *catchpointCatchupAccessorImpl) GetVerifyData(ctx context.Context) (bala
 			return fmt.Errorf("unable to get state proof verification data: %v", err)
 		}
 
-		onlineAccountsHash, _, err = calculateVerificationHash(ctx, tx.MakeOnlineAccountsIter, 0, true)
+		onlineAccountsHash, _, err = calculateVerificationHash(ctx, tx.MakeOrderedOnlineAccountsIter, 0, true)
 		if err != nil {
 			return fmt.Errorf("unable to get online accounts verification data: %v", err)
 		}
