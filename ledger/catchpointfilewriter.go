@@ -78,7 +78,7 @@ type catchpointFileWriter struct {
 	onlineAccountRows      trackerdb.TableIterator[*encoded.OnlineAccountRecordV6]
 	onlineAccountsDone     bool
 	onlineAccountPrev      *basics.Address
-	onlineAccountPrevRound *basics.Round
+	onlineAccountPrevRound basics.Round
 	onlineRoundParamsRows  trackerdb.TableIterator[*encoded.OnlineRoundParamsRecordV6]
 	onlineRoundParamsDone  bool
 }
@@ -457,18 +457,16 @@ func (cw *catchpointFileWriter) readDatabaseStep(ctx context.Context) error {
 				if cw.onlineAccountPrev == nil || *cw.onlineAccountPrev != oa.Address {
 					// Then set it to 0.
 					oa.UpdateRound = 0
-				} else {
-					// This case should never happen: there should only be one horizon row per account.
-					var prevUpdRound basics.Round
-					if cw.onlineAccountPrevRound != nil {
-						prevUpdRound = *cw.onlineAccountPrevRound
-					}
-					return fmt.Errorf("bad online account data: multiple horizon rows for %s, prev updround %d cur updround %d", oa.Address, prevUpdRound, oa.UpdateRound)
+				}
+
+				// This case should never happen: there should only be one horizon row per account.
+				if cw.onlineAccountPrev != nil && *cw.onlineAccountPrev == oa.Address {
+					return fmt.Errorf("bad online account data: multiple horizon rows for %s, prev updround %d cur updround %d", oa.Address, cw.onlineAccountPrevRound, oa.UpdateRound)
 				}
 			}
 
 			cw.onlineAccountPrev = &oa.Address
-			cw.onlineAccountPrevRound = &oa.UpdateRound
+			cw.onlineAccountPrevRound = oa.UpdateRound
 			onlineAccts = append(onlineAccts, *oa)
 			if len(onlineAccts) == BalancesPerCatchpointFileChunk {
 				break
