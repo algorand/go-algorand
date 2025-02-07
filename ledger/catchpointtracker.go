@@ -229,7 +229,7 @@ func (ct *catchpointTracker) finishFirstStage(ctx context.Context, dbRound basic
 	// but if votersTracker needs more state, it can set lowestRound to be earlier than that.
 	// We want to only write MaxBalLookback rounds of history to the catchpoint file.
 	var onlineExcludeBefore basics.Round
-	if normalOnlineHorizon := (dbRound + 1).SubSaturate(basics.Round(params.MaxBalLookback)); normalOnlineHorizon == onlineAccountsForgetBefore {
+	if normalOnlineHorizon := catchpointLookbackHorizonForNextRound(dbRound, params); normalOnlineHorizon == onlineAccountsForgetBefore {
 		// this is the common case, so we pass 0 so the DB dumps the full table, as is
 		onlineExcludeBefore = 0
 	} else if normalOnlineHorizon > onlineAccountsForgetBefore {
@@ -329,7 +329,7 @@ func (ct *catchpointTracker) finishFirstStageAfterCrash(dbRound basics.Round, bl
 	// pass dbRound+1-maxBalLookback as the onlineAccountsForgetBefore parameter: since we can't be sure whether
 	// there are more than 320 rounds of history in the online accounts tables, this ensures the catchpoint
 	// will only contain the most recent 320 rounds.
-	onlineAccountsForgetBefore := (dbRound + 1).SubSaturate(basics.Round(config.Consensus[blockProto].MaxBalLookback))
+	onlineAccountsForgetBefore := catchpointLookbackHorizonForNextRound(dbRound, config.Consensus[blockProto])
 	return ct.finishFirstStage(context.Background(), dbRound, onlineAccountsForgetBefore, blockProto, 0)
 }
 

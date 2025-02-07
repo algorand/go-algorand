@@ -77,7 +77,8 @@ type catchpointFileWriter struct {
 	kvDone                 bool
 	onlineAccountRows      trackerdb.TableIterator[*encoded.OnlineAccountRecordV6]
 	onlineAccountsDone     bool
-	onlineAccountCurrent   basics.Address
+	onlineAccountPrev      *basics.Address
+	onlineAccountPrevRound *basics.Round
 	onlineRoundParamsRows  trackerdb.TableIterator[*encoded.OnlineRoundParamsRecordV6]
 	onlineRoundParamsDone  bool
 }
@@ -402,10 +403,6 @@ func (cw *catchpointFileWriter) readDatabaseStep(ctx context.Context) error {
 			if err != nil {
 				return err
 			}
-			// Is this the first (and thus oldest) row for this address?
-			// If so, is the updateRound for this row beyond the lookback horizon (R-320)?
-			// Then set it to 0.
-			//
 			// We set UpdateRound to 0 here, so that all nodes generating catchpoints will have the
 			// verification hash for the onlineaccounts table data (which is used to calculate the
 			// catchpoint label). Depending on the history of an online account, nodes may not have
@@ -452,12 +449,26 @@ func (cw *catchpointFileWriter) readDatabaseStep(ctx context.Context) error {
 			//   EnableAccountDataResourceSeparation is set. These nodes will have horizon rows for
 			//   addresses with updateRound set to the round of the last actual voting data change,
 			//   not zero (case 1) or the round of the last account data change (case 2).
-			if cw.onlineAccountCurrent.IsZero() || cw.onlineAccountCurrent != oa.Address {
-				cw.onlineAccountCurrent = oa.Address
-				if oa.UpdateRound < (cw.accountsRound + 1).SubSaturate(basics.Round(cw.params.MaxBalLookback)) {
+			//
+
+			// Is the updateRound for this row beyond the lookback horizon (R-320)?
+			if oa.UpdateRound < catchpointLookbackHorizonForNextRound(cw.accountsRound, cw.params) {
+				// Is this the first (and thus oldest) row for this address?
+				if cw.onlineAccountPrev == nil || *cw.onlineAccountPrev != oa.Address {
+					// Then set it to 0.
 					oa.UpdateRound = 0
+				} else {
+					// This case should never happen: there should only be one horizon row per account.
+					var prevUpdRound basics.Round
+					if cw.onlineAccountPrevRound != nil {
+						prevUpdRound = *cw.onlineAccountPrevRound
+					}
+					return fmt.Errorf("bad online account data: multiple horizon rows for %s, prev updround %d cur updround %d", oa.Address, prevUpdRound, oa.UpdateRound)
 				}
 			}
+
+			cw.onlineAccountPrev = &oa.Address
+			cw.onlineAccountPrevRound = &oa.UpdateRound
 			onlineAccts = append(onlineAccts, *oa)
 			if len(onlineAccts) == BalancesPerCatchpointFileChunk {
 				break
@@ -521,4 +532,13 @@ func hasContextDeadlineExceeded(ctx context.Context) (contextExceeded bool, cont
 	default:
 	}
 	return
+}
+
+// catchpointLookbackHorizonForNextRound returns the lookback horizon used to evaluate the next
+// round after the provided `rnd`, according to consensus settings in `params`. That is, to evaluate
+// blocks starting from rnd+1, this function returns the oldest round that will be needed to evaluate
+// votes, certificates or other consensus data. Anything older than the returned round is beyond
+// the horizon and needed to evaluate blocks starting from rnd+1.
+func catchpointLookbackHorizonForNextRound(rnd basics.Round, params config.ConsensusParams) basics.Round {
+	return (rnd + 1).SubSaturate(basics.Round(params.MaxBalLookback))
 }
