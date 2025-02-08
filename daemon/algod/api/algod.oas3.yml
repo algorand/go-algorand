@@ -361,7 +361,7 @@
                   "description": "Block header data.",
                   "properties": {},
                   "type": "object",
-                  "x-algorand-format": "BlockHeader"
+                  "x-algorand-format": "BlockHeaderResponse"
                 }
               },
               "required": [
@@ -4261,7 +4261,7 @@
                       "description": "Block header data.",
                       "properties": {},
                       "type": "object",
-                      "x-algorand-format": "BlockHeader"
+                      "x-algorand-format": "BlockHeaderResponse"
                     }
                   },
                   "required": [
@@ -4277,7 +4277,7 @@
                       "description": "Block header data.",
                       "properties": {},
                       "type": "object",
-                      "x-algorand-format": "BlockHeader"
+                      "x-algorand-format": "BlockHeaderResponse"
                     }
                   },
                   "required": [
