@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,6 +20,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/ledger/encoded"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/util/db"
 )
@@ -63,8 +65,10 @@ type Reader interface {
 	MakeCatchpointPendingHashesIterator(hashCount int) CatchpointPendingHashesIter
 	// Note: Catchpoint tracker needs this on the reader handle in sqlite to not get locked by write txns
 	MakeCatchpointReader() (CatchpointReader, error)
-	MakeEncodedAccoutsBatchIter() EncodedAccountsBatchIter
+	MakeEncodedAccountsBatchIter() EncodedAccountsBatchIter
 	MakeKVsIter(ctx context.Context) (KVsIter, error)
+	MakeOnlineAccountsIter(ctx context.Context, useStaging bool, excludeBefore basics.Round) (TableIterator[*encoded.OnlineAccountRecordV6], error)
+	MakeOnlineRoundParamsIter(ctx context.Context, useStaging bool, excludeBefore basics.Round) (TableIterator[*encoded.OnlineRoundParamsRecordV6], error)
 }
 
 // Writer is the interface for the trackerdb write operations.

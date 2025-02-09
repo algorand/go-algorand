@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -43,6 +43,7 @@ import (
 	"github.com/algorand/go-algorand/data/pools"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/verify"
+	"github.com/algorand/go-algorand/heartbeat"
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/simulation"
@@ -155,6 +156,8 @@ type AlgorandFullNode struct {
 
 	stateProofWorker *stateproof.Worker
 	partHandles      []db.Accessor
+
+	heartbeatService *heartbeat.Service
 }
 
 // TxnWithStatus represents information about a single transaction,
@@ -338,6 +341,8 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 
 	node.stateProofWorker = stateproof.NewWorker(node.genesisDirs.StateproofGenesisDir, node.log, node.accountManager, node.ledger.Ledger, node.net, node)
 
+	node.heartbeatService = heartbeat.NewService(node.accountManager, node.ledger, node, node.log)
+
 	return node, err
 }
 
@@ -380,6 +385,7 @@ func (node *AlgorandFullNode) Start() error {
 		node.ledgerService.Start()
 		node.txHandler.Start()
 		node.stateProofWorker.Start()
+		node.heartbeatService.Start()
 		err := startNetwork()
 		if err != nil {
 			return err
@@ -459,6 +465,7 @@ func (node *AlgorandFullNode) Stop() {
 	if node.catchpointCatchupService != nil {
 		node.catchpointCatchupService.Stop()
 	} else {
+		node.heartbeatService.Stop()
 		node.stateProofWorker.Stop()
 		node.txHandler.Stop()
 		node.agreementService.Shutdown()
@@ -1220,6 +1227,7 @@ func (node *AlgorandFullNode) SetCatchpointCatchupMode(catchpointCatchupMode boo
 			}()
 			node.net.ClearHandlers()
 			node.net.ClearValidatorHandlers()
+			node.heartbeatService.Stop()
 			node.stateProofWorker.Stop()
 			node.txHandler.Stop()
 			node.agreementService.Shutdown()
@@ -1248,6 +1256,7 @@ func (node *AlgorandFullNode) SetCatchpointCatchupMode(catchpointCatchupMode boo
 		node.ledgerService.Start()
 		node.txHandler.Start()
 		node.stateProofWorker.Start()
+		node.heartbeatService.Start()
 
 		// Set up a context we can use to cancel goroutines on Stop()
 		node.ctx, node.cancelCtx = context.WithCancel(context.Background())

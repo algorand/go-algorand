@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -223,6 +223,11 @@ const ConsensusV39 = ConsensusVersion(
 	"https://github.com/algorandfoundation/specs/tree/925a46433742afb0b51bb939354bd907fa88bf95",
 )
 
+// ConsensusV40 enables consensus incentives and TEAL v11 featuring the mimc opcode
+const ConsensusV40 = ConsensusVersion(
+	"https://github.com/algorandfoundation/specs/tree/236dcc18c9c507d794813ab768e467ea42d1b4d9",
+)
+
 // ConsensusFuture is a protocol that should not appear in any production
 // network, but is used to test features before they are released.
 const ConsensusFuture = ConsensusVersion(
@@ -252,7 +257,7 @@ const ConsensusVAlpha5 = ConsensusVersion("alpha5")
 
 // ConsensusCurrentVersion is the latest version and should be used
 // when a specific version is not provided.
-const ConsensusCurrentVersion = ConsensusV39
+const ConsensusCurrentVersion = ConsensusV40
 
 // Error is used to indicate that an unsupported protocol has been detected.
 type Error ConsensusVersion

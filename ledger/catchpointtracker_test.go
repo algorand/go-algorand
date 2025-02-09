@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -362,9 +362,10 @@ func createCatchpoint(t *testing.T, ct *catchpointTracker, accountsRound basics.
 	spVerificationEncodedData, stateProofVerificationHash, err := ct.getSPVerificationData()
 	require.NoError(t, err)
 
+	proto := protocol.ConsensusCurrentVersion
 	var catchpointGenerationStats telemetryspec.CatchpointGenerationEventDetails
-	_, _, _, biggestChunkLen, err := ct.generateCatchpointData(
-		context.Background(), accountsRound, &catchpointGenerationStats, spVerificationEncodedData)
+	_, _, _, _, _, biggestChunkLen, err := ct.generateCatchpointData(
+		context.Background(), config.Consensus[proto], accountsRound, 0, &catchpointGenerationStats, spVerificationEncodedData)
 	require.NoError(t, err)
 
 	require.Equal(t, calculateStateProofVerificationHash(t, ml), stateProofVerificationHash)
@@ -372,7 +373,7 @@ func createCatchpoint(t *testing.T, ct *catchpointTracker, accountsRound basics.
 	err = ct.createCatchpoint(
 		context.Background(), accountsRound, round,
 		trackerdb.CatchpointFirstStageInfo{BiggestChunkLen: biggestChunkLen},
-		crypto.Digest{}, protocol.ConsensusCurrentVersion)
+		crypto.Digest{}, proto)
 	require.NoError(t, err)
 }
 
@@ -605,7 +606,7 @@ func BenchmarkLargeCatchpointDataWriting(b *testing.B) {
 	encodedSPData, _, err := ct.getSPVerificationData()
 	require.NoError(b, err)
 	b.ResetTimer()
-	ct.generateCatchpointData(context.Background(), basics.Round(0), &catchpointGenerationStats, encodedSPData)
+	ct.generateCatchpointData(context.Background(), proto, 0, 0, &catchpointGenerationStats, encodedSPData)
 	b.StopTimer()
 	b.ReportMetric(float64(accountsNumber), "accounts")
 }
@@ -1882,10 +1883,6 @@ func TestHashContract(t *testing.T) {
 func TestCatchpointFastUpdates(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
-		t.Skip("This test is too slow on ARM and causes CI builds to time out")
-	}
-
 	proto := config.Consensus[protocol.ConsensusFuture]
 
 	accts := []map[basics.Address]basics.AccountData{ledgertesting.RandomAccounts(20, true)}
@@ -1925,6 +1922,7 @@ func TestCatchpointFastUpdates(t *testing.T) {
 
 	wg := sync.WaitGroup{}
 
+	lastRound := basics.Round(0)
 	for i := basics.Round(initialBlocksCount); i < basics.Round(proto.CatchpointLookback+15); i++ {
 		rewardLevelDelta := crypto.RandUint64() % 5
 		rewardLevel += rewardLevelDelta
@@ -1959,9 +1957,20 @@ func TestCatchpointFastUpdates(t *testing.T) {
 			defer wg.Done()
 			ml.trackers.committedUpTo(round)
 		}(i)
+		lastRound = i
 	}
 	wg.Wait()
 	ml.trackers.waitAccountsWriting()
+
+	for ml.trackers.getDbRound() <= basics.Round(proto.CatchpointLookback) {
+		// db round stuck <= 320? likely committedUpTo dropped some commit tasks, due to deferredCommits channel full
+		// so give it another try
+		ml.trackers.committedUpTo(lastRound)
+		require.Eventually(t, func() bool {
+			//ml.trackers.waitAccountsWriting()
+			return ml.trackers.getDbRound() > basics.Round(proto.CatchpointLookback)
+		}, 5*time.Second, 100*time.Millisecond)
+	}
 
 	require.NotEmpty(t, ct.GetLastCatchpointLabel())
 }

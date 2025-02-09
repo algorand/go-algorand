@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -317,7 +317,7 @@ func (cs *CatchpointCatchupService) processStageLedgerDownload() error {
 		start := time.Now()
 		err0 = lf.downloadLedger(cs.ctx, peer, round)
 		if err0 == nil {
-			cs.log.Infof("ledger downloaded in %d seconds", time.Since(start)/time.Second)
+			cs.log.Infof("ledger downloaded from %s in %d seconds", peerAddress(peer), time.Since(start)/time.Second)
 			start = time.Now()
 			err0 = cs.ledgerAccessor.BuildMerkleTrie(cs.ctx, cs.updateVerifiedCounts)
 			if err0 == nil {
@@ -325,8 +325,10 @@ func (cs *CatchpointCatchupService) processStageLedgerDownload() error {
 				break
 			}
 			// failed to build the merkle trie for the above catchpoint file.
+			cs.log.Infof("failed to build merkle trie for catchpoint file from %s: %v", peerAddress(peer), err0)
 			cs.blocksDownloadPeerSelector.rankPeer(psp, peerRankInvalidDownload)
 		} else {
+			cs.log.Infof("failed to download catchpoint ledger from peer %s: %v", peerAddress(peer), err0)
 			cs.blocksDownloadPeerSelector.rankPeer(psp, peerRankDownloadFailed)
 		}
 

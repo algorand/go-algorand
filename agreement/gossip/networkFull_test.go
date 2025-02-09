@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -103,7 +103,7 @@ func spinNetwork(t *testing.T, nodesCount int, cfg config.Local) ([]*networkImpl
 			break
 		}
 	}
-	log.Infof("network established, %d nodes connected in %s", nodesCount, time.Now().Sub(start).String())
+	log.Infof("network established, %d nodes connected in %s", nodesCount, time.Since(start).String())
 	return networkImpls, msgCounters
 }
 

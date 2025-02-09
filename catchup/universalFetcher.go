@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -88,7 +88,7 @@ func (uf *universalBlockFetcher) fetchBlock(ctx context.Context, round basics.Ro
 	} else {
 		return nil, nil, time.Duration(0), fmt.Errorf("fetchBlock: UniversalFetcher only supports HTTPPeer and UnicastPeer")
 	}
-	downloadDuration = time.Now().Sub(blockDownloadStartTime)
+	downloadDuration = time.Since(blockDownloadStartTime)
 	block, cert, err := processBlockBytes(fetchedBuf, round, address)
 	if err != nil {
 		return nil, nil, time.Duration(0), err

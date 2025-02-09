@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -71,8 +71,8 @@ func (m *MockCatchpointCatchupAccessor) GetCatchupBlockRound(ctx context.Context
 }
 
 // GetVerifyData returns the balances hash, spver hash and totals used by VerifyCatchpoint
-func (m *MockCatchpointCatchupAccessor) GetVerifyData(ctx context.Context) (balancesHash crypto.Digest, spverHash crypto.Digest, totals ledgercore.AccountTotals, err error) {
-	return crypto.Digest{}, crypto.Digest{}, ledgercore.AccountTotals{}, nil
+func (m *MockCatchpointCatchupAccessor) GetVerifyData(ctx context.Context) (balancesHash, spverHash, onlineAccountsHash, onlineRoundParams crypto.Digest, totals ledgercore.AccountTotals, err error) {
+	return crypto.Digest{}, crypto.Digest{}, crypto.Digest{}, crypto.Digest{}, ledgercore.AccountTotals{}, nil
 }
 
 // VerifyCatchpoint verifies that the catchpoint is valid by reconstructing the label.
