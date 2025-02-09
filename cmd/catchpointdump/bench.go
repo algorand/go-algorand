@@ -169,11 +169,12 @@ func downloadCatchpointFromAnyRelay(network string, round int, relayAddress stri
 }
 
 func buildMerkleTrie(ctx context.Context, catchupAccessor ledger.CatchpointCatchupAccessor) (err error) {
+	fmt.Printf("\n Building Merkle Trie, this might take a few minutes...\n")
 	err = catchupAccessor.BuildMerkleTrie(ctx, func(uint64, uint64) {})
 	if err != nil {
 		return err
 	}
-	fmt.Printf("\n Building Merkle Trie, this will take a few minutes...")
+
 	var balanceHash, spverHash crypto.Digest
 	balanceHash, spverHash, _, err = catchupAccessor.GetVerifyData(ctx)
 	if err != nil {
