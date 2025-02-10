@@ -937,7 +937,7 @@ func testExactAccountChunk(t *testing.T, proto protocol.ConsensusVersion, extraB
 
 	var onlineExcludeBefore basics.Round
 	// we added so many blocks that lowestRound is stuck at first state proof, round 240?
-	if normalHorizon := (genDBRound + 1).SubSaturate(basics.Round(params.MaxBalLookback)); normalHorizon <= genLowestRound {
+	if normalHorizon := catchpointLookbackHorizonForNextRound(genDBRound, params); normalHorizon <= genLowestRound {
 		t.Logf("subtest is exercising case where lowestRound from votersTracker is satsified by the existing history")
 		require.EqualValues(t, genLowestRound, params.StateProofInterval-params.StateProofVotersLookback)
 		require.False(t, longHistory)
@@ -1084,7 +1084,7 @@ func TestCatchpointAfterTxns(t *testing.T) {
 }
 
 type catchpointOnlineAccountsIterWrapper struct {
-	ts                   trackerdb.Store
+	ts                   trackerdb.TransactionScope
 	iter                 trackerdb.TableIterator[*encoded.OnlineAccountRecordV6]
 	onlineAccountCurrent basics.Address
 	accountsRound        basics.Round
@@ -1235,30 +1235,56 @@ assert
 	t.Log("DB round generator", genDBRound, "validator", valDBRound)
 	t.Log("Latest round generator", genLatestRound, "validator", valLatestRound)
 
-	oaGenIterWrapper := catchpointOnlineAccountsIterWrapper{
-		ts:            dl.generator.trackerDB(),
-		accountsRound: genDBRound,
-		params:        config.Consensus[proto],
-	}
+	// get lowestRound that votersTracker is using to "hold back" the onlineaccounts and onlineroundparams history. Use to calculate
+	// onlineExcludeBefore argument passed to catchpoint file writer and calculateVerificationHash. Intended to be similar to
+	// how it works in catchpoittracker (during commitRound, flush, and postCommit when catchpoints are written) and also mirrors how
+	// this logic is used in TestExactAccountChunk.
+	genLowestRound := dl.generator.trackers.acctsOnline.voters.lowestRound(genDBRound)
+	valLowestRound := dl.validator.trackers.acctsOnline.voters.lowestRound(valDBRound)
+	require.Equal(t, genLowestRound, valLowestRound)
 
-	oaValIterWrapper := catchpointOnlineAccountsIterWrapper{
-		ts:            dl.validator.trackerDB(),
-		accountsRound: valDBRound,
-		params:        config.Consensus[proto],
+	var onlineExcludeBefore basics.Round
+	normalOnlineHorizon := catchpointLookbackHorizonForNextRound(genDBRound, config.Consensus[proto])
+	if normalOnlineHorizon <= genLowestRound {
+		t.Logf("lowestRound from votersTracker is satsified by the existing history")
+		onlineExcludeBefore = 0
+	} else if normalOnlineHorizon > genLowestRound {
+		t.Logf("votersTracker causes onlineaccounts & onlineroundparams to extend history to round %d (DBRound %d)", genLowestRound, genDBRound)
+		onlineExcludeBefore = normalOnlineHorizon
+	} else {
+		t.Fatalf("unexpected normalOnlineHorizon %d", normalOnlineHorizon)
 	}
+	t.Logf("writing catchpoint: dbround %d, lowestRound %d, normal online horizon %d, onlineExcludeBefore %d", genDBRound, genLowestRound, normalOnlineHorizon, onlineExcludeBefore)
 
-	genOAHash, genOARows, err := calculateVerificationHash(context.Background(), oaGenIterWrapper.makeCatchpointOrderedOnlineAccountsIter, 0, false)
-	require.NoError(t, err)
-	valOAHash, valOARows, err := calculateVerificationHash(context.Background(), oaValIterWrapper.makeCatchpointOrderedOnlineAccountsIter, 0, false)
-	require.NoError(t, err)
+	// generate catchpoint verification hash from the generator and validator databases, using the onlineExcludeBefore (dbRound-320)
+	var genOAHash, valOAHash crypto.Digest
+	var genOARows, valOARows uint64
+	require.NoError(t, dl.generator.trackerDB().Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
+		oaGenIterWrapper := catchpointOnlineAccountsIterWrapper{
+			ts:            tx,
+			accountsRound: genDBRound,
+			params:        config.Consensus[proto],
+		}
+		genOAHash, genOARows, err = calculateVerificationHash(context.Background(), oaGenIterWrapper.makeCatchpointOrderedOnlineAccountsIter, onlineExcludeBefore, false)
+		return err
+	}))
+	require.NoError(t, dl.validator.trackerDB().Transaction(func(ctx context.Context, tx trackerdb.TransactionScope) (err error) {
+		oaValIterWrapper := catchpointOnlineAccountsIterWrapper{
+			ts:            tx,
+			accountsRound: valDBRound,
+			params:        config.Consensus[proto],
+		}
+		valOAHash, valOARows, err = calculateVerificationHash(context.Background(), oaValIterWrapper.makeCatchpointOrderedOnlineAccountsIter, onlineExcludeBefore, false)
+		return err
+	}))
 	require.Equal(t, genOAHash, valOAHash)
 	require.NotZero(t, genOAHash)
 	require.Equal(t, genOARows, valOARows)
 	require.NotZero(t, genOARows)
 
-	genORPHash, genORPRows, err := calculateVerificationHash(context.Background(), dl.generator.trackerDB().MakeOnlineRoundParamsIter, 0, false)
+	genORPHash, genORPRows, err := calculateVerificationHash(context.Background(), dl.generator.trackerDB().MakeOnlineRoundParamsIter, onlineExcludeBefore, false)
 	require.NoError(t, err)
-	valORPHash, valORPRows, err := calculateVerificationHash(context.Background(), dl.validator.trackerDB().MakeOnlineRoundParamsIter, 0, false)
+	valORPHash, valORPRows, err := calculateVerificationHash(context.Background(), dl.validator.trackerDB().MakeOnlineRoundParamsIter, onlineExcludeBefore, false)
 	require.NoError(t, err)
 	require.Equal(t, genORPHash, valORPHash)
 	require.NotZero(t, genORPHash)
@@ -1269,8 +1295,9 @@ assert
 	catchpointDataFilePath := filepath.Join(tempDir, t.Name()+".data")
 	catchpointFilePath := filepath.Join(tempDir, t.Name()+".catchpoint.tar.gz")
 
-	cph := testWriteCatchpoint(t, config.Consensus[proto], dl.generator.trackerDB(), catchpointDataFilePath, catchpointFilePath, 0, 0)
-	require.EqualValues(t, 7, cph.TotalChunks)
+	// write catchpoint file to a new ledger and verify the contents match the original DB contents
+	cph := testWriteCatchpoint(t, config.Consensus[proto], dl.generator.trackerDB(), catchpointDataFilePath, catchpointFilePath, 0, onlineExcludeBefore)
+	require.EqualValues(t, 3, cph.TotalChunks)
 
 	l := testNewLedgerFromCatchpoint(t, dl.generator.trackerDB(), catchpointFilePath)
 	defer l.Close()
@@ -1290,7 +1317,7 @@ assert
 	oar, err := l.trackerDBs.MakeOnlineAccountsOptimizedReader()
 	require.NoError(t, err)
 
-	for i := genDBRound; i >= (genDBRound - 1000); i-- {
+	for i := genDBRound; i >= (genDBRound - 320); i-- {
 		oad, err := oar.LookupOnline(addrs[0], basics.Round(i))
 		require.NoError(t, err)
 		// block 3 started paying 1 microalgo to addrs[0] per round
