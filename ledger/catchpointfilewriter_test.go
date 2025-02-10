@@ -349,7 +349,9 @@ func testWriteCatchpoint(t *testing.T, params config.ConsensusParams, rdb tracke
 		}
 		for {
 			more, err := writer.FileWriteStep(context.Background())
-			require.NoError(t, err)
+			if err != nil {
+				return err
+			}
 			if !more {
 				break
 			}
