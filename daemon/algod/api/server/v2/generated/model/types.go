@@ -1520,6 +1520,9 @@ type GetApplicationBoxesParams struct {
 type GetBlockParams struct {
 	// Format Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.
 	Format *GetBlockParamsFormat `form:"format,omitempty" json:"format,omitempty"`
+
+	// HeaderOnly If true, only the block header (exclusive of payset or certificate) may be included in response.
+	HeaderOnly *bool `form:"header-only,omitempty" json:"header-only,omitempty"`
 }
 
 // GetBlockParamsFormat defines parameters for GetBlock.

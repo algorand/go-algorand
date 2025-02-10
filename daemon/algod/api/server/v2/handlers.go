@@ -686,6 +686,11 @@ func (v2 *Handlers) GetBlock(ctx echo.Context, round uint64, params model.GetBlo
 		return badRequest(ctx, err, errFailedParsingFormatOption, v2.Log)
 	}
 
+	// If the client requests block header only, process that
+	if params.HeaderOnly != nil && *params.HeaderOnly {
+		return v2.getBlockHeader(ctx, round, handle, contentType)
+	}
+
 	// msgpack format uses 'RawBlockBytes' and attaches a custom header.
 	if handle == protocol.CodecHandle {
 		blockbytes, blockErr := rpcs.RawBlockBytes(v2.Node.LedgerForAPI(), basics.Round(round))
@@ -715,6 +720,32 @@ func (v2 *Handlers) GetBlock(ctx echo.Context, round uint64, params model.GetBlo
 
 	// Encoding wasn't working well without embedding "real" objects.
 	response := BlockResponseJSON{
+		Block: block,
+	}
+
+	data, err := encode(handle, response)
+	if err != nil {
+		return internalError(ctx, err, errFailedToEncodeResponse, v2.Log)
+	}
+
+	return ctx.Blob(http.StatusOK, contentType, data)
+}
+
+func (v2 *Handlers) getBlockHeader(ctx echo.Context, round uint64, handle codec.Handle, contentType string) error {
+	ledger := v2.Node.LedgerForAPI()
+	block, err := ledger.BlockHdr(basics.Round(round))
+	if err != nil {
+		switch err.(type) {
+		case ledgercore.ErrNoEntry:
+			return notFound(ctx, err, errFailedLookingUpLedger, v2.Log)
+		default:
+			return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+		}
+	}
+
+	response := struct {
+		Block bookkeeping.BlockHeader `codec:"block"`
+	}{
 		Block: block,
 	}
 

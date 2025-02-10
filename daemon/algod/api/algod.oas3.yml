@@ -3992,6 +3992,14 @@
               "minimum": 0,
               "type": "integer"
             }
+          },
+          {
+            "description": "If true, only the block header (exclusive of payset or certificate) may be included in response.",
+            "in": "query",
+            "name": "header-only",
+            "schema": {
+              "type": "boolean"
+            }
           }
         ],
         "responses": {

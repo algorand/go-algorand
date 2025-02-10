@@ -656,6 +656,12 @@
             "required": true
           },
           {
+            "type": "boolean",
+            "description": "If true, only the block header (exclusive of payset or certificate) may be included in response.",
+            "name": "header-only",
+            "in": "query"
+          },
+          {
             "$ref": "#/parameters/format"
           }
         ],
