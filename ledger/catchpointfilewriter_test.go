@@ -942,6 +942,7 @@ func testExactAccountChunk(t *testing.T, proto protocol.ConsensusVersion, extraB
 	if normalHorizon := catchpointLookbackHorizonForNextRound(genDBRound, params); normalHorizon <= genLowestRound {
 		t.Logf("subtest is exercising case where lowestRound from votersTracker is satsified by the existing history")
 		require.EqualValues(t, genLowestRound, params.StateProofInterval-params.StateProofVotersLookback)
+		onlineExcludeBefore = 0
 		require.False(t, longHistory)
 	} else if normalHorizon > genLowestRound {
 		t.Logf("subtest is exercising case where votersTracker causes onlineaccounts & onlineroundparams to extend history to round %d (DBRound %d)", genLowestRound, genDBRound)
@@ -1128,14 +1129,33 @@ func (i *catchpointOnlineAccountsIterWrapper) GetItem() (*encoded.OnlineAccountR
 
 func TestCatchpointAfterStakeLookupTxns(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
+	// t.Parallel() No: config.Consensus is modified
 
+	futureNoSP := protocol.ConsensusVersion("test-protocol-TestCatchpointAfterStakeLookupTxns-noSP")
+	futureNoSPParams := config.Consensus[protocol.ConsensusFuture]
+	futureNoSPParams.StateProofInterval = 0
+	config.Consensus[futureNoSP] = futureNoSPParams
+	defer func() {
+		delete(config.Consensus, futureNoSP)
+	}()
+
+	// like with TestExactAccountChunk, exercise both the case where the onlineaccounts and onlineroundparams
+	// history is extended by the votersTracker, and the case when it is not.
+	shortMax := max(config.Consensus[protocol.ConsensusFuture].MaxBalLookback, config.Consensus[protocol.ConsensusFuture].CatchpointLookback)
+	shortRounds := 2*shortMax + 50
+	longRounds := uint64(1500)
+	t.Run("future", func(t *testing.T) { testCatchpointAfterStakeLookupTxns(t, protocol.ConsensusFuture, longRounds, true) })
+	t.Run("future_noSP", func(t *testing.T) { testCatchpointAfterStakeLookupTxns(t, futureNoSP, longRounds, false) })
+	t.Run("future_short", func(t *testing.T) { testCatchpointAfterStakeLookupTxns(t, protocol.ConsensusFuture, shortRounds, true) })
+	t.Run("future_noSP_short", func(t *testing.T) { testCatchpointAfterStakeLookupTxns(t, futureNoSP, shortRounds, false) })
+}
+
+func testCatchpointAfterStakeLookupTxns(t *testing.T, proto protocol.ConsensusVersion, maxBlocks uint64, longHistory bool) {
 	genBalances, addrs, _ := ledgertesting.NewTestGenesis(func(cfg *ledgertesting.GenesisCfg) {
 		cfg.OnlineCount = 1
 		ledgertesting.TurnOffRewards(cfg)
 	})
 	cfg := config.GetDefaultLocal()
-	proto := protocol.ConsensusFuture
 	dl := NewDoubleLedger(t, genBalances, proto, cfg, simpleLedgerOnDisk())
 	defer dl.Close()
 
@@ -1200,7 +1220,7 @@ assert
 	}
 	require.Equal(t, vb.Block().Round(), basics.Round(322))
 
-	for vb.Block().Round() <= 1500 {
+	for vb.Block().Round() <= basics.Round(maxBlocks) {
 		expectedStake++ // add 1 microalgo to the expected stake for the next block
 
 		// the online_stake opcode in block 323 will look up OnlineCirculation(3, 323).
@@ -1225,7 +1245,7 @@ assert
 	require.NotZero(t, genDBRound)
 	require.NotZero(t, valDBRound)
 	require.Equal(t, genDBRound, valDBRound)
-	require.Equal(t, 1497, int(genDBRound))
+	require.EqualValues(t, basics.Round(maxBlocks)-3, int(genDBRound))
 	genLatestRound := dl.generator.Latest()
 	valLatestRound := dl.validator.Latest()
 	require.NotZero(t, genLatestRound)
@@ -1250,9 +1270,11 @@ assert
 	if normalOnlineHorizon <= genLowestRound {
 		t.Logf("lowestRound from votersTracker is satsified by the existing history")
 		onlineExcludeBefore = 0
+		require.False(t, longHistory)
 	} else if normalOnlineHorizon > genLowestRound {
 		t.Logf("votersTracker causes onlineaccounts & onlineroundparams to extend history to round %d (DBRound %d)", genLowestRound, genDBRound)
 		onlineExcludeBefore = normalOnlineHorizon
+		require.True(t, longHistory)
 	} else {
 		t.Fatalf("unexpected normalOnlineHorizon %d", normalOnlineHorizon)
 	}
@@ -1319,12 +1341,13 @@ assert
 	oar, err := l.trackerDBs.MakeOnlineAccountsOptimizedReader()
 	require.NoError(t, err)
 
-	for i := genDBRound; i >= (genDBRound - 320); i-- {
+	// iterate from dbround to dbround - 320
+	for i := genDBRound; i >= (genDBRound - basics.Round(config.Consensus[proto].CatchpointLookback)); i-- {
 		oad, err := oar.LookupOnline(addrs[0], basics.Round(i))
 		require.NoError(t, err)
 		// block 3 started paying 1 microalgo to addrs[0] per round
 		expected := initialStake + uint64(i) - 2
-		require.Equal(t, expected, oad.AccountData.MicroAlgos.Raw)
+		require.Equal(t, expected, oad.AccountData.MicroAlgos.Raw, "failed at round %d, dbRound %d", i, genDBRound)
 	}
 
 }
