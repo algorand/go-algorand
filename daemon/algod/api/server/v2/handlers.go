@@ -686,6 +686,10 @@ func (v2 *Handlers) GetBlock(ctx echo.Context, round uint64, params model.GetBlo
 		return badRequest(ctx, err, errFailedParsingFormatOption, v2.Log)
 	}
 
+	// For a future iteration/V3, we should make the available data for this endpoint consistent between messagepack and JSON.
+	// Currently, the certificate is only returned in messagepack format requests for a complete block.
+	// The 'getBlockHeader' function is used to get the block header only; this is currently consistent between messagepack and JSON.
+
 	// If the client requests block header only, process that
 	if params.HeaderOnly != nil && *params.HeaderOnly {
 		return v2.getBlockHeader(ctx, round, handle, contentType)
