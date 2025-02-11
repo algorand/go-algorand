@@ -77,7 +77,7 @@ type catchpointFileWriter struct {
 	kvDone                 bool
 	onlineAccountRows      trackerdb.TableIterator[*encoded.OnlineAccountRecordV6]
 	onlineAccountsDone     bool
-	onlineAccountPrev      *basics.Address
+	onlineAccountPrev      basics.Address
 	onlineAccountPrevRound basics.Round
 	onlineRoundParamsRows  trackerdb.TableIterator[*encoded.OnlineRoundParamsRecordV6]
 	onlineRoundParamsDone  bool
@@ -454,18 +454,18 @@ func (cw *catchpointFileWriter) readDatabaseStep(ctx context.Context) error {
 			// Is the updateRound for this row beyond the lookback horizon (R-320)?
 			if oa.UpdateRound < catchpointLookbackHorizonForNextRound(cw.accountsRound, cw.params) {
 				// Is this the first (and thus oldest) row for this address?
-				if cw.onlineAccountPrev == nil || *cw.onlineAccountPrev != oa.Address {
+				if cw.onlineAccountPrev.IsZero() || cw.onlineAccountPrev != oa.Address {
 					// Then set it to 0.
 					oa.UpdateRound = 0
 				}
 
 				// This case should never happen: there should only be one horizon row per account.
-				if cw.onlineAccountPrev != nil && *cw.onlineAccountPrev == oa.Address {
+				if !cw.onlineAccountPrev.IsZero() && cw.onlineAccountPrev == oa.Address {
 					return fmt.Errorf("bad online account data: multiple horizon rows for %s, prev updround %d cur updround %d", oa.Address, cw.onlineAccountPrevRound, oa.UpdateRound)
 				}
 			}
 
-			cw.onlineAccountPrev = &oa.Address
+			cw.onlineAccountPrev = oa.Address
 			cw.onlineAccountPrevRound = oa.UpdateRound
 			onlineAccts = append(onlineAccts, *oa)
 			if len(onlineAccts) == BalancesPerCatchpointFileChunk {
