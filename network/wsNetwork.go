@@ -30,6 +30,7 @@ import (
 	"path"
 	"regexp"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -916,19 +917,14 @@ func (wn *WebsocketNetwork) checkProtocolVersionMatch(otherHeaders http.Header) 
 	otherAcceptedVersions := otherHeaders[textproto.CanonicalMIMEHeaderKey(ProtocolAcceptVersionHeader)]
 	for _, otherAcceptedVersion := range otherAcceptedVersions {
 		// do we have a matching version ?
-		for _, supportedProtocolVersion := range wn.supportedProtocolVersions {
-			if supportedProtocolVersion == otherAcceptedVersion {
-				matchingVersion = supportedProtocolVersion
-				return matchingVersion, ""
-			}
+		if slices.Contains(wn.supportedProtocolVersions, otherAcceptedVersion) {
+			return otherAcceptedVersion, ""
 		}
 	}
 
 	otherVersion = otherHeaders.Get(ProtocolVersionHeader)
-	for _, supportedProtocolVersion := range wn.supportedProtocolVersions {
-		if supportedProtocolVersion == otherVersion {
-			return supportedProtocolVersion, otherVersion
-		}
+	if slices.Contains(wn.supportedProtocolVersions, otherVersion) {
+		return otherVersion, otherVersion
 	}
 
 	return "", filterASCII(otherVersion)

@@ -5220,10 +5220,8 @@ func (cx *EvalContext) assignAsset(sv stackValue) (basics.AssetIndex, error) {
 // an inner static array.
 func (cx *EvalContext) availableAsset(aid basics.AssetIndex) bool {
 	// Ensure that aid is in Foreign Assets
-	for _, assetID := range cx.txn.Txn.ForeignAssets {
-		if assetID == aid {
-			return true
-		}
+	if slices.Contains(cx.txn.Txn.ForeignAssets, aid) {
+		return true
 	}
 	// or was created in group
 	if cx.version >= createdResourcesVersion {
@@ -5264,10 +5262,8 @@ func (cx *EvalContext) assignApp(sv stackValue) (basics.AppIndex, error) {
 
 func (cx *EvalContext) availableApp(aid basics.AppIndex) bool {
 	// Ensure that aid is in Foreign Apps
-	for _, appID := range cx.txn.Txn.ForeignApps {
-		if appID == aid {
-			return true
-		}
+	if slices.Contains(cx.txn.Txn.ForeignApps, aid) {
+		return true
 	}
 	// or was created in group
 	if cx.version >= createdResourcesVersion {
