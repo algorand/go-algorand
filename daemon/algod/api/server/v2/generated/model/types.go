@@ -94,12 +94,6 @@ const (
 	GetBlockParamsFormatMsgpack GetBlockParamsFormat = "msgpack"
 )
 
-// Defines values for GetBlockHeaderParamsFormat.
-const (
-	GetBlockHeaderParamsFormatJson    GetBlockHeaderParamsFormat = "json"
-	GetBlockHeaderParamsFormatMsgpack GetBlockHeaderParamsFormat = "msgpack"
-)
-
 // Defines values for GetTransactionProofParamsHashtype.
 const (
 	GetTransactionProofParamsHashtypeSha256    GetTransactionProofParamsHashtype = "sha256"
@@ -1161,12 +1155,6 @@ type BlockHashResponse struct {
 	BlockHash string `json:"blockHash"`
 }
 
-// BlockHeaderResponse defines model for BlockHeaderResponse.
-type BlockHeaderResponse struct {
-	// BlockHeader Block header data.
-	BlockHeader map[string]interface{} `json:"blockHeader"`
-}
-
 // BlockLogsResponse defines model for BlockLogsResponse.
 type BlockLogsResponse struct {
 	Logs []AppCallLogs `json:"logs"`
@@ -1532,19 +1520,13 @@ type GetApplicationBoxesParams struct {
 type GetBlockParams struct {
 	// Format Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.
 	Format *GetBlockParamsFormat `form:"format,omitempty" json:"format,omitempty"`
+
+	// HeaderOnly If true, only the block header (exclusive of payset or certificate) may be included in response.
+	HeaderOnly *bool `form:"header-only,omitempty" json:"header-only,omitempty"`
 }
 
 // GetBlockParamsFormat defines parameters for GetBlock.
 type GetBlockParamsFormat string
-
-// GetBlockHeaderParams defines parameters for GetBlockHeader.
-type GetBlockHeaderParams struct {
-	// Format Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.
-	Format *GetBlockHeaderParamsFormat `form:"format,omitempty" json:"format,omitempty"`
-}
-
-// GetBlockHeaderParamsFormat defines parameters for GetBlockHeader.
-type GetBlockHeaderParamsFormat string
 
 // GetTransactionProofParams defines parameters for GetTransactionProof.
 type GetTransactionProofParams struct {
