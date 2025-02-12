@@ -1144,8 +1144,10 @@ func TestCatchpointAfterStakeLookupTxns(t *testing.T) {
 	shortMax := max(config.Consensus[protocol.ConsensusFuture].MaxBalLookback, config.Consensus[protocol.ConsensusFuture].CatchpointLookback)
 	shortRounds := 2*shortMax + 50
 	longRounds := uint64(1500)
-	t.Run("future", func(t *testing.T) { testCatchpointAfterStakeLookupTxns(t, protocol.ConsensusFuture, longRounds, true) })
-	t.Run("future_noSP", func(t *testing.T) { testCatchpointAfterStakeLookupTxns(t, futureNoSP, longRounds, false) })
+	if !testing.Short() {
+		t.Run("future", func(t *testing.T) { testCatchpointAfterStakeLookupTxns(t, protocol.ConsensusFuture, longRounds, true) })
+		t.Run("future_noSP", func(t *testing.T) { testCatchpointAfterStakeLookupTxns(t, futureNoSP, longRounds, false) })
+	}
 	t.Run("future_short", func(t *testing.T) { testCatchpointAfterStakeLookupTxns(t, protocol.ConsensusFuture, shortRounds, true) })
 	t.Run("future_noSP_short", func(t *testing.T) { testCatchpointAfterStakeLookupTxns(t, futureNoSP, shortRounds, false) })
 }
