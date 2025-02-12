@@ -20,11 +20,13 @@ import (
 	"archive/tar"
 	"context"
 	"fmt"
+	"hash"
 	"io"
 	"os"
 	"path/filepath"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/encoded"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
@@ -79,6 +81,7 @@ type catchpointFileWriter struct {
 	onlineAccountsDone     bool
 	onlineAccountPrev      basics.Address
 	onlineAccountPrevRound basics.Round
+	onlineAccountHasher    hash.Hash
 	onlineRoundParamsRows  trackerdb.TableIterator[*encoded.OnlineRoundParamsRecordV6]
 	onlineRoundParamsDone  bool
 }
@@ -395,6 +398,7 @@ func (cw *catchpointFileWriter) readDatabaseStep(ctx context.Context) error {
 				return err
 			}
 			cw.onlineAccountRows = rows
+			cw.onlineAccountHasher = crypto.HashFactory{HashType: crypto.Sha512_256}.NewHash()
 		}
 
 		onlineAccts := make([]encoded.OnlineAccountRecordV6, 0, BalancesPerCatchpointFileChunk)
@@ -468,6 +472,8 @@ func (cw *catchpointFileWriter) readDatabaseStep(ctx context.Context) error {
 			cw.onlineAccountPrev = oa.Address
 			cw.onlineAccountPrevRound = oa.UpdateRound
 			onlineAccts = append(onlineAccts, *oa)
+			h := crypto.HashObj(*oa)
+			cw.onlineAccountHasher.Write(h[:])
 			if len(onlineAccts) == BalancesPerCatchpointFileChunk {
 				break
 			}
