@@ -278,8 +278,8 @@ func (*reader) MakeKVsIter(ctx context.Context) (trackerdb.KVsIter, error) {
 	return nil, nil
 }
 
-// MakeOnlineAccountsIter implements trackerdb.Reader
-func (*reader) MakeOnlineAccountsIter(context.Context, bool, basics.Round) (trackerdb.TableIterator[*encoded.OnlineAccountRecordV6], error) {
+// MakeOrderedOnlineAccountsIter implements trackerdb.Reader
+func (*reader) MakeOrderedOnlineAccountsIter(context.Context, bool, basics.Round) (trackerdb.TableIterator[*encoded.OnlineAccountRecordV6], error) {
 	// TODO: catchpoint
 	return nil, nil
 }

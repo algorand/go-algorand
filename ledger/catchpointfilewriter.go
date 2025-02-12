@@ -64,28 +64,34 @@ type catchpointFileWriter struct {
 	file                   *os.File
 	tar                    *tar.Writer
 	compressor             io.WriteCloser
-	chunk                  catchpointFileChunkV6
+	chunk                  CatchpointSnapshotChunkV6
 	chunkNum               uint64
 	writtenBytes           int64
 	biggestChunkLen        uint64
 	accountsIterator       trackerdb.EncodedAccountsBatchIter
 	maxResourcesPerChunk   int
+	accountsRound          basics.Round
 	onlineExcludeBefore    basics.Round
 	accountsDone           bool
 	kvRows                 trackerdb.KVsIter
 	kvDone                 bool
 	onlineAccountRows      trackerdb.TableIterator[*encoded.OnlineAccountRecordV6]
 	onlineAccountsDone     bool
+	onlineAccountPrev      basics.Address
+	onlineAccountPrevRound basics.Round
 	onlineRoundParamsRows  trackerdb.TableIterator[*encoded.OnlineRoundParamsRecordV6]
 	onlineRoundParamsDone  bool
 }
 
-type catchpointFileBalancesChunkV5 struct {
+// CatchpointSnapshotChunkV5 defines the encoding of "balances.X.msgpack" files in the catchpoint snapshot
+// used before database schema v6, which split accounts from asset/app resource data.
+type CatchpointSnapshotChunkV5 struct {
 	_struct  struct{}                  `codec:",omitempty,omitemptyarray"`
 	Balances []encoded.BalanceRecordV5 `codec:"bl,allocbound=BalancesPerCatchpointFileChunk"`
 }
 
-type catchpointFileChunkV6 struct {
+// CatchpointSnapshotChunkV6 defines the current encoding of "balances.X.msgpack" files in the catchpoint snapshot.
+type CatchpointSnapshotChunkV6 struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	Balances          []encoded.BalanceRecordV6 `codec:"bl,allocbound=BalancesPerCatchpointFileChunk"`
@@ -95,7 +101,7 @@ type catchpointFileChunkV6 struct {
 	OnlineRoundParams []encoded.OnlineRoundParamsRecordV6 `codec:"orp,allocbound=BalancesPerCatchpointFileChunk"`
 }
 
-func (chunk catchpointFileChunkV6) empty() bool {
+func (chunk CatchpointSnapshotChunkV6) empty() bool {
 	return len(chunk.Balances) == 0 && len(chunk.KVs) == 0 && len(chunk.OnlineAccounts) == 0 && len(chunk.OnlineRoundParams) == 0
 }
 
@@ -108,7 +114,7 @@ func (data catchpointStateProofVerificationContext) ToBeHashed() (protocol.HashI
 	return protocol.StateProofVerCtx, protocol.Encode(&data)
 }
 
-func makeCatchpointFileWriter(ctx context.Context, params config.ConsensusParams, filePath string, tx trackerdb.SnapshotScope, maxResourcesPerChunk int, onlineExcludeBefore basics.Round) (*catchpointFileWriter, error) {
+func makeCatchpointFileWriter(ctx context.Context, params config.ConsensusParams, filePath string, tx trackerdb.SnapshotScope, maxResourcesPerChunk int, accountsRound, onlineExcludeBefore basics.Round) (*catchpointFileWriter, error) {
 	aw, err := tx.MakeAccountsReader()
 	if err != nil {
 		return nil, err
@@ -164,6 +170,7 @@ func makeCatchpointFileWriter(ctx context.Context, params config.ConsensusParams
 		compressor:             compressor,
 		tar:                    tar,
 		accountsIterator:       tx.MakeEncodedAccountsBatchIter(),
+		accountsRound:          accountsRound,
 		maxResourcesPerChunk:   maxResourcesPerChunk,
 		onlineExcludeBefore:    onlineExcludeBefore,
 	}
@@ -216,7 +223,7 @@ func (cw *catchpointFileWriter) FileWriteStep(stepCtx context.Context) (more boo
 		return
 	}
 
-	writerRequest := make(chan catchpointFileChunkV6, 1)
+	writerRequest := make(chan CatchpointSnapshotChunkV6, 1)
 	writerResponse := make(chan error, 2)
 	go cw.asyncWriter(writerRequest, writerResponse, cw.chunkNum)
 	defer func() {
@@ -298,11 +305,11 @@ func (cw *catchpointFileWriter) FileWriteStep(stepCtx context.Context) (more boo
 		cw.chunkNum++
 		writerRequest <- cw.chunk
 		// indicate that we need a readDatabaseStep
-		cw.chunk = catchpointFileChunkV6{}
+		cw.chunk = CatchpointSnapshotChunkV6{}
 	}
 }
 
-func (cw *catchpointFileWriter) asyncWriter(chunks chan catchpointFileChunkV6, response chan error, chunkNum uint64) {
+func (cw *catchpointFileWriter) asyncWriter(chunks chan CatchpointSnapshotChunkV6, response chan error, chunkNum uint64) {
 	defer close(response)
 	for chk := range chunks {
 		chunkNum++
@@ -341,7 +348,7 @@ func (cw *catchpointFileWriter) readDatabaseStep(ctx context.Context) error {
 			return err
 		}
 		if len(balances) > 0 {
-			cw.chunk = catchpointFileChunkV6{Balances: balances, numAccounts: numAccounts}
+			cw.chunk = CatchpointSnapshotChunkV6{Balances: balances, numAccounts: numAccounts}
 			return nil
 		}
 		// It might seem reasonable, but do not close accountsIterator here,
@@ -372,7 +379,7 @@ func (cw *catchpointFileWriter) readDatabaseStep(ctx context.Context) error {
 			}
 		}
 		if len(kvrs) > 0 {
-			cw.chunk = catchpointFileChunkV6{KVs: kvrs}
+			cw.chunk = CatchpointSnapshotChunkV6{KVs: kvrs}
 			return nil
 		}
 		// Do not close kvRows here, or it will start over on the next iteration
@@ -382,7 +389,8 @@ func (cw *catchpointFileWriter) readDatabaseStep(ctx context.Context) error {
 	if cw.params.EnableCatchpointsWithOnlineAccounts && !cw.onlineAccountsDone {
 		// Create the OnlineAccounts iterator JIT
 		if cw.onlineAccountRows == nil {
-			rows, err := cw.tx.MakeOnlineAccountsIter(ctx, false, cw.onlineExcludeBefore)
+			// MakeOrderedOnlineAccountsIter orders by (address, updateRound).
+			rows, err := cw.tx.MakeOrderedOnlineAccountsIter(ctx, false, cw.onlineExcludeBefore)
 			if err != nil {
 				return err
 			}
@@ -395,13 +403,77 @@ func (cw *catchpointFileWriter) readDatabaseStep(ctx context.Context) error {
 			if err != nil {
 				return err
 			}
+			// We set UpdateRound to 0 here, so that all nodes generating catchpoints will have the
+			// verification hash for the onlineaccounts table data (which is used to calculate the
+			// catchpoint label). Depending on the history of an online account, nodes may not have
+			// the same updateRound column value for the oldest "horizon" row for that address,
+			// depending on whether the node caught up from genesis, or restored from a
+			// catchpoint. This does not have any impact on the correctness of online account
+			// lookups, but is due to changes in the database schema over time:
+			//
+			//   1. For nodes that have been online for a long time, the unlimited assets release
+			//   (v3.5.1, PR #3652) introduced a BaseAccountData type with an UpdateRound field,
+			//   consensus-flagged to be zero until EnableAccountDataResourceSeparation was enabled
+			//   in consensus v32. So accounts that have been inactive since before consensus v32
+			//   will continue to have a zero UpdateRound, until a transaction updates the
+			//   account. This behavior is consistent for all nodes and validated by the merkle trie
+			//   generated each catchpoint round.
+			//
+			//   2. The onlineaccounts table, introduced later in v3.9.2 (PR #4003), uses a
+			//   migration to populate the onlineaccounts table by selecting all online accounts
+			//   from the accounts table. This migration copies the BaseAccountData.UpdateRound
+			//   field, along with voting data, to set the initial values of the onlineaccounts
+			//   table for each address. After that, the onlineaccounts table's updateRound column
+			//   would only be updated if voting data changed -- so certain transactions like
+			//   receiving a pay txn of 0 algos, or receiving an asset transfer, etc, would not
+			//   result in a new onlineaccounts row with a new updateRound (unless it triggered a
+			//   balance or voting data change). This criteria is implemented in
+			//   onlineAccountsNewRound in acctdeltas.go, separate from accountsNewRound &
+			//   makeCompactAccountDeltas, which set the account table's UpdateRound value.
+			//
+			//   3. Node operators using fast catchup to restore from a catchpoint file version V6
+			//   or V7 (used before v4.0.1 and consensus v40, which added the
+			//   EnableCatchpointsWithOnlineAccounts flag) initialize the onlineaccounts table by
+			//   first restoring the accounts table from the snapshot, then running the same
+			//   migration introduced in (2), where updateRound (and account data) comes from
+			//   BaseAccountData. This means catchpoint file writers and fast catchup users could
+			//   see some addresses have a horizon row with an updateRound that was set to zero
+			//   (case 1), or the round of the last account data change (case 2). Since v4.0.1,
+			//   catchpoint file version V8 includes the onlineaccounts and onlineroundparams tables
+			//   in snapshots, to support the voter_params_get and online_stake opcodes (PR #6177).
+			//
+			//   4. However, a node catching up from scratch without using fast catchup, running
+			//   v3.9.2 or later, must track the online account history to verify block certificates
+			//   as it validates each block in turn.  It sets updateRound based on observing all
+			//   account voting data changes starting from round 0, whether or not
+			//   EnableAccountDataResourceSeparation is set. These nodes will have horizon rows for
+			//   addresses with updateRound set to the round of the last actual voting data change,
+			//   not zero (case 1) or the round of the last account data change (case 2).
+			//
+
+			// Is the updateRound for this row beyond the lookback horizon (R-320)?
+			if oa.UpdateRound < catchpointLookbackHorizonForNextRound(cw.accountsRound, cw.params) {
+				// Is this the first (and thus oldest) row for this address?
+				if cw.onlineAccountPrev.IsZero() || cw.onlineAccountPrev != oa.Address {
+					// Then set it to 0.
+					oa.UpdateRound = 0
+				}
+
+				// This case should never happen: there should only be one horizon row per account.
+				if !cw.onlineAccountPrev.IsZero() && cw.onlineAccountPrev == oa.Address {
+					return fmt.Errorf("bad online account data: multiple horizon rows for %s, prev updround %d cur updround %d", oa.Address, cw.onlineAccountPrevRound, oa.UpdateRound)
+				}
+			}
+
+			cw.onlineAccountPrev = oa.Address
+			cw.onlineAccountPrevRound = oa.UpdateRound
 			onlineAccts = append(onlineAccts, *oa)
 			if len(onlineAccts) == BalancesPerCatchpointFileChunk {
 				break
 			}
 		}
 		if len(onlineAccts) > 0 {
-			cw.chunk = catchpointFileChunkV6{OnlineAccounts: onlineAccts}
+			cw.chunk = CatchpointSnapshotChunkV6{OnlineAccounts: onlineAccts}
 			return nil
 		}
 		// Do not close onlineAccountRows here, or it will start over on the next iteration
@@ -430,7 +502,7 @@ func (cw *catchpointFileWriter) readDatabaseStep(ctx context.Context) error {
 			}
 		}
 		if len(onlineRndParams) > 0 {
-			cw.chunk = catchpointFileChunkV6{OnlineRoundParams: onlineRndParams}
+			cw.chunk = CatchpointSnapshotChunkV6{OnlineRoundParams: onlineRndParams}
 			return nil
 		}
 		// Do not close onlineRndParamsRows here, or it will start over on the next iteration
@@ -458,4 +530,13 @@ func hasContextDeadlineExceeded(ctx context.Context) (contextExceeded bool, cont
 	default:
 	}
 	return
+}
+
+// catchpointLookbackHorizonForNextRound returns the lookback horizon used to evaluate the next
+// round after the provided `rnd`, according to consensus settings in `params`. That is, to evaluate
+// blocks starting from rnd+1, this function returns the oldest round that will be needed to evaluate
+// votes, certificates or other consensus data. Anything older than the returned round is beyond
+// the horizon and needed to evaluate blocks starting from rnd+1.
+func catchpointLookbackHorizonForNextRound(rnd basics.Round, params config.ConsensusParams) basics.Round {
+	return (rnd + 1).SubSaturate(basics.Round(params.MaxBalLookback))
 }
