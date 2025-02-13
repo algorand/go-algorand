@@ -20,6 +20,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -333,14 +334,7 @@ func (g *generator) introspectLedgerVsGenerator(roundNumber, intra uint64) (errs
 	generatorExpectedOptinsNotFound := map[uint64][]uint64{}
 	for appId, appOptins := range expectedOptins[appKindBoxes] {
 		for optin := range appOptins {
-			missing := true
-			for _, boxOptin := range ledgerBoxEvidence[appId] {
-				if boxOptin == optin {
-					missing = false
-					break
-				}
-			}
-			if missing {
+			if !slices.Contains(ledgerBoxEvidence[appId], optin) {
 				generatorExpectedOptinsNotFound[appId] = append(generatorExpectedOptinsNotFound[appId], optin)
 			}
 		}
