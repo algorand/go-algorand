@@ -344,9 +344,10 @@ func TestApplicationsUpgradeOverGossip(t *testing.T) {
 	a.NoError(err)
 
 	// Fund the manager, so it can issue transactions later on
-	_, err = client.SendPaymentFromUnencryptedWallet(creator, user, fee, 10000000000, nil)
+	tx0, err := client.SendPaymentFromUnencryptedWallet(creator, user, fee, 10000000000, nil)
 	a.NoError(err)
-	client.WaitForRound(round + 2)
+	isCommitted := fixture.WaitForTxnConfirmation(round+10, tx0.ID().String())
+	a.True(isCommitted)
 
 	round, err = client.CurrentRound()
 	a.NoError(err)
@@ -454,7 +455,7 @@ int 1
 	// Try polling 10 rounds to ensure txn is committed.
 	round, err = client.CurrentRound()
 	a.NoError(err)
-	isCommitted := fixture.WaitForTxnConfirmation(round+10, txid)
+	isCommitted = fixture.WaitForTxnConfirmation(round+10, txid)
 	a.True(isCommitted)
 
 	// check creator's balance record for the app entry and the state changes
