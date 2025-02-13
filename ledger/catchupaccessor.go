@@ -1068,7 +1068,7 @@ func calculateVerificationHash[T crypto.Hashable](
 		return crypto.Digest{}, 0, err
 	}
 	defer rows.Close()
-	hasher := crypto.HashFactory{HashType: catchpointHashType}.NewHash()
+	hasher := crypto.HashFactory{HashType: crypto.Sha512_256}.NewHash()
 	cnt := uint64(0)
 	for rows.Next() {
 		item, err := rows.GetItem()

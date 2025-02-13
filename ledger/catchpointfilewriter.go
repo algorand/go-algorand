@@ -48,8 +48,6 @@ const (
 	// in the catchpoint file.
 	// (2 years * 31536000 seconds per year) / (256 rounds per state proof verification data * 3.6 seconds per round) ~= 70000
 	SPContextPerCatchpointFile = 70000
-
-	catchpointHashType = crypto.Sha512_256
 )
 
 // catchpointFileWriter is the struct managing the persistence of accounts data into the catchpoint file.
@@ -83,10 +81,9 @@ type catchpointFileWriter struct {
 	onlineAccountsDone     bool
 	onlineAccountPrev      basics.Address
 	onlineAccountPrevRound basics.Round
-	onlineAccountHash      hash.Hash
+	onlineAccountHasher    hash.Hash
 	onlineRoundParamsRows  trackerdb.TableIterator[*encoded.OnlineRoundParamsRecordV6]
 	onlineRoundParamsDone  bool
-	onlineRoundParamsHash  hash.Hash
 }
 
 // CatchpointSnapshotChunkV5 defines the encoding of "balances.X.msgpack" files in the catchpoint snapshot
@@ -401,7 +398,7 @@ func (cw *catchpointFileWriter) readDatabaseStep(ctx context.Context) error {
 				return err
 			}
 			cw.onlineAccountRows = rows
-			cw.onlineAccountHash = crypto.HashFactory{HashType: catchpointHashType}.NewHash()
+			cw.onlineAccountHasher = crypto.HashFactory{HashType: crypto.Sha512_256}.NewHash()
 		}
 
 		onlineAccts := make([]encoded.OnlineAccountRecordV6, 0, BalancesPerCatchpointFileChunk)
@@ -476,7 +473,7 @@ func (cw *catchpointFileWriter) readDatabaseStep(ctx context.Context) error {
 			cw.onlineAccountPrevRound = oa.UpdateRound
 			onlineAccts = append(onlineAccts, *oa)
 			h := crypto.HashObj(*oa)
-			cw.onlineAccountHash.Write(h[:])
+			cw.onlineAccountHasher.Write(h[:])
 			if len(onlineAccts) == BalancesPerCatchpointFileChunk {
 				break
 			}
@@ -497,7 +494,6 @@ func (cw *catchpointFileWriter) readDatabaseStep(ctx context.Context) error {
 				return err
 			}
 			cw.onlineRoundParamsRows = rows
-			cw.onlineRoundParamsHash = crypto.HashFactory{HashType: catchpointHashType}.NewHash()
 		}
 
 		onlineRndParams := make([]encoded.OnlineRoundParamsRecordV6, 0, BalancesPerCatchpointFileChunk)
@@ -507,8 +503,6 @@ func (cw *catchpointFileWriter) readDatabaseStep(ctx context.Context) error {
 				return err
 			}
 			onlineRndParams = append(onlineRndParams, *or)
-			h := crypto.HashObj(*or)
-			cw.onlineRoundParamsHash.Write(h[:])
 			if len(onlineRndParams) == BalancesPerCatchpointFileChunk {
 				break
 			}

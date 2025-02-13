@@ -252,6 +252,21 @@ func (ct *catchpointTracker) finishFirstStage(ctx context.Context, dbRound basic
 			return err
 		}
 	}
+	if params.EnableCatchpointsWithOnlineAccounts {
+		// Generate a hash of the onlineroundparams tables. The onlineaccounts hash is built by the catchpointFileWriter
+		// as it iterates through rows, and not calculated here.
+		err := ct.dbs.Snapshot(func(ctx context.Context, tx trackerdb.SnapshotScope) error {
+			var dbErr error
+			onlineRoundParamsHash, _, dbErr = calculateVerificationHash(ctx, tx.MakeOnlineRoundParamsIter, onlineExcludeBefore, false)
+			if dbErr != nil {
+				return dbErr
+			}
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+	}
 
 	if ct.enableGeneratingCatchpointFiles {
 		// Generate the catchpoint file. This is done inline so that it will
@@ -261,7 +276,7 @@ func (ct *catchpointTracker) finishFirstStage(ctx context.Context, dbRound basic
 		var err error
 
 		catchpointGenerationStats.BalancesWriteTime = uint64(updatingBalancesDuration.Nanoseconds())
-		totalAccounts, totalKVs, totalOnlineAccounts, totalOnlineRoundParams, totalChunks, biggestChunkLen, onlineAccountsHash, onlineRoundParamsHash, err = ct.generateCatchpointData(
+		totalAccounts, totalKVs, totalOnlineAccounts, totalOnlineRoundParams, totalChunks, biggestChunkLen, onlineAccountsHash, err = ct.generateCatchpointData(
 			ctx, params, dbRound, onlineExcludeBefore, &catchpointGenerationStats, spVerificationEncodedData)
 		ct.catchpointDataWriting.Store(0)
 		if err != nil {
@@ -1211,7 +1226,7 @@ func (ct *catchpointTracker) isWritingCatchpointDataFile() bool {
 //   - Balance and KV chunk (named balances.x.msgpack).
 //     ...
 //   - Balance and KV chunk (named balances.x.msgpack).
-func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, params config.ConsensusParams, accountsRound basics.Round, onlineExcludeBefore basics.Round, catchpointGenerationStats *telemetryspec.CatchpointGenerationEventDetails, encodedSPData []byte) (totalAccounts, totalKVs, totalOnlineAccounts, totalOnlineRoundParams, totalChunks, biggestChunkLen uint64, onlineAccountHash, onlineRoundParamsHash crypto.Digest, err error) {
+func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, params config.ConsensusParams, accountsRound basics.Round, onlineExcludeBefore basics.Round, catchpointGenerationStats *telemetryspec.CatchpointGenerationEventDetails, encodedSPData []byte) (totalAccounts, totalKVs, totalOnlineAccounts, totalOnlineRoundParams, totalChunks, biggestChunkLen uint64, onlineAccountHash crypto.Digest, err error) {
 	ct.log.Debugf("catchpointTracker.generateCatchpointData() writing catchpoint accounts for round %d", accountsRound)
 
 	startTime := time.Now()
@@ -1299,17 +1314,12 @@ func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, params 
 	ledgerGeneratecatchpointMicros.AddMicrosecondsSince(start, nil)
 	if err != nil {
 		ct.log.Warnf("catchpointTracker.generateCatchpointData() %v", err)
-		return 0, 0, 0, 0, 0, 0, crypto.Digest{}, crypto.Digest{}, err
+		return 0, 0, 0, 0, 0, 0, crypto.Digest{}, err
 	}
 
-	if params.EnableCatchpointsWithOnlineAccounts {
-		oaHash := catchpointWriter.onlineAccountHash.Sum(nil)
-		orpHash := catchpointWriter.onlineRoundParamsHash.Sum(nil)
-		if len(oaHash) != crypto.DigestSize || len(orpHash) != crypto.DigestSize {
-			return 0, 0, 0, 0, 0, 0, crypto.Digest{}, crypto.Digest{}, fmt.Errorf("invalid verification hash length")
-		}
-		onlineAccountHash = crypto.Digest(oaHash)
-		onlineRoundParamsHash = crypto.Digest(orpHash)
+	oaHash := catchpointWriter.onlineAccountHasher.Sum(nil)
+	if len(oaHash) != crypto.DigestSize {
+		return 0, 0, 0, 0, 0, 0, crypto.Digest{}, fmt.Errorf("invalid online account hash length: %d", len(oaHash))
 	}
 
 	catchpointGenerationStats.FileSize = uint64(catchpointWriter.writtenBytes)
@@ -1320,7 +1330,7 @@ func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, params 
 	catchpointGenerationStats.OnlineRoundParamsCount = catchpointWriter.totalOnlineRoundParams
 	catchpointGenerationStats.AccountsRound = uint64(accountsRound)
 
-	return catchpointWriter.totalAccounts, catchpointWriter.totalKVs, catchpointWriter.totalOnlineAccounts, catchpointWriter.totalOnlineRoundParams, catchpointWriter.chunkNum, catchpointWriter.biggestChunkLen, onlineAccountHash, onlineRoundParamsHash, nil
+	return catchpointWriter.totalAccounts, catchpointWriter.totalKVs, catchpointWriter.totalOnlineAccounts, catchpointWriter.totalOnlineRoundParams, catchpointWriter.chunkNum, catchpointWriter.biggestChunkLen, crypto.Digest(oaHash), nil
 }
 
 func (ct *catchpointTracker) recordFirstStageInfo(ctx context.Context, tx trackerdb.TransactionScope,
