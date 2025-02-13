@@ -364,7 +364,7 @@ func createCatchpoint(t *testing.T, ct *catchpointTracker, accountsRound basics.
 
 	proto := protocol.ConsensusCurrentVersion
 	var catchpointGenerationStats telemetryspec.CatchpointGenerationEventDetails
-	_, _, _, _, _, biggestChunkLen, _, _, err := ct.generateCatchpointData(
+	_, _, _, _, _, biggestChunkLen, err := ct.generateCatchpointData(
 		context.Background(), config.Consensus[proto], accountsRound, 0, &catchpointGenerationStats, spVerificationEncodedData)
 	require.NoError(t, err)
 
