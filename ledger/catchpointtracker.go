@@ -253,10 +253,15 @@ func (ct *catchpointTracker) finishFirstStage(ctx context.Context, dbRound basic
 		}
 	}
 	if params.EnableCatchpointsWithOnlineAccounts {
-		// Generate a hash of the onlineroundparams tables. The onlineaccounts hash is built by the catchpointFileWriter
-		// as it iterates through rows, and not calculated here.
+		// Generate hashes of the onlineaccounts and onlineroundparams tables.
 		err := ct.dbs.Snapshot(func(ctx context.Context, tx trackerdb.SnapshotScope) error {
 			var dbErr error
+			onlineAccountsHash, _, dbErr = calculateVerificationHash(ctx, tx.MakeOrderedOnlineAccountsIter, onlineExcludeBefore, false)
+			if dbErr != nil {
+				return dbErr
+
+			}
+
 			onlineRoundParamsHash, _, dbErr = calculateVerificationHash(ctx, tx.MakeOnlineRoundParamsIter, onlineExcludeBefore, false)
 			if dbErr != nil {
 				return dbErr
@@ -276,7 +281,7 @@ func (ct *catchpointTracker) finishFirstStage(ctx context.Context, dbRound basic
 		var err error
 
 		catchpointGenerationStats.BalancesWriteTime = uint64(updatingBalancesDuration.Nanoseconds())
-		totalAccounts, totalKVs, totalOnlineAccounts, totalOnlineRoundParams, totalChunks, biggestChunkLen, onlineAccountsHash, err = ct.generateCatchpointData(
+		totalAccounts, totalKVs, totalOnlineAccounts, totalOnlineRoundParams, totalChunks, biggestChunkLen, err = ct.generateCatchpointData(
 			ctx, params, dbRound, onlineExcludeBefore, &catchpointGenerationStats, spVerificationEncodedData)
 		ct.catchpointDataWriting.Store(0)
 		if err != nil {
@@ -1226,7 +1231,7 @@ func (ct *catchpointTracker) isWritingCatchpointDataFile() bool {
 //   - Balance and KV chunk (named balances.x.msgpack).
 //     ...
 //   - Balance and KV chunk (named balances.x.msgpack).
-func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, params config.ConsensusParams, accountsRound basics.Round, onlineExcludeBefore basics.Round, catchpointGenerationStats *telemetryspec.CatchpointGenerationEventDetails, encodedSPData []byte) (totalAccounts, totalKVs, totalOnlineAccounts, totalOnlineRoundParams, totalChunks, biggestChunkLen uint64, onlineAccountHash crypto.Digest, err error) {
+func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, params config.ConsensusParams, accountsRound basics.Round, onlineExcludeBefore basics.Round, catchpointGenerationStats *telemetryspec.CatchpointGenerationEventDetails, encodedSPData []byte) (totalAccounts, totalKVs, totalOnlineAccounts, totalOnlineRoundParams, totalChunks, biggestChunkLen uint64, err error) {
 	ct.log.Debugf("catchpointTracker.generateCatchpointData() writing catchpoint accounts for round %d", accountsRound)
 
 	startTime := time.Now()
@@ -1314,12 +1319,7 @@ func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, params 
 	ledgerGeneratecatchpointMicros.AddMicrosecondsSince(start, nil)
 	if err != nil {
 		ct.log.Warnf("catchpointTracker.generateCatchpointData() %v", err)
-		return 0, 0, 0, 0, 0, 0, crypto.Digest{}, err
-	}
-
-	oaHash := catchpointWriter.onlineAccountHasher.Sum(nil)
-	if len(oaHash) != crypto.DigestSize {
-		return 0, 0, 0, 0, 0, 0, crypto.Digest{}, fmt.Errorf("invalid online account hash length: %d", len(oaHash))
+		return 0, 0, 0, 0, 0, 0, err
 	}
 
 	catchpointGenerationStats.FileSize = uint64(catchpointWriter.writtenBytes)
@@ -1330,7 +1330,7 @@ func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, params 
 	catchpointGenerationStats.OnlineRoundParamsCount = catchpointWriter.totalOnlineRoundParams
 	catchpointGenerationStats.AccountsRound = uint64(accountsRound)
 
-	return catchpointWriter.totalAccounts, catchpointWriter.totalKVs, catchpointWriter.totalOnlineAccounts, catchpointWriter.totalOnlineRoundParams, catchpointWriter.chunkNum, catchpointWriter.biggestChunkLen, crypto.Digest(oaHash), nil
+	return catchpointWriter.totalAccounts, catchpointWriter.totalKVs, catchpointWriter.totalOnlineAccounts, catchpointWriter.totalOnlineRoundParams, catchpointWriter.chunkNum, catchpointWriter.biggestChunkLen, nil
 }
 
 func (ct *catchpointTracker) recordFirstStageInfo(ctx context.Context, tx trackerdb.TransactionScope,
