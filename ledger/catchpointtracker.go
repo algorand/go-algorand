@@ -229,7 +229,7 @@ func (ct *catchpointTracker) finishFirstStage(ctx context.Context, dbRound basic
 	// but if votersTracker needs more state, it can set lowestRound to be earlier than that.
 	// We want to only write MaxBalLookback rounds of history to the catchpoint file.
 	var onlineExcludeBefore basics.Round
-	if normalOnlineHorizon := (dbRound + 1).SubSaturate(basics.Round(params.MaxBalLookback)); normalOnlineHorizon == onlineAccountsForgetBefore {
+	if normalOnlineHorizon := catchpointLookbackHorizonForNextRound(dbRound, params); normalOnlineHorizon == onlineAccountsForgetBefore {
 		// this is the common case, so we pass 0 so the DB dumps the full table, as is
 		onlineExcludeBefore = 0
 	} else if normalOnlineHorizon > onlineAccountsForgetBefore {
@@ -256,7 +256,7 @@ func (ct *catchpointTracker) finishFirstStage(ctx context.Context, dbRound basic
 		// Generate hashes of the onlineaccounts and onlineroundparams tables.
 		err := ct.dbs.Snapshot(func(ctx context.Context, tx trackerdb.SnapshotScope) error {
 			var dbErr error
-			onlineAccountsHash, _, dbErr = calculateVerificationHash(ctx, tx.MakeOnlineAccountsIter, onlineExcludeBefore, false)
+			onlineAccountsHash, _, dbErr = calculateVerificationHash(ctx, makeCatchpointOrderedOnlineAccountsIterFactory(tx.MakeOrderedOnlineAccountsIter, dbRound, params), onlineExcludeBefore, false)
 			if dbErr != nil {
 				return dbErr
 
@@ -329,7 +329,7 @@ func (ct *catchpointTracker) finishFirstStageAfterCrash(dbRound basics.Round, bl
 	// pass dbRound+1-maxBalLookback as the onlineAccountsForgetBefore parameter: since we can't be sure whether
 	// there are more than 320 rounds of history in the online accounts tables, this ensures the catchpoint
 	// will only contain the most recent 320 rounds.
-	onlineAccountsForgetBefore := (dbRound + 1).SubSaturate(basics.Round(config.Consensus[blockProto].MaxBalLookback))
+	onlineAccountsForgetBefore := catchpointLookbackHorizonForNextRound(dbRound, config.Consensus[blockProto])
 	return ct.finishFirstStage(context.Background(), dbRound, onlineAccountsForgetBefore, blockProto, 0)
 }
 
@@ -1255,7 +1255,7 @@ func (ct *catchpointTracker) generateCatchpointData(ctx context.Context, params 
 	start := time.Now()
 	ledgerGeneratecatchpointCount.Inc(nil)
 	err = ct.dbs.SnapshotContext(ctx, func(dbCtx context.Context, tx trackerdb.SnapshotScope) (err error) {
-		catchpointWriter, err = makeCatchpointFileWriter(dbCtx, params, catchpointDataFilePath, tx, ResourcesPerCatchpointFileChunk, onlineExcludeBefore)
+		catchpointWriter, err = makeCatchpointFileWriter(dbCtx, params, catchpointDataFilePath, tx, ResourcesPerCatchpointFileChunk, accountsRound, onlineExcludeBefore)
 		if err != nil {
 			return
 		}

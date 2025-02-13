@@ -24,6 +24,7 @@ import (
 	"net"
 	"net/http"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -52,13 +53,7 @@ const averageMessageLength = 2 * 1024    // Most of the messages are smaller tha
 const msgsInReadBufferPerPeer = 10
 
 func init() {
-	matched := false
-	for _, version := range SupportedProtocolVersions {
-		if version == versionPeerFeatures {
-			matched = true
-		}
-	}
-	if !matched {
+	if !slices.Contains(SupportedProtocolVersions, versionPeerFeatures) {
 		panic(fmt.Sprintf("peer features version %s is not supported %v", versionPeerFeatures, SupportedProtocolVersions))
 	}
 
