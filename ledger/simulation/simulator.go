@@ -339,19 +339,19 @@ func (s Simulator) Simulate(simulateRequest Request) (Result, error) {
 			if err != nil {
 				return Result{}, err
 			}
-			resourcePopulator := makeResourcePopulator(simulateRequest.TxnGroups[0], consensusParams)
+			populator := makeResourcePopulator(simulateRequest.TxnGroups[0], consensusParams)
 
 			txnResources := make([]ResourceTracker, len(simulatorTracer.result.TxnGroups[0].Txns))
 			for i := range simulatorTracer.result.TxnGroups[0].Txns {
 				txnResources[i] = *simulatorTracer.result.TxnGroups[0].Txns[i].UnnamedResourcesAccessed
 			}
 
-			err = resourcePopulator.populateResources(*simulatorTracer.result.TxnGroups[0].UnnamedResourcesAccessed, txnResources)
+			err = populator.populateResources(*simulatorTracer.result.TxnGroups[0].UnnamedResourcesAccessed, txnResources)
 			if err != nil {
 				return Result{}, err
 			}
 
-			simulatorTracer.result.TxnGroups[0].PopulatedResourceArrays = resourcePopulator.getPopulatedArrays()
+			simulatorTracer.result.TxnGroups[0].PopulatedResourceArrays = populator.getPopulatedArrays()
 		}
 
 		// Remove private fields for easier test comparison
