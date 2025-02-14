@@ -51,6 +51,7 @@ import (
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
+	"github.com/algorand/go-algorand/util"
 	"github.com/algorand/go-algorand/util/execpool"
 	"github.com/algorand/go-algorand/util/metrics"
 )
@@ -2820,5 +2821,97 @@ func TestTxHandlerValidateIncomingTxMessage(t *testing.T) {
 		blobNonCan := craftNonCanonical(t, &stxn, blob)
 		outmsg = handler.validateIncomingTxMessage(network.IncomingMessage{Data: blobNonCan})
 		require.Equal(t, outmsg.Action, network.Disconnect)
+	})
+}
+
+// Create mock types to satisfy interfaces
+type erlMockPeer struct {
+	network.DisconnectableAddressablePeer
+	util.ErlClient
+	addr   string
+	closer func()
+}
+
+func newErlMockPeer(addr string) *erlMockPeer {
+	return &erlMockPeer{
+		addr: addr,
+	}
+}
+
+// Implement required interface methods
+func (m *erlMockPeer) RoutingAddr() []byte { return []byte(m.addr) }
+func (m *erlMockPeer) OnClose(f func())    { m.closer = f }
+
+func TestTxHandlerErlClientMapper(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	t.Run("Same routing address clients share erlIPClient", func(t *testing.T) {
+		mapper := erlClientMapper{
+			mapping:    make(map[string]*erlIPClient),
+			maxClients: 4,
+		}
+
+		peer1 := newErlMockPeer("192.168.1.1")
+		peer2 := newErlMockPeer("192.168.1.1")
+
+		client1 := mapper.getClient(peer1)
+		client2 := mapper.getClient(peer2)
+
+		// Verify both peers got same erlIPClient
+		require.Equal(t, client1, client2, "Expected same erlIPClient for same routing address")
+		require.Equal(t, 1, len(mapper.mapping))
+
+		ipClient := mapper.mapping["192.168.1.1"]
+		require.Equal(t, 2, len(ipClient.clients))
+	})
+
+	t.Run("Different routing addresses get different erlIPClients", func(t *testing.T) {
+		mapper := erlClientMapper{
+			mapping:    make(map[string]*erlIPClient),
+			maxClients: 4,
+		}
+
+		peer1 := newErlMockPeer("192.168.1.1")
+		peer2 := newErlMockPeer("192.168.1.2")
+
+		client1 := mapper.getClient(peer1)
+		client2 := mapper.getClient(peer2)
+
+		// Verify peers got different erlIPClients
+		require.NotEqual(t, client1, client2, "Expected different erlIPClients for different routing addresses")
+		require.Equal(t, 2, len(mapper.mapping))
+	})
+
+	t.Run("Client cleanup on connection close", func(t *testing.T) {
+		mapper := erlClientMapper{
+			mapping:    make(map[string]*erlIPClient),
+			maxClients: 4,
+		}
+
+		peer1 := newErlMockPeer("192.168.1.1")
+		peer2 := newErlMockPeer("192.168.1.1")
+
+		// Register clients for both peers
+		mapper.getClient(peer1)
+		mapper.getClient(peer2)
+
+		ipClient := mapper.mapping["192.168.1.1"]
+		closerCalled := false
+		ipClient.OnClose(func() {
+			closerCalled = true
+		})
+
+		require.Equal(t, 2, len(ipClient.clients))
+
+		// Simulate connection close for peer1
+		peer1.closer()
+		require.Equal(t, 1, len(ipClient.clients))
+		require.False(t, closerCalled)
+
+		// Simulate connection close for peer2
+		peer2.closer()
+		require.Equal(t, 0, len(ipClient.clients))
+		require.True(t, closerCalled)
 	})
 }
