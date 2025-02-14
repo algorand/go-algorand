@@ -158,23 +158,79 @@ func TestGetBlock(t *testing.T) {
 	getBlockTest(t, 0, "bad format", 400)
 }
 
-func getBlockHeaderTest(t *testing.T, blockNum uint64, format string, expectedCode int) {
+type blockResponseTest struct {
+	Block bookkeeping.Block `codec:"block"`
+
+	Cert *map[string]interface{} `codec:"cert,omitempty"`
+}
+
+func getBlockHeaderTest(t *testing.T, blockNum uint64, format string, expectedCode int, headerOnly *bool) {
 	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
 	defer releasefunc()
-	err := handler.GetBlockHeader(c, blockNum, model.GetBlockHeaderParams{Format: (*model.GetBlockHeaderParamsFormat)(&format)})
-	require.NoError(t, err)
-	require.Equal(t, expectedCode, rec.Code)
+
+	a := require.New(t)
+	insertRounds(a, handler, 3)
+
+	err := handler.GetBlock(c, blockNum, model.GetBlockParams{Format: (*model.GetBlockParamsFormat)(&format), HeaderOnly: headerOnly})
+	if format != "json" && format != "msgpack" {
+		a.NoError(err)
+	}
+	a.Equal(expectedCode, rec.Code)
+
+	if expectedCode == 200 {
+		var response blockResponseTest
+
+		if format == "msgpack" {
+			dec := codec.NewDecoderBytes(rec.Body.Bytes(), protocol.CodecHandle)
+			err = dec.Decode(&response)
+		} else if format == "json" {
+			err = protocol.DecodeJSON(rec.Body.Bytes(), &response)
+		}
+
+		a.NoError(err)
+		a.Equal(basics.Round(blockNum), response.Block.Round())
+
+		if headerOnly != nil && *headerOnly {
+			a.Nil(response.Cert)
+		} else {
+			// Cert should be present for normal, msgp block
+			a.NotNil(response.Cert)
+		}
+	}
 }
 
 func TestGetBlockHeader(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
-	getBlockHeaderTest(t, 0, "json", 200)
-	getBlockHeaderTest(t, 0, "msgpack", 200)
-	getBlockHeaderTest(t, 1, "json", 404)
-	getBlockHeaderTest(t, 1, "msgpack", 404)
-	getBlockHeaderTest(t, 0, "bad format", 400)
+	headerOnly := true
+	t.Run("json-200", func(t *testing.T) {
+		t.Parallel()
+		getBlockHeaderTest(t, 1, "json", 200, &headerOnly)
+	})
+	t.Run("msgpack-200", func(t *testing.T) {
+		t.Parallel()
+		getBlockHeaderTest(t, 1, "msgpack", 200, &headerOnly)
+	})
+	t.Run("json-404", func(t *testing.T) {
+		t.Parallel()
+		getBlockHeaderTest(t, 5, "json", 404, &headerOnly)
+	})
+	t.Run("msgpack-404", func(t *testing.T) {
+		t.Parallel()
+		getBlockHeaderTest(t, 5, "msgpack", 404, &headerOnly)
+	})
+	t.Run("format-400", func(t *testing.T) {
+		t.Parallel()
+		getBlockHeaderTest(t, 1, "bad format", 400, &headerOnly)
+	})
+	t.Run("normal block no flag", func(t *testing.T) {
+		t.Parallel()
+		getBlockHeaderTest(t, 1, "msgpack", 200, nil)
+	})
+	t.Run("normal block false flag", func(t *testing.T) {
+		t.Parallel()
+		getBlockHeaderTest(t, 1, "msgpack", 200, new(bool))
+	})
 }
 
 func testGetLedgerStateDelta(t *testing.T, round uint64, format string, expectedCode int) {

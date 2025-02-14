@@ -521,7 +521,7 @@ func (c *catchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 		// we won't get to this point, since we've already verified the version in processStagingContent
 		return errors.New("unsupported version")
 	case CatchpointFileVersionV5:
-		var balances catchpointFileBalancesChunkV5
+		var balances CatchpointSnapshotChunkV5
 		err = protocol.Decode(bytes, &balances)
 		if err != nil {
 			return err
@@ -542,7 +542,7 @@ func (c *catchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 		fallthrough
 	case CatchpointFileVersionV8:
 		// V8 added online accounts and online round params data + hashes, and added them to the v6 chunk format
-		var chunk catchpointFileChunkV6
+		var chunk CatchpointSnapshotChunkV6
 		err = protocol.Decode(bytes, &chunk)
 		if err != nil {
 			return err
@@ -1031,7 +1031,7 @@ func (c *catchpointCatchupAccessorImpl) GetVerifyData(ctx context.Context) (bala
 			return fmt.Errorf("unable to get state proof verification data: %v", err)
 		}
 
-		onlineAccountsHash, _, err = calculateVerificationHash(ctx, tx.MakeOnlineAccountsIter, 0, true)
+		onlineAccountsHash, _, err = calculateVerificationHash(ctx, tx.MakeOrderedOnlineAccountsIter, 0, true)
 		if err != nil {
 			return fmt.Errorf("unable to get online accounts verification data: %v", err)
 		}
