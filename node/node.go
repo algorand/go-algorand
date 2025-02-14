@@ -525,6 +525,10 @@ func (node *AlgorandFullNode) writeDevmodeBlock() (err error) {
 		blk.TimeStamp = prev.TimeStamp + *node.timestampOffset
 	}
 	blk.BlockHeader.Seed = committee.Seed(prev.Hash())
+	// Zero out payouts if Proposer not set
+	if (blk.BlockHeader.Proposer == basics.Address{}) {
+		blk.BlockHeader.ProposerPayout = basics.MicroAlgos{}
+	}
 	vb2 := ledgercore.MakeValidatedBlock(blk, vb.UnfinishedDeltas())
 
 	// add the newly generated block to the ledger

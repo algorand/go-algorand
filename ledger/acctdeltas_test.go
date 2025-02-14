@@ -716,7 +716,7 @@ func benchmarkWriteCatchpointStagingBalancesSub(b *testing.B, ascendingOrder boo
 			last64KSize = chunkSize
 			last64KAccountCreationTime = time.Duration(0)
 		}
-		var chunk catchpointFileChunkV6
+		var chunk CatchpointSnapshotChunkV6
 		chunk.Balances = make([]encoded.BalanceRecordV6, chunkSize)
 		for i := uint64(0); i < chunkSize; i++ {
 			var randomAccount encoded.BalanceRecordV6
@@ -2936,7 +2936,7 @@ func testOnlineAccountsDeletion(t *testing.T, addrA, addrB basics.Address, tx *s
 func testOnlineAccountsExcludeBefore(t *testing.T, addrA, addrB basics.Address, tx *sql.Tx) {
 	// Use MakeOnlineAccountsIter to dump all data, starting from rnd
 	getAcctDataForRound := func(rnd basics.Round, expectedCount int64) map[basics.Address][]*encoded.OnlineAccountRecordV6 {
-		it, err := sqlitedriver.MakeOnlineAccountsIter(context.Background(), tx, false, rnd)
+		it, err := sqlitedriver.MakeOrderedOnlineAccountsIter(context.Background(), tx, false, rnd)
 		require.NoError(t, err)
 
 		var count int64

@@ -176,16 +176,16 @@ universal:
 ifeq ($(OS_TYPE),darwin)
 	# build amd64 Mac binaries
 	mkdir -p $(GOPATH1)/bin-darwin-amd64
-	CROSS_COMPILE_ARCH=amd64 GOBIN=$(GOPATH1)/bin-darwin-amd64 MACOSX_DEPLOYMENT_TARGET=12.0 EXTRA_CONFIGURE_FLAGS='CFLAGS="-arch x86_64 -mmacos-version-min=12.0" --host=x86_64-apple-darwin' $(MAKE)
+	CROSS_COMPILE_ARCH=amd64 GOBIN=$(GOPATH1)/bin-darwin-amd64 MACOSX_DEPLOYMENT_TARGET=13.0 EXTRA_CONFIGURE_FLAGS='CFLAGS="-arch x86_64 -mmacos-version-min=13.0" --host=x86_64-apple-darwin' $(MAKE)
 
 	# build arm64 Mac binaries
 	mkdir -p $(GOPATH1)/bin-darwin-arm64
-	CROSS_COMPILE_ARCH=arm64 GOBIN=$(GOPATH1)/bin-darwin-arm64 MACOSX_DEPLOYMENT_TARGET=12.0 EXTRA_CONFIGURE_FLAGS='CFLAGS="-arch arm64 -mmacos-version-min=12.0" --host=aarch64-apple-darwin' $(MAKE)
+	CROSS_COMPILE_ARCH=arm64 GOBIN=$(GOPATH1)/bin-darwin-arm64 MACOSX_DEPLOYMENT_TARGET=13.0 EXTRA_CONFIGURE_FLAGS='CFLAGS="-arch arm64 -mmacos-version-min=13.0" --host=aarch64-apple-darwin' $(MAKE)
 
 	# same for buildsrc-special
 	cd tools/block-generator && \
-	CROSS_COMPILE_ARCH=amd64 GOBIN=$(GOPATH1)/bin-darwin-amd64 MACOSX_DEPLOYMENT_TARGET=12.0 EXTRA_CONFIGURE_FLAGS='CFLAGS="-arch x86_64 -mmacos-version-min=12.0" --host=x86_64-apple-darwin' $(MAKE)
-	CROSS_COMPILE_ARCH=arm64 GOBIN=$(GOPATH1)/bin-darwin-arm64 MACOSX_DEPLOYMENT_TARGET=12.0 EXTRA_CONFIGURE_FLAGS='CFLAGS="-arch arm64 -mmacos-version-min=12.0" --host=aarch64-apple-darwin' $(MAKE)
+	CROSS_COMPILE_ARCH=amd64 GOBIN=$(GOPATH1)/bin-darwin-amd64 MACOSX_DEPLOYMENT_TARGET=13.0 EXTRA_CONFIGURE_FLAGS='CFLAGS="-arch x86_64 -mmacos-version-min=13.0" --host=x86_64-apple-darwin' $(MAKE)
+	CROSS_COMPILE_ARCH=arm64 GOBIN=$(GOPATH1)/bin-darwin-arm64 MACOSX_DEPLOYMENT_TARGET=13.0 EXTRA_CONFIGURE_FLAGS='CFLAGS="-arch arm64 -mmacos-version-min=13.0" --host=aarch64-apple-darwin' $(MAKE)
 
 	# lipo together
 	mkdir -p $(GOPATH1)/bin

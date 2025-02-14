@@ -71,7 +71,7 @@ func (s *trackerSQLStore) Batch(fn trackerdb.BatchFn) (err error) {
 func (s *trackerSQLStore) BatchContext(ctx context.Context, fn trackerdb.BatchFn) (err error) {
 	return wrapIOError(s.pair.Wdb.AtomicContext(ctx, func(ctx context.Context, tx *sql.Tx) error {
 		return fn(ctx, &sqlBatchScope{tx, false, &sqlWriter{tx}})
-	}))
+	}, nil))
 }
 
 func (s *trackerSQLStore) BeginBatch(ctx context.Context) (trackerdb.Batch, error) {
@@ -89,7 +89,7 @@ func (s *trackerSQLStore) Snapshot(fn trackerdb.SnapshotFn) (err error) {
 func (s *trackerSQLStore) SnapshotContext(ctx context.Context, fn trackerdb.SnapshotFn) (err error) {
 	return wrapIOError(s.pair.Rdb.AtomicContext(ctx, func(ctx context.Context, tx *sql.Tx) error {
 		return fn(ctx, &sqlSnapshotScope{tx, &sqlReader{tx}})
-	}))
+	}, nil))
 }
 
 func (s *trackerSQLStore) BeginSnapshot(ctx context.Context) (trackerdb.Snapshot, error) {
@@ -111,11 +111,11 @@ func (s *trackerSQLStore) TransactionWithRetryClearFn(fn trackerdb.TransactionFn
 func (s *trackerSQLStore) TransactionContext(ctx context.Context, fn trackerdb.TransactionFn) (err error) {
 	return wrapIOError(s.pair.Wdb.AtomicContext(ctx, func(ctx context.Context, tx *sql.Tx) error {
 		return fn(ctx, &sqlTransactionScope{tx, false, &sqlReader{tx}, &sqlWriter{tx}, &sqlCatchpoint{tx}})
-	}))
+	}, nil))
 }
 
 func (s *trackerSQLStore) TransactionContextWithRetryClearFn(ctx context.Context, fn trackerdb.TransactionFn, rollbackFn trackerdb.RetryClearFn) (err error) {
-	return wrapIOError(s.pair.Wdb.AtomicContextWithRetryClearFn(ctx, func(ctx context.Context, tx *sql.Tx) error {
+	return wrapIOError(s.pair.Wdb.AtomicContext(ctx, func(ctx context.Context, tx *sql.Tx) error {
 		return fn(ctx, &sqlTransactionScope{tx, false, &sqlReader{tx}, &sqlWriter{tx}, &sqlCatchpoint{tx}})
 	}, rollbackFn))
 }
@@ -132,7 +132,7 @@ func (s trackerSQLStore) RunMigrations(ctx context.Context, params trackerdb.Par
 	err = wrapIOError(s.pair.Wdb.AtomicContext(ctx, func(ctx context.Context, tx *sql.Tx) error {
 		mgr, err = RunMigrations(ctx, tx, params, log, targetVersion)
 		return err
-	}))
+	}, nil))
 	return
 }
 
@@ -159,7 +159,7 @@ func (s *trackerSQLStore) ResetToV6Test(ctx context.Context) error {
 			}
 		}
 		return nil
-	})
+	}, nil)
 }
 
 func (s *trackerSQLStore) Close() {
@@ -211,9 +211,9 @@ func (r *sqlReader) MakeKVsIter(ctx context.Context) (trackerdb.KVsIter, error) 
 	return MakeKVsIter(ctx, r.q)
 }
 
-// MakeOnlineAccountsIter implements trackerdb.Reader
-func (r *sqlReader) MakeOnlineAccountsIter(ctx context.Context, useStaging bool, excludeBefore basics.Round) (trackerdb.TableIterator[*encoded.OnlineAccountRecordV6], error) {
-	return MakeOnlineAccountsIter(ctx, r.q, useStaging, excludeBefore)
+// MakeOrderedOnlineAccountsIter implements trackerdb.Reader
+func (r *sqlReader) MakeOrderedOnlineAccountsIter(ctx context.Context, useStaging bool, excludeBefore basics.Round) (trackerdb.TableIterator[*encoded.OnlineAccountRecordV6], error) {
+	return MakeOrderedOnlineAccountsIter(ctx, r.q, useStaging, excludeBefore)
 }
 
 // MakeOnlineRoundParamsIter implements trackerdb.Reader

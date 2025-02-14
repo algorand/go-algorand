@@ -44,6 +44,7 @@ func init() {
 	rootCmd.AddCommand(fileCmd)
 	rootCmd.AddCommand(netCmd)
 	rootCmd.AddCommand(databaseCmd)
+	rootCmd.AddCommand(infoCmd)
 }
 
 var rootCmd = &cobra.Command{

@@ -79,8 +79,8 @@ func (r *reader) MakeKVsIter(ctx context.Context) (trackerdb.KVsIter, error) {
 	panic("unimplemented")
 }
 
-// MakeOnlineAccountsIter implements trackerdb.Reader
-func (r *reader) MakeOnlineAccountsIter(context.Context, bool, basics.Round) (trackerdb.TableIterator[*encoded.OnlineAccountRecordV6], error) {
+// MakeOrderedOnlineAccountsIter implements trackerdb.Reader
+func (r *reader) MakeOrderedOnlineAccountsIter(context.Context, bool, basics.Round) (trackerdb.TableIterator[*encoded.OnlineAccountRecordV6], error) {
 	// TODO: catchpoint
 	panic("unimplemented")
 }
