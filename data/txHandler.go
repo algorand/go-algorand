@@ -638,15 +638,15 @@ func (handler *TxHandler) incomingMsgErlCheck(sender network.DisconnectableAddre
 		// is sufficient to indicate that we should enable Congestion Control, because
 		// an issue in vending capacity indicates the underlying resource (TXBacklog) is full
 		capguard, isCMEnabled, err = handler.erl.ConsumeCapacity(sender.(util.ErlClient))
-		if err != nil || // did ERL ask to enable congestion control?
-			(!isCMEnabled && congestedERL) { // is CM not currently enabled, but queue is congested?
+		if err != nil {
 			handler.erl.EnableCongestionControl()
 			// if there is no capacity, it is the same as if we failed to put the item onto the backlog, so report such
 			transactionMessagesDroppedFromBacklog.Inc(nil)
 			return capguard, true
-		}
-		// if the backlog Queue has 50% of its buffer back, turn congestion control off
-		if !congestedERL {
+		} else if !isCMEnabled && congestedERL { // is CM not currently enabled, but queue is congested?
+			// if the backlog Queue has 50% of its buffer back, turn congestion control off
+			handler.erl.EnableCongestionControl()
+		} else if !congestedERL {
 			handler.erl.DisableCongestionControl()
 		}
 	}
