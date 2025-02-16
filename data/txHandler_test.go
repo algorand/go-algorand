@@ -2915,3 +2915,86 @@ func TestTxHandlerErlClientMapper(t *testing.T) {
 		require.True(t, closerCalled)
 	})
 }
+
+// TestTxHandlerERLIPClient checks that ERL properly handles sender with the same and different addresses:
+// Configure ERL in following way:
+// 1. Small maxCapacity=10 fully shared by two IP senders (TxBacklogReservedCapacityPerPeer=5, IncomingConnectionsLimit=0)
+// 2. Submit one from both IP senders to initalize per peer-queues and exhaust shared capacity
+// 3. Make sure the third peer does not come through
+// 4. Make sure extra messages from the first peer and second peer are accepted
+func TestTxHandlerERLIPClient(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// technically we don't need any users for this test
+	// but we need to create the genesis accounts to prevent this warning:
+	// "cannot start evaluator: overflowed subtracting rewards for block 1"
+	_, _, genesis := makeTestGenesisAccounts(t, 0)
+	genBal := bookkeeping.MakeGenesisBalances(genesis, sinkAddr, poolAddr)
+	ledgerName := fmt.Sprintf("%s-mem", t.Name())
+	const inMem = true
+
+	log := logging.TestingLog(t)
+	log.SetLevel(logging.Panic)
+
+	const backlogSize = 10 // to have targetRateRefreshTicks: bsize / 10  != 0 in NewREDCongestionManager
+	cfg := config.GetDefaultLocal()
+	cfg.TxIncomingFilteringFlags = 0 // disable duplicate filtering to simplify the test
+	cfg.IncomingConnectionsLimit = 0 // disable incoming connections limit to have TxBacklogSize controlled
+	cfg.EnableTxBacklogRateLimiting = true
+	cfg.EnableTxBacklogAppRateLimiting = false
+	cfg.TxBacklogServiceRateWindowSeconds = 100 // large window
+	cfg.TxBacklogRateLimitingCongestionPct = 0  // always congested
+	cfg.TxBacklogReservedCapacityPerPeer = 5    // 5 messages per peer (IP address in our case)
+	cfg.TxBacklogSize = backlogSize
+	l, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, cfg)
+	require.NoError(t, err)
+	defer l.Close()
+
+	handler, err := makeTestTxHandler(l, cfg)
+	require.NoError(t, err)
+	defer handler.txVerificationPool.Shutdown()
+	defer close(handler.streamVerifierDropped)
+	require.NotNil(t, handler.erl)
+	require.Nil(t, handler.appLimiter)
+	handler.erl.Start()
+	defer handler.erl.Stop()
+
+	var addr1, addr2 basics.Address
+	crypto.RandBytes(addr1[:])
+	crypto.RandBytes(addr2[:])
+
+	tx := getTransaction(addr1, addr2, 1)
+
+	signedTx := tx.Sign(keypair()) // some random key
+	blob := protocol.Encode(&signedTx)
+	sender1 := newErlMockPeer("1")
+	sender2 := newErlMockPeer("2")
+	sender3 := newErlMockPeer("3")
+
+	// initialize peer queues
+	action := handler.processIncomingTxn(network.IncomingMessage{Data: blob, Sender: sender1})
+	require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, action)
+	require.Equal(t, 1, len(handler.backlogQueue))
+
+	action = handler.processIncomingTxn(network.IncomingMessage{Data: blob, Sender: sender2})
+	require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, action)
+	require.Equal(t, 2, len(handler.backlogQueue))
+
+	// make sure the third peer does not come through
+	action = handler.processIncomingTxn(network.IncomingMessage{Data: blob, Sender: sender3})
+	require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, action)
+	require.Equal(t, 2, len(handler.backlogQueue))
+
+	// make sure messages from other sender objects with the same IP are accepted
+	sender11 := newErlMockPeer("1")
+	sender21 := newErlMockPeer("2")
+
+	action = handler.processIncomingTxn(network.IncomingMessage{Data: blob, Sender: sender11})
+	require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, action)
+	require.Equal(t, 3, len(handler.backlogQueue))
+
+	action = handler.processIncomingTxn(network.IncomingMessage{Data: blob, Sender: sender21})
+	require.Equal(t, network.OutgoingMessage{Action: network.Ignore}, action)
+	require.Equal(t, 4, len(handler.backlogQueue))
+}
