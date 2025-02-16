@@ -21,6 +21,7 @@ package util
 
 import (
 	"fmt"
+	"runtime"
 	"syscall"
 )
 
@@ -71,4 +72,20 @@ func GetCurrentProcessTimes() (utime int64, stime int64, err error) {
 		stime = 0
 	}
 	return
+}
+
+// GetTotalMemory gets total system memory on Linux systems
+func GetTotalMemory() uint64 {
+	switch runtime.GOOS {
+	case "linux":
+		// Use sysinfo on Linux
+		var si syscall.Sysinfo_t
+		err := syscall.Sysinfo(&si)
+		if err != nil {
+			return 0
+		}
+		return si.Totalram
+	default:
+		return 0
+	}
 }

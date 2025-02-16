@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"os"
 	"runtime"
-	"syscall"
 	"time"
 
+	"github.com/algorand/go-algorand/util"
 	"github.com/google/uuid"
 	. "github.com/klauspost/cpuid/v2"
 )
@@ -56,21 +56,6 @@ func (bs *benchStage) String() string {
 	return fmt.Sprintf(">> stage:%s duration_sec:%.1f duration_min:%.1f cpu_sec:%d", bs.stage, bs.duration.Seconds(), bs.duration.Minutes(), bs.cpuTimeNS/1000000000)
 }
 
-func maybeGetTotalMemory() uint64 {
-	switch runtime.GOOS {
-	case "linux":
-		// Use sysinfo on Linux
-		var si syscall.Sysinfo_t
-		err := syscall.Sysinfo(&si)
-		if err != nil {
-			return 0
-		}
-		return si.Totalram
-	default:
-		return 0
-	}
-}
-
 func gatherHostInfo() *hostInfo {
 	nid := sha256.Sum256(uuid.NodeID())
 	uuid, _ := uuid.FromBytes(nid[0:16])
@@ -82,7 +67,7 @@ func gatherHostInfo() *hostInfo {
 		CpuVendor:     CPU.VendorID.String(),
 		CpuMaxMHz:     CPU.BoostFreq / 1_000_000,
 		CpuBaseMHz:    CPU.Hz / 1_000_000,
-		MemMB:         int(maybeGetTotalMemory()) / 1024 / 1024,
+		MemMB:         int(util.GetTotalMemory()) / 1024 / 1024,
 		ID:            uuid,
 		OS:            runtime.GOOS,
 	}
@@ -99,18 +84,13 @@ func makeBenchmarkReport() *benchReport {
 	}
 }
 
-func GetCPU() int64 {
-	usage := new(syscall.Rusage)
-	syscall.Getrusage(syscall.RUSAGE_SELF, usage)
-	return usage.Utime.Nano() + usage.Stime.Nano()
-}
-
 func (br *benchReport) startStage(stage string) *benchStage {
+	utime, stime, _ := util.GetCurrentProcessTimes()
 	bs := &benchStage{
 		stage:     stage,
 		start:     time.Now(),
 		duration:  0,
-		cpuTimeNS: GetCPU(),
+		cpuTimeNS: utime + stime,
 		completed: false,
 	}
 	br.Stages = append(br.Stages, bs)
@@ -118,9 +98,10 @@ func (br *benchReport) startStage(stage string) *benchStage {
 }
 
 func (bs *benchStage) completeStage() {
+	utime, stime, _ := util.GetCurrentProcessTimes()
 	bs.duration = time.Since(bs.start)
 	bs.completed = true
-	bs.cpuTimeNS = GetCPU() - bs.cpuTimeNS
+	bs.cpuTimeNS = utime + stime - bs.cpuTimeNS
 }
 
 func (br *benchReport) printReport() {
