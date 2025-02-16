@@ -40,7 +40,7 @@ func init() {
 	benchCmd.Flags().IntVarP(&round, "round", "r", 0, "Specify the round number ( i.e. 7700000 )")
 	benchCmd.Flags().StringVarP(&relayAddress, "relay", "p", "", "Relay address to use ( i.e. r-ru.algorand-mainnet.network:4160 )")
 	benchCmd.Flags().StringVarP(&catchpointFile, "tar", "t", "", "Specify the catchpoint file (either .tar or .tar.gz) to process")
-	benchCmd.Flags().StringVarP(&reportJsonPath, "report", "j", "", "Specify the file to save the Json formatted report to")
+	benchCmd.Flags().StringVarP(&reportJsonPath, "report", "j", "", "Specify the file to save the JSON formatted report to")
 }
 
 var benchCmd = &cobra.Command{
@@ -144,14 +144,8 @@ func downloadCatchpointFromAnyRelay(network string, round int, relayAddress stri
 	if relayAddress != "" {
 		addrs = []string{relayAddress}
 	} else {
-		//append relays
-		dnsaddrs, err := tools.ReadFromSRV(context.Background(), "algobootstrap", "tcp", networkName, "", false)
-		if err != nil || len(dnsaddrs) == 0 {
-			return "", fmt.Errorf("unable to bootstrap records for '%s' : %v", networkName, err)
-		}
-		addrs = append(addrs, dnsaddrs...)
 		// append archivers
-		dnsaddrs, err = tools.ReadFromSRV(context.Background(), "archive", "tcp", networkName, "", false)
+		dnsaddrs, err := tools.ReadFromSRV(context.Background(), "archive", "tcp", networkName, "", false)
 		if err == nil && len(dnsaddrs) > 0 {
 			addrs = append(addrs, dnsaddrs...)
 		}
@@ -175,11 +169,13 @@ func buildMerkleTrie(ctx context.Context, catchupAccessor ledger.CatchpointCatch
 		return err
 	}
 
-	var balanceHash, spverHash crypto.Digest
-	balanceHash, spverHash, _, err = catchupAccessor.GetVerifyData(ctx)
+	var balanceHash, spverHash, onlineAccountsHash, onlineRoundParamsHash crypto.Digest
+	balanceHash, spverHash, onlineAccountsHash, onlineRoundParamsHash, _, err = catchupAccessor.GetVerifyData(ctx)
 	if err != nil {
 		return err
 	}
-	fmt.Printf("done. \naccounts digest=%s, spver digest=%s\n\n", balanceHash, spverHash)
+	fmt.Printf("done. \naccounts digest=%s, spver digest=%s, onlineaccounts digest=%s onlineroundparams digest=%s\n",
+		balanceHash, spverHash, onlineAccountsHash, onlineRoundParamsHash)
+
 	return nil
 }
