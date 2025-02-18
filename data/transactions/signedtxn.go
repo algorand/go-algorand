@@ -37,8 +37,6 @@ type SignedTxn struct {
 	Lsig     LogicSig           `codec:"lsig"`
 	Txn      Transaction        `codec:"txn"`
 	AuthAddr basics.Address     `codec:"sgnr"`
-
-	cachedID *Txid `codec:"-"`
 }
 
 // SignedTxnInBlock is how a signed transaction is encoded in a block.
@@ -61,16 +59,7 @@ type SignedTxnWithAD struct {
 
 // ID returns the Txid (i.e., hash) of the underlying transaction.
 func (s SignedTxn) ID() Txid {
-	if s.cachedID != nil {
-		return *s.cachedID
-	}
 	return s.Txn.ID()
-}
-
-// CacheID caches the ID of the underlying transaction.
-func (s *SignedTxn) CacheID() {
-	txid := s.Txn.ID()
-	s.cachedID = &txid
 }
 
 // ID on SignedTxnInBlock should never be called, because the ID depends

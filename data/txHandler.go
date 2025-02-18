@@ -349,10 +349,6 @@ func (handler *TxHandler) backlogWorker() {
 					logging.Base().Warnf("Failed to release capacity to ElasticRateLimiter: %v", err)
 				}
 			}
-			// precompute transaction IDs
-			for i := range wi.unverifiedTxGroup {
-				wi.unverifiedTxGroup[i].CacheID()
-			}
 			if handler.checkAlreadyCommitted(wi) {
 				transactionMessagesAlreadyCommitted.Inc(nil)
 				if wi.capguard != nil {
