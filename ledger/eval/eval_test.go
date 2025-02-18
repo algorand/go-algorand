@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -273,7 +273,6 @@ func TestTransactionGroupWithTracer(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		testCase := testCase
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
 			genesisInitState, addrs, keys := ledgertesting.Genesis(10)
@@ -793,9 +792,27 @@ func (ledger *evalTestLedger) LookupAgreement(rnd basics.Round, addr basics.Addr
 	return convertToOnline(ad), err
 }
 
-// OnlineCirculation just returns a deterministic value for a given round.
+func (ledger *evalTestLedger) GetKnockOfflineCandidates(rnd basics.Round, _ config.ConsensusParams) (map[basics.Address]basics.OnlineAccountData, error) {
+	// simulate by returning all online accounts known by the test ledger
+	ret := make(map[basics.Address]basics.OnlineAccountData)
+	for addr, data := range ledger.roundBalances[rnd] {
+		if data.Status == basics.Online && !data.MicroAlgos.IsZero() {
+			ret[addr] = data.OnlineAccountData()
+		}
+	}
+	return ret, nil
+}
+
+// OnlineCirculation add up the balances of all online accounts in rnd. It
+// doesn't remove expired accounts.
 func (ledger *evalTestLedger) OnlineCirculation(rnd, voteRound basics.Round) (basics.MicroAlgos, error) {
-	return basics.MicroAlgos{Raw: uint64(rnd) * 1_000_000}, nil
+	circulation := basics.MicroAlgos{}
+	for _, data := range ledger.roundBalances[rnd] {
+		if data.Status == basics.Online {
+			circulation.Raw += data.MicroAlgos.Raw
+		}
+	}
+	return circulation, nil
 }
 
 func (ledger *evalTestLedger) LookupApplication(rnd basics.Round, addr basics.Address, aidx basics.AppIndex) (ledgercore.AppResource, error) {
@@ -948,8 +965,8 @@ func (ledger *evalTestLedger) nextBlock(t testing.TB) *BlockEvaluator {
 }
 
 // endBlock completes the block being created, returns the ValidatedBlock for inspection
-func (ledger *evalTestLedger) endBlock(t testing.TB, eval *BlockEvaluator) *ledgercore.ValidatedBlock {
-	unfinishedBlock, err := eval.GenerateBlock(nil)
+func (ledger *evalTestLedger) endBlock(t testing.TB, eval *BlockEvaluator, proposers ...basics.Address) *ledgercore.ValidatedBlock {
+	unfinishedBlock, err := eval.GenerateBlock(proposers)
 	require.NoError(t, err)
 	// fake agreement's setting of header fields so later validates work.
 	seed := committee.Seed{}
@@ -1023,6 +1040,10 @@ func (l *testCowBaseLedger) LookupWithoutRewards(basics.Round, basics.Address) (
 
 func (l *testCowBaseLedger) LookupAgreement(rnd basics.Round, addr basics.Address) (basics.OnlineAccountData, error) {
 	return basics.OnlineAccountData{}, errors.New("not implemented")
+}
+
+func (l *testCowBaseLedger) GetKnockOfflineCandidates(basics.Round, config.ConsensusParams) (map[basics.Address]basics.OnlineAccountData, error) {
+	return nil, errors.New("not implemented")
 }
 
 func (l *testCowBaseLedger) OnlineCirculation(rnd, voteRnd basics.Round) (basics.MicroAlgos, error) {
@@ -1099,7 +1120,7 @@ func TestEvalFunctionForExpiredAccounts(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	genesisInitState, addrs, keys := ledgertesting.GenesisWithProto(10, protocol.ConsensusFuture)
+	genesisInitState, addrs, _ := ledgertesting.GenesisWithProto(10, protocol.ConsensusFuture)
 
 	sendAddr := addrs[0]
 	recvAddr := addrs[1]
@@ -1145,37 +1166,17 @@ func TestEvalFunctionForExpiredAccounts(t *testing.T) {
 
 	// Advance the evaluator a couple rounds, watching for lack of expiration
 	for i := uint64(0); i < uint64(targetRound); i++ {
-		vb := l.endBlock(t, blkEval)
+		vb := l.endBlock(t, blkEval, recvAddr)
 		blkEval = l.nextBlock(t)
 		for _, acct := range vb.Block().ExpiredParticipationAccounts {
 			if acct == recvAddr {
-				// won't happen, because recvAddr didn't appear in block
+				// won't happen, because recvAddr was proposer
 				require.Fail(t, "premature expiration")
 			}
 		}
 	}
 
 	require.Greater(t, uint64(blkEval.Round()), uint64(recvAddrLastValidRound))
-
-	genHash := l.GenesisHash()
-	txn := transactions.Transaction{
-		Type: protocol.PaymentTx,
-		Header: transactions.Header{
-			Sender:      sendAddr,
-			Fee:         minFee,
-			FirstValid:  newBlock.Round(),
-			LastValid:   blkEval.Round(),
-			GenesisHash: genHash,
-		},
-		PaymentTxnFields: transactions.PaymentTxnFields{
-			Receiver: recvAddr,
-			Amount:   basics.MicroAlgos{Raw: 100},
-		},
-	}
-
-	st := txn.Sign(keys[0])
-	err = blkEval.Transaction(st, transactions.ApplyData{})
-	require.NoError(t, err)
 
 	// Make sure we validate our block as well
 	blkEval.validate = true
@@ -1251,7 +1252,7 @@ func TestExpiredAccountGenerationWithDiskFailure(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	genesisInitState, addrs, keys := ledgertesting.GenesisWithProto(10, protocol.ConsensusFuture)
+	genesisInitState, addrs, _ := ledgertesting.GenesisWithProto(10, protocol.ConsensusFuture)
 
 	sendAddr := addrs[0]
 	recvAddr := addrs[1]
@@ -1297,26 +1298,6 @@ func TestExpiredAccountGenerationWithDiskFailure(t *testing.T) {
 		eval = l.nextBlock(t)
 	}
 
-	genHash := l.GenesisHash()
-	txn := transactions.Transaction{
-		Type: protocol.PaymentTx,
-		Header: transactions.Header{
-			Sender:      sendAddr,
-			Fee:         minFee,
-			FirstValid:  newBlock.Round(),
-			LastValid:   eval.Round(),
-			GenesisHash: genHash,
-		},
-		PaymentTxnFields: transactions.PaymentTxnFields{
-			Receiver: recvAddr,
-			Amount:   basics.MicroAlgos{Raw: 100},
-		},
-	}
-
-	st := txn.Sign(keys[0])
-	err = eval.Transaction(st, transactions.ApplyData{})
-	require.NoError(t, err)
-
 	eval.validate = true
 	eval.generate = false
 
@@ -1354,18 +1335,45 @@ func TestAbsenteeChecks(t *testing.T) {
 		crypto.RandBytes(tmp.StateProofID[:])
 		crypto.RandBytes(tmp.SelectionID[:])
 		crypto.RandBytes(tmp.VoteID[:])
+		tmp.IncentiveEligible = true // make suspendable
 		tmp.VoteFirstValid = 1
 		tmp.VoteLastValid = 1500 // large enough to avoid EXPIRATION, so we can see SUSPENSION
-		tmp.LastHeartbeat = 1    // non-zero allows suspensions
 		switch i {
 		case 1:
-			tmp.LastHeartbeat = 1150 // lie here so that addr[1] won't be suspended
+			tmp.LastHeartbeat = 1 // we want addrs[1] to be suspended earlier than others
 		case 2:
-			tmp.LastProposed = 1150 // lie here so that addr[2] won't be suspended
+			tmp.LastProposed = 1 // we want addrs[2] to be suspended earlier than others
+		case 3:
+			tmp.LastProposed = 1 // we want addrs[3] to be a proposer, and never suspend itself
+		case 5:
+			tmp.LastHeartbeat = 1 // like addr[1] but !IncentiveEligible, no suspend
+			tmp.IncentiveEligible = false
+		case 6:
+			tmp.LastProposed = 1 // like addr[2] but !IncentiveEligible, no suspend
+			tmp.IncentiveEligible = false
+		default:
+			if i < 10 { // make 0,3,4,7,8,9 unsuspendable
+				switch i % 3 {
+				case 0:
+					tmp.LastProposed = 1200
+				case 1:
+					tmp.LastHeartbeat = 1200
+				case 2:
+					tmp.IncentiveEligible = false
+				}
+			} else {
+				// ensure non-zero balance for the new accounts, but a small
+				// balance so they will not be absent, just challenged.
+				tmp.MicroAlgos = basics.MicroAlgos{Raw: 1_000_000}
+				tmp.LastHeartbeat = 1 // non-zero allows suspensions
+			}
 		}
 
 		genesisInitState.Accounts[addr] = tmp
 	}
+
+	// pretend this node is participating on behalf of addrs[3] and addrs[4]
+	proposers := []basics.Address{addrs[3], addrs[4]}
 
 	l := newTestLedger(t, bookkeeping.GenesisBalances{
 		Balances:    genesisInitState.Accounts,
@@ -1378,15 +1386,21 @@ func TestAbsenteeChecks(t *testing.T) {
 	blkEval, err := l.StartEvaluator(newBlock.BlockHeader, 0, 0, nil)
 	require.NoError(t, err)
 
-	// Advance the evaluator, watching for lack of suspensions since we don't
-	// suspend until a txn with a suspendable account appears
+	// Advance the evaluator, watching for suspensions as they appear
 	challenge := byte(0)
-	for i := uint64(0); i < uint64(1210); i++ { // A bit past one grace period (200) past challenge at 1000.
-		vb := l.endBlock(t, blkEval)
+	for i := uint64(0); i < uint64(1200); i++ { // Just before first suspension at 1171
+		vb := l.endBlock(t, blkEval, proposers...)
 		blkEval = l.nextBlock(t)
-		require.Zero(t, vb.Block().AbsentParticipationAccounts)
-		if vb.Block().Round() == 1000 {
+
+		switch vb.Block().Round() {
+		case 202: // 2 out of 10 genesis accounts are now absent
+			require.Len(t, vb.Block().AbsentParticipationAccounts, 2, addrs)
+			require.Contains(t, vb.Block().AbsentParticipationAccounts, addrs[1])
+			require.Contains(t, vb.Block().AbsentParticipationAccounts, addrs[2])
+		case 1000:
 			challenge = vb.Block().BlockHeader.Seed[0]
+		default:
+			require.Zero(t, vb.Block().AbsentParticipationAccounts, "round %v", vb.Block().Round())
 		}
 	}
 	challenged := basics.Address{(challenge >> 3) << 3, 0xaa}
@@ -1422,26 +1436,32 @@ func TestAbsenteeChecks(t *testing.T) {
 	// Make sure we validate our block as well
 	blkEval.validate = true
 
-	unfinishedBlock, err := blkEval.GenerateBlock(nil)
+	unfinishedBlock, err := blkEval.GenerateBlock(proposers)
 	require.NoError(t, err)
 
 	// fake agreement's setting of header fields so later validates work
 	validatedBlock := ledgercore.MakeValidatedBlock(unfinishedBlock.UnfinishedBlock().WithProposer(committee.Seed{}, testPoolAddr, true), unfinishedBlock.UnfinishedDeltas())
 
-	require.Zero(t, validatedBlock.Block().ExpiredParticipationAccounts)
-	require.Contains(t, validatedBlock.Block().AbsentParticipationAccounts, addrs[0], addrs[0].String())
-	require.NotContains(t, validatedBlock.Block().AbsentParticipationAccounts, addrs[1], addrs[1].String())
-	require.NotContains(t, validatedBlock.Block().AbsentParticipationAccounts, addrs[2], addrs[2].String())
+	require.Equal(t, basics.Round(1201), validatedBlock.Block().Round())
+	require.Empty(t, validatedBlock.Block().ExpiredParticipationAccounts)
 
 	// Of the 32 extra accounts, make sure only the one matching the challenge is suspended
+	require.Len(t, validatedBlock.Block().AbsentParticipationAccounts, 1)
 	require.Contains(t, validatedBlock.Block().AbsentParticipationAccounts, challenged, challenged.String())
+	foundChallenged := false
 	for i := byte(0); i < 32; i++ {
 		if i == challenge>>3 {
+			rnd := validatedBlock.Block().Round()
+			ad := basics.Address{i << 3, 0xaa}
+			t.Logf("extra account %d %s is challenged, balance rnd %d %d", i, ad,
+				rnd, l.roundBalances[rnd][ad].MicroAlgos.Raw)
 			require.Equal(t, basics.Address{i << 3, 0xaa}, challenged)
+			foundChallenged = true
 			continue
 		}
 		require.NotContains(t, validatedBlock.Block().AbsentParticipationAccounts, basics.Address{i << 3, 0xaa})
 	}
+	require.True(t, foundChallenged)
 
 	_, err = Eval(context.Background(), l, validatedBlock.Block(), false, nil, nil, l.tracer)
 	require.NoError(t, err)
@@ -1459,7 +1479,7 @@ func TestAbsenteeChecks(t *testing.T) {
 
 	// Introduce an address that shouldn't be suspended
 	badBlock := goodBlock
-	badBlock.AbsentParticipationAccounts = append(badBlock.AbsentParticipationAccounts, addrs[1])
+	badBlock.AbsentParticipationAccounts = append(badBlock.AbsentParticipationAccounts, addrs[9])
 	_, err = Eval(context.Background(), l, badBlock, true, verify.GetMockedCache(true), nil, l.tracer)
 	require.ErrorContains(t, err, "not absent")
 
@@ -1497,16 +1517,21 @@ func TestExpiredAccountGeneration(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	genesisInitState, addrs, keys := ledgertesting.GenesisWithProto(10, protocol.ConsensusFuture)
+	genesisInitState, addrs, _ := ledgertesting.GenesisWithProto(10, protocol.ConsensusFuture)
 
 	sendAddr := addrs[0]
 	recvAddr := addrs[1]
+	propAddr := addrs[2]
+	otherPropAddr := addrs[3] // not expiring, but part of proposer addresses passed to GenerateBlock
 
-	// the last round that the recvAddr is valid for
-	recvAddrLastValidRound := basics.Round(2)
+	// pretend this node is participating on behalf of addrs[2] and addrs[3]
+	proposers := []basics.Address{propAddr, otherPropAddr}
+
+	// the last round that the recvAddr and propAddr are valid for
+	testAddrLastValidRound := basics.Round(2)
 
 	// the target round we want to advance the evaluator to
-	targetRound := basics.Round(4)
+	targetRound := basics.Round(2)
 
 	// Set all to online except the sending address
 	for _, addr := range addrs {
@@ -1527,11 +1552,11 @@ func TestExpiredAccountGeneration(t *testing.T) {
 		genesisInitState.Accounts[addr] = tmp
 	}
 
-	// Choose recvAddr to have a last valid round less than genesis block round
-	{
-		tmp := genesisInitState.Accounts[recvAddr]
-		tmp.VoteLastValid = recvAddrLastValidRound
-		genesisInitState.Accounts[recvAddr] = tmp
+	// Choose recvAddr and propAddr to have a last valid round less than genesis block round
+	for _, addr := range []basics.Address{recvAddr, propAddr} {
+		tmp := genesisInitState.Accounts[addr]
+		tmp.VoteLastValid = testAddrLastValidRound
+		genesisInitState.Accounts[addr] = tmp
 	}
 
 	l := newTestLedger(t, bookkeeping.GenesisBalances{
@@ -1548,36 +1573,18 @@ func TestExpiredAccountGeneration(t *testing.T) {
 
 	// Advance the evaluator a couple rounds...
 	for i := uint64(0); i < uint64(targetRound); i++ {
-		l.endBlock(t, eval)
+		vb := l.endBlock(t, eval)
 		eval = l.nextBlock(t)
+		require.Empty(t, vb.Block().ExpiredParticipationAccounts)
 	}
 
-	require.Greater(t, uint64(eval.Round()), uint64(recvAddrLastValidRound))
-
-	genHash := l.GenesisHash()
-	txn := transactions.Transaction{
-		Type: protocol.PaymentTx,
-		Header: transactions.Header{
-			Sender:      sendAddr,
-			Fee:         minFee,
-			FirstValid:  newBlock.Round(),
-			LastValid:   eval.Round(),
-			GenesisHash: genHash,
-		},
-		PaymentTxnFields: transactions.PaymentTxnFields{
-			Receiver: recvAddr,
-			Amount:   basics.MicroAlgos{Raw: 100},
-		},
-	}
-
-	st := txn.Sign(keys[0])
-	err = eval.Transaction(st, transactions.ApplyData{})
-	require.NoError(t, err)
+	require.Greater(t, uint64(eval.Round()), uint64(testAddrLastValidRound))
 
 	// Make sure we validate our block as well
 	eval.validate = true
 
-	unfinishedBlock, err := eval.GenerateBlock(nil)
+	// GenerateBlock will not mark its own proposer addresses as expired
+	unfinishedBlock, err := eval.GenerateBlock(proposers)
 	require.NoError(t, err)
 
 	listOfExpiredAccounts := unfinishedBlock.UnfinishedBlock().ParticipationUpdates.ExpiredParticipationAccounts
@@ -1594,29 +1601,17 @@ func TestExpiredAccountGeneration(t *testing.T) {
 	require.Zero(t, recvAcct.VoteID)
 	require.Zero(t, recvAcct.SelectionID)
 	require.Zero(t, recvAcct.StateProofID)
-}
 
-func TestBitsMatch(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-
-	for b := 0; b <= 6; b++ {
-		require.True(t, bitsMatch([]byte{0x1}, []byte{0x2}, b), "%d", b)
-	}
-	require.False(t, bitsMatch([]byte{0x1}, []byte{0x2}, 7))
-	require.False(t, bitsMatch([]byte{0x1}, []byte{0x2}, 8))
-	require.False(t, bitsMatch([]byte{0x1}, []byte{0x2}, 9))
-
-	for b := 0; b <= 12; b++ {
-		require.True(t, bitsMatch([]byte{0x1, 0xff, 0xaa}, []byte{0x1, 0xf0}, b), "%d", b)
-	}
-	require.False(t, bitsMatch([]byte{0x1, 0xff, 0xaa}, []byte{0x1, 0xf0}, 13))
-
-	// on a byte boundary
-	require.True(t, bitsMatch([]byte{0x1}, []byte{0x1}, 8))
-	require.False(t, bitsMatch([]byte{0x1}, []byte{0x1}, 9))
-	require.True(t, bitsMatch([]byte{0x1, 0xff}, []byte{0x1, 0x00}, 8))
-	require.False(t, bitsMatch([]byte{0x1, 0xff}, []byte{0x1, 00}, 9))
+	// propAddr not marked expired
+	propAcct, err := eval.state.lookup(propAddr)
+	require.NoError(t, err)
+	require.Equal(t, basics.Online, propAcct.Status)
+	require.NotZero(t, propAcct.VoteFirstValid)
+	require.NotZero(t, propAcct.VoteLastValid)
+	require.NotZero(t, propAcct.VoteKeyDilution)
+	require.NotZero(t, propAcct.VoteID)
+	require.NotZero(t, propAcct.SelectionID)
+	require.NotZero(t, propAcct.StateProofID)
 }
 
 func TestIsAbsent(t *testing.T) {
@@ -1627,82 +1622,13 @@ func TestIsAbsent(t *testing.T) {
 	var absent = func(total uint64, acct uint64, last uint64, current uint64) bool {
 		return isAbsent(basics.Algos(total), basics.Algos(acct), basics.Round(last), basics.Round(current))
 	}
-	// 1% of stake, absent for 1000 rounds
-	a.False(absent(1000, 10, 5000, 6000))
-	a.True(absent(1000, 10, 5000, 6001))  // longer
-	a.True(absent(1000, 11, 5000, 6001))  // more acct stake
-	a.False(absent(1000, 9, 5000, 6001))  // less acct stake
-	a.False(absent(1001, 10, 5000, 6001)) // more online stake
+	a.False(absent(1000, 10, 5000, 6000)) // 1% of stake, absent for 1000 rounds
+	a.False(absent(1000, 10, 5000, 7000)) // 1% of stake, absent for 2000 rounds
+	a.True(absent(1000, 10, 5000, 7001))  // 2001
+	a.True(absent(1000, 11, 5000, 7000))  // more acct stake drives percent down, makes it absent
+	a.False(absent(1000, 9, 5000, 7001))  // less acct stake
+	a.False(absent(1001, 10, 5000, 7001)) // more online stake
 	// not absent if never seen
-	a.False(absent(1000, 10, 0, 6000))
-	a.False(absent(1000, 10, 0, 6001))
-}
-
-func TestFailsChallenge(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-	a := assert.New(t)
-
-	// a valid challenge, with 4 matching bits, and an old last seen
-	a.True(failsChallenge(challenge{round: 11, seed: [32]byte{0xb0, 0xb4}, bits: 4}, basics.Address{0xbf, 0x34}, 10))
-
-	// challenge isn't "on"
-	a.False(failsChallenge(challenge{round: 0, seed: [32]byte{0xb0, 0xb4}, bits: 4}, basics.Address{0xbf, 0x34}, 10))
-	// node has appeared more recently
-	a.False(failsChallenge(challenge{round: 11, seed: [32]byte{0xb0, 0xb4}, bits: 4}, basics.Address{0xbf, 0x34}, 12))
-	// bits don't match
-	a.False(failsChallenge(challenge{round: 11, seed: [32]byte{0xb0, 0xb4}, bits: 4}, basics.Address{0xcf, 0x34}, 10))
-	// no enough bits match
-	a.False(failsChallenge(challenge{round: 11, seed: [32]byte{0xb0, 0xb4}, bits: 5}, basics.Address{0xbf, 0x34}, 10))
-}
-
-type singleSource bookkeeping.BlockHeader
-
-func (ss singleSource) BlockHdr(r basics.Round) (bookkeeping.BlockHeader, error) {
-	return bookkeeping.BlockHeader(ss), nil
-}
-
-func TestActiveChallenge(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	t.Parallel()
-	a := assert.New(t)
-
-	nowHeader := bookkeeping.BlockHeader{
-		UpgradeState: bookkeeping.UpgradeState{
-			// Here the rules are on, so they certainly differ from rules in oldHeader's params
-			CurrentProtocol: protocol.ConsensusFuture,
-		},
-	}
-	now := config.Consensus[nowHeader.CurrentProtocol]
-
-	// simplest test. when interval=X and grace=G, X+G+1 is a challenge
-	inChallenge := now.Payouts.ChallengeInterval + now.Payouts.ChallengeGracePeriod + 1
-	ch := activeChallenge(&now, inChallenge, singleSource(nowHeader))
-	a.NotZero(ch.round)
-
-	// all rounds before that have no challenge
-	for r := uint64(1); r < inChallenge; r++ {
-		ch := activeChallenge(&now, r, singleSource(nowHeader))
-		a.Zero(ch.round, r)
-	}
-
-	// ChallengeGracePeriod rounds allow challenges starting with inChallenge
-	for r := inChallenge; r < inChallenge+now.Payouts.ChallengeGracePeriod; r++ {
-		ch := activeChallenge(&now, r, singleSource(nowHeader))
-		a.EqualValues(ch.round, now.Payouts.ChallengeInterval)
-	}
-
-	// And the next round is again challenge-less
-	ch = activeChallenge(&now, inChallenge+now.Payouts.ChallengeGracePeriod, singleSource(nowHeader))
-	a.Zero(ch.round)
-
-	// ignore challenge if upgrade happened
-	oldHeader := bookkeeping.BlockHeader{
-		UpgradeState: bookkeeping.UpgradeState{
-			// We need a version from before payouts got turned on
-			CurrentProtocol: protocol.ConsensusV39,
-		},
-	}
-	ch = activeChallenge(&now, inChallenge, singleSource(oldHeader))
-	a.Zero(ch.round)
+	a.False(absent(1000, 10, 0, 2001))
+	a.True(absent(1000, 10, 1, 2002))
 }

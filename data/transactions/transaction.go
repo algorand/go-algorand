@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,13 +21,14 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/protocol"
-	"golang.org/x/exp/slices"
 )
 
 // Txid is a hash used to uniquely identify individual transactions
@@ -100,6 +101,11 @@ type Transaction struct {
 	AssetFreezeTxnFields
 	ApplicationCallTxnFields
 	StateProofTxnFields
+
+	// By making HeartbeatTxnFields a pointer we save a ton of space of the
+	// Transaction object. Unlike other txn types, the fields will be
+	// embedded under a named field in the transaction encoding.
+	*HeartbeatTxnFields `codec:"hb"`
 }
 
 // ApplyData contains information about the transaction's execution.
@@ -324,7 +330,7 @@ func (tx Header) Alive(tc TxnContext) error {
 
 // MatchAddress checks if the transaction touches a given address.
 func (tx Transaction) MatchAddress(addr basics.Address, spec SpecialAddresses) bool {
-	return slices.Contains(tx.RelevantAddrs(spec), addr)
+	return slices.Contains(tx.relevantAddrs(spec), addr)
 }
 
 var errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound = errors.New("transaction first voting round need to be less than its last voting round")
@@ -565,6 +571,42 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 			return errLeaseMustBeZeroInStateproofTxn
 		}
 
+	case protocol.HeartbeatTx:
+		if !proto.Heartbeat {
+			return fmt.Errorf("heartbeat transaction not supported")
+		}
+
+		// If this is a free/cheap heartbeat, it must be very simple.
+		if tx.Fee.Raw < proto.MinTxnFee && tx.Group.IsZero() {
+			kind := "free"
+			if tx.Fee.Raw > 0 {
+				kind = "cheap"
+			}
+
+			if len(tx.Note) > 0 {
+				return fmt.Errorf("tx.Note is set in %s heartbeat", kind)
+			}
+			if tx.Lease != [32]byte{} {
+				return fmt.Errorf("tx.Lease is set in %s heartbeat", kind)
+			}
+			if !tx.RekeyTo.IsZero() {
+				return fmt.Errorf("tx.RekeyTo is set in %s heartbeat", kind)
+			}
+		}
+
+		if (tx.HbProof == crypto.HeartbeatProof{}) {
+			return errors.New("tx.HbProof is empty")
+		}
+		if (tx.HbSeed == committee.Seed{}) {
+			return errors.New("tx.HbSeed is empty")
+		}
+		if tx.HbVoteID.IsEmpty() {
+			return errors.New("tx.HbVoteID is empty")
+		}
+		if tx.HbKeyDilution == 0 {
+			return errors.New("tx.HbKeyDilution is zero")
+		}
+
 	default:
 		return fmt.Errorf("unknown tx type %v", tx.Type)
 	}
@@ -594,8 +636,12 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 		nonZeroFields[protocol.ApplicationCallTx] = true
 	}
 
-	if !tx.StateProofTxnFields.Empty() {
+	if !tx.StateProofTxnFields.MsgIsZero() {
 		nonZeroFields[protocol.StateProofTx] = true
+	}
+
+	if tx.HeartbeatTxnFields != nil {
+		nonZeroFields[protocol.HeartbeatTx] = true
 	}
 
 	for t, nonZero := range nonZeroFields {
@@ -704,9 +750,8 @@ func (tx Header) Last() basics.Round {
 	return tx.LastValid
 }
 
-// RelevantAddrs returns the addresses whose balance records this transaction will need to access.
-// The header's default is to return just the sender and the fee sink.
-func (tx Transaction) RelevantAddrs(spec SpecialAddresses) []basics.Address {
+// relevantAddrs returns the addresses whose balance records this transaction will need to access.
+func (tx Transaction) relevantAddrs(spec SpecialAddresses) []basics.Address {
 	addrs := []basics.Address{tx.Sender, spec.FeeSink}
 
 	switch tx.Type {
@@ -723,6 +768,8 @@ func (tx Transaction) RelevantAddrs(spec SpecialAddresses) []basics.Address {
 		if !tx.AssetTransferTxnFields.AssetSender.IsZero() {
 			addrs = append(addrs, tx.AssetTransferTxnFields.AssetSender)
 		}
+	case protocol.HeartbeatTx:
+		addrs = append(addrs, tx.HeartbeatTxnFields.HbAddress)
 	}
 
 	return addrs

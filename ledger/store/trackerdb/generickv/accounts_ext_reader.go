@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -121,6 +121,16 @@ func (r *accountsReader) TotalAccounts(ctx context.Context) (total uint64, err e
 }
 
 func (r *accountsReader) TotalKVs(ctx context.Context) (total uint64, err error) {
+	// TODO: catchpoint
+	return
+}
+
+func (r *accountsReader) TotalOnlineAccountRows(ctx context.Context) (total uint64, err error) {
+	// TODO: catchpoint
+	return
+}
+
+func (r *accountsReader) TotalOnlineRoundParams(ctx context.Context) (total uint64, err error) {
 	// TODO: catchpoint
 	return
 }

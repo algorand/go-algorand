@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -28,6 +28,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -37,7 +38,6 @@ import (
 	"github.com/algorand/go-algorand/daemon/algod/api/server"
 	"github.com/algorand/go-algorand/ledger/eval"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
-	"golang.org/x/exp/slices"
 
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
@@ -156,6 +156,81 @@ func TestGetBlock(t *testing.T) {
 	getBlockTest(t, 1, "json", 404)
 	getBlockTest(t, 1, "msgpack", 404)
 	getBlockTest(t, 0, "bad format", 400)
+}
+
+type blockResponseTest struct {
+	Block bookkeeping.Block `codec:"block"`
+
+	Cert *map[string]interface{} `codec:"cert,omitempty"`
+}
+
+func getBlockHeaderTest(t *testing.T, blockNum uint64, format string, expectedCode int, headerOnly *bool) {
+	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t, cannedStatusReportGolden)
+	defer releasefunc()
+
+	a := require.New(t)
+	insertRounds(a, handler, 3)
+
+	err := handler.GetBlock(c, blockNum, model.GetBlockParams{Format: (*model.GetBlockParamsFormat)(&format), HeaderOnly: headerOnly})
+	if format != "json" && format != "msgpack" {
+		a.NoError(err)
+	}
+	a.Equal(expectedCode, rec.Code)
+
+	if expectedCode == 200 {
+		var response blockResponseTest
+
+		if format == "msgpack" {
+			dec := codec.NewDecoderBytes(rec.Body.Bytes(), protocol.CodecHandle)
+			err = dec.Decode(&response)
+		} else if format == "json" {
+			err = protocol.DecodeJSON(rec.Body.Bytes(), &response)
+		}
+
+		a.NoError(err)
+		a.Equal(basics.Round(blockNum), response.Block.Round())
+
+		if headerOnly != nil && *headerOnly {
+			a.Nil(response.Cert)
+		} else {
+			// Cert should be present for normal, msgp block
+			a.NotNil(response.Cert)
+		}
+	}
+}
+
+func TestGetBlockHeader(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	headerOnly := true
+	t.Run("json-200", func(t *testing.T) {
+		t.Parallel()
+		getBlockHeaderTest(t, 1, "json", 200, &headerOnly)
+	})
+	t.Run("msgpack-200", func(t *testing.T) {
+		t.Parallel()
+		getBlockHeaderTest(t, 1, "msgpack", 200, &headerOnly)
+	})
+	t.Run("json-404", func(t *testing.T) {
+		t.Parallel()
+		getBlockHeaderTest(t, 5, "json", 404, &headerOnly)
+	})
+	t.Run("msgpack-404", func(t *testing.T) {
+		t.Parallel()
+		getBlockHeaderTest(t, 5, "msgpack", 404, &headerOnly)
+	})
+	t.Run("format-400", func(t *testing.T) {
+		t.Parallel()
+		getBlockHeaderTest(t, 1, "bad format", 400, &headerOnly)
+	})
+	t.Run("normal block no flag", func(t *testing.T) {
+		t.Parallel()
+		getBlockHeaderTest(t, 1, "msgpack", 200, nil)
+	})
+	t.Run("normal block false flag", func(t *testing.T) {
+		t.Parallel()
+		getBlockHeaderTest(t, 1, "msgpack", 200, new(bool))
+	})
 }
 
 func testGetLedgerStateDelta(t *testing.T, round uint64, format string, expectedCode int) {
@@ -956,7 +1031,6 @@ func TestPostSimulateTransaction(t *testing.T) {
 	}
 
 	for i, testCase := range testCases {
-		testCase := testCase
 		t.Run(fmt.Sprintf("i=%d", i), func(t *testing.T) {
 			t.Parallel()
 			simulateTransactionTest(t, testCase.txnIndex, testCase.format, testCase.expectedStatus)

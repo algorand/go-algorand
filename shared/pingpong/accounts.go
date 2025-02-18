@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,6 +23,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -1003,10 +1004,8 @@ func (pps *WorkerState) generateAccounts() {
 }
 
 func uniqueAppend(they []string, x string) []string {
-	for _, v := range they {
-		if v == x {
-			return they
-		}
+	if slices.Contains(they, x) {
+		return they
 	}
 	return append(they, x)
 }

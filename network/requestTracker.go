@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,6 +21,7 @@ import (
 	"net"
 	"net/http"
 	"net/textproto"
+	"slices"
 	"sort"
 	"strings"
 	"sync/atomic"
@@ -519,10 +520,5 @@ func (rt *RequestTracker) getForwardedConnectionAddress(header http.Header) (ip 
 
 // isLocalhost returns true if the given host is a localhost address.
 func isLocalhost(host string) bool {
-	for _, v := range []string{"localhost", "127.0.0.1", "[::1]", "::1", "[::]"} {
-		if host == v {
-			return true
-		}
-	}
-	return false
+	return slices.Contains([]string{"localhost", "127.0.0.1", "[::1]", "::1", "[::]"}, host)
 }

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -316,7 +316,7 @@ func (v2 *Handlers) AddParticipationKey(ctx echo.Context) error {
 	partKeyBinary := buf.Bytes()
 
 	if len(partKeyBinary) == 0 {
-		lenErr := fmt.Errorf(errRESTPayloadZeroLength)
+		lenErr := errors.New(errRESTPayloadZeroLength)
 		return badRequest(ctx, lenErr, lenErr.Error(), v2.Log)
 	}
 
@@ -686,6 +686,15 @@ func (v2 *Handlers) GetBlock(ctx echo.Context, round uint64, params model.GetBlo
 		return badRequest(ctx, err, errFailedParsingFormatOption, v2.Log)
 	}
 
+	// For a future iteration/V3, we should make the available data for this endpoint consistent between messagepack and JSON.
+	// Currently, the certificate is only returned in messagepack format requests for a complete block.
+	// The 'getBlockHeader' function is used to get the block header only; this is currently consistent between messagepack and JSON.
+
+	// If the client requests block header only, process that
+	if params.HeaderOnly != nil && *params.HeaderOnly {
+		return v2.getBlockHeader(ctx, round, handle, contentType)
+	}
+
 	// msgpack format uses 'RawBlockBytes' and attaches a custom header.
 	if handle == protocol.CodecHandle {
 		blockbytes, blockErr := rpcs.RawBlockBytes(v2.Node.LedgerForAPI(), basics.Round(round))
@@ -715,6 +724,32 @@ func (v2 *Handlers) GetBlock(ctx echo.Context, round uint64, params model.GetBlo
 
 	// Encoding wasn't working well without embedding "real" objects.
 	response := BlockResponseJSON{
+		Block: block,
+	}
+
+	data, err := encode(handle, response)
+	if err != nil {
+		return internalError(ctx, err, errFailedToEncodeResponse, v2.Log)
+	}
+
+	return ctx.Blob(http.StatusOK, contentType, data)
+}
+
+func (v2 *Handlers) getBlockHeader(ctx echo.Context, round uint64, handle codec.Handle, contentType string) error {
+	ledger := v2.Node.LedgerForAPI()
+	block, err := ledger.BlockHdr(basics.Round(round))
+	if err != nil {
+		switch err.(type) {
+		case ledgercore.ErrNoEntry:
+			return notFound(ctx, err, errFailedLookingUpLedger, v2.Log)
+		default:
+			return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+		}
+	}
+
+	response := struct {
+		Block bookkeeping.BlockHeader `codec:"block"`
+	}{
 		Block: block,
 	}
 

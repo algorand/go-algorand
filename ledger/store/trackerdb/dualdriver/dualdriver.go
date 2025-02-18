@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,8 +21,11 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"sync"
 	"time"
 
+	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/ledger/encoded"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/util/db"
@@ -123,6 +126,10 @@ func (s *trackerStore) Transaction(fn trackerdb.TransactionFn) (err error) {
 	return s.TransactionContext(context.Background(), fn)
 }
 
+func (s *trackerStore) TransactionWithRetryClearFn(fn trackerdb.TransactionFn, rollbackFn trackerdb.RetryClearFn) error {
+	return s.TransactionContextWithRetryClearFn(context.Background(), fn, rollbackFn)
+}
+
 func (s *trackerStore) TransactionContext(ctx context.Context, fn trackerdb.TransactionFn) error {
 	handle, err := s.BeginTransaction(ctx)
 	if err != nil {
@@ -136,6 +143,22 @@ func (s *trackerStore) TransactionContext(ctx context.Context, fn trackerdb.Tran
 	}
 
 	return handle.Commit()
+}
+
+func (s *trackerStore) TransactionContextWithRetryClearFn(ctx context.Context, fn trackerdb.TransactionFn, rollbackFn trackerdb.RetryClearFn) error {
+	var wg sync.WaitGroup
+	wg.Add(2)
+	var pErr, sErr error
+	go func() {
+		pErr = s.primary.TransactionContextWithRetryClearFn(ctx, fn, rollbackFn)
+		wg.Done()
+	}()
+	go func() {
+		sErr = s.secondary.TransactionContextWithRetryClearFn(ctx, fn, rollbackFn)
+		wg.Done()
+	}()
+	wg.Wait()
+	return coalesceErrors(pErr, sErr)
 }
 
 func (s *trackerStore) BeginTransaction(ctx context.Context) (trackerdb.Transaction, error) {
@@ -243,14 +266,26 @@ func (*reader) MakeCatchpointReader() (trackerdb.CatchpointReader, error) {
 	return nil, nil
 }
 
-// MakeEncodedAccoutsBatchIter implements trackerdb.Reader
-func (*reader) MakeEncodedAccoutsBatchIter() trackerdb.EncodedAccountsBatchIter {
+// MakeEncodedAccountsBatchIter implements trackerdb.Reader
+func (*reader) MakeEncodedAccountsBatchIter() trackerdb.EncodedAccountsBatchIter {
 	// TODO: catchpoint
 	return nil
 }
 
 // MakeKVsIter implements trackerdb.Reader
 func (*reader) MakeKVsIter(ctx context.Context) (trackerdb.KVsIter, error) {
+	// TODO: catchpoint
+	return nil, nil
+}
+
+// MakeOrderedOnlineAccountsIter implements trackerdb.Reader
+func (*reader) MakeOrderedOnlineAccountsIter(context.Context, bool, basics.Round) (trackerdb.TableIterator[*encoded.OnlineAccountRecordV6], error) {
+	// TODO: catchpoint
+	return nil, nil
+}
+
+// MakeOnlineRoundParamsIter implements trackerdb.Reader
+func (*reader) MakeOnlineRoundParamsIter(context.Context, bool, basics.Round) (trackerdb.TableIterator[*encoded.OnlineRoundParamsRecordV6], error) {
 	// TODO: catchpoint
 	return nil, nil
 }

@@ -245,7 +245,7 @@
     },
     "/v2/accounts/{address}": {
       "get": {
-        "description": "Given a specific account public key, this call returns the accounts status, balance and spendable amounts",
+        "description": "Given a specific account public key, this call returns the account's status, balance and spendable amounts",
         "tags": [
           "public",
           "nonparticipating"
@@ -654,6 +654,12 @@
             "name": "round",
             "in": "path",
             "required": true
+          },
+          {
+            "type": "boolean",
+            "description": "If true, only the block header (exclusive of payset or certificate) may be included in response.",
+            "name": "header-only",
+            "in": "query"
           },
           {
             "$ref": "#/parameters/format"

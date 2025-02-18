@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,6 +19,7 @@ package ledger
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -29,6 +30,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/verify"
 	"github.com/algorand/go-algorand/data/txntest"
 	"github.com/algorand/go-algorand/ledger/eval"
@@ -41,6 +43,7 @@ import (
 type simpleLedgerCfg struct {
 	onDisk      bool // default is in-memory
 	notArchival bool // default is archival
+	logger      logging.Logger
 }
 
 type simpleLedgerOption func(*simpleLedgerCfg)
@@ -51,6 +54,10 @@ func simpleLedgerOnDisk() simpleLedgerOption {
 
 func simpleLedgerNotArchival() simpleLedgerOption {
 	return func(cfg *simpleLedgerCfg) { cfg.notArchival = true }
+}
+
+func simpleLedgerLogger(l logging.Logger) simpleLedgerOption {
+	return func(cfg *simpleLedgerCfg) { cfg.logger = l }
 }
 
 func newSimpleLedgerWithConsensusVersion(t testing.TB, balances bookkeeping.GenesisBalances, cv protocol.ConsensusVersion, cfg config.Local, opts ...simpleLedgerOption) *Ledger {
@@ -68,10 +75,16 @@ func newSimpleLedgerFull(t testing.TB, balances bookkeeping.GenesisBalances, cv 
 	require.NoError(t, err)
 	require.False(t, genBlock.FeeSink.IsZero())
 	require.False(t, genBlock.RewardsPool.IsZero())
+	tempDir := t.TempDir()
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	dbName = strings.Replace(dbName, "/", "_", -1)
+	dbName = filepath.Join(tempDir, dbName)
 	cfg.Archival = !slCfg.notArchival
-	l, err := OpenLedger(logging.Base(), dbName, !slCfg.onDisk, ledgercore.InitState{
+	log := slCfg.logger
+	if log == nil {
+		log = logging.Base()
+	}
+	l, err := OpenLedger(log, dbName, !slCfg.onDisk, ledgercore.InitState{
 		Block:       genBlock,
 		Accounts:    balances.Balances,
 		GenesisHash: genHash,
@@ -91,6 +104,7 @@ func nextBlock(t testing.TB, ledger *Ledger) *eval.BlockEvaluator {
 	eval, err := eval.StartEvaluator(ledger, nextHdr, eval.EvaluatorOptions{
 		Generate: true,
 		Validate: true, // Do the complete checks that a new txn would be subject to
+		Tracer:   logic.EvalErrorDetailsTracer{},
 	})
 	require.NoError(t, err)
 	return eval
@@ -129,7 +143,7 @@ func txn(t testing.TB, ledger *Ledger, eval *eval.BlockEvaluator, txn *txntest.T
 		}
 		return
 	}
-	require.True(t, len(problem) == 0 || problem[0] == "")
+	require.True(t, len(problem) == 0 || problem[0] == "", "Transaction did not fail. Expected: %v", problem)
 }
 
 func txgroup(t testing.TB, ledger *Ledger, eval *eval.BlockEvaluator, txns ...*txntest.Txn) error {
@@ -146,10 +160,11 @@ func txgroup(t testing.TB, ledger *Ledger, eval *eval.BlockEvaluator, txns ...*t
 // inspection. Proposer is optional - if unset, blocks will be finished with
 // ZeroAddress proposer.
 func endBlock(t testing.TB, ledger *Ledger, eval *eval.BlockEvaluator, proposer ...basics.Address) *ledgercore.ValidatedBlock {
-	ub, err := eval.GenerateBlock(nil)
+	// pass proposers to GenerateBlock, if provided
+	ub, err := eval.GenerateBlock(proposer)
 	require.NoError(t, err)
 
-	// We fake some thigns that agreement would do, like setting proposer
+	// We fake some things that agreement would do, like setting proposer
 	validatedBlock := ledgercore.MakeValidatedBlock(ub.UnfinishedBlock(), ub.UnfinishedDeltas())
 	gvb := &validatedBlock
 

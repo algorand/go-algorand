@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -23,6 +23,7 @@ import (
 	"net"
 	"os"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 
@@ -439,13 +440,7 @@ func checkedDelete(toDelete []cloudflare.DNSRecordResponseEntry, cloudflareDNS *
 
 func getEntries(getNetwork string, recordType string) ([]cloudflare.DNSRecordResponseEntry, error) {
 	recordTypes := []string{"A", "CNAME", "SRV", "TXT"}
-	isKnown := false
-	for _, known := range append(recordTypes, "") {
-		if recordType == known {
-			isKnown = true
-			break
-		}
-	}
+	isKnown := slices.Contains(recordTypes, recordType) || recordType == ""
 	if !isKnown {
 		return nil, fmt.Errorf("invalid recordType specified %s", recordType)
 	}

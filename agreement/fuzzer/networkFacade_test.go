@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -79,6 +79,11 @@ type facadePeer struct {
 }
 
 func (p *facadePeer) GetNetwork() network.GossipNode { return p.net }
+func (p *facadePeer) RoutingAddr() []byte {
+	buf := make([]byte, 8)
+	binary.BigEndian.PutUint64(buf, uint64(p.id))
+	return buf
+}
 
 // MakeNetworkFacade creates a facade with a given nodeID.
 func MakeNetworkFacade(fuzzer *Fuzzer, nodeID int) *NetworkFacade {

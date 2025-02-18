@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -24,6 +24,7 @@ import (
 	"io"
 	"os"
 	"reflect"
+	"slices"
 	"strings"
 )
 
@@ -123,7 +124,7 @@ func WriteNonDefaultValues(writer io.Writer, object, defaultObject interface{}, 
 			return fmt.Errorf("error processing serialized object - should be at EOF: %s", line)
 		}
 
-		if inStringArray(valName, ignore) {
+		if slices.Contains(ignore, valName) {
 			newFile[newIndex] = line
 			newIndex++
 			continue
@@ -181,15 +182,6 @@ func extractValueName(line string) (name string) {
 		return
 	}
 	return line[start+1 : end]
-}
-
-func inStringArray(item string, set []string) bool {
-	for _, s := range set {
-		if item == s {
-			return true
-		}
-	}
-	return false
 }
 
 func createValueMap(object interface{}) map[string]interface{} {

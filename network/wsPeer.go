@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -24,6 +24,7 @@ import (
 	"net"
 	"net/http"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -52,13 +53,7 @@ const averageMessageLength = 2 * 1024    // Most of the messages are smaller tha
 const msgsInReadBufferPerPeer = 10
 
 func init() {
-	matched := false
-	for _, version := range SupportedProtocolVersions {
-		if version == versionPeerFeatures {
-			matched = true
-		}
-	}
-	if !matched {
+	if !slices.Contains(SupportedProtocolVersions, versionPeerFeatures) {
 		panic(fmt.Sprintf("peer features version %s is not supported %v", versionPeerFeatures, SupportedProtocolVersions))
 	}
 
@@ -282,6 +277,8 @@ type wsPeer struct {
 
 	// closers is a slice of functions to run when the peer is closed
 	closers []func()
+	// closersMu synchronizes access to closers
+	closersMu deadlock.RWMutex
 
 	// peerType defines the peer's underlying connection type
 	// used for separate p2p vs ws metrics
@@ -293,11 +290,6 @@ type wsPeer struct {
 type HTTPPeer interface {
 	GetAddress() string
 	GetHTTPClient() *http.Client
-}
-
-// IPAddressable is addressable with either IPv4 or IPv6 address
-type IPAddressable interface {
-	RoutingAddr() []byte
 }
 
 // UnicastPeer is another possible interface for the opaque Peer.
@@ -979,6 +971,8 @@ L:
 		}
 
 	}
+	wp.closersMu.RLock()
+	defer wp.closersMu.RUnlock()
 	// now call all registered closers
 	for _, f := range wp.closers {
 		f()
@@ -1115,6 +1109,9 @@ func (wp *wsPeer) sendMessagesOfInterest(messagesOfInterestGeneration uint32, me
 }
 
 func (wp *wsPeer) OnClose(f func()) {
+	wp.closersMu.Lock()
+	defer wp.closersMu.Unlock()
+
 	if wp.closers == nil {
 		wp.closers = []func(){}
 	}

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,9 +18,9 @@ package transactions
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/algorand/go-algorand/data/basics"
-	"golang.org/x/exp/slices"
 )
 
 const (

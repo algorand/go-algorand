@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -28,7 +28,6 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
-	"golang.org/x/exp/maps"
 )
 
 //   ___________________
@@ -352,9 +351,9 @@ func (cb *roundCowState) reset() {
 	cb.proto = config.ConsensusParams{}
 	cb.mods.Reset()
 	cb.txnCount = 0
-	maps.Clear(cb.sdeltas)
+	clear(cb.sdeltas)
 	cb.compatibilityMode = false
-	maps.Clear(cb.compatibilityGetKeyCache)
+	clear(cb.compatibilityGetKeyCache)
 	cb.prevTotals = ledgercore.AccountTotals{}
 	cb.feesCollected = basics.MicroAlgos{}
 }

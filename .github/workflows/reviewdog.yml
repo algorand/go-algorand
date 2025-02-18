@@ -1,4 +1,6 @@
 name: "ReviewDog workflow"
+env:
+  GOLANGCI_LINT_VERSION: "v1.62.0"
 on:
   push:
     branches:
@@ -17,15 +19,15 @@ jobs:
       - name: Make libsodium.a
         run: sudo mv /usr/bin/go /usr/bin/go.bak && make crypto/libs/linux/amd64/lib/libsodium.a && sudo mv /usr/bin/go.bak /usr/bin/go
       - name: reviewdog-golangci-lint
-        uses: reviewdog/action-golangci-lint@v2.6.1
+        uses: reviewdog/action-golangci-lint@v2.7.0
         with:
           go_version_file: go.mod
-          golangci_lint_version: "v1.58.0"
+          golangci_lint_version: ${{ env.GOLANGCI_LINT_VERSION }}
           golangci_lint_flags: "-c .golangci.yml --allow-parallel-runners"
           reporter: "github-pr-check"
           tool_name: "Lint Errors"
           level: "error"
-          fail_on_error: true
+          fail_level: any
           filter_mode: "nofilter"
   # Non-Blocking Warnings Section
   reviewdog-warnings:
@@ -46,30 +48,30 @@ jobs:
         id: go_version
         run: echo "GO_VERSION=$(./scripts/get_golang_version.sh)" >> $GITHUB_ENV
       - name: Install specific golang
-        uses: actions/setup-go@v4.0.1
+        uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
       - name: Create folders for golangci-lint
         run: mkdir -p cicdtmp/golangci-lint
       - name: Check if custom golangci-lint is already built
         id: cache-golangci-lint
-        uses: actions/cache@v3.3.1
+        uses: actions/cache@v4
         with:
           path: cicdtmp/golangci-lint/golangci-lint-cgo
-          key: cicd-golangci-lint-cgo-v0.0.2-${{ env.GO_VERSION }}
+          key: cicd-golangci-lint-cgo-v0.0.3-${{ env.GO_VERSION }}-${{ env.GOLANGCI_LINT_VERSION }}
 
       - name: Build custom golangci-lint with CGO_ENABLED
         if: steps.cache-golangci-lint.outputs.cache-hit != 'true'
         run: |
           cd cicdtmp/golangci-lint
           git clone https://github.com/golangci/golangci-lint.git .
-          git checkout tags/v1.58.0
+          git checkout tags/${GOLANGCI_LINT_VERSION}
           CGO_ENABLED=true go build -trimpath -o golangci-lint-cgo ./cmd/golangci-lint
           ./golangci-lint-cgo --version
           cd ../../
       - name: Install reviewdog
         run: |
-          curl -sfL https://raw.githubusercontent.com/reviewdog/reviewdog/v0.18.1/install.sh | sh -s -- v0.18.1
+          curl -sfL https://raw.githubusercontent.com/reviewdog/reviewdog/v0.20.3/install.sh | sh -s -- v0.20.3
           reviewdog --version
       - name: Build custom linters
         run: |
@@ -92,9 +94,9 @@ jobs:
           cat temp_golangci-lint-cgo.txt | reviewdog \
           -f=golangci-lint \
           -name="Lint Warnings" \
-          -reporter=github-check \
+          -reporter=github-pr-check \
           -filter-mode=added \
-          -fail-on-error=true \
+          -fail-level=any \
           -level=warning
       - name: Slack Notification
         env:
@@ -107,11 +109,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: shellcheck
-        uses: reviewdog/action-shellcheck@v1
+        uses: reviewdog/action-shellcheck@v1.28.0
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           reporter: "github-pr-check"
           shellcheck_flags: "-e SC2034,SC2046,SC2053,SC2207,SC2145 -S warning"
-          fail_on_error: true
+          fail_level: any
           path: |
             test/scripts/e2e_subs

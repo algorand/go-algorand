@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -95,9 +95,7 @@ func NewWorker(genesisDir string, log logging.Logger, accts Accounts, ledger Led
 
 // Start starts the goroutines for the worker.
 func (spw *Worker) Start() {
-	ctx, cancel := context.WithCancel(context.Background())
-	spw.ctx = ctx
-	spw.shutdown = cancel
+	spw.ctx, spw.shutdown = context.WithCancel(context.Background())
 	spw.signedCh = make(chan struct{}, 1)
 
 	err := spw.initDb(spw.inMemory)

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -24,6 +24,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/encoded"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
@@ -51,50 +53,54 @@ const (
 // the writing is complete. It might take multiple steps until the operation is over, and the caller
 // has the option of throttling the CPU utilization in between the calls.
 type catchpointFileWriter struct {
-	ctx                  context.Context
-	tx                   trackerdb.SnapshotScope
-	filePath             string
-	totalAccounts        uint64
-	totalKVs             uint64
-	file                 *os.File
-	tar                  *tar.Writer
-	compressor           io.WriteCloser
-	chunk                catchpointFileChunkV6
-	chunkNum             uint64
-	writtenBytes         int64
-	biggestChunkLen      uint64
-	accountsIterator     accountsBatchIter
-	maxResourcesPerChunk int
-	accountsDone         bool
-	kvRows               kvIter
+	ctx                    context.Context
+	tx                     trackerdb.SnapshotScope
+	params                 config.ConsensusParams
+	filePath               string
+	totalAccounts          uint64
+	totalKVs               uint64
+	totalOnlineAccounts    uint64
+	totalOnlineRoundParams uint64
+	file                   *os.File
+	tar                    *tar.Writer
+	compressor             io.WriteCloser
+	chunk                  CatchpointSnapshotChunkV6
+	chunkNum               uint64
+	writtenBytes           int64
+	biggestChunkLen        uint64
+	accountsIterator       trackerdb.EncodedAccountsBatchIter
+	maxResourcesPerChunk   int
+	accountsRound          basics.Round
+	onlineExcludeBefore    basics.Round
+	accountsDone           bool
+	kvRows                 trackerdb.KVsIter
+	kvDone                 bool
+	onlineAccountRows      trackerdb.TableIterator[*encoded.OnlineAccountRecordV6]
+	onlineAccountsDone     bool
+	onlineRoundParamsRows  trackerdb.TableIterator[*encoded.OnlineRoundParamsRecordV6]
+	onlineRoundParamsDone  bool
 }
 
-type kvIter interface {
-	Next() bool
-	KeyValue() ([]byte, []byte, error)
-	Close()
-}
-
-type accountsBatchIter interface {
-	Next(ctx context.Context, accountCount int, resourceCount int) ([]encoded.BalanceRecordV6, uint64, error)
-	Close()
-}
-
-type catchpointFileBalancesChunkV5 struct {
+// CatchpointSnapshotChunkV5 defines the encoding of "balances.X.msgpack" files in the catchpoint snapshot
+// used before database schema v6, which split accounts from asset/app resource data.
+type CatchpointSnapshotChunkV5 struct {
 	_struct  struct{}                  `codec:",omitempty,omitemptyarray"`
 	Balances []encoded.BalanceRecordV5 `codec:"bl,allocbound=BalancesPerCatchpointFileChunk"`
 }
 
-type catchpointFileChunkV6 struct {
+// CatchpointSnapshotChunkV6 defines the current encoding of "balances.X.msgpack" files in the catchpoint snapshot.
+type CatchpointSnapshotChunkV6 struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Balances    []encoded.BalanceRecordV6 `codec:"bl,allocbound=BalancesPerCatchpointFileChunk"`
-	numAccounts uint64
-	KVs         []encoded.KVRecordV6 `codec:"kv,allocbound=BalancesPerCatchpointFileChunk"`
+	Balances          []encoded.BalanceRecordV6 `codec:"bl,allocbound=BalancesPerCatchpointFileChunk"`
+	numAccounts       uint64
+	KVs               []encoded.KVRecordV6                `codec:"kv,allocbound=BalancesPerCatchpointFileChunk"`
+	OnlineAccounts    []encoded.OnlineAccountRecordV6     `codec:"oa,allocbound=BalancesPerCatchpointFileChunk"`
+	OnlineRoundParams []encoded.OnlineRoundParamsRecordV6 `codec:"orp,allocbound=BalancesPerCatchpointFileChunk"`
 }
 
-func (chunk catchpointFileChunkV6) empty() bool {
-	return len(chunk.Balances) == 0 && len(chunk.KVs) == 0
+func (chunk CatchpointSnapshotChunkV6) empty() bool {
+	return len(chunk.Balances) == 0 && len(chunk.KVs) == 0 && len(chunk.OnlineAccounts) == 0 && len(chunk.OnlineRoundParams) == 0
 }
 
 type catchpointStateProofVerificationContext struct {
@@ -106,7 +112,7 @@ func (data catchpointStateProofVerificationContext) ToBeHashed() (protocol.HashI
 	return protocol.StateProofVerCtx, protocol.Encode(&data)
 }
 
-func makeCatchpointFileWriter(ctx context.Context, filePath string, tx trackerdb.SnapshotScope, maxResourcesPerChunk int) (*catchpointFileWriter, error) {
+func makeCatchpointFileWriter(ctx context.Context, params config.ConsensusParams, filePath string, tx trackerdb.SnapshotScope, maxResourcesPerChunk int, accountsRound, onlineExcludeBefore basics.Round) (*catchpointFileWriter, error) {
 	aw, err := tx.MakeAccountsReader()
 	if err != nil {
 		return nil, err
@@ -120,6 +126,19 @@ func makeCatchpointFileWriter(ctx context.Context, filePath string, tx trackerdb
 	totalKVs, err := aw.TotalKVs(ctx)
 	if err != nil {
 		return nil, err
+	}
+
+	var totalOnlineAccounts, totalOnlineRoundParams uint64
+	if params.EnableCatchpointsWithOnlineAccounts {
+		totalOnlineAccounts, err = aw.TotalOnlineAccountRows(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		totalOnlineRoundParams, err = aw.TotalOnlineRoundParams(ctx)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	err = os.MkdirAll(filepath.Dir(filePath), 0700)
@@ -137,16 +156,21 @@ func makeCatchpointFileWriter(ctx context.Context, filePath string, tx trackerdb
 	tar := tar.NewWriter(compressor)
 
 	res := &catchpointFileWriter{
-		ctx:                  ctx,
-		tx:                   tx,
-		filePath:             filePath,
-		totalAccounts:        totalAccounts,
-		totalKVs:             totalKVs,
-		file:                 file,
-		compressor:           compressor,
-		tar:                  tar,
-		accountsIterator:     tx.MakeEncodedAccoutsBatchIter(),
-		maxResourcesPerChunk: maxResourcesPerChunk,
+		ctx:                    ctx,
+		tx:                     tx,
+		params:                 params,
+		filePath:               filePath,
+		totalAccounts:          totalAccounts,
+		totalKVs:               totalKVs,
+		totalOnlineAccounts:    totalOnlineAccounts,
+		totalOnlineRoundParams: totalOnlineRoundParams,
+		file:                   file,
+		compressor:             compressor,
+		tar:                    tar,
+		accountsIterator:       tx.MakeEncodedAccountsBatchIter(),
+		accountsRound:          accountsRound,
+		maxResourcesPerChunk:   maxResourcesPerChunk,
+		onlineExcludeBefore:    onlineExcludeBefore,
 	}
 	return res, nil
 }
@@ -197,7 +221,7 @@ func (cw *catchpointFileWriter) FileWriteStep(stepCtx context.Context) (more boo
 		return
 	}
 
-	writerRequest := make(chan catchpointFileChunkV6, 1)
+	writerRequest := make(chan CatchpointSnapshotChunkV6, 1)
 	writerResponse := make(chan error, 2)
 	go cw.asyncWriter(writerRequest, writerResponse, cw.chunkNum)
 	defer func() {
@@ -232,6 +256,14 @@ func (cw *catchpointFileWriter) FileWriteStep(stepCtx context.Context) (more boo
 			if cw.kvRows != nil {
 				cw.kvRows.Close()
 				cw.kvRows = nil
+			}
+			if cw.onlineAccountRows != nil {
+				cw.onlineAccountRows.Close()
+				cw.onlineAccountRows = nil
+			}
+			if cw.onlineRoundParamsRows != nil {
+				cw.onlineRoundParamsRows.Close()
+				cw.onlineRoundParamsRows = nil
 			}
 		}
 	}()
@@ -271,11 +303,11 @@ func (cw *catchpointFileWriter) FileWriteStep(stepCtx context.Context) (more boo
 		cw.chunkNum++
 		writerRequest <- cw.chunk
 		// indicate that we need a readDatabaseStep
-		cw.chunk = catchpointFileChunkV6{}
+		cw.chunk = CatchpointSnapshotChunkV6{}
 	}
 }
 
-func (cw *catchpointFileWriter) asyncWriter(chunks chan catchpointFileChunkV6, response chan error, chunkNum uint64) {
+func (cw *catchpointFileWriter) asyncWriter(chunks chan CatchpointSnapshotChunkV6, response chan error, chunkNum uint64) {
 	defer close(response)
 	for chk := range chunks {
 		chunkNum++
@@ -314,7 +346,7 @@ func (cw *catchpointFileWriter) readDatabaseStep(ctx context.Context) error {
 			return err
 		}
 		if len(balances) > 0 {
-			cw.chunk = catchpointFileChunkV6{Balances: balances, numAccounts: numAccounts}
+			cw.chunk = CatchpointSnapshotChunkV6{Balances: balances, numAccounts: numAccounts}
 			return nil
 		}
 		// It might seem reasonable, but do not close accountsIterator here,
@@ -323,27 +355,95 @@ func (cw *catchpointFileWriter) readDatabaseStep(ctx context.Context) error {
 		cw.accountsDone = true
 	}
 
-	// Create the *Rows iterator JIT
-	if cw.kvRows == nil {
-		rows, err := cw.tx.MakeKVsIter(ctx)
-		if err != nil {
-			return err
+	// Create the kvRows iterator JIT
+	if !cw.kvDone {
+		if cw.kvRows == nil {
+			rows, err := cw.tx.MakeKVsIter(ctx)
+			if err != nil {
+				return err
+			}
+			cw.kvRows = rows
 		}
-		cw.kvRows = rows
+
+		kvrs := make([]encoded.KVRecordV6, 0, BalancesPerCatchpointFileChunk)
+		for cw.kvRows.Next() {
+			k, v, err := cw.kvRows.KeyValue()
+			if err != nil {
+				return err
+			}
+			kvrs = append(kvrs, encoded.KVRecordV6{Key: k, Value: v})
+			if len(kvrs) == BalancesPerCatchpointFileChunk {
+				break
+			}
+		}
+		if len(kvrs) > 0 {
+			cw.chunk = CatchpointSnapshotChunkV6{KVs: kvrs}
+			return nil
+		}
+		// Do not close kvRows here, or it will start over on the next iteration
+		cw.kvDone = true
 	}
 
-	kvrs := make([]encoded.KVRecordV6, 0, BalancesPerCatchpointFileChunk)
-	for cw.kvRows.Next() {
-		k, v, err := cw.kvRows.KeyValue()
-		if err != nil {
-			return err
+	if cw.params.EnableCatchpointsWithOnlineAccounts && !cw.onlineAccountsDone {
+		// Create the OnlineAccounts iterator JIT
+		if cw.onlineAccountRows == nil {
+			// MakeOrderedOnlineAccountsIter orders by (address, updateRound).
+			rows, err := makeCatchpointOrderedOnlineAccountsIterFactory(cw.tx.MakeOrderedOnlineAccountsIter, cw.accountsRound, cw.params)(ctx, false, cw.onlineExcludeBefore)
+			if err != nil {
+				return err
+			}
+			cw.onlineAccountRows = rows
 		}
-		kvrs = append(kvrs, encoded.KVRecordV6{Key: k, Value: v})
-		if len(kvrs) == BalancesPerCatchpointFileChunk {
-			break
+
+		onlineAccts := make([]encoded.OnlineAccountRecordV6, 0, BalancesPerCatchpointFileChunk)
+		for cw.onlineAccountRows.Next() {
+			oa, err := cw.onlineAccountRows.GetItem()
+			if err != nil {
+				return err
+			}
+			onlineAccts = append(onlineAccts, *oa)
+			if len(onlineAccts) == BalancesPerCatchpointFileChunk {
+				break
+			}
 		}
+		if len(onlineAccts) > 0 {
+			cw.chunk = CatchpointSnapshotChunkV6{OnlineAccounts: onlineAccts}
+			return nil
+		}
+		// Do not close onlineAccountRows here, or it will start over on the next iteration
+		cw.onlineAccountsDone = true
 	}
-	cw.chunk = catchpointFileChunkV6{KVs: kvrs}
+
+	if cw.params.EnableCatchpointsWithOnlineAccounts && !cw.onlineRoundParamsDone {
+		// Create the OnlineRoundParams iterator JIT
+		if cw.onlineRoundParamsRows == nil {
+			rows, err := cw.tx.MakeOnlineRoundParamsIter(ctx, false, cw.onlineExcludeBefore)
+			if err != nil {
+				return err
+			}
+			cw.onlineRoundParamsRows = rows
+		}
+
+		onlineRndParams := make([]encoded.OnlineRoundParamsRecordV6, 0, BalancesPerCatchpointFileChunk)
+		for cw.onlineRoundParamsRows.Next() {
+			or, err := cw.onlineRoundParamsRows.GetItem()
+			if err != nil {
+				return err
+			}
+			onlineRndParams = append(onlineRndParams, *or)
+			if len(onlineRndParams) == BalancesPerCatchpointFileChunk {
+				break
+			}
+		}
+		if len(onlineRndParams) > 0 {
+			cw.chunk = CatchpointSnapshotChunkV6{OnlineRoundParams: onlineRndParams}
+			return nil
+		}
+		// Do not close onlineRndParamsRows here, or it will start over on the next iteration
+		cw.onlineRoundParamsDone = true
+	}
+
+	// Finished the last chunk
 	return nil
 }
 
@@ -364,4 +464,118 @@ func hasContextDeadlineExceeded(ctx context.Context) (contextExceeded bool, cont
 	default:
 	}
 	return
+}
+
+// catchpointLookbackHorizonForNextRound returns the lookback horizon used to evaluate the next
+// round after the provided `rnd`, according to consensus settings in `params`. That is, to evaluate
+// blocks starting from rnd+1, this function returns the oldest round that will be needed to evaluate
+// votes, certificates or other consensus data. Anything older than the returned round is beyond
+// the horizon and needed to evaluate blocks starting from rnd+1.
+func catchpointLookbackHorizonForNextRound(rnd basics.Round, params config.ConsensusParams) basics.Round {
+	return (rnd + 1).SubSaturate(basics.Round(params.MaxBalLookback))
+}
+
+type catchpointOnlineAccountsIterWrapper struct {
+	iter                   trackerdb.TableIterator[*encoded.OnlineAccountRecordV6]
+	onlineAccountPrev      basics.Address
+	onlineAccountPrevRound basics.Round
+	accountsRound          basics.Round
+	params                 config.ConsensusParams
+}
+
+// makeCatchpointOrderedOnlineAccountsIter wraps the MakeOrderedOnlineAccountsIter iterator to deterministically set
+// the UpdateRound number to zero for online accounts beyond the "horizon" of online history of 320 rounds (defined by
+// MaxBalLookback).
+func makeCatchpointOrderedOnlineAccountsIterFactory(
+	iterFactory func(context.Context, bool, basics.Round) (trackerdb.TableIterator[*encoded.OnlineAccountRecordV6], error),
+	accountsRound basics.Round,
+	params config.ConsensusParams,
+) (
+	wrappedIterFactory func(context.Context, bool, basics.Round) (trackerdb.TableIterator[*encoded.OnlineAccountRecordV6], error),
+) {
+	// return an iterFactory that wraps the provided iterFactory
+	return func(ctx context.Context, useStaging bool, excludeBefore basics.Round) (trackerdb.TableIterator[*encoded.OnlineAccountRecordV6], error) {
+		iter, err := iterFactory(ctx, useStaging, excludeBefore)
+		if err != nil {
+			return nil, err
+		}
+		return &catchpointOnlineAccountsIterWrapper{
+			iter:          iter,
+			accountsRound: accountsRound,
+			params:        params,
+		}, nil
+	}
+}
+
+func (i *catchpointOnlineAccountsIterWrapper) Next() bool { return i.iter.Next() }
+func (i *catchpointOnlineAccountsIterWrapper) Close()     { i.iter.Close() }
+func (i *catchpointOnlineAccountsIterWrapper) GetItem() (*encoded.OnlineAccountRecordV6, error) {
+	oa, err := i.iter.GetItem()
+	if err != nil {
+		return nil, err
+	}
+	// We set UpdateRound to 0 here, so that all nodes generating catchpoints will have the
+	// verification hash for the onlineaccounts table data (which is used to calculate the
+	// catchpoint label). Depending on the history of an online account, nodes may not have
+	// the same updateRound column value for the oldest "horizon" row for that address,
+	// depending on whether the node caught up from genesis, or restored from a
+	// catchpoint. This does not have any impact on the correctness of online account
+	// lookups, but is due to changes in the database schema over time:
+	//
+	//   1. For nodes that have been online for a long time, the unlimited assets release
+	//   (v3.5.1, PR #3652) introduced a BaseAccountData type with an UpdateRound field,
+	//   consensus-flagged to be zero until EnableAccountDataResourceSeparation was enabled
+	//   in consensus v32. So accounts that have been inactive since before consensus v32
+	//   will continue to have a zero UpdateRound, until a transaction updates the
+	//   account. This behavior is consistent for all nodes and validated by the merkle trie
+	//   generated each catchpoint round.
+	//
+	//   2. The onlineaccounts table, introduced later in v3.9.2 (PR #4003), uses a
+	//   migration to populate the onlineaccounts table by selecting all online accounts
+	//   from the accounts table. This migration copies the BaseAccountData.UpdateRound
+	//   field, along with voting data, to set the initial values of the onlineaccounts
+	//   table for each address. After that, the onlineaccounts table's updateRound column
+	//   would only be updated if voting data changed -- so certain transactions like
+	//   receiving a pay txn of 0 algos, or receiving an asset transfer, etc, would not
+	//   result in a new onlineaccounts row with a new updateRound (unless it triggered a
+	//   balance or voting data change). This criteria is implemented in
+	//   onlineAccountsNewRound in acctdeltas.go, separate from accountsNewRound &
+	//   makeCompactAccountDeltas, which set the account table's UpdateRound value.
+	//
+	//   3. Node operators using fast catchup to restore from a catchpoint file version V6
+	//   or V7 (used before v4.0.1 and consensus v40, which added the
+	//   EnableCatchpointsWithOnlineAccounts flag) initialize the onlineaccounts table by
+	//   first restoring the accounts table from the snapshot, then running the same
+	//   migration introduced in (2), where updateRound (and account data) comes from
+	//   BaseAccountData. This means catchpoint file writers and fast catchup users could
+	//   see some addresses have a horizon row with an updateRound that was set to zero
+	//   (case 1), or the round of the last account data change (case 2). Since v4.0.1,
+	//   catchpoint file version V8 includes the onlineaccounts and onlineroundparams tables
+	//   in snapshots, to support the voter_params_get and online_stake opcodes (PR #6177).
+	//
+	//   4. However, a node catching up from scratch without using fast catchup, running
+	//   v3.9.2 or later, must track the online account history to verify block certificates
+	//   as it validates each block in turn.  It sets updateRound based on observing all
+	//   account voting data changes starting from round 0, whether or not
+	//   EnableAccountDataResourceSeparation is set. These nodes will have horizon rows for
+	//   addresses with updateRound set to the round of the last actual voting data change,
+	//   not zero (case 1) or the round of the last account data change (case 2).
+	//
+	// Is the updateRound for this row beyond the lookback horizon (R-320)?
+	if oa.UpdateRound < catchpointLookbackHorizonForNextRound(i.accountsRound, i.params) {
+		// Is this the first (and thus oldest) row for this address?
+		if i.onlineAccountPrev.IsZero() || i.onlineAccountPrev != oa.Address {
+			// Then set it to 0.
+			oa.UpdateRound = 0
+		}
+
+		// This case should never happen: there should only be one horizon row per account.
+		if !i.onlineAccountPrev.IsZero() && i.onlineAccountPrev == oa.Address {
+			return nil, fmt.Errorf("bad online account data: multiple horizon rows for %s, prev updround %d cur updround %d", oa.Address, i.onlineAccountPrevRound, oa.UpdateRound)
+		}
+	}
+
+	i.onlineAccountPrev = oa.Address
+	i.onlineAccountPrevRound = oa.UpdateRound
+	return oa, nil
 }

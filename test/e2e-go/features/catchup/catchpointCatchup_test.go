@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,11 +17,16 @@
 package catchup
 
 import (
+	"archive/tar"
+	"bytes"
 	"fmt"
+	"io"
 	"net/http"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -34,6 +39,7 @@ import (
 	"github.com/algorand/go-algorand/daemon/algod/api/client"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/model"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/node"
@@ -46,7 +52,7 @@ import (
 const basicTestCatchpointInterval = 4
 
 func waitForCatchpointGeneration(t *testing.T, fixture *fixtures.RestClientFixture, client client.RestClient, catchpointRound basics.Round) string {
-	err := fixture.ClientWaitForRoundWithTimeout(client, uint64(catchpointRound+1))
+	err := client.WaitForRoundWithTimeout(uint64(catchpointRound + 1))
 	if err != nil {
 		return ""
 	}
@@ -212,7 +218,7 @@ func startCatchpointGeneratingNode(a *require.Assertions, fixture *fixtures.Rest
 
 	restClient := fixture.GetAlgodClientForController(nodeController)
 	// We don't want to start using the node without it being properly initialized.
-	err = fixture.ClientWaitForRoundWithTimeout(restClient, 1)
+	err = restClient.WaitForRoundWithTimeout(1)
 	a.NoError(err)
 
 	return nodeController, restClient, &errorsCollector
@@ -239,7 +245,7 @@ func startCatchpointUsingNode(a *require.Assertions, fixture *fixtures.RestClien
 
 	restClient := fixture.GetAlgodClientForController(nodeController)
 	// We don't want to start using the node without it being properly initialized.
-	err = fixture.ClientWaitForRoundWithTimeout(restClient, 1)
+	err = restClient.WaitForRoundWithTimeout(1)
 	a.NoError(err)
 
 	return nodeController, restClient, wp, &errorsCollector
@@ -263,7 +269,7 @@ func startCatchpointNormalNode(a *require.Assertions, fixture *fixtures.RestClie
 
 	restClient := fixture.GetAlgodClientForController(nodeController)
 	// We don't want to start using the node without it being properly initialized.
-	err = fixture.ClientWaitForRoundWithTimeout(restClient, 1)
+	err = restClient.WaitForRoundWithTimeout(1)
 	a.NoError(err)
 
 	return nodeController, restClient, &errorsCollector
@@ -294,7 +300,7 @@ func TestCatchpointCatchupFailure(t *testing.T) {
 		t.Skip()
 	}
 
-	consensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	consensusParams := config.Consensus[protocol.ConsensusFuture]
 	applyCatchpointConsensusChanges(&consensusParams)
 	a := require.New(fixtures.SynchronizedTest(t))
 
@@ -339,7 +345,7 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 		t.Skip()
 	}
 
-	consensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	consensusParams := config.Consensus[protocol.ConsensusFuture]
 	applyCatchpointConsensusChanges(&consensusParams)
 	a := require.New(fixtures.SynchronizedTest(t))
 
@@ -365,7 +371,7 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 	_, err = usingNodeRestClient.Catchup(catchpointLabel, 0)
 	a.NoError(err)
 
-	err = fixture.ClientWaitForRoundWithTimeout(usingNodeRestClient, uint64(targetCatchpointRound+1))
+	err = usingNodeRestClient.WaitForRoundWithTimeout(uint64(targetCatchpointRound + 1))
 	a.NoError(err)
 
 	// ensure the raw block can be downloaded (including cert)
@@ -397,7 +403,7 @@ func TestCatchpointLabelGeneration(t *testing.T) {
 
 			consensus := make(config.ConsensusProtocols)
 			const consensusCatchpointCatchupTestProtocol = protocol.ConsensusVersion("catchpointtestingprotocol")
-			catchpointCatchupProtocol := config.Consensus[protocol.ConsensusCurrentVersion]
+			catchpointCatchupProtocol := config.Consensus[protocol.ConsensusFuture]
 			applyCatchpointConsensusChanges(&catchpointCatchupProtocol)
 			consensus[consensusCatchpointCatchupTestProtocol] = catchpointCatchupProtocol
 
@@ -438,7 +444,7 @@ func TestCatchpointLabelGeneration(t *testing.T) {
 			primaryNodeRestClient := fixture.GetAlgodClientForController(primaryNode)
 			log.Infof("Building ledger history..")
 			for {
-				err = fixture.ClientWaitForRound(primaryNodeRestClient, currentRound, 45*time.Second)
+				_, err = primaryNodeRestClient.WaitForRound(currentRound+1, 45*time.Second)
 				a.NoError(err)
 				if targetRound <= currentRound {
 					break
@@ -455,8 +461,149 @@ func TestCatchpointLabelGeneration(t *testing.T) {
 			} else {
 				a.Empty(*primaryNodeStatus.LastCatchpoint)
 			}
+
+			// download and inspect catchpoint file
+			if tc.expectLabels {
+				round, _, err := ledgercore.ParseCatchpointLabel(*primaryNodeStatus.LastCatchpoint)
+				a.NoError(err)
+
+				primaryNodeAddr, err := primaryNode.GetListeningAddress()
+				a.NoError(err)
+
+				chunks := downloadCatchpointFile(t, a, primaryNodeAddr, round)
+				a.NotEmpty(chunks)
+				validateCatchpointChunks(t, a, chunks, catchpointCatchupProtocol)
+			}
 		})
 	}
+}
+
+func validateCatchpointChunks(t *testing.T, a *require.Assertions, chunks []ledger.CatchpointSnapshotChunkV6, params config.ConsensusParams) {
+	// each chunk will contain only accounts, KVs, online accounts, and online round params
+	// KVs will be skipped if there are none in ledger
+	// online accounts and online round params only appear if params.EnableCatchpointsWithOnlineAccounts is true
+
+	var sawAccounts, sawKVs, sawOnlineAccounts, sawOnlineRoundParams bool
+	var numAccounts, numKVs, numOnlineAccounts, numOnlineRoundParams int
+	for _, c := range chunks {
+		if len(c.Balances) > 0 {
+			sawAccounts = true
+			numAccounts += len(c.Balances)
+			a.Empty(c.KVs)
+			a.Empty(c.OnlineAccounts)
+			a.Empty(c.OnlineRoundParams)
+		}
+		if len(c.KVs) > 0 {
+			a.True(sawAccounts)
+			a.False(sawOnlineAccounts)
+			a.False(sawOnlineRoundParams)
+			sawKVs = true
+			numKVs += len(c.KVs)
+			a.Empty(c.Balances)
+			a.Empty(c.OnlineAccounts)
+			a.Empty(c.OnlineRoundParams)
+		}
+		if len(c.OnlineAccounts) > 0 {
+			a.True(sawAccounts)
+			a.False(sawOnlineRoundParams)
+			sawOnlineAccounts = true
+			numOnlineAccounts += len(c.OnlineAccounts)
+			a.Empty(c.Balances)
+			a.Empty(c.KVs)
+			a.Empty(c.OnlineRoundParams)
+		}
+		if len(c.OnlineRoundParams) > 0 {
+			a.True(sawAccounts)
+			a.True(sawOnlineAccounts)
+			a.False(sawOnlineRoundParams) // should only be one chunk with online round params
+			sawOnlineRoundParams = true
+			numOnlineRoundParams += len(c.OnlineRoundParams)
+			a.Empty(c.Balances)
+			a.Empty(c.KVs)
+			a.Empty(c.OnlineAccounts)
+		}
+	}
+	if params.EnableCatchpointsWithOnlineAccounts {
+		a.True(sawOnlineAccounts)
+		a.True(sawOnlineRoundParams)
+		a.EqualValues(int(params.MaxBalLookback), numOnlineRoundParams,
+			"online round params chunk should be same size as lookback %d", params.MaxBalLookback)
+	}
+	// could also add assertions on # of accounts, etc, more about data contents
+	_ = sawKVs
+}
+
+func downloadCatchpointFile(t *testing.T, a *require.Assertions, baseURL string, round basics.Round) []ledger.CatchpointSnapshotChunkV6 {
+	// download the catchpoint file
+	url := fmt.Sprintf("%s/v1/test-v1/ledger/%s", baseURL, strconv.FormatUint(uint64(round), 36))
+	t.Logf("Downloading catchpoint file for round %d from %s", round, url)
+	resp, err := http.Get(url)
+	a.NoError(err)
+	a.Equal(200, resp.StatusCode)
+	body, err := io.ReadAll(resp.Body)
+	a.NoError(err)
+	t.Logf("Downloaded catchpoint file for round %d, size %d bytes", round, len(body))
+
+	// decode in-memory: should be small (a few KB) for these test networks
+	tarReader := tar.NewReader(bytes.NewReader(body))
+	tarData := readCatchpointContent(t, tarReader)
+	var chunks []ledger.CatchpointSnapshotChunkV6
+	for _, d := range tarData {
+		t.Logf("tar filename: %s, size %d", d.headerName, len(d.data))
+		if strings.HasPrefix(d.headerName, "balances.") { // chunk file
+			idxStr := strings.TrimSuffix(strings.TrimPrefix(d.headerName, "balances."), ".msgpack")
+			idx, err := strconv.Atoi(idxStr)
+			a.NoError(err)
+			var c ledger.CatchpointSnapshotChunkV6
+			err = protocol.Decode(d.data, &c)
+			a.NoError(err)
+			t.Logf("chunk %d has balances: %d, kvs: %d, online accounts: %d, onlineroundparams: %d",
+				idx, len(c.Balances), len(c.KVs), len(c.OnlineAccounts), len(c.OnlineRoundParams))
+			chunks = append(chunks, c)
+		}
+	}
+	return chunks
+}
+
+// copied from catchpointfilewriter_test.go
+type decodedCatchpointChunkData struct {
+	headerName string
+	data       []byte
+}
+
+// copied from catchpointfilewriter_test.go
+func readCatchpointContent(t *testing.T, tarReader *tar.Reader) []decodedCatchpointChunkData {
+	result := make([]decodedCatchpointChunkData, 0)
+	for {
+		header, err := tarReader.Next()
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			require.NoError(t, err)
+			break
+		}
+		data := make([]byte, header.Size)
+		readComplete := int64(0)
+
+		for readComplete < header.Size {
+			bytesRead, err := tarReader.Read(data[readComplete:])
+			readComplete += int64(bytesRead)
+			if err != nil {
+				if err == io.EOF {
+					if readComplete == header.Size {
+						break
+					}
+					require.NoError(t, err)
+				}
+				break
+			}
+		}
+
+		result = append(result, decodedCatchpointChunkData{headerName: header.Name, data: data})
+	}
+
+	return result
 }
 
 // TestNodeTxHandlerRestart starts a two-node and one relay network
@@ -553,8 +700,7 @@ func TestNodeTxHandlerRestart(t *testing.T) {
 
 	// Wait for the network to start making progress again
 	primaryNodeRestClient := fixture.GetAlgodClientForController(primaryNode)
-	err = fixture.ClientWaitForRound(primaryNodeRestClient, targetRound,
-		10*catchpointCatchupProtocol.AgreementFilterTimeout)
+	_, err = primaryNodeRestClient.WaitForRound(targetRound, 10*catchpointCatchupProtocol.AgreementFilterTimeout)
 	a.NoError(err)
 
 	// let the 2nd client send a transaction
@@ -674,8 +820,7 @@ func TestReadyEndpoint(t *testing.T) {
 
 	// Wait for the network to start making progress again
 	primaryNodeRestClient := fixture.GetAlgodClientForController(primaryNode)
-	err = fixture.ClientWaitForRound(primaryNodeRestClient, targetRound,
-		10*catchpointCatchupProtocol.AgreementFilterTimeout)
+	_, err = primaryNodeRestClient.WaitForRound(targetRound, 10*catchpointCatchupProtocol.AgreementFilterTimeout)
 	a.NoError(err)
 
 	// The primary node has reached the target round,

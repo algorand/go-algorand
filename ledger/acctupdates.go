@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2024 Algorand, Inc.
+// Copyright (C) 2019-2025 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -1483,13 +1483,6 @@ func (au *accountUpdates) roundOffset(rnd basics.Round) (offset uint64, err erro
 	return off, nil
 }
 
-func (au *accountUpdates) handleUnorderedCommit(dcc *deferredCommitContext) {
-}
-func (au *accountUpdates) handlePrepareCommitError(dcc *deferredCommitContext) {
-}
-func (au *accountUpdates) handleCommitError(dcc *deferredCommitContext) {
-}
-
 // prepareCommit prepares data to write to the database a "chunk" of rounds, and update the cached dbRound accordingly.
 func (au *accountUpdates) prepareCommit(dcc *deferredCommitContext) error {
 	if au.logAccountUpdatesMetrics {
@@ -1515,7 +1508,7 @@ func (au *accountUpdates) prepareCommit(dcc *deferredCommitContext) error {
 
 	// once the consensus upgrade to resource separation is complete, all resources/accounts are also tagged with
 	// their corresponding update round.
-	setUpdateRound := config.Consensus[au.versions[1]].EnableAccountDataResourceSeparation
+	setUpdateRound := config.Consensus[au.versions[1]].EnableLedgerDataUpdateRound
 
 	// compact all the deltas - when we're trying to persist multiple rounds, we might have the same account
 	// being updated multiple times. When that happen, we can safely omit the intermediate updates.
@@ -1743,9 +1736,6 @@ func (au *accountUpdates) postCommit(ctx context.Context, dcc *deferredCommitCon
 		var details struct{}
 		au.log.Metrics(telemetryspec.Accounts, dcc.stats, details)
 	}
-}
-
-func (au *accountUpdates) postCommitUnlocked(ctx context.Context, dcc *deferredCommitContext) {
 }
 
 // compactKvDeltas takes an array of StateDeltas containing kv deltas (one array entry per round), and
