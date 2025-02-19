@@ -522,12 +522,12 @@ func (handler *TxHandler) postProcessCheckedTxn(wi *txBacklogMsg) {
 	if wi.verificationErr != nil {
 		// disconnect from peer.
 		handler.postProcessReportErrors(wi.verificationErr)
+		logging.Base().Warnf("Received a malformed tx group %v: %v", wi.unverifiedTxGroup, wi.verificationErr)
 		// if in synchronous mode, signal the completion of the operation
 		if wi.syncCh != nil {
 			wi.syncCh <- network.Disconnect
 			return
 		}
-		logging.Base().Warnf("Received a malformed tx group %v: %v", wi.unverifiedTxGroup, wi.verificationErr)
 		handler.net.Disconnect(wi.rawmsg.Sender)
 		return
 	}
