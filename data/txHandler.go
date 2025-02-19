@@ -859,7 +859,7 @@ func (handler *TxHandler) validateIncomingTxMessage(rawmsg network.IncomingMessa
 		transactionMessagesDroppedFromBacklog.Inc(nil)
 
 		// additionally, remove the txn from duplicate caches to ensure it can be re-submitted
-		handler.deleteFromCaches(nil, canonicalKey)
+		handler.deleteFromCaches(crypto.Digest{}, canonicalKey)
 
 		// queue is full, do not if the message valid or not so ignore
 		action = network.Ignore
