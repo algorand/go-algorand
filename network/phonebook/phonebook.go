@@ -53,7 +53,7 @@ const (
 	archivalRole
 )
 
-// Has checks if the role also has the other role
+// Has checks if the role also has any of the other roles
 func (r Roles) Has(other Roles) bool {
 	return r.roles&other.roles != 0
 }
