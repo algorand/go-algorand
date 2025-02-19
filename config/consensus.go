@@ -704,8 +704,8 @@ var MaxBytesKeyValueLen int
 // of the consensus protocols. used for decoding purposes.
 var MaxExtraAppProgramLen int
 
-// MaxAvailableAppProgramLen is the largest supported app program size include the extra pages
-// supported supported by any of the consensus protocols. used for decoding purposes.
+// MaxAvailableAppProgramLen is the largest supported app program size including the extra
+// pages supported by any of the consensus protocols. used for decoding purposes.
 var MaxAvailableAppProgramLen int
 
 // MaxProposedExpiredOnlineAccounts is the maximum number of online accounts
