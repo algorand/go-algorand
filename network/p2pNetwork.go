@@ -946,7 +946,7 @@ func (n *P2PNetwork) txTopicHandleLoop() {
 				}
 				// participation or configuration change, cancel subscription and quit
 				if !wantTXGossip.Load() {
-					log.Debugf("Cancelling subscription to topic %s due participation change", p2p.TXTopicName)
+					log.Debugf("Cancelling subscription to topic %s due to participation change", p2p.TXTopicName)
 					sub.Cancel()
 					return
 				}
