@@ -262,8 +262,6 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		ExecutionPool: node.lowPriorityCryptoVerificationPool,
 		Ledger:        node.ledger,
 		Net:           node.net,
-		GenesisID:     node.genesisID,
-		GenesisHash:   node.genesisHash,
 		Config:        cfg,
 	}
 	node.txHandler, err = data.MakeTxHandler(txHandlerOpts)
