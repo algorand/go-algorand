@@ -63,12 +63,12 @@ func (r Roles) Is(other Roles) bool {
 	return r.roles == other.roles
 }
 
-// Assign adds the other role to the role
+// Assign adds the other roles to this set of roles
 func (r *Roles) Assign(other Roles) {
 	r.roles |= other.roles
 }
 
-// Remove removes the other role from the role
+// Remove removes the other roles from this set of roles
 func (r *Roles) Remove(other Roles) {
 	r.roles &= ^other.roles
 }
