@@ -17,6 +17,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -58,6 +59,11 @@ var listenIP = flag.String("l", "", "Override config.EndpointAddress (REST liste
 var sessionGUID = flag.String("s", "", "Telemetry Session GUID to use")
 var telemetryOverride = flag.String("t", "", `Override telemetry setting if supported (Use "true", "false", "0" or "1")`)
 var seed = flag.String("seed", "", "input to math/rand.Seed()")
+
+const (
+	DefaultStaticTelemetryStartupTimeout = 5 * time.Second
+	DefaultStaticTelemetryBGDialRetry    = 1 * time.Minute
+)
 
 func main() {
 	flag.Parse()
@@ -232,22 +238,29 @@ func run() int {
 					telemetryConfig.SessionGUID = *sessionGUID
 				}
 			}
+			// Try to enable remote telemetry now when URI is defined. Skip for DNS based telemetry.
+			ctx, cancel := context.WithTimeout(context.Background(), DefaultStaticTelemetryStartupTimeout)
+			defer cancel()
+			err = log.EnableTelemetryContext(ctx, telemetryConfig)
+			if err != nil {
+				fmt.Fprintln(os.Stdout, "error creating telemetry hook", err)
 
-			// Remote telemetry init loop
-			go func() {
-				for {
-					// Try to enable remote telemetry now when URI is defined. Skip for DNS based telemetry.
-					err := log.EnableTelemetry(telemetryConfig)
-					// Error occurs only if URI is defined and we need to retry later
-					if err == nil {
-						// Remote telemetry enabled or empty static URI, stop retrying
-						return
+				// Remote telemetry init loop
+				go func() {
+					for {
+						time.Sleep(DefaultStaticTelemetryBGDialRetry)
+						// Try to enable remote telemetry now when URI is defined. Skip for DNS based telemetry.
+						err := log.EnableTelemetryContext(context.Background(), telemetryConfig)
+						// Error occurs only if URI is defined and we need to retry later
+						if err == nil {
+							// Remote telemetry enabled or empty static URI, stop retrying
+							return
+						}
+						fmt.Fprintln(os.Stdout, "error creating telemetry hook", err)
+						// Try to reenable every minute
 					}
-					fmt.Fprintln(os.Stdout, "error creating telemetry hook", err)
-					// Try to reenable every minute
-					time.Sleep(time.Minute)
-				}
-			}()
+				}()
+			}
 		}
 	}
 
