@@ -825,7 +825,7 @@ func makeTestTxHandler(dl *Ledger, cfg config.Local) (*TxHandler, error) {
 	tp := pools.MakeTransactionPool(dl.Ledger, cfg, logging.Base(), nil)
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	opts := TxHandlerOpts{
-		tp, backlogPool, dl, &mocks.MockNetwork{}, "", crypto.Digest{}, cfg,
+		tp, backlogPool, dl, &mocks.MockNetwork{}, cfg,
 	}
 	return MakeTxHandler(opts)
 }
@@ -2349,19 +2349,19 @@ func TestTxHandlerRememberReportErrorsWithTxPool(t *testing.T) { //nolint:parall
 func TestMakeTxHandlerErrors(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	opts := TxHandlerOpts{
-		nil, nil, nil, &mocks.MockNetwork{}, "", crypto.Digest{}, config.Local{},
+		nil, nil, nil, &mocks.MockNetwork{}, config.Local{},
 	}
 	_, err := MakeTxHandler(opts)
 	require.Error(t, err, ErrInvalidTxPool)
 
 	opts = TxHandlerOpts{
-		&pools.TransactionPool{}, nil, nil, &mocks.MockNetwork{}, "", crypto.Digest{}, config.Local{},
+		&pools.TransactionPool{}, nil, nil, &mocks.MockNetwork{}, config.Local{},
 	}
 	_, err = MakeTxHandler(opts)
 	require.Error(t, err, ErrInvalidLedger)
 
 	// it is not possible to test MakeStreamVerifier returning an error, because it is not possible to
-	// get the leger return an error for returining the header of its latest round
+	// get the ledger to return an error for returining the header of its latest round
 }
 
 // TestTxHandlerRestartWithBacklogAndTxPool starts txHandler, sends transactions,
