@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"io"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/algorand/go-algorand/config"
@@ -662,11 +661,13 @@ type erlIPClient struct {
 	util.ErlClient
 	m       deadlock.RWMutex
 	clients map[util.ErlClient]struct{}
-	closer  atomic.Value
+	closer  func()
 }
 
 func (eic *erlIPClient) OnClose(f func()) {
-	eic.closer.Store(f)
+	eic.m.Lock()
+	defer eic.m.Unlock()
+	eic.closer = f
 }
 
 // register registers a new client to the erlIPClient
@@ -691,17 +692,13 @@ func (eic *erlIPClient) register(ec util.ErlClient) {
 // and calls the closer function if there are no more clients
 func (eic *erlIPClient) connClosed(ec util.ErlClient) {
 	eic.m.Lock()
+	defer eic.m.Unlock()
 	delete(eic.clients, ec)
 	empty := len(eic.clients) == 0
-	eic.m.Unlock()
 	// if no elements left, call the closer
-	// use atomic Swap in order to retrieve the closer and call it once
-	if empty {
-		// atomic.Value.Swap does not like nil values so use a typed nil
-		// and cast it to func() in order to compare with nil
-		if closer := eic.closer.Swap((func())(nil)).(func()); closer != nil {
-			closer()
-		}
+	if empty && eic.closer != nil {
+		eic.closer()
+		eic.closer = nil
 	}
 }
 
