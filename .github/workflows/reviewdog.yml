@@ -55,7 +55,7 @@ jobs:
         run: mkdir -p cicdtmp/golangci-lint
       - name: Check if custom golangci-lint is already built
         id: cache-golangci-lint
-        uses: actions/cache@v3.3.1
+        uses: actions/cache@v4
         with:
           path: cicdtmp/golangci-lint/golangci-lint-cgo
           key: cicd-golangci-lint-cgo-v0.0.3-${{ env.GO_VERSION }}-${{ env.GOLANGCI_LINT_VERSION }}
