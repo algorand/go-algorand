@@ -236,7 +236,7 @@ func createElasticHookContext(ctx context.Context, cfg TelemetryConfig) (hook lo
 		return nil, nil
 	}
 
-	client, err := elastic.NewClient(elastic.SetURL(cfg.URI),
+	client, err := elastic.DialContext(ctx, elastic.SetURL(cfg.URI),
 		elastic.SetBasicAuth(cfg.UserName, cfg.Password),
 		elastic.SetSniff(false),
 		elastic.SetGzip(true),
