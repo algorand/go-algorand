@@ -667,9 +667,8 @@ func (eic *erlIPClient) OnClose(f func()) {
 // by adding a helper closer function to track connection closures
 func (eic *erlIPClient) register(ec util.ErlClient) {
 	eic.m.Lock()
-	_, has := eic.clients[ec]
 	defer eic.m.Unlock()
-	if has {
+	if _, has := eic.clients[ec]; has {
 		// this peer is known => noop
 		return
 	}
