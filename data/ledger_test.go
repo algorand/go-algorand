@@ -682,6 +682,10 @@ func TestLedgerErrorValidate(t *testing.T) {
 					require.LessOrEqual(t, attemptedRound, dbRound)
 					require.GreaterOrEqual(t, int(l.Latest()), dbRound+int(cfg.MaxAcctLookback))
 					um = ""
+				} else if strings.Contains(um, "rolling back failed commitRound") {
+					// this in-memory ledger is expected to hit "database table is locked" errors
+					// so that retry logic is exercised and trackers notified of the rollback
+					um = ""
 				}
 				require.Empty(t, um, um)
 			default:
