@@ -618,7 +618,7 @@ func convertTxnGroupResult(txnGroupResult simulation.TxnGroupResult) PreEncodedS
 
 		// Check the rest of txnGroupResult.PopulatedResourceArrays to see if there are any non-empty ones, staring at the len(txnResults)
 		for i := len(txnResults); i < len(txnGroupResult.PopulatedResourceArrays); i++ {
-			extraResourceArrays[i] = *convertPopulatedResourceArrays(txnGroupResult.PopulatedResourceArrays[i])
+			extraResourceArrays[i-len(txnResults)] = *convertPopulatedResourceArrays(txnGroupResult.PopulatedResourceArrays[i])
 		}
 
 		encoded.ExtraResourceArrays = &extraResourceArrays

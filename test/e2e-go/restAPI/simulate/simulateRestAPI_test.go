@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net/http"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -2738,6 +2739,181 @@ int 1
 		},
 	}
 	a.Equal(expectedResult, resp)
+}
+
+func TestSimulateWithExtraPopulatedResourceArrays(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	a := require.New(fixtures.SynchronizedTest(t))
+	var localFixture fixtures.RestClientFixture
+	localFixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50EachFuture.json"))
+	defer localFixture.Shutdown()
+
+	testClient := localFixture.LibGoalClient
+
+	_, err := testClient.WaitForRound(1)
+	a.NoError(err)
+
+	wh, err := testClient.GetUnencryptedWalletHandle()
+	a.NoError(err)
+	addresses, err := testClient.ListAddresses(wh)
+	a.NoError(err)
+	_, senderAddress := helper.GetMaxBalAddr(t, testClient, addresses)
+	a.NotEmpty(senderAddress, "no addr with funds")
+	a.NoError(err)
+
+	ops, err := logic.AssembleString("#pragma version 11\n int 1")
+	a.NoError(err)
+	alwaysApprove := ops.Program
+
+	gl := basics.StateSchema{}
+	lc := basics.StateSchema{}
+
+	// create app
+	txn, err := testClient.MakeUnsignedAppCreateTx(transactions.OptInOC, alwaysApprove, alwaysApprove, gl, lc, nil, nil, nil, nil, nil, 0)
+	a.NoError(err)
+	txn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, 0, txn)
+	a.NoError(err)
+	// sign and broadcast
+	txID, err := testClient.SignAndBroadcastTransaction(wh, nil, txn)
+	a.NoError(err)
+	confirmedTxn, err := helper.WaitForTransaction(t, testClient, txID, 30*time.Second)
+	a.NoError(err)
+	// get app ID
+	a.NotNil(confirmedTxn.ApplicationIndex)
+
+	addrs := make([]string, 5)
+	for i := 0; i < 5; i++ {
+		addrs[i] = basics.Address{byte(i)}.GetUserAddress()
+	}
+
+	apps := make([]uint64, 4)
+	for i := 0; i < 4; i++ {
+		apps[i] = uint64((i + 1) * 10_000)
+	}
+
+	asset := uint64(10_001)
+
+	prog := fmt.Sprintf(`#pragma version 11
+txn ApplicationID
+bz end
+
+// 1 box ref here and 1 empty ref later
+byte "box_key"; int 1024; int 2; *; box_create
+
+// 4 accounts to max this txns limit
+addr %s; acct_params_get AcctBalance
+addr %s; acct_params_get AcctBalance
+addr %s; acct_params_get AcctBalance
+addr %s; acct_params_get AcctBalance
+
+// 3 apps to hit this txns reference limit and force references in ExtraResourceArrays
+int %d; app_params_get AppCreator
+int %d; app_params_get AppCreator
+int %d; app_params_get AppCreator
+
+// App in ExtraResourceArrays
+int %d; app_params_get AppCreator
+
+// Account in ExtraResourceArrays
+addr %s; acct_params_get AcctBalance
+
+// Asset in ExtraResourceArrays 
+int %d; asset_params_get AssetTotal
+
+end:
+  int 1; return
+`, addrs[0], addrs[1], addrs[2], addrs[3], apps[0], apps[1], apps[2], apps[3], addrs[4], asset)
+
+	ops, err = logic.AssembleString(prog)
+	a.NoError(err)
+	approval := ops.Program
+
+	// create app
+	txn, err = testClient.MakeUnsignedAppCreateTx(transactions.NoOpOC, approval, alwaysApprove, gl, lc, nil, nil, nil, nil, nil, 0)
+	a.NoError(err)
+	txn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, 0, txn)
+	a.NoError(err)
+	// sign and broadcast
+	txID, err = testClient.SignAndBroadcastTransaction(wh, nil, txn)
+	a.NoError(err)
+	confirmedTxn, err = helper.WaitForTransaction(t, testClient, txID, 30*time.Second)
+	a.NoError(err)
+	// get app ID
+	a.NotNil(confirmedTxn.ApplicationIndex)
+	testAppID := basics.AppIndex(*confirmedTxn.ApplicationIndex)
+	a.NotZero(testAppID)
+
+	// fund app account
+	txn, err = testClient.SendPaymentFromWallet(
+		wh, nil, senderAddress, testAppID.Address().String(),
+		0, 13_212_500, nil, "", 0, 0,
+	)
+	a.NoError(err)
+	txID = txn.ID().String()
+	_, err = helper.WaitForTransaction(t, testClient, txID, 30*time.Second)
+	a.NoError(err)
+
+	// construct app call
+	txn, err = testClient.MakeUnsignedAppNoOpTx(
+		uint64(testAppID), nil, nil, nil, nil, nil,
+	)
+	a.NoError(err)
+	txn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, 0, txn)
+	a.NoError(err)
+	stxn, err := testClient.SignTransactionWithWallet(wh, nil, txn)
+	a.NoError(err)
+
+	// It should work with AllowUnnamedResources=true
+	resp, err := testClient.SimulateTransactions(v2.PreEncodedSimulateRequest{
+		TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
+			{
+				Txns: []transactions.SignedTxn{stxn},
+			},
+		},
+		AllowUnnamedResources: true,
+		PopulateResources:     true,
+	})
+	a.NoError(err)
+
+	grp := resp.TxnGroups[0]
+	a.Empty(grp.FailureMessage)
+
+	boxes := []model.BoxReference{{App: uint64(1002), Name: []byte("box_key")}}
+
+	a.ElementsMatch(*grp.UnnamedResourcesAccessed.Accounts, addrs)
+	a.Equal((*grp.UnnamedResourcesAccessed.Assets)[0], asset)
+	a.ElementsMatch(*grp.UnnamedResourcesAccessed.Apps, apps)
+	a.ElementsMatch(*grp.UnnamedResourcesAccessed.Boxes, boxes)
+	a.Equal(*grp.UnnamedResourcesAccessed.ExtraBoxRefs, uint64(1))
+
+	a.Len(*grp.ExtraResourceArrays, 1)
+
+	// Resource population order is non-determinstic within an ref type
+	// and both assets and accounts have multiple values, so we need
+	// to combine the txn's populated array and the extra array
+	// to check for all values rather than checking each one seperately
+	resourceArrays := *grp.Txns[0].PopulatedResourceArrays
+	extraResources := (*grp.ExtraResourceArrays)[0]
+	populatedAccounts := slices.Concat(*extraResources.Accounts, *resourceArrays.Accounts)
+	populatedApps := slices.Concat(*extraResources.Apps, *resourceArrays.Apps)
+
+	// All apps are populated and one of them is in the extra resource array
+	a.ElementsMatch(populatedApps, apps)
+	a.Len(*extraResources.Apps, 1)
+
+	// All assets are populated and one of them is in the extra resource array
+	a.ElementsMatch(populatedAccounts, addrs)
+	a.Len(*extraResources.Accounts, 1)
+
+	// The asset is in the extra resource array
+	a.Nil(resourceArrays.Assets)
+	a.Equal((*extraResources.Assets)[0], asset)
+
+	// The txn has the box ref and the extra array has the empty ref
+	a.ElementsMatch(*resourceArrays.Boxes, boxes)
+	a.ElementsMatch(*extraResources.Boxes, []model.BoxReference{{App: uint64(0), Name: []byte("")}})
 }
 
 func TestSimulateWithFixSigners(t *testing.T) {
