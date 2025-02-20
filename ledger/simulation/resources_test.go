@@ -334,7 +334,7 @@ func TestPopulatorWithLocalResources(t *testing.T) {
 			Assets:   []basics.AssetIndex{asset},
 			Apps:     []basics.AppIndex{app},
 			Accounts: []basics.Address{addr},
-			Boxes:    []logic.BoxRef{},
+			Boxes:    nil,
 		},
 		populator.txnResources[0].getPopulatedArrays(),
 	)
@@ -424,30 +424,30 @@ func TestPopulatorWithGlobalResources(t *testing.T) {
 	pop3 := populator.txnResources[3].getPopulatedArrays()
 	pop4 := populator.txnResources[4].getPopulatedArrays()
 
-	// Txn 1 has all the new multi-resources (ie. both resources are not already in a txn)
-	// Txn 1 also gets the app and address resource because they are added before other resources
-	require.ElementsMatch(t, pop1.Apps, []basics.AppIndex{box5.App, local10_11.App, app3})
+	// Txn 1 has all the cross-reference resources because they are added first
+	// The exception is the cross-refs for app1 since txn 3 is calling app 1
+	require.ElementsMatch(t, pop1.Apps, []basics.AppIndex{box5.App, local10_11.App})
 	require.ElementsMatch(t, pop1.Boxes, []logic.BoxRef{box5})
-	require.ElementsMatch(t, pop1.Accounts, []basics.Address{addr2, holding6_7.Address, local10_11.Address})
-	require.ElementsMatch(t, pop1.Assets, []basics.AssetIndex{holding6_7.Asset})
+	require.ElementsMatch(t, pop1.Accounts, []basics.Address{holding6_7.Address, holding9_8.Address, local10_11.Address})
+	require.ElementsMatch(t, pop1.Assets, []basics.AssetIndex{holding6_7.Asset, holding1_8.Asset})
 
-	// Txn 2 has the asset and empty boxes because they are added last and txn 0 is full
-	require.ElementsMatch(t, pop2.Apps, []basics.AppIndex{})
-	require.ElementsMatch(t, pop2.Boxes, []logic.BoxRef{emptyBox, emptyBox, emptyBox, emptyBox, emptyBox, emptyBox, emptyBox})
-	require.ElementsMatch(t, pop2.Accounts, []basics.Address{})
+	// Txn 2 has the non cross-reference resources and empty boxes
+	require.ElementsMatch(t, pop2.Apps, []basics.AppIndex{app3})
+	require.ElementsMatch(t, pop2.Boxes, []logic.BoxRef{emptyBox, emptyBox, emptyBox, emptyBox, emptyBox})
+	require.ElementsMatch(t, pop2.Accounts, []basics.Address{addr2})
 	require.ElementsMatch(t, pop2.Assets, []basics.AssetIndex{asset4})
 
-	// Txn 3 has all the resources that had partial requirements already in txn 2 and leftover empty boxes
+	// Txn 3 has the cross refs for app1 since it is a call to app1
 	require.ElementsMatch(t, pop3.Apps, []basics.AppIndex{local1_12.App})
-	require.ElementsMatch(t, pop3.Boxes, []logic.BoxRef{box1, emptyBox, emptyBox, emptyBox})
-	require.ElementsMatch(t, pop3.Accounts, []basics.Address{holding9_8.Address, local13_1.Address})
+	require.ElementsMatch(t, pop3.Boxes, []logic.BoxRef{box1, emptyBox, emptyBox, emptyBox, emptyBox})
+	require.ElementsMatch(t, pop3.Accounts, []basics.Address{local13_1.Address})
 	require.ElementsMatch(t, pop3.Assets, []basics.AssetIndex{holding1_8.Asset})
 
 	// The 4th populated array does not map to a transaction, but it will contain the overflow of resources
 	require.Empty(t, pop4.Accounts)
 	require.Empty(t, pop4.Apps)
 	require.Empty(t, pop4.Assets)
-	require.ElementsMatch(t, pop4.Boxes, []logic.BoxRef{emptyBox})
+	require.ElementsMatch(t, pop4.Boxes, []logic.BoxRef{emptyBox, emptyBox})
 
 	require.Len(t, populator.getPopulatedArrays(), 4)
 

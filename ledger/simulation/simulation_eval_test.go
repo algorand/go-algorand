@@ -9434,9 +9434,9 @@ func populateResourceTest(t *testing.T, groupSharing bool) {
 	expectedPopulatedArrays := map[int]simulation.PopulatedResourceArrays{
 		1: {
 			Accounts: []basics.Address{foreignAccount.Addr},
-			Assets:   []basics.AssetIndex{},
-			Apps:     []basics.AppIndex{},
-			Boxes:    []logic.BoxRef{},
+			Assets:   nil,
+			Apps:     nil,
+			Boxes:    nil,
 		},
 	}
 
@@ -9651,5 +9651,125 @@ func TestPopulateResources(t *testing.T) {
 	t.Run("mixed resources", func(t *testing.T) {
 		t.Parallel()
 		mixedResourcePopulationTest(t)
+	})
+}
+
+func TestPopulateResourcesOrder(t *testing.T) {
+	env := simulationtesting.PrepareSimulatorTest(t)
+	sender := env.Accounts[0]
+
+	addrs := make([]basics.Address, 4)
+	for i := 0; i < len(addrs); i++ {
+		addrs[i] = basics.Address{byte(i + 1)}
+	}
+
+	apps := make([]basics.AppIndex, 4)
+	for i := 0; i < len(addrs); i++ {
+		apps[i] = basics.AppIndex(i + 10_000)
+	}
+
+	assets := make([]basics.AssetIndex, 4)
+	for i := 0; i < len(addrs); i++ {
+		assets[i] = basics.AssetIndex(i + 10_000)
+	}
+
+	program := fmt.Sprintf(`#pragma version 11
+	txn ApplicationID
+	bz end
+	
+	addr %s; balance
+	addr %s; balance
+	addr %s; balance
+	addr %s; balance
+	
+	int %d; app_params_get AppCreator
+	int %d; app_params_get AppCreator
+	int %d; app_params_get AppCreator
+	int %d; app_params_get AppCreator
+
+	int %d; asset_params_get AssetTotal
+	int %d; asset_params_get AssetTotal
+	int %d; asset_params_get AssetTotal
+	int %d; asset_params_get AssetTotal
+
+	end:
+	int 1
+	return
+	`, addrs[0], addrs[1], addrs[2], addrs[3], apps[0], apps[1], apps[2], apps[3], assets[0], assets[1], assets[2], assets[3])
+
+	appID := env.CreateApp(sender.Addr, simulationtesting.AppParams{
+		ApprovalProgram:   program,
+		ClearStateProgram: program,
+	})
+
+	appCall := env.TxnInfo.NewTxn(txntest.Txn{
+		Type:          protocol.ApplicationCallTx,
+		Sender:        sender.Addr,
+		ApplicationID: appID,
+	})
+
+	txgroup := txntest.Group(&appCall)
+
+	proto := env.TxnInfo.CurrentProtocolParams()
+
+	var expectedTxnResources *simulation.ResourceTracker
+	var expectedGroupResources *simulation.ResourceTracker
+
+	maxAppls := proto.MaxTxGroupSize
+
+	expectedGroupResources = &simulation.ResourceTracker{
+		MaxAccounts:               (proto.MaxAppTxnAccounts + proto.MaxAppTxnForeignApps) * maxAppls,
+		MaxAssets:                 proto.MaxAppTxnForeignAssets * maxAppls,
+		MaxApps:                   proto.MaxAppTxnForeignApps * maxAppls,
+		MaxBoxes:                  proto.MaxAppBoxReferences * maxAppls,
+		MaxTotalRefs:              proto.MaxAppTotalTxnReferences * maxAppls,
+		MaxCrossProductReferences: 80 * maxAppls,
+		Accounts:                  mapWithKeys(addrs, struct{}{}),
+		Assets:                    mapWithKeys(assets, struct{}{}),
+		Apps:                      mapWithKeys(apps, struct{}{}),
+	}
+	expectedTxnResources = nil
+
+	expectedPopulatedArrays := map[int]simulation.PopulatedResourceArrays{
+		0: {
+			Accounts: addrs,
+			Assets:   nil,
+			Apps:     apps,
+			Boxes:    nil,
+		},
+		1: {
+			Accounts: nil,
+			Assets:   assets,
+			Apps:     nil,
+			Boxes:    nil,
+		},
+	}
+
+	runSimulationTestCase(t, env, simulationTestCase{
+		input: simulation.Request{
+			TxnGroups:             [][]transactions.SignedTxn{txgroup},
+			AllowEmptySignatures:  true,
+			AllowUnnamedResources: true,
+			PopulateResources:     true,
+		},
+		expected: simulation.Result{
+			Version:   simulation.ResultLatestVersion,
+			LastRound: env.TxnInfo.LatestRound(),
+			EvalOverrides: simulation.ResultEvalOverrides{
+				AllowEmptySignatures:  true,
+				AllowUnnamedResources: true,
+			},
+			TxnGroups: []simulation.TxnGroupResult{{
+				Txns: []simulation.TxnResult{
+					{
+						AppBudgetConsumed:        ignoreAppBudgetConsumed,
+						UnnamedResourcesAccessed: expectedTxnResources,
+					}},
+				PopulatedResourceArrays:  expectedPopulatedArrays,
+				AppBudgetConsumed:        ignoreAppBudgetConsumed,
+				AppBudgetAdded:           700,
+				UnnamedResourcesAccessed: expectedGroupResources,
+			}},
+		},
 	})
 }

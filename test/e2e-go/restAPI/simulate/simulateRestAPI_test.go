@@ -2998,3 +2998,152 @@ func TestSimulateWithFixSigners(t *testing.T) {
 	}
 	a.Equal(expectedResult, result)
 }
+
+func TestPopulatedResourceArraysOrder(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	a := require.New(fixtures.SynchronizedTest(t))
+	var localFixture fixtures.RestClientFixture
+	localFixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50EachFuture.json"))
+	defer localFixture.Shutdown()
+
+	testClient := localFixture.LibGoalClient
+
+	_, err := testClient.WaitForRound(1)
+	a.NoError(err)
+
+	wh, err := testClient.GetUnencryptedWalletHandle()
+	a.NoError(err)
+	addresses, err := testClient.ListAddresses(wh)
+	a.NoError(err)
+	_, senderAddress := helper.GetMaxBalAddr(t, testClient, addresses)
+	a.NotEmpty(senderAddress, "no addr with funds")
+	a.NoError(err)
+
+	ops, err := logic.AssembleString("#pragma version 11\n int 1")
+	a.NoError(err)
+	alwaysApprove := ops.Program
+
+	gl := basics.StateSchema{}
+	lc := basics.StateSchema{}
+
+	// create app
+	txn, err := testClient.MakeUnsignedAppCreateTx(transactions.OptInOC, alwaysApprove, alwaysApprove, gl, lc, nil, nil, nil, nil, nil, 0)
+	a.NoError(err)
+	txn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, 0, txn)
+	a.NoError(err)
+	// sign and broadcast
+	txID, err := testClient.SignAndBroadcastTransaction(wh, nil, txn)
+	a.NoError(err)
+	confirmedTxn, err := helper.WaitForTransaction(t, testClient, txID, 30*time.Second)
+	a.NoError(err)
+	// get app ID
+	a.NotNil(confirmedTxn.ApplicationIndex)
+
+	addrs := make([]string, 4)
+	for i := 0; i < len(addrs); i++ {
+		addrs[i] = basics.Address{byte(i + 1)}.GetUserAddress()
+	}
+
+	apps := make([]uint64, 4)
+	for i := 0; i < len(addrs); i++ {
+		apps[i] = uint64(i + 10_000)
+	}
+
+	assets := make([]uint64, 4)
+	for i := 0; i < len(addrs); i++ {
+		assets[i] = uint64(i + 10_000)
+	}
+
+	prog := fmt.Sprintf(`#pragma version 11
+	txn ApplicationID
+	bz end
+	
+	addr %s; balance
+	addr %s; balance
+	addr %s; balance
+	addr %s; balance
+	
+	int %d; app_params_get AppCreator
+	int %d; app_params_get AppCreator
+	int %d; app_params_get AppCreator
+	int %d; app_params_get AppCreator
+
+	int %d; asset_params_get AssetTotal
+	int %d; asset_params_get AssetTotal
+	int %d; asset_params_get AssetTotal
+	int %d; asset_params_get AssetTotal
+
+	end:
+	int 1
+	return
+	`, addrs[0], addrs[1], addrs[2], addrs[3], apps[0], apps[1], apps[2], apps[3], assets[0], assets[1], assets[2], assets[3])
+
+	ops, err = logic.AssembleString(prog)
+	a.NoError(err)
+	approval := ops.Program
+
+	// create app
+	txn, err = testClient.MakeUnsignedAppCreateTx(transactions.NoOpOC, approval, alwaysApprove, gl, lc, nil, nil, nil, nil, nil, 0)
+	a.NoError(err)
+	txn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, 0, txn)
+	a.NoError(err)
+	// sign and broadcast
+	txID, err = testClient.SignAndBroadcastTransaction(wh, nil, txn)
+	a.NoError(err)
+	confirmedTxn, err = helper.WaitForTransaction(t, testClient, txID, 30*time.Second)
+	a.NoError(err)
+	// get app ID
+	a.NotNil(confirmedTxn.ApplicationIndex)
+	testAppID := basics.AppIndex(*confirmedTxn.ApplicationIndex)
+	a.NotZero(testAppID)
+
+	// fund app account
+	txn, err = testClient.SendPaymentFromWallet(
+		wh, nil, senderAddress, testAppID.Address().String(),
+		0, 13_212_500, nil, "", 0, 0,
+	)
+	a.NoError(err)
+	txID = txn.ID().String()
+	_, err = helper.WaitForTransaction(t, testClient, txID, 30*time.Second)
+	a.NoError(err)
+
+	// construct app call
+	txn, err = testClient.MakeUnsignedAppNoOpTx(
+		uint64(testAppID), nil, nil, nil, nil, nil,
+	)
+	a.NoError(err)
+	txn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, 0, txn)
+	a.NoError(err)
+	stxn, err := testClient.SignTransactionWithWallet(wh, nil, txn)
+	a.NoError(err)
+
+	// It should work with AllowUnnamedResources=true
+	resp, err := testClient.SimulateTransactions(v2.PreEncodedSimulateRequest{
+		TxnGroups: []v2.PreEncodedSimulateRequestTransactionGroup{
+			{
+				Txns: []transactions.SignedTxn{stxn},
+			},
+		},
+		AllowUnnamedResources: true,
+		PopulateResources:     true,
+	})
+	a.NoError(err)
+
+	grp := resp.TxnGroups[0]
+	a.Empty(grp.FailureMessage)
+
+	a.ElementsMatch(*grp.UnnamedResourcesAccessed.Accounts, addrs)
+	a.ElementsMatch(*grp.UnnamedResourcesAccessed.Assets, assets)
+	a.ElementsMatch(*grp.UnnamedResourcesAccessed.Apps, apps)
+
+	a.Len(*grp.ExtraResourceArrays, 1)
+
+	resourceArrays := *grp.Txns[0].PopulatedResourceArrays
+	extraResources := (*grp.ExtraResourceArrays)[0]
+
+	a.Equal(apps, *resourceArrays.Apps)
+	a.Equal(addrs, *resourceArrays.Accounts)
+	a.Equal(assets, *extraResources.Assets)
+}

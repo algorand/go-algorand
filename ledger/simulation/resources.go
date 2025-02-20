@@ -17,8 +17,10 @@
 package simulation
 
 import (
+	"cmp"
 	"fmt"
 	"math"
+	"slices"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
@@ -612,9 +614,9 @@ type txnResources struct {
 	// The assumption is that these are prefilled because of one of the following reasons:
 	//   - This transaction has already been signed
 	//   - One of the foreign resources is accessed on-chain
-	prefilledAssets   map[basics.AssetIndex]struct{}
-	prefilledApps     map[basics.AppIndex]struct{}
-	prefilledAccounts map[basics.Address]struct{}
+	prefilledAssets   []basics.AssetIndex
+	prefilledApps     []basics.AppIndex
+	prefilledAccounts []basics.Address
 	prefilledBoxes    []logic.BoxRef
 
 	// The following fields are resources that are available to the transaction group because they were used in a transaction field (like `Sender`) rather than a foreign array.
@@ -623,10 +625,10 @@ type txnResources struct {
 	accountsFromFields map[basics.Address]struct{}
 
 	// These are the fields currently being populated, thus we can mutate them however we'd like
-	assets   map[basics.AssetIndex]struct{}
-	apps     map[basics.AppIndex]struct{}
+	assets   []basics.AssetIndex
+	apps     []basics.AppIndex
 	boxes    []logic.BoxRef
-	accounts map[basics.Address]struct{}
+	accounts []basics.Address
 
 	maxTotalRefs int
 	maxAccounts  int
@@ -679,19 +681,18 @@ func (r *txnResources) hasApp(app basics.AppIndex) bool {
 	if r.appFromField == app {
 		return true
 	}
-	if _, hasStatic := r.prefilledApps[app]; hasStatic {
-		return true
-	}
-	if _, hasRef := r.apps[app]; hasRef {
+
+	if slices.Contains(slices.Concat(r.prefilledApps, r.apps), app) {
 		return true
 	}
 	return false
 }
 
 func (r *txnResources) hasAsset(aid basics.AssetIndex) bool {
-	_, hasStatic := r.prefilledAssets[aid]
-	_, hasRef := r.assets[aid]
-	return r.assetFromField == aid || hasStatic || hasRef
+	if slices.Contains(slices.Concat(r.prefilledAssets, r.assets), aid) {
+		return true
+	}
+	return r.assetFromField == aid
 }
 
 func (r *txnResources) hasAccount(addr basics.Address) bool {
@@ -699,13 +700,13 @@ func (r *txnResources) hasAccount(addr basics.Address) bool {
 		return true
 	}
 
-	for app := range r.apps {
+	for _, app := range r.apps {
 		if app.Address() == addr {
 			return true
 		}
 	}
 
-	for app := range r.prefilledApps {
+	for _, app := range r.prefilledApps {
 		if app.Address() == addr {
 			return true
 		}
@@ -714,10 +715,8 @@ func (r *txnResources) hasAccount(addr basics.Address) bool {
 	if _, hasField := r.accountsFromFields[addr]; hasField {
 		return true
 	}
-	if _, hasStatic := r.prefilledAccounts[addr]; hasStatic {
-		return true
-	}
-	if _, hasRef := r.accounts[addr]; hasRef {
+
+	if slices.Contains(slices.Concat(r.prefilledAccounts, r.accounts), addr) {
 		return true
 	}
 
@@ -733,7 +732,8 @@ func (r *txnResources) addAccount(addr basics.Address) error {
 	if !r.hasRoomForAccount() {
 		return fmt.Errorf("no room for account: %s", addr.String())
 	}
-	r.accounts[addr] = struct{}{}
+
+	r.accounts = append(r.accounts, addr)
 	return nil
 }
 
@@ -746,7 +746,7 @@ func (r *txnResources) addAsset(aid basics.AssetIndex) error {
 	if !r.hasRoomForAsset() {
 		return fmt.Errorf("no room for asset: %d", aid)
 	}
-	r.assets[aid] = struct{}{}
+	r.assets = append(r.assets, aid)
 	return nil
 }
 
@@ -759,7 +759,7 @@ func (r *txnResources) addApp(aid basics.AppIndex) error {
 	if !r.hasRoomForApp() {
 		return fmt.Errorf("no room for app: %d", aid)
 	}
-	r.apps[aid] = struct{}{}
+	r.apps = append(r.apps, aid)
 	return nil
 }
 
@@ -778,7 +778,7 @@ func (r *txnResources) addBoxWithApp(app basics.AppIndex, name string) error {
 		return fmt.Errorf("no room for box %d : %s", app, name)
 	}
 	r.boxes = append(r.boxes, logic.BoxRef{App: app, Name: name})
-	r.apps[app] = struct{}{}
+	r.apps = append(r.apps, app)
 	return nil
 }
 
@@ -786,8 +786,9 @@ func (r *txnResources) addAppLocal(app basics.AppIndex, addr basics.Address) err
 	if !r.hasRoomForAppLocal() {
 		return fmt.Errorf("no room for app local %d : %s", app, addr.String())
 	}
-	r.apps[app] = struct{}{}
-	r.accounts[addr] = struct{}{}
+
+	r.apps = append(r.apps, app)
+	r.accounts = append(r.accounts, addr)
 	return nil
 }
 
@@ -795,8 +796,9 @@ func (r *txnResources) addAssetHolding(addr basics.Address, aid basics.AssetInde
 	if !r.hasRoomForHolding() {
 		return fmt.Errorf("no room for asset holding %d : %s", aid, addr.String())
 	}
-	r.accounts[addr] = struct{}{}
-	r.assets[aid] = struct{}{}
+
+	r.accounts = append(r.accounts, addr)
+	r.assets = append(r.assets, aid)
 	return nil
 }
 
@@ -815,39 +817,11 @@ type PopulatedResourceArrays struct {
 }
 
 func (r *txnResources) getPopulatedArrays() PopulatedResourceArrays {
-	accounts := make([]basics.Address, 0, len(r.accounts)+len(r.prefilledAccounts))
-	for account := range r.accounts {
-		accounts = append(accounts, account)
-	}
-	for account := range r.prefilledAccounts {
-		accounts = append(accounts, account)
-	}
-
-	assets := make([]basics.AssetIndex, 0, len(r.assets)+len(r.prefilledAssets))
-	for asset := range r.assets {
-		assets = append(assets, asset)
-	}
-	for asset := range r.prefilledAssets {
-		assets = append(assets, asset)
-	}
-
-	apps := make([]basics.AppIndex, 0, len(r.apps)+len(r.prefilledApps))
-	for app := range r.apps {
-		apps = append(apps, app)
-	}
-	for app := range r.prefilledApps {
-		apps = append(apps, app)
-	}
-
-	boxes := make([]logic.BoxRef, 0, len(r.boxes)+len(r.prefilledBoxes))
-	boxes = append(boxes, r.boxes...)
-	boxes = append(boxes, r.prefilledBoxes...)
-
 	return PopulatedResourceArrays{
-		Accounts: accounts,
-		Assets:   assets,
-		Apps:     apps,
-		Boxes:    boxes,
+		Accounts: slices.Concat(r.prefilledAccounts, r.accounts),
+		Assets:   slices.Concat(r.prefilledAssets, r.assets),
+		Apps:     slices.Concat(r.prefilledApps, r.apps),
+		Boxes:    slices.Concat(r.prefilledBoxes, r.boxes),
 	}
 }
 
@@ -860,20 +834,21 @@ type resourcePopulator struct {
 
 func (p *resourcePopulator) addTransaction(txn transactions.Transaction, groupIndex int, consensusParams config.ConsensusParams) {
 	p.txnResources[groupIndex] = &txnResources{
-		prefilledAssets:    make(map[basics.AssetIndex]struct{}),
-		prefilledApps:      make(map[basics.AppIndex]struct{}),
-		prefilledAccounts:  make(map[basics.Address]struct{}),
+		prefilledAssets:    []basics.AssetIndex{},
+		prefilledApps:      []basics.AppIndex{},
+		prefilledAccounts:  []basics.Address{},
 		prefilledBoxes:     []logic.BoxRef{},
 		accountsFromFields: make(map[basics.Address]struct{}),
-		assets:             make(map[basics.AssetIndex]struct{}),
-		apps:               make(map[basics.AppIndex]struct{}),
-		accounts:           make(map[basics.Address]struct{}),
-		boxes:              []logic.BoxRef{},
-		maxTotalRefs:       consensusParams.MaxAppTotalTxnReferences,
-		maxAccounts:        consensusParams.MaxAppTxnAccounts,
-		maxBoxes:           consensusParams.MaxAppBoxReferences,
-		maxApps:            consensusParams.MaxAppTxnForeignApps,
-		maxAssets:          consensusParams.MaxAppTxnForeignAssets,
+
+		assets:       []basics.AssetIndex{},
+		apps:         []basics.AppIndex{},
+		accounts:     []basics.Address{},
+		boxes:        []logic.BoxRef{},
+		maxTotalRefs: consensusParams.MaxAppTotalTxnReferences,
+		maxAccounts:  consensusParams.MaxAppTxnAccounts,
+		maxBoxes:     consensusParams.MaxAppBoxReferences,
+		maxApps:      consensusParams.MaxAppTxnForeignApps,
+		maxAssets:    consensusParams.MaxAppTxnForeignAssets,
 	}
 
 	// The Sender will always be implicitly available for every transaction type
@@ -882,15 +857,16 @@ func (p *resourcePopulator) addTransaction(txn transactions.Transaction, groupIn
 	switch txn.Type {
 	case protocol.ApplicationCallTx:
 		for _, asset := range txn.ForeignAssets {
-			p.txnResources[groupIndex].prefilledAssets[asset] = struct{}{}
+			p.txnResources[groupIndex].prefilledAssets = append(p.txnResources[groupIndex].prefilledAssets, asset)
+
 		}
 
 		for _, app := range txn.ForeignApps {
-			p.txnResources[groupIndex].prefilledApps[app] = struct{}{}
+			p.txnResources[groupIndex].prefilledApps = append(p.txnResources[groupIndex].prefilledApps, app)
 		}
 
 		for _, account := range txn.Accounts {
-			p.txnResources[groupIndex].prefilledAccounts[account] = struct{}{}
+			p.txnResources[groupIndex].prefilledAccounts = append(p.txnResources[groupIndex].prefilledAccounts, account)
 		}
 
 		for _, box := range txn.Boxes {
@@ -1079,62 +1055,115 @@ func (p *resourcePopulator) addLocal(addr basics.Address, aid basics.AppIndex) e
 func (p *resourcePopulator) populateResources(groupResourceTracker ResourceTracker, txnResources []ResourceTracker) error {
 	// We don't want to mutate the groupResourceTracker because it is used later in simulate for UnnamedResourcesAccessed
 	groupResources := struct {
-		Assets        map[basics.AssetIndex]struct{}
-		Apps          map[basics.AppIndex]struct{}
-		Accounts      map[basics.Address]struct{}
-		Boxes         map[logic.BoxRef]struct{}
-		AssetHoldings map[ledgercore.AccountAsset]struct{}
-		AppLocals     map[ledgercore.AccountApp]struct{}
+		Assets        []basics.AssetIndex
+		Apps          []basics.AppIndex
+		Accounts      []basics.Address
+		Boxes         []logic.BoxRef
+		AssetHoldings []ledgercore.AccountAsset
+		AppLocals     []ledgercore.AccountApp
 	}{
-		Assets:        make(map[basics.AssetIndex]struct{}, len(groupResourceTracker.Assets)),
-		Apps:          make(map[basics.AppIndex]struct{}, len(groupResourceTracker.Apps)),
-		Accounts:      make(map[basics.Address]struct{}, len(groupResourceTracker.Accounts)),
-		Boxes:         make(map[logic.BoxRef]struct{}, len(groupResourceTracker.Boxes)),
-		AssetHoldings: make(map[ledgercore.AccountAsset]struct{}, len(groupResourceTracker.AssetHoldings)),
-		AppLocals:     make(map[ledgercore.AccountApp]struct{}, len(groupResourceTracker.AppLocals)),
+		Apps:          []basics.AppIndex{},
+		Accounts:      []basics.Address{},
+		Boxes:         []logic.BoxRef{},
+		AssetHoldings: []ledgercore.AccountAsset{},
+		AppLocals:     []ledgercore.AccountApp{},
 	}
 
+	// Sort assets
 	for asset := range groupResourceTracker.Assets {
-		groupResources.Assets[asset] = struct{}{}
+		groupResources.Assets = append(groupResources.Assets, asset)
 	}
+	slices.SortFunc(groupResources.Assets, func(a, b basics.AssetIndex) int {
+		return cmp.Compare(a, b)
+	})
 
+	// Sort apps
 	for app := range groupResourceTracker.Apps {
-		groupResources.Apps[app] = struct{}{}
+		groupResources.Apps = append(groupResources.Apps, app)
 	}
+	slices.SortFunc(groupResources.Apps, func(a, b basics.AppIndex) int {
+		return cmp.Compare(a, b)
+	})
 
+	// Sort accounts
 	for account := range groupResourceTracker.Accounts {
-		groupResources.Accounts[account] = struct{}{}
+		groupResources.Accounts = append(groupResources.Accounts, account)
 	}
+	slices.SortFunc(groupResources.Accounts, func(a, b basics.Address) int {
+		return cmp.Compare(a.GetUserAddress(), b.GetUserAddress())
+	})
 
+	// Sort boxes
+	// To sort boxes, we turn the app into a string, concat with the name, and then sort
 	for box := range groupResourceTracker.Boxes {
-		groupResources.Boxes[box] = struct{}{}
+		groupResources.Boxes = append(groupResources.Boxes, box)
 	}
+	slices.SortFunc(groupResources.Boxes, func(a, b logic.BoxRef) int {
+		return cmp.Compare(fmt.Sprintf("%d:%s", a.App, a.Name), fmt.Sprintf("%d:%s", b.App, b.Name))
+	})
 
+	// Sort assets holdings
+	// To sort asset holdings, we turn the asset into a string, concat with the address, and then sort
 	for holding := range groupResourceTracker.AssetHoldings {
-		groupResources.AssetHoldings[holding] = struct{}{}
+		groupResources.AssetHoldings = append(groupResources.AssetHoldings, holding)
 	}
+	slices.SortFunc(groupResources.AssetHoldings, func(a, b ledgercore.AccountAsset) int {
+		return cmp.Compare(fmt.Sprintf("%d:%s", a.Asset, a.Address), fmt.Sprintf("%d:%s", b.Asset, b.Address.GetUserAddress()))
+	})
 
+	// Sort app locals
+	// To sort app locals, we turn the app into a string, concat with the address, and then sort
 	for local := range groupResourceTracker.AppLocals {
-		groupResources.AppLocals[local] = struct{}{}
+		groupResources.AppLocals = append(groupResources.AppLocals, local)
 	}
+	slices.SortFunc(groupResources.AppLocals, func(a, b ledgercore.AccountApp) int {
+		return cmp.Compare(fmt.Sprintf("%d:%s", a.App, a.Address), fmt.Sprintf("%d:%s", b.App, b.Address.GetUserAddress()))
+	})
 
 	// First populate resources that HAVE to be assigned to a specific transaction
 	for i, tracker := range txnResources {
+		// Sort assets
+		sortedAssets := make([]basics.AssetIndex, 0, len(tracker.Assets))
 		for asset := range tracker.Assets {
+			sortedAssets = append(sortedAssets, asset)
+		}
+		slices.SortFunc(sortedAssets, func(a, b basics.AssetIndex) int {
+			return cmp.Compare(a, b)
+		})
+
+		// Sort apps
+		sortedApps := make([]basics.AppIndex, 0, len(tracker.Apps))
+		for app := range tracker.Apps {
+			sortedApps = append(sortedApps, app)
+		}
+		slices.SortFunc(sortedApps, func(a, b basics.AppIndex) int {
+			return cmp.Compare(a, b)
+		})
+
+		// Sort accounts
+		sortedAccounts := make([]basics.Address, 0, len(tracker.Accounts))
+		for account := range tracker.Accounts {
+			sortedAccounts = append(sortedAccounts, account)
+		}
+		slices.SortFunc(sortedAccounts, func(a, b basics.Address) int {
+			return cmp.Compare(a.GetUserAddress(), b.GetUserAddress())
+		})
+
+		for _, asset := range sortedAssets {
 			err := p.txnResources[i].addAsset(asset)
 			if err != nil {
 				return err
 			}
 		}
 
-		for app := range tracker.Apps {
+		for _, app := range sortedApps {
 			err := p.txnResources[i].addApp(app)
 			if err != nil {
 				return err
 			}
 		}
 
-		for account := range tracker.Accounts {
+		for _, account := range sortedAccounts {
 			err := p.txnResources[i].addAccount(account)
 			if err != nil {
 				return err
@@ -1143,41 +1172,51 @@ func (p *resourcePopulator) populateResources(groupResourceTracker ResourceTrack
 	}
 
 	// Then assign cross-reference resources because they have the most strict requirements (one account and another resource)
-	for holding := range groupResources.AssetHoldings {
+	for _, holding := range groupResources.AssetHoldings {
 		err := p.addHolding(holding.Address, holding.Asset)
 		if err != nil {
 			return err
 		}
 
 		// Remove the resources from the global tracker in case they were added separately
-		delete(groupResources.Assets, holding.Asset)
-		delete(groupResources.Accounts, holding.Address)
+		groupResources.Assets = slices.DeleteFunc(groupResources.Assets, func(a basics.AssetIndex) bool {
+			return a == holding.Asset
+		})
+		groupResources.Accounts = slices.DeleteFunc(groupResources.Accounts, func(a basics.Address) bool {
+			return a == holding.Address
+		})
 	}
 
-	for local := range groupResources.AppLocals {
+	for _, local := range groupResources.AppLocals {
 		err := p.addLocal(local.Address, local.App)
 		if err != nil {
 			return err
 		}
 
 		// Remove the resources from the global tracker in case they were added separately
-		delete(groupResources.Apps, local.App)
-		delete(groupResources.Accounts, local.Address)
+		groupResources.Apps = slices.DeleteFunc(groupResources.Apps, func(a basics.AppIndex) bool {
+			return a == local.App
+		})
+		groupResources.Accounts = slices.DeleteFunc(groupResources.Accounts, func(a basics.Address) bool {
+			return a == local.Address
+		})
 	}
 
 	// Then assign boxes because they can take up to two slots
-	for box := range groupResources.Boxes {
+	for _, box := range groupResources.Boxes {
 		err := p.addBox(box.App, box.Name)
 		if err != nil {
 			return err
 		}
 
 		// Remove the app from the global tracker in case it was added separately
-		delete(groupResources.Apps, box.App)
+		groupResources.Apps = slices.DeleteFunc(groupResources.Apps, func(a basics.AppIndex) bool {
+			return a == box.App
+		})
 	}
 
 	// Then assign accounts because they have a lower limit than other resources
-	for account := range groupResources.Accounts {
+	for _, account := range groupResources.Accounts {
 		err := p.addAccount(account)
 		if err != nil {
 			return err
@@ -1185,14 +1224,14 @@ func (p *resourcePopulator) populateResources(groupResourceTracker ResourceTrack
 	}
 
 	// Finally assign the remaining resources which just require one slot
-	for app := range groupResources.Apps {
+	for _, app := range groupResources.Apps {
 		err := p.addApp(app)
 		if err != nil {
 			return err
 		}
 	}
 
-	for asset := range groupResources.Assets {
+	for _, asset := range groupResources.Assets {
 		err := p.addAsset(asset)
 		if err != nil {
 			return err
@@ -1244,14 +1283,14 @@ func makeResourcePopulator(txnGroup []transactions.SignedTxn, consensusParams co
 	for i := len(txnGroup); i < consensusParams.MaxTxGroupSize; i++ {
 		populator.appCallIndexes = append(populator.appCallIndexes, i)
 		populator.txnResources[i] = &txnResources{
-			prefilledAssets:    make(map[basics.AssetIndex]struct{}),
-			prefilledApps:      make(map[basics.AppIndex]struct{}),
-			prefilledAccounts:  make(map[basics.Address]struct{}),
+			prefilledAssets:    []basics.AssetIndex{},
+			prefilledApps:      []basics.AppIndex{},
+			prefilledAccounts:  []basics.Address{},
 			prefilledBoxes:     []logic.BoxRef{},
 			accountsFromFields: make(map[basics.Address]struct{}),
-			assets:             make(map[basics.AssetIndex]struct{}),
-			apps:               make(map[basics.AppIndex]struct{}),
-			accounts:           make(map[basics.Address]struct{}),
+			assets:             []basics.AssetIndex{},
+			apps:               []basics.AppIndex{},
+			accounts:           []basics.Address{},
 			boxes:              []logic.BoxRef{},
 			maxTotalRefs:       consensusParams.MaxAppTotalTxnReferences,
 			maxAccounts:        consensusParams.MaxAppTxnAccounts,
