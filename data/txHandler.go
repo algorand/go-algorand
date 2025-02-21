@@ -38,6 +38,7 @@ import (
 	"github.com/algorand/go-algorand/util"
 	"github.com/algorand/go-algorand/util/execpool"
 	"github.com/algorand/go-algorand/util/metrics"
+	"github.com/algorand/go-deadlock"
 )
 
 var transactionMessagesHandled = metrics.MakeCounter(metrics.TransactionMessagesHandled)
@@ -129,6 +130,7 @@ type TxHandler struct {
 	streamVerifierChan         chan execpool.InputJob
 	streamVerifierDropped      chan *verify.UnverifiedTxnSigJob
 	erl                        *util.ElasticRateLimiter
+	erlClientMapper            erlClientMapper
 	appLimiter                 *appRateLimiter
 	appLimiterBacklogThreshold int
 	appLimiterCountERLDrops    bool
@@ -201,6 +203,10 @@ func MakeTxHandler(opts TxHandlerOpts) (*TxHandler, error) {
 				time.Duration(opts.Config.TxBacklogServiceRateWindowSeconds)*time.Second,
 				txBacklogDroppedCongestionManagement,
 			)
+			handler.erlClientMapper = erlClientMapper{
+				mapping:    make(map[string]*erlIPClient),
+				maxClients: opts.Config.MaxConnectionsPerIP,
+			}
 		}
 		if opts.Config.EnableTxBacklogAppRateLimiting {
 			handler.appLimiter = makeAppRateLimiter(
@@ -638,32 +644,116 @@ func (handler *TxHandler) incomingMsgDupCheck(data []byte) (crypto.Digest, bool)
 	return msgKey, false
 }
 
+// erlClientMapper handles erlIPClient creation from erlClient
+// in order to map multiple clients to a single IP address.
+// Then that meta erlIPClient is supposed to be supplied to ERL
+type erlClientMapper struct {
+	m          deadlock.RWMutex
+	mapping    map[string]*erlIPClient
+	maxClients int
+}
+
+// getClient returns erlIPClient for a given sender
+func (mp *erlClientMapper) getClient(sender network.DisconnectableAddressablePeer) util.ErlClient {
+	addr := string(sender.RoutingAddr())
+	ec := sender.(util.ErlClient)
+
+	// check if the client is already known
+	// typically one client sends lots of messages so more much more reads than writes.
+	// handle with a quick read lock, and if not found, create a new one with a write lock
+	mp.m.RLock()
+	ipClient, has := mp.mapping[addr]
+	mp.m.RUnlock()
+
+	if !has {
+		ipClient = mp.getClientByAddr(addr)
+	}
+
+	ipClient.register(ec)
+	return ipClient
+}
+
+// getClientByAddr is internal helper to get or create a new erlIPClient
+// with write lock held
+func (mp *erlClientMapper) getClientByAddr(addr string) *erlIPClient {
+	mp.m.Lock()
+	defer mp.m.Unlock()
+
+	ipClient, has := mp.mapping[addr]
+	if !has {
+		ipClient = &erlIPClient{
+			clients: make(map[util.ErlClient]struct{}, mp.maxClients),
+		}
+		mp.mapping[addr] = ipClient
+	}
+	return ipClient
+}
+
+type erlIPClient struct {
+	util.ErlClient
+	m       deadlock.RWMutex
+	clients map[util.ErlClient]struct{}
+	closer  func()
+}
+
+func (eic *erlIPClient) OnClose(f func()) {
+	eic.m.Lock()
+	defer eic.m.Unlock()
+	eic.closer = f
+}
+
+// register registers a new client to the erlIPClient
+// by adding a helper closer function to track connection closures
+func (eic *erlIPClient) register(ec util.ErlClient) {
+	eic.m.Lock()
+	defer eic.m.Unlock()
+	if _, has := eic.clients[ec]; has {
+		// this peer is known => noop
+		return
+	}
+	eic.clients[ec] = struct{}{}
+
+	ec.OnClose(func() {
+		eic.connClosed(ec)
+	})
+}
+
+// connClosed is called when a connection is closed so that
+// erlIPClient removes the client from its list of clients
+// and calls the closer function if there are no more clients
+func (eic *erlIPClient) connClosed(ec util.ErlClient) {
+	eic.m.Lock()
+	defer eic.m.Unlock()
+	delete(eic.clients, ec)
+	empty := len(eic.clients) == 0
+	// if no elements left, call the closer
+	if empty && eic.closer != nil {
+		eic.closer()
+		eic.closer = nil
+	}
+}
+
 // incomingMsgErlCheck runs the rate limiting check on a sender.
 // Returns:
 // - the capacity guard returned by the elastic rate limiter
 // - a boolean indicating if the sender is rate limited
-func (handler *TxHandler) incomingMsgErlCheck(sender network.DisconnectableAddressablePeer) (*util.ErlCapacityGuard, bool) {
-	var capguard *util.ErlCapacityGuard
-	var isCMEnabled bool
-	var err error
-	if handler.erl != nil {
-		congestedERL := float64(cap(handler.backlogQueue))*handler.backlogCongestionThreshold < float64(len(handler.backlogQueue))
-		// consume a capacity unit
-		// if the elastic rate limiter cannot vend a capacity, the error it returns
-		// is sufficient to indicate that we should enable Congestion Control, because
-		// an issue in vending capacity indicates the underlying resource (TXBacklog) is full
-		capguard, isCMEnabled, err = handler.erl.ConsumeCapacity(sender.(util.ErlClient))
-		if err != nil { // did ERL ask to enable congestion control?
-			handler.erl.EnableCongestionControl()
-			// if there is no capacity, it is the same as if we failed to put the item onto the backlog, so report such
-			transactionMessagesDroppedFromBacklog.Inc(nil)
-			return capguard, true
-		} else if !isCMEnabled && congestedERL { // is CM not currently enabled, but queue is congested?
-			handler.erl.EnableCongestionControl()
-		} else if !congestedERL {
-			// if the backlog Queue has 50% of its buffer back, turn congestion control off
-			handler.erl.DisableCongestionControl()
-		}
+func (handler *TxHandler) incomingMsgErlCheck(sender util.ErlClient) (*util.ErlCapacityGuard, bool) {
+	congestedERL := float64(cap(handler.backlogQueue))*handler.backlogCongestionThreshold < float64(len(handler.backlogQueue))
+	// consume a capacity unit
+	// if the elastic rate limiter cannot vend a capacity, the error it returns
+	// is sufficient to indicate that we should enable Congestion Control, because
+	// an issue in vending capacity indicates the underlying resource (TXBacklog) is full
+	capguard, isCMEnabled, err := handler.erl.ConsumeCapacity(sender)
+	if err != nil { // did ERL ask to enable congestion control?
+		handler.erl.EnableCongestionControl()
+		// if there is no capacity, it is the same as if we failed to put the item onto the backlog, so report such
+		transactionMessagesDroppedFromBacklog.Inc(nil)
+		return capguard, true
+	} else if !isCMEnabled && congestedERL { // is CM not currently enabled, but queue is congested?
+		handler.erl.EnableCongestionControl()
+	} else if !congestedERL {
+		// if the backlog Queue has 50% of its buffer back, turn congestion control off
+		handler.erl.DisableCongestionControl()
 	}
 	return capguard, false
 }
@@ -753,7 +843,11 @@ func (handler *TxHandler) processIncomingTxn(rawmsg network.IncomingMessage) net
 		return network.OutgoingMessage{Action: network.Ignore}
 	}
 
-	capguard, shouldDrop := handler.incomingMsgErlCheck(rawmsg.Sender)
+	var capguard *util.ErlCapacityGuard
+	if handler.erl != nil {
+		client := handler.erlClientMapper.getClient(rawmsg.Sender)
+		capguard, shouldDrop = handler.incomingMsgErlCheck(client)
+	}
 	accepted := false
 	defer func() {
 		// if we failed to put the item onto the backlog, we should release the capacity if any
