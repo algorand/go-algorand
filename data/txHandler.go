@@ -636,7 +636,27 @@ func (mp *erlClientMapper) getClient(sender network.DisconnectableAddressablePee
 	addr := string(sender.RoutingAddr())
 	ec := sender.(util.ErlClient)
 
+	// check if the client is already known
+	// typically one client sends lots of messages so more much more reads than writes.
+	// handle with a quick read lock, and if not found, create a new one with a write lock
+	mp.m.RLock()
+	ipClient, has := mp.mapping[addr]
+	mp.m.RUnlock()
+
+	if !has {
+		ipClient = mp.getClientByAddr(addr)
+	}
+
+	ipClient.register(ec)
+	return ipClient
+}
+
+// getClientByAddr is internal helper to get or create a new erlIPClient
+// with write lock held
+func (mp *erlClientMapper) getClientByAddr(addr string) *erlIPClient {
 	mp.m.Lock()
+	defer mp.m.Unlock()
+
 	ipClient, has := mp.mapping[addr]
 	if !has {
 		ipClient = &erlIPClient{
@@ -644,9 +664,6 @@ func (mp *erlClientMapper) getClient(sender network.DisconnectableAddressablePee
 		}
 		mp.mapping[addr] = ipClient
 	}
-	mp.m.Unlock()
-
-	ipClient.register(ec)
 	return ipClient
 }
 
