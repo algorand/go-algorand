@@ -38,6 +38,7 @@ type RoleSet struct {
 	_     func() // func is not comparable so that Roles. This is to prevent roles misuse and direct comparison.
 }
 
+// Role is a single role that a phonebook entry can have.
 type Role uint8
 
 const (
