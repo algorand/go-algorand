@@ -39,6 +39,7 @@ var (
 func init() {
 	walletCmd.AddCommand(newWalletCmd)
 	walletCmd.AddCommand(listWalletsCmd)
+	walletCmd.AddCommand(renameWalletCmd)
 
 	// Default wallet to use when -w not specified
 	walletCmd.Flags().StringVarP(&defaultWalletName, "default", "f", "", "Set the wallet with this name to be the default wallet")
@@ -197,6 +198,53 @@ var listWalletsCmd = &cobra.Command{
 			}
 			printWallets(dataDir, wallets)
 		})
+	},
+}
+
+var renameWalletCmd = &cobra.Command{
+	Use:   "rename [wallet name] [new wallet name]",
+	Short: "Rename wallet",
+	Args:  cobra.ExactArgs(2),
+	Run: func(cmd *cobra.Command, args []string) {
+		dataDir := datadir.EnsureSingleDataDir()
+
+		client := ensureKmdClient(dataDir)
+
+		walletName := []byte(args[0])
+		newWalletName := []byte(args[1])
+
+		if bytes.Equal(walletName, newWalletName) {
+			reportErrorf(errorCouldntRenameWallet, "new name is identical to current name")
+		}
+
+		wid, duplicate, err := client.FindWalletIDByName(walletName)
+
+		if err != nil {
+			reportErrorf(errorCouldntRenameWallet, err)
+		}
+
+		if wid == nil {
+			reportErrorf(errorCouldntFindWallet, string(walletName))
+		}
+
+		if duplicate {
+			reportErrorf(errorCouldntRenameWallet, "Multiple wallets by the same name are not supported")
+		}
+
+		walletPassword := []byte{}
+
+		// if wallet is encrypted, fetch the password
+		if !client.WalletIsUnencrypted(wid) {
+			fmt.Printf(infoPasswordPrompt, walletName)
+			walletPassword = ensurePassword()
+		}
+
+		err = client.RenameWallet(wid, newWalletName, walletPassword)
+		if err != nil {
+			reportErrorf(errorCouldntRenameWallet, err)
+		}
+
+		reportInfof(infoRenamedWallet, walletName, newWalletName)
 	},
 }
 
