@@ -148,7 +148,9 @@ func (ps *PeerStore) GetConnectionWaitTime(addrOrPeerID string) (bool, time.Dura
 	}
 
 	// Remove the expired elements from e.data[addr].recentConnectionTimes
-	ps.popNElements(numElmtsToRemove, peerID)
+	ad.recentConnectionTimes = ad.recentConnectionTimes[numElmtsToRemove:]
+	_ = ps.Put(peerID, addressDataKey, ad)
+
 	// If there are max number of connections within the time window, wait
 	metadata, _ = ps.Get(peerID, addressDataKey)
 	ad, ok = metadata.(addressData)
@@ -307,16 +309,6 @@ func (ps *PeerStore) appendTime(peerID peer.ID, t time.Time) {
 	data, _ := ps.Get(peerID, addressDataKey)
 	ad := data.(addressData)
 	ad.recentConnectionTimes = append(ad.recentConnectionTimes, t)
-	_ = ps.Put(peerID, addressDataKey, ad)
-}
-
-// PopEarliestTime removes the earliest time from recentConnectionTimes in
-// addressData for addr
-// It is expected to be later than ConnectionsRateLimitingWindow
-func (ps *PeerStore) popNElements(n int, peerID peer.ID) {
-	data, _ := ps.Get(peerID, addressDataKey)
-	ad := data.(addressData)
-	ad.recentConnectionTimes = ad.recentConnectionTimes[n:]
 	_ = ps.Put(peerID, addressDataKey, ad)
 }
 
