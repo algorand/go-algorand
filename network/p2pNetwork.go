@@ -451,7 +451,7 @@ func (n *P2PNetwork) meshThreadInner() int {
 			for i := range dhtArchivalPeers {
 				replace[i] = &dhtArchivalPeers[i]
 			}
-			n.pstore.ReplacePeerList(replace, string(n.networkID), phonebook.PhoneBookEntryArchivalRole)
+			n.pstore.ReplacePeerList(replace, string(n.networkID), phonebook.ArchivalRole)
 		}
 	}
 
@@ -461,7 +461,7 @@ func (n *P2PNetwork) meshThreadInner() int {
 		replace[i] = &peers[i]
 	}
 	if len(peers) > 0 {
-		n.pstore.ReplacePeerList(replace, string(n.networkID), phonebook.PhoneBookEntryRelayRole)
+		n.pstore.ReplacePeerList(replace, string(n.networkID), phonebook.RelayRole)
 	}
 	return len(peers)
 }
@@ -659,7 +659,7 @@ func (n *P2PNetwork) GetPeers(options ...PeerOption) []Peer {
 			n.wsPeersLock.RUnlock()
 		case PeersPhonebookRelays:
 			const maxNodes = 100
-			addrInfos := n.pstore.GetAddresses(maxNodes, phonebook.PhoneBookEntryRelayRole)
+			addrInfos := n.pstore.GetAddresses(maxNodes, phonebook.RelayRole)
 			for _, peerInfo := range addrInfos {
 				if peerInfo.ID == n.service.ID() {
 					continue
@@ -677,7 +677,7 @@ func (n *P2PNetwork) GetPeers(options ...PeerOption) []Peer {
 			}
 		case PeersPhonebookArchivalNodes:
 			// query known archival nodes that came from from DHT if enabled (or DNS if configured)
-			addrInfos := n.pstore.GetAddresses(numArchivalPeersToFind, phonebook.PhoneBookEntryArchivalRole)
+			addrInfos := n.pstore.GetAddresses(numArchivalPeersToFind, phonebook.ArchivalRole)
 			for _, peerInfo := range addrInfos {
 				if peerInfo.ID == n.service.ID() {
 					continue

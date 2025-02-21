@@ -25,7 +25,7 @@ import (
 )
 
 func testPhonebookAll(t *testing.T, set []string, ph Phonebook) {
-	actual := ph.GetAddresses(len(set), PhoneBookEntryRelayRole)
+	actual := ph.GetAddresses(len(set), RelayRole)
 	for _, got := range actual {
 		ok := false
 		for _, known := range set {
@@ -57,7 +57,7 @@ func testPhonebookUniform(t *testing.T, set []string, ph Phonebook, getsize int)
 	expected := (uniformityTestLength * getsize) / len(set)
 	counts := make([]int, len(set))
 	for i := 0; i < uniformityTestLength; i++ {
-		actual := ph.GetAddresses(getsize, PhoneBookEntryRelayRole)
+		actual := ph.GetAddresses(getsize, RelayRole)
 		for i, known := range set {
 			for _, xa := range actual {
 				if known == xa {
@@ -88,7 +88,7 @@ func TestArrayPhonebookAll(t *testing.T) {
 	set := []string{"a", "b", "c", "d", "e"}
 	ph := MakePhonebook(1, 1).(*phonebookImpl)
 	for _, e := range set {
-		ph.data[e] = makePhonebookEntryData("", PhoneBookEntryRelayRole, false)
+		ph.data[e] = makePhonebookEntryData("", RoleSet{roles: RelayRole}, false)
 	}
 	testPhonebookAll(t, set, ph)
 }
@@ -99,7 +99,7 @@ func TestArrayPhonebookUniform1(t *testing.T) {
 	set := []string{"a", "b", "c", "d", "e"}
 	ph := MakePhonebook(1, 1).(*phonebookImpl)
 	for _, e := range set {
-		ph.data[e] = makePhonebookEntryData("", PhoneBookEntryRelayRole, false)
+		ph.data[e] = makePhonebookEntryData("", RoleSet{roles: RelayRole}, false)
 	}
 	testPhonebookUniform(t, set, ph, 1)
 }
@@ -110,7 +110,7 @@ func TestArrayPhonebookUniform3(t *testing.T) {
 	set := []string{"a", "b", "c", "d", "e"}
 	ph := MakePhonebook(1, 1).(*phonebookImpl)
 	for _, e := range set {
-		ph.data[e] = makePhonebookEntryData("", PhoneBookEntryRelayRole, false)
+		ph.data[e] = makePhonebookEntryData("", RoleSet{roles: RelayRole}, false)
 	}
 	testPhonebookUniform(t, set, ph, 3)
 }
@@ -128,8 +128,8 @@ func TestMultiPhonebook(t *testing.T) {
 		phb = append(phb, e)
 	}
 	mp := MakePhonebook(1, 1*time.Millisecond)
-	mp.ReplacePeerList(pha, "pha", PhoneBookEntryRelayRole)
-	mp.ReplacePeerList(phb, "phb", PhoneBookEntryRelayRole)
+	mp.ReplacePeerList(pha, "pha", RelayRole)
+	mp.ReplacePeerList(phb, "phb", RelayRole)
 
 	testPhonebookAll(t, set, mp)
 	testPhonebookUniform(t, set, mp, 1)
@@ -152,13 +152,13 @@ func TestMultiPhonebookPersistentPeers(t *testing.T) {
 		phb = append(phb, e)
 	}
 	mp := MakePhonebook(1, 1*time.Millisecond)
-	mp.AddPersistentPeers(persistentPeers, "pha", PhoneBookEntryRelayRole)
-	mp.AddPersistentPeers(persistentPeers, "phb", PhoneBookEntryRelayRole)
-	mp.ReplacePeerList(pha, "pha", PhoneBookEntryRelayRole)
-	mp.ReplacePeerList(phb, "phb", PhoneBookEntryRelayRole)
+	mp.AddPersistentPeers(persistentPeers, "pha", RelayRole)
+	mp.AddPersistentPeers(persistentPeers, "phb", RelayRole)
+	mp.ReplacePeerList(pha, "pha", RelayRole)
+	mp.ReplacePeerList(phb, "phb", RelayRole)
 
 	testPhonebookAll(t, append(set, persistentPeers...), mp)
-	allAddresses := mp.GetAddresses(len(set)+len(persistentPeers), PhoneBookEntryRelayRole)
+	allAddresses := mp.GetAddresses(len(set)+len(persistentPeers), RelayRole)
 	for _, pp := range persistentPeers {
 		require.Contains(t, allAddresses, pp)
 	}
@@ -177,8 +177,8 @@ func TestMultiPhonebookDuplicateFiltering(t *testing.T) {
 		phb = append(phb, e)
 	}
 	mp := MakePhonebook(1, 1*time.Millisecond)
-	mp.ReplacePeerList(pha, "pha", PhoneBookEntryRelayRole)
-	mp.ReplacePeerList(phb, "phb", PhoneBookEntryRelayRole)
+	mp.ReplacePeerList(pha, "pha", RelayRole)
+	mp.ReplacePeerList(phb, "phb", RelayRole)
 
 	testPhonebookAll(t, set, mp)
 	testPhonebookUniform(t, set, mp, 1)
@@ -204,7 +204,7 @@ func TestWaitAndAddConnectionTimeLongtWindow(t *testing.T) {
 
 	// Test the addresses are populated in the phonebook and a
 	// time can be added to one of them
-	entries.ReplacePeerList([]string{addr1, addr2}, "default", PhoneBookEntryRelayRole)
+	entries.ReplacePeerList([]string{addr1, addr2}, "default", RelayRole)
 	addrInPhonebook, waitTime, provisionalTime := entries.GetConnectionWaitTime(addr1)
 	require.Equal(t, true, addrInPhonebook)
 	require.Equal(t, time.Duration(0), waitTime)
@@ -306,7 +306,7 @@ func TestWaitAndAddConnectionTimeShortWindow(t *testing.T) {
 	addr1 := "addrABC"
 
 	// Init the data structures
-	entries.ReplacePeerList([]string{addr1}, "default", PhoneBookEntryRelayRole)
+	entries.ReplacePeerList([]string{addr1}, "default", RelayRole)
 
 	// add 3 values. should not wait
 	// value 1
@@ -345,20 +345,20 @@ func TestPhonebookRoles(t *testing.T) {
 	archiverSet := []string{"archiver1", "archiver2", "archiver3"}
 
 	ph := MakePhonebook(1, 1).(*phonebookImpl)
-	ph.ReplacePeerList(relaysSet, "default", PhoneBookEntryRelayRole)
-	ph.ReplacePeerList(archiverSet, "default", PhoneBookEntryArchivalRole)
+	ph.ReplacePeerList(relaysSet, "default", RelayRole)
+	ph.ReplacePeerList(archiverSet, "default", ArchivalRole)
 	require.Equal(t, len(relaysSet)+len(archiverSet), len(ph.data))
 	require.Equal(t, len(relaysSet)+len(archiverSet), ph.Length())
 
-	for _, role := range []Roles{PhoneBookEntryRelayRole, PhoneBookEntryArchivalRole} {
+	for _, role := range []Role{RelayRole, ArchivalRole} {
 		for k := 0; k < 100; k++ {
 			for l := 0; l < 3; l++ {
 				entries := ph.GetAddresses(l, role)
-				if role.Has(PhoneBookEntryRelayRole) {
+				if role == RelayRole {
 					for _, entry := range entries {
 						require.Contains(t, entry, "relay")
 					}
-				} else if role.Has(PhoneBookEntryArchivalRole) {
+				} else if role == ArchivalRole {
 					for _, entry := range entries {
 						require.Contains(t, entry, "archiver")
 					}
@@ -373,29 +373,24 @@ func TestRolesOperations(t *testing.T) {
 	t.Parallel()
 
 	var tests = []struct {
-		role       Roles
-		otherRoles Roles
+		role       Role
+		otherRoles Role
 	}{
-		{PhoneBookEntryRelayRole, PhoneBookEntryArchivalRole},
-		{PhoneBookEntryArchivalRole, PhoneBookEntryRelayRole},
+		{RelayRole, ArchivalRole},
+		{ArchivalRole, RelayRole},
 	}
 
 	for _, test := range tests {
-		require.True(t, test.role.Has(test.role))
-		require.True(t, test.role.Is(test.role))
-		require.False(t, test.role.Has(test.otherRoles))
-		require.False(t, test.role.Is(test.otherRoles))
-
-		combo := Roles{roles: test.role.roles}
+		combo := RoleSet{roles: test.role}
 		combo.Assign(test.otherRoles)
-		require.Equal(t, test.role.roles|test.otherRoles.roles, combo.roles)
+		require.Equal(t, test.role|test.otherRoles, combo.roles)
 		require.True(t, combo.Has(test.role))
 		require.False(t, combo.Is(test.role))
 		require.True(t, combo.Has(test.otherRoles))
 		require.False(t, combo.Is(test.otherRoles))
 
 		combo.Remove(test.otherRoles)
-		require.Equal(t, test.role.roles, combo.roles)
+		require.Equal(t, test.role, combo.roles)
 		require.True(t, combo.Has(test.role))
 		require.True(t, combo.Is(test.role))
 		require.False(t, combo.Has(test.otherRoles))
@@ -408,32 +403,32 @@ func TestReplacePeerList(t *testing.T) {
 	t.Parallel()
 
 	pb := MakePhonebook(1, 1)
-	pb.ReplacePeerList([]string{"a", "b"}, "default", PhoneBookEntryRelayRole)
-	res := pb.GetAddresses(4, PhoneBookEntryRelayRole)
+	pb.ReplacePeerList([]string{"a", "b"}, "default", RelayRole)
+	res := pb.GetAddresses(4, RelayRole)
 	require.ElementsMatch(t, []string{"a", "b"}, res)
 
-	pb.ReplacePeerList([]string{"c"}, "default", PhoneBookEntryArchivalRole)
-	res = pb.GetAddresses(4, PhoneBookEntryArchivalRole)
+	pb.ReplacePeerList([]string{"c"}, "default", ArchivalRole)
+	res = pb.GetAddresses(4, ArchivalRole)
 	require.ElementsMatch(t, []string{"c"}, res)
 
 	// make b archival in addition to relay
-	pb.ReplacePeerList([]string{"b", "c"}, "default", PhoneBookEntryArchivalRole)
-	res = pb.GetAddresses(4, PhoneBookEntryRelayRole)
+	pb.ReplacePeerList([]string{"b", "c"}, "default", ArchivalRole)
+	res = pb.GetAddresses(4, RelayRole)
 	require.ElementsMatch(t, []string{"a", "b"}, res)
-	res = pb.GetAddresses(4, PhoneBookEntryArchivalRole)
+	res = pb.GetAddresses(4, ArchivalRole)
 	require.ElementsMatch(t, []string{"b", "c"}, res)
 
 	// update relays
-	pb.ReplacePeerList([]string{"a", "b"}, "default", PhoneBookEntryRelayRole)
-	res = pb.GetAddresses(4, PhoneBookEntryRelayRole)
+	pb.ReplacePeerList([]string{"a", "b"}, "default", RelayRole)
+	res = pb.GetAddresses(4, RelayRole)
 	require.ElementsMatch(t, []string{"a", "b"}, res)
-	res = pb.GetAddresses(4, PhoneBookEntryArchivalRole)
+	res = pb.GetAddresses(4, ArchivalRole)
 	require.ElementsMatch(t, []string{"b", "c"}, res)
 
 	// exclude b from archival
-	pb.ReplacePeerList([]string{"c"}, "default", PhoneBookEntryArchivalRole)
-	res = pb.GetAddresses(4, PhoneBookEntryRelayRole)
+	pb.ReplacePeerList([]string{"c"}, "default", ArchivalRole)
+	res = pb.GetAddresses(4, RelayRole)
 	require.ElementsMatch(t, []string{"a", "b"}, res)
-	res = pb.GetAddresses(4, PhoneBookEntryArchivalRole)
+	res = pb.GetAddresses(4, ArchivalRole)
 	require.ElementsMatch(t, []string{"c"}, res)
 }

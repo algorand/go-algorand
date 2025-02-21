@@ -791,7 +791,7 @@ func TestP2PHTTPHandler(t *testing.T) {
 	require.NoError(t, err)
 	pstore, err := peerstore.MakePhonebook(0, 10*time.Second)
 	require.NoError(t, err)
-	pstore.AddPersistentPeers([]*peer.AddrInfo{&peerInfoA}, "net", phonebook.PhoneBookEntryRelayRole)
+	pstore.AddPersistentPeers([]*peer.AddrInfo{&peerInfoA}, "net", phonebook.RelayRole)
 	httpClient, err = netB.service.GetHTTPClient(&peerInfoA, pstore, 1*time.Second)
 	require.NoError(t, err)
 	_, err = httpClient.Get("/test")
@@ -1428,7 +1428,7 @@ func TestGetPeersFiltersSelf(t *testing.T) {
 		ID:    selfID,
 		Addrs: []multiaddr.Multiaddr{selfAddr},
 	}
-	net.pstore.AddPersistentPeers([]*peer.AddrInfo{selfInfo}, "test-network", phonebook.PhoneBookEntryRelayRole)
+	net.pstore.AddPersistentPeers([]*peer.AddrInfo{selfInfo}, "test-network", phonebook.RelayRole)
 
 	// Create and add another peer
 	otherID, err := peer.Decode("QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx5N")
@@ -1439,7 +1439,7 @@ func TestGetPeersFiltersSelf(t *testing.T) {
 		ID:    otherID,
 		Addrs: []multiaddr.Multiaddr{addr},
 	}
-	net.pstore.AddPersistentPeers([]*peer.AddrInfo{otherInfo}, "test-network", phonebook.PhoneBookEntryRelayRole)
+	net.pstore.AddPersistentPeers([]*peer.AddrInfo{otherInfo}, "test-network", phonebook.RelayRole)
 
 	peers := net.GetPeers(PeersPhonebookRelays)
 
