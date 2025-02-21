@@ -47,8 +47,8 @@ func init() {
 
 	// Should we recover the wallet?
 	newWalletCmd.Flags().BoolVarP(&recoverWallet, "recover", "r", false, "Recover the wallet from the backup mnemonic provided at wallet creation (NOT the mnemonic provided by goal account export or by algokey). Regenerate accounts in the wallet with `goal account new`")
-	newWalletCmd.Flags().BoolVarP(&createUnencryptedWallet, "unencrypted", "n", false, "Create a new wallet without prompting for password.")
-	newWalletCmd.Flags().BoolVarP(&noDisplaySeed, "no-display-seed", "s", false, "Create a new wallet without displaying the seed phrase.")
+	newWalletCmd.Flags().BoolVar(&createUnencryptedWallet, "unencrypted", false, "Create a new wallet without prompting for password.")
+	newWalletCmd.Flags().BoolVar(&noDisplaySeed, "no-display-seed", false, "Create a new wallet without displaying the seed phrase.")
 }
 
 var walletCmd = &cobra.Command{
