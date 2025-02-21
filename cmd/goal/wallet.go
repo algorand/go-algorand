@@ -213,22 +213,22 @@ var renameWalletCmd = &cobra.Command{
 		walletName := []byte(args[0])
 		newWalletName := []byte(args[1])
 
-		wid, duplicate, err := client.FindWalletIDByName(walletName)
-
-		if wid == nil {
-			reportErrorf(errorCouldntFindWallet, string(walletName))
+		if bytes.Equal(walletName, newWalletName) {
+			reportErrorf(errorCouldntRenameWallet, "new name is identical to current name")
 		}
+
+		wid, duplicate, err := client.FindWalletIDByName(walletName)
 
 		if err != nil {
 			reportErrorf(errorCouldntRenameWallet, err)
 		}
 
-		if duplicate {
-			reportErrorf(errorCouldntRenameWallet, "Multiple wallets by the same name are not supported")
+		if wid == nil {
+			reportErrorf(errorCouldntFindWallet, string(walletName))
 		}
 
-		if bytes.Equal(walletName, newWalletName) {
-			reportErrorf(errorCouldntRenameWallet, "new name is identical to current name")
+		if duplicate {
+			reportErrorf(errorCouldntRenameWallet, "Multiple wallets by the same name are not supported")
 		}
 
 		walletPassword := []byte{}
