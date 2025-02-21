@@ -71,7 +71,7 @@ func TestRequestLogger(t *testing.T) {
 	require.True(t, postListen)
 	t.Log(addrA)
 	netB.phonebook = phonebook.MakePhonebook(1, 1*time.Millisecond)
-	netB.phonebook.ReplacePeerList([]string{addrA}, "default", phonebook.PhoneBookEntryRelayRole)
+	netB.phonebook.ReplacePeerList([]string{addrA}, "default", phonebook.RelayRole)
 	netB.Start()
 	defer func() { t.Log("stopping B"); netB.Stop(); t.Log("B done") }()
 
