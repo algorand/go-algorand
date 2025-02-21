@@ -32,9 +32,10 @@ import (
 )
 
 var (
-	recoverWallet     bool
-	noPassword        bool
-	defaultWalletName string
+	recoverWallet           bool
+	createUnencryptedWallet bool
+	noDisplaySeed           bool
+	defaultWalletName       string
 )
 
 func init() {
@@ -46,7 +47,8 @@ func init() {
 
 	// Should we recover the wallet?
 	newWalletCmd.Flags().BoolVarP(&recoverWallet, "recover", "r", false, "Recover the wallet from the backup mnemonic provided at wallet creation (NOT the mnemonic provided by goal account export or by algokey). Regenerate accounts in the wallet with `goal account new`")
-	newWalletCmd.Flags().BoolVarP(&noPassword, "non-interactive", "n", false, "Create the new wallet without prompting for password or displaying the seed phrase")
+	newWalletCmd.Flags().BoolVarP(&createUnencryptedWallet, "unencrypted", "n", false, "Create a new wallet without prompting for password.")
+	newWalletCmd.Flags().BoolVarP(&noDisplaySeed, "no-display-seed", "s", false, "Create a new wallet without displaying the seed phrase.")
 }
 
 var walletCmd = &cobra.Command{
@@ -117,7 +119,7 @@ var newWalletCmd = &cobra.Command{
 
 		walletPassword := []byte{}
 
-		if noPassword {
+		if createUnencryptedWallet {
 			reportInfoln(infoSkipPassword)
 		} else {
 			// Fetch a password for the wallet
@@ -142,9 +144,9 @@ var newWalletCmd = &cobra.Command{
 		}
 		reportInfof(infoCreatedWallet, walletName)
 
-		if !recoverWallet && !noPassword {
+		if !recoverWallet && !noDisplaySeed {
 			// Offer to print backup seed
-			fmt.Printf(infoBackupExplanation)
+			fmt.Println(infoBackupExplanation)
 			resp, err := reader.ReadString('\n')
 			resp = strings.TrimSpace(resp)
 			if err != nil {
