@@ -155,7 +155,7 @@ func TestArrayPhonebookAll(t *testing.T) {
 	require.NoError(t, err)
 	for _, addr := range set {
 		r := phonebook.RoleSet{}
-		r.Assign(phonebook.RelayRole)
+		r.Add(phonebook.RelayRole)
 		entry := makePhonebookEntryData("", r, false)
 		info, _ := peerInfoFromDomainPort(addr)
 		ph.AddAddrs(info.ID, info.Addrs, libp2p.AddressTTL)
@@ -179,7 +179,7 @@ func TestArrayPhonebookUniform1(t *testing.T) {
 	require.NoError(t, err)
 	for _, addr := range set {
 		r := phonebook.RoleSet{}
-		r.Assign(phonebook.RelayRole)
+		r.Add(phonebook.RelayRole)
 		entry := makePhonebookEntryData("", r, false)
 		info, _ := peerInfoFromDomainPort(addr)
 		ph.AddAddrs(info.ID, info.Addrs, libp2p.AddressTTL)
@@ -203,7 +203,7 @@ func TestArrayPhonebookUniform3(t *testing.T) {
 	require.NoError(t, err)
 	for _, addr := range set {
 		r := phonebook.RoleSet{}
-		r.Assign(phonebook.RelayRole)
+		r.Add(phonebook.RelayRole)
 		entry := makePhonebookEntryData("", r, false)
 		info, _ := peerInfoFromDomainPort(addr)
 		ph.AddAddrs(info.ID, info.Addrs, libp2p.AddressTTL)
@@ -284,6 +284,26 @@ func TestMultiPhonebookPersistentPeers(t *testing.T) {
 		}
 		require.True(t, found, fmt.Sprintf("%s not found in %v", string(pp.ID), allAddresses))
 	}
+
+	// check that role of persistent peer gets updated with AddPersistentPeers
+	ph2, err := MakePhonebook(1, 1*time.Millisecond)
+	require.NoError(t, err)
+	ph2.AddPersistentPeers(persistentPeers, "phc", phonebook.RelayRole)
+	ph2.AddPersistentPeers(persistentPeers, "phc", phonebook.ArchivalRole)
+	allAddresses = ph2.GetAddresses(len(set)+len(persistentPeers), phonebook.RelayRole)
+	require.Len(t, allAddresses, 0)
+	allAddresses = ph2.GetAddresses(len(set)+len(persistentPeers), phonebook.ArchivalRole)
+	require.Len(t, allAddresses, 1)
+
+	// check that role of persistent peer survives
+	phc := []*peer.AddrInfo{info}
+	ph2.ReplacePeerList(phc, "phc", phonebook.RelayRole)
+
+	allAddresses = ph2.GetAddresses(len(set)+len(persistentPeers), phonebook.RelayRole)
+	require.Len(t, allAddresses, 0)
+	allAddresses = ph2.GetAddresses(len(set)+len(persistentPeers), phonebook.ArchivalRole)
+	require.Len(t, allAddresses, 1)
+
 }
 
 func TestMultiPhonebookDuplicateFiltering(t *testing.T) {

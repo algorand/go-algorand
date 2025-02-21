@@ -119,14 +119,8 @@ func TestMultiPhonebook(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	set := []string{"a", "b", "c", "d", "e", "f", "g", "h", "i", "j"}
-	pha := make([]string, 0)
-	for _, e := range set[:5] {
-		pha = append(pha, e)
-	}
-	phb := make([]string, 0)
-	for _, e := range set[5:] {
-		phb = append(phb, e)
-	}
+	pha := append([]string{}, set[:5]...)
+	phb := append([]string{}, set[5:]...)
 	mp := MakePhonebook(1, 1*time.Millisecond)
 	mp.ReplacePeerList(pha, "pha", RelayRole)
 	mp.ReplacePeerList(phb, "phb", RelayRole)
@@ -143,14 +137,8 @@ func TestMultiPhonebookPersistentPeers(t *testing.T) {
 
 	persistentPeers := []string{"a"}
 	set := []string{"b", "c", "d", "e", "f", "g", "h", "i", "j", "k"}
-	pha := make([]string, 0)
-	for _, e := range set[:5] {
-		pha = append(pha, e)
-	}
-	phb := make([]string, 0)
-	for _, e := range set[5:] {
-		phb = append(phb, e)
-	}
+	pha := append([]string{}, set[:5]...)
+	phb := append([]string{}, set[5:]...)
 	mp := MakePhonebook(1, 1*time.Millisecond)
 	mp.AddPersistentPeers(persistentPeers, "pha", RelayRole)
 	mp.AddPersistentPeers(persistentPeers, "phb", RelayRole)
@@ -162,20 +150,32 @@ func TestMultiPhonebookPersistentPeers(t *testing.T) {
 	for _, pp := range persistentPeers {
 		require.Contains(t, allAddresses, pp)
 	}
+
+	// check that role of persistent peer gets updated with AddPersistentPeers
+	mp2 := MakePhonebook(1, 1*time.Millisecond)
+	mp2.AddPersistentPeers(persistentPeers, "phc", RelayRole)
+	mp2.AddPersistentPeers(persistentPeers, "phc", ArchivalRole)
+	allAddresses = mp2.GetAddresses(len(set)+len(persistentPeers), RelayRole)
+	require.Len(t, allAddresses, 0)
+	allAddresses = mp2.GetAddresses(len(set)+len(persistentPeers), ArchivalRole)
+	require.Len(t, allAddresses, 1)
+
+	// check that role of persistent peer survives
+	phc := []string{"a"}
+	mp2.ReplacePeerList(phc, "phc", RelayRole)
+
+	allAddresses = mp2.GetAddresses(len(set)+len(persistentPeers), RelayRole)
+	require.Len(t, allAddresses, 0)
+	allAddresses = mp2.GetAddresses(len(set)+len(persistentPeers), ArchivalRole)
+	require.Len(t, allAddresses, 1)
 }
 
 func TestMultiPhonebookDuplicateFiltering(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	set := []string{"a", "b", "c", "d", "e", "f", "g", "h", "i", "j"}
-	pha := make([]string, 0)
-	for _, e := range set[:7] {
-		pha = append(pha, e)
-	}
-	phb := make([]string, 0)
-	for _, e := range set[3:] {
-		phb = append(phb, e)
-	}
+	pha := append([]string{}, set[:7]...)
+	phb := append([]string{}, set[3:]...)
 	mp := MakePhonebook(1, 1*time.Millisecond)
 	mp.ReplacePeerList(pha, "pha", RelayRole)
 	mp.ReplacePeerList(phb, "phb", RelayRole)
@@ -218,7 +218,7 @@ func TestWaitAndAddConnectionTimeLongtWindow(t *testing.T) {
 	}
 
 	// add another value to addr
-	addrInPhonebook, waitTime, provisionalTime = entries.GetConnectionWaitTime(addr1)
+	_, waitTime, provisionalTime = entries.GetConnectionWaitTime(addr1)
 	require.Equal(t, time.Duration(0), waitTime)
 	require.Equal(t, true, entries.UpdateConnectionTime(addr1, provisionalTime))
 	phBookData = entries.data[addr1].recentConnectionTimes
@@ -232,7 +232,7 @@ func TestWaitAndAddConnectionTimeLongtWindow(t *testing.T) {
 
 	// the first time should be removed and a new one added
 	// there should not be any wait
-	addrInPhonebook, waitTime, provisionalTime = entries.GetConnectionWaitTime(addr1)
+	_, waitTime, provisionalTime = entries.GetConnectionWaitTime(addr1)
 	require.Equal(t, time.Duration(0), waitTime)
 	require.Equal(t, true, entries.UpdateConnectionTime(addr1, provisionalTime))
 	phBookData2 := entries.data[addr1].recentConnectionTimes
@@ -259,7 +259,7 @@ func TestWaitAndAddConnectionTimeLongtWindow(t *testing.T) {
 	}
 
 	// value 2
-	addrInPhonebook, waitTime, provisionalTime = entries.GetConnectionWaitTime(addr2)
+	_, waitTime, provisionalTime = entries.GetConnectionWaitTime(addr2)
 	require.Equal(t, time.Duration(0), waitTime)
 	require.Equal(t, true, entries.UpdateConnectionTime(addr2, provisionalTime))
 	// value 3
@@ -272,7 +272,7 @@ func TestWaitAndAddConnectionTimeLongtWindow(t *testing.T) {
 	require.Equal(t, 3, len(phBookData))
 
 	// add another element to trigger wait
-	_, waitTime, provisionalTime = entries.GetConnectionWaitTime(addr2)
+	_, waitTime, _ = entries.GetConnectionWaitTime(addr2)
 	require.Greater(t, int64(waitTime), int64(0))
 	// no element should be removed
 	phBookData2 = entries.data[addr2].recentConnectionTimes
@@ -382,7 +382,7 @@ func TestRolesOperations(t *testing.T) {
 
 	for _, test := range tests {
 		combo := RoleSet{roles: test.role}
-		combo.Assign(test.otherRoles)
+		combo.Add(test.otherRoles)
 		require.Equal(t, test.role|test.otherRoles, combo.roles)
 		require.True(t, combo.Has(test.role))
 		require.False(t, combo.Is(test.role))
