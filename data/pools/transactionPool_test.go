@@ -19,6 +19,7 @@ package pools
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"fmt"
 	"math/rand"
 	"os"
@@ -1438,7 +1439,7 @@ func TestStateProofLogging(t *testing.T) {
 	// Set the logging to capture the telemetry Metrics into logging
 	logger := logging.TestingLog(t)
 	logger.SetLevel(logging.Info)
-	logger.EnableTelemetry(logging.TelemetryConfig{Enable: true, SendToLog: true})
+	logger.EnableTelemetryContext(context.Background(), logging.TelemetryConfig{Enable: true, SendToLog: true})
 	var buf bytes.Buffer
 	logger.SetOutput(&buf)
 

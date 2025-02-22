@@ -35,6 +35,7 @@ logger.Info("New wallet was created")
 package logging
 
 import (
+	"context"
 	"io"
 	"runtime"
 	"runtime/debug"
@@ -154,7 +155,7 @@ type Logger interface {
 	// Adds a hook to the logger
 	AddHook(hook logrus.Hook)
 
-	EnableTelemetry(cfg TelemetryConfig) error
+	EnableTelemetryContext(ctx context.Context, cfg TelemetryConfig) error
 	UpdateTelemetryURI(uri string) error
 	GetTelemetryEnabled() bool
 	GetTelemetryUploadingEnabled() bool
@@ -389,11 +390,11 @@ func RegisterExitHandler(handler func()) {
 	logrus.RegisterExitHandler(handler)
 }
 
-func (l logger) EnableTelemetry(cfg TelemetryConfig) (err error) {
+func (l logger) EnableTelemetryContext(ctx context.Context, cfg TelemetryConfig) (err error) {
 	if l.loggerState.telemetry != nil || (!cfg.Enable && !cfg.SendToLog) {
 		return nil
 	}
-	return EnableTelemetry(cfg, &l)
+	return EnableTelemetryContext(ctx, cfg, &l)
 }
 
 func (l logger) UpdateTelemetryURI(uri string) (err error) {

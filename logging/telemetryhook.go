@@ -17,6 +17,7 @@
 package logging
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/olivere/elastic"
@@ -228,14 +229,14 @@ func (el elasticClientLogger) Printf(format string, v ...interface{}) {
 	}
 }
 
-func createElasticHook(cfg TelemetryConfig) (hook logrus.Hook, err error) {
+func createElasticHookContext(ctx context.Context, cfg TelemetryConfig) (hook logrus.Hook, err error) {
 	// Returning an error here causes issues... need the hooks to be created even if the elastic hook fails so that
 	// things can recover later.
 	if cfg.URI == "" {
 		return nil, nil
 	}
 
-	client, err := elastic.NewClient(elastic.SetURL(cfg.URI),
+	client, err := elastic.DialContext(ctx, elastic.SetURL(cfg.URI),
 		elastic.SetBasicAuth(cfg.UserName, cfg.Password),
 		elastic.SetSniff(false),
 		elastic.SetGzip(true),
@@ -257,12 +258,12 @@ func createElasticHook(cfg TelemetryConfig) (hook logrus.Hook, err error) {
 }
 
 // createTelemetryHook creates the Telemetry log hook, or returns nil if remote logging is not enabled
-func createTelemetryHook(cfg TelemetryConfig, history *logBuffer, hookFactory hookFactory) (hook logrus.Hook, err error) {
+func createTelemetryHookContext(ctx context.Context, cfg TelemetryConfig, history *logBuffer, hookFactory hookFactory) (hook logrus.Hook, err error) {
 	if !cfg.Enable {
 		return nil, fmt.Errorf("createTelemetryHook called when telemetry not enabled")
 	}
 
-	hook, err = hookFactory(cfg)
+	hook, err = hookFactory(ctx, cfg)
 
 	if err != nil {
 		return nil, err
@@ -290,7 +291,8 @@ func (hook *asyncTelemetryHook) UpdateHookURI(uri string) (err error) {
 		copy := tfh.telemetryConfig
 		copy.URI = uri
 		var newHook logrus.Hook
-		newHook, err = tfh.factory(copy)
+
+		newHook, err = tfh.factory(context.Background(), copy)
 
 		if err == nil && newHook != nil {
 			tfh.wrappedHook = newHook

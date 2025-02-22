@@ -17,6 +17,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -307,7 +308,7 @@ func initTelemetry(genesis bookkeeping.Genesis, log logging.Logger, dataDirector
 		telemetryConfig.Enable = logging.TelemetryOverride(*telemetryOverride, &telemetryConfig)
 
 		if telemetryConfig.Enable {
-			err = log.EnableTelemetry(telemetryConfig)
+			err = log.EnableTelemetryContext(context.Background(), telemetryConfig)
 			if err != nil {
 				fmt.Fprintln(os.Stdout, "error creating telemetry hook", err)
 				return
