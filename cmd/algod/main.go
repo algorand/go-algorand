@@ -61,8 +61,8 @@ var telemetryOverride = flag.String("t", "", `Override telemetry setting if supp
 var seed = flag.String("seed", "", "input to math/rand.Seed()")
 
 const (
-	DefaultStaticTelemetryStartupTimeout = 5 * time.Second
-	DefaultStaticTelemetryBGDialRetry    = 1 * time.Minute
+	defaultStaticTelemetryStartupTimeout = 5 * time.Second
+	defaultStaticTelemetryBGDialRetry    = 1 * time.Minute
 )
 
 func main() {
@@ -239,7 +239,7 @@ func run() int {
 				}
 			}
 			// Try to enable remote telemetry now when URI is defined. Skip for DNS based telemetry.
-			ctx, cancel := context.WithTimeout(context.Background(), DefaultStaticTelemetryStartupTimeout)
+			ctx, cancel := context.WithTimeout(context.Background(), defaultStaticTelemetryStartupTimeout)
 			defer cancel()
 			err = log.EnableTelemetryContext(ctx, telemetryConfig)
 			if err != nil {
@@ -248,7 +248,7 @@ func run() int {
 				// Remote telemetry init loop
 				go func() {
 					for {
-						time.Sleep(DefaultStaticTelemetryBGDialRetry)
+						time.Sleep(defaultStaticTelemetryBGDialRetry)
 						// Try to enable remote telemetry now when URI is defined. Skip for DNS based telemetry.
 						err := log.EnableTelemetryContext(context.Background(), telemetryConfig)
 						// Error occurs only if URI is defined and we need to retry later
