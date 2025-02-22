@@ -287,6 +287,10 @@ func (v2 *Handlers) generateKeyHandler(address string, params model.GeneratePart
 // GenerateParticipationKeys generates and installs participation keys to the node.
 // (POST /v2/participation/generate/{address})
 func (v2 *Handlers) GenerateParticipationKeys(ctx echo.Context, address string, params model.GenerateParticipationKeysParams) error {
+	addr, err := basics.UnmarshalChecksumAddress(address)
+	if err != nil {
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
 	if !v2.KeygenLimiter.TryAcquire(1) {
 		err := fmt.Errorf("participation key generation already in progress")
 		return badRequest(ctx, err, err.Error(), v2.Log)
@@ -301,8 +305,19 @@ func (v2 *Handlers) GenerateParticipationKeys(ctx echo.Context, address string, 
 		}
 	}()
 
-	// Empty object. In the future we may want to add a field for the participation ID.
-	return ctx.String(http.StatusOK, "{}")
+	firstRound := basics.Round(params.First)
+	lastRound := basics.Round(params.Last)
+	keyDilution := nilToZero(params.Dilution)
+	if keyDilution == 0 {
+		keyDilution = account.DefaultKeyDilution(firstRound, lastRound)
+	}
+	identity := account.ParticipationKeyIdentity{
+		Parent:      addr,
+		FirstValid:  firstRound,
+		LastValid:   lastRound,
+		KeyDilution: keyDilution,
+	}
+	return ctx.JSON(http.StatusOK, identity.ID().String())
 }
 
 // AddParticipationKey Add a participation key to the node
