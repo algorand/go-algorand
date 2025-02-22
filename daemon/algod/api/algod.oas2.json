@@ -3985,6 +3985,10 @@
         "fix-signers": {
           "description": "If true, signers for transactions that are missing signatures will be fixed during evaluation.",
           "type": "boolean"
+        },
+        "populate-resources": {
+          "description": "If true, return populated resource arrays for each transaction based on unnamed resources",
+          "type": "boolean"
         }
       }
     },
@@ -4267,7 +4271,40 @@
         }
       }
     },
-    "SimulateTransactionGroupResult": {
+    "ResourceArrays": {
+      "description": "Resource arrays that are required for a transaction",
+      "type": "object",
+      "properties": {
+        "accounts": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "x-algorand-format": "Address"
+          }
+        },
+        "assets": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "x-algorand-format": "uint64"
+          }
+        },
+        "apps": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "x-algorand-format": "uint64"
+          }
+        },
+        "boxes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/BoxReference"
+          }
+        }
+      }
+    },
+  "SimulateTransactionGroupResult": {
       "description": "Simulation result for an atomic transaction group",
       "type": "object",
       "required": [
@@ -4302,6 +4339,13 @@
         },
         "unnamed-resources-accessed": {
           "$ref": "#/definitions/SimulateUnnamedResourcesAccessed"
+        },
+        "extra-resource-arrays": {
+          "description": "Present if populate-resource-arrays is true in the request and additional tranactions are needed to name all the accessed resources.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ResourceArrays"
+          }
         }
       }
     },
@@ -4333,6 +4377,10 @@
           "description": "The account that needed to sign this transaction when no signature was provided and the provided signer was incorrect.",
           "type": "string",
           "x-algorand-format": "Address"
+        },
+        "populated-resource-arrays": {
+          "description": "Present if populate-resource-arrays is true in the request. In this case, it will be all of the resources this transaction needs to be evaluated.",
+          "$ref": "#/definitions/ResourceArrays"
         }
       }
     },
