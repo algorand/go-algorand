@@ -239,9 +239,9 @@ func run() int {
 				}
 			}
 			// Try to enable remote telemetry now when URI is defined. Skip for DNS based telemetry.
-			ctx, cancel := context.WithTimeout(context.Background(), defaultStaticTelemetryStartupTimeout)
-			defer cancel()
+			ctx, telemetryCancelFn := context.WithTimeout(context.Background(), defaultStaticTelemetryStartupTimeout)
 			err = log.EnableTelemetryContext(ctx, telemetryConfig)
+			telemetryCancelFn()
 			if err != nil {
 				fmt.Fprintln(os.Stdout, "error creating telemetry hook", err)
 
