@@ -216,15 +216,8 @@ func TestMultiPhonebook(t *testing.T) {
 		require.NoError(t, err)
 		infoSet = append(infoSet, info)
 	}
-	pha := make([]*peer.AddrInfo, 0)
-	for _, e := range infoSet[:5] {
-		pha = append(pha, e)
-	}
-	phb := make([]*peer.AddrInfo, 0)
-	for _, e := range infoSet[5:] {
-		phb = append(phb, e)
-	}
-
+	pha := append([]*peer.AddrInfo{}, infoSet[:5]...)
+	phb := append([]*peer.AddrInfo{}, infoSet[5:]...)
 	ph, err := MakePhonebook(1, 1*time.Millisecond)
 	require.NoError(t, err)
 	ph.ReplacePeerList(pha, "pha", phonebook.RelayRole)
@@ -251,14 +244,8 @@ func TestMultiPhonebookPersistentPeers(t *testing.T) {
 		infoSet = append(infoSet, info)
 	}
 
-	pha := make([]*peer.AddrInfo, 0)
-	for _, e := range infoSet[:5] {
-		pha = append(pha, e)
-	}
-	phb := make([]*peer.AddrInfo, 0)
-	for _, e := range infoSet[5:] {
-		phb = append(phb, e)
-	}
+	pha := append([]*peer.AddrInfo{}, infoSet[:5]...)
+	phb := append([]*peer.AddrInfo{}, infoSet[5:]...)
 	ph, err := MakePhonebook(1, 1*time.Millisecond)
 	require.NoError(t, err)
 	ph.AddPersistentPeers(persistentPeers, "pha", phonebook.RelayRole)
@@ -314,14 +301,8 @@ func TestMultiPhonebookDuplicateFiltering(t *testing.T) {
 		infoSet = append(infoSet, info)
 	}
 
-	pha := make([]*peer.AddrInfo, 0)
-	for _, e := range infoSet[:7] {
-		pha = append(pha, e)
-	}
-	phb := make([]*peer.AddrInfo, 0)
-	for _, e := range infoSet[3:] {
-		phb = append(phb, e)
-	}
+	pha := append([]*peer.AddrInfo{}, infoSet[:7]...)
+	phb := append([]*peer.AddrInfo{}, infoSet[3:]...)
 	ph, err := MakePhonebook(1, 1*time.Millisecond)
 	require.NoError(t, err)
 	ph.ReplacePeerList(pha, "pha", phonebook.RelayRole)
@@ -371,7 +352,7 @@ func TestWaitAndAddConnectionTimeLongtWindow(t *testing.T) {
 	}
 
 	// add another value to addr
-	addrInPhonebook, waitTime, provisionalTime = entries.GetConnectionWaitTime(string(info1.ID))
+	_, waitTime, provisionalTime = entries.GetConnectionWaitTime(string(info1.ID))
 	require.Equal(t, time.Duration(0), waitTime)
 	require.Equal(t, true, entries.UpdateConnectionTime(string(info1.ID), provisionalTime))
 	data, _ = entries.Get(info1.ID, addressDataKey)
@@ -386,7 +367,7 @@ func TestWaitAndAddConnectionTimeLongtWindow(t *testing.T) {
 
 	// the first time should be removed and a new one added
 	// there should not be any wait
-	addrInPhonebook, waitTime, provisionalTime = entries.GetConnectionWaitTime(string(info1.ID))
+	_, waitTime, provisionalTime = entries.GetConnectionWaitTime(string(info1.ID))
 	require.Equal(t, time.Duration(0), waitTime)
 	require.Equal(t, true, entries.UpdateConnectionTime(string(info1.ID), provisionalTime))
 	data, _ = entries.Get(info1.ID, addressDataKey)
@@ -432,7 +413,7 @@ func TestWaitAndAddConnectionTimeLongtWindow(t *testing.T) {
 	require.Equal(t, 3, len(phBookData))
 
 	// add another element to trigger wait
-	_, waitTime, provisionalTime = entries.GetConnectionWaitTime(string(info2.ID))
+	_, waitTime, _ = entries.GetConnectionWaitTime(string(info2.ID))
 	require.Greater(t, int64(waitTime), int64(0))
 	// no element should be removed
 	data2, _ = entries.Get(info2.ID, addressDataKey)
