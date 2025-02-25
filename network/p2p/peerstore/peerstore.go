@@ -127,7 +127,6 @@ func (ps *PeerStore) UpdateRetryAfter(addr string, retryAfter time.Time) {
 func (ps *PeerStore) GetConnectionWaitTime(addrOrPeerID string) (bool, time.Duration, time.Time) {
 	curTime := time.Now()
 	var timeSince time.Duration
-	var numElmtsToRemove int
 	peerID := peer.ID(addrOrPeerID)
 	metadata, err := ps.Get(peerID, addressDataKey)
 	if err != nil {
@@ -137,8 +136,13 @@ func (ps *PeerStore) GetConnectionWaitTime(addrOrPeerID string) (bool, time.Dura
 	if !ok {
 		return false, 0 /* not used */, curTime /* not used */
 	}
+
 	// Remove from recentConnectionTimes the times later than ConnectionsRateLimitingWindowSeconds
-	for numElmtsToRemove < len(ad.recentConnectionTimes) {
+	ad.mu.Lock()
+
+	originalLen := len(ad.recentConnectionTimes)
+	var numElmtsToRemove int
+	for numElmtsToRemove < originalLen {
 		timeSince = curTime.Sub(ad.recentConnectionTimes[numElmtsToRemove])
 		if timeSince >= ps.connectionsRateLimitingWindow {
 			numElmtsToRemove++
@@ -149,27 +153,22 @@ func (ps *PeerStore) GetConnectionWaitTime(addrOrPeerID string) (bool, time.Dura
 
 	// Remove the expired elements from e.data[addr].recentConnectionTimes
 	ad.recentConnectionTimes = ad.recentConnectionTimes[numElmtsToRemove:]
-	_ = ps.Put(peerID, addressDataKey, ad)
 
 	// If there are max number of connections within the time window, wait
-	metadata, _ = ps.Get(peerID, addressDataKey)
-	ad, ok = metadata.(addressData)
-	if !ok {
-		return false, 0 /* not used */, curTime /* not used */
+	remainingLength := originalLen - numElmtsToRemove
+	var waitTime time.Duration
+	if uint(remainingLength) >= ps.connectionsRateLimitingCount {
+		waitTime = ps.connectionsRateLimitingWindow - timeSince
+	} else {
+		// Else, there is space in connectionsRateLimitingCount. The
+		// connection request of the caller will proceed
+		// Append the provisional time for the next connection request
+		ad.recentConnectionTimes = append(ad.recentConnectionTimes, curTime)
 	}
-	numElts := len(ad.recentConnectionTimes)
-	if uint(numElts) >= ps.connectionsRateLimitingCount {
-		return true, /* true */
-			ps.connectionsRateLimitingWindow - timeSince, curTime /* not used */
-	}
+	ad.mu.Unlock()
 
-	// Else, there is space in connectionsRateLimitingCount. The
-	// connection request of the caller will proceed
-	// Update curTime, since it may have significantly changed if waited
-	provisionalTime := time.Now()
-	// Append the provisional time for the next connection request
-	ps.appendTime(peerID, provisionalTime)
-	return true, 0 /* no wait. proceed */, provisionalTime
+	_ = ps.Put(peerID, addressDataKey, ad)
+	return true, waitTime, curTime
 }
 
 // UpdateConnectionTime updates the connection time for the given address.
@@ -189,6 +188,9 @@ func (ps *PeerStore) UpdateConnectionTime(addrOrPeerID string, provisionalTime t
 	}()
 
 	// Find the provisionalTime and update it
+	ad.mu.Lock()
+	defer ad.mu.Unlock()
+
 	entry := ad.recentConnectionTimes
 	for indx, val := range entry {
 		if provisionalTime == val {
@@ -301,15 +303,6 @@ func (ps *PeerStore) deletePhonebookEntry(peerID peer.ID, networkName string) {
 		ps.ClearAddrs(peerID)
 		_ = ps.Put(peerID, addressDataKey, nil)
 	}
-}
-
-// AppendTime adds the current time to recentConnectionTimes in
-// addressData of addr
-func (ps *PeerStore) appendTime(peerID peer.ID, t time.Time) {
-	data, _ := ps.Get(peerID, addressDataKey)
-	ad := data.(addressData)
-	ad.recentConnectionTimes = append(ad.recentConnectionTimes, t)
-	_ = ps.Put(peerID, addressDataKey, ad)
 }
 
 func (ps *PeerStore) filterRetryTime(t time.Time, role phonebook.PhoneBookEntryRoles) []*peer.AddrInfo {
