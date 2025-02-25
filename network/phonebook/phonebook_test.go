@@ -436,6 +436,9 @@ func TestReplacePeerList(t *testing.T) {
 }
 
 func TestRoleSetPersistence(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	tests := []struct {
 		name string
 		fn   func(*testing.T)
