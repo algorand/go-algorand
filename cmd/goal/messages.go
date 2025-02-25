@@ -174,6 +174,7 @@ const (
 	infoPasswordConfirmation     = "Please confirm the password: "
 	infoCreatingWallet           = "Creating wallet..."
 	infoCreatedWallet            = "Created wallet '%s'"
+	infoUnencrypted              = "Creating unencrypted wallet"
 	infoBackupExplanation        = "Your new wallet has a backup phrase that can be used for recovery.\nKeeping this backup phrase safe is extremely important.\nWould you like to see it now? (Y/n): "
 	infoPrintedBackupPhrase      = "Your backup phrase is printed below.\nKeep this information safe -- never share it with anyone!"
 	infoBackupPhrase             = "\n%s"
