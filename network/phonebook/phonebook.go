@@ -34,12 +34,21 @@ const getAllAddresses = math.MaxInt32
 //
 //msgp:ignore Roles
 type RoleSet struct {
-	roles Role
-	_     func() // func is not comparable so that Roles. This is to prevent roles misuse and direct comparison.
+	roles       Role
+	persistence persistence // parallel bits indicating which roles are persistent
+	_           func()      // func is not comparable so that Roles. This is to prevent roles misuse and direct comparison.
 }
 
 // Role is a single role that a phonebook entry can have.
 type Role uint8
+type persistence uint8
+
+// enforceUint8 is a generic type that only compiles for types whose underlying type is uint8.
+type enforceUint8[T ~uint8] struct{}
+
+// enforce the underlying type of Role and persistence to be the same uint8
+var _ enforceUint8[Role]
+var _ enforceUint8[persistence]
 
 const (
 	// RelayRole used for all the relays that are provided either via the algobootstrap SRV record
@@ -48,6 +57,15 @@ const (
 	// ArchivalRole used for all the archival nodes that are provided via the archive SRV record.
 	ArchivalRole
 )
+
+// MakeRoleSet creates a new RoleSet with the passed role
+func MakeRoleSet(role Role, persistent bool) RoleSet {
+	r := RoleSet{roles: role}
+	if persistent {
+		r.persistence = persistence(role)
+	}
+	return r
+}
 
 // Has checks if the role in this role set has the other role
 func (r RoleSet) Has(other Role) bool {
@@ -69,9 +87,20 @@ func (r *RoleSet) Remove(other Role) {
 	r.roles &= ^other
 }
 
-// MakeRoleSet creates a new RoleSet with the passed role
-func MakeRoleSet(role Role) RoleSet {
-	return RoleSet{roles: role}
+// AddPersistent adds a role and marks it as persistent
+func (r *RoleSet) AddPersistent(role Role) {
+	r.roles |= role
+	r.persistence |= persistence(role)
+}
+
+// IsPersistent checks if the given role is marked as persistent
+func (r RoleSet) IsPersistent(role Role) bool {
+	return r.persistence&persistence(role) != 0
+}
+
+// hasPersistentRoles checks if there are any persistent roles in the set
+func (r RoleSet) hasPersistentRoles() bool {
+	return r.persistence != 0
 }
 
 // Phonebook stores or looks up addresses of nodes we might contact
@@ -120,18 +149,14 @@ type addressData struct {
 
 	// roles is the roles that this address serves.
 	roles RoleSet
-
-	// persistent is set true for peers whose record should not be removed for the peer list
-	persistent bool
 }
 
 // makePhonebookEntryData creates a new addressData entry for provided network name and role.
-func makePhonebookEntryData(networkName string, role RoleSet, persistent bool) addressData {
+func makePhonebookEntryData(networkName string, role Role, persistent bool) addressData {
 	pbData := addressData{
 		networkNames:          make(map[string]bool),
 		recentConnectionTimes: make([]time.Time, 0),
-		roles:                 role,
-		persistent:            persistent,
+		roles:                 MakeRoleSet(role, persistent),
 	}
 	pbData.networkNames[networkName] = true
 	return pbData
@@ -203,7 +228,7 @@ func (e *phonebookImpl) ReplacePeerList(addressesThey []string, networkName stri
 	// prepare a map of items we'd like to remove.
 	removeItems := make(map[string]bool, 0)
 	for k, pbd := range e.data {
-		if pbd.networkNames[networkName] && !pbd.persistent {
+		if pbd.networkNames[networkName] && !pbd.roles.IsPersistent(role) {
 			if pbd.roles.Is(role) {
 				removeItems[k] = true
 			} else if pbd.roles.Has(role) {
@@ -216,11 +241,7 @@ func (e *phonebookImpl) ReplacePeerList(addressesThey []string, networkName stri
 	for _, addr := range addressesThey {
 		if pbData, has := e.data[addr]; has {
 			// we already have this
-			if pbData.persistent {
-				// do not touch persistent peers
-				continue
-			}
-			// otherwise update the networkName and role
+			// update the networkName and role
 			pbData.networkNames[networkName] = true
 			pbData.roles.Add(role)
 			e.data[addr] = pbData
@@ -229,7 +250,7 @@ func (e *phonebookImpl) ReplacePeerList(addressesThey []string, networkName stri
 			delete(removeItems, addr)
 		} else {
 			// we don't have this item. add it.
-			e.data[addr] = makePhonebookEntryData(networkName, RoleSet{roles: role}, false)
+			e.data[addr] = makePhonebookEntryData(networkName, role, false)
 		}
 	}
 
@@ -250,12 +271,11 @@ func (e *phonebookImpl) AddPersistentPeers(dnsAddresses []string, networkName st
 		if pbData, has := e.data[addr]; has {
 			// we already have this.
 			// Make sure the persistence field is set to true and overwrite the role
-			pbData.persistent = true
-			pbData.roles = MakeRoleSet(role)
+			pbData.roles.AddPersistent(role)
 			e.data[addr] = pbData
 		} else {
 			// we don't have this item. add it.
-			e.data[addr] = makePhonebookEntryData(networkName, RoleSet{roles: role}, true)
+			e.data[addr] = makePhonebookEntryData(networkName, role, true)
 		}
 	}
 }

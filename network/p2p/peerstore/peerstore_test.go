@@ -154,9 +154,7 @@ func TestArrayPhonebookAll(t *testing.T) {
 	ph, err := MakePhonebook(1, 1*time.Millisecond)
 	require.NoError(t, err)
 	for _, addr := range set {
-		r := phonebook.RoleSet{}
-		r.Add(phonebook.RelayRole)
-		entry := makePhonebookEntryData("", r, false)
+		entry := makePhonebookEntryData("", phonebook.RelayRole, false)
 		info, _ := peerInfoFromDomainPort(addr)
 		ph.AddAddrs(info.ID, info.Addrs, libp2p.AddressTTL)
 		ph.Put(info.ID, addressDataKey, entry)
@@ -178,9 +176,7 @@ func TestArrayPhonebookUniform1(t *testing.T) {
 	ph, err := MakePhonebook(1, 1*time.Millisecond)
 	require.NoError(t, err)
 	for _, addr := range set {
-		r := phonebook.RoleSet{}
-		r.Add(phonebook.RelayRole)
-		entry := makePhonebookEntryData("", r, false)
+		entry := makePhonebookEntryData("", phonebook.RelayRole, false)
 		info, _ := peerInfoFromDomainPort(addr)
 		ph.AddAddrs(info.ID, info.Addrs, libp2p.AddressTTL)
 		ph.Put(info.ID, addressDataKey, entry)
@@ -202,9 +198,7 @@ func TestArrayPhonebookUniform3(t *testing.T) {
 	ph, err := MakePhonebook(1, 1*time.Millisecond)
 	require.NoError(t, err)
 	for _, addr := range set {
-		r := phonebook.RoleSet{}
-		r.Add(phonebook.RelayRole)
-		entry := makePhonebookEntryData("", r, false)
+		entry := makePhonebookEntryData("", phonebook.RelayRole, false)
 		info, _ := peerInfoFromDomainPort(addr)
 		ph.AddAddrs(info.ID, info.Addrs, libp2p.AddressTTL)
 		ph.Put(info.ID, addressDataKey, entry)
@@ -291,17 +285,20 @@ func TestMultiPhonebookPersistentPeers(t *testing.T) {
 	ph2.AddPersistentPeers(persistentPeers, "phc", phonebook.RelayRole)
 	ph2.AddPersistentPeers(persistentPeers, "phc", phonebook.ArchivalRole)
 	allAddresses = ph2.GetAddresses(len(set)+len(persistentPeers), phonebook.RelayRole)
-	require.Len(t, allAddresses, 0)
+	require.Len(t, allAddresses, 1)
 	allAddresses = ph2.GetAddresses(len(set)+len(persistentPeers), phonebook.ArchivalRole)
 	require.Len(t, allAddresses, 1)
 
 	// check that role of persistent peer survives
+	ph3, err := MakePhonebook(1, 1*time.Millisecond)
+	ph3.AddPersistentPeers(persistentPeers, "phc", phonebook.ArchivalRole)
+	require.NoError(t, err)
 	phc := []*peer.AddrInfo{info}
-	ph2.ReplacePeerList(phc, "phc", phonebook.RelayRole)
+	ph3.ReplacePeerList(phc, "phc", phonebook.RelayRole)
 
-	allAddresses = ph2.GetAddresses(len(set)+len(persistentPeers), phonebook.RelayRole)
-	require.Len(t, allAddresses, 0)
-	allAddresses = ph2.GetAddresses(len(set)+len(persistentPeers), phonebook.ArchivalRole)
+	allAddresses = ph3.GetAddresses(len(set)+len(persistentPeers), phonebook.RelayRole)
+	require.Len(t, allAddresses, 1)
+	allAddresses = ph3.GetAddresses(len(set)+len(persistentPeers), phonebook.ArchivalRole)
 	require.Len(t, allAddresses, 1)
 
 }

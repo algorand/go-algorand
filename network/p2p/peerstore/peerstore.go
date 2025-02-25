@@ -59,9 +59,6 @@ type addressData struct {
 
 	// roles is the roles that this address serves.
 	roles phonebook.RoleSet
-
-	// persistent is set true for peers whose record should not be removed for the peer list
-	persistent bool
 }
 
 // peerStoreCAB combines the libp2p Peerstore and CertifiedAddrBook interfaces.
@@ -218,7 +215,7 @@ func (ps *PeerStore) ReplacePeerList(addressesThey []*peer.AddrInfo, networkName
 			ad := data.(addressData)
 			updated := false
 			ad.mu.RLock()
-			if ad.networkNames[networkName] && !ad.persistent {
+			if ad.networkNames[networkName] && !ad.roles.IsPersistent(role) {
 				if ad.roles.Is(role) {
 					removeItems[pid] = true
 				} else if ad.roles.Has(role) {
@@ -238,12 +235,8 @@ func (ps *PeerStore) ReplacePeerList(addressesThey []*peer.AddrInfo, networkName
 		data, _ := ps.Get(info.ID, addressDataKey)
 		if data != nil {
 			// we already have this
+			// update the networkName and role
 			ad := data.(addressData)
-			if ad.persistent {
-				// do not touch persistent peers
-				continue
-			}
-			// otherwise update the networkName and role
 			ad.mu.Lock()
 			ad.networkNames[networkName] = true
 			ad.roles.Add(role)
@@ -255,7 +248,7 @@ func (ps *PeerStore) ReplacePeerList(addressesThey []*peer.AddrInfo, networkName
 		} else {
 			// we don't have this item. add it.
 			ps.AddAddrs(info.ID, info.Addrs, libp2p.AddressTTL)
-			entry := makePhonebookEntryData(networkName, phonebook.MakeRoleSet(role), false)
+			entry := makePhonebookEntryData(networkName, role, false)
 			_ = ps.Put(info.ID, addressDataKey, entry)
 		}
 	}
@@ -276,13 +269,12 @@ func (ps *PeerStore) AddPersistentPeers(addrInfo []*peer.AddrInfo, networkName s
 			// we already have this.
 			// Make sure the persistence field is set to true and overwrite the role
 			ad := data.(addressData)
-			ad.persistent = true
-			ad.roles = phonebook.MakeRoleSet(role)
+			ad.roles.AddPersistent(role)
 			_ = ps.Put(info.ID, addressDataKey, ad)
 		} else {
 			// we don't have this item. add it.
 			ps.AddAddrs(info.ID, info.Addrs, libp2p.PermanentAddrTTL)
-			entry := makePhonebookEntryData(networkName, phonebook.MakeRoleSet(role), true)
+			entry := makePhonebookEntryData(networkName, role, true)
 			_ = ps.Put(info.ID, addressDataKey, entry)
 		}
 	}
@@ -294,13 +286,12 @@ func (ps *PeerStore) Length() int {
 }
 
 // makePhonebookEntryData creates a new address entry for provided network name and role.
-func makePhonebookEntryData(networkName string, role phonebook.RoleSet, persistent bool) addressData {
+func makePhonebookEntryData(networkName string, role phonebook.Role, persistent bool) addressData {
 	pbData := addressData{
 		networkNames:          make(map[string]bool),
 		mu:                    &deadlock.RWMutex{},
 		recentConnectionTimes: make([]time.Time, 0),
-		roles:                 role,
-		persistent:            persistent,
+		roles:                 phonebook.MakeRoleSet(role, persistent),
 	}
 	pbData.networkNames[networkName] = true
 	return pbData

@@ -88,7 +88,7 @@ func TestArrayPhonebookAll(t *testing.T) {
 	set := []string{"a", "b", "c", "d", "e"}
 	ph := MakePhonebook(1, 1).(*phonebookImpl)
 	for _, e := range set {
-		ph.data[e] = makePhonebookEntryData("", RoleSet{roles: RelayRole}, false)
+		ph.data[e] = makePhonebookEntryData("", RelayRole, false)
 	}
 	testPhonebookAll(t, set, ph)
 }
@@ -99,7 +99,7 @@ func TestArrayPhonebookUniform1(t *testing.T) {
 	set := []string{"a", "b", "c", "d", "e"}
 	ph := MakePhonebook(1, 1).(*phonebookImpl)
 	for _, e := range set {
-		ph.data[e] = makePhonebookEntryData("", RoleSet{roles: RelayRole}, false)
+		ph.data[e] = makePhonebookEntryData("", RelayRole, false)
 	}
 	testPhonebookUniform(t, set, ph, 1)
 }
@@ -110,7 +110,7 @@ func TestArrayPhonebookUniform3(t *testing.T) {
 	set := []string{"a", "b", "c", "d", "e"}
 	ph := MakePhonebook(1, 1).(*phonebookImpl)
 	for _, e := range set {
-		ph.data[e] = makePhonebookEntryData("", RoleSet{roles: RelayRole}, false)
+		ph.data[e] = makePhonebookEntryData("", RelayRole, false)
 	}
 	testPhonebookUniform(t, set, ph, 3)
 }
@@ -156,17 +156,19 @@ func TestMultiPhonebookPersistentPeers(t *testing.T) {
 	mp2.AddPersistentPeers(persistentPeers, "phc", RelayRole)
 	mp2.AddPersistentPeers(persistentPeers, "phc", ArchivalRole)
 	allAddresses = mp2.GetAddresses(len(set)+len(persistentPeers), RelayRole)
-	require.Len(t, allAddresses, 0)
+	require.Len(t, allAddresses, 1)
 	allAddresses = mp2.GetAddresses(len(set)+len(persistentPeers), ArchivalRole)
 	require.Len(t, allAddresses, 1)
 
 	// check that role of persistent peer survives
+	mp3 := MakePhonebook(1, 1*time.Millisecond)
+	mp3.AddPersistentPeers(persistentPeers, "phc", ArchivalRole)
 	phc := []string{"a"}
-	mp2.ReplacePeerList(phc, "phc", RelayRole)
+	mp3.ReplacePeerList(phc, "phc", RelayRole)
 
-	allAddresses = mp2.GetAddresses(len(set)+len(persistentPeers), RelayRole)
-	require.Len(t, allAddresses, 0)
-	allAddresses = mp2.GetAddresses(len(set)+len(persistentPeers), ArchivalRole)
+	allAddresses = mp3.GetAddresses(len(set)+len(persistentPeers), RelayRole)
+	require.Len(t, allAddresses, 1)
+	allAddresses = mp3.GetAddresses(len(set)+len(persistentPeers), ArchivalRole)
 	require.Len(t, allAddresses, 1)
 }
 
@@ -431,4 +433,57 @@ func TestReplacePeerList(t *testing.T) {
 	require.ElementsMatch(t, []string{"a", "b"}, res)
 	res = pb.GetAddresses(4, ArchivalRole)
 	require.ElementsMatch(t, []string{"c"}, res)
+}
+
+func TestRoleSetPersistence(t *testing.T) {
+	tests := []struct {
+		name string
+		fn   func(*testing.T)
+	}{
+		{
+			name: "MakeRoleSet with persistence",
+			fn: func(t *testing.T) {
+				rs := MakeRoleSet(RelayRole, true)
+				require.True(t, rs.IsPersistent(RelayRole), "Expected RelayRole to be persistent")
+				require.True(t, rs.hasPersistentRoles(), "Expected HasPersistentRoles to return true")
+			},
+		},
+		{
+			name: "MakeRoleSet without persistence",
+			fn: func(t *testing.T) {
+				rs := MakeRoleSet(RelayRole, false)
+				require.False(t, rs.IsPersistent(RelayRole), "Expected RelayRole to not be persistent")
+				require.False(t, rs.hasPersistentRoles(), "Expected HasPersistentRoles to return false")
+			},
+		},
+		{
+			name: "AddPersistent",
+			fn: func(t *testing.T) {
+				rs := MakeRoleSet(RelayRole, false)
+				rs.AddPersistent(ArchivalRole)
+
+				require.True(t, rs.IsPersistent(ArchivalRole), "Expected ArchivalRole to be persistent")
+				require.False(t, rs.IsPersistent(RelayRole), "Expected RelayRole to not be persistent")
+				require.True(t, rs.Has(ArchivalRole), "Expected to have ArchivalRole")
+				require.True(t, rs.Has(RelayRole), "Expected to have RelayRole")
+				require.True(t, rs.hasPersistentRoles(), "Expected HasPersistentRoles to return true")
+			},
+		},
+		{
+			name: "Multiple roles with different persistence",
+			fn: func(t *testing.T) {
+				rs := MakeRoleSet(RelayRole, true)
+				rs.Add(ArchivalRole)
+
+				require.True(t, rs.IsPersistent(RelayRole), "Expected RelayRole to be persistent")
+				require.False(t, rs.IsPersistent(ArchivalRole), "Expected ArchivalRole to not be persistent")
+				require.True(t, rs.Has(RelayRole), "Expected to have RelayRole")
+				require.True(t, rs.Has(ArchivalRole), "Expected to have ArchivalRole")
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, test.fn)
+	}
 }
