@@ -30,12 +30,12 @@ import (
 const getAllAddresses = math.MaxInt32
 
 // RoleSet defines the roles that a single entry on the phonebook can take.
-// currently, we have two roles : relay role and archival role, which are mutually exclusive.
+// currently, we have two roles : relay role and archival role.
 //
 //msgp:ignore Roles
 type RoleSet struct {
-	roles       Role
-	persistence persistence // parallel bits indicating which roles are persistent
+	roles       Role        // roles is a bitfield of the roles that this entry has
+	persistence persistence // persistence is a bitfield of the roles that are persistent
 	_           func()      // func is not comparable so that Roles. This is to prevent roles misuse and direct comparison.
 }
 
