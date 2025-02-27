@@ -25,7 +25,7 @@ import (
 )
 
 func testPhonebookAll(t *testing.T, set []string, ph Phonebook) {
-	actual := ph.GetAddresses(len(set), PhoneBookEntryRelayRole)
+	actual := ph.GetAddresses(len(set), RelayRole)
 	for _, got := range actual {
 		ok := false
 		for _, known := range set {
@@ -57,7 +57,7 @@ func testPhonebookUniform(t *testing.T, set []string, ph Phonebook, getsize int)
 	expected := (uniformityTestLength * getsize) / len(set)
 	counts := make([]int, len(set))
 	for i := 0; i < uniformityTestLength; i++ {
-		actual := ph.GetAddresses(getsize, PhoneBookEntryRelayRole)
+		actual := ph.GetAddresses(getsize, RelayRole)
 		for i, known := range set {
 			for _, xa := range actual {
 				if known == xa {
@@ -88,7 +88,7 @@ func TestArrayPhonebookAll(t *testing.T) {
 	set := []string{"a", "b", "c", "d", "e"}
 	ph := MakePhonebook(1, 1).(*phonebookImpl)
 	for _, e := range set {
-		ph.data[e] = makePhonebookEntryData("", PhoneBookEntryRelayRole, false)
+		ph.data[e] = makePhonebookEntryData("", RelayRole, false)
 	}
 	testPhonebookAll(t, set, ph)
 }
@@ -99,7 +99,7 @@ func TestArrayPhonebookUniform1(t *testing.T) {
 	set := []string{"a", "b", "c", "d", "e"}
 	ph := MakePhonebook(1, 1).(*phonebookImpl)
 	for _, e := range set {
-		ph.data[e] = makePhonebookEntryData("", PhoneBookEntryRelayRole, false)
+		ph.data[e] = makePhonebookEntryData("", RelayRole, false)
 	}
 	testPhonebookUniform(t, set, ph, 1)
 }
@@ -110,7 +110,7 @@ func TestArrayPhonebookUniform3(t *testing.T) {
 	set := []string{"a", "b", "c", "d", "e"}
 	ph := MakePhonebook(1, 1).(*phonebookImpl)
 	for _, e := range set {
-		ph.data[e] = makePhonebookEntryData("", PhoneBookEntryRelayRole, false)
+		ph.data[e] = makePhonebookEntryData("", RelayRole, false)
 	}
 	testPhonebookUniform(t, set, ph, 3)
 }
@@ -119,17 +119,11 @@ func TestMultiPhonebook(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	set := []string{"a", "b", "c", "d", "e", "f", "g", "h", "i", "j"}
-	pha := make([]string, 0)
-	for _, e := range set[:5] {
-		pha = append(pha, e)
-	}
-	phb := make([]string, 0)
-	for _, e := range set[5:] {
-		phb = append(phb, e)
-	}
+	pha := append([]string{}, set[:5]...)
+	phb := append([]string{}, set[5:]...)
 	mp := MakePhonebook(1, 1*time.Millisecond)
-	mp.ReplacePeerList(pha, "pha", PhoneBookEntryRelayRole)
-	mp.ReplacePeerList(phb, "phb", PhoneBookEntryRelayRole)
+	mp.ReplacePeerList(pha, "pha", RelayRole)
+	mp.ReplacePeerList(phb, "phb", RelayRole)
 
 	testPhonebookAll(t, set, mp)
 	testPhonebookUniform(t, set, mp, 1)
@@ -143,42 +137,50 @@ func TestMultiPhonebookPersistentPeers(t *testing.T) {
 
 	persistentPeers := []string{"a"}
 	set := []string{"b", "c", "d", "e", "f", "g", "h", "i", "j", "k"}
-	pha := make([]string, 0)
-	for _, e := range set[:5] {
-		pha = append(pha, e)
-	}
-	phb := make([]string, 0)
-	for _, e := range set[5:] {
-		phb = append(phb, e)
-	}
+	pha := append([]string{}, set[:5]...)
+	phb := append([]string{}, set[5:]...)
 	mp := MakePhonebook(1, 1*time.Millisecond)
-	mp.AddPersistentPeers(persistentPeers, "pha", PhoneBookEntryRelayRole)
-	mp.AddPersistentPeers(persistentPeers, "phb", PhoneBookEntryRelayRole)
-	mp.ReplacePeerList(pha, "pha", PhoneBookEntryRelayRole)
-	mp.ReplacePeerList(phb, "phb", PhoneBookEntryRelayRole)
+	mp.AddPersistentPeers(persistentPeers, "pha", RelayRole)
+	mp.AddPersistentPeers(persistentPeers, "phb", RelayRole)
+	mp.ReplacePeerList(pha, "pha", RelayRole)
+	mp.ReplacePeerList(phb, "phb", RelayRole)
 
 	testPhonebookAll(t, append(set, persistentPeers...), mp)
-	allAddresses := mp.GetAddresses(len(set)+len(persistentPeers), PhoneBookEntryRelayRole)
+	allAddresses := mp.GetAddresses(len(set)+len(persistentPeers), RelayRole)
 	for _, pp := range persistentPeers {
 		require.Contains(t, allAddresses, pp)
 	}
+
+	// check that role of persistent peer gets updated with AddPersistentPeers
+	mp2 := MakePhonebook(1, 1*time.Millisecond)
+	mp2.AddPersistentPeers(persistentPeers, "phc", RelayRole)
+	mp2.AddPersistentPeers(persistentPeers, "phc", ArchivalRole)
+	allAddresses = mp2.GetAddresses(len(set)+len(persistentPeers), RelayRole)
+	require.Len(t, allAddresses, 1)
+	allAddresses = mp2.GetAddresses(len(set)+len(persistentPeers), ArchivalRole)
+	require.Len(t, allAddresses, 1)
+
+	// check that role of persistent peer survives
+	mp3 := MakePhonebook(1, 1*time.Millisecond)
+	mp3.AddPersistentPeers(persistentPeers, "phc", ArchivalRole)
+	phc := []string{"a"}
+	mp3.ReplacePeerList(phc, "phc", RelayRole)
+
+	allAddresses = mp3.GetAddresses(len(set)+len(persistentPeers), RelayRole)
+	require.Len(t, allAddresses, 1)
+	allAddresses = mp3.GetAddresses(len(set)+len(persistentPeers), ArchivalRole)
+	require.Len(t, allAddresses, 1)
 }
 
 func TestMultiPhonebookDuplicateFiltering(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	set := []string{"a", "b", "c", "d", "e", "f", "g", "h", "i", "j"}
-	pha := make([]string, 0)
-	for _, e := range set[:7] {
-		pha = append(pha, e)
-	}
-	phb := make([]string, 0)
-	for _, e := range set[3:] {
-		phb = append(phb, e)
-	}
+	pha := append([]string{}, set[:7]...)
+	phb := append([]string{}, set[3:]...)
 	mp := MakePhonebook(1, 1*time.Millisecond)
-	mp.ReplacePeerList(pha, "pha", PhoneBookEntryRelayRole)
-	mp.ReplacePeerList(phb, "phb", PhoneBookEntryRelayRole)
+	mp.ReplacePeerList(pha, "pha", RelayRole)
+	mp.ReplacePeerList(phb, "phb", RelayRole)
 
 	testPhonebookAll(t, set, mp)
 	testPhonebookUniform(t, set, mp, 1)
@@ -204,7 +206,7 @@ func TestWaitAndAddConnectionTimeLongtWindow(t *testing.T) {
 
 	// Test the addresses are populated in the phonebook and a
 	// time can be added to one of them
-	entries.ReplacePeerList([]string{addr1, addr2}, "default", PhoneBookEntryRelayRole)
+	entries.ReplacePeerList([]string{addr1, addr2}, "default", RelayRole)
 	addrInPhonebook, waitTime, provisionalTime := entries.GetConnectionWaitTime(addr1)
 	require.Equal(t, true, addrInPhonebook)
 	require.Equal(t, time.Duration(0), waitTime)
@@ -218,7 +220,7 @@ func TestWaitAndAddConnectionTimeLongtWindow(t *testing.T) {
 	}
 
 	// add another value to addr
-	addrInPhonebook, waitTime, provisionalTime = entries.GetConnectionWaitTime(addr1)
+	_, waitTime, provisionalTime = entries.GetConnectionWaitTime(addr1)
 	require.Equal(t, time.Duration(0), waitTime)
 	require.Equal(t, true, entries.UpdateConnectionTime(addr1, provisionalTime))
 	phBookData = entries.data[addr1].recentConnectionTimes
@@ -232,7 +234,7 @@ func TestWaitAndAddConnectionTimeLongtWindow(t *testing.T) {
 
 	// the first time should be removed and a new one added
 	// there should not be any wait
-	addrInPhonebook, waitTime, provisionalTime = entries.GetConnectionWaitTime(addr1)
+	_, waitTime, provisionalTime = entries.GetConnectionWaitTime(addr1)
 	require.Equal(t, time.Duration(0), waitTime)
 	require.Equal(t, true, entries.UpdateConnectionTime(addr1, provisionalTime))
 	phBookData2 := entries.data[addr1].recentConnectionTimes
@@ -259,7 +261,7 @@ func TestWaitAndAddConnectionTimeLongtWindow(t *testing.T) {
 	}
 
 	// value 2
-	addrInPhonebook, waitTime, provisionalTime = entries.GetConnectionWaitTime(addr2)
+	_, waitTime, provisionalTime = entries.GetConnectionWaitTime(addr2)
 	require.Equal(t, time.Duration(0), waitTime)
 	require.Equal(t, true, entries.UpdateConnectionTime(addr2, provisionalTime))
 	// value 3
@@ -272,7 +274,7 @@ func TestWaitAndAddConnectionTimeLongtWindow(t *testing.T) {
 	require.Equal(t, 3, len(phBookData))
 
 	// add another element to trigger wait
-	_, waitTime, provisionalTime = entries.GetConnectionWaitTime(addr2)
+	_, waitTime, _ = entries.GetConnectionWaitTime(addr2)
 	require.Greater(t, int64(waitTime), int64(0))
 	// no element should be removed
 	phBookData2 = entries.data[addr2].recentConnectionTimes
@@ -306,7 +308,7 @@ func TestWaitAndAddConnectionTimeShortWindow(t *testing.T) {
 	addr1 := "addrABC"
 
 	// Init the data structures
-	entries.ReplacePeerList([]string{addr1}, "default", PhoneBookEntryRelayRole)
+	entries.ReplacePeerList([]string{addr1}, "default", RelayRole)
 
 	// add 3 values. should not wait
 	// value 1
@@ -345,25 +347,146 @@ func TestPhonebookRoles(t *testing.T) {
 	archiverSet := []string{"archiver1", "archiver2", "archiver3"}
 
 	ph := MakePhonebook(1, 1).(*phonebookImpl)
-	ph.ReplacePeerList(relaysSet, "default", PhoneBookEntryRelayRole)
-	ph.ReplacePeerList(archiverSet, "default", PhoneBookEntryArchivalRole)
+	ph.ReplacePeerList(relaysSet, "default", RelayRole)
+	ph.ReplacePeerList(archiverSet, "default", ArchivalRole)
 	require.Equal(t, len(relaysSet)+len(archiverSet), len(ph.data))
 	require.Equal(t, len(relaysSet)+len(archiverSet), ph.Length())
 
-	for _, role := range []PhoneBookEntryRoles{PhoneBookEntryRelayRole, PhoneBookEntryArchivalRole} {
+	for _, role := range []Role{RelayRole, ArchivalRole} {
 		for k := 0; k < 100; k++ {
 			for l := 0; l < 3; l++ {
 				entries := ph.GetAddresses(l, role)
-				if role == PhoneBookEntryRelayRole {
+				if role == RelayRole {
 					for _, entry := range entries {
 						require.Contains(t, entry, "relay")
 					}
-				} else if role == PhoneBookEntryArchivalRole {
+				} else if role == ArchivalRole {
 					for _, entry := range entries {
 						require.Contains(t, entry, "archiver")
 					}
 				}
 			}
 		}
+	}
+}
+
+func TestRolesOperations(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	var tests = []struct {
+		role       Role
+		otherRoles Role
+	}{
+		{RelayRole, ArchivalRole},
+		{ArchivalRole, RelayRole},
+	}
+
+	for _, test := range tests {
+		combo := RoleSet{roles: test.role}
+		combo.Add(test.otherRoles)
+		require.Equal(t, test.role|test.otherRoles, combo.roles)
+		require.True(t, combo.Has(test.role))
+		require.False(t, combo.Is(test.role))
+		require.True(t, combo.Has(test.otherRoles))
+		require.False(t, combo.Is(test.otherRoles))
+
+		combo.Remove(test.otherRoles)
+		require.Equal(t, test.role, combo.roles)
+		require.True(t, combo.Has(test.role))
+		require.True(t, combo.Is(test.role))
+		require.False(t, combo.Has(test.otherRoles))
+		require.False(t, combo.Is(test.otherRoles))
+	}
+}
+
+func TestReplacePeerList(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	pb := MakePhonebook(1, 1)
+	pb.ReplacePeerList([]string{"a", "b"}, "default", RelayRole)
+	res := pb.GetAddresses(4, RelayRole)
+	require.ElementsMatch(t, []string{"a", "b"}, res)
+
+	pb.ReplacePeerList([]string{"c"}, "default", ArchivalRole)
+	res = pb.GetAddresses(4, ArchivalRole)
+	require.ElementsMatch(t, []string{"c"}, res)
+
+	// make b archival in addition to relay
+	pb.ReplacePeerList([]string{"b", "c"}, "default", ArchivalRole)
+	res = pb.GetAddresses(4, RelayRole)
+	require.ElementsMatch(t, []string{"a", "b"}, res)
+	res = pb.GetAddresses(4, ArchivalRole)
+	require.ElementsMatch(t, []string{"b", "c"}, res)
+
+	// update relays
+	pb.ReplacePeerList([]string{"a", "b"}, "default", RelayRole)
+	res = pb.GetAddresses(4, RelayRole)
+	require.ElementsMatch(t, []string{"a", "b"}, res)
+	res = pb.GetAddresses(4, ArchivalRole)
+	require.ElementsMatch(t, []string{"b", "c"}, res)
+
+	// exclude b from archival
+	pb.ReplacePeerList([]string{"c"}, "default", ArchivalRole)
+	res = pb.GetAddresses(4, RelayRole)
+	require.ElementsMatch(t, []string{"a", "b"}, res)
+	res = pb.GetAddresses(4, ArchivalRole)
+	require.ElementsMatch(t, []string{"c"}, res)
+}
+
+func TestRoleSetPersistence(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		fn   func(*testing.T)
+	}{
+		{
+			name: "MakeRoleSet with persistence",
+			fn: func(t *testing.T) {
+				rs := MakeRoleSet(RelayRole, true)
+				require.True(t, rs.IsPersistent(RelayRole), "Expected RelayRole to be persistent")
+				require.True(t, rs.hasPersistentRoles(), "Expected HasPersistentRoles to return true")
+			},
+		},
+		{
+			name: "MakeRoleSet without persistence",
+			fn: func(t *testing.T) {
+				rs := MakeRoleSet(RelayRole, false)
+				require.False(t, rs.IsPersistent(RelayRole), "Expected RelayRole to not be persistent")
+				require.False(t, rs.hasPersistentRoles(), "Expected HasPersistentRoles to return false")
+			},
+		},
+		{
+			name: "AddPersistent",
+			fn: func(t *testing.T) {
+				rs := MakeRoleSet(RelayRole, false)
+				rs.AddPersistent(ArchivalRole)
+
+				require.True(t, rs.IsPersistent(ArchivalRole), "Expected ArchivalRole to be persistent")
+				require.False(t, rs.IsPersistent(RelayRole), "Expected RelayRole to not be persistent")
+				require.True(t, rs.Has(ArchivalRole), "Expected to have ArchivalRole")
+				require.True(t, rs.Has(RelayRole), "Expected to have RelayRole")
+				require.True(t, rs.hasPersistentRoles(), "Expected HasPersistentRoles to return true")
+			},
+		},
+		{
+			name: "Multiple roles with different persistence",
+			fn: func(t *testing.T) {
+				rs := MakeRoleSet(RelayRole, true)
+				rs.Add(ArchivalRole)
+
+				require.True(t, rs.IsPersistent(RelayRole), "Expected RelayRole to be persistent")
+				require.False(t, rs.IsPersistent(ArchivalRole), "Expected ArchivalRole to not be persistent")
+				require.True(t, rs.Has(RelayRole), "Expected to have RelayRole")
+				require.True(t, rs.Has(ArchivalRole), "Expected to have ArchivalRole")
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, test.fn)
 	}
 }
