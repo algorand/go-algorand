@@ -17,9 +17,11 @@
 package logging
 
 import (
+	"context"
+	"sync"
+
 	"github.com/algorand/go-deadlock"
 	"github.com/sirupsen/logrus"
-	"sync"
 )
 
 type telemetryHook interface {
@@ -81,4 +83,4 @@ type asyncTelemetryHook struct {
 // A dummy noop type to get rid of checks like telemetry.hook != nil
 type dummyHook struct{}
 
-type hookFactory func(cfg TelemetryConfig) (logrus.Hook, error)
+type hookFactory func(ctx context.Context, cfg TelemetryConfig) (logrus.Hook, error)
