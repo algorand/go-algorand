@@ -243,7 +243,7 @@ func (s *serviceImpl) IDSigner() *PeerIDChallengeSigner {
 // DialPeersUntilTargetCount attempts to establish connections to the provided phonebook addresses
 func (s *serviceImpl) DialPeersUntilTargetCount(targetConnCount int) {
 	ps := s.host.Peerstore().(*pstore.PeerStore)
-	addrInfos := ps.GetAddresses(targetConnCount, phonebook.PhoneBookEntryRelayRole)
+	addrInfos := ps.GetAddresses(targetConnCount, phonebook.RelayRole)
 	conns := s.host.Network().Conns()
 	var numOutgoingConns int
 	for _, conn := range conns {
