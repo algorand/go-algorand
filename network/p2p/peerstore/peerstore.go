@@ -138,7 +138,7 @@ func (ps *PeerStore) GetConnectionWaitTime(addrOrPeerID string) (bool, time.Dura
 	ad.mu.Lock()
 
 	originalLen := len(ad.recentConnectionTimes)
-	var numElmtsToRemove int
+	numElmtsToRemove := 0
 	for numElmtsToRemove < originalLen {
 		timeSince = curTime.Sub(ad.recentConnectionTimes[numElmtsToRemove])
 		if timeSince >= ps.connectionsRateLimitingWindow {
@@ -153,7 +153,7 @@ func (ps *PeerStore) GetConnectionWaitTime(addrOrPeerID string) (bool, time.Dura
 
 	// If there are max number of connections within the time window, wait
 	remainingLength := originalLen - numElmtsToRemove
-	var waitTime time.Duration
+	var waitTime time.Duration = 0
 	if uint(remainingLength) >= ps.connectionsRateLimitingCount {
 		waitTime = ps.connectionsRateLimitingWindow - timeSince
 	} else {
