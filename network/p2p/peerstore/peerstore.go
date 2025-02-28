@@ -42,6 +42,7 @@ type PeerStore struct {
 	peerStoreCAB
 	connectionsRateLimitingCount  uint
 	connectionsRateLimitingWindow time.Duration
+	lock                          deadlock.Mutex
 }
 
 // addressData: holds the information associated with each phonebook address.
@@ -55,7 +56,6 @@ type addressData struct {
 
 	// networkNames: lists the networks to which the given address belongs.
 	networkNames map[string]bool
-	mu           *deadlock.RWMutex
 
 	// roles is the roles that this address serves.
 	roles phonebook.RoleSet
@@ -123,7 +123,10 @@ func (ps *PeerStore) UpdateRetryAfter(addr string, retryAfter time.Time) {
 // The provisional time should be updated after the connection with UpdateConnectionTime
 func (ps *PeerStore) GetConnectionWaitTime(addrOrPeerID string) (bool, time.Duration, time.Time) {
 	curTime := time.Now()
-	var timeSince time.Duration
+
+	ps.lock.Lock()
+	defer ps.lock.Unlock()
+
 	peerID := peer.ID(addrOrPeerID)
 	metadata, err := ps.Get(peerID, addressDataKey)
 	if err != nil {
@@ -135,10 +138,9 @@ func (ps *PeerStore) GetConnectionWaitTime(addrOrPeerID string) (bool, time.Dura
 	}
 
 	// Remove from recentConnectionTimes the times later than ConnectionsRateLimitingWindowSeconds
-	ad.mu.Lock()
-
 	originalLen := len(ad.recentConnectionTimes)
 	numElmtsToRemove := 0
+	timeSince := time.Duration(0)
 	for numElmtsToRemove < originalLen {
 		timeSince = curTime.Sub(ad.recentConnectionTimes[numElmtsToRemove])
 		if timeSince >= ps.connectionsRateLimitingWindow {
@@ -149,27 +151,29 @@ func (ps *PeerStore) GetConnectionWaitTime(addrOrPeerID string) (bool, time.Dura
 	}
 
 	// Remove the expired elements from e.data[addr].recentConnectionTimes
-	ad.recentConnectionTimes = ad.recentConnectionTimes[numElmtsToRemove:]
+	ps.popNElements(numElmtsToRemove, peerID)
 
 	// If there are max number of connections within the time window, wait
 	remainingLength := originalLen - numElmtsToRemove
-	var waitTime time.Duration = 0
 	if uint(remainingLength) >= ps.connectionsRateLimitingCount {
-		waitTime = ps.connectionsRateLimitingWindow - timeSince
-	} else {
-		// Else, there is space in connectionsRateLimitingCount. The
-		// connection request of the caller will proceed
-		// Append the provisional time for the next connection request
-		ad.recentConnectionTimes = append(ad.recentConnectionTimes, curTime)
+		return true, /* true */
+			ps.connectionsRateLimitingWindow - timeSince, curTime /* not used */
 	}
-	ad.mu.Unlock()
 
-	_ = ps.Put(peerID, addressDataKey, ad)
-	return true, waitTime, curTime
+	// Else, there is space in connectionsRateLimitingCount. The
+	// connection request of the caller will proceed
+	// Update curTime, since it may have significantly changed if waited
+	provisionalTime := time.Now()
+	// Append the provisional time for the next connection request
+	ps.appendTime(peerID, provisionalTime)
+	return true, 0 /* no wait. proceed */, provisionalTime
 }
 
 // UpdateConnectionTime updates the connection time for the given address.
 func (ps *PeerStore) UpdateConnectionTime(addrOrPeerID string, provisionalTime time.Time) bool {
+	ps.lock.Lock()
+	defer ps.lock.Unlock()
+
 	peerID := peer.ID(addrOrPeerID)
 	metadata, err := ps.Get(peerID, addressDataKey)
 	if err != nil {
@@ -185,9 +189,6 @@ func (ps *PeerStore) UpdateConnectionTime(addrOrPeerID string, provisionalTime t
 	}()
 
 	// Find the provisionalTime and update it
-	ad.mu.Lock()
-	defer ad.mu.Unlock()
-
 	entry := ad.recentConnectionTimes
 	for indx, val := range entry {
 		if provisionalTime == val {
@@ -210,6 +211,9 @@ func (ps *PeerStore) UpdateConnectionTime(addrOrPeerID string, provisionalTime t
 // existing items that aren't included in addressesThey are being removed
 // matching entries roles gets updated as needed and persistent peers are not touched
 func (ps *PeerStore) ReplacePeerList(addressesThey []*peer.AddrInfo, networkName string, role phonebook.Role) {
+	ps.lock.Lock()
+	defer ps.lock.Unlock()
+
 	// prepare a map of items we'd like to remove.
 	removeItems := make(map[peer.ID]bool, 0)
 	peerIDs := ps.Peers()
@@ -218,7 +222,6 @@ func (ps *PeerStore) ReplacePeerList(addressesThey []*peer.AddrInfo, networkName
 		if data != nil {
 			ad := data.(addressData)
 			updated := false
-			ad.mu.RLock()
 			if ad.networkNames[networkName] && !ad.roles.IsPersistent(role) {
 				if ad.roles.Is(role) {
 					removeItems[pid] = true
@@ -227,8 +230,6 @@ func (ps *PeerStore) ReplacePeerList(addressesThey []*peer.AddrInfo, networkName
 					updated = true
 				}
 			}
-			ad.mu.RUnlock()
-
 			if updated {
 				_ = ps.Put(pid, addressDataKey, ad)
 			}
@@ -241,10 +242,8 @@ func (ps *PeerStore) ReplacePeerList(addressesThey []*peer.AddrInfo, networkName
 			// we already have this
 			// update the networkName and role
 			ad := data.(addressData)
-			ad.mu.Lock()
 			ad.networkNames[networkName] = true
 			ad.roles.Add(role)
-			ad.mu.Unlock()
 			_ = ps.Put(info.ID, addressDataKey, ad)
 
 			// do not remove this entry
@@ -267,6 +266,9 @@ func (ps *PeerStore) ReplacePeerList(addressesThey []*peer.AddrInfo, networkName
 // i.e. they won't be replaced by ReplacePeerList calls.
 // If a peer is already in the peerstore, its role will be updated.
 func (ps *PeerStore) AddPersistentPeers(addrInfo []*peer.AddrInfo, networkName string, role phonebook.Role) {
+	ps.lock.Lock()
+	defer ps.lock.Unlock()
+
 	for _, info := range addrInfo {
 		data, _ := ps.Get(info.ID, addressDataKey)
 		if data != nil {
@@ -293,12 +295,30 @@ func (ps *PeerStore) Length() int {
 func makePhonebookEntryData(networkName string, role phonebook.Role, persistent bool) addressData {
 	pbData := addressData{
 		networkNames:          make(map[string]bool),
-		mu:                    &deadlock.RWMutex{},
 		recentConnectionTimes: make([]time.Time, 0),
 		roles:                 phonebook.MakeRoleSet(role, persistent),
 	}
 	pbData.networkNames[networkName] = true
 	return pbData
+}
+
+// appendTime adds the current time to recentConnectionTimes in
+// addressData of addr
+func (ps *PeerStore) appendTime(peerID peer.ID, t time.Time) {
+	data, _ := ps.Get(peerID, addressDataKey)
+	ad := data.(addressData)
+	ad.recentConnectionTimes = append(ad.recentConnectionTimes, t)
+	_ = ps.Put(peerID, addressDataKey, ad)
+}
+
+// popNElements removes the earliest time from recentConnectionTimes in
+// addressData for addr
+// It is expected to be later than ConnectionsRateLimitingWindow
+func (ps *PeerStore) popNElements(n int, peerID peer.ID) {
+	data, _ := ps.Get(peerID, addressDataKey)
+	ad := data.(addressData)
+	ad.recentConnectionTimes = ad.recentConnectionTimes[n:]
+	_ = ps.Put(peerID, addressDataKey, ad)
 }
 
 func (ps *PeerStore) deletePhonebookEntry(peerID peer.ID, networkName string) {
@@ -307,10 +327,8 @@ func (ps *PeerStore) deletePhonebookEntry(peerID peer.ID, networkName string) {
 		return
 	}
 	ad := data.(addressData)
-	ad.mu.Lock()
 	delete(ad.networkNames, networkName)
 	isEmpty := len(ad.networkNames) == 0
-	ad.mu.Unlock()
 	if isEmpty {
 		ps.ClearAddrs(peerID)
 		_ = ps.Put(peerID, addressDataKey, nil)
