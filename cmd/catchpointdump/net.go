@@ -35,6 +35,8 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
+	"github.com/algorand/go-algorand/network/p2p"
+	"github.com/algorand/go-algorand/network/p2p/peerstore"
 	"github.com/algorand/go-algorand/protocol"
 	tools "github.com/algorand/go-algorand/tools/network"
 	"github.com/algorand/go-algorand/util"
@@ -164,8 +166,8 @@ func printDownloadProgressLine(progress int, barLength int, url string, dld int6
 	fmt.Printf(escapeCursorUp+escapeDeleteLine+outString+" %s\n", formatSize(dld))
 }
 
-func getRemoteDataStream(url string, hint string) (result io.ReadCloser, ctxCancel context.CancelFunc, err error) {
-	fmt.Printf("downloading %s from %s\n", hint, url)
+func getRemoteDataStream(addr string, url string, client *http.Client, hint string) (result io.ReadCloser, ctxCancel context.CancelFunc, err error) {
+	fmt.Printf("downloading %s from %s %s\n", hint, addr, url)
 	request, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return
@@ -174,7 +176,7 @@ func getRemoteDataStream(url string, hint string) (result io.ReadCloser, ctxCanc
 	timeoutContext, ctxCancel := context.WithTimeout(context.Background(), config.GetDefaultLocal().MaxCatchpointDownloadDuration)
 	request = request.WithContext(timeoutContext)
 	network.SetUserAgentHeader(request.Header)
-	response, err := http.DefaultClient.Do(request)
+	response, err := client.Do(request)
 	if err != nil {
 		return
 	}
@@ -229,13 +231,28 @@ func doDownloadCatchpoint(url string, wdReader util.WatchdogStreamReader, out io
 	}
 }
 
+func buildURL(genesisID string, round int, resource string) string {
+	return fmt.Sprintf("/v1/%s/%s/%s", genesisID, resource, strconv.FormatUint(uint64(round), 36))
+}
+
 // Downloads a catchpoint tar file and returns the path to the tar file.
 func downloadCatchpoint(addr string, round int) (string, error) {
 	genesisID := strings.Split(networkName, ".")[0] + "-v1.0"
-	urlTemplate := "http://" + addr + "/v1/" + genesisID + "/%s/" + strconv.FormatUint(uint64(round), 36)
-	catchpointURL := fmt.Sprintf(urlTemplate, "ledger")
 
-	catchpointStream, catchpointCtxCancel, err := getRemoteDataStream(catchpointURL, "catchpoint")
+	// attempt to parse as p2p address first
+	var httpClient *http.Client
+	catchpointURL := buildURL(genesisID, round, "ledger")
+	if addrInfo, err := peerstore.PeerInfoFromAddr(addr); err == nil {
+		httpClient, err = p2p.MakeTestHTTPClient(addrInfo)
+		if err != nil {
+			return "", err
+		}
+	} else {
+		httpClient = http.DefaultClient
+		catchpointURL = "http://" + addr + catchpointURL
+	}
+
+	catchpointStream, catchpointCtxCancel, err := getRemoteDataStream(addr, catchpointURL, httpClient, "catchpoint")
 	defer catchpointCtxCancel()
 	if err != nil {
 		return "", err
