@@ -823,12 +823,14 @@ func (cs *CatchpointCatchupService) checkLedgerDownload() error {
 	for i := 0; i < cs.config.CatchupLedgerDownloadRetryAttempts; i++ {
 		psp, peerError := cs.blocksDownloadPeerSelector.getNextPeer()
 		if peerError != nil {
-			return err
+			cs.log.Debugf("checkLedgerDownload: error on getNextPeer: %s", peerError.Error())
+			return peerError
 		}
 		err = ledgerFetcher.headLedger(context.Background(), psp.Peer, round)
 		if err == nil {
 			return nil
 		}
+		cs.log.Debugf("checkLedgerDownload: failed to headLedger from peer %s: %v", peerAddress(psp.Peer), err)
 		// a non-nil error means that the catchpoint is not available, so we should rank it accordingly
 		cs.blocksDownloadPeerSelector.rankPeer(psp, peerRankNoCatchpointForRound)
 	}
