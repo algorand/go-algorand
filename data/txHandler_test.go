@@ -2205,21 +2205,46 @@ func TestTxHandlerRememberReportErrorsWithTxPool(t *testing.T) { //nolint:parall
 	handler.postProcessCheckedTxn(&wi)
 	require.Equal(t, 1, getMetricCounter(txPoolRememberTagTxnDead))
 
-	txn1 := transactions.Transaction{
-		Type: protocol.PaymentTx,
-		Header: transactions.Header{
-			Sender:      addresses[0],
-			Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee * 2},
-			FirstValid:  0,
-			LastValid:   basics.Round(proto.MaxTxnLife),
-			GenesisHash: genesisHash,
-		},
-		PaymentTxnFields: transactions.PaymentTxnFields{
-			Receiver: poolAddr,
-			Amount:   basics.MicroAlgos{Raw: mockBalancesMinBalance + (rand.Uint64() % 10000)},
-		},
+	makeTxn := func() transactions.Transaction {
+		return transactions.Transaction{
+			Type: protocol.PaymentTx,
+			Header: transactions.Header{
+				Sender:      addresses[0],
+				Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee * 2},
+				FirstValid:  0,
+				LastValid:   basics.Round(proto.MaxTxnLife),
+				GenesisHash: genesisHash,
+			},
+			PaymentTxnFields: transactions.PaymentTxnFields{
+				Receiver: poolAddr,
+				Amount:   basics.MicroAlgos{Raw: mockBalancesMinBalance + (rand.Uint64() % 10000)},
+			},
+		}
 	}
+	txn1 := makeTxn()
 
+	// add a round 1 block with oldTxn1 and oldTxn2 in it (for txID and lease checking later)
+	oldTxn1 := makeTxn()
+	oldTxn2 := oldTxn1
+	crypto.RandBytes(oldTxn2.Lease[:])
+	prev, err := ledger.BlockHdr(ledger.Latest())
+	require.NoError(t, err)
+	next := bookkeeping.MakeBlock(prev)
+	blockEval, err := ledger.StartEvaluator(next.BlockHeader, 0, 0, nil)
+	require.NoError(t, err)
+	err = blockEval.Transaction(oldTxn1.Sign(secrets[0]), transactions.ApplyData{})
+	require.NoError(t, err)
+	err = blockEval.Transaction(oldTxn2.Sign(secrets[0]), transactions.ApplyData{})
+	require.NoError(t, err)
+
+	// simulate this transaction was applied
+	ufblk, err := blockEval.GenerateBlock(nil)
+	require.NoError(t, err)
+	block := ledgercore.MakeValidatedBlock(ufblk.UnfinishedBlock(), ufblk.UnfinishedDeltas())
+	err = ledger.AddValidatedBlock(block, agreement.Certificate{})
+	require.NoError(t, err)
+
+	// trigger hitting pending queue max
 	wi.unverifiedTxGroup = []transactions.SignedTxn{txn1.Sign(secrets[0])}
 	for i := 0; i <= cfg.TxPoolSize; i++ {
 		txn := txn1
@@ -2289,11 +2314,13 @@ func TestTxHandlerRememberReportErrorsWithTxPool(t *testing.T) { //nolint:parall
 	// trigger TransactionInLedgerError (txid) error
 	wi.unverifiedTxGroup = []transactions.SignedTxn{txn1.Sign(secrets[0])}
 	wi.rawmsg = &network.IncomingMessage{}
-	handler.postProcessCheckedTxn(&wi)
-	handler.postProcessCheckedTxn(&wi)
+	handler.postProcessCheckedTxn(&wi) // calls Remember
+	handler.postProcessCheckedTxn(&wi) // calls Remember again
 	require.Equal(t, 1, getMetricCounter(txPoolRememberTagTxIDEval))
-	handler.checkAlreadyCommitted(&wi)
-	require.Equal(t, 1, getCheckMetricCounter(txPoolRememberTagTxIDEval))
+	// check transaction committed in round 1 (calls Ledger.CheckDup)
+	wi.unverifiedTxGroup = []transactions.SignedTxn{oldTxn1.Sign(secrets[0])}
+	handler.checkAlreadyCommitted(&wi) // calls Test
+	require.Equal(t, 1, getCheckMetricCounter(txPoolRememberTagTxID))
 
 	// trigger LeaseInLedgerError (lease) error
 	txn2 = txn1
@@ -2301,12 +2328,16 @@ func TestTxHandlerRememberReportErrorsWithTxPool(t *testing.T) { //nolint:parall
 	txn3 := txn2
 	txn3.Receiver = addr
 	wi.unverifiedTxGroup = []transactions.SignedTxn{txn2.Sign(secrets[0])}
-	handler.postProcessCheckedTxn(&wi)
+	handler.postProcessCheckedTxn(&wi) // calls Remember
 	wi.unverifiedTxGroup = []transactions.SignedTxn{txn3.Sign(secrets[0])}
-	handler.postProcessCheckedTxn(&wi)
+	handler.postProcessCheckedTxn(&wi) // calls Remember again
 	require.Equal(t, 1, getMetricCounter(txPoolRememberTagLeaseEval))
-	handler.checkAlreadyCommitted(&wi)
-	require.Equal(t, 1, getCheckMetricCounter(txPoolRememberTagLeaseEval))
+	// check transaction lease conflict with round 1 txn (calls Ledger.CheckDup)
+	oldTxn3 := oldTxn2
+	oldTxn3.Receiver = addr
+	wi.unverifiedTxGroup = []transactions.SignedTxn{oldTxn3.Sign(secrets[0])}
+	handler.checkAlreadyCommitted(&wi) // calls Test
+	require.Equal(t, 1, getCheckMetricCounter(txPoolRememberTagLease))
 
 	// TODO: not sure how to trigger fee error - need to return ErrNoSpace from ledger
 	// trigger pool fee error
@@ -2324,7 +2355,7 @@ func TestTxHandlerRememberReportErrorsWithTxPool(t *testing.T) { //nolint:parall
 	ledger.RegisterBlockListeners(blockListeners)
 
 	// add few blocks: on ci sometimes blockTicker is not fired in time in case of a single block
-	for i := basics.Round(1); i <= 3; i++ {
+	for i := basics.Round(2); i <= 4; i++ {
 		hdr := bookkeeping.BlockHeader{
 			Round: i,
 			UpgradeState: bookkeeping.UpgradeState{
