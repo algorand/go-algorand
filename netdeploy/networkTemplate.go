@@ -29,6 +29,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	kmdconfig "github.com/algorand/go-algorand/daemon/kmd/config"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/gen"
 	"github.com/algorand/go-algorand/libgoal"
@@ -131,10 +132,27 @@ func (t NetworkTemplate) createNodeDirectories(targetFolder string, binDir strin
 			}
 		}
 
+		var kmdDir string
+		if len(cfg.KmdJSONOverride) > 0 {
+			kmdDir = filepath.Join(nodeDir, libgoal.DefaultKMDDataDir)
+			err = os.MkdirAll(kmdDir, 0700) // kmd requires 700 permissions
+			if err != nil {
+				return
+			}
+			err = createKMDConfigFile(cfg, kmdDir)
+			if err != nil {
+				return
+			}
+		}
+
 		if importKeys && hasWallet {
 			var client libgoal.Client
-			client, err = libgoal.MakeClientWithBinDir(binDir, nodeDir, "", libgoal.KmdClient)
-			if err != nil {
+			if client, err = libgoal.MakeClientFromConfig(libgoal.ClientConfig{
+				AlgodDataDir: nodeDir,
+				KMDDataDir:   kmdDir,
+				CacheDir:     "",
+				BinDir:       binDir,
+			}, libgoal.KmdClient); err != nil {
 				return
 			}
 			_, err = client.CreateWallet(libgoal.UnencryptedWalletName, nil, crypto.MasterDerivationKey{})
@@ -241,12 +259,21 @@ func (t NetworkTemplate) Validate() error {
 		return fmt.Errorf("invalid template: at least one relay is required when more than a single node presents")
 	}
 
-	// Validate JSONOverride decoding
+	// Validate ConfigJSONOverride decoding
 	for _, cfg := range t.Nodes {
 		local := config.GetDefaultLocal()
 		err := decodeJSONOverride(cfg.ConfigJSONOverride, &local)
 		if err != nil {
-			return fmt.Errorf("invalid template: unable to decode JSONOverride: %w", err)
+			return fmt.Errorf("invalid template: unable to decode ConfigJSONOverride: %w", err)
+		}
+	}
+
+	// Validate KmdJSONOverride decoding
+	for _, cfg := range t.Nodes {
+		kmdconf := kmdconfig.KMDConfig{}
+		err := decodeJSONOverride(cfg.KmdJSONOverride, &kmdconf)
+		if err != nil {
+			return fmt.Errorf("invalid template: unable to decode KmdJSONOverride: %w", err)
 		}
 	}
 
@@ -293,7 +320,7 @@ func countRelayNodes(nodeCfgs []remote.NodeConfigGoal) (relayCount int) {
 	return
 }
 
-func decodeJSONOverride(override string, cfg *config.Local) error {
+func decodeJSONOverride[T any](override string, cfg *T) error {
 	if override != "" {
 		reader := strings.NewReader(override)
 		dec := json.NewDecoder(reader)
@@ -339,4 +366,14 @@ func createConfigFile(node remote.NodeConfigGoal, configFile string, numNodes in
 	}
 
 	return cfg, cfg.SaveToFile(configFile)
+}
+
+func createKMDConfigFile(node remote.NodeConfigGoal, kmdDir string) error {
+	cfg := kmdconfig.DefaultConfig(kmdDir)
+	err := decodeJSONOverride(node.KmdJSONOverride, &cfg)
+	if err != nil {
+		return err
+	}
+
+	return kmdconfig.SaveKMDConfig(kmdDir, cfg)
 }
