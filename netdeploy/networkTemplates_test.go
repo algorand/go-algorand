@@ -235,7 +235,21 @@ func TestDevModeValidate(t *testing.T) {
 				},
 			},
 		}
-		require.ErrorContains(t, tmpl.Validate(), "unable to decode JSONOverride")
+		require.ErrorContains(t, tmpl.Validate(), "unable to decode ConfigJSONOverride")
+	})
+
+	t.Run("KmdJSONOverride does not parse", func(t *testing.T) {
+		t.Parallel()
+		tmpl := NetworkTemplate{
+			Genesis: devmodeGenesis,
+			Nodes: []remote.NodeConfigGoal{
+				{
+					IsRelay:         false,
+					KmdJSONOverride: "DOES NOT PARSE",
+				},
+			},
+		}
+		require.ErrorContains(t, tmpl.Validate(), "unable to decode KmdJSONOverride")
 	})
 
 	t.Run("ConfigJSONOverride unknown key", func(t *testing.T) {
@@ -246,6 +260,20 @@ func TestDevModeValidate(t *testing.T) {
 				{
 					IsRelay:            false,
 					ConfigJSONOverride: "{\"Unknown Key\": \"Valid JSON\"}",
+				},
+			},
+		}
+		require.ErrorContains(t, tmpl.Validate(), "json: unknown field \"Unknown Key\"")
+	})
+
+	t.Run("KmdJSONOverride unknown key", func(t *testing.T) {
+		t.Parallel()
+		tmpl := NetworkTemplate{
+			Genesis: devmodeGenesis,
+			Nodes: []remote.NodeConfigGoal{
+				{
+					IsRelay:         false,
+					KmdJSONOverride: "{\"Unknown Key\": \"Valid JSON\"}",
 				},
 			},
 		}
