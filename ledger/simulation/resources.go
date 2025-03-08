@@ -1257,6 +1257,11 @@ func (p *resourcePopulator) getPopulatedArrays() map[int]PopulatedResourceArrays
 		}
 
 		pop := resources.getPopulatedArrays()
+
+		// The resource populator may populate extra "txns" beyond the group size to tell the caller
+		// that more transactions are needed to get all available resources. Once we hit completely
+		// empty resource arrays, we know we can stop because there won't be any more resources
+		// required
 		if i >= p.groupSize && len(pop.Accounts)+len(pop.Assets)+len(pop.Apps)+len(pop.Boxes) == 0 {
 			break
 		}
