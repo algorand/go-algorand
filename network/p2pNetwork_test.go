@@ -46,6 +46,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/multiformats/go-multiaddr"
 	ma "github.com/multiformats/go-multiaddr"
 	"github.com/stretchr/testify/require"
 )
@@ -597,7 +598,7 @@ func TestP2PNetworkDHTCapabilities(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			netA, err := NewP2PNetwork(log, cfg, "", nil, genesisID, config.Devtestnet, test.nis[0], nil)
+			netA, err := NewP2PNetwork(log.With("name", "netA"), cfg, "", nil, genesisID, config.Devtestnet, test.nis[0], nil)
 			require.NoError(t, err)
 
 			err = netA.Start()
@@ -611,13 +612,13 @@ func TestP2PNetworkDHTCapabilities(t *testing.T) {
 
 			multiAddrStr := addrsA[0].String()
 			phoneBookAddresses := []string{multiAddrStr}
-			netB, err := NewP2PNetwork(log, cfg, "", phoneBookAddresses, genesisID, config.Devtestnet, test.nis[1], nil)
+			netB, err := NewP2PNetwork(log.With("name", "netB"), cfg, "", phoneBookAddresses, genesisID, config.Devtestnet, test.nis[1], nil)
 			require.NoError(t, err)
 			err = netB.Start()
 			require.NoError(t, err)
 			defer netB.Stop()
 
-			netC, err := NewP2PNetwork(log, cfg, "", phoneBookAddresses, genesisID, config.Devtestnet, test.nis[2], nil)
+			netC, err := NewP2PNetwork(log.With("name", "netC"), cfg, "", phoneBookAddresses, genesisID, config.Devtestnet, test.nis[2], nil)
 			require.NoError(t, err)
 			err = netC.Start()
 			require.NoError(t, err)
@@ -679,9 +680,10 @@ func TestP2PNetworkDHTCapabilities(t *testing.T) {
 						fmt.Sprintf("Not all expected %s cap peers were found", cap),
 					)
 					// ensure GetPeers gets PeersPhonebookArchivalNodes peers
-					// it appears there are artifical peers because of listening on localhost and on a real network interface
+					// it appears there are artificial peers because of listening on localhost and on a real network interface
 					// so filter out and save only unique peers by their IDs
 					net := nets[idx]
+					net.meshThreadInner() // update peerstore with DHT peers
 					peers := net.GetPeers(PeersPhonebookArchivalNodes)
 					uniquePeerIDs := make(map[peer.ID]struct{})
 					for _, p := range peers {
@@ -789,7 +791,7 @@ func TestP2PHTTPHandler(t *testing.T) {
 	require.NoError(t, err)
 	pstore, err := peerstore.MakePhonebook(0, 10*time.Second)
 	require.NoError(t, err)
-	pstore.AddPersistentPeers([]*peer.AddrInfo{&peerInfoA}, "net", phonebook.PhoneBookEntryRelayRole)
+	pstore.AddPersistentPeers([]*peer.AddrInfo{&peerInfoA}, "net", phonebook.RelayRole)
 	httpClient, err = netB.service.GetHTTPClient(&peerInfoA, pstore, 1*time.Second)
 	require.NoError(t, err)
 	_, err = httpClient.Get("/test")
@@ -1404,4 +1406,50 @@ func TestP2PTxTopicValidator_NoWsPeer(t *testing.T) {
 	require.NotContains(t, net.wsPeers, peerID)
 	res := net.txTopicValidator(ctx, peerID, &msg)
 	require.Equal(t, pubsub.ValidationAccept, res)
+}
+
+// TestGetPeersFiltersSelf checks that GetPeers does not return the node's own peer ID.
+// The test adds a self peer to the peerstore and another peer to the peerstore and verifies that
+// the self peer is not in the returned list.
+func TestGetPeersFiltersSelf(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	log := logging.TestingLog(t)
+	cfg := config.GetDefaultLocal()
+
+	net, err := NewP2PNetwork(log, cfg, t.TempDir(), []string{}, "test-genesis", "test-network", &nopeNodeInfo{}, nil)
+	require.NoError(t, err)
+	selfID := net.service.ID()
+
+	// Create and add self
+	selfAddr, err := ma.NewMultiaddr("/ip4/127.0.0.1/p2p/" + selfID.String())
+	require.NoError(t, err)
+	selfInfo := &peer.AddrInfo{
+		ID:    selfID,
+		Addrs: []multiaddr.Multiaddr{selfAddr},
+	}
+	net.pstore.AddPersistentPeers([]*peer.AddrInfo{selfInfo}, "test-network", phonebook.RelayRole)
+
+	// Create and add another peer
+	otherID, err := peer.Decode("QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx5N")
+	require.NoError(t, err)
+	addr, err := ma.NewMultiaddr("/ip4/127.0.0.1/p2p/" + otherID.String())
+	require.NoError(t, err)
+	otherInfo := &peer.AddrInfo{
+		ID:    otherID,
+		Addrs: []multiaddr.Multiaddr{addr},
+	}
+	net.pstore.AddPersistentPeers([]*peer.AddrInfo{otherInfo}, "test-network", phonebook.RelayRole)
+
+	peers := net.GetPeers(PeersPhonebookRelays)
+
+	// Verify that self peer is not in the returned list
+	for _, p := range peers {
+		switch peer := p.(type) {
+		case *wsPeerCore:
+			require.NotEqual(t, selfAddr.String(), peer.GetAddress(), "GetPeers should not return the node's own peer ID")
+		default:
+			t.Fatalf("unexpected peer type: %T", peer)
+		}
+	}
 }

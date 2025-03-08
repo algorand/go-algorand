@@ -95,6 +95,9 @@ function configure_data_dir() {
   # configure telemetry
   if [ "$TELEMETRY_NAME" != "" ]; then
     diagcfg telemetry name -n "$TELEMETRY_NAME" -d "$ALGORAND_DATA"
+    if [ "$TELEMETRY_URL" != "" ]; then
+      diagcfg telemetry endpoint -e "$TELEMETRY_URL" -d "$ALGORAND_DATA"
+    fi
     diagcfg telemetry enable -d "$ALGORAND_DATA"
   elif ! [ -f "/etc/algorand/logging.config" ]; then
     diagcfg telemetry disable
@@ -213,6 +216,7 @@ echo "   TOKEN:           ${TOKEN:-"Not Set"}"
 echo "   ADMIN_TOKEN:     ${ADMIN_TOKEN:-"Not Set"}"
 echo "   KMD_TOKEN:       ${KMD_TOKEN:-"Not Set"}"
 echo "   TELEMETRY_NAME:  $TELEMETRY_NAME"
+echo "   TELEMETRY_URL:   $TELEMETRY_URL"
 echo "   NUM_ROUNDS:      $NUM_ROUNDS"
 echo "   GENESIS_ADDRESS: $GENESIS_ADDRESS"
 echo "   PEER_ADDRESS:    $PEER_ADDRESS"

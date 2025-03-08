@@ -656,6 +656,12 @@
             "required": true
           },
           {
+            "type": "boolean",
+            "description": "If true, only the block header (exclusive of payset or certificate) may be included in response.",
+            "name": "header-only",
+            "in": "query"
+          },
+          {
             "$ref": "#/parameters/format"
           }
         ],
@@ -795,68 +801,6 @@
         "responses": {
           "200": {
             "$ref": "#/responses/BlockHashResponse"
-          },
-          "400": {
-            "description": "Bad Request - Non integer number",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "401": {
-            "description": "Invalid API Token",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "404": {
-            "description": "None existing block ",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "500": {
-            "description": "Internal Error",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "default": {
-            "description": "Unknown Error"
-          }
-        }
-      }
-    },
-    "/v2/blocks/{round}/header": {
-      "get": {
-        "tags": [
-          "public",
-          "nonparticipating"
-        ],
-        "produces": [
-          "application/json",
-          "application/msgpack"
-        ],
-        "schemes": [
-          "http"
-        ],
-        "summary": "Get the block header for the block on the given round.",
-        "operationId": "GetBlockHeader",
-        "parameters": [
-          {
-            "minimum": 0,
-            "type": "integer",
-            "description": "The round from which to fetch block header information.",
-            "name": "round",
-            "in": "path",
-            "required": true
-          },
-          {
-            "$ref": "#/parameters/format"
-          }
-        ],
-        "responses": {
-          "200": {
-            "$ref": "#/responses/BlockHeaderResponse"
           },
           "400": {
             "description": "Bad Request - Non integer number",
@@ -5164,22 +5108,6 @@
           "blockHash": {
             "description": "Block header hash.",
             "type": "string"
-          }
-        }
-      }
-    },
-    "BlockHeaderResponse": {
-      "description": "Block header.",
-      "schema": {
-        "type": "object",
-        "required": [
-          "blockHeader"
-        ],
-        "properties": {
-          "blockHeader": {
-            "description": "Block header data.",
-            "type": "object",
-            "x-algorand-format": "BlockHeader"
           }
         }
       }

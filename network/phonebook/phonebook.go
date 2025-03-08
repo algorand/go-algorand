@@ -29,23 +29,84 @@ import (
 // of how many addresses the phonebook actually has. ( with the retry-after logic applied )
 const getAllAddresses = math.MaxInt32
 
-// PhoneBookEntryRoles defines the roles that a single entry on the phonebook can take.
-// currently, we have two roles : relay role and archival role, which are mutually exclusive.
+// RoleSet defines the roles that a single entry on the phonebook can take.
+// currently, we have two roles : relay role and archival role.
 //
-//msgp:ignore PhoneBookEntryRoles
-type PhoneBookEntryRoles int
+//msgp:ignore Roles
+type RoleSet struct {
+	roles       Role        // roles is a bitfield of the roles that this entry has
+	persistence persistence // persistence is a bitfield of the roles that are persistent
+	_           func()      // func is not comparable so that Roles. This is to prevent roles misuse and direct comparison.
+}
 
-// PhoneBookEntryRelayRole used for all the relays that are provided either via the algobootstrap SRV record
-// or via a configuration file.
-const PhoneBookEntryRelayRole = 1
+// Role is a single role that a phonebook entry can have.
+type Role uint8
+type persistence uint8
 
-// PhoneBookEntryArchivalRole used for all the archival nodes that are provided via the archive SRV record.
-const PhoneBookEntryArchivalRole = 2
+// enforceUint8 is a generic type that only compiles for types whose underlying type is uint8.
+type enforceUint8[T ~uint8] struct{}
+
+// enforce the underlying type of Role and persistence to be the same uint8
+var _ enforceUint8[Role]
+var _ enforceUint8[persistence]
+
+const (
+	// RelayRole used for all the relays that are provided either via the algobootstrap SRV record
+	// or via a configuration file.
+	RelayRole Role = 1 << iota
+	// ArchivalRole used for all the archival nodes that are provided via the archive SRV record.
+	ArchivalRole
+)
+
+// MakeRoleSet creates a new RoleSet with the passed role
+func MakeRoleSet(role Role, persistent bool) RoleSet {
+	r := RoleSet{roles: role}
+	if persistent {
+		r.persistence = persistence(role)
+	}
+	return r
+}
+
+// Has checks if the role in this role set has the other role
+func (r RoleSet) Has(other Role) bool {
+	return r.roles&other != 0
+}
+
+// Is checks if this set of roles is exactly the same as the other roles
+func (r RoleSet) Is(other Role) bool {
+	return r.roles == other
+}
+
+// Add adds the other roles to this set of roles
+func (r *RoleSet) Add(other Role) {
+	r.roles |= other
+}
+
+// Remove removes the other role from this set of roles
+func (r *RoleSet) Remove(other Role) {
+	r.roles &= ^other
+}
+
+// AddPersistent adds a role and marks it as persistent
+func (r *RoleSet) AddPersistent(role Role) {
+	r.roles |= role
+	r.persistence |= persistence(role)
+}
+
+// IsPersistent checks if the given role is marked as persistent
+func (r RoleSet) IsPersistent(role Role) bool {
+	return r.persistence&persistence(role) != 0
+}
+
+// hasPersistentRoles checks if there are any persistent roles in the set
+func (r RoleSet) hasPersistentRoles() bool {
+	return r.persistence != 0
+}
 
 // Phonebook stores or looks up addresses of nodes we might contact
 type Phonebook interface {
 	// GetAddresses(N) returns up to N addresses, but may return fewer
-	GetAddresses(n int, role PhoneBookEntryRoles) []string
+	GetAddresses(n int, role Role) []string
 
 	// UpdateRetryAfter updates the retry-after field for the entries matching the given address
 	UpdateRetryAfter(addr string, retryAfter time.Time)
@@ -65,12 +126,13 @@ type Phonebook interface {
 	// ReplacePeerList merges a set of addresses with that passed in for networkName
 	// new entries in dnsAddresses are being added
 	// existing items that aren't included in dnsAddresses are being removed
-	// matching entries don't change
-	ReplacePeerList(dnsAddresses []string, networkName string, role PhoneBookEntryRoles)
+	// matching entries roles gets updated as needed and persistent peers are not touched
+	ReplacePeerList(dnsAddresses []string, networkName string, role Role)
 
 	// AddPersistentPeers stores addresses of peers which are persistent.
-	// i.e. they won't be replaced by ReplacePeerList calls
-	AddPersistentPeers(dnsAddresses []string, networkName string, role PhoneBookEntryRoles)
+	// i.e. they won't be replaced by ReplacePeerList calls.
+	// If a peer is already in the peerstore, its role will be updated.
+	AddPersistentPeers(dnsAddresses []string, networkName string, role Role)
 }
 
 // addressData: holds the information associated with each phonebook address.
@@ -85,20 +147,16 @@ type addressData struct {
 	// networkNames: lists the networks to which the given address belongs.
 	networkNames map[string]bool
 
-	// role is the role that this address serves.
-	role PhoneBookEntryRoles
-
-	// persistent is set true for peers whose record should not be removed for the peer list
-	persistent bool
+	// roles is the roles that this address serves.
+	roles RoleSet
 }
 
 // makePhonebookEntryData creates a new addressData entry for provided network name and role.
-func makePhonebookEntryData(networkName string, role PhoneBookEntryRoles, persistent bool) addressData {
+func makePhonebookEntryData(networkName string, role Role, persistent bool) addressData {
 	pbData := addressData{
 		networkNames:          make(map[string]bool),
 		recentConnectionTimes: make([]time.Time, 0),
-		role:                  role,
-		persistent:            persistent,
+		roles:                 MakeRoleSet(role, persistent),
 	}
 	pbData.networkNames[networkName] = true
 	return pbData
@@ -127,7 +185,7 @@ func MakePhonebook(connectionsRateLimitingCount uint,
 func (e *phonebookImpl) deletePhonebookEntry(entryName, networkName string) {
 	pbEntry := e.data[entryName]
 	delete(pbEntry.networkNames, networkName)
-	if 0 == len(pbEntry.networkNames) {
+	if len(pbEntry.networkNames) == 0 {
 		delete(e.data, entryName)
 	}
 }
@@ -149,10 +207,10 @@ func (e *phonebookImpl) appendTime(addr string, t time.Time) {
 	e.data[addr] = entry
 }
 
-func (e *phonebookImpl) filterRetryTime(t time.Time, role PhoneBookEntryRoles) []string {
+func (e *phonebookImpl) filterRetryTime(t time.Time, role Role) []string {
 	o := make([]string, 0, len(e.data))
 	for addr, entry := range e.data {
-		if t.After(entry.retryAfter) && role == entry.role {
+		if t.After(entry.retryAfter) && entry.roles.Has(role) {
 			o = append(o, addr)
 		}
 	}
@@ -162,24 +220,31 @@ func (e *phonebookImpl) filterRetryTime(t time.Time, role PhoneBookEntryRoles) [
 // ReplacePeerList merges a set of addresses with that passed in.
 // new entries in addressesThey are being added
 // existing items that aren't included in addressesThey are being removed
-// matching entries don't change
-func (e *phonebookImpl) ReplacePeerList(addressesThey []string, networkName string, role PhoneBookEntryRoles) {
+// matching entries roles gets updated as needed and persistent peers are not touched
+func (e *phonebookImpl) ReplacePeerList(addressesThey []string, networkName string, role Role) {
 	e.lock.Lock()
 	defer e.lock.Unlock()
 
 	// prepare a map of items we'd like to remove.
 	removeItems := make(map[string]bool, 0)
 	for k, pbd := range e.data {
-		if pbd.networkNames[networkName] && pbd.role == role && !pbd.persistent {
-			removeItems[k] = true
+		if pbd.networkNames[networkName] && !pbd.roles.IsPersistent(role) {
+			if pbd.roles.Is(role) {
+				removeItems[k] = true
+			} else if pbd.roles.Has(role) {
+				pbd.roles.Remove(role)
+				e.data[k] = pbd
+			}
 		}
 	}
 
 	for _, addr := range addressesThey {
 		if pbData, has := e.data[addr]; has {
-			// we already have this.
-			// Update the networkName
+			// we already have this
+			// update the networkName and role
 			pbData.networkNames[networkName] = true
+			pbData.roles.Add(role)
+			e.data[addr] = pbData
 
 			// do not remove this entry
 			delete(removeItems, addr)
@@ -195,15 +260,18 @@ func (e *phonebookImpl) ReplacePeerList(addressesThey []string, networkName stri
 	}
 }
 
-func (e *phonebookImpl) AddPersistentPeers(dnsAddresses []string, networkName string, role PhoneBookEntryRoles) {
+// AddPersistentPeers stores addresses of peers which are persistent.
+// i.e. they won't be replaced by ReplacePeerList calls.
+// If a peer is already in the peerstore, its role will be updated.
+func (e *phonebookImpl) AddPersistentPeers(dnsAddresses []string, networkName string, role Role) {
 	e.lock.Lock()
 	defer e.lock.Unlock()
 
 	for _, addr := range dnsAddresses {
 		if pbData, has := e.data[addr]; has {
 			// we already have this.
-			// Make sure the persistence field is set to true
-			pbData.persistent = true
+			// Make sure the persistence field is set to true and overwrite the role
+			pbData.roles.AddPersistent(role)
 			e.data[addr] = pbData
 		} else {
 			// we don't have this item. add it.
@@ -335,7 +403,7 @@ func shuffleSelect(set []string, n int) []string {
 }
 
 // GetAddresses returns up to N shuffled address
-func (e *phonebookImpl) GetAddresses(n int, role PhoneBookEntryRoles) []string {
+func (e *phonebookImpl) GetAddresses(n int, role Role) []string {
 	e.lock.RLock()
 	defer e.lock.RUnlock()
 	return shuffleSelect(e.filterRetryTime(time.Now(), role), n)

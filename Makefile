@@ -50,11 +50,6 @@ export GOTESTCOMMAND=gotestsum --format pkgname --jsonfile testresults.json --
 endif
 
 ifeq ($(OS_TYPE), darwin)
-# For Xcode >= 15, set -no_warn_duplicate_libraries linker option
-CLANG_MAJOR_VERSION := $(shell clang --version | grep '^Apple clang version ' | awk '{print $$4}' | cut -d. -f1)
-ifeq ($(shell [ $(CLANG_MAJOR_VERSION) -ge 15 ] && echo true), true)
-EXTLDFLAGS := -Wl,-no_warn_duplicate_libraries
-endif
 # M1 Mac--homebrew install location in /opt/homebrew
 ifeq ($(ARCH), arm64)
 export CPATH=/opt/homebrew/include

@@ -30,6 +30,7 @@ import (
 	"path"
 	"regexp"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -529,7 +530,7 @@ func (wn *WebsocketNetwork) GetPeers(options ...PeerOption) []Peer {
 		case PeersPhonebookRelays:
 			// return copy of phonebook, which probably also contains peers we're connected to, but if it doesn't maybe we shouldn't be making new connections to those peers (because they disappeared from the directory)
 			var addrs []string
-			addrs = wn.phonebook.GetAddresses(1000, phonebook.PhoneBookEntryRelayRole)
+			addrs = wn.phonebook.GetAddresses(1000, phonebook.RelayRole)
 			for _, addr := range addrs {
 				client, _ := wn.GetHTTPClient(addr)
 				peerCore := makePeerCore(wn.ctx, wn, wn.log, wn.handler.readBuffer, addr, client, "" /*origin address*/)
@@ -537,7 +538,7 @@ func (wn *WebsocketNetwork) GetPeers(options ...PeerOption) []Peer {
 			}
 		case PeersPhonebookArchivalNodes:
 			var addrs []string
-			addrs = wn.phonebook.GetAddresses(1000, phonebook.PhoneBookEntryArchivalRole)
+			addrs = wn.phonebook.GetAddresses(1000, phonebook.ArchivalRole)
 			for _, addr := range addrs {
 				client, _ := wn.GetHTTPClient(addr)
 				peerCore := makePeerCore(wn.ctx, wn, wn.log, wn.handler.readBuffer, addr, client, "" /*origin address*/)
@@ -916,19 +917,14 @@ func (wn *WebsocketNetwork) checkProtocolVersionMatch(otherHeaders http.Header) 
 	otherAcceptedVersions := otherHeaders[textproto.CanonicalMIMEHeaderKey(ProtocolAcceptVersionHeader)]
 	for _, otherAcceptedVersion := range otherAcceptedVersions {
 		// do we have a matching version ?
-		for _, supportedProtocolVersion := range wn.supportedProtocolVersions {
-			if supportedProtocolVersion == otherAcceptedVersion {
-				matchingVersion = supportedProtocolVersion
-				return matchingVersion, ""
-			}
+		if slices.Contains(wn.supportedProtocolVersions, otherAcceptedVersion) {
+			return otherAcceptedVersion, ""
 		}
 	}
 
 	otherVersion = otherHeaders.Get(ProtocolVersionHeader)
-	for _, supportedProtocolVersion := range wn.supportedProtocolVersions {
-		if supportedProtocolVersion == otherVersion {
-			return supportedProtocolVersion, otherVersion
-		}
+	if slices.Contains(wn.supportedProtocolVersions, otherVersion) {
+		return otherVersion, otherVersion
 	}
 
 	return "", filterASCII(otherVersion)
@@ -1562,12 +1558,12 @@ func (wn *WebsocketNetwork) refreshRelayArchivePhonebookAddresses() {
 func (wn *WebsocketNetwork) updatePhonebookAddresses(relayAddrs []string, archiveAddrs []string) {
 	if len(relayAddrs) > 0 {
 		wn.log.Debugf("got %d relay dns addrs, %#v", len(relayAddrs), relayAddrs[:min(5, len(relayAddrs))])
-		wn.phonebook.ReplacePeerList(relayAddrs, string(wn.NetworkID), phonebook.PhoneBookEntryRelayRole)
+		wn.phonebook.ReplacePeerList(relayAddrs, string(wn.NetworkID), phonebook.RelayRole)
 	} else {
 		wn.log.Infof("got no relay DNS addrs for network %s", wn.NetworkID)
 	}
 	if len(archiveAddrs) > 0 {
-		wn.phonebook.ReplacePeerList(archiveAddrs, string(wn.NetworkID), phonebook.PhoneBookEntryArchivalRole)
+		wn.phonebook.ReplacePeerList(archiveAddrs, string(wn.NetworkID), phonebook.ArchivalRole)
 	} else {
 		wn.log.Infof("got no archive DNS addrs for network %s", wn.NetworkID)
 	}
@@ -1586,7 +1582,7 @@ func (wn *WebsocketNetwork) checkNewConnectionsNeeded() bool {
 		return false
 	}
 	// get more than we need so that we can ignore duplicates
-	newAddrs := wn.phonebook.GetAddresses(desired+numOutgoingTotal, phonebook.PhoneBookEntryRelayRole)
+	newAddrs := wn.phonebook.GetAddresses(desired+numOutgoingTotal, phonebook.RelayRole)
 	for _, na := range newAddrs {
 		if na == wn.config.PublicAddress {
 			// filter out self-public address, so we won't try to connect to ourselves.
@@ -2237,7 +2233,7 @@ func NewWebsocketNetwork(log logging.Logger, config config.Local, phonebookAddre
 			addresses = append(addresses, a)
 		}
 	}
-	pb.AddPersistentPeers(addresses, string(networkID), phonebook.PhoneBookEntryRelayRole)
+	pb.AddPersistentPeers(addresses, string(networkID), phonebook.RelayRole)
 	wn = &WebsocketNetwork{
 		log:               log,
 		config:            config,

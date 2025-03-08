@@ -1334,7 +1334,7 @@ func TestAcctOnlineVotersLongerHistory(t *testing.T) {
 	var foundCount int
 	err = oa.dbs.Snapshot(func(ctx context.Context, tx trackerdb.SnapshotScope) error {
 		// read staging = false, excludeBefore = excludeRound
-		it, err2 := tx.MakeOnlineAccountsIter(ctx, false, excludeRound)
+		it, err2 := tx.MakeOrderedOnlineAccountsIter(ctx, false, excludeRound)
 		require.NoError(t, err2)
 		defer it.Close()
 
