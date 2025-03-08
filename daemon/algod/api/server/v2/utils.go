@@ -564,8 +564,8 @@ func convertSimulateInitialStates(initialStates *simulation.ResourcesInitialStat
 	}
 }
 
+// Convert the resources to the model structs
 func convertPopulatedResourceArrays(populatedResources simulation.PopulatedResourceArrays) *model.ResourceArrays {
-	// Convert the resources to the model structs
 	accounts := make([]string, len(populatedResources.Accounts))
 	for i, account := range populatedResources.Accounts {
 		accounts[i] = account.String()
