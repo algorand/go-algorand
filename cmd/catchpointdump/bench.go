@@ -49,14 +49,14 @@ import (
 	tools "github.com/algorand/go-algorand/tools/network"
 )
 
-var reportJsonPath string
+var reportJSONPath string
 
 func init() {
 	benchCmd.Flags().StringVarP(&networkName, "net", "n", "", "Specify the network name ( i.e. mainnet.algorand.network )")
 	benchCmd.Flags().IntVarP(&round, "round", "r", 0, "Specify the round number ( i.e. 7700000 )")
 	benchCmd.Flags().StringVarP(&relayAddress, "relay", "p", "", "Relay address to use ( i.e. r-ru.algorand-mainnet.network:4160 )")
 	benchCmd.Flags().StringVarP(&catchpointFile, "tar", "t", "", "Specify the catchpoint file (either .tar or .tar.gz) to process")
-	benchCmd.Flags().StringVarP(&reportJsonPath, "report", "j", "", "Specify the file to save the JSON formatted report to")
+	benchCmd.Flags().StringVarP(&reportJSONPath, "report", "j", "", "Specify the file to save the JSON formatted report to")
 }
 
 var benchCmd = &cobra.Command{
@@ -145,9 +145,9 @@ var benchCmd = &cobra.Command{
 		stage.completeStage()
 
 		benchmark.printReport()
-		if reportJsonPath != "" {
-			if err := benchmark.saveReport(reportJsonPath); err != nil {
-				fmt.Printf("error writing report to %s: %v\n", reportJsonPath, err)
+		if reportJSONPath != "" {
+			if err = benchmark.saveReport(reportJSONPath); err != nil {
+				fmt.Printf("error writing report to %s: %v\n", reportJSONPath, err)
 			}
 		}
 

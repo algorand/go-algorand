@@ -26,7 +26,7 @@ import (
 
 	"github.com/algorand/go-algorand/util"
 	"github.com/google/uuid"
-	. "github.com/klauspost/cpuid/v2"
+	"github.com/klauspost/cpuid/v2"
 )
 
 type benchStage struct {
@@ -38,12 +38,12 @@ type benchStage struct {
 }
 
 type hostInfo struct {
-	CpuCoreCnt    int       `json:"cores"`
-	CpuLogicalCnt int       `json:"log_cores"`
-	CpuBaseMHz    int64     `json:"base_mhz"`
-	CpuMaxMHz     int64     `json:"max_mhz"`
-	CpuName       string    `json:"cpu_name"`
-	CpuVendor     string    `json:"cpu_vendor"`
+	CPUCoreCnt    int       `json:"cores"`
+	CPULogicalCnt int       `json:"log_cores"`
+	CPUBaseMHz    int64     `json:"base_mhz"`
+	CPUMaxMHz     int64     `json:"max_mhz"`
+	CPUName       string    `json:"cpu_name"`
+	CPUVendor     string    `json:"cpu_vendor"`
 	MemMB         int       `json:"mem_mb"`
 	OS            string    `json:"os"`
 	ID            uuid.UUID `json:"uuid"`
@@ -56,15 +56,15 @@ type benchReport struct {
 	// TODO: query cpu cores, bogomips and stuff (windows/mac compatible)
 }
 
-func (s *benchStage) MarshalJSON() ([]byte, error) {
+func (bs *benchStage) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&struct {
 		Stage    string `json:"stage"`
 		Duration int64  `json:"duration_sec"`
-		CpuTime  int64  `json:"cpu_time_sec"`
+		CPUTime  int64  `json:"cpu_time_sec"`
 	}{
-		Stage:    s.stage,
-		Duration: int64(s.duration.Seconds()),
-		CpuTime:  s.cpuTimeNS / 1000000000,
+		Stage:    bs.stage,
+		Duration: int64(bs.duration.Seconds()),
+		CPUTime:  bs.cpuTimeNS / 1000000000,
 	})
 }
 
@@ -77,12 +77,12 @@ func gatherHostInfo() *hostInfo {
 	uuid, _ := uuid.FromBytes(nid[0:16])
 
 	ni := &hostInfo{
-		CpuCoreCnt:    CPU.PhysicalCores,
-		CpuLogicalCnt: CPU.LogicalCores,
-		CpuName:       CPU.BrandName,
-		CpuVendor:     CPU.VendorID.String(),
-		CpuMaxMHz:     CPU.BoostFreq / 1_000_000,
-		CpuBaseMHz:    CPU.Hz / 1_000_000,
+		CPUCoreCnt:    cpuid.CPU.PhysicalCores,
+		CPULogicalCnt: cpuid.CPU.LogicalCores,
+		CPUName:       cpuid.CPU.BrandName,
+		CPUVendor:     cpuid.CPU.VendorID.String(),
+		CPUMaxMHz:     cpuid.CPU.BoostFreq / 1_000_000,
+		CPUBaseMHz:    cpuid.CPU.Hz / 1_000_000,
 		MemMB:         int(util.GetTotalMemory()) / 1024 / 1024,
 		ID:            uuid,
 		OS:            runtime.GOOS,
