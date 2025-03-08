@@ -856,18 +856,11 @@ func (p *resourcePopulator) addTransaction(txn transactions.Transaction, groupIn
 
 	switch txn.Type {
 	case protocol.ApplicationCallTx:
-		for _, asset := range txn.ForeignAssets {
-			p.txnResources[groupIndex].prefilledAssets = append(p.txnResources[groupIndex].prefilledAssets, asset)
+		p.txnResources[groupIndex].prefilledAssets = append(p.txnResources[groupIndex].prefilledAssets, txn.ForeignAssets...)
 
-		}
+		p.txnResources[groupIndex].prefilledApps = append(p.txnResources[groupIndex].prefilledApps, txn.ForeignApps...)
 
-		for _, app := range txn.ForeignApps {
-			p.txnResources[groupIndex].prefilledApps = append(p.txnResources[groupIndex].prefilledApps, app)
-		}
-
-		for _, account := range txn.Accounts {
-			p.txnResources[groupIndex].prefilledAccounts = append(p.txnResources[groupIndex].prefilledAccounts, account)
-		}
+		p.txnResources[groupIndex].prefilledAccounts = append(p.txnResources[groupIndex].prefilledAccounts, txn.Accounts...)
 
 		for _, box := range txn.Boxes {
 			ref := logic.BoxRef{App: txn.ForeignApps[box.Index], Name: string(box.Name)}
