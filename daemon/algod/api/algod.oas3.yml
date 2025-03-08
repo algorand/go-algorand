@@ -2413,7 +2413,7 @@
             "type": "integer"
           },
           "extra-resource-arrays": {
-            "description": "Present if populate-resource-arrays is true in the request and additional tranactions are needed to name all the accessed resources.",
+            "description": "Present if populate-resource-arrays is true in the request and additional transactions are needed to name all the accessed resources.",
             "items": {
               "$ref": "#/components/schemas/ResourceArrays"
             },

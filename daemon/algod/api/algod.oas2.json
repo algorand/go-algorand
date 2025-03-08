@@ -1864,8 +1864,8 @@
       "get": {
         "description": "Get ledger deltas for a round.",
         "tags": [
-            "public",
-            "nonparticipating"
+          "public",
+          "nonparticipating"
         ],
         "produces": [
           "application/json",
@@ -4304,7 +4304,7 @@
         }
       }
     },
-  "SimulateTransactionGroupResult": {
+    "SimulateTransactionGroupResult": {
       "description": "Simulation result for an atomic transaction group",
       "type": "object",
       "required": [
@@ -4341,7 +4341,7 @@
           "$ref": "#/definitions/SimulateUnnamedResourcesAccessed"
         },
         "extra-resource-arrays": {
-          "description": "Present if populate-resource-arrays is true in the request and additional tranactions are needed to name all the accessed resources.",
+          "description": "Present if populate-resource-arrays is true in the request and additional transactions are needed to name all the accessed resources.",
           "type": "array",
           "items": {
             "$ref": "#/definitions/ResourceArrays"
@@ -4373,7 +4373,7 @@
         "unnamed-resources-accessed": {
           "$ref": "#/definitions/SimulateUnnamedResourcesAccessed"
         },
-        "fixed-signer":{
+        "fixed-signer": {
           "description": "The account that needed to sign this transaction when no signature was provided and the provided signer was incorrect.",
           "type": "string",
           "x-algorand-format": "Address"
