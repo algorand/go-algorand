@@ -736,3 +736,51 @@ func TestPopulatorWithNoRoom(t *testing.T) {
 	groupResources.NumEmptyBoxRefs = 1
 	require.ErrorContains(t, populator.populateResources(groupResources, txnResources), "no room for box 0 : ")
 }
+
+func TestGetTotalRefs(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	prefilledApp := basics.AppIndex(1337)
+	prefilledAccount := basics.Address{137}
+	prefilledAsset := basics.AssetIndex(1337)
+	prefilledBox := transactions.BoxRef{Index: uint64(0), Name: []byte("box")}
+
+	unnamedApp := basics.AppIndex(7331)
+	unnamedAccount := basics.Address{37}
+	unnamedAsset := basics.AssetIndex(7331)
+
+	txns := make([]transactions.SignedTxn, 1)
+	txns[0].Txn.Type = protocol.ApplicationCallTx
+	txns[0].Txn.Accounts = []basics.Address{prefilledAccount}
+	txns[0].Txn.ForeignApps = []basics.AppIndex{prefilledApp}
+	txns[0].Txn.ForeignAssets = []basics.AssetIndex{prefilledAsset}
+	txns[0].Txn.Boxes = []transactions.BoxRef{prefilledBox}
+
+	txnResources := make([]ResourceTracker, 1)
+	groupResources := ResourceTracker{}
+
+	txnResources[0].Apps = make(map[basics.AppIndex]struct{})
+	txnResources[0].Accounts = make(map[basics.Address]struct{})
+	txnResources[0].Assets = make(map[basics.AssetIndex]struct{})
+	txnResources[0].Apps[unnamedApp] = struct{}{}
+	txnResources[0].Accounts[unnamedAccount] = struct{}{}
+	txnResources[0].Assets[unnamedAsset] = struct{}{}
+
+	// 1 of these will go into the first txn
+	// The other will go into the second txn
+	groupResources.NumEmptyBoxRefs = 2
+
+	consensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	populator := makeResourcePopulator(txns, consensusParams)
+
+	err := populator.populateResources(groupResources, txnResources)
+	require.NoError(t, err)
+
+	// Make sure all named and unnamed resources are accounted for
+	require.Equal(t, 8, populator.txnResources[0].getTotalRefs())
+
+	// Make sure the empty box refs are accounted for
+	require.Equal(t, 1, populator.txnResources[1].getTotalRefs())
+
+}
