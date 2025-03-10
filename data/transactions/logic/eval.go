@@ -31,6 +31,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -1566,8 +1567,8 @@ func (cx *EvalContext) step() error {
 	}
 
 	if opcost > cx.remainingBudget() {
-		return fmt.Errorf("pc=%3d dynamic cost budget exceeded, executing %s: local program cost was %d",
-			cx.pc, spec.Name, cx.cost)
+		return fmt.Errorf("pc=%3d dynamic cost budget exceeded, executing %s (%d): local program cost was %d",
+			cx.pc, spec.Name, opcost, cx.cost)
 	}
 
 	cx.cost += opcost
@@ -1691,7 +1692,7 @@ func (cx *EvalContext) checkStep() (int, error) {
 	}
 	opcost := deets.Cost(cx.program, cx.pc, blankStack)
 	if opcost <= 0 {
-		return 0, fmt.Errorf("%s reported non-positive cost", spec.Name)
+		return 0, fmt.Errorf("%s reported non-positive cost %d", spec.Name, opcost)
 	}
 	prevpc := cx.pc
 	if deets.check != nil {
@@ -1792,22 +1793,80 @@ func opAddw(cx *EvalContext) error {
 	return nil
 }
 
+// We always use big.Ints for a short time (one opcode) and then return them to
+// the pool. It is a fool's errand to try to get big.Ints to be allocated on the
+// stack because even if you manage it, their internal slice of Words must have
+// a backing store that ends up allocated on the heap.
+var bigIntPool = sync.Pool{
+	New: func() interface{} {
+		return new(big.Int)
+	},
+}
+
+func getBig() *big.Int {
+	return bigIntPool.Get().(*big.Int)
+}
+
+func putBig(b *big.Int) {
+	bigIntPool.Put(b)
+}
+
+// uint128 returns a big.Int constructed from the two uint64s supplied.
 func uint128(hi uint64, lo uint64) *big.Int {
-	whole := new(big.Int).SetUint64(hi)
+	// directly manipulate the words of the big.Int if they are uint64. big.Word
+	// is a `uint`, not `uint64`, so it might only be 32 bits. The words are
+	// LITTLE endian (lowest order bits are in words[0])
+	if bits.UintSize == 64 {
+		// this saves about 17% of the time in divmodw
+		b := getBig()
+		// reuse the existing Bits() slice to avoid allocation (it usually
+		// exists because this big.Int came from the pool)
+		words := append(b.Bits()[:0], big.Word(lo), big.Word(hi))
+		return b.SetBits(words)
+	}
+	// slowpath for non 64-bit systems
+	whole := getBig().SetUint64(hi)
 	whole.Lsh(whole, 64)
-	whole.Add(whole, new(big.Int).SetUint64(lo))
+	low := getBig().SetUint64(lo)
+	whole.Add(whole, low)
+	putBig(low)
 	return whole
+}
+
+// uint64s returns the high and low words of a big.Int. The big.Int MUST be no
+// larger than 128 bits.
+func uint64s(bi *big.Int) (hi uint64, lo uint64) {
+	// this is barely worth it. saves the cost of 1 opcode, roughly. But, since
+	// `uint128` has already peeked behind the big.Int curtain, why not?
+	if bits.UintSize == 64 {
+		words := bi.Bits()
+		if l := len(words); l > 0 {
+			lo = uint64(words[0])
+			if l > 1 {
+				hi = uint64(words[1])
+			}
+		}
+		return
+	}
+	// slowpath for non 64-bit systems
+	lo = bi.Uint64() // take lo first, so bi can be modified - avoid an allocation
+	hi = bi.Rsh(bi, 64).Uint64()
+	return
 }
 
 func opDivModwImpl(hiNum, loNum, hiDen, loDen uint64) (hiQuo uint64, loQuo uint64, hiRem uint64, loRem uint64) {
 	dividend := uint128(hiNum, loNum)
 	divisor := uint128(hiDen, loDen)
 
-	quo, rem := new(big.Int).QuoRem(dividend, divisor, new(big.Int))
-	return new(big.Int).Rsh(quo, 64).Uint64(),
-		quo.Uint64(),
-		new(big.Int).Rsh(rem, 64).Uint64(),
-		rem.Uint64()
+	quo, rem := getBig().QuoRem(dividend, divisor, getBig())
+	putBig(divisor)
+	putBig(dividend)
+
+	hiQuo, loQuo = uint64s(quo)
+	hiRem, loRem = uint64s(rem)
+	putBig(quo)
+	putBig(rem)
+	return
 }
 
 func opDivModw(cx *EvalContext) error {
@@ -2092,23 +2151,26 @@ func opSqrt(cx *EvalContext) error {
 	return nil
 }
 
+// bitlen returns the 1 based index of the highest set bit in the byte slice,
+// when thinking of the byteslize as a big-endian integer. (If the slice is
+// all zeros, it returns 0.)
+func bitlen(bytes []byte) int {
+	for i, b := range bytes {
+		if b != 0 {
+			return bits.Len8(b) + (8 * (len(bytes) - i - 1))
+		}
+	}
+	return 0
+}
+
 func opBitLen(cx *EvalContext) error {
 	last := len(cx.Stack) - 1
 	if cx.Stack[last].avmType() == avmUint64 {
 		cx.Stack[last].Uint = uint64(bits.Len64(cx.Stack[last].Uint))
 		return nil
 	}
-	length := len(cx.Stack[last].Bytes)
-	idx := 0
-	for i, b := range cx.Stack[last].Bytes {
-		if b != 0 {
-			idx = bits.Len8(b) + (8 * (length - i - 1))
-			break
-		}
-
-	}
+	cx.Stack[last].Uint = uint64(bitlen(cx.Stack[last].Bytes))
 	cx.Stack[last].Bytes = nil
-	cx.Stack[last].Uint = uint64(idx)
 	return nil
 }
 
@@ -2159,28 +2221,31 @@ func opExpwImpl(base uint64, exp uint64) (*big.Int, error) {
 	// These checks are slightly repetive but the clarity of
 	// avoiding nested checks seems worth it.
 	if exp == 0 && base == 0 {
-		return &big.Int{}, errors.New("0^0 is undefined")
+		return nil, errors.New("0^0 is undefined")
 	}
 	if base == 0 {
-		return &big.Int{}, nil
+		return getBig().SetUint64(0), nil
 	}
 	if exp == 0 || base == 1 {
-		return new(big.Int).SetUint64(1), nil
+		return getBig().SetUint64(1), nil
 	}
 	// base is now at least 2, so exp can not be 128
 	if exp >= 128 {
-		return &big.Int{}, fmt.Errorf("%d^%d overflow", base, exp)
+		return nil, fmt.Errorf("%d^%d overflow", base, exp)
 	}
 
-	answer := new(big.Int).SetUint64(base)
-	bigbase := new(big.Int).SetUint64(base)
+	answer := getBig().SetUint64(base)
+	bigbase := getBig().SetUint64(base)
 	// safe to cast exp, because it is known to fit in int (it's < 128)
 	for i := 1; i < int(exp); i++ {
 		answer.Mul(answer, bigbase)
 		if answer.BitLen() > 128 {
-			return &big.Int{}, fmt.Errorf("%d^%d overflow", base, exp)
+			putBig(answer)
+			putBig(bigbase)
+			return nil, fmt.Errorf("%d^%d overflow", base, exp)
 		}
 	}
+	putBig(bigbase)
 	return answer, nil
 }
 
@@ -2194,105 +2259,117 @@ func opExpw(cx *EvalContext) error {
 	if err != nil {
 		return err
 	}
-	hi := new(big.Int).Rsh(val, 64).Uint64()
-	lo := val.Uint64()
+	hi, lo := uint64s(val)
+	putBig(val)
 
 	cx.Stack[prev].Uint = hi
 	cx.Stack[last].Uint = lo
 	return nil
 }
 
-func opBytesBinOp(cx *EvalContext, result *big.Int, op func(x, y *big.Int) *big.Int) error {
+func byteMathOperands(cx *EvalContext) (*big.Int, *big.Int, error) {
 	last := len(cx.Stack) - 1
 	prev := last - 1
 
-	if len(cx.Stack[last].Bytes) > maxByteMathSize || len(cx.Stack[prev].Bytes) > maxByteMathSize {
-		return errors.New("math attempted on large byte-array")
+	if cx.version < fullByteMathVersion {
+		if len(cx.Stack[last].Bytes) > maxByteMathSize || len(cx.Stack[prev].Bytes) > maxByteMathSize {
+			return nil, nil, errors.New("math attempted on large byte-array")
+		}
 	}
 
-	rhs := new(big.Int).SetBytes(cx.Stack[last].Bytes)
-	lhs := new(big.Int).SetBytes(cx.Stack[prev].Bytes)
-	op(lhs, rhs) // op's receiver has already been bound to result
-	if result.Sign() < 0 {
-		return errors.New("byte math would have negative result")
-	}
-	cx.Stack[prev].Bytes = result.Bytes()
-	cx.Stack = cx.Stack[:last]
-	return nil
+	rhs := getBig().SetBytes(cx.Stack[last].Bytes)
+	lhs := getBig().SetBytes(cx.Stack[prev].Bytes)
+	return lhs, rhs, nil
 }
 
-// opBytesFullBinOp is like opBytesBinOp but it allows any size inputs (and
-// therefore must check the size of the output).
-func opBytesFullBinOp(cx *EvalContext, result *big.Int, op func(x, y *big.Int) *big.Int) error {
+func byteMathResult(cx *EvalContext, result *big.Int) error {
 	last := len(cx.Stack) - 1
 	prev := last - 1
-
-	rhs := new(big.Int).SetBytes(cx.Stack[last].Bytes)
-	lhs := new(big.Int).SetBytes(cx.Stack[prev].Bytes)
-	op(lhs, rhs) // op's receiver has already been bound to result
-	if result.Sign() < 0 {
-		return errors.New("byte math would have negative result")
-	}
 	cx.Stack[prev].Bytes = result.Bytes()
-	/*
-		if len(cx.Stack[last].Bytes) > maxStringSize {
-			return fmt.Errorf("byte math results would exceed %d bytes", maxStringSize)
-		}
-	*/
+	putBig(result)
 	cx.Stack = cx.Stack[:last]
 	return nil
 }
 
 func opBytesPlus(cx *EvalContext) error {
-	result := new(big.Int)
-	if cx.version >= fullByteMathVersion {
-		return opBytesFullBinOp(cx, result, result.Add)
+	lhs, rhs, err := byteMathOperands(cx)
+	if err != nil {
+		return err
 	}
-	return opBytesBinOp(cx, result, result.Add)
+	lhs.Add(lhs, rhs)
+	putBig(rhs)
+	return byteMathResult(cx, lhs)
 }
 
 func bplusCost(stack []stackValue) int {
 	last := len(stack) - 1
 	prev := last - 1
-	return 8 + max(len(stack[last].Bytes), len(stack[prev].Bytes))
+	return 1 + basics.DivCeil(max(len(stack[last].Bytes), len(stack[prev].Bytes)), 16)
 }
 
 func opBytesMinus(cx *EvalContext) error {
-	result := new(big.Int)
-	if cx.version >= fullByteMathVersion {
-		return opBytesFullBinOp(cx, result, result.Sub)
-	}
-	return opBytesBinOp(cx, result, result.Sub)
-}
-
-func opBytesDiv(cx *EvalContext) error {
-	result := new(big.Int)
-	var inner error
-	checkDiv := func(x, y *big.Int) *big.Int {
-		if y.BitLen() == 0 {
-			inner = errors.New("division by zero")
-			return new(big.Int)
-		}
-		return result.Div(x, y)
-	}
-	var err error
-	if cx.version >= fullByteMathVersion {
-		err = opBytesFullBinOp(cx, result, checkDiv)
-	} else {
-		err = opBytesBinOp(cx, result, checkDiv)
-	}
+	lhs, rhs, err := byteMathOperands(cx)
 	if err != nil {
 		return err
 	}
-	return inner
+	lhs.Sub(lhs, rhs)
+	putBig(rhs)
+	if lhs.Sign() < 0 {
+		putBig(lhs)
+		return errors.New("byte math would have negative result")
+	}
+	return byteMathResult(cx, lhs)
+}
+
+func opBytesDiv(cx *EvalContext) error {
+	lhs, rhs, err := byteMathOperands(cx)
+	if err != nil {
+		return err
+	}
+	if rhs.BitLen() == 0 {
+		putBig(rhs)
+		putBig(lhs)
+		return errors.New("division by zero")
+	}
+	lhs.Div(lhs, rhs)
+	putBig(rhs)
+	return byteMathResult(cx, lhs)
+}
+
+func bdivCost(stack []stackValue) int {
+	last := len(stack) - 1
+	prev := last - 1
+	l := len(stack[prev].Bytes)
+	chunks := l / 96
+	return 10 + chunks*chunks + l/10
 }
 
 func opBytesMul(cx *EvalContext) error {
-	result := new(big.Int)
-	if cx.version < fullByteMathVersion {
-		return opBytesBinOp(cx, result, result.Mul)
+	lhs, rhs, err := byteMathOperands(cx)
+	if err != nil {
+		return err
 	}
-	return opBytesFullBinOp(cx, result, result.Mul)
+	result := getBig().Mul(lhs, rhs) // lhs.Mul(lhs, rhs) would cause internal allocation
+	putBig(rhs)
+	putBig(lhs)
+	return byteMathResult(cx, result)
+}
+
+func bmulCost(stack []stackValue) int {
+	last := len(stack) - 1
+	prev := last - 1
+	return mulComplexity(len(stack[last].Bytes), len(stack[prev].Bytes))
+}
+
+func mulComplexity(la, lb int) int {
+	const chunk = 16
+	linear := 0
+	factor := 12
+	if min(la, lb) >= 512 {
+		factor = 24
+		linear = 2 * max(la, lb) / chunk
+	}
+	return linear + (8+la/chunk)*(8+lb/chunk)/factor
 }
 
 func opBytesSqrt(cx *EvalContext) error {
@@ -2304,10 +2381,20 @@ func opBytesSqrt(cx *EvalContext) error {
 		}
 	}
 
-	val := new(big.Int).SetBytes(cx.Stack[last].Bytes)
-	val.Sqrt(val)
-	cx.Stack[last].Bytes = val.Bytes()
+	val := getBig().SetBytes(cx.Stack[last].Bytes)
+	result := getBig().Sqrt(val) // val.Sqrt(val) would cause internal allocation
+	putBig(val)
+	cx.Stack[last].Bytes = result.Bytes()
+	putBig(result)
 	return nil
+}
+
+func bsqrtCost(stack []stackValue) int {
+	last := len(stack) - 1
+	bytes := stack[last].Bytes
+	l := len(bytes)
+	chunks := l / 96
+	return 5 + chunks*chunks*bits.Len(uint(l)) + l
 }
 
 func nonzero(b []byte) []byte {
@@ -2393,67 +2480,81 @@ func opBytesNeq(cx *EvalContext) error {
 }
 
 func opBytesModExp(cx *EvalContext) error {
-	result := new(big.Int)
 	last := len(cx.Stack) - 1 // z
 	prev := last - 1          // y
 	pprev := last - 2         // x
 
-	z := new(big.Int).SetBytes(cx.Stack[last].Bytes)
-	y := new(big.Int).SetBytes(cx.Stack[prev].Bytes)
-	x := new(big.Int).SetBytes(cx.Stack[pprev].Bytes)
+	z := getBig().SetBytes(cx.Stack[last].Bytes)
 	if z.BitLen() == 0 {
+		putBig(z)
 		return errors.New("modulo by zero")
 	}
-
-	result.Exp(x, y, z)
-
+	y := getBig().SetBytes(cx.Stack[prev].Bytes)
+	x := getBig().SetBytes(cx.Stack[pprev].Bytes)
+	result := getBig().Exp(x, y, z)
+	putBig(x)
+	putBig(y)
+	putBig(z)
 	cx.Stack[pprev].Bytes = result.Bytes()
+	putBig(result)
+
 	cx.Stack = cx.Stack[:prev]
 	return nil
 }
 
-func bmodexpCost(stack []stackValue) int {
+func bmodexpCostFloat(stack []stackValue) int {
 	last := len(stack) - 1 // mod
 	prev := last - 1       // exp
 	pprev := last - 2      // base
 
 	// Empirically estimated cost function constants
 	const (
-		exponentFactor = 1.63 // Adjusts cost of base & mod multiplication in the modexp by squaring algorithm
-		scalingFactor  = 15   // Normalization factor
-		baseCost       = 200  // Minimum cost of bmodexp
+		exponentFactor = 1.63   // Adjusts cost of base & mod multiplication in the modexp by squaring algorithm
+		scalingFactor  = 15 * 8 // Normalization factor
+		baseCost       = 200    // Minimum cost of bmodexp
 	)
 
-	expLength := float64(len(stack[prev].Bytes))
+	expLength := float64(bitlen(stack[prev].Bytes))
 	modLength := len(stack[last].Bytes)
 	baseLength := len(stack[pprev].Bytes)
 
 	// Derived from the asymptotic time complexity of the exponentiation by squaring algorithm
-	cost := (math.Pow(float64(max(baseLength, modLength)), exponentFactor) * expLength / scalingFactor) + baseCost
+	cost := baseCost + (math.Pow(float64(max(baseLength, modLength)), exponentFactor) * expLength / scalingFactor)
 
 	return int(cost)
 }
 
+// bmodexpCost approximates the cost of bmodexp, which works by repeated
+// squaring. There are bitlen(`exp`) steps, and at each step there is a
+// squaring, possibly an addition, and the result can be reduced modulo `mod`.
+func bmodexpCost(stack []stackValue) int {
+	mod := len(stack) - 1
+	exp := mod - 1
+	base := mod - 2
+
+	// EIP-198 uses max(base,mod) here, but I don't really understand why. If
+	// each step reduces module `mod`, it seems as though we should just use
+	// len(mod).  If len(base) is bigger than len(mod), bmodexp ought to be
+	// reducing ahead of each step, so it _never_ multiplies numbers wider than
+	// `exp`.
+	m := max(len(stack[base].Bytes), len(stack[mod].Bytes))
+
+	return bitlen(stack[exp].Bytes) * mulComplexity(m, m)
+}
+
 func opBytesModulo(cx *EvalContext) error {
-	result := new(big.Int)
-	var inner error
-	checkMod := func(x, y *big.Int) *big.Int {
-		if y.BitLen() == 0 {
-			inner = errors.New("modulo by zero")
-			return new(big.Int)
-		}
-		return result.Mod(x, y)
-	}
-	var err error
-	if cx.version >= fullByteMathVersion {
-		err = opBytesFullBinOp(cx, result, checkMod)
-	} else {
-		err = opBytesBinOp(cx, result, checkMod)
-	}
+	lhs, rhs, err := byteMathOperands(cx)
 	if err != nil {
 		return err
 	}
-	return inner
+	if rhs.BitLen() == 0 {
+		putBig(rhs)
+		putBig(lhs)
+		return errors.New("modulo by zero")
+	}
+	lhs.Mod(lhs, rhs)
+	putBig(rhs)
+	return byteMathResult(cx, lhs)
 }
 
 func zpad(smaller []byte, size int) []byte {

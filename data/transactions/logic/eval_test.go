@@ -450,6 +450,8 @@ func TestSimpleMath(t *testing.T) {
 	testAccepts(t, "int 21; int 7; / ; int  3; ==", 1)
 
 	testPanics(t, "int 1; int 2; - ; int 0; ==", 1)
+
+	testCost(t, "int 1; int 2; + ; int 3; ==", 5, 6)
 }
 
 // TestRapidMath uses rapid.Check to be a bit more exhaustive
@@ -3980,23 +3982,54 @@ main:
 	}
 }
 
+func BenchmarkBytesDiv(b *testing.B) {
+	for i := range 128 {
+		size := (i + 1) * 32
+		b.Run(fmt.Sprintf("b/ %d", size), func(b *testing.B) {
+			b.ReportAllocs()
+			benchmarkOperation(b, "", randBytes(size)+randBytes(size*3/8)+"b/; pop", "int 1")
+		})
+	}
+}
+
 // bigint multiply ought to have a weird cost function because Karatsuba kicks at 40 Words (320 bytes)
-func BenchmarkBytesMul(b *testing.B) {
+func BenchmarkBytesMulEqualSize(b *testing.B) {
 	for i := range 32 {
 		size := i * 64
 		b.Run(fmt.Sprintf("b* %d", size), func(b *testing.B) {
 			b.ReportAllocs()
-			benchmarkOperation(b, "", "byte "+randBytes(size)+"; byte "+randBytes(size)+";b*;pop", "int 1")
+			benchmarkOperation(b, "", randBytes(size)+randBytes(size)+"b*; pop", "int 1")
+		})
+	}
+}
+
+func BenchmarkBytesMulBySmall(b *testing.B) {
+	for i := range 64 {
+		size := i * 64
+		b.Run(fmt.Sprintf("b* %d by 8", size), func(b *testing.B) {
+			b.ReportAllocs()
+			benchmarkOperation(b, "", randBytes(size)+randBytes(8)+"b*; pop", "int 1")
+		})
+	}
+}
+
+func BenchmarkBytesMulByMed(b *testing.B) {
+	for i := range 64 {
+		size := i * 48
+		other := size / 3
+		b.Run(fmt.Sprintf("b* %d by %d", size, other), func(b *testing.B) {
+			b.ReportAllocs()
+			benchmarkOperation(b, "", randBytes(size)+randBytes(other)+"b*; pop", "int 1")
 		})
 	}
 }
 
 func BenchmarkBytesSqrt(b *testing.B) {
 	for i := range 64 {
-		size := i * 64
+		size := i * 16
 		b.Run(fmt.Sprintf("bqsrt %d", size), func(b *testing.B) {
 			b.ReportAllocs()
-			benchmarkOperation(b, "", "byte "+randBytes(size)+";bsqrt;pop", "int 1")
+			benchmarkOperation(b, "", randBytes(size)+"bsqrt; pop", "int 1")
 		})
 	}
 }
@@ -4010,28 +4043,19 @@ func BenchmarkBytesMulDifferingSizes(b *testing.B) {
 		}
 		b.Run(fmt.Sprintf("b* %d-%d", awords, bwords), func(b *testing.B) {
 			b.ReportAllocs()
-			benchmarkOperation(b, "", "byte "+randBytes(8*awords)+"; byte "+randBytes(8*bwords)+";b*;pop", "int 1")
+			benchmarkOperation(b, "", randBytes(8*awords)+randBytes(8*bwords)+"b*; pop", "int 1")
 		})
 	}
 }
 
+// BenchmarkFindWorstBytesDiv determines the relatiuve byte size of the dividend
+// and divisor for worst case speed testing.  About 3/8.
 func BenchmarkFindWorstBytesDiv(b *testing.B) {
-	for divisor := 4096; divisor > 0; divisor -= 128 {
+	for divisor := 1600; divisor > 1500; divisor -= 10 {
 		b.Run(fmt.Sprintf("b/ %d", divisor), func(b *testing.B) {
 			b.ReportAllocs()
-			benchmarkOperation(b, "", "byte "+randBytes(4096)+"; byte "+randBytes(divisor)+";b/;pop", "int 1")
+			benchmarkOperation(b, "", randBytes(4096)+randBytes(divisor)+"b/; pop", "int 1")
 		})
-	}
-}
-
-func BenchmarkFindWorstBytesMod(b *testing.B) {
-	for _, big := range []int{128, 512, 2096} {
-		for divisor := big; divisor > 0; divisor -= (big / 10) {
-			b.Run(fmt.Sprintf("b%% %d %d", big, divisor), func(b *testing.B) {
-				b.ReportAllocs()
-				benchmarkOperation(b, "", "byte "+randBytes(big)+"; byte "+randBytes(divisor)+";b%;pop", "int 1")
-			})
-		}
 	}
 }
 
@@ -4041,7 +4065,7 @@ func BenchmarkBinaryByteLogic(b *testing.B) {
 		for _, op := range []string{"b&", "b|", "b^"} {
 			b.Run(fmt.Sprintf("%s %d", op, size), func(b *testing.B) {
 				b.ReportAllocs()
-				benchmarkOperation(b, "", "byte "+randBytes(size)+"; byte "+randBytes(size)+";"+op+";pop", "int 1")
+				benchmarkOperation(b, "", randBytes(size)+randBytes(size)+op+";pop", "int 1")
 			})
 		}
 	}
@@ -4052,64 +4076,38 @@ func BenchmarkByteNot(b *testing.B) {
 		size := i * 64
 		b.Run(fmt.Sprintf("b~ %d", size), func(b *testing.B) {
 			b.ReportAllocs()
-			benchmarkOperation(b, "byte "+randBytes(size), "b~", "pop; int 1")
+			benchmarkOperation(b, randBytes(size), "b~", "pop; int 1")
 		})
 	}
 }
 
-// randBytes generates a random byte constant of length `length`
-func randBytes(length int) string {
+// randBytes generates a random `byte` constant of length `length`, replacing
+// the leading bytes with optional `prefix` bytes.
+func randBytes(length int, prefix ...byte) string {
 	bytes := make([]byte, length)
 	rand.Read(bytes)
-	return fmt.Sprintf("0x%x", bytes)
+	copy(bytes, prefix)
+	return fmt.Sprintf("byte 0x%x;", bytes)
 }
 
-// chunk emits one `byte` statement creating a byte string with `count` (64 bit) words
-func chunk(count int) string {
-	buf := make([]byte, 8*count)
-	rand.Read(buf)
-	word := "7090a0b0c0d0e0f0" // enough hex for one 64bit word, small enough to add without overflow
-	return "byte 0x" + strings.Repeat(word, count) + ";"
-}
-
-func BenchmarkByteMath(b *testing.B) {
+func BenchmarkByteAddSub(b *testing.B) {
 	benches := [][]string{
-		{"bytec", chunk(2) + "pop"},
+		{"bytec", randBytes(16) + "pop"},
 
-		{"b+ 1w", chunk(1) + chunk(1) + "b+; pop"},
-		{"b- 1w", chunk(1) + chunk(1) + "b-; pop"},
-		{"b* 1w", chunk(1) + chunk(1) + "b*; pop"},
-		// half sized divisor seems pessimal for / and %
-		{"b/ 1w", chunk(1) + "byte 0x8090a0b0;" + "b/; pop"},
-		{"b% 1w", chunk(1) + "byte 0x8090a0b0;" + "b%; pop"},
-		{"bsqrt 1w", chunk(1) + "bsqrt; pop"},
+		{"b+ 8", randBytes(8) + randBytes(8) + "b+; pop"},
+		{"b- 8", randBytes(8, 0xff) + randBytes(8, 0x11) + "b-; pop"},
 
 		// maximum sizes, pre fullByteMathVersion
-		{"b+ 8w", chunk(8) + chunk(8) + "b+; pop"},
-		{"b- 8w", chunk(8) + chunk(8) + "b-; pop"},
-		{"b+ 8w4w", chunk(8) + chunk(4) + "b+; pop"},
-		{"b- 8w4w", chunk(8) + chunk(4) + "b-; pop"},
-		{"b* 8w", chunk(8) + chunk(8) + "b*; pop"},
-		{"b/ 8w", chunk(8) + chunk(4) + "b/; pop"},
-		{"b% 8w", chunk(8) + chunk(4) + "b%; pop"},
-		{"bsqrt 8w", chunk(8) + "bsqrt; pop"},
+		{"b+ 64", randBytes(64) + randBytes(64) + "b+; pop"},
+		{"b- 64", randBytes(64, 0xff) + randBytes(64, 0x11) + "b-; pop"},
 
-		{"b+ 16w", chunk(16) + chunk(16) + "b+; pop"},
-		{"b- 16w", chunk(16) + chunk(16) + "b-; pop"},
-		{"b+ 16w8w", chunk(16) + chunk(8) + "b+; pop"},
-		{"b- 18w8w", chunk(16) + chunk(8) + "b-; pop"},
+		{"b+ 512", randBytes(512) + randBytes(512) + "b+; pop"},
+		{"b- 512", randBytes(512, 0xff) + randBytes(512) + "b-; pop"},
 
-		{"b+ 64w", chunk(64) + chunk(64) + "b+; pop"},
-		{"b- 64w", chunk(64) + chunk(64) + "b-; pop"},
-		{"b+ 64w32w", chunk(64) + chunk(32) + "b+; pop"},
-		{"b- 64w32w", chunk(64) + chunk(32) + "b-; pop"},
+		{"b+ 4096", randBytes(4096, 0x11) + randBytes(4096, 0x22) + "b+; pop"},
+		{"b- 4096", randBytes(4096, 0xff) + randBytes(4096, 0x11) + "b-; pop"},
 
-		{"b+ 512w", chunk(512) + chunk(512) + "b+; pop"},
-		{"b- 512w", chunk(512) + chunk(512) + "b-; pop"},
-		{"b+ 512w1w", chunk(512) + chunk(1) + "b+; pop"},
-		{"b+ 1w512w", chunk(1) + chunk(512) + "b+; pop"},
-		{"b- 512w1w", chunk(512) + chunk(1) + "b-; pop"},
-		{"bytec recheck", chunk(2) + "pop"},
+		{"bytec recheck", randBytes(16) + "pop"},
 	}
 	for _, bench := range benches {
 		b.Run(bench[0], func(b *testing.B) {
@@ -4720,6 +4718,20 @@ func testEvaluation(t *testing.T, program string, start uint64, stop uint64, tes
 	return outer
 }
 
+// testCost ensures that the program accepts and that the cost as described
+func testCost(t *testing.T, program string, cost uint64, ver uint64) {
+	t.Helper()
+	if ver < 6 {
+		panic("testCost doesn't work until ver 6")
+	}
+	// compare the OpCodeBudget remaining to the cost supplied, but add 2 to
+	// account for the access instructionms.  use pushint to avoid influencing
+	// the way `int` might be compiled in the test program. leave the stack as
+	// it was found.
+	program += fmt.Sprintf("; pushint %d; global OpcodeBudget; -; pushint 2; -; pushint %d; ==; assert", testLogicBudget, cost)
+	testAcceptRange(t, program, ver, ver)
+}
+
 func testAccepts(t *testing.T, program string, introduced uint64) {
 	t.Helper()
 	testPreexist(t, program, introduced)
@@ -5180,6 +5192,100 @@ func TestBitLen(t *testing.T) {
 
 }
 
+// BenchmarkBytesModExpRealistic is used to benchmark bmodexp for more realistic
+// values, things that will take less than 500k ticks. (320k is the most you can get today. (16 * 20k)
+func BenchmarkBytesModExpRealistic(b *testing.B) {
+	base := 32
+	for i := range 32 {
+		exp := i * 16
+		if i == 0 {
+			i = 1
+		}
+		b.Run(fmt.Sprintf("bmodexp-%d-%d", base, exp), func(b *testing.B) {
+			b.ReportAllocs()
+			// 0xaa ensures top bit is set, plus "some"
+			benchmarkOperation(b, "", randBytes(base)+randBytes(exp, 0xaa)+randBytes(base)+"bmodexp; pop", "int 1")
+		})
+	}
+	base = 64
+	for i := range 16 {
+		exp := i * 32
+		if i == 0 {
+			i = 1
+		}
+		b.Run(fmt.Sprintf("bmodexp-%d-%d", base, exp), func(b *testing.B) {
+			b.ReportAllocs()
+			benchmarkOperation(b, "", randBytes(base)+randBytes(exp, 0xaa)+randBytes(base)+"bmodexp; pop", "int 1")
+		})
+	}
+	base = 96
+	for i := range 16 {
+		exp := i * 32
+		if i == 0 {
+			i = 1
+		}
+		b.Run(fmt.Sprintf("bmodexp-%d-%d", base, exp), func(b *testing.B) {
+			b.ReportAllocs()
+			benchmarkOperation(b, "", randBytes(base)+randBytes(exp, 0xaa)+randBytes(base)+"bmodexp; pop", "int 1")
+		})
+	}
+	base = 512 // Typical RSA max key exp (4096 bits)
+	for i := range 16 {
+		exp := 1 + i*2 // RSA typically uses 65537 for verify, which has a *byte* width of just 3 (bit width = 17)
+		b.Run(fmt.Sprintf("bmodexp-%d-%d", base, exp), func(b *testing.B) {
+			b.ReportAllocs()
+			benchmarkOperation(b, "", randBytes(base)+randBytes(exp, 0xaa)+randBytes(base)+"bmodexp; pop", "int 1")
+		})
+	}
+	base = 1024 // Barely ever used (8192 bits)
+	for i := range 16 {
+		exp := 1 + i // RSA typically uses 65537 for verify, which has a *byte* width of just 3 (bit width = 17)
+		b.Run(fmt.Sprintf("bmodexp-%d-%d", base, exp), func(b *testing.B) {
+			b.ReportAllocs()
+			benchmarkOperation(b, "", randBytes(base)+randBytes(exp, 0xaa)+randBytes(base)+"bmodexp; pop", "int 1")
+		})
+	}
+}
+
+// BenchmarkBytesModExpLinearExponent is used to show that bmodexp takes linear time in the width of the exponent
+func BenchmarkBytesModExpLinearExponent(b *testing.B) {
+	for i := range 32 {
+		exp := (i + 1) * 128
+		b.Run(fmt.Sprintf("bmodexp64-%d", exp), func(b *testing.B) {
+			b.ReportAllocs()
+			// 0xaa ensures top bit is set, plus "some"
+			benchmarkOperation(b, "", randBytes(64)+randBytes(exp, 0xaa)+randBytes(64)+"bmodexp; pop", "int 1")
+		})
+	}
+	for i := range 32 {
+		exp := (i + 1) * 128
+		b.Run(fmt.Sprintf("bmodexp512-%d", exp), func(b *testing.B) {
+			b.ReportAllocs()
+			benchmarkOperation(b, "", randBytes(512)+randBytes(exp, 0xaa)+randBytes(512)+"bmodexp; pop", "int 1")
+		})
+	}
+}
+
+// BenchmarkBytesModBitlen shows why we use bitlen in the cost
+// function. Exponent of 0x0f is roughly half as costly as exponent of 0xf0,
+// even though both are 1 byte. (And RSA uses 3 as an exponent)
+func BenchmarkBytesModExpBitlen(b *testing.B) {
+	for i := range 32 {
+		size := (i + 1) * 128
+		b.Run("bmodexp0x0f", func(b *testing.B) {
+			b.ReportAllocs()
+			benchmarkOperation(b, "", randBytes(size)+"byte 0x0f;"+randBytes(size)+"bmodexp; pop", "int 1")
+		})
+	}
+	for i := range 32 {
+		size := (i + 1) * 128
+		b.Run("bmodexp0xf0", func(b *testing.B) {
+			b.ReportAllocs()
+			benchmarkOperation(b, "", randBytes(size)+"byte 0xf0;"+randBytes(size)+"bmodexp; pop", "int 1")
+		})
+	}
+}
+
 func BenchmarkBytesModExp(b *testing.B) {
 	type ModexpTestVector struct {
 		Base     string
@@ -5206,19 +5312,19 @@ func BenchmarkBytesModExp(b *testing.B) {
 	}
 	b.Run("bmod_cost", func(b *testing.B) {
 		b.ReportAllocs()
-		progText := fmt.Sprintf(`byte %s; byte %s;`, randBytes(64), randBytes(64)) + " b%; pop"
+		progText := randBytes(64) + randBytes(64) + " b%; pop"
 		benchmarkOperation(b, "", progText, "int 1")
 	})
 	b.Run("max_bmodexp_cost", func(b *testing.B) {
 		b.ReportAllocs()
-		progText := fmt.Sprintf(`byte %s; byte %s; byte %s; bmodexp; pop`, randBytes(4096), randBytes(4096), randBytes(4096))
+		progText := randBytes(4096) + randBytes(4096) + randBytes(4096) + "bmodexp; pop"
 		benchmarkOperation(b, "", progText, "int 1")
 	})
 	// Iterate through the test vectors and benchmark the bmodexp computation
 	for _, tv := range modexpTestVectors {
 		b.Run(tv.Name, func(b *testing.B) {
 			b.ReportAllocs()
-			progText := fmt.Sprintf(`byte %s; byte %s; byte %s; bmodexp; pop`, tv.Base, tv.Exponent, tv.Modulus)
+			progText := tv.Base + tv.Exponent + tv.Modulus + "bmodexp; pop"
 			benchmarkOperation(b, "", progText, "int 1")
 		})
 	}
@@ -5238,7 +5344,7 @@ func TestBytesModExp(t *testing.T) {
 		Exponent    string
 		Modulus     string
 		Result      string
-		LogicCost   int
+		LogicCost   uint64 // The cost of the bmodexp instruction
 		TestOutcome testOutcome
 	}
 	cases := []ModexpTestVector{
@@ -5248,36 +5354,29 @@ func TestBytesModExp(t *testing.T) {
 		{"0x01", "0x01", "0x0000", "0x01", 0, Panic}, // Modulo of 0 should panic
 		{"0x54b7", "0x00", "0x01", "0x", 200, Accept},
 		{"0x286e0b2a3fea08c786634bdf0a608fb22009c512e6f1f174", "0x9cebf0aae57f76408a", "0xcf5d2d1fdc2e3233adcc13c8b3fc2fb0a3d3c1032ee14288c9026968c59d6fd7f8c9ef82e63bea29304ebb91b150", "0x9e26c7578c46f09e26e67224526193f5af3512662276e54cb91944d9f80514b31fba2d4c6231c97309a79cfc09b0", 507, Accept},
-		{"0xb04336dca137d1284edf958923d01c83f6a09e50bcfb1b509c2afe63bca4f64bf28a482f202cdf08e4fad627acde33c4a5206086641acf2ceab1669bf99b5d672dc71a5d2fc7ff99152f2ecb71e95543cb72be06151e3b75c12961773a0b20e59ceb18713ee7313cb3c146b10188a23de2dab3b733d2dbc4b30258e6e8cde85d1c394a76784a2038a0499feaf4851f22c48b30a7eedf02de934f8a31930d90426fd93241862614943e7a6e2e7f3ef9b08ce14030dcb8ca51d53743ac", "0x3bc794defa8e", "0xf418c1ba14622a93b40859b6fa5c8869ceeab204991a18bba8b414a03bab048c016a98c190ca7f4edb82745e8d91ce930b28c3e8c6f783ff6ea7cf4e092fe845d81189c8d77e4d6b2a3c967ed3d64a7310be13260589531e6485ddf9b065bed8142d7189fe22e213847bc0e10c5ff21e5f12c513f91357db5de6dc879f1e622dc386be6521f48cd476adb021050c09b913147ccb0c7e9ea2712f63b1c2273c4eb70267d366c8eb9548d3bcc19972dce8538767cd53d010e35a3bbab920afd498184d587f3f081fcc7018fd9ad448076a4a8ff231fc", "0x7d01fce371b80532a8ba65fc442e3adb4a5cae46d734258d342fbabaad7e83b14474fd21a5cee7e4a53f3de7e6f3c497b893f0cf23d9a743c4dfa736fb8080d54083a03b20f598ec1eed1d83714465914aa9171cdb1c3a56fb9c021e0c80f44a4d2b4b5c4e078fdc818474af5e0a334b25ac3f069d2dcc72dca335d05ac24fdbfabf07b17ce6e9fb996100509545bd9a0e5df48215112e04a68b2cc700b1a379e3a5df9d2913498cb8e15c92bec53a3c5775dd7fdfa9a5b515f738c88dc404b09cc2a4c389ee6334da58364d5c22482b905a1ec3fc", 2696, Accept},
+		{"0xb04336dca137d1284edf958923d01c83f6a09e50bcfb1b509c2afe63bca4f64bf28a482f202cdf08e4fad627acde33c4a5206086641acf2ceab1669bf99b5d672dc71a5d2fc7ff99152f2ecb71e95543cb72be06151e3b75c12961773a0b20e59ceb18713ee7313cb3c146b10188a23de2dab3b733d2dbc4b30258e6e8cde85d1c394a76784a2038a0499feaf4851f22c48b30a7eedf02de934f8a31930d90426fd93241862614943e7a6e2e7f3ef9b08ce14030dcb8ca51d53743ac", "0x3bc794defa8e", "0xf418c1ba14622a93b40859b6fa5c8869ceeab204991a18bba8b414a03bab048c016a98c190ca7f4edb82745e8d91ce930b28c3e8c6f783ff6ea7cf4e092fe845d81189c8d77e4d6b2a3c967ed3d64a7310be13260589531e6485ddf9b065bed8142d7189fe22e213847bc0e10c5ff21e5f12c513f91357db5de6dc879f1e622dc386be6521f48cd476adb021050c09b913147ccb0c7e9ea2712f63b1c2273c4eb70267d366c8eb9548d3bcc19972dce8538767cd53d010e35a3bbab920afd498184d587f3f081fcc7018fd9ad448076a4a8ff231fc", "0x7d01fce371b80532a8ba65fc442e3adb4a5cae46d734258d342fbabaad7e83b14474fd21a5cee7e4a53f3de7e6f3c497b893f0cf23d9a743c4dfa736fb8080d54083a03b20f598ec1eed1d83714465914aa9171cdb1c3a56fb9c021e0c80f44a4d2b4b5c4e078fdc818474af5e0a334b25ac3f069d2dcc72dca335d05ac24fdbfabf07b17ce6e9fb996100509545bd9a0e5df48215112e04a68b2cc700b1a379e3a5df9d2913498cb8e15c92bec53a3c5775dd7fdfa9a5b515f738c88dc404b09cc2a4c389ee6334da58364d5c22482b905a1ec3fc", 2592, Accept},
 		{"0x3e1c6d61105021cbd5388fbad1bd004929932619359415cbf63b2a5ba087a615ac387a710e19affd897f750581c815ab75c56ab0f7f43fe29ef0a2c10a582ee7cbf548a1e58d3be900f2edd57ecc3e3ce2543730a5b7241f640215", "0xa80794b876bc56a2031a0fe504ee9047dac05791fe78917dc82dc06bdeb519ce285713e9c3a97d4bbe065be9cdf6d7d845f0206bad7d23eace4856", "0x33f27976478080519dd19e89950d04b1e65f3e4bd5e684b234f68584c54415f2896440391e2b36a65bb3e3fafb10a9c6ffae6c5b8ce5223bf786fa0a7a3a6d5a54985f26936fdbc70b2b94790d712de3ed0ecf34332e805da31224f83041efa739e958634529d94f8bd4c64d39a8e3e3d2741623912d97c33751aa0d", "0x2d6f597bb2771b5e9eafeeebb220a157d9bc7a7acb3eb0fed18272da51d1abef322e4b85b02c7ac79bddae7ac8708cc7f01e774e8e8b87023374567b52c3f8e9df28063abfdcb19152d95e2b6b3077acfb687e45e32164c132b0931c587eaa3f34ac474ec0512c6b57bad2b98ef83dca85d23a7c9b114893170501f2", 10363, Accept},
 		{"0x4de679ab106df6431f37cb20e60491eab2a00fda0017e3788856589e332db9596eda1ec03ea4e641ae4b22e7923662537ddd4ae130148ecd193b5e4578d7409e5371b50f45e92293d8c786b824eb26dd6c31419f8ad6383327772cd10b84b40d10a7438c1b3a92aedb718a0c97137e1064ad67484d7206487902ef8f8b7a34318474ba0f6113e9dc15c4e30e7711f641a82f6672ad2e039a09228db6db2287", "0xd021d1d6cc99274c090b16afe3a1c4314f48316dcd2a2cdebaaa2896c51c9f3d779bd7be01a2fdc17093c2c9a633", "0xb7a91bb84e0abaef90b4d4293d0c4968a2", "0x62c668fb320f44c7fec283e7827a6ce1ff", 12083, Accept},
-		{"0x51ebd23d2a02f976d3d9aae2061e06a8c0452b4b556443606ade0c71ea57a8463bbad81a5d6312237f8ab6194e18feb808631d40318b608cb7fe876d3ded24f04bbddc053a3be4579f5c6cdadc3ed1192a5016c609ff80a76677ed214ed0e5e04bf70bc03b6c15b999c4d343466b0324fa5a0a42ad60885885ab43f928991f30783819caba87e247837b0948b1d8d050ed", "0x1fbe100e76befa9e13", "0x576df8720f308d6e342644063415492caa9d4a11c80030e25f7541e56e62869d15b08a8807d789870194b0c7a325cf9d13e49c654b08965c8eb3e144145fb7", "0x197bcf7eafab09fa4776dbaa9ebb8cc2ff6787d1a800819cd75f507a1372157085dc171f6e501edf2b44d46038d3fa49e0db8ebac4b41461bdce184585edd9", 2200, Accept},
-		{"0x9c61f9e2209144eeabc02cb02e5db1484544e33478eb374a18be5baf71b16e91d9ab86882984ea9ba16fde77eb0ef161c497c1883e0cbdb8dca844ad7b8f270073ab640c385e4f9512", "0x648110c896453b6f1a3a0b234f5c0f8b7c4b4d958458280372a6232f9d98cd1420df6a5691fa1bf773f6bd", "0xe5e14e935f795ad814f54d95248b0102b2b0c351e8a5112541343c024d90dfa43c702eea820354a2670563425ee515c4dcc2c6bed73234b0e77384f3ba64a1b8b068149b2363566cdf9c80af", "0xa1d077b5157b4e829c814a0e8fb7e9b83e30e65ff46d3264dc619063a2de57fb171e050c5ec85715b73a8a8a7d2b155a6a77855edea62c9a6850c8dec1551bde227304b7df2811245405fdd5", 3535, Accept},
-		{"0xe1b779ff6951aee456aeaf87a963678eaaae4ed61f387b68e4f196ff71440a5955b9a8c2144dbe4c00717b157564f21b54c8c3934bb43754af039068ba03d1ab7c53f9d5526842cb", "0x6bc12883963b0f0b6eb6c275bcc9", "0x072c23cab0e4dbc633b86e45a6b9bdfaf87076bf618c08b142d42b7ad8c3ea4795e873dad518ace0f9e84a4e265191972e303bfbbd6cff781de09a1ccb19f0dc5d874dfc3b89bfa666b391068c3dc9c183f04e4dcd1ec80ed92fd4c792e102904817a41ae1208ed39a9484d61e10491859924a0a04a9455e36458702dcd8a312176e9a05e0e45a14783ecaa7e93f410a8a51848ad706d014467d634fa7c0d6756f54e5f980", "0x06d4a5ffa4568bf3bc20ff29f74941b212ec9121d936d6becbfde46dca5034e0749fead5293e42331a922d1e6a64efc42bf165ca3853c2a80248d32fdf70a6c233ef32851b85ea1c1b51ca364dd2bcd9f25a6249c014dc36b123382099f5f060eb8c0b6d13e4facb932fa49ae140b917dad9e82076e71b407928405aa449fb66eacd97429296a8f8d3cafd8660d124f5d98e6fdb9f1a74ba10a76b724bb8ef4ec98c749b6b", 4041, Accept},
+		{"0x51ebd23d2a02f976d3d9aae2061e06a8c0452b4b556443606ade0c71ea57a8463bbad81a5d6312237f8ab6194e18feb808631d40318b608cb7fe876d3ded24f04bbddc053a3be4579f5c6cdadc3ed1192a5016c609ff80a76677ed214ed0e5e04bf70bc03b6c15b999c4d343466b0324fa5a0a42ad60885885ab43f928991f30783819caba87e247837b0948b1d8d050ed", "0x1fbe100e76befa9e13", "0x576df8720f308d6e342644063415492caa9d4a11c80030e25f7541e56e62869d15b08a8807d789870194b0c7a325cf9d13e49c654b08965c8eb3e144145fb7", "0x197bcf7eafab09fa4776dbaa9ebb8cc2ff6787d1a800819cd75f507a1372157085dc171f6e501edf2b44d46038d3fa49e0db8ebac4b41461bdce184585edd9", 2117, Accept},
+		{"0x9c61f9e2209144eeabc02cb02e5db1484544e33478eb374a18be5baf71b16e91d9ab86882984ea9ba16fde77eb0ef161c497c1883e0cbdb8dca844ad7b8f270073ab640c385e4f9512", "0x648110c896453b6f1a3a0b234f5c0f8b7c4b4d958458280372a6232f9d98cd1420df6a5691fa1bf773f6bd", "0xe5e14e935f795ad814f54d95248b0102b2b0c351e8a5112541343c024d90dfa43c702eea820354a2670563425ee515c4dcc2c6bed73234b0e77384f3ba64a1b8b068149b2363566cdf9c80af", "0xa1d077b5157b4e829c814a0e8fb7e9b83e30e65ff46d3264dc619063a2de57fb171e050c5ec85715b73a8a8a7d2b155a6a77855edea62c9a6850c8dec1551bde227304b7df2811245405fdd5", 3525, Accept},
+		{"0xe1b779ff6951aee456aeaf87a963678eaaae4ed61f387b68e4f196ff71440a5955b9a8c2144dbe4c00717b157564f21b54c8c3934bb43754af039068ba03d1ab7c53f9d5526842cb", "0x6bc12883963b0f0b6eb6c275bcc9", "0x072c23cab0e4dbc633b86e45a6b9bdfaf87076bf618c08b142d42b7ad8c3ea4795e873dad518ace0f9e84a4e265191972e303bfbbd6cff781de09a1ccb19f0dc5d874dfc3b89bfa666b391068c3dc9c183f04e4dcd1ec80ed92fd4c792e102904817a41ae1208ed39a9484d61e10491859924a0a04a9455e36458702dcd8a312176e9a05e0e45a14783ecaa7e93f410a8a51848ad706d014467d634fa7c0d6756f54e5f980", "0x06d4a5ffa4568bf3bc20ff29f74941b212ec9121d936d6becbfde46dca5034e0749fead5293e42331a922d1e6a64efc42bf165ca3853c2a80248d32fdf70a6c233ef32851b85ea1c1b51ca364dd2bcd9f25a6249c014dc36b123382099f5f060eb8c0b6d13e4facb932fa49ae140b917dad9e82076e71b407928405aa449fb66eacd97429296a8f8d3cafd8660d124f5d98e6fdb9f1a74ba10a76b724bb8ef4ec98c749b6b", 4007, Accept},
 		{"0x4594ea63dd8b77f34701aaae1f430d4adee9811213bde681fd750cd4bff65322654553180248e580de54da02365dbcc61ad6039a61c0c5783872038cccf618ce10757b50d4f58529cc2d6d9ca30543e8ddedc481757a679101", "0xd32aab68fadf838e361d75da2ce241dd0b95dd38e3ceb860975e39d4eab04e84581269d22dc8880395c6c091b3859cd9fa031186af5bc0f23d6ada8fbfae9f7dcc307d862c", "0x7b646597ae005c1b0c2bc981917294e669a47fc12b27d08c1741caa5d31c68", "0x317c66d1e4a6e22d60a1299aaec61f9e8668e08bb94b11e59e32d1daad8e11", 7122, Accept},
 		{"0x44dfe16a0cc499362a5a6b6b5d4167b9e45c3bbd1b98b494e99ff71010013a8c816816f112a69f9e70a320625c149555e1276bad70999da1b3c124e5c54cbeb02b534f845ffdfcede15b01fa8d0bd8f22b95ace6cf5d0aa97cb81f1688afecef51cc48fdf3155185090e8249795af2c26997ea1a915fd85b5a8bf9cce7c7dbbb6f268cd424e6b86331d32a6e4cf783957160", "0xc392b4bfe312f474a02d0860823a05a8a6d5846f1db0a9245a1f64cb354b5ab91590d24ebba8ef68a369d25932b1acfcb33b6af52a260313bcc0493c", "0x5492af9556e685fd639f80e42fae3e0cc4588233f4683017d376c5746b3eea", "0x4e13bec8183024e881e1688458437e0a3c49959c3099329c4540c0b5840a70", 13688, Accept},
-		{"0x2ea1312db704ff29e0", "0x038302a78381a38adcb7581cbeb7a0797289d82d14a85cf4c36df72c5b5c3d464c4a280f930a85ef4aefb54ce935d01a18afd42d9a679140a360f2b185ac37fde9890d2808a6675e3d73bc696921babefa9cb1985b948e65734fae0515f0e6b7ef782bef9f1a4921c5df3e340e764bf6c347614c5649e645f3bdaaa2c7dbcc16b5107056", "0x71166d7a0b32f8cbd2f682474b61c5535e2867562bcf5dd5e43d2a4e036b78e871b18145e6da2ef327da994965ade4bb985f4f2402da936a6f90d0913512add104dc10741c06b948e911b8fbe9", "0x4540d8df3bc9cd82ff6e431440f65fd58165a43783dccabc315f5a33fa3a581068ca5ae3ede591e302fc863eff657b962d0e671235fc97456439921ec9023eff5b8256b056eb47eae5911f2e6b", 10658, Accept},
-		{"0x1f206df741a36c542fb5e609c9299e62a96ee677ca7266d85d086d4ebd6ab9b52c56539c41b0a1a69a0a5dfc794cd6076360643660147c053f821992bf5c787a1fed53eab8f61e0d538aa3a352616774d419c7be55415e60a86f296d1baa199284ebd2ff12eb2b84a7dfedbe1d34efd3219265f302b91963416e42145bfbdf7d0132b1d32c98129521a61d92e2318f94b87f96f68eefe5263717999ab1780f9c15e895a5c188e47518b209f61c3a501e315c4ea0504de653d9b3f9d25658c1c30b99fa6b2a02ff99838d04b86bbeb13ca94d90fd96aca7eae17bc76cf13e33cf37769ad7bf98c6f151c3961d2157aa63ebd577f2f5dbb67805df9a649942843c", "0x37c463", "0x8eb38552534a9ca188412677f154eeba8f011cf6ae00472dcca54c068d57825ff7f703b1a8380d2fc9a7e1e142f8770a7da52e2d47638853aacbe450a80f2c35a9ce0e5feca7bfff871252ec2c5754cafdcde3cd20ce4767c23042570d3d9641e8517ea4c3f10d7f4ea927824d948aed87de2b856347faba08be786ad3d9f30cd1bc4b036dd4a0053c59d11fc2840aefde47222a0273323f45b08539313de7393d24ade84f8f57c719986db04a0f3f483375e5779c8b8ce913991a80ea6cb368bb3f1f2c3dc3d424d7c0ae607c6d052dc7b0ae170250e1ad10e6b327857cb8610904c526d51430c31931d4ba3d5ebab8d6321c48d6d482f5b129f69871f4405f", "0x1d6e8af1caa1098ce2429e32eb831598f6b28a65376e54fe863283b545949586e2f3b41285d6047fcd52d164be131325f80412d2ca8bb84dd945ae69b3e1bc4fa861905b1f3032ea7279d2ed3c03f78ece1c0d0f159e0a4776d1ee47516e4379105491c37d6bc86bc26420966076d114f5a4091e800259f59073fd5f7c0100fbcbc10a9f7cef6fcd03c04ae97b54994ea479e168bc00ae9ea84ad07497aa470d3d438ccfa669de5d99ccf36a2ab1773378101123f5bcdd9a6f5a1df889b8a0bbc071d692d68b69801cfa467bdcb8d00dc5f32be5ca907433667691527534c229701ec929ef836c7caef7a088205082f98a08860ed72d383e6ac256aa3680f3c6", 1884, Accept},
-		{"0x7c391cf4e56c7c104d90177402b2e1a0f9179a06304f4357e4b146e116cd12e0f1c12bfc66171b8c8be104d09c304c340e125c4b6fda63b94315d74ad0e8b8178edac81b475da5dc7e825c309a4c0b5fb3c3e0bd7f94dc661cd8ac546940779e54edf58c6ace5589914541935bc66fff64442d8bc2e6dc8420257c8ab0a877729fe8", "0x74d69cdea330c38633c7bca9fb46d2e1e2050e5220c5fa3194584c62b4ebd3e85a70fd2f994d04681fc8aa32e580f87484b78ff8d3bab0412874e55772411288f4a6196f9da6db7aaebbf0d62e4e42275dfa475ac35802d912aacfb4f77e945f4e5e3c28610ddbd479280df848cd57829746fcc6452a5d4127b4f8b27a3149bc", "0x9000b0b587f64e78f51645a75d98b64d7fa1001d1636bcae53ea41f9f955f67f79c442adbca55d59c61642ed91364feef5e5147ed229cd5ff1d31b6c333a65f95e80c576f11ce4790c3162c351bd7df796c6e2184a387edea127c6ddf46a6eae6ade4066de609d655832b98b", "0x810f16edd6ffee0cad631b2f59ad6b3847f80974ce4376353ad1f8f487dae65e93ddb9552cc93b0725acb1ba3551132c138ef730568c3fde71918608edf3f78130170124d0a4d3d28fcd2cefb256465eb18e80ea0576fd1df44e76786a450285a0eef852b7df639925795293", 24014, Accept},
-		{"0x9b7e403f0d0134635f90d344dbce30ac511e8e5e274a3436ccb75503d0ee72a3ba59c2a9b774ee74abe082e09702c65151186706c62200241d306d8cb18b40278c885222db5d001aecceff20e4be25ed83d4ff7d40c4c6e513a63238a5c07e45da3a24868caa67fae36047d955a648dd1c741284cdb8bc282c01b9d66d2c5b651268ff1d50356f1dc6be6d59814d7787e6", "0x30c54b", "0x093fd6b228d5d2268a36b0a1b8fb7dbcb4669c22e0cc2a5deaa3c3da890c5fa23dc0", "0x2a3d94206458cce1a0cee7ef45b3812de4f2ae4ee9b347acf55385eca217159f6b76b7c14774aa54e9667bb172d66b25d907682576a2ec7f2038c07e4f", 0, Panic},
+		{"0x2ea1312db704ff29e0", "0x038302a78381a38adcb7581cbeb7a0797289d82d14a85cf4c36df72c5b5c3d464c4a280f930a85ef4aefb54ce935d01a18afd42d9a679140a360f2b185ac37fde9890d2808a6675e3d73bc696921babefa9cb1985b948e65734fae0515f0e6b7ef782bef9f1a4921c5df3e340e764bf6c347614c5649e645f3bdaaa2c7dbcc16b5107056", "0x71166d7a0b32f8cbd2f682474b61c5535e2867562bcf5dd5e43d2a4e036b78e871b18145e6da2ef327da994965ade4bb985f4f2402da936a6f90d0913512add104dc10741c06b948e911b8fbe9", "0x4540d8df3bc9cd82ff6e431440f65fd58165a43783dccabc315f5a33fa3a581068ca5ae3ede591e302fc863eff657b962d0e671235fc97456439921ec9023eff5b8256b056eb47eae5911f2e6b", 10598, Accept},
+		{"0x1f206df741a36c542fb5e609c9299e62a96ee677ca7266d85d086d4ebd6ab9b52c56539c41b0a1a69a0a5dfc794cd6076360643660147c053f821992bf5c787a1fed53eab8f61e0d538aa3a352616774d419c7be55415e60a86f296d1baa199284ebd2ff12eb2b84a7dfedbe1d34efd3219265f302b91963416e42145bfbdf7d0132b1d32c98129521a61d92e2318f94b87f96f68eefe5263717999ab1780f9c15e895a5c188e47518b209f61c3a501e315c4ea0504de653d9b3f9d25658c1c30b99fa6b2a02ff99838d04b86bbeb13ca94d90fd96aca7eae17bc76cf13e33cf37769ad7bf98c6f151c3961d2157aa63ebd577f2f5dbb67805df9a649942843c", "0x37c463", "0x8eb38552534a9ca188412677f154eeba8f011cf6ae00472dcca54c068d57825ff7f703b1a8380d2fc9a7e1e142f8770a7da52e2d47638853aacbe450a80f2c35a9ce0e5feca7bfff871252ec2c5754cafdcde3cd20ce4767c23042570d3d9641e8517ea4c3f10d7f4ea927824d948aed87de2b856347faba08be786ad3d9f30cd1bc4b036dd4a0053c59d11fc2840aefde47222a0273323f45b08539313de7393d24ade84f8f57c719986db04a0f3f483375e5779c8b8ce913991a80ea6cb368bb3f1f2c3dc3d424d7c0ae607c6d052dc7b0ae170250e1ad10e6b327857cb8610904c526d51430c31931d4ba3d5ebab8d6321c48d6d482f5b129f69871f4405f", "0x1d6e8af1caa1098ce2429e32eb831598f6b28a65376e54fe863283b545949586e2f3b41285d6047fcd52d164be131325f80412d2ca8bb84dd945ae69b3e1bc4fa861905b1f3032ea7279d2ed3c03f78ece1c0d0f159e0a4776d1ee47516e4379105491c37d6bc86bc26420966076d114f5a4091e800259f59073fd5f7c0100fbcbc10a9f7cef6fcd03c04ae97b54994ea479e168bc00ae9ea84ad07497aa470d3d438ccfa669de5d99ccf36a2ab1773378101123f5bcdd9a6f5a1df889b8a0bbc071d692d68b69801cfa467bdcb8d00dc5f32be5ca907433667691527534c229701ec929ef836c7caef7a088205082f98a08860ed72d383e6ac256aa3680f3c6", 1744, Accept},
+		{"0x7c391cf4e56c7c104d90177402b2e1a0f9179a06304f4357e4b146e116cd12e0f1c12bfc66171b8c8be104d09c304c340e125c4b6fda63b94315d74ad0e8b8178edac81b475da5dc7e825c309a4c0b5fb3c3e0bd7f94dc661cd8ac546940779e54edf58c6ace5589914541935bc66fff64442d8bc2e6dc8420257c8ab0a877729fe8", "0x74d69cdea330c38633c7bca9fb46d2e1e2050e5220c5fa3194584c62b4ebd3e85a70fd2f994d04681fc8aa32e580f87484b78ff8d3bab0412874e55772411288f4a6196f9da6db7aaebbf0d62e4e42275dfa475ac35802d912aacfb4f77e945f4e5e3c28610ddbd479280df848cd57829746fcc6452a5d4127b4f8b27a3149bc", "0x9000b0b587f64e78f51645a75d98b64d7fa1001d1636bcae53ea41f9f955f67f79c442adbca55d59c61642ed91364feef5e5147ed229cd5ff1d31b6c333a65f95e80c576f11ce4790c3162c351bd7df796c6e2184a387edea127c6ddf46a6eae6ade4066de609d655832b98b", "0x810f16edd6ffee0cad631b2f59ad6b3847f80974ce4376353ad1f8f487dae65e93ddb9552cc93b0725acb1ba3551132c138ef730568c3fde71918608edf3f78130170124d0a4d3d28fcd2cefb256465eb18e80ea0576fd1df44e76786a450285a0eef852b7df639925795293", 23991, Accept},
+		{"0x9b7e403f0d0134635f90d344dbce30ac511e8e5e274a3436ccb75503d0ee72a3ba59c2a9b774ee74abe082e09702c65151186706c62200241d306d8cb18b40278c885222db5d001aecceff20e4be25ed83d4ff7d40c4c6e513a63238a5c07e45da3a24868caa67fae36047d955a648dd1c741284cdb8bc282c01b9d66d2c5b651268ff1d50356f1dc6be6d59814d7787e6", "0x30c54b", "0x093fd6b228d5d2268a36b0a1b8fb7dbcb4669c22e0cc2a5deaa3c3da890c5fa23dc0", "0x2a3d94206458cce1a0cee7ef45b3812de4f2ae4ee9b347acf55385eca217159f6b76b7c14774aa54e9667bb172d66b25d907682576a2ec7f2038c07e4f", 0, Reject},
 	}
 
 	for i, tc := range cases {
 		// use subtests so that we can run all tests despite failures
 		t.Run(fmt.Sprintf("case %d", i), func(t *testing.T) {
-			progText := fmt.Sprintf(`byte %s
-byte %s
-byte %s
-bmodexp
-byte %s
-==
-assert
-global OpcodeBudget
-int %d
-==`, tc.Base, tc.Exponent, tc.Modulus, tc.Result, testLogicBudget-7-tc.LogicCost)
+			progText := fmt.Sprintf("pushbytes %s; pushbytes %s; pushbytes %s; bmodexp; pushbytes %s; ==",
+				tc.Base, tc.Exponent, tc.Modulus, tc.Result)
 			switch tc.TestOutcome {
 			case Accept:
 				testAccepts(t, progText, 12)
+				testCost(t, progText, tc.LogicCost+5, 12) // 4 pushbytes, and ==
 			case Reject:
 				testRejects(t, progText, 12)
 				// ensure nobody thinks they are testing a cost here
@@ -5294,9 +5393,11 @@ int %d
 
 func TestBytesMath(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
 	t.Parallel()
+
 	testAccepts(t, "byte 0x01; byte 0x01; b+; byte 0x02; ==", 4)
+	testCost(t, "byte 0x01; byte 0x02; b+; byte 0x03; ==", 2+10+2, 6)
+	testCost(t, "byte 0x01; byte 0x02; b+; byte 0x03; ==", 2+2+2, 12)
 	testAccepts(t, "byte 0x01FF; byte 0x01; b+; byte 0x0200; ==", 4)
 
 	effs := strings.Repeat("ff", 64)
@@ -5304,10 +5405,11 @@ func TestBytesMath(t *testing.T) {
 	testAccepts(t, fmt.Sprintf("byte 0x%s; byte 0x10; b+; len; int 65; ==", effs), 4)
 	// 4096 byte inputs that sum to 4097 byte outputs panic, no matter the version.
 	testPanics(t, notrack(fmt.Sprintf("byte 0x%s; byte 0x10; b+; len; int 4097; ==", strings.Repeat("ff", 4096))), 4)
-	// 65 byte inputs are not ok until v12.
-	p := fmt.Sprintf("byte 0x%s00; byte 0x10; b-; len; int 65; ==", effs)
+	// 65 byte inputs are not ok for b+ until v12.
+	p := fmt.Sprintf("byte 0x%s00; byte 0x10; b+; len; int 65; ==", effs)
 	testPanicRange(t, notrack(p), 4, 11)
 	testAcceptRange(t, p, 12, AssemblerMaxVersion)
+	testCost(t, p, 2+6+3, 12)
 
 	testAccepts(t, `byte 0x01; byte 0x01; b-; byte ""; ==`, 4)
 	testAccepts(t, "byte 0x0200; byte 0x01; b-; byte 0x01FF; ==", 4)
@@ -5315,35 +5417,103 @@ func TestBytesMath(t *testing.T) {
 	testAccepts(t, "byte 0x0100; byte 0x01; b-; byte 0xFF; ==", 4)
 	testPanics(t, "byte 0x01; byte 0x02; b-; int 1; return", 4)
 
+	// 65 byte inputs are not ok for b- until v12.
+	p = fmt.Sprintf("byte 0x%s00; byte 0x10; b-; len; int 65; ==", effs)
+	testPanicRange(t, notrack(p), 4, 11)
+	testAcceptRange(t, p, 12, AssemblerMaxVersion)
+	testCost(t, p, 2+6+3, 12)
+
+	testAccepts(t, "byte 0x10; byte 0x10; b*; byte 0x0100; ==", 4)
+	testAccepts(t, "byte 0x100000000000; byte 0x00; b*; byte b64(); ==", 4)
+	testCost(t, "byte 0x100000000000; byte 0x00; b*; byte b64(); ==", 20+4, 6)
+	testCost(t, "byte 0x100000000000; byte 0x2000; b*; byte 0x0200000000000000; ==", 5+4, 12)
+
 	testAccepts(t, "byte 0x01; byte 0x01; b/; byte 0x01; ==", 4)
 	testPanics(t, "byte 0x0200; byte b64(); b/; int 1; return", 4)
 	testPanics(t, "byte 0x01; byte 0x00; b/; int 1; return", 4)
-	testPanics(t, "int 65; bzero; byte 0x01; b/; int 1; return", 4)
+	p = "int 65; bzero; byte 0x01; b/; byte 0x; =="
+	testPanicRange(t, p, 4, 11)
+	testAcceptRange(t, p, 12, AssemblerMaxVersion)
 
 	testAccepts(t, "byte 0x10; byte 0x07; b%; byte 0x02; ==; return", 4)
 	testPanics(t, "byte 0x01; byte 0x00; b%; int 1; return", 4)
-	testPanics(t, "int 65; bzero; byte 0x10; b%", 4)
+	p = "byte 0x01; int 64; bzero; concat; byte 0x10; b%; byte 0x00; b=="
+	testPanicRange(t, p, 4, 11)
+	testAcceptRange(t, p, 12, AssemblerMaxVersion)
 
 	// Even 128 byte outputs are ok
-	testAccepts(t, fmt.Sprintf("byte 0x%s; byte 0x%s; b*; len; int 128; ==", effs, effs), 4)
+	p = fmt.Sprintf("byte 0x%s; byte 0x%s; b*; len; int 128; ==", effs, effs)
+	testAccepts(t, p, 4)
+	testCost(t, p, 26, 6) // 20 + 6 (5 obvious instructions plus bytecblock)
+	assert.Equal(t, 12, mulComplexity(64, 64))
+	testCost(t, p, 18, 12) // 12 + 6
+	// But not 65 byte inputs (until v12)
+	p = fmt.Sprintf("byte 0x%s; byte 0xff; concat; byte 0xff; b*; len; int 66; ==", effs)
+	testPanicRange(t, p, 4, 11)
+	testAcceptRange(t, p, 12, AssemblerMaxVersion)
+	assert.Equal(t, 8, mulComplexity(65, 1))
+	testCost(t, p, 16, 12) // 8 + 8 (7 obvious instructions, plus bytecblock)
 
-	testAccepts(t, "byte 0x00; bsqrt; byte 0x; ==; return", 6)
 	testAccepts(t, "byte 0x01; bsqrt; byte 0x01; ==; return", 6)
+	testAccepts(t, "byte 0x00; bsqrt; byte 0x; ==; return", 6)
 	testAccepts(t, "byte 0x10; bsqrt; byte 0x04; ==; return", 6)
 	testAccepts(t, "byte 0x11; bsqrt; byte 0x04; ==; return", 6)
 	testAccepts(t, "byte 0xffffff; bsqrt; len; int 2; ==; return", 6)
 	// 64 byte long inputs are accepted
-	testAccepts(t, fmt.Sprintf("byte 0x%s; bsqrt; len; int 32; ==", effs), 6)
-	// 65 byte inputs are not ok (no track allows assembly)
-	testPanics(t, notrack(fmt.Sprintf("byte 0x%s00; bsqrt; pop; int 1", effs)), 6)
+	p = fmt.Sprintf("byte 0x%s; bsqrt; len; int 32; ==", effs)
+	testAccepts(t, p, 6)
+	testCost(t, p, 44, 6)  // 40 + 4
+	testCost(t, p, 73, 12) // 69 + 4
+	// 65 byte inputs are not ok until v12 (no track allows assembly)
+	p = notrack(fmt.Sprintf("byte 0x%s00; bsqrt; len; int 33; ==", effs))
+	testPanicRange(t, p, 6, 11)
+	testAcceptRange(t, p, 12, AssemblerMaxVersion)
+	testCost(t, p, 74, 12) // 70 + 4
+
+	// 128, mostly for cost test
+	p = notrack(fmt.Sprintf("byte 0x%s%s; bsqrt; len; int 64; ==", effs, effs))
+	testPanicRange(t, p, 6, 11)
+	testAcceptRange(t, p, 12, AssemblerMaxVersion)
+	testCost(t, p, 145, 12) // 141 + 4
+}
+
+func TestMulComplexity(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	a := assert.New(t)
+	// test with sizes that are roughly equal
+	a.Equal(5, mulComplexity(0, 0))
+	a.Equal(5, mulComplexity(6, 7))
+	a.Equal(6, mulComplexity(16, 7))
+	a.Equal(6, mulComplexity(16, 16))
+	a.Equal(7, mulComplexity(32, 16))
+	a.Equal(21, mulComplexity(128, 128))
+	// demonstrate nice continuity near the changeover at 512
+	a.Equal(126, mulComplexity(511, 511))
+	a.Equal(130, mulComplexity(512, 512))
+	a.Equal(130, mulComplexity(513, 513))
+	a.Equal(130, mulComplexity(513, 511))
+
+	// test for bad discontinuities at 512
+	for la := range 4096 {
+		below := mulComplexity(la, 511)
+		above := mulComplexity(la, 512)
+		a.GreaterOrEqual(above, below)             // bigger input has bigger cost
+		a.GreaterOrEqual(1+la/25, above-below, la) // the cost goes up a "reasonable" amount, compared to length
+	}
+
+	// silly exhaustive test. only takes a few seconds
+	for la := range 4096 {
+		for lb := range 4096 {
+			a.Equal(mulComplexity(la, lb), mulComplexity(lb, la))
+		}
+	}
 }
 
 func TestBytesCompare(t *testing.T) {
 	partitiontest.PartitionTest(t)
-
 	t.Parallel()
-	testAccepts(t, "byte 0x10; byte 0x10; b*; byte 0x0100; ==", 4)
-	testAccepts(t, "byte 0x100000000000; byte 0x00; b*; byte b64(); ==", 4)
 
 	testAccepts(t, "byte 0x10; byte 0x10; b<; !", 4)
 	testAccepts(t, "byte 0x10; byte 0x10; b<=", 4)
