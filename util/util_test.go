@@ -19,10 +19,14 @@ package util
 import (
 	"testing"
 
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
 
 func TestGetTotalMemory(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	mem := GetTotalMemory()
 	require.Greater(t, mem, uint64(0))
 }
