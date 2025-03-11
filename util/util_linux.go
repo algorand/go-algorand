@@ -26,5 +26,6 @@ func getTotalMemory() uint64 {
 	if err != nil {
 		return 0
 	}
-	return si.Totalram
+	// support 32-bit systems where Totalram is uint32
+	return uint64(si.Totalram) * uint64(si.Unit)
 }

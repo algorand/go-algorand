@@ -17,18 +17,12 @@
 package util
 
 import (
-	"syscall"
-	"unsafe"
+	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
-func getTotalMemory() uint64 {
-	out, err := syscall.Sysctl("hw.memsize")
-	if err != nil {
-		return 0
-	}
-	b := []byte(out)
-	if len(b) < 8 {
-		b = append(b, 0)
-	}
-	return *(*uint64)(unsafe.Pointer(&b[0]))
+func TestGetTotalMemory(t *testing.T) {
+	mem := GetTotalMemory()
+	require.Greater(t, mem, uint64(0))
 }
