@@ -69,3 +69,8 @@ func filetimeToDuration(ft *syscall.Filetime) time.Duration {
 	n := int64(ft.HighDateTime)<<32 + int64(ft.LowDateTime) // in 100-nanosecond intervals
 	return time.Duration(n * 100)
 }
+
+// GetTotalMemory gets total system memory, returns 0 on Windows
+func GetTotalMemory() uint64 {
+	return 0
+}
