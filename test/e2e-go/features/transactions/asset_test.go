@@ -682,8 +682,6 @@ func TestAssetGroupCreateSendDestroy(t *testing.T) {
 	txSend, err = client1.MakeUnsignedAssetSendTx(assetID3, 0, account1, "", "")
 	_, err = helperFillSignBroadcast(client1, wh1, account1, txSend, err)
 	a.Error(err)
-
-	a.FailNow("test")
 }
 
 func TestAssetSend(t *testing.T) {
