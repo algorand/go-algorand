@@ -54,6 +54,11 @@ type TemplateKMDConfig struct {
 	SessionLifetimeSecs uint64
 }
 
+func (c TemplateKMDConfig) apply(cfg kmdconfig.KMDConfig) kmdconfig.KMDConfig {
+	cfg.SessionLifetimeSecs = c.SessionLifetimeSecs
+	return cfg
+}
+
 var defaultNetworkTemplate = NetworkTemplate{
 	Genesis: gen.DefaultGenesis,
 }
@@ -369,7 +374,6 @@ func createConfigFile(node remote.NodeConfigGoal, configFile string, numNodes in
 }
 
 func createKMDConfigFile(kmdConfig TemplateKMDConfig, kmdDir string) error {
-	cfg := kmdconfig.DefaultConfig(kmdDir)
-	cfg.SessionLifetimeSecs = kmdConfig.SessionLifetimeSecs
+	cfg := kmdConfig.apply(kmdconfig.DefaultConfig(kmdDir))
 	return kmdconfig.SaveKMDConfig(kmdDir, cfg)
 }
