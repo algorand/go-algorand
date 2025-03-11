@@ -23,16 +23,14 @@
             "Wallets": [
                 { "Name": "Wallet1",
                   "ParticipationOnly": false }
-            ],
-            "KmdJSONOverride": "{\"session_lifetime_secs\": 300}"
+            ]
         },
         {
             "Name": "Node",
             "Wallets": [
                 { "Name": "Wallet2",
                   "ParticipationOnly": false }
-            ],
-            "KmdJSONOverride": "{\"session_lifetime_secs\": 300}"
+            ]
         }
     ]
 }

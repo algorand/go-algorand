@@ -43,6 +43,15 @@ type NetworkTemplate struct {
 	Genesis   gen.GenesisData
 	Nodes     []remote.NodeConfigGoal
 	Consensus config.ConsensusProtocols
+	kmdConfig TemplateKMDConfig
+}
+
+// TemplateKMDConfig is a subset of the kmd configuration that can be overridden in the network template
+// by using OverrideKmdConfig TemplateOverride opts.
+// The reason why config.KMDConfig cannot be used directly is that it contains DataDir field which is
+// is not known until the template instantiation.
+type TemplateKMDConfig struct {
+	SessionLifetimeSecs uint64
 }
 
 var defaultNetworkTemplate = NetworkTemplate{
@@ -133,13 +142,13 @@ func (t NetworkTemplate) createNodeDirectories(targetFolder string, binDir strin
 		}
 
 		var kmdDir string
-		if len(cfg.KmdJSONOverride) > 0 {
+		if (t.kmdConfig != TemplateKMDConfig{}) {
 			kmdDir = filepath.Join(nodeDir, libgoal.DefaultKMDDataDir)
 			err = os.MkdirAll(kmdDir, 0700) // kmd requires 700 permissions
 			if err != nil {
 				return
 			}
-			err = createKMDConfigFile(cfg, kmdDir)
+			err = createKMDConfigFile(t.kmdConfig, kmdDir)
 			if err != nil {
 				return
 			}
@@ -268,15 +277,6 @@ func (t NetworkTemplate) Validate() error {
 		}
 	}
 
-	// Validate KmdJSONOverride decoding
-	for _, cfg := range t.Nodes {
-		kmdconf := kmdconfig.KMDConfig{}
-		err := decodeJSONOverride(cfg.KmdJSONOverride, &kmdconf)
-		if err != nil {
-			return fmt.Errorf("invalid template: unable to decode KmdJSONOverride: %w", err)
-		}
-	}
-
 	// Follow nodes cannot be relays
 	// Relays cannot have peer list
 	for _, cfg := range t.Nodes {
@@ -368,12 +368,8 @@ func createConfigFile(node remote.NodeConfigGoal, configFile string, numNodes in
 	return cfg, cfg.SaveToFile(configFile)
 }
 
-func createKMDConfigFile(node remote.NodeConfigGoal, kmdDir string) error {
+func createKMDConfigFile(kmdConfig TemplateKMDConfig, kmdDir string) error {
 	cfg := kmdconfig.DefaultConfig(kmdDir)
-	err := decodeJSONOverride(node.KmdJSONOverride, &cfg)
-	if err != nil {
-		return err
-	}
-
+	cfg.SessionLifetimeSecs = kmdConfig.SessionLifetimeSecs
 	return kmdconfig.SaveKMDConfig(kmdDir, cfg)
 }
