@@ -43,7 +43,7 @@ type NetworkTemplate struct {
 	Genesis   gen.GenesisData
 	Nodes     []remote.NodeConfigGoal
 	Consensus config.ConsensusProtocols
-	kmdConfig TemplateKMDConfig
+	kmdConfig TemplateKMDConfig // set by OverrideKmdConfig
 }
 
 // TemplateKMDConfig is a subset of the kmd configuration that can be overridden in the network template
