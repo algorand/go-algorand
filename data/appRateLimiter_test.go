@@ -18,6 +18,7 @@ package data
 
 import (
 	"encoding/binary"
+	"math/rand/v2"
 	"testing"
 	"time"
 
@@ -29,7 +30,6 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/blake2b"
-	"golang.org/x/exp/rand"
 )
 
 func TestAppRateLimiter_Make(t *testing.T) {
@@ -488,7 +488,7 @@ func TestAppRateLimiter_TxgroupToKeys(t *testing.T) {
 }
 
 func BenchmarkAppRateLimiter_TxgroupToKeys(b *testing.B) {
-	rnd := rand.New(rand.NewSource(123))
+	rnd := rand.New(rand.NewPCG(0, 123))
 
 	txgroups := make([][]transactions.SignedTxn, 0, b.N)
 	for i := 0; i < b.N; i++ {
@@ -510,13 +510,12 @@ func BenchmarkAppRateLimiter_TxgroupToKeys(b *testing.B) {
 	b.ReportAllocs()
 
 	origin := make([]byte, 4)
-	_, err := rnd.Read(origin)
-	require.NoError(b, err)
+	binary.LittleEndian.PutUint64(origin, rnd.Uint64()) 
 	require.NotEmpty(b, origin)
 
 	salt := [16]byte{}
-	_, err = rnd.Read(salt[:])
-	require.NoError(b, err)
+	binary.LittleEndian.PutUint64(salt[:8], rnd.Uint64())
+	binary.LittleEndian.PutUint64(salt[8:], rnd.Uint64())
 	require.NotEmpty(b, salt)
 
 	for i := 0; i < b.N; i++ {
