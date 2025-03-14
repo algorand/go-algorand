@@ -34,7 +34,7 @@ type (
 	// authenticated.
 	UnauthenticatedCredential struct {
 		_struct struct{}        `codec:",omitempty,omitemptyarray"`
-		Proof   crypto.VrfProof `codec:"pf"`
+		Proof   crypto.VrfProof `codec:"pf" vpack:"literal"`
 	}
 
 	// A Credential represents a proof of committee membership.

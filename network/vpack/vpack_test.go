@@ -31,7 +31,7 @@ func TestEncodingTest(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	for i := 0; i < 10000; i++ {
-		v0, err := protocol.RandomizeObject(&agreement.UnauthenticatedVote{})
+		v0, err := protocol.RandomizeObject(&agreement.UnauthenticatedVote{}, protocol.RandomizeObjectWithZeroesEveryN(10))
 		require.NoError(t, err)
 
 		v0vote := v0.(*agreement.UnauthenticatedVote)

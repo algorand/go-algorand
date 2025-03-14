@@ -40,7 +40,7 @@ func (s *StaticEncoder) CompressVote(dst, src []byte) ([]byte, error) {
 		dst = make([]byte, 0, defaultCompressCapacity)
 	}
 	s.cur = dst
-	err := parseVoteMsgpack(src, s)
+	err := parseVote(src, s)
 	if err != nil {
 		return nil, err
 	}
@@ -66,20 +66,20 @@ func (s *StaticEncoder) writeStatic(idx uint8) {
 func (s *StaticEncoder) writeDynamicVaruint(b []byte) {
 	var expectedLength int
 	switch b[0] {
-	case MarkerDynamicUint8:
+	case markerDynamicUint8:
 		expectedLength = 2
-	case MarkerDynamicUint16:
+	case markerDynamicUint16:
 		expectedLength = 3
-	case MarkerDynamicUint32:
+	case markerDynamicUint32:
 		expectedLength = 5
-	case MarkerDynamicUint64:
+	case markerDynamicUint64:
 		expectedLength = 9
 	default:
 		if isfixint(b[0]) {
 			expectedLength = 1
 			// prefix with fixuint marker, so 0x00-0x7f isn't used by fixint
 			// this is slightly inefficient, but we have low-numbered period & step fields in the static table
-			s.cur = append(s.cur, MarkerDynamicFixuint)
+			s.cur = append(s.cur, markerDynamicFixuint)
 		} else {
 			panic(fmt.Sprintf("unexpected dynamic varuint marker %x", b[0]))
 		}
@@ -91,17 +91,17 @@ func (s *StaticEncoder) writeDynamicVaruint(b []byte) {
 }
 
 func (s *StaticEncoder) writeDynamicBin32(b [32]byte) {
-	s.cur = append(s.cur, MarkerDynamicBin32)
+	s.cur = append(s.cur, markerDynamicBin32)
 	s.cur = append(s.cur, b[:]...)
 }
 
 func (s *StaticEncoder) writeLiteralBin64(b [64]byte) {
-	s.cur = append(s.cur, MarkerLiteralBin64)
+	s.cur = append(s.cur, markerLiteralBin64)
 	s.cur = append(s.cur, b[:]...)
 }
 
 func (s *StaticEncoder) writeLiteralBin80(b [80]byte) {
-	s.cur = append(s.cur, MarkerLiteralBin80)
+	s.cur = append(s.cur, markerLiteralBin80)
 	s.cur = append(s.cur, b[:]...)
 }
 
@@ -129,7 +129,7 @@ func decompressStatic(dst, src []byte) ([]byte, error) {
 		pos++
 
 		switch marker {
-		case MarkerDynamicFixuint:
+		case markerDynamicFixuint:
 			if pos >= lenb { // Needs one more byte beyond marker
 				// Loses a byte here vs msgpack, because vpack codes 0x00-0x7F are not assigned to fixuint.
 				// However only only period and step use fixuint, and we have assigned static indexes for
@@ -138,49 +138,49 @@ func decompressStatic(dst, src []byte) ([]byte, error) {
 			}
 			dst = append(dst, src[pos])
 			pos++
-		case MarkerDynamicUint8:
+		case markerDynamicUint8:
 			if pos >= lenb { // Needs one more byte
 				return nil, io.ErrUnexpectedEOF
 			}
 			dst = append(dst, marker, src[pos])
 			pos++
-		case MarkerDynamicUint16:
+		case markerDynamicUint16:
 			if pos+1 >= lenb { // Needs two more bytes
 				return nil, io.ErrUnexpectedEOF
 			}
 			dst = append(dst, marker, src[pos], src[pos+1])
 			pos += 2
-		case MarkerDynamicUint32:
+		case markerDynamicUint32:
 			if pos+3 >= lenb { // Needs four more bytes
 				return nil, io.ErrUnexpectedEOF
 			}
 			dst = append(dst, marker, src[pos], src[pos+1], src[pos+2], src[pos+3])
 			pos += 4
-		case MarkerDynamicUint64:
+		case markerDynamicUint64:
 			if pos+7 >= lenb { // Needs eight more bytes
 				return nil, io.ErrUnexpectedEOF
 			}
 			dst = append(dst, marker, src[pos], src[pos+1], src[pos+2], src[pos+3], src[pos+4], src[pos+5], src[pos+6], src[pos+7])
 			pos += 8
-		case MarkerLiteralBin64:
+		case markerLiteralBin64:
 			if pos+63 >= lenb { // Needs 64 more bytes
 				return nil, io.ErrUnexpectedEOF
 			}
-			dst = append(dst, staticTable[StaticIdxBin8Marker64]...)
+			dst = append(dst, msgpBin8Len64...)
 			dst = append(dst, src[pos:pos+64]...)
 			pos += 64
-		case MarkerLiteralBin80:
+		case markerLiteralBin80:
 			if pos+79 >= lenb { // Needs 80 more bytes
 				return nil, io.ErrUnexpectedEOF
 			}
-			dst = append(dst, staticTable[StaticIdxBin8Marker80]...)
+			dst = append(dst, msgpBin8Len80...)
 			dst = append(dst, src[pos:pos+80]...)
 			pos += 80
-		case MarkerDynamicBin32:
+		case markerDynamicBin32:
 			if pos+31 >= lenb { // Needs 32 more bytes
 				return nil, io.ErrUnexpectedEOF
 			}
-			dst = append(dst, staticTable[StaticIdxBin8Marker32]...)
+			dst = append(dst, msgpBin8Len32...)
 			dst = append(dst, src[pos:pos+32]...)
 			pos += 32
 		default:
