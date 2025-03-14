@@ -196,8 +196,8 @@ func makeVote(rv rawVote, voting crypto.OneTimeSigner, selection *crypto.VRFSecr
 
 	// for use when running in tests
 	if checkFn := getTestMakeVoteCheck(); checkFn != nil {
-		if checkEr := checkFn(&ret); checkEr != nil {
-			return unauthenticatedVote{}, fmt.Errorf("makeVote: testMakeVoteCheck failed: %v", err)
+		if checkErr := checkFn(&ret); checkErr != nil {
+			return unauthenticatedVote{}, fmt.Errorf("makeVote: testMakeVoteCheck failed: %w", checkErr)
 		}
 	}
 	return ret, nil
