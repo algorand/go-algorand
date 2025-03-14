@@ -4,36 +4,40 @@
 package vpack
 
 const (
-	StaticIdxMapMarker0     uint8 = 0xc0
-	StaticIdxMapMarker1     uint8 = 0xc1
-	StaticIdxMapMarker2     uint8 = 0xc2
-	StaticIdxMapMarker3     uint8 = 0xc3
-	StaticIdxMapMarker4     uint8 = 0xc4
-	StaticIdxMapMarker5     uint8 = 0xc5
-	StaticIdxMapMarker6     uint8 = 0xc6
-	StaticIdxCredField      uint8 = 0xd0
-	StaticIdxPfField        uint8 = 0xd1
-	StaticIdxRField         uint8 = 0xd2
-	StaticIdxPerField       uint8 = 0xd3
-	StaticIdxPropField      uint8 = 0xd4
-	StaticIdxDigField       uint8 = 0xd5
-	StaticIdxEncdigField    uint8 = 0xd6
-	StaticIdxOperField      uint8 = 0xd7
-	StaticIdxOpropField     uint8 = 0xd8
-	StaticIdxRndField       uint8 = 0xd9
-	StaticIdxSndField       uint8 = 0xda
-	StaticIdxStepField      uint8 = 0xdb
-	StaticIdxStepVal1Field  uint8 = 0xdc
-	StaticIdxStepVal2Field  uint8 = 0xdd
-	StaticIdxStepVal3Field  uint8 = 0xde
-	StaticIdxSigField       uint8 = 0xdf
-	StaticIdxPField         uint8 = 0xe0
-	StaticIdxP1sField       uint8 = 0xe1
-	StaticIdxP2Field        uint8 = 0xe2
-	StaticIdxP2sField       uint8 = 0xe3
-	StaticIdxPsField        uint8 = 0xe4
-	StaticIdxAllZeroPsField uint8 = 0xe5
-	StaticIdxSField         uint8 = 0xe6
+	staticIdxMapMarker0     uint8 = 0xc0
+	staticIdxMapMarker1     uint8 = 0xc1
+	staticIdxMapMarker2     uint8 = 0xc2
+	staticIdxMapMarker3     uint8 = 0xc3
+	staticIdxMapMarker4     uint8 = 0xc4
+	staticIdxMapMarker5     uint8 = 0xc5
+	staticIdxMapMarker6     uint8 = 0xc6
+	staticIdxCredField      uint8 = 0xd0
+	staticIdxPfField        uint8 = 0xd1
+	staticIdxRField         uint8 = 0xd2
+	staticIdxPerField       uint8 = 0xd3
+	staticIdxPropField      uint8 = 0xd4
+	staticIdxDigField       uint8 = 0xd5
+	staticIdxEncdigField    uint8 = 0xd6
+	staticIdxOperField      uint8 = 0xd7
+	staticIdxOpropField     uint8 = 0xd8
+	staticIdxRndField       uint8 = 0xd9
+	staticIdxSndField       uint8 = 0xda
+	staticIdxStepField      uint8 = 0xdb
+	staticIdxStepVal1Field  uint8 = 0xdc
+	staticIdxStepVal2Field  uint8 = 0xdd
+	staticIdxStepVal3Field  uint8 = 0xde
+	staticIdxSigField       uint8 = 0xdf
+	staticIdxPField         uint8 = 0xe0
+	staticIdxP1sField       uint8 = 0xe1
+	staticIdxP2Field        uint8 = 0xe2
+	staticIdxP2sField       uint8 = 0xe3
+	staticIdxPsField        uint8 = 0xe4
+	staticIdxAllZeroPsField uint8 = 0xe5
+	staticIdxSField         uint8 = 0xe6
+
+	// Constants for static index range bounds
+	staticIdxStart uint8 = 0xc0
+	staticIdxEnd   uint8 = 0xe6
 )
 
 var staticTable = createGeneratedStaticTable()
@@ -43,44 +47,44 @@ func createGeneratedStaticTable() [][]byte {
 	t := make([][]byte, 256)
 
 	// Basic entries
-	t[StaticIdxMapMarker0] = []byte{0x80}                                // Map with 0 items
-	t[StaticIdxMapMarker1] = []byte{0x81}                                // Map with 1 items
-	t[StaticIdxMapMarker2] = []byte{0x82}                                // Map with 2 items
-	t[StaticIdxMapMarker3] = []byte{0x83}                                // Map with 3 items
-	t[StaticIdxMapMarker4] = []byte{0x84}                                // Map with 4 items
-	t[StaticIdxMapMarker5] = []byte{0x85}                                // Map with 5 items
-	t[StaticIdxMapMarker6] = []byte{0x86}                                // Map with 6 items
-	t[StaticIdxCredField] = []byte{0xa4, 'c', 'r', 'e', 'd'}             // "cred" field
-	t[StaticIdxPfField] = []byte{0xa2, 'p', 'f'}                         // "pf" field
-	t[StaticIdxRField] = []byte{0xa1, 'r'}                               // "r" field
-	t[StaticIdxPerField] = []byte{0xa3, 'p', 'e', 'r'}                   // "per" field
-	t[StaticIdxPropField] = []byte{0xa4, 'p', 'r', 'o', 'p'}             // "prop" field
-	t[StaticIdxDigField] = []byte{0xa3, 'd', 'i', 'g'}                   // "dig" field
-	t[StaticIdxEncdigField] = []byte{0xa6, 'e', 'n', 'c', 'd', 'i', 'g'} // "encdig" field
-	t[StaticIdxOperField] = []byte{0xa4, 'o', 'p', 'e', 'r'}             // "oper" field
-	t[StaticIdxOpropField] = []byte{0xa5, 'o', 'p', 'r', 'o', 'p'}       // "oprop" field
-	t[StaticIdxRndField] = []byte{0xa3, 'r', 'n', 'd'}                   // "rnd" field
-	t[StaticIdxSndField] = []byte{0xa3, 's', 'n', 'd'}                   // "snd" field
-	t[StaticIdxStepField] = []byte{0xa4, 's', 't', 'e', 'p'}             // "step" field
-	t[StaticIdxStepVal1Field] = []byte{}                                 // step = 1 special
-	t[StaticIdxStepVal2Field] = []byte{}                                 // step = 2 special
-	t[StaticIdxStepVal3Field] = []byte{}                                 // step = 3 special
-	t[StaticIdxSigField] = []byte{0xa3, 's', 'i', 'g'}                   // "sig" field
-	t[StaticIdxPField] = []byte{0xa1, 'p'}                               // "p" field
-	t[StaticIdxP1sField] = []byte{0xa3, 'p', '1', 's'}                   // "p1s" field
-	t[StaticIdxP2Field] = []byte{0xa2, 'p', '2'}                         // "p2" field
-	t[StaticIdxP2sField] = []byte{0xa3, 'p', '2', 's'}                   // "p2s" field
-	t[StaticIdxPsField] = []byte{0xa2, 'p', 's'}                         // "ps" field
-	t[StaticIdxAllZeroPsField] = []byte{}                                // All-zero ps field for length 64
-	t[StaticIdxSField] = []byte{0xa1, 's'}                               // "s" field
+	t[staticIdxMapMarker0] = []byte{0x80}                                // Map with 0 items
+	t[staticIdxMapMarker1] = []byte{0x81}                                // Map with 1 items
+	t[staticIdxMapMarker2] = []byte{0x82}                                // Map with 2 items
+	t[staticIdxMapMarker3] = []byte{0x83}                                // Map with 3 items
+	t[staticIdxMapMarker4] = []byte{0x84}                                // Map with 4 items
+	t[staticIdxMapMarker5] = []byte{0x85}                                // Map with 5 items
+	t[staticIdxMapMarker6] = []byte{0x86}                                // Map with 6 items
+	t[staticIdxCredField] = []byte{0xa4, 'c', 'r', 'e', 'd'}             // "cred" field
+	t[staticIdxPfField] = []byte{0xa2, 'p', 'f'}                         // "pf" field
+	t[staticIdxRField] = []byte{0xa1, 'r'}                               // "r" field
+	t[staticIdxPerField] = []byte{0xa3, 'p', 'e', 'r'}                   // "per" field
+	t[staticIdxPropField] = []byte{0xa4, 'p', 'r', 'o', 'p'}             // "prop" field
+	t[staticIdxDigField] = []byte{0xa3, 'd', 'i', 'g'}                   // "dig" field
+	t[staticIdxEncdigField] = []byte{0xa6, 'e', 'n', 'c', 'd', 'i', 'g'} // "encdig" field
+	t[staticIdxOperField] = []byte{0xa4, 'o', 'p', 'e', 'r'}             // "oper" field
+	t[staticIdxOpropField] = []byte{0xa5, 'o', 'p', 'r', 'o', 'p'}       // "oprop" field
+	t[staticIdxRndField] = []byte{0xa3, 'r', 'n', 'd'}                   // "rnd" field
+	t[staticIdxSndField] = []byte{0xa3, 's', 'n', 'd'}                   // "snd" field
+	t[staticIdxStepField] = []byte{0xa4, 's', 't', 'e', 'p'}             // "step" field
+	t[staticIdxStepVal1Field] = []byte{}                                 // step = 1 special
+	t[staticIdxStepVal2Field] = []byte{}                                 // step = 2 special
+	t[staticIdxStepVal3Field] = []byte{}                                 // step = 3 special
+	t[staticIdxSigField] = []byte{0xa3, 's', 'i', 'g'}                   // "sig" field
+	t[staticIdxPField] = []byte{0xa1, 'p'}                               // "p" field
+	t[staticIdxP1sField] = []byte{0xa3, 'p', '1', 's'}                   // "p1s" field
+	t[staticIdxP2Field] = []byte{0xa2, 'p', '2'}                         // "p2" field
+	t[staticIdxP2sField] = []byte{0xa3, 'p', '2', 's'}                   // "p2s" field
+	t[staticIdxPsField] = []byte{0xa2, 'p', 's'}                         // "ps" field
+	t[staticIdxAllZeroPsField] = []byte{}                                // All-zero ps field for length 64
+	t[staticIdxSField] = []byte{0xa1, 's'}                               // "s" field
 
 	// Special expansions
-	t[StaticIdxStepVal1Field] = append(t[StaticIdxStepField], []byte{0x01}...)
-	t[StaticIdxStepVal2Field] = append(t[StaticIdxStepField], []byte{0x02}...)
-	t[StaticIdxStepVal3Field] = append(t[StaticIdxStepField], []byte{0x03}...)
-	zeroVal := append(t[StaticIdxPsField], msgpBin8Len64...)
+	t[staticIdxStepVal1Field] = append(t[staticIdxStepField], []byte{0x01}...)
+	t[staticIdxStepVal2Field] = append(t[staticIdxStepField], []byte{0x02}...)
+	t[staticIdxStepVal3Field] = append(t[staticIdxStepField], []byte{0x03}...)
+	zeroVal := append(t[staticIdxPsField], msgpBin8Len64...)
 	zeroVal = append(zeroVal, make([]byte, 64)...)
-	t[StaticIdxAllZeroPsField] = zeroVal
+	t[staticIdxAllZeroPsField] = zeroVal
 
 	return t
 }

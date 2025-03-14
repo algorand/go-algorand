@@ -17,7 +17,7 @@ func parseVote(data []byte, c compressWriter) error {
 	if cnt < 1 || cnt > 3 {
 		return fmt.Errorf("expected fixmap size for unauthenticatedVote 1 <= cnt <= 3, got %d", cnt)
 	}
-	c.writeStatic(StaticIdxMapMarker0 + cnt)
+	c.writeStatic(staticIdxMapMarker0 + cnt)
 
 	for range cnt {
 		key, err := p.readString()
@@ -27,7 +27,7 @@ func parseVote(data []byte, c compressWriter) error {
 
 		switch string(key) {
 		case "cred":
-			c.writeStatic(StaticIdxCredField)
+			c.writeStatic(staticIdxCredField)
 
 			cnt, err := p.readFixMap()
 			if err != nil {
@@ -36,7 +36,7 @@ func parseVote(data []byte, c compressWriter) error {
 			if cnt < 1 || cnt > 1 {
 				return fmt.Errorf("expected fixmap size for UnauthenticatedCredential 1 <= cnt <= 1, got %d", cnt)
 			}
-			c.writeStatic(StaticIdxMapMarker0 + cnt)
+			c.writeStatic(staticIdxMapMarker0 + cnt)
 
 			for range cnt {
 				key, err := p.readString()
@@ -46,7 +46,7 @@ func parseVote(data []byte, c compressWriter) error {
 
 				switch string(key) {
 				case "pf":
-					c.writeStatic(StaticIdxPfField)
+					c.writeStatic(staticIdxPfField)
 					val, err := p.readBin80()
 					if err != nil {
 						return fmt.Errorf("reading pf: %w", err)
@@ -59,7 +59,7 @@ func parseVote(data []byte, c compressWriter) error {
 			}
 
 		case "r":
-			c.writeStatic(StaticIdxRField)
+			c.writeStatic(staticIdxRField)
 
 			cnt, err := p.readFixMap()
 			if err != nil {
@@ -68,7 +68,7 @@ func parseVote(data []byte, c compressWriter) error {
 			if cnt < 1 || cnt > 5 {
 				return fmt.Errorf("expected fixmap size for rawVote 1 <= cnt <= 5, got %d", cnt)
 			}
-			c.writeStatic(StaticIdxMapMarker0 + cnt)
+			c.writeStatic(staticIdxMapMarker0 + cnt)
 
 			for range cnt {
 				key, err := p.readString()
@@ -78,7 +78,7 @@ func parseVote(data []byte, c compressWriter) error {
 
 				switch string(key) {
 				case "per":
-					c.writeStatic(StaticIdxPerField)
+					c.writeStatic(staticIdxPerField)
 					valBytes, err := p.readUintBytes()
 					if err != nil {
 						return fmt.Errorf("reading per: %w", err)
@@ -86,7 +86,7 @@ func parseVote(data []byte, c compressWriter) error {
 
 					c.writeDynamicVaruint(valBytes)
 				case "prop":
-					c.writeStatic(StaticIdxPropField)
+					c.writeStatic(staticIdxPropField)
 
 					cnt, err := p.readFixMap()
 					if err != nil {
@@ -95,7 +95,7 @@ func parseVote(data []byte, c compressWriter) error {
 					if cnt < 1 || cnt > 4 {
 						return fmt.Errorf("expected fixmap size for proposalValue 1 <= cnt <= 4, got %d", cnt)
 					}
-					c.writeStatic(StaticIdxMapMarker0 + cnt)
+					c.writeStatic(staticIdxMapMarker0 + cnt)
 
 					for range cnt {
 						key, err := p.readString()
@@ -105,7 +105,7 @@ func parseVote(data []byte, c compressWriter) error {
 
 						switch string(key) {
 						case "dig":
-							c.writeStatic(StaticIdxDigField)
+							c.writeStatic(staticIdxDigField)
 							val, err := p.readBin32()
 							if err != nil {
 								return fmt.Errorf("reading dig: %w", err)
@@ -113,7 +113,7 @@ func parseVote(data []byte, c compressWriter) error {
 
 							c.writeDynamicBin32(val)
 						case "encdig":
-							c.writeStatic(StaticIdxEncdigField)
+							c.writeStatic(staticIdxEncdigField)
 							val, err := p.readBin32()
 							if err != nil {
 								return fmt.Errorf("reading encdig: %w", err)
@@ -121,7 +121,7 @@ func parseVote(data []byte, c compressWriter) error {
 
 							c.writeDynamicBin32(val)
 						case "oper":
-							c.writeStatic(StaticIdxOperField)
+							c.writeStatic(staticIdxOperField)
 							valBytes, err := p.readUintBytes()
 							if err != nil {
 								return fmt.Errorf("reading oper: %w", err)
@@ -129,7 +129,7 @@ func parseVote(data []byte, c compressWriter) error {
 
 							c.writeDynamicVaruint(valBytes)
 						case "oprop":
-							c.writeStatic(StaticIdxOpropField)
+							c.writeStatic(staticIdxOpropField)
 							val, err := p.readBin32()
 							if err != nil {
 								return fmt.Errorf("reading oprop: %w", err)
@@ -142,7 +142,7 @@ func parseVote(data []byte, c compressWriter) error {
 					}
 
 				case "rnd":
-					c.writeStatic(StaticIdxRndField)
+					c.writeStatic(staticIdxRndField)
 					valBytes, err := p.readUintBytes()
 					if err != nil {
 						return fmt.Errorf("reading rnd: %w", err)
@@ -150,7 +150,7 @@ func parseVote(data []byte, c compressWriter) error {
 
 					c.writeDynamicVaruint(valBytes)
 				case "snd":
-					c.writeStatic(StaticIdxSndField)
+					c.writeStatic(staticIdxSndField)
 					val, err := p.readBin32()
 					if err != nil {
 						return fmt.Errorf("reading snd: %w", err)
@@ -167,18 +167,18 @@ func parseVote(data []byte, c compressWriter) error {
 					if len(valBytes) == 1 {
 						switch valBytes[0] {
 						case 1:
-							c.writeStatic(StaticIdxStepVal1Field)
+							c.writeStatic(staticIdxStepVal1Field)
 							continue
 						case 2:
-							c.writeStatic(StaticIdxStepVal2Field)
+							c.writeStatic(staticIdxStepVal2Field)
 							continue
 						case 3:
-							c.writeStatic(StaticIdxStepVal3Field)
+							c.writeStatic(staticIdxStepVal3Field)
 							continue
 						}
 					}
 
-					c.writeStatic(StaticIdxStepField)
+					c.writeStatic(staticIdxStepField)
 					c.writeDynamicVaruint(valBytes)
 				default:
 					return fmt.Errorf("unexpected field in rawVote: %q", key)
@@ -186,7 +186,7 @@ func parseVote(data []byte, c compressWriter) error {
 			}
 
 		case "sig":
-			c.writeStatic(StaticIdxSigField)
+			c.writeStatic(staticIdxSigField)
 
 			cnt, err := p.readFixMap()
 			if err != nil {
@@ -195,7 +195,7 @@ func parseVote(data []byte, c compressWriter) error {
 			if cnt < 1 || cnt > 6 {
 				return fmt.Errorf("expected fixmap size for OneTimeSignature 1 <= cnt <= 6, got %d", cnt)
 			}
-			c.writeStatic(StaticIdxMapMarker0 + cnt)
+			c.writeStatic(staticIdxMapMarker0 + cnt)
 
 			for range cnt {
 				key, err := p.readString()
@@ -205,7 +205,7 @@ func parseVote(data []byte, c compressWriter) error {
 
 				switch string(key) {
 				case "p":
-					c.writeStatic(StaticIdxPField)
+					c.writeStatic(staticIdxPField)
 					val, err := p.readBin32()
 					if err != nil {
 						return fmt.Errorf("reading p: %w", err)
@@ -213,7 +213,7 @@ func parseVote(data []byte, c compressWriter) error {
 
 					c.writeDynamicBin32(val)
 				case "p1s":
-					c.writeStatic(StaticIdxP1sField)
+					c.writeStatic(staticIdxP1sField)
 					val, err := p.readBin64()
 					if err != nil {
 						return fmt.Errorf("reading p1s: %w", err)
@@ -221,7 +221,7 @@ func parseVote(data []byte, c compressWriter) error {
 
 					c.writeLiteralBin64(val)
 				case "p2":
-					c.writeStatic(StaticIdxP2Field)
+					c.writeStatic(staticIdxP2Field)
 					val, err := p.readBin32()
 					if err != nil {
 						return fmt.Errorf("reading p2: %w", err)
@@ -229,7 +229,7 @@ func parseVote(data []byte, c compressWriter) error {
 
 					c.writeDynamicBin32(val)
 				case "p2s":
-					c.writeStatic(StaticIdxP2sField)
+					c.writeStatic(staticIdxP2sField)
 					val, err := p.readBin64()
 					if err != nil {
 						return fmt.Errorf("reading p2s: %w", err)
@@ -243,13 +243,13 @@ func parseVote(data []byte, c compressWriter) error {
 						return fmt.Errorf("reading ps: %w", err)
 					}
 					if val == [64]byte{} {
-						c.writeStatic(StaticIdxAllZeroPsField)
+						c.writeStatic(staticIdxAllZeroPsField)
 					} else {
-						c.writeStatic(StaticIdxPsField)
+						c.writeStatic(staticIdxPsField)
 						c.writeLiteralBin64(val)
 					}
 				case "s":
-					c.writeStatic(StaticIdxSField)
+					c.writeStatic(staticIdxSField)
 					val, err := p.readBin64()
 					if err != nil {
 						return fmt.Errorf("reading s: %w", err)

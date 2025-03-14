@@ -17,22 +17,24 @@
 package vpack
 
 const (
-	// 0x00 - 0x7f reserved for dynamic table entries
+	// 0x00 - 0xbf reserved for dynamic table entries
+	// 0xc0 - 0xef reserved for static table entries
+	// 0xf0 - 0xff reserved for markers
 
 	// Binary types: 64-byte, 80-byte literals and 32-byte dynamic binary values
-	markerLiteralBin64 = 0xc8 // signatures
-	markerLiteralBin80 = 0xc9 // pf
-	markerDynamicBin32 = 0xca // digests, addresses, pubkeys
+	markerLiteralBin64 = 0xf0 // signatures
+	markerLiteralBin80 = 0xf1 // pf
+	markerDynamicBin32 = 0xf2 // digests, addresses, pubkeys
 
-	markerDynamicFixuint = 0xcb // msgpack fixuint
-	markerDynamicUint8   = 0xcc // msgpack uint8
-	markerDynamicUint16  = 0xcd // msgpack uint16
-	markerDynamicUint32  = 0xce // msgpack uint32
-	markerDynamicUint64  = 0xcf // msgpack uint64
+	markerDynamicFixuint = 0xf3 // msgpack fixuint
+	markerDynamicUint8   = 0xf4 // msgpack uint8
+	markerDynamicUint16  = 0xf5 // msgpack uint16
+	markerDynamicUint32  = 0xf6 // msgpack uint32
+	markerDynamicUint64  = 0xf7 // msgpack uint64
 )
 
 func isStaticIdx(idx uint8) bool {
-	return idx >= 0xc1 && idx <= 0xe6
+	return idx >= staticIdxStart && idx <= staticIdxEnd
 }
 
 const (

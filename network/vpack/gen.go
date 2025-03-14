@@ -32,7 +32,7 @@ import (
 
 // staticItem represents one entry in the static table.
 type staticItem struct {
-	ConstName string // e.g. "StaticIdxPsField"
+	ConstName string // e.g. "staticIdxPsField"
 	Index     uint8
 	Data      []byte
 	Comment   string
@@ -41,7 +41,7 @@ type staticItem struct {
 // specialPattern is used to generate code snippets in createGeneratedStaticTable()
 // that do more complex expansions (like all-zero or numeric-value appends).
 type specialPattern struct {
-	Code string // e.g. "zeroField := append(...) ; t[StaticIdxAllZeroPsField] = zeroField"
+	Code string // e.g. "zeroField := append(...) ; t[staticIdxAllZeroPsField] = zeroField"
 }
 
 // codeGenerator is our main driver for reflection + generating code via templates.
@@ -66,7 +66,7 @@ type parseFuncData struct {
 // fieldData describes one field in the struct for parse code generation.
 type fieldData struct {
 	CodecName      string // e.g. "ps", "step", "data"
-	FieldNameConst string // e.g. "StaticIdxPsField"
+	FieldNameConst string // e.g. "staticIdxPsField"
 
 	IsSubStruct   bool
 	SubStructName string
@@ -74,7 +74,7 @@ type fieldData struct {
 	ArrayLen     int
 	IsLiteral    bool
 	IsZeroCheck  bool   // e.g. "0" special for a binary field
-	ZeroConst    string // e.g. "StaticIdxAllZeroDataField"
+	ZeroConst    string // e.g. "staticIdxAllZeroDataField"
 	VpackSpecial string // e.g. "1,2,3" for numeric
 
 	IsUint64Alias bool
@@ -116,6 +116,10 @@ const (
 {{- range .Items}}
 	{{.ConstName}} uint8 = 0x{{printf "%02x" .Index}}
 {{- end}}
+
+	// Constants for static index range bounds
+	staticIdxStart uint8 = 0x{{printf "%02x" .StaticIdxStart}}
+	staticIdxEnd uint8 = 0x{{printf "%02x" .StaticIdxEnd}}
 )
 
 var staticTable = createGeneratedStaticTable()
@@ -141,7 +145,7 @@ const parseFuncTemplate = `
 	if cnt < 1 || cnt > {{.MaxFieldCount}} {
 		return fmt.Errorf("expected fixmap size for {{.TypeName}} 1 <= cnt <= {{.MaxFieldCount}}, got %d", cnt)
 	}
-	c.writeStatic(StaticIdxMapMarker0+cnt)
+	c.writeStatic(staticIdxMapMarker0+cnt)
 
 	for range cnt {
 		key, err := p.readString()
@@ -176,7 +180,9 @@ const parseFuncTemplate = `
 			}
 	{{end}}
 			{{ if $fd.VpackSpecial }}c.writeStatic({{$fd.FieldNameConst}}){{ end }}
-			c.writeDynamicVaruint(valBytes)
+			if err := c.writeDynamicVaruint(valBytes); err != nil {
+				return fmt.Errorf("writing {{$fd.CodecName}}: %w", err)
+			}
   {{- else if gt $fd.ArrayLen 0}}
             {{ if and (not $fd.VpackSpecial) (not $fd.IsZeroCheck) }}c.writeStatic({{$fd.FieldNameConst}}){{end}}
 			val, err := p.readBin{{$fd.ArrayLen}}()
@@ -276,7 +282,7 @@ import (
 	if err != nil {
 		return fmt.Errorf("formatting static table: %w", err)
 	}
-	if os.WriteFile("static_table.go", formatted, 0644); err != nil {
+	if err := os.WriteFile("static_table.go", formatted, 0644); err != nil {
 		return err
 	}
 
@@ -285,7 +291,7 @@ import (
 	if err != nil {
 		return fmt.Errorf("formatting parser: %w", err)
 	}
-	if os.WriteFile("parse.go", formatted, 0644); err != nil {
+	if err := os.WriteFile("parse.go", formatted, 0644); err != nil {
 		return err
 	}
 
@@ -356,10 +362,10 @@ func (g *codeGenerator) analyzeType(t reflect.Type) error {
 }
 
 // defineSpecialZeroBinary is a generic helper for any fixed-length binary type
-// with "vpack_special_values:'0'". We produce e.g. "StaticIdxAllZeroDataField"
+// with "vpack_special_values:'0'". We produce e.g. "staticIdxAllZeroDataField"
 // and a snippet in specialPatterns that appends the bin8 marker + zero bytes.
 func (g *codeGenerator) defineSpecialZeroBinary(codecName string, length int) string {
-	allZeroConst := "StaticIdxAllZero" + strings.Title(codecName) + "Field"
+	allZeroConst := "staticIdxAllZero" + strings.Title(codecName) + "Field"
 	if g.findItemIndexByConstName(allZeroConst) >= 0 {
 		return allZeroConst
 	}
@@ -373,7 +379,7 @@ func (g *codeGenerator) defineSpecialZeroBinary(codecName string, length int) st
 		Comment:   fmt.Sprintf("All-zero %s field for length %d", codecName, length),
 	})
 
-	baseField := g.getOrCreateStaticIndexForField(codecName) // e.g. "StaticIdxDataField"
+	baseField := g.getOrCreateStaticIndexForField(codecName) // e.g. "staticIdxDataField"
 
 	// The snippet:
 	//   zeroVal := append(t[<baseField>], t[<bin8Const>]...)
@@ -390,14 +396,14 @@ t[%s] = zeroVal`,
 
 // defineSpecialValuesNumeric handles integer fields with vpack_special_values="1,2,3,...".
 func (g *codeGenerator) defineSpecialValuesNumeric(codecName, specialValues string) {
-	// For each special value, we create e.g. "StaticIdxStepVal1Field" and a snippet
-	//   t[StaticIdxStepVal1Field] = append(t[StaticIdxStepField], []byte{0x01}...)
-	baseField := g.getOrCreateStaticIndexForField(codecName) // e.g. "StaticIdxStepField"
+	// For each special value, we create e.g. "staticIdxStepVal1Field" and a snippet
+	//   t[staticIdxStepVal1Field] = append(t[staticIdxStepField], []byte{0x01}...)
+	baseField := g.getOrCreateStaticIndexForField(codecName) // e.g. "staticIdxStepField"
 
 	vals := strings.Split(specialValues, ",")
 	for _, v := range vals {
 		v = strings.TrimSpace(v)
-		cn := fmt.Sprintf("StaticIdx%sVal%sField", strings.Title(codecName), v)
+		cn := fmt.Sprintf("staticIdx%sVal%sField", strings.Title(codecName), v)
 		if g.findItemIndexByConstName(cn) >= 0 {
 			continue
 		}
@@ -423,9 +429,9 @@ func parseByteValue(s string) byte {
 	return b
 }
 
-// getOrCreateMapMarkerIndex ensures we have e.g. "StaticIdxMapMarker3" => 0x83
+// getOrCreateMapMarkerIndex ensures we have e.g. "staticIdxMapMarker3" => 0x83
 func (g *codeGenerator) getOrCreateMapMarkerIndex(n int) {
-	cn := fmt.Sprintf("StaticIdxMapMarker%d", n)
+	cn := fmt.Sprintf("staticIdxMapMarker%d", n)
 	if g.findItemIndexByConstName(cn) >= 0 {
 		return
 	}
@@ -445,7 +451,7 @@ func (g *codeGenerator) getOrCreateMapMarkerIndex(n int) {
 
 // getOrCreateStaticIndexForField creates a fixstr entry for a field name: e.g. 0xa3,"snd"
 func (g *codeGenerator) getOrCreateStaticIndexForField(fieldName string) string {
-	cn := "StaticIdx" + strings.Title(fieldName) + "Field"
+	cn := "staticIdx" + strings.Title(fieldName) + "Field"
 	idxNum := g.findItemIndexByConstName(cn)
 	if idxNum >= 0 {
 		return cn
@@ -480,7 +486,23 @@ func (g *codeGenerator) renderConstBlock() (string, error) {
 	sort.Slice(g.items, func(i, j int) bool {
 		return g.items[i].Index < g.items[j].Index
 	})
-	data := struct{ Items []staticItem }{Items: g.items}
+
+	// Find the minimum and maximum static index values
+	var minIdx, maxIdx uint8
+	if len(g.items) > 0 {
+		minIdx = g.items[0].Index              // First item after sorting
+		maxIdx = g.items[len(g.items)-1].Index // Last item after sorting
+	}
+
+	data := struct {
+		Items          []staticItem
+		StaticIdxStart uint8
+		StaticIdxEnd   uint8
+	}{
+		Items:          g.items,
+		StaticIdxStart: minIdx,
+		StaticIdxEnd:   maxIdx,
+	}
 
 	tmpl, err := template.New("constBlock").Parse(constBlockTemplate)
 	if err != nil {
@@ -530,10 +552,10 @@ func (g *codeGenerator) renderParseFunction(typeName string) (string, error) {
 		"split": func(s, sep string) []string {
 			return strings.Split(s, sep)
 		},
-		// top-level function to build e.g. "StaticIdxStepVal3Field"
+		// top-level function to build e.g. "staticIdxStepVal3Field"
 		"makeNumericConst": func(fieldName, val string) string {
-			// fieldName = "step", val="3" => "StaticIdxStepVal3Field"
-			return fmt.Sprintf("StaticIdx%sVal%sField", strings.Title(fieldName), val)
+			// fieldName = "step", val="3" => "staticIdxStepVal3Field"
+			return fmt.Sprintf("staticIdx%sVal%sField", strings.Title(fieldName), val)
 		},
 		"renderParseFunction": func(typeName string) string {
 			ret, err := g.renderParseFunction(typeName)

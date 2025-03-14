@@ -25,7 +25,7 @@ const defaultCompressCapacity = 1024
 
 type compressWriter interface {
 	writeStatic(idx uint8)
-	writeDynamicVaruint(b []byte)
+	writeDynamicVaruint(b []byte) error
 	writeDynamicBin32(b [32]byte)
 	writeLiteralBin64(b [64]byte)
 	writeLiteralBin80(b [80]byte)
@@ -63,17 +63,21 @@ func (s *StaticEncoder) writeStatic(idx uint8) {
 // writeDynamicVaruint writes a dynamic varuint to the writer.
 // It expects readUintBytes to provide a non-empty byte slice containing
 // a msgpack varuint encoding of 1, 2, 3, 5, or 9 byte length.
-func (s *StaticEncoder) writeDynamicVaruint(b []byte) {
+func (s *StaticEncoder) writeDynamicVaruint(b []byte) error {
 	var expectedLength int
 	switch b[0] {
-	case markerDynamicUint8:
+	case uint8tag:
 		expectedLength = 2
-	case markerDynamicUint16:
+		s.cur = append(s.cur, markerDynamicUint8)
+	case uint16tag:
 		expectedLength = 3
-	case markerDynamicUint32:
+		s.cur = append(s.cur, markerDynamicUint16)
+	case uint32tag:
 		expectedLength = 5
-	case markerDynamicUint64:
+		s.cur = append(s.cur, markerDynamicUint32)
+	case uint64tag:
 		expectedLength = 9
+		s.cur = append(s.cur, markerDynamicUint64)
 	default:
 		if isfixint(b[0]) {
 			expectedLength = 1
@@ -81,13 +85,14 @@ func (s *StaticEncoder) writeDynamicVaruint(b []byte) {
 			// this is slightly inefficient, but we have low-numbered period & step fields in the static table
 			s.cur = append(s.cur, markerDynamicFixuint)
 		} else {
-			panic(fmt.Sprintf("unexpected dynamic varuint marker %x", b[0]))
+			return fmt.Errorf("unexpected dynamic varuint marker %x", b[0])
 		}
 	}
 	if len(b) != expectedLength {
-		panic("unexpected dynamic length")
+		return fmt.Errorf("unexpected dynamic varuint length %d", len(b))
 	}
-	s.cur = append(s.cur, b...)
+	s.cur = append(s.cur, b[1:]...)
+	return nil
 }
 
 func (s *StaticEncoder) writeDynamicBin32(b [32]byte) {
@@ -142,25 +147,25 @@ func decompressStatic(dst, src []byte) ([]byte, error) {
 			if pos >= lenb { // Needs one more byte
 				return nil, io.ErrUnexpectedEOF
 			}
-			dst = append(dst, marker, src[pos])
+			dst = append(dst, uint8tag, src[pos])
 			pos++
 		case markerDynamicUint16:
 			if pos+1 >= lenb { // Needs two more bytes
 				return nil, io.ErrUnexpectedEOF
 			}
-			dst = append(dst, marker, src[pos], src[pos+1])
+			dst = append(dst, uint16tag, src[pos], src[pos+1])
 			pos += 2
 		case markerDynamicUint32:
 			if pos+3 >= lenb { // Needs four more bytes
 				return nil, io.ErrUnexpectedEOF
 			}
-			dst = append(dst, marker, src[pos], src[pos+1], src[pos+2], src[pos+3])
+			dst = append(dst, uint32tag, src[pos], src[pos+1], src[pos+2], src[pos+3])
 			pos += 4
 		case markerDynamicUint64:
 			if pos+7 >= lenb { // Needs eight more bytes
 				return nil, io.ErrUnexpectedEOF
 			}
-			dst = append(dst, marker, src[pos], src[pos+1], src[pos+2], src[pos+3], src[pos+4], src[pos+5], src[pos+6], src[pos+7])
+			dst = append(dst, uint64tag, src[pos], src[pos+1], src[pos+2], src[pos+3], src[pos+4], src[pos+5], src[pos+6], src[pos+7])
 			pos += 8
 		case markerLiteralBin64:
 			if pos+63 >= lenb { // Needs 64 more bytes
