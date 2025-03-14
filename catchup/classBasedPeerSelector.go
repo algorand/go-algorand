@@ -57,11 +57,13 @@ func (c *classBasedPeerSelector) rankPeer(psp *peerSelectorPeer, rank int) (int,
 		}
 
 		// Peer was in this class, if there was any kind of download issue, we increment the failure count
-		if rank >= peerRankNoBlockForRound {
+		failure := rank >= peerRankNoBlockForRound
+		if failure {
 			wp.downloadFailures++
-		} else if wp.downloadFailures > 0 {
+		} else {
 			// class usually multiple peers and we do not want to punish the entire class for one peer's failure
-			wp.downloadFailures--
+			// by decrementing the downloadFailures
+			wp.downloadFailures = max(wp.downloadFailures-1, 0)
 		}
 
 		break
