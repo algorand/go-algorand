@@ -17,6 +17,7 @@
 package catchup
 
 import (
+	"container/list"
 	"errors"
 	"math"
 	"sort"
@@ -142,7 +143,7 @@ type rankPooledPeerSelector struct {
 // selection gaps, and the count of peerRankDownloadFailed incidents.
 type historicStats struct {
 	windowSize       int
-	rankSamples      []int
+	rankSamples      *list.List
 	rankSum          uint64
 	requestGaps      []uint64
 	gapSum           float64
@@ -157,12 +158,12 @@ func makeHistoricStatus(windowSize int, class peerClass) *historicStats {
 	// that will determine the rank of the peer.
 	hs := historicStats{
 		windowSize:  windowSize,
-		rankSamples: make([]int, windowSize),
+		rankSamples: list.New(),
 		requestGaps: make([]uint64, 0, windowSize),
 		rankSum:     uint64(class.initialRank) * uint64(windowSize),
 		gapSum:      0.0}
 	for i := 0; i < windowSize; i++ {
-		hs.rankSamples[i] = class.initialRank
+		hs.rankSamples.PushBack(class.initialRank)
 	}
 	return &hs
 }
@@ -209,7 +210,7 @@ func (hs *historicStats) resetRequestPenalty(steps int, initialRank int, class p
 	if steps == 0 {
 		hs.requestGaps = make([]uint64, 0, hs.windowSize)
 		hs.gapSum = 0.0
-		return int(float64(hs.rankSum) / float64(len(hs.rankSamples)))
+		return int(float64(hs.rankSum) / float64(hs.rankSamples.Len()))
 	}
 
 	if steps > len(hs.requestGaps) {
@@ -219,7 +220,7 @@ func (hs *historicStats) resetRequestPenalty(steps int, initialRank int, class p
 		hs.gapSum -= 1.0 / float64(hs.requestGaps[s])
 	}
 	hs.requestGaps = hs.requestGaps[steps:]
-	return boundRankByClass(int(hs.computerPenalty()*(float64(hs.rankSum)/float64(len(hs.rankSamples)))), class)
+	return boundRankByClass(int(hs.computerPenalty()*(float64(hs.rankSum)/float64(hs.rankSamples.Len()))), class)
 }
 
 // push pushes a new rank to the historicStats, and returns the new
@@ -231,12 +232,6 @@ func (hs *historicStats) push(value int, counter uint64, class peerClass) (avera
 	// Do not modify this value with historical data.
 	if value == peerRankInvalidDownload {
 		return value
-	}
-
-	// This is a moving window. Remove the least recent value once the window is full
-	if len(hs.rankSamples) == hs.windowSize {
-		hs.rankSum -= uint64(hs.rankSamples[0])
-		hs.rankSamples = hs.rankSamples[1:]
 	}
 
 	initialRank := value
@@ -266,11 +261,17 @@ func (hs *historicStats) push(value int, counter uint64, class peerClass) (avera
 		}
 	}
 
-	hs.rankSamples = append(hs.rankSamples, value)
-	hs.rankSum += uint64(value)
+	// This is a moving window of windowSize size so an old value is removed and a new value is added.
+	oldFrontElem := hs.rankSamples.Front()
+	oldRank := oldFrontElem.Value.(int)
+	// Update rankSum (remove old value, add new value)
+	hs.rankSum = hs.rankSum - uint64(oldRank) + uint64(value)
+	// Update node value and move it to the back of the list by reusing the node
+	oldFrontElem.Value = value
+	hs.rankSamples.MoveToBack(oldFrontElem)
 
 	// The average performance of the peer
-	average := float64(hs.rankSum) / float64(len(hs.rankSamples))
+	average := float64(hs.rankSum) / float64(hs.rankSamples.Len())
 
 	if int(average) > upperBound(class) && (initialRank == peerRankDownloadFailed || initialRank == peerRankNoBlockForRound) {
 		// peerRankDownloadFailed will be delayed, to give the peer
