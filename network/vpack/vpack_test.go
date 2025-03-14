@@ -38,11 +38,26 @@ func TestEncodingTest(t *testing.T) {
 		if *v0vote == (agreement.UnauthenticatedVote{}) {
 			continue // don't try to encode or compress empty votes (a single byte, 0x80)
 		}
+		expectFailMissing := false
+		// top-level should have 3 fields, all of which are required
+		if v0vote.R.MsgIsZero() || v0vote.Cred.MsgIsZero() || v0vote.Sig.MsgIsZero() {
+			expectFailMissing = true
+		}
+		// Cred must be non-zero
+		if v0vote.Cred.Proof.MsgIsZero() {
+			expectFailMissing = true
+		}
 
 		msgpBuf := protocol.EncodeMsgp(v0.(msgp.Marshaler))
 		enc := NewStaticEncoder()
 		encBuf, err := enc.CompressVote(nil, msgpBuf)
-		require.NoError(t, err)
+		if expectFailMissing {
+			// We are strict, and won't process votes with missing fields (where vpack_size is set)
+			require.ErrorContains(t, err, "expected fixed map size")
+			continue
+		} else {
+			require.NoError(t, err)
+		}
 
 		dec := NewStaticDecoder()
 		decMsgpBuf, err := dec.DecompressVote(nil, encBuf)
