@@ -60,6 +60,21 @@ const (
 	PeersPhonebookArchivalNodes PeerOption = iota
 )
 
+func (po PeerOption) String() string {
+	switch po {
+	case PeersConnectedOut:
+		return "ConnectedOut"
+	case PeersConnectedIn:
+		return "ConnectedIn"
+	case PeersPhonebookRelays:
+		return "PhonebookRelays"
+	case PeersPhonebookArchivalNodes:
+		return "PhonebookArchivalNodes"
+	default:
+		return "Unknown PeerOption"
+	}
+}
+
 // GossipNode represents a node in the gossip network
 type GossipNode interface {
 	Address() (string, bool)
