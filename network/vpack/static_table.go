@@ -4,6 +4,7 @@
 package vpack
 
 const (
+	StaticIdxMapMarker0     uint8 = 0xc0
 	StaticIdxMapMarker1     uint8 = 0xc1
 	StaticIdxMapMarker2     uint8 = 0xc2
 	StaticIdxMapMarker3     uint8 = 0xc3
@@ -42,6 +43,7 @@ func createGeneratedStaticTable() [][]byte {
 	t := make([][]byte, 256)
 
 	// Basic entries
+	t[StaticIdxMapMarker0] = []byte{0x80}                                // Map with 0 items
 	t[StaticIdxMapMarker1] = []byte{0x81}                                // Map with 1 items
 	t[StaticIdxMapMarker2] = []byte{0x82}                                // Map with 2 items
 	t[StaticIdxMapMarker3] = []byte{0x83}                                // Map with 3 items

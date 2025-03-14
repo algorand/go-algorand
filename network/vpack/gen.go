@@ -134,10 +134,14 @@ const parseFuncFooter = `
 // parseFuncTemplate decodes a struct encoded as a map.
 // It calls `makeNumericConst` for special integer values in a top-level FuncMap.
 const parseFuncTemplate = `
-	cnt, err := p.expectWriteMapMarker({{.MaxFieldCount}}, c)
+	cnt, err := p.readFixMap()
 	if err != nil {
-		return fmt.Errorf("map for {{.TypeName}}: %w", err)
+		return fmt.Errorf("reading map for {{.TypeName}}: %w", err)
 	}
+	if cnt < 1 || cnt > {{.MaxFieldCount}} {
+		return fmt.Errorf("expected fixmap size for {{.TypeName}} 1 <= cnt <= {{.MaxFieldCount}}, got %d", cnt)
+	}
+	c.writeStatic(StaticIdxMapMarker0+cnt)
 
 	for range cnt {
 		key, err := p.readString()
@@ -153,6 +157,7 @@ const parseFuncTemplate = `
 			c.writeStatic({{$fd.FieldNameConst}})
 			{{renderParseFunction $fd.SubStructName}}
   {{- else if $fd.IsUint64Alias}}
+            {{ if not $fd.VpackSpecial }}c.writeStatic({{$fd.FieldNameConst}}){{end}}
 			valBytes, err := p.readUintBytes()
 			if err != nil {
 				return fmt.Errorf("reading {{$fd.CodecName}}: %w", err)
@@ -170,9 +175,10 @@ const parseFuncTemplate = `
 				}
 			}
 	{{end}}
-			c.writeStatic({{$fd.FieldNameConst}})
+			{{ if $fd.VpackSpecial }}c.writeStatic({{$fd.FieldNameConst}}){{ end }}
 			c.writeDynamicVaruint(valBytes)
   {{- else if gt $fd.ArrayLen 0}}
+            {{ if and (not $fd.VpackSpecial) (not $fd.IsZeroCheck) }}c.writeStatic({{$fd.FieldNameConst}}){{end}}
 			val, err := p.readBin{{$fd.ArrayLen}}()
 			if err != nil {
 				return fmt.Errorf("reading {{$fd.CodecName}}: %w", err)
@@ -185,10 +191,10 @@ const parseFuncTemplate = `
 				c.writeLiteralBin{{$fd.ArrayLen}}(val)
 			}
 	{{- else if $fd.IsLiteral}}
-			c.writeStatic({{$fd.FieldNameConst}})
+			{{ if $fd.VpackSpecial }}c.writeStatic({{$fd.FieldNameConst}}){{ end }}
 			c.writeLiteralBin{{$fd.ArrayLen}}(val)
 	{{- else}}
-			c.writeStatic({{$fd.FieldNameConst}})
+			{{ if $fd.VpackSpecial }}c.writeStatic({{$fd.FieldNameConst}}){{ end }}
 			c.writeDynamicBin{{$fd.ArrayLen}}(val)
 	{{- end}}
   {{- else}}
@@ -232,7 +238,7 @@ func (g *codeGenerator) generate(root reflect.Type) error {
 	// Also define map-marker constants for 1..6
 	// We don't need more than this, and an error will be thrown if a
 	// field grows beyond 6 items.
-	for i := 1; i <= 6; i++ {
+	for i := 0; i <= 6; i++ {
 		g.getOrCreateMapMarkerIndex(i)
 	}
 

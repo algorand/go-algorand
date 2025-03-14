@@ -184,30 +184,3 @@ func (p *parser) readUintBytes() ([]byte, error) {
 	p.pos += dataSize
 	return p.data[startPos : startPos+dataSize+1], nil
 }
-
-func (p *parser) expectWriteMapMarker(maxSz int, c compressWriter) (int, error) {
-	cnt, err := p.readFixMap()
-	if err != nil {
-		return 0, err
-	}
-	if cnt < 1 || cnt > maxSz {
-		return 0, fmt.Errorf("expected fixmap size %d <= cnt <= %d, got %d", 1, maxSz, cnt)
-	}
-	switch cnt {
-	case 1:
-		c.writeStatic(StaticIdxMapMarker1)
-	case 2:
-		c.writeStatic(StaticIdxMapMarker2)
-	case 3:
-		c.writeStatic(StaticIdxMapMarker3)
-	case 4:
-		c.writeStatic(StaticIdxMapMarker4)
-	case 5:
-		c.writeStatic(StaticIdxMapMarker5)
-	case 6:
-		c.writeStatic(StaticIdxMapMarker6)
-	default:
-		return 0, fmt.Errorf("unexpected fixmap size: %d", cnt)
-	}
-	return cnt, nil
-}
