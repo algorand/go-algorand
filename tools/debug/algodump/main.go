@@ -25,7 +25,6 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 
@@ -59,7 +58,7 @@ type StoredMessage struct {
 // dumpHandler handles dumping network messages to console/files
 type dumpHandler struct {
 	tags         map[protocol.Tag]bool
-	storeMutex   sync.Mutex
+	storeMutex   deadlock.Mutex
 	storeBuffer  []StoredMessage
 	storeSize    int
 	storeCounter int

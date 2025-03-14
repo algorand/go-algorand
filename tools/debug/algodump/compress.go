@@ -26,7 +26,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 
@@ -36,6 +35,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-deadlock"
 	kzstd "github.com/klauspost/compress/zstd"
 	"github.com/valyala/gozstd"
 )
@@ -109,24 +109,24 @@ type tagStats struct {
 	compressedBytes uint64
 	messageCount    uint64
 	contextBytes    uint64
-	mu              sync.Mutex
+	mu              deadlock.Mutex
 }
 
 // compressDumpHandler extends dumpHandler with compression functionality
 type compressDumpHandler struct {
 	*dumpHandler // Embed the original dumpHandler
 	stats        map[protocol.Tag]*tagStats
-	statsMutex   sync.Mutex
+	statsMutex   deadlock.Mutex
 	compressor   *zstd.BulkProcessor
 	contexts     map[string]*CompressionContext
-	contextMu    sync.Mutex
+	contextMu    deadlock.Mutex
 	dict         []byte
 	cdict        *gozstd.CDict // Reusable gozstd dictionary
 
 	// Tag-specific context configuration
 	tagContexts   map[protocol.Tag]int    // Maps tag to window size
 	tagGroups     map[protocol.Tag]string // Maps tag to group name for shared contexts
-	tagContextsMu sync.Mutex
+	tagContextsMu deadlock.Mutex
 }
 
 // setupCompressSignalHandler sets up a signal handler for the compressDumpHandler
