@@ -233,7 +233,7 @@ func (hs *historicStats) push(value int, counter uint64, class peerClass) (avera
 		return value
 	}
 
-	// This is a moving window. Remore the least recent value once the window is full
+	// This is a moving window. Remove the least recent value once the window is full
 	if len(hs.rankSamples) == hs.windowSize {
 		hs.rankSum -= uint64(hs.rankSamples[0])
 		hs.rankSamples = hs.rankSamples[1:]
@@ -280,10 +280,10 @@ func (hs *historicStats) push(value int, counter uint64, class peerClass) (avera
 		return initialRank
 	}
 
-	// A penalty is added relative to how freequently the peer is used
+	// A penalty is added relative to how frequently the peer is used
 	penalty := hs.updateRequestPenalty(counter)
 
-	// The rank based on the performance and the freequency
+	// The rank based on the performance and the frequency
 	avgWithPenalty := int(penalty * average)
 
 	// Keep the peer in the same class. The value passed will be
@@ -303,7 +303,7 @@ func makeRankPooledPeerSelector(net peersRetriever, initialPeersClasses []peerCl
 	return selector
 }
 
-// getNextPeer returns the next peer. It randomally selects a peer from a pool that has
+// getNextPeer returns the next peer. It randomly selects a peer from a pool that has
 // the lowest rank value. Given that the peers are grouped by their ranks, allow us to
 // prioritize peers based on their class and/or performance.
 func (ps *rankPooledPeerSelector) getNextPeer() (psp *peerSelectorPeer, err error) {
