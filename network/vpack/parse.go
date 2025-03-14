@@ -10,16 +10,18 @@ import (
 func parseVote(data []byte, c compressWriter) error {
 	p := newParser(data)
 
+	// Fixed size struct with 3 fields
 	cnt, err := p.readFixMap()
 	if err != nil {
 		return fmt.Errorf("reading map for unauthenticatedVote: %w", err)
 	}
-	if cnt < 1 || cnt > 3 {
-		return fmt.Errorf("expected fixmap size for unauthenticatedVote 1 <= cnt <= 3, got %d", cnt)
+	if cnt != 3 {
+		return fmt.Errorf("expected fixed map size 3 for unauthenticatedVote, got %d", cnt)
 	}
-	c.writeStatic(staticIdxMapMarker0 + cnt)
+	c.writeStatic(staticIdxMapMarker3)
 
-	for range cnt {
+	for range 3 {
+
 		key, err := p.readString()
 		if err != nil {
 			return fmt.Errorf("reading key for unauthenticatedVote: %w", err)
@@ -29,16 +31,18 @@ func parseVote(data []byte, c compressWriter) error {
 		case "cred":
 			c.writeStatic(staticIdxCredField)
 
+			// Fixed size struct with 1 fields
 			cnt, err := p.readFixMap()
 			if err != nil {
 				return fmt.Errorf("reading map for UnauthenticatedCredential: %w", err)
 			}
-			if cnt < 1 || cnt > 1 {
-				return fmt.Errorf("expected fixmap size for UnauthenticatedCredential 1 <= cnt <= 1, got %d", cnt)
+			if cnt != 1 {
+				return fmt.Errorf("expected fixed map size 1 for UnauthenticatedCredential, got %d", cnt)
 			}
-			c.writeStatic(staticIdxMapMarker0 + cnt)
+			c.writeStatic(staticIdxMapMarker1)
 
-			for range cnt {
+			for range 1 {
+
 				key, err := p.readString()
 				if err != nil {
 					return fmt.Errorf("reading key for UnauthenticatedCredential: %w", err)
@@ -61,6 +65,7 @@ func parseVote(data []byte, c compressWriter) error {
 		case "r":
 			c.writeStatic(staticIdxRField)
 
+			// Variable size struct
 			cnt, err := p.readFixMap()
 			if err != nil {
 				return fmt.Errorf("reading map for rawVote: %w", err)
@@ -71,6 +76,7 @@ func parseVote(data []byte, c compressWriter) error {
 			c.writeStatic(staticIdxMapMarker0 + cnt)
 
 			for range cnt {
+
 				key, err := p.readString()
 				if err != nil {
 					return fmt.Errorf("reading key for rawVote: %w", err)
@@ -84,10 +90,13 @@ func parseVote(data []byte, c compressWriter) error {
 						return fmt.Errorf("reading per: %w", err)
 					}
 
-					c.writeDynamicVaruint(valBytes)
+					if err := c.writeDynamicVaruint(valBytes); err != nil {
+						return fmt.Errorf("writing per: %w", err)
+					}
 				case "prop":
 					c.writeStatic(staticIdxPropField)
 
+					// Variable size struct
 					cnt, err := p.readFixMap()
 					if err != nil {
 						return fmt.Errorf("reading map for proposalValue: %w", err)
@@ -98,6 +107,7 @@ func parseVote(data []byte, c compressWriter) error {
 					c.writeStatic(staticIdxMapMarker0 + cnt)
 
 					for range cnt {
+
 						key, err := p.readString()
 						if err != nil {
 							return fmt.Errorf("reading key for proposalValue: %w", err)
@@ -127,7 +137,9 @@ func parseVote(data []byte, c compressWriter) error {
 								return fmt.Errorf("reading oper: %w", err)
 							}
 
-							c.writeDynamicVaruint(valBytes)
+							if err := c.writeDynamicVaruint(valBytes); err != nil {
+								return fmt.Errorf("writing oper: %w", err)
+							}
 						case "oprop":
 							c.writeStatic(staticIdxOpropField)
 							val, err := p.readBin32()
@@ -148,7 +160,9 @@ func parseVote(data []byte, c compressWriter) error {
 						return fmt.Errorf("reading rnd: %w", err)
 					}
 
-					c.writeDynamicVaruint(valBytes)
+					if err := c.writeDynamicVaruint(valBytes); err != nil {
+						return fmt.Errorf("writing rnd: %w", err)
+					}
 				case "snd":
 					c.writeStatic(staticIdxSndField)
 					val, err := p.readBin32()
@@ -179,7 +193,9 @@ func parseVote(data []byte, c compressWriter) error {
 					}
 
 					c.writeStatic(staticIdxStepField)
-					c.writeDynamicVaruint(valBytes)
+					if err := c.writeDynamicVaruint(valBytes); err != nil {
+						return fmt.Errorf("writing step: %w", err)
+					}
 				default:
 					return fmt.Errorf("unexpected field in rawVote: %q", key)
 				}
@@ -188,16 +204,18 @@ func parseVote(data []byte, c compressWriter) error {
 		case "sig":
 			c.writeStatic(staticIdxSigField)
 
+			// Fixed size struct with 6 fields
 			cnt, err := p.readFixMap()
 			if err != nil {
 				return fmt.Errorf("reading map for OneTimeSignature: %w", err)
 			}
-			if cnt < 1 || cnt > 6 {
-				return fmt.Errorf("expected fixmap size for OneTimeSignature 1 <= cnt <= 6, got %d", cnt)
+			if cnt != 6 {
+				return fmt.Errorf("expected fixed map size 6 for OneTimeSignature, got %d", cnt)
 			}
-			c.writeStatic(staticIdxMapMarker0 + cnt)
+			c.writeStatic(staticIdxMapMarker6)
 
-			for range cnt {
+			for range 6 {
+
 				key, err := p.readString()
 				if err != nil {
 					return fmt.Errorf("reading key for OneTimeSignature: %w", err)

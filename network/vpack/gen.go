@@ -24,6 +24,7 @@ import (
 	"os"
 	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 	"text/template"
 
@@ -60,6 +61,7 @@ type parseFuncData struct {
 	TypeName      string
 	CodecName     string
 	MaxFieldCount int
+	FixedSize     int    // If > 0, indicates a fixed size from vpack_size tag
 	Fields        []fieldData
 }
 
@@ -137,7 +139,20 @@ const parseFuncFooter = `
 
 // parseFuncTemplate decodes a struct encoded as a map.
 // It calls `makeNumericConst` for special integer values in a top-level FuncMap.
-const parseFuncTemplate = `
+const parseFuncTemplate = `{{if gt .FixedSize 0}}
+	// Fixed size struct with {{.FixedSize}} fields
+	cnt, err := p.readFixMap()
+	if err != nil {
+		return fmt.Errorf("reading map for {{.TypeName}}: %w", err)
+	}
+	if cnt != {{.FixedSize}} {
+		return fmt.Errorf("expected fixed map size {{.FixedSize}} for {{.TypeName}}, got %d", cnt)
+	}
+	c.writeStatic(staticIdxMapMarker{{.FixedSize}})
+
+	for range {{.FixedSize}} {
+{{else}}
+	// Variable size struct
 	cnt, err := p.readFixMap()
 	if err != nil {
 		return fmt.Errorf("reading map for {{.TypeName}}: %w", err)
@@ -148,6 +163,7 @@ const parseFuncTemplate = `
 	c.writeStatic(staticIdxMapMarker0+cnt)
 
 	for range cnt {
+{{end}}
 		key, err := p.readString()
 		if err != nil {
 			return fmt.Errorf("reading key for {{.TypeName}}: %w", err)
@@ -298,6 +314,17 @@ import (
 	return nil
 }
 
+// findStructField looks for a field by name within a struct type, regardless of export status
+func findStructField(t reflect.Type, name string) (reflect.StructField, bool) {
+	for i := 0; i < t.NumField(); i++ {
+		field := t.Field(i)
+		if field.Name == name {
+			return field, true
+		}
+	}
+	return reflect.StructField{}, false
+}
+
 // analyzeType collects parse-function data (fields, etc.) for type t.
 // Then we store it in parseFuncDataMap[t], recursing into sub-structs as needed.
 func (g *codeGenerator) analyzeType(t reflect.Type) error {
@@ -314,9 +341,22 @@ func (g *codeGenerator) analyzeType(t reflect.Type) error {
 		return getCodecTagName(fields[i]) < getCodecTagName(fields[j])
 	})
 
+	// Check for fixed-size structs using the vpack_size tag on _struct field
+	fixedSize := 0
+	// Look for _struct field directly (which may be unexported)
+	if structField, found := findStructField(t, "_struct"); found {
+		vpackSizeTag := structField.Tag.Get("vpack_size")
+		if vpackSizeTag != "" {
+			if size, err := strconv.Atoi(vpackSizeTag); err == nil {
+				fixedSize = size
+			}
+		}
+	}
+
 	pf := parseFuncData{
 		TypeName:      t.Name(),
 		MaxFieldCount: len(fields),
+		FixedSize:     fixedSize,
 	}
 
 	for _, f := range fields {

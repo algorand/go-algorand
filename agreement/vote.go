@@ -41,7 +41,7 @@ type (
 
 	// unauthenticatedVote is a vote which has not been verified
 	unauthenticatedVote struct {
-		_struct struct{}                            `codec:",omitempty,omitemptyarray"`
+		_struct struct{}                            `codec:",omitempty,omitemptyarray" vpack_size:"3"`
 		R       rawVote                             `codec:"r"`
 		Cred    committee.UnauthenticatedCredential `codec:"cred"`
 		Sig     crypto.OneTimeSignature             `codec:"sig,omitempty,omitemptycheckstruct"`
