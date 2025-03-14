@@ -281,7 +281,7 @@ func (s *Service) fetchAndWrite(ctx context.Context, r basics.Round, prevFetchCo
 		i++
 		select {
 		case <-ctx.Done():
-			s.log.Debugf("fetchAndWrite(%v): Aborted", r)
+			s.log.Debugf("fetchAndWrite(%d): Aborted", r)
 			return false
 		default:
 		}
@@ -309,10 +309,11 @@ func (s *Service) fetchAndWrite(ctx context.Context, r basics.Round, prevFetchCo
 
 		psp, getPeerErr := peerSelector.getNextPeer()
 		if getPeerErr != nil {
-			s.log.Debugf("fetchAndWrite: was unable to obtain a peer to retrieve the block from")
+			s.log.Debugf("fetchAndWrite(%d): was unable to obtain a peer to retrieve the block from: %v", r, getPeerErr)
 			return false
 		}
 		peer := psp.Peer
+		s.log.Debugf("fetchAndWrite(%d): got %s peer: %s", r, psp.peerClass, peerAddress(peer))
 
 		// Try to fetch, timing out after retryInterval
 		block, cert, blockDownloadDuration, err := s.innerFetch(ctx, r, peer)
@@ -343,15 +344,16 @@ func (s *Service) fetchAndWrite(ctx context.Context, r basics.Round, prevFetchCo
 					peerErrors[peer]++
 				}
 			}
-			s.log.Debugf("fetchAndWrite(%v): Could not fetch: %v (attempt %d)", r, err, i)
-			peerSelector.rankPeer(psp, failureRank)
+			s.log.Debugf("fetchAndWrite(%d): Could not fetch: %v (attempt %d), peer %s", r, err, i, peerAddress(psp.Peer))
+			o, n := peerSelector.rankPeer(psp, failureRank)
+			s.log.Debugf("fetchAndWrite(%d): Could not fetch: ranked peer %s with %d from %d to %d", r, peerAddress(psp.Peer), failureRank, o, n)
 
 			// we've just failed to retrieve a block; wait until the previous block is fetched before trying again
 			// to avoid the usecase where the first block doesn't exist, and we're making many requests down the chain
 			// for no reason.
 			select {
 			case <-ctx.Done():
-				s.log.Infof("fetchAndWrite(%v): Aborted while waiting for lookback block to ledger", r)
+				s.log.Infof("fetchAndWrite(%d): Aborted while waiting for lookback block to ledger", r)
 				return false
 			case <-lookbackComplete:
 			}
@@ -360,7 +362,7 @@ func (s *Service) fetchAndWrite(ctx context.Context, r basics.Round, prevFetchCo
 			// someone already wrote the block to the ledger, we should stop syncing
 			return false
 		}
-		s.log.Debugf("fetchAndWrite(%v): Got block and cert contents: %v %v", r, block, cert)
+		s.log.Debugf("fetchAndWrite(%d): Got block and cert contents: %v %v", r, block, cert)
 
 		// Check that the block's contents match the block header (necessary with an untrusted block because b.Hash() only hashes the header)
 		if s.cfg.CatchupVerifyPaysetHash() {
@@ -368,11 +370,11 @@ func (s *Service) fetchAndWrite(ctx context.Context, r basics.Round, prevFetchCo
 				peerSelector.rankPeer(psp, peerRankInvalidDownload)
 				// Check if this mismatch is due to an unsupported protocol version
 				if _, ok := config.Consensus[block.BlockHeader.CurrentProtocol]; !ok {
-					s.log.Errorf("fetchAndWrite(%v): unsupported protocol version detected: '%v'", r, block.BlockHeader.CurrentProtocol)
+					s.log.Errorf("fetchAndWrite(%d): unsupported protocol version detected: '%v'", r, block.BlockHeader.CurrentProtocol)
 					return false
 				}
 
-				s.log.Warnf("fetchAndWrite(%v): block contents do not match header (attempt %d)", r, i)
+				s.log.Warnf("fetchAndWrite(%d): block contents do not match header (attempt %d)", r, i)
 				continue // retry the fetch
 			}
 		}
@@ -380,7 +382,7 @@ func (s *Service) fetchAndWrite(ctx context.Context, r basics.Round, prevFetchCo
 		// make sure that we have the lookBack block that's required for authenticating this block
 		select {
 		case <-ctx.Done():
-			s.log.Debugf("fetchAndWrite(%v): Aborted while waiting for lookback block to ledger", r)
+			s.log.Debugf("fetchAndWrite(%d): Aborted while waiting for lookback block to ledger", r)
 			return false
 		case <-lookbackComplete:
 		}
@@ -388,7 +390,7 @@ func (s *Service) fetchAndWrite(ctx context.Context, r basics.Round, prevFetchCo
 		if s.cfg.CatchupVerifyCertificate() {
 			err = s.auth.Authenticate(block, cert)
 			if err != nil {
-				s.log.Warnf("fetchAndWrite(%v): cert did not authenticate block (attempt %d): %v", r, i, err)
+				s.log.Warnf("fetchAndWrite(%d): cert did not authenticate block (attempt %d): %v", r, i, err)
 				peerSelector.rankPeer(psp, peerRankInvalidDownload)
 				continue // retry the fetch
 			}
@@ -396,12 +398,12 @@ func (s *Service) fetchAndWrite(ctx context.Context, r basics.Round, prevFetchCo
 
 		peerRank := peerSelector.peerDownloadDurationToRank(psp, blockDownloadDuration)
 		r1, r2 := peerSelector.rankPeer(psp, peerRank)
-		s.log.Debugf("fetchAndWrite(%d): ranked peer with %d from %d to %d", r, peerRank, r1, r2)
+		s.log.Debugf("fetchAndWrite(%d): ranked peer %s with %d from %d to %d", r, peerAddress(psp.Peer), peerRank, r1, r2)
 
 		// Write to ledger, noting that ledger writes must be in order
 		select {
 		case <-ctx.Done():
-			s.log.Debugf("fetchAndWrite(%v): Aborted while waiting to write to ledger", r)
+			s.log.Debugf("fetchAndWrite(%d): Aborted while waiting to write to ledger", r)
 			return false
 		case <-prevFetchCompleteChan:
 			// make sure the ledger wrote enough of the account data to disk, since we don't want the ledger to hold a large amount of data in memory.
@@ -457,16 +459,16 @@ func (s *Service) fetchAndWrite(ctx context.Context, r basics.Round, prevFetchCo
 					return false
 				case errors.As(err, &protocolErr):
 					if !s.protocolErrorLogged {
-						logging.Base().Errorf("fetchAndWrite(%v): unrecoverable protocol error detected: %v", r, err)
+						logging.Base().Errorf("fetchAndWrite(%d): unrecoverable protocol error detected: %v", r, err)
 						s.protocolErrorLogged = true
 					}
 				default:
-					s.log.Errorf("fetchAndWrite(%v): ledger write failed: %v", r, err)
+					s.log.Errorf("fetchAndWrite(%d): ledger write failed: %v", r, err)
 				}
 
 				return false
 			}
-			s.log.Debugf("fetchAndWrite(%v): Wrote block to ledger", r)
+			s.log.Debugf("fetchAndWrite(%d): Wrote block to ledger", r)
 			return true
 		}
 	}
@@ -497,7 +499,7 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 
 	ps := createPeerSelector(s.net)
 	if _, err := ps.getNextPeer(); err != nil {
-		s.log.Debugf("pipelinedFetch: was unable to obtain a peer to retrieve the block from")
+		s.log.Debugf("pipelinedFetch: was unable to obtain a peer to retrieve the block from: %v", err)
 		return
 	}
 
@@ -546,6 +548,7 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 
 			if !completedOK {
 				// there was an error; defer will cancel the pipeline
+				s.log.Debugf("pipelinedFetch: quitting on fetchAndWrite error (firstRound=%d, nextRound=%d)", firstRound-1, nextRound)
 				return
 			}
 
@@ -582,6 +585,7 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 			}
 
 		case <-s.ctx.Done():
+			s.log.Debugf("pipelinedFetch: Aborted (firstRound=%d, nextRound=%d)", firstRound, nextRound)
 			return
 		}
 	}
@@ -759,7 +763,7 @@ func (s *Service) fetchRound(cert agreement.Certificate, verifier *agreement.Asy
 	for s.ledger.LastRound() < cert.Round {
 		psp, getPeerErr := ps.getNextPeer()
 		if getPeerErr != nil {
-			s.log.Debugf("fetchRound: was unable to obtain a peer to retrieve the block from")
+			s.log.Debugf("fetchRound: was unable to obtain a peer to retrieve the block from: %s", getPeerErr)
 			select {
 			case <-s.ctx.Done():
 				logging.Base().Debugf("fetchRound was asked to quit while collecting peers")
@@ -788,7 +792,7 @@ func (s *Service) fetchRound(cert agreement.Certificate, verifier *agreement.Asy
 				failureRank = peerRankNoBlockForRound
 				// If a peer does not have the block after few attempts it probably has not persisted the block yet.
 				// Give it some time to persist the block and try again.
-				// None, there is no exit condition on too many retries as per the function contract.
+				// Note, there is no exit condition on too many retries as per the function contract.
 				if count, ok := peerErrors[peer]; ok {
 					if count > errNoBlockForRoundThreshold {
 						time.Sleep(50 * time.Millisecond)
@@ -797,7 +801,7 @@ func (s *Service) fetchRound(cert agreement.Certificate, verifier *agreement.Asy
 						// for the low number of connected peers (like 2) the following scenario is possible:
 						// - both peers do not have the block
 						// - peer selector punishes one of the peers more than the other
-						// - the punished peer gets the block, and the less punished peer stucks.
+						// - the punished peer gets the block, and the less punished peer stuck.
 						// It this case reset the peer selector to let it re-learn priorities.
 						ps = createPeerSelector(s.net)
 					}
@@ -877,7 +881,7 @@ func (s *Service) roundIsNotSupported(nextRound basics.Round) bool {
 	return true
 }
 
-func createPeerSelector(net network.GossipNode) peerSelector {
+func createPeerSelector(net peersRetriever) peerSelector {
 	wrappedPeerSelectors := []*wrappedPeerSelector{
 		{
 			peerClass: network.PeersConnectedOut,
