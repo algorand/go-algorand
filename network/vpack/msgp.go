@@ -64,7 +64,7 @@ func (p *parser) readByte() (byte, error) {
 }
 
 // Read a fixmap header and return the count
-func (p *parser) readFixMap() (int, error) {
+func (p *parser) readFixMap() (uint8, error) {
 	b, err := p.readByte()
 	if err != nil {
 		return 0, err
@@ -74,19 +74,7 @@ func (p *parser) readFixMap() (int, error) {
 		return 0, fmt.Errorf("expected fixmap, got 0x%02x", b)
 	}
 
-	return int(b & 0x0f), nil
-}
-
-// Expect a fixmap of specific size
-func (p *parser) expectFixMap(expectedCount int) error {
-	count, err := p.readFixMap()
-	if err != nil {
-		return err
-	}
-	if count != expectedCount {
-		return fmt.Errorf("expected fixmap size %d, got %d", expectedCount, count)
-	}
-	return nil
+	return b & 0x0f, nil
 }
 
 // Zero-allocation string reading that returns a slice of the original data
@@ -105,17 +93,6 @@ func (p *parser) readString() ([]byte, error) {
 	s := p.data[p.pos : p.pos+length]
 	p.pos += length
 	return s, nil
-}
-
-func (p *parser) expectString(expected string) error {
-	s, err := p.readString()
-	if err != nil {
-		return err
-	}
-	if string(s) != expected { // zero-alloc conversion
-		return fmt.Errorf("expected string %s, got %s", string(expected), string(s))
-	}
-	return nil
 }
 
 func (p *parser) readBin80() ([80]byte, error) {

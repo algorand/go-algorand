@@ -54,8 +54,10 @@ type randomizeObjectCfg struct {
 	ZeroesEveryN int
 }
 
+// RandomizeObjectOption is an option for RandomizeObject
 type RandomizeObjectOption func(*randomizeObjectCfg)
 
+// RandomizeObjectWithZeroesEveryN sets the chance of zero values being generated (one in n)
 func RandomizeObjectWithZeroesEveryN(n int) RandomizeObjectOption {
 	return func(cfg *randomizeObjectCfg) { cfg.ZeroesEveryN = n }
 }
