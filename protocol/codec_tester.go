@@ -49,27 +49,46 @@ func oneOf(n int) bool {
 	return (rand.Int() % n) == 0
 }
 
+type randomizeObjectCfg struct {
+	// MoreZeros will increase the chance of zero values being generated.
+	ZeroesEveryN int
+}
+
+type RandomizeObjectOption func(*randomizeObjectCfg)
+
+func RandomizeObjectWithZeroesEveryN(n int) RandomizeObjectOption {
+	return func(cfg *randomizeObjectCfg) { cfg.ZeroesEveryN = n }
+}
+
 // RandomizeObject returns a random object of the same type as template
-func RandomizeObject(template interface{}) (interface{}, error) {
+func RandomizeObject(template interface{}, opts ...RandomizeObjectOption) (interface{}, error) {
+	cfg := randomizeObjectCfg{}
+	for _, opt := range opts {
+		opt(&cfg)
+	}
 	tt := reflect.TypeOf(template)
 	if tt.Kind() != reflect.Ptr {
 		return nil, fmt.Errorf("RandomizeObject: must be ptr")
 	}
 	v := reflect.New(tt.Elem())
 	changes := int(^uint(0) >> 1)
-	err := randomizeValue(v.Elem(), tt.String(), "", &changes, make(map[reflect.Type]bool))
+	err := randomizeValue(v.Elem(), 0, tt.String(), "", &changes, cfg, make(map[reflect.Type]bool))
 	return v.Interface(), err
 }
 
 // RandomizeObjectField returns a random object of the same type as template where a single field was modified.
-func RandomizeObjectField(template interface{}) (interface{}, error) {
+func RandomizeObjectField(template interface{}, opts ...RandomizeObjectOption) (interface{}, error) {
+	cfg := randomizeObjectCfg{}
+	for _, opt := range opts {
+		opt(&cfg)
+	}
 	tt := reflect.TypeOf(template)
 	if tt.Kind() != reflect.Ptr {
 		return nil, fmt.Errorf("RandomizeObject: must be ptr")
 	}
 	v := reflect.New(tt.Elem())
 	changes := 1
-	err := randomizeValue(v.Elem(), tt.String(), "", &changes, make(map[reflect.Type]bool))
+	err := randomizeValue(v.Elem(), 0, tt.String(), "", &changes, cfg, make(map[reflect.Type]bool))
 	return v.Interface(), err
 }
 
@@ -211,14 +230,14 @@ func checkBoundsLimitingTag(val reflect.Value, datapath string, structTag string
 	return
 }
 
-func randomizeValue(v reflect.Value, datapath string, tag string, remainingChanges *int, seenTypes map[reflect.Type]bool) error {
+func randomizeValue(v reflect.Value, depth int, datapath string, tag string, remainingChanges *int, cfg randomizeObjectCfg, seenTypes map[reflect.Type]bool) error {
 	if *remainingChanges == 0 {
 		return nil
 	}
-	/*if oneOf(5) {
+	if depth != 0 && cfg.ZeroesEveryN > 0 && oneOf(cfg.ZeroesEveryN) {
 		// Leave zero value
 		return nil
-	}*/
+	}
 
 	/* Consider cutting off recursive structures by stopping at some datapath depth.
 
@@ -264,7 +283,7 @@ func randomizeValue(v reflect.Value, datapath string, tag string, remainingChang
 		*remainingChanges--
 	case reflect.Ptr:
 		v.Set(reflect.New(v.Type().Elem()))
-		err := randomizeValue(reflect.Indirect(v), datapath, tag, remainingChanges, seenTypes)
+		err := randomizeValue(reflect.Indirect(v), depth+1, datapath, tag, remainingChanges, cfg, seenTypes)
 		if err != nil {
 			return err
 		}
@@ -292,7 +311,7 @@ func randomizeValue(v reflect.Value, datapath string, tag string, remainingChang
 			if rawMsgpType == f.Type {
 				return errSkipRawMsgpTesting
 			}
-			err := randomizeValue(v.Field(fieldIdx), datapath+"/"+f.Name, string(tag), remainingChanges, seenTypes)
+			err := randomizeValue(v.Field(fieldIdx), depth+1, datapath+"/"+f.Name, string(tag), remainingChanges, cfg, seenTypes)
 			if err != nil {
 				return err
 			}
@@ -304,7 +323,7 @@ func randomizeValue(v reflect.Value, datapath string, tag string, remainingChang
 	case reflect.Array:
 		indicesOrder := rand.Perm(v.Len())
 		for i := 0; i < v.Len(); i++ {
-			err := randomizeValue(v.Index(indicesOrder[i]), fmt.Sprintf("%s/%d", datapath, indicesOrder[i]), "", remainingChanges, seenTypes)
+			err := randomizeValue(v.Index(indicesOrder[i]), depth+1, fmt.Sprintf("%s/%d", datapath, indicesOrder[i]), "", remainingChanges, cfg, seenTypes)
 			if err != nil {
 				return err
 			}
@@ -325,7 +344,7 @@ func randomizeValue(v reflect.Value, datapath string, tag string, remainingChang
 		s := reflect.MakeSlice(v.Type(), l, l)
 		indicesOrder := rand.Perm(l)
 		for i := 0; i < l; i++ {
-			err := randomizeValue(s.Index(indicesOrder[i]), fmt.Sprintf("%s/%d", datapath, indicesOrder[i]), "", remainingChanges, seenTypes)
+			err := randomizeValue(s.Index(indicesOrder[i]), depth+1, fmt.Sprintf("%s/%d", datapath, indicesOrder[i]), "", remainingChanges, cfg, seenTypes)
 			if err != nil {
 				return err
 			}
@@ -349,13 +368,13 @@ func randomizeValue(v reflect.Value, datapath string, tag string, remainingChang
 		indicesOrder := rand.Perm(l)
 		for i := 0; i < l; i++ {
 			mk := reflect.New(mt.Key())
-			err := randomizeValue(mk.Elem(), fmt.Sprintf("%s/%d", datapath, indicesOrder[i]), "", remainingChanges, seenTypes)
+			err := randomizeValue(mk.Elem(), depth+1, fmt.Sprintf("%s/%d", datapath, indicesOrder[i]), "", remainingChanges, cfg, seenTypes)
 			if err != nil {
 				return err
 			}
 
 			mv := reflect.New(mt.Elem())
-			err = randomizeValue(mv.Elem(), fmt.Sprintf("%s/%d", datapath, indicesOrder[i]), "", remainingChanges, seenTypes)
+			err = randomizeValue(mv.Elem(), depth+1, fmt.Sprintf("%s/%d", datapath, indicesOrder[i]), "", remainingChanges, cfg, seenTypes)
 			if err != nil {
 				return err
 			}
