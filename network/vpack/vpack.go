@@ -80,10 +80,13 @@ func (s *StaticEncoder) writeDynamicVaruint(b []byte) error {
 		s.cur = append(s.cur, markerDynamicUint64)
 	default:
 		if isfixint(b[0]) {
-			expectedLength = 1
+			if len(b) != 1 {
+				return fmt.Errorf("unexpected dynamic fixint length %d", len(b))
+			}
 			// prefix with fixuint marker, so 0x00-0x7f isn't used by fixint
 			// this is slightly inefficient, but we have low-numbered period & step fields in the static table
-			s.cur = append(s.cur, markerDynamicFixuint)
+			s.cur = append(s.cur, markerDynamicFixuint, b[0])
+			return nil
 		} else {
 			return fmt.Errorf("unexpected dynamic varuint marker %x", b[0])
 		}

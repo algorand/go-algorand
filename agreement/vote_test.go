@@ -18,6 +18,8 @@ package agreement
 
 import (
 	"bytes"
+	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"testing"
@@ -53,6 +55,11 @@ func testVPackMakeVote(v *unauthenticatedVote) error {
 		return fmt.Errorf("makeVote: failed to decompress vote msgpack: %v", err)
 	}
 	if !bytes.Equal(vbuf, decBuf) {
+		fmt.Printf("vote: %+v\n", v)
+		fmt.Printf("oldbuf: %s\n", hex.EncodeToString(vbuf))
+		fmt.Printf("decbuf: %s\n", hex.EncodeToString(decBuf))
+		fmt.Printf("base64 oldbuf: %s\n", base64.StdEncoding.EncodeToString(vbuf))
+		fmt.Printf("base64 decbuf: %s\n", base64.StdEncoding.EncodeToString(decBuf))
 		return fmt.Errorf("makeVote: decompressed vote msgpack does not match original")
 	}
 	return nil
