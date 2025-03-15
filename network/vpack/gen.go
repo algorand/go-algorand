@@ -61,7 +61,7 @@ type parseFuncData struct {
 	TypeName      string
 	CodecName     string
 	MaxFieldCount int
-	FixedSize     int    // If > 0, indicates a fixed size from vpack_size tag
+	FixedSize     int // If > 0, indicates a fixed size from vpack_size tag
 	Fields        []fieldData
 }
 
@@ -343,7 +343,6 @@ func (g *codeGenerator) analyzeType(t reflect.Type) error {
 
 	// Check for fixed-size structs using the vpack_size tag on _struct field
 	fixedSize := 0
-	// Look for _struct field directly (which may be unexported)
 	if structField, found := findStructField(t, "_struct"); found {
 		vpackSizeTag := structField.Tag.Get("vpack_size")
 		if vpackSizeTag != "" {
@@ -421,8 +420,7 @@ func (g *codeGenerator) defineSpecialZeroBinary(codecName string, length int) st
 
 	baseField := g.getOrCreateStaticIndexForField(codecName) // e.g. "staticIdxDataField"
 
-	// The snippet:
-	//   zeroVal := append(t[<baseField>], t[<bin8Const>]...)
+	//   zeroVal := append(t[<baseField>], <bin8Const>...)
 	//   zeroVal = append(zeroVal, make([]byte, <length>)...)
 	//   t[<allZeroConst>] = zeroVal
 	code := fmt.Sprintf(`zeroVal := append(t[%s], msgpBin8Len%d...)
@@ -462,10 +460,13 @@ func (g *codeGenerator) defineSpecialValuesNumeric(codecName, specialValues stri
 	}
 }
 
-// parseByteValue converts a string like "1", "42" to a byte, defaulting to 0 if fails.
+// parseByteValue converts a string like "1", "42" to a byte, panic on error.
 func parseByteValue(s string) byte {
 	var b byte
-	fmt.Sscanf(s, "%d", &b)
+	_, err := fmt.Sscanf(s, "%d", &b)
+	if err != nil {
+		panic(fmt.Sprintf("bad vpack_special_values value: %v", err))
+	}
 	return b
 }
 
