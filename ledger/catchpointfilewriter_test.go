@@ -908,6 +908,7 @@ func testExactAccountChunk(t *testing.T, proto protocol.ConsensusVersion, extraB
 	testCatchpointFlushRound(dl.generator)
 	testCatchpointFlushRound(dl.validator)
 
+	// wait for the two ledgers to finish committing and be in sync
 	require.Eventually(t, func() bool {
 		dl.generator.accts.accountsMu.RLock()
 		dlg := len(dl.generator.accts.deltas)
