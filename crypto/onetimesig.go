@@ -37,24 +37,24 @@ type OneTimeSignature struct {
 	// Unfortunately we forgot to mark this struct as omitempty at
 	// one point, and now it's hard to change if we want to preserve
 	// encodings.
-	_struct struct{} `codec:""`
+	_struct struct{} `codec:"" vpack_size:"6"`
 
 	// Sig is a signature of msg under the key PK.
-	Sig ed25519Signature `codec:"s"`
+	Sig ed25519Signature `codec:"s" vpack:"literal"`
 	PK  ed25519PublicKey `codec:"p"`
 
 	// Old-style signature that does not use proper domain separation.
 	// PKSigOld is unused; however, unfortunately we forgot to mark it
 	// `codec:omitempty` and so it appears (with zero value) in certs.
 	// This means we can't delete the field without breaking catchup.
-	PKSigOld ed25519Signature `codec:"ps"`
+	PKSigOld ed25519Signature `codec:"ps" vpack:"literal" vpack_special_values:"0"`
 
 	// Used to verify a new-style two-level ephemeral signature.
 	// PK1Sig is a signature of OneTimeSignatureSubkeyOffsetID(PK, Batch, Offset) under the key PK2.
 	// PK2Sig is a signature of OneTimeSignatureSubkeyBatchID(PK2, Batch) under the master key (OneTimeSignatureVerifier).
 	PK2    ed25519PublicKey `codec:"p2"`
-	PK1Sig ed25519Signature `codec:"p1s"`
-	PK2Sig ed25519Signature `codec:"p2s"`
+	PK1Sig ed25519Signature `codec:"p1s" vpack:"literal"`
+	PK2Sig ed25519Signature `codec:"p2s" vpack:"literal"`
 }
 
 // A HeartbeatProof is functionally equivalent to a OneTimeSignature, but it has

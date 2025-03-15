@@ -34,13 +34,13 @@ type (
 		Sender   basics.Address `codec:"snd"`
 		Round    basics.Round   `codec:"rnd"`
 		Period   period         `codec:"per"`
-		Step     step           `codec:"step"`
+		Step     step           `codec:"step" vpack_special_values:"1,2,3"`
 		Proposal proposalValue  `codec:"prop"`
 	}
 
 	// unauthenticatedVote is a vote which has not been verified
 	unauthenticatedVote struct {
-		_struct struct{}                            `codec:",omitempty,omitemptyarray"`
+		_struct struct{}                            `codec:",omitempty,omitemptyarray" vpack_size:"3"`
 		R       rawVote                             `codec:"r"`
 		Cred    committee.UnauthenticatedCredential `codec:"cred"`
 		Sig     crypto.OneTimeSignature             `codec:"sig,omitempty,omitemptycheckstruct"`
@@ -146,6 +146,16 @@ func (uv unauthenticatedVote) verify(l LedgerReader) (vote, error) {
 	return vote{R: rv, Cred: cred, Sig: uv.Sig}, nil
 }
 
+var (
+	// testMakeVoteCheckFunction is a function that can be set to check every
+	// unauthenticatedVote before it is returned by makeVote. It is only set by tests.
+	testMakeVoteCheck func(*unauthenticatedVote) error
+)
+
+func getTestMakeVoteCheck() func(*unauthenticatedVote) error {
+	return testMakeVoteCheck
+}
+
 // makeVote creates a new unauthenticated vote from its constituent components.
 //
 // makeVote returns an error if it fails.
@@ -178,7 +188,15 @@ func makeVote(rv rawVote, voting crypto.OneTimeSigner, selection *crypto.VRFSecr
 	}
 
 	cred := committee.MakeCredential(&selection.SK, m.Selector)
-	return unauthenticatedVote{R: rv, Cred: cred, Sig: sig}, nil
+	ret := unauthenticatedVote{R: rv, Cred: cred, Sig: sig}
+
+	// for use when running in tests
+	if checkFn := getTestMakeVoteCheck(); checkFn != nil {
+		if checkErr := checkFn(&ret); checkErr != nil {
+			return unauthenticatedVote{}, fmt.Errorf("makeVote: testMakeVoteCheck failed: %w", checkErr)
+		}
+	}
+	return ret, nil
 }
 
 // ToBeHashed implements the Hashable interface.
