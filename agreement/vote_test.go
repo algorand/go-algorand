@@ -37,9 +37,7 @@ import (
 )
 
 func init() {
-	testMakeVoteCheckMu.Lock()
 	testMakeVoteCheck = testVPackMakeVote
-	testMakeVoteCheckMu.Unlock()
 }
 
 func testVPackMakeVote(v *unauthenticatedVote) error {

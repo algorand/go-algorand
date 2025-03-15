@@ -25,7 +25,6 @@ import (
 	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-deadlock"
 )
 
 type (
@@ -150,13 +149,10 @@ func (uv unauthenticatedVote) verify(l LedgerReader) (vote, error) {
 var (
 	// testMakeVoteCheckFunction is a function that can be set to check every
 	// unauthenticatedVote before it is returned by makeVote. It is only set by tests.
-	testMakeVoteCheck   func(*unauthenticatedVote) error
-	testMakeVoteCheckMu deadlock.RWMutex
+	testMakeVoteCheck func(*unauthenticatedVote) error
 )
 
 func getTestMakeVoteCheck() func(*unauthenticatedVote) error {
-	testMakeVoteCheckMu.RLock()
-	defer testMakeVoteCheckMu.RUnlock()
 	return testMakeVoteCheck
 }
 
