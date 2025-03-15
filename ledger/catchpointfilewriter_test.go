@@ -905,10 +905,8 @@ func testExactAccountChunk(t *testing.T, proto protocol.ConsensusVersion, extraB
 		dl.fullBlock(&selfpay)
 	}
 
-	genR, _ := testCatchpointFlushRound(dl.generator)
-	valR, _ := testCatchpointFlushRound(dl.validator)
-	require.Equal(t, genR, valR)
-	require.EqualValues(t, BalancesPerCatchpointFileChunk-12+extraBlocks, genR)
+	testCatchpointFlushRound(dl.generator)
+	testCatchpointFlushRound(dl.validator)
 
 	require.Eventually(t, func() bool {
 		dl.generator.accts.accountsMu.RLock()
@@ -920,6 +918,10 @@ func testExactAccountChunk(t *testing.T, proto protocol.ConsensusVersion, extraB
 		dl.validator.accts.accountsMu.RUnlock()
 		return dlg == dlv && dl.generator.Latest() == dl.validator.Latest()
 	}, 10*time.Second, 100*time.Millisecond)
+	genR, _ := dl.generator.LatestCommitted()
+	valR, _ := dl.validator.LatestCommitted()
+	require.Equal(t, genR, valR)
+	require.EqualValues(t, BalancesPerCatchpointFileChunk-12+extraBlocks, genR)
 
 	tempDir := t.TempDir()
 
