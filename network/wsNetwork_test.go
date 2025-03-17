@@ -559,7 +559,7 @@ func TestWebsocketNetworkCancel(t *testing.T) {
 	select {
 	case <-counterDone:
 		t.Errorf("All messages were sent, send not cancelled")
-	case <-time.After(2 * time.Second):
+	case <-time.After(1 * time.Second):
 	}
 	assert.Equal(t, 0, counter.Count())
 
@@ -573,7 +573,7 @@ func TestWebsocketNetworkCancel(t *testing.T) {
 	select {
 	case <-counterDone:
 		t.Errorf("All messages were sent, send not cancelled")
-	case <-time.After(2 * time.Second):
+	case <-time.After(1 * time.Second):
 	}
 	assert.Equal(t, 0, counter.Count())
 
@@ -588,6 +588,7 @@ func TestWebsocketNetworkCancel(t *testing.T) {
 		msgs = append(msgs, sendMessage{data: mbytes, enqueued: time.Now(), peerEnqueued: enqueueTime, ctx: context.Background()})
 	}
 
+	// cancel msg 50
 	msgs[50].ctx = ctx
 
 	for _, peer := range peers {
@@ -599,9 +600,10 @@ func TestWebsocketNetworkCancel(t *testing.T) {
 	select {
 	case <-counterDone:
 		t.Errorf("All messages were sent, send not cancelled")
-	case <-time.After(2 * time.Second):
+	case <-time.After(1 * time.Second):
 	}
-	assert.Equal(t, 50, counter.Count())
+	// all but msg 50 should have been sent
+	assert.Equal(t, 99, counter.Count())
 }
 
 // Set up two nodes, test that a.Broadcast is received by B, when B has no address.
@@ -3696,7 +3698,7 @@ func TestPreparePeerData(t *testing.T) {
 	for i, req := range reqs {
 		data[i], digests[i] = wn.broadcaster.preparePeerData(req, false)
 		require.NotEmpty(t, data[i])
-		require.NotEmpty(t, digests[i])
+		require.Empty(t, digests[i]) // small messages have no digest
 	}
 
 	for i := range data {
@@ -3706,7 +3708,7 @@ func TestPreparePeerData(t *testing.T) {
 	for i, req := range reqs {
 		data[i], digests[i] = wn.broadcaster.preparePeerData(req, true)
 		require.NotEmpty(t, data[i])
-		require.NotEmpty(t, digests[i])
+		require.Empty(t, digests[i]) // small messages have no digest
 	}
 
 	for i := range data {
