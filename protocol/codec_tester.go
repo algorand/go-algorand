@@ -50,8 +50,10 @@ func oneOf(n int) bool {
 }
 
 type randomizeObjectCfg struct {
-	// MoreZeros will increase the chance of zero values being generated.
+	// ZeroesEveryN will increase the chance of zero values being generated.
 	ZeroesEveryN int
+	// AllUintSizes will be equally likely to generate 8-bit, 16-bit, 32-bit, or 64-bit uints.
+	AllUintSizes bool
 }
 
 // RandomizeObjectOption is an option for RandomizeObject
@@ -60,6 +62,11 @@ type RandomizeObjectOption func(*randomizeObjectCfg)
 // RandomizeObjectWithZeroesEveryN sets the chance of zero values being generated (one in n)
 func RandomizeObjectWithZeroesEveryN(n int) RandomizeObjectOption {
 	return func(cfg *randomizeObjectCfg) { cfg.ZeroesEveryN = n }
+}
+
+// RandomizeObjectWithAllUintSizes will be equally likely to generate 8-bit, 16-bit, 32-bit, or 64-bit uints.
+func RandomizeObjectWithAllUintSizes() RandomizeObjectOption {
+	return func(cfg *randomizeObjectCfg) { cfg.AllUintSizes = true }
 }
 
 // RandomizeObject returns a random object of the same type as template
@@ -256,7 +263,22 @@ func randomizeValue(v reflect.Value, depth int, datapath string, tag string, rem
 			// generate value that will avoid protocol.ErrInvalidObject from HashType.Validate()
 			v.SetUint(rand.Uint64() % 3) // 3 is crypto.MaxHashType
 		} else {
-			v.SetUint(rand.Uint64())
+			var num uint64
+			if cfg.AllUintSizes {
+				switch rand.Intn(4) {
+				case 0: // fewer than 8 bits
+					num = uint64(rand.Intn(1 << 8)) // 0 to 255
+				case 1: // fewer than 16 bits
+					num = uint64(rand.Intn(1 << 16)) // 0 to 65535
+				case 2: // fewer than 32 bits
+					num = uint64(rand.Uint32()) // 0 to 2^32-1
+				case 3: // fewer than 64 bits
+					num = rand.Uint64() // 0 to 2^64-1
+				}
+			} else {
+				num = rand.Uint64()
+			}
+			v.SetUint(num)
 		}
 		*remainingChanges--
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:

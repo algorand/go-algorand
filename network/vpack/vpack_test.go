@@ -22,7 +22,6 @@ import (
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
-	"github.com/algorand/msgp/msgp"
 	"github.com/stretchr/testify/require"
 )
 
@@ -30,43 +29,79 @@ import (
 func TestEncodingTest(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	for i := 0; i < 10000; i++ {
-		v0, err := protocol.RandomizeObject(&agreement.UnauthenticatedVote{}, protocol.RandomizeObjectWithZeroesEveryN(10))
+	var errorCount int
+	const iters = 10000
+	for range iters {
+		v0obj, err := protocol.RandomizeObject(&agreement.UnauthenticatedVote{},
+			protocol.RandomizeObjectWithZeroesEveryN(10),
+			protocol.RandomizeObjectWithAllUintSizes(),
+		)
 		require.NoError(t, err)
 
-		v0vote := v0.(*agreement.UnauthenticatedVote)
-		if *v0vote == (agreement.UnauthenticatedVote{}) {
+		v0 := v0obj.(*agreement.UnauthenticatedVote)
+		if *v0 == (agreement.UnauthenticatedVote{}) {
 			continue // don't try to encode or compress empty votes (a single byte, 0x80)
 		}
-		expectFailMissing := false
-		// top-level should have 3 fields, all of which are required
-		if v0vote.R.MsgIsZero() || v0vote.Cred.MsgIsZero() || v0vote.Sig.MsgIsZero() {
-			expectFailMissing = true
+		var expectError string
+		// Expect errors when random vote doesn't match vpack_assert_size
+		if v0.Cred.Proof.MsgIsZero() {
+			expectError = "expected fixed map size 1 for UnauthenticatedCredential"
 		}
-		// Cred must be non-zero
-		if v0vote.Cred.Proof.MsgIsZero() {
-			expectFailMissing = true
+		if v0.R.MsgIsZero() || v0.Cred.MsgIsZero() || v0.Sig.MsgIsZero() {
+			expectError = "expected fixed map size 3 for unauthenticatedVote"
 		}
 
-		msgpBuf := protocol.EncodeMsgp(v0.(msgp.Marshaler))
+		msgpBuf := protocol.EncodeMsgp(v0)
 		enc := NewStaticEncoder()
 		encBuf, err := enc.CompressVote(nil, msgpBuf)
-		if expectFailMissing {
-			// We are strict, and won't process votes with missing fields (where vpack_size is set)
-			require.ErrorContains(t, err, "expected fixed map size")
+		if expectError != "" {
+			// skip expected errors
+			require.ErrorContains(t, err, expectError)
+			require.Nil(t, encBuf)
+			errorCount++
 			continue
-		} else {
-			require.NoError(t, err)
 		}
+		require.NoError(t, err)
 
+		// decompress and compare to original
 		dec := NewStaticDecoder()
 		decMsgpBuf, err := dec.DecompressVote(nil, encBuf)
 		require.NoError(t, err)
-
-		require.Equal(t, msgpBuf, decMsgpBuf)
+		require.Equal(t, msgpBuf, decMsgpBuf) // msgp encoding matches
 		var v1 agreement.UnauthenticatedVote
-		protocol.Decode(decMsgpBuf, &v1)
+		err = protocol.Decode(decMsgpBuf, &v1)
+		require.NoError(t, err)
+		require.Equal(t, *v0, v1) // vote objects match
+	}
+	t.Logf("TestEncodingTest: %d expected errors out of %d iterations", errorCount, iters)
+}
 
-		require.Equal(t, *v0vote, v1)
+// TestEncodeStaticSteps asserts that table entries for step:1, step:2, step:3 are encoded
+func TestEncodeStaticSteps(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	v := agreement.UnauthenticatedVote{}
+	v.Cred.Proof[0] = 1 // not empty
+	v.R.Round = 1
+	v.Sig.PK[0] = 1 // not empty
+
+	for i := 1; i <= 3; i++ {
+		var expectedStaticIdx uint8
+		switch i {
+		case 1:
+			v.R.Step = 1
+			expectedStaticIdx = staticIdxStepVal1Field
+		case 2:
+			v.R.Step = 2
+			expectedStaticIdx = staticIdxStepVal2Field
+		case 3:
+			v.R.Step = 3
+			expectedStaticIdx = staticIdxStepVal3Field
+		}
+
+		msgpbuf := protocol.Encode(&v)
+		w := &mockCompressWriter{}
+		err := parseVote(msgpbuf, w)
+		require.NoError(t, err)
+		require.Contains(t, w.writes, expectedStaticIdx)
 	}
 }

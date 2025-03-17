@@ -157,14 +157,16 @@ func isfixint(b byte) bool {
 // It will return a zero-length/nil slice iff err != nil.
 func (p *parser) readUintBytes() ([]byte, error) {
 	startPos := p.pos
-
+	// read marker byte
 	b, err := p.readByte()
 	if err != nil {
 		return nil, err
 	}
-	if isfixint(b) { // 1-byte unsigned int encoding
+	// fixint is a single byte containing marker and value
+	if isfixint(b) {
 		return p.data[startPos : startPos+1], nil
 	}
+	// otherwise, we expect a tag byte followed by the value
 	var dataSize int
 	switch b {
 	case uint8tag:

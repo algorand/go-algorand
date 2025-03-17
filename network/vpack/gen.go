@@ -61,7 +61,7 @@ type parseFuncData struct {
 	TypeName      string
 	CodecName     string
 	MaxFieldCount int
-	FixedSize     int // If > 0, indicates a fixed size from vpack_size tag
+	FixedSize     int // If > 0, indicates a fixed size from vpack_assert_size tag
 	Fields        []fieldData
 }
 
@@ -341,10 +341,10 @@ func (g *codeGenerator) analyzeType(t reflect.Type) error {
 		return getCodecTagName(fields[i]) < getCodecTagName(fields[j])
 	})
 
-	// Check for fixed-size structs using the vpack_size tag on _struct field
+	// Check for fixed-size structs using the vpack_assert_size tag on _struct field
 	fixedSize := 0
 	if structField, found := findStructField(t, "_struct"); found {
-		vpackSizeTag := structField.Tag.Get("vpack_size")
+		vpackSizeTag := structField.Tag.Get("vpack_assert_size")
 		if vpackSizeTag != "" {
 			if size, err := strconv.Atoi(vpackSizeTag); err == nil {
 				fixedSize = size

@@ -37,7 +37,7 @@ type OneTimeSignature struct {
 	// Unfortunately we forgot to mark this struct as omitempty at
 	// one point, and now it's hard to change if we want to preserve
 	// encodings.
-	_struct struct{} `codec:"" vpack_size:"6"`
+	_struct struct{} `codec:"" vpack_assert_size:"6"`
 
 	// Sig is a signature of msg under the key PK.
 	Sig ed25519Signature `codec:"s" vpack:"literal"`
