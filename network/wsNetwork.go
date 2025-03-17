@@ -283,8 +283,8 @@ const (
 )
 
 type broadcastRequest struct {
-	tags        []Tag
-	data        [][]byte
+	tag         Tag
+	data        []byte
 	except      Peer
 	done        chan struct{}
 	enqueueTime time.Time
@@ -361,32 +361,17 @@ func (wn *WebsocketNetwork) PublicAddress() string {
 // If except is not nil then we will not send it to that neighboring Peer.
 // if wait is true then the call blocks until the packet has actually been sent to all neighbors.
 func (wn *WebsocketNetwork) Broadcast(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except Peer) error {
-	dataArray := make([][]byte, 1)
-	dataArray[0] = data
-	tagArray := make([]protocol.Tag, 1)
-	tagArray[0] = tag
-	return wn.broadcaster.BroadcastArray(ctx, tagArray, dataArray, wait, except)
+	return wn.broadcaster.broadcast(ctx, tag, data, wait, except)
 }
 
-// BroadcastArray sends an array of messages.
-// If except is not nil then we will not send it to that neighboring Peer.
-// if wait is true then the call blocks until the packet has actually been sent to all neighbors.
-// TODO: add `priority` argument so that we don't have to guess it based on tag
-func (wn *msgBroadcaster) BroadcastArray(ctx context.Context, tags []protocol.Tag, data [][]byte, wait bool, except Peer) error {
-	if wn.config.DisableNetworking {
-		return nil
-	}
-	if len(tags) != len(data) {
-		return errBcastInvalidArray
-	}
-
-	request := broadcastRequest{tags: tags, data: data, enqueueTime: time.Now(), ctx: ctx}
+func (wn *msgBroadcaster) broadcast(ctx context.Context, tag Tag, data []byte, wait bool, except Peer) error {
+	request := broadcastRequest{tag: tag, data: data, enqueueTime: time.Now(), ctx: ctx}
 	if except != nil {
 		request.except = except
 	}
 
 	broadcastQueue := wn.broadcastQueueBulk
-	if highPriorityTag(tags) {
+	if highPriorityTag(tag) {
 		broadcastQueue = wn.broadcastQueueHighPrio
 	}
 	if wait {
@@ -427,14 +412,6 @@ func (wn *msgBroadcaster) BroadcastArray(ctx context.Context, tags []protocol.Ta
 func (wn *WebsocketNetwork) Relay(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except Peer) error {
 	if wn.relayMessages {
 		return wn.Broadcast(ctx, tag, data, wait, except)
-	}
-	return nil
-}
-
-// RelayArray relays array of messages
-func (wn *WebsocketNetwork) RelayArray(ctx context.Context, tags []protocol.Tag, data [][]byte, wait bool, except Peer) error {
-	if wn.relayMessages {
-		return wn.broadcaster.BroadcastArray(ctx, tags, data, wait, except)
 	}
 	return nil
 }
@@ -1351,28 +1328,25 @@ func (wn *WebsocketNetwork) getPeersChangeCounter() int32 {
 
 // preparePeerData prepares batches of data for sending.
 // It performs zstd compression for proposal massages if they this is a prio request and has proposal.
-func (wn *msgBroadcaster) preparePeerData(request broadcastRequest, prio bool) ([][]byte, []crypto.Digest) {
-	digests := make([]crypto.Digest, len(request.data))
-	data := make([][]byte, len(request.data))
-	for i, d := range request.data {
-		tbytes := []byte(request.tags[i])
-		mbytes := make([]byte, len(tbytes)+len(d))
-		copy(mbytes, tbytes)
-		copy(mbytes[len(tbytes):], d)
-		data[i] = mbytes
-		if request.tags[i] != protocol.MsgDigestSkipTag && len(d) >= messageFilterSize {
-			digests[i] = crypto.Hash(mbytes)
-		}
+func (wn *msgBroadcaster) preparePeerData(request broadcastRequest, prio bool) ([]byte, crypto.Digest) {
+	tbytes := []byte(request.tag)
+	mbytes := make([]byte, len(tbytes)+len(request.data))
+	copy(mbytes, tbytes)
+	copy(mbytes[len(tbytes):], request.data)
 
-		if prio && request.tags[i] == protocol.ProposalPayloadTag {
-			compressed, logMsg := zstdCompressMsg(tbytes, d)
-			if len(logMsg) > 0 {
-				wn.log.Warn(logMsg)
-			}
-			data[i] = compressed
-		}
+	var digest crypto.Digest
+	if request.tag != protocol.MsgDigestSkipTag && len(request.data) >= messageFilterSize {
+		digest = crypto.Hash(mbytes)
 	}
-	return data, digests
+
+	if prio && request.tag == protocol.ProposalPayloadTag {
+		compressed, logMsg := zstdCompressMsg(tbytes, request.data)
+		if len(logMsg) > 0 {
+			wn.log.Warn(logMsg)
+		}
+		mbytes = compressed
+	}
+	return mbytes, digest
 }
 
 // prio is set if the broadcast is a high-priority broadcast.
@@ -1389,7 +1363,7 @@ func (wn *msgBroadcaster) innerBroadcast(request broadcastRequest, prio bool, pe
 	}
 
 	start := time.Now()
-	data, digests := wn.preparePeerData(request, prio)
+	data, digest := wn.preparePeerData(request, prio)
 
 	// first send to all the easy outbound peers who don't block, get them started.
 	sentMessageCount := 0
@@ -1400,7 +1374,7 @@ func (wn *msgBroadcaster) innerBroadcast(request broadcastRequest, prio bool, pe
 		if Peer(peer) == request.except {
 			continue
 		}
-		ok := peer.writeNonBlockMsgs(request.ctx, data, prio, digests, request.enqueueTime)
+		ok := peer.writeNonBlock(request.ctx, data, prio, digest, request.enqueueTime)
 		if ok {
 			sentMessageCount++
 			continue
