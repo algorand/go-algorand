@@ -152,10 +152,6 @@ var (
 	testMakeVoteCheck func(*unauthenticatedVote) error
 )
 
-func getTestMakeVoteCheck() func(*unauthenticatedVote) error {
-	return testMakeVoteCheck
-}
-
 // makeVote creates a new unauthenticated vote from its constituent components.
 //
 // makeVote returns an error if it fails.
@@ -191,9 +187,9 @@ func makeVote(rv rawVote, voting crypto.OneTimeSigner, selection *crypto.VRFSecr
 	ret := unauthenticatedVote{R: rv, Cred: cred, Sig: sig}
 
 	// for use when running in tests
-	if checkFn := getTestMakeVoteCheck(); checkFn != nil {
-		if checkErr := checkFn(&ret); checkErr != nil {
-			return unauthenticatedVote{}, fmt.Errorf("makeVote: testMakeVoteCheck failed: %w", checkErr)
+	if testMakeVoteCheck != nil {
+		if testErr := testMakeVoteCheck(&ret); testErr != nil {
+			return unauthenticatedVote{}, fmt.Errorf("makeVote: testMakeVoteCheck failed: %w", testErr)
 		}
 	}
 	return ret, nil
