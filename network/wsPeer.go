@@ -116,7 +116,6 @@ type sendMessage struct {
 	enqueued     time.Time             // the time at which the message was first generated
 	peerEnqueued time.Time             // the time at which the peer was attempting to enqueue the message
 	msgTags      map[protocol.Tag]bool // when msgTags is specified ( i.e. non-nil ), the send goroutine is to replace the message tag filter with this one. No data would be accompanied to this message.
-	hash         crypto.Digest
 	ctx          context.Context
 
 	// onRelease function is called when the message is released either by being sent or discarded.
@@ -894,7 +893,7 @@ func (wp *wsPeer) writeNonBlock(ctx context.Context, data []byte, highPrio bool,
 		outchan = wp.sendBufferBulk
 	}
 	select {
-	case outchan <- sendMessage{data: data, enqueued: msgEnqueueTime, peerEnqueued: time.Now(), hash: digest, ctx: ctx}:
+	case outchan <- sendMessage{data: data, enqueued: msgEnqueueTime, peerEnqueued: time.Now(), ctx: ctx}:
 		return true
 	default:
 	}
