@@ -365,6 +365,9 @@ func (wn *WebsocketNetwork) Broadcast(ctx context.Context, tag protocol.Tag, dat
 }
 
 func (wn *msgBroadcaster) broadcast(ctx context.Context, tag Tag, data []byte, wait bool, except Peer) error {
+	if wn.config.DisableNetworking {
+		return nil
+	}
 	request := broadcastRequest{tag: tag, data: data, enqueueTime: time.Now(), ctx: ctx}
 	if except != nil {
 		request.except = except
