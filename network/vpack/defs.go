@@ -16,7 +16,11 @@
 
 package vpack
 
+// generates static_table.go and parse.go
+//go:generate go run gen.go
+
 const (
+	// vpack marker byte values:
 	// 0x00 - 0xbf reserved for dynamic table entries
 	// 0xc0 - 0xef reserved for static table entries
 	// 0xf0 - 0xff reserved for markers
@@ -25,7 +29,7 @@ const (
 	markerLiteralBin64 = 0xf0 // signatures
 	markerLiteralBin80 = 0xf1 // pf
 	markerDynamicBin32 = 0xf2 // digests, addresses, pubkeys
-
+	// Uint types: fixuint, uint8, uint16, uint32, uint64
 	markerDynamicFixuint = 0xf3 // msgpack fixuint
 	markerDynamicUint8   = 0xf4 // msgpack uint8
 	markerDynamicUint16  = 0xf5 // msgpack uint16

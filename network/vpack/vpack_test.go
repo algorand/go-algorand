@@ -17,9 +17,12 @@
 package vpack
 
 import (
+	"reflect"
 	"testing"
+	"unsafe"
 
 	"github.com/algorand/go-algorand/agreement"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
@@ -76,32 +79,104 @@ func TestEncodingTest(t *testing.T) {
 	t.Logf("TestEncodingTest: %d expected errors out of %d iterations", errorCount, iters)
 }
 
-// TestEncodeStaticSteps asserts that table entries for step:1, step:2, step:3 are encoded
-func TestEncodeStaticSteps(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	v := agreement.UnauthenticatedVote{}
-	v.Cred.Proof[0] = 1 // not empty
-	v.R.Round = 1
-	v.Sig.PK[0] = 1 // not empty
+// FuzzMsgpVote is a fuzz test for parseVote, CompressVote and DecompressVote.
+// It generates random msgp-encoded votes, then compresses & decompresses them.
+func FuzzMsgpVote(f *testing.F) {
+	addVote := func(obj any) {
+		var buf []byte
+		if v, ok := obj.(*agreement.UnauthenticatedVote); ok {
+			buf = protocol.Encode(v)
+		} else {
+			buf = protocol.EncodeReflect(obj)
+		}
+		f.Add(buf)
+	}
+	// error cases (weird msgp bufs)
+	for _, tc := range parseVoteTestCases {
+		addVote(tc.obj)
+	}
+	for range 100 { // random valid votes
+		v, err := protocol.RandomizeObject(&agreement.UnauthenticatedVote{},
+			protocol.RandomizeObjectWithZeroesEveryN(10),
+			protocol.RandomizeObjectWithAllUintSizes())
+		require.NoError(f, err)
+		addVote(v)
+	}
 
-	for i := 1; i <= 3; i++ {
-		var expectedStaticIdx uint8
-		switch i {
-		case 1:
-			v.R.Step = 1
-			expectedStaticIdx = staticIdxStepVal1Field
-		case 2:
-			v.R.Step = 2
-			expectedStaticIdx = staticIdxStepVal2Field
-		case 3:
-			v.R.Step = 3
-			expectedStaticIdx = staticIdxStepVal3Field
+	f.Fuzz(func(t *testing.T, buf []byte) {
+		enc := NewStaticEncoder()
+		encBuf, err := enc.CompressVote(nil, buf)
+		if err != nil {
+			// invalid msgpbuf, skip
+			return
+		}
+		dec := NewStaticDecoder()
+		decBuf, err := dec.DecompressVote(nil, encBuf)
+		require.NoError(t, err)
+		require.Equal(t, buf, decBuf)
+	})
+}
+
+func FuzzVoteFields(f *testing.F) {
+	f.Fuzz(func(t *testing.T, snd []byte, rnd, per, step uint64,
+		oper uint64, oprop, dig, encdig []byte,
+		pf []byte, s, p, ps, p2, p1s, p2s []byte) {
+		var v0 agreement.UnauthenticatedVote
+		copy(v0.R.Sender[:], snd)
+		v0.R.Round = basics.Round(rnd)
+		// Use reflection to set the unexported period field
+		rPeriodField := reflect.ValueOf(&v0.R).Elem().FieldByName("Period")
+		rPeriodField = reflect.NewAt(rPeriodField.Type(), unsafe.Pointer(rPeriodField.UnsafeAddr())).Elem()
+		rPeriodField.SetUint(per)
+		require.EqualValues(t, per, v0.R.Period)
+		// Use reflection to set the unexported step field
+		rStepField := reflect.ValueOf(&v0.R).Elem().FieldByName("Step")
+		rStepField = reflect.NewAt(rStepField.Type(), unsafe.Pointer(rStepField.UnsafeAddr())).Elem()
+		rStepField.SetUint(step)
+		require.EqualValues(t, step, v0.R.Step)
+		// Use reflection to set the OriginalPeriod field in the proposal
+		propVal := reflect.ValueOf(&v0.R.Proposal).Elem()
+		origPeriodField := propVal.FieldByName("OriginalPeriod")
+		origPeriodField = reflect.NewAt(origPeriodField.Type(), unsafe.Pointer(origPeriodField.UnsafeAddr())).Elem()
+		origPeriodField.SetUint(oper)
+		require.EqualValues(t, oper, v0.R.Proposal.OriginalPeriod)
+
+		copy(v0.R.Proposal.OriginalProposer[:], oprop)
+		copy(v0.R.Proposal.BlockDigest[:], dig)
+		copy(v0.R.Proposal.EncodingDigest[:], encdig)
+		copy(v0.Cred.Proof[:], pf)
+		copy(v0.Sig.Sig[:], s)
+		copy(v0.Sig.PK[:], p)
+		copy(v0.Sig.PKSigOld[:], ps)
+		copy(v0.Sig.PK2[:], p2)
+		copy(v0.Sig.PK1Sig[:], p1s)
+		copy(v0.Sig.PK2Sig[:], p2s)
+
+		var expectError string
+		if v0.Cred.Proof.MsgIsZero() {
+			expectError = "expected fixed map size 1 for UnauthenticatedCredential"
+		}
+		if v0.R.MsgIsZero() || v0.Cred.MsgIsZero() || v0.Sig.MsgIsZero() {
+			expectError = "expected fixed map size 3 for unauthenticatedVote"
 		}
 
-		msgpbuf := protocol.Encode(&v)
-		w := &mockCompressWriter{}
-		err := parseVote(msgpbuf, w)
+		msgpBuf := protocol.Encode(&v0)
+		enc := NewStaticEncoder()
+		encBuf, err := enc.CompressVote(nil, msgpBuf)
+		if expectError != "" {
+			// skip expected errors
+			require.ErrorContains(t, err, expectError)
+			require.Nil(t, encBuf)
+			return
+		}
 		require.NoError(t, err)
-		require.Contains(t, w.writes, expectedStaticIdx)
-	}
+		dec := NewStaticDecoder()
+		decBuf, err := dec.DecompressVote(nil, encBuf)
+		require.NoError(t, err)
+		require.Equal(t, msgpBuf, decBuf)
+		var v1 agreement.UnauthenticatedVote
+		err = protocol.Decode(decBuf, &v1)
+		require.NoError(t, err)
+		require.Equal(t, v0, v1)
+	})
 }
