@@ -17,6 +17,7 @@
 package vpack
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/algorand/go-algorand/agreement"
@@ -179,14 +180,46 @@ func TestParseEncodeStaticSteps(t *testing.T) {
 	}
 }
 
+// TestParseDynamicVaruintError asserts that an error is returned when writeDynamicVaruint fails,
+// to improve test coverage.
+func TestParseDynamicVaruintError(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	v := agreement.UnauthenticatedVote{}
+	v.Cred.Proof[0] = 1
+	v.Sig.PK[0] = 1
+	// make 4 votes, each with a different varuint set
+	v1 := v
+	v1.R.Round = 1
+	v2 := v
+	v2.R.Step = 100
+	v3 := v
+	v3.R.Period = 200
+	v4 := v
+	v4.R.Proposal.OriginalPeriod = 300
+
+	for i, v := range []agreement.UnauthenticatedVote{v1, v2, v3, v4} {
+		t.Logf("test %d", i)
+		msgpbuf := protocol.Encode(&v)
+		w := &mockCompressWriter{failDynamicVaruint: true}
+		err := parseVote(msgpbuf, w)
+		require.ErrorContains(t, err, "mockCompressWriter.writeDynamicVaruint")
+	}
+}
+
 // mockCompressWriter implements compressWriter for testing
-type mockCompressWriter struct{ writes []any }
+type mockCompressWriter struct {
+	failDynamicVaruint bool
+	writes             []any
+}
 
 func (m *mockCompressWriter) writeStatic(idx uint8)          { m.writes = append(m.writes, idx) }
 func (m *mockCompressWriter) writeLiteralBin64(val [64]byte) { m.writes = append(m.writes, val) }
 func (m *mockCompressWriter) writeLiteralBin80(val [80]byte) { m.writes = append(m.writes, val) }
 func (m *mockCompressWriter) writeDynamicBin32(val [32]byte) { m.writes = append(m.writes, val) }
 func (m *mockCompressWriter) writeDynamicVaruint(valBytes []byte) error {
+	if m.failDynamicVaruint {
+		return fmt.Errorf("mockCompressWriter.writeDynamicVaruint")
+	}
 	m.writes = append(m.writes, valBytes)
 	return nil
 }
