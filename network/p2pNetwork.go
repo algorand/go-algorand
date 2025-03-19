@@ -551,7 +551,7 @@ func (n *P2PNetwork) Broadcast(ctx context.Context, tag protocol.Tag, data []byt
 		return n.service.Publish(ctx, topic, data)
 	}
 	// Otherwise broadcast over websocket protocol stream
-	return n.broadcaster.BroadcastArray(ctx, []protocol.Tag{tag}, [][]byte{data}, wait, except)
+	return n.broadcaster.broadcast(ctx, tag, data, wait, except)
 }
 
 // Relay message

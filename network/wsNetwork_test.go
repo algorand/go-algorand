@@ -533,25 +533,6 @@ func TestWebsocketPeerData(t *testing.T) {
 	require.Equal(t, nil, netA.GetPeerData(peerB, "foo"))
 }
 
-// Test sending array of messages
-func TestWebsocketNetworkArray(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	netA, _, counter, closeFunc := setupWebsocketNetworkAB(t, 3)
-	defer closeFunc()
-	counterDone := counter.done
-
-	tags := []protocol.Tag{protocol.TxnTag, protocol.TxnTag, protocol.TxnTag}
-	data := [][]byte{[]byte("foo"), []byte("bar"), []byte("algo")}
-	netA.broadcaster.BroadcastArray(context.Background(), tags, data, false, nil)
-
-	select {
-	case <-counterDone:
-	case <-time.After(2 * time.Second):
-		t.Errorf("timeout, count=%d, wanted 2", counter.count)
-	}
-}
-
 // Test cancelling message sends
 func TestWebsocketNetworkCancel(t *testing.T) {
 	partitiontest.PartitionTest(t)
@@ -570,25 +551,29 @@ func TestWebsocketNetworkCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	// try calling BroadcastArray
-	netA.broadcaster.BroadcastArray(ctx, tags, data, true, nil)
+	// try calling broadcast
+	for i := 0; i < 100; i++ {
+		netA.broadcaster.broadcast(ctx, tags[i], data[i], true, nil)
+	}
 
 	select {
 	case <-counterDone:
 		t.Errorf("All messages were sent, send not cancelled")
-	case <-time.After(2 * time.Second):
+	case <-time.After(1 * time.Second):
 	}
 	assert.Equal(t, 0, counter.Count())
 
 	// try calling innerBroadcast
-	request := broadcastRequest{tags: tags, data: data, enqueueTime: time.Now(), ctx: ctx}
 	peers, _ := netA.peerSnapshot([]*wsPeer{})
-	netA.broadcaster.innerBroadcast(request, true, peers)
+	for i := 0; i < 100; i++ {
+		request := broadcastRequest{tag: tags[i], data: data[i], enqueueTime: time.Now(), ctx: ctx}
+		netA.broadcaster.innerBroadcast(request, true, peers)
+	}
 
 	select {
 	case <-counterDone:
 		t.Errorf("All messages were sent, send not cancelled")
-	case <-time.After(2 * time.Second):
+	case <-time.After(1 * time.Second):
 	}
 	assert.Equal(t, 0, counter.Count())
 
@@ -600,21 +585,25 @@ func TestWebsocketNetworkCancel(t *testing.T) {
 		mbytes := make([]byte, len(tbytes)+len(msg))
 		copy(mbytes, tbytes)
 		copy(mbytes[len(tbytes):], msg)
-		msgs = append(msgs, sendMessage{data: mbytes, enqueued: time.Now(), peerEnqueued: enqueueTime, hash: crypto.Hash(mbytes), ctx: context.Background()})
+		msgs = append(msgs, sendMessage{data: mbytes, enqueued: time.Now(), peerEnqueued: enqueueTime, ctx: context.Background()})
 	}
 
+	// cancel msg 50
 	msgs[50].ctx = ctx
 
 	for _, peer := range peers {
-		peer.sendBufferHighPrio <- sendMessages{msgs: msgs}
+		for _, msg := range msgs {
+			peer.sendBufferHighPrio <- msg
+		}
 	}
 
 	select {
 	case <-counterDone:
 		t.Errorf("All messages were sent, send not cancelled")
-	case <-time.After(2 * time.Second):
+	case <-time.After(1 * time.Second):
 	}
-	assert.Equal(t, 50, counter.Count())
+	// all but msg 50 should have been sent
+	assert.Equal(t, 99, counter.Count())
 }
 
 // Set up two nodes, test that a.Broadcast is received by B, when B has no address.
@@ -990,8 +979,8 @@ func TestSlowOutboundPeer(t *testing.T) {
 	for i := range destPeers {
 		destPeers[i].closing = make(chan struct{})
 		destPeers[i].net = node
-		destPeers[i].sendBufferHighPrio = make(chan sendMessages, sendBufferLength)
-		destPeers[i].sendBufferBulk = make(chan sendMessages, sendBufferLength)
+		destPeers[i].sendBufferHighPrio = make(chan sendMessage, sendBufferLength)
+		destPeers[i].sendBufferBulk = make(chan sendMessage, sendBufferLength)
 		destPeers[i].conn = &nopConnSingleton
 		destPeers[i].rootURL = fmt.Sprintf("fake %d", i)
 		node.addPeer(&destPeers[i])
@@ -2501,14 +2490,10 @@ func TestWebsocketNetwork_checkServerResponseVariables(t *testing.T) {
 }
 
 func (wn *WebsocketNetwork) broadcastWithTimestamp(tag protocol.Tag, data []byte, when time.Time) error {
-	msgArr := make([][]byte, 1)
-	msgArr[0] = data
-	tagArr := make([]protocol.Tag, 1)
-	tagArr[0] = tag
-	request := broadcastRequest{tags: tagArr, data: msgArr, enqueueTime: when, ctx: context.Background()}
+	request := broadcastRequest{tag: tag, data: data, enqueueTime: when, ctx: context.Background()}
 
 	broadcastQueue := wn.broadcaster.broadcastQueueBulk
-	if highPriorityTag(tagArr) {
+	if highPriorityTag(tag) {
 		broadcastQueue = wn.broadcaster.broadcastQueueHighPrio
 	}
 	// no wait
@@ -3702,34 +3687,36 @@ func TestPreparePeerData(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	// no compression
-	req := broadcastRequest{
-		tags: []protocol.Tag{protocol.AgreementVoteTag, protocol.ProposalPayloadTag},
-		data: [][]byte{[]byte("test"), []byte("data")},
+	reqs := []broadcastRequest{
+		{tag: protocol.AgreementVoteTag, data: []byte("test")},
+		{tag: protocol.ProposalPayloadTag, data: []byte("data")},
 	}
 
 	wn := WebsocketNetwork{}
-	data, digests := wn.broadcaster.preparePeerData(req, false)
-	require.NotEmpty(t, data)
-	require.NotEmpty(t, digests)
-	require.Equal(t, len(req.data), len(digests))
-	require.Equal(t, len(data), len(digests))
-
-	for i := range data {
-		require.Equal(t, append([]byte(req.tags[i]), req.data[i]...), data[i])
+	data := make([][]byte, len(reqs))
+	digests := make([]crypto.Digest, len(reqs))
+	for i, req := range reqs {
+		data[i], digests[i] = wn.broadcaster.preparePeerData(req, false)
+		require.NotEmpty(t, data[i])
+		require.Empty(t, digests[i]) // small messages have no digest
 	}
 
-	data, digests = wn.broadcaster.preparePeerData(req, true)
-	require.NotEmpty(t, data)
-	require.NotEmpty(t, digests)
-	require.Equal(t, len(req.data), len(digests))
-	require.Equal(t, len(data), len(digests))
+	for i := range data {
+		require.Equal(t, append([]byte(reqs[i].tag), reqs[i].data...), data[i])
+	}
+
+	for i, req := range reqs {
+		data[i], digests[i] = wn.broadcaster.preparePeerData(req, true)
+		require.NotEmpty(t, data[i])
+		require.Empty(t, digests[i]) // small messages have no digest
+	}
 
 	for i := range data {
-		if req.tags[i] != protocol.ProposalPayloadTag {
-			require.Equal(t, append([]byte(req.tags[i]), req.data[i]...), data[i])
+		if reqs[i].tag != protocol.ProposalPayloadTag {
+			require.Equal(t, append([]byte(reqs[i].tag), reqs[i].data...), data[i])
 			require.Equal(t, data[i], data[i])
 		} else {
-			require.Equal(t, append([]byte(req.tags[i]), zstdCompressionMagic[:]...), data[i][:len(req.tags[i])+len(zstdCompressionMagic)])
+			require.Equal(t, append([]byte(reqs[i].tag), zstdCompressionMagic[:]...), data[i][:len(reqs[i].tag)+len(zstdCompressionMagic)])
 		}
 	}
 }
@@ -4010,14 +3997,13 @@ func TestDiscardUnrequestedBlockResponse(t *testing.T) {
 	require.Eventually(t, func() bool { return netA.NumPeers() == 1 }, 500*time.Millisecond, 25*time.Millisecond)
 
 	// send an unrequested block response
-	msg := make([]sendMessage, 1)
-	msg[0] = sendMessage{
+	msg := sendMessage{
 		data:         append([]byte(protocol.TopicMsgRespTag), []byte("foo")...),
 		enqueued:     time.Now(),
 		peerEnqueued: time.Now(),
 		ctx:          context.Background(),
 	}
-	netA.peers[0].sendBufferBulk <- sendMessages{msgs: msg}
+	netA.peers[0].sendBufferBulk <- msg
 	require.Eventually(t,
 		func() bool {
 			return networkConnectionsDroppedTotal.GetUint64ValueForLabels(map[string]string{"reason": "unrequestedTS"}) == 1
@@ -4080,7 +4066,7 @@ func TestDiscardUnrequestedBlockResponse(t *testing.T) {
 	netC.log.SetOutput(logBuffer)
 
 	// send a late TS response from A -> C
-	netA.peers[0].sendBufferBulk <- sendMessages{msgs: msg}
+	netA.peers[0].sendBufferBulk <- msg
 	require.Eventually(
 		t,
 		func() bool { return netC.peers[0].outstandingTopicRequests.Load() == int64(0) },
@@ -4497,8 +4483,8 @@ func TestSendMessageCallbackDrain(t *testing.T) {
 	node := makeTestWebsocketNode(t)
 	destPeer := wsPeer{
 		closing:            make(chan struct{}),
-		sendBufferHighPrio: make(chan sendMessages, sendBufferLength),
-		sendBufferBulk:     make(chan sendMessages, sendBufferLength),
+		sendBufferHighPrio: make(chan sendMessage, sendBufferLength),
+		sendBufferBulk:     make(chan sendMessage, sendBufferLength),
 		conn:               &nopConnSingleton,
 	}
 	node.addPeer(&destPeer)
@@ -4657,16 +4643,16 @@ func TestPeerComparisonInBroadcast(t *testing.T) {
 
 	testPeer := &wsPeer{
 		wsPeerCore:     makePeerCore(wn.ctx, wn, log, nil, "test-addr", nil, ""),
-		sendBufferBulk: make(chan sendMessages, sendBufferLength),
+		sendBufferBulk: make(chan sendMessage, sendBufferLength),
 	}
 	exceptPeer := &wsPeer{
 		wsPeerCore:     makePeerCore(wn.ctx, wn, log, nil, "except-addr", nil, ""),
-		sendBufferBulk: make(chan sendMessages, sendBufferLength),
+		sendBufferBulk: make(chan sendMessage, sendBufferLength),
 	}
 
 	request := broadcastRequest{
-		tags:        []protocol.Tag{"test-tag"},
-		data:        [][]byte{[]byte("test-data")},
+		tag:         protocol.Tag("test-tag"),
+		data:        []byte("test-data"),
 		enqueueTime: time.Now(),
 		except:      exceptPeer,
 	}

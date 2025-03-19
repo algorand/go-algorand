@@ -163,11 +163,9 @@ type IncomingMessage struct {
 // Tag is a short string (2 bytes) marking a type of message
 type Tag = protocol.Tag
 
-func highPriorityTag(tags []protocol.Tag) bool {
-	for _, tag := range tags {
-		if tag == protocol.AgreementVoteTag || tag == protocol.ProposalPayloadTag {
-			return true
-		}
+func highPriorityTag(tag protocol.Tag) bool {
+	if tag == protocol.AgreementVoteTag || tag == protocol.ProposalPayloadTag {
+		return true
 	}
 	return false
 }
