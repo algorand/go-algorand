@@ -42,6 +42,7 @@ type Request struct {
 	ExtraOpcodeBudget     uint64
 	TraceConfig           ExecTraceConfig
 	FixSigners            bool
+	PopulateResources     bool
 }
 
 // simulatorLedger patches the ledger interface to use a constant latest round.
@@ -332,6 +333,27 @@ func (s Simulator) Simulate(simulateRequest Request) (Result, error) {
 	}
 
 	if simulatorTracer.result.TxnGroups[0].UnnamedResourcesAccessed != nil {
+		// Only populate resources if there wasn't an error. Otherwise we might have incomplete information.
+		if err == nil && simulateRequest.PopulateResources {
+			consensusParams, err := s.ledger.ConsensusParams(s.ledger.start)
+			if err != nil {
+				return Result{}, err
+			}
+			populator := makeResourcePopulator(simulateRequest.TxnGroups[0], consensusParams)
+
+			txnResources := make([]ResourceTracker, len(simulatorTracer.result.TxnGroups[0].Txns))
+			for i := range simulatorTracer.result.TxnGroups[0].Txns {
+				txnResources[i] = *simulatorTracer.result.TxnGroups[0].Txns[i].UnnamedResourcesAccessed
+			}
+
+			err = populator.populateResources(*simulatorTracer.result.TxnGroups[0].UnnamedResourcesAccessed, txnResources)
+			if err != nil {
+				return Result{}, err
+			}
+
+			simulatorTracer.result.TxnGroups[0].PopulatedResourceArrays = populator.getPopulatedArrays()
+		}
+
 		// Remove private fields for easier test comparison
 		simulatorTracer.result.TxnGroups[0].UnnamedResourcesAccessed.removePrivateFields()
 		if !simulatorTracer.result.TxnGroups[0].UnnamedResourcesAccessed.HasResources() {
