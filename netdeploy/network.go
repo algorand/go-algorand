@@ -78,6 +78,13 @@ func OverrideConsensusVersion(ver protocol.ConsensusVersion) TemplateOverride {
 	}
 }
 
+// OverrideKmdConfig changes the KMD config.
+func OverrideKmdConfig(kmdConfig TemplateKMDConfig) TemplateOverride {
+	return func(template *NetworkTemplate) {
+		template.kmdConfig = kmdConfig
+	}
+}
+
 // CreateNetworkFromTemplate uses the specified template to deploy a new private network
 // under the specified root directory.
 func CreateNetworkFromTemplate(name, rootDir string, templateReader io.Reader, binDir string, importKeys bool, nodeExitCallback nodecontrol.AlgodExitErrorCallback, consensus config.ConsensusProtocols, overrides ...TemplateOverride) (Network, error) {

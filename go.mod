@@ -33,7 +33,7 @@ require (
 	github.com/ipfs/go-log/v2 v2.5.1
 	github.com/jmoiron/sqlx v1.2.0
 	github.com/jsimonetti/rtnetlink v1.4.2
-	github.com/karalabe/usb v0.0.3-0.20230711191512-61db3e06439c
+	github.com/karalabe/hid v1.0.1-0.20240919124526-821c38d2678e
 	github.com/klauspost/cpuid/v2 v2.2.8
 	github.com/labstack/echo/v4 v4.9.1
 	github.com/libp2p/go-libp2p v0.37.0

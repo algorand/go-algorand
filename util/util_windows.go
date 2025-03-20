@@ -21,6 +21,7 @@ import (
 	"math"
 	"syscall"
 	"time"
+	"unsafe"
 )
 
 /* misc */
@@ -70,7 +71,38 @@ func filetimeToDuration(ft *syscall.Filetime) time.Duration {
 	return time.Duration(n * 100)
 }
 
-// GetTotalMemory gets total system memory, returns 0 on Windows
+// GetTotalMemory gets total system memory on Windows
 func GetTotalMemory() uint64 {
-	return 0
+	var memoryStatusEx MemoryStatusEx
+	memoryStatusEx.dwLength = uint32(unsafe.Sizeof(memoryStatusEx))
+
+	if err := globalMemoryStatusEx(&memoryStatusEx); err != nil {
+		return 0
+	}
+	return memoryStatusEx.ullTotalPhys
+}
+
+type MemoryStatusEx struct {
+	dwLength                uint32
+	dwMemoryLoad            uint32
+	ullTotalPhys            uint64
+	ullAvailPhys            uint64
+	ullTotalPageFile        uint64
+	ullAvailPageFile        uint64
+	ullTotalVirtual         uint64
+	ullAvailVirtual         uint64
+	ullAvailExtendedVirtual uint64
+}
+
+var (
+	modkernel32              = syscall.NewLazyDLL("kernel32.dll")
+	procGlobalMemoryStatusEx = modkernel32.NewProc("GlobalMemoryStatusEx")
+)
+
+func globalMemoryStatusEx(memoryStatusEx *MemoryStatusEx) error {
+	ret, _, _ := procGlobalMemoryStatusEx.Call(uintptr(unsafe.Pointer(memoryStatusEx)))
+	if ret == 0 {
+		return syscall.GetLastError()
+	}
+	return nil
 }
