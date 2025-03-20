@@ -20,7 +20,6 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
 	"github.com/google/go-cmp/cmp"
-	"golang.org/x/exp/maps"
 )
 
 type accountsReader struct {
@@ -143,22 +142,20 @@ func (ar *accountsReader) LookupKeyValue(key string) (pv trackerdb.PersistedKVDa
 }
 
 // LookupKeysByPrefix implements trackerdb.AccountsReader
-func (ar *accountsReader) LookupKeysByPrefix(prefix string, limit uint64, dupsCount bool, results map[string]bool) (round basics.Round, err error) {
-	copyResults := maps.Clone(results)
-	roundP, errP := ar.primary.LookupKeysByPrefix(prefix, limit, dupsCount, results)
-	roundS, errS := ar.secondary.LookupKeysByPrefix(prefix, limit, dupsCount, copyResults)
+func (ar *accountsReader) LookupKeysByPrefix(prefix, next string, maxBoxes, maxBytes int, values bool) (basics.Round, map[string]string, string, error) {
+	roundP, resP, nextP, errP := ar.primary.LookupKeysByPrefix(prefix, next, maxBoxes, maxBytes, values)
+	roundS, resS, nextS, errS := ar.secondary.LookupKeysByPrefix(prefix, next, maxBoxes, maxBytes, values)
 	// coalesce errors
-	err = coalesceErrors(errP, errS)
+	err := coalesceErrors(errP, errS)
 	if err != nil {
-		return
+		return 0, nil, "", err
 	}
 	// check results match
-	if roundP != roundS || !cmp.Equal(results, copyResults) {
-		err = ErrInconsistentResult
-		return
+	if roundP != roundS || !cmp.Equal(resP, resS) || nextP != nextS {
+		return 0, nil, "", ErrInconsistentResult
 	}
 	// return primary results
-	return roundP, nil
+	return roundP, resP, nextP, nil
 }
 
 // LookupResources implements trackerdb.AccountsReader

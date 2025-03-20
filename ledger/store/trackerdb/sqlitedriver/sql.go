@@ -19,6 +19,8 @@ package sqlitedriver
 import (
 	"database/sql"
 	"fmt"
+	"strings"
+
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/ledger/store/trackerdb"
@@ -34,7 +36,7 @@ type accountsDbQueries struct {
 	lookupAllResourcesStmt     *sql.Stmt
 	lookupLimitedResourcesStmt *sql.Stmt
 	lookupKvPairStmt           *sql.Stmt
-	lookupKeysByRangeStmt      *sql.Stmt
+	lookupKvByRangeStmt        *sql.Stmt
 	lookupCreatorStmt          *sql.Stmt
 }
 
@@ -115,7 +117,7 @@ func AccountsInitDbQueries(q db.Queryable) (*accountsDbQueries, error) {
 		return nil, err
 	}
 
-	qs.lookupKeysByRangeStmt, err = q.Prepare("SELECT acctrounds.rnd, kvstore.key FROM acctrounds LEFT JOIN kvstore ON kvstore.key >= ? AND kvstore.key < ? WHERE id='acctbase'")
+	qs.lookupKvByRangeStmt, err = q.Prepare("SELECT acctrounds.rnd, kvstore.key, kvstore.value FROM acctrounds LEFT JOIN kvstore ON kvstore.key >= ? AND kvstore.key < ? WHERE id='acctbase'")
 	if err != nil {
 		return nil, err
 	}
@@ -270,48 +272,63 @@ func (qs *accountsDbQueries) LookupKeyValue(key string) (pv trackerdb.PersistedK
 	return
 }
 
-// LookupKeysByPrefix returns a set of application box names matching the prefix.
-func (qs *accountsDbQueries) LookupKeysByPrefix(prefix string, limit uint64, dupsCount bool, results map[string]bool) (round basics.Round, err error) {
+// LookupKeysByPrefix returns a set of application boxes matching the `prefix`, beginning with `next`.
+func (qs *accountsDbQueries) LookupKeysByPrefix(prefix, next string, rowLimit, byteLimit int, values bool) (basics.Round, map[string]string, string, error) {
 	start, end := keyPrefixIntervalPreprocessing([]byte(prefix))
 	if end == nil {
 		// Not an expected use case, it's asking for all keys, or all keys
 		// prefixed by some number of 0xFF bytes. That's not possible because
 		// there's always (at least) a "bx:<appid>" prefix.
-		return 0, fmt.Errorf("lookup by strange prefix %#v", prefix)
+		return 0, nil, "", fmt.Errorf("lookup by strange prefix %#v", prefix)
 	}
-	err = db.Retry(func() error {
+	if next != "" {
+		if !strings.HasPrefix(next, prefix) {
+			return 0, nil, "", fmt.Errorf("next %#v is not prefixed by %#v", next, prefix)
+		}
+		start = []byte(next)
+		next = "" // If we don't exceed limits, we want next=""
+	}
+	round := basics.Round(0)
+	boxes := make(map[string]string)
+	err0 := db.Retry(func() error {
 		var rows *sql.Rows
-		rows, err = qs.lookupKeysByRangeStmt.Query(start, end)
+		rows, err := qs.lookupKvByRangeStmt.Query(start, end)
 		if err != nil {
 			return err
 		}
 		defer rows.Close()
 
-		var v sql.NullString
-
 		for rows.Next() {
-			if limit == 0 {
-				return nil
-			}
-			err = rows.Scan(&round, &v)
+			var k sql.NullString
+			var v sql.NullString
+			err = rows.Scan(&round, &k, &v)
 			if err != nil {
 				return err
 			}
-			if v.Valid {
-				if extant, ok := results[v.String]; ok {
-					// We don't want to count this as a new result if it's known
-					// to have been deleted, or if we running with !dupsCount.
-					if !extant || !dupsCount {
-						continue // skip, we have a more recent result
-					}
+			if k.Valid {
+				rowLimit--
+				byteLimit -= len(k.String)
+				if values {
+					byteLimit -= len(v.String)
 				}
-				results[v.String] = true
-				limit--
+				// If including this box would exceed limits, set `next` and return
+				if rowLimit < 0 || byteLimit < 0 {
+					next = k.String
+					return nil
+				}
+				if values {
+					boxes[k.String] = v.String
+				} else {
+					boxes[k.String] = ""
+				}
 			}
 		}
 		return nil
 	})
-	return
+	if err0 != nil {
+		return 0, nil, "", err0
+	}
+	return round, boxes, next, nil
 }
 
 // keyPrefixIntervalPreprocessing is implemented to generate an interval for DB queries that look up keys by prefix.
@@ -654,7 +671,7 @@ func (qs *accountsDbQueries) Close() {
 		&qs.lookupAllResourcesStmt,
 		&qs.lookupLimitedResourcesStmt,
 		&qs.lookupKvPairStmt,
-		&qs.lookupKeysByRangeStmt,
+		&qs.lookupKvByRangeStmt,
 		&qs.lookupCreatorStmt,
 	}
 	for _, preparedQuery := range preparedQueries {

@@ -1037,7 +1037,7 @@ func TestCatchpointAfterTxns(t *testing.T) {
 
 	l := testNewLedgerFromCatchpoint(t, dl.validator.trackerDB(), catchpointFilePath)
 	defer l.Close()
-	values, err := l.LookupKeysByPrefix(l.Latest(), "bx:", 10)
+	_, values, _, err := l.LookupKeysByPrefix("bx:", "", 10, 10_000, false)
 	require.NoError(t, err)
 	require.Len(t, values, 1)
 
@@ -1069,7 +1069,7 @@ func TestCatchpointAfterTxns(t *testing.T) {
 
 	l = testNewLedgerFromCatchpoint(t, dl.validator.trackerDB(), catchpointFilePath)
 	defer l.Close()
-	values, err = l.LookupKeysByPrefix(l.Latest(), "bx:", 10)
+	_, values, _, err = l.LookupKeysByPrefix("bx:", "", 10, 10_000, false)
 	require.NoError(t, err)
 	require.Len(t, values, 1)
 	v, err := l.LookupKv(l.Latest(), apps.MakeBoxKey(uint64(boxApp), "xxx"))
@@ -1378,7 +1378,7 @@ func TestCatchpointAfterBoxTxns(t *testing.T) {
 	l := testNewLedgerFromCatchpoint(t, dl.generator.trackerDB(), catchpointFilePath)
 	defer l.Close()
 
-	values, err := l.LookupKeysByPrefix(l.Latest(), "bx:", 10)
+	_, values, _, err := l.LookupKeysByPrefix("bx:", "", 10, 10_000, false)
 	require.NoError(t, err)
 	require.Len(t, values, 1)
 	v, err := l.LookupKv(l.Latest(), apps.MakeBoxKey(uint64(boxApp), "xxx"))

@@ -774,10 +774,10 @@ func (c *Client) ApplicationInformation(index uint64) (resp model.Application, e
 }
 
 // ApplicationBoxes takes an app's index and returns the names of boxes under it
-func (c *Client) ApplicationBoxes(appID uint64, maxBoxNum uint64, prefix string) (resp model.BoxesResponse, err error) {
+func (c *Client) ApplicationBoxes(appID uint64, prefix string, next *string, limit uint64, values bool) (resp model.BoxesResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
-		resp, err = algod.ApplicationBoxes(appID, maxBoxNum, prefix)
+		resp, err = algod.ApplicationBoxes(appID, prefix, next, limit, values)
 	}
 	return
 }
