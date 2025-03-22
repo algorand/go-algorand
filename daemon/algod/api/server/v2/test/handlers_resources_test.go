@@ -85,7 +85,7 @@ func (l *mockLedger) LookupKv(round basics.Round, key string) ([]byte, error) {
 	return nil, fmt.Errorf("Key %v does not exist", key)
 }
 
-func (l *mockLedger) LookupKeysByPrefix(round basics.Round, keyPrefix string, maxKeyNum uint64) ([]string, error) {
+func (l *mockLedger) LookupKeysByPrefix(prefix, next string, maxBoxes, maxBytes int, values bool) (basics.Round, map[string]string, string, error) {
 	panic("not implemented")
 }
 
