@@ -1030,25 +1030,29 @@ var infoAppCmd = &cobra.Command{
 		}
 		params := meta.Params
 
-		gsch := params.GlobalStateSchema
-		lsch := params.LocalStateSchema
-		epp := params.ExtraProgramPages
-
 		fmt.Printf("Application ID:        %d\n", appIdx)
 		fmt.Printf("Application account:   %v\n", basics.AppIndex(appIdx).Address())
 		fmt.Printf("Creator:               %v\n", params.Creator)
 		fmt.Printf("Approval hash:         %v\n", basics.Address(logic.HashProgram(params.ApprovalProgram)))
 		fmt.Printf("Clear hash:            %v\n", basics.Address(logic.HashProgram(params.ClearStateProgram)))
 
+		ver := params.Version
+		if ver != nil {
+			fmt.Printf("Program version:       %d\n", *ver)
+		}
+
+		epp := params.ExtraProgramPages
 		if epp != nil {
 			fmt.Printf("Extra program pages:   %d\n", *epp)
 		}
 
+		gsch := params.GlobalStateSchema
 		if gsch != nil {
 			fmt.Printf("Max global byteslices: %d\n", gsch.NumByteSlice)
 			fmt.Printf("Max global integers:   %d\n", gsch.NumUint)
 		}
 
+		lsch := params.LocalStateSchema
 		if lsch != nil {
 			fmt.Printf("Max local byteslices:  %d\n", lsch.NumByteSlice)
 			fmt.Printf("Max local integers:    %d\n", lsch.NumUint)

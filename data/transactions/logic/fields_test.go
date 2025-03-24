@@ -283,12 +283,11 @@ func TestAssetParamsFieldsVersions(t *testing.T) {
 }
 
 func TestFieldVersions(t *testing.T) {
-	// This test is weird, it confirms that we don't need to
-	// bother with a "good" test for AssetHolding and AppParams
-	// fields.  It will fail if we add a field that has a
-	// different debut version, and then we'll need a test
-	// like TestAssetParamsFieldsVersions that checks the field is
-	// unavailable before its debut.
+	// This test is weird, it confirms that we don't need to bother with a
+	// "good" test for AssetHolding fields.  It will fail if we add a field that
+	// has a different debut version, and then we'll need a test like
+	// TestAppParamsFieldsVersions that checks the field is unavailable before
+	// its debut.
 
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -296,9 +295,47 @@ func TestFieldVersions(t *testing.T) {
 	for _, fs := range assetHoldingFieldSpecs {
 		require.Equal(t, uint64(2), fs.version)
 	}
+}
 
-	for _, fs := range appParamsFieldSpecs {
-		require.Equal(t, uint64(5), fs.version)
+// TestAppParamsFieldsVersions tests types and accessibility of various app
+// fields over different versions.
+func TestAppParamsFieldsVersions(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	for _, field := range appParamsFieldSpecs {
+		testLogicRange(t, 2, 0, func(t *testing.T, ep *EvalParams, txn *transactions.Transaction, ledger *Ledger) {
+			text := fmt.Sprintf("int 56; app_params_get %s; assert;", field.field)
+			if field.ftype.AVMType == avmBytes {
+				text += "global ZeroAddress; concat; len" // use concat to prove we have bytes
+			} else {
+				text += "global ZeroAddress; len; +" // use + to prove we have an int
+			}
+
+			v := ep.Proto.LogicSigVersion
+			ledger.NewApp(txn.Sender, txn.ForeignApps[0], basics.AppParams{
+				ApprovalProgram:   []byte("ap"),
+				ClearStateProgram: []byte("cs"),
+				GlobalState:       map[string]basics.TealValue{},
+				StateSchemas:      basics.StateSchemas{},
+				ExtraProgramPages: 2,
+				Version:           6,
+			})
+			if field.version > v {
+				// check assembler fails if version before introduction
+				testProg(t, text, v, exp(1, "...was introduced in..."))
+				ops := testProg(t, text, field.version) // assemble in the future
+				ops.Program[0] = byte(v)                // but set version back to before intro
+				if v < 5 {
+					testAppBytes(t, ops.Program, ep, "illegal opcode", "illegal opcode")
+				} else {
+					testAppBytes(t, ops.Program, ep, "invalid app_params_get field")
+				}
+			} else {
+				testProg(t, text, v)
+				testApp(t, text, ep)
+			}
+		})
 	}
 }
 
