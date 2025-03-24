@@ -598,7 +598,15 @@ func convertPopulatedResourceArrays(populatedResources simulation.PopulatedResou
 
 func convertTxnGroupResult(txnGroupResult simulation.TxnGroupResult) PreEncodedSimulateTxnGroupResult {
 	txnResults := make([]PreEncodedSimulateTxnResult, len(txnGroupResult.Txns))
+
+	// applCount is used to track the number of app calls in the group so we can correctly determine
+	// if we need to populate extraResourceArrays (if resource population is enabled)
+	applCount := 0
 	for i, txnResult := range txnGroupResult.Txns {
+		if txnResult.Txn.Txn.Type == protocol.ApplicationCallTx {
+			applCount++
+		}
+
 		txnResults[i] = convertTxnResult(txnResult)
 		if populatedResources, ok := txnGroupResult.PopulatedResourceArrays[i]; ok {
 			txnResults[i].PopulatedResourceArrays = convertPopulatedResourceArrays(populatedResources)
@@ -613,10 +621,9 @@ func convertTxnGroupResult(txnGroupResult simulation.TxnGroupResult) PreEncodedS
 		UnnamedResourcesAccessed: convertUnnamedResourcesAccessed(txnGroupResult.UnnamedResourcesAccessed),
 	}
 
-	if len(txnGroupResult.PopulatedResourceArrays)-len(txnResults) > 0 {
-		extraResourceArrays := make([]model.ResourceArrays, len(txnGroupResult.PopulatedResourceArrays)-len(txnResults))
+	if len(txnGroupResult.PopulatedResourceArrays)-applCount > 0 {
+		extraResourceArrays := make([]model.ResourceArrays, len(txnGroupResult.PopulatedResourceArrays)-applCount)
 
-		// Check the rest of txnGroupResult.PopulatedResourceArrays to see if there are any non-empty ones, staring at the len(txnResults)
 		for i := len(txnResults); i < len(txnGroupResult.PopulatedResourceArrays); i++ {
 			extraResourceArrays[i-len(txnResults)] = *convertPopulatedResourceArrays(txnGroupResult.PopulatedResourceArrays[i])
 		}

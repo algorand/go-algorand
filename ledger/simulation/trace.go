@@ -75,8 +75,8 @@ type TxnGroupResult struct {
 
 	// PopulatedResourceArrays will be present if PopulateResources is true in the Request.
 	// In that case, it will be a map of resource arrays for each app call in the group.
-	// There may be more resource arrays given than transactions in the group, which means more
-	// app call transactions would be needed for the extra resources.
+	// There may be more resource arrays for txn indexes that go beyond the group length,
+	// which means more app call transactions would be needed for the extra resources.
 	PopulatedResourceArrays map[int]PopulatedResourceArrays
 }
 
