@@ -54,6 +54,7 @@ func TestAccount(t *testing.T) {
 			GlobalStateSchema: basics.StateSchema{NumUint: 2},
 		},
 		ExtraProgramPages: 1,
+		Version:           2,
 	}
 
 	totalAppSchema := basics.StateSchema{
@@ -119,6 +120,12 @@ func TestAccount(t *testing.T) {
 	verifyCreatedApp := func(index int, appIdx basics.AppIndex, params basics.AppParams) {
 		require.Equal(t, uint64(appIdx), (*conv.CreatedApps)[index].Id)
 		require.Equal(t, params.ApprovalProgram, (*conv.CreatedApps)[index].Params.ApprovalProgram)
+		if params.Version != 0 {
+			require.NotNil(t, (*conv.CreatedApps)[index].Params.Version)
+			require.Equal(t, params.Version, *(*conv.CreatedApps)[index].Params.Version)
+		} else {
+			require.Nil(t, (*conv.CreatedApps)[index].Params.Version)
+		}
 		if params.ExtraProgramPages != 0 {
 			require.NotNil(t, (*conv.CreatedApps)[index].Params.ExtraProgramPages)
 			require.Equal(t, uint64(params.ExtraProgramPages), *(*conv.CreatedApps)[index].Params.ExtraProgramPages)

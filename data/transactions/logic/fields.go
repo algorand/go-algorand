@@ -1326,6 +1326,9 @@ const (
 	// AppAddress is also not *in* the Params, but can be derived
 	AppAddress
 
+	// AppVersion begins at 0 and increasing each time either program changes
+	AppVersion
+
 	invalidAppParamsField // compile-time constant for number of fields
 )
 
@@ -1364,6 +1367,7 @@ var appParamsFieldSpecs = [...]appParamsFieldSpec{
 	{AppExtraProgramPages, StackUint64, 5, "Number of Extra Program Pages of code space"},
 	{AppCreator, StackAddress, 5, "Creator address"},
 	{AppAddress, StackAddress, 5, "Address for which this application has authority"},
+	{AppVersion, StackUint64, 12, "Version of the app, incremented each time the approval or clear program changes"},
 }
 
 func appParamsFieldSpecByField(f AppParamsField) (appParamsFieldSpec, bool) {

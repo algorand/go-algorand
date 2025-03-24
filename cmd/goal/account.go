@@ -734,7 +734,12 @@ func printAccountInfo(client libgoal.Client, address string, onlyShowAssetIDs bo
 			extraPages = fmt.Sprintf(", %d extra page%s", *app.Params.ExtraProgramPages, plural)
 		}
 
-		fmt.Fprintf(report, "\tID %d%s, global state used %d/%d uints, %d/%d byte slices\n", app.Id, extraPages, usedInts, allocatedInts, usedBytes, allocatedBytes)
+		version := uint64(0)
+		if app.Params.Version != nil {
+			version = *app.Params.Version
+		}
+
+		fmt.Fprintf(report, "\tID %d%s, global state used %d/%d uints, %d/%d byte slices, version %d\n", app.Id, extraPages, usedInts, allocatedInts, usedBytes, allocatedBytes, version)
 	}
 
 	fmt.Fprintln(report, "Opted In Apps:")

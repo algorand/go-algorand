@@ -97,6 +97,7 @@ func createApplication(ac *transactions.ApplicationCallTxnFields, balances Balan
 			GlobalStateSchema: ac.GlobalStateSchema,
 		},
 		ExtraProgramPages: ac.ExtraProgramPages,
+		Version:           0,
 	}
 
 	// Update the cached TotalStateSchema for this account, used
@@ -213,6 +214,9 @@ func updateApplication(ac *transactions.ApplicationCallTxnFields, balances Balan
 
 	params.ApprovalProgram = ac.ApprovalProgram
 	params.ClearStateProgram = ac.ClearStateProgram
+	if proto.EnableAppVersioning {
+		params.Version++
+	}
 
 	return balances.PutAppParams(creator, appIdx, params)
 }
