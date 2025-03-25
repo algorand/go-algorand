@@ -1790,7 +1790,7 @@ func (v2 *Handlers) GetApplicationBoxes(ctx echo.Context, applicationID uint64, 
 		if err != nil {
 			return badRequest(ctx, err, err.Error(), v2.Log)
 		}
-		prefix = kvPrefix + string(rawPrefix)
+		prefix = string(rawPrefix)
 	}
 
 	next := nilToZero(params.Next)
@@ -1806,7 +1806,7 @@ func (v2 *Handlers) GetApplicationBoxes(ctx echo.Context, applicationID uint64, 
 		next = kvPrefix + string(rawNext)
 	}
 
-	round, boxes, nextToken, err := ledger.LookupKeysByPrefix(prefix, next, max, 1_000_000, values)
+	round, boxes, nextToken, err := ledger.LookupKeysByPrefix(kvPrefix+prefix, next, max, 1_000_000, values)
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
 	}
