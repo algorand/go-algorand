@@ -2,7 +2,8 @@ module github.com/algorand/go-algorand/tools/block-generator
 
 replace github.com/algorand/go-algorand => ../..
 
-go 1.23
+go 1.23.0
+
 toolchain go1.23.3
 
 require (
