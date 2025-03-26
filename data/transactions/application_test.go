@@ -33,19 +33,21 @@ import (
 
 func TestApplicationCallFieldsNotChanged(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	af := ApplicationCallTxnFields{}
 	s := reflect.ValueOf(&af).Elem()
 
-	if s.NumField() != 13 {
-		t.Errorf("You added or removed a field from transactions.ApplicationCallTxnFields. " +
-			"Please ensure you have updated the Empty() method and then " +
+	if s.NumField() != 14 {
+		t.Errorf("You  added or removed a field from transactions.ApplicationCallTxnFields. " +
+			"Please ensure you have updated ApplicationCallTxnFields.Empty() and then " +
 			"fix this test")
 	}
 }
 
 func TestApplicationCallFieldsEmpty(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	a := require.New(t)
 
@@ -107,6 +109,7 @@ func TestApplicationCallFieldsEmpty(t *testing.T) {
 
 func TestEncodedAppTxnAllocationBounds(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	t.Parallel()
 
 	// ensure that all the supported protocols have value limits less or
 	// equal to their corresponding codec allocbounds
@@ -125,6 +128,9 @@ func TestEncodedAppTxnAllocationBounds(t *testing.T) {
 		}
 		if proto.MaxAppBoxReferences > encodedMaxBoxes {
 			require.Failf(t, "proto.MaxAppBoxReferences > encodedMaxBoxes", "protocol version = %s", protoVer)
+		}
+		if proto.MaxAppAccess > encodedMaxAccess {
+			require.Failf(t, "proto.MaxAppAccess > encodedMaxAccess", "protocol version = %s", protoVer)
 		}
 	}
 }
