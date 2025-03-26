@@ -485,27 +485,41 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 			return fmt.Errorf("application args total length too long, max len %d bytes", proto.MaxAppTotalArgLen)
 		}
 
-		// Limit number of accounts referred to in a single ApplicationCall
-		if len(tx.Accounts) > proto.MaxAppTxnAccounts {
-			return fmt.Errorf("tx.Accounts too long, max number of accounts is %d", proto.MaxAppTxnAccounts)
-		}
+		if len(tx.Access) > 0 {
+			if len(tx.Access) > proto.MaxAppAccess {
+				return fmt.Errorf("tx.Access too long, max number of references is %d", proto.MaxAppAccess)
+			}
+			// When tx.Access is used, no other references are allowed
+			if len(tx.Accounts) > 0 {
+				return errors.New("tx.Accounts can't be used when tx.Access is used")
+			}
+			if len(tx.ForeignApps) > 0 {
+				return errors.New("tx.ForeignApps can't be used when tx.Access is used")
+			}
+			if len(tx.ForeignAssets) > 0 {
+				return errors.New("tx.ForeignAssets can't be used when tx.Access is used")
+			}
+			if len(tx.Boxes) > 0 {
+				return errors.New("tx.Boxes can't be used when tx.Access is used")
+			}
+		} else {
+			if len(tx.Accounts) > proto.MaxAppTxnAccounts {
+				return fmt.Errorf("tx.Accounts too long, max number of accounts is %d", proto.MaxAppTxnAccounts)
+			}
+			if len(tx.ForeignApps) > proto.MaxAppTxnForeignApps {
+				return fmt.Errorf("tx.ForeignApps too long, max number of foreign apps is %d", proto.MaxAppTxnForeignApps)
+			}
+			if len(tx.ForeignAssets) > proto.MaxAppTxnForeignAssets {
+				return fmt.Errorf("tx.ForeignAssets too long, max number of foreign assets is %d", proto.MaxAppTxnForeignAssets)
+			}
+			if len(tx.Boxes) > proto.MaxAppBoxReferences {
+				return fmt.Errorf("tx.Boxes too long, max number of box references is %d", proto.MaxAppBoxReferences)
+			}
 
-		// Limit number of other app global states referred to
-		if len(tx.ForeignApps) > proto.MaxAppTxnForeignApps {
-			return fmt.Errorf("tx.ForeignApps too long, max number of foreign apps is %d", proto.MaxAppTxnForeignApps)
-		}
-
-		if len(tx.ForeignAssets) > proto.MaxAppTxnForeignAssets {
-			return fmt.Errorf("tx.ForeignAssets too long, max number of foreign assets is %d", proto.MaxAppTxnForeignAssets)
-		}
-
-		if len(tx.Boxes) > proto.MaxAppBoxReferences {
-			return fmt.Errorf("tx.Boxes too long, max number of box references is %d", proto.MaxAppBoxReferences)
-		}
-
-		// Limit the sum of all types of references that bring in account records
-		if len(tx.Accounts)+len(tx.ForeignApps)+len(tx.ForeignAssets)+len(tx.Boxes) > proto.MaxAppTotalTxnReferences {
-			return fmt.Errorf("tx references exceed MaxAppTotalTxnReferences = %d", proto.MaxAppTotalTxnReferences)
+			// Limit the sum of all types of references that bring in resource records
+			if len(tx.Accounts)+len(tx.ForeignApps)+len(tx.ForeignAssets)+len(tx.Boxes) > proto.MaxAppTotalTxnReferences {
+				return fmt.Errorf("tx references exceed MaxAppTotalTxnReferences = %d", proto.MaxAppTotalTxnReferences)
+			}
 		}
 
 		if tx.ExtraProgramPages > uint32(proto.MaxExtraAppProgramPages) {
