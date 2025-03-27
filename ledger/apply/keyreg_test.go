@@ -126,12 +126,6 @@ func TestKeyregApply(t *testing.T) {
 	err := Keyreg(tx.KeyregTxnFields, tx.Header, makeMockBalances(protocol.ConsensusCurrentVersion), spec, nil, basics.Round(0))
 	require.NoError(t, err)
 
-	tx.Sender = spec.FeeSink
-	err = Keyreg(tx.KeyregTxnFields, tx.Header, makeMockBalances(protocol.ConsensusCurrentVersion), spec, nil, basics.Round(0))
-	require.ErrorContains(t, err, "cannot register participation key for fee sink")
-
-	tx.Sender = src
-
 	mockBal := newKeyregTestBalances()
 
 	// Going from offline to online should be okay

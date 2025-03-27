@@ -21,7 +21,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"slices"
 	"sync"
 
 	"github.com/algorand/go-algorand/config"
@@ -287,30 +286,41 @@ func (tx Header) TxFee() basics.MicroAlgos {
 	return tx.Fee
 }
 
-// MatchAddress checks if the transaction touches a given address.
-func (tx Transaction) MatchAddress(addr basics.Address, spec SpecialAddresses) bool {
-	return slices.Contains(tx.relevantAddrs(spec), addr)
-}
+// MatchAddress checks if the transaction touches a given address.  The feesink
+// and rewards pool are not considered matches.
+func (tx Transaction) MatchAddress(addr basics.Address) bool {
+	if addr == tx.Sender {
+		return true
+	}
 
-var errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound = errors.New("transaction first voting round need to be less than its last voting round")
-var errKeyregTxnNonCoherentVotingKeys = errors.New("the following transaction fields need to be clear/set together : votekey, selkey, votekd")
-var errKeyregTxnOfflineTransactionHasVotingRounds = errors.New("on going offline key registration transaction, the vote first and vote last fields should not be set")
-var errKeyregTxnUnsupportedSwitchToNonParticipating = errors.New("transaction tries to mark an account as nonparticipating, but that transaction is not supported")
-var errKeyregTxnGoingOnlineWithNonParticipating = errors.New("transaction tries to register keys to go online, but nonparticipatory flag is set")
-var errKeyregTxnGoingOnlineWithZeroVoteLast = errors.New("transaction tries to register keys to go online, but vote last is set to zero")
-var errKeyregTxnGoingOnlineWithFirstVoteAfterLastValid = errors.New("transaction tries to register keys to go online, but first voting round is beyond the round after last valid round")
-var errKeyRegEmptyStateProofPK = errors.New("online keyreg transaction cannot have empty field StateProofPK")
-var errKeyregTxnNotEmptyStateProofPK = errors.New("transaction field StateProofPK should be empty in this consensus version")
-var errKeyregTxnNonParticipantShouldBeEmptyStateProofPK = errors.New("non participation keyreg transactions should contain empty stateProofPK")
-var errKeyregTxnOfflineShouldBeEmptyStateProofPK = errors.New("offline keyreg transactions should contain empty stateProofPK")
-var errKeyRegTxnValidityPeriodTooLong = errors.New("validity period for keyreg transaction is too long")
-var errStateProofNotSupported = errors.New("state proofs not supported")
-var errBadSenderInStateProofTxn = errors.New("sender must be the state-proof sender")
-var errFeeMustBeZeroInStateproofTxn = errors.New("fee must be zero in state-proof transaction")
-var errNoteMustBeEmptyInStateproofTxn = errors.New("note must be empty in state-proof transaction")
-var errGroupMustBeZeroInStateproofTxn = errors.New("group must be zero in state-proof transaction")
-var errRekeyToMustBeZeroInStateproofTxn = errors.New("rekey must be zero in state-proof transaction")
-var errLeaseMustBeZeroInStateproofTxn = errors.New("lease must be zero in state-proof transaction")
+	switch tx.Type {
+	case protocol.PaymentTx:
+		if addr == tx.PaymentTxnFields.Receiver {
+			return true
+		}
+		if !tx.PaymentTxnFields.CloseRemainderTo.IsZero() &&
+			addr == tx.PaymentTxnFields.CloseRemainderTo {
+			return true
+		}
+	case protocol.AssetTransferTx:
+		if addr == tx.AssetTransferTxnFields.AssetReceiver {
+			return true
+		}
+		if !tx.AssetTransferTxnFields.AssetCloseTo.IsZero() &&
+			addr == tx.AssetTransferTxnFields.AssetCloseTo {
+			return true
+		}
+		if !tx.AssetTransferTxnFields.AssetSender.IsZero() &&
+			addr == tx.AssetTransferTxnFields.AssetSender {
+			return true
+		}
+	case protocol.HeartbeatTx:
+		if addr == tx.HeartbeatTxnFields.HbAddress {
+			return true
+		}
+	}
+	return false
+}
 
 // WellFormed checks that the transaction looks reasonable on its own (but not necessarily valid against the actual ledger). It does not check signatures.
 func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusParams) error {
@@ -344,7 +354,7 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 
 	case protocol.StateProofTx:
 		if proto.StateProofInterval == 0 {
-			return errStateProofNotSupported
+			return fmt.Errorf("state proofs not supported")
 		}
 
 		err := tx.StateProofTxnFields.wellFormed(tx.Header)
@@ -450,31 +460,6 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 		return fmt.Errorf("transaction has RekeyTo set but rekeying not yet enabled")
 	}
 	return nil
-}
-
-// relevantAddrs returns the addresses whose balance records this transaction will need to access.
-func (tx Transaction) relevantAddrs(spec SpecialAddresses) []basics.Address {
-	addrs := []basics.Address{tx.Sender, spec.FeeSink}
-
-	switch tx.Type {
-	case protocol.PaymentTx:
-		addrs = append(addrs, tx.PaymentTxnFields.Receiver)
-		if !tx.PaymentTxnFields.CloseRemainderTo.IsZero() {
-			addrs = append(addrs, tx.PaymentTxnFields.CloseRemainderTo)
-		}
-	case protocol.AssetTransferTx:
-		addrs = append(addrs, tx.AssetTransferTxnFields.AssetReceiver)
-		if !tx.AssetTransferTxnFields.AssetCloseTo.IsZero() {
-			addrs = append(addrs, tx.AssetTransferTxnFields.AssetCloseTo)
-		}
-		if !tx.AssetTransferTxnFields.AssetSender.IsZero() {
-			addrs = append(addrs, tx.AssetTransferTxnFields.AssetSender)
-		}
-	case protocol.HeartbeatTx:
-		addrs = append(addrs, tx.HeartbeatTxnFields.HbAddress)
-	}
-
-	return addrs
 }
 
 // TxAmount returns the amount paid to the recipient in this payment

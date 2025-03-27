@@ -17,8 +17,10 @@
 package transactions
 
 import (
+	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
@@ -70,7 +72,7 @@ func TestAlgosEncoding(t *testing.T) {
 	}
 }
 
-func TestCheckSpender(t *testing.T) {
+func TestPaymentWellFormed(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	v7 := config.Consensus[protocol.ConsensusV7]
@@ -131,4 +133,57 @@ func TestCheckSpender(t *testing.T) {
 	require.NoError(t, tx.PaymentTxnFields.wellFormed(tx.Header, spec, v7))
 	require.NoError(t, tx.PaymentTxnFields.wellFormed(tx.Header, spec, v39))
 	require.NoError(t, tx.PaymentTxnFields.wellFormed(tx.Header, spec, vFuture))
+}
+
+func TestWellFormedPaymentErrors(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	curProto := config.Consensus[protocol.ConsensusCurrentVersion]
+	protoV27 := config.Consensus[protocol.ConsensusV27]
+	addr1, err := basics.UnmarshalChecksumAddress("NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA")
+	require.NoError(t, err)
+	usecases := []struct {
+		tx            Transaction
+		proto         config.ConsensusParams
+		expectedError error
+	}{
+		{
+			tx: Transaction{
+				Type: protocol.PaymentTx,
+				Header: Header{
+					Sender: addr1,
+					Fee:    basics.MicroAlgos{Raw: 100},
+				},
+			},
+			proto:         protoV27,
+			expectedError: makeMinFeeErrorf("transaction had fee %d, which is less than the minimum %d", 100, curProto.MinTxnFee),
+		},
+		{
+			tx: Transaction{
+				Type: protocol.PaymentTx,
+				Header: Header{
+					Sender: addr1,
+					Fee:    basics.MicroAlgos{Raw: 100},
+				},
+			},
+			proto: curProto,
+		},
+		{
+			tx: Transaction{
+				Type: protocol.PaymentTx,
+				Header: Header{
+					Sender:     addr1,
+					Fee:        basics.MicroAlgos{Raw: 1000},
+					LastValid:  100,
+					FirstValid: 105,
+				},
+			},
+			proto:         curProto,
+			expectedError: fmt.Errorf("transaction invalid range (%d--%d)", 105, 100),
+		},
+	}
+	for _, usecase := range usecases {
+		err := usecase.tx.WellFormed(SpecialAddresses{}, usecase.proto)
+		assert.Equal(t, usecase.expectedError, err)
+	}
 }
