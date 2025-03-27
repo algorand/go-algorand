@@ -105,30 +105,30 @@ func TestCheckSpender(t *testing.T) {
 	}
 
 	tx.Sender = feeSink
-	require.ErrorContains(t, tx.PaymentTxnFields.checkSpender(tx.Header, spec, v7),
+	require.ErrorContains(t, tx.PaymentTxnFields.wellFormed(tx.Header, spec, v7),
 		"to non incentive pool address")
-	require.ErrorContains(t, tx.PaymentTxnFields.checkSpender(tx.Header, spec, v39),
+	require.ErrorContains(t, tx.PaymentTxnFields.wellFormed(tx.Header, spec, v39),
 		"to non incentive pool address")
-	require.ErrorContains(t, tx.PaymentTxnFields.checkSpender(tx.Header, spec, vFuture),
+	require.ErrorContains(t, tx.PaymentTxnFields.wellFormed(tx.Header, spec, vFuture),
 		"cannot spend from fee sink")
 
 	tx.Receiver = poolAddr
-	require.NoError(t, tx.PaymentTxnFields.checkSpender(tx.Header, spec, v7))
-	require.NoError(t, tx.PaymentTxnFields.checkSpender(tx.Header, spec, v39))
-	require.ErrorContains(t, tx.PaymentTxnFields.checkSpender(tx.Header, spec, vFuture),
+	require.NoError(t, tx.PaymentTxnFields.wellFormed(tx.Header, spec, v7))
+	require.NoError(t, tx.PaymentTxnFields.wellFormed(tx.Header, spec, v39))
+	require.ErrorContains(t, tx.PaymentTxnFields.wellFormed(tx.Header, spec, vFuture),
 		"cannot spend from fee sink")
 
 	tx.CloseRemainderTo = poolAddr
-	require.ErrorContains(t, tx.PaymentTxnFields.checkSpender(tx.Header, spec, v7),
+	require.ErrorContains(t, tx.PaymentTxnFields.wellFormed(tx.Header, spec, v7),
 		"cannot close fee sink")
-	require.ErrorContains(t, tx.PaymentTxnFields.checkSpender(tx.Header, spec, v39),
+	require.ErrorContains(t, tx.PaymentTxnFields.wellFormed(tx.Header, spec, v39),
 		"cannot close fee sink")
-	require.ErrorContains(t, tx.PaymentTxnFields.checkSpender(tx.Header, spec, vFuture),
+	require.ErrorContains(t, tx.PaymentTxnFields.wellFormed(tx.Header, spec, vFuture),
 		"cannot spend from fee sink")
 
 	// When not sending from fee sink, everything's fine
 	tx.Sender = src
-	require.NoError(t, tx.PaymentTxnFields.checkSpender(tx.Header, spec, v7))
-	require.NoError(t, tx.PaymentTxnFields.checkSpender(tx.Header, spec, v39))
-	require.NoError(t, tx.PaymentTxnFields.checkSpender(tx.Header, spec, vFuture))
+	require.NoError(t, tx.PaymentTxnFields.wellFormed(tx.Header, spec, v7))
+	require.NoError(t, tx.PaymentTxnFields.wellFormed(tx.Header, spec, v39))
+	require.NoError(t, tx.PaymentTxnFields.wellFormed(tx.Header, spec, vFuture))
 }

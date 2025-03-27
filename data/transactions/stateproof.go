@@ -33,6 +33,33 @@ type StateProofTxnFields struct {
 	Message        stateproofmsg.Message   `codec:"spmsg"`
 }
 
+// wellFormed performs stateless checks on the StateProof transaction
+func (sp StateProofTxnFields) wellFormed(header Header) error {
+	// This is a placeholder transaction used to store state proofs
+	// on the ledger, and ensure they are broadly available.  Most of
+	// the fields must be empty.  It must be issued from a special
+	// sender address.
+	if header.Sender != StateProofSender {
+		return errBadSenderInStateProofTxn
+	}
+	if !header.Fee.IsZero() {
+		return errFeeMustBeZeroInStateproofTxn
+	}
+	if len(header.Note) != 0 {
+		return errNoteMustBeEmptyInStateproofTxn
+	}
+	if !header.Group.IsZero() {
+		return errGroupMustBeZeroInStateproofTxn
+	}
+	if !header.RekeyTo.IsZero() {
+		return errRekeyToMustBeZeroInStateproofTxn
+	}
+	if header.Lease != [32]byte{} {
+		return errLeaseMustBeZeroInStateproofTxn
+	}
+	return nil
+}
+
 // specialAddr is used to form a unique address that will send out state proofs.
 //
 //msgp:ignore specialAddr

@@ -1541,3 +1541,45 @@ func TestStateProofTxnShouldBeZero(t *testing.T) {
 	err = txn.WellFormed(SpecialAddresses{}, curProto)
 	require.NoError(t, err)
 }
+
+func TestTransactionIDChanges(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	txn := Transaction{
+		Type: "pay",
+		Header: Header{
+			Sender:     [32]byte{0x01},
+			Fee:        basics.MicroAlgos{Raw: 10_000},
+			FirstValid: 100,
+			LastValid:  200,
+			Note:       []byte{0x02},
+		},
+		PaymentTxnFields: PaymentTxnFields{
+			Receiver:         [32]byte{0x03},
+			Amount:           basics.MicroAlgos{Raw: 200_000},
+			CloseRemainderTo: [32]byte{0x04},
+		},
+	}
+
+	// Make a copy of txn, change some fields, be sure the TXID changes. This is not exhaustive.
+	txn2 := txn
+	txn2.Note = []byte{42}
+	if txn2.ID() == txn.ID() {
+		t.Errorf("txid does not depend on note")
+	}
+	txn2 = txn
+	txn2.Amount.Raw++
+	if txn2.ID() == txn.ID() {
+		t.Errorf("txid does not depend on amount")
+	}
+	txn2 = txn
+	txn2.Fee.Raw++
+	if txn2.ID() == txn.ID() {
+		t.Errorf("txid does not depend on fee")
+	}
+	txn2 = txn
+	txn2.LastValid++
+	if txn2.ID() == txn.ID() {
+		t.Errorf("txid does not depend on lastvalid")
+	}
+}
