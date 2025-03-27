@@ -34,6 +34,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/network"
+	"github.com/algorand/go-algorand/network/vpack"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-deadlock"
 	kzstd "github.com/klauspost/compress/zstd"
@@ -50,6 +51,7 @@ var storeBatchSize = flag.Int("storeBatch", 1024*1024, "Flush messages to disk a
 var compressionWindowSize = flag.Int("windowSize", 32768, "Compression window size in bytes")
 var contextConfig = flag.String("contextcfg", "", "Configure tag-specific compression contexts with window sizes. Format: TAG1:size1;TAG2,TAG3:size2 (e.g. AV:4096;TX,PP:32768)")
 var useGozstd = flag.Bool("useGozstd", false, "Use gozstd (C implementation) instead of klauspost (Go implementation) for compression contexts")
+var useVpack = flag.Bool("useVpack", false, "Use vpack compression library (optimized for AgreementVote messages) instead of zstd")
 
 // CompressionInterface defines the methods needed for a compression implementation
 type CompressionInterface interface {
@@ -122,6 +124,10 @@ type compressDumpHandler struct {
 	contextMu    deadlock.Mutex
 	dict         []byte
 	cdict        *gozstd.CDict // Reusable gozstd dictionary
+
+	// vpack-related fields
+	vpackEncoder *vpack.StaticEncoder
+	vpackDecoder *vpack.StaticDecoder
 
 	// Tag-specific context configuration
 	tagContexts   map[protocol.Tag]int    // Maps tag to window size
@@ -226,99 +232,117 @@ compress:
 	var compressed []byte
 	var err error
 	var contextCompressed []byte
+	var vpackCompressed []byte
 
-	// Handle context reuse compression first
-	if hp, ok := msg.Sender.(network.HTTPPeer); ok {
-		addr := hp.GetAddress()
-		// Add the tag group or tag as a suffix if we have tag-specific contexts configured
-		contextKey := addr
-		windowSize := *compressionWindowSize
+	// If using vpack, try to compress the message with vpack first
+	if *useVpack && dh.vpackEncoder != nil {
+		if msg.Tag == protocol.AgreementVoteTag {
+			// Use vpack compression for Agreement Vote messages
+			vpackCompressed, err = dh.vpackEncoder.CompressVote(nil, msg.Data)
+			if err != nil {
+				// Log error but continue with standard compression
+				fmt.Fprintf(os.Stderr, "vpack CompressVote error: %v\n", err)
+			}
+		}
+	}
 
-		dh.tagContextsMu.Lock()
-		if len(dh.tagContexts) > 0 {
-			if tagWindowSize, ok := dh.tagContexts[msg.Tag]; ok {
-				// Use the group name if this tag belongs to a group
-				if groupName, ok := dh.tagGroups[msg.Tag]; ok {
-					contextKey = addr + "-" + groupName
+	// Handle context reuse compression first (if not using vpack or vpack failed or message is not an AV)
+	if !*useVpack || vpackCompressed == nil {
+		if hp, ok := msg.Sender.(network.HTTPPeer); ok {
+			addr := hp.GetAddress()
+			// Add the tag group or tag as a suffix if we have tag-specific contexts configured
+			contextKey := addr
+			windowSize := *compressionWindowSize
+
+			dh.tagContextsMu.Lock()
+			if len(dh.tagContexts) > 0 {
+				if tagWindowSize, ok := dh.tagContexts[msg.Tag]; ok {
+					// Use the group name if this tag belongs to a group
+					if groupName, ok := dh.tagGroups[msg.Tag]; ok {
+						contextKey = addr + "-" + groupName
+					} else {
+						contextKey = addr + "-" + string(msg.Tag)
+					}
+					windowSize = tagWindowSize
+				}
+			}
+			dh.tagContextsMu.Unlock()
+
+			dh.contextMu.Lock()
+			ctx := dh.contexts[contextKey]
+			if ctx == nil {
+				// Create new context
+				buf := &bytes.Buffer{}
+
+				if *useGozstd {
+					// Calculate window log from window size (converting bytes to power of 2)
+					windowLog := 0
+					size := windowSize
+					for size > 1 {
+						size >>= 1
+						windowLog++
+					}
+					// Clamp to valid gozstd window log range
+					if windowLog < gozstd.WindowLogMin {
+						windowLog = gozstd.WindowLogMin
+					} else if windowLog > gozstd.WindowLogMax64 {
+						windowLog = gozstd.WindowLogMax64
+					}
+
+					// Create adapter for gozstd writer that implements CompressionInterface
+					adapter := NewGozstdWriterAdapter(buf, *compressionLevel, windowLog, dh.cdict)
+
+					// Create compression context
+					ctx = &CompressionContext{
+						w:        adapter,
+						buf:      buf,
+						isGozstd: true,
+					}
 				} else {
-					contextKey = addr + "-" + string(msg.Tag)
-				}
-				windowSize = tagWindowSize
-			}
-		}
-		dh.tagContextsMu.Unlock()
-
-		dh.contextMu.Lock()
-		ctx := dh.contexts[contextKey]
-		if ctx == nil {
-			// Create new context
-			buf := &bytes.Buffer{}
-
-			if *useGozstd {
-				// Calculate window log from window size (converting bytes to power of 2)
-				windowLog := 0
-				size := windowSize
-				for size > 1 {
-					size >>= 1
-					windowLog++
-				}
-				// Clamp to valid gozstd window log range
-				if windowLog < gozstd.WindowLogMin {
-					windowLog = gozstd.WindowLogMin
-				} else if windowLog > gozstd.WindowLogMax64 {
-					windowLog = gozstd.WindowLogMax64
+					// Use klauspost implementation (pure Go)
+					klevel := kzstd.EncoderLevelFromZstd(*compressionLevel)
+					opts := []kzstd.EOption{
+						kzstd.WithEncoderLevel(klevel),
+						kzstd.WithWindowSize(windowSize),
+					}
+					if dh.dict != nil {
+						opts = append(opts, kzstd.WithEncoderDict(dh.dict))
+					}
+					w, err := kzstd.NewWriter(buf, opts...)
+					if err != nil {
+						fmt.Printf("Failed to create klauspost zstd writer: %v\n", err)
+						return network.OutgoingMessage{Action: network.Ignore}
+					}
+					ctx = &CompressionContext{w: w, buf: buf}
 				}
 
-				// Create adapter for gozstd writer that implements CompressionInterface
-				adapter := NewGozstdWriterAdapter(buf, *compressionLevel, windowLog, dh.cdict)
-
-				// Create compression context
-				ctx = &CompressionContext{
-					w:        adapter,
-					buf:      buf,
-					isGozstd: true,
-				}
-			} else {
-				// Use klauspost implementation (pure Go)
-				klevel := kzstd.EncoderLevelFromZstd(*compressionLevel)
-				opts := []kzstd.EOption{
-					kzstd.WithEncoderLevel(klevel),
-					kzstd.WithWindowSize(windowSize),
-				}
-				if dh.dict != nil {
-					opts = append(opts, kzstd.WithEncoderDict(dh.dict))
-				}
-				w, err := kzstd.NewWriter(buf, opts...)
-				if err != nil {
-					fmt.Printf("Failed to create klauspost zstd writer: %v\n", err)
-					return network.OutgoingMessage{Action: network.Ignore}
-				}
-				ctx = &CompressionContext{w: w, buf: buf}
+				dh.contexts[contextKey] = ctx
 			}
 
-			dh.contexts[contextKey] = ctx
+			// Write message to context
+			ctx.buf.Reset()
+			_, _ = ctx.w.Write(msg.Data)
+			_ = ctx.w.Flush()
+			ctx.cnt += uint64(len(msg.Data))
+			contextCompressed = ctx.buf.Bytes()
+			dh.contextMu.Unlock()
 		}
 
-		// Write message to context
-		ctx.buf.Reset()
-		_, _ = ctx.w.Write(msg.Data)
-		_ = ctx.w.Flush()
-		ctx.cnt += uint64(len(msg.Data))
-		contextCompressed = ctx.buf.Bytes()
-		dh.contextMu.Unlock()
-	}
-
-	// Do regular compression for comparison
-	if dh.compressor != nil {
-		// Use dictionary-based compression
-		compressed, err = dh.compressor.Compress(nil, msg.Data)
+		// Do regular compression for comparison
+		if dh.compressor != nil {
+			// Use dictionary-based compression
+			compressed, err = dh.compressor.Compress(nil, msg.Data)
+		} else {
+			// Use standard compression
+			compressed, err = zstd.Compress(nil, msg.Data)
+		}
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error compressing data: %v\n", err)
+			return network.OutgoingMessage{Action: network.Ignore}
+		}
 	} else {
-		// Use standard compression
-		compressed, err = zstd.Compress(nil, msg.Data)
-	}
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error compressing data: %v\n", err)
-		return network.OutgoingMessage{Action: network.Ignore}
+		// Use the vpack compressed data if available
+		compressed = vpackCompressed
 	}
 
 	stats.mu.Lock()
@@ -393,6 +417,12 @@ func (dh *compressDumpHandler) printStats() {
 	defer dh.statsMutex.Unlock()
 
 	fmt.Println("\nCompression Statistics:")
+
+	// If using vpack, include that in the header
+	if *useVpack {
+		fmt.Println("Using vpack compression library for AgreementVote messages")
+	}
+
 	fmt.Println("Tag     Messages     Original % of Total   Compressed    Ratio     CtxBytes CtxRatio WindowSize")
 	fmt.Println("----- ---------- ------------ ---------- ------------ -------- ------------ -------- ----------")
 
@@ -434,8 +464,14 @@ func (dh *compressDumpHandler) printStats() {
 			pctOfTotal = float64(stats.originalBytes) / float64(totalOrig) * 100.0
 		}
 
+		// Add vpack indicator for AgreementVote messages when using vpack
+		tagDisplay := string(tag)
+		if *useVpack && tag == protocol.AgreementVoteTag {
+			tagDisplay = string(tag) + "*" // Add asterisk to indicate vpack compression
+		}
+
 		fmt.Printf("%-5s %10d %12d %8.1f%% %12d %7.1f%% %12d %7.1f%% %10d\n",
-			string(tag),
+			tagDisplay,
 			stats.messageCount,
 			stats.originalBytes,
 			pctOfTotal,
@@ -455,6 +491,11 @@ func (dh *compressDumpHandler) printStats() {
 		ctxReduction := (1.0 - float64(totalCtx)/float64(totalOrig)) * 100
 		fmt.Printf("%-5s %10s %12d %8.1f%% %12d %7.1f%% %12d %7.1f%% %10s\n",
 			"TOTAL", "-", totalOrig, 100.0, totalComp, reduction, totalCtx, ctxReduction, "-")
+
+		// Add a legend for vpack if enabled
+		if *useVpack {
+			fmt.Println("\n* AV tag uses vpack compression optimized for AgreementVote messages")
+		}
 	}
 }
 
@@ -470,8 +511,15 @@ func initCompressDumpHandler() *compressDumpHandler {
 		tagGroups:   make(map[protocol.Tag]string),
 	}
 
+	// Initialize vpack encoder/decoder if -useVpack flag is enabled
+	if *useVpack {
+		fmt.Println("Using vpack compression library")
+		cdh.vpackEncoder = vpack.NewStaticEncoder()
+		cdh.vpackDecoder = vpack.NewStaticDecoder()
+	}
+
 	// Initialize dictionary-based compression if a dictionary file is provided
-	if *dictionaryFile != "" {
+	if *dictionaryFile != "" && !*useVpack { // Don't use dictionary with vpack
 		fmt.Printf("Using dictionary-based compression with %s\n", *dictionaryFile)
 		var err error
 		cdh.dict, err = os.ReadFile(*dictionaryFile)
