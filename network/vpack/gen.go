@@ -182,7 +182,6 @@ const parseFuncTemplate = `{{if gt .FixedSize 0}}
 			c.writeStatic({{$fd.FieldNameConst}})
 			{{renderParseFunction $fd.SubStructName}}
   {{- else if $fd.IsUint64Alias}}
-            {{ if not $fd.VpackSpecial }}c.writeStatic({{$fd.FieldNameConst}}){{end}}
 			valBytes, err := p.readUintBytes()
 			if err != nil {
 				return fmt.Errorf("reading {{$fd.CodecName}}: %w", err)
@@ -200,12 +199,10 @@ const parseFuncTemplate = `{{if gt .FixedSize 0}}
 				}
 			}
 	{{end}}
-			{{ if $fd.VpackSpecial }}c.writeStatic({{$fd.FieldNameConst}}){{ end }}
-			if err := c.writeDynamicVaruint(valBytes); err != nil {
+			if err := c.writeDynamicVaruint({{$fd.FieldNameConst}}, valBytes); err != nil {
 				return fmt.Errorf("writing {{$fd.CodecName}}: %w", err)
 			}
   {{- else if gt $fd.ArrayLen 0}}
-            {{ if and (not $fd.VpackSpecial) (not $fd.IsZeroCheck) }}c.writeStatic({{$fd.FieldNameConst}}){{end}}
 			val, err := p.readBin{{$fd.ArrayLen}}()
 			if err != nil {
 				return fmt.Errorf("reading {{$fd.CodecName}}: %w", err)
@@ -214,15 +211,12 @@ const parseFuncTemplate = `{{if gt .FixedSize 0}}
 			if val == [{{$fd.ArrayLen}}]byte{} {
 				c.writeStatic({{$fd.ZeroConst}})
 			} else {
-				c.writeStatic({{$fd.FieldNameConst}})
-				c.writeLiteralBin{{$fd.ArrayLen}}(val)
+				c.writeLiteralBin{{$fd.ArrayLen}}({{$fd.FieldNameConst}}, val)
 			}
 	{{- else if $fd.IsLiteral}}
-			{{ if $fd.VpackSpecial }}c.writeStatic({{$fd.FieldNameConst}}){{ end }}
-			c.writeLiteralBin{{$fd.ArrayLen}}(val)
+			c.writeLiteralBin{{$fd.ArrayLen}}({{$fd.FieldNameConst}}, val)
 	{{- else}}
-			{{ if $fd.VpackSpecial }}c.writeStatic({{$fd.FieldNameConst}}){{ end }}
-			c.writeDynamicBin{{$fd.ArrayLen}}(val)
+			c.writeDynamicBin{{$fd.ArrayLen}}({{$fd.FieldNameConst}}, val)
 	{{- end}}
   {{- else}}
 			// this means the struct has a field not supported by this code generator

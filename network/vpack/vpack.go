@@ -25,10 +25,10 @@ const defaultCompressCapacity = 1024
 
 type compressWriter interface {
 	writeStatic(idx uint8)
-	writeDynamicVaruint(b []byte) error
-	writeDynamicBin32(b [32]byte)
-	writeLiteralBin64(b [64]byte)
-	writeLiteralBin80(b [80]byte)
+	writeDynamicVaruint(fieldNameIdx uint8, b []byte) error
+	writeDynamicBin32(fieldNameIdx uint8, b [32]byte)
+	writeLiteralBin64(fieldNameIdx uint8, b [64]byte)
+	writeLiteralBin80(fieldNameIdx uint8, b [80]byte)
 }
 
 // CompressVote appends a compressed vote in src to dst.
@@ -63,7 +63,8 @@ func (s *StaticEncoder) writeStatic(idx uint8) {
 // writeDynamicVaruint writes a dynamic varuint to the writer.
 // It expects readUintBytes to provide a non-empty byte slice containing
 // a msgpack varuint encoding of 1, 2, 3, 5, or 9 byte length.
-func (s *StaticEncoder) writeDynamicVaruint(b []byte) error {
+func (s *StaticEncoder) writeDynamicVaruint(fieldNameIdx uint8, b []byte) error {
+	s.cur = append(s.cur, fieldNameIdx)
 	var expectedLength int
 	switch b[0] {
 	case uint8tag:
@@ -98,17 +99,20 @@ func (s *StaticEncoder) writeDynamicVaruint(b []byte) error {
 	return nil
 }
 
-func (s *StaticEncoder) writeDynamicBin32(b [32]byte) {
+func (s *StaticEncoder) writeDynamicBin32(idx uint8, b [32]byte) {
+	s.cur = append(s.cur, idx)
 	s.cur = append(s.cur, markerDynamicBin32)
 	s.cur = append(s.cur, b[:]...)
 }
 
-func (s *StaticEncoder) writeLiteralBin64(b [64]byte) {
+func (s *StaticEncoder) writeLiteralBin64(idx uint8, b [64]byte) {
+	s.cur = append(s.cur, idx)
 	s.cur = append(s.cur, markerLiteralBin64)
 	s.cur = append(s.cur, b[:]...)
 }
 
-func (s *StaticEncoder) writeLiteralBin80(b [80]byte) {
+func (s *StaticEncoder) writeLiteralBin80(idx uint8, b [80]byte) {
+	s.cur = append(s.cur, idx)
 	s.cur = append(s.cur, markerLiteralBin80)
 	s.cur = append(s.cur, b[:]...)
 }

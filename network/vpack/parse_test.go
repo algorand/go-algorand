@@ -212,11 +212,17 @@ type mockCompressWriter struct {
 	writes             []any
 }
 
-func (m *mockCompressWriter) writeStatic(idx uint8)          { m.writes = append(m.writes, idx) }
-func (m *mockCompressWriter) writeLiteralBin64(val [64]byte) { m.writes = append(m.writes, val) }
-func (m *mockCompressWriter) writeLiteralBin80(val [80]byte) { m.writes = append(m.writes, val) }
-func (m *mockCompressWriter) writeDynamicBin32(val [32]byte) { m.writes = append(m.writes, val) }
-func (m *mockCompressWriter) writeDynamicVaruint(valBytes []byte) error {
+func (m *mockCompressWriter) writeStatic(idx uint8) { m.writes = append(m.writes, idx) }
+func (m *mockCompressWriter) writeLiteralBin64(idx uint8, val [64]byte) {
+	m.writes = append(m.writes, val)
+}
+func (m *mockCompressWriter) writeLiteralBin80(idx uint8, val [80]byte) {
+	m.writes = append(m.writes, val)
+}
+func (m *mockCompressWriter) writeDynamicBin32(idx uint8, val [32]byte) {
+	m.writes = append(m.writes, val)
+}
+func (m *mockCompressWriter) writeDynamicVaruint(idx uint8, valBytes []byte) error {
 	if m.failDynamicVaruint {
 		return fmt.Errorf("mockCompressWriter.writeDynamicVaruint")
 	}

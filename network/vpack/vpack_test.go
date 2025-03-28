@@ -398,7 +398,7 @@ func TestWriteDynamicVaruint(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			err := encoder.writeDynamicVaruint(tc.input)
+			err := encoder.writeDynamicVaruint(0, tc.input)
 
 			if tc.errorText != "" {
 				require.Error(t, err)
