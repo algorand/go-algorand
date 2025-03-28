@@ -118,7 +118,7 @@ func LoadLedger[T string | ledger.DirsAndPrefix](
 	return l, nil
 }
 
-// TxnsFrom returns the list of transactions to/from a given address in specific round
+// TxnsFrom returns the list of transactions sent by a given address in a round
 func (l *Ledger) TxnsFrom(id basics.Address, r basics.Round) ([]transactions.Transaction, error) {
 	blk, err := l.Block(r)
 	if err != nil {
