@@ -3359,6 +3359,10 @@
           "description": "\\[f\\] Address of account used to freeze holdings of this asset.  If empty, freezing is not permitted.",
           "type": "string"
         },
+        "global-frozen": {
+          "description": "\\[gf\\] Whether transfers of this asset are frozen for everyone.",
+          "type": "boolean"
+        },
         "manager": {
           "description": "\\[m\\] Address of account used to manage the keys of this asset and to destroy it.",
           "type": "string"
@@ -3403,10 +3407,6 @@
           "description": "Base64 encoded URL where more information about the asset can be retrieved.",
           "type": "string",
           "format": "byte"
-        },
-        "global-frozen": {
-          "description": "\\[gf\\] Whether transfers of this asset are frozen for everyone.",
-          "type": "boolean"
         }
       }
     },

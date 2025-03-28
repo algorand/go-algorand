@@ -24,6 +24,7 @@ import (
 
 	"github.com/algorand/go-algorand/cmd/util/datadir"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/libgoal"
 )
 
@@ -33,6 +34,7 @@ var (
 	assetTotal              uint64
 	assetDecimals           uint32
 	assetFrozen             bool
+	assetGlobalFrozen       bool
 	assetUnitName           string
 	assetMetadataHashBase64 string
 	assetURL                string
@@ -114,9 +116,8 @@ func init() {
 	freezeAssetCmd.Flags().StringVar(&assetUnitName, "asset", "", "Unit name of the asset being frozen")
 	freezeAssetCmd.Flags().StringVar(&account, "account", "", "Account address to freeze/unfreeze")
 	freezeAssetCmd.Flags().BoolVar(&assetFrozen, "freeze", false, "Freeze or unfreeze")
+	freezeAssetCmd.Flags().BoolVar(&assetGlobalFrozen, "global-freeze", false, "Globally freeze or unfreeze")
 	freezeAssetCmd.MarkFlagRequired("freezer")
-	freezeAssetCmd.MarkFlagRequired("account")
-	freezeAssetCmd.MarkFlagRequired("freeze")
 
 	optinAssetCmd.Flags().StringVar(&assetUnitName, "asset", "", "Unit name of the asset being accepted")
 	optinAssetCmd.Flags().Uint64Var(&assetID, "assetid", 0, "ID of the asset being accepted")
@@ -608,13 +609,24 @@ var freezeAssetCmd = &cobra.Command{
 
 		freezer := accountList.getAddressByName(assetFreezer)
 		creatorResolved := accountList.getAddressByName(assetCreator)
-		accountResolved := accountList.getAddressByName(account)
 
 		lookupAssetID(cmd, creatorResolved, client)
 
-		tx, err := client.MakeUnsignedAssetFreezeTx(assetID, accountResolved, assetFrozen)
-		if err != nil {
-			reportErrorf("Cannot construct transaction: %s", err)
+		var tx transactions.Transaction
+		var err error
+
+		if account != "" {
+			accountResolved := accountList.getAddressByName(account)
+
+			tx, err = client.MakeUnsignedAssetFreezeTx(assetID, accountResolved, assetFrozen)
+			if err != nil {
+				reportErrorf("Cannot construct transaction: %s", err)
+			}
+		} else {
+			tx, err = client.MakeUnsignedAssetGlobalFreezeTx(assetID, assetGlobalFrozen)
+			if err != nil {
+				reportErrorf("Cannot construct transaction: %s", err)
+			}
 		}
 
 		tx.Note = parseNoteField(cmd)
@@ -806,6 +818,7 @@ var infoAssetCmd = &cobra.Command{
 		fmt.Printf("Issued:           %s %s\n", assetDecimalsFmt(asset.Params.Total-res.Amount, asset.Params.Decimals), derefString(asset.Params.UnitName))
 		fmt.Printf("Decimals:         %d\n", asset.Params.Decimals)
 		fmt.Printf("Default frozen:   %v\n", derefBool(asset.Params.DefaultFrozen))
+		fmt.Printf("Global frozen:    %v\n", derefBool(asset.Params.GlobalFrozen))
 		fmt.Printf("Manager address:  %s\n", derefString(asset.Params.Manager))
 		if reserveEmpty {
 			fmt.Printf("Reserve address:  %s (Empty. Defaulting to creator)\n", derefString(asset.Params.Reserve))

@@ -849,6 +849,20 @@ func (c *Client) MakeUnsignedAssetFreezeTx(index uint64, accountToChange string,
 	return tx, nil
 }
 
+// MakeUnsignedAssetGlobalFreezeTx creates a tx template for globally freezing an asset.
+//
+// Call FillUnsignedTxTemplate afterwards to fill out common fields in
+// the resulting transaction template.
+func (c *Client) MakeUnsignedAssetGlobalFreezeTx(index uint64, newFreezeSetting bool) (transactions.Transaction, error) {
+	var tx transactions.Transaction
+
+	tx.Type = protocol.AssetFreezeTx
+	tx.FreezeAsset = basics.AssetIndex(index)
+	tx.GlobalFrozen = newFreezeSetting
+
+	return tx, nil
+}
+
 // GroupID computes the group ID for a group of transactions.
 func (c *Client) GroupID(txgroup []transactions.Transaction) (gid crypto.Digest, err error) {
 	var group transactions.TxGroup

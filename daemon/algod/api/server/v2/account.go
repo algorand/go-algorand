@@ -255,6 +255,10 @@ func AccountToAccountData(a *model.Account) (basics.AccountData, error) {
 			if ca.Params.DefaultFrozen != nil {
 				defaultFrozen = *ca.Params.DefaultFrozen
 			}
+			var globalFrozen bool
+			if ca.Params.GlobalFrozen != nil {
+				globalFrozen = *ca.Params.GlobalFrozen
+			}
 			var url string
 			if ca.Params.Url != nil {
 				url = *ca.Params.Url
@@ -272,6 +276,7 @@ func AccountToAccountData(a *model.Account) (basics.AccountData, error) {
 				Total:         ca.Params.Total,
 				Decimals:      uint32(ca.Params.Decimals),
 				DefaultFrozen: defaultFrozen,
+				GlobalFrozen:  globalFrozen,
 				UnitName:      unitName,
 				AssetName:     name,
 				URL:           url,
@@ -483,11 +488,13 @@ func AppLocalState(state basics.AppLocalState, appIdx basics.AppIndex) model.App
 // AssetParamsToAsset converts basics.AssetParams to model.Asset
 func AssetParamsToAsset(creator string, idx basics.AssetIndex, params *basics.AssetParams) model.Asset {
 	frozen := params.DefaultFrozen
+	globalFrozen := params.GlobalFrozen
 	assetParams := model.AssetParams{
 		Creator:       creator,
 		Total:         params.Total,
 		Decimals:      uint64(params.Decimals),
 		DefaultFrozen: &frozen,
+		GlobalFrozen:  &globalFrozen,
 		Name:          omitEmpty(printableUTF8OrEmpty(params.AssetName)),
 		NameB64:       sliceOrNil([]byte(params.AssetName)),
 		UnitName:      omitEmpty(printableUTF8OrEmpty(params.UnitName)),
