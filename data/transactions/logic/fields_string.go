@@ -171,12 +171,13 @@ func _() {
 	_ = x[AppExtraProgramPages-6]
 	_ = x[AppCreator-7]
 	_ = x[AppAddress-8]
-	_ = x[invalidAppParamsField-9]
+	_ = x[AppVersion-9]
+	_ = x[invalidAppParamsField-10]
 }
 
-const _AppParamsField_name = "AppApprovalProgramAppClearStateProgramAppGlobalNumUintAppGlobalNumByteSliceAppLocalNumUintAppLocalNumByteSliceAppExtraProgramPagesAppCreatorAppAddressinvalidAppParamsField"
+const _AppParamsField_name = "AppApprovalProgramAppClearStateProgramAppGlobalNumUintAppGlobalNumByteSliceAppLocalNumUintAppLocalNumByteSliceAppExtraProgramPagesAppCreatorAppAddressAppVersioninvalidAppParamsField"
 
-var _AppParamsField_index = [...]uint8{0, 18, 38, 54, 75, 90, 110, 130, 140, 150, 171}
+var _AppParamsField_index = [...]uint8{0, 18, 38, 54, 75, 90, 110, 130, 140, 150, 160, 181}
 
 func (i AppParamsField) String() string {
 	if i < 0 || i >= AppParamsField(len(_AppParamsField_index)-1) {

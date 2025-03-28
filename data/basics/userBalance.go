@@ -274,6 +274,7 @@ type AppParams struct {
 	GlobalState       TealKeyValue `codec:"gs"`
 	StateSchemas
 	ExtraProgramPages uint32 `codec:"epp"`
+	Version           uint64 `codec:"v"`
 }
 
 // StateSchemas is a thin wrapper around the LocalStateSchema and the

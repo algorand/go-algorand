@@ -2962,6 +2962,8 @@ func (cx *EvalContext) appParamsToValue(params *basics.AppParams, fs appParamsFi
 		sv.Uint = params.LocalStateSchema.NumByteSlice
 	case AppExtraProgramPages:
 		sv.Uint = uint64(params.ExtraProgramPages)
+	case AppVersion:
+		sv.Uint = params.Version
 	default:
 		// The pseudo fields AppCreator and AppAddress are handled before this method
 		return sv, fmt.Errorf("invalid app_params_get field %d", fs.field)

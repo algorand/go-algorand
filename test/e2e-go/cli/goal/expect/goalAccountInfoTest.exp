@@ -136,8 +136,8 @@ Held Assets:
 \tID $CCOIN_ASSET_ID, C-Coin, balance 1000 units
 \tID $DCOIN_ASSET_ID, D-Coin, balance 10.00 $DCOIN_UNIT_NAME (frozen)
 Created Apps:
-\tID $GSTATE_APP_ID, $GSTATE_EXTRA_PAGES extra pages, global state used 0/0 uints, 1/$GSTATE_GLOBAL_BYTE_SLICES byte slices
-\tID $LSTATE_APP_ID, global state used 0/0 uints, 0/$LSTATE_GLOBAL_BYTE_SLICES byte slices
+\tID $GSTATE_APP_ID, $GSTATE_EXTRA_PAGES extra pages, global state used 0/0 uints, 1/$GSTATE_GLOBAL_BYTE_SLICES byte slices, version 0
+\tID $LSTATE_APP_ID, global state used 0/0 uints, 0/$LSTATE_GLOBAL_BYTE_SLICES byte slices, version 0
 Opted In Apps:
 \tID $LSTATE_APP_ID, local state used 0/1 uints, 1/$LSTATE_LOCAL_BYTE_SLICES byte slices
 Minimum Balance:\t1578500 microAlgos"

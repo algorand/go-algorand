@@ -181,6 +181,7 @@ func RandomAppParams() basics.AppParams {
 		GlobalState:       make(basics.TealKeyValue),
 		StateSchemas:      schemas,
 		ExtraProgramPages: uint32(crypto.RandUint64() % 4),
+		Version:           crypto.RandUint64() % 10,
 	}
 	if len(ap.ApprovalProgram) > 0 {
 		crypto.RandBytes(ap.ApprovalProgram[:])
@@ -227,7 +228,6 @@ func RandomAppParams() basics.AppParams {
 	if len(ap.GlobalState) == 0 {
 		ap.GlobalState = nil
 	}
-	ap.ExtraProgramPages = uint32(crypto.RandUint64() % 4)
 	return ap
 }
 

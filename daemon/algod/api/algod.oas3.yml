@@ -1457,6 +1457,10 @@
           },
           "local-state-schema": {
             "$ref": "#/components/schemas/ApplicationStateSchema"
+          },
+          "version": {
+            "description": "\\[v\\] the number of updates to the application programs",
+            "type": "integer"
           }
         },
         "required": [

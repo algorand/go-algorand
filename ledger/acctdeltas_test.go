@@ -3386,6 +3386,7 @@ func randomAppResourceData() trackerdb.ResourcesData {
 		GlobalStateSchemaNumUint:      crypto.RandUint64(),
 		GlobalStateSchemaNumByteSlice: crypto.RandUint64(),
 		ExtraProgramPages:             uint32(crypto.RandUint63() % uint64(math.MaxUint32)),
+		Version:                       crypto.RandUint64(),
 
 		ResourceFlags: 255,
 		UpdateRound:   crypto.RandUint64(),
