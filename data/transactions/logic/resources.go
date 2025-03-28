@@ -280,6 +280,42 @@ func (cx *EvalContext) allowsAssetFreeze(hdr *transactions.Header, tx *transacti
 }
 
 func (r *resources) fillApplicationCall(ep *EvalParams, hdr *transactions.Header, tx *transactions.ApplicationCallTxnFields) {
+	if len(tx.Access) > 0 {
+		r.fillApplicationCallAccess(ep, hdr, tx)
+	} else {
+		r.fillApplicationCallForeign(ep, hdr, tx)
+	}
+}
+
+func (r *resources) fillApplicationCallAccess(ep *EvalParams, hdr *transactions.Header, tx *transactions.ApplicationCallTxnFields) {
+	// The only implicitly available things are the sender, the app, and the sender's locals
+	r.sharedAccounts[hdr.Sender] = struct{}{}
+	if tx.ApplicationID != 0 {
+		r.sharedApps[tx.ApplicationID] = struct{}{}
+		r.shareLocal(hdr.Sender, tx.ApplicationID)
+	}
+
+	// Access is a explicit list of resources that should be made "available"
+	for _, rr := range tx.Access {
+		switch {
+		case !rr.Address.IsZero():
+			r.sharedAccounts[rr.Address] = struct{}{}
+		case rr.Asset != 0:
+			r.sharedAsas[rr.Asset] = struct{}{}
+		case rr.App != 0:
+			r.sharedApps[rr.App] = struct{}{}
+		case !rr.Holding.Empty():
+			address, asset := tx.AccessHolding(rr.Holding)
+			r.shareHolding(address, asset)
+		case !rr.Locals.Empty():
+			address, app := tx.AccessLocals(rr.Locals)
+			r.shareLocal(address, app)
+		case !rr.Box.Empty():
+		}
+	}
+}
+
+func (r *resources) fillApplicationCallForeign(ep *EvalParams, hdr *transactions.Header, tx *transactions.ApplicationCallTxnFields) {
 	txAccounts := make([]basics.Address, 0, 2+len(tx.Accounts)+len(tx.ForeignApps))
 	txAccounts = append(txAccounts, hdr.Sender)
 	txAccounts = append(txAccounts, tx.Accounts...)

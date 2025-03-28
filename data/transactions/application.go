@@ -197,12 +197,44 @@ type ResourceRef struct {
 	Box     BoxRef            `codec:"b"`
 }
 
+// wellFormed checks that a ResourceRef is of only one kind (or none, all could be empty)
+func (rr ResourceRef) wellFormed() bool {
+	// Count the number of non-empty fields
+	count := 0
+	if !rr.Address.IsZero() {
+		count++
+	}
+	if rr.Asset != 0 {
+		count++
+	}
+	if rr.App != 0 {
+		count++
+	}
+	if !rr.Holding.Empty() {
+		count++
+	}
+	if !rr.Locals.Empty() {
+		count++
+	}
+	if !rr.Box.Empty() {
+		count++
+	}
+	return count <= 1
+}
+
 // HoldingRef names a holding by referring to an Address and Asset that appear
 // earlier in the Access list (0 is special cased)
 type HoldingRef struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 	Address uint64   `codec:"d"` // 0=Sender,n-1=index into the Access list, which must be an Address
 	Asset   uint64   `codec:"s"` // n-1=index into the Access list, which must be an Asset
+}
+
+// Empty does the obvious. An empty HoldingRef has no meaning, since we define
+// hr.Asset to be a 1-based index for consistency with LocalRef (which does it
+// because 0 means "this app")
+func (hr HoldingRef) Empty() bool {
+	return hr.Address == 0 && hr.Asset == 0
 }
 
 // LocalsRef names a local state by referring to an Address and App that appear
@@ -213,12 +245,26 @@ type LocalsRef struct {
 	App     uint64   `codec:"p"` // 0=ApplicationID,n-1=index into the Access list, which must be an App
 }
 
+// Empty does the obvious. An empty LocalsRef makes no sense, because it would
+// mean "give access to the sender's locals for this app", which is implicit.
+func (lr LocalsRef) Empty() bool {
+	return lr.Address == 0 && lr.App == 0
+}
+
 // BoxRef names a box by the slot. In the Boxes field, `i` is an index into
 // ForeignApps. As an entry in Access, `i` is a index into Access itself.
 type BoxRef struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 	Index   uint64   `codec:"i"`
 	Name    []byte   `codec:"n,allocbound=config.MaxBytesKeyValueLen"`
+}
+
+// Empty does the obvious. But the meaning is not obvious. An empty BoxRef just
+// adds to the read/write quota of the transaction. In tx.Access, _any_ empty
+// ResourceRef bumps the read/write quota. (We cannot distinguish the type when
+// all are empty.)
+func (br BoxRef) Empty() bool {
+	return br.Index == 0 && br.Name == nil
 }
 
 // Empty indicates whether or not all the fields in the
@@ -401,12 +447,25 @@ func (ac ApplicationCallTxnFields) wellFormed(proto config.ConsensusParams) erro
 
 // AddressByIndex converts an integer index into an address associated with the
 // transaction. Index 0 corresponds to the transaction sender, and an index > 0
-// corresponds to an offset into txn.Accounts. Returns an error if the index is
+// corresponds to an offset into txn.Accounts or txn.Access. Returns an error if the index is
 // not valid.
 func (ac *ApplicationCallTxnFields) AddressByIndex(accountIdx uint64, sender basics.Address) (basics.Address, error) {
 	// Index 0 always corresponds to the sender
 	if accountIdx == 0 {
 		return sender, nil
+	}
+
+	if ac.Access != nil {
+		// An index > 0 corresponds to an offset into txn.Access. Check to
+		// make sure the index is valid.
+		if accountIdx > uint64(len(ac.Access)) {
+			return basics.Address{}, fmt.Errorf("address reference %d outside tx.Access", accountIdx)
+		}
+		rr := ac.Access[accountIdx-1]
+		if rr.Address.IsZero() {
+			return basics.Address{}, fmt.Errorf("address reference %d is not an Address in tx.Access", accountIdx)
+		}
+		return rr.Address, nil
 	}
 
 	// An index > 0 corresponds to an offset into txn.Accounts. Check to
