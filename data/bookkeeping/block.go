@@ -262,6 +262,59 @@ type (
 	}
 )
 
+// TxnDeadError defines an error type which indicates a transaction is outside of the
+// round validity window.
+type TxnDeadError struct {
+	Round      basics.Round
+	FirstValid basics.Round
+	LastValid  basics.Round
+	Early      bool
+}
+
+func (err *TxnDeadError) Error() string {
+	return fmt.Sprintf("txn dead: round %d outside of %d--%d", err.Round, err.FirstValid, err.LastValid)
+}
+
+// Alive checks to see if the transaction is still alive (can be applied) at the specified Round.
+func (bh BlockHeader) Alive(tx transactions.Header) error {
+	// Check round validity
+	round := bh.Round
+	if round < tx.FirstValid || round > tx.LastValid {
+		return &TxnDeadError{
+			Round:      round,
+			FirstValid: tx.FirstValid,
+			LastValid:  tx.LastValid,
+			Early:      round < tx.FirstValid,
+		}
+	}
+
+	// Check genesis ID
+	proto := config.Consensus[bh.CurrentProtocol]
+	genesisID := bh.GenesisID
+	if tx.GenesisID != "" && tx.GenesisID != genesisID {
+		return fmt.Errorf("tx.GenesisID <%s> does not match expected <%s>",
+			tx.GenesisID, genesisID)
+	}
+
+	// Check genesis hash
+	if proto.SupportGenesisHash {
+		genesisHash := bh.GenesisHash
+		if tx.GenesisHash != (crypto.Digest{}) && tx.GenesisHash != genesisHash {
+			return fmt.Errorf("tx.GenesisHash <%s> does not match expected <%s>",
+				tx.GenesisHash, genesisHash)
+		}
+		if proto.RequireGenesisHash && tx.GenesisHash == (crypto.Digest{}) {
+			return fmt.Errorf("required tx.GenesisHash is missing")
+		}
+	} else {
+		if tx.GenesisHash != (crypto.Digest{}) {
+			return fmt.Errorf("tx.GenesisHash <%s> not allowed", tx.GenesisHash)
+		}
+	}
+
+	return nil
+}
+
 // Hash returns the hash of a block header.
 // The hash of a block is the hash of its header.
 func (bh BlockHeader) Hash() BlockHash {

@@ -421,7 +421,7 @@ func (handler *TxHandler) checkReportErrors(err error) {
 	case *ledgercore.TxnNotWellFormedError:
 		transactionMessageTxPoolCheckCounter.Add(txPoolRememberTagTxnNotWellFormed, 1)
 		return
-	case *transactions.TxnDeadError:
+	case *bookkeeping.TxnDeadError:
 		if err.Early {
 			transactionMessageTxPoolCheckCounter.Add(txPoolRememberTagTxnEarly, 1)
 		} else {
@@ -483,7 +483,7 @@ func (handler *TxHandler) rememberReportErrors(err error) {
 	case *pools.ErrTxPoolFeeError:
 		transactionMessageTxPoolRememberCounter.Add(txPoolRememberTagFee, 1)
 		return
-	case *transactions.TxnDeadError:
+	case *bookkeeping.TxnDeadError:
 		if err.Early {
 			transactionMessageTxPoolRememberCounter.Add(txPoolRememberTagTxnEarly, 1)
 		} else {

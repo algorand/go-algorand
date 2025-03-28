@@ -21,13 +21,11 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"slices"
 	"sync"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -288,287 +286,80 @@ func (tx Header) TxFee() basics.MicroAlgos {
 	return tx.Fee
 }
 
-// Alive checks to see if the transaction is still alive (can be applied) at the specified Round.
-func (tx Header) Alive(tc TxnContext) error {
-	// Check round validity
-	round := tc.Round()
-	if round < tx.FirstValid || round > tx.LastValid {
-		return &TxnDeadError{
-			Round:      round,
-			FirstValid: tx.FirstValid,
-			LastValid:  tx.LastValid,
-			Early:      round < tx.FirstValid,
-		}
+// MatchAddress checks if the transaction touches a given address.  The feesink
+// and rewards pool are not considered matches.
+func (tx Transaction) MatchAddress(addr basics.Address) bool {
+	if addr == tx.Sender {
+		return true
 	}
 
-	// Check genesis ID
-	proto := tc.ConsensusProtocol()
-	genesisID := tc.GenesisID()
-	if tx.GenesisID != "" && tx.GenesisID != genesisID {
-		return fmt.Errorf("tx.GenesisID <%s> does not match expected <%s>",
-			tx.GenesisID, genesisID)
+	switch tx.Type {
+	case protocol.PaymentTx:
+		if addr == tx.PaymentTxnFields.Receiver {
+			return true
+		}
+		if !tx.PaymentTxnFields.CloseRemainderTo.IsZero() &&
+			addr == tx.PaymentTxnFields.CloseRemainderTo {
+			return true
+		}
+	case protocol.AssetTransferTx:
+		if addr == tx.AssetTransferTxnFields.AssetReceiver {
+			return true
+		}
+		if !tx.AssetTransferTxnFields.AssetCloseTo.IsZero() &&
+			addr == tx.AssetTransferTxnFields.AssetCloseTo {
+			return true
+		}
+		if !tx.AssetTransferTxnFields.AssetSender.IsZero() &&
+			addr == tx.AssetTransferTxnFields.AssetSender {
+			return true
+		}
+	case protocol.HeartbeatTx:
+		if addr == tx.HeartbeatTxnFields.HbAddress {
+			return true
+		}
 	}
-
-	// Check genesis hash
-	if proto.SupportGenesisHash {
-		genesisHash := tc.GenesisHash()
-		if tx.GenesisHash != (crypto.Digest{}) && tx.GenesisHash != genesisHash {
-			return fmt.Errorf("tx.GenesisHash <%s> does not match expected <%s>",
-				tx.GenesisHash, genesisHash)
-		}
-		if proto.RequireGenesisHash && tx.GenesisHash == (crypto.Digest{}) {
-			return fmt.Errorf("required tx.GenesisHash is missing")
-		}
-	} else {
-		if tx.GenesisHash != (crypto.Digest{}) {
-			return fmt.Errorf("tx.GenesisHash <%s> not allowed", tx.GenesisHash)
-		}
-	}
-
-	return nil
+	return false
 }
-
-// MatchAddress checks if the transaction touches a given address.
-func (tx Transaction) MatchAddress(addr basics.Address, spec SpecialAddresses) bool {
-	return slices.Contains(tx.relevantAddrs(spec), addr)
-}
-
-var errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound = errors.New("transaction first voting round need to be less than its last voting round")
-var errKeyregTxnNonCoherentVotingKeys = errors.New("the following transaction fields need to be clear/set together : votekey, selkey, votekd")
-var errKeyregTxnOfflineTransactionHasVotingRounds = errors.New("on going offline key registration transaction, the vote first and vote last fields should not be set")
-var errKeyregTxnUnsupportedSwitchToNonParticipating = errors.New("transaction tries to mark an account as nonparticipating, but that transaction is not supported")
-var errKeyregTxnGoingOnlineWithNonParticipating = errors.New("transaction tries to register keys to go online, but nonparticipatory flag is set")
-var errKeyregTxnGoingOnlineWithZeroVoteLast = errors.New("transaction tries to register keys to go online, but vote last is set to zero")
-var errKeyregTxnGoingOnlineWithFirstVoteAfterLastValid = errors.New("transaction tries to register keys to go online, but first voting round is beyond the round after last valid round")
-var errKeyRegEmptyStateProofPK = errors.New("online keyreg transaction cannot have empty field StateProofPK")
-var errKeyregTxnNotEmptyStateProofPK = errors.New("transaction field StateProofPK should be empty in this consensus version")
-var errKeyregTxnNonParticipantShouldBeEmptyStateProofPK = errors.New("non participation keyreg transactions should contain empty stateProofPK")
-var errKeyregTxnOfflineShouldBeEmptyStateProofPK = errors.New("offline keyreg transactions should contain empty stateProofPK")
-var errKeyRegTxnValidityPeriodTooLong = errors.New("validity period for keyreg transaction is too long")
-var errStateProofNotSupported = errors.New("state proofs not supported")
-var errBadSenderInStateProofTxn = errors.New("sender must be the state-proof sender")
-var errFeeMustBeZeroInStateproofTxn = errors.New("fee must be zero in state-proof transaction")
-var errNoteMustBeEmptyInStateproofTxn = errors.New("note must be empty in state-proof transaction")
-var errGroupMustBeZeroInStateproofTxn = errors.New("group must be zero in state-proof transaction")
-var errRekeyToMustBeZeroInStateproofTxn = errors.New("rekey must be zero in state-proof transaction")
-var errLeaseMustBeZeroInStateproofTxn = errors.New("lease must be zero in state-proof transaction")
 
 // WellFormed checks that the transaction looks reasonable on its own (but not necessarily valid against the actual ledger). It does not check signatures.
 func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusParams) error {
 	switch tx.Type {
 	case protocol.PaymentTx:
-		// in case that the fee sink is spending, check that this spend is to a valid address
-		err := tx.checkSpender(tx.Header, spec, proto)
+		err := tx.PaymentTxnFields.wellFormed(tx.Header, spec, proto)
 		if err != nil {
 			return err
 		}
 
 	case protocol.KeyRegistrationTx:
-		if proto.EnableKeyregCoherencyCheck {
-			// ensure that the VoteLast is greater or equal to the VoteFirst
-			if tx.KeyregTxnFields.VoteFirst > tx.KeyregTxnFields.VoteLast {
-				return errKeyregTxnFirstVotingRoundGreaterThanLastVotingRound
-			}
-
-			// The trio of [VotePK, SelectionPK, VoteKeyDilution] needs to be all zeros or all non-zero for the transaction to be valid.
-			if !((tx.KeyregTxnFields.VotePK.IsEmpty() && tx.KeyregTxnFields.SelectionPK.IsEmpty() && tx.KeyregTxnFields.VoteKeyDilution == 0) ||
-				(!tx.KeyregTxnFields.VotePK.IsEmpty() && !tx.KeyregTxnFields.SelectionPK.IsEmpty() && tx.KeyregTxnFields.VoteKeyDilution != 0)) {
-				return errKeyregTxnNonCoherentVotingKeys
-			}
-
-			// if it's a going offline transaction
-			if tx.KeyregTxnFields.VoteKeyDilution == 0 {
-				// check that we don't have any VoteFirst/VoteLast fields.
-				if tx.KeyregTxnFields.VoteFirst != 0 || tx.KeyregTxnFields.VoteLast != 0 {
-					return errKeyregTxnOfflineTransactionHasVotingRounds
-				}
-			} else {
-				// going online
-				if tx.KeyregTxnFields.VoteLast == 0 {
-					return errKeyregTxnGoingOnlineWithZeroVoteLast
-				}
-				if tx.KeyregTxnFields.VoteFirst > tx.LastValid+1 {
-					return errKeyregTxnGoingOnlineWithFirstVoteAfterLastValid
-				}
-			}
-		}
-
-		// check that, if this tx is marking an account nonparticipating,
-		// it supplies no key (as though it were trying to go offline)
-		if tx.KeyregTxnFields.Nonparticipation {
-			if !proto.SupportBecomeNonParticipatingTransactions {
-				// if the transaction has the Nonparticipation flag high, but the protocol does not support
-				// that type of transaction, it is invalid.
-				return errKeyregTxnUnsupportedSwitchToNonParticipating
-			}
-			suppliesNullKeys := tx.KeyregTxnFields.VotePK.IsEmpty() || tx.KeyregTxnFields.SelectionPK.IsEmpty()
-			if !suppliesNullKeys {
-				return errKeyregTxnGoingOnlineWithNonParticipating
-			}
-		}
-
-		if err := tx.stateProofPKWellFormed(proto); err != nil {
+		err := tx.KeyregTxnFields.wellFormed(tx.Header, spec, proto)
+		if err != nil {
 			return err
 		}
 
-	case protocol.AssetConfigTx:
+	case protocol.AssetConfigTx, protocol.AssetTransferTx, protocol.AssetFreezeTx:
 		if !proto.Asset {
 			return fmt.Errorf("asset transaction not supported")
 		}
 
-	case protocol.AssetTransferTx:
-		if !proto.Asset {
-			return fmt.Errorf("asset transaction not supported")
-		}
-
-	case protocol.AssetFreezeTx:
-		if !proto.Asset {
-			return fmt.Errorf("asset transaction not supported")
-		}
 	case protocol.ApplicationCallTx:
 		if !proto.Application {
 			return fmt.Errorf("application transaction not supported")
 		}
 
-		// Ensure requested action is valid
-		switch tx.OnCompletion {
-		case NoOpOC, OptInOC, CloseOutOC, ClearStateOC, UpdateApplicationOC, DeleteApplicationOC:
-			/* ok */
-		default:
-			return fmt.Errorf("invalid application OnCompletion")
-		}
-
-		// Programs may only be set for creation or update
-		if tx.ApplicationID != 0 && tx.OnCompletion != UpdateApplicationOC {
-			if len(tx.ApprovalProgram) != 0 || len(tx.ClearStateProgram) != 0 {
-				return fmt.Errorf("programs may only be specified during application creation or update")
-			}
-		} else {
-			// This will check version matching, but not downgrading. That
-			// depends on chain state (so we pass an empty AppParams)
-			err := CheckContractVersions(tx.ApprovalProgram, tx.ClearStateProgram, basics.AppParams{}, &proto)
-			if err != nil {
-				return err
-			}
-		}
-
-		effectiveEPP := tx.ExtraProgramPages
-		// Schemas and ExtraProgramPages may only be set during application creation
-		if tx.ApplicationID != 0 {
-			if tx.LocalStateSchema != (basics.StateSchema{}) ||
-				tx.GlobalStateSchema != (basics.StateSchema{}) {
-				return fmt.Errorf("local and global state schemas are immutable")
-			}
-			if tx.ExtraProgramPages != 0 {
-				return fmt.Errorf("tx.ExtraProgramPages is immutable")
-			}
-
-			if proto.EnableExtraPagesOnAppUpdate {
-				effectiveEPP = uint32(proto.MaxExtraAppProgramPages)
-			}
-
-		}
-
-		// Limit total number of arguments
-		if len(tx.ApplicationArgs) > proto.MaxAppArgs {
-			return fmt.Errorf("too many application args, max %d", proto.MaxAppArgs)
-		}
-
-		// Sum up argument lengths
-		var argSum uint64
-		for _, arg := range tx.ApplicationArgs {
-			argSum = basics.AddSaturate(argSum, uint64(len(arg)))
-		}
-
-		// Limit total length of all arguments
-		if argSum > uint64(proto.MaxAppTotalArgLen) {
-			return fmt.Errorf("application args total length too long, max len %d bytes", proto.MaxAppTotalArgLen)
-		}
-
-		// Limit number of accounts referred to in a single ApplicationCall
-		if len(tx.Accounts) > proto.MaxAppTxnAccounts {
-			return fmt.Errorf("tx.Accounts too long, max number of accounts is %d", proto.MaxAppTxnAccounts)
-		}
-
-		// Limit number of other app global states referred to
-		if len(tx.ForeignApps) > proto.MaxAppTxnForeignApps {
-			return fmt.Errorf("tx.ForeignApps too long, max number of foreign apps is %d", proto.MaxAppTxnForeignApps)
-		}
-
-		if len(tx.ForeignAssets) > proto.MaxAppTxnForeignAssets {
-			return fmt.Errorf("tx.ForeignAssets too long, max number of foreign assets is %d", proto.MaxAppTxnForeignAssets)
-		}
-
-		if len(tx.Boxes) > proto.MaxAppBoxReferences {
-			return fmt.Errorf("tx.Boxes too long, max number of box references is %d", proto.MaxAppBoxReferences)
-		}
-
-		// Limit the sum of all types of references that bring in account records
-		if len(tx.Accounts)+len(tx.ForeignApps)+len(tx.ForeignAssets)+len(tx.Boxes) > proto.MaxAppTotalTxnReferences {
-			return fmt.Errorf("tx references exceed MaxAppTotalTxnReferences = %d", proto.MaxAppTotalTxnReferences)
-		}
-
-		if tx.ExtraProgramPages > uint32(proto.MaxExtraAppProgramPages) {
-			return fmt.Errorf("tx.ExtraProgramPages exceeds MaxExtraAppProgramPages = %d", proto.MaxExtraAppProgramPages)
-		}
-
-		lap := len(tx.ApprovalProgram)
-		lcs := len(tx.ClearStateProgram)
-		pages := int(1 + effectiveEPP)
-		if lap > pages*proto.MaxAppProgramLen {
-			return fmt.Errorf("approval program too long. max len %d bytes", pages*proto.MaxAppProgramLen)
-		}
-		if lcs > pages*proto.MaxAppProgramLen {
-			return fmt.Errorf("clear state program too long. max len %d bytes", pages*proto.MaxAppProgramLen)
-		}
-		if lap+lcs > pages*proto.MaxAppTotalProgramLen {
-			return fmt.Errorf("app programs too long. max total len %d bytes", pages*proto.MaxAppTotalProgramLen)
-		}
-
-		for i, br := range tx.Boxes {
-			// recall 0 is the current app so indexes are shifted, thus test is for greater than, not gte.
-			if br.Index > uint64(len(tx.ForeignApps)) {
-				return fmt.Errorf("tx.Boxes[%d].Index is %d. Exceeds len(tx.ForeignApps)", i, br.Index)
-			}
-			if proto.EnableBoxRefNameError && len(br.Name) > proto.MaxAppKeyLen {
-				return fmt.Errorf("tx.Boxes[%d].Name too long, max len %d bytes", i, proto.MaxAppKeyLen)
-			}
-		}
-
-		if tx.LocalStateSchema.NumEntries() > proto.MaxLocalSchemaEntries {
-			return fmt.Errorf("tx.LocalStateSchema too large, max number of keys is %d", proto.MaxLocalSchemaEntries)
-		}
-
-		if tx.GlobalStateSchema.NumEntries() > proto.MaxGlobalSchemaEntries {
-			return fmt.Errorf("tx.GlobalStateSchema too large, max number of keys is %d", proto.MaxGlobalSchemaEntries)
+		err := tx.ApplicationCallTxnFields.wellFormed(proto)
+		if err != nil {
+			return err
 		}
 
 	case protocol.StateProofTx:
 		if proto.StateProofInterval == 0 {
-			return errStateProofNotSupported
+			return fmt.Errorf("state proofs not supported")
 		}
 
-		// This is a placeholder transaction used to store state proofs
-		// on the ledger, and ensure they are broadly available.  Most of
-		// the fields must be empty.  It must be issued from a special
-		// sender address.
-		if tx.Sender != StateProofSender {
-			return errBadSenderInStateProofTxn
-		}
-		if !tx.Fee.IsZero() {
-			return errFeeMustBeZeroInStateproofTxn
-		}
-		if len(tx.Note) != 0 {
-			return errNoteMustBeEmptyInStateproofTxn
-		}
-		if !tx.Group.IsZero() {
-			return errGroupMustBeZeroInStateproofTxn
-		}
-		if !tx.RekeyTo.IsZero() {
-			return errRekeyToMustBeZeroInStateproofTxn
-		}
-		if tx.Lease != [32]byte{} {
-			return errLeaseMustBeZeroInStateproofTxn
+		err := tx.StateProofTxnFields.wellFormed(tx.Header)
+		if err != nil {
+			return err
 		}
 
 	case protocol.HeartbeatTx:
@@ -576,35 +367,9 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 			return fmt.Errorf("heartbeat transaction not supported")
 		}
 
-		// If this is a free/cheap heartbeat, it must be very simple.
-		if tx.Fee.Raw < proto.MinTxnFee && tx.Group.IsZero() {
-			kind := "free"
-			if tx.Fee.Raw > 0 {
-				kind = "cheap"
-			}
-
-			if len(tx.Note) > 0 {
-				return fmt.Errorf("tx.Note is set in %s heartbeat", kind)
-			}
-			if tx.Lease != [32]byte{} {
-				return fmt.Errorf("tx.Lease is set in %s heartbeat", kind)
-			}
-			if !tx.RekeyTo.IsZero() {
-				return fmt.Errorf("tx.RekeyTo is set in %s heartbeat", kind)
-			}
-		}
-
-		if (tx.HbProof == crypto.HeartbeatProof{}) {
-			return errors.New("tx.HbProof is empty")
-		}
-		if (tx.HbSeed == committee.Seed{}) {
-			return errors.New("tx.HbSeed is empty")
-		}
-		if tx.HbVoteID.IsEmpty() {
-			return errors.New("tx.HbVoteID is empty")
-		}
-		if tx.HbKeyDilution == 0 {
-			return errors.New("tx.HbKeyDilution is zero")
+		err := tx.HeartbeatTxnFields.wellFormed(tx.Header, proto)
+		if err != nil {
+			return err
 		}
 
 	default:
@@ -697,84 +462,6 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 	return nil
 }
 
-func (tx Transaction) stateProofPKWellFormed(proto config.ConsensusParams) error {
-	isEmpty := tx.KeyregTxnFields.StateProofPK.IsEmpty()
-	if !proto.EnableStateProofKeyregCheck {
-		// make certain empty key is stored.
-		if !isEmpty {
-			return errKeyregTxnNotEmptyStateProofPK
-		}
-		return nil
-	}
-
-	if proto.MaxKeyregValidPeriod != 0 && uint64(tx.VoteLast.SubSaturate(tx.VoteFirst)) > proto.MaxKeyregValidPeriod {
-		return errKeyRegTxnValidityPeriodTooLong
-	}
-
-	if tx.Nonparticipation {
-		// make certain that set offline request clears the stateProofPK.
-		if !isEmpty {
-			return errKeyregTxnNonParticipantShouldBeEmptyStateProofPK
-		}
-		return nil
-	}
-
-	if tx.VotePK.IsEmpty() || tx.SelectionPK.IsEmpty() {
-		if !isEmpty {
-			return errKeyregTxnOfflineShouldBeEmptyStateProofPK
-		}
-		return nil
-	}
-
-	// online transactions:
-	// setting online cannot set an empty stateProofPK
-	if isEmpty {
-		return errKeyRegEmptyStateProofPK
-	}
-
-	return nil
-}
-
-// Aux returns the note associated with this transaction
-func (tx Header) Aux() []byte {
-	return tx.Note
-}
-
-// First returns the first round this transaction is valid
-func (tx Header) First() basics.Round {
-	return tx.FirstValid
-}
-
-// Last returns the first round this transaction is valid
-func (tx Header) Last() basics.Round {
-	return tx.LastValid
-}
-
-// relevantAddrs returns the addresses whose balance records this transaction will need to access.
-func (tx Transaction) relevantAddrs(spec SpecialAddresses) []basics.Address {
-	addrs := []basics.Address{tx.Sender, spec.FeeSink}
-
-	switch tx.Type {
-	case protocol.PaymentTx:
-		addrs = append(addrs, tx.PaymentTxnFields.Receiver)
-		if !tx.PaymentTxnFields.CloseRemainderTo.IsZero() {
-			addrs = append(addrs, tx.PaymentTxnFields.CloseRemainderTo)
-		}
-	case protocol.AssetTransferTx:
-		addrs = append(addrs, tx.AssetTransferTxnFields.AssetReceiver)
-		if !tx.AssetTransferTxnFields.AssetCloseTo.IsZero() {
-			addrs = append(addrs, tx.AssetTransferTxnFields.AssetCloseTo)
-		}
-		if !tx.AssetTransferTxnFields.AssetSender.IsZero() {
-			addrs = append(addrs, tx.AssetTransferTxnFields.AssetSender)
-		}
-	case protocol.HeartbeatTx:
-		addrs = append(addrs, tx.HeartbeatTxnFields.HbAddress)
-	}
-
-	return addrs
-}
-
 // TxAmount returns the amount paid to the recipient in this payment
 func (tx Transaction) TxAmount() basics.MicroAlgos {
 	switch tx.Type {
@@ -809,17 +496,6 @@ func (tx Transaction) EstimateEncodedSize() int {
 		Sig: crypto.Signature{1},
 	}
 	return stx.GetEncodedLength()
-}
-
-// TxnContext describes the context in which a transaction can appear
-// (pretty much, a block, but we don't have the definition of a block
-// here, since that would be a circular dependency).  This is used to
-// decide if a transaction is alive or not.
-type TxnContext interface {
-	Round() basics.Round
-	ConsensusProtocol() config.ConsensusParams
-	GenesisID() string
-	GenesisHash() crypto.Digest
 }
 
 // ProgramVersion extracts the version of an AVM program from its bytecode
@@ -877,33 +553,4 @@ func CheckContractVersions(approval []byte, clear []byte, previous basics.AppPar
 		}
 	}
 	return nil
-}
-
-// ExplicitTxnContext is a struct that implements TxnContext with
-// explicit fields for everything.
-type ExplicitTxnContext struct {
-	ExplicitRound basics.Round
-	Proto         config.ConsensusParams
-	GenID         string
-	GenHash       crypto.Digest
-}
-
-// Round implements the TxnContext interface
-func (tc ExplicitTxnContext) Round() basics.Round {
-	return tc.ExplicitRound
-}
-
-// ConsensusProtocol implements the TxnContext interface
-func (tc ExplicitTxnContext) ConsensusProtocol() config.ConsensusParams {
-	return tc.Proto
-}
-
-// GenesisID implements the TxnContext interface
-func (tc ExplicitTxnContext) GenesisID() string {
-	return tc.GenID
-}
-
-// GenesisHash implements the TxnContext interface
-func (tc ExplicitTxnContext) GenesisHash() crypto.Digest {
-	return tc.GenHash
 }

@@ -1069,3 +1069,45 @@ func TestFirstYearsBonus(t *testing.T) {
 	// declined to about 72% (but foundation funding probably gone anyway)
 	a.InDelta(0.72, float64(bonus)/float64(plan.BaseAmount), 0.01)
 }
+
+func TestAlive(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	bh := BlockHeader{
+		Round:       0,
+		GenesisHash: crypto.Digest{0x42},
+	}
+	bh.CurrentProtocol = protocol.ConsensusCurrentVersion
+
+	header := transactions.Header{
+		FirstValid:  5000,
+		LastValid:   5050,
+		GenesisID:   bh.GenesisID,
+		GenesisHash: bh.GenesisHash,
+	}
+
+	bh.Round = header.FirstValid + 1
+	if err := bh.Alive(header); err != nil {
+		t.Errorf("transaction not alive during lifetime %v", err)
+	}
+
+	bh.Round = header.FirstValid
+	if err := bh.Alive(header); err != nil {
+		t.Errorf("transaction not alive at issuance %v", err)
+	}
+
+	bh.Round = header.LastValid
+	if err := bh.Alive(header); err != nil {
+		t.Errorf("transaction not alive at expiry %v", err)
+	}
+
+	bh.Round = header.FirstValid - 1
+	if bh.Alive(header) == nil {
+		t.Errorf("premature transaction alive %v", header)
+	}
+
+	bh.Round = header.LastValid + 1
+	if bh.Alive(header) == nil {
+		t.Errorf("expired transaction alive %v", header)
+	}
+}

@@ -23,22 +23,22 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func preparePayset(txnCount, acctCount int) Payset {
-	_, stxns, _, _ := generateTestObjects(txnCount, acctCount)
-	var stxnb []SignedTxnInBlock
-	for _, stxn := range stxns {
-		stxnb = append(stxnb, SignedTxnInBlock{
+func generatePayset(txnCount, acctCount int) Payset {
+	stxnb := make([]SignedTxnInBlock, txnCount)
+	for i, stxn := range generateSignedTxns(txnCount, acctCount) {
+		stxnb[i] = SignedTxnInBlock{
 			SignedTxnWithAD: SignedTxnWithAD{
 				SignedTxn: stxn,
 			},
-		})
+		}
 	}
 	return Payset(stxnb)
 }
+
 func TestPaysetCommitsToTxnOrder(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	payset := preparePayset(50, 50)
+	payset := generatePayset(50, 50)
 	commit1 := payset.CommitFlat()
 	payset[0], payset[1] = payset[1], payset[0]
 	commit2 := payset.CommitFlat()
@@ -63,8 +63,7 @@ func TestEmptyPaysetCommitment(t *testing.T) {
 }
 
 func BenchmarkCommit(b *testing.B) {
-	payset := preparePayset(5000, 50)
-
+	payset := generatePayset(5000, 50)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		payset.CommitFlat()
@@ -73,7 +72,7 @@ func BenchmarkCommit(b *testing.B) {
 }
 
 func BenchmarkToBeHashed(b *testing.B) {
-	payset := preparePayset(5000, 50)
+	payset := generatePayset(5000, 50)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		payset.ToBeHashed()

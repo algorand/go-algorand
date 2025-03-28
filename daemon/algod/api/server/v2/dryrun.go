@@ -17,7 +17,6 @@
 package v2
 
 import (
-	"encoding/base64"
 	"fmt"
 	"strings"
 
@@ -559,21 +558,8 @@ func doDryrunRequest(dr *DryrunRequest, response *model.DryrunResponse) {
 				}
 				result.Disassembly = debug.lines
 				result.AppCallTrace = &debug.history
-				result.GlobalDelta = StateDeltaToStateDelta(delta.GlobalDelta)
-				if len(delta.LocalDeltas) > 0 {
-					localDeltas := make([]model.AccountStateDelta, 0, len(delta.LocalDeltas))
-					for k, v := range delta.LocalDeltas {
-						ldaddr, err2 := stxn.Txn.AddressByIndex(k, stxn.Txn.Sender)
-						if err2 != nil {
-							messages = append(messages, err2.Error())
-						}
-						localDeltas = append(localDeltas, model.AccountStateDelta{
-							Address: ldaddr.String(),
-							Delta:   *StateDeltaToStateDelta(v),
-						})
-					}
-					result.LocalDeltas = &localDeltas
-				}
+				result.GlobalDelta = sliceOrNil(globalDeltaToStateDelta(delta.GlobalDelta))
+				result.LocalDeltas = sliceOrNil(localDeltasToLocalDeltas(delta, &stxn.Txn))
 
 				// ensure the program has not exceeded execution budget
 				cost := maxCurrentBudget - pooledAppBudget
@@ -618,33 +604,6 @@ func doDryrunRequest(dr *DryrunRequest, response *model.DryrunResponse) {
 		}
 		response.Txns[ti] = result
 	}
-}
-
-// StateDeltaToStateDelta converts basics.StateDelta to model.StateDelta
-func StateDeltaToStateDelta(sd basics.StateDelta) *model.StateDelta {
-	if len(sd) == 0 {
-		return nil
-	}
-
-	gsd := make(model.StateDelta, 0, len(sd))
-	for k, v := range sd {
-		value := model.EvalDelta{Action: uint64(v.Action)}
-		if v.Action == basics.SetBytesAction {
-			bytesVal := base64.StdEncoding.EncodeToString([]byte(v.Bytes))
-			value.Bytes = &bytesVal
-		} else if v.Action == basics.SetUintAction {
-			uintVal := v.Uint
-			value.Uint = &uintVal
-		}
-		// basics.DeleteAction does not require Uint/Bytes
-		kv := model.EvalDeltaKeyValue{
-			Key:   base64.StdEncoding.EncodeToString([]byte(k)),
-			Value: value,
-		}
-		gsd = append(gsd, kv)
-	}
-
-	return &gsd
 }
 
 // DeltaLogToLog base64 encode the logs

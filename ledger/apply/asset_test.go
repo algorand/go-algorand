@@ -24,6 +24,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -31,15 +32,9 @@ import (
 func TestAssetTransfer(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	// Creator
-	secretSrc := keypair()
-	src := basics.Address(secretSrc.SignatureVerifier)
-
-	secretDst := keypair()
-	dst := basics.Address(secretDst.SignatureVerifier)
-
-	secretCls := keypair()
-	cls := basics.Address(secretCls.SignatureVerifier)
+	src := ledgertesting.RandomAddress()
+	dst := ledgertesting.RandomAddress()
+	cls := ledgertesting.RandomAddress()
 
 	var total, toSend, dstAmount uint64
 	total = 1000000

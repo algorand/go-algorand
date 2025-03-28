@@ -118,7 +118,7 @@ type LedgerForAPI interface {
 	GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error)
 	EncodedBlockCert(rnd basics.Round) (blk []byte, cert []byte, err error)
 	Block(rnd basics.Round) (blk bookkeeping.Block, err error)
-	AddressTxns(id basics.Address, r basics.Round) ([]transactions.SignedTxnWithAD, error)
+	TxnsFrom(id basics.Address, r basics.Round) ([]transactions.Transaction, error)
 	GetStateDeltaForRound(rnd basics.Round) (ledgercore.StateDelta, error)
 	GetTracer() logic.EvalTracer
 }
@@ -229,18 +229,18 @@ func GetStateProofTransactionForRound(ctx context.Context, txnFetcher LedgerForA
 		default:
 		}
 
-		txns, err := txnFetcher.AddressTxns(transactions.StateProofSender, i)
+		txns, err := txnFetcher.TxnsFrom(transactions.StateProofSender, i)
 		if err != nil {
 			return transactions.Transaction{}, err
 		}
 		for _, txn := range txns {
-			if txn.Txn.Type != protocol.StateProofTx {
+			if txn.Type != protocol.StateProofTx {
 				continue
 			}
 
-			if txn.Txn.StateProofTxnFields.Message.FirstAttestedRound <= uint64(round) &&
-				uint64(round) <= txn.Txn.StateProofTxnFields.Message.LastAttestedRound {
-				return txn.Txn, nil
+			if txn.StateProofTxnFields.Message.FirstAttestedRound <= uint64(round) &&
+				uint64(round) <= txn.StateProofTxnFields.Message.LastAttestedRound {
+				return txn, nil
 			}
 		}
 	}
@@ -1574,7 +1574,8 @@ func (v2 *Handlers) PendingTransactionInformation(ctx echo.Context, txid string,
 		response.CloseRewards = &txn.ApplyData.CloseRewards.Raw
 		response.AssetIndex = computeAssetIndexFromTxn(txn, v2.Node.LedgerForAPI())
 		response.ApplicationIndex = computeAppIndexFromTxn(txn, v2.Node.LedgerForAPI())
-		response.LocalStateDelta, response.GlobalStateDelta = convertToDeltas(txn)
+		response.LocalStateDelta = sliceOrNil(localDeltasToLocalDeltas(txn.ApplyData.EvalDelta, &txn.Txn.Txn))
+		response.GlobalStateDelta = sliceOrNil(globalDeltaToStateDelta(txn.ApplyData.EvalDelta.GlobalDelta))
 		response.Logs = convertLogs(txn)
 		response.Inners = convertInners(&txn)
 	}
@@ -1623,9 +1624,6 @@ func (v2 *Handlers) getPendingTransactions(ctx echo.Context, max *uint64, format
 		return internalError(ctx, err, errFailedLookingUpTransactionPool, v2.Log)
 	}
 
-	// MatchAddress uses this to check FeeSink, we don't care about that here.
-	spec := transactions.SpecialAddresses{}
-
 	txnLimit := uint64(math.MaxUint64)
 	if max != nil && *max != 0 {
 		txnLimit = *max
@@ -1640,7 +1638,7 @@ func (v2 *Handlers) getPendingTransactions(ctx echo.Context, max *uint64, format
 		}
 
 		// continue if we have an address filter and the address doesn't match the transaction.
-		if addrPtr != nil && !txn.Txn.MatchAddress(*addrPtr, spec) {
+		if addrPtr != nil && !txn.Txn.MatchAddress(*addrPtr) {
 			continue
 		}
 

@@ -17,31 +17,24 @@
 package apply
 
 import (
-	"math/rand"
+	"math/rand/v2"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-var poolAddr = basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
-
 var spec = transactions.SpecialAddresses{
-	FeeSink:     feeSink,
-	RewardsPool: poolAddr,
-}
-
-func keypair() *crypto.SignatureSecrets {
-	var seed crypto.Seed
-	crypto.RandBytes(seed[:])
-	s := crypto.GenerateSignatureSecrets(seed)
-	return s
+	FeeSink:     ledgertesting.RandomAddress(),
+	RewardsPool: ledgertesting.RandomAddress(),
 }
 
 func TestAlgosEncoding(t *testing.T) {
@@ -82,27 +75,21 @@ func TestAlgosEncoding(t *testing.T) {
 func TestPaymentApply(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	mockBalV0 := makeMockBalances(protocol.ConsensusCurrentVersion)
-
-	secretSrc := keypair()
-	src := basics.Address(secretSrc.SignatureVerifier)
-
-	secretDst := keypair()
-	dst := basics.Address(secretDst.SignatureVerifier)
-
 	tx := transactions.Transaction{
 		Type: protocol.PaymentTx,
 		Header: transactions.Header{
-			Sender:     src,
+			Sender:     ledgertesting.RandomAddress(),
 			Fee:        basics.MicroAlgos{Raw: 1},
 			FirstValid: basics.Round(100),
 			LastValid:  basics.Round(1000),
 		},
 		PaymentTxnFields: transactions.PaymentTxnFields{
-			Receiver: dst,
+			Receiver: ledgertesting.RandomAddress(),
 			Amount:   basics.MicroAlgos{Raw: uint64(50)},
 		},
 	}
+
+	mockBalV0 := makeMockBalances(protocol.ConsensusCurrentVersion)
 	var ad transactions.ApplyData
 	err := Payment(tx.PaymentTxnFields, tx.Header, mockBalV0, transactions.SpecialAddresses{}, &ad)
 	require.NoError(t, err)
@@ -111,160 +98,80 @@ func TestPaymentApply(t *testing.T) {
 func TestPaymentValidation(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	payments, _, _, _ := generateTestObjects(100, 50)
-	genHash := crypto.Digest{0x42}
-	for i, txn := range payments {
-		txn.GenesisHash = genHash
-		payments[i] = txn
-	}
-	tcpast := transactions.ExplicitTxnContext{
-		Proto:   config.Consensus[protocol.ConsensusV27],
-		GenHash: genHash,
-	}
-	tc := transactions.ExplicitTxnContext{
-		Proto:   config.Consensus[protocol.ConsensusCurrentVersion],
-		GenHash: genHash,
-	}
-	for _, txn := range payments {
-		// Lifetime window
-		tc.ExplicitRound = txn.First() + 1
-		if txn.Alive(tc) != nil {
-			t.Errorf("transaction not alive during lifetime %v", txn)
-		}
-
-		tc.ExplicitRound = txn.First()
-		if txn.Alive(tc) != nil {
-			t.Errorf("transaction not alive at issuance %v", txn)
-		}
-
-		tc.ExplicitRound = txn.Last()
-		if txn.Alive(tc) != nil {
-			t.Errorf("transaction not alive at expiry %v", txn)
-		}
-
-		tc.ExplicitRound = txn.First() - 1
-		if txn.Alive(tc) == nil {
-			t.Errorf("premature transaction alive %v", txn)
-		}
-
-		tc.ExplicitRound = txn.Last() + 1
-		if txn.Alive(tc) == nil {
-			t.Errorf("expired transaction alive %v", txn)
-		}
-
-		// Make a copy of txn, change some fields, be sure the TXID changes. This is not exhaustive.
-		var txn2 transactions.Transaction
-		txn2 = txn
-		txn2.Note = []byte{42}
-		if txn2.ID() == txn.ID() {
-			t.Errorf("txid does not depend on note")
-		}
-		txn2 = txn
-		txn2.Amount.Raw++
-		if txn2.ID() == txn.ID() {
-			t.Errorf("txid does not depend on amount")
-		}
-		txn2 = txn
-		txn2.Fee.Raw++
-		if txn2.ID() == txn.ID() {
-			t.Errorf("txid does not depend on fee")
-		}
-		txn2 = txn
-		txn2.LastValid++
-		if txn2.ID() == txn.ID() {
-			t.Errorf("txid does not depend on lastvalid")
-		}
-
+	current := config.Consensus[protocol.ConsensusCurrentVersion]
+	for _, txn := range generateTestPays(100) {
 		// Check malformed transactions
 		largeWindow := txn
-		largeWindow.LastValid += basics.Round(tc.Proto.MaxTxnLife)
-		if largeWindow.WellFormed(spec, tc.Proto) == nil {
+		largeWindow.LastValid += basics.Round(current.MaxTxnLife)
+		if largeWindow.WellFormed(spec, current) == nil {
 			t.Errorf("transaction with large window %#v verified incorrectly", largeWindow)
 		}
 
 		badWindow := txn
 		badWindow.LastValid = badWindow.FirstValid - 1
-		if badWindow.WellFormed(spec, tc.Proto) == nil {
+		if badWindow.WellFormed(spec, current) == nil {
 			t.Errorf("transaction with bad window %#v verified incorrectly", badWindow)
 		}
 
 		badFee := txn
 		badFee.Fee = basics.MicroAlgos{}
-		if badFee.WellFormed(spec, tcpast.Proto) == nil {
+		if badFee.WellFormed(spec, config.Consensus[protocol.ConsensusV27]) == nil {
 			t.Errorf("transaction with no fee %#v verified incorrectly", badFee)
 		}
-		require.Nil(t, badFee.WellFormed(spec, tc.Proto))
+		assert.NoError(t, badFee.WellFormed(spec, current))
 
 		badFee.Fee.Raw = 1
-		if badFee.WellFormed(spec, tcpast.Proto) == nil {
+		if badFee.WellFormed(spec, config.Consensus[protocol.ConsensusV27]) == nil {
 			t.Errorf("transaction with low fee %#v verified incorrectly", badFee)
 		}
-		require.Nil(t, badFee.WellFormed(spec, tc.Proto))
+		assert.NoError(t, badFee.WellFormed(spec, current))
 	}
 }
 
 func TestPaymentSelfClose(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	secretSrc := keypair()
-	src := basics.Address(secretSrc.SignatureVerifier)
-
-	secretDst := keypair()
-	dst := basics.Address(secretDst.SignatureVerifier)
+	self := ledgertesting.RandomAddress()
 
 	tx := transactions.Transaction{
 		Type: protocol.PaymentTx,
 		Header: transactions.Header{
-			Sender:     src,
+			Sender:     self,
 			Fee:        basics.MicroAlgos{Raw: config.Consensus[protocol.ConsensusCurrentVersion].MinTxnFee},
 			FirstValid: basics.Round(100),
 			LastValid:  basics.Round(1000),
 		},
 		PaymentTxnFields: transactions.PaymentTxnFields{
-			Receiver:         dst,
+			Receiver:         ledgertesting.RandomAddress(),
 			Amount:           basics.MicroAlgos{Raw: uint64(50)},
-			CloseRemainderTo: src,
+			CloseRemainderTo: self,
 		},
 	}
 	require.Error(t, tx.WellFormed(spec, config.Consensus[protocol.ConsensusCurrentVersion]))
 }
 
-func generateTestObjects(numTxs, numAccs int) ([]transactions.Transaction, []transactions.SignedTxn, []*crypto.SignatureSecrets, []basics.Address) {
+func generateTestPays(numTxs int) []transactions.Transaction {
 	txs := make([]transactions.Transaction, numTxs)
-	signed := make([]transactions.SignedTxn, numTxs)
-	secrets := make([]*crypto.SignatureSecrets, numAccs)
-	addresses := make([]basics.Address, numAccs)
-
-	for i := 0; i < numAccs; i++ {
-		secret := keypair()
-		addr := basics.Address(secret.SignatureVerifier)
-		secrets[i] = secret
-		addresses[i] = addr
-	}
-
-	for i := 0; i < numTxs; i++ {
-		s := rand.Intn(numAccs)
-		r := rand.Intn(numAccs)
-		a := rand.Intn(1000)
-		f := config.Consensus[protocol.ConsensusCurrentVersion].MinTxnFee + uint64(rand.Intn(10))
-		iss := 50 + rand.Intn(30)
+	for i := range numTxs {
+		a := rand.IntN(1000)
+		f := config.Consensus[protocol.ConsensusCurrentVersion].MinTxnFee + uint64(rand.IntN(10))
+		iss := 50 + rand.IntN(30)
 		exp := iss + 10
 
 		txs[i] = transactions.Transaction{
 			Type: protocol.PaymentTx,
 			Header: transactions.Header{
-				Sender:     addresses[s],
-				Fee:        basics.MicroAlgos{Raw: f},
-				FirstValid: basics.Round(iss),
-				LastValid:  basics.Round(exp),
+				Sender:      ledgertesting.RandomAddress(),
+				Fee:         basics.MicroAlgos{Raw: f},
+				FirstValid:  basics.Round(iss),
+				LastValid:   basics.Round(exp),
+				GenesisHash: crypto.Digest{0x02},
 			},
 			PaymentTxnFields: transactions.PaymentTxnFields{
-				Receiver: addresses[r],
+				Receiver: ledgertesting.RandomAddress(),
 				Amount:   basics.MicroAlgos{Raw: uint64(a)},
 			},
 		}
-		signed[i] = txs[i].Sign(secrets[s])
 	}
-
-	return txs, signed, secrets, addresses
+	return txs
 }

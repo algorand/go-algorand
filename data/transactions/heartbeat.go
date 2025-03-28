@@ -17,6 +17,10 @@
 package transactions
 
 import (
+	"errors"
+	"fmt"
+
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/committee"
@@ -46,4 +50,39 @@ type HeartbeatTxnFields struct {
 
 	// HbKeyDilution must match HbAddress account's current KeyDilution.
 	HbKeyDilution uint64 `codec:"kd"`
+}
+
+// wellFormed performs some stateless checks on the Heartbeat transaction
+func (hb HeartbeatTxnFields) wellFormed(header Header, proto config.ConsensusParams) error {
+	// If this is a free/cheap heartbeat, it must be very simple.
+	if header.Fee.Raw < proto.MinTxnFee && header.Group.IsZero() {
+		kind := "free"
+		if header.Fee.Raw > 0 {
+			kind = "cheap"
+		}
+
+		if len(header.Note) > 0 {
+			return fmt.Errorf("tx.Note is set in %s heartbeat", kind)
+		}
+		if header.Lease != [32]byte{} {
+			return fmt.Errorf("tx.Lease is set in %s heartbeat", kind)
+		}
+		if !header.RekeyTo.IsZero() {
+			return fmt.Errorf("tx.RekeyTo is set in %s heartbeat", kind)
+		}
+	}
+
+	if (hb.HbProof == crypto.HeartbeatProof{}) {
+		return errors.New("tx.HbProof is empty")
+	}
+	if (hb.HbSeed == committee.Seed{}) {
+		return errors.New("tx.HbSeed is empty")
+	}
+	if hb.HbVoteID.IsEmpty() {
+		return errors.New("tx.HbVoteID is empty")
+	}
+	if hb.HbKeyDilution == 0 {
+		return errors.New("tx.HbKeyDilution is zero")
+	}
+	return nil
 }

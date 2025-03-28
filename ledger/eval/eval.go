@@ -990,7 +990,7 @@ func (eval *BlockEvaluator) TestTransactionGroup(txgroup []transactions.SignedTx
 // evaluator, or modify the block evaluator state in any other visible way.
 func (eval *BlockEvaluator) TestTransaction(txn transactions.SignedTxn) error {
 	// Transaction valid (not expired)?
-	err := txn.Txn.Alive(eval.block)
+	err := eval.block.Alive(txn.Txn.Header)
 	if err != nil {
 		return err
 	}
@@ -1003,7 +1003,7 @@ func (eval *BlockEvaluator) TestTransaction(txn transactions.SignedTxn) error {
 
 	// Transaction already in the ledger?
 	txid := txn.ID()
-	err = eval.state.checkDup(txn.Txn.First(), txn.Txn.Last(), txid, ledgercore.Txlease{Sender: txn.Txn.Sender, Lease: txn.Txn.Lease})
+	err = eval.state.checkDup(txn.Txn.FirstValid, txn.Txn.LastValid, txid, ledgercore.Txlease{Sender: txn.Txn.Sender, Lease: txn.Txn.Lease})
 	if err != nil {
 		return err
 	}
@@ -1179,13 +1179,13 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 	txid := txn.ID()
 
 	if eval.validate {
-		err = txn.Txn.Alive(eval.block)
+		err = eval.block.Alive(txn.Txn.Header)
 		if err != nil {
 			return err
 		}
 
 		// Transaction already in the ledger?
-		err = cow.checkDup(txn.Txn.First(), txn.Txn.Last(), txid, ledgercore.Txlease{Sender: txn.Txn.Sender, Lease: txn.Txn.Lease})
+		err = cow.checkDup(txn.Txn.FirstValid, txn.Txn.LastValid, txid, ledgercore.Txlease{Sender: txn.Txn.Sender, Lease: txn.Txn.Lease})
 		if err != nil {
 			return err
 		}
@@ -2034,7 +2034,7 @@ func (validator *evalTxValidator) run() {
 		signedTxnGroup := make([]transactions.SignedTxn, len(group))
 		for j, txn := range group {
 			signedTxnGroup[j] = txn.SignedTxn
-			err := txn.SignedTxn.Txn.Alive(validator.block)
+			err := validator.block.Alive(txn.SignedTxn.Txn.Header)
 			if err != nil {
 				validator.done <- err
 				return
