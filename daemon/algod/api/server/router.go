@@ -107,6 +107,7 @@ func NewRouter(logger logging.Logger, node APINodeInterface, shutdown <-chan str
 		middleware.RemoveTrailingSlash())
 	e.Use(
 		middlewares.MakeLogger(logger),
+		middleware.Gzip(),
 	)
 	// Optional middleware for Private Network Access Header (PNA). Must come before CORS middleware.
 	if node.Config().EnablePrivateNetworkAccessHeader {
