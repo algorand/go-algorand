@@ -50,8 +50,8 @@ func TestPrintTestCorpus(t *testing.T) {
 	t.Logf("Loaded %d messages (%d bytes)", len(corpus.messages), corpus.total)
 	cnt := 0
 	var origBytes, compBytes int64
-	enc := vpack.NewStaticEncoder()
-	dec := vpack.NewStaticDecoder()
+	enc := vpack.NewBitmaskEncoder()
+	dec := vpack.NewBitmaskDecoder()
 	for i, msg := range corpus.messages {
 		if msg.Tag != "AV" {
 			continue
@@ -204,7 +204,7 @@ func benchmarkVPackCompression(b *testing.B) {
 	// Filter messages to only include AV votes
 	filtered := filterMessages(b, corpus, true)
 
-	enc := vpack.NewStaticEncoder()
+	enc := vpack.NewBitmaskEncoder()
 	compressed := make([]byte, 0, 1024)
 
 	b.ResetTimer()
@@ -238,7 +238,7 @@ func benchmarkVPackDecompression(b *testing.B) {
 	compressedData := make([][]byte, 0, len(filtered))
 	var origCnt, encCnt int64
 
-	enc := vpack.NewStaticEncoder()
+	enc := vpack.NewBitmaskEncoder()
 
 	// Pre-compress the messages
 	for _, msg := range filtered {
@@ -258,7 +258,7 @@ func benchmarkVPackDecompression(b *testing.B) {
 	b.ResetTimer()
 	var totalDecompressed int64
 	decompressed := make([]byte, 0, 1024)
-	dec := vpack.NewStaticDecoder()
+	dec := vpack.NewBitmaskDecoder()
 	for i := 0; i < b.N; i++ {
 		// Process one compressed message per iteration, cycling through compressedData
 		compressed := compressedData[i%len(compressedData)]
