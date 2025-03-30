@@ -274,12 +274,12 @@ func (d *BitmaskDecoder) DecompressVote(dst, src []byte) ([]byte, error) {
 
 func (d *BitmaskDecoder) literalBin64(staticIdxField uint8) error {
 	if d.pos+1+64 > len(d.src) {
-		return fmt.Errorf("not enough data to read literal bin64 marker + value")
+		return fmt.Errorf("not enough data to read literal bin64 marker + value for field %d", staticIdxField)
 	}
 	marker := d.src[d.pos] // read custom marker
 	d.pos++
 	if marker != markerLiteralBin64 {
-		return fmt.Errorf("not a literal bin64")
+		return fmt.Errorf("not a literal bin64 for field %d", staticIdxField)
 	}
 	d.dst = append(d.dst, staticTable[staticIdxField]...)
 	d.dst = append(d.dst, msgpBin8Len64...)
@@ -290,12 +290,12 @@ func (d *BitmaskDecoder) literalBin64(staticIdxField uint8) error {
 
 func (d *BitmaskDecoder) dynamicBin32(staticIdxField uint8) error {
 	if d.pos+1+32 > len(d.src) {
-		return fmt.Errorf("not enough data to read dynamic bin32 marker + value")
+		return fmt.Errorf("not enough data to read dynamic bin32 marker + value for field %d", staticIdxField)
 	}
 	marker := d.src[d.pos] // read custom marker
 	d.pos++
 	if marker != markerDynamicBin32 {
-		return fmt.Errorf("not a dynamic bin32")
+		return fmt.Errorf("not a dynamic bin32 for field %d", staticIdxField)
 	}
 	d.dst = append(d.dst, staticTable[staticIdxField]...)
 	d.dst = append(d.dst, msgpBin8Len32...)
@@ -306,12 +306,12 @@ func (d *BitmaskDecoder) dynamicBin32(staticIdxField uint8) error {
 
 func (d *BitmaskDecoder) literalBin80(staticIdxField uint8) error {
 	if d.pos+1+80 > len(d.src) {
-		return fmt.Errorf("not enough data to read literal bin80 marker + value")
+		return fmt.Errorf("not enough data to read literal bin80 marker + value for field %d", staticIdxField)
 	}
 	marker := d.src[d.pos] // read custom marker
 	d.pos++
 	if marker != markerLiteralBin80 {
-		return fmt.Errorf("not a literal bin80")
+		return fmt.Errorf("not a literal bin80 for field %d", staticIdxField)
 	}
 	d.dst = append(d.dst, staticTable[staticIdxField]...)
 	d.dst = append(d.dst, msgpBin8Len80...)
@@ -322,42 +322,42 @@ func (d *BitmaskDecoder) literalBin80(staticIdxField uint8) error {
 
 func (d *BitmaskDecoder) varuint(staticIdxField uint8) error {
 	if d.pos+1 > len(d.src) {
-		return fmt.Errorf("not enough data to read varuint marker")
+		return fmt.Errorf("not enough data to read varuint marker for field %d", staticIdxField)
 	}
 	marker := d.src[d.pos] // read msgpack varuint marker
 	d.pos++
 	switch marker {
 	case uint8tag:
 		if d.pos+1 > len(d.src) { // Needs one more byte
-			return fmt.Errorf("not enough data for varuint")
+			return fmt.Errorf("not enough data for varuint uint8 for field %d", staticIdxField)
 		}
 		d.dst = append(d.dst, staticTable[staticIdxField]...)
 		d.dst = append(d.dst, marker, d.src[d.pos])
 		d.pos++
 	case uint16tag:
 		if d.pos+2 > len(d.src) { // Needs two more bytes
-			return fmt.Errorf("not enough data for varuint")
+			return fmt.Errorf("not enough data for varuint uint16 for field %d", staticIdxField)
 		}
 		d.dst = append(d.dst, staticTable[staticIdxField]...)
 		d.dst = append(d.dst, marker, d.src[d.pos], d.src[d.pos+1])
 		d.pos += 2
 	case uint32tag:
 		if d.pos+4 > len(d.src) { // Needs four more bytes
-			return fmt.Errorf("not enough data for varuint")
+			return fmt.Errorf("not enough data for varuint uint32 for field %d", staticIdxField)
 		}
 		d.dst = append(d.dst, staticTable[staticIdxField]...)
 		d.dst = append(d.dst, marker, d.src[d.pos], d.src[d.pos+1], d.src[d.pos+2], d.src[d.pos+3])
 		d.pos += 4
 	case uint64tag:
 		if d.pos+8 > len(d.src) { // Needs eight more bytes
-			return fmt.Errorf("not enough data for varuint")
+			return fmt.Errorf("not enough data for varuint uint64 for field %d", staticIdxField)
 		}
 		d.dst = append(d.dst, staticTable[staticIdxField]...)
 		d.dst = append(d.dst, marker, d.src[d.pos], d.src[d.pos+1], d.src[d.pos+2], d.src[d.pos+3], d.src[d.pos+4], d.src[d.pos+5], d.src[d.pos+6], d.src[d.pos+7])
 		d.pos += 8
 	default: // fixint uses a single byte for marker+value
 		if !isfixint(marker) {
-			return fmt.Errorf("not a fixint")
+			return fmt.Errorf("not a fixint for field %d", staticIdxField)
 		}
 		d.dst = append(d.dst, staticTable[staticIdxField]...)
 		d.dst = append(d.dst, marker)
