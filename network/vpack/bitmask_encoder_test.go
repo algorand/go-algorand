@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math"
 	"reflect"
+	"slices"
 	"testing"
 	"unsafe"
 
@@ -166,117 +167,92 @@ func TestBitmaskDecoderErrors(t *testing.T) {
 		},
 		{
 			name:        "pf bit set but wrong marker",
-			input:       append(append(createMask(), 0xF0), make([]byte, 80)...), // 0xF0 is wrong (should be 0xF1)
+			input:       slices.Concat(createMask(), []byte{0xF0}, make([]byte, 80)), // 0xF0 is wrong (should be 0xF1)
 			errExpected: fmt.Errorf("not a literal bin80 for field %d", staticIdxPfField),
 		},
 		{
 			name: "Error in varuint for rnd field",
-			input: func() []byte {
+			input: slices.Concat(createMask(),
 				// Add required fields and append just the marker causing an error
-				result := append(createMask(), markerLiteralBin80)
-				result = append(result, make([]byte, 80)...) // Add 80 bytes for pfField
-				return append(result, uint8tag)              // then uint8tag with no data
-			}(),
+				[]byte{markerLiteralBin80}, make([]byte, 80), // Add 80 bytes for pfField
+				[]byte{uint8tag}, // then uint8tag with no data
+			),
 			errExpected: fmt.Errorf("not enough data for varuint uint8 for field %d", staticIdxRndField),
 		},
 		{
 			name: "Error in dynamicBin32 for snd field",
-			input: func() []byte {
+			input: slices.Concat(createMask(),
 				// Add pfField, rnd field, then problematic snd field
-				result := append(createMask(), markerLiteralBin80)
-				result = append(result, make([]byte, 80)...) // Add 80 bytes for pfField
-				result = append(result, uint8tag, 0x01)      // Add rnd field (uint8:1)
-				return append(result, markerDynamicBin32)    // Add dynamicBin32 marker with no data
-			}(),
+				[]byte{markerLiteralBin80}, make([]byte, 80), // Add 80 bytes for pfField
+				[]byte{uint8tag, 0x01},     // Add rnd field (uint8:1)
+				[]byte{markerDynamicBin32}, // Add dynamicBin32 marker with no data
+			),
 			errExpected: fmt.Errorf("not enough data to read dynamic bin32 marker + value for field %d", staticIdxSndField),
 		},
 		{
 			name: "Error in dynamicBin32 for p field",
-			input: func() []byte {
+			input: slices.Concat(createMask(),
 				// Add pfField, rnd field, snd field, then problematic p field
-				result := append(createMask(), markerLiteralBin80)
-				result = append(result, make([]byte, 80)...) // Add 80 bytes for pfField
-				result = append(result, uint8tag, 0x01)      // Add rnd field (uint8:1)
-				result = append(result, markerDynamicBin32)  // Add snd field marker
-				result = append(result, make([]byte, 32)...) // Add 32 bytes for snd
-				return append(result, markerDynamicBin32)    // Add dynamicBin32 marker with no data
-			}(),
+				[]byte{markerLiteralBin80}, make([]byte, 80), // Add 80 bytes for pfField
+				[]byte{uint8tag, 0x01},                       // Add rnd field (uint8:1)
+				[]byte{markerDynamicBin32}, make([]byte, 32), // Add snd field marker + 32 bytes
+				[]byte{markerDynamicBin32}, // Add dynamicBin32 marker with no data
+			),
 			errExpected: fmt.Errorf("not enough data to read dynamic bin32 marker + value for field %d", staticIdxPField),
 		},
 		{
 			name: "Error in literalBin64 for p1s field",
-			input: func() []byte {
+			input: slices.Concat(createMask(),
 				// Add fields up to p1s and then use wrong marker
-				result := append(createMask(), markerLiteralBin80)
-				result = append(result, make([]byte, 80)...) // Add 80 bytes for pfField
-				result = append(result, uint8tag, 0x01)      // Add rnd field (uint8:1)
-				result = append(result, markerDynamicBin32)  // Add snd field marker
-				result = append(result, make([]byte, 32)...) // Add 32 bytes for snd
-				result = append(result, markerDynamicBin32)  // Add p field marker
-				result = append(result, make([]byte, 32)...) // Add 32 bytes for p
-				return append(result, 0xFF)                  // Then wrong marker instead of markerLiteralBin64
-			}(),
+				[]byte{markerLiteralBin80}, make([]byte, 80), // Add 80 bytes for pfField
+				[]byte{uint8tag, 0x01},                       // Add rnd field (uint8:1)
+				[]byte{markerDynamicBin32}, make([]byte, 32), // Add snd field marker + 32 bytes
+				[]byte{markerDynamicBin32}, make([]byte, 32), // Add p field marker + 32 bytes
+				[]byte{0xFF}, // Then wrong marker instead of markerLiteralBin64
+			),
 			errExpected: fmt.Errorf("not enough data to read literal bin64 marker + value for field %d", staticIdxP1sField),
 		},
 		{
 			name: "Error in dynamicBin32 for p2 field",
-			input: func() []byte {
+			input: slices.Concat(createMask(),
 				// Add fields up to p2 and then use wrong marker
-				result := append(createMask(), markerLiteralBin80)
-				result = append(result, make([]byte, 80)...) // Add 80 bytes for pfField
-				result = append(result, uint8tag, 0x01)      // Add rnd field (uint8:1)
-				result = append(result, markerDynamicBin32)  // Add snd field marker
-				result = append(result, make([]byte, 32)...) // Add 32 bytes for snd
-				result = append(result, markerDynamicBin32)  // Add p field marker
-				result = append(result, make([]byte, 32)...) // Add 32 bytes for p
-				result = append(result, markerLiteralBin64)  // Add p1s field marker
-				result = append(result, make([]byte, 64)...) // Add 64 bytes for p1s
-				return append(result, 0xFF)                  // Add wrong marker for p2
-			}(),
+				[]byte{markerLiteralBin80}, make([]byte, 80), // Add 80 bytes for pfField
+				[]byte{uint8tag, 0x01},                       // Add rnd field (uint8:1)
+				[]byte{markerDynamicBin32}, make([]byte, 32), // Add snd field marker + 32 bytes
+				[]byte{markerDynamicBin32}, make([]byte, 32), // Add p field marker + 32 bytes
+				[]byte{markerLiteralBin64}, make([]byte, 64), // Add p1s field marker + 64 bytes
+				[]byte{0xFF}, // Add wrong marker for p2
+			),
 			errExpected: fmt.Errorf("not enough data to read dynamic bin32 marker + value for field %d", staticIdxP2Field),
 		},
 		{
 			name: "Error in literalBin64 for p2s field",
-			input: func() []byte {
+			input: slices.Concat(createMask(),
 				// Start with valid bitmask, pfField, rnd, snd, p, p1s, p2, then add problematic p2s marker
-				result := append(createMask(), markerLiteralBin80)
-				result = append(result, make([]byte, 80)...) // Add 80 bytes for pfField
-				// Add remaining fields one by one
-				result = append(result, uint8tag, 0x01)      // rnd field
-				result = append(result, markerDynamicBin32)  // snd field start
-				result = append(result, make([]byte, 32)...) // snd field data
-				result = append(result, markerDynamicBin32)  // p field start
-				result = append(result, make([]byte, 32)...) // p field data
-				result = append(result, markerLiteralBin64)  // p1s field start
-				result = append(result, make([]byte, 64)...) // p1s field data
-				result = append(result, markerDynamicBin32)  // p2 field start
-				result = append(result, make([]byte, 32)...) // p2 field data
-				return append(result, markerLiteralBin64)    // p2s marker with no data
-			}(),
+				[]byte{markerLiteralBin80}, make([]byte, 80), // Add 80 bytes for pfField
+				[]byte{uint8tag, 0x01},                       // rnd field
+				[]byte{markerDynamicBin32}, make([]byte, 32), // snd field start + data
+				[]byte{markerDynamicBin32}, make([]byte, 32), // p field start + data
+				[]byte{markerLiteralBin64}, make([]byte, 64), // p1s field start + data
+				[]byte{markerDynamicBin32}, make([]byte, 32), // p2 field start + data
+				[]byte{markerLiteralBin64}, // p2s marker with no data
+			),
 			errExpected: fmt.Errorf("not enough data to read literal bin64 marker + value for field %d", staticIdxP2sField),
 		},
 		{
 			name: "Error in literalBin64 for s field",
-			input: func() []byte {
+			input: slices.Concat(createMask(),
 				// Start with valid bitmask and fields up to s field
-				result := append(createMask(), markerLiteralBin80)
-				result = append(result, make([]byte, 80)...) // Add 80 bytes for pfField
-				// Add remaining fields one by one
-				result = append(result, uint8tag, 0x01)      // rnd field
-				result = append(result, markerDynamicBin32)  // snd field start
-				result = append(result, make([]byte, 32)...) // snd field data
-				result = append(result, markerDynamicBin32)  // p field start
-				result = append(result, make([]byte, 32)...) // p field data
-				result = append(result, markerLiteralBin64)  // p1s field start
-				result = append(result, make([]byte, 64)...) // p1s field data
-				result = append(result, markerDynamicBin32)  // p2 field start
-				result = append(result, make([]byte, 32)...) // p2 field data
-				result = append(result, markerLiteralBin64)  // p2s field start
-				result = append(result, make([]byte, 64)...) // p2s field data
-				result = append(result, msgpBin8Len64...)    // ps field start
-				result = append(result, make([]byte, 64)...) // ps field data
-				return append(result, markerLiteralBin64)    // s marker with no data
-			}(),
+				[]byte{markerLiteralBin80}, make([]byte, 80), // Add 80 bytes for pfField
+				[]byte{uint8tag, 0x01},                       // rnd field
+				[]byte{markerDynamicBin32}, make([]byte, 32), // snd field start + data
+				[]byte{markerDynamicBin32}, make([]byte, 32), // p field start + data
+				[]byte{markerLiteralBin64}, make([]byte, 64), // p1s field start + data
+				[]byte{markerDynamicBin32}, make([]byte, 32), // p2 field start + data
+				[]byte{markerLiteralBin64}, make([]byte, 64), // p2s field start + data
+				[]byte(msgpBin8Len64), make([]byte, 64), // ps field start + data
+				[]byte{markerLiteralBin64}, // s marker with no data
+			),
 			errExpected: fmt.Errorf("not a literal bin64 for field %d", staticIdxSField),
 		},
 		{
@@ -302,77 +278,63 @@ func TestBitmaskDecoderErrors(t *testing.T) {
 		},
 		{
 			name: "Error in varuint for per field",
-			input: func() []byte {
+			input: slices.Concat(createMask(bitPer),
 				// Create a bitmask with per field bit set
-				result := append(createMask(bitPer), markerLiteralBin80)
-				result = append(result, make([]byte, 80)...) // Add 80 bytes for pfField
+				[]byte{markerLiteralBin80}, make([]byte, 80), // Add 80 bytes for pfField
 				// Don't add any more data - the decoder will fail when trying to read the varuint marker
-				return result
-			}(),
+			),
 			errExpected: fmt.Errorf("not enough data to read varuint marker for field %d", staticIdxPerField),
 		},
 		{
 			name: "Error in dynamicBin32 for dig field",
-			input: func() []byte {
+			input: slices.Concat(createMask(bitDig),
 				// Create a bitmask with dig field bit set
-				result := append(createMask(bitDig), markerLiteralBin80)
-				result = append(result, make([]byte, 80)...) // Add 80 bytes for pfField
-				return append(result, markerDynamicBin32)    // Add markerDynamicBin32 with no data
-			}(),
+				[]byte{markerLiteralBin80}, make([]byte, 80), // Add 80 bytes for pfField
+				[]byte{markerDynamicBin32}, // Add markerDynamicBin32 with no data
+			),
 			errExpected: fmt.Errorf("not enough data to read dynamic bin32 marker + value for field %d", staticIdxDigField),
 		},
 		{
 			name: "Error in dynamicBin32 for encdig field",
-			input: func() []byte {
+			input: slices.Concat(createMask(bitEncDig),
 				// Create a simple bitmask with just the encdig field bit set + required fields
-				result := append(createMask(bitEncDig), markerLiteralBin80)
-				result = append(result, make([]byte, 80)...) // Add 80 bytes for pfField
+				[]byte{markerLiteralBin80}, make([]byte, 80), // Add 80 bytes for pfField
 
 				// Add data for required fields (rnd and snd)
-				// First add a varuint for rnd
-				result = append(result, uint8tag, 1) // Simple rnd value
-
-				// Then add a dynamicBin32 for snd
-				result = append(result, markerDynamicBin32)
-				result = append(result, make([]byte, 32)...) // 32 bytes for snd
+				[]byte{uint8tag, 1},                          // Simple rnd value
+				[]byte{markerDynamicBin32}, make([]byte, 32), // 32 bytes for snd
 
 				// Now when the decoder gets to the encdig field it will fail because there's no data
-				return result
-			}(),
+			),
 			errExpected: fmt.Errorf("not a dynamic bin32 for field %d", staticIdxEncdigField),
 		},
 		{
 			name: "Error in varuint for oper field",
-			input: func() []byte {
+			input: slices.Concat(createMask(bitOper),
 				// Create a bitmask with oper field bit set
-				result := append(createMask(bitOper), markerLiteralBin80)
-				result = append(result, make([]byte, 80)...) // Add 80 bytes for pfField
-				return append(result, uint8tag)              // Add uint8tag with no data
-			}(),
+				[]byte{markerLiteralBin80}, make([]byte, 80), // Add 80 bytes for pfField
+				[]byte{uint8tag}, // Add uint8tag with no data
+			),
 			errExpected: fmt.Errorf("not enough data for varuint uint8 for field %d", staticIdxOperField),
 		},
 		{
 			name: "Error in dynamicBin32 for oprop field",
-			input: func() []byte {
+			input: slices.Concat(createMask(bitOprop),
 				// Create a bitmask with oprop field bit set
-				result := append(createMask(bitOprop), markerLiteralBin80)
-				result = append(result, make([]byte, 80)...) // Add 80 bytes for pfField
-				return append(result, markerDynamicBin32)    // Add markerDynamicBin32 with no data
-			}(),
+				[]byte{markerLiteralBin80}, make([]byte, 80), // Add 80 bytes for pfField
+				[]byte{markerDynamicBin32}, // Add markerDynamicBin32 with no data
+			),
 			errExpected: fmt.Errorf("not enough data to read dynamic bin32 marker + value for field %d", staticIdxOpropField),
 		},
 		{
 			name: "Error with step bit set",
-			input: func() []byte {
+			input: slices.Concat(createMask(bitStep),
 				// Create a bitmask with required fields and step bit set
-				result := append(createMask(bitStep), markerLiteralBin80)
-				result = append(result, make([]byte, 80)...) // 80 bytes for pfField
-				result = append(result, uint8tag, 42)        // rnd field
-				result = append(result, markerDynamicBin32)  // snd field
-				result = append(result, make([]byte, 32)...) // 32 bytes for snd
-				result = append(result, uint8tag)            // malformed step field (uint8tag with no data)
-				return result
-			}(),
+				[]byte{markerLiteralBin80}, make([]byte, 80), // 80 bytes for pfField
+				[]byte{uint8tag, 42},                         // rnd field
+				[]byte{markerDynamicBin32}, make([]byte, 32), // snd field + 32 bytes
+				[]byte{uint8tag}, // malformed step field (uint8tag with no data)
+			),
 			errExpected: fmt.Errorf("not enough data for varuint uint8 for field %d", staticIdxStepField),
 		},
 	}
@@ -570,15 +532,14 @@ func generateRandomVote() *rapid.Generator[*agreement.UnauthenticatedVote] {
 		rStepField = reflect.NewAt(rStepField.Type(), unsafe.Pointer(rStepField.UnsafeAddr())).Elem()
 		rStepField.SetUint(stepGen.Draw(t, "step"))
 
-		// Use reflection to set the OriginalPeriod field in the proposal
-		propVal := reflect.ValueOf(&v.R.Proposal).Elem()
-		origPeriodField := propVal.FieldByName("OriginalPeriod")
-		origPeriodField = reflect.NewAt(origPeriodField.Type(), unsafe.Pointer(origPeriodField.UnsafeAddr())).Elem()
-		origPeriodField.SetUint(integerRangeGen.Draw(t, "originalPeriod"))
-
 		// Decide whether to include a proposal or leave it empty
 		includeProposal := rapid.Bool().Draw(t, "includeProposal")
 		if includeProposal {
+			// Use reflection to set the OriginalPeriod field in the proposal
+			propVal := reflect.ValueOf(&v.R.Proposal).Elem()
+			origPeriodField := propVal.FieldByName("OriginalPeriod")
+			origPeriodField = reflect.NewAt(origPeriodField.Type(), unsafe.Pointer(origPeriodField.UnsafeAddr())).Elem()
+			origPeriodField.SetUint(integerRangeGen.Draw(t, "originalPeriod"))
 			// Generate random OpropField, BlockDigest, and EncodingDigest bytes (32 bytes each)
 			// But sometimes make them empty to test edge cases
 			makeBytesFn := func(name string) []byte {
