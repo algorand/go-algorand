@@ -3,6 +3,7 @@ package vpack
 import (
 	"fmt"
 	"math/bits"
+	"strings"
 )
 
 const (
@@ -27,6 +28,56 @@ const (
 	propFieldsMask     uint16 = bitDig | bitEncDig | bitOper | bitOprop
 	requiredFieldsMask uint16 = bitPf | bitRnd | bitSnd | sigFieldsMask
 )
+
+func printMask(mask uint16) string {
+	if mask == 0 {
+		return "0"
+	}
+	var bitNames []string
+	if mask&bitPf != 0 {
+		bitNames = append(bitNames, "bitPf")
+	}
+	if mask&bitPer != 0 {
+		bitNames = append(bitNames, "bitPer")
+	}
+	if mask&bitDig != 0 {
+		bitNames = append(bitNames, "bitDig")
+	}
+	if mask&bitEncDig != 0 {
+		bitNames = append(bitNames, "bitEncDig")
+	}
+	if mask&bitOper != 0 {
+		bitNames = append(bitNames, "bitOper")
+	}
+	if mask&bitOprop != 0 {
+		bitNames = append(bitNames, "bitOprop")
+	}
+	if mask&bitRnd != 0 {
+		bitNames = append(bitNames, "bitRnd")
+	}
+	if mask&bitSnd != 0 {
+		bitNames = append(bitNames, "bitSnd")
+	}
+	if mask&bitStep != 0 {
+		bitNames = append(bitNames, "bitStep")
+	}
+	if mask&bitP != 0 {
+		bitNames = append(bitNames, "bitP")
+	}
+	if mask&bitP1s != 0 {
+		bitNames = append(bitNames, "bitP1s")
+	}
+	if mask&bitP2 != 0 {
+		bitNames = append(bitNames, "bitP2")
+	}
+	if mask&bitP2s != 0 {
+		bitNames = append(bitNames, "bitP2s")
+	}
+	if mask&bitS != 0 {
+		bitNames = append(bitNames, "bitS")
+	}
+	return strings.Join(bitNames, ",")
+}
 
 // BitmaskEncoder is a VPack encoder that encodes a bitmask of fields.
 type BitmaskEncoder struct {
@@ -166,7 +217,7 @@ func (d *BitmaskDecoder) DecompressVote(dst, src []byte) ([]byte, error) {
 	}
 
 	if mask&requiredFieldsMask != requiredFieldsMask {
-		return nil, fmt.Errorf("missing required fields: mask %x", mask)
+		return nil, fmt.Errorf("missing required fields: mask %s", printMask(mask))
 	}
 
 	// top-level UnauthenticatedVote: fixmap(3)

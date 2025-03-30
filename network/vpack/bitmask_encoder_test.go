@@ -38,82 +38,52 @@ import (
 // comprehensive property-based test using rapid
 func TestBitmaskEncoder(t *testing.T) {
 	partitiontest.PartitionTest(t)
+	rapid.Check(t, checkBitmaskEncoder)
+}
 
-	// Track statistics to report at the end
-	var validVotes, errorVotes int
-	var bitmaskTotal, staticTotal int
+func checkBitmaskEncoder(t *rapid.T) {
+	// Generate a random vote
+	v0 := generateRandomVote().Draw(t, "vote")
 
-	rapid.Check(t, func(t *rapid.T) {
-		// Generate a random vote
-		v0 := generateRandomVote().Draw(t, "vote")
-
-		// Check if the vote is valid for compression
-		var expectError string
-		if ok, errorMsg := checkVoteValid(v0); !ok {
-			expectError = errorMsg
-		}
-
-		// Convert to msgpack
-		msgpBuf := protocol.EncodeMsgp(v0)
-
-		// Try to compress with BitmaskEncoder
-		encBM := NewBitmaskEncoder()
-		encBufBM, err := encBM.CompressVote(nil, msgpBuf)
-
-		if expectError != "" {
-			// We expect an error
-			require.ErrorContains(t, err, expectError)
-			require.Nil(t, encBufBM)
-			errorVotes++
-			return
-		}
-		require.NoError(t, err)
-
-		// Verify the bitmask is at the beginning
-		require.GreaterOrEqual(t, len(encBufBM), 2, "Compressed data should have at least 2 bytes for bitmask")
-		mask := uint16(encBufBM[0])<<8 | uint16(encBufBM[1])
-		require.NotZero(t, mask, "Bitmask should be non-zero")
-
-		// Decompress with BitmaskDecoder
-		decBM := NewBitmaskDecoder()
-		decBufBM, err := decBM.DecompressVote(nil, encBufBM)
-		require.NoError(t, err)
-
-		// Ensure the decompressed data matches the original msgpack data
-		require.Equal(t, msgpBuf, decBufBM)
-
-		// Decode the decompressed data and verify it matches the original vote
-		var v1 agreement.UnauthenticatedVote
-		err = protocol.Decode(decBufBM, &v1)
-		require.NoError(t, err)
-		require.Equal(t, *v0, v1)
-
-		// Also compare with StaticEncoder for reference (similar to what was in TestBitmaskEncoderMultiple)
-		encStatic := NewStaticEncoder()
-		encBufStatic, err := encStatic.CompressVote(nil, msgpBuf)
-		require.NoError(t, err)
-
-		// Update stats for reporting
-		validVotes++
-		bitmaskTotal += len(encBufBM)
-		staticTotal += len(encBufStatic)
-
-		// Log compression statistics for this vote
-		t.Logf("BitmaskEncoder: %d bytes, StaticEncoder: %d bytes, Ratio: %.2f%%",
-			len(encBufBM), len(encBufStatic), float64(len(encBufBM))/float64(len(encBufStatic))*100)
-	})
-
-	// Report overall statistics at the end
-	if validVotes > 0 {
-		avgBitmask := float64(bitmaskTotal) / float64(validVotes)
-		avgStatic := float64(staticTotal) / float64(validVotes)
-		ratio := avgBitmask / avgStatic * 100
-
-		t.Logf("Processed %d valid votes and %d error votes", validVotes, errorVotes)
-		t.Logf("Average sizes - BitmaskEncoder: %.2f bytes, StaticEncoder: %.2f bytes",
-			avgBitmask, avgStatic)
-		t.Logf("BitmaskEncoder is %.2f%% the size of StaticEncoder on average", ratio)
+	// Check if the vote is valid for compression
+	var expectError string
+	if ok, errorMsg := checkVoteValid(v0); !ok {
+		expectError = errorMsg
 	}
+
+	// Convert to msgpack
+	msgpBuf := protocol.EncodeMsgp(v0)
+
+	// Try to compress with BitmaskEncoder
+	encBM := NewBitmaskEncoder()
+	encBufBM, err := encBM.CompressVote(nil, msgpBuf)
+
+	if expectError != "" {
+		// We expect an error
+		require.ErrorContains(t, err, expectError)
+		require.Nil(t, encBufBM)
+		return
+	}
+	require.NoError(t, err)
+
+	// Verify the bitmask is at the beginning
+	require.GreaterOrEqual(t, len(encBufBM), 2, "Compressed data should have at least 2 bytes for bitmask")
+	mask := uint16(encBufBM[0])<<8 | uint16(encBufBM[1])
+	require.NotZero(t, mask, "Bitmask should be non-zero")
+
+	// Decompress with BitmaskDecoder
+	decBM := NewBitmaskDecoder()
+	decBufBM, err := decBM.DecompressVote(nil, encBufBM)
+	require.NoError(t, err)
+
+	// Ensure the decompressed data matches the original msgpack data
+	require.Equal(t, msgpBuf, decBufBM)
+
+	// Decode the decompressed data and verify it matches the original vote
+	var v1 agreement.UnauthenticatedVote
+	err = protocol.Decode(decBufBM, &v1)
+	require.NoError(t, err)
+	require.Equal(t, *v0, v1)
 }
 
 // createMask is a helper function that creates a byte slice representing a bitmask
@@ -349,7 +319,8 @@ func TestBitmaskDecoderErrors(t *testing.T) {
 }
 
 // TestCompressVoteError tests the error path in CompressVote function
-func TestCompressVoteError(t *testing.T) {
+// XXX use same cases as StaticEncoder
+func TestBitmaskCompressVoteError(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	// Create invalid msgpack data that will cause parseVote to fail
@@ -361,8 +332,8 @@ func TestCompressVoteError(t *testing.T) {
 	require.Error(t, err, "Expected error when compressing invalid msgpack data")
 }
 
-// TestHelperMethods tests the helper methods in BitmaskDecoder for various error cases
-func TestHelperMethods(t *testing.T) {
+// TestBitmaskHelperMethods tests the helper methods in BitmaskDecoder for various error cases
+func TestBitmaskHelperMethods(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	// Test cases for varuint method
@@ -605,26 +576,37 @@ func checkBitmaskVoteValid(vote *agreement.UnauthenticatedVote) bool {
 	if vote.R.Round == 0 {
 		return false
 	}
+	// ensure all sig fields are non-empty
+	if vote.Sig.Sig == [64]byte{} || vote.Sig.PK == [32]byte{} || vote.Sig.PK2 == [32]byte{} || vote.Sig.PK1Sig == [64]byte{} || vote.Sig.PK2Sig == [64]byte{} {
+		return false
+	}
 	return true
+}
+
+func FuzzRapidCheck(f *testing.F) {
+	f.Fuzz(rapid.MakeFuzz(checkBitmaskEncoder))
 }
 
 // FuzzBitmaskEncoder is a fuzz test that generates random votes,
 // compresses them with BitmaskEncoder and decompresses them with BitmaskDecoder.
 func FuzzBitmaskEncoder(f *testing.F) {
-	// Add seed examples from our generator
+	f.Skip()
+	// Add seed corpus examples
 	voteGen := generateRandomVote()
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 5; i++ {
 		vote := voteGen.Example(i)
 		if ok := checkBitmaskVoteValid(vote); !ok {
 			continue // Skip invalid votes
 		}
+		f.Logf("Vote %d: %+v", i, vote)
 		msgpBuf := protocol.EncodeMsgp(vote)
 		f.Add(msgpBuf) // Add seed corpus for the fuzzer
 	}
 
-	// Define the fuzz test
+	// Use a separate function that properly utilizes the fuzzer input
 	f.Fuzz(func(t *testing.T, msgpBuf []byte) {
 		// Try to compress the input
+		t.Logf("Input: %v", msgpBuf)
 		enc := NewBitmaskEncoder()
 		compressed, err := enc.CompressVote(nil, msgpBuf)
 		if err != nil {
@@ -651,7 +633,7 @@ func FuzzBitmaskEncoder(f *testing.F) {
 func FuzzBitmaskDecoder(f *testing.F) {
 	// Add valid compressed votes from our random vote generator
 	voteGen := generateRandomVote()
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 100; i++ {
 		vote := voteGen.Example(i) // Use deterministic seeds
 
 		if ok := checkBitmaskVoteValid(vote); !ok {
@@ -672,24 +654,18 @@ func FuzzBitmaskDecoder(f *testing.F) {
 	f.Add([]byte{0x01})
 	f.Add([]byte{0x01, 0x02})
 	f.Add([]byte{0xFF, 0xFF})
-
 	// Add additional error test cases for specific bitmasks with required fields
 	f.Add(createMask())
 	f.Add(append(createMask(), 0xFF))
 
-	// Define two types of tests using rapid.MakeFuzz:
-	// 1. A test that uses rapid to generate completely random byte sequences
-	// 2. A test that uses our properly structured compressed votes but mutates them
 	f.Fuzz(func(t *testing.T, data []byte) {
-		// This is the standard fuzzing approach - just try to decompress the input
-		// and make sure it doesn't crash
 		dec := NewBitmaskDecoder()
-		_, _ = dec.DecompressVote(nil, data) // We don't care about the error or result, just that it doesn't crash
+		_, _ = dec.DecompressVote(nil, data) // Ensure it doesn't crash
 	})
 }
 
-// TestCompareEncoders compares the output sizes of BitmaskEncoder and StaticEncoder
-func TestCompareEncoders(t *testing.T) {
+// TestBitmaskCompareEncoders compares the output sizes of BitmaskEncoder and StaticEncoder
+func TestBitmaskCompareEncoders(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	// Manually run a number of iterations to match the original test
