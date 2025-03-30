@@ -176,9 +176,6 @@ func (d *BitmaskDecoder) DecompressVote(dst, src []byte) ([]byte, error) {
 	d.dst = append(d.dst, staticTable[staticIdxMapMarker1]...)
 
 	// cred.pf should always appear (checked in requiredFieldsMask)
-	if (mask & bitPf) == 0 {
-		return nil, fmt.Errorf("pf bit missing")
-	}
 	if err := d.literalBin80(staticIdxPfField); err != nil {
 		return nil, err
 	}
