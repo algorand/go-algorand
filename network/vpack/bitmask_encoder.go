@@ -164,19 +164,16 @@ func (e *BitmaskEncoder) writeDynamicVaruint(fieldNameIdx uint8, b []byte) error
 
 func (e *BitmaskEncoder) writeDynamicBin32(idx uint8, b [32]byte) {
 	e.updateMask(idx)
-	e.buf = append(e.buf, markerDynamicBin32)
 	e.buf = append(e.buf, b[:]...)
 }
 
 func (e *BitmaskEncoder) writeLiteralBin64(idx uint8, b [64]byte) {
 	e.updateMask(idx)
-	e.buf = append(e.buf, markerLiteralBin64)
 	e.buf = append(e.buf, b[:]...)
 }
 
 func (e *BitmaskEncoder) writeLiteralBin80(idx uint8, b [80]byte) {
 	e.updateMask(idx)
-	e.buf = append(e.buf, markerLiteralBin80)
 	e.buf = append(e.buf, b[:]...)
 }
 
@@ -324,13 +321,8 @@ func (d *BitmaskDecoder) DecompressVote(dst, src []byte) ([]byte, error) {
 }
 
 func (d *BitmaskDecoder) literalBin64(staticIdxField uint8) error {
-	if d.pos+1+64 > len(d.src) {
+	if d.pos+64 > len(d.src) {
 		return fmt.Errorf("not enough data to read literal bin64 marker + value for field %d", staticIdxField)
-	}
-	marker := d.src[d.pos] // read custom marker
-	d.pos++
-	if marker != markerLiteralBin64 {
-		return fmt.Errorf("not a literal bin64 for field %d", staticIdxField)
 	}
 	d.dst = append(d.dst, staticTable[staticIdxField]...)
 	d.dst = append(d.dst, msgpBin8Len64...)
@@ -340,13 +332,8 @@ func (d *BitmaskDecoder) literalBin64(staticIdxField uint8) error {
 }
 
 func (d *BitmaskDecoder) dynamicBin32(staticIdxField uint8) error {
-	if d.pos+1+32 > len(d.src) {
+	if d.pos+32 > len(d.src) {
 		return fmt.Errorf("not enough data to read dynamic bin32 marker + value for field %d", staticIdxField)
-	}
-	marker := d.src[d.pos] // read custom marker
-	d.pos++
-	if marker != markerDynamicBin32 {
-		return fmt.Errorf("not a dynamic bin32 for field %d", staticIdxField)
 	}
 	d.dst = append(d.dst, staticTable[staticIdxField]...)
 	d.dst = append(d.dst, msgpBin8Len32...)
@@ -356,13 +343,8 @@ func (d *BitmaskDecoder) dynamicBin32(staticIdxField uint8) error {
 }
 
 func (d *BitmaskDecoder) literalBin80(staticIdxField uint8) error {
-	if d.pos+1+80 > len(d.src) {
+	if d.pos+80 > len(d.src) {
 		return fmt.Errorf("not enough data to read literal bin80 marker + value for field %d", staticIdxField)
-	}
-	marker := d.src[d.pos] // read custom marker
-	d.pos++
-	if marker != markerLiteralBin80 {
-		return fmt.Errorf("not a literal bin80 for field %d", staticIdxField)
 	}
 	d.dst = append(d.dst, staticTable[staticIdxField]...)
 	d.dst = append(d.dst, msgpBin8Len80...)

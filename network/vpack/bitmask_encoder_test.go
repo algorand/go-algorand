@@ -671,8 +671,8 @@ func TestBitmaskCompareEncoders(t *testing.T) {
 	// Manually run a number of iterations to match the original test
 	const iterations = 1000
 
-	var bitmaskTotal, staticTotal int
-	var validVotes int
+	var validVotes, invalidVotes, bitmaskErrorVotes, staticErrorVotes int
+	var bitmaskTotal, staticTotal, msgpTotal int
 
 	// Create a vote generator
 	voteGen := generateRandomVote()
@@ -684,6 +684,7 @@ func TestBitmaskCompareEncoders(t *testing.T) {
 
 		// Check if vote is valid for compression
 		if ok := checkBitmaskVoteValid(v0); !ok {
+			invalidVotes++
 			continue // Skip this test case if vote is invalid
 		}
 
@@ -693,6 +694,7 @@ func TestBitmaskCompareEncoders(t *testing.T) {
 		encBM := NewBitmaskEncoder()
 		encBufBM, err := encBM.CompressVote(nil, msgpBuf)
 		if err != nil {
+			bitmaskErrorVotes++
 			continue // Skip on compression error
 		}
 
@@ -700,6 +702,7 @@ func TestBitmaskCompareEncoders(t *testing.T) {
 		encStatic := NewStaticEncoder()
 		encBufStatic, err := encStatic.CompressVote(nil, msgpBuf)
 		if err != nil {
+			staticErrorVotes++
 			continue // Skip on compression error
 		}
 
@@ -707,21 +710,24 @@ func TestBitmaskCompareEncoders(t *testing.T) {
 		validVotes++
 		bitmaskTotal += len(encBufBM)
 		staticTotal += len(encBufStatic)
+		msgpTotal += len(msgpBuf)
 
 		// Log compression statistics for this vote
-		t.Logf("Vote %d - BitmaskEncoder: %d bytes, StaticEncoder: %d bytes, Ratio: %.2f%%",
-			i, len(encBufBM), len(encBufStatic),
-			float64(len(encBufBM))/float64(len(encBufStatic))*100)
+		t.Logf("Vote %d orig size %d - BitmaskEncoder: %d bytes (%.2f%%), StaticEncoder: %d bytes (%.2f%%), Ratio: %.2f%%",
+			i, len(msgpBuf), len(encBufBM), float64(len(encBufBM))/float64(len(msgpBuf))*100, len(encBufStatic),
+			float64(len(encBufStatic))/float64(len(msgpBuf))*100, float64(len(encBufBM))/float64(len(encBufStatic))*100)
 	}
 
 	// Report overall statistics at the end
 	if validVotes > 0 {
 		avgBitmask := float64(bitmaskTotal) / float64(validVotes)
 		avgStatic := float64(staticTotal) / float64(validVotes)
+		avgMsgp := float64(msgpTotal) / float64(validVotes)
 		ratio := avgBitmask / avgStatic * 100
 
-		t.Logf("Average over %d votes - BitmaskEncoder: %.2f bytes, StaticEncoder: %.2f bytes",
-			validVotes, avgBitmask, avgStatic)
-		t.Logf("BitmaskEncoder is %.2f%% the size of StaticEncoder on average", ratio)
+		t.Logf("Average over %d votes - BitmaskEncoder: %.2f bytes (%.2f%%), StaticEncoder: %.2f bytes (%.2f%%), Ratio: %.2f%%",
+			validVotes, avgBitmask, avgBitmask/avgMsgp*100, avgStatic, avgStatic/avgMsgp*100, ratio)
 	}
+
+	t.Logf("Invalid votes: %d, Bitmask errors: %d, Static errors: %d", invalidVotes, bitmaskErrorVotes, staticErrorVotes)
 }
