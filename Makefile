@@ -20,12 +20,13 @@ else
 endif
 S3_RELEASE_BUCKET = $$S3_RELEASE_BUCKET
 
-GOLANG_VERSIONS				:= $(shell ./scripts/get_golang_version.sh all)
-GOLANG_VERSION_BUILD		:= $(firstword $(GOLANG_VERSIONS))
-GOLANG_VERSION_SUPPORT		:= $(lastword $(GOLANG_VERSIONS))
-GOLANG_VERSION_BUILD_MAJOR	:= $(shell echo $(GOLANG_VERSION_BUILD) | cut -d'.' -f1,2)
-CURRENT_GO_VERSION			:= $(shell go version | cut -d " " -f 3 | tr -d 'go')
-CURRENT_GO_VERSION_MAJOR	:= $(shell echo $(CURRENT_GO_VERSION) | cut -d'.' -f1,2)
+GOLANG_VERSIONS            := $(shell ./scripts/get_golang_version.sh all)
+GOLANG_VERSION_BUILD       := $(firstword $(GOLANG_VERSIONS))
+GOLANG_VERSION_BUILD_MAJOR := $(shell echo $(GOLANG_VERSION_BUILD) | cut -d'.' -f1,2)
+GOLANG_VERSION_MIN         := $(lastword $(GOLANG_VERSIONS))
+GOLANG_VERSION_SUPPORT     := $(shell echo $(GOLANG_VERSION_MIN) | cut -d'.' -f1,2)
+CURRENT_GO_VERSION         := $(shell go version | cut -d " " -f 3 | tr -d 'go')
+CURRENT_GO_VERSION_MAJOR   := $(shell echo $(CURRENT_GO_VERSION) | cut -d'.' -f1,2)
 
 # If build number already set, use it - to ensure same build number across multiple platforms being built
 BUILDNUMBER      ?= $(shell ./scripts/compute_build_number.sh)
