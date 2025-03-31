@@ -17,13 +17,17 @@
 package transactions
 
 import (
+	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
@@ -122,5 +126,434 @@ func TestEncodedAppTxnAllocationBounds(t *testing.T) {
 		if proto.MaxAppBoxReferences > encodedMaxBoxes {
 			require.Failf(t, "proto.MaxAppBoxReferences > encodedMaxBoxes", "protocol version = %s", protoVer)
 		}
+	}
+}
+
+func TestAppCallCreateWellFormed(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	curProto := config.Consensus[protocol.ConsensusCurrentVersion]
+	futureProto := config.Consensus[protocol.ConsensusFuture]
+	addr1, err := basics.UnmarshalChecksumAddress("NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA")
+	require.NoError(t, err)
+	v5 := []byte{0x05}
+	v6 := []byte{0x06}
+
+	usecases := []struct {
+		tx            Transaction
+		proto         config.ConsensusParams
+		expectedError string
+	}{
+		{
+			tx: Transaction{
+				Type: protocol.ApplicationCallTx,
+				Header: Header{
+					Sender:     addr1,
+					Fee:        basics.MicroAlgos{Raw: 1000},
+					LastValid:  105,
+					FirstValid: 100,
+				},
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID:     0,
+					ApprovalProgram:   v5,
+					ClearStateProgram: v5,
+					ApplicationArgs: [][]byte{
+						[]byte("write"),
+					},
+				},
+			},
+			proto: curProto,
+		},
+		{
+			tx: Transaction{
+				Type: protocol.ApplicationCallTx,
+				Header: Header{
+					Sender:     addr1,
+					Fee:        basics.MicroAlgos{Raw: 1000},
+					LastValid:  105,
+					FirstValid: 100,
+				},
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID:     0,
+					ApprovalProgram:   v5,
+					ClearStateProgram: v5,
+					ApplicationArgs: [][]byte{
+						[]byte("write"),
+					},
+					ExtraProgramPages: 0,
+				},
+			},
+			proto: curProto,
+		},
+		{
+			tx: Transaction{
+				Type: protocol.ApplicationCallTx,
+				Header: Header{
+					Sender:     addr1,
+					Fee:        basics.MicroAlgos{Raw: 1000},
+					LastValid:  105,
+					FirstValid: 100,
+				},
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID:     0,
+					ApprovalProgram:   v5,
+					ClearStateProgram: v5,
+					ApplicationArgs: [][]byte{
+						[]byte("write"),
+					},
+					ExtraProgramPages: 3,
+				},
+			},
+			proto: futureProto,
+		},
+		{
+			tx: Transaction{
+				Type: protocol.ApplicationCallTx,
+				Header: Header{
+					Sender:     addr1,
+					Fee:        basics.MicroAlgos{Raw: 1000},
+					LastValid:  105,
+					FirstValid: 100,
+				},
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID:     0,
+					ApprovalProgram:   v5,
+					ClearStateProgram: v5,
+					ApplicationArgs: [][]byte{
+						[]byte("write"),
+					},
+					ExtraProgramPages: 0,
+				},
+			},
+			proto: futureProto,
+		},
+		{
+			tx: Transaction{
+				Type: protocol.ApplicationCallTx,
+				Header: Header{
+					Sender:     addr1,
+					Fee:        basics.MicroAlgos{Raw: 1000},
+					LastValid:  105,
+					FirstValid: 100,
+				},
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApprovalProgram:   v5,
+					ClearStateProgram: v6,
+				},
+			},
+			proto:         futureProto,
+			expectedError: "mismatch",
+		},
+	}
+	for i, usecase := range usecases {
+		t.Run(fmt.Sprintf("i=%d", i), func(t *testing.T) {
+			err := usecase.tx.WellFormed(SpecialAddresses{}, usecase.proto)
+			if usecase.expectedError != "" {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), usecase.expectedError)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestWellFormedErrors(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	curProto := config.Consensus[protocol.ConsensusCurrentVersion]
+	futureProto := config.Consensus[protocol.ConsensusFuture]
+	protoV27 := config.Consensus[protocol.ConsensusV27]
+	protoV28 := config.Consensus[protocol.ConsensusV28]
+	protoV32 := config.Consensus[protocol.ConsensusV32]
+	protoV36 := config.Consensus[protocol.ConsensusV36]
+	addr1, err := basics.UnmarshalChecksumAddress("NDQCJNNY5WWWFLP4GFZ7MEF2QJSMZYK6OWIV2AQ7OMAVLEFCGGRHFPKJJA")
+	require.NoError(t, err)
+	v5 := []byte{0x05}
+	okHeader := Header{
+		Sender:     addr1,
+		Fee:        basics.MicroAlgos{Raw: 1000},
+		LastValid:  105,
+		FirstValid: 100,
+	}
+	usecases := []struct {
+		tx            Transaction
+		proto         config.ConsensusParams
+		expectedError error
+	}{
+		{
+			tx: Transaction{
+				Type:   protocol.ApplicationCallTx,
+				Header: okHeader,
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID:     0, // creation
+					ApprovalProgram:   v5,
+					ClearStateProgram: v5,
+					ApplicationArgs: [][]byte{
+						[]byte("write"),
+					},
+					ExtraProgramPages: 1,
+				},
+			},
+			proto:         protoV27,
+			expectedError: fmt.Errorf("tx.ExtraProgramPages exceeds MaxExtraAppProgramPages = %d", protoV27.MaxExtraAppProgramPages),
+		},
+		{
+			tx: Transaction{
+				Type:   protocol.ApplicationCallTx,
+				Header: okHeader,
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID:     0, // creation
+					ApprovalProgram:   []byte(strings.Repeat("X", 1025)),
+					ClearStateProgram: []byte("Xjunk"),
+				},
+			},
+			proto:         protoV27,
+			expectedError: fmt.Errorf("approval program too long. max len 1024 bytes"),
+		},
+		{
+			tx: Transaction{
+				Type:   protocol.ApplicationCallTx,
+				Header: okHeader,
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID:     0, // creation
+					ApprovalProgram:   []byte(strings.Repeat("X", 1025)),
+					ClearStateProgram: []byte("Xjunk"),
+				},
+			},
+			proto: futureProto,
+		},
+		{
+			tx: Transaction{
+				Type:   protocol.ApplicationCallTx,
+				Header: okHeader,
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID:     0, // creation
+					ApprovalProgram:   []byte(strings.Repeat("X", 1025)),
+					ClearStateProgram: []byte(strings.Repeat("X", 1025)),
+				},
+			},
+			proto:         futureProto,
+			expectedError: fmt.Errorf("app programs too long. max total len 2048 bytes"),
+		},
+		{
+			tx: Transaction{
+				Type:   protocol.ApplicationCallTx,
+				Header: okHeader,
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID:     0, // creation
+					ApprovalProgram:   []byte(strings.Repeat("X", 1025)),
+					ClearStateProgram: []byte(strings.Repeat("X", 1025)),
+					ExtraProgramPages: 1,
+				},
+			},
+			proto: futureProto,
+		},
+		{
+			tx: Transaction{
+				Type:   protocol.ApplicationCallTx,
+				Header: okHeader,
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID: 1,
+					ApplicationArgs: [][]byte{
+						[]byte("write"),
+					},
+					ExtraProgramPages: 1,
+				},
+			},
+			proto:         futureProto,
+			expectedError: fmt.Errorf("tx.ExtraProgramPages is immutable"),
+		},
+		{
+			tx: Transaction{
+				Type:   protocol.ApplicationCallTx,
+				Header: okHeader,
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID:     0,
+					ApprovalProgram:   v5,
+					ClearStateProgram: v5,
+					ApplicationArgs: [][]byte{
+						[]byte("write"),
+					},
+					ExtraProgramPages: 4,
+				},
+			},
+			proto:         futureProto,
+			expectedError: fmt.Errorf("tx.ExtraProgramPages exceeds MaxExtraAppProgramPages = %d", futureProto.MaxExtraAppProgramPages),
+		},
+		{
+			tx: Transaction{
+				Type:   protocol.ApplicationCallTx,
+				Header: okHeader,
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID: 1,
+					ForeignApps:   []basics.AppIndex{10, 11},
+				},
+			},
+			proto: protoV27,
+		},
+		{
+			tx: Transaction{
+				Type:   protocol.ApplicationCallTx,
+				Header: okHeader,
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID: 1,
+					ForeignApps:   []basics.AppIndex{10, 11, 12},
+				},
+			},
+			proto:         protoV27,
+			expectedError: fmt.Errorf("tx.ForeignApps too long, max number of foreign apps is 2"),
+		},
+		{
+			tx: Transaction{
+				Type:   protocol.ApplicationCallTx,
+				Header: okHeader,
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID: 1,
+					ForeignApps:   []basics.AppIndex{10, 11, 12, 13, 14, 15, 16, 17},
+				},
+			},
+			proto: futureProto,
+		},
+		{
+			tx: Transaction{
+				Type:   protocol.ApplicationCallTx,
+				Header: okHeader,
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID: 1,
+					ForeignAssets: []basics.AssetIndex{14, 15, 16, 17, 18, 19, 20, 21, 22},
+				},
+			},
+			proto:         futureProto,
+			expectedError: fmt.Errorf("tx.ForeignAssets too long, max number of foreign assets is 8"),
+		},
+		{
+			tx: Transaction{
+				Type:   protocol.ApplicationCallTx,
+				Header: okHeader,
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID: 1,
+					Accounts:      []basics.Address{{}, {}, {}},
+					ForeignApps:   []basics.AppIndex{14, 15, 16, 17},
+					ForeignAssets: []basics.AssetIndex{14, 15, 16, 17},
+				},
+			},
+			proto:         futureProto,
+			expectedError: fmt.Errorf("tx references exceed MaxAppTotalTxnReferences = 8"),
+		},
+		{
+			tx: Transaction{
+				Type:   protocol.ApplicationCallTx,
+				Header: okHeader,
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID:     1,
+					ApprovalProgram:   []byte(strings.Repeat("X", 1025)),
+					ClearStateProgram: []byte(strings.Repeat("X", 1025)),
+					ExtraProgramPages: 0,
+					OnCompletion:      UpdateApplicationOC,
+				},
+			},
+			proto:         protoV28,
+			expectedError: fmt.Errorf("app programs too long. max total len %d bytes", curProto.MaxAppProgramLen),
+		},
+		{
+			tx: Transaction{
+				Type:   protocol.ApplicationCallTx,
+				Header: okHeader,
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID:     1,
+					ApprovalProgram:   []byte(strings.Repeat("X", 1025)),
+					ClearStateProgram: []byte(strings.Repeat("X", 1025)),
+					ExtraProgramPages: 0,
+					OnCompletion:      UpdateApplicationOC,
+				},
+			},
+			proto: futureProto,
+		},
+		{
+			tx: Transaction{
+				Type:   protocol.ApplicationCallTx,
+				Header: okHeader,
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID:     1,
+					ApprovalProgram:   v5,
+					ClearStateProgram: v5,
+					ApplicationArgs: [][]byte{
+						[]byte("write"),
+					},
+					ExtraProgramPages: 1,
+					OnCompletion:      UpdateApplicationOC,
+				},
+			},
+			proto:         protoV28,
+			expectedError: fmt.Errorf("tx.ExtraProgramPages is immutable"),
+		},
+		{
+			tx: Transaction{
+				Type:   protocol.ApplicationCallTx,
+				Header: okHeader,
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID: 1,
+					Boxes:         []BoxRef{{Index: 1, Name: []byte("junk")}},
+				},
+			},
+			proto:         futureProto,
+			expectedError: fmt.Errorf("tx.Boxes[0].Index is 1. Exceeds len(tx.ForeignApps)"),
+		},
+		{
+			tx: Transaction{
+				Type:   protocol.ApplicationCallTx,
+				Header: okHeader,
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID: 1,
+					Boxes:         []BoxRef{{Index: 1, Name: []byte("junk")}},
+					ForeignApps:   []basics.AppIndex{1},
+				},
+			},
+			proto: futureProto,
+		},
+		{
+			tx: Transaction{
+				Type:   protocol.ApplicationCallTx,
+				Header: okHeader,
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID: 1,
+					Boxes:         []BoxRef{{Index: 1, Name: []byte("junk")}},
+					ForeignApps:   []basics.AppIndex{1},
+				},
+			},
+			proto:         protoV32,
+			expectedError: fmt.Errorf("tx.Boxes too long, max number of box references is 0"),
+		},
+		{
+			tx: Transaction{
+				Type:   protocol.ApplicationCallTx,
+				Header: okHeader,
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID: 1,
+					Boxes:         []BoxRef{{Index: 1, Name: make([]byte, 65)}},
+					ForeignApps:   []basics.AppIndex{1},
+				},
+			},
+			proto:         futureProto,
+			expectedError: fmt.Errorf("tx.Boxes[0].Name too long, max len 64 bytes"),
+		},
+		{
+			tx: Transaction{
+				Type:   protocol.ApplicationCallTx,
+				Header: okHeader,
+				ApplicationCallTxnFields: ApplicationCallTxnFields{
+					ApplicationID: 1,
+					Boxes:         []BoxRef{{Index: 1, Name: make([]byte, 65)}},
+					ForeignApps:   []basics.AppIndex{1},
+				},
+			},
+			proto:         protoV36,
+			expectedError: nil,
+		},
+	}
+	for _, usecase := range usecases {
+		err := usecase.tx.WellFormed(SpecialAddresses{}, usecase.proto)
+		assert.Equal(t, usecase.expectedError, err)
 	}
 }

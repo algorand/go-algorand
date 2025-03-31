@@ -118,25 +118,21 @@ func LoadLedger[T string | ledger.DirsAndPrefix](
 	return l, nil
 }
 
-// AddressTxns returns the list of transactions to/from a given address in specific round
-func (l *Ledger) AddressTxns(id basics.Address, r basics.Round) ([]transactions.SignedTxnWithAD, error) {
+// TxnsFrom returns the list of transactions sent by a given address in a round
+func (l *Ledger) TxnsFrom(id basics.Address, r basics.Round) ([]transactions.Transaction, error) {
 	blk, err := l.Block(r)
 	if err != nil {
 		return nil, err
 	}
-	spec := transactions.SpecialAddresses{
-		FeeSink:     blk.FeeSink,
-		RewardsPool: blk.RewardsPool,
-	}
 
-	var res []transactions.SignedTxnWithAD
+	var res []transactions.Transaction
 	payset, err := blk.DecodePaysetFlat()
 	if err != nil {
 		return nil, err
 	}
 	for _, tx := range payset {
-		if tx.Txn.MatchAddress(id, spec) {
-			res = append(res, tx)
+		if id == tx.Txn.Sender {
+			res = append(res, tx.Txn)
 		}
 	}
 	return res, nil
