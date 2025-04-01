@@ -17,6 +17,8 @@
 package transactions
 
 import (
+	"errors"
+
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/stateproof"
 	"github.com/algorand/go-algorand/data/basics"
@@ -31,6 +33,40 @@ type StateProofTxnFields struct {
 	StateProofType protocol.StateProofType `codec:"sptype"`
 	StateProof     stateproof.StateProof   `codec:"sp"`
 	Message        stateproofmsg.Message   `codec:"spmsg"`
+}
+
+var errBadSenderInStateProofTxn = errors.New("sender must be the state-proof sender")
+var errFeeMustBeZeroInStateproofTxn = errors.New("fee must be zero in state-proof transaction")
+var errNoteMustBeEmptyInStateproofTxn = errors.New("note must be empty in state-proof transaction")
+var errGroupMustBeZeroInStateproofTxn = errors.New("group must be zero in state-proof transaction")
+var errRekeyToMustBeZeroInStateproofTxn = errors.New("rekey must be zero in state-proof transaction")
+var errLeaseMustBeZeroInStateproofTxn = errors.New("lease must be zero in state-proof transaction")
+
+// wellFormed performs stateless checks on the StateProof transaction
+func (sp StateProofTxnFields) wellFormed(header Header) error {
+	// This is a placeholder transaction used to store state proofs
+	// on the ledger, and ensure they are broadly available.  Most of
+	// the fields must be empty.  It must be issued from a special
+	// sender address.
+	if header.Sender != StateProofSender {
+		return errBadSenderInStateProofTxn
+	}
+	if !header.Fee.IsZero() {
+		return errFeeMustBeZeroInStateproofTxn
+	}
+	if len(header.Note) != 0 {
+		return errNoteMustBeEmptyInStateproofTxn
+	}
+	if !header.Group.IsZero() {
+		return errGroupMustBeZeroInStateproofTxn
+	}
+	if !header.RekeyTo.IsZero() {
+		return errRekeyToMustBeZeroInStateproofTxn
+	}
+	if header.Lease != [32]byte{} {
+		return errLeaseMustBeZeroInStateproofTxn
+	}
+	return nil
 }
 
 // specialAddr is used to form a unique address that will send out state proofs.

@@ -28,6 +28,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger/ledgercore"
+	ledgertesting "github.com/algorand/go-algorand/ledger/testing"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/algorand/go-algorand/util/db"
@@ -117,20 +118,13 @@ func (balances keyregTestBalances) StatefulEval(int, *logic.EvalParams, basics.A
 func TestKeyregApply(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	secretSrc := keypair()
-	src := basics.Address(secretSrc.SignatureVerifier)
+	src := ledgertesting.RandomAddress()
 	vrfSecrets := crypto.GenerateVRFSecrets()
-	secretParticipation := keypair()
+	sigVerifier := crypto.SignatureVerifier{0x02, 0x03, 0x04}
 
-	tx := createTestTxn(t, src, secretParticipation, vrfSecrets)
-	err := Keyreg(tx.KeyregTxnFields, tx.Header, makeMockBalances(protocol.ConsensusCurrentVersion), transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(0))
+	tx := createTestKeyreg(t, src, sigVerifier, vrfSecrets)
+	err := Keyreg(tx.KeyregTxnFields, tx.Header, makeMockBalances(protocol.ConsensusCurrentVersion), spec, nil, basics.Round(0))
 	require.NoError(t, err)
-
-	tx.Sender = feeSink
-	err = Keyreg(tx.KeyregTxnFields, tx.Header, makeMockBalances(protocol.ConsensusCurrentVersion), transactions.SpecialAddresses{FeeSink: feeSink}, nil, basics.Round(0))
-	require.Error(t, err)
-
-	tx.Sender = src
 
 	mockBal := newKeyregTestBalances()
 
@@ -163,7 +157,7 @@ func TestKeyregApply(t *testing.T) {
 				LastValid:  basics.Round(1200),
 			},
 			KeyregTxnFields: transactions.KeyregTxnFields{
-				VotePK:          crypto.OneTimeSignatureVerifier(secretParticipation.SignatureVerifier),
+				VotePK:          crypto.OneTimeSignatureVerifier(sigVerifier),
 				SelectionPK:     vrfSecrets.PK,
 				VoteKeyDilution: 1000,
 				VoteFirst:       500,
@@ -208,12 +202,11 @@ func testStateProofPKBeingStored(t *testing.T, tx transactions.Transaction, mock
 func TestStateProofPKKeyReg(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	secretSrc := keypair()
-	src := basics.Address(secretSrc.SignatureVerifier)
+	src := ledgertesting.RandomAddress()
 	vrfSecrets := crypto.GenerateVRFSecrets()
-	secretParticipation := keypair()
+	sigVerifier := crypto.SignatureVerifier{0x01, 0x02}
 
-	tx := createTestTxn(t, src, secretParticipation, vrfSecrets)
+	tx := createTestKeyreg(t, src, sigVerifier, vrfSecrets)
 	mockBal := makeMockBalances(protocol.ConsensusV30)
 	err := Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{}, nil, basics.Round(0))
 	require.NoError(t, err)
@@ -258,11 +251,11 @@ func TestStateProofPKKeyReg(t *testing.T) {
 
 }
 
-func createTestTxn(t *testing.T, src basics.Address, secretParticipation *crypto.SignatureSecrets, vrfSecrets *crypto.VRFSecrets) transactions.Transaction {
-	return createTestTxnWithPeriod(t, src, secretParticipation, vrfSecrets, defaultParticipationFirstRound, defaultParticipationLastRound)
+func createTestKeyreg(t *testing.T, src basics.Address, sigVerifier crypto.SignatureVerifier, vrfSecrets *crypto.VRFSecrets) transactions.Transaction {
+	return createTestKeyregWithPeriod(t, src, sigVerifier, vrfSecrets, defaultParticipationFirstRound, defaultParticipationLastRound)
 }
 
-func createTestTxnWithPeriod(t *testing.T, src basics.Address, secretParticipation *crypto.SignatureSecrets, vrfSecrets *crypto.VRFSecrets, firstRound basics.Round, lastRound basics.Round) transactions.Transaction {
+func createTestKeyregWithPeriod(t *testing.T, src basics.Address, sigVerifier crypto.SignatureVerifier, vrfSecrets *crypto.VRFSecrets, firstRound basics.Round, lastRound basics.Round) transactions.Transaction {
 	store, err := db.MakeAccessor("test-DB", false, true)
 	require.NoError(t, err)
 	defer store.Close()
@@ -280,7 +273,7 @@ func createTestTxnWithPeriod(t *testing.T, src basics.Address, secretParticipati
 			LastValid:  basics.Round(defaultParticipationLastRound),
 		},
 		KeyregTxnFields: transactions.KeyregTxnFields{
-			VotePK:       crypto.OneTimeSignatureVerifier(secretParticipation.SignatureVerifier),
+			VotePK:       crypto.OneTimeSignatureVerifier(sigVerifier),
 			SelectionPK:  vrfSecrets.PK,
 			StateProofPK: signer.GetVerifier().Commitment,
 			VoteFirst:    0,

@@ -30,10 +30,6 @@ var errKeyregGoingOnlineFirstVotingInFuture = errors.New("transaction tries to m
 
 // Keyreg applies a KeyRegistration transaction using the Balances interface.
 func Keyreg(keyreg transactions.KeyregTxnFields, header transactions.Header, balances Balances, spec transactions.SpecialAddresses, ad *transactions.ApplyData, round basics.Round) error {
-	if header.Sender == spec.FeeSink {
-		return fmt.Errorf("cannot register participation key for fee sink's address %v", header.Sender)
-	}
-
 	// Get the user's balance entry
 	record, err := balances.Get(header.Sender, false)
 	if err != nil {
