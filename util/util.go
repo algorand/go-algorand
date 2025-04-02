@@ -43,6 +43,10 @@ func SetFdSoftLimit(newLimit uint64) error {
 	if err != nil {
 		return fmt.Errorf("SetFdSoftLimit() err: %w", err)
 	}
+	if newLimit <= rLimit.Cur {
+		// Current limit is sufficient; no need to change it.
+		return nil
+	}
 
 	rLimit.Cur = newLimit
 	err = syscall.Setrlimit(syscall.RLIMIT_NOFILE, &rLimit)

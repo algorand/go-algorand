@@ -129,6 +129,10 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 		return errors.New(
 			"Initialize() overflowed when adding up ReservedFDs and RestConnectionsHardLimit; decrease them")
 	}
+	if cfg.EnableP2P {
+		// TODO: Decide if this is too much, or not enough.
+		fdRequired = ot.Add(fdRequired, 512)
+	}
 	err = util.SetFdSoftLimit(fdRequired)
 	if err != nil {
 		return fmt.Errorf("Initialize() err: %w", err)
