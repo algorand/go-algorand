@@ -8660,7 +8660,7 @@ func TestUnnamedResourcesLimits(t *testing.T) {
 				unnamedResourceArguments{}.
 					addAccounts(otherAccounts[:proto.MaxAppTotalTxnReferences+1]...).
 					markLimitExceeded(),
-				fmt.Sprintf("logic eval error: invalid Account reference %s", otherAccounts[proto.MaxAppTotalTxnReferences]),
+				fmt.Sprintf("logic eval error: unavailable Account %s", otherAccounts[proto.MaxAppTotalTxnReferences]),
 			)
 
 			// Exactly at asset limit
@@ -8726,7 +8726,7 @@ func TestUnnamedResourcesLimits(t *testing.T) {
 			// Adding 1 more of any is over the limit
 			testResourceAccess(
 				atLimit.addAccounts(otherAccounts[len(otherAccounts)-1]).markLimitExceeded(),
-				fmt.Sprintf("logic eval error: invalid Account reference %s", otherAccounts[len(otherAccounts)-1]),
+				fmt.Sprintf("logic eval error: unavailable Account %s", otherAccounts[len(otherAccounts)-1]),
 			)
 			testResourceAccess(
 				atLimit.addAssets(assets[len(assets)-1]).markLimitExceeded(),

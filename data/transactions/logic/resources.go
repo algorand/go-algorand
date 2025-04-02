@@ -318,15 +318,15 @@ func (r *resources) fillApplicationCallAccess(ep *EvalParams, hdr *transactions.
 			r.sharedApps[rr.App] = struct{}{}
 		case !rr.Holding.Empty():
 			// ApplicationCallTxnFields.wellFormed ensures no error here.
-			address, asset, _ := tx.AccessHolding(rr.Holding, hdr.Sender)
+			address, asset, _ := rr.Holding.Resolve(tx.Access, hdr.Sender)
 			r.shareHolding(address, asset)
 		case !rr.Locals.Empty():
 			// ApplicationCallTxnFields.wellFormed ensures no error here.
-			address, app, _ := tx.AccessLocals(rr.Locals, hdr.Sender)
+			address, app, _ := rr.Locals.Resolve(tx.Access, hdr.Sender)
 			r.shareLocal(address, app)
 		case !rr.Box.Empty():
 			// ApplicationCallTxnFields.wellFormed ensures no error here.
-			app, name, _ := tx.AccessBox(rr.Box)
+			app, name, _ := rr.Box.Resolve(tx.Access)
 			r.shareBox(BoxRef{app, name}, tx.ApplicationID)
 		}
 	}

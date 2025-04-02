@@ -3170,7 +3170,7 @@ app_local_put
 		var problem string
 		switch {
 		case ver < 34: // before v7, app accounts not available at all
-			problem = "invalid Account reference " + id0.Address().String()
+			problem = "unavailable Account " + id0.Address().String()
 		case ver < 38: // as of v7, it's the mutation that's the problem
 			problem = "invalid Account reference for mutation"
 		}

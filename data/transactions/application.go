@@ -197,10 +197,12 @@ type ResourceRef struct {
 	Box     BoxRef            `codec:"b"`
 }
 
-// wellFormed checks that a ResourceRef is of only one kind (or none, all could be empty)
-func (rr ResourceRef) wellFormed() bool {
+// wellFormed checks that a ResourceRef is of only one kind, and that the types
+// that have indices point to slots with refs of the proper type.
+func (rr ResourceRef) wellFormed(access []ResourceRef) error {
 	// Count the number of non-empty fields
 	count := 0
+	// The "basic" resources are inherently wellFormed
 	if !rr.Address.IsZero() {
 		count++
 	}
@@ -210,16 +212,33 @@ func (rr ResourceRef) wellFormed() bool {
 	if rr.App != 0 {
 		count++
 	}
+	// The references that have indices need to be checked
 	if !rr.Holding.Empty() {
+		if _, _, err := rr.Holding.Resolve(access, basics.Address{}); err != nil {
+			return err
+		}
 		count++
 	}
 	if !rr.Locals.Empty() {
+		if _, _, err := rr.Locals.Resolve(access, basics.Address{}); err != nil {
+			return err
+		}
 		count++
 	}
 	if !rr.Box.Empty() {
+		if _, _, err := rr.Box.Resolve(access); err != nil {
+			return err
+		}
 		count++
 	}
-	return count <= 1
+	switch count {
+	case 0:
+		return fmt.Errorf("tx.Access element is empty") // Allow, because BoxRef(0,"") should be ok?
+	case 1:
+		return nil
+	default:
+		return fmt.Errorf("tx.Access element has fields from multiple types")
+	}
 }
 
 // HoldingRef names a holding by referring to an Address and Asset that appear
@@ -237,6 +256,28 @@ func (hr HoldingRef) Empty() bool {
 	return hr.Address == 0 && hr.Asset == 0
 }
 
+// Resolve looks up the referenced address and asset in the access list
+func (hr HoldingRef) Resolve(access []ResourceRef, sender basics.Address) (basics.Address, basics.AssetIndex, error) {
+	address := sender
+	if hr.Address != 0 {
+		if hr.Address > uint64(len(access)) { // recall that Access is 1-based
+			return basics.Address{}, 0, fmt.Errorf("holding Address reference %d outside tx.Access", hr.Address)
+		}
+		address = access[hr.Address-1].Address
+		if address.IsZero() {
+			return basics.Address{}, 0, fmt.Errorf("holding Address reference %d is not an Address", hr.Address)
+		}
+	}
+	if hr.Asset == 0 || hr.Asset > uint64(len(access)) { // 1-based
+		return basics.Address{}, 0, fmt.Errorf("holding Asset reference %d outside tx.Access", hr.Asset)
+	}
+	asset := access[hr.Asset-1].Asset
+	if asset == 0 {
+		return basics.Address{}, 0, fmt.Errorf("holding Asset reference %d is not an Asset", hr.Asset)
+	}
+	return address, asset, nil
+}
+
 // LocalsRef names a local state by referring to an Address and App that appear
 // earlier in the Access list (0 is special cased)
 type LocalsRef struct {
@@ -249,6 +290,29 @@ type LocalsRef struct {
 // mean "give access to the sender's locals for this app", which is implicit.
 func (lr LocalsRef) Empty() bool {
 	return lr.Address == 0 && lr.App == 0
+}
+
+// Resolve looks up the referenced address and app in the access list. 0 is
+// returned if the App index is 0, meaning "current app".
+func (lr LocalsRef) Resolve(access []ResourceRef, sender basics.Address) (basics.Address, basics.AppIndex, error) {
+	address := sender
+	if lr.Address != 0 {
+		if lr.Address > uint64(len(access)) { // recall that Access is 1-based
+			return basics.Address{}, 0, fmt.Errorf("locals Address reference %d outside tx.Access", lr.Address)
+		}
+		address = access[lr.Address-1].Address
+		if address.IsZero() {
+			return basics.Address{}, 0, fmt.Errorf("locals Address reference %d is not an Address", lr.Address)
+		}
+	}
+	if lr.App == 0 || lr.App > uint64(len(access)) { // 1-based
+		return basics.Address{}, 0, fmt.Errorf("holding App reference %d outside tx.Access", lr.App)
+	}
+	app := access[lr.App-1].App
+	if app == 0 {
+		return basics.Address{}, 0, fmt.Errorf("holding App reference %d is not an App", lr.App)
+	}
+	return address, app, nil
 }
 
 // BoxRef names a box by the slot. In the Boxes field, `i` is an index into
@@ -265,6 +329,24 @@ type BoxRef struct {
 // all are empty.)
 func (br BoxRef) Empty() bool {
 	return br.Index == 0 && br.Name == nil
+}
+
+// Resolve looks up the referenced app and returns it with the name. 0 is
+// returned if the App index is 0, meaning "current app".
+func (br BoxRef) Resolve(access []ResourceRef) (basics.AppIndex, string, error) {
+	app := basics.AppIndex(0)
+	switch {
+	case br.Index == 0:
+		return 0, string(br.Name), nil
+	case br.Index <= uint64(len(access)): // 1-based
+		app = access[br.Index-1].App
+		if app == 0 {
+			return 0, "", fmt.Errorf("box Index reference %d is not an App", br.Index)
+		}
+		return app, string(br.Name), nil
+	default:
+		return app, "", fmt.Errorf("box Index %d outside tx.Access", br.Index)
+	}
 }
 
 // Empty indicates whether or not all the fields in the
@@ -372,38 +454,44 @@ func (ac ApplicationCallTxnFields) wellFormed(proto config.ConsensusParams) erro
 
 	if len(ac.Access) > 0 {
 		if len(ac.Access) > proto.MaxAppAccess {
-			return fmt.Errorf("ac.Access too long, max number of references is %d", proto.MaxAppAccess)
+			return fmt.Errorf("tx.Access too long, max number of references is %d", proto.MaxAppAccess)
 		}
 		// When ac.Access is used, no other references are allowed
 		if len(ac.Accounts) > 0 {
-			return errors.New("ac.Accounts can't be used when ac.Access is used")
+			return errors.New("tx.Accounts can't be used when tx.Access is used")
 		}
 		if len(ac.ForeignApps) > 0 {
-			return errors.New("ac.ForeignApps can't be used when ac.Access is used")
+			return errors.New("tx.ForeignApps can't be used when tx.Access is used")
 		}
 		if len(ac.ForeignAssets) > 0 {
-			return errors.New("ac.ForeignAssets can't be used when ac.Access is used")
+			return errors.New("tx.ForeignAssets can't be used when tx.Access is used")
 		}
 		if len(ac.Boxes) > 0 {
-			return errors.New("ac.Boxes can't be used when ac.Access is used")
+			return errors.New("tx.Boxes can't be used when tx.Access is used")
+		}
+
+		for _, rr := range ac.Access {
+			if err := rr.wellFormed(ac.Access); err != nil {
+				return err
+			}
 		}
 	} else {
 		if len(ac.Accounts) > proto.MaxAppTxnAccounts {
-			return fmt.Errorf("ac.Accounts too long, max number of accounts is %d", proto.MaxAppTxnAccounts)
+			return fmt.Errorf("tx.Accounts too long, max number of accounts is %d", proto.MaxAppTxnAccounts)
 		}
 		if len(ac.ForeignApps) > proto.MaxAppTxnForeignApps {
-			return fmt.Errorf("ac.ForeignApps too long, max number of foreign apps is %d", proto.MaxAppTxnForeignApps)
+			return fmt.Errorf("tx.ForeignApps too long, max number of foreign apps is %d", proto.MaxAppTxnForeignApps)
 		}
 		if len(ac.ForeignAssets) > proto.MaxAppTxnForeignAssets {
-			return fmt.Errorf("ac.ForeignAssets too long, max number of foreign assets is %d", proto.MaxAppTxnForeignAssets)
+			return fmt.Errorf("tx.ForeignAssets too long, max number of foreign assets is %d", proto.MaxAppTxnForeignAssets)
 		}
 		if len(ac.Boxes) > proto.MaxAppBoxReferences {
-			return fmt.Errorf("ac.Boxes too long, max number of box references is %d", proto.MaxAppBoxReferences)
+			return fmt.Errorf("tx.Boxes too long, max number of box references is %d", proto.MaxAppBoxReferences)
 		}
 
 		// Limit the sum of all types of references that bring in resource records
 		if len(ac.Accounts)+len(ac.ForeignApps)+len(ac.ForeignAssets)+len(ac.Boxes) > proto.MaxAppTotalTxnReferences {
-			return fmt.Errorf("ac references exceed MaxAppTotalTxnReferences = %d", proto.MaxAppTotalTxnReferences)
+			return fmt.Errorf("tx references exceed MaxAppTotalTxnReferences = %d", proto.MaxAppTotalTxnReferences)
 		}
 	}
 
@@ -498,66 +586,4 @@ func (ac *ApplicationCallTxnFields) IndexByAddress(target basics.Address, sender
 	}
 
 	return 0, fmt.Errorf("invalid Account reference %s does not appear in resource array", target)
-}
-
-// AccessHolding looks up the referenced address and asset in the Access list
-func (ac ApplicationCallTxnFields) AccessHolding(holding HoldingRef, sender basics.Address) (basics.Address, basics.AssetIndex, error) {
-	address := sender
-	if holding.Address != 0 {
-		if holding.Address > uint64(len(ac.Access)) { // recall that Access is 1-based
-			return basics.Address{}, 0, fmt.Errorf("holding Address reference %d outside tx.Access", holding.Address)
-		}
-		address = ac.Access[holding.Address-1].Address
-		if address.IsZero() {
-			return basics.Address{}, 0, fmt.Errorf("holding Address reference %d is not an Address", holding.Address)
-		}
-	}
-	if holding.Asset == 0 || holding.Asset > uint64(len(ac.Access)) { // 1-based
-		return basics.Address{}, 0, fmt.Errorf("holding Asset reference %d outside tx.Access", holding.Asset)
-	}
-	asset := ac.Access[holding.Asset-1].Asset
-	if asset == 0 {
-		return basics.Address{}, 0, fmt.Errorf("holding Asset reference %d is not an Asset", holding.Asset)
-	}
-	return address, asset, nil
-}
-
-// AccessLocals looks up the referenced address and app in the Access list
-func (ac ApplicationCallTxnFields) AccessLocals(locals LocalsRef, sender basics.Address) (basics.Address, basics.AppIndex, error) {
-	address := sender
-	if locals.Address != 0 {
-		if locals.Address > uint64(len(ac.Access)) { // recall that Access is 1-based
-			return basics.Address{}, 0, fmt.Errorf("locals Address reference %d outside tx.Access", locals.Address)
-		}
-		address = ac.Access[locals.Address-1].Address
-		if address.IsZero() {
-			return basics.Address{}, 0, fmt.Errorf("locals Address reference %d is not an Address", locals.Address)
-		}
-	}
-	if locals.App == 0 || locals.App > uint64(len(ac.Access)) { // 1-based
-		return basics.Address{}, 0, fmt.Errorf("holding App reference %d outside tx.Access", locals.App)
-	}
-	app := ac.Access[locals.App-1].App
-	if app == 0 {
-		return basics.Address{}, 0, fmt.Errorf("holding App reference %d is not an App", locals.App)
-	}
-	return address, app, nil
-}
-
-// AccessBox looks up the referenced app and returns it with the name. 0 is
-// returned if the index is 0, meaning "current app".
-func (ac ApplicationCallTxnFields) AccessBox(box BoxRef) (basics.AppIndex, string, error) {
-	app := basics.AppIndex(0)
-	switch {
-	case box.Index == 0:
-		return 0, string(box.Name), nil
-	case box.Index <= uint64(len(ac.Access)): // 1-based
-		app := ac.Access[box.Index-1].App
-		if app == 0 {
-			return 0, "", fmt.Errorf("box Index reference %d is not an App", box.Index)
-		}
-		return app, string(box.Name), nil
-	default:
-		return app, "", fmt.Errorf("box Index %d outside tx.Access", box.Index)
-	}
 }

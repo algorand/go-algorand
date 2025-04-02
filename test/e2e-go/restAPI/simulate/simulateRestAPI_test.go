@@ -2642,7 +2642,7 @@ int 1
 		AllowUnnamedResources: false,
 	})
 	a.NoError(err)
-	a.Contains(*resp.TxnGroups[0].FailureMessage, "logic eval error: invalid Account reference "+otherAddress)
+	a.Contains(*resp.TxnGroups[0].FailureMessage, "logic eval error: unavailable Account "+otherAddress)
 	a.Equal([]uint64{0}, *resp.TxnGroups[0].FailedAt)
 
 	// It should work with AllowUnnamedResources=true

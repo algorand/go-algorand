@@ -183,12 +183,12 @@ func TestAppSharing(t *testing.T) {
 	sources = []string{`gtxn 1 Sender; byte "key"; byte "val"; app_local_put; int 1`}
 	TestApps(t, sources, txntest.Group(&appl0, &appl1), 9, ledger)
 	TestApps(t, sources, txntest.Group(&appl0, &appl1), 8, ledger, // 8 doesn't share the account
-		Exp(0, "invalid Account reference "+appl1.Sender.String()))
+		Exp(0, "unavailable Account "+appl1.Sender.String()))
 	// same for app_local_del
 	sources = []string{`gtxn 1 Sender; byte "key"; app_local_del; int 1`}
 	TestApps(t, sources, txntest.Group(&appl0, &appl1), 9, ledger)
 	TestApps(t, sources, txntest.Group(&appl0, &appl1), 8, ledger, // 8 doesn't share the account
-		Exp(0, "invalid Account reference "+appl1.Sender.String()))
+		Exp(0, "unavailable Account "+appl1.Sender.String()))
 }
 
 // TestBetterLocalErrors confirms that we get specific errors about the missing
@@ -422,9 +422,9 @@ func TestOtherTxSharing(t *testing.T) {
 		TestApps(t, []string{senderBalance, ""}, txntest.Group(&appl, &send), 9, ledger)
 
 		TestApps(t, []string{"", senderBalance}, txntest.Group(&send, &appl), 8, ledger,
-			Exp(1, "invalid Account reference"))
+			Exp(1, "unavailable Account"))
 		TestApps(t, []string{senderBalance, ""}, txntest.Group(&appl, &send), 8, ledger,
-			Exp(0, "invalid Account reference"))
+			Exp(0, "unavailable Account"))
 	}
 
 	holdingAccess := `
@@ -451,7 +451,7 @@ func TestOtherTxSharing(t *testing.T) {
 		// The other account is not (it's not even in the pay txn)
 		appl.ApplicationArgs = [][]byte{otherAcct[:]}
 		TestApps(t, []string{"", otherBalance}, txntest.Group(&pay, &appl), 9, ledger,
-			Exp(1, "invalid Account reference "+otherAcct.String()))
+			Exp(1, "unavailable Account "+otherAcct.String()))
 
 		// The other account becomes accessible because used in CloseRemainderTo
 		withClose := pay
@@ -463,7 +463,7 @@ func TestOtherTxSharing(t *testing.T) {
 		// The other account is not available even though it's all the extra addresses
 		appl.ApplicationArgs = [][]byte{otherAcct[:]}
 		TestApps(t, []string{"", otherBalance}, txntest.Group(&acfg, &appl), 9, ledger,
-			Exp(1, "invalid Account reference "+otherAcct.String()))
+			Exp(1, "unavailable Account "+otherAcct.String()))
 	})
 
 	t.Run("axfer", func(t *testing.T) { // nolint:paralleltest // shares `ledger`
@@ -490,7 +490,7 @@ func TestOtherTxSharing(t *testing.T) {
 		// AssetCloseTo holding becomes available when set
 		appl.ApplicationArgs = [][]byte{other2Acct[:], {byte(axfer.XferAsset)}}
 		TestApps(t, []string{"", other2Balance}, txntest.Group(&axfer, &appl), 9, ledger,
-			Exp(1, "invalid Account reference "+other2Acct.String()))
+			Exp(1, "unavailable Account "+other2Acct.String()))
 		TestApps(t, []string{"", holdingAccess}, txntest.Group(&axfer, &appl), 9, ledger,
 			Exp(1, "unavailable Account "+other2Acct.String()))
 

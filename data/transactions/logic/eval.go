@@ -4912,7 +4912,7 @@ func (cx *EvalContext) holdingReference(account stackValue, ref uint64) (basics.
 		if slices.IndexFunc(cx.txn.Txn.Access, func(rr transactions.ResourceRef) bool {
 			// See if any holding in tx.Access matches what we need
 			if h := rr.Holding; !h.Empty() {
-				haddr, hasset, _ := cx.txn.Txn.AccessHolding(h, cx.txn.Txn.Sender)
+				haddr, hasset, _ := h.Resolve(cx.txn.Txn.Access, cx.txn.Txn.Sender)
 				if haddr == addr && hasset == asset {
 					return true
 				}
