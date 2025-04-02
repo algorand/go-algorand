@@ -74,6 +74,18 @@ func (r *resources) shareLocal(addr basics.Address, id basics.AppIndex) {
 	r.sharedLocals[ledgercore.AccountApp{Address: addr, App: id}] = struct{}{}
 }
 
+func (r *resources) shareBox(br BoxRef, current basics.AppIndex) {
+	if br.App == 0 {
+		// "current app": Ignore if this is a create, else use ApplicationID
+		if current == 0 {
+			// When the create actually happens, and we learn the appID, we'll add it.
+			return
+		}
+		br.App = current
+	}
+	r.boxes[br] = false
+}
+
 // In the fill* and allows* routines, we pass the header and the fields in
 // separately, even though they are pointers into the same structure. That
 // prevents dumb attempts to use other fields from the transaction.
@@ -280,7 +292,7 @@ func (cx *EvalContext) allowsAssetFreeze(hdr *transactions.Header, tx *transacti
 }
 
 func (r *resources) fillApplicationCall(ep *EvalParams, hdr *transactions.Header, tx *transactions.ApplicationCallTxnFields) {
-	if len(tx.Access) > 0 {
+	if tx.Access != nil {
 		r.fillApplicationCallAccess(ep, hdr, tx)
 	} else {
 		r.fillApplicationCallForeign(ep, hdr, tx)
@@ -305,12 +317,17 @@ func (r *resources) fillApplicationCallAccess(ep *EvalParams, hdr *transactions.
 		case rr.App != 0:
 			r.sharedApps[rr.App] = struct{}{}
 		case !rr.Holding.Empty():
-			address, asset := tx.AccessHolding(rr.Holding)
+			// ApplicationCallTxnFields.wellFormed ensures no error here.
+			address, asset, _ := tx.AccessHolding(rr.Holding, hdr.Sender)
 			r.shareHolding(address, asset)
 		case !rr.Locals.Empty():
-			address, app := tx.AccessLocals(rr.Locals)
+			// ApplicationCallTxnFields.wellFormed ensures no error here.
+			address, app, _ := tx.AccessLocals(rr.Locals, hdr.Sender)
 			r.shareLocal(address, app)
 		case !rr.Box.Empty():
+			// ApplicationCallTxnFields.wellFormed ensures no error here.
+			app, name, _ := tx.AccessBox(rr.Box)
+			r.shareBox(BoxRef{app, name}, tx.ApplicationID)
 		}
 	}
 }
@@ -351,21 +368,14 @@ func (r *resources) fillApplicationCallForeign(ep *EvalParams, hdr *transactions
 	}
 
 	for _, br := range tx.Boxes {
-		var app basics.AppIndex
-		if br.Index == 0 {
-			// "current app": Ignore if this is a create, else use ApplicationID
-			if tx.ApplicationID == 0 {
-				// When the create actually happens, and we learn the appID, we'll add it.
-				continue
-			}
-			app = tx.ApplicationID
-		} else {
-			// Bounds check will already have been done by
+		app := basics.AppIndex(0) // 0 can be handled by shareBox as current
+		if br.Index != 0 {
+			// Upper bounds check will already have been done by
 			// WellFormed. For testing purposes, it's better to panic
 			// now than after returning a nil.
-			app = tx.ForeignApps[br.Index-1] // shift for the 0=this convention
+			app = tx.ForeignApps[br.Index-1] // shift for the 0=current convention
 		}
-		r.boxes[BoxRef{app, string(br.Name)}] = false
+		r.shareBox(BoxRef{app, string(br.Name)}, tx.ApplicationID)
 	}
 }
 

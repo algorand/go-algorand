@@ -459,7 +459,7 @@ func (ac *ApplicationCallTxnFields) AddressByIndex(accountIdx uint64, sender bas
 		// An index > 0 corresponds to an offset into txn.Access. Check to
 		// make sure the index is valid.
 		if accountIdx > uint64(len(ac.Access)) {
-			return basics.Address{}, fmt.Errorf("address reference %d outside tx.Access", accountIdx)
+			return basics.Address{}, fmt.Errorf("invalid Account reference %d exceeds length of tx.Access %d", accountIdx, len(ac.Access))
 		}
 		rr := ac.Access[accountIdx-1]
 		if rr.Address.IsZero() {
@@ -471,7 +471,7 @@ func (ac *ApplicationCallTxnFields) AddressByIndex(accountIdx uint64, sender bas
 	// An index > 0 corresponds to an offset into txn.Accounts. Check to
 	// make sure the index is valid.
 	if accountIdx > uint64(len(ac.Accounts)) {
-		return basics.Address{}, fmt.Errorf("invalid Account reference %d", accountIdx)
+		return basics.Address{}, fmt.Errorf("invalid Account reference %d exceeds length of tx.Accounts %d", accountIdx, len(ac.Accounts))
 	}
 
 	// accountIdx must be in [1, len(ac.Accounts)]
@@ -479,12 +479,17 @@ func (ac *ApplicationCallTxnFields) AddressByIndex(accountIdx uint64, sender bas
 }
 
 // IndexByAddress converts an address into an integer offset into [txn.Sender,
-// txn.Accounts[0], ...], returning the index at the first match. It returns
-// an error if there is no such match.
+// XXX[0], ...], returning the index at the first match. XXX is tx.Access or
+// tx.Accounts. It returns an error if there is no such match.
 func (ac *ApplicationCallTxnFields) IndexByAddress(target basics.Address, sender basics.Address) (uint64, error) {
 	// Index 0 always corresponds to the sender
 	if target == sender {
 		return 0, nil
+	}
+
+	// Try ac.Access first. Remember only one of Access or Accounts can be set.
+	if idx := slices.IndexFunc(ac.Access, func(rr ResourceRef) bool { return rr.Address == target }); idx != -1 {
+		return uint64(idx) + 1, nil
 	}
 
 	// Otherwise we index into ac.Accounts
@@ -492,5 +497,67 @@ func (ac *ApplicationCallTxnFields) IndexByAddress(target basics.Address, sender
 		return uint64(idx) + 1, nil
 	}
 
-	return 0, fmt.Errorf("invalid Account reference %s", target)
+	return 0, fmt.Errorf("invalid Account reference %s does not appear in resource array", target)
+}
+
+// AccessHolding looks up the referenced address and asset in the Access list
+func (ac ApplicationCallTxnFields) AccessHolding(holding HoldingRef, sender basics.Address) (basics.Address, basics.AssetIndex, error) {
+	address := sender
+	if holding.Address != 0 {
+		if holding.Address > uint64(len(ac.Access)) { // recall that Access is 1-based
+			return basics.Address{}, 0, fmt.Errorf("holding Address reference %d outside tx.Access", holding.Address)
+		}
+		address = ac.Access[holding.Address-1].Address
+		if address.IsZero() {
+			return basics.Address{}, 0, fmt.Errorf("holding Address reference %d is not an Address", holding.Address)
+		}
+	}
+	if holding.Asset == 0 || holding.Asset > uint64(len(ac.Access)) { // 1-based
+		return basics.Address{}, 0, fmt.Errorf("holding Asset reference %d outside tx.Access", holding.Asset)
+	}
+	asset := ac.Access[holding.Asset-1].Asset
+	if asset == 0 {
+		return basics.Address{}, 0, fmt.Errorf("holding Asset reference %d is not an Asset", holding.Asset)
+	}
+	return address, asset, nil
+}
+
+// AccessLocals looks up the referenced address and app in the Access list
+func (ac ApplicationCallTxnFields) AccessLocals(locals LocalsRef, sender basics.Address) (basics.Address, basics.AppIndex, error) {
+	address := sender
+	if locals.Address != 0 {
+		if locals.Address > uint64(len(ac.Access)) { // recall that Access is 1-based
+			return basics.Address{}, 0, fmt.Errorf("locals Address reference %d outside tx.Access", locals.Address)
+		}
+		address = ac.Access[locals.Address-1].Address
+		if address.IsZero() {
+			return basics.Address{}, 0, fmt.Errorf("locals Address reference %d is not an Address", locals.Address)
+		}
+	}
+	if locals.App == 0 || locals.App > uint64(len(ac.Access)) { // 1-based
+		return basics.Address{}, 0, fmt.Errorf("holding App reference %d outside tx.Access", locals.App)
+	}
+	app := ac.Access[locals.App-1].App
+	if app == 0 {
+		return basics.Address{}, 0, fmt.Errorf("holding App reference %d is not an App", locals.App)
+	}
+	return address, app, nil
+}
+
+// AccessBox looks up the referenced app and returns it with the name. 0 is
+// returned if the index is 0, meaning "current app".
+func (ac ApplicationCallTxnFields) AccessBox(box BoxRef) (basics.AppIndex, string, error) {
+	app := basics.AppIndex(0)
+	switch {
+	case box.Index == 0:
+		return 0, string(box.Name), nil
+	case box.Index <= uint64(len(ac.Access)): // 1-based
+		app := ac.Access[box.Index-1].App
+		if app == 0 {
+			return 0, "", fmt.Errorf("box Index reference %d is not an App", box.Index)
+		}
+		return app, string(box.Name), nil
+	default:
+		return app, "", fmt.Errorf("box Index %d outside tx.Access", box.Index)
+	}
 }

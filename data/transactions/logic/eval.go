@@ -4246,7 +4246,7 @@ func (cx *EvalContext) accountReference(account stackValue) (basics.Address, uin
 	// created earlier in the group, or because of group sharing)
 	ok := cx.availableAccount(addr)
 	if !ok {
-		return addr, 0, fmt.Errorf("invalid Account reference %s", addr)
+		return addr, 0, fmt.Errorf("unavailable Account %s", addr)
 	}
 	// available, but not in txn.Accounts. Return 1 higher to signal.
 	return addr, uint64(len(cx.txn.Txn.Accounts) + 1), nil
@@ -4823,7 +4823,11 @@ func (cx *EvalContext) assetReference(ref uint64, foreign bool) (aid basics.Asse
 		if ref < uint64(len(cx.txn.Txn.ForeignAssets)) {
 			return basics.AssetIndex(cx.txn.Txn.ForeignAssets[ref]), nil
 		}
-		return 0, fmt.Errorf("Asset index %d beyond txn.ForeignAssets", ref)
+		// it seems most consistent to allow slot access into tx.Access if it is used with an old app.
+		if ref > 0 && ref-1 < uint64(len(cx.txn.Txn.Access)) && cx.txn.Txn.Access[ref-1].Asset != 0 {
+			return basics.AssetIndex(cx.txn.Txn.Access[ref-1].Asset), nil
+		}
+		return 0, fmt.Errorf("Asset index %d beyond access arrays", ref)
 	}
 	// Otherwise it's direct
 	return basics.AssetIndex(ref), nil
@@ -4831,9 +4835,8 @@ func (cx *EvalContext) assetReference(ref uint64, foreign bool) (aid basics.Asse
 
 const lastForbiddenResource = 255
 
-// resolveAsset figures out what Asset an integer is referring to, considering 0 as
-// current app first, then uses the integer as is if it is an availableAsset, then
-// tries to perform a slot lookup.
+// resolveAsset figures out what Asset an integer is referring to, checking if
+// the integer is an availableAsset, then tries to perform a slot lookup.
 func (cx *EvalContext) resolveAsset(ref uint64) (aid basics.AssetIndex, err error) {
 	if cx.Proto.AppForbidLowResources {
 		defer func() {
@@ -4853,7 +4856,11 @@ func (cx *EvalContext) resolveAsset(ref uint64) (aid basics.AssetIndex, err erro
 	if ref < uint64(len(cx.txn.Txn.ForeignAssets)) {
 		return basics.AssetIndex(cx.txn.Txn.ForeignAssets[ref]), nil
 	}
-	return 0, fmt.Errorf("unavailable Asset %d", ref)
+	if ref > 0 && ref-1 < uint64(len(cx.txn.Txn.Access)) && cx.txn.Txn.Access[ref-1].Asset != 0 {
+		fmt.Printf("2\n")
+		return basics.AssetIndex(cx.txn.Txn.Access[ref-1].Asset), nil
+	}
+	return 0, fmt.Errorf("unavailable Asset %d while resolving %+v in v%d", ref, cx.txn.Txn.Access, cx.version)
 }
 
 func (cx *EvalContext) holdingReference(account stackValue, ref uint64) (basics.Address, basics.AssetIndex, error) {
@@ -4898,6 +4905,24 @@ func (cx *EvalContext) holdingReference(account stackValue, ref uint64) (basics.
 	if err != nil {
 		return basics.Address{}, 0, err
 	}
+
+	// But if the transaction is using tx.Access, we must be more stringent, or
+	// else we open up to crazy cross product access rules or worse in v3.
+	if cx.txn.Txn.Access != nil {
+		if slices.IndexFunc(cx.txn.Txn.Access, func(rr transactions.ResourceRef) bool {
+			// See if any holding in tx.Access matches what we need
+			if h := rr.Holding; !h.Empty() {
+				haddr, hasset, _ := cx.txn.Txn.AccessHolding(h, cx.txn.Txn.Sender)
+				if haddr == addr && hasset == asset {
+					return true
+				}
+			}
+			return false
+		}) == -1 {
+			return basics.Address{}, 0, fmt.Errorf("unavailable Holding %s x %d is not in tx.Access", addr, asset)
+		}
+	}
+
 	return addr, asset, nil
 }
 
@@ -5208,7 +5233,7 @@ func (cx *EvalContext) assignAsset(sv stackValue) (basics.AssetIndex, error) {
 		return aid, nil
 	}
 
-	return 0, fmt.Errorf("unavailable Asset %d", aid)
+	return 0, fmt.Errorf("unavailable Asset %d during assignment %v", aid, cx.available)
 }
 
 // availableAsset determines whether an asset is "available". Before
@@ -5219,7 +5244,10 @@ func (cx *EvalContext) assignAsset(sv stackValue) (basics.AssetIndex, error) {
 // transaction (axfer,acfg,afrz), but not for holding lookups or assignments to
 // an inner static array.
 func (cx *EvalContext) availableAsset(aid basics.AssetIndex) bool {
-	// Ensure that aid is in Foreign Assets
+	// Ensure that aid is in an access array
+	if slices.ContainsFunc(cx.txn.Txn.Access, func(rr transactions.ResourceRef) bool { return rr.Asset == aid }) {
+		return true
+	}
 	if slices.Contains(cx.txn.Txn.ForeignAssets, aid) {
 		return true
 	}
