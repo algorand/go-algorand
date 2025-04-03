@@ -326,10 +326,12 @@ func (ct *catchpointTracker) finishFirstStageAfterCrash(dbRound basics.Round, bl
 		return err
 	}
 
-	// pass dbRound+1-maxBalLookback as the onlineAccountsForgetBefore parameter: since we can't be sure whether
+	// pass 0 as the onlineAccountsForgetBefore parameter: since we can't be sure whether
 	// there are more than 320 rounds of history in the online accounts tables, this ensures the catchpoint
 	// will only contain the most recent 320 rounds.
-	onlineAccountsForgetBefore := catchpointLookbackHorizonForNextRound(dbRound, config.Consensus[blockProto])
+	// Inside finishFirstStage, this has the same effect as the voters tracker returning a "lowestRound" of 0,
+	// which causes finishFirstStage to calculate the correct horizon and filter out data older than dbround+1-320.
+	onlineAccountsForgetBefore := basics.Round(0)
 	return ct.finishFirstStage(context.Background(), dbRound, onlineAccountsForgetBefore, blockProto, 0)
 }
 
