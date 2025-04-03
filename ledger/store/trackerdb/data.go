@@ -90,7 +90,6 @@ type ResourcesData struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	// asset parameters ( basics.AssetParams )
-	GlobalFrozen  bool           `codec:"0"`
 	Total         uint64         `codec:"a"`
 	Decimals      uint32         `codec:"b"`
 	DefaultFrozen bool           `codec:"c"`
@@ -102,6 +101,7 @@ type ResourcesData struct {
 	Reserve       basics.Address `codec:"i"`
 	Freeze        basics.Address `codec:"j"`
 	Clawback      basics.Address `codec:"k"`
+	GlobalFrozen  bool           `codec:"G"`
 
 	// asset holding ( basics.AssetHolding )
 	Amount uint64 `codec:"l"`
