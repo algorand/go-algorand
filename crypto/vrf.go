@@ -21,6 +21,7 @@ package crypto
 // #cgo linux,amd64 CFLAGS: -I${SRCDIR}/libs/linux/amd64/include
 // #cgo linux,arm64 CFLAGS: -I${SRCDIR}/libs/linux/arm64/include
 // #cgo linux,arm CFLAGS: -I${SRCDIR}/libs/linux/arm/include
+// #cgo linux,riscv64 CFLAGS: -I${SRCDIR}/libs/linux/riscv64/include
 // #cgo windows,amd64 CFLAGS: -I${SRCDIR}/libs/windows/amd64/include
 // #include <stdint.h>
 // #include "sodium.h"
