@@ -34,7 +34,6 @@ var (
 	assetTotal              uint64
 	assetDecimals           uint32
 	assetFrozen             bool
-	assetGlobalFrozen       bool
 	assetUnitName           string
 	assetMetadataHashBase64 string
 	assetURL                string
@@ -116,7 +115,6 @@ func init() {
 	freezeAssetCmd.Flags().StringVar(&assetUnitName, "asset", "", "Unit name of the asset being frozen")
 	freezeAssetCmd.Flags().StringVar(&account, "account", "", "Account address to freeze/unfreeze")
 	freezeAssetCmd.Flags().BoolVar(&assetFrozen, "freeze", false, "Freeze or unfreeze")
-	freezeAssetCmd.Flags().BoolVar(&assetGlobalFrozen, "global-freeze", false, "Globally freeze or unfreeze")
 	freezeAssetCmd.MarkFlagRequired("freezer")
 
 	optinAssetCmd.Flags().StringVar(&assetUnitName, "asset", "", "Unit name of the asset being accepted")
