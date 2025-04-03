@@ -839,26 +839,14 @@ func (c *Client) MakeUnsignedAssetFreezeTx(index uint64, accountToChange string,
 	tx.Type = protocol.AssetFreezeTx
 	tx.FreezeAsset = basics.AssetIndex(index)
 
-	tx.FreezeAccount, err = basics.UnmarshalChecksumAddress(accountToChange)
-	if err != nil {
-		return tx, err
+	if accountToChange != "" {
+		tx.FreezeAccount, err = basics.UnmarshalChecksumAddress(accountToChange)
+		if err != nil {
+			return tx, err
+		}
 	}
 
 	tx.AssetFrozen = newFreezeSetting
-
-	return tx, nil
-}
-
-// MakeUnsignedAssetGlobalFreezeTx creates a tx template for globally freezing an asset.
-//
-// Call FillUnsignedTxTemplate afterwards to fill out common fields in
-// the resulting transaction template.
-func (c *Client) MakeUnsignedAssetGlobalFreezeTx(index uint64, newFreezeSetting bool) (transactions.Transaction, error) {
-	var tx transactions.Transaction
-
-	tx.Type = protocol.AssetFreezeTx
-	tx.FreezeAsset = basics.AssetIndex(index)
-	tx.GlobalFrozen = newFreezeSetting
 
 	return tx, nil
 }

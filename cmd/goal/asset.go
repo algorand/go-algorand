@@ -609,24 +609,16 @@ var freezeAssetCmd = &cobra.Command{
 
 		freezer := accountList.getAddressByName(assetFreezer)
 		creatorResolved := accountList.getAddressByName(assetCreator)
+		accountResolved := accountList.getAddressByName(account)
 
 		lookupAssetID(cmd, creatorResolved, client)
 
 		var tx transactions.Transaction
 		var err error
 
-		if account != "" {
-			accountResolved := accountList.getAddressByName(account)
-
-			tx, err = client.MakeUnsignedAssetFreezeTx(assetID, accountResolved, assetFrozen)
-			if err != nil {
-				reportErrorf("Cannot construct transaction: %s", err)
-			}
-		} else {
-			tx, err = client.MakeUnsignedAssetGlobalFreezeTx(assetID, assetGlobalFrozen)
-			if err != nil {
-				reportErrorf("Cannot construct transaction: %s", err)
-			}
+		tx, err = client.MakeUnsignedAssetFreezeTx(assetID, accountResolved, assetFrozen)
+		if err != nil {
+			reportErrorf("Cannot construct transaction: %s", err)
 		}
 
 		tx.Note = parseNoteField(cmd)

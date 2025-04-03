@@ -462,20 +462,11 @@ func AssetFreeze(cf transactions.AssetFreezeTxnFields, header transactions.Heade
 		return fmt.Errorf("freeze not allowed: sender %v, freeze %v", header.Sender, params.Freeze)
 	}
 
-	// If FreezeAccount is zero, then this is a global freeze/unfreeze operation.
-	if cf.FreezeAccount == (basics.Address{}) {
-		// Update global frozen state.
-		if cf.GlobalFrozen {
-			params.GlobalFrozen = true
-		} else {
-			params.GlobalFrozen = false
-		}
+	// If FreezeAccount is not set, then this is a global freeze/unfreeze operation.
+	if cf.FreezeAccount.IsZero() {
+		params.GlobalFrozen = cf.AssetFrozen
 
 		return balances.PutAssetParams(creator, cf.FreezeAsset, params)
-	}
-
-	if cf.GlobalFrozen {
-		return fmt.Errorf("cannot freeze account and global at the same time")
 	}
 
 	// Get the account to be frozen/unfrozen.
