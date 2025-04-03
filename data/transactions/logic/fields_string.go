@@ -145,12 +145,13 @@ func _() {
 	_ = x[AssetFreeze-9]
 	_ = x[AssetClawback-10]
 	_ = x[AssetCreator-11]
-	_ = x[invalidAssetParamsField-12]
+	_ = x[AssetGlobalFrozen-12]
+	_ = x[invalidAssetParamsField-13]
 }
 
-const _AssetParamsField_name = "AssetTotalAssetDecimalsAssetDefaultFrozenAssetUnitNameAssetNameAssetURLAssetMetadataHashAssetManagerAssetReserveAssetFreezeAssetClawbackAssetCreatorinvalidAssetParamsField"
+const _AssetParamsField_name = "AssetTotalAssetDecimalsAssetDefaultFrozenAssetUnitNameAssetNameAssetURLAssetMetadataHashAssetManagerAssetReserveAssetFreezeAssetClawbackAssetCreatorAssetGlobalFrozeninvalidAssetParamsField"
 
-var _AssetParamsField_index = [...]uint8{0, 10, 23, 41, 54, 63, 71, 88, 100, 112, 123, 136, 148, 171}
+var _AssetParamsField_index = [...]uint8{0, 10, 23, 41, 54, 63, 71, 88, 100, 112, 123, 136, 148, 165, 188}
 
 func (i AssetParamsField) String() string {
 	if i < 0 || i >= AssetParamsField(len(_AssetParamsField_index)-1) {
@@ -222,12 +223,13 @@ func _() {
 	var x [1]struct{}
 	_ = x[AssetBalance-0]
 	_ = x[AssetFrozen-1]
-	_ = x[invalidAssetHoldingField-2]
+	_ = x[AccountFrozen-2]
+	_ = x[invalidAssetHoldingField-3]
 }
 
-const _AssetHoldingField_name = "AssetBalanceAssetFrozeninvalidAssetHoldingField"
+const _AssetHoldingField_name = "AssetBalanceAssetFrozenAccountFrozeninvalidAssetHoldingField"
 
-var _AssetHoldingField_index = [...]uint8{0, 12, 23, 47}
+var _AssetHoldingField_index = [...]uint8{0, 12, 23, 36, 60}
 
 func (i AssetHoldingField) String() string {
 	if i < 0 || i >= AssetHoldingField(len(_AssetHoldingField_index)-1) {
