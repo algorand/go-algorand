@@ -197,44 +197,42 @@ type ResourceRef struct {
 	Box     BoxRef            `codec:"b"`
 }
 
-// wellFormed checks that a ResourceRef is of only one kind, and that the types
-// that have indices point to slots with refs of the proper type.
+// Empty ResourceRefs are allowed, as they ask for a box quota bump.
+func (rr ResourceRef) Empty() bool {
+	return rr.Address.IsZero() && rr.Asset == 0 && rr.App == 0 &&
+		rr.Holding.Empty() && rr.Locals.Empty() && rr.Box.Empty()
+}
+
+// wellFormed checks that a ResourceRef is either empty or of only one kind, and
+// that the types that have indices point to slots with refs of the proper type.
 func (rr ResourceRef) wellFormed(access []ResourceRef) error {
 	// Count the number of non-empty fields
 	count := 0
+	switch {
 	// The "basic" resources are inherently wellFormed
-	if !rr.Address.IsZero() {
+	case !rr.Address.IsZero(), rr.Asset != 0, rr.App != 0:
 		count++
-	}
-	if rr.Asset != 0 {
-		count++
-	}
-	if rr.App != 0 {
-		count++
-	}
 	// The references that have indices need to be checked
-	if !rr.Holding.Empty() {
+	case !rr.Holding.Empty():
 		if _, _, err := rr.Holding.Resolve(access, basics.Address{}); err != nil {
 			return err
 		}
 		count++
-	}
-	if !rr.Locals.Empty() {
+	case !rr.Locals.Empty():
 		if _, _, err := rr.Locals.Resolve(access, basics.Address{}); err != nil {
 			return err
 		}
 		count++
-	}
-	if !rr.Box.Empty() {
+	case !rr.Box.Empty():
 		if _, _, err := rr.Box.Resolve(access); err != nil {
 			return err
 		}
 		count++
+	case !rr.Empty(): // If it's not one of those, it has to be empty
+		return fmt.Errorf("tx.Access with unknown content")
 	}
 	switch count {
-	case 0:
-		return fmt.Errorf("tx.Access element is empty") // Allow, because BoxRef(0,"") should be ok?
-	case 1:
+	case 0, 1:
 		return nil
 	default:
 		return fmt.Errorf("tx.Access element has fields from multiple types")
@@ -253,7 +251,7 @@ type HoldingRef struct {
 // hr.Asset to be a 1-based index for consistency with LocalRef (which does it
 // because 0 means "this app")
 func (hr HoldingRef) Empty() bool {
-	return hr.Address == 0 && hr.Asset == 0
+	return hr == HoldingRef{}
 }
 
 // Resolve looks up the referenced address and asset in the access list
@@ -289,7 +287,7 @@ type LocalsRef struct {
 // Empty does the obvious. An empty LocalsRef makes no sense, because it would
 // mean "give access to the sender's locals for this app", which is implicit.
 func (lr LocalsRef) Empty() bool {
-	return lr.Address == 0 && lr.App == 0
+	return lr == LocalsRef{}
 }
 
 // Resolve looks up the referenced address and app in the access list. 0 is
@@ -549,6 +547,7 @@ func (ac *ApplicationCallTxnFields) AddressByIndex(accountIdx uint64, sender bas
 		if accountIdx > uint64(len(ac.Access)) {
 			return basics.Address{}, fmt.Errorf("invalid Account reference %d exceeds length of tx.Access %d", accountIdx, len(ac.Access))
 		}
+		// And now check that the index refers to an Address
 		rr := ac.Access[accountIdx-1]
 		if rr.Address.IsZero() {
 			return basics.Address{}, fmt.Errorf("address reference %d is not an Address in tx.Access", accountIdx)

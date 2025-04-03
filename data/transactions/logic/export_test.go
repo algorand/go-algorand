@@ -41,6 +41,7 @@ func (l *Ledger) DelBoxes(app basics.AppIndex, names ...string) {
 	}
 }
 
+var ConvertEPToAccess = convertEPToAccess
 var DefaultSigParams = defaultSigParams
 var DefaultAppParams = defaultAppParams
 var Exp = exp

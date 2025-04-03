@@ -109,8 +109,8 @@ func TestAppSharing(t *testing.T) {
 		Exp(1, "unavailable Local State "+appl1.Sender.String()))
 
 	// But it's ok in appl2, because appl2 uses the same Sender, even though the
-	// foreign-app is not repeated in appl2 because the holding being accessed
-	// is the one from tx0.
+	// localref is not repeated in appl2 because the locals being accessed is
+	// the one from tx0.
 	TestApps(t, []string{optInCheck500, optInCheck500}, txntest.Group(&appl0, &appl2), 9, ledger)
 	TestApps(t, []string{optInCheck500, optInCheck500}, txntest.Group(&appl0, &appl2), 8, ledger, // version 8 does not get sharing
 		Exp(1, "unavailable App 500"))
@@ -182,6 +182,209 @@ func TestAppSharing(t *testing.T) {
 	ledger.NewLocals(appl1.Sender, 900) // opt in
 	sources = []string{`gtxn 1 Sender; byte "key"; byte "val"; app_local_put; int 1`}
 	TestApps(t, sources, txntest.Group(&appl0, &appl1), 9, ledger)
+	TestApps(t, sources, txntest.Group(&appl0, &appl1), 8, ledger, // 8 doesn't share the account
+		Exp(0, "unavailable Account "+appl1.Sender.String()))
+	// same for app_local_del
+	sources = []string{`gtxn 1 Sender; byte "key"; app_local_del; int 1`}
+	TestApps(t, sources, txntest.Group(&appl0, &appl1), 9, ledger)
+	TestApps(t, sources, txntest.Group(&appl0, &appl1), 8, ledger, // 8 doesn't share the account
+		Exp(0, "unavailable Account "+appl1.Sender.String()))
+}
+
+// TestAppAccess confirms availablility of apps using tx.Access
+func TestAppAccess(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	// Create some sample transactions. The main reason this a blackbox test
+	// (_test package) is to have access to txntest.
+	appl0 := txntest.Txn{
+		Type:          protocol.ApplicationCallTx,
+		ApplicationID: 900,
+		Sender:        basics.Address{1, 2, 3, 4},
+		Access: []transactions.ResourceRef{{
+			App: 500,
+		}, {
+			Locals: transactions.LocalsRef{
+				Address: 0,
+				App:     1,
+			},
+		}},
+	}
+
+	appl0noLocals := txntest.Txn{
+		Type:          protocol.ApplicationCallTx,
+		ApplicationID: 900,
+		Sender:        basics.Address{1, 2, 3, 4},
+		Access: []transactions.ResourceRef{{
+			App: 500,
+		}},
+	}
+
+	appl1 := txntest.Txn{
+		Type:          protocol.ApplicationCallTx,
+		ApplicationID: 901,
+		Sender:        basics.Address{4, 3, 2, 1},
+	}
+
+	appl2 := txntest.Txn{
+		Type:          protocol.ApplicationCallTx,
+		ApplicationID: 902,
+		Sender:        basics.Address{1, 2, 3, 4},
+	}
+
+	pay1 := txntest.Txn{
+		Type:     protocol.PaymentTx,
+		Sender:   basics.Address{5, 5, 5, 5},
+		Receiver: basics.Address{6, 6, 6, 6},
+	}
+
+	getSchema := "int 500; app_params_get AppGlobalNumByteSlice; !; assert; pop; int 1"
+	// In v8, the first tx can read app params of 500, because it's in its
+	// access array, but the second can't
+	TestApps(t, []string{getSchema, getSchema}, txntest.Group(&appl0, &appl1), 8, nil,
+		Exp(1, "unavailable App 500"))
+	// In v9, the second can, because the first can.
+	TestApps(t, []string{getSchema, getSchema}, txntest.Group(&appl0, &appl1), 9, nil)
+
+	getLocalEx := `txn Sender; int 500; byte "some-key"; app_local_get_ex; pop; pop; int 1`
+
+	// In contrast, here there's no help from v9, because the second tx is
+	// reading the locals for a different account.
+
+	// app_local_get* requires the address and the app exist, else the program fails
+	TestApps(t, []string{getLocalEx, getLocalEx}, txntest.Group(&appl0, &appl1), 8, nil,
+		Exp(0, "no account"))
+
+	_, _, ledger := MakeSampleEnv()
+	ledger.NewAccount(appl0.Sender, 100_000)
+	ledger.NewAccount(appl1.Sender, 100_000)
+	ledger.NewApp(appl0.Sender, 500, basics.AppParams{})
+	ledger.NewLocals(appl0.Sender, 500) // opt in
+	// Now txn0 passes, but txn1 has an error because it can't see app 500
+	TestApps(t, []string{getLocalEx, getLocalEx}, txntest.Group(&appl0, &appl1), 9, ledger,
+		Exp(1, "unavailable Local State"))
+
+	// Locals won't be available if we only listed the app in tx.Access
+	TestApps(t, []string{getLocalEx, getLocalEx}, txntest.Group(&appl0noLocals, &appl1), 9, ledger,
+		Exp(0, "unavailable Local State"))
+
+	// But it's ok in appl2, because appl2 uses the same Sender, even though the
+	// foreign-app is not repeated in appl2 because the holding being accessed
+	// is the one from tx0.
+	TestApps(t, []string{getLocalEx, getLocalEx}, txntest.Group(&appl0, &appl2), 9, ledger)
+	TestApps(t, []string{getLocalEx, getLocalEx}, txntest.Group(&appl0, &appl2), 8, ledger, // version 8 does not get sharing
+		Exp(1, "unavailable App 500"))
+
+	// Checking if an account is opted in has pretty much the same rules
+	optInCheck500 := "txn Sender; int 500; app_opted_in"
+
+	// app_opted_in requires the address and the app exist, else the program fails
+	TestApps(t, []string{optInCheck500, optInCheck500}, txntest.Group(&appl0, &appl1), 9, nil, // nil ledger, no account
+		Exp(0, "no account: "+appl0.Sender.String()))
+
+	// Now txn0 passes, but txn1 has an error because it can't see app 500 locals for appl1.Sender
+	TestApps(t, []string{optInCheck500, optInCheck500}, txntest.Group(&appl0, &appl1), 9, ledger,
+		Exp(1, "unavailable Local State "+appl1.Sender.String()))
+
+	// But it's ok in appl2, because appl2 uses the same Sender, even though the
+	// foreign-app is not repeated in appl2 because the holding being accessed
+	// is the one from tx0.
+	TestApps(t, []string{optInCheck500, optInCheck500}, txntest.Group(&appl0, &appl2), 9, ledger)
+	TestApps(t, []string{optInCheck500, optInCheck500}, txntest.Group(&appl0, &appl2), 8, ledger, // version 8 does not get sharing
+		Exp(1, "unavailable App 500"))
+
+	// Confirm sharing applies to the app id called in tx0, not just access array
+	optInCheck900 := "txn Sender; int 900; app_opted_in; !" // we did not opt any senders into 900
+
+	// as above, appl1 can't see the local state, but appl2 can b/c sender is same as appl0
+	TestApps(t, []string{optInCheck900, optInCheck900}, txntest.Group(&appl0, &appl1), 9, ledger,
+		Exp(1, "unavailable Local State "+appl1.Sender.String()))
+	TestApps(t, []string{optInCheck900, optInCheck900}, txntest.Group(&appl0, &appl2), 9, ledger)
+	fmt.Println("unavailable Local State " + appl2.Sender.String() + " x 900 is not in tx.Access")
+	TestApps(t, []string{optInCheck900, optInCheck900}, txntest.Group(&appl0, &appl2), 8, ledger, // v8=no sharing
+		Exp(1, "unavailable App 900")) // without sharing, even the app is unavailable, let along locals
+
+	// Now, confirm that *setting* a local state in tx1 that was made available
+	// in tx0 works.  The extra check here is that the change is recorded
+	// properly in EvalDelta.
+	putLocal := `txn ApplicationArgs 0; byte "X"; int 74; app_local_put; int 1`
+
+	noop := `int 1`
+	sources := []string{noop, putLocal}
+	appl1.ApplicationArgs = [][]byte{appl0.Sender[:]} // tx1 will try to modify local state exposed in tx0
+	// appl0.Sender is available, but 901's local state for it isn't (only 900's is, since 900 was called in tx0)
+	TestApps(t, sources, txntest.Group(&appl0, &appl1), 9, ledger,
+		Exp(1, "unavailable Local State "+appl0.Sender.String()))
+	// Add 901 to tx0's Access. Still won't work because we don't include the Locals yet
+	appl0.Access = append(appl0.Access, transactions.ResourceRef{App: 901})
+	TestApps(t, sources, txntest.Group(&appl0, &appl1), 9, ledger,
+		Exp(1, "unavailable Local State "+appl0.Sender.String()+" x 901"))
+	// Now add the LocalsRef
+	appl0.Access = append(appl0.Access, transactions.ResourceRef{
+		Locals: transactions.LocalsRef{
+			Address: 0,
+			App:     uint64(len(appl0.Access)), // reference 901 we added
+		}})
+	// This error shows we have access, just not opted in.
+	TestApps(t, sources, txntest.Group(&appl0, &appl1), 9, ledger,
+		Exp(1, "account "+appl0.Sender.String()+" is not opted into 901"))
+	ledger.NewLocals(appl0.Sender, 901) // opt in
+	ep, _ := TestApps(t, sources, txntest.Group(&appl0, &appl1), 9, ledger)
+	require.Len(t, ep.TxnGroup, 2)
+	ed := ep.TxnGroup[1].ApplyData.EvalDelta
+	require.Equal(t, map[uint64]basics.StateDelta{
+		1: { // no tx.Accounts, 1 indicates first in SharedAccts
+			"X": {
+				Action: basics.SetUintAction,
+				Uint:   74,
+			},
+		},
+	}, ed.LocalDeltas)
+	require.Len(t, ed.SharedAccts, 1)
+	require.Equal(t, ep.TxnGroup[0].Txn.Sender, ed.SharedAccts[0])
+
+	// when running all three, appl2 can't read the locals of app in tx0 and addr in tx1
+	sources = []string{"", "", "gtxn 1 Sender; gtxn 0 Applications 0; byte 0xAA; app_local_get_ex"}
+	TestApps(t, sources, txntest.Group(&appl0, &appl1, &appl2), 9, nil,
+		Exp(2, "unavailable Local State")) // note that the error message is for Locals, not specialized
+	// same test of an account in Access of tx1 rather than Sender, but no Locals in tx1
+	junk := "J5YDZLPOHWB5O6MVRHNFGY4JXIQAYYM6NUJWPBSYBBIXH5ENQ4Z5LTJELU"
+	j5y, err := basics.UnmarshalChecksumAddress(junk)
+	require.NoError(t, err)
+	appl1.Access = append(appl1.Access, transactions.ResourceRef{
+		Address: j5y,
+	})
+	sources = []string{"", "", `
+addr J5YDZLPOHWB5O6MVRHNFGY4JXIQAYYM6NUJWPBSYBBIXH5ENQ4Z5LTJELU
+gtxn 0 Applications 0; byte 0xAA; app_local_get_ex`}
+	TestApps(t, sources, txntest.Group(&appl0, &appl1, &appl2), 9, nil,
+		Exp(2, "unavailable Local State")) // note that the error message is for Locals, not specialized
+
+	// try to do a put on local state of the account in tx1, but tx0 ought not have access to that local state
+	ledger.NewAccount(pay1.Receiver, 200_000)
+	ledger.NewLocals(pay1.Receiver, 900) // opt in
+	sources = []string{`gtxn 1 Receiver; byte "key"; byte "val"; app_local_put; int 1`}
+	TestApps(t, sources, txntest.Group(&appl0, &pay1), 9, ledger,
+		Exp(0, "unavailable Local State "+pay1.Receiver.String()))
+
+	// same for app_local_del
+	sources = []string{`gtxn 1 Receiver; byte "key"; app_local_del; int 1`}
+	TestApps(t, sources, txntest.Group(&appl0, &pay1), 9, ledger,
+		Exp(0, "unavailable Local State "+pay1.Receiver.String()))
+
+	// now, use an app call in tx1, with 900 in Access
+	appl1.Access = append(appl1.Access, transactions.ResourceRef{App: 900})
+	ledger.NewLocals(appl1.Sender, 900) // opt in
+	sources = []string{`gtxn 1 Sender; byte "key"; byte "val"; app_local_put; int 1`}
+	// not enough: app 900 is in Access, but not the locals
+	TestApps(t, sources, txntest.Group(&appl0, &appl1), 9, ledger,
+		Exp(0, "unavailable Local State "+appl1.Sender.String()))
+	appl1.Access = append(appl1.Access, transactions.ResourceRef{
+		Locals: transactions.LocalsRef{
+			App:     uint64(len(appl1.Access)),
+			Address: 0,
+		}})
 	TestApps(t, sources, txntest.Group(&appl0, &appl1), 8, ledger, // 8 doesn't share the account
 		Exp(0, "unavailable Account "+appl1.Sender.String()))
 	// same for app_local_del

@@ -1161,11 +1161,17 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 
 	// Check the I/O budget for reading if this is the first top-level app call
 	if cx.caller == nil && !cx.readBudgetChecked {
-		boxRefCount := uint64(0) // Intentionally counts duplicates
+		bumps := uint64(0) // Intentionally counts duplicates
 		for _, tx := range cx.TxnGroup {
-			boxRefCount += uint64(len(tx.Txn.Boxes))
+			bumps += uint64(len(tx.Txn.Boxes))
+			for _, rr := range tx.Txn.Access {
+				// A box or an empty ref is an io quota bump
+				if !rr.Box.Empty() || rr.Empty() {
+					bumps++
+				}
+			}
 		}
-		cx.ioBudget = boxRefCount * cx.Proto.BytesPerBoxReference
+		cx.ioBudget = bumps * cx.Proto.BytesPerBoxReference
 
 		used := uint64(0)
 		for br := range cx.available.boxes {
@@ -4714,8 +4720,13 @@ func (cx *EvalContext) appReference(ref uint64, foreign bool) (aid basics.AppInd
 	if foreign {
 		// In old versions, a foreign reference must be an index in ForeignApps or 0
 		if ref <= uint64(len(cx.txn.Txn.ForeignApps)) {
-			return basics.AppIndex(cx.txn.Txn.ForeignApps[ref-1]), nil
+			return cx.txn.Txn.ForeignApps[ref-1], nil
 		}
+		// it seems most consistent to allow slot access into tx.Access if it is used with an old app.
+		if ref > 0 && ref-1 < uint64(len(cx.txn.Txn.Access)) && cx.txn.Txn.Access[ref-1].App != 0 {
+			return cx.txn.Txn.Access[ref-1].App, nil
+		}
+
 		return 0, fmt.Errorf("App index %d beyond txn.ForeignApps", ref)
 	}
 	// Otherwise it's direct
@@ -4746,8 +4757,12 @@ func (cx *EvalContext) resolveApp(ref uint64) (aid basics.AppIndex, err error) {
 	// given to anyone who cares about semantics in the first few rounds of
 	// a new network - don't use indexes for references, use the App ID
 	if ref <= uint64(len(cx.txn.Txn.ForeignApps)) {
-		return basics.AppIndex(cx.txn.Txn.ForeignApps[ref-1]), nil
+		return cx.txn.Txn.ForeignApps[ref-1], nil
 	}
+	if ref > 0 && ref-1 < uint64(len(cx.txn.Txn.Access)) && cx.txn.Txn.Access[ref-1].App != 0 {
+		return cx.txn.Txn.Access[ref-1].App, nil
+	}
+
 	return 0, fmt.Errorf("unavailable App %d", ref)
 }
 
@@ -4769,21 +4784,22 @@ func (cx *EvalContext) localsReference(account stackValue, ref uint64) (basics.A
 			}
 		}
 
-		// Do an extra check to give a better error. The app is definitely
-		// available. If the addr is too, then the trouble is they must have
-		// come from different transactions, and the HOLDING is the problem.
+		// Do an extra check to give a better error, which also allows the
+		// UnnamedResources code to notice that the account must be available as
+		// well.
 
 		acctOK := cx.availableAccount(addr)
+		localsErr := fmt.Errorf("unavailable Local State %s x %d", addr, aid)
 		switch {
 		case err != nil && acctOK:
-			// do nothing, err contains the an Asset specific problem
+			// do nothing, err contains the an App specific problem
 		case err == nil && acctOK:
 			// although both are available, the LOCALS are not
-			err = fmt.Errorf("unavailable Local State %s x %d", addr, aid)
+			err = localsErr
 		case err != nil && !acctOK:
-			err = fmt.Errorf("unavailable Account %s, %w", addr, err)
+			err = fmt.Errorf("unavailable Account %s, %w, %w", addr, err, localsErr)
 		case err == nil && !acctOK:
-			err = fmt.Errorf("unavailable Account %s", addr)
+			err = fmt.Errorf("unavailable Account %s, %w", addr, localsErr)
 		}
 
 		return basics.Address{}, 0, 0, err
@@ -4799,7 +4815,32 @@ func (cx *EvalContext) localsReference(account stackValue, ref uint64) (basics.A
 	if err != nil {
 		return basics.Address{}, 0, 0, err
 	}
-	return addr, app, addrIdx, nil
+
+	// But if the transaction is using tx.Access, we must be more stringent, or
+	// else we open up to accessing a huge cross-product of locals.
+	if cx.txn.Txn.Access == nil {
+		return addr, app, addrIdx, nil
+	}
+
+	if addr == cx.txn.Txn.Sender && app == cx.appID {
+		return addr, app, addrIdx, nil
+	}
+
+	if slices.ContainsFunc(cx.txn.Txn.Access,
+		func(rr transactions.ResourceRef) bool {
+			// See if any holding in tx.Access matches what we need
+			if l := rr.Locals; !l.Empty() {
+				laddr, lapp, _ := l.Resolve(cx.txn.Txn.Access, cx.txn.Txn.Sender)
+				if laddr == addr && lapp == app {
+					return true
+				}
+			}
+			return false
+		}) {
+		return addr, app, addrIdx, nil
+	}
+	return basics.Address{}, 0, 0, fmt.Errorf("unavailable Local State %s x %d is not in tx.Access", addr, app)
+
 }
 
 func (cx *EvalContext) assetReference(ref uint64, foreign bool) (aid basics.AssetIndex, err error) {
@@ -4821,11 +4862,11 @@ func (cx *EvalContext) assetReference(ref uint64, foreign bool) (aid basics.Asse
 	if foreign {
 		// In old versions, a foreign reference must be an index in ForeignAssets
 		if ref < uint64(len(cx.txn.Txn.ForeignAssets)) {
-			return basics.AssetIndex(cx.txn.Txn.ForeignAssets[ref]), nil
+			return cx.txn.Txn.ForeignAssets[ref], nil
 		}
 		// it seems most consistent to allow slot access into tx.Access if it is used with an old app.
 		if ref > 0 && ref-1 < uint64(len(cx.txn.Txn.Access)) && cx.txn.Txn.Access[ref-1].Asset != 0 {
-			return basics.AssetIndex(cx.txn.Txn.Access[ref-1].Asset), nil
+			return cx.txn.Txn.Access[ref-1].Asset, nil
 		}
 		return 0, fmt.Errorf("Asset index %d beyond access arrays", ref)
 	}
@@ -4854,13 +4895,12 @@ func (cx *EvalContext) resolveAsset(ref uint64) (aid basics.AssetIndex, err erro
 	// given to anyone who cares about semantics in the first few rounds of
 	// a new network - don't use indexes for references, use the Asset ID
 	if ref < uint64(len(cx.txn.Txn.ForeignAssets)) {
-		return basics.AssetIndex(cx.txn.Txn.ForeignAssets[ref]), nil
+		return cx.txn.Txn.ForeignAssets[ref], nil
 	}
 	if ref > 0 && ref-1 < uint64(len(cx.txn.Txn.Access)) && cx.txn.Txn.Access[ref-1].Asset != 0 {
-		fmt.Printf("2\n")
-		return basics.AssetIndex(cx.txn.Txn.Access[ref-1].Asset), nil
+		return cx.txn.Txn.Access[ref-1].Asset, nil
 	}
-	return 0, fmt.Errorf("unavailable Asset %d while resolving %+v in v%d", ref, cx.txn.Txn.Access, cx.version)
+	return 0, fmt.Errorf("unavailable Asset %d", ref)
 }
 
 func (cx *EvalContext) holdingReference(account stackValue, ref uint64) (basics.Address, basics.AssetIndex, error) {
@@ -4907,9 +4947,13 @@ func (cx *EvalContext) holdingReference(account stackValue, ref uint64) (basics.
 	}
 
 	// But if the transaction is using tx.Access, we must be more stringent, or
-	// else we open up to crazy cross product access rules or worse in v3.
-	if cx.txn.Txn.Access != nil {
-		if slices.IndexFunc(cx.txn.Txn.Access, func(rr transactions.ResourceRef) bool {
+	// else we open up to accessing a huge cross-product of holdings.
+	if cx.txn.Txn.Access == nil {
+		return addr, asset, nil
+	}
+
+	if slices.ContainsFunc(cx.txn.Txn.Access,
+		func(rr transactions.ResourceRef) bool {
 			// See if any holding in tx.Access matches what we need
 			if h := rr.Holding; !h.Empty() {
 				haddr, hasset, _ := h.Resolve(cx.txn.Txn.Access, cx.txn.Txn.Sender)
@@ -4918,12 +4962,10 @@ func (cx *EvalContext) holdingReference(account stackValue, ref uint64) (basics.
 				}
 			}
 			return false
-		}) == -1 {
-			return basics.Address{}, 0, fmt.Errorf("unavailable Holding %s x %d is not in tx.Access", addr, asset)
-		}
+		}) {
+		return addr, asset, nil
 	}
-
-	return addr, asset, nil
+	return basics.Address{}, 0, fmt.Errorf("unavailable Holding %s x %d is not in tx.Access", addr, asset)
 }
 
 func opAssetHoldingGet(cx *EvalContext) error {
@@ -5244,7 +5286,7 @@ func (cx *EvalContext) assignAsset(sv stackValue) (basics.AssetIndex, error) {
 // transaction (axfer,acfg,afrz), but not for holding lookups or assignments to
 // an inner static array.
 func (cx *EvalContext) availableAsset(aid basics.AssetIndex) bool {
-	// Ensure that aid is in an access array
+	// Check if aid is in an access array
 	if slices.ContainsFunc(cx.txn.Txn.Access, func(rr transactions.ResourceRef) bool { return rr.Asset == aid }) {
 		return true
 	}
@@ -5289,7 +5331,10 @@ func (cx *EvalContext) assignApp(sv stackValue) (basics.AppIndex, error) {
 }
 
 func (cx *EvalContext) availableApp(aid basics.AppIndex) bool {
-	// Ensure that aid is in Foreign Apps
+	// Check if aid is in an access array
+	if slices.ContainsFunc(cx.txn.Txn.Access, func(rr transactions.ResourceRef) bool { return rr.App == aid }) {
+		return true
+	}
 	if slices.Contains(cx.txn.Txn.ForeignApps, aid) {
 		return true
 	}
