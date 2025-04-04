@@ -4922,15 +4922,13 @@ func opAssetHoldingGet(cx *EvalContext) error {
 
 	var exist uint64 = 0
 	var value stackValue
-	if params, _, err := cx.Ledger.AssetParams(asset); err == nil {
-		// params exist, fetch the holding
-		if holding, err := cx.Ledger.AssetHolding(addr, asset); err == nil {
-			// the holding exists, read the value
-			exist = 1
-			value, err = cx.assetHoldingToValue(&holding, fs, &params)
-			if err != nil {
-				return err
-			}
+	if holding, err := cx.Ledger.AssetHolding(addr, asset); err == nil {
+		// the holding exists, read the value
+		exist = 1
+		params, _, _ := cx.Ledger.AssetParams(asset) // Asset may be deleted, so empty params is fine
+		value, err = cx.assetHoldingToValue(&holding, fs, &params)
+		if err != nil {
+			return err
 		}
 	}
 
