@@ -51,6 +51,8 @@ var catchpointFile string
 var outFileName string
 var excludedFields = cmdutil.MakeCobraStringSliceValue(nil, []string{"version", "catchpoint"})
 var printDigests bool
+var onlineOnly bool
+var rawDump bool
 
 func init() {
 	fileCmd.Flags().StringVarP(&catchpointFile, "tar", "t", "", "Specify the catchpoint file (either .tar or .tar.gz) to process")
@@ -59,9 +61,8 @@ func init() {
 	fileCmd.Flags().BoolVarP(&printDigests, "digest", "d", false, "Print balances and spver digests")
 	fileCmd.Flags().VarP(excludedFields, "exclude-fields", "e", "List of fields to exclude from the dump: ["+excludedFields.AllowedString()+"]")
 	fileCmd.Flags().BoolVarP(&rawDump, "raw", "R", false, "Dump raw catchpoint data, ignoring ledger database operations")
+	fileCmd.Flags().BoolVarP(&onlineOnly, "online-only", "O", false, "Only print online accounts and online round params data")
 }
-
-var rawDump bool
 
 var fileCmd = &cobra.Command{
 	Use:   "file",
@@ -141,18 +142,22 @@ var fileCmd = &cobra.Command{
 				}
 				defer outFile.Close()
 			}
-			err = printAccountsDatabase("./ledger.tracker.sqlite", true, fileHeader, outFile, excludedFields.GetSlice())
-			if err != nil {
-				reportErrorf("Unable to print account database : %v", err)
+			if !onlineOnly {
+				err = printAccountsDatabase("./ledger.tracker.sqlite", true, fileHeader, outFile, excludedFields.GetSlice())
+				if err != nil {
+					reportErrorf("Unable to print account database : %v", err)
+				}
+				err = printKeyValueStore("./ledger.tracker.sqlite", true, outFile)
+				if err != nil {
+					reportErrorf("Unable to print key value store : %v", err)
+				}
+				err = printStateProofVerificationContext("./ledger.tracker.sqlite", true, outFile)
+				if err != nil {
+					reportErrorf("Unable to print state proof verification database : %v", err)
+				}
 			}
-			err = printKeyValueStore("./ledger.tracker.sqlite", true, outFile)
-			if err != nil {
-				reportErrorf("Unable to print key value store : %v", err)
-			}
-			err = printStateProofVerificationContext("./ledger.tracker.sqlite", true, outFile)
-			if err != nil {
-				reportErrorf("Unable to print state proof verification database : %v", err)
-			}
+
+			// Always print online accounts and online round params
 			err = printOnlineAccounts("./ledger.tracker.sqlite", true, outFile)
 			if err != nil {
 				reportErrorf("Unable to print online accounts : %v", err)
@@ -290,33 +295,35 @@ func rawDumpCatchpointStream(r io.Reader, fileSize int64, outFile *os.File) erro
 						fmt.Fprintf(outFile, "Error decoding chunk %s: %v\n", fname, err)
 						break
 					}
-					// Balances
-					for _, brec := range chunk.Balances {
-						var ad trackerdb.BaseAccountData
-						err = protocol.Decode(brec.AccountData, &ad)
-						if err != nil {
-							fmt.Fprintf(outFile, "Error decoding account data %s: %v\n", brec.Address.String(), err)
-							return err
-						}
-						adJSON, _ := json.Marshal(ad)
-						fmt.Fprintf(outFile, "%s : %s\n", brec.Address.String(), string(adJSON))
-
-						// Now print each resource
-						for k, rawRes := range brec.Resources {
-							// decode as a generic object
-							var resDecoded trackerdb.ResourcesData
-							err = protocol.Decode(rawRes, &resDecoded)
+					// Balances - only print if not onlineOnly
+					if !onlineOnly {
+						for _, brec := range chunk.Balances {
+							var ad trackerdb.BaseAccountData
+							err = protocol.Decode(brec.AccountData, &ad)
 							if err != nil {
-								fmt.Fprintf(outFile, "Error decoding resource %s: %v\n", brec.Address.String(), err)
+								fmt.Fprintf(outFile, "Error decoding account data %s: %v\n", brec.Address.String(), err)
 								return err
 							}
-							resJSON, _ := json.Marshal(resDecoded)
-							fmt.Fprintf(outFile, "%s resource %d : %s\n", brec.Address.String(), k, string(resJSON))
+							adJSON, _ := json.Marshal(ad)
+							fmt.Fprintf(outFile, "%s : %s\n", brec.Address.String(), string(adJSON))
+
+							// Now print each resource
+							for k, rawRes := range brec.Resources {
+								// decode as a generic object
+								var resDecoded trackerdb.ResourcesData
+								err = protocol.Decode(rawRes, &resDecoded)
+								if err != nil {
+									fmt.Fprintf(outFile, "Error decoding resource %s: %v\n", brec.Address.String(), err)
+									return err
+								}
+								resJSON, _ := json.Marshal(resDecoded)
+								fmt.Fprintf(outFile, "%s resource %d : %s\n", brec.Address.String(), k, string(resJSON))
+							}
 						}
-					}
-					// KVs
-					for _, kv := range chunk.KVs {
-						printKeyValue(bufio.NewWriterSize(outFile, 1024), kv.Key, kv.Value)
+						// KVs
+						for _, kv := range chunk.KVs {
+							printKeyValue(bufio.NewWriterSize(outFile, 1024), kv.Key, kv.Value)
+						}
 					}
 					// OnlineAccounts
 					for _, oa := range chunk.OnlineAccounts {
