@@ -27,19 +27,29 @@ const ConfigFilename = "host-config.json"
 
 // HostConfig is algoh's configuration structure
 type HostConfig struct {
-	SendBlockStats bool
-	UploadOnError  bool
-	DeadManTimeSec int64
-	StatusDelayMS  int64
-	StallDelayMS   int64
+	SendBlockStats   bool
+	UploadOnError    bool
+	DeadManTimeSec   int64
+	StatusDelayMS    int64
+	StallDelayMS     int64
+	LogArchiveDir    string
+	LogArchiveMaxAge string
+	LogArchiveName   string
+	LogFileDir       string
+	LogSizeLimit     uint64
 }
 
 var defaultConfig = HostConfig{
-	SendBlockStats: false,
-	UploadOnError:  true,
-	DeadManTimeSec: 120,
-	StatusDelayMS:  500,
-	StallDelayMS:   60 * 1000,
+	SendBlockStats:   false,
+	UploadOnError:    true,
+	DeadManTimeSec:   120,
+	StatusDelayMS:    500,
+	StallDelayMS:     60 * 1000,
+	LogArchiveDir:    "",
+	LogArchiveMaxAge: "",
+	LogArchiveName:   "host.archive.log",
+	LogFileDir:       "",
+	LogSizeLimit:     1073741824,
 }
 
 // LoadConfigFromFile loads the configuration from the specified file, merging into the default configuration.
