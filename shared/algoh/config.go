@@ -37,6 +37,7 @@ type HostConfig struct {
 	LogArchiveName   string
 	LogFileDir       string
 	LogSizeLimit     uint64
+	MinLogLevel      uint32
 }
 
 var defaultConfig = HostConfig{
@@ -50,6 +51,7 @@ var defaultConfig = HostConfig{
 	LogArchiveName:   "host.archive.log",
 	LogFileDir:       "",
 	LogSizeLimit:     1073741824,
+	MinLogLevel:      3,
 }
 
 // LoadConfigFromFile loads the configuration from the specified file, merging into the default configuration.
