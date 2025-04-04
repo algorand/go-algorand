@@ -272,8 +272,6 @@ func getNodeController() nodecontrol.NodeController {
 }
 
 func configureLogging(genesis bookkeeping.Genesis, log logging.Logger, rootPath string, abort chan struct{}, algodConfig config.Local, algohConfig algoh.HostConfig) {
-	log = logging.Base()
-
 	liveLog := fmt.Sprintf("%s/host.log", rootPath)
 	if algohConfig.LogFileDir != "" {
 		liveLog = fmt.Sprintf("%s/%s", algohConfig.LogFileDir, "host.log")
@@ -296,7 +294,6 @@ func configureLogging(genesis bookkeeping.Genesis, log logging.Logger, rootPath 
 		maxLogAge, err = time.ParseDuration(algohConfig.LogArchiveMaxAge)
 		if err != nil {
 			log.Fatalf("invalid algoh config LogArchiveMaxAge: %s", err)
-			maxLogAge = 0
 		}
 	}
 
