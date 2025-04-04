@@ -64,6 +64,8 @@ func init() {
 	netCmd.Flags().VarP(excludedFields, "exclude-fields", "e", "List of fields to exclude from the dump: ["+excludedFields.AllowedString()+"]")
 	netCmd.Flags().StringVarP(&outFileName, "output", "o", "", "Specify an outfile for the dump ( i.e. tracker.dump.txt )")
 	netCmd.Flags().BoolVarP(&printDigests, "digest", "d", false, "Print balances and spver digests")
+	netCmd.Flags().BoolVarP(&rawDump, "raw", "R", false, "Dump raw catchpoint data, ignoring ledger database operations")
+	netCmd.Flags().BoolVarP(&onlineOnly, "online-only", "O", false, "Only print online accounts and online round params data")
 }
 
 var netCmd = &cobra.Command{
@@ -76,6 +78,51 @@ var netCmd = &cobra.Command{
 		if networkName == "" || round == 0 {
 			cmd.HelpFunc()(cmd, args)
 			return fmt.Errorf("network or round not set")
+		}
+
+		if rawDump {
+			// fetch from net, dump raw
+			var addrs []string
+			if relayAddress != "" {
+				addrs = []string{relayAddress}
+			} else {
+				addrs, err = tools.ReadFromSRV(context.Background(), "algobootstrap", "tcp", networkName, "", false)
+				if err != nil || len(addrs) == 0 {
+					reportErrorf("Unable to bootstrap records for '%s' : %v", networkName, err)
+				}
+			}
+
+			for _, addr := range addrs {
+				var tarName string
+				tarName, err = downloadCatchpoint(addr, round)
+				if err != nil {
+					reportInfof("failed to download catchpoint from '%s' : %v", addr, err)
+					continue
+				}
+				outFile := os.Stdout
+				if outFileName != "" {
+					outFile, err = os.OpenFile(outFileName, os.O_RDWR|os.O_TRUNC|os.O_CREATE, 0755)
+					if err != nil {
+						reportErrorf("Unable to create file '%s' : %v", outFileName, err)
+					}
+				}
+				f, ferr := os.Open(tarName)
+				if ferr != nil {
+					reportErrorf("Unable to open downloaded tar file '%s': %v", tarName, ferr)
+				}
+				defer f.Close()
+				err = rawDumpCatchpointStream(f, 0, outFile)
+				if err != nil {
+					reportInfof("failed to raw dump from '%s' : %v", addr, err)
+					continue
+				}
+				// if singleCatchpoint, break after the first success
+				err = nil
+				if singleCatchpoint {
+					break
+				}
+			}
+			return err
 		}
 
 		var addrs []string
@@ -377,18 +424,22 @@ func loadAndDump(addr string, tarFile string, genesisInitState ledgercore.InitSt
 			return err
 		}
 		defer outFile.Close()
-		err = printAccountsDatabase("./ledger.tracker.sqlite", true, fileHeader, outFile, excludedFields.GetSlice())
-		if err != nil {
-			return err
+		if !onlineOnly {
+			err = printAccountsDatabase("./ledger.tracker.sqlite", true, fileHeader, outFile, excludedFields.GetSlice())
+			if err != nil {
+				return err
+			}
+			err = printKeyValueStore("./ledger.tracker.sqlite", true, outFile)
+			if err != nil {
+				return err
+			}
+			err = printStateProofVerificationContext("./ledger.tracker.sqlite", true, outFile)
+			if err != nil {
+				return err
+			}
 		}
-		err = printKeyValueStore("./ledger.tracker.sqlite", true, outFile)
-		if err != nil {
-			return err
-		}
-		err = printStateProofVerificationContext("./ledger.tracker.sqlite", true, outFile)
-		if err != nil {
-			return err
-		}
+
+		// Always print online accounts and online round params
 		err = printOnlineAccounts("./ledger.tracker.sqlite", true, outFile)
 		if err != nil {
 			return err
