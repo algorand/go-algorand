@@ -281,6 +281,9 @@ func configureLogging(genesis bookkeeping.Genesis, log logging.Logger, rootPath 
 
 	archive := rootPath
 	if algohConfig.LogFileDir != "" {
+		archive = algohConfig.LogFileDir
+	}
+	if algohConfig.LogArchiveDir != "" {
 		archive = algohConfig.LogArchiveDir
 	}
 	if algohConfig.LogArchiveName != "" {
