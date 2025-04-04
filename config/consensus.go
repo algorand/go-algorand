@@ -453,6 +453,8 @@ type ConsensusParams struct {
 	// 6. checking that in the case of going online the VoteFirst is less or equal to the next network round.
 	EnableKeyregCoherencyCheck bool
 
+	// EnableExtraPagesOnAppUpdate allows updates to take advantage of the
+	// existing extra pages setting on an app, not _changing_ that setting.
 	EnableExtraPagesOnAppUpdate bool
 
 	// MaxProposedExpiredOnlineAccounts is the maximum number of online accounts
@@ -1558,8 +1560,9 @@ func initConsensusProtocols() {
 	vFuture.LogicSigVersion = 12 // When moving this to a release, put a new higher LogicSigVersion here
 
 	// txn.Access work
-	vFuture.MaxAppTxnAccounts = 8
-	vFuture.MaxAppAccess = 32
+	vFuture.MaxAppTxnAccounts = 8       // Accounts are no worse than others, they should be the same
+	vFuture.MaxAppAccess = 16           // Twice as many, though cross products are explicit
+	vFuture.BytesPerBoxReference = 2048 // Count is more important that bytes, loosen up
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 

@@ -205,7 +205,7 @@ func (rr ResourceRef) Empty() bool {
 
 // wellFormed checks that a ResourceRef is either empty or of only one kind, and
 // that the types that have indices point to slots with refs of the proper type.
-func (rr ResourceRef) wellFormed(access []ResourceRef) error {
+func (rr ResourceRef) wellFormed(access []ResourceRef, proto config.ConsensusParams) error {
 	// Count the number of non-empty fields
 	count := 0
 	switch {
@@ -224,6 +224,9 @@ func (rr ResourceRef) wellFormed(access []ResourceRef) error {
 		}
 		count++
 	case !rr.Box.Empty():
+		if proto.EnableBoxRefNameError && len(rr.Box.Name) > proto.MaxAppKeyLen {
+			return fmt.Errorf("tx.Access box Name too long, max len %d bytes", proto.MaxAppKeyLen)
+		}
 		if _, _, err := rr.Box.Resolve(access); err != nil {
 			return err
 		}
@@ -304,11 +307,11 @@ func (lr LocalsRef) Resolve(access []ResourceRef, sender basics.Address) (basics
 		}
 	}
 	if lr.App == 0 || lr.App > uint64(len(access)) { // 1-based
-		return basics.Address{}, 0, fmt.Errorf("holding App reference %d outside tx.Access", lr.App)
+		return basics.Address{}, 0, fmt.Errorf("locals App reference %d outside tx.Access", lr.App)
 	}
 	app := access[lr.App-1].App
 	if app == 0 {
-		return basics.Address{}, 0, fmt.Errorf("holding App reference %d is not an App", lr.App)
+		return basics.Address{}, 0, fmt.Errorf("locals App reference %d is not an App", lr.App)
 	}
 	return address, app, nil
 }
@@ -400,7 +403,7 @@ func (ac ApplicationCallTxnFields) wellFormed(proto config.ConsensusParams) erro
 	case NoOpOC, OptInOC, CloseOutOC, ClearStateOC, UpdateApplicationOC, DeleteApplicationOC:
 		/* ok */
 	default:
-		return fmt.Errorf("invalid application OnCompletion")
+		return fmt.Errorf("invalid application OnCompletion (%d)", ac.OnCompletion)
 	}
 
 	// Programs may only be set for creation or update
@@ -420,9 +423,11 @@ func (ac ApplicationCallTxnFields) wellFormed(proto config.ConsensusParams) erro
 	effectiveEPP := ac.ExtraProgramPages
 	// Schemas and ExtraProgramPages may only be set during application creation
 	if ac.ApplicationID != 0 {
-		if ac.LocalStateSchema != (basics.StateSchema{}) ||
-			ac.GlobalStateSchema != (basics.StateSchema{}) {
-			return fmt.Errorf("local and global state schemas are immutable")
+		if ac.GlobalStateSchema != (basics.StateSchema{}) {
+			return fmt.Errorf("tx.GlobalStateSchema is immutable")
+		}
+		if ac.LocalStateSchema != (basics.StateSchema{}) {
+			return fmt.Errorf("tx.LocalStateSchema is immutable")
 		}
 		if ac.ExtraProgramPages != 0 {
 			return fmt.Errorf("tx.ExtraProgramPages is immutable")
@@ -436,7 +441,8 @@ func (ac ApplicationCallTxnFields) wellFormed(proto config.ConsensusParams) erro
 
 	// Limit total number of arguments
 	if len(ac.ApplicationArgs) > proto.MaxAppArgs {
-		return fmt.Errorf("too many application args, max %d", proto.MaxAppArgs)
+		return fmt.Errorf("tx.ApplicationArgs has too many arguments. %d > %d",
+			len(ac.ApplicationArgs), proto.MaxAppArgs)
 	}
 
 	// Sum up argument lengths
@@ -447,7 +453,8 @@ func (ac ApplicationCallTxnFields) wellFormed(proto config.ConsensusParams) erro
 
 	// Limit total length of all arguments
 	if argSum > uint64(proto.MaxAppTotalArgLen) {
-		return fmt.Errorf("application args total length too long, max len %d bytes", proto.MaxAppTotalArgLen)
+		return fmt.Errorf("tx.ApplicationArgs total length is too long. %d > %d",
+			argSum, proto.MaxAppTotalArgLen)
 	}
 
 	if len(ac.Access) > 0 {
@@ -469,7 +476,7 @@ func (ac ApplicationCallTxnFields) wellFormed(proto config.ConsensusParams) erro
 		}
 
 		for _, rr := range ac.Access {
-			if err := rr.wellFormed(ac.Access); err != nil {
+			if err := rr.wellFormed(ac.Access, proto); err != nil {
 				return err
 			}
 		}
@@ -521,11 +528,13 @@ func (ac ApplicationCallTxnFields) wellFormed(proto config.ConsensusParams) erro
 	}
 
 	if ac.LocalStateSchema.NumEntries() > proto.MaxLocalSchemaEntries {
-		return fmt.Errorf("tx.LocalStateSchema too large, max number of keys is %d", proto.MaxLocalSchemaEntries)
+		return fmt.Errorf("tx.LocalStateSchema is too large. %d > %d",
+			ac.LocalStateSchema.NumEntries(), proto.MaxLocalSchemaEntries)
 	}
 
 	if ac.GlobalStateSchema.NumEntries() > proto.MaxGlobalSchemaEntries {
-		return fmt.Errorf("tx.GlobalStateSchema too large, max number of keys is %d", proto.MaxGlobalSchemaEntries)
+		return fmt.Errorf("tx.GlobalStateSchema is too large. %d > %d",
+			ac.GlobalStateSchema.NumEntries(), proto.MaxGlobalSchemaEntries)
 	}
 
 	return nil

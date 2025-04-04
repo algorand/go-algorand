@@ -419,43 +419,68 @@ func TestBoxAvailability(t *testing.T) {
 
 func TestBoxReadBudget(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
 	appID := basics.AppIndex(888)
 	appAddr := appID.Address()
 
-	ep, txn, ledger := MakeSampleEnv()
-	ledger.NewApp(basics.Address{}, appID, basics.AppParams{})
+	for _, access := range []bool{false, true} {
+		t.Run(fmt.Sprintf("access=%t", access), func(t *testing.T) {
+			t.Parallel()
+			ep, txn, ledger := MakeSampleEnv()
+			// txn.Txn.Boxes contains (0,"self"), (0,"other")
+			if access {
+				ConvertEPToAccess(ep, false)
+				// now .Boxes is nil, .Access contains what was in .Boxes
+			}
 
-	// Sample txn has two box refs, so read budget is 2*100
+			ledger.NewApp(basics.Address{}, appID, basics.AppParams{})
 
-	ledger.NewBox(appID, "self", make([]byte, 100), appAddr)
-	ledger.NewBox(appID, "other", make([]byte, 100), appAddr)
-	ledger.NewBox(appID, "third", make([]byte, 100), appAddr)
+			// Sample txn has two box refs, so read budget is 2*100
 
-	// Right at budget
-	TestApp(t, `byte "self"; box_len; assert; byte "other"; box_len; assert; ==`, ep)
+			ledger.NewBox(appID, "self", make([]byte, 100), appAddr)
+			ledger.NewBox(appID, "other", make([]byte, 100), appAddr)
+			ledger.NewBox(appID, "third", make([]byte, 100), appAddr)
 
-	// With three box refs, read budget is now 3*100
-	txn.Boxes = append(txn.Boxes, transactions.BoxRef{Name: []byte("third")})
-	TestApp(t, `byte "self"; box_len; assert; byte "third"; box_len; assert; ==`, ep)
+			// Right at budget
+			TestApp(t, `byte "self"; box_len; assert; byte "other"; box_len; assert; ==`, ep)
 
-	// Increase "third" box size to 101
-	ledger.DelBox(appID, "third", appAddr)
-	ledger.NewBox(appID, "third", make([]byte, 101), appAddr)
+			// With three box refs, read budget is now 3*100
+			if access {
+				txn.Access = append(txn.Access, transactions.ResourceRef{
+					Box: transactions.BoxRef{Name: []byte("third")},
+				})
+			} else {
+				txn.Boxes = append(txn.Boxes, transactions.BoxRef{Name: []byte("third")})
+			}
+			TestApp(t, `byte "self"; box_len; assert; byte "third"; box_len; assert; ==`, ep)
 
-	// Budget exceeded
-	TestApp(t, `byte "self"; box_len; assert; byte "third"; box_len; assert; ==`, ep, "box read budget (300) exceeded")
-	// Still exceeded if we don't touch the boxes
-	TestApp(t, `int 1`, ep, "box read budget (300) exceeded")
+			// Increase "third" box size to 101
+			ledger.DelBox(appID, "third", appAddr)
+			ledger.NewBox(appID, "third", make([]byte, 101), appAddr)
 
-	// Still exceeded with one box ref
-	txn.Boxes = txn.Boxes[2:]
-	TestApp(t, `byte "third"; box_len; assert; int 101; ==`, ep, "box read budget (100) exceeded")
+			// Budget exceeded
+			TestApp(t, `byte "self"; box_len; assert; byte "third"; box_len; assert; ==`, ep, "box read budget (300) exceeded")
+			// Still exceeded if we don't touch the boxes
+			TestApp(t, `int 1`, ep, "box read budget (300) exceeded")
 
-	// But not with two
-	txn.Boxes = append(txn.Boxes, transactions.BoxRef{})
-	TestApp(t, `byte "third"; box_len; assert; int 101; ==`, ep)
+			// Still exceeded with one box ref (remove the original box refs)
+			if access {
+				txn.Access[len(txn.Access)-3] = txn.Access[len(txn.Access)-1]
+				txn.Access = txn.Access[:len(txn.Access)-2]
+			} else {
+				txn.Boxes = txn.Boxes[2:]
+			}
+			TestApp(t, `byte "third"; box_len; assert; int 101; ==`, ep, "box read budget (100) exceeded")
+
+			// But not with a second empty ref
+			if access {
+				txn.Access = append(txn.Access, transactions.ResourceRef{})
+			} else {
+				txn.Boxes = append(txn.Boxes, transactions.BoxRef{})
+			}
+			TestApp(t, `byte "third"; box_len; assert; int 101; ==`, ep)
+		})
+	}
 }
 
 func TestBoxWriteBudget(t *testing.T) {
@@ -588,33 +613,52 @@ func TestBoxRepeatedCreate(t *testing.T) {
 
 func TestIOBudgetGrow(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	t.Parallel()
 
-	ep, txn, ledger := MakeSampleEnv()
-	ledger.NewApp(basics.Address{}, 888, basics.AppParams{})
-	ledger.CreateBox(888, "self", 101)
-	ledger.CreateBox(888, "other", 101)
+	for _, access := range []bool{false, true} {
+		t.Run(fmt.Sprintf("access=%t", access), func(t *testing.T) {
+			t.Parallel()
+			ep, txn, ledger := MakeSampleEnv()
+			// txn.Txn.Boxes contains (0,"self"), (0,"other")
+			if access {
+				ConvertEPToAccess(ep, false)
+				// now .Boxes is nil, .Access contains what was in .Boxes
+			}
+			ledger.NewApp(basics.Address{}, 888, basics.AppParams{})
+			ledger.CreateBox(888, "self", 101)
+			ledger.CreateBox(888, "other", 101)
 
-	TestApp(t, `byte "self"; int 1; byte 0x3333; box_replace;
+			TestApp(t, `byte "self"; int 1; byte 0x3333; box_replace;
                       byte "other"; int 1; byte 0x3333; box_replace;
                       int 1`, ep, "read budget (200) exceeded")
 
-	txn.Boxes = append(txn.Boxes, transactions.BoxRef{})
-	// Since we added an empty BoxRef, we can read > 200.
-	TestApp(t, `byte "self"; int 1; int 7; box_extract; pop;
+			if access {
+				txn.Access = append(txn.Access, transactions.ResourceRef{})
+			} else {
+				txn.Boxes = append(txn.Boxes, transactions.BoxRef{})
+			}
+			// Since we added an empty BoxRef, we can read > 200.
+			TestApp(t, `byte "self"; int 1; int 7; box_extract; pop;
                       byte "other"; int 1; int 7; box_extract; pop;
                       int 1`, ep)
-	// Add write, for that matter
-	TestApp(t, `byte "self"; int 1; byte 0x3333; box_replace;
+			// Add write, for that matter
+			TestApp(t, `byte "self"; int 1; byte 0x3333; box_replace;
                       byte "other"; int 1; byte 0x3333; box_replace;
                       int 1`, ep)
 
-	txn.Boxes = append(txn.Boxes, transactions.BoxRef{Name: []byte("another")})
+			if access {
+				txn.Access = append(txn.Access, transactions.ResourceRef{
+					Box: transactions.BoxRef{Name: []byte("another")},
+				})
+			} else {
+				txn.Boxes = append(txn.Boxes, transactions.BoxRef{Name: []byte("another")})
+			}
 
-	// Here we read 202, and write a very different 350 (since we now have 4 brs)
-	TestApp(t, `byte "self"; int 1; int 7; box_extract; pop;
+			// Here we read 202, and write a very different 350 (since we now have 4 brs)
+			TestApp(t, `byte "self"; int 1; int 7; box_extract; pop;
                       byte "other"; int 1; int 7; box_extract; pop;
                       byte "another"; int 350; box_create`, ep)
+		})
+	}
 }
 
 func TestConveniences(t *testing.T) {
