@@ -281,8 +281,9 @@ type ConsensusParams struct {
 	// be read in the transaction
 	MaxAppTxnForeignAssets int
 
-	// maximum number of "foreign references" (accounts, asa, app, boxes)
-	// that can be attached to a single app call.
+	// maximum number of "foreign references" (accounts, asa, app, boxes) that
+	// can be attached to a single app call.  Modern transactions can use
+	// MaxAccess references in txn.Access to access more.
 	MaxAppTotalTxnReferences int
 
 	// maximum cost of application approval program or clear state program
@@ -353,6 +354,9 @@ type ConsensusParams struct {
 
 	// Number of box references allowed
 	MaxAppBoxReferences int
+
+	// Number of references allowed in txn.Access
+	MaxAppAccess int
 
 	// Amount added to a txgroup's box I/O budget per box ref supplied.
 	// For reads: the sum of the sizes of all boxes in the group must be less than I/O budget
@@ -449,6 +453,8 @@ type ConsensusParams struct {
 	// 6. checking that in the case of going online the VoteFirst is less or equal to the next network round.
 	EnableKeyregCoherencyCheck bool
 
+	// EnableExtraPagesOnAppUpdate allows updates to take advantage of the
+	// existing extra pages setting on an app, not _changing_ that setting.
 	EnableExtraPagesOnAppUpdate bool
 
 	// MaxProposedExpiredOnlineAccounts is the maximum number of online accounts
@@ -1552,6 +1558,11 @@ func initConsensusProtocols() {
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
 	vFuture.LogicSigVersion = 12 // When moving this to a release, put a new higher LogicSigVersion here
+
+	// txn.Access work
+	vFuture.MaxAppTxnAccounts = 8       // Accounts are no worse than others, they should be the same
+	vFuture.MaxAppAccess = 16           // Twice as many, though cross products are explicit
+	vFuture.BytesPerBoxReference = 2048 // Count is more important that bytes, loosen up
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 

@@ -1087,7 +1087,7 @@ func TestTxnBadField(t *testing.T) {
 	testLogicBytes(t, program, nil, "invalid txn field")
 	// TODO: Check should know the type stack was wrong
 
-	// test txn does not accept ApplicationArgs and Accounts
+	// test that `txn` does not accept ApplicationArgs and Accounts, `txna` is necessary
 	txnOpcode := OpsByName[LogicVersion]["txn"].Opcode
 	txnaOpcode := OpsByName[LogicVersion]["txna"].Opcode
 
@@ -1834,8 +1834,7 @@ func makeSampleTxn() transactions.SignedTxn {
 	txn.Txn.AssetReceiver = txn.Txn.CloseRemainderTo
 	txn.Txn.AssetCloseTo = txn.Txn.Sender
 	txn.Txn.ApplicationID = basics.AppIndex(888)
-	txn.Txn.Accounts = make([]basics.Address, 1)
-	txn.Txn.Accounts[0] = txn.Txn.Receiver
+	txn.Txn.Accounts = []basics.Address{txn.Txn.Receiver}
 	rekeyToAddr := []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui05")
 	metadata := []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeuiHH")
 	managerAddr := []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui06")
