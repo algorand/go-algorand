@@ -34,13 +34,13 @@ type (
 		Sender   basics.Address `codec:"snd"`
 		Round    basics.Round   `codec:"rnd"`
 		Period   period         `codec:"per"`
-		Step     step           `codec:"step" vpack_special_values:"1,2,3"`
+		Step     step           `codec:"step"`
 		Proposal proposalValue  `codec:"prop"`
 	}
 
 	// unauthenticatedVote is a vote which has not been verified
 	unauthenticatedVote struct {
-		_struct struct{}                            `codec:",omitempty,omitemptyarray" vpack_assert_size:"3"`
+		_struct struct{}                            `codec:",omitempty,omitemptyarray"`
 		R       rawVote                             `codec:"r"`
 		Cred    committee.UnauthenticatedCredential `codec:"cred"`
 		Sig     crypto.OneTimeSignature             `codec:"sig,omitempty,omitemptycheckstruct"`

@@ -150,36 +150,6 @@ func TestParseVoteErrors(t *testing.T) {
 	}
 }
 
-// TestParseEncodeStaticSteps asserts that table entries for step:1, step:2, step:3 are encoded
-func TestParseEncodeStaticSteps(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	v := agreement.UnauthenticatedVote{}
-	v.Cred.Proof[0] = 1 // not empty
-	v.R.Round = 1
-	v.Sig.PK[0] = 1 // not empty
-
-	for i := 1; i <= 3; i++ {
-		var expectedStaticIdx uint8
-		switch i {
-		case 1:
-			v.R.Step = 1
-			expectedStaticIdx = staticIdxStepVal1Field
-		case 2:
-			v.R.Step = 2
-			expectedStaticIdx = staticIdxStepVal2Field
-		case 3:
-			v.R.Step = 3
-			expectedStaticIdx = staticIdxStepVal3Field
-		}
-
-		msgpbuf := protocol.Encode(&v)
-		w := &mockCompressWriter{}
-		err := parseVote(msgpbuf, w)
-		require.NoError(t, err)
-		require.Contains(t, w.writes, expectedStaticIdx)
-	}
-}
-
 // TestParseDynamicVaruintError asserts that an error is returned when writeDynamicVaruint fails,
 // to improve test coverage.
 func TestParseDynamicVaruintError(t *testing.T) {

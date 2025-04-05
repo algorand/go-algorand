@@ -89,8 +89,8 @@ func checkBitmaskEncoder(t *rapid.T) {
 // createMask is a helper function that creates a byte slice representing a bitmask
 // with the requiredFieldsMask and any additional bits provided
 func createMask(additionalBits ...uint16) []byte {
-	// Start with required fields mask
-	mask := requiredFieldsMask
+	// Start with 0
+	mask := uint16(0)
 
 	// Add any additional bits
 	for _, bit := range additionalBits {
@@ -568,12 +568,6 @@ func checkBitmaskVoteValid(vote *agreement.UnauthenticatedVote) bool {
 		return false
 	}
 	if vote.Sig.PKSigOld != [64]byte{} { // PKSigOld is deprecated and always zero
-		return false
-	}
-	if vote.R.Sender == (basics.Address{}) {
-		return false
-	}
-	if vote.R.Round == 0 {
 		return false
 	}
 	// ensure all sig fields are non-empty

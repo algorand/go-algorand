@@ -9,11 +9,11 @@ import (
 func parseVote(data []byte, c compressWriter) error {
 	p := newParser(data)
 
-	// Fixed size struct with 3 fields
 	cnt, err := p.readFixMap()
 	if err != nil {
 		return fmt.Errorf("reading map for unauthenticatedVote: %w", err)
 	}
+
 	if cnt != 3 {
 		return fmt.Errorf("expected fixed map size 3 for unauthenticatedVote, got %d", cnt)
 	}
@@ -30,11 +30,11 @@ func parseVote(data []byte, c compressWriter) error {
 		case "cred":
 			c.writeStatic(staticIdxCredField)
 
-			// Fixed size struct with 1 fields
 			cnt, err := p.readFixMap()
 			if err != nil {
 				return fmt.Errorf("reading map for UnauthenticatedCredential: %w", err)
 			}
+
 			if cnt != 1 {
 				return fmt.Errorf("expected fixed map size 1 for UnauthenticatedCredential, got %d", cnt)
 			}
@@ -62,18 +62,17 @@ func parseVote(data []byte, c compressWriter) error {
 		case "r":
 			c.writeStatic(staticIdxRField)
 
-			// Variable size struct
 			cnt, err := p.readFixMap()
 			if err != nil {
 				return fmt.Errorf("reading map for rawVote: %w", err)
 			}
+
 			if cnt < 1 || cnt > 5 {
 				return fmt.Errorf("expected fixmap size for rawVote 1 <= cnt <= 5, got %d", cnt)
 			}
 			c.writeStatic(staticIdxMapMarker0 + cnt)
 
 			for range cnt {
-
 				key, err := p.readString()
 				if err != nil {
 					return fmt.Errorf("reading key for rawVote: %w", err)
@@ -91,18 +90,17 @@ func parseVote(data []byte, c compressWriter) error {
 				case "prop":
 					c.writeStatic(staticIdxPropField)
 
-					// Variable size struct
 					cnt, err := p.readFixMap()
 					if err != nil {
 						return fmt.Errorf("reading map for proposalValue: %w", err)
 					}
+
 					if cnt < 1 || cnt > 4 {
 						return fmt.Errorf("expected fixmap size for proposalValue 1 <= cnt <= 4, got %d", cnt)
 					}
 					c.writeStatic(staticIdxMapMarker0 + cnt)
 
 					for range cnt {
-
 						key, err := p.readString()
 						if err != nil {
 							return fmt.Errorf("reading key for proposalValue: %w", err)
@@ -159,21 +157,6 @@ func parseVote(data []byte, c compressWriter) error {
 					if err != nil {
 						return fmt.Errorf("reading step: %w", err)
 					}
-					// If we have special single-byte numeric values
-					if len(valBytes) == 1 {
-						switch valBytes[0] {
-						case 1:
-							c.writeStatic(staticIdxStepVal1Field)
-							continue
-						case 2:
-							c.writeStatic(staticIdxStepVal2Field)
-							continue
-						case 3:
-							c.writeStatic(staticIdxStepVal3Field)
-							continue
-						}
-					}
-
 					if err := c.writeDynamicVaruint(staticIdxStepField, valBytes); err != nil {
 						return fmt.Errorf("writing step: %w", err)
 					}
@@ -185,11 +168,11 @@ func parseVote(data []byte, c compressWriter) error {
 		case "sig":
 			c.writeStatic(staticIdxSigField)
 
-			// Fixed size struct with 6 fields
 			cnt, err := p.readFixMap()
 			if err != nil {
 				return fmt.Errorf("reading map for OneTimeSignature: %w", err)
 			}
+
 			if cnt != 6 {
 				return fmt.Errorf("expected fixed map size 6 for OneTimeSignature, got %d", cnt)
 			}
@@ -232,10 +215,8 @@ func parseVote(data []byte, c compressWriter) error {
 					if err != nil {
 						return fmt.Errorf("reading ps: %w", err)
 					}
-					if val == [64]byte{} {
-						c.writeStatic(staticIdxAllZeroPsField)
-					} else {
-						c.writeLiteralBin64(staticIdxPsField, val)
+					if val != [64]byte{} {
+						return fmt.Errorf("expected empty array for ps, got %v", val)
 					}
 				case "s":
 					val, err := p.readBin64()

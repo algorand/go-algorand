@@ -3,40 +3,36 @@
 package vpack
 
 const (
-	staticIdxMapMarker0     uint8 = 0xc0
-	staticIdxMapMarker1     uint8 = 0xc1
-	staticIdxMapMarker2     uint8 = 0xc2
-	staticIdxMapMarker3     uint8 = 0xc3
-	staticIdxMapMarker4     uint8 = 0xc4
-	staticIdxMapMarker5     uint8 = 0xc5
-	staticIdxMapMarker6     uint8 = 0xc6
-	staticIdxCredField      uint8 = 0xd0
-	staticIdxPfField        uint8 = 0xd1
-	staticIdxRField         uint8 = 0xd2
-	staticIdxPerField       uint8 = 0xd3
-	staticIdxPropField      uint8 = 0xd4
-	staticIdxDigField       uint8 = 0xd5
-	staticIdxEncdigField    uint8 = 0xd6
-	staticIdxOperField      uint8 = 0xd7
-	staticIdxOpropField     uint8 = 0xd8
-	staticIdxRndField       uint8 = 0xd9
-	staticIdxSndField       uint8 = 0xda
-	staticIdxStepField      uint8 = 0xdb
-	staticIdxStepVal1Field  uint8 = 0xdc
-	staticIdxStepVal2Field  uint8 = 0xdd
-	staticIdxStepVal3Field  uint8 = 0xde
-	staticIdxSigField       uint8 = 0xdf
-	staticIdxPField         uint8 = 0xe0
-	staticIdxP1sField       uint8 = 0xe1
-	staticIdxP2Field        uint8 = 0xe2
-	staticIdxP2sField       uint8 = 0xe3
-	staticIdxPsField        uint8 = 0xe4
-	staticIdxAllZeroPsField uint8 = 0xe5
-	staticIdxSField         uint8 = 0xe6
+	staticIdxMapMarker0  uint8 = 0xc0
+	staticIdxMapMarker1  uint8 = 0xc1
+	staticIdxMapMarker2  uint8 = 0xc2
+	staticIdxMapMarker3  uint8 = 0xc3
+	staticIdxMapMarker4  uint8 = 0xc4
+	staticIdxMapMarker5  uint8 = 0xc5
+	staticIdxMapMarker6  uint8 = 0xc6
+	staticIdxCredField   uint8 = 0xd0
+	staticIdxPfField     uint8 = 0xd1
+	staticIdxRField      uint8 = 0xd2
+	staticIdxPerField    uint8 = 0xd3
+	staticIdxPropField   uint8 = 0xd4
+	staticIdxDigField    uint8 = 0xd5
+	staticIdxEncdigField uint8 = 0xd6
+	staticIdxOperField   uint8 = 0xd7
+	staticIdxOpropField  uint8 = 0xd8
+	staticIdxRndField    uint8 = 0xd9
+	staticIdxSndField    uint8 = 0xda
+	staticIdxStepField   uint8 = 0xdb
+	staticIdxSigField    uint8 = 0xdc
+	staticIdxPField      uint8 = 0xdd
+	staticIdxP1sField    uint8 = 0xde
+	staticIdxP2Field     uint8 = 0xdf
+	staticIdxP2sField    uint8 = 0xe0
+	staticIdxPsField     uint8 = 0xe1
+	staticIdxSField      uint8 = 0xe2
 
 	// Constants for static index range bounds
 	staticIdxStart uint8 = 0xc0
-	staticIdxEnd   uint8 = 0xe6
+	staticIdxEnd   uint8 = 0xe2
 )
 
 var staticTable = createGeneratedStaticTable()
@@ -65,25 +61,13 @@ func createGeneratedStaticTable() [][]byte {
 	t[staticIdxRndField] = []byte{0xa3, 'r', 'n', 'd'}                   // "rnd" field
 	t[staticIdxSndField] = []byte{0xa3, 's', 'n', 'd'}                   // "snd" field
 	t[staticIdxStepField] = []byte{0xa4, 's', 't', 'e', 'p'}             // "step" field
-	t[staticIdxStepVal1Field] = []byte{}                                 // step = 1 special
-	t[staticIdxStepVal2Field] = []byte{}                                 // step = 2 special
-	t[staticIdxStepVal3Field] = []byte{}                                 // step = 3 special
 	t[staticIdxSigField] = []byte{0xa3, 's', 'i', 'g'}                   // "sig" field
 	t[staticIdxPField] = []byte{0xa1, 'p'}                               // "p" field
 	t[staticIdxP1sField] = []byte{0xa3, 'p', '1', 's'}                   // "p1s" field
 	t[staticIdxP2Field] = []byte{0xa2, 'p', '2'}                         // "p2" field
 	t[staticIdxP2sField] = []byte{0xa3, 'p', '2', 's'}                   // "p2s" field
 	t[staticIdxPsField] = []byte{0xa2, 'p', 's'}                         // "ps" field
-	t[staticIdxAllZeroPsField] = []byte{}                                // All-zero ps field for length 64
 	t[staticIdxSField] = []byte{0xa1, 's'}                               // "s" field
-
-	// Special expansions
-	t[staticIdxStepVal1Field] = append(t[staticIdxStepField], []byte{0x01}...)
-	t[staticIdxStepVal2Field] = append(t[staticIdxStepField], []byte{0x02}...)
-	t[staticIdxStepVal3Field] = append(t[staticIdxStepField], []byte{0x03}...)
-	zeroVal := append(t[staticIdxPsField], msgpBin8Len64...)
-	zeroVal = append(zeroVal, make([]byte, 64)...)
-	t[staticIdxAllZeroPsField] = zeroVal
 
 	return t
 }
