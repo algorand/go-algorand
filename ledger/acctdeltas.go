@@ -1032,11 +1032,15 @@ func onlineAccountsNewRoundImpl(
 						prevAcct = updated
 					}
 				} else {
-					// "delete" by inserting a zero entry
 					if prevAcct.AccountData.IsVotingEmpty() && newAcct.IsVotingEmpty() {
 						// if both old and new are offline, ignore
+						// otherwise the following could happen:
+						// 1. there are multiple offline account deltas so all of them could be inserted
+						// 2. delta.oldAcct is often pulled from a cache that is only updated on new rows insert so
+						// it could pull a very old already deleted offline value resulting one more insert
 						continue
 					}
+					// "delete" by inserting a zero entry
 					var ref trackerdb.OnlineAccountRef
 					ref, err = writer.InsertOnlineAccount(data.address, 0, trackerdb.BaseOnlineAccountData{}, updRound, 0)
 					if err != nil {
