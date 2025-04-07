@@ -1033,6 +1033,10 @@ func onlineAccountsNewRoundImpl(
 					}
 				} else {
 					// "delete" by inserting a zero entry
+					if prevAcct.AccountData.IsVotingEmpty() && newAcct.IsVotingEmpty() {
+						// if both old and new are offline, ignore
+						continue
+					}
 					var ref trackerdb.OnlineAccountRef
 					ref, err = writer.InsertOnlineAccount(data.address, 0, trackerdb.BaseOnlineAccountData{}, updRound, 0)
 					if err != nil {
