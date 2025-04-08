@@ -307,22 +307,12 @@ func configureLogging(genesis bookkeeping.Genesis, log logging.Logger, rootPath 
 	}
 	log.SetOutput(logWriter)
 	log.SetJSONFormatter()
-	switch algohConfig.MinLogLevel {
-	case 0:
-		log.SetLevel(logging.Panic)
-	case 1:
-		log.SetLevel(logging.Fatal)
-	case 2:
-		log.SetLevel(logging.Error)
-	case 3:
-		log.SetLevel(logging.Warn)
-	case 4:
-		log.SetLevel(logging.Info)
-	case 5:
-		log.SetLevel(logging.Debug)
-	default:
-		log.SetLevel(logging.Warn)
-	}
+minLogLevel := logging.Level(algohConfig.MinLogLevel)
+if minLogLevel  > logging.Debug {
+    minLogLevel = logging.Warn
+}
+log.SetLevel(minLogLevel)
+
 
 	initTelemetry(genesis, log, rootPath, abort, algodConfig)
 
