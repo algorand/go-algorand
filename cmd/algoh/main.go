@@ -277,15 +277,15 @@ func configureLogging(genesis bookkeeping.Genesis, log logging.Logger, rootPath 
 		liveLog = fmt.Sprintf("%s/%s", algohConfig.LogFileDir, "host.log")
 	}
 
-	archive := rootPath
+	archiveLog := rootPath
 	if algohConfig.LogFileDir != "" {
-		archive = algohConfig.LogFileDir
+		archiveLog = algohConfig.LogFileDir
 	}
 	if algohConfig.LogArchiveDir != "" {
-		archive = algohConfig.LogArchiveDir
+		archiveLog = algohConfig.LogArchiveDir
 	}
 	if algohConfig.LogArchiveName != "" {
-		archive = fmt.Sprintf("%s/%s", archive, algohConfig.LogArchiveName)
+		archiveLog = fmt.Sprintf("%s/%s", archiveLog, algohConfig.LogArchiveName)
 	}
 
 	var maxLogAge time.Duration
@@ -307,12 +307,11 @@ func configureLogging(genesis bookkeeping.Genesis, log logging.Logger, rootPath 
 	}
 	log.SetOutput(logWriter)
 	log.SetJSONFormatter()
-minLogLevel := logging.Level(algohConfig.MinLogLevel)
-if minLogLevel  > logging.Debug {
-    minLogLevel = logging.Warn
-}
-log.SetLevel(minLogLevel)
-
+	minLogLevel := logging.Level(algohConfig.MinLogLevel)
+	if minLogLevel > logging.Debug {
+		minLogLevel = logging.Warn
+	}
+	log.SetLevel(minLogLevel)
 
 	initTelemetry(genesis, log, rootPath, abort, algodConfig)
 
