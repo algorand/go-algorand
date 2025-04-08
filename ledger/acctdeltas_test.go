@@ -3549,11 +3549,11 @@ func TestOnlineAccountsExceedOfflineRows(t *testing.T) {
 	lastUpdateRound = basics.Round(3)
 	updated, err = onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
 	require.NoError(t, err)
-	require.Len(t, updated, 0) // TODO: 0
+	require.Len(t, updated, 0)
 
 	history, _, err = queries.LookupOnlineHistory(addrA)
 	require.NoError(t, err)
-	require.Len(t, history, 2) // TODO: 2
+	require.Len(t, history, 2)
 
 	// test case 2
 	// multiple offline entries in a single batch
