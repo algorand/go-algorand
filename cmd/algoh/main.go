@@ -277,13 +277,15 @@ func configureLogging(genesis bookkeeping.Genesis, log logging.Logger, rootPath 
 		liveLog = fmt.Sprintf("%s/%s", algohConfig.LogFileDir, "host.log")
 	}
 
+	// Default to the root path if no archive log directory is specified
 	archiveLog := rootPath
-	if algohConfig.LogFileDir != "" {
-		archiveLog = algohConfig.LogFileDir
-	}
+	// If archive dir or log file dir is specified, use that instead
 	if algohConfig.LogArchiveDir != "" {
 		archiveLog = algohConfig.LogArchiveDir
+	} else if algohConfig.LogFileDir != "" {
+		archiveLog = algohConfig.LogFileDir
 	}
+
 	if algohConfig.LogArchiveName != "" {
 		archiveLog = fmt.Sprintf("%s/%s", archiveLog, algohConfig.LogArchiveName)
 	}
@@ -308,6 +310,7 @@ func configureLogging(genesis bookkeeping.Genesis, log logging.Logger, rootPath 
 	log.SetOutput(logWriter)
 	log.SetJSONFormatter()
 	minLogLevel := logging.Level(algohConfig.MinLogLevel)
+	// Debug is the highest level, so default to Warn if the user sets out of bounds
 	if minLogLevel > logging.Debug {
 		minLogLevel = logging.Warn
 	}
