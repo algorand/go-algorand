@@ -18,6 +18,7 @@ package logic
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -203,6 +204,89 @@ func TestTxnFieldVersions(t *testing.T) {
 			}
 			testLogicBytes(t, ops.Program, ep, checkErr, evalErr)
 		}
+	}
+}
+
+// ensure itxn_field works properly (only) in the versions it's supposed to work
+func TestITxnFieldVersions(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	var fields []txnFieldSpec
+	for _, fs := range txnFieldSpecs {
+		if fs.itxVersion > 0 {
+			fields = append(fields, fs)
+		}
+	}
+	require.Greater(t, len(fields), 1)
+
+	txn := makeSampleTxn()
+	txgroup := makeSampleTxnGroup(txn)
+	asmDefaultError := "...was introduced in ..."
+
+	specialArgs := map[string]string{
+		"Type": `byte "pay"`,
+		// assets must be available
+		"XferAsset":   `int 55`,
+		"ConfigAsset": `int 55`,
+		"FreezeAsset": `int 55`,
+		"Assets":      `int 55`,
+		// applications must be available
+		"ApplicationID": `int 111`,
+		"Applications":  `int 111`,
+	}
+	for _, fs := range fields {
+		field := fs.field.String()
+		t.Run(field, func(t *testing.T) {
+			text := "itxn_begin; itxn_field " + field + "; int 1"
+			asmError := asmDefaultError
+
+			if arg, ok := specialArgs[field]; ok {
+				text = arg + ";" + text
+			} else {
+				// prepend a generic value
+				switch fs.ftype.AVMType {
+				case avmUint64:
+					text = "int 1;" + text
+				case avmBytes:
+					if fs.ftype == StackAddress {
+						text = "txn Sender;" + text
+					} else {
+						text = fmt.Sprintf("byte 0x%s;", strings.Repeat("aa", int(fs.ftype.Bound[0]))) + text
+					}
+				case avmAny:
+					text = "error;"
+				}
+			}
+
+			// check assembler fails if version before introduction
+			testLine(t, text, assemblerNoVersion, asmError)
+			for v := uint64(0); v < fs.itxVersion; v++ {
+				testLine(t, text, v, asmError)
+			}
+			t.Log(text)
+			testLine(t, text, fs.itxVersion, "")
+
+			// First, make sure it works when it should
+			ops := testProg(t, text, fs.itxVersion)
+			ep := defaultAppParamsWithVersion(fs.itxVersion, txgroup...)
+			testAppBytes(t, ops.Program, ep)
+
+			// And now make sure it doesn't when it shouldn't
+			preVersion := fs.itxVersion - 1
+			ep = defaultAppParamsWithVersion(preVersion, txgroup...)
+
+			// we change the program version so can run, but itxn_field opcode
+			// still won't.
+			ops.Program[0] = byte(preVersion) // set version
+			checkErr := ""
+			evalErr := "invalid itxn_field " + field
+			if preVersion < 5 { // when inners and `itxn_field` were introduced
+				checkErr = "illegal opcode"
+				evalErr = "illegal opcode"
+			}
+			testAppBytes(t, ops.Program, ep, checkErr, evalErr)
+		})
 	}
 }
 

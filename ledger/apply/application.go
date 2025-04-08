@@ -380,6 +380,10 @@ func ApplicationCall(ac transactions.ApplicationCallTxnFields, header transactio
 		return err
 	}
 
+	if ac.RejectVersion > 0 && params.Version >= ac.RejectVersion {
+		return fmt.Errorf("app version (%d) >= reject version (%d)", params.Version, ac.RejectVersion)
+	}
+
 	// Ensure that the only operation we can do is ClearState if the application
 	// does not exist
 	if !exists && ac.OnCompletion != transactions.ClearStateOC {

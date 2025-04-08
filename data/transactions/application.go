@@ -166,6 +166,10 @@ type ApplicationCallTxnFields struct {
 	// larger than the default config, MaxAppProgramLen.
 	ExtraProgramPages uint32 `codec:"apep,omitempty"`
 
+	// RejectVersion is the lowest application version for which this
+	// transaction should immediately fail. 0 indicates that no version check should be performed.
+	RejectVersion uint64 `codec:"aprv,omitempty"`
+
 	// If you add any fields here, remember you MUST modify the Empty
 	// method below!
 }
@@ -185,6 +189,9 @@ func (ac *ApplicationCallTxnFields) Empty() bool {
 		return false
 	}
 	if ac.OnCompletion != 0 {
+		return false
+	}
+	if ac.RejectVersion != 0 {
 		return false
 	}
 	if ac.ApplicationArgs != nil {
@@ -229,6 +236,10 @@ func (ac ApplicationCallTxnFields) wellFormed(proto config.ConsensusParams) erro
 		/* ok */
 	default:
 		return fmt.Errorf("invalid application OnCompletion")
+	}
+
+	if !proto.EnableAppVersioning && ac.RejectVersion > 0 {
+		return fmt.Errorf("tx.RejectVersion is not supported")
 	}
 
 	// Programs may only be set for creation or update
