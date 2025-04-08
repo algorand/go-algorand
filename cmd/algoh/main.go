@@ -300,7 +300,7 @@ func configureLogging(genesis bookkeeping.Genesis, log logging.Logger, rootPath 
 	var logWriter io.Writer
 	if algohConfig.LogSizeLimit > 0 {
 		fmt.Println("algoh logging to: ", liveLog)
-		logWriter = logging.MakeCyclicFileWriter(liveLog, archive, algohConfig.LogSizeLimit, maxLogAge)
+		logWriter = logging.MakeCyclicFileWriter(liveLog, archiveLog, algohConfig.LogSizeLimit, maxLogAge)
 	} else {
 		fmt.Println("Logging to: stdout")
 		logWriter = os.Stdout
