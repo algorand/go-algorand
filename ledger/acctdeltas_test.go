@@ -3442,3 +3442,160 @@ func TestEncodedBaseResourceSize(t *testing.T) {
 	require.Less(t, len(encodedAsset), len(encodedApp))
 	require.GreaterOrEqual(t, MaxEncodedBaseResourceDataSize, len(encodedApp))
 }
+
+// TestOnlineAccountsExceedOfflineRows checks for extra rows for offline accounts in online accounts table:
+// 1. Account is online
+// 2. Account goes offline and recorded in baseOnlineAccounts cache
+// 3. Many (>320 normally) rounds later, account gets deleted by prunning
+// 4. Account updated with a transfer
+// 5. Since it is still in baseOnlineAccounts, it fetched as offline and a new offline row is inserted
+// ==> 5 <== could lead to a ghost row in online accounts table that:
+//   - are not needed but still correct
+//   - make catchpoint generation inconsistent across nodes since it content depends on dynamic baseOnlineAccounts cache.
+//
+// 6. A similar behavior is exposed when there are multiple offline updates in a batch with the same result
+// of extra unnesesary rows in the online accounts table.
+func TestOnlineAccountsExceedOfflineRows(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	dbs, _ := storetesting.DbOpenTest(t, true)
+	storetesting.SetDbLogging(t, dbs)
+	defer dbs.Close()
+
+	tx, err := dbs.Wdb.Handle.Begin()
+	require.NoError(t, err)
+	defer tx.Rollback()
+
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+
+	var accts map[basics.Address]basics.AccountData
+	sqlitedriver.AccountsInitTest(t, tx, accts, protocol.ConsensusCurrentVersion)
+
+	addrA := ledgertesting.RandomAddress()
+
+	// acct A is new, offline and then online => exercise new entry for account
+	deltaA := onlineAccountDelta{
+		address: addrA,
+		newAcct: []trackerdb.BaseOnlineAccountData{
+			{
+				MicroAlgos:     basics.MicroAlgos{Raw: 100_000_000},
+				BaseVotingData: trackerdb.BaseVotingData{VoteFirstValid: 1, VoteLastValid: 5},
+			},
+			{
+				MicroAlgos: basics.MicroAlgos{Raw: 100_000_000},
+			},
+		},
+		updRound:  []uint64{1, 2},
+		newStatus: []basics.Status{basics.Online, basics.Offline},
+	}
+	updates := compactOnlineAccountDeltas{}
+	updates.deltas = append(updates.deltas, deltaA)
+	writer, err := sqlitedriver.MakeOnlineAccountsSQLWriter(tx, updates.len() > 0)
+	require.NoError(t, err)
+	defer writer.Close()
+
+	lastUpdateRound := basics.Round(2)
+	updated, err := onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
+	require.NoError(t, err)
+	require.Len(t, updated, 2)
+
+	var baseOnlineAccounts lruOnlineAccounts
+	baseOnlineAccounts.init(logging.TestingLog(t), 1000, 800)
+	for _, persistedAcct := range updated {
+		baseOnlineAccounts.write(persistedAcct)
+	}
+
+	// make sure baseOnlineAccounts has the entry
+	entry, has := baseOnlineAccounts.read(addrA)
+	require.True(t, has)
+	require.True(t, entry.AccountData.IsVotingEmpty())
+	require.Equal(t, basics.Round(2), entry.UpdRound)
+
+	queries, err := sqlitedriver.OnlineAccountsInitDbQueries(tx)
+	require.NoError(t, err)
+
+	// make sure both rows are in the db
+	history, _, err := queries.LookupOnlineHistory(addrA)
+	require.NoError(t, err)
+	require.Len(t, history, 2)
+	// ASC ordered by updRound
+	require.False(t, history[0].AccountData.IsVotingEmpty())
+	require.Equal(t, basics.Round(1), history[0].UpdRound)
+	require.True(t, history[1].AccountData.IsVotingEmpty())
+	require.Equal(t, basics.Round(2), history[1].UpdRound)
+
+	// test case 1
+	// simulate compact online delta construction with baseOnlineAccounts use
+	acctDelta := ledgercore.AccountDeltas{}
+	ad := ledgercore.AccountData{
+		AccountBaseData: ledgercore.AccountBaseData{
+			Status:     basics.Offline,
+			MicroAlgos: basics.MicroAlgos{Raw: 100_000_000 - 1},
+		},
+	}
+	acctDelta.Upsert(addrA, ad)
+	deltas := []ledgercore.AccountDeltas{acctDelta}
+	updates = makeCompactOnlineAccountDeltas(deltas, 3, baseOnlineAccounts)
+
+	// make sure old is filled from baseOnlineAccounts
+	require.Empty(t, updates.misses)
+	require.Len(t, updates.deltas, 1)
+	require.NotEmpty(t, updates.deltas[0].oldAcct)
+	require.True(t, updates.deltas[0].oldAcct.AccountData.IsVotingEmpty())
+	require.Equal(t, 1, updates.deltas[0].nOnlineAcctDeltas)
+	require.Equal(t, basics.Offline, updates.deltas[0].newStatus[0])
+	require.True(t, updates.deltas[0].newAcct[0].IsVotingEmpty())
+
+	// insert and make sure no new rows are inserted
+	lastUpdateRound = basics.Round(3)
+	updated, err = onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
+	require.NoError(t, err)
+	require.Len(t, updated, 0)
+
+	history, _, err = queries.LookupOnlineHistory(addrA)
+	require.NoError(t, err)
+	require.Len(t, history, 2)
+
+	// test case 2
+	// multiple offline entries in a single batch
+
+	addrB := ledgertesting.RandomAddress()
+
+	// acct A is new, offline and then online => exercise new entry for account
+	deltaB := onlineAccountDelta{
+		address: addrB,
+		newAcct: []trackerdb.BaseOnlineAccountData{
+			{
+				MicroAlgos:     basics.MicroAlgos{Raw: 100_000_000},
+				BaseVotingData: trackerdb.BaseVotingData{VoteFirstValid: 1, VoteLastValid: 5},
+			},
+			{
+				MicroAlgos: basics.MicroAlgos{Raw: 100_000_000},
+			},
+			{
+				MicroAlgos: basics.MicroAlgos{Raw: 100_000_000 - 1},
+			},
+		},
+		updRound:  []uint64{4, 5, 6},
+		newStatus: []basics.Status{basics.Online, basics.Offline, basics.Offline},
+	}
+	updates = compactOnlineAccountDeltas{}
+	updates.deltas = append(updates.deltas, deltaB)
+
+	lastUpdateRound = basics.Round(4)
+	updated, err = onlineAccountsNewRoundImpl(writer, updates, proto, lastUpdateRound)
+	require.NoError(t, err)
+	require.Len(t, updated, 2) // 3rd update is ignored
+
+	// make sure the last offline entry is ignored
+	history, _, err = queries.LookupOnlineHistory(addrB)
+	require.NoError(t, err)
+	require.Len(t, history, 2)
+
+	// ASC ordered by updRound
+	require.False(t, history[0].AccountData.IsVotingEmpty())
+	require.Equal(t, basics.Round(4), history[0].UpdRound)
+	require.True(t, history[1].AccountData.IsVotingEmpty())
+	require.Equal(t, basics.Round(5), history[1].UpdRound)
+}
