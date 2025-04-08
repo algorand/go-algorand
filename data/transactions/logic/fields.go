@@ -1147,7 +1147,7 @@ type AssetHoldingField int
 const (
 	// AssetBalance AssetHolding.Amount
 	AssetBalance AssetHoldingField = iota
-	// AssetFrozen AssetHolding.Frozen || AssetParams.GlobalFrozen
+	// AssetFrozen AssetHolding.Frozen || (AssetParams.GlobalFrozen && (AssetParams.LastAssetFreeze > AssetHolding.LastAccountFreeze))
 	AssetFrozen
 	// AccountFrozen AssetHolding.Frozen
 	AccountFrozen

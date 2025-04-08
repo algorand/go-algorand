@@ -33,9 +33,10 @@ import (
 // AssetHolding converts between basics.AssetHolding and model.AssetHolding
 func AssetHolding(ah basics.AssetHolding, ai basics.AssetIndex) model.AssetHolding {
 	return model.AssetHolding{
-		Amount:   ah.Amount,
-		AssetID:  uint64(ai),
-		IsFrozen: ah.Frozen,
+		Amount:     ah.Amount,
+		AssetID:    uint64(ai),
+		IsFrozen:   ah.Frozen,
+		LastFreeze: ah.LastAccountFreeze,
 	}
 }
 
@@ -259,6 +260,10 @@ func AccountToAccountData(a *model.Account) (basics.AccountData, error) {
 			if ca.Params.GlobalFrozen != nil {
 				globalFrozen = *ca.Params.GlobalFrozen
 			}
+			var lastAssetFreeze uint64
+			if ca.Params.LastFreeze != nil {
+				lastAssetFreeze = *ca.Params.LastFreeze
+			}
 			var url string
 			if ca.Params.Url != nil {
 				url = *ca.Params.Url
@@ -273,18 +278,19 @@ func AccountToAccountData(a *model.Account) (basics.AccountData, error) {
 			}
 
 			assetParams[basics.AssetIndex(ca.Index)] = basics.AssetParams{
-				Total:         ca.Params.Total,
-				Decimals:      uint32(ca.Params.Decimals),
-				DefaultFrozen: defaultFrozen,
-				GlobalFrozen:  globalFrozen,
-				UnitName:      unitName,
-				AssetName:     name,
-				URL:           url,
-				MetadataHash:  metadataHash,
-				Manager:       manager,
-				Reserve:       reserve,
-				Freeze:        freeze,
-				Clawback:      clawback,
+				Total:           ca.Params.Total,
+				Decimals:        uint32(ca.Params.Decimals),
+				DefaultFrozen:   defaultFrozen,
+				GlobalFrozen:    globalFrozen,
+				LastAssetFreeze: lastAssetFreeze,
+				UnitName:        unitName,
+				AssetName:       name,
+				URL:             url,
+				MetadataHash:    metadataHash,
+				Manager:         manager,
+				Reserve:         reserve,
+				Freeze:          freeze,
+				Clawback:        clawback,
 			}
 		}
 	}
@@ -293,8 +299,9 @@ func AccountToAccountData(a *model.Account) (basics.AccountData, error) {
 		assets = make(map[basics.AssetIndex]basics.AssetHolding, len(*a.Assets))
 		for _, h := range *a.Assets {
 			assets[basics.AssetIndex(h.AssetID)] = basics.AssetHolding{
-				Amount: h.Amount,
-				Frozen: h.IsFrozen,
+				Amount:            h.Amount,
+				Frozen:            h.IsFrozen,
+				LastAccountFreeze: h.LastFreeze,
 			}
 		}
 	}
@@ -489,12 +496,14 @@ func AppLocalState(state basics.AppLocalState, appIdx basics.AppIndex) model.App
 func AssetParamsToAsset(creator string, idx basics.AssetIndex, params *basics.AssetParams) model.Asset {
 	frozen := params.DefaultFrozen
 	globalFrozen := params.GlobalFrozen
+	lastFreeze := params.LastAssetFreeze
 	assetParams := model.AssetParams{
 		Creator:       creator,
 		Total:         params.Total,
 		Decimals:      uint64(params.Decimals),
 		DefaultFrozen: &frozen,
 		GlobalFrozen:  &globalFrozen,
+		LastFreeze:    &lastFreeze,
 		Name:          omitEmpty(printableUTF8OrEmpty(params.AssetName)),
 		NameB64:       sliceOrNil([]byte(params.AssetName)),
 		UnitName:      omitEmpty(printableUTF8OrEmpty(params.UnitName)),

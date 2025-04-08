@@ -3309,7 +3309,8 @@
       "required": [
         "asset-id",
         "amount",
-        "is-frozen"
+        "is-frozen",
+        "last-freeze"
       ],
       "properties": {
         "amount": {
@@ -3325,6 +3326,10 @@
         "is-frozen": {
           "description": "\\[f\\] whether or not the holding is frozen.",
           "type": "boolean"
+        },
+        "last-freeze": {
+          "description": "\\[lf\\] the last time the holding was frozen or unfrozen.",
+          "type": "integer"
         }
       }
     },
@@ -3360,8 +3365,12 @@
           "type": "string"
         },
         "global-frozen": {
-          "description": "\\[gf\\] Whether transfers of this asset are frozen for everyone.",
+          "description": "\\[gf\\] Whether transfers of this asset are globally frozen.",
           "type": "boolean"
+        },
+        "last-freeze": {
+          "description": "\\[lf\\] the last time the asset was globally frozen or unfrozen.",
+          "type": "integer"
         },
         "manager": {
           "description": "\\[m\\] Address of account used to manage the keys of this asset and to destroy it.",

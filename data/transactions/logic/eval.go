@@ -2899,7 +2899,9 @@ func (cx *EvalContext) assetHoldingToValue(holding *basics.AssetHolding, fs asse
 	case AssetBalance:
 		sv.Uint = holding.Amount
 	case AssetFrozen:
-		sv.Uint = boolToUint(holding.Frozen || params.GlobalFrozen)
+		isAccountFrozen := holding.Frozen
+		isAssetFrozen := params.GlobalFrozen && (params.LastAssetFreeze > holding.LastAccountFreeze)
+		sv.Uint = boolToUint(isAccountFrozen || isAssetFrozen)
 	case AccountFrozen:
 		sv.Uint = boolToUint(holding.Frozen)
 	default:

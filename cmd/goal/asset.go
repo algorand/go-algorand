@@ -24,7 +24,6 @@ import (
 
 	"github.com/algorand/go-algorand/cmd/util/datadir"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/libgoal"
 )
 
@@ -116,6 +115,7 @@ func init() {
 	freezeAssetCmd.Flags().StringVar(&account, "account", "", "Account address to freeze/unfreeze")
 	freezeAssetCmd.Flags().BoolVar(&assetFrozen, "freeze", false, "Freeze or unfreeze")
 	freezeAssetCmd.MarkFlagRequired("freezer")
+	freezeAssetCmd.MarkFlagRequired("freeze")
 
 	optinAssetCmd.Flags().StringVar(&assetUnitName, "asset", "", "Unit name of the asset being accepted")
 	optinAssetCmd.Flags().Uint64Var(&assetID, "assetid", 0, "ID of the asset being accepted")
@@ -611,10 +611,7 @@ var freezeAssetCmd = &cobra.Command{
 
 		lookupAssetID(cmd, creatorResolved, client)
 
-		var tx transactions.Transaction
-		var err error
-
-		tx, err = client.MakeUnsignedAssetFreezeTx(assetID, accountResolved, assetFrozen)
+		tx, err := client.MakeUnsignedAssetFreezeTx(assetID, accountResolved, assetFrozen)
 		if err != nil {
 			reportErrorf("Cannot construct transaction: %s", err)
 		}
@@ -778,6 +775,12 @@ var infoAssetCmd = &cobra.Command{
 			}
 			return *b
 		}
+		deferUint64 := func(u *uint64) uint64 {
+			if u == nil {
+				return 0
+			}
+			return *u
+		}
 
 		lookupAssetID(cmd, creator, client)
 
@@ -809,6 +812,7 @@ var infoAssetCmd = &cobra.Command{
 		fmt.Printf("Decimals:         %d\n", asset.Params.Decimals)
 		fmt.Printf("Default frozen:   %v\n", derefBool(asset.Params.DefaultFrozen))
 		fmt.Printf("Global frozen:    %v\n", derefBool(asset.Params.GlobalFrozen))
+		fmt.Printf("Last freeze:      %v\n", deferUint64(asset.Params.LastFreeze))
 		fmt.Printf("Manager address:  %s\n", derefString(asset.Params.Manager))
 		if reserveEmpty {
 			fmt.Printf("Reserve address:  %s (Empty. Defaulting to creator)\n", derefString(asset.Params.Reserve))

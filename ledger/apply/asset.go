@@ -208,17 +208,22 @@ func takeOut(balances Balances, addr basics.Address, asset basics.AssetIndex, am
 		return fmt.Errorf("asset %v missing from %v", asset, addr)
 	}
 
-	params, _, err := getParams(balances, asset)
-	if err != nil {
-		return err
-	}
+	if !bypassFreeze {
+		if sndHolding.Frozen {
+			return fmt.Errorf("asset %v frozen in %v", asset, addr)
+		}
 
-	if params.GlobalFrozen && !bypassFreeze {
-		return fmt.Errorf("asset %v globally frozen", asset)
-	}
-
-	if sndHolding.Frozen && !bypassFreeze {
-		return fmt.Errorf("asset %v frozen in %v", asset, addr)
+		assetParams, _, err := getParams(balances, asset)
+		if err != nil {
+			return err
+		}
+		// GlobalFrozen can only be set to true after asset creation, so
+		// it _should_ always have an associated LastAssetFreeze value.
+		// GlobalFrozen is only enforced if the LastAssetFreeze occoured
+		// after an asset holding's LastAccountFreeze.
+		if assetParams.GlobalFrozen && (assetParams.LastAssetFreeze > sndHolding.LastAccountFreeze) {
+			return fmt.Errorf("asset %v globally frozen", asset)
+		}
 	}
 
 	newAmount, overflowed := basics.OSub(sndHolding.Amount, amount)
@@ -243,17 +248,22 @@ func putIn(balances Balances, addr basics.Address, asset basics.AssetIndex, amou
 		return fmt.Errorf("receiver error: must optin, asset %v missing from %v", asset, addr)
 	}
 
-	params, _, err := getParams(balances, asset)
-	if err != nil {
-		return err
-	}
+	if !bypassFreeze {
+		if rcvHolding.Frozen {
+			return fmt.Errorf("asset frozen in recipient")
+		}
 
-	if params.GlobalFrozen && !bypassFreeze {
-		return fmt.Errorf("asset %v globally frozen", asset)
-	}
-
-	if rcvHolding.Frozen && !bypassFreeze {
-		return fmt.Errorf("asset frozen in recipient")
+		assetParams, _, err := getParams(balances, asset)
+		if err != nil {
+			return err
+		}
+		// GlobalFrozen can only be set to true after asset creation, so
+		// it _should_ always have an associated LastAssetFreeze value.
+		// GlobalFrozen is only enforced if the LastAssetFreeze occoured
+		// after an asset holding's LastAccountFreeze.
+		if assetParams.GlobalFrozen && (assetParams.LastAssetFreeze >= rcvHolding.LastAccountFreeze) {
+			return fmt.Errorf("asset %v globally frozen", asset)
+		}
 	}
 
 	var overflowed bool
@@ -451,7 +461,7 @@ func AssetTransfer(ct transactions.AssetTransferTxnFields, header transactions.H
 }
 
 // AssetFreeze applies an AssetFreeze transaction using the Balances interface.
-func AssetFreeze(cf transactions.AssetFreezeTxnFields, header transactions.Header, balances Balances, spec transactions.SpecialAddresses, ad *transactions.ApplyData) error {
+func AssetFreeze(cf transactions.AssetFreezeTxnFields, header transactions.Header, balances Balances, spec transactions.SpecialAddresses, ad *transactions.ApplyData, txnCounter uint64) error {
 	// Only the Freeze address can change the freeze value.
 	params, creator, err := getParams(balances, cf.FreezeAsset)
 	if err != nil {
@@ -465,6 +475,7 @@ func AssetFreeze(cf transactions.AssetFreezeTxnFields, header transactions.Heade
 	// If FreezeAccount is not set, then this is a global freeze/unfreeze operation.
 	if cf.FreezeAccount.IsZero() {
 		params.GlobalFrozen = cf.AssetFrozen
+		params.LastAssetFreeze = txnCounter
 
 		return balances.PutAssetParams(creator, cf.FreezeAsset, params)
 	}
@@ -479,5 +490,6 @@ func AssetFreeze(cf transactions.AssetFreezeTxnFields, header transactions.Heade
 	}
 
 	holding.Frozen = cf.AssetFrozen
+	holding.LastAccountFreeze = txnCounter
 	return balances.PutAssetHolding(cf.FreezeAccount, cf.FreezeAsset, holding)
 }
