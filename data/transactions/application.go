@@ -208,22 +208,30 @@ func (rr ResourceRef) Empty() bool {
 func (rr ResourceRef) wellFormed(access []ResourceRef, proto config.ConsensusParams) error {
 	// Count the number of non-empty fields
 	count := 0
-	switch {
 	// The "basic" resources are inherently wellFormed
-	case !rr.Address.IsZero(), rr.Asset != 0, rr.App != 0:
+	if !rr.Address.IsZero() {
 		count++
+	}
+	if rr.Asset != 0 {
+		count++
+	}
+	if rr.App != 0 {
+		count++
+	}
 	// The references that have indices need to be checked
-	case !rr.Holding.Empty():
+	if !rr.Holding.Empty() {
 		if _, _, err := rr.Holding.Resolve(access, basics.Address{}); err != nil {
 			return err
 		}
 		count++
-	case !rr.Locals.Empty():
+	}
+	if !rr.Locals.Empty() {
 		if _, _, err := rr.Locals.Resolve(access, basics.Address{}); err != nil {
 			return err
 		}
 		count++
-	case !rr.Box.Empty():
+	}
+	if !rr.Box.Empty() {
 		if proto.EnableBoxRefNameError && len(rr.Box.Name) > proto.MaxAppKeyLen {
 			return fmt.Errorf("tx.Access box Name too long, max len %d bytes", proto.MaxAppKeyLen)
 		}
@@ -231,11 +239,14 @@ func (rr ResourceRef) wellFormed(access []ResourceRef, proto config.ConsensusPar
 			return err
 		}
 		count++
-	case !rr.Empty(): // If it's not one of those, it has to be empty
-		return fmt.Errorf("tx.Access with unknown content")
 	}
 	switch count {
-	case 0, 1:
+	case 0:
+		if !rr.Empty() { // If it's not one of those, it has to be empty
+			return fmt.Errorf("tx.Access with unknown content")
+		}
+		return nil
+	case 1:
 		return nil
 	default:
 		return fmt.Errorf("tx.Access element has fields from multiple types")

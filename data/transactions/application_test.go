@@ -322,6 +322,29 @@ func TestAppCallAccessWellFormed(t *testing.T) {
 				Access:        []ResourceRef{{Box: BoxRef{Name: make([]byte, 65)}}},
 			},
 		},
+
+		// Multiple uses in ResourceRef
+		{
+			expectedError: "tx.Access element has fields from multiple types",
+			ac: ApplicationCallTxnFields{
+				ApplicationID: 1,
+				Access:        []ResourceRef{{Address: basics.Address{0x01}, Box: BoxRef{Name: []byte("a")}}},
+			},
+		},
+		{
+			expectedError: "tx.Access element has fields from multiple types",
+			ac: ApplicationCallTxnFields{
+				ApplicationID: 1,
+				Access:        []ResourceRef{{App: 10, Locals: LocalsRef{App: 1}}},
+			},
+		},
+		{
+			expectedError: "tx.Access element has fields from multiple types",
+			ac: ApplicationCallTxnFields{
+				ApplicationID: 1,
+				Access:        []ResourceRef{{Asset: 10, Holding: HoldingRef{Asset: 1}}},
+			},
+		},
 	}
 	for i, tc := range cases {
 		name := fmt.Sprintf("i=%d", i)
