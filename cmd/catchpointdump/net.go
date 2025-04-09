@@ -78,51 +78,6 @@ var netCmd = &cobra.Command{
 			return fmt.Errorf("network or round not set")
 		}
 
-		if rawDump {
-			// fetch from net, dump raw
-			var addrs []string
-			if relayAddress != "" {
-				addrs = []string{relayAddress}
-			} else {
-				addrs, err = tools.ReadFromSRV(context.Background(), "algobootstrap", "tcp", networkName, "", false)
-				if err != nil || len(addrs) == 0 {
-					reportErrorf("Unable to bootstrap records for '%s' : %v", networkName, err)
-				}
-			}
-
-			for _, addr := range addrs {
-				var tarName string
-				tarName, err = downloadCatchpoint(addr, round)
-				if err != nil {
-					reportInfof("failed to download catchpoint from '%s' : %v", addr, err)
-					continue
-				}
-				outFile := os.Stdout
-				if outFileName != "" {
-					outFile, err = os.OpenFile(outFileName, os.O_RDWR|os.O_TRUNC|os.O_CREATE, 0755)
-					if err != nil {
-						reportErrorf("Unable to create file '%s' : %v", outFileName, err)
-					}
-				}
-				f, ferr := os.Open(tarName)
-				if ferr != nil {
-					reportErrorf("Unable to open downloaded tar file '%s': %v", tarName, ferr)
-				}
-				defer f.Close()
-				err = rawDumpCatchpointStream(f, 0, outFile)
-				if err != nil {
-					reportInfof("failed to raw dump from '%s' : %v", addr, err)
-					continue
-				}
-				// if singleCatchpoint, break after the first success
-				err = nil
-				if singleCatchpoint {
-					break
-				}
-			}
-			return err
-		}
-
 		var addrs []string
 		if relayAddress != "" {
 			addrs = []string{relayAddress}
@@ -140,16 +95,22 @@ var netCmd = &cobra.Command{
 				reportInfof("failed to download catchpoint from '%s' : %v", addr, err)
 				continue
 			}
-			genesisInitState := ledgercore.InitState{
-				Block: bookkeeping.Block{BlockHeader: bookkeeping.BlockHeader{
-					UpgradeState: bookkeeping.UpgradeState{
-						CurrentProtocol: protocol.ConsensusCurrentVersion,
-					},
-				}},
+
+			if rawDump {
+				err = loadAndRawDump(addr, tarName)
+			} else {
+				genesisInitState := ledgercore.InitState{
+					Block: bookkeeping.Block{BlockHeader: bookkeeping.BlockHeader{
+						UpgradeState: bookkeeping.UpgradeState{
+							CurrentProtocol: protocol.ConsensusCurrentVersion,
+						},
+					}},
+				}
+				err = loadAndDump(addr, tarName, genesisInitState)
 			}
-			err = loadAndDump(addr, tarName, genesisInitState)
+
 			if err != nil {
-				reportInfof("failed to load/dump from tar file for '%s' : %v", addr, err)
+				reportInfof("failed to process catchpoint for '%s' : %v", addr, err)
 				continue
 			}
 			// clear possible errors from previous run: at this point we've succeeded
@@ -345,6 +306,31 @@ func deleteLedgerFiles(deleteTracker bool) error {
 		if (err != nil) && !errors.Is(err, os.ErrNotExist) {
 			return err
 		}
+	}
+
+	return nil
+}
+
+func loadAndRawDump(addr string, tarFile string) error {
+	outFile := os.Stdout
+	if outFileName != "" {
+		var err error
+		outFile, err = os.OpenFile(outFileName, os.O_RDWR|os.O_TRUNC|os.O_CREATE, 0755)
+		if err != nil {
+			return fmt.Errorf("unable to create file '%s' : %v", outFileName, err)
+		}
+		defer outFile.Close()
+	}
+
+	f, err := os.Open(tarFile)
+	if err != nil {
+		return fmt.Errorf("unable to open downloaded tar file '%s': %v", tarFile, err)
+	}
+	defer f.Close()
+
+	err = rawDumpCatchpointStream(f, 0, outFile)
+	if err != nil {
+		return fmt.Errorf("failed to raw dump from '%s' : %v", addr, err)
 	}
 
 	return nil
