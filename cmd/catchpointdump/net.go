@@ -97,7 +97,7 @@ var netCmd = &cobra.Command{
 			}
 
 			if rawDump {
-				err = loadAndRawDump(addr, tarName)
+				err = rawDumpCatchpointFile(tarName, outFileName)
 			} else {
 				genesisInitState := ledgercore.InitState{
 					Block: bookkeeping.Block{BlockHeader: bookkeeping.BlockHeader{
@@ -306,31 +306,6 @@ func deleteLedgerFiles(deleteTracker bool) error {
 		if (err != nil) && !errors.Is(err, os.ErrNotExist) {
 			return err
 		}
-	}
-
-	return nil
-}
-
-func loadAndRawDump(addr string, tarFile string) error {
-	outFile := os.Stdout
-	if outFileName != "" {
-		var err error
-		outFile, err = os.OpenFile(outFileName, os.O_RDWR|os.O_TRUNC|os.O_CREATE, 0755)
-		if err != nil {
-			return fmt.Errorf("unable to create file '%s' : %v", outFileName, err)
-		}
-		defer outFile.Close()
-	}
-
-	f, err := os.Open(tarFile)
-	if err != nil {
-		return fmt.Errorf("unable to open downloaded tar file '%s': %v", tarFile, err)
-	}
-	defer f.Close()
-
-	err = rawDumpCatchpointStream(f, 0, outFile)
-	if err != nil {
-		return fmt.Errorf("failed to raw dump from '%s' : %v", addr, err)
 	}
 
 	return nil
