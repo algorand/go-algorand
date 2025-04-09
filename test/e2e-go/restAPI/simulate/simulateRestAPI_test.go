@@ -2585,7 +2585,7 @@ assert
 
 // Box access
 byte "A"
-int 1025
+int 2049						// need three refs with old quota, two after the bump (we only test latest)
 box_create
 assert
 
