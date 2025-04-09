@@ -293,7 +293,7 @@ func rawDumpCatchpointStream(r io.Reader, fileSize int64, outFile *os.File) erro
 					err = protocol.Decode(chunkData, &chunk)
 					if err != nil {
 						fmt.Fprintf(outFile, "Error decoding chunk %s: %v\n", fname, err)
-						break
+						return err
 					}
 					// Balances - only print if not onlineOnly
 					if !onlineOnly {
