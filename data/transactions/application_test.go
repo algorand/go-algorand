@@ -23,10 +23,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
+	basics_testing "github.com/algorand/go-algorand/data/basics/testing"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
@@ -39,9 +41,20 @@ func TestApplicationCallFieldsNotChanged(t *testing.T) {
 	s := reflect.ValueOf(&af).Elem()
 
 	if s.NumField() != 14 {
-		t.Errorf("You  added or removed a field from transactions.ApplicationCallTxnFields. " +
+		t.Errorf("You added or removed a field from transactions.ApplicationCallTxnFields. " +
 			"Please ensure you have updated ApplicationCallTxnFields.Empty() and then " +
 			"fix this test")
+	}
+}
+
+func TestResourceRefEmpty(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	assert.True(t, ResourceRef{}.Empty())
+	for _, nz := range basics_testing.NearZeros(t, ResourceRef{}) {
+		rr := nz.(ResourceRef)
+		assert.False(t, rr.Empty(), rr)
 	}
 }
 
@@ -49,10 +62,17 @@ func TestApplicationCallFieldsEmpty(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	t.Parallel()
 
-	a := require.New(t)
+	a := assert.New(t)
 
 	ac := ApplicationCallTxnFields{}
 	a.True(ac.Empty())
+
+	for _, nz := range basics_testing.NearZeros(t, ac) {
+		fields := nz.(ApplicationCallTxnFields)
+		a.False(fields.Empty(), fields)
+	}
+
+	// Everything below here ought to be redundant after the NearZeros loop.
 
 	ac.ApplicationID = 1
 	a.False(ac.Empty())
