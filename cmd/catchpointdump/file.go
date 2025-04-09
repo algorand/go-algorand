@@ -214,7 +214,7 @@ func rawDumpCatchpointFile(catchpointFile string, outFileName string) error {
 
 	outFile := os.Stdout
 	if outFileName != "" {
-		outFile, err = os.OpenFile(outFileName, os.O_RDWR|os.O_TRUNC|os.O_CREATE, 0755)
+		outFile, err = os.OpenFile(outFileName, os.O_RDWR|os.O_TRUNC|os.O_CREATE, 0644)
 		if err != nil {
 			return fmt.Errorf("unable to create file '%s': %v", outFileName, err)
 		}
