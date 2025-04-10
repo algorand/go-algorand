@@ -55,8 +55,8 @@ func CollectPaths(typ reflect.Type, prefix []int) [][]int {
 		return CollectPaths(typ.Elem(), prefix)
 
 	case reflect.Map:
-		// Only collect paths into the value, not the key
-		return CollectPaths(typ.Elem(), prefix)
+		// Record as a leaf because we will just make a single entry in the map
+		paths = append(paths, prefix)
 
 	case reflect.Struct:
 		// Special case: skip known value-type structs like time.Time
@@ -154,7 +154,11 @@ func exampleValue(t reflect.Type) reflect.Value {
 	case reflect.Map:
 		// Create a map with one key-value pair.
 		m := reflect.MakeMap(t)
-		m.SetMapIndex(exampleValue(t.Key()), exampleValue(t.Elem()))
+		// We put in an _empty_ value, because we want to ensure that a map with
+		// a value is considered non-zero.  The fact that the value is zero is
+		// irrelevant.
+		e := reflect.New(t.Elem()).Elem()
+		m.SetMapIndex(exampleValue(t.Key()), e)
 		return m
 	case reflect.Array:
 		// Create an array and set the first element.
