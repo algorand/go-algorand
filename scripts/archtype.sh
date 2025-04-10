@@ -15,6 +15,8 @@ elif [[ "${ARCH}" = "armv7l" ]]; then
     echo "arm"
 elif [[ "${ARCH}" = "aarch64" ]] || [[ "${ARCH}" = "arm64" ]]; then
     echo "arm64"
+elif [[ "${ARCH}" = "riscv64" ]]; then
+    echo "riscv64"
 else
     # Anything else needs to be specifically added...
     echo "unsupported"

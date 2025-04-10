@@ -36,6 +36,24 @@ func GetFdLimits() (soft uint64, hard uint64, err error) {
 	return rLimit.Cur, rLimit.Max, nil
 }
 
+// RaiseFdSoftLimit raises the file descriptors soft limit to the specified value,
+// or leave it unchanged if the value is less than the current.
+func RaiseFdSoftLimit(newLimit uint64) error {
+	soft, hard, err := GetFdLimits()
+	if err != nil {
+		return fmt.Errorf("RaiseFdSoftLimit() err: %w", err)
+	}
+	if newLimit <= soft {
+		// Current limit is sufficient; no need to change it.
+		return nil
+	}
+	if newLimit > hard {
+		// New limit exceeds the hard limit; set it to the hard limit.
+		newLimit = hard
+	}
+	return SetFdSoftLimit(newLimit)
+}
+
 // SetFdSoftLimit sets a new file descriptors soft limit.
 func SetFdSoftLimit(newLimit uint64) error {
 	var rLimit syscall.Rlimit
