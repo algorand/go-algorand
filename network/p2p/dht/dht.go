@@ -71,5 +71,5 @@ func backoffFactory() backoff.BackoffFactory {
 
 // MakeDiscovery creates a discovery.Discovery object using backoff and caching
 func MakeDiscovery(r crouting.ContentRouting) (discovery.Discovery, error) {
-	return backoff.NewBackoffDiscovery(routing.NewRoutingDiscovery(r), backoffFactory(), backoff.WithBackoffDiscoveryReturnedChannelSize(0))
+	return backoff.NewBackoffDiscovery(routing.NewRoutingDiscovery(r), backoffFactory())
 }
