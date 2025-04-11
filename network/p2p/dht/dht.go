@@ -69,7 +69,7 @@ func backoffFactory() backoff.BackoffFactory {
 	return backoff.NewExponentialDecorrelatedJitter(minBackoff, maxBackoff, baseBackoff, rand.NewSource(rand.Int63()))
 }
 
-// MakeDiscovery creates a discovery.Discovery object using backoff and cacching
+// MakeDiscovery creates a discovery.Discovery object using backoff and caching
 func MakeDiscovery(r crouting.ContentRouting) (discovery.Discovery, error) {
-	return backoff.NewBackoffDiscovery(routing.NewRoutingDiscovery(r), backoffFactory(), backoff.WithBackoffDiscoveryReturnedChannelSize(0), backoff.WithBackoffDiscoverySimultaneousQueryBufferSize(0))
+	return backoff.NewBackoffDiscovery(routing.NewRoutingDiscovery(r), backoffFactory())
 }
