@@ -39,6 +39,12 @@ import algosdk
 
 logger = logging.getLogger(__name__)
 
+# Set custom except hook for threading to log exceptions
+def custom_excepthook(args):
+    logger.error("Exception in thread %s: %s", args.thread.name, args.exc_value)
+
+threading.excepthook = custom_excepthook
+
 scriptdir = os.path.dirname(os.path.realpath(__file__))
 repodir = os.path.join(scriptdir, "..", "..")
 
@@ -186,8 +192,8 @@ def script_thread(runset, scriptname, to):
     start = time.time()
     try:
         _script_thread_inner(runset, scriptname, to)
-    except Exception:
-        logger.error('error in e2e_client_runner.py', exc_info=True)
+    except Exception as e:
+        logger.error('error in e2e_client_runner.py for %s: %s', scriptname, e, exc_info=True)
         runset.done(scriptname, False, time.time() - start)
 
 
