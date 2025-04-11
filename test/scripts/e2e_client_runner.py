@@ -220,6 +220,7 @@ class RunSet:
         algodata = self.env['ALGORAND_DATA']
 
         xrun(['goal', 'kmd', 'start', '-t', '3600', '-d', algodata], env=self.env, timeout=5)
+        logger.info("Starting KMD with data directory: %s", algodata)
         self.kmd = openkmd(algodata)
         self.algod = openalgod(algodata)
 
