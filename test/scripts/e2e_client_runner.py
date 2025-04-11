@@ -219,9 +219,14 @@ class RunSet:
         # should run from inside self.lock
         algodata = self.env['ALGORAND_DATA']
 
-        xrun(['goal', 'kmd', 'start', '-t', '3600', '-d', algodata], env=self.env, timeout=5)
+        xrun(['goal', 'kmd', 'start', '-t', '3600', '-d', algodata], env=self.env, timeout=10)
         logger.info("Starting KMD with data directory: %s", algodata)
-        self.kmd = openkmd(algodata)
+        try:
+            self.kmd = openkmd(algodata)
+            logger.info("Started KMD")
+        except Exception as e:
+            logger.error('error starting kmd', exc_info=True)
+            raise e
         self.algod = openalgod(algodata)
 
     def get_pub_wallet(self):
