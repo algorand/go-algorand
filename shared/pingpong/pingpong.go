@@ -1183,9 +1183,9 @@ func (pps *WorkerState) constructAppTxn(from, to string, fee uint64, client *lib
 	}
 
 	// construct box ref array
-	var boxRefs []transactions.BoxRef
+	var boxRefs []basics.BoxRef
 	for i := uint32(0); i < pps.getNumBoxes(); i++ {
-		boxRefs = append(boxRefs, transactions.BoxRef{Index: 0, Name: []byte{fmt.Sprintf("%d", i)[0]}})
+		boxRefs = append(boxRefs, basics.BoxRef{App: 0, Name: fmt.Sprintf("%d", i)})
 	}
 
 	appOptIns := pps.cinfo.OptIns[aidx]
@@ -1217,7 +1217,11 @@ func (pps *WorkerState) constructAppTxn(from, to string, fee uint64, client *lib
 		}
 		accounts = accounts[1:]
 	}
-	txn, err = client.MakeUnsignedAppNoOpTx(aidx, nil, accounts, nil, nil, boxRefs)
+	refs := libgoal.RefBundle{
+		Accounts: accounts,
+		Boxes:    boxRefs,
+	}
+	txn, err = client.MakeUnsignedAppNoOpTx(aidx, nil, refs)
 	if err != nil {
 		return
 	}

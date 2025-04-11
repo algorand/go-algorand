@@ -36,6 +36,8 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/libgoal"
+	"github.com/algorand/go-algorand/util"
 )
 
 var (
@@ -561,9 +563,12 @@ var appExecuteCmd = &cobra.Command{
 			proc.OnCompletion = "NoOp"
 		}
 		onCompletion := mustParseOnCompletion(proc.OnCompletion)
-		appAccounts := inputs.Accounts
-		foreignApps := inputs.ForeignApps
-		foreignAssets := inputs.ForeignAssets
+		refs := libgoal.RefBundle{
+			Accounts: inputs.Accounts,
+			Apps:     util.Map(inputs.ForeignApps, func(idx uint64) basics.AppIndex { return basics.AppIndex(idx) }),
+			Assets:   util.Map(inputs.ForeignAssets, func(idx uint64) basics.AssetIndex { return basics.AssetIndex(idx) }),
+			// goal app interact is old and doesn't know about boxes.
+		}
 
 		appArgs := make([][]byte, len(inputs.Args))
 		for i, arg := range inputs.Args {
@@ -588,7 +593,7 @@ var appExecuteCmd = &cobra.Command{
 			localSchema = header.Query.Local.ToStateSchema()
 			globalSchema = header.Query.Global.ToStateSchema()
 		}
-		tx, err := client.MakeUnsignedApplicationCallTx(appIdx, appArgs, appAccounts, foreignApps, foreignAssets, nil, onCompletion, approvalProg, clearProg, globalSchema, localSchema, 0)
+		tx, err := client.MakeUnsignedApplicationCallTx(appIdx, appArgs, refs, onCompletion, approvalProg, clearProg, globalSchema, localSchema, 0)
 		if err != nil {
 			reportErrorf("Cannot create application txn: %v", err)
 		}

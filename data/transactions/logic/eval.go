@@ -40,6 +40,7 @@ import (
 	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util"
 )
 
 // The constants below control opcode evaluation and MAY NOT be changed without
@@ -274,12 +275,6 @@ type LedgerForLogic interface {
 	Counter() uint64
 }
 
-// BoxRef is the "hydrated" form of a transactions.BoxRef - it has the actual app id, not an index
-type BoxRef struct {
-	App  basics.AppIndex
-	Name string
-}
-
 // UnnamedResourcePolicy is an interface that defines the policy for allowing unnamed resources.
 // This should only be used during simulation or debugging.
 type UnnamedResourcePolicy interface {
@@ -495,7 +490,7 @@ func (ep *EvalParams) computeAvailability() *resources {
 		sharedApps:     make(map[basics.AppIndex]struct{}),
 		sharedHoldings: make(map[ledgercore.AccountAsset]struct{}),
 		sharedLocals:   make(map[ledgercore.AccountApp]struct{}),
-		boxes:          make(map[BoxRef]bool),
+		boxes:          make(map[basics.BoxRef]bool),
 	}
 	for i := range ep.TxnGroup {
 		available.fill(&ep.TxnGroup[i].Txn, ep)
@@ -1081,29 +1076,16 @@ func (cx *EvalContext) evalStates() []evalState {
 		// should be located outside of the evalState, with the PC.
 		var stack []any
 		if cx.groupIndex == i {
-			stack = convertSlice(cx.Stack, func(sv stackValue) any {
-				return sv.asAny()
-			})
+			stack = util.Map(cx.Stack, stackValue.asAny)
 		}
 
 		states[i] = evalState{
 			Scratch: scratchAsAny,
 			Stack:   stack,
-			Logs:    convertSlice(cx.TxnGroup[i].EvalDelta.Logs, func(s string) []byte { return []byte(s) }),
+			Logs:    util.Map(cx.TxnGroup[i].EvalDelta.Logs, func(s string) []byte { return []byte(s) }),
 		}
 	}
 	return states
-}
-
-func convertSlice[X any, Y any](input []X, fn func(X) Y) []Y {
-	if input == nil {
-		return nil
-	}
-	output := make([]Y, len(input))
-	for i := range input {
-		output[i] = fn(input[i])
-	}
-	return output
 }
 
 // EvalContract executes stateful program as the gi'th transaction in params
@@ -1147,7 +1129,7 @@ func EvalContract(program []byte, gi int, aid basics.AppIndex, params *EvalParam
 		// make any "0 index" box refs available now that we have an appID.
 		for _, br := range cx.txn.Txn.Boxes {
 			if br.Index == 0 {
-				cx.EvalParams.available.boxes[BoxRef{cx.appID, string(br.Name)}] = false
+				cx.EvalParams.available.boxes[basics.BoxRef{App: cx.appID, Name: string(br.Name)}] = false
 			}
 		}
 		// and add the appID to `createdApps`
