@@ -594,7 +594,7 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | 60 | CreatedAssetID | uint64 | v5  | Asset ID allocated by the creation of an ASA (only with `itxn` in v5). Application mode only |
 | 61 | CreatedApplicationID | uint64 | v5  | ApplicationID allocated by the creation of an application (only with `itxn` in v5). Application mode only |
 | 62 | LastLog | []byte | v6  | The last message emitted. Empty bytes if none were emitted. Application mode only |
-| 63 | StateProofPK | []byte | v6  | 64 byte state proof public key |
+| 63 | StateProofPK | [64]byte | v6  | State proof public key |
 | 65 | NumApprovalProgramPages | uint64 | v7  | Number of Approval Program pages |
 | 67 | NumClearStateProgramPages | uint64 | v7  | Number of ClearState Program pages |
 

@@ -32,18 +32,6 @@ import (
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
 
-func checkEqual(expected []string, actual []string) bool {
-	if len(expected) != len(actual) {
-		return false
-	}
-	for i, e := range expected {
-		if e != actual[i] {
-			return false
-		}
-	}
-	return true
-}
-
 func TestApplication(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	defer fixtures.ShutdownSynchronizedTest(t)
@@ -124,9 +112,7 @@ log
 	b, err := client.BookkeepingBlock(round)
 	a.NoError(err)
 	for _, ps := range b.Payset {
-		ed := ps.ApplyData.EvalDelta
-		ok = checkEqual(logs, ed.Logs)
-		a.True(ok)
+		a.Equal(logs, ps.ApplyData.EvalDelta.Logs)
 	}
 
 }

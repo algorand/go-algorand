@@ -1805,7 +1805,8 @@ int 1
 
 const testTxnProgramTextV12 = testTxnProgramTextV11 + `
 assert
-int 1
+txn RejectVersion
+!
 `
 
 func makeSampleTxn() transactions.SignedTxn {

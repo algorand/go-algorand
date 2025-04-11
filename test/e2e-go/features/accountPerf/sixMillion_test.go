@@ -1181,7 +1181,7 @@ func makeOptInAppTransaction(
 	tLife uint64,
 	genesisHash crypto.Digest) (appTx transactions.Transaction) {
 
-	appTx, err := client.MakeUnsignedAppOptInTx(uint64(appIdx), nil, nil, nil, nil, nil)
+	appTx, err := client.MakeUnsignedAppOptInTx(uint64(appIdx), nil, nil, nil, nil, nil, 0)
 	require.NoError(t, err)
 
 	appTx.Header = transactions.Header{
@@ -1287,7 +1287,7 @@ func callAppTransaction(
 	tLife uint64,
 	genesisHash crypto.Digest) (appTx transactions.Transaction) {
 
-	appTx, err := client.MakeUnsignedAppNoOpTx(uint64(appIdx), nil, nil, nil, nil, nil)
+	appTx, err := client.MakeUnsignedAppNoOpTx(uint64(appIdx), nil, nil, nil, nil, nil, 0)
 	require.NoError(t, err)
 
 	appTx.Header = transactions.Header{
