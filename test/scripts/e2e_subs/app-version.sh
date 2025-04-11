@@ -25,7 +25,7 @@ ${gcmd} clerk send -f "$ACCOUNT" -t "$ACCOUNTB" -a 1000000
 # Now call from a different account, reject-version=0 allows all
 ${gcmd} app call --app-id="$APPID" --from="$ACCOUNTB" --reject-version 0
 
-# reject-version=1 allows because version is currently 1
+# reject-version=1 allows because version is currently 0
 ${gcmd} app call --app-id="$APPID" --from="$ACCOUNTB" --reject-version 1
 
 ${gcmd} app update --app-id="$APPID" --from="$ACCOUNT" --approval-prog=${TEAL}/approve-all.teal --clear-prog=${TEAL}/approve-all.teal

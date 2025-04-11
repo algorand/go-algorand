@@ -176,7 +176,7 @@ func TestAppCallVersioningWellFormed(t *testing.T) {
 			},
 		},
 		{
-			// Should we allow this, it's kind of non-sensical. Why specify a reject version when creating?
+			expectedError: "tx.RejectVersion cannot be set during creation",
 			ac: ApplicationCallTxnFields{
 				ApprovalProgram:   v5,
 				ClearStateProgram: v5,

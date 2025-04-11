@@ -242,6 +242,10 @@ func (ac ApplicationCallTxnFields) wellFormed(proto config.ConsensusParams) erro
 		return fmt.Errorf("tx.RejectVersion is not supported")
 	}
 
+	if ac.RejectVersion > 0 && ac.ApplicationID == 0 {
+		return fmt.Errorf("tx.RejectVersion cannot be set during creation")
+	}
+
 	// Programs may only be set for creation or update
 	if ac.ApplicationID != 0 && ac.OnCompletion != UpdateApplicationOC {
 		if len(ac.ApprovalProgram) != 0 || len(ac.ClearStateProgram) != 0 {

@@ -96,7 +96,7 @@ func init() {
 	appCmd.AddCommand(methodAppCmd)
 
 	appCmd.PersistentFlags().StringVarP(&walletName, "wallet", "w", "", "Set the wallet to be used for the selected operation")
-	appCmd.PersistentFlags().Uint64Var(&rejectVersion, "reject-version", 0, "Reject for this app version or higher")
+	appCmd.PersistentFlags().Uint64Var(&rejectVersion, "reject-version", 0, "If set non-zero, reject for this app version or higher")
 	appCmd.PersistentFlags().StringArrayVar(&appArgs, "app-arg", nil, "Args to encode for application transactions (all will be encoded to a byte slice). For ints, use the form 'int:1234'. For raw bytes, use the form 'b64:A=='. For printable strings, use the form 'str:hello'. For addresses, use the form 'addr:XYZ...'.")
 	appCmd.PersistentFlags().StringSliceVar(&foreignApps, "foreign-app", nil, "Indexes of other apps whose global state is read in this transaction")
 	appCmd.PersistentFlags().StringSliceVar(&foreignAssets, "foreign-asset", nil, "Indexes of assets whose parameters are read in this transaction")
