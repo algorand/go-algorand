@@ -39,6 +39,12 @@ import algosdk
 
 logger = logging.getLogger(__name__)
 
+# Set custom except hook for threading to log exceptions
+def custom_excepthook(args):
+    logger.error("Exception in thread %s: %s", args.thread.name, args.exc_value)
+
+threading.excepthook = custom_excepthook
+
 scriptdir = os.path.dirname(os.path.realpath(__file__))
 repodir = os.path.join(scriptdir, "..", "..")
 
@@ -186,8 +192,8 @@ def script_thread(runset, scriptname, to):
     start = time.time()
     try:
         _script_thread_inner(runset, scriptname, to)
-    except Exception:
-        logger.error('error in e2e_client_runner.py', exc_info=True)
+    except Exception as e:
+        logger.error('error in e2e_client_runner.py for %s: %s', scriptname, e, exc_info=True)
         runset.done(scriptname, False, time.time() - start)
 
 
@@ -219,14 +225,8 @@ class RunSet:
         # should run from inside self.lock
         algodata = self.env['ALGORAND_DATA']
 
-        xrun(['goal', 'kmd', 'start', '-t', '3600', '-d', algodata], env=self.env, timeout=10)
-        logger.info("Starting KMD with data directory: %s", algodata)
-        try:
-            self.kmd = openkmd(algodata)
-            logger.info("Started KMD")
-        except Exception as e:
-            logger.error('error starting kmd', exc_info=True)
-            raise e
+        xrun(['goal', 'kmd', 'start', '-t', '3600', '-d', algodata], env=self.env, timeout=5)
+        self.kmd = openkmd(algodata)
         self.algod = openalgod(algodata)
 
     def get_pub_wallet(self):
