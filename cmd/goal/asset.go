@@ -775,7 +775,7 @@ var infoAssetCmd = &cobra.Command{
 			}
 			return *b
 		}
-		deferUint64 := func(u *uint64) uint64 {
+		derefUint64 := func(u *uint64) uint64 {
 			if u == nil {
 				return 0
 			}
@@ -811,8 +811,7 @@ var infoAssetCmd = &cobra.Command{
 		fmt.Printf("Issued:           %s %s\n", assetDecimalsFmt(asset.Params.Total-res.Amount, asset.Params.Decimals), derefString(asset.Params.UnitName))
 		fmt.Printf("Decimals:         %d\n", asset.Params.Decimals)
 		fmt.Printf("Default frozen:   %v\n", derefBool(asset.Params.DefaultFrozen))
-		fmt.Printf("Global frozen:    %v\n", derefBool(asset.Params.GlobalFrozen))
-		fmt.Printf("Last freeze:      %v\n", deferUint64(asset.Params.LastFreeze))
+		fmt.Printf("Global freeze:    %v\n", derefUint64(asset.Params.LastGlobalFreeze))
 		fmt.Printf("Manager address:  %s\n", derefString(asset.Params.Manager))
 		if reserveEmpty {
 			fmt.Printf("Reserve address:  %s (Empty. Defaulting to creator)\n", derefString(asset.Params.Reserve))

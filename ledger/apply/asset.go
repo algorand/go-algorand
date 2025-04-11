@@ -213,16 +213,11 @@ func takeOut(balances Balances, addr basics.Address, asset basics.AssetIndex, am
 			return fmt.Errorf("asset %v frozen in %v", asset, addr)
 		}
 
-		assetParams, _, err := getParams(balances, asset)
-		if err != nil {
-			return err
-		}
-		// GlobalFrozen can only be set to true after asset creation, so
-		// it _should_ always have an associated LastAssetFreeze value.
-		// GlobalFrozen is only enforced if the LastAssetFreeze occoured
-		// after an asset holding's LastAccountFreeze.
-		if assetParams.GlobalFrozen && (assetParams.LastAssetFreeze > sndHolding.LastAccountFreeze) {
-			return fmt.Errorf("asset %v globally frozen", asset)
+		if balances.ConsensusParams().AssetGlobalFreeze {
+			err = isGlobalFrozen(balances, addr, asset, sndHolding)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
@@ -253,16 +248,11 @@ func putIn(balances Balances, addr basics.Address, asset basics.AssetIndex, amou
 			return fmt.Errorf("asset frozen in recipient")
 		}
 
-		assetParams, _, err := getParams(balances, asset)
-		if err != nil {
-			return err
-		}
-		// GlobalFrozen can only be set to true after asset creation, so
-		// it _should_ always have an associated LastAssetFreeze value.
-		// GlobalFrozen is only enforced if the LastAssetFreeze occoured
-		// after an asset holding's LastAccountFreeze.
-		if assetParams.GlobalFrozen && (assetParams.LastAssetFreeze >= rcvHolding.LastAccountFreeze) {
-			return fmt.Errorf("asset %v globally frozen", asset)
+		if balances.ConsensusParams().AssetGlobalFreeze {
+			err = isGlobalFrozen(balances, addr, asset, rcvHolding)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
@@ -273,6 +263,21 @@ func putIn(balances Balances, addr basics.Address, asset basics.AssetIndex, amou
 	}
 
 	return balances.PutAssetHolding(addr, asset, rcvHolding)
+}
+
+// isGlobalFrozen exclusively checks if an account is constrained by the global freeze.
+// It is assumed assetHolding.Frozen is False.
+func isGlobalFrozen(balances Balances, addr basics.Address, asset basics.AssetIndex, assetHolding basics.AssetHolding) error {
+	assetParams, _, err := getParams(balances, asset)
+	if err != nil {
+		return err
+	}
+	// GlobalFrozen is only enforced if a LastFreezeChange hasn't occoured after it
+	if assetParams.LastGlobalFreeze > assetHolding.LastFreezeChange {
+		return fmt.Errorf("asset %v globally frozen for %v", asset, addr)
+	}
+
+	return nil
 }
 
 // AssetTransfer applies an AssetTransfer transaction using the Balances interface.
@@ -473,9 +478,12 @@ func AssetFreeze(cf transactions.AssetFreezeTxnFields, header transactions.Heade
 	}
 
 	// If FreezeAccount is not set, then this is a global freeze/unfreeze operation.
-	if cf.FreezeAccount.IsZero() {
-		params.GlobalFrozen = cf.AssetFrozen
-		params.LastAssetFreeze = txnCounter
+	if balances.ConsensusParams().AssetGlobalFreeze && cf.FreezeAccount.IsZero() {
+		if cf.AssetFrozen {
+			params.LastGlobalFreeze = txnCounter + 1
+		} else {
+			params.LastGlobalFreeze = 0
+		}
 
 		return balances.PutAssetParams(creator, cf.FreezeAsset, params)
 	}
@@ -490,6 +498,8 @@ func AssetFreeze(cf transactions.AssetFreezeTxnFields, header transactions.Heade
 	}
 
 	holding.Frozen = cf.AssetFrozen
-	holding.LastAccountFreeze = txnCounter
+	if balances.ConsensusParams().AssetGlobalFreeze {
+		holding.LastFreezeChange = txnCounter + 1
+	}
 	return balances.PutAssetHolding(cf.FreezeAccount, cf.FreezeAsset, holding)
 }

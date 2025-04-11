@@ -442,8 +442,8 @@ type AssetHolding struct {
 	// IsFrozen \[f\] whether or not the holding is frozen.
 	IsFrozen bool `json:"is-frozen"`
 
-	// LastFreeze \[lf\] the last time the holding was frozen or unfrozen.
-	LastFreeze uint64 `json:"last-freeze"`
+	// LastFreezeChange \[l\] the last time the holding was frozen or unfrozen.
+	LastFreezeChange uint64 `json:"last-freeze-change"`
 }
 
 // AssetHoldingReference References an asset held by an account.
@@ -477,11 +477,8 @@ type AssetParams struct {
 	// Freeze \[f\] Address of account used to freeze holdings of this asset.  If empty, freezing is not permitted.
 	Freeze *string `json:"freeze,omitempty"`
 
-	// GlobalFrozen \[gf\] Whether transfers of this asset are globally frozen.
-	GlobalFrozen *bool `json:"global-frozen,omitempty"`
-
-	// LastFreeze \[lf\] the last time the asset was globally frozen or unfrozen.
-	LastFreeze *uint64 `json:"last-freeze,omitempty"`
+	// LastGlobalFreeze \[l\] When (as transaction counter) transfers of this asset were globally frozen. 0 if unfrozen.
+	LastGlobalFreeze *uint64 `json:"last-global-freeze,omitempty"`
 
 	// Manager \[m\] Address of account used to manage the keys of this asset and to destroy it.
 	Manager *string `json:"manager,omitempty"`

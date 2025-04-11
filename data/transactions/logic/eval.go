@@ -2900,9 +2900,9 @@ func (cx *EvalContext) assetHoldingToValue(holding *basics.AssetHolding, fs asse
 		sv.Uint = holding.Amount
 	case AssetFrozen:
 		isAccountFrozen := holding.Frozen
-		isAssetFrozen := params.GlobalFrozen && (params.LastAssetFreeze > holding.LastAccountFreeze)
+		isAssetFrozen := params.LastGlobalFreeze > holding.LastFreezeChange
 		sv.Uint = boolToUint(isAccountFrozen || isAssetFrozen)
-	case AccountFrozen:
+	case AssetFrozenLocally:
 		sv.Uint = boolToUint(holding.Frozen)
 	default:
 		return sv, fmt.Errorf("invalid asset_holding_get field %d", fs.field)
@@ -2940,8 +2940,8 @@ func (cx *EvalContext) assetParamsToValue(params *basics.AssetParams, creator ba
 		sv.Bytes = params.Clawback[:]
 	case AssetCreator:
 		sv.Bytes = creator[:]
-	case AssetGlobalFrozen:
-		sv.Uint = boolToUint(params.GlobalFrozen)
+	case AssetLastGlobalFreeze:
+		sv.Uint = params.LastGlobalFreeze
 	default:
 		return sv, fmt.Errorf("invalid asset_params_get field %d", fs.field)
 	}

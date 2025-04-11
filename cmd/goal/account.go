@@ -696,10 +696,8 @@ func printAccountInfo(client libgoal.Client, address string, onlyShowAssetIDs bo
 		frozen := ""
 		if assetHolding.IsFrozen {
 			frozen = " (frozen)"
-		}
-
-		if assetParams.Params.GlobalFrozen != nil && *assetParams.Params.GlobalFrozen {
-			if assetParams.Params.LastFreeze != nil && (*assetParams.Params.LastFreeze > assetHolding.LastFreeze) {
+		} else if assetParams.Params.LastGlobalFreeze != nil {
+			if *assetParams.Params.LastGlobalFreeze > assetHolding.LastFreezeChange {
 				frozen = " (globally frozen)"
 			}
 		}

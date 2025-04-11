@@ -2525,7 +2525,7 @@ func (z *AssetHolding) MarshalMsg(b []byte) (o []byte) {
 		zb0001Len--
 		zb0001Mask |= 0x4
 	}
-	if (*z).LastAccountFreeze == 0 {
+	if (*z).LastFreezeChange == 0 {
 		zb0001Len--
 		zb0001Mask |= 0x8
 	}
@@ -2545,7 +2545,7 @@ func (z *AssetHolding) MarshalMsg(b []byte) (o []byte) {
 		if (zb0001Mask & 0x8) == 0 { // if not empty
 			// string "l"
 			o = append(o, 0xa1, 0x6c)
-			o = msgp.AppendUint64(o, (*z).LastAccountFreeze)
+			o = msgp.AppendUint64(o, (*z).LastFreezeChange)
 		}
 	}
 	return
@@ -2592,9 +2592,9 @@ func (z *AssetHolding) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState)
 		}
 		if zb0001 > 0 {
 			zb0001--
-			(*z).LastAccountFreeze, bts, err = msgp.ReadUint64Bytes(bts)
+			(*z).LastFreezeChange, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "LastAccountFreeze")
+				err = msgp.WrapError(err, "struct-from-array", "LastFreezeChange")
 				return
 			}
 		}
@@ -2634,9 +2634,9 @@ func (z *AssetHolding) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState)
 					return
 				}
 			case "l":
-				(*z).LastAccountFreeze, bts, err = msgp.ReadUint64Bytes(bts)
+				(*z).LastFreezeChange, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "LastAccountFreeze")
+					err = msgp.WrapError(err, "LastFreezeChange")
 					return
 				}
 			default:
@@ -2668,7 +2668,7 @@ func (z *AssetHolding) Msgsize() (s int) {
 
 // MsgIsZero returns whether this is a zero value
 func (z *AssetHolding) MsgIsZero() bool {
-	return ((*z).Amount == 0) && ((*z).Frozen == false) && ((*z).LastAccountFreeze == 0)
+	return ((*z).Amount == 0) && ((*z).Frozen == false) && ((*z).LastFreezeChange == 0)
 }
 
 // MaxSize returns a maximum valid message size for this message type
@@ -2741,8 +2741,8 @@ func AssetIndexMaxSize() (s int) {
 func (z *AssetParams) MarshalMsg(b []byte) (o []byte) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
-	zb0002Len := uint32(13)
-	var zb0002Mask uint16 /* 14 bits */
+	zb0002Len := uint32(12)
+	var zb0002Mask uint16 /* 13 bits */
 	if (*z).MetadataHash == ([32]byte{}) {
 		zb0002Len--
 		zb0002Mask |= 0x2
@@ -2771,29 +2771,25 @@ func (z *AssetParams) MarshalMsg(b []byte) (o []byte) {
 		zb0002Len--
 		zb0002Mask |= 0x80
 	}
-	if (*z).GlobalFrozen == false {
+	if (*z).LastGlobalFreeze == 0 {
 		zb0002Len--
 		zb0002Mask |= 0x100
 	}
-	if (*z).LastAssetFreeze == 0 {
+	if (*z).Manager.MsgIsZero() {
 		zb0002Len--
 		zb0002Mask |= 0x200
 	}
-	if (*z).Manager.MsgIsZero() {
+	if (*z).Reserve.MsgIsZero() {
 		zb0002Len--
 		zb0002Mask |= 0x400
 	}
-	if (*z).Reserve.MsgIsZero() {
+	if (*z).Total == 0 {
 		zb0002Len--
 		zb0002Mask |= 0x800
 	}
-	if (*z).Total == 0 {
-		zb0002Len--
-		zb0002Mask |= 0x1000
-	}
 	if (*z).UnitName == "" {
 		zb0002Len--
-		zb0002Mask |= 0x2000
+		zb0002Mask |= 0x1000
 	}
 	// variable map header, size zb0002Len
 	o = append(o, 0x80|uint8(zb0002Len))
@@ -2834,31 +2830,26 @@ func (z *AssetParams) MarshalMsg(b []byte) (o []byte) {
 			o = (*z).Freeze.MarshalMsg(o)
 		}
 		if (zb0002Mask & 0x100) == 0 { // if not empty
-			// string "gf"
-			o = append(o, 0xa2, 0x67, 0x66)
-			o = msgp.AppendBool(o, (*z).GlobalFrozen)
-		}
-		if (zb0002Mask & 0x200) == 0 { // if not empty
 			// string "l"
 			o = append(o, 0xa1, 0x6c)
-			o = msgp.AppendUint64(o, (*z).LastAssetFreeze)
+			o = msgp.AppendUint64(o, (*z).LastGlobalFreeze)
 		}
-		if (zb0002Mask & 0x400) == 0 { // if not empty
+		if (zb0002Mask & 0x200) == 0 { // if not empty
 			// string "m"
 			o = append(o, 0xa1, 0x6d)
 			o = (*z).Manager.MarshalMsg(o)
 		}
-		if (zb0002Mask & 0x800) == 0 { // if not empty
+		if (zb0002Mask & 0x400) == 0 { // if not empty
 			// string "r"
 			o = append(o, 0xa1, 0x72)
 			o = (*z).Reserve.MarshalMsg(o)
 		}
-		if (zb0002Mask & 0x1000) == 0 { // if not empty
+		if (zb0002Mask & 0x800) == 0 { // if not empty
 			// string "t"
 			o = append(o, 0xa1, 0x74)
 			o = msgp.AppendUint64(o, (*z).Total)
 		}
-		if (zb0002Mask & 0x2000) == 0 { // if not empty
+		if (zb0002Mask & 0x1000) == 0 { // if not empty
 			// string "un"
 			o = append(o, 0xa2, 0x75, 0x6e)
 			o = msgp.AppendString(o, (*z).UnitName)
@@ -3010,17 +3001,9 @@ func (z *AssetParams) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) 
 		}
 		if zb0002 > 0 {
 			zb0002--
-			(*z).GlobalFrozen, bts, err = msgp.ReadBoolBytes(bts)
+			(*z).LastGlobalFreeze, bts, err = msgp.ReadUint64Bytes(bts)
 			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "GlobalFrozen")
-				return
-			}
-		}
-		if zb0002 > 0 {
-			zb0002--
-			(*z).LastAssetFreeze, bts, err = msgp.ReadUint64Bytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "LastAssetFreeze")
+				err = msgp.WrapError(err, "struct-from-array", "LastGlobalFreeze")
 				return
 			}
 		}
@@ -3143,16 +3126,10 @@ func (z *AssetParams) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) 
 					err = msgp.WrapError(err, "Clawback")
 					return
 				}
-			case "gf":
-				(*z).GlobalFrozen, bts, err = msgp.ReadBoolBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "GlobalFrozen")
-					return
-				}
 			case "l":
-				(*z).LastAssetFreeze, bts, err = msgp.ReadUint64Bytes(bts)
+				(*z).LastGlobalFreeze, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
-					err = msgp.WrapError(err, "LastAssetFreeze")
+					err = msgp.WrapError(err, "LastGlobalFreeze")
 					return
 				}
 			default:
@@ -3178,13 +3155,13 @@ func (_ *AssetParams) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *AssetParams) Msgsize() (s int) {
-	s = 1 + 2 + msgp.Uint64Size + 3 + msgp.Uint32Size + 3 + msgp.BoolSize + 3 + msgp.StringPrefixSize + len((*z).UnitName) + 3 + msgp.StringPrefixSize + len((*z).AssetName) + 3 + msgp.StringPrefixSize + len((*z).URL) + 3 + msgp.ArrayHeaderSize + (32 * (msgp.ByteSize)) + 2 + (*z).Manager.Msgsize() + 2 + (*z).Reserve.Msgsize() + 2 + (*z).Freeze.Msgsize() + 2 + (*z).Clawback.Msgsize() + 3 + msgp.BoolSize + 2 + msgp.Uint64Size
+	s = 1 + 2 + msgp.Uint64Size + 3 + msgp.Uint32Size + 3 + msgp.BoolSize + 3 + msgp.StringPrefixSize + len((*z).UnitName) + 3 + msgp.StringPrefixSize + len((*z).AssetName) + 3 + msgp.StringPrefixSize + len((*z).URL) + 3 + msgp.ArrayHeaderSize + (32 * (msgp.ByteSize)) + 2 + (*z).Manager.Msgsize() + 2 + (*z).Reserve.Msgsize() + 2 + (*z).Freeze.Msgsize() + 2 + (*z).Clawback.Msgsize() + 2 + msgp.Uint64Size
 	return
 }
 
 // MsgIsZero returns whether this is a zero value
 func (z *AssetParams) MsgIsZero() bool {
-	return ((*z).Total == 0) && ((*z).Decimals == 0) && ((*z).DefaultFrozen == false) && ((*z).UnitName == "") && ((*z).AssetName == "") && ((*z).URL == "") && ((*z).MetadataHash == ([32]byte{})) && ((*z).Manager.MsgIsZero()) && ((*z).Reserve.MsgIsZero()) && ((*z).Freeze.MsgIsZero()) && ((*z).Clawback.MsgIsZero()) && ((*z).GlobalFrozen == false) && ((*z).LastAssetFreeze == 0)
+	return ((*z).Total == 0) && ((*z).Decimals == 0) && ((*z).DefaultFrozen == false) && ((*z).UnitName == "") && ((*z).AssetName == "") && ((*z).URL == "") && ((*z).MetadataHash == ([32]byte{})) && ((*z).Manager.MsgIsZero()) && ((*z).Reserve.MsgIsZero()) && ((*z).Freeze.MsgIsZero()) && ((*z).Clawback.MsgIsZero()) && ((*z).LastGlobalFreeze == 0)
 }
 
 // MaxSize returns a maximum valid message size for this message type
@@ -3192,7 +3169,7 @@ func AssetParamsMaxSize() (s int) {
 	s = 1 + 2 + msgp.Uint64Size + 3 + msgp.Uint32Size + 3 + msgp.BoolSize + 3 + msgp.StringPrefixSize + config.MaxAssetUnitNameBytes + 3 + msgp.StringPrefixSize + config.MaxAssetNameBytes + 3 + msgp.StringPrefixSize + config.MaxAssetURLBytes + 3
 	// Calculating size of array: z.MetadataHash
 	s += msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
-	s += 2 + AddressMaxSize() + 2 + AddressMaxSize() + 2 + AddressMaxSize() + 2 + AddressMaxSize() + 3 + msgp.BoolSize + 2 + msgp.Uint64Size
+	s += 2 + AddressMaxSize() + 2 + AddressMaxSize() + 2 + AddressMaxSize() + 2 + AddressMaxSize() + 2 + msgp.Uint64Size
 	return
 }
 

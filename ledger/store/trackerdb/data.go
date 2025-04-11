@@ -90,24 +90,21 @@ type ResourcesData struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	// asset parameters ( basics.AssetParams )
-	Total           uint64         `codec:"a"`
-	Decimals        uint32         `codec:"b"`
-	DefaultFrozen   bool           `codec:"c"`
-	UnitName        string         `codec:"d"`
-	AssetName       string         `codec:"e"`
-	URL             string         `codec:"f"`
-	MetadataHash    [32]byte       `codec:"g"`
-	Manager         basics.Address `codec:"h"`
-	Reserve         basics.Address `codec:"i"`
-	Freeze          basics.Address `codec:"j"`
-	Clawback        basics.Address `codec:"k"`
-	GlobalFrozen    bool           `codec:"A"`
-	LastAssetFreeze uint64         `codec:"B"`
+	Total         uint64         `codec:"a"`
+	Decimals      uint32         `codec:"b"`
+	DefaultFrozen bool           `codec:"c"`
+	UnitName      string         `codec:"d"`
+	AssetName     string         `codec:"e"`
+	URL           string         `codec:"f"`
+	MetadataHash  [32]byte       `codec:"g"`
+	Manager       basics.Address `codec:"h"`
+	Reserve       basics.Address `codec:"i"`
+	Freeze        basics.Address `codec:"j"`
+	Clawback      basics.Address `codec:"k"`
 
 	// asset holding ( basics.AssetHolding )
-	Amount            uint64 `codec:"l"`
-	Frozen            bool   `codec:"m"`
-	LastAccountFreeze uint64 `codec:"C"`
+	Amount uint64 `codec:"l"`
+	Frozen bool   `codec:"m"`
 
 	// application local state ( basics.AppLocalState )
 	SchemaNumUint      uint64              `codec:"n"`
@@ -135,6 +132,12 @@ type ResourcesData struct {
 	// consensus parameter is being set. Once the above consensus takes place, this field would be populated with the
 	// correct round number.
 	UpdateRound uint64 `codec:"z"`
+
+	// Asset Global Freeze. Two new uint64s to contain the txnCounter value.
+	// `LastGlobalFreeze` belongs to AssetParams, indicating when the asset was globally frozen, or 0 if unfrozen.
+	// `LastFreezeChange` belongs to AssetHolding, indicating the last time it was set.
+	LastGlobalFreeze uint64 `codec:"A"`
+	LastFreezeChange uint64 `codec:"B"`
 }
 
 // BaseVotingData is the base struct used to store voting data
@@ -581,7 +584,8 @@ func (rd *ResourcesData) IsEmptyAssetFields() bool {
 		rd.Reserve.IsZero() &&
 		rd.Freeze.IsZero() &&
 		rd.Clawback.IsZero() &&
-		!rd.GlobalFrozen
+		rd.LastGlobalFreeze == 0 &&
+		rd.LastFreezeChange == 0
 }
 
 // IsAsset returns true if the flag is ResourceFlagsEmptyAsset and the fields are not empty.
@@ -605,8 +609,7 @@ func (rd *ResourcesData) ClearAssetParams() {
 	rd.Reserve = basics.Address{}
 	rd.Freeze = basics.Address{}
 	rd.Clawback = basics.Address{}
-	rd.GlobalFrozen = false
-	rd.LastAssetFreeze = 0
+	rd.LastGlobalFreeze = 0
 	hadHolding := (rd.ResourceFlags & ResourceFlagsNotHolding) == ResourceFlagsHolding
 	rd.ResourceFlags -= rd.ResourceFlags & ResourceFlagsOwnership
 	rd.ResourceFlags &= ^ResourceFlagsEmptyAsset
@@ -628,8 +631,7 @@ func (rd *ResourcesData) SetAssetParams(ap basics.AssetParams, haveHoldings bool
 	rd.Reserve = ap.Reserve
 	rd.Freeze = ap.Freeze
 	rd.Clawback = ap.Clawback
-	rd.GlobalFrozen = ap.GlobalFrozen
-	rd.LastAssetFreeze = ap.LastAssetFreeze
+	rd.LastGlobalFreeze = ap.LastGlobalFreeze
 	rd.ResourceFlags |= ResourceFlagsOwnership
 	if !haveHoldings {
 		rd.ResourceFlags |= ResourceFlagsNotHolding
@@ -643,19 +645,18 @@ func (rd *ResourcesData) SetAssetParams(ap basics.AssetParams, haveHoldings bool
 // GetAssetParams getter for asset params.
 func (rd *ResourcesData) GetAssetParams() basics.AssetParams {
 	ap := basics.AssetParams{
-		Total:           rd.Total,
-		Decimals:        rd.Decimals,
-		DefaultFrozen:   rd.DefaultFrozen,
-		UnitName:        rd.UnitName,
-		AssetName:       rd.AssetName,
-		URL:             rd.URL,
-		MetadataHash:    rd.MetadataHash,
-		Manager:         rd.Manager,
-		Reserve:         rd.Reserve,
-		Freeze:          rd.Freeze,
-		Clawback:        rd.Clawback,
-		GlobalFrozen:    rd.GlobalFrozen,
-		LastAssetFreeze: rd.LastAssetFreeze,
+		Total:            rd.Total,
+		Decimals:         rd.Decimals,
+		DefaultFrozen:    rd.DefaultFrozen,
+		UnitName:         rd.UnitName,
+		AssetName:        rd.AssetName,
+		URL:              rd.URL,
+		MetadataHash:     rd.MetadataHash,
+		Manager:          rd.Manager,
+		Reserve:          rd.Reserve,
+		Freeze:           rd.Freeze,
+		Clawback:         rd.Clawback,
+		LastGlobalFreeze: rd.LastGlobalFreeze,
 	}
 	return ap
 }
@@ -664,7 +665,7 @@ func (rd *ResourcesData) GetAssetParams() basics.AssetParams {
 func (rd *ResourcesData) ClearAssetHolding() {
 	rd.Amount = 0
 	rd.Frozen = false
-	rd.LastAccountFreeze = 0
+	rd.LastFreezeChange = 0
 
 	rd.ResourceFlags |= ResourceFlagsNotHolding
 	hadParams := (rd.ResourceFlags & ResourceFlagsOwnership) == ResourceFlagsOwnership
@@ -679,7 +680,7 @@ func (rd *ResourcesData) ClearAssetHolding() {
 func (rd *ResourcesData) SetAssetHolding(ah basics.AssetHolding) {
 	rd.Amount = ah.Amount
 	rd.Frozen = ah.Frozen
-	rd.LastAccountFreeze = ah.LastAccountFreeze
+	rd.LastFreezeChange = ah.LastFreezeChange
 	rd.ResourceFlags &= ^(ResourceFlagsNotHolding + ResourceFlagsEmptyAsset)
 	// ResourceFlagsHolding is set implicitly since it is zero
 	if rd.IsEmptyAssetFields() {
@@ -690,9 +691,9 @@ func (rd *ResourcesData) SetAssetHolding(ah basics.AssetHolding) {
 // GetAssetHolding getter for asset holding.
 func (rd *ResourcesData) GetAssetHolding() basics.AssetHolding {
 	return basics.AssetHolding{
-		Amount:            rd.Amount,
-		Frozen:            rd.Frozen,
-		LastAccountFreeze: rd.LastAccountFreeze,
+		Amount:           rd.Amount,
+		Frozen:           rd.Frozen,
+		LastFreezeChange: rd.LastFreezeChange,
 	}
 }
 

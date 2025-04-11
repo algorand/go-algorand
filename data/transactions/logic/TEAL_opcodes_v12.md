@@ -996,8 +996,8 @@ Fields
 | Index | Name | Type | In | Notes |
 | - | ------ | -- | - | --------- |
 | 0 | AssetBalance | uint64 |      | Amount of the asset unit held by this account |
-| 1 | AssetFrozen | bool |      | Is the asset frozen or not |
-| 2 | AccountFrozen | bool | v12  | Is the account frozen or not |
+| 1 | AssetFrozen | bool |      | Is the asset effectively frozen, accounting for local and global freeze state |
+| 2 | AssetFrozenLocally | bool | v12  | Is the account frozen or not |
 
 
 params: Txn.Accounts offset (or, since v4, an _available_ address), asset id (or, since v4, a Txn.ForeignAssets offset). Return: did_exist flag (1 if the asset existed and 0 otherwise), value.
@@ -1029,7 +1029,7 @@ Fields
 | 9 | AssetFreeze | address |      | Freeze address |
 | 10 | AssetClawback | address |      | Clawback address |
 | 11 | AssetCreator | address | v5  | Creator address |
-| 12 | AssetGlobalFrozen | bool | v12  | Is the asset frozen globally or not |
+| 12 | AssetLastGlobalFreeze | address | v12  | Last transaction counter value the asset was frozen. 0 if unfrozen |
 
 
 params: Txn.ForeignAssets offset (or, since v4, an _available_ asset id. Return: did_exist flag (1 if the asset existed and 0 otherwise), value.

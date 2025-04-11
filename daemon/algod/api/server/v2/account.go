@@ -33,10 +33,10 @@ import (
 // AssetHolding converts between basics.AssetHolding and model.AssetHolding
 func AssetHolding(ah basics.AssetHolding, ai basics.AssetIndex) model.AssetHolding {
 	return model.AssetHolding{
-		Amount:     ah.Amount,
-		AssetID:    uint64(ai),
-		IsFrozen:   ah.Frozen,
-		LastFreeze: ah.LastAccountFreeze,
+		Amount:           ah.Amount,
+		AssetID:          uint64(ai),
+		IsFrozen:         ah.Frozen,
+		LastFreezeChange: ah.LastFreezeChange,
 	}
 }
 
@@ -256,13 +256,9 @@ func AccountToAccountData(a *model.Account) (basics.AccountData, error) {
 			if ca.Params.DefaultFrozen != nil {
 				defaultFrozen = *ca.Params.DefaultFrozen
 			}
-			var globalFrozen bool
-			if ca.Params.GlobalFrozen != nil {
-				globalFrozen = *ca.Params.GlobalFrozen
-			}
-			var lastAssetFreeze uint64
-			if ca.Params.LastFreeze != nil {
-				lastAssetFreeze = *ca.Params.LastFreeze
+			var lastGlobalFreeze uint64
+			if ca.Params.LastGlobalFreeze != nil {
+				lastGlobalFreeze = *ca.Params.LastGlobalFreeze
 			}
 			var url string
 			if ca.Params.Url != nil {
@@ -278,19 +274,18 @@ func AccountToAccountData(a *model.Account) (basics.AccountData, error) {
 			}
 
 			assetParams[basics.AssetIndex(ca.Index)] = basics.AssetParams{
-				Total:           ca.Params.Total,
-				Decimals:        uint32(ca.Params.Decimals),
-				DefaultFrozen:   defaultFrozen,
-				GlobalFrozen:    globalFrozen,
-				LastAssetFreeze: lastAssetFreeze,
-				UnitName:        unitName,
-				AssetName:       name,
-				URL:             url,
-				MetadataHash:    metadataHash,
-				Manager:         manager,
-				Reserve:         reserve,
-				Freeze:          freeze,
-				Clawback:        clawback,
+				Total:            ca.Params.Total,
+				Decimals:         uint32(ca.Params.Decimals),
+				DefaultFrozen:    defaultFrozen,
+				LastGlobalFreeze: lastGlobalFreeze,
+				UnitName:         unitName,
+				AssetName:        name,
+				URL:              url,
+				MetadataHash:     metadataHash,
+				Manager:          manager,
+				Reserve:          reserve,
+				Freeze:           freeze,
+				Clawback:         clawback,
 			}
 		}
 	}
@@ -299,9 +294,9 @@ func AccountToAccountData(a *model.Account) (basics.AccountData, error) {
 		assets = make(map[basics.AssetIndex]basics.AssetHolding, len(*a.Assets))
 		for _, h := range *a.Assets {
 			assets[basics.AssetIndex(h.AssetID)] = basics.AssetHolding{
-				Amount:            h.Amount,
-				Frozen:            h.IsFrozen,
-				LastAccountFreeze: h.LastFreeze,
+				Amount:           h.Amount,
+				Frozen:           h.IsFrozen,
+				LastFreezeChange: h.LastFreezeChange,
 			}
 		}
 	}
@@ -495,25 +490,23 @@ func AppLocalState(state basics.AppLocalState, appIdx basics.AppIndex) model.App
 // AssetParamsToAsset converts basics.AssetParams to model.Asset
 func AssetParamsToAsset(creator string, idx basics.AssetIndex, params *basics.AssetParams) model.Asset {
 	frozen := params.DefaultFrozen
-	globalFrozen := params.GlobalFrozen
-	lastFreeze := params.LastAssetFreeze
+	lastGlobalFreeze := params.LastGlobalFreeze
 	assetParams := model.AssetParams{
-		Creator:       creator,
-		Total:         params.Total,
-		Decimals:      uint64(params.Decimals),
-		DefaultFrozen: &frozen,
-		GlobalFrozen:  &globalFrozen,
-		LastFreeze:    &lastFreeze,
-		Name:          omitEmpty(printableUTF8OrEmpty(params.AssetName)),
-		NameB64:       sliceOrNil([]byte(params.AssetName)),
-		UnitName:      omitEmpty(printableUTF8OrEmpty(params.UnitName)),
-		UnitNameB64:   sliceOrNil([]byte(params.UnitName)),
-		Url:           omitEmpty(printableUTF8OrEmpty(params.URL)),
-		UrlB64:        sliceOrNil([]byte(params.URL)),
-		Clawback:      addrOrNil(params.Clawback),
-		Freeze:        addrOrNil(params.Freeze),
-		Manager:       addrOrNil(params.Manager),
-		Reserve:       addrOrNil(params.Reserve),
+		Creator:          creator,
+		Total:            params.Total,
+		Decimals:         uint64(params.Decimals),
+		DefaultFrozen:    &frozen,
+		LastGlobalFreeze: &lastGlobalFreeze,
+		Name:             omitEmpty(printableUTF8OrEmpty(params.AssetName)),
+		NameB64:          sliceOrNil([]byte(params.AssetName)),
+		UnitName:         omitEmpty(printableUTF8OrEmpty(params.UnitName)),
+		UnitNameB64:      sliceOrNil([]byte(params.UnitName)),
+		Url:              omitEmpty(printableUTF8OrEmpty(params.URL)),
+		UrlB64:           sliceOrNil([]byte(params.URL)),
+		Clawback:         addrOrNil(params.Clawback),
+		Freeze:           addrOrNil(params.Freeze),
+		Manager:          addrOrNil(params.Manager),
+		Reserve:          addrOrNil(params.Reserve),
 	}
 	if params.MetadataHash != ([32]byte{}) {
 		metadataHash := slices.Clone(params.MetadataHash[:])
