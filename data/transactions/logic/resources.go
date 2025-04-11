@@ -53,7 +53,7 @@ type resources struct {
 	// of the box - has it been modified in this txngroup? If yes, the size of
 	// the box counts against the group writeBudget. So delete is NOT a dirtying
 	// operation.
-	boxes map[BoxRef]bool
+	boxes map[basics.BoxRef]bool
 
 	// dirtyBytes maintains a running count of the number of dirty bytes in `boxes`
 	dirtyBytes uint64
@@ -74,7 +74,7 @@ func (r *resources) shareLocal(addr basics.Address, id basics.AppIndex) {
 	r.sharedLocals[ledgercore.AccountApp{Address: addr, App: id}] = struct{}{}
 }
 
-func (r *resources) shareBox(br BoxRef, current basics.AppIndex) {
+func (r *resources) shareBox(br basics.BoxRef, current basics.AppIndex) {
 	if br.App == 0 {
 		// "current app": Ignore if this is a create, else use ApplicationID
 		if current == 0 {
@@ -327,7 +327,7 @@ func (r *resources) fillApplicationCallAccess(ep *EvalParams, hdr *transactions.
 		case !rr.Box.Empty():
 			// ApplicationCallTxnFields.wellFormed ensures no error here.
 			app, name, _ := rr.Box.Resolve(tx.Access)
-			r.shareBox(BoxRef{app, name}, tx.ApplicationID)
+			r.shareBox(basics.BoxRef{App: app, Name: name}, tx.ApplicationID)
 		}
 	}
 }
@@ -375,7 +375,7 @@ func (r *resources) fillApplicationCallForeign(ep *EvalParams, hdr *transactions
 			// now than after returning a nil.
 			app = tx.ForeignApps[br.Index-1] // shift for the 0=current convention
 		}
-		r.shareBox(BoxRef{app, string(br.Name)}, tx.ApplicationID)
+		r.shareBox(basics.BoxRef{App: app, Name: string(br.Name)}, tx.ApplicationID)
 	}
 }
 

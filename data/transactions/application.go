@@ -203,8 +203,9 @@ func (rr ResourceRef) Empty() bool {
 		rr.Holding.Empty() && rr.Locals.Empty() && rr.Box.Empty()
 }
 
-// wellFormed checks that a ResourceRef is either empty or of only one kind, and
-// that the types that have indices point to slots with refs of the proper type.
+// wellFormed checks that a ResourceRef is a proper member of `access. `rr` is
+// either empty a single kind of resource. Any internal indices point to proper
+// locations inside `access`.
 func (rr ResourceRef) wellFormed(access []ResourceRef, proto config.ConsensusParams) error {
 	// Count the number of non-empty fields
 	count := 0

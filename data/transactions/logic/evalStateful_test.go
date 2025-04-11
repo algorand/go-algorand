@@ -33,6 +33,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
+	"github.com/algorand/go-algorand/util"
 )
 
 func makeApp(li uint64, lb uint64, gi uint64, gb uint64) basics.AppParams {
@@ -933,7 +934,7 @@ int 100; byte 0x0201; == // types mismatch so this will fail
 	_, err := testApp(t, badsource, nil, "cannot compare")
 	attrs := basics.Attributes(err)
 	zeros := [256]int{}
-	scratch := convertSlice(zeros[:], func(i int) any { return uint64(i) })
+	scratch := util.Map(zeros[:], func(i int) any { return uint64(i) })
 	scratch[10] = uint64(5)
 	scratch[15] = []byte{0x01, 0x02, 0x03, 0x00}
 	require.Equal(t, map[string]any{
@@ -957,7 +958,7 @@ int 4; store 2			// store an int
 byte "jj"; store 3		// store a bytes
 int 1
 `
-	gscratch := convertSlice(zeros[:], func(i int) any { return uint64(i) })
+	gscratch := util.Map(zeros[:], func(i int) any { return uint64(i) })
 	gscratch[2] = uint64(4)
 	gscratch[3] = []byte("jj")
 
