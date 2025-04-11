@@ -19,6 +19,7 @@ package libgoal
 import (
 	"testing"
 
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
 )
@@ -140,4 +141,27 @@ func TestValidRounds(t *testing.T) {
 	a.NoError(err)
 	a.Equal(uint64(100), fv)
 	a.Equal(maxTxnLife, lv)
+}
+
+func TestBoxRefResolution(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+	a := require.New(t)
+
+	tbrs, err := resolveBoxReferences([]basics.BoxRef{{App: 77, Name: ""}, {App: 55, Name: ""}, {App: 55, Name: ""}, {App: 33, Name: ""}}, []basics.AppIndex{55, 77}, 33)
+	a.NoError(err)
+	require.EqualValues(t, 2, tbrs[0].Index)
+	require.EqualValues(t, 1, tbrs[1].Index)
+	require.EqualValues(t, 1, tbrs[2].Index)
+	require.EqualValues(t, 0, tbrs[3].Index)
+
+	tbrs, err = resolveBoxReferences([]basics.BoxRef{{App: 0, Name: ""}, {App: 55, Name: ""}, {App: 55, Name: ""}, {App: 33, Name: ""}}, []basics.AppIndex{55, 77, 33}, 33)
+	a.NoError(err)
+	require.EqualValues(t, 0, tbrs[0].Index) // 0 means 0
+	require.EqualValues(t, 1, tbrs[1].Index)
+	require.EqualValues(t, 1, tbrs[2].Index)
+	require.EqualValues(t, 3, tbrs[3].Index) // Since it was in the foreign array explicity
+
+	tbrs, err = resolveBoxReferences([]basics.BoxRef{{App: 77, Name: ""}, {App: 54, Name: ""}, {App: 55, Name: ""}, {App: 33, Name: ""}}, []basics.AppIndex{55, 77, 33}, 33)
+	a.Error(err)
 }

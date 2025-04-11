@@ -40,6 +40,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util"
 )
 
 var (
@@ -71,8 +72,10 @@ var (
 	// platform seems not so far-fetched?
 	foreignApps    []string
 	foreignAssets  []string
-	appBoxes       []string // parse these as we do app args, with optional number and comma in front
+	appStrBoxes    []string // parse these as we do app args, with optional number and comma in front
 	appStrAccounts []string
+	appStrHoldings []string // format: asset,addr ->  5245,XQJEJECPWUOXSKMIC5TCSARPVGHQJIIOKHO7WTKEPPLJMKG3D7VWWID66E
+	appStrLocals   []string // format: [app,]addr ->  5245,XQJEJECPWUOXSKMIC5TCSARPVGHQJIIOKHO7WTKEPPLJMKG3D7VWWID66E
 
 	appArgs          []string
 	appInputFilename string
@@ -98,9 +101,11 @@ func init() {
 	appCmd.PersistentFlags().StringArrayVar(&appArgs, "app-arg", nil, "Args to encode for application transactions (all will be encoded to a byte slice). For ints, use the form 'int:1234'. For raw bytes, use the form 'b64:A=='. For printable strings, use the form 'str:hello'. For addresses, use the form 'addr:XYZ...'.")
 	appCmd.PersistentFlags().StringSliceVar(&foreignApps, "foreign-app", nil, "Indexes of other apps whose global state is read in this transaction")
 	appCmd.PersistentFlags().StringSliceVar(&foreignAssets, "foreign-asset", nil, "Indexes of assets whose parameters are read in this transaction")
-	appCmd.PersistentFlags().StringArrayVar(&appBoxes, "box", nil, "Boxes that may be accessed by this transaction. Use the same form as app-arg to name the box, preceded by an optional app-id and comma. No app-id indicates the box is accessible by the app being called.")
+	appCmd.PersistentFlags().StringArrayVar(&appStrBoxes, "box", nil, "A Box that may be accessed by this transaction. Use the same form as app-arg to name the box, preceded by an optional app-id and comma. Zero or omitted app-id indicates the box is accessible by the app being called.")
 	appCmd.PersistentFlags().StringSliceVar(&appStrAccounts, "app-account", nil, "Accounts that may be accessed from application logic")
-	appCmd.PersistentFlags().StringVarP(&appInputFilename, "app-input", "i", "", "JSON file containing encoded arguments and inputs (mutually exclusive with app-arg, app-account, foreign-app, foreign-asset, and box)")
+	appCmd.PersistentFlags().StringArrayVar(&appStrHoldings, "holding", nil, "A Holding that may be accessed from application logic. An asset-id followed by a comma and a address")
+	appCmd.PersistentFlags().StringArrayVar(&appStrLocals, "local", nil, "A Local State that may be accessed from application logic. An optional app-id and comma, followed by an address. Zero or omitted app-id indicates the local state for app being called.")
+	appCmd.PersistentFlags().StringVarP(&appInputFilename, "app-input", "i", "", "JSON file containing encoded arguments and inputs (mutually exclusive with app-arg, app-account, foreign-app, foreign-asset, local, holding, and box)")
 
 	appCmd.PersistentFlags().StringVar(&approvalProgFile, "approval-prog", "", "(Uncompiled) TEAL assembly program filename for approving/rejecting transactions")
 	appCmd.PersistentFlags().StringVar(&clearProgFile, "clear-prog", "", "(Uncompiled) TEAL assembly program filename for updating application state when a user clears their local state")
@@ -209,12 +214,25 @@ type appCallInputs struct {
 	ForeignApps   []uint64            `codec:"foreignapps"`
 	ForeignAssets []uint64            `codec:"foreignassets"`
 	Boxes         []boxRef            `codec:"boxes"`
+	Holdings      []holdingRef        `codec:"holdings"`
+	Locals        []localRef          `codec:"locals"`
+	Access        bool                `codec:"access"`
 	Args          []apps.AppCallBytes `codec:"args"`
 }
 
 type boxRef struct {
 	appID uint64            `codec:"app"`
 	name  apps.AppCallBytes `codec:"name"`
+}
+
+type holdingRef struct {
+	assetID uint64 `codec:"asset"`
+	address string `codec:"account"`
+}
+
+type localRef struct {
+	appID   uint64 `codec:"app"`
+	address string `codec:"account"`
 }
 
 // newBoxRef parses a command-line box ref, which is an optional appId, a comma,
@@ -241,6 +259,58 @@ func newBoxRef(arg string) boxRef {
 	}
 }
 
+// newHoldingRef parses a command-line box ref, which is an assetId and an
+// optional address, separated by a comma. No address means Sender.
+func newHoldingRef(arg string) holdingRef {
+	assetStr, address, _ := strings.Cut(arg, ",")
+
+	assetID, err := strconv.ParseUint(assetStr, 10, 64)
+	if err != nil {
+		reportErrorf("Could not parse asset id in holding ref: %v", err)
+	}
+
+	return holdingRef{
+		assetID: assetID,
+		address: address, // "" would mean Sender
+	}
+}
+
+// newLocalRef parses a command-line local state ref, which is an optional appId
+// and an optional address, separated by a comma. No appId means the called app,
+// No address means Sender. They can not _both_ be omitted, as that is a
+// non-sensical LocalRef - it would make the local state of the sender for the
+// current app available. That is implicitly available already.
+func newLocalRef(arg string) localRef {
+	one, two, both := strings.Cut(arg, ",")
+
+	if both {
+		appID, err := strconv.ParseUint(one, 10, 64)
+		if err != nil {
+			reportErrorf("Could not parse app id in local ref: %v", err)
+		}
+		return localRef{
+			appID:   appID,
+			address: two,
+		}
+	}
+
+	// one is missing, so we should have a number or an address.  Try to parse
+	// it as a number. If it fails, assume an address, because at this stage we don't parse
+	// addresses.
+
+	if appID, err := strconv.ParseUint(one, 10, 64); err != nil {
+		return localRef{
+			appID:   appID,
+			address: "",
+		}
+	}
+
+	return localRef{
+		appID:   0,
+		address: one,
+	}
+}
+
 func stringsToUint64(strs []string) []uint64 {
 	out := make([]uint64, len(strs))
 	for i, idstr := range strs {
@@ -253,58 +323,8 @@ func stringsToUint64(strs []string) []uint64 {
 	return out
 }
 
-func stringsToBoxRefs(strs []string) []boxRef {
-	out := make([]boxRef, len(strs))
-	for i, brstr := range strs {
-		out[i] = newBoxRef(brstr)
-	}
-	return out
-}
-
-func translateBoxRefs(input []boxRef, foreignApps []uint64) []transactions.BoxRef {
-	output := make([]transactions.BoxRef, len(input))
-	for i, tbr := range input {
-		rawName, err := tbr.name.Raw()
-		if err != nil {
-			reportErrorf("Could not decode box name %s: %v", tbr.name, err)
-		}
-
-		index := uint64(0)
-		if tbr.appID != 0 {
-			found := false
-			for a, id := range foreignApps {
-				if tbr.appID == id {
-					index = uint64(a + 1)
-					found = true
-					break
-				}
-			}
-			// Check appIdx after the foreignApps check. If the user actually
-			// put the appIdx in foreignApps, and then used the appIdx here
-			// (rather than 0), then maybe they really want to use it in the
-			// transaction as the full number. Though it's hard to see why.
-			if !found && tbr.appID == appIdx {
-				index = 0
-				found = true
-			}
-			if !found {
-				reportErrorf("Box ref with appId (%d) not in foreign-apps", tbr.appID)
-			}
-		}
-		output[i] = transactions.BoxRef{
-			Index: index,
-			Name:  rawName,
-		}
-	}
-	return output
-}
-
-func parseAppInputs(inputs appCallInputs) (args [][]byte, accounts []string, foreignApps []uint64, foreignAssets []uint64, boxes []transactions.BoxRef) {
-	accounts = inputs.Accounts
-	foreignApps = inputs.ForeignApps
-	foreignAssets = inputs.ForeignAssets
-	boxes = translateBoxRefs(inputs.Boxes, foreignApps)
-	args = make([][]byte, len(inputs.Args))
+func parseAppInputs(inputs appCallInputs) ([][]byte, libgoal.RefBundle) {
+	args := make([][]byte, len(inputs.Args))
 	for i, arg := range inputs.Args {
 		rawValue, err := arg.Raw()
 		if err != nil {
@@ -312,15 +332,29 @@ func parseAppInputs(inputs appCallInputs) (args [][]byte, accounts []string, for
 		}
 		args[i] = rawValue
 	}
-	return
+	boxes := util.Map(inputs.Boxes, func(br boxRef) basics.BoxRef {
+		rawName, err := br.name.Raw()
+		if err != nil {
+			reportErrorf("Could not decode box name %s: %v", br.name, err)
+		}
+		return basics.BoxRef{App: basics.AppIndex(br.appID), Name: string(rawName)}
+	})
+	refs := libgoal.RefBundle{
+		Accounts: inputs.Accounts,
+		Apps:     util.Map(inputs.ForeignApps, func(idx uint64) basics.AppIndex { return basics.AppIndex(idx) }),
+		Assets:   util.Map(inputs.ForeignAssets, func(idx uint64) basics.AssetIndex { return basics.AssetIndex(idx) }),
+		Boxes:    boxes,
+	}
+	return args, refs
 }
 
-func processAppInputFile() (args [][]byte, accounts []string, foreignApps []uint64, foreignAssets []uint64, boxes []transactions.BoxRef) {
+func getAppInputsFromFile() appCallInputs {
 	var inputs appCallInputs
 	f, err := os.Open(appInputFilename)
 	if err != nil {
 		reportErrorf("Could not open app input JSON file: %v", err)
 	}
+	defer f.Close()
 
 	dec := protocol.NewJSONDecoder(f)
 	err = dec.Decode(&inputs)
@@ -328,22 +362,14 @@ func processAppInputFile() (args [][]byte, accounts []string, foreignApps []uint
 		reportErrorf("Could not decode app input JSON file: %v", err)
 	}
 
-	return parseAppInputs(inputs)
+	return inputs
 }
 
-func getAppInputs() (args [][]byte, accounts []string, _ []uint64, assets []uint64, boxes []transactions.BoxRef) {
-	if appInputFilename != "" {
-		if appArgs != nil || appStrAccounts != nil || foreignApps != nil || foreignAssets != nil {
-			reportErrorf("Cannot specify both command-line arguments/resources and JSON input filename")
-		}
-		return processAppInputFile()
-	}
-
+func getAppInputsFromCLI() appCallInputs {
 	// we need to ignore empty strings from appArgs because app-arg was
 	// previously a StringSliceVar, which also does that, and some test depend
 	// on it. appArgs became `StringArrayVar` in order to support abi arguments
 	// which contain commas.
-
 	var encodedArgs []apps.AppCallBytes
 	for _, arg := range appArgs {
 		if len(arg) > 0 {
@@ -351,12 +377,28 @@ func getAppInputs() (args [][]byte, accounts []string, _ []uint64, assets []uint
 		}
 	}
 
-	inputs := appCallInputs{
+	return appCallInputs{
 		Accounts:      appStrAccounts,
 		ForeignApps:   stringsToUint64(foreignApps),
 		ForeignAssets: stringsToUint64(foreignAssets),
-		Boxes:         stringsToBoxRefs(appBoxes),
+		Boxes:         util.Map(appStrBoxes, newBoxRef),
+		Holdings:      util.Map(appStrHoldings, newHoldingRef),
+		Locals:        util.Map(appStrLocals, newLocalRef),
 		Args:          encodedArgs,
+	}
+}
+
+func getAppInputs() ([][]byte, libgoal.RefBundle) {
+	var inputs appCallInputs
+	if appInputFilename != "" {
+		if appArgs != nil || appStrAccounts != nil ||
+			foreignApps != nil || foreignAssets != nil || appStrBoxes != nil ||
+			appStrHoldings != nil || appStrLocals != nil {
+			reportErrorf("Cannot specify both command-line arguments/resources and JSON input filename")
+		}
+		inputs = getAppInputsFromFile()
+	} else {
+		inputs = getAppInputsFromCLI()
 	}
 
 	return parseAppInputs(inputs)
@@ -444,14 +486,14 @@ var createAppCmd = &cobra.Command{
 		// Parse transaction parameters
 		approvalProg, clearProg := mustParseProgArgs()
 		onCompletionEnum := mustParseOnCompletion(onCompletion)
-		appArgs, appAccounts, foreignApps, foreignAssets, boxes := getAppInputs()
+		appArgs, refs := getAppInputs()
 
 		switch onCompletionEnum {
 		case transactions.CloseOutOC, transactions.ClearStateOC:
 			reportWarnf("'--on-completion %s' may be ill-formed for 'goal app create'", onCompletion)
 		}
 
-		tx, err := client.MakeUnsignedAppCreateTx(onCompletionEnum, approvalProg, clearProg, globalSchema, localSchema, appArgs, appAccounts, foreignApps, foreignAssets, boxes, extraPages)
+		tx, err := client.MakeUnsignedAppCreateTx(onCompletionEnum, approvalProg, clearProg, globalSchema, localSchema, appArgs, refs, extraPages)
 		if err != nil {
 			reportErrorf("Cannot create application txn: %v", err)
 		}
@@ -524,9 +566,9 @@ var updateAppCmd = &cobra.Command{
 
 		// Parse transaction parameters
 		approvalProg, clearProg := mustParseProgArgs()
-		appArgs, appAccounts, foreignApps, foreignAssets, boxes := getAppInputs()
+		appArgs, refs := getAppInputs()
 
-		tx, err := client.MakeUnsignedAppUpdateTx(appIdx, appArgs, appAccounts, foreignApps, foreignAssets, boxes, approvalProg, clearProg)
+		tx, err := client.MakeUnsignedAppUpdateTx(appIdx, appArgs, approvalProg, clearProg, refs)
 		if err != nil {
 			reportErrorf("Cannot create application txn: %v", err)
 		}
@@ -594,9 +636,9 @@ var optInAppCmd = &cobra.Command{
 		dataDir, client := getDataDirAndClient()
 
 		// Parse transaction parameters
-		appArgs, appAccounts, foreignApps, foreignAssets, boxes := getAppInputs()
+		appArgs, refs := getAppInputs()
 
-		tx, err := client.MakeUnsignedAppOptInTx(appIdx, appArgs, appAccounts, foreignApps, foreignAssets, boxes)
+		tx, err := client.MakeUnsignedAppOptInTx(appIdx, appArgs, refs)
 		if err != nil {
 			reportErrorf("Cannot create application txn: %v", err)
 		}
@@ -664,9 +706,9 @@ var closeOutAppCmd = &cobra.Command{
 		dataDir, client := getDataDirAndClient()
 
 		// Parse transaction parameters
-		appArgs, appAccounts, foreignApps, foreignAssets, boxes := getAppInputs()
+		appArgs, refs := getAppInputs()
 
-		tx, err := client.MakeUnsignedAppCloseOutTx(appIdx, appArgs, appAccounts, foreignApps, foreignAssets, boxes)
+		tx, err := client.MakeUnsignedAppCloseOutTx(appIdx, appArgs, refs)
 		if err != nil {
 			reportErrorf("Cannot create application txn: %v", err)
 		}
@@ -734,9 +776,9 @@ var clearAppCmd = &cobra.Command{
 		dataDir, client := getDataDirAndClient()
 
 		// Parse transaction parameters
-		appArgs, appAccounts, foreignApps, foreignAssets, boxes := getAppInputs()
+		appArgs, refs := getAppInputs()
 
-		tx, err := client.MakeUnsignedAppClearStateTx(appIdx, appArgs, appAccounts, foreignApps, foreignAssets, boxes)
+		tx, err := client.MakeUnsignedAppClearStateTx(appIdx, appArgs, refs)
 		if err != nil {
 			reportErrorf("Cannot create application txn: %v", err)
 		}
@@ -804,9 +846,9 @@ var callAppCmd = &cobra.Command{
 		dataDir, client := getDataDirAndClient()
 
 		// Parse transaction parameters
-		appArgs, appAccounts, foreignApps, foreignAssets, boxes := getAppInputs()
+		appArgs, refs := getAppInputs()
 
-		tx, err := client.MakeUnsignedAppNoOpTx(appIdx, appArgs, appAccounts, foreignApps, foreignAssets, boxes)
+		tx, err := client.MakeUnsignedAppNoOpTx(appIdx, appArgs, refs)
 		if err != nil {
 			reportErrorf("Cannot create application txn: %v", err)
 		}
@@ -874,9 +916,9 @@ var deleteAppCmd = &cobra.Command{
 		dataDir, client := getDataDirAndClient()
 
 		// Parse transaction parameters
-		appArgs, appAccounts, foreignApps, foreignAssets, boxes := getAppInputs()
+		appArgs, refs := getAppInputs()
 
-		tx, err := client.MakeUnsignedAppDeleteTx(appIdx, appArgs, appAccounts, foreignApps, foreignAssets, boxes)
+		tx, err := client.MakeUnsignedAppDeleteTx(appIdx, appArgs, refs)
 		if err != nil {
 			reportErrorf("Cannot create application txn: %v", err)
 		}
@@ -1097,7 +1139,7 @@ func populateMethodCallTxnArgs(types []string, values []string) ([]transactions.
 // into the appropriate foreign array. Their placement will be as compact as possible, which means
 // values will be deduplicated and any value that is the sender or the current app will not be added
 // to the foreign array.
-func populateMethodCallReferenceArgs(sender string, currentApp uint64, types []string, values []string, accounts *[]string, apps *[]uint64, assets *[]uint64) ([]int, error) {
+func populateMethodCallReferenceArgs(sender string, currentApp basics.AppIndex, types []string, values []string, refs *libgoal.RefBundle) ([]int, error) {
 	resolvedIndexes := make([]int, len(types))
 
 	for i, value := range values {
@@ -1109,7 +1151,7 @@ func populateMethodCallReferenceArgs(sender string, currentApp uint64, types []s
 				resolved = 0
 			} else {
 				duplicate := false
-				for j, account := range *accounts {
+				for j, account := range refs.Accounts {
 					if value == account {
 						resolved = j + 1 // + 1 because 0 is the sender
 						duplicate = true
@@ -1117,20 +1159,21 @@ func populateMethodCallReferenceArgs(sender string, currentApp uint64, types []s
 					}
 				}
 				if !duplicate {
-					resolved = len(*accounts) + 1
-					*accounts = append(*accounts, value)
+					resolved = len(refs.Accounts) + 1
+					refs.Accounts = append(refs.Accounts, value)
 				}
 			}
 		case abi.ApplicationReferenceType:
-			appID, err := strconv.ParseUint(value, 10, 64)
+			ui, err := strconv.ParseUint(value, 10, 64)
 			if err != nil {
 				return nil, fmt.Errorf("Unable to parse application ID '%s': %s", value, err)
 			}
+			appID := basics.AppIndex(ui)
 			if appID == currentApp {
 				resolved = 0
 			} else {
 				duplicate := false
-				for j, app := range *apps {
+				for j, app := range refs.Apps {
 					if appID == app {
 						resolved = j + 1 // + 1 because 0 is the current app
 						duplicate = true
@@ -1138,17 +1181,18 @@ func populateMethodCallReferenceArgs(sender string, currentApp uint64, types []s
 					}
 				}
 				if !duplicate {
-					resolved = len(*apps) + 1
-					*apps = append(*apps, appID)
+					resolved = len(refs.Apps) + 1
+					refs.Apps = append(refs.Apps, appID)
 				}
 			}
 		case abi.AssetReferenceType:
-			assetID, err := strconv.ParseUint(value, 10, 64)
+			ui, err := strconv.ParseUint(value, 10, 64)
 			if err != nil {
 				return nil, fmt.Errorf("Unable to parse asset ID '%s': %s", value, err)
 			}
+			assetID := basics.AssetIndex(ui)
 			duplicate := false
-			for j, asset := range *assets {
+			for j, asset := range refs.Assets {
 				if assetID == asset {
 					resolved = j
 					duplicate = true
@@ -1156,8 +1200,8 @@ func populateMethodCallReferenceArgs(sender string, currentApp uint64, types []s
 				}
 			}
 			if !duplicate {
-				resolved = len(*assets)
-				*assets = append(*assets, assetID)
+				resolved = len(refs.Assets)
+				refs.Assets = append(refs.Assets, assetID)
 			}
 		default:
 			return nil, fmt.Errorf("Unknown reference type: %s", types[i])
@@ -1248,7 +1292,7 @@ var methodAppCmd = &cobra.Command{
 		dataDir, client := getDataDirAndClient()
 
 		// Parse transaction parameters
-		appArgsParsed, appAccounts, foreignApps, foreignAssets, boxes := getAppInputs()
+		appArgsParsed, refs := getAppInputs()
 		if len(appArgsParsed) > 0 {
 			reportErrorf("--arg and --app-arg are mutually exclusive, do not use --app-arg")
 		}
@@ -1344,7 +1388,7 @@ var methodAppCmd = &cobra.Command{
 			}
 		}
 
-		refArgsResolved, err := populateMethodCallReferenceArgs(account, appIdx, refArgTypes, refArgValues, &appAccounts, &foreignApps, &foreignAssets)
+		refArgsResolved, err := populateMethodCallReferenceArgs(account, basics.AppIndex(appIdx), refArgTypes, refArgValues, &refs)
 		if err != nil {
 			reportErrorf("error populating reference arguments: %v", err)
 		}
@@ -1365,7 +1409,7 @@ var methodAppCmd = &cobra.Command{
 		}
 
 		appCallTxn, err := client.MakeUnsignedApplicationCallTx(
-			appIdx, applicationArgs, appAccounts, foreignApps, foreignAssets, boxes,
+			appIdx, applicationArgs, refs,
 			onCompletionEnum, approvalProg, clearProg, globalSchema, localSchema, extraPages)
 
 		if err != nil {

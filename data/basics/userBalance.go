@@ -334,6 +334,12 @@ type AssetIndex uint64
 // AppParams
 type AppIndex uint64
 
+// BoxRef is the "hydrated" form of a transactions.BoxRef - it has the actual app id, not an index
+type BoxRef struct {
+	App  AppIndex
+	Name string
+}
+
 // CreatableIndex represents either an AssetIndex or AppIndex, which come from
 // the same namespace of indices as each other (both assets and apps are
 // "creatables")
