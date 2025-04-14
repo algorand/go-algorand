@@ -554,7 +554,7 @@ type ConsensusParams struct {
 	// Allow for afrz transactions to target the zero address, freezing that
 	// asset for all holders. Subsequent unfreezing of an individuals holdings
 	// allows them to transfer the asset again.
-	AssetGlobalFreeze bool
+	EnableGlobalFreeze bool
 }
 
 // ProposerPayoutRules puts several related consensus parameters in one place. The same
@@ -1551,23 +1551,13 @@ func initConsensusProtocols() {
 	// our current max is 250000
 	v39.ApprovedUpgrades[protocol.ConsensusV40] = 208000
 
-	v41 := v40
-	v41.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
-
-	v41.AssetGlobalFreeze = true
-
-	Consensus[protocol.ConsensusV41] = v41
-
-	// v40 can be upgraded to v41, with an update delay of 7d.
-	// See previous for calculation.
-	// v40.ApprovedUpgrades[protocol.ConsensusV41] = 208000
-
 	// ConsensusFuture is used to test features that are implemented
 	// but not yet released in a production protocol version.
-	vFuture := v41
+	vFuture := v40
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
 	vFuture.LogicSigVersion = 12 // When moving this to a release, put a new higher LogicSigVersion here
+	vFuture.EnableGlobalFreeze = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 

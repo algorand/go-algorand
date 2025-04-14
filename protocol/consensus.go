@@ -228,11 +228,6 @@ const ConsensusV40 = ConsensusVersion(
 	"https://github.com/algorandfoundation/specs/tree/236dcc18c9c507d794813ab768e467ea42d1b4d9",
 )
 
-// ConsensusV41 enables Asset Global Freeze
-const ConsensusV41 = ConsensusVersion(
-	"TBD",
-)
-
 // ConsensusFuture is a protocol that should not appear in any production
 // network, but is used to test features before they are released.
 const ConsensusFuture = ConsensusVersion(
