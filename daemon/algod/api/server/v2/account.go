@@ -490,13 +490,12 @@ func AppLocalState(state basics.AppLocalState, appIdx basics.AppIndex) model.App
 // AssetParamsToAsset converts basics.AssetParams to model.Asset
 func AssetParamsToAsset(creator string, idx basics.AssetIndex, params *basics.AssetParams) model.Asset {
 	frozen := params.DefaultFrozen
-	lastGlobalFreeze := params.LastGlobalFreeze
 	assetParams := model.AssetParams{
 		Creator:          creator,
 		Total:            params.Total,
 		Decimals:         uint64(params.Decimals),
 		DefaultFrozen:    &frozen,
-		LastGlobalFreeze: &lastGlobalFreeze,
+		LastGlobalFreeze: omitEmpty(params.LastGlobalFreeze),
 		Name:             omitEmpty(printableUTF8OrEmpty(params.AssetName)),
 		NameB64:          sliceOrNil([]byte(params.AssetName)),
 		UnitName:         omitEmpty(printableUTF8OrEmpty(params.UnitName)),
