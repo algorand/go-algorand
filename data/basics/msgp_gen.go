@@ -2543,8 +2543,8 @@ func (z *AssetHolding) MarshalMsg(b []byte) (o []byte) {
 			o = msgp.AppendBool(o, (*z).Frozen)
 		}
 		if (zb0001Mask & 0x8) == 0 { // if not empty
-			// string "l"
-			o = append(o, 0xa1, 0x6c)
+			// string "fc"
+			o = append(o, 0xa2, 0x66, 0x63)
 			o = msgp.AppendUint64(o, (*z).LastFreezeChange)
 		}
 	}
@@ -2633,7 +2633,7 @@ func (z *AssetHolding) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState)
 					err = msgp.WrapError(err, "Frozen")
 					return
 				}
-			case "l":
+			case "fc":
 				(*z).LastFreezeChange, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "LastFreezeChange")
@@ -2662,7 +2662,7 @@ func (_ *AssetHolding) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *AssetHolding) Msgsize() (s int) {
-	s = 1 + 2 + msgp.Uint64Size + 2 + msgp.BoolSize + 2 + msgp.Uint64Size
+	s = 1 + 2 + msgp.Uint64Size + 2 + msgp.BoolSize + 3 + msgp.Uint64Size
 	return
 }
 
@@ -2673,7 +2673,7 @@ func (z *AssetHolding) MsgIsZero() bool {
 
 // MaxSize returns a maximum valid message size for this message type
 func AssetHoldingMaxSize() (s int) {
-	s = 1 + 2 + msgp.Uint64Size + 2 + msgp.BoolSize + 2 + msgp.Uint64Size
+	s = 1 + 2 + msgp.Uint64Size + 2 + msgp.BoolSize + 3 + msgp.Uint64Size
 	return
 }
 
@@ -2830,8 +2830,8 @@ func (z *AssetParams) MarshalMsg(b []byte) (o []byte) {
 			o = (*z).Freeze.MarshalMsg(o)
 		}
 		if (zb0002Mask & 0x100) == 0 { // if not empty
-			// string "l"
-			o = append(o, 0xa1, 0x6c)
+			// string "gf"
+			o = append(o, 0xa2, 0x67, 0x66)
 			o = msgp.AppendUint64(o, (*z).LastGlobalFreeze)
 		}
 		if (zb0002Mask & 0x200) == 0 { // if not empty
@@ -3126,7 +3126,7 @@ func (z *AssetParams) UnmarshalMsgWithState(bts []byte, st msgp.UnmarshalState) 
 					err = msgp.WrapError(err, "Clawback")
 					return
 				}
-			case "l":
+			case "gf":
 				(*z).LastGlobalFreeze, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "LastGlobalFreeze")
@@ -3155,7 +3155,7 @@ func (_ *AssetParams) CanUnmarshalMsg(z interface{}) bool {
 
 // Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
 func (z *AssetParams) Msgsize() (s int) {
-	s = 1 + 2 + msgp.Uint64Size + 3 + msgp.Uint32Size + 3 + msgp.BoolSize + 3 + msgp.StringPrefixSize + len((*z).UnitName) + 3 + msgp.StringPrefixSize + len((*z).AssetName) + 3 + msgp.StringPrefixSize + len((*z).URL) + 3 + msgp.ArrayHeaderSize + (32 * (msgp.ByteSize)) + 2 + (*z).Manager.Msgsize() + 2 + (*z).Reserve.Msgsize() + 2 + (*z).Freeze.Msgsize() + 2 + (*z).Clawback.Msgsize() + 2 + msgp.Uint64Size
+	s = 1 + 2 + msgp.Uint64Size + 3 + msgp.Uint32Size + 3 + msgp.BoolSize + 3 + msgp.StringPrefixSize + len((*z).UnitName) + 3 + msgp.StringPrefixSize + len((*z).AssetName) + 3 + msgp.StringPrefixSize + len((*z).URL) + 3 + msgp.ArrayHeaderSize + (32 * (msgp.ByteSize)) + 2 + (*z).Manager.Msgsize() + 2 + (*z).Reserve.Msgsize() + 2 + (*z).Freeze.Msgsize() + 2 + (*z).Clawback.Msgsize() + 3 + msgp.Uint64Size
 	return
 }
 
@@ -3169,7 +3169,7 @@ func AssetParamsMaxSize() (s int) {
 	s = 1 + 2 + msgp.Uint64Size + 3 + msgp.Uint32Size + 3 + msgp.BoolSize + 3 + msgp.StringPrefixSize + config.MaxAssetUnitNameBytes + 3 + msgp.StringPrefixSize + config.MaxAssetNameBytes + 3 + msgp.StringPrefixSize + config.MaxAssetURLBytes + 3
 	// Calculating size of array: z.MetadataHash
 	s += msgp.ArrayHeaderSize + ((32) * (msgp.ByteSize))
-	s += 2 + AddressMaxSize() + 2 + AddressMaxSize() + 2 + AddressMaxSize() + 2 + AddressMaxSize() + 2 + msgp.Uint64Size
+	s += 2 + AddressMaxSize() + 2 + AddressMaxSize() + 2 + AddressMaxSize() + 2 + AddressMaxSize() + 3 + msgp.Uint64Size
 	return
 }
 

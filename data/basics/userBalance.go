@@ -369,7 +369,7 @@ type AssetHolding struct {
 
 	Amount           uint64 `codec:"a"`
 	Frozen           bool   `codec:"f"`
-	LastFreezeChange uint64 `codec:"l"`
+	LastFreezeChange uint64 `codec:"fc"`
 }
 
 // AssetParams describes the parameters of an asset.
@@ -424,7 +424,7 @@ type AssetParams struct {
 
 	// LastGlobalFreeze specifies the last time (as a transaction counter) the
 	// asset was frozen globally, or 0 if the last global change was unfreeze.
-	LastGlobalFreeze uint64 `codec:"l"`
+	LastGlobalFreeze uint64 `codec:"gf"`
 }
 
 // ToBeHashed implements crypto.Hashable
