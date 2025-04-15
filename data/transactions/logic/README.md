@@ -650,7 +650,7 @@ Asset fields include `AssetHolding` and `AssetParam` fields that are used in the
 | Index | Name | Type | Notes |
 | - | ------ | -- | --------- |
 | 0 | AssetBalance | uint64 | Amount of the asset unit held by this account |
-| 1 | AssetFrozen | bool | Is the asset frozen or not |
+| 1 | AssetFrozen | bool | Is the asset effectively frozen, accounting for local and global freeze state |
 
 
 | Index | Name | Type | In | Notes |

@@ -550,6 +550,11 @@ type ConsensusParams struct {
 
 	// Heartbeat support
 	Heartbeat bool
+
+	// Allow for afrz transactions to target the zero address, freezing that
+	// asset for all holders. Subsequent unfreezing of an individuals holdings
+	// allows them to transfer the asset again.
+	EnableGlobalFreeze bool
 }
 
 // ProposerPayoutRules puts several related consensus parameters in one place. The same
@@ -1552,6 +1557,7 @@ func initConsensusProtocols() {
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
 	vFuture.LogicSigVersion = 12 // When moving this to a release, put a new higher LogicSigVersion here
+	vFuture.EnableGlobalFreeze = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 
