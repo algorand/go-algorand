@@ -342,6 +342,24 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 			return fmt.Errorf("asset transaction not supported")
 		}
 
+		switch tx.Type {
+		case protocol.AssetConfigTx:
+			err := tx.AssetConfigTxnFields.wellFormed()
+			if err != nil {
+				return err
+			}
+		case protocol.AssetTransferTx:
+			err := tx.AssetTransferTxnFields.wellFormed()
+			if err != nil {
+				return err
+			}
+		case protocol.AssetFreezeTx:
+			err := tx.AssetFreezeTxnFields.wellFormed(proto)
+			if err != nil {
+				return err
+			}
+		}
+
 	case protocol.ApplicationCallTx:
 		if !proto.Application {
 			return fmt.Errorf("application transaction not supported")

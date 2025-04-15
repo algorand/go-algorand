@@ -366,11 +366,6 @@ func AssetTransfer(ct transactions.AssetTransferTxnFields, header transactions.H
 	}
 
 	if ct.AssetCloseTo != (basics.Address{}) {
-		// Cannot close by clawback
-		if clawback {
-			return fmt.Errorf("cannot close asset by clawback")
-		}
-
 		record, err := balances.Get(source, false)
 		if err != nil {
 			return err
@@ -479,7 +474,7 @@ func AssetFreeze(cf transactions.AssetFreezeTxnFields, header transactions.Heade
 	}
 
 	// If FreezeAccount is not set, then this is a global freeze/unfreeze operation.
-	if balances.ConsensusParams().EnableGlobalFreeze && cf.FreezeAccount.IsZero() {
+	if cf.FreezeAccount.IsZero() {
 		if cf.AssetFrozen {
 			params.LastGlobalFreeze = txnCounter + 1
 		} else {
