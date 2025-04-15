@@ -2775,7 +2775,7 @@
         "AssetFreeze",
         "AssetClawback",
         "AssetCreator",
-        "AssetLastGlobalFreeze"
+        "AssetGlobalFrozen"
       ],
       "ArgEnumTypes": [
         "uint64",
@@ -2790,7 +2790,7 @@
         "address",
         "address",
         "address",
-        "address"
+        "bool"
       ],
       "DocCost": "1",
       "Doc": "X is field F from asset A. Y is 1 if A exists, else 0",

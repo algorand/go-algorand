@@ -668,7 +668,7 @@ Asset fields include `AssetHolding` and `AssetParam` fields that are used in the
 | 9 | AssetFreeze | address |      | Freeze address |
 | 10 | AssetClawback | address |      | Clawback address |
 | 11 | AssetCreator | address | v5  | Creator address |
-| 12 | AssetLastGlobalFreeze | address | v12  | Last transaction counter value the asset was frozen. 0 if unfrozen |
+| 12 | AssetGlobalFrozen | bool | v12  | Is the asset frozen or not |
 
 
 **App Fields**

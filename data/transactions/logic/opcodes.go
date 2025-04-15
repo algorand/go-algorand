@@ -81,7 +81,7 @@ const mimcVersion = 11
 // EXPERIMENTAL. These should be revisited whenever a new LogicSigVersion is
 // moved from vFuture to a new consensus version. If they remain unready, bump
 // their version, and fixup TestAssemble() in assembler_test.go.
-const spOpcodesVersion = 13 // falcon_verify, sumhash512
+const spOpcodesVersion = 12 // falcon_verify, sumhash512
 
 // Unlimited Global Storage opcodes
 const boxVersion = 8 // box_*

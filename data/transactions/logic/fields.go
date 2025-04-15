@@ -1239,8 +1239,8 @@ const (
 	// AssetCreator is not *in* the Params, but it is uniquely determined.
 	AssetCreator
 
-	// AssetLastGlobalFreeze AssetParams.LastGlobalFreeze
-	AssetLastGlobalFreeze
+	// AssetGlobalFrozen AssetParams.LastGlobalFreeze > 0
+	AssetGlobalFrozen
 
 	invalidAssetParamsField // compile-time constant for number of fields
 )
@@ -1283,7 +1283,7 @@ var assetParamsFieldSpecs = [...]assetParamsFieldSpec{
 	{AssetFreeze, StackAddress, 2, "Freeze address"},
 	{AssetClawback, StackAddress, 2, "Clawback address"},
 	{AssetCreator, StackAddress, 5, "Creator address"},
-	{AssetLastGlobalFreeze, StackAddress, 12, "Last transaction counter value the asset was frozen. 0 if unfrozen"},
+	{AssetGlobalFrozen, StackBoolean, 12, "Is the asset frozen or not"},
 }
 
 func assetParamsFieldSpecByField(f AssetParamsField) (assetParamsFieldSpec, bool) {

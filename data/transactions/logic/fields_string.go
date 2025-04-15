@@ -145,13 +145,13 @@ func _() {
 	_ = x[AssetFreeze-9]
 	_ = x[AssetClawback-10]
 	_ = x[AssetCreator-11]
-	_ = x[AssetLastGlobalFreeze-12]
+	_ = x[AssetGlobalFrozen-12]
 	_ = x[invalidAssetParamsField-13]
 }
 
-const _AssetParamsField_name = "AssetTotalAssetDecimalsAssetDefaultFrozenAssetUnitNameAssetNameAssetURLAssetMetadataHashAssetManagerAssetReserveAssetFreezeAssetClawbackAssetCreatorAssetLastGlobalFreezeinvalidAssetParamsField"
+const _AssetParamsField_name = "AssetTotalAssetDecimalsAssetDefaultFrozenAssetUnitNameAssetNameAssetURLAssetMetadataHashAssetManagerAssetReserveAssetFreezeAssetClawbackAssetCreatorAssetGlobalFrozeninvalidAssetParamsField"
 
-var _AssetParamsField_index = [...]uint8{0, 10, 23, 41, 54, 63, 71, 88, 100, 112, 123, 136, 148, 169, 192}
+var _AssetParamsField_index = [...]uint8{0, 10, 23, 41, 54, 63, 71, 88, 100, 112, 123, 136, 148, 165, 188}
 
 func (i AssetParamsField) String() string {
 	if i < 0 || i >= AssetParamsField(len(_AssetParamsField_index)-1) {

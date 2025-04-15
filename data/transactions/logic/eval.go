@@ -2940,8 +2940,8 @@ func (cx *EvalContext) assetParamsToValue(params *basics.AssetParams, creator ba
 		sv.Bytes = params.Clawback[:]
 	case AssetCreator:
 		sv.Bytes = creator[:]
-	case AssetLastGlobalFreeze:
-		sv.Uint = params.LastGlobalFreeze
+	case AssetGlobalFrozen:
+		sv.Uint = boolToUint(params.LastGlobalFreeze > 0)
 	default:
 		return sv, fmt.Errorf("invalid asset_params_get field %d", fs.field)
 	}
