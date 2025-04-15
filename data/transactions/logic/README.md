@@ -647,11 +647,10 @@ Global fields are fields that are common to all the transactions in the group. I
 
 Asset fields include `AssetHolding` and `AssetParam` fields that are used in the `asset_holding_get` and `asset_params_get` opcodes.
 
-| Index | Name | Type | In | Notes |
-| - | ------ | -- | - | --------- |
-| 0 | AssetBalance | uint64 |      | Amount of the asset unit held by this account |
-| 1 | AssetFrozen | bool |      | Is the asset effectively frozen, accounting for local and global freeze state |
-| 2 | AssetFrozenLocally | bool | v12  | Is the account frozen or not |
+| Index | Name | Type | Notes |
+| - | ------ | -- | --------- |
+| 0 | AssetBalance | uint64 | Amount of the asset unit held by this account |
+| 1 | AssetFrozen | bool | Is the asset effectively frozen, accounting for local and global freeze state |
 
 
 | Index | Name | Type | In | Notes |
@@ -668,7 +667,6 @@ Asset fields include `AssetHolding` and `AssetParam` fields that are used in the
 | 9 | AssetFreeze | address |      | Freeze address |
 | 10 | AssetClawback | address |      | Clawback address |
 | 11 | AssetCreator | address | v5  | Creator address |
-| 12 | AssetGlobalFrozen | bool | v12  | Is the asset frozen or not |
 
 
 **App Fields**
