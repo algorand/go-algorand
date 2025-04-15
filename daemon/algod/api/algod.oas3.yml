@@ -1550,17 +1550,12 @@
           "is-frozen": {
             "description": "\\[f\\] whether or not the holding is frozen.",
             "type": "boolean"
-          },
-          "last-freeze-change": {
-            "description": "\\[l\\] the last time the holding was frozen or unfrozen.",
-            "type": "integer"
           }
         },
         "required": [
           "amount",
           "asset-id",
-          "is-frozen",
-          "last-freeze-change"
+          "is-frozen"
         ],
         "type": "object"
       },
@@ -1609,9 +1604,9 @@
             "description": "\\[f\\] Address of account used to freeze holdings of this asset.  If empty, freezing is not permitted.",
             "type": "string"
           },
-          "last-global-freeze": {
-            "description": "\\[l\\] When (as transaction counter) transfers of this asset were globally frozen. 0 if unfrozen.",
-            "type": "integer"
+          "frozen": {
+            "description": "\\[fr\\] Whether this asset is frozen.",
+            "type": "boolean"
           },
           "manager": {
             "description": "\\[m\\] Address of account used to manage the keys of this asset and to destroy it.",

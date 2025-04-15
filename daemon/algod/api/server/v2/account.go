@@ -33,10 +33,9 @@ import (
 // AssetHolding converts between basics.AssetHolding and model.AssetHolding
 func AssetHolding(ah basics.AssetHolding, ai basics.AssetIndex) model.AssetHolding {
 	return model.AssetHolding{
-		Amount:           ah.Amount,
-		AssetID:          uint64(ai),
-		IsFrozen:         ah.Frozen,
-		LastFreezeChange: ah.LastFreezeChange,
+		Amount:   ah.Amount,
+		AssetID:  uint64(ai),
+		IsFrozen: ah.Frozen,
 	}
 }
 
@@ -257,8 +256,10 @@ func AccountToAccountData(a *model.Account) (basics.AccountData, error) {
 				defaultFrozen = *ca.Params.DefaultFrozen
 			}
 			var lastGlobalFreeze uint64
-			if ca.Params.LastGlobalFreeze != nil {
-				lastGlobalFreeze = *ca.Params.LastGlobalFreeze
+			if ca.Params.Frozen != nil {
+				// model.Asset doesn't know the LastGlobalFreeze value, so we
+				// fake it by setting it to MaxUint64 for basics.AssetParams.
+				lastGlobalFreeze = math.MaxUint64
 			}
 			var url string
 			if ca.Params.Url != nil {
@@ -294,9 +295,8 @@ func AccountToAccountData(a *model.Account) (basics.AccountData, error) {
 		assets = make(map[basics.AssetIndex]basics.AssetHolding, len(*a.Assets))
 		for _, h := range *a.Assets {
 			assets[basics.AssetIndex(h.AssetID)] = basics.AssetHolding{
-				Amount:           h.Amount,
-				Frozen:           h.IsFrozen,
-				LastFreezeChange: h.LastFreezeChange,
+				Amount: h.Amount,
+				Frozen: h.IsFrozen,
 			}
 		}
 	}
@@ -491,21 +491,21 @@ func AppLocalState(state basics.AppLocalState, appIdx basics.AppIndex) model.App
 func AssetParamsToAsset(creator string, idx basics.AssetIndex, params *basics.AssetParams) model.Asset {
 	frozen := params.DefaultFrozen
 	assetParams := model.AssetParams{
-		Creator:          creator,
-		Total:            params.Total,
-		Decimals:         uint64(params.Decimals),
-		DefaultFrozen:    &frozen,
-		LastGlobalFreeze: omitEmpty(params.LastGlobalFreeze),
-		Name:             omitEmpty(printableUTF8OrEmpty(params.AssetName)),
-		NameB64:          sliceOrNil([]byte(params.AssetName)),
-		UnitName:         omitEmpty(printableUTF8OrEmpty(params.UnitName)),
-		UnitNameB64:      sliceOrNil([]byte(params.UnitName)),
-		Url:              omitEmpty(printableUTF8OrEmpty(params.URL)),
-		UrlB64:           sliceOrNil([]byte(params.URL)),
-		Clawback:         addrOrNil(params.Clawback),
-		Freeze:           addrOrNil(params.Freeze),
-		Manager:          addrOrNil(params.Manager),
-		Reserve:          addrOrNil(params.Reserve),
+		Creator:       creator,
+		Total:         params.Total,
+		Decimals:      uint64(params.Decimals),
+		DefaultFrozen: &frozen,
+		Frozen:        omitEmpty(uint64ToBool(params.LastGlobalFreeze)),
+		Name:          omitEmpty(printableUTF8OrEmpty(params.AssetName)),
+		NameB64:       sliceOrNil([]byte(params.AssetName)),
+		UnitName:      omitEmpty(printableUTF8OrEmpty(params.UnitName)),
+		UnitNameB64:   sliceOrNil([]byte(params.UnitName)),
+		Url:           omitEmpty(printableUTF8OrEmpty(params.URL)),
+		UrlB64:        sliceOrNil([]byte(params.URL)),
+		Clawback:      addrOrNil(params.Clawback),
+		Freeze:        addrOrNil(params.Freeze),
+		Manager:       addrOrNil(params.Manager),
+		Reserve:       addrOrNil(params.Reserve),
 	}
 	if params.MetadataHash != ([32]byte{}) {
 		metadataHash := slices.Clone(params.MetadataHash[:])
