@@ -2280,7 +2280,7 @@
     },
     "/v2/applications/{application-id}/boxes": {
       "get": {
-        "description": "Given an application ID, return all Box names. No particular ordering is guaranteed. Request fails when client or server-side configured limits prevent returning all Box names.",
+        "description": "Given an application ID, return boxes in lexographical order by name. If the results must be truncated, a next-token is supplied to continue the request.",
         "tags": [
           "public",
           "nonparticipating"
@@ -2291,7 +2291,7 @@
         "schemes": [
           "http"
         ],
-        "summary": "Get all box names for a given application.",
+        "summary": "Get boxes for a given application.",
         "operationId": "GetApplicationBoxes",
         "parameters": [
           {
@@ -2303,8 +2303,26 @@
           },
           {
             "type": "integer",
-            "description": "Max number of box names to return. If max is not set, or max == 0, returns all box-names.",
+            "description": "Maximum number of boxes to return. Server may impose a lower limit.",
             "name": "max",
+            "in": "query"
+          },
+          {
+            "type": "string",
+            "description": "A box name prefix, in the goal app call arg form 'encoding:value'. For ints, use the form 'int:1234'. For raw bytes, use the form 'b64:A=='. For printable strings, use the form 'str:hello'. For addresses, use the form 'addr:XYZ...'.",
+            "name": "prefix",
+            "in": "query"
+          },
+          {
+            "type": "string",
+            "description": "A box name, in the goal app call arg form 'encoding:value'. When provided, the returned boxes begin (lexographically) with the supplied name. Callers may implement pagination by reinvoking the endpoint with the token from a previous call's next-token.",
+            "name": "next",
+            "in": "query"
+          },
+          {
+            "type": "boolean",
+            "description": "If true, box values will be returned.",
+            "name": "values",
             "in": "query"
           }
         ],
@@ -4037,7 +4055,6 @@
       "description": "Box name and its content.",
       "type": "object",
       "required": [
-        "round",
         "name",
         "value"
       ],
@@ -4047,26 +4064,12 @@
           "type": "integer"
         },
         "name": {
-          "description": "\\[name\\] box name, base64 encoded",
+          "description": "The box name, base64 encoded",
           "type": "string",
           "format": "byte"
         },
         "value": {
-          "description": "\\[value\\] box value, base64 encoded.",
-          "type": "string",
-          "format": "byte"
-        }
-      }
-    },
-    "BoxDescriptor": {
-      "description": "Box descriptor describes a Box.",
-      "type": "object",
-      "required": [
-        "name"
-      ],
-      "properties": {
-        "name": {
-          "description": "Base64 encoded box name",
+          "description": "The box value, base64 encoded.",
           "type": "string",
           "format": "byte"
         }
@@ -4086,22 +4089,6 @@
         },
         "name": {
           "description": "Base64 encoded box name",
-          "type": "string",
-          "format": "byte"
-        }
-      }
-    },
-    "KvDelta": {
-      "description": "A single Delta containing the key, the previous value and the current value for a single round.",
-      "type": "object",
-      "properties": {
-        "key": {
-          "description": "The key, base64 encoded.",
-          "type": "string",
-          "format": "byte"
-        },
-        "value": {
-          "description": "The new value of the KV store entry, base64 encoded.",
           "type": "string",
           "format": "byte"
         }
@@ -5514,17 +5501,26 @@
       }
     },
     "BoxesResponse": {
-      "description": "Box names of an application",
+      "description": "Boxes of an application",
       "schema": {
         "type": "object",
         "required": [
+          "round",
           "boxes"
         ],
         "properties": {
+          "round": {
+            "description": "The round for which this information is relevant.",
+            "type": "integer"
+          },
+          "next-token": {
+            "description": "Used for pagination, when making another request provide this token with the next parameter.",
+            "type": "string"
+          },
           "boxes": {
             "type": "array",
             "items": {
-              "$ref": "#/definitions/BoxDescriptor"
+              "$ref": "#/definitions/Box"
             }
           }
         }

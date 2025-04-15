@@ -20,6 +20,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -123,7 +124,7 @@ func main() {
 
 	done := make(chan struct{})
 	log := logging.Base()
-	configureLogging(genesis, log, absolutePath, done, algodConfig)
+	configureLogging(genesis, log, absolutePath, done, algodConfig, algohConfig)
 	defer log.CloseTelemetry()
 
 	exeDir, err = util.ExeDir()
@@ -270,26 +271,58 @@ func getNodeController() nodecontrol.NodeController {
 	return nc
 }
 
-func configureLogging(genesis bookkeeping.Genesis, log logging.Logger, rootPath string, abort chan struct{}, algodConfig config.Local) {
-	log = logging.Base()
-
+func configureLogging(genesis bookkeeping.Genesis, log logging.Logger, rootPath string, abort chan struct{}, algodConfig config.Local, algohConfig algoh.HostConfig) {
 	liveLog := fmt.Sprintf("%s/host.log", rootPath)
-	fmt.Println("Logging to: ", liveLog)
-	writer, err := os.OpenFile(liveLog, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
-	if err != nil {
-		panic(fmt.Sprintf("configureLogging: cannot open log file %v", err))
+	if algohConfig.LogFileDir != "" {
+		liveLog = fmt.Sprintf("%s/%s", algohConfig.LogFileDir, "host.log")
 	}
-	log.SetOutput(writer)
+
+	// Default to the root path if no archive log directory is specified
+	archiveLog := rootPath
+	// If archive dir or log file dir is specified, use that instead
+	if algohConfig.LogArchiveDir != "" {
+		archiveLog = algohConfig.LogArchiveDir
+	} else if algohConfig.LogFileDir != "" {
+		archiveLog = algohConfig.LogFileDir
+	}
+
+	if algohConfig.LogArchiveName != "" {
+		archiveLog = fmt.Sprintf("%s/%s", archiveLog, algohConfig.LogArchiveName)
+	}
+
+	var maxLogAge time.Duration
+	var err error
+	if algohConfig.LogArchiveMaxAge != "" {
+		maxLogAge, err = time.ParseDuration(algohConfig.LogArchiveMaxAge)
+		if err != nil {
+			log.Fatalf("invalid algoh config LogArchiveMaxAge: %s", err)
+		}
+	}
+
+	var logWriter io.Writer
+	if algohConfig.LogSizeLimit > 0 {
+		fmt.Println("algoh logging to: ", liveLog)
+		logWriter = logging.MakeCyclicFileWriter(liveLog, archiveLog, algohConfig.LogSizeLimit, maxLogAge)
+	} else {
+		fmt.Println("Logging to: stdout")
+		logWriter = os.Stdout
+	}
+	log.SetOutput(logWriter)
 	log.SetJSONFormatter()
-	log.SetLevel(logging.Debug)
+	minLogLevel := logging.Level(algohConfig.MinLogLevel)
+	// Debug is the highest level, so default to Warn if the user sets out of bounds
+	if minLogLevel > logging.Debug {
+		minLogLevel = logging.Warn
+	}
+	log.SetLevel(minLogLevel)
 
 	initTelemetry(genesis, log, rootPath, abort, algodConfig)
 
 	// if we have the telemetry enabled, we want to use it's sessionid as part of the
 	// collected metrics decorations.
-	fmt.Fprintln(writer, "++++++++++++++++++++++++++++++++++++++++")
-	fmt.Fprintln(writer, "Logging Starting")
-	fmt.Fprintln(writer, "++++++++++++++++++++++++++++++++++++++++")
+	fmt.Fprintln(logWriter, "++++++++++++++++++++++++++++++++++++++++")
+	fmt.Fprintln(logWriter, "Logging Starting")
+	fmt.Fprintln(logWriter, "++++++++++++++++++++++++++++++++++++++++")
 }
 
 func initTelemetry(genesis bookkeeping.Genesis, log logging.Logger, dataDirectory string, abort chan struct{}, algodConfig config.Local) {

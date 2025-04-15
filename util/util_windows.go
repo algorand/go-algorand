@@ -31,6 +31,11 @@ func GetFdLimits() (soft uint64, hard uint64, err error) {
 	return math.MaxUint64, math.MaxUint64, nil // syscall.RLIM_INFINITY
 }
 
+// RaiseFdSoftLimit raises the file descriptors soft limit.
+func RaiseFdSoftLimit(_ uint64) error {
+	return nil
+}
+
 // SetFdSoftLimit sets a new file descriptors soft limit.
 func SetFdSoftLimit(_ uint64) error {
 	return nil
