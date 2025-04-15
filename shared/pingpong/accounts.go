@@ -892,7 +892,7 @@ func (pps *WorkerState) newApp(addr string, client *libgoal.Client) (tx transact
 	globSchema := basics.StateSchema{NumByteSlice: proto.MaxGlobalSchemaEntries}
 	locSchema := basics.StateSchema{NumByteSlice: proto.MaxLocalSchemaEntries}
 
-	tx, err = client.MakeUnsignedAppCreateTx(transactions.NoOpOC, prog, prog, globSchema, locSchema, nil, nil, nil, nil, nil, 0)
+	tx, err = client.MakeUnsignedAppCreateTx(transactions.NoOpOC, prog, prog, globSchema, locSchema, nil, libgoal.RefBundle{}, 0)
 	if err != nil {
 		fmt.Printf("Cannot create app txn\n")
 		panic(err)
@@ -913,7 +913,7 @@ func (pps *WorkerState) newApp(addr string, client *libgoal.Client) (tx transact
 }
 
 func (pps *WorkerState) appOptIn(addr string, appID uint64, client *libgoal.Client) (tx transactions.Transaction, err error) {
-	tx, err = client.MakeUnsignedAppOptInTx(appID, nil, nil, nil, nil, nil)
+	tx, err = client.MakeUnsignedAppOptInTx(appID, nil, libgoal.RefBundle{})
 	if err != nil {
 		fmt.Printf("Cannot create app txn\n")
 		panic(err)

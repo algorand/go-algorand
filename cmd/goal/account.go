@@ -916,14 +916,14 @@ var changeOnlineCmd = &cobra.Command{
 
 		firstTxRound, lastTxRound, _, err := client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
 		if err != nil {
-			reportErrorf(err.Error())
+			reportErrorln(err)
 		}
 		err = changeAccountOnlineStatus(
 			accountAddress, online, statusChangeTxFile, walletName,
 			firstTxRound, lastTxRound, transactionFee, scLeaseBytes(cmd), dataDir, client,
 		)
 		if err != nil {
-			reportErrorf(err.Error())
+			reportErrorln(err)
 		}
 	},
 }
@@ -1092,7 +1092,7 @@ var renewParticipationKeyCmd = &cobra.Command{
 
 		err = generateAndRegisterPartKey(accountAddress, currentRound, roundLastValid, txRoundLastValid, transactionFee, scLeaseBytes(cmd), keyDilution, walletName, dataDir, client)
 		if err != nil {
-			reportErrorf(err.Error())
+			reportErrorln(err)
 		}
 
 		version := config.GetCurrentVersion()
