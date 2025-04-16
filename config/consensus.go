@@ -17,9 +17,6 @@
 package config
 
 import (
-	"encoding/json"
-	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/algorand/go-algorand/protocol"
@@ -811,28 +808,6 @@ func checkSetAllocBounds(p ConsensusParams) {
 	checkSetMax(p.MaxAppTxnForeignApps, &MaxAppTxnForeignApps)
 }
 
-// SaveConfigurableConsensus saves the configurable protocols file to the provided data directory.
-// if the params contains zero protocols, the existing consensus.json file will be removed if exists.
-func SaveConfigurableConsensus(dataDirectory string, params ConsensusProtocols) error {
-	consensusProtocolPath := filepath.Join(dataDirectory, ConfigurableConsensusProtocolsFilename)
-
-	if len(params) == 0 {
-		// we have no consensus params to write. In this case, just delete the existing file
-		// ( if any )
-		err := os.Remove(consensusProtocolPath)
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return err
-	}
-	encodedConsensusParams, err := json.Marshal(params)
-	if err != nil {
-		return err
-	}
-	err = os.WriteFile(consensusProtocolPath, encodedConsensusParams, 0644)
-	return err
-}
-
 // DeepCopy creates a deep copy of a consensus protocols map.
 func (cp ConsensusProtocols) DeepCopy() ConsensusProtocols {
 	staticConsensus := make(ConsensusProtocols)
@@ -873,54 +848,6 @@ func (cp ConsensusProtocols) Merge(configurableConsensus ConsensusProtocols) Con
 	}
 
 	return staticConsensus
-}
-
-// LoadConfigurableConsensusProtocols loads the configurable protocols from the data directory
-func LoadConfigurableConsensusProtocols(dataDirectory string) error {
-	newConsensus, err := PreloadConfigurableConsensusProtocols(dataDirectory)
-	if err != nil {
-		return err
-	}
-	if newConsensus != nil {
-		SetConfigurableConsensusProtocols(newConsensus)
-	}
-	return nil
-}
-
-// SetConfigurableConsensusProtocols sets the configurable protocols.
-func SetConfigurableConsensusProtocols(newConsensus ConsensusProtocols) ConsensusProtocols {
-	oldConsensus := Consensus
-	Consensus = newConsensus
-	// Set allocation limits
-	for _, p := range Consensus {
-		checkSetAllocBounds(p)
-	}
-	return oldConsensus
-}
-
-// PreloadConfigurableConsensusProtocols loads the configurable protocols from the data directory
-// and merge it with a copy of the Consensus map. Then, it returns it to the caller.
-func PreloadConfigurableConsensusProtocols(dataDirectory string) (ConsensusProtocols, error) {
-	consensusProtocolPath := filepath.Join(dataDirectory, ConfigurableConsensusProtocolsFilename)
-	file, err := os.Open(consensusProtocolPath)
-
-	if err != nil {
-		if os.IsNotExist(err) {
-			// this file is not required, only optional. if it's missing, no harm is done.
-			return Consensus, nil
-		}
-		return nil, err
-	}
-	defer file.Close()
-
-	configurableConsensus := make(ConsensusProtocols)
-
-	decoder := json.NewDecoder(file)
-	err = decoder.Decode(&configurableConsensus)
-	if err != nil {
-		return nil, err
-	}
-	return Consensus.Merge(configurableConsensus), nil
 }
 
 // initConsensusProtocols defines the consensus protocol values and how values change across different versions of the protocol.
@@ -1592,23 +1519,6 @@ func initConsensusProtocols() {
 	vAlpha5.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 	Consensus[protocol.ConsensusVAlpha5] = vAlpha5
 	vAlpha4.ApprovedUpgrades[protocol.ConsensusVAlpha5] = 10000
-}
-
-// ApplyShorterUpgradeRoundsForDevNetworks applies a shorter upgrade round time for the Devnet and Betanet networks.
-// This function should not take precedence over settings loaded via `PreloadConfigurableConsensusProtocols`.
-func ApplyShorterUpgradeRoundsForDevNetworks(id protocol.NetworkID) {
-	if id == Betanet || id == Devnet {
-		// Go through all approved upgrades and set to the MinUpgradeWaitRounds valid where MinUpgradeWaitRounds is set
-		for _, p := range Consensus {
-			if p.ApprovedUpgrades != nil {
-				for v := range p.ApprovedUpgrades {
-					if p.MinUpgradeWaitRounds > 0 {
-						p.ApprovedUpgrades[v] = p.MinUpgradeWaitRounds
-					}
-				}
-			}
-		}
-	}
 }
 
 // Global defines global Algorand protocol parameters which should not be overridden.

@@ -164,11 +164,11 @@ type ApplicationCallTxnFields struct {
 	// ExtraProgramPages specifies the additional app program len requested in pages.
 	// A page is MaxAppProgramLen bytes. This field enables execution of app programs
 	// larger than the default config, MaxAppProgramLen.
-	ExtraProgramPages uint32 `codec:"apep,omitempty"`
+	ExtraProgramPages uint32 `codec:"apep"`
 
 	// RejectVersion is the lowest application version for which this
 	// transaction should immediately fail. 0 indicates that no version check should be performed.
-	RejectVersion uint64 `codec:"aprv,omitempty"`
+	RejectVersion uint64 `codec:"aprv"`
 
 	// If you add any fields here, remember you MUST modify the Empty
 	// method below!
