@@ -64,6 +64,10 @@ func TestApplicationCallFieldsEmpty(t *testing.T) {
 	a.False(ac.Empty())
 
 	ac.ApplicationArgs = nil
+	ac.RejectVersion = 1
+	a.False(ac.Empty())
+
+	ac.RejectVersion = 0
 	ac.Accounts = make([]basics.Address, 1)
 	a.False(ac.Empty())
 

@@ -191,9 +191,6 @@ func (ac *ApplicationCallTxnFields) Empty() bool {
 	if ac.OnCompletion != 0 {
 		return false
 	}
-	if ac.RejectVersion != 0 {
-		return false
-	}
 	if ac.ApplicationArgs != nil {
 		return false
 	}
@@ -222,6 +219,9 @@ func (ac *ApplicationCallTxnFields) Empty() bool {
 		return false
 	}
 	if ac.ExtraProgramPages != 0 {
+		return false
+	}
+	if ac.RejectVersion != 0 {
 		return false
 	}
 	return true
