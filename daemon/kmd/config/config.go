@@ -69,6 +69,11 @@ type ScryptParams struct {
 	ScryptP int `json:"scrypt_p"`
 }
 
+// DefaultConfig returns the default KMDConfig
+func DefaultConfig(dataDir string) KMDConfig {
+	return defaultConfig(dataDir)
+}
+
 // defaultConfig returns the default KMDConfig
 func defaultConfig(dataDir string) KMDConfig {
 	return KMDConfig{
@@ -120,4 +125,15 @@ func LoadKMDConfig(dataDir string) (cfg KMDConfig, err error) {
 	}
 	err = cfg.Validate()
 	return
+}
+
+// SaveKMDConfig writes the kmd configuration to disk
+func SaveKMDConfig(dataDir string, cfg KMDConfig) error {
+	err := cfg.Validate()
+	if err != nil {
+		return err
+	}
+	configFilename := filepath.Join(dataDir, kmdConfigFilename)
+
+	return codecs.SaveObjectToFile(configFilename, cfg, true)
 }

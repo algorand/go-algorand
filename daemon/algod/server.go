@@ -129,7 +129,11 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 		return errors.New(
 			"Initialize() overflowed when adding up ReservedFDs and RestConnectionsHardLimit; decrease them")
 	}
-	err = util.SetFdSoftLimit(fdRequired)
+	if cfg.EnableP2P {
+		// TODO: Decide if this is too much, or not enough.
+		fdRequired = ot.Add(fdRequired, 512)
+	}
+	err = util.RaiseFdSoftLimit(fdRequired)
 	if err != nil {
 		return fmt.Errorf("Initialize() err: %w", err)
 	}
@@ -141,7 +145,7 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 			return errors.New(
 				"Initialize() overflowed when adding up fdRequired and 1000 needed for pebbledb")
 		}
-		err = util.SetFdSoftLimit(fdRequired)
+		err = util.RaiseFdSoftLimit(fdRequired)
 		if err != nil {
 			return fmt.Errorf("Initialize() failed to set FD limit for pebbledb backend, err: %w", err)
 		}
@@ -190,7 +194,7 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 					}
 				}
 			}
-			fdErr = util.SetFdSoftLimit(maxFDs)
+			fdErr = util.RaiseFdSoftLimit(maxFDs)
 			if fdErr != nil {
 				// do not fail but log the error
 				s.log.Errorf("Failed to set a new RLIMIT_NOFILE value to %d (max %d): %s", fdRequired, hard, fdErr.Error())

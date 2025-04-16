@@ -43,7 +43,9 @@ var versionCheck bool
 func init() {
 	rootCmd.AddCommand(fileCmd)
 	rootCmd.AddCommand(netCmd)
+	rootCmd.AddCommand(benchCmd)
 	rootCmd.AddCommand(databaseCmd)
+	rootCmd.AddCommand(infoCmd)
 }
 
 var rootCmd = &cobra.Command{

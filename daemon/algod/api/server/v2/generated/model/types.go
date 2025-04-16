@@ -94,12 +94,6 @@ const (
 	GetBlockParamsFormatMsgpack GetBlockParamsFormat = "msgpack"
 )
 
-// Defines values for GetBlockHeaderParamsFormat.
-const (
-	GetBlockHeaderParamsFormatJson    GetBlockHeaderParamsFormat = "json"
-	GetBlockHeaderParamsFormatMsgpack GetBlockHeaderParamsFormat = "msgpack"
-)
-
 // Defines values for GetTransactionProofParamsHashtype.
 const (
 	GetTransactionProofParamsHashtypeSha256    GetTransactionProofParamsHashtype = "sha256"
@@ -533,20 +527,14 @@ type AvmValue struct {
 
 // Box Box name and its content.
 type Box struct {
-	// Name \[name\] box name, base64 encoded
+	// Name The box name, base64 encoded
 	Name []byte `json:"name"`
 
 	// Round The round for which this information is relevant
-	Round uint64 `json:"round"`
+	Round *uint64 `json:"round,omitempty"`
 
-	// Value \[value\] box value, base64 encoded.
+	// Value The box value, base64 encoded.
 	Value []byte `json:"value"`
-}
-
-// BoxDescriptor Box descriptor describes a Box.
-type BoxDescriptor struct {
-	// Name Base64 encoded box name
-	Name []byte `json:"name"`
 }
 
 // BoxReference References a box of an application.
@@ -667,44 +655,6 @@ type EvalDeltaKeyValue struct {
 
 	// Value Represents a TEAL value delta.
 	Value EvalDelta `json:"value"`
-}
-
-// Genesis defines model for Genesis.
-type Genesis struct {
-	Alloc     []GenesisAllocation `json:"alloc"`
-	Comment   *string             `json:"comment,omitempty"`
-	Devmode   *bool               `json:"devmode,omitempty"`
-	Fees      string              `json:"fees"`
-	Id        string              `json:"id"`
-	Network   string              `json:"network"`
-	Proto     string              `json:"proto"`
-	Rwd       string              `json:"rwd"`
-	Timestamp float32             `json:"timestamp"`
-}
-
-// GenesisAllocation defines model for GenesisAllocation.
-type GenesisAllocation struct {
-	Addr    string `json:"addr"`
-	Comment string `json:"comment"`
-	State   struct {
-		Algo    float32  `json:"algo"`
-		Onl     *float32 `json:"onl,omitempty"`
-		Sel     *string  `json:"sel,omitempty"`
-		Stprf   *string  `json:"stprf,omitempty"`
-		Vote    *string  `json:"vote,omitempty"`
-		VoteFst *float32 `json:"voteFst,omitempty"`
-		VoteKD  *float32 `json:"voteKD,omitempty"`
-		VoteLst *float32 `json:"voteLst,omitempty"`
-	} `json:"state"`
-}
-
-// KvDelta A single Delta containing the key, the previous value and the current value for a single round.
-type KvDelta struct {
-	// Key The key, base64 encoded.
-	Key *[]byte `json:"key,omitempty"`
-
-	// Value The new value of the KV store entry, base64 encoded.
-	Value *[]byte `json:"value,omitempty"`
 }
 
 // LedgerStateDelta Ledger StateDelta object
@@ -1190,12 +1140,6 @@ type BlockHashResponse struct {
 	BlockHash string `json:"blockHash"`
 }
 
-// BlockHeaderResponse defines model for BlockHeaderResponse.
-type BlockHeaderResponse struct {
-	// BlockHeader Block header data.
-	BlockHeader map[string]interface{} `json:"blockHeader"`
-}
-
 // BlockLogsResponse defines model for BlockLogsResponse.
 type BlockLogsResponse struct {
 	Logs []AppCallLogs `json:"logs"`
@@ -1221,7 +1165,13 @@ type BoxResponse = Box
 
 // BoxesResponse defines model for BoxesResponse.
 type BoxesResponse struct {
-	Boxes []BoxDescriptor `json:"boxes"`
+	Boxes []Box `json:"boxes"`
+
+	// NextToken Used for pagination, when making another request provide this token with the next parameter.
+	NextToken *string `json:"next-token,omitempty"`
+
+	// Round The round for which this information is relevant.
+	Round uint64 `json:"round"`
 }
 
 // CatchpointAbortResponse An catchpoint abort response.
@@ -1553,27 +1503,30 @@ type GetApplicationBoxByNameParams struct {
 
 // GetApplicationBoxesParams defines parameters for GetApplicationBoxes.
 type GetApplicationBoxesParams struct {
-	// Max Max number of box names to return. If max is not set, or max == 0, returns all box-names.
+	// Max Maximum number of boxes to return. Server may impose a lower limit.
 	Max *uint64 `form:"max,omitempty" json:"max,omitempty"`
+
+	// Prefix A box name prefix, in the goal app call arg form 'encoding:value'. For ints, use the form 'int:1234'. For raw bytes, use the form 'b64:A=='. For printable strings, use the form 'str:hello'. For addresses, use the form 'addr:XYZ...'.
+	Prefix *string `form:"prefix,omitempty" json:"prefix,omitempty"`
+
+	// Next A box name, in the goal app call arg form 'encoding:value'. When provided, the returned boxes begin (lexographically) with the supplied name. Callers may implement pagination by reinvoking the endpoint with the token from a previous call's next-token.
+	Next *string `form:"next,omitempty" json:"next,omitempty"`
+
+	// Values If true, box values will be returned.
+	Values *bool `form:"values,omitempty" json:"values,omitempty"`
 }
 
 // GetBlockParams defines parameters for GetBlock.
 type GetBlockParams struct {
 	// Format Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.
 	Format *GetBlockParamsFormat `form:"format,omitempty" json:"format,omitempty"`
+
+	// HeaderOnly If true, only the block header (exclusive of payset or certificate) may be included in response.
+	HeaderOnly *bool `form:"header-only,omitempty" json:"header-only,omitempty"`
 }
 
 // GetBlockParamsFormat defines parameters for GetBlock.
 type GetBlockParamsFormat string
-
-// GetBlockHeaderParams defines parameters for GetBlockHeader.
-type GetBlockHeaderParams struct {
-	// Format Configures whether the response object is JSON or MessagePack encoded. If not provided, defaults to JSON.
-	Format *GetBlockHeaderParamsFormat `form:"format,omitempty" json:"format,omitempty"`
-}
-
-// GetBlockHeaderParamsFormat defines parameters for GetBlockHeader.
-type GetBlockHeaderParamsFormat string
 
 // GetTransactionProofParams defines parameters for GetTransactionProof.
 type GetTransactionProofParams struct {

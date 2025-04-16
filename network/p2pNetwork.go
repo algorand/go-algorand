@@ -45,6 +45,9 @@ import (
 	manet "github.com/multiformats/go-multiaddr/net"
 )
 
+// some arbitrary number TODO: figure out a better value based on peerSelector/fetcher algorithm
+const numArchivalPeersToFind = 4
+
 // P2PNetwork implements the GossipNode interface
 type P2PNetwork struct {
 	service     p2p.Service
@@ -434,15 +437,31 @@ func (n *P2PNetwork) meshThreadInner() int {
 			n.log.Warnf("Error getting relay nodes from capabilities discovery: %v", err)
 		}
 		n.log.Debugf("Discovered %d gossip peers from DHT", len(dhtPeers))
+
+		// also discover archival nodes
+		var dhtArchivalPeers []peer.AddrInfo
+		dhtArchivalPeers, err = n.capabilitiesDiscovery.PeersForCapability(p2p.Archival, numArchivalPeersToFind)
+		if err != nil {
+			n.log.Warnf("Error getting archival nodes from capabilities discovery: %v", err)
+		}
+		n.log.Debugf("Discovered %d archival peers from DHT", len(dhtArchivalPeers))
+
+		if len(dhtArchivalPeers) > 0 {
+			replace := make([]*peer.AddrInfo, len(dhtArchivalPeers))
+			for i := range dhtArchivalPeers {
+				replace[i] = &dhtArchivalPeers[i]
+			}
+			n.pstore.ReplacePeerList(replace, string(n.networkID), phonebook.ArchivalRole)
+		}
 	}
 
 	peers := mergeP2PAddrInfoResolvedAddresses(dnsPeers, dhtPeers)
-	replace := make([]*peer.AddrInfo, 0, len(peers))
+	replace := make([]*peer.AddrInfo, len(peers))
 	for i := range peers {
-		replace = append(replace, &peers[i])
+		replace[i] = &peers[i]
 	}
 	if len(peers) > 0 {
-		n.pstore.ReplacePeerList(replace, string(n.networkID), phonebook.PhoneBookEntryRelayRole)
+		n.pstore.ReplacePeerList(replace, string(n.networkID), phonebook.RelayRole)
 	}
 	return len(peers)
 }
@@ -532,7 +551,7 @@ func (n *P2PNetwork) Broadcast(ctx context.Context, tag protocol.Tag, data []byt
 		return n.service.Publish(ctx, topic, data)
 	}
 	// Otherwise broadcast over websocket protocol stream
-	return n.broadcaster.BroadcastArray(ctx, []protocol.Tag{tag}, [][]byte{data}, wait, except)
+	return n.broadcaster.broadcast(ctx, tag, data, wait, except)
 }
 
 // Relay message
@@ -640,8 +659,11 @@ func (n *P2PNetwork) GetPeers(options ...PeerOption) []Peer {
 			n.wsPeersLock.RUnlock()
 		case PeersPhonebookRelays:
 			const maxNodes = 100
-			addrInfos := n.pstore.GetAddresses(maxNodes, phonebook.PhoneBookEntryRelayRole)
+			addrInfos := n.pstore.GetAddresses(maxNodes, phonebook.RelayRole)
 			for _, peerInfo := range addrInfos {
+				if peerInfo.ID == n.service.ID() {
+					continue
+				}
 				if peerCore, ok := addrInfoToWsPeerCore(n, peerInfo); ok {
 					peers = append(peers, &peerCore)
 				}
@@ -654,29 +676,22 @@ func (n *P2PNetwork) GetPeers(options ...PeerOption) []Peer {
 				n.log.Debugf("Relay node(s) from peerstore: %v", addrs)
 			}
 		case PeersPhonebookArchivalNodes:
-			// query known archival nodes from DHT if enabled
-			if n.config.EnableDHTProviders {
-				const nodesToFind = 5
-				infos, err := n.capabilitiesDiscovery.PeersForCapability(p2p.Archival, nodesToFind)
-				if err != nil {
-					n.log.Warnf("Error getting archival nodes from capabilities discovery: %v", err)
-					return peers
+			// query known archival nodes that came from from DHT if enabled (or DNS if configured)
+			addrInfos := n.pstore.GetAddresses(numArchivalPeersToFind, phonebook.ArchivalRole)
+			for _, peerInfo := range addrInfos {
+				if peerInfo.ID == n.service.ID() {
+					continue
 				}
-				n.log.Debugf("Got %d archival node(s) from DHT", len(infos))
-				for _, addrInfo := range infos {
-					// TODO: remove after go1.22
-					info := addrInfo
-					if peerCore, ok := addrInfoToWsPeerCore(n, &info); ok {
-						peers = append(peers, &peerCore)
-					}
+				if peerCore, ok := addrInfoToWsPeerCore(n, peerInfo); ok {
+					peers = append(peers, &peerCore)
 				}
-				if n.log.GetLevel() >= logging.Debug && len(peers) > 0 {
-					addrs := make([]string, 0, len(peers))
-					for _, peer := range peers {
-						addrs = append(addrs, peer.(*wsPeerCore).GetAddress())
-					}
-					n.log.Debugf("Archival node(s) from DHT: %v", addrs)
+			}
+			if n.log.GetLevel() >= logging.Debug && len(peers) > 0 {
+				addrs := make([]string, 0, len(peers))
+				for _, peer := range peers {
+					addrs = append(addrs, peer.(*wsPeerCore).GetAddress())
 				}
+				n.log.Debugf("Archival node(s) from peerstore: %v", addrs)
 			}
 		case PeersConnectedIn:
 			n.wsPeersLock.RLock()
@@ -923,24 +938,33 @@ func (n *P2PNetwork) txTopicHandleLoop() {
 	}
 	n.log.Debugf("Subscribed to topic %s", p2p.TXTopicName)
 
-	for {
-		// msg from sub.Next not used since all work done by txTopicValidator
-		_, err := sub.Next(n.ctx)
-		if err != nil {
-			if err != pubsub.ErrSubscriptionCancelled && err != context.Canceled {
-				n.log.Errorf("Error reading from subscription %v, peerId %s", err, n.service.ID())
+	const threads = incomingThreads / 2 // perf tests showed that 10 (half of incomingThreads) was optimal in terms of TPS (attempted 1, 5, 10, 20)
+	var wg sync.WaitGroup
+	wg.Add(threads)
+	for i := 0; i < threads; i++ {
+		go func(ctx context.Context, sub p2p.SubNextCancellable, wantTXGossip *atomic.Bool, peerID peer.ID, log logging.Logger) {
+			defer wg.Done()
+			for {
+				// msg from sub.Next not used since all work done by txTopicValidator
+				_, err := sub.Next(ctx)
+				if err != nil {
+					if err != pubsub.ErrSubscriptionCancelled && err != context.Canceled {
+						log.Errorf("Error reading from subscription %v, peerId %s", err, peerID)
+					}
+					log.Debugf("Cancelling subscription to topic %s due Subscription.Next error: %v", p2p.TXTopicName, err)
+					sub.Cancel()
+					return
+				}
+				// participation or configuration change, cancel subscription and quit
+				if !wantTXGossip.Load() {
+					log.Debugf("Cancelling subscription to topic %s due to participation change", p2p.TXTopicName)
+					sub.Cancel()
+					return
+				}
 			}
-			n.log.Debugf("Cancelling subscription to topic %s due Subscription.Next error: %v", p2p.TXTopicName, err)
-			sub.Cancel()
-			return
-		}
-		// participation or configuration change, cancel subscription and quit
-		if !n.wantTXGossip.Load() {
-			n.log.Debugf("Cancelling subscription to topic %s due participation change", p2p.TXTopicName)
-			sub.Cancel()
-			return
-		}
+		}(n.ctx, sub, &n.wantTXGossip, n.service.ID(), n.log)
 	}
+	wg.Wait()
 }
 
 type gsPeer struct {

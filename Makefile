@@ -20,12 +20,13 @@ else
 endif
 S3_RELEASE_BUCKET = $$S3_RELEASE_BUCKET
 
-GOLANG_VERSIONS				:= $(shell ./scripts/get_golang_version.sh all)
-GOLANG_VERSION_BUILD		:= $(firstword $(GOLANG_VERSIONS))
-GOLANG_VERSION_SUPPORT		:= $(lastword $(GOLANG_VERSIONS))
-GOLANG_VERSION_BUILD_MAJOR	:= $(shell echo $(GOLANG_VERSION_BUILD) | cut -d'.' -f1,2)
-CURRENT_GO_VERSION			:= $(shell go version | cut -d " " -f 3 | tr -d 'go')
-CURRENT_GO_VERSION_MAJOR	:= $(shell echo $(CURRENT_GO_VERSION) | cut -d'.' -f1,2)
+GOLANG_VERSIONS            := $(shell ./scripts/get_golang_version.sh all)
+GOLANG_VERSION_BUILD       := $(firstword $(GOLANG_VERSIONS))
+GOLANG_VERSION_BUILD_MAJOR := $(shell echo $(GOLANG_VERSION_BUILD) | cut -d'.' -f1,2)
+GOLANG_VERSION_MIN         := $(lastword $(GOLANG_VERSIONS))
+GOLANG_VERSION_SUPPORT     := $(shell echo $(GOLANG_VERSION_MIN) | cut -d'.' -f1,2)
+CURRENT_GO_VERSION         := $(shell go version | cut -d " " -f 3 | tr -d 'go')
+CURRENT_GO_VERSION_MAJOR   := $(shell echo $(CURRENT_GO_VERSION) | cut -d'.' -f1,2)
 
 # If build number already set, use it - to ensure same build number across multiple platforms being built
 BUILDNUMBER      ?= $(shell ./scripts/compute_build_number.sh)
@@ -50,11 +51,6 @@ export GOTESTCOMMAND=gotestsum --format pkgname --jsonfile testresults.json --
 endif
 
 ifeq ($(OS_TYPE), darwin)
-# For Xcode >= 15, set -no_warn_duplicate_libraries linker option
-CLANG_MAJOR_VERSION := $(shell clang --version | grep '^Apple clang version ' | awk '{print $$4}' | cut -d. -f1)
-ifeq ($(shell [ $(CLANG_MAJOR_VERSION) -ge 15 ] && echo true), true)
-EXTLDFLAGS := -Wl,-no_warn_duplicate_libraries
-endif
 # M1 Mac--homebrew install location in /opt/homebrew
 ifeq ($(ARCH), arm64)
 export CPATH=/opt/homebrew/include
@@ -146,6 +142,13 @@ generate: deps
 	PATH=$(GOPATH1)/bin:$$PATH go generate ./...
 
 msgp: $(patsubst %,%/msgp_gen.go,$(MSGP_GENERATE))
+
+api:
+	make -C daemon/algod/api
+
+logic:
+	make -C data/transactions/logic
+
 
 %/msgp_gen.go: deps ALWAYS
 		@set +e; \
@@ -334,7 +337,11 @@ node_exporter: $(GOPATH1)/bin/node_exporter
 $(GOPATH1)/bin/node_exporter:
 	mkdir -p $(GOPATH1)/bin && \
 	cd $(GOPATH1)/bin && \
-	tar -xzvf $(SRCPATH)/installer/external/node_exporter-stable-$(shell ./scripts/ostype.sh)-$(shell uname -m | tr '[:upper:]' '[:lower:]').tar.gz && \
+	if [ -z "$(CROSS_COMPILE_ARCH)" ]; then \
+		tar -xzvf $(SRCPATH)/installer/external/node_exporter-stable-$(shell ./scripts/ostype.sh)-$(shell uname -m | tr '[:upper:]' '[:lower:]').tar.gz; \
+	else \
+		tar -xzvf $(SRCPATH)/installer/external/node_exporter-stable-$(shell ./scripts/ostype.sh)-universal.tar.gz; \
+	fi && \
 	cd -
 
 # deploy

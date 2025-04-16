@@ -30,6 +30,7 @@ import (
 	"path"
 	"regexp"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -282,8 +283,8 @@ const (
 )
 
 type broadcastRequest struct {
-	tags        []Tag
-	data        [][]byte
+	tag         Tag
+	data        []byte
 	except      Peer
 	done        chan struct{}
 	enqueueTime time.Time
@@ -360,32 +361,20 @@ func (wn *WebsocketNetwork) PublicAddress() string {
 // If except is not nil then we will not send it to that neighboring Peer.
 // if wait is true then the call blocks until the packet has actually been sent to all neighbors.
 func (wn *WebsocketNetwork) Broadcast(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except Peer) error {
-	dataArray := make([][]byte, 1)
-	dataArray[0] = data
-	tagArray := make([]protocol.Tag, 1)
-	tagArray[0] = tag
-	return wn.broadcaster.BroadcastArray(ctx, tagArray, dataArray, wait, except)
+	return wn.broadcaster.broadcast(ctx, tag, data, wait, except)
 }
 
-// BroadcastArray sends an array of messages.
-// If except is not nil then we will not send it to that neighboring Peer.
-// if wait is true then the call blocks until the packet has actually been sent to all neighbors.
-// TODO: add `priority` argument so that we don't have to guess it based on tag
-func (wn *msgBroadcaster) BroadcastArray(ctx context.Context, tags []protocol.Tag, data [][]byte, wait bool, except Peer) error {
+func (wn *msgBroadcaster) broadcast(ctx context.Context, tag Tag, data []byte, wait bool, except Peer) error {
 	if wn.config.DisableNetworking {
 		return nil
 	}
-	if len(tags) != len(data) {
-		return errBcastInvalidArray
-	}
-
-	request := broadcastRequest{tags: tags, data: data, enqueueTime: time.Now(), ctx: ctx}
+	request := broadcastRequest{tag: tag, data: data, enqueueTime: time.Now(), ctx: ctx}
 	if except != nil {
 		request.except = except
 	}
 
 	broadcastQueue := wn.broadcastQueueBulk
-	if highPriorityTag(tags) {
+	if highPriorityTag(tag) {
 		broadcastQueue = wn.broadcastQueueHighPrio
 	}
 	if wait {
@@ -426,14 +415,6 @@ func (wn *msgBroadcaster) BroadcastArray(ctx context.Context, tags []protocol.Ta
 func (wn *WebsocketNetwork) Relay(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except Peer) error {
 	if wn.relayMessages {
 		return wn.Broadcast(ctx, tag, data, wait, except)
-	}
-	return nil
-}
-
-// RelayArray relays array of messages
-func (wn *WebsocketNetwork) RelayArray(ctx context.Context, tags []protocol.Tag, data [][]byte, wait bool, except Peer) error {
-	if wn.relayMessages {
-		return wn.broadcaster.BroadcastArray(ctx, tags, data, wait, except)
 	}
 	return nil
 }
@@ -529,7 +510,7 @@ func (wn *WebsocketNetwork) GetPeers(options ...PeerOption) []Peer {
 		case PeersPhonebookRelays:
 			// return copy of phonebook, which probably also contains peers we're connected to, but if it doesn't maybe we shouldn't be making new connections to those peers (because they disappeared from the directory)
 			var addrs []string
-			addrs = wn.phonebook.GetAddresses(1000, phonebook.PhoneBookEntryRelayRole)
+			addrs = wn.phonebook.GetAddresses(1000, phonebook.RelayRole)
 			for _, addr := range addrs {
 				client, _ := wn.GetHTTPClient(addr)
 				peerCore := makePeerCore(wn.ctx, wn, wn.log, wn.handler.readBuffer, addr, client, "" /*origin address*/)
@@ -537,7 +518,7 @@ func (wn *WebsocketNetwork) GetPeers(options ...PeerOption) []Peer {
 			}
 		case PeersPhonebookArchivalNodes:
 			var addrs []string
-			addrs = wn.phonebook.GetAddresses(1000, phonebook.PhoneBookEntryArchivalRole)
+			addrs = wn.phonebook.GetAddresses(1000, phonebook.ArchivalRole)
 			for _, addr := range addrs {
 				client, _ := wn.GetHTTPClient(addr)
 				peerCore := makePeerCore(wn.ctx, wn, wn.log, wn.handler.readBuffer, addr, client, "" /*origin address*/)
@@ -916,19 +897,14 @@ func (wn *WebsocketNetwork) checkProtocolVersionMatch(otherHeaders http.Header) 
 	otherAcceptedVersions := otherHeaders[textproto.CanonicalMIMEHeaderKey(ProtocolAcceptVersionHeader)]
 	for _, otherAcceptedVersion := range otherAcceptedVersions {
 		// do we have a matching version ?
-		for _, supportedProtocolVersion := range wn.supportedProtocolVersions {
-			if supportedProtocolVersion == otherAcceptedVersion {
-				matchingVersion = supportedProtocolVersion
-				return matchingVersion, ""
-			}
+		if slices.Contains(wn.supportedProtocolVersions, otherAcceptedVersion) {
+			return otherAcceptedVersion, ""
 		}
 	}
 
 	otherVersion = otherHeaders.Get(ProtocolVersionHeader)
-	for _, supportedProtocolVersion := range wn.supportedProtocolVersions {
-		if supportedProtocolVersion == otherVersion {
-			return supportedProtocolVersion, otherVersion
-		}
+	if slices.Contains(wn.supportedProtocolVersions, otherVersion) {
+		return otherVersion, otherVersion
 	}
 
 	return "", filterASCII(otherVersion)
@@ -1355,28 +1331,25 @@ func (wn *WebsocketNetwork) getPeersChangeCounter() int32 {
 
 // preparePeerData prepares batches of data for sending.
 // It performs zstd compression for proposal massages if they this is a prio request and has proposal.
-func (wn *msgBroadcaster) preparePeerData(request broadcastRequest, prio bool) ([][]byte, []crypto.Digest) {
-	digests := make([]crypto.Digest, len(request.data))
-	data := make([][]byte, len(request.data))
-	for i, d := range request.data {
-		tbytes := []byte(request.tags[i])
-		mbytes := make([]byte, len(tbytes)+len(d))
-		copy(mbytes, tbytes)
-		copy(mbytes[len(tbytes):], d)
-		data[i] = mbytes
-		if request.tags[i] != protocol.MsgDigestSkipTag && len(d) >= messageFilterSize {
-			digests[i] = crypto.Hash(mbytes)
-		}
+func (wn *msgBroadcaster) preparePeerData(request broadcastRequest, prio bool) ([]byte, crypto.Digest) {
+	tbytes := []byte(request.tag)
+	mbytes := make([]byte, len(tbytes)+len(request.data))
+	copy(mbytes, tbytes)
+	copy(mbytes[len(tbytes):], request.data)
 
-		if prio && request.tags[i] == protocol.ProposalPayloadTag {
-			compressed, logMsg := zstdCompressMsg(tbytes, d)
-			if len(logMsg) > 0 {
-				wn.log.Warn(logMsg)
-			}
-			data[i] = compressed
-		}
+	var digest crypto.Digest
+	if request.tag != protocol.MsgDigestSkipTag && len(request.data) >= messageFilterSize {
+		digest = crypto.Hash(mbytes)
 	}
-	return data, digests
+
+	if prio && request.tag == protocol.ProposalPayloadTag {
+		compressed, logMsg := zstdCompressMsg(tbytes, request.data)
+		if len(logMsg) > 0 {
+			wn.log.Warn(logMsg)
+		}
+		mbytes = compressed
+	}
+	return mbytes, digest
 }
 
 // prio is set if the broadcast is a high-priority broadcast.
@@ -1393,7 +1366,7 @@ func (wn *msgBroadcaster) innerBroadcast(request broadcastRequest, prio bool, pe
 	}
 
 	start := time.Now()
-	data, digests := wn.preparePeerData(request, prio)
+	data, digest := wn.preparePeerData(request, prio)
 
 	// first send to all the easy outbound peers who don't block, get them started.
 	sentMessageCount := 0
@@ -1404,7 +1377,7 @@ func (wn *msgBroadcaster) innerBroadcast(request broadcastRequest, prio bool, pe
 		if Peer(peer) == request.except {
 			continue
 		}
-		ok := peer.writeNonBlockMsgs(request.ctx, data, prio, digests, request.enqueueTime)
+		ok := peer.writeNonBlock(request.ctx, data, prio, digest, request.enqueueTime)
 		if ok {
 			sentMessageCount++
 			continue
@@ -1562,12 +1535,12 @@ func (wn *WebsocketNetwork) refreshRelayArchivePhonebookAddresses() {
 func (wn *WebsocketNetwork) updatePhonebookAddresses(relayAddrs []string, archiveAddrs []string) {
 	if len(relayAddrs) > 0 {
 		wn.log.Debugf("got %d relay dns addrs, %#v", len(relayAddrs), relayAddrs[:min(5, len(relayAddrs))])
-		wn.phonebook.ReplacePeerList(relayAddrs, string(wn.NetworkID), phonebook.PhoneBookEntryRelayRole)
+		wn.phonebook.ReplacePeerList(relayAddrs, string(wn.NetworkID), phonebook.RelayRole)
 	} else {
 		wn.log.Infof("got no relay DNS addrs for network %s", wn.NetworkID)
 	}
 	if len(archiveAddrs) > 0 {
-		wn.phonebook.ReplacePeerList(archiveAddrs, string(wn.NetworkID), phonebook.PhoneBookEntryArchivalRole)
+		wn.phonebook.ReplacePeerList(archiveAddrs, string(wn.NetworkID), phonebook.ArchivalRole)
 	} else {
 		wn.log.Infof("got no archive DNS addrs for network %s", wn.NetworkID)
 	}
@@ -1586,7 +1559,7 @@ func (wn *WebsocketNetwork) checkNewConnectionsNeeded() bool {
 		return false
 	}
 	// get more than we need so that we can ignore duplicates
-	newAddrs := wn.phonebook.GetAddresses(desired+numOutgoingTotal, phonebook.PhoneBookEntryRelayRole)
+	newAddrs := wn.phonebook.GetAddresses(desired+numOutgoingTotal, phonebook.RelayRole)
 	for _, na := range newAddrs {
 		if na == wn.config.PublicAddress {
 			// filter out self-public address, so we won't try to connect to ourselves.
@@ -2237,7 +2210,7 @@ func NewWebsocketNetwork(log logging.Logger, config config.Local, phonebookAddre
 			addresses = append(addresses, a)
 		}
 	}
-	pb.AddPersistentPeers(addresses, string(networkID), phonebook.PhoneBookEntryRelayRole)
+	pb.AddPersistentPeers(addresses, string(networkID), phonebook.RelayRole)
 	wn = &WebsocketNetwork{
 		log:               log,
 		config:            config,
