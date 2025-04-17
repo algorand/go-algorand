@@ -95,6 +95,17 @@ func (p *parser) readString() ([]byte, error) {
 	return s, nil
 }
 
+func (p *parser) expectString(expected string) error {
+	s, err := p.readString()
+	if err != nil {
+		return err
+	}
+	if string(s) != expected {
+		return fmt.Errorf("expected string %q, got %q", expected, s)
+	}
+	return nil
+}
+
 func (p *parser) readBin80() ([80]byte, error) {
 	var data [80]byte
 	if err := p.ensureBytes(2); err != nil {

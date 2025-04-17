@@ -170,7 +170,7 @@ func TestParseDynamicVaruintError(t *testing.T) {
 	for i, v := range []agreement.UnauthenticatedVote{v1, v2, v3, v4} {
 		t.Logf("test %d", i)
 		msgpbuf := protocol.Encode(&v)
-		w := &mockCompressWriter{failDynamicVaruint: true}
+		w := &mockCompressWriter{failVaruint: true}
 		err := parseVote(msgpbuf, w)
 		require.ErrorContains(t, err, "mockCompressWriter.writeDynamicVaruint")
 	}
@@ -178,23 +178,23 @@ func TestParseDynamicVaruintError(t *testing.T) {
 
 // mockCompressWriter implements compressWriter for testing
 type mockCompressWriter struct {
-	failDynamicVaruint bool
-	writes             []any
+	failVaruint bool
+	writes      []any
 }
 
 func (m *mockCompressWriter) writeStatic(idx uint8) { m.writes = append(m.writes, idx) }
-func (m *mockCompressWriter) writeLiteralBin64(idx uint8, val [64]byte) {
+func (m *mockCompressWriter) writeBin64(idx uint8, val [64]byte) {
 	m.writes = append(m.writes, val)
 }
-func (m *mockCompressWriter) writeLiteralBin80(idx uint8, val [80]byte) {
+func (m *mockCompressWriter) writeBin80(idx uint8, val [80]byte) {
 	m.writes = append(m.writes, val)
 }
-func (m *mockCompressWriter) writeDynamicBin32(idx uint8, val [32]byte) {
+func (m *mockCompressWriter) writeBin32(idx uint8, val [32]byte) {
 	m.writes = append(m.writes, val)
 }
-func (m *mockCompressWriter) writeDynamicVaruint(idx uint8, valBytes []byte) error {
-	if m.failDynamicVaruint {
-		return fmt.Errorf("mockCompressWriter.writeDynamicVaruint")
+func (m *mockCompressWriter) writeVaruint(idx uint8, valBytes []byte) error {
+	if m.failVaruint {
+		return fmt.Errorf("mockCompressWriter.writeVaruint")
 	}
 	m.writes = append(m.writes, valBytes)
 	return nil

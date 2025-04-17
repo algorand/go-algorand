@@ -67,7 +67,6 @@ type fieldData struct {
 	SubStructName string
 
 	ArrayLen    int
-	IsLiteral   bool
 	AlwaysEmpty bool
 
 	IsUint64Alias bool
@@ -129,19 +128,18 @@ const parseFuncFooter = `
 
 // parseFuncTemplate decodes a struct encoded as a map.
 const parseFuncTemplate = `
+    { // Parse {{.TypeName}}
 	cnt, err := p.readFixMap()
 	if err != nil {
 		return fmt.Errorf("reading map for {{.TypeName}}: %w", err)
 	}
-{{if gt .FixedSize 0}}
-	// Fixed size struct with {{.FixedSize}} fields
+{{- if gt .FixedSize 0}}
+	// Assert {{.TypeName}} struct has {{.FixedSize}} fields
 	if cnt != {{.FixedSize}} {
 		return fmt.Errorf("expected fixed map size {{.FixedSize}} for {{.TypeName}}, got %d", cnt)
 	}
 	c.writeStatic(staticIdxMapMarker{{.FixedSize}})
-
-	for range {{.FixedSize}} {
-{{else}}
+{{- else}}
 	if cnt < 1 || cnt > {{.MaxFieldCount}} {
 		return fmt.Errorf("expected fixmap size for {{.TypeName}} 1 <= cnt <= {{.MaxFieldCount}}, got %d", cnt)
 	}
@@ -149,48 +147,61 @@ const parseFuncTemplate = `
 
 	for range cnt {
 {{- end}}
+{{- if eq .FixedSize 0 }}
 		key, err := p.readString()
 		if err != nil {
 			return fmt.Errorf("reading key for {{.TypeName}}: %w", err)
 		}
 
 		switch string(key) {
+{{- end }}
 {{- range $fd := .Fields}}
+{{- if gt $.FixedSize 0 }}
+
+         // Required field for {{$.TypeName}}: {{$fd.CodecName}}
+         if err := p.expectString("{{$fd.CodecName}}"); err != nil {
+			 return err
+		 }
+{{- else }}
 		case "{{$fd.CodecName}}":
+{{- end }}
   {{- if $fd.IsSubStruct}}
 			c.writeStatic({{$fd.FieldNameConst}})
-			{{renderParseFunction $fd.SubStructName}}
+			{{ renderParseFunction $fd.SubStructName }}
   {{- else if $fd.IsUint64Alias}}
-			valBytes, err := p.readUintBytes()
+			val, err := p.readUintBytes()
 			if err != nil {
 				return fmt.Errorf("reading {{$fd.CodecName}}: %w", err)
 			}
-			if err := c.writeDynamicVaruint({{$fd.FieldNameConst}}, valBytes); err != nil {
+			if err := c.writeVaruint({{$fd.FieldNameConst}}, val); err != nil {
 				return fmt.Errorf("writing {{$fd.CodecName}}: %w", err)
 			}
   {{- else if gt $fd.ArrayLen 0}}
-			val, err := p.readBin{{$fd.ArrayLen}}()
-			if err != nil {
+			if val, err := p.readBin{{$fd.ArrayLen}}(); err != nil {
 				return fmt.Errorf("reading {{$fd.CodecName}}: %w", err)
-			}
+			} else {
     {{- if $fd.AlwaysEmpty}}
-            if val != [{{$fd.ArrayLen}}]byte{} {
+            if val != [{{$fd.ArrayLen}}]byte{} { // must always be empty
                 return fmt.Errorf("expected empty array for {{$fd.CodecName}}, got %v", val)
             }
-	{{- else if $fd.IsLiteral}}
-			c.writeLiteralBin{{$fd.ArrayLen}}({{$fd.FieldNameConst}}, val)
 	{{- else}}
-			c.writeDynamicBin{{$fd.ArrayLen}}({{$fd.FieldNameConst}}, val)
+			c.writeBin{{$fd.ArrayLen}}({{$fd.FieldNameConst}}, val)
 	{{- end}}
+            }
   {{- else}}
 			// this means the struct has a field not supported by this code generator
 			return fmt.Errorf("unhandled field type for {{$fd.CodecName}} in {{$.TypeName}}")
   {{- end}}
 {{- end}}
+{{- if eq .FixedSize 0 }}
 		default:
 			return fmt.Errorf("unexpected field in {{.TypeName}}: %q", key)
+{{- end }}
+{{- if eq .FixedSize 0 }}
 		}
 	}
+{{- end }}
+    }
 `
 
 func main() {
@@ -268,6 +279,7 @@ import (
 	if err != nil {
 		return fmt.Errorf("formatting parser: %w", err)
 	}
+	//	formatted = []byte(hdr + importFmt + parseFuncHeader + parseCode + parseFuncFooter)
 	if err := os.WriteFile("parse.go", formatted, 0644); err != nil {
 		return err
 	}
@@ -324,11 +336,9 @@ func (g *codeGenerator) analyzeType(t reflect.Type) error {
 			CodecName:      getCodecTagName(f),
 			FieldNameConst: g.getOrCreateStaticIndexForField(getCodecTagName(f)),
 		}
-		// check for list of vpack tags like `vpack:"literal,alwaysempty"`
+		// check for list of vpack tags
 		for _, v := range strings.Split(f.Tag.Get("vpack"), ",") {
 			switch v {
-			case "literal":
-				fd.IsLiteral = true
 			case "alwaysempty":
 				fd.AlwaysEmpty = true
 			}

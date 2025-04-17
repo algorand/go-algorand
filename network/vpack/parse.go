@@ -9,64 +9,56 @@ import (
 func parseVote(data []byte, c compressWriter) error {
 	p := newParser(data)
 
-	cnt, err := p.readFixMap()
-	if err != nil {
-		return fmt.Errorf("reading map for unauthenticatedVote: %w", err)
-	}
-
-	if cnt != 3 {
-		return fmt.Errorf("expected fixed map size 3 for unauthenticatedVote, got %d", cnt)
-	}
-	c.writeStatic(staticIdxMapMarker3)
-
-	for range 3 {
-
-		key, err := p.readString()
+	{ // Parse unauthenticatedVote
+		cnt, err := p.readFixMap()
 		if err != nil {
-			return fmt.Errorf("reading key for unauthenticatedVote: %w", err)
+			return fmt.Errorf("reading map for unauthenticatedVote: %w", err)
 		}
+		// Assert unauthenticatedVote struct has 3 fields
+		if cnt != 3 {
+			return fmt.Errorf("expected fixed map size 3 for unauthenticatedVote, got %d", cnt)
+		}
+		c.writeStatic(staticIdxMapMarker3)
 
-		switch string(key) {
-		case "cred":
-			c.writeStatic(staticIdxCredField)
+		// Required field for unauthenticatedVote: cred
+		if err := p.expectString("cred"); err != nil {
+			return err
+		}
+		c.writeStatic(staticIdxCredField)
 
+		{ // Parse UnauthenticatedCredential
 			cnt, err := p.readFixMap()
 			if err != nil {
 				return fmt.Errorf("reading map for UnauthenticatedCredential: %w", err)
 			}
-
+			// Assert UnauthenticatedCredential struct has 1 fields
 			if cnt != 1 {
 				return fmt.Errorf("expected fixed map size 1 for UnauthenticatedCredential, got %d", cnt)
 			}
 			c.writeStatic(staticIdxMapMarker1)
 
-			for range 1 {
-
-				key, err := p.readString()
-				if err != nil {
-					return fmt.Errorf("reading key for UnauthenticatedCredential: %w", err)
-				}
-
-				switch string(key) {
-				case "pf":
-					val, err := p.readBin80()
-					if err != nil {
-						return fmt.Errorf("reading pf: %w", err)
-					}
-					c.writeLiteralBin80(staticIdxPfField, val)
-				default:
-					return fmt.Errorf("unexpected field in UnauthenticatedCredential: %q", key)
-				}
+			// Required field for UnauthenticatedCredential: pf
+			if err := p.expectString("pf"); err != nil {
+				return err
 			}
+			if val, err := p.readBin80(); err != nil {
+				return fmt.Errorf("reading pf: %w", err)
+			} else {
+				c.writeBin80(staticIdxPfField, val)
+			}
+		}
 
-		case "r":
-			c.writeStatic(staticIdxRField)
+		// Required field for unauthenticatedVote: r
+		if err := p.expectString("r"); err != nil {
+			return err
+		}
+		c.writeStatic(staticIdxRField)
 
+		{ // Parse rawVote
 			cnt, err := p.readFixMap()
 			if err != nil {
 				return fmt.Errorf("reading map for rawVote: %w", err)
 			}
-
 			if cnt < 1 || cnt > 5 {
 				return fmt.Errorf("expected fixmap size for rawVote 1 <= cnt <= 5, got %d", cnt)
 			}
@@ -80,158 +72,173 @@ func parseVote(data []byte, c compressWriter) error {
 
 				switch string(key) {
 				case "per":
-					valBytes, err := p.readUintBytes()
+					val, err := p.readUintBytes()
 					if err != nil {
 						return fmt.Errorf("reading per: %w", err)
 					}
-					if err := c.writeDynamicVaruint(staticIdxPerField, valBytes); err != nil {
+					if err := c.writeVaruint(staticIdxPerField, val); err != nil {
 						return fmt.Errorf("writing per: %w", err)
 					}
 				case "prop":
 					c.writeStatic(staticIdxPropField)
 
-					cnt, err := p.readFixMap()
-					if err != nil {
-						return fmt.Errorf("reading map for proposalValue: %w", err)
-					}
-
-					if cnt < 1 || cnt > 4 {
-						return fmt.Errorf("expected fixmap size for proposalValue 1 <= cnt <= 4, got %d", cnt)
-					}
-					c.writeStatic(staticIdxMapMarker0 + cnt)
-
-					for range cnt {
-						key, err := p.readString()
+					{ // Parse proposalValue
+						cnt, err := p.readFixMap()
 						if err != nil {
-							return fmt.Errorf("reading key for proposalValue: %w", err)
+							return fmt.Errorf("reading map for proposalValue: %w", err)
 						}
+						if cnt < 1 || cnt > 4 {
+							return fmt.Errorf("expected fixmap size for proposalValue 1 <= cnt <= 4, got %d", cnt)
+						}
+						c.writeStatic(staticIdxMapMarker0 + cnt)
 
-						switch string(key) {
-						case "dig":
-							val, err := p.readBin32()
+						for range cnt {
+							key, err := p.readString()
 							if err != nil {
-								return fmt.Errorf("reading dig: %w", err)
+								return fmt.Errorf("reading key for proposalValue: %w", err)
 							}
-							c.writeDynamicBin32(staticIdxDigField, val)
-						case "encdig":
-							val, err := p.readBin32()
-							if err != nil {
-								return fmt.Errorf("reading encdig: %w", err)
+
+							switch string(key) {
+							case "dig":
+								if val, err := p.readBin32(); err != nil {
+									return fmt.Errorf("reading dig: %w", err)
+								} else {
+									c.writeBin32(staticIdxDigField, val)
+								}
+							case "encdig":
+								if val, err := p.readBin32(); err != nil {
+									return fmt.Errorf("reading encdig: %w", err)
+								} else {
+									c.writeBin32(staticIdxEncdigField, val)
+								}
+							case "oper":
+								val, err := p.readUintBytes()
+								if err != nil {
+									return fmt.Errorf("reading oper: %w", err)
+								}
+								if err := c.writeVaruint(staticIdxOperField, val); err != nil {
+									return fmt.Errorf("writing oper: %w", err)
+								}
+							case "oprop":
+								if val, err := p.readBin32(); err != nil {
+									return fmt.Errorf("reading oprop: %w", err)
+								} else {
+									c.writeBin32(staticIdxOpropField, val)
+								}
+							default:
+								return fmt.Errorf("unexpected field in proposalValue: %q", key)
 							}
-							c.writeDynamicBin32(staticIdxEncdigField, val)
-						case "oper":
-							valBytes, err := p.readUintBytes()
-							if err != nil {
-								return fmt.Errorf("reading oper: %w", err)
-							}
-							if err := c.writeDynamicVaruint(staticIdxOperField, valBytes); err != nil {
-								return fmt.Errorf("writing oper: %w", err)
-							}
-						case "oprop":
-							val, err := p.readBin32()
-							if err != nil {
-								return fmt.Errorf("reading oprop: %w", err)
-							}
-							c.writeDynamicBin32(staticIdxOpropField, val)
-						default:
-							return fmt.Errorf("unexpected field in proposalValue: %q", key)
 						}
 					}
 
 				case "rnd":
-					valBytes, err := p.readUintBytes()
+					val, err := p.readUintBytes()
 					if err != nil {
 						return fmt.Errorf("reading rnd: %w", err)
 					}
-					if err := c.writeDynamicVaruint(staticIdxRndField, valBytes); err != nil {
+					if err := c.writeVaruint(staticIdxRndField, val); err != nil {
 						return fmt.Errorf("writing rnd: %w", err)
 					}
 				case "snd":
-					val, err := p.readBin32()
-					if err != nil {
+					if val, err := p.readBin32(); err != nil {
 						return fmt.Errorf("reading snd: %w", err)
+					} else {
+						c.writeBin32(staticIdxSndField, val)
 					}
-					c.writeDynamicBin32(staticIdxSndField, val)
 				case "step":
-					valBytes, err := p.readUintBytes()
+					val, err := p.readUintBytes()
 					if err != nil {
 						return fmt.Errorf("reading step: %w", err)
 					}
-					if err := c.writeDynamicVaruint(staticIdxStepField, valBytes); err != nil {
+					if err := c.writeVaruint(staticIdxStepField, val); err != nil {
 						return fmt.Errorf("writing step: %w", err)
 					}
 				default:
 					return fmt.Errorf("unexpected field in rawVote: %q", key)
 				}
 			}
+		}
 
-		case "sig":
-			c.writeStatic(staticIdxSigField)
+		// Required field for unauthenticatedVote: sig
+		if err := p.expectString("sig"); err != nil {
+			return err
+		}
+		c.writeStatic(staticIdxSigField)
 
+		{ // Parse OneTimeSignature
 			cnt, err := p.readFixMap()
 			if err != nil {
 				return fmt.Errorf("reading map for OneTimeSignature: %w", err)
 			}
-
+			// Assert OneTimeSignature struct has 6 fields
 			if cnt != 6 {
 				return fmt.Errorf("expected fixed map size 6 for OneTimeSignature, got %d", cnt)
 			}
 			c.writeStatic(staticIdxMapMarker6)
 
-			for range 6 {
+			// Required field for OneTimeSignature: p
+			if err := p.expectString("p"); err != nil {
+				return err
+			}
+			if val, err := p.readBin32(); err != nil {
+				return fmt.Errorf("reading p: %w", err)
+			} else {
+				c.writeBin32(staticIdxPField, val)
+			}
 
-				key, err := p.readString()
-				if err != nil {
-					return fmt.Errorf("reading key for OneTimeSignature: %w", err)
-				}
+			// Required field for OneTimeSignature: p1s
+			if err := p.expectString("p1s"); err != nil {
+				return err
+			}
+			if val, err := p.readBin64(); err != nil {
+				return fmt.Errorf("reading p1s: %w", err)
+			} else {
+				c.writeBin64(staticIdxP1sField, val)
+			}
 
-				switch string(key) {
-				case "p":
-					val, err := p.readBin32()
-					if err != nil {
-						return fmt.Errorf("reading p: %w", err)
-					}
-					c.writeDynamicBin32(staticIdxPField, val)
-				case "p1s":
-					val, err := p.readBin64()
-					if err != nil {
-						return fmt.Errorf("reading p1s: %w", err)
-					}
-					c.writeLiteralBin64(staticIdxP1sField, val)
-				case "p2":
-					val, err := p.readBin32()
-					if err != nil {
-						return fmt.Errorf("reading p2: %w", err)
-					}
-					c.writeDynamicBin32(staticIdxP2Field, val)
-				case "p2s":
-					val, err := p.readBin64()
-					if err != nil {
-						return fmt.Errorf("reading p2s: %w", err)
-					}
-					c.writeLiteralBin64(staticIdxP2sField, val)
-				case "ps":
-					val, err := p.readBin64()
-					if err != nil {
-						return fmt.Errorf("reading ps: %w", err)
-					}
-					if val != [64]byte{} {
-						return fmt.Errorf("expected empty array for ps, got %v", val)
-					}
-				case "s":
-					val, err := p.readBin64()
-					if err != nil {
-						return fmt.Errorf("reading s: %w", err)
-					}
-					c.writeLiteralBin64(staticIdxSField, val)
-				default:
-					return fmt.Errorf("unexpected field in OneTimeSignature: %q", key)
+			// Required field for OneTimeSignature: p2
+			if err := p.expectString("p2"); err != nil {
+				return err
+			}
+			if val, err := p.readBin32(); err != nil {
+				return fmt.Errorf("reading p2: %w", err)
+			} else {
+				c.writeBin32(staticIdxP2Field, val)
+			}
+
+			// Required field for OneTimeSignature: p2s
+			if err := p.expectString("p2s"); err != nil {
+				return err
+			}
+			if val, err := p.readBin64(); err != nil {
+				return fmt.Errorf("reading p2s: %w", err)
+			} else {
+				c.writeBin64(staticIdxP2sField, val)
+			}
+
+			// Required field for OneTimeSignature: ps
+			if err := p.expectString("ps"); err != nil {
+				return err
+			}
+			if val, err := p.readBin64(); err != nil {
+				return fmt.Errorf("reading ps: %w", err)
+			} else {
+				if val != [64]byte{} { // must always be empty
+					return fmt.Errorf("expected empty array for ps, got %v", val)
 				}
 			}
 
-		default:
-			return fmt.Errorf("unexpected field in unauthenticatedVote: %q", key)
+			// Required field for OneTimeSignature: s
+			if err := p.expectString("s"); err != nil {
+				return err
+			}
+			if val, err := p.readBin64(); err != nil {
+				return fmt.Errorf("reading s: %w", err)
+			} else {
+				c.writeBin64(staticIdxSField, val)
+			}
 		}
+
 	}
 
 	// Check for trailing bytes
