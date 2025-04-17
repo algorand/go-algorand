@@ -213,6 +213,9 @@ const (
 	// NumClearStateProgramPages = len(ClearStateProgramPages) // 4096
 	NumClearStateProgramPages
 
+	// RejectVersion uint64
+	RejectVersion
+
 	invalidTxnField // compile-time constant for number of fields
 )
 
@@ -344,7 +347,7 @@ var txnFieldSpecs = [...]txnFieldSpec{
 	{LastLog, StackBytes, false, 6, 0, true, "The last message emitted. Empty bytes if none were emitted"},
 
 	// Not an effect. Just added after the effects fields.
-	{StateProofPK, StackBytes, false, 6, 6, false, "64 byte state proof public key"},
+	{StateProofPK, StackBytes64, false, 6, 6, false, "State proof public key"},
 
 	// Pseudo-fields to aid access to large programs (bigger than TEAL values)
 	// reading in a txn seems not *super* useful, but setting in `itxn` is critical to inner app factories
@@ -352,6 +355,8 @@ var txnFieldSpecs = [...]txnFieldSpec{
 	{NumApprovalProgramPages, StackUint64, false, 7, 0, false, "Number of Approval Program pages"},
 	{ClearStateProgramPages, StackBytes, true, 7, 7, false, "ClearState Program as an array of pages"},
 	{NumClearStateProgramPages, StackUint64, false, 7, 0, false, "Number of ClearState Program pages"},
+
+	{RejectVersion, StackUint64, false, 12, 12, false, "Application version for which the txn must reject"},
 }
 
 // TxnFields contains info on the arguments to the txn* family of opcodes
@@ -1326,6 +1331,9 @@ const (
 	// AppAddress is also not *in* the Params, but can be derived
 	AppAddress
 
+	// AppVersion begins at 0 and increasing each time either program changes
+	AppVersion
+
 	invalidAppParamsField // compile-time constant for number of fields
 )
 
@@ -1364,6 +1372,7 @@ var appParamsFieldSpecs = [...]appParamsFieldSpec{
 	{AppExtraProgramPages, StackUint64, 5, "Number of Extra Program Pages of code space"},
 	{AppCreator, StackAddress, 5, "Creator address"},
 	{AppAddress, StackAddress, 5, "Address for which this application has authority"},
+	{AppVersion, StackUint64, 12, "Version of the app, incremented each time the approval or clear program changes"},
 }
 
 func appParamsFieldSpecByField(f AppParamsField) (appParamsFieldSpec, bool) {

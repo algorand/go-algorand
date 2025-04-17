@@ -1069,13 +1069,13 @@ func testAppAccountDeltaIndicesCompatibility(t *testing.T, source string, accoun
 	a.Equal(blk.Payset[0].ApplyData.EvalDelta.LocalDeltas[accountIdx]["lk1"].Bytes, "local1")
 }
 
-// TestParitalDeltaWrites checks account data consistency when app global state or app local state
+// TestPartialDeltaWrites checks account data consistency when app global state or app local state
 // accessed in a block where app creator and local user do not have any state changes expect app storage
 // Block 1: create app
 // Block 2: opt in
 // Block 3: write to global state (goes into creator's AD), write to local state of txn.Account[1] (not a txn sender)
 // In this case StateDelta will not have base record modification, only storage
-func TestParitalDeltaWrites(t *testing.T) {
+func TestPartialDeltaWrites(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	source := `#pragma version 2

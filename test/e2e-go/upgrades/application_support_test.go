@@ -233,7 +233,7 @@ int 1
 	a.Equal(uint64(1), value.Uint)
 
 	// call the app
-	tx, err = client.MakeUnsignedAppOptInTx(uint64(appIdx), nil, nil, nil, nil, nil)
+	tx, err = client.MakeUnsignedAppOptInTx(uint64(appIdx), nil, nil, nil, nil, nil, 0)
 	a.NoError(err)
 	tx, err = client.FillUnsignedTxTemplate(user, 0, 0, fee, tx)
 	a.NoError(err)
@@ -484,7 +484,7 @@ int 1
 	a.Equal(uint64(1), value.Uint)
 
 	// call the app
-	tx, err = client.MakeUnsignedAppOptInTx(uint64(appIdx), nil, nil, nil, nil, nil)
+	tx, err = client.MakeUnsignedAppOptInTx(uint64(appIdx), nil, nil, nil, nil, nil, 0)
 	a.NoError(err)
 	tx, err = client.FillUnsignedTxTemplate(user, 0, 0, fee, tx)
 	a.NoError(err)

@@ -1336,9 +1336,30 @@ int 5000; app_params_get AppLocalNumByteSlice;  assert; int 2; ==; assert
 int 5000; app_params_get AppLocalNumUint;       assert; int 3; ==; assert
 int 1
 `)
+		if v >= 12 {
+			// Version starts at 0
+			test(`int 5000; app_params_get AppVersion; assert; !`)
+		}
 
 		// Call it (default OnComplete is NoOp)
 		test(call)
+
+		update := `
+itxn_begin
+int appl;    itxn_field TypeEnum
+int 5000;    itxn_field ApplicationID
+` + approve + `; itxn_field ApprovalProgram
+` + approve + `; itxn_field ClearStateProgram
+int UpdateApplication; itxn_field OnCompletion
+itxn_submit
+int 1
+`
+		test(update)
+
+		if v >= 12 {
+			// Version starts at 0
+			test(`int 5000; app_params_get AppVersion; assert; int 1; ==`)
+		}
 
 		test(`
 itxn_begin
