@@ -73,7 +73,7 @@ function install_windows_shellcheck() {
 
 if [ "${OS}" = "linux" ]; then
     if ! which sudo >/dev/null; then
-        "$SCRIPTPATH/install_linux_deps.sh"
+        DEBIAN_FRONTEND="$DEBIAN_FRONTEND" "$SCRIPTPATH/install_linux_deps.sh"
     else
         sudo "$SCRIPTPATH/install_linux_deps.sh"
     fi
