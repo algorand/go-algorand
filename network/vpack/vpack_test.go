@@ -17,6 +17,7 @@
 package vpack
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"reflect"
@@ -43,10 +44,6 @@ func checkVoteValid(vote *agreement.UnauthenticatedVote) (ok bool, expectedError
 	if !vote.Sig.PKSigOld.MsgIsZero() {
 		return false, "expected empty array for ps"
 	}
-	if vote.Sig.PK1Sig.MsgIsZero() || vote.Sig.PK2Sig.MsgIsZero() || vote.Sig.Sig.MsgIsZero() ||
-		vote.Sig.PK.MsgIsZero() || vote.Sig.PK2.MsgIsZero() {
-		return false, "does not contain all sig fields"
-	}
 	return true, ""
 }
 
@@ -55,7 +52,7 @@ func TestEncodingTest(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	var errorCount int
-	const iters = 10000
+	const iters = 10000 //10000
 	for range iters {
 		v0obj, err := protocol.RandomizeObject(&agreement.UnauthenticatedVote{},
 			protocol.RandomizeObjectWithZeroesEveryN(10),
@@ -77,7 +74,7 @@ func TestEncodingTest(t *testing.T) {
 		encBuf, err := enc.CompressVote(nil, msgpBuf)
 		if expectError != "" {
 			// skip expected errors
-			require.ErrorContains(t, err, expectError)
+			require.ErrorContains(t, err, expectError, "expected error: %s", expectError)
 			require.Nil(t, encBuf)
 			errorCount++
 			continue
@@ -87,7 +84,8 @@ func TestEncodingTest(t *testing.T) {
 		// decompress and compare to original
 		dec := NewBitmaskDecoder()
 		decMsgpBuf, err := dec.DecompressVote(nil, encBuf)
-		require.NoError(t, err)
+		jsonBuf, _ := json.MarshalIndent(v0, "", "  ")
+		require.NoError(t, err, "got vote %s", jsonBuf)
 		require.Equal(t, msgpBuf, decMsgpBuf) // msgp encoding matches
 		var v1 agreement.UnauthenticatedVote
 		err = protocol.Decode(decMsgpBuf, &v1)
@@ -353,67 +351,4 @@ func FuzzDecompressStatic(f *testing.F) {
 	f.Fuzz(func(t *testing.T, input []byte) {
 		_, _ = decompressStatic(nil, input)
 	})
-}
-
-// TestWriteDynamicVaruint tests the writeDynamicVaruint function in StaticEncoder
-// to ensure all code paths are covered
-func TestWriteDynamicVaruint(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	encoder := NewBitmaskEncoder()
-
-	tests := []struct {
-		name      string
-		input     []byte // Input varuint bytes
-		errorText string // Expected error text if any (empty means no error expected)
-	}{
-		{name: "Valid uint8", input: []byte{uint8tag, 0x42}},                                             // uint8 with value 0x42
-		{name: "Valid uint16", input: []byte{uint16tag, 0x12, 0x34}},                                     // uint16 with value 0x1234
-		{name: "Valid uint32", input: []byte{uint32tag, 0x12, 0x34, 0x56, 0x78}},                         // uint32 with value 0x12345678
-		{name: "Valid uint64", input: []byte{uint64tag, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88}}, // uint64 with value
-		{name: "Valid fixint", input: []byte{0x01}},                                                      // fixint with value 1
-		{
-			name:      "Invalid fixint length",
-			input:     []byte{0x01, 0x02}, // fixint shouldn't have more than 1 byte
-			errorText: "unexpected dynamic fixint length",
-		},
-		{
-			name:      "Invalid varuint marker",
-			input:     []byte{0xFF}, // Invalid marker
-			errorText: "unexpected dynamic varuint marker",
-		},
-		{
-			name:      "Wrong uint8 length",
-			input:     []byte{uint8tag, 0x42, 0x43}, // Should be exactly 2 bytes
-			errorText: "unexpected dynamic varuint length",
-		},
-		{
-			name:      "Wrong uint16 length",
-			input:     []byte{uint16tag, 0x12}, // Should be exactly 3 bytes
-			errorText: "unexpected dynamic varuint length",
-		},
-		{
-			name:      "Wrong uint32 length",
-			input:     []byte{uint32tag, 0x12, 0x34, 0x56}, // Should be exactly 5 bytes
-			errorText: "unexpected dynamic varuint length",
-		},
-		{
-			name:      "Wrong uint64 length",
-			input:     []byte{uint64tag, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77}, // Should be exactly 9 bytes
-			errorText: "unexpected dynamic varuint length",
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			err := encoder.writeDynamicVaruint(0, tc.input)
-
-			if tc.errorText != "" {
-				require.Error(t, err)
-				require.Contains(t, err.Error(), tc.errorText)
-			} else {
-				require.NoError(t, err)
-			}
-		})
-	}
 }

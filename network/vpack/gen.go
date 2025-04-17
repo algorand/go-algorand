@@ -102,10 +102,6 @@ const (
 {{- range .Items}}
 	{{.ConstName}} uint8 = 0x{{printf "%02x" .Index}}
 {{- end}}
-
-	// Constants for static index range bounds
-	staticIdxStart uint8 = 0x{{printf "%02x" .StaticIdxStart}}
-	staticIdxEnd uint8 = 0x{{printf "%02x" .StaticIdxEnd}}
 )
 
 var staticTable = createGeneratedStaticTable()
@@ -138,12 +134,10 @@ const parseFuncTemplate = `
 	if cnt != {{.FixedSize}} {
 		return fmt.Errorf("expected fixed map size {{.FixedSize}} for {{.TypeName}}, got %d", cnt)
 	}
-	c.writeStatic(staticIdxMapMarker{{.FixedSize}})
 {{- else}}
 	if cnt < 1 || cnt > {{.MaxFieldCount}} {
 		return fmt.Errorf("expected fixmap size for {{.TypeName}} 1 <= cnt <= {{.MaxFieldCount}}, got %d", cnt)
 	}
-	c.writeStatic(staticIdxMapMarker0+cnt)
 
 	for range cnt {
 {{- end}}
@@ -166,7 +160,6 @@ const parseFuncTemplate = `
 		case "{{$fd.CodecName}}":
 {{- end }}
   {{- if $fd.IsSubStruct}}
-			c.writeStatic({{$fd.FieldNameConst}})
 			{{ renderParseFunction $fd.SubStructName }}
   {{- else if $fd.IsUint64Alias}}
 			val, err := p.readUintBytes()
@@ -364,7 +357,7 @@ func (g *codeGenerator) analyzeType(t reflect.Type) error {
 
 // getOrCreateMapMarkerIndex ensures we have e.g. "staticIdxMapMarker3" => 0x83
 func (g *codeGenerator) getOrCreateMapMarkerIndex(n int) {
-	cn := fmt.Sprintf("staticIdxMapMarker%d", n)
+	cn := fmt.Sprintf("msgpMapMarker%d", n)
 	if g.findItemIndexByConstName(cn) >= 0 {
 		return
 	}
@@ -384,7 +377,7 @@ func (g *codeGenerator) getOrCreateMapMarkerIndex(n int) {
 
 // getOrCreateStaticIndexForField creates a fixstr entry for a field name: e.g. 0xa3,"snd"
 func (g *codeGenerator) getOrCreateStaticIndexForField(fieldName string) string {
-	cn := "staticIdx" + strings.Title(fieldName) + "Field"
+	cn := "msgp" + strings.Title(fieldName) + "Field"
 	idxNum := g.findItemIndexByConstName(cn)
 	if idxNum >= 0 {
 		return cn
@@ -420,21 +413,10 @@ func (g *codeGenerator) renderConstBlock() (string, error) {
 		return g.items[i].Index < g.items[j].Index
 	})
 
-	// Find the minimum and maximum static index values
-	var minIdx, maxIdx uint8
-	if len(g.items) > 0 {
-		minIdx = g.items[0].Index              // First item after sorting
-		maxIdx = g.items[len(g.items)-1].Index // Last item after sorting
-	}
-
 	data := struct {
-		Items          []staticItem
-		StaticIdxStart uint8
-		StaticIdxEnd   uint8
+		Items []staticItem
 	}{
-		Items:          g.items,
-		StaticIdxStart: minIdx,
-		StaticIdxEnd:   maxIdx,
+		Items: g.items,
 	}
 
 	tmpl, err := template.New("constBlock").Parse(constBlockTemplate)

@@ -67,8 +67,8 @@ func checkBitmaskEncoder(t *rapid.T) {
 	require.NoError(t, err)
 
 	// Verify the bitmask is at the beginning
-	require.GreaterOrEqual(t, len(encBufBM), 2, "Compressed data should have at least 2 bytes for bitmask")
-	mask := uint16(encBufBM[0])<<8 | uint16(encBufBM[1])
+	require.GreaterOrEqual(t, len(encBufBM), 2, "Compressed data should have at least 2 bytes for header")
+	mask := uint8(encBufBM[0])
 	require.NotZero(t, mask, "Bitmask should be non-zero")
 
 	// Decompress with BitmaskDecoder
@@ -88,9 +88,9 @@ func checkBitmaskEncoder(t *rapid.T) {
 
 // createMask is a helper function that creates a byte slice representing a bitmask
 // with the requiredFieldsMask and any additional bits provided
-func createMask(additionalBits ...uint16) []byte {
+func createMask(additionalBits ...uint8) []byte {
 	// Start with 0
-	mask := uint16(0)
+	mask := uint8(0)
 
 	// Add any additional bits
 	for _, bit := range additionalBits {
@@ -98,7 +98,7 @@ func createMask(additionalBits ...uint16) []byte {
 	}
 
 	// Convert to byte slice (high byte, low byte)
-	return []byte{byte(mask >> 8), byte(mask)}
+	return []byte{mask}
 }
 
 // Test error cases for BitmaskDecoder
@@ -119,11 +119,6 @@ func TestBitmaskDecoderErrors(t *testing.T) {
 			name:        "Too short for bitmask",
 			input:       []byte{0x01},
 			errExpected: fmt.Errorf("bitmask missing"),
-		},
-		{
-			name:        "Not enough data after bitmask",
-			input:       createMask(),
-			errExpected: fmt.Errorf("not enough data to read literal bin80 marker + value for field %d", staticIdxPfField),
 		},
 		{
 			name:        "Empty mask",
