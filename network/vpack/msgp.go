@@ -33,6 +33,14 @@ const (
 	uint16tag  = 0xcd
 	uint32tag  = 0xce
 	uint64tag  = 0xcf
+
+	msgpMapMarker0 = "\x80" // Map with 0 items
+	msgpMapMarker1 = "\x81" // Map with 1 items
+	msgpMapMarker2 = "\x82" // Map with 2 items
+	msgpMapMarker3 = "\x83" // Map with 3 items
+	msgpMapMarker4 = "\x84" // Map with 4 items
+	msgpMapMarker5 = "\x85" // Map with 5 items
+	msgpMapMarker6 = "\x86" // Map with 6 items
 )
 
 // parser provides a zero-allocation parser for vote messages.

@@ -31,323 +31,125 @@ import (
 	"github.com/algorand/go-algorand/agreement"
 )
 
-// staticItem represents one entry in the static table.
-type staticItem struct {
-	ConstName string // e.g. "staticIdxPsField"
-	Index     uint8
-	Data      []byte
-	Comment   string
+type fixstrItem struct {
+	Const string // e.g. msgpFixstrPf
+	Lit   string // e.g. "\xa2pf"
 }
 
-// codeGenerator is our main driver for reflection + generating code via templates.
 type codeGenerator struct {
-	baseMapIndex uint8
-	nextIndex    uint8
-	items        []staticItem
+	fixstrs  map[string]fixstrItem
+	enums    []string
+	enumSeen map[string]struct{}
 
 	parseFns         map[reflect.Type]bool
 	parseFuncDataMap map[reflect.Type]parseFuncData
 }
 
-// parseFuncData is used to render one parse function from the parseFuncTemplate.
 type parseFuncData struct {
 	TypeName      string
-	CodecName     string
 	MaxFieldCount int
-	FixedSize     int // If > 0, indicates a fixed size from vpack_assert_size tag
+	FixedSize     int
 	Fields        []fieldData
 }
 
-// fieldData describes one field in the struct for parse code generation.
 type fieldData struct {
-	CodecName      string // e.g. "ps", "step", "data"
-	FieldNameConst string // e.g. "staticIdxPsField"
+	CodecName string
+
+	EnumConst   string // credPfVoteValue, ...
+	FixstrConst string
 
 	IsSubStruct   bool
 	SubStructName string
-
-	ArrayLen    int
-	AlwaysEmpty bool
-
+	ArrayLen      int
+	AlwaysEmpty   bool
 	IsUint64Alias bool
 }
 
-// fileHeaderTemplate sets up createGeneratedStaticTable.
-const fileHeaderTemplate = `
-// createGeneratedStaticTable initializes the static table with common msgpack patterns
-func createGeneratedStaticTable() [][]byte {
-	t := make([][]byte, 256)
-
-	// Basic entries
-{{- range .Items}}
-	t[{{.ConstName}}] = []byte{
-  {{- range $i, $b := .Data}}
-  {{- if $i}},{{end}}
-  {{- if eq $i 0 -}}
-    0x{{printf "%02x" $b}}
-  {{- else -}}
-    '{{printf "%c" $b}}'
-  {{- end}}
-{{- end -}} }
-{{- if .Comment}} // {{.Comment}}{{end}}
-{{- end}}
-
-	return t
-}
-`
-
-// constBlockTemplate emits the "const (...)" block for all static indices
-const constBlockTemplate = `
-const (
-{{- range .Items}}
-	{{.ConstName}} uint8 = 0x{{printf "%02x" .Index}}
-{{- end}}
-)
-
-var staticTable = createGeneratedStaticTable()
-`
-
-const parseFuncHeader = `
-func parseVote(data []byte, c compressWriter) error {
-    p := newParser(data)
-`
-
-const parseFuncFooter = `
-	// Check for trailing bytes
-	if p.pos < len(p.data) {
-		return fmt.Errorf("unexpected trailing data: %d bytes remain unprocessed", len(p.data) - p.pos)
-	}
-
-	return nil
-}
-`
-
-// parseFuncTemplate decodes a struct encoded as a map.
-const parseFuncTemplate = `
-    { // Parse {{.TypeName}}
-	cnt, err := p.readFixMap()
-	if err != nil {
-		return fmt.Errorf("reading map for {{.TypeName}}: %w", err)
-	}
-{{- if gt .FixedSize 0}}
-	// Assert {{.TypeName}} struct has {{.FixedSize}} fields
-	if cnt != {{.FixedSize}} {
-		return fmt.Errorf("expected fixed map size {{.FixedSize}} for {{.TypeName}}, got %d", cnt)
-	}
-{{- else}}
-	if cnt < 1 || cnt > {{.MaxFieldCount}} {
-		return fmt.Errorf("expected fixmap size for {{.TypeName}} 1 <= cnt <= {{.MaxFieldCount}}, got %d", cnt)
-	}
-
-	for range cnt {
-{{- end}}
-{{- if eq .FixedSize 0 }}
-		key, err := p.readString()
-		if err != nil {
-			return fmt.Errorf("reading key for {{.TypeName}}: %w", err)
-		}
-
-		switch string(key) {
-{{- end }}
-{{- range $fd := .Fields}}
-{{- if gt $.FixedSize 0 }}
-
-         // Required field for {{$.TypeName}}: {{$fd.CodecName}}
-         if err := p.expectString("{{$fd.CodecName}}"); err != nil {
-			 return err
-		 }
-{{- else }}
-		case "{{$fd.CodecName}}":
-{{- end }}
-  {{- if $fd.IsSubStruct}}
-			{{ renderParseFunction $fd.SubStructName }}
-  {{- else if $fd.IsUint64Alias}}
-			val, err := p.readUintBytes()
-			if err != nil {
-				return fmt.Errorf("reading {{$fd.CodecName}}: %w", err)
-			}
-			if err := c.writeVaruint({{$fd.FieldNameConst}}, val); err != nil {
-				return fmt.Errorf("writing {{$fd.CodecName}}: %w", err)
-			}
-  {{- else if gt $fd.ArrayLen 0}}
-			if val, err := p.readBin{{$fd.ArrayLen}}(); err != nil {
-				return fmt.Errorf("reading {{$fd.CodecName}}: %w", err)
-			} else {
-    {{- if $fd.AlwaysEmpty}}
-            if val != [{{$fd.ArrayLen}}]byte{} { // must always be empty
-                return fmt.Errorf("expected empty array for {{$fd.CodecName}}, got %v", val)
-            }
-	{{- else}}
-			c.writeBin{{$fd.ArrayLen}}({{$fd.FieldNameConst}}, val)
-	{{- end}}
-            }
-  {{- else}}
-			// this means the struct has a field not supported by this code generator
-			return fmt.Errorf("unhandled field type for {{$fd.CodecName}} in {{$.TypeName}}")
-  {{- end}}
-{{- end}}
-{{- if eq .FixedSize 0 }}
-		default:
-			return fmt.Errorf("unexpected field in {{.TypeName}}: %q", key)
-{{- end }}
-{{- if eq .FixedSize 0 }}
-		}
-	}
-{{- end }}
-    }
-`
-
 func main() {
-	gen := newCodeGenerator(0xd0, 0xc0)
-	err := gen.generate(reflect.TypeOf(agreement.UnauthenticatedVote{}))
-	if err != nil {
+	gen := &codeGenerator{
+		fixstrs:          make(map[string]fixstrItem),
+		enumSeen:         make(map[string]struct{}),
+		parseFns:         make(map[reflect.Type]bool),
+		parseFuncDataMap: make(map[reflect.Type]parseFuncData),
+	}
+
+	if err := gen.analyzeType(reflect.TypeOf(agreement.UnauthenticatedVote{}), nil); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+
+	if err := gen.emitFieldConsts(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	if err := gen.emitParser(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
 
-// newCodeGenerator sets up a generator with a chosen starting index.
-func newCodeGenerator(startIdx, baseMapIdx uint8) *codeGenerator {
-	return &codeGenerator{
-		baseMapIndex:     baseMapIdx,
-		nextIndex:        startIdx,
-		parseFns:         make(map[reflect.Type]bool),
-		parseFuncDataMap: make(map[reflect.Type]parseFuncData),
-	}
-}
-
-// generate orchestrates the reflection + template usage
-func (g *codeGenerator) generate(root reflect.Type) error {
-	// Recursively gather parse logic for root
-	if err := g.analyzeType(root); err != nil {
-		return err
-	}
-
-	// Also define map-marker constants for 1..6
-	// We don't need more than this, and an error will be thrown if a
-	// field grows beyond 6 items.
-	for i := 0; i <= 6; i++ {
-		g.getOrCreateMapMarkerIndex(i)
-	}
-
-	// Render the const block
-	constCode, err := g.renderConstBlock()
-	if err != nil {
-		return fmt.Errorf("rendering const block: %w", err)
-	}
-
-	// Render parse functions
-	parseCode, err := g.renderParseFunction("unauthenticatedVote")
-	if err != nil {
-		return fmt.Errorf("rendering parse functions: %w", err)
-	}
-
-	// Render file header (the createGeneratedStaticTable + expansions)
-	fileHeader, err := g.renderFileHeader()
-	if err != nil {
-		return fmt.Errorf("rendering file header: %w", err)
-	}
-
-	const hdr = `
-// Code generated by gen.go; DO NOT EDIT.
-
-package vpack
-`
-	const importFmt = `
-import (
-    "fmt"
-)
-`
-	// Write static table to file
-	formatted, err := format.Source([]byte(hdr + constCode + fileHeader))
-	if err != nil {
-		return fmt.Errorf("formatting static table: %w", err)
-	}
-	if err := os.WriteFile("static_table.go", formatted, 0644); err != nil {
-		return err
-	}
-
-	formatted, err = format.Source(
-		[]byte(hdr + importFmt + parseFuncHeader + parseCode + parseFuncFooter))
-	if err != nil {
-		return fmt.Errorf("formatting parser: %w", err)
-	}
-	//	formatted = []byte(hdr + importFmt + parseFuncHeader + parseCode + parseFuncFooter)
-	if err := os.WriteFile("parse.go", formatted, 0644); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// findStructField looks for a field by name within a struct type, regardless of export status
-func findStructField(t reflect.Type, name string) (reflect.StructField, bool) {
-	for i := 0; i < t.NumField(); i++ {
-		field := t.Field(i)
-		if field.Name == name {
-			return field, true
-		}
-	}
-	return reflect.StructField{}, false
-}
-
-// analyzeType collects parse-function data (fields, etc.) for type t.
-// Then we store it in parseFuncDataMap[t], recursing into sub-structs as needed.
-func (g *codeGenerator) analyzeType(t reflect.Type) error {
+// Reflection walk: gathers parse meta, enums, and fixstr literals
+func (g *codeGenerator) analyzeType(t reflect.Type, path []string) error {
 	if t.Kind() != reflect.Struct {
 		return nil
 	}
-	if g.parseFns[t] {
+	if g.parseFns[t] { // only one parse fn per concrete type
 		return nil
 	}
 	g.parseFns[t] = true
 
 	fields := exportedCodecFields(t)
-	sort.Slice(fields, func(i, j int) bool {
-		return getCodecTagName(fields[i]) < getCodecTagName(fields[j])
-	})
-
-	// Check for fixed-size structs using the vpack_assert_size tag on _struct field
-	fixedSize := 0
-	if structField, found := findStructField(t, "_struct"); found {
-		vpackSizeTag := structField.Tag.Get("vpack_assert_size")
-		if vpackSizeTag != "" {
-			if size, err := strconv.Atoi(vpackSizeTag); err == nil {
-				fixedSize = size
-			}
-		}
-	}
+	sort.Slice(fields, func(i, j int) bool { return codecName(fields[i]) < codecName(fields[j]) })
 
 	pf := parseFuncData{
 		TypeName:      t.Name(),
 		MaxFieldCount: len(fields),
-		FixedSize:     fixedSize,
+	}
+
+	if sf, ok := findStructField(t, "_struct"); ok {
+		if sz, _ := strconv.Atoi(sf.Tag.Get("vpack_assert_size")); sz > 0 {
+			pf.FixedSize = sz
+		}
 	}
 
 	for _, f := range fields {
-		fd := fieldData{
-			CodecName:      getCodecTagName(f),
-			FieldNameConst: g.getOrCreateStaticIndexForField(getCodecTagName(f)),
-		}
-		// check for list of vpack tags
-		for _, v := range strings.Split(f.Tag.Get("vpack"), ",") {
-			switch v {
-			case "alwaysempty":
-				fd.AlwaysEmpty = true
-			}
-		}
+		cn := codecName(f)
+		fd := fieldData{CodecName: cn}
+
 		ft := f.Type
+		curPath := append(path, cn)
+
 		if ft.Kind() == reflect.Struct {
 			fd.IsSubStruct = true
 			fd.SubStructName = ft.Name()
-			if err := g.analyzeType(ft); err != nil {
+			// recurse with extended path
+			if err := g.analyzeType(ft, curPath); err != nil {
 				return err
 			}
-		} else if ft.Kind() == reflect.Array {
-			fd.ArrayLen = ft.Len()
-		} else if ft.Kind() == reflect.Uint64 || ft.ConvertibleTo(reflect.TypeOf(uint64(0))) {
-			fd.IsUint64Alias = true
+		} else {
+			// value field – needs enum & fixstr
+			enum := pathToEnum(curPath)
+			fd.EnumConst = enum
+
+			if _, ok := g.enumSeen[enum]; !ok {
+				g.enums = append(g.enums, enum)
+				g.enumSeen[enum] = struct{}{}
+			}
+
+			fix := g.getOrCreateFixstr(cn)
+			fd.FixstrConst = fix
+
+			if ft.Kind() == reflect.Array {
+				fd.ArrayLen = ft.Len()
+			} else if ft.Kind() == reflect.Uint64 || ft.ConvertibleTo(reflect.TypeOf(uint64(0))) {
+				fd.IsUint64Alias = true
+			}
 		}
+
+		if strings.Contains(f.Tag.Get("vpack"), "alwaysempty") {
+			fd.AlwaysEmpty = true
+		}
+
 		pf.Fields = append(pf.Fields, fd)
 	}
 
@@ -355,163 +157,219 @@ func (g *codeGenerator) analyzeType(t reflect.Type) error {
 	return nil
 }
 
-// getOrCreateMapMarkerIndex ensures we have e.g. "staticIdxMapMarker3" => 0x83
-func (g *codeGenerator) getOrCreateMapMarkerIndex(n int) {
-	cn := fmt.Sprintf("msgpMapMarker%d", n)
-	if g.findItemIndexByConstName(cn) >= 0 {
-		return
-	}
-	if n > 15 { // e.g. 0x80 - 0x8f
-		panic(fmt.Sprintf("map marker index %d unsupported", n))
-	}
-
-	idx := g.baseMapIndex | byte(n)
-	data := []byte{0x80 | byte(n)}
-	g.items = append(g.items, staticItem{
-		ConstName: cn,
-		Index:     idx,
-		Data:      data,
-		Comment:   fmt.Sprintf("Map with %d items", n),
-	})
-}
-
-// getOrCreateStaticIndexForField creates a fixstr entry for a field name: e.g. 0xa3,"snd"
-func (g *codeGenerator) getOrCreateStaticIndexForField(fieldName string) string {
-	cn := "msgp" + strings.Title(fieldName) + "Field"
-	idxNum := g.findItemIndexByConstName(cn)
-	if idxNum >= 0 {
+func (g *codeGenerator) getOrCreateFixstr(name string) string {
+	cn := "msgpFixstr" + title(name)
+	if _, ok := g.fixstrs[cn]; ok {
 		return cn
 	}
-	idx := g.nextIndex
-	g.nextIndex++
-	// fixstr prefix 0xa0 + length
-	b := []byte{0xa0 | byte(len(fieldName))}
-	b = append(b, fieldName...)
-	g.items = append(g.items, staticItem{
-		ConstName: cn,
-		Index:     idx,
-		Data:      b,
-		Comment:   fmt.Sprintf("\"%s\" field", fieldName),
-	})
+	prefix := 0xa0 | len(name)
+	lit := fmt.Sprintf(`\x%02x%s`, prefix, name)
+	g.fixstrs[cn] = fixstrItem{Const: cn, Lit: lit}
 	return cn
 }
 
-// findItemIndexByConstName returns the index of the item in g.items or -1
-func (g *codeGenerator) findItemIndexByConstName(cn string) int {
-	for i, it := range g.items {
-		if it.ConstName == cn {
-			return i
+func (g *codeGenerator) emitFieldConsts() error {
+	sort.Strings(g.enums)
+	var enumBuf strings.Builder
+	fmt.Fprintln(&enumBuf, "// voteValueType enumerates every value-bearing field (full path).")
+	fmt.Fprintln(&enumBuf, "type voteValueType uint8")
+	fmt.Fprintln(&enumBuf, "const (")
+	for i, e := range g.enums {
+		if i == 0 {
+			fmt.Fprintf(&enumBuf, "\t%s voteValueType = iota\n", e)
+		} else {
+			fmt.Fprintf(&enumBuf, "\t%s\n", e)
 		}
 	}
-	return -1
+	fmt.Fprintln(&enumBuf, ")")
+
+	var fixBuf strings.Builder
+	fmt.Fprintln(&fixBuf, "\nconst (")
+	var names []string
+	for n := range g.fixstrs {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	for _, n := range names {
+		it := g.fixstrs[n]
+		fmt.Fprintf(&fixBuf, "\t%s = \"%s\"\n", it.Const, it.Lit)
+	}
+	fmt.Fprintln(&fixBuf, ")")
+
+	src := "// Code generated by gen.go; DO NOT EDIT.\n\npackage vpack\n\n" +
+		enumBuf.String() + fixBuf.String() + "\n"
+
+	out, err := format.Source([]byte(src))
+	if err != nil {
+		return err
+	}
+	return os.WriteFile("fields.go", out, 0o644)
 }
 
-// renderConstBlock uses constBlockTemplate to output static index constants.
-func (g *codeGenerator) renderConstBlock() (string, error) {
-	// Sort items by index
-	sort.Slice(g.items, func(i, j int) bool {
-		return g.items[i].Index < g.items[j].Index
-	})
+func (g *codeGenerator) emitParser() error {
+	header := `// Code generated by gen.go; DO NOT EDIT.
 
-	data := struct {
-		Items []staticItem
-	}{
-		Items: g.items,
+package vpack
+
+import "fmt"
+
+func parseVote(data []byte, c compressWriter) error {
+	p := newParser(data)
+`
+	body, err := g.renderParseFunction("unauthenticatedVote")
+	if err != nil {
+		return err
 	}
+	footer := `
+	// Check for trailing bytes
+	if p.pos < len(p.data) {
+		return fmt.Errorf("unexpected trailing data: %d bytes remain unprocessed", len(p.data)-p.pos)
+	}
+	return nil
+}`
 
-	tmpl, err := template.New("constBlock").Parse(constBlockTemplate)
+	src := header + body + footer
+	out, err := format.Source([]byte(src))
+	if err != nil {
+		return err
+	}
+	return os.WriteFile("parse.go", out, 0o644)
+}
+
+const parseFuncTemplate = `
+    { // Parse {{.TypeName}}
+        cnt, err := p.readFixMap()
+        if err != nil {
+            return fmt.Errorf("reading map for {{.TypeName}}: %w", err)
+        }
+{{- if gt .FixedSize 0}}
+        // Assert {{.TypeName}} struct has {{.FixedSize}} fields
+        if cnt != {{.FixedSize}} {
+            return fmt.Errorf("expected fixed map size {{.FixedSize}} for {{.TypeName}}, got %d", cnt)
+        }
+{{- else}}
+        if cnt < 1 || cnt > {{.MaxFieldCount}} {
+            return fmt.Errorf("expected fixmap size for {{.TypeName}} 1 <= cnt <= {{.MaxFieldCount}}, got %d", cnt)
+        }
+        for range cnt {
+{{- end}}
+{{- if eq .FixedSize 0}}
+            key, err := p.readString()
+            if err != nil {
+                return fmt.Errorf("reading key for {{.TypeName}}: %w", err)
+            }
+            switch string(key) {
+{{- end}}
+{{- range $fd := .Fields}}
+{{- if gt $.FixedSize 0}}
+        // Required field for {{$.TypeName}}: {{$fd.CodecName}}
+        if err := p.expectString("{{$fd.CodecName}}"); err != nil {
+            return err
+        }
+{{- else}}
+            case "{{$fd.CodecName}}":
+{{- end}}
+{{- if $fd.IsSubStruct}}
+                {{ renderParseFunction $fd.SubStructName }}
+{{- else if $fd.IsUint64Alias}}
+                val, err := p.readUintBytes()
+                if err != nil {
+                    return fmt.Errorf("reading {{$fd.CodecName}}: %w", err)
+                }
+                if err := c.writeVaruint({{$fd.EnumConst}}, val); err != nil {
+                    return fmt.Errorf("writing {{$fd.CodecName}}: %w", err)
+                }
+{{- else if gt $fd.ArrayLen 0}}
+                if val, err := p.readBin{{$fd.ArrayLen}}(); err != nil {
+                    return fmt.Errorf("reading {{$fd.CodecName}}: %w", err)
+                } else {
+{{- if $fd.AlwaysEmpty}}
+                    if val != [{{$fd.ArrayLen}}]byte{} {
+                        return fmt.Errorf("expected empty array for {{$fd.CodecName}}, got %v", val)
+                    }
+{{- else}}
+                    c.writeBin{{$fd.ArrayLen}}({{$fd.EnumConst}}, val)
+{{- end}}
+                }
+{{- else}}
+                return fmt.Errorf("unsupported field {{$fd.CodecName}} in {{$.TypeName}}")
+{{- end}}
+{{- end}}
+{{- if eq .FixedSize 0}}
+            default:
+                return fmt.Errorf("unexpected field in {{.TypeName}}: %q", key)
+            }
+        }
+{{- end}}
+    }
+`
+
+func (g *codeGenerator) renderParseFunction(root string) (string, error) {
+	var buf strings.Builder
+	tmpl, err := template.New("parse").
+		Funcs(template.FuncMap{
+			"renderParseFunction": func(name string) string {
+				s, err := g.renderParseFunction(name)
+				if err != nil {
+					panic(err)
+				}
+				return s
+			},
+		}).Parse(parseFuncTemplate)
 	if err != nil {
 		return "", err
 	}
 
-	var sb strings.Builder
-	if err := tmpl.Execute(&sb, data); err != nil {
-		return "", err
-	}
-	return sb.String(), nil
-}
-
-// renderFileHeader uses fileHeaderTemplate for createGeneratedStaticTable.
-func (g *codeGenerator) renderFileHeader() (string, error) {
-	// Sort items by index so table is stable
-	sort.Slice(g.items, func(i, j int) bool {
-		return g.items[i].Index < g.items[j].Index
-	})
-
-	data := struct{ Items []staticItem }{Items: g.items}
-
-	tmpl, err := template.New("fileHeader").Parse(fileHeaderTemplate)
-	if err != nil {
-		return "", err
-	}
-	var sb strings.Builder
-	if err := tmpl.Execute(&sb, data); err != nil {
-		return "", err
-	}
-	return sb.String(), nil
-}
-
-// renderParseFunctions uses parseFuncTemplate for each discovered struct type.
-// We define top-level template functions in FuncMap.
-func (g *codeGenerator) renderParseFunction(typeName string) (string, error) {
-	var sb strings.Builder
-	tmpl, err := template.New("parseFunc").Funcs(template.FuncMap{
-		"split": func(s, sep string) []string {
-			return strings.Split(s, sep)
-		},
-		"renderParseFunction": func(typeName string) string {
-			ret, err := g.renderParseFunction(typeName)
-			if err != nil {
-				panic(fmt.Sprintf("renderParseFunction for %s: %v", typeName, err))
-			}
-			return ret
-		},
-	}).Parse(parseFuncTemplate)
-	if err != nil {
-		return "", err
-	}
-
-	// Sort the types by name for stable output
-	var types []reflect.Type
-	for t, pf := range g.parseFuncDataMap {
-		if pf.TypeName == typeName {
-			types = append(types, t)
+	var todo []reflect.Type
+	for t, d := range g.parseFuncDataMap {
+		if d.TypeName == root {
+			todo = append(todo, t)
 		}
 	}
-
-	for _, t := range types {
-		pf := g.parseFuncDataMap[t]
-		var buf strings.Builder
-		if err := tmpl.Execute(&buf, pf); err != nil {
+	for _, t := range todo {
+		if err := tmpl.Execute(&buf, g.parseFuncDataMap[t]); err != nil {
 			return "", err
 		}
-		sb.WriteString(buf.String())
-		sb.WriteString("\n")
 	}
-	return sb.String(), nil
+	return buf.String(), nil
 }
 
 func exportedCodecFields(t reflect.Type) []reflect.StructField {
 	var out []reflect.StructField
-	for i := 0; i < t.NumField(); i++ {
+	for i := range t.NumField() {
 		f := t.Field(i)
-		if f.PkgPath != "" { // unexported
-			continue
+		if f.PkgPath == "" && codecName(f) != "" && codecName(f) != "-" {
+			out = append(out, f)
 		}
-		tag := getCodecTagName(f)
-		if tag == "" || tag == "-" {
-			continue
-		}
-		out = append(out, f)
 	}
 	return out
 }
 
-func getCodecTagName(f reflect.StructField) string {
-	tag := f.Tag.Get("codec")
-	if tag == "" {
+func codecName(f reflect.StructField) string { return strings.Split(f.Tag.Get("codec"), ",")[0] }
+
+func findStructField(t reflect.Type, name string) (reflect.StructField, bool) {
+	for i := range t.NumField() {
+		if f := t.Field(i); f.Name == name {
+			return f, true
+		}
+	}
+	return reflect.StructField{}, false
+}
+
+func title(s string) string {
+	if len(s) == 0 {
+		return s
+	}
+	return strings.ToUpper(s[:1]) + s[1:]
+}
+
+func pathToEnum(path []string) string {
+	if len(path) == 0 {
 		return ""
 	}
-	parts := strings.Split(tag, ",")
-	return parts[0]
+	out := path[0]
+	for _, seg := range path[1:] {
+		out += title(seg)
+	}
+	return out + "VoteValue"
 }
