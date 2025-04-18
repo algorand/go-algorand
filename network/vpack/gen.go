@@ -119,6 +119,9 @@ func (g *codeGenerator) analyzeType(t reflect.Type, path []string) error {
 		ft := f.Type
 		curPath := append(path, cn)
 
+		fix := g.getOrCreateFixstr(cn)
+		fd.FixstrConst = fix
+
 		if ft.Kind() == reflect.Struct {
 			fd.IsSubStruct = true
 			fd.SubStructName = ft.Name()
@@ -261,17 +264,17 @@ const parseFuncTemplate = `
             switch string(key) {
 {{- end}}
 {{- range $fd := .Fields}}
-{{- if gt $.FixedSize 0}}
+    {{- if gt $.FixedSize 0}}
         // Required field for {{$.TypeName}}: {{$fd.CodecName}}
         if err := p.expectString("{{$fd.CodecName}}"); err != nil {
             return err
         }
-{{- else}}
+    {{- else}}
             case "{{$fd.CodecName}}":
-{{- end}}
-{{- if $fd.IsSubStruct}}
+    {{- end}}
+    {{- if $fd.IsSubStruct}}
                 {{ renderParseFunction $fd.SubStructName }}
-{{- else if $fd.IsUint64Alias}}
+    {{- else if $fd.IsUint64Alias}}
                 val, err := p.readUintBytes()
                 if err != nil {
                     return fmt.Errorf("reading {{$fd.CodecName}}: %w", err)
@@ -279,21 +282,21 @@ const parseFuncTemplate = `
                 if err := c.writeVaruint({{$fd.EnumConst}}, val); err != nil {
                     return fmt.Errorf("writing {{$fd.CodecName}}: %w", err)
                 }
-{{- else if gt $fd.ArrayLen 0}}
+    {{- else if gt $fd.ArrayLen 0}}
                 if val, err := p.readBin{{$fd.ArrayLen}}(); err != nil {
                     return fmt.Errorf("reading {{$fd.CodecName}}: %w", err)
                 } else {
-{{- if $fd.AlwaysEmpty}}
+        {{- if $fd.AlwaysEmpty}}
                     if val != [{{$fd.ArrayLen}}]byte{} {
                         return fmt.Errorf("expected empty array for {{$fd.CodecName}}, got %v", val)
                     }
-{{- else}}
+        {{- else}}
                     c.writeBin{{$fd.ArrayLen}}({{$fd.EnumConst}}, val)
-{{- end}}
+        {{- end}}
                 }
-{{- else}}
+    {{- else}}
                 return fmt.Errorf("unsupported field {{$fd.CodecName}} in {{$.TypeName}}")
-{{- end}}
+    {{- end}}
 {{- end}}
 {{- if eq .FixedSize 0}}
             default:

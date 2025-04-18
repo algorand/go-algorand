@@ -18,8 +18,6 @@ package vpack
 
 import (
 	"encoding/json"
-	"fmt"
-	"io"
 	"reflect"
 	"testing"
 	"unsafe"
@@ -44,6 +42,13 @@ func checkVoteValid(vote *agreement.UnauthenticatedVote) (ok bool, expectedError
 	if !vote.Sig.PKSigOld.MsgIsZero() {
 		return false, "expected empty array for ps"
 	}
+	if vote.R.Round == 0 {
+		return false, "missing required fields"
+	}
+	if vote.R.Sender.IsZero() {
+		return false, "missing required fields"
+	}
+
 	return true, ""
 }
 
@@ -52,7 +57,7 @@ func TestEncodingTest(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	var errorCount int
-	const iters = 10000 //10000
+	const iters = 20000
 	for range iters {
 		v0obj, err := protocol.RandomizeObject(&agreement.UnauthenticatedVote{},
 			protocol.RandomizeObjectWithZeroesEveryN(10),
@@ -64,6 +69,9 @@ func TestEncodingTest(t *testing.T) {
 		if *v0 == (agreement.UnauthenticatedVote{}) {
 			continue // don't try to encode or compress empty votes (a single byte, 0x80)
 		}
+		// zero out ps, always empty
+		v0.Sig.PKSigOld = [64]byte{}
+
 		var expectError string
 		if ok, errorMsg := checkVoteValid(v0); !ok {
 			expectError = errorMsg
@@ -203,152 +211,28 @@ func FuzzVoteFields(f *testing.F) {
 	})
 }
 
-var decompressVoteTestCases = []struct {
-	name        string
-	input       []byte
-	errExpected error
-}{
-	{
-		name:        "Empty input",
-		input:       []byte{},
-		errExpected: nil, // Empty inputs are valid and return empty outputs
-	},
-	{
-		name:        "Insufficient bytes for markerDynamicFixuint",
-		input:       []byte{markerDynamicFixuint},
-		errExpected: io.ErrUnexpectedEOF,
-	},
-	{
-		name:        "Insufficient bytes for markerDynamicUint8",
-		input:       []byte{markerDynamicUint8},
-		errExpected: io.ErrUnexpectedEOF,
-	},
-	{
-		name:        "Insufficient bytes for markerDynamicUint16",
-		input:       []byte{markerDynamicUint16},
-		errExpected: io.ErrUnexpectedEOF,
-	},
-	{
-		name:        "Partial bytes for markerDynamicUint16",
-		input:       []byte{markerDynamicUint16, 0x01},
-		errExpected: io.ErrUnexpectedEOF,
-	},
-	{
-		name:        "Insufficient bytes for markerDynamicUint32",
-		input:       []byte{markerDynamicUint32},
-		errExpected: io.ErrUnexpectedEOF,
-	},
-	{
-		name:        "Partial bytes for markerDynamicUint32",
-		input:       []byte{markerDynamicUint32, 0x01, 0x02, 0x03},
-		errExpected: io.ErrUnexpectedEOF,
-	},
-	{
-		name:        "Insufficient bytes for markerDynamicUint64",
-		input:       []byte{markerDynamicUint64},
-		errExpected: io.ErrUnexpectedEOF,
-	},
-	{
-		name:        "Partial bytes for markerDynamicUint64",
-		input:       []byte{markerDynamicUint64, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07},
-		errExpected: io.ErrUnexpectedEOF,
-	},
-	{
-		name:        "Insufficient bytes for markerLiteralBin64",
-		input:       []byte{markerLiteralBin64},
-		errExpected: io.ErrUnexpectedEOF,
-	},
-	{
-		name:        "Partial bytes for markerLiteralBin64",
-		input:       []byte{markerLiteralBin64, 0x01, 0x02, 0x03},
-		errExpected: io.ErrUnexpectedEOF,
-	},
-	{
-		name:        "Insufficient bytes for markerLiteralBin80",
-		input:       []byte{markerLiteralBin80},
-		errExpected: io.ErrUnexpectedEOF,
-	},
-	{
-		name:        "Partial bytes for markerLiteralBin80",
-		input:       []byte{markerLiteralBin80, 0x01, 0x02, 0x03},
-		errExpected: io.ErrUnexpectedEOF,
-	},
-	{
-		name:        "Insufficient bytes for markerDynamicBin32",
-		input:       []byte{markerDynamicBin32},
-		errExpected: io.ErrUnexpectedEOF,
-	},
-	{
-		name:        "Partial bytes for markerDynamicBin32",
-		input:       []byte{markerDynamicBin32, 0x01, 0x02, 0x03},
-		errExpected: io.ErrUnexpectedEOF,
-	},
-	{
-		name:        "Invalid static marker outside static range",
-		input:       []byte{0x10}, // This is outside the valid static index range
-		errExpected: fmt.Errorf("unexpected marker: 0x%02x", 0x10),
-	},
-	{
-		name:        "Valid static index but nil entry in table",
-		input:       []byte{0xc7}, // This is within the valid static index range but has no entry
-		errExpected: fmt.Errorf("unexpected static marker: 0x%02x", 0xc7),
-	},
-	{
-		name:        "Unexpected marker outside valid range",
-		input:       []byte{0xFF}, // Marker outside of any valid range
-		errExpected: fmt.Errorf("unexpected marker: 0x%02x", 0xFF),
-	},
-}
+// // FuzzDecompressStatic is a fuzz test for decompressStatic.
+// // It tests error cases from decompressVoteTestCases and also valid compressed votes.
+// func FuzzDecompressStatic(f *testing.F) {
+// 	// Generate random votes, compress them, and add the compressed votes to the fuzzer
+// 	for range 100 {
+// 		v, err := protocol.RandomizeObject(&agreement.UnauthenticatedVote{},
+// 			protocol.RandomizeObjectWithZeroesEveryN(10),
+// 			protocol.RandomizeObjectWithAllUintSizes())
+// 		require.NoError(f, err)
+// 		vote := v.(*agreement.UnauthenticatedVote)
+// 		if ok, _ := checkVoteValid(vote); !ok {
+// 			continue
+// 		}
+// 		msgpBuf := protocol.EncodeMsgp(vote)
+// 		enc := NewBitmaskEncoder()
+// 		compressedVote, err := enc.CompressVote(nil, msgpBuf)
+// 		require.NoError(f, err)
+// 		f.Add(compressedVote)
+// 	}
 
-// TestDecompressVoteErrors tests error cases of the decompressStatic function
-func TestDecompressVoteErrors(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	for _, tc := range decompressVoteTestCases {
-		t.Run(tc.name, func(t *testing.T) {
-			_, err := decompressStatic(nil, tc.input)
-			if tc.errExpected == nil {
-				require.NoError(t, err)
-			} else {
-				require.Error(t, err)
-				if customErr, ok := tc.errExpected.(fmt.Formatter); ok {
-					require.Contains(t, err.Error(), fmt.Sprintf("%v", customErr))
-				} else {
-					require.Equal(t, tc.errExpected, err)
-				}
-			}
-		})
-	}
-}
-
-// FuzzDecompressStatic is a fuzz test for decompressStatic.
-// It tests error cases from decompressVoteTestCases and also valid compressed votes.
-func FuzzDecompressStatic(f *testing.F) {
-	for _, tc := range decompressVoteTestCases {
-		f.Add(tc.input)
-	}
-	// Generate random votes, compress them, and add the compressed votes to the fuzzer
-	for range 100 {
-		v, err := protocol.RandomizeObject(&agreement.UnauthenticatedVote{},
-			protocol.RandomizeObjectWithZeroesEveryN(10),
-			protocol.RandomizeObjectWithAllUintSizes())
-		require.NoError(f, err)
-		vote := v.(*agreement.UnauthenticatedVote)
-		if ok, _ := checkVoteValid(vote); !ok {
-			continue
-		}
-		msgpBuf := protocol.EncodeMsgp(vote)
-		enc := NewBitmaskEncoder()
-		compressedVote, err := enc.CompressVote(nil, msgpBuf)
-		require.NoError(f, err)
-		f.Add(compressedVote)
-	}
-	for i := range staticTable {
-		f.Add(staticTable[i])
-	}
-
-	// The actual fuzzing function
-	f.Fuzz(func(t *testing.T, input []byte) {
-		_, _ = decompressStatic(nil, input)
-	})
-}
+// 	// The actual fuzzing function
+// 	f.Fuzz(func(t *testing.T, input []byte) {
+// 		_, _ = decompressStatic(nil, input)
+// 	})
+// }

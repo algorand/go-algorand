@@ -24,6 +24,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -38,13 +39,13 @@ var parseVoteTestCases = []struct {
 	{map[string]string{"a": "1", "b": "2"},
 		"expected fixed map size 3 for unauthenticatedVote, got 2"},
 	{map[string]any{"a": 1, "b": 2, "c": 3},
-		"unexpected field in unauthenticatedVote"},
+		"expected string \"cred\", got \"a\""},
 	{[]int{1, 2, 3},
 		"reading map for unauthenticatedVote"},
 	{map[string]string{"a": "1", "b": "2", "c": "3", "d": "4", "e": "5", "f": "6", "g": "7"},
 		"expected fixed map size 3 for unauthenticatedVote, got 7"},
 	{map[string]string{gtFixMapString: "1", "b": "2", "c": "3"},
-		"reading key for unauthenticatedVote"},
+		"readString: expected fixstr, got 0xd9"},
 
 	// cred
 	{map[string]string{"cred": "1", "d": "2", "e": "3"},
@@ -52,9 +53,9 @@ var parseVoteTestCases = []struct {
 	{map[string]any{"cred": map[string]int{"pf": 1, "q": 2}, "d": "2", "e": "3"},
 		"expected fixed map size 1 for UnauthenticatedCredential, got 2"},
 	{map[string]any{"cred": map[string]int{gtFixMapString: 1}, "d": "2", "e": "3"},
-		"reading key for UnauthenticatedCredential"},
+		"readString: expected fixstr, got 0xd9"},
 	{map[string]any{"cred": map[string]string{"invalid": "1"}, "r": "2", "sig": "3"},
-		"unexpected field in UnauthenticatedCredential"},
+		"expected string \"pf\", got \"invalid\""},
 	{map[string]any{"cred": map[string]any{"pf": []byte{1, 2, 3}}, "r": "2", "sig": "3"},
 		"reading pf"},
 
@@ -107,10 +108,10 @@ var parseVoteTestCases = []struct {
 		"expected fixed map size 6 for OneTimeSignature, got 1"},
 	{map[string]any{"cred": map[string]any{"pf": crypto.VrfProof{1}}, "r": map[string]any{"rnd": 1}, "sig": map[string]any{
 		gtFixMapString: "1", "a": 1, "b": 2, "c": 3, "d": 4, "e": 5}},
-		"reading key for OneTimeSignature"},
+		"readString: expected fixstr, got 0xd9"},
 	{map[string]any{"cred": map[string]any{"pf": crypto.VrfProof{1}}, "r": map[string]any{"rnd": 1}, "sig": map[string]any{
 		"a": 1, "b": 2, "c": 3, "d": 4, "e": 5, "f": 6}},
-		"unexpected field in OneTimeSignature"},
+		"expected string \"p\", got \"a\""},
 	{map[string]any{"cred": map[string]any{"pf": crypto.VrfProof{1}}, "r": map[string]any{"rnd": 1}, "sig": map[string]any{
 		"p": []int{1}, "p1s": [64]byte{}, "p2": [32]byte{}, "p2s": [64]byte{}, "ps": [64]byte{}, "s": [64]byte{}}},
 		"reading p: expected bin8 length 32"},
@@ -145,14 +146,13 @@ func TestParseVoteErrors(t *testing.T) {
 			buf = protocol.EncodeReflect(tc.obj)
 		}
 		err := parseVote(buf, mock)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), tc.errContains)
+		assert.ErrorContains(t, err, tc.errContains)
 	}
 }
 
-// TestParseDynamicVaruintError asserts that an error is returned when writeDynamicVaruint fails,
+// TestParseVaruintError asserts that an error is returned when writeVaruint fails,
 // to improve test coverage.
-func TestParseDynamicVaruintError(t *testing.T) {
+func TestParseVaruintError(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	v := agreement.UnauthenticatedVote{}
 	v.Cred.Proof[0] = 1
@@ -172,7 +172,7 @@ func TestParseDynamicVaruintError(t *testing.T) {
 		msgpbuf := protocol.Encode(&v)
 		w := &mockCompressWriter{failVaruint: true}
 		err := parseVote(msgpbuf, w)
-		require.ErrorContains(t, err, "mockCompressWriter.writeDynamicVaruint")
+		require.ErrorContains(t, err, "mockCompressWriter.writeVaruint")
 	}
 }
 
@@ -182,17 +182,16 @@ type mockCompressWriter struct {
 	writes      []any
 }
 
-func (m *mockCompressWriter) writeStatic(idx uint8) { m.writes = append(m.writes, idx) }
-func (m *mockCompressWriter) writeBin64(idx uint8, val [64]byte) {
+func (m *mockCompressWriter) writeBin64(v voteValueType, val [64]byte) {
 	m.writes = append(m.writes, val)
 }
-func (m *mockCompressWriter) writeBin80(idx uint8, val [80]byte) {
+func (m *mockCompressWriter) writeBin80(v voteValueType, val [80]byte) {
 	m.writes = append(m.writes, val)
 }
-func (m *mockCompressWriter) writeBin32(idx uint8, val [32]byte) {
+func (m *mockCompressWriter) writeBin32(v voteValueType, val [32]byte) {
 	m.writes = append(m.writes, val)
 }
-func (m *mockCompressWriter) writeVaruint(idx uint8, valBytes []byte) error {
+func (m *mockCompressWriter) writeVaruint(v voteValueType, valBytes []byte) error {
 	if m.failVaruint {
 		return fmt.Errorf("mockCompressWriter.writeVaruint")
 	}

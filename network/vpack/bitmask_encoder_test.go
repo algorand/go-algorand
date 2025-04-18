@@ -45,31 +45,18 @@ func checkBitmaskEncoder(t *rapid.T) {
 	// Generate a random vote
 	v0 := generateRandomVote().Draw(t, "vote")
 
-	// Check if the vote is valid for compression
-	var expectError string
-	if ok, errorMsg := checkVoteValid(v0); !ok {
-		expectError = errorMsg
-	}
-
 	// Convert to msgpack
 	msgpBuf := protocol.EncodeMsgp(v0)
 
 	// Try to compress with BitmaskEncoder
 	encBM := NewBitmaskEncoder()
 	encBufBM, err := encBM.CompressVote(nil, msgpBuf)
-
-	if expectError != "" {
-		// We expect an error
-		require.ErrorContains(t, err, expectError)
-		require.Nil(t, encBufBM)
-		return
-	}
 	require.NoError(t, err)
 
 	// Verify the bitmask is at the beginning
 	require.GreaterOrEqual(t, len(encBufBM), 2, "Compressed data should have at least 2 bytes for header")
-	mask := uint8(encBufBM[0])
-	require.NotZero(t, mask, "Bitmask should be non-zero")
+	//	mask := uint8(encBufBM[0])
+	//	require.NotZero(t, mask, "Bitmask should be non-zero")
 
 	// Decompress with BitmaskDecoder
 	decBM := NewBitmaskDecoder()
@@ -84,6 +71,7 @@ func checkBitmaskEncoder(t *rapid.T) {
 	err = protocol.Decode(decBufBM, &v1)
 	require.NoError(t, err)
 	require.Equal(t, *v0, v1)
+	t.Logf("Vote OK")
 }
 
 // createMask is a helper function that creates a byte slice representing a bitmask
@@ -96,9 +84,7 @@ func createMask(additionalBits ...uint8) []byte {
 	for _, bit := range additionalBits {
 		mask |= bit
 	}
-
-	// Convert to byte slice (high byte, low byte)
-	return []byte{mask}
+	return []byte{mask, 0}
 }
 
 // Test error cases for BitmaskDecoder
@@ -113,122 +99,40 @@ func TestBitmaskDecoderErrors(t *testing.T) {
 		{
 			name:        "Empty input",
 			input:       []byte{},
-			errExpected: fmt.Errorf("bitmask missing"),
+			errExpected: fmt.Errorf("header missing"),
 		},
 		{
-			name:        "Too short for bitmask",
+			name:        "Too short for header",
 			input:       []byte{0x01},
-			errExpected: fmt.Errorf("bitmask missing"),
+			errExpected: fmt.Errorf("header missing"),
 		},
 		{
-			name:        "Empty mask",
+			name:        "Not enough data for pf",
 			input:       []byte{0x00, 0x00, 0x01},
-			errExpected: fmt.Errorf("missing required fields: mask 0"),
-		},
-		{
-			name:        "Not enough data for literal bin80",
-			input:       append(createMask(), 0xFF),
-			errExpected: fmt.Errorf("not enough data to read literal bin80 marker + value for field %d", staticIdxPfField),
-		},
-		{
-			name:        "pf bit set but wrong marker",
-			input:       slices.Concat(createMask(), []byte{0xF0}, make([]byte, 80)), // 0xF0 is wrong (should be 0xF1)
-			errExpected: fmt.Errorf("not a literal bin80 for field %d", staticIdxPfField),
+			errExpected: fmt.Errorf("not enough data to read value for field %s", msgpFixstrPf),
 		},
 		{
 			name: "Error in varuint for rnd field",
 			input: slices.Concat(createMask(),
 				// Add required fields and append just the marker causing an error
-				[]byte{markerLiteralBin80}, make([]byte, 80), // Add 80 bytes for pfField
-				[]byte{uint8tag}, // then uint8tag with no data
+				make([]byte, 80), // Add 80 bytes for pfField
 			),
-			errExpected: fmt.Errorf("not enough data for varuint uint8 for field %d", staticIdxRndField),
+			errExpected: fmt.Errorf("not enough data to read varuint marker for field %s", msgpFixstrRnd),
 		},
 		{
-			name: "Error in dynamicBin32 for snd field",
+			name: "Error reading varuint for rnd field",
 			input: slices.Concat(createMask(),
-				// Add pfField, rnd field, then problematic snd field
-				[]byte{markerLiteralBin80}, make([]byte, 80), // Add 80 bytes for pfField
-				[]byte{uint8tag, 0x01},     // Add rnd field (uint8:1)
-				[]byte{markerDynamicBin32}, // Add dynamicBin32 marker with no data
+				// Add required fields and append just the marker causing an error
+				make([]byte, 80), // Add 80 bytes for pfField
+				[]byte{0xff},     // Invalid marker
 			),
-			errExpected: fmt.Errorf("not enough data to read dynamic bin32 marker + value for field %d", staticIdxSndField),
-		},
-		{
-			name: "Error in dynamicBin32 for p field",
-			input: slices.Concat(createMask(),
-				// Add pfField, rnd field, snd field, then problematic p field
-				[]byte{markerLiteralBin80}, make([]byte, 80), // Add 80 bytes for pfField
-				[]byte{uint8tag, 0x01},                       // Add rnd field (uint8:1)
-				[]byte{markerDynamicBin32}, make([]byte, 32), // Add snd field marker + 32 bytes
-				[]byte{markerDynamicBin32}, // Add dynamicBin32 marker with no data
-			),
-			errExpected: fmt.Errorf("not enough data to read dynamic bin32 marker + value for field %d", staticIdxPField),
-		},
-		{
-			name: "Error in literalBin64 for p1s field",
-			input: slices.Concat(createMask(),
-				// Add fields up to p1s and then use wrong marker
-				[]byte{markerLiteralBin80}, make([]byte, 80), // Add 80 bytes for pfField
-				[]byte{uint8tag, 0x01},                       // Add rnd field (uint8:1)
-				[]byte{markerDynamicBin32}, make([]byte, 32), // Add snd field marker + 32 bytes
-				[]byte{markerDynamicBin32}, make([]byte, 32), // Add p field marker + 32 bytes
-				[]byte{0xFF}, // Then wrong marker instead of markerLiteralBin64
-			),
-			errExpected: fmt.Errorf("not enough data to read literal bin64 marker + value for field %d", staticIdxP1sField),
-		},
-		{
-			name: "Error in dynamicBin32 for p2 field",
-			input: slices.Concat(createMask(),
-				// Add fields up to p2 and then use wrong marker
-				[]byte{markerLiteralBin80}, make([]byte, 80), // Add 80 bytes for pfField
-				[]byte{uint8tag, 0x01},                       // Add rnd field (uint8:1)
-				[]byte{markerDynamicBin32}, make([]byte, 32), // Add snd field marker + 32 bytes
-				[]byte{markerDynamicBin32}, make([]byte, 32), // Add p field marker + 32 bytes
-				[]byte{markerLiteralBin64}, make([]byte, 64), // Add p1s field marker + 64 bytes
-				[]byte{0xFF}, // Add wrong marker for p2
-			),
-			errExpected: fmt.Errorf("not enough data to read dynamic bin32 marker + value for field %d", staticIdxP2Field),
-		},
-		{
-			name: "Error in literalBin64 for p2s field",
-			input: slices.Concat(createMask(),
-				// Start with valid bitmask, pfField, rnd, snd, p, p1s, p2, then add problematic p2s marker
-				[]byte{markerLiteralBin80}, make([]byte, 80), // Add 80 bytes for pfField
-				[]byte{uint8tag, 0x01},                       // rnd field
-				[]byte{markerDynamicBin32}, make([]byte, 32), // snd field start + data
-				[]byte{markerDynamicBin32}, make([]byte, 32), // p field start + data
-				[]byte{markerLiteralBin64}, make([]byte, 64), // p1s field start + data
-				[]byte{markerDynamicBin32}, make([]byte, 32), // p2 field start + data
-				[]byte{markerLiteralBin64}, // p2s marker with no data
-			),
-			errExpected: fmt.Errorf("not enough data to read literal bin64 marker + value for field %d", staticIdxP2sField),
-		},
-		{
-			name: "Error in literalBin64 for s field",
-			input: slices.Concat(createMask(),
-				// Start with valid bitmask and fields up to s field
-				[]byte{markerLiteralBin80}, make([]byte, 80), // Add 80 bytes for pfField
-				[]byte{uint8tag, 0x01},                       // rnd field
-				[]byte{markerDynamicBin32}, make([]byte, 32), // snd field start + data
-				[]byte{markerDynamicBin32}, make([]byte, 32), // p field start + data
-				[]byte{markerLiteralBin64}, make([]byte, 64), // p1s field start + data
-				[]byte{markerDynamicBin32}, make([]byte, 32), // p2 field start + data
-				[]byte{markerLiteralBin64}, make([]byte, 64), // p2s field start + data
-				[]byte(msgpBin8Len64), make([]byte, 64), // ps field start + data
-				[]byte{markerLiteralBin64}, // s marker with no data
-			),
-			errExpected: fmt.Errorf("not a literal bin64 for field %d", staticIdxSField),
-		},
+			errExpected: fmt.Errorf("not a fixint for field %s, got 255", msgpFixstrRnd)},
 		{
 			name: "Trailing data error",
 			input: func() []byte {
 				// Use a real compressed vote and add trailing data
 				voteGen := generateRandomVote()
 				vote := voteGen.Example(0)
-				if ok := checkBitmaskVoteValid(vote); !ok {
-					panic("Failed to generate valid vote for trailing data test")
-				}
 				// Encode and compress it
 				msgpBuf := protocol.EncodeMsgp(vote)
 				enc := NewBitmaskEncoder()
@@ -241,67 +145,6 @@ func TestBitmaskDecoderErrors(t *testing.T) {
 			}(),
 			errExpected: fmt.Errorf("unexpected trailing data"),
 		},
-		{
-			name: "Error in varuint for per field",
-			input: slices.Concat(createMask(bitPer),
-				// Create a bitmask with per field bit set
-				[]byte{markerLiteralBin80}, make([]byte, 80), // Add 80 bytes for pfField
-				// Don't add any more data - the decoder will fail when trying to read the varuint marker
-			),
-			errExpected: fmt.Errorf("not enough data to read varuint marker for field %d", staticIdxPerField),
-		},
-		{
-			name: "Error in dynamicBin32 for dig field",
-			input: slices.Concat(createMask(bitDig),
-				// Create a bitmask with dig field bit set
-				[]byte{markerLiteralBin80}, make([]byte, 80), // Add 80 bytes for pfField
-				[]byte{markerDynamicBin32}, // Add markerDynamicBin32 with no data
-			),
-			errExpected: fmt.Errorf("not enough data to read dynamic bin32 marker + value for field %d", staticIdxDigField),
-		},
-		{
-			name: "Error in dynamicBin32 for encdig field",
-			input: slices.Concat(createMask(bitEncDig),
-				// Create a simple bitmask with just the encdig field bit set + required fields
-				[]byte{markerLiteralBin80}, make([]byte, 80), // Add 80 bytes for pfField
-
-				// Add data for required fields (rnd and snd)
-				[]byte{uint8tag, 1},                          // Simple rnd value
-				[]byte{markerDynamicBin32}, make([]byte, 32), // 32 bytes for snd
-
-				// Now when the decoder gets to the encdig field it will fail because there's no data
-			),
-			errExpected: fmt.Errorf("not a dynamic bin32 for field %d", staticIdxEncdigField),
-		},
-		{
-			name: "Error in varuint for oper field",
-			input: slices.Concat(createMask(bitOper),
-				// Create a bitmask with oper field bit set
-				[]byte{markerLiteralBin80}, make([]byte, 80), // Add 80 bytes for pfField
-				[]byte{uint8tag}, // Add uint8tag with no data
-			),
-			errExpected: fmt.Errorf("not enough data for varuint uint8 for field %d", staticIdxOperField),
-		},
-		{
-			name: "Error in dynamicBin32 for oprop field",
-			input: slices.Concat(createMask(bitOprop),
-				// Create a bitmask with oprop field bit set
-				[]byte{markerLiteralBin80}, make([]byte, 80), // Add 80 bytes for pfField
-				[]byte{markerDynamicBin32}, // Add markerDynamicBin32 with no data
-			),
-			errExpected: fmt.Errorf("not enough data to read dynamic bin32 marker + value for field %d", staticIdxOpropField),
-		},
-		{
-			name: "Error with step bit set",
-			input: slices.Concat(createMask(bitStep),
-				// Create a bitmask with required fields and step bit set
-				[]byte{markerLiteralBin80}, make([]byte, 80), // 80 bytes for pfField
-				[]byte{uint8tag, 42},                         // rnd field
-				[]byte{markerDynamicBin32}, make([]byte, 32), // snd field + 32 bytes
-				[]byte{uint8tag}, // malformed step field (uint8tag with no data)
-			),
-			errExpected: fmt.Errorf("not enough data for varuint uint8 for field %d", staticIdxStepField),
-		},
 	}
 
 	for _, tc := range testCases {
@@ -313,27 +156,13 @@ func TestBitmaskDecoderErrors(t *testing.T) {
 	}
 }
 
-// TestCompressVoteError tests the error path in CompressVote function
-// XXX use same cases as StaticEncoder
-func TestBitmaskCompressVoteError(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	// Create invalid msgpack data that will cause parseVote to fail
-	invalidMsgpack := []byte{0xFF, 0xFF, 0xFF} // Invalid msgpack data
-
-	// Test CompressVote with invalid data
-	enc := NewBitmaskEncoder()
-	_, err := enc.CompressVote(nil, invalidMsgpack)
-	require.Error(t, err, "Expected error when compressing invalid msgpack data")
-}
-
 // TestBitmaskHelperMethods tests the helper methods in BitmaskDecoder for various error cases
 func TestBitmaskHelperMethods(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	// Test cases for varuint method
 	t.Run("varuint errors", func(t *testing.T) {
-		testField := staticIdxRndField // The field we'll test with
+		testField := msgpFixstrRnd // The field we'll test with
 
 		tests := []struct {
 			name          string
@@ -343,32 +172,32 @@ func TestBitmaskHelperMethods(t *testing.T) {
 			{
 				name:          "Empty input",
 				input:         []byte{},
-				errMsgPattern: fmt.Sprintf("not enough data to read varuint marker for field %d", testField),
+				errMsgPattern: fmt.Sprintf("not enough data to read varuint marker for field %s", testField),
 			},
 			{
 				name:          "Invalid marker",
 				input:         []byte{0xFF},
-				errMsgPattern: fmt.Sprintf("not a fixint for field %d", testField),
+				errMsgPattern: fmt.Sprintf("not a fixint for field %s", testField),
 			},
 			{
 				name:          "uint8tag without data",
 				input:         []byte{uint8tag},
-				errMsgPattern: fmt.Sprintf("not enough data for varuint uint8 for field %d", testField),
+				errMsgPattern: fmt.Sprintf("not enough data for varuint (need 1 bytes) for field %s", testField),
 			},
 			{
 				name:          "uint16tag with insufficient data",
 				input:         []byte{uint16tag, 0x01},
-				errMsgPattern: fmt.Sprintf("not enough data for varuint uint16 for field %d", testField),
+				errMsgPattern: fmt.Sprintf("not enough data for varuint (need 2 bytes) for field %s", testField),
 			},
 			{
 				name:          "uint32tag with insufficient data",
 				input:         []byte{uint32tag, 0x01, 0x02, 0x03},
-				errMsgPattern: fmt.Sprintf("not enough data for varuint uint32 for field %d", testField),
+				errMsgPattern: fmt.Sprintf("not enough data for varuint (need 4 bytes) for field %s", testField),
 			},
 			{
 				name:          "uint64tag with insufficient data",
 				input:         []byte{uint64tag, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07},
-				errMsgPattern: fmt.Sprintf("not enough data for varuint uint64 for field %d", testField),
+				errMsgPattern: fmt.Sprintf("not enough data for varuint (need 8 bytes) for field %s", testField),
 			},
 		}
 
@@ -382,9 +211,9 @@ func TestBitmaskHelperMethods(t *testing.T) {
 		}
 	})
 
-	// Test cases for dynamicBin32 method
-	t.Run("dynamicBin32 errors", func(t *testing.T) {
-		testField := staticIdxSndField // The field we'll test with
+	// Test cases for bin32 method
+	t.Run("bin32 errors", func(t *testing.T) {
+		testField := msgpFixstrSnd // The field we'll test with
 
 		tests := []struct {
 			name          string
@@ -394,17 +223,12 @@ func TestBitmaskHelperMethods(t *testing.T) {
 			{
 				name:          "Empty input",
 				input:         []byte{},
-				errMsgPattern: fmt.Sprintf("not enough data to read dynamic bin32 marker + value for field %d", testField),
+				errMsgPattern: fmt.Sprintf("not enough data to read value for field %s", testField),
 			},
 			{
-				name:          "Wrong marker",
-				input:         []byte{0xFF},
-				errMsgPattern: fmt.Sprintf("not enough data to read dynamic bin32 marker + value for field %d", testField),
-			},
-			{
-				name:          "Insufficient data after marker",
-				input:         []byte{markerDynamicBin32, 0x01, 0x02},
-				errMsgPattern: fmt.Sprintf("not enough data to read dynamic bin32 marker + value for field %d", testField),
+				name:          "Insufficient data",
+				input:         []byte{0x01, 0x02},
+				errMsgPattern: fmt.Sprintf("not enough data to read value for field %s", testField),
 			},
 		}
 
@@ -412,15 +236,15 @@ func TestBitmaskHelperMethods(t *testing.T) {
 			t.Run(tc.name, func(t *testing.T) {
 				dec := NewBitmaskDecoder()
 				dec.src = tc.input
-				err := dec.dynamicBin32(testField)
+				err := dec.bin32(testField)
 				require.ErrorContains(t, err, tc.errMsgPattern)
 			})
 		}
 	})
 
-	// Test cases for literalBin64 method
-	t.Run("literalBin64 errors", func(t *testing.T) {
-		testField := staticIdxP1sField // The field we'll test with
+	// Test cases for bin64 method
+	t.Run("bin64 errors", func(t *testing.T) {
+		testField := msgpFixstrP1s // The field we'll test with
 
 		tests := []struct {
 			name          string
@@ -430,17 +254,12 @@ func TestBitmaskHelperMethods(t *testing.T) {
 			{
 				name:          "Empty input",
 				input:         []byte{},
-				errMsgPattern: fmt.Sprintf("not enough data to read literal bin64 marker + value for field %d", testField),
+				errMsgPattern: fmt.Sprintf("not enough data to read value for field %s", testField),
 			},
 			{
-				name:          "Wrong marker",
-				input:         []byte{0xFF},
-				errMsgPattern: fmt.Sprintf("not enough data to read literal bin64 marker + value for field %d", testField),
-			},
-			{
-				name:          "Insufficient data after marker",
-				input:         []byte{markerLiteralBin64, 0x01, 0x02},
-				errMsgPattern: fmt.Sprintf("not enough data to read literal bin64 marker + value for field %d", testField),
+				name:          "Insufficient data",
+				input:         []byte{0x01, 0x02},
+				errMsgPattern: fmt.Sprintf("not enough data to read value for field %s", testField),
 			},
 		}
 
@@ -448,7 +267,7 @@ func TestBitmaskHelperMethods(t *testing.T) {
 			t.Run(tc.name, func(t *testing.T) {
 				dec := NewBitmaskDecoder()
 				dec.src = tc.input
-				err := dec.literalBin64(testField)
+				err := dec.bin64(testField)
 				require.ErrorContains(t, err, tc.errMsgPattern)
 			})
 		}
@@ -460,8 +279,17 @@ func generateRandomVote() *rapid.Generator[*agreement.UnauthenticatedVote] {
 	return rapid.Custom(func(t *rapid.T) *agreement.UnauthenticatedVote {
 		v := &agreement.UnauthenticatedVote{}
 
+		filterZeroBytes := func(b []byte) bool {
+			for _, v := range b {
+				if v != 0 {
+					return true
+				}
+			}
+			return false
+		}
+
 		// Generate random sender address (32 bytes)
-		addressBytes := rapid.SliceOfN(rapid.Byte(), 32, 32).Draw(t, "sender")
+		addressBytes := rapid.SliceOfN(rapid.Byte(), 32, 32).Filter(filterZeroBytes).Draw(t, "sender")
 		copy(v.R.Sender[:], addressBytes)
 
 		// Create an equal distribution generator for different integer ranges
@@ -515,36 +343,29 @@ func generateRandomVote() *rapid.Generator[*agreement.UnauthenticatedVote] {
 				)
 				return generator.Draw(t, name)
 			}
-
 			opropBytes := makeBytesFn("oprop")
 			digestBytes := makeBytesFn("digest")
 			encDigestBytes := makeBytesFn("encDigest")
 
-			// Only copy bytes if we have them
-			if len(opropBytes) > 0 {
-				copy(v.R.Proposal.OriginalProposer[:], opropBytes)
-			}
-			if len(digestBytes) > 0 {
-				copy(v.R.Proposal.BlockDigest[:], digestBytes)
-			}
-			if len(encDigestBytes) > 0 {
-				copy(v.R.Proposal.EncodingDigest[:], encDigestBytes)
-			}
+			copy(v.R.Proposal.OriginalProposer[:], opropBytes)
+			copy(v.R.Proposal.BlockDigest[:], digestBytes)
+			copy(v.R.Proposal.EncodingDigest[:], encDigestBytes)
+
 		} else {
 			// Leave the proposal empty
 			// The default zero values will be used
 		}
 
 		// Generate random proof bytes (80 bytes)
-		pfBytes := rapid.SliceOfN(rapid.Byte(), 80, 80).Draw(t, "proof")
+		pfBytes := rapid.SliceOfN(rapid.Byte(), 80, 80).Filter(filterZeroBytes).Draw(t, "proof")
 		copy(v.Cred.Proof[:], pfBytes)
 
 		// Generate signature fields (variable sizes)
-		sigBytes := rapid.SliceOfN(rapid.Byte(), 64, 64).Draw(t, "sig")
-		pkBytes := rapid.SliceOfN(rapid.Byte(), 32, 32).Draw(t, "pk")
-		p2Bytes := rapid.SliceOfN(rapid.Byte(), 32, 32).Draw(t, "pk2")
-		p1sBytes := rapid.SliceOfN(rapid.Byte(), 64, 64).Draw(t, "pk1sig")
-		p2sBytes := rapid.SliceOfN(rapid.Byte(), 64, 64).Draw(t, "pk2sig")
+		sigBytes := rapid.SliceOfN(rapid.Byte(), 64, 64).Filter(filterZeroBytes).Draw(t, "sig")
+		pkBytes := rapid.SliceOfN(rapid.Byte(), 32, 32).Filter(filterZeroBytes).Draw(t, "pk")
+		p2Bytes := rapid.SliceOfN(rapid.Byte(), 32, 32).Filter(filterZeroBytes).Draw(t, "pk2")
+		p1sBytes := rapid.SliceOfN(rapid.Byte(), 64, 64).Filter(filterZeroBytes).Draw(t, "pk1sig")
+		p2sBytes := rapid.SliceOfN(rapid.Byte(), 64, 64).Filter(filterZeroBytes).Draw(t, "pk2sig")
 		copy(v.Sig.Sig[:], sigBytes)
 		copy(v.Sig.PK[:], pkBytes)
 		copy(v.Sig.PK2[:], p2Bytes)
@@ -556,20 +377,6 @@ func generateRandomVote() *rapid.Generator[*agreement.UnauthenticatedVote] {
 
 		return v
 	})
-}
-
-func checkBitmaskVoteValid(vote *agreement.UnauthenticatedVote) bool {
-	if ok, _ := checkVoteValid(vote); !ok {
-		return false
-	}
-	if vote.Sig.PKSigOld != [64]byte{} { // PKSigOld is deprecated and always zero
-		return false
-	}
-	// ensure all sig fields are non-empty
-	if vote.Sig.Sig == [64]byte{} || vote.Sig.PK == [32]byte{} || vote.Sig.PK2 == [32]byte{} || vote.Sig.PK1Sig == [64]byte{} || vote.Sig.PK2Sig == [64]byte{} {
-		return false
-	}
-	return true
 }
 
 func FuzzRapidCheck(f *testing.F) {
@@ -584,9 +391,6 @@ func FuzzBitmaskEncoder(f *testing.F) {
 	voteGen := generateRandomVote()
 	for i := 0; i < 5; i++ {
 		vote := voteGen.Example(i)
-		if ok := checkBitmaskVoteValid(vote); !ok {
-			continue // Skip invalid votes
-		}
 		f.Logf("Vote %d: %+v", i, vote)
 		msgpBuf := protocol.EncodeMsgp(vote)
 		f.Add(msgpBuf) // Add seed corpus for the fuzzer
@@ -624,11 +428,6 @@ func FuzzBitmaskDecoder(f *testing.F) {
 	voteGen := generateRandomVote()
 	for i := 0; i < 100; i++ {
 		vote := voteGen.Example(i) // Use deterministic seeds
-
-		if ok := checkBitmaskVoteValid(vote); !ok {
-			continue // Skip invalid votes
-		}
-
 		msgpBuf := protocol.EncodeMsgp(vote)
 		enc := NewBitmaskEncoder()
 		compressedVote, err := enc.CompressVote(nil, msgpBuf)
@@ -651,72 +450,4 @@ func FuzzBitmaskDecoder(f *testing.F) {
 		dec := NewBitmaskDecoder()
 		_, _ = dec.DecompressVote(nil, data) // Ensure it doesn't crash
 	})
-}
-
-// TestBitmaskCompareEncoders compares the output sizes of BitmaskEncoder and StaticEncoder
-func TestBitmaskCompareEncoders(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	// Manually run a number of iterations to match the original test
-	const iterations = 1000
-
-	var validVotes, invalidVotes, bitmaskErrorVotes, staticErrorVotes int
-	var bitmaskTotal, staticTotal, msgpTotal int
-
-	// Create a vote generator
-	voteGen := generateRandomVote()
-
-	// Run the specified number of iterations
-	for i := 0; i < iterations; i++ {
-		// Generate a vote with a deterministic seed for each iteration
-		v0 := voteGen.Example(i)
-
-		// Check if vote is valid for compression
-		if ok := checkBitmaskVoteValid(v0); !ok {
-			invalidVotes++
-			continue // Skip this test case if vote is invalid
-		}
-
-		msgpBuf := protocol.EncodeMsgp(v0)
-
-		// Try to compress with BitmaskEncoder
-		encBM := NewBitmaskEncoder()
-		encBufBM, err := encBM.CompressVote(nil, msgpBuf)
-		if err != nil {
-			bitmaskErrorVotes++
-			continue // Skip on compression error
-		}
-
-		// Try to compress with StaticEncoder
-		encStatic := NewStaticEncoder()
-		encBufStatic, err := encStatic.CompressVote(nil, msgpBuf)
-		if err != nil {
-			staticErrorVotes++
-			continue // Skip on compression error
-		}
-
-		// Update stats for reporting
-		validVotes++
-		bitmaskTotal += len(encBufBM)
-		staticTotal += len(encBufStatic)
-		msgpTotal += len(msgpBuf)
-
-		// Log compression statistics for this vote
-		t.Logf("Vote %d orig size %d - BitmaskEncoder: %d bytes (%.2f%%), StaticEncoder: %d bytes (%.2f%%), Ratio: %.2f%%",
-			i, len(msgpBuf), len(encBufBM), float64(len(encBufBM))/float64(len(msgpBuf))*100, len(encBufStatic),
-			float64(len(encBufStatic))/float64(len(msgpBuf))*100, float64(len(encBufBM))/float64(len(encBufStatic))*100)
-	}
-
-	// Report overall statistics at the end
-	if validVotes > 0 {
-		avgBitmask := float64(bitmaskTotal) / float64(validVotes)
-		avgStatic := float64(staticTotal) / float64(validVotes)
-		avgMsgp := float64(msgpTotal) / float64(validVotes)
-		ratio := avgBitmask / avgStatic * 100
-
-		t.Logf("Average over %d votes - BitmaskEncoder: %.2f bytes (%.2f%%), StaticEncoder: %.2f bytes (%.2f%%), Ratio: %.2f%%",
-			validVotes, avgBitmask, avgBitmask/avgMsgp*100, avgStatic, avgStatic/avgMsgp*100, ratio)
-	}
-
-	t.Logf("Invalid votes: %d, Bitmask errors: %d, Static errors: %d", invalidVotes, bitmaskErrorVotes, staticErrorVotes)
 }

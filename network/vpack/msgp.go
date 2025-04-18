@@ -20,27 +20,31 @@ import (
 	"fmt"
 )
 
+// generates static_table.go and parse.go
+//go:generate go run gen.go
+
 // Minimal msgpack constants used here
 const (
-	fixMapMask = 0x80
-	fixMapMax  = 0x8f
-	fixStrMask = 0xa0
-	fixStrMax  = 0xbf
-	bin8       = 0xc4
-	bin16      = 0xc5
-	bin32      = 0xc6
-	uint8tag   = 0xcc
-	uint16tag  = 0xcd
-	uint32tag  = 0xce
-	uint64tag  = 0xcf
+	fixMapMask    = 0x80
+	fixMapMax     = 0x8f
+	fixStrMask    = 0xa0
+	fixStrMax     = 0xbf
+	bin8          = 0xc4
+	msgpBin8Len32 = "\xc4\x20" // bin8 marker with 32 items
+	msgpBin8Len64 = "\xc4\x40" // bin8 marker with 64 items
+	msgpBin8Len80 = "\xc4\x50" // bin8 marker with 80 items
+	uint8tag      = 0xcc
+	uint16tag     = 0xcd
+	uint32tag     = 0xce
+	uint64tag     = 0xcf
 
-	msgpMapMarker0 = "\x80" // Map with 0 items
-	msgpMapMarker1 = "\x81" // Map with 1 items
-	msgpMapMarker2 = "\x82" // Map with 2 items
-	msgpMapMarker3 = "\x83" // Map with 3 items
-	msgpMapMarker4 = "\x84" // Map with 4 items
-	msgpMapMarker5 = "\x85" // Map with 5 items
-	msgpMapMarker6 = "\x86" // Map with 6 items
+	msgpMapMarker0 = 0x80 // Map with 0 items
+	msgpMapMarker1 = 0x81 // Map with 1 items
+	msgpMapMarker2 = 0x82 // Map with 2 items
+	msgpMapMarker3 = 0x83 // Map with 3 items
+	msgpMapMarker4 = 0x84 // Map with 4 items
+	msgpMapMarker5 = 0x85 // Map with 5 items
+	msgpMapMarker6 = 0x86 // Map with 6 items
 )
 
 // parser provides a zero-allocation parser for vote messages.
