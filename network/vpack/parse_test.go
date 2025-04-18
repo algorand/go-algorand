@@ -17,7 +17,6 @@
 package vpack
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/algorand/go-algorand/agreement"
@@ -25,7 +24,6 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 // a string that is greater than the max 5-bit fixmap size
@@ -150,36 +148,9 @@ func TestParseVoteErrors(t *testing.T) {
 	}
 }
 
-// TestParseVaruintError asserts that an error is returned when writeVaruint fails,
-// to improve test coverage.
-func TestParseVaruintError(t *testing.T) {
-	partitiontest.PartitionTest(t)
-	v := agreement.UnauthenticatedVote{}
-	v.Cred.Proof[0] = 1
-	v.Sig.PK[0] = 1
-	// make 4 votes, each with a different varuint set
-	v1 := v
-	v1.R.Round = 1
-	v2 := v
-	v2.R.Step = 100
-	v3 := v
-	v3.R.Period = 200
-	v4 := v
-	v4.R.Proposal.OriginalPeriod = 300
-
-	for i, v := range []agreement.UnauthenticatedVote{v1, v2, v3, v4} {
-		t.Logf("test %d", i)
-		msgpbuf := protocol.Encode(&v)
-		w := &mockCompressWriter{failVaruint: true}
-		err := parseVote(msgpbuf, w)
-		require.ErrorContains(t, err, "mockCompressWriter.writeVaruint")
-	}
-}
-
 // mockCompressWriter implements compressWriter for testing
 type mockCompressWriter struct {
-	failVaruint bool
-	writes      []any
+	writes []any
 }
 
 func (m *mockCompressWriter) writeBin64(v voteValueType, val [64]byte) {
@@ -191,10 +162,6 @@ func (m *mockCompressWriter) writeBin80(v voteValueType, val [80]byte) {
 func (m *mockCompressWriter) writeBin32(v voteValueType, val [32]byte) {
 	m.writes = append(m.writes, val)
 }
-func (m *mockCompressWriter) writeVaruint(v voteValueType, valBytes []byte) error {
-	if m.failVaruint {
-		return fmt.Errorf("mockCompressWriter.writeVaruint")
-	}
+func (m *mockCompressWriter) writeVaruint(v voteValueType, valBytes []byte) {
 	m.writes = append(m.writes, valBytes)
-	return nil
 }

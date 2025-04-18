@@ -42,7 +42,7 @@ const defaultCompressCapacity = 1024
 
 // parseVote parses a vote and writes the values to the compressWriter.
 type compressWriter interface {
-	writeVaruint(voteValueType, []byte) error
+	writeVaruint(voteValueType, []byte)
 	writeBin32(voteValueType, [32]byte)
 	writeBin64(voteValueType, [64]byte)
 	writeBin80(voteValueType, [80]byte)
@@ -110,10 +110,9 @@ func (e *BitmaskEncoder) updateMask(field voteValueType) {
 
 // writeVaruint implements the compressWriter interface, but never returns error.
 // It passes the msgpack-encoded varuint bytes through as-is.
-func (e *BitmaskEncoder) writeVaruint(field voteValueType, b []byte) error {
+func (e *BitmaskEncoder) writeVaruint(field voteValueType, b []byte) {
 	e.updateMask(field)
 	e.buf = append(e.buf, b...)
-	return nil
 }
 
 func (e *BitmaskEncoder) writeBin32(field voteValueType, b [32]byte) {

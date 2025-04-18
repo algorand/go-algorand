@@ -4,6 +4,49 @@ package vpack
 
 import "fmt"
 
+// voteValueType enumerates every value-bearing field (full path).
+type voteValueType uint8
+
+const (
+	credPfVoteValue voteValueType = iota
+	rPerVoteValue
+	rPropDigVoteValue
+	rPropEncdigVoteValue
+	rPropOperVoteValue
+	rPropOpropVoteValue
+	rRndVoteValue
+	rSndVoteValue
+	rStepVoteValue
+	sigP1sVoteValue
+	sigP2VoteValue
+	sigP2sVoteValue
+	sigPVoteValue
+	sigPsVoteValue
+	sigSVoteValue
+)
+
+const (
+	msgpFixstrCred   = "\xa4cred"
+	msgpFixstrDig    = "\xa3dig"
+	msgpFixstrEncdig = "\xa6encdig"
+	msgpFixstrOper   = "\xa4oper"
+	msgpFixstrOprop  = "\xa5oprop"
+	msgpFixstrP      = "\xa1p"
+	msgpFixstrP1s    = "\xa3p1s"
+	msgpFixstrP2     = "\xa2p2"
+	msgpFixstrP2s    = "\xa3p2s"
+	msgpFixstrPer    = "\xa3per"
+	msgpFixstrPf     = "\xa2pf"
+	msgpFixstrProp   = "\xa4prop"
+	msgpFixstrPs     = "\xa2ps"
+	msgpFixstrR      = "\xa1r"
+	msgpFixstrRnd    = "\xa3rnd"
+	msgpFixstrS      = "\xa1s"
+	msgpFixstrSig    = "\xa3sig"
+	msgpFixstrSnd    = "\xa3snd"
+	msgpFixstrStep   = "\xa4step"
+)
+
 func parseVote(data []byte, c compressWriter) error {
 	p := newParser(data)
 
@@ -65,9 +108,7 @@ func parseVote(data []byte, c compressWriter) error {
 					if err != nil {
 						return fmt.Errorf("reading per: %w", err)
 					}
-					if err := c.writeVaruint(rPerVoteValue, val); err != nil {
-						return fmt.Errorf("writing per: %w", err)
-					}
+					c.writeVaruint(rPerVoteValue, val)
 				case "prop":
 
 					{ // Parse proposalValue
@@ -101,9 +142,7 @@ func parseVote(data []byte, c compressWriter) error {
 								if err != nil {
 									return fmt.Errorf("reading oper: %w", err)
 								}
-								if err := c.writeVaruint(rPropOperVoteValue, val); err != nil {
-									return fmt.Errorf("writing oper: %w", err)
-								}
+								c.writeVaruint(rPropOperVoteValue, val)
 							case "oprop":
 								if val, err := p.readBin32(); err != nil {
 									return fmt.Errorf("reading oprop: %w", err)
@@ -121,9 +160,7 @@ func parseVote(data []byte, c compressWriter) error {
 					if err != nil {
 						return fmt.Errorf("reading rnd: %w", err)
 					}
-					if err := c.writeVaruint(rRndVoteValue, val); err != nil {
-						return fmt.Errorf("writing rnd: %w", err)
-					}
+					c.writeVaruint(rRndVoteValue, val)
 				case "snd":
 					if val, err := p.readBin32(); err != nil {
 						return fmt.Errorf("reading snd: %w", err)
@@ -135,9 +172,7 @@ func parseVote(data []byte, c compressWriter) error {
 					if err != nil {
 						return fmt.Errorf("reading step: %w", err)
 					}
-					if err := c.writeVaruint(rStepVoteValue, val); err != nil {
-						return fmt.Errorf("writing step: %w", err)
-					}
+					c.writeVaruint(rStepVoteValue, val)
 				default:
 					return fmt.Errorf("unexpected field in rawVote: %q", key)
 				}

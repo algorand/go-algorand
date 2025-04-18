@@ -20,7 +20,7 @@ import (
 	"fmt"
 )
 
-// generates static_table.go and parse.go
+// generates parse_gen.go
 //go:generate go run gen.go
 
 // Minimal msgpack constants used here
