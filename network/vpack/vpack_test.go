@@ -78,7 +78,7 @@ func TestEncodingTest(t *testing.T) {
 		}
 
 		msgpBuf := protocol.EncodeMsgp(v0)
-		enc := NewBitmaskEncoder()
+		enc := NewStatelessEncoder()
 		encBuf, err := enc.CompressVote(nil, msgpBuf)
 		if expectError != "" {
 			// skip expected errors
@@ -90,7 +90,7 @@ func TestEncodingTest(t *testing.T) {
 		require.NoError(t, err)
 
 		// decompress and compare to original
-		dec := NewBitmaskDecoder()
+		dec := NewStatelessDecoder()
 		decMsgpBuf, err := dec.DecompressVote(nil, encBuf)
 		jsonBuf, _ := json.MarshalIndent(v0, "", "  ")
 		require.NoError(t, err, "got vote %s", jsonBuf)
@@ -137,13 +137,13 @@ func FuzzMsgpVote(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, buf []byte) {
-		enc := NewBitmaskEncoder()
+		enc := NewStatelessEncoder()
 		encBuf, err := enc.CompressVote(nil, buf)
 		if err != nil {
 			// invalid msgpbuf, skip
 			return
 		}
-		dec := NewBitmaskDecoder()
+		dec := NewStatelessDecoder()
 		decBuf, err := dec.DecompressVote(nil, encBuf)
 		require.NoError(t, err)
 		require.Equal(t, buf, decBuf)
@@ -191,7 +191,7 @@ func FuzzVoteFields(f *testing.F) {
 		}
 
 		msgpBuf := protocol.Encode(&v0)
-		enc := NewBitmaskEncoder()
+		enc := NewStatelessEncoder()
 		encBuf, err := enc.CompressVote(nil, msgpBuf)
 		if expectError != "" {
 			// skip expected errors
@@ -200,7 +200,7 @@ func FuzzVoteFields(f *testing.F) {
 			return
 		}
 		require.NoError(t, err)
-		dec := NewBitmaskDecoder()
+		dec := NewStatelessDecoder()
 		decBuf, err := dec.DecompressVote(nil, encBuf)
 		require.NoError(t, err)
 		require.Equal(t, msgpBuf, decBuf)
@@ -225,7 +225,7 @@ func FuzzVoteFields(f *testing.F) {
 // 			continue
 // 		}
 // 		msgpBuf := protocol.EncodeMsgp(vote)
-// 		enc := NewBitmaskEncoder()
+// 		enc := NewStatelessEncoder()
 // 		compressedVote, err := enc.CompressVote(nil, msgpBuf)
 // 		require.NoError(f, err)
 // 		f.Add(compressedVote)

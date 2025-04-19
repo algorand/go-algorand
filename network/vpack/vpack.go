@@ -48,26 +48,26 @@ type compressWriter interface {
 	writeBin80(voteValueType, [80]byte)
 }
 
-// BitmaskEncoder compresses a msgpack-encoded vote by stripping all msgpack
+// StatelessEncoder compresses a msgpack-encoded vote by stripping all msgpack
 // formatting and field names, replacing them with a bitmask indicating which
 // fields are present. It is not thread-safe.
-type BitmaskEncoder struct {
+type StatelessEncoder struct {
 	buf  []byte
 	mask uint8
 
 	requiredFields uint8
 }
 
-// NewBitmaskEncoder returns a new BitmaskEncoder.
-func NewBitmaskEncoder() *BitmaskEncoder {
-	return &BitmaskEncoder{}
+// NewStatelessEncoder returns a new StatelessEncoder.
+func NewStatelessEncoder() *StatelessEncoder {
+	return &StatelessEncoder{}
 }
 
 // CompressVote appends a compressed vote in src to dst.
 // If dst is nil, a new slice is allocated.
 // The returned slice may be the same as dst.
 // To re-use dst, run like: dst = enc.CompressVote(dst[:0], src)
-func (e *BitmaskEncoder) CompressVote(dst, src []byte) ([]byte, error) {
+func (e *StatelessEncoder) CompressVote(dst, src []byte) ([]byte, error) {
 	if dst == nil {
 		dst = make([]byte, 0, defaultCompressCapacity)
 	}
@@ -88,7 +88,7 @@ func (e *BitmaskEncoder) CompressVote(dst, src []byte) ([]byte, error) {
 	return e.buf, nil
 }
 
-func (e *BitmaskEncoder) updateMask(field voteValueType) {
+func (e *StatelessEncoder) updateMask(field voteValueType) {
 	switch field {
 	case rPerVoteValue:
 		e.mask |= bitPer
@@ -110,38 +110,38 @@ func (e *BitmaskEncoder) updateMask(field voteValueType) {
 
 // writeVaruint implements the compressWriter interface, but never returns error.
 // It passes the msgpack-encoded varuint bytes through as-is.
-func (e *BitmaskEncoder) writeVaruint(field voteValueType, b []byte) {
+func (e *StatelessEncoder) writeVaruint(field voteValueType, b []byte) {
 	e.updateMask(field)
 	e.buf = append(e.buf, b...)
 }
 
-func (e *BitmaskEncoder) writeBin32(field voteValueType, b [32]byte) {
+func (e *StatelessEncoder) writeBin32(field voteValueType, b [32]byte) {
 	e.updateMask(field)
 	e.buf = append(e.buf, b[:]...)
 }
 
-func (e *BitmaskEncoder) writeBin64(field voteValueType, b [64]byte) {
+func (e *StatelessEncoder) writeBin64(field voteValueType, b [64]byte) {
 	e.updateMask(field)
 	e.buf = append(e.buf, b[:]...)
 }
 
-func (e *BitmaskEncoder) writeBin80(field voteValueType, b [80]byte) {
+func (e *StatelessEncoder) writeBin80(field voteValueType, b [80]byte) {
 	e.updateMask(field)
 	e.buf = append(e.buf, b[:]...)
 }
 
-// BitmaskDecoder decompresses votes that were compressed by BitmaskEncoder.
-type BitmaskDecoder struct {
+// StatelessDecoder decompresses votes that were compressed by StatelessEncoder.
+type StatelessDecoder struct {
 	dst, src []byte
 	pos      int
 }
 
-// NewBitmaskDecoder returns a new BitmaskDecoder.
-func NewBitmaskDecoder() *BitmaskDecoder {
-	return &BitmaskDecoder{}
+// NewStatelessDecoder returns a new StatelessDecoder.
+func NewStatelessDecoder() *StatelessDecoder {
+	return &StatelessDecoder{}
 }
 
-func (d *BitmaskDecoder) rawVoteMapSize(mask uint8) (cnt uint8) {
+func (d *StatelessDecoder) rawVoteMapSize(mask uint8) (cnt uint8) {
 	// Count how many of per, step are set (rnd & snd must be present)
 	cnt = 2 + uint8(bits.OnesCount8(mask&(bitPer|bitStep)))
 	// Add 1 if any prop bits are set
@@ -151,14 +151,14 @@ func (d *BitmaskDecoder) rawVoteMapSize(mask uint8) (cnt uint8) {
 	return
 }
 
-func (d *BitmaskDecoder) proposalValueMapSize(mask uint8) uint8 {
+func (d *StatelessDecoder) proposalValueMapSize(mask uint8) uint8 {
 	// Count how many of dig, encdig, oper, oprop are set
 	return uint8(bits.OnesCount8(mask & (bitDig | bitEncDig | bitOper | bitOprop)))
 }
 
 // DecompressVote decodes a compressed vote in src and appends it to dst.
 // To re-use dst, run like: dst = dec.DecompressVote(dst[:0], src)
-func (d *BitmaskDecoder) DecompressVote(dst, src []byte) ([]byte, error) {
+func (d *StatelessDecoder) DecompressVote(dst, src []byte) ([]byte, error) {
 	if len(src) < 2 {
 		return nil, fmt.Errorf("header missing")
 	}
@@ -280,7 +280,7 @@ func (d *BitmaskDecoder) DecompressVote(dst, src []byte) ([]byte, error) {
 	return d.dst, nil
 }
 
-func (d *BitmaskDecoder) bin64(fieldStr string) error {
+func (d *StatelessDecoder) bin64(fieldStr string) error {
 	if d.pos+64 > len(d.src) {
 		return fmt.Errorf("not enough data to read value for field %s", fieldStr)
 	}
@@ -291,7 +291,7 @@ func (d *BitmaskDecoder) bin64(fieldStr string) error {
 	return nil
 }
 
-func (d *BitmaskDecoder) bin32(fieldStr string) error {
+func (d *StatelessDecoder) bin32(fieldStr string) error {
 	if d.pos+32 > len(d.src) {
 		return fmt.Errorf("not enough data to read value for field %s", fieldStr)
 	}
@@ -302,7 +302,7 @@ func (d *BitmaskDecoder) bin32(fieldStr string) error {
 	return nil
 }
 
-func (d *BitmaskDecoder) bin80(fieldStr string) error {
+func (d *StatelessDecoder) bin80(fieldStr string) error {
 	if d.pos+80 > len(d.src) {
 		return fmt.Errorf("not enough data to read value for field %s,  d.pos=%d, len(src)=%d", fieldStr, d.pos, len(d.src))
 	}
@@ -313,7 +313,7 @@ func (d *BitmaskDecoder) bin80(fieldStr string) error {
 	return nil
 }
 
-func (d *BitmaskDecoder) varuint(fieldName string) error {
+func (d *StatelessDecoder) varuint(fieldName string) error {
 	if d.pos+1 > len(d.src) {
 		return fmt.Errorf("not enough data to read varuint marker for field %s", fieldName)
 	}

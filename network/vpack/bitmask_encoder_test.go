@@ -33,33 +33,30 @@ import (
 	"pgregory.net/rapid"
 )
 
-// TestBitmaskEncoder tests the BitmaskEncoder/Decoder using randomly generated votes
-// This replaces both TestBitmaskEncoder and TestBitmaskEncoderMultiple with a more
+// TestStatelessEncoder tests the StatelessEncoder/Decoder using randomly generated votes
+// This replaces both TestStatelessEncoder and TestStatelessEncoderMultiple with a more
 // comprehensive property-based test using rapid
-func TestBitmaskEncoder(t *testing.T) {
+func TestStatelessEncoder(t *testing.T) {
 	partitiontest.PartitionTest(t)
-	rapid.Check(t, checkBitmaskEncoder)
+	rapid.Check(t, checkStatelessEncoder)
 }
 
-func checkBitmaskEncoder(t *rapid.T) {
+func checkStatelessEncoder(t *rapid.T) {
 	// Generate a random vote
 	v0 := generateRandomVote().Draw(t, "vote")
 
 	// Convert to msgpack
 	msgpBuf := protocol.EncodeMsgp(v0)
 
-	// Try to compress with BitmaskEncoder
-	encBM := NewBitmaskEncoder()
+	// Try to compress with StatelessEncoder
+	encBM := NewStatelessEncoder()
 	encBufBM, err := encBM.CompressVote(nil, msgpBuf)
 	require.NoError(t, err)
 
 	// Verify the bitmask is at the beginning
 	require.GreaterOrEqual(t, len(encBufBM), 2, "Compressed data should have at least 2 bytes for header")
-	//	mask := uint8(encBufBM[0])
-	//	require.NotZero(t, mask, "Bitmask should be non-zero")
-
-	// Decompress with BitmaskDecoder
-	decBM := NewBitmaskDecoder()
+	// Decompress with StatelessDecoder
+	decBM := NewStatelessDecoder()
 	decBufBM, err := decBM.DecompressVote(nil, encBufBM)
 	require.NoError(t, err)
 
@@ -87,8 +84,8 @@ func createMask(additionalBits ...uint8) []byte {
 	return []byte{mask, 0}
 }
 
-// Test error cases for BitmaskDecoder
-func TestBitmaskDecoderErrors(t *testing.T) {
+// Test error cases for StatelessDecoder
+func TestStatelessDecoderErrors(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	testCases := []struct {
@@ -135,7 +132,7 @@ func TestBitmaskDecoderErrors(t *testing.T) {
 				vote := voteGen.Example(0)
 				// Encode and compress it
 				msgpBuf := protocol.EncodeMsgp(vote)
-				enc := NewBitmaskEncoder()
+				enc := NewStatelessEncoder()
 				compressed, err := enc.CompressVote(nil, msgpBuf)
 				if err != nil {
 					panic(fmt.Sprintf("Failed to compress valid vote: %v", err))
@@ -149,15 +146,15 @@ func TestBitmaskDecoderErrors(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			dec := NewBitmaskDecoder()
+			dec := NewStatelessDecoder()
 			_, err := dec.DecompressVote(nil, tc.input)
 			require.ErrorContains(t, err, tc.errExpected.Error())
 		})
 	}
 }
 
-// TestBitmaskHelperMethods tests the helper methods in BitmaskDecoder for various error cases
-func TestBitmaskHelperMethods(t *testing.T) {
+// TestStatelessHelperMethods tests the helper methods in StatelessDecoder for various error cases
+func TestStatelessHelperMethods(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
 	// Test cases for varuint method
@@ -203,7 +200,7 @@ func TestBitmaskHelperMethods(t *testing.T) {
 
 		for _, tc := range tests {
 			t.Run(tc.name, func(t *testing.T) {
-				dec := NewBitmaskDecoder()
+				dec := NewStatelessDecoder()
 				dec.src = tc.input
 				err := dec.varuint(testField)
 				require.ErrorContains(t, err, tc.errMsgPattern)
@@ -234,7 +231,7 @@ func TestBitmaskHelperMethods(t *testing.T) {
 
 		for _, tc := range tests {
 			t.Run(tc.name, func(t *testing.T) {
-				dec := NewBitmaskDecoder()
+				dec := NewStatelessDecoder()
 				dec.src = tc.input
 				err := dec.bin32(testField)
 				require.ErrorContains(t, err, tc.errMsgPattern)
@@ -265,7 +262,7 @@ func TestBitmaskHelperMethods(t *testing.T) {
 
 		for _, tc := range tests {
 			t.Run(tc.name, func(t *testing.T) {
-				dec := NewBitmaskDecoder()
+				dec := NewStatelessDecoder()
 				dec.src = tc.input
 				err := dec.bin64(testField)
 				require.ErrorContains(t, err, tc.errMsgPattern)
@@ -372,7 +369,7 @@ func generateRandomVote() *rapid.Generator[*agreement.UnauthenticatedVote] {
 		copy(v.Sig.PK1Sig[:], p1sBytes)
 		copy(v.Sig.PK2Sig[:], p2sBytes)
 
-		// PKSigOld is deprecated and always zero when encoded with BitmaskEncoder
+		// PKSigOld is deprecated and always zero when encoded with StatelessEncoder
 		v.Sig.PKSigOld = [64]byte{}
 
 		return v
@@ -380,13 +377,13 @@ func generateRandomVote() *rapid.Generator[*agreement.UnauthenticatedVote] {
 }
 
 func FuzzRapidCheck(f *testing.F) {
-	f.Fuzz(rapid.MakeFuzz(checkBitmaskEncoder))
+	f.Fuzz(rapid.MakeFuzz(checkStatelessEncoder))
 }
 
-// FuzzBitmaskEncoder is a fuzz test that generates random votes,
-// compresses them with BitmaskEncoder and decompresses them with BitmaskDecoder.
-func FuzzBitmaskEncoder(f *testing.F) {
-	f.Skip()
+// FuzzStatelessEncoder is a fuzz test that generates random votes,
+// compresses them with StatelessEncoder and decompresses them with StatelessDecoder.
+func FuzzStatelessEncoder(f *testing.F) {
+	//	f.Skip()
 	// Add seed corpus examples
 	voteGen := generateRandomVote()
 	for i := 0; i < 5; i++ {
@@ -400,7 +397,7 @@ func FuzzBitmaskEncoder(f *testing.F) {
 	f.Fuzz(func(t *testing.T, msgpBuf []byte) {
 		// Try to compress the input
 		t.Logf("Input: %v", msgpBuf)
-		enc := NewBitmaskEncoder()
+		enc := NewStatelessEncoder()
 		compressed, err := enc.CompressVote(nil, msgpBuf)
 		if err != nil {
 			// Not valid msgpack data for a vote, skip
@@ -408,7 +405,7 @@ func FuzzBitmaskEncoder(f *testing.F) {
 		}
 
 		// Then decompress it
-		dec := NewBitmaskDecoder()
+		dec := NewStatelessDecoder()
 		decompressed, err := dec.DecompressVote(nil, compressed)
 		if err != nil {
 			t.Fatalf("Failed to decompress valid compressed data: %v", err)
@@ -421,15 +418,15 @@ func FuzzBitmaskEncoder(f *testing.F) {
 	})
 }
 
-// FuzzBitmaskDecoder is a fuzz test specifically targeting the BitmaskDecoder
+// FuzzStatelessDecoder is a fuzz test specifically targeting the StatelessDecoder
 // with potentially malformed input.
-func FuzzBitmaskDecoder(f *testing.F) {
+func FuzzStatelessDecoder(f *testing.F) {
 	// Add valid compressed votes from our random vote generator
 	voteGen := generateRandomVote()
 	for i := 0; i < 100; i++ {
 		vote := voteGen.Example(i) // Use deterministic seeds
 		msgpBuf := protocol.EncodeMsgp(vote)
-		enc := NewBitmaskEncoder()
+		enc := NewStatelessEncoder()
 		compressedVote, err := enc.CompressVote(nil, msgpBuf)
 		if err != nil {
 			continue
@@ -447,7 +444,7 @@ func FuzzBitmaskDecoder(f *testing.F) {
 	f.Add(append(createMask(), 0xFF))
 
 	f.Fuzz(func(t *testing.T, data []byte) {
-		dec := NewBitmaskDecoder()
+		dec := NewStatelessDecoder()
 		_, _ = dec.DecompressVote(nil, data) // Ensure it doesn't crash
 	})
 }
