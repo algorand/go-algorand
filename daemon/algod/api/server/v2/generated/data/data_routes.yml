@@ -14,8 +14,6 @@ output-options:
   - nonparticipating
 # do not exclude endpoints tagged data/experimental
 # - experimental
-  type-mappings:
-    integer: uint64
   skip-prune: true
 additional-imports:
   - alias: "."

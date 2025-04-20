@@ -21,6 +21,12 @@ const (
 	AccountSigTypeSig  AccountSigType = "sig"
 )
 
+// Defines values for TransactionProofHashtype.
+const (
+	TransactionProofHashtypeSha256    TransactionProofHashtype = "sha256"
+	TransactionProofHashtypeSha512256 TransactionProofHashtype = "sha512_256"
+)
+
 // Defines values for AddressRole.
 const (
 	AddressRoleFreezeTarget AddressRole = "freeze-target"
@@ -50,12 +56,6 @@ const (
 	TxTypeKeyreg TxType = "keyreg"
 	TxTypePay    TxType = "pay"
 	TxTypeStpf   TxType = "stpf"
-)
-
-// Defines values for TransactionProofResponseHashtype.
-const (
-	TransactionProofResponseHashtypeSha256    TransactionProofResponseHashtype = "sha256"
-	TransactionProofResponseHashtypeSha512256 TransactionProofResponseHashtype = "sha512_256"
 )
 
 // Defines values for AccountInformationParamsFormat.
@@ -385,6 +385,9 @@ type ApplicationParams struct {
 
 	// LocalStateSchema Specifies maximums on the number of each type that may be stored.
 	LocalStateSchema *ApplicationStateSchema `json:"local-state-schema,omitempty"`
+
+	// Version \[v\] the number of updates to the application programs
+	Version *uint64 `json:"version,omitempty"`
 }
 
 // ApplicationStateOperation An operation against an application's global/local/box state.
@@ -549,11 +552,11 @@ type BoxReference struct {
 // BuildVersion defines model for BuildVersion.
 type BuildVersion struct {
 	Branch      string `json:"branch"`
-	BuildNumber uint64 `json:"build_number"`
+	BuildNumber int64  `json:"build_number"`
 	Channel     string `json:"channel"`
 	CommitHash  string `json:"commit_hash"`
-	Major       uint64 `json:"major"`
-	Minor       uint64 `json:"minor"`
+	Major       int64  `json:"major"`
+	Minor       int64  `json:"minor"`
 }
 
 // DebugSettingsProf algod mutex and blocking profiling state.
@@ -1005,6 +1008,31 @@ type TealValue struct {
 	Uint uint64 `json:"uint"`
 }
 
+// TransactionProof Proof of transaction in a block.
+type TransactionProof struct {
+	// Hashtype The type of hash function used to create the proof, must be one of:
+	// * sha512_256
+	// * sha256
+	Hashtype TransactionProofHashtype `json:"hashtype"`
+
+	// Idx Index of the transaction in the block's payset.
+	Idx uint64 `json:"idx"`
+
+	// Proof Proof of transaction membership.
+	Proof []byte `json:"proof"`
+
+	// Stibhash Hash of SignedTxnInBlock for verifying proof.
+	Stibhash []byte `json:"stibhash"`
+
+	// Treedepth Represents the depth of the tree that is being proven, i.e. the number of edges from a leaf to the root.
+	Treedepth uint64 `json:"treedepth"`
+}
+
+// TransactionProofHashtype The type of hash function used to create the proof, must be one of:
+// * sha512_256
+// * sha256
+type TransactionProofHashtype string
+
 // Version algod version information.
 type Version struct {
 	Build          BuildVersion `json:"build"`
@@ -1026,7 +1054,7 @@ type AddressRole string
 type AfterTime = time.Time
 
 // AssetID defines model for asset-id.
-type AssetID uint64
+type AssetID = uint64
 
 // BeforeTime defines model for before-time.
 type BeforeTime = time.Time
@@ -1035,10 +1063,10 @@ type BeforeTime = time.Time
 type Catchpoint = string
 
 // CurrencyGreaterThan defines model for currency-greater-than.
-type CurrencyGreaterThan uint64
+type CurrencyGreaterThan = uint64
 
 // CurrencyLessThan defines model for currency-less-than.
-type CurrencyLessThan uint64
+type CurrencyLessThan = uint64
 
 // ExcludeCloseTo defines model for exclude-close-to.
 type ExcludeCloseTo = bool
@@ -1047,16 +1075,16 @@ type ExcludeCloseTo = bool
 type Format string
 
 // Limit defines model for limit.
-type Limit uint64
+type Limit = uint64
 
 // Max defines model for max.
-type Max uint64
+type Max = uint64
 
 // MaxRound defines model for max-round.
-type MaxRound uint64
+type MaxRound = uint64
 
 // MinRound defines model for min-round.
-type MinRound uint64
+type MinRound = uint64
 
 // Next defines model for next.
 type Next = string
@@ -1065,10 +1093,10 @@ type Next = string
 type NotePrefix = string
 
 // Round defines model for round.
-type Round uint64
+type Round = uint64
 
 // RoundNumber defines model for round-number.
-type RoundNumber uint64
+type RoundNumber = uint64
 
 // SigType defines model for sig-type.
 type SigType string
@@ -1413,30 +1441,8 @@ type TransactionParametersResponse struct {
 	MinFee uint64 `json:"min-fee"`
 }
 
-// TransactionProofResponse defines model for TransactionProofResponse.
-type TransactionProofResponse struct {
-	// Hashtype The type of hash function used to create the proof, must be one of:
-	// * sha512_256
-	// * sha256
-	Hashtype TransactionProofResponseHashtype `json:"hashtype"`
-
-	// Idx Index of the transaction in the block's payset.
-	Idx uint64 `json:"idx"`
-
-	// Proof Proof of transaction membership.
-	Proof []byte `json:"proof"`
-
-	// Stibhash Hash of SignedTxnInBlock for verifying proof.
-	Stibhash []byte `json:"stibhash"`
-
-	// Treedepth Represents the depth of the tree that is being proven, i.e. the number of edges from a leaf to the root.
-	Treedepth uint64 `json:"treedepth"`
-}
-
-// TransactionProofResponseHashtype The type of hash function used to create the proof, must be one of:
-// * sha512_256
-// * sha256
-type TransactionProofResponseHashtype string
+// TransactionProofResponse Proof of transaction in a block.
+type TransactionProofResponse = TransactionProof
 
 // VersionsResponse algod version information.
 type VersionsResponse = Version

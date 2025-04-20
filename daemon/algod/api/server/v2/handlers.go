@@ -946,7 +946,7 @@ func (v2 *Handlers) GetTransactionProof(ctx echo.Context, round uint64, txid str
 			Stibhash:  stibhash[:],
 			Idx:       uint64(idx),
 			Treedepth: uint64(proof.TreeDepth),
-			Hashtype:  model.TransactionProofResponseHashtype(hashtype),
+			Hashtype:  model.TransactionProofHashtype(hashtype),
 		}
 
 		return ctx.JSON(http.StatusOK, response)

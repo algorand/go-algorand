@@ -11,8 +11,6 @@ output-options:
   - participating
   - data
   - common
-  type-mappings:
-    integer: uint64
   skip-prune: true
 additional-imports:
   - alias: "."

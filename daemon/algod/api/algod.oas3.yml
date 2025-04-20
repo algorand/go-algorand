@@ -49,6 +49,7 @@
         "in": "query",
         "name": "asset-id",
         "schema": {
+          "format": "uint64",
           "type": "integer",
           "x-go-name": "AssetID"
         },
@@ -83,6 +84,7 @@
         "in": "query",
         "name": "currency-greater-than",
         "schema": {
+          "format": "uint64",
           "type": "integer"
         }
       },
@@ -91,6 +93,7 @@
         "in": "query",
         "name": "currency-less-than",
         "schema": {
+          "format": "uint64",
           "type": "integer"
         }
       },
@@ -119,6 +122,7 @@
         "in": "query",
         "name": "limit",
         "schema": {
+          "format": "uint64",
           "type": "integer"
         }
       },
@@ -127,6 +131,7 @@
         "in": "query",
         "name": "max",
         "schema": {
+          "format": "uint64",
           "type": "integer"
         }
       },
@@ -135,6 +140,7 @@
         "in": "query",
         "name": "max-round",
         "schema": {
+          "format": "uint64",
           "type": "integer"
         }
       },
@@ -143,6 +149,7 @@
         "in": "query",
         "name": "min-round",
         "schema": {
+          "format": "uint64",
           "type": "integer"
         }
       },
@@ -169,6 +176,7 @@
         "in": "query",
         "name": "round",
         "schema": {
+          "format": "uint64",
           "type": "integer"
         }
       },
@@ -178,6 +186,7 @@
         "name": "round-number",
         "required": true,
         "schema": {
+          "format": "uint64",
           "type": "integer"
         }
       },
@@ -237,6 +246,7 @@
                 },
                 "round": {
                   "description": "The round for which this information is relevant.",
+                  "format": "uint64",
                   "type": "integer"
                 }
               },
@@ -262,6 +272,7 @@
                 },
                 "round": {
                   "description": "The round for which this information is relevant.",
+                  "format": "uint64",
                   "type": "integer"
                 }
               },
@@ -291,6 +302,7 @@
                 },
                 "round": {
                   "description": "The round for which this information is relevant.",
+                  "format": "uint64",
                   "type": "integer"
                 }
               },
@@ -449,6 +461,7 @@
                 },
                 "round": {
                   "description": "The round for which this information is relevant.",
+                  "format": "uint64",
                   "type": "integer"
                 }
               },
@@ -595,6 +608,7 @@
               "properties": {
                 "offset": {
                   "description": "Timestamp offset in seconds.",
+                  "format": "uint64",
                   "type": "integer"
                 }
               },
@@ -614,6 +628,7 @@
               "properties": {
                 "round": {
                   "description": "The minimum sync round for the ledger.",
+                  "format": "uint64",
                   "type": "integer"
                 }
               },
@@ -668,38 +683,47 @@
                 },
                 "catchpoint-acquired-blocks": {
                   "description": "The number of blocks that have already been obtained by the node as part of the catchup",
+                  "format": "uint64",
                   "type": "integer"
                 },
                 "catchpoint-processed-accounts": {
                   "description": "The number of accounts from the current catchpoint that have been processed so far as part of the catchup",
+                  "format": "uint64",
                   "type": "integer"
                 },
                 "catchpoint-processed-kvs": {
                   "description": "The number of key-values (KVs) from the current catchpoint that have been processed so far as part of the catchup",
+                  "format": "uint64",
                   "type": "integer"
                 },
                 "catchpoint-total-accounts": {
                   "description": "The total number of accounts included in the current catchpoint",
+                  "format": "uint64",
                   "type": "integer"
                 },
                 "catchpoint-total-blocks": {
                   "description": "The total number of blocks that are required to complete the current catchpoint catchup",
+                  "format": "uint64",
                   "type": "integer"
                 },
                 "catchpoint-total-kvs": {
                   "description": "The total number of key-values (KVs) included in the current catchpoint",
+                  "format": "uint64",
                   "type": "integer"
                 },
                 "catchpoint-verified-accounts": {
                   "description": "The number of accounts from the current catchpoint that have been verified so far as part of the catchup",
+                  "format": "uint64",
                   "type": "integer"
                 },
                 "catchpoint-verified-kvs": {
                   "description": "The number of key-values (KVs) from the current catchpoint that have been verified so far as part of the catchup",
+                  "format": "uint64",
                   "type": "integer"
                 },
                 "catchup-time": {
                   "description": "CatchupTime in nanoseconds",
+                  "format": "uint64",
                   "type": "integer"
                 },
                 "last-catchpoint": {
@@ -708,6 +732,7 @@
                 },
                 "last-round": {
                   "description": "LastRound indicates the last round seen",
+                  "format": "uint64",
                   "type": "integer"
                 },
                 "last-version": {
@@ -720,6 +745,7 @@
                 },
                 "next-version-round": {
                   "description": "NextVersionRound is the round at which the next consensus version will apply",
+                  "format": "uint64",
                   "type": "integer"
                 },
                 "next-version-supported": {
@@ -732,18 +758,22 @@
                 },
                 "time-since-last-round": {
                   "description": "TimeSinceLastRound in nanoseconds",
+                  "format": "uint64",
                   "type": "integer"
                 },
                 "upgrade-delay": {
                   "description": "Upgrade delay",
+                  "format": "uint64",
                   "type": "integer"
                 },
                 "upgrade-next-protocol-vote-before": {
                   "description": "Next protocol round",
+                  "format": "uint64",
                   "type": "integer"
                 },
                 "upgrade-no-votes": {
                   "description": "No votes cast for consensus upgrade",
+                  "format": "uint64",
                   "type": "integer"
                 },
                 "upgrade-node-vote": {
@@ -752,18 +782,22 @@
                 },
                 "upgrade-vote-rounds": {
                   "description": "Total voting rounds for current upgrade",
+                  "format": "uint64",
                   "type": "integer"
                 },
                 "upgrade-votes": {
                   "description": "Total votes cast for consensus upgrade",
+                  "format": "uint64",
                   "type": "integer"
                 },
                 "upgrade-votes-required": {
                   "description": "Yes votes required for consensus upgrade",
+                  "format": "uint64",
                   "type": "integer"
                 },
                 "upgrade-yes-votes": {
                   "description": "Yes votes cast for consensus upgrade",
+                  "format": "uint64",
                   "type": "integer"
                 }
               },
@@ -822,6 +856,7 @@
                 },
                 "total-transactions": {
                   "description": "Total number of transactions in the pool.",
+                  "format": "uint64",
                   "type": "integer"
                 }
               },
@@ -889,6 +924,7 @@
                 },
                 "last-round": {
                   "description": "The round immediately preceding this simulation. State changes through this round were used to run this simulation.",
+                  "format": "uint64",
                   "type": "integer"
                 },
                 "txn-groups": {
@@ -900,6 +936,7 @@
                 },
                 "version": {
                   "description": "The version of this response object.",
+                  "format": "uint64",
                   "type": "integer"
                 }
               },
@@ -932,14 +969,17 @@
               "properties": {
                 "current_round": {
                   "description": "Round",
+                  "format": "uint64",
                   "type": "integer"
                 },
                 "online-money": {
                   "description": "OnlineMoney",
+                  "format": "uint64",
                   "type": "integer"
                 },
                 "total-money": {
                   "description": "TotalMoney",
+                  "format": "uint64",
                   "type": "integer"
                 }
               },
@@ -987,6 +1027,7 @@
                 },
                 "fee": {
                   "description": "Fee is the suggested transaction fee\nFee is in units of micro-Algos per byte.\nFee may fall to zero but transactions must still have a fee of\nat least MinTxnFee for the current network protocol.",
+                  "format": "uint64",
                   "type": "integer"
                 },
                 "genesis-hash": {
@@ -1001,10 +1042,12 @@
                 },
                 "last-round": {
                   "description": "LastRound indicates the last round seen",
+                  "format": "uint64",
                   "type": "integer"
                 },
                 "min-fee": {
                   "description": "The minimum transaction fee (not per byte) required for the\ntxn to validate for the current network protocol.",
+                  "format": "uint64",
                   "type": "integer"
                 }
               },
@@ -1026,44 +1069,7 @@
         "content": {
           "application/json": {
             "schema": {
-              "properties": {
-                "hashtype": {
-                  "description": "The type of hash function used to create the proof, must be one of: \n* sha512_256 \n* sha256",
-                  "enum": [
-                    "sha512_256",
-                    "sha256"
-                  ],
-                  "type": "string"
-                },
-                "idx": {
-                  "description": "Index of the transaction in the block's payset.",
-                  "type": "integer"
-                },
-                "proof": {
-                  "description": "Proof of transaction membership.",
-                  "format": "byte",
-                  "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
-                  "type": "string"
-                },
-                "stibhash": {
-                  "description": "Hash of SignedTxnInBlock for verifying proof.",
-                  "format": "byte",
-                  "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
-                  "type": "string"
-                },
-                "treedepth": {
-                  "description": "Represents the depth of the tree that is being proven, i.e. the number of edges from a leaf to the root.",
-                  "type": "integer"
-                }
-              },
-              "required": [
-                "hashtype",
-                "idx",
-                "proof",
-                "stibhash",
-                "treedepth"
-              ],
-              "type": "object"
+              "$ref": "#/components/schemas/TransactionProof"
             }
           }
         },
@@ -1090,10 +1096,12 @@
           },
           "amount": {
             "description": "\\[algo\\] total number of MicroAlgos in the account",
+            "format": "uint64",
             "type": "integer"
           },
           "amount-without-pending-rewards": {
             "description": "specifies the amount of MicroAlgos in the account, without the pending rewards.",
+            "format": "uint64",
             "type": "integer"
           },
           "apps-local-state": {
@@ -1105,6 +1113,7 @@
           },
           "apps-total-extra-pages": {
             "description": "\\[teap\\] the sum of all extra application program pages for this account.",
+            "format": "uint64",
             "type": "integer"
           },
           "apps-total-schema": {
@@ -1142,14 +1151,17 @@
           },
           "last-heartbeat": {
             "description": "The round in which this account last went online, or explicitly renewed their online status.",
+            "format": "uint64",
             "type": "integer"
           },
           "last-proposed": {
             "description": "The round in which this account last proposed the block.",
+            "format": "uint64",
             "type": "integer"
           },
           "min-balance": {
             "description": "MicroAlgo balance required by the account.\n\nThe requirement grows based on asset and application usage.",
+            "format": "uint64",
             "type": "integer"
           },
           "participation": {
@@ -1157,18 +1169,22 @@
           },
           "pending-rewards": {
             "description": "amount of MicroAlgos of pending rewards in this account.",
+            "format": "uint64",
             "type": "integer"
           },
           "reward-base": {
             "description": "\\[ebase\\] used as part of the rewards computation. Only applicable to accounts which are participating.",
+            "format": "uint64",
             "type": "integer"
           },
           "rewards": {
             "description": "\\[ern\\] total rewards of MicroAlgos the account has received, including pending rewards.",
+            "format": "uint64",
             "type": "integer"
           },
           "round": {
             "description": "The round for which this information is relevant.",
+            "format": "uint64",
             "type": "integer"
           },
           "sig-type": {
@@ -1186,26 +1202,32 @@
           },
           "total-apps-opted-in": {
             "description": "The count of all applications that have been opted in, equivalent to the count of application local data (AppLocalState objects) stored in this account.",
+            "format": "uint64",
             "type": "integer"
           },
           "total-assets-opted-in": {
             "description": "The count of all assets that have been opted in, equivalent to the count of AssetHolding objects held by this account.",
+            "format": "uint64",
             "type": "integer"
           },
           "total-box-bytes": {
             "description": "\\[tbxb\\] The total number of bytes used by this account's app's box keys and values.",
+            "format": "uint64",
             "type": "integer"
           },
           "total-boxes": {
             "description": "\\[tbx\\] The number of existing boxes created by this account's app.",
+            "format": "uint64",
             "type": "integer"
           },
           "total-created-apps": {
             "description": "The count of all apps (AppParams objects) created by this account.",
+            "format": "uint64",
             "type": "integer"
           },
           "total-created-assets": {
             "description": "The count of all assets (AssetParams objects) created by this account.",
+            "format": "uint64",
             "type": "integer"
           }
         },
@@ -1257,14 +1279,17 @@
           },
           "vote-first-valid": {
             "description": "\\[voteFst\\] First round for which this participation is valid.",
+            "format": "uint64",
             "type": "integer"
           },
           "vote-key-dilution": {
             "description": "\\[voteKD\\] Number of subkeys in each batch of participation keys.",
+            "format": "uint64",
             "type": "integer"
           },
           "vote-last-valid": {
             "description": "\\[voteLst\\] Last round for which this participation is valid.",
+            "format": "uint64",
             "type": "integer"
           },
           "vote-participation-key": {
@@ -1304,6 +1329,7 @@
         "properties": {
           "application-index": {
             "description": "The application from which the logs were generated",
+            "format": "uint64",
             "type": "integer"
           },
           "logs": {
@@ -1332,6 +1358,7 @@
         "properties": {
           "id": {
             "description": "\\[appidx\\] application index.",
+            "format": "uint64",
             "type": "integer"
           },
           "params": {
@@ -1362,6 +1389,7 @@
           },
           "id": {
             "description": "Application index.",
+            "format": "uint64",
             "type": "integer",
             "x-algorand-format": "uint64"
           }
@@ -1402,6 +1430,7 @@
           },
           "app": {
             "description": "Application ID of the local state application.",
+            "format": "uint64",
             "type": "integer",
             "x-algorand-format": "uint64"
           }
@@ -1417,6 +1446,7 @@
         "properties": {
           "id": {
             "description": "The application which this local state is for.",
+            "format": "uint64",
             "type": "integer"
           },
           "key-value": {
@@ -1456,6 +1486,7 @@
           },
           "extra-program-pages": {
             "description": "\\[epp\\] the amount of extra program pages available to this app.",
+            "format": "uint64",
             "type": "integer"
           },
           "global-state": {
@@ -1466,6 +1497,11 @@
           },
           "local-state-schema": {
             "$ref": "#/components/schemas/ApplicationStateSchema"
+          },
+          "version": {
+            "description": "\\[v\\] the number of updates to the application programs",
+            "format": "uint64",
+            "type": "integer"
           }
         },
         "required": [
@@ -1513,10 +1549,12 @@
         "properties": {
           "num-byte-slice": {
             "description": "\\[nbs\\] num of byte slices.",
+            "format": "uint64",
             "type": "integer"
           },
           "num-uint": {
             "description": "\\[nui\\] num of uints.",
+            "format": "uint64",
             "type": "integer"
           }
         },
@@ -1531,6 +1569,7 @@
         "properties": {
           "index": {
             "description": "unique asset identifier",
+            "format": "uint64",
             "type": "integer"
           },
           "params": {
@@ -1548,11 +1587,13 @@
         "properties": {
           "amount": {
             "description": "\\[a\\] number of units held.",
+            "format": "uint64",
             "type": "integer",
             "x-algorand-format": "uint64"
           },
           "asset-id": {
             "description": "Asset ID of the holding.",
+            "format": "uint64",
             "type": "integer",
             "x-go-name": "AssetID"
           },
@@ -1578,6 +1619,7 @@
           },
           "asset": {
             "description": "Asset ID of the holding.",
+            "format": "uint64",
             "type": "integer",
             "x-algorand-format": "uint64"
           }
@@ -1601,6 +1643,7 @@
           },
           "decimals": {
             "description": "\\[dc\\] The number of digits to use after the decimal point when displaying this asset. If 0, the asset is not divisible. If 1, the base unit of the asset is in tenths. If 2, the base unit of the asset is in hundredths, and so on. This value must be between 0 and 19 (inclusive).",
+            "format": "uint64",
             "maximum": 19,
             "minimum": 0,
             "type": "integer"
@@ -1639,6 +1682,7 @@
           },
           "total": {
             "description": "\\[t\\] The total number of units of this asset.",
+            "format": "uint64",
             "type": "integer",
             "x-algorand-format": "uint64"
           },
@@ -1699,10 +1743,12 @@
           },
           "type": {
             "description": "value type. Value `1` refers to **bytes**, value `2` refers to **uint64**",
+            "format": "uint64",
             "type": "integer"
           },
           "uint": {
             "description": "uint value.",
+            "format": "uint64",
             "type": "integer",
             "x-algorand-format": "uint64"
           }
@@ -1723,6 +1769,7 @@
           },
           "round": {
             "description": "The round for which this information is relevant",
+            "format": "uint64",
             "type": "integer"
           },
           "value": {
@@ -1743,6 +1790,7 @@
         "properties": {
           "app": {
             "description": "Application ID which this box belongs to",
+            "format": "uint64",
             "type": "integer"
           },
           "name": {
@@ -1799,11 +1847,13 @@
           "block-rate": {
             "description": "The rate of blocking events. The profiler aims to sample an average of one blocking event per rate nanoseconds spent blocked. To turn off profiling entirely, pass rate 0.",
             "example": 1000,
+            "format": "uint64",
             "type": "integer"
           },
           "mutex-rate": {
             "description": "The rate of mutex events. On average 1/rate events are reported. To turn off profiling entirely, pass rate 0",
             "example": 1000,
+            "format": "uint64",
             "type": "integer"
           }
         },
@@ -1827,7 +1877,7 @@
           },
           "latest-timestamp": {
             "description": "LatestTimestamp is available to some TEAL scripts. Defaults to the latest confirmed timestamp this algod is attached to.",
-            "format": "int64",
+            "format": "uint64",
             "type": "integer"
           },
           "protocol-version": {
@@ -1836,6 +1886,7 @@
           },
           "round": {
             "description": "Round is available to some TEAL scripts. Defaults to the current round on the network this algod is attached to.",
+            "format": "uint64",
             "type": "integer",
             "x-algorand-format": "uint64"
           },
@@ -1870,6 +1921,7 @@
         "description": "DryrunSource is TEAL source text that gets uploaded, compiled, and inserted into transactions or application state.",
         "properties": {
           "app-index": {
+            "format": "uint64",
             "type": "integer",
             "x-algorand-format": "uint64"
           },
@@ -1881,6 +1933,7 @@
             "type": "string"
           },
           "txn-index": {
+            "format": "uint64",
             "type": "integer"
           }
         },
@@ -1901,10 +1954,12 @@
           },
           "line": {
             "description": "Line number",
+            "format": "uint64",
             "type": "integer"
           },
           "pc": {
             "description": "Program counter",
+            "format": "uint64",
             "type": "integer"
           },
           "scratch": {
@@ -1944,10 +1999,12 @@
           },
           "budget-added": {
             "description": "Budget added during execution of app call transaction.",
+            "format": "uint64",
             "type": "integer"
           },
           "budget-consumed": {
             "description": "Budget consumed during execution of app call transaction.",
+            "format": "uint64",
             "type": "integer"
           },
           "disassembly": {
@@ -2020,6 +2077,7 @@
         "properties": {
           "action": {
             "description": "\\[at\\] delta action.",
+            "format": "uint64",
             "type": "integer"
           },
           "bytes": {
@@ -2028,6 +2086,7 @@
           },
           "uint": {
             "description": "\\[ui\\] uint value.",
+            "format": "uint64",
             "type": "integer",
             "x-algorand-format": "uint64"
           }
@@ -2082,6 +2141,7 @@
         "properties": {
           "index": {
             "description": "The index of the light block header in the vector commitment tree",
+            "format": "uint64",
             "type": "integer"
           },
           "proof": {
@@ -2092,6 +2152,7 @@
           },
           "treedepth": {
             "description": "Represents the depth of the tree that is being proven, i.e. the number of edges from a leaf to the root.",
+            "format": "uint64",
             "type": "integer"
           }
         },
@@ -2112,11 +2173,13 @@
           },
           "effective-first-valid": {
             "description": "When registered, this is the first round it may be used.",
+            "format": "uint64",
             "type": "integer",
             "x-algorand-format": "uint64"
           },
           "effective-last-valid": {
             "description": "When registered, this is the last round it may be used.",
+            "format": "uint64",
             "type": "integer",
             "x-algorand-format": "uint64"
           },
@@ -2129,14 +2192,17 @@
           },
           "last-block-proposal": {
             "description": "Round when this key was last used to propose a block.",
+            "format": "uint64",
             "type": "integer"
           },
           "last-state-proof": {
             "description": "Round when this key was last used to generate a state proof.",
+            "format": "uint64",
             "type": "integer"
           },
           "last-vote": {
             "description": "Round when this key was last used to vote.",
+            "format": "uint64",
             "type": "integer"
           }
         },
@@ -2152,26 +2218,32 @@
         "properties": {
           "application-index": {
             "description": "The application index if the transaction was found and it created an application.",
+            "format": "uint64",
             "type": "integer"
           },
           "asset-closing-amount": {
             "description": "The number of the asset's unit that were transferred to the close-to address.",
+            "format": "uint64",
             "type": "integer"
           },
           "asset-index": {
             "description": "The asset index if the transaction was found and it created an asset.",
+            "format": "uint64",
             "type": "integer"
           },
           "close-rewards": {
             "description": "Rewards in microalgos applied to the close remainder to account.",
+            "format": "uint64",
             "type": "integer"
           },
           "closing-amount": {
             "description": "Closing amount for the transaction.",
+            "format": "uint64",
             "type": "integer"
           },
           "confirmed-round": {
             "description": "The round where this transaction was confirmed, if present.",
+            "format": "uint64",
             "type": "integer"
           },
           "global-state-delta": {
@@ -2206,10 +2278,12 @@
           },
           "receiver-rewards": {
             "description": "Rewards in microalgos applied to the receiver account.",
+            "format": "uint64",
             "type": "integer"
           },
           "sender-rewards": {
             "description": "Rewards in microalgos applied to the sender account.",
+            "format": "uint64",
             "type": "integer"
           },
           "txn": {
@@ -2233,6 +2307,7 @@
           },
           "slot": {
             "description": "The scratch slot written.",
+            "format": "uint64",
             "type": "integer"
           }
         },
@@ -2275,6 +2350,7 @@
           },
           "extra-opcode-budget": {
             "description": "Applies extra opcode budget during simulation for each transaction group.",
+            "format": "uint64",
             "type": "integer"
           },
           "fix-signers": {
@@ -2283,6 +2359,7 @@
           },
           "round": {
             "description": "If provided, specifies the round preceding the simulation. State changes through this round will be used to run this simulation. Usually only the 4 most recent rounds will be available (controlled by the node config value MaxAcctLookback). If not specified, defaults to the latest available round.",
+            "format": "uint64",
             "type": "integer"
           },
           "txn-groups": {
@@ -2344,15 +2421,18 @@
         "properties": {
           "app-budget-added": {
             "description": "Total budget added during execution of app calls in the transaction group.",
+            "format": "uint64",
             "type": "integer"
           },
           "app-budget-consumed": {
             "description": "Total budget consumed during execution of app calls in the transaction group.",
+            "format": "uint64",
             "type": "integer"
           },
           "failed-at": {
             "description": "If present, indicates which transaction in this group caused the failure. This array represents the path to the failing transaction. Indexes are zero based, the first element indicates the top-level transaction, and successive elements indicate deeper inner transactions.",
             "items": {
+              "format": "uint64",
               "type": "integer"
             },
             "type": "array"
@@ -2382,6 +2462,7 @@
         "properties": {
           "app-budget-consumed": {
             "description": "Budget used during execution of an app call transaction. This value includes budged used by inner app calls spawned by this transaction.",
+            "format": "uint64",
             "type": "integer"
           },
           "exec-trace": {
@@ -2394,6 +2475,7 @@
           },
           "logic-sig-budget-consumed": {
             "description": "Budget used during execution of a logic sig transaction.",
+            "format": "uint64",
             "type": "integer"
           },
           "txn-result": {
@@ -2429,6 +2511,7 @@
           "apps": {
             "description": "The unnamed applications that were referenced. The order of this array is arbitrary.",
             "items": {
+              "format": "uint64",
               "type": "integer",
               "x-algorand-format": "uint64"
             },
@@ -2444,6 +2527,7 @@
           "assets": {
             "description": "The unnamed assets that were referenced. The order of this array is arbitrary.",
             "items": {
+              "format": "uint64",
               "type": "integer",
               "x-algorand-format": "uint64"
             },
@@ -2458,6 +2542,7 @@
           },
           "extra-box-refs": {
             "description": "The number of extra box references used to increase the IO budget. This is in addition to the references defined in the input transaction group and any referenced to unnamed boxes.",
+            "format": "uint64",
             "type": "integer"
           }
         },
@@ -2476,6 +2561,7 @@
           },
           "extra-opcode-budget": {
             "description": "The extra opcode budget added to each transaction group during simulation",
+            "format": "uint64",
             "type": "integer"
           },
           "fix-signers": {
@@ -2484,10 +2570,12 @@
           },
           "max-log-calls": {
             "description": "The maximum log calls one can make during simulation",
+            "format": "uint64",
             "type": "integer"
           },
           "max-log-size": {
             "description": "The maximum byte number to log during simulation",
+            "format": "uint64",
             "type": "integer"
           }
         },
@@ -2498,6 +2586,7 @@
         "properties": {
           "pc": {
             "description": "The program counter of the current opcode being evaluated.",
+            "format": "uint64",
             "type": "integer"
           },
           "scratch-changes": {
@@ -2510,6 +2599,7 @@
           "spawned-inners": {
             "description": "The indexes of the traces for inner transactions spawned by this opcode, if any.",
             "items": {
+              "format": "uint64",
               "type": "integer"
             },
             "type": "array"
@@ -2523,6 +2613,7 @@
           },
           "stack-pop-count": {
             "description": "The number of deleted stack values by this opcode.",
+            "format": "uint64",
             "type": "integer"
           },
           "state-changes": {
@@ -2635,16 +2726,19 @@
           },
           "FirstAttestedRound": {
             "description": "The first round the message attests to.",
+            "format": "uint64",
             "type": "integer",
             "x-algorand-format": "uint64"
           },
           "LastAttestedRound": {
             "description": "The last round the message attests to.",
+            "format": "uint64",
             "type": "integer",
             "x-algorand-format": "uint64"
           },
           "LnProvenWeight": {
             "description": "An integer value representing the natural log of the proven weight with 16 bits of precision. This value would be used to verify the next state proof.",
+            "format": "uint64",
             "type": "integer",
             "x-algorand-format": "uint64"
           },
@@ -2696,10 +2790,12 @@
           },
           "type": {
             "description": "\\[tt\\] value type. Value `1` refers to **bytes**, value `2` refers to **uint**",
+            "format": "uint64",
             "type": "integer"
           },
           "uint": {
             "description": "\\[ui\\] uint value.",
+            "format": "uint64",
             "type": "integer",
             "x-algorand-format": "uint64"
           }
@@ -2708,6 +2804,49 @@
           "bytes",
           "type",
           "uint"
+        ],
+        "type": "object"
+      },
+      "TransactionProof": {
+        "description": "Proof of transaction in a block.",
+        "properties": {
+          "hashtype": {
+            "description": "The type of hash function used to create the proof, must be one of: \n* sha512_256 \n* sha256",
+            "enum": [
+              "sha512_256",
+              "sha256"
+            ],
+            "type": "string"
+          },
+          "idx": {
+            "description": "Index of the transaction in the block's payset.",
+            "format": "uint64",
+            "type": "integer"
+          },
+          "proof": {
+            "description": "Proof of transaction membership.",
+            "format": "byte",
+            "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+            "type": "string"
+          },
+          "stibhash": {
+            "description": "Hash of SignedTxnInBlock for verifying proof.",
+            "format": "byte",
+            "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+            "type": "string"
+          },
+          "treedepth": {
+            "description": "Represents the depth of the tree that is being proven, i.e. the number of edges from a leaf to the root.",
+            "format": "uint64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "hashtype",
+          "idx",
+          "proof",
+          "stibhash",
+          "treedepth"
         ],
         "type": "object"
       },
@@ -3097,6 +3236,7 @@
             "name": "application-id",
             "required": true,
             "schema": {
+              "format": "uint64",
               "type": "integer"
             }
           }
@@ -3115,6 +3255,7 @@
                     },
                     "round": {
                       "description": "The round for which this information is relevant.",
+                      "format": "uint64",
                       "type": "integer"
                     }
                   },
@@ -3135,6 +3276,7 @@
                     },
                     "round": {
                       "description": "The round for which this information is relevant.",
+                      "format": "uint64",
                       "type": "integer"
                     }
                   },
@@ -3224,6 +3366,7 @@
             "in": "query",
             "name": "limit",
             "schema": {
+              "format": "uint64",
               "type": "integer"
             }
           },
@@ -3254,6 +3397,7 @@
                     },
                     "round": {
                       "description": "The round for which this information is relevant.",
+                      "format": "uint64",
                       "type": "integer"
                     }
                   },
@@ -3341,6 +3485,7 @@
             "name": "asset-id",
             "required": true,
             "schema": {
+              "format": "uint64",
               "type": "integer"
             }
           }
@@ -3359,6 +3504,7 @@
                     },
                     "round": {
                       "description": "The round for which this information is relevant.",
+                      "format": "uint64",
                       "type": "integer"
                     }
                   },
@@ -3379,6 +3525,7 @@
                     },
                     "round": {
                       "description": "The round for which this information is relevant.",
+                      "format": "uint64",
                       "type": "integer"
                     }
                   },
@@ -3468,6 +3615,7 @@
             "in": "query",
             "name": "max",
             "schema": {
+              "format": "uint64",
               "type": "integer"
             }
           },
@@ -3502,6 +3650,7 @@
                     },
                     "total-transactions": {
                       "description": "Total number of transactions in the pool.",
+                      "format": "uint64",
                       "type": "integer"
                     }
                   },
@@ -3527,6 +3676,7 @@
                     },
                     "total-transactions": {
                       "description": "Total number of transactions in the pool.",
+                      "format": "uint64",
                       "type": "integer"
                     }
                   },
@@ -3623,6 +3773,7 @@
             "name": "application-id",
             "required": true,
             "schema": {
+              "format": "uint64",
               "type": "integer"
             }
           }
@@ -3701,6 +3852,7 @@
             "name": "application-id",
             "required": true,
             "schema": {
+              "format": "uint64",
               "type": "integer"
             }
           },
@@ -3788,6 +3940,7 @@
             "name": "application-id",
             "required": true,
             "schema": {
+              "format": "uint64",
               "type": "integer"
             }
           },
@@ -3796,6 +3949,7 @@
             "in": "query",
             "name": "max",
             "schema": {
+              "format": "uint64",
               "type": "integer"
             }
           },
@@ -3842,6 +3996,7 @@
                     },
                     "round": {
                       "description": "The round for which this information is relevant.",
+                      "format": "uint64",
                       "type": "integer"
                     }
                   },
@@ -3908,6 +4063,7 @@
             "name": "asset-id",
             "required": true,
             "schema": {
+              "format": "uint64",
               "type": "integer"
             }
           }
@@ -3997,6 +4153,7 @@
             "name": "round",
             "required": true,
             "schema": {
+              "format": "uint64",
               "minimum": 0,
               "type": "integer"
             }
@@ -4142,6 +4299,7 @@
             "name": "round",
             "required": true,
             "schema": {
+              "format": "uint64",
               "minimum": 0,
               "type": "integer"
             }
@@ -4229,6 +4387,7 @@
             "name": "round",
             "required": true,
             "schema": {
+              "format": "uint64",
               "minimum": 0,
               "type": "integer"
             }
@@ -4318,6 +4477,7 @@
             "name": "round",
             "required": true,
             "schema": {
+              "format": "uint64",
               "minimum": 0,
               "type": "integer"
             }
@@ -4403,6 +4563,7 @@
             "name": "round",
             "required": true,
             "schema": {
+              "format": "uint64",
               "type": "integer"
             }
           },
@@ -4446,44 +4607,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "properties": {
-                    "hashtype": {
-                      "description": "The type of hash function used to create the proof, must be one of: \n* sha512_256 \n* sha256",
-                      "enum": [
-                        "sha512_256",
-                        "sha256"
-                      ],
-                      "type": "string"
-                    },
-                    "idx": {
-                      "description": "Index of the transaction in the block's payset.",
-                      "type": "integer"
-                    },
-                    "proof": {
-                      "description": "Proof of transaction membership.",
-                      "format": "byte",
-                      "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
-                      "type": "string"
-                    },
-                    "stibhash": {
-                      "description": "Hash of SignedTxnInBlock for verifying proof.",
-                      "format": "byte",
-                      "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
-                      "type": "string"
-                    },
-                    "treedepth": {
-                      "description": "Represents the depth of the tree that is being proven, i.e. the number of edges from a leaf to the root.",
-                      "type": "integer"
-                    }
-                  },
-                  "required": [
-                    "hashtype",
-                    "idx",
-                    "proof",
-                    "stibhash",
-                    "treedepth"
-                  ],
-                  "type": "object"
+                  "$ref": "#/components/schemas/TransactionProof"
                 }
               }
             },
@@ -4551,6 +4675,7 @@
             "name": "round",
             "required": true,
             "schema": {
+              "format": "uint64",
               "minimum": 0,
               "type": "integer"
             }
@@ -4733,6 +4858,7 @@
             "in": "query",
             "name": "min",
             "schema": {
+              "format": "uint64",
               "type": "integer"
             }
           }
@@ -4970,6 +5096,7 @@
             "name": "round",
             "required": true,
             "schema": {
+              "format": "uint64",
               "minimum": 0,
               "type": "integer"
             }
@@ -5101,6 +5228,7 @@
             "name": "round",
             "required": true,
             "schema": {
+              "format": "uint64",
               "minimum": 0,
               "type": "integer"
             }
@@ -5255,6 +5383,7 @@
                   "properties": {
                     "offset": {
                       "description": "Timestamp offset in seconds.",
+                      "format": "uint64",
                       "type": "integer"
                     }
                   },
@@ -5300,6 +5429,7 @@
             "name": "offset",
             "required": true,
             "schema": {
+              "format": "uint64",
               "minimum": 0,
               "type": "integer"
             }
@@ -5388,14 +5518,17 @@
                   "properties": {
                     "current_round": {
                       "description": "Round",
+                      "format": "uint64",
                       "type": "integer"
                     },
                     "online-money": {
                       "description": "OnlineMoney",
+                      "format": "uint64",
                       "type": "integer"
                     },
                     "total-money": {
                       "description": "TotalMoney",
+                      "format": "uint64",
                       "type": "integer"
                     }
                   },
@@ -5502,6 +5635,7 @@
                   "properties": {
                     "round": {
                       "description": "The minimum sync round for the ledger.",
+                      "format": "uint64",
                       "type": "integer"
                     }
                   },
@@ -5577,6 +5711,7 @@
             "name": "round",
             "required": true,
             "schema": {
+              "format": "uint64",
               "minimum": 0,
               "type": "integer"
             }
@@ -5822,6 +5957,7 @@
             "in": "query",
             "name": "dilution",
             "schema": {
+              "format": "uint64",
               "type": "integer"
             }
           },
@@ -5831,6 +5967,7 @@
             "name": "first",
             "required": true,
             "schema": {
+              "format": "uint64",
               "type": "integer"
             }
           },
@@ -5840,6 +5977,7 @@
             "name": "last",
             "required": true,
             "schema": {
+              "format": "uint64",
               "type": "integer"
             }
           }
@@ -6151,6 +6289,7 @@
             "name": "timeout",
             "schema": {
               "default": 0,
+              "format": "uint64",
               "type": "integer"
             }
           }
@@ -6182,6 +6321,7 @@
             "name": "round",
             "required": true,
             "schema": {
+              "format": "uint64",
               "minimum": 0,
               "type": "integer"
             }
@@ -6276,38 +6416,47 @@
                     },
                     "catchpoint-acquired-blocks": {
                       "description": "The number of blocks that have already been obtained by the node as part of the catchup",
+                      "format": "uint64",
                       "type": "integer"
                     },
                     "catchpoint-processed-accounts": {
                       "description": "The number of accounts from the current catchpoint that have been processed so far as part of the catchup",
+                      "format": "uint64",
                       "type": "integer"
                     },
                     "catchpoint-processed-kvs": {
                       "description": "The number of key-values (KVs) from the current catchpoint that have been processed so far as part of the catchup",
+                      "format": "uint64",
                       "type": "integer"
                     },
                     "catchpoint-total-accounts": {
                       "description": "The total number of accounts included in the current catchpoint",
+                      "format": "uint64",
                       "type": "integer"
                     },
                     "catchpoint-total-blocks": {
                       "description": "The total number of blocks that are required to complete the current catchpoint catchup",
+                      "format": "uint64",
                       "type": "integer"
                     },
                     "catchpoint-total-kvs": {
                       "description": "The total number of key-values (KVs) included in the current catchpoint",
+                      "format": "uint64",
                       "type": "integer"
                     },
                     "catchpoint-verified-accounts": {
                       "description": "The number of accounts from the current catchpoint that have been verified so far as part of the catchup",
+                      "format": "uint64",
                       "type": "integer"
                     },
                     "catchpoint-verified-kvs": {
                       "description": "The number of key-values (KVs) from the current catchpoint that have been verified so far as part of the catchup",
+                      "format": "uint64",
                       "type": "integer"
                     },
                     "catchup-time": {
                       "description": "CatchupTime in nanoseconds",
+                      "format": "uint64",
                       "type": "integer"
                     },
                     "last-catchpoint": {
@@ -6316,6 +6465,7 @@
                     },
                     "last-round": {
                       "description": "LastRound indicates the last round seen",
+                      "format": "uint64",
                       "type": "integer"
                     },
                     "last-version": {
@@ -6328,6 +6478,7 @@
                     },
                     "next-version-round": {
                       "description": "NextVersionRound is the round at which the next consensus version will apply",
+                      "format": "uint64",
                       "type": "integer"
                     },
                     "next-version-supported": {
@@ -6340,18 +6491,22 @@
                     },
                     "time-since-last-round": {
                       "description": "TimeSinceLastRound in nanoseconds",
+                      "format": "uint64",
                       "type": "integer"
                     },
                     "upgrade-delay": {
                       "description": "Upgrade delay",
+                      "format": "uint64",
                       "type": "integer"
                     },
                     "upgrade-next-protocol-vote-before": {
                       "description": "Next protocol round",
+                      "format": "uint64",
                       "type": "integer"
                     },
                     "upgrade-no-votes": {
                       "description": "No votes cast for consensus upgrade",
+                      "format": "uint64",
                       "type": "integer"
                     },
                     "upgrade-node-vote": {
@@ -6360,18 +6515,22 @@
                     },
                     "upgrade-vote-rounds": {
                       "description": "Total voting rounds for current upgrade",
+                      "format": "uint64",
                       "type": "integer"
                     },
                     "upgrade-votes": {
                       "description": "Total votes cast for consensus upgrade",
+                      "format": "uint64",
                       "type": "integer"
                     },
                     "upgrade-votes-required": {
                       "description": "Yes votes required for consensus upgrade",
+                      "format": "uint64",
                       "type": "integer"
                     },
                     "upgrade-yes-votes": {
                       "description": "Yes votes cast for consensus upgrade",
+                      "format": "uint64",
                       "type": "integer"
                     }
                   },
@@ -6433,6 +6592,7 @@
             "name": "round",
             "required": true,
             "schema": {
+              "format": "uint64",
               "minimum": 0,
               "type": "integer"
             }
@@ -6451,38 +6611,47 @@
                     },
                     "catchpoint-acquired-blocks": {
                       "description": "The number of blocks that have already been obtained by the node as part of the catchup",
+                      "format": "uint64",
                       "type": "integer"
                     },
                     "catchpoint-processed-accounts": {
                       "description": "The number of accounts from the current catchpoint that have been processed so far as part of the catchup",
+                      "format": "uint64",
                       "type": "integer"
                     },
                     "catchpoint-processed-kvs": {
                       "description": "The number of key-values (KVs) from the current catchpoint that have been processed so far as part of the catchup",
+                      "format": "uint64",
                       "type": "integer"
                     },
                     "catchpoint-total-accounts": {
                       "description": "The total number of accounts included in the current catchpoint",
+                      "format": "uint64",
                       "type": "integer"
                     },
                     "catchpoint-total-blocks": {
                       "description": "The total number of blocks that are required to complete the current catchpoint catchup",
+                      "format": "uint64",
                       "type": "integer"
                     },
                     "catchpoint-total-kvs": {
                       "description": "The total number of key-values (KVs) included in the current catchpoint",
+                      "format": "uint64",
                       "type": "integer"
                     },
                     "catchpoint-verified-accounts": {
                       "description": "The number of accounts from the current catchpoint that have been verified so far as part of the catchup",
+                      "format": "uint64",
                       "type": "integer"
                     },
                     "catchpoint-verified-kvs": {
                       "description": "The number of key-values (KVs) from the current catchpoint that have been verified so far as part of the catchup",
+                      "format": "uint64",
                       "type": "integer"
                     },
                     "catchup-time": {
                       "description": "CatchupTime in nanoseconds",
+                      "format": "uint64",
                       "type": "integer"
                     },
                     "last-catchpoint": {
@@ -6491,6 +6660,7 @@
                     },
                     "last-round": {
                       "description": "LastRound indicates the last round seen",
+                      "format": "uint64",
                       "type": "integer"
                     },
                     "last-version": {
@@ -6503,6 +6673,7 @@
                     },
                     "next-version-round": {
                       "description": "NextVersionRound is the round at which the next consensus version will apply",
+                      "format": "uint64",
                       "type": "integer"
                     },
                     "next-version-supported": {
@@ -6515,18 +6686,22 @@
                     },
                     "time-since-last-round": {
                       "description": "TimeSinceLastRound in nanoseconds",
+                      "format": "uint64",
                       "type": "integer"
                     },
                     "upgrade-delay": {
                       "description": "Upgrade delay",
+                      "format": "uint64",
                       "type": "integer"
                     },
                     "upgrade-next-protocol-vote-before": {
                       "description": "Next protocol round",
+                      "format": "uint64",
                       "type": "integer"
                     },
                     "upgrade-no-votes": {
                       "description": "No votes cast for consensus upgrade",
+                      "format": "uint64",
                       "type": "integer"
                     },
                     "upgrade-node-vote": {
@@ -6535,18 +6710,22 @@
                     },
                     "upgrade-vote-rounds": {
                       "description": "Total voting rounds for current upgrade",
+                      "format": "uint64",
                       "type": "integer"
                     },
                     "upgrade-votes": {
                       "description": "Total votes cast for consensus upgrade",
+                      "format": "uint64",
                       "type": "integer"
                     },
                     "upgrade-votes-required": {
                       "description": "Yes votes required for consensus upgrade",
+                      "format": "uint64",
                       "type": "integer"
                     },
                     "upgrade-yes-votes": {
                       "description": "Yes votes cast for consensus upgrade",
+                      "format": "uint64",
                       "type": "integer"
                     }
                   },
@@ -7081,6 +7260,7 @@
                     },
                     "fee": {
                       "description": "Fee is the suggested transaction fee\nFee is in units of micro-Algos per byte.\nFee may fall to zero but transactions must still have a fee of\nat least MinTxnFee for the current network protocol.",
+                      "format": "uint64",
                       "type": "integer"
                     },
                     "genesis-hash": {
@@ -7095,10 +7275,12 @@
                     },
                     "last-round": {
                       "description": "LastRound indicates the last round seen",
+                      "format": "uint64",
                       "type": "integer"
                     },
                     "min-fee": {
                       "description": "The minimum transaction fee (not per byte) required for the\ntxn to validate for the current network protocol.",
+                      "format": "uint64",
                       "type": "integer"
                     }
                   },
@@ -7168,6 +7350,7 @@
             "in": "query",
             "name": "max",
             "schema": {
+              "format": "uint64",
               "type": "integer"
             }
           },
@@ -7202,6 +7385,7 @@
                     },
                     "total-transactions": {
                       "description": "Total number of transactions in the pool.",
+                      "format": "uint64",
                       "type": "integer"
                     }
                   },
@@ -7227,6 +7411,7 @@
                     },
                     "total-transactions": {
                       "description": "Total number of transactions in the pool.",
+                      "format": "uint64",
                       "type": "integer"
                     }
                   },
@@ -7448,6 +7633,7 @@
                     },
                     "last-round": {
                       "description": "The round immediately preceding this simulation. State changes through this round were used to run this simulation.",
+                      "format": "uint64",
                       "type": "integer"
                     },
                     "txn-groups": {
@@ -7459,6 +7645,7 @@
                     },
                     "version": {
                       "description": "The version of this response object.",
+                      "format": "uint64",
                       "type": "integer"
                     }
                   },
@@ -7484,6 +7671,7 @@
                     },
                     "last-round": {
                       "description": "The round immediately preceding this simulation. State changes through this round were used to run this simulation.",
+                      "format": "uint64",
                       "type": "integer"
                     },
                     "txn-groups": {
@@ -7495,6 +7683,7 @@
                     },
                     "version": {
                       "description": "The version of this response object.",
+                      "format": "uint64",
                       "type": "integer"
                     }
                   },
