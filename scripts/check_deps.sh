@@ -38,7 +38,6 @@ GO_DEPS=(
     "msgp"
     "golangci-lint"
     "oapi-codegen"
-    "swagger"
 )
 
 check_go_binary_version() {
@@ -85,4 +84,3 @@ else
     echo -e "$RED_FG[$0]$END_FG_COLOR Required dependencies missing. Run \`${TEAL_FG}./scripts/configure_dev.sh$END_FG_COLOR\` and/or \`${TEAL_FG}./scripts/buildtools/install_buildtools.sh$END_FG_COLOR\` to install."
     exit 1
 fi
-
