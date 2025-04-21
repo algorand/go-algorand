@@ -3157,7 +3157,6 @@
         },
         "amount": {
           "description": "\\[algo\\] total number of MicroAlgos in the account",
-          "format": "uint64",
           "type": "integer",
           "format": "uint64"
         },

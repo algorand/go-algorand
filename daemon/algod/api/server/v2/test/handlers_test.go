@@ -1923,7 +1923,7 @@ func TestGetProofDefault(t *testing.T) {
 	var resp model.TransactionProofResponse
 	err = json.Unmarshal(rec.Body.Bytes(), &resp)
 	a.NoError(err)
-	a.Equal(model.TransactionProofResponseHashtypeSha512256, resp.Hashtype)
+	a.Equal(model.TransactionProofHashtypeSha512256, resp.Hashtype)
 
 	l := handler.Node.LedgerForAPI()
 	blkHdr, err := l.BlockHdr(1)
