@@ -552,11 +552,11 @@ type BoxReference struct {
 // BuildVersion defines model for BuildVersion.
 type BuildVersion struct {
 	Branch      string `json:"branch"`
-	BuildNumber int64  `json:"build_number"`
+	BuildNumber uint64 `json:"build_number"`
 	Channel     string `json:"channel"`
 	CommitHash  string `json:"commit_hash"`
-	Major       int64  `json:"major"`
-	Minor       int64  `json:"minor"`
+	Major       uint64 `json:"major"`
+	Minor       uint64 `json:"minor"`
 }
 
 // DebugSettingsProf algod mutex and blocking profiling state.

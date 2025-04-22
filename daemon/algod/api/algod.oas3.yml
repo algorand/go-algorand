@@ -1812,7 +1812,7 @@
             "type": "string"
           },
           "build_number": {
-            "format": "int64",
+            "format": "uint64",
             "type": "integer"
           },
           "channel": {
@@ -1822,11 +1822,11 @@
             "type": "string"
           },
           "major": {
-            "format": "int64",
+            "format": "uint64",
             "type": "integer"
           },
           "minor": {
-            "format": "int64",
+            "format": "uint64",
             "type": "integer"
           }
         },

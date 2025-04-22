@@ -4250,7 +4250,7 @@
         },
         "build_number": {
           "type": "integer",
-          "format": "int64"
+          "format": "uint64"
         },
         "channel": {
           "type": "string"
@@ -4260,11 +4260,11 @@
         },
         "major": {
           "type": "integer",
-          "format": "int64"
+          "format": "uint64"
         },
         "minor": {
           "type": "integer",
-          "format": "int64"
+          "format": "uint64"
         }
       }
     },
