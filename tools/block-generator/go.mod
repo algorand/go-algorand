@@ -4,7 +4,7 @@ replace github.com/algorand/go-algorand => ../..
 
 go 1.23.0
 
-toolchain go1.23.3
+toolchain go1.23.8
 
 require (
 	github.com/algorand/avm-abi v0.2.0
