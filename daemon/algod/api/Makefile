@@ -1,49 +1,40 @@
-GOPATH	:= $(shell go env GOPATH)
-GOPATH1	:= $(firstword $(subst :, ,$(GOPATH)))
-
 # Allow overriding swagger-converter API, e.g. for use with local container
 SWAGGER_CONVERTER_API ?= https://converter.swagger.io
 
-# `make all` or just `make` should be appropriate for dev work
-
-GEN := server/v2/generated/nonparticipating/public/routes.go server/v2/generated/nonparticipating/private/routes.go server/v2/generated/participating/public/routes.go server/v2/generated/participating/private/routes.go server/v2/generated/data/routes.go server/v2/generated/experimental/routes.go server/v2/generated/model/types.go
+GEN := \
+ server/v2/generated/nonparticipating/public/routes.go \
+ server/v2/generated/nonparticipating/private/routes.go \
+ server/v2/generated/participating/public/routes.go \
+ server/v2/generated/participating/private/routes.go \
+ server/v2/generated/data/routes.go \
+ server/v2/generated/experimental/routes.go \
+ server/v2/generated/model/types.go
 
 all:	$(GEN)
 
-# `make generate` should be able to replace old `generate.sh` script and be appropriate for build system use
-generate: oapi-codegen all
+# `make generate` exists because the old Makefile was written in a way
+# that presumed oapi-codegen was already installed. CI used `make
+# generate` to install it first.  Now `go run` makes everything work
+# no matter what.  We could move to `go tool` later, if we want the
+# versioning to be controlled in go.mod instead of here.
+generate: all
 
-server/v2/generated/nonparticipating/public/routes.go: algod.oas3.yml
-	$(GOPATH1)/bin/oapi-codegen -config $(@D)/public_routes.yml algod.oas3.yml
+OAPI := go run github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.4.1
 
-server/v2/generated/nonparticipating/private/routes.go:	algod.oas3.yml
-	$(GOPATH1)/bin/oapi-codegen -config $(@D)/private_routes.yml algod.oas3.yml
+# Pattern rule for all routes.go generation
+%/routes.go: %/routes.yml algod.oas3.yml
+	$(OAPI) -config $^
 
-server/v2/generated/participating/public/routes.go: algod.oas3.yml
-	$(GOPATH1)/bin/oapi-codegen -config $(@D)/public_routes.yml algod.oas3.yml
+# Only one types.go, but it's still more succinct to use a pattern
+%/types.go: %/types.yml algod.oas3.yml
+	$(OAPI) -config $^
 
-server/v2/generated/participating/private/routes.go: algod.oas3.yml
-	$(GOPATH1)/bin/oapi-codegen -config $(@D)/private_routes.yml algod.oas3.yml
-
-server/v2/generated/data/routes.go: algod.oas3.yml
-	$(GOPATH1)/bin/oapi-codegen -config $(@D)/data_routes.yml algod.oas3.yml
-
-server/v2/generated/experimental/routes.go: algod.oas3.yml
-	$(GOPATH1)/bin/oapi-codegen -config $(@D)/experimental_routes.yml algod.oas3.yml
-
-server/v2/generated/model/types.go: algod.oas3.yml
-	$(GOPATH1)/bin/oapi-codegen -config $(@D)/model_types.yml algod.oas3.yml
-
-algod.oas3.yml:	algod.oas2.json
-	jq < algod.oas2.json > /dev/null	# fail with a nice explantion if json is malformed
-	curl -s -X POST "$(SWAGGER_CONVERTER_API)/api/convert" -H "accept: application/json" -H "Content-Type: application/json" -d @./algod.oas2.json -o .3tmp.json
-	python3 jsoncanon.py < .3tmp.json > algod.oas3.yml
+# We use Makefile as a dependency here so everythign gets rebuilt when you mess with how things are built.
+algod.oas3.yml:	algod.oas2.json Makefile
+	jq < $< > /dev/null	# fail with a nice explantion if json is malformed
+	curl -s -X POST "$(SWAGGER_CONVERTER_API)/api/convert" -H "accept: application/json" -H "Content-Type: application/json" -d @./$< -o .3tmp.json
+	python3 jsoncanon.py < .3tmp.json > $@
 	rm -f .3tmp.json
-
-oapi-codegen: .PHONY
-	../../../scripts/buildtools/install_buildtools.sh -o github.com/oapi-codegen/oapi-codegen -c github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen
 
 clean:
 	rm -rf $(GEN) algod.oas3.yml
-
-.PHONY:
