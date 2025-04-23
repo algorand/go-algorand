@@ -45,6 +45,28 @@ func (cx *EvalContext) availableBox(name string, operation BoxOperation, createS
 	}
 
 	dirty, ok := cx.available.boxes[BoxRef{cx.appID, name}]
+
+	newAppAccess := false
+	// maybe allow it (and account for it) if a newly created app is accessing a
+	// box. we allow this because we know the box is empty upon first touch, so
+	// we don't have to go to the disk. but we only allow one such access for
+	// each spare (empty) box ref. that way, we can't end up needing to write
+	// many separate newly created boxes.
+	if !ok && cx.Proto.EnableUnnamedBoxAccessInNewApps {
+		if _, newAppAccess = cx.available.createdApps[cx.appID]; newAppAccess {
+			if cx.available.unnamedAccess > 0 {
+				ok = true                    // allow it
+				cx.available.unnamedAccess-- // account for it
+				dirty = false                // no-op, but for clarity
+
+				// it will be marked dirty and dirtyBytes will be incremented
+				// below, like any create. as a (good) side-effect it will go
+				// into `cx.available` so that later uses will see it in
+				// available.boxes, skipping this section
+			}
+		}
+	}
+
 	if !ok && cx.UnnamedResources != nil {
 		ok = cx.UnnamedResources.AvailableBox(cx.appID, name, operation, createSize)
 	}
@@ -52,13 +74,16 @@ func (cx *EvalContext) availableBox(name string, operation BoxOperation, createS
 		return nil, false, fmt.Errorf("invalid Box reference %#x", name)
 	}
 
-	// Since the box is in cx.available, we know this GetBox call is cheap. It
-	// will go (at most) to the cowRoundBase. Knowledge about existence
-	// simplifies write budget tracking, then we return the info to avoid yet
-	// another call to GetBox which most ops need anyway.
-	content, exists, err := cx.Ledger.GetBox(cx.appID, name)
-	if err != nil {
-		return nil, false, err
+	// If the box is in cx.available, GetBox() is cheap. It will go (at most) to
+	// the cowRoundBase. But if we did a "newAppAccess", GetBox would go to disk
+	// just to find the box is not there. So we skip it.
+	content, exists := []byte(nil), false
+	if !newAppAccess {
+		var getErr error
+		content, exists, getErr = cx.Ledger.GetBox(cx.appID, name)
+		if getErr != nil {
+			return nil, false, getErr
+		}
 	}
 
 	switch operation {
@@ -106,7 +131,7 @@ func (cx *EvalContext) availableBox(name string, operation BoxOperation, createS
 	return content, exists, nil
 }
 
-func argCheck(cx *EvalContext, name string, size uint64) error {
+func lengthChecks(cx *EvalContext, name string, size uint64) error {
 	// Enforce length rules. Currently these are the same as enforced by
 	// ledger. If these were ever to change in proto, we would need to isolate
 	// changes to different program versions. (so a v7 app could not see a
@@ -130,7 +155,7 @@ func opBoxCreate(cx *EvalContext) error {
 	name := string(cx.Stack[prev].Bytes)
 	size := cx.Stack[last].Uint
 
-	err := argCheck(cx, name, size)
+	err := lengthChecks(cx, name, size)
 	if err != nil {
 		return err
 	}
@@ -160,7 +185,7 @@ func opBoxExtract(cx *EvalContext) error {
 	start := cx.Stack[prev].Uint
 	length := cx.Stack[last].Uint
 
-	err := argCheck(cx, name, basics.AddSaturate(start, length))
+	err := lengthChecks(cx, name, basics.AddSaturate(start, length))
 	if err != nil {
 		return err
 	}
@@ -187,7 +212,7 @@ func opBoxReplace(cx *EvalContext) error {
 	start := cx.Stack[prev].Uint
 	name := string(cx.Stack[pprev].Bytes)
 
-	err := argCheck(cx, name, basics.AddSaturate(start, uint64(len(replacement))))
+	err := lengthChecks(cx, name, basics.AddSaturate(start, uint64(len(replacement))))
 	if err != nil {
 		return err
 	}
@@ -215,7 +240,7 @@ func opBoxSplice(cx *EvalContext) error {
 	start := cx.Stack[last-2].Uint
 	name := string(cx.Stack[last-3].Bytes)
 
-	err := argCheck(cx, name, 0)
+	err := lengthChecks(cx, name, 0)
 	if err != nil {
 		return err
 	}
@@ -240,7 +265,7 @@ func opBoxDel(cx *EvalContext) error {
 	last := len(cx.Stack) - 1 // name
 	name := string(cx.Stack[last].Bytes)
 
-	err := argCheck(cx, name, 0)
+	err := lengthChecks(cx, name, 0)
 	if err != nil {
 		return err
 	}
@@ -266,7 +291,7 @@ func opBoxResize(cx *EvalContext) error {
 	name := string(cx.Stack[prev].Bytes)
 	size := cx.Stack[last].Uint
 
-	err := argCheck(cx, name, size)
+	err := lengthChecks(cx, name, size)
 	if err != nil {
 		return err
 	}
@@ -305,7 +330,7 @@ func opBoxLen(cx *EvalContext) error {
 	last := len(cx.Stack) - 1 // name
 	name := string(cx.Stack[last].Bytes)
 
-	err := argCheck(cx, name, 0)
+	err := lengthChecks(cx, name, 0)
 	if err != nil {
 		return err
 	}
@@ -323,7 +348,7 @@ func opBoxGet(cx *EvalContext) error {
 	last := len(cx.Stack) - 1 // name
 	name := string(cx.Stack[last].Bytes)
 
-	err := argCheck(cx, name, 0)
+	err := lengthChecks(cx, name, 0)
 	if err != nil {
 		return err
 	}
@@ -346,7 +371,7 @@ func opBoxPut(cx *EvalContext) error {
 	value := cx.Stack[last].Bytes
 	name := string(cx.Stack[prev].Bytes)
 
-	err := argCheck(cx, name, uint64(len(value)))
+	err := lengthChecks(cx, name, uint64(len(value)))
 	if err != nil {
 		return err
 	}
