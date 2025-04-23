@@ -690,7 +690,7 @@ func TestBoxInners(t *testing.T) {
 	})
 }
 
-// Create the the app with bytecode in txn.ApplicationArgs[0], pass my arg[1] as created arg[0]
+// Create the app with bytecode in txn.ApplicationArgs[0], pass my arg[1] as created arg[0]
 var passThruCreator = main(`
   itxn_begin
   txn TypeEnum; itxn_field TypeEnum
