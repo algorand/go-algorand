@@ -22,6 +22,7 @@ import (
 	"time"
 
 	dht "github.com/libp2p/go-libp2p-kad-dht"
+	kbucket "github.com/libp2p/go-libp2p-kbucket"
 	"github.com/libp2p/go-libp2p/core/discovery"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -108,6 +109,8 @@ func (c *CapabilitiesDiscovery) PeersForCapability(capability Capability, n int)
 	return peers, nil
 }
 
+const capAdvertisementInitialDelay = time.Second / 10000
+
 // AdvertiseCapabilities periodically runs the Advertiser interface on the DHT
 // If a capability fails to advertise we will retry every 10 seconds until full success
 // This gets rerun every at the minimum ttl or the maxAdvertisementInterval.
@@ -115,7 +118,7 @@ func (c *CapabilitiesDiscovery) AdvertiseCapabilities(capabilities ...Capability
 	c.wg.Add(1)
 	go func() {
 		// Run the initial Advertisement immediately
-		nextExecution := time.After(time.Second / 10000)
+		nextExecution := time.After(capAdvertisementInitialDelay)
 		defer func() {
 			c.wg.Done()
 		}()
@@ -131,7 +134,12 @@ func (c *CapabilitiesDiscovery) AdvertiseCapabilities(capabilities ...Capability
 					ttl, err0 := c.advertise(c.dht.Context(), string(capa))
 					if err0 != nil {
 						err = err0
-						c.log.Errorf("failed to advertise for capability %s: %v", capa, err0)
+						loggerFn := c.log.Errorf
+						if err0 == kbucket.ErrLookupFailure {
+							// No peers in a routing table, it is typical for startup and not an error
+							loggerFn = c.log.Debugf
+						}
+						loggerFn("failed to advertise for capability %s: %v", capa, err0)
 						break
 					}
 					if ttl < advertisementInterval {
