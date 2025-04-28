@@ -37,6 +37,7 @@ if [[ "${UNAME}" == *"MINGW"* ]]; then
 	GOPATH1=$HOME/go
 else
 	export GOPATH=$(go env GOPATH)
+    GOPATH1=${GOPATH%%:*}
 fi
 
 # Setup GOBIN
