@@ -38,13 +38,12 @@ const (
 	totalRequiredFields       = 8
 )
 
-const defaultCompressCapacity = 1024
-
 // StatelessEncoder compresses a msgpack-encoded vote by stripping all msgpack
 // formatting and field names, replacing them with a bitmask indicating which
 // fields are present. It is not thread-safe.
 type StatelessEncoder struct {
-	buf  []byte
+	cur  []byte
+	pos  int
 	mask uint8
 
 	requiredFields uint8
@@ -55,29 +54,67 @@ func NewStatelessEncoder() *StatelessEncoder {
 	return &StatelessEncoder{}
 }
 
-// CompressVote appends a compressed vote in src to dst.
-// If dst is nil, a new slice is allocated.
+// CompressVoteBound estimates the maximum size needed for compressed vote data
+func CompressVoteBound(srcSize int) int {
+	// Vote messages typically get ~80% smaller, but we will use
+	// the input size as the worst case. If this is too small, CompressVote
+	// will return ErrBufferTooSmall (and the caller will send the uncompressed
+	// message instead).
+	return srcSize
+}
+
+// ErrBufferTooSmall is returned when the destination buffer is too small
+var ErrBufferTooSmall = fmt.Errorf("destination buffer too small")
+
+// CompressVote compresses a vote in src and writes it to dst.
+// If the provided buffer dst is nil or too small, a new slice is allocated.
 // The returned slice may be the same as dst.
 // To re-use dst, run like: dst = enc.CompressVote(dst[:0], src)
 func (e *StatelessEncoder) CompressVote(dst, src []byte) ([]byte, error) {
-	if dst == nil {
-		dst = make([]byte, 0, defaultCompressCapacity)
+	bound := CompressVoteBound(len(src))
+	// Reuse dst if it's big enough, otherwise allocate a new buffer
+	if cap(dst) >= bound {
+		dst = dst[0:bound] // Reuse dst buffer with its full capacity
+	} else {
+		dst = make([]byte, bound)
 	}
-	e.buf = dst[:0]
-	// put empty 2-byte header at beginning, to fill in later
-	e.buf = append(e.buf, byte(0), byte(0))
+
+	// Reset our position to the beginning
+	e.cur = dst
 	e.mask = 0
 	e.requiredFields = 0
+	// put empty 2-byte header at beginning, to fill in later
+	e.pos = 2
 	err := parseVote(src, e)
 	if err != nil {
 		return nil, err
 	}
+
+	// Check if we overflowed the buffer
+	if e.pos > len(dst) {
+		return nil, ErrBufferTooSmall
+	}
+
 	if e.requiredFields != totalRequiredFields {
 		return nil, fmt.Errorf("missing required fields")
 	}
 	// fill in header's first byte with mask
-	e.buf[0] = e.mask
-	return e.buf, nil
+	e.cur[0] = e.mask
+
+	// Return only the portion that was used
+	return dst[:e.pos], nil
+
+}
+
+// writeBytes writes multiple bytes to the current buffer
+// This is optimized to avoid per-byte bounds checking when possible
+func (s *StatelessEncoder) writeBytes(bytes []byte) {
+	// If we have enough room in the buffer, use direct copy
+	if s.pos+len(bytes) <= len(s.cur) {
+		copy(s.cur[s.pos:], bytes)
+	}
+	// Always increment pos, so CompressVote will return ErrBufferTooSmall
+	s.pos += len(bytes)
 }
 
 func (e *StatelessEncoder) updateMask(field voteValueType) {
@@ -102,22 +139,22 @@ func (e *StatelessEncoder) updateMask(field voteValueType) {
 
 func (e *StatelessEncoder) writeVaruint(field voteValueType, b []byte) {
 	e.updateMask(field)
-	e.buf = append(e.buf, b...)
+	e.writeBytes(b)
 }
 
 func (e *StatelessEncoder) writeBin32(field voteValueType, b [32]byte) {
 	e.updateMask(field)
-	e.buf = append(e.buf, b[:]...)
+	e.writeBytes(b[:])
 }
 
 func (e *StatelessEncoder) writeBin64(field voteValueType, b [64]byte) {
 	e.updateMask(field)
-	e.buf = append(e.buf, b[:]...)
+	e.writeBytes(b[:])
 }
 
 func (e *StatelessEncoder) writeBin80(field voteValueType, b [80]byte) {
 	e.updateMask(field)
-	e.buf = append(e.buf, b[:]...)
+	e.writeBytes(b[:])
 }
 
 // StatelessDecoder decompresses votes that were compressed by StatelessEncoder.
@@ -145,6 +182,12 @@ func (d *StatelessDecoder) proposalValueMapSize(mask uint8) uint8 {
 	// Count how many of dig, encdig, oper, oprop are set
 	return uint8(bits.OnesCount8(mask & (bitDig | bitEncDig | bitOper | bitOprop)))
 }
+
+// StaticDecoder decodes votes encoded by StaticEncoder using a static table.
+type StaticDecoder struct{}
+
+// NewStaticDecoder returns a new StaticDecoder.
+func NewStaticDecoder() *StaticDecoder { return &StaticDecoder{} }
 
 // DecompressVote decodes a compressed vote in src and appends it to dst.
 // To re-use dst, run like: dst = dec.DecompressVote(dst[:0], src)

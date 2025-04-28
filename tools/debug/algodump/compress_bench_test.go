@@ -205,7 +205,7 @@ func benchmarkVPackCompression(b *testing.B) {
 	filtered := filterMessages(b, corpus, true)
 
 	enc := vpack.NewStatelessEncoder()
-	compressed := make([]byte, 0, 1024)
+	compressed := make([]byte, 0, 4096)
 
 	b.ResetTimer()
 	var totalCompressed int64
@@ -215,7 +215,7 @@ func benchmarkVPackCompression(b *testing.B) {
 		msg := filtered[i%len(filtered)]
 
 		var err error
-		compressed, err = enc.CompressVote(compressed[:0], msg.Data)
+		compressed, err = enc.CompressVote(compressed, msg.Data)
 		if err != nil {
 			b.Fatalf("ParseVoteMsgpack failed: %v", err)
 		}

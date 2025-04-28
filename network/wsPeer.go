@@ -1086,11 +1086,16 @@ func (wp *wsPeer) OnClose(f func()) {
 	wp.closers = append(wp.closers, f)
 }
 
+func (wp *wsPeer) vpackVoteCompressionSupported() bool {
+	return wp.features&pfCompressedVoteVpack != 0
+}
+
 //msgp:ignore peerFeatureFlag
 type peerFeatureFlag int
 
 const (
 	pfCompressedProposal peerFeatureFlag = 1 << iota
+	pfCompressedVoteVpack
 )
 
 // versionPeerFeatures defines protocol version when peer features were introduced
@@ -1134,6 +1139,9 @@ func decodePeerFeatures(version string, announcedFeatures string) peerFeatureFla
 		part = strings.TrimSpace(part)
 		if part == PeerFeatureProposalCompression {
 			features |= pfCompressedProposal
+		}
+		if part == PeerFeatureVoteVpackCompression {
+			features |= pfCompressedVoteVpack
 		}
 	}
 	return features

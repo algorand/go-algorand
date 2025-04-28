@@ -1001,7 +1001,8 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 	responseHeader.Set(ProtocolVersionHeader, matchingVersion)
 	responseHeader.Set(GenesisHeader, wn.GenesisID)
 	// set the features we support
-	responseHeader.Set(PeerFeaturesHeader, PeerFeatureProposalCompression)
+	responseHeader.Set(PeerFeaturesHeader,
+		strings.Join([]string{PeerFeatureProposalCompression, PeerFeatureVoteVpackCompression}, ","))
 	var challenge string
 	if wn.prioScheme != nil {
 		challenge = wn.prioScheme.NewPrioChallenge()
@@ -1331,17 +1332,18 @@ func (wn *WebsocketNetwork) getPeersChangeCounter() int32 {
 
 // preparePeerData prepares batches of data for sending.
 // It performs zstd compression for proposal massages if they this is a prio request and has proposal.
-func (wn *msgBroadcaster) preparePeerData(request broadcastRequest, prio bool) ([]byte, crypto.Digest) {
+func (wn *msgBroadcaster) preparePeerData(request broadcastRequest, prio bool) ([]byte, []byte, crypto.Digest) {
 	tbytes := []byte(request.tag)
 	mbytes := make([]byte, len(tbytes)+len(request.data))
 	copy(mbytes, tbytes)
 	copy(mbytes[len(tbytes):], request.data)
+	var compressedData []byte
 
 	var digest crypto.Digest
 	if request.tag != protocol.MsgDigestSkipTag && len(request.data) >= messageFilterSize {
 		digest = crypto.Hash(mbytes)
 	}
-
+	// Compress proposals -- all proposals are compressed as of wsnet 2.2
 	if prio && request.tag == protocol.ProposalPayloadTag {
 		compressed, logMsg := zstdCompressMsg(tbytes, request.data)
 		if len(logMsg) > 0 {
@@ -1349,7 +1351,15 @@ func (wn *msgBroadcaster) preparePeerData(request broadcastRequest, prio bool) (
 		}
 		mbytes = compressed
 	}
-	return mbytes, digest
+	// Optionally compress votes: only supporting peers will receive it.
+	if prio && request.tag == protocol.AgreementVoteTag {
+		var logMsg string
+		compressedData, logMsg = vpackCompressVote(tbytes, request.data)
+		if len(logMsg) > 0 {
+			wn.log.Warn(logMsg)
+		}
+	}
+	return mbytes, compressedData, digest
 }
 
 // prio is set if the broadcast is a high-priority broadcast.
@@ -1366,7 +1376,7 @@ func (wn *msgBroadcaster) innerBroadcast(request broadcastRequest, prio bool, pe
 	}
 
 	start := time.Now()
-	data, digest := wn.preparePeerData(request, prio)
+	data, dataWithCompression, digest := wn.preparePeerData(request, prio)
 
 	// first send to all the easy outbound peers who don't block, get them started.
 	sentMessageCount := 0
@@ -1377,7 +1387,11 @@ func (wn *msgBroadcaster) innerBroadcast(request broadcastRequest, prio bool, pe
 		if Peer(peer) == request.except {
 			continue
 		}
-		ok := peer.writeNonBlock(request.ctx, data, prio, digest, request.enqueueTime)
+		dataToSend := data
+		if peer.vpackVoteCompressionSupported() && len(dataWithCompression) > 0 {
+			dataToSend = dataWithCompression
+		}
+		ok := peer.writeNonBlock(request.ctx, dataToSend, prio, digest, request.enqueueTime)
 		if ok {
 			sentMessageCount++
 			continue
@@ -1883,6 +1897,10 @@ const PeerFeaturesHeader = "X-Algorand-Peer-Features"
 // supports proposal payload compression with zstd
 const PeerFeatureProposalCompression = "ppzstd"
 
+// PeerFeatureVoteVpackCompression is a value for PeerFeaturesHeader indicating peer
+// supports agreement vote message compression with vpack
+const PeerFeatureVoteVpackCompression = "avvpack"
+
 var websocketsScheme = map[string]string{"http": "ws", "https": "wss"}
 
 var errBadAddr = errors.New("bad address")
@@ -2015,7 +2033,8 @@ func (wn *WebsocketNetwork) tryConnect(netAddr, gossipAddr string) {
 	// for backward compatibility, include the ProtocolVersion header as well.
 	requestHeader.Set(ProtocolVersionHeader, wn.protocolVersion)
 	// set the features header (comma-separated list)
-	requestHeader.Set(PeerFeaturesHeader, PeerFeatureProposalCompression)
+	requestHeader.Set(PeerFeaturesHeader,
+		strings.Join([]string{PeerFeatureProposalCompression, PeerFeatureVoteVpackCompression}, ","))
 	SetUserAgentHeader(requestHeader)
 	myInstanceName := wn.log.GetInstanceName()
 	requestHeader.Set(InstanceNameHeader, myInstanceName)

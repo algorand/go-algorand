@@ -3694,9 +3694,10 @@ func TestPreparePeerData(t *testing.T) {
 
 	wn := WebsocketNetwork{}
 	data := make([][]byte, len(reqs))
+	compressedData := make([][]byte, len(reqs))
 	digests := make([]crypto.Digest, len(reqs))
 	for i, req := range reqs {
-		data[i], digests[i] = wn.broadcaster.preparePeerData(req, false)
+		data[i], compressedData[i], digests[i] = wn.broadcaster.preparePeerData(req, false)
 		require.NotEmpty(t, data[i])
 		require.Empty(t, digests[i]) // small messages have no digest
 	}
@@ -3706,7 +3707,7 @@ func TestPreparePeerData(t *testing.T) {
 	}
 
 	for i, req := range reqs {
-		data[i], digests[i] = wn.broadcaster.preparePeerData(req, true)
+		data[i], compressedData[i], digests[i] = wn.broadcaster.preparePeerData(req, true)
 		require.NotEmpty(t, data[i])
 		require.Empty(t, digests[i]) // small messages have no digest
 	}

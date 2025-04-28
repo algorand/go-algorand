@@ -335,3 +335,83 @@ func FuzzVoteFields(f *testing.F) {
 		require.Equal(t, v0, v1)
 	})
 }
+
+// TestEncoderReuse specifically tests the reuse of a StatelessEncoder instance across
+// multiple compression operations. This test would have caught the bug where
+// the encoder's position wasn't being reset between calls.
+func TestEncoderReuse(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	// Create several random votes
+	const numVotes = 10
+	msgpBufs := make([][]byte, 0, numVotes)
+	voteGen := generateRandomVote()
+
+	// Generate random votes and encode them
+	for i := 0; i < numVotes; i++ {
+		msgpBufs = append(msgpBufs, protocol.EncodeMsgp(voteGen.Example(i)))
+	}
+
+	// Test reusing the same encoder multiple times
+	enc := NewStatelessEncoder()
+	var compressedBufs [][]byte
+
+	// First case: Create a new buffer for each compression
+	for i, msgpBuf := range msgpBufs {
+		compressedBuf, err := enc.CompressVote(nil, msgpBuf)
+		require.NoError(t, err, "Vote %d failed to compress with new buffer", i)
+		compressedBufs = append(compressedBufs, compressedBuf)
+	}
+
+	// Verify all compressed buffers can be decompressed correctly
+	dec := NewStatelessDecoder()
+	for i, compressedBuf := range compressedBufs {
+		decompressedBuf, err := dec.DecompressVote(nil, compressedBuf)
+		require.NoError(t, err, "Vote %d failed to decompress", i)
+		require.Equal(t, msgpBufs[i], decompressedBuf, "Vote %d decompressed incorrectly", i)
+	}
+
+	// Second case: Reuse a single pre-allocated buffer
+	compressedBufs = compressedBufs[:0] // Clear
+	reusedBuffer := make([]byte, 0, 4096)
+
+	for i, msgpBuf := range msgpBufs {
+		// Save the compressed result and create a new copy
+		// to avoid the buffer being modified by subsequent operations
+		compressed, err := enc.CompressVote(reusedBuffer[:0], msgpBuf)
+		require.NoError(t, err, "Vote %d failed to compress with reused buffer", i)
+		compressedCopy := make([]byte, len(compressed))
+		copy(compressedCopy, compressed)
+		compressedBufs = append(compressedBufs, compressedCopy)
+	}
+
+	// Verify all compressed buffers with reused buffer can be decompressed correctly
+	for i, compressedBuf := range compressedBufs {
+		decompressedBuf, err := dec.DecompressVote(nil, compressedBuf)
+		require.NoError(t, err, "Vote %d failed to decompress (reused buffer)", i)
+		require.Equal(t, msgpBufs[i], decompressedBuf, "Vote %d decompressed incorrectly (reused buffer)", i)
+	}
+
+	// Third case: Test with varying buffer sizes to ensure we handle capacity changes correctly
+	compressedBufs = compressedBufs[:0]  // Clear
+	varyingBuffer := make([]byte, 0, 10) // Start with a small buffer
+
+	for i, msgpBuf := range msgpBufs {
+		// This will cause the buffer to be reallocated sometimes
+		compressed, err := enc.CompressVote(varyingBuffer[:0], msgpBuf)
+		require.NoError(t, err, "Vote %d failed to compress with varying buffer", i)
+		compressedCopy := make([]byte, len(compressed))
+		copy(compressedCopy, compressed)
+		compressedBufs = append(compressedBufs, compressedCopy)
+
+		// Update the buffer for next iteration - it might have grown
+		varyingBuffer = compressed
+	}
+
+	// Verify all compressed buffers with varying buffer can be decompressed correctly
+	for i, compressedBuf := range compressedBufs {
+		decompressedBuf, err := dec.DecompressVote(nil, compressedBuf)
+		require.NoError(t, err, "Vote %d failed to decompress (varying buffer)", i)
+		require.Equal(t, msgpBufs[i], decompressedBuf, "Vote %d decompressed incorrectly (varying buffer)", i)
+	}
+}
