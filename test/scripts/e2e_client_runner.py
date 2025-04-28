@@ -57,6 +57,7 @@ def openkmd(algodata):
     kmdtokenpath = sorted(glob.glob(os.path.join(algodata,'kmd-*','kmd.token')))[-1]
     kmdtoken = open(kmdtokenpath, 'rt').read().strip()
     kmd = algosdk.kmd.KMDClient(kmdtoken, 'http://' + kmdnet)
+    print(kmdnet)
     return kmd
 
 def openalgod(algodata):
