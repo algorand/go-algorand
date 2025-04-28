@@ -33,7 +33,7 @@ type (
 	// An UnauthenticatedCredential is a Credential which has not yet been
 	// authenticated.
 	UnauthenticatedCredential struct {
-		_struct struct{}        `codec:",omitempty,omitemptyarray" vpack_assert_size:"1"`
+		_struct struct{}        `codec:",omitempty,omitemptyarray"`
 		Proof   crypto.VrfProof `codec:"pf"`
 	}
 

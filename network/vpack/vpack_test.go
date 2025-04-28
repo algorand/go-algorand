@@ -32,7 +32,6 @@ import (
 )
 
 // checkVoteValid analyzes a vote to determine if it would cause compression errors and what kind.
-// These errors result from vpack_assert_size not matching the input.
 // Returns (true, expectedError) if an error is expected during compression, (false, "") otherwise.
 func checkVoteValid(vote *agreement.UnauthenticatedVote) (ok bool, expectedError string) {
 	if vote.R.MsgIsZero() || vote.Cred.MsgIsZero() || vote.Sig.MsgIsZero() {
