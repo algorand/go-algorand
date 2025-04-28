@@ -126,8 +126,8 @@ type compressDumpHandler struct {
 	cdict        *gozstd.CDict // Reusable gozstd dictionary
 
 	// vpack-related fields
-	vpackEncoder *vpack.BitmaskEncoder
-	vpackDecoder *vpack.BitmaskDecoder
+	vpackEncoder *vpack.StatelessEncoder
+	vpackDecoder *vpack.StatelessDecoder
 
 	// Tag-specific context configuration
 	tagContexts   map[protocol.Tag]int    // Maps tag to window size
@@ -514,8 +514,8 @@ func initCompressDumpHandler() *compressDumpHandler {
 	// Initialize vpack encoder/decoder if -useVpack flag is enabled
 	if *useVpack {
 		fmt.Println("Using vpack compression library")
-		cdh.vpackEncoder = vpack.NewBitmaskEncoder()
-		cdh.vpackDecoder = vpack.NewBitmaskDecoder()
+		cdh.vpackEncoder = vpack.NewStatelessEncoder()
+		cdh.vpackDecoder = vpack.NewStatelessDecoder()
 	}
 
 	// Initialize dictionary-based compression if a dictionary file is provided
