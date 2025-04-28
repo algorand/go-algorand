@@ -105,10 +105,10 @@ fmt:
 	./scripts/check_license.sh -i
 
 fix: build
-	$(GOPATH1)/bin/algofix */
+	$(GOBIN)/bin/algofix */
 
 lint: deps
-	$(GOPATH1)/bin/golangci-lint run -c .golangci.yml
+	$(GOBIN)/bin/golangci-lint run -c .golangci.yml
 
 expectlint:
 	cd test/e2e-go/cli/goal/expect && python3 expect_linter.py *.exp
@@ -220,7 +220,7 @@ $(KMD_API_SWAGGER_SPEC): $(KMD_API_FILES) crypto/libs/$(OS_TYPE)/$(ARCH)/lib/lib
 	cd daemon/kmd/lib/kmdapi && \
 		python3 genSwaggerWrappers.py $(KMD_API_SWAGGER_WRAPPER)
 	cd daemon/kmd && \
-		PATH=$(GOPATH1)/bin:$$PATH \
+		PATH=$(GOBIN)/bin:$$PATH \
 		go generate ./...
 	rm daemon/kmd/lib/kmdapi/$(KMD_API_SWAGGER_WRAPPER)
 
@@ -276,21 +276,21 @@ check-go-version:
 build-race: build
 	@mkdir -p $(GOPATH1)/bin-race
 	GOBIN=$(GOPATH1)/bin-race go install $(GOTRIMPATH) $(GOTAGS) -race -ldflags="$(GOLDFLAGS)" ./...
-	cp $(GOPATH1)/bin/kmd $(GOPATH1)/bin-race
+	cp $(GOBIN)/bin/kmd $(GOPATH1)/bin-race
 
-NONGO_BIN_FILES=$(GOPATH1)/bin/find-nodes.sh $(GOPATH1)/bin/update.sh $(GOPATH1)/bin/COPYING $(GOPATH1)/bin/ddconfig.sh
+NONGO_BIN_FILES=$(GOBIN)/bin/find-nodes.sh $(GOBIN)/bin/update.sh $(GOBIN)/bin/COPYING $(GOBIN)/bin/ddconfig.sh
 
 NONGO_BIN: $(NONGO_BIN_FILES)
 
-$(GOPATH1)/bin/find-nodes.sh: scripts/find-nodes.sh
+$(GOBIN)/bin/find-nodes.sh: scripts/find-nodes.sh
 
-$(GOPATH1)/bin/update.sh: cmd/updater/update.sh
+$(GOBIN)/bin/update.sh: cmd/updater/update.sh
 
-$(GOPATH1)/bin/COPYING: COPYING
+$(GOBIN)/bin/COPYING: COPYING
 
-$(GOPATH1)/bin/ddconfig.sh: scripts/ddconfig.sh
+$(GOBIN)/bin/ddconfig.sh: scripts/ddconfig.sh
 
-$(GOPATH1)/bin/%:
+$(GOBIN)/bin/%:
 	cp -f $< $@
 
 test: build
