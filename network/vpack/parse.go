@@ -1,3 +1,19 @@
+// Copyright (C) 2019-2025 Algorand, Inc.
+// This file is part of go-algorand
+//
+// go-algorand is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as
+// published by the Free Software Foundation, either version 3 of the
+// License, or (at your option) any later version.
+//
+// go-algorand is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
+
 package vpack
 
 import "fmt"
@@ -22,29 +38,7 @@ const (
 	sigSVoteValue
 )
 
-const (
-	msgpFixstrCred   = "\xa4cred"
-	msgpFixstrDig    = "\xa3dig"
-	msgpFixstrEncdig = "\xa6encdig"
-	msgpFixstrOper   = "\xa4oper"
-	msgpFixstrOprop  = "\xa5oprop"
-	msgpFixstrP      = "\xa1p"
-	msgpFixstrP1s    = "\xa3p1s"
-	msgpFixstrP2     = "\xa2p2"
-	msgpFixstrP2s    = "\xa3p2s"
-	msgpFixstrPer    = "\xa3per"
-	msgpFixstrPf     = "\xa2pf"
-	msgpFixstrProp   = "\xa4prop"
-	msgpFixstrPs     = "\xa2ps"
-	msgpFixstrR      = "\xa1r"
-	msgpFixstrRnd    = "\xa3rnd"
-	msgpFixstrS      = "\xa1s"
-	msgpFixstrSig    = "\xa3sig"
-	msgpFixstrSnd    = "\xa3snd"
-	msgpFixstrStep   = "\xa4step"
-)
-
-func parseVote(data []byte, c compressWriter) error {
+func parseVote(data []byte, c *StatelessEncoder) error {
 	p := newParser(data)
 
 	// Parse unauthenticatedVote
@@ -56,9 +50,9 @@ func parseVote(data []byte, c compressWriter) error {
 	if cnt != 3 {
 		return fmt.Errorf("expected fixed map size 3 for unauthenticatedVote, got %d", cnt)
 	}
-	// Required field for unauthenticatedVote: cred
-	if s, err := p.readString(); err != nil || string(s) != "cred" {
-		return fmt.Errorf("expected string \"cred\", got %s: %w", s, err)
+	// Required nested map in unauthenticatedVote: cred
+	if s, rErr := p.readString(); rErr != nil || string(s) != "cred" {
+		return fmt.Errorf("expected string cred, got %s: %w", s, rErr)
 	}
 
 	// Parse UnauthenticatedCredential
@@ -70,9 +64,9 @@ func parseVote(data []byte, c compressWriter) error {
 	if cnt != 1 {
 		return fmt.Errorf("expected fixed map size 1 for UnauthenticatedCredential, got %d", cnt)
 	}
-	// Required field for UnauthenticatedCredential: pf
-	if s, err := p.readString(); err != nil || string(s) != "pf" {
-		return fmt.Errorf("expected string \"pf\", got %s: %w", s, err)
+	// Required field name for UnauthenticatedCredential: pf
+	if s, rErr := p.readString(); rErr != nil || string(s) != "pf" {
+		return fmt.Errorf("expected string pf, got %s: %w", s, rErr)
 	}
 	val, err := p.readBin80()
 	if err != nil {
@@ -80,12 +74,12 @@ func parseVote(data []byte, c compressWriter) error {
 	}
 	c.writeBin80(credPfVoteValue, val)
 
-	// Required field for unauthenticatedVote: r
-	if s, err := p.readString(); err != nil || string(s) != "r" {
-		return fmt.Errorf("expected string \"r\", got %s: %w", s, err)
+	// Required nested map in unauthenticatedVote: r
+	if s, rErr := p.readString(); rErr != nil || string(s) != "r" {
+		return fmt.Errorf("expected string r, got %s: %w", s, rErr)
 	}
 
-	// Parse rawVote
+	// Parse rawVote fixmap
 	cnt, err = p.readFixMap()
 	if err != nil {
 		return fmt.Errorf("reading map for rawVote: %w", err)
@@ -94,95 +88,93 @@ func parseVote(data []byte, c compressWriter) error {
 		return fmt.Errorf("expected fixmap size for rawVote 1 <= cnt <= 5, got %d", cnt)
 	}
 	for range cnt {
-		key, err := p.readString()
-		if err != nil {
-			return fmt.Errorf("reading key for rawVote: %w", err)
+		voteKey, err1 := p.readString()
+		if err1 != nil {
+			return fmt.Errorf("reading key for rawVote: %w", err1)
 		}
-		switch string(key) {
+		switch string(voteKey) {
 		case "per":
-			val, err := p.readUintBytes()
-			if err != nil {
-				return fmt.Errorf("reading per: %w", err)
+			val, err1 := p.readUintBytes()
+			if err1 != nil {
+				return fmt.Errorf("reading per: %w", err1)
 			}
 			c.writeVaruint(rPerVoteValue, val)
 		case "prop":
-
-			// Parse proposalValue
-			cnt, err := p.readFixMap()
-			if err != nil {
-				return fmt.Errorf("reading map for proposalValue: %w", err)
+			// Parse proposalValue fixmap
+			propCnt, err1 := p.readFixMap()
+			if err1 != nil {
+				return fmt.Errorf("reading map for proposalValue: %w", err1)
 			}
-			if cnt < 1 || cnt > 4 {
-				return fmt.Errorf("expected fixmap size for proposalValue 1 <= cnt <= 4, got %d", cnt)
+			if propCnt < 1 || propCnt > 4 {
+				return fmt.Errorf("expected fixmap size for proposalValue 1 <= cnt <= 4, got %d", propCnt)
 			}
-			for range cnt {
-				key, err := p.readString()
-				if err != nil {
-					return fmt.Errorf("reading key for proposalValue: %w", err)
+			for range propCnt {
+				propKey, err2 := p.readString()
+				if err2 != nil {
+					return fmt.Errorf("reading key for proposalValue: %w", err2)
 				}
-				switch string(key) {
+				switch string(propKey) {
 				case "dig":
-					val, err := p.readBin32()
-					if err != nil {
-						return fmt.Errorf("reading dig: %w", err)
+					val, err2 := p.readBin32()
+					if err2 != nil {
+						return fmt.Errorf("reading dig: %w", err2)
 					}
 					c.writeBin32(rPropDigVoteValue, val)
 
 				case "encdig":
-					val, err := p.readBin32()
-					if err != nil {
-						return fmt.Errorf("reading encdig: %w", err)
+					val, err2 := p.readBin32()
+					if err2 != nil {
+						return fmt.Errorf("reading encdig: %w", err2)
 					}
 					c.writeBin32(rPropEncdigVoteValue, val)
 
 				case "oper":
-					val, err := p.readUintBytes()
-					if err != nil {
-						return fmt.Errorf("reading oper: %w", err)
+					val, err2 := p.readUintBytes()
+					if err2 != nil {
+						return fmt.Errorf("reading oper: %w", err2)
 					}
 					c.writeVaruint(rPropOperVoteValue, val)
 				case "oprop":
-					val, err := p.readBin32()
-					if err != nil {
-						return fmt.Errorf("reading oprop: %w", err)
+					val, err2 := p.readBin32()
+					if err2 != nil {
+						return fmt.Errorf("reading oprop: %w", err2)
 					}
 					c.writeBin32(rPropOpropVoteValue, val)
 
 				default:
-					return fmt.Errorf("unexpected field in proposalValue: %q", key)
+					return fmt.Errorf("unexpected field in proposalValue: %q", propKey)
 				}
 			}
-
 		case "rnd":
-			val, err := p.readUintBytes()
-			if err != nil {
-				return fmt.Errorf("reading rnd: %w", err)
+			val, err1 := p.readUintBytes()
+			if err1 != nil {
+				return fmt.Errorf("reading rnd: %w", err1)
 			}
 			c.writeVaruint(rRndVoteValue, val)
 		case "snd":
-			val, err := p.readBin32()
-			if err != nil {
-				return fmt.Errorf("reading snd: %w", err)
+			val, err1 := p.readBin32()
+			if err1 != nil {
+				return fmt.Errorf("reading snd: %w", err1)
 			}
 			c.writeBin32(rSndVoteValue, val)
 
 		case "step":
-			val, err := p.readUintBytes()
-			if err != nil {
-				return fmt.Errorf("reading step: %w", err)
+			val, err1 := p.readUintBytes()
+			if err1 != nil {
+				return fmt.Errorf("reading step: %w", err1)
 			}
 			c.writeVaruint(rStepVoteValue, val)
 		default:
-			return fmt.Errorf("unexpected field in rawVote: %q", key)
+			return fmt.Errorf("unexpected field in rawVote: %q", voteKey)
 		}
 	}
 
-	// Required field for unauthenticatedVote: sig
-	if s, err := p.readString(); err != nil || string(s) != "sig" {
-		return fmt.Errorf("expected string \"sig\", got %s: %w", s, err)
+	// Required nested map in unauthenticatedVote: sig
+	if s, rErr := p.readString(); rErr != nil || string(s) != "sig" {
+		return fmt.Errorf("expected string sig, got %s: %w", s, rErr)
 	}
 
-	// Parse OneTimeSignature
+	// Parse OneTimeSignature fixmap
 	cnt, err = p.readFixMap()
 	if err != nil {
 		return fmt.Errorf("reading map for OneTimeSignature: %w", err)
@@ -192,8 +184,8 @@ func parseVote(data []byte, c compressWriter) error {
 		return fmt.Errorf("expected fixed map size 6 for OneTimeSignature, got %d", cnt)
 	}
 	// Required field for OneTimeSignature: p
-	if s, err := p.readString(); err != nil || string(s) != "p" {
-		return fmt.Errorf("expected string \"p\", got %s: %w", s, err)
+	if s, rErr := p.readString(); rErr != nil || string(s) != "p" {
+		return fmt.Errorf("expected string p, got %s: %w", s, rErr)
 	}
 	val32, err := p.readBin32()
 	if err != nil {
@@ -202,8 +194,8 @@ func parseVote(data []byte, c compressWriter) error {
 	c.writeBin32(sigPVoteValue, val32)
 
 	// Required field for OneTimeSignature: p1s
-	if s, err := p.readString(); err != nil || string(s) != "p1s" {
-		return fmt.Errorf("expected string \"p1s\", got %s: %w", s, err)
+	if s, rErr := p.readString(); rErr != nil || string(s) != "p1s" {
+		return fmt.Errorf("expected string p1s, got %s: %w", s, rErr)
 	}
 	val2, err := p.readBin64()
 	if err != nil {
@@ -212,8 +204,8 @@ func parseVote(data []byte, c compressWriter) error {
 	c.writeBin64(sigP1sVoteValue, val2)
 
 	// Required field for OneTimeSignature: p2
-	if s, err := p.readString(); err != nil || string(s) != "p2" {
-		return fmt.Errorf("expected string \"p2\", got %s: %w", s, err)
+	if s, rErr := p.readString(); rErr != nil || string(s) != "p2" {
+		return fmt.Errorf("expected string p2, got %s: %w", s, rErr)
 	}
 	val32, err = p.readBin32()
 	if err != nil {
@@ -222,8 +214,8 @@ func parseVote(data []byte, c compressWriter) error {
 	c.writeBin32(sigP2VoteValue, val32)
 
 	// Required field for OneTimeSignature: p2s
-	if s, err := p.readString(); err != nil || string(s) != "p2s" {
-		return fmt.Errorf("expected string \"p2s\", got %s: %w", s, err)
+	if s, rErr := p.readString(); rErr != nil || string(s) != "p2s" {
+		return fmt.Errorf("expected string p2s, got %s: %w", s, rErr)
 	}
 	val2, err = p.readBin64()
 	if err != nil {
@@ -232,8 +224,8 @@ func parseVote(data []byte, c compressWriter) error {
 	c.writeBin64(sigP2sVoteValue, val2)
 
 	// Required field for OneTimeSignature: ps
-	if s, err := p.readString(); err != nil || string(s) != "ps" {
-		return fmt.Errorf("expected string \"ps\", got %s: %w", s, err)
+	if s, rErr := p.readString(); rErr != nil || string(s) != "ps" {
+		return fmt.Errorf("expected string ps, got %s: %w", s, rErr)
 	}
 	val2, err = p.readBin64()
 	if err != nil {
@@ -244,8 +236,8 @@ func parseVote(data []byte, c compressWriter) error {
 	}
 
 	// Required field for OneTimeSignature: s
-	if s, err := p.readString(); err != nil || string(s) != "s" {
-		return fmt.Errorf("expected string \"s\", got %s: %w", s, err)
+	if s, rErr := p.readString(); rErr != nil || string(s) != "s" {
+		return fmt.Errorf("expected string s, got %s: %w", s, rErr)
 	}
 	val2, err = p.readBin64()
 	if err != nil {

@@ -18,10 +18,8 @@ package vpack
 
 import (
 	"bytes"
-	"fmt"
 	"math"
 	"reflect"
-	"slices"
 	"testing"
 	"unsafe"
 
@@ -39,6 +37,10 @@ import (
 func TestStatelessEncoder(t *testing.T) {
 	partitiontest.PartitionTest(t)
 	rapid.Check(t, checkStatelessEncoder)
+}
+
+func FuzzRapidCheck(f *testing.F) {
+	f.Fuzz(rapid.MakeFuzz(checkStatelessEncoder))
 }
 
 func checkStatelessEncoder(t *rapid.T) {
@@ -69,206 +71,6 @@ func checkStatelessEncoder(t *rapid.T) {
 	require.NoError(t, err)
 	require.Equal(t, *v0, v1)
 	t.Logf("Vote OK")
-}
-
-// createMask is a helper function that creates a byte slice representing a bitmask
-// with the requiredFieldsMask and any additional bits provided
-func createMask(additionalBits ...uint8) []byte {
-	// Start with 0
-	mask := uint8(0)
-
-	// Add any additional bits
-	for _, bit := range additionalBits {
-		mask |= bit
-	}
-	return []byte{mask, 0}
-}
-
-// Test error cases for StatelessDecoder
-func TestStatelessDecoderErrors(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	testCases := []struct {
-		name        string
-		input       []byte
-		errExpected error
-	}{
-		{
-			name:        "Empty input",
-			input:       []byte{},
-			errExpected: fmt.Errorf("header missing"),
-		},
-		{
-			name:        "Too short for header",
-			input:       []byte{0x01},
-			errExpected: fmt.Errorf("header missing"),
-		},
-		{
-			name:        "Not enough data for pf",
-			input:       []byte{0x00, 0x00, 0x01},
-			errExpected: fmt.Errorf("not enough data to read value for field %s", msgpFixstrPf),
-		},
-		{
-			name: "Error in varuint for rnd field",
-			input: slices.Concat(createMask(),
-				// Add required fields and append just the marker causing an error
-				make([]byte, 80), // Add 80 bytes for pfField
-			),
-			errExpected: fmt.Errorf("not enough data to read varuint marker for field %s", msgpFixstrRnd),
-		},
-		{
-			name: "Error reading varuint for rnd field",
-			input: slices.Concat(createMask(),
-				// Add required fields and append just the marker causing an error
-				make([]byte, 80), // Add 80 bytes for pfField
-				[]byte{0xff},     // Invalid marker
-			),
-			errExpected: fmt.Errorf("not a fixint for field %s, got 255", msgpFixstrRnd)},
-		{
-			name: "Trailing data error",
-			input: func() []byte {
-				// Use a real compressed vote and add trailing data
-				voteGen := generateRandomVote()
-				vote := voteGen.Example(0)
-				// Encode and compress it
-				msgpBuf := protocol.EncodeMsgp(vote)
-				enc := NewStatelessEncoder()
-				compressed, err := enc.CompressVote(nil, msgpBuf)
-				if err != nil {
-					panic(fmt.Sprintf("Failed to compress valid vote: %v", err))
-				}
-				// Add trailing data
-				return append(compressed, 0xFF, 0xFF, 0xFF)
-			}(),
-			errExpected: fmt.Errorf("unexpected trailing data"),
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			dec := NewStatelessDecoder()
-			_, err := dec.DecompressVote(nil, tc.input)
-			require.ErrorContains(t, err, tc.errExpected.Error())
-		})
-	}
-}
-
-// TestStatelessHelperMethods tests the helper methods in StatelessDecoder for various error cases
-func TestStatelessHelperMethods(t *testing.T) {
-	partitiontest.PartitionTest(t)
-
-	// Test cases for varuint method
-	t.Run("varuint errors", func(t *testing.T) {
-		testField := msgpFixstrRnd // The field we'll test with
-
-		tests := []struct {
-			name          string
-			input         []byte
-			errMsgPattern string
-		}{
-			{
-				name:          "Empty input",
-				input:         []byte{},
-				errMsgPattern: fmt.Sprintf("not enough data to read varuint marker for field %s", testField),
-			},
-			{
-				name:          "Invalid marker",
-				input:         []byte{0xFF},
-				errMsgPattern: fmt.Sprintf("not a fixint for field %s", testField),
-			},
-			{
-				name:          "uint8tag without data",
-				input:         []byte{uint8tag},
-				errMsgPattern: fmt.Sprintf("not enough data for varuint (need 1 bytes) for field %s", testField),
-			},
-			{
-				name:          "uint16tag with insufficient data",
-				input:         []byte{uint16tag, 0x01},
-				errMsgPattern: fmt.Sprintf("not enough data for varuint (need 2 bytes) for field %s", testField),
-			},
-			{
-				name:          "uint32tag with insufficient data",
-				input:         []byte{uint32tag, 0x01, 0x02, 0x03},
-				errMsgPattern: fmt.Sprintf("not enough data for varuint (need 4 bytes) for field %s", testField),
-			},
-			{
-				name:          "uint64tag with insufficient data",
-				input:         []byte{uint64tag, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07},
-				errMsgPattern: fmt.Sprintf("not enough data for varuint (need 8 bytes) for field %s", testField),
-			},
-		}
-
-		for _, tc := range tests {
-			t.Run(tc.name, func(t *testing.T) {
-				dec := NewStatelessDecoder()
-				dec.src = tc.input
-				err := dec.varuint(testField)
-				require.ErrorContains(t, err, tc.errMsgPattern)
-			})
-		}
-	})
-
-	// Test cases for bin32 method
-	t.Run("bin32 errors", func(t *testing.T) {
-		testField := msgpFixstrSnd // The field we'll test with
-
-		tests := []struct {
-			name          string
-			input         []byte
-			errMsgPattern string
-		}{
-			{
-				name:          "Empty input",
-				input:         []byte{},
-				errMsgPattern: fmt.Sprintf("not enough data to read value for field %s", testField),
-			},
-			{
-				name:          "Insufficient data",
-				input:         []byte{0x01, 0x02},
-				errMsgPattern: fmt.Sprintf("not enough data to read value for field %s", testField),
-			},
-		}
-
-		for _, tc := range tests {
-			t.Run(tc.name, func(t *testing.T) {
-				dec := NewStatelessDecoder()
-				dec.src = tc.input
-				err := dec.bin32(testField)
-				require.ErrorContains(t, err, tc.errMsgPattern)
-			})
-		}
-	})
-
-	// Test cases for bin64 method
-	t.Run("bin64 errors", func(t *testing.T) {
-		testField := msgpFixstrP1s // The field we'll test with
-
-		tests := []struct {
-			name          string
-			input         []byte
-			errMsgPattern string
-		}{
-			{
-				name:          "Empty input",
-				input:         []byte{},
-				errMsgPattern: fmt.Sprintf("not enough data to read value for field %s", testField),
-			},
-			{
-				name:          "Insufficient data",
-				input:         []byte{0x01, 0x02},
-				errMsgPattern: fmt.Sprintf("not enough data to read value for field %s", testField),
-			},
-		}
-
-		for _, tc := range tests {
-			t.Run(tc.name, func(t *testing.T) {
-				dec := NewStatelessDecoder()
-				dec.src = tc.input
-				err := dec.bin64(testField)
-				require.ErrorContains(t, err, tc.errMsgPattern)
-			})
-		}
-	})
 }
 
 // generateRandomVote creates a random vote generator using rapid
@@ -376,27 +178,29 @@ func generateRandomVote() *rapid.Generator[*agreement.UnauthenticatedVote] {
 	})
 }
 
-func FuzzRapidCheck(f *testing.F) {
-	f.Fuzz(rapid.MakeFuzz(checkStatelessEncoder))
-}
-
 // FuzzStatelessEncoder is a fuzz test that generates random votes,
 // compresses them with StatelessEncoder and decompresses them with StatelessDecoder.
 func FuzzStatelessEncoder(f *testing.F) {
-	//	f.Skip()
-	// Add seed corpus examples
+	// Add valid compressed votes from random vote generator
 	voteGen := generateRandomVote()
-	for i := 0; i < 5; i++ {
+	var msgpBuf []byte
+	for i := range 100 {
 		vote := voteGen.Example(i)
-		f.Logf("Vote %d: %+v", i, vote)
 		msgpBuf := protocol.EncodeMsgp(vote)
 		f.Add(msgpBuf) // Add seed corpus for the fuzzer
+	}
+	// Provide truncated versions of the last valid compressed vote
+	for i := 1; i < len(msgpBuf); i++ {
+		f.Add(msgpBuf[:i])
+	}
+	// Add parseVote test cases
+	for _, tc := range parseVoteTestCases {
+		f.Add(protocol.EncodeReflect(tc.obj))
 	}
 
 	// Use a separate function that properly utilizes the fuzzer input
 	f.Fuzz(func(t *testing.T, msgpBuf []byte) {
 		// Try to compress the input
-		t.Logf("Input: %v", msgpBuf)
 		enc := NewStatelessEncoder()
 		compressed, err := enc.CompressVote(nil, msgpBuf)
 		if err != nil {
@@ -421,11 +225,12 @@ func FuzzStatelessEncoder(f *testing.F) {
 // FuzzStatelessDecoder is a fuzz test specifically targeting the StatelessDecoder
 // with potentially malformed input.
 func FuzzStatelessDecoder(f *testing.F) {
-	// Add valid compressed votes from our random vote generator
+	// Add valid compressed votes from random vote generator
 	voteGen := generateRandomVote()
-	for i := 0; i < 100; i++ {
+	var msgpBuf []byte
+	for i := range 100 {
 		vote := voteGen.Example(i) // Use deterministic seeds
-		msgpBuf := protocol.EncodeMsgp(vote)
+		msgpBuf = protocol.EncodeMsgp(vote)
 		enc := NewStatelessEncoder()
 		compressedVote, err := enc.CompressVote(nil, msgpBuf)
 		if err != nil {
@@ -433,15 +238,17 @@ func FuzzStatelessDecoder(f *testing.F) {
 		}
 		f.Add(compressedVote)
 	}
+	// Provide truncated versions of the last valid compressed vote
+	for i := 1; i < len(msgpBuf); i++ {
+		f.Add(msgpBuf[:i])
+	}
 
-	// Add various error test cases as seed corpus
 	f.Add([]byte{})
 	f.Add([]byte{0x01})
 	f.Add([]byte{0x01, 0x02})
 	f.Add([]byte{0xFF, 0xFF})
-	// Add additional error test cases for specific bitmasks with required fields
-	f.Add(createMask())
-	f.Add(append(createMask(), 0xFF))
+	f.Add([]byte{0x00, 0x00})
+	f.Add([]byte{0x00, 0x00, 0xFF})
 
 	f.Fuzz(func(t *testing.T, data []byte) {
 		dec := NewStatelessDecoder()

@@ -40,14 +40,6 @@ const (
 
 const defaultCompressCapacity = 1024
 
-// parseVote parses a vote and writes the values to the compressWriter.
-type compressWriter interface {
-	writeVaruint(voteValueType, []byte)
-	writeBin32(voteValueType, [32]byte)
-	writeBin64(voteValueType, [64]byte)
-	writeBin80(voteValueType, [80]byte)
-}
-
 // StatelessEncoder compresses a msgpack-encoded vote by stripping all msgpack
 // formatting and field names, replacing them with a bitmask indicating which
 // fields are present. It is not thread-safe.
@@ -108,8 +100,6 @@ func (e *StatelessEncoder) updateMask(field voteValueType) {
 	}
 }
 
-// writeVaruint implements the compressWriter interface, but never returns error.
-// It passes the msgpack-encoded varuint bytes through as-is.
 func (e *StatelessEncoder) writeVaruint(field voteValueType, b []byte) {
 	e.updateMask(field)
 	e.buf = append(e.buf, b...)
@@ -185,7 +175,7 @@ func (d *StatelessDecoder) DecompressVote(dst, src []byte) ([]byte, error) {
 
 	// rawVote: fixmap { per, prop, rnd, snd, step }
 	d.dst = append(d.dst, msgpFixstrR...)
-	d.dst = append(d.dst, fixMapMask|d.rawVoteMapSize(mask))
+	d.dst = append(d.dst, msgpFixMapMask|d.rawVoteMapSize(mask))
 
 	// rawVote.per
 	if (mask & bitPer) != 0 {
@@ -198,7 +188,7 @@ func (d *StatelessDecoder) DecompressVote(dst, src []byte) ([]byte, error) {
 	if (mask & propFieldsMask) != 0 {
 		// proposalValue: fixmap { dig, encdig, oper, oprop }
 		d.dst = append(d.dst, msgpFixstrProp...)
-		d.dst = append(d.dst, fixMapMask|d.proposalValueMapSize(mask))
+		d.dst = append(d.dst, msgpFixMapMask|d.proposalValueMapSize(mask))
 		// prop.dig
 		if (mask & bitDig) != 0 {
 			if err := d.bin32(msgpFixstrDig); err != nil {
@@ -320,16 +310,16 @@ func (d *StatelessDecoder) varuint(fieldName string) error {
 	marker := d.src[d.pos] // read msgpack varuint marker
 	moreBytes := 0
 	switch marker {
-	case uint8tag:
+	case msgpUint8:
 		moreBytes = 1
-	case uint16tag:
+	case msgpUint16:
 		moreBytes = 2
-	case uint32tag:
+	case msgpUint32:
 		moreBytes = 4
-	case uint64tag:
+	case msgpUint64:
 		moreBytes = 8
 	default: // fixint uses a single byte for marker+value
-		if !isfixint(marker) {
+		if !isMsgpFixint(marker) {
 			return fmt.Errorf("not a fixint for field %s, got %d", fieldName, marker)
 		}
 		moreBytes = 0

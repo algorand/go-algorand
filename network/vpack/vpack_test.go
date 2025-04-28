@@ -18,7 +18,9 @@ package vpack
 
 import (
 	"encoding/json"
+	"fmt"
 	"reflect"
+	"slices"
 	"testing"
 	"unsafe"
 
@@ -101,6 +103,129 @@ func TestEncodingTest(t *testing.T) {
 		require.Equal(t, *v0, v1) // vote objects match
 	}
 	t.Logf("TestEncodingTest: %d expected errors out of %d iterations", errorCount, iters)
+}
+
+// Test error cases for StatelessDecoder
+func TestStatelessDecoderErrors(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	type testcases struct {
+		input []byte
+		err   string
+	}
+
+	for _, tc := range []testcases{
+		{input: []byte{}, err: "header missing"},
+		{input: []byte{0x01}, err: "header missing"},
+		{
+			input: []byte{0x00, 0x00, 0x01},
+			err:   fmt.Sprintf("not enough data to read value for field %s", msgpFixstrPf),
+		},
+		{
+			input: slices.Concat([]byte{0x00, 0x00}, make([]byte, 80)), // Add 80 bytes for pfField
+			err:   fmt.Sprintf("not enough data to read varuint marker for field %s", msgpFixstrRnd),
+		},
+		{
+			input: slices.Concat([]byte{0x00, 0x00}, make([]byte, 80), []byte{0xff}),
+			err:   fmt.Sprintf("not a fixint for field %s, got 255", msgpFixstrRnd)},
+		{
+			input: func() []byte {
+				vote := generateRandomVote().Example(0)
+				msgpBuf := protocol.EncodeMsgp(vote)
+				enc := NewStatelessEncoder()
+				compressed, err := enc.CompressVote(nil, msgpBuf)
+				require.NoError(t, err)
+				return append(compressed, 0xFF, 0xFF, 0xFF)
+			}(),
+			err: "unexpected trailing data",
+		},
+	} {
+		t.Run(tc.err, func(t *testing.T) {
+			dec := NewStatelessDecoder()
+			_, err := dec.DecompressVote(nil, tc.input)
+			require.ErrorContains(t, err, tc.err)
+		})
+	}
+
+	// Test cases for varuint method
+	t.Run("varuint errors", func(t *testing.T) {
+		testField := msgpFixstrRnd
+		for _, tc := range []testcases{
+			{
+				input: []byte{},
+				err:   fmt.Sprintf("not enough data to read varuint marker for field %s", testField),
+			},
+			{
+				input: []byte{0xFF},
+				err:   fmt.Sprintf("not a fixint for field %s", testField),
+			},
+			{
+				input: []byte{msgpUint8},
+				err:   fmt.Sprintf("not enough data for varuint (need 1 bytes) for field %s", testField),
+			},
+			{
+				input: []byte{msgpUint16, 0x01},
+				err:   fmt.Sprintf("not enough data for varuint (need 2 bytes) for field %s", testField),
+			},
+			{
+				input: []byte{msgpUint32, 0x01, 0x02, 0x03},
+				err:   fmt.Sprintf("not enough data for varuint (need 4 bytes) for field %s", testField),
+			},
+			{
+				input: []byte{msgpUint64, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07},
+				err:   fmt.Sprintf("not enough data for varuint (need 8 bytes) for field %s", testField),
+			},
+		} {
+			t.Run(tc.err, func(t *testing.T) {
+				dec := NewStatelessDecoder()
+				dec.src = tc.input
+				err := dec.varuint(testField)
+				require.ErrorContains(t, err, tc.err)
+			})
+		}
+	})
+
+	t.Run("bin32 errors", func(t *testing.T) {
+		testField := msgpFixstrSnd
+		for _, tc := range []testcases{
+			{
+				input: []byte{},
+				err:   fmt.Sprintf("not enough data to read value for field %s", testField),
+			},
+			{
+				input: []byte{0x01, 0x02},
+				err:   fmt.Sprintf("not enough data to read value for field %s", testField),
+			},
+		} {
+			t.Run(tc.err, func(t *testing.T) {
+				dec := NewStatelessDecoder()
+				dec.src = tc.input
+				err := dec.bin32(testField)
+				require.ErrorContains(t, err, tc.err)
+			})
+		}
+	})
+
+	t.Run("bin64 errors", func(t *testing.T) {
+		testField := msgpFixstrP1s
+		for _, tc := range []testcases{
+			{
+				input: []byte{},
+				err:   fmt.Sprintf("not enough data to read value for field %s", testField),
+			},
+			{
+				input: []byte{0x01, 0x02},
+				err:   fmt.Sprintf("not enough data to read value for field %s", testField),
+			},
+		} {
+			t.Run(tc.err, func(t *testing.T) {
+				dec := NewStatelessDecoder()
+				dec.src = tc.input
+				err := dec.bin64(testField)
+				require.ErrorContains(t, err, tc.err)
+			})
+		}
+	})
 }
 
 // FuzzMsgpVote is a fuzz test for parseVote, CompressVote and DecompressVote.
@@ -210,29 +335,3 @@ func FuzzVoteFields(f *testing.F) {
 		require.Equal(t, v0, v1)
 	})
 }
-
-// // FuzzDecompressStatic is a fuzz test for decompressStatic.
-// // It tests error cases from decompressVoteTestCases and also valid compressed votes.
-// func FuzzDecompressStatic(f *testing.F) {
-// 	// Generate random votes, compress them, and add the compressed votes to the fuzzer
-// 	for range 100 {
-// 		v, err := protocol.RandomizeObject(&agreement.UnauthenticatedVote{},
-// 			protocol.RandomizeObjectWithZeroesEveryN(10),
-// 			protocol.RandomizeObjectWithAllUintSizes())
-// 		require.NoError(f, err)
-// 		vote := v.(*agreement.UnauthenticatedVote)
-// 		if ok, _ := checkVoteValid(vote); !ok {
-// 			continue
-// 		}
-// 		msgpBuf := protocol.EncodeMsgp(vote)
-// 		enc := NewStatelessEncoder()
-// 		compressedVote, err := enc.CompressVote(nil, msgpBuf)
-// 		require.NoError(f, err)
-// 		f.Add(compressedVote)
-// 	}
-
-// 	// The actual fuzzing function
-// 	f.Fuzz(func(t *testing.T, input []byte) {
-// 		_, _ = decompressStatic(nil, input)
-// 	})
-// }

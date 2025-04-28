@@ -42,8 +42,8 @@ func init() {
 
 func testVPackMakeVote(v *unauthenticatedVote) error {
 	vbuf := protocol.Encode(v)
-	enc := vpack.NewStaticEncoder()
-	dec := vpack.NewStaticDecoder()
+	enc := vpack.NewStatelessEncoder()
+	dec := vpack.NewStatelessDecoder()
 	encBuf, err := enc.CompressVote(nil, vbuf)
 	if err != nil {
 		return fmt.Errorf("makeVote: failed to parse vote msgpack: %v", err)
