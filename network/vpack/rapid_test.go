@@ -126,6 +126,7 @@ func generateRandomVote() *rapid.Generator[*agreement.UnauthenticatedVote] {
 		rStepField.SetUint(stepGen.Draw(t, "step"))
 
 		// Decide whether to include a proposal or leave it empty
+		// If empty, the default zero values will be used
 		includeProposal := rapid.Bool().Draw(t, "includeProposal")
 		if includeProposal {
 			// Use reflection to set the OriginalPeriod field in the proposal
@@ -150,9 +151,6 @@ func generateRandomVote() *rapid.Generator[*agreement.UnauthenticatedVote] {
 			copy(v.R.Proposal.BlockDigest[:], digestBytes)
 			copy(v.R.Proposal.EncodingDigest[:], encDigestBytes)
 
-		} else {
-			// Leave the proposal empty
-			// The default zero values will be used
 		}
 
 		// Generate random proof bytes (80 bytes)
