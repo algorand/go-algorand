@@ -522,7 +522,7 @@ func (wp *wsPeer) readLoop() {
 	}()
 	wp.conn.SetReadLimit(MaxMessageLength)
 	slurper := MakeLimitedReaderSlurper(averageMessageLength, MaxMessageLength)
-	dataConverter := makeWsPeerMsgDataConverter(wp)
+	dataConverter := makeWsPeerMsgDataDecoder(wp)
 
 	for {
 		msg := IncomingMessage{}

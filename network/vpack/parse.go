@@ -197,11 +197,11 @@ func parseVote(data []byte, c *StatelessEncoder) error {
 	if s, rErr := p.readString(); rErr != nil || string(s) != "p1s" {
 		return fmt.Errorf("expected string p1s, got %s: %w", s, rErr)
 	}
-	val2, err := p.readBin64()
+	val64, err := p.readBin64()
 	if err != nil {
 		return fmt.Errorf("reading p1s: %w", err)
 	}
-	c.writeBin64(sigP1sVoteValue, val2)
+	c.writeBin64(sigP1sVoteValue, val64)
 
 	// Required field for OneTimeSignature: p2
 	if s, rErr := p.readString(); rErr != nil || string(s) != "p2" {
@@ -217,33 +217,33 @@ func parseVote(data []byte, c *StatelessEncoder) error {
 	if s, rErr := p.readString(); rErr != nil || string(s) != "p2s" {
 		return fmt.Errorf("expected string p2s, got %s: %w", s, rErr)
 	}
-	val2, err = p.readBin64()
+	val64, err = p.readBin64()
 	if err != nil {
 		return fmt.Errorf("reading p2s: %w", err)
 	}
-	c.writeBin64(sigP2sVoteValue, val2)
+	c.writeBin64(sigP2sVoteValue, val64)
 
 	// Required field for OneTimeSignature: ps
 	if s, rErr := p.readString(); rErr != nil || string(s) != "ps" {
 		return fmt.Errorf("expected string ps, got %s: %w", s, rErr)
 	}
-	val2, err = p.readBin64()
+	val64, err = p.readBin64()
 	if err != nil {
 		return fmt.Errorf("reading ps: %w", err)
 	}
-	if val2 != [64]byte{} {
-		return fmt.Errorf("expected empty array for ps, got %v", val)
+	if val64 != [64]byte{} {
+		return fmt.Errorf("expected empty array for ps, got %v", val64)
 	}
 
 	// Required field for OneTimeSignature: s
 	if s, rErr := p.readString(); rErr != nil || string(s) != "s" {
 		return fmt.Errorf("expected string s, got %s: %w", s, rErr)
 	}
-	val2, err = p.readBin64()
+	val64, err = p.readBin64()
 	if err != nil {
 		return fmt.Errorf("reading s: %w", err)
 	}
-	c.writeBin64(sigSVoteValue, val2)
+	c.writeBin64(sigSVoteValue, val64)
 
 	// Check for trailing bytes
 	if p.pos < len(p.data) {

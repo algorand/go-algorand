@@ -38,6 +38,8 @@ const (
 	totalRequiredFields       = 8
 )
 
+const headerSize = 2 // 1 byte for mask, 1 byte for future use
+
 // StatelessEncoder compresses a msgpack-encoded vote by stripping all msgpack
 // formatting and field names, replacing them with a bitmask indicating which
 // fields are present. It is not thread-safe.
@@ -60,7 +62,7 @@ func CompressVoteBound(srcSize int) int {
 	// the input size as the worst case. If this is too small, CompressVote
 	// will return ErrBufferTooSmall (and the caller will send the uncompressed
 	// message instead).
-	return srcSize
+	return srcSize + headerSize
 }
 
 // ErrBufferTooSmall is returned when the destination buffer is too small
@@ -83,8 +85,8 @@ func (e *StatelessEncoder) CompressVote(dst, src []byte) ([]byte, error) {
 	e.cur = dst
 	e.mask = 0
 	e.requiredFields = 0
-	// put empty 2-byte header at beginning, to fill in later
-	e.pos = 2
+	// put empty header at beginning, to fill in later
+	e.pos = headerSize
 	err := parseVote(src, e)
 	if err != nil {
 		return nil, err

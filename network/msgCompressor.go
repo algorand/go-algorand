@@ -151,7 +151,7 @@ func (dec vpackVoteDecompressor) convert(data []byte) ([]byte, error) {
 	return dec.dec.DecompressVote(nil, data)
 }
 
-func makeWsPeerMsgDataConverter(wp *wsPeer) *wsPeerMsgDataDecoder {
+func makeWsPeerMsgDataDecoder(wp *wsPeer) *wsPeerMsgDataDecoder {
 	c := wsPeerMsgDataDecoder{
 		log:    wp.log,
 		origin: wp.originAddress,
