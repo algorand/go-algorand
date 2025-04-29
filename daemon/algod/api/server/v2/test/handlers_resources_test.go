@@ -85,7 +85,7 @@ func (l *mockLedger) LookupKv(round basics.Round, key string) ([]byte, error) {
 	return nil, fmt.Errorf("Key %v does not exist", key)
 }
 
-func (l *mockLedger) LookupKeysByPrefix(round basics.Round, keyPrefix string, maxKeyNum uint64) ([]string, error) {
+func (l *mockLedger) LookupKeysByPrefix(prefix, next string, maxBoxes, maxBytes int, values bool) (basics.Round, map[string]string, string, error) {
 	panic("not implemented")
 }
 
@@ -181,20 +181,11 @@ func (l *mockLedger) Block(rnd basics.Round) (blk bookkeeping.Block, err error) 
 	return l.blocks[0], nil
 }
 
-func (l *mockLedger) AddressTxns(id basics.Address, r basics.Round) ([]transactions.SignedTxnWithAD, error) {
-	blk := l.blocks[r]
-
-	spec := transactions.SpecialAddresses{
-		FeeSink:     blk.FeeSink,
-		RewardsPool: blk.RewardsPool,
-	}
-
-	var res []transactions.SignedTxnWithAD
-
-	for _, tx := range blk.Payset {
-		if tx.Txn.MatchAddress(id, spec) {
-			signedTxn := transactions.SignedTxnWithAD{SignedTxn: transactions.SignedTxn{Txn: tx.Txn}}
-			res = append(res, signedTxn)
+func (l *mockLedger) TxnsFrom(id basics.Address, r basics.Round) ([]transactions.Transaction, error) {
+	var res []transactions.Transaction
+	for _, tx := range l.blocks[r].Payset {
+		if id == tx.Txn.Sender {
+			res = append(res, tx.Txn)
 		}
 	}
 	return res, nil

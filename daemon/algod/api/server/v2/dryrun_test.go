@@ -1084,12 +1084,12 @@ func TestStateDeltaToStateDelta(t *testing.T) {
 			Action: basics.DeleteAction,
 		},
 	}
-	gsd := StateDeltaToStateDelta(sd)
-	require.Equal(t, 3, len(*gsd))
+	gsd := globalDeltaToStateDelta(sd)
+	require.Equal(t, 3, len(gsd))
 
 	var keys []string
 	// test with a loop because sd is a map and iteration order is random
-	for _, item := range *gsd {
+	for _, item := range gsd {
 		if item.Key == b64("byteskey") {
 			require.Equal(t, uint64(1), item.Value.Action)
 			require.Nil(t, item.Value.Uint)
