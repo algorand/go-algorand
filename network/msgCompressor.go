@@ -77,7 +77,8 @@ func vpackCompressVote(tbytes []byte, d []byte) ([]byte, string) {
 const MaxDecompressedMessageSize = 20 * 1024 * 1024 // some large enough value
 
 // wsPeerMsgDataDecoder performs optional incoming messages conversion.
-// At the moment it only supports zstd decompression for payload proposal
+// At the moment it only supports zstd decompression for payload proposal,
+// and vpack decompression for votes.
 type wsPeerMsgDataDecoder struct {
 	log    logging.Logger
 	origin string
@@ -91,6 +92,15 @@ type zstdProposalDecompressor struct{}
 
 func (dec zstdProposalDecompressor) accept(data []byte) bool {
 	return len(data) > 4 && bytes.Equal(data[:4], zstdCompressionMagic[:])
+}
+
+type vpackVoteDecompressor struct {
+	enabled bool
+	dec     *vpack.StatelessDecoder
+}
+
+func (dec vpackVoteDecompressor) convert(data []byte) ([]byte, error) {
+	return dec.dec.DecompressVote(nil, data)
 }
 
 func (dec zstdProposalDecompressor) convert(data []byte) ([]byte, error) {
@@ -140,15 +150,6 @@ func (c *wsPeerMsgDataDecoder) convert(tag protocol.Tag, data []byte) ([]byte, e
 		}
 	}
 	return data, nil
-}
-
-type vpackVoteDecompressor struct {
-	enabled bool
-	dec     *vpack.StatelessDecoder
-}
-
-func (dec vpackVoteDecompressor) convert(data []byte) ([]byte, error) {
-	return dec.dec.DecompressVote(nil, data)
 }
 
 func makeWsPeerMsgDataDecoder(wp *wsPeer) *wsPeerMsgDataDecoder {
