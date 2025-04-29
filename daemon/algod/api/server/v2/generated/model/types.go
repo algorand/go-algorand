@@ -686,15 +686,6 @@ type GenesisAllocation struct {
 	} `json:"state"`
 }
 
-// KvDelta A single Delta containing the key, the previous value and the current value for a single round.
-type KvDelta struct {
-	// Key The key, base64 encoded.
-	Key *[]byte `json:"key,omitempty"`
-
-	// Value The new value of the KV store entry, base64 encoded.
-	Value *[]byte `json:"value,omitempty"`
-}
-
 // LedgerStateDelta Ledger StateDelta object
 type LedgerStateDelta = map[string]interface{}
 
