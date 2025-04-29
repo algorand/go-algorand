@@ -1,3 +1,19 @@
+// Copyright (C) 2019-2025 Algorand, Inc.
+// This file is part of go-algorand
+//
+// go-algorand is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as
+// published by the Free Software Foundation, either version 3 of the
+// License, or (at your option) any later version.
+//
+// go-algorand is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
+
 package test
 
 import (
@@ -20,8 +36,8 @@ func getCodecTag(field reflect.StructField) string {
 	return strings.Split(tag, ",")[0]
 }
 
-// getJsonTag extracts the json tag name
-func getJsonTag(field reflect.StructField) string {
+// getJSONTag extracts the json tag name
+func getJSONTag(field reflect.StructField) string {
 	tag := field.Tag.Get("json")
 	return strings.Split(tag, ",")[0]
 }
@@ -86,7 +102,7 @@ func verifyStructCompatibility(t *testing.T, bkType, modelType reflect.Type) {
 	actualFields := make(map[string]reflect.Type) // map[json_tag]field_type
 	for i := 0; i < modelType.NumField(); i++ {
 		field := modelType.Field(i)
-		if tag := getJsonTag(field); tag != "" {
+		if tag := getJSONTag(field); tag != "" {
 			actualFields[tag] = field.Type
 		}
 	}
@@ -118,7 +134,7 @@ func verifyStructCompatibility(t *testing.T, bkType, modelType reflect.Type) {
 func getMatchingField(t *testing.T, typ reflect.Type, tag string) reflect.StructField {
 	for i := 0; i < typ.NumField(); i++ {
 		field := typ.Field(i)
-		if jsonTag := getJsonTag(field); jsonTag == tag {
+		if jsonTag := getJSONTag(field); jsonTag == tag {
 			return field
 		}
 	}
