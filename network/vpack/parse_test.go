@@ -164,6 +164,8 @@ func TestParseVoteErrors(t *testing.T) {
 }
 
 func TestParseVoteTrailingDataErr(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
 	// Build minimal valid vote
 	obj := map[string]any{
 		"cred": map[string]any{"pf": crypto.VrfProof{}},

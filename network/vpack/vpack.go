@@ -110,13 +110,13 @@ func (e *StatelessEncoder) CompressVote(dst, src []byte) ([]byte, error) {
 
 // writeBytes writes multiple bytes to the current buffer
 // This is optimized to avoid per-byte bounds checking when possible
-func (s *StatelessEncoder) writeBytes(bytes []byte) {
+func (e *StatelessEncoder) writeBytes(bytes []byte) {
 	// If we have enough room in the buffer, use direct copy
-	if s.pos+len(bytes) <= len(s.cur) {
-		copy(s.cur[s.pos:], bytes)
+	if e.pos+len(bytes) <= len(e.cur) {
+		copy(e.cur[e.pos:], bytes)
 	}
 	// Always increment pos, so CompressVote will return ErrBufferTooSmall
-	s.pos += len(bytes)
+	e.pos += len(bytes)
 }
 
 func (e *StatelessEncoder) updateMask(field voteValueType) {
@@ -207,11 +207,11 @@ func (d *StatelessDecoder) DecompressVote(dst, src []byte) ([]byte, error) {
 	}
 
 	// top-level UnauthenticatedVote: fixmap(3) { cred, rawVote, sig }
-	d.dst = append(d.dst, msgpMapMarker3)
+	d.dst = append(d.dst, msgpFixMapMask|3)
 
 	// cred: fixmap(1) { pf: bin8(80) }
 	d.dst = append(d.dst, msgpFixstrCred...)
-	d.dst = append(d.dst, msgpMapMarker1)
+	d.dst = append(d.dst, msgpFixMapMask|1)
 
 	// cred.pf is always present
 	if err := d.bin80(msgpFixstrPf); err != nil {
@@ -282,7 +282,7 @@ func (d *StatelessDecoder) DecompressVote(dst, src []byte) ([]byte, error) {
 
 	// sig: fixmap(6) { p, p1s, p2, p2s, ps, s }
 	d.dst = append(d.dst, msgpFixstrSig...)
-	d.dst = append(d.dst, msgpMapMarker6)
+	d.dst = append(d.dst, msgpFixMapMask|6)
 	// sig.p
 	if err := d.bin32(msgpFixstrP); err != nil {
 		return nil, err

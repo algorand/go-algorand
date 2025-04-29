@@ -34,13 +34,6 @@ const (
 	msgpUint16     = 0xcd
 	msgpUint32     = 0xce
 	msgpUint64     = 0xcf
-	msgpMapMarker0 = 0x80 // Map with 0 items
-	msgpMapMarker1 = 0x81 // Map with 1 items
-	msgpMapMarker2 = 0x82 // Map with 2 items
-	msgpMapMarker3 = 0x83 // Map with 3 items
-	msgpMapMarker4 = 0x84 // Map with 4 items
-	msgpMapMarker5 = 0x85 // Map with 5 items
-	msgpMapMarker6 = 0x86 // Map with 6 items
 
 	msgpFixstrCred   = "\xa4cred"
 	msgpFixstrDig    = "\xa3dig"
