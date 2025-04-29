@@ -3686,16 +3686,28 @@ func BenchmarkVariableTransactionMessageBlockSizes(t *testing.B) {
 func TestPreparePeerData(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	// no compression
+	vote := map[string]any{
+		"cred": map[string]any{"pf": crypto.VrfProof{}},
+		"r":    map[string]any{"rnd": uint64(1), "snd": [32]byte{}},
+		"sig": map[string]any{
+			"p": [32]byte{}, "p1s": [64]byte{}, "p2": [32]byte{},
+			"p2s": [64]byte{}, "ps": [64]byte{}, "s": [64]byte{},
+		},
+	}
 	reqs := []broadcastRequest{
-		{tag: protocol.AgreementVoteTag, data: []byte("test")},
+		{tag: protocol.AgreementVoteTag, data: protocol.EncodeReflect(vote)},
 		{tag: protocol.ProposalPayloadTag, data: []byte("data")},
+		{tag: protocol.TxnTag, data: []byte("txn")},
+		{tag: protocol.StateProofSigTag, data: []byte("stateproof")},
 	}
 
 	wn := WebsocketNetwork{}
+	wn.broadcaster.log = logging.TestingLog(t)
 	data := make([][]byte, len(reqs))
 	compressedData := make([][]byte, len(reqs))
 	digests := make([]crypto.Digest, len(reqs))
+
+	// Test without compression (prio = false)
 	for i, req := range reqs {
 		data[i], compressedData[i], digests[i] = wn.broadcaster.preparePeerData(req, false)
 		require.NotEmpty(t, data[i])
@@ -3704,8 +3716,10 @@ func TestPreparePeerData(t *testing.T) {
 
 	for i := range data {
 		require.Equal(t, append([]byte(reqs[i].tag), reqs[i].data...), data[i])
+		require.Empty(t, compressedData[i]) // No compression when prio = false
 	}
 
+	// Test with compression (prio = true)
 	for i, req := range reqs {
 		data[i], compressedData[i], digests[i] = wn.broadcaster.preparePeerData(req, true)
 		require.NotEmpty(t, data[i])
@@ -3713,11 +3727,17 @@ func TestPreparePeerData(t *testing.T) {
 	}
 
 	for i := range data {
-		if reqs[i].tag != protocol.ProposalPayloadTag {
+		if reqs[i].tag == protocol.AgreementVoteTag {
+			// For votes with prio=true, the main data remains uncompressed, but compressedData is filled
 			require.Equal(t, append([]byte(reqs[i].tag), reqs[i].data...), data[i])
-			require.Equal(t, data[i], data[i])
-		} else {
+			require.NotEmpty(t, compressedData[i], "Vote messages should have compressed data when prio=true")
+		} else if reqs[i].tag == protocol.ProposalPayloadTag {
+			// For proposals with prio=true, the main data is compressed with zstd
 			require.Equal(t, append([]byte(reqs[i].tag), zstdCompressionMagic[:]...), data[i][:len(reqs[i].tag)+len(zstdCompressionMagic)])
+			require.Empty(t, compressedData[i], "Proposal messages should not have separate compressed data")
+		} else {
+			require.Equal(t, append([]byte(reqs[i].tag), reqs[i].data...), data[i])
+			require.Empty(t, compressedData[i])
 		}
 	}
 }
