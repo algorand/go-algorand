@@ -68,7 +68,7 @@ func (cx *EvalContext) availableBox(name string, operation BoxOperation, createS
 	}
 
 	if !ok && cx.UnnamedResources != nil {
-		ok = cx.UnnamedResources.AvailableBox(cx.appID, name, operation, createSize)
+		ok = cx.UnnamedResources.AvailableBox(cx.appID, name, newAppAccess, createSize)
 	}
 	if !ok {
 		return nil, false, fmt.Errorf("invalid Box reference %#x", name)

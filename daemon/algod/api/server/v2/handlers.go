@@ -1345,7 +1345,7 @@ func (v2 *Handlers) SimulateTransaction(ctx echo.Context, params model.SimulateT
 		}
 	}
 
-	response := convertSimulationResult(simulationResult)
+	response := convertSimulationResult(simulationResult, proto.EnableUnnamedBoxAccessInNewApps)
 
 	handle, contentType, err := getCodecHandle((*string)(params.Format))
 	if err != nil {
