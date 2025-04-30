@@ -49,11 +49,13 @@ func checkStatelessEncoder(t *rapid.T) {
 
 	// Convert to msgpack
 	msgpBuf := protocol.EncodeMsgp(v0)
+	require.LessOrEqual(t, len(msgpBuf), MaxMsgpackVoteSize)
 
 	// Try to compress with StatelessEncoder
 	encBM := NewStatelessEncoder()
 	encBufBM, err := encBM.CompressVote(nil, msgpBuf)
 	require.NoError(t, err)
+	require.LessOrEqual(t, len(encBufBM), MaxCompressedVoteSize)
 
 	// Verify the bitmask is at the beginning
 	require.GreaterOrEqual(t, len(encBufBM), 2, "Compressed data should have at least 2 bytes for header")
@@ -229,11 +231,13 @@ func FuzzStatelessDecoder(f *testing.F) {
 	for i := range 100 {
 		vote := voteGen.Example(i) // Use deterministic seeds
 		msgpBuf = protocol.EncodeMsgp(vote)
+		require.LessOrEqual(f, len(msgpBuf), MaxMsgpackVoteSize)
 		enc := NewStatelessEncoder()
 		compressedVote, err := enc.CompressVote(nil, msgpBuf)
 		if err != nil {
 			continue
 		}
+		require.LessOrEqual(f, len(compressedVote), MaxCompressedVoteSize)
 		f.Add(compressedVote)
 	}
 	// Provide truncated versions of the last valid compressed vote
@@ -250,6 +254,7 @@ func FuzzStatelessDecoder(f *testing.F) {
 
 	f.Fuzz(func(t *testing.T, data []byte) {
 		dec := NewStatelessDecoder()
-		_, _ = dec.DecompressVote(nil, data) // Ensure it doesn't crash
+		decbuf, _ := dec.DecompressVote(nil, data) // Ensure it doesn't crash
+		require.LessOrEqual(t, len(decbuf), MaxMsgpackVoteSize)
 	})
 }

@@ -79,8 +79,10 @@ func TestEncodingTest(t *testing.T) {
 		}
 
 		msgpBuf := protocol.EncodeMsgp(v0)
+		require.LessOrEqual(t, len(msgpBuf), MaxMsgpackVoteSize)
 		enc := NewStatelessEncoder()
 		encBuf, err := enc.CompressVote(nil, msgpBuf)
+		require.LessOrEqual(t, len(encBuf), MaxCompressedVoteSize)
 		if expectError != "" {
 			// skip expected errors
 			require.ErrorContains(t, err, expectError, "expected error: %s", expectError)
@@ -230,7 +232,6 @@ func TestStatelessDecoderErrors(t *testing.T) {
 // FuzzMsgpVote is a fuzz test for parseVote, CompressVote and DecompressVote.
 // It generates random msgp-encoded votes, then compresses & decompresses them.
 func FuzzMsgpVote(f *testing.F) {
-	f.Skip()
 	addVote := func(obj any) []byte {
 		var buf []byte
 		if v, ok := obj.(*agreement.UnauthenticatedVote); ok {
@@ -255,6 +256,7 @@ func FuzzMsgpVote(f *testing.F) {
 			protocol.RandomizeObjectWithAllUintSizes())
 		require.NoError(f, err)
 		msgpbuf := addVote(v)
+		require.LessOrEqual(f, len(msgpbuf), MaxMsgpackVoteSize)
 		for i := range len(msgpbuf) {
 			f.Add(msgpbuf[:i])
 		}
@@ -263,12 +265,14 @@ func FuzzMsgpVote(f *testing.F) {
 	f.Fuzz(func(t *testing.T, buf []byte) {
 		enc := NewStatelessEncoder()
 		encBuf, err := enc.CompressVote(nil, buf)
+		require.LessOrEqual(t, len(encBuf), MaxCompressedVoteSize)
 		if err != nil {
 			// invalid msgpbuf, skip
 			return
 		}
 		dec := NewStatelessDecoder()
 		decBuf, err := dec.DecompressVote(nil, encBuf)
+		require.LessOrEqual(t, len(decBuf), MaxMsgpackVoteSize)
 		require.NoError(t, err)
 		require.Equal(t, buf, decBuf)
 	})
@@ -315,8 +319,10 @@ func FuzzVoteFields(f *testing.F) {
 		}
 
 		msgpBuf := protocol.Encode(&v0)
+		require.LessOrEqual(t, len(msgpBuf), MaxMsgpackVoteSize)
 		enc := NewStatelessEncoder()
 		encBuf, err := enc.CompressVote(nil, msgpBuf)
+		require.LessOrEqual(t, len(encBuf), MaxCompressedVoteSize)
 		if expectError != "" {
 			// skip expected errors
 			require.ErrorContains(t, err, expectError)
@@ -349,6 +355,7 @@ func TestEncoderReuse(t *testing.T) {
 	// Generate random votes and encode them
 	for i := 0; i < numVotes; i++ {
 		msgpBufs = append(msgpBufs, protocol.EncodeMsgp(voteGen.Example(i)))
+		require.LessOrEqual(t, len(msgpBufs[i]), MaxMsgpackVoteSize)
 	}
 
 	// Test reusing the same encoder multiple times
@@ -359,6 +366,7 @@ func TestEncoderReuse(t *testing.T) {
 	for i, msgpBuf := range msgpBufs {
 		compressedBuf, err := enc.CompressVote(nil, msgpBuf)
 		require.NoError(t, err, "Vote %d failed to compress with new buffer", i)
+		require.LessOrEqual(t, len(compressedBuf), MaxCompressedVoteSize)
 		compressedBufs = append(compressedBufs, compressedBuf)
 	}
 
@@ -366,6 +374,7 @@ func TestEncoderReuse(t *testing.T) {
 	dec := NewStatelessDecoder()
 	for i, compressedBuf := range compressedBufs {
 		decompressedBuf, err := dec.DecompressVote(nil, compressedBuf)
+		require.LessOrEqual(t, len(decompressedBuf), MaxMsgpackVoteSize)
 		require.NoError(t, err, "Vote %d failed to decompress", i)
 		require.Equal(t, msgpBufs[i], decompressedBuf, "Vote %d decompressed incorrectly", i)
 	}
@@ -379,6 +388,7 @@ func TestEncoderReuse(t *testing.T) {
 		// to avoid the buffer being modified by subsequent operations
 		compressed, err := enc.CompressVote(reusedBuffer[:0], msgpBuf)
 		require.NoError(t, err, "Vote %d failed to compress with reused buffer", i)
+		require.LessOrEqual(t, len(compressed), MaxCompressedVoteSize)
 		compressedCopy := make([]byte, len(compressed))
 		copy(compressedCopy, compressed)
 		compressedBufs = append(compressedBufs, compressedCopy)
@@ -388,6 +398,7 @@ func TestEncoderReuse(t *testing.T) {
 	for i, compressedBuf := range compressedBufs {
 		decompressedBuf, err := dec.DecompressVote(nil, compressedBuf)
 		require.NoError(t, err, "Vote %d failed to decompress (reused buffer)", i)
+		require.LessOrEqual(t, len(decompressedBuf), MaxMsgpackVoteSize)
 		require.Equal(t, msgpBufs[i], decompressedBuf, "Vote %d decompressed incorrectly (reused buffer)", i)
 	}
 
@@ -399,6 +410,7 @@ func TestEncoderReuse(t *testing.T) {
 		// This will cause the buffer to be reallocated sometimes
 		compressed, err := enc.CompressVote(varyingBuffer[:0], msgpBuf)
 		require.NoError(t, err, "Vote %d failed to compress with varying buffer", i)
+		require.LessOrEqual(t, len(compressed), MaxCompressedVoteSize)
 		compressedCopy := make([]byte, len(compressed))
 		copy(compressedCopy, compressed)
 		compressedBufs = append(compressedBufs, compressedCopy)
@@ -411,6 +423,7 @@ func TestEncoderReuse(t *testing.T) {
 	for i, compressedBuf := range compressedBufs {
 		decompressedBuf, err := dec.DecompressVote(nil, compressedBuf)
 		require.NoError(t, err, "Vote %d failed to decompress (varying buffer)", i)
+		require.LessOrEqual(t, len(decompressedBuf), MaxMsgpackVoteSize)
 		require.Equal(t, msgpBufs[i], decompressedBuf, "Vote %d decompressed incorrectly (varying buffer)", i)
 	}
 }
