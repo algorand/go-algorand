@@ -2053,6 +2053,100 @@
         ],
         "type": "object"
       },
+      "Genesis": {
+        "properties": {
+          "alloc": {
+            "items": {
+              "$ref": "#/components/schemas/GenesisAllocation"
+            },
+            "type": "array"
+          },
+          "comment": {
+            "type": "string"
+          },
+          "devmode": {
+            "type": "boolean"
+          },
+          "fees": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "network": {
+            "type": "string"
+          },
+          "proto": {
+            "type": "string"
+          },
+          "rwd": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "alloc",
+          "fees",
+          "id",
+          "network",
+          "proto",
+          "rwd",
+          "timestamp"
+        ],
+        "title": "Genesis File in JSON",
+        "type": "object"
+      },
+      "GenesisAllocation": {
+        "properties": {
+          "addr": {
+            "type": "string"
+          },
+          "comment": {
+            "type": "string"
+          },
+          "state": {
+            "properties": {
+              "algo": {
+                "type": "number"
+              },
+              "onl": {
+                "type": "number"
+              },
+              "sel": {
+                "type": "string"
+              },
+              "stprf": {
+                "type": "string"
+              },
+              "vote": {
+                "type": "string"
+              },
+              "voteFst": {
+                "type": "number"
+              },
+              "voteKD": {
+                "type": "number"
+              },
+              "voteLst": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "algo"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "addr",
+          "comment",
+          "state"
+        ],
+        "title": "Allocations for Genesis File",
+        "type": "object"
+      },
       "LedgerStateDelta": {
         "description": "Ledger StateDelta object",
         "type": "object",
@@ -2838,7 +2932,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "string"
+                  "$ref": "#/components/schemas/Genesis"
                 }
               }
             },

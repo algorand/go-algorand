@@ -657,6 +657,35 @@ type EvalDeltaKeyValue struct {
 	Value EvalDelta `json:"value"`
 }
 
+// Genesis defines model for Genesis.
+type Genesis struct {
+	Alloc     []GenesisAllocation `json:"alloc"`
+	Comment   *string             `json:"comment,omitempty"`
+	Devmode   *bool               `json:"devmode,omitempty"`
+	Fees      string              `json:"fees"`
+	Id        string              `json:"id"`
+	Network   string              `json:"network"`
+	Proto     string              `json:"proto"`
+	Rwd       string              `json:"rwd"`
+	Timestamp float32             `json:"timestamp"`
+}
+
+// GenesisAllocation defines model for GenesisAllocation.
+type GenesisAllocation struct {
+	Addr    string `json:"addr"`
+	Comment string `json:"comment"`
+	State   struct {
+		Algo    float32  `json:"algo"`
+		Onl     *float32 `json:"onl,omitempty"`
+		Sel     *string  `json:"sel,omitempty"`
+		Stprf   *string  `json:"stprf,omitempty"`
+		Vote    *string  `json:"vote,omitempty"`
+		VoteFst *float32 `json:"voteFst,omitempty"`
+		VoteKD  *float32 `json:"voteKD,omitempty"`
+		VoteLst *float32 `json:"voteLst,omitempty"`
+	} `json:"state"`
+}
+
 // LedgerStateDelta Ledger StateDelta object
 type LedgerStateDelta = map[string]interface{}
 
