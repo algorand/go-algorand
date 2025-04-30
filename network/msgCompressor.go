@@ -55,7 +55,7 @@ func zstdCompressMsg(tbytes []byte, d []byte) ([]byte, string) {
 
 func vpackCompressVote(tbytes []byte, d []byte) ([]byte, string) {
 	var enc vpack.StatelessEncoder
-	bound := vpack.CompressVoteBound(len(d))
+	bound := vpack.CompressBound(len(d))
 	// Pre-allocate buffer for tag bytes and compressed data
 	mbytesComp := make([]byte, len(tbytes)+bound)
 	copy(mbytesComp, tbytes)

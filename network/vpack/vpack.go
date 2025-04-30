@@ -38,7 +38,10 @@ const (
 	totalRequiredFields       = 8
 )
 
-const headerSize = 2 // 1 byte for mask, 1 byte for future use
+const (
+	headerSize     = 2 // 1 byte for mask, 1 byte for future use
+	maxVaruintSize = 9 // max size of a varuint is 8 bytes + 1 byte for the marker
+)
 
 // StatelessEncoder compresses a msgpack-encoded vote by stripping all msgpack
 // formatting and field names, replacing them with a bitmask indicating which
@@ -56,10 +59,14 @@ func NewStatelessEncoder() *StatelessEncoder {
 	return &StatelessEncoder{}
 }
 
-// CompressVoteBound estimates the maximum size needed for compressed vote data
-func CompressVoteBound(srcSize int) int {
-	// XXX get headerSize + size of all fields
-	return srcSize + headerSize
+// CompressBound returns the maximum size needed for compressed vote data.
+// This is equal to the size of the header, plus all possible fields.
+func CompressBound(srcSize int) int {
+	return headerSize +
+		80 + // cred.pf
+		maxVaruintSize*4 + // r.rnd, r.per, r.step, r.prop.oper
+		32*6 + // r.prop.dig, r.prop.encdig, r.prop.oprop, r.snd, sig.p, sig.p2
+		64*3 // sig.p1s, sig.p2s, sig.s
 }
 
 // ErrBufferTooSmall is returned when the destination buffer is too small
@@ -70,7 +77,7 @@ var ErrBufferTooSmall = fmt.Errorf("destination buffer too small")
 // The returned slice may be the same as dst.
 // To re-use dst, run like: dst = enc.CompressVote(dst[:0], src)
 func (e *StatelessEncoder) CompressVote(dst, src []byte) ([]byte, error) {
-	bound := CompressVoteBound(len(src))
+	bound := CompressBound(len(src))
 	// Reuse dst if it's big enough, otherwise allocate a new buffer
 	if cap(dst) >= bound {
 		dst = dst[0:bound] // Reuse dst buffer with its full capacity
@@ -198,9 +205,8 @@ func (d *StatelessDecoder) DecompressVote(dst, src []byte) ([]byte, error) {
 	d.pos = 2
 	d.src = src
 	d.dst = dst
-	if d.dst == nil {
-		// typical compressed vote is 25% smaller
-		d.dst = make([]byte, 0, len(d.src)*4/3)
+	if d.dst == nil { // allocate a new buffer if dst is nil
+		d.dst = make([]byte, 0, len(d.src)*2)
 	}
 
 	// top-level UnauthenticatedVote: fixmap(3) { cred, rawVote, sig }
