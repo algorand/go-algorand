@@ -58,10 +58,7 @@ func NewStatelessEncoder() *StatelessEncoder {
 
 // CompressVoteBound estimates the maximum size needed for compressed vote data
 func CompressVoteBound(srcSize int) int {
-	// Vote messages typically get ~80% smaller, but we will use
-	// the input size as the worst case. If this is too small, CompressVote
-	// will return ErrBufferTooSmall (and the caller will send the uncompressed
-	// message instead).
+	// XXX get headerSize + size of all fields
 	return srcSize + headerSize
 }
 
@@ -87,7 +84,7 @@ func (e *StatelessEncoder) CompressVote(dst, src []byte) ([]byte, error) {
 	e.requiredFields = 0
 	// put empty header at beginning, to fill in later
 	e.pos = headerSize
-	err := parseVote(src, e)
+	err := parseMsgpVote(src, e)
 	if err != nil {
 		return nil, err
 	}

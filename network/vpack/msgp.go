@@ -66,7 +66,7 @@ type msgpVoteParser struct {
 	pos  int
 }
 
-func newParser(data []byte) *msgpVoteParser {
+func newMsgpVoteParser(data []byte) *msgpVoteParser {
 	return &msgpVoteParser{data: data}
 }
 
@@ -121,56 +121,44 @@ func (p *msgpVoteParser) readString() ([]byte, error) {
 }
 
 func (p *msgpVoteParser) readBin80() ([80]byte, error) {
-	var data [80]byte
-	if err := p.ensureBytes(2); err != nil {
+	const sz = 80
+	var data [sz]byte
+	if err := p.ensureBytes(sz + 2); err != nil {
 		return data, err
 	}
-	if p.data[p.pos] != msgpBin8 || p.data[p.pos+1] != 80 {
-		return data, fmt.Errorf("expected bin8 length 80, got %d", int(p.data[p.pos+1]))
+	if p.data[p.pos] != msgpBin8 || p.data[p.pos+1] != sz {
+		return data, fmt.Errorf("expected bin8 length %d, got %d", sz, int(p.data[p.pos+1]))
 	}
-	p.pos += 2
-
-	if err := p.ensureBytes(80); err != nil {
-		return data, err
-	}
-	copy(data[:], p.data[p.pos:p.pos+80])
-	p.pos += 80
+	copy(data[:], p.data[p.pos+2:p.pos+sz+2])
+	p.pos += sz + 2
 	return data, nil
 }
 
 func (p *msgpVoteParser) readBin32() ([32]byte, error) {
-	var data [32]byte
-	if err := p.ensureBytes(2); err != nil {
+	const sz = 32
+	var data [sz]byte
+	if err := p.ensureBytes(sz + 2); err != nil {
 		return data, err
 	}
-	if p.data[p.pos] != msgpBin8 || p.data[p.pos+1] != 32 {
-		return data, fmt.Errorf("expected bin8 length 32, got %d", int(p.data[p.pos+1]))
+	if p.data[p.pos] != msgpBin8 || p.data[p.pos+1] != sz {
+		return data, fmt.Errorf("expected bin8 length %d, got %d", sz, int(p.data[p.pos+1]))
 	}
-	p.pos += 2
-
-	if err := p.ensureBytes(32); err != nil {
-		return data, err
-	}
-	copy(data[:], p.data[p.pos:p.pos+32])
-	p.pos += 32
+	copy(data[:], p.data[p.pos+2:p.pos+sz+2])
+	p.pos += sz + 2
 	return data, nil
 }
 
 func (p *msgpVoteParser) readBin64() ([64]byte, error) {
-	var data [64]byte
-	if err := p.ensureBytes(2); err != nil {
+	const sz = 64
+	var data [sz]byte
+	if err := p.ensureBytes(sz + 2); err != nil {
 		return data, err
 	}
-	if p.data[p.pos] != msgpBin8 || p.data[p.pos+1] != 64 {
-		return data, fmt.Errorf("expected bin8 length 64, got %d", int(p.data[p.pos+1]))
+	if p.data[p.pos] != msgpBin8 || p.data[p.pos+1] != sz {
+		return data, fmt.Errorf("expected bin8 length %d, got %d", sz, int(p.data[p.pos+1]))
 	}
-	p.pos += 2
-
-	if err := p.ensureBytes(64); err != nil {
-		return data, err
-	}
-	copy(data[:], p.data[p.pos:p.pos+64])
-	p.pos += 64
+	copy(data[:], p.data[p.pos+2:p.pos+sz+2])
+	p.pos += sz + 2
 	return data, nil
 }
 

@@ -16,7 +16,9 @@
 
 package vpack
 
-import "fmt"
+import (
+	"fmt"
+)
 
 type voteValueType uint8
 
@@ -38,8 +40,8 @@ const (
 	sigSVoteValue
 )
 
-func parseVote(data []byte, c *StatelessEncoder) error {
-	p := newParser(data)
+func parseMsgpVote(msgpData []byte, c *StatelessEncoder) error {
+	p := newMsgpVoteParser(msgpData)
 
 	// Parse unauthenticatedVote
 	cnt, err := p.readFixMap()
