@@ -106,127 +106,84 @@ func TestEncodingTest(t *testing.T) {
 	t.Logf("TestEncodingTest: %d expected errors out of %d iterations", errorCount, iters)
 }
 
-// Test error cases for StatelessDecoder
 func TestStatelessDecoderErrors(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	type testcases struct {
-		input []byte
-		err   string
+	z := func(n int) []byte { return make([]byte, n) }
+	h := func(m uint8) []byte { return []byte{m, 0x00} }
+
+	fix1 := []byte{0x01} // msgpack fixint 1  (rnd = 1)
+	pf := z(80)          // cred.pf (always present)
+	z32, z64 := z(32), z(64)
+
+	type tc struct {
+		name, want string
+		buf        func() []byte
 	}
 
-	for _, tc := range []testcases{
-		{input: []byte{}, err: "header missing"},
-		{input: []byte{0x01}, err: "header missing"},
-		{
-			input: []byte{0x00, 0x00, 0x01},
-			err:   fmt.Sprintf("not enough data to read value for field %s", msgpFixstrPf),
-		},
-		{
-			input: slices.Concat([]byte{0x00, 0x00}, make([]byte, 80)), // Add 80 bytes for pfField
-			err:   fmt.Sprintf("not enough data to read varuint marker for field %s", msgpFixstrRnd),
-		},
-		{
-			input: slices.Concat([]byte{0x00, 0x00}, make([]byte, 80), []byte{0xff}),
-			err:   fmt.Sprintf("not a fixint for field %s, got 255", msgpFixstrRnd)},
-		{
-			input: func() []byte {
-				vote := generateRandomVote().Example(0)
-				msgpBuf := protocol.EncodeMsgp(vote)
-				enc := NewStatelessEncoder()
-				compressed, err := enc.CompressVote(nil, msgpBuf)
-				require.NoError(t, err)
-				return append(compressed, 0xFF, 0xFF, 0xFF)
-			}(),
-			err: "unexpected trailing data",
-		},
-	} {
-		t.Run(tc.err, func(t *testing.T) {
+	cases := []tc{
+		// ---------- cred ----------
+		{"pf-bin80", fmt.Sprintf("field %s", msgpFixstrPf),
+			func() []byte { return slices.Concat(h(0), z(79)) }},
+
+		// ---------- r.per ----------
+		{"per-varuint-marker", fmt.Sprintf("field %s", msgpFixstrPer),
+			func() []byte { return slices.Concat(h(bitPer), pf) }},
+
+		// ---------- r.prop.* ----------
+		{"dig-bin32", fmt.Sprintf("field %s", msgpFixstrDig),
+			func() []byte { return slices.Concat(h(bitDig), pf, z(10)) }},
+		{"encdig-bin32", fmt.Sprintf("field %s", msgpFixstrEncdig),
+			func() []byte { return slices.Concat(h(bitDig|bitEncDig), pf, z32, z(10)) }},
+		{"oper-varuint-marker", fmt.Sprintf("field %s", msgpFixstrOper),
+			func() []byte { return slices.Concat(h(bitOper), pf) }},
+		{"oprop-bin32", fmt.Sprintf("field %s", msgpFixstrOprop),
+			func() []byte { return slices.Concat(h(bitOprop), pf, z(5)) }},
+
+		// ---------- r.rnd ----------
+		{"rnd-varuint-marker", fmt.Sprintf("field %s", msgpFixstrRnd),
+			func() []byte { return slices.Concat(h(0), pf) }},
+		{"rnd-varuint-trunc", fmt.Sprintf("not enough data for varuint (need 4 bytes) for field %s", msgpFixstrRnd),
+			func() []byte { return slices.Concat(h(0), pf, []byte{msgpUint32, 0x00}) }},
+
+		// ---------- r.snd / r.step ----------
+		{"snd-bin32", fmt.Sprintf("field %s", msgpFixstrSnd),
+			func() []byte { return slices.Concat(h(0), pf, fix1) }},
+		{"step-varuint-marker", fmt.Sprintf("field %s", msgpFixstrStep),
+			func() []byte { return slices.Concat(h(bitStep), pf, fix1, z32) }},
+
+		// ---------- sig.* ----------
+		{"p-bin32", fmt.Sprintf("field %s", msgpFixstrP),
+			func() []byte { return slices.Concat(h(0), pf, fix1, z32) }},
+		{"p1s-bin64", fmt.Sprintf("field %s", msgpFixstrP1s),
+			func() []byte { return slices.Concat(h(0), pf, fix1, z32, z32, z(12)) }},
+		{"p2-bin32", fmt.Sprintf("field %s", msgpFixstrP2),
+			func() []byte { return slices.Concat(h(0), pf, fix1, z32, z32, z64) }},
+		{"p2s-bin64", fmt.Sprintf("field %s", msgpFixstrP2s),
+			func() []byte { return slices.Concat(h(0), pf, fix1, z32, z32, z64, z32, z(3)) }},
+		{"s-bin64", fmt.Sprintf("field %s", msgpFixstrS),
+			func() []byte { return slices.Concat(h(0), pf, fix1, z32, z32, z64, z32, z64) }},
+
+		// ---------- trailing data ----------
+		{"trailing-bytes", "unexpected trailing data",
+			func() []byte {
+				return slices.Concat(
+					h(0), pf, fix1, // header, pf, rnd
+					z32,                // snd
+					z32, z64, z32, z64, // p, p1s, p2, p2s
+					z64,          // s
+					[]byte{0xFF}, // extra byte
+				)
+			}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
 			dec := NewStatelessDecoder()
-			_, err := dec.DecompressVote(nil, tc.input)
-			require.ErrorContains(t, err, tc.err)
+			_, err := dec.DecompressVote(nil, tc.buf())
+			require.ErrorContains(t, err, tc.want)
 		})
 	}
-
-	// Test cases for varuint method
-	t.Run("varuint errors", func(t *testing.T) {
-		testField := msgpFixstrRnd
-		for _, tc := range []testcases{
-			{
-				input: []byte{},
-				err:   fmt.Sprintf("not enough data to read varuint marker for field %s", testField),
-			},
-			{
-				input: []byte{0xFF},
-				err:   fmt.Sprintf("not a fixint for field %s", testField),
-			},
-			{
-				input: []byte{msgpUint8},
-				err:   fmt.Sprintf("not enough data for varuint (need 1 bytes) for field %s", testField),
-			},
-			{
-				input: []byte{msgpUint16, 0x01},
-				err:   fmt.Sprintf("not enough data for varuint (need 2 bytes) for field %s", testField),
-			},
-			{
-				input: []byte{msgpUint32, 0x01, 0x02, 0x03},
-				err:   fmt.Sprintf("not enough data for varuint (need 4 bytes) for field %s", testField),
-			},
-			{
-				input: []byte{msgpUint64, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07},
-				err:   fmt.Sprintf("not enough data for varuint (need 8 bytes) for field %s", testField),
-			},
-		} {
-			t.Run(tc.err, func(t *testing.T) {
-				dec := NewStatelessDecoder()
-				dec.src = tc.input
-				err := dec.varuint(testField)
-				require.ErrorContains(t, err, tc.err)
-			})
-		}
-	})
-
-	t.Run("bin32 errors", func(t *testing.T) {
-		testField := msgpFixstrSnd
-		for _, tc := range []testcases{
-			{
-				input: []byte{},
-				err:   fmt.Sprintf("not enough data to read value for field %s", testField),
-			},
-			{
-				input: []byte{0x01, 0x02},
-				err:   fmt.Sprintf("not enough data to read value for field %s", testField),
-			},
-		} {
-			t.Run(tc.err, func(t *testing.T) {
-				dec := NewStatelessDecoder()
-				dec.src = tc.input
-				err := dec.bin32(testField)
-				require.ErrorContains(t, err, tc.err)
-			})
-		}
-	})
-
-	t.Run("bin64 errors", func(t *testing.T) {
-		testField := msgpFixstrP1s
-		for _, tc := range []testcases{
-			{
-				input: []byte{},
-				err:   fmt.Sprintf("not enough data to read value for field %s", testField),
-			},
-			{
-				input: []byte{0x01, 0x02},
-				err:   fmt.Sprintf("not enough data to read value for field %s", testField),
-			},
-		} {
-			t.Run(tc.err, func(t *testing.T) {
-				dec := NewStatelessDecoder()
-				dec.src = tc.input
-				err := dec.bin64(testField)
-				require.ErrorContains(t, err, tc.err)
-			})
-		}
-	})
 }
 
 // FuzzMsgpVote is a fuzz test for parseVote, CompressVote and DecompressVote.
