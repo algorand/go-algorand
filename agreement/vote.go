@@ -147,7 +147,7 @@ func (uv unauthenticatedVote) verify(l LedgerReader) (vote, error) {
 }
 
 var (
-	// testMakeVoteCheckFunction is a function that can be set to check every
+	// testMakeVoteCheck is a function that can be set to check every
 	// unauthenticatedVote before it is returned by makeVote. It is only set by tests.
 	testMakeVoteCheck func(*unauthenticatedVote) error
 )
