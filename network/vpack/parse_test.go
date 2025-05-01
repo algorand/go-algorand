@@ -55,6 +55,8 @@ var parseVoteTestCases = []struct {
 		"expected string pf, got invalid"},
 	{map[string]any{"cred": map[string]any{"pf": []byte{1, 2, 3}}, "r": "2", "sig": "3"},
 		"reading pf"},
+	{map[string]any{"cred": map[string]any{"pf": [100]byte{1, 2, 3}}, "r": "2", "sig": "3"},
+		"reading pf: expected bin8 length 80, got 100"},
 
 	// rawVote
 	{map[string]any{"cred": map[string]any{"pf": crypto.VrfProof{1}}, "r": []int{1, 2, 3}, "sig": "3"},

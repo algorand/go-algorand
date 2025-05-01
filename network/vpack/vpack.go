@@ -215,12 +215,6 @@ func (d *StatelessDecoder) proposalValueMapSize(mask uint8) uint8 {
 	return uint8(bits.OnesCount8(mask & (bitDig | bitEncDig | bitOper | bitOprop)))
 }
 
-// StaticDecoder decodes votes encoded by StaticEncoder using a static table.
-type StaticDecoder struct{}
-
-// NewStaticDecoder returns a new StaticDecoder.
-func NewStaticDecoder() *StaticDecoder { return &StaticDecoder{} }
-
 // DecompressVote decodes a compressed vote in src and appends it to dst.
 // To re-use dst, run like: dst = dec.DecompressVote(dst[:0], src)
 func (d *StatelessDecoder) DecompressVote(dst, src []byte) ([]byte, error) {
