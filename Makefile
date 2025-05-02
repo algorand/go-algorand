@@ -337,7 +337,11 @@ node_exporter: $(GOPATH1)/bin/node_exporter
 $(GOPATH1)/bin/node_exporter:
 	mkdir -p $(GOPATH1)/bin && \
 	cd $(GOPATH1)/bin && \
-	tar -xzvf $(SRCPATH)/installer/external/node_exporter-stable-$(shell ./scripts/ostype.sh)-$(shell uname -m | tr '[:upper:]' '[:lower:]').tar.gz && \
+	if [ -z "$(CROSS_COMPILE_ARCH)" ]; then \
+		tar -xzvf $(SRCPATH)/installer/external/node_exporter-stable-$(shell ./scripts/ostype.sh)-$(shell uname -m | tr '[:upper:]' '[:lower:]').tar.gz; \
+	else \
+		tar -xzvf $(SRCPATH)/installer/external/node_exporter-stable-$(shell ./scripts/ostype.sh)-universal.tar.gz; \
+	fi && \
 	cd -
 
 # deploy

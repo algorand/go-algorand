@@ -1220,7 +1220,7 @@ func (pps *WorkerState) constructAppTxn(from, to string, fee uint64, client *lib
 		Accounts: addresses,
 		Boxes:    boxRefs,
 	}
-	txn, err = client.MakeUnsignedAppNoOpTx(aidx, nil, refs)
+	txn, err = client.MakeUnsignedAppNoOpTx(aidx, nil, refs, 0)
 	if err != nil {
 		return
 	}

@@ -64,6 +64,8 @@ func init() {
 	netCmd.Flags().VarP(excludedFields, "exclude-fields", "e", "List of fields to exclude from the dump: ["+excludedFields.AllowedString()+"]")
 	netCmd.Flags().StringVarP(&outFileName, "output", "o", "", "Specify an outfile for the dump ( i.e. tracker.dump.txt )")
 	netCmd.Flags().BoolVarP(&printDigests, "digest", "d", false, "Print balances and spver digests")
+	netCmd.Flags().BoolVarP(&rawDump, "raw", "R", false, "Dump raw catchpoint data, ignoring ledger database operations")
+	netCmd.Flags().BoolVarP(&onlineOnly, "online-only", "O", false, "Only print online accounts and online round params data")
 }
 
 var netCmd = &cobra.Command{
@@ -95,16 +97,22 @@ var netCmd = &cobra.Command{
 				reportInfof("failed to download catchpoint from '%s' : %v", addr, err)
 				continue
 			}
-			genesisInitState := ledgercore.InitState{
-				Block: bookkeeping.Block{BlockHeader: bookkeeping.BlockHeader{
-					UpgradeState: bookkeeping.UpgradeState{
-						CurrentProtocol: protocol.ConsensusCurrentVersion,
-					},
-				}},
+
+			if rawDump {
+				err = rawDumpCatchpointFile(tarName, outFileName)
+			} else {
+				genesisInitState := ledgercore.InitState{
+					Block: bookkeeping.Block{BlockHeader: bookkeeping.BlockHeader{
+						UpgradeState: bookkeeping.UpgradeState{
+							CurrentProtocol: protocol.ConsensusCurrentVersion,
+						},
+					}},
+				}
+				err = loadAndDump(addr, tarName, genesisInitState)
 			}
-			err = loadAndDump(addr, tarName, genesisInitState)
+
 			if err != nil {
-				reportInfof("failed to load/dump from tar file for '%s' : %v", addr, err)
+				reportInfof("failed to process catchpoint for '%s' : %v", addr, err)
 				continue
 			}
 			// clear possible errors from previous run: at this point we've succeeded
@@ -377,18 +385,22 @@ func loadAndDump(addr string, tarFile string, genesisInitState ledgercore.InitSt
 			return err
 		}
 		defer outFile.Close()
-		err = printAccountsDatabase("./ledger.tracker.sqlite", true, fileHeader, outFile, excludedFields.GetSlice())
-		if err != nil {
-			return err
+		if !onlineOnly {
+			err = printAccountsDatabase("./ledger.tracker.sqlite", true, fileHeader, outFile, excludedFields.GetSlice())
+			if err != nil {
+				return err
+			}
+			err = printKeyValueStore("./ledger.tracker.sqlite", true, outFile)
+			if err != nil {
+				return err
+			}
+			err = printStateProofVerificationContext("./ledger.tracker.sqlite", true, outFile)
+			if err != nil {
+				return err
+			}
 		}
-		err = printKeyValueStore("./ledger.tracker.sqlite", true, outFile)
-		if err != nil {
-			return err
-		}
-		err = printStateProofVerificationContext("./ledger.tracker.sqlite", true, outFile)
-		if err != nil {
-			return err
-		}
+
+		// Always print online accounts and online round params
 		err = printOnlineAccounts("./ledger.tracker.sqlite", true, outFile)
 		if err != nil {
 			return err

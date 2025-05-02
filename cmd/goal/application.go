@@ -60,7 +60,8 @@ var (
 
 	extraPages uint32
 
-	onCompletion string
+	onCompletion  string
+	rejectVersion uint64
 
 	localSchemaUints      uint64
 	localSchemaByteSlices uint64
@@ -104,6 +105,7 @@ func init() {
 	appCmd.AddCommand(methodAppCmd)
 
 	appCmd.PersistentFlags().StringVarP(&walletName, "wallet", "w", "", "Set the wallet to be used for the selected operation")
+	appCmd.PersistentFlags().Uint64Var(&rejectVersion, "reject-version", 0, "If set non-zero, reject for this app version or higher")
 	appCmd.PersistentFlags().StringArrayVar(&appArgs, "app-arg", nil, "Args to encode for application transactions (all will be encoded to a byte slice). For ints, use the form 'int:1234'. For raw bytes, use the form 'b64:A=='. For printable strings, use the form 'str:hello'. For addresses, use the form 'addr:XYZ...'.")
 	appCmd.PersistentFlags().StringSliceVar(&foreignApps, "foreign-app", nil, "Indexes of other apps whose global state is read in this transaction")
 	appCmd.PersistentFlags().StringSliceVar(&foreignAssets, "foreign-asset", nil, "Indexes of assets whose parameters are read in this transaction")
@@ -140,6 +142,7 @@ func init() {
 	methodAppCmd.Flags().StringVar(&method, "method", "", "Method to be called")
 	methodAppCmd.Flags().StringArrayVar(&methodArgs, "arg", nil, "Args to pass in for calling a method")
 	methodAppCmd.Flags().StringVar(&onCompletion, "on-completion", "NoOp", "OnCompletion action for application transaction")
+	methodAppCmd.Flags().Uint64Var(&rejectVersion, "reject-version", 0, "RejectVersion for application transaction")
 	methodAppCmd.Flags().BoolVar(&methodCreatesApp, "create", false, "Create an application in this method call")
 	methodAppCmd.Flags().Uint64Var(&globalSchemaUints, "global-ints", 0, "Maximum number of integer values that may be stored in the global key/value store. Immutable, only valid when passed with --create.")
 	methodAppCmd.Flags().Uint64Var(&globalSchemaByteSlices, "global-byteslices", 0, "Maximum number of byte slices that may be stored in the global key/value store. Immutable, only valid when passed with --create.")
@@ -534,7 +537,8 @@ var createAppCmd = &cobra.Command{
 			reportWarnf("'--on-completion %s' may be ill-formed for 'goal app create'", onCompletion)
 		}
 
-		tx, err := client.MakeUnsignedAppCreateTx(onCompletionEnum, approvalProg, clearProg, globalSchema, localSchema, appArgs, refs, extraPages)
+		tx, err := client.MakeUnsignedAppCreateTx(onCompletionEnum, approvalProg, clearProg, globalSchema, localSchema,
+			appArgs, refs, extraPages)
 		if err != nil {
 			reportErrorf("Cannot create application txn: %v", err)
 		}
@@ -609,7 +613,7 @@ var updateAppCmd = &cobra.Command{
 		approvalProg, clearProg := mustParseProgArgs()
 		appArgs, refs := getAppInputs()
 
-		tx, err := client.MakeUnsignedAppUpdateTx(appIdx, appArgs, approvalProg, clearProg, refs)
+		tx, err := client.MakeUnsignedAppUpdateTx(appIdx, appArgs, approvalProg, clearProg, refs, rejectVersion)
 		if err != nil {
 			reportErrorf("Cannot create application txn: %v", err)
 		}
@@ -679,7 +683,7 @@ var optInAppCmd = &cobra.Command{
 		// Parse transaction parameters
 		appArgs, refs := getAppInputs()
 
-		tx, err := client.MakeUnsignedAppOptInTx(appIdx, appArgs, refs)
+		tx, err := client.MakeUnsignedAppOptInTx(appIdx, appArgs, refs, rejectVersion)
 		if err != nil {
 			reportErrorf("Cannot create application txn: %v", err)
 		}
@@ -749,7 +753,7 @@ var closeOutAppCmd = &cobra.Command{
 		// Parse transaction parameters
 		appArgs, refs := getAppInputs()
 
-		tx, err := client.MakeUnsignedAppCloseOutTx(appIdx, appArgs, refs)
+		tx, err := client.MakeUnsignedAppCloseOutTx(appIdx, appArgs, refs, rejectVersion)
 		if err != nil {
 			reportErrorf("Cannot create application txn: %v", err)
 		}
@@ -819,7 +823,7 @@ var clearAppCmd = &cobra.Command{
 		// Parse transaction parameters
 		appArgs, refs := getAppInputs()
 
-		tx, err := client.MakeUnsignedAppClearStateTx(appIdx, appArgs, refs)
+		tx, err := client.MakeUnsignedAppClearStateTx(appIdx, appArgs, refs, rejectVersion)
 		if err != nil {
 			reportErrorf("Cannot create application txn: %v", err)
 		}
@@ -888,7 +892,7 @@ var callAppCmd = &cobra.Command{
 		appArgs, refs := getAppInputs()
 		dataDir, client := getDataDirAndClient()
 
-		tx, err := client.MakeUnsignedAppNoOpTx(appIdx, appArgs, refs)
+		tx, err := client.MakeUnsignedAppNoOpTx(appIdx, appArgs, refs, rejectVersion)
 		if err != nil {
 			reportErrorf("Cannot create application txn: %v", err)
 		}
@@ -958,7 +962,7 @@ var deleteAppCmd = &cobra.Command{
 		// Parse transaction parameters
 		appArgs, refs := getAppInputs()
 
-		tx, err := client.MakeUnsignedAppDeleteTx(appIdx, appArgs, refs)
+		tx, err := client.MakeUnsignedAppDeleteTx(appIdx, appArgs, refs, rejectVersion)
 		if err != nil {
 			reportErrorf("Cannot create application txn: %v", err)
 		}
@@ -1112,25 +1116,29 @@ var infoAppCmd = &cobra.Command{
 		}
 		params := meta.Params
 
-		gsch := params.GlobalStateSchema
-		lsch := params.LocalStateSchema
-		epp := params.ExtraProgramPages
-
 		fmt.Printf("Application ID:        %d\n", appIdx)
 		fmt.Printf("Application account:   %v\n", basics.AppIndex(appIdx).Address())
 		fmt.Printf("Creator:               %v\n", params.Creator)
 		fmt.Printf("Approval hash:         %v\n", basics.Address(logic.HashProgram(params.ApprovalProgram)))
 		fmt.Printf("Clear hash:            %v\n", basics.Address(logic.HashProgram(params.ClearStateProgram)))
 
+		ver := params.Version
+		if ver != nil {
+			fmt.Printf("Program version:       %d\n", *ver)
+		}
+
+		epp := params.ExtraProgramPages
 		if epp != nil {
 			fmt.Printf("Extra program pages:   %d\n", *epp)
 		}
 
+		gsch := params.GlobalStateSchema
 		if gsch != nil {
 			fmt.Printf("Max global byteslices: %d\n", gsch.NumByteSlice)
 			fmt.Printf("Max global integers:   %d\n", gsch.NumUint)
 		}
 
+		lsch := params.LocalStateSchema
 		if lsch != nil {
 			fmt.Printf("Max local byteslices:  %d\n", lsch.NumByteSlice)
 			fmt.Printf("Max local integers:    %d\n", lsch.NumUint)
@@ -1354,6 +1362,10 @@ var methodAppCmd = &cobra.Command{
 			case transactions.CloseOutOC, transactions.ClearStateOC:
 				reportWarnf("'--on-completion %s' may be ill-formed for use with --create", onCompletion)
 			}
+
+			if rejectVersion != 0 {
+				reportErrorf("--reject-version should not be provided with --create")
+			}
 		} else {
 			if appIdx == 0 {
 				reportErrorf("one of --app-id or --create must be provided")
@@ -1445,7 +1457,7 @@ var methodAppCmd = &cobra.Command{
 
 		appCallTxn, err := client.MakeUnsignedApplicationCallTx(
 			appIdx, applicationArgs, refs,
-			onCompletionEnum, approvalProg, clearProg, globalSchema, localSchema, extraPages)
+			onCompletionEnum, approvalProg, clearProg, globalSchema, localSchema, extraPages, rejectVersion)
 
 		if err != nil {
 			reportErrorf("Cannot create application txn: %v", err)

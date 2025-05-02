@@ -86,6 +86,10 @@ func TestApplicationCallFieldsEmpty(t *testing.T) {
 	a.False(ac.Empty())
 
 	ac.ApplicationArgs = nil
+	ac.RejectVersion = 1
+	a.False(ac.Empty())
+
+	ac.RejectVersion = 0
 	ac.Accounts = make([]basics.Address, 1)
 	a.False(ac.Empty())
 
@@ -343,6 +347,81 @@ func TestAppCallAccessWellFormed(t *testing.T) {
 			ac: ApplicationCallTxnFields{
 				ApplicationID: 1,
 				Access:        []ResourceRef{{Asset: 10, Holding: HoldingRef{Asset: 1}}},
+			},
+		},
+	}
+	for i, tc := range cases {
+		name := fmt.Sprintf("i=%d", i)
+		if tc.expectedError != "" {
+			name = tc.expectedError
+		}
+		t.Run(name, func(t *testing.T) {
+			cv := tc.cv
+			if cv == "" {
+				cv = protocol.ConsensusFuture
+			}
+			err := tc.ac.wellFormed(config.Consensus[cv])
+			if tc.expectedError != "" {
+				require.ErrorContains(t, err, tc.expectedError)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestAppCallVersioningWellFormed(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	preVersion := protocol.ConsensusV40
+	v5 := []byte{0x05}
+
+	cases := []struct {
+		expectedError string
+		cv            protocol.ConsensusVersion // defaults to future if not set
+		ac            ApplicationCallTxnFields
+	}{
+		{
+			cv: preVersion,
+			ac: ApplicationCallTxnFields{
+				ApplicationID: 1,
+				RejectVersion: 0,
+			},
+		},
+		{
+			expectedError: "tx.RejectVersion is not supported",
+			cv:            preVersion,
+			ac: ApplicationCallTxnFields{
+				ApplicationID: 1,
+				RejectVersion: 1,
+			},
+		},
+		{
+			ac: ApplicationCallTxnFields{
+				ApplicationID: 1,
+				RejectVersion: 0,
+			},
+		},
+		{
+			ac: ApplicationCallTxnFields{
+				ApplicationID: 1,
+				RejectVersion: 1,
+			},
+		},
+		{
+			ac: ApplicationCallTxnFields{
+				ApprovalProgram:   v5,
+				ClearStateProgram: v5,
+				RejectVersion:     0,
+			},
+		},
+		{
+			expectedError: "tx.RejectVersion cannot be set during creation",
+			ac: ApplicationCallTxnFields{
+				ApprovalProgram:   v5,
+				ClearStateProgram: v5,
+				RejectVersion:     1,
 			},
 		},
 	}

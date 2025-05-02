@@ -96,7 +96,7 @@ return
 	lc := basics.StateSchema{}
 
 	// create app
-	appCreateTxn, err := testClient.MakeUnsignedApplicationCallTx(0, nil, libgoal.RefBundle{}, transactions.NoOpOC, approv, clst, gl, lc, 0)
+	appCreateTxn, err := testClient.MakeUnsignedApplicationCallTx(0, nil, libgoal.RefBundle{}, transactions.NoOpOC, approv, clst, gl, lc, 0, 0)
 	a.NoError(err)
 	appCreateTxn, err = testClient.FillUnsignedTxTemplate(someAddress, 0, 0, 0, appCreateTxn)
 	a.NoError(err)
@@ -120,7 +120,7 @@ return
 	a.NoError(err)
 
 	// call app, which will issue an ASA create inner txn
-	appCallTxn, err := testClient.MakeUnsignedAppNoOpTx(uint64(createdAppID), nil, libgoal.RefBundle{})
+	appCallTxn, err := testClient.MakeUnsignedAppNoOpTx(uint64(createdAppID), nil, libgoal.RefBundle{}, 0)
 	a.NoError(err)
 	appCallTxn, err = testClient.FillUnsignedTxTemplate(someAddress, 0, 0, 0, appCallTxn)
 	a.NoError(err)
@@ -233,7 +233,7 @@ end:
 	// create app
 	appCreateTxn, err := testClient.MakeUnsignedApplicationCallTx(
 		0, nil, libgoal.RefBundle{}, transactions.NoOpOC,
-		approval, clearState, gl, lc, 0,
+		approval, clearState, gl, lc, 0, 0,
 	)
 	a.NoError(err)
 	appCreateTxn, err = testClient.FillUnsignedTxTemplate(someAddress, 0, 0, 0, appCreateTxn)
@@ -277,7 +277,7 @@ end:
 			refs := libgoal.RefBundle{Boxes: []basics.BoxRef{{App: 0, Name: boxNames[i]}}}
 
 			txns[i], err = testClient.MakeUnsignedAppNoOpTx(
-				uint64(createdAppID), appArgs, refs,
+				uint64(createdAppID), appArgs, refs, 0,
 			)
 			a.NoError(err)
 			txns[i], err = testClient.FillUnsignedTxTemplate(someAddress, 0, 0, 0, txns[i])
@@ -568,7 +568,7 @@ end:
 	a.Equal(uint64(30), appAccountData.TotalBoxBytes)
 
 	// delete the app
-	appDeleteTxn, err := testClient.MakeUnsignedAppDeleteTx(uint64(createdAppID), nil, libgoal.RefBundle{})
+	appDeleteTxn, err := testClient.MakeUnsignedAppDeleteTx(uint64(createdAppID), nil, libgoal.RefBundle{}, 0)
 	a.NoError(err)
 	appDeleteTxn, err = testClient.FillUnsignedTxTemplate(someAddress, 0, 0, 0, appDeleteTxn)
 	a.NoError(err)
@@ -651,7 +651,7 @@ func TestBlockLogs(t *testing.T) {
 	// create app
 	appCreateTxn, err := testClient.MakeUnsignedApplicationCallTx(
 		0, nil, libgoal.RefBundle{}, transactions.NoOpOC,
-		outerApproval, clearState, gl, lc, 0,
+		outerApproval, clearState, gl, lc, 0, 0,
 	)
 	a.NoError(err)
 	appCreateTxn, err = testClient.FillUnsignedTxTemplate(someAddress, 0, 0, 0, appCreateTxn)
@@ -680,7 +680,7 @@ func TestBlockLogs(t *testing.T) {
 
 	// call app twice
 	appCallTxn, err := testClient.MakeUnsignedAppNoOpTx(
-		uint64(createdAppID), nil, libgoal.RefBundle{},
+		uint64(createdAppID), nil, libgoal.RefBundle{}, 0,
 	)
 	a.NoError(err)
 	appCallTxn0, err := testClient.FillUnsignedTxTemplate(someAddress, 0, 0, 0, appCallTxn)
