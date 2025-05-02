@@ -3780,6 +3780,8 @@ func TestPreparePeerData(t *testing.T) {
 
 	wn := WebsocketNetwork{}
 	wn.broadcaster.log = logging.TestingLog(t)
+	// Enable vote compression for the test
+	wn.broadcaster.enableVoteCompression = true
 	data := make([][]byte, len(reqs))
 	compressedData := make([][]byte, len(reqs))
 	digests := make([]crypto.Digest, len(reqs))
