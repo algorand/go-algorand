@@ -159,7 +159,8 @@ func makeWsPeerMsgDataDecoder(wp *wsPeer) *wsPeerMsgDataDecoder {
 	}
 
 	c.ppdec = zstdProposalDecompressor{}
-	if wp.vpackVoteCompressionSupported() {
+	// have both ends advertised support for compression?
+	if wp.enableVoteCompression && wp.vpackVoteCompressionSupported() {
 		c.avdec = vpackVoteDecompressor{
 			enabled: true,
 			dec:     vpack.NewStatelessDecoder(),

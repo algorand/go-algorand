@@ -238,6 +238,9 @@ type wsPeer struct {
 	// peer features derived from the peer version
 	features peerFeatureFlag
 
+	// enableCompression specifies whether this node can compress or decompress votes (and whether it has advertised this)
+	enableVoteCompression bool
+
 	// responseChannels used by the client to wait on the response of the request
 	responseChannels map[uint64]chan *Response
 

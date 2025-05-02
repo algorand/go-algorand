@@ -1042,18 +1042,19 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 
 	client, _ := wn.GetHTTPClient(trackedRequest.remoteAddress())
 	peer := &wsPeer{
-		wsPeerCore:        makePeerCore(wn.ctx, wn, wn.log, wn.handler.readBuffer, trackedRequest.remoteAddress(), client, trackedRequest.remoteHost),
-		conn:              wsPeerWebsocketConnImpl{conn},
-		outgoing:          false,
-		InstanceName:      trackedRequest.otherInstanceName,
-		incomingMsgFilter: wn.incomingMsgFilter,
-		prioChallenge:     challenge,
-		createTime:        trackedRequest.created,
-		version:           matchingVersion,
-		identity:          peerID,
-		identityChallenge: peerIDChallenge,
-		identityVerified:  atomic.Uint32{},
-		features:          decodePeerFeatures(matchingVersion, request.Header.Get(PeerFeaturesHeader)),
+		wsPeerCore:            makePeerCore(wn.ctx, wn, wn.log, wn.handler.readBuffer, trackedRequest.remoteAddress(), client, trackedRequest.remoteHost),
+		conn:                  wsPeerWebsocketConnImpl{conn},
+		outgoing:              false,
+		InstanceName:          trackedRequest.otherInstanceName,
+		incomingMsgFilter:     wn.incomingMsgFilter,
+		prioChallenge:         challenge,
+		createTime:            trackedRequest.created,
+		version:               matchingVersion,
+		identity:              peerID,
+		identityChallenge:     peerIDChallenge,
+		identityVerified:      atomic.Uint32{},
+		features:              decodePeerFeatures(matchingVersion, request.Header.Get(PeerFeaturesHeader)),
+		enableVoteCompression: wn.config.EnableVoteCompression,
 	}
 	peer.TelemetryGUID = trackedRequest.otherTelemetryGUID
 	peer.init(wn.config, wn.outgoingMessagesBufferSize)
@@ -1394,6 +1395,8 @@ func (wn *msgBroadcaster) innerBroadcast(request broadcastRequest, prio bool, pe
 			continue
 		}
 		dataToSend := data
+		// check whether to send a compressed vote. dataWithCompression will be empty if this node
+		// has not enabled vote compression.
 		if peer.vpackVoteCompressionSupported() && len(dataWithCompression) > 0 {
 			dataToSend = dataWithCompression
 		}
@@ -2148,6 +2151,7 @@ func (wn *WebsocketNetwork) tryConnect(netAddr, gossipAddr string) {
 		version:                     matchingVersion,
 		identity:                    peerID,
 		features:                    decodePeerFeatures(matchingVersion, response.Header.Get(PeerFeaturesHeader)),
+		enableVoteCompression:       wn.config.EnableVoteCompression,
 	}
 	peer.TelemetryGUID, peer.InstanceName, _ = getCommonHeaders(response.Header)
 
