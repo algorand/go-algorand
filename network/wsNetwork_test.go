@@ -490,6 +490,83 @@ func TestWebsocketProposalPayloadCompression(t *testing.T) {
 	}
 }
 
+// Set up two nodes, send vote to test vote compression feature
+func TestWebsocketVoteCompression(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	type testDef struct {
+		netAEnableCompression, netBEnableCompression bool
+	}
+
+	var tests []testDef = []testDef{
+		{true, true},   // both nodes with compression enabled
+		{true, false},  // node A with compression, node B without
+		{false, true},  // node A without compression, node B with compression
+		{false, false}, // both nodes with compression disabled
+	}
+
+	for _, test := range tests {
+		t.Run(fmt.Sprintf("A_compression_%v+B_compression_%v", test.netAEnableCompression, test.netBEnableCompression), func(t *testing.T) {
+			netA := makeTestWebsocketNode(t)
+			netA.config.GossipFanout = 1
+			netA.config.EnableVoteCompression = test.netAEnableCompression
+			netA.Start()
+			defer netStop(t, netA, "A")
+			netB := makeTestWebsocketNode(t)
+			netB.config.GossipFanout = 1
+			netB.config.EnableVoteCompression = test.netBEnableCompression
+			addrA, postListen := netA.Address()
+			require.True(t, postListen)
+			t.Log(addrA)
+			netB.phonebook.ReplacePeerList([]string{addrA}, "default", phonebook.RelayRole)
+			netB.Start()
+			defer netStop(t, netB, "B")
+
+			vote1 := map[string]any{
+				"cred": map[string]any{"pf": crypto.VrfProof{1}},
+				"r":    map[string]any{"rnd": uint64(2), "snd": [32]byte{3}},
+				"sig": map[string]any{
+					"p": [32]byte{4}, "p1s": [64]byte{5}, "p2": [32]byte{6},
+					"p2s": [64]byte{7}, "ps": [64]byte{8}, "s": [64]byte{9},
+				},
+			}
+			vote2 := map[string]any{
+				"cred": map[string]any{"pf": crypto.VrfProof{10}},
+				"r":    map[string]any{"rnd": uint64(11), "snd": [32]byte{12}},
+				"sig": map[string]any{
+					"p": [32]byte{13}, "p1s": [64]byte{14}, "p2": [32]byte{15},
+					"p2s": [64]byte{16}, "ps": [64]byte{17}, "s": [64]byte{18},
+				},
+			}
+			// Send a non-vote message to ensure that it goes through. Even though vpack compression
+			// and decompression will fail, the message should still go through (as an intended fallback).
+			vote3 := []byte("hello")
+			messages := [][]byte{protocol.EncodeReflect(vote1), protocol.EncodeReflect(vote2), vote3}
+			matcher := newMessageMatcher(t, messages)
+			counterDone := matcher.done
+			netB.RegisterHandlers([]TaggedMessageHandler{{Tag: protocol.AgreementVoteTag, MessageHandler: matcher}})
+
+			readyTimeout := time.NewTimer(2 * time.Second)
+			waitReady(t, netA, readyTimeout.C)
+			t.Log("a ready")
+			waitReady(t, netB, readyTimeout.C)
+			t.Log("b ready")
+
+			for _, msg := range messages {
+				netA.Broadcast(context.Background(), protocol.AgreementVoteTag, msg, true, nil)
+			}
+
+			select {
+			case <-counterDone:
+			case <-time.After(2 * time.Second):
+				t.Errorf("timeout, count=%d, wanted %d", len(matcher.received), len(messages))
+			}
+
+			require.True(t, matcher.Match())
+		})
+	}
+}
+
 // Repeat basic, but test a unicast
 func TestWebsocketNetworkUnicast(t *testing.T) {
 	partitiontest.PartitionTest(t)
