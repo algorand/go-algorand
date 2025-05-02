@@ -62,7 +62,7 @@ func vpackCompressVote(tbytes []byte, d []byte) ([]byte, string) {
 	comp, err := enc.CompressVote(mbytesComp[len(tbytes):], d)
 	if err != nil {
 		// fallback and reuse non-compressed original data
-		logMsg := fmt.Sprintf("failed to compress vote into buffer of len %d:: %v", len(d), err)
+		logMsg := fmt.Sprintf("failed to compress vote into buffer of len %d: %v", len(d), err)
 		copied := copy(mbytesComp[len(tbytes):], d)
 		return mbytesComp[:len(tbytes)+copied], logMsg
 	}
