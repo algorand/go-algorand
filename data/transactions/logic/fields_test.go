@@ -18,6 +18,7 @@ package logic
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -206,6 +207,89 @@ func TestTxnFieldVersions(t *testing.T) {
 	}
 }
 
+// ensure itxn_field works properly (only) in the versions it's supposed to work
+func TestITxnFieldVersions(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	var fields []txnFieldSpec
+	for _, fs := range txnFieldSpecs {
+		if fs.itxVersion > 0 {
+			fields = append(fields, fs)
+		}
+	}
+	require.Greater(t, len(fields), 1)
+
+	txn := makeSampleTxn()
+	txgroup := makeSampleTxnGroup(txn)
+	asmDefaultError := "...was introduced in ..."
+
+	specialArgs := map[string]string{
+		"Type": `byte "pay"`,
+		// assets must be available
+		"XferAsset":   `int 55`,
+		"ConfigAsset": `int 55`,
+		"FreezeAsset": `int 55`,
+		"Assets":      `int 55`,
+		// applications must be available
+		"ApplicationID": `int 111`,
+		"Applications":  `int 111`,
+	}
+	for _, fs := range fields {
+		field := fs.field.String()
+		t.Run(field, func(t *testing.T) {
+			text := "itxn_begin; itxn_field " + field + "; int 1"
+			asmError := asmDefaultError
+
+			if arg, ok := specialArgs[field]; ok {
+				text = arg + ";" + text
+			} else {
+				// prepend a generic value
+				switch fs.ftype.AVMType {
+				case avmUint64:
+					text = "int 1;" + text
+				case avmBytes:
+					if fs.ftype == StackAddress {
+						text = "txn Sender;" + text
+					} else {
+						text = fmt.Sprintf("byte 0x%s;", strings.Repeat("aa", int(fs.ftype.Bound[0]))) + text
+					}
+				case avmAny:
+					text = "error;"
+				}
+			}
+
+			// check assembler fails if version before introduction
+			testLine(t, text, assemblerNoVersion, asmError)
+			for v := uint64(0); v < fs.itxVersion; v++ {
+				testLine(t, text, v, asmError)
+			}
+			t.Log(text)
+			testLine(t, text, fs.itxVersion, "")
+
+			// First, make sure it works when it should
+			ops := testProg(t, text, fs.itxVersion)
+			ep := defaultAppParamsWithVersion(fs.itxVersion, txgroup...)
+			testAppBytes(t, ops.Program, ep)
+
+			// And now make sure it doesn't when it shouldn't
+			preVersion := fs.itxVersion - 1
+			ep = defaultAppParamsWithVersion(preVersion, txgroup...)
+
+			// we change the program version so can run, but itxn_field opcode
+			// still won't.
+			ops.Program[0] = byte(preVersion) // set version
+			checkErr := ""
+			evalErr := "invalid itxn_field " + field
+			if preVersion < 5 { // when inners and `itxn_field` were introduced
+				checkErr = "illegal opcode"
+				evalErr = "illegal opcode"
+			}
+			testAppBytes(t, ops.Program, ep, checkErr, evalErr)
+		})
+	}
+}
+
 // TestTxnEffectsAvailable ensures that LogicSigs can not use "effects" fields
 // (ever). And apps can only use effects fields with `gtxn` after
 // txnEffectsVersion. (itxn could use them earlier)
@@ -283,12 +367,11 @@ func TestAssetParamsFieldsVersions(t *testing.T) {
 }
 
 func TestFieldVersions(t *testing.T) {
-	// This test is weird, it confirms that we don't need to
-	// bother with a "good" test for AssetHolding and AppParams
-	// fields.  It will fail if we add a field that has a
-	// different debut version, and then we'll need a test
-	// like TestAssetParamsFieldsVersions that checks the field is
-	// unavailable before its debut.
+	// This test is weird, it confirms that we don't need to bother with a
+	// "good" test for AssetHolding fields.  It will fail if we add a field that
+	// has a different debut version, and then we'll need a test like
+	// TestAppParamsFieldsVersions that checks the field is unavailable before
+	// its debut.
 
 	partitiontest.PartitionTest(t)
 	t.Parallel()
@@ -296,9 +379,47 @@ func TestFieldVersions(t *testing.T) {
 	for _, fs := range assetHoldingFieldSpecs {
 		require.Equal(t, uint64(2), fs.version)
 	}
+}
 
-	for _, fs := range appParamsFieldSpecs {
-		require.Equal(t, uint64(5), fs.version)
+// TestAppParamsFieldsVersions tests types and accessibility of various app
+// fields over different versions.
+func TestAppParamsFieldsVersions(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
+	for _, field := range appParamsFieldSpecs {
+		testLogicRange(t, 2, 0, func(t *testing.T, ep *EvalParams, txn *transactions.Transaction, ledger *Ledger) {
+			text := fmt.Sprintf("int 56; app_params_get %s; assert;", field.field)
+			if field.ftype.AVMType == avmBytes {
+				text += "global ZeroAddress; concat; len" // use concat to prove we have bytes
+			} else {
+				text += "global ZeroAddress; len; +" // use + to prove we have an int
+			}
+
+			v := ep.Proto.LogicSigVersion
+			ledger.NewApp(txn.Sender, txn.ForeignApps[0], basics.AppParams{
+				ApprovalProgram:   []byte("ap"),
+				ClearStateProgram: []byte("cs"),
+				GlobalState:       map[string]basics.TealValue{},
+				StateSchemas:      basics.StateSchemas{},
+				ExtraProgramPages: 2,
+				Version:           6,
+			})
+			if field.version > v {
+				// check assembler fails if version before introduction
+				testProg(t, text, v, exp(1, "...was introduced in..."))
+				ops := testProg(t, text, field.version) // assemble in the future
+				ops.Program[0] = byte(v)                // but set version back to before intro
+				if v < 5 {
+					testAppBytes(t, ops.Program, ep, "illegal opcode", "illegal opcode")
+				} else {
+					testAppBytes(t, ops.Program, ep, "invalid app_params_get field")
+				}
+			} else {
+				testProg(t, text, v)
+				testApp(t, text, ep)
+			}
+		})
 	}
 }
 

@@ -1115,7 +1115,7 @@
         "uint64",
         "uint64",
         "[]byte",
-        "[]byte"
+        "[64]byte"
       ],
       "DocCost": "1",
       "Doc": "field F of current transaction",
@@ -1323,7 +1323,7 @@
         "uint64",
         "uint64",
         "[]byte",
-        "[]byte"
+        "[64]byte"
       ],
       "DocCost": "1",
       "Doc": "field F of the Tth transaction in the current group",
@@ -1613,7 +1613,7 @@
         "uint64",
         "uint64",
         "[]byte",
-        "[]byte"
+        "[64]byte"
       ],
       "DocCost": "1",
       "Doc": "field F of the Ath transaction in the current group",
@@ -3311,7 +3311,7 @@
         "uint64",
         "uint64",
         "bool",
-        "[]byte"
+        "[64]byte"
       ],
       "DocCost": "1",
       "Doc": "set field F of the current inner transaction to A",
@@ -3476,7 +3476,7 @@
         "uint64",
         "uint64",
         "[]byte",
-        "[]byte"
+        "[64]byte"
       ],
       "DocCost": "1",
       "Doc": "field F of the last inner transaction",
@@ -3681,7 +3681,7 @@
         "uint64",
         "uint64",
         "[]byte",
-        "[]byte"
+        "[64]byte"
       ],
       "DocCost": "1",
       "Doc": "field F of the Tth transaction in the last inner group submitted",
