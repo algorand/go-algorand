@@ -793,6 +793,7 @@ func (n *P2PNetwork) OnNetworkAdvance() {
 const maxHeaderKeys = 64
 const maxHeaderValues = 16
 
+// SortString is a type that implements sort.Interface for sorting strings
 type SortString = basics.SortString
 
 //msgp:allocbound peerMetaValues maxHeaderValues
@@ -801,7 +802,7 @@ type peerMetaValues []string
 //msgp:allocbound peerMetaHeaders maxHeaderKeys
 type peerMetaHeaders map[string]peerMetaValues
 
-func peerMetaHeadersToHttpHeaders(headers peerMetaHeaders) http.Header {
+func peerMetaHeadersToHTTPHeaders(headers peerMetaHeaders) http.Header {
 	httpHeaders := make(http.Header, len(headers))
 	for k, v := range headers {
 		httpHeaders[k] = v
@@ -809,12 +810,12 @@ func peerMetaHeadersToHttpHeaders(headers peerMetaHeaders) http.Header {
 	return httpHeaders
 }
 
-func peerMetaHeadersFromHttpHeaders(headers http.Header) peerMetaHeaders {
-	peerMetaHeaders := make(peerMetaHeaders, len(headers))
+func peerMetaHeadersFromHTTPHeaders(headers http.Header) peerMetaHeaders {
+	pmh := make(peerMetaHeaders, len(headers))
 	for k, v := range headers {
-		peerMetaHeaders[k] = v
+		pmh[k] = v
 	}
-	return peerMetaHeaders
+	return pmh
 }
 
 // TelemetryGUID returns the telemetry GUID of this node.
@@ -917,7 +918,7 @@ func (n *P2PNetwork) readPeerMetaHeaders(stream network.Stream, p2pPeer peer.ID)
 		err0 := fmt.Errorf("error unmarshaling response message from peer %s (%s): %w", p2pPeer, stream.Conn().RemoteMultiaddr().String(), err)
 		return peerMetaInfo{}, err0
 	}
-	headers := peerMetaHeadersToHttpHeaders(responseHeaders)
+	headers := peerMetaHeadersToHTTPHeaders(responseHeaders)
 	matchingVersion, _ := checkProtocolVersionMatch(headers, n.supportedProtocolVersions)
 	if matchingVersion == "" {
 		err0 := fmt.Errorf("peer %s (%s) does not support any of the supported protocol versions: %v", p2pPeer, stream.Conn().RemoteMultiaddr().String(), n.supportedProtocolVersions)
@@ -936,13 +937,13 @@ func (n *P2PNetwork) readPeerMetaHeaders(stream network.Stream, p2pPeer peer.ID)
 func (n *P2PNetwork) writePeerMetaHeaders(stream network.Stream, p2pPeer peer.ID, networkProtoVersion string) error {
 	header := make(http.Header)
 	setHeaders(header, networkProtoVersion, n)
-	meta := peerMetaHeadersFromHttpHeaders(header)
+	meta := peerMetaHeadersFromHTTPHeaders(header)
 	data := meta.MarshalMsg(nil)
 	length := len(data)
 	if length > math.MaxUint16 {
 		// 64k is enough for everyone
 		// current headers size is TBD
-		stream.Reset()
+		_ = stream.Reset()
 		n.log.Panicf("error writing initial message, too large: %v, peer %s (%s)", header, p2pPeer, stream.Conn().RemoteMultiaddr().String())
 	}
 	metaMsg := make([]byte, 2+length)
@@ -963,36 +964,36 @@ func (n *P2PNetwork) wsStreamHandlerV22(ctx context.Context, p2pPeer peer.ID, st
 	}
 
 	var err error
-	var peerMetaInfo peerMetaInfo
+	var pmi peerMetaInfo
 	if incoming {
-		peerMetaInfo, err = n.readPeerMetaHeaders(stream, p2pPeer)
+		pmi, err = n.readPeerMetaHeaders(stream, p2pPeer)
 		if err != nil {
 			n.log.Warnf("wsStreamHandlerV22: error reading peer meta headers response from peer %s (%s): %v", p2pPeer, stream.Conn().RemoteMultiaddr().String(), err)
-			stream.Reset()
+			_ = stream.Reset()
 			return
 		}
-		err = n.writePeerMetaHeaders(stream, p2pPeer, peerMetaInfo.version)
+		err = n.writePeerMetaHeaders(stream, p2pPeer, pmi.version)
 		if err != nil {
 			n.log.Warnf("wsStreamHandlerV22: error writing peer meta headers response to peer %s (%s): %v", p2pPeer, stream.Conn().RemoteMultiaddr().String(), err)
-			stream.Reset()
+			_ = stream.Reset()
 			return
 		}
 	} else {
 		err = n.writePeerMetaHeaders(stream, p2pPeer, n.protocolVersion)
 		if err != nil {
 			n.log.Warnf("wsStreamHandlerV22: error writing peer meta headers response to peer %s (%s): %v", p2pPeer, stream.Conn().RemoteMultiaddr().String(), err)
-			stream.Reset()
+			_ = stream.Reset()
 			return
 		}
 		// read the response
-		peerMetaInfo, err = n.readPeerMetaHeaders(stream, p2pPeer)
+		pmi, err = n.readPeerMetaHeaders(stream, p2pPeer)
 		if err != nil {
 			n.log.Warnf("wsStreamHandlerV22: error reading peer meta headers response from peer %s (%s): %v", p2pPeer, stream.Conn().RemoteMultiaddr().String(), err)
-			stream.Reset()
+			_ = stream.Reset()
 			return
 		}
 	}
-	n.wsStreamHandler(ctx, p2pPeer, stream, incoming, peerMetaInfo)
+	n.wsStreamHandler(ctx, p2pPeer, stream, incoming, pmi)
 }
 
 func (n *P2PNetwork) wsStreamHandler(ctx context.Context, p2pPeer peer.ID, stream network.Stream, incoming bool, pmi peerMetaInfo) {

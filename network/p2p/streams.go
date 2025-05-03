@@ -104,7 +104,7 @@ func (n *streamManager) dispatch(ctx context.Context, remotePeer peer.ID, stream
 		handler(ctx, remotePeer, stream, incoming)
 	} else {
 		n.log.Errorf("No handler for protocol %s, peer %s", stream.Protocol(), remotePeer)
-		stream.Reset()
+		_ = stream.Reset()
 	}
 }
 
@@ -163,7 +163,7 @@ func (n *streamManager) Connected(net network.Network, conn network.Conn) {
 		handler(n.ctx, remotePeer, stream, incoming)
 	} else {
 		n.log.Errorf("No handler for protocol %s, peer %s", targetProto, remotePeer)
-		stream.Reset()
+		_ = stream.Reset()
 	}
 }
 

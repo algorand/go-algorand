@@ -90,9 +90,11 @@ type serviceImpl struct {
 }
 
 // AlgorandWsProtocolV1 defines a libp2p protocol name for algorand's websockets messages
+// as the very initial release
 const AlgorandWsProtocolV1 = "/algorand-ws/1.0.0"
 
-// AlgorandWsProtocolV0 defines a libp2p protocol name for algorand's websockets messages
+// AlgorandWsProtocolV22 defines a libp2p protocol name for algorand's websockets messages
+// as a version supporting peer metadata and wsnet v2.2 protocol features
 const AlgorandWsProtocolV22 = "/algorand-ws/2.2.0"
 
 // algorandGUIDProtocolPrefix defines a libp2p protocol name for algorand node telemetry GUID exchange
@@ -183,6 +185,7 @@ func configureResourceManager(cfg config.Local) (network.ResourceManager, error)
 	return rm, err
 }
 
+// TelemetryInfo is a struct that holds telemetry information
 type TelemetryInfo struct {
 	ID       string
 	Instance string
