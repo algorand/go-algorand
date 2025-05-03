@@ -19,12 +19,14 @@ package p2p
 import (
 	"context"
 	"io"
+	"slices"
 
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-deadlock"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/multiformats/go-multiaddr"
 )
 
@@ -33,7 +35,7 @@ type streamManager struct {
 	ctx                 context.Context
 	log                 logging.Logger
 	host                host.Host
-	handler             StreamHandler
+	handlers            StreamHandlerMap
 	allowIncomingGossip bool
 
 	streams     map[peer.ID]network.Stream
@@ -43,12 +45,12 @@ type streamManager struct {
 // StreamHandler is called when a new bidirectional stream for a given protocol and peer is opened.
 type StreamHandler func(ctx context.Context, pid peer.ID, s network.Stream, incoming bool)
 
-func makeStreamManager(ctx context.Context, log logging.Logger, h host.Host, handler StreamHandler, allowIncomingGossip bool) *streamManager {
+func makeStreamManager(ctx context.Context, log logging.Logger, h host.Host, handlers StreamHandlerMap, allowIncomingGossip bool) *streamManager {
 	return &streamManager{
 		ctx:                 ctx,
 		log:                 log,
 		host:                h,
-		handler:             handler,
+		handlers:            handlers,
 		allowIncomingGossip: allowIncomingGossip,
 		streams:             make(map[peer.ID]network.Stream),
 	}
@@ -83,7 +85,7 @@ func (n *streamManager) streamHandler(stream network.Stream) {
 			n.streams[stream.Conn().RemotePeer()] = stream
 
 			incoming := stream.Conn().Stat().Direction == network.DirInbound
-			n.handler(n.ctx, remotePeer, stream, incoming)
+			n.dispatch(n.ctx, remotePeer, stream, incoming)
 			return
 		}
 		// otherwise, the old stream is still open, so we can close the new one
@@ -93,7 +95,17 @@ func (n *streamManager) streamHandler(stream network.Stream) {
 	// no old stream
 	n.streams[stream.Conn().RemotePeer()] = stream
 	incoming := stream.Conn().Stat().Direction == network.DirInbound
-	n.handler(n.ctx, remotePeer, stream, incoming)
+	n.dispatch(n.ctx, remotePeer, stream, incoming)
+}
+
+// dispatch the stream to the appropriate handler
+func (n *streamManager) dispatch(ctx context.Context, remotePeer peer.ID, stream network.Stream, incoming bool) {
+	if handler, ok := n.handlers[stream.Protocol()]; ok {
+		handler(ctx, remotePeer, stream, incoming)
+	} else {
+		n.log.Errorf("No handler for protocol %s, peer %s", stream.Protocol(), remotePeer)
+		stream.Reset()
+	}
 }
 
 // Connected is called when a connection is opened
@@ -124,7 +136,17 @@ func (n *streamManager) Connected(net network.Network, conn network.Conn) {
 		return // there's already an active stream with this peer for our protocol
 	}
 
-	stream, err := n.host.NewStream(n.ctx, remotePeer, AlgorandWsProtocol)
+	protos, err := n.host.Peerstore().GetProtocols(remotePeer)
+	if err != nil {
+		n.log.Infof("Failed to get protocols for %s (%s): %v", remotePeer, conn.RemoteMultiaddr().String(), err)
+		return
+	}
+	var targetProto protocol.ID = AlgorandWsProtocolV1
+	if slices.Contains(protos, AlgorandWsProtocolV22) {
+		targetProto = AlgorandWsProtocolV22
+	}
+
+	stream, err := n.host.NewStream(n.ctx, remotePeer, targetProto)
 	if err != nil {
 		n.log.Infof("Failed to open stream to %s (%s): %v", remotePeer, conn.RemoteMultiaddr().String(), err)
 		return
@@ -137,7 +159,12 @@ func (n *streamManager) Connected(net network.Network, conn network.Conn) {
 	n.streamsLock.Unlock()
 
 	incoming := stream.Conn().Stat().Direction == network.DirInbound
-	n.handler(n.ctx, remotePeer, stream, incoming)
+	if handler, ok := n.handlers[targetProto]; ok {
+		handler(n.ctx, remotePeer, stream, incoming)
+	} else {
+		n.log.Errorf("No handler for protocol %s, peer %s", targetProto, remotePeer)
+		stream.Reset()
+	}
 }
 
 // Disconnected is called when a connection is closed

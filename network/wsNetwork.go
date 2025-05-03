@@ -848,6 +848,7 @@ func (wn *WebsocketNetwork) NetProtoVersions() []string {
 	return wn.supportedProtocolVersions
 }
 
+// Config returns the configuration of this node.
 func (wn *WebsocketNetwork) Config() config.Local {
 	return wn.config
 }
@@ -855,8 +856,12 @@ func (wn *WebsocketNetwork) Config() config.Local {
 func setHeaders(header http.Header, netProtoVer string, meta peerMetadataProvider) {
 	header.Set(TelemetryIDHeader, meta.TelemetryGUID())
 	header.Set(InstanceNameHeader, meta.InstanceName())
-	header.Set(AddressHeader, meta.PublicAddress())
-	header.Set(NodeRandomHeader, meta.RandomID())
+	if pa := meta.PublicAddress(); pa != "" {
+		header.Set(AddressHeader, pa)
+	}
+	if rid := meta.RandomID(); rid != "" {
+		header.Set(NodeRandomHeader, rid)
+	}
 	header.Set(GenesisHeader, meta.GenesisID())
 
 	// set the features header (comma-separated list)
@@ -879,7 +884,7 @@ func setHeaders(header http.Header, netProtoVer string, meta peerMetadataProvide
 // checkServerResponseVariables check that the version and random-id in the request headers matches the server ones.
 // it returns true if it's a match, and false otherwise.
 func (wn *WebsocketNetwork) checkServerResponseVariables(otherHeader http.Header, addr string) (bool, string) {
-	matchingVersion, otherVersion := wn.checkProtocolVersionMatch(otherHeader)
+	matchingVersion, otherVersion := checkProtocolVersionMatch(otherHeader, wn.supportedProtocolVersions)
 	if matchingVersion == "" {
 		wn.log.Info(filterASCII(fmt.Sprintf("new peer %s version mismatch, mine=%v theirs=%s, headers %#v", addr, wn.supportedProtocolVersions, otherVersion, otherHeader)))
 		return false, ""
@@ -950,17 +955,17 @@ func (wn *WebsocketNetwork) checkIncomingConnectionLimits(response http.Response
 }
 
 // checkProtocolVersionMatch test ProtocolAcceptVersionHeader and ProtocolVersionHeader headers from the request/response and see if it can find a match.
-func (wn *WebsocketNetwork) checkProtocolVersionMatch(otherHeaders http.Header) (matchingVersion string, otherVersion string) {
+func checkProtocolVersionMatch(otherHeaders http.Header, ourSupportedProtocolVersions []string) (matchingVersion string, otherVersion string) {
 	otherAcceptedVersions := otherHeaders[textproto.CanonicalMIMEHeaderKey(ProtocolAcceptVersionHeader)]
 	for _, otherAcceptedVersion := range otherAcceptedVersions {
 		// do we have a matching version ?
-		if slices.Contains(wn.supportedProtocolVersions, otherAcceptedVersion) {
+		if slices.Contains(ourSupportedProtocolVersions, otherAcceptedVersion) {
 			return otherAcceptedVersion, ""
 		}
 	}
 
 	otherVersion = otherHeaders.Get(ProtocolVersionHeader)
-	if slices.Contains(wn.supportedProtocolVersions, otherVersion) {
+	if slices.Contains(ourSupportedProtocolVersions, otherVersion) {
 		return otherVersion, otherVersion
 	}
 
@@ -1035,7 +1040,7 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 		return
 	}
 
-	matchingVersion, otherVersion := wn.checkProtocolVersionMatch(request.Header)
+	matchingVersion, otherVersion := checkProtocolVersionMatch(request.Header, wn.supportedProtocolVersions)
 	if matchingVersion == "" {
 		wn.log.Info(filterASCII(fmt.Sprintf("new peer %s version mismatch, mine=%v theirs=%s, headers %#v", trackedRequest.remoteHost, wn.supportedProtocolVersions, otherVersion, request.Header)))
 		networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "mismatching protocol version"})

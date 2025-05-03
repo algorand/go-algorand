@@ -89,8 +89,11 @@ type serviceImpl struct {
 	topicsMu deadlock.RWMutex
 }
 
-// AlgorandWsProtocol defines a libp2p protocol name for algorand's websockets messages
-const AlgorandWsProtocol = "/algorand-ws/1.0.0"
+// AlgorandWsProtocolV1 defines a libp2p protocol name for algorand's websockets messages
+const AlgorandWsProtocolV1 = "/algorand-ws/1.0.0"
+
+// AlgorandWsProtocolV0 defines a libp2p protocol name for algorand's websockets messages
+const AlgorandWsProtocolV22 = "/algorand-ws/2.2.0"
 
 // algorandGUIDProtocolPrefix defines a libp2p protocol name for algorand node telemetry GUID exchange
 const algorandGUIDProtocolPrefix = "/algorand-telemetry/1.0.0/"
@@ -180,17 +183,25 @@ func configureResourceManager(cfg config.Local) (network.ResourceManager, error)
 	return rm, err
 }
 
-// MakeService creates a P2P service instance
-func MakeService(ctx context.Context, log logging.Logger, cfg config.Local, h host.Host, listenAddr string, wsStreamHandler StreamHandler, metricsTracer pubsub.RawTracer) (*serviceImpl, error) {
+type TelemetryInfo struct {
+	ID       string
+	Instance string
+}
 
-	sm := makeStreamManager(ctx, log, h, wsStreamHandler, cfg.EnableGossipService)
+// StreamHandlerMap is a map of protocol IDs to StreamHandlers
+type StreamHandlerMap map[protocol.ID]StreamHandler
+
+// MakeService creates a P2P service instance
+func MakeService(ctx context.Context, log logging.Logger, cfg config.Local, h host.Host, listenAddr string, wsStreamHandlers StreamHandlerMap, metricsTracer pubsub.RawTracer, ti TelemetryInfo) (*serviceImpl, error) {
+
+	sm := makeStreamManager(ctx, log, h, wsStreamHandlers, cfg.EnableGossipService)
 	h.Network().Notify(sm)
-	h.SetStreamHandler(AlgorandWsProtocol, sm.streamHandler)
+	for protoID := range wsStreamHandlers {
+		h.SetStreamHandler(protoID, sm.streamHandler)
+	}
 
 	// set an empty handler for telemetryID/telemetryInstance protocol in order to allow other peers to know our telemetryID
-	telemetryID := log.GetTelemetryGUID()
-	telemetryInstance := log.GetInstanceName()
-	telemetryProtoInfo := formatPeerTelemetryInfoProtocolName(telemetryID, telemetryInstance)
+	telemetryProtoInfo := formatPeerTelemetryInfoProtocolName(ti.ID, ti.Instance)
 	h.SetStreamHandler(protocol.ID(telemetryProtoInfo), func(s network.Stream) { s.Close() })
 
 	ps, err := makePubSub(ctx, cfg, h, metricsTracer)

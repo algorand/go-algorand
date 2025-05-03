@@ -18,6 +18,9 @@ package network
 
 import (
 	"context"
+	"encoding/binary"
+	"fmt"
+	"math"
 	"math/rand"
 	"net/http"
 	"strings"
@@ -27,6 +30,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	algocrypto "github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/network/limitcaller"
@@ -87,6 +91,13 @@ type P2PNetwork struct {
 	httpServer        *p2p.HTTPServer
 
 	identityTracker identityTracker
+
+	// supportedProtocolVersions defines versions supported by this network.
+	// Should be used instead of a global network.SupportedProtocolVersions for network/peers configuration
+	supportedProtocolVersions []string
+
+	// protocolVersion is an actual version announced as ProtocolVersionHeader
+	protocolVersion string
 }
 
 type bootstrapper struct {
@@ -258,6 +269,16 @@ func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebo
 		net.identityTracker = noopIdentityTracker{}
 	}
 
+	// set our supported versions
+	if net.config.NetworkProtocolVersion != "" {
+		net.supportedProtocolVersions = []string{net.config.NetworkProtocolVersion}
+	} else {
+		net.supportedProtocolVersions = SupportedProtocolVersions
+	}
+
+	// set our actual version
+	net.protocolVersion = ProtocolVersion
+
 	err = p2p.EnableP2PLogging(log, logging.Level(cfg.BaseLoggerDebugLevel))
 	if err != nil {
 		return nil, err
@@ -269,7 +290,17 @@ func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebo
 	}
 	log.Infof("P2P host created: peer ID %s addrs %s", h.ID(), h.Addrs())
 
-	net.service, err = p2p.MakeService(net.ctx, log, cfg, h, la, net.wsStreamHandler, pubsubMetricsTracer{})
+	// TODO: remove after consensus v41 takes effect.
+	ti := p2p.TelemetryInfo{
+		ID:       net.TelemetryGUID(),
+		Instance: net.InstanceName(),
+	}
+	hm := p2p.StreamHandlerMap{
+		p2p.AlgorandWsProtocolV1:  net.wsStreamHandlerV1,
+		p2p.AlgorandWsProtocolV22: net.wsStreamHandlerV22,
+	}
+	// END TODO
+	net.service, err = p2p.MakeService(net.ctx, log, cfg, h, la, hm, pubsubMetricsTracer{}, ti)
 	if err != nil {
 		return nil, err
 	}
@@ -754,11 +785,85 @@ func (n *P2PNetwork) OnNetworkAdvance() {
 	}
 }
 
+// peerMetaHeaders holds peer metadata headers similar to wsnet http.Header
+// due to msgp allocbound enforcement we need to limit the number of headers and values
+// but it is cannot be done without msgp modification to accept both map and slice allocbound
+// so that introduce a service peerMetaValues type to have allocbound set and msgp generator satisfied.
+
+const maxHeaderKeys = 64
+const maxHeaderValues = 16
+
+type SortString = basics.SortString
+
+//msgp:allocbound peerMetaValues maxHeaderValues
+type peerMetaValues []string
+
+//msgp:allocbound peerMetaHeaders maxHeaderKeys
+type peerMetaHeaders map[string]peerMetaValues
+
+func peerMetaHeadersToHttpHeaders(headers peerMetaHeaders) http.Header {
+	httpHeaders := make(http.Header, len(headers))
+	for k, v := range headers {
+		httpHeaders[k] = v
+	}
+	return httpHeaders
+}
+
+func peerMetaHeadersFromHttpHeaders(headers http.Header) peerMetaHeaders {
+	peerMetaHeaders := make(peerMetaHeaders, len(headers))
+	for k, v := range headers {
+		peerMetaHeaders[k] = v
+	}
+	return peerMetaHeaders
+}
+
+// TelemetryGUID returns the telemetry GUID of this node.
+func (n *P2PNetwork) TelemetryGUID() string {
+	return n.log.GetTelemetryGUID()
+}
+
+// InstanceName returns the instance name of this node.
+func (n *P2PNetwork) InstanceName() string {
+	return n.log.GetInstanceName()
+}
+
+// GenesisID returns the genesis ID of this node.
+func (n *P2PNetwork) GenesisID() string {
+	return n.genesisID
+}
+
+// NetProtoVersions returns the supported protocol versions of this node.
+func (n *P2PNetwork) NetProtoVersions() []string {
+	return n.supportedProtocolVersions
+}
+
+// RandomID satisfies the interface but is not used in P2PNetwork.
+func (n *P2PNetwork) RandomID() string {
+	return ""
+}
+
+// PublicAddress satisfies the interface but is not used in P2PNetwork.
+func (n *P2PNetwork) PublicAddress() string {
+	return ""
+}
+
+// Config returns the configuration of this node.
+func (n *P2PNetwork) Config() config.Local {
+	return n.config
+}
+
+type peerMetaInfo struct {
+	ti       p2p.TelemetryInfo
+	version  string
+	features string
+}
+
 // wsStreamHandler is a callback that the p2p package calls when a new peer connects and establishes a
 // stream for the websocket protocol.
-func (n *P2PNetwork) wsStreamHandler(ctx context.Context, p2pPeer peer.ID, stream network.Stream, incoming bool) {
-	if stream.Protocol() != p2p.AlgorandWsProtocol {
-		n.log.Warnf("unknown protocol %s from peer%s", stream.Protocol(), p2pPeer)
+// TODO: remove after consensus v41 takes effect.
+func (n *P2PNetwork) wsStreamHandlerV1(ctx context.Context, p2pPeer peer.ID, stream network.Stream, incoming bool) {
+	if stream.Protocol() != p2p.AlgorandWsProtocolV1 {
+		n.log.Warnf("unknown protocol %s from peer %s", stream.Protocol(), p2pPeer)
 		return
 	}
 
@@ -766,17 +871,131 @@ func (n *P2PNetwork) wsStreamHandler(ctx context.Context, p2pPeer peer.ID, strea
 		var initMsg [1]byte
 		rn, err := stream.Read(initMsg[:])
 		if rn == 0 || err != nil {
-			n.log.Warnf("wsStreamHandler: error reading initial message: %s, peer %s (%s)", err, p2pPeer, stream.Conn().RemoteMultiaddr().String())
+			n.log.Warnf("wsStreamHandlerV1: error reading initial message from peer %s (%s): %v", p2pPeer, stream.Conn().RemoteMultiaddr().String(), err)
 			return
 		}
 	} else {
 		_, err := stream.Write([]byte("1"))
 		if err != nil {
-			n.log.Warnf("wsStreamHandler: error sending initial message: %s", err)
+			n.log.Warnf("wsStreamHandlerV1: error sending initial message: %v", err)
 			return
 		}
 	}
 
+	protos, err := n.pstore.GetProtocols(p2pPeer)
+	if err != nil {
+		n.log.Warnf("wsStreamHandlerV1: error getting protocols for peer %s: %v", p2pPeer, err)
+	}
+
+	telemetryGUID, instanceName := p2p.GetPeerTelemetryInfo(protos)
+	pmi := peerMetaInfo{
+		ti:       p2p.TelemetryInfo{ID: telemetryGUID, Instance: instanceName},
+		version:  "1",
+		features: "",
+	}
+	n.wsStreamHandler(ctx, p2pPeer, stream, incoming, pmi)
+}
+
+func (n *P2PNetwork) readPeerMetaHeaders(stream network.Stream, p2pPeer peer.ID) (peerMetaInfo, error) {
+	var msgLenBytes [2]byte
+	rn, err := stream.Read(msgLenBytes[:])
+	if rn != 2 || err != nil {
+		err0 := fmt.Errorf("error reading response message length from peer %s (%s): %w", p2pPeer, stream.Conn().RemoteMultiaddr().String(), err)
+		return peerMetaInfo{}, err0
+	}
+
+	msgLen := binary.BigEndian.Uint16(msgLenBytes[:])
+	msgBytes := make([]byte, msgLen)
+	rn, err = stream.Read(msgBytes[:])
+	if rn != int(msgLen) || err != nil {
+		err0 := fmt.Errorf("error reading response message from peer %s (%s): %w", p2pPeer, stream.Conn().RemoteMultiaddr().String(), err)
+		return peerMetaInfo{}, err0
+	}
+	var responseHeaders peerMetaHeaders
+	_, err = responseHeaders.UnmarshalMsg(msgBytes[:])
+	if err != nil {
+		err0 := fmt.Errorf("error unmarshaling response message from peer %s (%s): %w", p2pPeer, stream.Conn().RemoteMultiaddr().String(), err)
+		return peerMetaInfo{}, err0
+	}
+	headers := peerMetaHeadersToHttpHeaders(responseHeaders)
+	matchingVersion, _ := checkProtocolVersionMatch(headers, n.supportedProtocolVersions)
+	if matchingVersion == "" {
+		err0 := fmt.Errorf("peer %s (%s) does not support any of the supported protocol versions: %v", p2pPeer, stream.Conn().RemoteMultiaddr().String(), n.supportedProtocolVersions)
+		return peerMetaInfo{}, err0
+	}
+	return peerMetaInfo{
+		ti: p2p.TelemetryInfo{
+			ID:       headers.Get(TelemetryIDHeader),
+			Instance: headers.Get(InstanceNameHeader),
+		},
+		version:  matchingVersion,
+		features: headers.Get(PeerFeaturesHeader),
+	}, nil
+}
+
+func (n *P2PNetwork) writePeerMetaHeaders(stream network.Stream, p2pPeer peer.ID, networkProtoVersion string) error {
+	header := make(http.Header)
+	setHeaders(header, networkProtoVersion, n)
+	meta := peerMetaHeadersFromHttpHeaders(header)
+	data := meta.MarshalMsg(nil)
+	length := len(data)
+	if length > math.MaxUint16 {
+		// 64k is enough for everyone
+		// current headers size is TBD
+		stream.Reset()
+		n.log.Panicf("error writing initial message, too large: %v, peer %s (%s)", header, p2pPeer, stream.Conn().RemoteMultiaddr().String())
+	}
+	metaMsg := make([]byte, 2+length)
+	binary.BigEndian.PutUint16(metaMsg, uint16(length))
+	copy(metaMsg[2:], data)
+	_, err := stream.Write(metaMsg)
+	if err != nil {
+		err0 := fmt.Errorf("error sending initial message: %w", err)
+		return err0
+	}
+	return nil
+}
+
+func (n *P2PNetwork) wsStreamHandlerV22(ctx context.Context, p2pPeer peer.ID, stream network.Stream, incoming bool) {
+	if stream.Protocol() != p2p.AlgorandWsProtocolV22 {
+		n.log.Warnf("unknown protocol %s from peer%s", stream.Protocol(), p2pPeer)
+		return
+	}
+
+	var err error
+	var peerMetaInfo peerMetaInfo
+	if incoming {
+		peerMetaInfo, err = n.readPeerMetaHeaders(stream, p2pPeer)
+		if err != nil {
+			n.log.Warnf("wsStreamHandlerV22: error reading peer meta headers response from peer %s (%s): %v", p2pPeer, stream.Conn().RemoteMultiaddr().String(), err)
+			stream.Reset()
+			return
+		}
+		err = n.writePeerMetaHeaders(stream, p2pPeer, peerMetaInfo.version)
+		if err != nil {
+			n.log.Warnf("wsStreamHandlerV22: error writing peer meta headers response to peer %s (%s): %v", p2pPeer, stream.Conn().RemoteMultiaddr().String(), err)
+			stream.Reset()
+			return
+		}
+	} else {
+		err = n.writePeerMetaHeaders(stream, p2pPeer, n.protocolVersion)
+		if err != nil {
+			n.log.Warnf("wsStreamHandlerV22: error writing peer meta headers response to peer %s (%s): %v", p2pPeer, stream.Conn().RemoteMultiaddr().String(), err)
+			stream.Reset()
+			return
+		}
+		// read the response
+		peerMetaInfo, err = n.readPeerMetaHeaders(stream, p2pPeer)
+		if err != nil {
+			n.log.Warnf("wsStreamHandlerV22: error reading peer meta headers response from peer %s (%s): %v", p2pPeer, stream.Conn().RemoteMultiaddr().String(), err)
+			stream.Reset()
+			return
+		}
+	}
+	n.wsStreamHandler(ctx, p2pPeer, stream, incoming, peerMetaInfo)
+}
+
+func (n *P2PNetwork) wsStreamHandler(ctx context.Context, p2pPeer peer.ID, stream network.Stream, incoming bool, pmi peerMetaInfo) {
 	// get address for peer ID
 	ma := stream.Conn().RemoteMultiaddr()
 	addr := ma.String()
@@ -803,17 +1022,15 @@ func (n *P2PNetwork) wsStreamHandler(ctx context.Context, p2pPeer peer.ID, strea
 	}
 	peerCore := makePeerCore(ctx, n, n.log, n.handler.readBuffer, addr, client, addr)
 	wsp := &wsPeer{
-		wsPeerCore: peerCore,
-		conn:       &wsPeerConnP2P{stream: stream},
-		outgoing:   !incoming,
-		identity:   netIdentPeerID,
-		peerType:   peerTypeP2P,
+		wsPeerCore:    peerCore,
+		conn:          &wsPeerConnP2P{stream: stream},
+		outgoing:      !incoming,
+		identity:      netIdentPeerID,
+		peerType:      peerTypeP2P,
+		TelemetryGUID: pmi.ti.ID,
+		InstanceName:  pmi.ti.Instance,
+		features:      decodePeerFeatures(pmi.version, pmi.features),
 	}
-	protos, err := n.pstore.GetProtocols(p2pPeer)
-	if err != nil {
-		n.log.Warnf("Error getting protocols for peer %s: %v", p2pPeer, err)
-	}
-	wsp.TelemetryGUID, wsp.InstanceName = p2p.GetPeerTelemetryInfo(protos)
 
 	localAddr, has := n.Address()
 	if !has {
