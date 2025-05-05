@@ -1032,7 +1032,7 @@ func onlineAccountsNewRoundImpl(
 						prevAcct = updated
 					}
 				} else {
-					if prevAcct.AccountData.IsVotingEmpty() && newAcct.IsVotingEmpty() {
+					if prevAcct.AccountData.IsVotingEmpty() && newStatus != basics.Online {
 						// if both old and new are offline, ignore
 						// otherwise the following could happen:
 						// 1. there are multiple offline account deltas so all of them could be inserted
