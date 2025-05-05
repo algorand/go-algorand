@@ -1066,17 +1066,13 @@ func (p *resourcePopulator) populateResources(groupResourceTracker ResourceTrack
 	for asset := range groupResourceTracker.Assets {
 		groupResources.Assets = append(groupResources.Assets, asset)
 	}
-	slices.SortFunc(groupResources.Assets, func(a, b basics.AssetIndex) int {
-		return cmp.Compare(a, b)
-	})
+	slices.Sort(groupResources.Assets)
 
 	// Sort apps
 	for app := range groupResourceTracker.Apps {
 		groupResources.Apps = append(groupResources.Apps, app)
 	}
-	slices.SortFunc(groupResources.Apps, func(a, b basics.AppIndex) int {
-		return cmp.Compare(a, b)
-	})
+	slices.Sort(groupResources.Apps)
 
 	// Sort accounts
 	for account := range groupResourceTracker.Accounts {
@@ -1086,31 +1082,25 @@ func (p *resourcePopulator) populateResources(groupResourceTracker ResourceTrack
 		return cmp.Compare(a.GetUserAddress(), b.GetUserAddress())
 	})
 
-	// Sort boxes
-	// To sort boxes, we turn the app into a string, concat with the name, and then sort
-	for box := range groupResourceTracker.Boxes {
-		groupResources.Boxes = append(groupResources.Boxes, box)
-	}
+	// Sort boxes by app first and then name
 	slices.SortFunc(groupResources.Boxes, func(a, b logic.BoxRef) int {
-		return cmp.Compare(fmt.Sprintf("%d:%s", a.App, a.Name), fmt.Sprintf("%d:%s", b.App, b.Name))
+		return cmp.Or(cmp.Compare(a.App, b.App), cmp.Compare(a.Name, b.Name))
 	})
 
-	// Sort assets holdings
-	// To sort asset holdings, we turn the asset into a string, concat with the address, and then sort
+	// Sort assets holdings by account first and then asset
 	for holding := range groupResourceTracker.AssetHoldings {
 		groupResources.AssetHoldings = append(groupResources.AssetHoldings, holding)
 	}
 	slices.SortFunc(groupResources.AssetHoldings, func(a, b ledgercore.AccountAsset) int {
-		return cmp.Compare(fmt.Sprintf("%d:%s", a.Asset, a.Address), fmt.Sprintf("%d:%s", b.Asset, b.Address.GetUserAddress()))
+		return cmp.Or(cmp.Compare(a.Address.GetUserAddress(), b.Address.GetUserAddress()), cmp.Compare(a.Asset, b.Asset))
 	})
 
-	// Sort app locals
-	// To sort app locals, we turn the app into a string, concat with the address, and then sort
+	// Sort app locals by account first and then app
 	for local := range groupResourceTracker.AppLocals {
 		groupResources.AppLocals = append(groupResources.AppLocals, local)
 	}
 	slices.SortFunc(groupResources.AppLocals, func(a, b ledgercore.AccountApp) int {
-		return cmp.Compare(fmt.Sprintf("%d:%s", a.App, a.Address), fmt.Sprintf("%d:%s", b.App, b.Address.GetUserAddress()))
+		return cmp.Or(cmp.Compare(a.Address.GetUserAddress(), b.Address.GetUserAddress()), cmp.Compare(a.App, b.App))
 	})
 
 	// First populate resources that HAVE to be assigned to a specific transaction
@@ -1120,18 +1110,14 @@ func (p *resourcePopulator) populateResources(groupResourceTracker ResourceTrack
 		for asset := range tracker.Assets {
 			sortedAssets = append(sortedAssets, asset)
 		}
-		slices.SortFunc(sortedAssets, func(a, b basics.AssetIndex) int {
-			return cmp.Compare(a, b)
-		})
+		slices.Sort(sortedAssets)
 
 		// Sort apps
 		sortedApps := make([]basics.AppIndex, 0, len(tracker.Apps))
 		for app := range tracker.Apps {
 			sortedApps = append(sortedApps, app)
 		}
-		slices.SortFunc(sortedApps, func(a, b basics.AppIndex) int {
-			return cmp.Compare(a, b)
-		})
+		slices.Sort(sortedApps)
 
 		// Sort accounts
 		sortedAccounts := make([]basics.Address, 0, len(tracker.Accounts))
