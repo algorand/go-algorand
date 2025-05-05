@@ -5,10 +5,10 @@ on:
   #   branches: 
   #     - master
   #     - 'rel/**'
-  pull_request:
-    branches:
-      - master
-  workflow_dispatch:
+  # pull_request:
+  #   branches:
+  #     - master
+  # workflow_dispatch:
   issue_comment:
     types: [created]
 
