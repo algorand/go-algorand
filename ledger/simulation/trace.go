@@ -77,6 +77,17 @@ type TxnGroupResult struct {
 	// In that case, it will be a map of resource arrays for each app call in the group.
 	// There may be more resource arrays for txn indexes that go beyond the group length,
 	// which means more app call transactions would be needed for the extra resources.
+	//
+	// For example, a [appl, appl, pay] group that needs three transactions worth of resources:
+	// {
+	//	0: PopulatedResourceArrays,
+	//	1: PopulatedResourceArrays,
+	//	2: nil // nil because txnGroup[2] is a pay
+	//	3: PopulatedResourceArrays // New index not in group indicates that a new appl is needed
+	//	4..15: nil // Everything else is nil
+	// }
+	//
+	// It should be noted that the indices will never exceed the transaction group size limit
 	PopulatedResourceArrays map[int]PopulatedResourceArrays
 }
 
