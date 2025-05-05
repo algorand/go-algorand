@@ -3123,10 +3123,11 @@
           "type": "object",
           "properties": {
             "algo": {
-              "type": "number"
+              "type": "integer",
+              "format" : "uint64"
             },
             "onl": {
-              "type": "number"
+              "type": "integer"
             },
             "sel": {
               "type": "string"
@@ -3138,13 +3139,16 @@
               "type": "string"
             },
             "voteKD": {
-              "type": "number"
+              "type": "integer",
+              "format" : "uint64"
             },
             "voteFst": {
-              "type": "number"
+              "type": "integer",
+              "format" : "uint64"
             },
             "voteLst": {
-              "type": "number"
+              "type": "integer",
+              "format" : "uint64"
             }
           },
           "required": [
@@ -3190,7 +3194,8 @@
           "type": "string"
         },
         "timestamp": {
-          "type": "number"
+          "type": "integer",
+          "format" : "int64"
         }
       },
       "required": [

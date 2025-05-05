@@ -31,7 +31,8 @@ OAPI := go run github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.4.1
 
 # We use Makefile as a dependency here so everythign gets rebuilt when you mess with how things are built.
 algod.oas3.yml:	algod.oas2.json Makefile
-	jq < $< > /dev/null	# fail with a nice explantion if json is malformed
+	jq < $< > /dev/null  # fail with a nice explantion if json is malformed
+	! grep '"type": "number"' $<  # Don't use the number type. Use integer (and format uint64 usually)
 	curl -s -X POST "$(SWAGGER_CONVERTER_API)/api/convert" -H "accept: application/json" -H "Content-Type: application/json" -d @./$< -o .3tmp.json
 	python3 jsoncanon.py < .3tmp.json > $@
 	rm -f .3tmp.json
