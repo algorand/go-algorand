@@ -1087,6 +1087,9 @@ func (p *resourcePopulator) populateResources(groupResourceTracker ResourceTrack
 	})
 
 	// Sort boxes by app first and then name
+	for box := range groupResourceTracker.Boxes {
+		groupResources.Boxes = append(groupResources.Boxes, box)
+	}
 	slices.SortFunc(groupResources.Boxes, func(a, b logic.BoxRef) int {
 		// NOTE: We intentionally sort in reverse order for apps so appID 0 is last since they can go anywhere
 		return cmp.Or(cmp.Compare(b.App, a.App), cmp.Compare(a.Name, b.Name))
