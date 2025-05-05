@@ -32,6 +32,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merklesignature"
 	"github.com/algorand/go-algorand/data/basics"
+	basics_testing "github.com/algorand/go-algorand/data/basics/testing"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -849,8 +850,8 @@ func TestDoubleLedgerGetKnockoffCandidates(t *testing.T) {
 		for addr, ad := range genBalances.Balances {
 			if ad.Status == basics.Online {
 				onlineCnt++
-				genesisOnlineAccts[addr] = ad.OnlineAccountData()
-				afterPayTxnOnlineAccts[addr] = ad.OnlineAccountData()
+				genesisOnlineAccts[addr] = basics_testing.OnlineAccountData(ad)
+				afterPayTxnOnlineAccts[addr] = basics_testing.OnlineAccountData(ad)
 			}
 		}
 

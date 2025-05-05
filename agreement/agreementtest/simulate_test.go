@@ -207,7 +207,7 @@ func (l *testLedger) LookupAgreement(r basics.Round, a basics.Address) (basics.O
 		err := fmt.Errorf("Lookup called on future round: %v > %v! (this is probably a bug)", r, l.nextRound)
 		panic(err)
 	}
-	return l.state[a].OnlineAccountData(), nil
+	return basics_testing.OnlineAccountData(l.state[a]), nil
 }
 
 func (l *testLedger) Circulation(r basics.Round, voteRnd basics.Round) (basics.MicroAlgos, error) {
@@ -222,7 +222,7 @@ func (l *testLedger) Circulation(r basics.Round, voteRnd basics.Round) (basics.M
 	var sum basics.MicroAlgos
 	var overflowed bool
 	for _, rec := range l.state {
-		sum, overflowed = basics.OAddA(sum, rec.OnlineAccountData().VotingStake())
+		sum, overflowed = basics.OAddA(sum, basics_testing.OnlineAccountData(rec).VotingStake())
 		if overflowed {
 			panic("circulation computation overflowed")
 		}
