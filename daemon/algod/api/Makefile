@@ -33,7 +33,8 @@ server/v2/generated/model/types.go:	algod.oas3.yml
 	$(GOPATH1)/bin/oapi-codegen -config ./server/v2/generated/model/model_types.yml algod.oas3.yml
 
 algod.oas3.yml:	algod.oas2.json
-	jq < algod.oas2.json > /dev/null	# fail with a nice explantion if json is malformed
+	jq < algod.oas2.json > /dev/null    # fail with a nice explantion if json is malformed
+	! grep '"type": "number"' $<	    # Don't use the number type. Use integer (and format uint64 usually)
 	curl -s -X POST "$(SWAGGER_CONVERTER_API)/api/convert" -H "accept: application/json" -H "Content-Type: application/json" -d @./algod.oas2.json -o .3tmp.json
 	python3 jsoncanon.py < .3tmp.json > algod.oas3.yml
 	rm -f .3tmp.json

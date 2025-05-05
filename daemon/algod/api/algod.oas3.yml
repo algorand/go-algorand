@@ -2087,7 +2087,8 @@
             "type": "string"
           },
           "timestamp": {
-            "type": "number"
+            "format": "int64",
+            "type": "integer"
           }
         },
         "required": [
@@ -2113,10 +2114,11 @@
           "state": {
             "properties": {
               "algo": {
-                "type": "number"
+                "format": "uint64",
+                "type": "integer"
               },
               "onl": {
-                "type": "number"
+                "type": "integer"
               },
               "sel": {
                 "type": "string"
@@ -2128,13 +2130,16 @@
                 "type": "string"
               },
               "voteFst": {
-                "type": "number"
+                "format": "uint64",
+                "type": "integer"
               },
               "voteKD": {
-                "type": "number"
+                "format": "uint64",
+                "type": "integer"
               },
               "voteLst": {
-                "type": "number"
+                "format": "uint64",
+                "type": "integer"
               }
             },
             "required": [
