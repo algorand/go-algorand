@@ -21,9 +21,9 @@ env:
   ALGOTEST: 1
 
 # Allow one concurrent run per platform/test combination
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event.issue.number || github.ref }}-${{ matrix.platform }}-${{ matrix.test_type }}
-  cancel-in-progress: true
+# concurrency:
+#   group: ${{ github.workflow }}-${{ github.event.issue.number || github.ref }}-${{ matrix.platform }}-${{ matrix.test_type }}
+#   cancel-in-progress: true
   
 permissions:
   pull-requests: read  # Only need to read comments
