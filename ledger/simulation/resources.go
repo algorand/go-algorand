@@ -954,6 +954,7 @@ func (p *resourcePopulator) addBox(app basics.AppIndex, name string) error {
 	var err error
 
 	// First try to find txn with app already available
+	// If the app ID is zero the box ref can go anywhere, so we just put it in the first available app
 	for _, i := range p.appCallIndexes {
 		if app == basics.AppIndex(0) || p.txnResources[i].hasApp(app) {
 			err = p.txnResources[i].addBox(app, name)
@@ -961,6 +962,12 @@ func (p *resourcePopulator) addBox(app basics.AppIndex, name string) error {
 				return nil
 			}
 		}
+	}
+
+	// If we have gotten to this point and the App ID is 0, then we know there is no where it can go
+	// The next loop will try to add the app reference, which is nonsensical for 0
+	if app == basics.AppIndex(0) {
+		return err
 	}
 
 	// Then try to find txn with room for both app and box
@@ -1081,7 +1088,8 @@ func (p *resourcePopulator) populateResources(groupResourceTracker ResourceTrack
 
 	// Sort boxes by app first and then name
 	slices.SortFunc(groupResources.Boxes, func(a, b logic.BoxRef) int {
-		return cmp.Or(cmp.Compare(a.App, b.App), cmp.Compare(a.Name, b.Name))
+		// NOTE: We intentionally sort in reverse order for apps so appID 0 is last since they can go anywhere
+		return cmp.Or(cmp.Compare(b.App, a.App), cmp.Compare(a.Name, b.Name))
 	})
 
 	// Sort assets holdings by account first and then asset
