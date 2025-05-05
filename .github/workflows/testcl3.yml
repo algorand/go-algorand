@@ -5,10 +5,9 @@ on:
   #   branches: 
   #     - master
   #     - 'rel/**'
-  # pull_request:
-  #   branches:
-  #     - master
-  #     - 'rel/**'
+  pull_request:
+    branches:
+      - master
   workflow_dispatch:
   issue_comment:
     types: [created]
@@ -21,9 +20,9 @@ env:
   ALGOTEST: 1
 
 # Allow one concurrent run per platform/test combination
-# concurrency:
-#   group: ${{ github.workflow }}-${{ github.event.issue.number || github.ref }}-${{ matrix.platform }}-${{ matrix.test_type }}
-#   cancel-in-progress: true
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.issue.number || github.ref }}-${{ matrix.platform }}-${{ matrix.test_type }}
+  cancel-in-progress: true
   
 permissions:
   pull-requests: read  # Only need to read comments
@@ -62,6 +61,12 @@ jobs:
             echo "Comment does not match pattern"
             echo "should_run=false" >> $GITHUB_OUTPUT
           fi
+      - id: debug
+        run: |
+          echo "Received comment: $COMMENT"
+          echo "Should run: ${{ steps.check.outputs.should_run }}"
+          echo "Platform: ${{ steps.check.outputs.platform }}"
+          echo "Test type: ${{ steps.check.outputs.test_type }}"
 
   # Build job - runs before tests
   build:
