@@ -566,18 +566,10 @@ func convertSimulateInitialStates(initialStates *simulation.ResourcesInitialStat
 
 // Convert the resources to the model structs
 func convertPopulatedResourceArrays(populatedResources simulation.PopulatedResourceArrays) *model.ResourceArrays {
-	accounts := make([]string, len(populatedResources.Accounts))
-	for i, account := range populatedResources.Accounts {
-		accounts[i] = account.String()
-	}
-	assets := make([]uint64, len(populatedResources.Assets))
-	for i, asset := range populatedResources.Assets {
-		assets[i] = uint64(asset)
-	}
-	apps := make([]uint64, len(populatedResources.Apps))
-	for i, app := range populatedResources.Apps {
-		apps[i] = uint64(app)
-	}
+	accounts := stringSlice(populatedResources.Accounts)
+	assets := uint64Slice(populatedResources.Assets)
+	apps := uint64Slice(populatedResources.Apps)
+
 	boxes := make([]model.BoxReference, len(populatedResources.Boxes))
 	for i, box := range populatedResources.Boxes {
 		boxes[i] = model.BoxReference{
