@@ -984,7 +984,7 @@ func (p *resourcePopulator) addBox(app basics.AppIndex, name string) error {
 func (p *resourcePopulator) addHolding(addr basics.Address, aid basics.AssetIndex) error {
 	var err error
 
-	// First try to find txn with account already available
+	// First try to find txn with account already available that can also accommodate the asset.
 	for _, i := range p.appCallIndexes {
 		if p.txnResources[i].hasAccount(addr) {
 			err = p.txnResources[i].addAsset(aid)
@@ -994,7 +994,7 @@ func (p *resourcePopulator) addHolding(addr basics.Address, aid basics.AssetInde
 		}
 	}
 
-	// Then try to find txn with asset already available
+	// Then try to find txn with asset already available that can also accommodate the account.
 	for _, i := range p.appCallIndexes {
 		if p.txnResources[i].hasAsset(aid) {
 			err = p.txnResources[i].addAccount(addr)
@@ -1018,7 +1018,7 @@ func (p *resourcePopulator) addHolding(addr basics.Address, aid basics.AssetInde
 func (p *resourcePopulator) addLocal(addr basics.Address, aid basics.AppIndex) error {
 	var err error
 
-	// First try to find txn with account already available
+	// First try to find txn with account already available	that can also accommodate the app.
 	for _, i := range p.appCallIndexes {
 		if p.txnResources[i].hasAccount(addr) {
 			err = p.txnResources[i].addApp(aid)
@@ -1028,7 +1028,7 @@ func (p *resourcePopulator) addLocal(addr basics.Address, aid basics.AppIndex) e
 		}
 	}
 
-	// Then try to find txn with app already available
+	// Then try to find txn with app already available that can also accommodate the account.
 	for _, i := range p.appCallIndexes {
 		if p.txnResources[i].hasApp(aid) {
 			err = p.txnResources[i].addAccount(addr)
