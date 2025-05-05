@@ -889,8 +889,6 @@ func (p *resourcePopulator) addTransaction(txn transactions.Transaction, groupIn
 }
 
 func (p *resourcePopulator) addAccount(addr basics.Address) error {
-	var err error
-
 	// If another txn has the account, do nothing
 	// This should never happen because the logic in EvalContext should
 	// prevent duplicate resources in the tracker, but we check here just to be safe
@@ -900,6 +898,7 @@ func (p *resourcePopulator) addAccount(addr basics.Address) error {
 		}
 	}
 
+	var err error
 	for _, i := range p.appCallIndexes {
 		err = p.txnResources[i].addAccount(addr)
 		if err == nil {
@@ -911,8 +910,6 @@ func (p *resourcePopulator) addAccount(addr basics.Address) error {
 }
 
 func (p *resourcePopulator) addAsset(asset basics.AssetIndex) error {
-	var err error
-
 	// If another txn has the asset, do nothing
 	// This should never happen because the logic in EvalContext should
 	// prevent duplicate resources in the tracker, but we check here just to be safe
@@ -922,6 +919,7 @@ func (p *resourcePopulator) addAsset(asset basics.AssetIndex) error {
 		}
 	}
 
+	var err error
 	for _, i := range p.appCallIndexes {
 		err = p.txnResources[i].addAsset(asset)
 		if err == nil {
@@ -933,8 +931,6 @@ func (p *resourcePopulator) addAsset(asset basics.AssetIndex) error {
 }
 
 func (p *resourcePopulator) addApp(app basics.AppIndex) error {
-	var err error
-
 	// If another txn has the app, do nothing
 	// This should never happen because the logic in EvalContext should
 	// prevent duplicate resources in the tracker, but we check here just to be safe
@@ -944,6 +940,7 @@ func (p *resourcePopulator) addApp(app basics.AppIndex) error {
 		}
 	}
 
+	var err error
 	for _, i := range p.appCallIndexes {
 		err = p.txnResources[i].addApp(app)
 		if err == nil {
