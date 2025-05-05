@@ -679,7 +679,7 @@ type GenesisAllocation struct {
 	Comment string `json:"comment"`
 	State   struct {
 		Algo    uint64  `json:"algo"`
-		Onl     *int    `json:"onl,omitempty"`
+		Onl     int     `json:"onl"`
 		Sel     *string `json:"sel,omitempty"`
 		Stprf   *string `json:"stprf,omitempty"`
 		Vote    *string `json:"vote,omitempty"`

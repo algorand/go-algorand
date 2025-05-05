@@ -3152,7 +3152,8 @@
             }
           },
           "required": [
-            "algo"
+            "algo",
+            "onl"
           ]
         }
       },
