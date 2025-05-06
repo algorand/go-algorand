@@ -36,7 +36,7 @@ const telemetryPrefix = "/"
 const telemetrySeparator = "/"
 const logBufferDepth = 2
 
-// EnableTelemetry configures and enables telemetry based on the config provided
+// EnableTelemetryContext configures and enables telemetry based on the config provided
 func EnableTelemetryContext(ctx context.Context, cfg TelemetryConfig, l *logger) (err error) {
 	telemetry, err := makeTelemetryStateContext(ctx, cfg, createElasticHookContext)
 	if err != nil {
