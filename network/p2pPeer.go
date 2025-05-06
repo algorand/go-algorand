@@ -76,7 +76,7 @@ func (c *wsPeerConnP2P) CloseWithMessage([]byte, time.Time) error {
 func (c *wsPeerConnP2P) SetReadLimit(int64) {}
 
 func (c *wsPeerConnP2P) CloseWithoutFlush() (err error) {
-	err = c.stream.Close()
+	err = c.stream.Reset()
 	defer func() {
 		err0 := c.stream.Conn().Close()
 		if err == nil {
