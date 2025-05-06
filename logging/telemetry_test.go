@@ -293,13 +293,9 @@ func runLogLevelsTest(t *testing.T, minLevel logrus.Level, expected int) {
 	// f.l.Fatal("fatal") - can't call this - it will os.Exit()
 
 	// Protect the call to log.Panic as we don't really want to crash
-	func() {
-		defer func() {
-			if r := recover(); r != nil {
-			}
-		}()
+	require.Panics(t, func() {
 		f.l.Panic("panic")
-	}()
+	})
 
 	// See if we got the expected number of entries
 	a.Equal(expected, len(f.hookEntries()))
@@ -321,13 +317,9 @@ func TestLogHistoryLevels(t *testing.T) {
 	f.l.Error("error")
 	// f.l.Fatal("fatal") - can't call this - it will os.Exit()
 	// Protect the call to log.Panic as we don't really want to crash
-	func() {
-		defer func() {
-			if r := recover(); r != nil {
-			}
-		}()
+	require.Panics(t, func() {
 		f.l.Panic("panic")
-	}()
+	})
 
 	data := f.hookData()
 	a.Nil(data[0]["log"]) // Debug

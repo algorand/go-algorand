@@ -45,10 +45,6 @@ type msgpMarshalUnmarshal interface {
 var rawMsgpType = reflect.TypeOf(msgp.Raw{})
 var errSkipRawMsgpTesting = fmt.Errorf("skipping msgp.Raw serializing, since it won't be the same across go-codec and msgp")
 
-func oneOf(n int) bool {
-	return (rand.Int() % n) == 0
-}
-
 type randomizeObjectCfg struct {
 	// ZeroesEveryN will increase the chance of zero values being generated.
 	ZeroesEveryN int

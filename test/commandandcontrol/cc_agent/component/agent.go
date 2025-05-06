@@ -96,7 +96,6 @@ type Command struct {
 	options string
 	time    int64
 	status  CommandStatus
-	err     error
 }
 
 var hostAgent = NewAgent()

@@ -160,11 +160,6 @@ func debugRemote() {
 }
 
 func debugLocal(args []string) {
-	// simple pre-invalidation
-	if roundNumber < 0 {
-		log.Fatalln("Invalid round")
-	}
-
 	// local debugging works in two modes:
 	// - listening for upcoming Dryrun Requests
 	// - or taking program, transaction or Dryrun Request from command line

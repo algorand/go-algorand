@@ -15,10 +15,10 @@ linters:
     - misspell
     - nilerr
     - nolintlint
+    - paralleltest
     - revive
     - staticcheck
     - typecheck
-    - paralleltest
     - unused
 
 severity:
@@ -124,6 +124,8 @@ issues:
       linters: unused
     - path: tools/
       linters: unused
+    - path: daemon/kmd/lib/kmdapi/
+      linters: unused
     - path: _test\.go
       linters:
         - errcheck
@@ -142,6 +144,9 @@ issues:
       linters:
         - staticcheck
       text: "SA4006: this value" # of X is never used
+    - linters:
+        - staticcheck
+      text: "(SA3001|SA1019):"
     - path: _test\.go
       linters:
         - revive

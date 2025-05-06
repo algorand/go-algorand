@@ -63,12 +63,10 @@ type WalletServerConfig struct {
 // WalletServer deals with serving API requests
 type WalletServer struct {
 	WalletServerConfig
-	netPath      string
-	pidPath      string
-	lockPath     string
-	fileLock     *flock.Flock
-	sockPath     string
-	tmpSocketDir string
+	netPath  string
+	pidPath  string
+	lockPath string
+	fileLock *flock.Flock
 
 	// This mutex protects shutdown, which lets us know if we died unexpectedly
 	// or as a result of being killed
