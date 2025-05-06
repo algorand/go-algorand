@@ -29,7 +29,7 @@ permissions:
   contents: read
 
 jobs:
-  example_matrix:
+  build:
     strategy:
       matrix:
         platform: [ubuntu-24.04, ubuntu-24.04-arm, macos-14]
@@ -65,7 +65,7 @@ jobs:
       uses: actions/cache@v4
       with:
         path: crypto/libs
-        key: libsodium-${{ runner.os }}-${{ hashFiles('crypto/libsodium-fork/**') }}
+        key: libsodium-${{ matrix.platform }}-${{ hashFiles('crypto/libsodium-fork/**') }}
 
     - name: Build
       run: |
@@ -82,9 +82,11 @@ jobs:
 
   # Test jobs that run in parallel splits
   test_nightly:
+    needs: [build]
     strategy:
       fail-fast: false
       matrix:
+        platform: [${{ needs.strategy.matrix.platform }}]
         partition_id: [0, 1]
     runs-on: ${{ matrix.platform }}
     env:
