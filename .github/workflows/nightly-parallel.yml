@@ -47,11 +47,6 @@ jobs:
       id: go_version
       run: echo "GO_VERSION=$(./scripts/get_golang_version.sh)" >> $GITHUB_ENV
 
-    - name: Set up Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: ${{ env.GO_VERSION }}
-
     - name: Cache Go modules
       uses: actions/cache@v4
       with:
@@ -61,6 +56,11 @@ jobs:
         key: ${{ matrix.platform }}-go-${{ hashFiles('**/go.sum') }}
         restore-keys: |
           ${{ matrix.platform }}-go-${{ hashFiles('**/go.sum') }}
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
 
     - name: Cache libsodium
       uses: actions/cache@v4
@@ -74,14 +74,14 @@ jobs:
 
     - name: Create workspace archive
       run: |
-        tar -czf workspace-${{ matrix.platform }}.tar.gz .
+        tar -czf /tmp/workspace-${{ matrix.platform }}.tar.gz .
       shell: bash
 
     - name: Upload workspace archive
       uses: actions/upload-artifact@v4
       with:
         name: workspace-${{ matrix.platform }}-${{ github.run_id }}
-        path: workspace-${{ matrix.platform }}.tar.gz
+        path: /tmp/workspace-${{ matrix.platform }}.tar.gz
         retention-days: 1
 
   # Test jobs that run in parallel splits
@@ -102,10 +102,10 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: workspace-${{ matrix.platform }}-${{ github.run_id }}
-          path: .
+          path: /tmp/workspace-${{ matrix.platform }}.tar.gz
       - name: Extract workspace archive
         run: |
-          tar -xzf workspace-${{ matrix.platform }}.tar.gz
+          tar -xzf /tmp/workspace-${{ matrix.platform }}.tar.gz
         shell: bash
       - name: Run tests
         run: |
