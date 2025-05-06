@@ -106,7 +106,7 @@ func TestP2PSubmitTX(t *testing.T) {
 	)
 	require.Eventually(t, func() bool {
 		return netA.hasPeers() && netB.hasPeers() && netC.hasPeers()
-	}, 2*time.Second, 50*time.Millisecond)
+	}, 5*time.Second, 50*time.Millisecond)
 
 	// for some reason the above check is not enough in race builds on CI
 	time.Sleep(time.Second) // give time for peers to connect.
@@ -199,7 +199,7 @@ func TestP2PSubmitTXNoGossip(t *testing.T) {
 
 	require.Eventually(t, func() bool {
 		return netA.hasPeers() && netB.hasPeers() && netC.hasPeers()
-	}, 2*time.Second, 50*time.Millisecond)
+	}, 5*time.Second, 50*time.Millisecond)
 
 	time.Sleep(time.Second) // give time for peers to connect.
 
@@ -282,7 +282,7 @@ func TestP2PSubmitWS(t *testing.T) {
 
 	require.Eventually(t, func() bool {
 		return netA.hasPeers() && netB.hasPeers() && netC.hasPeers()
-	}, 2*time.Second, 50*time.Millisecond)
+	}, 5*time.Second, 50*time.Millisecond)
 
 	time.Sleep(time.Second) // give time for peers to connect.
 

@@ -23,6 +23,7 @@ import (
 
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-deadlock"
+	"github.com/libp2p/go-libp2p/core/event"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -111,59 +112,61 @@ func (n *streamManager) dispatch(ctx context.Context, remotePeer peer.ID, stream
 // Connected is called when a connection is opened
 // for both incoming (listener -> addConn) and outgoing (dialer -> addConn) connections.
 func (n *streamManager) Connected(net network.Network, conn network.Conn) {
-	if conn.Stat().Direction == network.DirInbound && !n.allowIncomingGossip {
-		n.log.Debugf("ignoring incoming connection from %s", conn.RemotePeer().String())
-		return
-	}
+}
 
-	remotePeer := conn.RemotePeer()
-	localPeer := n.host.ID()
-
-	// ensure that only one of the peers initiates the stream
-	if localPeer > remotePeer {
-		return
-	}
-
-	needUnlock := true
-	n.streamsLock.Lock()
-	defer func() {
-		if needUnlock {
-			n.streamsLock.Unlock()
+func (n *streamManager) peerWatcher(ctx context.Context, sub event.Subscription) {
+	defer sub.Close()
+	for e := range sub.Out() {
+		evt := e.(event.EvtPeerIdentificationCompleted)
+		conn := evt.Conn
+		if conn.Stat().Direction == network.DirInbound && !n.allowIncomingGossip {
+			n.log.Debugf("ignoring incoming connection from %s", conn.RemotePeer().String())
+			continue
 		}
-	}()
-	_, ok := n.streams[remotePeer]
-	if ok {
-		return // there's already an active stream with this peer for our protocol
-	}
 
-	protos, err := n.host.Peerstore().GetProtocols(remotePeer)
-	if err != nil {
-		n.log.Infof("Failed to get protocols for %s (%s): %v", remotePeer, conn.RemoteMultiaddr().String(), err)
-		return
-	}
-	var targetProto protocol.ID = AlgorandWsProtocolV1
-	if slices.Contains(protos, AlgorandWsProtocolV22) {
-		targetProto = AlgorandWsProtocolV22
-	}
+		remotePeer := conn.RemotePeer()
+		localPeer := n.host.ID()
 
-	stream, err := n.host.NewStream(n.ctx, remotePeer, targetProto)
-	if err != nil {
-		n.log.Infof("Failed to open stream to %s (%s): %v", remotePeer, conn.RemoteMultiaddr().String(), err)
-		return
-	}
-	n.streams[remotePeer] = stream
+		// ensure that only one of the peers initiates the stream
+		if localPeer > remotePeer {
+			return
+		}
 
-	// release the lock to let handler do its thing
-	// otherwise reading/writing to the stream will deadlock
-	needUnlock = false
-	n.streamsLock.Unlock()
+		n.streamsLock.Lock()
+		_, ok := n.streams[remotePeer]
+		if ok {
+			n.streamsLock.Unlock()
+			return // there's already an active stream with this peer for our protocol
+		}
 
-	incoming := stream.Conn().Stat().Direction == network.DirInbound
-	if handler, ok := n.handlers[targetProto]; ok {
-		handler(n.ctx, remotePeer, stream, incoming)
-	} else {
-		n.log.Errorf("No handler for protocol %s, peer %s", targetProto, remotePeer)
-		_ = stream.Reset()
+		protos := evt.Protocols
+		var targetProto protocol.ID = AlgorandWsProtocolV1
+		if slices.Contains(protos, AlgorandWsProtocolV22) {
+			targetProto = AlgorandWsProtocolV22
+		}
+
+		stream, err := n.host.NewStream(n.ctx, remotePeer, targetProto)
+		if err != nil {
+			n.log.Infof("Failed to open stream to %s (%s): %v", remotePeer, conn.RemoteMultiaddr().String(), err)
+			n.streamsLock.Unlock()
+			return
+		}
+		n.streams[remotePeer] = stream
+		n.streamsLock.Unlock()
+
+		incoming := stream.Conn().Stat().Direction == network.DirInbound
+		if handler, ok := n.handlers[targetProto]; ok {
+			handler(n.ctx, remotePeer, stream, incoming)
+		} else {
+			n.log.Errorf("No handler for protocol %s, peer %s", targetProto, remotePeer)
+			_ = stream.Reset()
+		}
+
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
 	}
 }
 

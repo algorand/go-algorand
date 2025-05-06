@@ -37,6 +37,7 @@ import (
 	"github.com/libp2p/go-libp2p"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/crypto"
+	"github.com/libp2p/go-libp2p/core/event"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -198,7 +199,14 @@ type StreamHandlerMap map[protocol.ID]StreamHandler
 func MakeService(ctx context.Context, log logging.Logger, cfg config.Local, h host.Host, listenAddr string, wsStreamHandlers StreamHandlerMap, metricsTracer pubsub.RawTracer, ti TelemetryInfo) (*serviceImpl, error) {
 
 	sm := makeStreamManager(ctx, log, h, wsStreamHandlers, cfg.EnableGossipService)
+	sub, err := h.EventBus().Subscribe(new(event.EvtPeerIdentificationCompleted))
+	if err != nil {
+		err0 := fmt.Errorf("Failed to subscribe to peer identification events: %v", err)
+		return nil, err0
+	}
+	go sm.peerWatcher(ctx, sub)
 	h.Network().Notify(sm)
+
 	for protoID := range wsStreamHandlers {
 		h.SetStreamHandler(protoID, sm.streamHandler)
 	}
