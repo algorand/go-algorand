@@ -42,32 +42,26 @@ jobs:
       uses: actions/checkout@v4
       with:
         fetch-depth: 0
-    
     - name: Get Go version
       id: go_version
       run: echo "GO_VERSION=$(./scripts/get_golang_version.sh)" >> $GITHUB_ENV
-
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
         go-version: ${{ env.GO_VERSION }}
         cache: true
-
     - name: Cache libsodium
       uses: actions/cache@v4
       with:
         path: crypto/libs
         key: libsodium-${{ matrix.platform }}-${{ hashFiles('crypto/libsodium-fork/**') }}
-
     - name: Build
       run: |
         scripts/travis/build.sh --make_debug
-
     - name: Create workspace archive
       run: |
         tar -czf /tmp/workspace-${{ matrix.platform }}.tar.gz .
       shell: bash
-
     - name: Upload workspace archive
       uses: actions/upload-artifact@v4
       with:
@@ -83,11 +77,11 @@ jobs:
       matrix:
         # platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-14"]
         platform: ["ubuntu-24.04"]
-        partition_id: [0, 1]
+        partition_id: [1, 2, 3, 4, 5, 6, 7, 8] # do not zero index
     runs-on: ${{ matrix.platform }}
     env:
       PARTITION_ID: ${{ matrix.partition_id }}
-      PARTITION_TOTAL: 2
+      PARTITION_TOTAL: 8
     steps:
       - name: Download workspace archive
         uses: actions/download-artifact@v4
@@ -123,13 +117,12 @@ jobs:
             -- --tags "sqlite_unlock_notify sqlite_omit_load_extension" \
             -race -timeout 1h -coverprofile=coverage.txt -covermode=atomic -p 1 \
             $PACKAGE_NAMES
-
-  #     - name: Upload test results
-  #       uses: actions/upload-artifact@v4
-  #       with:
-  #         name: test-results-${{ matrix.platform }}-${{ matrix.partition_id }}
-  #         path: test_results
-  #         retention-days: 7
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.platform }}-${{ matrix.partition_id }}
+          path: test_results
+          retention-days: 7
 
   #     # - name: Upload coverage
   #     #   uses: codecov/codecov-action@v4
