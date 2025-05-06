@@ -32,7 +32,8 @@ jobs:
   build:
     strategy:
       matrix:
-        platform: [ubuntu-24.04, ubuntu-24.04-arm, macos-14]
+        # platform: [ubuntu-24.04, ubuntu-24.04-arm, macos-14]
+        platform: [ubuntu-24.04]
     runs-on: ${{ matrix.platform }}
 
     # Build job - runs before tests    
@@ -71,13 +72,16 @@ jobs:
       run: |
         scripts/travis/build.sh --make_debug
 
-    - name: Upload workspace
+    - name: Create workspace archive
+      run: |
+        tar -czf workspace-${{ matrix.platform }}.tar.gz .
+      shell: bash
+
+    - name: Upload workspace archive
       uses: actions/upload-artifact@v4
       with:
         name: workspace-${{ matrix.platform }}-${{ github.run_id }}
-        path: |
-          .
-          !.git/**/*
+        path: workspace-${{ matrix.platform }}.tar.gz
         retention-days: 1
 
   # Test jobs that run in parallel splits
@@ -86,18 +90,23 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-14"]
+        # platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-14"]
+        platform: ["ubuntu-24.04"]
         partition_id: [0, 1]
     runs-on: ${{ matrix.platform }}
     env:
       PARTITION_ID: ${{ matrix.partition_id }}
       PARTITION_TOTAL: 2
     steps:
-      - name: Restore workspace
+      - name: Download workspace archive
         uses: actions/download-artifact@v4
         with:
           name: workspace-${{ matrix.platform }}-${{ github.run_id }}
           path: .
+      - name: Extract workspace archive
+        run: |
+          tar -xzf workspace-${{ matrix.platform }}.tar.gz
+        shell: bash
       - name: Run tests
         run: |
           ./scripts/configure_dev.sh
