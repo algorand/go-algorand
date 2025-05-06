@@ -166,9 +166,7 @@ func (txs *TxService) getFilteredTxns(bloom *bloom.Filter) (txns []transactions.
 			if encodedLength+txGroupLength > txs.responseSizeLimit {
 				break
 			}
-			for _, tx := range txgroup {
-				missingTxns = append(missingTxns, tx)
-			}
+			missingTxns = append(missingTxns, txgroup...)
 			encodedLength += txGroupLength
 		}
 	}

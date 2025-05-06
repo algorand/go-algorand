@@ -1015,7 +1015,6 @@ var readStateAppCmd = &cobra.Command{
 		}
 
 		// Should be unreachable
-		return
 	},
 }
 

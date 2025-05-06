@@ -20,11 +20,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/algorand/go-algorand/logging"
 	"github.com/spf13/cobra"
 )
-
-var log = logging.Base()
 
 var rootCmd = &cobra.Command{
 	Use:   "pingpong",

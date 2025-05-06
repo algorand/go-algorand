@@ -78,7 +78,6 @@ type appInteractDatum interface {
 }
 
 func helpList(help map[string]appInteractDatum) string {
-	var names []string
 	largestName := 0
 	largestKind := 0
 	for k, v := range help {
@@ -91,7 +90,6 @@ func helpList(help map[string]appInteractDatum) string {
 		if len(v.kind()) > largestKind {
 			largestKind = len(v.kind())
 		}
-		names = append(names, k)
 	}
 
 	namesize := "%-" + fmt.Sprintf("%d", largestName+3) + "s"

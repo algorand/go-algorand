@@ -345,7 +345,7 @@ func (r *testResolver) updateDNSKeyRecord(zone string, key *dns.DNSKEY, sk crypt
 		ok := false
 		for _, ds := range dss {
 			newDS := key.ToDS(ds.DigestType)
-			if strings.ToLower(newDS.Digest) == strings.ToLower(ds.Digest) {
+			if strings.EqualFold(newDS.Digest, ds.Digest) {
 				ok = true
 				break
 			}

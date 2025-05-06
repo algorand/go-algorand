@@ -1891,8 +1891,6 @@ var errNetworkClosing = errors.New("WebsocketNetwork shutting down")
 
 var errBcastCallerCancel = errors.New("caller cancelled broadcast")
 
-var errBcastInvalidArray = errors.New("invalid broadcast array")
-
 var errBcastQFull = errors.New("broadcast queue full")
 
 // tryConnectReserveAddr synchronously checks that addr is not already being connected to, returns (websocket URL or "", true if connection may proceed)
