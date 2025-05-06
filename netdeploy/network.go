@@ -346,7 +346,7 @@ func (n Network) getRelayAddress(nc nodecontrol.NodeController) (relayAddress st
 	for i := 1; ; i++ {
 		relayAddress, err = nc.GetListeningAddress()
 		if err == nil {
-			return
+			return relayAddress, nil
 		}
 		if i <= maxGetRelayAddressRetry {
 			time.Sleep(100 * time.Millisecond)

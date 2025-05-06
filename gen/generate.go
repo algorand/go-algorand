@@ -414,7 +414,7 @@ func loadRootKey(filename string) (root account.Root, rootDB db.Accessor, err er
 
 	root, err = account.RestoreRoot(rootDB)
 	if err == nil {
-		return
+		return //nolint:nilerr // intentional
 	}
 
 	err = fmt.Errorf("could not restore existing root file %s: %v", filename, err)
@@ -436,7 +436,7 @@ func loadPartKeys(filename string) (part account.PersistedParticipation, partDB 
 
 	part, err = account.RestoreParticipation(partDB)
 	if err == nil {
-		return
+		return //nolint:nilerr // intentional
 	}
 
 	// Don't override 'unsupported schema' error

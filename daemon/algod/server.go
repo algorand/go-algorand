@@ -294,7 +294,7 @@ func makeListener(addr string) (net.Listener, error) {
 		preferredAddr := strings.Replace(addr, ":0", ":8080", -1)
 		listener, err = net.Listen("tcp", preferredAddr)
 		if err == nil {
-			return listener, err
+			return listener, nil
 		}
 	}
 	// err was not nil or :0 was not provided, fall back to originally passed addr
