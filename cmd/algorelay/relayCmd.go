@@ -44,7 +44,6 @@ var (
 )
 
 var nameRecordTypes = []string{"A", "CNAME", "SRV"}
-var srvRecordTypes = []string{"SRV"}
 
 const metricsPort = uint16(9100)
 

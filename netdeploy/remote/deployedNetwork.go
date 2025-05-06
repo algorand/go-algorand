@@ -494,16 +494,6 @@ func (cfg DeployedNetwork) GenerateDatabaseFiles(fileCfgs BootstrappedNetwork, g
 	return nil
 }
 
-func getGenesisAlloc(name string, allocation []bookkeeping.GenesisAllocation) bookkeeping.GenesisAllocation {
-	name = strings.ToLower(name)
-	for _, alloc := range allocation {
-		if strings.ToLower(alloc.Comment) == name {
-			return alloc
-		}
-	}
-	return bookkeeping.GenesisAllocation{}
-}
-
 // deterministicKeypair returns a key based on the provided index
 func deterministicKeypair(i uint64) *crypto.SignatureSecrets {
 	var seed crypto.Seed

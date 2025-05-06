@@ -64,7 +64,6 @@ type localLedger struct {
 	groupIndex      int
 	round           uint64
 	aidx            basics.AppIndex
-	latestTimestamp int64
 }
 
 func makeBalancesAdapter(

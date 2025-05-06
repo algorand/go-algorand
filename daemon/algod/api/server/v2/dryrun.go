@@ -208,7 +208,6 @@ type dryrunLedger struct {
 	// inputs:
 
 	dr  *DryrunRequest
-	hdr *bookkeeping.BlockHeader
 
 	// intermediate state:
 

@@ -124,6 +124,8 @@ issues:
       linters: unused
     - path: tools/
       linters: unused
+    - path: daemon/kmd/lib/kmdapi/
+      linters: unused
     - path: _test\.go
       linters:
         - errcheck

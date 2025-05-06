@@ -90,15 +90,6 @@ func blockToPath(blk uint64) string {
 	)
 }
 
-// stringBlockToPath is the same as blockToPath except it takes a (non-padded) base-36 block
-func stringBlockToPath(s string) (string, error) {
-	blk, err := stringToBlock(s)
-	if err != nil {
-		return "", err
-	}
-	return blockToPath(blk), nil
-}
-
 // blockDir returns the root folder where all the blocks are stored
 func blockDir() string {
 	return filepath.Join(*dirFlag, fmt.Sprintf("v1/%s/block", *genesisFlag))
