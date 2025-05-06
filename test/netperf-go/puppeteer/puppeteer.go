@@ -256,7 +256,7 @@ func (c *stdWriter) Write(p []byte) (n int, err error) {
 		if eolIdx > 0 {
 			line := c.prefix + c.output[:eolIdx+1]
 			c.output = c.output[eolIdx+1:]
-			fmt.Fprintf(c.outFile, line)
+			fmt.Fprint(c.outFile, line)
 		} else {
 			break
 		}

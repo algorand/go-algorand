@@ -59,11 +59,11 @@ type ApplicationIndexerResponse struct {
 }
 
 type localLedger struct {
-	balances        map[basics.Address]basics.AccountData
-	txnGroup        []transactions.SignedTxn
-	groupIndex      int
-	round           uint64
-	aidx            basics.AppIndex
+	balances   map[basics.Address]basics.AccountData
+	txnGroup   []transactions.SignedTxn
+	groupIndex int
+	round      uint64
+	aidx       basics.AppIndex
 }
 
 func makeBalancesAdapter(

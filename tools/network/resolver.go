@@ -111,8 +111,8 @@ func (p *Resolver) SetFallbackResolverAddress(fallbackDNSResolverAddress net.IPA
 	p.dnsAddress = fallbackDNSResolverAddress
 }
 
-func (p *Resolver) resolverDial(ctx context.Context, network, address string) (net.Conn, error) {
+func (p *Resolver) resolverDial(ctx context.Context, network, _address string) (net.Conn, error) {
 	// override the default address with our own.
-	address = p.EffectiveResolverDNS() + dnsPortSuffix
+	address := p.EffectiveResolverDNS() + dnsPortSuffix
 	return (&net.Dialer{}).DialContext(ctx, network, address)
 }

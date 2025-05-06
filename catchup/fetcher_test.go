@@ -287,9 +287,7 @@ func (p *testUnicastPeer) Request(ctx context.Context, tag protocol.Tag, topics 
 func (p *testUnicastPeer) Respond(ctx context.Context, reqMsg network.IncomingMessage, outMsg network.OutgoingMessage) (e error) {
 
 	hashKey := uint64(0)
-	channel, found := p.responseChannels[hashKey]
-	if !found {
-	}
+	channel, _ := p.responseChannels[hashKey]
 
 	select {
 	case channel <- &network.Response{Topics: outMsg.Topics}:

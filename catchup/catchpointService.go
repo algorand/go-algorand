@@ -763,9 +763,8 @@ func (cs *CatchpointCatchupService) updateNodeCatchupMode(catchupModeEnabled boo
 	case newCtx, open := <-newCtxCh:
 		if open {
 			cs.ctx, cs.cancelCtxFunc = context.WithCancel(newCtx)
-		} else {
-			// channel is closed, this means that the node is stopping
 		}
+		// if channel is closed, this means that the node is stopping
 	case <-cs.ctx.Done():
 		// the node context was canceled before the SetCatchpointCatchupMode goroutine had
 		// the chance of completing. We At this point, the service is shutting down. However,
