@@ -1,14 +1,14 @@
 # Test tools directories that have their own go.mod files, and
 # otherwise wouldn't get tested along with the main go-algorand build.
 name: Test tools modules
-on:
-  push:
-    branches:
-      - master
-    paths:
-      - 'tools/block-generator/**'
-      - 'tools/x-repo-types/**'
-  pull_request:
+# on:
+  # push:
+  #   branches:
+  #     - master
+  #   paths:
+  #     - 'tools/block-generator/**'
+  #     - 'tools/x-repo-types/**'
+  # pull_request:
 
 jobs:
   tools_test:

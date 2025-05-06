@@ -1,5 +1,5 @@
 name: Check PR category and type
-on:
+# on:
   # pull_request:
   #   branches:
   #     - master

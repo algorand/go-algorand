@@ -1,5 +1,5 @@
 name: "Build Windows"
-on:
+# on:
   # push:
   #   branches:
   #     - master
