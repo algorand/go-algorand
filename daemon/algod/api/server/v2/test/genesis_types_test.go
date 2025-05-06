@@ -154,10 +154,15 @@ func verifyTypeCompatibility(t *testing.T, bkType, modelType reflect.Type, tag s
 			return
 		}
 
-	case reflect.Float32:
-		// Special case: OpenAPI generator may use float32 for numeric types
-		switch bkType.Kind() {
-		case reflect.Int64, reflect.Uint64, reflect.Float32, reflect.Float64:
+	case reflect.Uint64:
+		// Special case: We represent all numeric types as uint64
+		switch {
+		case bkType.Kind() == reflect.Uint64,
+			bkType.Kind() == reflect.Int64:
+			return
+		case bkType.String() == "basics.MicroAlgos",
+			bkType.String() == "basics.Status",
+			bkType.String() == "basics.Round":
 			return
 		}
 
@@ -183,13 +188,11 @@ func verifyTypeCompatibility(t *testing.T, bkType, modelType reflect.Type, tag s
 				return
 			}
 
-		case reflect.Float32:
-			// Special case: OpenAPI generator represents all numeric types (uint64, basics.Round, etc) as *float32 in the schema
+		case reflect.Uint64:
+			// Special case: We represent all numeric types as uint64
 			switch {
 			case bkType.Kind() == reflect.Uint64,
-				bkType.Kind() == reflect.Int64,
-				bkType.Kind() == reflect.Float32,
-				bkType.Kind() == reflect.Float64:
+				bkType.Kind() == reflect.Int64:
 				return
 			case bkType.String() == "basics.MicroAlgos",
 				bkType.String() == "basics.Status",
