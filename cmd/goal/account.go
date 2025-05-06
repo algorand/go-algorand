@@ -1247,7 +1247,7 @@ var listParticipationKeysCmd = &cobra.Command{
 		for _, part := range parts {
 			onlineAccountInfo, err := client.AccountInformation(part.Address, false)
 			if err == nil {
-				var onlineInfoStr string
+				onlineInfoStr := "no"
 				votingBytes := part.Key.VoteParticipationKey
 				vrfBytes := part.Key.SelectionParticipationKey
 				if onlineAccountInfo.Participation != nil &&
@@ -1257,8 +1257,6 @@ var listParticipationKeysCmd = &cobra.Command{
 					(onlineAccountInfo.Participation.VoteLastValid == part.Key.VoteLastValid) &&
 					(onlineAccountInfo.Participation.VoteKeyDilution == part.Key.VoteKeyDilution) {
 					onlineInfoStr = "yes"
-				} else {
-					onlineInfoStr = "no"
 				}
 
 				/*
