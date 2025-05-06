@@ -262,7 +262,6 @@ type mockedCache struct {
 }
 
 func (v *mockedCache) Add(txgroup []transactions.SignedTxn, groupCtx *GroupContext) {
-	return
 }
 
 func (v *mockedCache) AddPayset(txgroup [][]transactions.SignedTxn, groupCtxs []*GroupContext) {

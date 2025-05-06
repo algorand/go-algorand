@@ -295,7 +295,7 @@ func (cfg DeployedNetwork) Validate(buildCfg BuildConfig, rootDir string) (err e
 
 // Validate that the string is a valid filename (we'll use it as part of a directory name somewhere)
 func validateFilename(filename string) (err error) {
-	if strings.Index(filename, "*") >= 0 {
+	if strings.Contains(filename, "*") {
 		return ErrDeployedNetworkNameCantIncludeWildcard
 	}
 	file, err := os.CreateTemp("", filename)

@@ -233,8 +233,6 @@ func (p *puppet) exec(wg *sync.WaitGroup, errs chan error) {
 			return
 		}
 	}
-
-	return
 }
 
 type stdWriter struct {

@@ -109,7 +109,6 @@ func (p *Resolver) effectiveResolver() ResolverIf {
 // SetFallbackResolverAddress sets preferred DNS server address
 func (p *Resolver) SetFallbackResolverAddress(fallbackDNSResolverAddress net.IPAddr) {
 	p.dnsAddress = fallbackDNSResolverAddress
-	return
 }
 
 func (p *Resolver) resolverDial(ctx context.Context, network, address string) (net.Conn, error) {

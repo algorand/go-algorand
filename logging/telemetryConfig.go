@@ -20,7 +20,6 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
-	"fmt"
 	"os"
 	"strings"
 
@@ -126,7 +125,7 @@ func (cfg TelemetryConfig) getInstanceName() string {
 
 	// NOTE: We used to report HASH:DataDir but DataDir is Personally Identifiable Information (PII)
 	// So we're removing it entirely to avoid GDPR issues.
-	return fmt.Sprintf("%s", pathHashStr[:16])
+	return pathHashStr[:16]
 }
 
 // SanitizeTelemetryString applies sanitization rules and returns the sanitized string.

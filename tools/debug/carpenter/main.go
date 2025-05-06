@@ -321,8 +321,6 @@ func outputTableFormat(out string, event logspec.Event, columns []string, colPos
 			outputRow(bodyTabWriter, output)
 		}
 	}
-
-	return
 }
 
 func outputRow(tabWriter *tabwriter.Writer, rowContent string) {

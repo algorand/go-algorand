@@ -109,6 +109,4 @@ func main() {
 	if commitHash != version.GetCommitHash() {
 		log.Printf("coroner: cadaver version mismatches coroner version:\n(%s (cadaver) != %s (coroner))\n", commitHash, version.GetCommitHash())
 	}
-
-	return
 }
