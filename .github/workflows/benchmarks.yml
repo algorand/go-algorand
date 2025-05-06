@@ -1,5 +1,6 @@
 name: "Benchmark workflow"
-# on:
+on:
+  workflow_dispatch:
   # Push and update benchmarks when a commit is merged into master.
   # push:
   #   branches:

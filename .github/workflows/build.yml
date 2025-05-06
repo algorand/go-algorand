@@ -1,5 +1,6 @@
 name: "Build Windows"
-# on:
+on:
+  workflow_dispatch:
   # push:
   #   branches:
   #     - master

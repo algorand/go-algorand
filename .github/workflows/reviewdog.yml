@@ -1,7 +1,8 @@
 name: "ReviewDog workflow"
 env:
   GOLANGCI_LINT_VERSION: "v1.62.0"
-# on:
+on:
+  workflow_dispatch:
   # push:
   #   branches:
   #     - master

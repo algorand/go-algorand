@@ -86,7 +86,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: [${{ needs.strategy.matrix.platform }}]
+        platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-14"]
         partition_id: [0, 1]
     runs-on: ${{ matrix.platform }}
     env:

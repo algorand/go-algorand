@@ -1,5 +1,6 @@
 name: Check PR category and type
-# on:
+on:
+  workflow_dispatch:
   # pull_request:
   #   branches:
   #     - master

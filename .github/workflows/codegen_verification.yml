@@ -1,5 +1,6 @@
 name: "codegen verification"
-# on:
+on:
+  workflow_dispatch:
 #   push:
 #     branches:
 #       - master

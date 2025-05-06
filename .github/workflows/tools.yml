@@ -1,7 +1,8 @@
 # Test tools directories that have their own go.mod files, and
 # otherwise wouldn't get tested along with the main go-algorand build.
 name: Test tools modules
-# on:
+on:
+  workflow_dispatch:
   # push:
   #   branches:
   #     - master
