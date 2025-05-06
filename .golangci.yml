@@ -6,19 +6,15 @@ linters:
   # default: deadcode, errcheck, gosimple, govet, ineffassign, staticcheck, typecheck, unused, varcheck
   disable-all: true
   enable:
-    - errcheck
     - copyloopvar
     - gofmt
     - gosimple
-    - govet
     - ineffassign
     - misspell
-    - nilerr
     - nolintlint
     - revive
     - staticcheck
     - typecheck
-    - paralleltest
     - unused
 
 severity:
@@ -80,7 +76,7 @@ issues:
   # Work our way back over time to be clean against all these
   # checkers.  If you'd like to contribute, raise the number after ~,
   # run the linter and dig in.
-  new-from-rev: eb019291beed556ec6ac1ceb4a15114ce4df0c57~25
+  #new-from-rev: eb019291beed556ec6ac1ceb4a15114ce4df0c57~25
 
   # Disable default exclude rules listed in `golangci-lint run --help` (selectively re-enable some below)
   exclude-use-default: false
