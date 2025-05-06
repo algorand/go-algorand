@@ -588,7 +588,7 @@ var appExecuteCmd = &cobra.Command{
 			localSchema = header.Query.Local.ToStateSchema()
 			globalSchema = header.Query.Global.ToStateSchema()
 		}
-		tx, err := client.MakeUnsignedApplicationCallTx(appIdx, appArgs, appAccounts, foreignApps, foreignAssets, nil, onCompletion, approvalProg, clearProg, globalSchema, localSchema, 0)
+		tx, err := client.MakeUnsignedApplicationCallTx(appIdx, appArgs, appAccounts, foreignApps, foreignAssets, nil, onCompletion, approvalProg, clearProg, globalSchema, localSchema, 0, rejectVersion)
 		if err != nil {
 			reportErrorf("Cannot create application txn: %v", err)
 		}

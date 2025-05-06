@@ -573,7 +573,6 @@ var assetDetailsCmd = &cobra.Command{
 		}
 
 		printAccountAssetsInformation(accountAddress, response)
-
 	},
 }
 var infoCmd = &cobra.Command{
@@ -734,7 +733,12 @@ func printAccountInfo(client libgoal.Client, address string, onlyShowAssetIDs bo
 			extraPages = fmt.Sprintf(", %d extra page%s", *app.Params.ExtraProgramPages, plural)
 		}
 
-		fmt.Fprintf(report, "\tID %d%s, global state used %d/%d uints, %d/%d byte slices\n", app.Id, extraPages, usedInts, allocatedInts, usedBytes, allocatedBytes)
+		version := uint64(0)
+		if app.Params.Version != nil {
+			version = *app.Params.Version
+		}
+
+		fmt.Fprintf(report, "\tID %d%s, global state used %d/%d uints, %d/%d byte slices, version %d\n", app.Id, extraPages, usedInts, allocatedInts, usedBytes, allocatedBytes, version)
 	}
 
 	fmt.Fprintln(report, "Opted In Apps:")
@@ -772,7 +776,7 @@ func printAccountAssetsInformation(address string, response model.AccountAssetsI
 	fmt.Printf("Account: %s\n", address)
 	fmt.Printf("Round: %d\n", response.Round)
 	if response.NextToken != nil {
-		fmt.Printf("NextToken (to retrieve more account assets): %s\n", *response.NextToken)
+		fmt.Printf("NextToken (use with --next to retrieve more account assets): %s\n", *response.NextToken)
 	}
 	fmt.Printf("Assets:\n")
 	for _, asset := range *response.AssetHoldings {

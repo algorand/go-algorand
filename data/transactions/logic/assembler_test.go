@@ -1731,6 +1731,7 @@ global PayoutsGoOnlineFee
 global PayoutsPercent
 global PayoutsMinBalance
 global PayoutsMaxBalance
+txn RejectVersion
 `, AssemblerMaxVersion)
 	for _, names := range [][]string{GlobalFieldNames[:], TxnFieldNames[:], blockFieldNames[:]} {
 		for _, f := range names {
@@ -2839,33 +2840,33 @@ func TestScratchBounds(t *testing.T) {
 	os := testProg(t, "int 5; store 1; load 1; return;", AssemblerMaxVersion)
 	sv := os.known.scratchSpace[1]
 	require.Equal(t, sv.AVMType, avmUint64)
-	require.ElementsMatch(t, sv.Bound, static(5))
+	require.Equal(t, sv.Bound, static(5))
 
 	os = testProg(t, "int 5; store 1; load 1; int 1; int 1; stores; return;", AssemblerMaxVersion)
 	sv = os.known.scratchSpace[1]
 	require.Equal(t, sv.AVMType, avmUint64)
-	require.ElementsMatch(t, sv.Bound, bound(1, 1))
+	require.Equal(t, sv.Bound, bound(1, 1))
 
 	// If the stack type for the slot index is a const, known at assembly time
 	// we can be sure of the slot we need to update
 	os = testProg(t, "int 5; store 1; load 1; int 1; byte 0xff; stores; return;", AssemblerMaxVersion)
 	sv = os.known.scratchSpace[1]
 	require.Equal(t, sv.AVMType, avmBytes)
-	require.ElementsMatch(t, sv.Bound, static(1))
+	require.Equal(t, sv.Bound, static(1))
 
 	osv := os.known.scratchSpace[0]
 	require.Equal(t, osv.AVMType, avmUint64)
-	require.ElementsMatch(t, osv.Bound, static(0))
+	require.Equal(t, osv.Bound, static(0))
 
 	// Otherwise, we just union all stack types with the incoming type
 	os = testProg(t, "int 5; store 1; load 1; byte 0xaa; btoi; byte 0xff; stores; return;", AssemblerMaxVersion)
 	sv = os.known.scratchSpace[1]
 	require.Equal(t, sv.AVMType, avmAny)
-	require.ElementsMatch(t, sv.Bound, static(0))
+	require.Equal(t, sv.Bound, static(0))
 
 	osv = os.known.scratchSpace[0]
 	require.Equal(t, osv.AVMType, avmAny)
-	require.ElementsMatch(t, osv.Bound, static(0))
+	require.Equal(t, osv.Bound, static(0))
 
 	testProg(t, "byte 0xff; store 1; load 1; return", AssemblerMaxVersion, exp(1, "return arg 0 wanted type uint64 ..."))
 }
@@ -2945,6 +2946,9 @@ func TestBadInnerFields(t *testing.T) {
 	testProg(t, "itxn_begin; byte 0x7263; itxn_field Note", 6)
 	testProg(t, "itxn_begin; global ZeroAddress; itxn_field VotePK", 6)
 	testProg(t, "itxn_begin; int 32; bzero; itxn_field TxID", 6, exp(1, "...is not allowed."))
+
+	testProg(t, "itxn_begin; int 3; itxn_field RejectVersion", 11, exp(1, "...introduced in v12..."))
+	testProg(t, "itxn_begin; int 2; itxn_field RejectVersion", 12)
 }
 
 func TestTypeTracking(t *testing.T) {

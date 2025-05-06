@@ -12,12 +12,11 @@
 # build a new image whenever the version number has been changed.
 
 BUILD=1.23.3
- MIN=1.23
- GO_MOD_SUPPORT=1.23
+MIN=$(echo $BUILD | cut -d. -f1-2).0
 
 if [ "$1" = all ]
 then
-    echo $BUILD $MIN $GO_MOD_SUPPORT
+    echo $BUILD $MIN
 elif [ "$1" = dev ]
 then
     echo $MIN

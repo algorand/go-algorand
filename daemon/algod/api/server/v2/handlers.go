@@ -27,6 +27,7 @@ import (
 	"net/http"
 	"os"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -103,7 +104,7 @@ type LedgerForAPI interface {
 	LookupAccount(round basics.Round, addr basics.Address) (ledgercore.AccountData, basics.Round, basics.MicroAlgos, error)
 	LookupLatest(addr basics.Address) (basics.AccountData, basics.Round, basics.MicroAlgos, error)
 	LookupKv(round basics.Round, key string) ([]byte, error)
-	LookupKeysByPrefix(round basics.Round, keyPrefix string, maxKeyNum uint64) ([]string, error)
+	LookupKeysByPrefix(prefix, next string, boxLimit, byteLimit int, values bool) (basics.Round, map[string]string, string, error)
 	ConsensusParams(r basics.Round) (config.ConsensusParams, error)
 	Latest() basics.Round
 	LookupAsset(rnd basics.Round, addr basics.Address, aidx basics.AssetIndex) (ledgercore.AssetResource, error)
@@ -117,7 +118,7 @@ type LedgerForAPI interface {
 	GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error)
 	EncodedBlockCert(rnd basics.Round) (blk []byte, cert []byte, err error)
 	Block(rnd basics.Round) (blk bookkeeping.Block, err error)
-	AddressTxns(id basics.Address, r basics.Round) ([]transactions.SignedTxnWithAD, error)
+	TxnsFrom(id basics.Address, r basics.Round) ([]transactions.Transaction, error)
 	GetStateDeltaForRound(rnd basics.Round) (ledgercore.StateDelta, error)
 	GetTracer() logic.EvalTracer
 }
@@ -228,18 +229,18 @@ func GetStateProofTransactionForRound(ctx context.Context, txnFetcher LedgerForA
 		default:
 		}
 
-		txns, err := txnFetcher.AddressTxns(transactions.StateProofSender, i)
+		txns, err := txnFetcher.TxnsFrom(transactions.StateProofSender, i)
 		if err != nil {
 			return transactions.Transaction{}, err
 		}
 		for _, txn := range txns {
-			if txn.Txn.Type != protocol.StateProofTx {
+			if txn.Type != protocol.StateProofTx {
 				continue
 			}
 
-			if txn.Txn.StateProofTxnFields.Message.FirstAttestedRound <= uint64(round) &&
-				uint64(round) <= txn.Txn.StateProofTxnFields.Message.LastAttestedRound {
-				return txn.Txn, nil
+			if txn.StateProofTxnFields.Message.FirstAttestedRound <= uint64(round) &&
+				uint64(round) <= txn.StateProofTxnFields.Message.LastAttestedRound {
+				return txn, nil
 			}
 		}
 	}
@@ -448,7 +449,7 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params 
 		totalResults := record.TotalAssets + record.TotalAssetParams + record.TotalAppLocalStates + record.TotalAppParams
 		if totalResults > maxResults {
 			v2.Log.Infof("MaxAccountAPIResults limit %d exceeded, total results %d", maxResults, totalResults)
-			extraData := map[string]interface{}{
+			extraData := map[string]any{
 				"max-results":           maxResults,
 				"total-assets-opted-in": record.TotalAssets,
 				"total-created-assets":  record.TotalAssetParams,
@@ -1576,7 +1577,8 @@ func (v2 *Handlers) PendingTransactionInformation(ctx echo.Context, txid string,
 		response.CloseRewards = &txn.ApplyData.CloseRewards.Raw
 		response.AssetIndex = computeAssetIndexFromTxn(txn, v2.Node.LedgerForAPI())
 		response.ApplicationIndex = computeAppIndexFromTxn(txn, v2.Node.LedgerForAPI())
-		response.LocalStateDelta, response.GlobalStateDelta = convertToDeltas(txn)
+		response.LocalStateDelta = sliceOrNil(localDeltasToLocalDeltas(txn.ApplyData.EvalDelta, &txn.Txn.Txn))
+		response.GlobalStateDelta = sliceOrNil(globalDeltaToStateDelta(txn.ApplyData.EvalDelta.GlobalDelta))
 		response.Logs = convertLogs(txn)
 		response.Inners = convertInners(&txn)
 	}
@@ -1625,9 +1627,6 @@ func (v2 *Handlers) getPendingTransactions(ctx echo.Context, max *uint64, format
 		return internalError(ctx, err, errFailedLookingUpTransactionPool, v2.Log)
 	}
 
-	// MatchAddress uses this to check FeeSink, we don't care about that here.
-	spec := transactions.SpecialAddresses{}
-
 	txnLimit := uint64(math.MaxUint64)
 	if max != nil && *max != 0 {
 		txnLimit = *max
@@ -1642,7 +1641,7 @@ func (v2 *Handlers) getPendingTransactions(ctx echo.Context, max *uint64, format
 		}
 
 		// continue if we have an address filter and the address doesn't match the transaction.
-		if addrPtr != nil && !txn.Txn.MatchAddress(*addrPtr, spec) {
+		if addrPtr != nil && !txn.Txn.MatchAddress(*addrPtr) {
 			continue
 		}
 
@@ -1756,62 +1755,93 @@ func (v2 *Handlers) GetApplicationByID(ctx echo.Context, applicationID uint64) e
 	return ctx.JSON(http.StatusOK, response)
 }
 
-func applicationBoxesMaxKeys(requestedMax uint64, algodMax uint64) uint64 {
-	if requestedMax == 0 {
-		if algodMax == 0 {
-			return math.MaxUint64 // unlimited results when both requested and algod max are 0
-		}
-		return algodMax + 1 // API limit dominates.  Increments by 1 to test if more than max supported results exist.
+func applicationBoxesMaxKeys(requestedMax uint64, algodMax uint64) int {
+	if requestedMax == 0 || requestedMax > math.MaxInt {
+		requestedMax = math.MaxInt
 	}
-
-	if requestedMax <= algodMax || algodMax == 0 {
-		return requestedMax // requested limit dominates
+	if algodMax == 0 || algodMax > math.MaxInt {
+		algodMax = math.MaxInt
 	}
-
-	return algodMax + 1 // API limit dominates.  Increments by 1 to test if more than max supported results exist.
+	return int(min(requestedMax, algodMax))
 }
 
-// GetApplicationBoxes returns the box names of an application
+// GetApplicationBoxes returns the boxes of an application
 // (GET /v2/applications/{application-id}/boxes)
 func (v2 *Handlers) GetApplicationBoxes(ctx echo.Context, applicationID uint64, params model.GetApplicationBoxesParams) error {
 	appIdx := basics.AppIndex(applicationID)
 	ledger := v2.Node.LedgerForAPI()
-	lastRound := ledger.Latest()
-	keyPrefix := apps.MakeBoxKey(uint64(appIdx), "")
 
 	requestedMax, algodMax := nilToZero(params.Max), v2.Node.Config().MaxAPIBoxPerApplication
 	max := applicationBoxesMaxKeys(requestedMax, algodMax)
 
-	if max != math.MaxUint64 {
-		record, _, _, err := ledger.LookupAccount(ledger.Latest(), appIdx.Address())
+	values := nilToZero(params.Values)
+
+	// We'll need to convert between "KV" names and "Box" names, so keep track
+	// of how much gets tacked on to make the kv name.
+	kvPrefix := apps.MakeBoxKey(uint64(appIdx), "")
+	kvPrefixLen := len(kvPrefix)
+
+	prefix := nilToZero(params.Prefix)
+	if len(prefix) > 0 {
+		cb, err := apps.NewAppCallBytes(prefix)
 		if err != nil {
-			return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+			return badRequest(ctx, err, err.Error(), v2.Log)
 		}
-		if record.TotalBoxes > max {
-			return ctx.JSON(http.StatusBadRequest, model.ErrorResponse{
-				Message: "Result limit exceeded",
-				Data: &map[string]interface{}{
-					"max-api-box-per-application": algodMax,
-					"max":                         requestedMax,
-					"total-boxes":                 record.TotalBoxes,
-				},
-			})
+		rawPrefix, err := cb.Raw()
+		if err != nil {
+			return badRequest(ctx, err, err.Error(), v2.Log)
 		}
+		prefix = string(rawPrefix)
 	}
 
-	boxKeys, err := ledger.LookupKeysByPrefix(lastRound, keyPrefix, math.MaxUint64)
+	next := nilToZero(params.Next)
+	if len(next) > 0 {
+		cb, err := apps.NewAppCallBytes(next)
+		if err != nil {
+			return badRequest(ctx, err, err.Error(), v2.Log)
+		}
+		rawNext, err := cb.Raw()
+		if err != nil {
+			return badRequest(ctx, err, err.Error(), v2.Log)
+		}
+		next = kvPrefix + string(rawNext)
+	}
+
+	round, boxes, nextToken, err := ledger.LookupKeysByPrefix(kvPrefix+prefix, next, max, 1_000_000, values)
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
 	}
 
-	prefixLen := len(keyPrefix)
-	responseBoxes := make([]model.BoxDescriptor, len(boxKeys))
-	for i, boxKey := range boxKeys {
-		responseBoxes[i] = model.BoxDescriptor{
-			Name: []byte(boxKey[prefixLen:]),
+	if nextToken != "" {
+		// Preserve existing failure behavior if caller is not using `next`.
+		if params.Next == nil {
+			return ctx.JSON(http.StatusBadRequest, model.ErrorResponse{
+				Message: "Result limit exceeded",
+				Data: &map[string]any{
+					"max-api-box-per-application": algodMax,
+					"max":                         requestedMax,
+				},
+			})
 		}
+		nextToken = nextToken[kvPrefixLen:]
 	}
-	response := model.BoxesResponse{Boxes: responseBoxes}
+
+	responseBoxes := make([]model.Box, 0, len(boxes))
+	for key, value := range boxes {
+		box := model.Box{Name: []byte(key[kvPrefixLen:])}
+		if values {
+			box.Value = []byte(value)
+		}
+		responseBoxes = append(responseBoxes, box)
+	}
+	slices.SortFunc(responseBoxes, func(a, b model.Box) int {
+		return bytes.Compare(a.Name, b.Name)
+	})
+	response := model.BoxesResponse{
+		Round:     uint64(round),
+		Boxes:     responseBoxes,
+		NextToken: omitEmpty(nextToken),
+	}
 	return ctx.JSON(http.StatusOK, response)
 }
 
@@ -1841,7 +1871,7 @@ func (v2 *Handlers) GetApplicationBoxByName(ctx echo.Context, applicationID uint
 	}
 
 	response := model.BoxResponse{
-		Round: uint64(lastRound),
+		Round: omitEmpty(uint64(lastRound)),
 		Name:  boxName,
 		Value: value,
 	}

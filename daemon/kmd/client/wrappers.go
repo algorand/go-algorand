@@ -59,6 +59,17 @@ func (kcl KMDClient) CreateWallet(walletName []byte, walletDriverName string, wa
 	return
 }
 
+// RenameWallet wraps kmdapi.APIV1POSTWalletRenameRequest
+func (kcl KMDClient) RenameWallet(walletID []byte, newWalletName []byte, walletPassword []byte) (resp kmdapi.APIV1POSTWalletRenameResponse, err error) {
+	req := kmdapi.APIV1POSTWalletRenameRequest{
+		WalletID:       string(walletID),
+		NewWalletName:  string(newWalletName),
+		WalletPassword: string(walletPassword),
+	}
+	err = kcl.DoV1Request(req, &resp)
+	return
+}
+
 // InitWallet wraps kmdapi.APIV1POSTWalletInitRequest
 func (kcl KMDClient) InitWallet(walletID []byte, walletPassword []byte) (resp kmdapi.APIV1POSTWalletInitResponse, err error) {
 	req := kmdapi.APIV1POSTWalletInitRequest{

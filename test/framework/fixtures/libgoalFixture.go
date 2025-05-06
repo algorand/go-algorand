@@ -127,7 +127,15 @@ func (f *LibGoalFixture) setup(test TestingTB, testName string, templateFile str
 	importKeys := false // Don't automatically import root keys when creating folders, we'll import on-demand
 	file, err := os.Open(templateFile)
 	f.failOnError(err, "Template file could not be opened: %v")
-	network, err := netdeploy.CreateNetworkFromTemplate("test", f.rootDir, file, f.binDir, importKeys, f.nodeExitWithError, f.consensus, overrides...)
+	defer file.Close()
+
+	// Override the kmd session lifetime to 5 minutes to prevent kmd wallet handles from expiring
+	kmdConfOverride := netdeploy.OverrideKmdConfig(netdeploy.TemplateKMDConfig{SessionLifetimeSecs: 300})
+	// copy overrides to prevent caller's data from being modified
+	extraOverrides := append([]netdeploy.TemplateOverride(nil), overrides...)
+	extraOverrides = append(extraOverrides, kmdConfOverride)
+
+	network, err := netdeploy.CreateNetworkFromTemplate("test", f.rootDir, file, f.binDir, importKeys, f.nodeExitWithError, f.consensus, extraOverrides...)
 	f.failOnError(err, "CreateNetworkFromTemplate failed: %v")
 	f.network = network
 

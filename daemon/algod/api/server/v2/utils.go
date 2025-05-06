@@ -288,14 +288,16 @@ func decode(handle codec.Handle, data []byte, v interface{}) error {
 	return nil
 }
 
-// Helper to convert basics.StateDelta -> *model.StateDelta
-func stateDeltaToStateDelta(d basics.StateDelta) *model.StateDelta {
-	if len(d) == 0 {
+// globalDeltaToStateDelta converts basics.StateDelta -> model.StateDelta. It
+// should only be used on globals, because locals require extra context to
+// translate account indexes.
+func globalDeltaToStateDelta(bsd basics.StateDelta) model.StateDelta {
+	if len(bsd) == 0 {
 		return nil
 	}
-	var delta model.StateDelta
-	for k, v := range d {
-		delta = append(delta, model.EvalDeltaKeyValue{
+	msd := make(model.StateDelta, 0, len(bsd))
+	for k, v := range bsd {
+		msd = append(msd, model.EvalDeltaKeyValue{
 			Key: base64.StdEncoding.EncodeToString([]byte(k)),
 			Value: model.EvalDelta{
 				Action: uint64(v.Action),
@@ -304,7 +306,7 @@ func stateDeltaToStateDelta(d basics.StateDelta) *model.StateDelta {
 			},
 		})
 	}
-	return &delta
+	return msd
 }
 
 func edIndexToAddress(index uint64, txn *transactions.Transaction, shared []basics.Address) string {
@@ -321,23 +323,21 @@ func edIndexToAddress(index uint64, txn *transactions.Transaction, shared []basi
 	}
 }
 
-func convertToDeltas(txn node.TxnWithStatus) (*[]model.AccountStateDelta, *model.StateDelta) {
-	var localStateDelta *[]model.AccountStateDelta
-	if len(txn.ApplyData.EvalDelta.LocalDeltas) > 0 {
-		d := make([]model.AccountStateDelta, 0)
-		shared := txn.ApplyData.EvalDelta.SharedAccts
+func localDeltasToLocalDeltas(ed transactions.EvalDelta, txn *transactions.Transaction) []model.AccountStateDelta {
+	if len(ed.LocalDeltas) == 0 {
+		return nil
+	}
+	lsd := make([]model.AccountStateDelta, 0, len(ed.LocalDeltas))
+	shared := ed.SharedAccts
 
-		for k, v := range txn.ApplyData.EvalDelta.LocalDeltas {
-			d = append(d, model.AccountStateDelta{
-				Address: edIndexToAddress(k, &txn.Txn.Txn, shared),
-				Delta:   *(stateDeltaToStateDelta(v)),
-			})
-		}
-
-		localStateDelta = &d
+	for k, v := range ed.LocalDeltas {
+		lsd = append(lsd, model.AccountStateDelta{
+			Address: edIndexToAddress(k, txn, shared),
+			Delta:   globalDeltaToStateDelta(v),
+		})
 	}
 
-	return localStateDelta, stateDeltaToStateDelta(txn.ApplyData.EvalDelta.GlobalDelta)
+	return lsd
 }
 
 func convertLogs(txn node.TxnWithStatus) *[][]byte {
@@ -381,11 +381,12 @@ func ConvertInnerTxn(txn *transactions.SignedTxnWithAD) PreEncodedTxInfo {
 	response.AssetIndex = omitEmpty(uint64(txn.ApplyData.ConfigAsset))
 	response.ApplicationIndex = omitEmpty(uint64(txn.ApplyData.ApplicationID))
 
+	response.LocalStateDelta = sliceOrNil(localDeltasToLocalDeltas(txn.ApplyData.EvalDelta, &txn.Txn))
+	response.GlobalStateDelta = sliceOrNil(globalDeltaToStateDelta(txn.ApplyData.EvalDelta.GlobalDelta))
 	withStatus := node.TxnWithStatus{
 		Txn:       txn.SignedTxn,
 		ApplyData: txn.ApplyData,
 	}
-	response.LocalStateDelta, response.GlobalStateDelta = convertToDeltas(withStatus)
 	response.Logs = convertLogs(withStatus)
 	response.Inners = convertInners(&withStatus)
 	return response

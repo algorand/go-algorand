@@ -17,11 +17,12 @@
 package catchup
 
 import (
+	"testing"
+	"time"
+
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/stretchr/testify/require"
-	"testing"
-	"time"
 )
 
 // Use to mock the wrapped peer selectors where warranted
@@ -481,6 +482,7 @@ func TestClassBasedPeerSelector_integration(t *testing.T) {
 	require.Nil(t, err)
 	require.Equal(t, mockP1WrappedPeer, peerResult)
 	cps.rankPeer(mockP1WrappedPeer, peerRankNoBlockForRound)
+	cps.rankPeer(mockP1WrappedPeer, peerRankNoBlockForRound)
 
 	peerResult, err = cps.getNextPeer()
 	require.Nil(t, err)
@@ -495,4 +497,8 @@ func TestClassBasedPeerSelector_integration(t *testing.T) {
 
 	require.Equal(t, 4, cps.peerSelectors[0].downloadFailures)
 	require.Equal(t, 0, cps.peerSelectors[1].downloadFailures)
+
+	// make sure successful download decreases download failures
+	cps.rankPeer(mockP1WrappedPeer, durationRank)
+	require.Equal(t, 3, cps.peerSelectors[0].downloadFailures)
 }

@@ -60,6 +60,21 @@ const (
 	PeersPhonebookArchivalNodes PeerOption = iota
 )
 
+func (po PeerOption) String() string {
+	switch po {
+	case PeersConnectedOut:
+		return "ConnectedOut"
+	case PeersConnectedIn:
+		return "ConnectedIn"
+	case PeersPhonebookRelays:
+		return "PhonebookRelays"
+	case PeersPhonebookArchivalNodes:
+		return "PhonebookArchivalNodes"
+	default:
+		return "Unknown PeerOption"
+	}
+}
+
 // GossipNode represents a node in the gossip network
 type GossipNode interface {
 	Address() (string, bool)
@@ -148,11 +163,9 @@ type IncomingMessage struct {
 // Tag is a short string (2 bytes) marking a type of message
 type Tag = protocol.Tag
 
-func highPriorityTag(tags []protocol.Tag) bool {
-	for _, tag := range tags {
-		if tag == protocol.AgreementVoteTag || tag == protocol.ProposalPayloadTag {
-			return true
-		}
+func highPriorityTag(tag protocol.Tag) bool {
+	if tag == protocol.AgreementVoteTag || tag == protocol.ProposalPayloadTag {
+		return true
 	}
 	return false
 }

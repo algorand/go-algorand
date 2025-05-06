@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
@@ -223,7 +224,7 @@ func keyPrefixIntervalPreprocessing(prefix []byte) ([]byte, []byte) {
 	return prefix, nil
 }
 
-func (r *accountsReader) LookupKeysByPrefix(prefix string, maxKeyNum uint64, results map[string]bool, resultCount uint64) (round basics.Round, err error) {
+func (r *accountsReader) LookupKeysByPrefix(prefix, next string, rowLimit, byteLimit int, values bool) (basics.Round, map[string]string, string, error) {
 	// SQL at time of writing:
 	//
 	// SELECT acctrounds.rnd, kvstore.key
@@ -231,41 +232,49 @@ func (r *accountsReader) LookupKeysByPrefix(prefix string, maxKeyNum uint64, res
 	// WHERE id='acctbase'
 
 	// read the current db round
-	round, err = r.AccountsRound()
+	round, err := r.AccountsRound()
 	if err != nil {
-		return
+		return 0, nil, "", err
 	}
 
 	start, end := keyPrefixIntervalPreprocessing([]byte(prefix))
+	if next != "" {
+		if !strings.HasPrefix(next, prefix) {
+			return 0, nil, "", fmt.Errorf("next %#v is not prefixed by %#v", next, prefix)
+		}
+		start = []byte(next)
+		next = "" // If we don't exceed limits, we want next=""
+	}
 
 	iter := r.kvr.NewIter(start, end, false)
 	defer iter.Close()
 
-	var value []byte
-
+	boxes := make(map[string]string)
 	for iter.Next() {
-		// end iteration if we reached max results
-		if resultCount == maxKeyNum {
-			return
-		}
-
 		// read the key
 		key := string(iter.Key())
-
-		// get value for current item in the iterator
-		value, err = iter.Value()
-		if err != nil {
-			return
+		value := ""
+		if values {
+			valBytes, err := iter.Value()
+			if err != nil {
+				return 0, nil, "", err
+			}
+			value = string(valBytes)
 		}
-
-		// mark if the key has data on the result map
-		results[key] = len(value) > 0
-
-		// inc results in range
-		resultCount++
+		rowLimit--
+		byteLimit -= len(key)
+		if values {
+			byteLimit -= len(value)
+		}
+		// If including this box would exceed limits, set `next` and return
+		if rowLimit < 0 || byteLimit < 0 {
+			next = key
+			break
+		}
+		boxes[key] = value
 	}
 
-	return
+	return round, boxes, next, nil
 }
 
 func (r *accountsReader) LookupCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (addr basics.Address, ok bool, dbRound basics.Round, err error) {
