@@ -1,9 +1,9 @@
 name: "Build Windows"
 on:
-  push:
-    branches:
-      - master
-  pull_request:
+  # push:
+  #   branches:
+  #     - master
+  # pull_request:
 jobs:
   build-windows:
     runs-on: windows-2022

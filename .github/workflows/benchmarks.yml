@@ -1,13 +1,13 @@
 name: "Benchmark workflow"
 on:
   # Push and update benchmarks when a commit is merged into master.
-  push:
-    branches:
-      - master
-  # Trigger benchmark test on this PR's commit against master.
-  pull_request:
-    branches:
-      - master
+  # push:
+  #   branches:
+  #     - master
+  # # Trigger benchmark test on this PR's commit against master.
+  # pull_request:
+  #   branches:
+  #     - master
 permissions:
   # Push benchmark performance graph to gh-pages branch.
   contents: write

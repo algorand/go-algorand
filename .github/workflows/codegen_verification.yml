@@ -1,9 +1,9 @@
 name: "codegen verification"
-on:
-  push:
-    branches:
-      - master
-  pull_request:
+# on:
+#   push:
+#     branches:
+#       - master
+#   pull_request:
 jobs:
   codegen_verification:
     runs-on: ubuntu-22.04

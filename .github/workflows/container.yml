@@ -1,11 +1,11 @@
 name: container
 
 on:
-  workflow_dispatch:
-  push:
-    branches:
-      - master
-      - feature/*
+  # workflow_dispatch:
+  # push:
+  #   branches:
+  #     - master
+  #     - feature/*
 
 jobs:
   build-and-push:
