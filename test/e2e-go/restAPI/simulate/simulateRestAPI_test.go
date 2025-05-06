@@ -2857,7 +2857,7 @@ end:
 
 	// construct app call
 	txn, err = testClient.MakeUnsignedAppNoOpTx(
-		uint64(testAppID), nil, nil, nil, nil, nil,
+		uint64(testAppID), nil, nil, nil, nil, nil, 0,
 	)
 	a.NoError(err)
 	txn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, 0, txn)
@@ -3111,7 +3111,7 @@ func TestPopulatedResourceArraysOrder(t *testing.T) {
 
 	// construct app call
 	txn, err = testClient.MakeUnsignedAppNoOpTx(
-		uint64(testAppID), nil, nil, nil, nil, nil,
+		uint64(testAppID), nil, nil, nil, nil, nil, 0,
 	)
 	a.NoError(err)
 	txn, err = testClient.FillUnsignedTxTemplate(senderAddress, 0, 0, 0, txn)
