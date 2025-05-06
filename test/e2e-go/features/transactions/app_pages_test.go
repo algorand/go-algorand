@@ -110,7 +110,7 @@ return
 	a.Equal(*accountInfo.AppsTotalExtraPages, uint64(app1ExtraPages))
 
 	// update app 1 and ensure the extra page still works
-	tx, err = client.MakeUnsignedAppUpdateTx(app1ID, nil, nil, nil, nil, nil, bigProgram, smallProgram)
+	tx, err = client.MakeUnsignedAppUpdateTx(app1ID, nil, nil, nil, nil, nil, bigProgram, smallProgram, 0)
 	a.NoError(err)
 	tx, err = client.FillUnsignedTxTemplate(baseAcct, 0, 0, 0, tx)
 	a.NoError(err)
@@ -151,7 +151,7 @@ return
 	a.Equal(*accountInfo.AppsTotalExtraPages, uint64(app1ExtraPages+app2ExtraPages))
 
 	// delete app 1
-	tx, err = client.MakeUnsignedAppDeleteTx(app1ID, nil, nil, nil, nil, nil)
+	tx, err = client.MakeUnsignedAppDeleteTx(app1ID, nil, nil, nil, nil, nil, 0)
 	a.NoError(err)
 	tx, err = client.FillUnsignedTxTemplate(baseAcct, 0, 0, 0, tx)
 	a.NoError(err)
@@ -170,7 +170,7 @@ return
 	a.Equal(*accountInfo.AppsTotalExtraPages, uint64(app2ExtraPages))
 
 	// delete app 2
-	tx, err = client.MakeUnsignedAppDeleteTx(app2ID, nil, nil, nil, nil, nil)
+	tx, err = client.MakeUnsignedAppDeleteTx(app2ID, nil, nil, nil, nil, nil, 0)
 	a.NoError(err)
 	tx, err = client.FillUnsignedTxTemplate(baseAcct, 0, 0, 0, tx)
 	a.NoError(err)

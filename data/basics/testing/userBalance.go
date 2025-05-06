@@ -29,3 +29,28 @@ func MakeAccountData(status basics.Status, algos basics.MicroAlgos) basics.Accou
 	}
 	return ad
 }
+
+// OnlineAccountData converts basics.AccountData to basics.OnlineAccountData.
+// Account is expected to be Online otherwise it is cleared out.
+// This function is intended for testing purposes only.
+func OnlineAccountData(u basics.AccountData) basics.OnlineAccountData {
+	if u.Status != basics.Online {
+		// if the account is not Online and agreement requests it for some reason, clear it out
+		return basics.OnlineAccountData{}
+	}
+
+	return basics.OnlineAccountData{
+		MicroAlgosWithRewards: u.MicroAlgos,
+		VotingData: basics.VotingData{
+			VoteID:          u.VoteID,
+			SelectionID:     u.SelectionID,
+			StateProofID:    u.StateProofID,
+			VoteFirstValid:  u.VoteFirstValid,
+			VoteLastValid:   u.VoteLastValid,
+			VoteKeyDilution: u.VoteKeyDilution,
+		},
+		IncentiveEligible: u.IncentiveEligible,
+		LastProposed:      u.LastProposed,
+		LastHeartbeat:     u.LastHeartbeat,
+	}
+}

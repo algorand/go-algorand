@@ -421,6 +421,8 @@ func ApplicationParamsToAppParams(gap *model.ApplicationParams) (basics.AppParam
 		}
 		ap.ExtraProgramPages = uint32(*gap.ExtraProgramPages)
 	}
+	ap.Version = nilToZero(gap.Version)
+
 	if gap.LocalStateSchema != nil {
 		ap.LocalStateSchema = basics.StateSchema{
 			NumUint:      gap.LocalStateSchema.NumUint,
@@ -462,6 +464,7 @@ func AppParamsToApplication(creator string, appIdx basics.AppIndex, appParams *b
 				NumByteSlice: appParams.GlobalStateSchema.NumByteSlice,
 				NumUint:      appParams.GlobalStateSchema.NumUint,
 			},
+			Version: omitEmpty(appParams.Version),
 		},
 	}
 	return app
