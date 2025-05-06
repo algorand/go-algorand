@@ -355,6 +355,7 @@ func ensureRelayStatus(checkOnly bool, relay eb.Relay, nameDomain string, srvDom
 	// Error if target has another name entry - target should be relay provider's domain so shouldn't be possible
 	if mapsTo, has := ctx.nameEntries[target]; has {
 		err = fmt.Errorf("relay target has a DNS Name entry and should not (%s -> %s)", target, mapsTo)
+		return
 	}
 
 	names, err := getTargetDNSChain(ctx.nameEntries, target)
@@ -374,6 +375,7 @@ func ensureRelayStatus(checkOnly bool, relay eb.Relay, nameDomain string, srvDom
 
 	if relay.DNSAlias == "" {
 		err = fmt.Errorf("missing DNSAlias name")
+		return
 	}
 
 	targetDomainAlias := relay.DNSAlias + "." + nameDomain

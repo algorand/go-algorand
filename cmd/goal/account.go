@@ -1245,9 +1245,9 @@ var listParticipationKeysCmd = &cobra.Command{
 		rowFormat := "%-10s  %-11s  %-15s  %10s  %11s  %10s\n"
 		fmt.Printf(rowFormat, "Registered", "Account", "ParticipationID", "Last Used", "First round", "Last round")
 		for _, part := range parts {
-			onlineInfoStr := "unknown"
 			onlineAccountInfo, err := client.AccountInformation(part.Address, false)
 			if err == nil {
+				var onlineInfoStr string
 				votingBytes := part.Key.VoteParticipationKey
 				vrfBytes := part.Key.SelectionParticipationKey
 				if onlineAccountInfo.Participation != nil &&
