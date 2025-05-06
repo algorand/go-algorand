@@ -47,20 +47,11 @@ jobs:
       id: go_version
       run: echo "GO_VERSION=$(./scripts/get_golang_version.sh)" >> $GITHUB_ENV
 
-    - name: Cache Go modules
-      uses: actions/cache@v4
-      with:
-        path: |
-          ~/.cache/go-build
-          ~/go/pkg/mod
-        key: ${{ matrix.platform }}-go-${{ hashFiles('**/go.sum') }}
-        restore-keys: |
-          ${{ matrix.platform }}-go-${{ hashFiles('**/go.sum') }}
-
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
         go-version: ${{ env.GO_VERSION }}
+        cache: true
 
     - name: Cache libsodium
       uses: actions/cache@v4
@@ -102,10 +93,11 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: workspace-${{ matrix.platform }}-${{ github.run_id }}
-          path: /tmp/workspace-${{ matrix.platform }}.tar.gz
+          path: /tmp/
       - name: Extract workspace archive
         run: |
           tar -xzf /tmp/workspace-${{ matrix.platform }}.tar.gz
+          rm -f /tmp/workspace-${{ matrix.platform }}.tar.gz
         shell: bash
       - name: Run tests
         run: |
