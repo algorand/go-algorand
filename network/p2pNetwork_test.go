@@ -40,6 +40,7 @@ import (
 	"github.com/algorand/go-algorand/network/phonebook"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
+	"github.com/algorand/go-deadlock"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pb "github.com/libp2p/go-libp2p-pubsub/pb"
@@ -896,7 +897,7 @@ func TestP2PRelay(t *testing.T) {
 
 	type logMessages struct {
 		msgs [][]byte
-		mu   sync.Mutex
+		mu   deadlock.Mutex
 	}
 	makeCounterHandler := func(numExpected int, counter *atomic.Uint32, msgSink *logMessages) ([]TaggedMessageValidatorHandler, chan struct{}) {
 		counterDone := make(chan struct{})
