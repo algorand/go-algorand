@@ -76,7 +76,7 @@ jobs:
   #     matrix:
   #       # platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-14"]
   #       platform: ["ubuntu-24.04"]
-  #       partition_id: [1, 2, 3, 4, 5, 6, 7, 8] # set PARITION_TOTAL below to match
+  #       partition_id: [0, 1, 2, 3, 4, 5, 6, 7] # set PARITION_TOTAL below to match
   #   runs-on: ${{ matrix.platform }}
   #   env:
   #     PARTITION_ID: ${{ matrix.partition_id }}
@@ -135,7 +135,7 @@ jobs:
       matrix:
         # platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-14"]
         platform: ["ubuntu-24.04"]
-        partition_id: [1, 2, 3, 4, 5, 6, 7, 8] # set PARTITION_TOTAL below to match
+        partition_id: [0, 1, 2, 3, 4, 5, 6, 7] # set PARTITION_TOTAL below to match
     runs-on: ${{ matrix.platform }}
     env:
       PARTITION_ID: ${{ matrix.partition_id }}
