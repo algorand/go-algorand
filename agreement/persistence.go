@@ -355,7 +355,7 @@ func (p *asyncPersistenceLoop) loop(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
-		case s, _ = <-p.pending:
+		case s = <-p.pending:
 		}
 
 		// make sure that the ledger finished writing the previous round to disk.

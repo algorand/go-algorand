@@ -57,10 +57,10 @@ var getToolsCmd = &cobra.Command{
 		}
 
 		file, err := os.Create(os.ExpandEnv(toolsDestFile))
-		defer file.Close()
 		if err != nil {
 			exitErrorf("Error creating output file: %s\n", err.Error())
 		}
+		defer file.Close()
 
 		err = s3Session.DownloadFile(name, file)
 		if err != nil {

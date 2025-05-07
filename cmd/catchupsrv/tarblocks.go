@@ -197,7 +197,7 @@ func (tbf *tarBlockFile) getBlock(round uint64) (data []byte, err error) {
 		}
 	}
 	err = nil
-	for true {
+	for {
 		tbf.current, err = tbf.tarfile.Next()
 		if err == io.EOF {
 			tbf._close()

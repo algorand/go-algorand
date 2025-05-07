@@ -146,6 +146,12 @@ func (uv unauthenticatedVote) verify(l LedgerReader) (vote, error) {
 	return vote{R: rv, Cred: cred, Sig: uv.Sig}, nil
 }
 
+var (
+	// testMakeVoteCheck is a function that can be set to check every
+	// unauthenticatedVote before it is returned by makeVote. It is only set by tests.
+	testMakeVoteCheck func(*unauthenticatedVote) error
+)
+
 // makeVote creates a new unauthenticated vote from its constituent components.
 //
 // makeVote returns an error if it fails.
@@ -178,7 +184,15 @@ func makeVote(rv rawVote, voting crypto.OneTimeSigner, selection *crypto.VRFSecr
 	}
 
 	cred := committee.MakeCredential(&selection.SK, m.Selector)
-	return unauthenticatedVote{R: rv, Cred: cred, Sig: sig}, nil
+	ret := unauthenticatedVote{R: rv, Cred: cred, Sig: sig}
+
+	// for use when running in tests
+	if testMakeVoteCheck != nil {
+		if testErr := testMakeVoteCheck(&ret); testErr != nil {
+			return unauthenticatedVote{}, fmt.Errorf("makeVote: testMakeVoteCheck failed: %w", testErr)
+		}
+	}
+	return ret, nil
 }
 
 // ToBeHashed implements the Hashable interface.

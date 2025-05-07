@@ -118,7 +118,7 @@ var telemetryStatusCmd = &cobra.Command{
 		if err != nil {
 			fmt.Println(err)
 			fmt.Println(loggingNotConfigured)
-		} else if cfg.Enable == false {
+		} else if !cfg.Enable {
 			fmt.Println(loggingNotEnabled)
 		} else {
 			fmt.Printf(loggingEnabled, cfg.Name, cfg.GUID)

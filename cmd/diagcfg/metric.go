@@ -104,7 +104,6 @@ func metricEnableDisable(enable bool) {
 	if err != nil {
 		fmt.Printf(metricSaveConfigFailed, fmt.Sprintf("%v", err))
 	}
-	return
 }
 
 func getConfigFilePath() (string, error) {

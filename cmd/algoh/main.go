@@ -48,10 +48,14 @@ var telemetryOverride = flag.String("t", "", `Override telemetry setting if supp
 // the following flags aren't being used by the algoh, but are needed so that the flag package won't complain that
 // these flags were provided but were not defined. We grab all the input flags and pass these downstream to the algod executable
 // as an input arguments.
-var peerOverride = flag.String("p", "", "Override phonebook with peer ip:port (or semicolon separated list: ip:port;ip:port;ip:port...)")
-var listenIP = flag.String("l", "", "Override config.EndpointAddress (REST listening address) with ip:port")
-var seed = flag.String("seed", "", "input to math/rand.Seed()")
-var genesisFile = flag.String("g", "", "Genesis configuration file")
+//
+//nolint:unused // unused for reasons above
+var (
+	peerOverride = flag.String("p", "", "Override phonebook with peer ip:port (or semicolon separated list: ip:port;ip:port;ip:port...)")
+	listenIP     = flag.String("l", "", "Override config.EndpointAddress (REST listening address) with ip:port")
+	seed         = flag.String("seed", "", "input to math/rand.Seed()")
+	genesisFile  = flag.String("g", "", "Genesis configuration file")
+)
 
 const algodFileName = "algod"
 const goalFileName = "goal"

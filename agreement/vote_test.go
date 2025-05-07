@@ -17,6 +17,10 @@
 package agreement
 
 import (
+	"bytes"
+	"encoding/base64"
+	"encoding/hex"
+	"fmt"
 	"os"
 	"testing"
 
@@ -27,9 +31,37 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/network/vpack"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/partitiontest"
 )
+
+func init() {
+	testMakeVoteCheck = testVPackMakeVote
+}
+
+func testVPackMakeVote(v *unauthenticatedVote) error {
+	vbuf := protocol.Encode(v)
+	enc := vpack.NewStatelessEncoder()
+	dec := vpack.NewStatelessDecoder()
+	encBuf, err := enc.CompressVote(nil, vbuf)
+	if err != nil {
+		return fmt.Errorf("makeVote: failed to parse vote msgpack: %v", err)
+	}
+	decBuf, err := dec.DecompressVote(nil, encBuf)
+	if err != nil {
+		return fmt.Errorf("makeVote: failed to decompress vote msgpack: %v", err)
+	}
+	if !bytes.Equal(vbuf, decBuf) {
+		fmt.Printf("vote: %+v\n", v)
+		fmt.Printf("oldbuf: %s\n", hex.EncodeToString(vbuf))
+		fmt.Printf("decbuf: %s\n", hex.EncodeToString(decBuf))
+		fmt.Printf("base64 oldbuf: %s\n", base64.StdEncoding.EncodeToString(vbuf))
+		fmt.Printf("base64 decbuf: %s\n", base64.StdEncoding.EncodeToString(decBuf))
+		return fmt.Errorf("makeVote: decompressed vote msgpack does not match original")
+	}
+	return nil
+}
 
 // error is set if this address is not selected
 func makeVoteTesting(addr basics.Address, vrfSecs *crypto.VRFSecrets, otSecs crypto.OneTimeSigner, ledger Ledger, round basics.Round, period period, step step, digest crypto.Digest) (vote, error) {

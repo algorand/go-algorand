@@ -17,6 +17,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -369,9 +370,9 @@ func getWalletHandleMaybePassword(dataDir string, walletName string, getPassword
 				walletID = []byte(wallets[0].ID)
 				accountList.setDefaultWalletID(walletID)
 			} else if len(wallets) == 0 {
-				return nil, nil, fmt.Errorf(errNoWallets)
+				return nil, nil, errors.New(errNoWallets)
 			} else {
-				return nil, nil, fmt.Errorf(errNoDefaultWallet)
+				return nil, nil, errors.New(errNoDefaultWallet)
 			}
 		}
 		// Fetch the wallet name (useful for error messages, and to check

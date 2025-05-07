@@ -545,30 +545,6 @@ func MinBalance(
 	return MicroAlgos{min}
 }
 
-// OnlineAccountData returns subset of AccountData as OnlineAccountData data structure.
-// Account is expected to be Online otherwise its is cleared out
-func (u AccountData) OnlineAccountData() OnlineAccountData {
-	if u.Status != Online {
-		// if the account is not Online and agreement requests it for some reason, clear it out
-		return OnlineAccountData{}
-	}
-
-	return OnlineAccountData{
-		MicroAlgosWithRewards: u.MicroAlgos,
-		VotingData: VotingData{
-			VoteID:          u.VoteID,
-			SelectionID:     u.SelectionID,
-			StateProofID:    u.StateProofID,
-			VoteFirstValid:  u.VoteFirstValid,
-			VoteLastValid:   u.VoteLastValid,
-			VoteKeyDilution: u.VoteKeyDilution,
-		},
-		IncentiveEligible: u.IncentiveEligible,
-		LastProposed:      u.LastProposed,
-		LastHeartbeat:     u.LastHeartbeat,
-	}
-}
-
 // VotingStake returns the amount of MicroAlgos associated with the user's account
 // for the purpose of participating in the Algorand protocol.  It assumes the
 // caller has already updated rewards appropriately using WithUpdatedRewards().
