@@ -201,7 +201,7 @@ func MakeService(ctx context.Context, log logging.Logger, cfg config.Local, h ho
 	sm := makeStreamManager(ctx, log, h, wsStreamHandlers, cfg.EnableGossipService)
 	sub, err := h.EventBus().Subscribe(new(event.EvtPeerIdentificationCompleted))
 	if err != nil {
-		err0 := fmt.Errorf("Failed to subscribe to peer identification events: %v", err)
+		err0 := fmt.Errorf("failed to subscribe to peer identification events: %v", err)
 		return nil, err0
 	}
 	go sm.peerWatcher(ctx, sub)

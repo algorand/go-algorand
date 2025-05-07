@@ -109,34 +109,32 @@ func (n *streamManager) dispatch(ctx context.Context, remotePeer peer.ID, stream
 	}
 }
 
-// Connected is called when a connection is opened
-// for both incoming (listener -> addConn) and outgoing (dialer -> addConn) connections.
-func (n *streamManager) Connected(net network.Network, conn network.Conn) {
-}
-
 func (n *streamManager) peerWatcher(ctx context.Context, sub event.Subscription) {
 	defer sub.Close()
 	for e := range sub.Out() {
 		evt := e.(event.EvtPeerIdentificationCompleted)
 		conn := evt.Conn
-		if conn.Stat().Direction == network.DirInbound && !n.allowIncomingGossip {
-			n.log.Debugf("ignoring incoming connection from %s", conn.RemotePeer().String())
-			continue
-		}
 
 		remotePeer := conn.RemotePeer()
 		localPeer := n.host.ID()
 
+		if conn.Stat().Direction == network.DirInbound && !n.allowIncomingGossip {
+			n.log.Debugf("%s: ignoring incoming connection from %s", localPeer.String(), remotePeer.String())
+			continue
+		}
+
 		// ensure that only one of the peers initiates the stream
 		if localPeer > remotePeer {
-			return
+			n.log.Debugf("%s: ignoring a lesser peer ID %s", localPeer.String(), remotePeer.String())
+			continue
 		}
 
 		n.streamsLock.Lock()
 		_, ok := n.streams[remotePeer]
 		if ok {
 			n.streamsLock.Unlock()
-			return // there's already an active stream with this peer for our protocol
+			n.log.Debugf("%s: already have a stream to/from %s", localPeer.String(), remotePeer.String())
+			continue // there's already an active stream with this peer for our protocol
 		}
 
 		protos := evt.Protocols
@@ -147,9 +145,9 @@ func (n *streamManager) peerWatcher(ctx context.Context, sub event.Subscription)
 
 		stream, err := n.host.NewStream(n.ctx, remotePeer, targetProto)
 		if err != nil {
-			n.log.Infof("Failed to open stream to %s (%s): %v", remotePeer, conn.RemoteMultiaddr().String(), err)
+			n.log.Infof("%s: failed to open stream to %s (%s): %v", localPeer.String(), remotePeer, conn.RemoteMultiaddr().String(), err)
 			n.streamsLock.Unlock()
-			return
+			continue
 		}
 		n.streams[remotePeer] = stream
 		n.streamsLock.Unlock()
@@ -158,7 +156,7 @@ func (n *streamManager) peerWatcher(ctx context.Context, sub event.Subscription)
 		if handler, ok := n.handlers[targetProto]; ok {
 			handler(n.ctx, remotePeer, stream, incoming)
 		} else {
-			n.log.Errorf("No handler for protocol %s, peer %s", targetProto, remotePeer)
+			n.log.Errorf("%s: no handler for protocol %s, peer %s", localPeer.String(), targetProto, remotePeer)
 			_ = stream.Reset()
 		}
 
@@ -168,6 +166,11 @@ func (n *streamManager) peerWatcher(ctx context.Context, sub event.Subscription)
 		default:
 		}
 	}
+}
+
+// Connected is called when a connection is opened
+// for both incoming (listener -> addConn) and outgoing (dialer -> addConn) connections.
+func (n *streamManager) Connected(net network.Network, conn network.Conn) {
 }
 
 // Disconnected is called when a connection is closed

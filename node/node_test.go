@@ -1022,15 +1022,15 @@ func TestNodeP2PRelays(t *testing.T) {
 		switch i {
 		case 0:
 			// node R1 connects to R2
-			t.Logf("Node%d phonebook: %s", i, ni[1].p2pMultiAddr())
+			t.Logf("Node%d %s phonebook: %s", i, ni[0].p2pID, ni[1].p2pMultiAddr())
 			return []string{ni[1].p2pMultiAddr()}
 		case 1:
 			// node R2 connects to none one
-			t.Logf("Node%d phonebook: empty", i)
+			t.Logf("Node%d %s phonebook: empty", i, ni[1].p2pID)
 			return []string{}
 		case 2:
-			// node N only connects to R1
-			t.Logf("Node%d phonebook: %s", i, ni[1].p2pMultiAddr())
+			// node N only connects to R2
+			t.Logf("Node%d %s phonebook: %s", i, ni[2].p2pID, ni[1].p2pMultiAddr())
 			return []string{ni[1].p2pMultiAddr()}
 		default:
 			t.Errorf("not expected number of nodes: %d", i)
