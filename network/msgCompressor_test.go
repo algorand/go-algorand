@@ -76,7 +76,7 @@ func (cl *converterTestLogger) Warnf(s string, args ...interface{}) {
 func TestWsPeerMsgDataConverterConvert(t *testing.T) {
 	partitiontest.PartitionTest(t)
 
-	c := wsPeerMsgDataConverter{}
+	c := wsPeerMsgDataDecoder{}
 	c.ppdec = zstdProposalDecompressor{}
 	tag := protocol.AgreementVoteTag
 	data := []byte("data")
