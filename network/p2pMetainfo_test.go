@@ -52,7 +52,6 @@ func TestReadPeerMetaHeaders(t *testing.T) {
 		supportedProtocolVersions: []string{"1.0", "2.2"},
 	}
 
-	// Prepare mock data
 	httpHeaders := make(http.Header)
 	httpHeaders.Set(TelemetryIDHeader, "mockTelemetryID")
 	httpHeaders.Set(InstanceNameHeader, "mockInstanceName")
@@ -65,14 +64,10 @@ func TestReadPeerMetaHeaders(t *testing.T) {
 	lengthBytes := make([]byte, 2)
 	binary.BigEndian.PutUint16(lengthBytes, length)
 
-	// Mock Read calls
 	mockStream.On("Read", mock.Anything).Return(lengthBytes, nil).Once()
 	mockStream.On("Read", mock.Anything).Return(data, nil).Once()
 
-	// Call the method
 	metaInfo, err := readPeerMetaHeaders(mockStream, p2pPeer, n.supportedProtocolVersions)
-
-	// Assertions
 	assert.NoError(t, err)
 	assert.Equal(t, "mockTelemetryID", metaInfo.telemetryID)
 	assert.Equal(t, "mockInstanceName", metaInfo.instanceName)
@@ -88,7 +83,6 @@ func TestWritePeerMetaHeaders(t *testing.T) {
 		log: logging.Base(),
 	}
 
-	// Prepare mock data
 	header := make(http.Header)
 	setHeaders(header, "1.0", n)
 	meta := peerMetaHeadersFromHTTPHeaders(header)
@@ -97,13 +91,9 @@ func TestWritePeerMetaHeaders(t *testing.T) {
 	lengthBytes := make([]byte, 2)
 	binary.BigEndian.PutUint16(lengthBytes, length)
 
-	// Mock Write calls
 	mockStream.On("Write", append(lengthBytes, data...)).Return(len(lengthBytes)+len(data), nil).Once()
 
-	// Call the method
 	err := writePeerMetaHeaders(mockStream, p2pPeer, "1.0", n)
-
-	// Assertions
 	assert.NoError(t, err)
 	mockStream.AssertExpectations(t)
 }
