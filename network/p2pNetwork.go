@@ -883,18 +883,7 @@ func (n *P2PNetwork) wsStreamHandlerV1(ctx context.Context, p2pPeer peer.ID, str
 		}
 	}
 
-	protos, err := n.pstore.GetProtocols(p2pPeer)
-	if err != nil {
-		n.log.Warnf("wsStreamHandlerV1: error getting protocols for peer %s: %v", p2pPeer, err)
-	}
-
-	telemetryGUID, instanceName := p2p.GetPeerTelemetryInfo(protos)
-	pmi := peerMetaInfo{
-		ti:       p2p.TelemetryInfo{ID: telemetryGUID, Instance: instanceName},
-		version:  "1",
-		features: "",
-	}
-	n.wsStreamHandler(ctx, p2pPeer, stream, incoming, pmi)
+	n.wsStreamHandler(ctx, p2pPeer, stream, incoming, peerMetaInfo{})
 }
 
 func (n *P2PNetwork) readPeerMetaHeaders(stream network.Stream, p2pPeer peer.ID) (peerMetaInfo, error) {
