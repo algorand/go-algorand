@@ -1280,8 +1280,8 @@ func TestNodeP2P_NetProtoVersions(t *testing.T) {
 
 	const numAccounts = 2
 	acctStake := make([]basics.MicroAlgos, numAccounts)
-	acctStake[0] = basics.MicroAlgos{Raw: uint64(maxMoneyAtStart / 2)}
-	acctStake[1] = basics.MicroAlgos{Raw: uint64(maxMoneyAtStart / 2)}
+	acctStake[0] = basics.MicroAlgos{Raw: uint64(maxMoneyAtStart / numAccounts)}
+	acctStake[1] = basics.MicroAlgos{Raw: uint64(maxMoneyAtStart / numAccounts)}
 
 	configHook := func(ni nodeInfo, cfg config.Local) (nodeInfo, config.Local) {
 		cfg = config.GetDefaultLocal()
@@ -1316,8 +1316,8 @@ func TestNodeP2P_NetProtoVersions(t *testing.T) {
 		return phonebook
 	}
 	nodes, wallets := setupFullNodesEx(t, consensusTest0, configurableConsensus, acctStake, configHook, phonebookHook)
-	require.Len(t, nodes, 2)
-	require.Len(t, wallets, 2)
+	require.Len(t, nodes, numAccounts)
+	require.Len(t, wallets, numAccounts)
 	for i := 0; i < len(nodes); i++ {
 		defer os.Remove(wallets[i])
 		defer nodes[i].Stop()

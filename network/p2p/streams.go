@@ -139,7 +139,8 @@ func (n *streamManager) peerWatcher(ctx context.Context, sub event.Subscription)
 
 		protos := evt.Protocols
 		var targetProto protocol.ID = AlgorandWsProtocolV1
-		if slices.Contains(protos, AlgorandWsProtocolV22) {
+		// n.handlers[AlgorandWsProtocolV22] check works on pair with disableV22Protocol for testing
+		if slices.Contains(protos, AlgorandWsProtocolV22) && n.handlers[AlgorandWsProtocolV22] != nil {
 			targetProto = AlgorandWsProtocolV22
 		}
 

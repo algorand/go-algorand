@@ -1483,6 +1483,7 @@ func TestP2PMetainfoExchange(t *testing.T) {
 
 	cfg2 := cfg
 	cfg2.EnableVoteCompression = false
+	cfg.NetAddress = ""
 	multiAddrStr := addrsA[0].String()
 	phoneBookAddresses := []string{multiAddrStr}
 	netB, err := NewP2PNetwork(log, cfg2, "", phoneBookAddresses, genesisID, config.Devtestnet, &nopeNodeInfo{}, nil)
@@ -1506,4 +1507,58 @@ func TestP2PMetainfoExchange(t *testing.T) {
 	peer = peers[0].(*wsPeer)
 	require.True(t, peer.features&pfCompressedProposal != 0)
 	require.True(t, peer.vpackVoteCompressionSupported())
+}
+
+// TestP2PMetainfoV1vsV22 checks v1 and v22 nodes works together.
+// It is done with setting disableV22Protocol=true for the second node,
+// and it renders EnableVoteCompression options to have no effect.
+func TestP2PMetainfoV1vsV22(t *testing.T) {
+	partitiontest.PartitionTest(t)
+
+	cfg := config.GetDefaultLocal()
+	cfg.DNSBootstrapID = "" // disable DNS lookups since the test uses phonebook addresses
+	cfg.NetAddress = "127.0.0.1:0"
+	cfg.EnableVoteCompression = true
+	log := logging.TestingLog(t)
+	netA, err := NewP2PNetwork(log, cfg, "", nil, genesisID, config.Devtestnet, &nopeNodeInfo{}, nil)
+	require.NoError(t, err)
+	err = netA.Start()
+	require.NoError(t, err)
+	defer netA.Stop()
+
+	peerInfoA := netA.service.AddrInfo()
+	addrsA, err := peer.AddrInfoToP2pAddrs(&peerInfoA)
+	require.NoError(t, err)
+	require.NotZero(t, addrsA[0])
+
+	cfg2 := cfg
+	cfg2.EnableVoteCompression = true
+	cfg.NetAddress = ""
+	multiAddrStr := addrsA[0].String()
+	phoneBookAddresses := []string{multiAddrStr}
+	disableV22Protocol = true
+	defer func() {
+		disableV22Protocol = false
+	}()
+	netB, err := NewP2PNetwork(log, cfg2, "", phoneBookAddresses, genesisID, config.Devtestnet, &nopeNodeInfo{}, nil)
+	require.NoError(t, err)
+	err = netB.Start()
+	require.NoError(t, err)
+	defer netB.Stop()
+
+	require.Eventually(t, func() bool {
+		return len(netA.service.Conns()) > 0 && len(netB.service.Conns()) > 0
+	}, 1*time.Second, 50*time.Millisecond)
+
+	peers := netA.GetPeers(PeersConnectedIn)
+	require.Len(t, peers, 1)
+	peer := peers[0].(*wsPeer)
+	require.False(t, peer.features&pfCompressedProposal != 0)
+	require.False(t, peer.vpackVoteCompressionSupported())
+
+	peers = netB.GetPeers(PeersConnectedOut)
+	require.Len(t, peers, 1)
+	peer = peers[0].(*wsPeer)
+	require.False(t, peer.features&pfCompressedProposal != 0)
+	require.False(t, peer.vpackVoteCompressionSupported())
 }

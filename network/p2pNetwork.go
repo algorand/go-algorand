@@ -48,6 +48,9 @@ import (
 // some arbitrary number TODO: figure out a better value based on peerSelector/fetcher algorithm
 const numArchivalPeersToFind = 4
 
+// disableV22Protocol is a flag for testing in order to test v1 node can communicate with v1 + v22 node
+var disableV22Protocol = false
+
 // P2PNetwork implements the GossipNode interface
 type P2PNetwork struct {
 	service     p2p.Service
@@ -290,6 +293,9 @@ func NewP2PNetwork(log logging.Logger, cfg config.Local, datadir string, phonebo
 	hm := p2p.StreamHandlerMap{
 		p2p.AlgorandWsProtocolV1:  net.wsStreamHandlerV1,
 		p2p.AlgorandWsProtocolV22: net.wsStreamHandlerV22,
+	}
+	if disableV22Protocol {
+		delete(hm, p2p.AlgorandWsProtocolV22)
 	}
 	// END TODO
 	net.service, err = p2p.MakeService(net.ctx, log, cfg, h, la, hm, pubsubMetricsTracer{})
