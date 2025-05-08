@@ -553,6 +553,9 @@ type ConsensusParams struct {
 
 	// Heartbeat support
 	Heartbeat bool
+
+	// EnableSha512BlockHash adds an additional SHA512 hash to the block header.
+	EnableSha512BlockHash bool
 }
 
 // ProposerPayoutRules puts several related consensus parameters in one place. The same
@@ -1486,6 +1489,7 @@ func initConsensusProtocols() {
 
 	vFuture.LogicSigVersion = 12       // When moving this to a release, put a new higher LogicSigVersion here
 	vFuture.EnableAppVersioning = true // if not promoted when v12 goes into effect, update logic/field.go
+	vFuture.EnableSha512BlockHash = true
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 

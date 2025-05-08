@@ -43,6 +43,8 @@ type (
 		// The hash of the previous block
 		Branch BlockHash `codec:"prev"`
 
+		Branch512 [crypto.Sha512Size]byte `codec:"prev512"`
+
 		// Sortition seed
 		Seed committee.Seed `codec:"seed"`
 
@@ -319,6 +321,12 @@ func (bh BlockHeader) Alive(tx transactions.Header) error {
 // The hash of a block is the hash of its header.
 func (bh BlockHeader) Hash() BlockHash {
 	return BlockHash(crypto.HashObj(bh))
+}
+
+// Hash512 returns the hash of a block header using SHA512.
+func (bh BlockHeader) Hash512() [crypto.Sha512Size]byte {
+	h := crypto.GenericHashObj(crypto.HashFactory{HashType: crypto.Sha512}.NewHash(), bh)
+	return [crypto.Sha512Size]byte(h)
 }
 
 // ToBeHashed implements the crypto.Hashable interface
@@ -628,6 +636,9 @@ func MakeBlock(prev BlockHeader) Block {
 			Bonus:        bonus,
 		},
 	}
+	if params.EnableSha512BlockHash {
+		blk.Branch512 = prev.Hash512()
+	}
 	blk.TxnCommitments, err = blk.PaysetCommit()
 	if err != nil {
 		logging.Base().Warnf("MakeBlock: computing empty TxnCommitments: %v", err)
@@ -718,6 +729,10 @@ func (bh BlockHeader) PreCheck(prev BlockHeader) error {
 	// check the pointer to the previous block
 	if bh.Branch != prev.Hash() {
 		return fmt.Errorf("block branch incorrect %v != %v", bh.Branch, prev.Hash())
+	}
+
+	if params.EnableSha512BlockHash && bh.Branch512 != prev.Hash512() {
+		return fmt.Errorf("block branch512 incorrect %v != %v", bh.Branch512, prev.Hash512())
 	}
 
 	// check upgrade state
