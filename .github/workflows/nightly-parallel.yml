@@ -128,21 +128,68 @@ jobs:
   #     #     file: ./coverage.txt
   #     #     fail_ci_if_error: false
 
-  # Integration nightly jobs that run in parallel splits
-  integration_nightly:
+  # # Integration nightly jobs that run in parallel splits
+  # integration_nightly:
+  #   needs: [build]
+  #   strategy:
+  #     fail-fast: false
+  #     matrix:
+  #       # platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-14"]
+  #       platform: ["ubuntu-24.04"]
+  #       partition_id: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] # set PARTITION_TOTAL below to match
+  #   runs-on: ${{ matrix.platform }}
+  #   env:
+  #     CIRCLECI: true
+  #     PARTITION_ID: ${{ matrix.partition_id }}
+  #     PARTITION_TOTAL: 16
+  #     E2E_TEST_FILTER: GO
+  #     PARALLEL_FLAG: "-p 1"
+  #   steps:
+  #     - name: Download workspace archive
+  #       uses: actions/download-artifact@v4
+  #       with:
+  #         name: workspace-${{ matrix.platform }}-${{ github.run_id }}
+  #         path: /tmp/
+  #     - name: Extract workspace archive
+  #       run: |
+  #         tar -xzf /tmp/workspace-${{ matrix.platform }}.tar.gz
+  #         rm -f /tmp/workspace-${{ matrix.platform }}.tar.gz
+  #       shell: bash
+  #     - name: Get Go version
+  #       id: go_version
+  #       run: echo "GO_VERSION=$(./scripts/get_golang_version.sh)" >> $GITHUB_ENV  
+  #     - name: Set up Go
+  #       uses: actions/setup-go@v5
+  #       with:
+  #         go-version: ${{ env.GO_VERSION }}
+  #         cache: true
+  #     - name: Run integration tests
+  #       run: |
+  #         ./scripts/configure_dev.sh
+  #         ./scripts/buildtools/install_buildtools.sh -o "gotest.tools/gotestsum"
+  #         mkdir -p ~/test_results/${{ matrix.platform }}_integration_nightly/${PARTITION_ID}
+  #         TEST_RESULTS=~/test_results/${{ matrix.platform }}_integration_nightly/${PARTITION_ID} \
+  #         test/scripts/run_integration_tests.sh
+  #     - name: Upload test results
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: integration-results-${{ matrix.platform }}-${{ github.run_id }}-${{ matrix.partition_id }}
+  #         path: ~/test_results
+  #         retention-days: 7
+
+  e2e_expect_nightly:
     needs: [build]
     strategy:
       fail-fast: false
       matrix:
-        # platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-14"]
         platform: ["ubuntu-24.04"]
-        partition_id: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] # set PARTITION_TOTAL below to match
+        partition_id: [0, 1] 
     runs-on: ${{ matrix.platform }}
     env:
       CIRCLECI: true
       PARTITION_ID: ${{ matrix.partition_id }}
-      PARTITION_TOTAL: 16
-      E2E_TEST_FILTER: GO
+      PARTITION_TOTAL: 2
+      E2E_TEST_FILTER: EXPECT
       PARALLEL_FLAG: "-p 1"
     steps:
       - name: Download workspace archive
@@ -157,74 +204,25 @@ jobs:
         shell: bash
       - name: Get Go version
         id: go_version
-        run: echo "GO_VERSION=$(./scripts/get_golang_version.sh)" >> $GITHUB_ENV  
+        run: echo "GO_VERSION=$(./scripts/get_golang_version.sh)" >> $GITHUB_ENV
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
-      - name: Run integration tests
+      - name: Run E2E expect tests
         run: |
-          ./scripts/configure_dev.sh
-          ./scripts/buildtools/install_buildtools.sh -o "gotest.tools/gotestsum"
-          mkdir -p ~/test_results/${{ matrix.platform }}_integration_nightly/${PARTITION_ID}
-          TEST_RESULTS=~/test_results/${{ matrix.platform }}_integration_nightly/${PARTITION_ID} \
+          scripts/configure_dev.sh
+          scripts/buildtools/install_buildtools.sh -o "gotest.tools/gotestsum"
+          mkdir -p ~/test_results/${{ matrix.platform }}_e2e_expect_nightly/${PARTITION_ID}
+          TEST_RESULTS=~/test_results/${{ matrix.platform }}_e2e_expect_nightly/${PARTITION_ID} \
           test/scripts/run_integration_tests.sh
       - name: Upload test results
         uses: actions/upload-artifact@v4
         with:
-          name: integration-results-${{ matrix.platform }}-${{ github.run_id }}-${{ matrix.partition_id }}
+          name: e2e-expect-results-${{ matrix.platform }}-${{ matrix.partition_id }}
           path: ~/test_results
           retention-days: 7
-
-  # e2e_expect_nightly:
-  #   needs: [check_comments, build]
-  #   if: needs.check_comments.outputs.should_run == 'true' && needs.check_comments.outputs.test_type == 'e2e_expect'
-  #   strategy:
-  #     fail-fast: false
-  #     matrix:
-  #       platform: ["${{ needs.check_comments.outputs.platform }}"]
-  #       partition_id: [0, 1] 
-  #       include:
-  #         - platform: amd64
-  #           runner: ubuntu-latest
-  #         - platform: arm64
-  #           runner: ubuntu-latest
-  #         - platform: mac_arm64
-  #           runner: macos-14
-  #   runs-on: ${{ matrix.runner }}
-  #   env:
-  #     PARTITION_ID: ${{ matrix.partition_id }}
-  #     PARTITION_TOTAL: 2
-  #     E2E_TEST_FILTER: EXPECT
-  #     PARALLEL_FLAG: "-p 1"
-  #   steps:
-  #     - uses: actions/download-artifact@v4
-  #       with:
-  #         name: workspace-${{ matrix.platform }}
-  #         path: .
-
-  #     - name: Set up Go
-  #       uses: actions/setup-go@v5
-  #       with:
-  #         go-version-file: 'go.mod'
-
-  #     - name: Run E2E expect tests
-  #       run: |
-  #         scripts/configure_dev.sh
-  #         scripts/buildtools/install_buildtools.sh -o "gotest.tools/gotestsum"
-          
-  #         mkdir -p test_results/${{ matrix.platform }}_e2e_expect_nightly/${PARTITION_ID}
-          
-  #         TEST_RESULTS=test_results/${{ matrix.platform }}_e2e_expect_nightly/${PARTITION_ID} \
-  #         test/scripts/run_integration_tests.sh
-
-  #     - name: Upload test results
-  #       uses: actions/upload-artifact@v4
-  #       with:
-  #         name: e2e-expect-results-${{ matrix.platform }}-${{ matrix.partition_id }}
-  #         path: test_results
-  #         retention-days: 7
 
   # e2e_subs_nightly:
   #   needs: [check_comments, build]
