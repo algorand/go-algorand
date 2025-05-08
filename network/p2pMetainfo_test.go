@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/test/partitiontest"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -45,6 +46,9 @@ func (m *MockStream) Write(p []byte) (n int, err error) {
 }
 
 func TestReadPeerMetaHeaders(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	mockStream := new(MockStream)
 	p2pPeer := peer.ID("mockPeer")
 	n := &P2PNetwork{
@@ -77,6 +81,9 @@ func TestReadPeerMetaHeaders(t *testing.T) {
 }
 
 func TestWritePeerMetaHeaders(t *testing.T) {
+	partitiontest.PartitionTest(t)
+	t.Parallel()
+
 	mockStream := new(MockStream)
 	p2pPeer := peer.ID("mockPeer")
 	n := &P2PNetwork{
