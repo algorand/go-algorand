@@ -109,8 +109,8 @@ jobs:
   #         export PACKAGE_NAMES=$(echo $PACKAGES | tr -d '\n')          
   #         mkdir -p test_results/${{ matrix.platform }}_test_nightly/${PARTITION_ID}
   #         gotestsum --format standard-verbose \
-  #           --junitfile test_results/${{ matrix.platform }}_test_nightly/${PARTITION_ID}/results.xml \
-  #           --jsonfile test_results/${{ matrix.platform }}_test_nightly/${PARTITION_ID}/testresults.json \
+  #           --junitfile ~/test_results/${{ matrix.platform }}_test_nightly/${PARTITION_ID}/results.xml \
+  #           --jsonfile ~/test_results/${{ matrix.platform }}_test_nightly/${PARTITION_ID}/testresults.json \
   #           -- --tags "sqlite_unlock_notify sqlite_omit_load_extension" \
   #           -race -timeout 1h -coverprofile=coverage.txt -covermode=atomic -p 1 \
   #           $PACKAGE_NAMES
@@ -118,7 +118,7 @@ jobs:
   #       uses: actions/upload-artifact@v4
   #       with:
   #         name: test-results-${{ matrix.platform }}-${{ github.run_id }}-${{ matrix.partition_id }}
-  #         path: test_results
+  #         path: ~/test_results
   #         retention-days: 7
 
   #     # - name: Upload coverage
@@ -136,12 +136,12 @@ jobs:
       matrix:
         # platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-14"]
         platform: ["ubuntu-24.04"]
-        partition_id: [0, 1, 2, 3] # set PARTITION_TOTAL below to match
+        partition_id: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] # set PARTITION_TOTAL below to match
     runs-on: ${{ matrix.platform }}
     env:
       CIRCLECI: true
       PARTITION_ID: ${{ matrix.partition_id }}
-      PARTITION_TOTAL: 4
+      PARTITION_TOTAL: 16
       E2E_TEST_FILTER: GO
       PARALLEL_FLAG: "-p 1"
     steps:
@@ -167,14 +167,14 @@ jobs:
         run: |
           ./scripts/configure_dev.sh
           ./scripts/buildtools/install_buildtools.sh -o "gotest.tools/gotestsum"
-          mkdir -p test_results/${{ matrix.platform }}_integration_nightly/${PARTITION_ID}
-          TEST_RESULTS=test_results/${{ matrix.platform }}_integration_nightly/${PARTITION_ID} \
+          mkdir -p ~/test_results/${{ matrix.platform }}_integration_nightly/${PARTITION_ID}
+          TEST_RESULTS=~/test_results/${{ matrix.platform }}_integration_nightly/${PARTITION_ID} \
           test/scripts/run_integration_tests.sh
       - name: Upload test results
         uses: actions/upload-artifact@v4
         with:
           name: integration-results-${{ matrix.platform }}-${{ github.run_id }}-${{ matrix.partition_id }}
-          path: test_results
+          path: ~/test_results
           retention-days: 7
 
   # e2e_expect_nightly:
