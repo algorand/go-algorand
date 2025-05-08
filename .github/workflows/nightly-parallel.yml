@@ -81,6 +81,7 @@ jobs:
   #   env:
   #     PARTITION_ID: ${{ matrix.partition_id }}
   #     PARTITION_TOTAL: 8
+  #     CIRCLECI: true
   #   steps:
   #     - name: Download workspace archive
   #       uses: actions/download-artifact@v4
@@ -138,6 +139,7 @@ jobs:
         partition_id: [0, 1, 2, 3] # set PARTITION_TOTAL below to match
     runs-on: ${{ matrix.platform }}
     env:
+      CIRCLECI: true
       PARTITION_ID: ${{ matrix.partition_id }}
       PARTITION_TOTAL: 4
       E2E_TEST_FILTER: GO
@@ -165,9 +167,7 @@ jobs:
         run: |
           ./scripts/configure_dev.sh
           ./scripts/buildtools/install_buildtools.sh -o "gotest.tools/gotestsum"
-          
           mkdir -p test_results/${{ matrix.platform }}_integration_nightly/${PARTITION_ID}
-          
           TEST_RESULTS=test_results/${{ matrix.platform }}_integration_nightly/${PARTITION_ID} \
           test/scripts/run_integration_tests.sh
       - name: Upload test results
