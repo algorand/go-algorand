@@ -121,6 +121,8 @@ jobs:
           path: ~/test_results
           retention-days: 7
       - name: Upload coverage
+        # Only upload coverage from ubuntu-24.04 platform
+        if: matrix.platform == 'ubuntu-24.04'
         uses: codecov/codecov-action@v4
         env:
           GITHUB_ACTIONS: True
