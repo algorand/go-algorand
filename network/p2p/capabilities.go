@@ -18,6 +18,7 @@ package p2p
 
 import (
 	"context"
+	"math/rand/v2"
 	"sync"
 	"time"
 
@@ -109,7 +110,7 @@ func (c *CapabilitiesDiscovery) PeersForCapability(capability Capability, n int)
 }
 
 // AdvertiseCapabilities periodically runs the Advertiser interface on the DHT
-// If a capability fails to advertise we will retry every 10 seconds until full success
+// If a capability fails to advertise we will retry every 100 seconds until full success
 // This gets rerun every at the minimum ttl or the maxAdvertisementInterval.
 func (c *CapabilitiesDiscovery) AdvertiseCapabilities(capabilities ...Capability) {
 	c.wg.Add(1)
@@ -121,6 +122,15 @@ func (c *CapabilitiesDiscovery) AdvertiseCapabilities(capabilities ...Capability
 		}()
 
 		for {
+			// shuffle capabilities to advertise in random order
+			// since the DHT's internal advertisement happens concurrently for peers in its routing table
+			// any peer error does not prevent advertisement of other peers.
+			// on repeated advertisement, we want to avoid the same order to make sure all capabilities are advertised.
+			if len(capabilities) > 1 {
+				rand.Shuffle(len(capabilities), func(i, j int) {
+					capabilities[i], capabilities[j] = capabilities[j], capabilities[i]
+				})
+			}
 			select {
 			case <-c.dht.Context().Done():
 				return
@@ -131,7 +141,7 @@ func (c *CapabilitiesDiscovery) AdvertiseCapabilities(capabilities ...Capability
 					ttl, err0 := c.advertise(c.dht.Context(), string(capa))
 					if err0 != nil {
 						err = err0
-						c.log.Errorf("failed to advertise for capability %s: %v", capa, err0)
+						c.log.Warnf("failed to advertise for capability %s: %v", capa, err0)
 						break
 					}
 					if ttl < advertisementInterval {
@@ -139,9 +149,9 @@ func (c *CapabilitiesDiscovery) AdvertiseCapabilities(capabilities ...Capability
 					}
 					c.log.Infof("advertised capability %s", capa)
 				}
-				// If we failed to advertise, retry every 10 seconds until successful
+				// If we failed to advertise, retry every 100 seconds until successful
 				if err != nil {
-					nextExecution = time.After(time.Second * 10)
+					nextExecution = time.After(time.Second * 100)
 				} else {
 					// Otherwise, ensure we're at the correct interval
 					nextExecution = time.After(advertisementInterval)
