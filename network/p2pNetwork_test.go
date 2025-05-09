@@ -375,6 +375,12 @@ func (s *mockService) GetHTTPClient(addrInfo *peer.AddrInfo, connTimeStore limit
 	return nil, nil
 }
 
+func (s *mockService) NetworkNotify(notifiee network.Notifiee) {
+}
+
+func (s *mockService) NetworkStopNotify(notifiee network.Notifiee) {
+}
+
 func makeMockService(id peer.ID, addrs []ma.Multiaddr) *mockService {
 	return &mockService{
 		id:    id,
@@ -1357,8 +1363,23 @@ func TestP2PEnableGossipService_BothDisable(t *testing.T) {
 	relayCfg := cfg
 	relayCfg.NetAddress = "127.0.0.1:0"
 
+	var netAConnected atomic.Bool
+	var netBConnected atomic.Bool
+	notifiee1 := &network.NotifyBundle{
+		ConnectedF: func(n network.Network, c network.Conn) {
+			netAConnected.Store(true)
+		},
+	}
+	notifiee2 := &network.NotifyBundle{
+		ConnectedF: func(n network.Network, c network.Conn) {
+			netBConnected.Store(true)
+		},
+	}
+
 	netA, err := NewP2PNetwork(log.With("net", "netA"), relayCfg, "", nil, genesisID, config.Devtestnet, &nopeNodeInfo{}, nil)
 	require.NoError(t, err)
+	netA.service.NetworkNotify(notifiee1)
+	defer netA.service.NetworkStopNotify(notifiee1)
 	netA.Start()
 	defer netA.Stop()
 
@@ -1374,11 +1395,13 @@ func TestP2PEnableGossipService_BothDisable(t *testing.T) {
 
 	netB, err := NewP2PNetwork(log.With("net", "netB"), nodeCfg, "", phoneBookAddresses, genesisID, config.Devtestnet, &nopeNodeInfo{}, nil)
 	require.NoError(t, err)
+	netB.service.NetworkNotify(notifiee2)
+	defer netB.service.NetworkStopNotify(notifiee2)
 	netB.Start()
 	defer netB.Stop()
 
 	require.Eventually(t, func() bool {
-		return len(netA.service.Conns()) > 0 && len(netB.service.Conns()) > 0
+		return netAConnected.Load() && netBConnected.Load()
 	}, 1*time.Second, 50*time.Millisecond)
 
 	require.False(t, netA.hasPeers())
