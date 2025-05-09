@@ -682,14 +682,14 @@ func (r *txnResources) hasApp(app basics.AppIndex) bool {
 		return true
 	}
 
-	if slices.Contains(slices.Concat(r.prefilledApps, r.apps), app) {
+	if slices.Contains(r.prefilledApps, app) || slices.Contains(r.apps, app) {
 		return true
 	}
 	return false
 }
 
 func (r *txnResources) hasAsset(aid basics.AssetIndex) bool {
-	if slices.Contains(slices.Concat(r.prefilledAssets, r.assets), aid) {
+	if slices.Contains(r.prefilledAssets, aid) || slices.Contains(r.assets, aid) {
 		return true
 	}
 	return r.assetFromField == aid
@@ -716,7 +716,7 @@ func (r *txnResources) hasAccount(addr basics.Address) bool {
 		return true
 	}
 
-	if slices.Contains(slices.Concat(r.prefilledAccounts, r.accounts), addr) {
+	if slices.Contains(r.prefilledAccounts, addr) || slices.Contains(r.accounts, addr) {
 		return true
 	}
 
