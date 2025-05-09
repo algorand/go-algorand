@@ -116,7 +116,7 @@ func main() {
 		log.Fatalf("Error validating DNSBootstrap input: %v", err)
 	}
 
-	if _, err := os.Stat(absolutePath); err != nil {
+	if _, err1 := os.Stat(absolutePath); err1 != nil {
 		reportErrorf("Data directory %s does not appear to be valid\n", dataDir)
 	}
 

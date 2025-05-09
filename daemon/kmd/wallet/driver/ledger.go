@@ -136,9 +136,9 @@ func (lwd *LedgerWalletDriver) scanWalletsLocked() error {
 			continue
 		}
 
-		dev, err := info.Open()
-		if err != nil {
-			lwd.log.Warnf("enumerated but failed to open ledger %s %x: %v", info.Path, info.ProductID, err)
+		dev, err1 := info.Open()
+		if err1 != nil {
+			lwd.log.Warnf("enumerated but failed to open ledger %s %x: %v", info.Path, info.ProductID, err1)
 			continue
 		}
 

@@ -190,8 +190,8 @@ func CopyFolder(source, dest string) error {
 }
 
 func copyFolder(source string, dest string, info os.FileInfo, includeFilter IncludeFilter) (err error) {
-	if err := os.MkdirAll(dest, info.Mode()); err != nil {
-		return fmt.Errorf("error creating destination folder: %v", err)
+	if err1 := os.MkdirAll(dest, info.Mode()); err1 != nil {
+		return fmt.Errorf("error creating destination folder: %v", err1)
 	}
 
 	contents, err := os.ReadDir(source)

@@ -470,9 +470,9 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params 
 
 	// check against configured total limit on assets/apps
 	if handle == protocol.CodecHandle {
-		data, err := encode(handle, record)
-		if err != nil {
-			return internalError(ctx, err, errFailedToEncodeResponse, v2.Log)
+		data, err1 := encode(handle, record)
+		if err1 != nil {
+			return internalError(ctx, err1, errFailedToEncodeResponse, v2.Log)
 		}
 		return ctx.Blob(http.StatusOK, contentType, data)
 	}
@@ -1553,8 +1553,8 @@ func (v2 *Handlers) PendingTransactionInformation(ctx echo.Context, txid string,
 
 	// We didn't find it, return a failure
 	if !ok {
-		err := errors.New(errTransactionNotFound)
-		return notFound(ctx, err, err.Error(), v2.Log)
+		err1 := errors.New(errTransactionNotFound)
+		return notFound(ctx, err1, err1.Error(), v2.Log)
 	}
 
 	// Encoding wasn't working well without embedding "real" objects.
@@ -1607,9 +1607,9 @@ func (v2 *Handlers) getPendingTransactions(ctx echo.Context, max *uint64, format
 	var addrPtr *basics.Address
 
 	if addrFilter != nil {
-		addr, err := basics.UnmarshalChecksumAddress(*addrFilter)
-		if err != nil {
-			return badRequest(ctx, err, errFailedToParseAddress, v2.Log)
+		addr, err1 := basics.UnmarshalChecksumAddress(*addrFilter)
+		if err1 != nil {
+			return badRequest(ctx, err1, errFailedToParseAddress, v2.Log)
 		}
 		addrPtr = &addr
 	}

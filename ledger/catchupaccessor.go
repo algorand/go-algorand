@@ -978,8 +978,8 @@ func (c *catchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 	wg.Wait()
 
 	select {
-	case err := <-errChan:
-		return err
+	case err1 := <-errChan:
+		return err1
 	default:
 	}
 

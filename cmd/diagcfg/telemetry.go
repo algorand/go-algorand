@@ -72,21 +72,21 @@ func saveTelemetryConfig(cfg logging.TelemetryConfig) {
 	if dataDir != "" {
 		// Save to dataDir and only update global config {Name,GUID}
 		ddPath := filepath.Join(dataDir, logging.TelemetryConfigFilename)
-		err := cfg.Save(ddPath)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, pathErrFormat, ddPath, err)
+		err1 := cfg.Save(ddPath)
+		if err1 != nil {
+			fmt.Fprintf(os.Stderr, pathErrFormat, ddPath, err1)
 			os.Exit(1)
 		}
-		gcfg, err := logging.LoadTelemetryConfig(globalPath)
-		if err != nil && !os.IsNotExist(err) {
-			fmt.Fprintf(os.Stderr, pathErrFormat, globalPath, err)
+		gcfg, err1 := logging.LoadTelemetryConfig(globalPath)
+		if err1 != nil && !os.IsNotExist(err1) {
+			fmt.Fprintf(os.Stderr, pathErrFormat, globalPath, err1)
 			os.Exit(1)
 		}
 		gcfg.Name = cfg.Name
 		gcfg.GUID = cfg.GUID
-		err = gcfg.Save(globalPath)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, pathErrFormat, globalPath, err)
+		err1 = gcfg.Save(globalPath)
+		if err1 != nil {
+			fmt.Fprintf(os.Stderr, pathErrFormat, globalPath, err1)
 			os.Exit(1)
 		}
 	} else {

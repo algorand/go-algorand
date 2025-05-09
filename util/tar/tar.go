@@ -72,8 +72,8 @@ func Compress(src string, writers ...io.Writer) error {
 		header.Name = strings.TrimPrefix(strings.Replace(file, src, "", -1), string(filepath.Separator))
 
 		// write the header
-		if err := tw.WriteHeader(header); err != nil {
-			return err
+		if err1 := tw.WriteHeader(header); err1 != nil {
+			return err1
 		}
 
 		// return on non-regular files (thanks to [kumo](https://medium.com/@komuw/just-like-you-did-fbdd7df829d3) for this suggested update)

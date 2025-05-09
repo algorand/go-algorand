@@ -198,7 +198,7 @@ func EnsureTelemetryConfigCreated(dataDir *string, genesisID string) (TelemetryC
 			*/
 
 			// If the directory exists...
-			if _, err := os.Stat(*dataDir); err == nil {
+			if _, err1 := os.Stat(*dataDir); err1 == nil {
 
 				// Remember, if we had a data directory supplied we want to save the config there
 				configPath = filepath.Join(*dataDir, TelemetryConfigFilename)
