@@ -33,8 +33,7 @@ jobs:
     # Build job - runs before tests
     strategy:
       matrix:
-        # platform: [ubuntu-24.04, ubuntu-24.04-arm, macos-14]
-        platform: [ubuntu-24.04]
+        platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-14"]
     runs-on: ${{ matrix.platform }}
     steps:
     - name: Checkout code
@@ -74,8 +73,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-14"]
-        platform: ["ubuntu-24.04"]
+        platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-14"]
         partition_id: [0, 1, 2, 3, 4, 5, 6, 7] # set PARITION_TOTAL below to match
     runs-on: ${{ matrix.platform }}
     env:
@@ -138,8 +136,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-14"]
-        platform: ["ubuntu-24.04-arm"]
+        platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-14"]
         partition_id: [0, 1, 2, 3, 4, 5, 6, 7] # set PARTITION_TOTAL below to match
     runs-on: ${{ matrix.platform }}
     env:
@@ -186,8 +183,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-14"]
-        platform: ["ubuntu-24.04-arm"]
+        platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-14"]
         partition_id: [0, 1]
     runs-on: ${{ matrix.platform }}
     env:
@@ -234,8 +230,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-14"]
-        platform: ["ubuntu-24.04-arm"]
+        platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-14"]
     runs-on: ${{ matrix.platform }}
     env:
       E2E_TEST_FILTER: SCRIPTS
@@ -279,8 +274,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        test_type: ['test', 'integration', 'e2e_expect']
-        platform: ['ubuntu-24.04-arm']
+        test_type: ["test", "integration", "e2e_expect"]
+        platform: ["ubuntu-24.04", "ubuntu-24.04-arm", "macos-14"]
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
