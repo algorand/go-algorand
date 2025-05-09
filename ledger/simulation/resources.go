@@ -696,6 +696,14 @@ func (r *txnResources) hasAsset(aid basics.AssetIndex) bool {
 }
 
 func (r *txnResources) hasAccount(addr basics.Address) bool {
+	if _, hasField := r.accountsFromFields[addr]; hasField {
+		return true
+	}
+
+	if slices.Contains(r.prefilledAccounts, addr) || slices.Contains(r.accounts, addr) {
+		return true
+	}
+
 	if r.appFromField.Address() == addr {
 		return true
 	}
@@ -710,14 +718,6 @@ func (r *txnResources) hasAccount(addr basics.Address) bool {
 		if app.Address() == addr {
 			return true
 		}
-	}
-
-	if _, hasField := r.accountsFromFields[addr]; hasField {
-		return true
-	}
-
-	if slices.Contains(r.prefilledAccounts, addr) || slices.Contains(r.accounts, addr) {
-		return true
 	}
 
 	return false
